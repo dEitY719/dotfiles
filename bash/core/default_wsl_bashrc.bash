@@ -91,17 +91,16 @@ esac
 # 컬러 지원 alias
 
 if [ -x /usr/bin/dircolors ]; then
-
-    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+    if [ -r ~/.dircolors ]; then
+        eval "$(dircolors -b ~/.dircolors)"
+    else
+        eval "$(dircolors -b)"
+    fi
 
     alias ls='ls --color=auto'
-
     alias grep='grep --color=auto'
-
     alias fgrep='fgrep --color=auto'
-
     alias egrep='egrep --color=auto'
-
 fi
 
 
@@ -114,24 +113,13 @@ alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo
 
 
 
-
-
 # bash-completion 지원
-
 if ! shopt -oq posix; then
-
     if [ -f /usr/share/bash-completion/bash_completion ]; then
-
+        # shellcheck source=/usr/share/bash-completion/bash_completion
         . /usr/share/bash-completion/bash_completion
-
     elif [ -f /etc/bash_completion ]; then
-
+        # shellcheck source=/etc/bash_completion
         . /etc/bash_completion
-
     fi
-
 fi
-
-
-
-. "$HOME/.local/bin/env"
