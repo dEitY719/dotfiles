@@ -5,9 +5,9 @@
 export PATH="$HOME/.local/bin:$PATH"
 
 # 개발 도구 경로 추가
-export PATH="/usr/local/go/bin:$PATH"  # Go
-export PATH="$HOME/.cargo/bin:$PATH"   # Rust
-export PATH="$HOME/.npm-global/bin:$PATH"  # npm global
+export PATH="/usr/local/go/bin:$PATH"     # Go
+export PATH="$HOME/.cargo/bin:$PATH"      # Rust
+export PATH="$HOME/.npm-global/bin:$PATH" # npm global
 
 # 사용자 정의 스크립트 경로
 export PATH="$DOTFILES_BASH_DIR/scripts:$PATH"

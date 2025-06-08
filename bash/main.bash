@@ -1,16 +1,10 @@
 # ~/dotfiles/bash/main.bash
 
-
-
 # Set the base directory for dotfiles bash configurations
 
 DOTFILES_BASH_FULL_PATH=$(realpath "${BASH_SOURCE[0]}")
 
 export DOTFILES_BASH_DIR="$(dirname "${DOTFILES_BASH_FULL_PATH}")"
-
-
-
-
 
 # --- Logging Initialization ---
 
@@ -22,50 +16,36 @@ source "${DOTFILES_BASH_DIR}/core/beauty_log.bash"
 
 init_logging "${DOTFILES_BASH_DIR}"
 
-
-
-
-
 # 로딩 시작 스피너
 
 log_progress_start "Loading dotfiles configurations..."
 
-
-
-
-
 # Initialize a counter for sourced files
 
 SOURCED_FILES_COUNT=0
-
-
 
 # Function to safely source a file and increment counter
 
 # shellcheck disable=SC1073
 safe_source() {
 
-  local file_path="$1"
+    local file_path="$1"
 
-  local error_msg="$2" # Optional custom error message
+    local error_msg="$2" # Optional custom error message
 
+    if [[ -f "${file_path}" ]]; then
 
+        source "${file_path}"
 
-  if [[ -f "${file_path}" ]]; then
+        ((SOURCED_FILES_COUNT++))
 
-    source "${file_path}"
+    else
 
-    ((SOURCED_FILES_COUNT++))
+        log_error "${error_msg:-File not found}: ${file_path}"
 
-  else
-
-    log_error "${error_msg:-File not found}: ${file_path}"
-
-  fi
+    fi
 
 }
-
-
 
 # --- WSL 기본 bashrc 설� � 로드 ---
 
@@ -77,10 +57,6 @@ safe_source "${DEFAULT_WSL_BASHRC_PATH}" "Core WSL bashrc file not found"
 
 # ------------------------------------------------------------------
 
-
-
-
-
 # --- 환경 변수 설� � 로드 ---
 
 ENV_DIR="${DOTFILES_BASH_DIR}/env"
@@ -89,23 +65,19 @@ ENV_DIR="${DOTFILES_BASH_DIR}/env"
 
 for f in "${ENV_DIR}/"*.bash; do
 
-  # log_util.bash는 이미 sourced.
+    # log_util.bash는 이미 sourced.
 
-  if [[ "$f" == "${FUNCTION_DIR}/log_util.bash" ]]; then
+    if [[ "$f" == "${FUNCTION_DIR}/log_util.bash" ]]; then
 
-    continue
+        continue
 
-  fi
+    fi
 
-  safe_source "$f" "Environment variable file not found"
+    safe_source "$f" "Environment variable file not found"
 
 done
 
 # ------------------------------------------------------------------
-
-
-
-
 
 # --- Alias 설� � 로드 ---
 
@@ -115,15 +87,11 @@ ALIAS_DIR="${DOTFILES_BASH_DIR}/alias"
 
 for f in "${ALIAS_DIR}/"*.bash; do
 
-  safe_source "$f" "Alias file not found"
+    safe_source "$f" "Alias file not found"
 
 done
 
 # ------------------------------------------------------------------
-
-
-
-
 
 # --- � 플리케이션별 설� � 로드 ---
 
@@ -133,15 +101,11 @@ APP_DIR="${DOTFILES_BASH_DIR}/app"
 
 for f in "${APP_DIR}/"*.bash; do
 
-  safe_source "$f" "Application setting file not found"
+    safe_source "$f" "Application setting file not found"
 
 done
 
 # ------------------------------------------------------------------
-
-
-
-
 
 # --- 모�  파일 로드 완료 후 스피너 중지 및 요약 � �보 ---
 

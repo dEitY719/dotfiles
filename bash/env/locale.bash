@@ -6,6 +6,5 @@ export LANG=ko_KR.UTF-8
 export LANGUAGE=ko_KR:ko
 export LC_ALL=ko_KR.UTF-8
 
-
 # 시간대 설정
 export TZ='Asia/Seoul'

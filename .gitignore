@@ -1,0 +1,6 @@
+.idea
+.venv
+*egg-info
+
+.python-version
+uv.lock

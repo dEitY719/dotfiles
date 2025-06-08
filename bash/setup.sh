@@ -1,10 +1,6 @@
 #!/bin/bash
 
-
-
 # setup.sh
-
-
 
 # --- Constants ---
 
@@ -16,8 +12,6 @@ HOME_BASHRC="${HOME}/.bashrc"
 
 HOME_BASH_PROFILE="${HOME}/.bash_profile"
 
-
-
 # --- Logging Initialization ---
 
 # init_logging 함수를 호출하여 로깅 기능을 초기화합니다.
@@ -28,116 +22,94 @@ source "${DOTFILES_BASH_DIR}/core/beauty_log.bash"
 
 init_logging "${DOTFILES_BASH_DIR}"
 
-
-
 # --- Functions ---
-
-
 
 # log_critical 함수를 사용하여 log_error_and_exit 대체
 
 log_error_and_exit() {
 
-     log_critical "$1" # log_critical 함수를 호출하여 에러 메시지 출력 후 종료
+    log_critical "$1" # log_critical 함수를 호출하여 에러 메시지 출력 후 종료
 
 }
-
-
 
 backup_file() {
 
-     local file_to_backup="$1"
+    local file_to_backup="$1"
 
-     local backup_destination="$2"
+    local backup_destination="$2"
 
-     if [ -e "$file_to_backup" ]; then
+    if [ -e "$file_to_backup" ]; then
 
-          log_info "백업 파일 생성: $file_to_backup -> $backup_destination"
+        log_info "백업 파일 생성: $file_to_backup -> $backup_destination"
 
-          cp "$file_to_backup" "$backup_destination" || log_error_and_exit "백업 파일 생성 실패: $file_to_backup"
+        cp "$file_to_backup" "$backup_destination" || log_error_and_exit "백업 파일 생성 실패: $file_to_backup"
 
-     fi
+    fi
 
 }
-
-
 
 create_symlink() {
 
-     local target="$1"
+    local target="$1"
 
-     local link_name="$2"
+    local link_name="$2"
 
-     if [ -L "$link_name" ]; then
+    if [ -L "$link_name" ]; then
 
-          log_dim "기존 심볼릭 링크 제거: $link_name"
+        log_dim "기존 심볼릭 링크 제거: $link_name"
 
-          rm "$link_name" || log_error_and_exit "기존 심볼릭 링크 제거 실패: $link_name"
+        rm "$link_name" || log_error_and_exit "기존 심볼릭 링크 제거 실패: $link_name"
 
-     elif [ -f "$link_name" ]; then
+    elif [ -f "$link_name" ]; then
 
-          log_error "경고: $link_name 가 심볼릭 링크가 아닌 일반 파일입니다. 백업 후 제거합니다."
+        log_error "경고: $link_name 가 심볼릭 링크가 아닌 일반 파일입니다. 백업 후 제거합니다."
 
-          backup_file "$link_name" "${link_name}-$(date +%Y%m%d%H%M%S)-original"
+        backup_file "$link_name" "${link_name}-$(date +%Y%m%d%H%M%S)-original"
 
-          rm "$link_name" || log_error_and_exit "기존 파일 제거 실패: $link_name"
+        rm "$link_name" || log_error_and_exit "기존 파일 제거 실패: $link_name"
 
-     fi
+    fi
 
-     log_info "심볼릭 링크 생성: $link_name -> $target"
+    log_info "심볼릭 링크 생성: $link_name -> $target"
 
-     ln -s "$target" "$link_name" || log_error_and_exit "심볼릭 링크 생성 실패: $link_name -> $target"
+    ln -s "$target" "$link_name" || log_error_and_exit "심볼릭 링크 생성 실패: $link_name -> $target"
 
 }
 
-
-
 # --- Main Script Logic ---
 
-
-
 log_debug "\n--- dotfiles setup 시작 ---"
-
-
 
 # main.bash 파일 존재 여부 확인
 
 if [ ! -f "$MAIN_BASH_SOURCE" ]; then
 
-     log_error_and_exit "main.bash 파일이 '${MAIN_BASH_SOURCE}' 경로에 존재하지 않습니다. 파일을 먼저 생성해주세요."
+    log_error_and_exit "main.bash 파일이 '${MAIN_BASH_SOURCE}' 경로에 존재하지 않습니다. 파일을 먼저 생성해주세요."
 
 fi
-
-
 
 # ~/.bashrc 로 심볼릭링크
 
 create_symlink "$MAIN_BASH_SOURCE" "$HOME_BASHRC"
 
-
-
 # ~/.bash_profile도 심볼릭링크 (선택 사항)
 
 if [ -f "${DOTFILES_BASH_DIR}/profile.bash" ]; then
 
-     log_dim "profile.bash 파일이 존재하므로 ~/.bash_profile 심볼릭 링크를 생성합니다."
+    log_dim "profile.bash 파일이 존재하므로 ~/.bash_profile 심볼릭 링크를 생성합니다."
 
-     create_symlink "${DOTFILES_BASH_DIR}/profile.bash" "$HOME_BASH_PROFILE"
+    create_symlink "${DOTFILES_BASH_DIR}/profile.bash" "$HOME_BASH_PROFILE"
 
 else
 
-     log_error "경고: ${DOTFILES_BASH_DIR}/profile.bash 파일이 없습니다. ~/.bash_profile 심볼릭 링크를 생성하지 않습니다."
+    log_error "경고: ${DOTFILES_BASH_DIR}/profile.bash 파일이 없습니다. ~/.bash_profile 심볼릭 링크를 생성하지 않습니다."
 
 fi
-
-
 
 log_debug "--- dotfiles setup 완료 ---"
 
 log_dim "변경 사항을 적용하려면 'source ~/.bashrc' 또는 셸을 재시작하십시오."
 
 log_dim "만약 ~/.bash_profile도 새로 링크했다면 'source ~/.bash_profile' 하거나 로그인 셸을 재시작하십시오."
-
-
 
 exit 0

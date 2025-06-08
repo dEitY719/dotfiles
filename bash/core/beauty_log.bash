@@ -11,8 +11,8 @@ _fallback_log_error() { echo "ERROR: $1" >&2; }
 _fallback_log_info() { echo "INFO: $1"; }
 
 _fallback_log_critical() {
-	echo "CRITICAL ERROR: $1" >&2
-	exit 1
+    echo "CRITICAL ERROR: $1" >&2
+    exit 1
 }
 
 # Function to initialize logging by sourcing log_util.bash
@@ -21,28 +21,28 @@ _fallback_log_critical() {
 
 init_logging() {
 
-	local dotfiles_bash_dir="${1}" # Pass DOTFILES_BASH_DIR as an argument
+    local dotfiles_bash_dir="${1}" # Pass DOTFILES_BASH_DIR as an argument
 
-	local log_util_path="${dotfiles_bash_dir}/util/log_util.bash"
+    local log_util_path="${dotfiles_bash_dir}/util/log_util.bash"
 
-	if [[ -f "${log_util_path}" ]]; then
+    if [[ -f "${log_util_path}" ]]; then
 
-		# shellcheck disable=SC1090
+        # shellcheck disable=SC1090
 
-		source "${log_util_path}"
+        source "${log_util_path}"
 
-	else
+    else
 
-		echo "ERROR: log_util.bash not found at ${log_util_path}. Using fallback logging." >&2
+        echo "ERROR: log_util.bash not found at ${log_util_path}. Using fallback logging." >&2
 
-		# Assign fallback functions to global log function names
+        # Assign fallback functions to global log function names
 
-		log_error() { _fallback_log_error "$@"; }
+        log_error() { _fallback_log_error "$@"; }
 
-		log_info() { _fallback_log_info "$@"; }
+        log_info() { _fallback_log_info "$@"; }
 
-		log_critical() { _fallback_log_critical "$@"; }
+        log_critical() { _fallback_log_critical "$@"; }
 
-	fi
+    fi
 
 }

@@ -3,7 +3,7 @@
 
 # Python
 export PYTHONPATH="$HOME/.local/lib/python3.x/site-packages:$PYTHONPATH"
-export PYTHONDONTWRITEBYTECODE=1  # .pyc 파일 생성 방지
+export PYTHONDONTWRITEBYTECODE=1 # .pyc 파일 생성 방지
 
 # Node.js
 export NODE_ENV='development'

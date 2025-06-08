@@ -1,10 +1,6 @@
 #!/bin/bash
 
-
-
 # ~/dotfiles/bash/util/log_util.bash
-
-
 
 # --- ANSI Color Codes ---
 
@@ -24,8 +20,6 @@ CInvert='\033[7m'
 
 CHidden='\033[8m'
 
-
-
 CBlack='\033[0;30m'
 
 CRed='\033[0;31m'
@@ -42,11 +36,9 @@ CCyan='\033[0;36m'
 
 CWhite='\033[0;37m'
 
-CLightGray='\033[0;37m'  # Alias for white
+CLightGray='\033[0;37m' # Alias for white
 
-
-
-CLBlack='\033[1;30m'    # Bold Black
+CLBlack='\033[1;30m' # Bold Black
 
 CLRed='\033[1;31m'
 
@@ -60,9 +52,7 @@ CLMagenta='\033[1;35m'
 
 CLCyan='\033[1;36m'
 
-CLWhite='\033[1;37m'    # Bold White
-
-
+CLWhite='\033[1;37m' # Bold White
 
 # Background Colors
 
@@ -82,8 +72,6 @@ CBGCyan='\033[46m'
 
 CBGWhite='\033[47m'
 
-
-
 # --- General purpose colored echo ---
 
 # Usage: cecho <color_code> "Your message"
@@ -98,8 +86,6 @@ cecho() {
 
 }
 
-
-
 # --- Log level functions ---
 
 log_critical() {
@@ -108,15 +94,11 @@ log_critical() {
 
 }
 
-
-
 log_error() {
 
     cecho "${CLRed}" "$*"
 
 }
-
-
 
 log_warning() {
 
@@ -124,15 +106,11 @@ log_warning() {
 
 }
 
-
-
 log_info() {
 
     cecho "${CGreen}" "$*"
 
 }
-
-
 
 log_debug() {
 
@@ -140,17 +118,13 @@ log_debug() {
 
 }
 
-
-
 # --- Alias for some colors ---
 
-log_dim(){
+log_dim() {
 
     cecho "${CDim}" "$*"
 
 }
-
-
 
 log_magenta() {
 
@@ -158,23 +132,17 @@ log_magenta() {
 
 }
 
-
-
 log_blue() {
 
     cecho "${CBlue}" "$*"
 
 }
 
-
-
 log_red() {
 
     cecho "${CRed}" "$*"
 
 }
-
-
 
 # --- log() function with color parsing ---
 
@@ -194,8 +162,6 @@ log() {
 
     local color_code=""
 
-
-
     local pattern='([A-Za-z]+)\(([^)]*)\)'
 
     while [[ "$input" =~ $pattern ]]; do
@@ -207,8 +173,6 @@ log() {
         text="${BASH_REMATCH[2]}"
 
         before="${input%%$match*}"
-
-
 
         color_code="${!color}"
 
@@ -222,23 +186,15 @@ log() {
 
         fi
 
-
-
         input="${input#*$match}"
 
     done
-
-
 
     output+="$input"
 
     echo -e "$output"
 
 }
-
-
-
-
 
 # --- Custom print example ---
 
@@ -254,11 +210,7 @@ print_bash_config_loaded() {
 
 }
 
-
-
 # Uncomment below to run the example when sourcing or running script
-
-
 
 print_test_log_methods() {
 
@@ -308,13 +260,7 @@ print_test_log_methods() {
 
 }
 
-
-
 # print_test_log_methods
-
-
-
-
 
 # --- Spinner animation ---
 
@@ -333,10 +279,6 @@ declare -A SPINNER_STYLES=(
     [clock]='🕛🕐🕑🕒🕓🕔🕕🕖🕗🕘🕙🕚'
 
 )
-
-
-
-
 
 log_spinner() {
 
@@ -366,8 +308,6 @@ log_spinner() {
 
     local message=$3
 
-
-
     # spinstr 맵 정의 (bash version 4 이상 필요)
 
     declare -A spinner_styles=(
@@ -390,8 +330,6 @@ log_spinner() {
 
     )
 
-
-
     local spinstr="${spinner_styles[$style]}"
 
     if [[ -z "$spinstr" ]]; then
@@ -400,19 +338,13 @@ log_spinner() {
 
     fi
 
-
-
     local delay=0.1
 
     local i=0
 
     local length=${#spinstr}
 
-
-
     tput civis
-
-
 
     while kill -0 "$pid" 2>/dev/null; do
 
@@ -426,29 +358,20 @@ log_spinner() {
 
     done
 
-
-
     tput cnorm
 
     echo -e "${message} ${CLGreen}[DONE]${RESET}"
 
 }
 
-
-
-
-
 log_spinner_demo() {
 
     log_info "Demo started: log_spinner"
 
-    sleep 3 & pid=$! && log_spinner "$pid" dots "Installing..."
+    sleep 3 &
+    pid=$! && log_spinner "$pid" dots "Installing..."
 
 }
-
-
-
-
 
 # --- Progress bar ---
 
@@ -458,55 +381,41 @@ log_progress_bar() {
 
     local width=40
 
-    local filled=$(( progress * width / 100 ))
+    local filled=$((progress * width / 100))
 
-    local empty=$(( width - filled ))
-
-
+    local empty=$((width - filled))
 
     local bar=""
 
-    for ((i=0; i<filled; i++)); do
+    for ((i = 0; i < filled; i++)); do
 
         bar+="█"
 
     done
 
-
-
     # 100%일 땐 empty도 채움
 
-    if (( progress == 100 )); then
+    if ((progress == 100)); then
 
         empty=0
 
     fi
 
-
-
-    for ((i=0; i<empty; i++)); do
+    for ((i = 0; i < empty; i++)); do
 
         bar+="-"
 
     done
 
-
-
     echo -ne "[$bar] $progress%\r"
 
-
-
-    if (( progress == 100 )); then
+    if ((progress == 100)); then
 
         echo -ne '\n'
 
     fi
 
 }
-
-
-
-
 
 log_progress_bar_demo() {
 
@@ -522,66 +431,36 @@ log_progress_bar_demo() {
 
 }
 
-
-
-
-
 _SPINNER_PID=""
 
 _SPINNER_MSG=""
 
 _SPINNER_CHARS=("-" "\\" "|" "/") # 스피너 모양 정의
 
-
-
 # 스피너를 백그라운드에서 시작하는 함수
 
 log_progress_start() {
-
     _SPINNER_MSG="${1:-Processing...}" # 메시지 인자를 받음
-
     (
-
         trap "exit 0" SIGTERM # 종료 신호 시 깔끔하게 종료
-
         i=0
-
         while :; do
-
             printf "\r[INFO] %s %s" "${_SPINNER_CHARS[$i]}" "${_SPINNER_MSG}"
-
-            i=$(( (i + 1) % ${#_SPINNER_CHARS[@]} ))
-
+            i=$(((i + 1) % ${#_SPINNER_CHARS[@]}))
             sleep 0.1
-
         done
-
     ) &
-
     _SPINNER_PID=$! # 백그라운드 프로세스의 PID 저장
-
 }
 
-
-
 # 스피너를 중지하고 메시지를 깔끔하게 지우는 함수
-
 log_progress_stop() {
-
     if [[ -n "${_SPINNER_PID}" ]]; then
-
-        kill -SIGTERM "${_SPINNER_PID}" 2>/dev/null # 스피너 프로세스 종료
-
-        wait "${_SPINNER_PID}" 2>/dev/null # 스피너 프로세스가 완전히 종료될 때까지 대기 (필요시)
-
+        kill -SIGTERM "${_SPINNER_PID}" 2>/dev/null               # 스피너 프로세스 종료
+        wait "${_SPINNER_PID}" 2>/dev/null                        # 스피너 프로세스가 완전히 종료될 때까지 대기 (필요시)
         printf "\r%s\r" "$(printf ' %.0s' $(seq 1 $(tput cols)))" # 현재 줄 깔끔하게 지우기
-
         _SPINNER_PID=""
-
     fi
-
     # 최종 메시지는 log_info로 출력
-
     log_dim "$1"
-
 }
