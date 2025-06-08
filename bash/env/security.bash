@@ -5,4 +5,5 @@
 export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-agent.socket"
 
 # GPG 설정
-export GPG_TTY=$(tty)
+GPG_TTY=$(tty)
+export GPG_TTY

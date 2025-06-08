@@ -33,19 +33,12 @@ log_error_and_exit() {
 }
 
 backup_file() {
-
     local file_to_backup="$1"
-
     local backup_destination="$2"
-
     if [ -e "$file_to_backup" ]; then
-
         log_info "백업 파일 생성: $file_to_backup -> $backup_destination"
-
         cp "$file_to_backup" "$backup_destination" || log_error_and_exit "백업 파일 생성 실패: $file_to_backup"
-
     fi
-
 }
 
 create_symlink() {

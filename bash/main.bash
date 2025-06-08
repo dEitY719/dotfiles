@@ -4,7 +4,8 @@
 
 DOTFILES_BASH_FULL_PATH=$(realpath "${BASH_SOURCE[0]}")
 
-export DOTFILES_BASH_DIR="$(dirname "${DOTFILES_BASH_FULL_PATH}")"
+DOTFILES_BASH_DIR="$(dirname "${DOTFILES_BASH_FULL_PATH}")"
+export DOTFILES_BASH_DIR
 
 # --- Logging Initialization ---
 
