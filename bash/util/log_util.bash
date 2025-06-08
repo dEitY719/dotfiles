@@ -19,7 +19,7 @@ CMagenta='\033[0;35m'
 CCyan='\033[0;36m'
 CWhite='\033[0;37m'
 CLightGray='\033[0;37m' # Alias for white
-CLBlack='\033[1;30m' # Bold Black
+CLBlack='\033[1;30m'    # Bold Black
 CLRed='\033[1;31m'
 CLGreen='\033[1;32m'
 CLYellow='\033[1;33m'
@@ -45,7 +45,6 @@ cecho() {
     echo -e "${color}$*${RESET}"
 }
 
-
 # --- Log level functions ---
 log_critical() {
     cecho "${CLMagenta}" "$*"
@@ -63,46 +62,44 @@ log_debug() {
     cecho "${CWhite}" "$*"
 }
 
-
 # --- Alias for some colors ---
-log_reset()       { cecho "${RESET}" "$*"; }
-log_bold()        { cecho "${CBold}" "$*"; }
-log_dim()         { cecho "${CDim}" "$*"; }
-log_italic()      { cecho "${CItalic}" "$*"; }
-log_underline()   { cecho "${CUnderline}" "$*"; }
-log_blink()       { cecho "${CBlink}" "$*"; }
-log_invert()      { cecho "${CInvert}" "$*"; }
-log_hidden()      { cecho "${CHidden}" "$*"; }
+log_reset() { cecho "${RESET}" "$*"; }
+log_bold() { cecho "${CBold}" "$*"; }
+log_dim() { cecho "${CDim}" "$*"; }
+log_italic() { cecho "${CItalic}" "$*"; }
+log_underline() { cecho "${CUnderline}" "$*"; }
+log_blink() { cecho "${CBlink}" "$*"; }
+log_invert() { cecho "${CInvert}" "$*"; }
+log_hidden() { cecho "${CHidden}" "$*"; }
 
-log_black()       { cecho "${CBlack}" "$*"; }
-log_red()         { cecho "${CRed}" "$*"; }
-log_green()       { cecho "${CGreen}" "$*"; }
-log_yellow()      { cecho "${CYellow}" "$*"; }
-log_blue()        { cecho "${CBlue}" "$*"; }
-log_magenta()     { cecho "${CMagenta}" "$*"; }
-log_cyan()        { cecho "${CCyan}" "$*"; }
-log_white()       { cecho "${CWhite}" "$*"; }
-log_light_gray()  { cecho "${CLightGray}" "$*"; }
+log_black() { cecho "${CBlack}" "$*"; }
+log_red() { cecho "${CRed}" "$*"; }
+log_green() { cecho "${CGreen}" "$*"; }
+log_yellow() { cecho "${CYellow}" "$*"; }
+log_blue() { cecho "${CBlue}" "$*"; }
+log_magenta() { cecho "${CMagenta}" "$*"; }
+log_cyan() { cecho "${CCyan}" "$*"; }
+log_white() { cecho "${CWhite}" "$*"; }
+log_light_gray() { cecho "${CLightGray}" "$*"; }
 
-log_lblack()      { cecho "${CLBlack}" "$*"; }
-log_lred()        { cecho "${CLRed}" "$*"; }
-log_lgreen()      { cecho "${CLGreen}" "$*"; }
-log_lyellow()     { cecho "${CLYellow}" "$*"; }
-log_lblue()       { cecho "${CLBlue}" "$*"; }
-log_lmagenta()    { cecho "${CLMagenta}" "$*"; }
-log_lcyan()       { cecho "${CLCyan}" "$*"; }
-log_lwhite()      { cecho "${CLWhite}" "$*"; }
+log_lblack() { cecho "${CLBlack}" "$*"; }
+log_lred() { cecho "${CLRed}" "$*"; }
+log_lgreen() { cecho "${CLGreen}" "$*"; }
+log_lyellow() { cecho "${CLYellow}" "$*"; }
+log_lblue() { cecho "${CLBlue}" "$*"; }
+log_lmagenta() { cecho "${CLMagenta}" "$*"; }
+log_lcyan() { cecho "${CLCyan}" "$*"; }
+log_lwhite() { cecho "${CLWhite}" "$*"; }
 
 # 배경 색상
-log_bg_black()    { cecho "${CBGBlack}" "$*"; }
-log_bg_red()      { cecho "${CBGRed}" "$*"; }
-log_bg_green()    { cecho "${CBGGreen}" "$*"; }
-log_bg_yellow()   { cecho "${CBGYellow}" "$*"; }
-log_bg_blue()     { cecho "${CBGBlue}" "$*"; }
-log_bg_magenta()  { cecho "${CBGMagenta}" "$*"; }
-log_bg_cyan()     { cecho "${CBGCyan}" "$*"; }
-log_bg_white()    { cecho "${CBGWhite}" "$*"; }
-
+log_bg_black() { cecho "${CBGBlack}" "$*"; }
+log_bg_red() { cecho "${CBGRed}" "$*"; }
+log_bg_green() { cecho "${CBGGreen}" "$*"; }
+log_bg_yellow() { cecho "${CBGYellow}" "$*"; }
+log_bg_blue() { cecho "${CBGBlue}" "$*"; }
+log_bg_magenta() { cecho "${CBGMagenta}" "$*"; }
+log_bg_cyan() { cecho "${CBGCyan}" "$*"; }
+log_bg_white() { cecho "${CBGWhite}" "$*"; }
 
 # --- log() function with color parsing ---
 log() {
@@ -142,7 +139,6 @@ print_bash_config_loaded() {
     log "CMagenta(¯＼_〔ツ〕_／¯ Everything looks good!)"
     log_dim "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
 }
-
 
 # Uncomment below to run the example when sourcing or running script
 print_test_log_methods() {
@@ -249,13 +245,11 @@ log_spinner() {
     echo -e "${message} ${CLGreen}[DONE]${RESET}"
 }
 
-
 log_spinner_demo() {
     log_info "Demo started: log_spinner"
     sleep 3 &
     pid=$! && log_spinner "$pid" dots "Installing..."
 }
-
 
 # --- Progress bar ---
 log_progress_bar() {
@@ -284,7 +278,6 @@ log_progress_bar() {
     fi
 }
 
-
 log_progress_bar_demo() {
     log_info "Demo started: log_progress_bar"
     for i in $(seq 0 10 100); do
@@ -293,11 +286,9 @@ log_progress_bar_demo() {
     done
 }
 
-
 _SPINNER_PID=""
 _SPINNER_MSG=""
 _SPINNER_CHARS=("-" "\\" "|" "/") # 스피너 모양 정의
-
 
 # 스피너를 백그라운드에서 시작하는 함수
 log_progress_start() {
@@ -314,12 +305,11 @@ log_progress_start() {
     _SPINNER_PID=$! # 백그라운드 프로세스의 PID 저장
 }
 
-
 # 스피너를 중지하고 메시지를 깔끔하게 지우는 함수
 log_progress_stop() {
     if [[ -n "${_SPINNER_PID}" ]]; then
-        kill -SIGTERM "${_SPINNER_PID}" 2>/dev/null               # 스피너 프로세스 종료
-        wait "${_SPINNER_PID}" 2>/dev/null                        # 스피너 프로세스가 완전히 종료될 때까지 대기 (필요시)
+        kill -SIGTERM "${_SPINNER_PID}" 2>/dev/null                   # 스피너 프로세스 종료
+        wait "${_SPINNER_PID}" 2>/dev/null                            # 스피너 프로세스가 완전히 종료될 때까지 대기 (필요시)
         printf "\r%s\r" "$(printf ' %.0s' "$(seq 1 "$(tput cols)")")" # 현재 줄 깔끔하게 지우기
         _SPINNER_PID=""
     fi
