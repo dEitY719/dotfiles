@@ -4,4 +4,4 @@
 [credential]
 	helper = store
 [core]
-	editor = vim
+	editor = code --wait
