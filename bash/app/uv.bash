@@ -31,3 +31,9 @@ uv_prod(){
     uv sync
     log_info "[production] dependencies installed"
 }
+
+install_uv(){
+    log_dim "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    log_info "uv installed"
+}

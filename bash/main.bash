@@ -113,3 +113,10 @@ done
 log_progress_stop "Dotfiles configuration loaded successfully. (Total files sourced: ${SOURCED_FILES_COUNT})"
 
 print_bash_config_loaded
+
+# pyenv 설정
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init --path)"
+eval "$(pyenv virtualenv-init -)"
+
