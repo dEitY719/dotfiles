@@ -34,4 +34,5 @@ alias hg='history | grep' # 히스토리에서 검색
 # 시스템 정보
 alias df='df -h'     # 디스크 사용량을 사람이 읽기 쉬운 형태로
 alias du='du -h'     # 디렉토리 크기를 사람이 읽기 쉬운 형태로
+alias duf='du -sh *' # 현재 디렉토리 파일/폴더 크기 요약
 alias free='free -h' # 메모리 사용량을 사람이 읽기 쉬운 형태로

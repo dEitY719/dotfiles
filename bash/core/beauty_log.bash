@@ -37,12 +37,15 @@ init_logging() {
 
         # Assign fallback functions to global log function names
 
-        log_error() { _fallback_log_error "$@"; }
-
-        log_info() { _fallback_log_info "$@"; }
-
-        log_critical() { _fallback_log_critical "$@"; }
-
+        log_error() { # shellcheck disable=SC2317
+            _fallback_log_error "$@"
+        }
+        log_info() { # shellcheck disable=SC2317
+            _fallback_log_info "$@"
+        }
+        log_critical() { # shellcheck disable=SC2317
+            _fallback_log_critical "$@"
+        }
     fi
 
 }

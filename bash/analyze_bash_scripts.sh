@@ -33,7 +33,8 @@ parse_aliases() {
 
     for line in "${lines[@]}"; do
         # sed로 alias 이름만 추출 (alias 다음에 바로 이름이 오고, 공백이나 = 등으로 끝나는 것을 처리)
-        local alias_name=$(echo "$line" | sed -E 's/^\s*alias\s+([a-zA-Z0-9_-]+).*$/\1/')
+        local alias_name
+        alias_name=$(echo "$line" | sed -E 's/^\s*alias\s+([a-zA-Z0-9_-]+).*$/\1/')
         if [[ -n "$alias_name" && ! -v ALL_ALIASES["$alias_name"] ]]; then
             ALL_ALIASES["$alias_name"]=1
             TOTAL_ALIAS_COUNT=$((TOTAL_ALIAS_COUNT + 1))
