@@ -27,20 +27,20 @@ myman() {
 
     # 스크립트를 실행하여 임시 파일에 결과를 저장
     # 여기서 스크립트의 출력 결과가 표준 출력으로 나오므로 파일로 리디렉션합니다.
-    "$analyzer_script" "$bash_config_dir" > "$temp_output_file"
+    "$analyzer_script" "$bash_config_dir" >"$temp_output_file"
 
     if [[ "$type_to_show" == "alias" ]]; then
         echo "### Alias 목록"
         # alias 목록 시작부터 다음 헤딩 전까지의 내용만 추출
-        sed -n '/### Alias 목록/,/### Function 목록/p' "$temp_output_file" | \
-        grep -v '### Alias 목록' | \
-        grep -v '### Function 목록' | \
-        sed '$d' # 마지막 줄 (공백 또는 다음 헤딩 라인) 제거
+        sed -n '/### Alias 목록/,/### Function 목록/p' "$temp_output_file" |
+            grep -v '### Alias 목록' |
+            grep -v '### Function 목록' |
+            sed '$d' # 마지막 줄 (공백 또는 다음 헤딩 라인) 제거
     elif [[ "$type_to_show" == "function" ]]; then
         echo "### Function 목록"
         # function 목록 시작부터 마지막까지의 내용만 추출
-        sed -n '/### Function 목록/,$p' "$temp_output_file" | \
-        grep -v '### Function 목록'
+        sed -n '/### Function 목록/,$p' "$temp_output_file" |
+            grep -v '### Function 목록'
     else
         echo "유효하지 않은 옵션: '$type_to_show'"
         echo "사용법: myman [alias | function]"

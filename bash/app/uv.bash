@@ -10,29 +10,26 @@ alias uv_check='uv check'
 alias uv_lock='uv lock'
 alias uv_unlock='uv unlock'
 
-
-uv_sync(){
+uv_sync() {
     log_dim "Installing [project & development] dependencies..."
     uv sync
     uv sync --dev --extra dev
     log_info "[project & development] dependencies installed"
 }
 
-
-uv_dev(){
+uv_dev() {
     log_dim "Installing [development] dependencies..."
     uv sync --dev --extra dev
     log_info "[development] dependencies installed"
 }
 
-
-uv_prod(){
+uv_prod() {
     log_dim "Installing [production] dependencies..."
     uv sync
     log_info "[production] dependencies installed"
 }
 
-install_uv(){
+install_uv() {
     log_dim "Installing uv..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
     log_info "uv installed"

@@ -38,7 +38,6 @@ DEFAULT_WSL_BASHRC_PATH="${DOTFILES_BASH_DIR}/core/default_wsl_bashrc.bash"
 # log_info "Sourcing core WSL bashrc from: ${DEFAULT_WSL_BASHRC_PATH}" # 스피너 사용 시 이 메시지는 생략
 safe_source "${DEFAULT_WSL_BASHRC_PATH}" "Core WSL bashrc file not found"
 
-
 # ------------------------------------------------------------------
 # --- 환경 변수 설� � 로드 ---
 ENV_DIR="${DOTFILES_BASH_DIR}/env"
@@ -51,7 +50,6 @@ for f in "${ENV_DIR}/"*.bash; do
     safe_source "$f" "Environment variable file not found"
 done
 
-
 # ------------------------------------------------------------------
 # --- Alias 설� � 로드 ---
 ALIAS_DIR="${DOTFILES_BASH_DIR}/alias"
@@ -61,7 +59,6 @@ for f in "${ALIAS_DIR}/"*.bash; do
 done
 # ------------------------------------------------------------------
 
-
 # --- � 플리케이션별 설� � 로드 ---
 APP_DIR="${DOTFILES_BASH_DIR}/app"
 # log_info "Sourcing application settings from: ${APP_DIR}" # 스피너 사용 시 이 메시지는 생략
@@ -69,14 +66,12 @@ for f in "${APP_DIR}/"*.bash; do
     safe_source "$f" "Application setting file not found"
 done
 
-
 # --- � 플리케이션별 설� � 로드 ---
 UTIL_DIR="${DOTFILES_BASH_DIR}/util"
 # log_info "Sourcing application settings from: ${APP_DIR}" # 스피너 사용 시 이 메시지는 생략
 for f in "${UTIL_DIR}/"*.bash; do
     safe_source "$f" "Utility setting file not found"
 done
-
 
 # ------------------------------------------------------------------
 # --- 모�  파일 로드 완료 후 스피너 중지 및 요약 � �보 ---
