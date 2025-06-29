@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ~/dotfiles/bash/util/log_util.bash
+# ~/dotfiles/bash/core/log_util.bash
 # --- ANSI Color Codes ---
 RESET='\033[0m'
 CBold='\033[1m'

@@ -23,7 +23,7 @@ init_logging() {
 
     local dotfiles_bash_dir="${1}" # Pass DOTFILES_BASH_DIR as an argument
 
-    local log_util_path="${dotfiles_bash_dir}/util/log_util.bash"
+    local log_util_path="${dotfiles_bash_dir}/core/log_util.bash"
 
     if [[ -f "${log_util_path}" ]]; then
 

@@ -5,7 +5,6 @@
 alias reload='exec bash'
 alias src='source ~/.bashrc'
 alias rs='reload'
-alias sb='src'
 
 # 파일 시스템 탐색
 alias ll='ls -alF'   # 상세 파일 정보 표시
