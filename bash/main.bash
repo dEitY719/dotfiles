@@ -44,7 +44,7 @@ ENV_DIR="${DOTFILES_BASH_DIR}/env"
 # log_info "Sourcing environment variables from: ${ENV_DIR}" # 스피너 사용 시 이 메시지는 생략
 for f in "${ENV_DIR}/"*.bash; do
     # log_util.bash는 이미 sourced.
-    if [[ "$f" == "${FUNCTION_DIR}/log_util.bash" ]]; then
+    if [[ "$f" == "${DOTFILES_BASH_DIR}/core/log_util.bash" ]]; then
         continue
     fi
     safe_source "$f" "Environment variable file not found"
@@ -77,3 +77,15 @@ done
 # --- 모�  파일 로드 완료 후 스피너 중지 및 요약 � �보 ---
 log_progress_stop "Dotfiles configuration loaded successfully. (Total files sourced: ${SOURCED_FILES_COUNT})"
 print_bash_config_loaded
+
+# --- WSL2 한글 입력 설정 (자동 추가됨) ---
+export QT_IM_MODULE=fcitx
+export GTK_IM_MODULE=fcitx
+export XMODIFIERS=@im=fcitx
+export DefaultIMModule=fcitx
+# fcitx가 아직 실행되지 않았다면 시작 (선택 사항이지만 권장)
+if ! pgrep -x fcitx >/dev/null; then
+    fcitx-autostart &>/dev/null
+fi
+# --- WSL2 한글 입력 설정 끝 ---
+
