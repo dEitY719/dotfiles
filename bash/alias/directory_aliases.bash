@@ -11,3 +11,6 @@ alias win_docu='cd /mnt/c/Users/deity/Documents'
 alias win_obsidian='cd /mnt/c/Users/deity/Documents/.obsidian'
 alias win_down='cd /mnt/c/Users/deity/Downloads'
 alias win_picture='cd /mnt/c/Users/deity/Pictures'
+
+# PARA
+alias mkpara='mkdir -p para/{archive,area,project,resource}'
