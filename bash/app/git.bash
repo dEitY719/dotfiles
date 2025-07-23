@@ -9,7 +9,6 @@ alias git_log2='git log --graph --decorate --date=short --abbrev-commit --pretty
 alias gl2=git_log2
 export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_pwd)\[\e[36m\]\$(__git_ps1 '(%s)')\[\e[0m\]\$ "
 
-
 alias gs='git status -sb'                        # 간략한 상태 보기
 alias ga='git add .'                             # 모든 변경사항 스테이징
 alias gc='git commit -m'                         # 커밋 메시지 작성

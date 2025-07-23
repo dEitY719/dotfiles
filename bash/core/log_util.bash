@@ -297,7 +297,7 @@ log_progress_start() {
         trap "exit 0" SIGTERM # 종료 신호 시 깔끔하게 종료
         i=0
         while :; do
-            printf "\r[INFO] %s %s" "${_SPINNER_CHARS[$i]}" "${_SPINNER_MSG}"
+            printf "\r [Info] %s %s" "${_SPINNER_CHARS[$i]}" "${_SPINNER_MSG}"
             i=$(((i + 1) % ${#_SPINNER_CHARS[@]}))
             sleep 0.1
         done
@@ -315,4 +315,28 @@ log_progress_stop() {
     fi
     # 최종 메시지는 log_info로 출력
     log_dim "$1"
+}
+
+print_random_quote() {
+    quotes=(
+        "Code is like humor. When you have to explain it, it’s bad. — Cory House"
+        "Programs must be written for people to read, and only incidentally for machines to execute. — Harold Abelson"
+        "Debugging is like being the detective in a crime movie where you are also the murderer. — Filipe Fortes"
+        "Talk is cheap. Show me the code. — Linus Torvalds"
+        "First, solve the problem. Then, write the code. — John Johnson"
+        "Any fool can write code that a computer can understand. Good programmers write code that humans can understand. — Martin Fowler"
+        "Experience is the name everyone gives to their mistakes. — Oscar Wilde"
+        "Simplicity is the soul of efficiency. — Austin Freeman"
+        "Before software can be reusable it first has to be usable. — Ralph Johnson"
+        "In order to be irreplaceable, one must always be different. — Coco Chanel"
+    )
+    # 랜덤 인덱스 선택 (0~9)
+    index=$(shuf -i 0-9 -n 1)
+    log_critical "${quotes[$index]}"
+}
+
+print_seraph_banner() {
+    log_dim "The highest order of angels, symbolizing protection and wisdom. 👼🌈✨"
+    toilet -f smblock -F border -F gay SERAPH
+    print_random_quote
 }

@@ -25,27 +25,32 @@ fi
 
 # --- 커스텀 경로 축약 함수 ---
 _short_pwd() {
-    local full_path=$(pwd)
+    local full_path
+    full_path=$(pwd)
     local max_dirs=3
     local parts=()
 
     # 홈 디렉토리 축약 (~)
     if [[ "$full_path" == "$HOME"* ]]; then
-        full_path="~${full_path#$HOME}"
+        full_path="~${full_path#"$HOME"}"
     fi
 
-    IFS='/' read -ra parts <<< "$full_path"
+    IFS='/' read -ra parts <<<"$full_path"
     local part_count=${#parts[@]}
 
-    if (( part_count > max_dirs )); then
-        local truncated_parts=("${parts[@]: -max_dirs}")
-        local truncated=$(IFS=/; echo "${truncated_parts[*]}")
+    if ((part_count > max_dirs)); then
+        local truncated_parts
+        truncated_parts=("${parts[@]: -max_dirs}")
+        local truncated
+        truncated=$(
+            IFS=/
+            echo "${truncated_parts[*]}"
+        )
         echo ".../$truncated"
     else
         echo "$full_path"
     fi
 }
-
 
 # 컬러 프롬프트
 case "$TERM" in
