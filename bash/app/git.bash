@@ -7,7 +7,8 @@ alias git_log='git log --graph --pretty=format:"%Cred%h %C(bold blue)%d %Creset%
 alias gl=git_log
 alias git_log2='git log --graph --decorate --date=short --abbrev-commit --pretty=oneline'
 alias gl2=git_log2
-export PS1="\[\e]0;\u@\h: \w\a\]\[\e[32m\]\u@\h:\[\e[33m\]\w\[\e[36m\]\$(__git_ps1 '(%s)')\[\e[0m\]\$ "
+export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_pwd)\[\e[36m\]\$(__git_ps1 '(%s)')\[\e[0m\]\$ "
+
 
 alias gs='git status -sb'                        # 간략한 상태 보기
 alias ga='git add .'                             # 모든 변경사항 스테이징
