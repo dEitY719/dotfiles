@@ -7,7 +7,6 @@ DOTFILES_BASH_FULL_PATH=$(realpath "${BASH_SOURCE[0]}")
 DOTFILES_BASH_DIR="$(dirname "${DOTFILES_BASH_FULL_PATH}")"
 export DOTFILES_BASH_DIR
 
-print_seraph_banner
 # --- Logging Initialization ---
 # init_logging 함수를 호출하여 로깅 기능을 초기화합니다.
 # DOTFILES_BASH_DIR 변수를 인자로 � �달합니다.
@@ -79,6 +78,7 @@ done
 # --- 모�  파일 로드 완료 후 스피너 중지 및 요약 � �보 ---
 log_progress_stop "\nDotfiles configuration loaded successfully. (Total files sourced: ${SOURCED_FILES_COUNT})"
 print_bash_config_loaded
+print_seraph_banner
 
 # --- WSL2 한글 입력 설정 (자동 추가됨) ---
 export QT_IM_MODULE=fcitx
