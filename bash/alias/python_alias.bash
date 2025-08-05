@@ -4,7 +4,9 @@
 alias cv='python -m venv .venv'
 alias av='source .venv/bin/activate'
 alias ev='echo $VIRTUAL_ENV'
-alias dv='deactivate' # deactivate는 source 없이도 작동합니다.
+alias dv='source deactivate' 
+# deactivate는 source 없이도 작동합니다.
+# pyenv-virtualenv: deactivate must be sourced. Run 'source deactivate' instead of 'deactivate'
 
 # Python Package Management
 alias pp_install='pip install'                                 # 일반 패키지 설치
