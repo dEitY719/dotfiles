@@ -4,7 +4,7 @@
 alias cv='python -m venv .venv'
 alias av='source .venv/bin/activate'
 alias ev='echo $VIRTUAL_ENV'
-alias dv='source deactivate' 
+alias dv='source deactivate'
 # deactivate는 source 없이도 작동합니다.
 # pyenv-virtualenv: deactivate must be sourced. Run 'source deactivate' instead of 'deactivate'
 

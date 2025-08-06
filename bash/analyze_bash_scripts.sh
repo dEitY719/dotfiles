@@ -24,20 +24,22 @@ usage() {
 # alias 정의를 파싱하고 전역 변수에 업데이트하는 함수
 parse_aliases() {
     local file_path="$1"
-    # alias 정의 패턴: 'alias 이름=...' 또는 'alias 이름 ...'
-    # 앞뒤 공백 무시, 주석 무시
-    # grep으로 라인 필터링 후, while read 파이프를 통해 처리 (서브쉘 문제 회피를 위해 mapfile/readarray 사용)
-    local lines
-    # alias는 `=`가 있을 수도 있고 없을 수도 있습니다.
-    IFS=$'\n' read -r -d '' -a lines < <(grep -E '^\s*alias\s+([a-zA-Z0-9_-]+)\b.*$' "$file_path")
+    local alias_names
+    # awk를 사용하여 alias 정의 라인에서 이름만 효율적으로 추출합니다.
+    # grep과 sed를 반복 호출하는 대신, 단일 awk 프로세스로 처리하여 효율성을 높입니다.
+    mapfile -t alias_names < <(awk '
+        # 주석 처리된 라인은 건너뜁니다.
+        /^\s*#/ { next }
+        # "alias my_alias=..." 형태와 일치하는 라인에서 alias 이름만 추출합니다.
+        match($0, /^\s*alias\s+([a-zA-Z0-9_-]+)/, m) {
+            print m[1]
+        }
+    ' "$file_path")
 
-    for line in "${lines[@]}"; do
-        # sed로 alias 이름만 추출 (alias 다음에 바로 이름이 오고, 공백이나 = 등으로 끝나는 것을 처리)
-        local alias_name
-        alias_name=$(echo "$line" | sed -E 's/^\s*alias\s+([a-zA-Z0-9_-]+).*$/\1/')
+    for alias_name in "${alias_names[@]}"; do
         if [[ -n "$alias_name" && ! -v ALL_ALIASES["$alias_name"] ]]; then
             ALL_ALIASES["$alias_name"]=1
-            TOTAL_ALIAS_COUNT=$((TOTAL_ALIAS_COUNT + 1))
+            ((TOTAL_ALIAS_COUNT++))
         fi
     done
 }
@@ -45,25 +47,25 @@ parse_aliases() {
 # function 정의를 파싱하고 전역 변수에 업데이트하는 함수 (수정된 부분)
 parse_functions() {
     local file_path="$1"
-    local lines
-    # function 정의 패턴: 'function 이름 { ... }' 또는 '이름() { ... }'
-    # '{'가 다음 줄에 올 수도 있는 경우를 고려
-    # 'b'는 단어 경계(word boundary)를 나타내어 'functionname' 같은 경우를 방지
-    IFS=$'\n' read -r -d '' -a lines < <(grep -E '^\s*(function\s+([a-zA-Z0-9_-]+)\b|([a-zA-Z0-9_-]+)\s*\(\))\s*(\{)?' "$file_path")
+    local func_names
+    # awk를 사용하여 두 가지 형태의 함수 정의('function name' 및 'name()')를 모두 찾아
+    # 함수 이름만 효율적으로 추출합니다.
+    mapfile -t func_names < <(awk '
+        # 주석 처리된 라인은 건너뜁니다.
+        /^\s*#/ { next }
+        # "function my_func" 형태를 먼저 확인합니다.
+        if (match($0, /^\s*function\s+([a-zA-Z0-9_-]+)/, m)) {
+            print m[1]
+        # "my_func()" 형태를 확인합니다.
+        } else if (match($0, /^\s*([a-zA-Z0-9_-]+)\s*\(\)/, m)) {
+            print m[1]
+        }
+    ' "$file_path")
 
-    for line in "${lines[@]}"; do
-        local func_name=""
-        # 'function name' 형태 (function 키워드 사용)
-        if [[ "$line" =~ ^\s*function\s+([a-zA-Z0-9_-]+)\b.* ]]; then
-            func_name="${BASH_REMATCH[1]}"
-        # 'name()' 형태 (괄호 사용)
-        elif [[ "$line" =~ ^\s*([a-zA-Z0-9_-]+)\s*\(\).* ]]; then
-            func_name="${BASH_REMATCH[1]}"
-        fi
-
+    for func_name in "${func_names[@]}"; do
         if [[ -n "$func_name" && ! -v ALL_FUNCTIONS["$func_name"] ]]; then
             ALL_FUNCTIONS["$func_name"]=1
-            TOTAL_FUNCTION_COUNT=$((TOTAL_FUNCTION_COUNT + 1))
+            ((TOTAL_FUNCTION_COUNT++))
         fi
     done
 }

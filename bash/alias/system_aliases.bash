@@ -7,7 +7,7 @@ alias kill9='kill -9'     # 강제 종료
 alias psa='ps aux'        # 모든 프로세스 표시
 
 # 네트워크
-alias ports='ss -tulanp'                   # 열린 포트 확인: netstat은 ss로 대체되는 추세입니다. ss가 더 빠르고 상세한 정보를 제공합니다.
+alias ports='ss -tulanp'                        # 열린 포트 확인: netstat은 ss로 대체되는 추세입니다. ss가 더 빠르고 상세한 정보를 제공합니다.
 alias myip='curl http://ipecho.net/plain; echo' # 공인 IP 확인
 alias localip='hostname -I'                     # 로컬 IP 확인
 alias ping='ping -c 5'                          # ping 5회만 실행
