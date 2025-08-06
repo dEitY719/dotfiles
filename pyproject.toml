@@ -17,18 +17,7 @@ dependencies = ["pydantic", "PyYAML"]
 
 # --- 개발 및 테스트 환경 의존성 ---
 [dependency-groups] # 비표준으로 uv 에서는 인식, 그러나 pip 인식못함
-dev = [
-    # 코드 품질 및 포맷팅
-    "black",
-    "isort",
-    "mypy",
-    "pylint",
-    "pylint-exit",
-    # 테스트 관련
-    "pytest",
-    "pytest-mock",
-    "tox>=4.26.0",
-]
+dev = ["ruff", "mypy", "pylint-exit", "pytest", "pytest-mock", "tox>=4.26.0"]
 
 
 # --- mypy 타입 스터브 ---
@@ -105,3 +94,23 @@ disallow_untyped_calls = false # 타입 힌트가 없는 함수 호출에 경고
 # mypy 검사에서 제외할 디렉터리 및 파일 패턴 (정규 표현식)
 # (?x) 플래그는 정규 표현식 내에서 공백과 주석을 허용하여 가독성을 높입니다.
 exclude = '(?x)( \.venv/ | \.tox/ | \.vscode/ | \.git/ | build/ | config/tox/ | tests )'
+
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [".git", ".mypy_cache", ".tox", ".nox", ".venv", "build", "dist", ".vscode"]
+
+[tool.ruff.lint]
+# E, F: pyflakes/pycodestyle 기본 규칙
+# W: 경고
+# I: isort (import 정렬)
+# UP: pyupgrade (최신 파이썬 문법 자동 변환)
+select = ["E", "F", "W", "I", "UP"]
+# pylint의 W1203 (logging-fstring-interpolation)에 해당하는 ruff 규칙(G004) 비활성화
+ignore = ["G004"]
+
+[tool.ruff.format]
+# black과 호환되는 포맷팅 설정
+quote-style = "double"
+# skip-string-normalization = false

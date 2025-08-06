@@ -18,10 +18,9 @@ alias pp_check='pip check'
 alias pp_uninstall='pip uninstall -y'
 
 # Python Code Quality & Formatting
-alias code_format='black . && isort . && flake8 .'
-alias code_check='ruff check . --fix && ruff format .'
-alias code_lint='pylint .'
-alias code_type='mypy .'
+alias code_check='ruff format . --check && ruff check .' # 포맷팅 및 린트 위반 사항 확인 (CI용)
+alias code_fix='ruff format . && ruff check . --fix'     # 코드 자동 포맷팅 및 수정
+alias code_type='mypy .'                                 # 타입 검사
 
 # Python Testing
 alias test_pytest='pytest --maxfail=1 --disable-warnings -q' # pytest 전용
