@@ -29,10 +29,13 @@ alias fgrep='fgrep --color=auto' # 고정 문자열 검색 결과 색상 표시
 # 디렉토리 탐색
 alias dirs='dirs -v'      # 디렉토리 스택 번호 표시
 alias h='history'         # 명령어 히스토리
-alias hg='history | grep' # 히스토리에서 검색
+# 히스토리에서 검색
+hg() {
+    history | grep --color=auto "$@"
+}
 
 # 시스템 정보
 alias df='df -h'     # 디스크 사용량을 사람이 읽기 쉬운 형태로
 alias du='du -h'     # 디렉토리 크기를 사람이 읽기 쉬운 형태로
-alias duf='du -sh *' # 현재 디렉토리 파일/폴더 크기 요약
+alias duf='du -sh * | sort -h' # 현재 디렉토리 파일/폴더 크기 요약
 alias free='free -h' # 메모리 사용량을 사람이 읽기 쉬운 형태로

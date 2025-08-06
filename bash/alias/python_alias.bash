@@ -19,6 +19,7 @@ alias pp_uninstall='pip uninstall -y'
 
 # Python Code Quality & Formatting
 alias code_format='black . && isort . && flake8 .'
+alias code_check='ruff check . --fix && ruff format .'
 alias code_lint='pylint .'
 alias code_type='mypy .'
 

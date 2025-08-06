@@ -7,7 +7,13 @@ alias cd_down='cd ~/downloads'
 alias cd_work='cd ~/workspace'
 
 cp_wdown() {
-    cp /mnt/c/Users/bwyoon/Downloads/"$1" .
+    if [ -z "$1" ]; then
+        echo "Usage: cp_wdown <file1> [file2] ..."
+        return 1
+    fi
+    for file in "$@"; do
+        cp "/mnt/c/Users/bwyoon/Downloads/$file" .
+    done
 }
 # window directory
 alias cd_wdocu='cd /mnt/c/Users/bwyoon/Documents'
