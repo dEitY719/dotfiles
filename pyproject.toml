@@ -12,7 +12,14 @@ version = "0.1.0"
 name = "dotfiles"
 description = "Opinionated Bash dotfiles for reproducible terminal environments across WSL, Linux, and macOS."
 authors = [{ name = "BW-Yoon", email = "byoungwoo.yoon@samsung.com" }]
-dependencies = ["pydantic", "PyYAML"]
+dependencies = [
+    "annotated-types>=0.7.0",
+    "pydantic",
+    "pydantic-core>=2.33.2",
+    "pyyaml",
+    "typing-extensions>=4.14.1",
+    "typing-inspection>=0.4.1",
+]
 
 
 # --- 개발 및 테스트 환경 의존성 ---
