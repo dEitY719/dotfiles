@@ -15,6 +15,8 @@ cp_wdown() {
         cp "/mnt/c/Users/bwyoon/Downloads/$file" .
     done
 }
+
+
 # window directory
 alias cd_wdocu='cd /mnt/c/Users/bwyoon/Documents'
 alias cd_wobsidian='cd /mnt/c/Users/bwyoon/Documents/.obsidian'
@@ -23,10 +25,20 @@ alias cd_wpicture='cd /mnt/c/Users/bwyoon/Pictures'
 alias cd_tilnote='cd /mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote'
 alias cd_obsidian='cd /mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote'
 
+
 # PARA
 alias mkpara='mkdir -p para/{archive,area,project,resource}'
 alias cd_para='cd ~/para'
+
+# PARA/project
 alias cd_project='cd ~/para/project'
+
+# PARA/area
 alias cd_area='cd ~/para/area'
+alias cd_vault='cd ~/para/area/vault'
+
+# PARA/resource
 alias cd_resource='cd ~/para/resource'
+
+# PARA/archive
 alias cd_archive='cd ~/para/archive'
