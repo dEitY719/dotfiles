@@ -20,6 +20,8 @@ alias cd_wdocu='cd /mnt/c/Users/bwyoon/Documents'
 alias cd_wobsidian='cd /mnt/c/Users/bwyoon/Documents/.obsidian'
 alias cd_wdown='cd /mnt/c/Users/bwyoon/Downloads'
 alias cd_wpicture='cd /mnt/c/Users/bwyoon/Pictures'
+alias cd_tilnote='cd /mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote'
+alias cd_obsidian='cd /mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote'
 
 # PARA
 alias mkpara='mkdir -p para/{archive,area,project,resource}'
