@@ -36,3 +36,42 @@ install_uv() {
     curl -LsSf https://astral.sh/uv/install.sh | sh
     log_info "uv installed"
 }
+
+
+# Defines the uv_help function to display common uv pip sync commands for this project.
+uv_help() {
+    cat <<-'EOF'
+
+Usage: source this file and then run 'uv_help'
+
+This will display the common 'uv pip sync' commands for this project.
+
+--------------------------------------------------------------------------------
+
+[ uv pip sync Commands ]
+
+1. Full Installation (frontend, backend, and dev):
+   Installs all project dependencies.
+   
+   uv pip sync --all-extras
+
+2. Backend Only Installation:
+   Installs base, backend, and development dependencies.
+   
+   uv pip sync --extra backend --extra dev
+
+3. Frontend Only Installation:
+   Installs base, frontend, and development dependencies.
+   
+   uv pip sync --extra frontend --extra dev
+
+--------------------------------------------------------------------------------
+
+[ Lock File Update ]
+
+If you modify 'pyproject.toml', update the lockfile before syncing:
+
+   uv lock
+
+EOF
+}
