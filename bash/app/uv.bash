@@ -37,7 +37,6 @@ install_uv() {
     log_info "uv installed"
 }
 
-
 # Defines the uv_help function to display common uv pip sync commands for this project.
 uv_help() {
     cat <<-'EOF'

@@ -58,15 +58,13 @@ psql_server <start|stop|restart|reload|status>
 ==========================================================
 POSTGRES_DOC
 
-
 # -------------------------------
 # Service list (format: service db user pass)
 # -------------------------------
 services=(
-  "dmc_dev dmc_playground_dev dmc_user change_me_strong_pw"
-  "dmc_test dmc_playground_test dmc_user change_me_strong_pw"
+    "dmc_dev dmc_playground_dev dmc_user change_me_strong_pw"
+    "dmc_test dmc_playground_test dmc_user change_me_strong_pw"
 )
-
 
 PGSERVICE_FILE="$HOME/.pg_service.conf"
 PGPASS_FILE="$HOME/.pgpass"
@@ -95,7 +93,7 @@ for entry in "${services[@]}"; do
     db_pass=$(echo "$entry" | awk '{print $4}')
 
     # ~/.pg_service.conf
-    cat >> "$PGSERVICE_FILE" <<EOF
+    cat >>"$PGSERVICE_FILE" <<EOF
 
 [$service_name]
 host=localhost
@@ -105,7 +103,7 @@ dbname=$db_name
 EOF
 
     # ~/.pgpass
-    echo "localhost:5432:$db_name:$db_user:$db_pass" >> "$PGPASS_FILE"
+    echo "localhost:5432:$db_name:$db_user:$db_pass" >>"$PGPASS_FILE"
 
     # alias 등록
     alias_name="psql_$service_name"
@@ -152,7 +150,7 @@ psql_cmd() {
         ["dt"]="list tables"
         ["d"]="describe table"
         ["q"]="quit"
-        ["x"]="toggle expanded output"  # 예시 추가
+        ["x"]="toggle expanded output" # 예시 추가
     )
 
     # -----------------------------
@@ -182,7 +180,7 @@ psql_cmd() {
     # -----------------------------
     # psql "service=$service" -c "$cmd"
     # echo "$cmd" | psql "service=$service"
-    psql "service=$service" <<< "$cmd"
+    psql "service=$service" <<<"$cmd"
 }
 : <<'HERE-STRING_DOC'
 ✨ Bash에서 <<< 는 here-string 이라고 부르며, 표준 입력을 문자열 하나로 전달할 때 사용
@@ -195,7 +193,6 @@ psql_cmd() {
     <<TAG : here-doc, 여러 줄을 stdin으로
     <<< "string" : here-string, 한 줄 문자열을 stdin으로
 HERE-STRING_DOC
-
 
 # --------------------------------------
 # PostgreSQL server 관리 함수 (명령어:설명)
@@ -211,7 +208,10 @@ psql_server() {
 
     # 배열에서 | 로 구분된 문자열 생성
     local usage_str
-    usage_str=$(IFS='|'; echo "${!cmd_list[*]}")
+    usage_str=$(
+        IFS='|'
+        echo "${!cmd_list[*]}"
+    )
 
     local action="$1"
 
