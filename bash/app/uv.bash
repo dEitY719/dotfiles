@@ -9,8 +9,12 @@ alias uv_clean='uv sync --clean'
 alias uv_check='uv check'
 alias uv_lock='uv lock'
 alias uv_unlock='uv unlock'
-alias uv_freeze="uv pip compile pyproject.toml > requirements.txt"
-alias uv_add_req='grep -vE "^\s*#|^\s*$" requirements.txt | cut -d= -f1 | sort -u | xargs -n1 uv add'
+
+# pyproject.toml → requirements.txt 로 export (requirements.txt는 항상 파생물)
+alias uv_export="uv pip compile pyproject.toml > requirements.txt"
+# 현재 환경 freeze → pyproject.toml dependencies 로 반영 (sync)
+alias uv_freeze="uv add \$(uv pip freeze | grep -v '^-e')"
+
 
 uv_sync() {
     log_dim "Installing [project & development] dependencies..."
