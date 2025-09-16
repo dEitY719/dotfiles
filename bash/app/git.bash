@@ -17,3 +17,4 @@ alias gl1='git log --oneline --graph --decorate' # 깔끔한 로그
 alias gco='git checkout'                         # 체크아웃 (브랜치 이동 등)
 alias gd='git diff'                              # 변경사항 확인
 alias gb='git branch'                            # 브랜치 목록
+alias gf='git fetch origin -p'
