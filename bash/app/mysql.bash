@@ -60,6 +60,59 @@ mysql_server <start|stop|restart|reload|status>
 # 예: mysql_server start
 #      mysql_server status
 
+6) WSL 환경에서 MySQL 서비스 로그/경고 통일 가이드
+----------------------------------------------------------
+# 상황
+# - PC-B (WSL Ubuntu 22.04)에서는 초기 설치 후 systemd 비활성 상태
+# - MySQL 서비스 상태 확인 시 init.d / mysqladmin 기반 출력
+# - "su: cannot change directory to /nonexistent" 경고 발생 가능
+# - Perl locale warning 발생 가능
+
+# 1. WSL systemd 활성화
+#  - /etc/wsl.conf 수정
+sudo nano /etc/wsl.conf
+# 내용 추가:
+[boot]
+systemd=true
+
+#  - WSL 완전 종료 후 재시작 (Windows PowerShell)
+wsl --shutdown
+wsl
+
+#  - 활성 확인
+ps -p 1 -o comm=
+# 출력이 'systemd' 여야 정상
+
+# 2. MySQL systemd 서비스 enable / start
+sudo systemctl enable mysql
+sudo systemctl start mysql
+sudo systemctl status mysql
+# 출력이 PC-A와 동일하게 Active / Loaded / CGroup 형태로 표시
+
+# 3. /nonexistent 홈 디렉토리 경고 제거
+#  - MySQL 계정이 현재 실행 중이면 중지 필요
+sudo systemctl stop mysql
+#  - mysql 계정 홈 디렉토리 변경
+sudo usermod -d /var/lib/mysql mysql
+sudo chown -R mysql:mysql /var/lib/mysql
+#  - MySQL 재시작
+sudo systemctl start mysql
+sudo systemctl status mysql
+# 경고 사라지고 PC-A와 동일하게 깔끔한 로그 확인 가능
+
+# 4. Perl locale warning 제거 (선택 사항)
+sudo apt update
+sudo apt install locales -y
+sudo locale-gen en_US.UTF-8
+sudo update-locale LANG=en_US.UTF-8
+source /etc/default/locale
+# Perl 경고 메시지 사라짐
+
+# 주의 사항
+# - 반드시 WSL 배포판을 --shutdown 후 재시작 해야 systemd 활성화 적용
+# - /nonexistent 경고는 기능상 문제는 없지만, 개발 환경 통일을 위해 변경 권장
+# - 모든 단계 수행 후 mysql systemctl 상태 확인으로 정상 여부 체크
+
 ==========================================================
 MYSQL_DOC
 
