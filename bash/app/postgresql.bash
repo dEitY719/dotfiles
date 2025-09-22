@@ -216,10 +216,3 @@ psql_server() {
         return 1
     fi
 }
-
-# -------------------------------
-# 8) WSL2 / systemd 안내 (필요시)
-# -------------------------------
-if grep -qEi "(Microsoft|WSL)" /proc/version &>/dev/null; then
-    echo "[Info] WSL detected. Use 'sudo service postgresql start' instead of systemctl if needed."
-fi
