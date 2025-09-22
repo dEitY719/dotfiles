@@ -11,12 +11,10 @@ DOTFILES_GIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # gitdotfiles의 특정 파일들
 GIT_CONFIG_SOURCE="${DOTFILES_GIT_DIR}/.gitconfig"
-GIT_CREDENTIALS_SOURCE="${DOTFILES_GIT_DIR}/.git-credentials"
 
 
 # 홈 디렉토리에 생성될 심볼릭 링크의 대상 경로
 HOME_GITCONFIG="${HOME}/.gitconfig"
-HOME_GIT_CREDENTIALS="${HOME}/.git-credentials"
 
 
 # --- Logging Initialization ---
@@ -82,14 +80,6 @@ if [ -f "$GIT_CONFIG_SOURCE" ]; then
     create_symlink "$GIT_CONFIG_SOURCE" "$HOME_GITCONFIG"
 else
     log_error "경고: .gitconfig 파일이 '${GIT_CONFIG_SOURCE}' 경로에 없습니다. 심볼릭 링크를 생성하지 않습니다."
-fi
-
-
-# .git-credentials 심볼릭 링크 생성 (선택 사항)
-if [ -f "$GIT_CREDENTIALS_SOURCE" ]; then
-    create_symlink "$GIT_CREDENTIALS_SOURCE" "$HOME_GIT_CREDENTIALS"
-else
-    log_error "경고: .git-credentials 파일이 '${GIT_CREDENTIALS_SOURCE}' 경로에 없습니다. 심볼릭 링크를 생성하지 않습니다."
 fi
 
 
