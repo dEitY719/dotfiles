@@ -79,6 +79,7 @@ done
 log_progress_stop "\nDotfiles configuration loaded successfully. (Total files sourced: ${SOURCED_FILES_COUNT})"
 print_bash_config_loaded
 print_seraph_banner
+clean_path
 
 # --- WSL2 한글 입력 설정 (자동 추가됨) ---
 export QT_IM_MODULE=fcitx
