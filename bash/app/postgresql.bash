@@ -192,7 +192,10 @@ psql_server() {
     )
 
     local usage_str
-    usage_str=$(IFS='|'; echo "${!cmd_list[*]}")
+    usage_str=$(
+        IFS='|'
+        echo "${!cmd_list[*]}"
+    )
     local action="$1"
 
     if [[ -z "$action" ]]; then

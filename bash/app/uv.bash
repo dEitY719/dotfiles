@@ -15,7 +15,6 @@ alias uv_export="uv pip compile pyproject.toml > requirements.txt"
 # 현재 환경 freeze → pyproject.toml dependencies 로 반영 (sync)
 alias uv_freeze="uv add \$(uv pip freeze | grep -v '^-e')"
 
-
 uv_sync() {
     log_dim "Installing [project & development] dependencies..."
     uv sync
