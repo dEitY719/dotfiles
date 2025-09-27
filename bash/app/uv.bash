@@ -1,79 +1,68 @@
 #!/bin/bash
+# bash/app/uv.bash  (정리판)
 
-# bash/app/uv.bash
+# ── 기본 동사 규칙 ──────────────────────────────────────────────
+# uvi : install (툴 설치)
+# uvs : sync (환경 동기화)
+# uvu : sync with upgrade
+# uvl : lock (lock 갱신)
+# uvc : compile/export (reqs 생성)
+# uvr : requirements로 sync
+# uvd : dev용 설치
+# uvp : prod용 설치
+# uvclean : 불필요 패키지 정리 (사실상 uvs와 동일)
+# uvh : help
 
-alias uv_install='uv sync'
-alias uv_update='uv sync --upgrade'
-alias uv_upgrade='uv sync --upgrade'
-alias uv_clean='uv sync --clean'
+# (1) uv 자체 설치
+alias uvi='curl -LsSf https://astral.sh/uv/install.sh | sh'
+
+# (2) 가장 자주 쓰는 것들
+alias uvs='uv sync'                                  # 기본/프로덕션 동기화
+alias uvu='uv sync --upgrade'                        # 업그레이드 동기화
+alias uvd='uv sync --dev --extra dev'                # dev 환경 설치
+alias uvp='uv sync'                                  # prod 동기화(=uvs)
+alias uvl='uv lock'                                  # lock 파일 갱신
+
+# (3) export / requirements 기반 sync
+alias uvc='uv pip compile pyproject.toml -o requirements.txt'
+alias uvr='uv pip sync requirements.txt'
+
+# (4) 클린 동기화 (여분 패키지 제거, 기본 동작과 동일)
+alias uvclean='uv sync --clean'
+
+# (5) 상태/검증
 alias uv_check='uv check'
-alias uv_lock='uv lock'
-alias uv_unlock='uv unlock'
 
-# pyproject.toml → requirements.txt 로 export (requirements.txt는 항상 파생물)
-alias uv_export="uv pip compile pyproject.toml > requirements.txt"
-# 현재 환경 freeze → pyproject.toml dependencies 로 반영 (sync)
-alias uv_freeze="uv add \$(uv pip freeze | grep -v '^-e')"
+# (6) 도움말(프로젝트 관례 안내)
+uvh() {
+  cat <<-'EOF'
 
-uv_sync() {
-    log_dim "Installing [project & development] dependencies..."
-    uv sync
-    uv sync --dev --extra dev
-    log_info "[project & development] dependencies installed"
-}
+[UV Quick Commands]
 
-uv_dev() {
-    log_dim "Installing [development] dependencies..."
-    uv sync --dev --extra dev
-    log_info "[development] dependencies installed"
-}
+  uvs        : uv sync (base/prod)
+  uvu        : uv sync --upgrade (업그레이드 동기화)
+  uvd        : uv sync --dev --extra dev
+  uvp        : uv sync (prod)
+  uvl        : uv lock
+  uvc        : uv pip compile pyproject.toml -o requirements.txt
+  uvr        : uv pip sync requirements.txt
+  uvclean    : uv sync --clean
+               - pyproject/lock에 없는 패키지를 제거하며 환경을 정리
+               - 사실상 uv sync와 동일 (uv sync 기본이 clean 동작)
+               - 완전 재설치 원하면: uv sync --reinstall 또는 .venv 삭제 후 uv sync
+  uv_check   : uv check
+  uvi        : install uv tool
 
-uv_prod() {
-    log_dim "Installing [production] dependencies..."
-    uv sync
-    log_info "[production] dependencies installed"
-}
+[Recipes]
 
-install_uv() {
-    log_dim "Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    log_info "uv installed"
-}
+  # 전체 extras 포함 설치
+  uv pip sync --all-extras
 
-# Defines the uv_help function to display common uv pip sync commands for this project.
-uv_help() {
-    cat <<-'EOF'
+  # 백엔드만
+  uv pip sync --extra backend --extra dev
 
-Usage: source this file and then run 'uv_help'
-
-This will display the common 'uv pip sync' commands for this project.
-
---------------------------------------------------------------------------------
-
-[ uv pip sync Commands ]
-
-1. Full Installation (frontend, backend, and dev):
-   Installs all project dependencies.
-   
-   uv pip sync --all-extras
-
-2. Backend Only Installation:
-   Installs base, backend, and development dependencies.
-   
-   uv pip sync --extra backend --extra dev
-
-3. Frontend Only Installation:
-   Installs base, frontend, and development dependencies.
-   
-   uv pip sync --extra frontend --extra dev
-
---------------------------------------------------------------------------------
-
-[ Lock File Update ]
-
-If you modify 'pyproject.toml', update the lockfile before syncing:
-
-   uv lock
+  # 프론트엔드만
+  uv pip sync --extra frontend --extra dev
 
 EOF
 }
