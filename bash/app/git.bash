@@ -20,3 +20,13 @@ alias gb='git branch'                            # 브랜치 목록
 alias gf='git fetch origin -p'
 alias gfa='git fetch --all --prune'              # 원격 전체 fetch + 필요없는 브랜치 정리
 alias gpl='git pull'                             # 현재 브랜치만 pull
+
+
+alias gset-main='git branch --set-upstream-to=origin/main main'
+alias gset-dev='git branch --set-upstream-to=origin/dev dev'
+
+gset() {
+    # 사용법: gset <branch>
+    local branch=${1:-$(git symbolic-ref --short HEAD)}
+    git branch --set-upstream-to=origin/$branch $branch
+}
