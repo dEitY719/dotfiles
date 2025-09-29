@@ -24,6 +24,8 @@ alias upgrade='sudo apt upgrade' # 패키지 업그레이드
 alias upgrade_all='sudo apt update && sudo apt upgrade'
 alias install='sudo apt install' # 패키지 설치
 alias remove='sudo apt remove'   # 패키지 제거
+alias auto_remove='sudo apt autoremove'
+
 
 # 로그 확인
 alias logs='tail -f /var/log/syslog'     # 시스템 로그 실시간 확인
