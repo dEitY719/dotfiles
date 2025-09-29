@@ -31,7 +31,7 @@ alias uvr='uv pip sync requirements.txt'
 alias uvclean='uv sync --clean'
 
 # (5) 상태/검증
-alias uv_check='uv check'
+alias uv_check='uv pip check'
 
 # (6) 도움말(프로젝트 관례 안내)
 uvh() {
