@@ -14,8 +14,8 @@ export PATH="$DOTFILES_BASH_DIR/scripts:$PATH"
 safe_source "$HOME/.local/bin/env" ".local/bin/env file not found"
 
 # PATH 변수 중복 제거 함수
-# PathCleaner.clean_path()
-clean_path() {
+# PathCleaner.clean_paths()
+clean_paths() {
     local newpath
     local path_entry
     local seen

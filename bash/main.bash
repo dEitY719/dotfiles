@@ -21,6 +21,17 @@ log_progress_start "Loading dotfiles configurations..."
 # Initialize a counter for sourced files
 SOURCED_FILES_COUNT=0
 
+# ------------------------------------------------------------------
+# --- Clean up old *h() functions before re-loading ---
+# This prevents stale function definitions from persisting across shell reloads
+while IFS= read -r func; do
+    func_name="${func%%(*}"
+    # Only unset help functions (ending with 'h'), excluding myh itself
+    if [[ "$func_name" =~ h$ ]] && [[ "$func_name" != "myh" ]]; then
+        unset -f "$func_name" 2>/dev/null
+    fi
+done < <(declare -F | awk '{print $3}' | grep 'h$' 2>/dev/null | sort)
+
 # Function to safely source a file and increment counter
 # shellcheck disable=SC1073
 safe_source() {
@@ -94,7 +105,7 @@ done
 log_progress_stop "\nDotfiles configuration loaded successfully. (Total files sourced: ${SOURCED_FILES_COUNT})"
 print_bash_config_loaded
 print_seraph_banner
-clean_path
+clean_paths
 
 # ------------------------------------------------------------------
 # --- Master Help Function ---
