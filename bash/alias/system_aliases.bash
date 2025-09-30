@@ -30,3 +30,44 @@ alias auto_remove='sudo apt autoremove'
 alias logs='tail -f /var/log/syslog'     # 시스템 로그 실시간 확인
 alias error='tail -f /var/log/error.log' # 에러 로그 실시간 확인
 alias auth='tail -f /var/log/auth.log'   # 인증 로그 실시간 확인
+
+# -------------------------------
+# System aliases 도움말
+# -------------------------------
+sysh() {
+    cat <<-'EOF'
+
+[System Management Commands]
+
+  Process Management:
+    psg          : ps aux | grep (프로세스 검색)
+    kill9        : kill -9 (강제 종료)
+    psa          : ps aux (모든 프로세스 표시)
+
+  Network:
+    ports        : ss -tulanp (열린 포트 확인)
+    myip         : curl http://ipecho.net/plain (공인 IP)
+    localip      : hostname -I (로컬 IP)
+    ping         : ping -c 5 (5회만 실행)
+
+  System Monitoring:
+    top          : htop (향상된 top, htop 설치 필요)
+    meminfo      : free -m -l -t (메모리 정보)
+    cpuinfo      : lscpu (CPU 정보)
+    diskusage    : df -h (디스크 사용량)
+
+  Package Management:
+    update       : sudo apt update
+    upgrade      : sudo apt upgrade
+    upgrade_all  : sudo apt update && sudo apt upgrade
+    install      : sudo apt install
+    remove       : sudo apt remove
+    auto_remove  : sudo apt autoremove
+
+  Logs:
+    logs         : tail -f /var/log/syslog (시스템 로그)
+    error        : tail -f /var/log/error.log (에러 로그)
+    auth         : tail -f /var/log/auth.log (인증 로그)
+
+EOF
+}

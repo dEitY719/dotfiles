@@ -26,3 +26,43 @@ alias test_unittest='python -m unittest discover'            # unittest 전용
 
 # Python Documentation
 alias docs_gen='sphinx-apidoc -o docs/source . && sphinx-build -b html docs/source docs/build'
+
+# -------------------------------
+# Python aliases 도움말
+# -------------------------------
+pph() {
+    cat <<-'EOF'
+
+[Python Package Management]
+
+  Installation:
+    pp_install     : pip install
+    pp_install_up  : pip install --upgrade pip && pip install
+    pp_reqs        : pip install -r requirements.txt
+    pp_uninstall   : pip uninstall -y
+
+  Management:
+    pp_freeze      : Generate requirements.txt (excluding project name)
+    pp_list        : pip list --outdated --format=columns
+    pp_check       : pip check
+
+[Python Code Quality]
+
+  Formatting & Linting:
+    code_check     : ruff format . --check && ruff check . (CI용)
+    code_fix       : ruff format . && ruff check . --fix (자동 수정)
+    code_type      : mypy . (타입 검사)
+
+[Python Testing]
+
+  Testing:
+    test_pytest    : pytest --maxfail=1 --disable-warnings -q
+    test_unittest  : python -m unittest discover
+
+[Python Documentation]
+
+  Docs:
+    docs_gen       : sphinx-apidoc + sphinx-build
+
+EOF
+}

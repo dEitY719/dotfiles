@@ -95,3 +95,63 @@ log_progress_stop "\nDotfiles configuration loaded successfully. (Total files so
 print_bash_config_loaded
 print_seraph_banner
 clean_path
+
+# ------------------------------------------------------------------
+# --- Master Help Function ---
+# Automatically detects and lists all *h() help functions
+# ------------------------------------------------------------------
+myh() {
+    cat <<-'EOF'
+
+╔════════════════════════════════════════════════════════════════╗
+║                   Dotfiles Help Functions                      ║
+╚════════════════════════════════════════════════════════════════╝
+
+EOF
+
+    echo "Available help commands:"
+    echo ""
+
+    # Automatically detect all functions ending with 'h' (excluding myh itself)
+    local help_funcs=()
+    while IFS= read -r func; do
+        # Extract function name only (remove parentheses)
+        func_name="${func%%(*}"
+        if [[ "$func_name" =~ h$ ]] && [[ "$func_name" != "myh" ]]; then
+            help_funcs+=("$func_name")
+        fi
+    done < <(declare -F | awk '{print $3}' | grep 'h$' | sort)
+
+    # Display help functions with descriptions
+    declare -A help_descriptions=(
+        ["uvh"]="UV package manager commands"
+        ["gith"]="Git shortcuts and aliases"
+        ["pyh"]="Python virtual environment commands"
+        ["dirh"]="Directory navigation aliases"
+        ["sysh"]="System management commands"
+        ["pph"]="Python package and code quality tools"
+    )
+
+    local max_width=0
+    for func in "${help_funcs[@]}"; do
+        if ((${#func} > max_width)); then
+            max_width=${#func}
+        fi
+    done
+
+    for func in "${help_funcs[@]}"; do
+        desc="${help_descriptions[$func]:-No description available}"
+        printf "  %-${max_width}s  :  %s\n" "$func" "$desc"
+    done
+
+    cat <<-'EOF'
+
+Usage: Type any of the above commands to see detailed help.
+Example: gith
+
+To add a new help function:
+  1. Create a function ending with 'h' (e.g., dockerh)
+  2. It will be automatically detected by myh()
+
+EOF
+}
