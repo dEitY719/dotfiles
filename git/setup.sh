@@ -47,7 +47,7 @@ backup_file() {
     local file_to_backup="$1"
     local backup_destination="$2"
     if [ -e "$file_to_backup" ]; then
-        log_error "백업 파일 생성: $file_to_backup -> $backup_destination"
+        log_info "백업 파일 생성: $file_to_backup -> $backup_destination"
         cp "$file_to_backup" "$backup_destination" || log_error_and_exit "백업 파일 생성 실패: $file_to_backup"
     fi
 }
@@ -79,7 +79,7 @@ log_debug "\n--- Git dotfiles setup 시작 ---"
 if [ -f "$GIT_CONFIG_SOURCE" ]; then
     create_symlink "$GIT_CONFIG_SOURCE" "$HOME_GITCONFIG"
 else
-    log_error "경고: .gitconfig 파일이 '${GIT_CONFIG_SOURCE}' 경로에 없습니다. 심볼릭 링크를 생성하지 않습니다."
+    log_warning "경고: .gitconfig 파일이 '${GIT_CONFIG_SOURCE}' 경로에 없습니다. 심볼릭 링크를 생성하지 않습니다."
 fi
 
 

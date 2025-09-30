@@ -17,11 +17,11 @@
 alias uvi='curl -LsSf https://astral.sh/uv/install.sh | sh'
 
 # (2) 가장 자주 쓰는 것들
-alias uvs='uv sync'                                  # 기본/프로덕션 동기화
-alias uvu='uv sync --upgrade'                        # 업그레이드 동기화
-alias uvd='uv sync --dev --extra dev'                # dev 환경 설치
-alias uvp='uv sync'                                  # prod 동기화(=uvs)
-alias uvl='uv lock'                                  # lock 파일 갱신
+alias uvs='uv sync'                   # 기본/프로덕션 동기화
+alias uvu='uv sync --upgrade'         # 업그레이드 동기화
+alias uvd='uv sync --dev --extra dev' # dev 환경 설치
+alias uvp='uv sync'                   # prod 동기화(=uvs)
+alias uvl='uv lock'                   # lock 파일 갱신
 
 # (3) export / requirements 기반 sync
 alias uvc='uv pip compile pyproject.toml -o requirements.txt'
@@ -35,7 +35,7 @@ alias uv_check='uv pip check'
 
 # (6) 도움말(프로젝트 관례 안내)
 uvh() {
-  cat <<-'EOF'
+    cat <<-'EOF'
 
 [UV Quick Commands]
 

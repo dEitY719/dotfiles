@@ -5,7 +5,6 @@
 # Add user-installed Python scripts to the PATH (for pip packages like gemini-cli)
 export PATH="$HOME/.local/bin:$PATH"
 
-
 # Python Virtual Environment
 alias create_venv='python -m venv .venv'
 alias act_venv='source .venv/bin/activate'

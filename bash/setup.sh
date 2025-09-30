@@ -55,7 +55,7 @@ create_symlink() {
 
     elif [ -f "$link_name" ]; then
 
-        log_error "경고: $link_name 가 심볼릭 링크가 아닌 일반 파일입니다. 백업 후 제거합니다."
+        log_warning "경고: $link_name 가 심볼릭 링크가 아닌 일반 파일입니다. 백업 후 제거합니다."
 
         backup_file "$link_name" "${link_name}-$(date +%Y%m%d%H%M%S)-original"
 

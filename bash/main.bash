@@ -51,6 +51,11 @@ for f in "${ENV_DIR}/"*.bash; do
     safe_source "$f" "Environment variable file not found"
 done
 
+# --- Load local environment overrides (not tracked by git) ---
+if [[ -f "${ENV_DIR}/local.bash" ]]; then
+    safe_source "${ENV_DIR}/local.bash" "Local environment file not found"
+fi
+
 # ------------------------------------------------------------------
 # --- Alias 설� � 로드 ---
 ALIAS_DIR="${DOTFILES_BASH_DIR}/alias"
@@ -58,6 +63,11 @@ ALIAS_DIR="${DOTFILES_BASH_DIR}/alias"
 for f in "${ALIAS_DIR}/"*.bash; do
     safe_source "$f" "Alias file not found"
 done
+
+# --- Load local aliases (not tracked by git) ---
+if [[ -f "${ALIAS_DIR}/local.bash" ]]; then
+    safe_source "${ALIAS_DIR}/local.bash" "Local alias file not found"
+fi
 # ------------------------------------------------------------------
 
 # --- � 플리케이션별 설� � 로드 ---
@@ -66,6 +76,11 @@ APP_DIR="${DOTFILES_BASH_DIR}/app"
 for f in "${APP_DIR}/"*.bash; do
     safe_source "$f" "Application setting file not found"
 done
+
+# --- Load local app configurations (not tracked by git) ---
+if [[ -f "${APP_DIR}/local.bash" ]]; then
+    safe_source "${APP_DIR}/local.bash" "Local app file not found"
+fi
 
 # --- � 플리케이션별 설� � 로드 ---
 UTIL_DIR="${DOTFILES_BASH_DIR}/util"
@@ -80,14 +95,3 @@ log_progress_stop "\nDotfiles configuration loaded successfully. (Total files so
 print_bash_config_loaded
 print_seraph_banner
 clean_path
-
-# --- WSL2 한글 입력 설정 (자동 추가됨) ---
-export QT_IM_MODULE=fcitx
-export GTK_IM_MODULE=fcitx
-export XMODIFIERS=@im=fcitx
-export DefaultIMModule=fcitx
-# fcitx가 아직 실행되지 않았다면 시작 (선택 사항이지만 권장)
-if ! pgrep -x fcitx >/dev/null; then
-    fcitx-autostart &>/dev/null
-fi
-# --- WSL2 한글 입력 설정 끝 ---

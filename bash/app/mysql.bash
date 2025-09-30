@@ -159,6 +159,7 @@ database=$db_name
 EOF
 
     alias_name="mysql_$service_name"
+    # shellcheck disable=SC2139
     alias "$alias_name"="mysql --defaults-group-suffix=_$service_name"
 done
 

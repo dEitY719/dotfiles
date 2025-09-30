@@ -114,6 +114,7 @@ EOF
 
     # alias 등록
     alias_name="psql_$service_name"
+    # shellcheck disable=SC2139
     alias "$alias_name"="psql \"\$service_name\""
 done
 
