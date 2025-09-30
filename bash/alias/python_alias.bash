@@ -1,12 +1,5 @@
 #!/bin/bash
 
-# Python Virtual Environment
-alias cv='python -m venv .venv'
-alias av='source .venv/bin/activate'
-alias ev='echo $VIRTUAL_ENV'
-alias dv='source deactivate'
-# deactivate는 source 없이도 작동합니다.
-# pyenv-virtualenv: deactivate must be sourced. Run 'source deactivate' instead of 'deactivate'
 
 # Python Package Management
 # alias pp_freeze: pyproject.toml에서 프로젝트 이름을 읽어와 pip freeze 목록에서 제외하고, -e .을 추가하여 requirements.txt를 생성하는 명령어입니다.
