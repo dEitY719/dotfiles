@@ -10,7 +10,7 @@
 #       💰 https://github.com/dEitY719/FinRx.git
 #======================================
 # TBD ...
-alias run_fcli='python ./src/ticker_library/cli.py'
+alias run_fcli='python ./src/ticker_library/cli/cli.py'
 
 #======================================
 # dmc-playground
