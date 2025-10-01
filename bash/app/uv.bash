@@ -21,7 +21,8 @@ alias uvs='uv sync'                   # 기본/프로덕션 동기화
 alias uvu='uv sync --upgrade'         # 업그레이드 동기화
 alias uvd='uv sync --dev --extra dev' # dev 환경 설치
 alias uvp='uv sync'                   # prod 동기화(=uvs)
-alias uvl='uv lock'                   # lock 파일 갱신
+alias uvk='uv lock'                   # lock 파일 갱신
+alias uvl='uv pip list'               # 설치 목록 확인
 
 # (3) export / requirements 기반 sync
 alias uvc='uv pip compile pyproject.toml -o requirements.txt'
@@ -31,7 +32,7 @@ alias uvr='uv pip sync requirements.txt'
 alias uvclean='uv sync --clean'
 
 # (5) 상태/검증
-alias uv_check='uv pip check'
+alias uvcheck='uv pip check'
 
 # (6) 도움말(프로젝트 관례 안내)
 uvh() {
@@ -43,14 +44,15 @@ uvh() {
   uvu        : uv sync --upgrade (업그레이드 동기화)
   uvd        : uv sync --dev --extra dev
   uvp        : uv sync (prod)
-  uvl        : uv lock
+  uvk        : uv lock
+  uvl        : uv pip list
   uvc        : uv pip compile pyproject.toml -o requirements.txt
   uvr        : uv pip sync requirements.txt
   uvclean    : uv sync --clean
                - pyproject/lock에 없는 패키지를 제거하며 환경을 정리
                - 사실상 uv sync와 동일 (uv sync 기본이 clean 동작)
                - 완전 재설치 원하면: uv sync --reinstall 또는 .venv 삭제 후 uv sync
-  uv_check   : uv check
+  uvcheck    : uv check
   uvi        : install uv tool
 
 [Recipes]
