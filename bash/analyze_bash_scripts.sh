@@ -2,7 +2,7 @@
 
 # ==============================================================================
 # Bash Script Analyzer: alias 및 function 정의를 파싱하여 매뉴얼 생성
-# (함수 이름 추출 정규식 강화 버전)
+# (gawk 비의존적으로 수정된 버전)
 # ==============================================================================
 
 # 전역 변수 초기화
@@ -25,16 +25,8 @@ usage() {
 parse_aliases() {
     local file_path="$1"
     local alias_names
-    # awk를 사용하여 alias 정의 라인에서 이름만 효율적으로 추출합니다.
-    # grep과 sed를 반복 호출하는 대신, 단일 awk 프로세스로 처리하여 효율성을 높입니다.
-    mapfile -t alias_names < <(awk '
-        # 주석 처리된 라인은 건너뜁니다.
-        /^\s*#/ { next }
-        # "alias my_alias=..." 형태와 일치하는 라인에서 alias 이름만 추출합니다.
-        match($0, /^\s*alias\s+([a-zA-Z0-9_-]+)/, m) {
-            print m[1]
-        }
-    ' "$file_path")
+    # sed를 사용하여 alias 이름 추출 (주석 처리된 라인 제외)
+    mapfile -t alias_names < <(grep '^	*alias' "$file_path" | grep -v '^	*#' | sed -n 's/^	*alias		\+\([a-zA-Z0-9_-]\+\)=.*\/\1/p')
 
     for alias_name in "${alias_names[@]}"; do
         if [[ -n "$alias_name" && ! -v ALL_ALIASES["$alias_name"] ]]; then
@@ -44,23 +36,12 @@ parse_aliases() {
     done
 }
 
-# function 정의를 파싱하고 전역 변수에 업데이트하는 함수 (수정된 부분)
+# function 정의를 파싱하고 전역 변수에 업데이트하는 함수
 parse_functions() {
     local file_path="$1"
     local func_names
-    # awk를 사용하여 두 가지 형태의 함수 정의('function name' 및 'name()')를 모두 찾아
-    # 함수 이름만 효율적으로 추출합니다.
-    mapfile -t func_names < <(awk '
-        # 주석 처리된 라인은 건너뜁니다.
-        /^\s*#/ { next }
-        # "function my_func" 형태를 먼저 확인합니다.
-        if (match($0, /^\s*function\s+([a-zA-Z0-9_-]+)/, m)) {
-            print m[1]
-        # "my_func()" 형태를 확인합니다.
-        } else if (match($0, /^\s*([a-zA-Z0-9_-]+)\s*\(\)/, m)) {
-            print m[1]
-        }
-    ' "$file_path")
+    # sed를 사용하여 두 가지 형태의 함수 정의('function name' 및 'name()')를 모두 파싱
+    mapfile -t func_names < <(grep -v '^	*#' "$file_path" | sed -n -E 's/^	*function		\+\([a-zA-Z0-9_-]\+\).*/\1/p; s/^	*\([a-zA-Z0-9_-]\+\)		*\(\).*/\1/p')
 
     for func_name in "${func_names[@]}"; do
         if [[ -n "$func_name" && ! -v ALL_FUNCTIONS["$func_name"] ]]; then
@@ -70,7 +51,7 @@ parse_functions() {
     done
 }
 
-# 결과 출력 함수 (이전과 동일)
+# 결과 출력 함수
 print_results() {
     echo "---"
     echo "## Bash 매뉴얼 요약"
@@ -99,7 +80,7 @@ print_results() {
 }
 
 # ==============================================================================
-# 메인 로직 (이전과 동일)
+# 메인 로직
 # ==============================================================================
 
 if [[ -z "$1" ]]; then
@@ -113,13 +94,11 @@ if [[ ! -d "$TARGET_DIR" ]]; then
     usage
 fi
 
-echo "Analyzing bash files in: $TARGET_DIR"
+# echo "Analyzing bash files in: $TARGET_DIR" # This message is now hidden in myman
 
 mapfile -t bash_files < <(find "$TARGET_DIR" -type f -name "*.bash")
 
 for bash_file in "${bash_files[@]}"; do
-    # 디버그 메시지 제거 (정상 동작 확인 후)
-    # echo "  Processing: $(basename "$bash_file")"
     parse_aliases "$bash_file"
     parse_functions "$bash_file"
 done
