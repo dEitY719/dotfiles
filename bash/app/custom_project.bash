@@ -18,4 +18,4 @@ alias run_fcli='python ./src/ticker_library/cli/cli.py'
 #======================================
 alias run_bes="uv run uvicorn src.backend.main:app --reload --host 127.0.0.1 --port 8000"
 # alias run_fes="uv run uvicorn src.backend.main:app --reload --host 127.0.0.1 --port 8000"
-alias run_cli="python api_cli.py"
+alias run_cli="python src/backend/api_cli.py"
