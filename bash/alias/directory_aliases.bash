@@ -204,7 +204,7 @@ EOF
 # -------------------------------
 # Directory navigation 도움말
 # -------------------------------
-dirh() {
+dirhelp() {
     cat <<-'EOF'
 
 [Directory Navigation Commands]

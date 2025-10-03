@@ -22,15 +22,15 @@ log_progress_start "Loading dotfiles configurations..."
 SOURCED_FILES_COUNT=0
 
 # ------------------------------------------------------------------
-# --- Clean up old *h() functions before re-loading ---
+# --- Clean up old *help() functions before re-loading ---
 # This prevents stale function definitions from persisting across shell reloads
 while IFS= read -r func; do
     func_name="${func%%(*}"
-    # Only unset help functions (ending with 'h'), excluding myh itself
-    if [[ "$func_name" =~ h$ ]] && [[ "$func_name" != "myh" ]]; then
+    # Only unset help functions (ending with 'help'), excluding myh itself
+    if [[ "$func_name" =~ help$ ]] && [[ "$func_name" != "myh" ]]; then
         unset -f "$func_name" 2>/dev/null
     fi
-done < <(declare -F | awk '{print $3}' | grep 'h$' 2>/dev/null | sort)
+done < <(declare -F | awk '{print $3}' | grep 'help$' 2>/dev/null | sort)
 
 # Function to safely source a file and increment counter
 # shellcheck disable=SC1073
@@ -68,7 +68,6 @@ if [[ -f "${ENV_DIR}/local.bash" ]]; then
 fi
 
 # ------------------------------------------------------------------
-# --- Alias 설� � 로드 ---
 ALIAS_DIR="${DOTFILES_BASH_DIR}/alias"
 # log_info "Sourcing aliases from: ${ALIAS_DIR}" # 스피너 사용 시 이 메시지는 생략
 for f in "${ALIAS_DIR}/"*.bash; do
@@ -81,7 +80,6 @@ if [[ -f "${ALIAS_DIR}/local.bash" ]]; then
 fi
 # ------------------------------------------------------------------
 
-# --- � 플리케이션별 설� � 로드 ---
 APP_DIR="${DOTFILES_BASH_DIR}/app"
 # log_info "Sourcing application settings from: ${APP_DIR}" # 스피너 사용 시 이 메시지는 생략
 for f in "${APP_DIR}/"*.bash; do
@@ -93,9 +91,12 @@ if [[ -f "${APP_DIR}/local.bash" ]]; then
     safe_source "${APP_DIR}/local.bash" "Local app file not found"
 fi
 
-# --- � 플리케이션별 설� � 로드 ---
+COREUTILS_DIR="${DOTFILES_BASH_DIR}/coreutils"
+for f in "${COREUTILS_DIR}/"*.bash; do
+    safe_source "$f" "Core Utils setting file not found"
+done
+
 UTIL_DIR="${DOTFILES_BASH_DIR}/util"
-# log_info "Sourcing application settings from: ${APP_DIR}" # 스피너 사용 시 이 메시지는 생략
 for f in "${UTIL_DIR}/"*.bash; do
     safe_source "$f" "Utility setting file not found"
 done
@@ -109,9 +110,9 @@ clean_paths
 
 # ------------------------------------------------------------------
 # --- Master Help Function ---
-# Automatically detects and lists all *h() help functions
+# Automatically detects and lists all *help() functions
 # ------------------------------------------------------------------
-myh() {
+myhelp() {
     cat <<-'EOF'
 
 ╔════════════════════════════════════════════════════════════════╗
@@ -128,20 +129,21 @@ EOF
     while IFS= read -r func; do
         # Extract function name only (remove parentheses)
         func_name="${func%%(*}"
-        if [[ "$func_name" =~ h$ ]] && [[ "$func_name" != "myh" ]]; then
+        if [[ "$func_name" =~ help$ ]] && [[ "$func_name" != "myhelp" ]] && [[ "$func_name" != _* ]]; then
             help_funcs+=("$func_name")
         fi
-    done < <(declare -F | awk '{print $3}' | grep 'h$' | sort)
+    done < <(declare -F | awk '{print $3}' | grep 'help$' | sort)
 
     # Display help functions with descriptions
     declare -A help_descriptions=(
-        ["uvh"]="UV package manager commands"
-        ["gith"]="Git shortcuts and aliases"
-        ["pyh"]="Python virtual environment commands"
-        ["dirh"]="Directory navigation aliases"
-        ["sysh"]="System management commands"
-        ["pph"]="Python package and code quality tools"
-        ["clih"]="Custom Project CLI list"
+        ["uvhelp"]="UV package manager commands"
+        ["githelp"]="Git shortcuts and aliases"
+        ["pyhelp"]="Python virtual environment commands"
+        ["dirhelp"]="Directory navigation aliases"
+        ["syshelp"]="System management commands"
+        ["pphelp"]="Python package and code quality tools"
+        ["clihelp"]="Custom Project CLI list"
+        ["duhelp"]="disk usage help"
     )
 
     local max_width=0
@@ -159,11 +161,11 @@ EOF
     cat <<-'EOF'
 
 Usage: Type any of the above commands to see detailed help.
-Example: gith
+Example: githelp, uvhelp, ...
 
 To add a new help function:
-  1. Create a function ending with 'h' (e.g., dockerh)
-  2. It will be automatically detected by myh()
+  1. Create a function ending with 'help' (e.g., dockerhelp)
+  2. It will be automatically detected by myhelp()
 
 EOF
 }

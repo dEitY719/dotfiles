@@ -34,7 +34,7 @@ alias auth='tail -f /var/log/auth.log'   # 인증 로그 실시간 확인
 # -------------------------------
 # System aliases 도움말
 # -------------------------------
-sysh() {
+syshelp() {
     cat <<-'EOF'
 
 [System Management Commands]

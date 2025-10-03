@@ -35,7 +35,7 @@ alias uvclean='uv sync --clean'
 alias uvcheck='uv pip check'
 
 # (6) 도움말(프로젝트 관례 안내)
-uvh() {
+uvhelp() {
     cat <<-'EOF'
 
 [UV Quick Commands]

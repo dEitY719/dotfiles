@@ -30,7 +30,7 @@ alias docs_gen='sphinx-apidoc -o docs/source . && sphinx-build -b html docs/sour
 # -------------------------------
 # Python aliases 도움말
 # -------------------------------
-pph() {
+pphelp() {
     cat <<-'EOF'
 
 [Python Package Management]

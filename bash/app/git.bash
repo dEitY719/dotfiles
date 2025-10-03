@@ -33,7 +33,7 @@ gset() {
 # -------------------------------
 # Git helper 도움말
 # -------------------------------
-gith() {
+githelp() {
     cat <<-'EOF'
 
 [Git Quick Commands]

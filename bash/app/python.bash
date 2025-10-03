@@ -23,7 +23,7 @@ alias dv='source deactivate'
 # -------------------------------
 # Python venv 도움말
 # -------------------------------
-pyh() {
+pyhelp() {
     cat <<-'EOF'
 
 [Python Virtual Environment Commands]

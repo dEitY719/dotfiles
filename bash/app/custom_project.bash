@@ -22,7 +22,7 @@ alias run_bes="uv run uvicorn src.backend.main:app --reload --host 127.0.0.1 --p
 alias run_api_cli="python src/backend/api_cli.py"
 alias run_db_cli="python src/database/db_cli.py"
 
-clih() {
+clihelp() {
     cat <<-'EOF'
 
 [Custom Project CLI Help]
