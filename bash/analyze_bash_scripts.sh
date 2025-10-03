@@ -2,8 +2,11 @@
 
 # ==============================================================================
 # Bash Script Analyzer: alias 및 function 정의를 파싱하여 매뉴얼 생성
-# (gawk 비의존적으로 수정된 버전)
+# (LC_ALL=C 추가 및 파서 재수정)
 # ==============================================================================
+
+# 일관된 정규식 및 정렬 동작을 위해 로케일을 C로 설정
+export LC_ALL=C
 
 # 전역 변수 초기화
 declare -A ALL_ALIASES
@@ -25,8 +28,8 @@ usage() {
 parse_aliases() {
     local file_path="$1"
     local alias_names
-    # sed를 사용하여 alias 이름 추출 (주석 처리된 라인 제외)
-    mapfile -t alias_names < <(grep '^	*alias' "$file_path" | grep -v '^	*#' | sed -n 's/^	*alias		\+\([a-zA-Z0-9_-]\+\)=.*\/\1/p')
+    # grep의 정규식을 수정하여 '..', '~' 같은 다양한 alias 이름을 올바르게 처리
+    mapfile -t alias_names < <(grep -E '^\s*alias\s+.*=' "$file_path" | grep -v '^\s*#' | sed -E 's/^\s*alias\s+([^=]+)=.*/\1/')
 
     for alias_name in "${alias_names[@]}"; do
         if [[ -n "$alias_name" && ! -v ALL_ALIASES["$alias_name"] ]]; then
@@ -40,8 +43,8 @@ parse_aliases() {
 parse_functions() {
     local file_path="$1"
     local func_names
-    # sed를 사용하여 두 가지 형태의 함수 정의('function name' 및 'name()')를 모두 파싱
-    mapfile -t func_names < <(grep -v '^	*#' "$file_path" | sed -n -E 's/^	*function		\+\([a-zA-Z0-9_-]\+\).*/\1/p; s/^	*\([a-zA-Z0-9_-]\+\)		*\(\).*/\1/p')
+    # Handles 'name()' and 'function name()'
+    mapfile -t func_names < <(grep -E '^\s*(function\s+)?[a-zA-Z0-9._-]+\s*\(\)' "$file_path" | grep -v '^\s*#' | sed -E 's/^\s*(function\s+)?//; s/\s*\(\).*//')
 
     for func_name in "${func_names[@]}"; do
         if [[ -n "$func_name" && ! -v ALL_FUNCTIONS["$func_name"] ]]; then
@@ -93,8 +96,6 @@ if [[ ! -d "$TARGET_DIR" ]]; then
     echo "오류: '$TARGET_DIR' 디렉토리를 찾을 수 없습니다."
     usage
 fi
-
-# echo "Analyzing bash files in: $TARGET_DIR" # This message is now hidden in myman
 
 mapfile -t bash_files < <(find "$TARGET_DIR" -type f -name "*.bash")
 
