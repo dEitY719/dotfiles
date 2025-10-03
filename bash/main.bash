@@ -141,6 +141,7 @@ EOF
         ["dirh"]="Directory navigation aliases"
         ["sysh"]="System management commands"
         ["pph"]="Python package and code quality tools"
+        ["clih"]="Custom Project CLI list"
     )
 
     local max_width=0
