@@ -31,6 +31,50 @@ gset() {
 }
 
 # -------------------------------
+# Git LFS 설치 함수 (Ubuntu 전용)
+# -------------------------------
+git_lfs_install() {
+    echo "[Git LFS 설치 시작]"
+
+    # apt 업데이트
+    sudo apt-get update
+
+    # git-lfs 설치
+    sudo apt-get install -y git-lfs
+
+    # git-lfs 초기화
+    git lfs install
+
+    # 설치 확인
+    if command -v git-lfs &>/dev/null; then
+        echo "[완료] Git LFS 설치 성공 ✅"
+        git lfs version
+    else
+        echo "[실패] Git LFS 설치가 올바르게 완료되지 않았습니다 ❌"
+    fi
+}
+
+# -------------------------------
+# Git LFS Track 함수
+# -------------------------------
+git_lfs_track() {
+    if [ $# -eq 0 ]; then
+        echo "사용법: git_lfs_track <패턴...>"
+        echo "예: git_lfs_track \"*.zip\" \"*.sql\" \"*.tar.gz\""
+        return 1
+    fi
+
+    for pattern in "$@"; do
+        git lfs track "$pattern"
+        echo "[추가됨] $pattern → .gitattributes"
+    done
+
+    echo "⚠️ 반드시 .gitattributes 파일을 커밋하세요!"
+}
+
+alias glfs='git_lfs_track'
+
+# -------------------------------
 # Git helper 도움말
 # -------------------------------
 githelp() {
@@ -67,5 +111,9 @@ githelp() {
   Special:
     gpf_dev_server : git push -f origin HEAD:refs/heads/dev-server
 
+  Git LFS:
+    git_lfs_install : Ubuntu 환경에서 git-lfs 설치 및 초기화 (최초 1회)
+    git_lfs_track   : git-lfs track <패턴...> (예: git_lfs_track "*.zip" "*.sql" "*.tar.gz")
+    glfs            : git_lfs_track 단축 명령어
 EOF
 }
