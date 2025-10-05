@@ -6,11 +6,10 @@
 # Strict mode: 실행(run)일 때만 -euo 적용, source일 땐 pipefail만
 # -------------------------------------------------
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  set -euo pipefail
+    set -euo pipefail
 else
-  set -o pipefail
+    set -o pipefail
 fi
-
 
 : <<'POSTGRES_DOC'
 ==========================================================
@@ -103,8 +102,8 @@ export LC_ALL=en_US.UTF-8
 # 1) 서비스 정의: "서비스명 DB명 사용자 비밀번호"
 # -------------------------------
 services=(
-  "dmc_dev  dmc_playground_dev  dmc_user  change_me_strong_pw"
-  "dmc_test dmc_playground_test dmc_user  change_me_strong_pw"
+    "dmc_dev  dmc_playground_dev  dmc_user  change_me_strong_pw"
+    "dmc_test dmc_playground_test dmc_user  change_me_strong_pw"
 )
 
 PGSERVICE_FILE="$HOME/.pg_service.conf"
@@ -120,51 +119,84 @@ touch "$PGSERVICE_FILE"
 chmod 600 "$PGSERVICE_FILE"
 
 # -------------------------------
-# 3) 기존 psql_* alias 삭제
+# 3) 기존 psql_* function 삭제
 # -------------------------------
 while IFS= read -r name; do
-  [[ -n "${name}" ]] && unalias "${name}" 2>/dev/null || true
-done < <(alias -p 2>/dev/null | awk -F'[ =]' '/^alias psql_/ {print $2}')
+    if [[ -n "${name}" ]]; then
+        unset -f "${name}" 2>/dev/null
+    fi
+done < <(declare -F | awk '{print $3}' | grep '^psql_')
 
 # -------------------------------
 # 4) 서비스 배열 기반 설정/alias 생성
 # -------------------------------
 for entry in "${services[@]}"; do
-  # shellcheck disable=SC2086
-  read -r service_name db_name db_user db_pass <<< "$entry"
+    # shellcheck disable=SC2086
+    read -r service_name db_name db_user db_pass <<<"$entry"
 
-  # ~/.pg_service.conf 에 서비스 섹션 작성
-  {
-    echo "[$service_name]"
-    echo "host=$DEFAULT_HOST"
-    echo "port=$DEFAULT_PORT"
-    echo "dbname=$db_name"
-    echo "user=$db_user"
-    echo "password=$db_pass"
-    echo
-  } >> "$PGSERVICE_FILE"
+    # ~/.pg_service.conf 에 서비스 섹션 작성
+    {
+        echo "[$service_name]"
+        echo "host=$DEFAULT_HOST"
+        echo "port=$DEFAULT_PORT"
+        echo "dbname=$db_name"
+        echo "user=$db_user"
+        echo "password=$db_pass"
+        echo
+    } >>"$PGSERVICE_FILE"
 
-  # alias 등록
-  alias "psql_${service_name}=PGSERVICE=${service_name} psql"
+    # alias 등록
+    # _create_psql_service_function "$service_name"
+    # alias "psql_${service_name}=PGSERVICE=\"$service_name\" psql"
+done
+
+# Helper function to create dynamic psql service functions
+_create_psql_service_function() {
+    local service_name="$1"
+    local func_name="psql_${service_name}"
+    # Define the function dynamically
+    eval "${func_name}() { PGSERVICE=\"${service_name}\" psql \"\$@\"; }"
+}
+
+# -------------------------------
+# 4) 서비스 배열 기반 설정/alias 생성
+# -------------------------------
+for entry in "${services[@]}"; do
+    # shellcheck disable=SC2086
+    read -r service_name db_name db_user db_pass <<<"$entry"
+
+    # ~/.pg_service.conf 에 서비스 섹션 작성
+    {
+        echo "[$service_name]"
+        echo "host=$DEFAULT_HOST"
+        echo "port=$DEFAULT_PORT"
+        echo "dbname=$db_name"
+        echo "user=$db_user"
+        echo "password=$db_pass"
+        echo
+    } >>"$PGSERVICE_FILE"
+
+    # Create function instead of alias
+    _create_psql_service_function "$service_name"
 done
 
 # -------------------------------
 # 5) PostgreSQL alias list
 # -------------------------------
 psql_list() {
-  local service_only="${1:-false}"
-  if [[ "$service_only" == "true" ]]; then
-    for entry in "${services[@]}"; do
-      read -r service_name _ <<< "$entry"
-      echo "psql_${service_name}=PGSERVICE=${service_name} psql"
-    done
-  else
-    echo "Registered PostgreSQL aliases (current shell):"
-    for entry in "${services[@]}"; do
-      read -r service_name db_name db_user db_pass <<< "$entry"
-      echo "psql_${service_name}=psql \"$service_name\" | URI: postgresql://$db_user:$db_pass@$DEFAULT_HOST:$DEFAULT_PORT/$db_name"
-    done
-  fi
+    local service_only="${1:-false}"
+    if [[ "$service_only" == "true" ]]; then
+        for entry in "${services[@]}"; do
+            read -r service_name _ <<<"$entry"
+            echo "psql_${service_name}=PGSERVICE=${service_name} psql"
+        done
+    else
+        echo "Registered PostgreSQL aliases (current shell):"
+        for entry in "${services[@]}"; do
+            read -r service_name db_name db_user db_pass <<<"$entry"
+            echo "psql_${service_name}=psql \"$service_name\" | URI: postgresql://$db_user:$db_pass@$DEFAULT_HOST:$DEFAULT_PORT/$db_name"
+        done
+    fi
 }
 
 # -------------------------------
@@ -172,154 +204,168 @@ psql_list() {
 # -------------------------------
 # 가독성 향상 버전: psqlhelp
 psqlhelp() {
-  # ---------- 색/스타일 ----------
-  local _nocolor=false
-  if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
-    if [[ $(tput colors 2>/dev/null || echo 0) -ge 8 ]]; then
-      BOLD=$(tput bold); DIM=$(tput dim); RESET=$(tput sgr0)
-      FG_CYAN=$(tput setaf 6); FG_GREEN=$(tput setaf 2)
-      FG_YELLOW=$(tput setaf 3); FG_BLUE=$(tput setaf 4)
-      FG_MAGENTA=$(tput setaf 5); FG_RED=$(tput setaf 1)
+    # ---------- 색/스타일 ----------
+    local _nocolor=false
+    if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+        if [[ $(tput colors 2>/dev/null || echo 0) -ge 8 ]]; then
+            BOLD=$(tput bold)
+            DIM=$(tput dim)
+            RESET=$(tput sgr0)
+            FG_CYAN=$(tput setaf 6)
+            FG_GREEN=$(tput setaf 2)
+            FG_YELLOW=$(tput setaf 3)
+            FG_BLUE=$(tput setaf 4)
+            FG_MAGENTA=$(tput setaf 5)
+            FG_RED=$(tput setaf 1)
+        else _nocolor=true; fi
     else _nocolor=true; fi
-  else _nocolor=true; fi
-  if $_nocolor; then
-    BOLD=""; DIM=""; RESET=""
-    FG_CYAN=""; FG_GREEN=""; FG_YELLOW=""; FG_BLUE=""
-    FG_MAGENTA=""; FG_RED=""
-  fi
+    if $_nocolor; then
+        BOLD=""
+        DIM=""
+        RESET=""
+        FG_CYAN=""
+        FG_GREEN=""
+        FG_YELLOW=""
+        # shellcheck disable=SC2034
+        FG_BLUE=""
+        # shellcheck disable=SC2034
+        FG_MAGENTA=""
+        # shellcheck disable=SC2034
+        FG_RED=""
+    fi
 
-  # ---------- 인자/축약어 사전 ----------
-  local service="${1:-}"; shift || true
-  local cmd="${*:-}"
+    # ---------- 인자/축약어 사전 ----------
+    local service="${1:-}"
+    shift || true
+    local cmd="${*:-}"
 
-  # 축약어 사전 (우측은 실제 \명령)
-  declare -A cmd_map=(
-    ["du"]="du"   # list roles
-    ["l"]="l"     # list databases
-    ["dt"]="dt"   # list tables
-    ["d"]="d"     # describe table
-    ["q"]="q"     # quit
-    ["x"]="x"     # toggle expanded output
-  )
-  # 축약어 설명(출력용)
-  declare -A cmd_desc=(
-    ["du"]="list roles"
-    ["l"]="list databases"
-    ["dt"]="list tables"
-    ["d"]="describe table"
-    ["q"]="quit"
-    ["x"]="toggle expanded output"
-  )
+    # 축약어 사전 (우측은 실제 \명령)
+    declare -A cmd_map=(
+        ["du"]="du" # list roles
+        ["l"]="l"   # list databases
+        ["dt"]="dt" # list tables
+        ["d"]="d"   # describe table
+        ["q"]="q"   # quit
+        ["x"]="x"   # toggle expanded output
+    )
+    # 축약어 설명(출력용)
+    declare -A cmd_desc=(
+        ["du"]="list roles"
+        ["l"]="list databases"
+        ["dt"]="list tables"
+        ["d"]="describe table"
+        ["q"]="quit"
+        ["x"]="toggle expanded output"
+    )
 
-  # ---------- 도움말/리스트 출력 유틸 ----------
-  _print_header() {
-    local title="$1"
-    printf "%s%s%s\n" "$BOLD$FG_CYAN" "$title" "$RESET"
-  }
-  _print_usage() {
-    _print_header "Usage"
-    cat <<USAGE
+    # ---------- 도움말/리스트 출력 유틸 ----------
+    _print_header() {
+        local title="$1"
+        printf "%s%s%s\n" "$BOLD$FG_CYAN" "$title" "$RESET"
+    }
+    _print_usage() {
+        _print_header "Usage"
+        cat <<USAGE
   ${BOLD}psqlhelp${RESET} ${FG_YELLOW}<service>${RESET} ${FG_GREEN}<command>${RESET}
 
 ${BOLD}Examples${RESET}
   psqlhelp dmc_dev ${FG_GREEN}\l${RESET}
   psqlhelp dmc_test ${FG_GREEN}dt${RESET}      ${DIM}(shortcut → \\dt)${RESET}
 USAGE
-    echo
-  }
-  _print_shortcuts() {
-    _print_header "Shortcuts"
-    # 이름 정렬 폭
-    local k
-    for k in du l dt d x q; do
-      printf "  %-3s %s→%s \\%-2s %s\n" \
-        "$BOLD$k$RESET" "$DIM" "$RESET" "${cmd_map[$k]}" "${cmd_desc[$k]}"
-    done
-    echo
-  }
-  _print_services_table() {
-    _print_header "Available services (current shell)"
-    # 표 헤더
-    printf "%s\n" "${DIM}┌──────────────────────┬──────────────────────────────┬─────────────────────┬──────────────┐${RESET}"
-    printf "%s %-20s %s %-28s %s %-19s %s %-12s %s\n" \
-      "│" "SERVICE" "│" "ALIAS" "│" "DB" "│" "USER" "│"
-    printf "%s\n" "${DIM}├──────────────────────┼──────────────────────────────┼─────────────────────┼──────────────┤${RESET}"
+        echo
+    }
+    _print_shortcuts() {
+        _print_header "Shortcuts"
+        # 이름 정렬 폭
+        local k
+        for k in du l dt d x q; do
+            printf "  %-3s %s→%s \\%-2s %s\n" \
+                "$BOLD$k$RESET" "$DIM" "$RESET" "${cmd_map[$k]}" "${cmd_desc[$k]}"
+        done
+        echo
+    }
+    _print_services_table() {
+        _print_header "Available services (current shell)"
+        # 표 헤더
+        printf "%s\n" "${DIM}┌──────────────────────┬──────────────────────────────┬─────────────────────┬──────────────┐${RESET}"
+        printf "%s %-20s %s %-28s %s %-19s %s %-12s %s\n" \
+            "│" "SERVICE" "│" "ALIAS" "│" "DB" "│" "USER" "│"
+        printf "%s\n" "${DIM}├──────────────────────┼──────────────────────────────┼─────────────────────┼──────────────┤${RESET}"
 
-    # services 배열 필요 (형식: "service db user pass")
-    local entry svc db user pass alias_name
-    for entry in "${services[@]}"; do
-      # shellcheck disable=SC2086
-      read -r svc db user pass <<< "$entry"
-      alias_name="psql_${svc}"
-      printf "│ %-20s │ %-28s │ %-19s │ %-12s │\n" \
-        "$svc" "$alias_name" "$db" "$user"
-    done
-    printf "%s\n" "${DIM}└──────────────────────┴──────────────────────────────┴─────────────────────┴──────────────┘${RESET}"
-    echo
-    printf "Run with:  %spsql_${DIM}<service>%s%s\n" "$BOLD" "$RESET" "  or  psqlhelp <service> <command>"
-    echo
-  }
+        # services 배열 필요 (형식: "service db user pass")
+        local entry svc db user alias_name
+        for entry in "${services[@]}"; do
+            # shellcheck disable=SC2086
+            read -r svc db user _ <<<"$entry"
+            alias_name="psql_${svc}"
+            printf "│ %-20s │ %-28s │ %-19s │ %-12s │\n" \
+                "$svc" "$alias_name" "$db" "$user"
+        done
+        printf "%s\n" "${DIM}└──────────────────────┴──────────────────────────────┴─────────────────────┴──────────────┘${RESET}"
+        echo
+        printf "Run with:  %spsql_${DIM}<service>%s%s\n" "$BOLD" "$RESET" "  or  psqlhelp <service> <command>"
+        echo
+    }
 
-  # ---------- 인자 없을 때: 도움말 모드 ----------
-  if [[ -z "$service" || -z "$cmd" ]]; then
-    _print_usage
-    _print_shortcuts
-    _print_services_table
-    return 1
-  fi
+    # ---------- 인자 없을 때: 도움말 모드 ----------
+    if [[ -z "$service" || -z "$cmd" ]]; then
+        _print_usage
+        _print_shortcuts
+        _print_services_table
+        return 1
+    fi
 
-  # ---------- 축약어 자동 매핑 ----------
-  if [[ -n "${cmd_map[$cmd]:-}" && "${cmd:0:1}" != "\\" ]]; then
-    cmd="\\${cmd_map[$cmd]}"
-  fi
+    # ---------- 축약어 자동 매핑 ----------
+    if [[ -n "${cmd_map[$cmd]:-}" && "${cmd:0:1}" != "\\" ]]; then
+        cmd="\\${cmd_map[$cmd]}"
+    fi
 
-  # ---------- 실행 표시 ----------
-  printf "%s→%s Using service %s%s%s, executing %s%s%s\n" \
-    "$DIM" "$RESET" "$BOLD$FG_MAGENTA" "$service" "$RESET" "$BOLD$FG_GREEN" "$cmd" "$RESET"
+    # ---------- 실행 표시 ----------
+    printf "%s→%s Using service %s%s%s, executing %s%s%s\n" \
+        "$DIM" "$RESET" "$BOLD$FG_MAGENTA" "$service" "$RESET" "$BOLD$FG_GREEN" "$cmd" "$RESET"
 
-  # ---------- 실제 실행 ----------
-  PGSERVICE="$service" psql <<EOF
+    # ---------- 실제 실행 ----------
+    PGSERVICE="$service" psql <<EOF
 $cmd
 EOF
 }
-
 
 # -------------------------------
 # 7) PostgreSQL server 관리 함수
 # -------------------------------
 psql_server() {
-  declare -A cmd_list=(
-    ["start"]="start the PostgreSQL service"
-    ["stop"]="stop the PostgreSQL service"
-    ["restart"]="restart the PostgreSQL service"
-    ["status"]="show PostgreSQL service status"
-    ["reload"]="reload PostgreSQL configuration"
-  )
+    declare -A cmd_list=(
+        ["start"]="start the PostgreSQL service"
+        ["stop"]="stop the PostgreSQL service"
+        ["restart"]="restart the PostgreSQL service"
+        ["status"]="show PostgreSQL service status"
+        ["reload"]="reload PostgreSQL configuration"
+    )
 
-  local action="${1:-}"
-  if [[ -z "$action" ]]; then
-    echo "Usage: psql_server <${!cmd_list[*]}>"
-    return 1
-  fi
-
-  if [[ -n "${cmd_list[$action]:-}" ]]; then
-    if command -v systemctl >/dev/null 2>&1; then
-      echo "[Info] sudo systemctl $action postgresql"
-      sudo systemctl "$action" postgresql
-    else
-      echo "[Info] sudo service postgresql $action"
-      sudo service postgresql "$action"
+    local action="${1:-}"
+    if [[ -z "$action" ]]; then
+        echo "Usage: psql_server <${!cmd_list[*]}>"
+        return 1
     fi
-  else
-    echo "[Error] Unknown action: $action"
-    return 1
-  fi
+
+    if [[ -n "${cmd_list[$action]:-}" ]]; then
+        if command -v systemctl >/dev/null 2>&1; then
+            echo "[Info] sudo systemctl $action postgresql"
+            sudo systemctl "$action" postgresql
+        else
+            echo "[Info] sudo service postgresql $action"
+            sudo service postgresql "$action"
+        fi
+    else
+        echo "[Error] Unknown action: $action"
+        return 1
+    fi
 }
 
 # -------------------------------
 # 8) WSL2 안내
 # -------------------------------
 if grep -qEi "(Microsoft|WSL)" /proc/version &>/dev/null; then
-  echo ""
-  echo " [Info] WSL detected. Use 'sudo service postgresql start' instead of systemctl if needed."
+    echo ""
+    echo " [Info] WSL detected. Use 'sudo service postgresql start' instead of systemctl if needed."
 fi
