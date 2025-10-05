@@ -144,6 +144,7 @@ EOF
         ["pphelp"]="Python package and code quality tools"
         ["clihelp"]="Custom Project CLI list"
         ["duhelp"]="disk usage help"
+        ["psqlhelp"]="PostgreSQL command helper"
     )
 
     local max_width=0
