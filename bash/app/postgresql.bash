@@ -154,8 +154,8 @@ done
 _create_psql_service_function() {
     local service_name="$1"
     local func_name="psql_${service_name}"
-    # Define the function dynamically
-    eval "${func_name}() { PGSERVICE=\"${service_name}\" psql \"\$@\"; }"
+    # Define the function dynamically using 'function' keyword for better compatibility
+    eval "function ${func_name} { PGSERVICE=\"${service_name}\" psql \"\$@\"; }"
 }
 
 # -------------------------------
