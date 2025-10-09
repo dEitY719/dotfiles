@@ -58,20 +58,24 @@ sudo -u postgres psql <<'SQL'
 CREATE ROLE dmc_user WITH LOGIN PASSWORD 'change_me_strong_pw';
 CREATE DATABASE dmc_playground_dev OWNER dmc_user;
 CREATE DATABASE dmc_playground_test OWNER dmc_user;
+CREATE DATABASE dmc_playground_prod OWNER dmc_user;
 
 -- 권한 부여
 GRANT ALL PRIVILEGES ON DATABASE dmc_playground_dev TO dmc_user;
 GRANT ALL PRIVILEGES ON DATABASE dmc_playground_test TO dmc_user;
+GRANT ALL PRIVILEGES ON DATABASE dmc_playground_prod TO dmc_user;
 SQL
 
 4) 접속 테스트
 ---------------
+psql "host=localhost dbname=dmc_playground user=dmc_user password=change_me_strong_pw" -c "\l"
 psql "host=localhost dbname=dmc_playground_test user=dmc_user password=change_me_strong_pw" -c "\l"
+psql "host=localhost dbname=dmc_playground_prod user=dmc_user password=change_me_strong_pw" -c "\l"
 
 5) Dotfiles PostgreSQL Helper Functions
 ----------------------------------------
 # 서비스 기반 psql 접속
-psql_<service>   # 예: psql_dmc_dev, psql_dmc_test
+psql_<service>   # 예: psql_dmc_dev, psql_dmc_test, psql_dmc_prod
 
 # 등록된 서비스와 URI 확인
 psql_list [true] 
@@ -104,6 +108,7 @@ export LC_ALL=en_US.UTF-8
 services=(
     "dmc_dev  dmc_playground_dev  dmc_user  change_me_strong_pw"
     "dmc_test dmc_playground_test dmc_user  change_me_strong_pw"
+    "dmc_prod dmc_playground_prod dmc_user  change_me_strong_pw"
 )
 
 PGSERVICE_FILE="$HOME/.pg_service.conf"
@@ -270,6 +275,7 @@ psqlhelp() {
 
 ${BOLD}Examples${RESET}
   psqlhelp dmc_dev ${FG_GREEN}\l${RESET}
+  psqlhelp dmc_prod ${FG_GREEN}\l${RESET}
   psqlhelp dmc_test ${FG_GREEN}dt${RESET}      ${DIM}(shortcut → \\dt)${RESET}
 USAGE
         echo
