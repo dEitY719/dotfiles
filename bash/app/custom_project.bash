@@ -19,6 +19,7 @@ alias run_fr_cli='python ./src/ticker_library/cli/cli.py'
 #       📚 https://github.com/dEitY719/dmc-playground.git
 #======================================
 alias run_bes="uv run uvicorn src.backend.main:app --reload --host 127.0.0.1 --port 8000"
+alias run_tbes='PYTEST_CURRENT_TEST=1 uv run uvicorn src.backend.main:app --reload --host 127.0.0.1 --port 8001'
 alias run_api_cli="python src/backend/api_cli.py"
 alias run_db_cli="python src/database/db_cli.py"
 
@@ -39,6 +40,7 @@ clihelp() {
 
   [dmc-playground]
     run_bes        : uv run uvicorn src.backend.main:app --reload --host 127.0.0.1 --port 8000
+    run_tbes       : PYTEST_CURRENT_TEST=1 uv run uvicorn src.backend.main:app --reload --host 127.0.0.1 --port 8001
     run_api_cli    : python src/backend/api_cli.py
     run_db_cli     : python src/database/db_cli.py
 
