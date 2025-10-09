@@ -375,3 +375,91 @@ if grep -qEi "(Microsoft|WSL)" /proc/version &>/dev/null; then
     echo ""
     echo " [Info] WSL detected. Use 'sudo service postgresql start' instead of systemctl if needed."
 fi
+
+
+# -------------------------------
+# 9) Create DB quickly from services[] (psql_create <DB_NAME>)
+# Example)
+# 9.1) dmc_playground_prod 생성/하드닝 (services에 이미 정의돼 있으므로 비번 프롬프트 없이 진행)
+#   psql_create dmc_playground_prod
+# 9.2) services에 없는 DB를 만들 때 (비번 입력 프롬프트가 뜸)
+#   psql_create my_new_db
+# -------------------------------
+psql_create() {
+    local DB_NAME="${1:-}"
+    if [[ -z "$DB_NAME" ]]; then
+        echo "Usage: psql_create <DB_NAME>"
+        return 1
+    fi
+
+    # 9-1) services 배열에서 DB_NAME 매칭하여 app_user/app_pass 추출
+    local APP_USER="" APP_PASS="" SERVICE_HIT=""
+    for entry in "${services[@]}"; do
+        # shellcheck disable=SC2086
+        read -r svc db user pass <<<"$entry"
+        if [[ "$db" == "$DB_NAME" ]]; then
+            APP_USER="$user"
+            APP_PASS="$pass"
+            SERVICE_HIT="$svc"
+            break
+        fi
+    done
+    # 매칭 실패 시 기본값/프롬프트
+    if [[ -z "$APP_USER" ]]; then
+        APP_USER="dmc_user"
+        read -r -s -p "Enter password for role '$APP_USER': " APP_PASS; echo
+    fi
+
+    # 9-2) admin psql 커맨드 선택 (sudo 우선, 실패 시 로컬 postgres 계정)
+    local ADMIN_PSQL=("sudo" "-u" "postgres" "psql" "-v" "ON_ERROR_STOP=1" "-X" "-q")
+    if ! printf "\\q\\n" | "${ADMIN_PSQL[@]}" >/dev/null 2>&1; then
+        ADMIN_PSQL=("psql" "-h" "${DEFAULT_HOST:-localhost}" "-p" "${DEFAULT_PORT:-5432}" "-U" "postgres" "-v" "ON_ERROR_STOP=1" "-X" "-q")
+        if ! printf "\\q\\n" | "${ADMIN_PSQL[@]}" >/dev/null 2>&1; then
+            echo "[Error] Can't connect as postgres (sudo or local). Set up access and retry."
+            return 1
+        fi
+    fi
+
+    # 9-3) 도우미: admin 쿼리 실행
+    _admin_sql() { "${ADMIN_PSQL[@]}" -d "${2:-postgres}" -c "$1"; }
+
+    # 9-4) 역할 생성/비번 설정 (존재하면 비번만 보정)
+    local ROLE_EXISTS
+    ROLE_EXISTS=$("${ADMIN_PSQL[@]}" -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='${APP_USER}'" || true)
+    if [[ "$ROLE_EXISTS" != "1" ]]; then
+        echo "==> Creating role '${APP_USER}'..."
+        _admin_sql "CREATE ROLE ${APP_USER} LOGIN PASSWORD \$\$${APP_PASS}\$\$;"
+    else
+        echo "==> Role '${APP_USER}' exists. Ensuring password..."
+        _admin_sql "ALTER ROLE ${APP_USER} WITH LOGIN PASSWORD \$\$${APP_PASS}\$\$;"
+    fi
+
+    # 9-5) DB 생성 (없으면)
+    local DB_EXISTS
+    DB_EXISTS=$("${ADMIN_PSQL[@]}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" || true)
+    if [[ "$DB_EXISTS" != "1" ]]; then
+        echo "==> Creating database '${DB_NAME}' owned by '${APP_USER}'..."
+        _admin_sql "CREATE DATABASE ${DB_NAME} OWNER ${APP_USER} TEMPLATE template0 ENCODING 'UTF8';"
+    else
+        echo "==> Database '${DB_NAME}' already exists. Skipping create."
+    fi
+
+    # 9-6) 최소 하드닝 & 권한
+    echo "==> Hardening connect privileges..."
+    _admin_sql "REVOKE CONNECT ON DATABASE ${DB_NAME} FROM PUBLIC;"
+    _admin_sql "GRANT  CONNECT ON DATABASE ${DB_NAME} TO ${APP_USER};"
+
+    echo "==> Schema ownership & privileges..."
+    _admin_sql "ALTER SCHEMA public OWNER TO ${APP_USER};" "${DB_NAME}"
+    _admin_sql "REVOKE CREATE ON SCHEMA public FROM PUBLIC;" "${DB_NAME}"
+    _admin_sql "GRANT USAGE, CREATE ON SCHEMA public TO ${APP_USER};" "${DB_NAME}"
+
+    # 9-7) 요약/연동 안내
+    echo "==> Done. Created/validated '${DB_NAME}' for user '${APP_USER}'."
+    if [[ -n "$SERVICE_HIT" ]]; then
+        echo "    Tip: psqlhelp ${SERVICE_HIT} \\l"
+        echo "         psql_${SERVICE_HIT} -c '\\dt'"
+    else
+        echo "    (No service matched this DB in services[]. Consider adding one for convenience.)"
+    fi
+}
