@@ -54,18 +54,18 @@ PROD_DB_URL="postgresql+asyncpg://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${
 _have() { command -v "$1" >/dev/null 2>&1; }
 
 _need() {
-  if ! _have "$1"; then
-    echo "[ERR] '$1' 명령을 찾을 수 없습니다. 설치 후 다시 시도하세요." >&2
-    return 127
-  fi
+    if ! _have "$1"; then
+        echo "[ERR] '$1' 명령을 찾을 수 없습니다. 설치 후 다시 시도하세요." >&2
+        return 127
+    fi
 }
 
 #--------------------------------------
 # FinRx
 #--------------------------------------
 run_fr_cli() {
-  _need python
-  python ./src/ticker_library/cli/cli.py "$@"
+    _need python
+    python ./src/ticker_library/cli/cli.py "$@"
 }
 
 #--------------------------------------
@@ -73,23 +73,23 @@ run_fr_cli() {
 #  - dev/test는 --reload 유지, prod는 --reload 제거 (원문 주석 반영)
 #--------------------------------------
 run_bes() {
-  _need uv
-  uv run uvicorn src.backend.main:app \
-    --reload \
-    --host "${DEV_HOST}" --port "${DEV_PORT}"
+    _need uv
+    uv run uvicorn src.backend.main:app \
+        --reload \
+        --host "${DEV_HOST}" --port "${DEV_PORT}"
 }
 
 run_tbes() {
-  _need uv
-  PYTEST_CURRENT_TEST=1 uv run uvicorn src.backend.main:app \
-    --reload \
-    --host "${TEST_HOST}" --port "${TEST_PORT}"
+    _need uv
+    PYTEST_CURRENT_TEST=1 uv run uvicorn src.backend.main:app \
+        --reload \
+        --host "${TEST_HOST}" --port "${TEST_PORT}"
 }
 
 run_pbes() {
-  _need uvicorn
-  APP_ENV=production uvicorn src.backend.main:app \
-    --host "${PROD_HOST}" --port "${PROD_PORT}"
+    _need uvicorn
+    APP_ENV=production uvicorn src.backend.main:app \
+        --host "${PROD_HOST}" --port "${PROD_PORT}"
 }
 
 #--------------------------------------
@@ -98,46 +98,46 @@ run_pbes() {
 #  - 인자 지정 시 해당 값으로 덮어씌움
 #--------------------------------------
 run_api_cli() {
-  _need python
-  local url="${1:-${DEV_API_URL}}"
-  python src/backend/api_cli.py "${url}"
+    _need python
+    local url="${1:-${DEV_API_URL}}"
+    python src/backend/api_cli.py "${url}"
 }
 
 run_tapi_cli() {
-  _need python
-  local url="${1:-${TEST_API_URL}}"
-  python src/backend/api_cli.py "${url}"
+    _need python
+    local url="${1:-${TEST_API_URL}}"
+    python src/backend/api_cli.py "${url}"
 }
 
 run_papi_cli() {
-  _need python
-  local url="${1:-${PROD_API_URL}}"
-  python src/backend/api_cli.py "${url}"
+    _need python
+    local url="${1:-${PROD_API_URL}}"
+    python src/backend/api_cli.py "${url}"
 }
 
 run_db_cli() {
-  _need python
-  local url="${1:-${DEV_DB_URL}}"
-  python src/database/db_cli.py "${url}"
+    _need python
+    local url="${1:-${DEV_DB_URL}}"
+    python src/database/db_cli.py "${url}"
 }
 
 run_tdb_cli() {
-  _need python
-  local url="${1:-${TEST_DB_URL}}"
-  python src/database/db_cli.py "${url}"
+    _need python
+    local url="${1:-${TEST_DB_URL}}"
+    python src/database/db_cli.py "${url}"
 }
 
 run_pdb_cli() {
-  _need python
-  local url="${1:-${PROD_DB_URL}}"
-  python src/database/db_cli.py "${url}"
+    _need python
+    local url="${1:-${PROD_DB_URL}}"
+    python src/database/db_cli.py "${url}"
 }
 
 #--------------------------------------
 # Help (요구사항 2: 변수 자동 반영)
 #--------------------------------------
 clihelp() {
-  cat <<-EOF
+    cat <<-EOF
 
 [Custom Project CLI Help]
 

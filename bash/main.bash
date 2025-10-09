@@ -1,16 +1,14 @@
 # ~/dotfiles/bash/main.bash
 
 # Set the base directory for dotfiles bash configurations
-
-DOTFILES_BASH_FULL_PATH=$(realpath "${BASH_SOURCE[0]}")
-
+DOTFILES_BASH_FULL_PATH="$(realpath "${BASH_SOURCE[0]}")"
 DOTFILES_BASH_DIR="$(dirname "${DOTFILES_BASH_FULL_PATH}")"
 export DOTFILES_BASH_DIR
 
 # --- Logging Initialization ---
-# init_logging 함수를 호출하여 로깅 기능을 초기화합니다.
-# DOTFILES_BASH_DIR 변수를 인자로 � �달합니다.
-
+# beauty_log.bash 로드 후 init_logging 호출
+# (log_* 함수와 스피너 사용)
+# shellcheck source=/dev/null
 source "${DOTFILES_BASH_DIR}/core/beauty_log.bash"
 init_logging "${DOTFILES_BASH_DIR}"
 
@@ -18,44 +16,61 @@ init_logging "${DOTFILES_BASH_DIR}"
 echo ""
 log_progress_start "Loading dotfiles configurations..."
 
-# Initialize a counter for sourced files
-SOURCED_FILES_COUNT=0
+# Initialize a counter for sourced files (global integer)
+declare -gi SOURCED_FILES_COUNT=0
 
 # ------------------------------------------------------------------
 # --- Clean up old *help() functions before re-loading ---
 # This prevents stale function definitions from persisting across shell reloads
 while IFS= read -r func; do
     func_name="${func%%(*}"
-    # Only unset help functions (ending with 'help'), excluding myh itself
-    if [[ "$func_name" =~ help$ ]] && [[ "$func_name" != "myh" ]]; then
+    # Only unset help functions (ending with 'help'), excluding myhelp itself
+    if [[ "$func_name" =~ help$ ]] && [[ "$func_name" != "myhelp" ]]; then
         unset -f "$func_name" 2>/dev/null
     fi
-done < <(declare -F | awk '{print $3}' | grep 'help$' 2>/dev/null | sort)
+done < <(
+    # 빈 매치가 정상인 케이스를 pipefail에서 실패로 보지 않도록 허용
+    declare -F | awk '{print $3}' | { grep 'help$' || true; } | LC_ALL=C sort
+)
 
+# ------------------------------------------------------------------
 # Function to safely source a file and increment counter
 # shellcheck disable=SC1073
 safe_source() {
     local file_path="$1"
-    local error_msg="$2" # Optional custom error message
-    if [[ -f "${file_path}" ]]; then
-        source "${file_path}"
-        ((SOURCED_FILES_COUNT++))
+    local error_msg="${2:-File not found}"
+
+    if [[ -f "$file_path" ]]; then
+        # shellcheck source=/dev/null
+        source "$file_path"
+
+        # 전역 정수 보장 (혹시 글로벌 선언이 없었다면 이 안에서라도 보강)
+        declare -gi SOURCED_FILES_COUNT=${SOURCED_FILES_COUNT:-0}
+        # 전위 증가 → set -e 환경에서도 성공 상태 유지
+        ((++SOURCED_FILES_COUNT))
     else
-        log_error "${error_msg:-File not found}: ${file_path}"
+        # 오류 로깅은 하되, 초기화 흐름은 끊지 않음
+        log_error "${error_msg}: ${file_path}" || true
     fi
 }
 
-# --- WSL 기본 bashrc 설� � 로드 ---
+# ------------------------------------------------------------------
+# --- WSL 기본 bashrc 로드 ---
 DEFAULT_WSL_BASHRC_PATH="${DOTFILES_BASH_DIR}/core/default_wsl_bashrc.bash"
-# log_info "Sourcing core WSL bashrc from: ${DEFAULT_WSL_BASHRC_PATH}" # 스피너 사용 시 이 메시지는 생략
 safe_source "${DEFAULT_WSL_BASHRC_PATH}" "Core WSL bashrc file not found"
 
 # ------------------------------------------------------------------
-# --- 환경 변수 설� � 로드 ---
+# 글롭이 비었을 때 '*.bash' 리터럴이 루프에 들어가지 않도록 nullglob 사용
+__NULLGLOB_WAS_ON=0
+if shopt -q nullglob; then
+    __NULLGLOB_WAS_ON=1
+fi
+shopt -s nullglob
+
+# --- 환경 변수 스크립트 로드 ---
 ENV_DIR="${DOTFILES_BASH_DIR}/env"
-# log_info "Sourcing environment variables from: ${ENV_DIR}" # 스피너 사용 시 이 메시지는 생략
 for f in "${ENV_DIR}/"*.bash; do
-    # log_util.bash는 이미 sourced.
+    # log_util.bash는 core에 있으므로 일반적으로 여기에 해당 없음 (예외 방어 남김)
     if [[ "$f" == "${DOTFILES_BASH_DIR}/core/log_util.bash" ]]; then
         continue
     fi
@@ -67,9 +82,8 @@ if [[ -f "${ENV_DIR}/local.bash" ]]; then
     safe_source "${ENV_DIR}/local.bash" "Local environment file not found"
 fi
 
-# ------------------------------------------------------------------
+# --- Aliases ---
 ALIAS_DIR="${DOTFILES_BASH_DIR}/alias"
-# log_info "Sourcing aliases from: ${ALIAS_DIR}" # 스피너 사용 시 이 메시지는 생략
 for f in "${ALIAS_DIR}/"*.bash; do
     safe_source "$f" "Alias file not found"
 done
@@ -78,10 +92,9 @@ done
 if [[ -f "${ALIAS_DIR}/local.bash" ]]; then
     safe_source "${ALIAS_DIR}/local.bash" "Local alias file not found"
 fi
-# ------------------------------------------------------------------
 
+# --- App settings ---
 APP_DIR="${DOTFILES_BASH_DIR}/app"
-# log_info "Sourcing application settings from: ${APP_DIR}" # 스피너 사용 시 이 메시지는 생략
 for f in "${APP_DIR}/"*.bash; do
     safe_source "$f" "Application setting file not found"
 done
@@ -91,18 +104,26 @@ if [[ -f "${APP_DIR}/local.bash" ]]; then
     safe_source "${APP_DIR}/local.bash" "Local app file not found"
 fi
 
+# --- Core utilities ---
 COREUTILS_DIR="${DOTFILES_BASH_DIR}/coreutils"
 for f in "${COREUTILS_DIR}/"*.bash; do
     safe_source "$f" "Core Utils setting file not found"
 done
 
+# --- Utilities ---
 UTIL_DIR="${DOTFILES_BASH_DIR}/util"
 for f in "${UTIL_DIR}/"*.bash; do
     safe_source "$f" "Utility setting file not found"
 done
 
+# --- Restore nullglob to previous state ---
+if [[ ${__NULLGLOB_WAS_ON} -eq 0 ]]; then
+    shopt -u nullglob
+fi
+unset __NULLGLOB_WAS_ON
+
 # ------------------------------------------------------------------
-# --- 모�  파일 로드 완료 후 스피너 중지 및 요약 � �보 ---
+# --- 모듈 파일 로드 완료 후 스피너 중지 및 요약 정보 ---
 log_progress_stop "\nDotfiles configuration loaded successfully. (Total files sourced: ${SOURCED_FILES_COUNT})"
 print_bash_config_loaded
 print_seraph_banner
@@ -124,17 +145,16 @@ EOF
     echo "Available help commands:"
     echo ""
 
-    # Automatically detect all functions ending with 'h' (excluding myh itself)
+    # Automatically detect all functions ending with 'help' (excluding myhelp itself)
     local help_funcs=()
     while IFS= read -r func; do
-        # Extract function name only (remove parentheses)
-        func_name="${func%%(*}"
+        local func_name="${func%%(*}"
         if [[ "$func_name" =~ help$ ]] && [[ "$func_name" != "myhelp" ]] && [[ "$func_name" != _* ]]; then
             help_funcs+=("$func_name")
         fi
-    done < <(declare -F | awk '{print $3}' | grep 'help$' | sort)
+    done < <(declare -F | awk '{print $3}' | { grep 'help$' || true; } | LC_ALL=C sort)
 
-    # Display help functions with descriptions
+    # Descriptions
     declare -A help_descriptions=(
         ["uvhelp"]="UV package manager commands"
         ["githelp"]="Git shortcuts and aliases"
@@ -148,6 +168,7 @@ EOF
     )
 
     local max_width=0
+    local func
     for func in "${help_funcs[@]}"; do
         if ((${#func} > max_width)); then
             max_width=${#func}
@@ -155,7 +176,7 @@ EOF
     done
 
     for func in "${help_funcs[@]}"; do
-        desc="${help_descriptions[$func]:-No description available}"
+        local desc="${help_descriptions[$func]:-No description available}"
         printf "  %-${max_width}s  :  %s\n" "$func" "$desc"
     done
 

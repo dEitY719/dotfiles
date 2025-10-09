@@ -10,29 +10,32 @@ export PATH="/usr/local/go/bin:$PATH" # Go
 # 사용자 정의 스크립트 경로
 export PATH="$DOTFILES_BASH_DIR/scripts:$PATH"
 
-# 환경 변수 파일 로드
-safe_source "$HOME/.local/bin/env" ".local/bin/env file not found"
-
 # PATH 변수 중복 제거 함수
 # PathCleaner.clean_paths()
 clean_paths() {
-    local newpath
+    local -a path_entries
+    local -A seen=()
+    local newpath=""
     local path_entry
-    local seen
 
-    # PATH 변수를 콜론(:)으로 분리하여 각 경로를 순회
-    IFS=':' read -ra path_entries <<<"$PATH"
-    declare -A seen
+    # PATH 문자열을 배열로 분리
+    IFS=':' read -r -a path_entries <<<"$PATH"
 
     for path_entry in "${path_entries[@]}"; do
-        # 이미 확인한 경로인지 체크
-        if [[ ! "${seen[$path_entry]}" ]]; then
-            # 새로운 경로에 추가하고 'seen'에 기록
-            newpath="${newpath}${newpath:+:}${path_entry}"
+        # 끝 슬래시 정규화
+        path_entry="${path_entry%/}"
+
+        # 빈 항목 또는 디렉토리 없는 경로 건너뜀
+        [[ -n "$path_entry" ]] || continue
+        [[ -d "$path_entry" ]] || continue
+
+        # 중복 방지: set -u에서도 안전
+        if [[ ! -v "seen[$path_entry]" ]]; then
             seen["$path_entry"]=1
+            newpath+="${newpath:+:}${path_entry}"
         fi
     done
 
-    # 정리된 경로를 PATH 변수에 다시 할당
+    # 정리된 PATH를 다시 적용
     export PATH="$newpath"
 }

@@ -12,7 +12,9 @@ version = "0.1.0"
 name = "dotfiles"
 description = "Opinionated Bash dotfiles for reproducible terminal environments across WSL, Linux, and macOS."
 authors = [{ name = "BW-Yoon", email = "byoungwoo.yoon@samsung.com" }]
-dependencies = []  # No runtime Python dependencies needed for bash dotfiles
+dependencies = [
+    "rich>=14.1.0",
+]  # No runtime Python dependencies needed for bash dotfiles
 
 
 # --- 개발 및 테스트 환경 의존성 ---
