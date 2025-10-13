@@ -165,6 +165,7 @@ EOF
         ["clihelp"]="Custom Project CLI list"
         ["duhelp"]="disk usage help"
         ["psqlhelp"]="PostgreSQL command helper"
+        ["cchelp"]="Claude Code Usage help"
     )
 
     local max_width=0
