@@ -14,6 +14,7 @@ alias ga='git add .'                             # 모든 변경사항 스테이
 alias gc='git commit -m'                         # 커밋 메시지 작성
 alias gp='git push'                              # 푸시
 alias gl1='git log --oneline --graph --decorate' # 깔끔한 로그
+alias glref='git log ref/main --oneline'         # ref 원격 main 브랜치 한줄 로그
 alias gco='git checkout'                         # 체크아웃 (브랜치 이동 등)
 alias gd='git diff'                              # 변경사항 확인
 alias gb='git branch'                            # 브랜치 목록
@@ -102,6 +103,8 @@ githelp() {
     gl2        : git_log2 (대체 로그 포맷)
     git_log    : 컬러풀한 커밋 로그
     git_log2   : 간결한 한줄 로그
+    glref      : git log ref/main --oneline (ref 원격 main 브랜치 한줄 로그)
+
 
   Branch Upstream:
     gset-main  : git branch --set-upstream-to=origin/main main
