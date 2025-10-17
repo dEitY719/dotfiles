@@ -11,7 +11,7 @@ kill_by_port() {
 
     if [ -n "$PID" ]; then
         echo "포트 $PORT 를 점유 중인 PID $PID 종료..."
-        kill -9 "$PID"
+        kill -9 $PID
     else
         echo "포트 $PORT 를 점유 중인 프로세스가 없습니다."
     fi

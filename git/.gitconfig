@@ -14,3 +14,4 @@
 	required = true
 [lfs]
 	activitytimeout = 300
+	locksverify = false
