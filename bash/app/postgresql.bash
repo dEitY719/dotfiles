@@ -371,10 +371,10 @@ psql_server() {
 # -------------------------------
 # 8) WSL2 안내
 # -------------------------------
-if grep -qEi "(Microsoft|WSL)" /proc/version &>/dev/null; then
-    echo ""
-    echo " [Info] WSL detected. Use 'sudo service postgresql start' instead of systemctl if needed."
-fi
+# if grep -qEi "(Microsoft|WSL)" /proc/version &>/dev/null; then
+#     echo ""
+#     echo " [Info] WSL detected. Use 'sudo service postgresql start' instead of systemctl if needed."
+# fi
 
 
 # -------------------------------

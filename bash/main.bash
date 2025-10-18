@@ -10,11 +10,11 @@ export DOTFILES_BASH_DIR
 # (log_* 함수와 스피너 사용)
 # shellcheck source=/dev/null
 source "${DOTFILES_BASH_DIR}/core/beauty_log.bash"
-init_logging "${DOTFILES_BASH_DIR}"
+# init_logging "${DOTFILES_BASH_DIR}"
 
 # 로딩 시작 스피너
-echo ""
-log_progress_start "Loading dotfiles configurations..."
+# echo ""
+# log_progress_start "Loading dotfiles configurations..."
 
 # Initialize a counter for sourced files (global integer)
 declare -gi SOURCED_FILES_COUNT=0
@@ -124,9 +124,10 @@ unset __NULLGLOB_WAS_ON
 
 # ------------------------------------------------------------------
 # --- 모듈 파일 로드 완료 후 스피너 중지 및 요약 정보 ---
-log_progress_stop "\nDotfiles configuration loaded successfully. (Total files sourced: ${SOURCED_FILES_COUNT})"
-print_bash_config_loaded
-print_seraph_banner
+# log_progress_stop "\nDotfiles configuration loaded successfully. (Total files sourced: ${SOURCED_FILES_COUNT})"
+echo "Dotfiles configuration loaded successfully. (Total files sourced: ${SOURCED_FILES_COUNT})"
+# print_bash_config_loaded
+# print_seraph_banner
 clean_paths
 
 # ------------------------------------------------------------------
