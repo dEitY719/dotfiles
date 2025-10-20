@@ -376,7 +376,6 @@ psql_server() {
 #     echo " [Info] WSL detected. Use 'sudo service postgresql start' instead of systemctl if needed."
 # fi
 
-
 # -------------------------------
 # 9) Create DB quickly from services[] (psql_create <DB_NAME>)
 # Example)
@@ -407,7 +406,8 @@ psql_create() {
     # 매칭 실패 시 기본값/프롬프트
     if [[ -z "$APP_USER" ]]; then
         APP_USER="dmc_user"
-        read -r -s -p "Enter password for role '$APP_USER': " APP_PASS; echo
+        read -r -s -p "Enter password for role '$APP_USER': " APP_PASS
+        echo
     fi
 
     # 9-2) admin psql 커맨드 선택 (sudo 우선, 실패 시 로컬 postgres 계정)

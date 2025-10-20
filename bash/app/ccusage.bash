@@ -17,12 +17,13 @@
 
 # ── 환경 보조: PATH 보정용 옵션 함수 ──────────────────────────
 ccusage_path_hint() {
-  case ":$PATH:" in
+    case ":$PATH:" in
     *":$HOME/.npm-global/bin:"*) ;;
-    *) echo '참고: PATH에 $HOME/.npm-global/bin 이 없다면 아래를 실행하세요:'
-       echo '  export PATH="$HOME/.npm-global/bin:$PATH"'
-       ;;
-  esac
+    *)
+        echo "참고: PATH에 $HOME/.npm-global/bin 이 없다면 아래를 실행하세요:"
+        echo "  export PATH='$HOME/.npm-global/bin:$PATH'"
+        ;;
+    esac
 }
 
 # ── 필수 명령어 alias (3개) ───────────────────────────────────
@@ -37,7 +38,7 @@ alias ccb='ccusage blocks --live'
 
 # ── 도움말 ────────────────────────────────────────────────────
 cchelp() {
-  cat <<-'EOF'
+    cat <<-'EOF'
 [ccusage install]
   전역 prefix를 사용자 홈으로 지정하여 설치:
     npm install -g ccusage --prefix=$HOME/.npm-global
