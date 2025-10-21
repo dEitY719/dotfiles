@@ -112,16 +112,10 @@ services=(
 )
 
 PGSERVICE_FILE="$HOME/.pg_service.conf"
-
-DEFAULT_HOST="localhost"
-DEFAULT_PORT="5432"
-
-# -------------------------------
-# 2) 기존 파일 초기화
-# -------------------------------
-rm -f "$PGSERVICE_FILE"
-touch "$PGSERVICE_FILE"
-chmod 600 "$PGSERVICE_FILE"
+if [ ! -f "$PGSERVICE_FILE" ]; then
+  touch "$PGSERVICE_FILE"
+fi
+chmod 0600 "$PGSERVICE_FILE"
 
 # -------------------------------
 # 3) 기존 psql_* function 삭제
