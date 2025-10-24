@@ -27,10 +27,20 @@ DEV_PORT=8000
 TEST_PORT=8001
 PROD_PORT=8719
 
-# Derived API URLs
+# smithery-playground 전용 포트
+SMT_DEV_PORT=9001
+SMT_TEST_PORT=9002
+SMT_PROD_PORT=9019
+
+# Derived API URLs (dmc-playground)
 DEV_API_URL="http://${DEV_HOST}:${DEV_PORT}"
 TEST_API_URL="http://${TEST_HOST}:${TEST_PORT}"
 PROD_API_URL="http://${PROD_HOST}:${PROD_PORT}"
+
+# smithery-playground 서비스 URL
+SMT_DEV_URL="http://${DEV_HOST}:${SMT_DEV_PORT}"
+SMT_TEST_URL="http://${TEST_HOST}:${SMT_TEST_PORT}"
+SMT_PROD_URL="http://${PROD_HOST}:${SMT_PROD_PORT}"
 
 #--------------------------------------
 # Database URLs (기존 값 변수화 & 재사용)
@@ -134,6 +144,30 @@ run_pdb_cli() {
 }
 
 #--------------------------------------
+# smithery-playground (FastAPI + Uvicorn)
+#  - dmc와 동일한 패턴: dev/test는 --reload, prod는 no reload
+#--------------------------------------
+run_smt() {
+    _need uv
+    uv run uvicorn src.main:app \
+        --reload \
+        --host "${DEV_HOST}" --port "${SMT_DEV_PORT}"
+}
+
+run_tsmt() {
+    _need uv
+    PYTEST_CURRENT_TEST=1 uv run uvicorn src.main:app \
+        --reload \
+        --host "${TEST_HOST}" --port "${SMT_TEST_PORT}"
+}
+
+run_psmt() {
+    _need uvicorn
+    APP_ENV=production uvicorn src.main:app \
+        --host "${PROD_HOST}" --port "${SMT_PROD_PORT}"
+}
+
+#--------------------------------------
 # Help (요구사항 2: 변수 자동 반영)
 #--------------------------------------
 clihelp() {
@@ -147,16 +181,21 @@ Repos
   • dmc-playground   📚 ${REPO_DMC_PG_URL}
 
 Hosts / Ports
-  - DEV  : ${DEV_HOST}:${DEV_PORT}
-  - TEST : ${TEST_HOST}:${TEST_PORT}
-  - PROD : ${PROD_HOST}:${PROD_PORT}
+  - DEV  : ${DEV_HOST}:${DEV_PORT}  (SMT ${SMT_DEV_PORT})
+  - TEST : ${TEST_HOST}:${TEST_PORT} (SMT ${SMT_TEST_PORT})
+  - PROD : ${PROD_HOST}:${PROD_PORT} (SMT ${SMT_PROD_PORT})
 
-API URLs (기본값)
+Service URLs (smithery-playground)
+  - DEV  : ${SMT_DEV_URL}
+  - TEST : ${SMT_TEST_URL}
+  - PROD : ${SMT_PROD_URL}
+
+API URLs (dmc-playground, 기본값)
   - DEV  : ${DEV_API_URL}
   - TEST : ${TEST_API_URL}
   - PROD : ${PROD_API_URL}
 
-DB URLs (기본값)
+DB URLs (dmc-playground, 기본값)
   - DEV  : ${DEV_DB_URL}
   - TEST : ${TEST_DB_URL}
   - PROD : ${PROD_DB_URL}
@@ -178,6 +217,11 @@ Aliases / Commands
     run_db_cli  [DB_URL?]      : 기본 ${DEV_DB_URL}
     run_tdb_cli [DB_URL?]      : 기본 ${TEST_DB_URL}
     run_pdb_cli [DB_URL?]      : 기본 ${PROD_DB_URL}
+
+  [smithery-playground]
+    run_smt                    : uv run uvicorn src.main:app --reload --host ${DEV_HOST}  --port ${SMT_DEV_PORT}
+    run_tsmt                   : PYTEST_CURRENT_TEST=1 uv run uvicorn src.main:app --reload --host ${TEST_HOST} --port ${SMT_TEST_PORT}
+    run_psmt                   : APP_ENV=production uvicorn src.main:app --host ${PROD_HOST} --port ${SMT_PROD_PORT}
 
 Recipes
 
@@ -201,6 +245,11 @@ Recipes
   run_db_cli                # -> ${DEV_DB_URL}
   run_tdb_cli               # -> ${TEST_DB_URL}
   run_pdb_cli               # -> ${PROD_DB_URL}
+
+  # smithery-playground 서버 실행
+  run_smt                   # -> ${SMT_DEV_URL} (reload)
+  run_tsmt                  # -> ${SMT_TEST_URL} (reload)
+  run_psmt                  # -> ${SMT_PROD_URL} (no reload)
 
 Tips
   - 가능한 프로젝트 루트에서 실행하세요. (현재: ${PROJECT_ROOT})
