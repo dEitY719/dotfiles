@@ -2,6 +2,13 @@
 
 # bash/app/git.bash
 
+# -------------------------------
+# Git Push Force with Upstream
+# -------------------------------
+alias gpfu='git push --set-upstream origin main --force-with-lease'
+# 설명: 현재 main 브랜치를 원격(origin/main)에 강제로 업스트림 설정 + 푸시
+# 사용 예시: main 브랜치가 원격보다 앞설 때, "rejected (fetch first)" 문제 해결용
+
 alias gpf_dev_server='git push -f origin HEAD:refs/heads/dev-server'
 alias git_log='git log --graph --pretty=format:"%Cred%h %C(bold blue)%d %Creset%s %Cgreen%ad %C(yellow)%an" --date=short'
 alias gl=git_log
@@ -113,6 +120,7 @@ githelp() {
 
   Special:
     gpf_dev_server : git push -f origin HEAD:refs/heads/dev-server
+    gpfu           : git push --set-upstream origin main --force-with-lease (main 강제 업스트림 푸시)
 
   Git LFS:
     git_lfs_install : Ubuntu 환경에서 git-lfs 설치 및 초기화 (최초 1회)
