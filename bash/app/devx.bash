@@ -9,7 +9,6 @@ case ":${PATH}:" in
 esac
 
 # --- Self-heal: make ~/.local/bin/devx point to this script ---
-# Resolve absolute path to this devx.bash
 DEVX_SRC="${BASH_SOURCE[0]}"
 if command -v realpath >/dev/null 2>&1; then
     DEVX_SRC="$(realpath "$DEVX_SRC")"
@@ -19,7 +18,6 @@ fi
 
 mkdir -p "${HOME}/.local/bin"
 
-# If not a symlink to this file, fix it.
 if [[ ! -L "${HOME}/.local/bin/devx" ]] || [[ "$(readlink "${HOME}/.local/bin/devx" 2>/dev/null)" != "$DEVX_SRC" ]]; then
     ln -sf "$DEVX_SRC" "${HOME}/.local/bin/devx"
     chmod +x "${HOME}/.local/bin/devx" 2>/dev/null || true
@@ -29,7 +27,6 @@ fi
 # devx command implementation
 # =======================
 
-# ---- lightweight helpers (no strict mode at top-level) ----
 devx__colors() {
     if [[ "${NO_COLOR:-}" != "1" && -t 1 ]]; then
         bold=$'\e[1m'
@@ -89,6 +86,7 @@ Usage: devx <command>
 
 Commands:
   up       Start dev server (uvicorn on :8000 + DB init)
+  down     Stop dev server and related services
   test     Run test suite (pytest)
   format   Format + lint code (tox -e ruff)
   shell    Enter project shell
@@ -100,10 +98,8 @@ Env:
 EOF
 }
 
-# ---- main runner: run in a subshell with strict modes ----
 devx__main() (
     set -euo pipefail
-
     devx__colors
 
     local cmd="${1:-}"
@@ -112,7 +108,6 @@ devx__main() (
         exit 2
     fi
 
-    # timer start (fallback to SECONDS)
     local t_start_ns t_end_ns dur_ms
     t_start_ns="$(date +%s%N 2>/dev/null || true)"
     if [[ -z "$t_start_ns" || "$t_start_ns" == *N ]]; then
@@ -129,13 +124,11 @@ devx__main() (
     devx__log INFO "from='${cwd}'  ->  root='${root}'  cmd='${cmd}'"
     devx__log RUN "${root}/tools/dev.sh ${cmd}"
 
-    # execute (even if not executable, run via bash)
     set +e
     (cd "$root" && bash "tools/dev.sh" "$cmd")
     local rc=$?
     set -e
 
-    # duration
     if [[ -n "${t_start_ns:-}" && "$t_start_ns" != *N ]]; then
         t_end_ns="$(date +%s%N 2>/dev/null || true)"
         if [[ -n "$t_end_ns" && "$t_end_ns" != *N ]]; then
@@ -155,7 +148,6 @@ devx__main() (
     exit "$rc"
 )
 
-# --- only run when executed directly, stay inert when sourced ---
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     devx__main "$@"
 fi
