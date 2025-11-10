@@ -55,27 +55,21 @@ sudo service postgresql status   # active (running) 확인
 -----------------------------------
 sudo -u postgres psql <<'SQL'
 -- 앱 전용 유저/DB 생성 (개발 / 테스트)
-CREATE ROLE dmc_user WITH LOGIN PASSWORD 'change_me_strong_pw';
-CREATE DATABASE dmc_playground_dev OWNER dmc_user;
-CREATE DATABASE dmc_playground_test OWNER dmc_user;
-CREATE DATABASE dmc_playground_prod OWNER dmc_user;
+CREATE ROLE himena WITH LOGIN PASSWORD 'change_me_strong_pw';
+CREATE DATABASE sleassem_dev OWNER himena;
 
 -- 권한 부여
-GRANT ALL PRIVILEGES ON DATABASE dmc_playground_dev TO dmc_user;
-GRANT ALL PRIVILEGES ON DATABASE dmc_playground_test TO dmc_user;
-GRANT ALL PRIVILEGES ON DATABASE dmc_playground_prod TO dmc_user;
+GRANT ALL PRIVILEGES ON DATABASE sleassem_dev TO himena;
 SQL
 
 4) 접속 테스트
 ---------------
-psql "host=localhost dbname=dmc_playground user=dmc_user password=change_me_strong_pw" -c "\l"
-psql "host=localhost dbname=dmc_playground_test user=dmc_user password=change_me_strong_pw" -c "\l"
-psql "host=localhost dbname=dmc_playground_prod user=dmc_user password=change_me_strong_pw" -c "\l"
+psql "host=localhost dbname=sleassem_dev user=himena password=change_me_strong_pw" -c "\l"
 
 5) Dotfiles PostgreSQL Helper Functions
 ----------------------------------------
 # 서비스 기반 psql 접속
-psql_<service>   # 예: psql_dmc_dev, psql_dmc_test, psql_dmc_prod
+psql_<service>   # 예: sleassem_dev, psql_dmc_dev
 
 # 등록된 서비스와 URI 확인
 psql_list [true] 
