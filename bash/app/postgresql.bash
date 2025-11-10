@@ -113,7 +113,7 @@ services=(
 
 PGSERVICE_FILE="$HOME/.pg_service.conf"
 if [ ! -f "$PGSERVICE_FILE" ]; then
-  touch "$PGSERVICE_FILE"
+    touch "$PGSERVICE_FILE"
 fi
 chmod 0600 "$PGSERVICE_FILE"
 
