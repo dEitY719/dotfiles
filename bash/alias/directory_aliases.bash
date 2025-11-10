@@ -20,6 +20,7 @@ alias cd_para='cd ~/para'
 
 # PARA/project
 alias cd_project='cd ~/para/project'
+alias cd_ss='cd ~/para/project/slea-ssem'
 
 # PARA/area
 alias cd_area='cd ~/para/area'
