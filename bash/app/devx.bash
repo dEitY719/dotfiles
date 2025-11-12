@@ -85,7 +85,7 @@ devx__usage() {
 Usage: devx <command>
 
 Commands:
-  up       Start dev server (uvicorn on :8000 + DB init)
+  up [b|f] Start dev server (b: backend, f: frontend)
   down     Stop dev server and related services
   test     Run test suite (pytest)
   format   Format + lint code (tox -e ruff)
@@ -102,8 +102,7 @@ devx__main() (
     set -euo pipefail
     devx__colors
 
-    local cmd="${1:-}"
-    if [[ -z "$cmd" ]]; then
+    if [[ $# -eq 0 ]]; then
         devx__usage
         exit 2
     fi
@@ -121,11 +120,12 @@ devx__main() (
         exit 1
     fi
 
-    devx__log INFO "from='${cwd}'  ->  root='${root}'  cmd='${cmd}'"
-    devx__log RUN "${root}/tools/dev.sh ${cmd}"
+    local cmd_str="$*"
+    devx__log INFO "from='${cwd}'  ->  root='${root}'  cmd='${cmd_str}'"
+    devx__log RUN "${root}/tools/dev.sh ${cmd_str}"
 
     set +e
-    (cd "$root" && bash "tools/dev.sh" "$cmd")
+    (cd "$root" && bash "tools/dev.sh" "$@")
     local rc=$?
     set -e
 
