@@ -2,12 +2,23 @@
 import argparse
 import hashlib
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 DEFAULT_EXTS = [".py", ".json"]
-DEFAULT_EXCLUDE_DIRS = {".git", ".hg", ".svn", ".venv", "venv",
-                        "__pycache__", ".mypy_cache", ".pytest_cache", ".tox", "build", "dist"}
+DEFAULT_EXCLUDE_DIRS = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".tox",
+    "build",
+    "dist",
+}
 
 
 def _usage() -> str:
@@ -99,36 +110,63 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=_usage(),
     )
-    ap.add_argument("path", nargs="?", default=".",
-                    help="Directory or single file to scan (default: .)")
+    ap.add_argument("path", nargs="?", default=".", help="Directory or single file to scan (default: .)")
+    ap.add_argument("-o", "--output", help="Output file name (default: [directory_name]_all_source.txt)")
+    ap.add_argument("--ext", action="append", help="File extension to include (e.g., --ext .py). Can be repeated.")
     ap.add_argument(
-        "-o", "--output", help="Output file name (default: [directory_name]_all_source.txt)")
-    ap.add_argument("--ext", action="append",
-                    help="File extension to include (e.g., --ext .py). Can be repeated.")
-    ap.add_argument("--include-glob", dest="include_glob", action="append", default=[],
-                    help="Glob pattern(s) to include (relative to base).")
-    ap.add_argument("--exclude-glob", dest="exclude_glob", action="append", default=[],
-                    help="Glob pattern(s) to exclude (relative to base).")
-    ap.add_argument("--exclude-dir", dest="exclude_dir", action="append", default=[],
-                    help="Directory names to exclude (exact match). Can repeat.")
-    ap.add_argument("--no-default-excludes", dest="no_default_excludes", action="store_true",
-                    help="Do not exclude common build/cache dirs.")
-    ap.add_argument("--follow-symlinks", dest="follow_symlinks", action="store_true",
-                    help="Follow symlinks.")
-    ap.add_argument("--relative", dest="relative", action="store_true",
-                    help="Print file paths relative to base directory.")
-    ap.add_argument("--case-insensitive-sort", dest="case_insensitive_sort", action="store_true",
-                    help="Case-insensitive sort of paths.")
-    ap.add_argument("--max-bytes", dest="max_bytes", type=int, default=None,
-                    help="Per-file maximum bytes to read; if set, truncate.")
-    ap.add_argument("--hash", dest="hash", choices=["sha256"], default=None,
-                    help="Include hash of file (truncated if --max-bytes is set).")
-    ap.add_argument("--encoding", dest="encoding", default="utf-8",
-                    help="Text decoding (default: utf-8).")
-    ap.add_argument("--errors", dest="errors", default="replace",
-                    help="Decode error policy (default: replace).")
-    ap.add_argument("--print-usage", dest="print_usage", action="store_true",
-                    help="주요 사용 예시를 출력하고 종료")
+        "--include-glob",
+        dest="include_glob",
+        action="append",
+        default=[],
+        help="Glob pattern(s) to include (relative to base).",
+    )
+    ap.add_argument(
+        "--exclude-glob",
+        dest="exclude_glob",
+        action="append",
+        default=[],
+        help="Glob pattern(s) to exclude (relative to base).",
+    )
+    ap.add_argument(
+        "--exclude-dir",
+        dest="exclude_dir",
+        action="append",
+        default=[],
+        help="Directory names to exclude (exact match). Can repeat.",
+    )
+    ap.add_argument(
+        "--no-default-excludes",
+        dest="no_default_excludes",
+        action="store_true",
+        help="Do not exclude common build/cache dirs.",
+    )
+    ap.add_argument("--follow-symlinks", dest="follow_symlinks", action="store_true", help="Follow symlinks.")
+    ap.add_argument(
+        "--relative", dest="relative", action="store_true", help="Print file paths relative to base directory."
+    )
+    ap.add_argument(
+        "--case-insensitive-sort",
+        dest="case_insensitive_sort",
+        action="store_true",
+        help="Case-insensitive sort of paths.",
+    )
+    ap.add_argument(
+        "--max-bytes",
+        dest="max_bytes",
+        type=int,
+        default=None,
+        help="Per-file maximum bytes to read; if set, truncate.",
+    )
+    ap.add_argument(
+        "--hash",
+        dest="hash",
+        choices=["sha256"],
+        default=None,
+        help="Include hash of file (truncated if --max-bytes is set).",
+    )
+    ap.add_argument("--encoding", dest="encoding", default="utf-8", help="Text decoding (default: utf-8).")
+    ap.add_argument("--errors", dest="errors", default="replace", help="Decode error policy (default: replace).")
+    ap.add_argument("--print-usage", dest="print_usage", action="store_true", help="주요 사용 예시를 출력하고 종료")
 
     args = ap.parse_args()
 
@@ -155,36 +193,38 @@ def main():
         output_name = args.output or f"{target.stem}_source.txt"
     elif target.is_dir():
         base_dir = target
-        files = list(iter_source_files(
+        files = list(
+            iter_source_files(
+                base_dir=base_dir,
+                exts=exts,
+                include_globs=args.include_glob,
+                exclude_globs=args.exclude_glob,
+                exclude_dirs=exclude_dirs,
+                follow_symlinks=args.follow_symlinks,
+            )
+        )
+        # 디렉터리일 때 기본 출력 파일명: <디렉터리명>_all_source.txt
+        dir_name = base_dir.name
+        output_name = args.output or f"{dir_name}_all_source.txt"
+    else:
+        print(f"[ERROR] Not a regular file or directory: {target}", file=sys.stderr)
+        sys.exit(2)
+
+    # 출력 경로는 현재 작업 디렉터리에 생성
+    output_path = Path.cwd() / Path(output_name).name
+
+    files = list(
+        iter_source_files(
             base_dir=base_dir,
             exts=exts,
             include_globs=args.include_glob,
             exclude_globs=args.exclude_glob,
             exclude_dirs=exclude_dirs,
             follow_symlinks=args.follow_symlinks,
-        ))
-        # 디렉터리일 때 기본 출력 파일명: <디렉터리명>_all_source.txt
-        dir_name = base_dir.name
-        output_name = args.output or f"{dir_name}_all_source.txt"
-    else:
-        print(
-            f"[ERROR] Not a regular file or directory: {target}", file=sys.stderr)
-        sys.exit(2)
+        )
+    )
 
-    # 출력 경로는 현재 작업 디렉터리에 생성
-    output_path = Path.cwd() / Path(output_name).name
-
-    files = list(iter_source_files(
-        base_dir=base_dir,
-        exts=exts,
-        include_globs=args.include_glob,
-        exclude_globs=args.exclude_glob,
-        exclude_dirs=exclude_dirs,
-        follow_symlinks=args.follow_symlinks,
-    ))
-
-    key = (lambda p: str(p).lower()) if args.case_insensitive_sort else (
-        lambda p: str(p))
+    key = (lambda p: str(p).lower()) if args.case_insensitive_sort else (lambda p: str(p))
     files.sort(key=key)
 
     print(f"Scanning: {base_dir}")
@@ -197,19 +237,18 @@ def main():
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     with output_path.open("w", encoding="utf-8", newline="\n") as out:
-        out.write(f"##### Consolidated Source Dump\n")
+        out.write("##### Consolidated Source Dump\n")
         out.write(f"Base: {base_dir}\nGenerated: {now}\n")
         out.write(f"Extensions: {', '.join(exts)}\n")
         out.write(f"Exclude dirs: {', '.join(sorted(exclude_dirs))}\n")
         out.write(f"Files: {len(files)}\n")
-        out.write(f"-----\n\n")
+        out.write("-----\n\n")
 
         for p in files:
             try:
                 rel = p.relative_to(base_dir) if args.relative else p
                 size = p.stat().st_size
-                modt = datetime.fromtimestamp(
-                    p.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                modt = datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
 
                 hashed = None
                 if args.hash == "sha256":
@@ -244,8 +283,7 @@ def main():
         out.write("##### --- SUMMARY --- #####\n")
         out.write(f"# 수록: {collected}, 잘림: {truncated}, 오류: {errors}\n")
 
-    print(
-        f"Done. Collected={collected}, Truncated={truncated}, Errors={errors}")
+    print(f"Done. Collected={collected}, Truncated={truncated}, Errors={errors}")
     if errors > 0:
         sys.exit(1)
 

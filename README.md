@@ -28,8 +28,9 @@ dotfiles/
 │   │   ├── pyenv.bash     # Python version manager
 │   │   ├── uv.bash        # Fast Python package installer
 │   │   └── ...            # More apps (postgres, mysql, obsidian, etc.)
-│   ├── custom-script/     # Custom scripts for tools and services
-│   │   └── claude-statusline-command.sh  # Claude Code custom status line
+│   ├── claude/            # Claude-related configurations
+│   │   ├── tox-agent.md   # Claude Code tox linting agent
+│   │   └── statusline-command.sh  # Claude Code custom status line
 │   ├── core/              # Core functionality
 │   │   ├── beauty_log.bash       # Logging utilities
 │   │   ├── log_util.bash         # Additional log functions
@@ -91,7 +92,8 @@ dotfiles/
    ```
 
    This will set up:
-   - `~/.claude/statusline-command.sh` → `~/dotfiles/bash/custom-script/claude-statusline-command.sh` (symlink)
+   - `~/.claude/statusline-command.sh` → `~/dotfiles/bash/claude/statusline-command.sh` (symlink)
+   - `~/.claude/agents/*.md` → `~/dotfiles/bash/claude/*.md` (symlinks)
 
 4. **Apply the changes:**
 
@@ -142,11 +144,12 @@ For a complete list, check files in `bash/alias/`.
 
 ### Application Configurations
 
-Application-specific configurations are in `bash/app/`. Custom scripts are in `bash/custom-script/`. These include:
+Application-specific configurations are in `bash/app/`. Claude-related configurations are in `bash/claude/`. These include:
 
 - **Claude Code**:
   - `app/claude.bash`: CLI shortcuts and environment setup
-  - `custom-script/claude-statusline-command.sh`: Custom status line (managed via `install.sh`)
+  - `claude/statusline-command.sh`: Custom status line (managed via `install.sh`)
+  - `claude/tox-agent.md`: Tox linting agent (managed via `install.sh`)
 - **Git**: Enhanced git commands and aliases
 - **Python**: pyenv, uv package manager integration
 - **Databases**: PostgreSQL, MySQL configurations

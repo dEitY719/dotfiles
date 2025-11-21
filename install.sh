@@ -20,8 +20,8 @@ echo -e "${BLUE}===== Dotfiles Setup =====${RESET}"
 echo -e "${BLUE}Creating ~/.claude directory...${RESET}"
 mkdir -p "$CLAUDE_DIR"
 
-# Create symlink for claude-statusline-command.sh
-STATUSLINE_SOURCE="$DOTFILES_DIR/bash/custom-script/claude-statusline-command.sh"
+# Create symlink for statusline-command.sh
+STATUSLINE_SOURCE="$DOTFILES_DIR/bash/claude/statusline-command.sh"
 STATUSLINE_DEST="$CLAUDE_DIR/statusline-command.sh"
 
 if [ ! -f "$STATUSLINE_SOURCE" ]; then
@@ -42,6 +42,40 @@ else
     ln -s "$STATUSLINE_SOURCE" "$STATUSLINE_DEST"
     chmod +x "$STATUSLINE_SOURCE"
     echo -e "${GREEN}Created symlink: $STATUSLINE_DEST -> $STATUSLINE_SOURCE${RESET}"
+fi
+
+# Create symlinks for Claude agents markdown files
+AGENTS_SOURCE_DIR="$DOTFILES_DIR/bash/claude"
+AGENTS_DEST_DIR="$CLAUDE_DIR/agents"
+
+if [ -d "$AGENTS_SOURCE_DIR" ]; then
+    echo -e "${BLUE}Setting up Claude agents...${RESET}"
+    mkdir -p "$AGENTS_DEST_DIR"
+
+    # Find all markdown files in agents source directory
+    for agent_file in "$AGENTS_SOURCE_DIR"/*.md; do
+        if [ -f "$agent_file" ]; then
+            agent_name=$(basename "$agent_file")
+            agent_dest="$AGENTS_DEST_DIR/$agent_name"
+
+            if [ -L "$agent_dest" ]; then
+                # Remove existing symlink
+                rm "$agent_dest"
+                echo -e "${GREEN}Removed existing symlink: $agent_dest${RESET}"
+            elif [ -f "$agent_dest" ]; then
+                # Backup existing file
+                backup_file="$agent_dest.backup.$(date +%s)"
+                mv "$agent_dest" "$backup_file"
+                echo -e "${YELLOW}Backed up existing file to: $backup_file${RESET}"
+            fi
+
+            # Create new symlink
+            ln -s "$agent_file" "$agent_dest"
+            echo -e "${GREEN}Created symlink: $agent_dest -> $agent_file${RESET}"
+        fi
+    done
+else
+    echo -e "${YELLOW}Warning: $AGENTS_SOURCE_DIR not found${RESET}"
 fi
 
 echo -e "${GREEN}===== Setup Complete =====${RESET}"
