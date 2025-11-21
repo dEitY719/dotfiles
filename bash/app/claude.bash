@@ -22,3 +22,50 @@
 # # 이제 다시 설치
 # npm install -g @anthropic-ai/claude-code
 # ```
+
+# (1) Claude Code 도움말
+claudehelp() {
+    cat <<-'EOF'
+
+[Claude Code Quick Commands]
+
+  /help      : Claude Code 도움말
+  /feedback  : 기능 요청 및 버그 리포트
+  /doctor    : 시스템 상태 진단
+
+[MCP (Model Context Protocol) 설정]
+
+  MCP 서버 관리 명령어:
+
+  claude mcp list              : 설치된 MCP 서버 목록
+  claude mcp get <name>        : MCP 서버 상세 정보
+  claude mcp add <name> ...    : MCP 서버 추가
+  claude mcp remove <name>     : MCP 서버 제거
+
+[Recommended MCP Servers]
+
+  1. Playwright MCP (웹 브라우저 자동화)
+     claude mcp add playwright --transport stdio -- npx -y @playwright/mcp@latest
+
+     사용 예:
+     - "playwright mcp를 사용해서 example.com에 접속해줘"
+     - "playwright로 검색창에 'claude' 입력하고 스크린샷 찍어줘"
+
+  2. Sequential Thinking MCP (논리적 분석)
+     claude mcp add sequential-thinking --transport stdio -- npx -y @modelcontextprotocol/server-sequential-thinking
+
+     사용 예:
+     - "이 문제를 sequential-thinking으로 단계별 분석해줘"
+     - "이 알고리즘의 시간복잡도를 체계적으로 분석해줘"
+
+[설치 후 확인]
+
+  # 설치한 MCP 서버 확인
+  claude mcp list
+
+  # 특정 MCP 서버 상태 확인
+  claude mcp get playwright
+  claude mcp get sequential-thinking
+
+EOF
+}

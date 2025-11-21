@@ -44,7 +44,7 @@ fi
 # Get git branch name (remove origin/ prefix if present)
 git_branch=""
 if [ -n "$cwd" ] && [ -d "$cwd" ]; then
-    if [ -d "$cwd/.git" ] || git -C "$cwd" rev-parse --git-dir > /dev/null 2>&1; then
+    if [ -d "$cwd/.git" ] || git -C "$cwd" rev-parse --git-dir >/dev/null 2>&1; then
         git_branch=$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null)
         # Remove origin/ prefix if present
         git_branch="${git_branch#origin/}"

@@ -167,6 +167,7 @@ EOF
         ["duhelp"]="disk usage help"
         ["psqlhelp"]="PostgreSQL command helper"
         ["cchelp"]="Claude Code Usage help"
+        ["claudehelp"]="Claude Code MCP help"
     )
 
     local max_width=0
