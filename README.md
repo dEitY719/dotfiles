@@ -28,6 +28,8 @@ dotfiles/
 │   │   ├── pyenv.bash     # Python version manager
 │   │   ├── uv.bash        # Fast Python package installer
 │   │   └── ...            # More apps (postgres, mysql, obsidian, etc.)
+│   ├── custom-script/     # Custom scripts for tools and services
+│   │   └── claude-statusline-command.sh  # Claude Code custom status line
 │   ├── core/              # Core functionality
 │   │   ├── beauty_log.bash       # Logging utilities
 │   │   ├── log_util.bash         # Additional log functions
@@ -50,7 +52,8 @@ dotfiles/
 ├── tests/                 # Test files
 ├── pyproject.toml         # Python project configuration
 ├── tox.ini                # Code quality automation
-├── setup.sh               # Main setup script
+├── setup.sh               # Main setup script (bash + git)
+├── install.sh             # Additional setup script (Claude Code + other tools)
 └── README.md              # This file
 ```
 
@@ -70,7 +73,7 @@ dotfiles/
    cd ~/dotfiles
    ```
 
-2. **Run the setup script:**
+2. **Run the main setup script:**
 
    ```bash
    ./setup.sh
@@ -81,7 +84,16 @@ dotfiles/
    - `~/.bash_profile` → `~/dotfiles/bash/profile.bash`
    - `~/.gitconfig` → `~/dotfiles/git/.gitconfig`
 
-3. **Apply the changes:**
+3. **Run the installation script (for additional setup):**
+
+   ```bash
+   ./install.sh
+   ```
+
+   This will set up:
+   - `~/.claude/statusline-command.sh` → `~/dotfiles/bash/custom-script/claude-statusline-command.sh` (symlink)
+
+4. **Apply the changes:**
 
    ```bash
    source ~/.bashrc
@@ -130,9 +142,11 @@ For a complete list, check files in `bash/alias/`.
 
 ### Application Configurations
 
-Application-specific configurations are in `bash/app/`. These include:
+Application-specific configurations are in `bash/app/`. Custom scripts are in `bash/custom-script/`. These include:
 
-- **Claude AI**: CLI shortcuts and environment setup
+- **Claude Code**:
+  - `app/claude.bash`: CLI shortcuts and environment setup
+  - `custom-script/claude-statusline-command.sh`: Custom status line (managed via `install.sh`)
 - **Git**: Enhanced git commands and aliases
 - **Python**: pyenv, uv package manager integration
 - **Databases**: PostgreSQL, MySQL configurations
