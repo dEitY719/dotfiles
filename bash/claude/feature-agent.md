@@ -89,7 +89,7 @@ L (Low - 낮음):
 
 ### Step 4: Generate REQ-ID
 
-Follow project conventions:
+Follow project conventions **with duplicate check**:
 
 **For SLEA-SSEM**:
 ```
@@ -101,18 +101,45 @@ Examples:
 - REQ-CLI-Session-1 (CLI, Session category, #1)
 - REQ-A-Scoring-1 (Agent, Scoring category, #1)
 
-Logic:
+Logic (with duplicate prevention):
 1. Determine [TYPE]: F, B, CLI, A, etc.
 2. Extract [CATEGORY] from requirement (2-3 words)
-3. Use [NUMBER]: 1, 2, 3... (first occurrence of that category)
+3. **Read feature_requirement_mvp1.md to find existing REQ IDs**
+4. **Filter IDs matching REQ-[TYPE]-[CATEGORY]-***
+5. **Find max([NUMBER]) in filtered list**
+6. **Assign [NUMBER] = max + 1** (or 1 if none exist)
 ```
 
-**Example**:
+**Example with duplicate check**:
 ```
 User request: "사용자 접속 이력을 확인하는 endpoint API"
   ↓ Type: Backend
-  ↓ Category: Access/History
-  ↓ ID: REQ-B-Access-1 (or REQ-B-History-1)
+  ↓ Category: Access
+  ↓ Check existing: Read feature_requirement_mvp1.md
+  ↓ Found: REQ-B-Access-1, REQ-B-Access-2
+  ↓ Max number: 2
+  ↓ NEW ID: REQ-B-Access-3 ✅ (not REQ-B-Access-1!)
+```
+
+**Critical**: Always check for existing IDs to prevent duplicates.
+
+**Duplicate Check Algorithm**:
+```python
+# Pseudocode
+existing_ids = grep("REQ-B-Access-", feature_requirement_mvp1.md)
+# Result: ["REQ-B-Access-1", "REQ-B-Access-2"]
+
+numbers = [extract_number(id) for id in existing_ids]
+# Result: [1, 2]
+
+max_number = max(numbers) if numbers else 0
+# Result: 2
+
+new_number = max_number + 1
+# Result: 3
+
+new_id = f"REQ-B-Access-{new_number}"
+# Result: "REQ-B-Access-3"
 ```
 
 ### Step 5: Structure as Markdown

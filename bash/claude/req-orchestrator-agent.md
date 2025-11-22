@@ -58,23 +58,38 @@ Determine requirement file location:
 
 ### Step 2: Phase 1 - Call req-spec-agent
 
-Prompt the req-spec-agent with:
-```yaml
-req_id: "REQ-F-A1-1"
-project_type: "frontend"  # or backend, cli, etc.
-requirement_file: "docs/feature_requirement_mvp1.md"
-task: |
-  Extract requirement for REQ-F-A1-1 from the requirements file.
-  Create a detailed specification document with:
-  - Intent (1 sentence)
-  - Location (file/directory paths)
-  - Signature (function/component signature)
-  - Behavior (detailed description)
-  - Dependencies (required libraries/modules)
-  - Acceptance Criteria (checklist)
+**Critical**: Use the Task tool to invoke req-spec-agent as a sub-agent.
+
+**Invocation**:
+```xml
+<invoke name="Task">
+<parameter name="subagent_type">req-spec-agent</parameter>
+<parameter name="description">Phase 1: Extract specification for REQ-F-A1-1</parameter>
+<parameter name="prompt">
+You are req-spec-agent. Extract and define specification for:
+
+REQ ID: REQ-F-A1-1
+Requirement File: docs/feature_requirement_mvp1.md
+Project Type: frontend
+
+Your task:
+1. Locate REQ-F-A1-1 in the requirements file
+2. Extract: Description, Priority, Use Cases, Expected Output, Error Cases
+3. Define specification with:
+   - Intent (1 sentence)
+   - Location (file/directory paths)
+   - Signature (function/component signature)
+   - Behavior (detailed description)
+   - Dependencies (required libraries/modules)
+   - Acceptance Criteria (checklist)
+4. Output structured markdown specification
+
+Follow your standard Phase 1 workflow.
+</parameter>
+</invoke>
 ```
 
-**Wait for req-spec-agent result** (marked as spec_document)
+**Wait for req-spec-agent result** (stored as spec_document in agent output)
 
 **Present to user**:
 ```
@@ -95,28 +110,39 @@ If NO: What needs to change?
 
 ### Step 3: Phase 2 - Call req-test-design-agent
 
-Prompt the req-test-design-agent with:
-```yaml
-req_id: "REQ-F-A1-1"
-specification: <spec_document from Phase 1>
-codebase_path: "<project root>"
-task: |
-  Design 4-5 test cases based on the specification:
-  1. TC-1: Happy Path (normal inputs, success)
-  2. TC-2: Input Validation (wrong inputs, errors)
-  3. TC-3: Edge Cases (boundary values, special cases)
-  4. TC-4: Acceptance Criteria (requirement verification)
-  5. TC-5: (optional, project-specific)
+**Critical**: Use the Task tool to invoke req-test-design-agent as a sub-agent.
 
-  Create test file at: tests/<domain>/test_<feature>.py
-  Generate pytest skeleton (implementations in Phase 3).
+**Invocation**:
+```xml
+<invoke name="Task">
+<parameter name="subagent_type">req-test-design-agent</parameter>
+<parameter name="description">Phase 2: Design test cases for REQ-F-A1-1</parameter>
+<parameter name="prompt">
+You are req-test-design-agent. Design test cases based on Phase 1 specification:
 
-  Output format:
-  - Test case descriptions
-  - Test file path and content
+REQ ID: REQ-F-A1-1
+Specification (from Phase 1):
+---
+{spec_document}
+---
+
+Your task:
+1. Analyze the specification
+2. Design 4-5 test cases:
+   - TC-1: Happy Path (component renders)
+   - TC-2: Main Happy Path (core requirement)
+   - TC-3: User Interaction (click, input, etc.)
+   - TC-4: Acceptance Criteria (all criteria met)
+   - TC-5: Edge Cases (error handling)
+3. Generate test file skeleton at: tests/<domain>/test_<feature>.py
+4. Output test design document with all test case descriptions
+
+Follow your standard Phase 2 workflow.
+</parameter>
+</invoke>
 ```
 
-**Wait for req-test-design-agent result** (marked as test_design_document)
+**Wait for req-test-design-agent result** (stored as test_design_document in agent output)
 
 **Present to user**:
 ```
@@ -137,28 +163,49 @@ If NO: What test cases need to change?
 
 ### Step 4: Phase 3 - Call req-implementation-agent
 
-Prompt the req-implementation-agent with:
-```yaml
-req_id: "REQ-F-A1-1"
-specification: <spec_document from Phase 1>
-test_design: <test_design_document from Phase 2>
-test_file_path: "tests/<domain>/test_<feature>.py"
-task: |
-  Implement code to pass all test cases:
+**Critical**: Use the Task tool to invoke req-implementation-agent as a sub-agent.
 
-  1. Read test file at [test_file_path]
-  2. Write minimal code to satisfy all tests
-  3. Run: ./tools/dev.sh test (or pytest equivalent)
-  4. Run: ./tools/dev.sh format (or ruff/black equivalent)
+**Invocation**:
+```xml
+<invoke name="Task">
+<parameter name="subagent_type">req-implementation-agent</parameter>
+<parameter name="description">Phase 3: Implement code for REQ-F-A1-1</parameter>
+<parameter name="prompt">
+You are req-implementation-agent. Implement code to pass all test cases:
 
-  Stop if:
-  - Tests fail: Report failures, do NOT proceed
-  - Lint issues: Report issues, do NOT proceed
+REQ ID: REQ-F-A1-1
 
-  Success: Report test/lint results and continue to Phase 4
+Specification (from Phase 1):
+---
+{spec_document}
+---
+
+Test Design (from Phase 2):
+---
+{test_design_document}
+---
+
+Test File Path: tests/<domain>/test_<feature>.py
+
+Your task:
+1. Read the test file and understand what each test expects
+2. Write minimal code to satisfy all test cases
+3. Run: ./tools/dev.sh test (or pytest equivalent)
+4. Run: ./tools/dev.sh format (or ruff/black equivalent)
+5. Report results
+
+**Critical Rules**:
+- Maximum 3 retry attempts if tests fail
+- If tests fail 3 times: STOP and report to orchestrator
+- If lint issues: STOP and report
+- Only proceed if ALL tests pass AND lint clean
+
+Follow your standard Phase 3 workflow.
+</parameter>
+</invoke>
 ```
 
-**Wait for req-implementation-agent result** (marked as implementation_result)
+**Wait for req-implementation-agent result** (stored as implementation_result in agent output)
 
 **Check result status**:
 - If FAILURE: Stop and report errors to user. Ask if they want to retry or modify requirements.
@@ -166,31 +213,49 @@ task: |
 
 ### Step 5: Phase 4 - Call req-summary-agent
 
-Prompt the req-summary-agent with:
-```yaml
-req_id: "REQ-F-A1-1"
-phase1_spec: <spec_document>
-phase2_tests: <test_design_document>
-phase3_result: <implementation_result>
-task: |
-  Create final documentation and commit:
+**Critical**: Use the Task tool to invoke req-summary-agent as a sub-agent.
 
-  1. Generate docs/progress/REQ-F-A1-1.md
-     - Include Phase 1 specification
-     - Include Phase 2 test design
-     - Include Phase 3 implementation results
-     - Add traceability: REQ → Spec → Tests → Code
+**Invocation**:
+```xml
+<invoke name="Task">
+<parameter name="subagent_type">req-summary-agent</parameter>
+<parameter name="description">Phase 4: Create documentation and commit for REQ-F-A1-1</parameter>
+<parameter name="prompt">
+You are req-summary-agent. Create final documentation and commit:
 
-  2. Update docs/DEV-PROGRESS.md
-     - Find REQ-F-A1-1 row
-     - Change Phase: 0 → 4
-     - Change Status: ⏳ Backlog → ✅ Done
-     - Add Notes with commit SHA
+REQ ID: REQ-F-A1-1
 
-  3. Create git commit
-     - Format: "chore: Update progress for REQ-F-A1-1"
-     - Include 🤖 Claude Code marker
-     - Add Co-Authored-By line
+Phase 1 Specification:
+---
+{spec_document}
+---
+
+Phase 2 Test Design:
+---
+{test_design_document}
+---
+
+Phase 3 Implementation Result:
+---
+{implementation_result}
+---
+
+Your task:
+1. Generate docs/progress/REQ-F-A1-1.md with complete Phase 1-4 documentation
+2. Update docs/DEV-PROGRESS.md:
+   - Find REQ-F-A1-1 row
+   - Change Phase: 0 → 4
+   - Change Status: ⏳ Backlog → ✅ Done
+   - Add commit SHA in Notes
+3. Create git commit:
+   - Format: "chore: Update progress for REQ-F-A1-1 completion"
+   - Include 🤖 Claude Code marker
+   - Include Co-Authored-By line
+4. Report completion with commit SHA
+
+Follow your standard Phase 4 workflow.
+</parameter>
+</invoke>
 ```
 
 **Wait for req-summary-agent result**

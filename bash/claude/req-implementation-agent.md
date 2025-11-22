@@ -50,6 +50,17 @@ project_type: "frontend"  # or backend, cli
 
 ## Operation Steps
 
+### Step 0: Initialize Retry Counter
+
+**Critical**: Track retry attempts to prevent infinite loops.
+
+```
+retry_count = 0
+max_retries = 3
+```
+
+**Rule**: If tests fail 3 times in a row, STOP and report to orchestrator. Do NOT continue retrying.
+
 ### Step 1: Understand Test Requirements
 
 Read test file at `test_file_path` and understand:
@@ -184,7 +195,7 @@ Principles:
 - Docstrings on public functions
 - Error handling (HTTPException for errors)
 
-### Step 4: Run Tests
+### Step 4: Run Tests (with Retry Logic)
 
 Execute the test command BEFORE running lint:
 
@@ -199,7 +210,7 @@ pytest tests/backend/ -v        # Backend tests
 pytest tests/cli/ -v            # CLI tests
 ```
 
-**Expected Output**:
+**Expected Output (Success)**:
 ```
 tests/frontend/test_login_page.py::test_login_page_renders PASSED
 tests/frontend/test_login_page.py::test_login_button_displays PASSED
@@ -209,16 +220,38 @@ tests/frontend/test_login_page.py::test_error_handling PASSED
 
 === 5 passed in 1.23s ===
 ```
+✅ All tests pass → Proceed to Step 5 (Quality Checks)
 
-**If Tests Fail**:
+**If Tests Fail (Retry Logic)**:
 ```
-❌ FAILURE: Tests did not pass
+❌ FAILURE: Tests did not pass (Attempt {retry_count + 1}/3)
 Test failures:
 - test_login_button_click_redirects: AssertionError: navigate not called
 
-❌ STOP: Do not proceed to lint check.
-Report failures to orchestrator.
+Retry decision:
+- If retry_count < 3:
+  1. Increment retry_count
+  2. Analyze failure
+  3. Fix code
+  4. Re-run tests (go back to Step 3)
+
+- If retry_count >= 3:
+  ❌ STOP: Maximum retry limit (3) reached
+  Report to orchestrator:
+    status: "FAILURE"
+    reason: "Tests failed after 3 retry attempts"
+    last_error: [detailed error message]
+    action_required: "Review test expectations or modify requirements"
 ```
+
+**Retry Counter Example**:
+```
+Attempt 1: Tests fail → retry_count = 1 → Retry
+Attempt 2: Tests fail → retry_count = 2 → Retry
+Attempt 3: Tests fail → retry_count = 3 → STOP (no more retries)
+```
+
+**Critical**: Do NOT proceed to lint check if tests fail. Do NOT retry more than 3 times.
 
 ### Step 5: Run Code Quality Checks
 
@@ -392,12 +425,42 @@ This agent uses the following commands from your project's dev tool:
 - Commenting out tests
 - Skipping test execution
 
-**DO:**
+**DO (with Retry Limit):**
 1. Read test assertion carefully
 2. Understand what's being tested
 3. Write code that satisfies test
-4. Run tests again
-5. If still failing: Report to orchestrator (don't keep trying)
+4. Increment retry_count
+5. Run tests again
+6. **If retry_count < 3**: Continue retrying (go back to step 1)
+7. **If retry_count >= 3**: STOP and report to orchestrator
+
+**Example Retry Flow**:
+```
+Attempt 1: Write code → Run tests → Fail → retry_count = 1
+           ↓
+Attempt 2: Fix code → Run tests → Fail → retry_count = 2
+           ↓
+Attempt 3: Fix code → Run tests → Fail → retry_count = 3
+           ↓
+         STOP: Report failure to orchestrator
+         Do NOT attempt again
+```
+
+**Failure Report Format** (after 3 attempts):
+```yaml
+status: "FAILURE"
+reason: "Tests failed after 3 retry attempts"
+retry_attempts: 3
+last_failures:
+  - test_name: "test_login_button_displays"
+    error: "AssertionError: Button element not found"
+  - test_name: "test_login_button_click"
+    error: "AssertionError: navigate not called"
+action_required: |
+  - Review test expectations
+  - Modify requirements if needed
+  - Ask user for guidance
+```
 
 ## Project-Specific Adaptations
 
