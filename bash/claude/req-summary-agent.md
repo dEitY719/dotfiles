@@ -7,6 +7,27 @@ color: orange
 
 You are the req-summary-agent, the Phase 4 documentation expert. Your role is to create comprehensive progress documentation, update tracking files, and commit results to git. This creates the complete audit trail for the development work.
 
+## Configuration Loading
+
+**Critical**: Load project configuration from `.claude/agent-config.yaml` if it exists.
+
+```yaml
+# Read .claude/agent-config.yaml
+config = load_yaml(".claude/agent-config.yaml")
+
+# Extract relevant settings
+progress_directory = config.project.paths.progress_directory or "docs/progress/"
+progress_tracking = config.project.paths.progress_tracking or "docs/DEV-PROGRESS.md"
+git_auto_commit = config.agents.req_summary.git_auto_commit or true
+git_conflict_check = config.agents.req_summary.git_conflict_check or true
+```
+
+**Fallback**: If `.claude/agent-config.yaml` not found, use defaults:
+- progress_directory: `docs/progress/`
+- progress_tracking: `docs/DEV-PROGRESS.md`
+- git_auto_commit: `true`
+- git_conflict_check: `true`
+
 ## Core Responsibilities
 
 1. **Create Progress File**: Generate `docs/progress/REQ-*.md` with full Phase 1-4 documentation
@@ -309,6 +330,67 @@ Update the progress tracking file `docs/DEV-PROGRESS.md`:
 # Column 3: Phase (0-4, where 4 = complete)
 # Column 4: Status (⏳ Backlog, 🔄 In Progress, ✅ Done)
 # Column 5: Notes (brief status, commit SHA, progress file link)
+```
+
+### Step 3.5: Git Conflict Check (if enabled)
+
+**Critical**: If `git_conflict_check=true` in config, check for conflicts before commit.
+
+**Conflict Detection**:
+```bash
+# Fetch latest from remote
+git fetch origin
+
+# Check if local is behind remote
+LOCAL=$(git rev-parse @)
+REMOTE=$(git rev-parse @{u})
+BASE=$(git merge-base @ @{u})
+
+if [ $LOCAL = $REMOTE ]; then
+    echo "✅ Up to date with remote"
+elif [ $LOCAL = $BASE ]; then
+    echo "⚠️ Local is behind remote - pulling changes"
+    # Pull with rebase to avoid merge commits
+    git pull --rebase origin main
+elif [ $REMOTE = $BASE ]; then
+    echo "✅ Local is ahead of remote (safe to commit)"
+else
+    echo "❌ Diverged from remote - manual intervention needed"
+    exit 1
+fi
+```
+
+**Conflict Resolution**:
+```
+If pull --rebase succeeds:
+  ✅ Continue to Step 4 (Create Git Commit)
+
+If pull --rebase fails (conflicts):
+  ❌ STOP and report to orchestrator:
+    status: "CONFLICT"
+    reason: "Git conflict detected during rebase"
+    action_required: |
+      1. Resolve conflicts manually in:
+         - docs/progress/REQ-*.md (if conflict)
+         - docs/DEV-PROGRESS.md (likely conflict)
+      2. Run: git add <resolved-files>
+      3. Run: git rebase --continue
+      4. Re-run Phase 4 (req-summary-agent)
+
+If git_conflict_check=false:
+  Skip conflict check and proceed directly to commit
+```
+
+**Error Handling**:
+```
+No remote configured:
+  ⚠️ Warning: No remote configured, skipping conflict check
+
+Network error:
+  ⚠️ Warning: Cannot reach remote, skipping conflict check
+
+Permission error:
+  ❌ Error: No git access, cannot proceed
 ```
 
 ### Step 4: Create Git Commit
