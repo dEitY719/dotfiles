@@ -124,6 +124,97 @@ Phase 4: Documentation      ⏳ PENDING
 
 ## Operation Flow
 
+### Step 0.5: Check for Parallel Development Conflicts
+
+**Before starting Phase 1**, check if REQ is already being worked on:
+
+```bash
+# Check DEV-PROGRESS.md for REQ status
+REQ_STATUS=$(grep "REQ-F-A1-1" docs/DEV-PROGRESS.md | awk '{print $4}')
+ASSIGNED_TO=$(grep "REQ-F-A1-1" docs/DEV-PROGRESS.md | awk '{print $6}')
+
+if [ "$REQ_STATUS" = "🔄" ]; then
+    echo "⚠️  WARNING: REQ-F-A1-1 is already in progress"
+    echo "Assigned to: $ASSIGNED_TO"
+    echo ""
+    echo "Options:"
+    echo "1. Continue anyway (may cause conflicts)"
+    echo "2. Choose different REQ"
+    echo "3. Coordinate with $ASSIGNED_TO"
+    # Ask user for confirmation
+fi
+```
+
+**Branch Management Strategy**:
+```bash
+# Create feature branch for this REQ
+BRANCH_NAME="req/REQ-F-A1-1"
+CURRENT_BRANCH=$(git branch --show-current)
+
+if [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "$BRANCH_NAME" ]; then
+    echo "⚠️  Not on main branch or REQ branch"
+    echo "Current: $CURRENT_BRANCH"
+    echo "Expected: main or $BRANCH_NAME"
+    echo ""
+    echo "Recommendation: git checkout -b $BRANCH_NAME main"
+fi
+
+# Create branch if it doesn't exist
+if ! git show-ref --verify --quiet refs/heads/$BRANCH_NAME; then
+    git checkout -b $BRANCH_NAME main
+    echo "✅ Created branch: $BRANCH_NAME"
+else
+    git checkout $BRANCH_NAME
+    echo "✅ Switched to existing branch: $BRANCH_NAME"
+fi
+```
+
+**REQ Assignment Tracking**:
+```yaml
+# Update DEV-PROGRESS.md with assignment
+| REQ-F-A1-1 | Feature Name | 0 | 🔄 In Progress | Assigned: @username, Branch: req/REQ-F-A1-1 |
+
+# Format:
+# Column 1: REQ ID
+# Column 2: Feature name
+# Column 3: Phase (0-4)
+# Column 4: Status (⏳ Backlog, 🔄 In Progress, ✅ Done)
+# Column 5: Notes (Assigned: @user, Branch: branch-name)
+```
+
+**Concurrent Development Safeguards**:
+```
+1. Branch-per-REQ strategy (req/REQ-ID)
+2. Assignment tracking in DEV-PROGRESS.md
+3. Lock file mechanism (.req-locks/REQ-F-A1-1.lock)
+4. Status updates before starting each phase
+```
+
+**Lock File Mechanism**:
+```bash
+# Create lock file before starting
+LOCK_FILE=".req-locks/REQ-F-A1-1.lock"
+mkdir -p .req-locks
+
+if [ -f "$LOCK_FILE" ]; then
+    LOCK_OWNER=$(cat "$LOCK_FILE")
+    LOCK_TIME=$(stat -c %y "$LOCK_FILE")
+    echo "⚠️  REQ locked by: $LOCK_OWNER"
+    echo "Lock time: $LOCK_TIME"
+    echo ""
+    echo "If lock is stale (>24 hours), remove manually:"
+    echo "rm $LOCK_FILE"
+    exit 1
+fi
+
+# Acquire lock
+echo "$(whoami)@$(hostname) at $(date)" > "$LOCK_FILE"
+echo "✅ Lock acquired for REQ-F-A1-1"
+
+# Release lock after Phase 4 complete
+trap "rm -f $LOCK_FILE" EXIT
+```
+
 ### Step 1: Parse User Request
 
 ```

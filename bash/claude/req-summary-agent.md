@@ -424,6 +424,382 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
  update mode 100644 docs/DEV-PROGRESS.md
 ```
 
+### Step 4.5: CI/CD Integration (if enabled)
+
+**If running in CI/CD environment**, trigger additional automation:
+
+**Detect CI/CD Environment**:
+```bash
+# Common CI/CD environment variables
+if [ -n "$GITHUB_ACTIONS" ]; then
+    CI_PLATFORM="github-actions"
+elif [ -n "$GITLAB_CI" ]; then
+    CI_PLATFORM="gitlab-ci"
+elif [ -n "$JENKINS_URL" ]; then
+    CI_PLATFORM="jenkins"
+elif [ -n "$CIRCLECI" ]; then
+    CI_PLATFORM="circleci"
+else
+    CI_PLATFORM="none"
+fi
+```
+
+**GitHub Actions Integration**:
+```yaml
+# .github/workflows/req-development.yml
+name: REQ Development Workflow
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches: [main, develop]
+
+jobs:
+  req-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Validate REQ Progress
+        run: |
+          # Check if progress files are updated
+          python scripts/validate_req_progress.py
+
+      - name: Run Tests
+        run: |
+          ./tools/dev.sh test
+
+      - name: Quality Checks
+        run: |
+          ./tools/dev.sh format
+
+      - name: Update PR Status
+        if: always()
+        run: |
+          # Post test results as PR comment
+          python scripts/post_test_results.py
+```
+
+**CI/CD Outputs**:
+```
+When running in CI/CD:
+1. Export test results to JUnit XML format
+2. Generate coverage reports
+3. Post results as PR comments
+4. Update PR labels based on status
+5. Trigger downstream jobs if needed
+```
+
+**Test Result Export**:
+```bash
+# Export for CI/CD systems
+pytest tests/ -v --junitxml=test-results.xml --cov-report=xml
+
+# GitHub Actions: Upload artifacts
+if [ "$CI_PLATFORM" = "github-actions" ]; then
+    echo "::set-output name=test-results::test-results.xml"
+    echo "::set-output name=coverage::coverage.xml"
+fi
+```
+
+**PR Status Updates**:
+```python
+# scripts/post_test_results.py
+def post_pr_comment(req_id, status, results):
+    """Post test results to PR as comment"""
+    comment = f"""
+## {req_id} Development Results
+
+**Status**: {'✅ SUCCESS' if status == 'SUCCESS' else '❌ FAILED'}
+
+### Test Results
+- Total: {results['total']}
+- Passed: {results['passed']}
+- Failed: {results['failed']}
+
+### Code Quality
+- Ruff: {results['ruff_status']}
+- MyPy: {results['mypy_status']}
+- Pylint: {results['pylint_status']}
+
+### Progress
+- Phase 1: ✅ Complete
+- Phase 2: ✅ Complete
+- Phase 3: ✅ Complete
+- Phase 4: ✅ Complete
+    """
+    # Post to GitHub PR using API
+```
+
+**Branch Protection Rules**:
+```
+For main/develop branches:
+- Require status checks: "REQ Development Workflow"
+- Require all tests passing
+- Require code quality checks passing
+- Prevent force push
+- Require linear history (no merge commits)
+```
+
+### Step 4.75: Auto-documentation Generation (if enabled)
+
+**Automatically generate documentation** from progress files:
+
+**Documentation Types**:
+```
+1. API Documentation (for Backend REQs)
+2. Feature Documentation (for all REQs)
+3. Changelog Updates (for all REQs)
+4. Architecture Diagrams (for complex REQs)
+5. User Guide Sections (for user-facing features)
+```
+
+**1. API Documentation Generation**:
+```python
+# For Backend REQs (REQ-B-*, REQ-A-*)
+# Generate OpenAPI/Swagger documentation
+
+def generate_api_docs(req_id, spec, implementation):
+    """Generate API documentation from specification"""
+
+    api_doc = f"""
+## {req_id}: {spec['title']}
+
+### Endpoint
+`{spec['method']} {spec['endpoint']}`
+
+### Description
+{spec['description']}
+
+### Request
+```json
+{spec['request_example']}
+```
+
+### Response
+**Success (200 OK)**:
+```json
+{spec['response_example']}
+```
+
+**Error Responses**:
+{spec['error_cases']}
+
+### Authentication
+{spec['auth_requirements']}
+
+### Rate Limiting
+{spec['rate_limits']}
+
+### Example Usage
+```bash
+curl -X {spec['method']} \\
+  {spec['endpoint']} \\
+  -H "Authorization: Bearer TOKEN" \\
+  -d '{spec['request_example']}'
+```
+    """
+
+    # Write to docs/api/REQ-B-*.md
+    write_file(f"docs/api/{req_id}.md", api_doc)
+```
+
+**2. Feature Documentation Generation**:
+```python
+# For all REQs
+# Generate user-facing feature documentation
+
+def generate_feature_docs(req_id, spec, tests):
+    """Generate feature documentation"""
+
+    feature_doc = f"""
+# {spec['title']}
+
+## Overview
+{spec['description']}
+
+## Use Cases
+{spec['use_cases']}
+
+## How to Use
+{generate_usage_guide(spec)}
+
+## Screenshots
+{generate_screenshot_placeholders(req_id)}
+
+## Acceptance Criteria
+{spec['acceptance_criteria']}
+
+## Related Features
+{find_related_reqs(req_id)}
+
+## Technical Details
+- **Implementation**: {spec['location']}
+- **Test Coverage**: {tests['total']} tests, {tests['passed']} passed
+- **Dependencies**: {spec['dependencies']}
+
+## Changelog
+- **{datetime.now().date()}**: Initial implementation ({req_id})
+    """
+
+    # Write to docs/features/REQ-*.md
+    write_file(f"docs/features/{req_id}.md", feature_doc)
+```
+
+**3. Changelog Updates**:
+```markdown
+# Update CHANGELOG.md automatically
+
+## [Unreleased]
+
+### Added
+- [REQ-F-A1-1] Samsung AD login button on login page (#123)
+  - Users can now authenticate using Samsung AD SSO
+  - Automatic redirect to Samsung AD login endpoint
+  - Secure token management
+
+### Changed
+- [REQ-B-B2-6] Improved user profile API performance (#124)
+  - Reduced response time from 500ms to 100ms
+  - Added caching layer for user data
+
+### Fixed
+- [REQ-CLI-Session-1] Fixed session save command error handling (#125)
+  - Now properly handles network timeouts
+  - Clear error messages for invalid input
+
+### Technical
+- Test Coverage: 95% → 97%
+- Code Quality: All checks passing
+- Documentation: Updated API docs for 3 new endpoints
+```
+
+**4. Architecture Diagram Generation**:
+```python
+# Generate Mermaid diagrams for complex features
+
+def generate_architecture_diagram(req_id, spec):
+    """Generate architecture diagram using Mermaid"""
+
+    if spec['type'] == 'backend':
+        diagram = f"""
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Backend
+    participant Database
+    participant SamsungAD
+
+    User->>Frontend: Click "Samsung AD Login"
+    Frontend->>Backend: GET /api/auth/login
+    Backend->>SamsungAD: Redirect to SSO
+    SamsungAD->>Backend: Return auth token
+    Backend->>Database: Store user session
+    Database-->>Backend: Session ID
+    Backend->>Frontend: Redirect with token
+    Frontend->>User: Show authenticated home page
+```
+        """
+    elif spec['type'] == 'frontend':
+        diagram = f"""
+```mermaid
+graph TD
+    A[Login Page] -->|Click Login| B[Samsung AD SSO]
+    B -->|Success| C[Token Received]
+    C -->|Store| D[Local Storage]
+    D -->|Redirect| E[Home Page]
+    B -->|Failure| F[Error Message]
+    F -->|Retry| A
+```
+        """
+
+    # Add to progress file
+    return diagram
+```
+
+**5. User Guide Generation**:
+```markdown
+# Generate user-facing guide sections
+
+## Samsung AD Login (REQ-F-A1-1)
+
+### What is it?
+The Samsung AD Login feature allows you to securely authenticate using your Samsung AD credentials.
+
+### How to use it
+1. Navigate to the login page
+2. Click the "Samsung AD로 로그인" button
+3. Enter your Samsung AD credentials on the redirect page
+4. You'll be automatically logged in and redirected to the home page
+
+### Troubleshooting
+**Q: Login button not showing?**
+A: Clear your browser cache and refresh the page.
+
+**Q: Login fails with error?**
+A: Ensure you're using valid Samsung AD credentials and have network access.
+
+### Related
+- [Profile Management](REQ-F-Profile-1.md)
+- [Session Management](REQ-CLI-Session-1.md)
+```
+
+**Auto-documentation File Structure**:
+```
+docs/
+├── api/                  # API documentation
+│   ├── REQ-B-Access-1.md
+│   ├── REQ-B-Auth-1.md
+│   └── index.md          # Auto-generated API index
+├── features/             # Feature documentation
+│   ├── REQ-F-A1-1.md
+│   ├── REQ-F-Profile-1.md
+│   └── index.md          # Auto-generated feature index
+├── guides/               # User guides
+│   ├── authentication.md # Generated from REQ-F-A1-1, REQ-B-Auth-1
+│   ├── profile-management.md
+│   └── index.md
+├── architecture/         # Architecture diagrams
+│   ├── REQ-B-Access-1.mermaid
+│   └── system-overview.md
+└── CHANGELOG.md          # Auto-updated changelog
+```
+
+**Configuration**:
+```yaml
+# In .claude/agent-config.yaml
+documentation:
+  auto_generate: true
+
+  api_docs:
+    enabled: true
+    directory: "docs/api/"
+    format: "markdown"  # markdown, openapi, swagger
+
+  feature_docs:
+    enabled: true
+    directory: "docs/features/"
+    include_screenshots: true
+    include_diagrams: true
+
+  changelog:
+    enabled: true
+    file: "CHANGELOG.md"
+    format: "keep-a-changelog"  # keep-a-changelog, conventional-commits
+
+  user_guides:
+    enabled: true
+    directory: "docs/guides/"
+    auto_organize_by_category: true
+
+  architecture:
+    enabled: true
+    directory: "docs/architecture/"
+    diagram_format: "mermaid"  # mermaid, plantuml, graphviz
+```
+
 ### Step 5: Report Completion
 
 Report final status to orchestrator:
