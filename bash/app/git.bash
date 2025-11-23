@@ -19,10 +19,18 @@ export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_
 alias gs='git status -sb'                        # 간략한 상태 보기
 alias ga='git add .'                             # 모든 변경사항 스테이징
 alias gc='git commit -m'                         # 커밋 메시지 작성
+alias gca='git commit --amend'                   # 커밋 메시지 작성
 alias gp='git push'                              # 푸시
 alias gl1='git log --oneline --graph --decorate' # 깔끔한 로그
 alias glref='git log ref/main --oneline'         # ref 원격 main 브랜치 한줄 로그
 alias gco='git checkout'                         # 체크아웃 (브랜치 이동 등)
+gsw() {
+    # 사용법: gsw origin/pr/refactor-cli
+    # 원격 브랜치에서 로컬 브랜치를 생성하고 switch (자동으로 upstream 설정)
+    local remote_branch="$1"
+    local local_branch="${remote_branch#*/}"  # origin/pr/refactor-cli -> pr/refactor-cli
+    git switch -c "$local_branch" "$remote_branch"
+}
 alias gd='git diff'                              # 변경사항 확인
 alias gb='git branch'                            # 브랜치 목록
 alias gf='git fetch origin -p'
@@ -94,6 +102,7 @@ githelp() {
     gs         : git status -sb (간략한 상태)
     ga         : git add . (모든 변경사항 스테이징)
     gc         : git commit -m (커밋)
+    gca        : git commit --amend (커밋 수정)
     gp         : git push (푸시)
     gpl        : git pull (풀)
     gco        : git checkout (브랜치 전환)
@@ -103,6 +112,7 @@ githelp() {
   Fetch & Sync:
     gf         : git fetch origin -p (원격 fetch + prune)
     gfa        : git fetch --all --prune (모든 원격 fetch)
+    gsw        : git switch -c <local> <remote> (원격 브랜치로부터 로컬 생성 + switch)
 
   Logs:
     gl         : git_log (그래프 형태 로그)
