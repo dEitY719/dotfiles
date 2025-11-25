@@ -28,11 +28,11 @@ gsw() {
     # 사용법: gsw origin/pr/refactor-cli
     # 원격 브랜치에서 로컬 브랜치를 생성하고 switch (자동으로 upstream 설정)
     local remote_branch="$1"
-    local local_branch="${remote_branch#*/}"  # origin/pr/refactor-cli -> pr/refactor-cli
+    local local_branch="${remote_branch#*/}" # origin/pr/refactor-cli -> pr/refactor-cli
     git switch -c "$local_branch" "$remote_branch"
 }
-alias gd='git diff'                              # 변경사항 확인
-alias gb='git branch'                            # 브랜치 목록
+alias gd='git diff'   # 변경사항 확인
+alias gb='git branch' # 브랜치 목록
 alias gf='git fetch origin -p'
 alias gfa='git fetch --all --prune' # 원격 전체 fetch + 필요없는 브랜치 정리
 alias gpl='git pull'                # 현재 브랜치만 pull

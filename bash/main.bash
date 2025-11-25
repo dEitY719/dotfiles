@@ -168,6 +168,7 @@ EOF
         ["psqlhelp"]="PostgreSQL command helper"
         ["cchelp"]="Claude Code Usage help"
         ["claudehelp"]="Claude Code MCP help"
+        ["dockerhelp"]="Docker commands and aliases"
     )
 
     local max_width=0
