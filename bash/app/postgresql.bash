@@ -55,16 +55,16 @@ sudo service postgresql status   # active (running) 확인
 -----------------------------------
 sudo -u postgres psql <<'SQL'
 -- 앱 전용 유저/DB 생성 (개발 / 테스트)
-CREATE ROLE himena WITH LOGIN PASSWORD 'change_me_strong_pw';
-CREATE DATABASE sleassem_dev OWNER himena;
+CREATE ROLE slea_user WITH LOGIN PASSWORD 'change_me_strong_pw';
+CREATE DATABASE sleassem_dev OWNER slea_user;
 
 -- 권한 부여
-GRANT ALL PRIVILEGES ON DATABASE sleassem_dev TO himena;
+GRANT ALL PRIVILEGES ON DATABASE sleassem_dev TO slea_user;
 SQL
 
 4) 접속 테스트
 ---------------
-psql "host=localhost dbname=sleassem_dev user=himena password=change_me_strong_pw" -c "\l"
+psql "host=localhost dbname=sleassem_dev user=slea_user password=change_me_strong_pw" -c "\l"
 
 5) Dotfiles PostgreSQL Helper Functions
 ----------------------------------------
@@ -106,9 +106,9 @@ services=(
     "dmc_dev  dmc_playground_dev  dmc_user  change_me_strong_pw"
     "dmc_test dmc_playground_test dmc_user  change_me_strong_pw"
     "dmc_prod dmc_playground_prod dmc_user  change_me_strong_pw"
-    "sleassem_dev sleassem_dev himena change_me_strong_pw"
-    "sleassem_test sleassem_test himena change_me_strong_pw"
-    "sleassem_prod sleassem_prod himena change_me_strong_pw"
+    "sleassem_dev sleassem_dev slea_user change_me_strong_pw"
+    "sleassem_test sleassem_test slea_user change_me_strong_pw"
+    "sleassem_prod sleassem_prod slea_user change_me_strong_pw"
 )
 
 PGSERVICE_FILE="$HOME/.pg_service.conf"
@@ -179,9 +179,8 @@ psql_list() {
 }
 
 # -------------------------------
-# 6) PostgreSQL command helper
+# 6) PostgreSQL command helper (Updated)
 # -------------------------------
-# 가독성 향상 버전: psqlhelp
 psqlhelp() {
     # ---------- 색/스타일 ----------
     local _nocolor=false
@@ -198,19 +197,10 @@ psqlhelp() {
             FG_RED=$(tput setaf 1)
         else _nocolor=true; fi
     else _nocolor=true; fi
+    
     if $_nocolor; then
-        BOLD=""
-        DIM=""
-        RESET=""
-        FG_CYAN=""
-        FG_GREEN=""
-        FG_YELLOW=""
-        # shellcheck disable=SC2034
-        FG_BLUE=""
-        # shellcheck disable=SC2034
-        FG_MAGENTA=""
-        # shellcheck disable=SC2034
-        FG_RED=""
+        BOLD="" DIM="" RESET=""
+        FG_CYAN="" FG_GREEN="" FG_YELLOW="" FG_BLUE="" FG_MAGENTA="" FG_RED=""
     fi
 
     # ---------- 인자/축약어 사전 ----------
@@ -218,100 +208,160 @@ psqlhelp() {
     shift || true
     local cmd="${*:-}"
 
-    # 축약어 사전 (우측은 실제 \명령)
     declare -A cmd_map=(
-        ["du"]="du" # list roles
-        ["l"]="l"   # list databases
-        ["dt"]="dt" # list tables
-        ["d"]="d"   # describe table
-        ["q"]="q"   # quit
-        ["x"]="x"   # toggle expanded output
+        ["du"]="du" ["l"]="l" ["dt"]="dt" ["d"]="d" ["q"]="q" ["x"]="x"
     )
-    # 축약어 설명(출력용)
     declare -A cmd_desc=(
-        ["du"]="list roles"
-        ["l"]="list databases"
-        ["dt"]="list tables"
-        ["d"]="describe table"
-        ["q"]="quit"
-        ["x"]="toggle expanded output"
+        ["du"]="list roles" ["l"]="list databases" ["dt"]="list tables"
+        ["d"]="describe table" ["q"]="quit" ["x"]="toggle expanded output"
     )
 
-    # ---------- 도움말/리스트 출력 유틸 ----------
+    # ---------- 화면 출력 함수 ----------
     _print_header() {
-        local title="$1"
-        printf "%s%s%s\n" "$BOLD$FG_CYAN" "$title" "$RESET"
+        printf "%s%s%s\n" "$BOLD$FG_CYAN" "$1" "$RESET"
     }
+
     _print_usage() {
         _print_header "Usage"
         cat <<USAGE
   ${BOLD}psqlhelp${RESET} ${FG_YELLOW}<service>${RESET} ${FG_GREEN}<command>${RESET}
 
-${BOLD}Examples${RESET}
-  psqlhelp dmc_dev ${FG_GREEN}\l${RESET}
-  psqlhelp dmc_prod ${FG_GREEN}\l${RESET}
-  psqlhelp dmc_test ${FG_GREEN}dt${RESET}      ${DIM}(shortcut → \\dt)${RESET}
+${BOLD}Management Commands${RESET}
+  ${FG_YELLOW}psql_create${RESET} <db_name>   : Create DB & User (Auto-hardening)
+  ${FG_YELLOW}psql_delete${RESET} <service>   : Delete DB & Attempt to drop User
 
-${BOLD}Add New Database Service (3 steps)${RESET}
-  1. Edit ${FG_CYAN}~/dotfiles/bash/app/postgresql.bash${RESET}
-     → services 배열에
-        "${FG_GREEN}sleassem_dev sleassem_dev himena change_me_strong_pw${RESET}" 추가
-  2. ${FG_YELLOW}psql_create sleassem_dev${RESET} 실행 (DB 및 유저 자동 생성)
-  3. ${FG_GREEN}psql_sleassem_dev -c '\\conninfo'${RESET} 로 연결 확인  
+${BOLD}Examples${RESET}
+  psqlhelp dmc_dev ${FG_GREEN}\\l${RESET}
+  psqlhelp sleassem_dev ${FG_GREEN}dt${RESET}
+
+${BOLD}Workflows${RESET}
+  Add: Edit bash file -> psql_create -> Check
+  Del: psql_delete -> Edit bash file
 USAGE
         echo
     }
+
     _print_shortcuts() {
         _print_header "Shortcuts"
-        # 이름 정렬 폭
-        local k
         for k in du l dt d x q; do
-            printf "  %-3s %s→%s \\%-2s %s\n" \
-                "$BOLD$k$RESET" "$DIM" "$RESET" "${cmd_map[$k]}" "${cmd_desc[$k]}"
+            printf "  %-3s %s→%s \\%-2s %s\n" "$BOLD$k$RESET" "$DIM" "$RESET" "${cmd_map[$k]}" "${cmd_desc[$k]}"
         done
         echo
     }
     _print_services_table() {
         _print_header "Available services (current shell)"
-        # 표 헤더
-        printf "%s\n" "${DIM}┌──────────────────────┬──────────────────────────────┬─────────────────────┬──────────────┐${RESET}"
-        printf "%s %-20s %s %-28s %s %-19s %s %-12s %s\n" \
-            "│" "SERVICE" "│" "ALIAS" "│" "DB" "│" "USER" "│"
-        printf "%s\n" "${DIM}├──────────────────────┼──────────────────────────────┼─────────────────────┼──────────────┤${RESET}"
 
-        # services 배열 필요 (형식: "service db user pass")
-        local entry svc db user alias_name
+        # 1. [Logic] DB 목록 조회 (빠른 조회)
+        local ALL_DBS=""
+        local chk_svc chk_db chk_user chk_pass
         for entry in "${services[@]}"; do
-            # shellcheck disable=SC2086
+            read -r chk_svc chk_db chk_user chk_pass <<<"$entry"
+            if ALL_DBS=$(PGPASSWORD="$chk_pass" PGCONNECT_TIMEOUT=1 psql -h "${DEFAULT_HOST:-localhost}" -p "${DEFAULT_PORT:-5432}" -U "$chk_user" -d "$chk_db" -w -tAc "SELECT datname FROM pg_database" 2>/dev/null); then
+                break
+            fi
+        done
+
+        # ---------------------------------------------------------
+        # 2. [Design] 컬럼 너비 설정 (이 숫자만 바꾸면 표 전체가 자동 조절됨)
+        # ---------------------------------------------------------
+        local w_stat=4    # STAT (아이콘/텍스트 너비)
+        local w_svc=20    # SERVICE
+        local w_alias=25  # ALIAS (조금 줄임)
+        local w_db=25     # DB
+        local w_user=12   # USER
+
+        # ---------------------------------------------------------
+        # 3. [Helper] 가로선 자동 생성 함수 (완벽한 줄맞춤의 핵심)
+        # ---------------------------------------------------------
+        # 사용법: _rep "문자" 반복횟수
+        _rep() { printf "%0.s$1" $(seq 1 "$2"); }
+
+        local line_stat line_svc line_alias line_db line_user
+        line_stat=$(_rep "─" $((w_stat + 2)))   # 좌우 공백 1칸씩 포함(+2)
+        line_svc=$(_rep "─" $((w_svc + 2)))
+        line_alias=$(_rep "─" $((w_alias + 2)))
+        line_db=$(_rep "─" $((w_db + 2)))
+        line_user=$(_rep "─" $((w_user + 2)))
+
+        # ---------------------------------------------------------
+        # 4. [Output] 테이블 그리기
+        # ---------------------------------------------------------
+        
+        # [Top Border]
+        printf "${DIM}┌%s┬%s┬%s┬%s┬%s┐${RESET}\n" \
+            "$line_stat" "$line_svc" "$line_alias" "$line_db" "$line_user"
+        
+        # [Header]
+        printf "│ %-${w_stat}s │ %-${w_svc}s │ %-${w_alias}s │ %-${w_db}s │ %-${w_user}s │\n" \
+            "STAT" "SERVICE" "ALIAS" "DB" "USER"
+
+        # [Middle Separator]
+        printf "${DIM}├%s┼%s┼%s┼%s┼%s┤${RESET}\n" \
+             "$line_stat" "$line_svc" "$line_alias" "$line_db" "$line_user"
+
+        local entry svc db user alias_name status_icon db_display user_display
+        local db_padded user_padded svc_padded alias_padded
+
+        for entry in "${services[@]}"; do
             read -r svc db user _ <<<"$entry"
             alias_name="psql_${svc}"
-            printf "│ %-20s │ %-28s │ %-19s │ %-12s │\n" \
-                "$svc" "$alias_name" "$db" "$user"
+            
+            # (A) 내용물 Padding (색상 입히기 전 길이 고정)
+            printf -v svc_padded   "%-${w_svc}s"   "${svc:0:$w_svc}"     # 넘치면 자름
+            printf -v alias_padded "%-${w_alias}s" "${alias_name:0:$w_alias}"
+            printf -v db_padded    "%-${w_db}s"    "${db:0:$w_db}"
+            printf -v user_padded  "%-${w_user}s"  "${user:0:$w_user}"
+
+            # (B) 상태 결정 및 색상 입히기
+            #     주의: status_icon은 Padding을 수동으로 제어하여 시각적 정렬 맞춤
+            if [[ -z "$ALL_DBS" ]]; then
+                # "? " (우측 공백 2칸)
+                status_icon=" ${FG_YELLOW}?${RESET}  " 
+                db_display="$db_padded"
+            elif echo "$ALL_DBS" | grep -qx "$db"; then
+                # " OK " (좌우 공백 1칸)
+                status_icon=" ${FG_GREEN}OK${RESET} "
+                db_display="${BOLD}${db_padded}${RESET}"
+            else
+                # "MISS" (공백 없음)
+                status_icon="${FG_RED}MISS${RESET}"
+                db_display="${DIM}${FG_RED}${db_padded}${RESET}"
+            fi
+
+            # (C) 최종 출력
+            #     status_icon은 이미 색상코드 포함 길이가 제각각이므로 %s로 그냥 출력
+            #     나머지는 이미 Padding 되었으므로 %s로 출력
+            printf "│ %s │ %s │ %s │ %s │ %s │\n" \
+                "$status_icon" "$svc_padded" "$alias_padded" "$db_display" "$user_padded"
         done
-        printf "%s\n" "${DIM}└──────────────────────┴──────────────────────────────┴─────────────────────┴──────────────┘${RESET}"
+
+        # [Bottom Border]
+        printf "${DIM}└%s┴%s┴%s┴%s┴%s┘${RESET}\n" \
+             "$line_stat" "$line_svc" "$line_alias" "$line_db" "$line_user"
+        
+        if [[ -z "$ALL_DBS" ]]; then
+             echo " ${FG_YELLOW}(!) Could not verify database status.${RESET}"
+        fi
         echo
         printf "Run with:  %spsql_${DIM}<service>%s%s\n" "$BOLD" "$RESET" "  or  psqlhelp <service> <command>"
         echo
     }
 
-    # ---------- 인자 없을 때: 도움말 모드 ----------
+    # ---------- 실행 로직 ----------
     if [[ -z "$service" || -z "$cmd" ]]; then
         _print_usage
         _print_shortcuts
         _print_services_table
-        return 1
+        return 0  # return 1에서 0으로 변경 (단순 조회는 성공으로 간주)
     fi
 
-    # ---------- 축약어 자동 매핑 ----------
     if [[ -n "${cmd_map[$cmd]:-}" && "${cmd:0:1}" != "\\" ]]; then
         cmd="\\${cmd_map[$cmd]}"
     fi
 
-    # ---------- 실행 표시 ----------
     printf "%s→%s Using service %s%s%s, executing %s%s%s\n" \
         "$DIM" "$RESET" "$BOLD$FG_MAGENTA" "$service" "$RESET" "$BOLD$FG_GREEN" "$cmd" "$RESET"
 
-    # ---------- 실제 실행 ----------
     PGSERVICE="$service" psql <<EOF
 $cmd
 EOF
@@ -443,4 +493,109 @@ psql_create() {
     else
         echo "    (No service matched this DB in services[]. Consider adding one for convenience.)"
     fi
+}
+
+# -------------------------------
+# 10) Delete DB & User safely (psql_delete <SERVICE_NAME>)
+# -------------------------------
+psql_delete() {
+    local SERVICE_NAME="${1:-}"
+    if [[ -z "$SERVICE_NAME" ]]; then
+        echo "Usage: psql_delete <SERVICE_NAME>"
+        echo "Example: psql_delete sleassem_dev"
+        return 1
+    fi
+
+    # 10-1) 서비스 정보 조회
+    local DB_NAME="" APP_USER="" FOUND=false
+    for entry in "${services[@]}"; do
+        read -r svc db user pass <<<"$entry"
+        if [[ "$svc" == "$SERVICE_NAME" ]]; then
+            DB_NAME="$db"
+            APP_USER="$user"
+            FOUND=true
+            break
+        fi
+    done
+
+    if [[ "$FOUND" == "false" ]]; then
+        echo "[Error] Service '$SERVICE_NAME' not found in services list."
+        echo "        Please check 'psqlhelp' for available services."
+        return 1
+    fi
+
+    # 10-2) 삭제 확인 (Safety Check)
+    echo "========================================================"
+    echo " [WARNING] You are about to DELETE a database service."
+    echo " Service : $SERVICE_NAME"
+    echo " Database: $DB_NAME"
+    echo " User    : $APP_USER"
+    echo "========================================================"
+    read -r -p "Are you sure you want to DESTROY this database? (Type 'delete'): " CONFIRM
+    if [[ "$CONFIRM" != "delete" ]]; then
+        echo "Aborted."
+        return 0
+    fi
+
+    # 10-3) Admin 연결 설정 (psql_create와 동일 로직)
+    local ADMIN_PSQL=("sudo" "-u" "postgres" "psql" "-v" "ON_ERROR_STOP=1" "-X" "-q")
+    if ! printf "\\q\\n" | "${ADMIN_PSQL[@]}" >/dev/null 2>&1; then
+        ADMIN_PSQL=("psql" "-h" "${DEFAULT_HOST:-localhost}" "-p" "${DEFAULT_PORT:-5432}" "-U" "postgres" "-v" "ON_ERROR_STOP=1" "-X" "-q")
+        if ! printf "\\q\\n" | "${ADMIN_PSQL[@]}" >/dev/null 2>&1; then
+            echo "[Error] Can't connect as postgres superuser."
+            return 1
+        fi
+    fi
+    _admin_sql() { "${ADMIN_PSQL[@]}" -d "${2:-postgres}" -c "$1"; }
+
+    # 10-4) 활성 세션 강제 종료 (DB 삭제를 위해 필수)
+    echo "==> Terminating active connections to '$DB_NAME'..."
+    _admin_sql "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${DB_NAME}' AND pid <> pg_backend_pid();"
+
+    # 10-5) DB 삭제
+    echo "==> Dropping database '$DB_NAME'..."
+    if _admin_sql "DROP DATABASE IF EXISTS ${DB_NAME};"; then
+        echo "    Database deleted."
+    else
+        echo "[Error] Failed to drop database."
+        return 1
+    fi
+
+    # 10-6) 유저 삭제 시도 (다른 DB가 공유 중이면 실패함 - 정상)
+    echo "==> Attempting to drop role '$APP_USER'..."
+    # 2>&1로 에러 메시지를 캡처하여 사용자 친화적으로 보여줌
+    local DROP_USER_MSG
+    if DROP_USER_MSG=$("${ADMIN_PSQL[@]}" -d postgres -c "DROP ROLE ${APP_USER};" 2>&1); then
+        echo "    Role '$APP_USER' deleted (No other dependencies)."
+    else
+        # 에러가 'dependent' 관련이면 경고만 하고 넘어감
+        if [[ "$DROP_USER_MSG" == *"dependent"* ]]; then
+             echo "    [Skip] Role '$APP_USER' was NOT deleted because other databases still use it."
+        else
+             echo "    [Info] $DROP_USER_MSG"
+        fi
+    fi
+
+    # ---------------------------------------------------------
+    # [NEW] 10-7) 현재 쉘 세션 메모리에서 서비스 제거 (UX 개선)
+    # ---------------------------------------------------------
+    local i
+    for i in "${!services[@]}"; do
+        # 해당 서비스 이름으로 시작하는 항목 찾기
+        if [[ "${services[i]}" =~ ^${SERVICE_NAME}[[:space:]] ]]; then
+            unset 'services[i]'
+            break
+        fi
+    done
+    # 배열 인덱스 재정렬 (구멍 메우기)
+    services=("${services[@]}")
+
+    # ---------------------------------------------------------
+    # 10-8) 마무리 안내
+    # ---------------------------------------------------------
+    echo ""
+    echo "Done."
+    echo "IMPORTANT: The service is removed from current shell, but..."
+    echo "           You MUST remove the line for '$SERVICE_NAME' in ~/dotfiles/bash/app/postgresql.bash manually"
+    echo "           to prevent it from reappearing next time you open a terminal."
 }
