@@ -44,6 +44,29 @@ else
     echo -e "${GREEN}Created symlink: $STATUSLINE_DEST -> $STATUSLINE_SOURCE${RESET}"
 fi
 
+# Create symlink for settings.json
+SETTINGS_SOURCE="$DOTFILES_DIR/bash/claude/settings.json"
+SETTINGS_DEST="$CLAUDE_DIR/settings.json"
+
+if [ ! -f "$SETTINGS_SOURCE" ]; then
+    echo -e "${YELLOW}Warning: $SETTINGS_SOURCE not found${RESET}"
+else
+    if [ -L "$SETTINGS_DEST" ]; then
+        # Remove existing symlink
+        rm "$SETTINGS_DEST"
+        echo -e "${GREEN}Removed existing symlink: $SETTINGS_DEST${RESET}"
+    elif [ -f "$SETTINGS_DEST" ]; then
+        # Backup existing file
+        backup_file="$SETTINGS_DEST.backup.$(date +%s)"
+        mv "$SETTINGS_DEST" "$backup_file"
+        echo -e "${YELLOW}Backed up existing file to: $backup_file${RESET}"
+    fi
+
+    # Create new symlink
+    ln -s "$SETTINGS_SOURCE" "$SETTINGS_DEST"
+    echo -e "${GREEN}Created symlink: $SETTINGS_DEST -> $SETTINGS_SOURCE${RESET}"
+fi
+
 # Create symlinks for Claude agents markdown files
 AGENTS_SOURCE_DIR="$DOTFILES_DIR/bash/claude"
 AGENTS_DEST_DIR="$CLAUDE_DIR/agents"
@@ -81,4 +104,5 @@ fi
 echo -e "${GREEN}===== Setup Complete =====${RESET}"
 echo -e "${BLUE}Next steps:${RESET}"
 echo "  1. Review ~/.claude/statusline-command.sh"
-echo "  2. Configure other dotfiles as needed"
+echo "  2. Review ~/.claude/settings.json (synced from dotfiles)"
+echo "  3. Configure other dotfiles as needed"

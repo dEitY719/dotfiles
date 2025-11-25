@@ -1,0 +1,8 @@
+{
+  "model": "haiku",
+  "statusLine": {
+    "type": "command",
+    "command": "bash /home/bwyoon/.claude/statusline-command.sh"
+  },
+  "alwaysThinkingEnabled": true
+}

@@ -67,5 +67,48 @@ claudehelp() {
   claude mcp get playwright
   claude mcp get sequential-thinking
 
+[Setup & Requirements]
+
+  ensure_jq        : jq 설치 여부 확인 및 자동 설치
+                     (Claude Code statusline 스크립트에 필요)
+
+  사용 예:
+  - ensure_jq      : jq 설치 확인 및 필요시 자동 설치
+
 EOF
 }
+
+# (2) jq 설치 확인 및 설치
+ensure_jq() {
+    if command -v jq &>/dev/null; then
+        # jq already installed - silent pass
+        return 0
+    else
+        echo "⚠️  jq is not installed. Installing..."
+        if command -v apt-get &>/dev/null; then
+            sudo apt-get update && sudo apt-get install -y jq
+        elif command -v brew &>/dev/null; then
+            brew install jq
+        elif command -v yum &>/dev/null; then
+            sudo yum install -y jq
+        else
+            echo "❌ Cannot determine package manager. Please install jq manually."
+            echo "   For Ubuntu/Debian: sudo apt-get install jq"
+            echo "   For macOS: brew install jq"
+            echo "   For CentOS/RHEL: sudo yum install jq"
+            return 1
+        fi
+
+        if command -v jq &>/dev/null; then
+            echo "✅ jq installed successfully"
+            jq --version
+            return 0
+        else
+            echo "❌ Failed to install jq"
+            return 1
+        fi
+    fi
+}
+
+# Auto-call ensure_jq when this file is sourced
+ensure_jq
