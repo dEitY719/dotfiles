@@ -55,16 +55,18 @@ sudo service postgresql status   # active (running) 확인
 -----------------------------------
 sudo -u postgres psql <<'SQL'
 -- 앱 전용 유저/DB 생성 (개발 / 테스트)
-CREATE ROLE slea_user WITH LOGIN PASSWORD 'change_me_strong_pw';
+CREATE ROLE slea_user WITH LOGIN PASSWORD 'change_me_dev_password';
 CREATE DATABASE sleassem_dev OWNER slea_user;
+sudo -u postgres psql -c "ALTER USER slea_user WITH PASSWORD 'change_me_dev_password';"
 
 -- 권한 부여
 GRANT ALL PRIVILEGES ON DATABASE sleassem_dev TO slea_user;
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE sleassem_dev TO slea_user;"
 SQL
 
 4) 접속 테스트
 ---------------
-psql "host=localhost dbname=sleassem_dev user=slea_user password=change_me_strong_pw" -c "\l"
+psql "host=localhost dbname=sleassem_dev user=slea_user password=change_me_dev_password" -c "\l"
 
 5) Dotfiles PostgreSQL Helper Functions
 ----------------------------------------
@@ -106,9 +108,9 @@ services=(
     "dmc_dev  dmc_playground_dev  dmc_user  change_me_strong_pw"
     "dmc_test dmc_playground_test dmc_user  change_me_strong_pw"
     "dmc_prod dmc_playground_prod dmc_user  change_me_strong_pw"
-    "sleassem_dev sleassem_dev slea_user change_me_strong_pw"
-    "sleassem_test sleassem_test slea_user change_me_strong_pw"
-    "sleassem_prod sleassem_prod slea_user change_me_strong_pw"
+    "sleassem_dev sleassem_dev slea_user change_me_dev_password"
+    "sleassem_test sleassem_test slea_user change_me_test_password"
+    "sleassem_prod sleassem_prod slea_user change_me_prod_password"
 )
 
 PGSERVICE_FILE="$HOME/.pg_service.conf"
