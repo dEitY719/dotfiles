@@ -194,15 +194,14 @@ psqlhelp() {
             FG_CYAN=$(tput setaf 6)
             FG_GREEN=$(tput setaf 2)
             FG_YELLOW=$(tput setaf 3)
-            FG_BLUE=$(tput setaf 4)
             FG_MAGENTA=$(tput setaf 5)
             FG_RED=$(tput setaf 1)
         else _nocolor=true; fi
     else _nocolor=true; fi
-    
+
     if $_nocolor; then
         BOLD="" DIM="" RESET=""
-        FG_CYAN="" FG_GREEN="" FG_YELLOW="" FG_BLUE="" FG_MAGENTA="" FG_RED=""
+        FG_CYAN="" FG_GREEN="" FG_YELLOW="" FG_MAGENTA="" FG_RED=""
     fi
 
     # ---------- 인자/축약어 사전 ----------
@@ -255,9 +254,9 @@ USAGE
 
         # 1. [Logic] DB 목록 조회 (빠른 조회)
         local ALL_DBS=""
-        local chk_svc chk_db chk_user chk_pass
+        local chk_db chk_user chk_pass
         for entry in "${services[@]}"; do
-            read -r chk_svc chk_db chk_user chk_pass <<<"$entry"
+            read -r _ chk_db chk_user chk_pass <<<"$entry"
             if ALL_DBS=$(PGPASSWORD="$chk_pass" PGCONNECT_TIMEOUT=1 psql -h "${DEFAULT_HOST:-localhost}" -p "${DEFAULT_PORT:-5432}" -U "$chk_user" -d "$chk_db" -w -tAc "SELECT datname FROM pg_database" 2>/dev/null); then
                 break
             fi
@@ -266,11 +265,11 @@ USAGE
         # ---------------------------------------------------------
         # 2. [Design] 컬럼 너비 설정 (이 숫자만 바꾸면 표 전체가 자동 조절됨)
         # ---------------------------------------------------------
-        local w_stat=4    # STAT (아이콘/텍스트 너비)
-        local w_svc=20    # SERVICE
-        local w_alias=25  # ALIAS (조금 줄임)
-        local w_db=25     # DB
-        local w_user=12   # USER
+        local w_stat=4   # STAT (아이콘/텍스트 너비)
+        local w_svc=20   # SERVICE
+        local w_alias=25 # ALIAS (조금 줄임)
+        local w_db=25    # DB
+        local w_user=12  # USER
 
         # ---------------------------------------------------------
         # 3. [Helper] 가로선 자동 생성 함수 (완벽한 줄맞춤의 핵심)
@@ -279,7 +278,7 @@ USAGE
         _rep() { printf "%0.s$1" $(seq 1 "$2"); }
 
         local line_stat line_svc line_alias line_db line_user
-        line_stat=$(_rep "─" $((w_stat + 2)))   # 좌우 공백 1칸씩 포함(+2)
+        line_stat=$(_rep "─" $((w_stat + 2))) # 좌우 공백 1칸씩 포함(+2)
         line_svc=$(_rep "─" $((w_svc + 2)))
         line_alias=$(_rep "─" $((w_alias + 2)))
         line_db=$(_rep "─" $((w_db + 2)))
@@ -288,37 +287,37 @@ USAGE
         # ---------------------------------------------------------
         # 4. [Output] 테이블 그리기
         # ---------------------------------------------------------
-        
+
         # [Top Border]
         printf "${DIM}┌%s┬%s┬%s┬%s┬%s┐${RESET}\n" \
             "$line_stat" "$line_svc" "$line_alias" "$line_db" "$line_user"
-        
+
         # [Header]
         printf "│ %-${w_stat}s │ %-${w_svc}s │ %-${w_alias}s │ %-${w_db}s │ %-${w_user}s │\n" \
             "STAT" "SERVICE" "ALIAS" "DB" "USER"
 
         # [Middle Separator]
         printf "${DIM}├%s┼%s┼%s┼%s┼%s┤${RESET}\n" \
-             "$line_stat" "$line_svc" "$line_alias" "$line_db" "$line_user"
+            "$line_stat" "$line_svc" "$line_alias" "$line_db" "$line_user"
 
-        local entry svc db user alias_name status_icon db_display user_display
+        local entry svc db user alias_name status_icon db_display
         local db_padded user_padded svc_padded alias_padded
 
         for entry in "${services[@]}"; do
             read -r svc db user _ <<<"$entry"
             alias_name="psql_${svc}"
-            
+
             # (A) 내용물 Padding (색상 입히기 전 길이 고정)
-            printf -v svc_padded   "%-${w_svc}s"   "${svc:0:$w_svc}"     # 넘치면 자름
+            printf -v svc_padded "%-${w_svc}s" "${svc:0:$w_svc}" # 넘치면 자름
             printf -v alias_padded "%-${w_alias}s" "${alias_name:0:$w_alias}"
-            printf -v db_padded    "%-${w_db}s"    "${db:0:$w_db}"
-            printf -v user_padded  "%-${w_user}s"  "${user:0:$w_user}"
+            printf -v db_padded "%-${w_db}s" "${db:0:$w_db}"
+            printf -v user_padded "%-${w_user}s" "${user:0:$w_user}"
 
             # (B) 상태 결정 및 색상 입히기
             #     주의: status_icon은 Padding을 수동으로 제어하여 시각적 정렬 맞춤
             if [[ -z "$ALL_DBS" ]]; then
                 # "? " (우측 공백 2칸)
-                status_icon=" ${FG_YELLOW}?${RESET}  " 
+                status_icon=" ${FG_YELLOW}?${RESET}  "
                 db_display="$db_padded"
             elif echo "$ALL_DBS" | grep -qx "$db"; then
                 # " OK " (좌우 공백 1칸)
@@ -339,10 +338,10 @@ USAGE
 
         # [Bottom Border]
         printf "${DIM}└%s┴%s┴%s┴%s┴%s┘${RESET}\n" \
-             "$line_stat" "$line_svc" "$line_alias" "$line_db" "$line_user"
-        
+            "$line_stat" "$line_svc" "$line_alias" "$line_db" "$line_user"
+
         if [[ -z "$ALL_DBS" ]]; then
-             echo " ${FG_YELLOW}(!) Could not verify database status.${RESET}"
+            echo " ${FG_YELLOW}(!) Could not verify database status.${RESET}"
         fi
         echo
         printf "Run with:  %spsql_${DIM}<service>%s%s\n" "$BOLD" "$RESET" "  or  psqlhelp <service> <command>"
@@ -354,7 +353,7 @@ USAGE
         _print_usage
         _print_shortcuts
         _print_services_table
-        return 0  # return 1에서 0으로 변경 (단순 조회는 성공으로 간주)
+        return 0 # return 1에서 0으로 변경 (단순 조회는 성공으로 간주)
     fi
 
     if [[ -n "${cmd_map[$cmd]:-}" && "${cmd:0:1}" != "\\" ]]; then
@@ -424,12 +423,12 @@ psql_create() {
         return 1
     fi
 
-    # 9-1) services 배열에서 DB_NAME 매칭하여 app_user/app_pass 추출
+    # 9-1) services 배열에서 DB_NAME 또는 SERVICE_NAME 매칭하여 app_user/app_pass 추출
     local APP_USER="" APP_PASS="" SERVICE_HIT=""
     for entry in "${services[@]}"; do
         # shellcheck disable=SC2086
         read -r svc db user pass <<<"$entry"
-        if [[ "$db" == "$DB_NAME" ]]; then
+        if [[ "$db" == "$DB_NAME" ]] || [[ "$svc" == "$DB_NAME" ]]; then
             APP_USER="$user"
             APP_PASS="$pass"
             SERVICE_HIT="$svc"
@@ -481,6 +480,9 @@ psql_create() {
     echo "==> Hardening connect privileges..."
     _admin_sql "REVOKE CONNECT ON DATABASE ${DB_NAME} FROM PUBLIC;"
     _admin_sql "GRANT  CONNECT ON DATABASE ${DB_NAME} TO ${APP_USER};"
+
+    echo "==> Granting all privileges on database..."
+    _admin_sql "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${APP_USER};"
 
     echo "==> Schema ownership & privileges..."
     _admin_sql "ALTER SCHEMA public OWNER TO ${APP_USER};" "${DB_NAME}"
@@ -572,9 +574,9 @@ psql_delete() {
     else
         # 에러가 'dependent' 관련이면 경고만 하고 넘어감
         if [[ "$DROP_USER_MSG" == *"dependent"* ]]; then
-             echo "    [Skip] Role '$APP_USER' was NOT deleted because other databases still use it."
+            echo "    [Skip] Role '$APP_USER' was NOT deleted because other databases still use it."
         else
-             echo "    [Info] $DROP_USER_MSG"
+            echo "    [Info] $DROP_USER_MSG"
         fi
     fi
 
