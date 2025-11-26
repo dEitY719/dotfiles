@@ -141,54 +141,61 @@ dlog_last() {
 # Docker Helper
 # -------------------------------
 dockerhelp() {
-    cat <<-'EOF'
+    # Color definitions
+    local bold=$(tput bold 2>/dev/null || echo "")
+    local blue=$(tput setaf 4 2>/dev/null || echo "")
+    local green=$(tput setaf 2 2>/dev/null || echo "")
+    local yellow=$(tput setaf 3 2>/dev/null || echo "")
+    local reset=$(tput sgr0 2>/dev/null || echo "")
 
-[Docker / Docker Compose Quick Commands]
+    cat <<EOF
 
-  🔹 Docker Compose 기본 (핵심 6개)
-    dc           : docker compose
-    dcu          : docker compose up
+${bold}${blue}[Docker / Docker Compose Quick Commands]${reset}
+
+  ${bold}${blue}🔹 Docker Compose 기본 (핵심 6개)${reset}
+    ${green}dc${reset}           : docker compose
+    ${green}dcu${reset}          : docker compose up
                    예) dcu             (포어그라운드 실행)
                        dcu -d          (옵션으로 detached 실행)
-    dcud         : docker compose up -d (항상 detached 실행)
-    dcd          : docker compose down
-    dcl          : docker compose logs -f
-    dce          : docker compose exec <svc> <cmd>
+    ${green}dcud${reset}         : docker compose up -d (항상 detached 실행)
+    ${green}dcd${reset}          : docker compose down
+    ${green}dcl${reset}          : docker compose logs -f
+    ${green}dce${reset}          : docker compose exec <svc> <cmd>
 
-  🔹 Docker Compose 추가
-    dcps         : docker compose ps
-    dcb          : docker compose build
-    dcr          : docker compose restart
-    dcdv         : docker compose down -v   (볼륨까지 삭제)
-    dcstop       : docker compose stop      (컨테이너만 정지)
-    dcstart      : docker compose start     (정지된 컨테이너 재시작)
+  ${bold}${blue}🔹 Docker Compose 추가${reset}
+    ${green}dcps${reset}         : docker compose ps
+    ${green}dcb${reset}          : docker compose build
+    ${green}dcr${reset}          : docker compose restart
+    ${green}dcdv${reset}         : docker compose down -v   (볼륨까지 삭제)
+    ${green}dcstop${reset}       : docker compose stop      (컨테이너만 정지)
+    ${green}dcstart${reset}      : docker compose start     (정지된 컨테이너 재시작)
 
-  🔹 Docker 기본
-    dps          : docker ps                (실행 중 컨테이너)
-    dpsa         : docker ps -a             (모든 컨테이너)
-    di / dim     : docker images            (이미지 목록)
-    dstats       : docker stats             (리소스 모니터링)
-    dstop        : docker stop <name/id>    (컨테이너 정지)
-    drm          : docker rm <name/id>      (컨테이너 삭제)
-    drmi         : docker rmi <image>       (이미지 삭제)
-    dlogs        : docker logs -f <name>    (컨테이너 로그 follow)
-    dinspect     : docker inspect <name>    (상세 정보)
+  ${bold}${blue}🔹 Docker 기본${reset}
+    ${green}dps${reset}          : docker ps                (실행 중 컨테이너)
+    ${green}dpsa${reset}         : docker ps -a             (모든 컨테이너)
+    ${green}di / dim${reset}     : docker images            (이미지 목록)
+    ${green}dstats${reset}       : docker stats             (리소스 모니터링)
+    ${green}dstop${reset}        : docker stop <name/id>    (컨테이너 정지)
+    ${green}drm${reset}          : docker rm <name/id>      (컨테이너 삭제)
+    ${green}drmi${reset}         : docker rmi <image>       (이미지 삭제)
+    ${green}dlogs${reset}        : docker logs -f <name>    (컨테이너 로그 follow)
+    ${green}dinspect${reset}     : docker inspect <name>    (상세 정보)
 
-  🔹 유틸리티 함수
-    dbash <name>         : 컨테이너 쉘 접속 (bash 없으면 sh로 자동 시도)
-    dstopall             : 모든 실행 중 컨테이너 정지
-    drmall               : 중지 포함 모든 컨테이너 삭제
-    drm_dangling         : dangling 이미지 삭제
-    dprune               : docker system prune -f (기본 청소)
-    dprune_full          : docker system prune -a --volumes -f (강력 청소, YES 확인 필요)
-    dlog_last <name> [N] : 컨테이너 최근 N줄 로그 조회 (기본 200줄)
+  ${bold}${blue}🔹 유틸리티 함수${reset}
+    ${green}dbash <name>${reset}         : 컨테이너 쉘 접속 (bash 없으면 sh로 자동 시도)
+    ${green}dstopall${reset}             : 모든 실행 중 컨테이너 정지
+    ${green}drmall${reset}               : 중지 포함 모든 컨테이너 삭제
+    ${green}drm_dangling${reset}         : dangling 이미지 삭제
+    ${green}dprune${reset}               : docker system prune -f (기본 청소)
+    ${green}dprune_full${reset}          : docker system prune -a --volumes -f (강력 청소, YES 확인 필요)
+    ${green}dlog_last <name> [N]${reset} : 컨테이너 최근 N줄 로그 조회 (기본 200줄)
 
-  🔹 참고
-    - Compose V2 기준: 'docker compose' 사용
+  ${bold}${blue}🔹 참고${reset}
+    ${yellow}- Compose V2 기준: 'docker compose' 사용
     - V1 환경이라면 alias 정의에서 'docker compose' → 'docker-compose'로 치환하세요.
     - 셸 시작 시:
         source /path/to/docker.bash
-      를 .bashrc 또는 .zshrc에 추가하면 항상 자동 로드됩니다.
+      를 .bashrc 또는 .zshrc에 추가하면 항상 자동 로드됩니다.${reset}
 
 EOF
 }
