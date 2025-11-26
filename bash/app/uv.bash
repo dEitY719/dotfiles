@@ -36,35 +36,41 @@ alias uvcheck='uv pip check'
 
 # (6) 도움말(프로젝트 관례 안내)
 uvhelp() {
-    cat <<-'EOF'
+    # Color definitions
+    local bold=$(tput bold 2>/dev/null || echo "")
+    local blue=$(tput setaf 4 2>/dev/null || echo "")
+    local green=$(tput setaf 2 2>/dev/null || echo "")
+    local reset=$(tput sgr0 2>/dev/null || echo "")
 
-[UV Quick Commands]
+    cat <<EOF
 
-  uvs        : uv sync (base/prod)
-  uvu        : uv sync --upgrade (업그레이드 동기화)
-  uvd        : uv sync --dev --extra dev
-  uvp        : uv sync (prod)
-  uvk        : uv lock
-  uvl        : uv pip list
-  uvc        : uv pip compile pyproject.toml -o requirements.txt
-  uvr        : uv pip sync requirements.txt
-  uvclean    : uv sync --clean
+${bold}${blue}[UV Quick Commands]${reset}
+
+  ${green}uvs${reset}        : uv sync (base/prod)
+  ${green}uvu${reset}        : uv sync --upgrade (업그레이드 동기화)
+  ${green}uvd${reset}        : uv sync --dev --extra dev
+  ${green}uvp${reset}        : uv sync (prod)
+  ${green}uvk${reset}        : uv lock
+  ${green}uvl${reset}        : uv pip list
+  ${green}uvc${reset}        : uv pip compile pyproject.toml -o requirements.txt
+  ${green}uvr${reset}        : uv pip sync requirements.txt
+  ${green}uvclean${reset}    : uv sync --clean
                - pyproject/lock에 없는 패키지를 제거하며 환경을 정리
                - 사실상 uv sync와 동일 (uv sync 기본이 clean 동작)
                - 완전 재설치 원하면: uv sync --reinstall 또는 .venv 삭제 후 uv sync
-  uvcheck    : uv check
-  uvi        : install uv tool
+  ${green}uvcheck${reset}    : uv check
+  ${green}uvi${reset}        : install uv tool
 
-[Recipes]
+${bold}${blue}[Recipes]${reset}
 
   # 전체 extras 포함 설치
-  uv pip sync --all-extras
+  ${green}uv pip sync --all-extras${reset}
 
   # 백엔드만
-  uv pip sync --extra backend --extra dev
+  ${green}uv pip sync --extra backend --extra dev${reset}
 
   # 프론트엔드만
-  uv pip sync --extra frontend --extra dev
+  ${green}uv pip sync --extra frontend --extra dev${reset}
 
 EOF
 }

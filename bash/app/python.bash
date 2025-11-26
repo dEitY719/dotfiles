@@ -24,29 +24,35 @@ alias dv='source deactivate'
 # Python venv 도움말
 # -------------------------------
 pyhelp() {
-    cat <<-'EOF'
+    # Color definitions
+    local bold=$(tput bold 2>/dev/null || echo "")
+    local blue=$(tput setaf 4 2>/dev/null || echo "")
+    local green=$(tput setaf 2 2>/dev/null || echo "")
+    local reset=$(tput sgr0 2>/dev/null || echo "")
 
-[Python Virtual Environment Commands]
+    cat <<EOF
 
-  Full Commands:
-    create_venv  : python -m venv .venv (가상환경 생성)
-    act_venv     : source .venv/bin/activate (가상환경 활성화)
-    echo_venv    : echo "$VIRTUAL_ENV" (현재 가상환경 경로 출력)
-    rm_venv      : rm -rf .venv (가상환경 삭제)
-    deact_venv   : deactivate (가상환경 비활성화)
+${bold}${blue}[Python Virtual Environment Commands]${reset}
 
-  Short Commands:
-    cv           : create venv
-    av           : activate venv
-    ev           : echo venv path
-    rv           : remove venv
-    dv           : deactivate venv
+  ${bold}${blue}Full Commands:${reset}
+    ${green}create_venv${reset}  : python -m venv .venv (가상환경 생성)
+    ${green}act_venv${reset}     : source .venv/bin/activate (가상환경 활성화)
+    ${green}echo_venv${reset}    : echo "\$VIRTUAL_ENV" (현재 가상환경 경로 출력)
+    ${green}rm_venv${reset}      : rm -rf .venv (가상환경 삭제)
+    ${green}deact_venv${reset}   : deactivate (가상환경 비활성화)
 
-[Quick Workflow]
-  1. cv           # 가상환경 생성
-  2. av           # 가상환경 활성화
-  3. pip install  # 패키지 설치
-  4. dv           # 작업 완료 후 비활성화
+  ${bold}${blue}Short Commands:${reset}
+    ${green}cv${reset}           : create venv
+    ${green}av${reset}           : activate venv
+    ${green}ev${reset}           : echo venv path
+    ${green}rv${reset}           : remove venv
+    ${green}dv${reset}           : deactivate venv
+
+  ${bold}${blue}[Quick Workflow]${reset}
+    1. ${green}cv${reset}           # 가상환경 생성
+    2. ${green}av${reset}           # 가상환경 활성화
+    3. ${green}pip install${reset}  # 패키지 설치
+    4. ${green}dv${reset}           # 작업 완료 후 비활성화
 
 EOF
 }

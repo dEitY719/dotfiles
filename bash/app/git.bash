@@ -94,47 +94,53 @@ alias glfs='git_lfs_track'
 # Git helper 도움말
 # -------------------------------
 githelp() {
-    cat <<-'EOF'
+    # Color definitions
+    local bold=$(tput bold 2>/dev/null || echo "")
+    local blue=$(tput setaf 4 2>/dev/null || echo "")
+    local green=$(tput setaf 2 2>/dev/null || echo "")
+    local reset=$(tput sgr0 2>/dev/null || echo "")
 
-[Git Quick Commands]
+    cat <<EOF
 
-  Basic Commands:
-    gs         : git status -sb (간략한 상태)
-    ga         : git add . (모든 변경사항 스테이징)
-    gc         : git commit -m (커밋)
-    gca        : git commit --amend (커밋 수정)
-    gp         : git push (푸시)
-    gpl        : git pull (풀)
-    gco        : git checkout (브랜치 전환)
-    gd         : git diff (변경사항 확인)
-    gb         : git branch (브랜치 목록)
+${bold}${blue}[Git Quick Commands]${reset}
 
-  Fetch & Sync:
-    gf         : git fetch origin -p (원격 fetch + prune)
-    gfa        : git fetch --all --prune (모든 원격 fetch)
-    gsw        : git switch -c <local> <remote> (원격 브랜치로부터 로컬 생성 + switch)
+  ${bold}${blue}Basic Commands:${reset}
+    ${green}gs${reset}         : git status -sb (간략한 상태)
+    ${green}ga${reset}         : git add . (모든 변경사항 스테이징)
+    ${green}gc${reset}         : git commit -m (커밋)
+    ${green}gca${reset}        : git commit --amend (커밋 수정)
+    ${green}gp${reset}         : git push (푸시)
+    ${green}gpl${reset}        : git pull (풀)
+    ${green}gco${reset}        : git checkout (브랜치 전환)
+    ${green}gd${reset}         : git diff (변경사항 확인)
+    ${green}gb${reset}         : git branch (브랜치 목록)
 
-  Logs:
-    gl         : git_log (그래프 형태 로그)
-    gl1        : git log --oneline --graph --decorate
-    gl2        : git_log2 (대체 로그 포맷)
-    git_log    : 컬러풀한 커밋 로그
-    git_log2   : 간결한 한줄 로그
-    glref      : git log ref/main --oneline (ref 원격 main 브랜치 한줄 로그)
+  ${bold}${blue}Fetch & Sync:${reset}
+    ${green}gf${reset}         : git fetch origin -p (원격 fetch + prune)
+    ${green}gfa${reset}        : git fetch --all --prune (모든 원격 fetch)
+    ${green}gsw${reset}        : git switch -c <local> <remote> (원격 브랜치로부터 로컬 생성 + switch)
+
+  ${bold}${blue}Logs:${reset}
+    ${green}gl${reset}         : git_log (그래프 형태 로그)
+    ${green}gl1${reset}        : git log --oneline --graph --decorate
+    ${green}gl2${reset}        : git_log2 (대체 로그 포맷)
+    ${green}git_log${reset}    : 컬러풀한 커밋 로그
+    ${green}git_log2${reset}   : 간결한 한줄 로그
+    ${green}glref${reset}      : git log ref/main --oneline (ref 원격 main 브랜치 한줄 로그)
 
 
-  Branch Upstream:
-    gset-main  : git branch --set-upstream-to=origin/main main
-    gset-dev   : git branch --set-upstream-to=origin/dev dev
-    gset       : gset [branch] (현재 브랜치 또는 지정 브랜치 upstream 설정)
+  ${bold}${blue}Branch Upstream:${reset}
+    ${green}gset-main${reset}  : git branch --set-upstream-to=origin/main main
+    ${green}gset-dev${reset}   : git branch --set-upstream-to=origin/dev dev
+    ${green}gset${reset}       : gset [branch] (현재 브랜치 또는 지정 브랜치 upstream 설정)
 
-  Special:
-    gpf_dev_server : git push -f origin HEAD:refs/heads/dev-server
-    gpfu           : git push --set-upstream origin main --force-with-lease (main 강제 업스트림 푸시)
+  ${bold}${blue}Special:${reset}
+    ${green}gpf_dev_server${reset} : git push -f origin HEAD:refs/heads/dev-server
+    ${green}gpfu${reset}           : git push --set-upstream origin main --force-with-lease (main 강제 업스트림 푸시)
 
-  Git LFS:
-    git_lfs_install : Ubuntu 환경에서 git-lfs 설치 및 초기화 (최초 1회)
-    git_lfs_track   : git-lfs track <패턴...> (예: git_lfs_track "*.zip" "*.sql" "*.tar.gz")
-    glfs            : git_lfs_track 단축 명령어
+  ${bold}${blue}Git LFS:${reset}
+    ${green}git_lfs_install${reset} : Ubuntu 환경에서 git-lfs 설치 및 초기화 (최초 1회)
+    ${green}git_lfs_track${reset}   : git-lfs track <패턴...> (예: git_lfs_track "*.zip" "*.sql" "*.tar.gz")
+    ${green}glfs${reset}            : git_lfs_track 단축 명령어
 EOF
 }

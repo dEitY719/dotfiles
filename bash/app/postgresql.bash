@@ -184,25 +184,16 @@ psql_list() {
 # 6) PostgreSQL command helper (Updated)
 # -------------------------------
 psqlhelp() {
-    # ---------- 색/스타일 ----------
-    local _nocolor=false
-    if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
-        if [[ $(tput colors 2>/dev/null || echo 0) -ge 8 ]]; then
-            BOLD=$(tput bold)
-            DIM=$(tput dim)
-            RESET=$(tput sgr0)
-            FG_CYAN=$(tput setaf 6)
-            FG_GREEN=$(tput setaf 2)
-            FG_YELLOW=$(tput setaf 3)
-            FG_MAGENTA=$(tput setaf 5)
-            FG_RED=$(tput setaf 1)
-        else _nocolor=true; fi
-    else _nocolor=true; fi
-
-    if $_nocolor; then
-        BOLD="" DIM="" RESET=""
-        FG_CYAN="" FG_GREEN="" FG_YELLOW="" FG_MAGENTA="" FG_RED=""
-    fi
+    # Color definitions
+    local bold=$(tput bold 2>/dev/null || echo "")
+    local blue=$(tput setaf 4 2>/dev/null || echo "")
+    local green=$(tput setaf 2 2>/dev/null || echo "")
+    local yellow=$(tput setaf 3 2>/dev/null || echo "")
+    local cyan=$(tput setaf 6 2>/dev/null || echo "")
+    local magenta=$(tput setaf 5 2>/dev/null || echo "")
+    local red=$(tput setaf 1 2>/dev/null || echo "")
+    local reset=$(tput sgr0 2>/dev/null || echo "")
+    local dim=$(tput dim 2>/dev/null || echo "")
 
     # ---------- 인자/축약어 사전 ----------
     local service="${1:-}"
@@ -219,36 +210,37 @@ psqlhelp() {
 
     # ---------- 화면 출력 함수 ----------
     _print_header() {
-        printf "%s%s%s\n" "$BOLD$FG_CYAN" "$1" "$RESET"
+        printf "\n%s%s%s\n" "$bold$blue" "$1" "$reset"
     }
 
     _print_usage() {
-        _print_header "Usage"
-        cat <<USAGE
-  ${BOLD}psqlhelp${RESET} ${FG_YELLOW}<service>${RESET} ${FG_GREEN}<command>${RESET}
+        cat <<EOF
 
-${BOLD}Management Commands${RESET}
-  ${FG_YELLOW}psql_create${RESET} <db_name>   : Create DB & User (Auto-hardening)
-  ${FG_YELLOW}psql_delete${RESET} <service>   : Delete DB & Attempt to drop User
+${bold}${blue}[PostgreSQL Helper Usage]${reset}
 
-${BOLD}Examples${RESET}
-  psqlhelp dmc_dev ${FG_GREEN}\\l${RESET}
-  psqlhelp sleassem_dev ${FG_GREEN}dt${RESET}
+  ${bold}psqlhelp${reset} ${yellow}<service>${reset} ${green}<command>${reset}
 
-${BOLD}Workflows${RESET}
-  Add: Edit bash file -> psql_create -> Check
-  Del: psql_delete -> Edit bash file
-USAGE
-        echo
+  ${bold}${blue}Management Commands${reset}
+    ${green}psql_create${reset} <db_name>   : Create DB & User (Auto-hardening)
+    ${green}psql_delete${reset} <service>   : Delete DB & Attempt to drop User
+
+  ${bold}${blue}Examples${reset}
+    psqlhelp dmc_dev ${green}\\l${reset}
+    psqlhelp sleassem_dev ${green}dt${reset}
+
+  ${bold}${blue}Workflows${reset}
+    Add: Edit bash file -> psql_create -> Check
+    Del: psql_delete -> Edit bash file
+EOF
     }
 
     _print_shortcuts() {
         _print_header "Shortcuts"
         for k in du l dt d x q; do
-            printf "  %-3s %s→%s \\%-2s %s\n" "$BOLD$k$RESET" "$DIM" "$RESET" "${cmd_map[$k]}" "${cmd_desc[$k]}"
+            printf "  ${green}%-3s${reset} %s→%s %s\n" "$k" "$dim" "$reset" "${cmd_desc[$k]}"
         done
-        echo
     }
+    
     _print_services_table() {
         _print_header "Available services (current shell)"
 
@@ -289,7 +281,7 @@ USAGE
         # ---------------------------------------------------------
 
         # [Top Border]
-        printf "${DIM}┌%s┬%s┬%s┬%s┬%s┐${RESET}\n" \
+        printf "${dim}┌%s┬%s┬%s┬%s┬%s┐${reset}\n" \
             "$line_stat" "$line_svc" "$line_alias" "$line_db" "$line_user"
 
         # [Header]
@@ -297,7 +289,7 @@ USAGE
             "STAT" "SERVICE" "ALIAS" "DB" "USER"
 
         # [Middle Separator]
-        printf "${DIM}├%s┼%s┼%s┼%s┼%s┤${RESET}\n" \
+        printf "${dim}├%s┼%s┼%s┼%s┼%s┤${reset}\n" \
             "$line_stat" "$line_svc" "$line_alias" "$line_db" "$line_user"
 
         local entry svc db user alias_name status_icon db_display
@@ -317,16 +309,16 @@ USAGE
             #     주의: status_icon은 Padding을 수동으로 제어하여 시각적 정렬 맞춤
             if [[ -z "$ALL_DBS" ]]; then
                 # "? " (우측 공백 2칸)
-                status_icon=" ${FG_YELLOW}?${RESET}  "
+                status_icon=" ${yellow}?${reset}  "
                 db_display="$db_padded"
             elif echo "$ALL_DBS" | grep -qx "$db"; then
                 # " OK " (좌우 공백 1칸)
-                status_icon=" ${FG_GREEN}OK${RESET} "
-                db_display="${BOLD}${db_padded}${RESET}"
+                status_icon=" ${green}OK${reset} "
+                db_display="${bold}${db_padded}${reset}"
             else
                 # "MISS" (공백 없음)
-                status_icon="${FG_RED}MISS${RESET}"
-                db_display="${DIM}${FG_RED}${db_padded}${RESET}"
+                status_icon="${red}MISS${reset}"
+                db_display="${dim}${red}${db_padded}${reset}"
             fi
 
             # (C) 최종 출력
@@ -337,14 +329,14 @@ USAGE
         done
 
         # [Bottom Border]
-        printf "${DIM}└%s┴%s┴%s┴%s┴%s┘${RESET}\n" \
+        printf "${dim}└%s┴%s┴%s┴%s┴%s┘${reset}\n" \
             "$line_stat" "$line_svc" "$line_alias" "$line_db" "$line_user"
 
         if [[ -z "$ALL_DBS" ]]; then
-            echo " ${FG_YELLOW}(!) Could not verify database status.${RESET}"
+            echo " ${yellow}(!) Could not verify database status.${reset}"
         fi
         echo
-        printf "Run with:  %spsql_${DIM}<service>%s%s\n" "$BOLD" "$RESET" "  or  psqlhelp <service> <command>"
+        printf "Run with:  %spsql_${dim}<service>%s%s\n" "$bold" "$reset" "  or  psqlhelp <service> <command>"
         echo
     }
 
@@ -353,7 +345,7 @@ USAGE
         _print_usage
         _print_shortcuts
         _print_services_table
-        return 0 # return 1에서 0으로 변경 (단순 조회는 성공으로 간주)
+        return 0
     fi
 
     if [[ -n "${cmd_map[$cmd]:-}" && "${cmd:0:1}" != "\\" ]]; then
@@ -361,7 +353,7 @@ USAGE
     fi
 
     printf "%s→%s Using service %s%s%s, executing %s%s%s\n" \
-        "$DIM" "$RESET" "$BOLD$FG_MAGENTA" "$service" "$RESET" "$BOLD$FG_GREEN" "$cmd" "$RESET"
+        "$dim" "$reset" "$bold$magenta" "$service" "$reset" "$bold$green" "$cmd" "$reset"
 
     PGSERVICE="$service" psql <<EOF
 $cmd

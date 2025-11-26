@@ -31,38 +31,44 @@ alias docs_gen='sphinx-apidoc -o docs/source . && sphinx-build -b html docs/sour
 # Python aliases 도움말
 # -------------------------------
 pphelp() {
-    cat <<-'EOF'
+    # Color definitions
+    local bold=$(tput bold 2>/dev/null || echo "")
+    local blue=$(tput setaf 4 2>/dev/null || echo "")
+    local green=$(tput setaf 2 2>/dev/null || echo "")
+    local reset=$(tput sgr0 2>/dev/null || echo "")
 
-[Python Package Management]
+    cat <<EOF
 
-  Installation:
-    pp_install     : pip install
-    pp_install_up  : pip install --upgrade pip && pip install
-    pp_reqs        : pip install -r requirements.txt
-    pp_uninstall   : pip uninstall -y
+${bold}${blue}[Python Package Management]${reset}
 
-  Management:
-    pp_freeze      : Generate requirements.txt (excluding project name)
-    pp_list        : pip list --outdated --format=columns
-    pp_check       : pip check
+  ${bold}${blue}Installation:${reset}
+    ${green}pp_install${reset}     : pip install
+    ${green}pp_install_up${reset}  : pip install --upgrade pip && pip install
+    ${green}pp_reqs${reset}        : pip install -r requirements.txt
+    ${green}pp_uninstall${reset}   : pip uninstall -y
 
-[Python Code Quality]
+  ${bold}${blue}Management:${reset}
+    ${green}pp_freeze${reset}      : Generate requirements.txt (excluding project name)
+    ${green}pp_list${reset}        : pip list --outdated --format=columns
+    ${green}pp_check${reset}       : pip check
 
-  Formatting & Linting:
-    code_check     : ruff format . --check && ruff check . (CI용)
-    code_fix       : ruff format . && ruff check . --fix (자동 수정)
-    code_type      : mypy . (타입 검사)
+${bold}${blue}[Python Code Quality]${reset}
 
-[Python Testing]
+  ${bold}${blue}Formatting & Linting:${reset}
+    ${green}code_check${reset}     : ruff format . --check && ruff check . (CI용)
+    ${green}code_fix${reset}       : ruff format . && ruff check . --fix (자동 수정)
+    ${green}code_type${reset}      : mypy . (타입 검사)
 
-  Testing:
-    test_pytest    : pytest --maxfail=1 --disable-warnings -q
-    test_unittest  : python -m unittest discover
+${bold}${blue}[Python Testing]${reset}
 
-[Python Documentation]
+  ${bold}${blue}Testing:${reset}
+    ${green}test_pytest${reset}    : pytest --maxfail=1 --disable-warnings -q
+    ${green}test_unittest${reset}  : python -m unittest discover
 
-  Docs:
-    docs_gen       : sphinx-apidoc + sphinx-build
+${bold}${blue}[Python Documentation]${reset}
+
+  ${bold}${blue}Docs:${reset}
+    ${green}docs_gen${reset}       : sphinx-apidoc + sphinx-build
 
 EOF
 }

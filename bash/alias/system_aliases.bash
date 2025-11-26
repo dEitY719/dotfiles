@@ -35,39 +35,45 @@ alias auth='tail -f /var/log/auth.log'   # 인증 로그 실시간 확인
 # System aliases 도움말
 # -------------------------------
 syshelp() {
-    cat <<-'EOF'
+    # Color definitions
+    local bold=$(tput bold 2>/dev/null || echo "")
+    local blue=$(tput setaf 4 2>/dev/null || echo "")
+    local green=$(tput setaf 2 2>/dev/null || echo "")
+    local reset=$(tput sgr0 2>/dev/null || echo "")
 
-[System Management Commands]
+    cat <<EOF
 
-  Process Management:
-    psg          : ps aux | grep (프로세스 검색)
-    kill9        : kill -9 (강제 종료)
-    psa          : ps aux (모든 프로세스 표시)
+${bold}${blue}[System Management Commands]${reset}
 
-  Network:
-    ports        : ss -tulanp (열린 포트 확인)
-    myip         : curl http://ipecho.net/plain (공인 IP)
-    localip      : hostname -I (로컬 IP)
-    ping         : ping -c 5 (5회만 실행)
+  ${bold}${blue}Process Management:${reset}
+    ${green}psg${reset}          : ps aux | grep (프로세스 검색)
+    ${green}kill9${reset}        : kill -9 (강제 종료)
+    ${green}psa${reset}          : ps aux (모든 프로세스 표시)
 
-  System Monitoring:
-    top          : htop (향상된 top, htop 설치 필요)
-    meminfo      : free -m -l -t (메모리 정보)
-    cpuinfo      : lscpu (CPU 정보)
-    diskusage    : df -h (디스크 사용량)
+  ${bold}${blue}Network:${reset}
+    ${green}ports${reset}        : ss -tulanp (열린 포트 확인)
+    ${green}myip${reset}         : curl http://ipecho.net/plain (공인 IP)
+    ${green}localip${reset}      : hostname -I (로컬 IP)
+    ${green}ping${reset}         : ping -c 5 (5회만 실행)
 
-  Package Management:
-    update       : sudo apt update
-    upgrade      : sudo apt upgrade
-    upgrade_all  : sudo apt update && sudo apt upgrade
-    install      : sudo apt install
-    remove       : sudo apt remove
-    auto_remove  : sudo apt autoremove
+  ${bold}${blue}System Monitoring:${reset}
+    ${green}top${reset}          : htop (향상된 top, htop 설치 필요)
+    ${green}meminfo${reset}      : free -m -l -t (메모리 정보)
+    ${green}cpuinfo${reset}      : lscpu (CPU 정보)
+    ${green}diskusage${reset}    : df -h (디스크 사용량)
 
-  Logs:
-    logs         : tail -f /var/log/syslog (시스템 로그)
-    error        : tail -f /var/log/error.log (에러 로그)
-    auth         : tail -f /var/log/auth.log (인증 로그)
+  ${bold}${blue}Package Management:${reset}
+    ${green}update${reset}       : sudo apt update
+    ${green}upgrade${reset}      : sudo apt upgrade
+    ${green}upgrade_all${reset}  : sudo apt update && sudo apt upgrade
+    ${green}install${reset}      : sudo apt install
+    ${green}remove${reset}       : sudo apt remove
+    ${green}auto_remove${reset}  : sudo apt autoremove
+
+  ${bold}${blue}Logs:${reset}
+    ${green}logs${reset}         : tail -f /var/log/syslog (시스템 로그)
+    ${green}error${reset}        : tail -f /var/log/error.log (에러 로그)
+    ${green}auth${reset}         : tail -f /var/log/auth.log (인증 로그)
 
 EOF
 }
