@@ -84,9 +84,49 @@ for ext in "${exts[@]}"; do
     total_loc=$((total_loc + loc))
 done
 
-printf 'total git commit: %s | %s ~ %s (%s) | %s commits per day\n' \
-    "${git_commits}" "$start_date" "$end_date" "$duration_label" "$avg_commits_per_day"
-printf 'total files: %s (LOC: %s)\n' "$(format_number "$total_files")" "$(format_number "$total_loc")"
+# Test Statistics (Heuristic: count 'def test_' in python test files)
+test_count=0
+# check if any python files exist first to avoid unnecessary work
+if [[ ${counts[py]} -gt 0 ]]; then
+    test_count=$(cd "$TARGET_DIR" && git ls-files -z --cached --others --exclude-standard -- "*.py" \
+        | (grep -z -vE "(^|/)\.venv/" || true) \
+        | (grep -z -E "test_.*\.py$|.*_test\.py$" || true) \
+        | (xargs -0 grep -h "def test_" 2>/dev/null || true) \
+        | wc -l)
+fi
+
+# Colors and Styles (Matched to Makefile)
+BOLD=$(tput bold 2>/dev/null || echo "")
+RED=$(tput setaf 1 2>/dev/null || echo "")
+GREEN=$(tput setaf 2 2>/dev/null || echo "")
+YELLOW=$(tput setaf 3 2>/dev/null || echo "")
+BLUE=$(tput setaf 4 2>/dev/null || echo "")
+NC=$(tput sgr0 2>/dev/null || echo "") # No Color / Reset
+
+printf "\n${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+printf "${BLUE}Git Commit Statistics${NC}\n"
+printf "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+printf "${GREEN}Commits:${NC}  %s\n" "${git_commits}"
+printf "${GREEN}Period:${NC}   %s ~ %s (%s)\n" "$start_date" "$end_date" "$duration_label"
+printf "${GREEN}Rate:${NC}     %s commits/day\n" "$avg_commits_per_day"
+
+if (( test_count > 0 )); then
+    printf "\n${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+    printf "${BLUE}Test Statistics${NC}\n"
+    printf "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+    printf "${GREEN}Tests:${NC}    %s (estimated)\n" "$(format_number "$test_count")"
+fi
+
+printf "\n${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+printf "${BLUE}File Statistics${NC}\n"
+printf "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+printf "${GREEN}Total:${NC}    %s files (%s LOC)\n" "$(format_number "$total_files")" "$(format_number "$total_loc")"
+
 for ext in "${exts[@]}"; do
-    printf '  .%s: %s (LOC: %s)\n' "$ext" "$(format_number "${counts[$ext]}")" "$(format_number "${locs[$ext]}")"
+    count=${counts[$ext]}
+    if (( count > 0 )); then
+        loc=${locs[$ext]}
+        printf "  ${YELLOW}.%-4s${NC} : %s files (%s LOC)\n" "$ext" "$(format_number "$count")" "$(format_number "$loc")"
+    fi
 done
+printf "\n"

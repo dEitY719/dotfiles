@@ -89,6 +89,7 @@ Commands:
   down     Stop dev server and related services
   test     Run test suite (pytest)
   format   Format + lint code (tox -e ruff)
+  stat     Show repository statistics (commits, LOC)
   shell    Enter project shell
   cli      Start interactive CLI
   db       Start database CLI
@@ -105,6 +106,33 @@ devx__main() (
     if [[ $# -eq 0 ]]; then
         devx__usage
         exit 2
+    fi
+
+    # --- Built-in command: stat ---
+    if [[ "$1" == "stat" ]]; then
+        shift
+        local src="${BASH_SOURCE[0]}"
+        local real_script_path
+        if command -v realpath >/dev/null 2>&1; then
+            real_script_path="$(realpath "$src")"
+        else
+            # Simple fallback for readlink
+            real_script_path="$(readlink -f "$src" 2>/dev/null || echo "$src")"
+        fi
+        
+        # devx.bash is in bash/app/, so we go up 3 levels to repo root
+        # bash/app/devx.bash -> bash/app -> bash -> root
+        local repo_root
+        repo_root="$(dirname "$(dirname "$(dirname "$real_script_path")")")"
+        local tool_path="${repo_root}/mytool/repo_stats.sh"
+
+        if [[ -f "$tool_path" ]]; then
+            bash "$tool_path" "$@"
+            exit $?
+        else
+            devx__log ERR "Could not find repo_stats.sh at ${tool_path}"
+            exit 1
+        fi
     fi
 
     local t_start_ns t_end_ns dur_ms
