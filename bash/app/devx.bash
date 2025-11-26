@@ -81,21 +81,22 @@ devx__find_root() {
 }
 
 devx__usage() {
-    cat <<'EOF'
-Usage: devx <command>
+    cat <<EOF
+${bold}${c_blue}Usage:${reset} devx <command>
 
-Commands:
-  up [b|f] Start dev server (b: backend, f: frontend)
-  down     Stop dev server and related services
-  test     Run test suite (pytest)
-  format   Format + lint code (tox -e ruff)
-  stat     Show repository statistics (commits, LOC)
-  shell    Enter project shell
-  cli      Start interactive CLI
-  db       Start database CLI
+${bold}${c_blue}Commands:${reset}
+  ${c_green}up [b|f]${reset}   Start dev server (b: backend, f: frontend)
+  ${c_green}down${reset}       Stop dev server and related services
+  ${c_green}test${reset}       Run test suite (pytest)
+  ${c_green}format${reset}     Format + lint code (tox -e ruff)
+  ${c_green}stat${reset}       Show repository statistics (commits, LOC)
+  ${c_green}help${reset}       Show this help message
+  ${c_green}shell${reset}      Enter project shell
+  ${c_green}cli${reset}        Start interactive CLI
+  ${c_green}db${reset}         Start database CLI
 
-Env:
-  NO_COLOR=1     # 컬러 출력 끄기
+${bold}${c_blue}Env:${reset}
+  ${c_yellow}NO_COLOR=1${reset}     # 컬러 출력 끄기
 EOF
 }
 
@@ -106,6 +107,11 @@ devx__main() (
     if [[ $# -eq 0 ]]; then
         devx__usage
         exit 2
+    fi
+
+    if [[ "$1" == "help" || "$1" == "--help" || "$1" == "-h" ]]; then
+        devx__usage
+        exit 0
     fi
 
     # --- Built-in command: stat ---
