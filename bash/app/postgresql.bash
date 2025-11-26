@@ -82,10 +82,10 @@ _generate_pg_service_conf() {
 }
 
 _register_aliases() {
-    # Clean old aliases
+    # Clean old aliases (Exclude core commands)
     while IFS= read -r name; do
         unset -f "${name}" 2>/dev/null
-    done < <(declare -F | awk '{print $3}' | grep '^psql_')
+    done < <(declare -F | awk '{print $3}' | grep '^psql_' | grep -Ev '^(psql_add|psql_del|psql_user|psql_server|psqlhelp|psql_list)$')
 
     # Define new aliases
     for entry in "${services[@]}"; do
@@ -216,11 +216,25 @@ psql_del() {
         fi
     fi
 
-    # Remove from file (using temp file for safety)
-    # Use a temp file to filter out the deleted line
-    grep -v "^$svc_name " "$PG_SERVICES_FILE" >"${PG_SERVICES_FILE}.tmp" && mv "${PG_SERVICES_FILE}.tmp" "$PG_SERVICES_FILE"
+            # Remove from file (using temp file for safety)
 
-    # Reload
+            # Use a temp file to filter out the deleted line
+
+            # Regex improved: Match start of line, service name, followed by space or tab
+
+            grep -Ev "^${svc_name}[[:space:]]+" "$PG_SERVICES_FILE" > "${PG_SERVICES_FILE}.tmp"
+
+            
+
+            # Safely overwrite the file (preserves symlink)
+
+            cat "${PG_SERVICES_FILE}.tmp" > "$PG_SERVICES_FILE"
+
+            rm "${PG_SERVICES_FILE}.tmp"
+
+            
+
+            # Reload
     mapfile -t services < <(grep -v '^[[:space:]]*#' "$PG_SERVICES_FILE" | grep -v '^[[:space:]]*$')
     _generate_pg_service_conf
     _register_aliases
