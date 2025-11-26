@@ -125,7 +125,7 @@ devx__main() (
             # Simple fallback for readlink
             real_script_path="$(readlink -f "$src" 2>/dev/null || echo "$src")"
         fi
-        
+
         # devx.bash is in bash/app/, so we go up 3 levels to repo root
         # bash/app/devx.bash -> bash/app -> bash -> root
         local repo_root

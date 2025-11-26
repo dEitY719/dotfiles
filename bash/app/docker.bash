@@ -142,11 +142,12 @@ dlog_last() {
 # -------------------------------
 dockerhelp() {
     # Color definitions
-    local bold=$(tput bold 2>/dev/null || echo "")
-    local blue=$(tput setaf 4 2>/dev/null || echo "")
-    local green=$(tput setaf 2 2>/dev/null || echo "")
-    local yellow=$(tput setaf 3 2>/dev/null || echo "")
-    local reset=$(tput sgr0 2>/dev/null || echo "")
+    local bold blue green yellow reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    blue=$(tput setaf 4 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    yellow=$(tput setaf 3 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
 
     cat <<EOF
 

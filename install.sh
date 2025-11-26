@@ -101,6 +101,30 @@ else
     echo -e "${YELLOW}Warning: $AGENTS_SOURCE_DIR not found${RESET}"
 fi
 
+# Create symlink for pg_services.list
+echo -e "${BLUE}Setting up PostgreSQL services config...${RESET}"
+PG_CONFIG_DIR="$HOME/.config"
+mkdir -p "$PG_CONFIG_DIR"
+
+PG_SOURCE="$DOTFILES_DIR/bash/config/pg_services.list"
+PG_DEST="$PG_CONFIG_DIR/pg_services.list"
+
+if [ ! -f "$PG_SOURCE" ]; then
+    echo -e "${YELLOW}Warning: $PG_SOURCE not found${RESET}"
+else
+    if [ -L "$PG_DEST" ]; then
+        rm "$PG_DEST"
+        echo -e "${GREEN}Removed existing symlink: $PG_DEST${RESET}"
+    elif [ -f "$PG_DEST" ]; then
+        backup_file="$PG_DEST.backup.$(date +%s)"
+        mv "$PG_DEST" "$backup_file"
+        echo -e "${YELLOW}Backed up existing file to: $backup_file${RESET}"
+    fi
+
+    ln -s "$PG_SOURCE" "$PG_DEST"
+    echo -e "${GREEN}Created symlink: $PG_DEST -> $PG_SOURCE${RESET}"
+fi
+
 echo -e "${GREEN}===== Setup Complete =====${RESET}"
 echo -e "${BLUE}Next steps:${RESET}"
 echo "  1. Review ~/.claude/statusline-command.sh"

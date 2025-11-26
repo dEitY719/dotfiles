@@ -32,10 +32,11 @@ alias docs_gen='sphinx-apidoc -o docs/source . && sphinx-build -b html docs/sour
 # -------------------------------
 pphelp() {
     # Color definitions
-    local bold=$(tput bold 2>/dev/null || echo "")
-    local blue=$(tput setaf 4 2>/dev/null || echo "")
-    local green=$(tput setaf 2 2>/dev/null || echo "")
-    local reset=$(tput sgr0 2>/dev/null || echo "")
+    local bold blue green reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    blue=$(tput setaf 4 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
 
     cat <<EOF
 

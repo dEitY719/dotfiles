@@ -1,0 +1,10 @@
+# PostgreSQL Services Configuration
+# Format: service_name  db_name  db_user  db_pass
+# -----------------------------------------------------------
+dmc_dev        dmc_playground_dev   dmc_user   change_me_strong_pw
+dmc_test       dmc_playground_test  dmc_user   change_me_strong_pw
+dmc_prod       dmc_playground_prod  dmc_user   change_me_strong_pw
+sleassem_dev   sleassem_dev         slea_user  change_me_dev_password
+sleassem_test  sleassem_test        slea_user  change_me_test_password
+sleassem_prod  sleassem_prod        slea_user  change_me_prod_password
+quantfolio_dev  quantfolio_dev  qf_user  qf_user

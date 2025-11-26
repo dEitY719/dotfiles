@@ -37,10 +37,11 @@ alias uvcheck='uv pip check'
 # (6) 도움말(프로젝트 관례 안내)
 uvhelp() {
     # Color definitions
-    local bold=$(tput bold 2>/dev/null || echo "")
-    local blue=$(tput setaf 4 2>/dev/null || echo "")
-    local green=$(tput setaf 2 2>/dev/null || echo "")
-    local reset=$(tput sgr0 2>/dev/null || echo "")
+    local bold blue green reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    blue=$(tput setaf 4 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
 
     cat <<EOF
 
