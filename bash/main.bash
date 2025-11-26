@@ -135,15 +135,23 @@ clean_paths
 # Automatically detects and lists all *help() functions
 # ------------------------------------------------------------------
 myhelp() {
-    cat <<-'EOF'
+    # Color definitions
+    local bold=$(tput bold 2>/dev/null || echo "")
+    local blue=$(tput setaf 4 2>/dev/null || echo "")
+    local green=$(tput setaf 2 2>/dev/null || echo "")
+    local yellow=$(tput setaf 3 2>/dev/null || echo "")
+    local cyan=$(tput setaf 6 2>/dev/null || echo "")
+    local reset=$(tput sgr0 2>/dev/null || echo "")
 
-╔════════════════════════════════════════════════════════════════╗
-║                   Dotfiles Help Functions                      ║
-╚════════════════════════════════════════════════════════════════╝
+    cat <<EOF
+
+${bold}${blue}╔════════════════════════════════════════════════════════════════╗${reset}
+${bold}${blue}║                   Dotfiles Help Functions                      ║${reset}
+${bold}${blue}╚════════════════════════════════════════════════════════════════╝${reset}
 
 EOF
 
-    echo "Available help commands:"
+    echo "${bold}${blue}Available help commands:${reset}"
     echo ""
 
     # Automatically detect all functions ending with 'help' (excluding myhelp itself)
@@ -181,17 +189,17 @@ EOF
 
     for func in "${help_funcs[@]}"; do
         local desc="${help_descriptions[$func]:-No description available}"
-        printf "  %-${max_width}s  :  %s\n" "$func" "$desc"
+        printf "  ${green}%-${max_width}s${reset}  :  %s\n" "$func" "$desc"
     done
 
-    cat <<-'EOF'
+    cat <<EOF
 
-Usage: Type any of the above commands to see detailed help.
-Example: githelp, uvhelp, ...
+${bold}${blue}Usage:${reset} Type any of the above commands to see detailed help.
+${bold}${blue}Example:${reset} ${cyan}githelp${reset}, ${cyan}uvhelp${reset}, ...
 
-To add a new help function:
+${bold}${yellow}To add a new help function:${reset}
   1. Create a function ending with 'help' (e.g., dockerhelp)
-  2. It will be automatically detected by myhelp()
+  2. It will be automatically detected by ${green}myhelp()${reset}
 
 EOF
 }
