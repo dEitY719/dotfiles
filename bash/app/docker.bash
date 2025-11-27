@@ -137,6 +137,51 @@ dlog_last() {
     docker logs --tail "$lines" "$container"
 }
 
+# 모든 컨테이너를 tar 파일로 백업
+dexport() {
+    local backup_dir="/home/bwyoon/dotfiles/backup"
+    local containers
+
+    echo "[Docker] 백업 디렉토리 확인: $backup_dir"
+    mkdir -p "$backup_dir"
+
+    # 모든 컨테이너 이름 가져오기
+    containers=$(docker ps -a --format "{{.Names}}")
+
+    if [ -z "$containers" ]; then
+        echo "[Docker] 백업할 컨테이너가 없습니다."
+        return 0
+    fi
+
+    echo "[Docker] 다음 컨테이너를 백업합니다:"
+    echo "$containers"
+    echo "----------------------------------------"
+
+    # 각 컨테이너 export
+    for name in $containers; do
+        echo "📦 Exporting $name..."
+        if docker export "$name" > "$backup_dir/${name}.tar"; then
+            echo "✅ $name -> $backup_dir/${name}.tar 완료"
+        else
+            echo "❌ $name 백업 실패"
+        fi
+    done
+
+    echo "----------------------------------------"
+    echo "🎉 모든 백업 작업이 완료되었습니다."
+    ls -lh "$backup_dir"
+}
+
+# WSL Docker 설치 (대화형 스크립트)
+dinstall() {
+    bash /home/bwyoon/dotfiles/mytool/install-docker.sh
+}
+
+# Docker 서비스 자동 시작 설정 (대화형 스크립트)
+denable() {
+    bash /home/bwyoon/dotfiles/mytool/enable-docker.sh
+}
+
 # -------------------------------
 # Docker Helper
 # -------------------------------
@@ -183,6 +228,8 @@ ${bold}${blue}[Docker / Docker Compose Quick Commands]${reset}
     ${green}dinspect${reset}     : docker inspect <name>    (상세 정보)
 
   ${bold}${blue}🔹 유틸리티 함수${reset}
+    ${green}dinstall${reset}             : WSL Docker 설치 (대화형 스크립트)
+    ${green}denable${reset}              : Docker 자동 시작 설정 (systemd)
     ${green}dbash <name>${reset}         : 컨테이너 쉘 접속 (bash 없으면 sh로 자동 시도)
     ${green}dstopall${reset}             : 모든 실행 중 컨테이너 정지
     ${green}drmall${reset}               : 중지 포함 모든 컨테이너 삭제
@@ -190,6 +237,7 @@ ${bold}${blue}[Docker / Docker Compose Quick Commands]${reset}
     ${green}dprune${reset}               : docker system prune -f (기본 청소)
     ${green}dprune_full${reset}          : docker system prune -a --volumes -f (강력 청소, YES 확인 필요)
     ${green}dlog_last <name> [N]${reset} : 컨테이너 최근 N줄 로그 조회 (기본 200줄)
+    ${green}dexport${reset}              : 모든 컨테이너를 tar 파일로 백업 (~/dotfiles/backup)
 
   ${bold}${blue}🔹 참고${reset}
     ${yellow}- Compose V2 기준: 'docker compose' 사용

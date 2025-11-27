@@ -13,3 +13,5 @@ uv.lock
 bash/env/local.bash
 bash/alias/local.bash
 bash/app/local.bash
+
+./backup/
