@@ -34,8 +34,30 @@ gsw() {
 alias gd='git diff'   # 변경사항 확인
 alias gb='git branch' # 브랜치 목록
 alias gf='git fetch origin -p'
+alias gfu='git fetch upstream'      # upstream에서 fetch
 alias gfa='git fetch --all --prune' # 원격 전체 fetch + 필요없는 브랜치 정리
 alias gpl='git pull'                # 현재 브랜치만 pull
+
+# Upstream 원격 저장소 추가 함수
+gupa() {
+    if [ $# -eq 0 ]; then
+        echo "사용법: gupa <git-repo-url>"
+        echo "예: gupa https://github.com/original-owner/repo.git"
+        return 1
+    fi
+    git remote add upstream "$1"
+    echo "✅ Upstream 원격 저장소 추가됨: $1"
+    git remote -v
+}
+
+# Upstream main 브랜치 로그 (기본값)
+alias glum='git log --oneline -n 20 upstream/main'
+
+# Upstream 특정 브랜치 로그 함수
+glub() {
+    local branch="${1:-main}"
+    git log --oneline -n 20 "upstream/$branch"
+}
 
 alias gset-main='git branch --set-upstream-to=origin/main main'
 alias gset-dev='git branch --set-upstream-to=origin/dev dev'
@@ -117,7 +139,8 @@ ${bold}${blue}[Git Quick Commands]${reset}
     ${green}gb${reset}         : git branch (브랜치 목록)
 
   ${bold}${blue}Fetch & Sync:${reset}
-    ${green}gf${reset}         : git fetch origin -p (원격 fetch + prune)
+    ${green}gf${reset}         : git fetch origin -p (origin fetch + prune)
+    ${green}gfu${reset}        : git fetch upstream (upstream에서만 fetch)
     ${green}gfa${reset}        : git fetch --all --prune (모든 원격 fetch)
     ${green}gsw${reset}        : git switch -c <local> <remote> (원격 브랜치로부터 로컬 생성 + switch)
 
@@ -129,6 +152,10 @@ ${bold}${blue}[Git Quick Commands]${reset}
     ${green}git_log2${reset}   : 간결한 한줄 로그
     ${green}glref${reset}      : git log ref/main --oneline (ref 원격 main 브랜치 한줄 로그)
 
+  ${bold}${blue}Upstream:${reset}
+    ${green}gupa${reset}       : git remote add upstream <url> (upstream 원격 저장소 추가)
+    ${green}glum${reset}       : git log --oneline -n 20 upstream/main (upstream main 최근 20개)
+    ${green}glub${reset}       : glub [branch] (upstream 특정 브랜치 최근 20개, 기본값: main)
 
   ${bold}${blue}Branch Upstream:${reset}
     ${green}gset-main${reset}  : git branch --set-upstream-to=origin/main main
