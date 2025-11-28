@@ -182,6 +182,108 @@ denable() {
     bash /home/bwyoon/dotfiles/mytool/enable-docker.sh
 }
 
+# Docker 회사 프록시 설정 (대화형 스크립트)
+dproxy_setup() {
+    bash /home/bwyoon/dotfiles/mytool/docker-configure-proxy.sh
+}
+
+# Docker 회사 프록시 설정 도움말
+dproxy_help() {
+    local bold blue green yellow red reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    blue=$(tput setaf 4 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    yellow=$(tput setaf 3 2>/dev/null || echo "")
+    red=$(tput setaf 1 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
+    cat <<EOF
+
+${bold}${blue}════════════════════════════════════════════════════
+  Docker 회사 프록시(Corporate Proxy) 설정 가이드
+════════════════════════════════════════════════════${reset}
+
+${bold}${blue}1️⃣  설정 파일 위치${reset}
+  ${yellow}/etc/systemd/system/docker.service.d/http-proxy.conf${reset}
+
+${bold}${blue}2️⃣  설정 확인${reset}
+  ${green}systemctl show --property=Environment docker${reset}
+
+  출력 예:
+    Environment=HTTP_PROXY=http://12.26.204.100:8080/ \\
+               HTTPS_PROXY=http://12.26.204.100:8080/ \\
+               NO_PROXY=localhost,127.0.0.1,...
+
+${bold}${blue}3️⃣  설정 파일 내용 확인${reset}
+  ${green}cat /etc/systemd/system/docker.service.d/http-proxy.conf${reset}
+
+${bold}${blue}4️⃣  설정 수정${reset}
+  ${green}sudo nano /etc/systemd/system/docker.service.d/http-proxy.conf${reset}
+
+  수정 후:
+    ${green}sudo systemctl daemon-reload${reset}
+    ${green}sudo systemctl restart docker${reset}
+
+${bold}${blue}5️⃣  설정 제거${reset}
+  ${green}sudo rm -f /etc/systemd/system/docker.service.d/http-proxy.conf${reset}
+
+  제거 후:
+    ${green}sudo systemctl daemon-reload${reset}
+    ${green}sudo systemctl restart docker${reset}
+
+${bold}${blue}6️⃣  Proxy 연결 테스트${reset}
+  ${green}docker pull alpine:latest${reset}
+
+  성공하면 이미지를 pull할 수 있습니다.
+
+${bold}${blue}7️⃣  설정 초기화 (전체 drop-in 디렉토리 삭제)${reset}
+  ${red}sudo rm -rf /etc/systemd/system/docker.service.d/${reset}
+
+  ${red}⚠️  주의: 다른 설정도 함께 삭제됩니다!${reset}
+
+${bold}${blue}═══════════════════════════════════════════════════${reset}
+
+${bold}빠른 명령어:${reset}
+  ${green}dproxy_setup${reset}   : Proxy 설정 대화형 스크립트
+  ${green}dproxy_help${reset}    : 이 도움말 표시
+  ${green}dproxy_show${reset}    : 현재 Proxy 설정 확인
+
+EOF
+}
+
+# Docker Proxy 설정 확인
+dproxy_show() {
+    local bold blue green yellow reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    blue=$(tput setaf 4 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    yellow=$(tput setaf 3 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
+    local proxy_conf="/etc/systemd/system/docker.service.d/http-proxy.conf"
+
+    echo "${bold}${blue}Docker Proxy Configuration${reset}"
+    echo ""
+
+    if [ -f "$proxy_conf" ]; then
+        echo "${bold}${green}✓ Proxy 설정 파일 존재${reset}"
+        echo ""
+        echo "${bold}설정 파일 위치:${reset}"
+        echo "  ${yellow}${proxy_conf}${reset}"
+        echo ""
+        echo "${bold}설정 내용:${reset}"
+        sed 's/^/  /' < "$proxy_conf"
+        echo ""
+        echo "${bold}현재 Docker 환경변수:${reset}"
+        systemctl show --property=Environment docker | sed 's/^/  /'
+    else
+        echo "${bold}${yellow}⚠  Proxy 설정 파일 없음${reset}"
+        echo ""
+        echo "Proxy를 설정하려면:"
+        echo "  ${green}dproxy_setup${reset}"
+    fi
+}
+
 # -------------------------------
 # Docker Helper
 # -------------------------------
@@ -230,6 +332,9 @@ ${bold}${blue}[Docker / Docker Compose Quick Commands]${reset}
   ${bold}${blue}🔹 유틸리티 함수${reset}
     ${green}dinstall${reset}             : WSL Docker 설치 (대화형 스크립트)
     ${green}denable${reset}              : Docker 자동 시작 설정 (systemd)
+    ${green}dproxy_setup${reset}         : 회사 프록시 설정 (대화형 스크립트)
+    ${green}dproxy_help${reset}          : 회사 프록시 설정 가이드 및 명령어 안내
+    ${green}dproxy_show${reset}          : 현재 회사 프록시 설정 확인
     ${green}dbash <name>${reset}         : 컨테이너 쉘 접속 (bash 없으면 sh로 자동 시도)
     ${green}dstopall${reset}             : 모든 실행 중 컨테이너 정지
     ${green}drmall${reset}               : 중지 포함 모든 컨테이너 삭제
