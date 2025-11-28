@@ -179,6 +179,8 @@ EOF
         ["claudehelp"]="Claude Code MCP help"
         ["dockerhelp"]="Docker commands and aliases"
         ["apthelp"]="APT package manager commands"
+        ["geminihelp"]="Gemini CLI commands and aliases"
+        ["codexhelp"]="Codex CLI commands and aliases"
     )
 
     local max_width=0
