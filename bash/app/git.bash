@@ -71,6 +71,32 @@ gupdel() {
     fi
 }
 
+# 원격 저장소 조회
+alias gr='git remote -v'
+
+# Cherry-pick 함수
+gcp() {
+    if [ $# -eq 0 ]; then
+        echo "사용법: gcp <commit-id> [commit-id2] [commit-id3] ..."
+        echo "예: gcp abc1234"
+        echo "예: gcp abc1234 def5678 ghi9012"
+        return 1
+    fi
+
+    local failed=0
+    for commit in "$@"; do
+        if git cherry-pick "$commit"; then
+            echo "✅ Cherry-pick 성공: $commit"
+        else
+            echo "❌ Cherry-pick 실패: $commit"
+            failed=1
+            break
+        fi
+    done
+
+    return $failed
+}
+
 # Upstream main 브랜치 로그 (기본값)
 alias glum='git log --oneline -n 20 upstream/main'
 
@@ -164,6 +190,7 @@ ${bold}${blue}[Git Quick Commands]${reset}
     ${green}gfu${reset}        : git fetch upstream (upstream에서만 fetch)
     ${green}gfa${reset}        : git fetch --all --prune (모든 원격 fetch)
     ${green}gsw${reset}        : git switch -c <local> <remote> (원격 브랜치로부터 로컬 생성 + switch)
+    ${green}gr${reset}         : git remote -v (원격 저장소 조회)
 
   ${bold}${blue}Logs:${reset}
     ${green}gl${reset}         : git_log (그래프 형태 로그)
@@ -183,6 +210,10 @@ ${bold}${blue}[Git Quick Commands]${reset}
     ${green}gset-main${reset}  : git branch --set-upstream-to=origin/main main
     ${green}gset-dev${reset}   : git branch --set-upstream-to=origin/dev dev
     ${green}gset${reset}       : gset [branch] (현재 브랜치 또는 지정 브랜치 upstream 설정)
+
+  ${bold}${blue}Cherry-pick:${reset}
+    ${green}gcp${reset}        : gcp <commit-id> [commit-id2] ... (커밋 cherry-pick)
+                  예: gcp abc1234 또는 gcp abc1234 def5678
 
   ${bold}${blue}Special:${reset}
     ${green}gpf_dev_server${reset} : git push -f origin HEAD:refs/heads/dev-server
