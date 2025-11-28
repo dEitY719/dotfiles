@@ -50,6 +50,27 @@ gupa() {
     git remote -v
 }
 
+# 원격 저장소 삭제 함수
+gupdel() {
+    if [ $# -eq 0 ]; then
+        echo "사용법: gupdel <remote-name>"
+        echo "예: gupdel upstream"
+        echo ""
+        echo "현재 등록된 원격 저장소:"
+        git remote -v
+        return 1
+    fi
+
+    local remote="$1"
+    if git remote remove "$remote" 2>/dev/null; then
+        echo "✅ 원격 저장소 삭제됨: $remote"
+        git remote -v
+    else
+        echo "❌ 원격 저장소를 찾을 수 없습니다: $remote"
+        return 1
+    fi
+}
+
 # Upstream main 브랜치 로그 (기본값)
 alias glum='git log --oneline -n 20 upstream/main'
 
@@ -154,6 +175,7 @@ ${bold}${blue}[Git Quick Commands]${reset}
 
   ${bold}${blue}Upstream:${reset}
     ${green}gupa${reset}       : git remote add upstream <url> (upstream 원격 저장소 추가)
+    ${green}gupdel${reset}     : gupdel <remote-name> (원격 저장소 삭제)
     ${green}glum${reset}       : git log --oneline -n 20 upstream/main (upstream main 최근 20개)
     ${green}glub${reset}       : glub [branch] (upstream 특정 브랜치 최근 20개, 기본값: main)
 
