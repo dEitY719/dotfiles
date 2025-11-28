@@ -160,7 +160,7 @@ dexport() {
     # 각 컨테이너 export
     for name in $containers; do
         echo "📦 Exporting $name..."
-        if docker export "$name" > "$backup_dir/${name}.tar"; then
+        if docker export "$name" >"$backup_dir/${name}.tar"; then
             echo "✅ $name -> $backup_dir/${name}.tar 완료"
         else
             echo "❌ $name 백업 실패"

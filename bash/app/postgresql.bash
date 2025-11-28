@@ -216,25 +216,21 @@ psql_del() {
         fi
     fi
 
-            # Remove from file (using temp file for safety)
+    # Remove from file (using temp file for safety)
 
-            # Use a temp file to filter out the deleted line
+    # Use a temp file to filter out the deleted line
 
-            # Regex improved: Match start of line, service name, followed by space or tab
+    # Regex improved: Match start of line, service name, followed by space or tab
 
-            grep -Ev "^${svc_name}[[:space:]]+" "$PG_SERVICES_FILE" > "${PG_SERVICES_FILE}.tmp"
+    grep -Ev "^${svc_name}[[:space:]]+" "$PG_SERVICES_FILE" >"${PG_SERVICES_FILE}.tmp"
 
-            
+    # Safely overwrite the file (preserves symlink)
 
-            # Safely overwrite the file (preserves symlink)
+    cat "${PG_SERVICES_FILE}.tmp" >"$PG_SERVICES_FILE"
 
-            cat "${PG_SERVICES_FILE}.tmp" > "$PG_SERVICES_FILE"
+    rm "${PG_SERVICES_FILE}.tmp"
 
-            rm "${PG_SERVICES_FILE}.tmp"
-
-            
-
-            # Reload
+    # Reload
     mapfile -t services < <(grep -v '^[[:space:]]*#' "$PG_SERVICES_FILE" | grep -v '^[[:space:]]*$')
     _generate_pg_service_conf
     _register_aliases

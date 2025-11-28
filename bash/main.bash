@@ -178,6 +178,7 @@ EOF
         ["cchelp"]="Claude Code Usage help"
         ["claudehelp"]="Claude Code MCP help"
         ["dockerhelp"]="Docker commands and aliases"
+        ["apthelp"]="APT package manager commands"
     )
 
     local max_width=0
