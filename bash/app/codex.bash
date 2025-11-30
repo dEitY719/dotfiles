@@ -48,7 +48,8 @@ ${bold}${blue}[Codex Quick Commands]${reset}
     ${green}cxver${reset}      : codex --version (버전 정보)
 
   ${bold}${blue}Installation & Setup:${reset}
-    ${green}cxinstall${reset}  : Codex CLI 설치 (대화형 스크립트)
+    ${green}cxinstall${reset}   : Codex CLI 설치 (대화형 스크립트)
+    ${green}cxuninstall${reset} : Codex CLI 제거 (대화형 스크립트)
 
   ${bold}${blue}Interactive Mode:${reset}
     ${green}cx${reset}         : 대화형 모드 시작

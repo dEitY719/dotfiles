@@ -336,6 +336,7 @@ ${bold}${blue}[Docker / Docker Compose Quick Commands]${reset}
 
   ${bold}${blue}🔹 유틸리티 함수${reset}
     ${green}dinstall${reset}             : WSL Docker 설치 (대화형 스크립트)
+    ${green}duninstall${reset}           : WSL Docker 제거 (대화형 스크립트)
     ${green}denable${reset}              : Docker 자동 시작 설정 (systemd)
     ${green}dproxy_setup${reset}         : 회사 프록시 설정 (대화형 스크립트)
     ${green}dproxy_help${reset}          : 회사 프록시 설정 가이드 및 명령어 안내

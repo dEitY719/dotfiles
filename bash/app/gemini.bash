@@ -49,6 +49,7 @@ ${bold}${blue}[Gemini CLI Quick Commands]${reset}
 
   ${bold}${blue}Installation & Setup:${reset}
     ${green}ginstall${reset}     : Gemini CLI 설치 (대화형 스크립트)
+    ${green}guninstall${reset}   : Gemini CLI 제거 (대화형 스크립트)
 
   ${bold}${blue}Tips:${reset}
     • 설치: ginstall
