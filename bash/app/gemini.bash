@@ -62,3 +62,8 @@ EOF
 ginstall() {
     bash /home/bwyoon/dotfiles/mytool/install-gemini.sh
 }
+
+# Gemini 제거 (대화형 스크립트)
+guninstall() {
+    bash /home/bwyoon/dotfiles/mytool/uninstall-gemini.sh
+}

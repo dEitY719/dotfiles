@@ -177,6 +177,11 @@ dinstall() {
     bash /home/bwyoon/dotfiles/mytool/install-docker.sh
 }
 
+# WSL Docker 제거 (대화형 스크립트)
+duninstall() {
+    bash /home/bwyoon/dotfiles/mytool/uninstall-docker.sh
+}
+
 # Docker 서비스 자동 시작 설정 (대화형 스크립트)
 denable() {
     bash /home/bwyoon/dotfiles/mytool/enable-docker.sh
@@ -272,7 +277,7 @@ dproxy_show() {
         echo "  ${yellow}${proxy_conf}${reset}"
         echo ""
         echo "${bold}설정 내용:${reset}"
-        sed 's/^/  /' < "$proxy_conf"
+        sed 's/^/  /' <"$proxy_conf"
         echo ""
         echo "${bold}현재 Docker 환경변수:${reset}"
         systemctl show --property=Environment docker | sed 's/^/  /'
