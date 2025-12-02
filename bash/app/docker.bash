@@ -125,6 +125,56 @@ EOF
     fi
 }
 
+# 디스크 사용량 확인
+ddf() {
+    docker system df
+}
+
+# 상세 디스크 사용량 확인
+ddfv() {
+    docker system df -v
+}
+
+# Dangling 볼륨 확인
+dvols() {
+    docker volume ls -f dangling=true
+}
+
+# 특정 볼륨 삭제
+dvol_rm() {
+    if [ -z "$1" ]; then
+        echo "사용법: dvol_rm <volume_name>"
+        return 1
+    fi
+    docker volume rm "$1"
+}
+
+# 모든 dangling 볼륨 일괄 삭제
+dvol_rm_dangling() {
+    local ids
+    ids=$(docker volume ls -f dangling=true -q)
+    if [ -z "$ids" ]; then
+        echo "[Docker] 삭제할 dangling 볼륨이 없습니다."
+        return 0
+    fi
+    echo "[Docker] dangling 볼륨 삭제:"
+    echo "$ids"
+    docker volume rm $ids
+    echo "✅ dangling 볼륨 삭제 완료"
+}
+
+# 사용되지 않는 네트워크 정리
+dnetwork_prune() {
+    echo "🧹 Docker network prune -f 실행 중..."
+    docker network prune -f
+}
+
+# 빌드 캐시 정리
+dbuild_prune() {
+    echo "🧹 Docker builder prune -f 실행 중..."
+    docker builder prune -f
+}
+
 # 최근 N줄 로그만 보기 (기본 200줄)
 # 사용법: dlog_last <container_name> [줄수]
 dlog_last() {
@@ -333,6 +383,17 @@ ${bold}${blue}[Docker / Docker Compose Quick Commands]${reset}
     ${green}drmi${reset}         : docker rmi <image>       (이미지 삭제)
     ${green}dlogs${reset}        : docker logs -f <name>    (컨테이너 로그 follow)
     ${green}dinspect${reset}     : docker inspect <name>    (상세 정보)
+
+  ${bold}${blue}🔹 Docker 리소스 관리${reset}
+    ${green}ddf${reset}                  : docker system df              (디스크 사용량 확인)
+    ${green}ddfv${reset}                 : docker system df -v           (상세 디스크 사용량)
+    ${green}dvols${reset}                : docker volume ls -f dangling=true (dangling 볼륨 확인)
+    ${green}dvol_rm <name>${reset}       : docker volume rm <name>       (특정 볼륨 삭제)
+    ${green}dvol_rm_dangling${reset}     : dangling 볼륨 일괄 삭제
+    ${green}dnetwork_prune${reset}       : 사용되지 않는 네트워크 정리
+    ${green}dbuild_prune${reset}         : 빌드 캐시 정리
+    ${green}dprune${reset}               : docker system prune -f         (기본 청소)
+    ${green}dprune_full${reset}          : docker system prune -a --volumes -f (강력 청소)
 
   ${bold}${blue}🔹 유틸리티 함수${reset}
     ${green}dinstall${reset}             : WSL Docker 설치 (대화형 스크립트)
