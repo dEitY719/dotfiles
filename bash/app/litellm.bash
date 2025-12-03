@@ -50,7 +50,6 @@ fi
 LITELLM_PROJECT_PATH="/home/bwyoon/para/project/litellm"
 LITELLM_API_KEY="sk-4444"
 LITELLM_URL="http://localhost:4444"
-LITELLM_MASTER_KEY="sk-4444"
 
 # ===== 헬퍼 함수 =====
 
@@ -98,8 +97,10 @@ _verify_models_loaded() {
         return 1
     fi
 
-    local configured_models=($(_get_configured_models))
-    local loaded_models=($(_get_loaded_models))
+    local configured_models
+    local loaded_models
+    mapfile -t configured_models < <(_get_configured_models)
+    mapfile -t loaded_models < <(_get_loaded_models)
 
     if [[ ${#loaded_models[@]} -eq 0 ]]; then
         echo "${red}❌ 로드된 모델이 없습니다${reset}"
@@ -112,7 +113,15 @@ _verify_models_loaded() {
 
     local all_loaded=true
     for model in "${configured_models[@]}"; do
-        if [[ " ${loaded_models[@]} " =~ " ${model} " ]]; then
+        local found=false
+        for loaded in "${loaded_models[@]}"; do
+            if [[ "$loaded" == "$model" ]]; then
+                found=true
+                break
+            fi
+        done
+
+        if [[ "$found" == "true" ]]; then
             echo "${green}✅ $model${reset}"
         else
             echo "${red}❌ $model (로드 실패)${reset}"
@@ -140,9 +149,7 @@ litellm_start() {
     cd "$LITELLM_PROJECT_PATH" || return 1
 
     echo "Docker Compose로 서비스 시작 중..."
-    docker compose up -d > /dev/null 2>&1
-
-    if [[ $? -eq 0 ]]; then
+    if docker compose up -d > /dev/null 2>&1; then
         echo "${green}✓ 컨테이너 시작 완료${reset}"
     else
         echo "${red}❌ 컨테이너 시작 실패${reset}"
@@ -231,7 +238,8 @@ litellm_models() {
         return 1
     fi
 
-    local models=$(curl -s "${LITELLM_URL}/models" \
+    local models
+    models=$(curl -s "${LITELLM_URL}/models" \
         -H "Authorization: Bearer ${LITELLM_API_KEY}" 2>/dev/null)
 
     if [[ -z "$models" ]]; then
@@ -261,7 +269,8 @@ litellm_test() {
     fi
 
     # 모델 존재 여부 확인
-    local available_models=$(_get_loaded_models)
+    local available_models
+    available_models=$(_get_loaded_models)
     if ! echo "$available_models" | grep -q "^${model_name}$"; then
         echo "${red}❌ 모델을 찾을 수 없습니다: $model_name${reset}"
         echo ""
@@ -275,7 +284,8 @@ litellm_test() {
     echo "  Prompt: What is 2+2?"
     echo ""
 
-    local response=$(curl -s -X POST "${LITELLM_URL}/v1/chat/completions" \
+    local response
+    response=$(curl -s -X POST "${LITELLM_URL}/v1/chat/completions" \
         -H "Authorization: Bearer ${LITELLM_API_KEY}" \
         -H "Content-Type: application/json" \
         -d "{\"model\":\"$model_name\",\"messages\":[{\"role\":\"user\",\"content\":\"What is 2+2?\"}],\"max_tokens\":50}" \
@@ -283,14 +293,16 @@ litellm_test() {
 
     # 에러 확인
     if echo "$response" | grep -q '"error"'; then
-        local error_msg=$(echo "$response" | grep -o '"message":"[^"]*"' | head -1 | cut -d'"' -f4)
+        local error_msg
+        error_msg=$(echo "$response" | grep -o '"message":"[^"]*"' | head -1 | cut -d'"' -f4)
         echo "${red}❌ 요청 실패${reset}"
         echo "  에러: $error_msg"
         return 1
     fi
 
     # 응답 파싱
-    local content=$(echo "$response" | grep -o '"content":"[^"]*"' | head -1 | cut -d'"' -f4)
+    local content
+    content=$(echo "$response" | grep -o '"content":"[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [[ -z "$content" ]]; then
         # content가 없으면 다른 형식 확인
