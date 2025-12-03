@@ -247,23 +247,23 @@ ${bold}${blue}[Git Quick Commands]${reset}
 EOF
 }
 
-# gl 함수 (최근 15개 기본, -a/--all 옵션으로 모두 보기)
+# gl 함수 (최근 11개 기본, -a/--all 옵션으로 모두 보기)
 unalias gl 2>/dev/null || true
 gl() {
     local show_all=0
-    local args=""
+    local args=()
 
     for arg in "$@"; do
         if [ "$arg" = "-a" ] || [ "$arg" = "--all" ]; then
             show_all=1
         else
-            args="$args $arg"
+            args+=("$arg")
         fi
     done
 
     if [ $show_all -eq 1 ]; then
-        git_log $args
+        git_log "${args[@]}"
     else
-        git_log -n 15 $args
+        git_log -n 11 "${args[@]}"
     fi
 }
