@@ -29,15 +29,27 @@ alias dcstart='docker compose start' # 정지된 컨테이너 시작
 # 먼저 docker compose logs 시도 → 실패하면 docker logs로 자동 폴백
 unalias dcl 2>/dev/null  # 기존 alias 제거 (함수 정의 전)
 dcl() {
+    local bold blue green yellow reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    blue=$(tput setaf 4 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    yellow=$(tput setaf 3 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
     if [ -z "$1" ]; then
-        echo "사용법: dcl <service_name_or_container> [options]"
         echo ""
-        echo "예시:"
-        echo "  dcl slea-backend              # compose 서비스 또는 컨테이너 이름"
-        echo "  dcl slea-backend --tail 50    # 최근 50줄"
+        echo "${bold}${blue}Docker Compose Logs (dcl)${reset}"
         echo ""
-        echo "현재 실행 중인 컨테이너:"
+        echo "${bold}사용법:${reset}"
+        echo "  ${green}dcl <service_name_or_container> [options]${reset}"
+        echo ""
+        echo "${bold}예시:${reset}"
+        echo "  ${yellow}dcl slea-backend${reset}              # compose 서비스 또는 컨테이너 이름"
+        echo "  ${yellow}dcl slea-backend --tail 50${reset}    # 최근 50줄"
+        echo ""
+        echo "${bold}${blue}현재 실행 중인 컨테이너:${reset}"
         docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" | head -20
+        echo ""
         return 0
     fi
 
@@ -70,8 +82,13 @@ alias dinspect='docker inspect' # 컨테이너/이미지 상세 정보
 # 컨테이너 쉘 접속 (bash 우선, 없으면 sh)
 # 사용법: dbash <container_name_or_id>
 dbash() {
+    local bold green reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
     if [ -z "$1" ]; then
-        echo "사용법: dbash <container_name_or_id>"
+        echo "${bold}${green}사용법:${reset} dbash <container_name_or_id>"
         return 1
     fi
     docker exec -it "$1" /bin/bash 2>/dev/null || docker exec -it "$1" /bin/sh
@@ -79,73 +96,105 @@ dbash() {
 
 # 실행 중인 모든 컨테이너 정지
 dstopall() {
-    local ids
+    local ids bold blue green yellow reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    blue=$(tput setaf 4 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    yellow=$(tput setaf 3 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
     ids=$(docker ps -q)
     if [ -z "$ids" ]; then
-        echo "[Docker] 실행 중인 컨테이너가 없습니다."
+        echo "${bold}${yellow}⚠  실행 중인 컨테이너가 없습니다.${reset}"
         return 0
     fi
-    echo "[Docker] 모든 실행 중 컨테이너 정지:"
-    echo "$ids"
+    echo "${bold}${blue}[Docker]${reset} 모든 실행 중 컨테이너 정지:"
+    echo "${green}$ids${reset}"
     docker stop "$ids"
 }
 
 # 중지된 컨테이너 일괄 삭제
 drmall() {
-    local ids
+    local ids bold blue green yellow red reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    blue=$(tput setaf 4 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    yellow=$(tput setaf 3 2>/dev/null || echo "")
+    red=$(tput setaf 1 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
     ids=$(docker ps -aq)
     if [ -z "$ids" ]; then
-        echo "[Docker] 삭제할 컨테이너가 없습니다."
+        echo "${bold}${yellow}⚠  삭제할 컨테이너가 없습니다.${reset}"
         return 0
     fi
-    echo "[Docker] 모든 컨테이너 삭제:"
-    echo "$ids"
+    echo "${bold}${red}[Docker]${reset} 모든 컨테이너 삭제:"
+    echo "${green}$ids${reset}"
     docker rm "$ids"
 }
 
 # dangling(태그 없는) 이미지 삭제
 drm_dangling() {
-    local ids
+    local ids bold blue green yellow reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    blue=$(tput setaf 4 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    yellow=$(tput setaf 3 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
     ids=$(docker images -f "dangling=true" -q)
     if [ -z "$ids" ]; then
-        echo "[Docker] 삭제할 dangling 이미지가 없습니다."
+        echo "${bold}${yellow}⚠  삭제할 dangling 이미지가 없습니다.${reset}"
         return 0
     fi
-    echo "[Docker] dangling 이미지 삭제:"
-    echo "$ids"
+    echo "${bold}${blue}[Docker]${reset} dangling 이미지 삭제:"
+    echo "${green}$ids${reset}"
     docker rmi "$ids"
 }
 
 # Docker 시스템 기본 청소 (사용되지 않는 컨테이너/네트워크/이미지 등)
 dprune() {
-    echo "🧹 Docker system prune -f 실행 중..."
+    local bold green reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
+    echo "${bold}${green}🧹 Docker system prune -f 실행 중...${reset}"
     docker system prune -f
 }
 
 # Docker 강력 청소 (사용하지 않는 이미지/볼륨까지 전부 삭제) - 매우 주의!
 dprune_full() {
-    cat <<-'EOF'
-⚠️  주의: Docker 전체 강력 청소를 수행합니다.
+    local bold blue green yellow red reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    blue=$(tput setaf 4 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    yellow=$(tput setaf 3 2>/dev/null || echo "")
+    red=$(tput setaf 1 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
 
-삭제 대상:
-  - 중지된 컨테이너
-  - 사용되지 않는 이미지(모든 태그)
-  - 사용되지 않는 네트워크
-  - 사용되지 않는 볼륨
+    cat <<EOF
+${bold}${red}⚠️  주의: Docker 전체 강력 청소를 수행합니다.${reset}
 
-명령어:
-  docker system prune -a --volumes -f
+${bold}삭제 대상:${reset}
+  ${yellow}- 중지된 컨테이너${reset}
+  ${yellow}- 사용되지 않는 이미지(모든 태그)${reset}
+  ${yellow}- 사용되지 않는 네트워크${reset}
+  ${yellow}- 사용되지 않는 볼륨${reset}
 
-정말 실행하시겠습니까? (YES 입력 시 진행)
+${bold}명령어:${reset}
+  ${green}docker system prune -a --volumes -f${reset}
+
+${bold}정말 실행하시겠습니까? (YES 입력 시 진행)${reset}
 EOF
 
     read -r answer
     if [ "$answer" = "YES" ]; then
-        echo "[Docker] docker system prune -a --volumes -f 실행..."
+        echo "${bold}${blue}[Docker]${reset} docker system prune -a --volumes -f 실행..."
         docker system prune -a --volumes -f
-        echo "✅ Docker 강력 청소 완료"
+        echo "${bold}${green}✅ Docker 강력 청소 완료${reset}"
     else
-        echo "⏹ 작업이 취소되었습니다."
+        echo "${bold}${yellow}⏹ 작업이 취소되었습니다.${reset}"
     fi
 }
 
@@ -175,23 +224,34 @@ dvol_rm() {
 
 # 모든 dangling 볼륨 일괄 삭제
 dvol_rm_dangling() {
-    local ids
+    local ids bold blue green yellow reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    blue=$(tput setaf 4 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    yellow=$(tput setaf 3 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
     ids=$(docker volume ls -f dangling=true -q)
     if [ -z "$ids" ]; then
-        echo "[Docker] 삭제할 dangling 볼륨이 없습니다."
+        echo "${bold}${yellow}⚠  삭제할 dangling 볼륨이 없습니다.${reset}"
         return 0
     fi
-    echo "[Docker] dangling 볼륨 삭제:"
-    echo "$ids"
+    echo "${bold}${blue}[Docker]${reset} dangling 볼륨 삭제:"
+    echo "${green}$ids${reset}"
     docker volume rm "$ids"
-    echo "✅ dangling 볼륨 삭제 완료"
+    echo "${bold}${green}✅ dangling 볼륨 삭제 완료${reset}"
 }
 
 # 컨테이너 환경변수 확인 (정렬)
 # 사용법: denv <container_name_or_id>
 denv() {
+    local bold green reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
     if [ -z "$1" ]; then
-        echo "사용법: denv <container_name_or_id>"
+        echo "${bold}${green}사용법:${reset} denv <container_name_or_id>"
         return 1
     fi
     docker exec "$1" env | sort
@@ -200,8 +260,13 @@ denv() {
 # docker inspect에서 Env 섹션 확인
 # 사용법: dinspect_env <container_name_or_id>
 dinspect_env() {
+    local bold green reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
     if [ -z "$1" ]; then
-        echo "사용법: dinspect_env <container_name_or_id>"
+        echo "${bold}${green}사용법:${reset} dinspect_env <container_name_or_id>"
         return 1
     fi
     docker inspect "$1" | grep -A 50 '"Env":'
@@ -209,25 +274,42 @@ dinspect_env() {
 
 # 사용되지 않는 네트워크 정리
 dnetwork_prune() {
-    echo "🧹 Docker network prune -f 실행 중..."
+    local bold green reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
+    echo "${bold}${green}🧹 Docker network prune -f 실행 중...${reset}"
     docker network prune -f
 }
 
 # 빌드 캐시 정리
 dbuild_prune() {
-    echo "🧹 Docker builder prune -f 실행 중..."
+    local bold green reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
+    echo "${bold}${green}🧹 Docker builder prune -f 실행 중...${reset}"
     docker builder prune -f
 }
 
 # 최근 N줄 로그만 보기 (기본 200줄)
 # 사용법: dlog_last <container_name> [줄수]
 dlog_last() {
+    local bold green yellow reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    yellow=$(tput setaf 3 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
+
     if [ -z "$1" ]; then
-        echo "사용법: dlog_last <container_name> [줄수]"
+        echo "${bold}${green}사용법:${reset} dlog_last <container_name> [줄수]"
         return 1
     fi
     local container="$1"
     local lines="${2:-200}"
+    echo "${bold}${yellow}[Docker]${reset} $container (최근 $lines줄):"
     docker logs --tail "$lines" "$container"
 }
 
@@ -235,34 +317,40 @@ dlog_last() {
 dexport() {
     local backup_dir="/home/bwyoon/dotfiles/backup"
     local containers
+    local bold blue green yellow reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    blue=$(tput setaf 4 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    yellow=$(tput setaf 3 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
 
-    echo "[Docker] 백업 디렉토리 확인: $backup_dir"
+    echo "${bold}${blue}[Docker]${reset} 백업 디렉토리 확인: ${yellow}$backup_dir${reset}"
     mkdir -p "$backup_dir"
 
     # 모든 컨테이너 이름 가져오기
     containers=$(docker ps -a --format "{{.Names}}")
 
     if [ -z "$containers" ]; then
-        echo "[Docker] 백업할 컨테이너가 없습니다."
+        echo "${bold}${yellow}⚠  백업할 컨테이너가 없습니다.${reset}"
         return 0
     fi
 
-    echo "[Docker] 다음 컨테이너를 백업합니다:"
-    echo "$containers"
+    echo "${bold}${blue}[Docker]${reset} 다음 컨테이너를 백업합니다:"
+    echo "${green}$containers${reset}"
     echo "----------------------------------------"
 
     # 각 컨테이너 export
     for name in $containers; do
-        echo "📦 Exporting $name..."
+        echo "📦 Exporting ${bold}$name${reset}..."
         if docker export "$name" >"$backup_dir/${name}.tar"; then
-            echo "✅ $name -> $backup_dir/${name}.tar 완료"
+            echo "${bold}${green}✅ $name → $backup_dir/${name}.tar 완료${reset}"
         else
-            echo "❌ $name 백업 실패"
+            echo "${bold}${yellow}❌ $name 백업 실패${reset}"
         fi
     done
 
     echo "----------------------------------------"
-    echo "🎉 모든 백업 작업이 완료되었습니다."
+    echo "${bold}${green}🎉 모든 백업 작업이 완료되었습니다.${reset}"
     ls -lh "$backup_dir"
 }
 
