@@ -37,6 +37,27 @@ alias gf='git fetch origin -p'
 alias gfu='git fetch upstream'      # upstream에서 fetch
 alias gfa='git fetch --all --prune' # 원격 전체 fetch + 필요없는 브랜치 정리
 alias gpl='git pull'                # 현재 브랜치만 pull
+alias grmc='git rm --cached'        # 파일을 스테이징에서 제거 (파일 시스템은 유지)
+
+# Git rm --cached 함수 (여러 파일 처리)
+git_rm_cached() {
+    if [ $# -eq 0 ]; then
+        echo "사용법: git_rm_cached <파일명> [파일명2] ..."
+        echo "예: git_rm_cached file.txt"
+        echo "예: git_rm_cached file1.txt file2.txt"
+        echo "⚠️ 스테이징에서 제거되지만 파일은 유지됩니다"
+        return 1
+    fi
+
+    for file in "$@"; do
+        if git rm --cached "$file"; then
+            echo "✅ 스테이징에서 제거됨: $file"
+        else
+            echo "❌ 제거 실패: $file"
+            return 1
+        fi
+    done
+}
 
 # Upstream 원격 저장소 추가 함수
 gupa() {
@@ -184,6 +205,7 @@ ${bold}${blue}[Git Quick Commands]${reset}
     ${green}gco${reset}        : git checkout (브랜치 전환)
     ${green}gd${reset}         : git diff (변경사항 확인)
     ${green}gb${reset}         : git branch (브랜치 목록)
+    ${green}grmc${reset}       : git rm --cached (스테이징에서 제거, 파일 유지)
 
   ${bold}${blue}Fetch & Sync:${reset}
     ${green}gf${reset}         : git fetch origin -p (origin fetch + prune)
