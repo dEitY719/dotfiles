@@ -35,7 +35,10 @@ dcl() {
         echo "예시:"
         echo "  dcl slea-backend              # compose 서비스 또는 컨테이너 이름"
         echo "  dcl slea-backend --tail 50    # 최근 50줄"
-        return 1
+        echo ""
+        echo "현재 실행 중인 컨테이너:"
+        docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" | head -20
+        return 0
     fi
 
     local service="$1"
@@ -404,7 +407,8 @@ ${bold}${blue}[Docker / Docker Compose Quick Commands]${reset}
     ${green}dcud${reset}         : docker compose up -d (항상 detached 실행)
     ${green}dcd${reset}          : docker compose down
     ${green}dcl${reset}          : 개선된 로그 조회 (compose 서비스 또는 컨테이너 이름 모두 지원)
-                   예) dcl slea-backend          (포어그라운드)
+                   예) dcl                       (도움말 + 실행 중인 컨테이너 목록)
+                       dcl slea-backend          (포어그라운드)
                        dcl slea-backend --tail 50 (최근 50줄)
     ${green}dce${reset}          : docker compose exec <svc> <cmd>
 
