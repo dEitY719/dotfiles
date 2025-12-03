@@ -10,7 +10,22 @@ alias gpfu='git push --set-upstream origin main --force-with-lease'
 # 사용 예시: main 브랜치가 원격보다 앞설 때, "rejected (fetch first)" 문제 해결용
 
 alias gpf_dev_server='git push -f origin HEAD:refs/heads/dev-server'
-alias git_log='git log --graph --pretty=format:"%Cred%h %C(bold blue)%d %Creset%s %Cgreen%ad %C(yellow)%an" --date=short'
+# Git log 함수 (default: 15개, -a/--all 옵션으로 모두 보기)
+git_log() {
+    local limit=(-n 15)
+    local git_args=()
+
+    # 옵션 처리
+    for arg in "$@"; do
+        if [[ "$arg" == "-a" ]] || [[ "$arg" == "--all" ]]; then
+            limit=()  # limit 제거
+        else
+            git_args+=("$arg")
+        fi
+    done
+
+    git log --graph --pretty=format:"%Cred%h %C(bold blue)%d %Creset%s %Cgreen%ad %C(yellow)%an" --date=short "${limit[@]}" "${git_args[@]}"
+}
 alias gl=git_log
 alias git_log2='git log --graph --decorate --date=short --abbrev-commit --pretty=oneline'
 alias gl2=git_log2
@@ -215,10 +230,10 @@ ${bold}${blue}[Git Quick Commands]${reset}
     ${green}gr${reset}         : git remote -v (원격 저장소 조회)
 
   ${bold}${blue}Logs:${reset}
-    ${green}gl${reset}         : git_log (그래프 형태 로그)
+    ${green}gl${reset}         : git_log (최근 15개, -a/--all로 모두 보기)
     ${green}gl1${reset}        : git log --oneline --graph --decorate
     ${green}gl2${reset}        : git_log2 (대체 로그 포맷)
-    ${green}git_log${reset}    : 컬러풀한 커밋 로그
+    ${green}git_log${reset}    : 컬러풀한 커밋 로그 (기본 15개, -a/--all 옵션 사용 가능)
     ${green}git_log2${reset}   : 간결한 한줄 로그
     ${green}glref${reset}      : git log ref/main --oneline (ref 원격 main 브랜치 한줄 로그)
 
