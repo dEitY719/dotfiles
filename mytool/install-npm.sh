@@ -109,7 +109,7 @@ EOF
         # PATH 설정 확인
         if ! echo "$PATH" | grep -q "$npm_prefix/bin"; then
             warning "PATH에 ${npm_prefix}/bin이 없습니다."
-            warning "~/.bashrc 또는 ~/.bash_profile에 다음을 추가하세요:"
+            warning "$HOME/.bashrc 또는 $HOME/.bash_profile에 다음을 추가하세요:"
             echo "  ${yellow}export PATH=\"\$HOME/.npm-global/bin:\$PATH\"${reset}"
         fi
     else

@@ -87,7 +87,7 @@ EOF
     local http_proxy https_proxy no_proxy
 
     echo "${bold}HTTP/HTTPS Proxy URL:${reset}"
-    read -p "  예) http://12.26.204.100:8080/ : " http_proxy
+    read -rp "  예) http://12.26.204.100:8080/ : " http_proxy
 
     if [ -z "$http_proxy" ]; then
         error "Proxy URL이 필요합니다."
@@ -99,7 +99,7 @@ EOF
     echo ""
     echo "${bold}NO_PROXY (쉼표로 구분, 선택사항):${reset}"
     echo "  예) localhost,127.0.0.1,.company.com,10.0.0.0/8"
-    read -p "  입력 (비워둘 수 있음): " no_proxy
+    read -rp "  입력 (비워둘 수 있음): " no_proxy
 
     # ========================================
     # Step 3: Create systemd drop-in directory
