@@ -13,7 +13,7 @@ alias dc='docker compose'          # 기본 compose 명령
 alias dcu='docker compose up'      # foreground 실행 (옵션 추가 가능: dcu -d 등)
 alias dcud='docker compose up -d'  # detached 모드 고정 실행
 alias dcd='docker compose down'    # 서비스 종료 + 네트워크 정리
-alias dcl='docker compose logs -f' # 서비스 로그 follow
+# dcl: 개선된 함수 (compose 서비스 또는 컨테이너 이름으로 로그 조회, 아래에 정의)
 alias dce='docker compose exec'    # 서비스 내 명령 실행 (dce app bash 등)
 
 # 🔹 Compose 추가 alias
@@ -23,6 +23,27 @@ alias dcr='docker compose restart'   # 서비스 재시작
 alias dcdv='docker compose down -v'  # 볼륨까지 삭제 (데이터 초기화)
 alias dcstop='docker compose stop'   # 컨테이너만 정지
 alias dcstart='docker compose start' # 정지된 컨테이너 시작
+
+# 개선된 dcl 함수: compose 서비스 또는 컨테이너 이름으로 로그 조회
+# 사용법: dcl <service_name_or_container>
+# 먼저 docker compose logs 시도 → 실패하면 docker logs로 자동 폴백
+unalias dcl 2>/dev/null  # 기존 alias 제거 (함수 정의 전)
+dcl() {
+    if [ -z "$1" ]; then
+        echo "사용법: dcl <service_name_or_container> [options]"
+        echo ""
+        echo "예시:"
+        echo "  dcl slea-backend              # compose 서비스 또는 컨테이너 이름"
+        echo "  dcl slea-backend --tail 50    # 최근 50줄"
+        return 1
+    fi
+
+    local service="$1"
+    shift  # 첫 번째 인자 제거 (나머지 옵션들을 위해)
+
+    # 먼저 docker compose logs 시도, 실패하면 docker logs로 폴백
+    docker compose logs -f "$service" "$@" 2>/dev/null || docker logs -f "$service" "$@"
+}
 
 # -------------------------------
 # Docker Standard Aliases
@@ -382,7 +403,9 @@ ${bold}${blue}[Docker / Docker Compose Quick Commands]${reset}
                        dcu -d          (옵션으로 detached 실행)
     ${green}dcud${reset}         : docker compose up -d (항상 detached 실행)
     ${green}dcd${reset}          : docker compose down
-    ${green}dcl${reset}          : docker compose logs -f
+    ${green}dcl${reset}          : 개선된 로그 조회 (compose 서비스 또는 컨테이너 이름 모두 지원)
+                   예) dcl slea-backend          (포어그라운드)
+                       dcl slea-backend --tail 50 (최근 50줄)
     ${green}dce${reset}          : docker compose exec <svc> <cmd>
 
   ${bold}${blue}🔹 Docker Compose 추가${reset}
