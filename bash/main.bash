@@ -183,6 +183,7 @@ EOF
         ["codexhelp"]="Codex CLI commands and aliases"
         ["dproxyhelp"]="Docker Proxy(Corporate) commands"
         ["npmhelp"]="NPM package manager commands"
+        ["litellm_help"]="LiteLLM commands and aliases"
     )
 
     local max_width=0

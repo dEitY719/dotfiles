@@ -325,7 +325,7 @@ litellm_test() {
 litellm_help() {
     cat <<EOF
 
-${bold}${blue}[LiteLLM 명령어 가이드]${reset}
+${bold}${blue}[LiteLLM commands and aliases]${reset}
 
 ${bold}${blue}기본 명령어:${reset}
   ${green}litellm_start${reset}           : LiteLLM 스택 시작 (make up)
