@@ -181,6 +181,8 @@ EOF
         ["apthelp"]="APT package manager commands"
         ["geminihelp"]="Gemini CLI commands and aliases"
         ["codexhelp"]="Codex CLI commands and aliases"
+        ["dproxyhelp"]="Docker Proxy(Corporate) commands"
+        ["npmhelp"]="NPM package manager commands"
     )
 
     local max_width=0
@@ -192,7 +194,7 @@ EOF
     done
 
     for func in "${help_funcs[@]}"; do
-        local desc="${help_descriptions[$func]:-No description available}"
+        local desc="${help_descriptions[$func]:-🚨 No description available}"
         printf "  ${green}%-${max_width}s${reset}  :  %s\n" "$func" "$desc"
     done
 

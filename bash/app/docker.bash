@@ -159,8 +159,28 @@ dvol_rm_dangling() {
     fi
     echo "[Docker] dangling 볼륨 삭제:"
     echo "$ids"
-    docker volume rm $ids
+    docker volume rm "$ids"
     echo "✅ dangling 볼륨 삭제 완료"
+}
+
+# 컨테이너 환경변수 확인 (정렬)
+# 사용법: denv <container_name_or_id>
+denv() {
+    if [ -z "$1" ]; then
+        echo "사용법: denv <container_name_or_id>"
+        return 1
+    fi
+    docker exec "$1" env | sort
+}
+
+# docker inspect에서 Env 섹션 확인
+# 사용법: dinspect_env <container_name_or_id>
+dinspect_env() {
+    if [ -z "$1" ]; then
+        echo "사용법: dinspect_env <container_name_or_id>"
+        return 1
+    fi
+    docker inspect "$1" | grep -A 50 '"Env":'
 }
 
 # 사용되지 않는 네트워크 정리
@@ -243,7 +263,7 @@ dproxy_setup() {
 }
 
 # Docker 회사 프록시 설정 도움말
-dproxy_help() {
+dproxyhelp() {
     local bold blue green yellow red reset
     bold=$(tput bold 2>/dev/null || echo "")
     blue=$(tput setaf 4 2>/dev/null || echo "")
@@ -300,7 +320,7 @@ ${bold}${blue}══════════════════════
 
 ${bold}빠른 명령어:${reset}
   ${green}dproxy_setup${reset}   : Proxy 설정 대화형 스크립트
-  ${green}dproxy_help${reset}    : 이 도움말 표시
+  ${green}dproxyhelp${reset}    : 이 도움말 표시
   ${green}dproxy_show${reset}    : 현재 Proxy 설정 확인
 
 EOF
@@ -400,9 +420,11 @@ ${bold}${blue}[Docker / Docker Compose Quick Commands]${reset}
     ${green}duninstall${reset}           : WSL Docker 제거 (대화형 스크립트)
     ${green}denable${reset}              : Docker 자동 시작 설정 (systemd)
     ${green}dproxy_setup${reset}         : 회사 프록시 설정 (대화형 스크립트)
-    ${green}dproxy_help${reset}          : 회사 프록시 설정 가이드 및 명령어 안내
+    ${green}dproxyhelp${reset}          : 회사 프록시 설정 가이드 및 명령어 안내
     ${green}dproxy_show${reset}          : 현재 회사 프록시 설정 확인
     ${green}dbash <name>${reset}         : 컨테이너 쉘 접속 (bash 없으면 sh로 자동 시도)
+    ${green}denv <name>${reset}          : 컨테이너 환경변수 확인 (docker exec env | sort)
+    ${green}dinspect_env <name>${reset}  : docker inspect에서 Env 섹션 확인 (-A 50줄)
     ${green}dstopall${reset}             : 모든 실행 중 컨테이너 정지
     ${green}drmall${reset}               : 중지 포함 모든 컨테이너 삭제
     ${green}drm_dangling${reset}         : dangling 이미지 삭제
