@@ -30,7 +30,7 @@ LiteLLM은 여러 LLM 공급자(Gemini, OpenAI 등)를 통합하는 프록시 �
 LITELLM_DOC
 
 # ===== 색상 정의 =====
-if command -v tput &> /dev/null; then
+if command -v tput &>/dev/null; then
     bold=$(tput bold)
     blue=$(tput setaf 4)
     green=$(tput setaf 2)
@@ -78,15 +78,15 @@ _get_configured_models() {
         return
     fi
 
-    grep "model_name:" "$LITELLM_PROJECT_PATH/litellm_settings.yml" | \
-        sed 's/.*model_name: //' | \
+    grep "model_name:" "$LITELLM_PROJECT_PATH/litellm_settings.yml" |
+        sed 's/.*model_name: //' |
         tr -d ' '
 }
 
 # 실제 로드된 모델 목록 조회
 _get_loaded_models() {
     curl -s "${LITELLM_URL}/models" \
-        -H "Authorization: Bearer ${LITELLM_API_KEY}" 2>/dev/null | \
+        -H "Authorization: Bearer ${LITELLM_API_KEY}" 2>/dev/null |
         grep -o '"id":"[^"]*"' | cut -d'"' -f4 | sort
 }
 
@@ -149,7 +149,7 @@ litellm_start() {
     cd "$LITELLM_PROJECT_PATH" || return 1
 
     echo "Docker Compose로 서비스 시작 중..."
-    if docker compose up -d > /dev/null 2>&1; then
+    if docker compose up -d >/dev/null 2>&1; then
         echo "${green}✓ 컨테이너 시작 완료${reset}"
     else
         echo "${red}❌ 컨테이너 시작 실패${reset}"

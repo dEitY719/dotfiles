@@ -5,12 +5,12 @@ DOTFILES_BASH_FULL_PATH="$(realpath "${BASH_SOURCE[0]}")"
 DOTFILES_BASH_DIR="$(dirname "${DOTFILES_BASH_FULL_PATH}")"
 export DOTFILES_BASH_DIR
 
-# --- Logging Initialization ---
-# beauty_log.bash 로드 후 init_logging 호출
-# (log_* 함수와 스피너 사용)
+# --- UX Library Initialization ---
+# Load central UX library for consistent styling across all functions
+# This provides: colors, output functions, progress indicators, interactive prompts, tables
+# Replaces the old beauty_log.bash and log_util.bash system
 # shellcheck source=/dev/null
-source "${DOTFILES_BASH_DIR}/core/beauty_log.bash"
-# init_logging "${DOTFILES_BASH_DIR}"
+source "${DOTFILES_BASH_DIR}/core/ux_lib.bash"
 
 # 로딩 시작 스피너
 # echo ""
@@ -50,14 +50,14 @@ safe_source() {
         ((++SOURCED_FILES_COUNT))
     else
         # 오류 로깅은 하되, 초기화 흐름은 끊지 않음
-        log_error "${error_msg}: ${file_path}" || true
+        ux_error "${error_msg}: ${file_path}" || true
     fi
 }
 
 # ------------------------------------------------------------------
-# --- WSL 기본 bashrc 로드 ---
-DEFAULT_WSL_BASHRC_PATH="${DOTFILES_BASH_DIR}/core/default_wsl_bashrc.bash"
-safe_source "${DEFAULT_WSL_BASHRC_PATH}" "Core WSL bashrc file not found"
+# NOTE: WSL default bashrc has been replaced by env/bash_settings.bash
+# The old default_wsl_bashrc.bash has been deprecated
+# Essential settings are now loaded via env/bash_settings.bash
 
 # ------------------------------------------------------------------
 # 글롭이 비었을 때 '*.bash' 리터럴이 루프에 들어가지 않도록 nullglob 사용
@@ -67,53 +67,38 @@ if shopt -q nullglob; then
 fi
 shopt -s nullglob
 
-# --- 환경 변수 스크립트 로드 ---
-ENV_DIR="${DOTFILES_BASH_DIR}/env"
-for f in "${ENV_DIR}/"*.bash; do
-    # log_util.bash는 core에 있으므로 일반적으로 여기에 해당 없음 (예외 방어 남김)
-    if [[ "$f" == "${DOTFILES_BASH_DIR}/core/log_util.bash" ]]; then
-        continue
-    fi
+# ------------------------------------------------------------------
+# --- Load modules in priority order ---
+# ------------------------------------------------------------------
+# Priority 1: ENV directory (environment variables must be loaded first)
+# Priority 2: All other directories (auto-discovered, no manual addition needed)
+
+# --- Load ENV directory first (environment variables) ---
+for f in "${DOTFILES_BASH_DIR}/env/"*.bash; do
+    [ -f "$f" ] || continue
     safe_source "$f" "Environment variable file not found"
 done
 
-# --- Load local environment overrides (not tracked by git) ---
-if [[ -f "${ENV_DIR}/local.bash" ]]; then
-    safe_source "${ENV_DIR}/local.bash" "Local environment file not found"
-fi
+# --- Auto-load all other directories ---
+# This automatically discovers and loads all .bash files from subdirectories
+# New directories are automatically included without modifying this file
+for dir in "${DOTFILES_BASH_DIR}"/*; do
+    [ -d "$dir" ] || continue
 
-# --- Aliases ---
-ALIAS_DIR="${DOTFILES_BASH_DIR}/alias"
-for f in "${ALIAS_DIR}/"*.bash; do
-    safe_source "$f" "Alias file not found"
-done
+    dir_name=$(basename "$dir")
 
-# --- Load local aliases (not tracked by git) ---
-if [[ -f "${ALIAS_DIR}/local.bash" ]]; then
-    safe_source "${ALIAS_DIR}/local.bash" "Local alias file not found"
-fi
+    # Skip special directories that shouldn't be auto-loaded
+    [[ "$dir_name" == "core" ]] && continue      # Already loaded (ux_lib.bash)
+    [[ "$dir_name" == "env" ]] && continue       # Already loaded above
+    [[ "$dir_name" == "scripts" ]] && continue   # Executable scripts, not sourced
+    [[ "$dir_name" == "config" ]] && continue    # Configuration files only
+    [[ "$dir_name" == "claude" ]] && continue    # Claude-specific settings
 
-# --- App settings ---
-APP_DIR="${DOTFILES_BASH_DIR}/app"
-for f in "${APP_DIR}/"*.bash; do
-    safe_source "$f" "Application setting file not found"
-done
-
-# --- Load local app configurations (not tracked by git) ---
-if [[ -f "${APP_DIR}/local.bash" ]]; then
-    safe_source "${APP_DIR}/local.bash" "Local app file not found"
-fi
-
-# --- Core utilities ---
-COREUTILS_DIR="${DOTFILES_BASH_DIR}/coreutils"
-for f in "${COREUTILS_DIR}/"*.bash; do
-    safe_source "$f" "Core Utils setting file not found"
-done
-
-# --- Utilities ---
-UTIL_DIR="${DOTFILES_BASH_DIR}/util"
-for f in "${UTIL_DIR}/"*.bash; do
-    safe_source "$f" "Utility setting file not found"
+    # Load all .bash files in this directory (including local.bash)
+    for f in "$dir"/*.bash; do
+        [ -f "$f" ] || continue
+        safe_source "$f" "File not found in $dir_name"
+    done
 done
 
 # --- Restore nullglob to previous state ---
@@ -133,27 +118,13 @@ clean_paths
 # ------------------------------------------------------------------
 # --- Master Help Function ---
 # Automatically detects and lists all *help() functions
+# Now uses the central UX library for consistent styling
 # ------------------------------------------------------------------
 myhelp() {
-    # Color definitions
-    local bold blue green yellow cyan reset
-    bold=$(tput bold 2>/dev/null || echo "")
-    blue=$(tput setaf 4 2>/dev/null || echo "")
-    green=$(tput setaf 2 2>/dev/null || echo "")
-    yellow=$(tput setaf 3 2>/dev/null || echo "")
-    cyan=$(tput setaf 6 2>/dev/null || echo "")
-    reset=$(tput sgr0 2>/dev/null || echo "")
+    # UX library is already loaded globally in main.bash
+    ux_header "Dotfiles Help Functions"
 
-    cat <<EOF
-
-${bold}${blue}╔════════════════════════════════════════════════════════════════╗${reset}
-${bold}${blue}║                   Dotfiles Help Functions                      ║${reset}
-${bold}${blue}╚════════════════════════════════════════════════════════════════╝${reset}
-
-EOF
-
-    echo "${bold}${blue}Available help commands:${reset}"
-    echo ""
+    ux_section "Available help commands"
 
     # Automatically detect all functions ending with 'help' (excluding myhelp itself)
     local help_funcs=()
@@ -184,8 +155,10 @@ EOF
         ["dproxyhelp"]="Docker Proxy(Corporate) commands"
         ["npmhelp"]="NPM package manager commands"
         ["litellm_help"]="LiteLLM commands and aliases"
+        ["uxhelp"]="UX library functions and styling guide"
     )
 
+    # Calculate max width for alignment
     local max_width=0
     local func
     for func in "${help_funcs[@]}"; do
@@ -194,19 +167,20 @@ EOF
         fi
     done
 
+    # Display help functions
     for func in "${help_funcs[@]}"; do
-        local desc="${help_descriptions[$func]:-🚨 No description available}"
-        printf "  ${green}%-${max_width}s${reset}  :  %s\n" "$func" "$desc"
+        local desc="${help_descriptions[$func]:-No description available}"
+        printf "  ${UX_SUCCESS}%-${max_width}s${UX_RESET}  ${UX_MUTED}:${UX_RESET}  %s\n" "$func" "$desc"
     done
 
-    cat <<EOF
-
-${bold}${blue}Usage:${reset} Type any of the above commands to see detailed help.
-${bold}${blue}Example:${reset} ${cyan}githelp${reset}, ${cyan}uvhelp${reset}, ...
-
-${bold}${yellow}To add a new help function:${reset}
-  1. Create a function ending with 'help' (e.g., dockerhelp)
-  2. It will be automatically detected by ${green}myhelp()${reset}
-
-EOF
+    echo ""
+    ux_divider
+    echo ""
+    ux_info "Type any of the above commands to see detailed help"
+    echo "  ${UX_MUTED}Example:${UX_RESET} ${UX_INFO}githelp${UX_RESET}, ${UX_INFO}uvhelp${UX_RESET}, ${UX_INFO}dockerhelp${UX_RESET}"
+    echo ""
+    ux_warning "To add a new help function:"
+    ux_bullet "Create a function ending with 'help' (e.g., dockerhelp)"
+    ux_bullet "It will be automatically detected by ${UX_SUCCESS}myhelp${UX_RESET}"
+    echo ""
 }

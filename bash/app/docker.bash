@@ -9,12 +9,12 @@
 # 구버전(V1: docker-compose) 사용 시 아래의 'docker compose'를 'docker-compose'로 변경하세요.
 
 # 🔹 Compose 기본 단축키 (요청하신 핵심 6개)
-alias dc='docker compose'          # 기본 compose 명령
-alias dcu='docker compose up'      # foreground 실행 (옵션 추가 가능: dcu -d 등)
-alias dcud='docker compose up -d'  # detached 모드 고정 실행
-alias dcd='docker compose down'    # 서비스 종료 + 네트워크 정리
+alias dc='docker compose'         # 기본 compose 명령
+alias dcu='docker compose up'     # foreground 실행 (옵션 추가 가능: dcu -d 등)
+alias dcud='docker compose up -d' # detached 모드 고정 실행
+alias dcd='docker compose down'   # 서비스 종료 + 네트워크 정리
 # dcl: 개선된 함수 (compose 서비스 또는 컨테이너 이름으로 로그 조회, 아래에 정의)
-alias dce='docker compose exec'    # 서비스 내 명령 실행 (dce app bash 등)
+alias dce='docker compose exec' # 서비스 내 명령 실행 (dce app bash 등)
 
 # 🔹 Compose 추가 alias
 alias dcps='docker compose ps'       # compose 서비스 상태
@@ -27,37 +27,55 @@ alias dcstart='docker compose start' # 정지된 컨테이너 시작
 # 개선된 dcl 함수: compose 서비스 또는 컨테이너 이름으로 로그 조회
 # 사용법: dcl <service_name_or_container>
 # 먼저 docker compose logs 시도 → 실패하면 docker logs로 자동 폴백
-unalias dcl 2>/dev/null  # 기존 alias 제거 (함수 정의 전)
+# Now uses central UX library for consistent styling
+unalias dcl 2>/dev/null # 기존 alias 제거 (함수 정의 전)
 dcl() {
-    local bold blue green yellow reset
-    bold=$(tput bold 2>/dev/null || echo "")
-    blue=$(tput setaf 4 2>/dev/null || echo "")
-    green=$(tput setaf 2 2>/dev/null || echo "")
-    yellow=$(tput setaf 3 2>/dev/null || echo "")
-    reset=$(tput sgr0 2>/dev/null || echo "")
-
+    # UX library is already loaded globally in main.bash
     if [ -z "$1" ]; then
+        ux_header "Docker Compose Logs (dcl)"
+
+        ux_section "Usage"
+        echo "  ${UX_SUCCESS}dcl${UX_RESET} ${UX_MUTED}<service_name_or_container> [options]${UX_RESET}"
         echo ""
-        echo "${bold}${blue}Docker Compose Logs (dcl)${reset}"
+
+        ux_section "Examples"
+        echo "  ${UX_MUTED}#${UX_RESET} View logs for a service or container"
+        echo "  ${UX_INFO}dcl slea-backend${UX_RESET}"
         echo ""
-        echo "${bold}사용법:${reset}"
-        echo "  ${green}dcl <service_name_or_container> [options]${reset}"
+        echo "  ${UX_MUTED}#${UX_RESET} Follow last 50 lines"
+        echo "  ${UX_INFO}dcl slea-backend --tail 50${UX_RESET}"
         echo ""
-        echo "${bold}예시:${reset}"
-        echo "  ${yellow}dcl slea-backend${reset}              # compose 서비스 또는 컨테이너 이름"
-        echo "  ${yellow}dcl slea-backend --tail 50${reset}    # 최근 50줄"
+        echo "  ${UX_MUTED}#${UX_RESET} Follow logs in real-time with timestamps"
+        echo "  ${UX_INFO}dcl slea-backend -f --timestamps${UX_RESET}"
         echo ""
-        echo "${bold}${blue}현재 실행 중인 컨테이너:${reset}"
-        docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" | head -20
+
+        ux_section "Currently Running Containers"
+        if docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" 2>/dev/null | tail -n +2 | head -20; then
+            echo ""
+        else
+            ux_warning "No running containers found"
+            echo ""
+        fi
+
+        ux_info "Run ${UX_BOLD}dockerhelp${UX_RESET} for more Docker commands"
         echo ""
         return 0
     fi
 
     local service="$1"
-    shift  # 첫 번째 인자 제거 (나머지 옵션들을 위해)
+    shift # 첫 번째 인자 제거 (나머지 옵션들을 위해)
 
     # 먼저 docker compose logs 시도, 실패하면 docker logs로 폴백
-    docker compose logs -f "$service" "$@" 2>/dev/null || docker logs -f "$service" "$@"
+    if docker compose logs -f "$service" "$@" 2>/dev/null; then
+        return 0
+    elif docker logs -f "$service" "$@" 2>/dev/null; then
+        return 0
+    else
+        ux_error "Service or container '${service}' not found"
+        echo ""
+        ux_info "Run ${UX_BOLD}dcl${UX_RESET} without arguments to see available containers"
+        return 1
+    fi
 }
 
 # -------------------------------
@@ -81,17 +99,30 @@ alias dinspect='docker inspect' # 컨테이너/이미지 상세 정보
 
 # 컨테이너 쉘 접속 (bash 우선, 없으면 sh)
 # 사용법: dbash <container_name_or_id>
+# Now uses central UX library for consistent styling
 dbash() {
-    local bold green reset
-    bold=$(tput bold 2>/dev/null || echo "")
-    green=$(tput setaf 2 2>/dev/null || echo "")
-    reset=$(tput sgr0 2>/dev/null || echo "")
-
+    # UX library is already loaded globally in main.bash
     if [ -z "$1" ]; then
-        echo "${bold}${green}사용법:${reset} dbash <container_name_or_id>"
+        ux_usage "dbash" "<container_name_or_id>" "Access container shell (tries bash, falls back to sh)"
+        echo ""
+        ux_section "Running Containers"
+        docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" 2>/dev/null || ux_error "Docker is not running"
+        echo ""
         return 1
     fi
-    docker exec -it "$1" /bin/bash 2>/dev/null || docker exec -it "$1" /bin/sh
+
+    local container="$1"
+
+    # Try bash first, fallback to sh
+    if docker exec -it "$container" /bin/bash 2>/dev/null; then
+        return 0
+    elif docker exec -it "$container" /bin/sh 2>/dev/null; then
+        return 0
+    else
+        ux_error "Cannot access shell for container '${container}'"
+        ux_info "Make sure the container is running: ${UX_BOLD}docker ps${UX_RESET}"
+        return 1
+    fi
 }
 
 # 실행 중인 모든 컨테이너 정지
