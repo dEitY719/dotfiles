@@ -102,6 +102,9 @@ ux_spinner() {
     # Hide cursor
     tput civis 2>/dev/null || true
 
+    # Safety: Restore cursor on Ctrl+C or exit
+    trap 'tput cnorm 2>/dev/null || true' EXIT INT TERM
+
     while kill -0 "$pid" 2>/dev/null; do
         printf "\r${UX_INFO}${frames[$i]}${UX_RESET} $message..."
         i=$(( (i + 1) % ${#frames[@]} ))
@@ -110,6 +113,7 @@ ux_spinner() {
 
     # Show cursor
     tput cnorm 2>/dev/null || true
+    trap - EXIT INT TERM
 
     # Clear the line and show completion
     printf "\r${UX_SUCCESS}✅${UX_RESET} $message... Done!\n"
