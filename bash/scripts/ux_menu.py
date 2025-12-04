@@ -52,11 +52,21 @@ def show_menu(title: str, options: List[str], allow_cancel: bool = True) -> Opti
         except (ValueError, KeyboardInterrupt):
             console.print("[red]Invalid selection or cancelled[/red]")
             return None # Return None on invalid input or Ctrl+C
+        except EOFError:
+            # Handle case where input stream is closed (e.g. piped input issue)
+            return None
 
 if __name__ == "__main__":
+    stderr_console = Console(stderr=True)
+    
+    # Check for command line argument
+    if len(sys.argv) < 2:
+        stderr_console.print("[red]Error: JSON configuration required as first argument[/red]")
+        sys.exit(2)
+        
     try:
-        # Read menu config from stdin
-        config = json.loads(sys.stdin.read())
+        config_json = sys.argv[1]
+        config = json.loads(config_json)
 
         result = show_menu(
             title=config["title"],
@@ -70,8 +80,8 @@ if __name__ == "__main__":
         else:
             sys.exit(1) # Indicate cancellation or invalid input
     except json.JSONDecodeError:
-        Console().print("[red]Error: Invalid JSON input for ux_menu.py[/red]", file=sys.stderr)
+        stderr_console.print("[red]Error: Invalid JSON input argument[/red]")
         sys.exit(2)
     except Exception as e:
-        Console().print(f"[red]An unexpected error occurred: {e}[/red]", file=sys.stderr)
+        stderr_console.print(f"[red]An unexpected error occurred: {e}[/red]")
         sys.exit(3)

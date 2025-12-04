@@ -254,7 +254,8 @@ ux_menu() {
             '{title: $title, options: $options, allow_cancel: true}')
 
         local result
-        result=$(echo "$config" | python3 "$menu_script")
+        # Pass config as argument, ensuring stdin is connected to tty for interaction
+        result=$(python3 "$menu_script" "$config" < /dev/tty)
         
         # Check Python script's exit code for cancellation
         if [ $? -eq 0 ]; then
