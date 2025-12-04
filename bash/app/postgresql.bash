@@ -96,7 +96,7 @@ _register_aliases() {
 }
 
 # Initial Load
-if [[ -f "$PG_SERVICES_FILE" ]]; then
+if [[ -f "$PG_SERVICES_FILE" ]] && [[ $- == *i* ]]; then
     _generate_pg_service_conf
     _register_aliases
 fi

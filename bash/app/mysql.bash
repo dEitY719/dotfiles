@@ -127,29 +127,27 @@ services=(
 MYSQL_CNF_FILE="$HOME/.my.cnf"
 
 # -------------------------------
-# 0) 기존 파일 삭제 후 새로 생성
+# 0) MySQL Config Update Function
 # -------------------------------
-rm -f "$MYSQL_CNF_FILE"
-touch "$MYSQL_CNF_FILE"
-chmod 600 "$MYSQL_CNF_FILE"
+mysql_update_config() {
+    # 기존 파일 삭제 후 새로 생성
+    rm -f "$MYSQL_CNF_FILE"
+    touch "$MYSQL_CNF_FILE"
+    chmod 600 "$MYSQL_CNF_FILE"
 
-# -------------------------------
-# 1) 기존 mysql_* alias 삭제
-# -------------------------------
-for a in $(alias | grep -oP "^mysql_\w+" 2>/dev/null); do
-    unalias "$a" 2>/dev/null
-done
+    # 기존 mysql_* alias 삭제
+    for a in $(alias | grep -oP "^mysql_\w+" 2>/dev/null); do
+        unalias "$a" 2>/dev/null
+    done
 
-# -------------------------------
-# 2) 서비스 배열 기반으로 파일/alias 업데이트
-# -------------------------------
-for entry in "${services[@]}"; do
-    service_name=$(echo "$entry" | awk '{print $1}')
-    db_name=$(echo "$entry" | awk '{print $2}')
-    db_user=$(echo "$entry" | awk '{print $3}')
-    db_pass=$(echo "$entry" | awk '{print $4}')
+    # 서비스 배열 기반으로 파일/alias 업데이트
+    for entry in "${services[@]}"; do
+        service_name=$(echo "$entry" | awk '{print $1}')
+        db_name=$(echo "$entry" | awk '{print $2}')
+        db_user=$(echo "$entry" | awk '{print $3}')
+        db_pass=$(echo "$entry" | awk '{print $4}')
 
-    cat >>"$MYSQL_CNF_FILE" <<EOF
+        cat >>"$MYSQL_CNF_FILE" <<EOF
 
 [client_$service_name]
 user=$db_user
@@ -158,10 +156,18 @@ host=localhost
 database=$db_name
 EOF
 
-    alias_name="mysql_$service_name"
-    # shellcheck disable=SC2139
-    alias "$alias_name"="mysql --defaults-group-suffix=_$service_name"
-done
+        alias_name="mysql_$service_name"
+        # shellcheck disable=SC2139
+        alias "$alias_name"="mysql --defaults-group-suffix=_$service_name"
+    done
+}
+
+# -------------------------------
+# 1) Auto-run only in interactive mode
+# -------------------------------
+if [[ $- == *i* ]]; then
+    mysql_update_config
+fi
 
 # -------------------------------
 # 3) MySQL alias list

@@ -1,5 +1,20 @@
 # ~/dotfiles/bash/main.bash
 
+# --- Initialization Guards ---
+# Prevent loading in non-interactive shells or specific environments (like Codex CLI)
+# to avoid permission errors, timeouts, and unwanted side effects.
+if [[ $- != *i* ]] && [[ -z "$DOTFILES_FORCE_INIT" ]]; then
+    return
+fi
+
+if [[ -n "$DOTFILES_SKIP_INIT" ]]; then
+    return
+fi
+
+if [[ -n "$CODEX_CLI" ]]; then
+    return
+fi
+
 # Set the base directory for dotfiles bash configurations
 DOTFILES_BASH_FULL_PATH="$(realpath "${BASH_SOURCE[0]}")"
 DOTFILES_BASH_DIR="$(dirname "${DOTFILES_BASH_FULL_PATH}")"
