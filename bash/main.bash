@@ -3,16 +3,44 @@
 # --- Initialization Guards ---
 # Prevent loading in non-interactive shells or specific environments (like Codex CLI)
 # to avoid permission errors, timeouts, and unwanted side effects.
-if [[ $- != *i* ]] && [[ -z "$DOTFILES_FORCE_INIT" ]]; then
-    return
-fi
 
-if [[ -n "$DOTFILES_SKIP_INIT" ]]; then
-    return
-fi
+# 1. Check for Codex Environment (npm managed or explicit CLI flag)
+is_codex_env() {
+    [[ -n "$CODEX_CLI" ]] || [[ -n "$CODEX_MANAGED_BY_NPM" ]]
+}
 
-if [[ -n "$CODEX_CLI" ]]; then
-    return
+# 2. Main Guard Logic
+# Skip if:
+# - Non-interactive shell AND no force flag
+# - Explicit skip flag is set
+# - Codex environment detected (unless forced)
+should_skip_init() {
+    if [[ -n "$DOTFILES_FORCE_INIT" ]]; then
+        return 1 # Do not skip
+    fi
+
+    if [[ $- != *i* ]]; then
+        return 0 # Skip (Non-interactive)
+    fi
+
+    if [[ -n "$DOTFILES_SKIP_INIT" ]]; then
+        return 0 # Skip (Explicit skip)
+    fi
+
+    if is_codex_env; then
+        return 0 # Skip (Codex)
+    fi
+
+    return 1 # Do not skip
+}
+
+if should_skip_init; then
+    # Handle "return" vs "exit" depending on how the script was invoked
+    if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+        return 0
+    else
+        exit 0
+    fi
 fi
 
 # Set the base directory for dotfiles bash configurations

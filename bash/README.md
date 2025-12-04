@@ -16,6 +16,14 @@ bash/
 └── setup.sh            # Setup script (creates symlinks)
 ```
 
+## Environment Control Variables
+
+You can control the loading behavior of the dotfiles using the following environment variables:
+
+- **`DOTFILES_FORCE_INIT`**: Set this to `1` (or any non-empty value) to force loading the dotfiles configuration even in non-interactive shells or restricted environments (like Codex). This also forces the regeneration of dynamic configurations (MySQL, PostgreSQL).
+- **`DOTFILES_SKIP_INIT`**: Set this to `1` to explicitly skip loading the dotfiles configuration.
+- **`CODEX_MANAGED_BY_NPM` / `CODEX_CLI`**: Automatically detected to prevent loading in Codex CLI environments to avoid permission errors and timeouts.
+
 ## Module Loading Order
 
 Files are loaded in the following order (see `main.bash`):

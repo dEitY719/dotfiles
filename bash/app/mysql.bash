@@ -163,9 +163,9 @@ EOF
 }
 
 # -------------------------------
-# 1) Auto-run only in interactive mode
+# 1) Auto-run only in interactive mode (or if forced)
 # -------------------------------
-if [[ $- == *i* ]]; then
+if [[ $- == *i* ]] || [[ -n "$DOTFILES_FORCE_INIT" ]]; then
     mysql_update_config
 fi
 
