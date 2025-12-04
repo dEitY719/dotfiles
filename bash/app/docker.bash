@@ -65,17 +65,24 @@ dcl() {
     local service="$1"
     shift # 첫 번째 인자 제거 (나머지 옵션들을 위해)
 
-    # 먼저 docker compose logs 시도 → 실패하면 docker logs로 폴백
-    if docker compose logs -f "$service" "$@" 2>/dev/null; then
+    # 1. Try to identify as a Docker Compose service
+    # We check 'docker compose config --services' to verify existence without running logs yet.
+    # This prevents 'docker compose logs' from swallowing stderr (app logs) via the old 2>/dev/null method.
+    if docker compose config --services 2>/dev/null | grep -qFx "$service"; then
+        docker compose logs -f "$service" "$@"
         return 0
-    elif docker logs -f "$service" "$@" 2>/dev/null; then
-        return 0
-    else
-        ux_error "Service or container '${service}' not found"
-        echo ""
-        ux_info "Run ${UX_BOLD}dcl${UX_RESET} without arguments to see available containers"
-        return 1
     fi
+
+    # 2. Fallback: Check if it's a valid container name/ID
+    if docker container inspect "$service" >/dev/null 2>&1; then
+        docker logs -f "$service" "$@"
+        return 0
+    fi
+
+    ux_error "Service or container '${service}' not found"
+    echo ""
+    ux_info "Run ${UX_BOLD}dcl${UX_RESET} without arguments to see available containers"
+    return 1
 }
 
 # Filter dcl logs for errors
