@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Progress bar for long-running operations"""
 
+import subprocess
 import sys
 import time
-import subprocess
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+
 from rich.console import Console
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 
 console = Console()
+
 
 def run_with_progress(command: str, description: str, total_steps: int = 100):
     """Run a command with a progress bar"""
@@ -17,21 +19,15 @@ def run_with_progress(command: str, description: str, total_steps: int = 100):
         BarColumn(),
         TaskProgressColumn(),
         console=console,
-        transient=True
+        transient=True,
     ) as progress:
         task = progress.add_task(description, total=total_steps)
 
-        process = subprocess.Popen(
-            command,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
         stdout_lines = []
         stderr_lines = []
-        
+
         # Read stdout/stderr line by line to keep track of progress and capture output
         # This is a simplified progress; a more advanced one would parse progress from command output
         # For now, we just advance the bar periodically
@@ -44,7 +40,7 @@ def run_with_progress(command: str, description: str, total_steps: int = 100):
                     stdout_lines.append(line)
             except Exception:
                 pass
-            
+
             try:
                 err_line = process.stderr.readline()
                 if err_line:
@@ -52,17 +48,17 @@ def run_with_progress(command: str, description: str, total_steps: int = 100):
             except Exception:
                 pass
 
-            if (time.time() - start_time) * 10 < total_steps: # Advance roughly for up to 10 seconds of process
+            if (time.time() - start_time) * 10 < total_steps:  # Advance roughly for up to 10 seconds of process
                 progress.update(task, advance=1)
             time.sleep(0.1)
-        
+
         # Ensure all remaining output is read
         for line in process.stdout.readlines():
             stdout_lines.append(line)
         for line in process.stderr.readlines():
             stderr_lines.append(line)
 
-        progress.update(task, completed=total_steps) # Mark as complete
+        progress.update(task, completed=total_steps)  # Mark as complete
 
         # Print captured output if any, especially stderr
         if stdout_lines:
@@ -71,6 +67,7 @@ def run_with_progress(command: str, description: str, total_steps: int = 100):
             console.print(f"[dim red]Command stderr:[/dim red]\n{''.join(stderr_lines).strip()}")
 
         return process.returncode
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

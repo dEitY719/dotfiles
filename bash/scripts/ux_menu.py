@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Interactive menu system for bash functions"""
 
-import sys
 import json
-from typing import List, Optional
+import sys
+
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
@@ -11,15 +11,16 @@ from rich.table import Table
 # Initialize console to write to stderr so UI is visible even when stdout is captured
 console = Console(stderr=True)
 
-def show_menu(title: str, options: List[str], allow_cancel: bool = True) -> Optional[int]:
+
+def show_menu(title: str, options: list[str], allow_cancel: bool = True) -> int | None:
     """
     Display an interactive menu and return selected index
-    
+
     Args:
         title: Menu title
         options: List of option strings
         allow_cancel: Whether to show cancel option
-        
+
     Returns:
         Selected index (0-based) or None if cancelled
     """
@@ -43,7 +44,7 @@ def show_menu(title: str, options: List[str], allow_cancel: bool = True) -> Opti
                 "\n[yellow]Select an option[/yellow]",
                 choices=[str(i) for i in range(len(options) + 1)],
                 show_choices=False,
-                console=console
+                console=console,
             )
 
             choice_num = int(choice)
@@ -53,34 +54,33 @@ def show_menu(title: str, options: List[str], allow_cancel: bool = True) -> Opti
                 return choice_num - 1
         except (ValueError, KeyboardInterrupt):
             console.print("[red]Invalid selection or cancelled[/red]")
-            return None # Return None on invalid input or Ctrl+C
+            return None  # Return None on invalid input or Ctrl+C
         except EOFError:
             # Handle case where input stream is closed (e.g. piped input issue)
             return None
 
+
 if __name__ == "__main__":
     stderr_console = Console(stderr=True)
-    
+
     # Check for command line argument
     if len(sys.argv) < 2:
         stderr_console.print("[red]Error: JSON configuration required as first argument[/red]")
         sys.exit(2)
-        
+
     try:
         config_json = sys.argv[1]
         config = json.loads(config_json)
 
         result = show_menu(
-            title=config["title"],
-            options=config["options"],
-            allow_cancel=config.get("allow_cancel", True)
+            title=config["title"], options=config["options"], allow_cancel=config.get("allow_cancel", True)
         )
 
         if result is not None:
             print(result)
             sys.exit(0)
         else:
-            sys.exit(1) # Indicate cancellation or invalid input
+            sys.exit(1)  # Indicate cancellation or invalid input
     except json.JSONDecodeError:
         stderr_console.print("[red]Error: Invalid JSON input argument[/red]")
         sys.exit(2)
