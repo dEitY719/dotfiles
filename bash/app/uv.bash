@@ -29,7 +29,7 @@ alias uvc='uv pip compile pyproject.toml -o requirements.txt'
 alias uvr='uv pip sync requirements.txt'
 
 # (4) 클린 동기화 (여분 패키지 제거, 기본 동작과 동일)
-alias uvclean='uv sync --clean'
+alias uvclean='uv sync'
 
 # (5) 상태/검증
 alias uvcheck='uv pip check'
@@ -54,7 +54,7 @@ uvhelp() {
     echo ""
 
     ux_section "Maintenance"
-    ux_table_row "uvclean" "uv sync --clean" "Remove unused"
+    ux_table_row "uvclean" "uv sync" "Remove unused (default)"
     ux_table_row "uvcheck" "uv pip check" "Verify env"
     echo ""
 
