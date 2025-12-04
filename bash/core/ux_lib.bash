@@ -155,6 +155,28 @@ ux_with_spinner() {
     return $exit_code
 }
 
+# Run a command with a Python-based Rich progress bar or a basic spinner fallback
+# Usage: ux_with_progress "Message" command args...
+ux_with_progress() {
+    local message="$1"
+    shift
+    local cmd=("$@")
+    local progress_script="${DOTFILES_BASH_DIR}/scripts/ux_progress.py"
+
+    # Check if Python + rich is available
+    if command -v python3 &>/dev/null && python3 -c "import rich" &>/dev/null; then
+        # Use rich Python progress bar
+        python3 "$progress_script" "$message" "${cmd[*]}"
+        return $?
+    else
+        # Fallback to basic spinner
+        ux_warning "Python 'rich' not found. Falling back to basic spinner."
+        ux_with_spinner "$message" "${cmd[@]}"
+        return $?
+    fi
+}
+
+
 # Simple progress dots (for lighter feedback)
 # Usage: ux_progress_dots <pid>
 ux_progress_dots() {
@@ -212,6 +234,59 @@ ux_input() {
         fi
     done
 }
+
+# Display an interactive menu using a Python script or basic bash fallback
+# Usage: result=$(ux_menu "Select option:" "Option 1" "Option 2" "Option 3")
+# Returns 0-based index or empty string if cancelled/failed
+ux_menu() {
+    local title="$1"
+    shift
+    local options=("$@")
+    local menu_script="${DOTFILES_BASH_DIR}/scripts/ux_menu.py"
+
+    # Check if Python + rich is available
+    if command -v python3 &>/dev/null && python3 -c "import rich" &>/dev/null && command -v jq &>/dev/null; then
+        # Use rich Python menu
+        local config
+        config=$(jq -n \
+            --arg title "$title" \
+            --argjson options "$(printf '%s\n' "${options[@]}" | jq -R . | jq -s .)" \
+            '{title: $title, options: $options, allow_cancel: true}')
+
+        local result
+        result=$(echo "$config" | python3 "$menu_script")
+        
+        # Check Python script's exit code for cancellation
+        if [ $? -eq 0 ]; then
+            echo "$result"
+        else
+            # User cancelled or invalid input
+            return 1
+        fi
+    else
+        # Fallback to basic bash menu
+        ux_warning "Python 'rich' or 'jq' not found. Falling back to basic bash menu."
+        echo ""
+        ux_section "$title"
+        local i=1
+        for opt in "${options[@]}"; do
+            echo "  ${UX_PRIMARY}$i)${UX_RESET} $opt"
+            ((i++))
+        done
+        echo "  ${UX_MUTED}0) Cancel${UX_RESET}"
+        echo ""
+        printf "${UX_INFO}❯${UX_RESET} Select: "
+        read -r choice
+        
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
+            echo $((choice - 1))
+        else
+            ux_info "Cancelled."
+            return 1
+        fi
+    fi
+}
+
 
 # =============================================================================
 # Table Formatting
@@ -354,3 +429,30 @@ ux_check_old_style() {
     fi
     return 0
 }
+
+# =============================================================================
+# Log Filtering
+# =============================================================================
+
+# Filter logs and colorize based on keywords (ERROR, WARN, INFO)
+# Usage: some_command_producing_logs | ux_filter_logs "custom_pattern"
+ux_filter_logs() {
+    local pattern="${1:-ERROR|WARN}" # Default pattern to highlight
+    local color_error="${UX_ERROR}"
+    local color_warn="${UX_WARNING}"
+    local color_info="${UX_INFO}"
+    local reset="${UX_RESET}"
+
+    while IFS= read -r line; do
+        if [[ "$line" =~ ERROR ]]; then
+            echo "${color_error}${line}${reset}"
+        elif [[ "$line" =~ WARN ]]; then
+            echo "${color_warn}${line}${reset}"
+        elif [[ "$line" =~ INFO ]]; then
+            echo "${color_info}${line}${reset}"
+        else
+            echo "$line"
+        fi
+    done
+}
+

@@ -2,9 +2,9 @@
 
 # bash/app/docker.bash
 
-# -------------------------------
+# ------------------------------- 
 # Docker / Docker Compose Aliases
-# -------------------------------
+# ------------------------------- 
 # 참고: Docker Compose V2('docker compose') 기준입니다.
 # 구버전(V1: docker-compose) 사용 시 아래의 'docker compose'를 'docker-compose'로 변경하세요.
 
@@ -50,7 +50,7 @@ dcl() {
         echo ""
 
         ux_section "Currently Running Containers"
-        if docker ps --format "table {{.Names}}	{{.Image}}	{{.Status}}" 2>/dev/null | tail -n +2 | head -20; then
+        if docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" 2>/dev/null | tail -n +2 | head -20; then
             echo ""
         else
             ux_warning "No running containers found"
@@ -65,7 +65,7 @@ dcl() {
     local service="$1"
     shift # 첫 번째 인자 제거 (나머지 옵션들을 위해)
 
-    # 먼저 docker compose logs 시도, 실패하면 docker logs로 폴백
+    # 먼저 docker compose logs 시도 → 실패하면 docker logs로 폴백
     if docker compose logs -f "$service" "$@" 2>/dev/null; then
         return 0
     elif docker logs -f "$service" "$@" 2>/dev/null; then
@@ -78,9 +78,22 @@ dcl() {
     fi
 }
 
-# -------------------------------
+# Filter dcl logs for errors
+# Usage: dcl_errors <service_name_or_container>
+dcl_errors() {
+    local service="$1"
+    if [ -z "$service" ]; then
+        ux_usage "dcl_errors" "<service_name_or_container>" "Filter dcl logs for ERROR/WARN/INFO"
+        return 1
+    fi
+    ux_info "Filtering logs for '$service' to show ERROR/WARN/INFO..."
+    dcl "$service" | ux_filter_logs
+}
+
+
+# ------------------------------- 
 # Docker Standard Aliases
-# -------------------------------
+# ------------------------------- 
 alias dps='docker ps'       # 실행 중 컨테이너
 alias dpsa='docker ps -a'   # 모든 컨테이너(정지 포함)
 alias di='docker images'    # 이미지 목록
@@ -93,9 +106,9 @@ alias drmi='docker rmi'         # 개별 이미지 삭제
 alias dlogs='docker logs -f'    # 개별 컨테이너 로그 follow
 alias dinspect='docker inspect' # 컨테이너/이미지 상세 정보
 
-# -------------------------------
+# ------------------------------- 
 # Utility Functions
-# -------------------------------
+# ------------------------------- 
 
 # 컨테이너 쉘 접속 (bash 우선, 없으면 sh)
 # 사용법: dbash <container_name_or_id>
@@ -106,7 +119,7 @@ dbash() {
         ux_usage "dbash" "<container_name_or_id>" "Access container shell (tries bash, falls back to sh)"
         echo ""
         ux_section "Running Containers"
-        docker ps --format "table {{.Names}}	{{.Image}}	{{.Status}}" 2>/dev/null || ux_error "Docker is not running"
+        docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" 2>/dev/null || ux_error "Docker is not running"
         echo ""
         return 1
     fi
@@ -166,8 +179,7 @@ drm_dangling() {
 
 # Docker 시스템 기본 청소 (사용되지 않는 컨테이너/네트워크/이미지 등)
 dprune() {
-    echo "${UX_BOLD}${UX_SUCCESS}🧹 Docker system prune -f 실행 중...${UX_RESET}"
-    docker system prune -f
+    ux_with_progress "Pruning Docker system" docker system prune -f
 }
 
 # Docker 강력 청소 (사용하지 않는 이미지/볼륨까지 전부 삭제) - 매우 주의!
@@ -233,13 +245,43 @@ dvol_rm_dangling() {
 }
 
 # 컨테이너 환경변수 확인 (정렬)
-# 사용법: denv <container_name_or_id>
+# 사용법: denv <container_name_or_id> (interactive if no args)
 denv() {
-    if [ -z "$1" ]; then
-        ux_usage "denv" "<container_name_or_id>" "컨테이너 환경변수 확인"
+    local container_name="$1"
+
+    if [ -z "$container_name" ]; then
+        # Show menu of running containers
+        local containers
+        mapfile -t containers < <(docker ps --format '{{.Names}}' 2>/dev/null)
+
+        if [ ${#containers[@]} -eq 0 ]; then
+            ux_warning "No running containers found."
+            return 1
+        fi
+
+        local selection_idx
+        selection_idx=$(ux_menu "Select container to inspect:" "${containers[@]}")
+
+        if [ -z "$selection_idx" ]; then
+            ux_info "Operation cancelled."
+            return 0
+        fi
+
+        container_name="${containers[$selection_idx]}"
+    fi
+
+    if [ -z "$container_name" ]; then
+        ux_error "No container selected."
         return 1
     fi
-    docker exec "$1" env | sort
+
+    ux_header "Environment Variables: $container_name"
+    if docker exec "$container_name" env | sort; then
+        ux_success "Successfully listed environment variables for $container_name."
+    else
+        ux_error "Failed to retrieve environment variables for $container_name."
+        return 1
+    fi
 }
 
 # docker inspect에서 Env 섹션 확인
@@ -406,9 +448,9 @@ dproxy_show() {
     fi
 }
 
-# -------------------------------
+# ------------------------------- 
 # Docker Helper
-# -------------------------------
+# ------------------------------- 
 dockerhelp() {
     ux_header "Docker / Docker Compose Quick Commands"
 
