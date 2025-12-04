@@ -149,7 +149,6 @@ _verify_models_loaded() {
 
 # 1. LiteLLM 시작
 litellm_start() {
-    _init_litellm_env
     ux_header "LiteLLM 스택 시작"
     _check_litellm_project || return 1
 
@@ -192,7 +191,6 @@ litellm_start() {
 
 # 2. LiteLLM 중지
 litellm_stop() {
-    _init_litellm_env
     ux_header "LiteLLM 스택 중지"
     _check_litellm_project || return 1
 
@@ -202,7 +200,6 @@ litellm_stop() {
 
 # 3. LiteLLM 재시작
 litellm_restart() {
-    _init_litellm_env
     ux_header "LiteLLM 스택 재시작"
     litellm_stop
     sleep 2
@@ -211,7 +208,6 @@ litellm_restart() {
 
 # 4. 서비스 상태 확인
 litellm_status() {
-    _init_litellm_env
     ux_header "LiteLLM 서비스 상태"
 
     _check_litellm_project || return 1
@@ -238,7 +234,6 @@ litellm_status() {
 
 # 5. 등록된 모델 목록 조회
 litellm_models() {
-    _init_litellm_env
     ux_header "LiteLLM 모델 목록"
 
     if ! _check_litellm_health; then
@@ -267,7 +262,6 @@ litellm_models() {
 
 # 6. 모델 테스트
 litellm_test() {
-    _init_litellm_env
     local model_name="${1:-gemini-2.0-flash}"
 
     ux_header "LiteLLM 모델 테스트: $model_name"
@@ -332,7 +326,6 @@ litellm_test() {
 
 # 7. 도움말
 litellm_help() {
-    _init_litellm_env
     ux_header "LiteLLM Commands"
 
     ux_section "Basic Commands"
