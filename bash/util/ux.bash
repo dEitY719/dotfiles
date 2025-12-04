@@ -4,7 +4,7 @@
 # UX library utilities and help function
 
 # Alias to run the interactive UX demo
-alias ux-demo='bash "${DOTFILES_BASH_DIR}/scripts/demo_ux.sh"'
+alias ux-demo='bash "${DOTFILES_BASH_DIR}/../mytool/demo_ux.sh"'
 
 # =============================================================================
 # UX Help Function
@@ -118,13 +118,13 @@ EOF
     # --- Demo Section ---
     ux_section "Try It Out"
     ux_info "Run the interactive demo to see all features in action:"
-    echo "  ${UX_SUCCESS}ux-demo${UX_RESET}  or  ${UX_SUCCESS}bash \${DOTFILES_BASH_DIR}/scripts/demo_ux.sh${UX_RESET}"
+    echo "  ${UX_SUCCESS}ux-demo${UX_RESET}  or  ${UX_SUCCESS}bash \${DOTFILES_BASH_DIR}/../mytool/demo_ux.sh${UX_RESET}"
     echo ""
 
     # --- Documentation Section ---
     ux_section "Documentation"
     ux_bullet "Library file: ${UX_BOLD}bash/ux_lib/ux_lib.bash${UX_RESET}"
-    ux_bullet "Demo script: ${UX_BOLD}bash/scripts/demo_ux.sh${UX_RESET}"
+    ux_bullet "Demo script: ${UX_BOLD}mytool/demo_ux.sh${UX_RESET}"
     ux_bullet "Example migrations: ${UX_BOLD}myhelp()${UX_RESET}, ${UX_BOLD}dcl()${UX_RESET}, ${UX_BOLD}dbash()${UX_RESET}"
     echo ""
 

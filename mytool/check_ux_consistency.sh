@@ -1,7 +1,7 @@
 #!/bin/bash
 # Check UX consistency across all bash files
 
-DOTFILES_BASH_DIR="$(dirname "$(dirname "$(realpath "$0")")")"
+DOTFILES_BASH_DIR="$(dirname "$(dirname "$(realpath "$0")")")/bash"
 
 # Load UX library for reporting
 source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"

@@ -40,8 +40,8 @@ my_function() {
 -   **Central UX Library**: `bash/ux_lib/ux_lib.bash`
 -   **Python Menu Script**: `bash/ux_lib/ux_menu.py` (Internal dependency)
 -   **Python Progress Script**: `bash/ux_lib/ux_progress.py` (Internal dependency)
--   **UX Demo Script**: `bash/scripts/demo_ux.sh` (to be updated)
--   **UX Consistency Checker**: `bash/scripts/check_ux_consistency.sh` (to be created)
+-   **UX Demo Script**: `mytool/demo_ux.sh`
+-   **UX Consistency Checker**: `mytool/check_ux_consistency.sh`
 
 ## Portability (Using in Other Projects)
 
@@ -59,8 +59,8 @@ The library automatically handles the paths for its internal Python dependencies
 
 ## Testing and Validation
 
-*   Use `bash/scripts/demo_ux.sh` to interactively test UX features.
-*   Run `bash/scripts/check_ux_consistency.sh` to ensure adherence to guidelines.
+*   Use `mytool/demo_ux.sh` to interactively test UX features.
+*   Run `mytool/check_ux_consistency.sh` to ensure adherence to guidelines.
 
 ## Best Practices
 

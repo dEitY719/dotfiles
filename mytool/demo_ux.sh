@@ -6,7 +6,7 @@
 
 # Get the dotfiles bash directory
 SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
-DOTFILES_BASH_DIR="$(dirname "$SCRIPT_DIR")"
+DOTFILES_BASH_DIR="$(dirname "$SCRIPT_DIR")/bash"
 
 # Load UX library
 # shellcheck source=/dev/null
