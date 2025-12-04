@@ -10,7 +10,7 @@ export DOTFILES_BASH_DIR
 # This provides: colors, output functions, progress indicators, interactive prompts, tables
 # Replaces the old beauty_log.bash and log_util.bash system
 # shellcheck source=/dev/null
-source "${DOTFILES_BASH_DIR}/core/ux_lib.bash"
+source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
 
 # 로딩 시작 스피너
 # echo ""
@@ -88,7 +88,8 @@ for dir in "${DOTFILES_BASH_DIR}"/*; do
     dir_name=$(basename "$dir")
 
     # Skip special directories that shouldn't be auto-loaded
-    [[ "$dir_name" == "core" ]] && continue    # Already loaded (ux_lib.bash)
+    [[ "$dir_name" == "core" ]] && continue    # Deprecated files
+    [[ "$dir_name" == "ux_lib" ]] && continue  # Already loaded explicitly
     [[ "$dir_name" == "env" ]] && continue     # Already loaded above
     [[ "$dir_name" == "scripts" ]] && continue # Executable scripts, not sourced
     [[ "$dir_name" == "config" ]] && continue  # Configuration files only

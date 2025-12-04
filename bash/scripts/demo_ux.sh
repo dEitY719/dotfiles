@@ -10,7 +10,7 @@ DOTFILES_BASH_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Load UX library
 # shellcheck source=/dev/null
-source "${DOTFILES_BASH_DIR}/core/ux_lib.bash"
+source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
 
 # =============================================================================
 # Demo Functions
@@ -254,7 +254,7 @@ demo_real_world() {
     echo ""
 
     ux_section "Modified Files"
-    ux_bullet "bash/core/ux_lib.bash ${UX_MUTED}(new file)${UX_RESET}"
+    ux_bullet "bash/ux_lib/ux_lib.bash ${UX_MUTED}(new file)${UX_RESET}"
     ux_bullet "bash/app/docker.bash ${UX_MUTED}(modified)${UX_RESET}"
     ux_bullet "bash/main.bash ${UX_MUTED}(modified)${UX_RESET}"
     echo ""

@@ -3,8 +3,8 @@
 
 DOTFILES_BASH_DIR="$(dirname "$(dirname "$(realpath "$0")")")"
 
-# shellcheck source=/dev/null
-source "${DOTFILES_BASH_DIR}/core/ux_lib.bash"
+# Load UX library for reporting
+source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
 
 ux_header "UX Consistency Checker"
 

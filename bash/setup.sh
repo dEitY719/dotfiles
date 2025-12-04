@@ -17,8 +17,8 @@ HOME_BASH_PROFILE="${HOME}/.bash_profile"
 # init_logging 함수를 호출하여 로깅 기능을 초기화합니다.
 # DOTFILES_BASH_DIR 변수를 인자로 전달합니다.
 
-# [Phase 1.5 Migration] Replace legacy beauty_log.bash with ux_lib.bash
-source "${DOTFILES_BASH_DIR}/core/ux_lib.bash"
+# Load UX library
+source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
 
 # Define legacy mapping functions for backward compatibility
 log_info() { ux_info "$1"; }

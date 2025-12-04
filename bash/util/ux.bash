@@ -78,7 +78,7 @@ uxhelp() {
 
   my_function() {
       # Load UX library
-      source "${DOTFILES_BASH_DIR}/core/ux_lib.bash"
+      source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
 
       # Show help if no arguments
       if [ -z "$1" ]; then
@@ -109,7 +109,7 @@ EOF
 
     # --- Quick Reference Section ---
     ux_section "Quick Start"
-    ux_numbered 1 "Load library: ${UX_BOLD}source \"\${DOTFILES_BASH_DIR}/core/ux_lib.bash\"${UX_RESET}"
+    ux_numbered 1 "Load library: ${UX_BOLD}source \"\${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash\"${UX_RESET}"
     ux_numbered 2 "Use semantic colors: ${UX_BOLD}\${UX_PRIMARY}${UX_RESET}, ${UX_BOLD}\${UX_SUCCESS}${UX_RESET}, etc."
     ux_numbered 3 "Use helper functions: ${UX_BOLD}ux_header${UX_RESET}, ${UX_BOLD}ux_success${UX_RESET}, etc."
     ux_numbered 4 "Always end with ${UX_BOLD}\${UX_RESET}${UX_RESET} to reset colors"
@@ -123,7 +123,7 @@ EOF
 
     # --- Documentation Section ---
     ux_section "Documentation"
-    ux_bullet "Library file: ${UX_BOLD}bash/core/ux_lib.bash${UX_RESET}"
+    ux_bullet "Library file: ${UX_BOLD}bash/ux_lib/ux_lib.bash${UX_RESET}"
     ux_bullet "Demo script: ${UX_BOLD}bash/scripts/demo_ux.sh${UX_RESET}"
     ux_bullet "Example migrations: ${UX_BOLD}myhelp()${UX_RESET}, ${UX_BOLD}dcl()${UX_RESET}, ${UX_BOLD}dbash()${UX_RESET}"
     echo ""

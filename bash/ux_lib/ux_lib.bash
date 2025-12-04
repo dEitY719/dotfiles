@@ -22,6 +22,10 @@ UX_DIM=$(tput dim 2>/dev/null || echo "")
 export UX_RESET
 UX_RESET=$(tput sgr0 2>/dev/null || echo "")
 
+# Determine directory where this script is located
+# This allows the library to be self-contained and portable
+UX_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Semantic colors (named by purpose, not appearance)
 # Use these instead of direct color codes for consistency
 export UX_PRIMARY
@@ -170,7 +174,7 @@ ux_with_progress() {
     local message="$1"
     shift
     local cmd=("$@")
-    local progress_script="${DOTFILES_BASH_DIR}/scripts/ux_progress.py"
+    local progress_script="${UX_LIB_DIR}/ux_progress.py"
 
     # Check if Python + rich is available
     if command -v python3 &>/dev/null && python3 -c "import rich" &>/dev/null; then
@@ -250,7 +254,7 @@ ux_menu() {
     local title="$1"
     shift
     local options=("$@")
-    local menu_script="${DOTFILES_BASH_DIR}/scripts/ux_menu.py"
+    local menu_script="${UX_LIB_DIR}/ux_menu.py"
 
     # Check if Python + rich is available
     if command -v python3 &>/dev/null && python3 -c "import rich" &>/dev/null && command -v jq &>/dev/null; then
