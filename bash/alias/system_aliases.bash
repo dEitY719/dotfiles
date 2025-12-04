@@ -35,46 +35,39 @@ alias auth='tail -f /var/log/auth.log'   # 인증 로그 실시간 확인
 # System aliases 도움말
 # -------------------------------
 syshelp() {
-    # Color definitions
-    local bold blue green reset
-    bold=$(tput bold 2>/dev/null || echo "")
-    blue=$(tput setaf 4 2>/dev/null || echo "")
-    green=$(tput setaf 2 2>/dev/null || echo "")
-    reset=$(tput sgr0 2>/dev/null || echo "")
+    ux_header "System Management Commands"
 
-    cat <<EOF
+    ux_section "Process Management"
+    ux_table_row "psg" "ps aux | grep" "Find process"
+    ux_table_row "kill9" "kill -9" "Force kill"
+    ux_table_row "psa" "ps aux" "List all processes"
+    echo ""
 
-${bold}${blue}[System Management Commands]${reset}
+    ux_section "Network"
+    ux_table_row "ports" "ss -tulanp" "Show open ports"
+    ux_table_row "myip" "curl ipecho.net" "Public IP"
+    ux_table_row "localip" "hostname -I" "Local IP"
+    ux_table_row "ping" "ping -c 5" "Ping (5 times)"
+    echo ""
 
-  ${bold}${blue}Process Management:${reset}
-    ${green}psg${reset}          : ps aux | grep (프로세스 검색)
-    ${green}kill9${reset}        : kill -9 (강제 종료)
-    ${green}psa${reset}          : ps aux (모든 프로세스 표시)
+    ux_section "Monitoring"
+    ux_table_row "top" "htop" "Process monitor"
+    ux_table_row "meminfo" "free -m" "Memory usage"
+    ux_table_row "cpuinfo" "lscpu" "CPU info"
+    ux_table_row "diskusage" "df -h" "Disk usage"
+    echo ""
 
-  ${bold}${blue}Network:${reset}
-    ${green}ports${reset}        : ss -tulanp (열린 포트 확인)
-    ${green}myip${reset}         : curl http://ipecho.net/plain (공인 IP)
-    ${green}localip${reset}      : hostname -I (로컬 IP)
-    ${green}ping${reset}         : ping -c 5 (5회만 실행)
+    ux_section "Package Management (APT)"
+    ux_table_row "update" "apt update" "Update lists"
+    ux_table_row "upgrade" "apt upgrade" "Upgrade packages"
+    ux_table_row "install" "apt install" "Install package"
+    ux_table_row "remove" "apt remove" "Remove package"
+    ux_table_row "auto_remove" "apt autoremove" "Remove unused"
+    echo ""
 
-  ${bold}${blue}System Monitoring:${reset}
-    ${green}top${reset}          : htop (향상된 top, htop 설치 필요)
-    ${green}meminfo${reset}      : free -m -l -t (메모리 정보)
-    ${green}cpuinfo${reset}      : lscpu (CPU 정보)
-    ${green}diskusage${reset}    : df -h (디스크 사용량)
-
-  ${bold}${blue}Package Management:${reset}
-    ${green}update${reset}       : sudo apt update
-    ${green}upgrade${reset}      : sudo apt upgrade
-    ${green}upgrade_all${reset}  : sudo apt update && sudo apt upgrade
-    ${green}install${reset}      : sudo apt install
-    ${green}remove${reset}       : sudo apt remove
-    ${green}auto_remove${reset}  : sudo apt autoremove
-
-  ${bold}${blue}Logs:${reset}
-    ${green}logs${reset}         : tail -f /var/log/syslog (시스템 로그)
-    ${green}error${reset}        : tail -f /var/log/error.log (에러 로그)
-    ${green}auth${reset}         : tail -f /var/log/auth.log (인증 로그)
-
-EOF
+    ux_section "Log Viewing"
+    ux_table_row "logs" "syslog" "System logs"
+    ux_table_row "error" "error.log" "Error logs"
+    ux_table_row "auth" "auth.log" "Auth logs"
+    echo ""
 }

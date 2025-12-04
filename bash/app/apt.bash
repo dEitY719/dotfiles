@@ -82,27 +82,25 @@ awhich() {
 
 # Remove old kernels (Ubuntu only)
 aclean_kernel() {
-    printf "[Cleaning Old Kernels]\n\n"
+    ux_header "Cleaning Old Kernels"
 
     local current_kernel
     current_kernel=$(uname -r)
-    echo "Current kernel: $current_kernel"
+    echo "Current kernel: ${UX_SUCCESS}$current_kernel${UX_RESET}"
 
-    printf "\nInstalled kernels:\n"
+    echo ""
+    ux_section "Installed kernels"
     dpkg -l | grep linux-image
 
-    printf "\nWARNING: This will remove all kernels except the current one.\n"
-    read -p "Continue? (y/N): " -n 1 -r
-    echo
-
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo ""
+    if ux_confirm "WARNING: This will remove all kernels except the current one. Continue?" "n"; then
         local kernels_to_remove
         kernels_to_remove=$(dpkg -l | grep linux-image | grep -v "$current_kernel" | awk '{print $2}')
         # shellcheck disable=SC2086
         sudo apt-get remove --purge $kernels_to_remove
-        echo "[Complete] Old kernels removed successfully!"
+        ux_success "Old kernels removed successfully!"
     else
-        echo "[Cancelled]"
+        ux_info "Cancelled"
     fi
 }
 
@@ -132,11 +130,12 @@ appa_remove() {
 
 # System package statistics
 astat() {
-    echo "[System Package Statistics]"
-    echo "Total installed packages: $(dpkg -l | grep -c '^ii')"
-    echo "Upgradable packages: $(apt list --upgradable 2>/dev/null | grep -v -c 'WARNING\|Listing')"
-    echo "Cache size: $(du -sh /var/cache/apt/archives/ 2>/dev/null | cut -f1)"
-    echo "Held packages: $(apt-mark showhold | wc -l)"
+    ux_header "System Package Statistics"
+    ux_table_row "Total Installed" "$(dpkg -l | grep -c '^ii')" ""
+    ux_table_row "Upgradable" "$(apt list --upgradable 2>/dev/null | grep -v -c 'WARNING\|Listing')" ""
+    ux_table_row "Cache Size" "$(du -sh /var/cache/apt/archives/ 2>/dev/null | cut -f1)" ""
+    ux_table_row "Held Packages" "$(apt-mark showhold | wc -l)" ""
+    echo ""
 }
 
 # Show package info with dependencies
@@ -146,77 +145,71 @@ ainfo() {
         return 1
     fi
 
-    echo "[Package Info: $1]"
+    ux_header "Package Info: $1"
     apt-cache show "$1" | head -20
     echo ""
-    echo "[Dependencies]"
+    ux_section "Dependencies"
     apt-cache depends "$1" | head -10
+    echo ""
 }
 
 # =======================================
 # Help Function
 # =======================================
 apthelp() {
-    # Color definitions
-    local bold blue green yellow reset
-    bold=$(tput bold 2>/dev/null || echo "")
-    blue=$(tput setaf 4 2>/dev/null || echo "")
-    green=$(tput setaf 2 2>/dev/null || echo "")
-    yellow=$(tput setaf 3 2>/dev/null || echo "")
-    reset=$(tput sgr0 2>/dev/null || echo "")
+    ux_header "APT Quick Commands"
 
-    cat <<EOF
+    ux_section "Basic Update & Upgrade"
+    ux_table_row "au" "apt-get update" "Update lists"
+    ux_table_row "aug" "apt-get upgrade" "Safe upgrade"
+    ux_table_row "afa" "apt-get full-upgrade" "Aggressive upgrade"
+    ux_table_row "adu" "apt-get dist-upgrade" "Dist upgrade"
+    ux_table_row "auug" "update+upgrade+clean" "Full cleanup"
+    echo ""
 
-${bold}${blue}[APT Quick Commands]${reset}
+    ux_section "Cleanup & Remove"
+    ux_table_row "aar" "apt-get autoremove" "Remove unused deps"
+    ux_table_row "aac" "apt-get autoclean" "Clean old cache"
+    ux_table_row "ac" "apt-get clean" "Clean all cache"
+    ux_table_row "afd" "apt-get install -f" "Fix broken deps"
+    ux_table_row "acheck" "apt-get check" "Verify consistency"
+    echo ""
 
-  ${bold}${blue}Basic Update & Upgrade:${reset}
-    ${green}au${reset}        : apt-get update
-    ${green}aug${reset}       : apt-get upgrade (safe update)
-    ${green}afa${reset}       : apt-get full-upgrade (more aggressive)
-    ${green}adu${reset}       : apt-get dist-upgrade (major version update)
-    ${green}auug${reset}      : Complete cleanup (update + upgrade + autoremove + autoclean)
+    ux_section "Install & Remove"
+    ux_table_row "ai" "apt-get install" "Install package"
+    ux_table_row "ar" "apt-get remove" "Remove (keep config)"
+    ux_table_row "arp" "apt-get purge" "Remove completely"
+    ux_table_row "adpkg" "dpkg -i" "Install .deb file"
+    echo ""
 
-  ${bold}${blue}Cleanup & Remove:${reset}
-    ${green}aar${reset}       : apt-get autoremove (remove unused dependencies)
-    ${green}aac${reset}       : apt-get autoclean (remove old cache files)
-    ${green}ac${reset}        : apt-get clean (remove all cache files)
-    ${green}afd${reset}       : apt-get install -f (fix broken dependencies)
-    ${green}acheck${reset}    : apt-get check (verify system consistency)
+    ux_section "Search & Info"
+    ux_table_row "as" "apt-cache search" "Search packages"
+    ux_table_row "ash" "apt-cache show" "Show details"
+    ux_table_row "ainfo" "ainfo <pkg>" "Info + deps"
+    ux_table_row "alist" "list --installed" "List installed"
+    ux_table_row "aulist" "list --upgradable" "List upgradable"
+    echo ""
 
-  ${bold}${blue}Install & Remove:${reset}
-    ${green}ai${reset}        : apt-get install (install package)
-    ${green}ar${reset}        : apt-get remove (remove package, keep config)
-    ${green}arp${reset}       : apt-get purge (remove package completely)
-    ${green}adpkg${reset}     : dpkg -i (install local .deb file)
+    ux_section "Dependencies & Files"
+    ux_table_row "adep" "depends <pkg>" "Show deps"
+    ux_table_row "ardep" "rdepends <pkg>" "Show reverse deps"
+    ux_table_row "afiles" "dpkg -L <pkg>" "List files"
+    ux_table_row "awhich" "dpkg -S <file>" "Find owner pkg"
+    echo ""
 
-  ${bold}${blue}Search & Info:${reset}
-    ${green}as${reset}        : apt-cache search (search packages)
-    ${green}ash${reset}       : apt-cache show (show package details)
-    ${green}ainfo${reset}     : ainfo <package> (package info + dependencies)
-    ${green}alist${reset}     : apt list --installed (list installed packages)
-    ${green}aulist${reset}    : apt list --upgradable (list upgradable packages)
+    ux_section "Version & Hold"
+    ux_table_row "ahold" "apt-mark hold" "Lock version"
+    ux_table_row "aunhold" "apt-mark unhold" "Unlock version"
+    echo ""
 
-  ${bold}${blue}Dependencies & Files:${reset}
-    ${green}adep${reset}      : adep <package> (show package dependencies)
-    ${green}ardep${reset}     : ardep <package> (show reverse dependencies)
-    ${green}afiles${reset}    : afiles <package> (list files from package)
-    ${green}awhich${reset}    : awhich <filepath> (find package that owns file)
+    ux_section "PPA & System"
+    ux_table_row "appa_add" "add-apt-repository" "Add PPA"
+    ux_table_row "appa_list" "List PPAs" "Show installed PPAs"
+    ux_table_row "appa_remove" "remove PPA" "Remove PPA"
+    ux_table_row "aclean_kernel" "Clean kernels" "Remove old kernels"
+    ux_table_row "astat" "Stats" "System pkg stats"
+    ux_table_row "asize" "Cache size" "Check cache size"
+    echo ""
 
-  ${bold}${blue}Version & Hold:${reset}
-    ${green}ahold${reset}     : ahold <package> (lock package version)
-    ${green}aunhold${reset}   : aunhold <package> (unlock package)
-
-  ${bold}${blue}PPA Management:${reset}
-    ${green}appa_add${reset}    : appa_add ppa:user/ppa-name (add PPA and update)
-    ${green}appa_list${reset}   : appa_list (list installed PPAs)
-    ${green}appa_remove${reset} : appa_remove ppa:user/ppa-name (remove PPA)
-
-  ${bold}${blue}Kernel & System:${reset}
-    ${green}aclean_kernel${reset} : Remove old kernels (Ubuntu only)
-    ${green}astat${reset}        : Show system package statistics
-    ${green}asize${reset}        : Check cache directory size
-
-  ${bold}${yellow}Note: Commands prefixed with sudo require elevated privileges${reset}
-
-EOF
+    ux_info "Note: Commands prefixed with sudo require elevated privileges"
 }

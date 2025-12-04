@@ -212,68 +212,62 @@ alias glfs='git_lfs_track'
 # Git helper 도움말
 # -------------------------------
 githelp() {
-    # Color definitions
-    local bold blue green reset
-    bold=$(tput bold 2>/dev/null || echo "")
-    blue=$(tput setaf 4 2>/dev/null || echo "")
-    green=$(tput setaf 2 2>/dev/null || echo "")
-    reset=$(tput sgr0 2>/dev/null || echo "")
+    ux_header "Git Quick Commands"
 
-    cat <<EOF
+    ux_section "Basic Commands"
+    ux_table_row "gs" "git status -sb" "Short status"
+    ux_table_row "ga" "git add ." "Stage all changes"
+    ux_table_row "gc" "git commit -m" "Commit with message"
+    ux_table_row "gca" "git commit --amend" "Amend last commit"
+    ux_table_row "gp" "git push" "Push to remote"
+    ux_table_row "gpl" "git pull" "Pull from remote"
+    ux_table_row "gco" "git checkout" "Checkout branch/commit"
+    ux_table_row "gd" "git diff" "Show changes"
+    ux_table_row "gb" "git branch" "List branches"
+    ux_table_row "grmc" "git rm --cached" "Unstage, keep file"
+    echo ""
 
-${bold}${blue}[Git Quick Commands]${reset}
+    ux_section "Fetch & Sync"
+    ux_table_row "gf" "git fetch origin -p" "Fetch origin & prune"
+    ux_table_row "gfu" "git fetch upstream" "Fetch upstream"
+    ux_table_row "gfa" "git fetch --all" "Fetch all & prune"
+    ux_table_row "gsw" "git switch -c" "Switch to remote branch"
+    ux_table_row "gr" "git remote -v" "List remotes"
+    echo ""
 
-  ${bold}${blue}Basic Commands:${reset}
-    ${green}gs${reset}         : git status -sb (간략한 상태)
-    ${green}ga${reset}         : git add . (모든 변경사항 스테이징)
-    ${green}gc${reset}         : git commit -m (커밋)
-    ${green}gca${reset}        : git commit --amend (커밋 수정)
-    ${green}gp${reset}         : git push (푸시)
-    ${green}gpl${reset}        : git pull (풀)
-    ${green}gco${reset}        : git checkout (브랜치 전환)
-    ${green}gd${reset}         : git diff (변경사항 확인)
-    ${green}gb${reset}         : git branch (브랜치 목록)
-    ${green}grmc${reset}       : git rm --cached (스테이징에서 제거, 파일 유지)
+    ux_section "Logs"
+    ux_table_row "gl" "git_log" "Graph log (default 11)"
+    ux_table_row "gl1" "log --oneline" "One-line graph log"
+    ux_table_row "gl2" "git_log2" "Alternative log format"
+    ux_table_row "glref" "log ref/main" "Ref log for main"
+    echo ""
 
-  ${bold}${blue}Fetch & Sync:${reset}
-    ${green}gf${reset}         : git fetch origin -p (origin fetch + prune)
-    ${green}gfu${reset}        : git fetch upstream (upstream에서만 fetch)
-    ${green}gfa${reset}        : git fetch --all --prune (모든 원격 fetch)
-    ${green}gsw${reset}        : git switch -c <local> <remote> (원격 브랜치로부터 로컬 생성 + switch)
-    ${green}gr${reset}         : git remote -v (원격 저장소 조회)
+    ux_section "Upstream"
+    ux_table_row "gupa" "remote add upstream" "Add upstream remote"
+    ux_table_row "gupdel" "gupdel <remote>" "Remove remote"
+    ux_table_row "glum" "log upstream/main" "Upstream main log"
+    ux_table_row "glub" "glub [branch]" "Upstream branch log"
+    echo ""
 
-  ${bold}${blue}Logs:${reset}
-    ${green}gl${reset}         : git_log (그래프 형태 로그)
-    ${green}gl1${reset}        : git log --oneline --graph --decorate
-    ${green}gl2${reset}        : git_log2 (대체 로그 포맷)
-    ${green}git_log${reset}    : 컬러풀한 커밋 로그
-    ${green}git_log2${reset}   : 간결한 한줄 로그
-    ${green}glref${reset}      : git log ref/main --oneline (ref 원격 main 브랜치 한줄 로그)
+    ux_section "Branch Configuration"
+    ux_table_row "gset-main" "set-upstream main" "Track origin/main"
+    ux_table_row "gset-dev" "set-upstream dev" "Track origin/dev"
+    ux_table_row "gset" "gset [branch]" "Track origin/[branch]"
+    echo ""
 
-  ${bold}${blue}Upstream:${reset}
-    ${green}gupa${reset}       : git remote add upstream <url> (upstream 원격 저장소 추가)
-    ${green}gupdel${reset}     : gupdel <remote-name> (원격 저장소 삭제)
-    ${green}glum${reset}       : git log --oneline -n 20 upstream/main (upstream main 최근 20개)
-    ${green}glub${reset}       : glub [branch] (upstream 특정 브랜치 최근 20개, 기본값: main)
+    ux_section "Cherry-pick"
+    ux_table_row "gcp" "gcp <commit>..." "Cherry-pick commits"
+    echo ""
 
-  ${bold}${blue}Branch Upstream:${reset}
-    ${green}gset-main${reset}  : git branch --set-upstream-to=origin/main main
-    ${green}gset-dev${reset}   : git branch --set-upstream-to=origin/dev dev
-    ${green}gset${reset}       : gset [branch] (현재 브랜치 또는 지정 브랜치 upstream 설정)
+    ux_section "Special"
+    ux_table_row "gpf_dev_server" "push force dev" "Force push dev-server"
+    ux_table_row "gpfu" "push --force-with-lease" "Force push main"
+    echo ""
 
-  ${bold}${blue}Cherry-pick:${reset}
-    ${green}gcp${reset}        : gcp <commit-id> [commit-id2] ... (커밋 cherry-pick)
-                  예: gcp abc1234 또는 gcp abc1234 def5678
-
-  ${bold}${blue}Special:${reset}
-    ${green}gpf_dev_server${reset} : git push -f origin HEAD:refs/heads/dev-server
-    ${green}gpfu${reset}           : git push --set-upstream origin main --force-with-lease (main 강제 업스트림 푸시)
-
-  ${bold}${blue}Git LFS:${reset}
-    ${green}git_lfs_install${reset} : Ubuntu 환경에서 git-lfs 설치 및 초기화 (최초 1회)
-    ${green}git_lfs_track${reset}   : git-lfs track <패턴...> (예: git_lfs_track "*.zip" "*.sql" "*.tar.gz")
-    ${green}glfs${reset}            : git_lfs_track 단축 명령어
-EOF
+    ux_section "Git LFS"
+    ux_table_row "git_lfs_install" "Install LFS" "Ubuntu setup"
+    ux_table_row "glfs" "track <pattern>" "Track files with LFS"
+    echo ""
 }
 
 # gl 함수 (최근 11개 기본, -a/--all 옵션으로 모두 보기)

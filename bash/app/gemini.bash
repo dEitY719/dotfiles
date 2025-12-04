@@ -29,34 +29,25 @@ alias ghelp='gemini --help'
 
 # Gemini 도움말 함수
 geminihelp() {
-    # Color definitions
-    local bold blue green reset
-    bold=$(tput bold 2>/dev/null || echo "")
-    blue=$(tput setaf 4 2>/dev/null || echo "")
-    green=$(tput setaf 2 2>/dev/null || echo "")
-    reset=$(tput sgr0 2>/dev/null || echo "")
+    ux_header "Gemini CLI Quick Commands"
 
-    cat <<EOF
+    ux_section "Basic Commands"
+    ux_table_row "gg" "gcloud gemini" "Base command"
+    ux_table_row "gflash" "gemini --model flash" "Use Flash model"
+    ux_table_row "gpro" "gemini --model pro" "Use Pro model"
+    ux_table_row "gver" "gemini --version" "Check version"
+    ux_table_row "ghelp" "gemini --help" "Gemini Help"
+    echo ""
 
-${bold}${blue}[Gemini CLI Quick Commands]${reset}
+    ux_section "Installation & Setup"
+    ux_table_row "ginstall" "Install Script" "Install Gemini CLI"
+    ux_table_row "guninstall" "Uninstall Script" "Remove Gemini CLI"
+    echo ""
 
-  ${bold}${blue}Basic Commands:${reset}
-    ${green}gg${reset}           : gcloud gemini (기본 명령어)
-    ${green}gflash${reset}       : gemini --model gemini-2.5-flash
-    ${green}gpro${reset}         : gemini --model gemini-2.5-pro
-    ${green}gver${reset}         : gemini --version (버전 정보)
-    ${green}ghelp${reset}        : gemini --help (도움말)
-
-  ${bold}${blue}Installation & Setup:${reset}
-    ${green}ginstall${reset}     : Gemini CLI 설치 (대화형 스크립트)
-    ${green}guninstall${reset}   : Gemini CLI 제거 (대화형 스크립트)
-
-  ${bold}${blue}Tips:${reset}
-    • 설치: ginstall
-    • 웹 로그인으로 인증 완료
-    • 더 많은 기능은 'ghelp' 참고
-
-EOF
+    ux_section "Tips"
+    ux_bullet "Auth via web login (no API key file needed)"
+    ux_bullet "Use 'ghelp' for detailed CLI options"
+    echo ""
 }
 
 # Gemini 설치 (대화형 스크립트)

@@ -31,45 +31,30 @@ alias docs_gen='sphinx-apidoc -o docs/source . && sphinx-build -b html docs/sour
 # Python aliases 도움말
 # -------------------------------
 pphelp() {
-    # Color definitions
-    local bold blue green reset
-    bold=$(tput bold 2>/dev/null || echo "")
-    blue=$(tput setaf 4 2>/dev/null || echo "")
-    green=$(tput setaf 2 2>/dev/null || echo "")
-    reset=$(tput sgr0 2>/dev/null || echo "")
+    ux_header "Python Package & Quality Tools"
 
-    cat <<EOF
+    ux_section "Package Management"
+    ux_table_row "pp_install" "pip install" "Install package"
+    ux_table_row "pp_install_up" "upgrade pip & install" "Update pip first"
+    ux_table_row "pp_reqs" "pip install -r reqs" "Install from file"
+    ux_table_row "pp_uninstall" "pip uninstall -y" "Remove package"
+    ux_table_row "pp_freeze" "Freeze to reqs.txt" "Exclude project name"
+    ux_table_row "pp_list" "pip list --outdated" "Check updates"
+    ux_table_row "pp_check" "pip check" "Verify deps"
+    echo ""
 
-${bold}${blue}[Python Package Management]${reset}
+    ux_section "Code Quality (Ruff/MyPy)"
+    ux_table_row "code_check" "ruff format & check" "CI mode (check only)"
+    ux_table_row "code_fix" "ruff format & fix" "Auto-fix issues"
+    ux_table_row "code_type" "mypy ." "Type checking"
+    echo ""
 
-  ${bold}${blue}Installation:${reset}
-    ${green}pp_install${reset}     : pip install
-    ${green}pp_install_up${reset}  : pip install --upgrade pip && pip install
-    ${green}pp_reqs${reset}        : pip install -r requirements.txt
-    ${green}pp_uninstall${reset}   : pip uninstall -y
+    ux_section "Testing"
+    ux_table_row "test_pytest" "pytest -q" "Run pytest (fast)"
+    ux_table_row "test_unittest" "unittest discover" "Run unittest"
+    echo ""
 
-  ${bold}${blue}Management:${reset}
-    ${green}pp_freeze${reset}      : Generate requirements.txt (excluding project name)
-    ${green}pp_list${reset}        : pip list --outdated --format=columns
-    ${green}pp_check${reset}       : pip check
-
-${bold}${blue}[Python Code Quality]${reset}
-
-  ${bold}${blue}Formatting & Linting:${reset}
-    ${green}code_check${reset}     : ruff format . --check && ruff check . (CI용)
-    ${green}code_fix${reset}       : ruff format . && ruff check . --fix (자동 수정)
-    ${green}code_type${reset}      : mypy . (타입 검사)
-
-${bold}${blue}[Python Testing]${reset}
-
-  ${bold}${blue}Testing:${reset}
-    ${green}test_pytest${reset}    : pytest --maxfail=1 --disable-warnings -q
-    ${green}test_unittest${reset}  : python -m unittest discover
-
-${bold}${blue}[Python Documentation]${reset}
-
-  ${bold}${blue}Docs:${reset}
-    ${green}docs_gen${reset}       : sphinx-apidoc + sphinx-build
-
-EOF
+    ux_section "Documentation"
+    ux_table_row "docs_gen" "sphinx build" "Generate HTML docs"
+    echo ""
 }

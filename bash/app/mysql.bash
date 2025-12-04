@@ -168,25 +168,26 @@ done
 # -------------------------------
 mysql_list() {
     local service_only="$1"
+    
     if [[ "$service_only" == "true" ]]; then
-        printf "%-15s  %-20s\n" "Service Name" "Alias"
-        printf "%-15s  %-20s\n" "------------" "--------------------"
+        ux_table_header "Service Name" "Alias" ""
         for entry in "${services[@]}"; do
             service_name=$(echo "$entry" | awk '{print $1}')
             alias_name="mysql_${service_name}"
-            printf "%-15s  %-20s\n" "$service_name" "$alias_name"
+            ux_table_row "$service_name" "$alias_name" ""
         done
     else
-        printf "%-15s  %-20s  %s\n" "Service Name" "Alias" "Connection Info"
-        printf "%-15s  %-20s  %s\n" "------------" "--------------------" "----------------------------------------------"
+        ux_table_header "Service Name" "Alias" "Connection Info"
         for entry in "${services[@]}"; do
             service_name=$(echo "$entry" | awk '{print $1}')
             db_name=$(echo "$entry" | awk '{print $2}')
             db_user=$(echo "$entry" | awk '{print $3}')
             db_pass=$(echo "$entry" | awk '{print $4}')
             alias_name="mysql_${service_name}"
-            printf "%-15s  %-20s  mysql://%s:%s@localhost:3306/%s\n" \
-                "$service_name" "$alias_name" "$db_user" "$db_pass" "$db_name"
+            
+            # Hide password in display if needed, but showing connection string for now
+            local conn_str="mysql://${db_user}:***@localhost:3306/${db_name}"
+            ux_table_row "$service_name" "$alias_name" "$conn_str"
         done
     fi
 }

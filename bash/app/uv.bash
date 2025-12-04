@@ -36,42 +36,31 @@ alias uvcheck='uv pip check'
 
 # (6) 도움말(프로젝트 관례 안내)
 uvhelp() {
-    # Color definitions
-    local bold blue green reset
-    bold=$(tput bold 2>/dev/null || echo "")
-    blue=$(tput setaf 4 2>/dev/null || echo "")
-    green=$(tput setaf 2 2>/dev/null || echo "")
-    reset=$(tput sgr0 2>/dev/null || echo "")
+    ux_header "UV Quick Commands"
 
-    cat <<EOF
+    ux_section "Sync & Install"
+    ux_table_row "uvs" "uv sync" "Base sync (prod)"
+    ux_table_row "uvu" "uv sync --upgrade" "Upgrade deps"
+    ux_table_row "uvd" "uv sync --dev" "Dev install"
+    ux_table_row "uvp" "uv sync" "Prod install"
+    ux_table_row "uvi" "install script" "Install UV tool"
+    echo ""
 
-${bold}${blue}[UV Quick Commands]${reset}
+    ux_section "Lock & Export"
+    ux_table_row "uvk" "uv lock" "Refresh lockfile"
+    ux_table_row "uvl" "uv pip list" "List packages"
+    ux_table_row "uvc" "uv pip compile" "Export requirements"
+    ux_table_row "uvr" "uv pip sync" "Sync from reqs"
+    echo ""
 
-  ${green}uvs${reset}        : uv sync (base/prod)
-  ${green}uvu${reset}        : uv sync --upgrade (업그레이드 동기화)
-  ${green}uvd${reset}        : uv sync --dev --extra dev
-  ${green}uvp${reset}        : uv sync (prod)
-  ${green}uvk${reset}        : uv lock
-  ${green}uvl${reset}        : uv pip list
-  ${green}uvc${reset}        : uv pip compile pyproject.toml -o requirements.txt
-  ${green}uvr${reset}        : uv pip sync requirements.txt
-  ${green}uvclean${reset}    : uv sync --clean
-               - pyproject/lock에 없는 패키지를 제거하며 환경을 정리
-               - 사실상 uv sync와 동일 (uv sync 기본이 clean 동작)
-               - 완전 재설치 원하면: uv sync --reinstall 또는 .venv 삭제 후 uv sync
-  ${green}uvcheck${reset}    : uv check
-  ${green}uvi${reset}        : install uv tool
+    ux_section "Maintenance"
+    ux_table_row "uvclean" "uv sync --clean" "Remove unused"
+    ux_table_row "uvcheck" "uv pip check" "Verify env"
+    echo ""
 
-${bold}${blue}[Recipes]${reset}
-
-  # 전체 extras 포함 설치
-  ${green}uv pip sync --all-extras${reset}
-
-  # 백엔드만
-  ${green}uv pip sync --extra backend --extra dev${reset}
-
-  # 프론트엔드만
-  ${green}uv pip sync --extra frontend --extra dev${reset}
-
-EOF
+    ux_section "Recipes"
+    ux_bullet "Install all extras: ${UX_SUCCESS}uv pip sync --all-extras${UX_RESET}"
+    ux_bullet "Backend dev:      ${UX_SUCCESS}uv pip sync --extra backend --extra dev${UX_RESET}"
+    ux_bullet "Frontend dev:     ${UX_SUCCESS}uv pip sync --extra frontend --extra dev${UX_RESET}"
+    echo ""
 }

@@ -13,24 +13,15 @@ alias dsql='du -h src/database/data/*.sql | sort -h'
 alias dubig='du -ah . | sort -rh | head -n 10'
 
 duhelp() {
-    # Color definitions
-    local bold blue green yellow reset
-    bold=$(tput bold 2>/dev/null || echo "")
-    blue=$(tput setaf 4 2>/dev/null || echo "")
-    green=$(tput setaf 2 2>/dev/null || echo "")
-    yellow=$(tput setaf 3 2>/dev/null || echo "")
-    reset=$(tput sgr0 2>/dev/null || echo "")
+    ux_header "Disk Usage Helper (du aliases)"
 
-    cat <<EOF
+    ux_section "Aliases"
+    ux_table_row "dus" "du -sh ." "Current dir summary"
+    ux_table_row "dud" "du -sh *" "Subdir summary (sorted)"
+    ux_table_row "dsql" "du .sql" "SQL dump sizes"
+    ux_table_row "dubig" "du top 10" "Top 10 largest items"
+    echo ""
 
-${bold}${blue}Disk Usage Helper (du aliases)${reset}
-
-  ${green}dus${reset}    : 현재 디렉토리 전체 크기 요약 (du -sh .)
-  ${green}dud${reset}    : 하위 디렉토리 크기 정렬 (du -sh * | sort -h)
-  ${green}dsql${reset}   : SQL dump 파일 크기 정렬 (du -h src/database/data/*.sql | sort -h)
-  ${green}dubig${reset}  : 상위 10개 큰 파일/디렉토리 (du -ah . | sort -rh | head -n 10)
-
-${yellow}Tip: -h 옵션은 사람이 읽기 좋은 단위(K, M, G)를 의미합니다.${reset}
-
-EOF
+    ux_info "Tip: -h option means 'human-readable' (K, M, G)"
+    echo ""
 }
