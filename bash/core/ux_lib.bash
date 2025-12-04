@@ -15,18 +15,27 @@
 # =============================================================================
 
 # Text styles
-export UX_BOLD=$(tput bold 2>/dev/null || echo "")
-export UX_DIM=$(tput dim 2>/dev/null || echo "")
-export UX_RESET=$(tput sgr0 2>/dev/null || echo "")
+export UX_BOLD
+UX_BOLD=$(tput bold 2>/dev/null || echo "")
+export UX_DIM
+UX_DIM=$(tput dim 2>/dev/null || echo "")
+export UX_RESET
+UX_RESET=$(tput sgr0 2>/dev/null || echo "")
 
 # Semantic colors (named by purpose, not appearance)
 # Use these instead of direct color codes for consistency
-export UX_PRIMARY=$(tput setaf 4 2>/dev/null || echo "")      # blue - headers, titles
-export UX_SUCCESS=$(tput setaf 2 2>/dev/null || echo "")      # green - success states
-export UX_WARNING=$(tput setaf 3 2>/dev/null || echo "")      # yellow - warnings
-export UX_ERROR=$(tput setaf 1 2>/dev/null || echo "")        # red - errors
-export UX_INFO=$(tput setaf 6 2>/dev/null || echo "")         # cyan - info messages
-export UX_MUTED=$(tput setaf 8 2>/dev/null || echo "")        # gray - secondary info
+export UX_PRIMARY
+UX_PRIMARY=$(tput setaf 4 2>/dev/null || echo "")      # blue - headers, titles
+export UX_SUCCESS
+UX_SUCCESS=$(tput setaf 2 2>/dev/null || echo "")      # green - success states
+export UX_WARNING
+UX_WARNING=$(tput setaf 3 2>/dev/null || echo "")      # yellow - warnings
+export UX_ERROR
+UX_ERROR=$(tput setaf 1 2>/dev/null || echo "")        # red - errors
+export UX_INFO
+UX_INFO=$(tput setaf 6 2>/dev/null || echo "")         # cyan - info messages
+export UX_MUTED
+UX_MUTED=$(tput setaf 8 2>/dev/null || echo "")        # gray - secondary info
 
 # =============================================================================
 # Standard Output Functions
@@ -39,9 +48,9 @@ ux_header() {
     local width=60
 
     echo ""
-    echo "${UX_BOLD}${UX_PRIMARY}╔══════════════════════════════════════════════════════════════╗${UX_RESET}"
-    printf "${UX_BOLD}${UX_PRIMARY}║${UX_RESET} %-60s ${UX_BOLD}${UX_PRIMARY}║${UX_RESET}\n" "$text"
-    echo "${UX_BOLD}${UX_PRIMARY}╚══════════════════════════════════════════════════════════════╝${UX_RESET}"
+    printf "%s%s╔══════════════════════════════════════════════════════════════╗%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
+    printf "%s%s║%s %-60s %s%s║%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}" "$text" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
+    printf "%s%s╚══════════════════════════════════════════════════════════════╝%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
     echo ""
 }
 
@@ -50,32 +59,32 @@ ux_header() {
 ux_section() {
     local title="$1"
     echo ""
-    echo "${UX_BOLD}${UX_PRIMARY}$title${UX_RESET}"
-    printf "${UX_BOLD}${UX_PRIMARY}%s${UX_RESET}\n" "$(printf '─%.0s' $(seq 1 ${#title}))"
+    printf "%s%s%s%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$title" "${UX_RESET}"
+    printf "%s%s%s%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$(printf '─%.0s' $(seq 1 ${#title}))" "${UX_RESET}"
 }
 
 # Display a success message with checkmark
 # Usage: ux_success "Operation completed"
 ux_success() {
-    echo "${UX_BOLD}${UX_SUCCESS}✅${UX_RESET} $1"
+    printf "%s%s✅%s %s\n" "${UX_BOLD}" "${UX_SUCCESS}" "${UX_RESET}" "$1"
 }
 
 # Display an error message with X mark (to stderr)
 # Usage: ux_error "Something went wrong"
 ux_error() {
-    echo "${UX_BOLD}${UX_ERROR}❌${UX_RESET} $1" >&2
+    printf "%s%s❌%s %s\n" "${UX_BOLD}" "${UX_ERROR}" "${UX_RESET}" "$1" >&2
 }
 
 # Display a warning message with warning sign
 # Usage: ux_warning "This might cause issues"
 ux_warning() {
-    echo "${UX_BOLD}${UX_WARNING}⚠️${UX_RESET}  $1"
+    printf "%s%s⚠️%s  %s\n" "${UX_BOLD}" "${UX_WARNING}" "${UX_RESET}" "$1"
 }
 
 # Display an info message with info icon
 # Usage: ux_info "For your information"
 ux_info() {
-    echo "${UX_BOLD}${UX_INFO}ℹ️${UX_RESET}  $1"
+    printf "%s%sℹ️%s  %s\n" "${UX_BOLD}" "${UX_INFO}" "${UX_RESET}" "$1"
 }
 
 # Display a step indicator
@@ -83,7 +92,7 @@ ux_info() {
 ux_step() {
     local step_num="$1"
     local step_text="$2"
-    echo "${UX_BOLD}${UX_PRIMARY}[$step_num]${UX_RESET} $step_text"
+    printf "%s%s[%s]%s %s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$step_num" "${UX_RESET}" "$step_text"
 }
 
 # =============================================================================
@@ -106,7 +115,7 @@ ux_spinner() {
     trap 'tput cnorm 2>/dev/null || true' EXIT INT TERM
 
     while kill -0 "$pid" 2>/dev/null; do
-        printf "\r${UX_INFO}${frames[$i]}${UX_RESET} $message..."
+        printf "\r%s%s%s %s..." "${UX_INFO}" "${frames[$i]}" "${UX_RESET}" "$message"
         i=$(( (i + 1) % ${#frames[@]} ))
         sleep "$delay"
     done
@@ -116,7 +125,7 @@ ux_spinner() {
     trap - EXIT INT TERM
 
     # Clear the line and show completion
-    printf "\r${UX_SUCCESS}✅${UX_RESET} $message... Done!\n"
+    printf "\r%s✅%s %s... Done!\n" "${UX_SUCCESS}" "${UX_RESET}" "$message"
 }
 
 # Run a command with spinner
@@ -200,9 +209,9 @@ ux_confirm() {
     local default="${2:-n}"
 
     if [[ "$default" == "y" ]]; then
-        printf "${UX_WARNING}❓${UX_RESET} $prompt [Y/n]: "
+        printf "%s❓%s %s [Y/n]: " "${UX_WARNING}" "${UX_RESET}" "$prompt"
     else
-        printf "${UX_WARNING}❓${UX_RESET} $prompt [y/N]: "
+        printf "%s❓%s %s [y/N]: " "${UX_WARNING}" "${UX_RESET}" "$prompt"
     fi
 
     read -r response
@@ -223,7 +232,7 @@ ux_input() {
     local response
 
     while true; do
-        printf "${UX_INFO}❯${UX_RESET} $prompt "
+        printf "%s❯%s %s " "${UX_INFO}" "${UX_RESET}" "$prompt"
         read -r response
 
         if [[ "$response" =~ $pattern ]]; then
@@ -256,9 +265,10 @@ ux_menu() {
         local result
         # Pass config as argument, ensuring stdin is connected to tty for interaction
         result=$(python3 "$menu_script" "$config" < /dev/tty)
+        local py_exit_code=$?
         
         # Check Python script's exit code for cancellation
-        if [ $? -eq 0 ]; then
+        if [ $py_exit_code -eq 0 ]; then
             echo "$result"
         else
             # User cancelled or invalid input
@@ -276,7 +286,7 @@ ux_menu() {
         done
         echo "  ${UX_MUTED}0) Cancel${UX_RESET}"
         echo ""
-        printf "${UX_INFO}❯${UX_RESET} Select: "
+        printf "%s❯%s Select: " "${UX_INFO}" "${UX_RESET}"
         read -r choice
         
         if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
@@ -330,7 +340,7 @@ ux_table_header() {
 # Display a bullet point
 # Usage: ux_bullet "Item description"
 ux_bullet() {
-    echo "  ${UX_PRIMARY}•${UX_RESET} $1"
+    printf "  ${UX_PRIMARY}•${UX_RESET} %s\n" "$1"
 }
 
 # Display a numbered item
@@ -388,10 +398,11 @@ ux_enable_error_trap() {
 # Check if command exists and show appropriate message
 # Usage: if ux_require "docker"; then ... fi
 ux_require() {
-    local cmd="$1"
-    local msg="${2:-$cmd is required but not installed}"
+    local tool_name="$1"
+    local msg="${2:-$tool_name is required but not installed}"
 
-    if ! command -v "$cmd" &> /dev/null; then
+    if ! command -v "$tool_name" &> /dev/null;
+    then
         ux_error "$msg"
         return 1
     fi
@@ -444,7 +455,8 @@ ux_filter_logs() {
     local color_info="${UX_INFO}"
     local reset="${UX_RESET}"
 
-    while IFS= read -r line; do
+    while IFS= read -r line;
+    do
         if [[ "$line" =~ ERROR ]]; then
             echo "${color_error}${line}${reset}"
         elif [[ "$line" =~ WARN ]]; then
@@ -456,4 +468,3 @@ ux_filter_logs() {
         fi
     done
 }
-

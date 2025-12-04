@@ -38,17 +38,17 @@ fi
 # This check is complex and can lead to false positives/negatives.
 # For now, let's focus on detecting *help functions that don't call ux_header or ux_section.
 ux_section "Checking for help functions missing UX formatting"
-local help_funcs=()
+help_funcs=()
 while IFS= read -r func; do
-    local func_name="${func%%(*}"
+    func_name="${func%%(*}"
     if [[ "$func_name" =~ help$ ]] && [[ "$func_name" != "myhelp" ]] && [[ "$func_name" != _* ]]; then
         help_funcs+=("$func_name")
     fi
 done < <(declare -F | awk '{print $3}' | { grep 'help$' || true; } | LC_ALL=C sort) # Need to load functions first to declare -F
 
-local help_format_issues=0
+help_format_issues=0
 for hf in "${help_funcs[@]}"; do
-    local func_definition=$(type "$hf" 2>/dev/null)
+    func_definition=$(type "$hf" 2>/dev/null)
     if ! (echo "$func_definition" | grep -q "ux_header" && echo "$func_definition" | grep -q "ux_section"); then
         ux_warning "Help function '$hf' might not be using ux_header/ux_section for formatting."
         ((help_format_issues++))
@@ -64,7 +64,7 @@ fi
 
 # Check 3: Python scripts have execute permission
 ux_section "Checking Python scripts execute permissions"
-local python_script_issues=0
+python_script_issues=0
 for py_script in "${DOTFILES_BASH_DIR}/scripts/"*.py; do
     if [ -f "$py_script" ]; then
         if [ ! -x "$py_script" ]; then
@@ -86,5 +86,5 @@ ux_divider_thick
 if [ "$found_issues" -eq 0 ] && [ "$help_format_issues" -eq 0 ] && [ "$python_script_issues" -eq 0 ]; then
     ux_success "All UX consistency checks passed!"
 else
-    ux_error "Found $(($found_issues + $help_format_issues + $python_script_issues)) total UX consistency issues."
+    ux_error "Found $((found_issues + help_format_issues + python_script_issues)) total UX consistency issues."
 fi

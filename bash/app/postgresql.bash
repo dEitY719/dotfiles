@@ -129,15 +129,15 @@ psql_add() {
         return 1
     fi
 
-    printf "${UX_INFO}❯${UX_RESET} Database Name [default: $svc_name]: "
+    printf "%s❯%s Database Name [default: %s]: " "${UX_INFO}" "${UX_RESET}" "$svc_name"
     read -r db_name
     db_name=${db_name:-$svc_name}
 
-    printf "${UX_INFO}❯${UX_RESET} User Name [default: ${USER}]: "
+    printf "%s❯%s User Name [default: %s]: " "${UX_INFO}" "${UX_RESET}" "$USER"
     read -r db_user
     db_user=${db_user:-$USER}
 
-    printf "${UX_INFO}❯${UX_RESET} Password: "
+    printf "%s❯%s Password: " "${UX_INFO}" "${UX_RESET}"
     read -r -s db_pass
     echo ""
     
@@ -189,7 +189,7 @@ psql_del() {
     done
     echo ""
 
-    printf "${UX_WARNING}❯${UX_RESET} Select number to delete (or 'q' to quit): "
+    printf "%s❯%s Select number to delete (or 'q' to quit): " "${UX_WARNING}" "${UX_RESET}"
     read -r selection
     
     if [[ "$selection" == "q" ]]; then return 0; fi
@@ -279,7 +279,7 @@ psql_user() {
         ;;
     create)
         if [[ -z "$arg1" ]]; then
-            printf "${UX_INFO}❯${UX_RESET} Enter new username: "
+            printf "%s❯%s Enter new username: " "${UX_INFO}" "${UX_RESET}"
             read -r arg1
         fi
         if [[ -z "$arg1" ]]; then
@@ -287,7 +287,7 @@ psql_user() {
             return 1
         fi
 
-        printf "${UX_INFO}❯${UX_RESET} Enter password for '$arg1': "
+        printf "%s❯%s Enter password for '%s': " "${UX_INFO}" "${UX_RESET}" "$arg1"
         read -r -s arg2
         echo ""
         echo "Creating user '$arg1'..."
@@ -295,7 +295,7 @@ psql_user() {
         ;;
     delete)
         if [[ -z "$arg1" ]]; then
-            printf "${UX_WARNING}❯${UX_RESET} Enter username to DELETE: "
+            printf "%s❯%s Enter username to DELETE: " "${UX_WARNING}" "${UX_RESET}"
             read -r arg1
         fi
         if [[ -z "$arg1" ]]; then
@@ -312,22 +312,22 @@ psql_user() {
             echo "Usage: psql_user rename <old_name> <new_name>"
             return 1
         fi
-        echo "Renaming '$arg1' to '$arg2'..."
+        echo "Renaming '$arg1' to '$arg2' நான"
         _admin_sql "postgres" "ALTER USER $arg1 RENAME TO $arg2;" && ux_success "Success."
         ;;
     passwd)
         if [[ -z "$arg1" ]]; then
-            printf "${UX_INFO}❯${UX_RESET} Enter username to change password: "
+            printf "%s❯%s Enter username to change password: " "${UX_INFO}" "${UX_RESET}"
             read -r arg1
         fi
-        printf "${UX_INFO}❯${UX_RESET} Enter NEW password for '$arg1': "
+        printf "%s❯%s Enter NEW password for '%s': " "${UX_INFO}" "${UX_RESET}" "$arg1"
         read -r -s arg2
         echo ""
         _admin_sql "postgres" "ALTER USER $arg1 WITH PASSWORD '$arg2';" && ux_success "Password updated."
         ;;
     attr)
         if [[ -z "$arg1" ]]; then
-            printf "${UX_INFO}❯${UX_RESET} Enter username to modify attributes: "
+            printf "%s❯%s Enter username to modify attributes: " "${UX_INFO}" "${UX_RESET}"
             read -r arg1
         fi
         if [[ -z "$arg1" ]]; then
@@ -367,7 +367,7 @@ psql_user() {
         fi
 
         ux_success "Done."
-        _admin_sql "postgres" "\\du $arg1"
+        _admin_sql "postgres" "\du $arg1"
         ;;
     *)
         echo "Usage: psql_user <command>"
@@ -386,6 +386,12 @@ psql_user() {
 # 5) Help & Wrapper
 # -------------------------------
 psqlhelp() {
+    local bold blue green yellow reset
+    bold=$(tput bold 2>/dev/null || echo "")
+    blue=$(tput setaf 4 2>/dev/null || echo "")
+    green=$(tput setaf 2 2>/dev/null || echo "")
+    yellow=$(tput setaf 3 2>/dev/null || echo "")
+    reset=$(tput sgr0 2>/dev/null || echo "")
     if [[ $# -gt 0 ]]; then
         # Legacy/Direct mode support: psqlhelp <service> <cmd>
         local svc="$1"
@@ -395,40 +401,42 @@ psqlhelp() {
         return
     fi
 
-    ux_header "PostgreSQL Manager"
+    cat <<EOF
+${bold}${blue}[PostgreSQL Manager]${reset}
 
-    ux_section "Services & DBs"
-    ux_table_row "psql_add" "Add Service" "Wizard: DB/User creation"
-    ux_table_row "psql_del" "Remove Service" "Wizard: Drop DB/User"
-    ux_table_row "psql_<name>" "Connect" "e.g., psql_dmc_dev"
-    echo ""
+    ${bold}${green}Services & DBs${reset}
+        ${yellow}psql_add${reset}      : Add a new Service (Wizard: DB/User creation included)
+        ${yellow}psql_del${reset}      : Remove a Service (Wizard: Drop DB/User option included)
+        ${yellow}psql_<name>${reset}  : Connect to DB (e.g., psql_dmc_dev)
 
-    ux_section "User Management"
-    ux_table_row "psql_user list" "List Users" "Show all users"
-    ux_table_row "psql_user create" "Create User" "Create new user"
-    ux_table_row "psql_user attr" "Attributes" "Modify privileges"
-    ux_table_row "psql_user passwd" "Password" "Change password"
-    ux_table_row "psql_user delete" "Delete User" "Remove user"
-    echo ""
+    ${bold}${green}User Management${reset}
+        ${yellow}psql_user list${reset}           : List all users
+        ${yellow}psql_user create <name>${reset}  : Create a new user
+        ${yellow}psql_user attr <name>${reset}    : Modify attributes (CreateDB, Superuser...)
+        ${yellow}psql_user rename <o> <n>${reset} : Rename a user
+        ${yellow}psql_user passwd <name>${reset}  : Change password
+        ${yellow}psql_user delete <name>${reset}  : Delete a user
 
-    ux_section "Server Control"
-    ux_table_row "psql_server" "status" "Check server status"
-    echo ""
+    ${bold}${green}Server Control${reset}    
+        ${yellow}psql_server status${reset} : Check server status (start/stop/restart)
 
-    ux_section "Current Services"
+    ${bold}${green}Current Services${reset}
+EOF
+
     if [[ ${#services[@]} -eq 0 ]]; then
-        ux_warning "No services found. Run 'psql_add' or check config"
+        echo "  (No services found. Run 'psql_add' or check configuration)"
     else
-        ux_table_header "ALIAS" "DATABASE" "USER"
+        # Simple Table View
+        printf "\t  %-20s %-25s %-15s\n" "ALIAS" "DATABASE" "USER"
+        printf "\t  %-20s %-25s %-15s\n" "-----" "--------" "----"
         for entry in "${services[@]}"; do
             read -r svc db user _ <<<"$entry"
-            ux_table_row "psql_$svc" "$db" "$user"
+            printf "\t  %-20s %-25s %-15s\n" "psql_$svc" "$db" "$user"
         done
     fi
-    
-    echo ""
-    ux_info "Config File: $PG_SERVICES_FILE"
-    echo ""
+    echo
+    echo "    ${bold}${green}Config File${reset}: $PG_SERVICES_FILE"
+    echo
 }
 
 # Server control wrapper (Legacy support)

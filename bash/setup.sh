@@ -29,6 +29,7 @@ log_debug() { echo "${UX_MUTED}[DEBUG] $1${UX_RESET}"; }
 log_warning() { ux_warning "$1"; }
 
 # Legacy init_logging shim (no-op as ux_lib loads immediately)
+# shellcheck disable=SC2317
 init_logging() { :; }
 
 # --- Functions ---
