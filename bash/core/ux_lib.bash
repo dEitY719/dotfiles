@@ -25,17 +25,17 @@ UX_RESET=$(tput sgr0 2>/dev/null || echo "")
 # Semantic colors (named by purpose, not appearance)
 # Use these instead of direct color codes for consistency
 export UX_PRIMARY
-UX_PRIMARY=$(tput setaf 4 2>/dev/null || echo "")      # blue - headers, titles
+UX_PRIMARY=$(tput setaf 4 2>/dev/null || echo "") # blue - headers, titles
 export UX_SUCCESS
-UX_SUCCESS=$(tput setaf 2 2>/dev/null || echo "")      # green - success states
+UX_SUCCESS=$(tput setaf 2 2>/dev/null || echo "") # green - success states
 export UX_WARNING
-UX_WARNING=$(tput setaf 3 2>/dev/null || echo "")      # yellow - warnings
+UX_WARNING=$(tput setaf 3 2>/dev/null || echo "") # yellow - warnings
 export UX_ERROR
-UX_ERROR=$(tput setaf 1 2>/dev/null || echo "")        # red - errors
+UX_ERROR=$(tput setaf 1 2>/dev/null || echo "") # red - errors
 export UX_INFO
-UX_INFO=$(tput setaf 6 2>/dev/null || echo "")         # cyan - info messages
+UX_INFO=$(tput setaf 6 2>/dev/null || echo "") # cyan - info messages
 export UX_MUTED
-UX_MUTED=$(tput setaf 8 2>/dev/null || echo "")        # gray - secondary info
+UX_MUTED=$(tput setaf 8 2>/dev/null || echo "") # gray - secondary info
 
 # =============================================================================
 # Standard Output Functions
@@ -116,7 +116,7 @@ ux_spinner() {
 
     while kill -0 "$pid" 2>/dev/null; do
         printf "\r%s%s%s %s..." "${UX_INFO}" "${frames[$i]}" "${UX_RESET}" "$message"
-        i=$(( (i + 1) % ${#frames[@]} ))
+        i=$(((i + 1) % ${#frames[@]}))
         sleep "$delay"
     done
 
@@ -139,7 +139,7 @@ ux_with_spinner() {
     local temp_log="/tmp/ux_spinner_$$.log"
 
     # Run command in background
-    "${cmd[@]}" &> "$temp_log" &
+    "${cmd[@]}" &>"$temp_log" &
     local pid=$!
 
     # Show spinner
@@ -184,7 +184,6 @@ ux_with_progress() {
         return $?
     fi
 }
-
 
 # Simple progress dots (for lighter feedback)
 # Usage: ux_progress_dots <pid>
@@ -264,9 +263,9 @@ ux_menu() {
 
         local result
         # Pass config as argument, ensuring stdin is connected to tty for interaction
-        result=$(python3 "$menu_script" "$config" < /dev/tty)
+        result=$(python3 "$menu_script" "$config" </dev/tty)
         local py_exit_code=$?
-        
+
         # Check Python script's exit code for cancellation
         if [ $py_exit_code -eq 0 ]; then
             echo "$result"
@@ -288,7 +287,7 @@ ux_menu() {
         echo ""
         printf "%s❯%s Select: " "${UX_INFO}" "${UX_RESET}"
         read -r choice
-        
+
         if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
             echo $((choice - 1))
         else
@@ -297,7 +296,6 @@ ux_menu() {
         fi
     fi
 }
-
 
 # =============================================================================
 # Table Formatting
@@ -401,8 +399,7 @@ ux_require() {
     local tool_name="$1"
     local msg="${2:-$tool_name is required but not installed}"
 
-    if ! command -v "$tool_name" &> /dev/null;
-    then
+    if ! command -v "$tool_name" &>/dev/null; then
         ux_error "$msg"
         return 1
     fi
@@ -455,8 +452,7 @@ ux_filter_logs() {
     local color_info="${UX_INFO}"
     local reset="${UX_RESET}"
 
-    while IFS= read -r line;
-    do
+    while IFS= read -r line; do
         if [[ "$line" =~ ERROR ]]; then
             echo "${color_error}${line}${reset}"
         elif [[ "$line" =~ WARN ]]; then

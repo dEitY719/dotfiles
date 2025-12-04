@@ -61,7 +61,6 @@ else
     ux_error "Found $help_format_issues help functions with potential formatting issues."
 fi
 
-
 # Check 3: Python scripts have execute permission
 ux_section "Checking Python scripts execute permissions"
 python_script_issues=0
@@ -78,7 +77,6 @@ if [ "$python_script_issues" -eq 0 ]; then
 else
     ux_error "Found $python_script_issues Python scripts without execute permissions."
 fi
-
 
 # Summary
 echo ""

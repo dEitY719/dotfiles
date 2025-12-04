@@ -2,9 +2,9 @@
 
 # bash/app/docker.bash
 
-# ------------------------------- 
+# -------------------------------
 # Docker / Docker Compose Aliases
-# ------------------------------- 
+# -------------------------------
 # 참고: Docker Compose V2('docker compose') 기준입니다.
 # 구버전(V1: docker-compose) 사용 시 아래의 'docker compose'를 'docker-compose'로 변경하세요.
 
@@ -90,10 +90,9 @@ dcl_errors() {
     dcl "$service" | ux_filter_logs
 }
 
-
-# ------------------------------- 
+# -------------------------------
 # Docker Standard Aliases
-# ------------------------------- 
+# -------------------------------
 alias dps='docker ps'       # 실행 중 컨테이너
 alias dpsa='docker ps -a'   # 모든 컨테이너(정지 포함)
 alias di='docker images'    # 이미지 목록
@@ -106,9 +105,9 @@ alias drmi='docker rmi'         # 개별 이미지 삭제
 alias dlogs='docker logs -f'    # 개별 컨테이너 로그 follow
 alias dinspect='docker inspect' # 컨테이너/이미지 상세 정보
 
-# ------------------------------- 
+# -------------------------------
 # Utility Functions
-# ------------------------------- 
+# -------------------------------
 
 # 컨테이너 쉘 접속 (bash 우선, 없으면 sh)
 # 사용법: dbash <container_name_or_id>
@@ -448,9 +447,9 @@ dproxy_show() {
     fi
 }
 
-# ------------------------------- 
+# -------------------------------
 # Docker Helper
-# ------------------------------- 
+# -------------------------------
 dockerhelp() {
     ux_header "Docker / Docker Compose Quick Commands"
 

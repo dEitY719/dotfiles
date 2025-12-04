@@ -298,40 +298,80 @@ main() {
         read -rp "$(echo -e "${UX_WARNING}❯${UX_RESET}") Select demo: " choice
 
         case "$choice" in
-            1) clear; demo_colors ;;
-            2) clear; demo_headers ;;
-            3) clear; demo_lists ;;
-            4) clear; demo_progress ;; # basic spinner
-            5) clear; demo_interactive ;; # confirm/input
-            6) clear; demo_menu ;;
-            7) clear; demo_rich_progress ;;
-            8) clear; demo_log_filtering ;;
-            9) clear; demo_usage ;;
-            [aA]) clear; demo_real_world ;;
-            [zZ])
-                clear; demo_colors
-                clear; demo_headers
-                clear; demo_lists
-                clear; demo_progress
-                clear; demo_interactive
-                clear; demo_menu
-                clear; demo_rich_progress
-                clear; demo_log_filtering
-                clear; demo_usage
-                clear; demo_real_world
-                ;; 
-            0)
-                echo ""
-                ux_success "Thanks for trying the UX library!"
-                ux_info "Run ${UX_BOLD}uxhelp${UX_RESET} to see all available functions"
-                echo ""
-                exit 0
-                ;; 
-            *)
-                clear
-                ux_error "Invalid choice: $choice"
-                sleep 1
-                ;; 
+        1)
+            clear
+            demo_colors
+            ;;
+        2)
+            clear
+            demo_headers
+            ;;
+        3)
+            clear
+            demo_lists
+            ;;
+        4)
+            clear
+            demo_progress
+            ;; # basic spinner
+        5)
+            clear
+            demo_interactive
+            ;; # confirm/input
+        6)
+            clear
+            demo_menu
+            ;;
+        7)
+            clear
+            demo_rich_progress
+            ;;
+        8)
+            clear
+            demo_log_filtering
+            ;;
+        9)
+            clear
+            demo_usage
+            ;;
+        [aA])
+            clear
+            demo_real_world
+            ;;
+        [zZ])
+            clear
+            demo_colors
+            clear
+            demo_headers
+            clear
+            demo_lists
+            clear
+            demo_progress
+            clear
+            demo_interactive
+            clear
+            demo_menu
+            clear
+            demo_rich_progress
+            clear
+            demo_log_filtering
+            clear
+            demo_usage
+            clear
+            demo_real_world
+            ;;
+        0)
+            echo ""
+            ux_success "Thanks for trying the UX library!"
+            ux_info "Run ${UX_BOLD}uxhelp${UX_RESET} to see all available functions"
+            echo ""
+            exit 0
+            ;;
+        *)
+            clear
+            ux_error "Invalid choice: $choice"
+            sleep 1
+            ;;
         esac
     done
 }

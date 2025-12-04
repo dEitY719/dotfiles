@@ -168,7 +168,7 @@ done
 # -------------------------------
 mysql_list() {
     local service_only="$1"
-    
+
     if [[ "$service_only" == "true" ]]; then
         ux_table_header "Service Name" "Alias" ""
         for entry in "${services[@]}"; do
@@ -184,7 +184,7 @@ mysql_list() {
             db_user=$(echo "$entry" | awk '{print $3}')
             db_pass=$(echo "$entry" | awk '{print $4}')
             alias_name="mysql_${service_name}"
-            
+
             # Hide password in display if needed, but showing connection string for now
             local conn_str="mysql://${db_user}:***@localhost:3306/${db_name}"
             ux_table_row "$service_name" "$alias_name" "$conn_str"

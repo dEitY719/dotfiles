@@ -88,11 +88,11 @@ for dir in "${DOTFILES_BASH_DIR}"/*; do
     dir_name=$(basename "$dir")
 
     # Skip special directories that shouldn't be auto-loaded
-    [[ "$dir_name" == "core" ]] && continue      # Already loaded (ux_lib.bash)
-    [[ "$dir_name" == "env" ]] && continue       # Already loaded above
-    [[ "$dir_name" == "scripts" ]] && continue   # Executable scripts, not sourced
-    [[ "$dir_name" == "config" ]] && continue    # Configuration files only
-    [[ "$dir_name" == "claude" ]] && continue    # Claude-specific settings
+    [[ "$dir_name" == "core" ]] && continue    # Already loaded (ux_lib.bash)
+    [[ "$dir_name" == "env" ]] && continue     # Already loaded above
+    [[ "$dir_name" == "scripts" ]] && continue # Executable scripts, not sourced
+    [[ "$dir_name" == "config" ]] && continue  # Configuration files only
+    [[ "$dir_name" == "claude" ]] && continue  # Claude-specific settings
 
     # Load all .bash files in this directory (including local.bash)
     for f in "$dir"/*.bash; do

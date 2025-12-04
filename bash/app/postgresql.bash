@@ -123,7 +123,7 @@ psql_add() {
     if ! svc_name=$(ux_input "Service Name (Alias suffix, e.g. my_dev):" "."); then
         return 1
     fi
-    
+
     if grep -q "^$svc_name " "$PG_SERVICES_FILE"; then
         ux_error "Service '$svc_name' already exists."
         return 1
@@ -140,7 +140,7 @@ psql_add() {
     printf "%s❯%s Password: " "${UX_INFO}" "${UX_RESET}"
     read -r -s db_pass
     echo ""
-    
+
     if [[ -z "$db_pass" ]]; then
         ux_error "Password cannot be empty."
         return 1
@@ -191,7 +191,7 @@ psql_del() {
 
     printf "%s❯%s Select number to delete (or 'q' to quit): " "${UX_WARNING}" "${UX_RESET}"
     read -r selection
-    
+
     if [[ "$selection" == "q" ]]; then return 0; fi
     if ! [[ "$selection" =~ ^[0-9]+$ ]] || [[ "$selection" -ge "${#services[@]}" ]]; then
         ux_error "Invalid selection."
@@ -203,7 +203,7 @@ psql_del() {
 
     echo ""
     ux_info "Selected: ${UX_BOLD}$svc_name${UX_RESET}"
-    
+
     if ux_confirm "Also DROP DATABASE '$db_name' and USER '$db_user' from PostgreSQL?" "n"; then
         # Drop DB
         echo " -> Terminating connections..."

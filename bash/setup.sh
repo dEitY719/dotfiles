@@ -23,7 +23,10 @@ source "${DOTFILES_BASH_DIR}/core/ux_lib.bash"
 # Define legacy mapping functions for backward compatibility
 log_info() { ux_info "$1"; }
 log_error() { ux_error "$1"; }
-log_critical() { ux_error "$1"; exit 1; }
+log_critical() {
+    ux_error "$1"
+    exit 1
+}
 log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
 log_debug() { echo "${UX_MUTED}[DEBUG] $1${UX_RESET}"; }
 log_warning() { ux_warning "$1"; }
