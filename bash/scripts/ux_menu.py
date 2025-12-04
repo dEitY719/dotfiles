@@ -42,7 +42,8 @@ def show_menu(title: str, options: List[str], allow_cancel: bool = True) -> Opti
             choice = Prompt.ask(
                 "\n[yellow]Select an option[/yellow]",
                 choices=[str(i) for i in range(len(options) + 1)],
-                show_choices=False
+                show_choices=False,
+                console=console
             )
 
             choice_num = int(choice)
