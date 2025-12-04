@@ -6,7 +6,9 @@
 
 # 1. Check for Codex Environment (npm managed or explicit CLI flag)
 is_codex_env() {
-    [[ -n "$CODEX_CLI" ]] || [[ -n "$CODEX_MANAGED_BY_NPM" ]]
+    [[ -n "$CODEX_CLI" ]] || \
+    [[ -n "$CODEX_MANAGED_BY_NPM" ]] || \
+    [[ -n "$CODEX_SANDBOX_NETWORK_DISABLED" ]]
 }
 
 # 2. Main Guard Logic
@@ -14,6 +16,9 @@ is_codex_env() {
 # - Non-interactive shell AND no force flag
 # - Explicit skip flag is set
 # - Codex environment detected (unless forced)
+# Returns:
+#   0 (true)  = YES, skip initialization
+#   1 (false) = NO, proceed with initialization
 should_skip_init() {
     if [[ -n "$DOTFILES_FORCE_INIT" ]]; then
         return 1 # Do not skip
