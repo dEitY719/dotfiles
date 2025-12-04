@@ -17,19 +17,15 @@
 alias uvi='curl -LsSf https://astral.sh/uv/install.sh | sh'
 
 # (2) 가장 자주 쓰는 것들
-alias uvs='uv sync'                   # 기본/프로덕션 동기화
+alias uvs='uv sync'                   # 기본/프로덕션 동기화 (설치 및 정리 포함)
 alias uvu='uv sync --upgrade'         # 업그레이드 동기화
 alias uvd='uv sync --dev --extra dev' # dev 환경 설치
-alias uvp='uv sync'                   # prod 동기화(=uvs)
 alias uvk='uv lock'                   # lock 파일 갱신
 alias uvl='uv pip list'               # 설치 목록 확인
 
 # (3) export / requirements 기반 sync
 alias uvc='uv pip compile pyproject.toml -o requirements.txt'
 alias uvr='uv pip sync requirements.txt'
-
-# (4) 클린 동기화 (여분 패키지 제거, 기본 동작과 동일)
-alias uvclean='uv sync'
 
 # (5) 상태/검증
 alias uvcheck='uv pip check'
@@ -39,10 +35,9 @@ uvhelp() {
     ux_header "UV Quick Commands"
 
     ux_section "Sync & Install"
-    ux_table_row "uvs" "uv sync" "Base sync (prod)"
+    ux_table_row "uvs" "uv sync" "Sync env & prune (Prod)"
     ux_table_row "uvu" "uv sync --upgrade" "Upgrade deps"
     ux_table_row "uvd" "uv sync --dev" "Dev install"
-    ux_table_row "uvp" "uv sync" "Prod install"
     ux_table_row "uvi" "install script" "Install UV tool"
     echo ""
 
@@ -54,7 +49,6 @@ uvhelp() {
     echo ""
 
     ux_section "Maintenance"
-    ux_table_row "uvclean" "uv sync" "Remove unused (default)"
     ux_table_row "uvcheck" "uv pip check" "Verify env"
     echo ""
 
