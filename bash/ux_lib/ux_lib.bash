@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ~/dotfiles/bash/core/ux_lib.bash
+# ~/dotfiles/bash/ux_lib/ux_lib.bash
 # Central UX library for consistent styling across all dotfiles scripts
 
 # This library provides:

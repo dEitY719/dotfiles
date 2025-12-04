@@ -8,7 +8,7 @@ This directory contains modular bash configuration files that are automatically 
 bash/
 ├── alias/              # Command aliases and shortcuts
 ├── app/                # Application-specific configurations
-├── core/               # Core logging and utilities
+├── ux_lib/             # UX library (logging, progress, menu)
 ├── env/                # Environment variables
 ├── util/               # General utility functions
 ├── main.bash           # Main entry point (sources all modules)
@@ -20,46 +20,38 @@ bash/
 
 Files are loaded in the following order (see `main.bash`):
 
-1. **Core** (`core/default_wsl_bashrc.bash`)
-2. **Environment Variables** (`env/*.bash`)
+1. **Environment Variables** (`env/*.bash`)
+2. **UX Library** (`ux_lib/ux_lib.bash`)
 3. **Aliases** (`alias/*.bash`)
 4. **Applications** (`app/*.bash`)
 5. **Utilities** (`util/*.bash`)
 
-## Core Modules
+## UX Library (ux_lib/)
 
-### core/beauty_log.bash
+### ux_lib/ux_lib.bash
 
-Beautiful logging system with colored output and progress indicators.
+Central UX library providing consistent styling, logging, and interactive features.
 
-**Functions:**
-- `init_logging()` - Initialize logging system
-- `log_debug()` - Debug level messages
-- `log_info()` - Informational messages
-- `log_warning()` - Warning messages
-- `log_error()` - Error messages
-- `log_critical()` - Critical errors (exits with code 1)
-- `log_progress_start()` - Start progress spinner
-- `log_progress_stop()` - Stop progress spinner
-- `print_bash_config_loaded()` - Display success banner
-- `print_seraph_banner()` - Display ASCII art banner
+**Features:**
+- **Semantic Colors**: `UX_PRIMARY`, `UX_SUCCESS`, `UX_ERROR`, etc.
+- **Output Functions**: `ux_header`, `ux_section`, `ux_success`, `ux_error`
+- **Progress Indicators**: `ux_spinner`, `ux_with_progress`
+- **Interactive Components**: `ux_confirm`, `ux_menu`, `ux_input`
 
 **Example:**
 ```bash
-source "${DOTFILES_BASH_DIR}/core/beauty_log.bash"
-init_logging "${DOTFILES_BASH_DIR}"
+source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
 
-log_info "This is an informational message"
-log_error "This is an error message"
+ux_header "My Script"
+ux_info "This is an informational message"
+
+if ux_confirm "Do you want to proceed?"; then
+    ux_with_spinner "Processing..." sleep 2
+    ux_success "Done!"
+else
+    ux_error "Cancelled"
+fi
 ```
-
-### core/log_util.bash
-
-Additional logging utilities and helper functions.
-
-### core/default_wsl_bashrc.bash
-
-Default WSL bash configuration, includes standard Ubuntu/Debian bashrc settings.
 
 ## Environment Modules (env/)
 

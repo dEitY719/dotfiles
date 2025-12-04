@@ -31,7 +31,7 @@ dotfiles/
 │   ├── claude/            # Claude-related configurations
 │   │   ├── tox-agent.md   # Claude Code tox linting agent
 │   │   └── statusline-command.sh  # Claude Code custom status line
-│   ├── core/              # Core functionality
+│   ├── ux_lib/            # Core functionality (UX library)
 │   │   ├── beauty_log.bash       # Logging utilities
 │   │   ├── log_util.bash         # Additional log functions
 │   │   └── default_wsl_bashrc.bash

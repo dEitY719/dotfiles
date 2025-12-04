@@ -7,7 +7,7 @@ This repository serves as a collection of dotfiles, primarily focusing on bash s
 *   **Bash Scripts (`bash/`)**:
     *   **Aliases (`alias/`)**: Contains aliases for common commands, directory navigation, Python-specific tasks, and general system utilities.
     *   **Application-specific Scripts (`app/`)**: Includes scripts for configuring and interacting with various applications such as Cursor, Custom Project setups, Gemini-related tools, Git, JetBrains IDEs, MySQL, NPM, Obsidian, PostgreSQL, Pyenv, Python, and UV.
-    *   **Core Utilities (`core/`)**: Provides foundational utilities like `beauty_log.bash` and `log_util.bash` for enhanced logging, and `default_wsl_bashrc.bash` for Windows Subsystem for Linux (WSL) specific configurations.
+    *   **UX Library (`ux_lib/`)**: Provides a self-contained UX library (`ux_lib.bash`) for consistent styling, logging, progress indicators, and interactive components across all scripts.
     *   **Environment Configurations (`env/`)**: Manages environment variables for development, editor settings, Korean language support, locale, PATH adjustments, proxy settings, and security.
     *   **General Utilities (`util/`)**: Contains miscellaneous utility scripts like `my_man.bash`.
 *   **Configuration Files**:
