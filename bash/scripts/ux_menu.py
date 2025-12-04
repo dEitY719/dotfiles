@@ -8,7 +8,8 @@ from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
 
-console = Console()
+# Initialize console to write to stderr so UI is visible even when stdout is captured
+console = Console(stderr=True)
 
 def show_menu(title: str, options: List[str], allow_cancel: bool = True) -> Optional[int]:
     """
