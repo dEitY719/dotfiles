@@ -463,12 +463,6 @@ psql_user() {
 # 5) Help & Wrapper
 # -------------------------------
 psqlhelp() {
-    local bold blue green yellow reset
-    bold=$(tput bold 2>/dev/null || echo "")
-    blue=$(tput setaf 4 2>/dev/null || echo "")
-    green=$(tput setaf 2 2>/dev/null || echo "")
-    yellow=$(tput setaf 3 2>/dev/null || echo "")
-    reset=$(tput sgr0 2>/dev/null || echo "")
     if [[ $# -gt 0 ]]; then
         # Legacy/Direct mode support: psqlhelp <service> <cmd>
         local svc="$1"
@@ -478,42 +472,42 @@ psqlhelp() {
         return
     fi
 
-    cat <<EOF
-${bold}${blue}[PostgreSQL Manager]${reset}
+    ux_header "PostgreSQL Manager"
 
-    ${bold}${green}Services & DBs${reset}
-        ${yellow}psql_add${reset}      : Add a new Service (Wizard: DB/User creation included)
-        ${yellow}psql_del${reset}      : Remove a Service (Wizard: Drop DB/User option included)
-        ${yellow}psql_<name>${reset}  : Connect to DB (e.g., psql_dmc_dev)
+    ux_section "Services & DBs"
+    ux_table_row "psql_add" "Add service" "Interactive DB/User wizard"
+    ux_table_row "psql_del" "Remove service" "Interactive deletion wizard"
+    ux_table_row "psql_<name>" "Connect" "e.g., psql_dmc_dev"
+    echo ""
 
-    ${bold}${green}User Management${reset}
-        ${yellow}psql_user list${reset}           : List all users
-        ${yellow}psql_user create <name>${reset}  : Create a new user
-        ${yellow}psql_user attr <name>${reset}    : Modify attributes (CreateDB, Superuser...)
-        ${yellow}psql_user rename <o> <n>${reset} : Rename a user
-        ${yellow}psql_user passwd <name>${reset}  : Change password
-        ${yellow}psql_user delete <name>${reset}  : Delete a user
+    ux_section "User Management"
+    ux_table_row "psql_user list" "List users" "Show all PostgreSQL users"
+    ux_table_row "psql_user create" "Create user" "Create a new user"
+    ux_table_row "psql_user attr" "Modify attrs" "CREATEDB, SUPERUSER, etc"
+    ux_table_row "psql_user rename" "Rename user" "Rename existing user"
+    ux_table_row "psql_user passwd" "Change pwd" "Change user password"
+    ux_table_row "psql_user delete" "Delete user" "Delete a user"
+    echo ""
 
-    ${bold}${green}Server Control${reset}    
-        ${yellow}psql_server status${reset} : Check server status (start/stop/restart)
+    ux_section "Server Control"
+    ux_table_row "psql_server" "Server status" "Check/start/stop/restart"
+    ux_table_row "pinstall" "Install script" "Install PostgreSQL on WSL/Linux"
+    echo ""
 
-    ${bold}${green}Current Services${reset}
-EOF
-
+    ux_section "Current Services"
     if [[ ${#services[@]} -eq 0 ]]; then
-        echo "  (No services found. Run 'psql_add' or check configuration)"
+        ux_info "(No services found. Run 'psql_add' to create one)"
     else
-        # Simple Table View
-        printf "\t  %-20s %-25s %-15s\n" "ALIAS" "DATABASE" "USER"
-        printf "\t  %-20s %-25s %-15s\n" "-----" "--------" "----"
+        ux_table_row "ALIAS" "DATABASE" "USER"
         for entry in "${services[@]}"; do
             read -r svc db user _ <<<"$entry"
-            printf "\t  %-20s %-25s %-15s\n" "psql_$svc" "$db" "$user"
+            ux_table_row "psql_$svc" "$db" "$user"
         done
     fi
-    echo
-    echo "    ${bold}${green}Config File${reset}: $PG_SERVICES_FILE"
-    echo
+    echo ""
+
+    ux_info "Config File: ${UX_BOLD}$PG_SERVICES_FILE${UX_RESET}"
+    echo ""
 }
 
 # Server control wrapper (Legacy support)
@@ -524,4 +518,9 @@ psql_server() {
     else
         sudo service postgresql "$action"
     fi
+}
+
+# PostgreSQL 서버 설치 (대화형 스크립트)
+pinstall() {
+    bash /home/bwyoon/dotfiles/mytool/install-postgresql.sh
 }
