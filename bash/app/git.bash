@@ -146,6 +146,38 @@ gcp() {
     return $failed
 }
 
+# Cherry-pick 함수 (특정 작가의 커밋들을 범위에서 찾아 cherry-pick)
+# 사용법: gcpa <커밋범위> [사용자이름]
+# 예: gcpa 751e304..7ffcbd4
+# 예: gcpa 751e304..7ffcbd4 dEitY719
+# 예: gcpa 751e304^..7ffcbd4 (시작 커밋 포함)
+gcpa() {
+    local commit_range="$1"
+    local author="${2:-dEitY719}"  # 기본값: dEitY719
+
+    if [ -z "$commit_range" ]; then
+        echo "사용법: gcpa <커밋범위> [사용자이름]"
+        echo "예: gcpa 751e304..7ffcbd4"
+        echo "예: gcpa 751e304..7ffcbd4 dEitY719"
+        echo "⚠️ 커밋범위 형식: <start>..<end> 또는 <start>^..<end>"
+        return 1
+    fi
+
+    # 지정된 범위와 작가의 커밋들을 가져오기
+    local commits
+    commits=$(git log --author="$author" --no-merges --reverse --pretty=format:"%h" "$commit_range" 2>/dev/null)
+
+    if [ -z "$commits" ]; then
+        echo "❌ '$author' 작가의 커밋을 찾을 수 없습니다: $commit_range"
+        return 1
+    fi
+
+    echo "📝 Cherry-picking commits by '$author' in range $commit_range:"
+    echo "$commits"
+    echo ""
+    echo "$commits" | xargs git cherry-pick
+}
+
 # Upstream main 브랜치 로그 (기본값)
 alias glum='git log --oneline -n 20 upstream/main'
 
@@ -257,6 +289,7 @@ githelp() {
 
     ux_section "Cherry-pick"
     ux_table_row "gcp" "gcp <commit>..." "Cherry-pick commits"
+    ux_table_row "gcpa" "gcpa <range> [author]" "Cherry-pick by author"
     echo ""
 
     ux_section "Special"
