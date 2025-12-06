@@ -118,52 +118,127 @@ psql_add() {
     fi
 
     ux_header "Add New PostgreSQL Service"
-    ux_info "Config File: $PG_SERVICES_FILE"
+    echo ""
+    ux_info "이 마법사는 PostgreSQL 데이터베이스 연결 정보를 저장합니다."
+    ux_info "저장 후 'psql_<alias>' 명령으로 빠르게 접속할 수 있습니다."
+    echo ""
+    ux_divider
     echo ""
 
-    # 1. Get Inputs
-    if ! svc_name=$(ux_input "Service Name (Alias suffix, e.g. my_dev):" "."); then
-        return 1
-    fi
+    # 1. Get Service Name
+    ux_section "📍 Step 1: 서비스 별칭 설정"
+    ux_info "이 서비스를 식별할 짧은 이름을 입력하세요."
+    ux_bullet "예시: my_dev, prod_db, local_test"
+    echo ""
+    while true; do
+        printf "%s❯%s 서비스 별칭 (예: my_dev): " "${UX_PRIMARY}" "${UX_RESET}"
+        read -r svc_name
 
-    if grep -q "^$svc_name " "$PG_SERVICES_FILE"; then
-        ux_error "Service '$svc_name' already exists."
-        return 1
-    fi
+        if [[ -z "$svc_name" ]]; then
+            ux_error "별칭을 입력해주세요."
+            continue
+        fi
 
-    printf "%s❯%s Database Name [default: %s]: " "${UX_INFO}" "${UX_RESET}" "$svc_name"
+        if ! [[ "$svc_name" =~ ^[a-zA-Z0-9_]+$ ]]; then
+            ux_error "영문, 숫자, 언더스코어(_)만 사용 가능합니다."
+            continue
+        fi
+
+        if grep -q "^$svc_name " "$PG_SERVICES_FILE"; then
+            ux_error "이미 존재하는 별칭입니다: '$svc_name'"
+            continue
+        fi
+
+        break
+    done
+    echo ""
+
+    # 2. Get Database Name
+    ux_section "🗄️  Step 2: 데이터베이스 이름"
+    ux_info "PostgreSQL에서 사용할 데이터베이스 이름입니다."
+    ux_bullet "기본값: $svc_name (엔터를 누르면 기본값 사용)"
+    echo ""
+    printf "%s❯%s 데이터베이스 이름 [%s]: " "${UX_PRIMARY}" "${UX_RESET}" "$svc_name"
     read -r db_name
     db_name=${db_name:-$svc_name}
-
-    printf "%s❯%s User Name [default: %s]: " "${UX_INFO}" "${UX_RESET}" "$USER"
-    read -r db_user
-    db_user=${db_user:-$USER}
-
-    printf "%s❯%s Password: " "${UX_INFO}" "${UX_RESET}"
-    read -r -s db_pass
+    ux_success "선택됨: $db_name"
     echo ""
 
-    if [[ -z "$db_pass" ]]; then
-        ux_error "Password cannot be empty."
-        return 1
+    # 3. Get User Name
+    ux_section "👤 Step 3: 데이터베이스 사용자"
+    ux_info "이 데이터베이스에 접속할 PostgreSQL 사용자입니다."
+    ux_bullet "기본값: $USER (엔터를 누르면 기본값 사용)"
+    echo ""
+    printf "%s❯%s 사용자 이름 [%s]: " "${UX_PRIMARY}" "${UX_RESET}" "$USER"
+    read -r db_user
+    db_user=${db_user:-$USER}
+    ux_success "선택됨: $db_user"
+    echo ""
+
+    # 4. Get Password
+    ux_section "🔐 Step 4: 비밀번호"
+    ux_warning "비밀번호는 화면에 표시되지 않습니다."
+    echo ""
+    while true; do
+        printf "%s❯%s 비밀번호 입력: " "${UX_PRIMARY}" "${UX_RESET}"
+        read -r -s db_pass
+        echo ""
+
+        if [[ -z "$db_pass" ]]; then
+            ux_error "비밀번호를 입력해주세요."
+            continue
+        fi
+
+        printf "%s❯%s 비밀번호 확인: " "${UX_PRIMARY}" "${UX_RESET}"
+        read -r -s db_pass_confirm
+        echo ""
+
+        if [[ "$db_pass" != "$db_pass_confirm" ]]; then
+            ux_error "비밀번호가 일치하지 않습니다."
+            continue
+        fi
+
+        break
+    done
+    ux_success "비밀번호 설정됨"
+    echo ""
+
+    # 5. Review before saving
+    ux_section "📋 입력 정보 확인"
+    ux_divider
+    printf "  %-20s: %s\n" "서비스 별칭" "psql_$svc_name"
+    printf "  %-20s: %s\n" "데이터베이스" "$db_name"
+    printf "  %-20s: %s\n" "사용자" "$db_user"
+    printf "  %-20s: %s\n" "비밀번호" "***"
+    ux_divider
+    echo ""
+
+    if ! ux_confirm "위 정보로 서비스를 등록하시겠습니까?" "y"; then
+        ux_warning "취소되었습니다."
+        return 0
     fi
+    echo ""
 
-    # 2. Save to config (Appends to the physical file, following symlink)
+    # 6. Save to config (Appends to the physical file, following symlink)
     printf "%s  %s  %s  %s\n" "$svc_name" "$db_name" "$db_user" "$db_pass" >>"$PG_SERVICES_FILE"
-    ux_success "Added to $PG_SERVICES_FILE"
+    ux_success "✓ $PG_SERVICES_FILE에 저장되었습니다."
+    echo ""
 
-    # 3. Reload
+    # 7. Reload
     mapfile -t services < <(grep -v '^[[:space:]]*#' "$PG_SERVICES_FILE" | grep -v '^[[:space:]]*$')
     _generate_pg_service_conf
     _register_aliases
 
-    # 4. Offer to create actual DB
-    echo ""
-    if ux_confirm "Do you want to CREATE this Database & User in PostgreSQL now?" "y"; then
+    # 8. Offer to create actual DB
+    ux_section "🚀 다음 단계"
+    if ux_confirm "PostgreSQL에 이 데이터베이스와 사용자를 실제로 생성하시겠습니까?" "y"; then
+        echo ""
         _psql_create_logic "$db_name" "$db_user" "$db_pass"
     fi
 
-    ux_success "Done. Use 'psql_$svc_name' to connect."
+    echo ""
+    ux_success "완료! 다음 명령으로 접속할 수 있습니다:"
+    printf "  %s💡 psql_%s%s\n\n" "${UX_SUCCESS}" "$svc_name" "${UX_RESET}"
 }
 
 # [Interactive] Delete a service

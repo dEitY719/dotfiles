@@ -5,3 +5,4 @@ dmc_dev        dmc_playground_dev   dmc_user   change_me_strong_pw
 sleassem_dev   sleassem_dev         slea_user  change_me_dev_password
 sleassem_test  sleassem_test        slea_user  change_me_test_password
 quantfolio_dev  quantfolio_dev  qf_user  qf_user
+test_db_yyy  test_db_yyy  test_db_bwyoon  foobar
