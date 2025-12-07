@@ -67,7 +67,7 @@ _admin_sql() {
 
 # Validation Helper
 _validate_identifier() {
-    local input=""
+    local input="$1"
     local type="$2"
     if ! [[ "$input" =~ ^[a-zA-Z0-9_]+$ ]]; then
         ux_error "Invalid $type: Use alphanumeric and underscore only."
@@ -81,7 +81,7 @@ _validate_identifier() {
 }
 
 _check_password_strength() {
-    local pwd=""
+    local pwd="$1"
     if [[ ${#pwd} -lt 8 ]]; then
         ux_warning "Password is less than 8 characters. Recommended: 12+ characters."
     fi
