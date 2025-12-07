@@ -151,7 +151,7 @@ if [[ -f "$PG_SERVICES_FILE" ]]; then
 fi
 
 # -------------------------------
-# 3) Core Commands: Add / Del
+# 3) Core Commands: Add / Del / List
 # -------------------------------
 
 # [Interactive] Add a new service (Link Existing)
@@ -227,6 +227,25 @@ psql_add() {
 
     ux_success "Service '$svc_name' added!"
     printf "  %s💡 psql_%s%s\n\n" "${UX_SUCCESS}" "$svc_name" "${UX_RESET}"
+}
+
+# List all configured services
+psql_list() {
+    ux_header "Configured PostgreSQL Services"
+    if [[ ${#services[@]} -eq 0 ]]; then
+        ux_info "No services configured."
+        return 0
+    fi
+
+    printf "${UX_BOLD}%-25s %-25s %-20s${UX_RESET}\n" "ALIAS" "DATABASE" "USER"
+    printf "${UX_BOLD}%-25s %-25s %-20s${UX_RESET}\n" "─────" "────────" "────"
+
+    for entry in "${services[@]}"; do
+        read -r svc db user _ <<<"$entry"
+        printf "%-25s %-25s %-20s\n" "psql_$svc" "$db" "$user"
+    done
+    echo ""
+    ux_info "Config File: $PG_SERVICES_FILE"
 }
 
 # [Interactive] Delete a service
@@ -697,7 +716,7 @@ psqlhelp() {
     fi
 
     ux_header "PostgreSQL Manager"
-    ux_usage "psqlhelp" "" "Show available PostgreSQL commands"
+    # ux_usage "psqlhelp" "" "Show available PostgreSQL commands"
 
     ux_section "Primary Commands"
     ux_table_row "psql_bootstrap" "Create New" "Full Setup: Create DB, User, Grant & Save"
@@ -707,6 +726,7 @@ psqlhelp() {
     echo ""
 
     ux_section "Connections"
+    ux_table_row "psql_list" "List Services" "Show all configured connections"
     if [[ ${#services[@]} -eq 0 ]]; then
         ux_info "  (No services configured)"
     else
