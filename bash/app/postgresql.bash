@@ -283,7 +283,7 @@ psql_del() {
             # Drop DB
             echo " -> Terminating connections..."
             # Use safe parameter passing for query
-            _admin_sql "postgres" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = \ AND pid <> pg_backend_pid();" -v 1="$db_name"
+            _admin_sql "postgres" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db_name' AND pid <> pg_backend_pid();"
             echo " -> Dropping Database '$db_name'..."
             _admin_sql "postgres" "DROP DATABASE IF EXISTS \"$db_name\";"
 
@@ -546,11 +546,12 @@ psql_bootstrap() {
     # Step 1: Create User
     ux_step 1 "Checking User '$user_name'..."
     local user_exists
-    # Use -v for safe parameter passing
-    user_exists=$(_admin_sql "postgres" "SELECT 1 FROM pg_roles WHERE rolname=:'u'" -v u="$user_name" -tA)
+    # Safe to interpolate $user_name because it is validated alphanumeric+underscore
+    user_exists=$(_admin_sql "postgres" "SELECT 1 FROM pg_roles WHERE rolname='$user_name'" -tA)
     
     if [[ "$user_exists" != "1" ]]; then
-        if _admin_sql "postgres" "CREATE USER \"$user_name\" WITH PASSWORD '$password';"; then
+        # Use dollar-quoting for password to handle special chars safely
+        if _admin_sql "postgres" "CREATE USER \"$user_name\" WITH PASSWORD \$\$$password\$\$;"; then
             user_created=true
         else
             ux_error "Failed to create user."
@@ -558,7 +559,7 @@ psql_bootstrap() {
         fi
     else
         ux_info "User exists. Updating password..."
-        _admin_sql "postgres" "ALTER USER \"$user_name\" WITH PASSWORD '$password';"
+        _admin_sql "postgres" "ALTER USER \"$user_name\" WITH PASSWORD \$\$$password\$\$;"
     fi
     
     # Default roles - Explicitly grant CREATEDB, prompt for CREATEROLE
@@ -568,7 +569,7 @@ psql_bootstrap() {
     # Step 2: Create DB
     ux_step 2 "Checking Database '$db_name'..."
     local db_exists
-    db_exists=$(_admin_sql "postgres" "SELECT 1 FROM pg_database WHERE datname=:'d'" -v d="$db_name" -tA)
+    db_exists=$(_admin_sql "postgres" "SELECT 1 FROM pg_database WHERE datname='$db_name'" -tA)
     
     if [[ "$db_exists" != "1" ]]; then
         if _admin_sql "postgres" "CREATE DATABASE \"$db_name\" OWNER \"$user_name\";"; then
@@ -648,8 +649,8 @@ psql_sync() {
         if ux_confirm "Add '$db' to your service list?" "y"; then
             # Try to guess owner
             local owner
-            # Use safe parameter passing
-            owner=$(_admin_sql "postgres" "SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname = :d;" -v d="$db" -tA)
+            # Direct interpolation safe here as $db comes from pg_database listing
+            owner=$(_admin_sql "postgres" "SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname = '$db';" -tA)
             
             ux_info "Owner: $owner"
             printf "%s❯%s Enter Password for user '%s': " "${UX_PRIMARY}" "${UX_RESET}" "$owner"
