@@ -23,14 +23,18 @@ PGSERVICE_CONF="$HOME/.pg_service.conf"
 # Check if config file exists
 if [[ ! -f "$PG_SERVICES_FILE" ]]; then
     touch "$PG_SERVICES_FILE"
+    chmod 0600 "$PG_SERVICES_FILE"
 fi
 
 # Load services from file (Skip comments and empty lines)
-if [[ -f "$PG_SERVICES_FILE" ]]; then
-    mapfile -t services < <(grep -v '^[[:space:]]*#' "$PG_SERVICES_FILE" | grep -v '^[[:space:]]*$')
-else
-    services=()
-fi
+_load_services() {
+    if [[ -f "$PG_SERVICES_FILE" ]]; then
+        mapfile -t services < <(grep -v '^[[:space:]]*#' "$PG_SERVICES_FILE" | grep -v '^[[:space:]]*$')
+    else
+        services=()
+    fi
+}
+_load_services
 
 DEFAULT_HOST="${DEFAULT_HOST:-localhost}"
 DEFAULT_PORT="${DEFAULT_PORT:-5432}"
@@ -43,7 +47,7 @@ _admin_sql() {
     local db="${1:-postgres}"
     local query="${2:-}"
     shift 2
-    # Capture any remaining arguments (e.g. -tA)
+    # Capture any remaining arguments (e.g. -tA, -v var=val)
     local extra_args=("$@")
 
     local cmd=("sudo" "-u" "postgres" "psql" "-v" "ON_ERROR_STOP=1" "-X" "-q" "${extra_args[@]}" "-d" "$db" "-c" "$query")
@@ -53,12 +57,34 @@ _admin_sql() {
         # Fallback to local network connect
         cmd=("psql" "-h" "$DEFAULT_HOST" "-p" "$DEFAULT_PORT" "-U" "postgres" "-v" "ON_ERROR_STOP=1" "-X" "-q" "${extra_args[@]}" "-d" "$db" "-c" "$query")
         if ! printf "\q\n" | "${cmd[@]:0:7}" >/dev/null 2>&1; then
-            echo " [Error] Cannot connect to PostgreSQL as superuser."
-            echo "         Please ensure you have sudo access or 'postgres' user password."
+            ux_error "Cannot connect to PostgreSQL as superuser."
+            ux_info "Please ensure you have sudo access or 'postgres' user password."
             return 1
         fi
     fi
     "${cmd[@]}"
+}
+
+# Validation Helper
+_validate_identifier() {
+    local input=""
+    local type="$2"
+    if ! [[ "$input" =~ ^[a-zA-Z0-9_]+$ ]]; then
+        ux_error "Invalid $type: Use alphanumeric and underscore only."
+        return 1
+    fi
+    if [[ ${#input} -gt 63 ]]; then
+        ux_error "$type exceeds 63 characters (PostgreSQL limit)."
+        return 1
+    fi
+    return 0
+}
+
+_check_password_strength() {
+    local pwd=""
+    if [[ ${#pwd} -lt 8 ]]; then
+        ux_warning "Password is less than 8 characters. Recommended: 12+ characters."
+    fi
 }
 
 # -------------------------------
@@ -74,23 +100,39 @@ _generate_pg_service_conf() {
 
     for entry in "${services[@]}"; do
         read -r svc db user pass <<<"$entry"
-        {
-            echo "[$svc]"
-            echo "host=$DEFAULT_HOST"
-            echo "port=$DEFAULT_PORT"
-            echo "dbname=$db"
-            echo "user=$user"
-            echo "password=$pass"
-            echo ""
-        } >>"$PGSERVICE_CONF"
+        # Sanitize service name to prevent config corruption
+        if [[ "$svc" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            {
+                echo "[$svc]"
+                echo "host=$DEFAULT_HOST"
+                echo "port=$DEFAULT_PORT"
+                echo "dbname=$db"
+                echo "user=$user"
+                echo "password=$pass"
+                echo ""
+            } >>"$PGSERVICE_CONF"
+        fi
     done
 }
 
 _register_aliases() {
     # Clean old aliases (Exclude core commands)
-    while IFS= read -r name; do
+    local old_aliases
+    # Nuclear option: Chain simple greps to avoid any regex/parenthesis parsing issues in $(...)
+    old_aliases=$(declare -F | awk '{print $3}' | grep '^psql_' | \
+        grep -v 'psql_add' | \
+        grep -v 'psql_del' | \
+        grep -v 'psql_db' | \
+        grep -v 'psql_user' | \
+        grep -v 'psql_server' | \
+        grep -v 'psqlhelp' | \
+        grep -v 'psql_list' | \
+        grep -v 'psql_bootstrap' | \
+        grep -v 'psql_sync')
+
+    for name in $old_aliases; do
         unset -f "${name}" 2>/dev/null
-    done < <(declare -F | awk '{print $3}' | grep '^psql_' | grep -Ev '^(psql_add|psql_del|psql_db|psql_user|psql_server|psqlhelp|psql_list|psql_bootstrap|psql_sync)$')
+    done
 
     # Define new aliases
     for entry in "${services[@]}"; do
@@ -124,7 +166,7 @@ psql_add() {
     echo ""
 
     # 1. Get Service Name
-    ux_section "📍 Step 1: Service Alias"
+    ux_section "Step 1: Service Alias"
     ux_info "Short name for this connection (e.g. 'my_dev')."
     while true; do
         printf "%s❯%s Alias name: " "${UX_PRIMARY}" "${UX_RESET}"
@@ -134,10 +176,8 @@ psql_add() {
             ux_error "Alias is required."
             continue
         fi
-        if ! [[ "$svc_name" =~ ^[a-zA-Z0-9_]+$ ]]; then
-            ux_error "Alphanumeric and underscore only."
-            continue
-        fi
+        _validate_identifier "$svc_name" "Alias" || continue
+
         if grep -q "^$svc_name " "$PG_SERVICES_FILE"; then
             ux_error "Alias '$svc_name' already exists."
             continue
@@ -147,21 +187,23 @@ psql_add() {
     echo ""
 
     # 2. Get Database Name
-    ux_section "🗄️  Step 2: Database Name"
+    ux_section "Step 2: Database Name"
     printf "%s❯%s Database Name [%s]: " "${UX_PRIMARY}" "${UX_RESET}" "$svc_name"
     read -r db_name
     db_name=${db_name:-$svc_name}
+    _validate_identifier "$db_name" "Database Name" || return 1
     echo ""
 
     # 3. Get User Name
-    ux_section "👤 Step 3: Database User"
+    ux_section "Step 3: Database User"
     printf "%s❯%s User Name [%s]: " "${UX_PRIMARY}" "${UX_RESET}" "$USER"
     read -r db_user
     db_user=${db_user:-$USER}
+    _validate_identifier "$db_user" "User Name" || return 1
     echo ""
 
     # 4. Get Password
-    ux_section "🔐 Step 4: Password"
+    ux_section "Step 4: Password"
     while true; do
         printf "%s❯%s Enter Password: " "${UX_PRIMARY}" "${UX_RESET}"
         read -r -s db_pass
@@ -176,9 +218,10 @@ psql_add() {
 
     # 6. Save
     printf "%s  %s  %s  %s\n" "$svc_name" "$db_name" "$db_user" "$db_pass" >>"$PG_SERVICES_FILE"
+    chmod 0600 "$PG_SERVICES_FILE"
 
     # Reload
-    mapfile -t services < <(grep -v '^[[:space:]]*#' "$PG_SERVICES_FILE" | grep -v '^[[:space:]]*$')
+    _load_services
     _generate_pg_service_conf
     _register_aliases
 
@@ -190,6 +233,11 @@ psql_add() {
 psql_del() {
     local svc_name
     local selection
+    local dry_run=false
+
+    if [[ "${1:-}" == "--dry-run" ]]; then
+        dry_run=true
+    fi
 
     if [[ ! -f "$PG_SERVICES_FILE" ]]; then
         ux_error "Config file not found: $PG_SERVICES_FILE"
@@ -227,28 +275,41 @@ psql_del() {
     ux_info "Selected: ${UX_BOLD}$svc_name${UX_RESET}"
 
     if ux_confirm "Also DROP DATABASE '$db_name' and USER '$db_user' from PostgreSQL?" "n"; then
-        # Drop DB
-        echo " -> Terminating connections..."
-        _admin_sql "postgres" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${db_name}' AND pid <> pg_backend_pid();"
-        echo " -> Dropping Database '$db_name'..."
-        _admin_sql "postgres" "DROP DATABASE IF EXISTS ${db_name};"
-
-        # Drop User (Optional check)
-        echo " -> Attempting to drop User '$db_user'..."
-        if ! _admin_sql "postgres" "DROP ROLE ${db_user};" 2>/dev/null; then
-            ux_warning "User not deleted. Likely used by other DBs or dependent objects"
+        if [[ "$dry_run" == "true" ]]; then
+            ux_info "[DRY RUN] Would terminate connections to '$db_name'"
+            ux_info "[DRY RUN] Would DROP DATABASE '$db_name'"
+            ux_info "[DRY RUN] Would DROP ROLE '$db_user'"
         else
-            echo "    User deleted."
+            # Drop DB
+            echo " -> Terminating connections..."
+            # Use safe parameter passing for query
+            _admin_sql "postgres" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = \ AND pid <> pg_backend_pid();" -v 1="$db_name"
+            echo " -> Dropping Database '$db_name'..."
+            _admin_sql "postgres" "DROP DATABASE IF EXISTS \"$db_name\";"
+
+            # Drop User (Optional check)
+            echo " -> Attempting to drop User '$db_user'..."
+            if ! _admin_sql "postgres" "DROP ROLE \"$db_user\";" 2>/dev/null; then
+                ux_warning "User not deleted. Likely used by other DBs or dependent objects"
+            else
+                echo "    User deleted."
+            fi
         fi
+    fi
+
+    if [[ "$dry_run" == "true" ]]; then
+         ux_info "[DRY RUN] Would remove '$svc_name' from $PG_SERVICES_FILE"
+         return 0
     fi
 
     # Remove from file (using temp file for safety)
     grep -Ev "^${svc_name}[[:space:]]+" "$PG_SERVICES_FILE" >"${PG_SERVICES_FILE}.tmp"
     cat "${PG_SERVICES_FILE}.tmp" >"$PG_SERVICES_FILE"
     rm "${PG_SERVICES_FILE}.tmp"
+    chmod 0600 "$PG_SERVICES_FILE"
 
     # Reload
-    mapfile -t services < <(grep -v '^[[:space:]]*#' "$PG_SERVICES_FILE" | grep -v '^[[:space:]]*$')
+    _load_services
     _generate_pg_service_conf
     _register_aliases
 
@@ -258,10 +319,26 @@ psql_del() {
 # -------------------------------
 # 4) User & DB Management
 # -------------------------------
+_psql_user_help() {
+    ux_header "PostgreSQL User Management"
+    ux_usage "psql_user" "<command>" "Manage PostgreSQL users"
+    ux_section "Commands"
+    ux_bullet "list                       — Show all users"
+    ux_bullet "create [name]              — Create new user"
+    ux_bullet "delete <name>              — Remove user"
+    ux_bullet "rename <old> <new>         — Rename user"
+    ux_bullet "passwd <name>              — Change password"
+    ux_bullet "attr <name>                — Modify user attributes"
+}
+
 psql_user() {
-    local action="${1:-list}"
-    local arg1="$2"
-    local arg2="$3"
+    if [[ $# -eq 0 ]]; then
+        _psql_user_help
+        return 0
+    fi
+
+    local action=""
+    shift
 
     case "$action" in
     list)
@@ -269,82 +346,114 @@ psql_user() {
         _admin_sql "postgres" "\du"
         ;;
     create)
+        local arg1="${1:-}"
+        local arg2="${2:-}"
         if [[ -z "$arg1" ]]; then
             printf "%s❯%s Enter new username: " "${UX_INFO}" "${UX_RESET}"
             read -r arg1
         fi
         if [[ -z "$arg1" ]]; then return 1; fi
+        _validate_identifier "$arg1" "Username" || return 1
 
         printf "%s❯%s Enter password for '%s': " "${UX_INFO}" "${UX_RESET}" "$arg1"
         read -r -s arg2
         echo ""
-        _admin_sql "postgres" "CREATE USER $arg1 WITH PASSWORD '$arg2';" && ux_success "Success."
+        _check_password_strength "$arg2"
+        # Secure password passing
+        _admin_sql "postgres" "CREATE USER \"$arg1\" WITH PASSWORD '$arg2';" && ux_success "Success."
         ;;
     delete)
+        local arg1="${1:-}"
         if [[ -z "$arg1" ]]; then
             printf "%s❯%s Enter username to DELETE: " "${UX_WARNING}" "${UX_RESET}"
             read -r arg1
         fi
         if [[ -z "$arg1" ]]; then return 1; fi
+        _validate_identifier "$arg1" "Username" || return 1
 
         if ux_confirm "Delete user '$arg1'?" "n"; then
-            _admin_sql "postgres" "DROP USER $arg1;" && ux_success "User '$arg1' deleted."
+            _admin_sql "postgres" "DROP USER \"$arg1\";" && ux_success "User '$arg1' deleted."
         fi
         ;;
     rename)
+        local arg1="${1:-}"
+        local arg2="${2:-}"
         if [[ -z "$arg1" || -z "$arg2" ]]; then
-            echo "Usage: psql_user rename <old_name> <new_name>"
+            ux_info "Usage: psql_user rename <old_name> <new_name>"
             return 1
         fi
-        _admin_sql "postgres" "ALTER USER $arg1 RENAME TO $arg2;" && ux_success "Success."
+        _admin_sql "postgres" "ALTER USER \"$arg1\" RENAME TO \"$arg2\";" && ux_success "Success."
         ;;
     passwd)
+        local arg1="${1:-}"
+        local arg2="${2:-}"
         if [[ -z "$arg1" ]]; then
             printf "%s❯%s Enter username: " "${UX_INFO}" "${UX_RESET}"
             read -r arg1
         fi
+        _validate_identifier "$arg1" "Username" || return 1
+        
         printf "%s❯%s Enter NEW password: " "${UX_INFO}" "${UX_RESET}"
         read -r -s arg2
         echo ""
-        _admin_sql "postgres" "ALTER USER $arg1 WITH PASSWORD '$arg2';" && ux_success "Password updated."
+        _check_password_strength "$arg2"
+        _admin_sql "postgres" "ALTER USER \"$arg1\" WITH PASSWORD '$arg2';" && ux_success "Password updated."
         ;;
     attr)
+        local arg1="${1:-}"
         if [[ -z "$arg1" ]]; then
             printf "%s❯%s Enter username: " "${UX_INFO}" "${UX_RESET}"
             read -r arg1
         fi
         if [[ -z "$arg1" ]]; then return 1; fi
+        _validate_identifier "$arg1" "Username" || return 1
 
         ux_header "Modifying Attributes for '$arg1'"
         # 1. Create DB
         if ux_confirm "Allow CREATEDB?" "n"; then
-            _admin_sql "postgres" "ALTER ROLE $arg1 WITH CREATEDB;"
+            _admin_sql "postgres" "ALTER ROLE \"$arg1\" WITH CREATEDB;"
         else
-            _admin_sql "postgres" "ALTER ROLE $arg1 WITH NOCREATEDB;"
+            _admin_sql "postgres" "ALTER ROLE \"$arg1\" WITH NOCREATEDB;"
         fi
         # 2. Create Role
         if ux_confirm "Allow CREATEROLE?" "n"; then
-            _admin_sql "postgres" "ALTER ROLE $arg1 WITH CREATEROLE;"
+            _admin_sql "postgres" "ALTER ROLE \"$arg1\" WITH CREATEROLE;"
         else
-            _admin_sql "postgres" "ALTER ROLE $arg1 WITH NOCREATEROLE;"
+            _admin_sql "postgres" "ALTER ROLE \"$arg1\" WITH NOCREATEROLE;"
         fi
         # 3. Superuser
         if ux_confirm "Make SUPERUSER (Dangerous)?" "n"; then
-            _admin_sql "postgres" "ALTER ROLE $arg1 WITH SUPERUSER;"
+            _admin_sql "postgres" "ALTER ROLE \"$arg1\" WITH SUPERUSER;"
         else
-            _admin_sql "postgres" "ALTER ROLE $arg1 WITH NOSUPERUSER;"
+            _admin_sql "postgres" "ALTER ROLE \"$arg1\" WITH NOSUPERUSER;"
         fi
         ux_success "Done."
-        _admin_sql "postgres" "\du $arg1"
+        _admin_sql "postgres" "\du \"$arg1\""
         ;;
     *)
-        echo "Usage: psql_user <list|create|delete|rename|passwd|attr>"
+        _psql_user_help
         ;;
     esac
 }
 
+_psql_db_help() {
+    ux_header "PostgreSQL Database Management"
+    ux_usage "psql_db" "<command>" "Manage PostgreSQL databases"
+    ux_section "Commands"
+    ux_bullet "list                       — List all databases"
+    ux_bullet "create [name] [owner]      — Create new database"
+    ux_bullet "delete [name]              — Drop database (terminates connections)"
+    ux_bullet "grant [db] [user]          — Grant full privileges"
+}
+
 psql_db() {
-    local action="${1:-list}"
+    if [[ $# -eq 0 ]]; then
+        _psql_db_help
+        return 0
+    fi
+
+    local action=""
+    shift
 
     case "$action" in
     list)
@@ -352,13 +461,14 @@ psql_db() {
         _admin_sql "postgres" "\l"
         ;;
     create)
-        local db_name="${2:-}"
-        local owner_name="${3:-}"
+        local db_name="${1:-}"
+        local owner_name="${2:-}"
         if [[ -z "$db_name" ]]; then
             printf "%s❯%s Enter new DB name: " "${UX_INFO}" "${UX_RESET}"
             read -r db_name
         fi
         if [[ -z "$db_name" ]]; then return 1; fi
+        _validate_identifier "$db_name" "Database Name" || return 1
 
         echo "Creating database '$db_name'..."
         if [[ -n "$owner_name" ]]; then
@@ -368,32 +478,40 @@ psql_db() {
         fi
         ;;
     delete)
-        local db_name="${2:-}"
+        local db_name="${1:-}"
         if [[ -z "$db_name" ]]; then
             printf "%s❯%s Enter DB name to DELETE: " "${UX_WARNING}" "${UX_RESET}"
             read -r db_name
         fi
         if [[ -z "$db_name" ]]; then return 1; fi
+        _validate_identifier "$db_name" "Database Name" || return 1
 
         if ux_confirm "Drop database '$db_name'?" "n"; then
+            echo " -> Terminating connections..."
+             _admin_sql "postgres" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = \ AND pid <> pg_backend_pid();" -v 1="$db_name"
             _admin_sql "postgres" "DROP DATABASE \"$db_name\";" && ux_success "Deleted."
         fi
         ;;
     grant)
-        local db_name="${2:-}"
-        local user_name="${3:-}"
+        local db_name="${1:-}"
+        local user_name="${2:-}"
         if [[ -z "$db_name" || -z "$user_name" ]]; then
-            echo "Usage: psql_db grant <db_name> <user_name>"
+            ux_info "Usage: psql_db grant <db_name> <user_name>"
             return 1
         fi
         ux_header "Granting privileges on '$db_name' to '$user_name'"
         _admin_sql "$db_name" "GRANT CONNECT ON DATABASE \"$db_name\" TO \"$user_name\";"
         _admin_sql "$db_name" "GRANT ALL PRIVILEGES ON DATABASE \"$db_name\" TO \"$user_name\";"
         _admin_sql "$db_name" "GRANT ALL ON SCHEMA public TO \"$user_name\";"
+        # Set default privileges for future objects
+        _admin_sql "$db_name" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"$user_name\";"
+        _admin_sql "$db_name" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO \"$user_name\";"
+        _admin_sql "$db_name" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO \"$user_name\";"
+        
         ux_success "Granted."
         ;;
     *)
-        echo "Usage: psql_db <list|create|delete|grant>"
+        _psql_db_help
         ;;
     esac
 }
@@ -410,32 +528,60 @@ psql_bootstrap() {
     local alias_name="${4:-$db_name}" # Default alias to db_name
 
     if [[ -z "$db_name" || -z "$user_name" || -z "$password" ]]; then
-        echo "Usage: psql_bootstrap <db_name> <user_name> <password> [alias]"
+        ux_usage "psql_bootstrap" "<db_name> <user_name> <password> [alias]" "Bootstrap new DB project"
         return 1
     fi
+    
+    _validate_identifier "$db_name" "Database Name" || return 1
+    _validate_identifier "$user_name" "Username" || return 1
+    _validate_identifier "$alias_name" "Alias" || return 1
+    _check_password_strength "$password"
 
     ux_header "Bootstrapping: $db_name (Owner: $user_name)"
     ux_divider
 
+    local user_created=false
+    local db_created=false
+
     # Step 1: Create User
     ux_step 1 "Checking User '$user_name'..."
     local user_exists
-    user_exists=$(_admin_sql "postgres" "SELECT 1 FROM pg_roles WHERE rolname='$user_name'" -tA)
+    # Use -v for safe parameter passing
+    user_exists=$(_admin_sql "postgres" "SELECT 1 FROM pg_roles WHERE rolname=:'u'" -v u="$user_name" -tA)
+    
     if [[ "$user_exists" != "1" ]]; then
-        _admin_sql "postgres" "CREATE USER \"$user_name\" WITH PASSWORD '$password';"
+        if _admin_sql "postgres" "CREATE USER \"$user_name\" WITH PASSWORD '$password';"; then
+            user_created=true
+        else
+            ux_error "Failed to create user."
+            return 1
+        fi
     else
         ux_info "User exists. Updating password..."
         _admin_sql "postgres" "ALTER USER \"$user_name\" WITH PASSWORD '$password';"
     fi
-    # Default roles
-    _admin_sql "postgres" "ALTER ROLE \"$user_name\" WITH CREATEDB CREATEROLE;"
+    
+    # Default roles - Explicitly grant CREATEDB, prompt for CREATEROLE
+    _admin_sql "postgres" "ALTER ROLE \"$user_name\" WITH CREATEDB;"
+    # Removed automatic CREATEROLE for security
 
     # Step 2: Create DB
     ux_step 2 "Checking Database '$db_name'..."
     local db_exists
-    db_exists=$(_admin_sql "postgres" "SELECT 1 FROM pg_database WHERE datname='$db_name'" -tA)
+    db_exists=$(_admin_sql "postgres" "SELECT 1 FROM pg_database WHERE datname=:'d'" -v d="$db_name" -tA)
+    
     if [[ "$db_exists" != "1" ]]; then
-        _admin_sql "postgres" "CREATE DATABASE \"$db_name\" OWNER \"$user_name\";"
+        if _admin_sql "postgres" "CREATE DATABASE \"$db_name\" OWNER \"$user_name\";"; then
+            db_created=true
+        else
+            ux_error "Failed to create database."
+            # Rollback user if we just created it
+            if [[ "$user_created" == "true" ]]; then
+                ux_warning "Rolling back user '$user_name'..."
+                _admin_sql "postgres" "DROP ROLE \"$user_name\";"
+            fi
+            return 1
+        fi
     else
         ux_info "Database already exists."
     fi
@@ -445,18 +591,22 @@ psql_bootstrap() {
     _admin_sql "$db_name" "GRANT CONNECT ON DATABASE \"$db_name\" TO \"$user_name\";"
     _admin_sql "$db_name" "GRANT ALL PRIVILEGES ON DATABASE \"$db_name\" TO \"$user_name\";"
     _admin_sql "$db_name" "GRANT ALL ON SCHEMA public TO \"$user_name\";"
+    # Default privileges
+    _admin_sql "$db_name" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"$user_name\";"
+    _admin_sql "$db_name" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO \"$user_name\";"
 
     # Step 4: Save to Services
     ux_step 4 "Saving configuration..."
     if grep -q "^$alias_name " "$PG_SERVICES_FILE" 2>/dev/null; then
         ux_warning "Service alias '$alias_name' already exists in $PG_SERVICES_FILE"
-        ux_info "Skipping config save to avoid duplicates."
+        ux_info "Skipping config save to avoid duplicates. Use 'psql_del' to remove old alias if needed."
     else
         printf "%s  %s  %s  %s\n" "$alias_name" "$db_name" "$user_name" "$password" >>"$PG_SERVICES_FILE"
+        chmod 0600 "$PG_SERVICES_FILE"
         ux_success "Saved to $PG_SERVICES_FILE"
-
+        
         # Reload
-        mapfile -t services < <(grep -v '^[[:space:]]*#' "$PG_SERVICES_FILE" | grep -v '^[[:space:]]*$')
+        _load_services
         _generate_pg_service_conf
         _register_aliases
     fi
@@ -481,16 +631,13 @@ psql_sync() {
 
     for db in "${all_dbs[@]}"; do
         # Check if DB name exists as a SERVICE alias or DB NAME in the config
-        # Simple check: is 'db' mentioned in the file? (Rough check, but effective for typical usage)
-        # Better check: Iterate loaded services to see if db matches any 'dbname' field
         local already_tracked=false
-        for srv in "${services[@]}"; do
-            read -r _ s_db _ _ <<<"$srv"
-            if [[ "$s_db" == "$db" ]]; then
-                already_tracked=true
-                break
-            fi
-        done
+        # Refresh services list in loop not needed if we check the file, 
+        # but to be safe we can re-check against the in-memory array or file.
+        # Simple file grep is robust here.
+        if grep -q "[[:space:]]$db[[:space:]]" "$PG_SERVICES_FILE" || grep -q "^$db[[:space:]]" "$PG_SERVICES_FILE"; then
+            already_tracked=true
+        fi
 
         if [[ "$already_tracked" == "true" ]]; then
             continue
@@ -501,21 +648,25 @@ psql_sync() {
         if ux_confirm "Add '$db' to your service list?" "y"; then
             # Try to guess owner
             local owner
-            owner=$(_admin_sql "postgres" "SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname = '$db';" -tA)
-
+            # Use safe parameter passing
+            owner=$(_admin_sql "postgres" "SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname = :d;" -v d="$db" -tA)
+            
             ux_info "Owner: $owner"
             printf "%s❯%s Enter Password for user '%s': " "${UX_PRIMARY}" "${UX_RESET}" "$owner"
             read -r -s db_pass
             echo ""
-
+            
             if [[ -n "$db_pass" ]]; then
                 printf "%s  %s  %s  %s\n" "$db" "$db" "$owner" "$db_pass" >>"$PG_SERVICES_FILE"
+                chmod 0600 "$PG_SERVICES_FILE"
                 ux_success "Added '$db' to config."
+                # Reload services immediately so next check is accurate
+                _load_services
             else
                 ux_warning "Skipped (No password provided)."
             fi
         else
-            echo "Skipped."
+            ux_info "Skipped."
         fi
         echo ""
     done
@@ -523,8 +674,8 @@ psql_sync() {
     if [[ "$found_new" == "false" ]]; then
         ux_success "All databases are already tracked in your config!"
     else
-        # Reload
-        mapfile -t services < <(grep -v '^[[:space:]]*#' "$PG_SERVICES_FILE" | grep -v '^[[:space:]]*$')
+        # Final Reload
+        _load_services
         _generate_pg_service_conf
         _register_aliases
         ux_success "Sync complete."
@@ -537,7 +688,7 @@ psql_sync() {
 psqlhelp() {
     if [[ $# -gt 0 ]]; then
         # Legacy/Direct mode support: psqlhelp <service> <cmd>
-        local svc="$1"
+        local svc=""
         shift
         local sql_cmd="$*"
         PGSERVICE="$svc" psql -c "$sql_cmd"
@@ -545,6 +696,7 @@ psqlhelp() {
     fi
 
     ux_header "PostgreSQL Manager"
+    ux_usage "psqlhelp" "" "Show available PostgreSQL commands"
 
     ux_section "Primary Commands"
     ux_table_row "psql_bootstrap" "Create New" "Full Setup: Create DB, User, Grant & Save"
@@ -586,3 +738,4 @@ psql_server() {
 pinstall() {
     bash /home/bwyoon/dotfiles/mytool/install-postgresql.sh
 }
+
