@@ -719,22 +719,11 @@ psqlhelp() {
     # ux_usage "psqlhelp" "" "Show available PostgreSQL commands"
 
     ux_section "Primary Commands"
+    ux_table_row "psql_list" "List Services" "Show all configured connections"
     ux_table_row "psql_bootstrap" "Create New" "Full Setup: Create DB, User, Grant & Save"
     ux_table_row "psql_sync" "Sync DBs" "Scan server and add existing DBs to config"
     ux_table_row "psql_add" "Add Link" "Manually add a shortcut for existing DB"
     ux_table_row "psql_del" "Remove" "Remove service (and optionally drop DB)"
-    echo ""
-
-    ux_section "Connections"
-    ux_table_row "psql_list" "List Services" "Show all configured connections"
-    if [[ ${#services[@]} -eq 0 ]]; then
-        ux_info "  (No services configured)"
-    else
-        for entry in "${services[@]}"; do
-            read -r svc db user _ <<<"$entry"
-            ux_table_row "psql_$svc" "$db" "$user"
-        done
-    fi
     echo ""
 
     ux_section "Low-Level Management"
@@ -742,8 +731,8 @@ psqlhelp() {
     ux_table_row "psql_user" "User Ops" "list, create, attr, passwd, delete"
     echo ""
 
-    ux_info "Config File: $PG_SERVICES_FILE"
-    echo ""
+    # Show services table
+    psql_list
 }
 
 # Server control wrapper (Legacy support)
