@@ -119,15 +119,15 @@ _register_aliases() {
     # Clean old aliases (Exclude core commands)
     local old_aliases
     # Nuclear option: Chain simple greps to avoid any regex/parenthesis parsing issues in $(...)
-    old_aliases=$(declare -F | awk '{print $3}' | grep '^psql_' | \
-        grep -v 'psql_add' | \
-        grep -v 'psql_del' | \
-        grep -v 'psql_db' | \
-        grep -v 'psql_user' | \
-        grep -v 'psql_server' | \
-        grep -v 'psqlhelp' | \
-        grep -v 'psql_list' | \
-        grep -v 'psql_bootstrap' | \
+    old_aliases=$(declare -F | awk '{print $3}' | grep '^psql_' |
+        grep -v 'psql_add' |
+        grep -v 'psql_del' |
+        grep -v 'psql_db' |
+        grep -v 'psql_user' |
+        grep -v 'psql_server' |
+        grep -v 'psqlhelp' |
+        grep -v 'psql_list' |
+        grep -v 'psql_bootstrap' |
         grep -v 'psql_sync')
 
     for name in $old_aliases; do
@@ -317,8 +317,8 @@ psql_del() {
     fi
 
     if [[ "$dry_run" == "true" ]]; then
-         ux_info "[DRY RUN] Would remove '$svc_name' from $PG_SERVICES_FILE"
-         return 0
+        ux_info "[DRY RUN] Would remove '$svc_name' from $PG_SERVICES_FILE"
+        return 0
     fi
 
     # Remove from file (using temp file for safety)
@@ -411,7 +411,7 @@ psql_user() {
             read -r arg1
         fi
         _validate_identifier "$arg1" "Username" || return 1
-        
+
         printf "%s❯%s Enter NEW password: " "${UX_INFO}" "${UX_RESET}"
         read -r -s arg2
         echo ""
@@ -507,7 +507,7 @@ psql_db() {
 
         if ux_confirm "Drop database '$db_name'?" "n"; then
             echo " -> Terminating connections..."
-             _admin_sql "postgres" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = \ AND pid <> pg_backend_pid();" -v 1="$db_name"
+            _admin_sql "postgres" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = \ AND pid <> pg_backend_pid();" -v 1="$db_name"
             _admin_sql "postgres" "DROP DATABASE \"$db_name\";" && ux_success "Deleted."
         fi
         ;;
@@ -526,7 +526,7 @@ psql_db() {
         _admin_sql "$db_name" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"$user_name\";"
         _admin_sql "$db_name" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO \"$user_name\";"
         _admin_sql "$db_name" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO \"$user_name\";"
-        
+
         ux_success "Granted."
         ;;
     *)
@@ -550,7 +550,7 @@ psql_bootstrap() {
         ux_usage "psql_bootstrap" "<db_name> <user_name> <password> [alias]" "Bootstrap new DB project"
         return 1
     fi
-    
+
     _validate_identifier "$db_name" "Database Name" || return 1
     _validate_identifier "$user_name" "Username" || return 1
     _validate_identifier "$alias_name" "Alias" || return 1
@@ -560,14 +560,13 @@ psql_bootstrap() {
     ux_divider
 
     local user_created=false
-    local db_created=false
 
     # Step 1: Create User
     ux_step 1 "Checking User '$user_name'..."
     local user_exists
     # Safe to interpolate $user_name because it is validated alphanumeric+underscore
     user_exists=$(_admin_sql "postgres" "SELECT 1 FROM pg_roles WHERE rolname='$user_name'" -tA)
-    
+
     if [[ "$user_exists" != "1" ]]; then
         # Use dollar-quoting for password to handle special chars safely
         if _admin_sql "postgres" "CREATE USER \"$user_name\" WITH PASSWORD \$\$$password\$\$;"; then
@@ -580,7 +579,7 @@ psql_bootstrap() {
         ux_info "User exists. Updating password..."
         _admin_sql "postgres" "ALTER USER \"$user_name\" WITH PASSWORD \$\$$password\$\$;"
     fi
-    
+
     # Default roles - Explicitly grant CREATEDB, prompt for CREATEROLE
     _admin_sql "postgres" "ALTER ROLE \"$user_name\" WITH CREATEDB;"
     # Removed automatic CREATEROLE for security
@@ -589,10 +588,10 @@ psql_bootstrap() {
     ux_step 2 "Checking Database '$db_name'..."
     local db_exists
     db_exists=$(_admin_sql "postgres" "SELECT 1 FROM pg_database WHERE datname='$db_name'" -tA)
-    
+
     if [[ "$db_exists" != "1" ]]; then
         if _admin_sql "postgres" "CREATE DATABASE \"$db_name\" OWNER \"$user_name\";"; then
-            db_created=true
+            :
         else
             ux_error "Failed to create database."
             # Rollback user if we just created it
@@ -624,7 +623,7 @@ psql_bootstrap() {
         printf "%s  %s  %s  %s\n" "$alias_name" "$db_name" "$user_name" "$password" >>"$PG_SERVICES_FILE"
         chmod 0600 "$PG_SERVICES_FILE"
         ux_success "Saved to $PG_SERVICES_FILE"
-        
+
         # Reload
         _load_services
         _generate_pg_service_conf
@@ -652,10 +651,10 @@ psql_sync() {
     for db in "${all_dbs[@]}"; do
         # Check if DB name exists as a SERVICE alias or DB NAME in the config
         local already_tracked=false
-        # Refresh services list in loop not needed if we check the file, 
+        # Refresh services list in loop not needed if we check the file,
         # but to be safe we can re-check against the in-memory array or file.
         # Simple file grep is robust here.
-        if grep -q "[[:space:]]$db[[:space:]]" "$PG_SERVICES_FILE" || grep -q "^$db[[:space:]]" "$PG_SERVICES_FILE"; then
+        if grep -q "[[:space:]]${db}[[:space:]]" "$PG_SERVICES_FILE" || grep -q "^${db}[[:space:]]" "$PG_SERVICES_FILE"; then
             already_tracked=true
         fi
 
@@ -670,12 +669,12 @@ psql_sync() {
             local owner
             # Direct interpolation safe here as $db comes from pg_database listing
             owner=$(_admin_sql "postgres" "SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname = '$db';" -tA)
-            
+
             ux_info "Owner: $owner"
             printf "%s❯%s Enter Password for user '%s': " "${UX_PRIMARY}" "${UX_RESET}" "$owner"
             read -r -s db_pass
             echo ""
-            
+
             if [[ -n "$db_pass" ]]; then
                 printf "%s  %s  %s  %s\n" "$db" "$db" "$owner" "$db_pass" >>"$PG_SERVICES_FILE"
                 chmod 0600 "$PG_SERVICES_FILE"
@@ -748,4 +747,3 @@ psql_server() {
 pinstall() {
     bash "$HOME/dotfiles/mytool/install-postgresql.sh"
 }
-
