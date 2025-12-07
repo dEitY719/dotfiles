@@ -327,7 +327,7 @@ dlog_last() {
 
 # 모든 컨테이너를 tar 파일로 백업
 dexport() {
-    local backup_dir="/home/bwyoon/dotfiles/backup"
+    local backup_dir="$HOME/dotfiles/backup"
     local containers
 
     echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} 백업 디렉토리 확인: ${UX_WARNING}$backup_dir${UX_RESET}"
@@ -362,22 +362,22 @@ dexport() {
 
 # WSL Docker 설치 (대화형 스크립트)
 dinstall() {
-    bash /home/bwyoon/dotfiles/mytool/install-docker.sh
+    bash "$HOME/dotfiles/mytool/install-docker.sh"
 }
 
 # WSL Docker 제거 (대화형 스크립트)
 duninstall() {
-    bash /home/bwyoon/dotfiles/mytool/uninstall-docker.sh
+    bash "$HOME/dotfiles/mytool/uninstall-docker.sh"
 }
 
 # Docker 서비스 자동 시작 설정 (대화형 스크립트)
 denable() {
-    bash /home/bwyoon/dotfiles/mytool/enable-docker.sh
+    bash "$HOME/dotfiles/mytool/enable-docker.sh"
 }
 
 # Docker 회사 프록시 설정 (대화형 스크립트)
 dproxy_setup() {
-    bash /home/bwyoon/dotfiles/mytool/docker-configure-proxy.sh
+    bash "$HOME/dotfiles/mytool/docker-configure-proxy.sh"
 }
 
 # Docker 회사 프록시 설정 도움말

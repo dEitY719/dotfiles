@@ -7,7 +7,7 @@ LiteLLM Proxy Server - Getting Started Guide
 
 🎯 개요
 LiteLLM은 여러 LLM 공급자(Gemini, OpenAI 등)를 통합하는 프록시 서버입니다.
-프로젝트 경로: /home/bwyoon/para/project/litellm
+프로젝트 경로: $HOME/para/project/litellm
 
 ⚙️  설정 파일
   - litellm_settings.yml : 모델 라우팅 설정

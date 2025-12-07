@@ -131,10 +131,10 @@ npmhelp() {
 
 # NPM 설치 (대화형 스크립트)
 npminstall() {
-    bash /home/bwyoon/dotfiles/mytool/install-npm.sh
+    bash "$HOME/dotfiles/mytool/install-npm.sh"
 }
 
 # NPM 제거 (대화형 스크립트)
 npmuninstall() {
-    bash /home/bwyoon/dotfiles/mytool/uninstall-npm.sh
+    bash "$HOME/dotfiles/mytool/uninstall-npm.sh"
 }

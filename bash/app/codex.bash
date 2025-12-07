@@ -57,12 +57,12 @@ codexhelp() {
 
 # Codex 설치 (대화형 스크립트)
 cxinstall() {
-    bash /home/bwyoon/dotfiles/mytool/install-codex.sh
+    bash "$HOME/dotfiles/mytool/install-codex.sh"
 }
 
 # Codex 제거 (대화형 스크립트)
 cxuninstall() {
-    bash /home/bwyoon/dotfiles/mytool/uninstall-codex.sh
+    bash "$HOME/dotfiles/mytool/uninstall-codex.sh"
 }
 
 # Codex 버전 및 상태 확인

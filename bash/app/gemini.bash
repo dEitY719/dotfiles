@@ -52,10 +52,10 @@ geminihelp() {
 
 # Gemini 설치 (대화형 스크립트)
 ginstall() {
-    bash /home/bwyoon/dotfiles/mytool/install-gemini.sh
+    bash "$HOME/dotfiles/mytool/install-gemini.sh"
 }
 
 # Gemini 제거 (대화형 스크립트)
 guninstall() {
-    bash /home/bwyoon/dotfiles/mytool/uninstall-gemini.sh
+    bash "$HOME/dotfiles/mytool/uninstall-gemini.sh"
 }
