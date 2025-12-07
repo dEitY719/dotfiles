@@ -6,9 +6,9 @@
 
 # 1. Check for Codex Environment (npm managed or explicit CLI flag)
 is_codex_env() {
-    [[ -n "$CODEX_CLI" ]] || \
-    [[ -n "$CODEX_MANAGED_BY_NPM" ]] || \
-    [[ -n "$CODEX_SANDBOX_NETWORK_DISABLED" ]]
+    [[ -n "$CODEX_CLI" ]] ||
+        [[ -n "$CODEX_MANAGED_BY_NPM" ]] ||
+        [[ -n "$CODEX_SANDBOX_NETWORK_DISABLED" ]]
 }
 
 # 2. Main Guard Logic

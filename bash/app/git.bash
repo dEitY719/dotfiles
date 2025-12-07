@@ -153,7 +153,7 @@ gcp() {
 # 예: gcpa 751e304^..7ffcbd4 (시작 커밋 포함)
 gcpa() {
     local commit_range="$1"
-    local author="${2:-dEitY719}"  # 기본값: dEitY719
+    local author="${2:-dEitY719}" # 기본값: dEitY719
 
     if [ -z "$commit_range" ]; then
         echo "사용법: gcpa <커밋범위> [사용자이름]"

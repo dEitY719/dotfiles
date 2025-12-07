@@ -63,3 +63,14 @@ This project uses `tox` to orchestrate all checks.
     - Use type hints.
 - **Commits:**
     - Semantic style: `Type: Summary` (e.g., `Feat: Add new docker alias`, `Fix: Resolve path issue in WSL`).
+
+## Recent Changes
+
+### PostgreSQL Helper (`bash/app/postgresql.bash`)
+- **Added `psql_db` command:** Introduced a new function `psql_db` for database management, separating it from user management (`psql_user`).
+  - `psql_db list`: Lists all databases.
+  - `psql_db create [db_name] [owner]`: Interactively creates a new database.
+  - `psql_db delete [db_name]`: Interactively deletes a database.
+  - `psql_db grant [db_name] [user_name]`: Grants a user full privileges on a specific database and its public schema.
+- **Updated `psql_user`:** The `psql_user attr` subcommand can be used to grant `CREATEDB` and other attributes to a user.
+- **Updated `psqlhelp`:** The help command has been updated to reflect all the new `psql_db` commands, improving discoverability.
