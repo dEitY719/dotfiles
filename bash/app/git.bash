@@ -241,6 +241,95 @@ git_lfs_track() {
 alias glfs='git_lfs_track'
 
 # -------------------------------
+# Check and Cherry-pick Missing Commits
+# -------------------------------
+gcp_scan() {
+    local base="${1:-main}"
+    local source="${2:-upstream/main}"
+
+    ux_header "Scanning for missing commits from '$source' in '$base'..."
+
+    # Verify branches exist
+    if ! git rev-parse --verify "$base" >/dev/null 2>&1; then
+        ux_error "Base branch '$base' does not exist."
+        return 1
+    fi
+    if ! git rev-parse --verify "$source" >/dev/null 2>&1; then
+        ux_error "Source branch '$source' does not exist."
+        return 1
+    fi
+
+    # Find missing commits (present in source, missing in base)
+    # git cherry base source lists commits in source not in base
+    local missing_list
+    missing_list=$(git cherry "$base" "$source" | grep "^+" | awk '{print $2}')
+
+    if [ -z "$missing_list" ]; then
+        ux_success "No missing commits found! '$base' is up to date with '$source'."
+        return 0
+    fi
+
+    local count
+    count=$(echo "$missing_list" | wc -l)
+
+    # Calculate range (Oldest..Newest)
+    # git cherry outputs in chronological order (oldest first)
+    local first_sha
+    first_sha=$(echo "$missing_list" | head -n 1)
+    local last_sha
+    last_sha=$(echo "$missing_list" | tail -n 1)
+    local range_str="${first_sha}^..${last_sha}"
+
+    # Verify contiguity
+    local range_count
+    range_count=$(git rev-list --count "$range_str")
+    local is_contiguous=0
+    if [ "$range_count" -eq "$count" ]; then
+        is_contiguous=1
+    fi
+
+    # Display Summary
+    ux_section "Analysis Result"
+    ux_bullet "Found ${UX_BOLD}${count}${UX_RESET} missing commits."
+    ux_bullet "Suggested Range: ${UX_BOLD}${range_str}${UX_RESET}"
+    if [ $is_contiguous -eq 1 ]; then
+        ux_success "Range is contiguous (clean cherry-pick)."
+    else
+        ux_warning "Range is NOT contiguous (contains $((range_count - count)) already merged commits)."
+    fi
+
+    # Display Commits
+    echo ""
+    ux_section "Commit List"
+    # Display commits (formatting handled by git log)
+    echo "$missing_list" | xargs git log --no-walk --format="%C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short
+
+    echo ""
+    # Interactive Confirmation
+    if ux_confirm "Do you want to cherry-pick these $count commits?" "n"; then
+        echo ""
+        if [ $is_contiguous -eq 1 ]; then
+            ux_info "Executing: git cherry-pick $range_str"
+            if git cherry-pick "$range_str"; then
+                ux_success "Cherry-pick complete!"
+            else
+                ux_error "Cherry-pick encountered an error. Resolve and run 'git cherry-pick --continue'."
+            fi
+        else
+            # For non-contiguous, passing hashes is safer
+            ux_info "Executing: git cherry-pick <list of $count hashes>"
+            if echo "$missing_list" | xargs git cherry-pick; then
+                ux_success "Cherry-pick complete!"
+            else
+                ux_error "Cherry-pick encountered an error. Resolve and run 'git cherry-pick --continue'."
+            fi
+        fi
+    else
+        ux_info "Cancelled. You can use the range above manually."
+    fi
+}
+
+# -------------------------------
 # Git helper 도움말
 # -------------------------------
 githelp() {
@@ -290,6 +379,7 @@ githelp() {
     ux_section "Cherry-pick"
     ux_table_row "gcp" "gcp <commit>..." "Cherry-pick commits"
     ux_table_row "gcpa" "gcpa <range> [author]" "Cherry-pick by author"
+    ux_table_row "gcp_scan" "gcp_scan [base] [src]" "Scan & pick missing"
     echo ""
 
     ux_section "Special"
