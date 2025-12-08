@@ -315,12 +315,10 @@ gcp_scan() {
     echo ""
     ux_section "Commit List"
     {
-        local idx=1
         for sha in $missing_list; do
-            git log --no-walk --format="  %C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short "$sha"
-            ((idx++))
+            git log --no-walk --format="%C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short "$sha"
         done
-    }
+    } | nl -w 2 -s '. '
 
     echo ""
     # Interactive Confirmation
