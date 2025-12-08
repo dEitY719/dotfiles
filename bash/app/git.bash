@@ -39,7 +39,7 @@ alias gpfu='git push --set-upstream origin main --force-with-lease'
 # 사용 예시: main 브랜치가 원격보다 앞설 때, "rejected (fetch first)" 문제 해결용
 
 alias gpf_dev_server='git push -f origin HEAD:refs/heads/dev-server'
-alias git_log='git log --graph --pretty=format:"%Cred%h %C(bold blue)%d %Creset%s %Cgreen%ad %C(yellow)%an" --date=short'
+alias git_log='git log --graph --pretty=tformat:"%Cred%h %C(bold blue)%d %Creset%s %Cgreen%ad %C(yellow)%an" --date=short'
 alias git_log2='git log --graph --decorate --date=short --abbrev-commit --pretty=oneline'
 alias gl2=git_log2
 export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_pwd)\[\e[36m\]\$(__git_ps1 '(%s)')\[\e[0m\]\$ "
