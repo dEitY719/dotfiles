@@ -243,6 +243,19 @@ alias glfs='git_lfs_track'
 # -------------------------------
 # Check and Cherry-pick Missing Commits
 # -------------------------------
+# gcp_scan: Intelligently identify and cherry-pick missing commits
+#
+# Compares two branches and shows commits present in source but missing in base.
+# Uses `git cherry` to detect commits and provides interactive confirmation.
+#
+# Usage:
+#   gcp_scan                    # defaults: main <- upstream/main
+#   gcp_scan develop origin     # custom branches
+#
+# Note: git cherry marks commits as:
+#   '+' = present in source, missing in base (will be cherry-picked)
+#   '-' = already merged in base
+#
 gcp_scan() {
     local base="${1:-main}"
     local source="${2:-upstream/main}"
@@ -298,11 +311,16 @@ gcp_scan() {
         ux_warning "Range is NOT contiguous (contains $((range_count - count)) already merged commits)."
     fi
 
-    # Display Commits
+    # Display Commits (preserve missing_list order)
     echo ""
     ux_section "Commit List"
-    # Display commits (formatting handled by git log)
-    echo "$missing_list" | xargs git log --no-walk --format="%C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short
+    {
+        local idx=1
+        for sha in $missing_list; do
+            git log --no-walk --format="  %C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short "$sha"
+            ((idx++))
+        done
+    }
 
     echo ""
     # Interactive Confirmation
@@ -313,21 +331,32 @@ gcp_scan() {
             if git cherry-pick "$range_str"; then
                 ux_success "Cherry-pick complete!"
             else
-                ux_error "Cherry-pick encountered an error. Resolve and run 'git cherry-pick --continue'."
+                ux_error "Cherry-pick encountered conflicts. Resolve manually and run:"
+                ux_error "  git cherry-pick --continue"
+                return 1
             fi
         else
-            # For non-contiguous, passing hashes is safer
-            ux_info "Executing: git cherry-pick <list of $count hashes>"
-            if echo "$missing_list" | xargs git cherry-pick; then
-                ux_success "Cherry-pick complete!"
-            else
-                ux_error "Cherry-pick encountered an error. Resolve and run 'git cherry-pick --continue'."
-            fi
+            # Non-contiguous: cherry-pick individually for better control
+            ux_warning "Non-contiguous range detected. Cherry-picking individually..."
+            local picked=0
+            for sha in $missing_list; do
+                ux_info "Cherry-picking $sha..."
+                if git cherry-pick "$sha"; then
+                    ((picked++))
+                else
+                    ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
+                    return 1
+                fi
+            done
+            ux_success "Cherry-picked $picked/$count commits successfully!"
         fi
     else
-        ux_info "Cancelled. You can use the range above manually."
+        ux_info "Cancelled. You can use the range above manually: git cherry-pick $range_str"
     fi
 }
+
+# Quick shorthand for gcp_scan
+alias gcs='gcp_scan'
 
 # -------------------------------
 # Git helper 도움말
@@ -379,7 +408,7 @@ githelp() {
     ux_section "Cherry-pick"
     ux_table_row "gcp" "gcp <commit>..." "Cherry-pick commits"
     ux_table_row "gcpa" "gcpa <range> [author]" "Cherry-pick by author"
-    ux_table_row "gcp_scan" "gcp_scan [base] [src]" "Scan & pick missing"
+    ux_table_row "gcp_scan" "gcp_scan [base] [src]" "Compare & pick missing (default: main ← upstream/main)"
     echo ""
 
     ux_section "Special"
