@@ -249,16 +249,47 @@ alias glfs='git_lfs_track'
 # Uses `git cherry` to detect commits and provides interactive confirmation.
 #
 # Usage:
-#   gcp_scan                    # defaults: main <- upstream/main
-#   gcp_scan develop origin     # custom branches
+#   gcp_scan [--author=<name|all>]         # defaults: main <- upstream/main, author=dEitY719
+#   gcp_scan develop origin --author=all   # custom branches + show all commits
 #
 # Note: git cherry marks commits as:
 #   '+' = present in source, missing in base (will be cherry-picked)
 #   '-' = already merged in base
 #
 gcp_scan() {
-    local base="${1:-main}"
-    local source="${2:-upstream/main}"
+    local base="main"
+    local source="upstream/main"
+    local author="dEitY719"
+    local positional=()
+
+    # Parse arguments (positional: base source; flag: --author)
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --author=*)
+            author="${1#--author=}"
+            ;;
+        --author)
+            if [ -n "${2-}" ]; then
+                author="$2"
+                shift
+            else
+                ux_error "--author requires a value"
+                return 1
+            fi
+            ;;
+        *)
+            positional+=("$1")
+            ;;
+        esac
+        shift
+    done
+
+    if [ "${#positional[@]}" -ge 1 ]; then
+        base="${positional[0]}"
+    fi
+    if [ "${#positional[@]}" -ge 2 ]; then
+        source="${positional[1]}"
+    fi
 
     ux_header "Scanning for missing commits from '$source' in '$base'..."
 
@@ -282,15 +313,45 @@ gcp_scan() {
         return 0
     fi
 
+    local total_count
+    total_count=$(echo "$missing_list" | wc -l)
+    local author_lc
+    author_lc=$(printf '%s' "$author" | tr '[:upper:]' '[:lower:]')
+
+    # Filter by author unless explicitly showing all
+    local selected_list=""
+    if [ "$author_lc" = "all" ]; then
+        selected_list="$missing_list"
+    else
+        while IFS= read -r sha; do
+            [ -z "$sha" ] && continue
+            local commit_author
+            commit_author=$(git show -s --format='%an' "$sha")
+            if [ "$(printf '%s' "$commit_author" | tr '[:upper:]' '[:lower:]')" = "$author_lc" ]; then
+                if [ -z "$selected_list" ]; then
+                    selected_list="$sha"
+                else
+                    selected_list="$selected_list"$'\n'"$sha"
+                fi
+            fi
+        done <<<"$missing_list"
+    fi
+
+    if [ -z "$selected_list" ]; then
+        ux_warning "No missing commits match author '$author'."
+        ux_info "Use --author=all to show all missing commits."
+        return 0
+    fi
+
     local count
-    count=$(echo "$missing_list" | wc -l)
+    count=$(echo "$selected_list" | wc -l)
 
     # Calculate range (Oldest..Newest)
     # git cherry outputs in chronological order (oldest first)
     local first_sha
-    first_sha=$(echo "$missing_list" | head -n 1)
+    first_sha=$(echo "$selected_list" | head -n 1)
     local last_sha
-    last_sha=$(echo "$missing_list" | tail -n 1)
+    last_sha=$(echo "$selected_list" | tail -n 1)
     local range_str="${first_sha}^..${last_sha}"
 
     # Verify contiguity
@@ -303,19 +364,20 @@ gcp_scan() {
 
     # Display Summary
     ux_section "Analysis Result"
-    ux_bullet "Found ${UX_BOLD}${count}${UX_RESET} missing commits."
+    ux_bullet "Missing (all authors): ${UX_BOLD}${total_count}${UX_RESET}"
+    ux_bullet "Author filter: ${UX_BOLD}${author}${UX_RESET} -> ${UX_BOLD}${count}${UX_RESET} commit(s)"
     ux_bullet "Suggested Range: ${UX_BOLD}${range_str}${UX_RESET}"
     if [ $is_contiguous -eq 1 ]; then
         ux_success "Range is contiguous (clean cherry-pick)."
     else
-        ux_warning "Range is NOT contiguous (contains $((range_count - count)) already merged commits)."
+        ux_warning "Range is NOT contiguous (contains $((range_count - count)) other commits in between)."
     fi
 
-    # Display Commits (preserve missing_list order)
+    # Display Commits (preserve selected_list order)
     echo ""
     ux_section "Commit List"
     {
-        for sha in $missing_list; do
+        for sha in $selected_list; do
             git log --no-walk --format="%C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short "$sha"
         done
     } | nl -w 2 -s '. '
@@ -337,7 +399,7 @@ gcp_scan() {
             # Non-contiguous: cherry-pick individually for better control
             ux_warning "Non-contiguous range detected. Cherry-picking individually..."
             local picked=0
-            for sha in $missing_list; do
+            for sha in $selected_list; do
                 ux_info "Cherry-picking $sha..."
                 if git cherry-pick "$sha"; then
                     ((picked++))
@@ -406,7 +468,7 @@ githelp() {
     ux_section "Cherry-pick"
     ux_table_row "gcp" "gcp <commit>..." "Cherry-pick commits"
     ux_table_row "gcpa" "gcpa <range> [author]" "Cherry-pick by author"
-    ux_table_row "gcp_scan" "gcp_scan [base] [src]" "Compare & pick missing (default: main ← upstream/main)"
+    ux_table_row "gcp_scan" "gcp_scan [base] [src] [--author=<name|all>]" "Compare & pick missing (default: main <- upstream/main, author=dEitY719)"
     echo ""
 
     ux_section "Special"
