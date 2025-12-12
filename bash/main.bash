@@ -204,6 +204,7 @@ myhelp() {
         ["dproxyhelp"]="Docker Proxy(Corporate) commands"
         ["npmhelp"]="NPM package manager commands"
         ["litellm_help"]="LiteLLM commands and aliases"
+        ["gpuhelp"]="GPU monitoring commands (WSL2 universal)"
         ["uxhelp"]="UX library functions and styling guide"
     )
 
