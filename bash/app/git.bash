@@ -61,7 +61,28 @@ gsw() {
 }
 alias gd='git diff'   # 변경사항 확인
 alias gb='git branch' # 브랜치 목록
-alias gf='git fetch origin -p'
+
+# Fetch from remote with prune (default: origin)
+# Usage: gf [remote]
+#   gf              -> git fetch origin -p
+#   gf upstream     -> git fetch upstream -p
+#   gf u            -> git fetch upstream -p (shorthand)
+#   gf <remote>     -> git fetch <remote> -p
+unalias gf 2>/dev/null || true
+gf() {
+    local remote="${1:-origin}"
+
+    # Handle shorthand aliases
+    case "$remote" in
+    u | upstream-shorthand)
+        remote="upstream"
+        ;;
+    esac
+
+    ux_info "Fetching from '$remote' with prune..."
+    git fetch "$remote" -p
+}
+
 alias gfu='git fetch upstream'      # upstream에서 fetch
 alias gfa='git fetch --all --prune' # 원격 전체 fetch + 필요없는 브랜치 정리
 alias gpl='git pull'                # 현재 브랜치만 pull
@@ -505,7 +526,7 @@ githelp() {
     echo ""
 
     ux_section "Fetch & Sync"
-    ux_table_row "gf" "git fetch origin -p" "Fetch origin & prune"
+    ux_table_row "gf [remote]" "gf / gf u / gf <name>" "Fetch & prune (default: origin, u=upstream)"
     ux_table_row "gfu" "git fetch upstream" "Fetch upstream"
     ux_table_row "gfa" "git fetch --all" "Fetch all & prune"
     ux_table_row "gsw" "git switch -c" "Switch to remote branch"
