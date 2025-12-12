@@ -346,6 +346,34 @@ gcp_scan() {
     local count
     count=$(echo "$selected_list" | wc -l)
 
+    # [IMPROVEMENT] Check for duplicate commits (same subject already in base branch)
+    local final_selected_list=""
+    local duplicate_list=""
+    local duplicate_count=0
+
+    while IFS= read -r sha; do
+        [ -z "$sha" ] && continue
+        local subject
+        subject=$(git show -s --format='%s' "$sha")
+
+        # Check if base branch has a commit with same subject (search recent 200 commits for speed)
+        if git log "$base" -n 200 --format='%s' 2>/dev/null | grep -Fqx "$subject"; then
+            duplicate_list="${duplicate_list}${sha}"$'\n'
+            ((duplicate_count++))
+        else
+            if [ -z "$final_selected_list" ]; then
+                final_selected_list="$sha"
+            else
+                final_selected_list="${final_selected_list}"$'\n'"${sha}"
+            fi
+        fi
+    done <<<"$selected_list"
+
+    # Update count if duplicates exist
+    if [ $duplicate_count -gt 0 ]; then
+        count=$((count - duplicate_count))
+    fi
+
     # Calculate range (Oldest..Newest)
     # git cherry outputs in chronological order (oldest first)
     local first_sha
@@ -366,6 +394,9 @@ gcp_scan() {
     ux_section "Analysis Result"
     ux_bullet "Missing (all authors): ${UX_BOLD}${total_count}${UX_RESET}"
     ux_bullet "Author filter: ${UX_BOLD}${author}${UX_RESET} -> ${UX_BOLD}${count}${UX_RESET} commit(s)"
+    if [ $duplicate_count -gt 0 ]; then
+        ux_bullet "Duplicates (already applied): ${UX_BOLD}${UX_YELLOW}${duplicate_count}${UX_RESET}"
+    fi
     ux_bullet "Suggested Range: ${UX_BOLD}${range_str}${UX_RESET}"
     if [ $is_contiguous -eq 1 ]; then
         ux_success "Range is contiguous (clean cherry-pick)."
@@ -373,12 +404,29 @@ gcp_scan() {
         ux_warning "Range is NOT contiguous (contains $((range_count - count)) other commits in between)."
     fi
 
-    # Display Commits (preserve selected_list order)
+    # Display Commits (preserve selected_list order with duplicate marking)
     echo ""
     ux_section "Commit List"
+    echo "Commits to cherry-pick:"
     {
         for sha in $selected_list; do
-            git log --no-walk --format="%C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short "$sha"
+            local is_dup=0
+            local subject
+            subject=$(git show -s --format='%s' "$sha")
+
+            # Check if this is a duplicate
+            if git log "$base" -n 200 --format='%s' 2>/dev/null | grep -Fqx "$subject"; then
+                is_dup=1
+            fi
+
+            local line
+            line=$(git log --no-walk --format="%C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short "$sha")
+
+            if [ $is_dup -eq 1 ]; then
+                echo "${UX_YELLOW}${line} ${UX_BOLD}[DUPLICATE - Already in $base]${UX_RESET}"
+            else
+                echo "$line"
+            fi
         done
     } | nl -w 2 -s '. '
 
@@ -386,7 +434,7 @@ gcp_scan() {
     # Interactive Confirmation
     if ux_confirm "Do you want to cherry-pick these $count commits?" "n"; then
         echo ""
-        if [ $is_contiguous -eq 1 ]; then
+        if [ $is_contiguous -eq 1 ] && [ $duplicate_count -eq 0 ]; then
             ux_info "Executing: git cherry-pick $range_str"
             if git cherry-pick "$range_str"; then
                 ux_success "Cherry-pick complete!"
@@ -396,19 +444,38 @@ gcp_scan() {
                 return 1
             fi
         else
-            # Non-contiguous: cherry-pick individually for better control
-            ux_warning "Non-contiguous range detected. Cherry-picking individually..."
+            # Non-contiguous OR has duplicates: cherry-pick individually for better control
+            if [ $duplicate_count -gt 0 ]; then
+                ux_warning "Duplicates detected. Cherry-picking individually with auto-skip for duplicates..."
+            elif [ $is_contiguous -eq 0 ]; then
+                ux_warning "Non-contiguous range detected. Cherry-picking individually..."
+            fi
             local picked=0
+            local skipped=0
             for sha in $selected_list; do
-                ux_info "Cherry-picking $sha..."
-                if git cherry-pick "$sha"; then
-                    ((picked++))
+                local subject
+                subject=$(git show -s --format='%s' "$sha")
+
+                # Check if this commit is a duplicate (already in base)
+                local is_dup=0
+                if git log "$base" -n 200 --format='%s' 2>/dev/null | grep -Fqx "$subject"; then
+                    is_dup=1
+                fi
+
+                if [ $is_dup -eq 1 ]; then
+                    ux_warning "Skipping $sha (already in $base)..."
+                    ((skipped++))
                 else
-                    ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
-                    return 1
+                    ux_info "Cherry-picking $sha..."
+                    if git cherry-pick "$sha"; then
+                        ((picked++))
+                    else
+                        ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
+                        return 1
+                    fi
                 fi
             done
-            ux_success "Cherry-picked $picked/$count commits successfully!"
+            ux_success "Cherry-picked $picked/$count commits successfully! (Skipped $skipped duplicates)"
         fi
     else
         ux_info "Cancelled. You can use the range above manually: git cherry-pick $range_str"

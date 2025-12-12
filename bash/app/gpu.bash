@@ -42,7 +42,7 @@ gpuinfo() {
     # 1. WSL2 호스트 GPU 정보
     if [ -x /usr/lib/wsl/lib/nvidia-smi ]; then
         echo "📌 WSL2 호스트 GPU:"
-        /usr/lib/wsl/lib/nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader 2>/dev/null | \
+        /usr/lib/wsl/lib/nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader 2>/dev/null |
             awk -F, '{printf "  [GPU %s] %s (%s VRAM)\n", $1, $2, $3}'
     else
         echo "⚠️  nvidia-smi not found"
