@@ -2,7 +2,21 @@
   "model": "haiku",
   "statusLine": {
     "type": "command",
-    "command": "bash ~/.claude/statusline-command.sh"
+    "command": "bash $HOME/.claude/statusline-command.sh"
   },
-  "alwaysThinkingEnabled": false
+  "alwaysThinkingEnabled": false,
+  "subagents": {
+    "defaultModel": "haiku"
+  },
+  "agents": {
+    "general-purpose": {
+        "model": "haiku"
+    },
+    "statusline-setup": {
+        "model": "haiku"
+    },
+    "explore": {
+        "model": "haiku"
+    }
+  }
 }

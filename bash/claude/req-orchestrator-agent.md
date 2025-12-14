@@ -1,7 +1,7 @@
 ---
 name: req-orchestrator-agent
 description: Master agent for REQ-based development workflow. Orchestrates Phase 1-4 (Specification → Test Design → Implementation → Summary) by calling specialized sub-agents and managing user approvals. Use when user requests a feature implementation using REQ-ID format like "REQ-F-A1-1 개발해" or "implement REQ-AUTH-1".
-model: haiku
+model: sonnet
 color: gold
 ---
 

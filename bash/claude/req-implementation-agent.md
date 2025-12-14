@@ -1,7 +1,7 @@
 ---
 name: req-implementation-agent
 description: Phase 3 implementation agent. Writes code to satisfy test cases and runs quality checks (tests + linting). Called by req-orchestrator-agent after Phase 2 approval. Exits with FAILURE if tests fail or lint issues found. Exit with SUCCESS only when all tests pass and code quality is clean.
-model: sonnet
+model: haiku
 color: cyan
 ---
 
