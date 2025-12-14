@@ -1,0 +1,23 @@
+ WSL을 새로 설치하셨다면 필요한 로케일(언어 설정) 데이터가 생성되지 않아서 발생하는 문제입니다. 또한
+  nvm 에러는 기존 설정과 충돌이 나서 발생합니다.
+
+  다음 두 단계로 해결할 수 있습니다.
+
+  1. 로케일 설정 오류 해결 (manpath: can't set the locale...)
+
+  en_US.UTF-8 (그리고 혹시 필요하다면 ko_KR.UTF-8) 로케일을 시스템에 생성해야 합니다.
+
+  터미널에 다음 명령어를 입력하세요:
+
+   1 sudo locale-gen en_US.UTF-8
+   2 sudo update-locale LANG=en_US.UTF-8
+  (만약 한글 로케일도 필요하다면 `sudo locale-gen ko_KR.UTF-8`도 추가로 실행해주세요.)
+
+  2. NVM 설정 오류 해결
+
+  nvm은 ~/.npmrc 파일에 prefix 설정이 있으면 충돌을 일으킵니다. 에러 메시지에서 제안한 대로 다음
+  명령어를 실행하면 해결됩니다:
+
+   1 nvm use --delete-prefix v24.12.0
+
+  위 명령어 실행 후 src (또는 source ~/.bashrc)를 다시 실행하면 에러가 사라질 것입니다.
