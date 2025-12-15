@@ -15,3 +15,8 @@ fi
 if command -v pyenv >/dev/null; then
     eval "$(pyenv init --path)"
 fi
+
+# Python 설치 (대화형 스크립트)
+pyinstall() {
+    bash "$HOME/dotfiles/mytool/install-python.sh"
+}

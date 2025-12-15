@@ -76,6 +76,7 @@ ${bold}${blue}[설치 후 확인]${reset}
 
 ${bold}${blue}[Setup & Requirements]${reset}
 
+  ${green}clinstall${reset}        : Claude Code CLI 설치
   ${green}ensure_jq${reset}        : jq 설치 여부 확인 및 자동 설치
                      (Claude Code statusline 스크립트에 필요)
 
@@ -119,3 +120,9 @@ ensure_jq() {
 
 # Auto-call ensure_jq when this file is sourced
 ensure_jq
+
+# Claude Code CLI 설치 스크립트
+clinstall() {
+    bash "$HOME/dotfiles/mytool/install-claude.sh"
+}
+

@@ -42,6 +42,10 @@ pyhelp() {
     ux_table_row "dv" "deactivate" "Deactivate"
     echo ""
 
+    ux_section "Setup Tools"
+    ux_table_row "pyinstall" "Install Script" "Install Python/Pyenv"
+    echo ""
+
     ux_section "Quick Workflow"
     ux_step 1 "${UX_SUCCESS}cv${UX_RESET}  # Create .venv"
     ux_step 2 "${UX_SUCCESS}av${UX_RESET}  # Activate"

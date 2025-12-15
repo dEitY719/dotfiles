@@ -14,7 +14,6 @@
 # uvh : help
 
 # (1) uv 자체 설치
-alias uvi='curl -LsSf https://astral.sh/uv/install.sh | sh'
 
 # (2) 가장 자주 쓰는 것들
 alias uvs='uv sync'                   # 기본/프로덕션 동기화 (설치 및 정리 포함)
@@ -30,7 +29,12 @@ alias uvr='uv pip sync requirements.txt'
 # (5) 상태/검증
 alias uvcheck='uv pip check'
 
-# (6) 도움말(프로젝트 관례 안내)
+# (6) uv-install 함수 (mytool/install-uv.sh 호출)
+uv-install() {
+    bash "$HOME/dotfiles/mytool/install-uv.sh"
+}
+
+# (7) 도움말(프로젝트 관례 안내)
 uvhelp() {
     ux_header "UV Quick Commands"
 
@@ -38,7 +42,7 @@ uvhelp() {
     ux_table_row "uvs" "uv sync" "Sync env & prune (Prod)"
     ux_table_row "uvu" "uv sync --upgrade" "Upgrade deps"
     ux_table_row "uvd" "uv sync --dev" "Dev install"
-    ux_table_row "uvi" "install script" "Install UV tool"
+    ux_table_row "uv-install" "install script" "Install UV tool"
     echo ""
 
     ux_section "Lock & Export"
