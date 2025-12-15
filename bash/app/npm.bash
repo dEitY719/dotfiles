@@ -3,36 +3,45 @@
 # 1. 전역 경로 변수 정의
 NPM_GLOBAL_PATH="$HOME/.npm-global"
 
-# 2. NPM prefix 설정
+# 2. nvm 설치 여부 확인 (디렉토리 존재로 판단 - NVM_DIR 변수보다 확실)
+NVM_INSTALLED=false
+if [ -d "$HOME/.nvm" ] && [ -s "$HOME/.nvm/nvm.sh" ]; then
+    NVM_INSTALLED=true
+fi
+
+# 3. NPM prefix 설정
 # nvm이 설치되어 있지 않은 경우에만 전역 prefix를 설정합니다.
-if [ -z "$NVM_DIR" ]; then
+# nvm은 자체적으로 npm을 관리하므로 prefix 설정과 충돌합니다.
+if [ "$NVM_INSTALLED" = false ]; then
     # NPM prefix 설정이 되어 있는지 확인
-    # npm config get prefix 명령을 사용하며, 결과를 표준 오류로 리디렉션하여 깔끔하게 처리
     CURRENT_PREFIX=$(npm config get prefix 2>/dev/null)
 
     if [ "$CURRENT_PREFIX" != "$NPM_GLOBAL_PATH" ]; then
-        # 설정이 원하는 경로와 다르거나 (기본값인 /usr/local 등), 설정이 아예 없을 경우
         echo ""
         echo "ℹ️ NPM prefix 경로를 '$NPM_GLOBAL_PATH'로 설정합니다. (현재: $CURRENT_PREFIX)"
 
-        # 디렉토리 생성은 PATH 설정 전에 미리 해둡니다. (멱등성 유지)
+        # 디렉토리 생성
         if [ ! -d "$NPM_GLOBAL_PATH" ]; then
             mkdir -p "$NPM_GLOBAL_PATH"
         fi
 
-        # npm config set 명령 실행
-        # 이 명령어는 한 번만 실행되어 ~/.npmrc에 기록됩니다.
         npm config set prefix "$NPM_GLOBAL_PATH"
-
         echo "✅ 설정 완료. ~/.npmrc 파일 확인: $(grep prefix ~/.npmrc 2>/dev/null)"
     fi
 else
-    # nvm이 설치된 경우, PATH는 nvm이 관리하므로 별도 설정이 불필요합니다.
-    # 단, 사용자가 ~/.npm-global/bin에 설치된 다른 도구를 사용할 수 있으므로, 해당 경로는 PATH에 추가합니다.
-    : # no-op
+    # nvm이 설치된 경우: .npmrc에서 prefix 설정을 제거하여 충돌 방지
+    # 이 설정이 있으면 nvm이 매번 경고를 출력합니다.
+    if [ -f "$HOME/.npmrc" ] && grep -q "^prefix=" "$HOME/.npmrc" 2>/dev/null; then
+        # prefix 라인 제거
+        sed -i '/^prefix=/d' "$HOME/.npmrc"
+        # 빈 파일이 되면 삭제
+        if [ ! -s "$HOME/.npmrc" ]; then
+            rm -f "$HOME/.npmrc"
+        fi
+    fi
 fi
 
-# 3. PATH 환경 변수 설정
+# 4. PATH 환경 변수 설정
 # nvm 사용 여부와 관계없이 ~/.npm-global/bin을 PATH에 추가하여
 # 사용자가 직접 설치한 다른 CLI 도구들을 사용할 수 있도록 합니다.
 if [[ ":$PATH:" != *":$NPM_GLOBAL_PATH/bin:"* ]]; then
