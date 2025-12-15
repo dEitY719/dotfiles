@@ -34,9 +34,9 @@ error() {
 confirm() {
     local prompt="$1"
     local response
-    echo -n "${bold}${blue}${prompt}${reset} (y/n) "
+    echo -n "${bold}${blue}${prompt}${reset} (Y/n) "
     read -r response
-    [[ "$response" == "y" || "$response" == "Y" ]]
+    [[ -z "$response" || "$response" == "y" || "$response" == "Y" ]]
 }
 
 # Main script
