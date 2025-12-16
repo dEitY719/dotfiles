@@ -1,4 +1,5 @@
 {
+  "model": "sonnet",
   "statusLine": {
     "type": "command",
     "command": "bash $HOME/.claude/statusline-command.sh"
@@ -24,7 +25,6 @@
     "plugin-dev@claude-code-plugins": true,
     "unit-testing@claude-code-workflows": true
   },
-  "alwaysThinkingEnabled": false,
   "subagents": {
     "defaultModel": "haiku"
   },
