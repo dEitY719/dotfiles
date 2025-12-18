@@ -1,148 +1,101 @@
 #!/bin/bash
-
 # mytool/enable-docker.sh
 # Docker 서비스 자동 시작 설정 (systemd) - 대화형
 
 set -e
 
-# Color definitions
-bold=$(tput bold 2>/dev/null || echo "")
-blue=$(tput setaf 4 2>/dev/null || echo "")
-green=$(tput setaf 2 2>/dev/null || echo "")
-yellow=$(tput setaf 3 2>/dev/null || echo "")
-red=$(tput setaf 1 2>/dev/null || echo "")
-reset=$(tput sgr0 2>/dev/null || echo "")
-
-# Helper functions
-info() {
-    echo "${bold}${blue}[INFO]${reset} $*"
-}
-
-success() {
-    echo "${bold}${green}[✓]${reset} $*"
-}
-
-warning() {
-    echo "${bold}${yellow}[⚠]${reset} $*"
-}
-
-error() {
-    echo "${bold}${red}[✗]${reset} $*"
-}
-
-confirm() {
-    local prompt="$1"
-    local response
-    echo -n "${bold}${blue}${prompt}${reset} (y/n) "
-    read -r response
-    [[ "$response" == "y" || "$response" == "Y" ]]
-}
+# Source the UX library
+# shellcheck source=../bash/ux_lib/ux_lib.bash
+source "$(dirname "$0")/../bash/ux_lib/ux_lib.bash"
 
 # Main script
 main() {
     clear
-    cat <<EOF
-${bold}${blue}════════════════════════════════════════════════════
-  Docker 서비스 자동 시작 설정 (systemd)
-════════════════════════════════════════════════════${reset}
+    ux_header "Docker Service Auto-Start Setup"
+    ux_info "This script enables the Docker service to start automatically on boot (with systemd)."
 
-이 스크립트는 Docker 서비스를 WSL 부팅 시
-자동으로 시작되도록 설정합니다.
+    ux_section "Setup Process"
+    ux_numbered 1 "Start the Docker service now."
+    ux_numbered 2 "Enable the Docker service to start on boot."
+    ux_numbered 3 "Verify the service status."
+    echo ""
+    ux_warning "This script requires sudo privileges."
+    echo ""
 
-설정 과정:
-  1. Docker 서비스 시작
-  2. Docker 자동 시작 활성화 (systemd enable)
-  3. 설정 확인
-
-${yellow}주의: 이 스크립트는 sudo 권한이 필요합니다.${reset}
-
-EOF
-
-    if ! confirm "계속 진행하시겠습니까?"; then
-        warning "설정이 취소되었습니다."
+    if ! ux_confirm "Do you want to proceed?" "y"; then
+        ux_warning "Setup cancelled."
         exit 0
     fi
 
-    # ========================================
-    # Check if Docker is installed
-    # ========================================
-    info "Docker 설치 상태 확인 중..."
-    if ! command -v docker &> /dev/null; then
-        error "Docker가 설치되어 있지 않습니다."
-        echo "${yellow}먼저 'dinstall'을 실행하여 Docker를 설치하세요.${reset}"
+    # Check Docker installation
+    ux_info "Checking Docker installation status..."
+    if ! ux_require "docker"; then
+        ux_error "Docker is not installed. Please run 'dinstall' first."
         exit 1
     fi
-    success "Docker가 설치되어 있습니다."
+    ux_success "Docker is installed."
+    echo ""
 
-    # ========================================
-    # Step 1: Start Docker service
-    # ========================================
-    info "Step 1/3: Docker 서비스 시작 중..."
-    if confirm "Docker 서비스를 시작하시겠습니까?"; then
+    # Step 1: Start Docker
+    ux_step "1/3" "Starting Docker service"
+    if ux_confirm "Start the Docker service now?" "y"; then
         if sudo systemctl start docker; then
-            success "Docker 서비스 시작 완료"
+            ux_success "Docker service started successfully."
         else
-            error "Docker 서비스 시작 실패"
+            ux_error "Failed to start Docker service."
             return 1
         fi
     else
-        warning "Step 1 스킵됨"
+        ux_info "Step 1 skipped by user."
     fi
+    echo ""
 
-    # ========================================
-    # Step 2: Enable Docker to start on boot
-    # ========================================
-    info "Step 2/3: Docker 자동 시작 활성화 중..."
-    if confirm "Docker를 WSL 부팅 시 자동 시작하도록 설정하시겠습니까?"; then
+    # Step 2: Enable Docker
+    ux_step "2/3" "Enabling Docker auto-start"
+    if ux_confirm "Enable Docker to start automatically on boot?" "y"; then
         if sudo systemctl enable docker; then
-            success "Docker 자동 시작 활성화 완료"
+            ux_success "Docker auto-start enabled successfully."
         else
-            error "Docker 자동 시작 활성화 실패"
+            ux_error "Failed to enable Docker auto-start."
             return 1
         fi
     else
-        warning "Step 2 스킵됨"
+        ux_info "Step 2 skipped by user."
     fi
+    echo ""
 
-    # ========================================
-    # Step 3: Verify Docker is running
-    # ========================================
-    info "Step 3/3: Docker 서비스 상태 확인 중..."
-    if confirm "Docker 서비스 상태를 확인하시겠습니까?";  then
+    # Step 3: Verify Status
+    ux_step "3/3" "Verifying Docker service status"
+    if ux_confirm "Check Docker service status now?" "y"; then
         echo ""
-        echo "${bold}Docker 서비스 상태:${reset}"
+        ux_section "Docker Service Status"
         if sudo systemctl status docker --no-pager; then
             echo ""
-            success "Docker 서비스가 정상 실행 중입니다."
+            ux_success "Docker service appears to be running correctly."
         else
-            warning "Docker 서비스 상태 확인 실패"
+            ux_warning "Could not confirm Docker service status."
         fi
     else
-        warning "Step 3 스킵됨"
+        ux_info "Step 3 skipped by user."
     fi
 
-    # ========================================
     # Completion
-    # ========================================
     echo ""
-    cat <<EOF
-${bold}${green}════════════════════════════════════════════════════
-  ✅ Docker 자동 시작 설정 완료!
-════════════════════════════════════════════════════${reset}
+    ux_header "✅ Docker Auto-Start Setup Complete!"
+    ux_section "Next Steps"
+    ux_numbered 1 "Restart WSL: ${UX_PRIMARY}wsl --shutdown${UX_RESET}"
+    ux_numbered 2 "After restarting WSL, check if Docker is running: ${UX_PRIMARY}docker ps${UX_RESET}"
+    echo ""
 
-${bold}다음 단계:${reset}
-  1. WSL 재시작: ${yellow}wsl --shutdown${reset}
-  2. WSL 다시 시작 후 Docker 자동 실행 확인:
-     ${yellow}docker ps${reset}
+    ux_section "Verification Commands"
+    ux_table_header "Description" "Command"
+    ux_table_row "Service Status" "sudo systemctl status docker"
+    ux_table_row "Auto-start Status" "sudo systemctl is-enabled docker"
+    echo ""
 
-${bold}Docker 상태 확인:${reset}
-  - 서비스 상태: ${yellow}sudo systemctl status docker${reset}
-  - 자동 시작 설정: ${yellow}sudo systemctl is-enabled docker${reset}
-
-${bold}더 많은 Docker 명령어는:${reset}
-  ${yellow}dockerhelp${reset}
-
-EOF
+    ux_section "More Commands"
+    ux_info "For more Docker commands, run: ${UX_PRIMARY}dockerhelp${UX_RESET}"
+    echo ""
 }
 
 main "$@"

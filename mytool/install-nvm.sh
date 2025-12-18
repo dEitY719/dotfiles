@@ -1,130 +1,100 @@
 #!/bin/bash
-
 # mytool/install-nvm.sh
 # NVM (Node Version Manager) Install Script
 # Installs NVM and the latest LTS version of Node.js
 
 set -e
 
-# Color definitions
-bold=$(tput bold 2>/dev/null || echo "")
-blue=$(tput setaf 4 2>/dev/null || echo "")
-green=$(tput setaf 2 2>/dev/null || echo "")
-yellow=$(tput setaf 3 2>/dev/null || echo "")
-red=$(tput setaf 1 2>/dev/null || echo "")
-reset=$(tput sgr0 2>/dev/null || echo "")
+# Source the UX library
+# shellcheck source=../bash/ux_lib/ux_lib.bash
+source "$(dirname "$0")/../bash/ux_lib/ux_lib.bash"
 
-# Helper functions
-info() {
-    echo "${bold}${blue}[INFO]${reset} $*"
-}
-
-success() {
-    echo "${bold}${green}[✓]${reset} $*"
-}
-
-warning() {
-    echo "${bold}${yellow}[⚠]${reset} $*"
-}
-
-error() {
-    echo "${bold}${red}[✗]${reset} $*"
-}
-
-confirm() {
-    local prompt="$1"
-    local response
-    echo -n "${bold}${blue}${prompt}${reset} (y/n) "
-    read -r response
-    [[ "$response" == "y" || "$response" == "Y" ]]
-}
-
-# Main script
 main() {
     clear
-    cat <<EOF
-${bold}${blue}════════════════════════════════════════════════════
-  NVM & Node.js LTS Install Script
-════════════════════════════════════════════════════${reset}
+    ux_header "NVM & Node.js LTS Installer"
+    ux_info "This script installs NVM (Node Version Manager) and the latest LTS Node.js version."
 
-This script will:
-  1. Install NVM (Node Version Manager)
-  2. Install the latest LTS version of Node.js
-  3. Set LTS as the default version
+    ux_section "Installation Steps"
+    ux_numbered 1 "Download and run the NVM installation script."
+    ux_numbered 2 "Load NVM into the current session."
+    ux_numbered 3 "Install the latest LTS (Long-Term Support) version of Node.js."
+    echo ""
 
-EOF
-
-    if ! confirm "Continue with installation?"; then
-        warning "Installation cancelled."
+    if ! ux_confirm "Do you want to proceed with the installation?" "y"; then
+        ux_warning "Installation cancelled."
         exit 0
     fi
 
     # ========================================
     # Step 1: Install NVM
     # ========================================
-    info "Step 1/3: Installing NVM..."
-
+    ux_step "1/3" "Installing NVM..."
     export NVM_DIR="$HOME/.nvm"
+    local nvm_install_url="https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh"
     
     if [ -d "$NVM_DIR" ]; then
-        warning "NVM directory ($NVM_DIR) already exists."
-        if ! confirm "Do you want to reinstall/update NVM?"; then
-             info "Skipping NVM installation."
+        ux_warning "NVM directory ($NVM_DIR) already exists."
+        if ! ux_confirm "Do you want to run the installer again to update NVM?" "n"; then
+             ux_info "Skipping NVM installation."
         else
-            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-            success "NVM installed/updated."
+            ux_info "Running NVM installer from ${nvm_install_url}..."
+            # The installer has its own output, so we don't use a spinner
+            curl -o- "$nvm_install_url" | bash
+            ux_success "NVM install/update script finished."
         fi
     else
-        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-        success "NVM installed."
+        ux_info "Running NVM installer from ${nvm_install_url}..."
+        curl -o- "$nvm_install_url" | bash
+        ux_success "NVM install script finished."
     fi
+    echo ""
 
     # ========================================
     # Step 2: Load NVM
     # ========================================
-    info "Step 2/3: Loading NVM..."
-    
-    # Load NVM for the current session
+    ux_step "2/3" "Loading NVM..."
     if [ -s "$NVM_DIR/nvm.sh" ]; then
-        \. "$NVM_DIR/nvm.sh"
-        success "NVM loaded."
+        # shellcheck source=/dev/null
+        . "$NVM_DIR/nvm.sh"
+        ux_success "NVM loaded for the current session."
     else
-        error "Could not find nvm.sh at $NVM_DIR/nvm.sh"
-        return 1
+        ux_error "Could not find nvm.sh to load. Installation may have failed."
+        exit 1
     fi
+    echo ""
 
     # ========================================
     # Step 3: Install Node.js LTS
     # ========================================
-    info "Step 3/3: Installing Node.js LTS..."
-
-    if confirm "Install latest LTS version of Node.js?"; then
+    ux_step "3/3" "Installing Node.js LTS..."
+    if ux_confirm "Install the latest LTS version of Node.js and set it as default?" "y"; then
+        ux_info "Running 'nvm install --lts'..."
+        # nvm also has its own rich output
         nvm install --lts
-        nvm use --lts
-        success "Node.js LTS installed and active."
+        ux_info "Setting LTS as the default version for new shells..."
+        nvm alias default 'lts/*'
+        ux_success "Node.js LTS installed and set as default."
         
         echo ""
-        echo "${bold}Current Versions:${reset}"
-        echo "Node: $(node --version)"
-        echo "NPM:  $(npm --version)"
+        ux_section "Current Versions"
+        nvm_version=$(nvm --version)
+        node_version=$(node --version)
+        npm_version=$(npm --version)
+        ux_table_header "Component" "Version"
+        ux_table_row "NVM" "$nvm_version"
+        ux_table_row "Node.js" "$node_version"
+        ux_table_row "npm" "$npm_version"
     else
-        warning "Skipping Node.js LTS installation."
+        ux_info "Skipping Node.js LTS installation."
     fi
 
     # ========================================
     # Completion
     # ========================================
     echo ""
-    cat <<EOF
-${bold}${green}════════════════════════════════════════════════════
-  ✅ NVM & Node.js Setup Complete!
-════════════════════════════════════════════════════${reset}
-
-${bold}Note:${reset}
-  Restart your terminal or run 'source ~/.bashrc' (or ~/.profile)
-  to ensure NVM is available in new sessions.
-
-EOF
+    ux_header "✅ NVM & Node.js Setup Complete!"
+    ux_warning "You must restart your terminal or run 'source ~/.bashrc' for NVM to be available in new sessions."
+    echo ""
 }
 
 main "$@"

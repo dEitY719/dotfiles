@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Source the UX library
+# This assumes the script is run from the dotfiles repo, or ux_lib is in a known path.
+# For portability, let's determine the script's own directory.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ ! -f "${SCRIPT_DIR}/../bash/ux_lib/ux_lib.bash" ]; then
+    echo "Error: Could not find ux_lib.bash. Make sure this script is run from the dotfiles/mytool directory." >&2
+    exit 1
+fi
+# shellcheck source=../bash/ux_lib/ux_lib.bash
+source "${SCRIPT_DIR}/../bash/ux_lib/ux_lib.bash"
+
 format_number() {
     local num=$1
     local sign=""
@@ -20,14 +31,14 @@ format_number() {
 
 TARGET_DIR=${1:-.}
 if [[ ! -d $TARGET_DIR ]]; then
-    echo "error: '${TARGET_DIR}' is not a directory" >&2
+    ux_error "'${TARGET_DIR}' is not a directory" >&2
     exit 1
 fi
 
 TARGET_DIR=$(realpath "$TARGET_DIR")
 
 if ! git -C "$TARGET_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    echo "error: '${TARGET_DIR}' is not inside a git repository" >&2
+    ux_error "'${TARGET_DIR}' is not a git repository" >&2
     exit 1
 fi
 
@@ -56,8 +67,6 @@ if (( git_commits > 0 )); then
     fi
 fi
 
-duration_label=$(printf '%02d days' "$duration_days")
-
 declare -a exts=(py js css tsx)
 declare -A counts
 declare -A locs
@@ -75,7 +84,7 @@ for ext in "${exts[@]}"; do
     if (( count > 0 )); then
         # Calculate LOC using -z for safety with special characters
         # grep -z filters null-terminated stream
-        loc=$(cd "$TARGET_DIR" && git ls-files -z --cached --others --exclude-standard -- "*.${ext}" | (grep -z -vE "(^|/)\.venv/" || true) | xargs -0 cat | wc -l)
+        loc=$(cd "$TARGET_DIR" && git ls-files -z --cached --others --exclude-standard -- "*.${ext}" | (grep -z -vE "(^|/)\.venv/" || true) | xargs -0 cat 2>/dev/null | wc -l)
     fi
 
     counts[$ext]=$count
@@ -95,38 +104,34 @@ if [[ ${counts[py]} -gt 0 ]]; then
         | wc -l)
 fi
 
-# Colors and Styles (Matched to Makefile)
-BOLD=$(tput bold 2>/dev/null || echo "")
-RED=$(tput setaf 1 2>/dev/null || echo "")
-GREEN=$(tput setaf 2 2>/dev/null || echo "")
-YELLOW=$(tput setaf 3 2>/dev/null || echo "")
-BLUE=$(tput setaf 4 2>/dev/null || echo "")
-NC=$(tput sgr0 2>/dev/null || echo "") # No Color / Reset
 
-printf "\n${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-printf "${BLUE}Git Commit Statistics${NC}\n"
-printf "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-printf "${GREEN}Commits:${NC}  %s\n" "${git_commits}"
-printf "${GREEN}Period:${NC}   %s ~ %s (%s)\n" "$start_date" "$end_date" "$duration_label"
-printf "${GREEN}Rate:${NC}     %s commits/day\n" "$avg_commits_per_day"
+# --- Display ---
+clear
+ux_header "Repository Statistics: $(basename "$TARGET_DIR")"
 
+# Git Commit Statistics
+ux_section "Git Commit Statistics"
+ux_table_row "Total Commits" "$(format_number "$git_commits")"
+ux_table_row "Project Period" "${start_date} ~ ${end_date} (${duration_days} days)"
+ux_table_row "Commit Rate" "${avg_commits_per_day} commits/day"
+
+# Test Statistics
 if (( test_count > 0 )); then
-    printf "\n${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-    printf "${BLUE}Test Statistics${NC}\n"
-    printf "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-    printf "${GREEN}Tests:${NC}    %s (estimated)\n" "$(format_number "$test_count")"
+    ux_section "Test Statistics"
+    ux_table_row "Estimated Tests" "$(format_number "$test_count")"
 fi
 
-printf "\n${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-printf "${BLUE}File Statistics${NC}\n"
-printf "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-printf "${GREEN}Total:${NC}    %s files (%s LOC)\n" "$(format_number "$total_files")" "$(format_number "$total_loc")"
-
+# File Statistics
+ux_section "File & Code Statistics"
+ux_table_row "${UX_BOLD}Total Files${UX_RESET}" "$(format_number "$total_files")"
+ux_table_row "${UX_BOLD}Total LOC${UX_RESET}" "$(format_number "$total_loc")"
+echo ""
+ux_table_header "Extension" "Files" "Lines of Code"
 for ext in "${exts[@]}"; do
     count=${counts[$ext]}
+    loc=${locs[$ext]}
     if (( count > 0 )); then
-        loc=${locs[$ext]}
-        printf "  ${YELLOW}.%-4s${NC} : %s files (%s LOC)\n" "$ext" "$(format_number "$count")" "$(format_number "$loc")"
+        ux_table_row ".${ext}" "$(format_number "$count")" "$(format_number "$loc")"
     fi
 done
-printf "\n"
+echo ""

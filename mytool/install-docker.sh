@@ -1,219 +1,136 @@
 #!/bin/bash
-
 # mytool/install-docker.sh
 # WSL Docker 설치 스크립트 (대화형)
 
 set -e
 
-# Color definitions
-bold=$(tput bold 2>/dev/null || echo "")
-blue=$(tput setaf 4 2>/dev/null || echo "")
-green=$(tput setaf 2 2>/dev/null || echo "")
-yellow=$(tput setaf 3 2>/dev/null || echo "")
-red=$(tput setaf 1 2>/dev/null || echo "")
-reset=$(tput sgr0 2>/dev/null || echo "")
-
-# Helper functions
-info() {
-    echo "${bold}${blue}[INFO]${reset} $*"
-}
-
-success() {
-    echo "${bold}${green}[✓]${reset} $*"
-}
-
-warning() {
-    echo "${bold}${yellow}[⚠]${reset} $*"
-}
-
-error() {
-    echo "${bold}${red}[✗]${reset} $*"
-}
-
-confirm() {
-    local prompt="$1"
-    local response
-    echo -n "${bold}${blue}${prompt}${reset} (y/n) "
-    read -r response
-    [[ "$response" == "y" || "$response" == "Y" ]]
-}
+# Source the UX library
+# shellcheck source=../bash/ux_lib/ux_lib.bash
+source "$(dirname "$0")"/../bash/ux_lib/ux_lib.bash"
 
 # Main script
 main() {
     clear
-    cat <<EOF
-${bold}${blue}════════════════════════════════════════════════════
-  WSL Docker 설치 스크립트 (대화형)
-════════════════════════════════════════════════════${reset}
+    ux_header "Docker Installer for WSL/Ubuntu"
+    ux_info "This script installs Docker Engine and Docker Compose."
 
-이 스크립트는 WSL Ubuntu에 Docker를 설치합니다.
-설치 과정:
-  1. 패키지 매니저 업데이트
-  2. Docker 의존성 설치
-  3. Docker 공식 GPG 키 추가
-  4. Docker 저장소 추가
-  5. Docker Engine & Compose 설치
-  6. 설치 확인
+    ux_section "Installation Steps"
+    ux_numbered 1 "Update package sources"
+    ux_numbered 2 "Install dependencies (curl, gnupg, etc.)"
+    ux_numbered 3 "Add Docker's official GPG key"
+    ux_numbered 4 "Set up the Docker repository"
+    ux_numbered 5 "Install Docker Engine and Compose"
+    ux_numbered 6 "Configure sudo-less Docker access (optional)"
+    echo ""
+    ux_warning "This script requires sudo privileges."
+    echo ""
 
-${yellow}주의: 이 스크립트는 sudo 권한이 필요합니다.${reset}
-
-EOF
-
-    if ! confirm "계속 진행하시겠습니까?"; then
-        warning "설치가 취소되었습니다."
+    if ! ux_confirm "Do you want to proceed with the installation?" "y"; then
+        ux_warning "Installation cancelled."
         exit 0
     fi
+
+    # Prompt for sudo password upfront and keep the session alive
+    ux_info "Requesting sudo privileges for the installation..."
+    if ! sudo -v; then
+        ux_error "Sudo privileges are required. Aborting."
+        exit 1
+    fi
+    # Keep the sudo session alive in the background
+    while true; do sudo -n true; sleep 60; kill -0 "$" || exit; done &> /dev/null &
+    local sudo_keep_alive_pid=$!
+    trap 'kill "$sudo_keep_alive_pid"' EXIT
+    
+    ux_success "Sudo privileges acquired."
+    echo ""
 
     # ========================================
     # Step 1: Update package manager
     # ========================================
-    info "Step 1/6: 패키지 매니저 업데이트 중..."
-    if confirm "apt-get update를 실행하시겠습니까?"; then
-        sudo apt-get update || {
-            error "apt-get update 실패"
-            return 1
-        }
-        success "패키지 매니저 업데이트 완료"
-    else
-        warning "Step 1 스킵됨"
+    ux_step "1/6" "Updating package manager sources..."
+    if ! ux_with_spinner "Updating apt cache" sudo apt-get update -qq; then
+        exit 1
     fi
-
-    if confirm "apt-get upgrade를 실행하시겠습니까?"; then
-        sudo apt-get upgrade -y || {
-            error "apt-get upgrade 실패"
-            return 1
-        }
-        success "패키지 업그레이드 완료"
-    else
-        warning "apt-get upgrade 스킵됨"
-    fi
-
+    
     # ========================================
     # Step 2: Install Docker dependencies
     # ========================================
-    info "Step 2/6: Docker 의존성 설치 중..."
-    if confirm "Docker 의존성을 설치하시겠습니까?"; then
-        sudo apt-get install -y \
-            ca-certificates \
-            curl \
-            gnupg \
-            lsb-release || {
-            error "Docker 의존성 설치 실패"
-            return 1
-        }
-        success "Docker 의존성 설치 완료"
-    else
-        warning "Step 2 스킵됨"
+    ux_step "2/6" "Installing Docker dependencies..."
+    if ! ux_with_spinner "Installing dependencies" sudo apt-get install -y -qq ca-certificates curl; then
+         exit 1
     fi
 
     # ========================================
     # Step 3: Add Docker's official GPG key
     # ========================================
-    info "Step 3/6: Docker GPG 키 추가 중..."
-    if confirm "Docker 공식 GPG 키를 추가하시겠습니까?"; then
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-            sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg || {
-            error "GPG 키 추가 실패"
-            return 1
-        }
-        success "Docker GPG 키 추가 완료"
-    else
-        warning "Step 3 스킵됨"
-    fi
+    ux_step "3/6" "Adding Docker's official GPG key..."
+    sudo install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+    ux_success "Docker GPG key added successfully."
 
     # ========================================
     # Step 4: Add Docker repository
     # ========================================
-    info "Step 4/6: Docker 저장소 추가 중..."
-    if confirm "Docker 저장소를 추가하시겠습니까?"; then
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
-            sudo tee /etc/apt/sources.list.d/docker.list > /dev/null || {
-            error "Docker 저장소 추가 실패"
-            return 1
-        }
-        success "Docker 저장소 추가 완료"
-
-        info "저장소 설정 확인:"
-        cat /etc/apt/sources.list.d/docker.list
-    else
-        warning "Step 4 스킵됨"
-    fi
+    ux_step "4/6" "Setting up Docker repository..."
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    ux_success "Docker repository added successfully."
 
     # ========================================
     # Step 5: Update & Install Docker
     # ========================================
-    info "Step 5/6: apt-get 업데이트 후 Docker 설치 중..."
-    if confirm "apt-get update (Docker 저장소 반영)를 실행하시겠습니까?"; then
-        sudo apt-get update || {
-            error "apt-get update 실패"
-            return 1
-        }
-        success "패키지 매니저 업데이트 완료"
-    else
-        warning "apt-get update 스킵됨"
+    ux_step "5/6" "Updating apt and installing Docker..."
+    if ! ux_with_spinner "Updating apt cache again" sudo apt-get update -qq; then
+        exit 1
     fi
-
-    if confirm "Docker Engine, CLI, Compose를 설치하시겠습니까?"; then
-        sudo apt-get install -y \
-            docker-ce \
-            docker-ce-cli \
-            containerd.io \
-            docker-compose-plugin || {
-            error "Docker 설치 실패"
-            return 1
-        }
-        success "Docker 설치 완료"
-    else
-        warning "Docker 설치 스킵됨"
+    if ! ux_with_spinner "Installing Docker packages" sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+        exit 1
     fi
 
     # ========================================
-    # Step 6: Verify installation
+    # Step 6: Post-installation (optional)
     # ========================================
-    info "Step 6/6: 설치 확인 중..."
-
-    echo ""
-    echo "${bold}Docker 버전:${reset}"
-    docker --version || warning "Docker 버전 확인 실패"
-
-    echo ""
-    echo "${bold}Docker Compose 버전:${reset}"
-    docker compose version || warning "Docker Compose 버전 확인 실패"
-
-    # ========================================
-    # Post-installation (optional)
-    # ========================================
-    echo ""
-    if confirm "Docker를 sudo 없이 사용하도록 설정하시겠습니까? (권장)"; then
-        info "docker 그룹 생성 및 현재 사용자 추가 중..."
-        sudo groupadd -f docker || true
-        sudo usermod -aG docker "$USER" || {
-            error "사용자를 docker 그룹에 추가 실패"
-            return 1
-        }
-        success "docker 그룹 설정 완료"
-        warning "설정을 적용하려면 WSL을 재시작하거나 다음을 실행하세요:"
-        echo "  newgrp docker"
+    ux_step "6/6" "Configuring sudo-less Docker access..."
+    if ux_confirm "Add current user '$USER' to the 'docker' group for sudo-less access?" "y"; then
+        sudo groupadd -f docker
+        if sudo usermod -aG docker "$USER"; then
+            ux_success "User '$USER' added to 'docker' group."
+            ux_warning "You must log out and log back in, or run 'newgrp docker' for this to take effect."
+        else
+            ux_error "Failed to add user to 'docker' group."
+        fi
+    else
+        ux_info "Sudo-less access setup skipped."
     fi
 
     # ========================================
     # Completion
     # ========================================
     echo ""
-    cat <<EOF
-${bold}${green}════════════════════════════════════════════════════
-  ✅ Docker 설치 완료!
-════════════════════════════════════════════════════${reset}
-
-${bold}다음 단계:${reset}
-  1. 필요시 WSL 재시작: ${yellow}wsl --shutdown${reset}
-  2. Docker 테스트: ${yellow}docker run hello-world${reset}
-  3. Docker Compose 테스트: ${yellow}docker compose version${reset}
-
-${bold}더 많은 Docker 명령어는:${reset}
-  ${yellow}dockerhelp${reset}
-
-EOF
+    ux_header "✅ Docker Installation Complete!"
+    ux_section "Verification"
+    if command -v docker &>/dev/null; then
+        ux_info "Docker Version:"
+        docker --version
+        ux_info "Docker Compose Version:"
+        docker compose version
+    else
+        ux_error "Docker command not found after installation."
+    fi
+    
+    ux_section "Next Steps"
+    ux_numbered 1 "If you added user to docker group, restart WSL: ${UX_PRIMARY}wsl --shutdown${UX_RESET}"
+    ux_numbered 2 "Test the installation: ${UX_PRIMARY}docker run hello-world${UX_RESET}"
+    echo ""
+    ux_info "For more Docker commands, run: ${UX_PRIMARY}dockerhelp${UX_RESET}"
+    echo ""
+    
+    # Clean up sudo keep-alive
+    kill "$sudo_keep_alive_pid" 2>/dev/null || true
+    trap - EXIT
 }
 
 main "$@"

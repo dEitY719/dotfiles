@@ -1,99 +1,69 @@
 #!/bin/bash
-
 # mytool/install-uv.sh
 # UV Install Script
 # Installs the UV tool by Astral.
 
 set -e
 
-# Color definitions
-bold=$(tput bold 2>/dev/null || echo "")
-blue=$(tput setaf 4 2>/dev/null || echo "")
-green=$(tput setaf 2 2>/dev/null || echo "")
-yellow=$(tput setaf 3 2>/dev/null || echo "")
-red=$(tput setaf 1 2>/dev/null || echo "")
-reset=$(tput sgr0 2>/dev/null || echo "")
-
-# Helper functions
-info() {
-    echo "${bold}${blue}[INFO]${reset} $*"
-}
-
-success() {
-    echo "${bold}${green}[✓]${reset} $*"
-}
-
-warning() {
-    echo "${bold}${yellow}[⚠]${reset} $*"
-}
-
-error() {
-    echo "${bold}${red}[✗]${reset} $*"
-}
-
-confirm() {
-    local prompt="$1"
-    local response
-    echo -n "${bold}${blue}${prompt}${reset} (Y/n) "
-    read -r response
-    [[ -z "$response" || "$response" == "y" || "$response" == "Y" ]]
-}
+# Source the UX library
+# shellcheck source=../bash/ux_lib/ux_lib.bash
+source "$(dirname "$0")/../bash/ux_lib/ux_lib.bash"
 
 # Main script
 main() {
     clear
-    cat <<EOF
-${bold}${blue}════════════════════════════════════════════════════
-  UV Install Script
-════════════════════════════════════════════════════${reset}
+    ux_header "UV Installer"
+    ux_info "This script installs 'uv', the fast Python package installer and resolver from Astral."
+    echo ""
 
-This script will:
-  1. Install the UV tool from astral.sh.
-
-EOF
-
-    if ! confirm "Continue with installation?"; then
-        warning "Installation cancelled."
+    if ! ux_confirm "Do you want to proceed with the installation?" "y"; then
+        ux_warning "Installation cancelled."
         exit 0
     fi
 
     # ========================================
     # Step 1: Install UV
     # ========================================
-    info "Step 1/1: Installing UV..."
+    ux_step "1/1" "Installing or updating uv..."
+    
     if command -v uv &>/dev/null; then
-        warning "UV appears to be already installed."
-        if ! confirm "Do you want to reinstall/update it?"; then
-            info "Skipping UV installation."
+        ux_warning "uv appears to be already installed."
+        if ! ux_confirm "Do you want to run the installer again to check for updates?" "n"; then
+            ux_info "Skipping uv installation."
+            echo ""
+            uv --version
             exit 0
         fi
     fi
-
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    success "UV installed/updated."
-
+    
+    local install_url="https://astral.sh/uv/install.sh"
+    ux_info "Running installer from ${install_url}..."
+    # The installer has its own output, so we don't use a spinner
+    curl -LsSf "$install_url" | sh
+    
+    # The installer script gives its own success message and instructions.
+    # We just need to verify and add a final summary.
+    
     echo ""
-    echo "${bold}Verification:${reset}"
-    if command -v uv &>/dev/null; then
-        uv --version
-    else
-        warning "UV command not found after installation. Please check your PATH."
+    ux_section "Verification"
+    # The installer modifies the environment, so we need to source the cargo env script to find `uv`
+    # This might be in different places depending on how Rust was installed. Common paths:
+    if [ -f "$HOME/.cargo/env" ]; then
+        # shellcheck source=/dev/null
+        source "$HOME/.cargo/env"
     fi
 
-    # ========================================
-    # Completion
-    # ========================================
+    if command -v uv &>/dev/null; then
+        ux_success "uv command is now available in your PATH."
+        uv --version
+    else
+        ux_error "uv command not found after installation."
+        ux_warning "Please check the output above. You may need to restart your shell or run 'source ~/.bashrc'."
+    fi
+
     echo ""
-    cat <<EOF
-${bold}${green}════════════════════════════════════════════════════
-  ✅ UV Setup Complete!
-════════════════════════════════════════════════════${reset}
-
-${bold}Note:${reset}
-  If 'uv --version' above failed, please restart your terminal or run
-  'source ~/.bashrc' (or ~/.profile) to ensure your PATH is updated.
-
-EOF
+    ux_header "✅ UV Installation Complete"
+    echo ""
 }
 
 main "$@"

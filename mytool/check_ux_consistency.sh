@@ -1,88 +1,95 @@
 #!/bin/bash
 # Check UX consistency across all bash files
 
-DOTFILES_BASH_DIR="$(dirname "$(dirname "$(realpath "$0")")")/bash"
+# Determine the absolute path to the bash directory
+# This makes the script runnable from any location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTFILES_BASH_DIR="$(cd "${SCRIPT_DIR}/../bash" && pwd)"
 
 # Load UX library for reporting
-source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
+# shellcheck source=../bash/ux_lib/ux_lib.bash
+source "${SCRIPT_DIR}/../bash/ux_lib/ux_lib.bash"
 
 ux_header "UX Consistency Checker"
+total_issues=0
 
-# Check 1: Functions using old color definitions
-ux_section "Checking for deprecated color definitions"
+# =============================================================================
+# Check 1: Find deprecated raw `tput` color definitions
+# =============================================================================
+ux_section "1. Checking for deprecated color definitions"
 deprecated_patterns=(
-    'bold=\$\(tput bold'
-    'blue=\$\(tput setaf 4'
-    'green=\$\(tput setaf 2'
-    'yellow=\$\(tput setaf 3'
-    'red=\$\(tput setaf 1'
-    'reset=\$\(tput sgr0'
+    'bold=$(tput bold'
+    'blue=$(tput setaf 4'
+    'green=$(tput setaf 2'
+    'yellow=$(tput setaf 3'
+    'red=$(tput setaf 1'
+    'reset=$(tput sgr0'
 )
 
-found_issues=0
+found_files=""
+# Search in app/, alias/, and coreutils/ directories
+search_dirs=(
+    "${DOTFILES_BASH_DIR}/app"
+    "${DOTFILES_BASH_DIR}/alias"
+    "${DOTFILES_BASH_DIR}/coreutils"
+    "${SCRIPT_DIR}"
+)
+
 for pattern in "${deprecated_patterns[@]}"; do
-    ux_info "Searching for pattern: $pattern"
-    # Search in app/ and alias/ directories, excluding current script and ux_lib itself
-    if grep -r -E "$pattern" "${DOTFILES_BASH_DIR}/app" "${DOTFILES_BASH_DIR}/alias" "${DOTFILES_BASH_DIR}/coreutils" 2>/dev/null | grep -v "ux_lib.bash"; then
-        ux_warning "Found deprecated pattern: $pattern"
-        ((found_issues++))
-    fi
+    # Exclude ux_lib itself, this script, and binary files
+    found_files+=$(grep -r -l -E "$pattern" "${search_dirs[@]}" \
+        --exclude-dir="ux_lib" \
+        --exclude-dir=".git" \
+        --exclude-dir=".idea" \
+        --exclude-dir="tmp" \
+        --exclude="check_ux_consistency.sh" 2>/dev/null || true)
+    found_files+=$'\n'
 done
-if [ "$found_issues" -eq 0 ]; then
+
+# Process unique files found
+unique_files=$(echo "$found_files" | grep -v '^[[:space:]]*$' | LC_ALL=C sort -u)
+
+if [ -z "$unique_files" ]; then
     ux_success "No deprecated color definitions found."
 else
-    ux_error "Found $found_issues issues with deprecated color definitions."
+    ux_error "Found files with deprecated color definitions:"
+    while IFS= read -r file; do
+        ux_bullet "$file"
+    done <<< "$unique_files"
+    total_issues=$((total_issues + $(echo "$unique_files" | wc -l)))
 fi
 
-# Check 2: Functions without help text (heuristic: not always accurate)
-# This check is complex and can lead to false positives/negatives.
-# For now, let's focus on detecting *help functions that don't call ux_header or ux_section.
-ux_section "Checking for help functions missing UX formatting"
-help_funcs=()
-while IFS= read -r func; do
-    func_name="${func%%(*}"
-    if [[ "$func_name" =~ help$ ]] && [[ "$func_name" != "myhelp" ]] && [[ "$func_name" != _* ]]; then
-        help_funcs+=("$func_name")
-    fi
-done < <(declare -F | awk '{print $3}' | { grep 'help$' || true; } | LC_ALL=C sort) # Need to load functions first to declare -F
 
-help_format_issues=0
-for hf in "${help_funcs[@]}"; do
-    func_definition=$(type "$hf" 2>/dev/null)
-    if ! (echo "$func_definition" | grep -q "ux_header" && echo "$func_definition" | grep -q "ux_section"); then
-        ux_warning "Help function '$hf' might not be using ux_header/ux_section for formatting."
-        ((help_format_issues++))
+# =============================================================================
+# Check 2: Ensure Python helper scripts are executable
+# =============================================================================
+ux_section "2. Checking Python helper script permissions"
+py_script_issues=0
+# The python scripts used by ux_lib are in ux_lib
+py_scripts_dir="${DOTFILES_BASH_DIR}/ux_lib"
+for py_script in "${py_scripts_dir}/"*.py; do
+    if [ -f "$py_script" ] && [ ! -x "$py_script" ]; then
+        ux_warning "Python script '$py_script' is not executable. Run 'chmod +x $py_script'"
+        ((py_script_issues++))
     fi
 done
 
-if [ "$help_format_issues" -eq 0 ]; then
-    ux_success "All help functions appear to use UX formatting."
+if [ "$py_script_issues" -eq 0 ]; then
+    ux_success "All internal Python scripts have correct execute permissions."
 else
-    ux_error "Found $help_format_issues help functions with potential formatting issues."
+    ux_error "Found $py_script_issues Python scripts without execute permissions."
+    total_issues=$((total_issues + py_script_issues))
 fi
 
-# Check 3: Python scripts have execute permission
-ux_section "Checking Python scripts execute permissions"
-python_script_issues=0
-for py_script in "${DOTFILES_BASH_DIR}/scripts/"*.py; do
-    if [ -f "$py_script" ]; then
-        if [ ! -x "$py_script" ]; then
-            ux_warning "Python script '$py_script' is not executable. Run 'chmod +x $py_script'"
-            ((python_script_issues++))
-        fi
-    fi
-done
-if [ "$python_script_issues" -eq 0 ]; then
-    ux_success "All Python scripts have execute permissions."
-else
-    ux_error "Found $python_script_issues Python scripts without execute permissions."
-fi
 
+# =============================================================================
 # Summary
-echo ""
+# =============================================================================
 ux_divider_thick
-if [ "$found_issues" -eq 0 ] && [ "$help_format_issues" -eq 0 ] && [ "$python_script_issues" -eq 0 ]; then
+if [ "$total_issues" -eq 0 ]; then
     ux_success "All UX consistency checks passed!"
+    exit 0
 else
-    ux_error "Found $((found_issues + help_format_issues + python_script_issues)) total UX consistency issues."
+    ux_error "Found $total_issues total UX consistency issue(s)."
+    exit 1
 fi

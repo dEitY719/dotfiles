@@ -1,130 +1,85 @@
 #!/bin/bash
-
 # mytool/install-git-secret.sh
 # git-secret 설치 스크립트 (GPG 기반 비밀 관리)
 
 set -e
 
-# Color definitions
-bold=$(tput bold 2>/dev/null || echo "")
-blue=$(tput setaf 4 2>/dev/null || echo "")
-green=$(tput setaf 2 2>/dev/null || echo "")
-yellow=$(tput setaf 3 2>/dev/null || echo "")
-red=$(tput setaf 1 2>/dev/null || echo "")
-reset=$(tput sgr0 2>/dev/null || echo "")
-
-# Helper functions
-info() {
-    echo "${bold}${blue}[INFO]${reset} $*"
-}
-
-success() {
-    echo "${bold}${green}[✓]${reset} $*"
-}
-
-warning() {
-    echo "${bold}${yellow}[⚠]${reset} $*"
-}
-
-error() {
-    echo "${bold}${red}[✗]${reset} $*"
-}
-
-confirm() {
-    local prompt="$1"
-    local response
-    echo -n "${bold}${blue}${prompt}${reset} (y/n) "
-    read -r response
-    [[ "$response" == "y" || "$response" == "Y" ]]
-}
+# Source the UX library
+# shellcheck source=../bash/ux_lib/ux_lib.bash
+source "$(dirname "$0")/../bash/ux_lib/ux_lib.bash"
 
 main() {
     clear
-    cat <<EOF
-${bold}${blue}════════════════════════════════════════════════════
-  git-secret 설치 스크립트
-════════════════════════════════════════════════════${reset}
+    ux_header "git-secret Installer"
+    ux_info "This script installs git-secret for managing secrets in a Git repository."
 
-이 스크립트는 apt 패키지 관리자를 사용하여 git-secret을 설치합니다.
-설치 과정:
-  1. git 및 gpg 의존성 확인
-  2. apt 저장소 업데이트 (옵션)
-  3. git-secret 패키지 설치
-  4. 설치 확인
+    ux_section "git-secret Workflow"
+    ux_bullet "Manually add files to be encrypted with 'git secret add'."
+    ux_bullet "Run 'git secret hide' to encrypt files."
+    ux_bullet "Run 'git secret reveal' after cloning to decrypt."
+    echo ""
+    ux_warning "This script may require sudo privileges."
+    echo ""
 
-${yellow}주의: sudo 권한이 필요할 수 있습니다.${reset}
-
-EOF
-
-    if ! confirm "계속 진행하시겠습니까?"; then
-        warning "설치가 취소되었습니다."
+    if ! ux_confirm "Do you want to proceed with the installation?" "y"; then
+        ux_warning "Installation cancelled."
         exit 0
     fi
 
     # ========================================
     # Step 1: Check dependencies
     # ========================================
-    info "Step 1/4: git 및 gpg 의존성 확인 중..."
-
-    if ! command -v git &>/dev/null; then
-        error "git이 설치되어 있지 않습니다."
-        warning "apt-get install git 또는 mytool/install-git.sh (미제공) 등을 통해 설치해주세요."
-        exit 1
-    fi
-    success "git 설치됨: $(git --version)"
-
-    if ! command -v gpg &>/dev/null; then
-        error "gpg가 설치되어 있지 않습니다."
-        warning "apt-get install gnupg 로 설치 후 다시 시도하세요."
-        exit 1
-    fi
-    success "gpg 설치됨: $(gpg --version | head -n 1)"
-
-    # ========================================
-    # Step 2: Update apt (optional)
-    # ========================================
-    info "Step 2/4: apt 저장소 업데이트 여부 확인..."
-    if confirm "apt-get update 를 먼저 실행할까요?"; then
-        if sudo -n true 2>/dev/null; then
-            sudo apt-get update
-        else
-            warning "sudo 인증 필요. 비밀번호를 입력해야 할 수 있습니다."
-            sudo apt-get update
-        fi
-        success "apt-get update 완료"
-    else
-        warning "apt-get update 스킵됨"
-    fi
-
-    # ========================================
-    # Step 3: Install git-secret
-    # ========================================
-    info "Step 3/4: git-secret 설치 중..."
-
-    if command -v git-secret &>/dev/null; then
-        warning "git-secret이 이미 설치되어 있습니다."
-        if ! confirm "재설치/업데이트 하시겠습니까?"; then
-            info "설치를 건너뜁니다."
-        else
-            sudo apt-get install -y git-secret
-            success "git-secret 재설치/업데이트 완료"
-        fi
-    else
-        sudo apt-get install -y git-secret
-        success "git-secret 설치 완료"
-    fi
-
-    # ========================================
-    # Step 4: Verify installation
-    # ========================================
-    info "Step 4/4: 설치 확인 중..."
-
+    ux_step "1/3" "Checking dependencies..."
+    if ! ux_require "git"; then exit 1; fi
+    ux_success "git is installed."
+    if ! ux_require "gpg"; then exit 1; fi
+    ux_success "gpg is installed."
     echo ""
-    echo "${bold}git-secret 버전:${reset}"
+
+    # ========================================
+    # Step 2: Install git-secret
+    # ========================================
+    ux_step "2/3" "Installing git-secret..."
+    # Prompt for sudo password upfront
+    ux_info "Requesting sudo privileges..."
+    if ! sudo -v; then
+        ux_error "Sudo privileges are required. Aborting."
+        exit 1
+    fi
+    
+    # Keep sudo session alive
+    while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done &> /dev/null &
+    local sudo_keep_alive_pid=$!
+    trap 'kill "$sudo_keep_alive_pid" 2>/dev/null' EXIT
+
     if command -v git-secret &>/dev/null; then
-        git-secret --version || warning "버전 확인 실패"
+        ux_warning "git-secret is already installed."
+        if ux_confirm "Do you want to reinstall/update it?" "n"; then
+            if ! ux_with_spinner "Reinstalling git-secret via apt" sudo apt-get install -y --reinstall git-secret; then
+                exit 1
+            fi
+        else
+            ux_info "Installation skipped."
+        fi
     else
-        error "git-secret 명령어를 찾을 수 없습니다. PATH 또는 설치 상태를 확인하세요."
+        if ! ux_with_spinner "Updating apt cache" sudo apt-get update -qq; then
+            exit 1
+        fi
+        if ! ux_with_spinner "Installing git-secret via apt" sudo apt-get install -y git-secret; then
+            exit 1
+        fi
+    fi
+    echo ""
+
+    # ========================================
+    # Step 3: Verify installation
+    # ========================================
+    ux_step "3/3" "Verifying installation..."
+    if command -v git-secret &>/dev/null; then
+        ux_success "git-secret command found."
+        git-secret --version || ux_warning "Could not determine git-secret version."
+    else
+        ux_error "git-secret command not found after installation."
         exit 1
     fi
 
@@ -132,17 +87,14 @@ EOF
     # Completion
     # ========================================
     echo ""
-    cat <<EOF
-${bold}${green}════════════════════════════════════════════════════
-  ✅ git-secret 설치 완료!
-════════════════════════════════════════════════════${reset}
-
-${bold}다음 단계:${reset}
-  1. GPG 공개키/개인키 준비: ${yellow}gpg --full-generate-key${reset}
-  2. dotfiles 도움말: ${yellow}gshelp${reset}
-  3. 기존 Git 리포지토리에서 git-secret 초기화: ${yellow}git secret init${reset}
-
-EOF
+    ux_header "✅ git-secret Installation Complete!"
+    ux_section "Next Steps"
+    ux_numbered 1 "Generate a GPG key if you don't have one: ${UX_PRIMARY}gpg --full-generate-key${UX_RESET}"
+    ux_numbered 2 "In your repository, initialize git-secret: ${UX_PRIMARY}git secret init${UX_RESET}"
+    ux_numbered 3 "View project-specific help: ${UX_PRIMARY}gshelp${UX_RESET}"
+    echo ""
+    ux_info "For more details, run: ${UX_PRIMARY}man git-secret${UX_RESET}"
+    echo ""
 }
 
 main "$@"
