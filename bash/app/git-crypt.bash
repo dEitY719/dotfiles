@@ -51,6 +51,7 @@ alias gcaddme='gc_addme'
 alias gcbackup='gc_backup_key'
 alias gcrestore='gc_restore_key'
 alias gcnewpc='gc_setup_new_pc'
+alias gcpush='gc_push_env'
 
 # git-crypt 설치 스크립트 실행
 git_crypt_install() {
@@ -103,15 +104,16 @@ gc_help() {
     echo ""
 
     ux_section "Helper Functions"
+    ux_table_row "gcpush" "gc_push_env" ".env 암호화 & Push 🚀 (올인원, 가장 쉬움)"
     ux_table_row "gcsetup" "gc_setup" "대화형 초기 설정 도우미"
-    ux_table_row "gcaddme" "gc_addme" "내 GPG 키 자동 찾기 & 추가 ⭐"
+    ux_table_row "gcaddme" "gc_addme" "내 GPG 키 자동 찾기 & 추가"
     ux_table_row "gc_encrypt_env" "암호화 .env" ".env 파일 암호화 퀵 스타트"
     ux_table_row "gcsetup-cache" "gc_setup_cache" "GPG agent 캐싱 설정 (24시간)"
     ux_table_row "gcpurge" "gc_purge_cache" "GPG 캐시 초기화 (즉시 만료)"
     ux_table_row "gc_cache_status" "캐싱 상태" "GPG agent 캐싱 상태 확인"
     ux_table_row "gcbackup" "gc_backup_key" "GPG 개인키 백업 (다른 PC 이동용)"
     ux_table_row "gcrestore" "gc_restore_key" "GPG 개인키 복원 (다른 PC에서)"
-    ux_table_row "gcnewpc" "gc_setup_new_pc" "다른 PC 올인원 설정 🚀 (가장 쉬움)"
+    ux_table_row "gcnewpc" "gc_setup_new_pc" "다른 PC 올인원 설정 (가장 쉬움)"
     echo ""
 
     ux_section "git-secret과의 비교"
@@ -147,6 +149,17 @@ gc_help() {
     echo "    3. gcrestore             # GPG 키 복원"
     echo "    4. gcsetup-cache         # 캐싱 설정 (선택)"
     echo "    5. git-crypt unlock      # .env 복호화"
+    echo ""
+
+    ux_section "여러 프로젝트에서 사용하기"
+    echo ""
+    echo "  ${bold}⭐ 가장 쉬운 방법 (각 프로젝트마다)${reset}"
+    echo "  ════════════════════════════════════════════════════"
+    echo "    ${bold}cd ~/project-A && gcpush${reset}"
+    echo "    ${bold}cd ~/project-B && gcpush${reset}"
+    echo ""
+    echo "  ${green}→ 한 명령어로 자동 진행!${reset}"
+    echo "    (git-crypt init → GPG 추가 → .gitattributes → commit → push)"
     echo ""
 
     ux_section "Tips"
@@ -324,6 +337,175 @@ gc_encrypt_env() {
     ux_bullet "공유할 환경 변수: .env (git-crypt로 암호화되어 커밋)"
     ux_bullet "로컬 전용 값: .env.local (git에 커밋 안 됨)"
     ux_bullet "애플리케이션에서 .env.local이 .env를 오버라이드하도록 설정 권장"
+}
+
+# .env 파일을 한 번에 암호화하고 push (올인원)
+gc_push_env() {
+    ux_header ".env 파일 암호화 & Push (올인원)"
+
+    # ========================================
+    # Step 1: Check .env file
+    # ========================================
+    ux_section "Step 1/6: .env 파일 확인"
+
+    if [[ ! -f .env ]]; then
+        ux_error ".env 파일이 없습니다."
+        ux_info "현재 디렉토리: $(pwd)"
+        return 1
+    fi
+    ux_success ".env 파일 존재 확인"
+    echo ""
+
+    # ========================================
+    # Step 2: Check git repository
+    # ========================================
+    ux_section "Step 2/6: Git 리포지토리 확인"
+
+    if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+        ux_error "Git 리포지토리가 아닙니다."
+        ux_info "git init 을 먼저 실행하세요."
+        return 1
+    fi
+    ux_success "Git 리포지토리 확인됨"
+    echo ""
+
+    # ========================================
+    # Step 3: Initialize git-crypt
+    # ========================================
+    ux_section "Step 3/6: git-crypt 초기화 확인"
+
+    if ! command -v git-crypt &>/dev/null; then
+        ux_error "git-crypt이 설치되어 있지 않습니다."
+        ux_info "설치: gcinstall 또는 sudo apt-get install git-crypt"
+        return 1
+    fi
+
+    if ! git-crypt status &>/dev/null; then
+        ux_warning "git-crypt이 초기화되지 않았습니다."
+        ux_info "git-crypt init 실행 중..."
+        if git-crypt init; then
+            ux_success "git-crypt 초기화 완료"
+        else
+            ux_error "git-crypt 초기화 실패"
+            return 1
+        fi
+    else
+        ux_success "git-crypt 이미 초기화됨"
+    fi
+    echo ""
+
+    # ========================================
+    # Step 4: Add GPG key
+    # ========================================
+    ux_section "Step 4/6: GPG 키 확인 및 추가"
+
+    # Check if GPG key is already added
+    local gpg_keys_in_repo
+    gpg_keys_in_repo=$(git-crypt status 2>/dev/null | grep -c "GPG User" || echo "0")
+
+    if [[ "$gpg_keys_in_repo" -eq 0 ]]; then
+        ux_warning "리포지토리에 GPG 키가 없습니다."
+        ux_info "자동으로 GPG 키를 추가합니다..."
+        echo ""
+
+        # Call gcaddme function
+        if ! gc_addme; then
+            ux_error "GPG 키 추가 실패"
+            return 1
+        fi
+    else
+        ux_success "GPG 키가 이미 추가되어 있습니다."
+    fi
+    echo ""
+
+    # ========================================
+    # Step 5: Configure .gitattributes and .gitignore
+    # ========================================
+    ux_section "Step 5/6: .gitattributes 및 .gitignore 설정"
+
+    # Add to .gitattributes
+    if ! grep -q "^\.env.*filter=git-crypt" .gitattributes 2>/dev/null; then
+        echo ".env filter=git-crypt diff=git-crypt" >> .gitattributes
+        ux_success ".gitattributes에 .env 패턴 추가됨"
+    else
+        ux_info ".env가 이미 .gitattributes에 있습니다."
+    fi
+
+    # Handle .gitignore
+    local remove_from_gitignore=false
+    if grep -q "^\.env$" .gitignore 2>/dev/null; then
+        ux_warning ".env가 .gitignore에 있습니다."
+        ux_info "git-crypt로 암호화하므로 .gitignore에서 제거하는 것을 권장합니다."
+        echo ""
+        echo -n "  .gitignore에서 .env 제거할까요? (Y/n) "
+        read -r response
+        response=${response:-Y}
+
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            sed -i '/^\.env$/d' .gitignore
+            ux_success ".gitignore에서 .env 제거됨"
+
+            # Add .env.local
+            if ! grep -q "^\.env\.local$" .gitignore 2>/dev/null; then
+                echo ".env.local" >> .gitignore
+                ux_success ".gitignore에 .env.local 추가됨"
+            fi
+            remove_from_gitignore=true
+        fi
+    fi
+    echo ""
+
+    # ========================================
+    # Step 6: Git add, commit, push
+    # ========================================
+    ux_section "Step 6/6: Git add, commit, push"
+
+    # Git add
+    if [[ "$remove_from_gitignore" == true ]]; then
+        git add .env .gitattributes .gitignore
+        ux_success "파일 추가됨: .env, .gitattributes, .gitignore"
+    else
+        git add -f .env .gitattributes
+        ux_success "파일 추가됨: .env (-f), .gitattributes"
+    fi
+
+    # Git commit
+    echo ""
+    echo -n "커밋 메시지 (Enter = 기본값): "
+    read -r commit_msg
+    commit_msg=${commit_msg:-"Add encrypted .env with git-crypt"}
+
+    if git commit -m "$commit_msg"; then
+        ux_success "커밋 완료: $commit_msg"
+    else
+        ux_warning "커밋할 변경사항이 없거나 커밋 실패"
+    fi
+
+    # Git push
+    echo ""
+    echo -n "지금 push 하시겠습니까? (Y/n) "
+    read -r push_response
+    push_response=${push_response:-Y}
+
+    if [[ "$push_response" =~ ^[Yy]$ ]]; then
+        if git push; then
+            ux_success "Push 완료!"
+        else
+            ux_error "Push 실패 (upstream 설정 확인)"
+            ux_info "수동 push: git push -u origin <branch>"
+            return 1
+        fi
+    else
+        ux_info "나중에 수동으로 push 하세요: git push"
+    fi
+
+    echo ""
+    ux_success "✅ .env 파일 암호화 & Push 완료!"
+    echo ""
+    ux_section "💡 다른 PC에서 복호화"
+    ux_bullet "git clone <repo> && cd <repo>"
+    ux_bullet "bash ~/dotfiles/mytool/setup-new-pc.sh (처음 1회)"
+    ux_bullet "또는 git-crypt unlock (이미 GPG 키 있으면)"
 }
 
 # GPG agent 캐싱 설정 (편의성 향상)
