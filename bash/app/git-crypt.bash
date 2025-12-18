@@ -400,10 +400,9 @@ gc_push_env() {
     ux_section "Step 4/6: GPG 키 확인 및 추가"
 
     # Check if GPG key is already added
-    local gpg_keys_in_repo
-    gpg_keys_in_repo=$(git-crypt status 2>/dev/null | grep -c "GPG User" || echo "0")
-
-    if [[ "$gpg_keys_in_repo" -eq 0 ]]; then
+    if git-crypt status 2>/dev/null | grep -q "GPG User"; then
+        ux_success "GPG 키가 이미 추가되어 있습니다."
+    else
         ux_warning "리포지토리에 GPG 키가 없습니다."
         ux_info "자동으로 GPG 키를 추가합니다..."
         echo ""
@@ -413,8 +412,6 @@ gc_push_env() {
             ux_error "GPG 키 추가 실패"
             return 1
         fi
-    else
-        ux_success "GPG 키가 이미 추가되어 있습니다."
     fi
     echo ""
 
