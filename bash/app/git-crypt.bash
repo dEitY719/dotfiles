@@ -50,10 +50,28 @@ alias gcpurge='gc_purge_cache'
 alias gcaddme='gc_addme'
 alias gcbackup='gc_backup_key'
 alias gcrestore='gc_restore_key'
+alias gcnewpc='gc_setup_new_pc'
 
 # git-crypt 설치 스크립트 실행
 git_crypt_install() {
     bash "$HOME/dotfiles/mytool/install-git-crypt.sh"
+}
+
+# 다른 PC에서 한 번에 설정 (올인원)
+gc_setup_new_pc() {
+    local script_path="$HOME/dotfiles/mytool/setup-new-pc.sh"
+
+    if [[ ! -f "$script_path" ]]; then
+        # Try relative path
+        script_path="mytool/setup-new-pc.sh"
+        if [[ ! -f "$script_path" ]]; then
+            ux_error "setup-new-pc.sh 스크립트를 찾을 수 없습니다."
+            ux_info "dotfiles 리포지토리 내에서 실행하세요."
+            return 1
+        fi
+    fi
+
+    bash "$script_path"
 }
 
 # git-crypt 빠른 도움말
@@ -93,6 +111,7 @@ gc_help() {
     ux_table_row "gc_cache_status" "캐싱 상태" "GPG agent 캐싱 상태 확인"
     ux_table_row "gcbackup" "gc_backup_key" "GPG 개인키 백업 (다른 PC 이동용)"
     ux_table_row "gcrestore" "gc_restore_key" "GPG 개인키 복원 (다른 PC에서)"
+    ux_table_row "gcnewpc" "gc_setup_new_pc" "다른 PC 올인원 설정 🚀 (가장 쉬움)"
     echo ""
 
     ux_section "git-secret과의 비교"
@@ -107,7 +126,16 @@ gc_help() {
 
     ux_section "다른 PC에서 사용하기 (개인 프로젝트)"
     echo ""
-    echo "  ${bold}방법 1: GitHub 사용 (권장, 간편) ⭐${reset}"
+    echo "  ${bold}⭐ 한 방에 설정 (올인원, 가장 쉬움)${reset}"
+    echo "  ════════════════════════════════════════════════════"
+    echo "    ${bold}git clone <repo> && cd dotfiles && bash mytool/setup-new-pc.sh${reset}"
+    echo ""
+    echo "    또는 dotfiles 적용 후: ${bold}gcnewpc${reset}"
+    echo ""
+    echo "  ${green}→ 모든 단계를 인터랙티브하게 자동 진행!${reset}"
+    echo "    (git-crypt 설치 → GPG 복원 → 캐싱 설정 → unlock → 확인)"
+    echo ""
+    echo "  ${bold}수동 설정 (단계별 제어)${reset}"
     echo "  ────────────────────────────────────"
     echo "  ${bold}현재 PC:${reset}"
     echo "    1. gcbackup              # GPG 키 백업 + 대칭키 암호화"
@@ -116,19 +144,9 @@ gc_help() {
     echo "  ${bold}다른 PC:${reset}"
     echo "    1. git clone <repo> && cd dotfiles"
     echo "    2. gcinstall             # git-crypt 설치"
-    echo "    3. gcrestore             # GPG 키 복원 (암호화된 파일 자동 감지)"
+    echo "    3. gcrestore             # GPG 키 복원"
     echo "    4. gcsetup-cache         # 캐싱 설정 (선택)"
-    echo "    5. git-crypt unlock      # .env 복호화 완료!"
-    echo ""
-    echo "  ${bold}방법 2: USB 전송${reset}"
-    echo "  ────────────────────────────────────"
-    echo "  ${bold}현재 PC:${reset}"
-    echo "    1. gcbackup              # 옵션 2 선택 (암호화 안 함)"
-    echo "    2. USB로 백업 파일 복사"
-    echo ""
-    echo "  ${bold}다른 PC:${reset}"
-    echo "    1. gcinstall && gcrestore"
-    echo "    2. git clone <repo> && git-crypt unlock"
+    echo "    5. git-crypt unlock      # .env 복호화"
     echo ""
 
     ux_section "Tips"
