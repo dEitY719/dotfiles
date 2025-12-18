@@ -4,15 +4,6 @@
 # bash/app/git-secret.bash
 # Git-secret integration and helper functions
 
-# Ensure ux_lib is sourced
-if [ -z "$(type -t ux_info)" ]; then
-    # Assume ux_lib.bash is in the same directory structure relative to main.bash
-    # This script is sourced by main.bash, so it should be fine.
-    # If this script is run standalone, it will need to source ux_lib.bash
-    # For now, rely on main.bash sourcing it.
-    true
-fi
-
 # ==============================================================================
 # Git Secret Helper Functions
 # ==============================================================================
@@ -25,44 +16,24 @@ gs-help() {
   echo ""
 
   ux_section "Workflow (GPG based)"
-  ux_numbered 1 "Installation: Install git-secret (e.g., \
-${UX_PRIMARY}install-git-secret.sh${UX_RESET}
-)"
-  ux_numbered 2 "Generate a GPG key: \
-${UX_PRIMARY}gpg --full-generate-key${UX_RESET}
-"
-  ux_numbered 3 "Initialize a git repo for git-secret: \
-${UX_PRIMARY}git secret init${UX_RESET}
-"
-  ux_numbered 4 "Add team members' GPG public keys: \
-${UX_PRIMARY}git secret tell user@example.com${UX_RESET}
-"
-  ux_numbered 5 "Add files to hide (e.g., .env): \
-${UX_PRIMARY}git secret add .env${UX_RESET}
-"
-  ux_numbered 6 "Encrypt (hide) added files: \
-${UX_PRIMARY}git secret hide${UX_RESET}
- (creates .env.secret)"
-  ux_numbered 7 "Decrypt (reveal) files after git pull: \
-${UX_PRIMARY}git secret reveal${UX_RESET}
-"
+  ux_numbered 1 "Installation: Install git-secret (e.g., '${UX_PRIMARY}install-git-secret.sh${UX_RESET}')"
+  ux_numbered 2 "Generate a GPG key: '${UX_PRIMARY}gpg --full-generate-key${UX_RESET}'"
+  ux_numbered 3 "Initialize a git repo for git-secret: '${UX_PRIMARY}git secret init${UX_RESET}'"
+  ux_numbered 4 "Add team members' GPG public keys: '${UX_PRIMARY}git secret tell user@example.com${UX_RESET}'"
+  ux_numbered 5 "Add files to hide (e.g., .env): '${UX_PRIMARY}git secret add .env${UX_RESET}'"
+  ux_numbered 6 "Encrypt (hide) added files: '${UX_PRIMARY}git secret hide${UX_RESET}' (creates .env.secret)"
+  ux_numbered 7 "Decrypt (reveal) files after git pull: '${UX_PRIMARY}git secret reveal${UX_RESET}'"
   echo ""
 
   ux_section "Available Commands"
-  ux_bullet "${UX_PRIMARY}gs_init${UX_RESET}   : \
-`git secret init`${UX_RESET}" - Initializes git-secret in a repo."
-  ux_bullet "${UX_PRIMARY}gs_tell${UX_RESET}   : \
-`git secret tell <emails>`${UX_RESET}" - Adds GPG keys to git-secret."
-  ux_bullet "${UX_PRIMARY}gs_add${UX_RESET}    : \
-`git secret add <files>`${UX_RESET}" - Adds files to be encrypted."
-  ux_bullet "${UX_PRIMARY}gs_hide${UX_RESET}   : \
-`git secret hide`${UX_RESET}" - Encrypts added files."
-  ux_bullet "${UX_PRIMARY}gs_reveal${UX_RESET} : \
-`git secret reveal`${UX_RESET}" - Decrypts files."
-  ux_bullet "${UX_PRIMARY}gs_list${UX_RESET}   : \
-`git secret list`${UX_RESET}" - Lists encrypted files."
-  ux_bullet "${UX_PRIMARY}gs_whoknows${UX_RESET} : \
-`git secret whoknows`${UX_RESET}" - Lists GPG keys authorized to decrypt."
+  ux_table_header "Command" "Description"
+  ux_table_row "gs_init" "Initializes git-secret in a repo."
+  ux_table_row "gs_tell <emails>" "Adds GPG keys to git-secret."
+  ux_table_row "gs_add <files>" "Adds files to be encrypted."
+  ux_table_row "gs_hide" "Encrypts all added files."
+  ux_table_row "gs_reveal" "Decrypts all files."
+  ux_table_row "gs_list" "Lists encrypted files."
+  ux_table_row "gs_whoknows" "Lists GPG keys authorized to decrypt."
   echo ""
 }
 
@@ -76,9 +47,7 @@ gs_init() {
   git secret init "$@"
   if [ $? -eq 0 ]; then
     ux_success "git-secret initialized."
-    ux_info "Remember to run \
-`${UX_PRIMARY}git secret tell <your_gpg_email>${UX_RESET}`
-"
+    ux_info "Remember to run '${UX_PRIMARY}git secret tell <your_gpg_email>${UX_RESET}'"
   else
     ux_error "Failed to initialize git-secret."
   fi
@@ -86,7 +55,7 @@ gs_init() {
 
 # Add GPG keys to git-secret
 gs_tell() {
-  if [ -z "$1" ]; then
+  if [ -z "" ]; then
     ux_error "Usage: gs_tell <GPG_EMAIL1> [GPG_EMAIL2...]"
     return 1
   fi
@@ -101,16 +70,14 @@ gs_tell() {
 
 # Add files to be encrypted
 gs_add() {
-  if [ -z "$1" ]; then
+  if [ -z "" ]; then
     ux_error "Usage: gs_add <file1> [file2...]"
     return 1
   fi
   ux_info "Adding file(s) to git-secret for encryption..."
   git secret add "$@"
   if [ $? -eq 0 ]; then
-    ux_success "File(s) added to git-secret. Now run \
-`${UX_PRIMARY}gs_hide${UX_RESET}`
- to encrypt."
+    ux_success "File(s) added to git-secret. Now run '${UX_PRIMARY}gs_hide${UX_RESET}' to encrypt."
   else
     ux_error "Failed to add file(s) to git-secret."
   fi
@@ -122,11 +89,7 @@ gs_hide() {
   git secret hide "$@"
   if [ $? -eq 0 ]; then
     ux_success "Files encrypted (hidden)."
-    ux_info "Don't forget to \
-`${UX_PRIMARY}git add .gitsecret/${UX_RESET}`
- and \
-`${UX_PRIMARY}git add <your_secret_file>.secret${UX_RESET}`
-"
+    ux_info "Don't forget to '${UX_PRIMARY}git add .gitsecret/${UX_RESET}' and '${UX_PRIMARY}git add <your_secret_file>.secret${UX_RESET}'"
   else
     ux_error "Failed to encrypt (hide) files."
   fi
