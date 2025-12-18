@@ -6,7 +6,6 @@
 uv.lock
 
 .git-credentials
-.env
 
 # Local machine-specific configurations
 *.local.bash
@@ -15,4 +14,4 @@ bash/alias/local.bash
 bash/app/local.bash
 bash/config/pg_services.list
 
-./backup/
+./backup/.env.local
