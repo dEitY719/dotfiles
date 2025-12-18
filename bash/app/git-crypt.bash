@@ -48,6 +48,8 @@ alias gcsetup='gc_setup'
 alias gcsetup-cache='gc_setup_cache'
 alias gcpurge='gc_purge_cache'
 alias gcaddme='gc_addme'
+alias gcbackup='gc_backup_key'
+alias gcrestore='gc_restore_key'
 
 # git-crypt 설치 스크립트 실행
 git_crypt_install() {
@@ -89,6 +91,8 @@ gc_help() {
     ux_table_row "gcsetup-cache" "gc_setup_cache" "GPG agent 캐싱 설정 (24시간)"
     ux_table_row "gcpurge" "gc_purge_cache" "GPG 캐시 초기화 (즉시 만료)"
     ux_table_row "gc_cache_status" "캐싱 상태" "GPG agent 캐싱 상태 확인"
+    ux_table_row "gcbackup" "gc_backup_key" "GPG 개인키 백업 (다른 PC 이동용)"
+    ux_table_row "gcrestore" "gc_restore_key" "GPG 개인키 복원 (다른 PC에서)"
     echo ""
 
     ux_section "git-secret과의 비교"
@@ -99,6 +103,32 @@ gc_help() {
     echo "  투명한 통합           명시적 명령어"
     echo "  git add 시 암호화    git secret hide 실행"
     echo "  git pull 시 복호화   git secret reveal 실행"
+    echo ""
+
+    ux_section "다른 PC에서 사용하기 (개인 프로젝트)"
+    echo ""
+    echo "  ${bold}방법 1: GitHub 사용 (권장, 간편) ⭐${reset}"
+    echo "  ────────────────────────────────────"
+    echo "  ${bold}현재 PC:${reset}"
+    echo "    1. gcbackup              # GPG 키 백업 + 대칭키 암호화"
+    echo "    2. git add .secrets/ && git commit && git push"
+    echo ""
+    echo "  ${bold}다른 PC:${reset}"
+    echo "    1. git clone <repo> && cd dotfiles"
+    echo "    2. gcinstall             # git-crypt 설치"
+    echo "    3. gcrestore             # GPG 키 복원 (암호화된 파일 자동 감지)"
+    echo "    4. gcsetup-cache         # 캐싱 설정 (선택)"
+    echo "    5. git-crypt unlock      # .env 복호화 완료!"
+    echo ""
+    echo "  ${bold}방법 2: USB 전송${reset}"
+    echo "  ────────────────────────────────────"
+    echo "  ${bold}현재 PC:${reset}"
+    echo "    1. gcbackup              # 옵션 2 선택 (암호화 안 함)"
+    echo "    2. USB로 백업 파일 복사"
+    echo ""
+    echo "  ${bold}다른 PC:${reset}"
+    echo "    1. gcinstall && gcrestore"
+    echo "    2. git clone <repo> && git-crypt unlock"
     echo ""
 
     ux_section "Tips"
@@ -334,6 +364,281 @@ gc_cache_status() {
         ux_success "GPG agent 실행 중"
     else
         ux_warning "GPG agent가 실행되지 않았습니다."
+    fi
+}
+
+# GPG 개인키 백업 (다른 PC로 이동용)
+gc_backup_key() {
+    ux_header "GPG 개인키 백업"
+
+    # Check if gpg is installed
+    if ! command -v gpg &>/dev/null; then
+        ux_error "gpg가 설치되어 있지 않습니다."
+        return 1
+    fi
+
+    # Get all GPG secret keys
+    local gpg_keys
+    gpg_keys=$(gpg --list-secret-keys --keyid-format=long 2>/dev/null | grep "^sec" | awk '{print $2}' | cut -d'/' -f2)
+
+    if [[ -z "$gpg_keys" ]]; then
+        ux_error "GPG 개인키가 없습니다."
+        ux_info "GPG 키 생성: gpg --full-generate-key"
+        return 1
+    fi
+
+    # Count keys
+    local key_count
+    key_count=$(echo "$gpg_keys" | wc -l)
+
+    ux_section "GPG 키 목록 ($key_count개 발견)"
+    echo ""
+
+    # Show all keys with details
+    local key_index=1
+    local key_array=()
+    while IFS= read -r key_id; do
+        key_array+=("$key_id")
+        local key_info
+        key_info=$(gpg --list-secret-keys --keyid-format=long "$key_id" 2>/dev/null | grep "^uid" | sed 's/uid *\[.*\] //')
+        echo "  [$key_index] $key_id"
+        echo "      $key_info"
+        echo ""
+        ((key_index++))
+    done <<< "$gpg_keys"
+
+    # Select key
+    local selected_key
+    if [[ $key_count -eq 1 ]]; then
+        selected_key="${key_array[0]}"
+        ux_info "GPG 키 1개 발견, 자동 선택: $selected_key"
+    else
+        echo -n "  백업할 키 번호 [1-$key_count] (Enter = 1): "
+        read -r selection
+        selection=${selection:-1}
+
+        if [[ ! "$selection" =~ ^[0-9]+$ ]] || [[ $selection -lt 1 ]] || [[ $selection -gt $key_count ]]; then
+            ux_error "잘못된 선택입니다."
+            return 1
+        fi
+
+        selected_key="${key_array[$((selection-1))]}"
+        ux_info "선택된 키: $selected_key"
+    fi
+
+    echo ""
+    ux_section "백업 파일 생성 중..."
+
+    # Backup file path
+    local backup_file="$HOME/gpg-backup-${selected_key}.asc"
+
+    # Export secret key
+    if gpg --export-secret-keys --armor "$selected_key" > "$backup_file" 2>/dev/null; then
+        ux_success "GPG 개인키 백업 완료!"
+        echo ""
+        ux_info "백업 파일: $backup_file"
+        echo ""
+
+        # Ask for symmetric encryption
+        ux_section "GitHub에 안전하게 업로드하기 (선택)"
+        ux_info "GPG 대칭키 암호화를 사용하면 GitHub에 안전하게 올릴 수 있습니다."
+        echo ""
+        echo "  ${bold}[1] 대칭키 암호화 후 GitHub 업로드 준비 (권장)${reset}"
+        echo "      → Passphrase만 기억하면 다른 PC에서 복호화 가능"
+        echo "      → .secrets/ 디렉토리에 암호화된 파일 저장"
+        echo ""
+        echo "  ${bold}[2] USB/로컬 전송용 (암호화 안 함)${reset}"
+        echo "      → 백업 파일 그대로 USB 등으로 전송"
+        echo ""
+
+        echo -n "  선택 [1/2] (Enter = 1): "
+        read -r encrypt_choice
+        encrypt_choice=${encrypt_choice:-1}
+
+        if [[ "$encrypt_choice" == "1" ]]; then
+            # Create .secrets directory
+            local secrets_dir="$HOME/dotfiles/.secrets"
+            mkdir -p "$secrets_dir"
+
+            # Symmetric encryption
+            local encrypted_file="$secrets_dir/gpg-backup-${selected_key}.asc.gpg"
+
+            echo ""
+            ux_info "대칭키 암호화 중... (Passphrase 입력 필요)"
+            ux_warning "이 Passphrase는 git-crypt용과 다릅니다. 새로 만드세요!"
+            echo ""
+
+            if gpg --symmetric --armor --output "$encrypted_file" "$backup_file" 2>/dev/null; then
+                ux_success "대칭키 암호화 완료!"
+                echo ""
+                ux_info "암호화된 파일: $encrypted_file"
+
+                # Update .gitignore
+                local gitignore_file="$HOME/dotfiles/.gitignore"
+                if ! grep -q "^\.secrets/\*\.asc$" "$gitignore_file" 2>/dev/null; then
+                    echo ".secrets/*.asc" >> "$gitignore_file"
+                    ux_info ".gitignore 업데이트: .secrets/*.asc 추가됨"
+                fi
+
+                # Clean up original backup
+                rm -f "$backup_file"
+                ux_info "원본 백업 파일 삭제됨 (암호화된 파일만 유지)"
+
+                echo ""
+                ux_section "GitHub에 커밋하기"
+                echo "  ${bold}cd ~/dotfiles${reset}"
+                echo "  ${bold}git add .secrets/ .gitignore${reset}"
+                echo "  ${bold}git commit -m \"Add encrypted GPG backup\"${reset}"
+                echo "  ${bold}git push${reset}"
+                echo ""
+
+                ux_section "다른 PC에서 복원 (워크플로우)"
+                echo "  1. ${bold}git clone <repo>${reset}"
+                echo "  2. ${bold}cd dotfiles && gcrestore${reset}"
+                echo "  3. 암호화된 백업 파일 선택 (.secrets/gpg-backup-*.asc.gpg)"
+                echo "  4. Passphrase 입력 → 자동 복호화 & import"
+
+            else
+                ux_error "대칭키 암호화 실패"
+                ux_info "원본 백업 파일 유지: $backup_file"
+            fi
+        else
+            # USB/Local transfer
+            ux_section "⚠️  보안 주의사항"
+            ux_bullet "이 파일은 매우 중요한 개인키입니다!"
+            ux_bullet "안전한 방법으로만 전송하세요 (USB, 암호화된 저장소)"
+            ux_bullet "전송 후 백업 파일 삭제 권장: rm $backup_file"
+            ux_bullet "이메일, 공개 클라우드에 절대 업로드 금지"
+            echo ""
+
+            ux_section "다음 단계 (다른 PC에서)"
+            echo "  1. git-crypt 설치: ${bold}gcinstall${reset}"
+            echo "  2. GPG 키 복원: ${bold}gcrestore${reset}"
+            echo "  3. 리포지토리 clone: ${bold}git clone <repo>${reset}"
+            echo "  4. 복호화: ${bold}git-crypt unlock${reset}"
+        fi
+    else
+        ux_error "GPG 키 백업 실패"
+        return 1
+    fi
+}
+
+# GPG 개인키 복원 (다른 PC에서 실행)
+gc_restore_key() {
+    ux_header "GPG 개인키 복원"
+
+    # Check if gpg is installed
+    if ! command -v gpg &>/dev/null; then
+        ux_error "gpg가 설치되어 있지 않습니다."
+        ux_info "설치: sudo apt-get install gnupg"
+        return 1
+    fi
+
+    ux_section "백업 파일 선택"
+    echo ""
+
+    # Find encrypted backup files in .secrets/
+    local encrypted_files
+    encrypted_files=$(find ~/dotfiles/.secrets -name "gpg-backup-*.asc.gpg" 2>/dev/null)
+
+    # Find plain backup files in home directory
+    local plain_files
+    plain_files=$(find ~ -maxdepth 1 -name "gpg-backup-*.asc" 2>/dev/null)
+
+    # Show found files
+    if [[ -n "$encrypted_files" ]]; then
+        ux_info "발견된 암호화된 백업 파일 (.secrets/):"
+        echo "$encrypted_files" | while read -r file; do
+            echo "  • $file"
+        done
+        echo ""
+    fi
+
+    if [[ -n "$plain_files" ]]; then
+        ux_info "발견된 일반 백업 파일 (~/):"
+        echo "$plain_files" | while read -r file; do
+            echo "  • $file"
+        done
+        echo ""
+    fi
+
+    # Ask for backup file path
+    echo -n "백업 파일 경로 (드래그 앤 드롭 또는 입력): "
+    read -r backup_file
+
+    # Remove quotes if present
+    backup_file=$(echo "$backup_file" | sed "s/['\"]//g")
+
+    # Check if file exists
+    if [[ ! -f "$backup_file" ]]; then
+        ux_error "파일을 찾을 수 없습니다: $backup_file"
+        return 1
+    fi
+
+    # Check if encrypted (.gpg file)
+    if [[ "$backup_file" == *.gpg ]]; then
+        echo ""
+        ux_section "암호화된 파일 복호화 중..."
+        ux_info "대칭키 Passphrase를 입력하세요 (백업 시 설정한 것)"
+        echo ""
+
+        # Decrypt to temporary file
+        local decrypted_file="${backup_file%.gpg}"
+        decrypted_file="/tmp/$(basename "$decrypted_file")"
+
+        if gpg --decrypt --output "$decrypted_file" "$backup_file" 2>/dev/null; then
+            ux_success "복호화 완료!"
+            backup_file="$decrypted_file"
+        else
+            ux_error "복호화 실패 (Passphrase 확인)"
+            return 1
+        fi
+    fi
+
+    echo ""
+    ux_section "GPG 키 import 중..."
+
+    # Import secret key
+    if gpg --import "$backup_file" 2>/dev/null; then
+        ux_success "GPG 개인키 import 완료!"
+        echo ""
+
+        # Clean up decrypted temp file
+        if [[ "$backup_file" == /tmp/* ]]; then
+            rm -f "$backup_file"
+            ux_info "임시 복호화 파일 삭제됨"
+        fi
+
+        # Show imported key
+        local imported_key
+        imported_key=$(gpg --list-secret-keys --keyid-format=long 2>/dev/null | grep "^sec" | tail -n 1 | awk '{print $2}' | cut -d'/' -f2)
+
+        if [[ -n "$imported_key" ]]; then
+            ux_info "Import된 키: $imported_key"
+            gpg --list-secret-keys --keyid-format=long "$imported_key" 2>/dev/null | grep "^uid"
+            echo ""
+        fi
+
+        # Trust setting
+        ux_section "신뢰도 설정 (옵션)"
+        ux_info "GPG 키를 완전히 신뢰하려면 다음 명령어 실행:"
+        echo "  ${bold}gpg --edit-key $imported_key${reset}"
+        echo "  gpg> ${bold}trust${reset}"
+        echo "  Your decision? ${bold}5${reset} (궁극적 신뢰)"
+        echo "  gpg> ${bold}quit${reset}"
+        echo ""
+
+        ux_section "다음 단계"
+        ux_bullet "GPG 캐싱 설정: gcsetup-cache (선택)"
+        ux_bullet "git-crypt 복호화: git-crypt unlock"
+        ux_bullet ".env 파일 확인: cat .env"
+    else
+        ux_error "GPG 키 import 실패"
+        # Clean up decrypted temp file on error
+        if [[ "$backup_file" == /tmp/* ]]; then
+            rm -f "$backup_file"
+        fi
+        return 1
     fi
 }
 
