@@ -120,7 +120,7 @@ gs_whoknows() {
 
 
 # Register with myhelp
-myhelp_register "gs-help" "git-secret" "Manage GPG-encrypted secrets in Git"
+HELP_DESCRIPTIONS["gs-help"]="Manage GPG-encrypted secrets in Git"
 
 # Ensure git-secret is available
 if ! command -v git-secret &>/dev/null; then
