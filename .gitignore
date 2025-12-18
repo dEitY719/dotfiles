@@ -16,3 +16,4 @@ bash/config/pg_services.list
 
 ./backup/.env.local
 .secrets/*.asc
+bash/claude/settings.json
