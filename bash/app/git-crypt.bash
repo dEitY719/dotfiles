@@ -76,6 +76,7 @@ gc_setup_new_pc() {
 }
 
 # git-crypt 빠른 도움말
+HELP_DESCRIPTIONS["gc_help"]="git-crypt (투명한 Git 암호화)"
 gc_help() {
     ux_header "git-crypt (투명한 Git 암호화)"
 

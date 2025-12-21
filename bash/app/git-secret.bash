@@ -9,6 +9,8 @@
 # ==============================================================================
 
 # Git Secret Help
+# Register with myhelp
+HELP_DESCRIPTIONS["gs-help"]="Manage GPG-encrypted secrets in Git"
 gs-help() {
   ux_header "Git Secret Usage"
   ux_info "Git Secret is a tool to store your private data inside a Git repo."
@@ -117,10 +119,6 @@ gs_whoknows() {
   ux_info "Listing GPG keys authorized to decrypt git-secret:"
   git secret whoknows "$@"
 }
-
-
-# Register with myhelp
-HELP_DESCRIPTIONS["gs-help"]="Manage GPG-encrypted secrets in Git"
 
 # Ensure git-secret is available
 if ! command -v git-secret &>/dev/null; then

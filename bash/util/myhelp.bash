@@ -59,7 +59,7 @@ myhelp() {
 
     # Display help functions with descriptions from global array
     for func in "${help_funcs[@]}"; do
-        local desc="${HELP_DESCRIPTIONS[$func]:-No description available}"
+        local desc="${HELP_DESCRIPTIONS[$func]:-⛔No description available}"
         printf "  ${UX_SUCCESS}%-${max_width}s${UX_RESET}  ${UX_MUTED}:${UX_RESET}  %s\n" "$func" "$desc"
     done
 
