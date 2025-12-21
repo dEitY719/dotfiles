@@ -53,6 +53,11 @@ alias gcrestore='gc_restore_key'
 alias gcnewpc='gc_setup_new_pc'
 alias gcpush='gc_push_env'
 
+# Color shortcuts for UX output
+bold="${UX_BOLD:-}"
+reset="${UX_RESET:-}"
+green="${UX_SUCCESS:-}"
+
 # git-crypt 설치 스크립트 실행
 git_crypt_install() {
     bash "$HOME/dotfiles/mytool/install-git-crypt.sh"
@@ -76,6 +81,7 @@ gc_setup_new_pc() {
 }
 
 # git-crypt 빠른 도움말
+# shellcheck disable=SC2034  # consumed by myhelp for help listings
 HELP_DESCRIPTIONS["gc_help"]="git-crypt (투명한 Git 암호화)"
 gc_help() {
     ux_header "git-crypt (투명한 Git 암호화)"
@@ -264,7 +270,7 @@ gc_encrypt_env() {
     # 1. Add to .gitattributes
     ux_section "Step 1: .gitattributes 설정"
     if ! grep -q "^\.env.*filter=git-crypt" .gitattributes 2>/dev/null; then
-        echo ".env filter=git-crypt diff=git-crypt" >> .gitattributes
+        echo ".env filter=git-crypt diff=git-crypt" >>.gitattributes
         ux_success ".gitattributes에 .env 패턴 추가됨"
     else
         ux_info ".env가 이미 .gitattributes에 있습니다."
@@ -300,7 +306,7 @@ gc_encrypt_env() {
 
                 # Add .env.local instead
                 if ! grep -q "^\.env\.local$" .gitignore 2>/dev/null; then
-                    echo ".env.local" >> .gitignore
+                    echo ".env.local" >>.gitignore
                     ux_success ".gitignore에 .env.local 추가됨 (로컬 전용)"
                 fi
             else
@@ -423,7 +429,7 @@ gc_push_env() {
 
     # Add to .gitattributes
     if ! grep -q "^\.env.*filter=git-crypt" .gitattributes 2>/dev/null; then
-        echo ".env filter=git-crypt diff=git-crypt" >> .gitattributes
+        echo ".env filter=git-crypt diff=git-crypt" >>.gitattributes
         ux_success ".gitattributes에 .env 패턴 추가됨"
     else
         ux_info ".env가 이미 .gitattributes에 있습니다."
@@ -445,7 +451,7 @@ gc_push_env() {
 
             # Add .env.local
             if ! grep -q "^\.env\.local$" .gitignore 2>/dev/null; then
-                echo ".env.local" >> .gitignore
+                echo ".env.local" >>.gitignore
                 ux_success ".gitignore에 .env.local 추가됨"
             fi
             remove_from_gitignore=true
@@ -603,7 +609,7 @@ gc_backup_key() {
         echo "      $key_info"
         echo ""
         ((key_index++))
-    done <<< "$gpg_keys"
+    done <<<"$gpg_keys"
 
     # Select key
     local selected_key
@@ -620,7 +626,7 @@ gc_backup_key() {
             return 1
         fi
 
-        selected_key="${key_array[$((selection-1))]}"
+        selected_key="${key_array[$((selection - 1))]}"
         ux_info "선택된 키: $selected_key"
     fi
 
@@ -631,7 +637,7 @@ gc_backup_key() {
     local backup_file="$HOME/gpg-backup-${selected_key}.asc"
 
     # Export secret key
-    if gpg --export-secret-keys --armor "$selected_key" > "$backup_file" 2>/dev/null; then
+    if gpg --export-secret-keys --armor "$selected_key" >"$backup_file" 2>/dev/null; then
         ux_success "GPG 개인키 백업 완료!"
         echo ""
         ux_info "백업 파일: $backup_file"
@@ -674,7 +680,7 @@ gc_backup_key() {
                 # Update .gitignore
                 local gitignore_file="$HOME/dotfiles/.gitignore"
                 if ! grep -q "^\.secrets/\*\.asc$" "$gitignore_file" 2>/dev/null; then
-                    echo ".secrets/*.asc" >> "$gitignore_file"
+                    echo ".secrets/*.asc" >>"$gitignore_file"
                     ux_info ".gitignore 업데이트: .secrets/*.asc 추가됨"
                 fi
 
@@ -765,7 +771,8 @@ gc_restore_key() {
     read -r backup_file
 
     # Remove quotes if present
-    backup_file=$(echo "$backup_file" | sed "s/['\"]//g")
+    backup_file=${backup_file//\"/}
+    backup_file=${backup_file//\'/}
 
     # Check if file exists
     if [[ ! -f "$backup_file" ]]; then
@@ -892,7 +899,7 @@ gc_addme() {
         echo "      $key_info"
         echo ""
         ((key_index++))
-    done <<< "$gpg_keys"
+    done <<<"$gpg_keys"
 
     # Select key
     local selected_key
@@ -909,7 +916,7 @@ gc_addme() {
             return 1
         fi
 
-        selected_key="${key_array[$((selection-1))]}"
+        selected_key="${key_array[$((selection - 1))]}"
         ux_info "선택된 키: $selected_key"
     fi
 

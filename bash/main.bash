@@ -65,6 +65,7 @@ declare -gi SOURCED_FILES_COUNT=0
 
 # Initialize global help descriptions associative array
 # Modules can register their descriptions via: HELP_DESCRIPTIONS["funcname"]="description"
+# shellcheck disable=SC2034  # populated by modules and consumed by myhelp
 declare -gA HELP_DESCRIPTIONS=()
 
 # ------------------------------------------------------------------
@@ -136,12 +137,12 @@ done
 
 # Directories to skip (add new entries here instead of modifying loop logic)
 SKIP_DIRS=(
-    "core"      # Deprecated files
-    "ux_lib"    # Already loaded explicitly
-    "env"       # Already loaded above
-    "scripts"   # Executable scripts, not sourced
-    "config"    # Configuration files only
-    "claude"    # Claude-specific settings
+    "core"    # Deprecated files
+    "ux_lib"  # Already loaded explicitly
+    "env"     # Already loaded above
+    "scripts" # Executable scripts, not sourced
+    "config"  # Configuration files only
+    "claude"  # Claude-specific settings
 )
 
 for dir in "${DOTFILES_BASH_DIR}"/*; do
@@ -151,7 +152,10 @@ for dir in "${DOTFILES_BASH_DIR}"/*; do
     # Check if directory is in skip list
     skip=false
     for skip_dir in "${SKIP_DIRS[@]}"; do
-        [[ "$dir_name" == "$skip_dir" ]] && { skip=true; break; }
+        [[ "$dir_name" == "$skip_dir" ]] && {
+            skip=true
+            break
+        }
     done
     [[ "$skip" == true ]] && continue
 
