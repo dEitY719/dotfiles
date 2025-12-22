@@ -18,5 +18,39 @@ fi
 
 # Python 설치 (대화형 스크립트)
 pyinstall() {
-    bash "$HOME/dotfiles/mytool/install-python.sh"
+    bash "$HOME/dotfiles/mytool/install-python.sh" "$@"
 }
+
+# 특정 Python 버전 제거
+py_uninstall() {
+    local version="$1"
+
+    if [ -z "$version" ]; then
+        ux_error "Usage: py-uninstall <python_version>"
+        return 1
+    fi
+
+    if ! command -v pyenv >/dev/null; then
+        ux_error "pyenv is not installed or not on PATH."
+        return 1
+    fi
+
+    if ! pyenv versions --bare | grep -Fxq "$version"; then
+        ux_warning "Python ${version} is not installed via pyenv."
+        return 0
+    fi
+
+    if ! ux_confirm "Uninstall Python ${version} via pyenv?" "n"; then
+        ux_info "Uninstall cancelled."
+        return 0
+    fi
+
+    if pyenv uninstall -f "$version"; then
+        ux_success "Python ${version} removed."
+    else
+        ux_error "Failed to uninstall Python ${version}."
+        return 1
+    fi
+}
+
+alias py-uninstall='py_uninstall'

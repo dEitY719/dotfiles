@@ -21,7 +21,14 @@ main() {
     ux_header "Pyenv & Python Installer"
     ux_info "This script installs pyenv, Python build dependencies, and common Python versions."
 
-    local target_versions=("${DEFAULT_PYTHON_VERSIONS[@]}")
+    local target_versions=("$@")
+    if [ ${#target_versions[@]} -eq 0 ]; then
+        target_versions=("${DEFAULT_PYTHON_VERSIONS[@]}")
+        ux_info "Using default versions: ${target_versions[*]}"
+    else
+        ux_info "Using requested versions: ${target_versions[*]}"
+    fi
+
     local global_version="${target_versions[${#target_versions[@]}-1]}"
     ux_section "Installation Steps"
     ux_numbered 1 "Install Python build dependencies (requires sudo)."

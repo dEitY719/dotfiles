@@ -43,7 +43,8 @@ pyhelp() {
     echo ""
 
     ux_section "Setup Tools"
-    ux_table_row "pyinstall" "Install Script" "Install Python/Pyenv"
+    ux_table_row "pyinstall [version...]" "Install Script" "Install default or specific Python versions"
+    ux_table_row "py-uninstall <version>" "pyenv uninstall" "Remove a specific Python version"
     echo ""
 
     ux_section "Quick Workflow"
