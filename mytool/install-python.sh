@@ -9,26 +9,34 @@ set -e
 # shellcheck source=../bash/ux_lib/ux_lib.bash
 source "$(dirname "$0")/../bash/ux_lib/ux_lib.bash"
 
+DEFAULT_PYTHON_VERSIONS=(
+    "3.10.18"
+    "3.11.13"
+    "3.12.11"
+    "3.13.5"
+)
+
 main() {
     clear
     ux_header "Pyenv & Python Installer"
-    ux_info "This script installs pyenv, Python build dependencies, and a recent Python version."
-    
-    local python_version="3.12.3"
+    ux_info "This script installs pyenv, Python build dependencies, and common Python versions."
+
+    local target_versions=("${DEFAULT_PYTHON_VERSIONS[@]}")
+    local global_version="${target_versions[${#target_versions[@]}-1]}"
     ux_section "Installation Steps"
     ux_numbered 1 "Install Python build dependencies (requires sudo)."
     ux_numbered 2 "Install pyenv (Python Version Manager) via Git."
     ux_numbered 3 "Load pyenv into the current session."
-    ux_numbered 4 "Install Python ${python_version} and set as global default."
+    ux_numbered 4 "Install Python versions: ${target_versions[*]} (latest set as global default)."
     echo ""
     ux_warning "This script requires sudo privileges for dependency installation."
     echo ""
 
-    if ! ux_confirm "Do you want to proceed with the installation?" "y"; then
+    if ! ux_confirm "Proceed with pyenv setup and install: ${target_versions[*]}?" "y"; then
         ux_warning "Installation cancelled."
         exit 0
     fi
-    
+
     # Request sudo privileges upfront
     ux_info "Requesting sudo privileges for installing dependencies..."
     if ! sudo -v; then
@@ -45,10 +53,10 @@ main() {
     ux_step "1/4" "Installing Python build dependencies..."
     if command -v apt-get >/dev/null; then
         if ! ux_with_spinner "Updating apt cache" sudo apt-get update -qq; then exit 1; fi
-        
+
         local dependencies=(
-            make build-essential libssl-dev zlib1g-dev libbz2-dev 
-            libreadline-dev libsqlite3-dev wget curl llvm libncursesw5-dev 
+            make build-essential libssl-dev zlib1g-dev libbz2-dev
+            libreadline-dev libsqlite3-dev wget curl llvm libncursesw5-dev
             xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
         )
         if ! ux_with_spinner "Installing build dependencies" sudo apt-get install -y -qq "${dependencies[@]}"; then
@@ -99,21 +107,22 @@ main() {
     # ========================================
     # Step 4: Install Python
     # ========================================
-    ux_step "4/4" "Installing Python ${python_version}..."
-    if ux_confirm "Install Python ${python_version} and set as global default?" "y"; then
-        ux_info "Installing Python ${python_version} with pyenv (this may take a while)..."
-        # pyenv install has its own detailed output, no spinner needed.
-        pyenv install "$python_version" --skip-existing
-        pyenv global "$python_version"
-        ux_success "Python ${python_version} installed and set as global."
+    ux_step "4/4" "Installing Python versions (${target_versions[*]})..."
+    if ux_confirm "Install Python versions: ${target_versions[*]} (global=${global_version})?" "y"; then
+        for version in "${target_versions[@]}"; do
+            ux_info "Installing Python ${version} with pyenv (this may take a while)..."
+            if ! pyenv install --skip-existing "$version"; then
+                ux_error "Failed to install Python ${version}."
+                exit 1
+            fi
+        done
+
+        pyenv global "$global_version"
+        ux_success "Python versions installed. Global set to ${global_version}."
 
         echo ""
         ux_section "Current Versions"
-        py_version=$(python --version 2>&1)
-        pip_version=$(pip --version 2>&1 | awk '{print $1, $2}')
-        ux_table_header "Component" "Version"
-        ux_table_row "Python" "$py_version"
-        ux_table_row "Pip" "$pip_version"
+        pyenv versions
     else
         ux_info "Skipping Python installation."
     fi
