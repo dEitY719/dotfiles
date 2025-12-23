@@ -19,7 +19,6 @@ alias dce='docker compose exec' # 서비스 내 명령 실행 (dce app bash 등)
 # 🔹 Compose 추가 alias
 alias dcps='docker compose ps'       # compose 서비스 상태
 alias dcb='docker compose build'     # 서비스 이미지 빌드
-alias dcr='docker compose restart'   # 서비스 재시작
 alias dcdv='docker compose down -v'  # 볼륨까지 삭제 (데이터 초기화)
 alias dcstop='docker compose stop'   # 컨테이너만 정지
 alias dcstart='docker compose start' # 정지된 컨테이너 시작
@@ -29,6 +28,7 @@ alias dcstart='docker compose start' # 정지된 컨테이너 시작
 # 먼저 docker compose logs 시도 → 실패하면 docker logs로 자동 폴백
 # Now uses central UX library for consistent styling
 unalias dcl 2>/dev/null # 기존 alias 제거 (함수 정의 전)
+unalias dcr 2>/dev/null # 기존 alias 제거 (함수 정의 전)
 dcl() {
     # UX library is already loaded globally in main.bash
     if [ -z "$1" ]; then
@@ -82,6 +82,125 @@ dcl() {
     ux_error "Service or container '${service}' not found"
     echo ""
     ux_info "Run ${UX_BOLD}dcl${UX_RESET} without arguments to see available containers"
+    return 1
+}
+
+# Compose restart with auto-discovery
+# Usage: dcr <service_name> [docker compose args...]
+# - Tries current dir compose file first
+# - Falls back to LITELLM_PROJECT_PATH or ~/para/project/litellm-stack
+# - If no compose file found, falls back to docker restart on the container
+dcr() {
+    if [ -z "$1" ]; then
+        ux_usage "dcr" "<service_name> [options]" "Restart service (compose-aware, auto path detect)"
+        ux_bullet "Search order: ./compose.yml → \$LITELLM_PROJECT_PATH → ~/para/project/litellm-stack"
+        ux_bullet "Fallback: docker restart <container>"
+        return 1
+    fi
+
+    local service="$1"; shift
+
+    # Build candidate directories
+    local -a candidate_dirs=()
+    local cwd_dir
+    cwd_dir="$(pwd)"
+    candidate_dirs+=("$cwd_dir")
+
+    if [[ -n "$LITELLM_PROJECT_PATH" ]]; then
+        candidate_dirs+=("$LITELLM_PROJECT_PATH")
+    fi
+    if [[ -d "$HOME/para/project/litellm-stack" ]]; then
+        candidate_dirs+=("$HOME/para/project/litellm-stack")
+    fi
+
+    # Deduplicate directories
+    local -a unique_dirs=()
+    local seen
+    for dir in "${candidate_dirs[@]}"; do
+        seen=false
+        for udir in "${unique_dirs[@]}"; do
+            if [[ "$dir" == "$udir" ]]; then
+                seen=true
+                break
+            fi
+        done
+        [[ "$seen" == false ]] && unique_dirs+=("$dir")
+    done
+
+    local compose_file=""
+    local compose_dir=""
+    local fname
+    for dir in "${unique_dirs[@]}"; do
+        for fname in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
+            if [[ -f "$dir/$fname" ]]; then
+                compose_file="$dir/$fname"
+                compose_dir="$dir"
+                break 2
+            fi
+        done
+    done
+
+    if [[ -n "$compose_file" ]]; then
+        ux_info "Using compose file: $compose_file"
+
+        # Use absolute compose path, no directory change
+        local -a compose_args=("-f" "$compose_file")
+
+        # Capture current start time (if container exists) to detect no-op restarts
+        local container_id=""
+        local old_started=""
+        container_id=$(docker compose "${compose_args[@]}" ps -q "$service" 2>/dev/null | head -1)
+        if [[ -n "$container_id" ]]; then
+            old_started=$(docker inspect -f '{{.State.StartedAt}}' "$container_id" 2>/dev/null || echo "")
+        fi
+
+        # First try a standard restart
+        if docker compose "${compose_args[@]}" restart "$service" "$@"; then
+            # Check if start time changed; if not, force recreate
+            local new_started=""
+            if [[ -n "$container_id" ]]; then
+                new_started=$(docker inspect -f '{{.State.StartedAt}}' "$container_id" 2>/dev/null || echo "")
+            fi
+
+            if [[ -n "$old_started" && -n "$new_started" && "$old_started" == "$new_started" ]]; then
+                ux_warning "Restart did not change start time; forcing recreate (up -d --force-recreate --no-deps)."
+                docker compose "${compose_args[@]}" up -d --force-recreate --no-deps "$service"
+                container_id=$(docker compose "${compose_args[@]}" ps -q "$service" 2>/dev/null | head -1)
+                if [[ -n "$container_id" ]]; then
+                    new_started=$(docker inspect -f '{{.State.StartedAt}}' "$container_id" 2>/dev/null || echo "")
+                fi
+            fi
+
+            if [[ -n "$container_id" ]]; then
+                local status_line
+                status_line=$(docker ps --filter "id=$container_id" --format "{{.Names}} {{.Status}}")
+                [[ -n "$status_line" ]] && ux_info "Status: $status_line"
+            fi
+            return 0
+        else
+            ux_warning "docker compose restart failed; attempting compose up -d."
+            if docker compose "${compose_args[@]}" up -d --no-deps "$service"; then
+                container_id=$(docker compose "${compose_args[@]}" ps -q "$service" 2>/dev/null | head -1)
+                if [[ -n "$container_id" ]]; then
+                    local status_line
+                    status_line=$(docker ps --filter "id=$container_id" --format "{{.Names}} {{.Status}}")
+                    [[ -n "$status_line" ]] && ux_info "Status: $status_line"
+                fi
+                return 0
+            fi
+            ux_error "Compose restart/up failed for service '$service'."
+            return 1
+        fi
+    fi
+
+    # Fallback: restart container directly
+    if docker container inspect "$service" >/dev/null 2>&1; then
+        ux_warning "Compose file not found (searched: ${unique_dirs[*]}). Falling back to docker restart."
+        docker restart "$service" "$@"
+        return $?
+    fi
+
+    ux_error "No compose file found (searched: ${unique_dirs[*]}) and container '$service' not found."
     return 1
 }
 

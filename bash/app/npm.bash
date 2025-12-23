@@ -133,6 +133,11 @@ npmhelp() {
     ux_table_row "npmuninstall" "Uninstall Script" "Remove Node/NPM"
     echo ""
 
+    ux_section "Troubleshooting"
+    ux_bullet "EACCES permission error (npm WARN): npm config set prefix ~/.npm-global"
+    ux_bullet "nvm과 npm prefix 충돌: .npmrc 파일의 prefix 라인 제거"
+    echo ""
+
     ux_section "Common Commands"
     ux_bullet "npm init"
     ux_bullet "npm run <script>"
