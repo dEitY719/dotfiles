@@ -98,7 +98,8 @@ dcr() {
         return 1
     fi
 
-    local service="$1"; shift
+    local service="$1"
+    shift
 
     # Build candidate directories
     local -a candidate_dirs=()
@@ -128,13 +129,11 @@ dcr() {
     done
 
     local compose_file=""
-    local compose_dir=""
     local fname
     for dir in "${unique_dirs[@]}"; do
         for fname in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
             if [[ -f "$dir/$fname" ]]; then
                 compose_file="$dir/$fname"
-                compose_dir="$dir"
                 break 2
             fi
         done
