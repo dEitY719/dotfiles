@@ -131,6 +131,7 @@ npmhelp() {
     ux_section "Setup Tools"
     ux_table_row "npminstall" "Install Script" "Install Node/NPM"
     ux_table_row "npmuninstall" "Uninstall Script" "Remove Node/NPM"
+    ux_table_row "crtsetup" "Certificate Setup" "Install CA cert (proxy)"
     echo ""
 
     ux_section "Troubleshooting"
@@ -156,4 +157,9 @@ npminstall() {
 # NPM 제거 (대화형 스크립트)
 npmuninstall() {
     bash "$HOME/dotfiles/mytool/uninstall-npm.sh"
+}
+
+# CA 인증서 설치 (대화형 스크립트)
+crtsetup() {
+    bash "$HOME/dotfiles/mytool/setup-crt.sh"
 }
