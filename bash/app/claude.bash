@@ -1,6 +1,13 @@
 #!/bin/bash
 # /home/deity719/dotfiles/bash/app/claude.bash
 
+# Initialize DOTFILES_BASH_DIR if not already set (for standalone execution)
+if [[ -z "$DOTFILES_BASH_DIR" ]]; then
+    source "$(dirname "${BASH_SOURCE[0]}")/../util/init.bash"
+    DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "${BASH_SOURCE[0]}")"
+    export DOTFILES_BASH_DIR
+fi
+
 #### ✅ 1. 이미 쓰고 계신 `~/.npm-global` 경로 활용
 # 아까 `gemini-cli` 설치에서 전역 경로가 `~/.npm-global/bin` 으로 잡혀 있었죠.
 # npm install -g @anthropic-ai/claude-code --prefix=$HOME/.npm-global

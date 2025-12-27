@@ -1,14 +1,13 @@
 #!/bin/bash
 # Check UX consistency across all bash files
 
-# Determine the absolute path to the bash directory
-# This makes the script runnable from any location
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DOTFILES_BASH_DIR="$(cd "${SCRIPT_DIR}/../bash" && pwd)"
+# Initialize DOTFILES_BASH_DIR using common initialization function
+source "$(dirname "${BASH_SOURCE[0]}")/../bash/util/init.bash"
+DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "${BASH_SOURCE[0]}")"
+export DOTFILES_BASH_DIR
 
 # Load UX library for reporting
-
-source "${SCRIPT_DIR}/../bash/ux_lib/ux_lib.bash"
+source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
 
 ux_header "UX Consistency Checker"
 total_issues=0

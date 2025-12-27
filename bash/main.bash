@@ -49,8 +49,9 @@ if should_skip_init; then
 fi
 
 # Set the base directory for dotfiles bash configurations
-DOTFILES_BASH_FULL_PATH="$(realpath "${BASH_SOURCE[0]}")"
-DOTFILES_BASH_DIR="$(dirname "${DOTFILES_BASH_FULL_PATH}")"
+# Use common initialization function for consistency across all scripts
+source "$(dirname "${BASH_SOURCE[0]}")/util/init.bash"
+DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "${BASH_SOURCE[0]}")"
 export DOTFILES_BASH_DIR
 
 # --- UX Library Initialization ---

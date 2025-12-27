@@ -4,7 +4,10 @@
 
 # --- Constants ---
 
-DOTFILES_BASH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Initialize DOTFILES_BASH_DIR using common initialization function
+source "$(dirname "${BASH_SOURCE[0]}")/util/init.bash"
+DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "${BASH_SOURCE[0]}")"
+export DOTFILES_BASH_DIR
 
 MAIN_BASH_SOURCE="${DOTFILES_BASH_DIR}/main.bash"
 
