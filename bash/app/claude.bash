@@ -74,10 +74,12 @@ ${bold}${blue}[Setup & Requirements]${reset}
   ${green}ensure_jq${reset}        : jq 설치 여부 확인 및 자동 설치
                      (Claude Code statusline 스크립트에 필요)
 
-${bold}${blue}[Settings Management]${reset}
+${bold}${blue}[Configuration Management]${reset}
 
-  ${green}claude_init${reset}      : Claude Code 설정 파일 symbolic link 초기화
-                     (dotfiles/bash/claude/settings.json ↔ ~/.claude/settings.json)
+  ${green}claude_init${reset}      : Claude Code 설정 및 skills symbolic link 초기화
+                     - settings.json ↔ ~/.claude/settings.json
+                     - statusline-command.sh ↔ ~/.claude/statusline-command.sh
+                     - skills/*.md ↔ ~/.claude/skills/*.md
   ${green}claude_edit_settings${reset} : settings.json 파일 편집 (vim)
 EOF
 }
@@ -128,13 +130,21 @@ claude_init() {
     local settings_target="$HOME/.claude/settings.json"
     local statusline_source="$HOME/dotfiles/bash/claude/statusline-command.sh"
     local statusline_target="$HOME/.claude/statusline-command.sh"
+    local skills_source_dir="$HOME/dotfiles/bash/claude/skills"
+    local skills_target_dir="$HOME/.claude/skills"
 
-    echo "🔧 Initializing Claude Code settings..."
+    echo "🔧 Initializing Claude Code configuration..."
 
     # Create ~/.claude directory if not exists
     if [[ ! -d "$HOME/.claude" ]]; then
         echo "📁 Creating ~/.claude directory..."
         mkdir -p "$HOME/.claude"
+    fi
+
+    # Create ~/.claude/skills directory if not exists
+    if [[ ! -d "$skills_target_dir" ]]; then
+        echo "📁 Creating ~/.claude/skills directory..."
+        mkdir -p "$skills_target_dir"
     fi
 
     # Handle settings.json
@@ -165,11 +175,52 @@ claude_init() {
         echo "✅ Created symbolic link for statusline-command.sh"
     fi
 
+    # Handle skills directory
     echo ""
-    echo "✨ Claude Code settings initialization complete!"
+    echo "📚 Setting up Claude Code skills..."
+    local skill_count=0
+    if [[ -d "$skills_source_dir" ]]; then
+        for skill_file in "$skills_source_dir"/*.md; do
+            if [[ -f "$skill_file" ]]; then
+                local skill_name=$(basename "$skill_file")
+                local skill_target="$skills_target_dir/$skill_name"
+
+                if [[ -L "$skill_target" ]]; then
+                    echo "  ✅ $skill_name (already linked)"
+                elif [[ -f "$skill_target" ]]; then
+                    echo "  ⚠️  $skill_name exists as regular file"
+                    echo "     Backing up to $skill_name.backup..."
+                    mv "$skill_target" "$skill_target.backup"
+                    ln -s "$skill_file" "$skill_target"
+                    echo "  ✅ $skill_name (linked)"
+                else
+                    ln -s "$skill_file" "$skill_target"
+                    echo "  ✅ $skill_name (linked)"
+                fi
+                ((skill_count++))
+            fi
+        done
+
+        if [[ $skill_count -eq 0 ]]; then
+            echo "  ℹ️  No skill files found in $skills_source_dir"
+        else
+            echo "  📊 Total: $skill_count skill(s) linked"
+        fi
+    else
+        echo "  ⚠️  Skills source directory not found: $skills_source_dir"
+    fi
+
     echo ""
-    echo "📍 Symbolic links:"
+    echo "✨ Claude Code configuration initialization complete!"
+    echo ""
+    echo "📍 Configuration files:"
     ls -la "$settings_target" "$statusline_target" 2>/dev/null | grep -v "^total"
+
+    echo ""
+    echo "📍 Skills:"
+    if [[ -d "$skills_target_dir" ]]; then
+        ls -la "$skills_target_dir"/*.md 2>/dev/null | grep -v "^total" || echo "  (no skills found)"
+    fi
 }
 
 # (4) Claude Code settings.json 편집

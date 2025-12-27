@@ -9,6 +9,7 @@ Opinionated Bash dotfiles for reproducible terminal environments across WSL, Lin
 - **Application Integration**: Pre-configured setups for common development tools
 - **Code Quality**: Integrated linting and formatting tools (ruff, mypy, shellcheck, shfmt)
 - **Easy Installation**: Simple symlink-based setup script
+- **Symbolic Link Management**: Standardized pattern for managing config files via dotfiles (see [symlink-manager skill](bash/claude/skills/symlink-manager.md))
 
 ## Project Structure
 
@@ -29,8 +30,11 @@ dotfiles/
 │   │   ├── uv.bash        # Fast Python package installer
 │   │   └── ...            # More apps (postgres, mysql, obsidian, etc.)
 │   ├── claude/            # Claude-related configurations
+│   │   ├── skills/        # Claude Code skills (symlinked to ~/.claude/skills/)
+│   │   │   └── symlink-manager.md  # Symbolic link management pattern
 │   │   ├── tox-agent.md   # Claude Code tox linting agent
-│   │   └── statusline-command.sh  # Claude Code custom status line
+│   │   ├── statusline-command.sh  # Claude Code custom status line
+│   │   └── settings.json  # Claude Code settings (symlinked to ~/.claude/settings.json)
 │   ├── ux_lib/            # Core functionality (UX library)
 │   │   ├── beauty_log.bash       # Logging utilities
 │   │   ├── log_util.bash         # Additional log functions
@@ -92,7 +96,9 @@ dotfiles/
    ```
 
    This will set up:
+   - `~/.claude/settings.json` → `~/dotfiles/bash/claude/settings.json` (symlink)
    - `~/.claude/statusline-command.sh` → `~/dotfiles/bash/claude/statusline-command.sh` (symlink)
+   - `~/.claude/skills/*.md` → `~/dotfiles/bash/claude/skills/*.md` (symlinks)
    - `~/.claude/agents/*.md` → `~/dotfiles/bash/claude/*.md` (symlinks)
 
 4. **Apply the changes:**
