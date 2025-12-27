@@ -5,6 +5,7 @@
 # =============================================================================
 
 # 도움말 함수
+HELP_DESCRIPTIONS["mytool_help"]="MyTool - Personal Utility Commands"
 mytool_help() {
     echo ""
     echo "MyTool - Personal Utility Commands"
