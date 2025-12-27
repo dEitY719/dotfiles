@@ -50,7 +50,7 @@ fi
 
 # Set the base directory for dotfiles bash configurations
 # Use common initialization function for consistency across all scripts
-_SCRIPT_PATH="${BASH_SOURCE[0]}"
+_SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 source "$(dirname "$_SCRIPT_PATH")/util/init.bash"
 DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
 export DOTFILES_BASH_DIR

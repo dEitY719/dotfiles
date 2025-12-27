@@ -5,7 +5,7 @@
 # This script showcases all the styling and interactive capabilities
 
 # Initialize DOTFILES_BASH_DIR using common initialization function
-_SCRIPT_PATH="${BASH_SOURCE[0]}"
+_SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 source "$(dirname "$_SCRIPT_PATH")/../bash/util/init.bash"
 DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
 export DOTFILES_BASH_DIR
