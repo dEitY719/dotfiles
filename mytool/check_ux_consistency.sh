@@ -2,8 +2,9 @@
 # Check UX consistency across all bash files
 
 # Initialize DOTFILES_BASH_DIR using common initialization function
-source "$(dirname "${BASH_SOURCE[0]}")/../bash/util/init.bash"
-DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "${BASH_SOURCE[0]}")"
+_SCRIPT_PATH="${BASH_SOURCE[0]}"
+source "$(dirname "$_SCRIPT_PATH")/../bash/util/init.bash"
+DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
 export DOTFILES_BASH_DIR
 
 # Load UX library for reporting

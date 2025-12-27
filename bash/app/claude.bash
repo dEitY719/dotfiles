@@ -3,8 +3,9 @@
 
 # Initialize DOTFILES_BASH_DIR if not already set (for standalone execution)
 if [[ -z "$DOTFILES_BASH_DIR" ]]; then
-    source "$(dirname "${BASH_SOURCE[0]}")/../util/init.bash"
-    DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "${BASH_SOURCE[0]}")"
+    _SCRIPT_PATH="${BASH_SOURCE[0]}"
+    source "$(dirname "$_SCRIPT_PATH")/../util/init.bash"
+    DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
     export DOTFILES_BASH_DIR
 fi
 
