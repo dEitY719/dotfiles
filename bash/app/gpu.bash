@@ -14,7 +14,7 @@
 # 사용 예: gpustatus
 gpustatus() {
     # dotfiles에서 gpu_status.sh 스크립트 경로
-    local gpu_script="/home/bwyoon/dotfiles/mytool/gpu_status.sh"
+    local gpu_script="${HOME}/dotfiles/mytool/gpu_status.sh"
 
     if [ ! -f "$gpu_script" ]; then
         echo "❌ GPU status script not found at: $gpu_script"

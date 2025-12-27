@@ -11,7 +11,7 @@
 
 ```bash
 [ -f ~/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -C "bwyoon@KORCO158847"
-````
+```
 
 * `-t ed25519`: 최신 보안 알고리즘
 * `-C`: 식별용 주석(이메일이나 호스트명)
@@ -21,11 +21,11 @@
 ```bash
 bwyoon@KORCO158847:~/dotfiles(main)$ [ -f ~/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -C "bwyoon@KORCO158847"
 Generating public/private ed25519 key pair.
-Enter file in which to save the key (/home/bwyoon/.ssh/id_ed25519): 
-Enter passphrase (empty for no passphrase): 
-Enter same passphrase again: 
-Your identification has been saved in /home/bwyoon/.ssh/id_ed25519
-Your public key has been saved in /home/bwyoon/.ssh/id_ed25519.pub
+Enter file in which to save the key (~/.ssh/id_ed25519):
+Enter passphrase (empty for no passphrase):
+Enter same passphrase again:
+Your identification has been saved in ~/.ssh/id_ed25519
+Your public key has been saved in ~/.ssh/id_ed25519.pub
 The key fingerprint is:
 SHA256:wxbLTGnBFE4bAdRuueX3pwRjO1Uf57wGn/8au2G4IOU bwyoon@KORCO158847
 ```
@@ -46,7 +46,7 @@ ssh-add ~/.ssh/id_ed25519
 ```bash
 bwyoon@KORCO158847:~/dotfiles(main)$ eval "$(ssh-agent -s)"
 Agent pid 172432
-Identity added: /home/bwyoon/.ssh/id_ed25519 (bwyoon@KORCO158847)
+Identity added: ~/.ssh/id_ed25519 (bwyoon@KORCO158847)
 ```
 
 ---
