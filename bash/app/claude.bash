@@ -26,7 +26,7 @@
 # (1) Claude Code 도움말
 claudehelp() {
     # Load UX library
-    source "$(dirname "${BASH_SOURCE[0]}")/../ux_lib/ux_lib.bash"
+    source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
 
     cat <<EOF
 
