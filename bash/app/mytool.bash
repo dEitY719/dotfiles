@@ -19,8 +19,6 @@ mytool_help() {
     echo "Usage examples:"
     echo "  srcpack --ext .py --max-bytes 50000"
     echo "  sp  # Shortcut for 'srcpack --ext .py --max-bytes 33000'"
-    echo "  hwinfo"
-    echo "  devx stat"
     echo ""
 }
 
