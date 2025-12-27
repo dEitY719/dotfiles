@@ -21,17 +21,17 @@
       "ReadFile(**/.env)",
       "ReadFile(.env.*)",
       "ReadFile(**/.env.*)",
-      "Bash(pytest*)",
-      "Bash(python -m pytest*)",
-      "Bash(ruff check*)",
-      "Bash(ruff format*)",
-      "Bash(mypy*)",
-      "Bash(tox*)",
-      "Bash(git status*)",
-      "Bash(git diff*)",
-      "Bash(git log*)",
-      "Bash(npm test*)",
-      "Bash(npm run test*)"
+      "Bash(pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(ruff check:*)",
+      "Bash(ruff format:*)",
+      "Bash(mypy:*)",
+      "Bash(tox:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run test:*)"
     ],
     "deny": [
       "Read(~/.aws/**)",
@@ -41,8 +41,8 @@
       "Edit(~/.bashrc)",
       "Edit(~/.bash_profile)",
       "Edit(/etc/**)",
-      "Bash(rm -rf*)",
-      "Bash(sudo rm*)"
+      "Bash(rm -rf:*)",
+      "Bash(sudo rm:*)"
     ]
   }
 }
