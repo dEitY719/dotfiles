@@ -3,5 +3,46 @@
   "statusLine": {
     "type": "command",
     "command": "/home/bwyoon/.claude/statusline-command.sh"
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "excludedCommands": ["docker"]
+  },
+  "permissions": {
+    "allow": [
+      "Edit(**/test_*.py)",
+      "Edit(**/*_test.py)",
+      "Edit(**/tests/**/*.py)",
+      "ReadFile(**/test_*.py)",
+      "ReadFile(**/*_test.py)",
+      "ReadFile(**/tests/**/*.py)",
+      "ReadFile(.env)",
+      "ReadFile(**/.env)",
+      "ReadFile(.env.*)",
+      "ReadFile(**/.env.*)",
+      "Bash(pytest*)",
+      "Bash(python -m pytest*)",
+      "Bash(ruff check*)",
+      "Bash(ruff format*)",
+      "Bash(mypy*)",
+      "Bash(tox*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(npm test*)",
+      "Bash(npm run test*)"
+    ],
+    "deny": [
+      "Read(~/.aws/**)",
+      "Read(~/.ssh/**)",
+      "Read(**/credentials.json)",
+      "Read(**/*secret*)",
+      "Edit(~/.bashrc)",
+      "Edit(~/.bash_profile)",
+      "Edit(/etc/**)",
+      "Bash(rm -rf*)",
+      "Bash(sudo rm*)"
+    ]
   }
 }

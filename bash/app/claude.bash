@@ -106,9 +106,40 @@ ${bold}${blue}[Workflow Patterns]${reset}
   - 테스트 작성: ${green}cltest "테스트 작성해줘"${reset}
   - 대규모 리팩토링: ${green}clskip "리팩토링해줘"${reset} (신중하게)
 
-  ${bold}권한 관리 팁:${reset}
-  - ~/.claude/settings.json에서 자주 사용하는 명령어 사전 허용
-  - /sandbox 명령어로 작업 범위 격리 (84% 권한 프롬프트 감소)
+${bold}${blue}[권한 관리 & Sandbox]${reset}
+
+  ${bold}1. Sandbox 사용법 (84% 프롬프트 감소)${reset}
+     ${green}/sandbox${reset}         : Claude 대화 중에 입력
+                      → Auto-allow mode 선택 (권장)
+                      → pytest, git, npm 등이 자동 승인됨
+
+     예제:
+     ${green}claude${reset}
+     > ${green}/sandbox${reset}
+     > [Auto-allow mode 선택]
+     > "테스트 작성하고 실행해줘"
+     → pytest, ruff, git 명령어가 자동 실행!
+
+  ${bold}2. Settings.json 설정${reset}
+     ${green}claude_edit_settings${reset} : 설정 파일 편집
+
+     위치: ~/dotfiles/bash/claude/settings.json
+
+     기본 설정 포함:
+     - Sandbox 활성화 (autoAllowBashIfSandboxed: true)
+     - 테스트 파일 자동 허용 (pytest, ruff, mypy, tox)
+     - 민감한 파일 차단 (.env, ~/.aws, ~/.ssh)
+     - 위험한 명령어 차단 (rm -rf, sudo rm)
+
+  ${bold}3. 설정 예제${reset}
+     프로젝트별 설정: .claude/settings.json
+     {
+       "sandbox": { "enabled": true },
+       "permissions": {
+         "allow": ["Bash(pytest*)"],
+         "deny": ["Read(.env)"]
+       }
+     }
 EOF
 }
 
