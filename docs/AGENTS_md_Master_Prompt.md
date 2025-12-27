@@ -37,6 +37,7 @@ Rationale: Maximize context window allocation for code and logic.
 ## 2.4 Machine-Readable Clarity
 
 Provide concrete, executable guidance:
+
 - Golden Rules (Do's & Don'ts)
 - Operational Commands (build, test, deploy)
 - Implementation Patterns (code templates, naming conventions)
@@ -83,12 +84,15 @@ Create or update `./AGENTS.md` with the following structure:
 ### Required Sections
 
 #### 1. Project Context
+
 - Business/technical objectives (one-line summary)
 - Primary tech stack and framework versions
 - Repository structure overview
 
 #### 2. Operational Commands
+
 Real, executable commands from this repo:
+
 - Development: `npm run dev`, `python -m uvicorn`, `./setup.sh`
 - Testing: `pytest tests/`, `tox`, `npm test`
 - Build: `npm run build`, `cargo build --release`
@@ -97,6 +101,7 @@ Real, executable commands from this repo:
 #### 3. Golden Rules
 
 **Immutable Constraints** (Security, Architecture):
+
 - 500-line hard limit per AGENTS.md file
 - No secrets, tokens, or credentials in any file
 - No emojis (token efficiency)
@@ -105,6 +110,7 @@ Real, executable commands from this repo:
 - No writes outside repo or to HOME in sandbox/CODEX_CLI contexts
 
 **Do's & Don'ts** (Development Standards):
+
 - DO: Write tests before implementation (TDD-first)
 - DO: Use snake_case for bash function/file names
 - DO: Use ux_lib for all output (no raw echo)
@@ -115,6 +121,7 @@ Real, executable commands from this repo:
 #### 4. SOLID & Design Principles
 
 Explicit mandates:
+
 - **S**RP: One class/module, one reason to change
 - **O**CP: Extend via interfaces, not modification
 - **L**SP: Subtypes must be substitutable
@@ -127,12 +134,14 @@ Explicit mandates:
 #### 5. TDD Protocol
 
 **Test-First Workflow**:
+
 1. Write failing test demonstrating requirement
 2. Implement minimal code to pass test
 3. Refactor while keeping tests green
 4. Commit only when all tests pass
 
 **Test Coverage Requirements**:
+
 - Critical paths: 90%+ coverage
 - Use targeted test commands (avoid 17min full suite): `pytest tests/backend/billing/ -v`
 - Integration tests required for external dependencies
@@ -146,15 +155,18 @@ Explicit mandates:
 #### 7. Context Map (Action-Based Routing - DIP Compliant)
 
 **Format Rules**:
+
 - NO tables (use list format for better diff/parsing)
 - NO emojis
 - Pattern: `- **[Action/Intent](relative/path)** — When-to-use guidance`
 
 **Good vs. Bad Examples**:
+
 - **Bad (Implementation-bound)**: `[Edit React Components](./src/components)`
 - **Good (Intent-bound)**: `[UI Library & Design System](./src/components/AGENTS.md)`
 
 **Structure**:
+
 ```markdown
 - **[API Routes](./app/api/AGENTS.md)** — Backend route handlers and middleware
 - **[UI Components](./components/AGENTS.md)** — Frontend component library and design system
@@ -165,6 +177,7 @@ Explicit mandates:
 ### Conditional Sections (Project-Type Specific)
 
 Add these if applicable:
+
 - **Web Apps**: Authentication flow, state management, asset optimization
 - **ML/AI**: Model registry, training pipelines, dataset versioning
 - **Microservices**: Service discovery, API contracts (OpenAPI), inter-service communication
@@ -191,11 +204,13 @@ Add these if applicable:
 ### Nested File Structure (Required Sections)
 
 #### 1. Module Context
+
 - Purpose: What problem does this module solve?
 - Dependencies: External libraries, internal modules, version pins
 - Ownership: Team/maintainer contact (if applicable)
 
 #### 2. Tech Stack & Constraints
+
 - Libraries used with version pins if critical
 - Allowed vs. forbidden patterns (e.g., "Use `ux_lib` for all output, NOT raw `echo`")
 - Performance budgets specific to this module
@@ -203,6 +218,7 @@ Add these if applicable:
 #### 3. Implementation Patterns
 
 Concrete code templates:
+
 ```python
 # Example: FastAPI route pattern
 @router.get("/items/{item_id}")
@@ -212,6 +228,7 @@ async def get_item(item_id: int, db: Session = Depends(get_db)):
 ```
 
 File naming conventions:
+
 - `test_*.py` for unit tests
 - `*_integration_test.py` for integration tests
 - `conftest.py` for shared fixtures
@@ -219,6 +236,7 @@ File naming conventions:
 #### 4. Testing Strategy
 
 **Targeted test commands** (avoid full suite):
+
 ```bash
 # Run only this module's tests
 pytest tests/backend/billing/ -v --cov=app/billing
@@ -230,6 +248,7 @@ Required test scenarios: Happy path, edge cases, error conditions
 #### 5. Local Golden Rules
 
 Module-specific Do's & Don'ts:
+
 - "Always validate input with Pydantic models in this module"
 - "Never bypass rate limiting decorators"
 - "Log all external API calls at INFO level"
@@ -243,12 +262,14 @@ For learning-focused modules, link to concept docs, .ipynb files, or tutorials
 Before finalizing, verify ALL conditions:
 
 ### Structural Tests
+
 - [ ] Root AGENTS.md exists at project root
 - [ ] All required sections present (Context, Commands, Golden Rules, Context Map)
 - [ ] All Context Map links point to valid file paths (relative paths only)
 - [ ] No circular references (A -> B -> A)
 
 ### Content Tests
+
 - [ ] Each file < 500 lines (HARD STOP if violated)
 - [ ] No emojis used anywhere
 - [ ] No tables in Context Maps
@@ -256,12 +277,14 @@ Before finalizing, verify ALL conditions:
 - [ ] All commands are executable (verify paths/binaries exist)
 
 ### Semantic Tests
+
 - [ ] Golden Rules include TDD-first rule ("No implementation without failing test")
 - [ ] SOLID principles explicitly mentioned (SRP, OCP, LSP, ISP, DIP)
 - [ ] Testing commands are targeted, not generic `npm test`
 - [ ] Nested files have Module Context and Targeted Test Commands
 
 ### Linting (prefer automated)
+
 ```bash
 # Run Markdown linter (prefer tox in this repo)
 tox -e mdlint
@@ -287,17 +310,18 @@ Before overwriting existing AGENTS.md files:
 
 ## Failure Recovery
 
-| Failure Type            | Recovery Action                                       |
-| ----------------------- | ----------------------------------------------------- |
-| File write permission   | Suggest `chmod`, fallback to stdout preview          |
-| Invalid directory       | Skip and warn; continue with accessible paths        |
-| Circular reference      | Break cycle at detection point; log reference chain  |
-| 500-line limit exceeded | Auto-split into nested file; update parent Map       |
-| Missing test command    | Add placeholder with TODO; flag for manual update    |
+| Failure Type            | Recovery Action                                     |
+| ----------------------- | --------------------------------------------------- |
+| File write permission   | Suggest `chmod`, fallback to stdout preview         |
+| Invalid directory       | Skip and warn; continue with accessible paths       |
+| Circular reference      | Break cycle at detection point; log reference chain |
+| 500-line limit exceeded | Auto-split into nested file; update parent Map      |
+| Missing test command    | Add placeholder with TODO; flag for manual update   |
 
 ## Rollback Mechanism
 
 If critical error during generation:
+
 1. Restore all `.agents.md.backup` files
 2. Delete partially generated files from this session
 3. Output error report: failure point, root cause, suggested fix
@@ -350,6 +374,7 @@ All AGENTS.md files MUST link to: `CLAUDE.md`, `bash/ux_lib/UX_GUIDELINES.md`, `
 ## Quality Gates
 
 Before committing AGENTS.md changes:
+
 ```bash
 tox -e mdlint        # Lint Markdown
 wc -l AGENTS.md      # Must show < 500
@@ -360,21 +385,27 @@ wc -l AGENTS.md      # Must show < 500
 # 8. Quick Reference Examples
 
 ## Small CLI Tool (< 20 files)
+
 Root AGENTS.md only. No nested files needed.
+
 - Context: CLI tool purpose, tech stack (Go/Cobra)
 - Commands: `go build`, `go test`, `golangci-lint run`
 - Golden Rules: Validate connections, use env vars for credentials
 - TDD: Tests in `*_test.go`, run before commit
 
 ## Medium Web App (50-100 files)
+
 Root + 2-3 nested files (frontend, backend, db).
+
 - Context: E-commerce, Next.js + FastAPI + PostgreSQL
 - Commands: `npm run dev`, `uvicorn app.main:app --reload`, `pytest tests/`
 - Golden Rules: No internal IDs in URLs, auth required, Alembic for migrations
 - Nested: `frontend/AGENTS.md`, `backend/AGENTS.md`, `db/AGENTS.md`
 
 ## Large Microservices (100+ files)
+
 Root + nested per service + cross-cutting.
+
 - Context: 5 services, Kubernetes, gRPC
 - Commands: `skaffold dev`, `make test-all`, `kubectl apply -k overlays/production`
 - Golden Rules: gRPC only, Sealed Secrets, no direct DB access between services
