@@ -81,6 +81,34 @@ ${bold}${blue}[Configuration Management]${reset}
                      - statusline-command.sh ↔ ~/.claude/statusline-command.sh
                      - skills/*.md ↔ ~/.claude/skills/*.md
   ${green}claude_edit_settings${reset} : settings.json 파일 편집 (vim)
+
+${bold}${blue}[Workflow Patterns]${reset}
+
+  ${bold}1. Plan 모드 (권장 - 안전)${reset}
+     ${green}claude${reset}          : Interactive 모드로 시작
+                      먼저 plan을 요청하고, 승인 후 실행
+                      TDD/SDD 지향 개발에 적합
+
+     ${green}clplan${reset}          : claude 명령어 alias
+
+  ${bold}2. 테스트 & 린팅 작업${reset}
+     ${green}cltest "요청내용"${reset} : 테스트 작성 및 실행
+                      예: cltest "사용자 인증 테스트 작성해줘"
+                      권한 설정으로 pytest/ruff 자동 허용
+
+  ${bold}3. Skip Permissions 모드 (주의)${reset}
+     ${green}clskip "요청내용"${reset} : 모든 권한 프롬프트 무시
+                      복잡한 리팩토링이나 보일러플레이트 생성 시
+                      ⚠️  작은 범위부터 시작하고 신중하게 사용
+
+  ${bold}권장 워크플로우:${reset}
+  - 새 기능 개발: ${green}claude${reset} (plan → 승인 → 실행)
+  - 테스트 작성: ${green}cltest "테스트 작성해줘"${reset}
+  - 대규모 리팩토링: ${green}clskip "리팩토링해줘"${reset} (신중하게)
+
+  ${bold}권한 관리 팁:${reset}
+  - ~/.claude/settings.json에서 자주 사용하는 명령어 사전 허용
+  - /sandbox 명령어로 작업 범위 격리 (84% 권한 프롬프트 감소)
 EOF
 }
 
@@ -241,4 +269,35 @@ claude_edit_settings() {
     echo ""
     echo "✅ Settings file edited"
     echo "   Changes will take effect immediately (settings.json is symlinked)"
+}
+
+# (5) Claude Code workflow aliases
+# Plan 모드: Interactive 모드로 시작 (권장)
+alias clplan='claude'
+
+# 테스트 작성 및 실행
+cltest() {
+    if [[ -z "$1" ]]; then
+        echo "사용법: cltest \"요청내용\""
+        echo "예: cltest \"사용자 인증 테스트 작성해줘\""
+        return 1
+    fi
+    claude -p "$1"
+}
+
+# Skip permissions 모드 (주의해서 사용)
+clskip() {
+    if [[ -z "$1" ]]; then
+        echo "사용법: clskip \"요청내용\""
+        echo "예: clskip \"이 모듈을 리팩토링해줘\""
+        echo ""
+        echo "⚠️  주의: 모든 권한 프롬프트를 무시합니다."
+        echo "   작은 범위부터 시작하고 신중하게 사용하세요."
+        return 1
+    fi
+
+    echo "⚠️  Skip permissions 모드로 실행합니다..."
+    echo "   요청: $1"
+    echo ""
+    claude --dangerously-skip-permissions -p "$1"
 }
