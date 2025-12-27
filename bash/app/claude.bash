@@ -34,12 +34,6 @@ claudehelp() {
 
     cat <<EOF
 
-${bold}${blue}[Claude Code Quick Commands]${reset}
-
-  ${green}/help${reset}      : Claude Code 도움말
-  ${green}/feedback${reset}  : 기능 요청 및 버그 리포트
-  ${green}/doctor${reset}    : 시스템 상태 진단
-
 ${bold}${blue}[MCP (Model Context Protocol) 설정]${reset}
 
   MCP 서버 관리 명령어:
@@ -80,9 +74,11 @@ ${bold}${blue}[Setup & Requirements]${reset}
   ${green}ensure_jq${reset}        : jq 설치 여부 확인 및 자동 설치
                      (Claude Code statusline 스크립트에 필요)
 
-  사용 예:
-  - ${green}ensure_jq${reset}      : jq 설치 확인 및 필요시 자동 설치
+${bold}${blue}[Settings Management]${reset}
 
+  ${green}claude_init${reset}      : Claude Code 설정 파일 symbolic link 초기화
+                     (dotfiles/bash/claude/settings.json ↔ ~/.claude/settings.json)
+  ${green}claude_edit_settings${reset} : settings.json 파일 편집 (vim)
 EOF
 }
 
@@ -124,4 +120,74 @@ ensure_jq
 # Claude Code CLI 설치 스크립트
 clinstall() {
     bash "$HOME/dotfiles/mytool/install-claude.sh"
+}
+
+# (3) Claude Code 설정 파일 symbolic link 초기화
+claude_init() {
+    local settings_source="$HOME/dotfiles/bash/claude/settings.json"
+    local settings_target="$HOME/.claude/settings.json"
+    local statusline_source="$HOME/dotfiles/bash/claude/statusline-command.sh"
+    local statusline_target="$HOME/.claude/statusline-command.sh"
+
+    echo "🔧 Initializing Claude Code settings..."
+
+    # Create ~/.claude directory if not exists
+    if [[ ! -d "$HOME/.claude" ]]; then
+        echo "📁 Creating ~/.claude directory..."
+        mkdir -p "$HOME/.claude"
+    fi
+
+    # Handle settings.json
+    if [[ -L "$settings_target" ]]; then
+        echo "✅ settings.json symbolic link already exists"
+    elif [[ -f "$settings_target" ]]; then
+        echo "⚠️  settings.json exists as regular file"
+        echo "   Backing up to settings.json.backup..."
+        mv "$settings_target" "$settings_target.backup"
+        ln -s "$settings_source" "$settings_target"
+        echo "✅ Created symbolic link for settings.json"
+    else
+        ln -s "$settings_source" "$settings_target"
+        echo "✅ Created symbolic link for settings.json"
+    fi
+
+    # Handle statusline-command.sh
+    if [[ -L "$statusline_target" ]]; then
+        echo "✅ statusline-command.sh symbolic link already exists"
+    elif [[ -f "$statusline_target" ]]; then
+        echo "⚠️  statusline-command.sh exists as regular file"
+        echo "   Backing up to statusline-command.sh.backup..."
+        mv "$statusline_target" "$statusline_target.backup"
+        ln -s "$statusline_source" "$statusline_target"
+        echo "✅ Created symbolic link for statusline-command.sh"
+    else
+        ln -s "$statusline_source" "$statusline_target"
+        echo "✅ Created symbolic link for statusline-command.sh"
+    fi
+
+    echo ""
+    echo "✨ Claude Code settings initialization complete!"
+    echo ""
+    echo "📍 Symbolic links:"
+    ls -la "$settings_target" "$statusline_target" 2>/dev/null | grep -v "^total"
+}
+
+# (4) Claude Code settings.json 편집
+claude_edit_settings() {
+    local settings_file="$HOME/dotfiles/bash/claude/settings.json"
+
+    if [[ ! -f "$settings_file" ]]; then
+        echo "❌ Settings file not found: $settings_file"
+        return 1
+    fi
+
+    echo "📝 Editing Claude Code settings..."
+    echo "   File: $settings_file"
+    echo ""
+
+    ${EDITOR:-vim} "$settings_file"
+
+    echo ""
+    echo "✅ Settings file edited"
+    echo "   Changes will take effect immediately (settings.json is symlinked)"
 }

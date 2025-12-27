@@ -1,0 +1,7 @@
+{
+  "model": "haiku",
+  "statusLine": {
+    "type": "command",
+    "command": "/home/bwyoon/.claude/statusline-command.sh"
+  }
+}
