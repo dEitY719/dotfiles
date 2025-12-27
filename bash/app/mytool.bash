@@ -15,6 +15,7 @@ mytool_help() {
     echo "  ${UX_BOLD}srcpack(sp)${UX_RESET}  - Bundle source code files with syntax highlighting"
     echo "  ${UX_BOLD}hwinfo${UX_RESET}       - Display comprehensive hardware information"
     echo "  ${UX_BOLD}devx stat${UX_RESET}    - Show project statistics (commits, tests, files, LOC)"
+    echo "  ${UX_BOLD}mthelp${UX_RESET}       - Show this help message"
     echo ""
     echo "Usage examples:"
     echo "  srcpack --ext .py --max-bytes 50000"
@@ -45,6 +46,9 @@ srcpack() {
 # =============================================================================
 # Aliases
 # =============================================================================
+
+# MyTool 도움말 별칭
+alias mthelp='mytool_help'
 
 # 소스 번들링 짧은 별칭
 alias sp='srcpack --ext .py --max-bytes 33000'
