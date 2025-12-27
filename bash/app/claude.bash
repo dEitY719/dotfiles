@@ -25,103 +25,99 @@
 
 # (1) Claude Code 도움말
 claudehelp() {
-    # Color definitions
-    local bold blue green reset
-    bold=$(tput bold 2>/dev/null || echo "")
-    blue=$(tput setaf 4 2>/dev/null || echo "")
-    green=$(tput setaf 2 2>/dev/null || echo "")
-    reset=$(tput sgr0 2>/dev/null || echo "")
+    # Load UX library
+    source "$(dirname "${BASH_SOURCE[0]}")/../ux_lib/ux_lib.bash"
 
     cat <<EOF
 
-${bold}${blue}[MCP (Model Context Protocol) 설정]${reset}
+${UX_BOLD}${UX_PRIMARY}[MCP (Model Context Protocol) 설정]${UX_RESET}
 
   MCP 서버 관리 명령어:
 
-  ${green}claude mcp list${reset}              : 설치된 MCP 서버 목록
-  ${green}claude mcp get <name>${reset}        : MCP 서버 상세 정보
-  ${green}claude mcp add <name> ...${reset}    : MCP 서버 추가
-  ${green}claude mcp remove <name>${reset}     : MCP 서버 제거
+  ${UX_SUCCESS}claude mcp list${UX_RESET}              : 설치된 MCP 서버 목록
+  ${UX_SUCCESS}claude mcp get <name>${UX_RESET}        : MCP 서버 상세 정보
+  ${UX_SUCCESS}claude mcp add <name> ...${UX_RESET}    : MCP 서버 추가
+  ${UX_SUCCESS}claude mcp remove <name>${UX_RESET}     : MCP 서버 제거
 
-${bold}${blue}[Recommended MCP Servers]${reset}
+${UX_BOLD}${UX_PRIMARY}[Recommended MCP Servers]${UX_RESET}
 
-  1. ${bold}Playwright MCP${reset} (웹 브라우저 자동화)
-     ${green}claude mcp add playwright --transport stdio -- npx -y @playwright/mcp@latest${reset}
+  1. ${UX_BOLD}Playwright MCP${UX_RESET} (웹 브라우저 자동화)
+     ${UX_SUCCESS}claude mcp add playwright --transport stdio -- npx -y @playwright/mcp@latest${UX_RESET}
 
      사용 예:
      - "playwright mcp를 사용해서 example.com에 접속해줘"
      - "playwright로 검색창에 'claude' 입력하고 스크린샷 찍어줘"
 
-  2. ${bold}Sequential Thinking MCP${reset} (논리적 분석)
-     ${green}claude mcp add sequential-thinking --transport stdio -- npx -y @modelcontextprotocol/server-sequential-thinking${reset}
+  2. ${UX_BOLD}Sequential Thinking MCP${UX_RESET} (논리적 분석)
+     ${UX_SUCCESS}claude mcp add sequential-thinking --transport stdio -- npx -y @modelcontextprotocol/server-sequential-thinking${UX_RESET}
 
      사용 예:
      - "이 문제를 sequential-thinking으로 단계별 분석해줘"
      - "이 알고리즘의 시간복잡도를 체계적으로 분석해줘"
 
-${bold}${blue}[설치 후 확인]${reset}
+${UX_BOLD}${UX_PRIMARY}[설치 후 확인]${UX_RESET}
 
   # 설치한 MCP 서버 확인
-  ${green}claude mcp list${reset}
+  ${UX_SUCCESS}claude mcp list${UX_RESET}
 
   # 특정 MCP 서버 상태 확인
-  ${green}claude mcp get playwright${reset}
-  ${green}claude mcp get sequential-thinking${reset}
+  ${UX_SUCCESS}claude mcp get playwright${UX_RESET}
+  ${UX_SUCCESS}claude mcp get sequential-thinking${UX_RESET}
 
-${bold}${blue}[Setup & Requirements]${reset}
+${UX_BOLD}${UX_PRIMARY}[Setup & Requirements]${UX_RESET}
 
-  ${green}clinstall${reset}        : Claude Code CLI 설치
-  ${green}ensure_jq${reset}        : jq 설치 여부 확인 및 자동 설치
+  ${UX_SUCCESS}clinstall${UX_RESET}        : Claude Code CLI 설치
+  ${UX_SUCCESS}ensure_jq${UX_RESET}        : jq 설치 여부 확인 및 자동 설치
                      (Claude Code statusline 스크립트에 필요)
 
-${bold}${blue}[Configuration Management]${reset}
+${UX_BOLD}${UX_PRIMARY}[Configuration Management]${UX_RESET}
 
-  ${green}claude_init${reset}      : Claude Code 설정 및 skills symbolic link 초기화
+  ${UX_SUCCESS}claude_init${UX_RESET}      : Claude Code 설정 및 skills symbolic link 초기화
                      - settings.json ↔ ~/.claude/settings.json
                      - statusline-command.sh ↔ ~/.claude/statusline-command.sh
                      - skills/*.md ↔ ~/.claude/skills/*.md
-  ${green}claude_edit_settings${reset} : settings.json 파일 편집 (vim)
+  ${UX_SUCCESS}claude_edit_settings${UX_RESET} : settings.json 파일 편집 (vim)
 
-${bold}${blue}[Workflow Patterns]${reset}
+${UX_BOLD}${UX_PRIMARY}[Workflow Patterns]${UX_RESET}
 
-  ${bold}1. Plan 모드 (권장 - 안전)${reset}
-     ${green}claude${reset}          : Interactive 모드로 시작
+  ${UX_BOLD}1. Plan 모드 (권장 - 안전)${UX_RESET}
+     ${UX_SUCCESS}claude${UX_RESET}          : Interactive 모드로 시작
                       먼저 plan을 요청하고, 승인 후 실행
                       TDD/SDD 지향 개발에 적합
 
-     ${green}clplan${reset}          : claude 명령어 alias
+     ${UX_SUCCESS}clplan${UX_RESET}          : claude 명령어 alias
 
-  ${bold}2. 테스트 & 린팅 작업${reset}
-     ${green}cltest "요청내용"${reset} : 테스트 작성 및 실행
+  ${UX_BOLD}2. 테스트 & 린팅 작업${UX_RESET}
+     ${UX_SUCCESS}cltest "요청내용"${UX_RESET} : 테스트 작성 및 실행
                       예: cltest "사용자 인증 테스트 작성해줘"
                       권한 설정으로 pytest/ruff 자동 허용
 
-  ${bold}3. Skip Permissions 모드 (주의)${reset}
-     ${green}clskip "요청내용"${reset} : 모든 권한 프롬프트 무시
+  ${UX_BOLD}3. Skip Permissions 모드 (주의)${UX_RESET}
+     ${UX_SUCCESS}clskip "요청내용"${UX_RESET} : 모든 권한 프롬프트 무시
                       복잡한 리팩토링이나 보일러플레이트 생성 시
                       ⚠️  작은 범위부터 시작하고 신중하게 사용
 
-  ${bold}권장 워크플로우:${reset}
-  - 새 기능 개발: ${green}claude${reset} (plan → 승인 → 실행)
-  - 테스트 작성: ${green}cltest "테스트 작성해줘"${reset}
-  - 대규모 리팩토링: ${green}clskip "리팩토링해줘"${reset} (신중하게)
+  ${UX_BOLD}권장 워크플로우:${UX_RESET}
+  - 새 기능 개발: ${UX_SUCCESS}claude${UX_RESET} (plan → 승인 → 실행)
+  - 테스트 작성: ${UX_SUCCESS}cltest "테스트 작성해줘"${UX_RESET}
+  - 대규모 리팩토링: ${UX_SUCCESS}clskip "리팩토링해줘"${UX_RESET} (신중하게)
 
-${bold}${blue}[권한 관리 & Sandbox]${reset}
+${UX_BOLD}${UX_PRIMARY}[권한 관리 & Sandbox]${UX_RESET}
 
-  ${bold}1. Sandbox 사용법 (84% 프롬프트 감소)${reset}
-     ${green}/sandbox${reset}         : Claude 대화 중에 입력
+  ${UX_BOLD}1. Sandbox 사용법 (84% 프롬프트 감소)${UX_RESET}
+     ${UX_SUCCESS}/sandbox${UX_RESET}         : Claude 대화 중에 입력
                       → Auto-allow mode 선택 (권장)
                       → pytest, git, npm 등이 자동 승인됨
 
      예제:
-     ${green}claude${reset}
-     > ${green}/sandbox${reset}
+     ${UX_SUCCESS}claude${UX_RESET}
+     > ${UX_SUCCESS}/sandbox${UX_RESET}
      > [Auto-allow mode 선택]
      > "테스트 작성하고 실행해줘"
      → pytest, ruff, git 명령어가 자동 실행!
 
-  ${bold}2. Settings.json 설정${reset}
-     ${green}claude_edit_settings${reset} : 설정 파일 편집
+  ${UX_BOLD}2. Settings.json 설정${UX_RESET}
+     ${UX_SUCCESS}claude_edit_settings${UX_RESET} : 설정 파일 편집
 
      위치: ~/dotfiles/bash/claude/settings.json
 
@@ -131,7 +127,7 @@ ${bold}${blue}[권한 관리 & Sandbox]${reset}
      - 민감한 파일 차단 (.env, ~/.aws, ~/.ssh)
      - 위험한 명령어 차단 (rm -rf, sudo rm)
 
-  ${bold}3. 설정 예제${reset}
+  ${UX_BOLD}3. 설정 예제${UX_RESET}
      프로젝트별 설정: .claude/settings.json
      {
        "sandbox": { "enabled": true },
