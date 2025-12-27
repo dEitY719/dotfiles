@@ -96,4 +96,4 @@ project_branch="📁 ${project_name}(${branch_emoji} ${git_branch})"
 
 # Output format with colors and emojis: 🌅 YY-MM-DD HH:MM:SS | 🐰 Haiku 4.5 | 📁 project(🌳 main)
 # Time: Cyan with emoji, Model: Orange with emoji, Project+Branch: Green with emojis
-printf "${CYAN}%s %s${RESET} | ${ORANGE}%s %s${RESET} | ${GREEN}%s${RESET}" "$time_emoji" "$current_time" "$model_emoji" "$model_name" "$project_branch"
+printf "${CYAN}%s %s${RESET} | ${ORANGE}%s %s${RESET} | ${GREEN}%s${RESET}\n" "$time_emoji" "$current_time" "$model_emoji" "$model_name" "$project_branch"

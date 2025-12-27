@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_BASH_DIR="$(cd "${SCRIPT_DIR}/../bash" && pwd)"
 
 # Load UX library for reporting
-# shellcheck source=../bash/ux_lib/ux_lib.bash
+
 source "${SCRIPT_DIR}/../bash/ux_lib/ux_lib.bash"
 
 ux_header "UX Consistency Checker"

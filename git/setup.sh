@@ -22,7 +22,7 @@ HOME_GITCONFIG="${HOME}/.gitconfig"
 # setup.sh가 dotfiles/git에 있으므로, dotfiles/bash/ux_lib는 ../bash/ux_lib에 있습니다.
 UX_LIB_SCRIPT="${DOTFILES_GIT_DIR}/../bash/ux_lib/ux_lib.bash"
 
-# shellcheck source=../bash/ux_lib/ux_lib.bash
+
 if [[ -f "${UX_LIB_SCRIPT}" ]]; then
     source "${UX_LIB_SCRIPT}"
 else

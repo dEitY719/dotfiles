@@ -9,7 +9,7 @@ if [ ! -f "${SCRIPT_DIR}/../bash/ux_lib/ux_lib.bash" ]; then
     echo "Error: Could not find ux_lib.bash. Make sure this script is run from the dotfiles/mytool directory." >&2
     exit 1
 fi
-# shellcheck source=../bash/ux_lib/ux_lib.bash
+
 source "${SCRIPT_DIR}/../bash/ux_lib/ux_lib.bash"
 
 format_number() {

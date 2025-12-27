@@ -4,7 +4,7 @@
 set -e
 
 # Source the UX library
-# shellcheck source=../bash/ux_lib/ux_lib.bash
+
 source "$(dirname "$0")/../bash/ux_lib/ux_lib.bash"
 
 main() {
