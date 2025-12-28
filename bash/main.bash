@@ -84,7 +84,6 @@ done < <(_get_help_functions)
 
 # ------------------------------------------------------------------
 # Function to safely source a file and increment counter
-# shellcheck disable=SC1090
 safe_source() {
     local file_path="$1"
     local error_msg="${2:-File not found}"
