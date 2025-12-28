@@ -5,117 +5,81 @@
 
 set -e
 
-# Color definitions
-bold=$(tput bold 2>/dev/null || echo "")
-blue=$(tput setaf 4 2>/dev/null || echo "")
-green=$(tput setaf 2 2>/dev/null || echo "")
-yellow=$(tput setaf 3 2>/dev/null || echo "")
-red=$(tput setaf 1 2>/dev/null || echo "")
-reset=$(tput sgr0 2>/dev/null || echo "")
-
-# Helper functions
-info() {
-    echo "${bold}${blue}[INFO]${reset} $*"
-}
-
-success() {
-    echo "${bold}${green}[✓]${reset} $*"
-}
-
-warning() {
-    echo "${bold}${yellow}[⚠]${reset} $*"
-}
-
-error() {
-    echo "${bold}${red}[✗]${reset} $*"
-}
-
-confirm() {
-    local prompt="$1"
-    local response
-    echo -n "${bold}${blue}${prompt}${reset} (y/n) "
-    read -r response
-    [[ "$response" == "y" || "$response" == "Y" ]]
-}
+# Source the UX library
+source "$(dirname "$0")/../bash/ux_lib/ux_lib.bash"
 
 main() {
     clear
-    cat <<EOF
-${bold}${blue}════════════════════════════════════════════════════
-  GPG Agent 캐싱 설정 스크립트
-════════════════════════════════════════════════════${reset}
+    ux_header "GPG Agent Caching Setup"
+    ux_info "This script configures GPG passphrase caching for convenience."
 
-이 스크립트는 GPG passphrase를 자동으로 캐싱하도록 설정합니다.
+    ux_section "Benefits of Caching"
+    ux_bullet "Enter passphrase only once per day"
+    ux_bullet "Auto-unlock for git-crypt"
+    ux_bullet "Balance between security and convenience"
+    echo ""
 
-${bold}캐싱의 장점:${reset}
-  ✓ Passphrase를 하루에 한 번만 입력
-  ✓ git-crypt unlock 시 자동 실행
-  ✓ 보안과 편의성의 균형
+    ux_section "Setup Process"
+    ux_numbered 1 "Check GPG installation"
+    ux_numbered 2 "Create ~/.gnupg directory if needed"
+    ux_numbered 3 "Configure gpg-agent.conf"
+    ux_numbered 4 "Restart GPG agent"
+    echo ""
 
-설정 과정:
-  1. GPG 설치 확인
-  2. ~/.gnupg 디렉토리 생성
-  3. gpg-agent.conf 파일 설정
-  4. GPG agent 재시작
-
-${yellow}주의: 기존 gpg-agent.conf가 있으면 추가됩니다.${reset}
-
-EOF
-
-    if ! confirm "계속 진행하시겠습니까?"; then
-        warning "설정이 취소되었습니다."
+    if ! ux_confirm "Do you want to proceed with the setup?" "y"; then
+        ux_warning "Setup cancelled"
         exit 0
     fi
 
     # ========================================
     # Step 1: Check GPG
     # ========================================
-    info "Step 1/4: GPG 설치 확인 중..."
+    ux_step "1/4" "Checking GPG installation..."
 
     if ! command -v gpg &>/dev/null; then
-        error "gpg가 설치되어 있지 않습니다."
-        warning "apt-get install gnupg 로 설치 후 다시 시도하세요."
+        ux_error "gpg is not installed"
+        ux_info "Install with: apt-get install gnupg"
         exit 1
     fi
-    success "gpg 설치됨: $(gpg --version | head -n 1)"
+    ux_success "GPG installed: $(gpg --version | head -n 1)"
     echo ""
 
     # ========================================
     # Step 2: Create .gnupg directory
     # ========================================
-    info "Step 2/4: ~/.gnupg 디렉토리 확인 중..."
+    ux_step "2/4" "Checking ~/.gnupg directory..."
 
     if [[ -d ~/.gnupg ]]; then
-        success "~/.gnupg 디렉토리가 이미 존재합니다."
+        ux_success "~/.gnupg directory already exists"
     else
         mkdir -p ~/.gnupg
         chmod 700 ~/.gnupg
-        success "~/.gnupg 디렉토리 생성 완료"
+        ux_success "Created ~/.gnupg directory"
     fi
     echo ""
 
     # ========================================
     # Step 3: Configure gpg-agent.conf
     # ========================================
-    info "Step 3/4: gpg-agent.conf 설정 중..."
+    ux_step "3/4" "Configuring gpg-agent.conf..."
 
     local gpg_agent_conf="$HOME/.gnupg/gpg-agent.conf"
     local cache_ttl=86400  # 24 hours in seconds
 
     # Check if settings already exist
     if grep -q "default-cache-ttl" "$gpg_agent_conf" 2>/dev/null; then
-        warning "gpg-agent.conf에 이미 cache-ttl 설정이 있습니다."
-        echo "${bold}현재 설정:${reset}"
-        grep -E "cache-ttl|cache-ttl-ssh" "$gpg_agent_conf" 2>/dev/null || echo "  (없음)"
+        ux_warning "Cache settings already exist in gpg-agent.conf"
+        ux_section "Current Configuration"
+        grep -E "cache-ttl|cache-ttl-ssh" "$gpg_agent_conf" 2>/dev/null || echo "  (none)"
         echo ""
 
-        if confirm "기존 설정을 덮어쓰시겠습니까?"; then
+        if ux_confirm "Overwrite existing settings?" "n"; then
             # Remove old cache-ttl settings
             sed -i '/default-cache-ttl/d' "$gpg_agent_conf"
             sed -i '/max-cache-ttl/d' "$gpg_agent_conf"
-            info "기존 cache-ttl 설정 제거됨"
+            ux_info "Removed old cache-ttl settings"
         else
-            warning "설정 변경을 건너뜁니다."
+            ux_info "Skipping configuration changes"
             exit 0
         fi
     fi
@@ -123,61 +87,61 @@ EOF
     # Add new settings
     echo "default-cache-ttl $cache_ttl" >> "$gpg_agent_conf"
     echo "max-cache-ttl $cache_ttl" >> "$gpg_agent_conf"
-    success "gpg-agent.conf 설정 완료 (24시간 캐싱)"
+    ux_success "Configured gpg-agent.conf (24-hour caching)"
 
     echo ""
-    echo "${bold}추가된 설정:${reset}"
-    echo "  default-cache-ttl $cache_ttl"
-    echo "  max-cache-ttl $cache_ttl"
+    ux_section "Added Configuration"
+    ux_bullet "default-cache-ttl $cache_ttl"
+    ux_bullet "max-cache-ttl $cache_ttl"
     echo ""
 
     # ========================================
     # Step 4: Reload GPG agent
     # ========================================
-    info "Step 4/4: GPG agent 재시작 중..."
+    ux_step "4/4" "Restarting GPG agent..."
 
     if gpg-connect-agent reloadagent /bye &>/dev/null; then
-        success "GPG agent 재시작 완료"
+        ux_success "GPG agent restarted successfully"
     else
-        warning "GPG agent 재시작 실패 (수동으로 재시작해야 할 수 있습니다)"
-        info "수동 재시작: gpgconf --kill gpg-agent"
+        ux_warning "GPG agent restart failed (may need manual restart)"
+        ux_info "Manual restart: gpgconf --kill gpg-agent"
     fi
     echo ""
 
     # ========================================
     # Verify configuration
     # ========================================
-    info "설정 확인 중..."
-    echo ""
-    echo "${bold}gpg-agent.conf 내용:${reset}"
-    cat "$gpg_agent_conf"
+    ux_section "Configuration Verification"
+    ux_section "gpg-agent.conf contents:"
+    cat "$gpg_agent_conf" | sed 's/^/  /'
     echo ""
 
     # ========================================
     # Completion
     # ========================================
-    cat <<EOF
-${bold}${green}════════════════════════════════════════════════════
-  ✅ GPG Agent 캐싱 설정 완료!
-════════════════════════════════════════════════════${reset}
+    ux_divider_thick
+    ux_success "GPG Agent Caching Setup Complete!"
+    echo ""
 
-${bold}다음 단계:${reset}
-  1. git-crypt unlock 또는 GPG 사용 시 passphrase 입력
-  2. 24시간 동안 자동으로 캐싱됨
-  3. 하루에 한 번만 입력하면 됩니다
+    ux_section "Next Steps"
+    ux_numbered 1 "Use GPG or git-crypt unlock to enter passphrase"
+    ux_numbered 2 "Passphrase automatically cached for 24 hours"
+    ux_numbered 3 "You will only need to enter it once per day"
+    echo ""
 
-${bold}캐싱 동작:${reset}
-  • 첫 GPG 사용: Passphrase 입력 필요
-  • 24시간 이내: 자동으로 사용 (재입력 불필요)
-  • 24시간 이후: Passphrase 재입력
+    ux_section "How Caching Works"
+    ux_bullet "First GPG use: Passphrase required"
+    ux_bullet "Within 24 hours: Auto-unlocked (no re-entry needed)"
+    ux_bullet "After 24 hours: Passphrase re-entry required"
+    echo ""
 
-${bold}캐싱 초기화 (즉시 만료):${reset}
-  ${yellow}gpgconf --kill gpg-agent${reset}
-
-${bold}설정 확인:${reset}
-  ${yellow}cat ~/.gnupg/gpg-agent.conf${reset}
-
-EOF
+    ux_section "Cache Management"
+    ux_info "Clear cache immediately (expire passphrase):"
+    echo "  ${UX_PRIMARY}gpgconf --kill gpg-agent${UX_RESET}"
+    echo ""
+    ux_info "Verify configuration:"
+    echo "  ${UX_PRIMARY}cat ~/.gnupg/gpg-agent.conf${UX_RESET}"
+    echo ""
 }
 
 main "$@"
