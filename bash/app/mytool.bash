@@ -8,7 +8,7 @@
 # Registered in global HELP_DESCRIPTIONS array for myhelp discovery
 HELP_DESCRIPTIONS["mytool_help"]="MyTool - Personal Utility Commands"
 # Reference in this file to satisfy shellcheck (assignment is intentional for myhelp)
-readonly _MYTOOL_HELP_REGISTERED="${HELP_DESCRIPTIONS[mytool_help]}"
+: "${HELP_DESCRIPTIONS[mytool_help]}"  # Silent reference
 mytool_help() {
     echo ""
     echo "MyTool - Personal Utility Commands"

@@ -158,7 +158,8 @@ EOF
 
         # Create dynamic function instead of alias for safe variable expansion
         # Usage: mysql_<service_name> [options/queries]
-        eval "mysql_${service_name}() { mysql --defaults-group-suffix=_${service_name} \"\$@\"; }"
+        # Use single/double quote mix to safely handle variable expansion in eval
+        eval 'mysql_'"${service_name}"'() { mysql --defaults-group-suffix=_'"${service_name}"' "$@"; }'
     done
 }
 

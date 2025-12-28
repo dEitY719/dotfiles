@@ -84,7 +84,7 @@ gc_setup_new_pc() {
 # Registered in global HELP_DESCRIPTIONS array for myhelp discovery
 HELP_DESCRIPTIONS["gc_help"]="git-crypt (투명한 Git 암호화)"
 # Reference in this file to satisfy shellcheck (assignment is intentional for myhelp)
-readonly _GC_HELP_REGISTERED="${HELP_DESCRIPTIONS[gc_help]}"
+: "${HELP_DESCRIPTIONS[gc_help]}"  # Silent reference
 gc_help() {
     ux_header "git-crypt (투명한 Git 암호화)"
 
