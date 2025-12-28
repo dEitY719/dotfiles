@@ -135,12 +135,7 @@ mysql_update_config() {
     touch "$MYSQL_CNF_FILE"
     chmod 600 "$MYSQL_CNF_FILE"
 
-    # Remove old mysql_* functions (previously were aliases)
-    for func in $(declare -F | awk '{print $3}' | grep "^mysql_" 2>/dev/null); do
-        unset -f "$func" 2>/dev/null
-    done
-
-    # 서비스 배열 기반으로 파일/alias 업데이트
+    # 서비스 배열 기반으로 .my.cnf 파일만 생성
     for entry in "${services[@]}"; do
         service_name=$(echo "$entry" | awk '{print $1}')
         db_name=$(echo "$entry" | awk '{print $2}')
@@ -155,11 +150,6 @@ password=$db_pass
 host=localhost
 database=$db_name
 EOF
-
-        # Create dynamic function instead of alias for safe variable expansion
-        # Usage: mysql_<service_name> [options/queries]
-        # Use single/double quote mix to safely handle variable expansion in eval
-        eval 'mysql_'"${service_name}"'() { mysql --defaults-group-suffix=_'"${service_name}"' "$@"; }'
     done
 }
 
@@ -169,6 +159,19 @@ EOF
 if [[ $- == *i* ]] || [[ -n "$DOTFILES_FORCE_INIT" ]]; then
     mysql_update_config
 fi
+
+# -------------------------------
+# 2) Service-specific MySQL functions
+# Predefined functions for each service (prevents eval complexity)
+# Each function passes arguments through --defaults-group-suffix
+# -------------------------------
+mysql_dmc_dev() {
+    mysql --defaults-group-suffix=_dmc_dev "$@"
+}
+
+mysql_dmc_test() {
+    mysql --defaults-group-suffix=_dmc_test "$@"
+}
 
 # -------------------------------
 # 3) MySQL alias list
