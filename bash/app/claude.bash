@@ -245,7 +245,8 @@ claude_init() {
     if [[ -d "$skills_source_dir" ]]; then
         for skill_file in "$skills_source_dir"/*.md; do
             if [[ -f "$skill_file" ]]; then
-                local skill_name=$(basename "$skill_file")
+                local skill_name
+                skill_name="$(basename "$skill_file")"
                 local skill_target="$skills_target_dir/$skill_name"
 
                 if [[ -L "$skill_target" ]]; then
@@ -277,12 +278,27 @@ claude_init() {
     echo "✨ Claude Code configuration initialization complete!"
     echo ""
     echo "📍 Configuration files:"
-    ls -la "$settings_target" "$statusline_target" 2>/dev/null | grep -v "^total"
+    local config_target
+    for config_target in "$settings_target" "$statusline_target"; do
+        if [[ -e "$config_target" ]]; then
+            ls -la -- "$config_target"
+        fi
+    done
 
     echo ""
     echo "📍 Skills:"
     if [[ -d "$skills_target_dir" ]]; then
-        ls -la "$skills_target_dir"/*.md 2>/dev/null | grep -v "^total" || echo "  (no skills found)"
+        local linked_skill_found=0
+        local skill_target_file
+        for skill_target_file in "$skills_target_dir"/*.md; do
+            if [[ -e "$skill_target_file" ]]; then
+                ls -la -- "$skill_target_file"
+                linked_skill_found=1
+            fi
+        done
+        if [[ $linked_skill_found -eq 0 ]]; then
+            echo "  (no skills found)"
+        fi
     fi
 }
 

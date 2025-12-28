@@ -5,6 +5,7 @@
 # =============================================================================
 
 # 도움말 함수
+# shellcheck disable=SC2034  # Registered globally for myhelp discovery
 HELP_DESCRIPTIONS["mytool_help"]="MyTool - Personal Utility Commands"
 mytool_help() {
     echo ""

@@ -26,7 +26,8 @@ init_dotfiles_bash_dir() {
     fi
 
     # Case 3: Script is in a sibling directory (e.g., mytool alongside bash)
-    local parent_dir="$(dirname "$script_dir")"
+    local parent_dir
+    parent_dir="$(dirname "$script_dir")"
     if [[ -d "$parent_dir/bash" ]]; then
         echo "$parent_dir/bash"
         return 0
