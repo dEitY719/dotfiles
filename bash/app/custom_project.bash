@@ -171,92 +171,43 @@ run_psmt() {
 # Help (요구사항 2: 변수 자동 반영)
 #--------------------------------------
 clihelp() {
-    cat <<-EOF
+    ux_header "Custom Project CLI Help"
 
-[Custom Project CLI Help]
+    ux_section "Repositories"
+    ux_table_row "dotfiles" "✨" "${REPO_DOTFILES_URL}"
+    ux_table_row "FinRx" "💰" "${REPO_FINRX_URL}"
+    ux_table_row "dmc-playground" "📚" "${REPO_DMC_PG_URL}"
+    echo ""
 
-Repos
-  • dotfiles         ✨ ${REPO_DOTFILES_URL}
-  • FinRx            💰 ${REPO_FINRX_URL}
-  • dmc-playground   📚 ${REPO_DMC_PG_URL}
+    ux_section "Service URLs"
+    ux_table_row "DEV" "${SMT_DEV_URL} (port ${SMT_DEV_PORT})" "smithery-playground"
+    ux_table_row "TEST" "${SMT_TEST_URL} (port ${SMT_TEST_PORT})" "smithery-playground"
+    ux_table_row "PROD" "${SMT_PROD_URL} (port ${SMT_PROD_PORT})" "smithery-playground"
+    echo ""
 
-Hosts / Ports
-  - DEV  : ${DEV_HOST}:${DEV_PORT}  (SMT ${SMT_DEV_PORT})
-  - TEST : ${TEST_HOST}:${TEST_PORT} (SMT ${SMT_TEST_PORT})
-  - PROD : ${PROD_HOST}:${PROD_PORT} (SMT ${SMT_PROD_PORT})
+    ux_section "FinRx Commands"
+    ux_table_row "run_fr_cli" "python ./src/ticker_library/cli/cli.py" "Run CLI"
+    echo ""
 
-Service URLs (smithery-playground)
-  - DEV  : ${SMT_DEV_URL}
-  - TEST : ${SMT_TEST_URL}
-  - PROD : ${SMT_PROD_URL}
+    ux_section "dmc-playground Commands"
+    ux_table_row "run_bes" "Backend dev server (reload)" "DEV: ${DEV_API_URL}"
+    ux_table_row "run_tbes" "Backend test server (reload)" "TEST: ${TEST_API_URL}"
+    ux_table_row "run_pbes" "Backend prod server (no reload)" "PROD: ${PROD_API_URL}"
+    ux_table_row "run_api_cli [URL]" "API CLI (default: DEV)" "Query/test API"
+    ux_table_row "run_db_cli [URL]" "DB CLI (default: DEV)" "Query/test database"
+    echo ""
 
-API URLs (dmc-playground, 기본값)
-  - DEV  : ${DEV_API_URL}
-  - TEST : ${TEST_API_URL}
-  - PROD : ${PROD_API_URL}
+    ux_section "smithery-playground Commands"
+    ux_table_row "run_smt" "Dev server (reload)" "URL: ${SMT_DEV_URL}"
+    ux_table_row "run_tsmt" "Test server (reload)" "URL: ${SMT_TEST_URL}"
+    ux_table_row "run_psmt" "Prod server (no reload)" "URL: ${SMT_PROD_URL}"
+    echo ""
 
-DB URLs (dmc-playground, 기본값)
-  - DEV  : ${DEV_DB_URL}
-  - TEST : ${TEST_DB_URL}
-  - PROD : ${PROD_DB_URL}
-
-Aliases / Commands
-
-  [FinRx]
-    run_fr_cli                 : python ./src/ticker_library/cli/cli.py
-
-  [dmc-playground]
-    run_bes                    : uv run uvicorn src.backend.main:app --reload --host ${DEV_HOST} --port ${DEV_PORT}
-    run_tbes                   : PYTEST_CURRENT_TEST=1 uv run uvicorn src.backend.main:app --reload --host ${TEST_HOST} --port ${TEST_PORT}
-    run_pbes                   : APP_ENV=production uvicorn src.backend.main:app --host ${PROD_HOST} --port ${PROD_PORT}
-
-    run_api_cli [API_URL?]     : 기본 ${DEV_API_URL}
-    run_tapi_cli [API_URL?]    : 기본 ${TEST_API_URL}
-    run_papi_cli [API_URL?]    : 기본 ${PROD_API_URL}
-
-    run_db_cli  [DB_URL?]      : 기본 ${DEV_DB_URL}
-    run_tdb_cli [DB_URL?]      : 기본 ${TEST_DB_URL}
-    run_pdb_cli [DB_URL?]      : 기본 ${PROD_DB_URL}
-
-  [smithery-playground]
-    run_smt                    : uv run uvicorn src.main:app --reload --host ${DEV_HOST}  --port ${SMT_DEV_PORT}
-    run_tsmt                   : PYTEST_CURRENT_TEST=1 uv run uvicorn src.main:app --reload --host ${TEST_HOST} --port ${SMT_TEST_PORT}
-    run_psmt                   : APP_ENV=production uvicorn src.main:app --host ${PROD_HOST} --port ${SMT_PROD_PORT}
-
-Recipes
-
-  # 백엔드 개발 서버 실행 (FastAPI + Uvicorn, hot reload)
-  run_bes
-
-  # 테스트 서버 실행 (hot reload)
-  run_tbes
-
-  # 프로덕션 서버 실행 (no reload)
-  run_pbes
-
-  # API 유틸리티 CLI 사용 (기본 DEV URL)
-  run_api_cli --help
-  run_api_cli               # -> ${DEV_API_URL}
-  run_tapi_cli              # -> ${TEST_API_URL}
-  run_papi_cli              # -> ${PROD_API_URL}
-
-  # DB 유틸리티 CLI 사용 (기본 DEV DB URL)
-  run_db_cli --help
-  run_db_cli                # -> ${DEV_DB_URL}
-  run_tdb_cli               # -> ${TEST_DB_URL}
-  run_pdb_cli               # -> ${PROD_DB_URL}
-
-  # smithery-playground 서버 실행
-  run_smt                   # -> ${SMT_DEV_URL} (reload)
-  run_tsmt                  # -> ${SMT_TEST_URL} (reload)
-  run_psmt                  # -> ${SMT_PROD_URL} (no reload)
-
-Tips
-  - 가능한 프로젝트 루트에서 실행하세요. (현재: ${PROJECT_ROOT})
-  - 가상환경은 uv/pyproject 기반 권장 (예: uvs / uvd)
-  - 프로덕션에서는 --reload 옵션을 사용하지 않습니다.
-
-EOF
+    ux_section "Tips"
+    ux_bullet "Run from project root (current: ${PROJECT_ROOT})"
+    ux_bullet "Recommend uv/pyproject-based venv (uvs/uvd)"
+    ux_bullet "Never use --reload in production"
+    echo ""
 }
 
 # 끝.

@@ -36,115 +36,48 @@ claudehelp() {
     # Load UX library
     source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
 
-    cat <<EOF
+    ux_header "Claude Code - MCP & Workflow Guide"
 
-${UX_BOLD}${UX_PRIMARY}[MCP (Model Context Protocol) 설정]${UX_RESET}
+    ux_section "MCP (Model Context Protocol) Commands"
+    ux_table_row "claude mcp list" "List installed MCP servers" ""
+    ux_table_row "claude mcp get <name>" "Show MCP server details" ""
+    ux_table_row "claude mcp add <name> ..." "Add MCP server" ""
+    ux_table_row "claude mcp remove <name>" "Remove MCP server" ""
+    echo ""
 
-  MCP 서버 관리 명령어:
+    ux_section "Recommended MCP Servers"
+    ux_bullet "Playwright MCP: Web browser automation"
+    echo "  Install: ${UX_SUCCESS}claude mcp add playwright --transport stdio -- npx -y @playwright/mcp@latest${UX_RESET}"
+    ux_bullet "Sequential Thinking MCP: Logical analysis"
+    echo "  Install: ${UX_SUCCESS}claude mcp add sequential-thinking --transport stdio -- npx -y @modelcontextprotocol/server-sequential-thinking${UX_RESET}"
+    echo ""
 
-  ${UX_SUCCESS}claude mcp list${UX_RESET}              : 설치된 MCP 서버 목록
-  ${UX_SUCCESS}claude mcp get <name>${UX_RESET}        : MCP 서버 상세 정보
-  ${UX_SUCCESS}claude mcp add <name> ...${UX_RESET}    : MCP 서버 추가
-  ${UX_SUCCESS}claude mcp remove <name>${UX_RESET}     : MCP 서버 제거
+    ux_section "Setup & Requirements"
+    ux_table_row "clinstall" "Install Claude Code CLI" ""
+    ux_table_row "ensure_jq" "Install jq (required for statusline)" ""
+    ux_table_row "claude_init" "Initialize config & skills" ""
+    ux_table_row "claude_edit_settings" "Edit settings.json" ""
+    echo ""
 
-${UX_BOLD}${UX_PRIMARY}[Recommended MCP Servers]${UX_RESET}
+    ux_section "Workflow Patterns"
+    ux_bullet "Plan mode (recommended): ${UX_SUCCESS}claude${UX_RESET} → plan → approve → execute"
+    ux_bullet "Test workflow: ${UX_SUCCESS}cltest \"test description\"${UX_RESET}}"
+    ux_bullet "Skip permissions (caution): ${UX_SUCCESS}clskip \"request\"${UX_RESET}"
+    echo ""
 
-  1. ${UX_BOLD}Playwright MCP${UX_RESET} (웹 브라우저 자동화)
-     ${UX_SUCCESS}claude mcp add playwright --transport stdio -- npx -y @playwright/mcp@latest${UX_RESET}
+    ux_section "Sandbox Mode"
+    ux_info "Use in Claude conversation: ${UX_SUCCESS}/sandbox${UX_RESET}"
+    ux_bullet "Select Auto-allow mode"
+    ux_bullet "pytest, git, npm auto-approved"
+    echo ""
 
-     사용 예:
-     - "playwright mcp를 사용해서 example.com에 접속해줘"
-     - "playwright로 검색창에 'claude' 입력하고 스크린샷 찍어줘"
-
-  2. ${UX_BOLD}Sequential Thinking MCP${UX_RESET} (논리적 분석)
-     ${UX_SUCCESS}claude mcp add sequential-thinking --transport stdio -- npx -y @modelcontextprotocol/server-sequential-thinking${UX_RESET}
-
-     사용 예:
-     - "이 문제를 sequential-thinking으로 단계별 분석해줘"
-     - "이 알고리즘의 시간복잡도를 체계적으로 분석해줘"
-
-${UX_BOLD}${UX_PRIMARY}[설치 후 확인]${UX_RESET}
-
-  # 설치한 MCP 서버 확인
-  ${UX_SUCCESS}claude mcp list${UX_RESET}
-
-  # 특정 MCP 서버 상태 확인
-  ${UX_SUCCESS}claude mcp get playwright${UX_RESET}
-  ${UX_SUCCESS}claude mcp get sequential-thinking${UX_RESET}
-
-${UX_BOLD}${UX_PRIMARY}[Setup & Requirements]${UX_RESET}
-
-  ${UX_SUCCESS}clinstall${UX_RESET}        : Claude Code CLI 설치
-  ${UX_SUCCESS}ensure_jq${UX_RESET}        : jq 설치 여부 확인 및 자동 설치
-                     (Claude Code statusline 스크립트에 필요)
-
-${UX_BOLD}${UX_PRIMARY}[Configuration Management]${UX_RESET}
-
-  ${UX_SUCCESS}claude_init${UX_RESET}      : Claude Code 설정 및 skills symbolic link 초기화
-                     - settings.json ↔ ~/.claude/settings.json
-                     - statusline-command.sh ↔ ~/.claude/statusline-command.sh
-                     - skills/*.md ↔ ~/.claude/skills/*.md
-  ${UX_SUCCESS}claude_edit_settings${UX_RESET} : settings.json 파일 편집 (vim)
-
-${UX_BOLD}${UX_PRIMARY}[Workflow Patterns]${UX_RESET}
-
-  ${UX_BOLD}1. Plan 모드 (권장 - 안전)${UX_RESET}
-     ${UX_SUCCESS}claude${UX_RESET}          : Interactive 모드로 시작
-                      먼저 plan을 요청하고, 승인 후 실행
-                      TDD/SDD 지향 개발에 적합
-
-     ${UX_SUCCESS}clplan${UX_RESET}          : claude 명령어 alias
-
-  ${UX_BOLD}2. 테스트 & 린팅 작업${UX_RESET}
-     ${UX_SUCCESS}cltest "요청내용"${UX_RESET} : 테스트 작성 및 실행
-                      예: cltest "사용자 인증 테스트 작성해줘"
-                      권한 설정으로 pytest/ruff 자동 허용
-
-  ${UX_BOLD}3. Skip Permissions 모드 (주의)${UX_RESET}
-     ${UX_SUCCESS}clskip "요청내용"${UX_RESET} : 모든 권한 프롬프트 무시
-                      복잡한 리팩토링이나 보일러플레이트 생성 시
-                      ⚠️  작은 범위부터 시작하고 신중하게 사용
-
-  ${UX_BOLD}권장 워크플로우:${UX_RESET}
-  - 새 기능 개발: ${UX_SUCCESS}claude${UX_RESET} (plan → 승인 → 실행)
-  - 테스트 작성: ${UX_SUCCESS}cltest "테스트 작성해줘"${UX_RESET}
-  - 대규모 리팩토링: ${UX_SUCCESS}clskip "리팩토링해줘"${UX_RESET} (신중하게)
-
-${UX_BOLD}${UX_PRIMARY}[권한 관리 & Sandbox]${UX_RESET}
-
-  ${UX_BOLD}1. Sandbox 사용법 (84% 프롬프트 감소)${UX_RESET}
-     ${UX_SUCCESS}/sandbox${UX_RESET}         : Claude 대화 중에 입력
-                      → Auto-allow mode 선택 (권장)
-                      → pytest, git, npm 등이 자동 승인됨
-
-     예제:
-     ${UX_SUCCESS}claude${UX_RESET}
-     > ${UX_SUCCESS}/sandbox${UX_RESET}
-     > [Auto-allow mode 선택]
-     > "테스트 작성하고 실행해줘"
-     → pytest, ruff, git 명령어가 자동 실행!
-
-  ${UX_BOLD}2. Settings.json 설정${UX_RESET}
-     ${UX_SUCCESS}claude_edit_settings${UX_RESET} : 설정 파일 편집
-
-     위치: ~/dotfiles/bash/claude/settings.json
-
-     기본 설정 포함:
-     - Sandbox 활성화 (autoAllowBashIfSandboxed: true)
-     - 테스트 파일 자동 허용 (pytest, ruff, mypy, tox)
-     - 민감한 파일 차단 (.env, ~/.aws, ~/.ssh)
-     - 위험한 명령어 차단 (rm -rf, sudo rm)
-
-  ${UX_BOLD}3. 설정 예제${UX_RESET}
-     프로젝트별 설정: .claude/settings.json
-     {
-       "sandbox": { "enabled": true },
-       "permissions": {
-         "allow": ["Bash(pytest*)"],
-         "deny": ["Read(.env)"]
-       }
-     }
-EOF
+    ux_section "Configuration"
+    ux_info "Settings file: ~/dotfiles/bash/claude/settings.json"
+    ux_bullet "Sandbox: autoAllowBashIfSandboxed"
+    ux_bullet "Auto-allow: pytest, ruff, mypy, tox"
+    ux_bullet "Block: .env, ~/.aws, ~/.ssh"
+    ux_bullet "Block commands: rm -rf, sudo rm"
+    echo ""
 }
 
 # (2) jq 설치 확인 및 설치

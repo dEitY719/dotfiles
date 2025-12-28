@@ -28,23 +28,14 @@ fi
 # =======================
 
 devx__colors() {
-    if [[ "${NO_COLOR:-}" != "1" && -t 1 ]]; then
-        bold=$'\e[1m'
-        dim=$'\e[2m'
-        reset=$'\e[0m'
-        c_blue=$'\e[34m'
-        c_green=$'\e[32m'
-        c_yellow=$'\e[33m'
-        c_red=$'\e[31m'
-    else
-        bold=
-        dim=
-        reset=
-        c_blue=
-        c_green=
-        c_yellow=
-        c_red=
-    fi
+    # Use UX library variables instead of hardcoding colors
+    bold="${UX_BOLD:-}"
+    dim="${UX_MUTED:-}"
+    reset="${UX_RESET:-}"
+    c_blue="${UX_PRIMARY:-}"
+    c_green="${UX_SUCCESS:-}"
+    c_yellow="${UX_WARNING:-}"
+    c_red="${UX_ERROR:-}"
 }
 
 devx__log() {

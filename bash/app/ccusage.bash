@@ -38,16 +38,15 @@ alias ccb='ccusage blocks --live'
 
 # ── 도움말 ────────────────────────────────────────────────────
 cchelp() {
-    cat <<-'EOF'
-[ccusage install]
-  전역 prefix를 사용자 홈으로 지정하여 설치:
-    npm install -g ccusage --prefix=$HOME/.npm-global
+    ux_header "Claude Code Usage Commands"
 
+    ux_section "Installation"
+    ux_bullet "Global prefix: npm install -g ccusage --prefix=\$HOME/.npm-global"
+    echo ""
 
-[ccusage자주 쓰는 명령어 / alias]
-  
-  ccd: ccusage daily --breakdown      // 모델별 소비 내역
-  ccs: ccusage session --sort tokens  // 세션 단위 분석 (어떤 대화에서 토큰 많이 썼는지)
-  ccb: ccusage blocks --live          // 캐시 비율 확인 (실시간)
-EOF
+    ux_section "Quick Commands (Aliases)"
+    ux_table_row "ccd" "ccusage daily --breakdown" "Token usage by model"
+    ux_table_row "ccs" "ccusage session --sort tokens" "Session analysis"
+    ux_table_row "ccb" "ccusage blocks --live" "Cache hit ratio (live)"
+    echo ""
 }

@@ -6,23 +6,20 @@
 
 # 도움말 함수
 mytool_help() {
+    ux_header "MyTool - Personal Utility Commands"
+
+    ux_section "Available Commands"
+    ux_table_row "srcpack (sp)" "Bundle source code files" "With syntax highlighting"
+    ux_table_row "hwinfo" "Display hardware info" "CPU, GPU, memory details"
+    ux_table_row "devx stat" "Project statistics" "Commits, tests, files, LOC"
+    ux_table_row "agents_init (ai)" "Generate AGENTS.md" "File system for project"
     echo ""
-    echo "MyTool - Personal Utility Commands"
-    echo "===================================="
-    echo ""
-    echo "Available commands:"
-    echo ""
-    echo "  ${UX_BOLD}srcpack(sp)${UX_RESET}    - Bundle source code files with syntax highlighting"
-    echo "  ${UX_BOLD}hwinfo${UX_RESET}         - Display comprehensive hardware information"
-    echo "  ${UX_BOLD}devx stat${UX_RESET}      - Show project statistics (commits, tests, files, LOC)"
-    echo "  ${UX_BOLD}agents_init(ai)${UX_RESET} - Generate AGENTS.md file system for current project"
-    echo "  ${UX_BOLD}mthelp${UX_RESET}         - Show this help message"
-    echo ""
-    echo "Usage examples:"
-    echo "  srcpack --ext .py --max-bytes 50000"
-    echo "  sp  # Shortcut for 'srcpack --ext .py --max-bytes 33000'"
-    echo "  agents_init  # Generate AGENTS.md in current directory"
-    echo "  ai  # Shortcut for 'agents_init'"
+
+    ux_section "Usage Examples"
+    ux_bullet "srcpack --ext .py --max-bytes 50000"
+    ux_bullet "sp - Shortcut for 'srcpack --ext .py --max-bytes 33000'"
+    ux_bullet "agents_init - Generate AGENTS.md in current directory"
+    ux_bullet "ai - Shortcut for 'agents_init'"
     echo ""
 }
 

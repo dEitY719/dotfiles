@@ -307,20 +307,40 @@ mysql_server() {
     local action="$1"
 
     if [[ -z "$action" ]]; then
-        echo "Usage: mysql_server <${usage_str}>"
-        echo "Commands:"
+        ux_usage "mysql_server" "<${usage_str}>" "Manage MySQL service"
+        ux_section "Commands"
         for cmd in "${!cmd_list[@]}"; do
-            printf "  %-7s -> %s\n" "$cmd" "${cmd_list[$cmd]}"
+            ux_bullet "$cmd - ${cmd_list[$cmd]}"
         done
         return 1
     fi
 
     if [[ -n "${cmd_list[$action]}" ]]; then
-        echo "[Info] Running: sudo service mysql $action"
+        ux_info "Running: sudo service mysql $action"
         sudo service mysql "$action"
     else
-        echo "[Error] Unknown action: $action"
-        echo "Usage: mysql_server <${usage_str}>"
+        ux_error "Unknown action: $action"
+        ux_usage "mysql_server" "<${usage_str}>" "Manage MySQL service"
         return 1
     fi
+}
+
+# MySQL Help Function
+mysqlhelp() {
+    ux_header "MySQL Service Management"
+
+    ux_section "Service Commands"
+    ux_table_row "mysql_list" "List configured services" "Show all database connections"
+    ux_table_row "mysql_dmc_dev" "Connect to dev database" "Use .my.cnf config"
+    ux_table_row "mysql_dmc_test" "Connect to test database" "Use .my.cnf config"
+    ux_table_row "mysql_cmd <svc> <cmd>" "Execute SQL command" "databases, tables, version, describe, status, etc."
+    ux_table_row "mysql_server <action>" "Manage service" "start, stop, restart, status, reload"
+    echo ""
+
+    ux_section "Common Workflows"
+    ux_bullet "Show databases: mysql_cmd dmc_dev databases"
+    ux_bullet "Show tables: mysql_cmd dmc_dev tables"
+    ux_bullet "Check MySQL version: mysql_cmd dmc_dev version"
+    ux_bullet "Check service status: mysql_server status"
+    echo ""
 }
