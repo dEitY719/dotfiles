@@ -94,11 +94,17 @@ aclean_kernel() {
 
     echo ""
     if ux_confirm "WARNING: This will remove all kernels except the current one. Continue?" "n"; then
-        local kernels_to_remove
-        kernels_to_remove=$(dpkg -l | grep linux-image | grep -v "$current_kernel" | awk '{print $2}')
-        # shellcheck disable=SC2086
-        sudo apt-get remove --purge $kernels_to_remove
-        ux_success "Old kernels removed successfully!"
+        local -a kernels_to_remove=()
+        while IFS= read -r kernel; do
+            kernels_to_remove+=("$kernel")
+        done < <(dpkg -l | grep linux-image | grep -v "$current_kernel" | awk '{print $2}')
+
+        if [[ ${#kernels_to_remove[@]} -gt 0 ]]; then
+            sudo apt-get remove --purge "${kernels_to_remove[@]}"
+            ux_success "Old kernels removed successfully!"
+        else
+            ux_info "No old kernels found to remove"
+        fi
     else
         ux_info "Cancelled"
     fi

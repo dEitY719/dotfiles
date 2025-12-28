@@ -65,11 +65,6 @@ source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
 # Initialize a counter for sourced files (global integer)
 declare -gi SOURCED_FILES_COUNT=0
 
-# Initialize global help descriptions associative array
-# Modules can register their descriptions via: HELP_DESCRIPTIONS["funcname"]="description"
-# shellcheck disable=SC2034  # populated by modules and consumed by myhelp
-declare -gA HELP_DESCRIPTIONS=()
-
 # ------------------------------------------------------------------
 # --- Helper function to get all *help() functions ---
 # Used by both cleanup and myhelp display

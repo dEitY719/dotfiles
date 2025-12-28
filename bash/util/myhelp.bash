@@ -7,6 +7,12 @@
 # Modules can register via: HELP_DESCRIPTIONS["funcname"]="description"
 # ------------------------------------------------------------------
 
+# Initialize global help descriptions associative array
+# This should be declared only once (in this file) and populated by all modules
+if [[ -z "${HELP_DESCRIPTIONS+_}" ]]; then
+    declare -gA HELP_DESCRIPTIONS=()
+fi
+
 # Default descriptions for backward compatibility
 # New modules should register their own descriptions
 _register_default_help_descriptions() {

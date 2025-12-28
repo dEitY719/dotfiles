@@ -187,8 +187,7 @@ demo_rich_progress() {
 
     ux_section "Another Task"
     ux_info "Simulating a complex calculation..."
-    # shellcheck disable=SC2016
-    ux_with_progress "Calculating complex data" 'for i in $(seq 1 100); do echo "Step $i"; sleep 0.05; done'
+    ux_with_progress "Calculating complex data" "for i in \$(seq 1 100); do echo \"Step \$i\"; sleep 0.05; done"
     echo ""
 
     read -rp "Press Enter to continue..."

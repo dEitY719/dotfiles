@@ -5,8 +5,10 @@
 # =============================================================================
 
 # 도움말 함수
-# shellcheck disable=SC2034  # Registered globally for myhelp discovery
+# Registered in global HELP_DESCRIPTIONS array for myhelp discovery
 HELP_DESCRIPTIONS["mytool_help"]="MyTool - Personal Utility Commands"
+# Reference in this file to satisfy shellcheck (assignment is intentional for myhelp)
+readonly _MYTOOL_HELP_REGISTERED="${HELP_DESCRIPTIONS[mytool_help]}"
 mytool_help() {
     echo ""
     echo "MyTool - Personal Utility Commands"

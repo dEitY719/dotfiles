@@ -81,8 +81,10 @@ gc_setup_new_pc() {
 }
 
 # git-crypt 빠른 도움말
-# shellcheck disable=SC2034  # consumed by myhelp for help listings
+# Registered in global HELP_DESCRIPTIONS array for myhelp discovery
 HELP_DESCRIPTIONS["gc_help"]="git-crypt (투명한 Git 암호화)"
+# Reference in this file to satisfy shellcheck (assignment is intentional for myhelp)
+readonly _GC_HELP_REGISTERED="${HELP_DESCRIPTIONS[gc_help]}"
 gc_help() {
     ux_header "git-crypt (투명한 Git 암호화)"
 

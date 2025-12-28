@@ -135,9 +135,9 @@ mysql_update_config() {
     touch "$MYSQL_CNF_FILE"
     chmod 600 "$MYSQL_CNF_FILE"
 
-    # 기존 mysql_* alias 삭제
-    for a in $(alias | grep -oP "^mysql_\w+" 2>/dev/null); do
-        unalias "$a" 2>/dev/null
+    # Remove old mysql_* functions (previously were aliases)
+    for func in $(declare -F | awk '{print $3}' | grep "^mysql_" 2>/dev/null); do
+        unset -f "$func" 2>/dev/null
     done
 
     # 서비스 배열 기반으로 파일/alias 업데이트
@@ -156,9 +156,9 @@ host=localhost
 database=$db_name
 EOF
 
-        alias_name="mysql_$service_name"
-        # shellcheck disable=SC2139
-        alias "$alias_name"="mysql --defaults-group-suffix=_$service_name"
+        # Create dynamic function instead of alias for safe variable expansion
+        # Usage: mysql_<service_name> [options/queries]
+        eval "mysql_${service_name}() { mysql --defaults-group-suffix=_${service_name} \"\$@\"; }"
     done
 }
 
