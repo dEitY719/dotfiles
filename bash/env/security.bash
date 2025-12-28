@@ -26,3 +26,9 @@ COMPANY_CA_CERT="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
 if [ -f "$COMPANY_CA_CERT" ]; then
     export NODE_EXTRA_CA_CERTS="$COMPANY_CA_CERT"
 fi
+
+# Python requests CA 인증서 설정 (회사 내부 프록시용)
+# 파일이 존재할 때만 설정하여 집 WSL 환경과 호환성 유지
+if [ -f "$COMPANY_CA_CERT" ]; then
+    export REQUESTS_CA_BUNDLE="$COMPANY_CA_CERT"
+fi
