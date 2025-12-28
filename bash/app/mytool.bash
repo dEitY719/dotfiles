@@ -5,10 +5,6 @@
 # =============================================================================
 
 # 도움말 함수
-# Registered in global HELP_DESCRIPTIONS array for myhelp discovery
-HELP_DESCRIPTIONS["mytool_help"]="MyTool - Personal Utility Commands"
-# Reference in this file to satisfy shellcheck (assignment is intentional for myhelp)
-: "${HELP_DESCRIPTIONS[mytool_help]}"  # Silent reference
 mytool_help() {
     echo ""
     echo "MyTool - Personal Utility Commands"

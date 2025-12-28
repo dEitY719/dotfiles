@@ -2,7 +2,7 @@
 
 : <<'GIT_CRYPT_DOC'
 ==========================================================
-git-crypt Quickstart (투명한 Git 암호화)
+git-crypt Quickstart (Transparent Git encryption)
 ==========================================================
 
 1) 설치
@@ -81,12 +81,8 @@ gc_setup_new_pc() {
 }
 
 # git-crypt 빠른 도움말
-# Registered in global HELP_DESCRIPTIONS array for myhelp discovery
-HELP_DESCRIPTIONS["gc_help"]="git-crypt (투명한 Git 암호화)"
-# Reference in this file to satisfy shellcheck (assignment is intentional for myhelp)
-: "${HELP_DESCRIPTIONS[gc_help]}"  # Silent reference
 gc_help() {
-    ux_header "git-crypt (투명한 Git 암호화)"
+    ux_header "git-crypt (Transparent Git encryption)"
 
     ux_section "설치"
     ux_table_row "gcinstall" "설치 스크립트" "apt-get 기반 설치"

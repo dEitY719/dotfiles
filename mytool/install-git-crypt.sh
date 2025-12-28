@@ -1,6 +1,6 @@
 #!/bin/bash
 # mytool/install-git-crypt.sh
-# git-crypt 설치 스크립트 (투명한 Git 암호화)
+# git-crypt 설치 스크립트 (Transparent Git encryption)
 
 set -e
 

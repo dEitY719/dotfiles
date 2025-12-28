@@ -38,6 +38,8 @@ _register_default_help_descriptions() {
     [[ -z "${HELP_DESCRIPTIONS[litellm_help]}" ]] && HELP_DESCRIPTIONS["litellm_help"]="LiteLLM commands and aliases"
     [[ -z "${HELP_DESCRIPTIONS[gpuhelp]}" ]] && HELP_DESCRIPTIONS["gpuhelp"]="GPU monitoring commands (WSL2 universal)"
     [[ -z "${HELP_DESCRIPTIONS[uxhelp]}" ]] && HELP_DESCRIPTIONS["uxhelp"]="UX library functions and styling guide"
+    [[ -z "${HELP_DESCRIPTIONS[gc_help]}" ]] && HELP_DESCRIPTIONS["gc_help"]="git-crypt (Transparent Git encryption)"
+    [[ -z "${HELP_DESCRIPTIONS[mytool_help]}" ]] && HELP_DESCRIPTIONS["mytool_help"]="MyTool - Personal Utility Commands"
 }
 
 myhelp() {

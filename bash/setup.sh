@@ -35,7 +35,6 @@ log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
 log_debug() { echo "${UX_MUTED}[DEBUG] $1${UX_RESET}"; }
 log_warning() { ux_warning "$1"; }
 
-
 # --- Functions ---
 
 # log_critical 함수를 사용하여 log_error_and_exit 대체
