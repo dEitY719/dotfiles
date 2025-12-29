@@ -32,18 +32,12 @@ zsh-switch() {
 }
 
 # Switch to bash shell
-    fi
-
-    ux_header "Available Zsh Themes"
-    ux_info "Located in: ${UX_BOLD}~/.oh-my-zsh/themes/${UX_RESET}"
-    echo ""
-
-    local themes_dir="${HOME}/.oh-my-zsh/themes"
-    if [ -d "$themes_dir" ]; then
-        echo "Available themes:"
-        find "$themes_dir" -maxdepth 1 -name "*.zsh-theme" -printf '%f\n' | sed 's/\.zsh-theme$//' | sort | nl
+bash-switch() {
+    if command -v bash &>/dev/null; then
+        ux_success "Switching to bash..."
+        exec bash -i
     else
-        ux_error "Themes directory not found."
+        ux_error "bash is not installed."
         return 1
     fi
 }
