@@ -1,4 +1,6 @@
 #!/bin/bash
+# shell-common/tools/external/gemini.sh
+# Gemini CLI helper - shared across bash and zsh
 
 : <<'GEMINI_DOC'
 ==========================================================
@@ -14,20 +16,19 @@ Gemini CLI Dotfiles Helper - Getting Started Guide
 
 2) API 키 or 웹 로그인 인증
 ------------------------
-    ~/.env 파일에 저장된 GEMINI_API_KEY는 쓸모없고, 
+    ~/.env 파일에 저장된 GEMINI_API_KEY는 쓸모없고,
     웹 로그인으로 인증 완료
 ==========================================================
 GEMINI_DOC
 
-# --- 별칭(Alias) 및 함수 정의 ---
-# gcloud-based Gemini CLI alias (separate tool)
+# --- Aliases ---
 alias gg='gcloud gemini'
 alias gflash='gemini --model gemini-2.5-flash'
 alias gpro='gemini --model gemini-2.5-pro'
 alias gver='gemini --version'
 alias ghelp='gemini --help'
 
-# Gemini 도움말 함수
+# --- Functions ---
 
 # Gemini 설치 (대화형 스크립트)
 ginstall() {
