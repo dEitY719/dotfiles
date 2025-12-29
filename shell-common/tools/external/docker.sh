@@ -1,6 +1,7 @@
-#!/bin/bash
-
-# bash/app/docker.bash
+#!/bin/sh
+# shell-common/tools/external/docker.sh
+# Docker / Docker Compose - aliases, functions, and help
+# Shared between bash and zsh
 
 # -------------------------------
 # Docker / Docker Compose Aliases
@@ -30,7 +31,7 @@ alias dcstart='docker compose start' # 정지된 컨테이너 시작
 unalias dcl 2>/dev/null # 기존 alias 제거 (함수 정의 전)
 unalias dcr 2>/dev/null # 기존 alias 제거 (함수 정의 전)
 dcl() {
-    # UX library is already loaded globally in main.bash
+    # UX library is already loaded globally in main.bash/main.zsh
     if [ -z "$1" ]; then
         ux_header "Docker Compose Logs (dcl)"
 
@@ -62,7 +63,7 @@ dcl() {
         return 0
     fi
 
-    local service="$1"
+    service="$1"
     shift # 첫 번째 인자 제거 (나머지 옵션들을 위해)
 
     # 1. Try to identify as a Docker Compose service
@@ -98,92 +99,84 @@ dcr() {
         return 1
     fi
 
-    local service="$1"
+    service="$1"
     shift
 
-    # Build candidate directories
-    local -a candidate_dirs=()
-    local cwd_dir
-    cwd_dir="$(pwd)"
-    candidate_dirs+=("$cwd_dir")
+    # Build candidate directories (as a space-separated string)
+    candidate_dirs="$(pwd)"
 
-    if [[ -n "$LITELLM_PROJECT_PATH" ]]; then
-        candidate_dirs+=("$LITELLM_PROJECT_PATH")
+    if [ -n "$LITELLM_PROJECT_PATH" ]; then
+        candidate_dirs="$candidate_dirs $LITELLM_PROJECT_PATH"
     fi
-    if [[ -d "$HOME/para/project/litellm-stack" ]]; then
-        candidate_dirs+=("$HOME/para/project/litellm-stack")
+    if [ -d "$HOME/para/project/litellm-stack" ]; then
+        candidate_dirs="$candidate_dirs $HOME/para/project/litellm-stack"
     fi
 
     # Deduplicate directories
-    local -a unique_dirs=()
-    local seen
-    for dir in "${candidate_dirs[@]}"; do
+    unique_dirs=""
+    for dir in $candidate_dirs; do
         seen=false
-        for udir in "${unique_dirs[@]}"; do
-            if [[ "$dir" == "$udir" ]]; then
+        for udir in $unique_dirs; do
+            if [ "$dir" = "$udir" ]; then
                 seen=true
                 break
             fi
         done
-        [[ "$seen" == false ]] && unique_dirs+=("$dir")
+        if [ "$seen" = false ]; then
+            unique_dirs="$unique_dirs $dir"
+        fi
     done
 
-    local compose_file=""
-    local fname
-    for dir in "${unique_dirs[@]}"; do
+    compose_file=""
+    for dir in $unique_dirs; do
         for fname in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
-            if [[ -f "$dir/$fname" ]]; then
+            if [ -f "$dir/$fname" ]; then
                 compose_file="$dir/$fname"
                 break 2
             fi
         done
     done
 
-    if [[ -n "$compose_file" ]]; then
+    if [ -n "$compose_file" ]; then
         ux_info "Using compose file: $compose_file"
 
         # Use absolute compose path, no directory change
-        local -a compose_args=("-f" "$compose_file")
-
         # Capture current start time (if container exists) to detect no-op restarts
-        local container_id=""
-        local old_started=""
-        container_id=$(docker compose "${compose_args[@]}" ps -q "$service" 2>/dev/null | head -1)
-        if [[ -n "$container_id" ]]; then
+        container_id=$(docker compose -f "$compose_file" ps -q "$service" 2>/dev/null | head -1)
+        old_started=""
+        if [ -n "$container_id" ]; then
             old_started=$(docker inspect -f '{{.State.StartedAt}}' "$container_id" 2>/dev/null || echo "")
         fi
 
         # First try a standard restart
-        if docker compose "${compose_args[@]}" restart "$service" "$@"; then
+        if docker compose -f "$compose_file" restart "$service" "$@"; then
             # Check if start time changed; if not, force recreate
-            local new_started=""
-            if [[ -n "$container_id" ]]; then
+            new_started=""
+            if [ -n "$container_id" ]; then
                 new_started=$(docker inspect -f '{{.State.StartedAt}}' "$container_id" 2>/dev/null || echo "")
             fi
 
-            if [[ -n "$old_started" && -n "$new_started" && "$old_started" == "$new_started" ]]; then
+            if [ -n "$old_started" ] && [ -n "$new_started" ] && [ "$old_started" = "$new_started" ]; then
                 ux_warning "Restart did not change start time; forcing recreate (up -d --force-recreate --no-deps)."
-                docker compose "${compose_args[@]}" up -d --force-recreate --no-deps "$service"
-                container_id=$(docker compose "${compose_args[@]}" ps -q "$service" 2>/dev/null | head -1)
-                if [[ -n "$container_id" ]]; then
+                docker compose -f "$compose_file" up -d --force-recreate --no-deps "$service"
+                container_id=$(docker compose -f "$compose_file" ps -q "$service" 2>/dev/null | head -1)
+                if [ -n "$container_id" ]; then
                     new_started=$(docker inspect -f '{{.State.StartedAt}}' "$container_id" 2>/dev/null || echo "")
                 fi
             fi
 
-            if [[ -n "$container_id" ]]; then
-                local status_line
+            if [ -n "$container_id" ]; then
                 status_line=$(docker ps --filter "id=$container_id" --format "{{.Names}} {{.Status}}")
-                [[ -n "$status_line" ]] && ux_info "Status: $status_line"
+                [ -n "$status_line" ] && ux_info "Status: $status_line"
             fi
             return 0
         else
             ux_warning "docker compose restart failed; attempting compose up -d."
-            if docker compose "${compose_args[@]}" up -d --no-deps "$service"; then
-                container_id=$(docker compose "${compose_args[@]}" ps -q "$service" 2>/dev/null | head -1)
-                if [[ -n "$container_id" ]]; then
-                    local status_line
+            if docker compose -f "$compose_file" up -d --no-deps "$service"; then
+                container_id=$(docker compose -f "$compose_file" ps -q "$service" 2>/dev/null | head -1)
+                if [ -n "$container_id" ]; then
                     status_line=$(docker ps --filter "id=$container_id" --format "{{.Names}} {{.Status}}")
-                    [[ -n "$status_line" ]] && ux_info "Status: $status_line"
+                    [ -n "$status_line" ] && ux_info "Status: $status_line"
                 fi
                 return 0
             fi
@@ -194,19 +187,19 @@ dcr() {
 
     # Fallback: restart container directly
     if docker container inspect "$service" >/dev/null 2>&1; then
-        ux_warning "Compose file not found (searched: ${unique_dirs[*]}). Falling back to docker restart."
+        ux_warning "Compose file not found (searched: ${unique_dirs}). Falling back to docker restart."
         docker restart "$service" "$@"
         return $?
     fi
 
-    ux_error "No compose file found (searched: ${unique_dirs[*]}) and container '$service' not found."
+    ux_error "No compose file found (searched: ${unique_dirs}) and container '$service' not found."
     return 1
 }
 
 # Filter dcl logs for errors
 # Usage: dcl_errors <service_name_or_container>
 dcl_errors() {
-    local service="$1"
+    service="$1"
     if [ -z "$service" ]; then
         ux_usage "dcl_errors" "<service_name_or_container>" "Filter dcl logs for ERROR/WARN/INFO"
         return 1
@@ -238,7 +231,7 @@ alias dinspect='docker inspect' # 컨테이너/이미지 상세 정보
 # 사용법: dbash <container_name_or_id>
 # Now uses central UX library for consistent styling
 dbash() {
-    # UX library is already loaded globally in main.bash
+    # UX library is already loaded globally in main.bash/main.zsh
     if [ -z "$1" ]; then
         ux_usage "dbash" "<container_name_or_id>" "Access container shell (tries bash, falls back to sh)"
         echo ""
@@ -248,7 +241,7 @@ dbash() {
         return 1
     fi
 
-    local container="$1"
+    container="$1"
 
     # Try bash first, fallback to sh
     if docker exec -it "$container" /bin/bash 2>/dev/null; then
@@ -264,7 +257,6 @@ dbash() {
 
 # 실행 중인 모든 컨테이너 정지
 dstopall() {
-    local ids
     ids=$(docker ps -q)
     if [ -z "$ids" ]; then
         ux_warning "실행 중인 컨테이너가 없습니다."
@@ -272,12 +264,11 @@ dstopall() {
     fi
     echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} 모든 실행 중 컨테이너 정지:"
     echo "${UX_SUCCESS}$ids${UX_RESET}"
-    docker stop "$ids"
+    docker stop $ids
 }
 
 # 중지된 컨테이너 일괄 삭제
 drmall() {
-    local ids
     ids=$(docker ps -aq)
     if [ -z "$ids" ]; then
         ux_warning "삭제할 컨테이너가 없습니다."
@@ -285,12 +276,11 @@ drmall() {
     fi
     echo "${UX_BOLD}${UX_ERROR}[Docker]${UX_RESET} 모든 컨테이너 삭제:"
     echo "${UX_SUCCESS}$ids${UX_RESET}"
-    docker rm "$ids"
+    docker rm $ids
 }
 
 # dangling(태그 없는) 이미지 삭제
 drm_dangling() {
-    local ids
     ids=$(docker images -f "dangling=true" -q)
     if [ -z "$ids" ]; then
         ux_warning "삭제할 dangling 이미지가 없습니다."
@@ -298,7 +288,7 @@ drm_dangling() {
     fi
     echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} dangling 이미지 삭제:"
     echo "${UX_SUCCESS}$ids${UX_RESET}"
-    docker rmi "$ids"
+    docker rmi $ids
 }
 
 # Docker 시스템 기본 청소 (사용되지 않는 컨테이너/네트워크/이미지 등)
@@ -356,7 +346,6 @@ dvol_rm() {
 
 # 모든 dangling 볼륨 일괄 삭제
 dvol_rm_dangling() {
-    local ids
     ids=$(docker volume ls -f dangling=true -q)
     if [ -z "$ids" ]; then
         ux_warning "삭제할 dangling 볼륨이 없습니다."
@@ -364,34 +353,38 @@ dvol_rm_dangling() {
     fi
     echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} dangling 볼륨 삭제:"
     echo "${UX_SUCCESS}$ids${UX_RESET}"
-    docker volume rm "$ids"
+    docker volume rm $ids
     ux_success "dangling 볼륨 삭제 완료"
 }
 
 # 컨테이너 환경변수 확인 (정렬)
 # 사용법: denv <container_name_or_id> (interactive if no args)
 denv() {
-    local container_name="$1"
+    container_name="$1"
 
     if [ -z "$container_name" ]; then
-        # Show menu of running containers
-        local containers
-        mapfile -t containers < <(docker ps --format '{{.Names}}' 2>/dev/null)
+        # Show menu of running containers - use temporary file for container list
+        _tmp_containers=$(mktemp)
+        docker ps --format '{{.Names}}' 2>/dev/null >"$_tmp_containers"
 
-        if [ ${#containers[@]} -eq 0 ]; then
+        if [ ! -s "$_tmp_containers" ]; then
             ux_warning "No running containers found."
+            rm -f "$_tmp_containers"
             return 1
         fi
 
-        local selection_idx
-        selection_idx=$(ux_menu "Select container to inspect:" "${containers[@]}")
+        # Call ux_menu with temp file contents
+        selection_idx=$(ux_menu "Select container to inspect:" < "$_tmp_containers")
 
         if [ -z "$selection_idx" ]; then
             ux_info "Operation cancelled."
+            rm -f "$_tmp_containers"
             return 0
         fi
 
-        container_name="${containers[$selection_idx]}"
+        # Get the selected container name
+        container_name=$(sed -n "${selection_idx}p" "$_tmp_containers")
+        rm -f "$_tmp_containers"
     fi
 
     if [ -z "$container_name" ]; then
@@ -437,16 +430,16 @@ dlog_last() {
         ux_usage "dlog_last" "<container_name> [줄수]" "컨테이너 최근 N줄 로그 조회"
         return 1
     fi
-    local container="$1"
-    local lines="${2:-200}"
+    container="$1"
+    lines="${2:-200}"
     echo "${UX_BOLD}${UX_WARNING}[Docker]${UX_RESET} $container (최근 $lines줄):"
     docker logs --tail "$lines" "$container"
 }
 
 # 모든 컨테이너를 tar 파일로 백업
 dexport() {
-    local backup_dir="$HOME/dotfiles/backup"
-    local containers
+    backup_dir="$HOME/dotfiles/backup"
+    containers=""
 
     echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} 백업 디렉토리 확인: ${UX_WARNING}$backup_dir${UX_RESET}"
     mkdir -p "$backup_dir"
@@ -480,29 +473,27 @@ dexport() {
 
 # WSL Docker 설치 (대화형 스크립트)
 dinstall() {
-    bash "$HOME/dotfiles/mytool/install-docker.sh"
+    sh "$HOME/dotfiles/shell-common/tools/custom/install-docker.sh"
 }
 
 # WSL Docker 제거 (대화형 스크립트)
 duninstall() {
-    bash "$HOME/dotfiles/mytool/uninstall-docker.sh"
+    sh "$HOME/dotfiles/shell-common/tools/custom/uninstall-docker.sh"
 }
 
 # Docker 서비스 자동 시작 설정 (대화형 스크립트)
 denable() {
-    bash "$HOME/dotfiles/mytool/enable-docker.sh"
+    sh "$HOME/dotfiles/shell-common/tools/custom/enable-docker.sh"
 }
 
 # Docker 회사 프록시 설정 (대화형 스크립트)
 dproxy_setup() {
-    bash "$HOME/dotfiles/mytool/docker-configure-proxy.sh"
+    sh "$HOME/dotfiles/shell-common/tools/custom/docker-configure-proxy.sh"
 }
-
-# Docker 회사 프록시 설정 도움말
 
 # Docker Proxy 설정 확인
 dproxy_show() {
-    local proxy_conf="/etc/systemd/system/docker.service.d/http-proxy.conf"
+    proxy_conf="/etc/systemd/system/docker.service.d/http-proxy.conf"
 
     ux_header "Docker Proxy Configuration"
 
