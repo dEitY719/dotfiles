@@ -53,12 +53,16 @@ source "$(dirname "$_SCRIPT_PATH")/util/init.bash"
 DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
 export DOTFILES_BASH_DIR
 
+# Set up SHELL_COMMON path early for unified UX library loading
+SHELL_COMMON="${DOTFILES_BASH_DIR}/../shell-common"
+export SHELL_COMMON
+
 # --- UX Library Initialization ---
 # Load central UX library for consistent styling across all functions
 # This provides: colors, output functions, progress indicators, interactive prompts, tables
-# Replaces the old beauty_log.bash and log_util.bash system
+# Unified library is now at shell-common/tools/ux_lib/
 # shellcheck source=/dev/null
-source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
+source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 
 # Initialize a counter for sourced files (global integer)
 declare -gi SOURCED_FILES_COUNT=0
@@ -122,7 +126,7 @@ shopt -s nullglob
 
 # --- Load shell-common environment variables first ---
 # These are POSIX-compatible and work in both bash and zsh
-SHELL_COMMON="${DOTFILES_BASH_DIR}/../shell-common"
+# (SHELL_COMMON already defined earlier for UX library loading)
 if [ -d "${SHELL_COMMON}/env" ]; then
     for f in "${SHELL_COMMON}/env/"*.sh; do
         [ -f "$f" ] || continue

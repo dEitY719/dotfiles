@@ -71,8 +71,8 @@ fi
 # Phase 3: Load UX Library (MUST load before aliases/functions that use it)
 # ═══════════════════════════════════════════════════════════════
 
-if [ -f "${ZSH_DOTFILES}/ux_lib/ux_lib.zsh" ]; then
-    source "${ZSH_DOTFILES}/ux_lib/ux_lib.zsh" 2>/dev/null || {
+if [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
+    source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null || {
         echo "Warning: Failed to load UX library" >&2
     }
 fi
