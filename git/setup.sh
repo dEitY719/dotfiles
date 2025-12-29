@@ -18,9 +18,9 @@ HOME_GITCONFIG="${HOME}/.gitconfig"
 
 
 # --- Logging Initialization ---
-# ux_lib.bash를 로드합니다.
-# setup.sh가 dotfiles/git에 있으므로, dotfiles/bash/ux_lib는 ../bash/ux_lib에 있습니다.
-UX_LIB_SCRIPT="${DOTFILES_GIT_DIR}/../bash/ux_lib/ux_lib.bash"
+# ux_lib.sh를 로드합니다.
+# setup.sh가 dotfiles/git에 있으므로, shell-common/tools/ux_lib는 ../shell-common/tools/ux_lib에 있습니다.
+UX_LIB_SCRIPT="${DOTFILES_GIT_DIR}/../shell-common/tools/ux_lib/ux_lib.sh"
 
 
 if [[ -f "${UX_LIB_SCRIPT}" ]]; then
