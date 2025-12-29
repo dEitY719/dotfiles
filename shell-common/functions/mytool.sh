@@ -1,10 +1,7 @@
-#!/bin/bash
-
-# =============================================================================
-# MyTool - Personal Utility Functions
-# =============================================================================
-
-# 도움말 함수
+#!/bin/sh
+# shell-common/functions/mytool.sh
+# MyTool - Personal Utility Functions (POSIX-compatible)
+# Shared between bash and zsh
 
 # 하드웨어 정보 표시 함수
 get_hw_info() {
@@ -36,18 +33,12 @@ agents_init() {
     bash "$script" "$@"
 }
 
-# =============================================================================
-# Aliases
-# =============================================================================
-
-# MyTool 도움말 별칭
-alias mthelp='mytool_help'
-
-# 소스 번들링 짧은 별칭
-alias sp='srcpack --ext .py --max-bytes 33000'
-
-# 하드웨어 정보 별칭
-alias hwinfo='get_hw_info'
-
-# AGENTS.md 생성 짧은 별칭
-alias ai='agents_init'
+# Powerlevel10k 설치 함수
+install-p10k() {
+    local script="$HOME/dotfiles/mytool/install-p10k.sh"
+    if [ ! -f "$script" ]; then
+        echo "Error: install-p10k script not found: $script" >&2
+        return 2
+    fi
+    bash "$script" "$@"
+}

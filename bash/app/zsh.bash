@@ -362,6 +362,11 @@ zsh-help() {
     ux_table_row "zsh-plugins" "List plugins"
     echo ""
 
+    ux_section "Required/Recommended Packages"
+    ux_table_row "install-p10k" "Install powerlevel10k theme"
+    ux_table_row "p10k configure" "Configure powerlevel10k"
+    echo ""
+
     ux_section "Status"
     ux_table_row "zsh-version" "Show zsh version"
     ux_table_row "zsh-info" "System info"

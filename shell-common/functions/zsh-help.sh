@@ -19,7 +19,7 @@ alias bash-to='bash-switch'
 # ─────────────────────────────────────────────────────────────────
 # Required Packages for Enhanced Zsh
 # ─────────────────────────────────────────────────────────────────
-# install-powerlevel10k  - Install powerlevel10k theme for modern zsh prompt
+# install-p10k  - Install powerlevel10k theme for modern zsh prompt
 #
 # Note: powerlevel10k requires:
 #   - git (for cloning the theme repository)

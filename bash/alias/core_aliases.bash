@@ -3,8 +3,18 @@
 
 # 환경 변수 리로드
 alias reload='exec bash'
-alias src='source ~/.bashrc'
 alias rs='reload'
+
+# Shell-aware configuration reload (sources appropriate rc file)
+src() {
+    if [ -n "$ZSH_VERSION" ]; then
+        # Running in zsh
+        source ~/.zshrc
+    else
+        # Default to bash
+        source ~/.bashrc
+    fi
+}
 
 # 파일 시스템 탐색
 alias ll='ls -alF'   # 상세 파일 정보 표시

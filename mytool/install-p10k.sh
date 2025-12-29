@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-powerlevel10k.sh
+# mytool/install-p10k.sh
 # Install and configure powerlevel10k theme for zsh
 
 set -e
@@ -157,7 +157,7 @@ _check_wget() {
 }
 
 # Main installation flow
-install-powerlevel10k() {
+install-p10k() {
     ux_info "Installing powerlevel10k..."
 
     if ! _check_dependencies; then
@@ -195,5 +195,5 @@ install-powerlevel10k() {
 
 # Run installation if script is executed directly
 if [ "${0##*/}" = "install-powerlevel10k.sh" ]; then
-    install-powerlevel10k
+    install-p10k
 fi
