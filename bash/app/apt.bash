@@ -43,8 +43,8 @@ alias asize='du -sh /var/cache/apt/archives/' # Check cache size
 # Show package dependencies
 adep() {
     if [ $# -eq 0 ]; then
-        echo "Usage: adep <package-name>"
-        echo "Example: adep firefox"
+        ux_usage "adep" "<package-name>" "Show package dependencies"
+        ux_bullet "adep firefox"
         return 1
     fi
     apt-cache depends "$1"
@@ -53,8 +53,8 @@ adep() {
 # Show reverse dependencies (which packages need this)
 ardep() {
     if [ $# -eq 0 ]; then
-        echo "Usage: ardep <package-name>"
-        echo "Example: ardep libc6"
+        ux_usage "ardep" "<package-name>" "Show reverse dependencies"
+        ux_bullet "ardep libc6"
         return 1
     fi
     apt-cache rdepends "$1"
@@ -63,8 +63,8 @@ ardep() {
 # List all files installed by a package
 afiles() {
     if [ $# -eq 0 ]; then
-        echo "Usage: afiles <package-name>"
-        echo "Example: afiles curl"
+        ux_usage "afiles" "<package-name>" "List files installed by package"
+        ux_bullet "afiles curl"
         return 1
     fi
     dpkg -L "$1"
@@ -73,8 +73,8 @@ afiles() {
 # Find which package owns a file
 awhich() {
     if [ $# -eq 0 ]; then
-        echo "Usage: awhich <file-path>"
-        echo "Example: awhich /usr/bin/curl"
+        ux_usage "awhich" "<file-path>" "Find which package owns a file"
+        ux_bullet "awhich /usr/bin/curl"
         return 1
     fi
     dpkg -S "$1"

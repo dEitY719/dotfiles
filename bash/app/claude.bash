@@ -86,7 +86,7 @@ ensure_jq() {
         # jq already installed - silent pass
         return 0
     else
-        echo "⚠️  jq is not installed. Installing..."
+        ux_warning "jq is not installed. Installing..."
         if command -v apt-get &>/dev/null; then
             sudo apt-get update && sudo apt-get install -y jq
         elif command -v brew &>/dev/null; then
@@ -94,19 +94,19 @@ ensure_jq() {
         elif command -v yum &>/dev/null; then
             sudo yum install -y jq
         else
-            echo "❌ Cannot determine package manager. Please install jq manually."
-            echo "   For Ubuntu/Debian: sudo apt-get install jq"
-            echo "   For macOS: brew install jq"
-            echo "   For CentOS/RHEL: sudo yum install jq"
+            ux_error "Cannot determine package manager. Please install jq manually."
+            ux_bullet "Ubuntu/Debian: ${UX_BOLD}sudo apt-get install jq${UX_RESET}"
+            ux_bullet "macOS: ${UX_BOLD}brew install jq${UX_RESET}"
+            ux_bullet "CentOS/RHEL: ${UX_BOLD}sudo yum install jq${UX_RESET}"
             return 1
         fi
 
         if command -v jq &>/dev/null; then
-            echo "✅ jq installed successfully"
+            ux_success "jq installed successfully"
             jq --version
             return 0
         else
-            echo "❌ Failed to install jq"
+            ux_error "Failed to install jq"
             return 1
         fi
     fi
@@ -129,51 +129,55 @@ claude_init() {
     local skills_source_dir="$HOME/dotfiles/bash/claude/skills"
     local skills_target_dir="$HOME/.claude/skills"
 
-    echo "🔧 Initializing Claude Code configuration..."
+    ux_info "Initializing Claude Code configuration..."
+    echo ""
 
     # Create ~/.claude directory if not exists
     if [[ ! -d "$HOME/.claude" ]]; then
-        echo "📁 Creating ~/.claude directory..."
+        ux_info "Creating ~/.claude directory..."
         mkdir -p "$HOME/.claude"
     fi
 
     # Create ~/.claude/skills directory if not exists
     if [[ ! -d "$skills_target_dir" ]]; then
-        echo "📁 Creating ~/.claude/skills directory..."
+        ux_info "Creating ~/.claude/skills directory..."
         mkdir -p "$skills_target_dir"
     fi
 
     # Handle settings.json
+    ux_section "Settings Configuration"
     if [[ -L "$settings_target" ]]; then
-        echo "✅ settings.json symbolic link already exists"
+        ux_success "settings.json symbolic link already exists"
     elif [[ -f "$settings_target" ]]; then
-        echo "⚠️  settings.json exists as regular file"
-        echo "   Backing up to settings.json.backup..."
+        ux_warning "settings.json exists as regular file"
+        ux_info "Backing up to settings.json.backup..."
         mv "$settings_target" "$settings_target.backup"
         ln -s "$settings_source" "$settings_target"
-        echo "✅ Created symbolic link for settings.json"
+        ux_success "Created symbolic link for settings.json"
     else
         ln -s "$settings_source" "$settings_target"
-        echo "✅ Created symbolic link for settings.json"
+        ux_success "Created symbolic link for settings.json"
     fi
+    echo ""
 
     # Handle statusline-command.sh
+    ux_section "Statusline Configuration"
     if [[ -L "$statusline_target" ]]; then
-        echo "✅ statusline-command.sh symbolic link already exists"
+        ux_success "statusline-command.sh symbolic link already exists"
     elif [[ -f "$statusline_target" ]]; then
-        echo "⚠️  statusline-command.sh exists as regular file"
-        echo "   Backing up to statusline-command.sh.backup..."
+        ux_warning "statusline-command.sh exists as regular file"
+        ux_info "Backing up to statusline-command.sh.backup..."
         mv "$statusline_target" "$statusline_target.backup"
         ln -s "$statusline_source" "$statusline_target"
-        echo "✅ Created symbolic link for statusline-command.sh"
+        ux_success "Created symbolic link for statusline-command.sh"
     else
         ln -s "$statusline_source" "$statusline_target"
-        echo "✅ Created symbolic link for statusline-command.sh"
+        ux_success "Created symbolic link for statusline-command.sh"
     fi
+    echo ""
 
     # Handle skills directory
-    echo ""
-    echo "📚 Setting up Claude Code skills..."
+    ux_section "Claude Code Skills"
     local skill_count=0
     if [[ -d "$skills_source_dir" ]]; then
         for skill_file in "$skills_source_dir"/*.md; do
@@ -183,43 +187,44 @@ claude_init() {
                 local skill_target="$skills_target_dir/$skill_name"
 
                 if [[ -L "$skill_target" ]]; then
-                    echo "  ✅ $skill_name (already linked)"
+                    ux_success "$skill_name (already linked)"
                 elif [[ -f "$skill_target" ]]; then
-                    echo "  ⚠️  $skill_name exists as regular file"
-                    echo "     Backing up to $skill_name.backup..."
+                    ux_warning "$skill_name exists as regular file"
+                    ux_info "Backing up to $skill_name.backup..."
                     mv "$skill_target" "$skill_target.backup"
                     ln -s "$skill_file" "$skill_target"
-                    echo "  ✅ $skill_name (linked)"
+                    ux_success "$skill_name (linked)"
                 else
                     ln -s "$skill_file" "$skill_target"
-                    echo "  ✅ $skill_name (linked)"
+                    ux_success "$skill_name (linked)"
                 fi
                 ((skill_count++))
             fi
         done
 
         if [[ $skill_count -eq 0 ]]; then
-            echo "  ℹ️  No skill files found in $skills_source_dir"
+            ux_info "No skill files found in $skills_source_dir"
         else
-            echo "  📊 Total: $skill_count skill(s) linked"
+            ux_success "Total: $skill_count skill(s) linked"
         fi
     else
-        echo "  ⚠️  Skills source directory not found: $skills_source_dir"
+        ux_warning "Skills source directory not found: $skills_source_dir"
     fi
+    echo ""
 
+    ux_header "Claude Code Initialization Complete"
     echo ""
-    echo "✨ Claude Code configuration initialization complete!"
-    echo ""
-    echo "📍 Configuration files:"
+
+    ux_section "Configuration Files"
     local config_target
     for config_target in "$settings_target" "$statusline_target"; do
         if [[ -e "$config_target" ]]; then
             ls -la -- "$config_target"
         fi
     done
-
     echo ""
-    echo "📍 Skills:"
+
+    ux_section "Skills"
     if [[ -d "$skills_target_dir" ]]; then
         local linked_skill_found=0
         local skill_target_file
@@ -230,7 +235,7 @@ claude_init() {
             fi
         done
         if [[ $linked_skill_found -eq 0 ]]; then
-            echo "  (no skills found)"
+            ux_info "(no skills found)"
         fi
     fi
 }
@@ -240,19 +245,19 @@ claude_edit_settings() {
     local settings_file="$HOME/dotfiles/bash/claude/settings.json"
 
     if [[ ! -f "$settings_file" ]]; then
-        echo "❌ Settings file not found: $settings_file"
+        ux_error "Settings file not found: $settings_file"
         return 1
     fi
 
-    echo "📝 Editing Claude Code settings..."
-    echo "   File: $settings_file"
+    ux_header "Claude Code Settings"
+    ux_info "File: $settings_file"
     echo ""
 
     ${EDITOR:-vim} "$settings_file"
 
     echo ""
-    echo "✅ Settings file edited"
-    echo "   Changes will take effect immediately (settings.json is symlinked)"
+    ux_success "Settings file edited"
+    ux_info "Changes will take effect immediately (settings.json is symlinked)"
 }
 
 # (5) Claude Code workflow aliases
@@ -262,8 +267,9 @@ alias clplan='claude'
 # 테스트 작성 및 실행
 cltest() {
     if [[ -z "$1" ]]; then
-        echo "사용법: cltest \"요청내용\""
-        echo "예: cltest \"사용자 인증 테스트 작성해줘\""
+        ux_header "cltest"
+        ux_usage "cltest" "\"request\"" "Run Claude with prompt for test writing"
+        ux_bullet "Example: ${UX_INFO}cltest \"사용자 인증 테스트 작성해줘\"${UX_RESET}"
         return 1
     fi
     claude -p "$1"
@@ -272,16 +278,17 @@ cltest() {
 # Skip permissions 모드 (주의해서 사용)
 clskip() {
     if [[ -z "$1" ]]; then
-        echo "사용법: clskip \"요청내용\""
-        echo "예: clskip \"이 모듈을 리팩토링해줘\""
+        ux_header "clskip"
+        ux_usage "clskip" "\"request\"" "Run Claude skipping permission prompts (caution)"
+        ux_bullet "Example: ${UX_INFO}clskip \"이 모듈을 리팩토링해줘\"${UX_RESET}"
         echo ""
-        echo "⚠️  주의: 모든 권한 프롬프트를 무시합니다."
-        echo "   작은 범위부터 시작하고 신중하게 사용하세요."
+        ux_warning "모든 권한 프롬프트를 무시합니다"
+        ux_bullet "작은 범위부터 시작하고 신중하게 사용하세요"
         return 1
     fi
 
-    echo "⚠️  Skip permissions 모드로 실행합니다..."
-    echo "   요청: $1"
+    ux_warning "Skip permissions 모드로 실행합니다"
+    ux_info "요청: $1"
     echo ""
     claude --dangerously-skip-permissions -p "$1"
 }

@@ -17,12 +17,12 @@ gpustatus() {
     local gpu_script="${HOME}/dotfiles/mytool/gpu_status.sh"
 
     if [ ! -f "$gpu_script" ]; then
-        echo "❌ GPU status script not found at: $gpu_script"
+        ux_error "GPU status script not found at: $gpu_script"
         return 1
     fi
 
     if [ ! -x "$gpu_script" ]; then
-        echo "❌ GPU status script is not executable"
+        ux_error "GPU status script is not executable"
         return 1
     fi
 
@@ -33,57 +33,53 @@ gpustatus() {
 # GPU 간략 정보 (하드웨어 + 레이어 오프로드)
 # 사용 예: gpuinfo
 gpuinfo() {
-    echo ""
-    printf "%s\n" "$(printf '═%.0s' {1..63})"
-    printf "%-63s\n" "GPU 하드웨어 정보 (요약)"
-    printf "%s\n" "$(printf '═%.0s' {1..63})"
-    echo ""
+    ux_header "GPU 하드웨어 정보"
 
     # 1. WSL2 호스트 GPU 정보
+    ux_section "WSL2 호스트 GPU"
     if [ -x /usr/lib/wsl/lib/nvidia-smi ]; then
-        echo "📌 WSL2 호스트 GPU:"
         /usr/lib/wsl/lib/nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader 2>/dev/null |
             awk -F, '{printf "  [GPU %s] %s (%s VRAM)\n", $1, $2, $3}'
     else
-        echo "⚠️  nvidia-smi not found"
+        ux_warning "nvidia-smi not found"
     fi
     echo ""
 
     # 2. Ollama GPU 메모리 인식
-    echo "📌 Ollama GPU 메모리:"
+    ux_section "Ollama GPU 메모리"
     if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "^ollama$"; then
         local gpu_mem
         gpu_mem=$(docker logs ollama 2>&1 | grep "gpu memory" | tail -1 | grep -oP 'available="\K[^"]+')
         if [ -n "$gpu_mem" ]; then
-            echo "  ✅ GPU 인식됨: $gpu_mem available"
+            ux_success "GPU 인식됨: $gpu_mem available"
         else
-            echo "  ⚠️  GPU 메모리 로그 없음 (모델 미로드)"
+            ux_warning "GPU 메모리 로그 없음 (모델 미로드)"
         fi
     else
-        echo "  ⚠️  Ollama 컨테이너 실행 중 아님"
+        ux_warning "Ollama 컨테이너 실행 중 아님"
     fi
     echo ""
 
     # 3. Ollama GPU 레이어 오프로드
-    echo "📌 GPU 레이어 오프로드:"
+    ux_section "GPU 레이어 오프로드"
     if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "^ollama$"; then
         local offload
         offload=$(docker logs ollama 2>&1 | grep "offloaded.*layers to GPU" | tail -1 | grep -oP 'offloaded \K\d+/\d+' 2>/dev/null)
         if [ -n "$offload" ]; then
             if [[ "$offload" == "0/"* ]]; then
-                echo "  ❌ $offload (CPU 모드)"
+                ux_error "$offload (CPU 모드)"
             else
-                echo "  ✅ $offload layers"
+                ux_success "$offload layers"
             fi
         else
-            echo "  ⚠️  아직 모델 로드 안됨"
+            ux_warning "아직 모델 로드 안됨"
         fi
     else
-        echo "  ⚠️  Ollama 컨테이너 실행 중 아님"
+        ux_warning "Ollama 컨테이너 실행 중 아님"
     fi
     echo ""
 
-    echo "상세 정보: gpustatus"
+    ux_info "상세 정보: ${UX_BOLD}gpustatus${UX_RESET}"
     echo ""
 }
 
