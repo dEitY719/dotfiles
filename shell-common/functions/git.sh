@@ -33,11 +33,12 @@ gl() {
     done
 
     # Execute git log with appropriate flags
+    # Use --no-pager to avoid paging for inline display
     if [ $show_all -eq 1 ]; then
         # Show all commits
-        eval "git log --graph --pretty=tformat:'%Cred%h %C(bold blue)%d %Creset%s %Cgreen%ad %C(yellow)%an' --date=short $args"
+        eval "git --no-pager log --graph --pretty=tformat:'%Cred%h %C(bold blue)%d %Creset%s %Cgreen%ad %C(yellow)%an' --date=short $args"
     else
         # Show only last 11 commits
-        eval "git log --graph --pretty=tformat:'%Cred%h %C(bold blue)%d %Creset%s %Cgreen%ad %C(yellow)%an' --date=short -n 11 $args"
+        eval "git --no-pager log --graph --pretty=tformat:'%Cred%h %C(bold blue)%d %Creset%s %Cgreen%ad %C(yellow)%an' --date=short -n 11 $args"
     fi
 }
