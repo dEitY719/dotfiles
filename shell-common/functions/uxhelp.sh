@@ -1,17 +1,16 @@
-#!/bin/bash
-
-# ~/dotfiles/bash/util/ux.bash
-# UX library utilities and help function
+#!/usr/bin/env sh
+# shell-common/functions/uxhelp.sh
+# UX library help function (POSIX-compatible)
 
 # Alias to run the interactive UX demo
-alias ux-demo='bash "${DOTFILES_BASH_DIR}/../shell-common/tools/custom/demo_ux.sh"'
+alias ux-demo='bash "${SHELL_COMMON}/tools/custom/demo_ux.sh"'
 
 # =============================================================================
 # UX Help Function
 # =============================================================================
 
 uxhelp() {
-    # UX library is already loaded globally in main.bash
+    # UX library is already loaded globally in main.bash/main.zsh
     ux_header "UX Library - Styling Guide"
 
     ux_info "The UX library provides consistent styling across all dotfiles functions"
@@ -118,7 +117,7 @@ EOF
     # --- Demo Section ---
     ux_section "Try It Out"
     ux_info "Run the interactive demo to see all features in action:"
-    echo "  ${UX_SUCCESS}ux-demo${UX_RESET}  or  ${UX_SUCCESS}bash \${DOTFILES_BASH_DIR}/../shell-common/tools/custom/demo_ux.sh${UX_RESET}"
+    echo "  ${UX_SUCCESS}ux-demo${UX_RESET}  or  ${UX_SUCCESS}bash \${SHELL_COMMON}/tools/custom/demo_ux.sh${UX_RESET}"
     echo ""
 
     # --- Documentation Section ---
@@ -133,3 +132,6 @@ EOF
     ux_info "For more help topics, run ${UX_BOLD}myhelp${UX_RESET}"
     echo ""
 }
+
+# Register help description
+HELP_DESCRIPTIONS["uxhelp"]="UX library functions and styling guide"
