@@ -1,23 +1,26 @@
 #!/bin/bash
 
-
-
-# setup.sh: Entry point to set up all dotfiles components
-
-
-
-# Exit immediately if a command exits with a non-zero status
+# setup.sh: Shell environment setup orchestrator
+#
+# PURPOSE: Set up all shell configurations (bash, zsh, git)
+# WHEN TO RUN: On initial dotfiles installation (REQUIRED)
+#
+# This script orchestrates the setup of individual shell environments.
+# Each sub-script performs specific initialization:
+#   - bash/setup.sh: Sets DOTFILES_BASH_DIR, SHELL_COMMON environment variables
+#   - zsh/setup.sh: Provides user feedback and guidance
+#   - git/setup.sh: Sets up git configuration
+#
+# See SETUP_GUIDE.md for detailed information
+#
+# ⚠️  IMPORTANT: Do NOT delete bash/setup.sh, zsh/setup.sh, or git/setup.sh
+#     They perform special initialization beyond simple symlink creation
 
 set -e
 
-
-
 # Run setup scripts for bash, zsh, and git
-
 ./bash/setup.sh
-
 ./zsh/setup.sh
-
 ./git/setup.sh
 
 

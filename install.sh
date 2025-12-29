@@ -1,7 +1,23 @@
 #!/bin/bash
 
-# Dotfiles installation script
-# Sets up symlinks and configuration files for the dotfiles repository
+# install.sh: Claude and PostgreSQL configuration setup
+#
+# PURPOSE: Set up Claude IDE and PostgreSQL configurations
+# WHEN TO RUN: After ./setup.sh (on initial installation) or anytime (optional)
+#
+# ⚠️  IMPORTANT DISTINCTION:
+# This script is OPTIONAL and supplements ./setup.sh
+# It provides Claude IDE integration and PostgreSQL setup
+#
+# RELATIONSHIP WITH setup.sh:
+#   - setup.sh (REQUIRED): Shell environment + symlinks (bash, zsh, git)
+#   - install.sh (OPTIONAL): Claude + PostgreSQL setup + symlink re-setup
+#
+# DOES NOT do:
+#   - Set DOTFILES_BASH_DIR or SHELL_COMMON environment variables
+#   - Install bash/zsh with special initialization
+#
+# See SETUP_GUIDE.md for detailed information on script relationships
 
 set -e
 

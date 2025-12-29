@@ -1,6 +1,20 @@
 #!/bin/bash
 
-# setup.sh
+# bash/setup.sh: Bash shell environment setup
+#
+# PURPOSE: Set up bash shell with special initialization
+# WHEN TO RUN: Via ./setup.sh (do NOT run manually)
+#
+# SPECIAL INITIALIZATION (why this file is REQUIRED):
+#   1. Sets DOTFILES_BASH_DIR environment variable (needed by bash/main.bash)
+#   2. Sets SHELL_COMMON environment variable (needed by all bash functions)
+#   3. Creates ~/.bashrc symlink
+#   4. Creates ~/.bash_profile symlink (optional)
+#
+# These environment variables are NOT set by install.sh and are CRITICAL
+# for bash shell initialization to work properly.
+#
+# See SETUP_GUIDE.md for more information
 
 # --- Constants ---
 

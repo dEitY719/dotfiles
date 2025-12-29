@@ -1,7 +1,20 @@
 #!/bin/bash
 
-# zsh/setup.sh
-# Zsh setup script for dotfiles initialization
+# zsh/setup.sh: Zsh shell environment setup
+#
+# PURPOSE: Set up zsh shell and provide user guidance
+# WHEN TO RUN: Via ./setup.sh (do NOT run manually)
+#
+# SPECIAL FEATURES (why this file is REQUIRED):
+#   1. Creates ~/.zshrc symlink to zsh/zshrc
+#   2. Provides user feedback using UX library
+#   3. Displays completion messages and next steps
+#   4. Guides users on how to apply changes
+#
+# Note: While zsh/main.zsh is the main loader, this script ensures
+# proper initialization and user communication during setup.
+#
+# See SETUP_GUIDE.md for more information
 
 # --- Constants ---
 

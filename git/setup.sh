@@ -1,8 +1,16 @@
 #!/bin/bash
 
-# ~/dotfiles/git/setup.sh
-# setup.sh for Git dotfiles
-
+# git/setup.sh: Git configuration setup
+#
+# PURPOSE: Set up git configuration symlinks
+# WHEN TO RUN: Via ./setup.sh (do NOT run manually)
+#
+# SPECIAL FEATURES (why this file is REQUIRED):
+#   1. Creates ~/.gitconfig symlink to git/.gitconfig
+#   2. Provides user feedback using UX library
+#   3. Ensures proper git configuration initialization
+#
+# See SETUP_GUIDE.md for more information
 
 # --- Constants ---
 # 현재 스크립트가 위치한 git 디렉토리의 절대 경로를 설정합니다.
