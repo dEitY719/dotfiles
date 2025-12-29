@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# bash/app/local.bash.example
-# Copy this file to local.bash and customize for your machine
-
-# Example: Application-specific configs
-# export OPENAI_API_KEY="sk-..."
-# export GITHUB_TOKEN="ghp_..."
