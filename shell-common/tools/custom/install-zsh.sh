@@ -5,8 +5,8 @@
 
 set -e
 
-# Source the UX library
-source "$(dirname "$0")/../../bash/ux_lib/ux_lib.bash"
+# Initialize common tools environment
+source "$(dirname "$0")/init.sh" || exit 1
 
 main() {
     clear

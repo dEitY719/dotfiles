@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Source the UX library
+# Initialize common tools environment
 # This assumes the script is run from the dotfiles repo, or ux_lib is in a known path.
 # For portability, let's determine the script's own directory.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,7 +10,7 @@ if [ ! -f "${SCRIPT_DIR}/../bash/ux_lib/ux_lib.bash" ]; then
     exit 1
 fi
 
-source "${SCRIPT_DIR}/../bash/ux_lib/ux_lib.bash"
+source "$(dirname "$0")/init.sh" || exit 1
 
 format_number() {
     local num=$1

@@ -4,9 +4,9 @@
 
 set -e
 
-# Source the UX library
+# Initialize common tools environment
 DOTFILES_ROOT="${HOME}/dotfiles"
-source "${DOTFILES_ROOT}/bash/ux_lib/ux_lib.bash"
+source "$(dirname "$0")/init.sh" || exit 1
 
 # Check if ripgrep is already installed
 _check_installed() {

@@ -5,9 +5,9 @@
 
 set -e
 
-# Source the UX library
+# Initialize common tools environment
 
-source "$(dirname "$0")/../../bash/ux_lib/ux_lib.bash"
+source "$(dirname "$0")/init.sh" || exit 1
 
 DEFAULT_PYTHON_VERSIONS=(
     "3.10.18"

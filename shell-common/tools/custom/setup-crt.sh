@@ -5,9 +5,9 @@
 
 set -e
 
-# Source the UX library
+# Initialize common tools environment
 
-source "$(dirname "$0")/../../bash/ux_lib/ux_lib.bash"
+source "$(dirname "$0")/init.sh" || exit 1
 
 # Constants
 COMPANY_CA_CERT="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
