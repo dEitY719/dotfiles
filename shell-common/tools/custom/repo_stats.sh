@@ -5,11 +5,8 @@ set -euo pipefail
 # This assumes the script is run from the dotfiles repo, or ux_lib is in a known path.
 # For portability, let's determine the script's own directory.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ ! -f "${SCRIPT_DIR}/../bash/ux_lib/ux_lib.bash" ]; then
-    echo "Error: Could not find ux_lib.bash. Make sure this script is run from the dotfiles/mytool directory." >&2
-    exit 1
-fi
 
+# Load initialization (which includes UX library)
 source "$(dirname "$0")/init.sh" || exit 1
 
 format_number() {

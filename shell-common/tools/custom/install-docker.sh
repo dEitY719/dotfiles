@@ -4,8 +4,8 @@
 
 set -e
 
-# Initialize common tools environment
-# Path: shell-common/tools/custom/install-docker.sh -> ../../bash/ux_lib/ux_lib.bash
+# Initialize common tools environment (loads unified UX library via init.sh)
+# Path: shell-common/tools/custom/install-docker.sh -> ../ux_lib/ux_lib.sh
 source "$(dirname "$0")/init.sh" || exit 1
 
 # Main script

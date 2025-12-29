@@ -9,7 +9,7 @@ set -euo pipefail
 
 # Source UX library for consistent styling
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-UX_LIB_PATH="${SCRIPT_DIR}/../bash/ux_lib/ux_lib.bash"
+UX_LIB_PATH="${SCRIPT_DIR}/../ux_lib/ux_lib.sh"
 if [[ -f "$UX_LIB_PATH" ]]; then
     source "$UX_LIB_PATH"
 fi

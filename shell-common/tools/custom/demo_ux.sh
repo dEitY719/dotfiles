@@ -255,7 +255,7 @@ demo_real_world() {
     echo ""
 
     ux_section "Modified Files"
-    ux_bullet "bash/ux_lib/ux_lib.bash ${UX_MUTED}(new file)${UX_RESET}"
+    ux_bullet "shell-common/tools/ux_lib/ux_lib.sh ${UX_MUTED}(unified library)${UX_RESET}"
     ux_bullet "bash/app/docker.bash ${UX_MUTED}(modified)${UX_RESET}"
     ux_bullet "bash/main.bash ${UX_MUTED}(modified)${UX_RESET}"
     echo ""
