@@ -8,125 +8,120 @@ set -e
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="$HOME/.claude"
 
-# Colors for output
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-RESET='\033[0m'
+# --- Load UX Library ---
+UX_LIB_SCRIPT="${DOTFILES_DIR}/shell-common/tools/ux_lib/ux_lib.sh"
 
-echo -e "${BLUE}===== Dotfiles Setup =====${RESET}"
+if [[ -f "${UX_LIB_SCRIPT}" ]]; then
+    source "${UX_LIB_SCRIPT}"
+else
+    echo "CRITICAL ERROR: UX library script not found at ${UX_LIB_SCRIPT}. Exiting." >&2
+    exit 1
+fi
 
-# Create ~/.claude directory if it doesn't exist
-echo -e "${BLUE}Creating ~/.claude directory...${RESET}"
+# --- Main Setup ---
+ux_header "Dotfiles Setup"
+
+# --- Create ~/.claude directory ---
+ux_section "Setting up ~/.claude directory"
 mkdir -p "$CLAUDE_DIR"
 
-# Create symlink for statusline-command.sh
+# --- Function: Create symlink with backup ---
+create_symlink() {
+    local source="$1"
+    local dest="$2"
+    local description="$3"
+
+    if [ ! -f "$source" ]; then
+        ux_warning "File not found: $source"
+        return 1
+    fi
+
+    if [ -L "$dest" ]; then
+        rm "$dest"
+        ux_info "Removed existing symlink: $dest"
+    elif [ -f "$dest" ]; then
+        local backup_file="${dest}.backup.$(date +%s)"
+        mv "$dest" "$backup_file"
+        ux_warning "Backed up existing file to: $backup_file"
+    fi
+
+    ln -s "$source" "$dest"
+    ux_success "Created symlink for $description"
+    return 0
+}
+
+# --- Setup statusline-command.sh ---
 STATUSLINE_SOURCE="$DOTFILES_DIR/claude/statusline-command.sh"
 STATUSLINE_DEST="$CLAUDE_DIR/statusline-command.sh"
 
-if [ ! -f "$STATUSLINE_SOURCE" ]; then
-    echo -e "${YELLOW}Warning: $STATUSLINE_SOURCE not found${RESET}"
-else
-    if [ -L "$STATUSLINE_DEST" ]; then
-        # Remove existing symlink
-        rm "$STATUSLINE_DEST"
-        echo -e "${GREEN}Removed existing symlink: $STATUSLINE_DEST${RESET}"
-    elif [ -f "$STATUSLINE_DEST" ]; then
-        # Backup existing file
-        backup_file="$STATUSLINE_DEST.backup.$(date +%s)"
-        mv "$STATUSLINE_DEST" "$backup_file"
-        echo -e "${YELLOW}Backed up existing file to: $backup_file${RESET}"
-    fi
-
-    # Create new symlink
-    ln -s "$STATUSLINE_SOURCE" "$STATUSLINE_DEST"
+if create_symlink "$STATUSLINE_SOURCE" "$STATUSLINE_DEST" "statusline-command.sh"; then
     chmod +x "$STATUSLINE_SOURCE"
-    echo -e "${GREEN}Created symlink: $STATUSLINE_DEST -> $STATUSLINE_SOURCE${RESET}"
 fi
 
-# Create symlink for settings.json
+# --- Setup settings.json ---
 SETTINGS_SOURCE="$DOTFILES_DIR/claude/settings.json"
 SETTINGS_DEST="$CLAUDE_DIR/settings.json"
 
-if [ ! -f "$SETTINGS_SOURCE" ]; then
-    echo -e "${YELLOW}Warning: $SETTINGS_SOURCE not found${RESET}"
-else
-    if [ -L "$SETTINGS_DEST" ]; then
-        # Remove existing symlink
-        rm "$SETTINGS_DEST"
-        echo -e "${GREEN}Removed existing symlink: $SETTINGS_DEST${RESET}"
-    elif [ -f "$SETTINGS_DEST" ]; then
-        # Backup existing file
-        backup_file="$SETTINGS_DEST.backup.$(date +%s)"
-        mv "$SETTINGS_DEST" "$backup_file"
-        echo -e "${YELLOW}Backed up existing file to: $backup_file${RESET}"
-    fi
+create_symlink "$SETTINGS_SOURCE" "$SETTINGS_DEST" "settings.json"
 
-    # Create new symlink
-    ln -s "$SETTINGS_SOURCE" "$SETTINGS_DEST"
-    echo -e "${GREEN}Created symlink: $SETTINGS_DEST -> $SETTINGS_SOURCE${RESET}"
-fi
-
-# Create symlinks for Claude agents markdown files
+# --- Setup Claude Agents ---
+ux_section "Setting up Claude agents"
 AGENTS_SOURCE_DIR="$DOTFILES_DIR/claude"
 AGENTS_DEST_DIR="$CLAUDE_DIR/agents"
 
 if [ -d "$AGENTS_SOURCE_DIR" ]; then
-    echo -e "${BLUE}Setting up Claude agents...${RESET}"
     mkdir -p "$AGENTS_DEST_DIR"
 
-    # Find all markdown files in agents source directory
     for agent_file in "$AGENTS_SOURCE_DIR"/*.md; do
         if [ -f "$agent_file" ]; then
             agent_name=$(basename "$agent_file")
             agent_dest="$AGENTS_DEST_DIR/$agent_name"
 
             if [ -L "$agent_dest" ]; then
-                # Remove existing symlink
                 rm "$agent_dest"
-                echo -e "${GREEN}Removed existing symlink: $agent_dest${RESET}"
+                ux_info "Removed existing symlink: $agent_dest"
             elif [ -f "$agent_dest" ]; then
-                # Backup existing file
                 backup_file="$agent_dest.backup.$(date +%s)"
                 mv "$agent_dest" "$backup_file"
-                echo -e "${YELLOW}Backed up existing file to: $backup_file${RESET}"
+                ux_warning "Backed up existing file to: $backup_file"
             fi
 
-            # Create new symlink
             ln -s "$agent_file" "$agent_dest"
-            echo -e "${GREEN}Created symlink: $agent_dest -> $agent_file${RESET}"
+            ux_success "Created symlink for $(basename "$agent_dest")"
         fi
     done
 else
-    echo -e "${YELLOW}Warning: $AGENTS_SOURCE_DIR not found${RESET}"
+    ux_warning "Claude agents directory not found: $AGENTS_SOURCE_DIR"
 fi
 
-# Create symlink for pg_services.list
-echo -e "${BLUE}Setting up PostgreSQL services config...${RESET}"
+# --- Setup PostgreSQL Services Config ---
+ux_section "Setting up PostgreSQL services config"
 PG_CONFIG_DIR="$HOME/.config"
 mkdir -p "$PG_CONFIG_DIR"
 
 PG_SOURCE="$DOTFILES_DIR/shell-common/config/pg_services.list"
 PG_DEST="$PG_CONFIG_DIR/pg_services.list"
 
-if [ ! -f "$PG_SOURCE" ]; then
-    echo -e "${YELLOW}Warning: $PG_SOURCE not found${RESET}"
-else
-    if [ -L "$PG_DEST" ]; then
-        rm "$PG_DEST"
-        echo -e "${GREEN}Removed existing symlink: $PG_DEST${RESET}"
-    elif [ -f "$PG_DEST" ]; then
-        backup_file="$PG_DEST.backup.$(date +%s)"
-        mv "$PG_DEST" "$backup_file"
-        echo -e "${YELLOW}Backed up existing file to: $backup_file${RESET}"
-    fi
+create_symlink "$PG_SOURCE" "$PG_DEST" "pg_services.list"
 
-    ln -s "$PG_SOURCE" "$PG_DEST"
-    echo -e "${GREEN}Created symlink: $PG_DEST -> $PG_SOURCE${RESET}"
-fi
+# --- Setup Bash Configuration ---
+ux_section "Setting up Bash configuration"
+BASH_SOURCE="$DOTFILES_DIR/bash/main.bash"
+BASH_DEST="$HOME/.bashrc"
 
-echo -e "${GREEN}===== Setup Complete =====${RESET}"
-echo -e "${BLUE}Next steps:${RESET}"
-echo "  1. Review ~/.claude/statusline-command.sh"
-echo "  2. Review ~/.claude/settings.json (synced from dotfiles)"
-echo "  3. Configure other dotfiles as needed"
+create_symlink "$BASH_SOURCE" "$BASH_DEST" ".bashrc"
+
+# --- Setup Zsh Configuration ---
+ux_section "Setting up Zsh configuration"
+ZSH_SOURCE="$DOTFILES_DIR/zsh/main.zsh"
+ZSH_DEST="$HOME/.zshrc"
+
+create_symlink "$ZSH_SOURCE" "$ZSH_DEST" ".zshrc"
+
+# --- Completion Message ---
+ux_header "Setup Complete"
+ux_section "Next steps"
+ux_bullet "Review ~/.claude/statusline-command.sh"
+ux_bullet "Review ~/.claude/settings.json (synced from dotfiles)"
+ux_bullet "Configure other dotfiles as needed"
+echo ""
