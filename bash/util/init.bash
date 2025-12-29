@@ -14,26 +14,12 @@ init_dotfiles_bash_dir() {
     script_dir="$(dirname "$(realpath "$script_path")")"
 
     # Case 1: Script is directly in bash directory
-    if [[ "$script_dir" == */bash ]] && [[ ! "$script_dir" == */bash/* ]]; then
+    if [[ "$script_dir" == */bash ]]; then
         echo "$script_dir"
         return 0
     fi
 
-    # Case 2: Script is in a subdirectory of bash (e.g., bash/util, bash/app, bash/env)
-    if [[ "$script_dir" == */bash/* ]]; then
-        echo "${script_dir%%/bash/*}/bash"
-        return 0
-    fi
-
-    # Case 3: Script is in a sibling directory (e.g., mytool alongside bash)
-    local parent_dir
-    parent_dir="$(dirname "$script_dir")"
-    if [[ -d "$parent_dir/bash" ]]; then
-        echo "$parent_dir/bash"
-        return 0
-    fi
-
-    # Case 4: Fallback - search upward for bash directory
+    # Case 2: Fallback - search upward for bash directory
     local search_dir="$script_dir"
     while [[ "$search_dir" != "/" ]]; do
         if [[ -d "$search_dir/bash" ]]; then
