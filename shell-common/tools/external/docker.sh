@@ -473,22 +473,22 @@ dexport() {
 
 # WSL Docker 설치 (대화형 스크립트)
 dinstall() {
-    sh "$HOME/dotfiles/shell-common/tools/custom/install-docker.sh"
+    bash "$HOME/dotfiles/shell-common/tools/custom/install-docker.sh"
 }
 
 # WSL Docker 제거 (대화형 스크립트)
 duninstall() {
-    sh "$HOME/dotfiles/shell-common/tools/custom/uninstall-docker.sh"
+    bash "$HOME/dotfiles/shell-common/tools/custom/uninstall-docker.sh"
 }
 
 # Docker 서비스 자동 시작 설정 (대화형 스크립트)
 denable() {
-    sh "$HOME/dotfiles/shell-common/tools/custom/enable-docker.sh"
+    bash "$HOME/dotfiles/shell-common/tools/custom/enable-docker.sh"
 }
 
 # Docker 회사 프록시 설정 (대화형 스크립트)
 dproxy_setup() {
-    sh "$HOME/dotfiles/shell-common/tools/custom/docker-configure-proxy.sh"
+    bash "$HOME/dotfiles/shell-common/tools/custom/docker-configure-proxy.sh"
 }
 
 # Docker Proxy 설정 확인
