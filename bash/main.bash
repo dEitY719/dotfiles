@@ -118,10 +118,30 @@ shopt -s nullglob
 # ------------------------------------------------------------------
 # --- Load modules in priority order ---
 # ------------------------------------------------------------------
-# Priority 1: ENV directory (environment variables must be loaded first)
-# Priority 2: All other directories (auto-discovered, no manual addition needed)
+# Priority 1: Shell-common (POSIX-compatible, shared across bash/zsh)
+# Priority 2: ENV directory (bash-specific environment variables)
+# Priority 3: All other directories (auto-discovered, no manual addition needed)
 
-# --- Load ENV directory first (environment variables) ---
+# --- Load shell-common environment variables first ---
+# These are POSIX-compatible and work in both bash and zsh
+SHELL_COMMON="${DOTFILES_BASH_DIR}/../shell-common"
+if [ -d "${SHELL_COMMON}/env" ]; then
+    for f in "${SHELL_COMMON}/env/"*.sh; do
+        [ -f "$f" ] || continue
+        safe_source "$f" "Shell-common environment file not found"
+    done
+fi
+
+# --- Load shell-common aliases ---
+# These are POSIX-compatible and work in both bash and zsh
+if [ -d "${SHELL_COMMON}/aliases" ]; then
+    for f in "${SHELL_COMMON}/aliases/"*.sh; do
+        [ -f "$f" ] || continue
+        safe_source "$f" "Shell-common aliases file not found"
+    done
+fi
+
+# --- Load bash-specific ENV directory ---
 for f in "${DOTFILES_BASH_DIR}/env/"*.bash; do
     [ -f "$f" ] || continue
     safe_source "$f" "Environment variable file not found"

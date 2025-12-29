@@ -1,0 +1,73 @@
+# system_aliases.bash
+# 시스템 관련 명령어에 대한 alias 정의
+
+# 프로세스 관리
+alias psg='ps aux | grep' # 프로세스 검색
+alias kill9='kill -9'     # 강제 종료
+alias psa='ps aux'        # 모든 프로세스 표시
+
+# 네트워크
+alias ports='ss -tulanp'                        # 열린 포트 확인: netstat은 ss로 대체되는 추세입니다. ss가 더 빠르고 상세한 정보를 제공합니다.
+alias myip='curl http://ipecho.net/plain; echo' # 공인 IP 확인
+alias localip='hostname -I'                     # 로컬 IP 확인
+alias ping='ping -c 5'                          # ping 5회만 실행
+
+# 시스템 모니터링
+alias top='htop'              # 향상된 top 명령어 (htop 설치 필요)
+alias meminfo='free -m -l -t' # 메모리 정보
+alias cpuinfo='lscpu'         # CPU 정보
+alias diskusage='df -h'       # 디스크 사용량
+
+# 시스템 관리
+alias update='sudo apt update'   # 패키지 목록 업데이트
+alias upgrade='sudo apt upgrade' # 패키지 업그레이드
+alias upgrade_all='sudo apt update && sudo apt upgrade'
+alias install='sudo apt install' # 패키지 설치
+alias remove='sudo apt remove'   # 패키지 제거
+alias auto_remove='sudo apt autoremove'
+
+# 로그 확인
+alias logs='tail -f /var/log/syslog'     # 시스템 로그 실시간 확인
+alias error='tail -f /var/log/error.log' # 에러 로그 실시간 확인
+alias auth='tail -f /var/log/auth.log'   # 인증 로그 실시간 확인
+
+# -------------------------------
+# System aliases 도움말
+# -------------------------------
+syshelp() {
+    ux_header "System Management Commands"
+
+    ux_section "Process Management"
+    ux_table_row "psg" "ps aux | grep" "Find process"
+    ux_table_row "kill9" "kill -9" "Force kill"
+    ux_table_row "psa" "ps aux" "List all processes"
+    echo ""
+
+    ux_section "Network"
+    ux_table_row "ports" "ss -tulanp" "Show open ports"
+    ux_table_row "myip" "curl ipecho.net" "Public IP"
+    ux_table_row "localip" "hostname -I" "Local IP"
+    ux_table_row "ping" "ping -c 5" "Ping (5 times)"
+    echo ""
+
+    ux_section "Monitoring"
+    ux_table_row "top" "htop" "Process monitor"
+    ux_table_row "meminfo" "free -m" "Memory usage"
+    ux_table_row "cpuinfo" "lscpu" "CPU info"
+    ux_table_row "diskusage" "df -h" "Disk usage"
+    echo ""
+
+    ux_section "Package Management (APT)"
+    ux_table_row "update" "apt update" "Update lists"
+    ux_table_row "upgrade" "apt upgrade" "Upgrade packages"
+    ux_table_row "install" "apt install" "Install package"
+    ux_table_row "remove" "apt remove" "Remove package"
+    ux_table_row "auto_remove" "apt autoremove" "Remove unused"
+    echo ""
+
+    ux_section "Log Viewing"
+    ux_table_row "logs" "syslog" "System logs"
+    ux_table_row "error" "error.log" "Error logs"
+    ux_table_row "auth" "auth.log" "Auth logs"
+    echo ""
+}
