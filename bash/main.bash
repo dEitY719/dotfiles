@@ -150,21 +150,23 @@ fi
 
 # --- Load shell-common tools (external) ---
 # External/third-party tools: apt, ccusage, claude, codex
-if [ -d "${SHELL_COMMON}/tools/external" ]; then
-    for f in "${SHELL_COMMON}/tools/external/"*.sh; do
-        [ -f "$f" ] || continue
-        safe_source "$f" "Shell-common external tool not found"
-    done
-fi
+# TEMPORARILY DISABLED - debugging Windows Terminal issue
+# if [ -d "${SHELL_COMMON}/tools/external" ]; then
+#     for f in "${SHELL_COMMON}/tools/external/"*.sh; do
+#         [ -f "$f" ] || continue
+#         safe_source "$f" "Shell-common external tool not found"
+#     done
+# fi
 
 # --- Load shell-common tools (custom) ---
 # Custom development tools: devx, etc.
-if [ -d "${SHELL_COMMON}/tools/custom" ]; then
-    for f in "${SHELL_COMMON}/tools/custom/"*.sh; do
-        [ -f "$f" ] || continue
-        safe_source "$f" "Shell-common custom tool not found"
-    done
-fi
+# TEMPORARILY DISABLED - debugging Windows Terminal issue
+# if [ -d "${SHELL_COMMON}/tools/custom" ]; then
+#     for f in "${SHELL_COMMON}/tools/custom/"*.sh; do
+#         [ -f "$f" ] || continue
+#         safe_source "$f" "Shell-common custom tool not found"
+#     done
+# fi
 
 # --- Load shell-common projects ---
 # Project-specific configurations and utilities
