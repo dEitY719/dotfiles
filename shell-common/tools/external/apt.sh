@@ -86,7 +86,6 @@ awhich() {
 aclean_kernel() {
     ux_header "Cleaning Old Kernels"
 
-    local current_kernel
     current_kernel=$(uname -r)
     echo "Current kernel: ${UX_SUCCESS}$current_kernel${UX_RESET}"
 
@@ -96,17 +95,17 @@ aclean_kernel() {
 
     echo ""
     if ux_confirm "WARNING: This will remove all kernels except the current one. Continue?" "n"; then
-        local -a kernels_to_remove=()
-        while IFS= read -r kernel; do
-            kernels_to_remove+=("$kernel")
-        done < <(dpkg -l | grep linux-image | grep -v "$current_kernel" | awk '{print $2}')
+        _tmp_kernels=$(mktemp)
+        dpkg -l | grep linux-image | grep -v "$current_kernel" | awk '{print $2}' > "$_tmp_kernels"
 
-        if [ ${#kernels_to_remove[@]} -gt 0 ]; then
-            sudo apt-get remove --purge "${kernels_to_remove[@]}"
+        if [ -s "$_tmp_kernels" ]; then
+            # shellcheck disable=SC2046
+            sudo apt-get remove --purge $(cat "$_tmp_kernels")
             ux_success "Old kernels removed successfully!"
         else
             ux_info "No old kernels found to remove"
         fi
+        rm -f "$_tmp_kernels"
     else
         ux_info "Cancelled"
     fi
