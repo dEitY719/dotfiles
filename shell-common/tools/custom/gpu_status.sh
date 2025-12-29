@@ -7,7 +7,7 @@ set -e
 
 # Source the UX library
 
-source "$(dirname "$0")/../bash/ux_lib/ux_lib.bash"
+source "$(dirname "$0")/../../bash/ux_lib/ux_lib.bash"
 
 ux_header "GPU Status Monitor (for WSL2)"
 echo ""

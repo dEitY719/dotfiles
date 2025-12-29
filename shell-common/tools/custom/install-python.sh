@@ -7,7 +7,7 @@ set -e
 
 # Source the UX library
 
-source "$(dirname "$0")/../bash/ux_lib/ux_lib.bash"
+source "$(dirname "$0")/../../bash/ux_lib/ux_lib.bash"
 
 DEFAULT_PYTHON_VERSIONS=(
     "3.10.18"
