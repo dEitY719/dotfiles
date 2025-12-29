@@ -109,11 +109,11 @@ EOF
             return 0
             ;;
         \?)
-            echo "Unknown option: -$OPTARG"
+            ux_error "Unknown option: -$OPTARG"
             return 1
             ;;
         :)
-            echo "Option -$OPTARG requires an argument."
+            ux_error "Option -$OPTARG requires an argument"
             return 1
             ;;
         esac
@@ -121,7 +121,8 @@ EOF
     shift $((OPTIND - 1))
 
     if [ "$#" -lt 1 ]; then
-        echo "Usage: cp_wdown <file1> [file2] ...  (-h for help)"
+        ux_usage "cp_wdown" "<file1> [file2] ..." "Copy files from Windows Downloads to WSL"
+        ux_info "Use -h for help"
         return 1
     fi
 
@@ -150,19 +151,20 @@ EOF
         fi
 
         if [ -z "$win_downloads" ]; then
-            echo "Failed to locate Windows Downloads path (no pwsh.exe/powershell.exe/cmd.exe?)."
+            ux_error "Failed to locate Windows Downloads path"
+            ux_info "Make sure pwsh.exe/powershell.exe or cmd.exe is available"
             return 1
         fi
 
         # Windows → WSL 경로로 변환
         src=$(wslpath -u "$win_downloads") || {
-            echo "wslpath conversion failed for: $win_downloads"
+            ux_error "wslpath conversion failed for: $win_downloads"
             return 1
         }
     fi
 
     mkdir -p "$dest" || {
-        echo "Cannot create destination: $dest"
+        ux_error "Cannot create destination: $dest"
         return 1
     }
 
@@ -172,8 +174,8 @@ EOF
     ((verbose)) && cp_opts+=(-v)
 
     ((verbose)) && {
-        echo "Source (Windows): $src"
-        echo "Destination     : $dest"
+        ux_info "Source (Windows): $src"
+        ux_info "Destination     : $dest"
     }
 
     local any_copied=0
@@ -181,7 +183,7 @@ EOF
         local pattern="$src/$arg"
         mapfile -t matches < <(compgen -G "$pattern")
         if [ "${#matches[@]}" -eq 0 ]; then
-            echo "No match: $pattern"
+            ux_warning "No match: $pattern"
             continue
         fi
         for m in "${matches[@]}"; do
@@ -194,11 +196,11 @@ EOF
     done
 
     if ((dryrun)); then
-        echo "[dry-run] No files were actually copied."
+        ux_info "[dry-run] No files were actually copied"
     elif ((any_copied)); then
-        ((verbose)) && echo "Done."
+        ((verbose)) && ux_success "Done"
     else
-        echo "Nothing copied."
+        ux_warning "Nothing copied"
         return 1
     fi
 }

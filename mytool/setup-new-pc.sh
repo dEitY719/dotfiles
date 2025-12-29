@@ -5,45 +5,35 @@
 
 set -e
 
-# Color definitions
-bold=$(tput bold 2>/dev/null || echo "")
-blue=$(tput setaf 4 2>/dev/null || echo "")
-green=$(tput setaf 2 2>/dev/null || echo "")
-yellow=$(tput setaf 3 2>/dev/null || echo "")
-red=$(tput setaf 1 2>/dev/null || echo "")
-reset=$(tput sgr0 2>/dev/null || echo "")
+# Source UX library for consistent styling
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UX_LIB_PATH="${SCRIPT_DIR}/../bash/ux_lib/ux_lib.bash"
+if [[ -f "$UX_LIB_PATH" ]]; then
+    source "$UX_LIB_PATH"
+else
+    echo "Error: UX library not found at $UX_LIB_PATH"
+    exit 1
+fi
 
-# Helper functions
+# Helper functions using UX library
 info() {
-    echo "${bold}${blue}[INFO]${reset} $*"
+    ux_info "$*"
 }
 
 success() {
-    echo "${bold}${green}[✓]${reset} $*"
+    ux_success "$*"
 }
 
 warning() {
-    echo "${bold}${yellow}[⚠]${reset} $*"
+    ux_warning "$*"
 }
 
 error() {
-    echo "${bold}${red}[✗]${reset} $*"
+    ux_error "$*"
 }
 
 confirm() {
-    local prompt="$1"
-    local default="${2:-y}"
-    local response
-
-    if [[ "$default" == "y" ]]; then
-        echo -n "${bold}${blue}${prompt}${reset} (Y/n) "
-    else
-        echo -n "${bold}${blue}${prompt}${reset} (y/N) "
-    fi
-
-    read -r response
-    response=${response:-$default}
-    [[ "$response" =~ ^[Yy]$ ]]
+    ux_confirm "$1" "${2:-y}"
 }
 
 main() {

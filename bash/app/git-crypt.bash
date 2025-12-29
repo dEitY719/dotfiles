@@ -280,17 +280,13 @@ gc_encrypt_env() {
     local choice="1"
 
     if grep -q "^\.env$" .gitignore 2>/dev/null; then
-        ux_warning ".env가 .gitignore에 있습니다."
+        ux_warning ".env가 .gitignore에 있습니다"
         echo ""
-        ux_info "git-crypt 사용 시 .env는 암호화되므로 저장소에 추가해도 안전합니다."
+        ux_info "git-crypt 사용 시 .env는 암호화되므로 저장소에 추가해도 안전합니다"
         ux_info "두 가지 선택지가 있습니다:"
         echo ""
-        echo "  ${bold}[1] .gitignore에서 .env 제거 (권장)${reset}"
-        echo "      → .env: 암호화되어 저장소에 커밋"
-        echo "      → .env.local: .gitignore에 추가 (로컬 전용)"
-        echo ""
-        echo "  ${bold}[2] git add -f 사용 (강제 추가)${reset}"
-        echo "      → .gitignore는 유지, 매번 -f 플래그 필요"
+        ux_bullet "[1] .gitignore에서 .env 제거 (권장) - .env: 암호화되어 저장소에 커밋 / .env.local: .gitignore에 추가"
+        ux_bullet "[2] git add -f 사용 (강제 추가) - .gitignore는 유지, 매번 -f 플래그 필요"
         echo ""
 
         echo -n "  선택 [1/2] (Enter = 1): "

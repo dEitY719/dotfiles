@@ -225,17 +225,19 @@ mysql_cmd() {
     )
 
     if [[ -z "$service" || -z "$user_input_cmd" ]]; then
-        echo "Usage: mysql_cmd <service> '<command>'"
-        echo "Example commands:"
+        ux_header "mysql_cmd"
+        ux_usage "mysql_cmd" "<service> '<command>'" "Run MySQL command on service"
+        echo ""
+        ux_section "Available Commands"
         for k in "${!cmd_templates[@]}"; do
             if [[ "${cmd_templates[$k]}" == *"{arg}"* ]]; then
-                printf "  %-12s -> %s (requires argument)\n" "$k" "${cmd_templates[$k]}"
+                ux_bullet "$k: ${cmd_templates[$k]} (requires argument)"
             else
-                printf "  %-12s -> %s\n" "$k" "${cmd_templates[$k]}"
+                ux_bullet "$k: ${cmd_templates[$k]}"
             fi
         done
-        echo
-        echo "Available services:"
+        echo ""
+        ux_section "Available Services"
         mysql_list true
         return 1
     fi
@@ -249,7 +251,7 @@ mysql_cmd() {
         fi
     done
     if [[ "$found" == "false" ]]; then
-        echo "[Error] Unknown service: $service"
+        ux_error "Unknown service: $service"
         mysql_list true
         return 1
     fi
@@ -259,8 +261,8 @@ mysql_cmd() {
         local template="${cmd_templates[$user_input_cmd]}"
         if [[ "$template" == *"{arg}"* ]]; then
             if [[ -z "$rest_args" ]]; then
-                echo "[Error] '$user_input_cmd' requires an argument."
-                echo "Usage: mysql_cmd $service $user_input_cmd <arg>"
+                ux_error "'$user_input_cmd' requires an argument"
+                ux_usage "mysql_cmd" "$service $user_input_cmd <arg>" ""
                 return 1
             fi
             sql="${template//\{arg\}/$rest_args}"
@@ -277,7 +279,7 @@ mysql_cmd() {
         local output
         output=$(mysql --defaults-group-suffix="_$service" -N -s -e "$sql")
         if [[ -z "$output" ]]; then
-            echo "[Notice] Table '$rest_args' does not exist or has no columns."
+            ux_warning "Table '$rest_args' does not exist or has no columns"
             return 1
         fi
         echo "$output"
