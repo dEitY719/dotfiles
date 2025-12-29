@@ -79,6 +79,25 @@ source $ZSH/oh-my-zsh.sh
 # ═══════════════════════════════════════════════════════════════
 # SOLID-compliant architecture with complete bash/zsh separation
 
-if [ -f "$HOME/dotfiles/zsh/main.zsh" ]; then
-    source "$HOME/dotfiles/zsh/main.zsh"
-fi
+# Load Zsh Dotfiles
+export DOTFILES_ROOT="$HOME/dotfiles"
+export SHELL_COMMON="$HOME/dotfiles/shell-common"
+export ZSH_DOTFILES="$HOME/dotfiles/zsh"
+
+# Phase 1: Shared Environment
+[ -d "$SHELL_COMMON/env" ] && for f in "$SHELL_COMMON"/env/*.sh; do [ -f "$f" ] && source "$f" 2>/dev/null; done
+
+# Phase 2: UX Library (needed for aliases/functions)
+[ -f "$ZSH_DOTFILES/ux_lib/ux_lib.zsh" ] && source "$ZSH_DOTFILES/ux_lib/ux_lib.zsh" 2>/dev/null
+
+# Phase 3: Shared Aliases
+[ -d "$SHELL_COMMON/aliases" ] && for f in "$SHELL_COMMON"/aliases/*.sh; do [ -f "$f" ] && source "$f" 2>/dev/null; done
+
+# Phase 4: Shared Functions
+[ -d "$SHELL_COMMON/functions" ] && for f in "$SHELL_COMMON"/functions/*.sh; do [ -f "$f" ] && source "$f" 2>/dev/null; done
+
+# Phase 5: Zsh Utilities
+[ -d "$ZSH_DOTFILES/util" ] && for f in "$ZSH_DOTFILES"/util/*.zsh; do [ -f "$f" ] && source "$f" 2>/dev/null; done
+
+# Phase 6: Zsh App Modules
+[ -d "$ZSH_DOTFILES/app" ] && for f in "$ZSH_DOTFILES"/app/*.zsh; do [ -f "$f" ] && source "$f" 2>/dev/null; done

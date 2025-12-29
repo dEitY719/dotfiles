@@ -8,30 +8,31 @@
 # Exit if not in zsh
 [ -n "$ZSH_VERSION" ] || return 0
 
-# Guard: Only run in interactive shells to avoid slowdown in non-interactive contexts
-[[ $- == *i* ]] || return 0
-
 # ═══════════════════════════════════════════════════════════════
-# Directory Setup - Compute paths from script location
+# Directory Setup - Use provided variables or detect from script location
 # ═══════════════════════════════════════════════════════════════
 
-# Compute DOTFILES_ROOT from this script's location
-# In zsh, use ${(%):-%N} to get the sourced script name
-# Fallback to $0 if in zsh < 4.2 or in other contexts
-_ZSH_SCRIPT="${${(%):-%N}:-$0}"
-_ZSH_SCRIPT_DIR="$(cd "$(dirname "$_ZSH_SCRIPT")" 2>/dev/null && pwd)" || _ZSH_SCRIPT_DIR=""
+# If zshrc already set these, use them. Otherwise detect them.
+if [ -z "$DOTFILES_ROOT" ]; then
+    # Compute DOTFILES_ROOT from this script's location
+    # In zsh, use ${(%):-%N} to get the sourced script name
+    # Fallback to $0 if in zsh < 4.2 or in other contexts
+    _ZSH_SCRIPT="${${(%):-%N}:-$0}"
+    _ZSH_SCRIPT_DIR="$(cd "$(dirname "$_ZSH_SCRIPT")" 2>/dev/null && pwd)" || _ZSH_SCRIPT_DIR=""
 
-# Compute DOTFILES_ROOT: go up from zsh/ to parent directory
-DOTFILES_ROOT="${_ZSH_SCRIPT_DIR%/zsh}"
+    # Compute DOTFILES_ROOT: go up from zsh/ to parent directory
+    DOTFILES_ROOT="${_ZSH_SCRIPT_DIR%/zsh}"
 
-# Validate DOTFILES_ROOT is a real directory
-if [ -z "$DOTFILES_ROOT" ] || [ ! -d "$DOTFILES_ROOT" ]; then
-    # Fallback to default location if detection fails
-    DOTFILES_ROOT="${HOME}/dotfiles"
+    # Validate DOTFILES_ROOT is a real directory
+    if [ -z "$DOTFILES_ROOT" ] || [ ! -d "$DOTFILES_ROOT" ]; then
+        # Fallback to default location if detection fails
+        DOTFILES_ROOT="${HOME}/dotfiles"
+    fi
 fi
 
-SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
-ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"
+# Set derived paths if not already set
+[ -n "$SHELL_COMMON" ] || SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
+[ -n "$ZSH_DOTFILES" ] || ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"
 
 # Exit if dotfiles not found
 if [ ! -d "$DOTFILES_ROOT" ]; then
