@@ -100,12 +100,12 @@ if [ -d "${SHELL_COMMON}/functions" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 5.5: Load Shared Tools (shell-common/tools/)
-# Application-specific aliases, functions, and help (combined)
+# Phase 5.5: Load Shared Tools - External (shell-common/tools/external/)
+# External/third-party tools: apt, ccusage, claude, codex
 # ═══════════════════════════════════════════════════════════════
 
-if [ -d "${SHELL_COMMON}/tools" ]; then
-    for f in "${SHELL_COMMON}"/tools/*.sh; do
+if [ -d "${SHELL_COMMON}/tools/external" ]; then
+    for f in "${SHELL_COMMON}"/tools/external/*.sh; do
         if [ -f "$f" ]; then
             source "$f" 2>/dev/null || true
         fi
@@ -113,7 +113,20 @@ if [ -d "${SHELL_COMMON}/tools" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 5.6: Load Shared Projects (shell-common/projects/)
+# Phase 5.6: Load Shared Tools - Custom (shell-common/tools/custom/)
+# Custom development tools: devx, etc.
+# ═══════════════════════════════════════════════════════════════
+
+if [ -d "${SHELL_COMMON}/tools/custom" ]; then
+    for f in "${SHELL_COMMON}"/tools/custom/*.sh; do
+        if [ -f "$f" ]; then
+            source "$f" 2>/dev/null || true
+        fi
+    done
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# Phase 5.7: Load Shared Projects (shell-common/projects/)
 # Project-specific configurations and utilities
 # ═══════════════════════════════════════════════════════════════
 

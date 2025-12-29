@@ -150,12 +150,21 @@ if [ -d "${SHELL_COMMON}/functions" ]; then
     done
 fi
 
-# --- Load shell-common tools ---
-# Application-specific aliases, functions, and help (aliases + functions combined)
-if [ -d "${SHELL_COMMON}/tools" ]; then
-    for f in "${SHELL_COMMON}/tools/"*.sh; do
+# --- Load shell-common tools (external) ---
+# External/third-party tools: apt, ccusage, claude, codex
+if [ -d "${SHELL_COMMON}/tools/external" ]; then
+    for f in "${SHELL_COMMON}/tools/external/"*.sh; do
         [ -f "$f" ] || continue
-        safe_source "$f" "Shell-common tools file not found"
+        safe_source "$f" "Shell-common external tool not found"
+    done
+fi
+
+# --- Load shell-common tools (custom) ---
+# Custom development tools: devx, etc.
+if [ -d "${SHELL_COMMON}/tools/custom" ]; then
+    for f in "${SHELL_COMMON}/tools/custom/"*.sh; do
+        [ -f "$f" ] || continue
+        safe_source "$f" "Shell-common custom tool not found"
     done
 fi
 
