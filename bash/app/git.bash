@@ -167,19 +167,75 @@ gcp() {
     return $failed
 }
 
+# Cherry-pick with conflict resolution strategy (theirs)
+# 사용법: gcp_theirs <commit-id> [commit-id2] ...
+# 예: gcp_theirs abc1234
+# Conflict 발생 시 incoming 변경사항 (branch의 내용) 유지
+gcp_theirs() {
+    if [ $# -eq 0 ]; then
+        echo "사용법: gcp_theirs <commit-id> [commit-id2] ..."
+        echo "예: gcp_theirs abc1234"
+        echo "⚠️ Conflict 발생 시 incoming 변경사항(theirs) 유지"
+        return 1
+    fi
+
+    local failed=0
+    for commit in "$@"; do
+        if git cherry-pick -X theirs "$commit"; then
+            echo "✅ Cherry-pick -X theirs 성공: $commit"
+        else
+            echo "❌ Cherry-pick -X theirs 실패: $commit"
+            failed=1
+            break
+        fi
+    done
+
+    return $failed
+}
+
+# Cherry-pick with conflict resolution strategy (ours)
+# 사용법: gcp_ours <commit-id> [commit-id2] ...
+# 예: gcp_ours abc1234
+# Conflict 발생 시 현재 branch의 변경사항 유지
+gcp_ours() {
+    if [ $# -eq 0 ]; then
+        echo "사용법: gcp_ours <commit-id> [commit-id2] ..."
+        echo "예: gcp_ours abc1234"
+        echo "⚠️ Conflict 발생 시 현재 branch의 변경사항(ours) 유지"
+        return 1
+    fi
+
+    local failed=0
+    for commit in "$@"; do
+        if git cherry-pick -X ours "$commit"; then
+            echo "✅ Cherry-pick -X ours 성공: $commit"
+        else
+            echo "❌ Cherry-pick -X ours 실패: $commit"
+            failed=1
+            break
+        fi
+    done
+
+    return $failed
+}
+
+# Cherry-pick abort 및 continue 단축어
+alias gcpa='git cherry-pick --abort'    # Cherry-pick 작업 중단
+alias gcpc='git cherry-pick --continue' # Cherry-pick 작업 계속
+
 # Cherry-pick 함수 (특정 작가의 커밋들을 범위에서 찾아 cherry-pick)
-# 사용법: gcpa <커밋범위> [사용자이름]
-# 예: gcpa 751e304..7ffcbd4
-# 예: gcpa 751e304..7ffcbd4 dEitY719
-# 예: gcpa 751e304^..7ffcbd4 (시작 커밋 포함)
-gcpa() {
+# 사용법: gcp_author <커밋범위> [사용자이름]
+# 예: gcp_author 751e304..7ffcbd4
+# 예: gcp_author 751e304..7ffcbd4 dEitY719
+# 예: gcp_author 751e304^..7ffcbd4 (시작 커밋 포함)
+gcp_author() {
     local commit_range="$1"
     local author="${2:-dEitY719}" # 기본값: dEitY719
 
     if [ -z "$commit_range" ]; then
-        echo "사용법: gcpa <커밋범위> [사용자이름]"
-        echo "예: gcpa 751e304..7ffcbd4"
-        echo "예: gcpa 751e304..7ffcbd4 dEitY719"
+        echo "사용법: gcp_author <커밋범위> [사용자이름]"
+        echo "예: gcp_author 751e304..7ffcbd4"
+        echo "예: gcp_author 751e304..7ffcbd4 dEitY719"
         echo "⚠️ 커밋범위 형식: <start>..<end> 또는 <start>^..<end>"
         return 1
     fi
@@ -555,8 +611,18 @@ githelp() {
 
     ux_section "Cherry-pick"
     ux_table_row "gcp" "gcp <commit>..." "Cherry-pick commits"
-    ux_table_row "gcpa" "gcpa <range> [author]" "Cherry-pick by author"
+    ux_table_row "gcp_theirs" "gcp_theirs <commit>..." "Cherry-pick with -X theirs (incoming)"
+    ux_table_row "gcp_ours" "gcp_ours <commit>..." "Cherry-pick with -X ours (current)"
+    # ux_table_row "gcpa" "git cherry-pick --abort" "Abort cherry-pick operation"
+    # ux_table_row "gcpc" "git cherry-pick --continue" "Continue cherry-pick after resolving conflicts"
+    ux_table_row "gcp_author" "gcp_author <range> [author]" "Cherry-pick by author"
     ux_table_row "gcp_scan" "gcp_scan [base] [src] [--author=<name|all>]" "Compare & pick missing (default: main <- upstream/main, author=dEitY719)"
+    echo ""
+
+    ux_section "Cherry-pick -X (Merge Strategy)"
+    ux_bullet "gcp_theirs: ${UX_ERROR}Conflict${UX_RESET} 발생시 ${UX_WARNING}incoming(cherry-pick되는 커밋의 변경)${UX_RESET} 선택"
+    ux_bullet "gcp_ours: ${UX_ERROR}Conflict${UX_RESET} 발생시 ${UX_SUCCESS}current branch(현재 브랜치의 변경)${UX_RESET} 선택"
+    ux_bullet "예: gcp_theirs abc1234 def5678 - ${UX_MUTED}두 커밋을 theirs 전략으로 cherry-pick${UX_RESET}"
     echo ""
 
     ux_section "Special"
