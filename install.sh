@@ -21,7 +21,7 @@ echo -e "${BLUE}Creating ~/.claude directory...${RESET}"
 mkdir -p "$CLAUDE_DIR"
 
 # Create symlink for statusline-command.sh
-STATUSLINE_SOURCE="$DOTFILES_DIR/bash/claude/statusline-command.sh"
+STATUSLINE_SOURCE="$DOTFILES_DIR/claude/statusline-command.sh"
 STATUSLINE_DEST="$CLAUDE_DIR/statusline-command.sh"
 
 if [ ! -f "$STATUSLINE_SOURCE" ]; then
@@ -45,7 +45,7 @@ else
 fi
 
 # Create symlink for settings.json
-SETTINGS_SOURCE="$DOTFILES_DIR/bash/claude/settings.json"
+SETTINGS_SOURCE="$DOTFILES_DIR/claude/settings.json"
 SETTINGS_DEST="$CLAUDE_DIR/settings.json"
 
 if [ ! -f "$SETTINGS_SOURCE" ]; then
@@ -68,7 +68,7 @@ else
 fi
 
 # Create symlinks for Claude agents markdown files
-AGENTS_SOURCE_DIR="$DOTFILES_DIR/bash/claude"
+AGENTS_SOURCE_DIR="$DOTFILES_DIR/claude"
 AGENTS_DEST_DIR="$CLAUDE_DIR/agents"
 
 if [ -d "$AGENTS_SOURCE_DIR" ]; then

@@ -87,11 +87,11 @@ clinstall() {
 # ═══════════════════════════════════════════════════════════════
 
 claude_init() {
-    local settings_source="$HOME/dotfiles/bash/claude/settings.json"
+    local settings_source="$HOME/dotfiles/claude/settings.json"
     local settings_target="$HOME/.claude/settings.json"
-    local statusline_source="$HOME/dotfiles/bash/claude/statusline-command.sh"
+    local statusline_source="$HOME/dotfiles/claude/statusline-command.sh"
     local statusline_target="$HOME/.claude/statusline-command.sh"
-    local skills_source_dir="$HOME/dotfiles/bash/claude/skills"
+    local skills_source_dir="$HOME/dotfiles/claude/skills"
     local skills_target_dir="$HOME/.claude/skills"
 
     ux_info "Initializing Claude Code configuration..."
@@ -207,7 +207,7 @@ claude_init() {
 # ═══════════════════════════════════════════════════════════════
 
 claude_edit_settings() {
-    local settings_file="$HOME/dotfiles/bash/claude/settings.json"
+    local settings_file="$HOME/dotfiles/claude/settings.json"
 
     if [ ! -f "$settings_file" ]; then
         ux_error "Settings file not found: $settings_file"

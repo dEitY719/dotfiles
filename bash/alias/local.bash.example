@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# bash/alias/local.bash.example
-# Copy this file to local.bash and customize for your machine
-
-# Example: Personal aliases
-# alias work="cd ~/work-projects"
-# alias myserver="ssh user@myserver.com"

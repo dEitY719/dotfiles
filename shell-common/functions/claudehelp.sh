@@ -42,7 +42,7 @@ claudehelp() {
     echo ""
 
     ux_section "Configuration"
-    ux_info "Settings file: ~/dotfiles/bash/claude/settings.json"
+    ux_info "Settings file: ~/dotfiles/claude/settings.json"
     ux_bullet "Sandbox: autoAllowBashIfSandboxed"
     ux_bullet "Auto-allow: pytest, ruff, mypy, tox"
     ux_bullet "Block: .env, ~/.aws, ~/.ssh"
