@@ -124,4 +124,4 @@ HELP_DESCRIPTIONS[githelp]="Git commands reference"
 
 # Export functions
 export -f myhelp _myhelp_show_all register_help get_help_description category_help
-export -A HELP_DESCRIPTIONS
+# Note: In zsh, arrays cannot be exported; they're available in the current shell session

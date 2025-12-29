@@ -392,7 +392,10 @@ zsh-help() {
 
 # Register help function description
 # shellcheck disable=SC2034
-HELP_DESCRIPTIONS[zsh-help]="Zsh shell management commands"
+# Only register if HELP_DESCRIPTIONS exists (loaded by myhelp.zsh)
+if [ -n "${HELP_DESCRIPTIONS+x}" ]; then
+    HELP_DESCRIPTIONS[zsh-help]="Zsh shell management commands"
+fi
 
 # Export functions for use in other shells
 export -f bash-switch zsh-version zsh-themes zsh-theme zsh-theme-current

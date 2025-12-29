@@ -47,7 +47,10 @@ githelp() {
 
 # Register help function description
 # shellcheck disable=SC2034
-HELP_DESCRIPTIONS[githelp]="Git command reference"
+# Only register if HELP_DESCRIPTIONS exists (loaded by myhelp.zsh)
+if [ -n "${HELP_DESCRIPTIONS+x}" ]; then
+    HELP_DESCRIPTIONS[githelp]="Git command reference"
+fi
 
 # Export functions
 export -f githelp

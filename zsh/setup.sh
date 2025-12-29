@@ -8,7 +8,7 @@
 # Initialize DOTFILES_ROOT and other paths
 DOTFILES_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"
-MAIN_ZSH_SOURCE="${ZSH_DOTFILES}/main.zsh"
+ZSH_ZSHRC_SOURCE="${ZSH_DOTFILES}/zshrc"
 HOME_ZSHRC="${HOME}/.zshrc"
 
 # Load UX library from bash for setup feedback
@@ -69,13 +69,13 @@ create_symlink() {
 
 log_debug "\n--- zsh dotfiles setup 시작 ---"
 
-# main.zsh 파일 존재 여부 확인
-if [ ! -f "$MAIN_ZSH_SOURCE" ]; then
-    log_error_and_exit "main.zsh 파일이 '${MAIN_ZSH_SOURCE}' 경로에 존재하지 않습니다. 파일을 먼저 생성해주세요."
+# zshrc 파일 존재 여부 확인
+if [ ! -f "$ZSH_ZSHRC_SOURCE" ]; then
+    log_error_and_exit "zshrc 파일이 '${ZSH_ZSHRC_SOURCE}' 경로에 존재하지 않습니다. 파일을 먼저 생성해주세요."
 fi
 
 # ~/.zshrc 를 심볼릭 링크로 생성
-create_symlink "$MAIN_ZSH_SOURCE" "$HOME_ZSHRC"
+create_symlink "$ZSH_ZSHRC_SOURCE" "$HOME_ZSHRC"
 
 # --- Completion Messages ---
 
