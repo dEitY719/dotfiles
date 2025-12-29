@@ -198,6 +198,7 @@ SKIP_DIRS=(
     "scripts" # Executable scripts, not sourced
     "config"  # Configuration files only
     "claude"  # Claude-specific settings
+    "app"     # Moved to shell-common/tools/external/
 )
 
 for dir in "${DOTFILES_BASH_DIR}"/*; do

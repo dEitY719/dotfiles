@@ -1,4 +1,7 @@
 #!/bin/bash
+# shell-common/tools/external/litellm.sh
+# Auto-generated from bash/app/litellm.bash
+
 
 : <<'LITELLM_DOC'
 ==========================================================

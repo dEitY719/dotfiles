@@ -1,4 +1,7 @@
 #!/bin/bash
+# shell-common/tools/external/gpu.sh
+# Auto-generated from bash/app/gpu.bash
+
 
 # bash/app/gpu.bash
 # GPU monitoring and diagnostics for WSL2 environment

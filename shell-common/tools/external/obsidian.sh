@@ -1,4 +1,7 @@
 #!/bin/bash
+# shell-common/tools/external/obsidian.sh
+# Auto-generated from bash/app/obsidian.bash
+
 
 # ~/dotfiles/bash/app/obsidian.bash
 

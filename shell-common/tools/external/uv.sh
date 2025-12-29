@@ -1,4 +1,7 @@
 #!/bin/bash
+# shell-common/tools/external/uv.sh
+# Auto-generated from bash/app/uv.bash
+
 # bash/app/uv.bash  (정리판)
 
 # ── 기본 동사 규칙 ──────────────────────────────────────────────

@@ -1,4 +1,7 @@
 #!/bin/bash
+# shell-common/tools/external/python.sh
+# Auto-generated from bash/app/python.bash
+
 
 # bash/app/python.bash
 

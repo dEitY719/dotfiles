@@ -1,4 +1,7 @@
 #!/bin/bash
+# shell-common/tools/external/git.sh
+# Auto-generated from bash/app/git.bash
+
 
 # bash/app/git.bash
 # Note: This file uses bash-specific features (read -a, __git_ps1, etc.)

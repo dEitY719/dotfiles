@@ -1,4 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
+# shell-common/tools/external/mysql.sh
+# Auto-generated from bash/app/mysql.bash
+
 # file: ~/dotfiles/bash/app/mysql.bash
 
 : <<'MYSQL_DOC'

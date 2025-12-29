@@ -1,4 +1,7 @@
 #!/bin/bash
+# shell-common/tools/external/zsh.sh
+# Auto-generated from bash/app/zsh.bash
+
 
 # bash/app/zsh.bash
 # Bash-specific zsh integration functions

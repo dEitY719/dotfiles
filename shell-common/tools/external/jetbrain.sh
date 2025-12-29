@@ -1,4 +1,7 @@
 #!/bin/bash
+# shell-common/tools/external/jetbrain.sh
+# Auto-generated from bash/app/jetbrain.bash
+
 
 # $HOME/dotfiles/bash/app/jetbrain.bash
 

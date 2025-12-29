@@ -1,4 +1,7 @@
 #!/bin/bash
+# shell-common/tools/external/pyenv.sh
+# Auto-generated from bash/app/pyenv.bash
+
 
 # pyenv의 루트 경로
 export PYENV_ROOT="$HOME/.pyenv"

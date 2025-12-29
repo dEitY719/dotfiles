@@ -1,4 +1,7 @@
 #!/bin/bash
+# shell-common/tools/external/npm.sh
+# Auto-generated from bash/app/npm.bash
+
 
 # 1. 전역 경로 변수 정의
 NPM_GLOBAL_PATH="$HOME/.npm-global"
