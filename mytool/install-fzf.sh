@@ -144,7 +144,7 @@ install-fzf() {
     ux_success "fzf installation complete!"
     echo ""
     ux_info "To enable fzf in your current shell session, run:"
-    ux_bold "exec ${SHELL##*/}"
+    echo "  ${UX_BOLD}exec ${SHELL##*/}${UX_RESET}"
     echo ""
     _show_key_bindings
 }
