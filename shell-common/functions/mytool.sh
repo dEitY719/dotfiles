@@ -92,3 +92,13 @@ install-bat() {
     fi
     bash "$script" "$@"
 }
+
+# pet (command snippet manager) 설치 함수
+install-pet() {
+    local script="$HOME/dotfiles/mytool/install-pet.sh"
+    if [ ! -f "$script" ]; then
+        echo "Error: install-pet script not found: $script" >&2
+        return 2
+    fi
+    bash "$script" "$@"
+}

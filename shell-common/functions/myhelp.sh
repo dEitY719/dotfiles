@@ -42,6 +42,7 @@ npmhelp:NPM package manager commands
 nvmhelp:NVM (Node Version Manager) commands
 pphelp:Python package and code quality tools
 psqlhelp:PostgreSQL command helper
+pet-help:pet - Simple command snippet manager
 pyhelp:Python virtual environment commands
 ripgrep-help:ripgrep (rg) fast text search tool
 syshelp:System management commands

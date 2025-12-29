@@ -366,6 +366,7 @@ zsh-help() {
     ux_table_row "install-ripgrep" "Install ripgrep (fast text search)"
     ux_table_row "install-fd" "Install fd (fast file finder)"
     ux_table_row "install-bat" "Install bat (cat with highlighting)"
+    ux_table_row "install-pet" "Install pet (command snippet manager)"
     echo ""
 
     ux_section "Status"
