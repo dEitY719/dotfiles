@@ -44,18 +44,47 @@ _install_pet_from_github() {
     mkdir -p "$temp_dir"
     cd "$temp_dir"
 
-    local filename=""
+    # Try different filename patterns used by pet releases
+    local filenames=()
     if [ "$os_type" = "linux" ]; then
-        filename="pet_linux_${arch}.tar.gz"
+        filenames=("pet_${version}_linux_${arch}.tar.gz" "pet_linux_${arch}.tar.gz" "pet-${version}-linux-${arch}.tar.gz")
     else
-        filename="pet_darwin_${arch}.tar.gz"
+        filenames=("pet_${version}_darwin_${arch}.tar.gz" "pet_darwin_${arch}.tar.gz" "pet-${version}-darwin-${arch}.tar.gz")
     fi
 
-    local url="https://github.com/knqyf263/pet/releases/download/v${version}/${filename}"
+    local filename=""
+    local url=""
+    local found=0
+
+    # Try each possible filename
+    for fn in "${filenames[@]}"; do
+        ux_info "Trying to download: $fn"
+        local test_url="https://github.com/knqyf263/pet/releases/download/v${version}/${fn}"
+
+        if curl -sSL -I "$test_url" 2>/dev/null | grep -q "200\|302"; then
+            filename="$fn"
+            url="$test_url"
+            found=1
+            break
+        fi
+    done
+
+    if [ $found -eq 0 ]; then
+        ux_error "Could not find pet release for version $version, architecture $arch"
+        ux_info "Please check available versions at: https://github.com/knqyf263/pet/releases"
+        return 1
+    fi
 
     ux_info "Downloading pet from GitHub: $filename"
     if ! curl -sSL "$url" -o "$filename"; then
         ux_error "Failed to download pet from GitHub"
+        return 1
+    fi
+
+    # Verify file is actually gzip
+    if ! file "$filename" | grep -q "gzip\|tar"; then
+        ux_error "Downloaded file is not a valid archive"
+        ux_info "File type: $(file $filename)"
         return 1
     fi
 
@@ -64,6 +93,8 @@ _install_pet_from_github() {
 
     if [ ! -f "pet" ]; then
         ux_error "Extraction failed - pet binary not found"
+        ux_info "Contents of archive:"
+        tar -tzf "$filename" | head -10
         return 1
     fi
 
