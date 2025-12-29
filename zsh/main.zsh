@@ -100,6 +100,19 @@ if [ -d "${SHELL_COMMON}/functions" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
+# Phase 5.5: Load Shared Tools (shell-common/tools/)
+# Application-specific aliases, functions, and help (combined)
+# ═══════════════════════════════════════════════════════════════
+
+if [ -d "${SHELL_COMMON}/tools" ]; then
+    for f in "${SHELL_COMMON}"/tools/*.sh; do
+        if [ -f "$f" ]; then
+            source "$f" 2>/dev/null || true
+        fi
+    done
+fi
+
+# ═══════════════════════════════════════════════════════════════
 # Phase 6: Load Zsh Utilities (zsh/util/)
 # ═══════════════════════════════════════════════════════════════
 

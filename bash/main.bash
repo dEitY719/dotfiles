@@ -150,6 +150,15 @@ if [ -d "${SHELL_COMMON}/functions" ]; then
     done
 fi
 
+# --- Load shell-common tools ---
+# Application-specific aliases, functions, and help (aliases + functions combined)
+if [ -d "${SHELL_COMMON}/tools" ]; then
+    for f in "${SHELL_COMMON}/tools/"*.sh; do
+        [ -f "$f" ] || continue
+        safe_source "$f" "Shell-common tools file not found"
+    done
+fi
+
 # --- Load bash-specific ENV directory ---
 for f in "${DOTFILES_BASH_DIR}/env/"*.bash; do
     [ -f "$f" ] || continue
