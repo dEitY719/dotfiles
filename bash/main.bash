@@ -210,3 +210,16 @@ echo "Dotfiles configuration loaded successfully. (Total files sourced: ${SOURCE
 type -t clean_paths &>/dev/null && clean_paths
 
 # myhelp function is now loaded via shell-common/functions/myhelp.sh (shared version)
+
+# fzf key bindings and completion
+if command -v fzf &>/dev/null; then
+    # Source fzf key bindings
+    if [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
+        source /usr/share/doc/fzf/examples/key-bindings.bash
+    fi
+
+    # Source fzf completion
+    if [ -f /usr/share/bash-completion/completions/fzf ]; then
+        source /usr/share/bash-completion/completions/fzf
+    fi
+fi

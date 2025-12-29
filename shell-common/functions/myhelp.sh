@@ -26,6 +26,7 @@ dirhelp:Directory navigation aliases
 dockerhelp:Docker commands and aliases
 dproxyhelp:Docker Proxy(Corporate) commands
 duhelp:Disk usage help
+fzf-help:fzf (Fuzzy Finder) key bindings and usage
 gc_help:git-crypt (Transparent Git encryption)
 geminihelp:Gemini CLI commands and aliases
 githelp:Git shortcuts and aliases
