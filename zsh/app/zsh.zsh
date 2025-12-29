@@ -9,6 +9,18 @@
 # Shell Switching Functions
 # ═══════════════════════════════════════════════════════════════
 
+# Switch to zsh shell
+# Keeps current session and directory context
+zsh-switch() {
+    if command -v zsh &>/dev/null; then
+        ux_success "Switching to zsh..."
+        exec zsh -i
+    else
+        ux_error "zsh is not installed. Run 'install-zsh' to install it."
+        return 1
+    fi
+}
+
 # Switch to bash shell
 # Keeps current session and directory context
 bash-switch() {
@@ -16,7 +28,8 @@ bash-switch() {
     exec bash -i
 }
 
-# Shorthand for bash switch
+# Shorthand for shell switches
+alias zsh-to='zsh-switch'
 alias bash-to='bash-switch'
 
 # ═══════════════════════════════════════════════════════════════
@@ -398,6 +411,6 @@ if [ -n "${HELP_DESCRIPTIONS+x}" ]; then
 fi
 
 # Export functions for use in other shells
-export -f bash-switch zsh-version zsh-themes zsh-theme zsh-theme-current
+export -f zsh-switch bash-switch zsh-version zsh-themes zsh-theme zsh-theme-current
 export -f zsh-plugins zsh-update zsh-reload zsh-edit zsh-snippet zsh-snippets
 export -f zsh-help _zshhelp_full _zsh_check_installed _zsh_check_omz
