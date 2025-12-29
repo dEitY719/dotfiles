@@ -5,7 +5,7 @@
 set -e
 
 # Source the UX library
-DOTFILES_ROOT="/home/bwyoon/dotfiles"
+DOTFILES_ROOT="${HOME}/dotfiles"
 source "${DOTFILES_ROOT}/bash/ux_lib/ux_lib.bash"
 
 # Check dependencies
