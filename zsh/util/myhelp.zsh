@@ -4,6 +4,20 @@
 # Help system for zsh dotfiles
 # Provides centralized help registry for all commands
 
+# Ensure UX library is loaded
+if ! type ux_header >/dev/null 2>&1; then
+    # Try to load UX library if not already loaded
+    if [ -z "$SHELL_COMMON" ]; then
+        # Detect DOTFILES_ROOT from this script
+        _MYHELP_DIR="${0:h}"
+        _DOTFILES_ROOT="${_MYHELP_DIR%/zsh/util}"
+        SHELL_COMMON="${_DOTFILES_ROOT}/shell-common"
+    fi
+    if [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
+        source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null
+    fi
+fi
+
 # Initialize help descriptions array
 typeset -A HELP_DESCRIPTIONS
 

@@ -7,6 +7,19 @@
 # Modules can register via: HELP_DESCRIPTIONS["funcname"]="description"
 # ------------------------------------------------------------------
 
+# Ensure UX library is loaded
+if ! type ux_header >/dev/null 2>&1; then
+    # Try to load UX library if not already loaded
+    if [ -z "$SHELL_COMMON" ]; then
+        # Detect DOTFILES_BASH_DIR from this script
+        _MYHELP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        SHELL_COMMON="${_MYHELP_DIR%/bash/util}/shell-common"
+    fi
+    if [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
+        source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null
+    fi
+fi
+
 # Initialize global help descriptions associative array
 # This should be declared only once (in this file) and populated by all modules
 if [[ -z "${HELP_DESCRIPTIONS+_}" ]]; then
