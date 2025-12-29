@@ -1,4 +1,6 @@
 #!/bin/bash
+# shell-common/tools/external/pip.sh
+# Python package management utilities
 
 # Python Package Management
 # alias pp_freeze: pyproject.toml에서 프로젝트 이름을 읽어와 pip freeze 목록에서 제외하고, -e .을 추가하여 requirements.txt를 생성하는 명령어입니다.
