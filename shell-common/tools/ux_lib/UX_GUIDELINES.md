@@ -21,9 +21,9 @@
 
 ```bash
 my_function() {
-    # 1. Load UX library (if not already sourced globally in main.bash)
+    # 1. Load UX library (if not already sourced globally in main.bash/main.zsh)
     #    If using in a standalone script, source relative to the script:
-    #    source "$(dirname "$0")"/../lib/ux_lib.bash"
+    #    source "$(dirname "$0")/../../tools/ux_lib/ux_lib.sh"
 
     # 2. Show help if no arguments
     if [ -z "$1" ]; then
@@ -37,11 +37,11 @@ my_function() {
 
 ## File Locations
 
--   **Central UX Library**: `bash/ux_lib/ux_lib.bash`
--   **Python Menu Script**: `bash/ux_lib/ux_menu.py` (Internal dependency)
--   **Python Progress Script**: `bash/ux_lib/ux_progress.py` (Internal dependency)
--   **UX Demo Script**: `mytool/demo_ux.sh`
--   **UX Consistency Checker**: `mytool/check_ux_consistency.sh`
+-   **Central UX Library**: `shell-common/tools/ux_lib/ux_lib.sh`
+-   **Python Menu Script**: `shell-common/tools/ux_lib/ux_menu.py` (Internal dependency)
+-   **Python Progress Script**: `shell-common/tools/ux_lib/ux_progress.py` (Internal dependency)
+-   **UX Demo Script**: `shell-common/tools/custom/demo_ux.sh`
+-   **UX Consistency Checker**: `shell-common/tools/custom/check_ux_consistency.sh`
 
 ## Portability (Using in Other Projects)
 
@@ -52,10 +52,10 @@ This UX library is designed to be self-contained. To use it in another project:
 
 ```bash
 # Example: Sourcing from a script in the project root
-source "./lib/ux_lib/ux_lib.bash"
+source "./shell-common/tools/ux_lib/ux_lib.sh"
 ```
 
-The library automatically handles the paths for its internal Python dependencies (`ux_menu.py`, `ux_progress.py`).
+The library automatically handles the paths for its internal Python dependencies (`ux_menu.py`, `ux_progress.py`) via the `UX_LIB_DIR` variable.
 
 ## Testing and Validation
 
