@@ -44,8 +44,7 @@ alias gpfu='git push --set-upstream origin main --force-with-lease'
 # 사용 예시: main 브랜치가 원격보다 앞설 때, "rejected (fetch first)" 문제 해결용
 
 alias gpf_dev_server='git push -f origin HEAD:refs/heads/dev-server'
-alias git_log='git log --graph --pretty=tformat:"%Cred%h %C(bold blue)%d %Creset%s %Cgreen%ad %C(yellow)%an" --date=short'
-alias git_log2='git log --graph --decorate --date=short --abbrev-commit --pretty=oneline'
+# git_log and git_log2 aliases are now in shell-common/aliases/git.sh
 alias gl2=git_log2
 
 # PS1 only for bash (zsh uses oh-my-zsh themes)
@@ -53,14 +52,9 @@ if [ -n "$BASH" ]; then
     export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_pwd)\[\e[36m\]\$(__git_ps1 '(%s)')\[\e[0m\]\$ "
 fi
 
-alias gs='git status -sb'                        # 간략한 상태 보기
-alias ga='git add .'                             # 모든 변경사항 스테이징
-alias gc='git commit -m'                         # 커밋 메시지 작성
-alias gca='git commit --amend'                   # 커밋 메시지 작성
-alias gp='git push'                              # 푸시
-alias gl1='git log --oneline --graph --decorate' # 깔끔한 로그
-alias glref='git log ref/main --oneline'         # ref 원격 main 브랜치 한줄 로그
-alias gco='git checkout'                         # 체크아웃 (브랜치 이동 등)
+# Basic git aliases are now in shell-common/aliases/git.sh
+# Keeping bash-specific functions below:
+
 gsw() {
     # 사용법: gsw origin/pr/refactor-cli
     # 원격 브랜치에서 로컬 브랜치를 생성하고 switch (자동으로 upstream 설정)
@@ -68,8 +62,6 @@ gsw() {
     local local_branch="${remote_branch#*/}" # origin/pr/refactor-cli -> pr/refactor-cli
     git switch -c "$local_branch" "$remote_branch"
 }
-alias gd='git diff'   # 변경사항 확인
-alias gb='git branch' # 브랜치 목록
 
 # Fetch from remote with prune (default: origin)
 # Usage: gf [remote]
@@ -92,10 +84,7 @@ gf() {
     git fetch "$remote" -p
 }
 
-alias gfu='git fetch upstream'      # upstream에서 fetch
-alias gfa='git fetch --all --prune' # 원격 전체 fetch + 필요없는 브랜치 정리
-alias gpl='git pull'                # 현재 브랜치만 pull
-alias grmc='git rm --cached'        # 파일을 스테이징에서 제거 (파일 시스템은 유지)
+# Fetch aliases (gfu, gfa, gpl, grmc) are now in shell-common/aliases/git.sh
 
 # Git rm --cached 함수 (여러 파일 처리)
 git_rm_cached() {
@@ -148,9 +137,6 @@ gupdel() {
         return 1
     fi
 }
-
-# 원격 저장소 조회
-alias gr='git remote -v'
 
 # Cherry-pick 함수
 gcp() {
@@ -644,23 +630,5 @@ githelp() {
     echo ""
 }
 
-# gl 함수 (최근 11개 기본, -a/--all 옵션으로 모두 보기)
-unalias gl 2>/dev/null || true
-gl() {
-    local show_all=0
-    local args=()
-
-    for arg in "$@"; do
-        if [ "$arg" = "-a" ] || [ "$arg" = "--all" ]; then
-            show_all=1
-        else
-            args+=("$arg")
-        fi
-    done
-
-    if [ $show_all -eq 1 ]; then
-        git_log "${args[@]}"
-    else
-        git_log -n 11 "${args[@]}"
-    fi
-}
+# gl 함수는 이제 shell-common/functions/git.sh에서 공유됨
+# Moved to shell-common/functions/git.sh for bash/zsh compatibility

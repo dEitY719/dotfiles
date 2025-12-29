@@ -49,7 +49,19 @@ if [ -d "${SHELL_COMMON}/aliases" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 3: Load Zsh UX Library
+# Phase 3: Load Shared Functions (shell-common/functions/)
+# ═══════════════════════════════════════════════════════════════
+
+if [ -d "${SHELL_COMMON}/functions" ]; then
+    for f in "${SHELL_COMMON}"/functions/*.sh; do
+        if [ -f "$f" ]; then
+            source "$f" 2>/dev/null || true
+        fi
+    done
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# Phase 4: Load Zsh UX Library
 # ═══════════════════════════════════════════════════════════════
 
 if [ -f "${ZSH_DOTFILES}/ux_lib/ux_lib.zsh" ]; then
@@ -59,7 +71,7 @@ if [ -f "${ZSH_DOTFILES}/ux_lib/ux_lib.zsh" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 4: Load Zsh Environment Settings (zsh/env/)
+# Phase 5: Load Zsh Environment Settings (zsh/env/)
 # ═══════════════════════════════════════════════════════════════
 
 if [ -d "${ZSH_DOTFILES}/env" ]; then
@@ -69,7 +81,7 @@ if [ -d "${ZSH_DOTFILES}/env" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 5: Load Zsh Utilities (zsh/util/)
+# Phase 6: Load Zsh Utilities (zsh/util/)
 # ═══════════════════════════════════════════════════════════════
 
 if [ -d "${ZSH_DOTFILES}/util" ]; then
@@ -81,7 +93,7 @@ if [ -d "${ZSH_DOTFILES}/util" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 6: Load Zsh Application Modules (zsh/app/)
+# Phase 7: Load Zsh Application Modules (zsh/app/)
 # ═══════════════════════════════════════════════════════════════
 
 if [ -d "${ZSH_DOTFILES}/app" ]; then

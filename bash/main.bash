@@ -141,6 +141,15 @@ if [ -d "${SHELL_COMMON}/aliases" ]; then
     done
 fi
 
+# --- Load shell-common functions ---
+# These are POSIX-compatible and work in both bash and zsh
+if [ -d "${SHELL_COMMON}/functions" ]; then
+    for f in "${SHELL_COMMON}/functions/"*.sh; do
+        [ -f "$f" ] || continue
+        safe_source "$f" "Shell-common functions file not found"
+    done
+fi
+
 # --- Load bash-specific ENV directory ---
 for f in "${DOTFILES_BASH_DIR}/env/"*.bash; do
     [ -f "$f" ] || continue
