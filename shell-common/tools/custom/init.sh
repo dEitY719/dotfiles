@@ -37,8 +37,8 @@ export DOTFILES_BASH_DIR="${DOTFILES_ROOT}/bash"
 export SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 
 # Load UX library
-if [[ -f "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash" ]]; then
-    source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
+if [[ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]]; then
+    source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 else
     # Fallback: define minimal error handling if UX library unavailable
     ux_error() { echo "❌ $*" >&2; }

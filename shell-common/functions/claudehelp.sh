@@ -3,8 +3,8 @@
 # claudeHelp - shared between bash and zsh
 
 claudehelp() {
-    # Load UX library
-    source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
+    # Load UX library (unified library at shell-common/tools/ux_lib/)
+    source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 
     ux_header "Claude Code - MCP & Workflow Guide"
 

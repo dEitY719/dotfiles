@@ -12,7 +12,7 @@ export DOTFILES_BASH_DIR
 
 # Load UX library
 # shellcheck source=/dev/null
-source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
+source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 
 # =============================================================================
 # Demo Functions

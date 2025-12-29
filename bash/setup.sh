@@ -10,6 +10,10 @@ source "$(dirname "$_SCRIPT_PATH")/util/init.bash"
 DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
 export DOTFILES_BASH_DIR
 
+# Set up SHELL_COMMON for unified UX library loading
+SHELL_COMMON="${DOTFILES_BASH_DIR}/../shell-common"
+export SHELL_COMMON
+
 MAIN_BASH_SOURCE="${DOTFILES_BASH_DIR}/main.bash"
 
 HOME_BASHRC="${HOME}/.bashrc"
@@ -21,8 +25,8 @@ HOME_BASH_PROFILE="${HOME}/.bash_profile"
 # init_logging 함수를 호출하여 로깅 기능을 초기화합니다.
 # DOTFILES_BASH_DIR 변수를 인자로 전달합니다.
 
-# Load UX library
-source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
+# Load UX library (unified library at shell-common/tools/ux_lib/)
+source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 
 # Define legacy mapping functions for backward compatibility
 log_info() { ux_info "$1"; }

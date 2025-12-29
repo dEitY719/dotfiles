@@ -8,7 +8,7 @@ DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
 export DOTFILES_BASH_DIR
 
 # Load UX library for reporting
-source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
+source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 
 ux_header "UX Consistency Checker"
 total_issues=0

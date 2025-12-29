@@ -11,12 +11,12 @@ ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"
 ZSH_ZSHRC_SOURCE="${ZSH_DOTFILES}/zshrc"
 HOME_ZSHRC="${HOME}/.zshrc"
 
-# Load UX library from bash for setup feedback
-BASH_UX_LIB="${DOTFILES_ROOT}/bash/ux_lib/ux_lib.bash"
-if [ -f "$BASH_UX_LIB" ]; then
-    source "$BASH_UX_LIB"
+# Load UX library (unified library at shell-common/tools/ux_lib/)
+UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
+if [ -f "$UX_LIB" ]; then
+    source "$UX_LIB"
 else
-    echo "Error: UX library not found at $BASH_UX_LIB"
+    echo "Error: UX library not found at $UX_LIB"
     exit 1
 fi
 
