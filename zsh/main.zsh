@@ -5,8 +5,10 @@
 # Completely independent from bash - no emulation, native zsh execution
 # Loading order: Env → UX → Alias → Functions → Utils → App
 
-# Exit if not in zsh
-[ -n "$ZSH_VERSION" ] || return 0
+# Exit if not in zsh (safely return without killing shell)
+if [ -z "$ZSH_VERSION" ]; then
+    return 0
+fi
 
 # ═══════════════════════════════════════════════════════════════
 # Directory Setup - Use provided variables or detect from script location

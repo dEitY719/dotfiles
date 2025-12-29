@@ -41,11 +41,9 @@ should_skip_init() {
 
 if should_skip_init; then
     # Handle "return" vs "exit" depending on how the script was invoked
-    if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
-        return 0
-    else
-        exit 0
-    fi
+    # IMPORTANT: Use return even for direct execution to avoid killing the shell
+    # (applies to both sourced and direct execution contexts)
+    return 0
 fi
 
 # Set the base directory for dotfiles bash configurations
