@@ -116,16 +116,10 @@ fi
 
 # ═══════════════════════════════════════════════════════════════
 # Phase 5.6: Load Shared Tools - Custom (shell-common/tools/custom/)
-# Custom development tools: devx, etc.
+# NOTE: shell-common/tools/custom/ contains executable utility scripts
+# that should NOT be auto-sourced. They are meant to be run explicitly
+# as commands, not loaded as shell functions. Examples: demo_ux.sh, check_ux_consistency.sh
 # ═══════════════════════════════════════════════════════════════
-
-if [ -d "${SHELL_COMMON}/tools/custom" ]; then
-    for f in "${SHELL_COMMON}"/tools/custom/*.sh; do
-        if [ -f "$f" ]; then
-            source "$f" 2>/dev/null || true
-        fi
-    done
-fi
 
 # ═══════════════════════════════════════════════════════════════
 # Phase 5.7: Load Shared Projects (shell-common/projects/)

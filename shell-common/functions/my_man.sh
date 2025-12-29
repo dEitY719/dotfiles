@@ -7,8 +7,8 @@ myman() {
     local temp_output_file
     temp_output_file=$(mktemp) # 안전한 임시 파일 생성
 
-    # 함수 종료 시 임시 파일 삭제 보장
-    trap 'rm -f "$temp_output_file"' RETURN
+    # 함수 종료 시 임시 파일 삭제 보장 (zsh 호환성: trap EXIT 사용)
+    trap "rm -f '$temp_output_file'" EXIT
 
     if [[ -z "$type_to_show" ]]; then
         ux_header "myman"
@@ -19,8 +19,8 @@ myman() {
         return 1
     fi
 
-    local analyzer_script="$HOME/dotfiles/bash/analyze_bash_scripts.sh"
-    local bash_config_dir="$HOME/dotfiles/bash"
+    local analyzer_script="$HOME/dotfiles/shell-common/tools/custom/analyze_bash_scripts.sh"
+    local sh_config_dir="$HOME/dotfiles/shell-common"
 
     if [[ ! -f "$analyzer_script" ]]; then
         ux_error "스크립트를 찾을 수 없습니다: '$analyzer_script'"
@@ -29,7 +29,7 @@ myman() {
     fi
 
     # 스크립트를 실행하여 임시 파일에 결과를 저장 (에러 출력은 숨김)
-    "$analyzer_script" "$bash_config_dir" >"$temp_output_file" 2>/dev/null
+    "$analyzer_script" "$sh_config_dir" >"$temp_output_file" 2>/dev/null
 
     if [[ "$type_to_show" == "alias" ]]; then
         (

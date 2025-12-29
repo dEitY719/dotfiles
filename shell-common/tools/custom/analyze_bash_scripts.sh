@@ -97,11 +97,11 @@ if [[ ! -d "$TARGET_DIR" ]]; then
     usage
 fi
 
-mapfile -t bash_files < <(find "$TARGET_DIR" -type f -name "*.bash")
+mapfile -t sh_files < <(find "$TARGET_DIR" -type f -name "*.sh")
 
-for bash_file in "${bash_files[@]}"; do
-    parse_aliases "$bash_file"
-    parse_functions "$bash_file"
+for sh_file in "${sh_files[@]}"; do
+    parse_aliases "$sh_file"
+    parse_functions "$sh_file"
 done
 
 print_results
