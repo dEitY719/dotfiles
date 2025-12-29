@@ -156,10 +156,9 @@ for f in "${DOTFILES_BASH_DIR}/env/"*.bash; do
     safe_source "$f" "Environment variable file not found"
 done
 
-# --- Load util/myhelp.bash early ---
-# Must be loaded before app/*.bash to ensure HELP_DESCRIPTIONS associative array
-# is properly initialized before modules try to register their descriptions
-safe_source "${DOTFILES_BASH_DIR}/util/myhelp.bash" "MyHelp utility not found"
+# Note: myhelp is now loaded from shell-common/functions/myhelp.sh (shared version)
+# This was previously loaded here as bash/util/myhelp.bash but we now use
+# the unified shell-common version for parity with zsh
 
 # --- Auto-load all other directories ---
 # This automatically discovers and loads all .bash files from subdirectories
@@ -169,7 +168,7 @@ safe_source "${DOTFILES_BASH_DIR}/util/myhelp.bash" "MyHelp utility not found"
 SKIP_DIRS=(
     "core"    # Deprecated files
     "ux_lib"  # Already loaded explicitly
-    "util"    # Already loaded explicitly (myhelp.bash)
+    "util"    # Skipped - using shell-common/functions/myhelp.sh instead
     "env"     # Already loaded above
     "scripts" # Executable scripts, not sourced
     "config"  # Configuration files only
@@ -210,4 +209,4 @@ echo "Dotfiles configuration loaded successfully. (Total files sourced: ${SOURCE
 # Clean up duplicate PATH entries (defined in env/path.bash)
 type -t clean_paths &>/dev/null && clean_paths
 
-# myhelp function is now loaded via bash/util/myhelp.bash (auto-discovered)
+# myhelp function is now loaded via shell-common/functions/myhelp.sh (shared version)

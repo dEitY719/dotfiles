@@ -93,11 +93,15 @@ export ZSH_DOTFILES="$HOME/dotfiles/zsh"
 # Phase 3: Shared Aliases
 [ -d "$SHELL_COMMON/aliases" ] && for f in "$SHELL_COMMON"/aliases/*.sh; do [ -f "$f" ] && source "$f" 2>/dev/null; done
 
-# Phase 4: Shared Functions
+# Phase 4: Shared Functions (MUST load BEFORE zsh utilities to override)
 [ -d "$SHELL_COMMON/functions" ] && for f in "$SHELL_COMMON"/functions/*.sh; do [ -f "$f" ] && source "$f" 2>/dev/null; done
 
-# Phase 5: Zsh Utilities
-[ -d "$ZSH_DOTFILES/util" ] && for f in "$ZSH_DOTFILES"/util/*.zsh; do [ -f "$f" ] && source "$f" 2>/dev/null; done
+# Phase 5: Zsh Utilities (may redefine some shared functions, but we use shared versions)
+[ -d "$ZSH_DOTFILES/util" ] && for f in "$ZSH_DOTFILES"/util/*.zsh; do
+    # Skip myhelp.zsh as we use the shared version instead
+    case "$f" in */myhelp.zsh) continue ;; esac
+    [ -f "$f" ] && source "$f" 2>/dev/null
+done
 
 # Phase 6: Zsh App Modules
 [ -d "$ZSH_DOTFILES/app" ] && for f in "$ZSH_DOTFILES"/app/*.zsh; do [ -f "$f" ] && source "$f" 2>/dev/null; done
