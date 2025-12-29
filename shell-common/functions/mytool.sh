@@ -42,3 +42,13 @@ install-p10k() {
     fi
     bash "$script" "$@"
 }
+
+# fzf (fuzzy finder) 설치 함수
+install-fzf() {
+    local script="$HOME/dotfiles/mytool/install-fzf.sh"
+    if [ ! -f "$script" ]; then
+        echo "Error: install-fzf script not found: $script" >&2
+        return 2
+    fi
+    bash "$script" "$@"
+}
