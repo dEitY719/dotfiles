@@ -12,9 +12,11 @@ set -e
 
 
 
-# Run setup scripts for git and bash
+# Run setup scripts for bash, zsh, and git
 
 ./bash/setup.sh
+
+./zsh/setup.sh
 
 ./git/setup.sh
 
