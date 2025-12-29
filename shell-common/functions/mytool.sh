@@ -82,3 +82,13 @@ install-fd() {
     fi
     bash "$script" "$@"
 }
+
+# bat (cat with syntax highlighting) 설치 함수
+install-bat() {
+    local script="$HOME/dotfiles/mytool/install-bat.sh"
+    if [ ! -f "$script" ]; then
+        echo "Error: install-bat script not found: $script" >&2
+        return 2
+    fi
+    bash "$script" "$@"
+}

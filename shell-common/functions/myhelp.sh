@@ -18,6 +18,7 @@ _register_help_descriptions() {
 
     HELP_DESCRIPTIONS="${HELP_DESCRIPTIONS}
 apthelp:APT package manager commands
+bat-help:bat - Cat replacement with syntax highlighting
 cchelp:Claude Code usage help
 claudehelp:Claude Code MCP help
 clihelp:Custom Project CLI list

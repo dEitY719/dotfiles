@@ -365,6 +365,7 @@ zsh-help() {
     ux_table_row "install-fasd" "Install fasd (fast directory access)"
     ux_table_row "install-ripgrep" "Install ripgrep (fast text search)"
     ux_table_row "install-fd" "Install fd (fast file finder)"
+    ux_table_row "install-bat" "Install bat (cat with highlighting)"
     echo ""
 
     ux_section "Status"
