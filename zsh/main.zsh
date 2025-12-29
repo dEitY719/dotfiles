@@ -113,6 +113,19 @@ if [ -d "${SHELL_COMMON}/tools" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
+# Phase 5.6: Load Shared Projects (shell-common/projects/)
+# Project-specific configurations and utilities
+# ═══════════════════════════════════════════════════════════════
+
+if [ -d "${SHELL_COMMON}/projects" ]; then
+    for f in "${SHELL_COMMON}"/projects/*.sh; do
+        if [ -f "$f" ]; then
+            source "$f" 2>/dev/null || true
+        fi
+    done
+fi
+
+# ═══════════════════════════════════════════════════════════════
 # Phase 6: Load Zsh Utilities (zsh/util/)
 # ═══════════════════════════════════════════════════════════════
 

@@ -159,6 +159,15 @@ if [ -d "${SHELL_COMMON}/tools" ]; then
     done
 fi
 
+# --- Load shell-common projects ---
+# Project-specific configurations and utilities
+if [ -d "${SHELL_COMMON}/projects" ]; then
+    for f in "${SHELL_COMMON}/projects/"*.sh; do
+        [ -f "$f" ] || continue
+        safe_source "$f" "Shell-common projects file not found"
+    done
+fi
+
 # --- Load bash-specific ENV directory ---
 for f in "${DOTFILES_BASH_DIR}/env/"*.bash; do
     [ -f "$f" ] || continue
