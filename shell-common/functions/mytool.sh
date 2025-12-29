@@ -62,3 +62,13 @@ install-fasd() {
     fi
     bash "$script" "$@"
 }
+
+# ripgrep (fast text search) 설치 함수
+install-ripgrep() {
+    local script="$HOME/dotfiles/mytool/install-ripgrep.sh"
+    if [ ! -f "$script" ]; then
+        echo "Error: install-ripgrep script not found: $script" >&2
+        return 2
+    fi
+    bash "$script" "$@"
+}

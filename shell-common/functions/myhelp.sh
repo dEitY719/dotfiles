@@ -41,6 +41,7 @@ nvmhelp:NVM (Node Version Manager) commands
 pphelp:Python package and code quality tools
 psqlhelp:PostgreSQL command helper
 pyhelp:Python virtual environment commands
+ripgrep-help:ripgrep (rg) fast text search tool
 syshelp:System management commands
 uvhelp:UV package manager commands
 zsh-help:Zsh shell management commands

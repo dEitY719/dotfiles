@@ -363,6 +363,7 @@ zsh-help() {
     ux_table_row "p10k configure" "Configure powerlevel10k"
     ux_table_row "install-fzf" "Install fzf (fuzzy finder)"
     ux_table_row "install-fasd" "Install fasd (fast directory access)"
+    ux_table_row "install-ripgrep" "Install ripgrep (fast text search)"
     echo ""
 
     ux_section "Status"
