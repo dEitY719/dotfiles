@@ -27,6 +27,7 @@ dockerhelp:Docker commands and aliases
 dproxyhelp:Docker Proxy(Corporate) commands
 duhelp:Disk usage help
 fasd-help:fasd - Fast access to directories and files
+fd-help:fd - Fast file finder tool
 fzf-help:fzf (Fuzzy Finder) key bindings and usage
 gc_help:git-crypt (Transparent Git encryption)
 geminihelp:Gemini CLI commands and aliases

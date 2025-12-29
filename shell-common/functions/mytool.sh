@@ -72,3 +72,13 @@ install-ripgrep() {
     fi
     bash "$script" "$@"
 }
+
+# fd (fast file finder) 설치 함수
+install-fd() {
+    local script="$HOME/dotfiles/mytool/install-fd.sh"
+    if [ ! -f "$script" ]; then
+        echo "Error: install-fd script not found: $script" >&2
+        return 2
+    fi
+    bash "$script" "$@"
+}
