@@ -94,6 +94,13 @@ else
     ux_warning "Claude agents directory not found: $AGENTS_SOURCE_DIR"
 fi
 
+# --- Setup Git Configuration ---
+ux_section "Setting up Git configuration"
+GIT_SOURCE="$DOTFILES_DIR/git/.gitconfig"
+GIT_DEST="$HOME/.gitconfig"
+
+create_symlink "$GIT_SOURCE" "$GIT_DEST" ".gitconfig"
+
 # --- Setup PostgreSQL Services Config ---
 ux_section "Setting up PostgreSQL services config"
 PG_CONFIG_DIR="$HOME/.config"
