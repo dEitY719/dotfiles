@@ -435,11 +435,7 @@ gc_push_env() {
         ux_warning ".env가 .gitignore에 있습니다."
         ux_info "git-crypt로 암호화하므로 .gitignore에서 제거하는 것을 권장합니다."
         echo ""
-        echo -n "  .gitignore에서 .env 제거할까요? (Y/n) "
-        read -r response
-        response=${response:-Y}
-
-        if [[ "$response" =~ ^[Yy]$ ]]; then
+        if ux_confirm ".gitignore에서 .env 제거할까요?" "y"; then
             sed -i '/^\.env$/d' .gitignore
             ux_success ".gitignore에서 .env 제거됨"
 
@@ -481,11 +477,7 @@ gc_push_env() {
 
     # Git push
     echo ""
-    echo -n "지금 push 하시겠습니까? (Y/n) "
-    read -r push_response
-    push_response=${push_response:-Y}
-
-    if [[ "$push_response" =~ ^[Yy]$ ]]; then
+    if ux_confirm "지금 push 하시겠습니까?" "y"; then
         if git push; then
             ux_success "Push 완료!"
         else
