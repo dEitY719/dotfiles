@@ -3,21 +3,39 @@
 # zsh/main.zsh
 # Zsh Dotfiles Loader (SOLID Principle Compliant)
 # Completely independent from bash - no emulation, native zsh execution
+# Loading order: Env → UX → Alias → Functions → Utils → App
 
 # Exit if not in zsh
 [ -n "$ZSH_VERSION" ] || return 0
 
+# Guard: Only run in interactive shells to avoid slowdown in non-interactive contexts
+[[ $- == *i* ]] || return 0
+
 # ═══════════════════════════════════════════════════════════════
-# Directory Setup
+# Directory Setup - Compute paths from script location
 # ═══════════════════════════════════════════════════════════════
 
-DOTFILES_ROOT="${HOME}/dotfiles"
+# Compute DOTFILES_ROOT from this script's location
+# In zsh, use ${(%):-%N} to get the sourced script name
+# Fallback to $0 if in zsh < 4.2 or in other contexts
+_ZSH_SCRIPT="${${(%):-%N}:-$0}"
+_ZSH_SCRIPT_DIR="$(cd "$(dirname "$_ZSH_SCRIPT")" 2>/dev/null && pwd)" || _ZSH_SCRIPT_DIR=""
+
+# Compute DOTFILES_ROOT: go up from zsh/ to parent directory
+DOTFILES_ROOT="${_ZSH_SCRIPT_DIR%/zsh}"
+
+# Validate DOTFILES_ROOT is a real directory
+if [ -z "$DOTFILES_ROOT" ] || [ ! -d "$DOTFILES_ROOT" ]; then
+    # Fallback to default location if detection fails
+    DOTFILES_ROOT="${HOME}/dotfiles"
+fi
+
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"
 
 # Exit if dotfiles not found
 if [ ! -d "$DOTFILES_ROOT" ]; then
-    echo "Warning: Dotfiles directory not found at $DOTFILES_ROOT" >&2
+    echo "❌ Dotfiles directory not found at: $DOTFILES_ROOT" >&2
     return 1
 fi
 
@@ -37,7 +55,27 @@ if [ -d "${SHELL_COMMON}/env" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 2: Load Shared Aliases (shell-common/aliases/)
+# Phase 2: Load Zsh Environment Settings (zsh/env/)
+# ═══════════════════════════════════════════════════════════════
+
+if [ -d "${ZSH_DOTFILES}/env" ]; then
+    for f in "${ZSH_DOTFILES}"/env/*.zsh; do
+        [ -f "$f" ] && source "$f" 2>/dev/null || true
+    done 2>/dev/null || true
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# Phase 3: Load UX Library (MUST load before aliases/functions that use it)
+# ═══════════════════════════════════════════════════════════════
+
+if [ -f "${ZSH_DOTFILES}/ux_lib/ux_lib.zsh" ]; then
+    source "${ZSH_DOTFILES}/ux_lib/ux_lib.zsh" 2>/dev/null || {
+        echo "Warning: Failed to load UX library" >&2
+    }
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# Phase 4: Load Shared Aliases (shell-common/aliases/)
 # ═══════════════════════════════════════════════════════════════
 
 if [ -d "${SHELL_COMMON}/aliases" ]; then
@@ -49,7 +87,7 @@ if [ -d "${SHELL_COMMON}/aliases" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 3: Load Shared Functions (shell-common/functions/)
+# Phase 5: Load Shared Functions (shell-common/functions/)
 # ═══════════════════════════════════════════════════════════════
 
 if [ -d "${SHELL_COMMON}/functions" ]; then
@@ -58,26 +96,6 @@ if [ -d "${SHELL_COMMON}/functions" ]; then
             source "$f" 2>/dev/null || true
         fi
     done
-fi
-
-# ═══════════════════════════════════════════════════════════════
-# Phase 4: Load Zsh UX Library
-# ═══════════════════════════════════════════════════════════════
-
-if [ -f "${ZSH_DOTFILES}/ux_lib/ux_lib.zsh" ]; then
-    source "${ZSH_DOTFILES}/ux_lib/ux_lib.zsh" 2>/dev/null || {
-        echo "Warning: Failed to load UX library" >&2
-    }
-fi
-
-# ═══════════════════════════════════════════════════════════════
-# Phase 5: Load Zsh Environment Settings (zsh/env/)
-# ═══════════════════════════════════════════════════════════════
-
-if [ -d "${ZSH_DOTFILES}/env" ]; then
-    for f in "${ZSH_DOTFILES}"/env/*.zsh; do
-        [ -f "$f" ] && source "$f" 2>/dev/null || true
-    done 2>/dev/null || true
 fi
 
 # ═══════════════════════════════════════════════════════════════
@@ -138,6 +156,6 @@ export ZSH_DOTFILES
 # Only show message if UX library is loaded
 if type ux_success >/dev/null 2>&1; then
     # Uncomment for debugging:
-    # ux_success "Zsh dotfiles loaded successfully"
+    # ux_success "Zsh dotfiles loaded successfully (from $ZSH_DOTFILES)"
     :
 fi
