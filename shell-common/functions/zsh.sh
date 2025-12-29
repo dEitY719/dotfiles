@@ -362,6 +362,7 @@ zsh-help() {
     ux_table_row "install-p10k" "Install powerlevel10k theme"
     ux_table_row "p10k configure" "Configure powerlevel10k"
     ux_table_row "install-fzf" "Install fzf (fuzzy finder)"
+    ux_table_row "install-fasd" "Install fasd (fast directory access)"
     echo ""
 
     ux_section "Status"

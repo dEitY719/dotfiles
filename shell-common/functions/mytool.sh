@@ -52,3 +52,13 @@ install-fzf() {
     fi
     bash "$script" "$@"
 }
+
+# fasd (fast access to directories/files) 설치 함수
+install-fasd() {
+    local script="$HOME/dotfiles/mytool/install-fasd.sh"
+    if [ ! -f "$script" ]; then
+        echo "Error: install-fasd script not found: $script" >&2
+        return 2
+    fi
+    bash "$script" "$@"
+}
