@@ -326,7 +326,7 @@ mysql_server() {
 }
 
 # MySQL Help Function
-mysqlhelp() {
+mysql_help() {
     ux_header "MySQL Service Management"
 
     ux_section "Service Commands"

@@ -40,6 +40,7 @@ _register_default_help_descriptions() {
     [[ -z "${HELP_DESCRIPTIONS[uxhelp]}" ]] && HELP_DESCRIPTIONS["uxhelp"]="UX library functions and styling guide"
     [[ -z "${HELP_DESCRIPTIONS[gc_help]}" ]] && HELP_DESCRIPTIONS["gc_help"]="git-crypt (Transparent Git encryption)"
     [[ -z "${HELP_DESCRIPTIONS[mytool_help]}" ]] && HELP_DESCRIPTIONS["mytool_help"]="MyTool - Personal Utility Commands"
+    [[ -z "${HELP_DESCRIPTIONS[mysql_help]}" ]] && HELP_DESCRIPTIONS["mysql_help"]="MySQL Service Management"
 }
 
 myhelp() {
