@@ -61,7 +61,11 @@ if [ -n "$BASH" ]; then
         __git_ps1() {
             local branch
             branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-            [ -n "$branch" ] && printf "%s%s%s" "${1:- }" "$branch" "${2}"
+            if [ -n "$branch" ]; then
+                local fmt="${1:-%s}"
+                fmt="${fmt//%s/$branch}"
+                printf "%s%s" "$fmt" "$2"
+            fi
         }
     fi
     export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_pwd)\[\e[36m\]\$(__git_ps1 '(%s)')\[\e[0m\]\$ "
