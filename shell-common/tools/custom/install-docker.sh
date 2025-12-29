@@ -5,8 +5,8 @@
 set -e
 
 # Source the UX library
-
-source "$(dirname "$0")"/../bash/ux_lib/ux_lib.bash"
+# Path: shell-common/tools/custom/install-docker.sh -> ../../bash/ux_lib/ux_lib.bash
+source "$(dirname "$0")/../../bash/ux_lib/ux_lib.bash"
 
 # Main script
 main() {
