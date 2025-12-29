@@ -1,37 +1,20 @@
 #!/bin/bash
-# directory_aliases.bash
+# bash/alias/directory_aliases.bash
+#
+# ⚠️  BASH-SPECIFIC OVERRIDES
+# Basic directory aliases (cd_dot, cd_down, cd_work, cd_para, etc.)
+# are now in shell-common/aliases/directory.sh for bash/zsh compatibility.
+#
+# This file should contain ONLY bash-specific project shortcuts.
+# General directory aliases should be moved to shell-common/aliases/
 
-# BASIC
-alias cd_dot='cd ~/dotfiles'
-alias cd_down='cd ~/downloads'
-alias cd_work='cd ~/workspace'
-
-# window directory
-alias cd_wdocu='cd /mnt/c/Users/bwyoon/Documents'
-alias cd_wobsidian='cd /mnt/c/Users/bwyoon/Documents/.obsidian'
-alias cd_wdown='cd /mnt/c/Users/bwyoon/Downloads'
-alias cd_wpicture='cd /mnt/c/Users/bwyoon/Pictures'
-alias cd_tilnote='cd /mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote'
-alias cd_obsidian='cd /mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote'
-
-# PARA
-alias mkpara='mkdir -p para/{archive,area,project,resource}'
-alias cd_para='cd ~/para'
-
-# PARA/project
+# PARA/project shortcuts (bash-specific - custom projects)
 alias cd_project='cd ~/para/project'
 alias cd_ss='cd ~/para/project/slea-ssem'
 alias cd_ll='cd ~/para/project/litellm'
 
-# PARA/area
-alias cd_area='cd ~/para/area'
+# PARA/area shortcuts (bash-specific - custom areas)
 alias cd_vault='cd ~/para/area/vault'
-
-# PARA/resource
-alias cd_resource='cd ~/para/resource'
-
-# PARA/archive
-alias cd_archive='cd ~/para/archive'
 
 # Copy from Windows "Downloads" to WSL ~/downloads (robust path resolution)
 cp_wdown() {
