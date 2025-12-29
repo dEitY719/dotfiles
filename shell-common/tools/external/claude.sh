@@ -79,7 +79,7 @@ ensure_jq
 # ═══════════════════════════════════════════════════════════════
 
 clinstall() {
-    bash "$HOME/dotfiles/mytool/install-claude.sh"
+    bash "${HOME}/dotfiles/shell-common/tools/custom/install-claude.sh"
 }
 
 # ═══════════════════════════════════════════════════════════════

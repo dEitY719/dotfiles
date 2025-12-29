@@ -8,7 +8,7 @@ git-crypt Quickstart (Transparent Git encryption)
 1) 설치
 --------
 apt-get install git-crypt
-또는: bash mytool/install-git-crypt.sh
+또는: bash shell-common/tools/custom/install-git-crypt.sh
 
 2) 초기화 및 GPG 키 추가
 ------------------------
@@ -60,16 +60,16 @@ green="${UX_SUCCESS:-}"
 
 # git-crypt 설치 스크립트 실행
 git_crypt_install() {
-    bash "$HOME/dotfiles/mytool/install-git-crypt.sh"
+    bash "$HOME/dotfiles/shell-common/tools/custom/install-git-crypt.sh"
 }
 
 # 다른 PC에서 한 번에 설정 (올인원)
 gc_setup_new_pc() {
-    local script_path="$HOME/dotfiles/mytool/setup-new-pc.sh"
+    local script_path="$HOME/dotfiles/shell-common/tools/custom/setup-new-pc.sh"
 
     if [[ ! -f "$script_path" ]]; then
         # Try relative path
-        script_path="mytool/setup-new-pc.sh"
+        script_path="shell-common/tools/custom/setup-new-pc.sh"
         if [[ ! -f "$script_path" ]]; then
             ux_error "setup-new-pc.sh 스크립트를 찾을 수 없습니다."
             ux_info "dotfiles 리포지토리 내에서 실행하세요."
@@ -95,7 +95,7 @@ gc_setup() {
     # 2. Check if git-crypt installed
     if ! command -v git-crypt &>/dev/null; then
         ux_error "git-crypt이 설치되어 있지 않습니다."
-        ux_info "설치: gcinstall 또는 bash mytool/install-git-crypt.sh"
+        ux_info "설치: gcinstall 또는 bash shell-common/tools/custom/install-git-crypt.sh"
         return 1
     fi
 
@@ -396,7 +396,7 @@ gc_push_env() {
     echo ""
     ux_section "💡 다른 PC에서 복호화"
     ux_bullet "git clone <repo> && cd <repo>"
-    ux_bullet "bash ~/dotfiles/mytool/setup-new-pc.sh (처음 1회)"
+    ux_bullet "bash ~/dotfiles/shell-common/tools/custom/setup-new-pc.sh (처음 1회)"
     ux_bullet "또는 git-crypt unlock (이미 GPG 키 있으면)"
 }
 

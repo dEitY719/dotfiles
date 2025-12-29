@@ -9,7 +9,7 @@
 
 # 1) npm 전역 설치
 #    npm config set prefix '~/.npm-global'
-#    bash mytool/install-codex.sh
+#    bash shell-common/tools/custom/install-codex.sh
 #    또는 수동 설치:
 #    npm install -g <codex-package-name>
 #
@@ -30,7 +30,7 @@ alias cxver='codex --version'       # Show version
 # ═══════════════════════════════════════════════════════════════
 
 cxinstall() {
-    bash "$HOME/dotfiles/mytool/install-codex.sh"
+    bash "${HOME}/dotfiles/shell-common/tools/custom/install-codex.sh"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -38,7 +38,7 @@ cxinstall() {
 # ═══════════════════════════════════════════════════════════════
 
 cxuninstall() {
-    bash "$HOME/dotfiles/mytool/uninstall-codex.sh"
+    bash "${HOME}/dotfiles/shell-common/tools/custom/uninstall-codex.sh"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -54,7 +54,7 @@ cxstatus() {
         ux_table_row "Location" "$(which codex)" ""
     else
         ux_warning "Codex not found"
-        ux_info "To install: bash mytool/install-codex.sh"
+        ux_info "To install: bash shell-common/tools/custom/install-codex.sh"
         return 1
     fi
 

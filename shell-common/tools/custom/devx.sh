@@ -175,7 +175,7 @@ devx__main() {
         # shell-common/tools/custom/devx.sh -> shell-common/tools/custom -> shell-common/tools -> shell-common -> root
         local repo_root
         repo_root="$(dirname "$(dirname "$(dirname "$(dirname "$script_path")")")")"
-        local tool_path="${repo_root}/mytool/repo_stats.sh"
+        local tool_path="${repo_root}/shell-common/tools/custom/repo_stats.sh"
 
         if [ -f "$tool_path" ]; then
             bash "$tool_path" "$@"
