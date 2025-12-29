@@ -150,23 +150,17 @@ fi
 
 # --- Load shell-common tools (external) ---
 # External/third-party tools: apt, ccusage, claude, codex
-# TEMPORARILY DISABLED - debugging Windows Terminal issue
-# if [ -d "${SHELL_COMMON}/tools/external" ]; then
-#     for f in "${SHELL_COMMON}/tools/external/"*.sh; do
-#         [ -f "$f" ] || continue
-#         safe_source "$f" "Shell-common external tool not found"
-#     done
-# fi
+if [ -d "${SHELL_COMMON}/tools/external" ]; then
+    for f in "${SHELL_COMMON}/tools/external/"*.sh; do
+        [ -f "$f" ] || continue
+        safe_source "$f" "Shell-common external tool not found"
+    done
+fi
 
 # --- Load shell-common tools (custom) ---
-# Custom development tools: devx, etc.
-# TEMPORARILY DISABLED - debugging Windows Terminal issue
-# if [ -d "${SHELL_COMMON}/tools/custom" ]; then
-#     for f in "${SHELL_COMMON}/tools/custom/"*.sh; do
-#         [ -f "$f" ] || continue
-#         safe_source "$f" "Shell-common custom tool not found"
-#     done
-# fi
+# NOTE: shell-common/tools/custom/ contains executable utility scripts
+# that should NOT be auto-sourced. They are meant to be run explicitly
+# as commands, not loaded as shell functions. Examples: demo_ux.sh, check_ux_consistency.sh
 
 # --- Load shell-common projects ---
 # Project-specific configurations and utilities
