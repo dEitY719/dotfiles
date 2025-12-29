@@ -4,20 +4,24 @@
 # Automatically detects and lists all *help() functions
 # Modules can register descriptions via HELP_DESCRIPTIONS array
 
-# Initialize help descriptions (works in both bash and zsh)
-if [ -z "${HELP_DESCRIPTIONS+x}" ]; then
-    # Bash: associative array
-    # Zsh: will use typeset -A if needed
+# Initialize help descriptions guard (works in both bash and zsh)
+if [ -z "${_HELP_REGISTERED+x}" ]; then
+    _HELP_REGISTERED=0
     HELP_DESCRIPTIONS=""
 fi
 
 # Register all help descriptions (shared across shells)
+# Only register once per session to prevent duplicates
 _register_help_descriptions() {
+    # Guard: prevent re-registration of the same descriptions
+    if [ "$_HELP_REGISTERED" -eq 1 ]; then
+        return
+    fi
+
     # These descriptions appear in myhelp output
     # Modules can override by setting before sourcing
 
-    HELP_DESCRIPTIONS="${HELP_DESCRIPTIONS}
-apthelp:APT package manager commands
+    HELP_DESCRIPTIONS="apthelp:APT package manager commands
 bat-help:bat - Cat replacement with syntax highlighting
 cchelp:Claude Code usage help
 claudehelp:Claude Code MCP help
@@ -47,8 +51,10 @@ pyhelp:Python virtual environment commands
 ripgrep-help:ripgrep (rg) fast text search tool
 syshelp:System management commands
 uvhelp:UV package manager commands
-zsh-help:Zsh shell management commands
-"
+zsh-help:Zsh shell management commands"
+
+    # Mark as registered
+    _HELP_REGISTERED=1
 }
 
 # Main help function - works in both bash and zsh
