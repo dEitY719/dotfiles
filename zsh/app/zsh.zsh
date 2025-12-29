@@ -410,7 +410,5 @@ if [ -n "${HELP_DESCRIPTIONS+x}" ]; then
     HELP_DESCRIPTIONS[zsh-help]="Zsh shell management commands"
 fi
 
-# Export functions for use in other shells
-export -f zsh-switch bash-switch zsh-version zsh-themes zsh-theme zsh-theme-current
-export -f zsh-plugins zsh-update zsh-reload zsh-edit zsh-snippet zsh-snippets
-export -f zsh-help _zshhelp_full _zsh_check_installed _zsh_check_omz
+# Note: In zsh, functions are automatically available without explicit export
+# (export -f is bash syntax and not needed in zsh)

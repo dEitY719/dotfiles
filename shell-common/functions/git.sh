@@ -5,6 +5,10 @@
 # Git log formatter alias
 alias git_log='git log --graph --pretty=tformat:"%Cred%h %C(bold blue)%d %Creset%s %Cgreen%ad %C(yellow)%an" --date=short'
 
+# Override Oh My Zsh's gl alias with our function (zsh only)
+# In zsh, Oh My Zsh may have defined gl='git pull', so we unalias first
+unalias gl 2>/dev/null || true
+
 # Smart git log function (shows last 11 commits by default, all with -a/--all flag)
 # Usage:
 #   gl        - Show last 11 commits in graph format
