@@ -103,15 +103,15 @@ alias npm-search='npm_search'
 
 # NPM 설치 (대화형 스크립트)
 npminstall() {
-    bash "$HOME/dotfiles/mytool/install-npm.sh"
+    bash "$HOME/dotfiles/shell-common/tools/custom/install-npm.sh"
 }
 
 # NPM 제거 (대화형 스크립트)
 npmuninstall() {
-    bash "$HOME/dotfiles/mytool/uninstall-npm.sh"
+    bash "$HOME/dotfiles/shell-common/tools/custom/uninstall-npm.sh"
 }
 
 # CA 인증서 설치 (대화형 스크립트)
 crtsetup() {
-    bash "$HOME/dotfiles/mytool/setup-crt.sh"
+    bash "$HOME/dotfiles/shell-common/tools/custom/setup-crt.sh"
 }

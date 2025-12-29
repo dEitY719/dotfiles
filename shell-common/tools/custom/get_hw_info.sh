@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ~/dotfiles/mytool/get_hw_info.sh
+# ~/dotfiles/shell-common/tools/custom/get_hw_info.sh
 # Display comprehensive hardware information
 
 # Initialize DOTFILES_BASH_DIR using common initialization function

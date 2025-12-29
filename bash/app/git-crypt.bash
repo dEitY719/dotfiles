@@ -402,7 +402,7 @@ gc_push_env() {
 
 # GPG agent 캐싱 설정 (편의성 향상)
 gc_setup_cache() {
-    bash "$HOME/dotfiles/mytool/setup-gpg-cache.sh"
+    bash "$HOME/dotfiles/shell-common/tools/custom/setup-gpg-cache.sh"
 }
 
 # GPG agent 캐시 수동 초기화 (passphrase 즉시 만료)

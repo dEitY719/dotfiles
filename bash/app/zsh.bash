@@ -10,7 +10,7 @@
 
 # Install zsh with oh-my-zsh and plugins (bash-specific)
 install-zsh() {
-    bash "$HOME/dotfiles/mytool/install-zsh.sh" "$@"
+    bash "$HOME/dotfiles/shell-common/tools/custom/install-zsh.sh" "$@"
 }
 
 # ═══════════════════════════════════════════════════════════════

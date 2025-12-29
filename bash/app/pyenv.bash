@@ -18,7 +18,7 @@ fi
 
 # Python 설치 (대화형 스크립트)
 pyinstall() {
-    bash "$HOME/dotfiles/mytool/install-python.sh" "$@"
+    bash "$HOME/dotfiles/shell-common/tools/custom/install-python.sh" "$@"
 }
 
 # 특정 Python 버전 제거
