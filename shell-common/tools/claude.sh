@@ -1,50 +1,56 @@
-#!/bin/bash
-# /home/deity719/dotfiles/bash/app/claude.bash
+#!/bin/sh
+# shell-common/tools/claude.sh
+# Claude Code CLI - setup, utilities, and workflow helpers
+# Shared between bash and zsh
 
-# Initialize DOTFILES_BASH_DIR if not already set (for standalone execution)
-if [[ -z "$DOTFILES_BASH_DIR" ]]; then
-    _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
-    source "$(dirname "$_SCRIPT_PATH")/../util/init.bash"
-    DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
-    export DOTFILES_BASH_DIR
-fi
+# ═══════════════════════════════════════════════════════════════
+# Installation Instructions
+# ═══════════════════════════════════════════════════════════════
 
-#### ✅ 1. 이미 쓰고 계신 `~/.npm-global` 경로 활용
-# 아까 `gemini-cli` 설치에서 전역 경로가 `~/.npm-global/bin` 으로 잡혀 있었죠.
-# npm install -g @anthropic-ai/claude-code --prefix=$HOME/.npm-global
-# 이후 PATH에 `~/.npm-global/bin` 이 잡혀 있어야 합니다.
+# Method 1: Global npm prefix (using ~/.npm-global)
+# Recommended if you already have this directory from other npm packages
+#
+# 1) Install:
+#    npm install -g @anthropic-ai/claude-code --prefix=$HOME/.npm-global
+# 2) Ensure PATH is set (if not already):
+#    export PATH="$HOME/.npm-global/bin:$PATH"
+#
+# Verify:
+#    which claude && claude --version
+#
+#
+# Method 2: Using nvm (Node Version Manager) - RECOMMENDED
+# Cleaner approach: nvm manages Node.js and npm packages in your home directory
+#
+# 1) Install nvm:
+#    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+#    source ~/.bashrc   # or ~/.zshrc
+#
+# 2) Install Node.js (e.g., version 20):
+#    nvm install 20
+#    nvm use 20
+#
+# 3) Install Claude Code:
+#    npm install -g @anthropic-ai/claude-code
+#
+# Verify:
+#    which claude && claude --version
 
-#### ✅ 2. 혹은 `nvm` 사용 (더 깔끔한 방법)
-# * `nvm` 은 Node.js 버전을 사용자 홈 디렉토리에 설치해 주고, npm 전역 패키지도 같은 홈 경로에 저장합니다.
-# * root 권한이 필요 없고, 여러 Node.js 버전을 쉽게 관리할 수 있어요.
+# ═══════════════════════════════════════════════════════════════
+# Dependency Check: Ensure jq is installed
+# ═══════════════════════════════════════════════════════════════
 
-# ```bash
-# # nvm 설치
-# curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-# source ~/.bashrc   # 또는 ~/.zshrc
-
-# # Node 설치 (예: 20버전)
-# nvm install 20
-# nvm use 20
-
-# # 이제 다시 설치
-# npm install -g @anthropic-ai/claude-code
-# ```
-
-# (1) Claude Code 도움말
-
-# (2) jq 설치 확인 및 설치
 ensure_jq() {
-    if command -v jq &>/dev/null; then
+    if command -v jq > /dev/null 2>&1; then
         # jq already installed - silent pass
         return 0
     else
         ux_warning "jq is not installed. Installing..."
-        if command -v apt-get &>/dev/null; then
+        if command -v apt-get > /dev/null 2>&1; then
             sudo apt-get update && sudo apt-get install -y jq
-        elif command -v brew &>/dev/null; then
+        elif command -v brew > /dev/null 2>&1; then
             brew install jq
-        elif command -v yum &>/dev/null; then
+        elif command -v yum > /dev/null 2>&1; then
             sudo yum install -y jq
         else
             ux_error "Cannot determine package manager. Please install jq manually."
@@ -54,7 +60,7 @@ ensure_jq() {
             return 1
         fi
 
-        if command -v jq &>/dev/null; then
+        if command -v jq > /dev/null 2>&1; then
             ux_success "jq installed successfully"
             jq --version
             return 0
@@ -68,12 +74,18 @@ ensure_jq() {
 # Auto-call ensure_jq when this file is sourced
 ensure_jq
 
-# Claude Code CLI 설치 스크립트
+# ═══════════════════════════════════════════════════════════════
+# Claude Code Installation
+# ═══════════════════════════════════════════════════════════════
+
 clinstall() {
     bash "$HOME/dotfiles/mytool/install-claude.sh"
 }
 
-# (3) Claude Code 설정 파일 symbolic link 초기화
+# ═══════════════════════════════════════════════════════════════
+# Claude Code Configuration Initialization
+# ═══════════════════════════════════════════════════════════════
+
 claude_init() {
     local settings_source="$HOME/dotfiles/bash/claude/settings.json"
     local settings_target="$HOME/.claude/settings.json"
@@ -86,22 +98,22 @@ claude_init() {
     echo ""
 
     # Create ~/.claude directory if not exists
-    if [[ ! -d "$HOME/.claude" ]]; then
+    if [ ! -d "$HOME/.claude" ]; then
         ux_info "Creating ~/.claude directory..."
         mkdir -p "$HOME/.claude"
     fi
 
     # Create ~/.claude/skills directory if not exists
-    if [[ ! -d "$skills_target_dir" ]]; then
+    if [ ! -d "$skills_target_dir" ]; then
         ux_info "Creating ~/.claude/skills directory..."
         mkdir -p "$skills_target_dir"
     fi
 
     # Handle settings.json
     ux_section "Settings Configuration"
-    if [[ -L "$settings_target" ]]; then
+    if [ -L "$settings_target" ]; then
         ux_success "settings.json symbolic link already exists"
-    elif [[ -f "$settings_target" ]]; then
+    elif [ -f "$settings_target" ]; then
         ux_warning "settings.json exists as regular file"
         ux_info "Backing up to settings.json.backup..."
         mv "$settings_target" "$settings_target.backup"
@@ -115,9 +127,9 @@ claude_init() {
 
     # Handle statusline-command.sh
     ux_section "Statusline Configuration"
-    if [[ -L "$statusline_target" ]]; then
+    if [ -L "$statusline_target" ]; then
         ux_success "statusline-command.sh symbolic link already exists"
-    elif [[ -f "$statusline_target" ]]; then
+    elif [ -f "$statusline_target" ]; then
         ux_warning "statusline-command.sh exists as regular file"
         ux_info "Backing up to statusline-command.sh.backup..."
         mv "$statusline_target" "$statusline_target.backup"
@@ -131,17 +143,16 @@ claude_init() {
 
     # Handle skills directory
     ux_section "Claude Code Skills"
-    local skill_count=0
-    if [[ -d "$skills_source_dir" ]]; then
+    skill_count=0
+    if [ -d "$skills_source_dir" ]; then
         for skill_file in "$skills_source_dir"/*.md; do
-            if [[ -f "$skill_file" ]]; then
-                local skill_name
-                skill_name="$(basename "$skill_file")"
-                local skill_target="$skills_target_dir/$skill_name"
+            if [ -f "$skill_file" ]; then
+                skill_name=$(basename "$skill_file")
+                skill_target="$skills_target_dir/$skill_name"
 
-                if [[ -L "$skill_target" ]]; then
+                if [ -L "$skill_target" ]; then
                     ux_success "$skill_name (already linked)"
-                elif [[ -f "$skill_target" ]]; then
+                elif [ -f "$skill_target" ]; then
                     ux_warning "$skill_name exists as regular file"
                     ux_info "Backing up to $skill_name.backup..."
                     mv "$skill_target" "$skill_target.backup"
@@ -151,11 +162,11 @@ claude_init() {
                     ln -s "$skill_file" "$skill_target"
                     ux_success "$skill_name (linked)"
                 fi
-                ((skill_count++))
+                skill_count=$((skill_count + 1))
             fi
         done
 
-        if [[ $skill_count -eq 0 ]]; then
+        if [ "$skill_count" -eq 0 ]; then
             ux_info "No skill files found in $skills_source_dir"
         else
             ux_success "Total: $skill_count skill(s) linked"
@@ -169,35 +180,36 @@ claude_init() {
     echo ""
 
     ux_section "Configuration Files"
-    local config_target
     for config_target in "$settings_target" "$statusline_target"; do
-        if [[ -e "$config_target" ]]; then
+        if [ -e "$config_target" ]; then
             ls -la -- "$config_target"
         fi
     done
     echo ""
 
     ux_section "Skills"
-    if [[ -d "$skills_target_dir" ]]; then
-        local linked_skill_found=0
-        local skill_target_file
+    if [ -d "$skills_target_dir" ]; then
+        linked_skill_found=0
         for skill_target_file in "$skills_target_dir"/*.md; do
-            if [[ -e "$skill_target_file" ]]; then
+            if [ -e "$skill_target_file" ]; then
                 ls -la -- "$skill_target_file"
                 linked_skill_found=1
             fi
         done
-        if [[ $linked_skill_found -eq 0 ]]; then
+        if [ "$linked_skill_found" -eq 0 ]; then
             ux_info "(no skills found)"
         fi
     fi
 }
 
-# (4) Claude Code settings.json 편집
+# ═══════════════════════════════════════════════════════════════
+# Claude Code Settings Editor
+# ═══════════════════════════════════════════════════════════════
+
 claude_edit_settings() {
     local settings_file="$HOME/dotfiles/bash/claude/settings.json"
 
-    if [[ ! -f "$settings_file" ]]; then
+    if [ ! -f "$settings_file" ]; then
         ux_error "Settings file not found: $settings_file"
         return 1
     fi
@@ -213,35 +225,38 @@ claude_edit_settings() {
     ux_info "Changes will take effect immediately (settings.json is symlinked)"
 }
 
-# (5) Claude Code workflow aliases
-# Plan 모드: Interactive 모드로 시작 (권장)
+# ═══════════════════════════════════════════════════════════════
+# Claude Code Workflow Helpers
+# ═══════════════════════════════════════════════════════════════
+
+# Plan mode: Interactive mode (recommended)
 alias clplan='claude'
 
-# 테스트 작성 및 실행
+# Test writing helper
 cltest() {
-    if [[ -z "$1" ]]; then
+    if [ -z "$1" ]; then
         ux_header "cltest"
         ux_usage "cltest" "\"request\"" "Run Claude with prompt for test writing"
-        ux_bullet "Example: ${UX_INFO}cltest \"사용자 인증 테스트 작성해줘\"${UX_RESET}"
+        ux_bullet "Example: ${UX_INFO}cltest \"Write authentication tests\"${UX_RESET}"
         return 1
     fi
     claude -p "$1"
 }
 
-# Skip permissions 모드 (주의해서 사용)
+# Skip permissions mode (use with caution)
 clskip() {
-    if [[ -z "$1" ]]; then
+    if [ -z "$1" ]; then
         ux_header "clskip"
         ux_usage "clskip" "\"request\"" "Run Claude skipping permission prompts (caution)"
-        ux_bullet "Example: ${UX_INFO}clskip \"이 모듈을 리팩토링해줘\"${UX_RESET}"
+        ux_bullet "Example: ${UX_INFO}clskip \"Refactor this module\"${UX_RESET}"
         echo ""
-        ux_warning "모든 권한 프롬프트를 무시합니다"
-        ux_bullet "작은 범위부터 시작하고 신중하게 사용하세요"
+        ux_warning "This will skip all permission prompts"
+        ux_bullet "Start with small scopes and use carefully"
         return 1
     fi
 
-    ux_warning "Skip permissions 모드로 실행합니다"
-    ux_info "요청: $1"
+    ux_warning "Running in skip permissions mode"
+    ux_info "Request: $1"
     echo ""
     claude --dangerously-skip-permissions -p "$1"
 }
