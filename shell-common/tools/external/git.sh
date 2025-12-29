@@ -52,6 +52,18 @@ alias gl2=git_log2
 
 # PS1 only for bash (zsh uses oh-my-zsh themes)
 if [ -n "$BASH" ]; then
+    # Load git-prompt.sh if available, otherwise define __git_ps1
+    if [ -f /usr/share/git-core/contrib/completion/git-prompt.sh ]; then
+        # shellcheck source=/usr/share/git-core/contrib/completion/git-prompt.sh
+        source /usr/share/git-core/contrib/completion/git-prompt.sh
+    else
+        # Fallback: define __git_ps1 locally if not available system-wide
+        __git_ps1() {
+            local branch
+            branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+            [ -n "$branch" ] && printf "%s%s%s" "${1:- }" "$branch" "${2}"
+        }
+    fi
     export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_pwd)\[\e[36m\]\$(__git_ps1 '(%s)')\[\e[0m\]\$ "
 fi
 
