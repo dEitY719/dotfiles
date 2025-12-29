@@ -122,6 +122,5 @@ HELP_DESCRIPTIONS[myhelp]="Main help system"
 HELP_DESCRIPTIONS[zsh-help]="Zsh shell management"
 HELP_DESCRIPTIONS[githelp]="Git commands reference"
 
-# Export functions
-export -f myhelp _myhelp_show_all register_help get_help_description category_help
-# Note: In zsh, arrays cannot be exported; they're available in the current shell session
+# Note: In zsh, functions and arrays don't need explicit export
+# They're automatically available in the current shell session

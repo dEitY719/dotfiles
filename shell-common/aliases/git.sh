@@ -23,7 +23,7 @@ alias git_log2='git log --graph --decorate --date=short --abbrev-commit --pretty
 alias glref='git log ref/main --oneline'         # ref 원격 main 브랜치 한줄 로그
 
 # Git branch/checkout
-alias gb='git branch'                            # 브랜치 목록
+alias gb='git --no-pager branch'                 # 브랜치 목록 (pager 비활성화)
 alias gco='git checkout'                         # 체크아웃 (브랜치 이동 등)
 
 # Git diff
