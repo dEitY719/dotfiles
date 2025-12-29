@@ -1,6 +1,11 @@
 #!/bin/bash
 
 # bash/app/git.bash
+# Note: This file uses bash-specific features (read -a, __git_ps1, etc.)
+# and is only loaded in bash shells
+
+# Exit if not running in bash
+[ -n "$BASH" ] || return 0
 
 # --- 커스텀 경로 축약 함수 ---
 _short_pwd() {

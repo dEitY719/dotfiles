@@ -3,6 +3,10 @@
 # ~/dotfiles/bash/env/bash_settings.bash
 # Essential Bash shell settings
 # Extracted from default_wsl_bashrc.bash with duplicates removed
+# Note: This file uses bash-specific features (shopt, etc.)
+
+# Exit if not running in bash
+[ -n "$BASH" ] || return 0
 
 # =============================================================================
 # Interactive Shell Check
