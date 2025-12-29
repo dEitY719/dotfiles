@@ -2,7 +2,7 @@
 
 kill_by_port() {
     if [ -z "$1" ]; then
-        echo "사용법: kill_by_port <포트번호>"
+        ux_error "사용법: kill_by_port <포트번호>"
         return 1
     fi
 
@@ -10,10 +10,10 @@ kill_by_port() {
     PID=$(lsof -t -i :"$PORT")
 
     if [ -n "$PID" ]; then
-        echo "포트 $PORT 를 점유 중인 PID $PID 종료..."
+        ux_info "포트 $PORT 를 점유 중인 PID $PID 종료..."
         kill -9 "$PID"
     else
-        echo "포트 $PORT 를 점유 중인 프로세스가 없습니다."
+        ux_warning "포트 $PORT 를 점유 중인 프로세스가 없습니다."
     fi
 }
 
@@ -23,12 +23,12 @@ alias kp=kill_by_port
 # 포트 확인 함수
 check_port() {
     if [ -z "$1" ]; then
-        echo "사용법: check_port <포트번호>"
+        ux_error "사용법: check_port <포트번호>"
         return 1
     fi
     PORT=$1
-    echo "🔍 포트 $PORT 사용 현황:"
-    lsof -i :"$PORT" || echo "해당 포트를 사용하는 프로세스가 없습니다."
+    ux_info "포트 $PORT 사용 현황:"
+    lsof -i :"$PORT" || ux_warning "해당 포트를 사용하는 프로세스가 없습니다."
 }
 
 # 짧은 별칭
