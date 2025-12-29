@@ -12,7 +12,7 @@ uv.lock
 bash/env/local.bash
 bash/alias/local.bash
 bash/app/local.bash
-bash/config/pg_services.list
+shell-common/config/pg_services.list
 
 ./backup/.env.local
 .secrets/*.asc

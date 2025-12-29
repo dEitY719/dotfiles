@@ -106,7 +106,7 @@ echo -e "${BLUE}Setting up PostgreSQL services config...${RESET}"
 PG_CONFIG_DIR="$HOME/.config"
 mkdir -p "$PG_CONFIG_DIR"
 
-PG_SOURCE="$DOTFILES_DIR/bash/config/pg_services.list"
+PG_SOURCE="$DOTFILES_DIR/shell-common/config/pg_services.list"
 PG_DEST="$PG_CONFIG_DIR/pg_services.list"
 
 if [ ! -f "$PG_SOURCE" ]; then
