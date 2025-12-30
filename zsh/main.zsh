@@ -139,11 +139,14 @@ fi
 # ═══════════════════════════════════════════════════════════════
 
 if [ -d "${ZSH_DOTFILES}/util" ]; then
+    # Use setopt null_glob to allow empty glob results (e.g., when no .zsh files exist)
+    setopt null_glob
     for f in "${ZSH_DOTFILES}"/util/*.zsh; do
         if [ -f "$f" ]; then
             source "$f" 2>/dev/null || true
         fi
     done
+    unsetopt null_glob
 fi
 
 # ═══════════════════════════════════════════════════════════════
