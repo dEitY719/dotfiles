@@ -195,6 +195,6 @@ install-p10k() {
 }
 
 # Run installation if script is executed directly
-if [ "${0##*/}" = "install-powerlevel10k.sh" ]; then
+if [ "${0##*/}" = "install-p10k.sh" ]; then
     install-p10k
 fi
