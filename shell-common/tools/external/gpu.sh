@@ -176,6 +176,4 @@ _gpuhelp_full() {
 }
 
 # Main help function (compact version)
-
-# Export function for use in other shells
-export -f gpuhelp _gpuhelp_full
+# Note: gpu_help function is defined in shell-common/functions/gpuhelp.sh
