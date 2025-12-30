@@ -2,9 +2,9 @@
 # shell-common/functions/psqlhelp.sh
 # psqlHelp - shared between bash and zsh
 
-psqlhelp() {
+psql_help() {
     if [[ $# -gt 0 ]]; then
-        # Legacy/Direct mode support: psqlhelp <service> <cmd>
+        # Legacy/Direct mode support: psql_help <service> <cmd>
         local svc=""
         shift
         local sql_cmd="$*"
@@ -13,7 +13,7 @@ psqlhelp() {
     fi
 
     ux_header "PostgreSQL Manager"
-    # ux_usage "psqlhelp" "" "Show available PostgreSQL commands"
+    # ux_usage "psql_help" "" "Show available PostgreSQL commands"
 
     ux_section "Primary Commands"
     ux_table_row "psql_list" "List Services" "Show all configured connections"
@@ -31,3 +31,6 @@ psqlhelp() {
     # Show services table
     psql_list
 }
+
+# Alias for psql-help format (using dash instead of underscore)
+alias psql-help='psql_help'

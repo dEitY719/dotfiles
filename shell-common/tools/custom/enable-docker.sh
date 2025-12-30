@@ -94,7 +94,7 @@ main() {
     echo ""
 
     ux_section "More Commands"
-    ux_info "For more Docker commands, run: ${UX_PRIMARY}dockerhelp${UX_RESET}"
+    ux_info "For more Docker commands, run: ${UX_PRIMARY}docker-help${UX_RESET}"
     echo ""
 }
 

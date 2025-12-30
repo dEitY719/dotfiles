@@ -2,7 +2,7 @@
 # shell-common/functions/clihelp.sh
 # cliHelp - shared between bash and zsh
 
-clihelp() {
+cli_help() {
     ux_header "Custom Project CLI Help"
 
     ux_section "Repositories"
@@ -41,3 +41,6 @@ clihelp() {
     ux_bullet "Never use --reload in production"
     echo ""
 }
+
+# Alias for cli-help format (using dash instead of underscore)
+alias cli-help='cli_help'

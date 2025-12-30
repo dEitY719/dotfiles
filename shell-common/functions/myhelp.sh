@@ -69,27 +69,27 @@ _get_help_functions() {
 
 _register_default_help_descriptions() {
     # Only set if not already registered by the module itself
-    [[ -z "${HELP_DESCRIPTIONS[uvhelp]}" ]] && HELP_DESCRIPTIONS["uvhelp"]="UV package manager commands"
-    [[ -z "${HELP_DESCRIPTIONS[githelp]}" ]] && HELP_DESCRIPTIONS["githelp"]="Git shortcuts and aliases"
-    [[ -z "${HELP_DESCRIPTIONS[pyhelp]}" ]] && HELP_DESCRIPTIONS["pyhelp"]="Python virtual environment commands"
-    [[ -z "${HELP_DESCRIPTIONS[dirhelp]}" ]] && HELP_DESCRIPTIONS["dirhelp"]="Directory navigation aliases"
-    [[ -z "${HELP_DESCRIPTIONS[syshelp]}" ]] && HELP_DESCRIPTIONS["syshelp"]="System management commands"
-    [[ -z "${HELP_DESCRIPTIONS[pphelp]}" ]] && HELP_DESCRIPTIONS["pphelp"]="Python package and code quality tools"
-    [[ -z "${HELP_DESCRIPTIONS[clihelp]}" ]] && HELP_DESCRIPTIONS["clihelp"]="Custom Project CLI list"
-    [[ -z "${HELP_DESCRIPTIONS[duhelp]}" ]] && HELP_DESCRIPTIONS["duhelp"]="Disk usage help"
-    [[ -z "${HELP_DESCRIPTIONS[psqlhelp]}" ]] && HELP_DESCRIPTIONS["psqlhelp"]="PostgreSQL command helper"
-    [[ -z "${HELP_DESCRIPTIONS[cchelp]}" ]] && HELP_DESCRIPTIONS["cchelp"]="Claude Code usage help"
-    [[ -z "${HELP_DESCRIPTIONS[claudehelp]}" ]] && HELP_DESCRIPTIONS["claudehelp"]="Claude Code MCP help"
-    [[ -z "${HELP_DESCRIPTIONS[dockerhelp]}" ]] && HELP_DESCRIPTIONS["dockerhelp"]="Docker commands and aliases"
-    [[ -z "${HELP_DESCRIPTIONS[apthelp]}" ]] && HELP_DESCRIPTIONS["apthelp"]="APT package manager commands"
-    [[ -z "${HELP_DESCRIPTIONS[geminihelp]}" ]] && HELP_DESCRIPTIONS["geminihelp"]="Gemini CLI commands and aliases"
-    [[ -z "${HELP_DESCRIPTIONS[codexhelp]}" ]] && HELP_DESCRIPTIONS["codexhelp"]="Codex CLI commands and aliases"
-    [[ -z "${HELP_DESCRIPTIONS[dproxyhelp]}" ]] && HELP_DESCRIPTIONS["dproxyhelp"]="Docker Proxy(Corporate) commands"
-    [[ -z "${HELP_DESCRIPTIONS[npmhelp]}" ]] && HELP_DESCRIPTIONS["npmhelp"]="NPM package manager commands"
-    [[ -z "${HELP_DESCRIPTIONS[nvmhelp]}" ]] && HELP_DESCRIPTIONS["nvmhelp"]="NVM (Node Version Manager) commands"
+    [[ -z "${HELP_DESCRIPTIONS[uv_help]}" ]] && HELP_DESCRIPTIONS["uv_help"]="UV package manager commands"
+    [[ -z "${HELP_DESCRIPTIONS[git_help]}" ]] && HELP_DESCRIPTIONS["git_help"]="Git shortcuts and aliases"
+    [[ -z "${HELP_DESCRIPTIONS[py_help]}" ]] && HELP_DESCRIPTIONS["py_help"]="Python virtual environment commands"
+    [[ -z "${HELP_DESCRIPTIONS[dir_help]}" ]] && HELP_DESCRIPTIONS["dir_help"]="Directory navigation aliases"
+    [[ -z "${HELP_DESCRIPTIONS[sys_help]}" ]] && HELP_DESCRIPTIONS["sys_help"]="System management commands"
+    [[ -z "${HELP_DESCRIPTIONS[pp_help]}" ]] && HELP_DESCRIPTIONS["pp_help"]="Python package and code quality tools"
+    [[ -z "${HELP_DESCRIPTIONS[cli_help]}" ]] && HELP_DESCRIPTIONS["cli_help"]="Custom Project CLI list"
+    [[ -z "${HELP_DESCRIPTIONS[du_help]}" ]] && HELP_DESCRIPTIONS["du_help"]="Disk usage help"
+    [[ -z "${HELP_DESCRIPTIONS[psql_help]}" ]] && HELP_DESCRIPTIONS["psql_help"]="PostgreSQL command helper"
+    [[ -z "${HELP_DESCRIPTIONS[cc_help]}" ]] && HELP_DESCRIPTIONS["cc_help"]="Claude Code usage help"
+    [[ -z "${HELP_DESCRIPTIONS[claude_help]}" ]] && HELP_DESCRIPTIONS["claude_help"]="Claude Code MCP help"
+    [[ -z "${HELP_DESCRIPTIONS[docker_help]}" ]] && HELP_DESCRIPTIONS["docker_help"]="Docker commands and aliases"
+    [[ -z "${HELP_DESCRIPTIONS[apt_help]}" ]] && HELP_DESCRIPTIONS["apt_help"]="APT package manager commands"
+    [[ -z "${HELP_DESCRIPTIONS[gemini_help]}" ]] && HELP_DESCRIPTIONS["gemini_help"]="Gemini CLI commands and aliases"
+    [[ -z "${HELP_DESCRIPTIONS[codex_help]}" ]] && HELP_DESCRIPTIONS["codex_help"]="Codex CLI commands and aliases"
+    [[ -z "${HELP_DESCRIPTIONS[dproxy_help]}" ]] && HELP_DESCRIPTIONS["dproxy_help"]="Docker Proxy(Corporate) commands"
+    [[ -z "${HELP_DESCRIPTIONS[npm_help]}" ]] && HELP_DESCRIPTIONS["npm_help"]="NPM package manager commands"
+    [[ -z "${HELP_DESCRIPTIONS[nvm_help]}" ]] && HELP_DESCRIPTIONS["nvm_help"]="NVM (Node Version Manager) commands"
     [[ -z "${HELP_DESCRIPTIONS[litellm_help]}" ]] && HELP_DESCRIPTIONS["litellm_help"]="LiteLLM commands and aliases"
-    [[ -z "${HELP_DESCRIPTIONS[gpuhelp]}" ]] && HELP_DESCRIPTIONS["gpuhelp"]="GPU monitoring commands (WSL2 universal)"
-    [[ -z "${HELP_DESCRIPTIONS[uxhelp]}" ]] && HELP_DESCRIPTIONS["uxhelp"]="UX library functions and styling guide"
+    [[ -z "${HELP_DESCRIPTIONS[gpu_help]}" ]] && HELP_DESCRIPTIONS["gpu_help"]="GPU monitoring commands (WSL2 universal)"
+    [[ -z "${HELP_DESCRIPTIONS[ux_help]}" ]] && HELP_DESCRIPTIONS["ux_help"]="UX library functions and styling guide"
     [[ -z "${HELP_DESCRIPTIONS[gc_help]}" ]] && HELP_DESCRIPTIONS["gc_help"]="git-crypt (Transparent Git encryption)"
     [[ -z "${HELP_DESCRIPTIONS[mytool_help]}" ]] && HELP_DESCRIPTIONS["mytool_help"]="MyTool - Personal Utility Commands"
     [[ -z "${HELP_DESCRIPTIONS[mysql_help]}" ]] && HELP_DESCRIPTIONS["mysql_help"]="MySQL Service Management"
@@ -100,7 +100,7 @@ _register_default_help_descriptions() {
     [[ -z "${HELP_DESCRIPTIONS[fzf-help]}" ]] && HELP_DESCRIPTIONS["fzf-help"]="fzf (Fuzzy Finder) key bindings and usage"
     [[ -z "${HELP_DESCRIPTIONS[pet-help]}" ]] && HELP_DESCRIPTIONS["pet-help"]="pet - Simple command snippet manager"
     [[ -z "${HELP_DESCRIPTIONS[ripgrep-help]}" ]] && HELP_DESCRIPTIONS["ripgrep-help"]="ripgrep (rg) fast text search tool"
-    [[ -z "${HELP_DESCRIPTIONS[p10k-help]}" ]] && HELP_DESCRIPTIONS["p10k-help"]="Powerlevel10k font setup guide"
+    [[ -z "${HELP_DESCRIPTIONS[p10k_help]}" ]] && HELP_DESCRIPTIONS["p10k_help"]="Powerlevel10k font setup guide"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -108,7 +108,7 @@ _register_default_help_descriptions() {
 # ═══════════════════════════════════════════════════════════════
 
 # Internal: Show all available commands
-_myhelp_show_all() {
+_my_help_show_all() {
     ux_header "Dotfiles Help Functions"
     ux_section "Available help commands"
 
@@ -118,7 +118,7 @@ _myhelp_show_all() {
         # Extract function name (before '(' or first space)
         local func_name="${func%%[( ]*}"
         # Check if func_name ends with 'help' and exclude internal functions
-        if [[ "$func_name" == *help ]] && [[ "$func_name" != "myhelp" ]] && [[ "$func_name" != _* ]]; then
+        if [[ "$func_name" == *help ]] && [[ "$func_name" != "my_help" ]] && [[ "$func_name" != _* ]]; then
             help_funcs+=("$func_name")
         fi
     done < <(_get_help_functions)
@@ -140,22 +140,22 @@ _myhelp_show_all() {
     ux_divider
     echo ""
     ux_info "Type any of the above commands to see detailed help"
-    echo "  ${UX_MUTED}Example:${UX_RESET} ${UX_INFO}githelp${UX_RESET}, ${UX_INFO}uvhelp${UX_RESET}, ${UX_INFO}dockerhelp${UX_RESET}"
+    echo "  ${UX_MUTED}Example:${UX_RESET} ${UX_INFO}git-help${UX_RESET}, ${UX_INFO}uv-help${UX_RESET}, ${UX_INFO}docker-help${UX_RESET}"
     echo ""
     ux_warning "To add a new help function:"
-    ux_bullet "Create a function ending with 'help' (e.g., dockerhelp)"
-    ux_bullet "Register description: HELP_DESCRIPTIONS[\"yourhelp\"]=\"Your description\""
-    ux_bullet "It will be automatically detected by ${UX_SUCCESS}myhelp${UX_RESET}"
+    ux_bullet "Create a function ending with '_help' (e.g., docker_help)"
+    ux_bullet "Register description: HELP_DESCRIPTIONS[\"your_help\"]=\"Your description\""
+    ux_bullet "It will be automatically detected by ${UX_SUCCESS}my-help${UX_RESET}"
     echo ""
 }
 
 # Main help function - displays all registered commands or specific help
-myhelp() {
+my_help() {
     # Register default descriptions
     _register_default_help_descriptions
 
     if [ -z "$1" ]; then
-        _myhelp_show_all
+        _my_help_show_all
         return 0
     fi
 
@@ -190,13 +190,13 @@ category_help() {
             zsh-help --all 2>/dev/null || ux_error "zsh-help not available"
             ;;
         git)
-            githelp
+            git_help
             ;;
         system)
-            syshelp 2>/dev/null || ux_info "System help not available"
+            sys_help 2>/dev/null || ux_info "System help not available"
             ;;
         *)
-            _myhelp_show_all
+            _my_help_show_all
             ;;
     esac
 }
@@ -206,4 +206,7 @@ category_help() {
 # ═══════════════════════════════════════════════════════════════
 
 # Register built-in help functions (can be overridden)
-HELP_DESCRIPTIONS[myhelp]="Main help system"
+HELP_DESCRIPTIONS[my_help]="Main help system"
+
+# Alias for my-help format (using dash instead of underscore)
+alias my-help='my_help'

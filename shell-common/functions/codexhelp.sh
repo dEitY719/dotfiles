@@ -2,7 +2,7 @@
 # shell-common/functions/codexhelp.sh
 # codexHelp - shared between bash and zsh
 
-codexhelp() {
+codex_help() {
     ux_header "Codex Quick Commands"
 
     ux_section "Basic Commands"
@@ -26,3 +26,6 @@ codexhelp() {
     ux_bullet "Auth: Use 'cx' to authenticate"
     echo ""
 }
+
+# Alias for codex-help format (using dash instead of underscore)
+alias codex-help='codex_help'

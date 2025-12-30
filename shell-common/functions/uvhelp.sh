@@ -2,7 +2,7 @@
 # shell-common/functions/uvhelp.sh
 # uvHelp - shared between bash and zsh
 
-uvhelp() {
+uv_help() {
     ux_header "UV Quick Commands"
 
     ux_section "Sync & Install"
@@ -29,3 +29,6 @@ uvhelp() {
     ux_bullet "Frontend dev:     ${UX_SUCCESS}uv pip sync --extra frontend --extra dev${UX_RESET}"
     echo ""
 }
+
+# Alias for uv-help format (using dash instead of underscore)
+alias uv-help='uv_help'

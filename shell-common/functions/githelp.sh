@@ -2,7 +2,7 @@
 # shell-common/functions/githelp.sh
 # gitHelp - shared between bash and zsh
 
-githelp() {
+git_help() {
     ux_header "Git Quick Commands"
 
     ux_section "Basic Commands"
@@ -72,3 +72,6 @@ githelp() {
     ux_table_row "glfs" "track <pattern>" "Track files with LFS"
     echo ""
 }
+
+# Alias for git-help format (using dash instead of underscore)
+alias git-help='git_help'

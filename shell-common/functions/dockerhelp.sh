@@ -2,7 +2,7 @@
 # shell-common/functions/dockerhelp.sh
 # dockerHelp - shared between bash and zsh
 
-dockerhelp() {
+docker_help() {
     ux_header "Docker / Docker Compose Quick Commands"
 
     ux_section "Docker Compose Basics"
@@ -59,3 +59,6 @@ dockerhelp() {
     ux_info "Note: 'docker compose' (V2) is used by default."
     echo ""
 }
+
+# Alias for docker-help format (using dash instead of underscore)
+alias docker-help='docker_help'

@@ -2,7 +2,7 @@
 # shell-common/functions/npmhelp.sh
 # npmHelp - shared between bash and zsh
 
-npmhelp() {
+npm_help() {
     ux_header "NPM Quick Commands"
 
     ux_section "Info & Version"
@@ -50,3 +50,6 @@ npmhelp() {
 
     ux_info "Global Path: ~/.npm-global"
 }
+
+# Alias for npm-help format (using dash instead of underscore)
+alias npm-help='npm_help'

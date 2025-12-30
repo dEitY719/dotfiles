@@ -8,7 +8,7 @@
 # ═══════════════════════════════════════════════════════════════
 
 # Main help function for powerlevel10k font setup
-p10k-help() {
+p10k_help() {
     ux_header "Powerlevel10k Font Setup for VSCode Terminal"
 
     ux_section "VS Code Settings (settings.json)"
@@ -51,3 +51,6 @@ EOF
     ux_info "Or check theme: ${UX_BOLD}zsh-theme-current${UX_RESET}}"
     echo ""
 }
+
+# Alias for p10k-help format (using dash instead of underscore)
+alias p10k-help='p10k_help'

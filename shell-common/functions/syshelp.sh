@@ -2,7 +2,7 @@
 # shell-common/functions/syshelp.sh
 # sysHelp - shared between bash and zsh
 
-syshelp() {
+sys_help() {
     ux_header "System Management Commands"
 
     ux_section "Process Management"
@@ -39,3 +39,6 @@ syshelp() {
     ux_table_row "auth" "auth.log" "Auth logs"
     echo ""
 }
+
+# Alias for sys-help format (using dash instead of underscore)
+alias sys-help='sys_help'

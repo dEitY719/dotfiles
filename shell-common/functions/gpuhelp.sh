@@ -2,10 +2,10 @@
 # shell-common/functions/gpuhelp.sh
 # gpuHelp - shared between bash and zsh
 
-gpuhelp() {
+gpu_help() {
     # Show full help with --all or -a flag
     if [[ "$1" == "--all" ]] || [[ "$1" == "-a" ]]; then
-        _gpuhelp_full
+        _gpu_help_full
         return 0
     fi
 
@@ -31,5 +31,8 @@ gpuhelp() {
     ux_bullet "Restart: ${UX_BOLD}docker compose up -d ollama${UX_RESET}"
     echo ""
 
-    ux_info "More details: ${UX_BOLD}gpuhelp --all${UX_RESET}"
+    ux_info "More details: ${UX_BOLD}gpu-help --all${UX_RESET}"
 }
+
+# Alias for gpu-help format (using dash instead of underscore)
+alias gpu-help='gpu_help'

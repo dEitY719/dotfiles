@@ -2,7 +2,7 @@
 # shell-common/functions/dproxyhelp.sh
 # dproxyHelp - shared between bash and zsh
 
-dproxyhelp() {
+dproxy_help() {
     ux_header "Docker Corporate Proxy Setup Guide"
 
     ux_section "1. Config File Location"
@@ -46,7 +46,10 @@ dproxyhelp() {
     echo ""
     ux_info "Quick Commands:"
     ux_bullet "${UX_SUCCESS}dproxy_setup${UX_RESET} : Interactive setup script"
-    ux_bullet "${UX_SUCCESS}dproxyhelp${UX_RESET}   : Show this help"
+    ux_bullet "${UX_SUCCESS}dproxy-help${UX_RESET}  : Show this help"
     ux_bullet "${UX_SUCCESS}dproxy_show${UX_RESET}  : Show current proxy config"
     echo ""
 }
+
+# Alias for dproxy-help format (using dash instead of underscore)
+alias dproxy-help='dproxy_help'

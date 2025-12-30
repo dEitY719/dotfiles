@@ -2,7 +2,7 @@
 # shell-common/functions/pyhelp.sh
 # pyHelp - shared between bash and zsh
 
-pyhelp() {
+py_help() {
     ux_header "Python Virtual Environment Commands"
 
     ux_section "Full Commands"
@@ -33,3 +33,6 @@ pyhelp() {
     ux_step 4 "${UX_SUCCESS}dv${UX_RESET}  # Deactivate when done"
     echo ""
 }
+
+# Alias for py-help format (using dash instead of underscore)
+alias py-help='py_help'

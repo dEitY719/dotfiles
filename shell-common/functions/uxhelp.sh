@@ -9,7 +9,7 @@ alias ux-demo='bash "${SHELL_COMMON}/tools/custom/demo_ux.sh"'
 # UX Help Function
 # =============================================================================
 
-uxhelp() {
+ux_help() {
     # UX library is already loaded globally in main.bash/main.zsh
     ux_header "UX Library - Styling Guide"
 
@@ -129,9 +129,12 @@ EOF
 
     ux_divider
     echo ""
-    ux_info "For more help topics, run ${UX_BOLD}myhelp${UX_RESET}"
+    ux_info "For more help topics, run ${UX_BOLD}my-help${UX_RESET}"
     echo ""
 }
 
+# Alias for ux-help format (using dash instead of underscore)
+alias ux-help='ux_help'
+
 # Register help description
-HELP_DESCRIPTIONS["uxhelp"]="UX library functions and styling guide"
+HELP_DESCRIPTIONS["ux_help"]="UX library functions and styling guide"

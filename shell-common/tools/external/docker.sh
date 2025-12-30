@@ -58,7 +58,7 @@ dcl() {
             echo ""
         fi
 
-        ux_info "Run ${UX_BOLD}dockerhelp${UX_RESET} for more Docker commands"
+        ux_info "Run ${UX_BOLD}docker-help${UX_RESET} for more Docker commands"
         echo ""
         return 0
     fi

@@ -2,7 +2,7 @@
 # shell-common/functions/cchelp.sh
 # ccHelp - shared between bash and zsh
 
-cchelp() {
+cc_help() {
     ux_header "Claude Code Usage Commands"
 
     ux_section "Installation"
@@ -15,3 +15,6 @@ cchelp() {
     ux_table_row "ccb" "ccusage blocks --live" "Cache hit ratio (live)"
     echo ""
 }
+
+# Alias for cc-help format (using dash instead of underscore)
+alias cc-help='cc_help'

@@ -164,7 +164,7 @@ ainfo() {
 # APT Help Function
 # ═══════════════════════════════════════════════════════════════
 
-apthelp() {
+apt_help() {
     if type ux_header >/dev/null 2>&1; then
         ux_header "APT Quick Commands"
     else
@@ -248,3 +248,6 @@ apthelp() {
         echo "Note: Commands prefixed with sudo require elevated privileges"
     fi
 }
+
+# Alias for apt-help format (using dash instead of underscore)
+alias apt-help='apt_help'

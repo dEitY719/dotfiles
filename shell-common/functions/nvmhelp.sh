@@ -2,7 +2,7 @@
 # shell-common/functions/nvmhelp.sh
 # nvmHelp - shared between bash and zsh
 
-nvmhelp() {
+nvm_help() {
     ux_header "NVM (Node Version Manager)"
 
     ux_section "Commands"
@@ -15,3 +15,6 @@ nvmhelp() {
     ux_bullet "nvm ls             : List installed versions"
     echo ""
 }
+
+# Alias for nvm-help format (using dash instead of underscore)
+alias nvm-help='nvm_help'

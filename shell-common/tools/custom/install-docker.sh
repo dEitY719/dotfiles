@@ -125,7 +125,7 @@ main() {
     ux_numbered 1 "If you added user to docker group, restart WSL: ${UX_PRIMARY}wsl --shutdown${UX_RESET}"
     ux_numbered 2 "Test the installation: ${UX_PRIMARY}docker run hello-world${UX_RESET}"
     echo ""
-    ux_info "For more Docker commands, run: ${UX_PRIMARY}dockerhelp${UX_RESET}"
+    ux_info "For more Docker commands, run: ${UX_PRIMARY}docker-help${UX_RESET}"
     echo ""
     
     # Clean up sudo keep-alive

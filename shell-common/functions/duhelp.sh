@@ -2,7 +2,7 @@
 # shell-common/functions/duhelp.sh
 # duHelp - shared between bash and zsh
 
-duhelp() {
+du_help() {
     ux_header "Disk Usage Helper (du aliases)"
 
     ux_section "Aliases"
@@ -15,3 +15,6 @@ duhelp() {
     ux_info "Tip: -h option means 'human-readable' (K, M, G)"
     echo ""
 }
+
+# Alias for du-help format (using dash instead of underscore)
+alias du-help='du_help'

@@ -2,7 +2,7 @@
 # shell-common/functions/claudehelp.sh
 # claudeHelp - shared between bash and zsh
 
-claudehelp() {
+claude_help() {
     # Load UX library (unified library at shell-common/tools/ux_lib/)
     source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 
@@ -49,3 +49,6 @@ claudehelp() {
     ux_bullet "Block commands: rm -rf, sudo rm"
     echo ""
 }
+
+# Alias for claude-help format (using dash instead of underscore)
+alias claude-help='claude_help'

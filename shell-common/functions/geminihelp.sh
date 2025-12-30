@@ -2,7 +2,7 @@
 # shell-common/functions/geminihelp.sh
 # geminiHelp - shared between bash and zsh
 
-geminihelp() {
+gemini_help() {
     ux_header "Gemini CLI Quick Commands"
 
     ux_section "Basic Commands"
@@ -23,3 +23,6 @@ geminihelp() {
     ux_bullet "Use 'ghelp' for detailed CLI options"
     echo ""
 }
+
+# Alias for gemini-help format (using dash instead of underscore)
+alias gemini-help='gemini_help'

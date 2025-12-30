@@ -2,7 +2,7 @@
 # shell-common/functions/pphelp.sh
 # ppHelp - shared between bash and zsh
 
-pphelp() {
+pp_help() {
     ux_header "Python Package & Quality Tools"
 
     ux_section "Package Management"
@@ -30,3 +30,6 @@ pphelp() {
     ux_table_row "docs_gen" "sphinx build" "Generate HTML docs"
     echo ""
 }
+
+# Alias for pp-help format (using dash instead of underscore)
+alias pp-help='pp_help'

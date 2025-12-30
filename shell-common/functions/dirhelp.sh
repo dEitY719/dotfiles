@@ -2,7 +2,7 @@
 # shell-common/functions/dirhelp.sh
 # dirHelp - shared between bash and zsh
 
-dirhelp() {
+dir_help() {
     cat <<-'EOF'
 
 [Directory Navigation Commands]
@@ -45,3 +45,6 @@ dirhelp() {
 
 EOF
 }
+
+# Alias for dir-help format (using dash instead of underscore)
+alias dir-help='dir_help'
