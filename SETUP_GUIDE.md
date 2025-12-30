@@ -93,11 +93,12 @@ cd ~/dotfiles
 ```bash
 # 역할:
 # 1. ~/.zshrc symlink 생성
-# 2. 완료 메시지 + 다음 단계 안내 (사용자 피드백)
+# 2. ~/.p10k.zsh symlink 생성 (Powerlevel10k 설정)
+# 3. 완료 메시지 + 다음 단계 안내 (사용자 피드백)
 ```
-- **특수 작업**: 사용자 안내
+- **특수 작업**: 사용자 안내, p10k 설정 관리
 - **언제 실행**: setup.sh에서 자동 호출 (수동 호출 X)
-- **symlink 생성**: ~/.zshrc
+- **symlink 생성**: ~/.zshrc, ~/.p10k.zsh
 
 ### git/setup.sh
 ```bash

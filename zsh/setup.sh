@@ -90,6 +90,18 @@ fi
 # ~/.zshrc 를 심볼릭 링크로 생성
 create_symlink "$ZSH_ZSHRC_SOURCE" "$HOME_ZSHRC"
 
+# --- Setup Powerlevel10k Configuration ---
+
+# Powerlevel10k 설정 파일 symlink 생성
+P10K_SOURCE="${ZSH_DOTFILES}/app/p10k.zsh"
+HOME_P10K="${HOME}/.p10k.zsh"
+
+if [ -f "$P10K_SOURCE" ]; then
+    create_symlink "$P10K_SOURCE" "$HOME_P10K"
+else
+    log_warning "경고: p10k.zsh 파일이 '${P10K_SOURCE}' 경로에 없습니다. ~/.p10k.zsh를 생성하지 않습니다."
+fi
+
 # --- Completion Messages ---
 
 log_debug "--- zsh dotfiles setup 완료 ---"
