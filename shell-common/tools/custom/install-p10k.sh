@@ -68,8 +68,8 @@ _update_zshrc() {
 # List available Nerd Fonts
 _list_nerd_fonts() {
     ux_section "Available Nerd Fonts"
-    ux_numbered 1 "FiraCode Nerd Font (recommended)"
-    ux_numbered 2 "Meslo LG Nerd Font (powerlevel10k default)"
+    ux_numbered 1 "FiraCode Nerd Font"
+    ux_numbered 2 "Meslo LG Nerd Font (powerlevel10k default) ⭐ RECOMMENDED"
     ux_numbered 3 "JetBrains Mono Nerd Font"
     ux_numbered 4 "Ubuntu Mono Nerd Font"
     ux_numbered 5 "Hack Nerd Font"
@@ -113,7 +113,8 @@ _install_nerd_font() {
 _select_nerd_font() {
     _list_nerd_fonts
 
-    read -p "Select font to install (1-6): " font_choice
+    read -p "Select font to install (1-6) [default: 2 - Meslo LG]: " font_choice
+    font_choice="${font_choice:-2}"  # Default to Meslo LG (option 2)
 
     case "$font_choice" in
         1)
