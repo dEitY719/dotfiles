@@ -1,2 +1,93 @@
 1. bash/app/gemini.bash 파일 내용을 검토하세요.
 2. 위 파일 내용이 bash, zsh 양쪽에서 모두에서 사용되는 alias, function 이라면 shell-common/tools/external 아래에 위치하도록 refactoring 되어야 합니다. (2868f46 커밋 참고)
+
+
+
+
+
+›  ~/dotfiles  main ⇡1  myhelp                                                                          ✔  18:35:14 
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║ Dotfiles Help Functions                                      ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+
+  Available help commands
+  ───────────────────────
+    apthelp              :  APT package manager commands
+    bat-help             :  bat - Cat replacement with syntax highlighting
+    cchelp               :  Claude Code usage help
+    claudehelp           :  Claude Code MCP help
+    clihelp              :  Custom Project CLI list
+    codexhelp            :  Codex CLI commands and aliases
+    dirhelp              :  Directory navigation aliases
+    dockerhelp           :  Docker commands and aliases
+    dproxyhelp           :  Docker Proxy(Corporate) commands
+    duhelp               :  Disk usage help
+    fasd-help            :  fasd - Fast access to directories and files
+    fd-help              :  fd - Fast file finder tool
+    fzf-help             :  fzf (Fuzzy Finder) key bindings and usage
+    gc_help              :  git-crypt (Transparent Git encryption)
+    geminihelp           :  Gemini CLI commands and aliases
+    githelp              :  Git shortcuts and aliases
+    gpuhelp              :  GPU monitoring commands (WSL2 universal)
+    litellm_help         :  LiteLLM commands and aliases
+    myhelp               :  Main help system
+    mysql_help           :  MySQL Service Management
+    mytool_help          :  MyTool - Personal Utility Commands
+    npmhelp              :  NPM package manager commands
+    nvmhelp              :  NVM (Node Version Manager) commands
+    pet-help             :  pet - Simple command snippet manager
+    pphelp               :  Python package and code quality tools
+    psqlhelp             :  PostgreSQL command helper
+    pyhelp               :  Python virtual environment commands
+    ripgrep-help         :  ripgrep (rg) fast text search tool
+    syshelp              :  System management commands
+    uvhelp               :  UV package manager commands
+    zsh-help             :  Zsh shell management commands
+
+
+# AsWas : myhelp 실행 결과
+1. 위의 다양한 help 함수들의 naming이 통일되지 않았어.
+2. 나는 {name}-help 형태가 개인적으로 마음에 드는데, 너의 의견은 어때? 요즘 alias 이름이 _ (underline) 이 아니고 - (dash)를 많이 사용하는 형태입니까?
+3. 너는 어떤 형태를 선호해?
+
+
+# 동료 답변(제안)
+• 사용 중인 헬퍼 함수 스타일을 참고해, 함수명은 일관성을 위해 밑줄(_) 대신 대시(-) 사용을 권장합니다. 일반적으로 자바스크립트나 파이썬에서는 밑줄이 더 흔하지만, 프로젝트 내 스타일 가이드에 맞춰 통일하는 게 가장 중요합니다. 일관된 네이밍 표준을 정해 팀 내 공유하는 것을 추천합니다.
+
+- *-help처럼 일관된 패턴을 쓰면 기억하기 쉽고 자동완성/검색(rg, compgen)에도 좋습니다. 현재 목록에 gc_help, litellm_help, mytool_help처럼 _help가 섞여 있어서 정리 대상이 맞습니다.
+- 최근 CLI/alias 관행은 대체로 대시(-)를 더 자주 씁니다. 이유: 1) POSIX/프로그램 플래그와 동일한 감각, 2) zsh/bash 자동완성에서 자연스러운 분리, 3) 단어 경계 가독성. 다만 Bash 함수 이름은 대시를 허용하지 않으므로, 함수명은 snake_case, 호출용 alias만 대시 형태로 두는 식이 흔합니다.
+- 나도 name-help를 추천합니다. 함수는 name_help로 두고, 사용자 노출 alias는 name-help로 매핑하는 형태가 안전하고 일관됩니다. 원하는 경우 전체를 다음처럼 표준화하면 좋습니다: 함수 foo_help + alias foo-help.
+
+# 동료의 제안을 어떻게 생각해?
+
+# ok. 동료와 너의 의견을 반영해서 리팩토링할게. 
+# 최종 요청
+1. 아래와 같이 foo-help() 형태로 함수 이름을 변경해. (함수 foo_help + alias foo-help)
+2. 실수하지 말고 1개씩 꼼꼼히 수정해.
+3. 혹시 내가 누락한 것은 없는지 cross-check해.
+apthelp              -> apt-help
+cchelp               -> cc-help
+claudehelp           -> claude-help
+clihelp              -> cli-help
+codexhelp            -> codex-help
+dirhelp              -> dir-help
+dockerhelp           -> docker-help
+dproxyhelp           -> dproxy-help
+duhelp               -> du-help
+gc_help              -> gc-help
+geminihelp           -> gemini-help
+githelp              -> git-help
+gpuhelp              -> gpu-help
+litellm_help         -> litellm-help
+myhelp               -> my-help
+mysql_help           -> mysql-help
+mytool_help          -> mytool-help
+npmhelp              -> npm-help
+nvmhelp              -> nvm-help
+pphelp               -> pp-help
+psqlhelp             -> psql-help
+pyhelp               -> py-help
+syshelp              -> sys-help
+uvhelp               -> uv-help
