@@ -1,8 +1,9 @@
 # core_aliases.bash
 # 기본 명령어에 대한 alias 정의
 
-# 환경 변수 리로드
-alias reload='exec bash'
+# 환경 변수 리로드 (셸 독립적)
+# 현재 사용 중인 셸로 리로드 (bash 또는 zsh)
+alias reload='exec ${SHELL##*/}'
 alias rs='reload'
 
 # Shell-aware configuration reload (sources appropriate rc file)

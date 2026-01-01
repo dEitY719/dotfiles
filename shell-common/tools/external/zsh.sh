@@ -2,6 +2,9 @@
 # shell-common/tools/external/zsh.sh
 # Auto-generated from bash/app/zsh.bash
 
+# Guard: This file contains bash-only features (export -f)
+# Skip loading if not in bash
+[ -n "$BASH_VERSION" ] || return 0
 
 # bash/app/zsh.bash
 # Bash-specific zsh integration functions

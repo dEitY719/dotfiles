@@ -153,7 +153,11 @@ fi
 # Phase 7: Load Zsh Application Modules (zsh/app/)
 # ═══════════════════════════════════════════════════════════════
 
-if [ -d "${ZSH_DOTFILES}/app" ]; then
+_load_zsh_apps() {
+    if [ ! -d "${ZSH_DOTFILES}/app" ]; then
+        return 0
+    fi
+
     # Load in specific order for dependencies
     local app_files=(
         "${ZSH_DOTFILES}/app/zsh.zsh"      # Shell management
@@ -161,6 +165,7 @@ if [ -d "${ZSH_DOTFILES}/app" ]; then
     )
 
     # Load specific files in order
+    local f
     for f in "${app_files[@]}"; do
         if [ -f "$f" ]; then
             source "$f" 2>/dev/null || true
@@ -177,7 +182,10 @@ if [ -d "${ZSH_DOTFILES}/app" ]; then
             source "$f" 2>/dev/null || true
         fi
     done
-fi
+}
+
+# Execute the loader function
+_load_zsh_apps
 
 # ═══════════════════════════════════════════════════════════════
 # Export Configuration

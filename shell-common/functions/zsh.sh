@@ -9,7 +9,7 @@
 
 # Check if zsh is installed
 _zsh_check_installed() {
-    if ! command -v zsh &>/dev/null; then
+    if ! command -v zsh >/dev/null 2>&1; then
         ux_error "zsh is not installed."
         ux_info "Install with: ${UX_BOLD}install-zsh${UX_RESET}"
         return 1
@@ -183,9 +183,9 @@ zsh-edit() {
     ux_info "Opening \$HOME/.zshrc in editor..."
     if [ -n "$EDITOR" ]; then
         "$EDITOR" "$zshrc"
-    elif command -v nano &>/dev/null; then
+    elif command -v nano >/dev/null 2>&1; then
         nano "$zshrc"
-    elif command -v vi &>/dev/null; then
+    elif command -v vi >/dev/null 2>&1; then
         vi "$zshrc"
     else
         ux_error "No editor found."
@@ -220,7 +220,7 @@ EOF
 
     if [ -n "$EDITOR" ]; then
         "$EDITOR" "$snippet_file"
-    elif command -v nano &>/dev/null; then
+    elif command -v nano >/dev/null 2>&1; then
         nano "$snippet_file"
     else
         ux_error "No editor found."
