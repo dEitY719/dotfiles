@@ -116,7 +116,6 @@ _register_default_help_descriptions() {
 # Internal: Show all available commands
 _my_help_show_all() {
     ux_header "Dotfiles Help Functions"
-    ux_section "Available help commands"
 
     # Collect help functions
     local help_funcs=()
@@ -146,6 +145,9 @@ _my_help_show_all() {
 
     # Remove duplicates and sort
     local unique_funcs=($(printf '%s\n' "${help_funcs[@]}" | sort -u))
+
+    # Show section with count of available help commands
+    ux_section "Available help commands(${#unique_funcs[@]})"
 
     # Calculate max width for alignment
     local max_width=0
