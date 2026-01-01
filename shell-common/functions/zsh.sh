@@ -28,14 +28,14 @@ _zsh_check_omz() {
 }
 
 # Get current zsh version
-zsh-version() {
+zsh_version() {
     if _zsh_check_installed; then
         zsh --version
     fi
 }
 
 # List all available zsh themes
-zsh-themes() {
+zsh_themes() {
     if ! _zsh_check_omz; then
         return 1
     fi
@@ -55,7 +55,7 @@ zsh-themes() {
 }
 
 # Change zsh theme
-zsh-theme() {
+zsh_theme() {
     if ! _zsh_check_omz; then
         return 1
     fi
@@ -86,7 +86,7 @@ zsh-theme() {
 }
 
 # Get current zsh theme
-zsh-theme-current() {
+zsh_theme_current() {
     if [ ! -f "${HOME}/.zshrc" ]; then
         ux_error "\$HOME/.zshrc not found."
         return 1
@@ -102,7 +102,7 @@ zsh-theme-current() {
 }
 
 # List installed zsh plugins
-zsh-plugins() {
+zsh_plugins() {
     if ! _zsh_check_omz; then
         return 1
     fi
@@ -134,7 +134,7 @@ zsh-plugins() {
 }
 
 # Update oh-my-zsh to latest version
-zsh-update() {
+zsh_update() {
     if ! _zsh_check_omz; then
         return 1
     fi
@@ -154,7 +154,7 @@ zsh-update() {
 }
 
 # Reload zsh configuration (POSIX-compatible version)
-zsh-reload() {
+zsh_reload() {
     if [ -f "${HOME}/.zshrc" ]; then
         ux_info "Reloading zsh configuration..."
         if [ -n "$ZSH_VERSION" ]; then
@@ -173,7 +173,7 @@ zsh-reload() {
 }
 
 # Open zsh configuration in editor
-zsh-edit() {
+zsh_edit() {
     local zshrc="${HOME}/.zshrc"
     if [ ! -f "$zshrc" ]; then
         ux_error "\$HOME/.zshrc not found."
@@ -194,7 +194,7 @@ zsh-edit() {
 }
 
 # Create/Edit zsh config snippet
-zsh-snippet() {
+zsh_snippet() {
     if [ -z "$1" ]; then
         ux_usage "zsh-snippet" "<snippet-name>" "Create or edit a config snippet"
         ux_bullet "Example: ${UX_BOLD}zsh-snippet aliases${UX_RESET}"
@@ -229,7 +229,7 @@ EOF
 }
 
 # List zsh snippets
-zsh-snippets() {
+zsh_snippets() {
     local snippets_dir="${HOME}/.zshrc.d"
 
     if [ ! -d "$snippets_dir" ]; then
@@ -331,7 +331,7 @@ _zshhelp_full() {
 }
 
 # Main help function (compact version)
-zsh-help() {
+zsh_help() {
     # Show full help with --all or -a flag
     if [ "$1" = "--all" ] || [ "$1" = "-a" ]; then
         _zshhelp_full
@@ -380,19 +380,19 @@ zsh-help() {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# Naming Convention: Support both dash and underscore
+# Naming Convention: Function uses underscore, alias provides dash format
 # ═══════════════════════════════════════════════════════════════
-# Recommended: Use underscore for functions, dash for user-facing commands
-# These aliases allow both naming styles to work
+# Functions: zsh_help, zsh_version, etc. (underscore format - POSIX compatible)
+# User calls: zsh-help, zsh-version, etc. (dash format - user friendly)
 
-alias zsh_help='zsh-help'
-alias zsh_version='zsh-version'
-alias zsh_themes='zsh-themes'
-alias zsh_theme='zsh-theme'
-alias zsh_theme_current='zsh-theme-current'
-alias zsh_plugins='zsh-plugins'
-alias zsh_update='zsh-update'
-alias zsh_reload='zsh-reload'
-alias zsh_edit='zsh-edit'
-alias zsh_snippet='zsh-snippet'
-alias zsh_snippets='zsh-snippets'
+alias zsh-help='zsh_help'
+alias zsh-version='zsh_version'
+alias zsh-themes='zsh_themes'
+alias zsh-theme='zsh_theme'
+alias zsh-theme-current='zsh_theme_current'
+alias zsh-plugins='zsh_plugins'
+alias zsh-update='zsh_update'
+alias zsh-reload='zsh_reload'
+alias zsh-edit='zsh_edit'
+alias zsh-snippet='zsh_snippet'
+alias zsh-snippets='zsh_snippets'

@@ -8,7 +8,7 @@
 # ═══════════════════════════════════════════════════════════════
 
 # Display fasd help and usage
-fasd-help() {
+fasd_help() {
     ux_header "fasd - Fast Access to Directories and Files"
 
     ux_section "Core Commands"
@@ -97,4 +97,4 @@ fasd-help() {
 }
 
 # Naming Convention: Support both dash and underscore
-alias fasd_help='fasd-help'
+alias fasd-help='fasd_help'

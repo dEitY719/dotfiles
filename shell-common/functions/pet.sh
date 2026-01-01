@@ -8,7 +8,7 @@
 # ═══════════════════════════════════════════════════════════════
 
 # Display pet help and usage
-pet-help() {
+pet_help() {
     ux_header "pet - Simple Command Snippet Manager"
 
     ux_section "Core Concept"
@@ -141,4 +141,4 @@ pet-help() {
 }
 
 # Naming Convention: Support both dash and underscore
-alias pet_help='pet-help'
+alias pet-help='pet_help'

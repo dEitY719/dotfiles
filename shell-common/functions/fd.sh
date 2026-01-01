@@ -8,7 +8,7 @@
 # ═══════════════════════════════════════════════════════════════
 
 # Display fd help and usage
-fd-help() {
+fd_help() {
     ux_header "fd - Fast File Finder"
 
     ux_section "Core Concept"
@@ -121,4 +121,4 @@ fd-help() {
 }
 
 # Naming Convention: Support both dash and underscore
-alias fd_help='fd-help'
+alias fd-help='fd_help'

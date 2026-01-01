@@ -8,7 +8,7 @@
 # ═══════════════════════════════════════════════════════════════
 
 # Display fzf help and key bindings
-fzf-help() {
+fzf_help() {
     ux_header "fzf - Fuzzy Finder Help"
 
     ux_section "Core Key Bindings"
@@ -97,4 +97,4 @@ fzf-help() {
 }
 
 # Naming Convention: Support both dash and underscore
-alias fzf_help='fzf-help'
+alias fzf-help='fzf_help'

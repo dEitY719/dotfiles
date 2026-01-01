@@ -8,7 +8,7 @@
 # ═══════════════════════════════════════════════════════════════
 
 # Display bat help and usage
-bat-help() {
+bat_help() {
     ux_header "bat - Cat Replacement with Syntax Highlighting"
 
     ux_section "Core Concept"
@@ -131,6 +131,7 @@ bat-help() {
     echo ""
 }
 
-# Naming Convention: Support both dash and underscore
-# Recommended: Use underscore for functions, dash for user-facing commands
-alias bat_help='bat-help'
+# Naming Convention: Function uses underscore, alias provides dash format
+# Users call: bat-help (dash format)
+# Function: bat_help (underscore format - POSIX compatible)
+alias bat-help='bat_help'

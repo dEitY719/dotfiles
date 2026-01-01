@@ -8,7 +8,7 @@
 # ═══════════════════════════════════════════════════════════════
 
 # Display ripgrep help and usage
-ripgrep-help() {
+ripgrep_help() {
     ux_header "ripgrep (rg) - Fast Text Search Tool"
 
     ux_section "Core Concept"
@@ -121,4 +121,4 @@ ripgrep-help() {
 }
 
 # Naming Convention: Support both dash and underscore
-alias ripgrep_help='ripgrep-help'
+alias ripgrep-help='ripgrep_help'
