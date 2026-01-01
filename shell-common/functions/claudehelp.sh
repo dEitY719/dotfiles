@@ -48,7 +48,89 @@ claude_help() {
     ux_bullet "Block: .env, ~/.aws, ~/.ssh"
     ux_bullet "Block commands: rm -rf, sudo rm"
     echo ""
+
+    ux_section "Skills Management"
+    ux_table_row "claude-skills" "List available Claude Code skills" ""
+    ux_info "Skills location: ~/dotfiles/claude/skills/"
+    echo ""
+}
+
+# Function to list Claude Code skills
+get_claude_skills() {
+    local skills_dir="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills"
+
+    # Check if skills directory exists
+    if [ ! -d "$skills_dir" ]; then
+        echo "No skills directory found at: $skills_dir" >&2
+        return 1
+    fi
+
+    # Load UX library if available
+    if command -v ux_header >/dev/null 2>&1; then
+        ux_header "Claude Code Skills"
+        echo ""
+    else
+        echo "=== Claude Code Skills ==="
+        echo ""
+    fi
+
+    # Track if any skills found
+    local found_skills=0
+
+    # Iterate through skill directories
+    for skill_path in "$skills_dir"/*; do
+        # Skip if not a directory
+        [ -d "$skill_path" ] || continue
+
+        local skill_name
+        skill_name="$(basename "$skill_path")"
+        local skill_md="$skill_path/SKILL.md"
+
+        # Skip if SKILL.md doesn't exist
+        [ -f "$skill_md" ] || continue
+
+        # Extract name and description from YAML frontmatter
+        local yaml_name yaml_desc
+
+        # Extract YAML content (between --- markers, excluding the markers)
+        local yaml_content
+        yaml_content=$(sed -n '/^---$/,/^---$/p' "$skill_md" | sed '1d;$d')
+
+        # Extract name (first match only)
+        yaml_name=$(echo "$yaml_content" | grep '^name:' | head -1 | sed 's/^name: *//')
+
+        # Extract description (may span multiple lines, get first sentence/line)
+        yaml_desc=$(echo "$yaml_content" | grep '^description:' | head -1 | sed 's/^description: *//')
+
+        # Use directory name as fallback
+        [ -n "$yaml_name" ] || yaml_name="$skill_name"
+        [ -n "$yaml_desc" ] || yaml_desc="(No description)"
+
+        # Truncate description to 60 chars (more readable than 30)
+        if [ ${#yaml_desc} -gt 60 ]; then
+            yaml_desc="$(echo "$yaml_desc" | cut -c1-57)..."
+        fi
+
+        # Output formatted line
+        printf "%-20s | %s\n" "$yaml_name" "$yaml_desc"
+
+        found_skills=1
+    done
+
+    # If no skills found
+    if [ "$found_skills" -eq 0 ]; then
+        echo "No skills found in $skills_dir"
+        return 0
+    fi
+
+    echo ""
+    if command -v ux_info >/dev/null 2>&1; then
+        ux_info "Skills location: $skills_dir"
+    else
+        echo "Skills location: $skills_dir"
+    fi
 }
 
 # Alias for claude-help format (using dash instead of underscore)
 alias claude-help='claude_help'
+alias claude-skills='get_claude_skills'
