@@ -30,9 +30,13 @@ fi
 # Help Registry Initialization (bash/zsh compatible)
 # ═══════════════════════════════════════════════════════════════
 
-# Initialize global help descriptions associative array
+# Initialize global help descriptions associative array (bash/zsh compatible)
 if [ -z "${HELP_DESCRIPTIONS+_}" ]; then
-    declare -gA HELP_DESCRIPTIONS=()
+    if [ -n "$BASH_VERSION" ]; then
+        declare -gA HELP_DESCRIPTIONS=()
+    elif [ -n "$ZSH_VERSION" ]; then
+        typeset -gA HELP_DESCRIPTIONS=()
+    fi
 fi
 
 # ═══════════════════════════════════════════════════════════════
@@ -69,38 +73,40 @@ _get_help_functions() {
 
 _register_default_help_descriptions() {
     # Only set if not already registered by the module itself
-    [[ -z "${HELP_DESCRIPTIONS[uv_help]}" ]] && HELP_DESCRIPTIONS["uv_help"]="UV package manager commands"
-    [[ -z "${HELP_DESCRIPTIONS[git_help]}" ]] && HELP_DESCRIPTIONS["git_help"]="Git shortcuts and aliases"
-    [[ -z "${HELP_DESCRIPTIONS[py_help]}" ]] && HELP_DESCRIPTIONS["py_help"]="Python virtual environment commands"
-    [[ -z "${HELP_DESCRIPTIONS[dir_help]}" ]] && HELP_DESCRIPTIONS["dir_help"]="Directory navigation aliases"
-    [[ -z "${HELP_DESCRIPTIONS[sys_help]}" ]] && HELP_DESCRIPTIONS["sys_help"]="System management commands"
-    [[ -z "${HELP_DESCRIPTIONS[pp_help]}" ]] && HELP_DESCRIPTIONS["pp_help"]="Python package and code quality tools"
-    [[ -z "${HELP_DESCRIPTIONS[cli_help]}" ]] && HELP_DESCRIPTIONS["cli_help"]="Custom Project CLI list"
-    [[ -z "${HELP_DESCRIPTIONS[du_help]}" ]] && HELP_DESCRIPTIONS["du_help"]="Disk usage help"
-    [[ -z "${HELP_DESCRIPTIONS[psql_help]}" ]] && HELP_DESCRIPTIONS["psql_help"]="PostgreSQL command helper"
-    [[ -z "${HELP_DESCRIPTIONS[cc_help]}" ]] && HELP_DESCRIPTIONS["cc_help"]="Claude Code usage help"
-    [[ -z "${HELP_DESCRIPTIONS[claude_help]}" ]] && HELP_DESCRIPTIONS["claude_help"]="Claude Code MCP help"
-    [[ -z "${HELP_DESCRIPTIONS[docker_help]}" ]] && HELP_DESCRIPTIONS["docker_help"]="Docker commands and aliases"
-    [[ -z "${HELP_DESCRIPTIONS[apt_help]}" ]] && HELP_DESCRIPTIONS["apt_help"]="APT package manager commands"
-    [[ -z "${HELP_DESCRIPTIONS[gemini_help]}" ]] && HELP_DESCRIPTIONS["gemini_help"]="Gemini CLI commands and aliases"
-    [[ -z "${HELP_DESCRIPTIONS[codex_help]}" ]] && HELP_DESCRIPTIONS["codex_help"]="Codex CLI commands and aliases"
-    [[ -z "${HELP_DESCRIPTIONS[dproxy_help]}" ]] && HELP_DESCRIPTIONS["dproxy_help"]="Docker Proxy(Corporate) commands"
-    [[ -z "${HELP_DESCRIPTIONS[npm_help]}" ]] && HELP_DESCRIPTIONS["npm_help"]="NPM package manager commands"
-    [[ -z "${HELP_DESCRIPTIONS[nvm_help]}" ]] && HELP_DESCRIPTIONS["nvm_help"]="NVM (Node Version Manager) commands"
-    [[ -z "${HELP_DESCRIPTIONS[litellm_help]}" ]] && HELP_DESCRIPTIONS["litellm_help"]="LiteLLM commands and aliases"
-    [[ -z "${HELP_DESCRIPTIONS[gpu_help]}" ]] && HELP_DESCRIPTIONS["gpu_help"]="GPU monitoring commands (WSL2 universal)"
-    [[ -z "${HELP_DESCRIPTIONS[ux_help]}" ]] && HELP_DESCRIPTIONS["ux_help"]="UX library functions and styling guide"
-    [[ -z "${HELP_DESCRIPTIONS[gc_help]}" ]] && HELP_DESCRIPTIONS["gc_help"]="git-crypt (Transparent Git encryption)"
-    [[ -z "${HELP_DESCRIPTIONS[mytool_help]}" ]] && HELP_DESCRIPTIONS["mytool_help"]="MyTool - Personal Utility Commands"
-    [[ -z "${HELP_DESCRIPTIONS[mysql_help]}" ]] && HELP_DESCRIPTIONS["mysql_help"]="MySQL Service Management"
-    [[ -z "${HELP_DESCRIPTIONS[zsh-help]}" ]] && HELP_DESCRIPTIONS["zsh-help"]="Zsh shell management"
-    [[ -z "${HELP_DESCRIPTIONS[bat-help]}" ]] && HELP_DESCRIPTIONS["bat-help"]="bat - Cat replacement with syntax highlighting"
-    [[ -z "${HELP_DESCRIPTIONS[fasd-help]}" ]] && HELP_DESCRIPTIONS["fasd-help"]="fasd - Fast access to directories and files"
-    [[ -z "${HELP_DESCRIPTIONS[fd-help]}" ]] && HELP_DESCRIPTIONS["fd-help"]="fd - Fast file finder tool"
-    [[ -z "${HELP_DESCRIPTIONS[fzf-help]}" ]] && HELP_DESCRIPTIONS["fzf-help"]="fzf (Fuzzy Finder) key bindings and usage"
-    [[ -z "${HELP_DESCRIPTIONS[pet-help]}" ]] && HELP_DESCRIPTIONS["pet-help"]="pet - Simple command snippet manager"
-    [[ -z "${HELP_DESCRIPTIONS[ripgrep-help]}" ]] && HELP_DESCRIPTIONS["ripgrep-help"]="ripgrep (rg) fast text search tool"
-    [[ -z "${HELP_DESCRIPTIONS[p10k_help]}" ]] && HELP_DESCRIPTIONS["p10k_help"]="Powerlevel10k font setup guide"
+    # Use simple unconditional assignment (modules load first, so they take precedence)
+    # This approach works in both bash and zsh
+    HELP_DESCRIPTIONS[uv_help]="${HELP_DESCRIPTIONS[uv_help]:-UV package manager commands}"
+    HELP_DESCRIPTIONS[git_help]="${HELP_DESCRIPTIONS[git_help]:-Git shortcuts and aliases}"
+    HELP_DESCRIPTIONS[py_help]="${HELP_DESCRIPTIONS[py_help]:-Python virtual environment commands}"
+    HELP_DESCRIPTIONS[dir_help]="${HELP_DESCRIPTIONS[dir_help]:-Directory navigation aliases}"
+    HELP_DESCRIPTIONS[sys_help]="${HELP_DESCRIPTIONS[sys_help]:-System management commands}"
+    HELP_DESCRIPTIONS[pp_help]="${HELP_DESCRIPTIONS[pp_help]:-Python package and code quality tools}"
+    HELP_DESCRIPTIONS[cli_help]="${HELP_DESCRIPTIONS[cli_help]:-Custom Project CLI list}"
+    HELP_DESCRIPTIONS[du_help]="${HELP_DESCRIPTIONS[du_help]:-Disk usage help}"
+    HELP_DESCRIPTIONS[psql_help]="${HELP_DESCRIPTIONS[psql_help]:-PostgreSQL command helper}"
+    HELP_DESCRIPTIONS[cc_help]="${HELP_DESCRIPTIONS[cc_help]:-Claude Code usage help}"
+    HELP_DESCRIPTIONS[claude_help]="${HELP_DESCRIPTIONS[claude_help]:-Claude Code MCP help}"
+    HELP_DESCRIPTIONS[docker_help]="${HELP_DESCRIPTIONS[docker_help]:-Docker commands and aliases}"
+    HELP_DESCRIPTIONS[apt_help]="${HELP_DESCRIPTIONS[apt_help]:-APT package manager commands}"
+    HELP_DESCRIPTIONS[gemini_help]="${HELP_DESCRIPTIONS[gemini_help]:-Gemini CLI commands and aliases}"
+    HELP_DESCRIPTIONS[codex_help]="${HELP_DESCRIPTIONS[codex_help]:-Codex CLI commands and aliases}"
+    HELP_DESCRIPTIONS[dproxy_help]="${HELP_DESCRIPTIONS[dproxy_help]:-Docker Proxy(Corporate) commands}"
+    HELP_DESCRIPTIONS[npm_help]="${HELP_DESCRIPTIONS[npm_help]:-NPM package manager commands}"
+    HELP_DESCRIPTIONS[nvm_help]="${HELP_DESCRIPTIONS[nvm_help]:-NVM (Node Version Manager) commands}"
+    HELP_DESCRIPTIONS[litellm_help]="${HELP_DESCRIPTIONS[litellm_help]:-LiteLLM commands and aliases}"
+    HELP_DESCRIPTIONS[gpu_help]="${HELP_DESCRIPTIONS[gpu_help]:-GPU monitoring commands (WSL2 universal)}"
+    HELP_DESCRIPTIONS[ux_help]="${HELP_DESCRIPTIONS[ux_help]:-UX library functions and styling guide}"
+    HELP_DESCRIPTIONS[gc_help]="${HELP_DESCRIPTIONS[gc_help]:-git-crypt (Transparent Git encryption)}"
+    HELP_DESCRIPTIONS[mytool_help]="${HELP_DESCRIPTIONS[mytool_help]:-MyTool - Personal Utility Commands}"
+    HELP_DESCRIPTIONS[mysql_help]="${HELP_DESCRIPTIONS[mysql_help]:-MySQL Service Management}"
+    HELP_DESCRIPTIONS[zsh-help]="${HELP_DESCRIPTIONS[zsh-help]:-Zsh shell management commands}"
+    HELP_DESCRIPTIONS[bat-help]="${HELP_DESCRIPTIONS[bat-help]:-bat - Cat replacement with syntax highlighting}"
+    HELP_DESCRIPTIONS[fasd-help]="${HELP_DESCRIPTIONS[fasd-help]:-fasd - Fast access to directories and files}"
+    HELP_DESCRIPTIONS[fd-help]="${HELP_DESCRIPTIONS[fd-help]:-fd - Fast file finder tool}"
+    HELP_DESCRIPTIONS[fzf-help]="${HELP_DESCRIPTIONS[fzf-help]:-fzf (Fuzzy Finder) key bindings and usage}"
+    HELP_DESCRIPTIONS[pet-help]="${HELP_DESCRIPTIONS[pet-help]:-pet - Simple command snippet manager}"
+    HELP_DESCRIPTIONS[ripgrep-help]="${HELP_DESCRIPTIONS[ripgrep-help]:-ripgrep (rg) fast text search tool}"
+    HELP_DESCRIPTIONS[p10k_help]="${HELP_DESCRIPTIONS[p10k_help]:-Powerlevel10k font setup guide}"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -117,8 +123,9 @@ _my_help_show_all() {
     while IFS= read -r func; do
         # Extract function name (before '(' or first space)
         local func_name="${func%%[( ]*}"
-        # Check if func_name ends with 'help' and exclude internal functions
-        if [[ "$func_name" == *help ]] && [[ "$func_name" != "my_help" ]] && [[ "$func_name" != _* ]]; then
+        # Only include functions ending with '-help' (dash format)
+        # Exclude: my_help, internal functions (_*), and underscore format (*_help)
+        if [[ "$func_name" == *-help ]] && [[ "$func_name" != _* ]]; then
             help_funcs+=("$func_name")
         fi
     done < <(_get_help_functions)
@@ -151,8 +158,11 @@ _my_help_show_all() {
 
 # Main help function - displays all registered commands or specific help
 my_help() {
-    # Register default descriptions
-    _register_default_help_descriptions
+    # Register default descriptions (only once)
+    if [ -z "${_HELP_DEFAULTS_REGISTERED}" ]; then
+        _register_default_help_descriptions
+        _HELP_DEFAULTS_REGISTERED=1
+    fi
 
     if [ -z "$1" ]; then
         _my_help_show_all
