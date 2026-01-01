@@ -120,3 +120,16 @@ done
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+
+# fzf key bindings and completion
+if command -v fzf &>/dev/null; then
+    # Source fzf key bindings
+    if [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]; then
+        source /usr/share/doc/fzf/examples/key-bindings.zsh
+    fi
+
+    # Source fzf completion
+    if [ -f /usr/share/doc/fzf/examples/completion.zsh ]; then
+        source /usr/share/doc/fzf/examples/completion.zsh
+    fi
+fi
