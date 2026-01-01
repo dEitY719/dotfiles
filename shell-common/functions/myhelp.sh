@@ -123,23 +123,47 @@ _my_help_show_all() {
     while IFS= read -r func; do
         # Extract function name (before '(' or first space)
         local func_name="${func%%[( ]*}"
-        # Only include functions ending with '-help' (dash format)
-        # Exclude: my_help, internal functions (_*), and underscore format (*_help)
-        if [[ "$func_name" == *-help ]] && [[ "$func_name" != _* ]]; then
-            help_funcs+=("$func_name")
+
+        # Include functions ending with 'help' (both dash and underscore)
+        # Exclude:
+        # - my_help, my-help (main help function)
+        # - _* (internal functions)
+        # - run-help (zsh builtin)
+        # - register_help, category_help (internal utility functions)
+        if [[ "$func_name" == *help ]] && \
+           [[ "$func_name" != "my_help" ]] && \
+           [[ "$func_name" != "my-help" ]] && \
+           [[ "$func_name" != "run-help" ]] && \
+           [[ "$func_name" != "register_help" ]] && \
+           [[ "$func_name" != "category_help" ]] && \
+           [[ "$func_name" != _* ]]; then
+
+            # Normalize to dash format for display
+            local display_name="${func_name//_/-}"
+            help_funcs+=("$display_name")
         fi
     done < <(_get_help_functions)
+
+    # Remove duplicates and sort
+    local unique_funcs=($(printf '%s\n' "${help_funcs[@]}" | sort -u))
 
     # Calculate max width for alignment
     local max_width=0
     local func
-    for func in "${help_funcs[@]}"; do
+    for func in "${unique_funcs[@]}"; do
         ((${#func} > max_width)) && max_width=${#func}
     done
 
     # Display help functions with descriptions
-    for func in "${help_funcs[@]}"; do
-        local desc="${HELP_DESCRIPTIONS[$func]:-⛔No description available}"
+    for func in "${unique_funcs[@]}"; do
+        # Try both dash and underscore format for description lookup
+        local desc="${HELP_DESCRIPTIONS[$func]}"
+        if [ -z "$desc" ]; then
+            # Try underscore format
+            local func_underscore="${func//-/_}"
+            desc="${HELP_DESCRIPTIONS[$func_underscore]}"
+        fi
+        desc="${desc:-⛔No description available}"
         printf "  ${UX_SUCCESS}%-${max_width}s${UX_RESET}  ${UX_MUTED}:${UX_RESET}  %s\n" "$func" "$desc"
     done
 
@@ -150,8 +174,9 @@ _my_help_show_all() {
     echo "  ${UX_MUTED}Example:${UX_RESET} ${UX_INFO}git-help${UX_RESET}, ${UX_INFO}uv-help${UX_RESET}, ${UX_INFO}docker-help${UX_RESET}"
     echo ""
     ux_warning "To add a new help function:"
-    ux_bullet "Create a function ending with '_help' (e.g., docker_help)"
-    ux_bullet "Register description: HELP_DESCRIPTIONS[\"your_help\"]=\"Your description\""
+    ux_bullet "Create a function ending with 'help' (e.g., docker-help or docker_help)"
+    ux_bullet "Register description: HELP_DESCRIPTIONS[\"docker_help\"]=\"Your description\""
+    ux_bullet "Display name will be normalized to dash format (docker-help)"
     ux_bullet "It will be automatically detected by ${UX_SUCCESS}my-help${UX_RESET}"
     echo ""
 }
@@ -172,9 +197,11 @@ my_help() {
     # If argument is provided, show specific help for that command
     local cmd_name="$1"
 
-    # Try to call the specific help function
+    # Try to call the specific help function (try both dash and underscore formats)
     if type "${cmd_name}-help" &>/dev/null 2>&1; then
         "${cmd_name}-help"
+    elif type "${cmd_name}_help" &>/dev/null 2>&1; then
+        "${cmd_name}_help"
     elif type "$cmd_name" &>/dev/null 2>&1; then
         # Try calling command with --help
         "$cmd_name" --help 2>/dev/null || {
