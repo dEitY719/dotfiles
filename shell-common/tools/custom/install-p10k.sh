@@ -147,13 +147,24 @@ _select_nerd_font() {
     esac
 }
 
-# Check if wget is available for font download
-_check_wget() {
+# Check if wget and unzip are available for font download
+_check_font_dependencies() {
+    local missing_deps=()
+
     if ! command -v wget &>/dev/null; then
-        ux_warning "wget is not installed."
-        ux_info "Install with: ${UX_BOLD}sudo apt-get install wget${UX_RESET}"
+        missing_deps+=("wget")
+    fi
+
+    if ! command -v unzip &>/dev/null; then
+        missing_deps+=("unzip")
+    fi
+
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        ux_warning "Missing dependencies: ${missing_deps[*]}"
+        ux_info "Install with: ${UX_BOLD}sudo apt-get install ${missing_deps[*]}${UX_RESET}"
         return 1
     fi
+
     return 0
 }
 
@@ -178,10 +189,10 @@ install-p10k() {
     # Offer to install Nerd Font
     ux_info ""
     if ux_confirm "Install a Nerd Font for better visual appearance?" "y"; then
-        if _check_wget; then
+        if _check_font_dependencies; then
             _select_nerd_font
         else
-            ux_warning "Cannot install Nerd Font without wget."
+            ux_warning "Cannot install Nerd Font without required dependencies."
             ux_info "You can manually download fonts from: https://www.nerdfonts.com"
         fi
     fi
