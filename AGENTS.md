@@ -47,11 +47,11 @@
 - **Maintenance**: Update AGENTS.md when adding new modules.
 
 # Context Map
-- **[Bash Core](./bash/AGENTS.md)** — Core configuration, aliases, and environment settings.
-- **[Bash Apps](./bash/app/AGENTS.md)** — Application integrations (Docker, Postgres, etc.).
-- **[UX Library](./bash/ux_lib/AGENTS.md)** — Visual styling, logging, and interaction utilities.
-- **[CLI Tools](./mytool/AGENTS.md)** — Standalone Python/Bash helper scripts.
-- **[Documentation](./docs/AGENTS.md)** — Project documentation and master prompts.
+- **[Bash Module](./bash/AGENTS.md)** — Bash-specific configuration and utilities
+- **[Zsh Module](./zsh/AGENTS.md)** — Zsh-specific configuration and applications
+- **[Shell Common](./shell-common/AGENTS.md)** — POSIX-compatible shared utilities (env, aliases, functions, tools, projects)
+- **[UX Library](./shell-common/tools/ux_lib/AGENTS.md)** — Styling, logging, interactive components
+- **[Documentation](./docs/AGENTS.md)** — Project docs, AGENTS.md master prompt, SOLID reviews
 
 # Postmortem: Auto-Sourcing Utility Scripts (2025-12-29)
 
