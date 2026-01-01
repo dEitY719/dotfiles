@@ -6,14 +6,25 @@ This directory contains modular bash configuration files that are automatically 
 
 ```
 bash/
-├── alias/              # Command aliases and shortcuts
-├── app/                # Application-specific configurations
-├── ux_lib/             # UX library (logging, progress, menu)
-├── env/                # Environment variables
-├── util/               # General utility functions
+├── env/                # Bash-specific environment variables
+│   └── bash_interactive.sh
+├── util/               # Bash-specific utility functions
+│   └── init.bash
 ├── main.bash           # Main entry point (sources all modules)
 ├── profile.bash        # Bash profile configuration
-└── setup.sh            # Setup script (creates symlinks)
+├── setup.sh            # Setup script (creates symlinks)
+├── README.md           # This file
+└── AGENTS.md           # Context for AI agents
+
+shell-common/           # Shared modules (used by both bash and zsh)
+├── env/                # Shared environment variables (PATH, locale, etc.)
+├── aliases/            # Command aliases and shortcuts
+├── functions/          # Shared functions (help systems, git, etc.)
+├── tools/
+│   ├── custom/         # Installation scripts and utilities
+│   ├── external/       # External tool integrations
+│   └── ux_lib/         # UX library (logging, progress, styling)
+└── projects/           # Project-specific utilities (finrx, dmc, smithery)
 ```
 
 ## Environment Control Variables
@@ -28,17 +39,22 @@ You can control the loading behavior of the dotfiles using the following environ
 
 Files are loaded in the following order (see `main.bash`):
 
-1. **Environment Variables** (`env/*.bash`)
-2. **UX Library** (`ux_lib/ux_lib.bash`)
-3. **Aliases** (`alias/*.bash`)
-4. **Applications** (`app/*.bash`)
-5. **Utilities** (`util/*.bash`)
+1. **Guards & Initialization** (Check for DOTFILES_SKIP_INIT, CODEX environment)
+2. **UX Library** (`shell-common/tools/ux_lib/ux_lib.sh`)
+3. **Common Environment** (`shell-common/env/*.sh`)
+4. **Common Aliases** (`shell-common/aliases/*.sh`)
+5. **Common Functions** (`shell-common/functions/*.sh`)
+6. **External Tools** (`shell-common/tools/external/*.sh`)
+7. **Projects** (`shell-common/projects/*.sh`)
+8. **Bash Environment** (`bash/env/*.sh`)
+9. **Auto-discovery** (Additional bash-specific files)
+10. **FZF Bindings** (If fzf is installed)
 
-## UX Library (ux_lib/)
+## UX Library (shell-common/tools/ux_lib/)
 
-### ux_lib/ux_lib.bash
+### shell-common/tools/ux_lib/ux_lib.sh
 
-Central UX library providing consistent styling, logging, and interactive features.
+Central UX library providing consistent styling, logging, and interactive features across bash and zsh.
 
 **Features:**
 - **Semantic Colors**: `UX_PRIMARY`, `UX_SUCCESS`, `UX_ERROR`, etc.
@@ -48,7 +64,7 @@ Central UX library providing consistent styling, logging, and interactive featur
 
 **Example:**
 ```bash
-source "${DOTFILES_BASH_DIR}/ux_lib/ux_lib.bash"
+# Already loaded by main.bash
 
 ux_header "My Script"
 ux_info "This is an informational message"
@@ -61,245 +77,290 @@ else
 fi
 ```
 
-## Environment Modules (env/)
+## Environment Modules
 
-### development.bash
-Development environment settings and variables.
+### Shared Environment (shell-common/env/)
 
-### editor.bash
-Default editor configuration (EDITOR, VISUAL variables).
+These environment modules are shared between bash and zsh:
 
-### korean.bash
-Korean language support settings for terminal.
+- **development.sh**: Development environment settings and variables
+- **editor.sh**: Default editor configuration (EDITOR, VISUAL variables)
+- **fcitx.sh**: Fcitx input method configuration
+- **korean.sh**: Korean language support settings
+- **locale.sh**: Locale settings (UTF-8, language preferences)
+- **path.sh**: PATH environment variable configuration with deduplication
+- **proxy.sh**: Proxy server configuration (http_proxy, https_proxy, no_proxy)
+- **security.sh**: Security-related environment variables
+- **local.sh.example**: Template for local overrides (not tracked in git)
 
-### locale.bash
-Locale settings (UTF-8, language preferences).
-
-### path.bash
-PATH environment variable configuration. Add custom paths here.
-
-**Example additions:**
+**Example PATH additions:**
 ```bash
+# In shell-common/env/path.sh
 export PATH="$HOME/.local/bin:$PATH"
-export PATH="/opt/myapp/bin:$PATH"
+export PATH="/usr/local/go/bin:$PATH"
 ```
 
-### proxy.bash
-Proxy server configuration (http_proxy, https_proxy, no_proxy).
-
-**Usage:**
+**Example proxy configuration:**
 ```bash
-# Set proxy
+# In shell-common/env/proxy.sh
 export http_proxy="http://proxy.example.com:8080"
 export https_proxy="http://proxy.example.com:8080"
 export no_proxy="localhost,127.0.0.1"
 ```
 
-### security.bash
-Security-related environment variables and settings.
+### Bash-Specific Environment (bash/env/)
 
-## Alias Modules (alias/)
+- **bash_interactive.sh**: Bash-specific interactive shell settings
 
-### core_aliases.bash
-Core command aliases used across the system.
+## Alias Modules (shell-common/aliases/)
 
-### directory_aliases.bash
-Directory navigation aliases (ls variants, cd shortcuts).
+These alias files are shared between bash and zsh:
 
-**Common aliases:**
+- **core.sh**: Core command aliases (reload, src, cd shortcuts)
+- **directory.sh**: Directory navigation aliases (ls variants, cd helpers)
+- **directory_project.sh**: Project-specific directory navigation
+- **disk_usage.sh**: Disk usage and cleanup aliases
+- **git.sh**: Git command shortcuts and aliases
+- **kill.sh**: Process management aliases
+- **mytool.sh**: Custom tool aliases
+- **system.sh**: System administration and maintenance aliases
+
+**Example usage:**
 ```bash
-ll='ls -alF'
-la='ls -A'
-l='ls -CF'
+# From core.sh
+reload              # Reload shell configuration
+src                 # Source appropriate rc file
+
+# From directory.sh
+ll                  # ls -alF
+la                  # ls -A
+
+# From git.sh
+ga                  # git add
+gc                  # git commit
+gp                  # git push
 ```
 
-### python_alias.bash
-Python-related aliases and shortcuts.
+## Function Modules (shell-common/functions/)
 
-### system_aliases.bash
-System administration and maintenance aliases.
+These function files provide help systems and utilities shared between bash and zsh:
 
-## Application Modules (app/)
+- **myhelp.sh**: Main help system registry and display
+- **my_man.sh**: Custom manual page viewer
+- **bat.sh**, **bathelp.sh**: bat (cat alternative) integration
+- **cchelp.sh**: Claude Code help
+- **claudehelp.sh**: Claude AI CLI help
+- **clihelp.sh**: CLI tools help
+- **codexhelp.sh**: Codex help functions
+- **dirhelp.sh**: Directory navigation help
+- **dockerhelp.sh**: Docker help
+- **dproxyhelp.sh**: Docker proxy help
+- **duhelp.sh**: Disk usage help
+- **fasd.sh**: Fast directory navigation
+- **fd.sh**: fd (find alternative) integration
+- **fzf.sh**: Fuzzy finder integration
+- **gc_help.sh**: Garbage collection help
+- **geminihelp.sh**: Gemini AI help
+- **githelp.sh**, **git.sh**: Git help and utilities
+- **gpuhelp.sh**: GPU monitoring help
+- **litellm_help.sh**: LiteLLM help
+- **mysql_help.sh**: MySQL help
+- **mytool_help.sh**, **mytool.sh**: Custom tool help
+- **npmhelp.sh**: npm help
+- **nvmhelp.sh**: nvm (Node version manager) help
+- **p10k.sh**: Powerlevel10k theme integration
+- **pet.sh**: Pet (snippet manager) integration
+- **pphelp.sh**: Project-specific help
+- **psqlhelp.sh**: PostgreSQL help
+- **pyhelp.sh**: Python help
+- **ripgrep.sh**: ripgrep integration
+- **syshelp.sh**: System help
+- **uvhelp.sh**: uv (Python package manager) help
+- **uxhelp.sh**: UX library help
+- **zsh-help.sh**, **zsh.sh**: Zsh help and utilities
 
-### claude.bash
-Claude AI CLI configuration and shortcuts.
+## External Tool Integration (shell-common/tools/external/)
 
-### cursor.bash
-Cursor editor integration.
+Integration scripts for external tools (automatically loaded):
 
-### custom_project.bash
-Custom project-specific settings.
+- FZF, bat, fd, ripgrep integrations
+- Python tools (pyenv, uv, poetry)
+- Node.js tools (nvm, npm)
+- Database tools (MySQL, PostgreSQL)
+- AI CLI tools (Claude, Gemini)
 
-### gemini.bash
-Google Gemini AI CLI configuration.
+## Project Utilities (shell-common/projects/)
 
-### git.bash
-Git command aliases and enhanced functionality.
+Project-specific utility functions:
 
-**Features:**
-- Git status shortcuts
-- Branch management helpers
-- Commit shortcuts
+- **finrx.sh**: FinRx project utilities
+- **dmc.sh**: dmc-playground (FastAPI + PostgreSQL) utilities
+- **smithery.sh**: smithery-playground (FastAPI) utilities
 
-### jetbrain.bash
-JetBrains IDE integration.
+## Bash Utility Modules (bash/util/)
 
-### mysql.bash
-MySQL database client configuration and shortcuts.
-
-**Features:**
-- Connection shortcuts
-- Common query aliases
-- Database management helpers
-
-### npm.bash
-Node.js and npm configuration.
-
-See [npm.bash.md](app/npm.bash.md) for detailed documentation.
-
-### obsidian.bash
-Obsidian note-taking app integration.
-
-### postgresql.bash
-PostgreSQL database configuration and helpers.
-
-**Features:**
-- psql connection shortcuts
-- Database management functions
-- PostgreSQL environment variables
-
-### pyenv.bash
-Python version manager (pyenv) integration.
-
-**Setup:**
-```bash
-# Initializes pyenv if installed
-eval "$(pyenv init -)"
-```
-
-### python.bash
-Python environment configuration.
-
-### uv.bash
-UV (fast Python package installer) configuration.
-
-**Features:**
-- UV command shortcuts
-- Virtual environment helpers
-
-## Utility Modules (util/)
-
-### my_man.bash
-Custom manual page viewer and help system.
+- **init.bash**: Bash initialization utilities
 
 ## Creating Custom Modules
 
-### Adding a New Alias File
+### Adding a New Alias File (Shared)
 
-1. Create a new file in `alias/`:
+1. Create a new file in `shell-common/aliases/`:
    ```bash
-   touch bash/alias/my_aliases.bash
+   touch shell-common/aliases/my_aliases.sh
    ```
 
 2. Add your aliases:
    ```bash
-   # bash/alias/my_aliases.bash
+   #!/bin/sh
+   # shell-common/aliases/my_aliases.sh
    alias mycommand='long command here'
    alias shortcut='another command'
    ```
 
-3. It will be automatically loaded by `main.bash`
+3. It will be automatically loaded by both bash and zsh
 
-### Adding a New Application Configuration
+### Adding a New Function Module (Shared)
 
-1. Create a new file in `app/`:
+1. Create a new file in `shell-common/functions/`:
    ```bash
-   touch bash/app/myapp.bash
+   touch shell-common/functions/myapp.sh
    ```
 
-2. Add your configuration:
+2. Add your functions:
    ```bash
-   # bash/app/myapp.bash
+   #!/bin/sh
+   # shell-common/functions/myapp.sh
 
-   # Environment variables
-   export MYAPP_HOME="/path/to/myapp"
-   export MYAPP_CONFIG="${HOME}/.config/myapp"
+   # Check if command exists
+   _have() {
+       command -v "$1" > /dev/null 2>&1
+   }
 
-   # Aliases
-   alias myapp-start='myapp daemon start'
-   alias myapp-stop='myapp daemon stop'
-
-   # Functions
    myapp_status() {
+       _have myapp || { echo "myapp not installed" >&2; return 1; }
        myapp status --verbose
    }
    ```
 
 3. It will be automatically sourced on next shell startup
 
-### Adding Environment Variables
+### Adding Environment Variables (Shared)
 
-1. Create or edit a file in `env/`:
+1. Create or edit a file in `shell-common/env/`:
    ```bash
-   vim bash/env/local.bash
+   vim shell-common/env/local.sh
    ```
 
 2. Add your variables:
    ```bash
-   # bash/env/local.bash
+   #!/bin/sh
+   # shell-common/env/local.sh
    export MY_VAR="value"
    export ANOTHER_VAR="another value"
    ```
 
+### Adding Bash-Specific Configuration
+
+1. Create a file in `bash/env/` or `bash/util/`:
+   ```bash
+   touch bash/env/my_bash_config.sh
+   ```
+
+2. Add bash-specific code:
+   ```bash
+   #!/bin/bash
+   # bash/env/my_bash_config.sh
+
+   # Bash-specific features only
+   shopt -s histappend
+   export HISTCONTROL=ignoredups:erasedups
+   ```
+
 ### Best Practices
 
-1. **Use descriptive file names**: `myapp.bash` not `app1.bash`
-2. **Document your code**: Add comments explaining what each section does
-3. **Check dependencies**: Use conditional loading for optional tools:
+1. **Use descriptive file names**: `myapp.sh` not `app1.sh`
+2. **Choose the right location**:
+   - Shared code → `shell-common/` (use POSIX-compatible syntax)
+   - Bash-only code → `bash/` (can use bash-specific features)
+3. **Document your code**: Add comments explaining what each section does
+4. **Check dependencies**: Use conditional loading for optional tools:
    ```bash
-   if command -v myapp &> /dev/null; then
+   if command -v myapp >/dev/null 2>&1; then
        alias myapp-quick='myapp --fast'
    fi
    ```
-4. **Avoid side effects**: Don't automatically start services or modify files
-5. **Keep it modular**: One app or purpose per file
+5. **Avoid side effects**: Don't automatically start services or modify files
+6. **Keep it modular**: One app or purpose per file
+7. **POSIX compatibility for shared files**: Use `#!/bin/sh` and avoid bash-specific syntax in `shell-common/`
 
-## Configuration File Structure Template
+## Configuration File Structure Templates
+
+### Shared Module Template (shell-common/)
 
 ```bash
-#!/usr/bin/env bash
-# bash/app/myapp.bash
-# Description: Configuration for MyApp
+#!/bin/sh
+# shell-common/functions/myapp.sh
+# Description: MyApp utilities (shared between bash and zsh)
 
 # Check if myapp is installed
-if ! command -v myapp &> /dev/null; then
+if ! command -v myapp >/dev/null 2>&1; then
     return 0
 fi
 
-# Environment Variables
+# Environment Variables (or put in shell-common/env/myapp.sh)
 export MYAPP_HOME="${HOME}/.myapp"
 export MYAPP_CONFIG="${MYAPP_HOME}/config"
 
-# Aliases
+# Aliases (or put in shell-common/aliases/myapp.sh)
 alias myapp-start='myapp daemon start'
 alias myapp-stop='myapp daemon stop'
 alias myapp-status='myapp status --verbose'
+
+# Helper function
+_have() {
+    command -v "$1" >/dev/null 2>&1
+}
 
 # Functions
 myapp_init() {
     # Initialize myapp configuration
     mkdir -p "${MYAPP_CONFIG}"
-    log_info "MyApp initialized at ${MYAPP_HOME}"
+    ux_info "MyApp initialized at ${MYAPP_HOME}"
 }
 
 myapp_clean() {
     # Clean myapp cache
     rm -rf "${MYAPP_HOME}/cache"/*
-    log_info "MyApp cache cleaned"
+    ux_info "MyApp cache cleaned"
 }
+```
 
-# Auto-initialization (optional)
-# [[ ! -d "${MYAPP_HOME}" ]] && myapp_init
+### Bash-Specific Module Template (bash/)
+
+```bash
+#!/bin/bash
+# bash/env/my_bash_feature.sh
+# Description: Bash-specific configuration
+
+# Bash-only guard (optional)
+[ -n "$BASH_VERSION" ] || return 0
+
+# Use bash-specific features freely
+shopt -s histappend
+export HISTCONTROL=ignoredups:erasedups
+
+# Bash arrays and associative arrays are OK here
+declare -A my_config=(
+    [key1]="value1"
+    [key2]="value2"
+)
+
+# Bash-specific functions
+my_bash_function() {
+    local var="value"
+    echo "Bash-specific: $var"
+}
 ```
 
 ## Debugging
@@ -322,15 +383,20 @@ The main.bash script shows:
 ### Troubleshooting
 
 **Module not loading:**
-1. Check file extension is `.bash`
-2. Verify file is in correct directory
-3. Check file permissions: `chmod 644 bash/app/myapp.bash`
-4. Look for syntax errors: `bash -n bash/app/myapp.bash`
+1. Check file extension (`.sh` for shared, `.bash` for bash-specific)
+2. Verify file is in correct directory:
+   - Shared: `shell-common/{env,aliases,functions,tools,projects}/`
+   - Bash-only: `bash/{env,util}/`
+3. Check file permissions: `chmod 644 shell-common/functions/myapp.sh`
+4. Look for syntax errors:
+   - Shared: `shellcheck shell-common/functions/myapp.sh`
+   - Bash: `bash -n bash/env/myapp.sh`
 
 **Conflicts between modules:**
 1. Check for duplicate aliases/functions
-2. Verify load order (env → alias → app → util)
+2. Verify load order (see "Module Loading Order" section)
 3. Use unique prefixes for function names
+4. Check both bash/ and shell-common/ for conflicts
 
 **Performance issues:**
 1. Minimize expensive operations in module files
