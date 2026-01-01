@@ -95,3 +95,6 @@ fzf-help() {
     echo "  export FZF_DEFAULT_OPTS='--multi --preview \"head -20 {}\"'"
     echo ""
 }
+
+# Naming Convention: Support both dash and underscore
+alias fzf_help='fzf-help'

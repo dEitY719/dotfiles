@@ -130,3 +130,7 @@ bat-help() {
     ux_bullet "Fuzzy finder: ${UX_BOLD}fzf-help${UX_RESET}"
     echo ""
 }
+
+# Naming Convention: Support both dash and underscore
+# Recommended: Use underscore for functions, dash for user-facing commands
+alias bat_help='bat-help'

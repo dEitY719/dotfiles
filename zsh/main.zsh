@@ -43,32 +43,38 @@ if [ ! -d "$DOTFILES_ROOT" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 1: Load Shared Environment Variables (shell-common/env/)
+# Helper: Safe Source Function (consistent with bash loader)
 # ═══════════════════════════════════════════════════════════════
 
-if [ -d "${SHELL_COMMON}/env" ]; then
-    for f in "${SHELL_COMMON}"/env/*.sh; do
-        if [ -f "$f" ]; then
-            # Source with error handling
-            if ! source "$f" 2>/dev/null; then
-                echo "Warning: Failed to load $f" >&2
+safe_source() {
+    local file_path="$1"
+    local error_msg="${2:-File not found}"
+
+    if [ -f "$file_path" ]; then
+        source "$file_path" 2>/dev/null || {
+            # Use ux_error if available, otherwise fallback to echo
+            if type ux_error >/dev/null 2>&1; then
+                ux_error "${error_msg}: ${file_path}"
+            else
+                echo "Error: ${error_msg}: ${file_path}" >&2
             fi
+            return 1
+        }
+    else
+        # Use ux_error if available, otherwise fallback to echo
+        if type ux_error >/dev/null 2>&1; then
+            ux_error "${error_msg}: ${file_path}"
+        else
+            echo "Error: ${error_msg}: ${file_path}" >&2
         fi
-    done
-fi
+        return 1
+    fi
+}
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 2: Load Zsh Environment Settings (zsh/env/)
-# ═══════════════════════════════════════════════════════════════
-
-if [ -d "${ZSH_DOTFILES}/env" ]; then
-    for f in "${ZSH_DOTFILES}"/env/*.zsh; do
-        [ -f "$f" ] && source "$f" 2>/dev/null || true
-    done 2>/dev/null || true
-fi
-
-# ═══════════════════════════════════════════════════════════════
-# Phase 3: Load UX Library (MUST load before aliases/functions that use it)
+# Phase 1: Load UX Library FIRST (consistent with bash loader)
+# Provides: colors, output functions, progress indicators, prompts, tables
+# MUST load before any code that uses ux_* functions
 # ═══════════════════════════════════════════════════════════════
 
 if [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
@@ -78,14 +84,32 @@ if [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
+# Phase 2: Load Shared Environment Variables (shell-common/env/)
+# ═══════════════════════════════════════════════════════════════
+
+if [ -d "${SHELL_COMMON}/env" ]; then
+    for f in "${SHELL_COMMON}"/env/*.sh; do
+        [ -f "$f" ] && safe_source "$f" "Failed to load env" || true
+    done
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# Phase 3: Load Zsh Environment Settings (zsh/env/)
+# ═══════════════════════════════════════════════════════════════
+
+if [ -d "${ZSH_DOTFILES}/env" ]; then
+    for f in "${ZSH_DOTFILES}"/env/*.zsh; do
+        [ -f "$f" ] && safe_source "$f" "Failed to load zsh env" || true
+    done
+fi
+
+# ═══════════════════════════════════════════════════════════════
 # Phase 4: Load Shared Aliases (shell-common/aliases/)
 # ═══════════════════════════════════════════════════════════════
 
 if [ -d "${SHELL_COMMON}/aliases" ]; then
     for f in "${SHELL_COMMON}"/aliases/*.sh; do
-        if [ -f "$f" ]; then
-            source "$f" 2>/dev/null || true
-        fi
+        [ -f "$f" ] && safe_source "$f" "Failed to load alias" || true
     done
 fi
 
@@ -95,62 +119,54 @@ fi
 
 if [ -d "${SHELL_COMMON}/functions" ]; then
     for f in "${SHELL_COMMON}"/functions/*.sh; do
-        if [ -f "$f" ]; then
-            source "$f" 2>/dev/null || true
-        fi
+        [ -f "$f" ] && safe_source "$f" "Failed to load function" || true
     done
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 5.5: Load Shared Tools - External (shell-common/tools/external/)
+# Phase 6: Load Shared Tools - External (shell-common/tools/external/)
 # External/third-party tools: apt, ccusage, claude, codex
 # ═══════════════════════════════════════════════════════════════
 
 if [ -d "${SHELL_COMMON}/tools/external" ]; then
     for f in "${SHELL_COMMON}"/tools/external/*.sh; do
-        if [ -f "$f" ]; then
-            source "$f" 2>/dev/null || true
-        fi
+        [ -f "$f" ] && safe_source "$f" "Failed to load external tool" || true
     done
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 5.6: Load Shared Tools - Custom (shell-common/tools/custom/)
+# Phase 7: Load Shared Tools - Custom (shell-common/tools/custom/)
 # NOTE: shell-common/tools/custom/ contains executable utility scripts
 # that should NOT be auto-sourced. They are meant to be run explicitly
 # as commands, not loaded as shell functions. Examples: demo_ux.sh, check_ux_consistency.sh
 # ═══════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 5.7: Load Shared Projects (shell-common/projects/)
+# Phase 8: Load Shared Projects (shell-common/projects/)
 # Project-specific configurations and utilities
 # ═══════════════════════════════════════════════════════════════
 
 if [ -d "${SHELL_COMMON}/projects" ]; then
     for f in "${SHELL_COMMON}"/projects/*.sh; do
-        if [ -f "$f" ]; then
-            source "$f" 2>/dev/null || true
-        fi
+        [ -f "$f" ] && safe_source "$f" "Failed to load project" || true
     done
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 6: Load Zsh Utilities (zsh/util/)
+# Phase 9: Load Zsh Utilities (zsh/util/)
 # ═══════════════════════════════════════════════════════════════
 
 if [ -d "${ZSH_DOTFILES}/util" ]; then
     # Use setopt null_glob to allow empty glob results (e.g., when no .zsh files exist)
     setopt null_glob
     for f in "${ZSH_DOTFILES}"/util/*.zsh; do
-        if [ -f "$f" ]; then
-            source "$f" 2>/dev/null || true
-        fi
+        [ -f "$f" ] && safe_source "$f" "Failed to load zsh util" || true
     done
     unsetopt null_glob
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 7: Load Zsh Application Modules (zsh/app/)
+# Phase 10: Load Zsh Application Modules (zsh/app/)
 # ═══════════════════════════════════════════════════════════════
 
 _load_zsh_apps() {
@@ -167,9 +183,7 @@ _load_zsh_apps() {
     # Load specific files in order
     local f
     for f in "${app_files[@]}"; do
-        if [ -f "$f" ]; then
-            source "$f" 2>/dev/null || true
-        fi
+        [ -f "$f" ] && safe_source "$f" "Failed to load zsh app" || true
     done
 
     # Load any remaining app files not explicitly listed
@@ -178,9 +192,7 @@ _load_zsh_apps() {
         case "$f" in
             */zsh.zsh|*/git.zsh) continue ;;
         esac
-        if [ -f "$f" ]; then
-            source "$f" 2>/dev/null || true
-        fi
+        [ -f "$f" ] && safe_source "$f" "Failed to load zsh app" || true
     done
 }
 

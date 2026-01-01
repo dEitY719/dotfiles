@@ -139,3 +139,6 @@ pet-help() {
     ux_bullet "Zsh shell: ${UX_BOLD}zsh-help${UX_RESET}"
     echo ""
 }
+
+# Naming Convention: Support both dash and underscore
+alias pet_help='pet-help'

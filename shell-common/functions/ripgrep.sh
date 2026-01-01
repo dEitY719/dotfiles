@@ -119,3 +119,6 @@ ripgrep-help() {
     ux_bullet "File viewer: ${UX_BOLD}bat-help${UX_RESET}"
     echo ""
 }
+
+# Naming Convention: Support both dash and underscore
+alias ripgrep_help='ripgrep-help'

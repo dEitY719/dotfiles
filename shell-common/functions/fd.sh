@@ -119,3 +119,6 @@ fd-help() {
     ux_bullet "Directory access: ${UX_BOLD}fasd-help${UX_RESET}"
     echo ""
 }
+
+# Naming Convention: Support both dash and underscore
+alias fd_help='fd-help'

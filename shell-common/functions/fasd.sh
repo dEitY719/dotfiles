@@ -95,3 +95,6 @@ fasd-help() {
     ux_bullet "File manager: ${UX_BOLD}z -i${UX_RESET} (interactive mode)"
     echo ""
 }
+
+# Naming Convention: Support both dash and underscore
+alias fasd_help='fasd-help'

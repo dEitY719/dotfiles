@@ -378,3 +378,21 @@ zsh-help() {
     ux_info "More details: ${UX_BOLD}zsh-help --all${UX_RESET}"
     echo ""
 }
+
+# ═══════════════════════════════════════════════════════════════
+# Naming Convention: Support both dash and underscore
+# ═══════════════════════════════════════════════════════════════
+# Recommended: Use underscore for functions, dash for user-facing commands
+# These aliases allow both naming styles to work
+
+alias zsh_help='zsh-help'
+alias zsh_version='zsh-version'
+alias zsh_themes='zsh-themes'
+alias zsh_theme='zsh-theme'
+alias zsh_theme_current='zsh-theme-current'
+alias zsh_plugins='zsh-plugins'
+alias zsh_update='zsh-update'
+alias zsh_reload='zsh-reload'
+alias zsh_edit='zsh-edit'
+alias zsh_snippet='zsh-snippet'
+alias zsh_snippets='zsh-snippets'
