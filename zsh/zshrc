@@ -103,6 +103,11 @@ export ZSH_DOTFILES="$HOME/dotfiles/zsh"
 # Phase 4: Shared Functions (MUST load BEFORE zsh utilities to override)
 [ -d "$SHELL_COMMON/functions" ] && for f in "$SHELL_COMMON"/functions/*.sh; do [ -f "$f" ] && source "$f" 2>/dev/null; done
 
+# Phase 4.5: Shared External Tools (apt, docker, etc.)
+[ -d "$SHELL_COMMON/tools/external" ] && for f in "$SHELL_COMMON"/tools/external/*.sh; do
+    [ -f "$f" ] && source "$f" 2>/dev/null
+done
+
 # Phase 5: Zsh Utilities (may redefine some shared functions, but we use shared versions)
 [ -d "$ZSH_DOTFILES/util" ] && for f in "$ZSH_DOTFILES"/util/*.zsh; do
     # Skip myhelp.zsh as we use the shared version instead

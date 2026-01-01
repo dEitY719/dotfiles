@@ -121,21 +121,24 @@ _generate_pg_service_conf() {
 _register_aliases() {
     # Clean old aliases (Exclude core commands)
     local old_aliases
-    # Nuclear option: Chain simple greps to avoid any regex/parenthesis parsing issues in $(...)
-    old_aliases=$(declare -F | awk '{print $3}' | grep '^psql_' |
-        grep -v 'psql_add' |
-        grep -v 'psql_del' |
-        grep -v 'psql_db' |
-        grep -v 'psql_user' |
-        grep -v 'psql_server' |
-        grep -v 'psqlhelp' |
-        grep -v 'psql_list' |
-        grep -v 'psql_bootstrap' |
-        grep -v 'psql_sync')
+    if [[ -n "$BASH_VERSION" ]]; then
+        # Nuclear option: Chain simple greps to avoid any regex/parenthesis parsing issues in $(...)
+        old_aliases=$(declare -F | awk '{print $3}' | grep '^psql_' |
+            grep -v 'psql_add' |
+            grep -v 'psql_del' |
+            grep -v 'psql_db' |
+            grep -v 'psql_user' |
+            grep -v 'psql_server' |
+            grep -v 'psqlhelp' |
+            grep -v 'psql_help' |
+            grep -v 'psql_list' |
+            grep -v 'psql_bootstrap' |
+            grep -v 'psql_sync')
 
-    for name in $old_aliases; do
-        unset -f "${name}" 2>/dev/null
-    done
+        for name in $old_aliases; do
+            unset -f "${name}" 2>/dev/null
+        done
+    fi
 
     # Define new aliases
     for entry in "${services[@]}"; do

@@ -197,12 +197,39 @@ my_help() {
     # If argument is provided, show specific help for that command
     local cmd_name="$1"
 
-    # Try to call the specific help function (try both dash and underscore formats)
-    if type "${cmd_name}-help" &>/dev/null 2>&1; then
-        "${cmd_name}-help"
-    elif type "${cmd_name}_help" &>/dev/null 2>&1; then
-        "${cmd_name}_help"
-    elif type "$cmd_name" &>/dev/null 2>&1; then
+    # Prefer canonical underscore helpers to avoid alias-only lookups (bash cannot
+    # execute aliases when the name comes from parameter expansion)
+    local normalized="${cmd_name//-/_}"
+    local helper_name="$normalized"
+    if [[ "$helper_name" != *_help ]]; then
+        helper_name="${helper_name}_help"
+    fi
+
+    if typeset -f "$helper_name" &>/dev/null; then
+        "$helper_name"
+        return 0
+    fi
+
+    # Some modules only expose a dash-style alias (e.g., apt-help). Safely detect
+    # aliases/functions using dash notation and execute them via eval so alias
+    # expansion occurs in both bash and zsh.
+    if [[ "$cmd_name" =~ ^[A-Za-z0-9_-]+$ ]]; then
+        local dash_name="${cmd_name//_/-}"
+        if [[ "$dash_name" != *-help ]]; then
+            dash_name="${dash_name}-help"
+        fi
+        if type "$dash_name" &>/dev/null 2>&1; then
+            eval "$dash_name"
+            return 0
+        fi
+    fi
+
+    if typeset -f "$cmd_name" &>/dev/null; then
+        "$cmd_name"
+        return 0
+    fi
+
+    if type "$cmd_name" &>/dev/null 2>&1; then
         # Try calling command with --help
         "$cmd_name" --help 2>/dev/null || {
             ux_info "Help for '${cmd_name}' not available."
