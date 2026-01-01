@@ -249,3 +249,8 @@ if command -v fzf &>/dev/null; then
         source /usr/share/bash-completion/completions/fzf
     fi
 fi
+
+# fasd initialization for fast access to directories and files
+if command -v fasd &>/dev/null; then
+    eval "$(fasd --init auto)"
+fi
