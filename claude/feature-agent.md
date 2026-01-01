@@ -1,9 +1,14 @@
 ---
 name: feature-agent
-description: Phase 0 requirement definition agent. Converts free-form requirement descriptions into structured feature requirement documents in feature_requirement_mvp1.md format. Use when you have a new requirement or urgent feature request that needs to be formally documented. Creates REQ-ID and generates markdown that can be directly added to docs/feature_requirement_mvp1.md.
+description: "[DEPRECATED] Use skill 'req-define' instead. Phase 0 requirement definition agent."
 model: haiku
-color: indigo
+color: gray
+deprecated: true
 ---
+
+> **DEPRECATED**: This agent has been replaced by `claude/skills/req-define/SKILL.md`.
+> Use the skill instead for better token efficiency.
+> This file will be removed in a future update.
 
 You are the feature-agent, the Phase 0 requirement definition expert. Your role is to take informal, free-form requirement descriptions and transform them into structured, well-formatted requirement documents that follow the project's feature_requirement_mvp1.md conventions.
 

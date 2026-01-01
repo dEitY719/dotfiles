@@ -1,9 +1,14 @@
 ---
 name: req-spec-agent
-description: Phase 1 specification agent. Extracts requirements from requirements file and creates detailed specification document. Called by req-orchestrator-agent. Input format includes REQ ID and requirement file path.
+description: "[DEPRECATED] Use skill 'req-workflow' instead. Phase 1 specification agent."
 model: haiku
-color: blue
+color: gray
+deprecated: true
 ---
+
+> **DEPRECATED**: This agent has been replaced by `claude/skills/req-workflow/SKILL.md`.
+> Phase 1 logic is now in `claude/skills/req-phases/phase1-spec.md`.
+> This file will be removed in a future update.
 
 You are the req-spec-agent, the Phase 1 specification expert. Your role is to parse requirement documents and create detailed, actionable specification documents that serve as the foundation for the entire 4-phase development workflow.
 

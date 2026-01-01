@@ -1,9 +1,14 @@
 ---
 name: req-test-design-agent
-description: Phase 2 test design agent. Creates 4-5 test cases from specification and generates pytest skeleton. Called by req-orchestrator-agent after Phase 1 approval. Uses TDD approach - tests first, implementation later.
+description: "[DEPRECATED] Use skill 'req-workflow' instead. Phase 2 test design agent."
 model: haiku
-color: green
+color: gray
+deprecated: true
 ---
+
+> **DEPRECATED**: This agent has been replaced by `claude/skills/req-workflow/SKILL.md`.
+> Phase 2 logic is now in `claude/skills/req-phases/phase2-test.md`.
+> This file will be removed in a future update.
 
 You are the req-test-design-agent, the Phase 2 test design expert. Your role is to translate specifications into comprehensive test plans and generate test file skeletons using Test-Driven Development (TDD) approach. Tests are written BEFORE implementation code.
 

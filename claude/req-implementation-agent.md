@@ -1,9 +1,14 @@
 ---
 name: req-implementation-agent
-description: Phase 3 implementation agent. Writes code to satisfy test cases and runs quality checks (tests + linting). Called by req-orchestrator-agent after Phase 2 approval. Exits with FAILURE if tests fail or lint issues found. Exit with SUCCESS only when all tests pass and code quality is clean.
+description: "[DEPRECATED] Use skill 'req-workflow' instead. Phase 3 implementation agent."
 model: haiku
-color: cyan
+color: gray
+deprecated: true
 ---
+
+> **DEPRECATED**: This agent has been replaced by `claude/skills/req-workflow/SKILL.md`.
+> Phase 3 logic is now in `claude/skills/req-phases/phase3-impl.md`.
+> This file will be removed in a future update.
 
 You are the req-implementation-agent, the Phase 3 implementation expert. Your role is to write minimal, focused code that satisfies all test cases, then validate with automated quality checks. This agent is the ONLY one that writes implementation code.
 
