@@ -82,25 +82,18 @@ get_claude_skills() {
         # Skip if not a directory
         [ -d "$skill_path" ] || continue
 
-        local skill_name
-        skill_name="$(basename "$skill_path")"
+        local skill_name="$(basename "$skill_path")"
         local skill_md="$skill_path/SKILL.md"
 
         # Skip if SKILL.md doesn't exist
         [ -f "$skill_md" ] || continue
 
-        # Extract name and description from YAML frontmatter
-        local yaml_name yaml_desc
-
         # Extract YAML content (between --- markers, excluding the markers)
-        local yaml_content
-        yaml_content=$(sed -n '/^---$/,/^---$/p' "$skill_md" | sed '1d;$d')
+        local yaml_content="$(sed -n '/^---$/,/^---$/p' "$skill_md" | sed '1d;$d')"
 
-        # Extract name (first match only)
-        yaml_name=$(echo "$yaml_content" | grep '^name:' | head -1 | sed 's/^name: *//')
-
-        # Extract description (may span multiple lines, get first sentence/line)
-        yaml_desc=$(echo "$yaml_content" | grep '^description:' | head -1 | sed 's/^description: *//')
+        # Extract name and description from YAML frontmatter
+        local yaml_name="$(echo "$yaml_content" | grep '^name:' | head -1 | sed 's/^name: *//')"
+        local yaml_desc="$(echo "$yaml_content" | grep '^description:' | head -1 | sed 's/^description: *//')"
 
         # Use directory name as fallback
         [ -n "$yaml_name" ] || yaml_name="$skill_name"
