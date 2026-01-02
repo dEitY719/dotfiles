@@ -235,6 +235,7 @@ gcp_ours() {
 # Cherry-pick abort 및 continue 단축어
 alias gcpa='git cherry-pick --abort'    # Cherry-pick 작업 중단
 alias gcpc='git cherry-pick --continue' # Cherry-pick 작업 계속
+alias gcps='git cherry-pick --skip'     # Cherry-pick 작업 건너뛰기
 
 # Cherry-pick 함수 (특정 작가의 커밋들을 범위에서 찾아 cherry-pick)
 # 사용법: gcp_author <커밋범위> [사용자이름]
