@@ -1,7 +1,10 @@
 #!/bin/bash
 # mytool/setup-crt.sh
-# Samsung Semiconductor CA Certificate Setup Script
-# Installs and manages the company proxy certificate for Node.js/npm
+# CA Certificate Setup Script
+# Installs and manages CA certificates for Node.js/npm
+#
+# This script reads CA_CERT from shell-common/env/security.local.sh
+# Supports both custom certificates and system CA bundle
 
 set -e
 
@@ -9,13 +12,42 @@ set -e
 
 source "$(dirname "$0")/init.sh" || exit 1
 
-# Constants
-COMPANY_CA_CERT="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-COMPANY_CA_NAME="samsungsemi-prx.com.crt"
+# ========================================
+# Load CA_CERT from security.local.sh (Single Source of Truth)
+# ========================================
+SECURITY_LOCAL="$HOME/dotfiles/shell-common/env/security.local.sh"
+SECURITY_EXAMPLE="$HOME/dotfiles/shell-common/env/security.local.example"
+
+# Try to load CA_CERT from security.local.sh
+if [ -f "$SECURITY_LOCAL" ]; then
+    # shellcheck disable=SC1090
+    source "$SECURITY_LOCAL"
+elif [ -f "$SECURITY_EXAMPLE" ]; then
+    # Fallback to example file (extract default CA_CERT)
+    # shellcheck disable=SC1090
+    CA_CERT=$(grep -m1 '^CA_CERT=' "$SECURITY_EXAMPLE" | cut -d'"' -f2)
+fi
+
+# Validate CA_CERT is set
+if [ -z "$CA_CERT" ]; then
+    ux_error "CA_CERT not found. Please set it in security.local.sh"
+    exit 1
+fi
+
+# Extract certificate name from path
+CA_CERT_NAME="$(basename "$CA_CERT")"
+
+# Determine CA type
+SYSTEM_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+if [ "$CA_CERT" = "$SYSTEM_CA_BUNDLE" ]; then
+    IS_SYSTEM_CA=true
+else
+    IS_SYSTEM_CA=false
+fi
 
 # Helper function: Check if certificate is already installed
 check_certificate_status() {
-    if [ -f "$COMPANY_CA_CERT" ]; then
+    if [ -f "$CA_CERT" ]; then
         return 0  # Certificate exists
     else
         return 1  # Certificate does not exist
@@ -34,17 +66,45 @@ verify_env_variable() {
 # Main script
 main() {
     clear
-    ux_header "Samsung Semiconductor CA Certificate Setup"
-    ux_info "This script helps you install and manage the company proxy certificate."
+    ux_header "CA Certificate Setup"
+    ux_info "Current CA: $CA_CERT"
     echo ""
 
     # ========================================
-    # Step 1: Check current status
+    # Handle System CA Bundle (Option 2)
+    # ========================================
+    if [ "$IS_SYSTEM_CA" = true ]; then
+        ux_info "System CA bundle detected. Verifying..."
+        echo ""
+
+        if [ -f "$CA_CERT" ]; then
+            ux_success "✓ System CA bundle exists: $CA_CERT"
+
+            if verify_env_variable; then
+                ux_success "✓ NODE_EXTRA_CA_CERTS is properly set"
+            else
+                ux_warning "NODE_EXTRA_CA_CERTS is not set"
+                ux_info "Run: source ~/.bashrc"
+            fi
+
+            echo ""
+            ux_info "System CA bundle is ready. No installation needed."
+            exit 0
+        else
+            ux_error "System CA bundle not found at: $CA_CERT"
+            ux_info "The system CA bundle should exist by default."
+            ux_info "Check your system configuration."
+            exit 1
+        fi
+    fi
+
+    # ========================================
+    # Step 1: Check current status (Custom Certificate)
     # ========================================
     ux_step "1/4" "Checking current certificate status..."
 
     if check_certificate_status; then
-        ux_success "Certificate is installed at $COMPANY_CA_CERT"
+        ux_success "Certificate is installed at $CA_CERT"
         echo ""
 
         if verify_env_variable; then
@@ -105,8 +165,8 @@ main() {
     elif [ "$choice" = "2" ]; then
         ux_info "Manual setup selected."
         ux_section "Manual Setup Instructions"
-        ux_bullet "1. Obtain the certificate file (samsungsemi-prx.com.crt)"
-        ux_bullet "2. Copy it to: $COMPANY_CA_CERT"
+        ux_bullet "1. Obtain the certificate file ($CA_CERT_NAME)"
+        ux_bullet "2. Copy it to: $CA_CERT"
         ux_bullet "3. Run: sudo update-ca-certificates"
         ux_bullet "4. Verify: echo \$NODE_EXTRA_CA_CERTS"
         echo ""
@@ -131,24 +191,24 @@ main() {
     fi
 
     # Create backup if certificate already exists
-    if [ -f "$COMPANY_CA_CERT" ]; then
-        BACKUP_FILE="${COMPANY_CA_CERT}.backup.$(date +%Y%m%d_%H%M%S)"
+    if [ -f "$CA_CERT" ]; then
+        BACKUP_FILE="${CA_CERT}.backup.$(date +%Y%m%d_%H%M%S)"
         ux_info "Backing up existing certificate to: $BACKUP_FILE"
-        if ! sudo cp "$COMPANY_CA_CERT" "$BACKUP_FILE"; then
+        if ! sudo cp "$CA_CERT" "$BACKUP_FILE"; then
             ux_error "Failed to backup existing certificate."
             exit 1
         fi
     fi
 
     # Copy certificate to system directory
-    ux_info "Copying certificate to $COMPANY_CA_CERT..."
-    if ! sudo cp "$CERT_SOURCE" "$COMPANY_CA_CERT"; then
+    ux_info "Copying certificate to $CA_CERT..."
+    if ! sudo cp "$CERT_SOURCE" "$CA_CERT"; then
         ux_error "Failed to copy certificate."
         exit 1
     fi
 
     # Set appropriate permissions
-    if ! sudo chmod 644 "$COMPANY_CA_CERT"; then
+    if ! sudo chmod 644 "$CA_CERT"; then
         ux_error "Failed to set certificate permissions."
         exit 1
     fi
@@ -170,8 +230,8 @@ main() {
     echo ""
 
     # Check if certificate file exists
-    if [ -f "$COMPANY_CA_CERT" ]; then
-        ux_success "✓ Certificate file exists: $COMPANY_CA_CERT"
+    if [ -f "$CA_CERT" ]; then
+        ux_success "✓ Certificate file exists: $CA_CERT"
     else
         ux_error "✗ Certificate file not found."
         exit 1
@@ -179,10 +239,10 @@ main() {
 
     # Check certificate details
     ux_info "Certificate details:"
-    if openssl x509 -in "$COMPANY_CA_CERT" -text -noout 2>/dev/null | grep -q "Subject:"; then
-        ux_bullet "$(openssl x509 -in "$COMPANY_CA_CERT" -noout -subject | sed 's/subject=//')"
-        ux_bullet "$(openssl x509 -in "$COMPANY_CA_CERT" -noout -issuer | sed 's/issuer=//')"
-        ux_bullet "Valid: $(openssl x509 -in "$COMPANY_CA_CERT" -noout -dates | tr '\n' ', ')"
+    if openssl x509 -in "$CA_CERT" -text -noout 2>/dev/null | grep -q "Subject:"; then
+        ux_bullet "$(openssl x509 -in "$CA_CERT" -noout -subject | sed 's/subject=//')"
+        ux_bullet "$(openssl x509 -in "$CA_CERT" -noout -issuer | sed 's/issuer=//')"
+        ux_bullet "Valid: $(openssl x509 -in "$CA_CERT" -noout -dates | tr '\n' ', ')"
     else
         ux_warning "Could not parse certificate details."
     fi
@@ -204,9 +264,10 @@ main() {
     echo ""
 
     ux_section "Troubleshooting"
-    ux_bullet "If NODE_EXTRA_CA_CERTS is not set, check: bash/env/security.bash"
-    ux_bullet "To remove certificate: sudo rm $COMPANY_CA_CERT && sudo update-ca-certificates"
-    ux_bullet "To view certificate: openssl x509 -in $COMPANY_CA_CERT -text"
+    ux_bullet "If NODE_EXTRA_CA_CERTS is not set, check: shell-common/env/security.local.sh"
+    ux_bullet "CA_CERT is read from: $SECURITY_LOCAL"
+    ux_bullet "To remove certificate: sudo rm $CA_CERT && sudo update-ca-certificates"
+    ux_bullet "To view certificate: openssl x509 -in $CA_CERT -text"
     echo ""
 }
 
