@@ -1,5 +1,10 @@
 # security.sh
 # 보안 관련 환경 변수 설정 (POSIX 호환)
+#
+# 환경별 CA 인증서 설정 방법:
+#   1. shell-common/env/security.local.example을 security.local.sh로 복사
+#   2. 환경에 맞는 CA 설정 선택 (회사 외부PC/내부PC)
+#   3. security.local.sh는 자동으로 로드됨 (.gitignore에 의해 제외됨)
 
 # SSH 에이전트 소켓
 if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
@@ -17,15 +22,12 @@ if tty >/dev/null 2>&1; then
     export GPG_TTY
 fi
 
-# Node.js/NPM CA 인증서 설정 (회사 내부 프록시용)
-# 파일이 존재할 때만 설정하여 집 WSL 환경과 호환성 유지
-COMPANY_CA_CERT="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-if [ -f "$COMPANY_CA_CERT" ]; then
-    export NODE_EXTRA_CA_CERTS="$COMPANY_CA_CERT"
+# ========================================
+# 환경별 로컬 보안 설정 로드 (CA 인증서 등)
+# ========================================
+# shellcheck disable=SC1091
+_security_dir="$(dirname "${BASH_SOURCE[0]:-$0}")"
+if [ -f "${_security_dir}/security.local.sh" ]; then
+    . "${_security_dir}/security.local.sh"
 fi
-
-# Python requests CA 인증서 설정 (회사 내부 프록시용)
-# 파일이 존재할 때만 설정하여 집 WSL 환경과 호환성 유지
-if [ -f "$COMPANY_CA_CERT" ]; then
-    export REQUESTS_CA_BUNDLE="$COMPANY_CA_CERT"
-fi
+unset _security_dir

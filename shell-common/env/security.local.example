@@ -1,0 +1,32 @@
+# security.local.example
+# 환경별 보안 설정 예제 (CA 인증서 관리)
+#
+# 사용 방법:
+#   1. 이 파일을 security.local.sh로 복사
+#      cp security.local.example security.local.sh
+#   2. 환경에 맞는 CA 설정 선택 (아래 옵션 중 하나)
+#   3. security.local.sh는 자동으로 로드됨 (.gitignore에 의해 제외됨)
+
+
+# 🚨🚨🚨CA 인증서 경로 선택 (옵션 중 하나만 활성화)🚨🚨🚨
+# 옵션1: 회사 외부PC (VPN) - setup-crt.sh로 설치한 인증서
+CA_CERT="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
+
+# 옵션2: 회사 내부PC (직접 연결) - 시스템 CA 번들
+#CA_CERT="/etc/ssl/certs/ca-certificates.crt"
+
+
+# CA 인증서 설정 (Node.js, Python)
+# 파일이 존재할 때만 설정하여 집 환경과 호환성 유지
+if [ -f "$CA_CERT" ]; then
+    export NODE_EXTRA_CA_CERTS="$CA_CERT"
+    export REQUESTS_CA_BUNDLE="$CA_CERT"
+fi
+
+
+# ========================================
+# 참고
+# ========================================
+# - 회사 외부PC: setup-crt.sh로 인증서 설치 후 옵션 1 사용
+# - 회사 내부PC: 옵션 2 사용 (시스템 CA 번들)
+# - 집 환경: security.local.sh를 생성하지 않음 (CA 설정 불필요)

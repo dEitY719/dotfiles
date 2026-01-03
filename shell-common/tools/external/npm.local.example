@@ -8,14 +8,13 @@
 #   2. 필요에 따라 설정 수정
 #   3. npm.local.sh는 자동으로 .gitignore에 의해 제외됨
 #
-# NVM의 방식을 따르는 스크립트 (프록시/CA만 설정)
+# NVM의 방식을 따르는 스크립트 (NVM 로드 + 프록시 설정)
 # (prefix, ~/.npm-global 관련 설정 완전 제거)
+#
+# 참고: CA 인증서(NODE_EXTRA_CA_CERTS) 설정은
+#      shell-common/env/security.local.sh에서 관리됩니다
 
-# --- 1. Node.js CA 설정 ---
-# Node 스크립트가 시스템 CA를 신뢰하도록 설정
-export NODE_EXTRA_CA_CERTS="/etc/ssl/certs/ca-certificates.crt"
-
-# --- 2. NVM 로드 ---
+# --- 1. NVM 로드 ---
 export NVM_DIR="$HOME/.nvm"
 if [ -s "$NVM_DIR/nvm.sh" ]; then
     # nvm 스크립트를 로드합니다
@@ -33,7 +32,7 @@ if [ -s "$NVM_DIR/nvm.sh" ]; then
     fi
 fi
 
-# --- 3. .npmrc 설정 (프록시, CA 등) ---
+# --- 2. .npmrc 설정 (프록시, CA 등) ---
 # nvm 로드가 완료되어 'npm' 명령어를 사용할 수 있을 때
 if command -v npm >/dev/null 2>&1; then
 
