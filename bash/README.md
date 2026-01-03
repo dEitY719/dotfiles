@@ -85,8 +85,7 @@ These environment modules are shared between bash and zsh:
 
 - **development.sh**: Development environment settings and variables
 - **editor.sh**: Default editor configuration (EDITOR, VISUAL variables)
-- **fcitx.sh**: Fcitx input method configuration
-- **korean.sh**: Korean language support settings
+- **fcitx.sh**: Fcitx input method configuration (exported env vars and optional autostart; toggle with ENABLE_FCITX=false)
 - **locale.sh**: Locale settings (UTF-8, language preferences)
 - **path.sh**: PATH environment variable configuration with deduplication
 - **proxy.sh**: Proxy server configuration (http_proxy, https_proxy, no_proxy)
