@@ -33,12 +33,18 @@ npm_help() {
     ux_section "Setup Tools"
     ux_table_row "npminstall" "Install Script" "Install Node/NPM"
     ux_table_row "npmuninstall" "Uninstall Script" "Remove Node/NPM"
-    ux_table_row "crtsetup" "Certificate Setup" "Install CA cert (proxy)"
+    echo ""
+
+    ux_section "Certificate Management"
+    ux_info "For CA certificate setup (company proxy/internal network):"
+    ux_bullet "Run: ${UX_SUCCESS}crt-help${UX_RESET} for detailed guide"
+    ux_bullet "Setup: ${UX_SUCCESS}crtsetup${UX_RESET} to install certificate"
     echo ""
 
     ux_section "Troubleshooting"
     ux_bullet "EACCES permission error (npm WARN): npm config set prefix ~/.npm-global"
     ux_bullet "nvm과 npm prefix 충돌: .npmrc 파일의 prefix 라인 제거"
+    ux_bullet "Certificate error: Run ${UX_SUCCESS}crt-help${UX_RESET} for CA setup guide"
     echo ""
 
     ux_section "Common Commands"

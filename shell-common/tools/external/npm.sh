@@ -76,7 +76,14 @@ npmuninstall() {
     bash "$HOME/dotfiles/shell-common/tools/custom/uninstall-npm.sh"
 }
 
-# CA 인증서 설치 (대화형 스크립트)
+# ========================================
+# CA Certificate Setup
+# ========================================
+# Note: Although CA certificate setup is placed here with npm utilities,
+# it is actually managed by security.local.sh and provides broader functionality
+# beyond npm (also used by Python via REQUESTS_CA_BUNDLE).
+# This is a convenience location since npm often requires custom certificates.
+# See crt-help for detailed CA certificate documentation.
 crtsetup() {
     bash "$HOME/dotfiles/shell-common/tools/custom/setup-crt.sh"
 }

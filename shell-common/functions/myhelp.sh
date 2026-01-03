@@ -107,6 +107,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[pet-help]="${HELP_DESCRIPTIONS[pet-help]:-pet - Simple command snippet manager}"
     HELP_DESCRIPTIONS[ripgrep-help]="${HELP_DESCRIPTIONS[ripgrep-help]:-ripgrep (rg) fast text search tool}"
     HELP_DESCRIPTIONS[p10k_help]="${HELP_DESCRIPTIONS[p10k_help]:-Powerlevel10k font setup guide}"
+    HELP_DESCRIPTIONS[crt_help]="${HELP_DESCRIPTIONS[crt_help]:-CA Certificate setup and management guide}"
 }
 
 # ═══════════════════════════════════════════════════════════════
