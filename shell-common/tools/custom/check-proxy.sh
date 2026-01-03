@@ -1,34 +1,18 @@
-#!/bin/sh
+#!/bin/bash
 # shell-common/tools/custom/check-proxy.sh
 # Comprehensive proxy diagnostic script
 # Usage: check_proxy [test|config|all]
 
 set -e
 
+# Load UX library if not already loaded
+if ! declare -f ux_header >/dev/null 2>&1; then
+    source "$(dirname "$0")/../ux_lib/ux_lib.sh" 2>/dev/null || true
+fi
+
 # ============================================================
 # Helper functions
 # ============================================================
-
-_print_header() {
-    local title="$1"
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "📋 $title"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-}
-
-_print_section() {
-    echo ""
-    echo "▶ $1"
-}
-
-_check_status() {
-    if [ $? -eq 0 ]; then
-        echo "  ✅ Success"
-    else
-        echo "  ❌ Failed"
-    fi
-}
 
 _format_env() {
     local var="$1"
@@ -41,117 +25,127 @@ _format_env() {
 # ============================================================
 
 check_proxy_env() {
-    _print_header "1. Current Environment Variables"
+    ux_header "1. Current Environment Variables"
 
-    echo ""
-    _print_section "HTTP/HTTPS Proxy"
+    ux_section "HTTP/HTTPS Proxy"
     _format_env "http_proxy" "${http_proxy:-[NOT SET]}"
     _format_env "HTTP_PROXY" "${HTTP_PROXY:-[NOT SET]}"
     _format_env "https_proxy" "${https_proxy:-[NOT SET]}"
     _format_env "HTTPS_PROXY" "${HTTPS_PROXY:-[NOT SET]}"
-
     echo ""
-    _print_section "NO Proxy (Exceptions)"
+
+    ux_section "NO Proxy (Exceptions)"
     if [ -n "$no_proxy" ]; then
-        echo "  no_proxy (lowercase):"
+        ux_bullet "no_proxy (lowercase) entries:"
         echo "$no_proxy" | tr ',' '\n' | sed 's/^/    - /'
     else
-        echo "  ❌ no_proxy: [NOT SET]"
+        ux_warning "no_proxy: [NOT SET]"
     fi
+    echo ""
 }
 
 check_proxy_local_sh() {
-    _print_header "2. proxy.local.sh Loading Status"
+    ux_header "2. proxy.local.sh Loading Status"
 
-    _print_section "File Existence"
+    ux_section "File Existence"
     if [ -f "$HOME/dotfiles/shell-common/env/proxy.local.sh" ]; then
-        echo "  ✅ proxy.local.sh exists"
-        echo "     Path: $HOME/dotfiles/shell-common/env/proxy.local.sh"
-        echo "     Size: $(wc -c < "$HOME/dotfiles/shell-common/env/proxy.local.sh") bytes"
-        echo "     Modified: $(stat -c '%y' "$HOME/dotfiles/shell-common/env/proxy.local.sh" 2>/dev/null || stat -f '%Sm' "$HOME/dotfiles/shell-common/env/proxy.local.sh" 2>/dev/null || echo '[N/A]')"
+        ux_success "proxy.local.sh exists"
+        ux_bullet "Path: $HOME/dotfiles/shell-common/env/proxy.local.sh"
+        ux_bullet "Size: $(wc -c < "$HOME/dotfiles/shell-common/env/proxy.local.sh") bytes"
+        ux_bullet "Modified: $(stat -c '%y' "$HOME/dotfiles/shell-common/env/proxy.local.sh" 2>/dev/null || stat -f '%Sm' "$HOME/dotfiles/shell-common/env/proxy.local.sh" 2>/dev/null || echo '[N/A]')"
     else
-        echo "  ❌ proxy.local.sh NOT FOUND"
+        ux_error "proxy.local.sh NOT FOUND"
         return 1
     fi
+    echo ""
 
-    _print_section "Content Validation"
+    ux_section "Content Validation"
     if grep -q "export http_proxy" "$HOME/dotfiles/shell-common/env/proxy.local.sh"; then
-        echo "  ✅ http_proxy export found"
+        ux_success "http_proxy export found"
     else
-        echo "  ⚠️  http_proxy export not found"
+        ux_warning "http_proxy export not found"
     fi
 
     if grep -q "export no_proxy" "$HOME/dotfiles/shell-common/env/proxy.local.sh"; then
-        echo "  ✅ no_proxy export found"
+        ux_success "no_proxy export found"
     else
-        echo "  ⚠️  no_proxy export not found"
+        ux_warning "no_proxy export not found"
     fi
+    echo ""
 }
 
 check_proxy_shell_loading() {
-    _print_header "3. Shell Loading Test"
+    ux_header "3. Shell Loading Test"
 
-    _print_section "Bash"
-    echo "  Testing: bash -c 'source proxy.sh && echo \$http_proxy'"
+    ux_section "Bash"
+    ux_info "Testing: bash -c 'source proxy.sh && echo \$http_proxy'"
     bash_result=$(bash -c "source $HOME/dotfiles/shell-common/env/proxy.sh 2>/dev/null && echo \${http_proxy:-[NOT SET]}" 2>/dev/null)
     if [ "$bash_result" != "[NOT SET]" ] && [ -n "$bash_result" ]; then
-        echo "  ✅ Bash loading: $bash_result"
+        ux_success "Bash loading: $bash_result"
     else
-        echo "  ⚠️  Bash loading: [NOT SET] or failed"
+        ux_warning "Bash loading: [NOT SET] or failed"
     fi
+    echo ""
 
-    _print_section "Zsh"
+    ux_section "Zsh"
     if command -v zsh >/dev/null 2>&1; then
-        echo "  Testing: zsh -c 'source proxy.sh && echo \$http_proxy'"
+        ux_info "Testing: zsh -c 'source proxy.sh && echo \$http_proxy'"
         zsh_result=$(zsh -c "source $HOME/dotfiles/shell-common/env/proxy.sh 2>/dev/null && echo \${http_proxy:-[NOT SET]}" 2>/dev/null)
         if [ "$zsh_result" != "[NOT SET]" ] && [ -n "$zsh_result" ]; then
-            echo "  ✅ Zsh loading: $zsh_result"
+            ux_success "Zsh loading: $zsh_result"
         else
-            echo "  ⚠️  Zsh loading: [NOT SET] or failed"
+            ux_warning "Zsh loading: [NOT SET] or failed"
         fi
     else
-        echo "  ⚠️  Zsh not installed"
+        ux_warning "Zsh not installed"
     fi
+    echo ""
 }
 
 check_proxy_connectivity() {
-    _print_header "4. Proxy Connectivity Test"
+    ux_header "4. Proxy Connectivity Test"
 
     if [ -z "$http_proxy" ] && [ -z "$HTTP_PROXY" ]; then
-        echo "⚠️  No proxy configured, skipping connectivity test"
+        ux_warning "No proxy configured, skipping connectivity test"
+        echo ""
         return 0
     fi
 
     local proxy="${http_proxy:-$HTTP_PROXY}"
 
-    _print_section "Connection Test (timeout 5s)"
-    echo "  Proxy: $proxy"
-    echo "  Target: https://github.com"
+    ux_section "Connection Test (timeout 5s)"
+    ux_bullet "Proxy: $proxy"
+    ux_bullet "Target: https://github.com"
+    echo ""
 
     if timeout 5 curl -v --proxy "$proxy" https://github.com 2>&1 | grep -q "HTTP\|Connected"; then
-        echo "  ✅ Proxy connection successful"
+        ux_success "Proxy connection successful"
     else
-        echo "  ❌ Proxy connection failed or timeout"
+        ux_error "Proxy connection failed or timeout"
     fi
+    echo ""
 }
 
 check_git_config() {
-    _print_header "5. Git Proxy Configuration"
+    ux_header "5. Git Proxy Configuration"
 
-    _print_section "Git Global Config"
+    ux_section "Git Global Config"
     if git config --global -l | grep -q "proxy"; then
+        ux_bullet "Git proxy configuration found:"
         git config --global -l | grep proxy | sed 's/^/  /'
     else
-        echo "  ℹ️  No explicit git proxy configuration (using system environment)"
+        ux_info "No explicit git proxy configuration (using system environment)"
     fi
+    echo ""
 
-    _print_section "Git Test"
-    echo "  Testing: timeout 5 git ls-remote https://github.com/anthropics/claude-code.git"
+    ux_section "Git Remote Access Test"
+    ux_info "Testing: timeout 5 git ls-remote https://github.com/anthropics/claude-code.git"
     if timeout 5 git ls-remote https://github.com/anthropics/claude-code.git >/dev/null 2>&1; then
-        echo "  ✅ Git remote access successful"
+        ux_success "Git remote access successful"
     else
-        echo "  ❌ Git remote access failed"
+        ux_error "Git remote access failed"
     fi
+    echo ""
 }
 
 # ============================================================
@@ -186,8 +180,7 @@ check_proxy() {
             ;;
     esac
 
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ux_divider_thick
     echo ""
 }
 
