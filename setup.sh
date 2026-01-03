@@ -18,7 +18,8 @@
 
 set -e
 
-# Run setup scripts for bash, zsh, and git
+# Run setup scripts for shell-common, bash, zsh, and git
+./shell-common/setup.sh
 ./bash/setup.sh
 ./zsh/setup.sh
 ./git/setup.sh
