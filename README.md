@@ -1,295 +1,162 @@
 # Dotfiles
 
-Opinionated Bash dotfiles for reproducible terminal environments across WSL, Linux, and macOS.
+Opinionated Bash/Zsh dotfiles for reproducible terminal environments across WSL, Linux, and macOS.
 
-## Features
+## ✨ Features
 
-- **Modular Configuration**: Organized bash configurations split by purpose (aliases, apps, env, utils)
-- **Beautiful Logging**: Custom logging system with colored output and progress indicators
-- **Application Integration**: Pre-configured setups for common development tools
-- **Code Quality**: Integrated linting and formatting tools (ruff, mypy, shellcheck, shfmt)
-- **Easy Installation**: Simple symlink-based setup script
-- **Symbolic Link Management**: Standardized pattern for managing config files via dotfiles (see [symlink-manager skill](bash/claude/skills/symlink-manager.md))
+- **Environment-Specific Setup**: Automatic configuration for Home/Internal/External environments
+- **Modular Configuration**: Organized shell configs by purpose (aliases, apps, env, utils)
+- **Cross-Shell Support**: Unified config for Bash and Zsh with shared portable code
+- **UX Library**: Beautiful logging with colored output and progress indicators
+- **Code Quality**: Integrated linting tools (shellcheck, ruff, mypy)
+- **Easy Installation**: Interactive setup script with environment detection
 
-## Project Structure
+## 🚀 Quick Start
+
+### Prerequisites
+- Bash 4.0+ or Zsh 5.0+
+- Git
+
+### Installation
+
+```bash
+git clone https://github.com/yourusername/dotfiles.git ~/dotfiles
+cd ~/dotfiles
+./setup.sh
+```
+
+The setup script will:
+1. **Ask for your environment** (Public PC / Internal company PC / External company PC)
+2. **Configure environment-specific files** (.local.sh files)
+3. **Create shell symlinks** (~/.bashrc, ~/.zshrc, ~/.gitconfig)
+4. **Set up environment variables**
+
+After setup, reload your shell:
+```bash
+exec bash  # or exec zsh
+```
+
+## 📚 Documentation
+
+### For Initial Setup
+→ See **[Setup Guide](docs/SETUP_GUIDE.md)** for detailed installation instructions
+
+### Directory Structure
 
 ```
 dotfiles/
-├── bash/                   # Bash configurations
-│   ├── alias/             # Command aliases and shortcuts
-│   │   ├── core_aliases.bash
-│   │   ├── directory_aliases.bash
-│   │   ├── python_alias.bash
-│   │   └── system_aliases.bash
-│   ├── app/               # Application-specific configurations
-│   │   ├── claude.bash    # Claude AI CLI
-│   │   ├── gemini.bash    # Google Gemini AI
-│   │   ├── git.bash       # Git shortcuts
-│   │   ├── npm.bash       # Node.js/npm
-│   │   ├── pyenv.bash     # Python version manager
-│   │   ├── uv.bash        # Fast Python package installer
-│   │   └── ...            # More apps (postgres, mysql, obsidian, etc.)
-│   ├── claude/            # Claude-related configurations
-│   │   ├── skills/        # Claude Code skills (symlinked to ~/.claude/skills/)
-│   │   │   └── symlink-manager.md  # Symbolic link management pattern
-│   │   ├── tox-agent.md   # Claude Code tox linting agent
-│   │   ├── statusline-command.sh  # Claude Code custom status line
-│   │   └── settings.json  # Claude Code settings (symlinked to ~/.claude/settings.json)
-│   ├── ux_lib/            # Core functionality (UX library)
-│   │   ├── beauty_log.bash       # Logging utilities
-│   │   ├── log_util.bash         # Additional log functions
-│   │   └── default_wsl_bashrc.bash
-│   ├── env/               # Environment variables
-│   │   ├── development.bash
-│   │   ├── editor.bash
-│   │   ├── korean.bash
-│   │   ├── locale.bash
-│   │   ├── path.bash
-│   │   ├── proxy.bash
-│   │   └── security.bash
-│   ├── util/              # Utility functions
-│   │   └── my_man.bash
-│   ├── main.bash          # Main entry point
-│   ├── profile.bash       # Bash profile configuration
-│   └── setup.sh           # Bash setup script
-├── git/                   # Git configurations
-│   └── setup.sh           # Git setup script
-├── tests/                 # Test files
-├── pyproject.toml         # Python project configuration
-├── tox.ini                # Code quality automation
-├── setup.sh               # Main setup script (bash + git)
-├── install.sh             # Additional setup script (Claude Code + other tools)
-└── README.md              # This file
+├── shell-common/          # Shared code (both bash & zsh)
+│   ├── env/              # Environment variables & .local configs
+│   ├── aliases/          # Command aliases
+│   ├── functions/        # Portable functions
+│   ├── tools/            # Utilities and tools
+│   └── setup.sh          # Environment-specific setup
+│
+├── bash/                 # Bash-specific configuration
+│   ├── env/             # Bash environment settings
+│   ├── app/             # Application configurations
+│   ├── main.bash        # Main entry point
+│   └── setup.sh         # Bash setup
+│
+├── zsh/                 # Zsh-specific configuration
+│   ├── env/             # Zsh environment settings
+│   ├── app/             # Application configurations
+│   ├── main.zsh         # Main entry point
+│   └── setup.sh         # Zsh setup
+│
+├── git/                 # Git configuration
+│   └── setup.sh         # Git setup
+│
+├── docs/                # Documentation
+│   └── SETUP_GUIDE.md   # Detailed setup instructions
+│
+├── setup.sh             # Main orchestrator
+└── README.md            # This file
 ```
 
-## Installation
+## 🔧 Configuration
 
-### Prerequisites
+### Environment-Specific Configs
 
-- Bash 4.0 or later
-- Git
+The setup script creates `.local.sh` files based on your environment:
 
-### Quick Start
+- **Public PC**: No company-specific settings
+- **Internal Company PC**: Uses system CA bundle (Option 2)
+- **External Company PC**: Uses custom certificate (Option 1)
 
-1. **Clone the repository:**
+These files are in `.gitignore` and won't be committed to the repository.
 
-   ```bash
-   git clone https://github.com/yourusername/dotfiles.git ~/dotfiles
-   cd ~/dotfiles
-   ```
+### Using Custom Configurations
 
-2. **Run the main setup script:**
-
-   ```bash
-   ./setup.sh
-   ```
-
-   This will create symlinks:
-   - `~/.bashrc` → `~/dotfiles/bash/main.bash`
-   - `~/.bash_profile` → `~/dotfiles/bash/profile.bash`
-   - `~/.gitconfig` → `~/dotfiles/git/.gitconfig`
-
-3. **Run the installation script (for additional setup):**
-
-   ```bash
-   ./install.sh
-   ```
-
-   This will set up:
-   - `~/.claude/settings.json` → `~/dotfiles/bash/claude/settings.json` (symlink)
-   - `~/.claude/statusline-command.sh` → `~/dotfiles/bash/claude/statusline-command.sh` (symlink)
-   - `~/.claude/skills/*.md` → `~/dotfiles/bash/claude/skills/*.md` (symlinks)
-   - `~/.claude/agents/*.md` → `~/dotfiles/bash/claude/*.md` (symlinks)
-
-4. **Apply the changes:**
-
-   ```bash
-   source ~/.bashrc
-   ```
-
-### Manual Installation
-
-If you prefer manual setup:
+To add your own settings:
 
 ```bash
-# Bash configuration
-ln -sf ~/dotfiles/bash/main.bash ~/.bashrc
-ln -sf ~/dotfiles/bash/profile.bash ~/.bash_profile
-
-# Git configuration
-ln -sf ~/dotfiles/git/.gitconfig ~/.gitconfig
+# Home environment
+cp shell-common/env/proxy.local.example shell-common/env/proxy.local.sh
+# Edit the file to match your environment
 ```
 
-## Usage
-
-### Environment Variables
-
-Key environment variables are set in `bash/env/`:
-
-- **PATH**: Configured in `path.bash`
-- **Editor**: Set in `editor.bash` (defaults to vim)
-- **Locale**: Korean and UTF-8 support in `korean.bash` and `locale.bash`
-- **Proxy**: Configure proxy settings in `proxy.bash`
-
-### Aliases
-
-Common aliases are available immediately after sourcing. Examples:
-
-```bash
-# Directory navigation (from directory_aliases.bash)
-ll, la, l      # ls variants
-
-# Python (from python_alias.bash)
-py, python3    # Python shortcuts
-
-# System (from system_aliases.bash)
-# Add your custom system aliases here
-```
-
-For a complete list, check files in `bash/alias/`.
-
-### Application Configurations
-
-Application-specific configurations are in `bash/app/`. Claude-related configurations are in `bash/claude/`. These include:
-
-- **Claude Code**:
-  - `app/claude.bash`: CLI shortcuts and environment setup
-  - `claude/statusline-command.sh`: Custom status line (managed via `install.sh`)
-  - `claude/tox-agent.md`: Tox linting agent (managed via `install.sh`)
-- **Git**: Enhanced git commands and aliases
-- **Python**: pyenv, uv package manager integration
-- **Databases**: PostgreSQL, MySQL configurations
-- **Editors**: JetBrains, Cursor, Obsidian
-
-## Development
-
-### Requirements
-
-```bash
-# Install Python dependencies (for development tools)
-pip install -e .[dev]
-
-# Or using uv (faster)
-uv pip install -e .[dev]
-```
+## 🛠️ Development
 
 ### Code Quality
 
-This project uses several linting and formatting tools:
-
 ```bash
-# Format shell scripts
-tox -e shfmt
-
 # Check shell scripts
 tox -e shellcheck
 
-# Format Python code
+# Format shell scripts
+tox -e shfmt
+
+# Check Python code
 tox -e ruff
 
-# Type checking
-tox -e mypy
-
-# Markdown linting
-tox -e mdlint
-
-# Run all checks
+# All checks
 tox
 ```
 
-### Project Configuration Files
+## 💡 Key Commands
 
-- **pyproject.toml**: Python project metadata, tool configurations (black, ruff, mypy)
-- **tox.ini**: Automated testing and linting configuration
-- **.markdownlint.json**: Markdown linting rules
-
-## Customization
-
-### Adding Custom Configurations
-
-1. **Create a local configuration file:**
-
-   ```bash
-   touch bash/env/local.bash
-   ```
-
-2. **Add your custom settings:**
-
-   ```bash
-   # bash/env/local.bash
-   export MY_CUSTOM_VAR="value"
-   alias myalias="command"
-   ```
-
-3. **The main.bash will automatically source it**
-
-### Adding Application Configurations
-
-Create a new file in `bash/app/`:
+After installation, you'll have access to:
 
 ```bash
-# bash/app/myapp.bash
-export MYAPP_HOME="/path/to/myapp"
-alias myapp="command to run myapp"
+# Shell management
+zsh-help                # Zsh management commands
+bash-switch            # Switch to Bash
+zsh-switch            # Switch to Zsh
+
+# Help system
+my-help               # Show available help topics
+
+# Git shortcuts
+gb                    # Git branch
+gst                   # Git status
 ```
 
-It will be automatically sourced on shell startup.
+## 🐛 Troubleshooting
 
-## Platform Support
-
-- **WSL2** (Windows Subsystem for Linux): Full support with Korean input (fcitx)
-- **Linux**: Tested on Ubuntu, Debian
-- **macOS**: Basic support (some features may need adjustment)
-
-## Troubleshooting
-
-### Bash configuration not loading
+If shell configuration isn't loading:
 
 ```bash
-# Check if symlink is correct
-ls -la ~/.bashrc
-
 # Re-run setup
 cd ~/dotfiles && ./setup.sh
+
+# Reload shell
+exec bash  # or exec zsh
 ```
 
-### Permission issues
+For more help, see [Setup Guide](docs/SETUP_GUIDE.md).
 
-```bash
-# Make setup scripts executable
-chmod +x setup.sh bash/setup.sh git/setup.sh
-```
+## 📋 Project Details
 
-### Korean input not working (WSL2)
+| Item | Description |
+|------|-------------|
+| **Language** | Bash/Zsh/Python |
+| **Platform** | WSL2, Linux, macOS |
+| **License** | MIT |
+| **Author** | BW-Yoon |
 
-The dotfiles include fcitx configuration for Korean input on WSL2. If it's not working:
+## 📖 Additional Resources
 
-```bash
-# Install fcitx
-sudo apt install fcitx fcitx-hangul
-
-# The dotfiles will auto-start fcitx
-```
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run code quality checks: `tox`
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License.
-
-## Author
-
-**BW-Yoon** - byoungwoo.yoon@samsung.com
-
-## Acknowledgments
-
-- Inspired by various dotfiles repositories in the community
-- Built with best practices for shell scripting and Python development
+- [Setup Guide](docs/SETUP_GUIDE.md) - Detailed setup and configuration
+- [Shell-Common Documentation](shell-common/README.md) - Shared code overview
+- Configuration files in `pyproject.toml` and `tox.ini`

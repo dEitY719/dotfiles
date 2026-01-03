@@ -13,26 +13,38 @@ dotfiles는 두 가지 설정 스크립트로 나뉩니다:
 
 ## 🚀 신규 사용자 초기화 (처음 설치)
 
-### Step 1: Shell 환경 설정 (필수)
+### Step 1: 환경별 설정 (필수)
 ```bash
 cd ~/dotfiles
 ./setup.sh
 ```
 
 **이 스크립트가 하는 일:**
-1. `bash/setup.sh` 실행
+
+1. **shell-common/setup.sh** 실행 (환경 선택)
+   ```
+   Select your environment:
+   1) Public PC (home environment)
+   2) Internal company PC (direct connection)
+   3) External company PC (VPN)
+   ```
+   - **1) Public PC**: 환경별 설정 제거 (집 환경)
+   - **2) Internal PC**: *.local.sh 생성 + System CA Bundle 활성화
+   - **3) External PC**: *.local.sh 생성 + Custom Certificate 활성화
+
+2. `bash/setup.sh` 실행
    - `~/.bashrc` → `bash/main.bash` symlink 생성
    - `DOTFILES_BASH_DIR`, `SHELL_COMMON` 환경변수 설정
    - `~/.bash_profile` symlink (선택사항)
 
-2. `zsh/setup.sh` 실행
+3. `zsh/setup.sh` 실행
    - `~/.zshrc` → `zsh/zshrc` symlink 생성
    - 완료 메시지 및 다음 단계 안내
 
-3. `git/setup.sh` 실행
+4. `git/setup.sh` 실행
    - `~/.gitconfig` → `git/.gitconfig` symlink 생성
 
-**결과:** 새 shell에 진입 가능
+**결과:** 환경에 맞는 설정으로 초기화 완료
 
 ### Step 2: Claude/PostgreSQL 설정 (선택사항)
 ```bash
@@ -49,6 +61,7 @@ cd ~/dotfiles
 ## ⚠️ 중요: 파일 삭제 금지
 
 **절대 삭제하면 안 되는 파일:**
+- ❌ `shell-common/setup.sh` - 환경별 설정 필수
 - ❌ `bash/setup.sh` - bash 환경변수 설정 필수
 - ❌ `zsh/setup.sh` - zsh 초기화 필수
 - ❌ `git/setup.sh` - git config symlink 필수
@@ -70,13 +83,28 @@ cd ~/dotfiles
 ```bash
 #!/bin/bash
 # 순서대로 각 shell의 setup.sh를 호출
+./shell-common/setup.sh
 ./bash/setup.sh
 ./zsh/setup.sh
 ./git/setup.sh
 ```
-- **역할**: Orchestrator (모든 shell setup 실행)
+- **역할**: Orchestrator (모든 shell 및 환경 setup 실행)
 - **언제 실행**: 초기 설치 시 필수
 - **부작용**: 없음 (하위 스크립트 호출만)
+
+### shell-common/setup.sh
+```bash
+# 역할:
+# 1. 사용자에게 3가지 환경 선택 요청
+# 2. 환경에 맞는 *.local.sh 파일 생성/삭제
+# 3. security.local.sh CA 설정 자동 구성
+```
+- **특수 작업**: 환경별 설정 (Public/Internal/External)
+- **언제 실행**: setup.sh에서 자동 호출 (수동 호출 가능)
+- **생성되는 파일**:
+  - `shell-common/env/proxy.local.sh`
+  - `shell-common/env/security.local.sh`
+  - `shell-common/tools/external/npm.local.sh`
 
 ### bash/setup.sh
 ```bash
