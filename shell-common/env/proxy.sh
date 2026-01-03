@@ -12,6 +12,11 @@
 #   - proxy.local.example (template)
 #   - proxy.local.sh (auto-generated, environment-specific)
 
+# Load UX library if not already loaded (for proxy_help() formatting)
+if ! declare -f ux_header >/dev/null 2>&1; then
+    source "${BASH_SOURCE[0]%/*}/../tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+fi
+
 # ============================================================
 # DEFAULT SETTINGS (for public/home environment)
 # ============================================================
@@ -31,71 +36,56 @@ export NO_PROXY="$no_proxy"
 # ============================================================
 
 proxy_help() {
-    cat <<-'EOF'
+    ux_header "Proxy(Corporate) Commands & Diagnostics"
 
-[Proxy(Corporate) Commands & Diagnostics]
+    ux_section "Diagnostic Commands"
+    ux_bullet "check-proxy          Run full diagnostic"
+    ux_bullet "check-proxy env      Environment variables only"
+    ux_bullet "check-proxy file     proxy.local.sh file check"
+    ux_bullet "check-proxy shell    Shell loading test"
+    ux_bullet "check-proxy conn     Connectivity test"
+    ux_bullet "check-proxy git      Git configuration"
+    echo ""
 
-🔍 DIAGNOSTIC COMMANDS
+    ux_section "Quick Commands"
+    ux_bullet "echo \$http_proxy          Current proxy setting"
+    ux_bullet "echo \$https_proxy         Current HTTPS proxy"
+    ux_bullet "echo \$no_proxy            NO_PROXY exceptions"
+    ux_bullet "env | grep -i proxy        Show all proxy vars"
+    echo ""
 
-  # 전체 프록시 진단 실행 (권장)
-  check-proxy          # Run full diagnostic
-  check-proxy env      # Environment variables only
-  check-proxy file     # proxy.local.sh file check
-  check-proxy shell    # Shell loading test
-  check-proxy conn     # Connectivity test
-  check-proxy git      # Git configuration
+    ux_section "Setting Proxy (Company Internal)"
+    ux_bullet "export http_proxy=\"http://12.26.204.100:8080/\""
+    ux_bullet "export https_proxy=\"http://12.26.204.100:8080/\""
+    ux_bullet "export no_proxy=\"10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,ssai.samsungds.net,dsvdi.net,pfs.nprotect.com\""
+    echo ""
 
-📌 QUICK COMMANDS
+    ux_section "Disabling Proxy"
+    ux_bullet "unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY"
+    echo ""
 
-  # 현재 프록시 설정 확인
-  echo $http_proxy
-  echo $https_proxy
-  echo $no_proxy
+    ux_section "Git Configuration"
+    ux_bullet "git config --global http.connectTimeout 60    Increase timeout"
+    ux_bullet "git config --global http.lowSpeedLimit 0      Disable low speed limit"
+    ux_bullet "git config --global http.lowSpeedTime 999999   Disable low speed time"
+    ux_bullet "git config --global -l | grep proxy           View git proxy config"
+    echo ""
 
-  # 프록시 설정 (기본값)
-  export http_proxy="http://12.26.204.100:8080/"
-  export https_proxy="http://12.26.204.100:8080/"
-  export no_proxy="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,ssai.samsungds.net,dsvdi.net,pfs.nprotect.com"
+    ux_section "GitHub Bypass (Direct Connection)"
+    ux_bullet "git config --global url.\"https://github.com/\".insteadOf https://"
+    echo ""
 
-  # 프록시 해제 (비활성화)
-  unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY
+    ux_section "Common Recipes"
+    ux_numbered "1" "Temporary proxy (current session only): export http_proxy=\"http://12.26.204.100:8080/\""
+    ux_numbered "2" "Add exception for domain: export no_proxy=\"\$no_proxy,.internal.domain.com\""
+    ux_numbered "3" "Complete reset: unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY"
+    echo ""
 
-  # 현재 프록시 상태 출력
-  env | grep -i proxy
-
-🛠️  GIT CONFIGURATION
-
-  # Git 프록시 타임아웃 증가 (기본 30초 → 60초)
-  git config --global http.connectTimeout 60
-  git config --global http.lowSpeedLimit 0
-  git config --global http.lowSpeedTime 999999
-
-  # GitHub 프록시 우회 (GitHub만 직접 연결)
-  git config --global url."https://github.com/".insteadOf https://
-
-  # Git 프록시 설정 확인
-  git config --global -l | grep proxy
-
-📖 RECIPES
-
-  # 프록시 임시 적용 (현재 세션만)
-  export http_proxy="http://12.26.204.100:8080/"
-
-  # 프록시 완전 초기화
-  unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY
-
-  # 특정 도메인만 예외 처리
-  export no_proxy="$no_proxy,.internal.domain.com"
-
-⚠️  NOTES
-
-  - NO_PROXY 값에 공백이 있으면 인식되지 않음 → 반드시 콤마(,)로 구분
-  - 대소문자 구분이 없지만, 일부 툴은 대문자 환경 변수만 인식
-  - 시스템 전체에 적용하려면 ~/.bashrc 또는 ~/.zshrc에 추가
-
-  Ref: https://confluence.samsungds.net/pages/viewpage.action?pageId=1367083095
-
-EOF
+    ux_section "Important Notes"
+    ux_warning "NO_PROXY with spaces is not recognized - use commas only"
+    ux_info "Some tools only recognize uppercase (HTTP_PROXY, HTTPS_PROXY)"
+    ux_info "Reference: https://confluence.samsungds.net/pages/viewpage.action?pageId=1367083095"
+    echo ""
 }
 
 # Wrapper function for check-proxy.sh
