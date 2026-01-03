@@ -62,19 +62,37 @@ setup_local_files() {
 
     print_header "Setting up environment-specific files for: $environment"
 
-    # Copy all .local.example files to .local.sh
+    # Copy .local.example files to .local.sh (with environment-specific filtering)
     for example_file in "${local_examples[@]}"; do
         local dir
         local filename
         local local_file
+        local basename_file
 
         dir="$(dirname "$example_file")"
         filename="$(basename "$example_file" .example)"
         local_file="${dir}/${filename%.*}.local.sh"
+        basename_file="$(basename "$example_file")"
 
-        # Copy the file
-        cp "$example_file" "$local_file"
-        print_success "Created: ${local_file#$SHELL_COMMON_DIR/}"
+        # Environment-specific handling
+        case "$environment" in
+            internal)
+                # Internal company PC: copy ALL .local.example files
+                cp "$example_file" "$local_file"
+                print_success "Created: ${local_file#$SHELL_COMMON_DIR/}"
+                ;;
+            external)
+                # External company PC (VPN): skip proxy.local.example
+                # Reason: proxy.local.sh is only valid for internal (2번 option)
+                # VPN environment uses direct connection without proxy
+                if [ "$basename_file" = "proxy.local.example" ]; then
+                    print_info "Skipped (not needed for VPN): ${basename_file}"
+                else
+                    cp "$example_file" "$local_file"
+                    print_success "Created: ${local_file#$SHELL_COMMON_DIR/}"
+                fi
+                ;;
+        esac
     done
 
     # Handle security.local.sh based on environment
@@ -138,23 +156,25 @@ main() {
             echo ""
             ;;
         2)
-            print_info "Selected: Internal company PC"
+            print_info "Selected: Internal company PC (direct connection)"
             setup_local_files "internal"
             echo ""
             print_success "Setup complete for internal company PC"
             print_info "Changes made:"
             print_info "  - Copied all .local.example files to .local.sh"
             print_info "  - Security: System CA Bundle (Option 2) activated"
+            print_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
             echo ""
             ;;
         3)
-            print_info "Selected: External company PC"
+            print_info "Selected: External company PC (VPN)"
             setup_local_files "external"
             echo ""
             print_success "Setup complete for external company PC"
             print_info "Changes made:"
-            print_info "  - Copied all .local.example files to .local.sh"
+            print_info "  - Copied .local.example files to .local.sh (except proxy)"
             print_info "  - Security: Custom Certificate (Option 1) activated"
+            print_info "  - Proxy: Skipped (not needed for VPN - direct connection)"
             print_info "  - Next: Run 'setup-crt.sh' to install the certificate"
             echo ""
             ;;
