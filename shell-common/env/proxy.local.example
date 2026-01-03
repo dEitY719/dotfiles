@@ -19,48 +19,8 @@ export HTTPS_PROXY="$https_proxy"
 export no_proxy="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,ssai.samsungds.net,dsvdi.net,pfs.nprotect.com"
 export NO_PROXY="$no_proxy"
 
-HELP_DESCRIPTIONS["proxyhelp"]="Proxy(Corporate) Commands"
-proxy_help() {
-    cat <<-'EOF'
-
-[Proxy(Corporate) Commands]
-
-  # 현재 프록시 설정 확인
-  echo $http_proxy
-  echo $https_proxy
-  echo $no_proxy
-
-  # 프록시 설정 (기본값)
-  export http_proxy="http://12.26.204.100:8080/"
-  export https_proxy="http://12.26.204.100:8080/"
-  export no_proxy="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,ssai.samsungds.net,dsvdi.net,pfs.nprotect.com"
-
-  # 프록시 해제 (비활성화)
-  unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY
-
-  # 현재 프록시 상태 출력
-  env | grep -i proxy
-
-[Recipes]
-
-  # 프록시 임시 적용 (현재 세션만)
-  export http_proxy="http://12.26.204.100:8080/"
-
-  # 프록시 완전 초기화
-  unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY
-
-  # 특정 도메인만 예외 처리
-  export no_proxy="$no_proxy,.internal.domain.com"
-
-[Notes]
-
-  - NO_PROXY 값에 공백이 있으면 인식되지 않음 → 반드시 콤마(,)로 구분
-  - 대소문자 구분이 없지만, 일부 툴은 대문자 환경 변수만 인식
-  - 시스템 전체에 적용하려면 ~/.bashrc 또는 ~/.zshrc에 추가
-
-  Ref: https://confluence.samsungds.net/pages/viewpage.action?pageId=1367083095
-
-EOF
-}
-
-alias proxy-help='proxy_help'
+# ============================================================
+# NOTE: proxy_help() 및 check-proxy 명령어는 proxy.sh에서
+#       환경 구분 없이 모든 환경에서 사용 가능합니다.
+#       이 파일은 환경별 프록시 설정 오버라이드만 포함합니다.
+# ============================================================
