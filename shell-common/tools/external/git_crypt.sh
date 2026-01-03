@@ -1,5 +1,5 @@
 #!/bin/bash
-# shell-common/tools/external/git-crypt.sh
+# shell-common/tools/external/git_crypt.sh
 # Git-crypt helper - shared across bash and zsh
 
 : <<'GIT_CRYPT_DOC'
