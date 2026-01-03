@@ -3,47 +3,48 @@
 # dirHelp - shared between bash and zsh
 
 dir_help() {
-    cat <<-'EOF'
+    ux_header "Directory Navigation"
 
-[Directory Navigation Commands]
+    ux_section "Core Directories"
+    ux_table_header "Command" "Destination" "Purpose"
+    ux_table_row "cd_dot" "\$HOME/dotfiles" "Dotfiles repository root"
+    ux_table_row "cd_down" "\$HOME/downloads" "Downloads folder"
+    ux_table_row "cd_work" "\$HOME/workspace" "Workspace root"
+    echo ""
 
-  Basic:
-    cd_dot       : cd ~/dotfiles
-    cd_down      : cd ~/downloads
-    cd_work      : cd ~/workspace
+    ux_section "Windows (WSL)"
+    ux_table_header "Command" "Destination" "Purpose"
+    ux_table_row "cd_wdocu" "Windows Documents" "Access Windows documents"
+    ux_table_row "cd_wobsidian" "Windows Obsidian" "Obsidian vault location"
+    ux_table_row "cd_wdown" "Windows Downloads" "Quick access to downloads"
+    ux_table_row "cd_wpicture" "Windows Pictures" "Photo library"
+    ux_table_row "cd_tilnote" "Obsidian TilNote" "TilNote vault"
+    ux_table_row "cd_obsidian" "Obsidian vault" "Default vault in WSL"
+    echo ""
 
-  Windows Directories (WSL):
-    cd_wdocu     : Windows Documents
-    cd_wobsidian : Windows Obsidian folder
-    cd_wdown     : Windows Downloads
-    cd_wpicture  : Windows Pictures
-    cd_tilnote   : Obsidian TilNote vault
-    cd_obsidian  : Obsidian vault
+    ux_section "PARA Method"
+    ux_table_header "Command" "Destination" "Purpose"
+    ux_table_row "mkpara" "para/{archive,area,project,resource}" "Create PARA directories"
+    ux_table_row "cd_para" "\$HOME/para" "PARA root"
+    ux_table_row "cd_project" "\$HOME/para/project" "Projects workspace"
+    ux_table_row "cd_area" "\$HOME/para/area" "Areas of responsibility"
+    ux_table_row "cd_vault" "\$HOME/para/area/vault" "Vault under Areas"
+    ux_table_row "cd_resource" "\$HOME/para/resource" "Reference materials"
+    ux_table_row "cd_archive" "\$HOME/para/archive" "Archived items"
+    echo ""
 
-  PARA Method:
-    mkpara       : mkdir -p para/{archive,area,project,resource}
-    cd_para      : cd ~/para
-    cd_project   : cd ~/para/project
-    cd_area      : cd ~/para/area
-    cd_vault     : cd ~/para/area/vault
-    cd_resource  : cd ~/para/resource
-    cd_archive   : cd ~/para/archive
+    ux_section "Windows Copy Utility"
+    ux_table_header "Command" "Usage" "Purpose"
+    ux_table_row "cp_wdown" "cp_wdown [options] <file...>" "Copy from Windows Downloads into WSL (run -h for details)"
+    echo ""
 
-  Advanced:
-    cp_wdown     : Copy files from Windows Downloads to WSL
-                   Usage: cp_wdown [options] <file1> [file2] ...
-                   Run 'cp_wdown -h' for detailed help
-
-[Quick Examples]
-  # 빠른 이동
-  cd_dot              # dotfiles로 이동
-  cd_obsidian         # Obsidian vault로 이동
-
-  # Windows 파일 복사
-  cp_wdown "*.pdf"    # 모든 PDF 파일 복사
-  cp_wdown -r folder  # 폴더 전체 복사
-
-EOF
+    ux_section "Quick Examples"
+    ux_table_header "Command" "Description"
+    ux_table_row "cd_dot" "Jump to dotfiles repository"
+    ux_table_row "cd_obsidian" "Open Obsidian vault"
+    ux_table_row 'cp_wdown "*.pdf"' "Copy all PDF files from Windows Downloads"
+    ux_table_row "cp_wdown -r folder" "Copy an entire folder"
+    echo ""
 }
 
 # Alias for dir-help format (using dash instead of underscore)

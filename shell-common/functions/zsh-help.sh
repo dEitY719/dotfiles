@@ -1,74 +1,123 @@
 #!/bin/sh
 # shell-common/functions/zsh-help.sh
-# zsh-Help - shared between bash and zsh
+# zsh help - shared between bash and zsh
 
-# Keeps current session and directory context
-bash-switch() {
-    ux_success "Switching to bash..."
-    exec bash -i
-}
+_zsh_help_full() {
+    ux_header "Zsh Management Commands (Complete)"
 
-# Shorthand for zsh switch
-alias zsh-to='zsh-switch'
-alias bash-to='bash-switch'
-
-# ═══════════════════════════════════════════════════════════════
-# Zsh Configuration Management
-# ═══════════════════════════════════════════════════════════════
-
-# ─────────────────────────────────────────────────────────────────
-# Required Packages for Enhanced Zsh
-# ─────────────────────────────────────────────────────────────────
-# install-p10k  - Install powerlevel10k theme for modern zsh prompt
-#
-# Note: powerlevel10k requires:
-#   - git (for cloning the theme repository)
-#   - oh-my-zsh (installed via install-zsh)
-#   - Recommended: A patched font (Nerd Font) for better visual appearance
-
-# Check if zsh is installed
-_zsh_check_installed() {
-    if ! command -v zsh &>/dev/null; then
-        ux_error "zsh is not installed."
-        ux_info "Install with: ${UX_BOLD}install-zsh${UX_RESET}"
-        return 1
-    fi
-    return 0
-}
-
-# Check if oh-my-zsh is installed
-_zsh_check_omz() {
-    if [ ! -d "${HOME}/.oh-my-zsh" ]; then
-        ux_warning "oh-my-zsh is not installed."
-        ux_info "Install with: ${UX_BOLD}install-zsh${UX_RESET}"
-        return 1
-    fi
-    return 0
-}
-
-# Get current zsh version
-zsh-version() {
-    if _zsh_check_installed; then
-        zsh --version
-    fi
-}
-
-# List all available zsh themes
-zsh-themes() {
-    if ! _zsh_check_omz; then
-        return 1
-    fi
-
-    ux_header "Available Zsh Themes"
-    ux_info "Located in: ${UX_BOLD}~/.oh-my-zsh/themes/${UX_RESET}"
+    ux_section "Shell Switching"
+    ux_table_row "zsh-switch" "Switch to zsh shell"
+    ux_table_row "bash-switch" "Switch back to bash"
     echo ""
 
-    local themes_dir="${HOME}/.oh-my-zsh/themes"
-    if [ -d "$themes_dir" ]; then
-        echo "Available themes:"
-        find "$themes_dir" -maxdepth 1 -name "*.zsh-theme" -printf '%f\n' | sed 's/\.zsh-theme$//' | sort | nl
-    else
-        ux_error "Themes directory not found."
-        return 1
-    fi
+    ux_section "Version & Info"
+    ux_table_row "zsh-version" "Get zsh version"
+    ux_table_row "zsh-info" "System and zsh info"
+    echo ""
+
+    ux_section "Theme Management"
+    ux_table_row "zsh-themes" "List all available themes"
+    ux_table_row "zsh-theme-current" "Show current theme"
+    ux_table_row "zsh-theme <name>" "Change zsh theme"
+    ux_bullet "Example: zsh-theme powerlevel10k"
+    echo ""
+
+    ux_section "Plugin Management"
+    ux_table_row "zsh-plugins" "List installed plugins"
+    ux_table_row "zsh-update" "Update oh-my-zsh framework"
+    echo ""
+
+    ux_section "Configuration Management"
+    ux_table_row "zsh-edit" "Edit $HOME/.zshrc in editor"
+    ux_table_row "zsh-reload" "Reload zsh config"
+    ux_table_row "zsh-snippet <name>" "Create/edit config snippet"
+    ux_table_row "zsh-snippets" "List all snippets"
+    echo ""
+
+    ux_section "Quick Aliases"
+    ux_table_row "zsh-config" "View current zsh config"
+    ux_table_row "zsh-edit-quick" "Quick edit with nano"
+    echo ""
+
+    ux_section "Popular Themes"
+    ux_bullet "${UX_BOLD}robbyrussell${UX_RESET} - Default clean theme"
+    ux_bullet "${UX_BOLD}powerlevel10k${UX_RESET} - Modern powerline theme (requires Nerd Font)"
+    ux_bullet "${UX_BOLD}agnoster${UX_RESET} - Git-aware theme"
+    ux_bullet "${UX_BOLD}minimal${UX_RESET} - Minimal and fast"
+    ux_bullet "${UX_BOLD}afowler${UX_RESET} - Syntax highlighting focused"
+    echo ""
+
+    ux_section "Recommended Plugins"
+    echo ""
+    ux_info "In your $HOME/.zshrc, modify the plugins line:"
+    echo "  plugins=(git zsh-autosuggestions zsh-syntax-highlighting extract)"
+    echo ""
+    ux_bullet "${UX_BOLD}git${UX_RESET} - Git aliases and functions"
+    ux_bullet "${UX_BOLD}zsh-autosuggestions${UX_RESET} - Command suggestions (type then use arrow)"
+    ux_bullet "${UX_BOLD}zsh-syntax-highlighting${UX_RESET} - Syntax highlighting as you type"
+    ux_bullet "${UX_BOLD}extract${UX_RESET} - Smart archive extraction (extract file.tar.gz)"
+    ux_bullet "${UX_BOLD}web-search${UX_RESET} - Quick web search (google 'query')"
+    echo ""
+
+    ux_section "Bash & Zsh Coexistence"
+    ux_bullet "Both shells can coexist without conflicts"
+    ux_bullet "Switch shells anytime: ${UX_BOLD}zsh-switch${UX_RESET} or ${UX_BOLD}bash-switch${UX_RESET}"
+    ux_bullet "Set default: ${UX_BOLD}chsh -s \$(which zsh)${UX_RESET} (then login again)"
+    echo ""
+
+    ux_section "Configuration Tips"
+    ux_bullet "Shared config: Add to shell-common/ for portable settings"
+    ux_bullet "Shell-specific: Use shell-specific files for unique functions"
+    ux_bullet "Use snippets: Organize $HOME/.zshrc.d/ for better management"
+    echo ""
 }
+
+zsh_help() {
+    if [ "$1" = "--all" ] || [ "$1" = "-a" ]; then
+        _zsh_help_full
+        return 0
+    fi
+
+    ux_header "Zsh Management Commands"
+
+    ux_section "Quick Start"
+    ux_table_row "zsh-switch" "Switch to zsh"
+    ux_table_row "bash-switch" "Switch back to bash"
+    ux_table_row "install-zsh" "Install zsh (if not installed)"
+    echo ""
+
+    ux_section "Configuration"
+    ux_table_row "zsh-edit" "Edit $HOME/.zshrc"
+    ux_table_row "zsh-reload" "Reload zsh config"
+    ux_table_row "zsh-snippet <name>" "Create config snippet"
+    echo ""
+
+    ux_section "Theme & Plugins"
+    ux_table_row "zsh-theme-current" "Current theme"
+    ux_table_row "zsh-themes" "List all themes"
+    ux_table_row "zsh-plugins" "List plugins"
+    echo ""
+
+    ux_section "Required/Recommended Packages"
+    ux_table_row "install-p10k" "Install powerlevel10k theme"
+    ux_table_row "p10k-help" "VSCode terminal font setup guide"
+    ux_table_row "p10k configure" "Configure powerlevel10k"
+    ux_table_row "install-fzf" "Install fzf (fuzzy finder)"
+    ux_table_row "install-fasd" "Install fasd (fast directory access)"
+    ux_table_row "install-ripgrep" "Install ripgrep (fast text search)"
+    ux_table_row "install-fd" "Install fd (fast file finder)"
+    ux_table_row "install-bat" "Install bat (cat with highlighting)"
+    ux_table_row "install-pet" "Install pet (command snippet manager)"
+    echo ""
+
+    ux_section "Status"
+    ux_table_row "zsh-version" "Show zsh version"
+    ux_table_row "zsh-info" "System info"
+    echo ""
+
+    ux_info "More details: ${UX_BOLD}zsh-help --all${UX_RESET}"
+    echo ""
+}
+
+# Alias for zsh-help format (using dash instead of underscore)
+alias zsh-help='zsh_help'
