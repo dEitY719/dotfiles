@@ -29,6 +29,25 @@ print_info() {
     echo -e "${YELLOW}ℹ $1${NC}"
 }
 
+cleanup_local_files() {
+    # Find all .local.sh files
+    local local_files
+    mapfile -t local_files < <(find "$SHELL_COMMON_DIR" -name "*.local.sh" -type f)
+
+    if [ ${#local_files[@]} -eq 0 ]; then
+        print_info "No .local.sh files found"
+        return 0
+    fi
+
+    print_header "Cleaning up environment-specific files"
+
+    # Delete all .local.sh files
+    for local_file in "${local_files[@]}"; do
+        rm -f "$local_file"
+        print_success "Removed: ${local_file#$SHELL_COMMON_DIR/}"
+    done
+}
+
 setup_local_files() {
     local environment="$1"
 
@@ -112,7 +131,10 @@ main() {
     case "$choice" in
         1)
             print_info "Selected: Public PC"
-            print_info "No environment-specific configuration needed"
+            cleanup_local_files
+            echo ""
+            print_success "Setup complete for public PC (home environment)"
+            print_info "All environment-specific configuration removed"
             echo ""
             ;;
         2)
