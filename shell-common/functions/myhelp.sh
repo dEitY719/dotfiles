@@ -97,7 +97,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[gpu_help]="${HELP_DESCRIPTIONS[gpu_help]:-GPU monitoring commands (WSL2 universal)}"
     HELP_DESCRIPTIONS[ux_help]="${HELP_DESCRIPTIONS[ux_help]:-UX library functions and styling guide}"
     HELP_DESCRIPTIONS[gc_help]="${HELP_DESCRIPTIONS[gc_help]:-git-crypt (Transparent Git encryption)}"
-    HELP_DESCRIPTIONS[mytool_help]="${HELP_DESCRIPTIONS[mytool_help]:-MyTool - Personal Utility Commands}"
+    HELP_DESCRIPTIONS[mytool_help]="${HELP_DESCRIPTIONS[mytool_help]:-Custom utility scripts in tools/custom}"
     HELP_DESCRIPTIONS[mysql_help]="${HELP_DESCRIPTIONS[mysql_help]:-MySQL Service Management}"
     HELP_DESCRIPTIONS[zsh-help]="${HELP_DESCRIPTIONS[zsh-help]:-Zsh shell management commands}"
     HELP_DESCRIPTIONS[bat-help]="${HELP_DESCRIPTIONS[bat-help]:-bat - Cat replacement with syntax highlighting}"

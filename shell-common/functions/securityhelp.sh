@@ -87,8 +87,9 @@ crt_help() {
 # Help Registration
 # ═══════════════════════════════════════════════════════════════
 
-# Register help function description
-HELP_DESCRIPTIONS["crt_help"]="CA Certificate setup and management guide"
+# Note: HELP_DESCRIPTIONS registration is handled by myhelp.sh
+# which loads before this file and properly initializes the array
+# in a shell-independent way
 
 # Alias for crt-help format (using dash instead of underscore)
 alias crt-help='crt_help'

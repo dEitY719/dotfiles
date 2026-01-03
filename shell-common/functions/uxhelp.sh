@@ -136,5 +136,5 @@ EOF
 # Alias for ux-help format (using dash instead of underscore)
 alias ux-help='ux_help'
 
-# Register help description
-HELP_DESCRIPTIONS["ux_help"]="UX library functions and styling guide"
+# Note: HELP_DESCRIPTIONS registration is handled by myhelp.sh
+# which loads before this file and properly initializes the array
