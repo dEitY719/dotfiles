@@ -1,9 +1,7 @@
 #!/bin/sh
 # shell-common/functions/git.sh
-# Shared git functions for bash and zsh
-
-# Git log formatter alias
-alias git_log='git log --graph --pretty=tformat:"%Cred%h %C(bold blue)%d %Creset%s %Cgreen%ad %C(yellow)%an" --date=short'
+# Portable git functions for bash and zsh
+# (No bash-specific features)
 
 # Override Oh My Zsh's gl alias with our function (zsh only)
 # In zsh, Oh My Zsh may have defined gl='git pull', so we unalias first

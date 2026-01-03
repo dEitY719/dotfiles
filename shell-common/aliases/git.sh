@@ -1,6 +1,7 @@
 #!/bin/sh
 # shell-common/aliases/git.sh
-# Shared git aliases for bash and zsh
+# Portable git aliases for bash and zsh
+# (No bash-specific features)
 
 # Git status shortcuts
 alias gs='git status -sb'                        # 간략한 상태 보기
@@ -11,15 +12,12 @@ alias gca='git commit --amend'                   # 커밋 메시지 수정
 # Git push/pull
 alias gp='git push'                              # 푸시
 alias gpf='git push --force-with-lease'          # 강제 푸시 (안전한 버전)
-alias gpfu='git push --set-upstream origin main --force-with-lease' # upstream 설정 후 강제 푸시
-alias gpf_dev_server='git push -f origin HEAD:refs/heads/dev-server' # dev-server 강제 푸시
 alias gpl='git pull'                             # 현재 브랜치만 pull
 
 # Git log
 alias gl1='git log --oneline --graph --decorate' # 깔끔한 로그
-alias git_log='git log --graph --pretty=tformat:"%Cred%h %C(bold blue)%d %Creset%s %Cgreen%ad %C(yellow)%an" --date=short' # 상세 로그
 alias gl2='git log --graph --decorate --date=short --abbrev-commit --pretty=oneline' # 간단한 그래프 로그
-alias git_log2='git log --graph --decorate --date=short --abbrev-commit --pretty=oneline' # 별칭
+alias glum='git log --oneline -n 20 upstream/main' # upstream/main 최근 20개 커밋
 alias glref='git log ref/main --oneline'         # ref 원격 main 브랜치 한줄 로그
 
 # Git branch/checkout
@@ -37,3 +35,8 @@ alias gfa='git fetch --all --prune'              # 원격 전체 fetch + 필요�
 
 # Git cleanup
 alias grmc='git rm --cached'                     # 파일을 스테이징에서 제거 (파일 시스템은 유지)
+
+# Git cherry-pick
+alias gcpa='git cherry-pick --abort'             # Cherry-pick 작업 중단
+alias gcpc='git cherry-pick --continue'          # Cherry-pick 작업 계속
+alias gcps='git cherry-pick --skip'              # Cherry-pick 작업 건너뛰기
