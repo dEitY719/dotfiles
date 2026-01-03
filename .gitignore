@@ -8,12 +8,7 @@ uv.lock
 .git-credentials
 
 # Local machine-specific configurations
-*.local.bash
 *.local.sh
-bash/env/local.bash
-bash/alias/local.bash
-bash/app/local.bash
 shell-common/config/pg_services.list
 
-./backup/.env.local
 .secrets/*.asc
