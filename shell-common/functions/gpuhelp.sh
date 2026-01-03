@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # shell-common/functions/gpuhelp.sh
 # gpuHelp - shared between bash and zsh
 

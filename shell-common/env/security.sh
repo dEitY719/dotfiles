@@ -1,5 +1,6 @@
+#!/bin/bash
 # security.sh
-# 보안 관련 환경 변수 설정 (POSIX 호환)
+# 보안 관련 환경 변수 설정 (bash 사용)
 #
 # 환경별 CA 인증서 설정 방법:
 #   1. shell-common/env/security.local.example을 security.local.sh로 복사

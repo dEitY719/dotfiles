@@ -1,6 +1,6 @@
-#!/usr/bin/env sh
+#!/bin/bash
 # shell-common/functions/uxhelp.sh
-# UX library help function (POSIX-compatible)
+# UX library help function
 
 # Alias to run the interactive UX demo
 alias ux-demo='bash "${SHELL_COMMON}/tools/custom/demo_ux.sh"'

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # shell-common/functions/fzf.sh
 # fzf (fuzzy finder) helper functions and documentation
 # Shared between bash and zsh

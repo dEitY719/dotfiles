@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # shell-common/functions/psqlhelp.sh
 # psqlHelp - shared between bash and zsh
 

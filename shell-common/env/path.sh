@@ -1,3 +1,4 @@
+#!/bin/bash
 # path.bash
 # PATH 관련 환경 변수 설정
 

@@ -1,6 +1,6 @@
-#!/usr/bin/env sh
+#!/bin/bash
 # shell-common/env/fcitx.sh
-# Korean input configuration using fcitx (POSIX compatible)
+# Korean input configuration using fcitx
 
 # Only configure if fcitx is installed and explicitly enabled
 if command -v fcitx >/dev/null 2>&1 && [ "${ENABLE_FCITX:-false}" = "true" ]; then
