@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-npm.sh
+# mytool/install_npm.sh
 # Node.js & npm 설치 스크립트 (대화형)
 
 set -e

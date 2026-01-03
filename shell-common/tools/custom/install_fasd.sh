@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-fasd.sh
+# mytool/install_fasd.sh
 # Install and configure fasd (fast access to directories and files)
 
 set -e
@@ -146,6 +146,6 @@ install-fasd() {
 }
 
 # Run installation if script is executed directly
-if [ "${0##*/}" = "install-fasd.sh" ]; then
+if [ "${0##*/}" = "install_fasd.sh" ]; then
     install-fasd
 fi

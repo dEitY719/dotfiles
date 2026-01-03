@@ -9,7 +9,7 @@
 
 
 # 🚨🚨🚨CA 인증서 경로 선택 (옵션 중 하나만 활성화)🚨🚨🚨
-# 옵션1: 회사 외부PC (VPN) - setup-crt.sh로 설치한 인증서
+# 옵션1: 회사 외부PC (VPN) - setup_crt.sh로 설치한 인증서
 CA_CERT="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
 
 # 옵션2: 회사 내부PC (직접 연결) - 시스템 CA 번들
@@ -27,6 +27,6 @@ fi
 # ========================================
 # 참고
 # ========================================
-# - 회사 외부PC: setup-crt.sh로 인증서 설치 후 옵션 1 사용
+# - 회사 외부PC: setup_crt.sh로 인증서 설치 후 옵션 1 사용
 # - 회사 내부PC: 옵션 2 사용 (시스템 CA 번들)
 # - 집 환경: security.local.sh를 생성하지 않음 (CA 설정 불필요)

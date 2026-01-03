@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/docker-configure-proxy.sh
+# mytool/docker_configure_proxy.sh
 # Docker Proxy 설정 스크립트 (대화형)
 # 회사 프록시(Corporate Proxy)가 필요한 환경에서 systemd를 통해 Docker에 proxy 설정
 

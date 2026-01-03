@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/uninstall-gemini.sh
+# mytool/uninstall_gemini.sh
 # Gemini CLI 제거 스크립트 (대화형)
 
 set -e

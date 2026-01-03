@@ -88,12 +88,12 @@ proxy_help() {
     echo ""
 }
 
-# Wrapper function for check-proxy.sh
+# Wrapper function for check_proxy.sh
 proxy_check() {
-    if [ -f "${HOME}/dotfiles/shell-common/tools/custom/check-proxy.sh" ]; then
-        bash "${HOME}/dotfiles/shell-common/tools/custom/check-proxy.sh" "$@"
+    if [ -f "${HOME}/dotfiles/shell-common/tools/custom/check_proxy.sh" ]; then
+        bash "${HOME}/dotfiles/shell-common/tools/custom/check_proxy.sh" "$@"
     else
-        echo "❌ check-proxy.sh not found at ~/dotfiles/shell-common/tools/custom/check-proxy.sh"
+        echo "❌ check_proxy.sh not found at ~/dotfiles/shell-common/tools/custom/check_proxy.sh"
         return 1
     fi
 }

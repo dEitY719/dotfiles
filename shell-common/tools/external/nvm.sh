@@ -11,5 +11,5 @@ export NVM_DIR="$HOME/.nvm"
 
 # NVM Install Script
 nvm-install() {
-    bash "$HOME/dotfiles/shell-common/tools/custom/install-nvm.sh"
+    bash "$HOME/dotfiles/shell-common/tools/custom/install_nvm.sh"
 }

@@ -1,5 +1,5 @@
 #!/bin/bash
-# shell-common/tools/custom/setup-crt.sh
+# shell-common/tools/custom/setup_crt.sh
 # CA Certificate Setup Script
 # Installs and manages CA certificates for Node.js/npm
 #

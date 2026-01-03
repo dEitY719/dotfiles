@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-fd.sh
+# mytool/install_fd.sh
 # Install and configure fd (fast file search tool)
 
 set -e
@@ -108,6 +108,6 @@ install-fd() {
 }
 
 # Run installation if script is executed directly
-if [ "${0##*/}" = "install-fd.sh" ]; then
+if [ "${0##*/}" = "install_fd.sh" ]; then
     install-fd
 fi

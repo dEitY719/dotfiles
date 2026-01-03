@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-zsh.sh
+# mytool/install_zsh.sh
 # Zsh Install Script
 # Installs zsh shell with optional oh-my-zsh framework and plugins
 

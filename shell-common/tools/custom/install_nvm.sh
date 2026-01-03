@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-nvm.sh
+# mytool/install_nvm.sh
 # NVM (Node Version Manager) Install Script
 # Installs NVM and the latest LTS version of Node.js
 

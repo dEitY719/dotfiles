@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-fzf.sh
+# mytool/install_fzf.sh
 # Install and configure fzf (fuzzy finder) for bash and zsh
 
 set -e
@@ -150,6 +150,6 @@ install-fzf() {
 }
 
 # Run installation if script is executed directly
-if [ "${0##*/}" = "install-fzf.sh" ]; then
+if [ "${0##*/}" = "install_fzf.sh" ]; then
     install-fzf
 fi

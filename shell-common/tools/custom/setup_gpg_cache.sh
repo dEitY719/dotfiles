@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# mytool/setup-gpg-cache.sh
+# mytool/setup_gpg_cache.sh
 # GPG agent 캐싱 설정 스크립트 (편의성 향상)
 
 set -e

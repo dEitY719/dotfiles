@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/enable-docker.sh
+# mytool/enable_docker.sh
 # Docker 서비스 자동 시작 설정 (systemd) - 대화형
 
 set -e

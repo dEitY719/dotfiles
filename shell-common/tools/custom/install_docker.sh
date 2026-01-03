@@ -1,11 +1,11 @@
 #!/bin/bash
-# mytool/install-docker.sh
+# mytool/install_docker.sh
 # WSL Docker 설치 스크립트 (대화형)
 
 set -e
 
 # Initialize common tools environment (loads unified UX library via init.sh)
-# Path: shell-common/tools/custom/install-docker.sh -> ../ux_lib/ux_lib.sh
+# Path: shell-common/tools/custom/install_docker.sh -> ../ux_lib/ux_lib.sh
 source "$(dirname "$0")/init.sh" || exit 1
 
 # Main script

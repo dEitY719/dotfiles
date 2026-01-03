@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-bat.sh
+# mytool/install_bat.sh
 # Install and configure bat (cat replacement with syntax highlighting)
 
 set -e
@@ -108,6 +108,6 @@ install-bat() {
 }
 
 # Run installation if script is executed directly
-if [ "${0##*/}" = "install-bat.sh" ]; then
+if [ "${0##*/}" = "install_bat.sh" ]; then
     install-bat
 fi

@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/uninstall-docker.sh
+# mytool/uninstall_docker.sh
 # WSL Docker 제거 스크립트 (대화형)
 
 set -e

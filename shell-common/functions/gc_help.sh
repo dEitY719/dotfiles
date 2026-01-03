@@ -56,7 +56,7 @@ gc_help() {
     echo ""
     echo "  ${bold}⭐ 한 방에 설정 (올인원, 가장 쉬움)${reset}"
     echo "  ════════════════════════════════════════════════════"
-    echo "    ${bold}git clone <repo> && cd dotfiles && bash shell-common/tools/custom/setup-new-pc.sh${reset}"
+    echo "    ${bold}git clone <repo> && cd dotfiles && bash shell-common/tools/custom/setup_new_pc.sh${reset}"
     echo ""
     echo "    또는 dotfiles 적용 후: ${bold}gcnewpc${reset}"
     echo ""

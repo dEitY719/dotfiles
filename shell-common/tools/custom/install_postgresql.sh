@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-postgresql.sh
+# mytool/install_postgresql.sh
 # PostgreSQL 서버 설치 스크립트 (대화형)
 
 set -e

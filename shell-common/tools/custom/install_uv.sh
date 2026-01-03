@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-uv.sh
+# mytool/install_uv.sh
 # UV Install Script
 # Installs the UV tool by Astral.
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-pet.sh
+# mytool/install_pet.sh
 # Install and configure pet (command snippet manager)
 
 set -e
@@ -204,6 +204,6 @@ install-pet() {
 }
 
 # Run installation if script is executed directly
-if [ "${0##*/}" = "install-pet.sh" ]; then
+if [ "${0##*/}" = "install_pet.sh" ]; then
     install-pet
 fi

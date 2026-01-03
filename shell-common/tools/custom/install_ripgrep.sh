@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-ripgrep.sh
+# mytool/install_ripgrep.sh
 # Install and configure ripgrep (fast text search tool)
 
 set -e
@@ -112,6 +112,6 @@ install-ripgrep() {
 }
 
 # Run installation if script is executed directly
-if [ "${0##*/}" = "install-ripgrep.sh" ]; then
+if [ "${0##*/}" = "install_ripgrep.sh" ]; then
     install-ripgrep
 fi

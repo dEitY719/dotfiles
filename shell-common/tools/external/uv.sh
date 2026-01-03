@@ -32,9 +32,9 @@ alias uvr='uv pip sync requirements.txt'
 # (5) 상태/검증
 alias uvcheck='uv pip check'
 
-# (6) uv-install 함수 (shell-common/tools/custom/install-uv.sh 호출)
+# (6) uv-install 함수 (shell-common/tools/custom/install_uv.sh 호출)
 uv-install() {
-    bash "$HOME/dotfiles/shell-common/tools/custom/install-uv.sh"
+    bash "$HOME/dotfiles/shell-common/tools/custom/install_uv.sh"
 }
 
 # (7) 도움말(프로젝트 관례 안내)

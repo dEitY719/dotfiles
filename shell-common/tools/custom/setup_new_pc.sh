@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# mytool/setup-new-pc.sh
+# mytool/setup_new_pc.sh
 # 다른 PC에서 한 번에 git-crypt 환경 설정 (인터랙티브)
 
 set -e
@@ -72,7 +72,7 @@ EOF
         warning "다음 명령어를 먼저 실행하세요:"
         echo "  git clone <your-dotfiles-repo>"
         echo "  cd dotfiles"
-        echo "  bash mytool/setup-new-pc.sh"
+        echo "  bash mytool/setup_new_pc.sh"
         exit 1
     fi
     success "dotfiles 리포지토리 확인됨"

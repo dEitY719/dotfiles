@@ -1,7 +1,7 @@
 #!/bin/bash
-# mytool/install-gemini.sh
-# Gemini CLI 설치 스크립트 (대화형)
-# npm 전역 패키지: @google/gemini-cli
+# mytool/install_codex.sh
+# Codex CLI 설치 스크립트 (대화형)
+# npm 전역 패키지: codex-cli (또는 해당 패키지명)
 
 set -e
 
@@ -12,13 +12,13 @@ source "$(dirname "$0")/init.sh" || exit 1
 # Main script
 main() {
     clear
-    ux_header "Gemini CLI Installer"
-    ux_info "This script installs the '@google/gemini-cli' using npm."
+    ux_header "Codex CLI Installer"
+    ux_info "This script installs the '@openai/codex' CLI using npm."
 
     ux_section "Setup Process"
     ux_numbered 1 "Check for Node.js and npm."
     ux_numbered 2 "Configure npm global path (optional)."
-    ux_numbered 3 "Install the '@google/gemini-cli' npm package."
+    ux_numbered 3 "Install the '@openai/codex' npm package."
     ux_numbered 4 "Verify the installation."
     echo ""
 
@@ -61,19 +61,19 @@ main() {
     echo ""
 
     # ========================================
-    # Step 3: Install Gemini CLI
+    # Step 3: Install Codex CLI
     # ========================================
-    ux_step "3/4" "Installing Gemini CLI..."
-    local gemini_package="@google/gemini-cli"
-    if ux_confirm "Install the '${gemini_package}' npm package globally?" "y"; then
-        if ! ux_with_spinner "Installing ${gemini_package}" npm install -g "$gemini_package"; then
-            ux_error "Gemini CLI installation failed."
+    ux_step "3/4" "Installing Codex CLI..."
+    local codex_package="@openai/codex"
+    if ux_confirm "Install the '${codex_package}' npm package globally?" "y"; then
+        if ! ux_with_spinner "Installing ${codex_package}" npm install -g "$codex_package"; then
+            ux_error "Codex CLI installation failed."
             exit 1
         fi
     else
         ux_info "Step 3 skipped by user."
         echo ""
-        ux_header "✅ Gemini CLI Setup Finished"
+        ux_header "✅ Codex CLI Setup Complete!"
         exit 0
     fi
 
@@ -81,11 +81,12 @@ main() {
     # Step 4: Verify installation
     # ========================================
     ux_step "4/4" "Verifying installation..."
-    if command -v gemini &> /dev/null; then
-        ux_success "Gemini CLI command found."
-        gemini --version || ux_warning "Could not determine gemini version."
+
+    if command -v codex &> /dev/null; then
+        ux_success "Codex CLI command found."
+        codex --version || ux_warning "Could not determine codex version."
     else
-        ux_error "Gemini CLI command not found after installation."
+        ux_error "Codex CLI command not found after installation."
         ux_warning "Check your PATH and restart your terminal."
     fi
 
@@ -93,12 +94,12 @@ main() {
     # Completion
     # ========================================
     echo ""
-    ux_header "✅ Gemini CLI Setup Complete!"
+    ux_header "✅ Codex CLI Setup Complete!"
     ux_section "Next Steps"
     ux_bullet "Check your PATH if the command is not found: ${UX_PRIMARY}echo \$PATH${UX_RESET}"
-    ux_bullet "View help: ${UX_PRIMARY}gemini --help${UX_RESET}"
+    ux_bullet "View help: ${UX_PRIMARY}codex --help${UX_RESET}"
     echo ""
-    ux_info "For more project-specific commands, run: ${UX_PRIMARY}gemini-help${UX_RESET}"
+    ux_info "For more project-specific commands, run: ${UX_PRIMARY}codex-help${UX_RESET}"
     echo ""
 }
 

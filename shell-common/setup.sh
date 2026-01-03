@@ -175,7 +175,7 @@ main() {
             print_info "  - Copied .local.example files to .local.sh (except proxy)"
             print_info "  - Security: Custom Certificate (Option 1) activated"
             print_info "  - Proxy: Skipped (not needed for VPN - direct connection)"
-            print_info "  - Next: Run 'setup-crt.sh' to install the certificate"
+            print_info "  - Next: Run 'setup_crt.sh' to install the certificate"
             echo ""
             ;;
         *)

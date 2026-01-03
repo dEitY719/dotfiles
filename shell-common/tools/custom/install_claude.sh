@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-claude.sh
+# mytool/install_claude.sh
 # Claude Code CLI Install Script
 # Installs the @anthropic-ai/claude-code global npm package.
 
@@ -31,7 +31,7 @@ main() {
         ux_success "NVM is installed and loaded."
     else
         ux_error "NVM is not installed. Please install it first."
-        ux_info "You can run 'install-nvm.sh' from the mytool directory."
+        ux_info "You can run 'install_nvm.sh' from the mytool directory."
         exit 1
     fi
     echo ""

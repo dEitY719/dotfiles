@@ -1,5 +1,5 @@
 #!/bin/bash
-# shell-common/tools/custom/check-proxy.sh
+# shell-common/tools/custom/check_proxy.sh
 # Comprehensive proxy diagnostic script
 # Usage: check_proxy [env|file|shell|conn|git|all]
 
@@ -190,6 +190,6 @@ check_proxy() {
 # Execute if run directly (not sourced)
 # ============================================================
 
-if [ "${0##*/}" = "check-proxy.sh" ] || [ "$1" != "" ]; then
+if [ "${0##*/}" = "check_proxy.sh" ] || [ "$1" != "" ]; then
     check_proxy "$@"
 fi

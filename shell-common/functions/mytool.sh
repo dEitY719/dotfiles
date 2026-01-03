@@ -25,7 +25,7 @@ srcpack() {
 
 # AGENTS.md 생성 함수
 agents_init() {
-    local script="$HOME/dotfiles/shell-common/tools/custom/run-AGENTS_md_Master_Prompt.sh"
+    local script="$HOME/dotfiles/shell-common/tools/custom/run_agents_md_master_prompt.sh"
     if [ ! -f "$script" ]; then
         echo "Error: AGENTS.md generation script not found: $script" >&2
         return 2
@@ -35,7 +35,7 @@ agents_init() {
 
 # Powerlevel10k 설치 함수
 install-p10k() {
-    local script="$HOME/dotfiles/shell-common/tools/custom/install-p10k.sh"
+    local script="$HOME/dotfiles/shell-common/tools/custom/install_p10k.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-p10k script not found: $script" >&2
         return 2
@@ -45,7 +45,7 @@ install-p10k() {
 
 # fzf (fuzzy finder) 설치 함수
 install-fzf() {
-    local script="$HOME/dotfiles/shell-common/tools/custom/install-fzf.sh"
+    local script="$HOME/dotfiles/shell-common/tools/custom/install_fzf.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-fzf script not found: $script" >&2
         return 2
@@ -55,7 +55,7 @@ install-fzf() {
 
 # fasd (fast access to directories/files) 설치 함수
 install-fasd() {
-    local script="$HOME/dotfiles/shell-common/tools/custom/install-fasd.sh"
+    local script="$HOME/dotfiles/shell-common/tools/custom/install_fasd.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-fasd script not found: $script" >&2
         return 2
@@ -65,7 +65,7 @@ install-fasd() {
 
 # ripgrep (fast text search) 설치 함수
 install-ripgrep() {
-    local script="$HOME/dotfiles/shell-common/tools/custom/install-ripgrep.sh"
+    local script="$HOME/dotfiles/shell-common/tools/custom/install_ripgrep.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-ripgrep script not found: $script" >&2
         return 2
@@ -75,7 +75,7 @@ install-ripgrep() {
 
 # fd (fast file finder) 설치 함수
 install-fd() {
-    local script="$HOME/dotfiles/shell-common/tools/custom/install-fd.sh"
+    local script="$HOME/dotfiles/shell-common/tools/custom/install_fd.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-fd script not found: $script" >&2
         return 2
@@ -85,7 +85,7 @@ install-fd() {
 
 # bat (cat with syntax highlighting) 설치 함수
 install-bat() {
-    local script="$HOME/dotfiles/shell-common/tools/custom/install-bat.sh"
+    local script="$HOME/dotfiles/shell-common/tools/custom/install_bat.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-bat script not found: $script" >&2
         return 2
@@ -95,7 +95,7 @@ install-bat() {
 
 # pet (command snippet manager) 설치 함수
 install-pet() {
-    local script="$HOME/dotfiles/shell-common/tools/custom/install-pet.sh"
+    local script="$HOME/dotfiles/shell-common/tools/custom/install_pet.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-pet script not found: $script" >&2
         return 2

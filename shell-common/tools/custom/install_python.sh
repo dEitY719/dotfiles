@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/install-python.sh
+# mytool/install_python.sh
 # Pyenv & Python Install Script
 # Installs pyenv, dependencies, and a specific version of Python.
 

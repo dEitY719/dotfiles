@@ -91,7 +91,7 @@ Removed auto-sourcing of shell-common/tools/custom/ from:
 These scripts are **meant to be executed explicitly** as commands:
 
 ```bash
-./install-docker.sh    # Direct execution
+./install_docker.sh    # Direct execution
 dinstall               # Via function wrapper in docker.sh
 ```
 

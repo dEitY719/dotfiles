@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/uninstall-npm.sh
+# mytool/uninstall_npm.sh
 # Node.js & npm 제거 스크립트 (대화형)
 
 set -e

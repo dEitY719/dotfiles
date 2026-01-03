@@ -1,5 +1,5 @@
 #!/bin/bash
-# mytool/uninstall-codex.sh
+# mytool/uninstall_codex.sh
 # Codex CLI 제거 스크립트 (대화형)
 
 set -e
