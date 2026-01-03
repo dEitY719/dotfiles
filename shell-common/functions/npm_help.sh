@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/npmhelp.sh
+# shell-common/functions/npm_help.sh
 # npmHelp - shared between bash and zsh
 
 npm_help() {

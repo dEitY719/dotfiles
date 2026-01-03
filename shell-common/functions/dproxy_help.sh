@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/dproxyhelp.sh
+# shell-common/functions/dproxy_help.sh
 # dproxyHelp - shared between bash and zsh
 
 dproxy_help() {

@@ -44,7 +44,7 @@ dotfiles/
 |------|--------------|------|------|
 | **env/** | editor.sh, locale.sh, path.sh 등 | 환경 변수만 담당 | 우수 |
 | **aliases/** | core.sh, git.sh, system.sh 등 | 별칭만 담당 | 우수 |
-| **functions/** | githelp.sh, zsh.sh 등 | 관련 함수 그룹화 | 우수 |
+| **functions/** | git_help.sh, zsh.sh 등 | 관련 함수 그룹화 | 우수 |
 | **ux_lib.sh** | UX 라이브러리 | 출력/스타일링 담당 | 우수 |
 | **main.bash/main.zsh** | 로더 | 로딩 순서 관리만 담당 | 우수 |
 
@@ -56,7 +56,7 @@ dotfiles/
 
 **개선 제안:**
 
-- `myhelp.sh` (213줄): 헬프 레지스트리와 기본 설명 등록을 분리 가능
+- `my_help.sh` (213줄): 헬프 레지스트리와 기본 설명 등록을 분리 가능
 
 ---
 
@@ -116,7 +116,7 @@ dotfiles/
    alias reload='exec bash'  # zsh에서는 작동하지 않음
    ```
 
-2. `myhelp.sh:1` - shebang 불일치:
+2. `my_help.sh:1` - shebang 불일치:
 
    ```bash
    #!/bin/bash  # POSIX 호환 스크립트에서 #!/bin/sh가 더 적절
@@ -237,7 +237,7 @@ fi
 
 - 사용자 혼란 (어떤 형식을 써야 하는지)
 - 자동 완성 불편
-- `myhelp.sh`에서 두 패턴 모두 검색해야 함
+- `my_help.sh`에서 두 패턴 모두 검색해야 함
 
 **해결책:**
 
@@ -246,7 +246,7 @@ fi
 git_help() { ... }
 alias git-help='git_help'
 
-# myhelp.sh에서 이미 이 패턴 사용 중 - 전체 적용 필요
+# my_help.sh에서 이미 이 패턴 사용 중 - 전체 적용 필요
 ```
 
 ---
@@ -365,8 +365,8 @@ fi
 | 파일 | shebang | 사용된 문법 | 평가 |
 |------|---------|------------|------|
 | `zsh.sh` | `#!/bin/sh` | `&>/dev/null` (bash/zsh) | 위반 |
-| `myhelp.sh` | `#!/bin/bash` | `[[ ]]`, arrays | 일관적 |
-| `githelp.sh` | `#!/bin/sh` | 순수 POSIX | 정상 |
+| `my_help.sh` | `#!/bin/bash` | `[[ ]]`, arrays | 일관적 |
+| `git_help.sh` | `#!/bin/sh` | 순수 POSIX | 정상 |
 | `path.sh` | (공유) | Bash-only 배열 문법 | 위반 |
 
 **특히 주의: `shell-common/env/path.sh`**

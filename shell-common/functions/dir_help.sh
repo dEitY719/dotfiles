@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/dirhelp.sh
+# shell-common/functions/dir_help.sh
 # dirHelp - shared between bash and zsh
 
 dir_help() {

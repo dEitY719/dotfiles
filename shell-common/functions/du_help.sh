@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/duhelp.sh
+# shell-common/functions/du_help.sh
 # duHelp - shared between bash and zsh
 
 du_help() {

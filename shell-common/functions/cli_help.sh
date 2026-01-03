@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/clihelp.sh
+# shell-common/functions/cli_help.sh
 # cliHelp - shared between bash and zsh
 
 cli_help() {

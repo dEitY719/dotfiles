@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/cchelp.sh
+# shell-common/functions/cc_help.sh
 # ccHelp - shared between bash and zsh
 
 cc_help() {

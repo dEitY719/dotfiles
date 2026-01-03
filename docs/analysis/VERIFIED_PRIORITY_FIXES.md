@@ -72,7 +72,7 @@ This document lists only CONFIRMED issues after manual verification of false pos
 # - Arrays: read -r -a (used for array operations)
 ```
 
-#### 2. shell-common/functions/gpuhelp.sh ✗ WRONG SHEBANG
+#### 2. shell-common/functions/gpu_help.sh ✗ WRONG SHEBANG
 ```bash
 # Current: #!/bin/sh
 # Change to: #!/bin/bash
@@ -81,7 +81,7 @@ This document lists only CONFIRMED issues after manual verification of false pos
 # - Double brackets [[]] for conditional expressions
 ```
 
-#### 3. shell-common/functions/psqlhelp.sh ✗ WRONG SHEBANG
+#### 3. shell-common/functions/psql_help.sh ✗ WRONG SHEBANG
 ```bash
 # Current: #!/bin/sh
 # Change to: #!/bin/bash
@@ -90,7 +90,7 @@ This document lists only CONFIRMED issues after manual verification of false pos
 # - Double brackets [[]] for conditional expressions
 ```
 
-#### 4. shell-common/functions/claudehelp.sh ✗ WRONG SHEBANG
+#### 4. shell-common/functions/claude_help.sh ✗ WRONG SHEBANG
 ```bash
 # Current: #!/bin/sh
 # Change to: #!/bin/bash
@@ -100,7 +100,7 @@ This document lists only CONFIRMED issues after manual verification of false pos
 # Note: Uses 'source' keyword which is bash-specific (POSIX uses '.')
 ```
 
-#### 5. shell-common/functions/uxhelp.sh ✗ WRONG SHEBANG
+#### 5. shell-common/functions/ux_help.sh ✗ WRONG SHEBANG
 ```bash
 # Current: #!/usr/bin/env sh
 # Change to: #!/bin/bash
@@ -136,7 +136,7 @@ This document lists only CONFIRMED issues after manual verification of false pos
 # "source" only appears in strings ("source code")
 ```
 
-#### ✓ shell-common/functions/pyhelp.sh - OK (KEEP #!/bin/sh)
+#### ✓ shell-common/functions/py_help.sh - OK (KEEP #!/bin/sh)
 ```
 # Current: #!/bin/sh - CORRECT
 # No actual bash-specific features
@@ -157,10 +157,10 @@ This document lists only CONFIRMED issues after manual verification of false pos
 
 **shell-common/functions/ (6 files):**
 1. fzf.sh - Change `#!/bin/sh` to `#!/bin/bash`
-2. gpuhelp.sh - Change `#!/bin/sh` to `#!/bin/bash`
-3. psqlhelp.sh - Change `#!/bin/sh` to `#!/bin/bash`
-4. claudehelp.sh - Change `#!/bin/sh` to `#!/bin/bash`
-5. uxhelp.sh - Change `#!/usr/bin/env sh` to `#!/bin/bash`
+2. gpu_help.sh - Change `#!/bin/sh` to `#!/bin/bash`
+3. psql_help.sh - Change `#!/bin/sh` to `#!/bin/bash`
+4. claude_help.sh - Change `#!/bin/sh` to `#!/bin/bash`
+5. ux_help.sh - Change `#!/usr/bin/env sh` to `#!/bin/bash`
 6. zsh.sh - Change `#!/bin/sh` to `#!/bin/bash`
 
 ---
@@ -192,17 +192,17 @@ sed -i '1s|#!/usr/bin/env sh|#!/bin/bash|' shell-common/env/fcitx.sh
 # 5. fzf.sh
 sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/fzf.sh
 
-# 6. gpuhelp.sh
-sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/gpuhelp.sh
+# 6. gpu_help.sh
+sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/gpu_help.sh
 
-# 7. psqlhelp.sh
-sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/psqlhelp.sh
+# 7. psql_help.sh
+sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/psql_help.sh
 
-# 8. claudehelp.sh
-sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/claudehelp.sh
+# 8. claude_help.sh
+sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/claude_help.sh
 
-# 9. uxhelp.sh
-sed -i '1s|#!/usr/bin/env sh|#!/bin/bash|' shell-common/functions/uxhelp.sh
+# 9. ux_help.sh
+sed -i '1s|#!/usr/bin/env sh|#!/bin/bash|' shell-common/functions/ux_help.sh
 
 # 10. zsh.sh
 sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/zsh.sh
@@ -221,10 +221,10 @@ sed -i '1i#!/bin/bash' shell-common/env/security.sh
 # Fix wrong shebangs
 sed -i '1s|#!/usr/bin/env sh|#!/bin/bash|' shell-common/env/fcitx.sh
 sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/fzf.sh
-sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/gpuhelp.sh
-sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/psqlhelp.sh
-sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/claudehelp.sh
-sed -i '1s|#!/usr/bin/env sh|#!/bin/bash|' shell-common/functions/uxhelp.sh
+sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/gpu_help.sh
+sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/psql_help.sh
+sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/claude_help.sh
+sed -i '1s|#!/usr/bin/env sh|#!/bin/bash|' shell-common/functions/ux_help.sh
 sed -i '1s|#!/bin/sh|#!/bin/bash|' shell-common/functions/zsh.sh
 
 echo "✓ Fixed 10 priority files"
@@ -248,7 +248,7 @@ for f in shell-common/env/{path,proxy,security,fcitx}.sh; do
 done
 
 # Check that all identified function files now have #!/bin/bash
-for f in shell-common/functions/{fzf,gpuhelp,psqlhelp,claudehelp,uxhelp,zsh}.sh; do
+for f in shell-common/functions/{fzf,gpu_help,psql_help,claude_help,ux_help,zsh}.sh; do
     shebang=$(head -1 "$f")
     if [[ "$shebang" == "#!/bin/bash" ]]; then
         echo "✓ $f: $shebang"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# shell-common/functions/psqlhelp.sh
+# shell-common/functions/psql_help.sh
 # psqlHelp - shared between bash and zsh
 
 psql_help() {

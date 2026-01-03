@@ -1,5 +1,5 @@
 #!/bin/bash
-# shell-common/functions/uxhelp.sh
+# shell-common/functions/ux_help.sh
 # UX library help function
 
 # Alias to run the interactive UX demo
@@ -124,7 +124,7 @@ EOF
     ux_section "Documentation"
     ux_bullet "Library file: ${UX_BOLD}shell-common/tools/ux_lib/ux_lib.sh${UX_RESET}"
     ux_bullet "Demo script: ${UX_BOLD}shell-common/tools/custom/demo_ux.sh${UX_RESET}"
-    ux_bullet "Example migrations: ${UX_BOLD}myhelp()${UX_RESET}, ${UX_BOLD}dcl()${UX_RESET}, ${UX_BOLD}dbash()${UX_RESET}"
+    ux_bullet "Example migrations: ${UX_BOLD}my_help()${UX_RESET}, ${UX_BOLD}dcl()${UX_RESET}, ${UX_BOLD}dbash()${UX_RESET}"
     echo ""
 
     ux_divider
@@ -136,5 +136,5 @@ EOF
 # Alias for ux-help format (using dash instead of underscore)
 alias ux-help='ux_help'
 
-# Note: HELP_DESCRIPTIONS registration is handled by myhelp.sh
+# Note: HELP_DESCRIPTIONS registration is handled by my_help.sh
 # which loads before this file and properly initializes the array

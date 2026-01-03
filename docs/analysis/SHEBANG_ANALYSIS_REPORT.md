@@ -80,7 +80,7 @@ These files have incorrect shebangs for their content:
 - **Recommended**: Consider keeping as `#!/bin/sh` (false positive)
 - **Note**: "source" detected in comments/strings, not actual bash source command
 
-##### 3. `shell-common/functions/claudehelp.sh`
+##### 3. `shell-common/functions/claude_help.sh`
 - **Current**: `#!/bin/sh`
 - **Recommended**: Consider keeping as `#!/bin/sh` or verify actual usage
 - **Note**: May have false positive from "source" in strings
@@ -90,7 +90,7 @@ These files have incorrect shebangs for their content:
 - **Recommended**: `#!/bin/bash`
 - **Reason**: Uses arrays (`read -r -a`)
 
-##### 5. `shell-common/functions/gpuhelp.sh`
+##### 5. `shell-common/functions/gpu_help.sh`
 - **Current**: `#!/bin/sh`
 - **Recommended**: `#!/bin/bash`
 - **Reason**: Uses double brackets `[[ ]]`
@@ -100,17 +100,17 @@ These files have incorrect shebangs for their content:
 - **Recommended**: Consider keeping as `#!/bin/sh` (false positive)
 - **Note**: "source" detected in comments/strings
 
-##### 7. `shell-common/functions/psqlhelp.sh`
+##### 7. `shell-common/functions/psql_help.sh`
 - **Current**: `#!/bin/sh`
 - **Recommended**: `#!/bin/bash`
 - **Reason**: Uses double brackets `[[ ]]`
 
-##### 8. `shell-common/functions/pyhelp.sh`
+##### 8. `shell-common/functions/py_help.sh`
 - **Current**: `#!/bin/sh`
 - **Recommended**: Consider keeping as `#!/bin/sh` (false positive)
 - **Note**: "source" detected in comments/strings
 
-##### 9. `shell-common/functions/uxhelp.sh`
+##### 9. `shell-common/functions/ux_help.sh`
 - **Current**: `#!/usr/bin/env sh`
 - **Recommended**: Consider keeping as `#!/usr/bin/env sh` (false positive)
 - **Note**: "source" detected in comments/strings
@@ -154,10 +154,10 @@ These files use bash-specific features but have wrong shebang:
 3. `shell-common/functions/fzf.sh` - Currently: `#!/bin/sh` → Change to: `#!/bin/bash`
    - Uses: arrays
 
-4. `shell-common/functions/gpuhelp.sh` - Currently: `#!/bin/sh` → Change to: `#!/bin/bash`
+4. `shell-common/functions/gpu_help.sh` - Currently: `#!/bin/sh` → Change to: `#!/bin/bash`
    - Uses: double brackets `[[ ]]`
 
-5. `shell-common/functions/psqlhelp.sh` - Currently: `#!/bin/sh` → Change to: `#!/bin/bash`
+5. `shell-common/functions/psql_help.sh` - Currently: `#!/bin/sh` → Change to: `#!/bin/bash`
    - Uses: double brackets `[[ ]]`
 
 6. `shell-common/projects/dmc.sh` - Currently: `#!/bin/sh` → Change to: `#!/bin/bash`
@@ -257,8 +257,8 @@ The analysis detected the following bash-specific features:
    ```bash
    # shell-common/env/fcitx.sh
    # shell-common/functions/fzf.sh
-   # shell-common/functions/gpuhelp.sh
-   # shell-common/functions/psqlhelp.sh
+   # shell-common/functions/gpu_help.sh
+   # shell-common/functions/psql_help.sh
    ```
    Change to `#!/bin/bash`.
 
@@ -304,10 +304,10 @@ The analysis may have some false positives for the `source` keyword, as it can a
 Files flagged only for `source` usage should be manually reviewed. The following files likely have false positives:
 - shell-common/functions/bat.sh
 - shell-common/functions/mytool_help.sh
-- shell-common/functions/pyhelp.sh
-- shell-common/functions/uxhelp.sh
+- shell-common/functions/py_help.sh
+- shell-common/functions/ux_help.sh
 - shell-common/functions/zsh.sh
-- shell-common/functions/claudehelp.sh
+- shell-common/functions/claude_help.sh
 
 **Recommendation**: Manually review these files. If they only use `. script.sh` (dot notation) instead of `source script.sh`, they are POSIX-compatible and can keep `#!/bin/sh`.
 

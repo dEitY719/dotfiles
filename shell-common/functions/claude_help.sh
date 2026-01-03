@@ -1,5 +1,5 @@
 #!/bin/bash
-# shell-common/functions/claudehelp.sh
+# shell-common/functions/claude_help.sh
 # claudeHelp - shared between bash and zsh
 
 claude_help() {

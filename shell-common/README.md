@@ -40,7 +40,7 @@ All files in `aliases/` contain pure `alias` definitions. These work identically
 | `core.sh` | `bash/alias/core_aliases.bash` | Basic command aliases (ll, la, cd, rm, cp, mv, etc.) |
 | `system.sh` | `bash/alias/system_aliases.bash` | System aliases (ports, myip, top, htop, update, etc.) |
 
-**Note:** These files also contain helper functions (`hg()`, `syshelp()`) that are shell-independent.
+**Note:** These files also contain helper functions (`hg()`, `sys_help()`) that are shell-independent.
 
 ## Usage
 

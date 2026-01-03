@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/githelp.sh
+# shell-common/functions/git_help.sh
 # gitHelp - shared between bash and zsh
 
 git_help() {

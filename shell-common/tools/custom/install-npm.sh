@@ -110,7 +110,7 @@ main() {
     ux_bullet "${UX_PRIMARY}npm install -g typescript${UX_RESET}"
     ux_bullet "${UX_PRIMARY}npm install -g @angular/cli${UX_RESET}"
     echo ""
-    ux_info "For more commands, run: ${UX_PRIMARY}npmhelp${UX_RESET}"
+    ux_info "For more commands, run: ${UX_PRIMARY}npm-help${UX_RESET}"
     echo ""
 }
 

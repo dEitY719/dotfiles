@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/pphelp.sh
+# shell-common/functions/pp_help.sh
 # ppHelp - shared between bash and zsh
 
 pp_help() {

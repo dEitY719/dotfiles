@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/nvmhelp.sh
+# shell-common/functions/nvm_help.sh
 # nvmHelp - shared between bash and zsh
 
 nvm_help() {

@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/codexhelp.sh
+# shell-common/functions/codex_help.sh
 # codexHelp - shared between bash and zsh
 
 codex_help() {

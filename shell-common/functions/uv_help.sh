@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/uvhelp.sh
+# shell-common/functions/uv_help.sh
 # uvHelp - shared between bash and zsh
 
 uv_help() {

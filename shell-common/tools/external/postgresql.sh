@@ -129,7 +129,6 @@ _register_aliases() {
             grep -v 'psql_db' |
             grep -v 'psql_user' |
             grep -v 'psql_server' |
-            grep -v 'psqlhelp' |
             grep -v 'psql_help' |
             grep -v 'psql_list' |
             grep -v 'psql_bootstrap' |

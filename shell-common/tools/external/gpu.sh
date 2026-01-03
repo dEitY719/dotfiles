@@ -120,7 +120,7 @@ alias gpu-watch='watch -n 1 "/usr/lib/wsl/lib/nvidia-smi"'
 # ═══════════════════════════════════════════════════════════════
 
 # Internal: Full help function
-_gpuhelp_full() {
+_gpu_help_full() {
     ux_header "GPU Monitoring Commands (Complete)"
 
     ux_section "Core GPU Diagnostics"
@@ -176,4 +176,4 @@ _gpuhelp_full() {
 }
 
 # Main help function (compact version)
-# Note: gpu_help function is defined in shell-common/functions/gpuhelp.sh
+# Note: gpu_help function is defined in shell-common/functions/gpu_help.sh

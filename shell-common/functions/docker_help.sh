@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/dockerhelp.sh
+# shell-common/functions/docker_help.sh
 # dockerHelp - shared between bash and zsh
 
 docker_help() {

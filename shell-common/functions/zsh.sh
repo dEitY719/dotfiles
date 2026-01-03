@@ -259,7 +259,7 @@ zsh_snippets() {
 # Naming Convention: Function uses underscore, alias provides dash format
 # ═══════════════════════════════════════════════════════════════
 # Functions: zsh_version, zsh_themes, etc. (underscore format - POSIX compatible)
-# Help command is defined in shell-common/functions/zsh-help.sh
+# Help command is defined in shell-common/functions/zsh_help.sh
 # User calls: zsh-help, zsh-version, etc. (dash format - user friendly)
 alias zsh-version='zsh_version'
 alias zsh-themes='zsh_themes'

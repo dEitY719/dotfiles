@@ -1,5 +1,5 @@
 #!/bin/bash
-# shell-common/functions/gpuhelp.sh
+# shell-common/functions/gpu_help.sh
 # gpuHelp - shared between bash and zsh
 
 gpu_help() {

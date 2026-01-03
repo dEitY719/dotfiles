@@ -56,7 +56,7 @@ Quick reference for immediate fixes in shell-common/env/ and shell-common/functi
 ```
 
 ```bash
-# 2. shell-common/functions/gpuhelp.sh
+# 2. shell-common/functions/gpu_help.sh
 # Change from: #!/bin/sh
 # Change to:   #!/bin/bash
 
@@ -64,7 +64,7 @@ Quick reference for immediate fixes in shell-common/env/ and shell-common/functi
 ```
 
 ```bash
-# 3. shell-common/functions/psqlhelp.sh
+# 3. shell-common/functions/psql_help.sh
 # Change from: #!/bin/sh
 # Change to:   #!/bin/bash
 
@@ -84,7 +84,7 @@ If they use `source script.sh`, they need `#!/bin/bash`.
 # Current: #!/bin/sh
 # Action: VERIFY - check for actual 'source' command usage
 
-# 5. shell-common/functions/claudehelp.sh
+# 5. shell-common/functions/claude_help.sh
 # Current: #!/bin/sh
 # Action: VERIFY - check for actual 'source' command usage
 
@@ -92,11 +92,11 @@ If they use `source script.sh`, they need `#!/bin/bash`.
 # Current: #!/bin/sh
 # Action: VERIFY - check for actual 'source' command usage
 
-# 7. shell-common/functions/pyhelp.sh
+# 7. shell-common/functions/py_help.sh
 # Current: #!/bin/sh
 # Action: VERIFY - check for actual 'source' command usage
 
-# 8. shell-common/functions/uxhelp.sh
+# 8. shell-common/functions/ux_help.sh
 # Current: #!/usr/bin/env sh
 # Action: VERIFY - check for actual 'source' command usage
 
@@ -119,7 +119,7 @@ grep -E '^\s*source\s+' shell-common/functions/bat.sh
 ### Quick verification for all suspect files
 
 ```bash
-for f in shell-common/functions/{bat,claudehelp,mytool_help,pyhelp,uxhelp,zsh}.sh; do
+for f in shell-common/functions/{bat,claude_help,mytool_help,py_help,ux_help,zsh}.sh; do
     echo "=== $f ==="
     grep -E '^\s*(source|\.|eval)\s+' "$f" 2>/dev/null || echo "No source/dot commands found"
     echo
@@ -140,8 +140,8 @@ done
 
 3. **Change shebang in 3 functions files (confirmed):**
    - shell-common/functions/fzf.sh
-   - shell-common/functions/gpuhelp.sh
-   - shell-common/functions/psqlhelp.sh
+   - shell-common/functions/gpu_help.sh
+   - shell-common/functions/psql_help.sh
 
 4. **Verify and possibly fix 6 functions files:**
    - Check if they actually use `source` command

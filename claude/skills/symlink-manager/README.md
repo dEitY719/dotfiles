@@ -71,7 +71,7 @@ Generated functions for each managed config:
 # Generated functions
 claude_init              # Set up symbolic links
 claude_edit_settings     # Edit settings.json
-claudehelp              # Show all commands
+claude-help             # Show all commands
 ```
 
 ## Safety Features

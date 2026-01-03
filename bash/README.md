@@ -145,39 +145,39 @@ gp                  # git push
 
 These function files provide help systems and utilities shared between bash and zsh:
 
-- **myhelp.sh**: Main help system registry and display
+- **my_help.sh**: Main help system registry and display
 - **my_man.sh**: Custom manual page viewer
-- **bat.sh**, **bathelp.sh**: bat (cat alternative) integration
-- **cchelp.sh**: Claude Code help
-- **claudehelp.sh**: Claude AI CLI help
-- **clihelp.sh**: CLI tools help
-- **codexhelp.sh**: Codex help functions
-- **dirhelp.sh**: Directory navigation help
-- **dockerhelp.sh**: Docker help
-- **dproxyhelp.sh**: Docker proxy help
-- **duhelp.sh**: Disk usage help
+- **bat.sh**: bat (cat alternative) integration
+- **cc_help.sh**: Claude Code help
+- **claude_help.sh**: Claude AI CLI help
+- **cli_help.sh**: CLI tools help
+- **codex_help.sh**: Codex help functions
+- **dir_help.sh**: Directory navigation help
+- **docker_help.sh**: Docker help
+- **dproxy_help.sh**: Docker proxy help
+- **du_help.sh**: Disk usage help
 - **fasd.sh**: Fast directory navigation
 - **fd.sh**: fd (find alternative) integration
 - **fzf.sh**: Fuzzy finder integration
 - **gc_help.sh**: Garbage collection help
-- **geminihelp.sh**: Gemini AI help
-- **githelp.sh**, **git.sh**: Git help and utilities
-- **gpuhelp.sh**: GPU monitoring help
+- **gemini_help.sh**: Gemini AI help
+- **git_help.sh**, **git.sh**: Git help and utilities
+- **gpu_help.sh**: GPU monitoring help
 - **litellm_help.sh**: LiteLLM help
 - **mysql_help.sh**: MySQL help
 - **mytool_help.sh**, **mytool.sh**: Custom tool help
-- **npmhelp.sh**: npm help
-- **nvmhelp.sh**: nvm (Node version manager) help
+- **npm_help.sh**: npm help
+- **nvm_help.sh**: nvm (Node version manager) help
 - **p10k.sh**: Powerlevel10k theme integration
 - **pet.sh**: Pet (snippet manager) integration
-- **pphelp.sh**: Project-specific help
-- **psqlhelp.sh**: PostgreSQL help
-- **pyhelp.sh**: Python help
+- **pp_help.sh**: Project-specific help
+- **psql_help.sh**: PostgreSQL help
+- **py_help.sh**: Python help
 - **ripgrep.sh**: ripgrep integration
-- **syshelp.sh**: System help
-- **uvhelp.sh**: uv (Python package manager) help
-- **uxhelp.sh**: UX library help
-- **zsh-help.sh**, **zsh.sh**: Zsh help and utilities
+- **sys_help.sh**: System help
+- **uv_help.sh**: uv (Python package manager) help
+- **ux_help.sh**: UX library help
+- **zsh_help.sh**, **zsh.sh**: Zsh help and utilities
 
 ## External Tool Integration (shell-common/tools/external/)
 

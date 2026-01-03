@@ -5,7 +5,7 @@
 
 
 
-›  ~/dotfiles  main ⇡1  myhelp                                                                          ✔  18:35:14 
+›  ~/dotfiles  main ⇡1  my-help                                                                          ✔  18:35:14 
 
   ╔══════════════════════════════════════════════════════════════╗
   ║ Dotfiles Help Functions                                      ║
@@ -16,38 +16,38 @@
   ───────────────────────
     apthelp              :  APT package manager commands
     bat-help             :  bat - Cat replacement with syntax highlighting
-    cchelp               :  Claude Code usage help
-    claudehelp           :  Claude Code MCP help
-    clihelp              :  Custom Project CLI list
-    codexhelp            :  Codex CLI commands and aliases
-    dirhelp              :  Directory navigation aliases
-    dockerhelp           :  Docker commands and aliases
-    dproxyhelp           :  Docker Proxy(Corporate) commands
-    duhelp               :  Disk usage help
+    cc-help               :  Claude Code usage help
+    claude-help           :  Claude Code MCP help
+    cli-help              :  Custom Project CLI list
+    codex-help            :  Codex CLI commands and aliases
+    dir-help              :  Directory navigation aliases
+    docker-help           :  Docker commands and aliases
+    dproxy-help           :  Docker Proxy(Corporate) commands
+    du-help               :  Disk usage help
     fasd-help            :  fasd - Fast access to directories and files
     fd-help              :  fd - Fast file finder tool
     fzf-help             :  fzf (Fuzzy Finder) key bindings and usage
     gc_help              :  git-crypt (Transparent Git encryption)
-    geminihelp           :  Gemini CLI commands and aliases
-    githelp              :  Git shortcuts and aliases
-    gpuhelp              :  GPU monitoring commands (WSL2 universal)
+    gemini-help           :  Gemini CLI commands and aliases
+    git-help              :  Git shortcuts and aliases
+    gpu-help              :  GPU monitoring commands (WSL2 universal)
     litellm_help         :  LiteLLM commands and aliases
-    myhelp               :  Main help system
+    my-help               :  Main help system
     mysql_help           :  MySQL Service Management
     mytool_help          :  MyTool - Personal Utility Commands
-    npmhelp              :  NPM package manager commands
-    nvmhelp              :  NVM (Node Version Manager) commands
+    npm-help              :  NPM package manager commands
+    nvm-help              :  NVM (Node Version Manager) commands
     pet-help             :  pet - Simple command snippet manager
-    pphelp               :  Python package and code quality tools
-    psqlhelp             :  PostgreSQL command helper
-    pyhelp               :  Python virtual environment commands
+    pp-help               :  Python package and code quality tools
+    psql-help             :  PostgreSQL command helper
+    py-help               :  Python virtual environment commands
     ripgrep-help         :  ripgrep (rg) fast text search tool
-    syshelp              :  System management commands
-    uvhelp               :  UV package manager commands
+    sys-help              :  System management commands
+    uv-help               :  UV package manager commands
     zsh-help             :  Zsh shell management commands
 
 
-# AsWas : myhelp 실행 결과
+# AsWas : my-help 실행 결과
 1. 위의 다양한 help 함수들의 naming이 통일되지 않았어.
 2. 나는 {name}-help 형태가 개인적으로 마음에 드는데, 너의 의견은 어때? 요즘 alias 이름이 _ (underline) 이 아니고 - (dash)를 많이 사용하는 형태입니까?
 3. 너는 어떤 형태를 선호해?
@@ -68,26 +68,26 @@
 2. 실수하지 말고 1개씩 꼼꼼히 수정해.
 3. 혹시 내가 누락한 것은 없는지 cross-check해.
 apthelp              -> apt-help
-cchelp               -> cc-help
-claudehelp           -> claude-help
-clihelp              -> cli-help
-codexhelp            -> codex-help
-dirhelp              -> dir-help
-dockerhelp           -> docker-help
-dproxyhelp           -> dproxy-help
-duhelp               -> du-help
+cc-help               -> cc-help
+claude-help           -> claude-help
+cli-help              -> cli-help
+codex-help            -> codex-help
+dir-help              -> dir-help
+docker-help           -> docker-help
+dproxy-help           -> dproxy-help
+du-help               -> du-help
 gc_help              -> gc-help
-geminihelp           -> gemini-help
-githelp              -> git-help
-gpuhelp              -> gpu-help
+gemini-help           -> gemini-help
+git-help              -> git-help
+gpu-help              -> gpu-help
 litellm_help         -> litellm-help
-myhelp               -> my-help
+my-help               -> my-help
 mysql_help           -> mysql-help
 mytool_help          -> mytool-help
-npmhelp              -> npm-help
-nvmhelp              -> nvm-help
-pphelp               -> pp-help
-psqlhelp             -> psql-help
-pyhelp               -> py-help
-syshelp              -> sys-help
-uvhelp               -> uv-help
+npm-help              -> npm-help
+nvm-help              -> nvm-help
+pp-help               -> pp-help
+psql-help             -> psql-help
+py-help               -> py-help
+sys-help              -> sys-help
+uv-help               -> uv-help

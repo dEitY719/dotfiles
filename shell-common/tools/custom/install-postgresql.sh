@@ -122,7 +122,7 @@ main() {
     ux_section "Next Steps"
     ux_numbered 1 "Check server status: ${UX_PRIMARY}psql_server status${UX_RESET}"
     ux_numbered 2 "Add users/databases: ${UX_PRIMARY}psql_add${UX_RESET}"
-    ux_numbered 3 "View all helpers: ${UX_PRIMARY}psqlhelp${UX_RESET}"
+    ux_numbered 3 "View all helpers: ${UX_PRIMARY}psql-help${UX_RESET}"
     echo ""
 }
 

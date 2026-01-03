@@ -1,5 +1,5 @@
 #!/bin/bash
-# shell-common/functions/securityhelp.sh
+# shell-common/functions/security_help.sh
 # CA Certificate setup help and utilities
 
 # Load UX library (unified library at shell-common/tools/ux_lib/)
@@ -87,7 +87,7 @@ crt_help() {
 # Help Registration
 # ═══════════════════════════════════════════════════════════════
 
-# Note: HELP_DESCRIPTIONS registration is handled by myhelp.sh
+# Note: HELP_DESCRIPTIONS registration is handled by my_help.sh
 # which loads before this file and properly initializes the array
 # in a shell-independent way
 

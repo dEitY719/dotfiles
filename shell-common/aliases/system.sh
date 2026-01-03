@@ -31,4 +31,4 @@ alias logs='tail -f /var/log/syslog'     # 시스템 로그 실시간 확인
 alias error='tail -f /var/log/error.log' # 에러 로그 실시간 확인
 alias auth='tail -f /var/log/auth.log'   # 인증 로그 실시간 확인
 
-# Note: sys_help function is defined in shell-common/functions/syshelp.sh
+# Note: sys_help function is defined in shell-common/functions/sys_help.sh

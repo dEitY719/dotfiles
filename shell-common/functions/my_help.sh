@@ -1,5 +1,5 @@
 #!/bin/bash
-# shell-common/functions/myhelp.sh
+# shell-common/functions/my_help.sh
 # Help system for bash/zsh dotfiles
 # Provides centralized help registry for all commands
 # Bash/Zsh compatible (POSIX not supported)

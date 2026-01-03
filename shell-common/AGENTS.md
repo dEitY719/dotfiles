@@ -113,7 +113,7 @@ zsh -c "source shell-common/functions/git.sh && type git_help"
 
 - **[Environment Variables](./env/)** — PATH, locale, editor, proxy, security settings
 - **[Aliases](./aliases/)** — Core, directory, git, system, disk usage shortcuts
-- **[Functions](./functions/)** — Help systems (myhelp, git_help, etc.), utilities
+- **[Functions](./functions/)** — Help systems (my_help, git_help, etc.), utilities
 - **[External Tools](./tools/external/)** — fzf, bat, fd, pyenv, nvm integrations
 - **[Custom Tools](./tools/custom/)** — Installation scripts, setup utilities
 - **[UX Library](./tools/ux_lib/AGENTS.md)** — Styling, logging, interactive components

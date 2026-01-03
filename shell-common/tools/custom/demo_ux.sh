@@ -364,7 +364,7 @@ main() {
         0)
             echo ""
             ux_success "Thanks for trying the UX library!"
-            ux_info "Run ${UX_BOLD}uxhelp${UX_RESET} to see all available functions"
+            ux_info "Run ${UX_BOLD}ux-help${UX_RESET} to see all available functions"
             echo ""
             exit 0
             ;;

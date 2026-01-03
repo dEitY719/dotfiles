@@ -27,7 +27,7 @@ The UX guidelines are defined in: `shell-common/tools/ux_lib/UX_GUIDELINES.md`
 ### Core Principles
 
 1. **Consistency**: All functions use the same color scheme and formatting
-2. **Discoverability**: Help text is always available with no arguments; `myhelp` lists all topics
+2. **Discoverability**: Help text is always available with no arguments; `my-help` lists all topics
 3. **Safety**: Destructive operations require explicit confirmation
 4. **Feedback**: Clear success/error/warning messages with progress indicators
 5. **Readability**: Well-structured output with semantic colors
@@ -137,7 +137,7 @@ Verify:
 
 ## Reference Example
 
-See: `shell-common/functions/cchelp.sh`
+See: `shell-common/functions/cc_help.sh`
 
 ```bash
 cc_help() {
@@ -233,7 +233,7 @@ Benefits:
 ```
 shell-common/tools/ux_lib/ux_lib.sh         # UX function library
 shell-common/tools/ux_lib/UX_GUIDELINES.md  # Full guidelines
-shell-common/functions/cchelp.sh            # Reference pattern
+shell-common/functions/cc_help.sh            # Reference pattern
 shell-common/tools/custom/demo_ux.sh        # Interactive demo
 shell-common/tools/custom/check_ux_consistency.sh  # Validation tool
 ```

@@ -42,7 +42,7 @@ User: "이 함수를 cc_help 스타일로 리팩토링해"
 
 ## Reference Pattern
 
-See: `shell-common/functions/cchelp.sh`
+See: `shell-common/functions/cc_help.sh`
 
 ```bash
 cc_help() {

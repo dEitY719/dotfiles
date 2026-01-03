@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/syshelp.sh
+# shell-common/functions/sys_help.sh
 # sysHelp - shared between bash and zsh
 
 sys_help() {

@@ -253,7 +253,7 @@ claude_init
 claude_edit_settings
 
 # Show help
-claudehelp
+claude-help
 ```
 
 ## Safety Guidelines

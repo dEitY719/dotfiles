@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/pyhelp.sh
+# shell-common/functions/py_help.sh
 # pyHelp - shared between bash and zsh
 
 py_help() {

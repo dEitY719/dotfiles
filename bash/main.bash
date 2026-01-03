@@ -69,7 +69,7 @@ declare -gi SOURCED_FILES_COUNT=0
 
 # ------------------------------------------------------------------
 # --- Helper function to get all *help() functions ---
-# Used by both cleanup and myhelp display
+# Used by both cleanup and my_help display
 _get_help_functions() {
     declare -F | awk '{print $3}' | { grep 'help$' || true; } | LC_ALL=C sort
 }
@@ -79,7 +79,7 @@ _get_help_functions() {
 # This prevents stale function definitions from persisting across shell reloads
 while IFS= read -r func; do
     func_name="${func%%(*}"
-    if [[ "$func_name" =~ help$ ]] && [[ "$func_name" != "myhelp" ]]; then
+    if [[ "$func_name" =~ help$ ]] && [[ "$func_name" != "my_help" ]]; then
         unset -f "$func_name" 2>/dev/null
     fi
 done < <(_get_help_functions)
@@ -181,8 +181,8 @@ for f in "${DOTFILES_BASH_DIR}/env/"*.bash; do
     safe_source "$f" "Environment variable file not found"
 done
 
-# Note: myhelp is now loaded from shell-common/functions/myhelp.sh (shared version)
-# This was previously loaded here as bash/util/myhelp.bash but we now use
+# Note: my_help is now loaded from shell-common/functions/my_help.sh (shared version)
+# This was previously loaded here as bash/util/my_help.bash but we now use
 # the unified shell-common version for parity with zsh
 
 # --- Auto-load all other directories ---
@@ -193,7 +193,7 @@ done
 SKIP_DIRS=(
     "core"    # Deprecated files
     "ux_lib"  # Already loaded explicitly
-    "util"    # Skipped - using shell-common/functions/myhelp.sh instead
+    "util"    # Skipped - using shell-common/functions/my_help.sh instead
     "env"     # Already loaded above
     "scripts" # Executable scripts, not sourced
     "config"  # Configuration files only
@@ -235,7 +235,7 @@ echo "Dotfiles configuration loaded successfully. (Total files sourced: ${SOURCE
 # Clean up duplicate PATH entries (defined in env/path.bash)
 type -t clean_paths &>/dev/null && clean_paths
 
-# myhelp function is now loaded via shell-common/functions/myhelp.sh (shared version)
+# my_help function is now loaded via shell-common/functions/my_help.sh (shared version)
 
 # fzf key bindings and completion
 if command -v fzf &>/dev/null; then

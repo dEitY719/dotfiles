@@ -3,7 +3,7 @@
 ## Design Principles
 
 1.  **Consistency**: All functions use the same color scheme and formatting.
-2.  **Discoverability**: Help text is always available with no arguments, and `myhelp` lists all available help topics.
+2.  **Discoverability**: Help text is always available with no arguments, and `my-help` lists all available help topics.
 3.  **Safety**: Destructive operations require explicit confirmation.
 4.  **Feedback**: Operations provide clear success/error/warning messages and progress indicators.
 5.  **Readability**: Output is well-structured, easy to read, and uses semantic colors effectively.

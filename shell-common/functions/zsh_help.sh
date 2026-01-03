@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/zsh-help.sh
+# shell-common/functions/zsh_help.sh
 # zsh help - shared between bash and zsh
 
 _zsh_help_full() {

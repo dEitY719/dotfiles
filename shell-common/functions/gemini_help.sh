@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/geminihelp.sh
+# shell-common/functions/gemini_help.sh
 # geminiHelp - shared between bash and zsh
 
 gemini_help() {
