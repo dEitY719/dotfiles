@@ -66,3 +66,7 @@
 - **File names**: snake_case with `.sh` (e.g., `git_help.sh`, `install_docker.sh`, `git_crypt.sh`).
 - **Function names**: snake_case (e.g., `git_help`, `install_docker`, `git_crypt_install`).
 - **Aliases**: dash-form for user commands, mapped from snake_case functions (e.g., `alias git-help='git_help'`, `alias install-docker='install_docker'`).
+
+# Naming Rules (Docs)
+
+- **Markdown files**: dash-form (e.g., `setup-guide.md`, `ux-library-notes.md`); avoid camelCase or snake_case in filenames.
