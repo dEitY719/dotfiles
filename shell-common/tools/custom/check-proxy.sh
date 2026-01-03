@@ -1,9 +1,7 @@
 #!/bin/bash
 # shell-common/tools/custom/check-proxy.sh
 # Comprehensive proxy diagnostic script
-# Usage: check_proxy [test|config|all]
-
-set -e
+# Usage: check_proxy [env|file|shell|conn|git|all]
 
 # Load UX library if not already loaded
 if ! declare -f ux_header >/dev/null 2>&1; then
@@ -53,23 +51,27 @@ check_proxy_local_sh() {
         ux_bullet "Path: $HOME/dotfiles/shell-common/env/proxy.local.sh"
         ux_bullet "Size: $(wc -c < "$HOME/dotfiles/shell-common/env/proxy.local.sh") bytes"
         ux_bullet "Modified: $(stat -c '%y' "$HOME/dotfiles/shell-common/env/proxy.local.sh" 2>/dev/null || stat -f '%Sm' "$HOME/dotfiles/shell-common/env/proxy.local.sh" 2>/dev/null || echo '[N/A]')"
-    else
-        ux_error "proxy.local.sh NOT FOUND"
-        return 1
-    fi
-    echo ""
+        echo ""
 
-    ux_section "Content Validation"
-    if grep -q "export http_proxy" "$HOME/dotfiles/shell-common/env/proxy.local.sh"; then
-        ux_success "http_proxy export found"
-    else
-        ux_warning "http_proxy export not found"
-    fi
+        ux_section "Content Validation"
+        if grep -q "export http_proxy" "$HOME/dotfiles/shell-common/env/proxy.local.sh"; then
+            ux_success "http_proxy export found"
+        else
+            ux_warning "http_proxy export not found"
+        fi
 
-    if grep -q "export no_proxy" "$HOME/dotfiles/shell-common/env/proxy.local.sh"; then
-        ux_success "no_proxy export found"
+        if grep -q "export no_proxy" "$HOME/dotfiles/shell-common/env/proxy.local.sh"; then
+            ux_success "no_proxy export found"
+        else
+            ux_warning "no_proxy export not found"
+        fi
     else
-        ux_warning "no_proxy export not found"
+        ux_warning "proxy.local.sh NOT FOUND"
+        ux_info "This is normal for public/home environments and VPN setups"
+        ux_bullet "Option 1 (Public/Home PC): No proxy needed - file not required"
+        ux_bullet "Option 2 (Internal PC): Run setup.sh and select option 2"
+        ux_bullet "Option 3 (VPN): Uses direct connection - file not needed"
+        ux_info "Continue with diagnostics for public/VPN environments..."
     fi
     echo ""
 }
