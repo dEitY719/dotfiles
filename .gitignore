@@ -9,6 +9,7 @@ uv.lock
 
 # Local machine-specific configurations
 *.local.bash
+*.local.sh
 bash/env/local.bash
 bash/alias/local.bash
 bash/app/local.bash
