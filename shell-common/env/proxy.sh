@@ -18,7 +18,6 @@ export NO_PROXY="$no_proxy"
 # export HTTPS_PROXY="$https_proxy"
 
 # 환경별 로컬 프록시 설정 로드 (있는 경우)
-# shellcheck disable=SC1091
 if [ -f "${BASH_SOURCE[0]%/*}/proxy.local.sh" ]; then
     . "${BASH_SOURCE[0]%/*}/proxy.local.sh"
 elif [ -f "${0:a:h}/proxy.local.sh" ]; then

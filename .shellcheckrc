@@ -1,0 +1,14 @@
+# Shellcheck configuration
+# Applies to all shell scripts in the repository
+
+# SC1091: Not following non-constant source
+# Used for dynamic .local file sourcing pattern (environment-specific configs)
+disable=SC1091
+
+# SC1090: Can't follow non-constant source
+# Used for dynamic variable-based sourcing in setup scripts
+disable=SC1090
+
+# SC2034: Variable appears unused
+# Used for HELP_DESCRIPTIONS array registration and template variables
+disable=SC2034

@@ -84,7 +84,6 @@ crtsetup() {
 # ========================================
 # 환경별 로컬 NPM 설정 로드 (있는 경우)
 # ========================================
-# shellcheck disable=SC1091
 if [ -f "${BASH_SOURCE[0]%/*}/npm.local.sh" ]; then
     . "${BASH_SOURCE[0]%/*}/npm.local.sh"
 elif [ -f "${0:a:h}/npm.local.sh" ]; then

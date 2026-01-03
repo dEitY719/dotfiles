@@ -58,7 +58,6 @@ alias zsh-info='zsh --version && echo && uname -a' # Zsh system info
 # ═══════════════════════════════════════════════════════════════
 
 # Register help function description
-# shellcheck disable=SC2034
 HELP_DESCRIPTIONS["zsh-help"]="Zsh shell management commands"
 
 # Export functions for use in other shells

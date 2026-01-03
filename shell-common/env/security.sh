@@ -26,7 +26,6 @@ fi
 # ========================================
 # 환경별 로컬 보안 설정 로드 (CA 인증서 등)
 # ========================================
-# shellcheck disable=SC1091
 _security_dir="$(dirname "${BASH_SOURCE[0]:-$0}")"
 if [ -f "${_security_dir}/security.local.sh" ]; then
     . "${_security_dir}/security.local.sh"

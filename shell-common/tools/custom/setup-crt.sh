@@ -20,11 +20,9 @@ SECURITY_EXAMPLE="$HOME/dotfiles/shell-common/env/security.local.example"
 
 # Try to load CA_CERT from security.local.sh
 if [ -f "$SECURITY_LOCAL" ]; then
-    # shellcheck disable=SC1090
     source "$SECURITY_LOCAL"
 elif [ -f "$SECURITY_EXAMPLE" ]; then
     # Fallback to example file (extract default CA_CERT)
-    # shellcheck disable=SC1090
     CA_CERT=$(grep -m1 '^CA_CERT=' "$SECURITY_EXAMPLE" | cut -d'"' -f2)
 fi
 

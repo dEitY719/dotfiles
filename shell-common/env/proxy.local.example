@@ -19,7 +19,6 @@ export HTTPS_PROXY="$https_proxy"
 export no_proxy="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,ssai.samsungds.net,dsvdi.net,pfs.nprotect.com"
 export NO_PROXY="$no_proxy"
 
-# shellcheck disable=SC2034
 HELP_DESCRIPTIONS["proxyhelp"]="Proxy(Corporate) Commands"
 proxy_help() {
     cat <<-'EOF'
