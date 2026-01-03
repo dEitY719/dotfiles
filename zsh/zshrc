@@ -110,8 +110,8 @@ done
 
 # Phase 5: Zsh Utilities (may redefine some shared functions, but we use shared versions)
 [ -d "$ZSH_DOTFILES/util" ] && for f in "$ZSH_DOTFILES"/util/*.zsh; do
-    # Skip myhelp.zsh as we use the shared version instead
-    case "$f" in */myhelp.zsh) continue ;; esac
+    # Skip my_help.zsh as we use the shared version instead
+    case "$f" in */my_help.zsh) continue ;; esac
     [ -f "$f" ] && source "$f" 2>/dev/null
 done
 

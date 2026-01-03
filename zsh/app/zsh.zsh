@@ -42,7 +42,7 @@ alias zsh-info='zsh --version && echo && uname -a' # Zsh system info
 # ═══════════════════════════════════════════════════════════════
 
 # Register help function description
-# Only register if HELP_DESCRIPTIONS exists (loaded by myhelp.zsh)
+# Only register if HELP_DESCRIPTIONS exists (loaded by my_help.zsh)
 if [ -n "${HELP_DESCRIPTIONS+x}" ]; then
     HELP_DESCRIPTIONS[zsh-help]="Zsh shell management commands"
 fi
