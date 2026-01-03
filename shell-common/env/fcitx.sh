@@ -2,8 +2,8 @@
 # shell-common/env/fcitx.sh
 # Fcitx input method environment and optional autostart for Korean input
 
-# Enable by default; set ENABLE_FCITX=false to skip configuration
-if [ "${ENABLE_FCITX:-true}" = "true" ] && command -v fcitx >/dev/null 2>&1; then
+# Opt-in: set ENABLE_FCITX=true to enable configuration
+if command -v fcitx >/dev/null 2>&1 && [ "${ENABLE_FCITX:-false}" = "true" ]; then
     export QT_IM_MODULE=fcitx
     export GTK_IM_MODULE=fcitx
     export XMODIFIERS=@im=fcitx
