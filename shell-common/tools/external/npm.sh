@@ -1,55 +1,17 @@
 #!/bin/bash
 # shell-common/tools/external/npm.sh
-# Auto-generated from bash/app/npm.bash
-
-
-# 1. 전역 경로 변수 정의
-NPM_GLOBAL_PATH="$HOME/.npm-global"
-
-# 2. nvm 설치 여부 확인 (디렉토리 존재로 판단 - NVM_DIR 변수보다 확실)
-NVM_INSTALLED=false
-if [ -d "$HOME/.nvm" ] && [ -s "$HOME/.nvm/nvm.sh" ]; then
-    NVM_INSTALLED=true
-fi
-
-# 3. NPM prefix 설정
-# nvm이 설치되어 있지 않은 경우에만 전역 prefix를 설정합니다.
-# nvm은 자체적으로 npm을 관리하므로 prefix 설정과 충돌합니다.
-if [ "$NVM_INSTALLED" = false ]; then
-    # NPM prefix 설정이 되어 있는지 확인
-    CURRENT_PREFIX=$(npm config get prefix 2>/dev/null)
-
-    if [ "$CURRENT_PREFIX" != "$NPM_GLOBAL_PATH" ]; then
-        echo ""
-        echo "ℹ️ NPM prefix 경로를 '$NPM_GLOBAL_PATH'로 설정합니다. (현재: $CURRENT_PREFIX)"
-
-        # 디렉토리 생성
-        if [ ! -d "$NPM_GLOBAL_PATH" ]; then
-            mkdir -p "$NPM_GLOBAL_PATH"
-        fi
-
-        npm config set prefix "$NPM_GLOBAL_PATH"
-        echo "✅ 설정 완료. ~/.npmrc 파일 확인: $(grep prefix ~/.npmrc 2>/dev/null)"
-    fi
-else
-    # nvm이 설치된 경우: .npmrc에서 prefix 설정을 제거하여 충돌 방지
-    # 이 설정이 있으면 nvm이 매번 경고를 출력합니다.
-    if [ -f "$HOME/.npmrc" ] && grep -q "^prefix=" "$HOME/.npmrc" 2>/dev/null; then
-        # prefix 라인 제거
-        sed -i '/^prefix=/d' "$HOME/.npmrc"
-        # 빈 파일이 되면 삭제
-        if [ ! -s "$HOME/.npmrc" ]; then
-            rm -f "$HOME/.npmrc"
-        fi
-    fi
-fi
-
-# 4. PATH 환경 변수 설정
-# nvm 사용 여부와 관계없이 ~/.npm-global/bin을 PATH에 추가하여
-# 사용자가 직접 설치한 다른 CLI 도구들을 사용할 수 있도록 합니다.
-if [[ ":$PATH:" != *":$NPM_GLOBAL_PATH/bin:"* ]]; then
-    export PATH="$NPM_GLOBAL_PATH/bin:$PATH"
-fi
+# NPM/NVM 기본 설정 및 유틸리티
+#
+# 환경별 설정 방법:
+#   1. NVM을 사용하는 경우 (집 또는 회사):
+#      shell-common/tools/external/npm.local.example을 npm.local.sh로 복사
+#   2. npm.local.sh에서 환경에 맞게 NPM/NVM 설정 수정
+#   3. npm.local.sh는 자동으로 로드됨 (.gitignore에 의해 제외됨)
+#
+# 참고:
+#   - 이 파일은 기본 NPM aliases와 helper functions만 제공합니다
+#   - NVM 관련 설정은 npm.local.sh에서 처리해야 합니다
+#   - npm.local.sh가 없으면 시스템에 설치된 기본 npm을 사용합니다
 
 # ========================================
 # NPM Aliases
@@ -118,3 +80,14 @@ npmuninstall() {
 crtsetup() {
     bash "$HOME/dotfiles/shell-common/tools/custom/setup-crt.sh"
 }
+
+# ========================================
+# 환경별 로컬 NPM 설정 로드 (있는 경우)
+# ========================================
+# shellcheck disable=SC1091
+if [ -f "${BASH_SOURCE[0]%/*}/npm.local.sh" ]; then
+    . "${BASH_SOURCE[0]%/*}/npm.local.sh"
+elif [ -f "${0:a:h}/npm.local.sh" ]; then
+    # zsh support
+    . "${0:a:h}/npm.local.sh"
+fi

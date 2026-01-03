@@ -1,0 +1,85 @@
+#!/bin/sh
+# npm.local.example
+# 환경별 NPM 설정 예제 (회사 환경용)
+#
+# 사용 방법:
+#   1. 이 파일을 npm.local.sh로 복사
+#      cp npm.local.example npm.local.sh
+#   2. 필요에 따라 설정 수정
+#   3. npm.local.sh는 자동으로 .gitignore에 의해 제외됨
+#
+# NVM의 방식을 따르는 스크립트 (프록시/CA만 설정)
+# (prefix, ~/.npm-global 관련 설정 완전 제거)
+
+# --- 1. Node.js CA 설정 ---
+# Node 스크립트가 시스템 CA를 신뢰하도록 설정
+export NODE_EXTRA_CA_CERTS="/etc/ssl/certs/ca-certificates.crt"
+
+# --- 2. NVM 로드 ---
+export NVM_DIR="$HOME/.nvm"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+    # nvm 스크립트를 로드합니다
+    \. "$NVM_DIR/nvm.sh"
+    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+
+    # NVM 로드 후: .npmrc에서 prefix 설정을 제거하여 충돌 방지
+    # NVM은 자체적으로 npm을 관리하므로 prefix 설정이 있으면 경고를 출력합니다
+    if [ -f "$HOME/.npmrc" ] && grep -q "^prefix=" "$HOME/.npmrc" 2>/dev/null; then
+        sed -i '/^prefix=/d' "$HOME/.npmrc"
+        # 빈 파일이 되면 삭제
+        if [ ! -s "$HOME/.npmrc" ]; then
+            rm -f "$HOME/.npmrc"
+        fi
+    fi
+fi
+
+# --- 3. .npmrc 설정 (프록시, CA 등) ---
+# nvm 로드가 완료되어 'npm' 명령어를 사용할 수 있을 때
+if command -v npm >/dev/null 2>&1; then
+
+    # --- 원하는 .npmrc 설정값 정의 (prefix는 제외!) ---
+    DESIRED_PROXY="http://12.26.204.100:8080"
+    DESIRED_HTTPS_PROXY="http://12.26.204.100:8080"
+    DESIRED_NOPROXY="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,dsvdi.net,pfs.nprotect.com"
+    DESIRED_STRICT_SSL="true"
+    DESIRED_REGISTRY="https://registry.npmjs.org/"
+    DESIRED_CAFILE="/etc/ssl/certs/ca-certificates.crt"
+
+    # --- 현재 값과 비교하여 다를 경우에만 설정 실행 (prefix 제외) ---
+
+    # 1. proxy
+    CURRENT_PROXY="$(npm config get proxy 2>/dev/null)"
+    if [[ "$CURRENT_PROXY" != "$DESIRED_PROXY" ]]; then
+        npm config set proxy "$DESIRED_PROXY"
+    fi
+
+    # 2. https-proxy
+    CURRENT_HTTPS_PROXY="$(npm config get https-proxy 2>/dev/null)"
+    if [[ "$CURRENT_HTTPS_PROXY" != "$DESIRED_HTTPS_PROXY" ]]; then
+        npm config set https-proxy "$DESIRED_HTTPS_PROXY"
+    fi
+
+    # 3. noproxy
+    CURRENT_NOPROXY="$(npm config get noproxy 2>/dev/null)"
+    if [[ "$CURRENT_NOPROXY" != "$DESIRED_NOPROXY" ]]; then
+        npm config set noproxy "$DESIRED_NOPROXY"
+    fi
+
+    # 4. registry
+    CURRENT_REGISTRY="$(npm config get registry 2>/dev/null)"
+    if [[ "$CURRENT_REGISTRY" != "$DESIRED_REGISTRY" ]]; then
+        npm config set registry "$DESIRED_REGISTRY"
+    fi
+
+    # 5. cafile
+    CURRENT_CAFILE="$(npm config get cafile 2>/dev/null)"
+    if [[ "$CURRENT_CAFILE" != "$DESIRED_CAFILE" ]]; then
+        npm config set cafile "$DESIRED_CAFILE"
+    fi
+
+    # 6. strict-ssl
+    CURRENT_STRICT_SSL="$(npm config get strict-ssl 2>/dev/null)"
+    if [[ "$CURRENT_STRICT_SSL" != "$DESIRED_STRICT_SSL" ]]; then
+        npm config set strict-ssl "$DESIRED_STRICT_SSL"
+    fi
+fi
