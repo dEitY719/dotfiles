@@ -1,5 +1,5 @@
 #!/bin/sh
-# proxy.local.example
+# proxy.local.sh (template)
 # 환경별 프록시 설정 예제 (회사 환경용)
 #
 # 사용 방법:

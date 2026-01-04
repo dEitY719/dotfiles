@@ -1,4 +1,4 @@
-# security.local.example
+# security.local.sh (template)
 # 환경별 보안 설정 예제 (CA 인증서 관리)
 #
 # 사용 방법:
