@@ -9,10 +9,10 @@
 #   3. npm.local.sh는 자동으로 .gitignore에 의해 제외됨
 #
 # NVM의 방식을 따르는 스크립트 (NVM 로드 + 프록시 설정)
-# (prefix, ~/.npm-global 관련 설정 완전 제거)
 #
-# 참고: CA 인증서(NODE_EXTRA_CA_CERTS) 설정은
-#      shell-common/env/security.local.sh에서 관리됩니다
+# 참고:
+#   - CA 인증서(NODE_EXTRA_CA_CERTS) 설정은 shell-common/env/security.local.sh에서 관리됩니다
+#   - NPM PATH 설정은 npm.sh에서 관리됩니다
 
 # --- 1. NVM 로드 ---
 export NVM_DIR="$HOME/.nvm"
