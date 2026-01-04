@@ -117,12 +117,22 @@ Coverage Requirements:
 - Use targeted tests: `pytest tests/backend/billing/ -v`
 - Integration tests for external dependencies
 
-#### 6. Standards & References
+#### 6. Naming Conventions
+
+**Bash/Zsh:**
+- File names: snake_case with `.sh` (e.g., `git_help.sh`, `install_docker.sh`)
+- Function names: snake_case (e.g., `git_help`, `install_docker`)
+- Aliases: dash-form for user commands, mapped from snake_case functions (e.g., `alias git-help='git_help'`)
+
+**Documentation:**
+- Markdown files: dash-form (e.g., `setup-guide.md`, `ux-library-notes.md`); avoid camelCase or snake_case
+
+#### 7. Standards & References
 - Coding conventions: Link to project docs
 - Git strategy: Commit format (Type: Summary)
 - Maintenance policy: Update when patterns evolve
 
-#### 7. Context Map (Action-Based Routing)
+#### 8. Context Map (Action-Based Routing)
 
 Format Rules:
 - NO tables (use lists)
