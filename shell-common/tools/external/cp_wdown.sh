@@ -1,7 +1,10 @@
 #!/bin/bash
-# shell-common/tools/custom/cp_wdown.sh
+# shell-common/tools/external/cp_wdown.sh
 # Copy files from Windows "Downloads" to WSL ~/downloads with robust path resolution
 # Bash-specific due to use of: local -a, (()), mapfile, compgen
+
+# Guard: only load in bash (tools/external is sourced in both bash and zsh)
+[ -n "$BASH_VERSION" ] || return 0
 
 cp_wdown() {
     # ✅ getopts initialization: prevent OPTIND state from previous calls
