@@ -31,8 +31,8 @@ export NO_PROXY="$no_proxy"
 
 # Load environment-specific proxy configuration (if exists)
 # This allows overriding default settings for corporate/special environments
-# Try POSIX-compatible method first, then bash/zsh specific
-_proxy_script_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || _proxy_script_dir="$PWD"
+# Use -- to prevent "-bash" or similar values from being interpreted as options
+_proxy_script_dir="$(cd "$(dirname -- "$0")" 2>/dev/null && pwd)" || _proxy_script_dir="$PWD"
 if [ -f "$_proxy_script_dir/proxy.local.sh" ]; then
     . "$_proxy_script_dir/proxy.local.sh"
 fi

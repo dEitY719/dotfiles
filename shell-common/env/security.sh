@@ -27,8 +27,8 @@ fi
 # Environment-specific security settings (CA certificates, etc.)
 # ========================================
 
-# POSIX-compatible directory detection
-_security_dir="$(cd "$(dirname "$0" 2>/dev/null)" 2>/dev/null && pwd)" || _security_dir="$PWD"
+# POSIX-compatible directory detection (use -- to prevent "-bash" from being interpreted as option)
+_security_dir="$(cd "$(dirname -- "$0" 2>/dev/null)" 2>/dev/null && pwd)" || _security_dir="$PWD"
 if [ -f "$_security_dir/security.local.sh" ]; then
     . "$_security_dir/security.local.sh"
 fi

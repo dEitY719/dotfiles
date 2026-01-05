@@ -43,8 +43,8 @@ if $_UX_IS_BASH; then
 elif $_UX_IS_ZSH; then
     UX_LIB_DIR="${0:h}"
 else
-    # POSIX sh compatible way
-    UX_LIB_DIR="$(cd "$(dirname "$0")" && pwd)"
+    # POSIX sh compatible way (use -- to prevent "-bash" from being interpreted as option)
+    UX_LIB_DIR="$(cd "$(dirname -- "$0")" && pwd)"
 fi
 
 # Semantic colors (named by purpose, not appearance)

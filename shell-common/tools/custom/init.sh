@@ -15,8 +15,9 @@ fi
 
 # Detect DOTFILES_ROOT dynamically (bash-specific due to BASH_SOURCE)
 # Works regardless of where this script is called from
-_THIS_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
-_THIS_DIR="$(dirname "$_THIS_SCRIPT")"
+# Use -- to prevent "-bash" or similar values from being interpreted as options
+_THIS_SCRIPT="$(cd "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/$(basename -- "${BASH_SOURCE[0]}")"
+_THIS_DIR="$(dirname -- "$_THIS_SCRIPT")"
 
 # Navigate from shell-common/tools/custom back to dotfiles root
 # Path: /path/to/dotfiles/shell-common/tools/custom/init.sh
