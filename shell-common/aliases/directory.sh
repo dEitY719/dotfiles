@@ -7,6 +7,15 @@ alias cd_dot='cd ~/dotfiles'
 alias cd_down='cd ~/downloads'
 alias cd_work='cd ~/workspace'
 
+# Dotfiles navigation functions
+dot() {
+    cd ~/dotfiles
+}
+
+dotfiles() {
+    cd ~/dotfiles
+}
+
 # Windows directory paths (WSL)
 alias cd_wdocu='cd /mnt/c/Users/bwyoon/Documents'
 alias cd_wobsidian='cd /mnt/c/Users/bwyoon/Documents/.obsidian'

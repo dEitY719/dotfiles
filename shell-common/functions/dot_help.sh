@@ -45,7 +45,7 @@ dot_help() {
     ux_section "Useful Commands"
     ux_table_row "my-help"       "List all available help topics"
     ux_table_row "src"           "Reload shell configuration"
-    ux_table_row "cd ~dot"       "Navigate to dotfiles directory"
+    ux_table_row "dot"           "Navigate to dotfiles directory"
     ux_table_row "ux-help"       "View UX guidelines and semantic colors"
     echo ""
 
