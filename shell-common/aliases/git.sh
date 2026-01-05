@@ -17,7 +17,6 @@ alias gpl='git pull'                             # 현재 브랜치만 pull
 # Git log
 alias gl1='git log --oneline --graph --decorate' # 깔끔한 로그
 alias gl2='git log --graph --decorate --date=short --abbrev-commit --pretty=oneline' # 간단한 그래프 로그
-alias glum='git log --oneline -n 20 upstream/main' # upstream/main 최근 20개 커밋
 alias glref='git log ref/main --oneline'         # ref 원격 main 브랜치 한줄 로그
 
 # Git branch/checkout
