@@ -58,6 +58,7 @@
 - **[Bash Module](./bash/AGENTS.md)** — Bash-specific configuration and utilities
 - **[Zsh Module](./zsh/AGENTS.md)** — Zsh-specific configuration and applications
 - **[Shell Common](./shell-common/AGENTS.md)** — POSIX-compatible shared utilities (env, aliases, functions, tools, projects)
+- **[Claude Code](./claude/AGENTS.md)** — Claude Code configuration, settings, skills, and automation
 - **[UX Library](./shell-common/tools/ux_lib/AGENTS.md)** — Styling, logging, interactive components
 - **[Documentation](./docs/AGENTS.md)** — Project docs, AGENTS.md master prompt, SOLID reviews
 
