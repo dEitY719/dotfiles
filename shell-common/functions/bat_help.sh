@@ -1,6 +1,6 @@
 #!/bin/sh
-# shell-common/functions/bat.sh
-# bat helper functions and documentation
+# shell-common/functions/bat_help.sh
+# bat help function and documentation
 # Shared between bash and zsh
 
 # ═══════════════════════════════════════════════════════════════

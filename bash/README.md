@@ -146,7 +146,7 @@ These function files provide help systems and utilities shared between bash and 
 
 - **my_help.sh**: Main help system registry and display
 - **my_man.sh**: Custom manual page viewer
-- **bat.sh**: bat (cat alternative) integration
+- **bat_help.sh**: bat (cat alternative) help and documentation
 - **cc_help.sh**: Claude Code help
 - **claude_help.sh**: Claude AI CLI help
 - **cli_help.sh**: CLI tools help
