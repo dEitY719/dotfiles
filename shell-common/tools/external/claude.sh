@@ -226,6 +226,50 @@ claude_edit_settings() {
 }
 
 # ═══════════════════════════════════════════════════════════════
+# Claude Code Skills Directory Bind Mount
+# ═══════════════════════════════════════════════════════════════
+
+claude_mount_skills() {
+    local skills_source="$HOME/dotfiles/claude/skills"
+    local skills_target="$HOME/.claude/skills"
+
+    # Check if source directory exists
+    if [ ! -d "$skills_source" ]; then
+        return 0
+    fi
+
+    # Create target directory if not exists
+    if [ ! -d "$skills_target" ]; then
+        mkdir -p "$skills_target"
+    fi
+
+    # Check if already mounted using findmnt (faster and more reliable)
+    if command -v findmnt > /dev/null 2>&1; then
+        if findmnt -t none -o TARGET -n | grep -q "^${skills_target}$"; then
+            return 0
+        fi
+    else
+        # Fallback to mount command
+        if mount | grep -q "${skills_target}"; then
+            return 0
+        fi
+    fi
+
+    # Perform bind mount (will prompt for sudo password if needed)
+    sudo mount --bind "$skills_source" "$skills_target" 2>/dev/null
+
+    if [ $? -eq 0 ]; then
+        return 0
+    else
+        # Silent fail - don't spam errors on every shell startup
+        return 1
+    fi
+}
+
+# Auto-mount skills on shell startup
+claude_mount_skills
+
+# ═══════════════════════════════════════════════════════════════
 # Claude Code Workflow Helpers
 # ═══════════════════════════════════════════════════════════════
 
