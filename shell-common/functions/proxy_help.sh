@@ -63,5 +63,17 @@ proxy_help() {
     fi
 }
 
-# Alias for proxy-help format (using dash instead of underscore)
+# Wrapper function for check_proxy.sh diagnostic
+proxy_check() {
+    local check_proxy_script="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/custom/check_proxy.sh"
+    if [ -f "$check_proxy_script" ]; then
+        bash "$check_proxy_script" "$@"
+    else
+        ux_error "check_proxy.sh not found at $check_proxy_script" >&2
+        return 1
+    fi
+}
+
+# Aliases for proxy-help and check-proxy
 alias proxy-help='proxy_help'
+alias check-proxy='proxy_check'

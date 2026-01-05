@@ -13,6 +13,14 @@ if [ -n "${_CUSTOM_TOOLS_INITIALIZED:-}" ]; then
     return 0
 fi
 
+# Define minimal UX fallback BEFORE validation (in case UX library fails to load)
+# This prevents "command not found" errors in error paths
+if ! type ux_error >/dev/null 2>&1; then
+    ux_error() { echo "Error:" "$@" >&2; }
+    ux_info() { echo "Info:" "$@"; }
+    ux_success() { echo "Success:" "$@"; }
+fi
+
 # Detect DOTFILES_ROOT dynamically (bash-specific due to BASH_SOURCE)
 # Works regardless of where this script is called from
 # Use -- to prevent "-bash" or similar values from being interpreted as options
@@ -26,7 +34,6 @@ DOTFILES_ROOT="${_THIS_DIR%/shell-common/tools/custom}"
 
 # Validate DOTFILES_ROOT
 if [ ! -d "$DOTFILES_ROOT" ] || [ ! -d "$DOTFILES_ROOT/bash" ]; then
-    # UX library not yet loaded, use basic error output
     ux_error "Failed to detect DOTFILES_ROOT. Expected structure:" >&2
     echo "   $DOTFILES_ROOT/bash/" >&2
     echo "   $DOTFILES_ROOT/shell-common/" >&2
@@ -38,14 +45,10 @@ export DOTFILES_ROOT
 export DOTFILES_BASH_DIR="${DOTFILES_ROOT}/bash"
 export SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 
-# Load UX library
+# Load UX library (if not already loaded, replace fallback with real implementation)
 if [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
     . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
-else
-    # Fallback: define minimal UX functions if library unavailable
-    ux_error() { echo "Error:" "$@" >&2; }
-    ux_info() { echo "Info:" "$@"; }
-    ux_success() { echo "Success:" "$@"; }
+    # UX library loaded successfully (fallback already replaced)
 fi
 
 # Mark as initialized to prevent re-sourcing
