@@ -245,7 +245,7 @@ claude_mount_skills() {
 
     # Check if already mounted using findmnt (faster and more reliable)
     if command -v findmnt > /dev/null 2>&1; then
-        if findmnt -t none -o TARGET -n | grep -q "^${skills_target}$"; then
+        if findmnt "$skills_target" > /dev/null 2>&1; then
             return 0
         fi
     else
