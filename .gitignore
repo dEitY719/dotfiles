@@ -1,6 +1,7 @@
 .idea
 .venv
 *egg-info
+*.pyc
 
 .python-version
 uv.lock
@@ -10,5 +11,10 @@ uv.lock
 # Local machine-specific configurations
 *.local.sh
 shell-common/config/pg_services.list
+
+# Build artifacts (generated during setup in some environments)
+build/
+__pycache__/
+*.egg-info/
 
 .secrets/*.asc
