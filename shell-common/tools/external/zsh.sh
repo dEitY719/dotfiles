@@ -55,10 +55,8 @@ alias zsh-info='zsh --version && echo && uname -a' # Zsh system info
 
 # ═══════════════════════════════════════════════════════════════
 # Register Help & Export Functions (Bash-Specific)
+# Note: HELP_DESCRIPTIONS defaults are centrally defined in my_help.sh
 # ═══════════════════════════════════════════════════════════════
-
-# Register help function description
-HELP_DESCRIPTIONS["zsh-help"]="Zsh shell management commands"
 
 # Export functions for use in other shells
 # (POSIX functions are auto-loaded from shell-common/)

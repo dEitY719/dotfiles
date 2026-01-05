@@ -101,6 +101,8 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[mysql_help]="${HELP_DESCRIPTIONS[mysql_help]:-MySQL Service Management}"
     HELP_DESCRIPTIONS[zsh-help]="${HELP_DESCRIPTIONS[zsh-help]:-Zsh shell management commands}"
     HELP_DESCRIPTIONS[bat-help]="${HELP_DESCRIPTIONS[bat-help]:-bat - Cat replacement with syntax highlighting}"
+    HELP_DESCRIPTIONS[dot_help]="${HELP_DESCRIPTIONS[dot_help]:-Dotfiles project overview and setup guidance}"
+    HELP_DESCRIPTIONS[proxy_help]="${HELP_DESCRIPTIONS[proxy_help]:-Proxy configuration commands and diagnostics}"
     HELP_DESCRIPTIONS[fasd-help]="${HELP_DESCRIPTIONS[fasd-help]:-fasd - Fast access to directories and files}"
     HELP_DESCRIPTIONS[fd-help]="${HELP_DESCRIPTIONS[fd-help]:-fd - Fast file finder tool}"
     HELP_DESCRIPTIONS[fzf-help]="${HELP_DESCRIPTIONS[fzf-help]:-fzf (Fuzzy Finder) key bindings and usage}"

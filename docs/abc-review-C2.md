@@ -13,3 +13,10 @@
 ## Note
 
 Other refactors (POSIX shebangs, proxy_help extraction, README updates, apt/agents_init alias split) align with the previous review. The above gaps should be patched to restore interfaces and avoid regressions.
+
+---
+
+## Follow-up Review of `1c9fb78`
+
+- **Resolved** — `cp_wdown` is now auto-loaded (moved to tools/external), `check-proxy` alias restored, and `init.sh` fallback defined before use. Earlier regressions are fixed.
+- **New/Residual (Medium)** — `tools/external/cp_wdown.sh` is sourced for zsh as well as bash; it uses bash-only builtins (`mapfile`, `local -a`, arithmetic `(( ))`) without a bash guard. In zsh loading, this will error on source and can halt the loader. Add a guard at the top (`[ -n "$BASH_VERSION" ] || return 0`) or relocate to a bash-only loader path to preserve LSP/OCP expectations for shared external modules.
