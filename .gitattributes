@@ -1,1 +1,8 @@
+# Shell scripts always use LF (Unix line endings)
+# Prevents CRLF issues across different environments
+*.sh text eol=lf
+*.bash text eol=lf
+*.zsh text eol=lf
+
+# Encrypted files
 .env filter=git-crypt diff=git-crypt
