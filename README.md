@@ -41,6 +41,11 @@ exec bash  # or exec zsh
 ### For Initial Setup
 → See **[Setup Guide](docs/SETUP_GUIDE.md)** for detailed installation instructions
 
+### Detailed Documentation
+- **[shell-common/README.md](shell-common/README.md)** - Shared shell configuration, module loading, and best practices
+- **[bash/setup.sh](bash/setup.sh)** - Bash-specific setup and configuration
+- **[zsh/setup.sh](zsh/setup.sh)** - Zsh-specific setup and configuration
+
 ### Directory Structure
 
 ```
