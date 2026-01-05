@@ -11,5 +11,5 @@ alias sp='srcpack --ext .py --max-bytes 33000'
 # 하드웨어 정보 별칭
 alias hwinfo='get_hw_info'
 
-# AGENTS.md 생성 짧은 별칭
-alias ai='agents_init'
+# AGENTS.md 생성 짧은 별칭 (changed from 'ai' to avoid conflict with apt install)
+alias aa='agents_init'

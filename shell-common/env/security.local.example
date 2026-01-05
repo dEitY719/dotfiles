@@ -8,16 +8,16 @@
 #   3. security.local.sh는 자동으로 로드됨 (.gitignore에 의해 제외됨)
 
 
-# 🚨🚨🚨CA 인증서 경로 선택 (옵션 중 하나만 활성화)🚨🚨🚨
-# 옵션1: 회사 외부PC (VPN) - setup_crt.sh로 설치한 인증서
+# WARNING: Choose CA certificate path (enable only ONE option)
+# Option 1: Corporate external PC (VPN) - installed by setup_crt.sh
 CA_CERT="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
 
-# 옵션2: 회사 내부PC (직접 연결) - 시스템 CA 번들
+# Option 2: Corporate internal PC (direct connection) - system CA bundle
 #CA_CERT="/etc/ssl/certs/ca-certificates.crt"
 
 
-# CA 인증서 설정 (Node.js, Python)
-# 파일이 존재할 때만 설정하여 집 환경과 호환성 유지
+# CA certificate setup (Node.js, Python)
+# Only set if file exists to maintain compatibility with home environments
 if [ -f "$CA_CERT" ]; then
     export NODE_EXTRA_CA_CERTS="$CA_CERT"
     export REQUESTS_CA_BUNDLE="$CA_CERT"
@@ -25,8 +25,8 @@ fi
 
 
 # ========================================
-# 참고
+# Notes
 # ========================================
-# - 회사 외부PC: setup_crt.sh로 인증서 설치 후 옵션 1 사용
-# - 회사 내부PC: 옵션 2 사용 (시스템 CA 번들)
-# - 집 환경: security.local.sh를 생성하지 않음 (CA 설정 불필요)
+# - Corporate external PC: Use option 1 after installing certificate with setup_crt.sh
+# - Corporate internal PC: Use option 2 (system CA bundle)
+# - Home environment: Do not create security.local.sh (CA setup not needed)

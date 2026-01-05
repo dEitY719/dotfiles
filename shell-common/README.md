@@ -70,7 +70,7 @@ Files are loaded in the following order (see `bash/main.bash` or `zsh/main.zsh`)
 
 ### Shared Environment Variables
 
-All files in `env/` contain pure environment variable exports or simple POSIX shell commands.
+All files in `env/` contain environment variable definitions (POSIX-compatible). Help functions and diagnostics are separated into dedicated files:
 
 | File | Description |
 |------|-------------|
@@ -79,9 +79,11 @@ All files in `env/` contain pure environment variable exports or simple POSIX sh
 | `fcitx.sh` | Korean input (fcitx) configuration |
 | `locale.sh` | Locale and timezone settings (LANG, TZ) |
 | `path.sh` | PATH environment with deduplication |
-| `proxy.sh` | Network proxy configuration (http_proxy, https_proxy, no_proxy) |
-| `security.sh` | Security settings (SSH_AUTH_SOCK, GPG_TTY) |
+| `proxy.sh` | Network proxy defaults (http_proxy, https_proxy, no_proxy); help in `functions/proxy_help.sh` |
+| `security.sh` | Security settings (SSH_AUTH_SOCK, GPG_TTY) - POSIX-compatible |
 | `local.sh.example` | Template for local environment overrides |
+
+**Note:** Help functions for these modules are located in `functions/` (e.g., `proxy_help.sh` for proxy configuration assistance).
 
 **Environment Control Variables:**
 - `DOTFILES_FORCE_INIT`: Force loading even in non-interactive shells or restricted environments
@@ -90,7 +92,7 @@ All files in `env/` contain pure environment variable exports or simple POSIX sh
 
 ### Alias Modules (aliases/)
 
-All files in `aliases/` contain portable `alias` definitions and shell-independent helper functions.
+All files in `aliases/` contain portable `alias` definitions. Bash-specific utility functions are separated into dedicated files:
 
 | File | Description |
 |------|-------------|
@@ -102,6 +104,8 @@ All files in `aliases/` contain portable `alias` definitions and shell-independe
 | `kill.sh` | Process management aliases |
 | `mytool.sh` | Custom tool aliases |
 | `system.sh` | System administration and maintenance aliases |
+
+**Note:** Bash-specific functions like `cp_wdown` are in `tools/custom/` (e.g., `cp_wdown.sh`) to keep alias files POSIX-compatible.
 
 ### Function Modules (functions/)
 
@@ -149,12 +153,29 @@ fi
 
 ### External Tool Integration (tools/external/)
 
-Automatic integration scripts for external tools:
-- FZF, bat, fd, ripgrep
-- Python tools (pyenv, uv, poetry)
-- Node.js tools (nvm, npm)
-- Database tools (MySQL, PostgreSQL)
-- AI CLI tools (Claude, Gemini)
+Automatic integration scripts for external tools. Output formatting uses the UX library for consistency:
+- **Git integration** (`git.sh`) - Git utilities with UX-formatted messages
+- **FZF, bat, fd, ripgrep** - Tool integrations
+- **Python tools** (pyenv, uv, poetry)
+- **Node.js tools** (nvm, npm)
+- **Database tools** (MySQL, PostgreSQL)
+- **AI CLI tools** (Claude, Gemini)
+
+**Design:** These files use the UX library (`ux_error()`, `ux_success()`, etc.) instead of direct echo/emoji for consistent output formatting across all shells.
+
+### Custom Tools & Utilities (tools/custom/)
+
+Installation scripts and custom utilities specific to the environment:
+- `init.sh` - Centralized initialization for all custom tools (DOTFILES_ROOT detection, UX library loading)
+- `cp_wdown.sh` - Bash-specific utility for copying files from Windows Downloads to WSL
+- `check_proxy.sh` - Proxy diagnostics and troubleshooting
+- Installation and setup scripts
+
+**Design:** These files are bash-specific (when required) and use the UX library for consistent output. `init.sh` provides centralized path and library initialization to avoid redundant code in multiple files.
+
+### UX Library (tools/ux_lib/)
+
+Central library providing consistent styling and interactive features across bash and zsh (replaces raw echo/emoji with semantic functions).
 
 ### Project Utilities (projects/)
 
@@ -243,18 +264,27 @@ Project-specific utility functions:
 
 1. **Use descriptive file names**: `myapp.sh` not `app1.sh`
 2. **Choose the right location**:
-   - Shared code → `shell-common/` (use POSIX-compatible syntax)
-   - Bash-only code → `bash/` (can use bash-specific features)
-3. **Document your code**: Add comments explaining what each section does
-4. **Check dependencies**: Use conditional loading for optional tools:
+   - **Shared, POSIX code** → `shell-common/{env,aliases,functions}` (use `#!/bin/sh`, no bash-specific syntax)
+   - **Bash-specific utilities** → `tools/custom/` or `bash/` (use `#!/bin/bash`, can use bash features)
+   - **Shared bash functions** → `shell-common/functions/` (POSIX-compatible)
+3. **Respect SRP (Single Responsibility Principle)**:
+   - Environment files: export variables only (move help functions to `functions/`)
+   - Alias files: define aliases/simple commands only (move complex logic to dedicated functions)
+   - Avoid mixing concerns (e.g., don't put installation scripts in alias files)
+4. **Use UX Library for output**:
+   - Use `ux_error()`, `ux_success()`, `ux_warning()`, `ux_info()` instead of raw `echo` and emoji
+   - Use `ux_section()`, `ux_header()` for structured output
+   - Use `ux_usage()` for help text
+5. **Document your code**: Add comments explaining what each section does
+6. **Check dependencies**: Use conditional loading for optional tools:
    ```bash
    if command -v myapp >/dev/null 2>&1; then
        alias myapp-quick='myapp --fast'
    fi
    ```
-5. **Avoid side effects**: Don't automatically start services or modify files
-6. **Keep it modular**: One app or purpose per file
-7. **POSIX compatibility for shared files**: Use `#!/bin/sh` and avoid bash-specific syntax in `shell-common/`
+7. **Avoid side effects**: Don't automatically start services or modify files
+8. **Keep it modular**: One app or purpose per file
+9. **POSIX compatibility for shared files**: Use `#!/bin/sh`, `[ ]` not `[[ ]]`, avoid bash-specific syntax in `shell-common/`
 
 ## Configuration File Templates
 

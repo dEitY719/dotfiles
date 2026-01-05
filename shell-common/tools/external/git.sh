@@ -126,20 +126,20 @@ gupa() {
 # Delete remote repository
 gupdel() {
     if [ $# -eq 0 ]; then
-        echo "Usage: gupdel <remote-name>"
-        echo "Example: gupdel upstream"
+        ux_usage "gupdel" "<remote-name>" "Delete a git remote"
+        ux_bullet "gupdel upstream"
         echo ""
-        echo "Registered remotes:"
+        ux_section "Registered remotes"
         git remote -v
         return 1
     fi
 
     local remote="$1"
     if git remote remove "$remote" 2>/dev/null; then
-        echo "✅ Remote deleted: $remote"
+        ux_success "Remote deleted: $remote"
         git remote -v
     else
-        echo "❌ Remote not found: $remote"
+        ux_error "Remote not found: $remote"
         return 1
     fi
 }
@@ -147,18 +147,18 @@ gupdel() {
 # Cherry-pick function
 gcp() {
     if [ $# -eq 0 ]; then
-        echo "Usage: gcp <commit-id> [commit-id2] [commit-id3] ..."
-        echo "Example: gcp abc1234"
-        echo "Example: gcp abc1234 def5678 ghi9012"
+        ux_usage "gcp" "<commit-id> [commit-id2] ..." "Cherry-pick one or more commits"
+        ux_bullet "gcp abc1234"
+        ux_bullet "gcp abc1234 def5678 ghi9012"
         return 1
     fi
 
     local failed=0
     for commit in "$@"; do
         if git cherry-pick "$commit"; then
-            echo "✅ Cherry-pick succeeded: $commit"
+            ux_success "Cherry-pick succeeded: $commit"
         else
-            echo "❌ Cherry-pick failed: $commit"
+            ux_error "Cherry-pick failed: $commit"
             failed=1
             break
         fi
@@ -172,18 +172,18 @@ gcp() {
 # Example: gcp_theirs abc1234
 gcp_theirs() {
     if [ $# -eq 0 ]; then
-        echo "Usage: gcp_theirs <commit-id> [commit-id2] ..."
-        echo "Example: gcp_theirs abc1234"
-        echo "⚠️ Conflicts will use incoming (theirs) changes"
+        ux_usage "gcp_theirs" "<commit-id> [commit-id2] ..." "Cherry-pick with 'theirs' conflict strategy"
+        ux_bullet "gcp_theirs abc1234"
+        ux_warning "Conflicts will use incoming (theirs) changes"
         return 1
     fi
 
     local failed=0
     for commit in "$@"; do
         if git cherry-pick -X theirs "$commit"; then
-            echo "✅ Cherry-pick -X theirs succeeded: $commit"
+            ux_success "Cherry-pick -X theirs succeeded: $commit"
         else
-            echo "❌ Cherry-pick -X theirs failed: $commit"
+            ux_error "Cherry-pick -X theirs failed: $commit"
             failed=1
             break
         fi
@@ -197,18 +197,18 @@ gcp_theirs() {
 # Example: gcp_ours abc1234
 gcp_ours() {
     if [ $# -eq 0 ]; then
-        echo "Usage: gcp_ours <commit-id> [commit-id2] ..."
-        echo "Example: gcp_ours abc1234"
-        echo "⚠️ Conflicts will use current branch (ours) changes"
+        ux_usage "gcp_ours" "<commit-id> [commit-id2] ..." "Cherry-pick with 'ours' conflict strategy"
+        ux_bullet "gcp_ours abc1234"
+        ux_warning "Conflicts will use current branch (ours) changes"
         return 1
     fi
 
     local failed=0
     for commit in "$@"; do
         if git cherry-pick -X ours "$commit"; then
-            echo "✅ Cherry-pick -X ours succeeded: $commit"
+            ux_success "Cherry-pick -X ours succeeded: $commit"
         else
-            echo "❌ Cherry-pick -X ours failed: $commit"
+            ux_error "Cherry-pick -X ours failed: $commit"
             failed=1
             break
         fi
@@ -226,10 +226,10 @@ gcp_author() {
     local author="${2:-dEitY719}"
 
     if [ -z "$commit_range" ]; then
-        echo "Usage: gcp_author <commit-range> [author-name]"
-        echo "Example: gcp_author 751e304..7ffcbd4"
-        echo "Example: gcp_author 751e304..7ffcbd4 dEitY719"
-        echo "⚠️ Format: <start>..<end> or <start>^..<end>"
+        ux_usage "gcp_author" "<commit-range> [author-name]" "Cherry-pick commits by specific author"
+        ux_bullet "gcp_author 751e304..7ffcbd4"
+        ux_bullet "gcp_author 751e304..7ffcbd4 dEitY719"
+        ux_warning "Format: <start>..<end> or <start>^..<end>"
         return 1
     fi
 
@@ -237,11 +237,11 @@ gcp_author() {
     commits=$(git log --author="$author" --no-merges --reverse --pretty=format:"%h" "$commit_range" 2>/dev/null)
 
     if [ -z "$commits" ]; then
-        echo "❌ No commits found by '$author' in range $commit_range"
+        ux_error "No commits found by '$author' in range $commit_range"
         return 1
     fi
 
-    echo "📝 Cherry-picking commits by '$author' in range $commit_range:"
+    ux_info "Cherry-picking commits by '$author' in range $commit_range:"
     echo "$commits"
     echo ""
     echo "$commits" | xargs git cherry-pick
@@ -265,7 +265,7 @@ gset() {
 
 # Git LFS install function (Ubuntu only)
 git_lfs_install() {
-    echo "[Starting Git LFS installation]"
+    ux_info "Starting Git LFS installation"
 
     # Update apt
     sudo apt-get update
@@ -278,27 +278,27 @@ git_lfs_install() {
 
     # Verify installation
     if command -v git-lfs &>/dev/null; then
-        echo "[Complete] Git LFS installed successfully ✅"
+        ux_success "Git LFS installed successfully"
         git lfs version
     else
-        echo "[Failed] Git LFS installation did not complete correctly ❌"
+        ux_error "Git LFS installation did not complete correctly"
     fi
 }
 
 # Git LFS track function
 git_lfs_track() {
     if [ $# -eq 0 ]; then
-        echo "Usage: git_lfs_track <pattern...>"
-        echo "Example: git_lfs_track \"*.zip\" \"*.sql\" \"*.tar.gz\""
+        ux_usage "git_lfs_track" "<pattern...>" "Track file patterns with Git LFS"
+        ux_bullet "git_lfs_track \"*.zip\" \"*.sql\" \"*.tar.gz\""
         return 1
     fi
 
     for pattern in "$@"; do
         git lfs track "$pattern"
-        echo "[Added] $pattern → .gitattributes"
+        ux_success "Added $pattern to .gitattributes"
     done
 
-    echo "⚠️ Remember to commit the .gitattributes file!"
+    ux_warning "Remember to commit the .gitattributes file!"
 }
 
 alias glfs='git_lfs_track'
