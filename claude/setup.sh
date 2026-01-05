@@ -91,6 +91,45 @@ create_symlink() {
     ln -s "$target" "$link_name" || log_error_and_exit "심볼릭 링크 생성 실패: $link_name -> $target"
 }
 
+setup_skills_mount() {
+    local sudoers_file="/etc/sudoers.d/claude-skills-mount"
+
+    log_info "Skills 디렉토리 bind mount 설정"
+
+    # Check if sudoers file already exists
+    if [ -f "$sudoers_file" ]; then
+        log_dim "✓ sudoers 설정이 이미 존재합니다"
+        return 0
+    fi
+
+    # Create sudoers configuration
+    log_info "sudoers 파일 생성: $sudoers_file"
+    cat << EOF | sudo tee "$sudoers_file" > /dev/null
+# Allow passwordless bind mount for Claude Code skills directory
+# Created by dotfiles/claude/setup.sh
+${USER} ALL=(ALL) NOPASSWD: /bin/mount --bind ${CLAUDE_SKILLS_SOURCE} ${HOME_SKILLS}
+${USER} ALL=(ALL) NOPASSWD: /usr/bin/mount --bind ${CLAUDE_SKILLS_SOURCE} ${HOME_SKILLS}
+${USER} ALL=(ALL) NOPASSWD: /bin/umount ${HOME_SKILLS}
+${USER} ALL=(ALL) NOPASSWD: /usr/bin/umount ${HOME_SKILLS}
+EOF
+
+    if [ $? -ne 0 ]; then
+        log_error "sudoers 파일 생성 실패"
+        return 1
+    fi
+
+    # Set proper permissions
+    log_info "sudoers 파일 권한 설정"
+    sudo chmod 440 "$sudoers_file"
+
+    if [ $? -eq 0 ]; then
+        log_dim "✓ sudoers 설정 완료"
+    else
+        log_error "sudoers 파일 권한 설정 실패"
+        return 1
+    fi
+}
+
 # --- Main Script Logic ---
 
 log_debug "\n--- Claude Code dotfiles setup 시작 ---"
@@ -122,8 +161,14 @@ create_symlink "$CLAUDE_SETTINGS_SOURCE" "$HOME_SETTINGS"
 # statusline-command.sh 심볼릭 링크 생성
 create_symlink "$CLAUDE_STATUSLINE_SOURCE" "$HOME_STATUSLINE"
 
-# skills 디렉토리 심볼릭 링크 생성
-create_symlink "$CLAUDE_SKILLS_SOURCE" "$HOME_SKILLS"
+# skills 디렉토리 생성 (bind mount 사용)
+if [ ! -d "$HOME_SKILLS" ]; then
+    log_info "~/.claude/skills 디렉토리 생성"
+    mkdir -p "$HOME_SKILLS" || log_error_and_exit "~/.claude/skills 디렉토리 생성 실패"
+fi
+
+# skills bind mount를 위한 sudoers 설정
+setup_skills_mount
 
 # --- Verify Links ---
 
@@ -141,10 +186,10 @@ else
     log_error_and_exit "statusline-command.sh 심볼릭 링크 생성 실패"
 fi
 
-if [ -L "$HOME_SKILLS" ]; then
-    log_dim "✓ skills 디렉토리 심볼릭 링크 확인됨"
+if [ -d "$HOME_SKILLS" ]; then
+    log_dim "✓ skills 디렉토리 확인됨"
 else
-    log_error_and_exit "skills 디렉토리 심볼릭 링크 생성 실패"
+    log_error_and_exit "skills 디렉토리 생성 실패"
 fi
 
 # --- Completion Messages ---
@@ -153,13 +198,15 @@ log_debug "--- Claude Code dotfiles setup 완료 ---"
 echo ""
 
 ux_success "Claude Code 설정이 완료되었습니다!"
-ux_info "다음 파일/디렉토리가 symlink로 관리됩니다:"
-ux_bullet "~/.claude/settings.json → ~/dotfiles/claude/settings.json"
-ux_bullet "~/.claude/statusline-command.sh → ~/dotfiles/claude/statusline-command.sh"
-ux_bullet "~/.claude/skills → ~/dotfiles/claude/skills"
+ux_info "다음 설정이 적용되었습니다:"
+ux_bullet "~/.claude/settings.json → ~/dotfiles/claude/settings.json (symlink)"
+ux_bullet "~/.claude/statusline-command.sh → ~/dotfiles/claude/statusline-command.sh (symlink)"
+ux_bullet "~/.claude/skills ← ~/dotfiles/claude/skills (bind mount)"
+ux_bullet "/etc/sudoers.d/claude-skills-mount (passwordless mount)"
 echo ""
 
 ux_section "다음 단계"
+ux_bullet "새 쉘을 열면 skills가 자동으로 bind mount됩니다"
 ux_bullet "Claude Code 재시작하여 변경 사항 적용"
 ux_bullet "필요시 설정 파일 편집: ${UX_BOLD}vim ~/dotfiles/claude/settings.json${UX_RESET}"
 echo ""
