@@ -65,7 +65,7 @@ def write_script(content: str) -> Path:
     return Path(tf.name)
 
 
-def run_bash_script(script_path: Path, timeout: int) -> subprocess.CompletedProcess:
+def run_bash_script(script_path: Path, timeout: int) -> subprocess.CompletedProcess[str]:
     # 비대화 프롬프트/대기 방지 환경
     env = os.environ.copy()
     env.update(
@@ -89,14 +89,14 @@ def run_bash_script(script_path: Path, timeout: int) -> subprocess.CompletedProc
     )
 
 
-def tail_lines(path: Path, n: int = 30):
+def tail_lines(path: Path, n: int = 30) -> list[str]:
     try:
         return path.read_text(errors="replace").splitlines()[-n:]
     except Exception:
         return []
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Check .bash files in clean shells with tracing.", formatter_class=argparse.RawTextHelpFormatter
     )

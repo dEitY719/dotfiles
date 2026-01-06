@@ -4,14 +4,16 @@
 import subprocess
 import sys
 import time
+from typing import IO
 
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 
 console = Console()
+console_stderr = Console(stderr=True)
 
 
-def run_with_progress(command: str, description: str, total_steps: int = 100):
+def run_with_progress(command: str, description: str, total_steps: int = 100) -> int:
     """Run a command with a progress bar"""
     with Progress(
         SpinnerColumn(),
@@ -25,8 +27,14 @@ def run_with_progress(command: str, description: str, total_steps: int = 100):
 
         process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-        stdout_lines = []
-        stderr_lines = []
+        if process.stdout is None or process.stderr is None:
+            raise RuntimeError("Progress runner requires stdout/stderr pipes.")
+
+        stdout: IO[str] = process.stdout
+        stderr: IO[str] = process.stderr
+
+        stdout_lines: list[str] = []
+        stderr_lines: list[str] = []
 
         # Read stdout/stderr line by line to keep track of progress and capture output
         # This is a simplified progress; a more advanced one would parse progress from command output
@@ -35,14 +43,14 @@ def run_with_progress(command: str, description: str, total_steps: int = 100):
         while process.poll() is None:
             # Try to read output without blocking forever
             try:
-                line = process.stdout.readline()
+                line = stdout.readline()
                 if line:
                     stdout_lines.append(line)
             except Exception:
                 pass
 
             try:
-                err_line = process.stderr.readline()
+                err_line = stderr.readline()
                 if err_line:
                     stderr_lines.append(err_line)
             except Exception:
@@ -53,9 +61,9 @@ def run_with_progress(command: str, description: str, total_steps: int = 100):
             time.sleep(0.1)
 
         # Ensure all remaining output is read
-        for line in process.stdout.readlines():
+        for line in stdout.readlines():
             stdout_lines.append(line)
-        for line in process.stderr.readlines():
+        for line in stderr.readlines():
             stderr_lines.append(line)
 
         progress.update(task, completed=total_steps)  # Mark as complete
@@ -71,7 +79,7 @@ def run_with_progress(command: str, description: str, total_steps: int = 100):
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        console.print("[red]Usage: ux_progress.py <description> <command> [total_steps][/red]", file=sys.stderr)
+        console_stderr.print("[red]Usage: ux_progress.py <description> <command> [total_steps][/red]")
         sys.exit(1)
 
     description = sys.argv[1]
@@ -82,5 +90,5 @@ if __name__ == "__main__":
         exit_code = run_with_progress(command, description, total_steps)
         sys.exit(exit_code)
     except Exception as e:
-        console.print(f"[red]An unexpected error occurred: {e}[/red]", file=sys.stderr)
+        console_stderr.print(f"[red]An unexpected error occurred: {e}[/red]")
         sys.exit(1)

@@ -8,6 +8,7 @@ import os
 import re
 from collections import defaultdict
 from pathlib import Path
+from typing import TypedDict
 
 
 # ANSI color codes
@@ -40,7 +41,17 @@ BASH_FEATURES = {
 }
 
 
-def get_shebang(filepath):
+class AnalysisEntry(TypedDict, total=False):
+    path: str
+    shebang: str
+    features: list[str]
+    is_exec: bool
+    priority: bool
+    recommended: str
+    reason: str
+
+
+def get_shebang(filepath: Path | str) -> str | None:
     """Extract shebang from file"""
     try:
         with open(filepath, encoding="utf-8", errors="ignore") as f:
@@ -52,7 +63,7 @@ def get_shebang(filepath):
     return None
 
 
-def detect_bash_features(filepath):
+def detect_bash_features(filepath: Path | str) -> list[str]:
     """Detect bash-specific features in file"""
     try:
         with open(filepath, encoding="utf-8", errors="ignore") as f:
@@ -67,14 +78,14 @@ def detect_bash_features(filepath):
         return []
 
 
-def is_executable(filepath):
+def is_executable(filepath: Path | str) -> bool:
     """Check if file is executable"""
     return os.access(filepath, os.X_OK)
 
 
-def analyze_files(root_dir):
+def analyze_files(root_dir: Path | str) -> tuple[dict[str, list[AnalysisEntry]], defaultdict[str, int]]:
     """Analyze all .sh and .bash files"""
-    results = {
+    results: dict[str, list[AnalysisEntry]] = {
         "bash_required": [],
         "posix_ok": [],
         "source_only": [],
@@ -83,7 +94,7 @@ def analyze_files(root_dir):
         "correct": [],
     }
 
-    stats = defaultdict(int)
+    stats: defaultdict[str, int] = defaultdict(int)
 
     # Find all .sh and .bash files
     for pattern in ["**/*.sh", "**/*.bash"]:
@@ -97,7 +108,7 @@ def analyze_files(root_dir):
             features = detect_bash_features(filepath)
             is_exec = is_executable(filepath)
 
-            entry = {
+            entry: AnalysisEntry = {
                 "path": str(rel_path),
                 "shebang": shebang or "NONE",
                 "features": features,
