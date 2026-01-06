@@ -7,6 +7,11 @@ if ! declare -f ux_header >/dev/null 2>&1; then
     source "${BASH_SOURCE[0]%/*}/../tools/ux_lib/ux_lib.sh" 2>/dev/null || true
 fi
 
+# Load mount management functions
+if ! declare -f show_mnt >/dev/null 2>&1; then
+    source "${BASH_SOURCE[0]%/*}/../tools/custom/mount.sh" 2>/dev/null || true
+fi
+
 dot_help() {
     ux_header "Dotfiles Project Information"
 
@@ -23,15 +28,12 @@ dot_help() {
     ux_bullet "Diagnostic: shell-common/tools/custom/check_ux_consistency.sh"
     echo ""
 
-    ux_section "Claude Skills Mount Status"
-    ux_info "Skills bind mount automatically configured during setup.sh"
+    ux_section "Claude Mount Status"
+    ux_info "Claude environment directories automatically configured"
     echo ""
 
-    # Show mount status if available
-    if command -v findmnt >/dev/null 2>&1; then
-        ux_bullet "Current mount location:"
-        findmnt ~/.claude/skills 2>/dev/null | sed 's/^/  /'
-    fi
+    # Show all mount status using dedicated function
+    show_mnt 2>/dev/null
     echo ""
 
     ux_section "Key Features"

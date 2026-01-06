@@ -37,6 +37,13 @@
 #    which claude && claude --version
 
 # ═══════════════════════════════════════════════════════════════
+# Load mount management functions
+# ═══════════════════════════════════════════════════════════════
+
+if ! declare -f _is_mounted >/dev/null 2>&1; then
+    source "${BASH_SOURCE[0]%/*}/mount.sh" 2>/dev/null || true
+fi
+
 # Dependency Check: Ensure jq is installed
 # ═══════════════════════════════════════════════════════════════
 
@@ -243,15 +250,16 @@ claude_mount_skills() {
         mkdir -p "$skills_target"
     fi
 
-    # Check if already mounted using findmnt (faster and more reliable)
-    if command -v findmnt > /dev/null 2>&1; then
-        if findmnt "$skills_target" > /dev/null 2>&1; then
-            return 0
-        fi
+    # Check if already mounted (using unified _is_mounted function if available)
+    if declare -f _is_mounted >/dev/null 2>&1; then
+        _is_mounted "$skills_target" && return 0
     else
-        # Fallback to mount command
-        if mount | grep -q "${skills_target}"; then
-            return 0
+        # Fallback: Check if already mounted using findmnt
+        if command -v findmnt > /dev/null 2>&1; then
+            findmnt "$skills_target" > /dev/null 2>&1 && return 0
+        else
+            # Final fallback to mount command
+            mount | grep -q "${skills_target}" && return 0
         fi
     fi
 

@@ -42,8 +42,8 @@ Located at `shell-common/tools/external/claude.sh`:
 
 ```bash
 claude_mount_skills() {
-    # Check if already mounted
-    if findmnt -t none -o TARGET -n | grep -q "^${skills_target}$"; then
+    # Check if already mounted (using unified _is_mounted function)
+    if _is_mounted "$skills_target"; then
         return 0
     fi
 
@@ -52,7 +52,7 @@ claude_mount_skills() {
 }
 ```
 
-Called automatically on shell startup.
+Called automatically on shell startup. Uses `_is_mounted()` from `mount.sh` for consistent mount checking across the system.
 
 ## Skills Directory Structure
 
@@ -82,7 +82,8 @@ ls -la ~/.claude/settings.json
 ls -la ~/.claude/statusline-command.sh
 
 # 2. Verify bind mount
-findmnt ~/.claude/skills
+show_mnt                    # Show all Claude mounts
+show_mnt ~/.claude/skills   # Show specific mount
 
 # 3. Verify skills loaded
 claude  # Start Claude Code
@@ -145,11 +146,15 @@ vim ~/dotfiles/claude/settings.json
 vim ~/dotfiles/claude/statusline-command.sh
 
 # Verify mount
-findmnt ~/.claude/skills
+show_mnt                    # Show all Claude mounts
+show_mnt ~/.claude/skills   # Show specific mount
+
+# Add new mount (e.g., agents directory)
+addmnt ~/dotfiles/claude/agents ~/.claude/agents
 
 # Unmount (if needed)
 sudo umount ~/.claude/skills
 
 # Re-mount manually
-sudo mount --bind ~/dotfiles/claude/skills ~/.claude/skills
+addmnt ~/dotfiles/claude/skills ~/.claude/skills
 ```
