@@ -26,6 +26,7 @@ dtests -v
 Central pytest configuration providing the `shell_runner` fixture for executing bash/zsh commands in isolated environments.
 
 **Key Features:**
+
 - **Isolated environment**: Each test gets a temporary HOME and ZDOTDIR to prevent config interference
 - **Shell agnostic**: Single fixture supports both bash and zsh testing
 - **Result capture**: Returns `ShellRunnerResult` with exit_code, stdout, stderr
@@ -33,6 +34,7 @@ Central pytest configuration providing the `shell_runner` fixture for executing 
 - **Force initialization**: Uses DOTFILES_FORCE_INIT=1 for non-interactive shells
 
 **Fixture Usage:**
+
 ```python
 def test_example(shell_runner):
     result = shell_runner("bash", "echo $SHELL_COMMON")
@@ -45,16 +47,19 @@ def test_example(shell_runner):
 Tests 34 auto-sourced help topics for callable status and output validity.
 
 **Excluded Help Topics:**
+
 - `mount-help`: Requires /etc/mtab (filesystem-specific)
 - `addmnt-help`: Requires /etc/mtab (filesystem-specific)
 
 **Test Coverage:**
+
 - Function/alias existence for each help topic
 - Function callability in bash and zsh (68 parametrized tests)
 - Output validation (non-empty, contains expected sections)
 - Error handling (undefined topics report errors)
 
 **Example:**
+
 ```bash
 # Topics tested: aliasimp, ansiexpl, ansitest, bash, buildhelp, ...
 declare -f mount_help > /dev/null && echo ok  # Validates function exists
@@ -65,12 +70,14 @@ declare -f mount_help > /dev/null && echo ok  # Validates function exists
 Tests 39 custom tool implementations in `shell-common/tools/custom/`.
 
 **Test Coverage:**
+
 - File existence and +x executable permission
 - Function callable in bash and zsh
 - Integration with help system
 - Environment variable setup (DOTFILES_ROOT, SHELL_COMMON)
 
 **Example Tool Files:**
+
 - devx.sh: Project development commands
 - init.sh: Centralized initialization
 - repo_stats.sh: Repository statistics
@@ -82,31 +89,37 @@ Tests 39 custom tool implementations in `shell-common/tools/custom/`.
 
 **Test Categories:**
 
-1. **Initialization Tests (4)**
+1. **Initialization Tests (4):**
+
    - Dotfiles initialization succeeds in both shells
    - Configuration files are sourced in both shells
 
-2. **Function Availability Tests (4)**
+2. **Function Availability Tests (4):**
+
    - `my_help` function available
    - `mytool_help` function available
    - Aliases registered correctly
 
-3. **Environment Variables Tests (3)**
+3. **Environment Variables Tests (3):**
+
    - SHELL_COMMON, DOTFILES_ROOT, SOURCED_FILES_COUNT set correctly
    - Values non-empty and valid
 
-4. **Shell-Specific Features Tests (4)**
+4. **Shell-Specific Features Tests (4):**
+
    - Bash handles [[ ]] syntax
    - Zsh handles [[ ]] syntax
    - Both handle POSIX [ ] syntax
 
-5. **Help System Consistency Tests (4)**
+5. **Help System Consistency Tests (4):**
+
    - HELP_DESCRIPTIONS array exists
    - my_help function produces output
    - mytool_help function produces output
    - Both shells produce similar help output
 
-6. **Error Handling Tests (2)**
+6. **Error Handling Tests (2):**
+
    - Undefined functions produce errors
    - Invalid syntax produces errors
 
@@ -123,6 +136,7 @@ Prevents side effects during test execution:
 ### DOTFILES_FORCE_INIT=1
 
 Forces full initialization in non-interactive shells:
+
 - Bypasses DOTFILES_SUPPRESS_MESSAGE checks
 - Enables function/alias loading in subprocesses
 - Required for pytest subprocess testing
@@ -134,31 +148,37 @@ Auto-detected by conftest.py based on current working directory. Available in al
 ## Running Tests
 
 ### All Tests
+
 ```bash
 ./scripts/test
 ```
 
 ### Verbose Output
+
 ```bash
 ./scripts/test -v
 ```
 
 ### Specific Test File
+
 ```bash
 pytest tests/test_help_topics.py
 ```
 
 ### Specific Test Class
+
 ```bash
 pytest tests/test_help_topics.py::TestHelpTopics
 ```
 
 ### Specific Test
+
 ```bash
 pytest tests/test_compatibility.py::TestDotfilesInitialization::test_bash_initialization
 ```
 
 ### With Coverage
+
 ```bash
 python3 -m pytest tests/ --cov=. --cov-report=html
 ```
