@@ -236,8 +236,9 @@ unset __NULLGLOB_WAS_ON
 # ------------------------------------------------------------------
 # --- Module loading complete ---
 # Display initialization summary (shared function from shell-common)
-# Only show in interactive shells to avoid interfering with prompts (e.g., PowerLevel10k instant prompt)
-if [[ $- == *i* ]] && type dotfiles_init_summary &>/dev/null; then
+# Only show in truly interactive shells (with proper TTY) to avoid interfering with prompts
+# (e.g., PowerLevel10k instant prompt)
+if [[ $- == *i* && -t 1 ]] && type dotfiles_init_summary &>/dev/null; then
     dotfiles_init_summary "$SOURCED_FILES_COUNT"
 fi
 

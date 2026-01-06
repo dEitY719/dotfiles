@@ -226,7 +226,8 @@ export ZSH_DOTFILES
 # ═══════════════════════════════════════════════════════════════
 
 # Display initialization summary (shared function from shell-common)
-# Only show in interactive shells to avoid interfering with prompts (e.g., PowerLevel10k instant prompt)
-if [[ -o interactive ]] && type dotfiles_init_summary >/dev/null 2>&1; then
+# Only show in truly interactive shells (with TTY) to avoid interfering
+# with PowerLevel10k instant prompt in nested or piped contexts
+if [[ -o interactive && -t 2 ]] && type dotfiles_init_summary >/dev/null 2>&1; then
     dotfiles_init_summary "$SOURCED_FILES_COUNT"
 fi
