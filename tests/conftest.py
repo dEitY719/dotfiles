@@ -20,6 +20,23 @@ BASH_DIR = REPO_ROOT / "bash"
 ZSH_DIR = REPO_ROOT / "zsh"
 
 
+# pytest-xdist support: provide worker_id fixture for all test modes
+@pytest.fixture
+def worker_id(request):
+    """Get pytest-xdist worker ID.
+
+    Returns:
+        - "master" when running sequentially (no xdist)
+        - "gw0", "gw1", etc. when running with pytest-xdist
+    """
+    if hasattr(request.config, "workerinput"):
+        # Running with pytest-xdist
+        return request.config.workerinput["workerid"]
+    else:
+        # Running without pytest-xdist
+        return "master"
+
+
 class ShellRunnerResult:
     """Result from executing shell command."""
 
@@ -95,9 +112,14 @@ def run_command(
 
 
 @pytest.fixture
-def temp_home():
-    """Create and cleanup temporary HOME directory."""
-    with tempfile.TemporaryDirectory(prefix="dotfiles_test_") as tmpdir:
+def temp_home(worker_id):
+    """Create and cleanup temporary HOME directory (xdist-aware).
+
+    Each pytest-xdist worker gets a unique temporary directory
+    to avoid conflicts during parallel execution.
+    """
+    # worker_id is "master" for non-parallel or "gw0", "gw1", etc. for parallel
+    with tempfile.TemporaryDirectory(prefix=f"dotfiles_test_{worker_id}_") as tmpdir:
         yield tmpdir
 
 

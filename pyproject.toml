@@ -55,9 +55,9 @@ packages = []
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
-addopts = "-v --strict-markers -n auto --dist loadscope"
+addopts = "-v --strict-markers -n auto --dist load"
 # -n auto: parallel execution using all available CPU cores
-# --dist loadscope: distribute tests by scope (class/module)
+# --dist load: distribute tests evenly across workers (better for heterogeneous tests)
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "bash: marks tests that run in bash shell",
