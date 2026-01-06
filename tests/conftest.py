@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-
 # Repository root detection
 REPO_ROOT = Path(__file__).parent.parent
 SHELL_COMMON = REPO_ROOT / "shell-common"

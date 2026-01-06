@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-
 # Repository paths
 REPO_ROOT = Path(__file__).parent.parent
 SHELL_COMMON = REPO_ROOT / "shell-common"
@@ -79,12 +78,8 @@ class TestMytoolHelpFunction:
     def test_mytool_help_produces_output(self, shell_runner, shell):
         """Test that mytool_help function produces non-empty output."""
         result = shell_runner(shell, "mytool_help")
-        assert (
-            result.exit_code == 0
-        ), f"{shell}: mytool_help failed with exit code {result.exit_code}"
-        assert (
-            len(result.stdout.strip()) > 0
-        ), f"{shell}: mytool_help produced no output"
+        assert result.exit_code == 0, f"{shell}: mytool_help failed with exit code {result.exit_code}"
+        assert len(result.stdout.strip()) > 0, f"{shell}: mytool_help produced no output"
 
 
 class TestMytoolHelpLists:
@@ -109,9 +104,7 @@ class TestMytoolHelpLists:
         ]
 
         for tool in key_tools:
-            assert tool.lower() in output, (
-                f"{shell}: {tool} not found in mytool-help output"
-            )
+            assert tool.lower() in output, f"{shell}: {tool} not found in mytool-help output"
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_mytool_help_aliases(self, shell_runner, shell):
@@ -146,9 +139,9 @@ class TestMytoolFilesExist:
             tool: Tool command name
         """
         tool_path = TOOLS_CUSTOM / f"{tool}.sh"
-        assert os.access(
-            tool_path, os.X_OK
-        ), f"Tool not executable: {tool_path} (mode: {oct(tool_path.stat().st_mode)})"
+        assert os.access(tool_path, os.X_OK), (
+            f"Tool not executable: {tool_path} (mode: {oct(tool_path.stat().st_mode)})"
+        )
 
 
 class TestMytoolFunctionality:
@@ -194,9 +187,7 @@ class TestMytoolIntegration:
         # Either mytool is listed, or we at least have the help output
         mytool_listed = "mytool" in result.stdout.lower()
         has_help_output = len(result.stdout.strip()) > 100  # More than just header
-        assert mytool_listed or has_help_output, (
-            f"{shell}: No meaningful output from my_help or mytool not listed"
-        )
+        assert mytool_listed or has_help_output, f"{shell}: No meaningful output from my_help or mytool not listed"
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_mytool_invocation(self, shell_runner, shell):
@@ -207,6 +198,4 @@ class TestMytoolIntegration:
         result = shell_runner(shell, "my_help mytool")
         assert result.exit_code == 0, f"{shell}: my_help mytool failed"
         # Should show tool list
-        assert (
-            len(result.stdout.strip()) > 0
-        ), f"{shell}: my_help mytool produced no output"
+        assert len(result.stdout.strip()) > 0, f"{shell}: my_help mytool produced no output"

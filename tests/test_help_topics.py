@@ -7,7 +7,6 @@ without errors in both bash and zsh environments.
 
 import pytest
 
-
 # Auto-sourced help topics (34 total)
 # Excludes: mount-help, addmnt-help (not auto-loaded by main.bash/main.zsh)
 # Use function names (underscores) instead of aliases (dashes) for non-interactive subprocess testing
@@ -85,9 +84,9 @@ class TestHelpTopicsCallable:
             cmd: Help topic command (e.g., "git-help")
         """
         result = shell_runner(shell, f"{cmd} 2>&1 > /dev/null")
-        assert (
-            result.exit_code == 0
-        ), f"{shell}: {cmd} failed with exit code {result.exit_code}\nstderr: {result.stderr}"
+        assert result.exit_code == 0, (
+            f"{shell}: {cmd} failed with exit code {result.exit_code}\nstderr: {result.stderr}"
+        )
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     @pytest.mark.parametrize("cmd", HELP_TOPICS)
@@ -100,12 +99,8 @@ class TestHelpTopicsCallable:
             cmd: Help topic command
         """
         result = shell_runner(shell, f"{cmd}")
-        assert (
-            result.exit_code == 0
-        ), f"{shell}: {cmd} failed with exit code {result.exit_code}"
-        assert (
-            len(result.stdout.strip()) > 0
-        ), f"{shell}: {cmd} produced no output"
+        assert result.exit_code == 0, f"{shell}: {cmd} failed with exit code {result.exit_code}"
+        assert len(result.stdout.strip()) > 0, f"{shell}: {cmd} produced no output"
 
 
 class TestHelpTopicsWithDifferentFormats:
@@ -150,9 +145,7 @@ class TestHelpTopicsErrorHandling:
         result = shell_runner(shell, "my_help")
         assert result.exit_code == 0, f"{shell}: my_help with no args failed"
         # Should list multiple help topics
-        assert (
-            len(result.stdout.split("\n")) > 5
-        ), f"{shell}: my_help output seems incomplete"
+        assert len(result.stdout.split("\n")) > 5, f"{shell}: my_help output seems incomplete"
 
 
 class TestHelpTopicsEnvironmentIntegrity:

@@ -72,14 +72,14 @@ class TestEnvironmentVariables:
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_shell_common_path_set(self, shell_runner, shell):
         """Test SHELL_COMMON environment variable is set."""
-        result = shell_runner(shell, "test -n \"$SHELL_COMMON\" && echo ok")
+        result = shell_runner(shell, 'test -n "$SHELL_COMMON" && echo ok')
         assert result.exit_code == 0, f"{shell}: SHELL_COMMON not set"
         assert "ok" in result.stdout, f"{shell}: SHELL_COMMON is empty"
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_dotfiles_root_path_set(self, shell_runner, shell):
         """Test DOTFILES_ROOT environment variable is set."""
-        result = shell_runner(shell, "test -n \"$DOTFILES_ROOT\" && echo ok")
+        result = shell_runner(shell, 'test -n "$DOTFILES_ROOT" && echo ok')
         assert result.exit_code == 0, f"{shell}: DOTFILES_ROOT not set"
         assert "ok" in result.stdout, f"{shell}: DOTFILES_ROOT is empty"
 
@@ -98,25 +98,25 @@ class TestShellDifferences:
 
     def test_bash_specific_features(self, shell_runner):
         """Test bash can handle bash-specific syntax."""
-        result = shell_runner("bash", "[[ -n \"$BASH\" ]] && echo bash")
+        result = shell_runner("bash", '[[ -n "$BASH" ]] && echo bash')
         assert result.exit_code == 0
         assert "bash" in result.stdout
 
     def test_zsh_specific_features(self, shell_runner):
         """Test zsh can handle zsh-specific syntax."""
-        result = shell_runner("zsh", "[[ -n \"$ZSH_VERSION\" ]] && echo zsh")
+        result = shell_runner("zsh", '[[ -n "$ZSH_VERSION" ]] && echo zsh')
         assert result.exit_code == 0
         assert "zsh" in result.stdout
 
     def test_posix_shell_features_in_bash(self, shell_runner):
         """Test POSIX shell features work in bash."""
-        result = shell_runner("bash", "[ -n \"$HOME\" ] && echo posix")
+        result = shell_runner("bash", '[ -n "$HOME" ] && echo posix')
         assert result.exit_code == 0
         assert "posix" in result.stdout
 
     def test_posix_shell_features_in_zsh(self, shell_runner):
         """Test POSIX shell features work in zsh."""
-        result = shell_runner("zsh", "[ -n \"$HOME\" ] && echo posix")
+        result = shell_runner("zsh", '[ -n "$HOME" ] && echo posix')
         assert result.exit_code == 0
         assert "posix" in result.stdout
 
@@ -135,7 +135,7 @@ class TestHelpSystemConsistency:
         """Test my_help function lists help topics."""
         result = shell_runner(shell, "my_help")
         assert result.exit_code == 0, f"{shell}: my_help failed"
-        lines = len([l for l in result.stdout.strip().split('\n') if l])
+        lines = len([line for line in result.stdout.strip().split("\n") if line])
         assert lines > 10, f"{shell}: my_help lists too few topics: {lines}"
 
     def test_bash_zsh_help_output_similar(self, shell_runner):
