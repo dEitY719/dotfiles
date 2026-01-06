@@ -19,18 +19,24 @@ dependencies = [
 
 # --- 개발 및 테스트 환경 의존성 ---
 [dependency-groups] # 비표준으로 uv 에서는 인식, 그러나 pip 인식못함
-dev = ["ruff", "mypy", "pylint-exit", "pytest", "pytest-mock", "tox>=4.26.0"]
+dev = ["ruff", "mypy", "pylint-exit", "pytest", "pytest-mock", "pexpect", "tox>=4.26.0"]
 
 
-# --- mypy 타입 스터브 ---
+# --- Python 프로젝트 의존성 및 extras ---
 [project.optional-dependencies]
 dev = [
-    # mypy 타입 스터브 (types-*)
+    # Testing frameworks
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pexpect>=4.8",  # For interactive shell testing
+    # Linting and formatting
+    "ruff>=0.1.0",
+    "black>=23.0",
+    # Type checking
+    "mypy>=1.0",
     "types-toml",
     "types-requests",
     "types-PyYAML",
-    # 필요하다면 다른 mypy 관련 타입 스터브 추가
-    # 예: "types-setuptools", "types-cachetools" 등
 ]
 
 
@@ -48,6 +54,12 @@ packages = []
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+addopts = "-v --strict-markers"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "bash: marks tests that run in bash shell",
+    "zsh: marks tests that run in zsh shell",
+]
 
 
 [tool.black]

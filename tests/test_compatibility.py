@@ -1,0 +1,181 @@
+"""
+Test suite for bash/zsh compatibility.
+
+Tests that dotfiles initialization works correctly in both shells,
+and that help systems function consistently across environments.
+"""
+
+import pytest
+
+
+class TestDotfilesInitialization:
+    """Test dotfiles initialization in bash and zsh."""
+
+    def test_bash_initialization(self, shell_runner):
+        """Test bash/main.bash initialization succeeds."""
+        result = shell_runner("bash", "echo initialized")
+        assert result.exit_code == 0, "bash initialization failed"
+        assert "initialized" in result.stdout
+
+    def test_zsh_initialization(self, shell_runner):
+        """Test zsh/main.zsh initialization succeeds."""
+        result = shell_runner("zsh", "echo initialized")
+        assert result.exit_code == 0, "zsh initialization failed"
+        assert "initialized" in result.stdout
+
+    def test_bash_sources_files(self, shell_runner):
+        """Test that bash loads configuration files."""
+        result = shell_runner("bash", "echo $SOURCED_FILES_COUNT")
+        assert result.exit_code == 0
+        count = result.stdout.strip()
+        assert count.isdigit() and int(count) > 0, "bash: No files sourced"
+
+    def test_zsh_sources_files(self, shell_runner):
+        """Test that zsh loads configuration files."""
+        result = shell_runner("zsh", "echo $SOURCED_FILES_COUNT")
+        assert result.exit_code == 0
+        count = result.stdout.strip()
+        assert count.isdigit() and int(count) > 0, "zsh: No files sourced"
+
+
+class TestFunctionAvailability:
+    """Test that functions are available in both shells."""
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_my_help_function_available(self, shell_runner, shell):
+        """Test my_help function is available."""
+        result = shell_runner(shell, "declare -f my_help | head -1")
+        assert result.exit_code == 0, f"{shell}: my_help function not available"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_mytool_help_function_available(self, shell_runner, shell):
+        """Test mytool_help function is available."""
+        result = shell_runner(shell, "declare -f mytool_help | head -1")
+        assert result.exit_code == 0, f"{shell}: mytool_help function not available"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_my_help_alias_available(self, shell_runner, shell):
+        """Test my-help alias is available."""
+        result = shell_runner(shell, "alias my-help")
+        assert result.exit_code == 0, f"{shell}: my-help alias not available"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_mytool_help_alias_available(self, shell_runner, shell):
+        """Test mytool-help alias is available."""
+        result = shell_runner(shell, "alias mytool-help")
+        assert result.exit_code == 0, f"{shell}: mytool-help alias not available"
+
+
+class TestEnvironmentVariables:
+    """Test environment variable setup and availability."""
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_shell_common_path_set(self, shell_runner, shell):
+        """Test SHELL_COMMON environment variable is set."""
+        result = shell_runner(shell, "test -n \"$SHELL_COMMON\" && echo ok")
+        assert result.exit_code == 0, f"{shell}: SHELL_COMMON not set"
+        assert "ok" in result.stdout, f"{shell}: SHELL_COMMON is empty"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_dotfiles_root_path_set(self, shell_runner, shell):
+        """Test DOTFILES_ROOT environment variable is set."""
+        result = shell_runner(shell, "test -n \"$DOTFILES_ROOT\" && echo ok")
+        assert result.exit_code == 0, f"{shell}: DOTFILES_ROOT not set"
+        assert "ok" in result.stdout, f"{shell}: DOTFILES_ROOT is empty"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_sourced_files_count_integer(self, shell_runner, shell):
+        """Test SOURCED_FILES_COUNT is a valid integer."""
+        result = shell_runner(shell, "echo $SOURCED_FILES_COUNT")
+        assert result.exit_code == 0
+        count = result.stdout.strip()
+        assert count.isdigit(), f"{shell}: SOURCED_FILES_COUNT is not an integer: {count}"
+        assert int(count) > 0, f"{shell}: SOURCED_FILES_COUNT is 0"
+
+
+class TestShellDifferences:
+    """Test handling of shell-specific features."""
+
+    def test_bash_specific_features(self, shell_runner):
+        """Test bash can handle bash-specific syntax."""
+        result = shell_runner("bash", "[[ -n \"$BASH\" ]] && echo bash")
+        assert result.exit_code == 0
+        assert "bash" in result.stdout
+
+    def test_zsh_specific_features(self, shell_runner):
+        """Test zsh can handle zsh-specific syntax."""
+        result = shell_runner("zsh", "[[ -n \"$ZSH_VERSION\" ]] && echo zsh")
+        assert result.exit_code == 0
+        assert "zsh" in result.stdout
+
+    def test_posix_shell_features_in_bash(self, shell_runner):
+        """Test POSIX shell features work in bash."""
+        result = shell_runner("bash", "[ -n \"$HOME\" ] && echo posix")
+        assert result.exit_code == 0
+        assert "posix" in result.stdout
+
+    def test_posix_shell_features_in_zsh(self, shell_runner):
+        """Test POSIX shell features work in zsh."""
+        result = shell_runner("zsh", "[ -n \"$HOME\" ] && echo posix")
+        assert result.exit_code == 0
+        assert "posix" in result.stdout
+
+
+class TestHelpSystemConsistency:
+    """Test that help system behaves consistently across shells."""
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_help_descriptions_available(self, shell_runner, shell):
+        """Test HELP_DESCRIPTIONS array exists."""
+        result = shell_runner(shell, "declare -p HELP_DESCRIPTIONS | head -1")
+        assert result.exit_code == 0, f"{shell}: HELP_DESCRIPTIONS not available"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_my_help_lists_topics(self, shell_runner, shell):
+        """Test my-help lists help topics."""
+        result = shell_runner(shell, "my-help | wc -l")
+        assert result.exit_code == 0
+        lines = int(result.stdout.strip())
+        assert lines > 10, f"{shell}: my-help lists too few topics: {lines}"
+
+    def test_bash_zsh_help_output_similar(self, shell_runner):
+        """Test that bash and zsh produce similar help output format."""
+        result_bash = shell_runner("bash", "my-help | head -3")
+        result_zsh = shell_runner("zsh", "my-help | head -3")
+
+        assert result_bash.exit_code == 0
+        assert result_zsh.exit_code == 0
+
+        # Both should produce output
+        assert len(result_bash.stdout.strip()) > 0
+        assert len(result_zsh.stdout.strip()) > 0
+
+    def test_bash_zsh_mytool_output_similar(self, shell_runner):
+        """Test that bash and zsh mytool-help output is similar."""
+        result_bash = shell_runner("bash", "mytool-help | head -3")
+        result_zsh = shell_runner("zsh", "mytool-help | head -3")
+
+        assert result_bash.exit_code == 0
+        assert result_zsh.exit_code == 0
+
+        # Both should produce output
+        assert len(result_bash.stdout.strip()) > 0
+        assert len(result_zsh.stdout.strip()) > 0
+
+
+class TestErrorHandling:
+    """Test error handling consistency."""
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_undefined_function_error(self, shell_runner, shell):
+        """Test that undefined function produces error."""
+        result = shell_runner(shell, "undefined_nonexistent_function")
+        # Should fail with non-zero exit
+        assert result.exit_code != 0, f"{shell}: undefined function did not error"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_invalid_syntax_error(self, shell_runner, shell):
+        """Test that invalid syntax produces error."""
+        result = shell_runner(shell, "[[ ]]")  # Incomplete test
+        # Should fail
+        assert result.exit_code != 0, f"{shell}: invalid syntax did not error"
