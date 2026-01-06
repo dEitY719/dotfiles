@@ -37,11 +37,14 @@
 #    which claude && claude --version
 
 # ═══════════════════════════════════════════════════════════════
-# Load mount management functions
+# Load mount management functions (bash/zsh compatible)
 # ═══════════════════════════════════════════════════════════════
 
 if ! declare -f _is_mounted >/dev/null 2>&1; then
-    source "${BASH_SOURCE[0]%/*}/mount.sh" 2>/dev/null || true
+    # Use SHELL_COMMON variable (defined by bash/zsh loaders)
+    if [ -n "$SHELL_COMMON" ] && [ -f "${SHELL_COMMON}/tools/custom/mount.sh" ]; then
+        source "${SHELL_COMMON}/tools/custom/mount.sh" 2>/dev/null || true
+    fi
 fi
 
 # Dependency Check: Ensure jq is installed
