@@ -35,7 +35,7 @@
       "Bash(sudo rm:*)"
     ]
   },
-  "model": "haiku",
+  "model": "sonnet",
   "statusLine": {
     "type": "command",
     "command": "${HOME}/.claude/statusline-command.sh"
