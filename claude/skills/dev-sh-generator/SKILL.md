@@ -198,6 +198,19 @@ Required Variables:
    - Provide install instructions if missing
    - NO emoji in echo
 
+   **lint command**:
+   - Run linters excluding markdown: `tox -k 'not mdlint'`
+   - Covers: ruff, mypy, shellcheck (excludes markdown)
+   - Markdown linting available separately via `mdlint` command
+   - Rationale: Markdown errors can be numerous; separate for selective use
+   - NO emoji in echo
+
+   **mdlint command** (optional, separate):
+   - Only include if project has markdown files
+   - Run markdown linter: `tox -e mdlint "${@:2}"`
+   - Allows users to run markdown checks on-demand
+   - NO emoji in echo
+
    **shell command**:
    - Check for uv: `command -v uv`
    - Use `exec` to replace shell process
@@ -601,6 +614,66 @@ Before completion, ensure ALL:
 12. Smoke tests pass (help, invalid command)
 13. Follows AGENTS.md patterns exactly
 14. Line endings are LF
+
+## Linting & Markdown Best Practices
+
+### Separate Linting for Markdown
+
+When projects have markdown files, adopt the following strategy to avoid noise during regular development:
+
+#### Rationale
+- Markdown linting errors can be numerous and frequent
+- Regular CI linting should exclude markdown to avoid blocking developers
+- Markdown checks should be run selectively when actually fixing documentation
+
+#### Implementation Pattern
+
+**Default `lint` command** (excludes markdown):
+```bash
+lint)
+  echo "Running linters excluding markdown (tox -k 'not mdlint')..."
+  if command -v tox >/dev/null 2>&1; then
+    tox -k 'not mdlint'  # Runs: ruff, mypy, shellcheck
+  else
+    echo "ERROR: tox not found."
+    exit 1
+  fi
+  ;;
+```
+
+**Separate `mdlint` command** (markdown only):
+```bash
+mdlint)
+  echo "Running markdown linter (tox -e mdlint)..."
+  if command -v tox >/dev/null 2>&1; then
+    tox -e mdlint "${@:2}"
+  else
+    echo "ERROR: tox not found."
+    exit 1
+  fi
+  ;;
+```
+
+#### Usage Examples
+```bash
+# Regular linting (skips markdown)
+./tools/dev.sh lint
+
+# Check markdown when needed
+./tools/dev.sh mdlint
+
+# Format Python code
+./tools/dev.sh format
+```
+
+#### Update Help Text
+List both commands in help:
+```
+Commands:
+  lint         Run linters (ruff, mypy, shellcheck) - excludes markdown
+  mdlint       Run markdown linter separately (tox -e mdlint)
+  format       Format and lint Python code (tox -e ruff)
+```
 
 ## Execution Workflow
 

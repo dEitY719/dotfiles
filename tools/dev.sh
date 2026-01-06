@@ -24,9 +24,19 @@ case "$cmd" in
     ;;
 
   lint)
-    echo "Running all linters (tox)..."
+    echo "Running linters excluding markdown (tox -k 'not mdlint')..."
     if command -v tox >/dev/null 2>&1; then
-      tox
+      tox -k 'not mdlint'
+    else
+      echo "ERROR: tox not found. Install: uv pip install tox"
+      exit 1
+    fi
+    ;;
+
+  mdlint)
+    echo "Running markdown linter (tox -e mdlint)..."
+    if command -v tox >/dev/null 2>&1; then
+      tox -e mdlint "${@:2}"
     else
       echo "ERROR: tox not found. Install: uv pip install tox"
       exit 1
@@ -70,7 +80,8 @@ Usage: ./tools/dev.sh <command>
 Commands:
   test         Run test suite (pytest)
   format       Format and lint Python code (tox -e ruff)
-  lint         Run all linters (tox: ruff, mypy, mdlint, shellcheck)
+  lint         Run linters (ruff, mypy, shellcheck) - excludes markdown
+  mdlint       Run markdown linter separately (tox -e mdlint)
   setup        Run setup script (symlinks only)
   install      Run full installation
   shell        Enter project shell
@@ -81,6 +92,7 @@ Examples:
   ./tools/dev.sh test -k test_bash
   ./tools/dev.sh format
   ./tools/dev.sh lint
+  ./tools/dev.sh mdlint
   ./tools/dev.sh setup
   ./tools/dev.sh install
 
