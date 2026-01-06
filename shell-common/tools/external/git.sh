@@ -1,39 +1,35 @@
 #!/bin/bash
 # shell-common/tools/external/git.sh
-# Bash-specific git functions and features
-# (This file requires bash and should not be sourced in other shells)
-
-# Exit if not running in bash
-[ -n "$BASH" ] || return 0
+# Portable git functions for bash and zsh
+# Functions: gcp_scan, gsw, gf, gupa, gcp, gcp_theirs, gcp_ours, etc.
 
 # ============================================================
-# BASH-SPECIFIC HELPERS
+# PORTABLE HELPER FUNCTIONS
 # ============================================================
 
-# Custom path abbreviation function (bash array syntax required)
+# Custom path abbreviation function (bash/zsh compatible)
 _short_pwd() {
-    local full_path
-    full_path=$(pwd)
-    local max_dirs=3
-    local parts=()
+    local full_path pwd_output max_dirs
+    pwd_output=$(pwd)
+    full_path="$pwd_output"
+    max_dirs=3
 
     # Abbreviate home directory (~)
-    if [[ "$full_path" == "$HOME"* ]]; then
-        full_path="~${full_path#"$HOME"}"
-    fi
+    case "$full_path" in
+        "$HOME"*)
+            full_path="~${full_path#"$HOME"}"
+            ;;
+    esac
 
-    IFS='/' read -ra parts <<<"$full_path"
-    local part_count=${#parts[@]}
+    # Count directory levels using awk (portable)
+    local part_count level_count
+    level_count=$(echo "$full_path" | awk -F/ '{print NF-1}')
 
-    if ((part_count > max_dirs)); then
-        local truncated_parts
-        truncated_parts=("${parts[@]: -max_dirs}")
+    if [ "$level_count" -gt "$max_dirs" ]; then
+        # Use sed for portable substring (last 3 dirs + /)
         local truncated
-        truncated=$(
-            IFS=/
-            echo "${truncated_parts[*]}"
-        )
-        echo ".../$truncated"
+        truncated=$(echo "$full_path" | sed "s|.*/\([^/]*/[^/]*/[^/]*\)$|.../\1|")
+        echo "$truncated"
     else
         echo "$full_path"
     fi

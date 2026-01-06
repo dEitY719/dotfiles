@@ -226,8 +226,18 @@ export ZSH_DOTFILES
 # ═══════════════════════════════════════════════════════════════
 
 # Display initialization summary (shared function from shell-common)
-# Only show in truly interactive shells (with TTY) to avoid interfering
-# with PowerLevel10k instant prompt in nested or piped contexts
-if [[ -o interactive && -t 2 ]] && type dotfiles_init_summary >/dev/null 2>&1; then
-    dotfiles_init_summary "$SOURCED_FILES_COUNT"
+# Show in interactive shells, unless explicitly disabled
+# Note: Will be suppressed automatically in nested/instant-prompt contexts
+if [[ -o interactive ]] && type dotfiles_init_summary >/dev/null 2>&1; then
+    # Allow suppression via environment variable for special cases (CI/CD, etc.)
+    if [[ "${DOTFILES_SUPPRESS_MESSAGE:-0}" != "1" ]]; then
+        # Try to suppress in instant-prompt contexts (check stderr)
+        # If stderr is not a TTY, we're likely in a nested/piped context
+        if [[ -t 2 ]]; then
+            dotfiles_init_summary "$SOURCED_FILES_COUNT"
+        elif [[ -z "$ZSH_SUBSHELL" ]]; then
+            # Not in a zsh subshell, likely safe to show
+            dotfiles_init_summary "$SOURCED_FILES_COUNT"
+        fi
+    fi
 fi
