@@ -38,6 +38,99 @@
 - **DON'T**: Use bash-specific variables (e.g., `${BASH_SOURCE[0]}`) without fallback; this breaks zsh compatibility.
 - **DON'T**: Place functions in `shell-common/tools/custom/` (won't be auto-sourced; breaks initialization).
 
+## shell-common Directory Structure Guide
+
+**CRITICAL**: Correct directory placement prevents "function not found" and "command not found" errors.
+
+### shell-common/functions/ - AUTO-SOURCED FUNCTIONS
+Loaded automatically by `main.bash` and `main.zsh` during shell initialization.
+
+**Use this for:**
+- Commands that users call from the terminal (e.g., `devx help`, `git-help`)
+- Functions that need to be available in the shell immediately
+- Wrapper functions around commands
+- Helper functions needed by other functions or aliases
+
+**Examples:**
+- `devx.sh` - Provides `devx` command dispatcher
+- `git_help.sh` - Provides `git_help()` function (callable as alias `git-help`)
+- `docker_help.sh` - Provides `docker_help()` function
+- `my_man.sh` - Provides custom man page function
+- `my_help.sh` - Provides `my_help()` shell command
+
+**Pattern**: `shell-common/functions/COMMAND_help.sh` or `shell-common/functions/COMMAND.sh`
+
+### shell-common/tools/custom/ - EXECUTABLE UTILITY SCRIPTS
+Run explicitly as scripts, NOT auto-sourced. Used for development tools, CLI utilities, analysis scripts.
+
+**Use this for:**
+- Command-line utilities meant to be executed directly
+- Standalone scripts that should NOT be sourced
+- Tools called by Makefile, tox, or other scripts
+- Development/debugging utilities
+
+**Examples:**
+- `check_ux_consistency.sh` - Run: `./shell-common/tools/custom/check_ux_consistency.sh`
+- `analyze_bash_scripts.sh` - Run: `./shell-common/tools/custom/analyze_bash_scripts.sh`
+- `demo_ux.sh` - Run: `./shell-common/tools/custom/demo_ux.sh`
+- `mount.sh` - Utility script for mounting operations
+
+**Pattern**: `shell-common/tools/custom/TOOL_NAME.sh` (has shebang, executable, never sourced)
+
+### shell-common/tools/external/ - THIRD-PARTY TOOL WRAPPERS
+Auto-sourced. Thin wrappers around system tools or external packages.
+
+**Use this for:**
+- Wrapper functions for external CLIs (npm, pip, etc.)
+- System tool integrations
+- Package manager abstraction
+
+**Examples:**
+- `npm.sh` - npm wrapper
+- `apt.sh` - apt package manager integration
+- `ccusage.sh` - External tool wrapper
+
+### Decision Tree
+
+```
+Creating a new .sh file? Ask yourself:
+
+1. Will users call this as a command? (e.g., `devx help`, `my-tool`)
+   YES -> shell-common/functions/
+   NO  -> Next question
+
+2. Is this a standalone utility script to be run explicitly?
+   YES -> shell-common/tools/custom/
+   NO  -> Next question
+
+3. Is this a wrapper for an external tool?
+   YES -> shell-common/tools/external/
+   NO  -> Contact maintainers (may belong in bash/, zsh/, or projects/)
+```
+
+### Common Mistakes & Fixes
+
+**ERROR**: Function placed in `tools/custom/` not available after shell restart
+```
+# WRONG
+mv shell-common/functions/devx.sh shell-common/tools/custom/devx.sh
+# Result: devx: command not found (not auto-sourced)
+
+# RIGHT
+# Keep it in shell-common/functions/devx.sh (auto-sourced at startup)
+```
+
+**ERROR**: Utility script accidentally sourced by main.bash
+```
+# WRONG: Sourcing a utility script
+source shell-common/tools/custom/check_ux_consistency.sh
+# Result: Global pollution, side effects, broken behavior
+
+# RIGHT: Execute directly when needed
+./shell-common/tools/custom/check_ux_consistency.sh
+# Or call from Makefile/tox
+```
+
 ## Bash/Zsh Compatibility Rules
 
 This project supports both bash and zsh. Ensure cross-shell compatibility:
