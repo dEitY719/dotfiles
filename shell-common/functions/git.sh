@@ -3,9 +3,10 @@
 # Portable git functions for bash and zsh
 # (No bash-specific features)
 
-# Override Oh My Zsh's gl alias with our function (zsh only)
-# In zsh, Oh My Zsh may have defined gl='git pull', so we unalias first
-unalias gl 2>/dev/null || true
+# Override Oh My Zsh's git aliases with our functions (zsh only)
+# In zsh, Oh My Zsh may define various git aliases, so we unalias them first
+# to allow our function definitions to work properly
+unalias gl gd glum glog 2>/dev/null || true
 
 # ============================================================================
 # Shared git log formatter (extracted common logic)

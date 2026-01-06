@@ -4,6 +4,11 @@
 # Prevent loading in non-interactive shells or specific environments (like Codex CLI)
 # to avoid permission errors, timeouts, and unwanted side effects.
 
+# 0. Prevent loading in zsh (use zsh/main.zsh instead)
+if [ -n "$ZSH_VERSION" ]; then
+    return 0
+fi
+
 # 1. Check for Codex Environment (npm managed or explicit CLI flag)
 is_codex_env() {
     [[ -n "$CODEX_CLI" ]] ||
@@ -231,7 +236,8 @@ unset __NULLGLOB_WAS_ON
 # ------------------------------------------------------------------
 # --- Module loading complete ---
 # Display initialization summary (shared function from shell-common)
-if type dotfiles_init_summary &>/dev/null; then
+# Only show in interactive shells to avoid interfering with prompts (e.g., PowerLevel10k instant prompt)
+if [[ $- == *i* ]] && type dotfiles_init_summary &>/dev/null; then
     dotfiles_init_summary "$SOURCED_FILES_COUNT"
 fi
 

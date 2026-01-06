@@ -14,6 +14,10 @@ fi
 # Directory Setup - Use provided variables or detect from script location
 # ═══════════════════════════════════════════════════════════════
 
+# Clear bash-specific variables that might be inherited from parent bash shell
+# to prevent path confusion
+unset DOTFILES_BASH_DIR
+
 # If zshrc already set these, use them. Otherwise detect them.
 if [ -z "$DOTFILES_ROOT" ]; then
     # Compute DOTFILES_ROOT from this script's location
@@ -32,9 +36,10 @@ if [ -z "$DOTFILES_ROOT" ]; then
     fi
 fi
 
-# Set derived paths if not already set
-[ -n "$SHELL_COMMON" ] || SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
-[ -n "$ZSH_DOTFILES" ] || ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"
+# Set derived paths with zsh-specific values (always recompute SHELL_COMMON and ZSH_DOTFILES
+# in zsh context to avoid inheriting bash-computed paths from parent shell)
+SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
+ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"
 
 # Exit if dotfiles not found
 if [ ! -d "$DOTFILES_ROOT" ]; then
@@ -221,6 +226,7 @@ export ZSH_DOTFILES
 # ═══════════════════════════════════════════════════════════════
 
 # Display initialization summary (shared function from shell-common)
-if type dotfiles_init_summary >/dev/null 2>&1; then
+# Only show in interactive shells to avoid interfering with prompts (e.g., PowerLevel10k instant prompt)
+if [[ -o interactive ]] && type dotfiles_init_summary >/dev/null 2>&1; then
     dotfiles_init_summary "$SOURCED_FILES_COUNT"
 fi
