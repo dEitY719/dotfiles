@@ -9,7 +9,9 @@
 
 
 # WARNING: Choose CA certificate path (enable only ONE option)
-# Option 1: Corporate external PC (VPN) - installed by setup_crt.sh
+# Option 1: Corporate external PC (VPN) - installed by setup_crt.sh2
+# 인증서 파일은 아래 링크에서 Download
+# http://12.53.3.52:5465/apc/AgentInstall/list_agent.htm
 CA_CERT="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
 
 # Option 2: Corporate internal PC (direct connection) - system CA bundle
