@@ -30,10 +30,13 @@
 - **DO**: Run `tox` before committing.
 - **DO**: Use environment variables (e.g., `$SHELL_COMMON`) or absolute paths when sourcing files across shell contexts.
 - **DO**: Test scripts in both bash and zsh for cross-shell compatibility.
+- **DO**: Place shell functions in `shell-common/functions/` (auto-sourced by main.bash/main.zsh).
+- **DO**: Place executable utility scripts in `shell-common/tools/custom/` (run explicitly, not sourced).
 - **DON'T**: Use raw `echo` or `printf` (violates UX consistency).
 - **DON'T**: Hardcode paths; use `$HOME` or relative paths.
 - **DON'T**: Commit secrets or sensitive data.
 - **DON'T**: Use bash-specific variables (e.g., `${BASH_SOURCE[0]}`) without fallback; this breaks zsh compatibility.
+- **DON'T**: Place functions in `shell-common/tools/custom/` (won't be auto-sourced; breaks initialization).
 
 ## Bash/Zsh Compatibility Rules
 
