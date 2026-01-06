@@ -147,13 +147,8 @@ devx__main() {
         exit 2
     fi
 
-    # Help command
-    case "$1" in
-    help|--help|-h)
-        devx__usage
-        exit 0
-        ;;
-    esac
+    # Note: help is now delegated to tools/dev.sh like other commands
+    # This allows each project to define its own help text
 
     # Built-in stat command
     if [ "$1" = "stat" ]; then
