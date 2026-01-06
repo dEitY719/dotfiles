@@ -43,6 +43,12 @@ if [ ! -d "$DOTFILES_ROOT" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
+# Initialize counter for sourced files (consistent with bash loader)
+# ═══════════════════════════════════════════════════════════════
+
+typeset -gi SOURCED_FILES_COUNT=0
+
+# ═══════════════════════════════════════════════════════════════
 # Helper: Safe Source Function (consistent with bash loader)
 # ═══════════════════════════════════════════════════════════════
 
@@ -60,6 +66,8 @@ safe_source() {
             fi
             return 1
         }
+        # Increment counter after successful source
+        ((++SOURCED_FILES_COUNT))
     else
         # Use ux_error if available, otherwise fallback to echo
         if type ux_error >/dev/null 2>&1; then
@@ -212,9 +220,7 @@ export ZSH_DOTFILES
 # Completion Message
 # ═══════════════════════════════════════════════════════════════
 
-# Only show message if UX library is loaded
-if type ux_success >/dev/null 2>&1; then
-    # Uncomment for debugging:
-    # ux_success "Zsh dotfiles loaded successfully (from $ZSH_DOTFILES)"
-    :
+# Display initialization summary (shared function from shell-common)
+if type dotfiles_init_summary >/dev/null 2>&1; then
+    dotfiles_init_summary "$SOURCED_FILES_COUNT"
 fi

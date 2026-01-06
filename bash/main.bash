@@ -230,7 +230,10 @@ unset __NULLGLOB_WAS_ON
 
 # ------------------------------------------------------------------
 # --- Module loading complete ---
-echo "Dotfiles configuration loaded successfully. (Total files sourced: ${SOURCED_FILES_COUNT})"
+# Display initialization summary (shared function from shell-common)
+if type dotfiles_init_summary &>/dev/null; then
+    dotfiles_init_summary "$SOURCED_FILES_COUNT"
+fi
 
 # Clean up duplicate PATH entries (defined in env/path.bash)
 type -t clean_paths &>/dev/null && clean_paths

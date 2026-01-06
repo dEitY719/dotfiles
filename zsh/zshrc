@@ -85,38 +85,9 @@ source $ZSH/oh-my-zsh.sh
 # Load Zsh Dotfiles (Native Zsh - No Bash Emulation)
 # ═══════════════════════════════════════════════════════════════
 # SOLID-compliant architecture with complete bash/zsh separation
+# Source main.zsh which handles all initialization and displays completion message
 
-# Load Zsh Dotfiles
-export DOTFILES_ROOT="$HOME/dotfiles"
-export SHELL_COMMON="$HOME/dotfiles/shell-common"
-export ZSH_DOTFILES="$HOME/dotfiles/zsh"
-
-# Phase 1: Shared Environment
-[ -d "$SHELL_COMMON/env" ] && for f in "$SHELL_COMMON"/env/*.sh; do [ -f "$f" ] && source "$f" 2>/dev/null; done
-
-# Phase 2: UX Library (needed for aliases/functions)
-[ -f "$SHELL_COMMON/tools/ux_lib/ux_lib.sh" ] && source "$SHELL_COMMON/tools/ux_lib/ux_lib.sh" 2>/dev/null
-
-# Phase 3: Shared Aliases
-[ -d "$SHELL_COMMON/aliases" ] && for f in "$SHELL_COMMON"/aliases/*.sh; do [ -f "$f" ] && source "$f" 2>/dev/null; done
-
-# Phase 4: Shared Functions (MUST load BEFORE zsh utilities to override)
-[ -d "$SHELL_COMMON/functions" ] && for f in "$SHELL_COMMON"/functions/*.sh; do [ -f "$f" ] && source "$f" 2>/dev/null; done
-
-# Phase 4.5: Shared External Tools (apt, docker, etc.)
-[ -d "$SHELL_COMMON/tools/external" ] && for f in "$SHELL_COMMON"/tools/external/*.sh; do
-    [ -f "$f" ] && source "$f" 2>/dev/null
-done
-
-# Phase 5: Zsh Utilities (may redefine some shared functions, but we use shared versions)
-[ -d "$ZSH_DOTFILES/util" ] && for f in "$ZSH_DOTFILES"/util/*.zsh; do
-    # Skip my_help.zsh as we use the shared version instead
-    case "$f" in */my_help.zsh) continue ;; esac
-    [ -f "$f" ] && source "$f" 2>/dev/null
-done
-
-# Phase 6: Zsh App Modules
-[ -d "$ZSH_DOTFILES/app" ] && for f in "$ZSH_DOTFILES"/app/*.zsh; do [ -f "$f" ] && source "$f" 2>/dev/null; done
+source "$HOME/dotfiles/zsh/main.zsh"
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
