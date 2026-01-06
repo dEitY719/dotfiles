@@ -40,10 +40,10 @@ _git_log_formatter() {
 
     # Execute git log with appropriate flags
     if [ $show_all -eq 1 ]; then
-        # Show all commits
-        eval "git --no-pager log $log_format $branch $args"
+        # Show all commits with pager enabled for page-by-page browsing
+        eval "git log $log_format $branch $args"
     else
-        # Show only last 11 commits
+        # Show only last 11 commits (no pager needed for small output)
         eval "git --no-pager log $log_format -n 11 $branch $args"
     fi
 }
