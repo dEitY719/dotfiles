@@ -13,3 +13,6 @@ alias hwinfo='get_hw_info'
 
 # AGENTS.md 생성 짧은 별칭 (changed from 'ai' to avoid conflict with apt install)
 alias aa='agents_init'
+
+# Test suite runner alias (uses namespace to avoid POSIX 'test' builtin collision)
+alias dtests='${DOTFILES_ROOT:-.}/scripts/test'

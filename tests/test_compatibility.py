@@ -132,35 +132,35 @@ class TestHelpSystemConsistency:
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_lists_topics(self, shell_runner, shell):
-        """Test my-help lists help topics."""
-        result = shell_runner(shell, "my-help | wc -l")
-        assert result.exit_code == 0
-        lines = int(result.stdout.strip())
-        assert lines > 10, f"{shell}: my-help lists too few topics: {lines}"
+        """Test my_help function lists help topics."""
+        result = shell_runner(shell, "my_help")
+        assert result.exit_code == 0, f"{shell}: my_help failed"
+        lines = len([l for l in result.stdout.strip().split('\n') if l])
+        assert lines > 10, f"{shell}: my_help lists too few topics: {lines}"
 
     def test_bash_zsh_help_output_similar(self, shell_runner):
         """Test that bash and zsh produce similar help output format."""
-        result_bash = shell_runner("bash", "my-help | head -3")
-        result_zsh = shell_runner("zsh", "my-help | head -3")
+        result_bash = shell_runner("bash", "my_help")
+        result_zsh = shell_runner("zsh", "my_help")
 
-        assert result_bash.exit_code == 0
-        assert result_zsh.exit_code == 0
+        assert result_bash.exit_code == 0, "bash: my_help failed"
+        assert result_zsh.exit_code == 0, "zsh: my_help failed"
 
         # Both should produce output
-        assert len(result_bash.stdout.strip()) > 0
-        assert len(result_zsh.stdout.strip()) > 0
+        assert len(result_bash.stdout.strip()) > 0, "bash: no output"
+        assert len(result_zsh.stdout.strip()) > 0, "zsh: no output"
 
     def test_bash_zsh_mytool_output_similar(self, shell_runner):
-        """Test that bash and zsh mytool-help output is similar."""
-        result_bash = shell_runner("bash", "mytool-help | head -3")
-        result_zsh = shell_runner("zsh", "mytool-help | head -3")
+        """Test that bash and zsh mytool_help output is similar."""
+        result_bash = shell_runner("bash", "mytool_help")
+        result_zsh = shell_runner("zsh", "mytool_help")
 
-        assert result_bash.exit_code == 0
-        assert result_zsh.exit_code == 0
+        assert result_bash.exit_code == 0, "bash: mytool_help failed"
+        assert result_zsh.exit_code == 0, "zsh: mytool_help failed"
 
         # Both should produce output
-        assert len(result_bash.stdout.strip()) > 0
-        assert len(result_zsh.stdout.strip()) > 0
+        assert len(result_bash.stdout.strip()) > 0, "bash: no output"
+        assert len(result_zsh.stdout.strip()) > 0, "zsh: no output"
 
 
 class TestErrorHandling:

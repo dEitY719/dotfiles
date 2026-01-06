@@ -14,32 +14,35 @@ esac
 
 # ═══════════════════════════════════════════════════════════════
 # Self-heal: Create symlink to devx in ~/.local/bin
+# (Skipped in test mode)
 # ═══════════════════════════════════════════════════════════════
 
-# Detect the source script path (works in both bash and sh)
-if [ -n "${BASH_SOURCE+x}" ]; then
-    DEVX_SRC="${BASH_SOURCE[0]}"
-else
-    # For shells that don't have BASH_SOURCE, use $0
-    # This is a limitation of POSIX sh, but the tool is primarily bash-friendly
-    DEVX_SRC="$0"
-fi
+if [ "${DOTFILES_TEST_MODE:-0}" != "1" ]; then
+    # Detect the source script path (works in both bash and sh)
+    if [ -n "${BASH_SOURCE+x}" ]; then
+        DEVX_SRC="${BASH_SOURCE[0]}"
+    else
+        # For shells that don't have BASH_SOURCE, use $0
+        # This is a limitation of POSIX sh, but the tool is primarily bash-friendly
+        DEVX_SRC="$0"
+    fi
 
-# Resolve to absolute path
-if command -v realpath > /dev/null 2>&1; then
-    DEVX_SRC="$(realpath "$DEVX_SRC")"
-elif command -v readlink > /dev/null 2>&1; then
-    DEVX_SRC="$(readlink -f "$DEVX_SRC" 2>/dev/null || echo "$DEVX_SRC")"
-fi
+    # Resolve to absolute path
+    if command -v realpath > /dev/null 2>&1; then
+        DEVX_SRC="$(realpath "$DEVX_SRC")"
+    elif command -v readlink > /dev/null 2>&1; then
+        DEVX_SRC="$(readlink -f "$DEVX_SRC" 2>/dev/null || echo "$DEVX_SRC")"
+    fi
 
-# Create ~/.local/bin if needed
-mkdir -p "${HOME}/.local/bin"
+    # Create ~/.local/bin if needed
+    mkdir -p "${HOME}/.local/bin"
 
-# Update symlink if needed
-current_link="$(readlink "${HOME}/.local/bin/devx" 2>/dev/null || true)"
-if [ "$current_link" != "$DEVX_SRC" ]; then
-    ln -sf "$DEVX_SRC" "${HOME}/.local/bin/devx"
-    chmod +x "${HOME}/.local/bin/devx" 2>/dev/null || true
+    # Update symlink if needed
+    current_link="$(readlink "${HOME}/.local/bin/devx" 2>/dev/null || true)"
+    if [ "$current_link" != "$DEVX_SRC" ]; then
+        ln -sf "$DEVX_SRC" "${HOME}/.local/bin/devx"
+        chmod +x "${HOME}/.local/bin/devx" 2>/dev/null || true
+    fi
 fi
 
 # ═══════════════════════════════════════════════════════════════

@@ -13,6 +13,12 @@ if [ -n "${_CUSTOM_TOOLS_INITIALIZED:-}" ]; then
     return 0
 fi
 
+# Exit early in test mode (prevents side effects like package installations)
+if [ "${DOTFILES_TEST_MODE:-0}" = "1" ]; then
+    _CUSTOM_TOOLS_INITIALIZED=1
+    return 0
+fi
+
 # Define minimal UX fallback BEFORE validation (in case UX library fails to load)
 # This prevents "command not found" errors in error paths
 if ! type ux_error >/dev/null 2>&1; then
