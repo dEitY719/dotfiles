@@ -67,6 +67,14 @@ fi
 - **DO**: Use `#!/bin/sh` shebang
 - **DON'T**: Use bash arrays/associative arrays without shell detection
 
+## Bash/Zsh Sourcing Rules
+When sourcing files from scripts loaded by both bash and zsh loaders:
+- **Forbidden**: `source "${BASH_SOURCE[0]%/*}/file.sh"` (bash-only, breaks in zsh)
+- **Required**: Use pre-defined env vars: `source "${SHELL_COMMON}/tools/custom/file.sh"`
+- **Required**: Use DOTFILES_ROOT when appropriate: `source "${DOTFILES_ROOT}/path/to/file.sh"`
+- **Acceptable**: Direct execution only: `source "$(dirname "$0")/file.sh"` (for executable scripts)
+- **Test in both**: `bash -i -c 'source main.bash && function_name'` and `zsh -c 'source main.zsh && function_name'`
+
 ## Output Standards
 - **DO**: Use `ux_lib` functions (`ux_header`, `ux_success`, `ux_error`)
 - **DON'T**: Use raw `echo` or `printf` (violates UX consistency)

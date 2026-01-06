@@ -28,9 +28,22 @@
 - **DO**: Use snake_case for all Bash functions and filenames.
 - **DO**: Use `ux_lib` functions (`ux_header`, `ux_success`) for ALL output.
 - **DO**: Run `tox` before committing.
+- **DO**: Use environment variables (e.g., `$SHELL_COMMON`) or absolute paths when sourcing files across shell contexts.
+- **DO**: Test scripts in both bash and zsh for cross-shell compatibility.
 - **DON'T**: Use raw `echo` or `printf` (violates UX consistency).
 - **DON'T**: Hardcode paths; use `$HOME` or relative paths.
 - **DON'T**: Commit secrets or sensitive data.
+- **DON'T**: Use bash-specific variables (e.g., `${BASH_SOURCE[0]}`) without fallback; this breaks zsh compatibility.
+
+## Bash/Zsh Compatibility Rules
+
+This project supports both bash and zsh. Ensure cross-shell compatibility:
+
+- **Forbidden**: `source "${BASH_SOURCE[0]%/*}/file.sh"` (bash-only, fails in zsh)
+- **Required**: Use environment variables: `source "${SHELL_COMMON}/tools/custom/file.sh"`
+- **Acceptable**: Use positional parameter: `source "$(dirname "$0")/file.sh"` (works in direct execution)
+- **For sourced scripts**: Always prefer pre-defined variables like `$SHELL_COMMON`, `$DOTFILES_ROOT`
+- **Test command**: Verify in both: `bash -i -c 'function_name'` and `zsh -c 'source main.zsh && function_name'`
 
 # SOLID & Design Principles
 
