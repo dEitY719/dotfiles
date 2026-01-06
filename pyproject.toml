@@ -19,7 +19,7 @@ dependencies = [
 
 # --- 개발 및 테스트 환경 의존성 ---
 [dependency-groups] # 비표준으로 uv 에서는 인식, 그러나 pip 인식못함
-dev = ["ruff", "mypy", "pylint-exit", "pytest", "pytest-mock", "pexpect", "tox>=4.26.0"]
+dev = ["ruff", "mypy", "pylint-exit", "pytest", "pytest-mock", "pytest-xdist", "pexpect", "tox>=4.26.0"]
 
 
 # --- Python 프로젝트 의존성 및 extras ---
@@ -28,6 +28,7 @@ dev = [
     # Testing frameworks
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "pytest-xdist>=3.0",  # For parallel test execution
     "pexpect>=4.8",  # For interactive shell testing
     # Linting and formatting
     "ruff>=0.1.0",
@@ -54,7 +55,9 @@ packages = []
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
-addopts = "-v --strict-markers"
+addopts = "-v --strict-markers -n auto --dist loadscope"
+# -n auto: parallel execution using all available CPU cores
+# --dist loadscope: distribute tests by scope (class/module)
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "bash: marks tests that run in bash shell",

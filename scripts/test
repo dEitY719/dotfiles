@@ -3,18 +3,21 @@
 # Test Suite Runner for Dotfiles Project
 #
 # Usage:
-#   ./scripts/test              # Run all tests
+#   ./scripts/test              # Run all tests (parallel by default)
 #   ./scripts/test -a|--all     # Run all tests (same as above)
 #   ./scripts/test -v|--verbose # Run with verbose output
+#   ./scripts/test -s|--serial  # Run tests sequentially (disable parallel)
 #   ./scripts/test -h|--help    # Show help
 #
 # Requirements:
 #   - Python 3.10+
 #   - pytest
+#   - pytest-xdist (for parallel execution)
 #   - pexpect
 #
 # Environment:
 #   Sets DOTFILES_TEST_MODE=1 for test-aware tool behavior
+#   Parallel execution uses all available CPU cores by default
 #
 
 set -e
@@ -64,22 +67,29 @@ USAGE:
 OPTIONS:
     -a, --all       Run all tests (default)
     -v, --verbose   Run with verbose output
+    -s, --serial    Run tests sequentially (disable parallel execution)
     -h, --help      Show this help message
 
 ENVIRONMENT VARIABLES:
     DOTFILES_TEST_MODE=1  Enable test mode (prevents side effects)
 
 EXAMPLES:
-    ./scripts/test                  # Run all tests
-    ./scripts/test --verbose        # Verbose output
-    ./scripts/test -a | head -50    # Show first 50 lines
+    ./scripts/test                  # Run all tests (parallel)
+    ./scripts/test --verbose        # Verbose output (parallel)
+    ./scripts/test --serial         # Sequential execution
+    ./scripts/test --verbose --serial # Verbose + sequential
+
+PERFORMANCE:
+    Default: Parallel execution using all CPU cores (~60-80s)
+    Serial:  Sequential execution (~250s)
 
 REQUIREMENTS:
     - Python 3.10+
     - pytest
+    - pytest-xdist (for parallel execution)
     - pexpect
 
-For more information, see: docs/abc-review-C.md
+For more information, see: docs/abc-review-C.md and tests/README.md
 
 EOF
 }
@@ -106,6 +116,14 @@ check_requirements() {
         print_info "$pytest_version"
     fi
 
+    # Check pytest-xdist (optional, for parallel execution)
+    if python3 -m pip show pytest-xdist >/dev/null 2>&1; then
+        local xdist_version=$(python3 -m pip show pytest-xdist 2>&1 | grep Version | awk '{print $2}')
+        print_info "pytest-xdist $xdist_version (parallel execution enabled)"
+    else
+        print_warning "pytest-xdist not found. Tests will run serially. Install with: pip install pytest-xdist"
+    fi
+
     if [ $missing -eq 1 ]; then
         print_error "Missing required dependencies"
         return 1
@@ -117,21 +135,35 @@ check_requirements() {
 # Run tests
 run_tests() {
     local verbose_flag=""
+    local parallel_flag=""
+
     if [ "$VERBOSE" = "1" ]; then
         verbose_flag="-v"
     fi
+
+    if [ "$SERIAL" = "1" ]; then
+        # Serial execution: remove parallel flags if present
+        parallel_flag="-p no"  # Disable xdist plugin
+    fi
+    # else: use default pytest.ini settings (parallel execution enabled)
 
     cd "$REPO_ROOT"
     export DOTFILES_TEST_MODE=1
 
     print_header "Running Test Suite"
-    python3 -m pytest tests/ $verbose_flag --tb=short
+    if [ "$SERIAL" = "1" ]; then
+        python3 -m pytest tests/ $verbose_flag --tb=short -p no:xdist
+    else
+        # Use pytest.ini defaults which include -n auto --dist loadscope
+        python3 -m pytest tests/ $verbose_flag --tb=short
+    fi
     return $?
 }
 
 # Main
 main() {
     local VERBOSE=0
+    local SERIAL=0
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -141,6 +173,10 @@ main() {
             ;;
         -v | --verbose)
             VERBOSE=1
+            shift
+            ;;
+        -s | --serial)
+            SERIAL=1
             shift
             ;;
         -h | --help)
