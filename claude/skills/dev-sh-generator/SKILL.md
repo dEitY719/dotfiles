@@ -199,8 +199,8 @@ Required Variables:
    - NO emoji in echo
 
    **lint command**:
-   - Run linters excluding markdown: `tox -k 'not mdlint'`
-   - Covers: ruff, mypy, shellcheck (excludes markdown)
+   - Run linters excluding markdown: `tox -e ruff,mypy,shellcheck,shfmt`
+   - Covers: ruff (Python format/lint), mypy (type check), shellcheck (bash), shfmt (bash format)
    - Markdown linting available separately via `mdlint` command
    - Rationale: Markdown errors can be numerous; separate for selective use
    - NO emoji in echo
@@ -631,9 +631,9 @@ When projects have markdown files, adopt the following strategy to avoid noise d
 **Default `lint` command** (excludes markdown):
 ```bash
 lint)
-  echo "Running linters excluding markdown (tox -k 'not mdlint')..."
+  echo "Running linters excluding markdown..."
   if command -v tox >/dev/null 2>&1; then
-    tox -k 'not mdlint'  # Runs: ruff, mypy, shellcheck
+    tox -e ruff,mypy,shellcheck,shfmt
   else
     echo "ERROR: tox not found."
     exit 1

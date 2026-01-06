@@ -24,9 +24,9 @@ case "$cmd" in
     ;;
 
   lint)
-    echo "Running linters excluding markdown (tox -k 'not mdlint')..."
+    echo "Running linters excluding markdown (ruff, mypy, shellcheck, shfmt)..."
     if command -v tox >/dev/null 2>&1; then
-      tox -k 'not mdlint'
+      tox -e ruff,mypy,shellcheck,shfmt
     else
       echo "ERROR: tox not found. Install: uv pip install tox"
       exit 1
