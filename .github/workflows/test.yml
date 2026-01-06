@@ -1,0 +1,76 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pexpect
+
+      - name: Verify shells available
+        run: |
+          which bash zsh
+          bash --version | head -1
+          zsh --version
+
+      - name: Run test suite
+        run: ./scripts/test -v
+
+      - name: Upload coverage (if available)
+        if: always()
+        run: |
+          if command -v coverage >/dev/null 2>&1; then
+            coverage report
+          fi
+
+  lint:
+    name: Lint Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check shell scripts
+        run: |
+          if command -v shellcheck >/dev/null 2>&1; then
+            echo "Running shellcheck..."
+            find . -name "*.sh" -type f \
+              -not -path "./.git/*" \
+              -not -path "./.*" \
+              | xargs shellcheck --severity=warning || true
+          else
+            echo "shellcheck not available, skipping"
+          fi
+
+      - name: Check markdown
+        run: |
+          if command -v markdownlint >/dev/null 2>&1; then
+            echo "Running markdownlint..."
+            markdownlint tests/README.md docs/abc-review-C.md || true
+          else
+            echo "markdownlint not available, skipping"
+          fi
