@@ -82,7 +82,7 @@ Execute BEFORE making any changes:
 
    ```bash
    # Find or identify bash script location
-   cat ~/dotfiles/bash/app/<app>.bash
+   cat ~/dotfiles/shell-common/tools/external/<app>.sh
    ```
 
 4. **Plan File Paths**
@@ -233,7 +233,7 @@ Verify ALL:
 ```text
 Original location: ~/dotfiles/bash/claude/settings.json
 Symbolic link:     ~/.claude/settings.json -> ~/dotfiles/bash/claude/settings.json
-Management script: ~/dotfiles/bash/app/claude.bash
+Management script: ~/dotfiles/shell-common/tools/external/claude.sh
 ```
 
 ### Added Functions

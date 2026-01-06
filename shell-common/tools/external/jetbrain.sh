@@ -1,8 +1,8 @@
 #!/bin/bash
 # shell-common/tools/external/jetbrain.sh
-# Auto-generated from bash/app/jetbrain.bash
+# External application launcher configuration
 
 
-# $HOME/dotfiles/bash/app/jetbrain.bash
+# $HOME/dotfiles/shell-common/tools/external/jetbrain.sh
 
 alias pycharm='~/application/pycharm-2025.2.0.1/bin/pycharm'

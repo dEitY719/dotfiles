@@ -1,9 +1,9 @@
 #!/bin/bash
 # shell-common/tools/external/postgresql.sh
-# Auto-generated from bash/app/postgresql.bash
+# PostgreSQL service bootstrap & helpers
 
 # PostgreSQL service bootstrap & helpers
-# file: ~/dotfiles/bash/app/postgresql.bash
+# file: ~/dotfiles/shell-common/tools/external/postgresql.sh
 
 # -------------------------------------------------
 # Strict mode

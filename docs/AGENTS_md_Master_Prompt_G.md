@@ -85,7 +85,7 @@ Before finalizing, verify:
     - **Repo Invariants**: "Use `ux_lib` for output. Run `tox` before commit."
 - **Context Map (Action-Based Routing)**:
     - Format: `- **[Intent/Action]({relative_path})** — {Description}`
-    - *Example:* `- **[Database Schema Changes](./bash/app/AGENTS.md)** — SQL migrations and psql helpers.`
+    - *Example:* `- **[External Tools](./shell-common/tools/AGENTS.md)** — Database, container, and application helpers.`
 
 #### Conditional Sections
 - **Knowledge/Learning**: For specific user personas, link to concept docs or `.ipynb` files.

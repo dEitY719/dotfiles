@@ -1,8 +1,8 @@
 #!/bin/bash
 # shell-common/tools/external/mysql.sh
-# Auto-generated from bash/app/mysql.bash
+# MySQL service bootstrap and helpers
 
-# file: ~/dotfiles/bash/app/mysql.bash
+# file: ~/dotfiles/shell-common/tools/external/mysql.sh
 
 : <<'MYSQL_DOC'
 ==========================================================
