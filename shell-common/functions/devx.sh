@@ -254,24 +254,26 @@ _should_run_main=false
 
 if [ -n "${ZSH_VERSION+x}" ]; then
     # In zsh: use ZSH_EVAL_CONTEXT to detect sourcing vs direct execution
-    # - source:* = sourcing (don't run)
-    # - toplevel = direct execution (run)
-    # - file:* = direct execution via zsh file.zsh (run)
-    # - empty/unset (old zsh) = unknown (don't run for safety)
-    case "${ZSH_EVAL_CONTEXT:-}" in
+    # When sourced in ~/.zshrc or other files, ZSH_EVAL_CONTEXT starts with "source:"
+    # The variable changes as code is evaluated, but the prefix tells us the context
+    _eval_ctx="${ZSH_EVAL_CONTEXT:-}"
+
+    case "$_eval_ctx" in
         source:*)
-            # This is sourcing - don't run
+            # This is being sourced - don't run main function
             _should_run_main=false
             ;;
-        toplevel)
-            # Direct execution
+        toplevel|file:*)
+            # Direct execution (zsh script or interactive)
             _should_run_main=true
             ;;
-        file:*)
-            # Direct execution via zsh file.zsh
-            _should_run_main=true
+        *)
+            # Unknown context (old zsh, edge cases) - don't run for safety
+            # This includes: cmdarg, empty string, or any other value
+            _should_run_main=false
             ;;
     esac
+    unset _eval_ctx
 else
     # In bash/sh: check if basename is devx or devx.sh (not shell name)
     case "$(basename "$0")" in
