@@ -31,8 +31,10 @@ export NO_PROXY="$no_proxy"
 
 # Load environment-specific proxy configuration (if exists)
 # This allows overriding default settings for corporate/special environments
-# Use -- to prevent "-bash" or similar values from being interpreted as options
-_proxy_script_dir="$(cd "$(dirname -- "$0")" 2>/dev/null && pwd)" || _proxy_script_dir="$PWD"
+#
+# Note: When sourcing, $0 may be shell name (bash, -zsh, etc), so we use
+# SHELL_COMMON env var as primary source, with fallback to script directory.
+_proxy_script_dir="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/env"
 if [ -f "$_proxy_script_dir/proxy.local.sh" ]; then
     . "$_proxy_script_dir/proxy.local.sh"
 fi
