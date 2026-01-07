@@ -11,6 +11,7 @@ uv.lock
 # Local machine-specific configurations
 *.local.sh
 shell-common/config/pg_services.list
+# Note: pip.conf is symlinked to ~/.config/pip/pip.conf (outside this repo, not version controlled)
 
 # Build artifacts (generated during setup in some environments)
 build/

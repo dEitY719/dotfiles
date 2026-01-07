@@ -128,6 +128,45 @@ setup_local_files() {
     fi
 }
 
+setup_pip_config() {
+    local environment="$1"
+    local pip_config_dir="${HOME}/.config/pip"
+    local pip_conf="${pip_config_dir}/pip.conf"
+
+    # Ensure ~/.config/pip directory exists
+    mkdir -p "$pip_config_dir"
+
+    print_header "Setting up pip configuration for: $environment"
+
+    # Remove existing pip.conf if it exists
+    if [ -f "$pip_conf" ]; then
+        rm -f "$pip_conf"
+        print_info "Removed existing: $pip_conf"
+    fi
+
+    # Create symlink based on environment
+    case "$environment" in
+        internal)
+            # Internal company PC: use internal repository
+            ln -s "${SHELL_COMMON_DIR}/config/pip/pip.conf.internal" "$pip_conf"
+            print_success "Created symlink: $pip_conf → pip.conf.internal"
+            print_info "Using: Samsung internal repositories"
+            ;;
+        external)
+            # External company PC (VPN): use public PyPI
+            ln -s "${SHELL_COMMON_DIR}/config/pip/pip.conf.external" "$pip_conf"
+            print_success "Created symlink: $pip_conf → pip.conf.external"
+            print_info "Using: Public PyPI"
+            ;;
+        public)
+            # Public PC (home): use public PyPI
+            ln -s "${SHELL_COMMON_DIR}/config/pip/pip.conf.external" "$pip_conf"
+            print_success "Created symlink: $pip_conf → pip.conf.external"
+            print_info "Using: Public PyPI"
+            ;;
+    esac
+}
+
 # ============================================================================
 # Main Menu
 # ============================================================================
@@ -150,6 +189,7 @@ main() {
         1)
             print_info "Selected: Public PC"
             cleanup_local_files
+            setup_pip_config "public"
             echo ""
             print_success "Setup complete for public PC (home environment)"
             print_info "All environment-specific configuration removed"
@@ -158,23 +198,27 @@ main() {
         2)
             print_info "Selected: Internal company PC (direct connection)"
             setup_local_files "internal"
+            setup_pip_config "internal"
             echo ""
             print_success "Setup complete for internal company PC"
             print_info "Changes made:"
             print_info "  - Copied all .local.example files to .local.sh"
             print_info "  - Security: System CA Bundle (Option 2) activated"
             print_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
+            print_info "  - Pip: Samsung internal repository configured"
             echo ""
             ;;
         3)
             print_info "Selected: External company PC (VPN)"
             setup_local_files "external"
+            setup_pip_config "external"
             echo ""
             print_success "Setup complete for external company PC"
             print_info "Changes made:"
             print_info "  - Copied .local.example files to .local.sh (except proxy)"
             print_info "  - Security: Custom Certificate (Option 1) activated"
             print_info "  - Proxy: Skipped (not needed for VPN - direct connection)"
+            print_info "  - Pip: Public PyPI configured"
             print_info "  - Next: Run 'setup_crt.sh' to install the certificate"
             echo ""
             ;;

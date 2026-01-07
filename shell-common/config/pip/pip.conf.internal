@@ -1,0 +1,15 @@
+# pip.conf.internal (template)
+# Samsung internal repository configuration for corporate PC
+#
+# Usage:
+#   This file is symlinked to ~/.config/pip/pip.conf by setup.sh
+#   Choose this option when using company internal repositories
+#   (requires direct connection to company network)
+
+[global]
+no-cache-dir = true
+index = http://repo.samsungds.net/artifactory/api/pypi/pypi-remote
+index-url = http://repo.samsungds.net/artifactory/api/pypi/pypi-remote/simple
+extra-index-url = http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple
+find-links = https://repo.samsungds.net/artifactory/api/pypi/pypi-torch/torch_stable.html
+trusted-host = nexus.adpaas.cloud.samsungds.net repo.samsungds.net
