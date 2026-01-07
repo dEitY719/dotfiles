@@ -4,14 +4,28 @@
 # Usage:
 #   This file is symlinked to ~/.config/pip/pip.conf by setup.sh
 #   Choose this option when using company internal repositories
-#   (requires direct connection to company network and proxy)
+#   (requires direct connection to company network)
 #
 # Note: CA certificate is configured via security.local.sh -> REQUESTS_CA_BUNDLE
+#       Proxy is configured via proxy.local.sh -> environment variables
 
 [global]
-no-cache-dir = true
-proxy = http://12.26.204.100:8080
-index-url = http://repo.samsungds.net:8081/artifactory/api/pypi/pypi/simple
-extra-index-url = http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple
-find-links = https://repo.samsungds.net/artifactory/api/pypi/pypi-torch/torch_stable.html
-trusted-host = repo.samsungds.net nexus.adpaas.cloud.samsungds.net
+# Minimal configuration - matches company standard
+# Primary Samsung internal PyPI repository
+index-url = http://repo.samsungds.net/artifactory/api/pypi/pypi-remote/simple
+
+# Trust the repository host (disable SSL verification if needed)
+trusted-host = repo.samsungds.net
+
+# ============================================================
+# Commented out - managed by other configuration files
+# ============================================================
+# no-cache-dir = true
+# Proxy settings: Use shell-common/env/proxy.local.sh instead
+# proxy = http://12.26.204.100:8080
+
+# Extra repositories (commented - not used in current setup)
+# extra-index-url = http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple
+
+# PyTorch wheels (commented - install via dedicated channel if needed)
+# find-links = https://repo.samsungds.net/artifactory/api/pypi/pypi-torch/torch_stable.html
