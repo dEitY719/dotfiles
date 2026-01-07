@@ -64,10 +64,17 @@ proxy_help() {
 }
 
 # Wrapper function for check_proxy.sh diagnostic
+# Also runs pip_check for comprehensive network diagnostics
 proxy_check() {
     local check_proxy_script="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/custom/check_proxy.sh"
     if [ -f "$check_proxy_script" ]; then
         bash "$check_proxy_script" "$@"
+        echo ""
+        echo ""
+        # Also run pip check for comprehensive diagnostics
+        if type pip_check >/dev/null 2>&1; then
+            pip_check "$@"
+        fi
     else
         ux_error "check_proxy.sh not found at $check_proxy_script" >&2
         return 1
