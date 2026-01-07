@@ -248,13 +248,27 @@ devx__main() {
 # Only execute if directly invoked (not sourced)
 # Need to handle bash and zsh differently:
 # - bash: $0 is shell name when sourced, script name when executed
-# - zsh: $0 is script name in both cases, but ZSH_EVAL_CONTEXT differs
+# - zsh: ZSH_EVAL_CONTEXT prefix distinguishes sourcing (source:*) from direct execution
+# Default to false (don't run) for safety, only enable for explicit direct execution
 _should_run_main=false
 
 if [ -n "${ZSH_VERSION+x}" ]; then
-    # In zsh: check if ZSH_EVAL_CONTEXT indicates direct execution (not sourcing)
+    # In zsh: use ZSH_EVAL_CONTEXT to detect sourcing vs direct execution
+    # - source:* = sourcing (don't run)
+    # - toplevel = direct execution (run)
+    # - file:* = direct execution via zsh file.zsh (run)
+    # - empty/unset (old zsh) = unknown (don't run for safety)
     case "${ZSH_EVAL_CONTEXT:-}" in
-        toplevel*|"")
+        source:*)
+            # This is sourcing - don't run
+            _should_run_main=false
+            ;;
+        toplevel)
+            # Direct execution
+            _should_run_main=true
+            ;;
+        file:*)
+            # Direct execution via zsh file.zsh
             _should_run_main=true
             ;;
     esac
