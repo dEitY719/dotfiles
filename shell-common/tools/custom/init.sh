@@ -27,11 +27,11 @@ if ! type ux_error >/dev/null 2>&1; then
     ux_success() { echo "Success:" "$@"; }
 fi
 
-# Detect DOTFILES_ROOT dynamically (bash-specific due to BASH_SOURCE)
+# Detect DOTFILES_ROOT dynamically (POSIX-compatible for bash/zsh)
 # Works regardless of where this script is called from
-# Use -- to prevent "-bash" or similar values from being interpreted as options
-_THIS_SCRIPT="$(cd "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/$(basename -- "${BASH_SOURCE[0]}")"
-_THIS_DIR="$(dirname -- "$_THIS_SCRIPT")"
+# Get this script's directory using POSIX-compatible approach
+# Works in bash, zsh, and other POSIX shells
+_THIS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Navigate from shell-common/tools/custom back to dotfiles root
 # Path: /path/to/dotfiles/shell-common/tools/custom/init.sh

@@ -53,6 +53,7 @@ fi
 
 # Set the base directory for dotfiles bash configurations
 # Use common initialization function for consistency across all scripts
+# NOTE: BASH_SOURCE is bash-specific (won't execute in zsh due to zsh check above)
 _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 source "$(dirname "$_SCRIPT_PATH")/util/init.bash"
 DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
