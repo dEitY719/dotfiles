@@ -98,34 +98,38 @@ check_pip_environment() {
 check_pip_repository() {
     ux_header "4. Repository Connectivity Test"
 
-    ux_section "Primary Repository"
-    local repo_url="http://repo.samsungds.net:8081/artifactory/api/pypi/pypi/simple"
-    echo "  Testing: $repo_url"
+    # Get configured index-url from pip
+    local configured_repo
+    configured_repo=$(pip config list 2>/dev/null | grep "global.index-url" | cut -d"=" -f2 | tr -d "'" | xargs)
+
+    if [ -z "$configured_repo" ]; then
+        ux_info "No repository configured in pip config"
+        return 0
+    fi
+
+    ux_section "Configured Repository (from pip config)"
+    echo "  Testing: $configured_repo"
 
     if command -v curl >/dev/null 2>&1; then
-        if curl -s --connect-timeout 5 --max-time 10 "$repo_url" >/dev/null 2>&1; then
-            ux_success "Repository accessible (HTTP)"
+        # Test with HTTP status code check (more reliable than just checking exit code)
+        local http_code
+        http_code=$(curl -s -w "%{http_code}" -o /dev/null --connect-timeout 5 --max-time 10 "$configured_repo" 2>/dev/null)
+
+        if [ "$http_code" = "200" ] || [ "$http_code" = "404" ]; then
+            ux_success "Repository accessible (HTTP $http_code)"
         else
-            ux_warning "Repository NOT accessible (may require proxy/authentication)"
+            ux_warning "Repository NOT accessible (HTTP $http_code - may require proxy/authentication/network)"
         fi
     else
         ux_info "curl not available - skipping connectivity test"
     fi
     echo ""
 
-    ux_section "Secondary Repository (DataService)"
-    local secondary_url="http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple"
-    echo "  Testing: $secondary_url"
-
-    if command -v curl >/dev/null 2>&1; then
-        if curl -s --connect-timeout 5 --max-time 10 "$secondary_url" >/dev/null 2>&1; then
-            ux_success "Repository accessible (HTTP)"
-        else
-            ux_warning "Repository NOT accessible (may require proxy/authentication)"
-        fi
-    else
-        ux_info "curl not available - skipping connectivity test"
-    fi
+    # Additional info about Samsung internal repos (for reference only)
+    ux_section "Samsung Internal Repositories (Reference - requires internal network)"
+    ux_info "These URLs are only accessible from internal company network or with proper proxy:"
+    ux_bullet "Primary: http://repo.samsungds.net/artifactory/api/pypi/pypi-remote/simple"
+    ux_bullet "DataService: http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple"
     echo ""
 }
 
