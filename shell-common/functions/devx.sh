@@ -3,6 +3,7 @@
 # Development utility - project setup and command routing
 # Shared between bash and zsh
 
+
 # ═══════════════════════════════════════════════════════════════
 # PATH Setup - Ensure ~/.local/bin is accessible
 # ═══════════════════════════════════════════════════════════════
@@ -246,34 +247,26 @@ devx__main() {
 }
 
 # Only execute if directly invoked (not sourced)
-# Need to handle bash and zsh differently:
-# - bash: $0 is shell name when sourced, script name when executed
-# - zsh: ZSH_EVAL_CONTEXT prefix distinguishes sourcing (source:*) from direct execution
-# Default to false (don't run) for safety, only enable for explicit direct execution
+# In zsh: when sourced, ZSH_EVAL_CONTEXT has prefix "source:"
+#         when called as function/command in .zshrc, it has "file:*" (not reliable for detection)
+# In bash: when sourced, basename "$0" is shell name (bash, sh)
+#         when executed directly, basename "$0" is script name (devx, devx.sh)
 _should_run_main=false
 
 if [ -n "${ZSH_VERSION+x}" ]; then
-    # In zsh: use ZSH_EVAL_CONTEXT to detect sourcing vs direct execution
-    # When sourced in ~/.zshrc or other files, ZSH_EVAL_CONTEXT starts with "source:"
-    # The variable changes as code is evaluated, but the prefix tells us the context
-    _eval_ctx="${ZSH_EVAL_CONTEXT:-}"
-
-    case "$_eval_ctx" in
+    # In zsh: Only "source:*" indicates explicit sourcing
+    # All other cases (file:*, toplevel, cmdarg, etc) should default to false for safety
+    case "${ZSH_EVAL_CONTEXT:-}" in
         source:*)
-            # This is being sourced - don't run main function
+            # This is being sourced via "source" command
             _should_run_main=false
             ;;
-        toplevel|file:*)
-            # Direct execution (zsh script or interactive)
-            _should_run_main=true
-            ;;
         *)
-            # Unknown context (old zsh, edge cases) - don't run for safety
-            # This includes: cmdarg, empty string, or any other value
+            # Default to false (safe) for all other cases
+            # This prevents accidental execution during shell initialization
             _should_run_main=false
             ;;
     esac
-    unset _eval_ctx
 else
     # In bash/sh: check if basename is devx or devx.sh (not shell name)
     case "$(basename "$0")" in
