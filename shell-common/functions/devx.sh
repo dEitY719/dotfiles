@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/tools/custom/devx.sh
+# shell-common/functions/devx.sh
 # Development utility - project setup and command routing
 # Shared between bash and zsh
 
@@ -14,35 +14,52 @@ esac
 
 # ═══════════════════════════════════════════════════════════════
 # Self-heal: Create symlink to devx in ~/.local/bin
-# (Skipped in test mode)
+# (Skipped in test mode and when being sourced as a function)
 # ═══════════════════════════════════════════════════════════════
 
 if [ "${DOTFILES_TEST_MODE:-0}" != "1" ]; then
-    # Detect the source script path (works in both bash and sh)
-    if [ -n "${BASH_SOURCE+x}" ]; then
-        DEVX_SRC="${BASH_SOURCE[0]}"
-    else
-        # For shells that don't have BASH_SOURCE, use $0
-        # This is a limitation of POSIX sh, but the tool is primarily bash-friendly
-        DEVX_SRC="$0"
+    # Only run self-heal when being executed directly, not when sourced
+    # When sourced as a function, basename "$0" will be the shell name (bash, zsh, sh)
+    # When executed directly, basename "$0" will be devx or devx.sh
+    _is_being_executed=false
+
+    case "$(basename "$0")" in
+        devx.sh|devx)
+            _is_being_executed=true
+            ;;
+    esac
+
+    if [ "$_is_being_executed" = "true" ]; then
+        # Detect the source script path (works in both bash and sh)
+        if [ -n "${BASH_SOURCE+x}" ]; then
+            DEVX_SRC="${BASH_SOURCE[0]}"
+        else
+            # For shells that don't have BASH_SOURCE, use $0
+            DEVX_SRC="$0"
+        fi
+
+        # Resolve to absolute path
+        if command -v realpath > /dev/null 2>&1; then
+            DEVX_SRC="$(realpath "$DEVX_SRC" 2>/dev/null || true)"
+        elif command -v readlink > /dev/null 2>&1; then
+            DEVX_SRC="$(readlink -f "$DEVX_SRC" 2>/dev/null || true)"
+        fi
+
+        # Only create symlink if we have a valid absolute path
+        if [ -n "$DEVX_SRC" ] && [ -f "$DEVX_SRC" ]; then
+            # Create ~/.local/bin if needed
+            mkdir -p "${HOME}/.local/bin"
+
+            # Update symlink if needed
+            current_link="$(readlink "${HOME}/.local/bin/devx" 2>/dev/null || true)"
+            if [ "$current_link" != "$DEVX_SRC" ]; then
+                ln -sf "$DEVX_SRC" "${HOME}/.local/bin/devx" 2>/dev/null || true
+                chmod +x "${HOME}/.local/bin/devx" 2>/dev/null || true
+            fi
+        fi
     fi
 
-    # Resolve to absolute path
-    if command -v realpath > /dev/null 2>&1; then
-        DEVX_SRC="$(realpath "$DEVX_SRC")"
-    elif command -v readlink > /dev/null 2>&1; then
-        DEVX_SRC="$(readlink -f "$DEVX_SRC" 2>/dev/null || echo "$DEVX_SRC")"
-    fi
-
-    # Create ~/.local/bin if needed
-    mkdir -p "${HOME}/.local/bin"
-
-    # Update symlink if needed
-    current_link="$(readlink "${HOME}/.local/bin/devx" 2>/dev/null || true)"
-    if [ "$current_link" != "$DEVX_SRC" ]; then
-        ln -sf "$DEVX_SRC" "${HOME}/.local/bin/devx"
-        chmod +x "${HOME}/.local/bin/devx" 2>/dev/null || true
-    fi
+    unset _is_being_executed
 fi
 
 # ═══════════════════════════════════════════════════════════════
@@ -169,10 +186,10 @@ devx__main() {
             script_path="$(readlink -f "$script_path" 2>/dev/null || echo "$script_path")"
         fi
 
-        # Navigate from shell-common/tools/custom/devx.sh to repo root
-        # shell-common/tools/custom/devx.sh -> shell-common/tools/custom -> shell-common/tools -> shell-common -> root
+        # Navigate from shell-common/functions/devx.sh to repo root
+        # shell-common/functions/devx.sh -> shell-common/functions -> shell-common -> root
         local repo_root
-        repo_root="$(dirname "$(dirname "$(dirname "$(dirname "$script_path")")")")"
+        repo_root="$(dirname "$(dirname "$(dirname "$script_path")")")"
         local tool_path="${repo_root}/shell-common/tools/custom/repo_stats.sh"
 
         if [ -f "$tool_path" ]; then
@@ -229,7 +246,29 @@ devx__main() {
 }
 
 # Only execute if directly invoked (not sourced)
-# In POSIX sh, $0 check is the standard way
-if [ "$(basename "$0")" = "devx.sh" ] || [ "$(basename "$0")" = "devx" ]; then
+# Need to handle bash and zsh differently:
+# - bash: $0 is shell name when sourced, script name when executed
+# - zsh: $0 is script name in both cases, but ZSH_EVAL_CONTEXT differs
+_should_run_main=false
+
+if [ -n "${ZSH_VERSION+x}" ]; then
+    # In zsh: check if ZSH_EVAL_CONTEXT indicates direct execution (not sourcing)
+    case "${ZSH_EVAL_CONTEXT:-}" in
+        toplevel*|"")
+            _should_run_main=true
+            ;;
+    esac
+else
+    # In bash/sh: check if basename is devx or devx.sh (not shell name)
+    case "$(basename "$0")" in
+        devx|devx.sh)
+            _should_run_main=true
+            ;;
+    esac
+fi
+
+if [ "$_should_run_main" = "true" ]; then
     devx__main "$@"
 fi
+
+unset _should_run_main
