@@ -197,6 +197,7 @@ main() {
             ;;
         2)
             print_info "Selected: Internal company PC (direct connection)"
+            cleanup_local_files
             setup_local_files "internal"
             setup_pip_config "internal"
             echo ""
@@ -210,6 +211,7 @@ main() {
             ;;
         3)
             print_info "Selected: External company PC (VPN)"
+            cleanup_local_files
             setup_local_files "external"
             setup_pip_config "external"
             echo ""
