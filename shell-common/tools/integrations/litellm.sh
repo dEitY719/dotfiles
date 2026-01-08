@@ -266,6 +266,8 @@ litellm_models() {
 # 6. 모델 테스트
 litellm_test() {
     local model_name="${1:-gemini-2.0-flash}"
+    local prompt="${2:-What is 2+2?}"
+    local max_tokens="${3:-100}"
 
     ux_header "LiteLLM 모델 테스트: $model_name"
 
@@ -287,43 +289,61 @@ litellm_test() {
 
     ux_info "요청 중..."
     ux_bullet "Model: ${UX_SUCCESS}$model_name${UX_RESET}"
-    ux_bullet "Prompt: What is 2+2?"
+    ux_bullet "Prompt: $prompt"
+    ux_bullet "Max tokens: $max_tokens"
     echo ""
+
+    # JSON 요청 생성 (proper escaping)
+    local request_json
+    request_json=$(cat <<EOF
+{
+  "model": "$model_name",
+  "messages": [
+    {
+      "role": "user",
+      "content": $(echo "$prompt" | jq -R .)
+    }
+  ],
+  "max_tokens": $max_tokens
+}
+EOF
+)
 
     local response
     response=$(curl -s -X POST "${LITELLM_URL}/v1/chat/completions" \
         -H "Authorization: Bearer ${LITELLM_API_KEY}" \
         -H "Content-Type: application/json" \
-        -d "{\"model\":\"$model_name\",\"messages\":[{\"role\":\"user\",\"content\":\"What is 2+2?\"}],\"max_tokens\":50}" \
+        -d "$request_json" \
         2>/dev/null)
 
-    # 에러 확인
-    if echo "$response" | grep -q '"error"'; then
+    # jq로 에러 확인
+    if echo "$response" | jq -e '.error' &>/dev/null; then
         local error_msg
-        error_msg=$(echo "$response" | grep -o '"message":"[^"]*"' | head -1 | cut -d'"' -f4)
+        error_msg=$(echo "$response" | jq -r '.error.message // .error' 2>/dev/null)
         ux_error "요청 실패"
         echo "  에러: $error_msg"
+        echo ""
+        echo "DEBUG: Full response:"
+        echo "$response" | jq . 2>/dev/null || echo "$response"
         return 1
     fi
 
-    # 응답 파싱
+    # jq로 응답 파싱 (안전함)
     local content
-    content=$(echo "$response" | grep -o '"content":"[^"]*"' | head -1 | cut -d'"' -f4)
+    content=$(echo "$response" | jq -r '.choices[0].message.content // empty' 2>/dev/null)
 
     if [[ -z "$content" ]]; then
-        # content가 없으면 다른 형식 확인
         ux_warning "응답을 수신했지만 내용이 비어있습니다"
         echo ""
-        echo "원본 응답 (일부):"
-        echo "$response" | head -c 200
-        echo "..."
+        echo "원본 응답:"
+        echo "$response" | jq . 2>/dev/null || echo "$response"
         return 0
     fi
 
     ux_success "성공"
     echo ""
     ux_section "응답"
-    echo "  $content"
+    echo "$content"
     return 0
 }
 
