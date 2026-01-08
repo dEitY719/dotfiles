@@ -84,15 +84,160 @@ When sourcing files from scripts loaded by both bash and zsh loaders:
 - **env/**: Only `export` statements, no functions
 - **aliases/**: Only `alias` definitions, no complex logic
 - **functions/**: Utility functions and help systems
-- **tools/external/**: Third-party tool integrations (fzf, bat, fd, etc.)
+- **tools/integrations/**: Third-party tool integrations (fzf, bat, fd, etc.)
 - **tools/custom/**: Installation scripts and custom utilities
 - **tools/ux_lib/**: UX library (loaded first by main loaders)
 - **projects/**: Project-specific utilities (finrx, dmc, smithery)
+
+# Common Mistakes & Fixes
+
+## ERROR 1: Function placed in `tools/custom/` not auto-sourced
+**Symptom**: Function defined in `tools/custom/mytool.sh` not available after shell restart
+**Root Cause**: `tools/custom/` is NOT auto-sourced by bash/main.bash or zsh/main.zsh
+**Fix**: Move function to `functions/` directory instead. Use `tools/custom/` only for executable scripts, not function definitions
+**Example**:
+```bash
+# WRONG - won't be available as a function
+tools/custom/my_function.sh  (contains: my_function() { ... })
+
+# RIGHT - auto-sourced and available
+functions/my_function.sh     (contains: my_function() { ... })
+```
+
+## ERROR 2: Utility script accidentally sourced globally
+**Symptom**: Script side effects execute for every shell session (duplicate exports, unwanted aliases)
+**Root Cause**: Executable script placed in `functions/` or auto-sourced directory
+**Fix**: Place executable scripts in `tools/custom/` (explicit execution only, no auto-sourcing)
+**Example**:
+```bash
+# WRONG - side effects run on every login
+functions/setup_dev.sh  (contains: #!/bin/sh ... npm install ...)
+
+# RIGHT - only runs when explicitly executed
+tools/custom/setup_dev.sh  (then call: bash tools/custom/setup_dev.sh)
+```
+
+## ERROR 3: Hardcoded paths instead of environment variables
+**Symptom**: Paths break when dotfiles directory moved or symlinked
+**Root Cause**: Using absolute paths (e.g., `/home/user/dotfiles/...`) instead of `$SHELL_COMMON` or `$DOTFILES_ROOT`
+**Fix**: Use pre-defined environment variables: `$SHELL_COMMON`, `$DOTFILES_ROOT`, `$HOME`
+**Example**:
+```bash
+# WRONG - breaks if path changes
+script_path="/home/bwyoon/dotfiles/shell-common/tools/custom/setup.sh"
+
+# RIGHT - works anywhere
+script_path="${SHELL_COMMON}/tools/custom/setup.sh"
+```
+
+## ERROR 4: Confusion between `tools/integrations/` vs `tools/custom/`
+**Symptom**: Unclear where to place wrapper scripts or third-party integrations
+**Root Cause**: Both directories contain `.sh` files, semantics unclear
+**Fix**: Remember: **integrations = wrappers for external tools** (auto-sourced), **custom = utility scripts** (explicit execution)
+**Example**:
+```bash
+# integrations/ - Auto-sourced wrappers for external tools
+tools/integrations/npm.sh       (wraps npm command)
+tools/integrations/docker.sh    (wraps docker command)
+
+# custom/ - Explicit execution scripts
+tools/custom/install_npm.sh     (installs npm)
+tools/custom/setup_docker.sh    (configures docker)
+```
+
+## ERROR 5: Mixing concerns in a single file
+**Symptom**: One file does too many things (env setup + aliases + functions), hard to maintain
+**Root Cause**: Not splitting by responsibility (env vars, aliases, functions should be separate files)
+**Fix**: Use multiple files for different concerns. File names should reflect purpose: `*_help.sh`, `*_env.sh`, etc.
+**Example**:
+```bash
+# WRONG - all mixed in one file
+git.sh:
+  export GIT_EDITOR="vim"
+  alias gs="git status"
+  git_help() { ... }
+
+# RIGHT - split by concern
+git.sh or aliases/git.sh  (just: alias gs="git status")
+env/git.sh               (just: export GIT_EDITOR="vim")
+functions/git_help.sh    (just: git_help() { ... })
+```
+
+## ERROR 6: Using bash-specific syntax in shell-common
+**Symptom**: Function works in bash but fails in zsh (array syntax, `BASH_SOURCE`, etc.)
+**Root Cause**: Using bash-only features without shell detection
+**Fix**: Use POSIX syntax or wrap with shell detection block (`if [ -n "$BASH_VERSION" ]`)
+**Example**:
+```bash
+# WRONG - bash-only array syntax
+my_array=("$@")
+files=("${BASH_SOURCE[0]%/*}"/files/*)
+
+# RIGHT - POSIX-compatible
+my_array="$@"
+for f in "${SHELL_COMMON}"/files/*; do ... done
+
+# Or with bash/zsh detection
+if [ -n "$BASH_VERSION" ]; then
+    my_array=("$@")
+elif [ -n "$ZSH_VERSION" ]; then
+    my_array=("${(@s/ /)$@}")  # zsh array expansion
+fi
+```
 
 ## Dependency Management
 - Files must be self-contained or check dependencies with `_have`
 - No assumptions about load order (except ux_lib loads first)
 - Guard expensive operations (e.g., pyenv init) with conditionals
+
+# Decision Tree: Where to Add a New File?
+
+```
+1. Is it a simple alias?
+   → YES: Add to aliases/*.sh
+   → NO: Go to 2
+
+2. Is it an environment variable export?
+   → YES: Add to env/*.sh
+   → NO: Go to 3
+
+3. Is it a help function (like apt_help, git_help)?
+   → YES: Add to functions/*_help.sh
+   → NO: Go to 4
+
+4. Is it a utility function called from the shell?
+   → YES: Add to functions/*.sh
+   → NO: Go to 5
+
+5. Is it a wrapper/integration for a 3rd-party tool (like npm, docker)?
+   → YES: Add to tools/integrations/*.sh
+   → NO: Go to 6
+
+6. Is it an executable script meant to be run explicitly?
+   → YES: Add to tools/custom/*.sh
+   → NO: Go to 7
+
+7. Is it bash or zsh-specific?
+   → YES: Add to bash/*.bash or zsh/*.zsh (not shell-common)
+   → NO: Go to 8
+
+8. Is it project-specific (finrx, smithery, etc.)?
+   → YES: Add to projects/<project>/*.sh
+   → NO: Check if it fits one of the above categories
+```
+
+**Quick Reference Table**:
+
+| Type | Location | Auto-sourced? | Example |
+|------|----------|---|---------|
+| Alias | `aliases/*.sh` | ✓ | `gs='git status'` |
+| Environment | `env/*.sh` | ✓ | `export PATH=...` |
+| Help function | `functions/*_help.sh` | ✓ | `apt_help()` |
+| Utility function | `functions/*.sh` | ✓ | `devx()`, `gitlog()` |
+| 3rd-party wrapper | `tools/integrations/*.sh` | ✓ | `npm.sh`, `docker.sh` |
+| Executable script | `tools/custom/*.sh` | ✗ | `install_npm.sh`, `setup.sh` |
+| Shell-specific | `bash/*.bash` or `zsh/*.zsh` | varies | bash prompt setup |
+| Project-specific | `projects/<name>/*.sh` | ✓ | finrx utilities |
 
 # Testing Strategy
 
@@ -122,7 +267,7 @@ zsh -c "source shell-common/functions/git.sh && type git_help"
 - **[Environment Variables](./env/)** — PATH, locale, editor, proxy, security settings
 - **[Aliases](./aliases/)** — Core, directory, git, system, disk usage shortcuts
 - **[Functions](./functions/)** — Help systems (my_help, git_help, etc.), utilities
-- **[External Tools](./tools/external/)** — fzf, bat, fd, pyenv, nvm integrations
+- **[Integrations](./tools/integrations/)** — 3rd-party tool wrappers (fzf, bat, fd, pyenv, nvm)
 - **[Custom Tools](./tools/custom/)** — Installation scripts, setup utilities
 - **[UX Library](./tools/ux_lib/AGENTS.md)** — Styling, logging, interactive components
 - **[Projects](./projects/)** — FinRx, dmc-playground, smithery-playground utilities
