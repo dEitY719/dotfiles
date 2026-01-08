@@ -2,15 +2,18 @@
 set -euo pipefail
 
 # Configuration (dotfiles project - bash configuration management)
-PY_RUN="uv run"
-PY_TEST="uv run pytest"
 
 cmd="${1:-help}"
 
 case "$cmd" in
   test)
-    echo "Running tests..."
-    $PY_TEST "${@:2}"
+    echo "Running tests via tests/test..."
+    if [ -x "./tests/test" ]; then
+      ./tests/test "${@:2}"
+    else
+      echo "ERROR: tests/test not found or not executable."
+      exit 1
+    fi
     ;;
 
   fmt|format)
@@ -78,7 +81,7 @@ case "$cmd" in
 Usage: ./tools/dev.sh <command>
 
 Commands:
-  test         Run test suite (pytest)
+  test         Run test suite (tests/test)
   format       Format and lint Python code (tox -e ruff)
   lint         Run linters (ruff, mypy, shellcheck) - excludes markdown
   mdlint       Run markdown linter separately (tox -e mdlint)

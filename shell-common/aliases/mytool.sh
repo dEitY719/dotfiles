@@ -15,4 +15,4 @@ alias hwinfo='get_hw_info'
 alias aa='agents_init'
 
 # Test suite runner alias (uses namespace to avoid POSIX 'test' builtin collision)
-alias dtests='${DOTFILES_ROOT:-.}/scripts/test'
+alias dtests='${DOTFILES_ROOT:-.}/tests/test'

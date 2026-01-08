@@ -313,7 +313,7 @@ pytest tests/ --tb=short            # 짧은 traceback
 # POSIX test builtin을 shadow하게 되어 스크립트 깨짐
 
 # ✅ DO: 네임스페이스된 runner만 사용
-alias dtests='scripts/test'        # 또는 shell-common/tools/custom/dotfiles_test.sh
+alias dtests='tests/test'        # 또는 shell-common/tools/custom/dotfiles_test.sh
 ```
 
 **권장 사항**:
@@ -417,15 +417,15 @@ commands = pytest {posargs}
 **Priority: MEDIUM**
 
 ```bash
-# scripts/test 또는 shell-common/tools/custom/dotfiles_test.sh
+# tests/test 또는 shell-common/tools/custom/dotfiles_test.sh
     - pytest 설치 확인
     - pytest 기반 실행
     - 결과 포맷팅 (UX 라이브러리)
     - -a/--all 옵션 지원
 
 # 사용법:
-# scripts/test -a          # 모든 테스트
-# scripts/test --help      # 도움말
+# tests/test -a          # 모든 테스트
+# tests/test --help      # 도움말
 ```
 
 ### 6.6 Phase 6: 문서 및 CI 통합 (P3)
@@ -545,7 +545,7 @@ alias dtests='pytest'      # ✓ 충돌 없음
 alias mytests='pytest'     # ✓ 또는 다른 이름
 
 # Option 2: 스크립트로 실행
-scripts/test -a            # ✓ 함수/alias 아님
+tests/test -a            # ✓ 함수/alias 아님
 shell-common/tools/custom/dotfiles_test.sh
 
 # Option 3: 조건부 alias (권장 안함)
@@ -783,7 +783,7 @@ watchmedo shell-command \
   - bash vs zsh 로드 성공
   - 함수/alias 정의 확인
 
-- scripts/test 또는 shell-common/tools/custom/dotfiles_test.sh
+- tests/test 또는 shell-common/tools/custom/dotfiles_test.sh
   - 네임스페이스된 runner (dtests)
   - pytest 설치 확인 및 자동 실행
 
@@ -831,7 +831,7 @@ watchmedo shell-command \
    - 테스트 환경에서 safe하게 실행
 
 5. Runner 구현 (P2)
-   - scripts/test 또는 dotfiles_test.sh 네임스페이스된 runner
+   - tests/test 또는 dotfiles_test.sh 네임스페이스된 runner
    - dtests alias 제공
 
 ### 최종 단계 (P1 완료 후)

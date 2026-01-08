@@ -6,12 +6,12 @@ Comprehensive pytest-based test suite for the dotfiles project, validating bash/
 
 Run all tests:
 ```bash
-./scripts/test
+./tests/test
 ```
 
 With verbose output:
 ```bash
-./scripts/test -v
+./tests/test -v
 ```
 
 Or use the dtests alias:
@@ -150,13 +150,13 @@ Auto-detected by conftest.py based on current working directory. Available in al
 ### All Tests
 
 ```bash
-./scripts/test
+./tests/test
 ```
 
 ### Verbose Output
 
 ```bash
-./scripts/test -v
+./tests/test -v
 ```
 
 ### Specific Test File
@@ -292,5 +292,5 @@ View results in Actions tab on GitHub.
 ## See Also
 
 - docs/abc-review-C.md: Test plan and architecture
-- scripts/test: Test runner with dependency checking
+- tests/test: Test runner with dependency checking
 - .github/workflows/test.yml: GitHub Actions CI configuration

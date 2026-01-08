@@ -3,11 +3,11 @@
 # Test Suite Runner for Dotfiles Project
 #
 # Usage:
-#   ./scripts/test              # Run all tests (parallel by default)
-#   ./scripts/test -a|--all     # Run all tests (same as above)
-#   ./scripts/test -v|--verbose # Run with verbose output
-#   ./scripts/test -s|--serial  # Run tests sequentially (disable parallel)
-#   ./scripts/test -h|--help    # Show help
+#   ./tests/test              # Run all tests (parallel by default)
+#   ./tests/test -a|--all     # Run all tests (same as above)
+#   ./tests/test -v|--verbose # Run with verbose output
+#   ./tests/test -s|--serial  # Run tests sequentially (disable parallel)
+#   ./tests/test -h|--help    # Show help
 #
 # Requirements:
 #   - Python 3.10+
@@ -62,7 +62,7 @@ show_help() {
 Test Suite Runner for Dotfiles Project
 
 USAGE:
-    ./scripts/test [OPTIONS]
+    ./tests/test [OPTIONS]
 
 OPTIONS:
     -a, --all       Run all tests (default)
@@ -74,10 +74,10 @@ ENVIRONMENT VARIABLES:
     DOTFILES_TEST_MODE=1  Enable test mode (prevents side effects)
 
 EXAMPLES:
-    ./scripts/test                  # Run all tests (parallel)
-    ./scripts/test --verbose        # Verbose output (parallel)
-    ./scripts/test --serial         # Sequential execution
-    ./scripts/test --verbose --serial # Verbose + sequential
+    ./tests/test                  # Run all tests (parallel)
+    ./tests/test --verbose        # Verbose output (parallel)
+    ./tests/test --serial         # Sequential execution
+    ./tests/test --verbose --serial # Verbose + sequential
 
 PERFORMANCE:
     Default: Parallel execution using all CPU cores (~60-80s)
