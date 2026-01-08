@@ -16,7 +16,8 @@ litellm_help() {
 
     ux_section "Examples"
     ux_bullet "Start: ${UX_SUCCESS}litellm_start${UX_RESET}"
-    ux_bullet "Test:  ${UX_SUCCESS}litellm_test gemini-2.0-flash${UX_RESET}"
+    # ux_bullet "Test:  ${UX_SUCCESS}litellm_test gemini-2.0-flash${UX_RESET}"
+    ux_bullet "Test:  ${UX_SUCCESS}litellm_test gpt-oss-20b${UX_RESET}"
     ux_bullet "Check: ${UX_SUCCESS}litellm_status${UX_RESET}"
     echo ""
 
@@ -26,3 +27,6 @@ litellm_help() {
     ux_table_row "Key" "$LITELLM_API_KEY" ""
     echo ""
 }
+
+# Alias for litellm-help format (using dash instead of underscore)
+alias litellm-help='litellm_help'
