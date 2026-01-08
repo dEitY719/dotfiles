@@ -265,7 +265,7 @@ litellm_models() {
 
 # 6. 모델 테스트
 litellm_test() {
-    local model_name="${1:-gemini-2.0-flash}"
+    local model_name="${1:-gpt-oss-20b}"
     local prompt="${2:-What is 2+2?}"
     local max_tokens="${3:-100}"
 
