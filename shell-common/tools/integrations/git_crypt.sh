@@ -295,15 +295,34 @@ gc_push_env() {
             return 1
         fi
     else
-        ux_success "git-crypt 이미 초기화됨"
-        ux_info "이 프로젝트는 이미 git-crypt이 설정되어 있습니다."
+        # Check git-crypt metadata integrity
+        local git_crypt_dir=".git/git-crypt"
+        if [[ ! -d "$git_crypt_dir" ]]; then
+            ux_error "git-crypt 메타데이터가 손상되었습니다!"
+            ux_info ".git/git-crypt 디렉토리를 찾을 수 없습니다."
+            echo ""
+            ux_section "💡 복구 방법"
+            ux_bullet "1단계: git-crypt를 초기화 (기존 암호화 설정 초기화)"
+            echo "  rm -rf .git/git-crypt"
+            echo "  git-crypt init"
+            echo ""
+            ux_bullet "2단계: 다시 실행"
+            echo "  gcpush"
+            echo ""
+            return 1
+        fi
+
+        ux_success "git-crypt 메타데이터 확인됨"
         echo ""
 
         # Check if repository is unlocked
-        if git-crypt status -f &>/dev/null; then
+        local unlock_status
+        unlock_status=$(git-crypt status -f 2>&1)
+
+        if [[ $? -eq 0 ]]; then
             ux_success "Repository는 unlocked 상태입니다."
         else
-            ux_warning "⚠️  Repository가 locked 상태입니다."
+            ux_warning "Repository가 locked 상태입니다."
             ux_info "복호화를 위해 git-crypt unlock 실행 중..."
             echo ""
 
@@ -313,11 +332,14 @@ gc_push_env() {
                 ux_error "git-crypt unlock 실패"
                 echo ""
                 ux_section "💡 해결 방법"
-                ux_bullet "상황 1️⃣  (처음 Team 프로젝트에 join): 프로젝트 소유자가 당신의 GPG 키를 add-gpg-user로 추가 필요"
-                ux_info "자세한 정보: ${bold}gc-help${reset} → 'Team 프로젝트에 Join하기' 섹션 참고"
+                ux_bullet "상황 1: 처음 Team 프로젝트에 참여"
+                ux_info "→ 프로젝트 소유자가 당신의 GPG 키를 add-gpg-user로 추가 필요"
                 echo ""
-                ux_bullet "상황 2️⃣  (예전에 설정했던 프로젝트): symmetric key가 필요할 수 있습니다"
-                ux_info "프로젝트 소유자에게 key 파일 요청 후: ${bold}git-crypt unlock ~/key.txt${reset}"
+                ux_bullet "상황 2: 예전에 설정했던 프로젝트"
+                ux_info "→ 프로젝트 소유자에게 key 파일 요청 후: git-crypt unlock ~/key.txt"
+                echo ""
+                ux_bullet "상황 3: git-crypt 메타데이터 손상"
+                ux_info "→ rm -rf .git/git-crypt && git-crypt init && gcpush"
                 echo ""
                 return 1
             fi
@@ -338,9 +360,35 @@ gc_push_env() {
         ux_info "자동으로 GPG 키를 추가합니다..."
         echo ""
 
-        # Call gcaddme function
+        # Call gcaddme function with error handling
         if ! gc_addme; then
-            ux_error "GPG 키 추가 실패"
+            local error_msg="GPG 키 추가 실패"
+            ux_error "$error_msg"
+            echo ""
+            ux_section "💡 문제 해결"
+            echo ""
+            ux_bullet "확인 1: git-crypt 메타데이터 상태"
+            echo "  명령어: git-crypt status"
+            echo ""
+            ux_bullet "확인 2: GPG 개인키 존재 여부"
+            echo "  명령어: gpg --list-secret-keys"
+            echo ""
+            ux_bullet "확인 3: Repository 상태"
+            echo "  명령어: ls -la .git/git-crypt/"
+            echo ""
+            ux_section "💡 복구 옵션"
+            echo ""
+            ux_bullet "옵션 1: git-crypt 초기화 (권장 - 처음 설정인 경우)"
+            echo "  rm -rf .git/git-crypt"
+            echo "  git-crypt init"
+            echo "  gcpush"
+            echo ""
+            ux_bullet "옵션 2: 직접 GPG 키 추가"
+            echo "  gpg --list-secret-keys --keyid-format=long"
+            echo "  git-crypt add-gpg-user <KEY_ID>"
+            echo ""
+            echo "자세한 정보는 'gc-help' 또는 'gcsetup' 명령어를 참고하세요."
+            echo ""
             return 1
         fi
     fi
@@ -838,15 +886,67 @@ gc_addme() {
 
     echo ""
     ux_section "git-crypt에 GPG 키 추가 중..."
+    echo ""
 
-    # Add GPG user to git-crypt
-    if git-crypt add-gpg-user "$selected_key"; then
+    local add_gpg_output
+    add_gpg_output=$(git-crypt add-gpg-user "$selected_key" 2>&1)
+    local add_gpg_status=$?
+
+    if [[ $add_gpg_status -eq 0 ]]; then
         ux_success "GPG 키 추가 완료!"
+        echo ""
         ux_info "이제 .gitattributes를 설정하고 파일을 추가하세요."
         echo ""
         ux_bullet "다음 단계: gc_encrypt_env 또는 수동으로 .gitattributes 설정"
     else
         ux_error "GPG 키 추가 실패"
+        echo ""
+
+        # Analyze error message
+        if echo "$add_gpg_output" | grep -q "Unable to open key file"; then
+            ux_section "에러 분석"
+            echo ""
+            ux_error "git-crypt 메타데이터 손상: Unable to open key file"
+            echo ""
+            ux_info "Repository의 git-crypt 구조가 손상되었을 가능성이 있습니다."
+            echo ""
+            ux_section "💡 복구 방법"
+            echo ""
+            ux_bullet "1단계: 현재 상태 확인"
+            echo "  ls -la .git/git-crypt/"
+            echo "  git-crypt status"
+            echo ""
+            ux_bullet "2단계: git-crypt 재초기화"
+            echo "  rm -rf .git/git-crypt"
+            echo "  git-crypt init"
+            echo ""
+            ux_bullet "3단계: 명령어 재실행"
+            echo "  gcaddme"
+            echo ""
+        elif echo "$add_gpg_output" | grep -q "invalid key id\|gpg.*error"; then
+            ux_section "에러 분석"
+            echo ""
+            ux_error "GPG 키 문제: $add_gpg_output"
+            echo ""
+            ux_info "선택한 GPG 키가 유효하지 않을 수 있습니다."
+            echo ""
+            ux_section "💡 해결 방법"
+            echo ""
+            ux_bullet "1단계: 유효한 GPG 키 확인"
+            echo "  gpg --list-secret-keys --keyid-format=long"
+            echo ""
+            ux_bullet "2단계: 다시 시도"
+            echo "  gcaddme"
+            echo ""
+        else
+            ux_section "에러 상세 메시지"
+            echo ""
+            echo "$add_gpg_output"
+            echo ""
+            ux_info "위 에러 메시지를 분석하여 문제를 해결하세요."
+            echo ""
+        fi
+
         return 1
     fi
 }
