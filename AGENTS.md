@@ -7,11 +7,10 @@
 # Operational Commands
 
 - **Setup**: `./setup.sh` (Symlinks), `./install.sh` (Full install).
-- **Linting (All)**: `tox` (Runs ruff, mypy, mdlint, shellcheck, shfmt).
+- **Linting (All)**: `tox` (Runs ruff, mypy, shellcheck, shfmt).
 - **Linting (Python)**: `tox -e ruff` (fixes), `tox -e mypy`.
 - **Linting (Bash)**: `tox -e shellcheck`, `tox -e shfmt` (formats).
 - **Testing**: `pytest` (if tests exist), manual validation via `mytool/demo_ux.sh`.
-- **Docs**: `tox -e mdlint`.
 
 # Golden Rules
 

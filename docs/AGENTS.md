@@ -7,7 +7,6 @@
   - `todo.txt` - Project task tracking
 
 # Operational Commands
-- **Lint Markdown**: `tox -e mdlint`
 - **Review**: Open in Markdown previewer (VS Code, grip)
 - **Count Lines**: `wc -l docs/*.md` (enforce <500 for AGENTS.md files)
 
@@ -65,8 +64,7 @@ Structure:
 After implementing changes from reviews:
 1. Mark items as completed in review doc (add checkboxes)
 2. Update root AGENTS.md if Golden Rules changed
-3. Run `tox -e mdlint` to verify Markdown validity
-4. Commit with reference to review item (e.g., "Fix: Issue #3 from abc-review-C")
+3. Commit with reference to review item (e.g., "Fix: Issue #3 from abc-review-C")
 
 # File Descriptions
 
@@ -93,18 +91,6 @@ Project task tracking (plain text format):
 
 # Testing Strategy
 
-## Markdown Validation
-```bash
-# Lint all docs
-tox -e mdlint
-
-# Check specific file
-markdownlint docs/AGENTS_md_Master_Prompt.md
-
-# Fix auto-fixable issues
-markdownlint --fix docs/*.md
-```
-
 ## AGENTS.md Validation
 ```bash
 # Check line counts (must be <500)
@@ -122,8 +108,7 @@ grep -r "http://\|https://\|file://" **/AGENTS.md
 ## Adding New Documentation
 1. Create file in `docs/` with descriptive name
 2. Add entry to this AGENTS.md under "File Descriptions"
-3. Run `tox -e mdlint` to validate
-4. Update root AGENTS.md Context Map if major doc
+3. Update root AGENTS.md Context Map if major doc
 
 ## Updating Master Prompt
 See "Master Prompt Modifications" in Golden Rules above.
