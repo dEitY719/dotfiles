@@ -253,6 +253,15 @@ devx__main() {
 #         when executed directly, basename "$0" is script name (devx, devx.sh)
 _should_run_main=false
 
+# ═══════════════════════════════════════════════════════════════
+# Public Function: devx()
+# Wrapper function for interactive shell use
+# Allows calling `devx <command>` after sourcing this file
+# ═══════════════════════════════════════════════════════════════
+devx() {
+    devx__main "$@"
+}
+
 if [ -n "${ZSH_VERSION+x}" ]; then
     # In zsh: Only "source:*" indicates explicit sourcing
     # All other cases (file:*, toplevel, cmdarg, etc) should default to false for safety

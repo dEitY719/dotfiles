@@ -15,13 +15,13 @@ REPO_ROOT = Path(__file__).parent.parent
 SHELL_COMMON = REPO_ROOT / "shell-common"
 TOOLS_CUSTOM = SHELL_COMMON / "tools" / "custom"
 
-# Custom tool commands (39 total)
+# Custom tool commands (38 total)
+# Note: devx is now a function in shell-common/functions/devx.sh, not a custom tool
 MYTOOL_COMMANDS = [
     "analyze_bash_scripts",
     "check_proxy",
     "check_ux_consistency",
     "demo_ux",
-    "devx",
     "docker_configure_proxy",
     "enable_docker",
     "get_hw_info",
@@ -94,10 +94,10 @@ class TestMytoolHelpLists:
         output = result.stdout.lower()
 
         # Check for key tools (sample)
+        # Note: devx is now a function, not listed in mytool help
         key_tools = [
             "analyze_bash_scripts",
             "check_proxy",
-            "devx",
             "install_fd",
             "mount",
             "repo_stats",
