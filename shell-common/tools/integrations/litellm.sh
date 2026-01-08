@@ -265,6 +265,29 @@ litellm_models() {
 
 # 6. 모델 테스트
 litellm_test() {
+    # 매개변수 검증
+    if [[ $# -eq 0 ]]; then
+        ux_header "LiteLLM 모델 테스트"
+        ux_section "사용법"
+        echo ""
+        ux_bullet "기본 사용법:"
+        echo "  llm-test <model> [prompt] [max-tokens]"
+        echo ""
+        ux_bullet "매개변수:"
+        echo "  model       : 사용할 모델명 (필수)"
+        echo "  prompt      : 질문 (선택, 기본값: What is 2+2?)"
+        echo "  max-tokens  : 최대 토큰 (선택, 기본값: 100)"
+        echo ""
+        ux_bullet "예시:"
+        echo "  llm-test gpt-oss-20b                                  # 기본 프롬프트"
+        echo "  llm-test gpt-oss-20b \"What is 3+4?\"                 # 프롬프트 지정"
+        echo "  llm-test gpt-oss-20b \"Explain AI\" 200               # 토큰 지정"
+        echo ""
+        ux_section "사용 가능한 모델"
+        litellm_models
+        return 0
+    fi
+
     local model_name="${1:-gpt-oss-20b}"
     local prompt="${2:-What is 2+2?}"
     local max_tokens="${3:-100}"
@@ -282,7 +305,16 @@ litellm_test() {
     if ! echo "$available_models" | grep -q "^${model_name}$"; then
         ux_error "모델을 찾을 수 없습니다: $model_name"
         echo ""
-        ux_info "사용 가능한 모델:"
+        ux_section "💡 사용법"
+        echo ""
+        ux_bullet "올바른 사용법:"
+        echo "  llm-test <model> <prompt> [max-tokens]"
+        echo ""
+        ux_bullet "예시:"
+        echo "  llm-test gpt-oss-20b \"What is 3+4?\""
+        echo "  llm-test gpt-oss-20b \"Your question\" 200"
+        echo ""
+        ux_section "사용 가능한 모델:"
         litellm_models
         return 1
     fi
