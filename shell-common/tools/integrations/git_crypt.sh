@@ -296,6 +296,32 @@ gc_push_env() {
         fi
     else
         ux_success "git-crypt 이미 초기화됨"
+        ux_info "이 프로젝트는 이미 git-crypt이 설정되어 있습니다."
+        echo ""
+
+        # Check if repository is unlocked
+        if git-crypt status -f &>/dev/null; then
+            ux_success "Repository는 unlocked 상태입니다."
+        else
+            ux_warning "⚠️  Repository가 locked 상태입니다."
+            ux_info "복호화를 위해 git-crypt unlock 실행 중..."
+            echo ""
+
+            if git-crypt unlock; then
+                ux_success "git-crypt unlock 완료"
+            else
+                ux_error "git-crypt unlock 실패"
+                echo ""
+                ux_section "💡 해결 방법"
+                ux_bullet "상황 1️⃣  (처음 Team 프로젝트에 join): 프로젝트 소유자가 당신의 GPG 키를 add-gpg-user로 추가 필요"
+                ux_info "자세한 정보: ${bold}gc-help${reset} → 'Team 프로젝트에 Join하기' 섹션 참고"
+                echo ""
+                ux_bullet "상황 2️⃣  (예전에 설정했던 프로젝트): symmetric key가 필요할 수 있습니다"
+                ux_info "프로젝트 소유자에게 key 파일 요청 후: ${bold}git-crypt unlock ~/key.txt${reset}"
+                echo ""
+                return 1
+            fi
+        fi
     fi
     echo ""
 
