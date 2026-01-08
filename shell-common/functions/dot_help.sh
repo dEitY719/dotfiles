@@ -7,11 +7,6 @@ if ! declare -f ux_header >/dev/null 2>&1; then
     source "${BASH_SOURCE[0]%/*}/../tools/ux_lib/ux_lib.sh" 2>/dev/null || true
 fi
 
-# Load mount management functions
-if ! declare -f show_mnt >/dev/null 2>&1; then
-    source "${BASH_SOURCE[0]%/*}/../tools/custom/mount.sh" 2>/dev/null || true
-fi
-
 dot_help() {
     ux_header "Dotfiles Project Information"
 

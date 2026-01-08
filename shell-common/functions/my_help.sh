@@ -110,6 +110,8 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[ripgrep-help]="${HELP_DESCRIPTIONS[ripgrep-help]:-ripgrep (rg) fast text search tool}"
     HELP_DESCRIPTIONS[p10k_help]="${HELP_DESCRIPTIONS[p10k_help]:-Powerlevel10k font setup guide}"
     HELP_DESCRIPTIONS[crt_help]="${HELP_DESCRIPTIONS[crt_help]:-CA Certificate setup and management guide}"
+    HELP_DESCRIPTIONS[pip_help]="${HELP_DESCRIPTIONS[pip_help]:-Pip package manager configuration and diagnostics}"
+    HELP_DESCRIPTIONS[mount_help]="${HELP_DESCRIPTIONS[mount_help]:-Mount management commands for Claude environment}"
 }
 
 # ═══════════════════════════════════════════════════════════════

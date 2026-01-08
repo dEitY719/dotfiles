@@ -1,17 +1,23 @@
 #!/bin/sh
-# shell-common/tools/custom/mount.sh
+# shell-common/functions/mount.sh
 # Mount management functions following SOLID principles
 # Single Responsibility: addmnt() mounts, show_mnt() displays status
 
-# Load UX library if not already loaded
-if ! declare -f ux_bullet >/dev/null 2>&1; then
-    source "${BASH_SOURCE[0]%/*}/../ux_lib/ux_lib.sh" 2>/dev/null || true
+# Load UX library if not already loaded (bash/zsh compatible)
+if ! type ux_bullet >/dev/null 2>&1; then
+    # Detect script directory in bash/zsh compatible way
+    if [ -n "$ZSH_VERSION" ]; then
+        _SCRIPT_DIR="${0:h}"
+    else
+        _SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    fi
+    [ -f "$_SCRIPT_DIR/../tools/ux_lib/ux_lib.sh" ] && source "$_SCRIPT_DIR/../tools/ux_lib/ux_lib.sh" 2>/dev/null
 fi
 
 # Show comprehensive help for mount functions
 # Single Responsibility: Only display mount module help information
 mount_help() {
-    if declare -f ux_header >/dev/null 2>&1; then
+    if type ux_header >/dev/null 2>&1; then
         ux_header "Mount Management Commands"
 
         ux_section "Description"
@@ -108,10 +114,9 @@ _is_mounted() {
     return $?
 }
 
-# Show help for addmnt function
-# Single Responsibility: Only display mount help information
-addmnt_help() {
-    if declare -f ux_header >/dev/null 2>&1; then
+# Internal: Show help for addmnt function (use _addmnt_help_ prefix for internal functions)
+_addmnt_help() {
+    if type ux_header >/dev/null 2>&1; then
         ux_header "Mount Bind Usage"
 
         ux_section "Description"
@@ -169,7 +174,7 @@ addmnt() {
 
     # Show help if no arguments
     if [ -z "$source" ] || [ -z "$target" ]; then
-        addmnt_help
+        _addmnt_help
         return 1
     fi
 
@@ -179,7 +184,7 @@ addmnt() {
 
     # Check if source exists
     if [ ! -e "$source" ]; then
-        if declare -f ux_error >/dev/null 2>&1; then
+        if type ux_error >/dev/null 2>&1; then
             ux_error "Source path does not exist: $source"
         else
             echo "Error: Source path does not exist: $source" >&2
@@ -190,7 +195,7 @@ addmnt() {
     # Create target directory if it doesn't exist
     if [ ! -e "$target" ]; then
         mkdir -p "$target" || {
-            if declare -f ux_error >/dev/null 2>&1; then
+            if type ux_error >/dev/null 2>&1; then
                 ux_error "Failed to create target directory: $target"
             else
                 echo "Error: Failed to create target directory: $target" >&2
@@ -201,7 +206,7 @@ addmnt() {
 
     # Check if already mounted
     if _is_mounted "$target"; then
-        if declare -f ux_info >/dev/null 2>&1; then
+        if type ux_info >/dev/null 2>&1; then
             ux_info "Target is already mounted: $target"
         else
             echo "Note: $target is already mounted" >&2
@@ -211,12 +216,12 @@ addmnt() {
 
     # Perform mount operation with sudo
     if sudo mount --bind "$source" "$target" 2>/dev/null; then
-        if declare -f ux_success >/dev/null 2>&1; then
+        if type ux_success >/dev/null 2>&1; then
             ux_success "Successfully mounted $source to $target"
         fi
         return 0
     else
-        if declare -f ux_error >/dev/null 2>&1; then
+        if type ux_error >/dev/null 2>&1; then
             ux_error "Failed to mount $source to $target"
         else
             echo "Error: Failed to mount $source to $target" >&2
@@ -225,10 +230,9 @@ addmnt() {
     fi
 }
 
-# Show help for show_mnt function
-# Single Responsibility: Only display mount status help information
-show_mnt_help() {
-    if declare -f ux_header >/dev/null 2>&1; then
+# Internal: Show help for show_mnt function
+_show_mnt_help() {
+    if type ux_header >/dev/null 2>&1; then
         ux_header "Mount Status Display"
 
         ux_section "Description"
@@ -276,13 +280,13 @@ show_mnt() {
 
     # Show help if requested with -h or --help
     if [ "$mount_path" = "-h" ] || [ "$mount_path" = "--help" ]; then
-        show_mnt_help
+        _show_mnt_help
         return 0
     fi
 
     # Check if findmnt is available
     if ! _check_command findmnt; then
-        if declare -f ux_error >/dev/null 2>&1; then
+        if type ux_error >/dev/null 2>&1; then
             ux_error "findmnt or mount command not found"
         else
             echo "Error: findmnt or mount command not found" >&2
@@ -295,7 +299,7 @@ show_mnt() {
         mount_path="${mount_path/#\~/$HOME}"
 
         # Show single mount status with UX formatting
-        if declare -f ux_section >/dev/null 2>&1; then
+        if type ux_section >/dev/null 2>&1; then
             ux_section "Mount Status: $mount_path"
         else
             echo "Mount Status: $mount_path"
@@ -303,7 +307,7 @@ show_mnt() {
 
         # Display mount information with indentation
         findmnt "$mount_path" 2>/dev/null | sed 's/^/  /' || {
-            if declare -f ux_info >/dev/null 2>&1; then
+            if type ux_info >/dev/null 2>&1; then
                 ux_info "Not mounted: $mount_path"
             else
                 echo "  (not mounted)" >&2
@@ -312,7 +316,7 @@ show_mnt() {
         }
     else
         # Show all Claude-related mounts under ~/.claude
-        if declare -f ux_section >/dev/null 2>&1; then
+        if type ux_section >/dev/null 2>&1; then
             ux_section "Claude Mount Locations"
         else
             echo "Claude Mount Locations:"
@@ -326,7 +330,7 @@ show_mnt() {
             echo "$mounts" | sed 's/^/  /'
             return 0
         else
-            if declare -f ux_info >/dev/null 2>&1; then
+            if type ux_info >/dev/null 2>&1; then
                 ux_info "No mounts found under ~/.claude"
             else
                 echo "  (no mounts under ~/.claude)" >&2
@@ -337,11 +341,5 @@ show_mnt() {
 }
 alias show-mnt='show_mnt'
 
-# Export functions for use in other scripts
-export -f addmnt
-export -f show_mnt
-export -f mount_help
-export -f addmnt_help
-export -f show_mnt_help
-export -f _is_mounted
-export -f _check_command
+# Note: Functions are automatically exported in both bash and zsh
+# No need for explicit export declarations in POSIX-compatible scripts
