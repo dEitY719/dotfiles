@@ -20,15 +20,23 @@ esac
 
 if [ "${DOTFILES_TEST_MODE:-0}" != "1" ]; then
     # Only run self-heal when being executed directly, not when sourced
-    # When sourced as a function, basename "$0" will be the shell name (bash, zsh, sh)
-    # When executed directly, basename "$0" will be devx or devx.sh
+    # Safe method: Use parameter expansion instead of basename (avoids $0 flag injection)
+    # If $0 starts with -, it's sourced (flag injection detected)
     _is_being_executed=false
 
-    case "$(basename "$0")" in
-        devx.sh|devx)
-            _is_being_executed=true
-            ;;
-    esac
+    # Extract filename from $0 using parameter expansion (shell-safe, no external commands)
+    _script_name="${0##*/}"
+
+    # Validate that _script_name doesn't start with - (indicates sourced with flags)
+    if [ "${_script_name#-}" = "$_script_name" ]; then
+        # $0 is a valid filename, not a flag
+        case "$_script_name" in
+            devx.sh|devx)
+                _is_being_executed=true
+                ;;
+        esac
+    fi
+    unset _script_name
 
     if [ "$_is_being_executed" = "true" ]; then
         # Detect the source script path (works in both bash and sh)
@@ -277,12 +285,19 @@ if [ -n "${ZSH_VERSION+x}" ]; then
             ;;
     esac
 else
-    # In bash/sh: check if basename is devx or devx.sh (not shell name)
-    case "$(basename "$0")" in
-        devx|devx.sh)
-            _should_run_main=true
-            ;;
-    esac
+    # In bash/sh: check if script name is devx or devx.sh (not shell name)
+    # Safe method: Use parameter expansion instead of basename
+    _script_name="${0##*/}"
+
+    # Validate that $0 doesn't start with - (indicates sourced with flags)
+    if [ "${_script_name#-}" = "$_script_name" ]; then
+        case "$_script_name" in
+            devx|devx.sh)
+                _should_run_main=true
+                ;;
+        esac
+    fi
+    unset _script_name
 fi
 
 if [ "$_should_run_main" = "true" ]; then
