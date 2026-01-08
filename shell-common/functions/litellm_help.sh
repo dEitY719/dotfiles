@@ -6,12 +6,12 @@ litellm_help() {
     ux_header "LiteLLM Commands"
 
     ux_section "Basic Commands"
-    ux_table_row "litellm_start" "Start Stack" "docker compose up"
-    ux_table_row "litellm_stop" "Stop Stack" "docker compose down"
-    ux_table_row "litellm_restart" "Restart" "Stop & Start"
-    ux_table_row "litellm_status" "Status" "Check health & models"
-    ux_table_row "litellm_models" "List Models" "Show loaded models"
-    ux_table_row "litellm_test" "Test Model" "Run basic prompt"
+    ux_table_row "llm-start" "Start Stack" "docker compose up"
+    ux_table_row "llm-stop" "Stop Stack" "docker compose down"
+    ux_table_row "llm-restart" "Restart" "Stop & Start"
+    ux_table_row "llm-status" "Status" "Check health & models"
+    ux_table_row "llm-models" "List Models" "Show loaded models"
+    ux_table_row "llm-test" "Test Model" "Run basic prompt"
     echo ""
 
     ux_section "Examples"
