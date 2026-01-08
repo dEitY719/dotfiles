@@ -137,13 +137,13 @@ if [ -d "${SHELL_COMMON}/functions" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 6: Load Shared Tools - External (shell-common/tools/external/)
-# External/third-party tools: apt, ccusage, claude, codex
+# Phase 6: Load Shared Tools - Integrations (shell-common/tools/integrations/)
+# 3rd-party integrations: apt, ccusage, claude, codex, git, npm, etc
 # ═══════════════════════════════════════════════════════════════
 
-if [ -d "${SHELL_COMMON}/tools/external" ]; then
-    for f in "${SHELL_COMMON}"/tools/external/*.sh; do
-        [ -f "$f" ] && safe_source "$f" "Failed to load external tool" || true
+if [ -d "${SHELL_COMMON}/tools/integrations" ]; then
+    for f in "${SHELL_COMMON}"/tools/integrations/*.sh; do
+        [ -f "$f" ] && safe_source "$f" "Failed to load integration tool" || true
     done
 fi
 
