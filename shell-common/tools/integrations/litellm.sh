@@ -327,16 +327,23 @@ litellm_test() {
     return 0
 }
 
-# 7. 도움말
+# 7. 도커 네트워크 정보
+litellm_network() {
+    ux_header "LiteLLM 도커 네트워크"
+    docker network inspect litellm-network
+}
+
+# 8. 도움말
 
 # ===== Alias 정의 =====
-alias llm_start='litellm_start'
-alias llm_stop='litellm_stop'
-alias llm_restart='litellm_restart'
-alias llm_status='litellm_status'
-alias llm_models='litellm_models'
-alias llm_test='litellm_test'
-alias llm_help='litellm_help'
+alias llm-start='litellm_start'
+alias llm-stop='litellm_stop'
+alias llm-restart='litellm_restart'
+alias llm-status='litellm_status'
+alias llm-models='litellm_models'
+alias llm-test='litellm_test'
+alias llm-network='litellm_network'
+alias llm-help='litellm_help'
 
 # ===== 초기화 (sourced될 때 자동 실행) =====
 _init_litellm_env
