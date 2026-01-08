@@ -343,7 +343,6 @@ alias llm-status='litellm_status'
 alias llm-models='litellm_models'
 alias llm-test='litellm_test'
 alias llm-network='litellm_network'
-alias llm-help='litellm_help'
 
 # ===== 초기화 (sourced될 때 자동 실행) =====
 _init_litellm_env

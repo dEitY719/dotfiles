@@ -30,3 +30,4 @@ litellm_help() {
 
 # Alias for litellm-help format (using dash instead of underscore)
 alias litellm-help='litellm_help'
+alias llm-help='litellm_help'
