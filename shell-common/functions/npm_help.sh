@@ -102,7 +102,12 @@ npm_config() {
     ux_bullet "npm config set <key>    Update a setting"
     echo ""
 }
+# NPM Check Wrapper - calls the diagnostic script
+npm_check() {
+    bash "$HOME/dotfiles/shell-common/tools/custom/check_npm.sh" "$@"
+}
 alias npm-config='npm_config'
+alias check-npm='npm_check'
 
 # Alias for npm-help format (using dash instead of underscore)
 alias npm-help='npm_help'
