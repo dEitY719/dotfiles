@@ -132,29 +132,30 @@ check_requirements() {
     return 0
 }
 
+
 # Run tests
 run_tests() {
     local verbose_flag=""
-    local parallel_flag=""
+    local addopts_override=""
 
     if [ "$VERBOSE" = "1" ]; then
         verbose_flag="-v"
     fi
-
-    if [ "$SERIAL" = "1" ]; then
-        # Serial execution: remove parallel flags if present
-        parallel_flag="-p no"  # Disable xdist plugin
-    fi
-    # else: use default pytest.ini settings (parallel execution enabled)
 
     cd "$REPO_ROOT"
     export DOTFILES_TEST_MODE=1
 
     print_header "Running Test Suite"
     if [ "$SERIAL" = "1" ]; then
-        python3 -m pytest tests/ $verbose_flag --tb=short -p no:xdist
+        # Serial execution: override addopts to remove xdist options
+        # Use -o flag to override pyproject.toml addopts
+        python3 -m pytest tests/ \
+            $verbose_flag \
+            --tb=short \
+            -o addopts="-v --strict-markers" \
+            -p no:xdist
     else
-        # Use pytest.ini defaults which include -n auto --dist loadscope
+        # Use pytest.ini defaults which include -n auto --dist load
         python3 -m pytest tests/ $verbose_flag --tb=short
     fi
     return $?
@@ -181,28 +182,28 @@ main() {
             ;;
         -h | --help)
             show_help
-            exit 0
+            return 0
             ;;
         *)
             print_error "Unknown option: $1"
             echo "Use -h or --help for usage information"
-            exit 1
+            return 1
             ;;
         esac
     done
 
     # Check requirements
     if ! check_requirements; then
-        exit 1
+        return 1
     fi
 
     # Run tests
     if run_tests; then
         print_success "All tests passed!"
-        exit 0
+        return 0
     else
         print_error "Some tests failed"
-        exit 1
+        return 1
     fi
 }
 
