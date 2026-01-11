@@ -126,6 +126,68 @@ setup_local_files() {
                 ;;
         esac
     fi
+
+    # ========================================
+    # Handle npm.local.sh based on environment
+    # ========================================
+    local npm_local="${SHELL_COMMON_DIR}/tools/integrations/npm.local.sh"
+
+    if [ -f "$npm_local" ]; then
+        case "$environment" in
+            internal)
+                # For internal company PC: use Option 2 (Artifactory + Proxy)
+                print_info "Configuring NPM for internal company PC (Option 2: Artifactory)"
+
+                # Comment out Option 1 DESIRED_* lines
+                sed -i '/^    # === Option1:/,/^    # === Option2:/ {
+                    /DESIRED_REGISTRY=.*npmjs/s/^    /    # /
+                    /DESIRED_CAFILE=.*samsungsemi/s/^    /    # /
+                    /DESIRED_STRICT_SSL="true"/s/^    /    # /
+                    /DESIRED_PROXY=""/s/^    /    # /
+                    /DESIRED_HTTPS_PROXY=""/s/^    /    # /
+                    /DESIRED_NOPROXY=""/s/^    /    # /
+                }' "$npm_local"
+
+                # Uncomment Option 2 DESIRED_* lines
+                sed -i '/^    # === Option2:/,/^    # === 공통 설정/ {
+                    /DESIRED_REGISTRY=.*artifactory/s/^    # /    /
+                    /DESIRED_CAFILE=.*ca-certificates.crt/s/^    # /    /
+                    /DESIRED_STRICT_SSL="false"/s/^    # /    /
+                    /DESIRED_PROXY=.*12.26/s/^    # /    /
+                    /DESIRED_HTTPS_PROXY=.*12.26/s/^    # /    /
+                    /DESIRED_NOPROXY=.*10.229/s/^    # /    /
+                }' "$npm_local"
+
+                print_success "NPM config: Option 2 (Artifactory + Proxy) activated"
+                ;;
+            external)
+                # For external company PC: use Option 1 (npmjs + CA Certificate + No Proxy)
+                print_info "Configuring NPM for external company PC (Option 1: npmjs)"
+
+                # Uncomment Option 1 DESIRED_* lines (default state)
+                sed -i '/^    # === Option1:/,/^    # === Option2:/ {
+                    /DESIRED_REGISTRY=.*npmjs/s/^    # /    /
+                    /DESIRED_CAFILE=.*samsungsemi/s/^    # /    /
+                    /DESIRED_STRICT_SSL="true"/s/^    # /    /
+                    /DESIRED_PROXY=""/s/^    # /    /
+                    /DESIRED_HTTPS_PROXY=""/s/^    # /    /
+                    /DESIRED_NOPROXY=""/s/^    # /    /
+                }' "$npm_local"
+
+                # Comment out Option 2 DESIRED_* lines
+                sed -i '/^    # === Option2:/,/^    # === 공통 설정/ {
+                    /DESIRED_REGISTRY=.*artifactory/s/^    /    # /
+                    /DESIRED_CAFILE=.*ca-certificates.crt/s/^    /    # /
+                    /DESIRED_STRICT_SSL="false"/s/^    /    # /
+                    /DESIRED_PROXY=.*12.26/s/^    /    # /
+                    /DESIRED_HTTPS_PROXY=.*12.26/s/^    /    # /
+                    /DESIRED_NOPROXY=.*10.229/s/^    /    # /
+                }' "$npm_local"
+
+                print_success "NPM config: Option 1 (npmjs + No Proxy) activated"
+                ;;
+        esac
+    fi
 }
 
 setup_pip_config() {
