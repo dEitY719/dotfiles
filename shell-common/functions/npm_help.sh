@@ -2,6 +2,13 @@
 # shell-common/functions/npm_help.sh
 # npmHelp - shared between bash and zsh
 
+# ========================================
+# Load UX Library
+# ========================================
+if ! declare -f ux_header >/dev/null 2>&1; then
+    source "$(dirname "${BASH_SOURCE[0]}")/../tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+fi
+
 npm_help() {
     ux_header "NPM Quick Commands"
 
@@ -30,6 +37,10 @@ npm_help() {
     ux_table_row "npm-cache-clean" "cache clean --force" "Clear cache"
     echo ""
 
+    ux_section "Configuration"
+    ux_table_row "npm-config" "Show current config" "Registry, CA, SSL"
+    echo ""
+
     ux_section "Setup Tools"
     ux_table_row "npminstall" "Install Script" "Install Node/NPM"
     ux_table_row "npmuninstall" "Uninstall Script" "Remove Node/NPM"
@@ -56,6 +67,24 @@ npm_help() {
 
     ux_info "Global Path: ~/.npm-global"
 }
+
+# NPM Config Function - show registry, cafile, and strict-ssl in one command
+npm_config() {
+    ux_header "NPM Configuration"
+
+    ux_section "Current Settings"
+    ux_table_row "Registry" "$(npm config get registry 2>/dev/null || echo '(not set)')"
+    ux_table_row "CA File" "$(npm config get cafile 2>/dev/null || echo '(not set)')"
+    ux_table_row "Strict SSL" "$(npm config get strict-ssl 2>/dev/null || echo '(not set)')"
+    echo ""
+
+    ux_section "Quick Commands"
+    ux_bullet "npm-config              Show this configuration"
+    ux_bullet "npm config list         Show all npm settings"
+    ux_bullet "npm config set <key>    Update a setting"
+    echo ""
+}
+alias npm-config='npm_config'
 
 # Alias for npm-help format (using dash instead of underscore)
 alias npm-help='npm_help'

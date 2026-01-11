@@ -14,10 +14,16 @@
 #   - npm.local.sh가 없으면 시스템에 설치된 기본 npm을 사용합니다
 
 # ========================================
+# Load UX Library
+# ========================================
+if ! declare -f ux_header >/dev/null 2>&1; then
+    source "$(dirname "${BASH_SOURCE[0]}")/../tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+fi
+
+# ========================================
 # NPM Aliases
 # ========================================
 alias npm-v='npm --version'
-alias npm-list='npm list -g --depth=0'
 alias npm-outdated='npm outdated -g'
 alias npm-update='npm update -g'
 alias npm-cache-clean='npm cache clean --force'
@@ -61,6 +67,28 @@ npm_search() {
     npm search "$@"
 }
 alias npm-search='npm_search'
+
+# NPM List Function (improved - shows multiple locations)
+npm_list() {
+    ux_header "NPM Packages Installed"
+
+    ux_section "System Global NPM (/usr/lib)"
+    npm list -g --depth=0 2>/dev/null | head -10 || ux_info "No global npm packages"
+    echo ""
+
+    ux_section "User Global (~/.npm-global/bin)"
+    if [ -d "$HOME/.npm-global/bin" ]; then
+        if [ "$(ls -1 "$HOME/.npm-global/bin" 2>/dev/null | wc -l)" -gt 0 ]; then
+            ls -1 "$HOME/.npm-global/bin" 2>/dev/null | sed 's/^/  • /'
+        else
+            ux_info "No packages installed yet"
+        fi
+    else
+        ux_warning "Directory not found: ~/.npm-global/bin"
+    fi
+    echo ""
+}
+alias npm-list='npm_list'
 
 # ========================================
 # NPM Helper Function
