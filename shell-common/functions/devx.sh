@@ -164,13 +164,13 @@ EOF
 # ═══════════════════════════════════════════════════════════════
 
 devx__main() {
-    set -eu
+    set -u
     devx__colors
 
     # No arguments: show usage
     if [ $# -eq 0 ]; then
         devx__usage
-        exit 2
+        return 2
     fi
 
     # Note: help is now delegated to tools/dev.sh like other commands
@@ -203,10 +203,10 @@ devx__main() {
 
         if [ -f "$tool_path" ]; then
             bash "$tool_path" "$@"
-            exit $?
+            return $?
         else
             devx__log ERR "Could not find repo_stats.sh at ${tool_path}"
-            exit 1
+            return 1
         fi
     fi
 
@@ -221,7 +221,7 @@ devx__main() {
     local root
     if ! root="$(devx__find_root)"; then
         devx__log ERR "Could not find tools/dev.sh from ${cwd}"
-        exit 1
+        return 1
     fi
 
     # Log and execute command
@@ -251,7 +251,7 @@ devx__main() {
     else
         devx__log ERR "exit_code=${rc}  duration=${dur_ms}ms"
     fi
-    exit "$rc"
+    return "$rc"
 }
 
 # Only execute if directly invoked (not sourced)
