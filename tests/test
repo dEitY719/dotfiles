@@ -20,7 +20,8 @@
 #   Parallel execution uses all available CPU cores by default
 #
 
-set -e
+# Note: Do NOT use 'set -e' as it terminates the script when main() returns
+# non-zero exit code. Instead, we handle errors explicitly in main() function.
 
 # Colors for output
 RED='\033[0;31m'
@@ -207,5 +208,7 @@ main() {
     fi
 }
 
-# Run main function
+# Run main function and exit with its return code
 main "$@"
+exit_code=$?
+exit $exit_code
