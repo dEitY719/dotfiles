@@ -68,14 +68,20 @@ npm_help() {
     ux_info "Global Path: ~/.npm-global"
 }
 
-# NPM Config Function - show registry, cafile, and strict-ssl in one command
+# NPM Config Function - show all important npm settings in one command
 npm_config() {
     ux_header "NPM Configuration"
 
-    ux_section "Current Settings"
+    ux_section "Registry & Security"
     ux_table_row "Registry" "$(npm config get registry 2>/dev/null || echo '(not set)')"
     ux_table_row "CA File" "$(npm config get cafile 2>/dev/null || echo '(not set)')"
     ux_table_row "Strict SSL" "$(npm config get strict-ssl 2>/dev/null || echo '(not set)')"
+    echo ""
+
+    ux_section "Proxy Settings"
+    ux_table_row "Proxy" "$(npm config get proxy 2>/dev/null || echo '(not set)')"
+    ux_table_row "HTTPS Proxy" "$(npm config get https-proxy 2>/dev/null || echo '(not set)')"
+    ux_table_row "No Proxy" "$(npm config get noproxy 2>/dev/null || echo '(not set)')"
     echo ""
 
     ux_section "Quick Commands"
