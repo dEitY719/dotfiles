@@ -19,3 +19,6 @@ __pycache__/
 *.egg-info/
 
 .secrets/*.asc
+
+# Claude Code personal settings (user-specific, environment-dependent)
+claude/settings.json

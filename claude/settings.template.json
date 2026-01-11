@@ -33,7 +33,9 @@
       "Edit(/etc/**)",
       "Bash(rm -rf:*)",
       "Bash(sudo rm:*)"
-    ]
+    ],
+    "ask": [],
+    "defaultMode": "default"
   },
   "model": "haiku",
   "statusLine": {
