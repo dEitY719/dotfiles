@@ -68,20 +68,32 @@ npm_help() {
     ux_info "Global Path: ~/.npm-global"
 }
 
+# Helper function to normalize npm config output
+_npm_config_get() {
+    local value
+    value="$(npm config get "$1" 2>/dev/null)"
+    # Normalize null or empty values to "(not set)"
+    if [ -z "$value" ] || [ "$value" = "null" ]; then
+        echo "(not set)"
+    else
+        echo "$value"
+    fi
+}
+
 # NPM Config Function - show all important npm settings in one command
 npm_config() {
     ux_header "NPM Configuration"
 
     ux_section "Registry & Security"
-    ux_table_row "Registry" "$(npm config get registry 2>/dev/null || echo '(not set)')"
-    ux_table_row "CA File" "$(npm config get cafile 2>/dev/null || echo '(not set)')"
-    ux_table_row "Strict SSL" "$(npm config get strict-ssl 2>/dev/null || echo '(not set)')"
+    ux_table_row "Registry" "$(_npm_config_get registry)"
+    ux_table_row "CA File" "$(_npm_config_get cafile)"
+    ux_table_row "Strict SSL" "$(_npm_config_get strict-ssl)"
     echo ""
 
     ux_section "Proxy Settings"
-    ux_table_row "Proxy" "$(npm config get proxy 2>/dev/null || echo '(not set)')"
-    ux_table_row "HTTPS Proxy" "$(npm config get https-proxy 2>/dev/null || echo '(not set)')"
-    ux_table_row "No Proxy" "$(npm config get noproxy 2>/dev/null || echo '(not set)')"
+    ux_table_row "Proxy" "$(_npm_config_get proxy)"
+    ux_table_row "HTTPS Proxy" "$(_npm_config_get https-proxy)"
+    ux_table_row "No Proxy" "$(_npm_config_get noproxy)"
     echo ""
 
     ux_section "Quick Commands"
