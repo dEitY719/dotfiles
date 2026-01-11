@@ -11,7 +11,52 @@ SHELL_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
+
+# ============================================================================
+# Configuration Values (SSOT - Single Source of Truth)
+# ============================================================================
+# These are extracted settings values for maintainability
+# If values change, update only here (not in sed patterns)
+
+declare -A SECURITY_CONFIG=(
+    [external]="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
+    [internal]="/etc/ssl/certs/ca-certificates.crt"
+)
+
+declare -A NPM_REGISTRY=(
+    [external]="https://registry.npmjs.org/"
+    [internal]="http://repo.samsungds.net:8081/artifactory/api/npm/npm/"
+)
+
+declare -A NPM_CAFILE=(
+    [external]="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
+    [internal]="/etc/ssl/certs/ca-certificates.crt"
+)
+
+declare -A NPM_STRICT_SSL=(
+    [external]="true"
+    [internal]="false"
+)
+
+declare -A NPM_PROXY=(
+    [external]=""
+    [internal]="http://12.26.204.100:8080"
+)
+
+declare -A NPM_NOPROXY=(
+    [external]=""
+    [internal]="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,dsvdi.net,pfs.nprotect.com"
+)
+
+declare -A PROXY_HTTP=(
+    [internal]="http://12.26.204.100:8080/"
+)
+
+declare -A PROXY_NO=(
+    [internal]="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,ssai.samsungds.net,dsvdi.net,pfs.nprotect.com"
+)
 
 # ============================================================================
 # Helper Functions
@@ -27,6 +72,10 @@ print_success() {
 
 print_info() {
     echo -e "${YELLOW}ℹ $1${NC}"
+}
+
+print_error() {
+    echo -e "${RED}✗ $1${NC}"
 }
 
 cleanup_local_files() {
@@ -48,7 +97,7 @@ cleanup_local_files() {
     done
 }
 
-setup_local_files() {
+copy_local_files() {
     local environment="$1"
 
     # Find all .local.example files
@@ -60,7 +109,7 @@ setup_local_files() {
         return 0
     fi
 
-    print_header "Setting up environment-specific files for: $environment"
+    print_header "Copying template files for: $environment"
 
     # Copy .local.example files to .local.sh (with environment-specific filtering)
     for example_file in "${local_examples[@]}"; do
@@ -83,8 +132,7 @@ setup_local_files() {
                 ;;
             external)
                 # External company PC (VPN): skip proxy.local.example
-                # Reason: proxy.local.sh is only valid for internal (2번 option)
-                # VPN environment uses direct connection without proxy
+                # Reason: proxy.local.sh is only valid for internal environment
                 if [ "$basename_file" = "proxy.local.example" ]; then
                     print_info "Skipped (not needed for VPN): ${basename_file}"
                 else
@@ -94,100 +142,175 @@ setup_local_files() {
                 ;;
         esac
     done
+}
 
-    # Handle security.local.sh based on environment
+read_config_value() {
+    local environment="$1"
+    local config_key="$2"
+    local config_file="${SHELL_COMMON_DIR}/config/environments.conf"
+
+    if [ ! -f "$config_file" ]; then
+        return 1
+    fi
+
+    grep "^${environment}:${config_key}=" "$config_file" 2>/dev/null | cut -d= -f2- | sed 's/"//g'
+}
+
+setup_security_config() {
+    local environment="$1"
+    local security_template="${SHELL_COMMON_DIR}/env/security.local.example"
     local security_local="${SHELL_COMMON_DIR}/env/security.local.sh"
 
-    if [ -f "$security_local" ]; then
-        case "$environment" in
-            internal)
-                # For internal company PC: use Option 2 (system CA bundle)
-                print_info "Configuring for internal company PC (Option 2: System CA)"
+    # Try to get CA_CERT from environments.conf (Stage 3 approach)
+    local ca_cert
+    ca_cert="$(read_config_value "$environment" "CA_CERT")"
 
-                # Comment out Option 1
-                sed -i 's/^CA_CERT="\/usr\/local\/share/#CA_CERT="\/usr\/local\/share/' "$security_local"
-
-                # Uncomment Option 2
-                sed -i 's/^#CA_CERT="\/etc\/ssl\/certs/CA_CERT="\/etc\/ssl\/certs/' "$security_local"
-
-                print_success "Security config: Option 2 (System CA Bundle) activated"
-                ;;
-            external)
-                # For external company PC: use Option 1 (custom certificate)
-                print_info "Configuring for external company PC (Option 1: Custom Certificate)"
-
-                # Uncomment Option 1 (already uncommented by default, but ensure it)
-                sed -i 's/^#CA_CERT="\/usr\/local\/share/CA_CERT="\/usr\/local\/share/' "$security_local"
-
-                # Comment out Option 2
-                sed -i 's/^CA_CERT="\/etc\/ssl\/certs/#CA_CERT="\/etc\/ssl\/certs/' "$security_local"
-
-                print_success "Security config: Option 1 (Custom Certificate) activated"
-                ;;
-        esac
+    # Fallback to associative array (Stage 1-2 approach)
+    if [ -z "$ca_cert" ]; then
+        ca_cert="${SECURITY_CONFIG[$environment]}"
     fi
 
-    # ========================================
-    # Handle npm.local.sh based on environment
-    # ========================================
+    if [ -z "$ca_cert" ]; then
+        print_error "Unknown environment: $environment"
+        return 1
+    fi
+
+    case "$environment" in
+        internal)
+            print_info "Configuring security for internal company PC (System CA)"
+            # Comment out Option 1, Uncomment Option 2
+            if [ -f "$security_local" ]; then
+                sed -i 's/^CA_CERT="\/usr\/local\/share/#CA_CERT="\/usr\/local\/share/' "$security_local"
+                sed -i 's/^#CA_CERT="\/etc\/ssl\/certs/CA_CERT="\/etc\/ssl\/certs/' "$security_local"
+            fi
+            print_success "CA Certificate: ${ca_cert}"
+            ;;
+        external)
+            print_info "Configuring security for external company PC (Custom Certificate)"
+            if [ -f "$security_local" ]; then
+                sed -i 's/^#CA_CERT="\/usr\/local\/share/CA_CERT="\/usr\/local\/share/' "$security_local"
+                sed -i 's/^CA_CERT="\/etc\/ssl\/certs/#CA_CERT="\/etc\/ssl\/certs/' "$security_local"
+            fi
+            print_success "CA Certificate: ${ca_cert}"
+            ;;
+    esac
+}
+
+setup_npm_config() {
+    local environment="$1"
     local npm_local="${SHELL_COMMON_DIR}/tools/integrations/npm.local.sh"
 
-    if [ -f "$npm_local" ]; then
-        case "$environment" in
-            internal)
-                # For internal company PC: use Option 2 (Artifactory + Proxy)
-                print_info "Configuring NPM for internal company PC (Option 2: Artifactory)"
-
-                # Comment out Option 1 DESIRED_* lines
-                sed -i '/^    # === Option1:/,/^    # === Option2:/ {
-                    /DESIRED_REGISTRY=.*npmjs/s/^    /    # /
-                    /DESIRED_CAFILE=.*samsungsemi/s/^    /    # /
-                    /DESIRED_STRICT_SSL="true"/s/^    /    # /
-                    /DESIRED_PROXY=""/s/^    /    # /
-                    /DESIRED_HTTPS_PROXY=""/s/^    /    # /
-                    /DESIRED_NOPROXY=""/s/^    /    # /
-                }' "$npm_local"
-
-                # Uncomment Option 2 DESIRED_* lines
-                sed -i '/^    # === Option2:/,/^    # === 공통 설정/ {
-                    /DESIRED_REGISTRY=.*artifactory/s/^    # /    /
-                    /DESIRED_CAFILE=.*ca-certificates.crt/s/^    # /    /
-                    /DESIRED_STRICT_SSL="false"/s/^    # /    /
-                    /DESIRED_PROXY=.*12.26/s/^    # /    /
-                    /DESIRED_HTTPS_PROXY=.*12.26/s/^    # /    /
-                    /DESIRED_NOPROXY=.*10.229/s/^    # /    /
-                }' "$npm_local"
-
-                print_success "NPM config: Option 2 (Artifactory + Proxy) activated"
-                ;;
-            external)
-                # For external company PC: use Option 1 (npmjs + CA Certificate + No Proxy)
-                print_info "Configuring NPM for external company PC (Option 1: npmjs)"
-
-                # Uncomment Option 1 DESIRED_* lines (default state)
-                sed -i '/^    # === Option1:/,/^    # === Option2:/ {
-                    /DESIRED_REGISTRY=.*npmjs/s/^    # /    /
-                    /DESIRED_CAFILE=.*samsungsemi/s/^    # /    /
-                    /DESIRED_STRICT_SSL="true"/s/^    # /    /
-                    /DESIRED_PROXY=""/s/^    # /    /
-                    /DESIRED_HTTPS_PROXY=""/s/^    # /    /
-                    /DESIRED_NOPROXY=""/s/^    # /    /
-                }' "$npm_local"
-
-                # Comment out Option 2 DESIRED_* lines
-                sed -i '/^    # === Option2:/,/^    # === 공통 설정/ {
-                    /DESIRED_REGISTRY=.*artifactory/s/^    /    # /
-                    /DESIRED_CAFILE=.*ca-certificates.crt/s/^    /    # /
-                    /DESIRED_STRICT_SSL="false"/s/^    /    # /
-                    /DESIRED_PROXY=.*12.26/s/^    /    # /
-                    /DESIRED_HTTPS_PROXY=.*12.26/s/^    /    # /
-                    /DESIRED_NOPROXY=.*10.229/s/^    /    # /
-                }' "$npm_local"
-
-                print_success "NPM config: Option 1 (npmjs + No Proxy) activated"
-                ;;
-        esac
+    if [ ! -f "$npm_local" ]; then
+        return 0
     fi
+
+    # Get configuration values
+    local registry
+    registry="$(read_config_value "$environment" "NPM_REGISTRY")"
+    [ -z "$registry" ] && registry="${NPM_REGISTRY[$environment]}"
+
+    local proxy
+    proxy="$(read_config_value "$environment" "NPM_PROXY")"
+    [ -z "$proxy" ] && proxy="${NPM_PROXY[$environment]}"
+
+    if [ -z "$registry" ]; then
+        print_error "Unknown environment: $environment"
+        return 1
+    fi
+
+    case "$environment" in
+        internal)
+            print_info "Configuring NPM for internal company PC (Artifactory + Proxy)"
+            # Comment out Option 1 lines
+            sed -i '/^    # === Option1:/,/^    # === Option2:/ {
+                /DESIRED_REGISTRY=.*npmjs/s/^    /    # /
+                /DESIRED_CAFILE=.*samsungsemi/s/^    /    # /
+                /DESIRED_STRICT_SSL="true"/s/^    /    # /
+                /DESIRED_PROXY=""/s/^    /    # /
+                /DESIRED_HTTPS_PROXY=""/s/^    /    # /
+                /DESIRED_NOPROXY=""/s/^    /    # /
+            }' "$npm_local"
+            # Uncomment Option 2 lines
+            sed -i '/^    # === Option2:/,/^    # === 공통 설정/ {
+                /DESIRED_REGISTRY=.*artifactory/s/^    # /    /
+                /DESIRED_CAFILE=.*ca-certificates.crt/s/^    # /    /
+                /DESIRED_STRICT_SSL="false"/s/^    # /    /
+                /DESIRED_PROXY=.*12.26/s/^    # /    /
+                /DESIRED_HTTPS_PROXY=.*12.26/s/^    # /    /
+                /DESIRED_NOPROXY=.*10.229/s/^    # /    /
+            }' "$npm_local"
+            print_success "NPM Registry: $registry"
+            print_success "NPM Proxy: $proxy"
+            ;;
+        external)
+            print_info "Configuring NPM for external company PC (npmjs + No Proxy)"
+            # Uncomment Option 1 lines
+            sed -i '/^    # === Option1:/,/^    # === Option2:/ {
+                /DESIRED_REGISTRY=.*npmjs/s/^    # /    /
+                /DESIRED_CAFILE=.*samsungsemi/s/^    # /    /
+                /DESIRED_STRICT_SSL="true"/s/^    # /    /
+                /DESIRED_PROXY=""/s/^    # /    /
+                /DESIRED_HTTPS_PROXY=""/s/^    # /    /
+                /DESIRED_NOPROXY=""/s/^    # /    /
+            }' "$npm_local"
+            # Comment out Option 2 lines
+            sed -i '/^    # === Option2:/,/^    # === 공통 설정/ {
+                /DESIRED_REGISTRY=.*artifactory/s/^    /    # /
+                /DESIRED_CAFILE=.*ca-certificates.crt/s/^    /    # /
+                /DESIRED_STRICT_SSL="false"/s/^    /    # /
+                /DESIRED_PROXY=.*12.26/s/^    /    # /
+                /DESIRED_HTTPS_PROXY=.*12.26/s/^    /    # /
+                /DESIRED_NOPROXY=.*10.229/s/^    /    # /
+            }' "$npm_local"
+            print_success "NPM Registry: $registry"
+            print_success "NPM Proxy: (none - direct connection)"
+            ;;
+    esac
+}
+
+verify_config() {
+    local environment="$1"
+
+    print_header "Verifying configuration for: $environment"
+
+    # Verify npm config if npm is available
+    if command -v npm >/dev/null 2>&1; then
+        local npm_registry
+        npm_registry="$(npm config get registry 2>/dev/null || echo "unknown")"
+        print_info "npm registry: $npm_registry"
+
+        local npm_cafile
+        npm_cafile="$(npm config get cafile 2>/dev/null || echo "none")"
+        print_info "npm cafile: $npm_cafile"
+    else
+        print_info "npm is not installed, skipping npm config verification"
+    fi
+
+    # Verify CA cert is accessible if configured
+    if [ -v SHELL_COMMON_DIR ]; then
+        local ca_cert="${SECURITY_CONFIG[$environment]}"
+        if [ -n "$ca_cert" ] && [ -f "$ca_cert" ]; then
+            print_success "CA Certificate accessible: $ca_cert"
+        elif [ -n "$ca_cert" ]; then
+            print_info "CA Certificate not found yet: $ca_cert (will be installed by setup_crt.sh)"
+        fi
+    fi
+}
+
+setup_local_files() {
+    local environment="$1"
+
+    print_header "Setting up environment-specific files for: $environment"
+
+    # Stage 1: Copy template files
+    copy_local_files "$environment"
+
+    # Stage 2: Configure each setting type
+    setup_security_config "$environment"
+    setup_npm_config "$environment"
+
+    # Stage 3: Verify configuration
+    verify_config "$environment"
 }
 
 setup_pip_config() {
