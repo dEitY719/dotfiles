@@ -15,8 +15,9 @@ REPO_ROOT = Path(__file__).parent.parent
 SHELL_COMMON = REPO_ROOT / "shell-common"
 TOOLS_CUSTOM = SHELL_COMMON / "tools" / "custom"
 
-# Custom tool commands (38 total)
+# Custom tool commands (37 total)
 # Note: devx is now a function in shell-common/functions/devx.sh, not a custom tool
+# Note: mount is now a function in shell-common/functions/mount.sh, not a custom tool
 MYTOOL_COMMANDS = [
     "analyze_bash_scripts",
     "check_proxy",
@@ -45,7 +46,6 @@ MYTOOL_COMMANDS = [
     "install_ripgrep",
     "install_uv",
     "install_zsh",
-    "mount",
     "repo_stats",
     "run_agents_md_master_prompt",
     "set_locale",
@@ -94,12 +94,11 @@ class TestMytoolHelpLists:
         output = result.stdout.lower()
 
         # Check for key tools (sample)
-        # Note: devx is now a function, not listed in mytool help
+        # Note: devx and mount are now functions, not listed in mytool help
         key_tools = [
             "analyze_bash_scripts",
             "check_proxy",
             "install_fd",
-            "mount",
             "repo_stats",
         ]
 
