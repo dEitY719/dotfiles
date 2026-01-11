@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# DO NOT use 'set -e' or 'set -euo pipefail' at top level
+# This causes the script to exit when subprocess fails
+set -uo pipefail
 
 # Configuration (dotfiles project - bash configuration management)
 
 cmd="${1:-help}"
+EXIT_CODE=0
 
 case "$cmd" in
   test)
     echo "Running tests via tests/test..."
     if [ -x "./tests/test" ]; then
       ./tests/test "${@:2}"
+      EXIT_CODE=$?
     else
       echo "ERROR: tests/test not found or not executable."
-      exit 1
+      EXIT_CODE=1
     fi
     ;;
 
@@ -20,9 +24,10 @@ case "$cmd" in
     echo "Formatting code (tox -e ruff)..."
     if command -v tox >/dev/null 2>&1; then
       tox -e ruff
+      EXIT_CODE=$?
     else
       echo "ERROR: tox not found. Install: uv pip install tox"
-      exit 1
+      EXIT_CODE=1
     fi
     ;;
 
@@ -30,9 +35,10 @@ case "$cmd" in
     echo "Running linters excluding markdown (ruff, mypy, shellcheck, shfmt)..."
     if command -v tox >/dev/null 2>&1; then
       tox -e ruff,mypy,shellcheck,shfmt
+      EXIT_CODE=$?
     else
       echo "ERROR: tox not found. Install: uv pip install tox"
-      exit 1
+      EXIT_CODE=1
     fi
     ;;
 
@@ -40,9 +46,10 @@ case "$cmd" in
     echo "Running markdown linter (tox -e mdlint)..."
     if command -v tox >/dev/null 2>&1; then
       tox -e mdlint "${@:2}"
+      EXIT_CODE=$?
     else
       echo "ERROR: tox not found. Install: uv pip install tox"
-      exit 1
+      EXIT_CODE=1
     fi
     ;;
 
@@ -50,9 +57,10 @@ case "$cmd" in
     echo "Running setup (symlinks)..."
     if [ -f ./setup.sh ]; then
       ./setup.sh "${@:2}"
+      EXIT_CODE=$?
     else
       echo "ERROR: setup.sh not found."
-      exit 1
+      EXIT_CODE=1
     fi
     ;;
 
@@ -60,9 +68,10 @@ case "$cmd" in
     echo "Running full installation..."
     if [ -f ./install.sh ]; then
       ./install.sh "${@:2}"
+      EXIT_CODE=$?
     else
       echo "ERROR: install.sh not found."
-      exit 1
+      EXIT_CODE=1
     fi
     ;;
 
@@ -106,3 +115,6 @@ See AGENTS.md for more details.
 HELP
     ;;
 esac
+
+# Exit with the captured exit code
+exit $EXIT_CODE
