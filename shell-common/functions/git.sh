@@ -91,11 +91,11 @@ gprune() {
         return 0
     fi
 
-    echo "Deleting $branch_count branch(es) from '$remote':"
+    echo "${UX_PRIMARY}Deleting $branch_count branch(es) from '$remote':${UX_RESET}"
     git branch -r | grep "^[[:space:]]*$remote/" | grep -v "^[[:space:]]*$remote/main" | sed 's/^[[:space:]]*//' | while read -r branch; do
         echo "${UX_DIM}Deleting: $branch${UX_RESET}"
         git branch -dr "$branch" >/dev/null 2>&1
     done
 
-    echo "Done!"
+    echo "${UX_SUCCESS}Done!${UX_RESET}"
 }
