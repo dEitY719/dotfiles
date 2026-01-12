@@ -87,15 +87,15 @@ gprune() {
     branch_count=$(git branch -r | grep "^[[:space:]]*$remote/" | grep -v "^[[:space:]]*$remote/main" | wc -l)
 
     if [ "$branch_count" -eq 0 ]; then
-        echo "No branches to delete (keeping remotes/$remote/main)"
+        echo "No branches to delete (keeping $remote/main)"
         return 0
     fi
 
     echo "Deleting $branch_count branch(es) from '$remote':"
     git branch -r | grep "^[[:space:]]*$remote/" | grep -v "^[[:space:]]*$remote/main" | sed 's/^[[:space:]]*//' | while read -r branch; do
-        echo "  - Deleting: $branch"
-        git branch -dr "$branch"
+        echo "${UX_DIM}Deleting: $branch${UX_RESET}"
+        git branch -dr "$branch" >/dev/null 2>&1
     done
 
-    echo "Done! Kept remotes/$remote/main"
+    echo "Done!"
 }
