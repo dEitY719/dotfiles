@@ -65,3 +65,37 @@ gl() {
 glum() {
     _git_log_formatter "upstream/main" "$@"
 }
+
+# ============================================================================
+# Prune remote branches (except main)
+# ============================================================================
+# Delete all branches from a specific remote except the main branch
+# Usage:
+#   gprune origin   - Delete all origin/* branches except origin/main
+#   gprune upstream - Delete all upstream/* branches except upstream/main
+gprune() {
+    if [ -z "$1" ]; then
+        echo "Usage: gprune <remote-name>"
+        echo "Example: gprune origin"
+        return 1
+    fi
+
+    local remote="$1"
+    local branch_count=0
+
+    # Count branches to be deleted
+    branch_count=$(git branch -r | grep "^[[:space:]]*remotes/$remote/" | grep -v "remotes/$remote/main" | wc -l)
+
+    if [ "$branch_count" -eq 0 ]; then
+        echo "No branches to delete (keeping remotes/$remote/main)"
+        return 0
+    fi
+
+    echo "Deleting $branch_count branch(es) from '$remote':"
+    git branch -r | grep "^[[:space:]]*remotes/$remote/" | grep -v "remotes/$remote/main" | sed 's/^[[:space:]]*//' | while read -r branch; do
+        echo "  - Deleting: $branch"
+        git branch -dr "$branch"
+    done
+
+    echo "Done! Kept remotes/$remote/main"
+}

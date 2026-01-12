@@ -45,6 +45,7 @@ git_help() {
     ux_table_row "gset-main" "set-upstream main" "Track origin/main"
     ux_table_row "gset-dev" "set-upstream dev" "Track origin/dev"
     ux_table_row "gset" "gset [branch]" "Track origin/[branch]"
+    ux_table_row "gprune" "gprune <remote>" "Delete all branches except main"
     echo ""
 
     ux_section "Cherry-pick"
