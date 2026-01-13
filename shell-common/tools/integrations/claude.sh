@@ -74,8 +74,8 @@ ensure_jq() {
     fi
 }
 
-# Auto-call ensure_jq when this file is sourced
-ensure_jq
+# NOTE: Do not auto-install dependencies at shell init time.
+# If jq is required for a specific workflow, call `ensure_jq` explicitly.
 
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Installation

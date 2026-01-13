@@ -102,6 +102,9 @@ fi
 
 if [ -d "${SHELL_COMMON}/env" ]; then
     for f in "${SHELL_COMMON}"/env/*.sh; do
+        case "$f" in
+            *.local.sh) continue ;;
+        esac
         [ -f "$f" ] && safe_source "$f" "Failed to load env" || true
     done
 fi
@@ -122,6 +125,9 @@ fi
 
 if [ -d "${SHELL_COMMON}/aliases" ]; then
     for f in "${SHELL_COMMON}"/aliases/*.sh; do
+        case "$f" in
+            *.local.sh) continue ;;
+        esac
         [ -f "$f" ] && safe_source "$f" "Failed to load alias" || true
     done
 fi
@@ -132,6 +138,9 @@ fi
 
 if [ -d "${SHELL_COMMON}/functions" ]; then
     for f in "${SHELL_COMMON}"/functions/*.sh; do
+        case "$f" in
+            *.local.sh) continue ;;
+        esac
         [ -f "$f" ] && safe_source "$f" "Failed to load function" || true
     done
 fi
@@ -143,6 +152,9 @@ fi
 
 if [ -d "${SHELL_COMMON}/tools/integrations" ]; then
     for f in "${SHELL_COMMON}"/tools/integrations/*.sh; do
+        case "$f" in
+            *.local.sh) continue ;;
+        esac
         [ -f "$f" ] && safe_source "$f" "Failed to load integration tool" || true
     done
 fi
@@ -161,6 +173,9 @@ fi
 
 if [ -d "${SHELL_COMMON}/projects" ]; then
     for f in "${SHELL_COMMON}"/projects/*.sh; do
+        case "$f" in
+            *.local.sh) continue ;;
+        esac
         [ -f "$f" ] && safe_source "$f" "Failed to load project" || true
     done
 fi

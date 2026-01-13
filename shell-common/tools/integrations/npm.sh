@@ -91,6 +91,64 @@ npm_list() {
 alias npm-list='npm_list'
 
 # ========================================
+# NPM Configuration Apply (explicit)
+# ========================================
+
+_npm_apply_one() {
+    local key="$1"
+    local desired="${2-}"
+
+    local current
+    current="$(npm config get "$key" 2>/dev/null || true)"
+    case "$current" in
+        null | undefined) current="" ;;
+    esac
+
+    if [ "$current" = "$desired" ]; then
+        ux_success "$key already set"
+        return 0
+    fi
+
+    ux_info "Setting $key"
+    if npm config set "$key" "$desired" >/dev/null 2>&1; then
+        ux_success "$key updated"
+        return 0
+    fi
+
+    ux_error "Failed to set $key"
+    return 1
+}
+
+npm_apply_config() {
+    if ! command -v npm >/dev/null 2>&1; then
+        ux_error "npm not found"
+        ux_info "Install: ${UX_BOLD}npminstall${UX_RESET}"
+        return 1
+    fi
+
+    if [ -z "${DESIRED_REGISTRY:-}" ]; then
+        ux_error "npm.local.sh not loaded (DESIRED_REGISTRY is empty)"
+        ux_info "Create: ${UX_BOLD}shell-common/tools/integrations/npm.local.sh${UX_RESET}"
+        ux_info "Or run: ${UX_BOLD}./shell-common/setup.sh${UX_RESET}"
+        return 1
+    fi
+
+    ux_header "Apply npm config (explicit)"
+    ux_info "This does not run automatically at shell init."
+
+    _npm_apply_one "registry" "$DESIRED_REGISTRY" || return 1
+    _npm_apply_one "cafile" "$DESIRED_CAFILE" || return 1
+    _npm_apply_one "strict-ssl" "$DESIRED_STRICT_SSL" || return 1
+    _npm_apply_one "proxy" "$DESIRED_PROXY" || return 1
+    _npm_apply_one "https-proxy" "$DESIRED_HTTPS_PROXY" || return 1
+    _npm_apply_one "noproxy" "$DESIRED_NOPROXY" || return 1
+    _npm_apply_one "prefix" "$DESIRED_PREFIX" || return 1
+
+    ux_success "npm config applied"
+}
+alias npm-apply-config='npm_apply_config'
+
+# ========================================
 # NPM Helper Function
 # ========================================
 
