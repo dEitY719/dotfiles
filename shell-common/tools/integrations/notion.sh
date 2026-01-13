@@ -55,9 +55,7 @@ notion_help() {
     echo ""
 
     ux_section "5️⃣  Test API Token Validity"
-    ux_bullet "curl https://api.notion.com/v1/users/me \\"
-    ux_bullet "  -H \"Authorization: Bearer \$NOTION_API_KEY\" \\"
-    ux_bullet "  -H \"Notion-Version: 2022-06-28\""
+    ux_bullet "curl https://api.notion.com/v1/users/me -H \"Authorization: Bearer \$NOTION_API_KEY\" -H \"Notion-Version: 2022-06-28\""
     ux_info "Success response: returns workspace and user information"
     echo ""
 
