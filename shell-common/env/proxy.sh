@@ -33,9 +33,9 @@ export NO_PROXY="$no_proxy"
 # This allows overriding default settings for corporate/special environments
 #
 # Note: When sourcing, $0 may be shell name (bash, -zsh, etc), so we use
-# SHELL_COMMON env var as primary source, with fallback to script directory.
-_proxy_script_dir="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/env"
-if [ -f "$_proxy_script_dir/proxy.local.sh" ]; then
-    . "$_proxy_script_dir/proxy.local.sh"
+# SHELL_COMMON (or DOTFILES_ROOT) for reliable path resolution.
+_proxy_root="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
+if [ -f "$_proxy_root/env/proxy.local.sh" ]; then
+    . "$_proxy_root/env/proxy.local.sh"
 fi
-unset _proxy_script_dir
+unset _proxy_root
