@@ -69,9 +69,14 @@ _init_litellm_env() {
 
 # ===== 헬퍼 함수 =====
 
+# Lazy initialization wrapper (idempotent)
+_litellm_ensure_init() {
+    _init_litellm_env
+}
+
 # 프로젝트 디렉토리 체크
 _check_litellm_project() {
-    _init_litellm_env
+    _litellm_ensure_init
     local project_path="${LITELLM_PROJECT_PATH:-}"
     if [[ -z "$project_path" ]] || [[ ! -d "$project_path" ]]; then
         ux_error "LiteLLM 프로젝트를 찾을 수 없습니다: ${project_path:-<unset>}"
@@ -82,7 +87,7 @@ _check_litellm_project() {
 
 # API 연결 테스트
 _check_litellm_health() {
-    _init_litellm_env
+    _litellm_ensure_init
     if curl -s "${LITELLM_URL:-}/health/liveliness" >/dev/null 2>&1; then
         return 0
     else
@@ -92,7 +97,7 @@ _check_litellm_health() {
 
 # litellm_settings.yml에 정의된 모델 목록 파싱
 _get_configured_models() {
-    _init_litellm_env
+    _litellm_ensure_init
 
     local project_path="${LITELLM_PROJECT_PATH:-}"
     if [[ -z "$project_path" ]] || [[ ! -f "$project_path/litellm_settings.yml" ]]; then
@@ -106,7 +111,7 @@ _get_configured_models() {
 
 # 실제 로드된 모델 목록 조회
 _get_loaded_models() {
-    _init_litellm_env
+    _litellm_ensure_init
 
     local url="${LITELLM_URL:-}"
     local api_key="${LITELLM_API_KEY:-}"
