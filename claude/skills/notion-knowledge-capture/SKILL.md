@@ -1,11 +1,24 @@
 ---
 name: notion-knowledge-capture
 description: Transforms conversations and discussions into structured documentation pages in Notion. Captures insights, decisions, and knowledge from chat context, formats appropriately, and saves to wikis or databases with proper organization and linking for easy discovery.
+allowed-tools: Read, Glob
 ---
 
 # Knowledge Capture
 
 Transforms conversations, discussions, and insights into structured documentation in your Notion workspace. Captures knowledge from chat context, formats it appropriately, and saves it to the right location with proper organization and linking.
+
+## MCP Smoke Test (Notion)
+
+Use this to verify the Notion MCP connection before attempting a full capture:
+
+1. Use the Notion MCP tool that maps to `POST /v1/search` and run a simple query like `test`.
+2. Confirm the tool returns `200` and a JSON payload (it may be an empty result set depending on workspace permissions).
+
+If you see `401 unauthorized` with `"API token is invalid."`, the MCP server is not receiving the same token you validated with `curl`. Typical causes:
+- Claude Code is reading a different config file than you expect (project override vs user config).
+- The MCP server env var key/value is not what the server expects (missing, empty, or accidentally set to a placeholder like `$NOTION_API_KEY`).
+- Claude Code needs a full restart after config changes.
 
 ## Quick Start
 
@@ -13,8 +26,8 @@ When asked to save information to Notion:
 
 1. **Extract content**: Identify key information from conversation context
 2. **Structure information**: Organize into appropriate documentation format
-3. **Determine location**: Use `Notion:notion-search` to find appropriate wiki page/database
-4. **Create page**: Use `Notion:notion-create-pages` to save content
+3. **Determine location**: Use the Notion MCP tool for `POST /v1/search` to find the right wiki page or database
+4. **Create page**: Use the Notion MCP tool for `POST /v1/pages` to create the new page
 5. **Make discoverable**: Link from relevant hub pages, add to databases, or update wiki navigation so others can find it
 
 ## Knowledge Capture Workflow
@@ -72,7 +85,7 @@ Where to save:
 ### Step 5: Create the page
 
 ```
-Use Notion:notion-create-pages:
+Use the Notion MCP tool for `POST /v1/pages`:
 - Set appropriate title
 - Use structured content from template
 - Set properties if in database
@@ -100,7 +113,7 @@ Link the new page so others can find it:
    - If in team wiki, ensure it's linked from team homepage
 
 Example:
-Notion:notion-update-page
+Use the Notion MCP tool for `PATCH /v1/pages/{page_id}`
 page_id: "team-wiki-homepage-id"
 command: "insert_content_after"
 selection_with_ellipsis: "## How-To Guides..."
@@ -200,4 +213,3 @@ See [examples/](examples/) for complete workflows:
 - [examples/conversation-to-faq.md](examples/conversation-to-faq.md) - FAQ from Q&A
 - [examples/decision-capture.md](examples/decision-capture.md) - Decision record
 - [examples/how-to-guide.md](examples/how-to-guide.md) - How-to from discussion
-
