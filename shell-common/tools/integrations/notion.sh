@@ -31,6 +31,17 @@ NOTION_HELP
 notion_help() {
     ux_header "Notion MCP Setup & Configuration"
 
+    ux_section "🔍 Current Environment Status"
+    if [ -n "${NOTION_API_KEY:-}" ]; then
+        local key_preview="${NOTION_API_KEY:0:10}...${NOTION_API_KEY: -10}"
+        ux_success "NOTION_API_KEY is set"
+        ux_info "Key preview: $key_preview"
+    else
+        ux_warning "NOTION_API_KEY is not set"
+        ux_info "Run: export NOTION_API_KEY='your_key_here' or source ~/.env"
+    fi
+    echo ""
+
     ux_section "1️⃣  Generate API Key from Notion"
     ux_numbered "1" "Visit https://www.notion.so/profile/integrations"
     ux_numbered "2" "Click 'Create new integration' button"
