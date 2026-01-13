@@ -1,955 +1,465 @@
-# Setup.sh 동작 일관성 검토 - 보안 및 NPM 설정 처리
+# P0 구현 코드 리뷰 (d2e4e05)
 
-**검토 대상**:
+## 1) Review Info
 
-- 최근 커밋: `156541c` (npm-config 프록시 표시), `7150b8b` (npm 설정 자동화)
-- 검토 파일: `shell-common/env/security.local.example`, `shell-common/tools/integrations/npm.local.example`, `shell-common/env/proxy.local.example` (3개 파일)
-- 처리 코드: `shell-common/setup.sh`의 `setup_local_files()` 함수
+- Reviewer: Claude (Sonnet 4.5) - S/W Architecture 전문가 (보수적 입장)
+- Date: 2026-01-13
+- Commit: d2e4e05f946707ad95dba66a4e89d8cc633db270
+- Scope: P0 우선순위 구현 (셸 초기화 부작용 제거)
+- 관점: **운영 안정성, 회귀 리스크 최소화, 점진적 검증**
 
----
+## 2) 전반적 평가
 
-## 1️⃣ 현재 상태 분석
+**✅ 전체적으로 매우 훌륭한 구현입니다.**
 
-### 1.1 동작 과정 비교
+이번 P0 구현은 보수적 아키텍처 관점에서 **즉각 조치가 필요했던 운영 리스크를 정확히 제거**했습니다:
 
-#### security.local 처리 방식
+1. ✅ **셸 초기화 시 자동 설치 제거** (claude.sh ensure_jq)
+2. ✅ **.local.sh 중복 로딩 제거** (bash/zsh 로더)
+3. ✅ **.local.sh 역할 명확화** (npm.local.example: 값 정의만)
+4. ✅ **명시적 적용 커맨드 추가** (npm-apply-config)
+
+**변경 범위가 정확하고, 기존 시스템에 대한 영향을 최소화하면서 핵심 문제를 해결했습니다.**
+
+## 3) 상세 리뷰 (파일별)
+
+### ✅ 우수: bash/main.bash, zsh/main.zsh
+
+**변경 내용:**
 
 ```bash
-# setup.sh 라인 98-128
-if [ -f "$security_local" ]; then
-    case "$environment" in
-        internal)
-            # Comment out Option 1 (한 줄)
-            sed -i 's/^CA_CERT="\/usr\/local\/share/#CA_CERT="\/usr\/local\/share/' "$security_local"
-            # Uncomment Option 2 (한 줄)
-            sed -i 's/^#CA_CERT="\/etc\/ssl\/certs/CA_CERT="\/etc\/ssl\/certs/' "$security_local"
-        ;;
-        external)
-            # Uncomment Option 1 (한 줄)
-            sed -i 's/^#CA_CERT="\/usr\/local\/share/CA_CERT="\/usr\/local\/share/' "$security_local"
-            # Comment out Option 2 (한 줄)
-            sed -i 's/^CA_CERT="\/etc\/ssl\/certs/#CA_CERT="\/etc\/ssl\/certs/' "$security_local"
-        ;;
+# bash/main.bash:157-160 (env), 169-172 (aliases), 181-184 (functions), 193-196 (integrations), 210-213 (projects)
+# zsh/main.zsh:105-108 (env), 128-131 (aliases), 141-144 (functions), 155-158 (integrations), 176-179 (projects)
+for f in "${SHELL_COMMON}"/env/*.sh; do
+    case "$f" in
+        *.local.sh) continue ;;
     esac
-fi
-```
-
-**특징**:
-
-- ✓ 매우 간단한 구조 (1개 변수: `CA_CERT`)
-- ✓ 직관적인 sed 명령 (단순 string replacement)
-- ✓ 명확한 의도 파악 용이
-
-#### npm.local 처리 방식
-
-```bash
-# setup.sh 라인 130-190
-if [ -f "$npm_local" ]; then
-    case "$environment" in
-        internal)
-            # Comment out Option 1 (6개 변수)
-            sed -i '/^    # === Option1:/,/^    # === Option2:/ {
-                /DESIRED_REGISTRY=.*npmjs/s/^    /    # /
-                /DESIRED_CAFILE=.*samsungsemi/s/^    /    # /
-                /DESIRED_STRICT_SSL="true"/s/^    /    # /
-                /DESIRED_PROXY=""/s/^    /    # /
-                /DESIRED_HTTPS_PROXY=""/s/^    /    # /
-                /DESIRED_NOPROXY=""/s/^    /    # /
-            }' "$npm_local"
-            # Uncomment Option 2 (6개 변수)
-            sed -i '/^    # === Option2:/,/^    # === 공통 설정/ {
-                /DESIRED_REGISTRY=.*artifactory/s/^    # /    /
-                /DESIRED_CAFILE=.*ca-certificates.crt/s/^    # /    /
-                /DESIRED_STRICT_SSL="false"/s/^    # /    /
-                /DESIRED_PROXY=.*12.26/s/^    # /    /
-                /DESIRED_HTTPS_PROXY=.*12.26/s/^    # /    /
-                /DESIRED_NOPROXY=.*10.229/s/^    # /    /
-            }' "$npm_local"
-        ;;
-        external)
-            # 동일한 6개 변수 toggle (반복)
-        ;;
-    esac
-fi
-```
-
-**특징**:
-
-- ✗ 복잡한 구조 (6개 변수: DESIRED_* 들)
-- ✗ 복잡한 sed 문법 (range + nested replacement)
-- ✗ 유지보수 어려움 (각 변수를 정확히 명시해야 함)
-
-#### proxy.local 처리 방식
-
-```bash
-# setup.sh 라인 85-93
-case "$environment" in
-    external)
-        # External company PC (VPN): skip proxy.local.example
-        # Reason: proxy.local.sh is only valid for internal (2번 option)
-        # VPN environment uses direct connection without proxy
-        if [ "$basename_file" = "proxy.local.example" ]; then
-            print_info "Skipped (not needed for VPN): ${basename_file}"
-        else
-            cp "$example_file" "$local_file"
-        fi
-    ;;
-esac
-```
-
-**특징**:
-
-- ⚠️ 선택적 생성 (external에서만 스킵)
-- ✓ 단순한 구조 (4개 변수: http_proxy, https_proxy, no_proxy 등)
-- ✓ 환경별 Option toggle 없음 (단일 설정만 포함)
-- ✗ 하지만 조건부 로직이 이상함 (proxy.local은 internal 환경용인데 external에서 스킵)
-
-### 1.2 문제점 요약
-
-| 항목 | security.local | npm.local | proxy.local | 평가 |
-| --- | --- | --- | --- | --- |
-| **변수 개수** | 1개 | 6개 | 4개 | ✗ 불일치 |
-| **sed 명령 복잡도** | 단순 (1줄) | 복잡 (6줄 + range) | 없음 (조건부 스킵) | ✗ 불일치 |
-| **환경별 Option** | 2개 | 2개 | 0개 (단일) | ✗ 불일치 |
-| **생성 조건** | 항상 생성 | 항상 생성 | internal만 생성 | ✗ 불일치 |
-| **코드 가독성** | 높음 | 낮음 | 낮음 (조건부) | ✗ 문제 |
-
----
-
-## 2️⃣ SOLID 원칙 준수 현황
-
-### 2.1 Single Responsibility Principle (SRP) 위반 ⚠️
-
-`setup_local_files()` 함수가 너무 많은 책임을 가짐:
-
-```bash
-setup_local_files() {
-    local environment="$1"
-
-    # 책임 1: .local.example → .local.sh 파일 복사
-    for example_file in "${local_examples[@]}"; do
-        cp "$example_file" "$local_file"
-    done
-
-    # 책임 2: security.local.sh 환경별 설정
-    if [ -f "$security_local" ]; then
-        sed -i ...  # Option toggle
-    fi
-
-    # 책임 3: npm.local.sh 환경별 설정
-    if [ -f "$npm_local" ]; then
-        sed -i ...  # 6개 변수 toggle
-    fi
-}
-```
-
-**문제**:
-
-- 함수가 3개 이상의 서로 다른 책임을 처리
-- 각 설정 파일의 처리 로직이 한 함수에 embedded되어 있음
-- 새로운 .local 파일 추가 시 함수를 계속 수정해야 함
-
-**개선 방안**:
-
-```bash
-# 각 설정별로 독립적인 함수 분리
-setup_security_config() { ... }
-setup_npm_config() { ... }
-setup_python_config() { ... }  # 향후 추가 가능
-
-setup_local_files() {
-    # 기본 파일 복사만 담당
-    # 각 설정 함수 호출
-}
-```
-
-### 2.2 Open/Closed Principle (OCP) 위반 ⚠️
-
-새로운 .local.example 파일을 추가하려면 setup.sh를 직접 수정해야 함:
-
-```bash
-# 현재: proxy.local.example 추가 시
-if [ "$basename_file" = "proxy.local.example" ]; then
-    # 특수 처리...
-fi
-```
-
-**문제**:
-
-- 새로운 설정 파일마다 setup.sh 코드 수정 필요
-- 확장에 닫혀있는 구조
-
-**개선 방안**:
-
-```bash
-# 설정 파일별 메타데이터 정의
-declare -A CONFIG_HANDLERS=(
-    ["security.local"]="handle_security_config"
-    ["npm.local"]="handle_npm_config"
-)
-
-# 동적으로 처리
-for config_name in "${!CONFIG_HANDLERS[@]}"; do
-    handler_func="${CONFIG_HANDLERS[$config_name]}"
-    $handler_func "$environment"
+    safe_source "$f" "..."
 done
 ```
 
-### 2.3 Don't Repeat Yourself (DRY) 위반 ⚠️
+**평가:**
 
-#### Issue 1: Comment/Uncomment 로직 중복
+- ✅ **일관성**: 5개 섹션(env, aliases, functions, integrations, projects) 모두에 동일 패턴 적용
+- ✅ **POSIX 호환**: `case ... in` 패턴은 bash/zsh 공통, 안전함
+- ✅ **최소 변경**: 기존 로딩 로직을 건드리지 않고 스킵 조건만 추가
+- ✅ **가독성**: 코드 의도가 명확함 ("*.local.sh는 로더에서 스킵")
+
+**추가 고려사항:**
+
+- 현재 구현은 "로더 스킵 + 기본 스크립트에서 로드" 방식 (abc-review-G.md의 Option A)
+- 이 방식은 `.local.sh`의 존재 여부를 각 기본 스크립트가 제어할 수 있어 유연함 ✅
+
+### ✅ 우수: shell-common/tools/integrations/claude.sh
+
+**변경 내용:**
 
 ```bash
-# security.local에서
-sed -i 's/^CA_CERT="../#CA_CERT="../'          # Comment
-sed -i 's/^#CA_CERT=/CA_CERT=/'                # Uncomment
+# Before (claude.sh:77-78)
+# Auto-call ensure_jq when this file is sourced
+ensure_jq
 
-# npm.local에서
-sed -i '/^    /s/^    /    # /'                # Comment
-sed -i '/^    # /s/^    # /    /'              # Uncomment
+# After (claude.sh:77-78)
+# NOTE: Do not auto-install dependencies at shell init time.
+# If jq is required for a specific workflow, call `ensure_jq` explicitly.
 ```
 
-#### Issue 2: 환경별 설정 로직 중복
+**평가:**
+
+- ✅ **운영 리스크 제거**: 더 이상 셸 초기화 시 apt-get/brew 실행 안 함
+- ✅ **명확한 주석**: 왜 자동 호출을 제거했는지 설명
+- ✅ **대안 제시**: "explicitly" 호출하라는 가이드
+
+**추가 고려사항:**
+
+- `ensure_jq` 함수 자체는 유지되어 필요 시 명시적 호출 가능 ✅
+- 의존성 체크를 "경고만" 출력하도록 개선하는 것도 고려 가능 (P1)
+
+  ```bash
+  # Example (optional future enhancement)
+  if ! command -v jq >/dev/null 2>&1; then
+      ux_warning "jq not found. Run 'clinstall jq' to install."
+  fi
+  ```
+
+### ✅ 우수: shell-common/env/security.sh
+
+**변경 내용:**
 
 ```bash
-case "$environment" in
-    internal)
-        # security.local: Option 2 활성화
-        # npm.local: Option 2 활성화
-    ;;
-    external)
-        # security.local: Option 1 활성화
-        # npm.local: Option 1 활성화
-    ;;
-esac
-```
-
-**공통 패턴**: 모든 설정이 동일하게 Option1(external) ↔ Option2(internal) toggle
-
----
-
-## 3️⃣ SSOT (Single Source of Truth) 원칙 위반 ⚠️
-
-### 3.1 설정값 중복 정의
-
-**문제**: 설정값이 여러 곳에서 중복 정의되거나 분산됨
-
-#### security.local.example (템플릿)
-
-```bash
-# CA_CERT 설정 (1개 변수, 2개 Option)
-CA_CERT="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-#CA_CERT="/etc/ssl/certs/ca-certificates.crt"
-```
-
-#### npm.local.example (템플릿)
-
-```bash
-# Option 1 설정
-DESIRED_REGISTRY="https://registry.npmjs.org/"
-DESIRED_CAFILE="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-DESIRED_PROXY=""
-
-# Option 2 설정 (주석)
-# DESIRED_REGISTRY="http://repo.samsungds.net:8081/..."
-# DESIRED_CAFILE="/etc/ssl/certs/ca-certificates.crt"
-# DESIRED_PROXY="http://12.26.204.100:8080"
-```
-
-#### proxy.local.example (템플릿)
-
-```bash
-# 프록시 설정 (4개 변수, Option 없음)
-export http_proxy="http://12.26.204.100:8080/"
-export https_proxy="http://12.26.204.100:8080/"
-export no_proxy="10.229.95.200,10.229.95.220,..."
-```
-
-#### setup.sh (자동화)
-
-```bash
-# npm.local 설정
-sed -i '/DESIRED_REGISTRY=.*npmjs/s/^    /    # /'
-sed -i '/DESIRED_REGISTRY=.*artifactory/s/^    # /    /'
-
-# proxy.local 조건부 스킵 (setup.sh 라인 88-91)
-if [ "$basename_file" = "proxy.local.example" ]; then
-    print_info "Skipped (not needed for VPN): ${basename_file}"
+# Before (security.sh:30-35)
+_security_dir="$(cd "$(dirname -- "$0" 2>/dev/null)" 2>/dev/null && pwd)" || _security_dir="$PWD"
+if [ -f "$_security_dir/security.local.sh" ]; then
+    . "$_security_dir/security.local.sh"
 fi
-```
+unset _security_dir
 
-**문제**:
-- npm.local.example과 setup.sh에서 동일한 값이 반복 정의됨
-- 유지보수 시 두 곳을 모두 수정해야 함
-- 불일치 가능성이 있음
-
-### 3.2 옵션 정보의 분산
-
-| 정보 | security.local | npm.local | proxy.local | 문제 |
-|------|---|---|---|---|
-| Option 개수 | 2개 | 2개 | 0개 (단일) | ✗ 불일치 |
-| 설정값 정의 위치 | template | template | template | ✓ 명확 |
-| setup.sh 처리 | sed toggle | sed toggle | 조건부 스킵 | ✗ 불일치 |
-| 프록시 변경 시 | ✓ 1곳 수정 | ✓ 2곳 수정 | ✓ 1곳 수정 | ⚠️ 불일치 |
-| 환경별 로직 | 동일 | 동일 | 다름 | ✗ 일관성 부재 |
-
-### 3.3 실제 유지보수 시나리오
-
-**시나리오 1**: 회사 프록시 주소 변경 (12.26.204.100:8080 → 10.0.0.1:3128)
-
-**필요한 수정**:
-
-1. npm.local.example 수정 (Option 2):
-```bash
-# DESIRED_PROXY="http://10.0.0.1:3128"
-# DESIRED_HTTPS_PROXY="http://10.0.0.1:3128"
-```
-
-2. setup.sh 수정 (sed 패턴 변경):
-```bash
-sed -i '/DESIRED_PROXY=.*12.26/s/^    # /    /'          # ← 패턴 변경 필요
-sed -i '/DESIRED_HTTPS_PROXY=.*12.26/s/^    # /    /'    # ← 패턴 변경 필요
-```
-
-3. proxy.local.example 수정:
-```bash
-export http_proxy="http://10.0.0.1:3128/"
-export https_proxy="http://10.0.0.1:3128/"
-```
-
-**문제점**:
-- npm.local: **2곳** 수정 필요 (template + setup.sh 패턴)
-- proxy.local: **1곳** 수정 필요
-- 프로토콜이 다름 (sed toggle vs 단순 업데이트)
-
-**시나리오 2**: proxy.local 추가 프록시 주소 필요
-
-proxy.local은 Option이 없으므로:
-- 새 프록시 주소를 위해서는 Option을 **새로 추가**해야 함
-- 이는 template 구조와 setup.sh 로직을 동시에 수정 필요
-- npm.local과 달리 구조가 다르므로 매우 번거로움
-
-**근본 원인**: 각 파일의 처리 방식이 불일치하고, 설정값의 정의와 적용 로직이 분산됨
-
----
-
-## 4️⃣ 현재 구조의 한계
-
-### 4.1 sed 기반 자동화의 문제점
-
-#### Issue 1: 정규식 유지보수 어려움
-
-```bash
-# 정확한 패턴 일치 필요
-sed -i '/DESIRED_PROXY=.*12.26/s/^    # /    /'
-       # ← 만약 "12.26.204.100:8080" 형식이 변경되면?
-       # ← 정규식을 다시 작성해야 함
-```
-
-#### Issue 2: 파일 형식 변경에 취약
-
-```bash
-# 들여쓰기 변경 시
-sed -i '/^    # === Option1:/,/^    # === Option2:/ {'
-#      # ← "    " (4칸) 가정
-# 만약 탭으로 변경되면 패턴 불일치
-```
-
-#### Issue 3: 확인 어려움
-
-```bash
-# 설정 후 확인 불가능
-npm config get registry  # 실제로 설정되었는지 확인
-npm config get proxy     # 설정 과정에서 누락되지 않았는지 확인?
-```
-
-### 4.2 파일 구조의 일관성 부재
-
-#### security.local.example
-
-```bash
-# Template 스타일: 정적 인라인 옵션
-# Option 1: ... (주석 + 설명)
-CA_CERT="/usr/local/share/..."
-
-# Option 2: ... (주석 + 설명)
-#CA_CERT="/etc/ssl/..."
-```
-
-#### npm.local.example
-
-```bash
-# Configuration 스타일: 동적 변수 + 옵션
-# Option 1: ... (여러 줄의 DESIRED_* 변수)
-DESIRED_REGISTRY="..."
-DESIRED_CAFILE="..."
-
-# Option 2: ... (여러 줄의 DESIRED_* 변수 commented)
-# DESIRED_REGISTRY="..."
-# DESIRED_CAFILE="..."
-
-# 실제 적용 로직
-if command -v npm >/dev/null 2>&1; then
-    npm config set registry "$DESIRED_REGISTRY"
-    npm config set cafile "$DESIRED_CAFILE"
+# After (security.sh:30-36)
+_security_root="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
+if [ -f "$_security_root/env/security.local.sh" ]; then
+    . "$_security_root/env/security.local.sh"
 fi
+unset _security_root
 ```
 
-#### proxy.local.example
+**평가:**
+
+- ✅ **신뢰성 향상**: `dirname -- "$0"`는 source 컨텍스트에서 부정확 → `SHELL_COMMON` 사용으로 해결
+- ✅ **SSOT 적용**: 이미 정의된 `SHELL_COMMON`, `DOTFILES_ROOT` 변수 재사용
+- ✅ **Fallback 제공**: `${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}` 3단계 폴백
+
+**추가 고려사항:**
+
+- 이 패턴은 다른 `.local.sh` 로딩에도 재사용 가능 (proxy.sh 등) ✅
+
+### ✅ 탁월: shell-common/tools/integrations/npm.local.example
+
+**변경 내용:**
 
 ```bash
-# Simple Export 스타일: 단순 환경변수 정의
-# (Option 없음, internal 환경용만)
-export http_proxy="http://12.26.204.100:8080/"
-export https_proxy="http://12.26.204.100:8080/"
-export no_proxy="10.229.95.200,..."
+# Before (npm.local.example:15-112)
+# - NVM 로드 (\. "$NVM_DIR/nvm.sh")
+# - ~/.npmrc 수정 (sed -i '/^prefix=/d')
+# - npm config set registry/cafile/proxy/... (7개 항목)
+
+# After (npm.local.example:21-52)
+# - 값 정의만 (DESIRED_REGISTRY, DESIRED_CAFILE, ...)
+# - 실행 로직 전부 제거
+# - 주석으로 "값 정의만 담당, 적용은 npm-apply-config로" 명시
 ```
 
-**문제**: 세 파일의 구조가 완전히 다름
-- security.local: 단일 변수 (sed toggle)
-- npm.local: 다중 변수 + 적용 로직 (sed toggle)
-- proxy.local: 단순 환경변수 (조건부 스킵, Option 없음)
+**평가:**
 
----
+- ✅ **역할 명확화**: `.local.sh`는 "값 정의만" (SSOT 원칙 준수)
+- ✅ **부작용 제거**: 더 이상 셸 초기화 시 npm config set, ~/.npmrc 수정 없음
+- ✅ **문서화 강화**: 사용자가 혼란 없도록 주석으로 명확히 설명
+- ✅ **간결성**: 112줄 → 52줄 (60줄 감소, 53% 감소)
 
-## 5️⃣ 리팩토링 제안
+**추가 고려사항:**
 
-### 5.1 핵심 원칙
+- NVM 로드 로직이 제거되었는데, 이것이 문제가 되는 사용자가 있을 수 있음
+- 권장: NVM 로드는 별도 `nvm.local.sh`로 분리하거나, `npm.sh`에서 옵셔널 로드
+- 현재는 시스템에 nvm이 설치되어 있다면 이미 `.bashrc`/`.zshrc`에서 로드될 가능성 높음 ✅
 
-1. **SSOT 확보**: 설정값은 한 곳에서만 정의
-2. **책임 분리**: 각 설정 파일별 독립적인 처리 로직
-3. **일관된 구조**: 모든 .local.example 파일이 동일한 패턴 따름
-4. **명확한 의도**: sed 조작 없이도 설정값의 의미가 명확함
+### ✅ 탁월: shell-common/tools/integrations/npm.sh
 
-### 5.2 리팩토링 방안 A: 설정 파일 계층화 (권장)
-
-#### 구조 변경
-
-```
-shell-common/
-├── config/
-│   └── environments.conf          # SSOT: 환경별 설정값 정의
-│
-├── env/
-│   ├── security.local.example      # 템플릿 (변수만 정의)
-│   └── security.local.sh           # 자동 생성됨 (setup.sh가 env.conf에서 읽어 생성)
-│
-└── tools/integrations/
-    ├── npm.local.example           # 템플릿 (변수만 정의)
-    └── npm.local.sh                # 자동 생성됨
-```
-
-#### environments.conf (새로 생성 - SSOT)
+**변경 내용:**
 
 ```bash
-# Single Source of Truth: 환경별 설정값 정의 (3개 파일 통합)
-# format: ENVIRONMENT:SETTING_NAME=VALUE
-
-# === Security (CA Certificate) ===
-external:CA_CERT="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-internal:CA_CERT="/etc/ssl/certs/ca-certificates.crt"
-
-# === NPM Configuration (Option 1: External) ===
-external:NPM_REGISTRY="https://registry.npmjs.org/"
-external:NPM_CAFILE="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-external:NPM_STRICT_SSL="true"
-external:NPM_PROXY=""
-external:NPM_HTTPS_PROXY=""
-external:NPM_NOPROXY=""
-
-# === NPM Configuration (Option 2: Internal) ===
-internal:NPM_REGISTRY="http://repo.samsungds.net:8081/artifactory/api/npm/npm/"
-internal:NPM_CAFILE="/etc/ssl/certs/ca-certificates.crt"
-internal:NPM_STRICT_SSL="false"
-internal:NPM_PROXY="http://12.26.204.100:8080"
-internal:NPM_HTTPS_PROXY="http://12.26.204.100:8080"
-internal:NPM_NOPROXY="10.229.95.200,10.229.95.220,..."
-
-# === Proxy Configuration (Internal Only) ===
-internal:PROXY_HTTP="http://12.26.204.100:8080/"
-internal:PROXY_HTTPS="http://12.26.204.100:8080/"
-internal:PROXY_NO="10.229.95.200,10.229.95.220,..."
-```
-
-#### setup.sh 개선
-
-```bash
-# environments.conf에서 값을 읽어 .local.sh 파일 자동 생성
-setup_environment_config() {
-    local environment="$1"
-    local config_file="$SHELL_COMMON_DIR/config/environments.conf"
-
-    # security.local.sh 생성
-    {
-        cat shell-common/env/security.local.example
-        echo "# Auto-configured for: $environment"
-        grep "^${environment}:CA_CERT=" "$config_file" | cut -d: -f2-
-    } > shell-common/env/security.local.sh
-
-    # npm.local.sh 생성
-    {
-        cat shell-common/tools/integrations/npm.local.example
-        echo "# Auto-configured for: $environment"
-        grep "^${environment}:NPM_" "$config_file" | cut -d: -f2- | \
-        sed 's/NPM_/DESIRED_/g'
-    } > shell-common/tools/integrations/npm.local.sh
-
-    # proxy.local.sh 생성 (internal 환경만)
-    if [ "$environment" = "internal" ]; then
-        {
-            cat shell-common/env/proxy.local.example
-            echo "# Auto-configured for: $environment"
-            grep "^${environment}:PROXY_" "$config_file" | \
-            sed 's/PROXY_HTTP/http_proxy/; s/PROXY_HTTPS/https_proxy/; s/PROXY_NO/no_proxy/' | \
-            cut -d: -f2-
-        } > shell-common/env/proxy.local.sh
-    fi
+# npm.sh:93-151 (새로 추가)
+npm_apply_config() {
+    # 1. npm 명령어 존재 확인
+    # 2. DESIRED_REGISTRY 변수 존재 확인 (npm.local.sh 로드 여부 체크)
+    # 3. 각 설정 항목에 대해:
+    #    - 현재 값 조회 (npm config get)
+    #    - 원하는 값과 비교
+    #    - 다를 경우에만 npm config set 실행
+    # 4. ux_lib 사용으로 UX 일관성 확보
 }
+alias npm-apply-config='npm_apply_config'
 ```
 
-**장점**:
-- ✓ SSOT 확보 (environments.conf가 유일한 진실)
-- ✓ sed 조작 제거 (파일 생성으로 대체)
-- ✓ 3개 파일 통합 관리
-- ✓ 새로운 설정 추가 용이 (environments.conf만 수정)
-- ✓ 설정값 변경 시 한 곳만 수정
+**평가:**
 
-### 5.3 리팩토링 방안 B: 설정 파일 표준화
+- ✅ **명시적 실행**: 사용자가 원할 때만 `npm-apply-config` 실행
+- ✅ **Idempotent**: 현재 값과 비교 후 다를 때만 설정 (불필요한 I/O 방지)
+- ✅ **에러 처리**: npm 없음, npm.local.sh 없음 케이스 모두 처리
+- ✅ **UX 일관성**: `ux_header`, `ux_info`, `ux_success`, `ux_error` 사용
+- ✅ **가이드 제공**: 에러 발생 시 해결 방법 제시 (예: "Create: npm.local.sh")
 
-#### 모든 .local.example을 동일한 구조로 통일
-
-**security.local.example** (현재 ✓ 좋음)
-```bash
-# 템플릿 파일: 변수 정의만
-CA_CERT="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-```
-
-**npm.local.example** (개선 필요)
-```bash
-# Before: 템플릿에서 설정 로직까지 포함
-DESIRED_REGISTRY="..."
-if command -v npm; then
-    npm config set ...
-fi
-
-# After: 순수 변수 정의만
-DESIRED_REGISTRY="https://registry.npmjs.org/"
-DESIRED_CAFILE="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-DESIRED_PROXY=""
-```
-
-**새로운 npm-apply.sh** (설정 적용 로직)
-```bash
-#!/bin/bash
-# npm 설정을 npm.local.sh에서 읽어 실제로 적용
-
-if [ -f "npm.local.sh" ]; then
-    source npm.local.sh
-
-    [ -n "$DESIRED_REGISTRY" ] && npm config set registry "$DESIRED_REGISTRY"
-    [ -n "$DESIRED_CAFILE" ] && npm config set cafile "$DESIRED_CAFILE"
-    ...
-fi
-```
-
-**장점**:
-- ✓ 모든 .local.example 파일이 순수 템플릿 역할
-- ✓ 설정 로직이 별도의 apply 스크립트로 분리
-- ✓ 각 설정별로 일관된 구조
-
-### 5.4 즉시 적용 가능한 개선 (Quick Win)
-
-#### 개선 1: 설정값 추출 및 주석화
+**특히 탁월한 점:**
 
 ```bash
-# setup.sh 내에 명시적 변수 정의
-declare -A SECURITY_CONFIG=(
-    [external]="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-    [internal]="/etc/ssl/certs/ca-certificates.crt"
-)
+_npm_apply_one() {
+    local key="$1"
+    local desired="${2-}"
 
-declare -A NPM_REGISTRY=(
-    [external]="https://registry.npmjs.org/"
-    [internal]="http://repo.samsungds.net:8081/..."
-)
-
-# sed 패턴 대신 변수 사용
-CA_CERT="${SECURITY_CONFIG[$environment]}"
-```
-
-#### 개선 2: 함수 분리
-
-```bash
-# 현재: setup_local_files() 함수가 모든 것을 처리
-
-# 개선:
-apply_security_config() { ... }
-apply_npm_config() { ... }
-
-setup_local_files() {
-    for example_file in "${local_examples[@]}"; do
-        cp "$example_file" "$local_file"
-    done
-
-    # 각 설정별 함수 호출
-    apply_security_config "$environment"
-    apply_npm_config "$environment"
-}
-```
-
-#### 개선 3: 검증 로직 추가
-
-```bash
-# 설정 후 실제로 적용되었는지 검증
-verify_security_config() {
-    local expected_ca="$1"
-    # NODE_EXTRA_CA_CERTS가 설정되었는지 확인
-    if [ "$NODE_EXTRA_CA_CERTS" = "$expected_ca" ]; then
-        print_success "Security config verified"
-    else
-        print_info "Warning: Security config may not be applied correctly"
-    fi
-}
-
-verify_npm_config() {
-    local expected_registry="$1"
-    # npm config get으로 실제 설정값 확인
-    local actual="$(npm config get registry 2>/dev/null)"
-    if [ "$actual" = "$expected_registry" ]; then
-        print_success "NPM config verified"
-    else
-        print_info "Warning: npm config set이 자동 적용되지 않을 수 있습니다"
-    fi
-}
-```
-
----
-
-## 6️⃣ 리팩토링 후 setup.sh 구조 개선
-
-### 6.1 cleanup_local_files() 함수 제거 (SOLID 원칙)
-
-#### 현재 동작 (불필요한 복잡성)
-
-```bash
-main() {
-    case "$choice" in
-        1)
-            cleanup_local_files              # ← 필요함
-            setup_local_files 호출 안함
-            ;;
-        2)
-            cleanup_local_files              # ← cleanup 후 setup (2단계)
-            setup_local_files "internal"
-            ;;
-        3)
-            cleanup_local_files              # ← cleanup 후 setup (2단계)
-            setup_local_files "external"
-            ;;
+    local current
+    current="$(npm config get "$key" 2>/dev/null || true)"
+    case "$current" in
+        null | undefined) current="" ;;
     esac
-}
-```
 
-#### 리팩토링 후 동작 (간결함)
-
-```bash
-main() {
-    case "$choice" in
-        1)
-            remove_local_files               # ← 단순 삭제만
-            ;;
-        2)
-            setup_environment_config "internal"   # ← 1단계 (자동 생성)
-            ;;
-        3)
-            setup_environment_config "external"   # ← 1단계 (자동 생성)
-            ;;
-    esac
-}
-```
-
-**개선 이유**:
-- ✓ cleanup_local_files() 제거 (SRP 원칙)
-  - 현재: cleanup과 setup이 결합된 복합 책임
-  - 개선: setup만 담당 (생성이 자동으로 덮어쓰기)
-- ✓ 단계 감소: 2단계 (cleanup → setup) → 1단계 (setup only)
-- ✓ 코드 간결성: 불필요한 함수 제거
-
-### 6.2 선택적 copy 로직 제거 (SSOT + 일관성)
-
-#### 현재 동작 (불일치)
-
-```bash
-setup_local_files() {
-    for example_file in ...; do
-        case "$environment" in
-            internal)
-                # 모든 파일 copy
-                cp "$example_file" "$local_file"
-                ;;
-            external)
-                # 선택적 조건부 copy
-                if [ "$basename_file" = "proxy.local.example" ]; then
-                    print_info "Skipped (not needed for VPN): ${basename_file}"
-                else
-                    cp "$example_file" "$local_file"
-                fi
-                ;;
-        esac
-    done
-}
-```
-
-**문제점**:
-- ✗ internal과 external의 copy 로직이 다름
-- ✗ proxy.local은 특별 처리 (조건부 스킵)
-- ✗ 일관성 부재 (DRY 원칙 위반)
-
-#### 리팩토링 후 동작 (일관됨)
-
-```bash
-setup_environment_config() {
-    local environment="$1"
-    local config_file="$SHELL_COMMON_DIR/config/environments.conf"
-
-    # 1. security.local.sh 생성 (동일한 로직)
-    generate_config_file "security" "$environment" "$config_file"
-
-    # 2. npm.local.sh 생성 (동일한 로직)
-    generate_config_file "npm" "$environment" "$config_file"
-
-    # 3. proxy.local.sh 생성
-    #    - internal: 자동 생성
-    #    - external: 자동으로 생성 안 함 (environments.conf에 정의 없음)
-    if [ "$environment" = "internal" ]; then
-        generate_config_file "proxy" "$environment" "$config_file"
+    if [ "$current" = "$desired" ]; then
+        ux_success "$key already set"
+        return 0
     fi
-}
-
-generate_config_file() {
-    local config_type="$1"
-    local environment="$2"
-    local config_file="$3"
-
-    # environments.conf에서 값 읽어 파일 생성
-    # 모든 환경에서 동일한 로직 사용
-    local output_file="..."
-    {
-        cat "${TEMPLATE_FILE}"
-        echo "# Auto-configured for: $environment"
-        grep "^${environment}:${config_type^^}_" "$config_file" | \
-        cut -d: -f2-
-    } > "$output_file"
+    # ...
 }
 ```
 
-**개선점**:
-- ✓ 모든 환경에서 동일한 generate_config_file() 사용 (DRY)
-- ✓ 선택적 copy 로직 제거 (조건부 스킵 → 자동 판단)
-- ✓ proxy.local은 environments.conf에 정의 여부로 자동 판단
-  - internal: PROXY_* 정의 → 생성됨
-  - external: PROXY_* 정의 없음 → 생성 안 됨
+- ✅ **Helper 함수 분리**: `_npm_apply_one`로 반복 로직 제거 (DRY 원칙)
+- ✅ **Robust 처리**: `null`, `undefined` 케이스 처리
+- ✅ **UX 향상**: "already set"으로 불필요한 설정 스킵 명확히 표시
 
-### 6.3 sed toggle 로직 제거 (명확성)
+**추가 고려사항:**
 
-#### 현재 동작 (복잡)
+- (정정) npm.sh는 이미 npm.local.sh를 자동 로드함 (하단 로드 로직 존재)
+- 로더에서 `*.local.sh`를 스킵해도, npm.sh가 자체 로드하므로 `npm-apply-config` 실행 전 수동 source가 필요하지 않음
+- 근거: `docs/test-results-P0.md`의 "Edge Case Discovery" 테스트 결과
 
 ```bash
-# security.local.sh 처리
-sed -i 's/^CA_CERT="\/usr\/local\/share/#CA_CERT="\/usr\/local\/share/' "$security_local"
-sed -i 's/^#CA_CERT="\/etc\/ssl\/certs/CA_CERT="\/etc\/ssl\/certs/' "$security_local"
-
-# npm.local.sh 처리
-sed -i '/^    # === Option1:/,/^    # === Option2:/ {
-    /DESIRED_REGISTRY=.*npmjs/s/^    /    # /
-    /DESIRED_CAFILE=.*samsungsemi/s/^    /    # /
-    ...
-}' "$npm_local"
+# shell-common/tools/integrations/npm.sh:185-190
+if [ -f "${BASH_SOURCE[0]%/*}/npm.local.sh" ]; then
+    . "${BASH_SOURCE[0]%/*}/npm.local.sh"
+elif [ -f "${0:a:h}/npm.local.sh" ]; then
+    # zsh support
+    . "${0:a:h}/npm.local.sh"
+fi
 ```
 
-**문제점**:
-- ✗ sed 정규식이 복잡하고 유지보수 어려움
-- ✗ 파일 형식 변경에 취약 (들여쓰기 가정)
-- ✗ 설정값이 중복 정의됨 (template + sed 패턴)
+## 4) 개선 제안 (선택적)
 
-#### 리팩토링 후 동작 (명확함)
+### 🔄 고려사항 1: npm.local.sh 자동 로드
+
+**현 상태 (정정):**
+
+- 로더에서 `*.local.sh` 스킵
+- 하지만 `npm.sh`가 `npm.local.sh`를 자동 로드함
+- 따라서 `npm-apply-config` 실행 전에 사용자가 수동으로 `source npm.local.sh` 할 필요 없음
+
+**참고:**
 
 ```bash
-# environments.conf에서 직접 값 읽음
-generate_config_file() {
-    local config_type="$1"
-    local environment="$2"
-    local config_file="$3"
-
-    {
-        cat "${TEMPLATE_FILE}"
-        echo ""
-        echo "# Auto-configured for: $environment"
-
-        # SSOT: environments.conf에서만 읽음
-        grep "^${environment}:${config_type^^}_" "$config_file" | \
-        cut -d: -f2- | \
-        sed "s/${config_type^^}_//g"  # 접두사 제거
-    } > "$output_file"
-}
+# shell-common/tools/integrations/npm.sh:185-190
+if [ -f "${BASH_SOURCE[0]%/*}/npm.local.sh" ]; then
+    . "${BASH_SOURCE[0]%/*}/npm.local.sh"
+elif [ -f "${0:a:h}/npm.local.sh" ]; then
+    # zsh support
+    . "${0:a:h}/npm.local.sh"
+fi
 ```
 
-**개선점**:
-- ✓ sed toggle 제거 (단순 파일 생성)
-- ✓ SSOT 확보 (설정값 한 곳에서만 정의)
-- ✓ 파일 형식 독립적 (들여쓰기 상관없음)
-- ✓ 명확성: 생성되는 파일 내용이 예측 가능
+**비고:**
 
-### 6.4 setup.sh 전체 구조 개선
+- 현재 로직은 "스크립트 위치 기준" 자동 로드이며, `npm.local.sh`가 "값 정의만" 담당하므로 부작용이 거의 없음 ✅
+- 필요 시 security.sh처럼 `SHELL_COMMON` 기반 경로로 통일하는 리팩터링은 선택적(P1)으로 고려 가능
 
-#### 현재 구조 (3단계 처리)
+### 🔄 고려사항 2: proxy.sh도 동일 패턴 적용
 
-```
-Main Menu
-  ↓
-cleanup_local_files()    ← 함수 1
-  ↓
-setup_local_files()      ← 함수 2 (조건부 copy 포함)
-  ↓
-sed toggle 처리          ← 함수 3
-  ↓
-setup_pip_config()       ← 함수 4
+**현재 상황:**
+
+- `shell-common/env/proxy.sh:37-40`에서 여전히 `proxy.local.sh`를 재-source
+- abc-review-CX.md H2에서 지적한 중복 로딩 문제가 proxy.sh에는 남아 있을 가능성
+
+**확인 필요:**
+
+```bash
+grep -n "proxy.local.sh" shell-common/env/proxy.sh
 ```
 
-**문제**:
-- 4개 함수 중 일부는 중복 책임
-- 조건부 로직이 분산됨
+**제안 (P1):**
 
-#### 리팩토링 후 구조 (1단계 처리)
+- npm.local.sh와 동일하게 security.sh 패턴 적용
 
-```
-Main Menu
-  ↓
-setup_environment_config()    ← 단일 책임 함수
-  ├─ generate_config_file("security")
-  ├─ generate_config_file("npm")
-  └─ generate_config_file("proxy")  [if internal]
-  ↓
-setup_pip_config()
-```
+  ```bash
+  # shell-common/env/proxy.sh (예시)
+  _proxy_root="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
+  if [ -f "$_proxy_root/env/proxy.local.sh" ]; then
+      . "$_proxy_root/env/proxy.local.sh"
+  fi
+  unset _proxy_root
+  ```
 
-**장점**:
-- ✓ 함수 개수 감소 (cleanup_local_files 제거)
-- ✓ 책임 명확화 (각 함수는 1가지만)
-- ✓ 유지보수성 향상 (일관된 로직)
+### 🔄 고려사항 3: NVM 로딩 처리
+
+**현재 상황:**
+
+- 기존 npm.local.example은 NVM 로드를 포함했으나, 새 버전은 제거
+- NVM 사용자는 별도 설정 필요
+
+**제안 (P2):**
+
+- 옵션 1: `tools/integrations/nvm.sh`가 이미 존재하는지 확인하고, 거기서 NVM 로드
+- 옵션 2: 사용자가 직접 `.bashrc`/`.zshrc`에서 NVM 로드 (권장)
+- 옵션 3: `npm.local.sh`에 NVM 로드 추가 (값 정의만 하는 원칙에 위배되므로 비권장)
+
+**권장: 옵션 2** (사용자가 직접 관리)
+
+- NVM 로드는 npm 설정과는 별개의 관심사
+- 대부분 NVM 설치 시 자동으로 `.bashrc`에 추가됨
+- 현재대로 유지 ✅
+
+## 5) 테스트 권장사항
+
+### 필수 테스트 (회귀 검증)
+
+1. **셸 재시작 10회 테스트**
+
+   ```bash
+   for i in {1..10}; do
+       bash -c ". ~/.bashrc && echo 'Test $i: OK'"
+   done
+   ```
+
+   - 예상: sudo 프롬프트, npm config set 실행 없음
+   - 예상: 에러 메시지 없음
+
+2. **.local.sh 중복 로딩 확인**
+
+   ```bash
+   # npm.local.sh에 디버그 추가
+   echo "DEBUG: npm.local.sh loaded at $(date +%s%N)" >> /tmp/npm_local_debug.log
+
+   # 셸 재시작 후 확인
+   cat /tmp/npm_local_debug.log | wc -l  # 예상: 1 (중복 없음)
+   ```
+
+3. **npm-apply-config 동작 확인**
+
+   ```bash
+   # 1. npm.local.sh 있는 경우
+   npm-apply-config
+   # 예상: 설정 적용 성공
+
+   # 2. npm.local.sh 없는 경우
+   mv npm.local.sh npm.local.sh.bak
+   npm-apply-config
+   # 예상: "npm.local.sh not loaded" 에러 + 가이드 출력
+   ```
+
+4. **security.local.sh 로딩 확인**
+
+   ```bash
+   # security.local.sh에 테스트 변수 추가
+   echo 'export TEST_SECURITY_LOADED=1' > shell-common/env/security.local.sh
+
+   # 셸 재시작 후 확인
+   echo $TEST_SECURITY_LOADED  # 예상: 1
+   ```
+
+### 선택적 테스트 (엣지 케이스)
+
+1. **SHELL_COMMON 미정의 시**
+
+   ```bash
+   unset SHELL_COMMON DOTFILES_ROOT
+   . shell-common/env/security.sh
+   # 예상: fallback으로 $HOME/dotfiles/shell-common 사용
+   ```
+
+2. **npm 없는 환경**
+
+   ```bash
+   PATH=/tmp:$PATH npm-apply-config
+   # 예상: "npm not found" 에러 + 설치 가이드
+   ```
+
+3. **npm.local.sh 일부 변수만 정의**
+   ```bash
+   # npm.local.sh에 DESIRED_REGISTRY만 정의, 나머지 생략
+   npm-apply-config
+   # 예상: 빈 값("")으로 처리되어 설정 적용
+   ```
+
+## 6) 잠재적 리스크 분석
+
+### 🟢 Low Risk (안전)
+
+1. **로더 변경 (bash/zsh main.sh)**
+
+   - 변경 범위: 최소 (스킵 조건만 추가)
+   - 영향: 기존 로딩 로직 그대로 유지
+   - 회귀 가능성: 매우 낮음 ✅
+
+2. **claude.sh ensure_jq 제거**
+
+   - 변경: 자동 호출 제거, 함수는 유지
+   - 영향: 더 이상 자동 설치 안 함 (의도된 동작)
+   - 회귀 가능성: 없음 ✅
+
+3. **npm.local.example 단순화**
+   - 변경: 값 정의만 남김
+   - 영향: 더 이상 자동 실행 안 함 (의도된 동작)
+   - 회귀 가능성: 없음 ✅
+
+### 🟡 Medium Risk (주의 필요)
+
+1. **NVM 사용자 영향**
+   - 현상: 기존 npm.local.sh에서 NVM 로드했던 사용자는 별도 설정 필요
+   - 영향: NVM 사용자는 `.bashrc`에 수동 추가 필요
+   - 완화: 대부분 이미 `.bashrc`에 있음 ✅
+   - 권장: 마이그레이션 가이드 문서 추가 (P2)
+
+### 🔴 High Risk (없음)
+
+- 이번 P0 구현에서 High Risk 항목은 발견되지 않음 ✅
+
+## 7) 마이그레이션 체크리스트
+
+**기존 사용자를 위한 마이그레이션 가이드:**
+
+### 필수 조치
+
+- [ ] 1. 코드 업데이트: `git pull` 또는 `git checkout d2e4e05`
+- [ ] 2. 셸 재시작: 새로운 로더 로직 적용
+- [ ] 3. npm.local.sh 생성: `cp npm.local.example npm.local.sh` (아직 없는 경우)
+- [ ] 4. npm 설정 적용: `npm-apply-config` 실행
+
+### 선택적 조치
+
+- [ ] 5. NVM 사용자: `.bashrc`에 NVM 로드 확인
+
+  ```bash
+  # ~/.bashrc or ~/.zshrc
+  export NVM_DIR="$HOME/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  ```
+
+- [ ] 6. 기존 npm.local.sh 사용자: NVM 로드 로직 제거 (새 템플릿 참고)
+- [ ] 7. 테스트: 위 "필수 테스트" 섹션 실행
+
+## 8) 종합 평가
+
+### 점수 (10점 만점)
+
+| 항목                | 점수 | 평가                                                     |
+| ------------------- | ---- | -------------------------------------------------------- |
+| **목적 달성**       | 10   | P0 리스크를 정확히 제거 (자동 설치, 중복 로딩, 부작용) |
+| **코드 품질**       | 9    | 일관성, 가독성, 에러 처리 우수. npm.local.sh 자동 로드 포함 |
+| **회귀 리스크**     | 10   | 최소 변경, 기존 로직 유지, 안전함                        |
+| **UX**              | 9    | ux_lib 사용, 명확한 에러 메시지, npm.local.sh 자동 로드 포함 |
+| **문서화**          | 9    | 주석으로 의도 명확. 마이그레이션 가이드 추가하면 10점   |
+| **테스트 가능성**   | 10   | 명확한 입력/출력, 테스트 시나리오 작성 용이              |
+| **확장성**          | 9    | 패턴 재사용 가능. proxy.sh 등 다른 파일에도 적용 가능    |
+| **SOLID/SSOT 준수** | 10   | SRP(역할 분리), SSOT(값 정의 vs 적용) 완벽히 준수        |
+
+**총점: 9.5/10** ⭐⭐⭐⭐⭐
+
+### 최종 의견
+
+**이번 P0 구현은 보수적 아키텍처 관점에서 모범 사례입니다.**
+
+✅ **Strengths (강점):**
+
+1. **정확한 문제 식별**: abc-review-G.md에서 제시한 P0 리스크를 완벽히 해결
+2. **최소 변경 원칙**: 기존 시스템을 건드리지 않고 핵심만 수정
+3. **일관된 패턴**: bash/zsh, 5개 섹션 모두 동일 스킵 로직
+4. **역할 분리**: .local.sh(값 정의) vs. npm_apply_config(적용)
+5. **UX 향상**: ux_lib 사용, 명확한 에러 메시지
+6. **안전성**: idempotent, 에러 처리, fallback 제공
+
+🔄 **Areas for Improvement (개선 포인트):**
+
+1. **proxy.sh 동일 패턴**: security.sh처럼 SHELL_COMMON 기반으로 수정 (P1)
+2. **마이그레이션 가이드**: 기존 사용자를 위한 문서 추가 (P2)
+
+### 승인 권장
+
+**✅ 코드 리뷰 승인 (Approved with Minor Suggestions)**
+
+- 현재 구현은 즉시 머지 가능한 수준 ✅
+- "Areas for Improvement"는 후속 PR로 진행해도 무방
+- 필수 테스트 수행 후 main 브랜치 머지 권장
 
 ---
 
-## 7️⃣ 권장 액션 플랜
+**리뷰 완료**
 
-### 단계 1: 즉시 (문제 해결)
+질문이나 추가 논의가 필요한 부분이 있다면 말씀해 주세요.
 
-1. **설정값 추출** (개선 1)
-   - setup.sh 내에 `declare -A SECURITY_CONFIG=(...)`로 명시
-   - sed 정규식의 의도를 주석으로 설명
+**다음 단계 권장:**
 
-2. **검증 로직 추가**
-   - setup 완료 후 `npm config get registry` 등으로 확인
-   - 사용자에게 피드백 제공
-
-### 단계 2: 단기 (구조 개선)
-
-1. **함수 분리** (개선 2)
-   - setup_security_config(), setup_npm_config() 분리
-   - SRP 원칙 준수
-
-2. **문서 개선**
-   - 각 파일의 용도를 명확히 (Template vs Configuration)
-   - sed 패턴의 의도를 설명
-
-### 단계 3: 중기 (근본 해결)
-
-1. **리팩토링 방안 A 적용** (권장)
-   - environments.conf 도입
-   - SSOT 원칙 확보
-   - sed 조작 제거
-
-2. **파일 구조 표준화**
-   - 모든 .local.example 통일
-   - 설정 적용 로직 분리
-
-3. **setup.sh 간소화** (섹션 6 참고)
-   - cleanup_local_files() 제거
-   - 선택적 copy 로직 제거
-   - sed toggle 로직 제거
-
----
-
-## 8️⃣ 체크리스트
-
-### 현재 상태 ❌
-
-- [ ] SSOT 원칙 준수 (설정값 중복 없음)
-- [ ] SRP 원칙 준수 (함수의 책임이 명확함)
-- [ ] OCP 원칙 준수 (새 파일 추가 시 코드 수정 불필요)
-- [ ] DRY 원칙 준수 (중복 로직 없음)
-- [ ] 파일 구조 일관성 (모든 .local.example이 동일한 패턴)
-- [ ] 설정값 검증 (설정 후 확인 가능)
-
-### 개선 후 목표 ✓
-
-리팩토링 방안 A 적용 시:
-- [x] SSOT 원칙 준수
-- [x] SRP 원칙 준수 (함수 분리)
-- [x] OCP 원칙 준수 (설정 추가 용이)
-- [x] DRY 원칙 준수
-- [x] 파일 구조 일관성
-- [x] 설정값 검증 가능
-
----
-
-## 📌 9️⃣ 결론
-
-### 주요 발견사항
-
-1. **동작 과정의 심각한 불일치** (3개 파일)
-   - security.local: 간단한 1개 변수 (sed toggle)
-   - npm.local: 복잡한 6개 변수 (sed 6줄 + range toggle)
-   - proxy.local: 4개 변수 (조건부 스킵, Option 없음)
-   - **동일한 설정 패턴을 3가지 다르게 처리 중**
-
-2. **일관성 부재**
-   - security.local과 npm.local: sed toggle 방식
-   - proxy.local: 조건부 스킵 방식 (다름)
-   - 각 파일의 구조, 변수 개수, Option 여부 모두 다름
-   - setup.sh의 처리 로직이 제각각임
-
-3. **SOLID 원칙 위반**
-   - setup_local_files()가 3개 이상의 책임 보유 (SRP 위반)
-   - 새 파일 추가 시 함수 수정 필요 (OCP 위반)
-   - comment/uncomment 로직 중복 (DRY 위반)
-
-4. **SSOT 원칙 위반**
-   - 설정값이 template과 setup.sh에 중복 정의
-   - npm.local: 2곳, proxy.local: 1곳, security.local: 1곳
-   - 프로토콜 불일치로 유지보수 비용 증가
-
-### 해결 방향
-
-**권장**: 3단계 리팩토링 적용
-
-1. **리팩토링 방안 A**: environments.conf 도입
-   - SSOT 원칙 확보 (3개 파일 설정값을 1곳에 통합)
-   - sed 조작 제거 (명확한 파일 생성)
-   - 일관된 처리 방식 (모든 파일을 동일한 프로토콜로)
-
-2. **setup.sh 간소화** (섹션 6 참고)
-   - cleanup_local_files() 제거 (SRP 원칙)
-   - 선택적 copy 로직 제거 (DRY 원칙)
-   - sed toggle 로직 제거 (SSOT 원칙)
-   - 처리 단계 감소: 2단계 → 1단계
-
-3. **파일 구조 표준화**
-   - 모든 .local.example 통일
-   - 설정 적용 로직 분리
-
-**최종 효과**:
-- ✓ 코드 복잡도 감소 (함수 개수 감소, 단계 축소)
-- ✓ 유지보수성 향상 (SSOT 확보)
-- ✓ 확장성 확보 (새 환경/설정 추가 용이)
-- ✓ 일관성 확보 (SOLID 원칙 준수)
+1. 필수 테스트 수행 (셸 재시작 10회, npm-apply-config 동작 확인)
+2. 테스트 통과 확인 후 main 브랜치 머지
+3. P1 개선사항(proxy.sh 패턴 적용 등)은 별도 이슈/PR로 진행
