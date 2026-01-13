@@ -3,17 +3,17 @@
 # Shared directory navigation aliases for bash and zsh
 
 # BASIC
-alias cd_dot='cd ~/dotfiles'
+alias cd_dot='cd "${DOTFILES_ROOT:-$HOME/dotfiles}"'
 alias cd_down='cd ~/downloads'
 alias cd_work='cd ~/workspace'
 
 # Dotfiles navigation functions
 dot() {
-    cd ~/dotfiles
+    cd "${DOTFILES_ROOT:-$HOME/dotfiles}"
 }
 
 dotfiles() {
-    cd ~/dotfiles
+    cd "${DOTFILES_ROOT:-$HOME/dotfiles}"
 }
 
 # Windows directory paths (WSL)

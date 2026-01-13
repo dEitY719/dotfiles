@@ -82,7 +82,7 @@ ensure_jq() {
 # ═══════════════════════════════════════════════════════════════
 
 clinstall() {
-    bash "${HOME}/dotfiles/shell-common/tools/custom/install_claude.sh"
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_claude.sh"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -90,11 +90,11 @@ clinstall() {
 # ═══════════════════════════════════════════════════════════════
 
 claude_init() {
-    local settings_source="$HOME/dotfiles/claude/settings.json"
+    local settings_source="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/settings.json"
     local settings_target="$HOME/.claude/settings.json"
-    local statusline_source="$HOME/dotfiles/claude/statusline-command.sh"
+    local statusline_source="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/statusline-command.sh"
     local statusline_target="$HOME/.claude/statusline-command.sh"
-    local skills_source_dir="$HOME/dotfiles/claude/skills"
+    local skills_source_dir="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills"
     local skills_target_dir="$HOME/.claude/skills"
 
     ux_info "Initializing Claude Code configuration..."
@@ -210,7 +210,7 @@ claude_init() {
 # ═══════════════════════════════════════════════════════════════
 
 claude_edit_settings() {
-    local settings_file="$HOME/dotfiles/claude/settings.json"
+    local settings_file="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/settings.json"
 
     if [ ! -f "$settings_file" ]; then
         ux_error "Settings file not found: $settings_file"
@@ -233,7 +233,7 @@ claude_edit_settings() {
 # ═══════════════════════════════════════════════════════════════
 
 claude_mount_skills() {
-    local skills_source="$HOME/dotfiles/claude/skills"
+    local skills_source="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills"
     local skills_target="$HOME/.claude/skills"
 
     # Check if source directory exists
@@ -270,8 +270,11 @@ claude_mount_skills() {
     fi
 }
 
-# Auto-mount skills on shell startup
-claude_mount_skills
+# Auto-mount skills on shell startup (opt-in only).
+# NOTE: Avoid side effects during shell init and during tests.
+if [ "${DOTFILES_TEST_MODE:-0}" != "1" ] && [ "${CLAUDE_AUTO_MOUNT_SKILLS:-0}" = "1" ]; then
+    claude_mount_skills >/dev/null 2>&1 || true
+fi
 
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Workflow Helpers

@@ -19,8 +19,8 @@ myman() {
         return 1
     fi
 
-    local analyzer_script="$HOME/dotfiles/shell-common/tools/custom/analyze_bash_scripts.sh"
-    local sh_config_dir="$HOME/dotfiles/shell-common"
+    local analyzer_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/analyze_bash_scripts.sh"
+    local sh_config_dir="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
 
     if [[ ! -f "$analyzer_script" ]]; then
         ux_error "스크립트를 찾을 수 없습니다: '$analyzer_script'"

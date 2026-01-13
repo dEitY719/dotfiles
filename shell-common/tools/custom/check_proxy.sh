@@ -3,10 +3,8 @@
 # Comprehensive proxy diagnostic script
 # Usage: check_proxy [env|file|shell|conn|git|all]
 
-# Load UX library if not already loaded
-if ! declare -f ux_header >/dev/null 2>&1; then
-    source "$(dirname "$0")/../ux_lib/ux_lib.sh" 2>/dev/null || true
-fi
+# Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
+source "$(dirname "$0")/init.sh" || exit 1
 
 # ============================================================
 # Helper functions
@@ -46,21 +44,22 @@ check_proxy_local_sh() {
     ux_header "2. proxy.local.sh Loading Status"
 
     ux_section "File Existence"
-    if [ -f "$HOME/dotfiles/shell-common/env/proxy.local.sh" ]; then
+    local proxy_local="${SHELL_COMMON}/env/proxy.local.sh"
+    if [ -f "$proxy_local" ]; then
         ux_success "proxy.local.sh exists"
-        ux_bullet "Path: $HOME/dotfiles/shell-common/env/proxy.local.sh"
-        ux_bullet "Size: $(wc -c < "$HOME/dotfiles/shell-common/env/proxy.local.sh") bytes"
-        ux_bullet "Modified: $(stat -c '%y' "$HOME/dotfiles/shell-common/env/proxy.local.sh" 2>/dev/null || stat -f '%Sm' "$HOME/dotfiles/shell-common/env/proxy.local.sh" 2>/dev/null || echo '[N/A]')"
+        ux_bullet "Path: $proxy_local"
+        ux_bullet "Size: $(wc -c < "$proxy_local") bytes"
+        ux_bullet "Modified: $(stat -c '%y' "$proxy_local" 2>/dev/null || stat -f '%Sm' "$proxy_local" 2>/dev/null || echo '[N/A]')"
         echo ""
 
         ux_section "Content Validation"
-        if grep -q "export http_proxy" "$HOME/dotfiles/shell-common/env/proxy.local.sh"; then
+        if grep -q "export http_proxy" "$proxy_local"; then
             ux_success "http_proxy export found"
         else
             ux_warning "http_proxy export not found"
         fi
 
-        if grep -q "export no_proxy" "$HOME/dotfiles/shell-common/env/proxy.local.sh"; then
+        if grep -q "export no_proxy" "$proxy_local"; then
             ux_success "no_proxy export found"
         else
             ux_warning "no_proxy export not found"
@@ -79,9 +78,11 @@ check_proxy_local_sh() {
 check_proxy_shell_loading() {
     ux_header "3. Shell Loading Test"
 
+    local proxy_sh="${SHELL_COMMON}/env/proxy.sh"
+
     ux_section "Bash"
     ux_info "Testing: bash -c 'source proxy.sh && echo \$http_proxy'"
-    bash_result=$(bash -c "source $HOME/dotfiles/shell-common/env/proxy.sh 2>/dev/null && echo \${http_proxy:-[NOT SET]}" 2>/dev/null)
+    bash_result=$(bash -c "source \"$proxy_sh\" 2>/dev/null && echo \${http_proxy:-[NOT SET]}" 2>/dev/null)
     if [ "$bash_result" != "[NOT SET]" ] && [ -n "$bash_result" ]; then
         ux_success "Bash loading: $bash_result"
     else
@@ -92,7 +93,7 @@ check_proxy_shell_loading() {
     ux_section "Zsh"
     if command -v zsh >/dev/null 2>&1; then
         ux_info "Testing: zsh -c 'source proxy.sh && echo \$http_proxy'"
-        zsh_result=$(zsh -c "source $HOME/dotfiles/shell-common/env/proxy.sh 2>/dev/null && echo \${http_proxy:-[NOT SET]}" 2>/dev/null)
+        zsh_result=$(zsh -c "source \"$proxy_sh\" 2>/dev/null && echo \${http_proxy:-[NOT SET]}" 2>/dev/null)
         if [ "$zsh_result" != "[NOT SET]" ] && [ -n "$zsh_result" ]; then
             ux_success "Zsh loading: $zsh_result"
         else

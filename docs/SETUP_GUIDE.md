@@ -46,6 +46,14 @@ cd ~/dotfiles
 
 **결과:** 환경에 맞는 설정으로 초기화 완료
 
+### Step 1.5: npm 설정 적용 (선택, 필요 시)
+
+`npm.local.sh`는 이제 **값 정의만** 담당합니다. 설정 적용은 명시적으로 실행합니다:
+
+```bash
+npm-apply-config
+```
+
 ### Step 2: Claude/PostgreSQL 설정 (선택사항)
 ```bash
 ./install.sh
@@ -104,7 +112,7 @@ cd ~/dotfiles
 - **생성되는 파일**:
   - `shell-common/env/proxy.local.sh`
   - `shell-common/env/security.local.sh`
-  - `shell-common/tools/external/npm.local.sh`
+  - `shell-common/tools/integrations/npm.local.sh`
 
 ### bash/setup.sh
 ```bash

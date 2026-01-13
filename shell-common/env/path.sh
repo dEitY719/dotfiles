@@ -9,7 +9,7 @@ export PATH="$HOME/.local/bin:$PATH"
 export PATH="/usr/local/go/bin:$PATH" # Go
 
 # 사용자 정의 스크립트 경로
-export PATH="$DOTFILES_BASH_DIR/scripts:$PATH"
+export PATH="${DOTFILES_BASH_DIR:-${DOTFILES_ROOT:-$HOME/dotfiles}/bash}/scripts:$PATH"
 
 # PATH 변수 중복 제거 함수
 # PathCleaner.clean_paths()
@@ -47,6 +47,7 @@ clean_paths() {
         local -a path_entries
 
         # PATH 문자열을 배열로 분리 (zsh 문법)
+        # shellcheck disable=SC2296
         path_entries=("${(@s/:/)PATH}")
 
         for path_entry in "${path_entries[@]}"; do

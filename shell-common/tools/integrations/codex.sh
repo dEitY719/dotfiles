@@ -30,7 +30,7 @@ alias cxver='codex --version'       # Show version
 # ═══════════════════════════════════════════════════════════════
 
 cxinstall() {
-    bash "${HOME}/dotfiles/shell-common/tools/custom/install_codex.sh"
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_codex.sh"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -38,7 +38,7 @@ cxinstall() {
 # ═══════════════════════════════════════════════════════════════
 
 cxuninstall() {
-    bash "${HOME}/dotfiles/shell-common/tools/custom/uninstall_codex.sh"
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/uninstall_codex.sh"
 }
 
 # ═══════════════════════════════════════════════════════════════

@@ -42,7 +42,7 @@ claude_help() {
     echo ""
 
     ux_section "Configuration"
-    ux_info "Settings file: ~/dotfiles/claude/settings.json"
+    ux_info "Settings file: ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/settings.json"
     ux_bullet "Sandbox: autoAllowBashIfSandboxed"
     ux_bullet "Auto-allow: pytest, ruff, mypy, tox"
     ux_bullet "Block: .env, ~/.aws, ~/.ssh"
@@ -51,7 +51,7 @@ claude_help() {
 
     ux_section "Skills Management"
     ux_table_row "claude-skills" "List available Claude Code skills" ""
-    ux_info "Skills location: ~/dotfiles/claude/skills/"
+    ux_info "Skills location: ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills/"
     echo ""
 }
 

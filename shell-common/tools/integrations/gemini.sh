@@ -32,10 +32,10 @@ alias ghelp='gemini --help'
 
 # Gemini 설치 (대화형 스크립트)
 ginstall() {
-    bash "$HOME/dotfiles/shell-common/tools/custom/install_gemini.sh"
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_gemini.sh"
 }
 
 # Gemini 제거 (대화형 스크립트)
 guninstall() {
-    bash "$HOME/dotfiles/shell-common/tools/custom/uninstall_gemini.sh"
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/uninstall_gemini.sh"
 }

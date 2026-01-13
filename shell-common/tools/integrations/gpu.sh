@@ -17,7 +17,7 @@
 # 사용 예: gpustatus
 gpustatus() {
     # dotfiles에서 gpu_status.sh 스크립트 경로
-    local gpu_script="${HOME}/dotfiles/shell-common/tools/custom/gpu_status.sh"
+    local gpu_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/gpu_status.sh"
 
     if [ ! -f "$gpu_script" ]; then
         ux_error "GPU status script not found at: $gpu_script"

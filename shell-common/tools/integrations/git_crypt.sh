@@ -62,12 +62,12 @@ green="${UX_SUCCESS:-}"
 
 # git-crypt 설치 스크립트 실행
 git_crypt_install() {
-    bash "$HOME/dotfiles/shell-common/tools/custom/install_git_crypt.sh"
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_git_crypt.sh"
 }
 
 # 다른 PC에서 한 번에 설정 (올인원)
 gc_setup_new_pc() {
-    local script_path="$HOME/dotfiles/shell-common/tools/custom/setup_new_pc.sh"
+    local script_path="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/setup_new_pc.sh"
 
     if [[ ! -f "$script_path" ]]; then
         # Try relative path
@@ -472,13 +472,13 @@ gc_push_env() {
     echo ""
     ux_section "💡 다른 PC에서 복호화"
     ux_bullet "git clone <repo> && cd <repo>"
-    ux_bullet "bash ~/dotfiles/shell-common/tools/custom/setup_new_pc.sh (처음 1회)"
+    ux_bullet "bash ${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/tools/custom/setup_new_pc.sh (처음 1회)"
     ux_bullet "또는 git-crypt unlock (이미 GPG 키 있으면)"
 }
 
 # GPG agent 캐싱 설정 (편의성 향상)
 gc_setup_cache() {
-    bash "$HOME/dotfiles/shell-common/tools/custom/setup_gpg_cache.sh"
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/setup_gpg_cache.sh"
 }
 
 # GPG agent 캐시 수동 초기화 (passphrase 즉시 만료)
@@ -625,7 +625,7 @@ gc_backup_key() {
 
         if [[ "$encrypt_choice" == "1" ]]; then
             # Create .secrets directory
-            local secrets_dir="$HOME/dotfiles/.secrets"
+            local secrets_dir="${DOTFILES_ROOT:-$HOME/dotfiles}/.secrets"
             mkdir -p "$secrets_dir"
 
             # Symmetric encryption
@@ -642,7 +642,7 @@ gc_backup_key() {
                 ux_info "암호화된 파일: $encrypted_file"
 
                 # Update .gitignore
-                local gitignore_file="$HOME/dotfiles/.gitignore"
+                local gitignore_file="${DOTFILES_ROOT:-$HOME/dotfiles}/.gitignore"
                 if ! grep -q "^\.secrets/\*\.asc$" "$gitignore_file" 2>/dev/null; then
                     echo ".secrets/*.asc" >>"$gitignore_file"
                     ux_info ".gitignore 업데이트: .secrets/*.asc 추가됨"
@@ -654,7 +654,7 @@ gc_backup_key() {
 
                 echo ""
                 ux_section "GitHub에 커밋하기"
-                echo "  ${bold}cd ~/dotfiles${reset}"
+                echo "  ${bold}cd ${DOTFILES_ROOT:-$HOME/dotfiles}${reset}"
                 echo "  ${bold}git add .secrets/ .gitignore${reset}"
                 echo "  ${bold}git commit -m \"Add encrypted GPG backup\"${reset}"
                 echo "  ${bold}git push${reset}"
@@ -707,7 +707,7 @@ gc_restore_key() {
 
     # Find encrypted backup files in .secrets/
     local encrypted_files
-    encrypted_files=$(find ~/dotfiles/.secrets -name "gpg-backup-*.asc.gpg" 2>/dev/null)
+    encrypted_files=$(find "${DOTFILES_ROOT:-$HOME/dotfiles}/.secrets" -name "gpg-backup-*.asc.gpg" 2>/dev/null)
 
     # Find plain backup files in home directory
     local plain_files

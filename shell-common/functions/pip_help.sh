@@ -68,7 +68,7 @@ pip_help() {
 
 # Wrapper function for check_pip.sh diagnostic
 pip_check() {
-    local check_pip_script="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/custom/check_pip.sh"
+    local check_pip_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/check_pip.sh"
     if [ -f "$check_pip_script" ]; then
         bash "$check_pip_script" "$@"
     else

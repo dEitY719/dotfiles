@@ -3,10 +3,8 @@
 # Comprehensive npm configuration diagnostic script
 # Usage: check_npm [config|files|env|registry|packages|all]
 
-# Load UX library if not already loaded
-if ! declare -f ux_header >/dev/null 2>&1; then
-    source "$(dirname "$0")/../ux_lib/ux_lib.sh" 2>/dev/null || true
-fi
+# Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
+source "$(dirname "$0")/init.sh" || exit 1
 
 # ============================================================
 # Helper functions
@@ -71,13 +69,14 @@ check_npm_config_files() {
     fi
 
     ux_section "npm.local.sh Status (Environment-specific)"
-    if [ -f "$HOME/dotfiles/shell-common/tools/integrations/npm.local.sh" ]; then
+    local npm_local="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/integrations/npm.local.sh"
+    if [ -f "$npm_local" ]; then
         ux_success "Found: npm.local.sh"
         echo ""
 
-        if grep -q "^    DESIRED_REGISTRY=\"https://registry.npmjs.org/\"" "$HOME/dotfiles/shell-common/tools/integrations/npm.local.sh"; then
+        if grep -q "^    DESIRED_REGISTRY=\"https://registry.npmjs.org/\"" "$npm_local"; then
             ux_info "Active Option: Option1 (External/VPN - npmjs + no proxy)"
-        elif grep -q "^    DESIRED_REGISTRY=\"http://repo.samsungds.net" "$HOME/dotfiles/shell-common/tools/integrations/npm.local.sh"; then
+        elif grep -q "^    DESIRED_REGISTRY=\"http://repo.samsungds.net" "$npm_local"; then
             ux_info "Active Option: Option2 (Internal PC - Artifactory + proxy)"
         fi
         echo ""

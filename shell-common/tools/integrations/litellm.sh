@@ -36,7 +36,11 @@ LITELLM_DOC
 
 # 프로젝트 경로 자동 감지 (Makefile에서 export되지 않았을 경우)
 _init_litellm_env() {
-    if [[ -z "$LITELLM_PROJECT_PATH" ]]; then
+    if [[ "${_LITELLM_ENV_INITIALIZED:-}" == "1" ]]; then
+        return 0
+    fi
+
+    if [[ -z "${LITELLM_PROJECT_PATH:-}" ]]; then
         # 현재 디렉토리부터 상위로 올라가면서 docker-compose.yml 검색
         local search_dir="."
         while [[ "$search_dir" != "/" ]]; do
@@ -48,7 +52,7 @@ _init_litellm_env() {
         done
 
         # 여전히 못 찾으면 기본값 사용
-        if [[ -z "$LITELLM_PROJECT_PATH" ]]; then
+        if [[ -z "${LITELLM_PROJECT_PATH:-}" ]]; then
             LITELLM_PROJECT_PATH="$HOME/para/project/litellm"
         fi
     fi
@@ -59,14 +63,18 @@ _init_litellm_env() {
 
     # 전역 변수로 export
     export LITELLM_PROJECT_PATH LITELLM_URL LITELLM_API_KEY
+
+    _LITELLM_ENV_INITIALIZED="1"
 }
 
 # ===== 헬퍼 함수 =====
 
 # 프로젝트 디렉토리 체크
 _check_litellm_project() {
-    if [[ ! -d "$LITELLM_PROJECT_PATH" ]]; then
-        ux_error "LiteLLM 프로젝트를 찾을 수 없습니다: $LITELLM_PROJECT_PATH"
+    _init_litellm_env
+    local project_path="${LITELLM_PROJECT_PATH:-}"
+    if [[ -z "$project_path" ]] || [[ ! -d "$project_path" ]]; then
+        ux_error "LiteLLM 프로젝트를 찾을 수 없습니다: ${project_path:-<unset>}"
         return 1
     fi
     return 0
@@ -74,7 +82,8 @@ _check_litellm_project() {
 
 # API 연결 테스트
 _check_litellm_health() {
-    if curl -s "${LITELLM_URL}/health/liveliness" &>/dev/null; then
+    _init_litellm_env
+    if curl -s "${LITELLM_URL:-}/health/liveliness" >/dev/null 2>&1; then
         return 0
     else
         return 1
@@ -83,20 +92,30 @@ _check_litellm_health() {
 
 # litellm_settings.yml에 정의된 모델 목록 파싱
 _get_configured_models() {
-    if [[ ! -f "$LITELLM_PROJECT_PATH/litellm_settings.yml" ]]; then
-        echo ""
-        return
+    _init_litellm_env
+
+    local project_path="${LITELLM_PROJECT_PATH:-}"
+    if [[ -z "$project_path" ]] || [[ ! -f "$project_path/litellm_settings.yml" ]]; then
+        return 0
     fi
 
-    grep "model_name:" "$LITELLM_PROJECT_PATH/litellm_settings.yml" |
+    grep "model_name:" "$project_path/litellm_settings.yml" |
         sed 's/.*model_name: //' |
         tr -d ' '
 }
 
 # 실제 로드된 모델 목록 조회
 _get_loaded_models() {
-    curl -s "${LITELLM_URL}/models" \
-        -H "Authorization: Bearer ${LITELLM_API_KEY}" 2>/dev/null |
+    _init_litellm_env
+
+    local url="${LITELLM_URL:-}"
+    local api_key="${LITELLM_API_KEY:-}"
+    if [[ -z "$url" ]]; then
+        return 0
+    fi
+
+    curl -s "${url}/models" \
+        -H "Authorization: Bearer ${api_key}" 2>/dev/null |
         grep -o '"id":"[^"]*"' | cut -d'"' -f4 | sort
 }
 
@@ -349,7 +368,7 @@ EOF
         2>/dev/null)
 
     # jq로 에러 확인
-    if echo "$response" | jq -e '.error' &>/dev/null; then
+    if echo "$response" | jq -e '.error' >/dev/null 2>&1; then
         local error_msg
         error_msg=$(echo "$response" | jq -r '.error.message // .error' 2>/dev/null)
         ux_error "요청 실패"
@@ -396,5 +415,5 @@ alias llm-models='litellm_models'
 alias llm-test='litellm_test'
 alias llm-network='litellm_network'
 
-# ===== 초기화 (sourced될 때 자동 실행) =====
-_init_litellm_env
+# ===== 초기화 =====
+# Do not auto-run at shell init time. Functions call _init_litellm_env lazily.

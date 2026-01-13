@@ -5,7 +5,6 @@
 set -e
 
 # Initialize common tools environment
-DOTFILES_ROOT="${HOME}/dotfiles"
 source "$(dirname "$0")/init.sh" || exit 1
 
 # Check if fd is already installed

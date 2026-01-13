@@ -14,7 +14,9 @@ if [[ -f "$UX_LIB_PATH" ]]; then
     source "$UX_LIB_PATH"
 fi
 
-PROMPT_FILE="$HOME/dotfiles/docs/AGENTS_md_Master_Prompt.md"
+# Resolve DOTFILES_ROOT from script location when not provided
+DOTFILES_ROOT="${DOTFILES_ROOT:-${SCRIPT_DIR%/shell-common/tools/custom}}"
+PROMPT_FILE="${DOTFILES_ROOT:-$HOME/dotfiles}/docs/AGENTS_md_Master_Prompt.md"
 
 # 프롬프트 파일 존재 확인
 if [[ ! -f "$PROMPT_FILE" ]]; then

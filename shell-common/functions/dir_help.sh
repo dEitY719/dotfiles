@@ -7,7 +7,7 @@ dir_help() {
 
     ux_section "Core Directories"
     ux_table_header "Command" "Destination" "Purpose"
-    ux_table_row "cd_dot" "\$HOME/dotfiles" "Dotfiles repository root"
+    ux_table_row "cd_dot" "\$DOTFILES_ROOT" "Dotfiles repository root"
     ux_table_row "cd_down" "\$HOME/downloads" "Downloads folder"
     ux_table_row "cd_work" "\$HOME/workspace" "Workspace root"
     echo ""

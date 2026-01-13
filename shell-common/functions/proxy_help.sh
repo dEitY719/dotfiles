@@ -66,7 +66,7 @@ proxy_help() {
 # Wrapper function for check_proxy.sh diagnostic
 # Also runs pip_check for comprehensive network diagnostics
 proxy_check() {
-    local check_proxy_script="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/custom/check_proxy.sh"
+    local check_proxy_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/check_proxy.sh"
     if [ -f "$check_proxy_script" ]; then
         bash "$check_proxy_script" "$@"
         echo ""

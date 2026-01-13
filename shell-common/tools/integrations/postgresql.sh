@@ -721,5 +721,5 @@ psql_server() {
 }
 
 pinstall() {
-    bash "$HOME/dotfiles/shell-common/tools/custom/install_postgresql.sh"
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_postgresql.sh"
 }

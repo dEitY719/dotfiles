@@ -90,7 +90,7 @@ REQUIREMENTS:
     - pytest-xdist (for parallel execution)
     - pexpect
 
-For more information, see: docs/abc-review-C.md and tests/README.md
+For more information, see: docs/abc-review-CX.md, docs/test-results-P0.md, and tests/README.md
 
 EOF
 }

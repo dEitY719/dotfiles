@@ -40,7 +40,7 @@ mount_help() {
         echo ""
 
         ux_numbered 3 "Add new bind mount:"
-        echo "  addmnt ~/dotfiles/claude/agents ~/.claude/agents"
+        echo "  addmnt ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/agents ~/.claude/agents"
         echo ""
 
         ux_section "For More Information"
@@ -66,7 +66,7 @@ Available Commands:
 Examples:
   show_mnt                                      View all mounts
   show_mnt ~/.claude/skills                     View specific mount
-  addmnt ~/dotfiles/claude/agents ~/.claude/agents  Add new mount
+  addmnt $DOTFILES_ROOT/claude/agents ~/.claude/agents  Add new mount
 
 Notes:
   - Requires sudo for mount operations
@@ -133,7 +133,7 @@ _addmnt_help() {
         echo ""
 
         ux_section "Examples"
-        ux_bullet "addmnt ~/dotfiles/skills ~/.claude/skills"
+        ux_bullet "addmnt ${DOTFILES_ROOT:-$HOME/dotfiles}/skills ~/.claude/skills"
         ux_bullet "addmnt ~/projects ~/.local/mounts/projects"
         echo ""
 
@@ -152,7 +152,7 @@ Parameters:
   target   Target mount point (required, created if missing)
 
 Examples:
-  addmnt ~/dotfiles/skills ~/.claude/skills
+  addmnt $DOTFILES_ROOT/skills ~/.claude/skills
   addmnt ~/projects ~/.local/mounts/projects
 
 Notes:

@@ -25,6 +25,8 @@ cd ~/dotfiles
 ./setup.sh
 ```
 
+If you install to a different location, use that path instead of `~/dotfiles`. Most scripts resolve paths via `DOTFILES_ROOT`/`SHELL_COMMON`.
+
 The setup script will:
 1. **Ask for your environment** (Public PC / Internal company PC / External company PC)
 2. **Configure environment-specific files** (.local.sh files)
@@ -99,6 +101,14 @@ To add your own settings:
 # Home environment
 cp shell-common/env/proxy.local.example shell-common/env/proxy.local.sh
 # Edit the file to match your environment
+```
+
+### npm config (explicit apply)
+
+`shell-common/tools/integrations/npm.local.sh` only defines desired values. Apply them explicitly:
+
+```bash
+npm-apply-config
 ```
 
 ## 🛠️ Development

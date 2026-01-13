@@ -59,8 +59,10 @@ source "$(dirname "$_SCRIPT_PATH")/util/init.bash"
 DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
 export DOTFILES_BASH_DIR
 
-# Set up SHELL_COMMON path early for unified UX library loading
-SHELL_COMMON="${DOTFILES_BASH_DIR}/../shell-common"
+# Set DOTFILES_ROOT + SHELL_COMMON early for unified path SSOT across modules
+DOTFILES_ROOT="${DOTFILES_BASH_DIR%/bash}"
+export DOTFILES_ROOT
+SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 export SHELL_COMMON
 
 # --- UX Library Initialization ---

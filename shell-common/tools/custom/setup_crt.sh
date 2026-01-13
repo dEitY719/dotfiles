@@ -15,8 +15,8 @@ source "$(dirname "$0")/init.sh" || exit 1
 # ========================================
 # Load CA_CERT from security.local.sh (Single Source of Truth)
 # ========================================
-SECURITY_LOCAL="$HOME/dotfiles/shell-common/env/security.local.sh"
-SECURITY_EXAMPLE="$HOME/dotfiles/shell-common/env/security.local.example"
+SECURITY_LOCAL="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/env/security.local.sh"
+SECURITY_EXAMPLE="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/env/security.local.example"
 
 # Try to load CA_CERT from security.local.sh
 if [ -f "$SECURITY_LOCAL" ]; then
