@@ -163,8 +163,7 @@ EOF
 # Main Command Router
 # ═══════════════════════════════════════════════════════════════
 
-devx__main() {
-    set -u
+devx__main_impl() {
     devx__colors
 
     # No arguments: show usage
@@ -252,6 +251,26 @@ devx__main() {
         devx__log ERR "exit_code=${rc}  duration=${dur_ms}ms"
     fi
     return "$rc"
+}
+
+devx__main() {
+    if [ -n "${ZSH_VERSION-}" ]; then
+        setopt localoptions nounset
+        devx__main_impl "$@"
+        return $?
+    fi
+
+    local had_nounset=0
+    case $- in
+    *u*) had_nounset=1 ;;
+    esac
+    set -u
+    devx__main_impl "$@"
+    local rc=$?
+    if [ "$had_nounset" -eq 0 ]; then
+        set +u
+    fi
+    return $rc
 }
 
 # Only execute if directly invoked (not sourced)
