@@ -49,12 +49,13 @@ else
         branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
         if [ -n "$branch" ]; then
             local fmt="${1:-%s}"
+            local suffix="${2-}"
             fmt="${fmt//%s/$branch}"
-            printf "%s%s" "$fmt" "$2"
+            printf "%s%s" "$fmt" "$suffix"
         fi
     }
 fi
-export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_pwd)\[\e[36m\]\$(__git_ps1 '(%s)')\[\e[0m\]\$ "
+export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_pwd)\[\e[36m\]\$(__git_ps1 '(%s)' '')\[\e[0m\]\$ "
 
 # ============================================================
 # BASH-SPECIFIC FUNCTIONS

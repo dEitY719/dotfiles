@@ -6,15 +6,10 @@ Provides functions for drawing shapes, text, emojis, and compositing elements
 together to create animation frames.
 """
 
-from typing import Optional
-
-import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 
-def create_blank_frame(
-    width: int, height: int, color: tuple[int, int, int] = (255, 255, 255)
-) -> Image.Image:
+def create_blank_frame(width: int, height: int, color: tuple[int, int, int] = (255, 255, 255)) -> Image.Image:
     """
     Create a blank frame with solid color background.
 
@@ -33,8 +28,8 @@ def draw_circle(
     frame: Image.Image,
     center: tuple[int, int],
     radius: int,
-    fill_color: Optional[tuple[int, int, int]] = None,
-    outline_color: Optional[tuple[int, int, int]] = None,
+    fill_color: tuple[int, int, int] | None = None,
+    outline_color: tuple[int, int, int] | None = None,
     outline_width: int = 1,
 ) -> Image.Image:
     """
@@ -139,7 +134,7 @@ def draw_star(
     center: tuple[int, int],
     size: int,
     fill_color: tuple[int, int, int],
-    outline_color: Optional[tuple[int, int, int]] = None,
+    outline_color: tuple[int, int, int] | None = None,
     outline_width: int = 1,
 ) -> Image.Image:
     """

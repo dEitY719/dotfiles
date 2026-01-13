@@ -155,7 +155,7 @@ if [ -d "${SHELL_COMMON}/env" ]; then
     for f in "${SHELL_COMMON}/env/"*.sh; do
         [ -f "$f" ] || continue
         case "$f" in
-            *.local.sh) continue ;;
+        *.local.sh) continue ;;
         esac
         safe_source "$f" "Shell-common environment file not found"
     done
@@ -167,7 +167,7 @@ if [ -d "${SHELL_COMMON}/aliases" ]; then
     for f in "${SHELL_COMMON}/aliases/"*.sh; do
         [ -f "$f" ] || continue
         case "$f" in
-            *.local.sh) continue ;;
+        *.local.sh) continue ;;
         esac
         safe_source "$f" "Shell-common aliases file not found"
     done
@@ -179,7 +179,7 @@ if [ -d "${SHELL_COMMON}/functions" ]; then
     for f in "${SHELL_COMMON}/functions/"*.sh; do
         [ -f "$f" ] || continue
         case "$f" in
-            *.local.sh) continue ;;
+        *.local.sh) continue ;;
         esac
         safe_source "$f" "Shell-common functions file not found"
     done
@@ -191,7 +191,7 @@ if [ -d "${SHELL_COMMON}/tools/integrations" ]; then
     for f in "${SHELL_COMMON}/tools/integrations/"*.sh; do
         [ -f "$f" ] || continue
         case "$f" in
-            *.local.sh) continue ;;
+        *.local.sh) continue ;;
         esac
         safe_source "$f" "Shell-common integration tool not found"
     done
@@ -208,7 +208,7 @@ if [ -d "${SHELL_COMMON}/projects" ]; then
     for f in "${SHELL_COMMON}/projects/"*.sh; do
         [ -f "$f" ] || continue
         case "$f" in
-            *.local.sh) continue ;;
+        *.local.sh) continue ;;
         esac
         safe_source "$f" "Shell-common projects file not found"
     done
