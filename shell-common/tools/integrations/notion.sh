@@ -62,11 +62,11 @@ notion_help() {
     ux_section "📋 Environment File Example"
     cat <<'ENV_EXAMPLE'
 # .env or shell env file
-NOTION_API_KEY='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'
+NOTION_API_KEY='ntn_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 
 # Optional: Workspace settings
-NOTION_WORKSPACE_ID='2bfc8bad-75a1-8144-910a-00030418db4d'
-NOTION_WORKSPACE_NAME='Claude-Research'
+NOTION_WORKSPACE_ID='xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+NOTION_WORKSPACE_NAME='Your-Workspace-Name'
 ENV_EXAMPLE
     echo ""
 
