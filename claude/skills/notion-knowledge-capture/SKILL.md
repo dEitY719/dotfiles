@@ -16,6 +16,7 @@ Use this to verify the Notion MCP connection before attempting a full capture:
 2. Confirm the tool returns `200` and a JSON payload (it may be an empty result set depending on workspace permissions).
 
 If you see `401 unauthorized` with `"API token is invalid."`, the MCP server is not receiving the same token you validated with `curl`. Typical causes:
+
 - Claude Code is reading a different config file than you expect (project override vs user config).
 - The MCP server env var key/value is not what the server expects (missing, empty, or accidentally set to a placeholder like `$NOTION_API_KEY`).
 - Claude Code needs a full restart after config changes.
@@ -27,7 +28,7 @@ When asked to save information to Notion:
 1. **Extract content**: Identify key information from conversation context
 2. **Structure information**: Organize into appropriate documentation format
 3. **Determine location**: Use the Notion MCP tool for `POST /v1/search` to find the right wiki page or database
-4. **Create page**: Use the Notion MCP tool for `POST /v1/pages` to create the new page
+4. **Add content**: Use the Notion MCP tool for `PATCH /v1/blocks/{block_id}` (append blocks to existing page) or `POST /v1/pages` with parent ID if creating under a specific page
 5. **Make discoverable**: Link from relevant hub pages, add to databases, or update wiki navigation so others can find it
 
 ## Knowledge Capture Workflow
@@ -57,7 +58,6 @@ Classify the knowledge:
 - Reference Documentation
 ```
 
-
 ### Step 3: Structure the content
 
 ```
@@ -68,7 +68,6 @@ Format appropriately based on content type:
 - Add relevant metadata
 - Link to related pages
 ```
-
 
 ### Step 4: Determine destination
 
@@ -82,15 +81,25 @@ Where to save:
 - Team wiki (team-specific knowledge)
 ```
 
-### Step 5: Create the page
+### Step 5: Create or append content
+
+**Option A: Append to existing page (Recommended)**
+
+```
+Use the Notion MCP tool for `PATCH /v1/blocks/{block_id}`:
+- block_id: ID of the existing page (parent container)
+- children: Array of blocks (paragraphs, headings, bullet lists, etc.)
+- Advantage: Works reliably with internal integrations, no parent parameter format issues
+```
+
+**Option B: Create new page under a parent**
 
 ```
 Use the Notion MCP tool for `POST /v1/pages`:
-- Set appropriate title
-- Use structured content from template
-- Set properties if in database
-- Add tags/categories
-- Link to related pages
+- parent.page_id: ID of parent page (required for internal integrations)
+- properties.title: Set appropriate title
+- children: Structured content from template
+- Note: parent parameter must be a valid page ID; workspace-level creation requires public integration
 ```
 
 ### Step 6: Make content discoverable
@@ -102,12 +111,12 @@ Link the new page so others can find it:
    - Add link to wiki table of contents page
    - Add link from relevant project page
    - Add link from category/topic page (e.g., "Engineering Docs")
-   
+
 2. If page is in a database:
    - Set appropriate tags/categories
    - Set status (e.g., "Published")
    - Add to relevant views
-   
+
 3. Optionally update parent page:
    - If saved under a project, add to project's "Documentation" section
    - If in team wiki, ensure it's linked from team homepage
@@ -131,7 +140,6 @@ Choose appropriate structure based on content:
 **Decision**: Context → Decision → Rationale → Options Considered → Consequences → Implementation
 **FAQ**: Short Answer → Detailed Explanation → Examples → When to Use → Related Questions
 **Learning**: What Happened → What Went Well → What Didn't → Root Causes → Learnings → Actions
-
 
 ## Destination Patterns
 
@@ -203,13 +211,23 @@ See [reference/database-best-practices.md](reference/database-best-practices.md)
 ## Common Issues
 
 **"Not sure where to save"**: Default to general wiki, can move later
+
 **"Content is fragmentary"**: Group related fragments into cohesive doc
+
 **"Already exists"**: Search first, update existing if appropriate
+
 **"Too informal"**: Clean up language while preserving insights
+
+**"Cannot create new page (validation_error on parent parameter)"**: Use PATCH /v1/blocks instead:
+
+- Internal integrations cannot create workspace-level pages
+- Instead, append blocks to an existing page using its page ID as block_id
+- This is more reliable and avoids JSON serialization issues with complex parent parameters
 
 ## Examples
 
 See [examples/](examples/) for complete workflows:
+
 - [examples/conversation-to-faq.md](examples/conversation-to-faq.md) - FAQ from Q&A
 - [examples/decision-capture.md](examples/decision-capture.md) - Decision record
 - [examples/how-to-guide.md](examples/how-to-guide.md) - How-to from discussion
