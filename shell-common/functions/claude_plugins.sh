@@ -397,13 +397,20 @@ README_HEADER
         fi
 
         local category=$(basename "$category_dir")
+
+        # Count direct .md files
         local file_count=$(find "$category_dir" -maxdepth 1 -type f -name "*.md" 2>/dev/null | wc -l)
 
-        if [ "$file_count" -gt 0 ]; then
-            echo "## $category ($file_count)" >> "$readme_file"
+        # Count nested SKILL.md or AGENT.md files in subdirectories
+        local nested_count=$(find "$category_dir" -maxdepth 2 -type f \( -name "SKILL.md" -o -name "AGENT.md" \) 2>/dev/null | wc -l)
+
+        # Process only if there are files (direct or nested)
+        if [ "$file_count" -gt 0 ] || [ "$nested_count" -gt 0 ]; then
+            local total_files=$((file_count + nested_count))
+            echo "## $category ($total_files)" >> "$readme_file"
             echo "" >> "$readme_file"
 
-            # List each file with its description
+            # List each direct .md file with its description
             for file in "$category_dir"/*.md; do
                 if [ -f "$file" ]; then
                     local filename=$(basename "$file" .md)
@@ -418,18 +425,32 @@ README_HEADER
                 fi
             done
 
-            # Also process nested directories (like skills/category/SKILL.md)
+            # Process nested directories (like skills/category/SKILL.md or agents/category/AGENT.md)
             for nested_dir in "$category_dir"/*; do
-                if [ -d "$nested_dir" ] && [ -f "$nested_dir/SKILL.md" ]; then
+                if [ -d "$nested_dir" ]; then
                     local nested_name=$(basename "$nested_dir")
-                    local description=$(_get_plugin_description "$nested_dir/SKILL.md")
 
-                    if [ -z "$description" ]; then
-                        description="[설명 없음]"
+                    # Check for SKILL.md, AGENT.md, or any .md file
+                    local nested_file=""
+                    if [ -f "$nested_dir/SKILL.md" ]; then
+                        nested_file="$nested_dir/SKILL.md"
+                    elif [ -f "$nested_dir/AGENT.md" ]; then
+                        nested_file="$nested_dir/AGENT.md"
+                    else
+                        # Check for any .md file in this nested directory
+                        nested_file=$(find "$nested_dir" -maxdepth 1 -type f -name "*.md" | head -1)
                     fi
 
-                    echo "  - **$nested_name**: $description" >> "$readme_file"
-                    processed=$((processed + 1))
+                    if [ -f "$nested_file" ]; then
+                        local description=$(_get_plugin_description "$nested_file")
+
+                        if [ -z "$description" ]; then
+                            description="[설명 없음]"
+                        fi
+
+                        echo "  - **$nested_name**: $description" >> "$readme_file"
+                        processed=$((processed + 1))
+                    fi
                 fi
             done
 
