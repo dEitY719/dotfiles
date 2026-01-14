@@ -380,12 +380,30 @@ generate_plugin_doc_ko() {
 # Generate Korean Documentation Recursively for Plugin Directories
 # ═══════════════════════════════════════════════════════════════
 
-# Extract brief description from plugin file (first description line or YAML)
+# Extract brief description from plugin file (YAML or heading fallback)
 _get_plugin_description() {
     local file="$1"
 
-    # Try to extract description from YAML header
-    grep "^description:" "$file" 2>/dev/null | head -1 | sed 's/^description: *//; s/"//g' | cut -c1-100
+    # 1. Try to extract description from YAML frontmatter
+    local yaml_desc
+    yaml_desc=$(grep "^description:" "$file" 2>/dev/null | head -1 | sed 's/^description: *//; s/"//g' | cut -c1-100)
+
+    if [ -n "$yaml_desc" ]; then
+        echo "$yaml_desc"
+        return 0
+    fi
+
+    # 2. Fallback: Extract first markdown heading (# Title)
+    local title_desc
+    title_desc=$(grep "^# " "$file" 2>/dev/null | head -1 | sed 's/^# *//; s/#*$//' | cut -c1-100)
+
+    if [ -n "$title_desc" ]; then
+        echo "$title_desc"
+        return 0
+    fi
+
+    # 3. No description found - return empty string
+    return 1
 }
 
 # Generate README.md summarizing plugin directory structure

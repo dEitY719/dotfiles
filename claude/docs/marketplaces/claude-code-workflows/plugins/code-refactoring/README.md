@@ -8,13 +8,13 @@
 
 ## commands (3)
 
-- **context-restore**: [설명 없음]
-- **refactor-clean**: [설명 없음]
-- **tech-debt**: [설명 없음]
+- **context-restore**: Context Restoration: Advanced Semantic Memory Rehydration
+- **refactor-clean**: Refactor and Clean Code
+- **tech-debt**: Technical Debt Analysis and Remediation
 
 
 ---
 
-*Generated: 2026-01-14 10:53:25*
+*Generated: 2026-01-14 14:11:37*
 
 한국어 요약 및 세부 설명은 각 폴더의 `*_KO.md` 파일을 참고하세요.
