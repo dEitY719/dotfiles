@@ -204,22 +204,69 @@ view_plugin_info() {
 # ═══════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════
-# Generate Korean Documentation from Plugin Files (Claude-Assisted)
+# Generate Korean Documentation from Plugin Files (AI-Agnostic)
 # ═══════════════════════════════════════════════════════════════
+
+# Default AI tool for documentation generation
+# Can be overridden by: CLAUDE_DOC_GENERATOR=gemini, CLAUDE_DOC_GENERATOR=codex, etc.
+: "${CLAUDE_DOC_GENERATOR:=claude}"
+
+# Korean documentation generation prompt template
+_generate_plugin_doc_ko_prompt() {
+    local plugin_file="$1"
+
+    cat << 'PROMPT_EOF'
+다음 에이전트/스킬 파일을 한국어로 요약해줘. 다음 요구사항을 따라줘:
+
+1. YAML 헤더 유지 (name, description, model 등)
+2. 주요 기능들을 한국어로 명확하게 설명
+3. 마크다운 형식으로 구조화
+4. 번역은 정확하고 전문적일 것
+5. 끝에 [원본 파일] 섹션 추가하여 원본 파일 경로 명시
+
+원본 파일 내용:
+```
+PROMPT_EOF
+
+    cat "$plugin_file"
+
+    cat << 'PROMPT_EOF'
+```
+PROMPT_EOF
+}
 
 generate_plugin_doc_ko() {
     local plugin_file="$1"
     local output_file="$2"
+    local ai_tool="${3:-${CLAUDE_DOC_GENERATOR}}"
 
     if [ -z "$plugin_file" ] || [ -z "$output_file" ]; then
         ux_header "generate_plugin_doc_ko"
-        ux_usage "generate_plugin_doc_ko" "<source-file> <output-file>" "Generate Korean summary from plugin file"
-        ux_bullet "Example: ${UX_INFO}generate_plugin_doc_ko ~/.claude/plugins/marketplaces/claude-code-workflows/plugins/code-refactoring/agents/code-reviewer.md ~/.claude/docs/marketplaces/claude-code-workflows/plugins/code-refactoring/agents/code-reviewer_KO.md${UX_RESET}"
+        ux_usage "generate_plugin_doc_ko" "<source-file> <output-file> [ai-tool]" "Generate Korean summary from plugin file"
+        ux_bullet "Example: ${UX_INFO}generate_plugin_doc_ko file.md output_KO.md${UX_RESET}"
+        ux_bullet "With specific AI: ${UX_INFO}generate_plugin_doc_ko file.md output_KO.md gemini${UX_RESET}"
+        echo ""
+        ux_section "Available AI Tools"
+        ux_bullet "claude (default) - Anthropic Claude"
+        ux_bullet "gemini - Google Gemini"
+        ux_bullet "codex - OpenAI Codex"
+        ux_bullet "Other tools - Any CLI tool that accepts -p or --prompt"
+        echo ""
+        ux_section "Override Default AI Tool"
+        ux_bullet "Set environment variable: ${UX_CODE}export CLAUDE_DOC_GENERATOR=gemini${UX_RESET}"
         return 1
     fi
 
     if [ ! -f "$plugin_file" ]; then
         ux_error "Plugin file not found: $plugin_file"
+        return 1
+    fi
+
+    # Check if AI tool is available
+    if ! command -v "$ai_tool" > /dev/null 2>&1; then
+        ux_error "AI tool not found or not in PATH: $ai_tool"
+        ux_info "Make sure '$ai_tool' is installed and available in your PATH"
+        ux_info "Or specify a different AI tool with: generate_plugin_doc_ko <source> <output> <tool>"
         return 1
     fi
 
@@ -230,19 +277,40 @@ generate_plugin_doc_ko() {
     ux_header "Generating Korean Documentation"
     ux_info "Source: $plugin_file"
     ux_info "Output: $output_file"
+    ux_info "AI Tool: ${UX_HIGHLIGHT}$ai_tool${UX_RESET}"
     echo ""
-    ux_info "Calling Claude to generate Korean summary..."
+    ux_info "Calling $ai_tool to generate Korean summary..."
     echo ""
 
-    # Generate Korean summary using Claude
-    claude -p "다음 에이전트/스킬 파일을 한국어로 요약해줘. YAML 헤더와 주요 기능들을 포함해서 마크다운 형식으로 작성해줘. 번역은 정확하고 전문적이어야 해. 그리고 [원본 파일] 섹션에 원본 파일 경로를 추가해줘.
+    # Generate Korean summary using the specified AI tool
+    # Support multiple prompt flag formats: -p, --prompt, --prompt=
+    local prompt_output
+    prompt_output=$(_generate_plugin_doc_ko_prompt "$plugin_file")
 
-원본 파일 내용:
-\`\`\`
-$(cat "$plugin_file")
-\`\`\`" > "$output_file"
+    case "$ai_tool" in
+        claude|gemini)
+            # These tools use -p flag
+            "$ai_tool" -p "$prompt_output" > "$output_file" 2>&1
+            ;;
+        codex)
+            # Codex might use different flags
+            "$ai_tool" -p "$prompt_output" > "$output_file" 2>&1
+            ;;
+        *)
+            # Try common prompt flag patterns
+            if "$ai_tool" -p "$prompt_output" > "$output_file" 2>&1; then
+                :  # Success
+            elif "$ai_tool" --prompt "$prompt_output" > "$output_file" 2>&1; then
+                :  # Success
+            else
+                ux_error "Could not determine correct prompt flag for $ai_tool"
+                ux_info "Tried: -p and --prompt flags"
+                return 1
+            fi
+            ;;
+    esac
 
-    if [ $? -eq 0 ]; then
+    if [ $? -eq 0 ] && [ -s "$output_file" ]; then
         ux_success "Korean documentation generated"
         echo ""
         ux_section "Output File"
@@ -252,6 +320,7 @@ $(cat "$plugin_file")
         head -30 "$output_file"
     else
         ux_error "Failed to generate documentation"
+        rm -f "$output_file"
         return 1
     fi
 }
@@ -261,11 +330,19 @@ $(cat "$plugin_file")
 create_plugin_structure_ko() {
     local marketplace="$1"
     local plugin_path="$2"
+    local ai_tool="${3:-${CLAUDE_DOC_GENERATOR}}"
 
     if [ -z "$marketplace" ] || [ -z "$plugin_path" ]; then
         ux_header "create_plugin_structure_ko"
-        ux_usage "create_plugin_structure_ko" "<marketplace> <plugin-path>" "Create directory structure and generate Korean docs"
-        ux_bullet "Example: ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
+        ux_usage "create_plugin_structure_ko" "<marketplace> <plugin-path> [ai-tool]" "Create directory structure and generate Korean docs"
+        ux_bullet "Example (default): ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
+        ux_bullet "Example (gemini): ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md gemini${UX_RESET}"
+        echo ""
+        ux_section "Available AI Tools"
+        ux_bullet "claude (default) - Anthropic Claude"
+        ux_bullet "gemini - Google Gemini"
+        ux_bullet "codex - OpenAI Codex"
+        ux_bullet "Other tools - Any CLI tool that accepts -p or --prompt"
         return 1
     fi
 
@@ -289,8 +366,8 @@ create_plugin_structure_ko() {
     ux_success "Created directory: $output_dir"
     echo ""
 
-    # Generate Korean documentation
-    generate_plugin_doc_ko "$source_file" "$output_file"
+    # Generate Korean documentation with specified AI tool
+    generate_plugin_doc_ko "$source_file" "$output_file" "$ai_tool"
 
     echo ""
     ux_section "Next Steps"
@@ -333,28 +410,41 @@ claude_plugins_help() {
     ux_bullet "Usage: ${UX_CODE}view_plugin_info algorithmic-art${UX_RESET}"
     echo ""
 
-    ux_section "generate_plugin_doc_ko <source-file> <output-file>"
-    ux_info "Generate Korean documentation from plugin file using Claude"
-    ux_bullet "Usage: ${UX_CODE}generate_plugin_doc_ko ~/.claude/plugins/[path]/file.md ~/.claude/docs/[path]/file_KO.md${UX_RESET}"
+    ux_section "generate_plugin_doc_ko <source-file> <output-file> [ai-tool]"
+    ux_info "Generate Korean documentation from plugin file using any AI tool"
+    ux_bullet "Usage (default Claude): ${UX_CODE}generate_plugin_doc_ko file.md output_KO.md${UX_RESET}"
+    ux_bullet "Usage (Gemini): ${UX_CODE}generate_plugin_doc_ko file.md output_KO.md gemini${UX_RESET}"
     echo ""
 
-    ux_section "create_plugin_structure_ko <marketplace> <plugin-path>"
+    ux_section "create_plugin_structure_ko <marketplace> <plugin-path> [ai-tool]"
     ux_info "Create structure and generate Korean docs in one command (RECOMMENDED)"
-    ux_bullet "Usage: ${UX_CODE}create_plugin_structure_ko <marketplace> <path/to/file.md>${UX_RESET}"
+    ux_bullet "Usage (default): ${UX_CODE}create_plugin_structure_ko <marketplace> <path/to/file.md>${UX_RESET}"
+    ux_bullet "Usage (Gemini): ${UX_CODE}create_plugin_structure_ko <marketplace> <path/to/file.md> gemini${UX_RESET}"
     echo ""
 
     ux_section "Quick Examples"
-    ux_bullet "1. Generate Korean docs for code-reviewer agent:"
+    ux_bullet "1. Generate with default AI (Claude):"
     ux_bullet "   ${UX_CODE}create-plugin-ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
     echo ""
-    ux_bullet "2. Generate for other agents in the same workflow:"
-    ux_bullet "   ${UX_CODE}create-plugin-ko claude-code-workflows plugins/git-pr-workflows/agents/code-reviewer.md${UX_RESET}"
+    ux_bullet "2. Generate with Gemini:"
+    ux_bullet "   ${UX_CODE}create-plugin-ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md gemini${UX_RESET}"
     echo ""
-    ux_bullet "3. Review the generated file:"
+    ux_bullet "3. Change default AI tool for session:"
+    ux_bullet "   ${UX_CODE}export CLAUDE_DOC_GENERATOR=codex${UX_RESET}"
+    ux_bullet "   ${UX_CODE}create-plugin-ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
+    echo ""
+    ux_bullet "4. Review the generated file:"
     ux_bullet "   ${UX_CODE}code ~/.claude/docs/marketplaces/claude-code-workflows/plugins/code-refactoring/agents/code-reviewer_KO.md${UX_RESET}"
     echo ""
-    ux_bullet "4. Commit to git:"
+    ux_bullet "5. Commit to git:"
     ux_bullet "   ${UX_CODE}cd ~/dotfiles && git add claude/docs/ && git commit -m 'docs: Add Korean summary'${UX_RESET}"
+    echo ""
+
+    ux_section "Supported AI Tools"
+    ux_bullet "claude - Anthropic Claude (default)"
+    ux_bullet "gemini - Google Gemini"
+    ux_bullet "codex - OpenAI Codex"
+    ux_bullet "Any CLI tool accepting -p or --prompt flag"
     echo ""
 
     ux_section "Recommended Workflow"
