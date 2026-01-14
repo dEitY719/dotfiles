@@ -512,7 +512,7 @@ README_HEADER
             echo "" >>"$readme_file"
 
             # List each direct .md file with its description
-            for file in "$category_dir"/*.md; do
+            while IFS= read -r file; do
                 if [ -f "$file" ]; then
                     local filename
                     filename=$(basename "$file" .md)
@@ -526,10 +526,10 @@ README_HEADER
                     echo "- **$filename**: $description" >>"$readme_file"
                     processed=$((processed + 1))
                 fi
-            done
+            done < <(find "$category_dir" -maxdepth 1 -type f -name "*.md")
 
             # Process nested directories (like skills/category/SKILL.md or agents/category/AGENT.md)
-            for nested_dir in "$category_dir"/*; do
+            while IFS= read -r nested_dir; do
                 if [ -d "$nested_dir" ]; then
                     local nested_name
                     nested_name=$(basename "$nested_dir")
@@ -557,7 +557,7 @@ README_HEADER
                         processed=$((processed + 1))
                     fi
                 fi
-            done
+            done < <(find "$category_dir" -maxdepth 1 -type d ! -name "$(basename "$category_dir")")
 
             echo "" >>"$readme_file"
         fi
