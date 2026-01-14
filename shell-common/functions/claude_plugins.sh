@@ -326,6 +326,188 @@ generate_plugin_doc_ko() {
 }
 
 # ═══════════════════════════════════════════════════════════════
+# Generate Korean Documentation Recursively for Plugin Directories
+# ═══════════════════════════════════════════════════════════════
+
+# Extract brief description from plugin file (first description line or YAML)
+_get_plugin_description() {
+    local file="$1"
+
+    # Try to extract description from YAML header
+    grep "^description:" "$file" 2>/dev/null | head -1 | sed 's/^description: *//; s/"//g' | cut -c1-100
+}
+
+# Generate README.md summarizing plugin directory structure
+_generate_plugin_directory_readme_ko() {
+    local plugin_dir="$1"
+    local docs_dir="$2"
+    local ai_tool="$3"
+
+    local readme_file="$docs_dir/README.md"
+    local plugin_name=$(basename "$plugin_dir")
+
+    ux_info "Generating directory summary: README.md"
+
+    # Create header with basic info
+    cat > "$readme_file" << 'README_HEADER'
+# 플러그인 폴더 구조 및 요약
+
+README_HEADER
+
+    echo "" >> "$readme_file"
+
+    # Process each subdirectory and file
+    local processed=0
+
+    for category_dir in "$plugin_dir"/*; do
+        if [ ! -d "$category_dir" ]; then
+            continue
+        fi
+
+        local category=$(basename "$category_dir")
+        local file_count=$(find "$category_dir" -maxdepth 1 -type f -name "*.md" 2>/dev/null | wc -l)
+
+        if [ "$file_count" -gt 0 ]; then
+            echo "## $category ($file_count)" >> "$readme_file"
+            echo "" >> "$readme_file"
+
+            # List each file with its description
+            for file in "$category_dir"/*.md; do
+                if [ -f "$file" ]; then
+                    local filename=$(basename "$file" .md)
+                    local description=$(_get_plugin_description "$file")
+
+                    if [ -z "$description" ]; then
+                        description="[설명 없음]"
+                    fi
+
+                    echo "- **$filename**: $description" >> "$readme_file"
+                    processed=$((processed + 1))
+                fi
+            done
+
+            # Also process nested directories (like skills/category/SKILL.md)
+            for nested_dir in "$category_dir"/*; do
+                if [ -d "$nested_dir" ] && [ -f "$nested_dir/SKILL.md" ]; then
+                    local nested_name=$(basename "$nested_dir")
+                    local description=$(_get_plugin_description "$nested_dir/SKILL.md")
+
+                    if [ -z "$description" ]; then
+                        description="[설명 없음]"
+                    fi
+
+                    echo "  - **$nested_name**: $description" >> "$readme_file"
+                    processed=$((processed + 1))
+                fi
+            done
+
+            echo "" >> "$readme_file"
+        fi
+    done
+
+    if [ $processed -gt 0 ]; then
+        echo "" >> "$readme_file"
+        echo "---" >> "$readme_file"
+        echo "" >> "$readme_file"
+        echo "*Generated: $(date '+%Y-%m-%d %H:%M:%S')*" >> "$readme_file"
+        echo "" >> "$readme_file"
+        echo "한국어 요약 및 세부 설명은 각 폴더의 \`*_KO.md\` 파일을 참고하세요." >> "$readme_file"
+
+        ux_success "README.md generated successfully"
+        return 0
+    else
+        ux_warning "No markdown files found in directory"
+        rm -f "$readme_file"
+        return 1
+    fi
+}
+
+# Process plugin directory recursively and generate Korean docs for all files
+process_plugin_directory_ko() {
+    local marketplace="$1"
+    local plugin_path="$2"
+    local ai_tool="${3:-${CLAUDE_DOC_GENERATOR}}"
+
+    if [ -z "$marketplace" ] || [ -z "$plugin_path" ]; then
+        ux_header "process_plugin_directory_ko"
+        ux_usage "process_plugin_directory_ko" "<marketplace> <plugin-path/> [ai-tool]" "Recursively generate Korean docs for all files in directory"
+        ux_bullet "Example: ${UX_INFO}process_plugin_directory_ko claude-code-workflows plugins/code-refactoring/${UX_RESET}"
+        ux_bullet "With Gemini: ${UX_INFO}process_plugin_directory_ko claude-code-workflows plugins/code-refactoring/ gemini${UX_RESET}"
+        return 1
+    fi
+
+    local docs_base="$HOME/.claude/docs/marketplaces/$marketplace"
+    local plugins_base="$HOME/.claude/plugins/marketplaces/$marketplace"
+    local source_dir="${plugins_base}/${plugin_path%/}"  # Remove trailing slash if present
+    local docs_dir="${docs_base}/${plugin_path%/}"
+
+    if [ ! -d "$source_dir" ]; then
+        ux_error "Plugin directory not found: $source_dir"
+        return 1
+    fi
+
+    ux_header "Processing Plugin Directory Recursively"
+    ux_info "Source: $source_dir"
+    ux_info "Docs: $docs_dir"
+    ux_info "AI Tool: ${UX_HIGHLIGHT}$ai_tool${UX_RESET}"
+    echo ""
+
+    # Create docs directory structure
+    mkdir -p "$docs_dir"
+
+    # Find all .md files recursively
+    local md_files=()
+    while IFS= read -r -d '' file; do
+        md_files+=("$file")
+    done < <(find "$source_dir" -type f -name "*.md" -print0)
+
+    if [ ${#md_files[@]} -eq 0 ]; then
+        ux_error "No markdown files found in: $source_dir"
+        return 1
+    fi
+
+    ux_section "Found Files"
+    ux_info "Total markdown files: ${#md_files[@]}"
+    echo ""
+
+    # Process each markdown file
+    local success_count=0
+    for source_file in "${md_files[@]}"; do
+        # Get relative path
+        local relative_path="${source_file#$source_dir/}"
+        local output_file="$docs_dir/${relative_path%.md}_KO.md"
+        local output_dir=$(dirname "$output_file")
+
+        mkdir -p "$output_dir"
+
+        # Generate Korean documentation
+        ux_info "Processing: $relative_path"
+        if generate_plugin_doc_ko "$source_file" "$output_file" "$ai_tool" > /dev/null 2>&1; then
+            success_count=$((success_count + 1))
+            ux_bullet "✓ Generated: ${output_file##*/}"
+        else
+            ux_bullet "✗ Failed: $relative_path"
+        fi
+    done
+
+    echo ""
+    ux_section "Summary"
+    ux_bullet "Total files: ${#md_files[@]}"
+    ux_bullet "Generated: $success_count"
+    ux_bullet "Failed: $((${#md_files[@]} - success_count))"
+    echo ""
+
+    # Generate README.md with directory summary
+    _generate_plugin_directory_readme_ko "$source_dir" "$docs_dir" "$ai_tool"
+
+    echo ""
+    ux_section "Next Steps"
+    ux_bullet "Review generated files: ${UX_CODE}code $docs_dir${UX_RESET}"
+    ux_bullet "View summary: ${UX_CODE}cat $docs_dir/README.md${UX_RESET}"
+    ux_bullet "Commit to git: ${UX_CODE}cd ~/dotfiles && git add claude/docs/ && git commit${UX_RESET}"
+}
+
+# ═══════════════════════════════════════════════════════════════
 
 create_plugin_structure_ko() {
     local marketplace="$1"
@@ -334,9 +516,10 @@ create_plugin_structure_ko() {
 
     if [ -z "$marketplace" ] || [ -z "$plugin_path" ]; then
         ux_header "create_plugin_structure_ko"
-        ux_usage "create_plugin_structure_ko" "<marketplace> <plugin-path> [ai-tool]" "Create directory structure and generate Korean docs"
-        ux_bullet "Example (default): ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
-        ux_bullet "Example (gemini): ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md gemini${UX_RESET}"
+        ux_usage "create_plugin_structure_ko" "<marketplace> <plugin-path|plugin-path/> [ai-tool]" "Generate Korean docs for file or directory"
+        ux_bullet "Single file: ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
+        ux_bullet "Full directory: ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/${UX_RESET}"
+        ux_bullet "With Gemini: ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/ gemini${UX_RESET}"
         echo ""
         ux_section "Available AI Tools"
         ux_bullet "claude (default) - Anthropic Claude"
@@ -346,34 +529,43 @@ create_plugin_structure_ko() {
         return 1
     fi
 
-    local docs_base="$HOME/.claude/docs/marketplaces/$marketplace"
     local plugins_base="$HOME/.claude/plugins/marketplaces/$marketplace"
-    local source_file="$plugins_base/$plugin_path"
-    local output_file="$docs_base/$plugin_path"
-    output_file="${output_file%.md}_KO.md"
+    local source_path="${plugins_base}/${plugin_path}"
 
-    if [ ! -f "$source_file" ]; then
-        ux_error "Plugin file not found: $source_file"
+    # Check if path is a file or directory
+    if [ -f "$source_path" ]; then
+        # File path - use original single-file processing
+        local docs_base="$HOME/.claude/docs/marketplaces/$marketplace"
+        local output_file="$docs_base/$plugin_path"
+        output_file="${output_file%.md}_KO.md"
+
+        ux_header "Creating Plugin Documentation Structure"
+        echo ""
+
+        # Create directory structure
+        local output_dir=$(dirname "$output_file")
+        mkdir -p "$output_dir"
+        ux_success "Created directory: $output_dir"
+        echo ""
+
+        # Generate Korean documentation with specified AI tool
+        generate_plugin_doc_ko "$source_path" "$output_file" "$ai_tool"
+
+        echo ""
+        ux_section "Next Steps"
+        ux_bullet "Review generated file: ${UX_CODE}code $output_file${UX_RESET}"
+        ux_bullet "Add personal notes: ${UX_CODE}code ${output_file%.md}_NOTES.md${UX_RESET}"
+        ux_bullet "Commit to git: ${UX_CODE}cd ~/dotfiles && git add claude/docs/ && git commit${UX_RESET}"
+
+    elif [ -d "$source_path" ]; then
+        # Directory path - use recursive directory processing
+        process_plugin_directory_ko "$marketplace" "$plugin_path" "$ai_tool"
+
+    else
+        ux_error "Path not found: $source_path"
+        ux_info "Please check the marketplace and plugin path"
         return 1
     fi
-
-    ux_header "Creating Plugin Documentation Structure"
-    echo ""
-
-    # Create directory structure
-    output_dir=$(dirname "$output_file")
-    mkdir -p "$output_dir"
-    ux_success "Created directory: $output_dir"
-    echo ""
-
-    # Generate Korean documentation with specified AI tool
-    generate_plugin_doc_ko "$source_file" "$output_file" "$ai_tool"
-
-    echo ""
-    ux_section "Next Steps"
-    ux_bullet "Review generated file: ${UX_CODE}code $output_file${UX_RESET}"
-    ux_bullet "Add personal notes: ${UX_CODE}code ${output_file%.md}_NOTES.md${UX_RESET}"
-    ux_bullet "Commit to git: ${UX_CODE}cd ~/dotfiles && git add claude/docs/ && git commit -m 'docs: Add Korean summary...'${UX_RESET}"
 }
 
 # ═══════════════════════════════════════════════════════════════
