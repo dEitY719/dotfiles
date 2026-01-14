@@ -270,11 +270,126 @@ claude_mount_skills() {
     fi
 }
 
-# Auto-mount skills on shell startup (opt-in only).
+# ═══════════════════════════════════════════════════════════════
+# Claude Code Agents Directory Bind Mount
+# ═══════════════════════════════════════════════════════════════
+
+claude_mount_agents() {
+    local agents_source="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/agents"
+    local agents_target="$HOME/.claude/agents"
+
+    # Check if source directory exists
+    if [ ! -d "$agents_source" ]; then
+        return 0
+    fi
+
+    # Create target directory if not exists
+    if [ ! -d "$agents_target" ]; then
+        mkdir -p "$agents_target"
+    fi
+
+    # Check if already mounted (using unified _is_mounted function if available)
+    if declare -f _is_mounted >/dev/null 2>&1; then
+        _is_mounted "$agents_target" && return 0
+    else
+        # Fallback: Check if already mounted using findmnt
+        if command -v findmnt > /dev/null 2>&1; then
+            findmnt "$agents_target" > /dev/null 2>&1 && return 0
+        else
+            # Final fallback to mount command
+            mount | grep -q "${agents_target}" && return 0
+        fi
+    fi
+
+    # Perform bind mount (will prompt for sudo password if needed)
+    sudo mount --bind "$agents_source" "$agents_target" 2>/dev/null
+
+    if [ $? -eq 0 ]; then
+        return 0
+    else
+        # Silent fail - don't spam errors on every shell startup
+        return 1
+    fi
+}
+
+# Auto-mount skills and agents on shell startup (opt-in only).
 # NOTE: Avoid side effects during shell init and during tests.
 if [ "${DOTFILES_TEST_MODE:-0}" != "1" ] && [ "${CLAUDE_AUTO_MOUNT_SKILLS:-0}" = "1" ]; then
     claude_mount_skills >/dev/null 2>&1 || true
 fi
+
+if [ "${DOTFILES_TEST_MODE:-0}" != "1" ] && [ "${CLAUDE_AUTO_MOUNT_AGENTS:-0}" = "1" ]; then
+    claude_mount_agents >/dev/null 2>&1 || true
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# Claude Code Documentation Directory Bind Mount
+# ═══════════════════════════════════════════════════════════════
+
+claude_mount_docs() {
+    local docs_source="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/docs"
+    local docs_target="$HOME/.claude/docs"
+
+    # Check if source directory exists
+    if [ ! -d "$docs_source" ]; then
+        return 0
+    fi
+
+    # Create target directory if not exists
+    if [ ! -d "$docs_target" ]; then
+        mkdir -p "$docs_target"
+    fi
+
+    # Check if already mounted (using unified _is_mounted function if available)
+    if declare -f _is_mounted >/dev/null 2>&1; then
+        _is_mounted "$docs_target" && return 0
+    else
+        # Fallback: Check if already mounted using findmnt
+        if command -v findmnt > /dev/null 2>&1; then
+            findmnt "$docs_target" > /dev/null 2>&1 && return 0
+        else
+            # Final fallback to mount command
+            mount | grep -q "${docs_target}" && return 0
+        fi
+    fi
+
+    # Perform bind mount (will prompt for sudo password if needed)
+    sudo mount --bind "$docs_source" "$docs_target" 2>/dev/null
+
+    if [ $? -eq 0 ]; then
+        return 0
+    else
+        # Silent fail - don't spam errors on every shell startup
+        return 1
+    fi
+}
+
+# Auto-mount docs on shell startup (opt-in only).
+# NOTE: Avoid side effects during shell init and during tests.
+if [ "${DOTFILES_TEST_MODE:-0}" != "1" ] && [ "${CLAUDE_AUTO_MOUNT_DOCS:-0}" = "1" ]; then
+    claude_mount_docs >/dev/null 2>&1 || true
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# Claude Code Marketplace Plugins Management
+# ═══════════════════════════════════════════════════════════════
+
+open_claude_plugins() {
+    local plugins_dir="$HOME/.claude/plugins/marketplaces"
+
+    if [ ! -d "$plugins_dir" ]; then
+        ux_error "Plugins directory not found: $plugins_dir"
+        ux_info "Plugins will be available after Claude Code marketplace setup"
+        return 1
+    fi
+
+    ux_header "Opening Claude Marketplace Plugins"
+    ux_info "Location: $plugins_dir"
+    echo ""
+
+    # Open in VSCode
+    code "$plugins_dir"
+}
 
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Workflow Helpers
