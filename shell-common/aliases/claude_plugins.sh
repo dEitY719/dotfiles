@@ -13,5 +13,9 @@ alias init-plugins-docs='init_plugins_docs'
 # Sync plugins structure to documentation directory
 alias sync-plugins='sync_plugins_structure'
 
+# Generate Korean documentation for plugins
+alias gen-plugin-ko='generate_plugin_doc_ko'
+alias create-plugin-ko='create_plugin_structure_ko'
+
 # Show help for plugin management
 alias plugins-help='claude_plugins_help'

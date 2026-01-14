@@ -203,6 +203,104 @@ view_plugin_info() {
 # Help & Documentation
 # ═══════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════
+# Generate Korean Documentation from Plugin Files (Claude-Assisted)
+# ═══════════════════════════════════════════════════════════════
+
+generate_plugin_doc_ko() {
+    local plugin_file="$1"
+    local output_file="$2"
+
+    if [ -z "$plugin_file" ] || [ -z "$output_file" ]; then
+        ux_header "generate_plugin_doc_ko"
+        ux_usage "generate_plugin_doc_ko" "<source-file> <output-file>" "Generate Korean summary from plugin file"
+        ux_bullet "Example: ${UX_INFO}generate_plugin_doc_ko ~/.claude/plugins/marketplaces/claude-code-workflows/plugins/code-refactoring/agents/code-reviewer.md ~/.claude/docs/marketplaces/claude-code-workflows/plugins/code-refactoring/agents/code-reviewer_KO.md${UX_RESET}"
+        return 1
+    fi
+
+    if [ ! -f "$plugin_file" ]; then
+        ux_error "Plugin file not found: $plugin_file"
+        return 1
+    fi
+
+    # Create output directory if not exists
+    output_dir=$(dirname "$output_file")
+    mkdir -p "$output_dir"
+
+    ux_header "Generating Korean Documentation"
+    ux_info "Source: $plugin_file"
+    ux_info "Output: $output_file"
+    echo ""
+    ux_info "Calling Claude to generate Korean summary..."
+    echo ""
+
+    # Generate Korean summary using Claude
+    claude -p "다음 에이전트/스킬 파일을 한국어로 요약해줘. YAML 헤더와 주요 기능들을 포함해서 마크다운 형식으로 작성해줘. 번역은 정확하고 전문적이어야 해. 그리고 [원본 파일] 섹션에 원본 파일 경로를 추가해줘.
+
+원본 파일 내용:
+\`\`\`
+$(cat "$plugin_file")
+\`\`\`" > "$output_file"
+
+    if [ $? -eq 0 ]; then
+        ux_success "Korean documentation generated"
+        echo ""
+        ux_section "Output File"
+        ls -lh "$output_file"
+        echo ""
+        ux_info "Preview (first 30 lines):"
+        head -30 "$output_file"
+    else
+        ux_error "Failed to generate documentation"
+        return 1
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════
+
+create_plugin_structure_ko() {
+    local marketplace="$1"
+    local plugin_path="$2"
+
+    if [ -z "$marketplace" ] || [ -z "$plugin_path" ]; then
+        ux_header "create_plugin_structure_ko"
+        ux_usage "create_plugin_structure_ko" "<marketplace> <plugin-path>" "Create directory structure and generate Korean docs"
+        ux_bullet "Example: ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
+        return 1
+    fi
+
+    local docs_base="$HOME/.claude/docs/marketplaces/$marketplace"
+    local plugins_base="$HOME/.claude/plugins/marketplaces/$marketplace"
+    local source_file="$plugins_base/$plugin_path"
+    local output_file="$docs_base/$plugin_path"
+    output_file="${output_file%.md}_KO.md"
+
+    if [ ! -f "$source_file" ]; then
+        ux_error "Plugin file not found: $source_file"
+        return 1
+    fi
+
+    ux_header "Creating Plugin Documentation Structure"
+    echo ""
+
+    # Create directory structure
+    output_dir=$(dirname "$output_file")
+    mkdir -p "$output_dir"
+    ux_success "Created directory: $output_dir"
+    echo ""
+
+    # Generate Korean documentation
+    generate_plugin_doc_ko "$source_file" "$output_file"
+
+    echo ""
+    ux_section "Next Steps"
+    ux_bullet "Review generated file: ${UX_CODE}code $output_file${UX_RESET}"
+    ux_bullet "Add personal notes: ${UX_CODE}code ${output_file%.md}_NOTES.md${UX_RESET}"
+    ux_bullet "Commit to git: ${UX_CODE}cd ~/dotfiles && git add claude/docs/ && git commit -m 'docs: Add Korean summary...'${UX_RESET}"
+}
+
+# ═══════════════════════════════════════════════════════════════
+
 claude_plugins_help() {
     ux_header "Claude Marketplace Plugins Management"
     echo ""
@@ -235,15 +333,32 @@ claude_plugins_help() {
     ux_bullet "Usage: ${UX_CODE}view_plugin_info algorithmic-art${UX_RESET}"
     echo ""
 
+    ux_highlight "generate_plugin_doc_ko <source-file> <output-file>"
+    ux_info "Generate Korean documentation from plugin file using Claude"
+    ux_bullet "Usage: ${UX_CODE}generate_plugin_doc_ko ~/.claude/plugins/[path]/file.md ~/.claude/docs/[path]/file_KO.md${UX_RESET}"
+    echo ""
+
+    ux_highlight "create_plugin_structure_ko <marketplace> <plugin-path>"
+    ux_info "Create structure and generate Korean docs in one command"
+    ux_bullet "Usage: ${UX_CODE}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
+    echo ""
+
     ux_section "Documentation Workflow"
     ux_bullet "1. ${UX_CODE}init_plugins_docs${UX_RESET} - Initialize documentation directory"
     ux_bullet "2. ${UX_CODE}open_claude_plugins${UX_RESET} - Review plugin descriptions"
-    ux_bullet "3. ${UX_CODE}sync_plugins_structure${UX_RESET} - Create structure for translations"
-    ux_bullet "4. Create Korean README.md files in ~/.claude/docs/marketplaces/"
-    ux_bullet "5. Use Claude Code to help with translations"
-    ux_bullet "6. Commit changes to ~/dotfiles/claude/docs/"
+    ux_bullet "3. ${UX_CODE}create_plugin_structure_ko <marketplace> <path>/${UX_RESET} - Generate Korean docs"
+    ux_bullet "4. Review and customize generated documentation"
+    ux_bullet "5. Commit changes to ~/dotfiles/claude/docs/"
 
     echo ""
+    ux_section "Directory Structure"
+    ux_info "Plugins (read-only):"
+    ux_bullet "~/.claude/plugins/marketplaces/[marketplace]/plugins/[plugin-name]/agents/[agent].md"
+    echo ""
+    ux_info "Documentation (git-tracked, mounted):"
+    ux_bullet "~/.claude/docs/marketplaces/[marketplace]/plugins/[plugin-name]/agents/[agent]_KO.md"
+    echo ""
+
     ux_section "Git Integration"
     ux_info "All documentation is mounted and automatically git-tracked:"
     ux_bullet "User location: ${UX_INFO}~/.claude/docs${UX_RESET} (via bind mount)"
