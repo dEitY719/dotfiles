@@ -239,18 +239,33 @@ generate_plugin_doc_ko() {
     local plugin_file="$1"
     local output_file="$2"
     local ai_tool="${3:-${CLAUDE_DOC_GENERATOR}}"
+    local force_overwrite=false
+
+    # Parse force flag from ai_tool parameter
+    if [ "$ai_tool" = "--force" ]; then
+        force_overwrite=true
+        ai_tool="${CLAUDE_DOC_GENERATOR}"
+    elif [[ "$ai_tool" == *"--force"* ]]; then
+        force_overwrite=true
+        ai_tool="${ai_tool//--force/}"
+        ai_tool="${ai_tool// /}"  # Remove extra spaces
+    fi
 
     if [ -z "$plugin_file" ] || [ -z "$output_file" ]; then
         ux_header "generate_plugin_doc_ko"
-        ux_usage "generate_plugin_doc_ko" "<source-file> <output-file> [ai-tool]" "Generate Korean summary from plugin file"
+        ux_usage "generate_plugin_doc_ko" "<source-file> <output-file> [ai-tool] [--force]" "Generate Korean summary from plugin file"
         ux_bullet "Example: ${UX_INFO}generate_plugin_doc_ko file.md output_KO.md${UX_RESET}"
         ux_bullet "With specific AI: ${UX_INFO}generate_plugin_doc_ko file.md output_KO.md gemini${UX_RESET}"
+        ux_bullet "Force overwrite: ${UX_INFO}generate_plugin_doc_ko file.md output_KO.md claude --force${UX_RESET}"
         echo ""
         ux_section "Available AI Tools"
-        ux_bullet "claude (default) - Anthropic Claude"
-        ux_bullet "gemini - Google Gemini"
-        ux_bullet "codex - OpenAI Codex"
-        ux_bullet "Other tools - Any CLI tool that accepts -p or --prompt"
+        ux_bullet "claude (default) - Anthropic Claude (uses -p flag)"
+        ux_bullet "gemini - Google Gemini (uses -p flag)"
+        ux_bullet "codex - Codex CLI (uses 'exec' subcommand)"
+        ux_bullet "Other tools - Any CLI tool that accepts -p, --prompt, exec, or positional argument"
+        echo ""
+        ux_section "Options"
+        ux_bullet "--force - Overwrite existing files (default: skip if exists)"
         echo ""
         ux_section "Override Default AI Tool"
         ux_bullet "Set environment variable: ${UX_CODE}export CLAUDE_DOC_GENERATOR=gemini${UX_RESET}"
@@ -260,6 +275,12 @@ generate_plugin_doc_ko() {
     if [ ! -f "$plugin_file" ]; then
         ux_error "Plugin file not found: $plugin_file"
         return 1
+    fi
+
+    # Check if output file already exists and skip if not forced
+    if [ -f "$output_file" ] && [ "$force_overwrite" != "true" ]; then
+        ux_info "File already exists (skipping): ${output_file##*/}"
+        return 0
     fi
 
     # Check if AI tool is available
@@ -274,6 +295,10 @@ generate_plugin_doc_ko() {
     output_dir=$(dirname "$output_file")
     mkdir -p "$output_dir"
 
+    if [ -f "$output_file" ] && [ "$force_overwrite" = "true" ]; then
+        ux_info "Overwriting existing file: ${output_file##*/}"
+    fi
+
     ux_header "Generating Korean Documentation"
     ux_info "Source: $plugin_file"
     ux_info "Output: $output_file"
@@ -283,7 +308,7 @@ generate_plugin_doc_ko() {
     echo ""
 
     # Generate Korean summary using the specified AI tool
-    # Support multiple prompt flag formats: -p, --prompt, --prompt=
+    # Support multiple prompt flag formats: -p, --prompt, positional argument
     local prompt_output
     prompt_output=$(_generate_plugin_doc_ko_prompt "$plugin_file")
 
@@ -293,8 +318,9 @@ generate_plugin_doc_ko() {
             "$ai_tool" -p "$prompt_output" > "$output_file" 2>&1
             ;;
         codex)
-            # Codex might use different flags
-            "$ai_tool" -p "$prompt_output" > "$output_file" 2>&1
+            # Codex uses 'exec' subcommand for non-interactive execution
+            # Use --output-last-message to capture only the AI response (not session info)
+            "$ai_tool" exec "$prompt_output" --output-last-message "$output_file" > /dev/null 2>&1
             ;;
         *)
             # Try common prompt flag patterns
@@ -302,9 +328,15 @@ generate_plugin_doc_ko() {
                 :  # Success
             elif "$ai_tool" --prompt "$prompt_output" > "$output_file" 2>&1; then
                 :  # Success
+            elif "$ai_tool" exec "$prompt_output" --output-last-message "$output_file" > /dev/null 2>&1; then
+                :  # Success (exec subcommand with output file)
+            elif "$ai_tool" exec "$prompt_output" > "$output_file" 2>&1; then
+                :  # Success (exec subcommand)
+            elif "$ai_tool" "$prompt_output" > "$output_file" 2>&1; then
+                :  # Success (positional argument)
             else
-                ux_error "Could not determine correct prompt flag for $ai_tool"
-                ux_info "Tried: -p and --prompt flags"
+                ux_error "Could not determine correct prompt format for $ai_tool"
+                ux_info "Tried: -p flag, --prompt flag, exec subcommand, and positional argument"
                 return 1
             fi
             ;;
@@ -427,12 +459,27 @@ process_plugin_directory_ko() {
     local marketplace="$1"
     local plugin_path="$2"
     local ai_tool="${3:-${CLAUDE_DOC_GENERATOR}}"
+    local force_overwrite=false
+
+    # Parse force flag from ai_tool parameter
+    if [ "$ai_tool" = "--force" ]; then
+        force_overwrite=true
+        ai_tool="${CLAUDE_DOC_GENERATOR}"
+    elif [[ "$ai_tool" == *"--force"* ]]; then
+        force_overwrite=true
+        ai_tool="${ai_tool//--force/}"
+        ai_tool="${ai_tool// /}"  # Remove extra spaces
+    fi
 
     if [ -z "$marketplace" ] || [ -z "$plugin_path" ]; then
         ux_header "process_plugin_directory_ko"
-        ux_usage "process_plugin_directory_ko" "<marketplace> <plugin-path/> [ai-tool]" "Recursively generate Korean docs for all files in directory"
+        ux_usage "process_plugin_directory_ko" "<marketplace> <plugin-path/> [ai-tool] [--force]" "Recursively generate Korean docs for all files in directory"
         ux_bullet "Example: ${UX_INFO}process_plugin_directory_ko claude-code-workflows plugins/code-refactoring/${UX_RESET}"
         ux_bullet "With Gemini: ${UX_INFO}process_plugin_directory_ko claude-code-workflows plugins/code-refactoring/ gemini${UX_RESET}"
+        ux_bullet "Force update: ${UX_INFO}process_plugin_directory_ko claude-code-workflows plugins/code-refactoring/ --force${UX_RESET}"
+        echo ""
+        ux_section "Options"
+        ux_bullet "--force - Overwrite all existing files (default: skip if exists)"
         return 1
     fi
 
@@ -472,6 +519,8 @@ process_plugin_directory_ko() {
 
     # Process each markdown file
     local success_count=0
+    local skipped_count=0
+    local failed_count=0
     for source_file in "${md_files[@]}"; do
         # Get relative path
         local relative_path="${source_file#$source_dir/}"
@@ -482,10 +531,26 @@ process_plugin_directory_ko() {
 
         # Generate Korean documentation
         ux_info "Processing: $relative_path"
-        if generate_plugin_doc_ko "$source_file" "$output_file" "$ai_tool" > /dev/null 2>&1; then
-            success_count=$((success_count + 1))
-            ux_bullet "✓ Generated: ${output_file##*/}"
+
+        # Build command with optional --force flag
+        local cmd_output
+        if [ "$force_overwrite" = "true" ]; then
+            cmd_output=$(generate_plugin_doc_ko "$source_file" "$output_file" "$ai_tool" --force 2>&1)
         else
+            cmd_output=$(generate_plugin_doc_ko "$source_file" "$output_file" "$ai_tool" 2>&1)
+        fi
+
+        if [ -f "$output_file" ]; then
+            # Check if it was skipped (file already exists, not forced)
+            if echo "$cmd_output" | grep -q "already exists (skipping)"; then
+                skipped_count=$((skipped_count + 1))
+                ux_bullet "⊘ Skipped (exists): ${output_file##*/}"
+            else
+                success_count=$((success_count + 1))
+                ux_bullet "✓ Generated: ${output_file##*/}"
+            fi
+        else
+            failed_count=$((failed_count + 1))
             ux_bullet "✗ Failed: $relative_path"
         fi
     done
@@ -494,7 +559,8 @@ process_plugin_directory_ko() {
     ux_section "Summary"
     ux_bullet "Total files: ${#md_files[@]}"
     ux_bullet "Generated: $success_count"
-    ux_bullet "Failed: $((${#md_files[@]} - success_count))"
+    ux_bullet "Skipped (exists): $skipped_count"
+    ux_bullet "Failed: $failed_count"
     echo ""
 
     # Generate README.md with directory summary
@@ -513,19 +579,34 @@ create_plugin_structure_ko() {
     local marketplace="$1"
     local plugin_path="$2"
     local ai_tool="${3:-${CLAUDE_DOC_GENERATOR}}"
+    local force_overwrite=false
+
+    # Parse force flag from ai_tool parameter
+    if [ "$ai_tool" = "--force" ]; then
+        force_overwrite=true
+        ai_tool="${CLAUDE_DOC_GENERATOR}"
+    elif [[ "$ai_tool" == *"--force"* ]]; then
+        force_overwrite=true
+        ai_tool="${ai_tool//--force/}"
+        ai_tool="${ai_tool// /}"  # Remove extra spaces
+    fi
 
     if [ -z "$marketplace" ] || [ -z "$plugin_path" ]; then
         ux_header "create_plugin_structure_ko"
-        ux_usage "create_plugin_structure_ko" "<marketplace> <plugin-path|plugin-path/> [ai-tool]" "Generate Korean docs for file or directory"
+        ux_usage "create_plugin_structure_ko" "<marketplace> <plugin-path|plugin-path/> [ai-tool] [--force]" "Generate Korean docs for file or directory"
         ux_bullet "Single file: ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
         ux_bullet "Full directory: ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/${UX_RESET}"
         ux_bullet "With Gemini: ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/ gemini${UX_RESET}"
+        ux_bullet "Force overwrite: ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/ --force${UX_RESET}"
         echo ""
         ux_section "Available AI Tools"
-        ux_bullet "claude (default) - Anthropic Claude"
-        ux_bullet "gemini - Google Gemini"
-        ux_bullet "codex - OpenAI Codex"
-        ux_bullet "Other tools - Any CLI tool that accepts -p or --prompt"
+        ux_bullet "claude (default) - Anthropic Claude (uses -p flag)"
+        ux_bullet "gemini - Google Gemini (uses -p flag)"
+        ux_bullet "codex - Codex CLI (uses 'exec' subcommand)"
+        ux_bullet "Other tools - Any CLI tool that accepts -p, --prompt, exec, or positional argument"
+        echo ""
+        ux_section "Options"
+        ux_bullet "--force - Overwrite existing files (default: skip if exists)"
         return 1
     fi
 
@@ -549,7 +630,11 @@ create_plugin_structure_ko() {
         echo ""
 
         # Generate Korean documentation with specified AI tool
-        generate_plugin_doc_ko "$source_path" "$output_file" "$ai_tool"
+        if [ "$force_overwrite" = "true" ]; then
+            generate_plugin_doc_ko "$source_path" "$output_file" "$ai_tool" --force
+        else
+            generate_plugin_doc_ko "$source_path" "$output_file" "$ai_tool"
+        fi
 
         echo ""
         ux_section "Next Steps"
@@ -559,7 +644,11 @@ create_plugin_structure_ko() {
 
     elif [ -d "$source_path" ]; then
         # Directory path - use recursive directory processing
-        process_plugin_directory_ko "$marketplace" "$plugin_path" "$ai_tool"
+        if [ "$force_overwrite" = "true" ]; then
+            process_plugin_directory_ko "$marketplace" "$plugin_path" "$ai_tool" --force
+        else
+            process_plugin_directory_ko "$marketplace" "$plugin_path" "$ai_tool"
+        fi
 
     else
         ux_error "Path not found: $source_path"
