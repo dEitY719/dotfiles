@@ -58,33 +58,93 @@ list_plugins() {
     echo ""
 
     local marketplace_count=0
+    local total_agents=0
+    local total_commands=0
     local total_skills=0
 
     for marketplace in "$plugins_dir"/*; do
-        if [ -d "$marketplace" ]; then
-            marketplace_name=$(basename "$marketplace")
-            marketplace_count=$((marketplace_count + 1))
-
-            # Count skills in this marketplace
-            local skills_dir="$marketplace/skills"
-            if [ -d "$skills_dir" ]; then
-                local skill_count
-                skill_count=$(find "$skills_dir" -maxdepth 1 -type d ! -name "skills" | wc -l)
-                total_skills=$((total_skills + skill_count))
-
-                ux_section "$marketplace_name"
-                ux_bullet "Path: ${UX_INFO}$marketplace${UX_RESET}"
-                ux_bullet "Skills: ${UX_HIGHLIGHT}$skill_count${UX_RESET}"
-            else
-                ux_section "$marketplace_name"
-                ux_warning "No skills directory found"
-            fi
-            echo ""
+        if [ ! -d "$marketplace" ]; then
+            continue
         fi
+
+        marketplace_name=$(basename "$marketplace")
+        marketplace_count=$((marketplace_count + 1))
+
+        ux_section "$marketplace_name"
+        ux_bullet "Path: ${UX_INFO}$marketplace${UX_RESET}"
+        echo ""
+
+        # Counters for this marketplace
+        local mp_agents=0
+        local mp_commands=0
+        local mp_skills=0
+
+        # Count direct category folders at marketplace level
+        if [ -d "$marketplace/agents" ]; then
+            mp_agents=$(find "$marketplace/agents" -maxdepth 1 -type f -name "*.md" 2>/dev/null | wc -l)
+            total_agents=$((total_agents + mp_agents))
+        fi
+
+        if [ -d "$marketplace/commands" ]; then
+            mp_commands=$(find "$marketplace/commands" -maxdepth 1 -type f -name "*.md" 2>/dev/null | wc -l)
+            total_commands=$((total_commands + mp_commands))
+        fi
+
+        if [ -d "$marketplace/skills" ]; then
+            mp_skills=$(find "$marketplace/skills" -maxdepth 1 -type d ! -name "skills" 2>/dev/null | wc -l)
+            total_skills=$((total_skills + mp_skills))
+        fi
+
+        # Check for plugins directory structure (nested plugins with their own agents/commands/skills)
+        if [ -d "$marketplace/plugins" ]; then
+            local plugin_count=0
+            local plugin_agents=0
+            local plugin_commands=0
+            local plugin_skills=0
+
+            # Count plugins
+            plugin_count=$(find "$marketplace/plugins" -maxdepth 1 -type d ! -name "plugins" 2>/dev/null | wc -l)
+
+            # Recursively count agents, commands, skills in all plugins
+            if [ "$plugin_count" -gt 0 ]; then
+                plugin_agents=$(find "$marketplace/plugins" -name "agents" -type d -exec find {} -maxdepth 1 -type f -name "*.md" \; 2>/dev/null | wc -l)
+                plugin_commands=$(find "$marketplace/plugins" -name "commands" -type d -exec find {} -maxdepth 1 -type f -name "*.md" \; 2>/dev/null | wc -l)
+                plugin_skills=$(find "$marketplace/plugins" -name "skills" -type d -exec find {} -maxdepth 1 -type d ! -name "skills" \; 2>/dev/null | wc -l)
+
+                mp_agents=$((mp_agents + plugin_agents))
+                mp_commands=$((mp_commands + plugin_commands))
+                mp_skills=$((mp_skills + plugin_skills))
+
+                total_agents=$((total_agents + plugin_agents))
+                total_commands=$((total_commands + plugin_commands))
+                total_skills=$((total_skills + plugin_skills))
+
+                ux_bullet "Plugins: ${UX_HIGHLIGHT}$plugin_count${UX_RESET}"
+            fi
+        fi
+
+        # Display counts for this marketplace
+        if [ "$mp_agents" -gt 0 ]; then
+            ux_bullet "Agents: ${UX_HIGHLIGHT}$mp_agents${UX_RESET}"
+        fi
+        if [ "$mp_commands" -gt 0 ]; then
+            ux_bullet "Commands: ${UX_HIGHLIGHT}$mp_commands${UX_RESET}"
+        fi
+        if [ "$mp_skills" -gt 0 ]; then
+            ux_bullet "Skills: ${UX_HIGHLIGHT}$mp_skills${UX_RESET}"
+        fi
+
+        if [ "$mp_agents" -eq 0 ] && [ "$mp_commands" -eq 0 ] && [ "$mp_skills" -eq 0 ]; then
+            ux_warning "No agents, commands, or skills found"
+        fi
+
+        echo ""
     done
 
     ux_section "Summary"
     ux_bullet "Total Marketplaces: ${UX_HIGHLIGHT}$marketplace_count${UX_RESET}"
+    ux_bullet "Total Agents: ${UX_HIGHLIGHT}$total_agents${UX_RESET}"
+    ux_bullet "Total Commands: ${UX_HIGHLIGHT}$total_commands${UX_RESET}"
     ux_bullet "Total Skills: ${UX_HIGHLIGHT}$total_skills${UX_RESET}"
 }
 
