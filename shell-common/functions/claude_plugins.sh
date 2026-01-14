@@ -23,9 +23,7 @@ init_plugins_docs() {
         }
     fi
 
-    mkdir -p "$docs_dir"
-
-    if [ $? -eq 0 ]; then
+    if mkdir -p "$docs_dir"; then
         ux_success "Documentation directory created"
         echo ""
         ux_section "Directory Structure"
@@ -70,7 +68,8 @@ list_plugins() {
             # Count skills in this marketplace
             local skills_dir="$marketplace/skills"
             if [ -d "$skills_dir" ]; then
-                local skill_count=$(find "$skills_dir" -maxdepth 1 -type d ! -name "skills" | wc -l)
+                local skill_count
+                skill_count=$(find "$skills_dir" -maxdepth 1 -type d ! -name "skills" | wc -l)
                 total_skills=$((total_skills + skill_count))
 
                 ux_section "$marketplace_name"
@@ -211,11 +210,15 @@ view_plugin_info() {
 # Can be overridden by: CLAUDE_DOC_GENERATOR=gemini, CLAUDE_DOC_GENERATOR=codex, etc.
 : "${CLAUDE_DOC_GENERATOR:=claude}"
 
+# Optional styling fallbacks (helps when shell uses `set -u`)
+: "${UX_HIGHLIGHT:=${UX_INFO-}}"
+: "${UX_CODE:=${UX_BOLD-}${UX_PRIMARY-}}"
+
 # Korean documentation generation prompt template
 _generate_plugin_doc_ko_prompt() {
     local plugin_file="$1"
 
-    cat << 'PROMPT_EOF'
+    cat <<'PROMPT_EOF'
 다음 에이전트/스킬 파일을 한국어로 요약해줘. 다음 요구사항을 따라줘:
 
 1. YAML 헤더 유지 (name, description, model 등)
@@ -230,7 +233,7 @@ PROMPT_EOF
 
     cat "$plugin_file"
 
-    cat << 'PROMPT_EOF'
+    cat <<'PROMPT_EOF'
 ```
 PROMPT_EOF
 }
@@ -238,18 +241,8 @@ PROMPT_EOF
 generate_plugin_doc_ko() {
     local plugin_file="$1"
     local output_file="$2"
-    local ai_tool="${3:-${CLAUDE_DOC_GENERATOR}}"
+    local ai_tool="${CLAUDE_DOC_GENERATOR}"
     local force_overwrite=false
-
-    # Parse force flag from ai_tool parameter
-    if [ "$ai_tool" = "--force" ]; then
-        force_overwrite=true
-        ai_tool="${CLAUDE_DOC_GENERATOR}"
-    elif [[ "$ai_tool" == *"--force"* ]]; then
-        force_overwrite=true
-        ai_tool="${ai_tool//--force/}"
-        ai_tool="${ai_tool// /}"  # Remove extra spaces
-    fi
 
     if [ -z "$plugin_file" ] || [ -z "$output_file" ]; then
         ux_header "generate_plugin_doc_ko"
@@ -272,6 +265,25 @@ generate_plugin_doc_ko() {
         return 1
     fi
 
+    # Parse optional args: [ai-tool] [--force]
+    shift 2
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --force)
+            force_overwrite=true
+            ;;
+        -h | --help)
+            ux_header "generate_plugin_doc_ko"
+            ux_usage "generate_plugin_doc_ko" "<source-file> <output-file> [ai-tool] [--force]" "Generate Korean summary from plugin file"
+            return 1
+            ;;
+        *)
+            ai_tool="$1"
+            ;;
+        esac
+        shift
+    done
+
     if [ ! -f "$plugin_file" ]; then
         ux_error "Plugin file not found: $plugin_file"
         return 1
@@ -284,7 +296,7 @@ generate_plugin_doc_ko() {
     fi
 
     # Check if AI tool is available
-    if ! command -v "$ai_tool" > /dev/null 2>&1; then
+    if ! command -v "$ai_tool" >/dev/null 2>&1; then
         ux_error "AI tool not found or not in PATH: $ai_tool"
         ux_info "Make sure '$ai_tool' is installed and available in your PATH"
         ux_info "Or specify a different AI tool with: generate_plugin_doc_ko <source> <output> <tool>"
@@ -292,6 +304,7 @@ generate_plugin_doc_ko() {
     fi
 
     # Create output directory if not exists
+    local output_dir
     output_dir=$(dirname "$output_file")
     mkdir -p "$output_dir"
 
@@ -310,39 +323,45 @@ generate_plugin_doc_ko() {
     # Generate Korean summary using the specified AI tool
     # Support multiple prompt flag formats: -p, --prompt, positional argument
     local prompt_output
-    prompt_output=$(_generate_plugin_doc_ko_prompt "$plugin_file")
-
+    local rc=0
     case "$ai_tool" in
-        claude|gemini)
-            # These tools use -p flag
-            "$ai_tool" -p "$prompt_output" > "$output_file" 2>&1
-            ;;
-        codex)
-            # Codex uses 'exec' subcommand for non-interactive execution
-            # Use --output-last-message to capture only the AI response (not session info)
-            "$ai_tool" exec "$prompt_output" --output-last-message "$output_file" > /dev/null 2>&1
-            ;;
-        *)
-            # Try common prompt flag patterns
-            if "$ai_tool" -p "$prompt_output" > "$output_file" 2>&1; then
-                :  # Success
-            elif "$ai_tool" --prompt "$prompt_output" > "$output_file" 2>&1; then
-                :  # Success
-            elif "$ai_tool" exec "$prompt_output" --output-last-message "$output_file" > /dev/null 2>&1; then
-                :  # Success (exec subcommand with output file)
-            elif "$ai_tool" exec "$prompt_output" > "$output_file" 2>&1; then
-                :  # Success (exec subcommand)
-            elif "$ai_tool" "$prompt_output" > "$output_file" 2>&1; then
-                :  # Success (positional argument)
-            else
-                ux_error "Could not determine correct prompt format for $ai_tool"
-                ux_info "Tried: -p flag, --prompt flag, exec subcommand, and positional argument"
-                return 1
-            fi
-            ;;
+    claude | gemini)
+        # These tools use -p flag
+        prompt_output=$(_generate_plugin_doc_ko_prompt "$plugin_file")
+        "$ai_tool" -p "$prompt_output" >"$output_file" 2>&1
+        rc=$?
+        ;;
+    codex)
+        # Codex uses 'exec' subcommand for non-interactive execution
+        # Use --output-last-message to capture only the AI response (not session info)
+        _generate_plugin_doc_ko_prompt "$plugin_file" | "$ai_tool" exec --output-last-message "$output_file" - >/dev/null 2>&1
+        rc=$?
+        ;;
+    *)
+        # Try common prompt flag patterns
+        prompt_output=$(_generate_plugin_doc_ko_prompt "$plugin_file")
+        if "$ai_tool" -p "$prompt_output" >"$output_file" 2>&1; then
+            : # Success
+        elif "$ai_tool" --prompt "$prompt_output" >"$output_file" 2>&1; then
+            : # Success
+        elif _generate_plugin_doc_ko_prompt "$plugin_file" | "$ai_tool" exec --output-last-message "$output_file" - >/dev/null 2>&1; then
+            : # Success (exec subcommand reading prompt from stdin)
+        elif "$ai_tool" exec --output-last-message "$output_file" "$prompt_output" >/dev/null 2>&1; then
+            : # Success (exec subcommand with output file + prompt arg)
+        elif "$ai_tool" exec "$prompt_output" >"$output_file" 2>&1; then
+            : # Success (exec subcommand)
+        elif "$ai_tool" "$prompt_output" >"$output_file" 2>&1; then
+            : # Success (positional argument)
+        else
+            ux_error "Could not determine correct prompt format for $ai_tool"
+            ux_info "Tried: -p flag, --prompt flag, exec subcommand, and positional argument"
+            return 1
+        fi
+        rc=$?
+        ;;
     esac
 
-    if [ $? -eq 0 ] && [ -s "$output_file" ]; then
+    if [ $rc -eq 0 ] && [ -s "$output_file" ]; then
         ux_success "Korean documentation generated"
         echo ""
         ux_section "Output File"
@@ -376,17 +395,18 @@ _generate_plugin_directory_readme_ko() {
     local ai_tool="$3"
 
     local readme_file="$docs_dir/README.md"
-    local plugin_name=$(basename "$plugin_dir")
+    local plugin_name
+    plugin_name=$(basename "$plugin_dir")
 
     ux_info "Generating directory summary: README.md"
 
     # Create header with basic info
-    cat > "$readme_file" << 'README_HEADER'
+    cat >"$readme_file" <<'README_HEADER'
 # 플러그인 폴더 구조 및 요약
 
 README_HEADER
 
-    echo "" >> "$readme_file"
+    echo "" >>"$readme_file"
 
     # Process each subdirectory and file
     local processed=0
@@ -396,31 +416,36 @@ README_HEADER
             continue
         fi
 
-        local category=$(basename "$category_dir")
+        local category
+        category=$(basename "$category_dir")
 
         # Count direct .md files
-        local file_count=$(find "$category_dir" -maxdepth 1 -type f -name "*.md" 2>/dev/null | wc -l)
+        local file_count
+        file_count=$(find "$category_dir" -maxdepth 1 -type f -name "*.md" 2>/dev/null | wc -l)
 
         # Count nested SKILL.md or AGENT.md files in subdirectories
-        local nested_count=$(find "$category_dir" -maxdepth 2 -type f \( -name "SKILL.md" -o -name "AGENT.md" \) 2>/dev/null | wc -l)
+        local nested_count
+        nested_count=$(find "$category_dir" -maxdepth 2 -type f \( -name "SKILL.md" -o -name "AGENT.md" \) 2>/dev/null | wc -l)
 
         # Process only if there are files (direct or nested)
         if [ "$file_count" -gt 0 ] || [ "$nested_count" -gt 0 ]; then
             local total_files=$((file_count + nested_count))
-            echo "## $category ($total_files)" >> "$readme_file"
-            echo "" >> "$readme_file"
+            echo "## $category ($total_files)" >>"$readme_file"
+            echo "" >>"$readme_file"
 
             # List each direct .md file with its description
             for file in "$category_dir"/*.md; do
                 if [ -f "$file" ]; then
-                    local filename=$(basename "$file" .md)
-                    local description=$(_get_plugin_description "$file")
+                    local filename
+                    filename=$(basename "$file" .md)
+                    local description
+                    description=$(_get_plugin_description "$file")
 
                     if [ -z "$description" ]; then
                         description="[설명 없음]"
                     fi
 
-                    echo "- **$filename**: $description" >> "$readme_file"
+                    echo "- **$filename**: $description" >>"$readme_file"
                     processed=$((processed + 1))
                 fi
             done
@@ -428,7 +453,8 @@ README_HEADER
             # Process nested directories (like skills/category/SKILL.md or agents/category/AGENT.md)
             for nested_dir in "$category_dir"/*; do
                 if [ -d "$nested_dir" ]; then
-                    local nested_name=$(basename "$nested_dir")
+                    local nested_name
+                    nested_name=$(basename "$nested_dir")
 
                     # Check for SKILL.md, AGENT.md, or any .md file
                     local nested_file=""
@@ -442,29 +468,32 @@ README_HEADER
                     fi
 
                     if [ -f "$nested_file" ]; then
-                        local description=$(_get_plugin_description "$nested_file")
+                        local description
+                        description=$(_get_plugin_description "$nested_file")
 
                         if [ -z "$description" ]; then
                             description="[설명 없음]"
                         fi
 
-                        echo "  - **$nested_name**: $description" >> "$readme_file"
+                        echo "  - **$nested_name**: $description" >>"$readme_file"
                         processed=$((processed + 1))
                     fi
                 fi
             done
 
-            echo "" >> "$readme_file"
+            echo "" >>"$readme_file"
         fi
     done
 
     if [ $processed -gt 0 ]; then
-        echo "" >> "$readme_file"
-        echo "---" >> "$readme_file"
-        echo "" >> "$readme_file"
-        echo "*Generated: $(date '+%Y-%m-%d %H:%M:%S')*" >> "$readme_file"
-        echo "" >> "$readme_file"
-        echo "한국어 요약 및 세부 설명은 각 폴더의 \`*_KO.md\` 파일을 참고하세요." >> "$readme_file"
+        {
+            echo ""
+            echo "---"
+            echo ""
+            echo "*Generated: $(date '+%Y-%m-%d %H:%M:%S')*"
+            echo ""
+            echo "한국어 요약 및 세부 설명은 각 폴더의 \`*_KO.md\` 파일을 참고하세요."
+        } >>"$readme_file"
 
         ux_success "README.md generated successfully"
         return 0
@@ -479,18 +508,8 @@ README_HEADER
 process_plugin_directory_ko() {
     local marketplace="$1"
     local plugin_path="$2"
-    local ai_tool="${3:-${CLAUDE_DOC_GENERATOR}}"
+    local ai_tool="${CLAUDE_DOC_GENERATOR}"
     local force_overwrite=false
-
-    # Parse force flag from ai_tool parameter
-    if [ "$ai_tool" = "--force" ]; then
-        force_overwrite=true
-        ai_tool="${CLAUDE_DOC_GENERATOR}"
-    elif [[ "$ai_tool" == *"--force"* ]]; then
-        force_overwrite=true
-        ai_tool="${ai_tool//--force/}"
-        ai_tool="${ai_tool// /}"  # Remove extra spaces
-    fi
 
     if [ -z "$marketplace" ] || [ -z "$plugin_path" ]; then
         ux_header "process_plugin_directory_ko"
@@ -504,9 +523,28 @@ process_plugin_directory_ko() {
         return 1
     fi
 
+    # Parse optional args: [ai-tool] [--force]
+    shift 2
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --force)
+            force_overwrite=true
+            ;;
+        -h | --help)
+            ux_header "process_plugin_directory_ko"
+            ux_usage "process_plugin_directory_ko" "<marketplace> <plugin-path/> [ai-tool] [--force]" "Recursively generate Korean docs for all files in directory"
+            return 1
+            ;;
+        *)
+            ai_tool="$1"
+            ;;
+        esac
+        shift
+    done
+
     local docs_base="$HOME/.claude/docs/marketplaces/$marketplace"
     local plugins_base="$HOME/.claude/plugins/marketplaces/$marketplace"
-    local source_dir="${plugins_base}/${plugin_path%/}"  # Remove trailing slash if present
+    local source_dir="${plugins_base}/${plugin_path%/}" # Remove trailing slash if present
     local docs_dir="${docs_base}/${plugin_path%/}"
 
     if [ ! -d "$source_dir" ]; then
@@ -544,9 +582,10 @@ process_plugin_directory_ko() {
     local failed_count=0
     for source_file in "${md_files[@]}"; do
         # Get relative path
-        local relative_path="${source_file#$source_dir/}"
+        local relative_path="${source_file#"$source_dir"/}"
         local output_file="$docs_dir/${relative_path%.md}_KO.md"
-        local output_dir=$(dirname "$output_file")
+        local output_dir
+        output_dir=$(dirname "$output_file")
 
         mkdir -p "$output_dir"
 
@@ -599,18 +638,8 @@ process_plugin_directory_ko() {
 create_plugin_structure_ko() {
     local marketplace="$1"
     local plugin_path="$2"
-    local ai_tool="${3:-${CLAUDE_DOC_GENERATOR}}"
+    local ai_tool="${CLAUDE_DOC_GENERATOR}"
     local force_overwrite=false
-
-    # Parse force flag from ai_tool parameter
-    if [ "$ai_tool" = "--force" ]; then
-        force_overwrite=true
-        ai_tool="${CLAUDE_DOC_GENERATOR}"
-    elif [[ "$ai_tool" == *"--force"* ]]; then
-        force_overwrite=true
-        ai_tool="${ai_tool//--force/}"
-        ai_tool="${ai_tool// /}"  # Remove extra spaces
-    fi
 
     if [ -z "$marketplace" ] || [ -z "$plugin_path" ]; then
         ux_header "create_plugin_structure_ko"
@@ -631,6 +660,25 @@ create_plugin_structure_ko() {
         return 1
     fi
 
+    # Parse optional args: [ai-tool] [--force]
+    shift 2
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --force)
+            force_overwrite=true
+            ;;
+        -h | --help)
+            ux_header "create_plugin_structure_ko"
+            ux_usage "create_plugin_structure_ko" "<marketplace> <plugin-path|plugin-path/> [ai-tool] [--force]" "Generate Korean docs for file or directory"
+            return 1
+            ;;
+        *)
+            ai_tool="$1"
+            ;;
+        esac
+        shift
+    done
+
     local plugins_base="$HOME/.claude/plugins/marketplaces/$marketplace"
     local source_path="${plugins_base}/${plugin_path}"
 
@@ -645,7 +693,8 @@ create_plugin_structure_ko() {
         echo ""
 
         # Create directory structure
-        local output_dir=$(dirname "$output_file")
+        local output_dir
+        output_dir=$(dirname "$output_file")
         mkdir -p "$output_dir"
         ux_success "Created directory: $output_dir"
         echo ""
@@ -760,10 +809,10 @@ claude_plugins_help() {
 
     ux_section "Directory Structure"
     ux_info "Plugins (read-only marketplace):"
-    ux_bullet "~/.claude/plugins/marketplaces/[marketplace]/plugins/[plugin-name]/agents/[agent].md"
+    ux_bullet "\$HOME/.claude/plugins/marketplaces/[marketplace]/plugins/[plugin-name]/agents/[agent].md"
     echo ""
     ux_info "Documentation (git-tracked, mounted):"
-    ux_bullet "~/.claude/docs/marketplaces/[marketplace]/plugins/[plugin-name]/agents/"
+    ux_bullet "\$HOME/.claude/docs/marketplaces/[marketplace]/plugins/[plugin-name]/agents/"
     ux_bullet "  ├── [agent]_KO.md    (Korean summary, auto-generated)"
     ux_bullet "  └── README.md         (Learning notes, manual)"
     echo ""
