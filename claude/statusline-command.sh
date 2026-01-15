@@ -50,6 +50,9 @@ fi
 
 weekly_used=$(echo "$input" | jq -r '.context_window.weekly_percentage // ""')
 
+# Extract cost information from Claude Code
+total_cost=$(echo "$input" | jq -r '.cost.total_cost_usd // ""')
+
 # Get current time in YY-MM-DD HH:MM:SS format
 current_time=$(date +%y-%m-%d\ %H:%M:%S)
 current_hour=$(date +%H)
@@ -149,10 +152,33 @@ if [[ -n "$context_used" ]]; then
     fi
 fi
 
+# Format cost information with dynamic color coding
+cost_info=""
+cost_color="$GREEN"  # Default to green
+if [[ -n "$total_cost" ]] && [[ "$total_cost" != "null" ]]; then
+    # Determine color based on cost amount
+    # Green: $0-5, Orange: $5-20, Red: $20+
+    cost_numeric=$(printf "%.2f" "$total_cost" 2>/dev/null || echo "0")
+    cost_comparison=$(echo "$cost_numeric >= 20" | bc 2>/dev/null)
+
+    if [[ "$cost_comparison" == "1" ]]; then
+        cost_color="$RED"
+    else
+        cost_comparison=$(echo "$cost_numeric >= 5" | bc 2>/dev/null)
+        if [[ "$cost_comparison" == "1" ]]; then
+            cost_color="$ORANGE"
+        else
+            cost_color="$GREEN"
+        fi
+    fi
+
+    cost_info=" | ${cost_color}💰 \$$cost_numeric${RESET}"
+fi
+
 # Output format with colors and emojis
 # Time: Cyan, Model: Orange, Project+Branch: Magenta, Usage: Dynamic color (Red/Orange/Green)
 if [[ -n "$usage_info" ]]; then
-    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET} | ${usage_info}"
+    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET} | ${usage_info}${cost_info}"
 else
-    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET}"
+    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET}${cost_info}"
 fi
