@@ -32,6 +32,7 @@ gpustatus() {
     # 스크립트 실행 (현재 디렉토리 유지)
     bash "$gpu_script"
 }
+alias gpu-status='gpustatus'
 
 # GPU 간략 정보 (하드웨어 + 레이어 오프로드)
 # 사용 예: gpuinfo
@@ -85,6 +86,7 @@ gpuinfo() {
     ux_info "상세 정보: ${UX_BOLD}gpustatus${UX_RESET}"
     echo ""
 }
+alias gpu-info='gpuinfo'
 
 # ═══════════════════════════════════════════════════════════════
 # Ollama GPU Monitoring
