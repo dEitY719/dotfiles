@@ -7,6 +7,7 @@
 CYAN='\033[36m'
 ORANGE='\033[33m'
 GREEN='\033[32m'
+MAGENTA='\033[35m'
 RESET='\033[0m'
 
 # Read JSON input from stdin
@@ -16,6 +17,10 @@ input=$(cat)
 cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
 model_id=$(echo "$input" | jq -r '.model.id // ""')
 model_display=$(echo "$input" | jq -r '.model.display_name // ""')
+
+# Extract usage information from JSON input
+session_usage=$(echo "$input" | jq -r '.usage.session_percent // ""')
+week_usage=$(echo "$input" | jq -r '.usage.week_percent // ""')
 
 # Get current time in YY-MM-DD HH:MM:SS format
 current_time=$(date +%y-%m-%d\ %H:%M:%S)
@@ -94,6 +99,20 @@ fi
 # Combine project name with branch: "📁 quantfolio(🌳 main)"
 project_branch="📁 ${project_name}(${branch_emoji} ${git_branch})"
 
-# Output format with colors and emojis: 🌅 YY-MM-DD HH:MM:SS | 🐰 Haiku 4.5 | 📁 project(🌳 main)
-# Time: Cyan with emoji, Model: Orange with emoji, Project+Branch: Green with emojis
-printf "${CYAN}%s %s${RESET} | ${ORANGE}%s %s${RESET} | ${GREEN}%s${RESET}\n" "$time_emoji" "$current_time" "$model_emoji" "$model_name" "$project_branch"
+# Format usage information
+usage_info=""
+if [[ -n "$session_usage" ]]; then
+    if [[ -n "$week_usage" ]]; then
+        usage_info="📊 ${session_usage}% used (week: ${week_usage}%)"
+    else
+        usage_info="📊 ${session_usage}% used"
+    fi
+fi
+
+# Output format with colors and emojis
+# Time: Cyan, Model: Orange, Project+Branch: Green, Usage: Magenta
+if [[ -n "$usage_info" ]]; then
+    printf "${CYAN}%s %s${RESET} | ${ORANGE}%s %s${RESET} | ${GREEN}%s${RESET} | ${MAGENTA}%s${RESET}\n" "$time_emoji" "$current_time" "$model_emoji" "$model_name" "$project_branch" "$usage_info"
+else
+    printf "${CYAN}%s %s${RESET} | ${ORANGE}%s %s${RESET} | ${GREEN}%s${RESET}\n" "$time_emoji" "$current_time" "$model_emoji" "$model_name" "$project_branch"
+fi
