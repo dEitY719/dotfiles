@@ -33,8 +33,34 @@ total_input_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens /
 total_output_tokens=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
 context_window_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 
-# Use Claude Code's official used_percentage first (most accurate)
-context_used=$(echo "$input" | jq -r '.context_window.used_percentage // ""')
+# Prefer ccusage-based current usage percentage:
+# current_usage% = totalTokens / tokenLimitStatus.limit * 100
+context_used=""
+if command -v ccusage >/dev/null 2>&1; then
+    ccusage_json="$(ccusage blocks --active --token-limit max --json 2>/dev/null || true)"
+    if [[ -n "$ccusage_json" ]]; then
+        ccusage_pct="$(
+            echo "$ccusage_json" | jq -r '
+                if (.blocks | length) > 0
+                   and (.blocks[0].tokenLimitStatus.limit // 0) > 0
+                   and (.blocks[0].totalTokens // 0) >= 0
+                then
+                    ((.blocks[0].totalTokens / .blocks[0].tokenLimitStatus.limit) * 100)
+                else
+                    empty
+                end
+            ' 2>/dev/null
+        )"
+        if [[ -n "$ccusage_pct" ]] && [[ "$ccusage_pct" != "null" ]]; then
+            context_used="$(LC_ALL=C printf "%.0f" "$ccusage_pct" 2>/dev/null || true)"
+        fi
+    fi
+fi
+
+# Fallback: use Claude Code's official used_percentage
+if [[ -z "$context_used" ]] || [[ "$context_used" == "null" ]]; then
+    context_used=$(echo "$input" | jq -r '.context_window.used_percentage // ""')
+fi
 
 # If not available, calculate from token counts
 if [[ -z "$context_used" ]] || [[ "$context_used" == "null" ]]; then
@@ -44,11 +70,6 @@ if [[ -z "$context_used" ]] || [[ "$context_used" == "null" ]]; then
         context_used=$(( (total_tokens * 100) / context_window_size ))
     fi
 fi
-
-weekly_used=$(echo "$input" | jq -r '.context_window.weekly_percentage // ""')
-
-# Extract cost information from Claude Code
-total_cost=$(echo "$input" | jq -r '.cost.total_cost_usd // ""')
 
 # Get current time in YY-MM-DD HH:MM:SS format
 current_time=$(date +%y-%m-%d\ %H:%M:%S)
@@ -140,42 +161,13 @@ if [[ -n "$context_used" ]]; then
         usage_color="$GREEN"
     fi
 
-    if [[ -n "$weekly_used" ]]; then
-        # Show current usage with weekly context
-        usage_info="${usage_color}📊 ${context_used}% used | Weekly: ${weekly_used}%${RESET}"
-    else
-        # Show only current usage
-        usage_info="${usage_color}📊 ${context_used}% used${RESET}"
-    fi
-fi
-
-# Format cost information with dynamic color coding
-cost_info=""
-cost_color="$GREEN"  # Default to green
-if [[ -n "$total_cost" ]] && [[ "$total_cost" != "null" ]]; then
-    # Determine color based on cost amount
-    # Green: $0-5, Orange: $5-20, Red: $20+
-    cost_numeric=$(printf "%.2f" "$total_cost" 2>/dev/null || echo "0")
-    cost_comparison=$(echo "$cost_numeric >= 20" | bc 2>/dev/null)
-
-    if [[ "$cost_comparison" == "1" ]]; then
-        cost_color="$RED"
-    else
-        cost_comparison=$(echo "$cost_numeric >= 5" | bc 2>/dev/null)
-        if [[ "$cost_comparison" == "1" ]]; then
-            cost_color="$ORANGE"
-        else
-            cost_color="$GREEN"
-        fi
-    fi
-
-    cost_info=" | ${cost_color}💰 \$$cost_numeric${RESET}"
+    usage_info="${usage_color}📊 ${context_used}% used${RESET}"
 fi
 
 # Output format with colors and emojis
 # Time: Cyan, Model: Orange, Project+Branch: Magenta, Usage: Dynamic color (Red/Orange/Green)
 if [[ -n "$usage_info" ]]; then
-    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET} | ${usage_info}${cost_info}"
+    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET} | ${usage_info}"
 else
-    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET}${cost_info}"
+    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET}"
 fi
