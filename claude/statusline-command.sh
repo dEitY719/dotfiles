@@ -132,9 +132,9 @@ if [[ -n "$context_used" ]]; then
 fi
 
 # Output format with colors and emojis
-# Time: Cyan, Model: Orange, Project+Branch: Green, Usage: Dynamic color (Red/Orange/Green)
+# Time: Cyan, Model: Orange, Project+Branch: Magenta, Usage: Dynamic color (Red/Orange/Green)
 if [[ -n "$usage_info" ]]; then
-    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${GREEN}${project_branch}${RESET} | ${usage_info}"
+    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET} | ${usage_info}"
 else
-    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${GREEN}${project_branch}${RESET}"
+    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET}"
 fi
