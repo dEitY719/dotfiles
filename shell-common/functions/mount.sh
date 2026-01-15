@@ -27,19 +27,24 @@ mount_help() {
         ux_section "Available Commands"
         ux_bullet "addmnt <source> <target>    Create bind mount"
         ux_bullet "show_mnt [path]             Display mount status"
+        ux_bullet "claude_mount_all            Mount all Claude directories (skills, agents, docs)"
         ux_bullet "mount_help                  Show this help message"
         echo ""
 
         ux_section "Quick Examples"
-        ux_numbered 1 "View all Claude mounts:"
+        ux_numbered 1 "Mount all Claude directories at once:"
+        echo "  claude_mount_all"
+        echo ""
+
+        ux_numbered 2 "View all Claude mounts:"
         echo "  show_mnt"
         echo ""
 
-        ux_numbered 2 "View specific mount:"
+        ux_numbered 3 "View specific mount:"
         echo "  show_mnt ~/.claude/skills"
         echo ""
 
-        ux_numbered 3 "Add new bind mount:"
+        ux_numbered 4 "Add new bind mount:"
         echo "  addmnt ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/agents ~/.claude/agents"
         echo ""
 
@@ -59,18 +64,20 @@ Description:
   Manage bind mounts for Claude environment
 
 Available Commands:
-  addmnt <source> <target>    Create bind mount
-  show_mnt [path]             Display mount status
-  mount_help                  Show this help
+  addmnt <source> <target>       Create bind mount
+  show_mnt [path]                Display mount status
+  claude_mount_all               Mount all Claude directories (skills, agents, docs)
+  mount_help                     Show this help message
 
 Examples:
+  claude_mount_all                              Mount all Claude directories
   show_mnt                                      View all mounts
   show_mnt ~/.claude/skills                     View specific mount
   addmnt $DOTFILES_ROOT/claude/agents ~/.claude/agents  Add new mount
 
 Notes:
   - Requires sudo for mount operations
-  - Alias: show-mnt
+  - Alias: show-mnt, mount-help
 HELP
     fi
 }
