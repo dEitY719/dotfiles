@@ -1,0 +1,29 @@
+# OpenCode Configuration - HOME Environment
+# File: ~/.config/opencode/opencode.json
+#
+# This file is NOT needed for the home environment.
+# OpenCode uses its default configuration by default.
+#
+# If you want to customize your home environment, you can create
+# ~/.config/opencode/opencode.json with custom settings.
+#
+# Example: Using a custom LiteLLM endpoint for home development
+#
+# {
+#   "$schema": "https://opencode.ai/config.json",
+#   "provider": {
+#     "litellm": {
+#       "npm": "@ai-sdk/openai-compatible",
+#       "name": "LiteLLM Provider",
+#       "options": {
+#         "baseURL": "http://localhost:4444",
+#         "apiKey": "your-local-api-key"
+#       },
+#       "models": {
+#         "local-model": {
+#           "name": "local-model"
+#         }
+#       }
+#     }
+#   }
+# }

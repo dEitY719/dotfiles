@@ -1,0 +1,24 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "litellm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteLLM Provider",
+      "options": {
+        "baseURL": "http://ssai.samsungds.net:9090",
+        "apiKey": "925f1053996f6a679f40db2251d2d622a5263731"
+      },
+      "models": {
+        "GLM-4.6": {
+          "name": "GLM-4.6"
+        },
+        "gpt-oss-120b": {
+          "name": "gpt-oss-120b"
+        },
+        "DeepSeek-V3.2": {
+          "name": "DeepSeek-V3.2"
+        }
+      }
+    }
+  }
+}
