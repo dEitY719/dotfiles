@@ -33,19 +33,16 @@ total_input_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens /
 total_output_tokens=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
 context_window_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 
-# Calculate session usage: (input_tokens + output_tokens) / context_window * 100
-# This matches the /usage command's "Current session" percentage
-context_used=""
-if [[ "$total_input_tokens" =~ ^[0-9]+$ ]] && [[ "$total_output_tokens" =~ ^[0-9]+$ ]] && [[ "$context_window_size" -gt 0 ]]; then
-    total_tokens=$((total_input_tokens + total_output_tokens))
-    # Accurate percentage calculation with proper rounding
-    # Formula: round(total_tokens * 100 / context_window_size)
-    context_used=$(( (total_tokens * 100 + context_window_size / 2) / context_window_size ))
-fi
+# Use Claude Code's official used_percentage first (most accurate)
+context_used=$(echo "$input" | jq -r '.context_window.used_percentage // ""')
 
-# If calculation fails, fallback to used_percentage from Claude Code
-if [[ -z "$context_used" ]] || [[ "$context_used" == "0" && "$total_tokens" -gt 0 ]]; then
-    context_used=$(echo "$input" | jq -r '.context_window.used_percentage // ""')
+# If not available, calculate from token counts
+if [[ -z "$context_used" ]] || [[ "$context_used" == "null" ]]; then
+    if [[ "$total_input_tokens" =~ ^[0-9]+$ ]] && [[ "$total_output_tokens" =~ ^[0-9]+$ ]] && [[ "$context_window_size" -gt 0 ]]; then
+        total_tokens=$((total_input_tokens + total_output_tokens))
+        # Simple calculation: (total_tokens / context_window_size) * 100
+        context_used=$(( (total_tokens * 100) / context_window_size ))
+    fi
 fi
 
 weekly_used=$(echo "$input" | jq -r '.context_window.weekly_percentage // ""')
