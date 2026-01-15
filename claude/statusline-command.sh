@@ -28,8 +28,19 @@ cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
 model_id=$(echo "$input" | jq -r '.model.id // ""')
 model_display=$(echo "$input" | jq -r '.model.display_name // ""')
 
-# Extract context window usage percentage
-context_used=$(echo "$input" | jq -r '.context_window.used_percentage // ""')
+# Extract context window usage information
+total_input_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
+total_output_tokens=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
+context_window_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
+
+# Calculate actual usage percentage (excluding cache)
+if [[ "$total_input_tokens" =~ ^[0-9]+$ ]] && [[ "$context_window_size" -gt 0 ]]; then
+    total_tokens=$((total_input_tokens + total_output_tokens))
+    context_used=$(( (total_tokens * 100) / context_window_size ))
+else
+    context_used=$(echo "$input" | jq -r '.context_window.used_percentage // ""')
+fi
+
 weekly_used=$(echo "$input" | jq -r '.context_window.weekly_percentage // ""')
 
 # Get current time in YY-MM-DD HH:MM:SS format
