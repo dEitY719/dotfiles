@@ -28,8 +28,11 @@ alias cd_obsidian='cd /mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote'
 alias mkpara='mkdir -p para/{archive,area,project,resource}'
 alias cd_para='cd ~/para'
 
-# PROJECT directories
+# PARA directories
 alias cd_proj='cd ~/para/project'
 alias cd_area='cd ~/para/area'
 alias cd_resource='cd ~/para/resource'
 alias cd_archive='cd ~/para/archive'
+
+# PROJECT directories
+alias cd_rca='cd ~/para/archive/rca-knowledge'

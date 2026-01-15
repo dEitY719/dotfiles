@@ -131,10 +131,17 @@ _verify_models_loaded() {
         return 1
     fi
 
-    local configured_models
-    local loaded_models
-    mapfile -t configured_models < <(_get_configured_models)
-    mapfile -t loaded_models < <(_get_loaded_models)
+    local configured_models=()
+    local loaded_models=()
+
+    # POSIX 호환 방식으로 배열에 데이터 할당 (mapfile 대신 while read 사용)
+    while IFS= read -r model; do
+        [[ -n "$model" ]] && configured_models+=("$model")
+    done < <(_get_configured_models)
+
+    while IFS= read -r model; do
+        [[ -n "$model" ]] && loaded_models+=("$model")
+    done < <(_get_loaded_models)
 
     if [[ ${#loaded_models[@]} -eq 0 ]]; then
         ux_error "로드된 모델이 없습니다"

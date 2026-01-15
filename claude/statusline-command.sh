@@ -13,14 +13,23 @@ RESET='\033[0m'
 # Read JSON input from stdin
 input=$(cat)
 
+# Debug: Log full JSON to find weekly usage information
+{
+  echo "=== Full JSON Structure ==="
+  echo "$input" | jq . 2>/dev/null || echo "$input"
+  echo "=== Debug Info ==="
+  echo "Time: $(date)"
+  echo "---"
+} >> /tmp/statusline-weekly-debug.log 2>&1
+
 # Extract current directory and model from JSON input
 cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
 model_id=$(echo "$input" | jq -r '.model.id // ""')
 model_display=$(echo "$input" | jq -r '.model.display_name // ""')
 
-# Extract usage information from JSON input
-session_usage=$(echo "$input" | jq -r '.usage.session_percent // ""')
-week_usage=$(echo "$input" | jq -r '.usage.week_percent // ""')
+# Extract context window usage percentage
+context_used=$(echo "$input" | jq -r '.context_window.used_percentage // ""')
+weekly_used=$(echo "$input" | jq -r '.context_window.weekly_percentage // ""')
 
 # Get current time in YY-MM-DD HH:MM:SS format
 current_time=$(date +%y-%m-%d\ %H:%M:%S)
@@ -101,11 +110,13 @@ project_branch="📁 ${project_name}(${branch_emoji} ${git_branch})"
 
 # Format usage information
 usage_info=""
-if [[ -n "$session_usage" ]]; then
-    if [[ -n "$week_usage" ]]; then
-        usage_info="📊 ${session_usage}% used (week: ${week_usage}%)"
+if [[ -n "$context_used" ]]; then
+    if [[ -n "$weekly_used" ]]; then
+        # Show current usage with weekly context
+        usage_info="📊 ${context_used}% used | Weekly: ${weekly_used}%"
     else
-        usage_info="📊 ${session_usage}% used"
+        # Show only current usage
+        usage_info="📊 ${context_used}% used"
     fi
 fi
 
