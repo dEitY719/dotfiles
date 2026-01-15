@@ -134,7 +134,7 @@ fi
 # Output format with colors and emojis
 # Time: Cyan, Model: Orange, Project+Branch: Green, Usage: Dynamic color (Red/Orange/Green)
 if [[ -n "$usage_info" ]]; then
-    printf "${CYAN}%s %s${RESET} | ${ORANGE}%s %s${RESET} | ${GREEN}%s${RESET} | %s\n" "$time_emoji" "$current_time" "$model_emoji" "$model_name" "$project_branch" "$usage_info"
+    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${GREEN}${project_branch}${RESET} | ${usage_info}"
 else
-    printf "${CYAN}%s %s${RESET} | ${ORANGE}%s %s${RESET} | ${GREEN}%s${RESET}\n" "$time_emoji" "$current_time" "$model_emoji" "$model_name" "$project_branch"
+    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${GREEN}${project_branch}${RESET}"
 fi
