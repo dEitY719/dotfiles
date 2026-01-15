@@ -312,15 +312,11 @@ claude_mount_agents() {
     fi
 }
 
-# Auto-mount skills and agents on shell startup (opt-in only).
-# NOTE: Avoid side effects during shell init and during tests.
-if [ "${DOTFILES_TEST_MODE:-0}" != "1" ] && [ "${CLAUDE_AUTO_MOUNT_SKILLS:-0}" = "1" ]; then
-    claude_mount_skills >/dev/null 2>&1 || true
-fi
-
-if [ "${DOTFILES_TEST_MODE:-0}" != "1" ] && [ "${CLAUDE_AUTO_MOUNT_AGENTS:-0}" = "1" ]; then
-    claude_mount_agents >/dev/null 2>&1 || true
-fi
+# NOTE: Auto-mount functionality removed from shell init to prevent sudo prompts
+# during shell startup. Use explicit functions instead:
+#   claude_mount_skills   - Mount skills directory
+#   claude_mount_agents   - Mount agents directory
+#   claude_mount_docs     - Mount docs directory
 
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Documentation Directory Bind Mount
@@ -364,11 +360,56 @@ claude_mount_docs() {
     fi
 }
 
-# Auto-mount docs on shell startup (opt-in only).
-# NOTE: Avoid side effects during shell init and during tests.
-if [ "${DOTFILES_TEST_MODE:-0}" != "1" ] && [ "${CLAUDE_AUTO_MOUNT_DOCS:-0}" = "1" ]; then
-    claude_mount_docs >/dev/null 2>&1 || true
-fi
+# NOTE: Auto-mount functionality removed from shell init to prevent sudo prompts
+# during shell startup. Use explicit function instead:
+#   claude_mount_docs - Mount docs directory
+
+# ═══════════════════════════════════════════════════════════════
+# Claude Code Mount All Helper
+# ═══════════════════════════════════════════════════════════════
+
+# Mount all Claude directories at once (for manual initialization)
+claude_mount_all() {
+    ux_header "Claude Code Directory Mounts"
+
+    local mounted_count=0
+    local failed_count=0
+
+    # Try mounting skills
+    ux_info "Mounting skills directory..."
+    if claude_mount_skills; then
+        ux_success "skills directory mounted"
+        mounted_count=$((mounted_count + 1))
+    else
+        ux_warning "skills directory mount failed or already mounted"
+        failed_count=$((failed_count + 1))
+    fi
+
+    # Try mounting agents
+    ux_info "Mounting agents directory..."
+    if claude_mount_agents; then
+        ux_success "agents directory mounted"
+        mounted_count=$((mounted_count + 1))
+    else
+        ux_warning "agents directory mount failed or already mounted"
+        failed_count=$((failed_count + 1))
+    fi
+
+    # Try mounting docs
+    ux_info "Mounting docs directory..."
+    if claude_mount_docs; then
+        ux_success "docs directory mounted"
+        mounted_count=$((mounted_count + 1))
+    else
+        ux_warning "docs directory mount failed or already mounted"
+        failed_count=$((failed_count + 1))
+    fi
+
+    echo ""
+    ux_section "Summary"
+    echo "Successfully mounted: $mounted_count"
+    echo "Failed or already mounted: $failed_count"
+}
 
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Marketplace Plugins Management
