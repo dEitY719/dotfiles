@@ -7,6 +7,7 @@
 CYAN='\033[36m'
 ORANGE='\033[33m'
 GREEN='\033[32m'
+RED='\033[31m'
 MAGENTA='\033[35m'
 RESET='\033[0m'
 
@@ -108,22 +109,32 @@ fi
 # Combine project name with branch: "📁 quantfolio(🌳 main)"
 project_branch="📁 ${project_name}(${branch_emoji} ${git_branch})"
 
-# Format usage information
+# Format usage information and determine color based on usage percentage
 usage_info=""
+usage_color="$GREEN"  # Default to green
 if [[ -n "$context_used" ]]; then
+    # Determine color based on usage percentage
+    if ((context_used >= 90)); then
+        usage_color="$RED"
+    elif ((context_used >= 70)); then
+        usage_color="$ORANGE"
+    else
+        usage_color="$GREEN"
+    fi
+
     if [[ -n "$weekly_used" ]]; then
         # Show current usage with weekly context
-        usage_info="📊 ${context_used}% used | Weekly: ${weekly_used}%"
+        usage_info="${usage_color}📊 ${context_used}% used | Weekly: ${weekly_used}%${RESET}"
     else
         # Show only current usage
-        usage_info="📊 ${context_used}% used"
+        usage_info="${usage_color}📊 ${context_used}% used${RESET}"
     fi
 fi
 
 # Output format with colors and emojis
-# Time: Cyan, Model: Orange, Project+Branch: Green, Usage: Magenta
+# Time: Cyan, Model: Orange, Project+Branch: Green, Usage: Dynamic color (Red/Orange/Green)
 if [[ -n "$usage_info" ]]; then
-    printf "${CYAN}%s %s${RESET} | ${ORANGE}%s %s${RESET} | ${GREEN}%s${RESET} | ${MAGENTA}%s${RESET}\n" "$time_emoji" "$current_time" "$model_emoji" "$model_name" "$project_branch" "$usage_info"
+    printf "${CYAN}%s %s${RESET} | ${ORANGE}%s %s${RESET} | ${GREEN}%s${RESET} | %s\n" "$time_emoji" "$current_time" "$model_emoji" "$model_name" "$project_branch" "$usage_info"
 else
     printf "${CYAN}%s %s${RESET} | ${ORANGE}%s %s${RESET} | ${GREEN}%s${RESET}\n" "$time_emoji" "$current_time" "$model_emoji" "$model_name" "$project_branch"
 fi
