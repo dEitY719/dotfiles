@@ -28,39 +28,24 @@ cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
 model_id=$(echo "$input" | jq -r '.model.id // ""')
 model_display=$(echo "$input" | jq -r '.model.display_name // ""')
 
-# Extract context window size from JSON
+# Extract context window information from Claude Code input
+total_input_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
+total_output_tokens=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
 context_window_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 
-# Try to get accurate usage from ccusage blocks (active session)
+# Calculate session usage: (input_tokens + output_tokens) / context_window * 100
+# This matches the /usage command's "Current session" percentage
 context_used=""
-if command -v ccusage &> /dev/null; then
-    ccusage_data=$(ccusage blocks --live --json 2>/dev/null)
-    if [[ -n "$ccusage_data" ]]; then
-        # Extract the active block with isActive: true
-        active_block=$(echo "$ccusage_data" | jq '.[] | select(.isActive == true)' 2>/dev/null)
-        if [[ -n "$active_block" ]]; then
-            ccusage_input=$(echo "$active_block" | jq -r '.tokenCounts.inputTokens // 0' 2>/dev/null)
-            ccusage_output=$(echo "$active_block" | jq -r '.tokenCounts.outputTokens // 0' 2>/dev/null)
-            if [[ "$ccusage_input" =~ ^[0-9]+$ ]] && [[ "$ccusage_output" =~ ^[0-9]+$ ]] && [[ "$context_window_size" -gt 0 ]]; then
-                total_tokens=$((ccusage_input + ccusage_output))
-                # Calculate percentage with proper rounding
-                context_used=$(( (total_tokens * 100 + context_window_size / 2) / context_window_size ))
-            fi
-        fi
-    fi
+if [[ "$total_input_tokens" =~ ^[0-9]+$ ]] && [[ "$total_output_tokens" =~ ^[0-9]+$ ]] && [[ "$context_window_size" -gt 0 ]]; then
+    total_tokens=$((total_input_tokens + total_output_tokens))
+    # Accurate percentage calculation with proper rounding
+    # Formula: round(total_tokens * 100 / context_window_size)
+    context_used=$(( (total_tokens * 100 + context_window_size / 2) / context_window_size ))
 fi
 
-# Fallback to Claude Code's context_window data if ccusage fails
-if [[ -z "$context_used" ]]; then
-    total_input_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
-    total_output_tokens=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
-
-    if [[ "$total_input_tokens" =~ ^[0-9]+$ ]] && [[ "$context_window_size" -gt 0 ]]; then
-        total_tokens=$((total_input_tokens + total_output_tokens))
-        context_used=$(( (total_tokens * 100 + context_window_size / 2) / context_window_size ))
-    else
-        context_used=$(echo "$input" | jq -r '.context_window.used_percentage // ""')
-    fi
+# If calculation fails, fallback to used_percentage from Claude Code
+if [[ -z "$context_used" ]] || [[ "$context_used" == "0" && "$total_tokens" -gt 0 ]]; then
+    context_used=$(echo "$input" | jq -r '.context_window.used_percentage // ""')
 fi
 
 weekly_used=$(echo "$input" | jq -r '.context_window.weekly_percentage // ""')
