@@ -111,6 +111,83 @@ cp shell-common/env/proxy.local.example shell-common/env/proxy.local.sh
 npm-apply-config
 ```
 
+## 🔐 Secret Management with git-crypt
+
+This project uses **git-crypt** for transparent encryption of sensitive files (`.env`, API keys, credentials, etc.).
+
+### Overview
+
+- **Automatic encryption/decryption**: Files matching `.gitattributes` patterns are transparently encrypted in git
+- **Authentication options**: Symmetric keys or GPG-based authentication
+- **Works transparently**: `git clone`, `git pull`, `git push` automatically decrypt/encrypt files
+- **Secure storage**: Encrypted files are binary-safe in the repository; only authorized users can decrypt
+
+### Quick Start on a New PC
+
+**Option 1: Restore from backup key (Recommended)**
+
+```bash
+# After cloning the repository
+cd ~/dotfiles
+
+# Restore your backup key
+gcrestore
+
+# Verify decryption worked
+source ~/.bashrc  # Should load without errors
+echo $GEMINI_API_KEY  # Should show your API key
+```
+
+**Option 2: Manual unlock with symmetric key**
+
+```bash
+# If you have the backup key file from another PC
+git-crypt unlock .secrets/.dotfiles-backup-key.txt
+```
+
+### Backup & Recovery
+
+**Backup your key (on the PC with working git-crypt)**:
+
+```bash
+gcbackup
+# Creates: .secrets/.dotfiles-backup-key.txt (encrypted in git)
+```
+
+**Restore on a new PC**:
+
+```bash
+gcrestore
+# Automatically handles key transfer and restoration
+```
+
+### Troubleshooting
+
+- **`.env` shows "GITCRYPT..." header**: Repository is locked (keys don't match)
+- **`source ~/.bashrc` fails with syntax errors**: `.env` is still encrypted, run `gcrestore`
+- **`git-crypt unlock` fails**: GPG keys or symmetric key not available on this PC
+- **Multi-PC Recovery**: See [docs/abc-review-O.md](docs/abc-review-O.md) for detailed step-by-step procedures
+
+### How It Works
+
+1. `.gitattributes` marks files to encrypt:
+   ```
+   .env filter=git-crypt diff=git-crypt
+   .secrets/** filter=git-crypt diff=git-crypt
+   ```
+
+2. When you `git push`, git-crypt encrypts these files before storing in the repository
+
+3. When you `git pull` or `git clone`, git-crypt automatically decrypts (if you have the key)
+
+4. On your local machine, files are always plaintext and readable
+
+### Additional Resources
+
+- **[git-crypt documentation](https://github.com/AGWA/git-crypt)** - Official git-crypt docs
+- **[Multi-PC Recovery Guide](docs/abc-review-O.md)** - Detailed procedures for recovering git-crypt on another PC
+- **Shell commands**: `gc-help` for more git-crypt utilities
+
 ## 🛠️ Development
 
 ### Code Quality
