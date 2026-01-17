@@ -1,198 +1,127 @@
-# shell-common/*.sh SOLID & SSOT 리뷰 (CX)
-
-## 1) Reviewer Info
+# Reviewer Info
 
 - Reviewer: GPT-5.2 (Codex CLI)
-- Date: 2026-01-13
-- Scope: `shell-common/**/*.sh` 전체 (총 127개 파일, 16,429 LOC)
-- 목적: 동료 리뷰를 위한 개선 포인트/리스크 정리 (구현 여부 결정용)
+- Date: 2026-01-15
+- Scope: `git-crypt` + `.env` 로딩 실패(내부 PC) 원인 분석 및 복구 가이드, 관련 스크립트/로더 수정
 
-## 2) 구조 요약 (현재 관찰)
+# Project Structure Summary (관련 영역)
 
-- 로더 동작(중요): `bash/main.bash`, `zsh/main.zsh`에서 `shell-common/{env,aliases,functions,tools/integrations,projects}/*.sh`를 전부 `source`합니다. `tools/custom`는 “실행 전용”이라 로더가 자동 로드하지 않습니다.
-- 현재 구조(대체로 의도는 명확):
-  - `env/`: 환경변수/경로
-  - `aliases/`: 별칭
-  - `functions/`: 함수/커맨드
-  - `tools/integrations/`: 외부 도구 통합(자동 로드)
-  - `tools/custom/`: 설치/진단/유틸 스크립트(명시 실행)
-  - `projects/`: 프로젝트별 유틸(자동 로드)
-- “계약(Contract)” 불일치 징후:
-  - `shell-common/AGENTS.md`는 “POSIX 호환”을 강조하지만, 실제 `shell-common/**/*.sh`에는 bash 전용/의존 구현이 다수 존재합니다(예: `declare -A`, `mapfile`, `[[ ... ]]`, `BASH_SOURCE` 등).
-  - 또한 일부 `.local.sh`는 “값 정의”를 넘어 “상태 변경(파일 수정, npm config set 등)”까지 수행합니다.
+- `.env`: dotfiles 루트의 환경변수 파일 (git-crypt로 암호화 대상)
+- `.gitattributes`: `.env filter=git-crypt diff=git-crypt` 설정
+- `shell-common/env/dotenv.sh`: 로그인 시 `.env`를 자동 source
+- `shell-common/tools/integrations/git_crypt.sh`: `gcpush` 등 git-crypt 헬퍼
+- `shell-common/functions/gc_help.sh`: `gc-help` 문서/가이드 출력
 
-## 3) SOLID 평가 (각 10점 만점)
+# Incident Summary
 
-- SRP(단일 책임): 5/10
-  - 디렉터리 분리는 되어 있으나, “자동 로드 시점”에 파일/시스템 상태 변경을 수행하는 스크립트가 있어 책임 경계가 흐려집니다.
-- OCP(개방-폐쇄): 5/10
-  - 확장 지점(새 스크립트 추가)은 좋지만, 서비스/설정이 스크립트 내부 배열/하드코딩으로 박혀 있어 확장 시 코드 수정이 빈번합니다.
-- LSP(리스코프 치환): 7/10
-  - 래퍼/헬퍼는 대체로 원 명령의 기대 동작을 유지하나, 일부는 쉘/OS에 따라 “존재/부재”가 불명확합니다(동일 명령이 bash/zsh에서 다르게 동작할 가능성).
-- ISP(인터페이스 분리): 6/10
-  - 도움말/진단/설치가 분리된 곳도 있으나, 큰 통합 스크립트(예: DB, LLM, 도커)는 기능 폭이 넓습니다.
-- DIP(의존성 역전): 4/10
-  - `ux_lib`가 존재하지만 많은 스크립트가 여전히 `echo/printf` + 컬러 변수에 직접 의존하며, 일부는 로드 시 자동 설치/파일 갱신까지 수행합니다.
+내부 PC에서 `git pull` 이후 `source ~/.bashrc` 실행 시 아래 에러가 발생했습니다.
 
-총점(50점 만점): 27/50
+- `bash: /home/bwyoon/dotfiles/.env: line 1: syntax error near unexpected token ')'`
+- `.env` 1라인이 `GITCRYPT...`로 시작하는 “바이너리/난독화 문자열”로 보임
 
-## 3.1) 동료 피드백 반영 (G)
+이는 거의 확실하게 **repo가 `git-crypt lock` 상태(또는 unlock 불가 상태)에서 `.env`가 “암호문 그대로” 워킹트리에 존재하는데, 이를 bash가 그대로 `source` 하면서 파싱에 실패**한 케이스입니다.
 
-- 원칙 위반(또는 문서-현실 불일치)이 곧 “즉시 수정 필요”를 의미하지는 않습니다. 우선순위는 **운영 리스크/실제 버그 가능성** 중심으로 두는 것이 안전합니다.
-- 특히 “자동 로드 시점”에 발생하는 설치/권한/네트워크 의존 부작용과, `.local.sh`의 중복 로딩/상태 변경은 실제 장애·성능 저하로 이어질 수 있어 P0로 유지합니다.
-- 반면 경로 하드코딩, 프로젝트 로직 혼입, 디렉터리 계약(aliases/env에 함수) 등은 구조적으로는 개선 여지가 있지만, 현재 사용 패턴에서 문제가 보고되지 않았다면 **점진적 적용(P2~P3)**이 더 현실적일 수 있습니다.
-- 대규모 일괄 리팩토링은 버그 유입 가능성이 높으므로, 작은 단위로 변경하고 검증하며 진행하는 접근을 권장합니다.
+# Root Cause Analysis
 
-## 4) 이슈 (심각도별)
+## 원인 1: `.env`를 무조건 `source` 하는 로더
 
-### High
+`shell-common/env/dotenv.sh`가 `.env` 존재 여부만 확인하고 바로 `. "${DOTFILES_ROOT}/.env"`를 수행했습니다.
 
-#### H1. 자동 로드 시 “설치/권한 필요 작업” 수행 (SRP/DIP 위반 + 운영 리스크)
+- repo가 unlock 상태면 문제 없음 (워크트리에 평문이 존재)
+- repo가 lock 상태면 `.env`가 `GITCRYPT...` 헤더를 가진 암호문이며, `source` 시 문법 에러 발생
 
-- 근거:
-  - `shell-common/tools/integrations/claude.sh:46`에서 `ensure_jq()`가 `apt-get/brew/yum` 설치까지 수행하고,
-  - `shell-common/tools/integrations/claude.sh:78`에서 파일이 source될 때 `ensure_jq`를 자동 호출합니다.
-- 문제:
-  - 셸 시작 시 sudo/패키지 설치/네트워크 의존 작업이 트리거될 수 있어 예측 불가능/느린 초기화/권한 프롬프트 발생.
-  - CI/컨테이너/권한 제한 환경에서 “의도치 않은 설치 시도”가 초기화 실패로 연결될 수 있음.
-  - “통합(Integration)”은 정의/래핑에 집중하고, 설치는 `tools/custom/`에서 명시 실행이 더 안전합니다.
-- 권장:
-  - 자동 호출 제거(또는 최소 “경고만” 출력).
-  - `ensure_jq`는 `claude_init` 같은 명시 커맨드 실행 시에만 호출.
-  - 설치는 `clinstall`(이미 존재) 또는 `tools/custom/install_*.sh`로 통일.
+## 원인 2: 내부 PC에서 `git-crypt unlock` 실패 (GPG 개인키 부재)
 
-#### H2. `.local.sh` 로딩 순서/중복 로딩 문제 (SSOT/OCP 위반 + 사이드이펙트 중복)
+사용자 로그:
 
-- 현상 1: 로더는 `*.local.sh`도 glob에 포함해 먼저/같이 source합니다.
-  - 예: `bash/main.bash:154` ~ `bash/main.bash:186`
-  - 예: `zsh/main.zsh:103` ~ `zsh/main.zsh:148`
-- 추가 리스크: 파일명 정렬(glob) 기준으로 `security.local.sh`가 `security.sh`보다 먼저 로드되는 등 “base → local” 순서가 보장되지 않습니다.
-- 현상 2: 기본 스크립트가 다시 `.local.sh`를 source합니다.
-  - 예: `shell-common/env/proxy.sh:37` ~ `shell-common/env/proxy.sh:40`
-  - 예: `shell-common/env/security.sh:32` ~ `shell-common/env/security.sh:34`
-  - 예: `shell-common/tools/integrations/npm.sh:127` ~ `shell-common/tools/integrations/npm.sh:132`
-- 결과:
-  - `.local.sh`가 “값 정의만” 한다면 중복 로딩은 낭비 수준일 수 있지만,
-  - 실제로는 “상태 변경”이 있는 `.local.sh`도 존재하여(아래 H3), 중복 실행/순서 역전이 실질 버그로 이어질 수 있습니다.
-- 권장(택1, SSOT로 결정 필요):
-  - A) 로더에서 `*.local.sh`는 스킵하고, 각 기본 스크립트가 필요 시 “한 번만” 로드. (권장)
-  - B) 로더에서 “기본 파일 → local 파일” 순으로 두 단계 로드(예: `*.sh` 중 `.local.sh` 제외 후 로드, 그 다음 `.local.sh` 로드)하고, 기본 스크립트의 재-source 제거.
+- `git-crypt unlock` → `Error: no GPG secret key available to unlock this repository.`
 
-#### H3. `.local.sh`가 설정 “적용(Apply)”까지 수행 (SSOT/SRP 위반 + 셸 시작 비용/부작용)
+즉, repo의 `.git-crypt/keys/...*.gpg`에 등록된 “해당 키를 복호화할 수 있는” **GPG 개인키가 내부 PC에 없어서 unlock 자체가 불가능**한 상태였습니다.
 
-- 근거:
-  - `shell-common/tools/integrations/npm.local.sh:27` ~ `shell-common/tools/integrations/npm.local.sh:33`에서 `~/.npmrc`를 수정/삭제할 수 있고,
-  - `shell-common/tools/integrations/npm.local.sh:72` ~ `shell-common/tools/integrations/npm.local.sh:111`에서 `npm config set`을 수행합니다.
-- 문제:
-  - `.local.sh`의 역할이 “환경별 값 정의(SSOT)”인지 “적용 로직(절차)”인지 혼재.
-  - 셸 시작 시 node/npm 실행이 반복될 수 있어 성능과 예측 가능성이 떨어집니다.
-- 권장:
-  - `.local.sh`는 “값만 정의”(예: `NPM_DESIRED_*`)로 제한.
-  - 적용은 `setup.sh` 또는 `npm_apply_config` 같은 명시 커맨드로 분리.
-  - 진단 스크립트(`tools/custom/check_npm.sh`)는 텍스트 패턴 매칭 대신 “변수/명령 결과 기반”으로 판단(SSOT 재사용).
+## 원인 3: 헬퍼 스크립트가 잘못된 메타데이터 경로를 안내 (`.git/git-crypt`)
 
-#### H4. 하드코딩된 dotfiles 경로가 다수 존재 (SSOT 위반, 이식성 저하)
+`gcpush` 로그에서:
 
-- 관찰:
-  - `shell-common/**/*.sh`에서 `~/dotfiles` 및 `$HOME/dotfiles/...` 패턴이 광범위(예: 70+ 라인 수준)로 존재합니다.
-  - 예: `shell-common/functions/mytool.sh:8`, `shell-common/tools/integrations/codex.sh:33`, `shell-common/tools/integrations/docker.sh:476` 등.
-- 문제:
-  - 리포지토리 위치가 `~/dotfiles`가 아닐 때 즉시 깨짐.
-  - 동일 상수가 여러 곳에 분산(SSOT 위반).
-- 우선순위 메모(G 반영):
-  - 현재 설치 경로가 고정(`~/dotfiles`)이고 다른 경로 사용 계획이 없다면, 운영 리스크는 상대적으로 낮아 P2로 점진 적용하는 접근도 가능합니다.
-- 권장:
-  - 실행/로딩 시 이미 세팅되는 `DOTFILES_ROOT`, `SHELL_COMMON`를 “유일한 경로 SSOT”로 사용.
-  - 공통 헬퍼(예: `shell_common_resolve()` 또는 `dotfiles_root_resolve()`)를 하나로 두고 모든 래퍼가 이를 사용.
-  - `tools/custom/init.sh`의 “동적 DOTFILES_ROOT 탐지” 패턴을 `functions/`와 `tools/integrations/`에도 재사용하도록 일반화.
+- “`.git/git-crypt 디렉토리를 찾을 수 없습니다`”
+- “`rm -rf .git/git-crypt` 후 `git-crypt init`” 같은 복구 가이드
 
-#### H5. 공유 통합 스크립트에 프로젝트/환경 전용 로직 혼입 (SRP/OCP 위반)
+하지만 `git-crypt`의 공유/추적 메타데이터는 일반적으로 repo 루트의 **`.git-crypt/` (트래킹 대상)** 입니다.
+`.git/git-crypt`는 git의 내부 디렉토리이며 clone/pull로 공유되지도 않고, 스크립트가 이를 “정상성 체크”로 쓰면 **항상 오진**할 수 있습니다.
 
-- 예시:
-  - `shell-common/tools/integrations/litellm.sh:399` ~ `shell-common/tools/integrations/litellm.sh:400`에서 source 시점에 `_init_litellm_env`를 자동 실행(프로젝트 디렉터리 탐색/환경 변수 export).
-  - `shell-common/tools/integrations/mysql.sh`는 `services=(dmc_dev, dmc_test ...)` 등 특정 프로젝트 성격의 설정을 포함.
-  - `shell-common/aliases/disk_usage.sh:10`의 `src/database/data/*.sql`은 프로젝트 경로 가정.
-- 문제:
-  - “공유 레이어”가 특정 프로젝트/개인 환경에 강하게 결합되면, 다른 환경에서 불필요한 로딩/오동작/유지보수 부담이 증가.
-- 우선순위 메모(G 반영):
-  - 현재 사용 패턴이 단일 프로젝트 중심이고 충돌/혼란이 없다면, “완벽 분리”보다 “문제 발생 시 분리”가 비용 대비 안전할 수 있어 P2로 하향 가능합니다.
-- 권장:
-  - 프로젝트 전용은 `shell-common/projects/`로 이동(예: litellm, dmc 관련).
-  - `tools/integrations/`는 “도구 자체”의 일반 통합에 집중.
-  - source 시 자동 실행(디렉터리 탐색, 설정 파일 생성 등)은 “명시 커맨드 실행 시”로 지연.
+# Your Actions Review (의미/특이점)
 
-### Medium
+## `rm -rf .git/git-crypt`는 의미가 거의 없습니다
 
-#### M1. 디렉터리 계약 위반: `env/`에 함수, `aliases/`에 함수 포함 (SRP/구조 일관성)
+해당 경로는 git-crypt의 공유 메타데이터 경로가 아니므로, 없다고 해서 “손상”이라고 보기 어렵고, 삭제해도 근본 원인(내부 PC의 GPG 개인키 부재) 해결에 도움이 되지 않습니다.
 
-- 근거:
-  - `shell-common/env/path.sh:16`에 `clean_paths()` 함수 존재.
-  - `shell-common/aliases/core.sh:10`, `shell-common/aliases/directory.sh:11`, `shell-common/aliases/kill.sh:3` 등에서 함수 정의.
-- 문제:
-  - 로딩 순서/의존성 추적이 어려워지고 “어디에 무엇을 두어야 하는가” 규칙이 약해짐.
-- 권장:
-  - `aliases/`는 alias만 두고, 함수는 `functions/`로 이동 후 alias로 연결.
-  - `env/`는 export만 유지하고, `clean_paths`는 `functions/`로 분리하거나 로더에서 1회 실행하는 정책으로 명확화.
-  - (G 반영) 신규/수정 코드부터 규칙을 적용하고, 기존 코드는 “문제 발생 또는 대규모 정리 시”로 미루는 점진 접근이 안전합니다.
+## `git-crypt init`는 “기존 암호화 repo”에서는 위험합니다
 
-#### M2. “Auto-generated from bash/app/*”의 SSOT/재생성 파이프라인 불명확
+`git-crypt init`은 새로운 키를 생성/초기화합니다. 이미 `.env`가 암호화되어 운영 중인 repo에서 이를 다시 수행하면:
 
-- 근거: 아래 파일들이 헤더에 “Auto-generated”를 표기합니다.
-  - `shell-common/tools/integrations/{gpu,litellm,nvm,pyenv,python,uv,zsh}.sh`
-- 문제:
-  - 실제 생성 스크립트/검증(예: CI에서 diff 체크)이 없으면 원본과 산출물이 쉽게 드리프트(SSOT 붕괴).
-  - “SSOT가 bash/app인지 shell-common인지”가 불명확해 변경 규칙이 혼란스러움.
-- 권장:
-  - SSOT를 명확히 1곳으로 결정(권장: “공유 기능은 shell-common을 SSOT”).
-  - 생성이 필요하다면 `tools/custom/`에 “regen 스크립트”를 두고, `tox` 또는 CI에서 재생성 결과 diff가 없음을 보장.
-  - (G 반영) 실제 드리프트/유지보수 비용이 관측되지 않는다면, 파이프라인 구축은 “선택”으로 두고 필요 시에만 도입하는 것이 안전합니다.
+- 기존에 암호화되어 커밋된 파일들을 **원래 키로 복호화할 수 없게 만드는 방향**으로 문제를 키울 수 있습니다.
+- 특히 “unlock이 안 되는 상황”에서 init로 우회하는 것은, 장기적으로 다른 PC(External)와의 호환성을 깨뜨릴 수 있습니다.
 
-#### M3. 출력/UX 의존성 일관성 부족 (DIP 위반 + 유지보수 비용)
+이번 로그의 “Generating key...”는 **새 키를 만들었다는 신호**이므로, 내부/외부 PC 간에 키 일관성이 깨졌을 가능성을 강하게 시사합니다.
 
-- 관찰:
-  - `ux_lib`가 존재하지만 다수 스크립트가 `echo`/`printf` 및 컬러 변수 직접 조합으로 출력합니다.
-  - 예: `shell-common/functions/git.sh:78` ~ `shell-common/functions/git.sh:100`, `shell-common/tools/integrations/docker.sh:39` 등.
-- 문제:
-  - UX 일관성 저하 + 출력 스타일 변경 시 파편화.
-- 권장:
-  - “출력은 ux_lib만 사용”을 실제 코드로 강제(예: `ux_blank`, `ux_code`, `ux_kv` 같은 최소 API 추가 후 기존 스크립트 점진 교체).
-  - (G 반영) 기능 리스크가 아니라 UX 품질 성격이므로, 신규/수정 시에만 점진 적용하는 편이 안전합니다.
+# Fix Implemented (Repo Changes)
 
-#### M4. 쉘/OS 호환성 계약이 문서와 다름 (SSOT: “지원 범위” 불일치)
+## 1) 잠긴(encrypted) `.env`를 source 하지 않도록 방어
 
-- 예:
-  - `shell-common/tools/integrations/postgresql.sh`는 `mapfile`, `declare -A`, bash 정규식 등 bash 전용 구현을 포함하지만 상단에 zsh/공유를 명확히 차단하지 않습니다(`shell-common/tools/integrations/postgresql.sh:11` ~ `shell-common/tools/integrations/postgresql.sh:40` 참고).
-  - `shell-common/functions/zsh.sh`는 `find -printf` 사용 등 GNU 의존이 있어 macOS에서 실패 가능성이 있습니다(`shell-common/functions/zsh.sh:50`).
-- 권장:
-  - “shell-common은 bash+zsh 공통(비-POSIX)”로 규정할지, “진짜 POSIX”로 갈지 결정.
-  - bash-only는 `tools/integrations/*`에서 명시 가드(`[ -n "$BASH_VERSION" ] || return 0`)로 조용히 스킵.
-  - GNU 의존은 OS 감지 또는 대체 구현 제공.
-  - (G 반영) 실제 지원 대상(예: Linux + bash/zsh)이 명확하고 다른 환경 이슈가 없다면, 문서를 현실에 맞게 조정하는 선택지도 있습니다.
+- 변경: `shell-common/env/dotenv.sh`
+- 내용: `.env`의 시작 바이트가 `GITCRYPT`로 보이면(잠김 상태), `source`를 건너뛰고 경고만 출력
 
-### Low
+효과:
+- `source ~/.bashrc` 시 `.env`가 암호문이어도 더 이상 bash 파싱 에러로 초기화가 깨지지 않음
 
-#### L1. 네이밍/스코프 관례가 혼재 (일관성/검색성 저하)
+## 2) git-crypt 가이드/헬퍼에서 잘못된 경로 `.git/git-crypt` 제거
 
-- 예:
-  - 함수명이 `snake_case`와 `kebab-case`가 혼재(예: `shell-common/tools/integrations/uv.sh:36`의 `uv-install()`).
-  - 일부 alias 파일에서 `PORT`, `PID` 같은 전역 변수를 사용(`shell-common/aliases/kill.sh:9` ~ `shell-common/aliases/kill.sh:14`).
-- 권장:
-  - 함수는 `snake_case`, 사용자 커맨드는 alias로 `kebab-case`를 제공하는 규칙을 일관되게 적용.
-  - 함수 내부 변수는 `local`로 한정.
+- 변경: `shell-common/tools/integrations/git_crypt.sh`
+- 변경: `shell-common/functions/gc_help.sh`
+- 내용:
+  - 체크/안내 경로를 `.git-crypt/` 기준으로 수정
+  - “기존 repo에서 `git-crypt init` 재실행”을 복구책으로 무심코 안내하지 않도록 문구를 안전하게 조정
 
-## 5) Action Items (우선순위)
+# Recovery Playbook (Internal PC 기준)
 
-- [ ] P0: 셸 초기화 시 자동 설치/권한 작업 제거 (`shell-common/tools/integrations/claude.sh:78` 등)
-- [ ] P0: `.local.sh` 로딩 정책 SSOT 확정 및 중복 로드 제거(로더/기본 스크립트 중 한쪽으로 정리)
-- [ ] P0: `.local.sh`는 “값 정의만” 하도록 정리하고, 적용은 명시 커맨드로 분리(`npm.local.sh` 우선)
-- [ ] P2: dotfiles 경로 SSOT를 `DOTFILES_ROOT`/`SHELL_COMMON`로 통일(하드코딩 제거; 신규/수정부터 점진 적용)
-- [ ] P2: 프로젝트 전용 로직은 충돌/혼란 발생 시 `projects/`로 이동(완벽 분리보다 “문제 발생 시 분리” 우선)
-- [ ] P3: `env/`/`aliases/`의 “함수 포함” 문제 정리(대규모 정리 시 또는 문제 발생 시)
-- [ ] 선택: “Auto-generated” 파이프라인 정식화(재생성 스크립트 + diff 체크; 드리프트가 관측될 때)
-- [ ] 선택: `ux_lib` 중심 출력으로 점진 정리(UX 개선 필요 시)
-- [ ] 선택: OS별 GNU 의존 제거/가드(find -printf 등; 실제 지원 범위 확정 후)
+## 목표: 내부 PC에서 repo를 정상 unlock 상태로 만들기
 
-## 6) 결론
+1. 외부 PC(이미 unlock 가능한 PC)에서 아래 중 하나를 준비
+   - (권장) GPG 개인키 export 후 내부 PC에 import
+   - 또는 symmetric key(export-key) 파일을 안전하게 전달
 
-- 현재 `shell-common/`은 “공유 레이어”라는 큰 방향성은 매우 좋지만, 실제 구현은 (1) 초기화 시점의 사이드이펙트, (2) `.local.sh` 로딩 정책, (3) dotfiles 경로 하드코딩으로 인해 SOLID/SSOT 관점 리스크가 커져 있습니다.
-- 동료 피드백(G) 기준으로는 “초기화 부작용 제거(P0)”와 “로딩/설정 SSOT 확정(P0)”에 우선 집중하고, 그 외 구조 개선은 실제 문제/수요가 있을 때 점진적으로 진행하는 편이 안전합니다.
+2. 내부 PC에서 unlock 수행
+   - GPG 방식: `git-crypt unlock`
+   - symmetric key 방식: `git-crypt unlock ~/repo-key.txt`
+
+3. 내부 PC의 새 GPG 키를 repo에 “추가”하려면 (이미 unlock 된 상태에서만 가능)
+   - `gpg --list-secret-keys --keyid-format=long`
+   - `git-crypt add-gpg-user <KEY_ID>`
+   - `git add .git-crypt/ && git commit && git push`
+
+# Severity-Grouped Issues
+
+## High
+
+- `.env` 자동 로딩이 lock 상태를 고려하지 않아, 로그인/쉘 초기화가 깨짐
+- `gcpush`/`gc_help`가 `.git/git-crypt`를 기준으로 “손상”을 오진하고, 위험한 재초기화(init)를 유도
+- 내부 PC에 GPG 개인키가 없으면 unlock이 불가 (운영/재현성 관점에서 치명적)
+
+## Medium
+
+- “unlock 실패”와 “초기화(init)”가 섞여 실행될 때, 내부/외부 PC 간 키 불일치로 장기 장애 가능
+
+## Low
+
+- `.env`에 실제 비밀 값이 존재하는 구조상, 디버깅/출력 시 유출 위험이 큼 (업무 PC/공유 로그 주의)
+
+# Action Items (Priority)
+
+- P0: 내부 PC에 기존 GPG 개인키 또는 symmetric key로 unlock 경로를 확립
+- P0: unlock 전에는 `git-crypt init` 재실행 금지 (새 키 생성으로 기존 암호문 복구 불가 위험)
+- P1: `gcbackup/gcrestore`(또는 별도 절차)로 “다른 PC에서 unlock 가능한 최소 요건”을 문서화/자동화
+- P2: `.env`는 평문 출력/preview를 기본적으로 금지하고(특히 자동 스크립트), 필요한 경우에만 opt-in
+
+# Conclusion
+
+이번 에러는 “잠긴 git-crypt 암호문 `.env`를 bash가 source한 것”이 직접 원인이며, 내부 PC에서 unlock이 실패한 것이 근본 원인입니다.
+로더는 잠긴 `.env`를 자동으로 건너뛰도록 수정했고, git-crypt 헬퍼/가이드의 잘못된 경로 안내를 바로잡았습니다.

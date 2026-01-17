@@ -295,18 +295,23 @@ gc_push_env() {
             return 1
         fi
     else
-        # Check git-crypt metadata integrity
-        local git_crypt_dir=".git/git-crypt"
+        # Check git-crypt repository metadata integrity (tracked)
+        local git_crypt_dir=".git-crypt"
         if [[ ! -d "$git_crypt_dir" ]]; then
-            ux_error "git-crypt 메타데이터가 손상되었습니다!"
-            ux_info ".git/git-crypt 디렉토리를 찾을 수 없습니다."
+            ux_error "git-crypt 메타데이터가 없습니다!"
+            ux_info ".git-crypt 디렉토리를 찾을 수 없습니다."
             echo ""
-            ux_section "💡 복구 방법"
-            ux_bullet "1단계: git-crypt를 초기화 (기존 암호화 설정 초기화)"
-            echo "  rm -rf .git/git-crypt"
+            ux_section "복구 가이드"
+            ux_bullet "새로 설정하는 리포지토리라면 (처음 1회만)"
             echo "  git-crypt init"
+            echo "  git-crypt add-gpg-user <KEY_ID>"
+            echo "  git add .git-crypt/ .gitattributes"
             echo ""
-            ux_bullet "2단계: 다시 실행"
+            ux_bullet "기존 암호화 리포지토리라면"
+            ux_info "→ .git-crypt/가 커밋되어 있어야 합니다. history/branch 상태를 확인하세요."
+            ux_info "→ 무심코 git-crypt init을 다시 하면 기존 암호문 복호화가 불가해질 수 있습니다."
+            echo ""
+            ux_bullet "다시 실행"
             echo "  gcpush"
             echo ""
             return 1
@@ -315,15 +320,10 @@ gc_push_env() {
         ux_success "git-crypt 메타데이터 확인됨"
         echo ""
 
-        # Check if repository is unlocked
-        local unlock_status
-        unlock_status=$(git-crypt status -f 2>&1)
-
-        if [[ $? -eq 0 ]]; then
-            ux_success "Repository는 unlocked 상태입니다."
-        else
+        # Check if .env is currently decrypted (locked repos keep encrypted bytes in the working tree)
+        if head -c 8 .env 2>/dev/null | LC_ALL=C grep -q "^GITCRYPT"; then
             ux_warning "Repository가 locked 상태입니다."
-            ux_info "복호화를 위해 git-crypt unlock 실행 중..."
+            ux_info "복호화를 위해 git-crypt unlock을 실행하세요."
             echo ""
 
             if git-crypt unlock; then
@@ -331,18 +331,18 @@ gc_push_env() {
             else
                 ux_error "git-crypt unlock 실패"
                 echo ""
-                ux_section "💡 해결 방법"
-                ux_bullet "상황 1: 처음 Team 프로젝트에 참여"
-                ux_info "→ 프로젝트 소유자가 당신의 GPG 키를 add-gpg-user로 추가 필요"
+                ux_section "해결 방법"
+                ux_bullet "내 PC에 해당 GPG 개인키가 없는 경우"
+                ux_info "→ 기존 PC에서 GPG 개인키를 export/import 하거나, symmetric key로 unlock 하세요."
                 echo ""
-                ux_bullet "상황 2: 예전에 설정했던 프로젝트"
-                ux_info "→ 프로젝트 소유자에게 key 파일 요청 후: git-crypt unlock ~/key.txt"
+                ux_bullet "symmetric key 예시 (소유자가 제공)"
+                echo "  git-crypt unlock ~/repo-key.txt"
                 echo ""
-                ux_bullet "상황 3: git-crypt 메타데이터 손상"
-                ux_info "→ rm -rf .git/git-crypt && git-crypt init && gcpush"
-                echo ""
+                ux_info "주의: 기존 암호화 리포지토리에서 git-crypt init 재실행은 매우 위험합니다."
                 return 1
             fi
+        else
+            ux_success "Repository는 unlocked 상태입니다."
         fi
     fi
     echo ""
@@ -352,9 +352,9 @@ gc_push_env() {
     # ========================================
     ux_section "Step 4/6: GPG 키 확인 및 추가"
 
-    # Check if GPG key is already added
-    if git-crypt status 2>/dev/null | grep -q "GPG User"; then
-        ux_success "GPG 키가 이미 추가되어 있습니다."
+    # Check if repository already has at least one git-crypt GPG key enrolled
+    if find .git-crypt/keys -type f -name "*.gpg" -print -quit 2>/dev/null | grep -q .; then
+        ux_success "리포지토리에 GPG 키가 이미 있습니다."
     else
         ux_warning "리포지토리에 GPG 키가 없습니다."
         ux_info "자동으로 GPG 키를 추가합니다..."
@@ -374,14 +374,14 @@ gc_push_env() {
             echo "  명령어: gpg --list-secret-keys"
             echo ""
             ux_bullet "확인 3: Repository 상태"
-            echo "  명령어: ls -la .git/git-crypt/"
+            echo "  명령어: ls -la .git-crypt/"
             echo ""
             ux_section "💡 복구 옵션"
             echo ""
-            ux_bullet "옵션 1: git-crypt 초기화 (권장 - 처음 설정인 경우)"
-            echo "  rm -rf .git/git-crypt"
+            ux_bullet "옵션 1: (처음 설정인 경우에만) git-crypt 초기화"
             echo "  git-crypt init"
-            echo "  gcpush"
+            echo "  git-crypt add-gpg-user <KEY_ID>"
+            echo "  git add .git-crypt/ .gitattributes"
             echo ""
             ux_bullet "옵션 2: 직접 GPG 키 추가"
             echo "  gpg --list-secret-keys --keyid-format=long"
@@ -913,11 +913,11 @@ gc_addme() {
             ux_section "💡 복구 방법"
             echo ""
             ux_bullet "1단계: 현재 상태 확인"
-            echo "  ls -la .git/git-crypt/"
+            echo "  ls -la .git-crypt/"
             echo "  git-crypt status"
             echo ""
             ux_bullet "2단계: git-crypt 재초기화"
-            echo "  rm -rf .git/git-crypt"
+            echo "  (주의) 기존 repo에서는 재초기화하지 마세요. 정말 처음 설정하는 경우에만:"
             echo "  git-crypt init"
             echo ""
             ux_bullet "3단계: 명령어 재실행"

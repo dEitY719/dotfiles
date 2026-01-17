@@ -99,7 +99,7 @@ gc_help() {
     echo ""
     echo "    2. 소유자가 repo에서 add-gpg-user 실행:"
     echo "       ${bold}소유자: git-crypt add-gpg-user YOUR_GPG_KEY_ID${reset}"
-    echo "       ${bold}소유자: git add .git/git-crypt/ && git commit && git push${reset}"
+    echo "       ${bold}소유자: git add .git-crypt/ && git commit && git push${reset}"
     echo ""
     echo "  ${bold}Step 2️⃣  (당신이 이후 실행)${reset}"
     echo "  ──────────────────────────────────"
