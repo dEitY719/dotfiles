@@ -81,26 +81,26 @@ create_config_dir() {
 generate_home_config() {
     local config_file="$HOME/.config/opencode/opencode.json"
 
-    if [ -f "$config_file" ]; then
-        ux_info "Config file already exists. Using existing configuration."
-        return 0
-    fi
-
     ux_info "Setting up home environment (using default LLM)..."
 
-    # For home, we don't need to create a custom config
-    # OpenCode uses its default configuration
-    ux_success "Home environment configured (using OpenCode defaults)"
+    # Create a minimal config for home environment using OpenCode defaults
+    cat > "$config_file" << 'EOF'
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "default": {
+      "name": "OpenCode Default Provider"
+    }
+  }
+}
+EOF
+    chmod 600 "$config_file"
+    ux_success "Home environment configured: $config_file"
 }
 
 # Generate opencode.json for external environment
 generate_external_config() {
     local config_file="$HOME/.config/opencode/opencode.json"
-
-    if [ -f "$config_file" ]; then
-        ux_info "Config file already exists. Using existing configuration."
-        return 0
-    fi
 
     ux_info "Setting up external environment with LiteLLM..."
 
@@ -132,11 +132,6 @@ EOF
 generate_internal_config() {
     local config_file="$HOME/.config/opencode/opencode.json"
 
-    if [ -f "$config_file" ]; then
-        ux_info "Config file already exists. Using existing configuration."
-        return 0
-    fi
-
     ux_info "Setting up internal environment with Samsung DS LiteLLM..."
 
     cat > "$config_file" << 'EOF'
@@ -148,7 +143,7 @@ generate_internal_config() {
       "name": "LiteLLM Provider",
       "options": {
         "baseURL": "http://ssai.samsungds.net:9090",
-        "apiKey": "925f1053996f6a679f40db2251d2d622a5263731"
+        "apiKey": "${SSAI_LLM_API_KEY}"
       },
       "models": {
         "GLM-4.6": {
@@ -244,11 +239,49 @@ main() {
     # ========================================
     ux_step "3/5" "Installing OpenCode CLI..."
 
-    ux_info "Installing OpenCode using official installer..."
-    if curl -fsSL -L https://opencode.ai/install | bash; then
-        ux_success "OpenCode installed successfully"
+    ux_info "Installing OpenCode using versioned approach (avoids GitHub API rate limits)..."
+    echo ""
+
+    # Create temp file for error capture
+    local install_log=$(mktemp)
+    local install_script=$(mktemp)
+
+    # Use explicit version for all environments (avoids GitHub API rate limit issues)
+    # Known stable versions: 1.0.180+
+    local opencode_version="1.0.180"
+
+    ux_info "Using OpenCode version: $opencode_version"
+    echo ""
+
+    # Download installer script with spinner
+    ux_with_spinner "Downloading OpenCode installer..." curl -fsSL -L https://opencode.ai/install -o "$install_script" 2>"$install_log"
+
+    if [ ! -f "$install_script" ] || [ ! -s "$install_script" ]; then
+        ux_error "Failed to download OpenCode installer."
+        ux_warning "Network error details:"
+        cat "$install_log" 2>/dev/null | sed 's/^/  /' || echo "  (No error details available)"
+        rm -f "$install_log" "$install_script"
+        exit 1
+    fi
+
+    echo ""
+
+    # Run installer with explicit version (bypasses GitHub API call) with spinner
+    ux_with_spinner "Installing OpenCode $opencode_version..." bash "$install_script" -v "$opencode_version" 2>"$install_log" >>"$install_log"
+
+    if [ $? -eq 0 ]; then
+        ux_success "OpenCode $opencode_version installed successfully"
+        rm -f "$install_log" "$install_script"
     else
         ux_error "OpenCode installation failed."
+        ux_warning "Installer error details:"
+        cat "$install_log" 2>/dev/null | sed 's/^/  /' || echo "  (No error details available)"
+        echo ""
+        ux_info "Troubleshooting:"
+        ux_bullet "Verify curl works: curl -I https://opencode.ai/install"
+        ux_bullet "Check GitHub releases: https://github.com/anomalyco/opencode/releases"
+        ux_bullet "For Internal PC: Verify proxy and firewall settings"
+        rm -f "$install_log" "$install_script"
         exit 1
     fi
     echo ""

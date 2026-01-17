@@ -6,7 +6,7 @@
       "name": "LiteLLM Provider",
       "options": {
         "baseURL": "http://ssai.samsungds.net:9090",
-        "apiKey": "925f1053996f6a679f40db2251d2d622a5263731"
+        "apiKey": "${SSAI_LLM_API_KEY}"
       },
       "models": {
         "GLM-4.6": {
