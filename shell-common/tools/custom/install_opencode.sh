@@ -229,28 +229,23 @@ main() {
     echo ""
 
     # ========================================
-    # Step 2: Check for Node.js and npm
+    # Step 2: Check for curl
     # ========================================
-    ux_step "2/5" "Checking for Node.js and npm..."
-    if ! ux_require "node"; then
-        ux_error "Node.js is required for OpenCode installation"
+    ux_step "2/5" "Checking for curl..."
+    if ! ux_require "curl"; then
+        ux_error "curl is required for OpenCode installation"
         exit 1
     fi
-    ux_success "Node.js is installed: $(node --version)"
-    if ! ux_require "npm"; then
-        ux_error "npm is required for OpenCode installation"
-        exit 1
-    fi
-    ux_success "npm is installed: $(npm --version)"
+    ux_success "curl is installed: $(curl --version | head -1)"
     echo ""
 
     # ========================================
     # Step 3: Install OpenCode CLI
     # ========================================
-    ux_step "3/5" "Installing OpenCode CLI (opencode-ai)..."
+    ux_step "3/5" "Installing OpenCode CLI..."
 
-    ux_info "Installing opencode-ai via npm..."
-    if npm install -g opencode-ai; then
+    ux_info "Installing OpenCode using official installer..."
+    if curl -fsSL -L https://opencode.ai/install | bash; then
         ux_success "OpenCode installed successfully"
     else
         ux_error "OpenCode installation failed."
