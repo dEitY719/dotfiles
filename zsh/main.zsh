@@ -67,7 +67,11 @@ safe_source() {
     fi
 
     # Attempt to source the file
-    if . "$file_path" 2>/dev/null; then
+    local source_error
+    source_error=$(. "$file_path" 2>&1)
+    local source_exit=$?
+
+    if [ $source_exit -eq 0 ]; then
         # Increment counter after successful source
         ((++SOURCED_FILES_COUNT))
         return 0
@@ -81,11 +85,17 @@ safe_source() {
             return 0
             ;;
         */tools/integrations/*|*/functions/*|*/env/*)
-            # Important files - report error
+            # Important files - report error with actual error details
             if type ux_error >/dev/null 2>&1; then
                 ux_error "${error_msg}: ${file_path}"
+                if [ -n "$source_error" ]; then
+                    echo "  Error details: ${source_error}" | head -1 >&2
+                fi
             else
                 echo "Error: ${error_msg}: ${file_path}" >&2
+                if [ -n "$source_error" ]; then
+                    echo "  Error details: ${source_error}" | head -1 >&2
+                fi
             fi
             return 1
             ;;
