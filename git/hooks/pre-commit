@@ -7,11 +7,14 @@
 # 2. Naming convention violations (dash-form in user-facing text)
 # 3. Function naming consistency (snake_case only)
 # 4. UX library usage consistency
+# 5. Subshell sourcing anti-pattern (source_var=$(. file)) [WARNING]
+# 6. Alias/Function name conflicts (same name as both alias and function) [BLOCKING]
+# 7. Wrapper function anti-pattern (function only calls other function) [WARNING]
 #
 # Performance: Optimized for staged files only (git diff --cached)
 # All checks run in single pass per file
 #
-# Reference: docs/abc-review-CX.md, docs/abc-review-G.md
+# Reference: docs/abc-review-CX.md, docs/abc-review-G.md, docs/analysis/2025-01-19-shell-function-propagation-issues.md
 
 set -e
 
@@ -36,9 +39,12 @@ TMPDIR="${TMPDIR:-/tmp}"
 VIOLATIONS_FILE=$(mktemp "$TMPDIR/violations_XXXXXX.txt")
 FUNC_VIOLATIONS_FILE=$(mktemp "$TMPDIR/func_violations_XXXXXX.txt")
 SHEBANG_VIOLATIONS_FILE=$(mktemp "$TMPDIR/shebang_violations_XXXXXX.txt")
+SUBSHELL_VIOLATIONS_FILE=$(mktemp "$TMPDIR/subshell_violations_XXXXXX.txt")
+ALIAS_CONFLICT_FILE=$(mktemp "$TMPDIR/alias_conflict_XXXXXX.txt")
+WRAPPER_VIOLATIONS_FILE=$(mktemp "$TMPDIR/wrapper_violations_XXXXXX.txt")
 
 # Ensure cleanup on exit (trap is essential for avoiding orphaned temp files)
-trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE"' EXIT
+trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$WRAPPER_VIOLATIONS_FILE"' EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Helper functions
@@ -150,6 +156,100 @@ check_ux_library_usage() {
     return 1
 }
 
+check_subshell_sourcing() {
+    local file="$1"
+
+    # Find pattern: variable=$(. file) or variable=$(source file)
+    # This breaks function/alias propagation
+    while IFS= read -r line_info; do
+        local line_num=$(echo "$line_info" | cut -d: -f1)
+        local line_text=$(echo "$line_info" | cut -d: -f2-)
+
+        # Extract the variable name for context
+        local var_name=$(echo "$line_text" | sed 's/.*\([a-z_][a-z0-9_]*\)\s*=\s*\$(.*/\1/')
+
+        echo "$file:$line_num: [WARNING] Subshell sourcing breaks function propagation: '${var_name}=\$(...)'
+  Fix: Use direct sourcing '. file' instead of '\${var_name}=\$(. file)'
+  Reference: https://github.com/bwyoon/dotfiles/blob/main/para/archive/rca-knowledge/docs/analysis/2025-01-19-shell-function-propagation-issues.md" >> "$SUBSHELL_VIOLATIONS_FILE"
+    done < <(grep -n '[a-z_][a-z0-9_]*\s*=\s*\$(' "$file" 2>/dev/null | grep -E '\.(sh|zsh|bash)\s*\)' || true)
+}
+
+check_alias_function_conflict() {
+    local file="$1"
+
+    # Extract all alias names
+    local alias_names=$(grep -o "^alias[[:space:]]*[a-z_-][a-z0-9_-]*=" "$file" 2>/dev/null | sed "s/.*alias[[:space:]]*\([^=]*\)=.*/\1/" | sort -u)
+
+    # Extract all function names
+    local func_names=$(grep -o "^[a-z_-][a-z0-9_-]*()[[:space:]]*{" "$file" 2>/dev/null | sed "s/(.*//;s/^[[:space:]]*//;s/[[:space:]]*$//" | sort -u)
+
+    # Find conflicts (same name in both alias and function)
+    if [ -n "$alias_names" ] && [ -n "$func_names" ]; then
+        while IFS= read -r alias_name; do
+            [ -z "$alias_name" ] && continue
+
+            # Normalize name (remove/convert dashes)
+            local normalized_alias="${alias_name//-/_}"
+
+            while IFS= read -r func_name; do
+                [ -z "$func_name" ] && continue
+                local normalized_func="${func_name//-/_}"
+
+                # Check if names conflict (exact or underscore/dash variant)
+                if [ "$alias_name" = "$func_name" ] || [ "$normalized_alias" = "$normalized_func" ]; then
+                    local alias_line=$(grep -n "^alias[[:space:]]*$alias_name=" "$file" 2>/dev/null | cut -d: -f1 | head -1)
+                    local func_line=$(grep -n "^$func_name()[[:space:]]*{" "$file" 2>/dev/null | cut -d: -f1 | head -1)
+
+                    echo "$file:$alias_line,$func_line: [BLOCKING] Alias/function name conflict: '$alias_name'
+  The same name exists as both:
+    - Alias (line $alias_line): alias $alias_name='...'
+    - Function (line $func_line): $func_name() { ... }
+  This causes parse errors on reload in zsh.
+  Fix: Use different names (e.g., alias 'my-cmd' and function 'my_cmd_impl')
+  Reference: https://github.com/bwyoon/dotfiles/blob/main/para/archive/rca-knowledge/docs/analysis/2025-01-19-shell-function-propagation-issues.md" >> "$ALIAS_CONFLICT_FILE"
+                fi
+            done <<< "$func_names"
+        done <<< "$alias_names"
+    fi
+}
+
+check_wrapper_function() {
+    local file="$1"
+
+    # Find functions that only call another function with same arguments
+    # Pattern: func() { other_func "$@" } or func() { other_func_name }
+    while IFS= read -r line_info; do
+        local line_num=$(echo "$line_info" | cut -d: -f1)
+        local line_text=$(echo "$line_info" | cut -d: -f2-)
+
+        # Extract function name
+        local func_name=$(echo "$line_text" | sed 's/^\s*\([a-z_-][a-z0-9_-]*\)().*/\1/')
+
+        # Look for the closing brace and extract body
+        local start_line=$line_num
+        local end_line=$(awk "NR>$start_line && /^[}]/ {print NR; exit}" "$file")
+        [ -z "$end_line" ] && end_line=$((start_line + 5))
+
+        # Get function body (strip braces and whitespace)
+        local body=$(sed -n "${start_line},$end_line p" "$file" | sed '1s/.*{\(.*\)/\1/;$s/\(.*\)}.*/\1/' | grep -v '^[[:space:]]*$' | head -1)
+
+        # Check if body is just a function call
+        if [[ "$body" =~ ^[[:space:]]*\$?\{?[a-z_-][a-z0-9_-]*\}?[[:space:]]*\"\$@\"[[:space:]]*$ ]] || \
+           [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*\"\$@\" ]] || \
+           [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*$ ]]; then
+
+            local called_func=$(echo "$body" | sed 's/.*\s*\([a-z_-][a-z0-9_-]*\).*/\1/')
+
+            echo "$file:$line_num: [WARNING] Wrapper function anti-pattern: '$func_name() { $called_func ... }'
+  This wrapper function only delegates to another function.
+  Consider removing the wrapper or using an alias:
+    - Option A: alias ${func_name}='${called_func}'
+    - Option B: Enhance the wrapper with additional logic
+  Reference: https://github.com/bwyoon/dotfiles/blob/main/para/archive/rca-knowledge/docs/analysis/2025-01-19-shell-function-propagation-issues.md" >> "$WRAPPER_VIOLATIONS_FILE"
+        fi
+    done < <(grep -n "^[a-z_-][a-z0-9_-]*()[[:space:]]*{" "$file" 2>/dev/null)
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Get staged files (git diff --cached)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -187,35 +287,56 @@ while IFS= read -r file; do
 done <<< "$STAGED_FILES"
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Part 2-4: Unified check for function files (single loop)
+# Part 2-7: Unified check for function files (single loop)
 # ═══════════════════════════════════════════════════════════════════════════
 
 naming_violations=0
 function_naming_violations=0
 ux_violations=0
+subshell_violations=0
+alias_conflict_violations=0
+wrapper_violations=0
 
 while IFS= read -r file; do
-    # Only check function files
-    [[ "$file" != shell-common/functions/*.sh ]] && continue
+    # Check both function files and integration tools
+    [[ "$file" != shell-common/functions/*.sh && "$file" != shell-common/tools/integrations/*.sh ]] && continue
     [[ "$file" == *NAMING_CONVENTION* ]] && continue
 
     full_path="$REPO_ROOT/$file"
     [ -f "$full_path" ] || continue
 
-    # Run all three checks in single pass (performance optimization)
-    # Check 1: Naming violations
-    if ! check_naming_violations "$full_path" 2>/dev/null; then
-        ((naming_violations++))
+    # Run all checks in single pass (performance optimization)
+    # Check 1: Naming violations (functions only)
+    if [[ "$file" == shell-common/functions/*.sh ]]; then
+        if ! check_naming_violations "$full_path" 2>/dev/null; then
+            ((naming_violations++))
+        fi
+
+        # Check 2: Function naming (functions only)
+        if ! check_function_naming "$full_path" 2>/dev/null; then
+            ((function_naming_violations++))
+        fi
+
+        # Check 3: UX library usage
+        if ! check_ux_library_usage "$full_path" 2>/dev/null; then
+            ((ux_violations++))
+        fi
     fi
 
-    # Check 2: Function naming
-    if ! check_function_naming "$full_path" 2>/dev/null; then
-        ((function_naming_violations++))
+    # Anti-pattern checks (all .sh files)
+    # Check 5: Subshell sourcing [WARNING]
+    if check_subshell_sourcing "$full_path" 2>/dev/null; then
+        [ -s "$SUBSHELL_VIOLATIONS_FILE" ] && ((subshell_violations++))
     fi
 
-    # Check 3: UX library usage
-    if ! check_ux_library_usage "$full_path" 2>/dev/null; then
-        ((ux_violations++))
+    # Check 6: Alias/Function conflicts [BLOCKING]
+    if check_alias_function_conflict "$full_path" 2>/dev/null; then
+        [ -s "$ALIAS_CONFLICT_FILE" ] && ((alias_conflict_violations++))
+    fi
+
+    # Check 7: Wrapper function anti-pattern [WARNING]
+    if check_wrapper_function "$full_path" 2>/dev/null; then
+        [ -s "$WRAPPER_VIOLATIONS_FILE" ] && ((wrapper_violations++))
     fi
 done <<< "$STAGED_FILES"
 
@@ -227,42 +348,92 @@ echo ""
 echo -e "${BLUE}Pre-commit validation (staged files only)${NC}"
 echo ""
 
-total_violations=$((shebang_violations + naming_violations + function_naming_violations))
+# Separate BLOCKING violations from WARNINGS
+blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations))
+warning_count=$((subshell_violations + wrapper_violations + ux_violations))
 
-if [ $total_violations -eq 0 ]; then
-    # Critical checks passed
-    if [ $ux_violations -gt 0 ]; then
-        echo -e "${YELLOW}⚠ UX Library suggestions ($ux_violations file(s)):${NC}"
-        echo "  Consider using UX functions for consistent output styling"
-        echo -e "${GREEN}✓ All critical checks passed${NC}"
+if [ $blocking_violations -eq 0 ]; then
+    # Blocking checks passed - show warnings if any
+    has_warnings=0
+
+    if [ $alias_conflict_violations -gt 0 ] && [ -s "$ALIAS_CONFLICT_FILE" ]; then
+        echo -e "${RED}✗ BLOCKING: Alias/Function name conflicts ($alias_conflict_violations file(s)):${NC}"
+        cat "$ALIAS_CONFLICT_FILE" | sed 's/^/  /'
         echo ""
-    else
-        echo -e "${GREEN}✓ All checks passed!${NC}"
-        echo ""
+        exit 1
     fi
+
+    if [ $subshell_violations -gt 0 ] && [ -s "$SUBSHELL_VIOLATIONS_FILE" ]; then
+        echo -e "${YELLOW}⚠ [WARNING] Subshell sourcing anti-pattern ($subshell_violations violation(s)):${NC}"
+        head -n 3 "$SUBSHELL_VIOLATIONS_FILE" | sed 's/^/  /'
+        [ $(wc -l < "$SUBSHELL_VIOLATIONS_FILE") -gt 3 ] && echo "  ... and more" && echo ""
+        echo ""
+        has_warnings=1
+    fi
+
+    if [ $wrapper_violations -gt 0 ] && [ -s "$WRAPPER_VIOLATIONS_FILE" ]; then
+        echo -e "${YELLOW}⚠ [WARNING] Wrapper function anti-patterns ($wrapper_violations violation(s)):${NC}"
+        head -n 3 "$WRAPPER_VIOLATIONS_FILE" | sed 's/^/  /'
+        [ $(wc -l < "$WRAPPER_VIOLATIONS_FILE") -gt 3 ] && echo "  ... and more" && echo ""
+        echo ""
+        has_warnings=1
+    fi
+
+    if [ $ux_violations -gt 0 ]; then
+        echo -e "${YELLOW}⚠ [INFO] UX Library suggestions ($ux_violations file(s)):${NC}"
+        echo "  Consider using UX functions for consistent output styling"
+        echo ""
+        has_warnings=1
+    fi
+
+    if [ $has_warnings -eq 0 ]; then
+        echo -e "${GREEN}✓ All checks passed!${NC}"
+    else
+        echo -e "${GREEN}✓ All critical checks passed (with warnings above)${NC}"
+    fi
+    echo ""
     exit 0
 else
-    # Report violations
-    echo -e "${RED}✗ Found $total_violations critical violation(s)${NC}"
+    # BLOCKING violations found - report and fail
+    echo -e "${RED}✗ Found $blocking_violations BLOCKING violation(s)${NC}"
     echo ""
 
+    if [ $alias_conflict_violations -gt 0 ] && [ -s "$ALIAS_CONFLICT_FILE" ]; then
+        echo -e "${RED}[BLOCKING] Alias/Function name conflicts ($alias_conflict_violations):${NC}"
+        cat "$ALIAS_CONFLICT_FILE" | sed 's/^/  /'
+        echo ""
+    fi
+
     if [ $shebang_violations -gt 0 ] && [ -s "$SHEBANG_VIOLATIONS_FILE" ]; then
-        echo -e "${RED}Shebang violations ($shebang_violations):${NC}"
+        echo -e "${RED}[BLOCKING] Shebang violations ($shebang_violations):${NC}"
         cat "$SHEBANG_VIOLATIONS_FILE" | sed 's/^/  /'
         echo ""
     fi
 
     if [ $naming_violations -gt 0 ] && [ -s "$VIOLATIONS_FILE" ]; then
-        echo -e "${RED}Naming convention violations ($naming_violations):${NC}"
+        echo -e "${RED}[BLOCKING] Naming convention violations ($naming_violations):${NC}"
         echo "  User-facing text must use dash-form, not snake_case:"
         tail -n 5 "$VIOLATIONS_FILE" | sed 's/^/  /'
         echo ""
     fi
 
     if [ $function_naming_violations -gt 0 ] && [ -s "$FUNC_VIOLATIONS_FILE" ]; then
-        echo -e "${RED}Function naming violations ($function_naming_violations):${NC}"
+        echo -e "${RED}[BLOCKING] Function naming violations ($function_naming_violations):${NC}"
         echo "  Function definitions must use snake_case only:"
         tail -n 5 "$FUNC_VIOLATIONS_FILE" | sed 's/^/  /'
+        echo ""
+    fi
+
+    # Show warnings too
+    if [ $subshell_violations -gt 0 ] && [ -s "$SUBSHELL_VIOLATIONS_FILE" ]; then
+        echo -e "${YELLOW}[WARNING] Subshell sourcing anti-pattern ($subshell_violations):${NC}"
+        head -n 2 "$SUBSHELL_VIOLATIONS_FILE" | sed 's/^/  /'
+        echo ""
+    fi
+
+    if [ $wrapper_violations -gt 0 ] && [ -s "$WRAPPER_VIOLATIONS_FILE" ]; then
+        echo -e "${YELLOW}[WARNING] Wrapper function anti-patterns ($wrapper_violations):${NC}"
+        head -n 2 "$WRAPPER_VIOLATIONS_FILE" | sed 's/^/  /'
         echo ""
     fi
 
