@@ -116,6 +116,12 @@ git commit --no-verify -m "message"
 
 ## 📖 상세 섹션별 가이드
 
+### 🔐 초기 설정
+
+| 토픽 | 위치 | 내용 |
+|------|------|------|
+| SSH 설정 | [SSH_SETUP_GUIDE.md](./SSH_SETUP_GUIDE.md) | Enterprise GitHub SSH 인증 완전 가이드 |
+
 ### 🔍 Hook 동작 이해하기
 
 | 토픽 | 위치 | 내용 |
