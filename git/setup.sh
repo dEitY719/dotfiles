@@ -16,13 +16,16 @@
 # 현재 스크립트가 위치한 git 디렉토리의 절대 경로를 설정합니다.
 DOTFILES_GIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Dotfiles repository의 루트 경로
+DOTFILES_REPO_ROOT="$(cd "$DOTFILES_GIT_DIR/.." && pwd)"
 
 # gitdotfiles의 특정 파일들
 GIT_CONFIG_SOURCE="${DOTFILES_GIT_DIR}/.gitconfig"
+GIT_HOOKS_SOURCE_DIR="${DOTFILES_GIT_DIR}/hooks"
 
-
-# 홈 디렉토리에 생성될 심볼릭 링크의 대상 경로
+# 홈 디렉토리와 repository에 생성될 심볼릭 링크의 대상 경로
 HOME_GITCONFIG="${HOME}/.gitconfig"
+REPO_GIT_HOOKS_DIR="${DOTFILES_REPO_ROOT}/.git/hooks"
 
 
 # --- Logging Initialization ---
@@ -85,6 +88,23 @@ if [ -f "$GIT_CONFIG_SOURCE" ]; then
     create_symlink "$GIT_CONFIG_SOURCE" "$HOME_GITCONFIG"
 else
     ux_warning "경고: .gitconfig 파일이 '${GIT_CONFIG_SOURCE}' 경로에 없습니다. 심볼릭 링크를 생성하지 않습니다."
+fi
+
+
+# Git hooks 설정
+# .git/hooks 디렉토리 생성 (필요시)
+mkdir -p "$REPO_GIT_HOOKS_DIR" 2>/dev/null || true
+
+# Pre-commit hook 심볼릭 링크 생성
+# Source: git/hooks/pre-commit (tracked in git)
+# Target: .git/hooks/pre-commit (symlink, not tracked)
+if [ -f "${GIT_HOOKS_SOURCE_DIR}/pre-commit" ]; then
+    PRE_COMMIT_TARGET="${REPO_GIT_HOOKS_DIR}/pre-commit"
+    create_symlink "${GIT_HOOKS_SOURCE_DIR}/pre-commit" "$PRE_COMMIT_TARGET"
+    chmod +x "${GIT_HOOKS_SOURCE_DIR}/pre-commit"
+    ux_info "Pre-commit hook 설정 완료: ${PRE_COMMIT_TARGET}"
+else
+    ux_warning "경고: pre-commit hook 파일이 '${GIT_HOOKS_SOURCE_DIR}/pre-commit' 경로에 없습니다."
 fi
 
 
