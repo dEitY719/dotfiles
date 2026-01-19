@@ -61,27 +61,46 @@ safe_source() {
     local file_path="$1"
     local error_msg="${2:-File not found}"
 
-    if [ -f "$file_path" ]; then
-        source "$file_path" 2>/dev/null || {
-            # Use ux_error if available, otherwise fallback to echo
+    if [ ! -f "$file_path" ]; then
+        # File doesn't exist - silently skip (common for optional files)
+        return 0
+    fi
+
+    # Attempt to source the file
+    if . "$file_path" 2>/dev/null; then
+        # Increment counter after successful source
+        ((++SOURCED_FILES_COUNT))
+        return 0
+    fi
+
+    # Source failed - report error for important files
+    # Skip errors for optional files (like .local.sh)
+    case "$file_path" in
+        *.local.sh)
+            # Optional local overrides - silently skip
+            return 0
+            ;;
+        */tools/integrations/*|*/functions/*|*/env/*)
+            # Important files - report error
             if type ux_error >/dev/null 2>&1; then
                 ux_error "${error_msg}: ${file_path}"
             else
                 echo "Error: ${error_msg}: ${file_path}" >&2
             fi
             return 1
-        }
-        # Increment counter after successful source
-        ((++SOURCED_FILES_COUNT))
-    else
-        # Use ux_error if available, otherwise fallback to echo
-        if type ux_error >/dev/null 2>&1; then
-            ux_error "${error_msg}: ${file_path}"
-        else
-            echo "Error: ${error_msg}: ${file_path}" >&2
-        fi
-        return 1
-    fi
+            ;;
+        *)
+            # Other files - report error only in debug mode
+            if [ "${DEBUG_DOTFILES:-0}" = "1" ]; then
+                if type ux_error >/dev/null 2>&1; then
+                    ux_error "${error_msg}: ${file_path}"
+                else
+                    echo "Error: ${error_msg}: ${file_path}" >&2
+                fi
+            fi
+            return 1
+            ;;
+    esac
 }
 
 # ═══════════════════════════════════════════════════════════════
