@@ -108,6 +108,26 @@ else
 fi
 
 
+# --- Global Git Hooks Setup ---
+GLOBAL_HOOKS_DIR="${HOME}/.config/git/hooks"
+GLOBAL_HOOK_SOURCE="${DOTFILES_GIT_DIR}/global-hooks/pre-commit"
+GLOBAL_HOOK_TARGET="${GLOBAL_HOOKS_DIR}/pre-commit"
+
+ux_info "Global Git Hooks 설정 시작"
+
+if [ -f "$GLOBAL_HOOK_SOURCE" ]; then
+    mkdir -p "$GLOBAL_HOOKS_DIR"
+    create_symlink "$GLOBAL_HOOK_SOURCE" "$GLOBAL_HOOK_TARGET"
+    chmod +x "$GLOBAL_HOOK_SOURCE"
+    
+    # Configure git to use global hooks path
+    git config --global core.hooksPath "$GLOBAL_HOOKS_DIR"
+    ux_success "Global core.hooksPath가 ${GLOBAL_HOOKS_DIR}로 설정되었습니다."
+else
+    ux_warning "경고: Global pre-commit hook 파일이 '${GLOBAL_HOOK_SOURCE}' 경로에 없습니다."
+fi
+
+
 ux_success "Git dotfiles setup 완료"
 echo "${UX_MUTED}Git 설정이 적용되었습니다.${UX_RESET}"
 
