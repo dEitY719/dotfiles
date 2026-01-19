@@ -2,9 +2,23 @@
 # shell-common/functions/dot_help.sh
 # dot_help - Dotfiles project information and setup guidance
 
-# Load UX library if not already loaded
-if ! declare -f ux_header >/dev/null 2>&1; then
-    source "${BASH_SOURCE[0]%/*}/../tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+# Load UX library if not already loaded (POSIX portable)
+if ! type ux_header >/dev/null 2>&1; then
+    # Try multiple paths to find ux_lib.sh
+    _ux_lib_paths="
+        ${SHELL_COMMON}/tools/ux_lib/ux_lib.sh
+        ${HOME}/.local/dotfiles/shell-common/tools/ux_lib/ux_lib.sh
+        $(dirname "$0")/../tools/ux_lib/ux_lib.sh
+    "
+
+    for _ux_lib_path in $_ux_lib_paths; do
+        if [ -f "$_ux_lib_path" ]; then
+            # shellcheck disable=SC1090
+            . "$_ux_lib_path"
+            break
+        fi
+    done
+    unset _ux_lib_path _ux_lib_paths
 fi
 
 dot_help() {

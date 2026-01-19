@@ -3,6 +3,17 @@
 # Development utility - project setup and command routing
 # Shared between bash and zsh
 
+# ═══════════════════════════════════════════════════════════════
+# UX Library Setup
+# ═══════════════════════════════════════════════════════════════
+
+# Try to source UX library if available
+_UX_LIB_PATH="${SHELL_COMMON:-${HOME}/.local/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh"
+if [ -f "$_UX_LIB_PATH" ]; then
+    # shellcheck disable=SC1090
+    . "$_UX_LIB_PATH"
+fi
+unset _UX_LIB_PATH
 
 # ═══════════════════════════════════════════════════════════════
 # PATH Setup - Ensure ~/.local/bin is accessible
@@ -72,18 +83,17 @@ if [ "${DOTFILES_TEST_MODE:-0}" != "1" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Color Setup - Use UX library variables
+# Color Variables (fallback if ux_lib not loaded)
 # ═══════════════════════════════════════════════════════════════
 
-devx__colors() {
-    bold="${UX_BOLD:-}"
-    dim="${UX_MUTED:-}"
-    reset="${UX_RESET:-}"
-    c_blue="${UX_PRIMARY:-}"
-    c_green="${UX_SUCCESS:-}"
-    c_yellow="${UX_WARNING:-}"
-    c_red="${UX_ERROR:-}"
-}
+# Use UX_* variables from ux_lib, or set reasonable defaults
+: "${UX_BOLD:=}"
+: "${UX_RESET:=}"
+: "${UX_PRIMARY:=}"
+: "${UX_SUCCESS:=}"
+: "${UX_WARNING:=}"
+: "${UX_ERROR:=}"
+: "${UX_MUTED:=}"
 
 # ═══════════════════════════════════════════════════════════════
 # Logging Functions
@@ -136,27 +146,51 @@ devx__find_root() {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# Usage / Help
+# Usage / Help (using semantic UX functions where available)
 # ═══════════════════════════════════════════════════════════════
 
 devx__usage() {
-    cat <<EOF
-${bold}${c_blue}Usage:${reset} devx <command>
+    # Use ux_section if available, otherwise plain echo
+    if type ux_section > /dev/null 2>&1; then
+        ux_section "devx - Development Utility"
+        echo ""
+        ux_section "Usage"
+        printf "  devx %s<command>%s\n" "$UX_MUTED" "$UX_RESET"
+        echo ""
+        ux_section "Commands"
+        ux_bullet "up [b|f]   - Start dev server (b: backend, f: frontend)"
+        ux_bullet "down       - Stop dev server and related services"
+        ux_bullet "test       - Run test suite (pytest)"
+        ux_bullet "format     - Format + lint code (tox -e ruff)"
+        ux_bullet "stat       - Show repository statistics (commits, LOC)"
+        ux_bullet "help       - Show this help message"
+        ux_bullet "shell      - Enter project shell"
+        ux_bullet "cli        - Start interactive CLI"
+        ux_bullet "db         - Start database CLI"
+        echo ""
+        ux_section "Environment"
+        printf "  %sNO_COLOR=1%s     Disable color output\n" "$UX_WARNING" "$UX_RESET"
+        echo ""
+    else
+        # Fallback: plain text format
+        cat <<EOF
+Usage: devx <command>
 
-${bold}${c_blue}Commands:${reset}
-  ${c_green}up [b|f]${reset}   Start dev server (b: backend, f: frontend)
-  ${c_green}down${reset}       Stop dev server and related services
-  ${c_green}test${reset}       Run test suite (pytest)
-  ${c_green}format${reset}     Format + lint code (tox -e ruff)
-  ${c_green}stat${reset}       Show repository statistics (commits, LOC)
-  ${c_green}help${reset}       Show this help message
-  ${c_green}shell${reset}      Enter project shell
-  ${c_green}cli${reset}        Start interactive CLI
-  ${c_green}db${reset}         Start database CLI
+Commands:
+  up [b|f]   Start dev server (b: backend, f: frontend)
+  down       Stop dev server and related services
+  test       Run test suite (pytest)
+  format     Format + lint code (tox -e ruff)
+  stat       Show repository statistics (commits, LOC)
+  help       Show this help message
+  shell      Enter project shell
+  cli        Start interactive CLI
+  db         Start database CLI
 
-${bold}${c_blue}Env:${reset}
-  ${c_yellow}NO_COLOR=1${reset}     # Disable color output
+Environment:
+  NO_COLOR=1     Disable color output
 EOF
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -164,8 +198,6 @@ EOF
 # ═══════════════════════════════════════════════════════════════
 
 devx__main_impl() {
-    devx__colors
-
     # No arguments: show usage
     if [ $# -eq 0 ]; then
         devx__usage

@@ -441,7 +441,7 @@ dexport() {
     backup_dir="${DOTFILES_ROOT:-$HOME/dotfiles}/backup"
     containers=""
 
-    echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} 백업 디렉토리 확인: ${UX_WARNING}$backup_dir${UX_RESET}"
+    ux_info "백업 디렉토리 확인: $backup_dir"
     mkdir -p "$backup_dir"
 
     # 모든 컨테이너 이름 가져오기
@@ -452,23 +452,25 @@ dexport() {
         return 0
     fi
 
-    echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} 다음 컨테이너를 백업합니다:"
-    echo "${UX_SUCCESS}$containers${UX_RESET}"
-    echo "----------------------------------------"
+    ux_section "컨테이너 백업 시작"
+    echo ""
 
     # 각 컨테이너 export
     for name in $containers; do
-        echo "📦 Exporting ${UX_BOLD}$name${UX_RESET}..."
+        ux_info "처리 중: $name"
         if docker export "$name" >"$backup_dir/${name}.tar"; then
-            echo "${UX_BOLD}${UX_SUCCESS}✅ $name → $backup_dir/${name}.tar 완료${UX_RESET}"
+            ux_success "$name → $backup_dir/${name}.tar 완료"
         else
-            echo "${UX_BOLD}${UX_WARNING}❌ $name 백업 실패${UX_RESET}"
+            ux_warning "$name 백업 실패"
         fi
     done
 
-    echo "----------------------------------------"
-    echo "${UX_BOLD}${UX_SUCCESS}🎉 모든 백업 작업이 완료되었습니다.${UX_RESET}"
-    ls -lh "$backup_dir"
+    echo ""
+    ux_success "모든 백업 작업이 완료되었습니다."
+    ux_info "백업 파일 목록:"
+    ls -lh "$backup_dir" | tail -n +2 | while read -r line; do
+        ux_bullet "$line"
+    done
 }
 
 # WSL Docker 설치 (대화형 스크립트)

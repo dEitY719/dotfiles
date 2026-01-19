@@ -76,7 +76,12 @@ proxy_check() {
             pip_check "$@"
         fi
     else
-        ux_error "check_proxy.sh not found at $check_proxy_script" >&2
+        # Error handling with fallback (guard ux_error)
+        if type ux_error >/dev/null 2>&1; then
+            ux_error "check_proxy.sh not found at $check_proxy_script"
+        else
+            echo "❌ check_proxy.sh not found at $check_proxy_script" >&2
+        fi
         return 1
     fi
 }
