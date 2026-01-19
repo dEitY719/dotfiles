@@ -46,17 +46,18 @@
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 OPENCODE_CONFIG_FILE="${OPENCODE_CONFIG_FILE:-$OPENCODE_CONFIG_DIR/opencode.json}"
 
+# Unalias potentially conflicting aliases to allow function re-definition in zsh
+# This fixes "defining function based on alias" errors when re-sourcing
+for alias_name in openinstall opencode-verify opencode-help opencode-edit; do
+    unalias "$alias_name" 2>/dev/null || true
+done
+
 # ═══════════════════════════════════════════════════════════════
 # OpenCode Installation
 # ═══════════════════════════════════════════════════════════════
 
 install_opencode() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_opencode.sh"
-}
-
-# Alias for shorter form
-openinstall() {
-    install_opencode "$@"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -141,11 +142,6 @@ opencode_verify() {
     ux_header "✅ Verification Complete"
 }
 
-# Alias for verification
-opencode-verify() {
-    opencode_verify "$@"
-}
-
 # ═══════════════════════════════════════════════════════════════
 # OpenCode Help and Documentation
 # ═══════════════════════════════════════════════════════════════
@@ -198,11 +194,6 @@ opencode_help() {
     echo ""
 }
 
-# Alias for help
-opencode-help() {
-    opencode_help "$@"
-}
-
 # ═══════════════════════════════════════════════════════════════
 # OpenCode Edit Configuration
 # ═══════════════════════════════════════════════════════════════
@@ -225,11 +216,6 @@ opencode_edit() {
     echo ""
     ux_success "Configuration file edited"
     ux_info "Changes will take effect immediately"
-}
-
-# Alias
-opencode-edit() {
-    opencode_edit "$@"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -255,10 +241,6 @@ opentest() {
 # ═══════════════════════════════════════════════════════════════
 
 alias install-opencode='install_opencode'
-alias openinstall='install_opencode'
-alias opencode-help='opencode_help'
-alias opencode-verify='opencode_verify'
-alias opencode-edit='opencode_edit'
 alias opencfg='opencode_edit'
 
 # ═══════════════════════════════════════════════════════════════
