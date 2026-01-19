@@ -112,6 +112,13 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[crt_help]="${HELP_DESCRIPTIONS[crt_help]:-CA Certificate setup and management guide}"
     HELP_DESCRIPTIONS[pip_help]="${HELP_DESCRIPTIONS[pip_help]:-Pip package manager configuration and diagnostics}"
     HELP_DESCRIPTIONS[mount_help]="${HELP_DESCRIPTIONS[mount_help]:-Mount management commands for Claude environment}"
+    HELP_DESCRIPTIONS[category_help]="${HELP_DESCRIPTIONS[category_help]:-View help organized by category (shell, git, system, all)}"
+    HELP_DESCRIPTIONS[claude_plugins_help]="${HELP_DESCRIPTIONS[claude_plugins_help]:-Claude plugins and integrations setup}"
+    HELP_DESCRIPTIONS[notion_help]="${HELP_DESCRIPTIONS[notion_help]:-Notion API integration and commands}"
+    HELP_DESCRIPTIONS[ollama_help]="${HELP_DESCRIPTIONS[ollama_help]:-Ollama local LLM setup and usage}"
+    HELP_DESCRIPTIONS[opencode_help]="${HELP_DESCRIPTIONS[opencode_help]:-OpenCode CLI setup and configuration}"
+    HELP_DESCRIPTIONS[register_help]="${HELP_DESCRIPTIONS[register_help]:-Help registry management and registration functions}"
+    HELP_DESCRIPTIONS[show_doc_help]="${HELP_DESCRIPTIONS[show_doc_help]:-Documentation viewer and manager commands}"
 }
 
 # ═══════════════════════════════════════════════════════════════
