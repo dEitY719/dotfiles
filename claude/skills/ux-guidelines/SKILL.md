@@ -12,13 +12,28 @@ You are the UX Consistency Specialist. Ensure all help functions and user-facing
 
 ## Trigger Scenarios
 
-Use this skill when:
+### Individual Function Refactoring
+
+Use this skill when refactoring specific help functions or creating new ones:
 
 - "proxy_help() 함수를 UX 가이드라인에 따라 리팩토링해"
 - "새 help 함수를 만드는데 UX_GUIDELINES 규칙을 따르고 싶어"
 - "현재 help 텍스트를 ux_lib 함수들로 다시 작성해"
 - "이 함수를 cc_help 스타일로 리팩토링해"
 - "help 함수들의 formatting을 일관되게 해줘"
+
+### Bulk UX Compliance Review (Check shell-common/ against UX_GUIDELINES.md)
+
+Use this skill to scan all shell-common/*.sh files for UX guideline violations and document findings:
+
+- "ux-guidelines 스킬을 사용하여 docs/abc-review-CX.md 문서에 작성해"
+  (Check shell-common/*.sh files, identify violations, write to abc-review-CX.md for ChatGPT review)
+
+- "ux-guidelines 스킬을 사용하여 docs/abc-review-C.md 문서에 작성해"
+  (Check shell-common/*.sh files, identify violations, write to abc-review-C.md for Claude review)
+
+- "ux-guidelines 스킬을 사용하여 docs/abc-review-G.md 문서에 작성해"
+  (Check shell-common/*.sh files, identify violations, write to abc-review-G.md for Gemini review)
 
 ## UX Guidelines Foundation
 
@@ -246,9 +261,71 @@ Run consistency checker to ensure all help functions follow guidelines:
 shell-common/tools/custom/check_ux_consistency.sh
 ```
 
+## Bulk UX Compliance Review Workflow
+
+For scanning all shell-common/*.sh files against UX_GUIDELINES.md and documenting findings:
+
+### Overview
+
+This workflow allows you to:
+1. Scan all shell-common/ files for UX guideline violations
+2. Document findings in review files (`abc-review-C.md`, `abc-review-CX.md`, `abc-review-G.md`)
+3. Share violations with team members for collaborative review
+4. Track compliance issues before deciding on fixes
+
+### Review Documents
+
+Review documents follow this structure:
+
+- **abc-review-C.md** — Claude review (AI-generated analysis)
+- **abc-review-CX.md** — ChatGPT review (cross-AI validation)
+- **abc-review-G.md** — Gemini review (alternative perspective)
+
+See: `docs/AGENTS.md` for review document format specification.
+
+### Typical Violations to Document
+
+When scanning shell-common/, check for:
+
+1. **Hardcoded Colors** — Using ANSI codes instead of `UX_*` variables
+   - Problem: `echo -e "${COLOR_RED}Error${COLOR_RESET}"`
+   - Should be: `ux_error "Error"`
+
+2. **Hardcoded Output** — Using `cat <<EOF` instead of UX functions
+   - Problem: `cat <<EOF\n  Command A\n  Command B\nEOF`
+   - Should be: `ux_bullet "Command A"` + `ux_bullet "Command B"`
+
+3. **Missing Help** — Functions without help output
+   - Problem: Function has no `[ -z "$1" ]` check
+   - Should be: Show help when called with no args
+
+4. **Inconsistent Formatting** — Mixed styles (emojis, markdown, raw text)
+   - Problem: Some functions use emojis, others don't
+   - Should be: All use consistent UX semantic functions
+
+5. **Non-semantic Output** — Using plain echo without UX context
+   - Problem: `echo "Done"`
+   - Should be: `ux_success "Done"`
+
+### When NOT to Include Violations
+
+- Executable utility scripts (tools/custom/*.sh) that don't have user-facing output
+- Third-party wrappers that only delegate to external tools
+- Auto-generated files or templates
+
+### Review Process
+
+1. **Initial Scan** — Use ux-guidelines skill to create initial review document
+2. **Team Review** — Share with colleagues for feedback
+3. **Prioritize** — Identify high vs medium vs low priority fixes
+4. **Implement** — Fix violations as agreed upon
+5. **Validate** — Run check_ux_consistency.sh to verify
+
 ## Execution
 
-When invoked:
+### For Individual Function Refactoring
+
+When refactoring a specific help function:
 
 1. Read the current help function/module
 2. Identify sections and organize logically
@@ -259,3 +336,26 @@ When invoked:
 7. Create commit documenting the changes
 
 **Start by reading the target file and understanding its current structure.**
+
+### For Bulk UX Compliance Review
+
+When scanning shell-common/ and creating review documents:
+
+1. **Discover** all shell-common/*.sh files (glob: `shell-common/**/*.sh`)
+2. **Analyze** each file against UX_GUIDELINES.md:
+   - Check for hardcoded colors (ANSI escape sequences)
+   - Check for hardcoded text output (cat <<EOF patterns)
+   - Check for missing help functionality
+   - Check for inconsistent formatting/styling
+   - Check for non-semantic output functions
+3. **Categorize** findings by severity:
+   - **High**: Breaks UX guidelines completely (e.g., hardcoded colors)
+   - **Medium**: Partially follows guidelines (e.g., inconsistent style)
+   - **Low**: Minor issues (e.g., missing comments)
+4. **Document** in target review file (abc-review-C.md, abc-review-CX.md, or abc-review-G.md):
+   - Reviewer name and date
+   - List of violations with file paths and line numbers
+   - Suggested fixes for each violation
+   - Overall compliance score
+5. **Format** as Markdown following docs/AGENTS.md review document structure
+6. **Output** the completed review document (do NOT commit; user will review with colleagues)
