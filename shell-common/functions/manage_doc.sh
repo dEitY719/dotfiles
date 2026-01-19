@@ -179,19 +179,31 @@ alias clear-doc='clear_doc'
 alias doc-help='show_doc_help'
 
 # ═══════════════════════════════════════════════════════════════
-# Main execution
+# Main execution - Only run if directly executed, not sourced
 # ═══════════════════════════════════════════════════════════════
 
-# If executed directly with arguments, run the requested command
-if [ "${DOTFILES_TEST_MODE:-0}" != "1" ] && [ -n "${1:-}" ]; then
-    # Run function if first argument matches a function name
-    case "$1" in
-        clear_doc|archive_doc|show_doc_help)
-            "$@"
-            ;;
-        *)
-            # Default to clear_doc for backward compatibility with alias
-            clear_doc "$@"
+# Check if this script is being executed directly (not sourced)
+# Safe method: Use parameter expansion instead of basename to avoid flag injection
+_script_name="${0##*/}"
+
+# Validate that _script_name doesn't start with - (indicates sourced with flags)
+if [ "${_script_name#-}" = "$_script_name" ]; then
+    case "$_script_name" in
+        manage_doc.sh|manage_doc)
+            # This is direct execution - run with arguments
+            if [ "${DOTFILES_TEST_MODE:-0}" != "1" ] && [ -n "${1:-}" ]; then
+                case "$1" in
+                    clear_doc|archive_doc|show_doc_help)
+                        "$@"
+                        ;;
+                    *)
+                        # Default to clear_doc for backward compatibility with alias
+                        clear_doc "$@"
+                        ;;
+                esac
+            fi
             ;;
     esac
 fi
+
+unset _script_name
