@@ -22,40 +22,40 @@ mount_help() {
 
         ux_section "Description"
         ux_info "Manage bind mounts for Claude environment (skills, agents, etc.)"
-        echo ""
+
 
         ux_section "Available Commands"
         ux_bullet "addmnt <source> <target>    Create bind mount"
         ux_bullet "show_mnt [path]             Display mount status"
         ux_bullet "claude_mount_all            Mount all Claude directories (skills, agents, docs)"
         ux_bullet "mount_help                  Show this help message"
-        echo ""
+
 
         ux_section "Quick Examples"
         ux_numbered 1 "Mount all Claude directories at once:"
-        echo "  claude_mount_all"
-        echo ""
+        ux_bullet "claude_mount_all"
+
 
         ux_numbered 2 "View all Claude mounts:"
-        echo "  show_mnt"
-        echo ""
+        ux_bullet "show_mnt"
+
 
         ux_numbered 3 "View specific mount:"
-        echo "  show_mnt ~/.claude/skills"
-        echo ""
+        ux_bullet "show_mnt ~/.claude/skills"
+
 
         ux_numbered 4 "Add new bind mount:"
-        echo "  addmnt ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/agents ~/.claude/agents"
-        echo ""
+        ux_bullet "addmnt ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/agents ~/.claude/agents"
+
 
         ux_section "For More Information"
         ux_bullet "addmnt --help       Usage for addmnt command"
         ux_bullet "show_mnt --help     Usage for show_mnt command"
-        echo ""
+
 
         ux_warning "Requires sudo for mount operations"
         ux_info "Configure sudoers for passwordless mounting in /etc/sudoers.d/"
-        echo ""
+
     else
         cat << 'HELP'
 Mount Management Commands
@@ -128,26 +128,26 @@ _addmnt_help() {
 
         ux_section "Description"
         ux_info "Create a bind mount from source to target directory"
-        echo ""
+
 
         ux_section "Usage"
         ux_bullet "addmnt <source> <target>"
-        echo ""
+
 
         ux_section "Parameters"
         ux_bullet "source  - Source directory path (required, must exist)"
         ux_bullet "target  - Target mount point (required, created if missing)"
-        echo ""
+
 
         ux_section "Examples"
         ux_bullet "addmnt ${DOTFILES_ROOT:-$HOME/dotfiles}/skills ~/.claude/skills"
         ux_bullet "addmnt ~/projects ~/.local/mounts/projects"
-        echo ""
+
 
         ux_section "Notes"
         ux_warning "Requires sudo permissions (use sudoers for passwordless mount)"
         ux_info "Target directory is created automatically if it doesn't exist"
-        echo ""
+
     else
         cat << 'HELP'
 addmnt - Create bind mount
@@ -244,22 +244,22 @@ _show_mnt_help() {
 
         ux_section "Description"
         ux_info "Display mount status for Claude environment directories"
-        echo ""
+
 
         ux_section "Usage"
         ux_bullet "show_mnt              Show all Claude mounts under ~/.claude"
         ux_bullet "show_mnt <path>       Show specific mount path status"
-        echo ""
+
 
         ux_section "Examples"
         ux_bullet "show_mnt                           All Claude mounts"
         ux_bullet "show_mnt ~/.claude/skills          Skills directory mount"
         ux_bullet "show_mnt ~/.claude/agents          Agents directory mount"
-        echo ""
+
 
         ux_section "Notes"
         ux_info "Requires findmnt or mount command to display mount information"
-        echo ""
+
     else
         cat << 'HELP'
 show_mnt - Display mount status
@@ -317,7 +317,7 @@ show_mnt() {
             if type ux_info >/dev/null 2>&1; then
                 ux_info "Not mounted: $mount_path"
             else
-                echo "  (not mounted)" >&2
+                ux_bullet "(not mounted)" >&2
             fi
             return 1
         }
@@ -340,7 +340,7 @@ show_mnt() {
             if type ux_info >/dev/null 2>&1; then
                 ux_info "No mounts found under ~/.claude"
             else
-                echo "  (no mounts under ~/.claude)" >&2
+                ux_bullet "(no mounts under ~/.claude)" >&2
             fi
             return 1
         fi

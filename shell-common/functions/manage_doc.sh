@@ -64,7 +64,6 @@ clear_doc() {
         ux_section "Examples"
         ux_bullet "clear-doc docs/abc-review-G.md           # Clear single file"
         ux_bullet "clear-doc 'docs/abc-review*'             # Clear matching files"
-        echo ""
         return 1
     fi
 
@@ -263,12 +262,11 @@ show_doc_help() {
     ux_info "Usage: clear-doc <file|pattern>"
     echo ""
     ux_info "Examples:"
-    echo "  clear-doc docs/abc-review-G.md              // Clear single file"
-    echo "  clear-doc docs/abc-review*                  // Unquoted glob (both work!)"
-    echo "  clear-doc 'docs/abc-review*'                // Quoted pattern"
-    echo "  clear-doc docs/file1.md docs/file2.md       // Multiple files"
-    echo "  clear-doc 'docs/*.md' notes.txt              // Mixed patterns + files"
-    echo ""
+    ux_bullet "clear-doc docs/abc-review-G.md              // Clear single file"
+    ux_bullet "clear-doc docs/abc-review*                  // Unquoted glob (both work!)"
+    ux_bullet "clear-doc 'docs/abc-review*'                // Quoted pattern"
+    ux_bullet "clear-doc docs/file1.md docs/file2.md       // Multiple files"
+    ux_bullet "clear-doc 'docs/*.md' notes.txt              // Mixed patterns + files"
 
     ux_section "del-doc"
     ux_bullet "Permanently delete documentation files"
@@ -276,12 +274,11 @@ show_doc_help() {
     ux_info "Usage: del-doc <file|pattern>"
     echo ""
     ux_info "Examples:"
-    echo "  del-doc docs/abc-review-G.md               // Delete single file"
-    echo "  del-doc docs/abc-plan*                      // Unquoted glob"
-    echo "  del-doc 'docs/abc-review*2.md'              // Quoted pattern (deletes *2.md files)"
-    echo "  del-doc docs/file1.md docs/file2.md         // Multiple files"
-    echo "  del-doc 'docs/abc-*' notes.txt              // Mixed patterns + files"
-    echo ""
+    ux_bullet "del-doc docs/abc-review-G.md               // Delete single file"
+    ux_bullet "del-doc docs/abc-plan*                      // Unquoted glob"
+    ux_bullet "del-doc 'docs/abc-review*2.md'              // Quoted pattern (deletes *2.md files)"
+    ux_bullet "del-doc docs/file1.md docs/file2.md         // Multiple files"
+    ux_bullet "del-doc 'docs/abc-*' notes.txt              // Mixed patterns + files"
 
     ux_section "Description"
     ux_info "Safely clears the content of documentation files (clear-doc)"

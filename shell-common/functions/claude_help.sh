@@ -13,33 +13,33 @@ claude_help() {
     ux_table_row "claude mcp get <name>" "Show MCP server details" ""
     ux_table_row "claude mcp add <name> ..." "Add MCP server" ""
     ux_table_row "claude mcp remove <name>" "Remove MCP server" ""
-    echo ""
+
 
     ux_section "Recommended MCP Servers"
     ux_bullet "Playwright MCP: Web browser automation"
-    echo "  Install: ${UX_SUCCESS}claude mcp add playwright --transport stdio -- npx -y @playwright/mcp@latest${UX_RESET}"
+    ux_bullet "Install: ${UX_SUCCESS}claude mcp add playwright --transport stdio -- npx -y @playwright/mcp@latest${UX_RESET}"
     ux_bullet "Sequential Thinking MCP: Logical analysis"
-    echo "  Install: ${UX_SUCCESS}claude mcp add sequential-thinking --transport stdio -- npx -y @modelcontextprotocol/server-sequential-thinking${UX_RESET}"
-    echo ""
+    ux_bullet "Install: ${UX_SUCCESS}claude mcp add sequential-thinking --transport stdio -- npx -y @modelcontextprotocol/server-sequential-thinking${UX_RESET}"
+
 
     ux_section "Setup & Requirements"
     ux_table_row "clinstall" "Install Claude Code CLI" ""
     ux_table_row "ensure_jq" "Install jq (required for statusline)" ""
     ux_table_row "claude_init" "Initialize config & skills" ""
     ux_table_row "claude_edit_settings" "Edit settings.json" ""
-    echo ""
+
 
     ux_section "Workflow Patterns"
     ux_bullet "Plan mode (recommended): ${UX_SUCCESS}claude${UX_RESET} → plan → approve → execute"
     ux_bullet "Test workflow: ${UX_SUCCESS}cltest \"test description\"${UX_RESET}}"
     ux_bullet "Skip permissions (caution): ${UX_SUCCESS}clskip \"request\"${UX_RESET}"
-    echo ""
+
 
     ux_section "Sandbox Mode"
     ux_info "Use in Claude conversation: ${UX_SUCCESS}/sandbox${UX_RESET}"
     ux_bullet "Select Auto-allow mode"
     ux_bullet "pytest, git, npm auto-approved"
-    echo ""
+
 
     ux_section "Configuration"
     ux_info "Settings file: ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/settings.json"
@@ -47,7 +47,7 @@ claude_help() {
     ux_bullet "Auto-allow: pytest, ruff, mypy, tox"
     ux_bullet "Block: .env, ~/.aws, ~/.ssh"
     ux_bullet "Block commands: rm -rf, sudo rm"
-    echo ""
+
 
     ux_section "Statusline Display"
     ux_info "Real-time session information in Claude Code status bar"
@@ -56,12 +56,12 @@ claude_help() {
     ux_bullet "📁 Project (folder name + git branch with emoji)"
     ux_bullet "📊 Context usage percentage + weekly percentage"
     ux_bullet "💰 Session cost (Green <\$5, Orange \$5-20, Red >\$20)"
-    echo ""
+
 
     ux_section "Skills Management"
     ux_table_row "claude-skills" "List available Claude Code skills" ""
     ux_info "Skills location: ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills/"
-    echo ""
+
 }
 
 # Function to list Claude Code skills
@@ -70,17 +70,17 @@ get_claude_skills() {
 
     # Check if skills directory exists
     if [ ! -d "$skills_dir" ]; then
-        echo "No skills directory found at: $skills_dir" >&2
+        ux_error "No skills directory found at: $skills_dir"
         return 1
     fi
 
     # Load UX library if available
     if command -v ux_header >/dev/null 2>&1; then
         ux_header "Claude Code Skills"
-        echo ""
+
     else
-        echo "=== Claude Code Skills ==="
-        echo ""
+        ux_info "=== Claude Code Skills ==="
+
     fi
 
     # Track if any skills found
@@ -121,15 +121,15 @@ get_claude_skills() {
 
     # If no skills found
     if [ "$found_skills" -eq 0 ]; then
-        echo "No skills found in $skills_dir"
+        ux_info "No skills found in $skills_dir"
         return 0
     fi
 
-    echo ""
+
     if command -v ux_info >/dev/null 2>&1; then
         ux_info "Skills location: $skills_dir"
     else
-        echo "Skills location: $skills_dir"
+        ux_info "Skills location: $skills_dir"
     fi
 }
 

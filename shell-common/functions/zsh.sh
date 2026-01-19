@@ -42,11 +42,11 @@ zsh_themes() {
 
     ux_header "Available Zsh Themes"
     ux_info "Located in: ${UX_BOLD}~/.oh-my-zsh/themes/${UX_RESET}"
-    echo ""
+
 
     local themes_dir="${HOME}/.oh-my-zsh/themes"
     if [ -d "$themes_dir" ]; then
-        echo "Available themes:"
+        ux_header "Available themes:"
         find "$themes_dir" -maxdepth 1 -name "*.zsh-theme" -printf '%f\n' | sed 's/\.zsh-theme$//' | sort | nl
     else
         ux_error "Themes directory not found."
@@ -109,7 +109,7 @@ zsh_plugins() {
 
     ux_header "Installed Zsh Plugins"
     ux_info "Location: ${UX_BOLD}~/.oh-my-zsh/custom/plugins/${UX_RESET}"
-    echo ""
+
 
     local plugins_dir="${HOME}/.oh-my-zsh/custom/plugins"
     if [ -d "$plugins_dir" ]; then
@@ -121,10 +121,10 @@ zsh_plugins() {
         fi
     fi
 
-    echo ""
+
     ux_section "Built-in Plugins"
     ux_info "Location: ${UX_BOLD}~/.oh-my-zsh/plugins/${UX_RESET}"
-    echo "Popular plugins:"
+    ux_header "Popular plugins:"
     ux_bullet "git - Git aliases and functions"
     ux_bullet "zsh-autosuggestions - Command auto-completion"
     ux_bullet "zsh-syntax-highlighting - Syntax highlighting"
@@ -240,12 +240,12 @@ zsh_snippets() {
 
     ux_header "Zsh Configuration Snippets"
     ux_info "Location: ${UX_BOLD}\$HOME/.zshrc.d/${UX_RESET}"
-    echo ""
+
 
     if [ -n "$(find "$snippets_dir" -maxdepth 1 -name "*.zsh" 2>/dev/null)" ]; then
         ux_section "Available Snippets"
         find "$snippets_dir" -maxdepth 1 -name "*.zsh" -printf '%f\n' | sed 's/\.zsh$//' | sort | nl
-        echo ""
+
         ux_section "Usage"
         ux_bullet "View snippet: ${UX_BOLD}cat \$HOME/.zshrc.d/<snippet-name>.zsh${UX_RESET}"
         ux_bullet "Edit snippet: ${UX_BOLD}zsh-snippet <snippet-name>${UX_RESET}"

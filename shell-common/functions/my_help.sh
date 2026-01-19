@@ -172,18 +172,18 @@ _my_help_show_all() {
         printf "  ${UX_SUCCESS}%-${max_width}s${UX_RESET}  ${UX_MUTED}:${UX_RESET}  %s\n" "$func" "$desc"
     done
 
-    echo ""
+
     ux_divider
-    echo ""
+
     ux_info "Type any of the above commands to see detailed help"
-    echo "  ${UX_MUTED}Example:${UX_RESET} ${UX_INFO}git-help${UX_RESET}, ${UX_INFO}uv-help${UX_RESET}, ${UX_INFO}docker-help${UX_RESET}"
-    echo ""
+    ux_bullet "${UX_MUTED}Example:${UX_RESET} ${UX_INFO}git-help${UX_RESET}, ${UX_INFO}uv-help${UX_RESET}, ${UX_INFO}docker-help${UX_RESET}"
+
     ux_warning "To add a new help function:"
     ux_bullet "Create a function ending with 'help' (e.g., docker-help or docker_help)"
     ux_bullet "Register description: HELP_DESCRIPTIONS[\"docker_help\"]=\"Your description\""
     ux_bullet "Display name will be normalized to dash format (docker-help)"
     ux_bullet "It will be automatically detected by ${UX_SUCCESS}my-help${UX_RESET}"
-    echo ""
+
 }
 
 # Main help function - displays all registered commands or specific help

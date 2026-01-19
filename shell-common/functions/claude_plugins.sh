@@ -11,7 +11,7 @@ init_plugins_docs() {
 
     ux_header "Initializing Plugin Documentation Directory"
     ux_info "Creating: $docs_dir"
-    echo ""
+
 
     # Check if docs is mounted
     if declare -f _is_mounted >/dev/null 2>&1; then
@@ -19,19 +19,19 @@ init_plugins_docs() {
             ux_success "docs directory is mounted"
             ux_info "Source: ~/dotfiles/claude/docs"
             ux_info "Target: ~/.claude/docs"
-            echo ""
+
         }
     fi
 
     if mkdir -p "$docs_dir"; then
         ux_success "Documentation directory created"
-        echo ""
+
         ux_section "Directory Structure"
         ux_bullet "Marketplace plugins: ${UX_INFO}\$HOME/.claude/plugins/marketplaces${UX_RESET}"
         ux_bullet "Documentation (mounted): ${UX_INFO}$docs_base_dir${UX_RESET}"
         ux_bullet "Marketplace docs: ${UX_INFO}$docs_dir${UX_RESET}"
         ux_bullet "Git tracked in: ${UX_INFO}~/dotfiles/claude/docs${UX_RESET}"
-        echo ""
+
         ux_section "Quick Commands"
         ux_bullet "Open plugins: ${UX_HIGHLIGHT}open_claude_plugins${UX_RESET}"
         ux_bullet "List available plugins: ${UX_HIGHLIGHT}list-plugins${UX_RESET}"
@@ -55,7 +55,7 @@ list_plugins() {
     fi
 
     ux_header "Available Marketplaces"
-    echo ""
+
 
     local marketplace_count=0
     local total_agents=0
@@ -72,7 +72,7 @@ list_plugins() {
 
         ux_section "$marketplace_name"
         ux_bullet "Path: ${UX_INFO}$marketplace${UX_RESET}"
-        echo ""
+
 
         # Counters for this marketplace
         local mp_agents=0
@@ -138,7 +138,7 @@ list_plugins() {
             ux_warning "No agents, commands, or skills found"
         fi
 
-        echo ""
+
     done
 
     ux_section "Summary"
@@ -163,7 +163,7 @@ sync_plugins_structure() {
     fi
 
     ux_header "Syncing Plugin Structure to Documentation"
-    echo ""
+
 
     mkdir -p "$docs_dir"
 
@@ -192,15 +192,15 @@ sync_plugins_structure() {
         fi
     done
 
-    echo ""
+
     ux_section "Structure Created"
     ux_info "Documentation directory: $docs_dir"
     ux_info "Mounted from: ~/dotfiles/claude/docs/marketplaces"
-    echo ""
+
     ux_section "Git Integration"
     ux_bullet "Files are automatically tracked in: ${UX_HIGHLIGHT}~/dotfiles/claude/docs/${UX_RESET}"
     ux_bullet "Ready for version control and team collaboration"
-    echo ""
+
     ux_info "Next steps:"
     ux_bullet "1. Review plugin descriptions in VSCode"
     ux_bullet "2. Create Korean README.md files in each skill directory"
@@ -233,16 +233,16 @@ view_plugin_info() {
                 marketplace_name=$(basename "$marketplace")
 
                 ux_header "$plugin_name"
-                echo ""
+
 
                 ux_section "Marketplace"
                 ux_info "$marketplace_name"
-                echo ""
+
 
                 if [ -f "$skill_dir/SKILL.md" ]; then
                     ux_section "Description (SKILL.md)"
                     head -20 "$skill_dir/SKILL.md"
-                    echo ""
+
                     ux_bullet "Full file: ${UX_INFO}$skill_dir/SKILL.md${UX_RESET}"
                 fi
 
@@ -310,16 +310,16 @@ generate_plugin_doc_ko() {
         ux_bullet "Example: ${UX_INFO}generate-plugin-doc-ko file.md output_KO.md${UX_RESET}"
         ux_bullet "With specific AI: ${UX_INFO}generate-plugin-doc-ko file.md output_KO.md gemini${UX_RESET}"
         ux_bullet "Force overwrite: ${UX_INFO}generate-plugin-doc-ko file.md output_KO.md claude --force${UX_RESET}"
-        echo ""
+
         ux_section "Available AI Tools"
         ux_bullet "claude (default) - Anthropic Claude (uses -p flag)"
         ux_bullet "gemini - Google Gemini (uses -p flag)"
         ux_bullet "codex - Codex CLI (uses 'exec' subcommand)"
         ux_bullet "Other tools - Any CLI tool that accepts -p, --prompt, exec, or positional argument"
-        echo ""
+
         ux_section "Options"
         ux_bullet "--force - Overwrite existing files (default: skip if exists)"
-        echo ""
+
         ux_section "Override Default AI Tool"
         ux_bullet "Set environment variable: ${UX_CODE}export CLAUDE_DOC_GENERATOR=gemini${UX_RESET}"
         return 1
@@ -376,9 +376,9 @@ generate_plugin_doc_ko() {
     ux_info "Source: $plugin_file"
     ux_info "Output: $output_file"
     ux_info "AI Tool: ${UX_HIGHLIGHT}$ai_tool${UX_RESET}"
-    echo ""
+
     ux_info "Calling $ai_tool to generate Korean summary..."
-    echo ""
+
 
     # Generate Korean summary using the specified AI tool
     # Support multiple prompt flag formats: -p, --prompt, positional argument
@@ -423,10 +423,10 @@ generate_plugin_doc_ko() {
 
     if [ $rc -eq 0 ] && [ -s "$output_file" ]; then
         ux_success "Korean documentation generated"
-        echo ""
+
         ux_section "Output File"
         ls -lh "$output_file"
-        echo ""
+
         ux_info "Preview (first 30 lines):"
         head -30 "$output_file"
     else
@@ -449,7 +449,7 @@ _get_plugin_description() {
     yaml_desc=$(grep "^description:" "$file" 2>/dev/null | head -1 | sed 's/^description: *//; s/"//g' | cut -c1-100)
 
     if [ -n "$yaml_desc" ]; then
-        echo "$yaml_desc"
+        ux_info "$yaml_desc"
         return 0
     fi
 
@@ -458,7 +458,7 @@ _get_plugin_description() {
     title_desc=$(grep "^# " "$file" 2>/dev/null | head -1 | sed 's/^# *//; s/#*$//' | cut -c1-100)
 
     if [ -n "$title_desc" ]; then
-        echo "$title_desc"
+        ux_info "$title_desc"
         return 0
     fi
 
@@ -484,7 +484,7 @@ _generate_plugin_directory_readme_ko() {
 
 README_HEADER
 
-    echo "" >>"$readme_file"
+
 
     # Process each subdirectory and file
     local processed=0
@@ -508,8 +508,8 @@ README_HEADER
         # Process only if there are files (direct or nested)
         if [ "$file_count" -gt 0 ] || [ "$nested_count" -gt 0 ]; then
             local total_files=$((file_count + nested_count))
-            echo "## $category ($total_files)" >>"$readme_file"
-            echo "" >>"$readme_file"
+            ux_info "## $category ($total_files)" >>"$readme_file"
+
 
             # List each direct .md file with its description
             while IFS= read -r file; do
@@ -523,7 +523,7 @@ README_HEADER
                         description="[설명 없음]"
                     fi
 
-                    echo "- **$filename**: $description" >>"$readme_file"
+                    ux_info "- **$filename**: $description" >>"$readme_file"
                     processed=$((processed + 1))
                 fi
             done < <(find "$category_dir" -maxdepth 1 -type f -name "*.md")
@@ -553,24 +553,24 @@ README_HEADER
                             description="[설명 없음]"
                         fi
 
-                        echo "  - **$nested_name**: $description" >>"$readme_file"
+                        ux_bullet "- **$nested_name**: $description" >>"$readme_file"
                         processed=$((processed + 1))
                     fi
                 fi
             done < <(find "$category_dir" -maxdepth 1 -type d ! -name "$(basename "$category_dir")")
 
-            echo "" >>"$readme_file"
+
         fi
     done
 
     if [ $processed -gt 0 ]; then
         {
-            echo ""
-            echo "---"
-            echo ""
-            echo "*Generated: $(date '+%Y-%m-%d %H:%M:%S')*"
-            echo ""
-            echo "한국어 요약 및 세부 설명은 각 폴더의 \`*_KO.md\` 파일을 참고하세요."
+
+            ux_info "---"
+
+            ux_info "*Generated: $(date '+%Y-%m-%d %H:%M:%S')*"
+
+            ux_info "한국어 요약 및 세부 설명은 각 폴더의 \`*_KO.md\` 파일을 참고하세요."
         } >>"$readme_file"
 
         ux_success "README.md generated successfully"
@@ -595,7 +595,7 @@ process_plugin_directory_ko() {
         ux_bullet "Example: ${UX_INFO}process-plugin-directory-ko claude-code-workflows plugins/code-refactoring/${UX_RESET}"
         ux_bullet "With Gemini: ${UX_INFO}process-plugin-directory-ko claude-code-workflows plugins/code-refactoring/ gemini${UX_RESET}"
         ux_bullet "Force update: ${UX_INFO}process-plugin-directory-ko claude-code-workflows plugins/code-refactoring/ --force${UX_RESET}"
-        echo ""
+
         ux_section "Options"
         ux_bullet "--force - Overwrite all existing files (default: skip if exists)"
         return 1
@@ -634,7 +634,7 @@ process_plugin_directory_ko() {
     ux_info "Source: $source_dir"
     ux_info "Docs: $docs_dir"
     ux_info "AI Tool: ${UX_HIGHLIGHT}$ai_tool${UX_RESET}"
-    echo ""
+
 
     # Create docs directory structure
     mkdir -p "$docs_dir"
@@ -652,7 +652,7 @@ process_plugin_directory_ko() {
 
     ux_section "Found Files"
     ux_info "Total markdown files: ${#md_files[@]}"
-    echo ""
+
 
     # Process each markdown file
     local success_count=0
@@ -693,18 +693,18 @@ process_plugin_directory_ko() {
         fi
     done
 
-    echo ""
+
     ux_section "Summary"
     ux_bullet "Total files: ${#md_files[@]}"
     ux_bullet "Generated: $success_count"
     ux_bullet "Skipped (exists): $skipped_count"
     ux_bullet "Failed: $failed_count"
-    echo ""
+
 
     # Generate README.md with directory summary
     _generate_plugin_directory_readme_ko "$source_dir" "$docs_dir"
 
-    echo ""
+
     ux_section "Next Steps"
     ux_bullet "Review generated files: ${UX_CODE}code $docs_dir${UX_RESET}"
     ux_bullet "View summary: ${UX_CODE}cat $docs_dir/README.md${UX_RESET}"
@@ -726,13 +726,13 @@ create_plugin_structure_ko() {
         ux_bullet "Full directory: ${UX_INFO}create-plugin-structure-ko claude-code-workflows plugins/code-refactoring/${UX_RESET}"
         ux_bullet "With Gemini: ${UX_INFO}create-plugin-structure-ko claude-code-workflows plugins/code-refactoring/ gemini${UX_RESET}"
         ux_bullet "Force overwrite: ${UX_INFO}create-plugin-structure-ko claude-code-workflows plugins/code-refactoring/ --force${UX_RESET}"
-        echo ""
+
         ux_section "Available AI Tools"
         ux_bullet "claude (default) - Anthropic Claude (uses -p flag)"
         ux_bullet "gemini - Google Gemini (uses -p flag)"
         ux_bullet "codex - Codex CLI (uses 'exec' subcommand)"
         ux_bullet "Other tools - Any CLI tool that accepts -p, --prompt, exec, or positional argument"
-        echo ""
+
         ux_section "Options"
         ux_bullet "--force - Overwrite existing files (default: skip if exists)"
         return 1
@@ -768,14 +768,14 @@ create_plugin_structure_ko() {
         output_file="${output_file%.md}_KO.md"
 
         ux_header "Creating Plugin Documentation Structure"
-        echo ""
+
 
         # Create directory structure
         local output_dir
         output_dir=$(dirname "$output_file")
         mkdir -p "$output_dir"
         ux_success "Created directory: $output_dir"
-        echo ""
+
 
         # Generate Korean documentation with specified AI tool
         if [ "$force_overwrite" = "true" ]; then
@@ -784,7 +784,7 @@ create_plugin_structure_ko() {
             generate_plugin_doc_ko "$source_path" "$output_file" "$ai_tool"
         fi
 
-        echo ""
+
         ux_section "Next Steps"
         ux_bullet "Review generated file: ${UX_CODE}code $output_file${UX_RESET}"
         ux_bullet "Add personal notes: ${UX_CODE}code ${output_file%.md}_NOTES.md${UX_RESET}"
@@ -809,72 +809,72 @@ create_plugin_structure_ko() {
 
 claude_plugins_help() {
     ux_header "Claude Marketplace Plugins Management"
-    echo ""
+
 
     ux_section "Available Commands"
-    echo ""
+
 
     ux_section "open_claude_plugins"
     ux_info "Open marketplace plugins directory in VSCode"
     ux_bullet "Usage: ${UX_CODE}open_claude_plugins${UX_RESET}"
-    echo ""
+
 
     ux_section "list-plugins"
     ux_info "List all available marketplaces and their skills"
     ux_bullet "Usage: ${UX_CODE}list-plugins${UX_RESET}"
-    echo ""
+
 
     ux_section "init-plugins-docs"
     ux_info "Initialize Korean documentation directory structure"
     ux_bullet "Usage: ${UX_CODE}init-plugins-docs${UX_RESET}"
-    echo ""
+
 
     ux_section "sync-plugins-structure"
     ux_info "Create directory structure mirroring plugins organization"
     ux_bullet "Usage: ${UX_CODE}sync-plugins-structure${UX_RESET}"
-    echo ""
+
 
     ux_section "view-plugin-info <plugin-name>"
     ux_info "View specific plugin information"
     ux_bullet "Usage: ${UX_CODE}view-plugin-info algorithmic-art${UX_RESET}"
-    echo ""
+
 
     ux_section "generate-plugin-doc-ko <source-file> <output-file> [ai-tool]"
     ux_info "Generate Korean documentation from plugin file using any AI tool"
     ux_bullet "Usage (default Claude): ${UX_CODE}generate-plugin-doc-ko file.md output_KO.md${UX_RESET}"
     ux_bullet "Usage (Gemini): ${UX_CODE}generate-plugin-doc-ko file.md output_KO.md gemini${UX_RESET}"
-    echo ""
+
 
     ux_section "create-plugin-structure-ko <marketplace> <plugin-path> [ai-tool]"
     ux_info "Create structure and generate Korean docs in one command (RECOMMENDED)"
     ux_bullet "Usage (default): ${UX_CODE}create-plugin-structure-ko <marketplace> <path/to/file.md>${UX_RESET}"
     ux_bullet "Usage (Gemini): ${UX_CODE}create-plugin-structure-ko <marketplace> <path/to/file.md> gemini${UX_RESET}"
-    echo ""
+
 
     ux_section "Quick Examples"
     ux_bullet "1. Generate with default AI (Claude):"
     ux_bullet "   ${UX_CODE}create-plugin-ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
-    echo ""
+
     ux_bullet "2. Generate with Gemini:"
     ux_bullet "   ${UX_CODE}create-plugin-ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md gemini${UX_RESET}"
-    echo ""
+
     ux_bullet "3. Change default AI tool for session:"
     ux_bullet "   ${UX_CODE}export CLAUDE_DOC_GENERATOR=codex${UX_RESET}"
     ux_bullet "   ${UX_CODE}create-plugin-ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
-    echo ""
+
     ux_bullet "4. Review the generated file:"
     ux_bullet "   ${UX_CODE}code ~/.claude/docs/marketplaces/claude-code-workflows/plugins/code-refactoring/agents/code-reviewer_KO.md${UX_RESET}"
-    echo ""
+
     ux_bullet "5. Commit to git:"
     ux_bullet "   ${UX_CODE}cd ~/dotfiles && git add claude/docs/ && git commit -m 'docs: Add Korean summary'${UX_RESET}"
-    echo ""
+
 
     ux_section "Supported AI Tools"
     ux_bullet "claude - Anthropic Claude (default)"
     ux_bullet "gemini - Google Gemini"
     ux_bullet "codex - OpenAI Codex"
     ux_bullet "Any CLI tool accepting -p or --prompt flag"
-    echo ""
+
 
     ux_section "Recommended Workflow"
     ux_bullet "1. ${UX_CODE}init-plugins-docs${UX_RESET} - Initialize docs directory (first time only)"
@@ -883,17 +883,17 @@ claude_plugins_help() {
     ux_bullet "4. Edit & customize generated ${UX_CODE}*_KO.md${UX_RESET} file"
     ux_bullet "5. Add personal notes to ${UX_CODE}README.md${UX_RESET}"
     ux_bullet "6. ${UX_CODE}git add && git commit${UX_RESET} - Save to dotfiles repository"
-    echo ""
+
 
     ux_section "Directory Structure"
     ux_info "Plugins (read-only marketplace):"
     ux_bullet "\$HOME/.claude/plugins/marketplaces/[marketplace]/plugins/[plugin-name]/agents/[agent].md"
-    echo ""
+
     ux_info "Documentation (git-tracked, mounted):"
     ux_bullet "\$HOME/.claude/docs/marketplaces/[marketplace]/plugins/[plugin-name]/agents/"
     ux_bullet "  ├── [agent]_KO.md    (Korean summary, auto-generated)"
     ux_bullet "  └── README.md         (Learning notes, manual)"
-    echo ""
+
 
     ux_section "Git Integration"
     ux_info "All documentation is mounted and automatically git-tracked:"

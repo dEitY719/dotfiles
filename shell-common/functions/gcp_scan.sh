@@ -196,14 +196,14 @@ EOF
             ux_warning "Range is NOT contiguous (contains $((range_count - count)) other commits in between)."
         fi
     else
-        echo ""
+
         echo "=== Analysis Result ==="
-        echo "  Missing (all authors): $total_count"
-        echo "  Author filter: $author -> $count commit(s)"
+        ux_bullet "Missing (all authors): $total_count"
+        ux_bullet "Author filter: $author -> $count commit(s)"
         if [ $duplicate_count -gt 0 ]; then
-            echo "  Duplicates (already applied): $duplicate_count"
+            ux_bullet "Duplicates (already applied): $duplicate_count"
         fi
-        echo "  Suggested Range: $range_str"
+        ux_bullet "Suggested Range: $range_str"
         if [ $is_contiguous -eq 1 ]; then
             echo "✓ Range is contiguous (clean cherry-pick)."
         else
@@ -212,7 +212,7 @@ EOF
     fi
 
     # Display Commits
-    echo ""
+
     if type ux_section >/dev/null 2>&1; then
         ux_section "Commit List"
     else
@@ -243,11 +243,11 @@ EOF
         done | nl -w 2 -s '. '
     }
 
-    echo ""
+
     # Interactive Confirmation
     if type ux_confirm >/dev/null 2>&1; then
         if ux_confirm "Do you want to cherry-pick these $count commits?" "n"; then
-            echo ""
+
             if [ $is_contiguous -eq 1 ] && [ $duplicate_count -eq 0 ]; then
                 if type ux_info >/dev/null 2>&1; then
                     ux_info "Executing: git cherry-pick $range_str"

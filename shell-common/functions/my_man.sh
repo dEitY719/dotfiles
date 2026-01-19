@@ -15,7 +15,7 @@ myman() {
         ux_usage "my-man" "[alias | function]" "Show defined aliases or functions"
         ux_bullet "alias: 정의된 모든 alias 목록을 보여줍니다."
         ux_bullet "function: 정의된 모든 function 목록을 보여줍니다."
-        echo ""
+
         return 1
     fi
 
@@ -33,8 +33,7 @@ myman() {
 
     if [[ "$type_to_show" == "alias" ]]; then
         (
-            echo "### Alias 목록"
-            echo
+            ux_header "Alias 목록"
             # sed로 alias 목록만 추출하고 빈 줄 제거 후 less로 출력
             sed -n '/### Alias 목록/,/### Function 목록/p' "$temp_output_file" |
                 grep -v '### Alias 목록' |
@@ -43,8 +42,7 @@ myman() {
         ) | less
     elif [[ "$type_to_show" == "function" ]]; then
         (
-            echo "### Function 목록"
-            echo
+            ux_header "Function 목록"
             # sed로 function 목록 추출 후 less로 출력
             sed -n '/### Function 목록/,$p' "$temp_output_file" |
                 grep -v '### Function 목록'
