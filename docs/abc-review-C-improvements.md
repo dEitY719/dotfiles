@@ -9,7 +9,7 @@
 
 ## 1. 구현 검토 요약
 
-### ✅ 원본 구현의 강점 (3d5273f)
+### 원본 구현의 강점 (3d5273f)
 
 1. **보안 체크가 매우 포괄적**
    - Secret/Key detection
@@ -25,7 +25,7 @@
    - `.githooks` > `git/hooks` > `.git/hooks`
    - 팀 공유 > 프로젝트 관례 > 로컬 표준
 
-### ⚠️ 발견된 문제점
+### 발견된 문제점
 
 #### [치명적] 1. Tox 실행이 너무 무거움
 **문제**: 모든 커밋마다 `tox -e ruff,shfmt,shellcheck` 실행
@@ -43,8 +43,8 @@ fi
 - Project-level hook에서 실행해야 할 내용
 
 **해결**:
-- ❌ Global hook에서 완전히 제거
-- ✅ 각 프로젝트의 `git/hooks/pre-commit`에서 실행 (이미 있음)
+- Global hook에서 제거
+- 각 프로젝트의 `git/hooks/pre-commit`에서 실행 (이미 있음)
 
 #### [심각] 2. Debug Code 패턴이 너무 광범위
 **문제**: `console.log` 차단
@@ -74,7 +74,7 @@ DEBUG_PATTERNS="pdb\.set_trace\(\)|binding\.pry|^[[:space:]]*debugger;|breakpoin
 **문제**: `tox.ini`가 있는데 tox가 없으면 커밋 차단
 ```bash
 # 기존 코드 (라인 123-125)
-echo -e "${RED}❌ BLOCKING: tox.ini exists but 'tox' command is missing.${NC}"
+echo -e "${RED}[BLOCK] tox.ini exists but 'tox' command is missing.${NC}"
 exit 1
 ```
 
@@ -87,7 +87,7 @@ exit 1
 - Tox 체크 자체를 global에서 제거
 - Project-level hook에서 처리 권장
 
-### ❌ 누락된 기능
+### 누락된 기능
 
 #### 1. Trailing Whitespace 체크
 **`abc-review-C.md:118-122`에서 제안했지만 구현 누락**
@@ -96,7 +96,7 @@ exit 1
 ```bash
 # C. Trailing Whitespace Check (STANDARD)
 if ! git diff --cached --check >/dev/null 2>&1; then
-    echo -e "${RED}❌ BLOCKING: Trailing whitespace detected!${NC}"
+    echo -e "${RED}[BLOCK] Trailing whitespace detected!${NC}"
     git diff --cached --check 2>&1 | head -20 | sed 's/^/   /'
     CHECKS_FAILED=1
 fi
@@ -186,7 +186,7 @@ DEBUG_PATTERNS="pdb\.set_trace\(\)|binding\.pry|^[[:space:]]*debugger;|breakpoin
 
 # WARNING만 표시, 차단 안 함
 if [ -n "$DEBUG_MATCHES" ]; then
-    echo -e "${YELLOW}⚠️  WARNING: Debug code detected (consider removing):${NC}"
+    echo -e "${YELLOW}[WARN] Debug code detected (consider removing):${NC}"
     WARNINGS=1
     # Don't block - just warn
 fi
@@ -245,7 +245,7 @@ echo "$STAGED_FILES" | xargs -r grep -E "$PATTERN" 2>/dev/null
 #### 1. Trailing Whitespace Check
 ```bash
 if ! git diff --cached --check >/dev/null 2>&1; then
-    echo -e "${RED}❌ BLOCKING: Trailing whitespace detected!${NC}"
+    echo -e "${RED}[BLOCK] Trailing whitespace detected!${NC}"
     git diff --cached --check 2>&1 | head -20 | sed 's/^/   /'
     [ $(git diff --cached --check 2>&1 | wc -l) -gt 20 ] && echo "   ... and more"
     CHECKS_FAILED=1
@@ -294,16 +294,16 @@ echo -e "${RED}Fix the issues above or use 'git commit --no-verify' to bypass${N
 
 # 성공 메시지 구분
 if [ $WARNINGS -ne 0 ]; then
-    echo -e "${GREEN}✓ Global checks passed (with warnings above)${NC}"
+    echo -e "${GREEN}[OK] Global checks passed (with warnings above)${NC}"
 else
-    echo -e "${GREEN}✓ All global checks passed${NC}"
+    echo -e "${GREEN}[OK] All global checks passed${NC}"
 fi
 
 # Project hook 결과 표시
 if "$RUN_HOOK" "$@"; then
-    echo -e "${GREEN}✓ Project hook completed successfully${NC}"
+    echo -e "${GREEN}[OK] Project hook completed successfully${NC}"
 else
-    echo -e "${RED}✗ Project hook failed with exit code $PROJECT_EXIT${NC}"
+    echo -e "${RED}[FAIL] Project hook failed with exit code $PROJECT_EXIT${NC}"
 fi
 ```
 
@@ -340,7 +340,7 @@ Conflict markers:   ~30ms
 Debug code:         ~40ms
 Large files:        ~100ms
 Email check:        ~10ms
-Tox execution:      5-30초 ⚠️ (프로젝트마다 다름)
+Tox execution:      5-30초 (주의: 프로젝트마다 다름)
 ─────────────────────────────
 Total:              5-30초
 ```
@@ -354,7 +354,7 @@ Debug code:            ~40ms
 Large files:           ~100ms
 Email check:           ~10ms
 ─────────────────────────────
-Total:                 ~250ms ✅
+Total:                 ~250ms (OK)
 ```
 
 **개선 효과**: **20-120배 빠름**
@@ -449,7 +449,7 @@ ls -l ~/.config/git/hooks/pre-commit
 
 ## 7. 결론
 
-### ✅ 달성한 목표
+### 달성한 목표
 
 1. **성능**: 5-30초 → 250ms (20-120배 개선)
 2. **정확성**: False positive 감소 (console.log 제거)
@@ -457,19 +457,17 @@ ls -l ~/.config/git/hooks/pre-commit
 4. **안정성**: 재귀 방지, 에러 처리 개선
 5. **유연성**: 환경변수로 제어 가능
 
-### 📊 비교 요약
+### 비교 요약
 
-| 항목 | 기존 (3d5273f) | 개선 (현재) |
-|------|---------------|-----------|
-| Tox 실행 | ✓ (느림) | ✗ (project로 이동) |
-| Trailing WS | ✗ | ✓ |
-| Debug mode | ✗ | ✓ |
-| 재귀 방지 | 주석만 | ✓ 구현 |
-| console.log | 차단 | 허용 |
-| 성능 | 5-30초 | 250ms |
-| False positive | 높음 | 낮음 |
+- Tox 실행: 기존=있음(느림), 개선=없음(project hook으로 이동)
+- Trailing whitespace: 기존=없음, 개선=있음
+- Debug mode: 기존=없음, 개선=있음
+- 재귀 방지: 기존=주석만, 개선=구현됨
+- `console.log`: 기존=차단, 개선=허용
+- 성능: 기존=5-30초, 개선=~250ms
+- False positive: 기존=높음, 개선=낮음
 
-### 🎯 핵심 개선 사항
+### 핵심 개선 사항
 
 1. **Tox 제거**: Global에서 제거 → 20-120배 빠름
 2. **Trailing Whitespace**: 추가 → 표준 품질 체크
@@ -477,7 +475,7 @@ ls -l ~/.config/git/hooks/pre-commit
 4. **환경변수 지원**: 긴급 상황 대응 가능
 5. **재귀 방지**: 안전한 delegation
 
-### 🚀 다음 단계 (선택사항)
+### 다음 단계 (선택사항)
 
 1. **Pre-push hook**: 무거운 체크는 push 시점으로 이동
    - Tox 전체 실행
