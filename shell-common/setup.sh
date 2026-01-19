@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # shell-common/setup.sh
 # Environment-specific configuration setup for shell-common
 

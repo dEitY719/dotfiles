@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 
 # zsh/setup.sh: Zsh shell environment setup
 #
