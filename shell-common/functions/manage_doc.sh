@@ -297,11 +297,14 @@ show_doc_help() {
 # Main execution
 # ═══════════════════════════════════════════════════════════════
 
-# Export functions for use in subshells and aliases
-export -f clear_doc
-export -f delete_doc
-export -f archive_doc
-export -f show_doc_help
+# Export functions for use in subshells and aliases (bash-specific)
+# Note: export -f is bash-only; zsh doesn't need this as functions are already available
+if [ -n "$BASH_VERSION" ]; then
+    export -f clear_doc
+    export -f delete_doc
+    export -f archive_doc
+    export -f show_doc_help
+fi
 
 # ═══════════════════════════════════════════════════════════════
 # Aliases
@@ -315,28 +318,32 @@ alias doc-help='show_doc_help'
 # Main execution - Only run if directly executed, not sourced
 # ═══════════════════════════════════════════════════════════════
 
-# Check if this script is being executed directly (not sourced)
-# Safe method: Use parameter expansion instead of basename to avoid flag injection
-_script_name="${0##*/}"
+# If SHELL_COMMON is set, we're being loaded by the dotfiles loader (main.bash/main.zsh)
+# Skip direct execution in that case
+if [ -z "${SHELL_COMMON:-}" ]; then
+    # Check if this script is being executed directly (not sourced)
+    # Safe method: Use parameter expansion instead of basename to avoid flag injection
+    _script_name="${0##*/}"
 
-# Validate that _script_name doesn't start with - (indicates sourced with flags)
-if [ "${_script_name#-}" = "$_script_name" ]; then
-    case "$_script_name" in
-        manage_doc.sh|manage_doc)
-            # This is direct execution - run with arguments
-            if [ "${DOTFILES_TEST_MODE:-0}" != "1" ] && [ -n "${1:-}" ]; then
-                case "$1" in
-                    clear_doc|delete_doc|archive_doc|show_doc_help)
-                        "$@"
-                        ;;
-                    *)
-                        # Default to clear_doc for backward compatibility with alias
-                        clear_doc "$@"
-                        ;;
-                esac
-            fi
-            ;;
-    esac
+    # Validate that _script_name doesn't start with - (indicates sourced with flags)
+    if [ "${_script_name#-}" = "$_script_name" ]; then
+        case "$_script_name" in
+            manage_doc.sh|manage_doc)
+                # This is direct execution - run with arguments
+                if [ "${DOTFILES_TEST_MODE:-0}" != "1" ] && [ -n "${1:-}" ]; then
+                    case "$1" in
+                        clear_doc|delete_doc|archive_doc|show_doc_help)
+                            "$@"
+                            ;;
+                        *)
+                            # Default to clear_doc for backward compatibility with alias
+                            clear_doc "$@"
+                            ;;
+                    esac
+                fi
+                ;;
+        esac
+    fi
+
+    unset _script_name
 fi
-
-unset _script_name
