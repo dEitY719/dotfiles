@@ -130,16 +130,14 @@ _my_help_show_all() {
 
         # Include functions ending with 'help' (both dash and underscore)
         # Exclude:
-        # - my_help, my-help (main help function)
+        # - my-help (main help function)
         # - _* (internal functions)
         # - run-help (zsh builtin)
-        # - register_help, category_help (internal utility functions)
+        # - *_* (internal utility functions with underscores)
         if [[ "$func_name" == *help ]] && \
-           [[ "$func_name" != "my_help" ]] && \
            [[ "$func_name" != "my-help" ]] && \
            [[ "$func_name" != "run-help" ]] && \
-           [[ "$func_name" != "register_help" ]] && \
-           [[ "$func_name" != "category_help" ]] && \
+           [[ "$func_name" != *_* ]] && \
            [[ "$func_name" != _* ]]; then
 
             # Normalize to dash format for display

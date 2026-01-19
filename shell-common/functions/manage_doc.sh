@@ -23,8 +23,8 @@
 #   - Error messages:       "Usage: clear-doc ..."  (dash-form - users read this)
 #
 # To preserve this consistency:
-#   1. Grep for "clear_doc" in help/examples text -> should return 0 results
-#   2. All user-visible text should match: grep "clear-doc" show_doc_help
+#   1. Verify no snake_case appears in user-visible text
+#   2. All user-visible text should use dash-form (grep clear-doc show_doc_help)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════
@@ -151,7 +151,7 @@ clear_doc() {
 # ═══════════════════════════════════════════════════════════════
 
 archive_doc() {
-    ux_error "archive_doc not yet implemented"
+    ux_error "archive-doc not yet implemented"
     return 1
 }
 

@@ -11,8 +11,8 @@ myman() {
     trap "rm -f '$temp_output_file'" EXIT
 
     if [[ -z "$type_to_show" ]]; then
-        ux_header "myman"
-        ux_usage "myman" "[alias | function]" "Show defined aliases or functions"
+        ux_header "my-man"
+        ux_usage "my-man" "[alias | function]" "Show defined aliases or functions"
         ux_bullet "alias: 정의된 모든 alias 목록을 보여줍니다."
         ux_bullet "function: 정의된 모든 function 목록을 보여줍니다."
         echo ""
@@ -51,7 +51,7 @@ myman() {
         ) | less
     else
         ux_error "유효하지 않은 옵션: '$type_to_show'"
-        ux_usage "myman" "[alias | function]" "Show defined aliases or functions"
+        ux_usage "my-man" "[alias | function]" "Show defined aliases or functions"
         return 1
     fi
 }

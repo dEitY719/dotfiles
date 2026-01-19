@@ -34,8 +34,8 @@ init_plugins_docs() {
         echo ""
         ux_section "Quick Commands"
         ux_bullet "Open plugins: ${UX_HIGHLIGHT}open_claude_plugins${UX_RESET}"
-        ux_bullet "List available plugins: ${UX_HIGHLIGHT}list_plugins${UX_RESET}"
-        ux_bullet "Create structure from plugins: ${UX_HIGHLIGHT}sync_plugins_structure${UX_RESET}"
+        ux_bullet "List available plugins: ${UX_HIGHLIGHT}list-plugins${UX_RESET}"
+        ux_bullet "Create structure from plugins: ${UX_HIGHLIGHT}sync-plugins-structure${UX_RESET}"
     else
         ux_error "Failed to create documentation directory"
         return 1
@@ -46,7 +46,7 @@ init_plugins_docs() {
 # List Available Plugins with Marketplace Organization
 # ═══════════════════════════════════════════════════════════════
 
-list_plugins() {
+list-plugins() {
     local plugins_dir="$HOME/.claude/plugins/marketplaces"
 
     if [ ! -d "$plugins_dir" ]; then
@@ -152,7 +152,7 @@ list_plugins() {
 # Create Documentation Directory Structure from Plugins
 # ═══════════════════════════════════════════════════════════════
 
-sync_plugins_structure() {
+sync-plugins-structure() {
     local plugins_dir="$HOME/.claude/plugins/marketplaces"
     local docs_base_dir="$HOME/.claude/docs"
     local docs_dir="$docs_base_dir/marketplaces"
@@ -212,13 +212,13 @@ sync_plugins_structure() {
 # Quick Lookup: Find and View Specific Plugin Info
 # ═══════════════════════════════════════════════════════════════
 
-view_plugin_info() {
+view-plugin-info() {
     local plugin_name="$1"
 
     if [ -z "$plugin_name" ]; then
-        ux_header "view_plugin_info"
-        ux_usage "view_plugin_info" "<plugin-name>" "Find and display plugin information"
-        ux_bullet "Example: ${UX_INFO}view_plugin_info algorithmic-art${UX_RESET}"
+        ux_header "view-plugin-info"
+        ux_usage "view-plugin-info" "<plugin-name>" "Find and display plugin information"
+        ux_bullet "Example: ${UX_INFO}view-plugin-info algorithmic-art${UX_RESET}"
         return 1
     fi
 
@@ -253,7 +253,7 @@ view_plugin_info() {
 
     if [ $found -eq 0 ]; then
         ux_error "Plugin not found: $plugin_name"
-        ux_info "Available plugins can be listed with: ${UX_HIGHLIGHT}list_plugins${UX_RESET}"
+        ux_info "Available plugins can be listed with: ${UX_HIGHLIGHT}list-plugins${UX_RESET}"
         return 1
     fi
 }
@@ -275,7 +275,7 @@ view_plugin_info() {
 : "${UX_CODE:=${UX_BOLD-}${UX_PRIMARY-}}"
 
 # Korean documentation generation prompt template
-_generate_plugin_doc_ko_prompt() {
+_generate-plugin-doc-ko_prompt() {
     local plugin_file="$1"
 
     cat <<'PROMPT_EOF'
@@ -298,18 +298,18 @@ PROMPT_EOF
 PROMPT_EOF
 }
 
-generate_plugin_doc_ko() {
+generate-plugin-doc-ko() {
     local plugin_file="$1"
     local output_file="$2"
     local ai_tool="${CLAUDE_DOC_GENERATOR}"
     local force_overwrite=false
 
     if [ -z "$plugin_file" ] || [ -z "$output_file" ]; then
-        ux_header "generate_plugin_doc_ko"
-        ux_usage "generate_plugin_doc_ko" "<source-file> <output-file> [ai-tool] [--force]" "Generate Korean summary from plugin file"
-        ux_bullet "Example: ${UX_INFO}generate_plugin_doc_ko file.md output_KO.md${UX_RESET}"
-        ux_bullet "With specific AI: ${UX_INFO}generate_plugin_doc_ko file.md output_KO.md gemini${UX_RESET}"
-        ux_bullet "Force overwrite: ${UX_INFO}generate_plugin_doc_ko file.md output_KO.md claude --force${UX_RESET}"
+        ux_header "generate-plugin-doc-ko"
+        ux_usage "generate-plugin-doc-ko" "<source-file> <output-file> [ai-tool] [--force]" "Generate Korean summary from plugin file"
+        ux_bullet "Example: ${UX_INFO}generate-plugin-doc-ko file.md output_KO.md${UX_RESET}"
+        ux_bullet "With specific AI: ${UX_INFO}generate-plugin-doc-ko file.md output_KO.md gemini${UX_RESET}"
+        ux_bullet "Force overwrite: ${UX_INFO}generate-plugin-doc-ko file.md output_KO.md claude --force${UX_RESET}"
         echo ""
         ux_section "Available AI Tools"
         ux_bullet "claude (default) - Anthropic Claude (uses -p flag)"
@@ -333,8 +333,8 @@ generate_plugin_doc_ko() {
             force_overwrite=true
             ;;
         -h | --help)
-            ux_header "generate_plugin_doc_ko"
-            ux_usage "generate_plugin_doc_ko" "<source-file> <output-file> [ai-tool] [--force]" "Generate Korean summary from plugin file"
+            ux_header "generate-plugin-doc-ko"
+            ux_usage "generate-plugin-doc-ko" "<source-file> <output-file> [ai-tool] [--force]" "Generate Korean summary from plugin file"
             return 1
             ;;
         *)
@@ -359,7 +359,7 @@ generate_plugin_doc_ko() {
     if ! command -v "$ai_tool" >/dev/null 2>&1; then
         ux_error "AI tool not found or not in PATH: $ai_tool"
         ux_info "Make sure '$ai_tool' is installed and available in your PATH"
-        ux_info "Or specify a different AI tool with: generate_plugin_doc_ko <source> <output> <tool>"
+        ux_info "Or specify a different AI tool with: generate-plugin-doc-ko <source> <output> <tool>"
         return 1
     fi
 
@@ -387,24 +387,24 @@ generate_plugin_doc_ko() {
     case "$ai_tool" in
     claude | gemini)
         # These tools use -p flag
-        prompt_output=$(_generate_plugin_doc_ko_prompt "$plugin_file")
+        prompt_output=$(_generate-plugin-doc-ko_prompt "$plugin_file")
         "$ai_tool" -p "$prompt_output" >"$output_file" 2>&1
         rc=$?
         ;;
     codex)
         # Codex uses 'exec' subcommand for non-interactive execution
         # Use --output-last-message to capture only the AI response (not session info)
-        _generate_plugin_doc_ko_prompt "$plugin_file" | "$ai_tool" exec --output-last-message "$output_file" - >/dev/null 2>&1
+        _generate-plugin-doc-ko_prompt "$plugin_file" | "$ai_tool" exec --output-last-message "$output_file" - >/dev/null 2>&1
         rc=$?
         ;;
     *)
         # Try common prompt flag patterns
-        prompt_output=$(_generate_plugin_doc_ko_prompt "$plugin_file")
+        prompt_output=$(_generate-plugin-doc-ko_prompt "$plugin_file")
         if "$ai_tool" -p "$prompt_output" >"$output_file" 2>&1; then
             : # Success
         elif "$ai_tool" --prompt "$prompt_output" >"$output_file" 2>&1; then
             : # Success
-        elif _generate_plugin_doc_ko_prompt "$plugin_file" | "$ai_tool" exec --output-last-message "$output_file" - >/dev/null 2>&1; then
+        elif _generate-plugin-doc-ko_prompt "$plugin_file" | "$ai_tool" exec --output-last-message "$output_file" - >/dev/null 2>&1; then
             : # Success (exec subcommand reading prompt from stdin)
         elif "$ai_tool" exec --output-last-message "$output_file" "$prompt_output" >/dev/null 2>&1; then
             : # Success (exec subcommand with output file + prompt arg)
@@ -583,18 +583,18 @@ README_HEADER
 }
 
 # Process plugin directory recursively and generate Korean docs for all files
-process_plugin_directory_ko() {
+process-plugin-directory-ko() {
     local marketplace="$1"
     local plugin_path="$2"
     local ai_tool="${CLAUDE_DOC_GENERATOR}"
     local force_overwrite=false
 
     if [ -z "$marketplace" ] || [ -z "$plugin_path" ]; then
-        ux_header "process_plugin_directory_ko"
-        ux_usage "process_plugin_directory_ko" "<marketplace> <plugin-path/> [ai-tool] [--force]" "Recursively generate Korean docs for all files in directory"
-        ux_bullet "Example: ${UX_INFO}process_plugin_directory_ko claude-code-workflows plugins/code-refactoring/${UX_RESET}"
-        ux_bullet "With Gemini: ${UX_INFO}process_plugin_directory_ko claude-code-workflows plugins/code-refactoring/ gemini${UX_RESET}"
-        ux_bullet "Force update: ${UX_INFO}process_plugin_directory_ko claude-code-workflows plugins/code-refactoring/ --force${UX_RESET}"
+        ux_header "process-plugin-directory-ko"
+        ux_usage "process-plugin-directory-ko" "<marketplace> <plugin-path/> [ai-tool] [--force]" "Recursively generate Korean docs for all files in directory"
+        ux_bullet "Example: ${UX_INFO}process-plugin-directory-ko claude-code-workflows plugins/code-refactoring/${UX_RESET}"
+        ux_bullet "With Gemini: ${UX_INFO}process-plugin-directory-ko claude-code-workflows plugins/code-refactoring/ gemini${UX_RESET}"
+        ux_bullet "Force update: ${UX_INFO}process-plugin-directory-ko claude-code-workflows plugins/code-refactoring/ --force${UX_RESET}"
         echo ""
         ux_section "Options"
         ux_bullet "--force - Overwrite all existing files (default: skip if exists)"
@@ -609,8 +609,8 @@ process_plugin_directory_ko() {
             force_overwrite=true
             ;;
         -h | --help)
-            ux_header "process_plugin_directory_ko"
-            ux_usage "process_plugin_directory_ko" "<marketplace> <plugin-path/> [ai-tool] [--force]" "Recursively generate Korean docs for all files in directory"
+            ux_header "process-plugin-directory-ko"
+            ux_usage "process-plugin-directory-ko" "<marketplace> <plugin-path/> [ai-tool] [--force]" "Recursively generate Korean docs for all files in directory"
             return 1
             ;;
         *)
@@ -673,9 +673,9 @@ process_plugin_directory_ko() {
         # Build command with optional --force flag
         local cmd_output
         if [ "$force_overwrite" = "true" ]; then
-            cmd_output=$(generate_plugin_doc_ko "$source_file" "$output_file" "$ai_tool" --force 2>&1)
+            cmd_output=$(generate-plugin-doc-ko "$source_file" "$output_file" "$ai_tool" --force 2>&1)
         else
-            cmd_output=$(generate_plugin_doc_ko "$source_file" "$output_file" "$ai_tool" 2>&1)
+            cmd_output=$(generate-plugin-doc-ko "$source_file" "$output_file" "$ai_tool" 2>&1)
         fi
 
         if [ -f "$output_file" ]; then
@@ -713,19 +713,19 @@ process_plugin_directory_ko() {
 
 # ═══════════════════════════════════════════════════════════════
 
-create_plugin_structure_ko() {
+create-plugin-structure-ko() {
     local marketplace="$1"
     local plugin_path="$2"
     local ai_tool="${CLAUDE_DOC_GENERATOR}"
     local force_overwrite=false
 
     if [ -z "$marketplace" ] || [ -z "$plugin_path" ]; then
-        ux_header "create_plugin_structure_ko"
-        ux_usage "create_plugin_structure_ko" "<marketplace> <plugin-path|plugin-path/> [ai-tool] [--force]" "Generate Korean docs for file or directory"
-        ux_bullet "Single file: ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
-        ux_bullet "Full directory: ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/${UX_RESET}"
-        ux_bullet "With Gemini: ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/ gemini${UX_RESET}"
-        ux_bullet "Force overwrite: ${UX_INFO}create_plugin_structure_ko claude-code-workflows plugins/code-refactoring/ --force${UX_RESET}"
+        ux_header "create-plugin-structure-ko"
+        ux_usage "create-plugin-structure-ko" "<marketplace> <plugin-path|plugin-path/> [ai-tool] [--force]" "Generate Korean docs for file or directory"
+        ux_bullet "Single file: ${UX_INFO}create-plugin-structure-ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
+        ux_bullet "Full directory: ${UX_INFO}create-plugin-structure-ko claude-code-workflows plugins/code-refactoring/${UX_RESET}"
+        ux_bullet "With Gemini: ${UX_INFO}create-plugin-structure-ko claude-code-workflows plugins/code-refactoring/ gemini${UX_RESET}"
+        ux_bullet "Force overwrite: ${UX_INFO}create-plugin-structure-ko claude-code-workflows plugins/code-refactoring/ --force${UX_RESET}"
         echo ""
         ux_section "Available AI Tools"
         ux_bullet "claude (default) - Anthropic Claude (uses -p flag)"
@@ -746,8 +746,8 @@ create_plugin_structure_ko() {
             force_overwrite=true
             ;;
         -h | --help)
-            ux_header "create_plugin_structure_ko"
-            ux_usage "create_plugin_structure_ko" "<marketplace> <plugin-path|plugin-path/> [ai-tool] [--force]" "Generate Korean docs for file or directory"
+            ux_header "create-plugin-structure-ko"
+            ux_usage "create-plugin-structure-ko" "<marketplace> <plugin-path|plugin-path/> [ai-tool] [--force]" "Generate Korean docs for file or directory"
             return 1
             ;;
         *)
@@ -779,9 +779,9 @@ create_plugin_structure_ko() {
 
         # Generate Korean documentation with specified AI tool
         if [ "$force_overwrite" = "true" ]; then
-            generate_plugin_doc_ko "$source_path" "$output_file" "$ai_tool" --force
+            generate-plugin-doc-ko "$source_path" "$output_file" "$ai_tool" --force
         else
-            generate_plugin_doc_ko "$source_path" "$output_file" "$ai_tool"
+            generate-plugin-doc-ko "$source_path" "$output_file" "$ai_tool"
         fi
 
         echo ""
@@ -793,9 +793,9 @@ create_plugin_structure_ko() {
     elif [ -d "$source_path" ]; then
         # Directory path - use recursive directory processing
         if [ "$force_overwrite" = "true" ]; then
-            process_plugin_directory_ko "$marketplace" "$plugin_path" "$ai_tool" --force
+            process-plugin-directory-ko "$marketplace" "$plugin_path" "$ai_tool" --force
         else
-            process_plugin_directory_ko "$marketplace" "$plugin_path" "$ai_tool"
+            process-plugin-directory-ko "$marketplace" "$plugin_path" "$ai_tool"
         fi
 
     else
@@ -819,36 +819,36 @@ claude_plugins_help() {
     ux_bullet "Usage: ${UX_CODE}open_claude_plugins${UX_RESET}"
     echo ""
 
-    ux_section "list_plugins"
+    ux_section "list-plugins"
     ux_info "List all available marketplaces and their skills"
-    ux_bullet "Usage: ${UX_CODE}list_plugins${UX_RESET}"
+    ux_bullet "Usage: ${UX_CODE}list-plugins${UX_RESET}"
     echo ""
 
-    ux_section "init_plugins_docs"
+    ux_section "init-plugins-docs"
     ux_info "Initialize Korean documentation directory structure"
-    ux_bullet "Usage: ${UX_CODE}init_plugins_docs${UX_RESET}"
+    ux_bullet "Usage: ${UX_CODE}init-plugins-docs${UX_RESET}"
     echo ""
 
-    ux_section "sync_plugins_structure"
+    ux_section "sync-plugins-structure"
     ux_info "Create directory structure mirroring plugins organization"
-    ux_bullet "Usage: ${UX_CODE}sync_plugins_structure${UX_RESET}"
+    ux_bullet "Usage: ${UX_CODE}sync-plugins-structure${UX_RESET}"
     echo ""
 
-    ux_section "view_plugin_info <plugin-name>"
+    ux_section "view-plugin-info <plugin-name>"
     ux_info "View specific plugin information"
-    ux_bullet "Usage: ${UX_CODE}view_plugin_info algorithmic-art${UX_RESET}"
+    ux_bullet "Usage: ${UX_CODE}view-plugin-info algorithmic-art${UX_RESET}"
     echo ""
 
-    ux_section "generate_plugin_doc_ko <source-file> <output-file> [ai-tool]"
+    ux_section "generate-plugin-doc-ko <source-file> <output-file> [ai-tool]"
     ux_info "Generate Korean documentation from plugin file using any AI tool"
-    ux_bullet "Usage (default Claude): ${UX_CODE}generate_plugin_doc_ko file.md output_KO.md${UX_RESET}"
-    ux_bullet "Usage (Gemini): ${UX_CODE}generate_plugin_doc_ko file.md output_KO.md gemini${UX_RESET}"
+    ux_bullet "Usage (default Claude): ${UX_CODE}generate-plugin-doc-ko file.md output_KO.md${UX_RESET}"
+    ux_bullet "Usage (Gemini): ${UX_CODE}generate-plugin-doc-ko file.md output_KO.md gemini${UX_RESET}"
     echo ""
 
-    ux_section "create_plugin_structure_ko <marketplace> <plugin-path> [ai-tool]"
+    ux_section "create-plugin-structure-ko <marketplace> <plugin-path> [ai-tool]"
     ux_info "Create structure and generate Korean docs in one command (RECOMMENDED)"
-    ux_bullet "Usage (default): ${UX_CODE}create_plugin_structure_ko <marketplace> <path/to/file.md>${UX_RESET}"
-    ux_bullet "Usage (Gemini): ${UX_CODE}create_plugin_structure_ko <marketplace> <path/to/file.md> gemini${UX_RESET}"
+    ux_bullet "Usage (default): ${UX_CODE}create-plugin-structure-ko <marketplace> <path/to/file.md>${UX_RESET}"
+    ux_bullet "Usage (Gemini): ${UX_CODE}create-plugin-structure-ko <marketplace> <path/to/file.md> gemini${UX_RESET}"
     echo ""
 
     ux_section "Quick Examples"
@@ -877,7 +877,7 @@ claude_plugins_help() {
     echo ""
 
     ux_section "Recommended Workflow"
-    ux_bullet "1. ${UX_CODE}init_plugins_docs${UX_RESET} - Initialize docs directory (first time only)"
+    ux_bullet "1. ${UX_CODE}init-plugins-docs${UX_RESET} - Initialize docs directory (first time only)"
     ux_bullet "2. ${UX_CODE}open_claude_plugins${UX_RESET} - Review plugin files in VSCode"
     ux_bullet "3. ${UX_CODE}create-plugin-ko <marketplace> <path>${UX_RESET} - Generate Korean summary"
     ux_bullet "4. Edit & customize generated ${UX_CODE}*_KO.md${UX_RESET} file"

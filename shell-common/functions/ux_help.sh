@@ -82,7 +82,7 @@ ux_help() {
       # Show help if no arguments
       if [ -z "$1" ]; then
           ux_header "My Function"
-          ux_usage "my_function" "<arg>" "Description"
+          ux_usage "my-function" "<arg>" "Description"
           return 0
       fi
 

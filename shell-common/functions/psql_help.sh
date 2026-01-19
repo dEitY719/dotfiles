@@ -13,7 +13,6 @@ psql_help() {
     fi
 
     ux_header "PostgreSQL Manager"
-    # ux_usage "psql_help" "" "Show available PostgreSQL commands"
 
     ux_section "Primary Commands"
     ux_table_row "psql_list" "List Services" "Show all configured connections"

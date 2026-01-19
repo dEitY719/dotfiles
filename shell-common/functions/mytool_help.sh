@@ -104,7 +104,7 @@ mytool_help() {
         tool_name="$(basename "$script" .sh)"
 
         local desc
-        desc="$(_extract_tool_description "$script" "$tool_name")"
+        desc=$(_extract_tool_description "$script" "$tool_name")
 
         ux_table_row "$tool_name" "$desc"
         count=$((count + 1))
