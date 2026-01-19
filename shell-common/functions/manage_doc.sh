@@ -46,22 +46,20 @@ clear_doc() {
 
     local files=()
 
-    # Process each argument
+    # Process each argument - supports both quoted patterns and direct globs
+    # Examples:
+    #   clear_doc 'docs/abc-review*'      (quoted pattern)
+    #   clear_doc docs/abc-review*        (unquoted glob - shell expands first)
+    #   clear_doc docs/file1.md docs/file2.md  (multiple explicit files)
     for arg in "$@"; do
-        # Check if argument contains wildcards
-        if [[ "$arg" == *[\*\?]* ]]; then
-            # Expand glob pattern
-            for f in $arg; do
-                if [ -f "$f" ]; then
-                    files+=("$f")
-                fi
-            done
-        else
-            # Literal file path
-            if [ -f "$arg" ]; then
-                files+=("$arg")
+        # Try glob expansion on each argument
+        # If arg contains wildcards (quoted), this expands them
+        # If arg is a literal filename, this just returns the filename as-is
+        for f in $arg; do
+            if [ -f "$f" ]; then
+                files+=("$f")
             fi
-        fi
+        done
     done
 
     # Handle case where no files match
