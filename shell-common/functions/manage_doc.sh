@@ -36,10 +36,10 @@ unset _UX_LIB_PATH
 clear_doc() {
     # Validate arguments
     if [ $# -eq 0 ]; then
-        ux_error "Usage: clear_doc <file|pattern>"
+        ux_error "Usage: clear-doc <file|pattern>"
         ux_section "Examples"
-        ux_bullet "clear_doc docs/abc-review-G.md           # Clear single file"
-        ux_bullet "clear_doc 'docs/abc-review*'             # Clear matching files"
+        ux_bullet "clear-doc docs/abc-review-G.md           # Clear single file"
+        ux_bullet "clear-doc 'docs/abc-review*'             # Clear matching files"
         echo ""
         return 1
     fi
@@ -48,9 +48,9 @@ clear_doc() {
 
     # Process each argument - supports both quoted patterns and direct globs
     # Examples:
-    #   clear_doc 'docs/abc-review*'      (quoted pattern)
-    #   clear_doc docs/abc-review*        (unquoted glob - shell expands first)
-    #   clear_doc docs/file1.md docs/file2.md  (multiple explicit files)
+    #   clear-doc 'docs/abc-review*'      (quoted pattern)
+    #   clear-doc docs/abc-review*        (unquoted glob - shell expands first)
+    #   clear-doc docs/file1.md docs/file2.md  (multiple explicit files)
     for arg in "$@"; do
         # Try glob expansion on each argument
         # If arg contains wildcards (quoted), this expands them
@@ -139,17 +139,17 @@ show_doc_help() {
     ux_header "Document Management Commands"
     echo ""
 
-    ux_section "clear_doc"
+    ux_section "clear-doc"
     ux_bullet "Clear content of documentation files"
     echo ""
-    ux_info "Usage: clear_doc <file|pattern>"
+    ux_info "Usage: clear-doc <file|pattern>"
     echo ""
     ux_info "Examples:"
-    echo "  clear_doc docs/abc-review-G.md              // Clear single file"
-    echo "  clear_doc docs/abc-review*                  // Unquoted glob (both work!)"
-    echo "  clear_doc 'docs/abc-review*'                // Quoted pattern"
-    echo "  clear_doc docs/file1.md docs/file2.md       // Multiple files"
-    echo "  clear_doc 'docs/*.md' notes.txt             // Mixed patterns + files"
+    echo "  clear-doc docs/abc-review-G.md              // Clear single file"
+    echo "  clear-doc docs/abc-review*                  // Unquoted glob (both work!)"
+    echo "  clear-doc 'docs/abc-review*'                // Quoted pattern"
+    echo "  clear-doc docs/file1.md docs/file2.md       // Multiple files"
+    echo "  clear-doc 'docs/*.md' notes.txt              // Mixed patterns + files"
     echo ""
 
     ux_section "Description"
