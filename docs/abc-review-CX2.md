@@ -68,13 +68,40 @@
 
 ## 5) Action Items (Priority)
 
-- [ ] P0: Fix `devx__log()` undefined vars under `set -u` (`shell-common/functions/devx.sh:102`).
-- [ ] P0: Decide and enforce a policy for review docs (immutable snapshot vs living) and make `docs/abc-review-CX.md` + `docs/abc-review-G.md` consistent with that decision (`docs/abc-review-CX.md:46`, `docs/abc-review-G.md:44`).
-- [ ] P1: Align `devx.sh` shebang with its actual compatibility intent (`shell-common/functions/devx.sh:1`).
-- [ ] P1: Remove emoji from `proxy_help.sh` fallback error message (`shell-common/functions/proxy_help.sh:83`).
-- [ ] P2: Promote `dexport()` failures to `ux_error` and consider aggregate exit code (`shell-common/tools/integrations/docker.sh:459`).
+- [x] P0: Fix `devx__log()` undefined vars under `set -u` (`shell-common/functions/devx.sh:103`) (resolved in `bdde46f`).
+- [ ] P0: Decide and enforce a policy for review docs (immutable snapshot vs living) and make `docs/abc-review-CX.md` + `docs/abc-review-G.md` consistent with that decision (`docs/abc-review-CX.md:32`) (policy decided as living, but content still needs consistency cleanup).
+- [x] P1: Align `devx.sh` shebang with its actual compatibility intent (`shell-common/functions/devx.sh:1`) (resolved in `bdde46f`).
+- [x] P1: Remove emoji from `proxy_help.sh` fallback error message (`shell-common/functions/proxy_help.sh:83`) (resolved in `bdde46f`).
+- [x] P2: Promote `dexport()` failures to `ux_error` and consider aggregate exit code (`shell-common/tools/integrations/docker.sh:440`) (resolved in `bdde46f`).
 - [ ] P2: Apply small `shellcheck` cleanups in `shell-common/setup.sh` (`shell-common/setup.sh:85`).
 
 ## 6) Conclusion
 
 This commit is a strong step toward consistent `ux_lib`-driven output and fixes the largest P0 items from the earlier UX audit. The main blocker to merging/rolling out broadly is the `devx__log()` + `set -u` regression, plus the documentation drift created by editing review docs without updating their content to match the post-refactor reality.
+
+## 7) Follow-up Review (bdde46f)
+
+### What Looks Resolved
+
+- `devx.sh` shebang mismatch is resolved (`shell-common/functions/devx.sh:1`).
+- `devx__log()` no longer hard-fails under `set -u` (adds local fallbacks; `shell-common/functions/devx.sh:103`).
+- `proxy_help.sh` fallback error message is plain text now (`shell-common/functions/proxy_help.sh:83`).
+- `dexport()` reports failures via `ux_error` and returns non-zero if any export fails (`shell-common/tools/integrations/docker.sh:440`).
+
+### Remaining Feedback (Small)
+
+- `devx__log()` fallback defaults use `-` when `UX_*` is empty, which can inject stray hyphens into output.
+  - Evidence: `shell-common/functions/devx.sh:110`
+  - Suggestion: use empty-string fallbacks (e.g., `${UX_MUTED:-}` / `${UX_PRIMARY:-}`) since `UX_*` are already defaulted to `""` above (`shell-common/functions/devx.sh:90`).
+
+- `setup_new_pc.sh` still contains non-`ux_*` output and undefined style vars (`bold/reset`).
+  - Evidence: `shell-common/tools/custom/setup_new_pc.sh:131`
+  - Suggestion: replace `${bold}`/`${reset}` with `${UX_BOLD}`/`${UX_RESET}` or remove styling and use `ux_section`/`ux_bullet` consistently; avoid raw `echo` for user-facing lines where feasible.
+
+- “POSIX compatibility” claims still conflict with a few `#!/bin/sh` modules that use non-POSIX features (e.g., `local`).
+  - Evidence: `shell-common/functions/proxy_help.sh:68`
+  - Suggestion: either remove `local` in `#!/bin/sh` modules or update headers/comments to reflect “bash/zsh shared” rather than “POSIX”.
+
+- `docs/abc-review-CX.md` appears internally inconsistent (metrics/scores) and introduces emoji-based status headings that conflict with the repo’s “no emojis” guidance.
+  - Evidence: `docs/abc-review-CX.md:32`, `docs/abc-review-CX.md:46`
+  - Suggestion: pick one policy (living doc vs snapshot) and keep metrics consistent (e.g., `104/136` currently); align emoji policy with root rules.

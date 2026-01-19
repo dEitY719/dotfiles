@@ -106,13 +106,14 @@ devx__log() {
     local ts
     ts="$(date '+%F %T')"
 
-    # Use UX_* variables if available (from ux_lib), otherwise use defaults
-    local dim="${UX_MUTED:--}"
-    local reset="${UX_RESET:-}"
-    local c_blue="${UX_PRIMARY:--}"
-    local c_green="${UX_SUCCESS:--}"
-    local c_yellow="${UX_WARNING:--}"
-    local c_red="${UX_ERROR:--}"
+    # Use UX_* variables if available (from ux_lib), otherwise use empty strings
+    # (UX_* are already pre-initialized to "" above, so use empty fallbacks)
+    local dim="${UX_MUTED}"
+    local reset="${UX_RESET}"
+    local c_blue="${UX_PRIMARY}"
+    local c_green="${UX_SUCCESS}"
+    local c_yellow="${UX_WARNING}"
+    local c_red="${UX_ERROR}"
 
     case "$lvl" in
     INFO)

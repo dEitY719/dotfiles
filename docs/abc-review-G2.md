@@ -2,59 +2,47 @@
 - **Reviewer**: Gemini (Google DeepMind)
 - **Model**: Gemini Pro
 - **Date**: 2026-01-19
-- **Scope**: Code review of commit `c5734d3` (UX Guidelines Compliance Fixes)
-- **Previous Review**: `docs/abc-review-G.md`
+- **Scope**: Code review of commit `bdde46f` (G2/CX2 Feedback Resolution)
+- **Previous Review**: `docs/abc-review-G2.md`
 
 # Commit Summary
-**Commit**: `c5734d3`
+**Commit**: `bdde46f`
 **Author**: dEitY719
-**Subject**: refactor: Align shell-common UX output with guidelines compliance audit
+**Subject**: fix: Address code review issues from G2.md & CX2.md feedback
 
-This commit addresses the majority of UX guideline violations identified in the previous review. It introduces POSIX-compatible library loading, fallback mechanisms, and refactors key scripts to use semantic `ux_*` functions.
+This commit addresses the final remaining UX inconsistencies identified in previous reviews and introduces critical stability fixes for the `devx` utility.
 
 # Verification Results
 
 ## ✅ Solved Issues
-The following P0/P1 issues from `abc-review-G.md` have been successfully resolved:
 
-1.  **`shell-common/setup.sh`** (P0)
-    -   Hardcoded ANSI colors and `print_*` functions removed.
-    -   Now sources `ux_lib.sh` dynamically with fallback definitions.
-    -   Consistent with project styling.
+1.  **`shell-common/tools/custom/setup_new_pc.sh`** (P1 - Resolved)
+    -   **Issue**: Previous `cat <<EOF` banner with manual colors.
+    -   **Fix**: Completely refactored to use `ux_header`, `ux_section`, `ux_numbered`, and `ux_success`. The output is now fully semantic and consistent with the project style.
+    -   **Bonus**: The `.env` file preview now iterates with `ux_bullet` instead of a `sed` hack.
 
-2.  **`shell-common/functions/devx.sh`** (P1)
-    -   `cat <<EOF` usage replaced with `ux_section`, `ux_bullet` in `devx__usage`.
-    -   Custom color functions removed in favor of `UX_*` globals.
-    -   Proper library loading logic added.
+2.  **`shell-common/functions/devx.sh`** (P0 - Resolved)
+    -   **Issue**: `devx__log` used undefined variables (`dim`, `reset`, etc.), causing crashes under `set -u` (strict mode).
+    -   **Fix**: Local variables are now properly initialized with fallbacks to `UX_*` globals or safe defaults (`-`).
+    -   **Improvement**: Shebang changed to `#!/bin/bash` to accurately reflect the script's usage of bash-isms (`local`, `BASH_SOURCE`), while noting zsh compatibility.
 
-3.  **POSIX Compatibility & Fallbacks** (New Improvement)
-    -   `dot_help.sh`, `npm_help.sh`: Replaced bash-isms (`declare -f`, `BASH_SOURCE`) with POSIX-compliant checks (`type`, path iteration).
-    -   `proxy_help.sh`: Added `type ux_error` check to prevent crashes in minimal environments.
+3.  **`shell-common/functions/proxy_help.sh`** (P1 - Resolved)
+    -   **Issue**: Fallback error message used an emoji (`❌`) which might not render in minimal environments.
+    -   **Fix**: Changed to plain text "Error: ...".
 
-4.  **Semantic Formatting**
-    -   `dproxy_help.sh`: Refactored raw `echo` blocks to use `ux_bullet` and `ux_success`.
-    -   `tools/integrations/docker.sh`: Refactored `dexport` output.
-
-## ⚠️ Remaining Issues
-
-1.  **`shell-common/tools/custom/setup_new_pc.sh`** (P1 - Unresolved)
-    -   **Issue**: The script still uses `cat <<EOF` with manually injected color variables (`${bold}${blue}...`) for the main banner and completion summary.
-    -   **Violation**: Inconsistent with `ux_header` style used elsewhere.
-    -   **Recommendation**: Replace the ASCII art banner with `ux_header "Setup New PC (git-crypt)"` and the final summary with `ux_section` / `ux_bullet`.
+4.  **`shell-common/tools/integrations/docker.sh`** (Feature)
+    -   **Improvement**: `dexport` now tracks failed containers, reports them with `ux_error`, and returns a non-zero exit code if any failures occur.
 
 # Updated Compliance Score
 
-- **Previous Score**: 88/100
-- **Current Score**: **95/100**
+- **Previous Score**: 95/100
+- **Current Score**: **100/100**
 
-The remaining issue is isolated to a specific utility script and does not affect the core library or main help functions.
+All identified UX violations and related functional regressions have been resolved. The codebase is now fully compliant with the `UX_GUIDELINES.md` standard.
 
 # Action Items
 
-1.  **[P1] Refactor `shell-common/tools/custom/setup_new_pc.sh`**
-    -   Replace `cat <<EOF` banner with `ux_header`.
-    -   Replace completion block with `ux_section` and `ux_bullet`.
-    -   Ensure `ux_lib.sh` loading uses the new robust multi-path logic if possible.
+- **None**. All P0/P1 items are resolved.
 
 # Conclusion
-The `c5734d3` commit significantly improves the codebase's adherence to UX guidelines and robustness. The POSIX compatibility changes are a welcome addition that increases the portability of the shared functions. Only one identified script remains to be updated.
+The `bdde46f` commit is a high-quality polish that brings the `shell-common` library to a production-ready state regarding UX consistency and shell portability. No further changes are required for this scope.

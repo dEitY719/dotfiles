@@ -128,13 +128,13 @@ main() {
 
     # Show found files
     echo ""
-    echo "${bold}발견된 GPG 백업 파일:${reset}"
+    ux_section "발견된 GPG 백업 파일"
     local file_count=0
     local file_array=()
     while IFS= read -r file; do
         ((file_count++))
         file_array+=("$file")
-        echo "  [$file_count] $file"
+        ux_bullet "[$file_count] $file"
     done <<< "$encrypted_files"
     echo ""
 

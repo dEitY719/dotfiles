@@ -1,6 +1,6 @@
-#!/bin/sh
+#!/bin/bash
 # shell-common/functions/proxy_help.sh
-# Proxy help function (POSIX-compatible, shared between bash and zsh)
+# Proxy help function (bash/zsh compatible, uses local keyword)
 
 proxy_help() {
     if type ux_header >/dev/null 2>&1; then
