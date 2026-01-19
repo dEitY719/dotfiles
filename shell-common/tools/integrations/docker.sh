@@ -440,6 +440,7 @@ dlog_last() {
 dexport() {
     backup_dir="${DOTFILES_ROOT:-$HOME/dotfiles}/backup"
     containers=""
+    failed_containers=0
 
     ux_info "백업 디렉토리 확인: $backup_dir"
     mkdir -p "$backup_dir"
@@ -461,16 +462,25 @@ dexport() {
         if docker export "$name" >"$backup_dir/${name}.tar"; then
             ux_success "$name → $backup_dir/${name}.tar 완료"
         else
-            ux_warning "$name 백업 실패"
+            ux_error "$name 백업 실패"
+            failed_containers=$((failed_containers + 1))
         fi
     done
 
     echo ""
-    ux_success "모든 백업 작업이 완료되었습니다."
+    if [ "$failed_containers" -eq 0 ]; then
+        ux_success "모든 백업 작업이 완료되었습니다."
+    else
+        ux_warning "백업 작업이 부분적으로 실패했습니다. ($failed_containers개 실패)"
+    fi
+
     ux_info "백업 파일 목록:"
     ls -lh "$backup_dir" | tail -n +2 | while read -r line; do
         ux_bullet "$line"
     done
+
+    # Return non-zero if any containers failed
+    [ "$failed_containers" -eq 0 ]
 }
 
 # WSL Docker 설치 (대화형 스크립트)

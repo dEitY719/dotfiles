@@ -1,7 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 # shell-common/functions/devx.sh
 # Development utility - project setup and command routing
-# Shared between bash and zsh
+# Primarily for bash (uses local keyword, BASH_SOURCE, and other bash-isms)
+# Note: Can be sourced in zsh as well due to compatible syntax
 
 # ═══════════════════════════════════════════════════════════════
 # UX Library Setup
@@ -104,6 +105,14 @@ devx__log() {
     shift
     local ts
     ts="$(date '+%F %T')"
+
+    # Use UX_* variables if available (from ux_lib), otherwise use defaults
+    local dim="${UX_MUTED:--}"
+    local reset="${UX_RESET:-}"
+    local c_blue="${UX_PRIMARY:--}"
+    local c_green="${UX_SUCCESS:--}"
+    local c_yellow="${UX_WARNING:--}"
+    local c_red="${UX_ERROR:--}"
 
     case "$lvl" in
     INFO)

@@ -80,7 +80,7 @@ proxy_check() {
         if type ux_error >/dev/null 2>&1; then
             ux_error "check_proxy.sh not found at $check_proxy_script"
         else
-            echo "❌ check_proxy.sh not found at $check_proxy_script" >&2
+            echo "Error: check_proxy.sh not found at $check_proxy_script" >&2
         fi
         return 1
     fi

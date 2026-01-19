@@ -38,24 +38,20 @@ confirm() {
 
 main() {
     clear
-    cat <<EOF
-${bold}${blue}════════════════════════════════════════════════════
-  다른 PC에서 git-crypt 환경 설정 (올인원)
-════════════════════════════════════════════════════${reset}
-
-이 스크립트는 새로운 PC에서 git-crypt를 사용하기 위한
-모든 설정을 자동으로 진행합니다.
-
-${bold}진행 단계:${reset}
-  1. git-crypt 설치 확인/설치
-  2. GPG 개인키 복원
-  3. GPG 캐싱 설정 (선택)
-  4. git-crypt 복호화
-  5. .env 파일 확인
-
-${yellow}주의: 이 스크립트는 dotfiles 리포지토리 내에서 실행해야 합니다.${reset}
-
-EOF
+    ux_header "다른 PC에서 git-crypt 환경 설정 (올인원)"
+    echo ""
+    ux_info "이 스크립트는 새로운 PC에서 git-crypt를 사용하기 위한"
+    ux_info "모든 설정을 자동으로 진행합니다."
+    echo ""
+    ux_section "진행 단계"
+    ux_numbered 1 "git-crypt 설치 확인/설치"
+    ux_numbered 2 "GPG 개인키 복원"
+    ux_numbered 3 "GPG 캐싱 설정 (선택)"
+    ux_numbered 4 "git-crypt 복호화"
+    ux_numbered 5 ".env 파일 확인"
+    echo ""
+    ux_warning "주의: 이 스크립트는 dotfiles 리포지토리 내에서 실행해야 합니다."
+    echo ""
 
     if ! confirm "계속 진행하시겠습니까?"; then
         warning "설정이 취소되었습니다."
@@ -265,9 +261,11 @@ EOF
         if file .env | grep -q "text"; then
             success ".env 파일 복호화 확인됨!"
             echo ""
-            echo "${bold}.env 파일 미리보기 (첫 5줄):${reset}"
-            head -n 5 .env | sed 's/^/  /'
-            echo "  ..."
+            ux_section ".env 파일 미리보기 (첫 5줄)"
+            head -n 5 .env | while read -r line; do
+                ux_bullet "$line"
+            done
+            ux_bullet "..."
         else
             error ".env 파일이 여전히 암호화되어 있습니다."
             exit 1
@@ -278,25 +276,22 @@ EOF
     # ========================================
     # Completion
     # ========================================
-    cat <<EOF
-${bold}${green}════════════════════════════════════════════════════
-  ✅ 설정 완료!
-════════════════════════════════════════════════════${reset}
-
-${bold}다음 단계 (선택):${reset}
-  1. dotfiles 적용: ${yellow}bash bash/setup.sh${reset}
-  2. 셸 새로고침: ${yellow}source ~/.bashrc${reset}
-  3. git-crypt 도움말: ${yellow}gchelp${reset}
-
-${bold}설정된 내용:${reset}
-  ✓ git-crypt 설치됨
-  ✓ GPG 개인키 복원됨
-  ✓ GPG 캐싱 설정됨 (선택)
-  ✓ .env 파일 복호화됨
-
-${bold}이제 암호화된 파일들을 자유롭게 사용할 수 있습니다!${reset}
-
-EOF
+    echo ""
+    ux_success "설정이 완료되었습니다!"
+    echo ""
+    ux_section "다음 단계 (선택)"
+    ux_bullet "dotfiles 적용: bash bash/setup.sh"
+    ux_bullet "셸 새로고침: source ~/.bashrc"
+    ux_bullet "git-crypt 도움말: gchelp"
+    echo ""
+    ux_section "설정된 내용"
+    ux_success "git-crypt 설치됨"
+    ux_success "GPG 개인키 복원됨"
+    ux_success "GPG 캐싱 설정됨 (선택)"
+    ux_success ".env 파일 복호화됨"
+    echo ""
+    ux_info "이제 암호화된 파일들을 자유롭게 사용할 수 있습니다!"
+    echo ""
 }
 
 main "$@"
