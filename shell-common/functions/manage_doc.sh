@@ -1,7 +1,31 @@
 #!/bin/bash
-# shell-common/tools/custom/manage_doc.sh
+# shell-common/functions/manage_doc.sh
 # Document management utilities for dotfiles
 # Provides functions to manage documentation files (clear, archive, etc.)
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEVELOPER NOTES - NAMING CONVENTION (See AGENTS.md:174-178)
+# ═══════════════════════════════════════════════════════════════════════════════
+# This file demonstrates the project's naming convention:
+#
+#   INTERNAL NAMES:   snake_case (clear_doc, show_doc_help)
+#   USER-FACING:      dash-form  (clear-doc, doc-help via aliases)
+#
+# CRITICAL RULE:
+#   All documentation, help text, examples, and error messages shown to users
+#   MUST use dash-form (clear-doc), NEVER snake_case (clear_doc).
+#
+# Pattern Used in This File:
+#   - Function definition:  clear_doc() {}           (snake_case - internal)
+#   - Alias definition:     alias clear-doc='clear_doc'  (dash-form - user)
+#   - Help text:            "Usage: clear-doc ..."   (dash-form - users see this)
+#   - All examples:         "clear-doc file.md"     (dash-form - users copy/paste)
+#   - Error messages:       "Usage: clear-doc ..."  (dash-form - users read this)
+#
+# To preserve this consistency:
+#   1. Grep for "clear_doc" in help/examples text -> should return 0 results
+#   2. All user-visible text should match: grep "clear-doc" show_doc_help
+# ═══════════════════════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════
 # UX Library Setup
