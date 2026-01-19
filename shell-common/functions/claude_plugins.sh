@@ -46,7 +46,7 @@ init_plugins_docs() {
 # List Available Plugins with Marketplace Organization
 # ═══════════════════════════════════════════════════════════════
 
-list-plugins() {
+list_plugins() {
     local plugins_dir="$HOME/.claude/plugins/marketplaces"
 
     if [ ! -d "$plugins_dir" ]; then
@@ -152,7 +152,7 @@ list-plugins() {
 # Create Documentation Directory Structure from Plugins
 # ═══════════════════════════════════════════════════════════════
 
-sync-plugins-structure() {
+sync_plugins_structure() {
     local plugins_dir="$HOME/.claude/plugins/marketplaces"
     local docs_base_dir="$HOME/.claude/docs"
     local docs_dir="$docs_base_dir/marketplaces"
@@ -212,7 +212,7 @@ sync-plugins-structure() {
 # Quick Lookup: Find and View Specific Plugin Info
 # ═══════════════════════════════════════════════════════════════
 
-view-plugin-info() {
+view_plugin_info() {
     local plugin_name="$1"
 
     if [ -z "$plugin_name" ]; then
@@ -275,7 +275,7 @@ view-plugin-info() {
 : "${UX_CODE:=${UX_BOLD-}${UX_PRIMARY-}}"
 
 # Korean documentation generation prompt template
-_generate-plugin-doc-ko_prompt() {
+_generate_plugin_doc_ko_prompt() {
     local plugin_file="$1"
 
     cat <<'PROMPT_EOF'
@@ -298,7 +298,7 @@ PROMPT_EOF
 PROMPT_EOF
 }
 
-generate-plugin-doc-ko() {
+generate_plugin_doc_ko() {
     local plugin_file="$1"
     local output_file="$2"
     local ai_tool="${CLAUDE_DOC_GENERATOR}"
@@ -387,24 +387,24 @@ generate-plugin-doc-ko() {
     case "$ai_tool" in
     claude | gemini)
         # These tools use -p flag
-        prompt_output=$(_generate-plugin-doc-ko_prompt "$plugin_file")
+        prompt_output=$(_generate_plugin_doc_ko_prompt "$plugin_file")
         "$ai_tool" -p "$prompt_output" >"$output_file" 2>&1
         rc=$?
         ;;
     codex)
         # Codex uses 'exec' subcommand for non-interactive execution
         # Use --output-last-message to capture only the AI response (not session info)
-        _generate-plugin-doc-ko_prompt "$plugin_file" | "$ai_tool" exec --output-last-message "$output_file" - >/dev/null 2>&1
+        _generate_plugin_doc_ko_prompt "$plugin_file" | "$ai_tool" exec --output-last-message "$output_file" - >/dev/null 2>&1
         rc=$?
         ;;
     *)
         # Try common prompt flag patterns
-        prompt_output=$(_generate-plugin-doc-ko_prompt "$plugin_file")
+        prompt_output=$(_generate_plugin_doc_ko_prompt "$plugin_file")
         if "$ai_tool" -p "$prompt_output" >"$output_file" 2>&1; then
             : # Success
         elif "$ai_tool" --prompt "$prompt_output" >"$output_file" 2>&1; then
             : # Success
-        elif _generate-plugin-doc-ko_prompt "$plugin_file" | "$ai_tool" exec --output-last-message "$output_file" - >/dev/null 2>&1; then
+        elif _generate_plugin_doc_ko_prompt "$plugin_file" | "$ai_tool" exec --output-last-message "$output_file" - >/dev/null 2>&1; then
             : # Success (exec subcommand reading prompt from stdin)
         elif "$ai_tool" exec --output-last-message "$output_file" "$prompt_output" >/dev/null 2>&1; then
             : # Success (exec subcommand with output file + prompt arg)
@@ -583,7 +583,7 @@ README_HEADER
 }
 
 # Process plugin directory recursively and generate Korean docs for all files
-process-plugin-directory-ko() {
+process_plugin_directory_ko() {
     local marketplace="$1"
     local plugin_path="$2"
     local ai_tool="${CLAUDE_DOC_GENERATOR}"
@@ -673,9 +673,9 @@ process-plugin-directory-ko() {
         # Build command with optional --force flag
         local cmd_output
         if [ "$force_overwrite" = "true" ]; then
-            cmd_output=$(generate-plugin-doc-ko "$source_file" "$output_file" "$ai_tool" --force 2>&1)
+            cmd_output=$(generate_plugin_doc_ko "$source_file" "$output_file" "$ai_tool" --force 2>&1)
         else
-            cmd_output=$(generate-plugin-doc-ko "$source_file" "$output_file" "$ai_tool" 2>&1)
+            cmd_output=$(generate_plugin_doc_ko "$source_file" "$output_file" "$ai_tool" 2>&1)
         fi
 
         if [ -f "$output_file" ]; then
@@ -702,7 +702,7 @@ process-plugin-directory-ko() {
     echo ""
 
     # Generate README.md with directory summary
-    _generate_plugin_directory_readme_ko "$source_dir" "$docs_dir" "$ai_tool"
+    _generate_plugin_directory_readme_ko "$source_dir" "$docs_dir"
 
     echo ""
     ux_section "Next Steps"
@@ -713,7 +713,7 @@ process-plugin-directory-ko() {
 
 # ═══════════════════════════════════════════════════════════════
 
-create-plugin-structure-ko() {
+create_plugin_structure_ko() {
     local marketplace="$1"
     local plugin_path="$2"
     local ai_tool="${CLAUDE_DOC_GENERATOR}"
@@ -779,9 +779,9 @@ create-plugin-structure-ko() {
 
         # Generate Korean documentation with specified AI tool
         if [ "$force_overwrite" = "true" ]; then
-            generate-plugin-doc-ko "$source_path" "$output_file" "$ai_tool" --force
+            generate_plugin_doc_ko "$source_path" "$output_file" "$ai_tool" --force
         else
-            generate-plugin-doc-ko "$source_path" "$output_file" "$ai_tool"
+            generate_plugin_doc_ko "$source_path" "$output_file" "$ai_tool"
         fi
 
         echo ""
@@ -793,9 +793,9 @@ create-plugin-structure-ko() {
     elif [ -d "$source_path" ]; then
         # Directory path - use recursive directory processing
         if [ "$force_overwrite" = "true" ]; then
-            process-plugin-directory-ko "$marketplace" "$plugin_path" "$ai_tool" --force
+            process_plugin_directory_ko "$marketplace" "$plugin_path" "$ai_tool" --force
         else
-            process-plugin-directory-ko "$marketplace" "$plugin_path" "$ai_tool"
+            process_plugin_directory_ko "$marketplace" "$plugin_path" "$ai_tool"
         fi
 
     else

@@ -34,7 +34,7 @@ agents_init() {
 }
 
 # Powerlevel10k 설치 함수
-install-p10k() {
+install_p10k() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_p10k.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-p10k script not found: $script" >&2
@@ -44,7 +44,7 @@ install-p10k() {
 }
 
 # fzf (fuzzy finder) 설치 함수
-install-fzf() {
+install_fzf() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_fzf.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-fzf script not found: $script" >&2
@@ -54,7 +54,7 @@ install-fzf() {
 }
 
 # fasd (fast access to directories/files) 설치 함수
-install-fasd() {
+install_fasd() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_fasd.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-fasd script not found: $script" >&2
@@ -64,7 +64,7 @@ install-fasd() {
 }
 
 # ripgrep (fast text search) 설치 함수
-install-ripgrep() {
+install_ripgrep() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_ripgrep.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-ripgrep script not found: $script" >&2
@@ -74,7 +74,7 @@ install-ripgrep() {
 }
 
 # fd (fast file finder) 설치 함수
-install-fd() {
+install_fd() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_fd.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-fd script not found: $script" >&2
@@ -84,7 +84,7 @@ install-fd() {
 }
 
 # bat (cat with syntax highlighting) 설치 함수
-install-bat() {
+install_bat() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_bat.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-bat script not found: $script" >&2
@@ -94,7 +94,7 @@ install-bat() {
 }
 
 # pet (command snippet manager) 설치 함수
-install-pet() {
+install_pet() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_pet.sh"
     if [ ! -f "$script" ]; then
         echo "Error: install-pet script not found: $script" >&2
