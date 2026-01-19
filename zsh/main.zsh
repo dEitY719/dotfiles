@@ -66,9 +66,9 @@ safe_source() {
         return 0
     fi
 
-    # Attempt to source the file
-    local source_error
-    source_error=$(. "$file_path" 2>&1)
+    # Source file directly in parent shell (critical for function/alias propagation)
+    # NOTE: MUST NOT use $(...) subshell as it breaks function definitions
+    . "$file_path" 2>/dev/null
     local source_exit=$?
 
     if [ $source_exit -eq 0 ]; then
@@ -85,17 +85,11 @@ safe_source() {
             return 0
             ;;
         */tools/integrations/*|*/functions/*|*/env/*)
-            # Important files - report error with actual error details
+            # Important files - report error
             if type ux_error >/dev/null 2>&1; then
                 ux_error "${error_msg}: ${file_path}"
-                if [ -n "$source_error" ]; then
-                    echo "  Error details: ${source_error}" | head -1 >&2
-                fi
             else
                 echo "Error: ${error_msg}: ${file_path}" >&2
-                if [ -n "$source_error" ]; then
-                    echo "  Error details: ${source_error}" | head -1 >&2
-                fi
             fi
             return 1
             ;;
