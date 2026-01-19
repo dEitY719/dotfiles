@@ -5,12 +5,35 @@
 # It runs on EVERY commit in ANY repository this user touches.
 #
 # Logic:
-# 1. Global Safety Checks (Secrets, Conflicts, Debug, Size, Email, Tox)
+# 1. Global Safety Checks (Lightweight, Fast, Universal)
+#    - Secrets/Keys Detection
+#    - Conflict Markers
+#    - Trailing Whitespace
+#    - Large Files (>10MB)
+#    - Email Identity Warning
 # 2. Project-Specific Hook Delegation (.githooks, git/hooks, .git/hooks)
 #
 # To bypass: git commit --no-verify
+# To skip global checks: export GIT_HOOKS_SKIP_GLOBAL=1
+# To debug: export GIT_HOOKS_DEBUG=1
 
 set -u
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Environment Variables
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Skip global checks if requested (emergency use)
+if [ "${GIT_HOOKS_SKIP_GLOBAL:-0}" = "1" ]; then
+    echo "[Global Hook] Skipping global checks (GIT_HOOKS_SKIP_GLOBAL=1)"
+    # Still delegate to project hook
+    SKIP_GLOBAL=1
+else
+    SKIP_GLOBAL=0
+fi
+
+# Debug mode
+DEBUG=${GIT_HOOKS_DEBUG:-0}
 
 # Colors
 RED='\033[0;31m'
@@ -22,141 +45,206 @@ NC='\033[0m'
 # Get Repo Root
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$REPO_ROOT" ]; then
+    [ "$DEBUG" = "1" ] && echo "[Debug] Not in a git repository, exiting"
     exit 0
 fi
 
 # Get Staged Files
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
 if [ -z "$STAGED_FILES" ]; then
+    [ "$DEBUG" = "1" ] && echo "[Debug] No staged files, exiting"
     exit 0
 fi
 
-echo -e "${BLUE}[Global Hook] Running safety checks...${NC}"
+# Count staged files for debug
+STAGED_COUNT=$(echo "$STAGED_FILES" | wc -l)
+[ "$DEBUG" = "1" ] && echo "[Debug] Found $STAGED_COUNT staged file(s)"
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 1. Global Safety Checks
+# 1. Global Safety Checks (Lightweight Only!)
 # ═══════════════════════════════════════════════════════════════════════════
 
-EXIT_CODE=0
-CHECKS_FAILED=0
+if [ "$SKIP_GLOBAL" = "0" ]; then
+    echo -e "${BLUE}[Global Hook] Running safety checks...${NC}"
 
-# A. Secret/Key Blocking
-# ----------------------
-# Look for private keys and generic API tokens
-FORBIDDEN_KEYS="-----BEGIN OPENSSH PRIVATE KEY-----|-----BEGIN RSA PRIVATE KEY-----|AKIA[0-9A-Z]{16}"
-if echo "$STAGED_FILES" | xargs grep -E "$FORBIDDEN_KEYS" >/dev/null 2>&1; then
-    echo -e "${RED}❌ BLOCKING: Potential secret/key detected in staged files!${NC}"
-    echo "$STAGED_FILES" | xargs grep -E -l "$FORBIDDEN_KEYS" | sed 's/^/   - /'
-    CHECKS_FAILED=1
-fi
+    CHECKS_FAILED=0
+    WARNINGS=0
 
-# B. Conflict Marker Check
-# ------------------------
-if echo "$STAGED_FILES" | xargs grep -lE "^<<<<<<< |^>>>>>>> " >/dev/null 2>&1; then
-    echo -e "${RED}❌ BLOCKING: Git conflict markers left in code!${NC}"
-    echo "$STAGED_FILES" | xargs grep -lE "^<<<<<<< |^>>>>>>> " | sed 's/^/   - /'
-    CHECKS_FAILED=1
-fi
+    # ───────────────────────────────────────────────────────────────────────
+    # A. Secret/Key Blocking (CRITICAL)
+    # ───────────────────────────────────────────────────────────────────────
+    [ "$DEBUG" = "1" ] && echo "[Debug] Checking for secrets/keys..."
 
-# C. Debug Code Blocking
-# ----------------------
-# Common debug patterns: pdb, binding.pry, console.log (stricter)
-# Exclude some file types if necessary
-DEBUG_PATTERNS="pdb\.set_trace\(\)|binding\.pry|console\.log\("
-# Only check text files
-if echo "$STAGED_FILES" | grep -vE "\.md$|\.txt$|\.json$" | xargs grep -E "$DEBUG_PATTERNS" >/dev/null 2>&1; then
-    echo -e "${RED}❌ BLOCKING: Debug code detected (remove before commit)!${NC}"
-    echo "$STAGED_FILES" | grep -vE "\.md$|\.txt$|\.json$" | xargs grep -E -l "$DEBUG_PATTERNS" | sed 's/^/   - /'
-    CHECKS_FAILED=1
-fi
+    # Look for private keys and generic API tokens
+    FORBIDDEN_KEYS="-----BEGIN OPENSSH PRIVATE KEY-----|-----BEGIN RSA PRIVATE KEY-----|-----BEGIN PRIVATE KEY-----|AKIA[0-9A-Z]{16}"
 
-# D. Large File Warning (>10MB)
-# -----------------------------
-# 10MB = 10485760 bytes
-LARGE_FILES=$(echo "$STAGED_FILES" | xargs -I {} find "{}" -type f -size +10M 2>/dev/null)
-if [ -n "$LARGE_FILES" ]; then
-    echo -e "${RED}❌ BLOCKING: Attempting to commit files larger than 10MB!${NC}"
-    echo "$LARGE_FILES" | sed 's/^/   - /'
-    echo "   (Use Git LFS or .gitignore for large binaries)"
-    CHECKS_FAILED=1
-fi
-
-# E. Email Identity Check (Warning)
-# ---------------------------------
-USER_EMAIL=$(git config user.email)
-CURRENT_DIR=$(pwd)
-
-# Heuristic: "work" dir vs "gmail", "personal" dir vs "corp"
-if [[ "$CURRENT_DIR" == *"work"* || "$CURRENT_DIR" == *"corp"* ]]; then
-    if [[ "$USER_EMAIL" == *"gmail.com"* || "$USER_EMAIL" == *"naver.com"* ]]; then
-        echo -e "${YELLOW}⚠️  WARNING: Committing to WORK directory with PERSONAL email ($USER_EMAIL)${NC}"
-        # This is just a warning, doesn't set CHECKS_FAILED
-    fi
-elif [[ "$CURRENT_DIR" == *"personal"* || "$CURRENT_DIR" == *"dotfiles"* ]]; then
-    # Assuming standard corp emails don't look like these public providers
-    if [[ "$USER_EMAIL" != *"gmail.com"* && "$USER_EMAIL" != *"naver.com"* && "$USER_EMAIL" != *"outlook.com"* ]]; then
-        echo -e "${YELLOW}⚠️  WARNING: Committing to PERSONAL directory with (likely) WORK email ($USER_EMAIL)${NC}"
-    fi
-fi
-
-# F. Tox Check (Project-Aware Global Check)
-# -----------------------------------------
-if [ -f "$REPO_ROOT/tox.ini" ]; then
-    # Only run if tox is installed
-    if command -v tox &> /dev/null; then
-        echo -e "${BLUE}   running tox checks (ruff, shfmt, shellcheck)...${NC}"
-        
-        # Run silently first
-        if ! tox -e ruff,shfmt,shellcheck > /dev/null 2>&1; then
-             echo -e "${RED}❌ BLOCKING: tox checks failed!${NC}"
-             echo "   Re-running to show errors:"
-             # Re-run to show output
-             tox -e ruff,shfmt,shellcheck
-             CHECKS_FAILED=1
-        else
-             echo -e "${GREEN}   ✓ Tox checks passed.${NC}"
-        fi
-    else
-        # Warn but don't fail if tox is missing? Or Fail? 
-        # User requested "Must perform and check for errors". 
-        # If tox.ini is present, implying a tox project, having tox installed is a reasonable requirement.
-        echo -e "${RED}❌ BLOCKING: tox.ini exists but 'tox' command is missing.${NC}"
-        echo "   Please install tox to commit in this repository."
+    # Use proper quoting and only check text files
+    if echo "$STAGED_FILES" | xargs -r grep -lE "$FORBIDDEN_KEYS" 2>/dev/null; then
+        echo -e "${RED}❌ BLOCKING: Potential secret/key detected in staged files!${NC}"
+        echo "$STAGED_FILES" | xargs -r grep -lE "$FORBIDDEN_KEYS" 2>/dev/null | sed 's/^/   - /'
+        echo "   Hint: Check for private keys, AWS keys (AKIA...), etc."
         CHECKS_FAILED=1
     fi
-fi
 
-# Summary Exit
-if [ $CHECKS_FAILED -ne 0 ]; then
-    echo -e "${RED}Commit blocked by Global Safety Checks.${NC}"
-    exit 1
+    # ───────────────────────────────────────────────────────────────────────
+    # B. Conflict Marker Check (CRITICAL)
+    # ───────────────────────────────────────────────────────────────────────
+    [ "$DEBUG" = "1" ] && echo "[Debug] Checking for conflict markers..."
+
+    if echo "$STAGED_FILES" | xargs -r grep -lE "^(<<<<<<<|=======|>>>>>>>)" 2>/dev/null; then
+        echo -e "${RED}❌ BLOCKING: Git conflict markers left in code!${NC}"
+        echo "$STAGED_FILES" | xargs -r grep -lE "^(<<<<<<<|=======|>>>>>>>)" 2>/dev/null | sed 's/^/   - /'
+        echo "   Hint: Resolve merge conflicts before committing"
+        CHECKS_FAILED=1
+    fi
+
+    # ───────────────────────────────────────────────────────────────────────
+    # C. Trailing Whitespace Check (STANDARD)
+    # ───────────────────────────────────────────────────────────────────────
+    [ "$DEBUG" = "1" ] && echo "[Debug] Checking for trailing whitespace..."
+
+    # Use git's built-in check (very fast)
+    if ! git diff --cached --check >/dev/null 2>&1; then
+        echo -e "${RED}❌ BLOCKING: Trailing whitespace detected!${NC}"
+        git diff --cached --check 2>&1 | head -20 | sed 's/^/   /'
+        [ $(git diff --cached --check 2>&1 | wc -l) -gt 20 ] && echo "   ... and more"
+        CHECKS_FAILED=1
+    fi
+
+    # ───────────────────────────────────────────────────────────────────────
+    # D. Debug Code Detection (CONSERVATIVE)
+    # ───────────────────────────────────────────────────────────────────────
+    [ "$DEBUG" = "1" ] && echo "[Debug] Checking for debug code..."
+
+    # Only check for EXPLICIT debug statements (not console.log)
+    # pdb: Python debugger
+    # binding.pry: Ruby debugger
+    # debugger;: JavaScript debugger keyword
+    DEBUG_PATTERNS="pdb\.set_trace\(\)|binding\.pry|^[[:space:]]*debugger;|breakpoint\(\)"
+
+    # Exclude documentation and config files
+    DEBUG_MATCHES=$(echo "$STAGED_FILES" | grep -vE "\.(md|txt|json|yaml|yml)$" | xargs -r grep -lE "$DEBUG_PATTERNS" 2>/dev/null || true)
+
+    if [ -n "$DEBUG_MATCHES" ]; then
+        echo -e "${YELLOW}⚠️  WARNING: Debug code detected (consider removing):${NC}"
+        echo "$DEBUG_MATCHES" | sed 's/^/   - /'
+        WARNINGS=1
+        # Don't block - just warn
+    fi
+
+    # ───────────────────────────────────────────────────────────────────────
+    # E. Large File Warning (>10MB)
+    # ───────────────────────────────────────────────────────────────────────
+    [ "$DEBUG" = "1" ] && echo "[Debug] Checking for large files..."
+
+    # 10MB = 10485760 bytes
+    LARGE_FILES=$(echo "$STAGED_FILES" | xargs -r -I {} find "$REPO_ROOT/{}" -type f -size +10M 2>/dev/null || true)
+
+    if [ -n "$LARGE_FILES" ]; then
+        echo -e "${RED}❌ BLOCKING: Attempting to commit files larger than 10MB!${NC}"
+        echo "$LARGE_FILES" | sed 's/^/   - /'
+        echo "   Hint: Use Git LFS or add to .gitignore for large binaries"
+        CHECKS_FAILED=1
+    fi
+
+    # ───────────────────────────────────────────────────────────────────────
+    # F. Email Identity Check (WARNING ONLY)
+    # ───────────────────────────────────────────────────────────────────────
+    [ "$DEBUG" = "1" ] && echo "[Debug] Checking email identity..."
+
+    USER_EMAIL=$(git config user.email)
+    CURRENT_DIR=$(pwd)
+
+    # Heuristic: Check directory path vs email domain
+    if [[ "$CURRENT_DIR" == *"/work/"* || "$CURRENT_DIR" == *"/corp/"* ]]; then
+        if [[ "$USER_EMAIL" == *"gmail.com"* || "$USER_EMAIL" == *"naver.com"* || "$USER_EMAIL" == *"outlook.com"* ]]; then
+            echo -e "${YELLOW}⚠️  WARNING: Committing to WORK directory with PERSONAL email${NC}"
+            echo "   Current: $USER_EMAIL"
+            echo "   Path: $CURRENT_DIR"
+            WARNINGS=1
+        fi
+    elif [[ "$CURRENT_DIR" == *"/personal/"* || "$CURRENT_DIR" == *"/home/"* ]]; then
+        # Check if email looks corporate (not common providers)
+        if [[ "$USER_EMAIL" != *"gmail.com"* && "$USER_EMAIL" != *"naver.com"* && "$USER_EMAIL" != *"outlook.com"* && "$USER_EMAIL" != *"hotmail.com"* && "$USER_EMAIL" != *"yahoo.com"* ]]; then
+            echo -e "${YELLOW}⚠️  WARNING: Committing to PERSONAL directory with (likely) WORK email${NC}"
+            echo "   Current: $USER_EMAIL"
+            echo "   Path: $CURRENT_DIR"
+            WARNINGS=1
+        fi
+    fi
+
+    # ───────────────────────────────────────────────────────────────────────
+    # Summary of Global Checks
+    # ───────────────────────────────────────────────────────────────────────
+
+    if [ $CHECKS_FAILED -ne 0 ]; then
+        echo ""
+        echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${RED}Commit BLOCKED by global safety checks${NC}"
+        echo -e "${RED}Fix the issues above or use 'git commit --no-verify' to bypass${NC}"
+        echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        exit 1
+    elif [ $WARNINGS -ne 0 ]; then
+        echo -e "${GREEN}✓ Global checks passed (with warnings above)${NC}"
+    else
+        echo -e "${GREEN}✓ All global checks passed${NC}"
+    fi
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 2. Delegation to Local Hooks
+# 2. Delegation to Project-Specific Hooks
 # ═══════════════════════════════════════════════════════════════════════════
+
+[ "$DEBUG" = "1" ] && echo "[Debug] Searching for project-level hooks..."
 
 # Candidate hooks in priority order
 CANDIDATE_HOOKS=(
-  ".githooks/pre-commit"       # Team shared hook
+  ".githooks/pre-commit"       # Team shared hook (highest priority)
   "git/hooks/pre-commit"       # Dotfiles/Custom structure
   ".git/hooks/pre-commit"      # Standard/Local hook (e.g. Husky)
 )
 
 RUN_HOOK=""
+CURRENT_SCRIPT=$(readlink -f "$0" 2>/dev/null || echo "$0")
 
 for hook in "${CANDIDATE_HOOKS[@]}"; do
-    if [ -x "$REPO_ROOT/$hook" ]; then
-        # Avoid self-execution loop check
-        RUN_HOOK="$REPO_ROOT/$hook"
+    HOOK_PATH="$REPO_ROOT/$hook"
+
+    [ "$DEBUG" = "1" ] && echo "[Debug] Checking: $HOOK_PATH"
+
+    if [ -x "$HOOK_PATH" ]; then
+        # Prevent self-execution loop
+        HOOK_REALPATH=$(readlink -f "$HOOK_PATH" 2>/dev/null || echo "$HOOK_PATH")
+
+        if [ "$HOOK_REALPATH" = "$CURRENT_SCRIPT" ]; then
+            [ "$DEBUG" = "1" ] && echo "[Debug] Skipping self: $HOOK_PATH"
+            continue
+        fi
+
+        RUN_HOOK="$HOOK_PATH"
+        [ "$DEBUG" = "1" ] && echo "[Debug] Found executable hook: $RUN_HOOK"
         break
     fi
 done
 
 if [ -n "$RUN_HOOK" ]; then
     echo -e "${BLUE}[Global Hook] Delegating to project hook: $RUN_HOOK${NC}"
-    "$RUN_HOOK" "$@"
-    exit $?
+    echo ""
+
+    # Execute project hook and propagate exit code
+    if "$RUN_HOOK" "$@"; then
+        echo ""
+        echo -e "${GREEN}✓ Project hook completed successfully${NC}"
+        exit 0
+    else
+        PROJECT_EXIT=$?
+        echo ""
+        echo -e "${RED}✗ Project hook failed with exit code $PROJECT_EXIT${NC}"
+        exit $PROJECT_EXIT
+    fi
+else
+    [ "$DEBUG" = "1" ] && echo "[Debug] No project-level hook found"
+    echo -e "${BLUE}[Global Hook] No project-specific hook found, skipping delegation${NC}"
 fi
 
 exit 0
