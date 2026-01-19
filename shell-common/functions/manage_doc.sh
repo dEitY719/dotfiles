@@ -147,6 +147,100 @@ clear_doc() {
 }
 
 # ═══════════════════════════════════════════════════════════════
+# delete_doc() - Delete documentation files permanently
+# ═══════════════════════════════════════════════════════════════
+
+delete_doc() {
+    # Validate arguments
+    if [ $# -eq 0 ]; then
+        ux_error "Usage: del-doc <file|pattern>"
+        ux_section "Examples"
+        ux_bullet "del-doc docs/abc-review-G.md           # Delete single file"
+        ux_bullet "del-doc 'docs/abc-plan*'                # Delete matching files"
+        ux_bullet "del-doc 'docs/abc-review*2.md'          # Delete abc-review-CX2.md, etc"
+        echo ""
+        return 1
+    fi
+
+    local files=()
+
+    # Process each argument - supports both quoted patterns and direct globs
+    # Examples:
+    #   del-doc 'docs/abc-plan*'       (quoted pattern)
+    #   del-doc docs/abc-plan*         (unquoted glob - shell expands first)
+    #   del-doc docs/file1.md docs/file2.md  (multiple explicit files)
+    for arg in "$@"; do
+        # Try glob expansion on each argument
+        # If arg contains wildcards (quoted), this expands them
+        # If arg is a literal filename, this just returns the filename as-is
+        for f in $arg; do
+            if [ -f "$f" ]; then
+                files+=("$f")
+            fi
+        done
+    done
+
+    # Handle case where no files match
+    if [ ${#files[@]} -eq 0 ]; then
+        ux_error "No matching files found"
+        ux_info "Searched for: $*"
+        return 1
+    fi
+
+    # Show header
+    echo ""
+    ux_header "Document Deletion"
+    echo ""
+
+    # Display files to be deleted
+    ux_section "Files to be deleted (${#files[@]})"
+    for file in "${files[@]}"; do
+        # Show file size before deletion
+        local size
+        size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "?")
+        ux_bullet "$file ($size bytes)"
+    done
+    echo ""
+
+    # Request user confirmation (destructive operation)
+    ux_warning "This will permanently DELETE these files and cannot be undone"
+    if ! ux_confirm "Delete ${#files[@]} file(s)?"; then
+        ux_info "Operation cancelled"
+        echo ""
+        return 0
+    fi
+
+    # Delete each file
+    echo ""
+    ux_section "Deleting files"
+    local success_count=0
+    local error_count=0
+
+    for file in "${files[@]}"; do
+        if rm -f "$file" 2>/dev/null; then
+            ux_success "Deleted: $file"
+            ((success_count++))
+        else
+            ux_error "Failed to delete: $file (permission denied?)"
+            ((error_count++))
+        fi
+    done
+
+    # Summary
+    echo ""
+    ux_section "Summary"
+    if [ $error_count -eq 0 ]; then
+        ux_success "$success_count file(s) deleted successfully"
+        echo ""
+        return 0
+    else
+        ux_warning "$success_count succeeded, $error_count failed"
+        echo ""
+        return 1
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════
 # archive_doc() - Archive documentation files (placeholder for future)
 # ═══════════════════════════════════════════════════════════════
 
@@ -176,10 +270,24 @@ show_doc_help() {
     echo "  clear-doc 'docs/*.md' notes.txt              // Mixed patterns + files"
     echo ""
 
+    ux_section "del-doc"
+    ux_bullet "Permanently delete documentation files"
+    echo ""
+    ux_info "Usage: del-doc <file|pattern>"
+    echo ""
+    ux_info "Examples:"
+    echo "  del-doc docs/abc-review-G.md               // Delete single file"
+    echo "  del-doc docs/abc-plan*                      // Unquoted glob"
+    echo "  del-doc 'docs/abc-review*2.md'              // Quoted pattern (deletes *2.md files)"
+    echo "  del-doc docs/file1.md docs/file2.md         // Multiple files"
+    echo "  del-doc 'docs/abc-*' notes.txt              // Mixed patterns + files"
+    echo ""
+
     ux_section "Description"
-    ux_info "Safely clears the content of documentation files"
-    ux_info "Requires confirmation before clearing (destructive operation)"
-    ux_info "Supports both individual files and glob patterns"
+    ux_info "Safely clears the content of documentation files (clear-doc)"
+    ux_info "Permanently deletes documentation files (del-doc)"
+    ux_info "Both operations require user confirmation (destructive)"
+    ux_info "Support both individual files and glob patterns"
     echo ""
 
     ux_section "Patterns"
@@ -194,6 +302,7 @@ show_doc_help() {
 
 # Export functions for use in subshells and aliases
 export -f clear_doc
+export -f delete_doc
 export -f archive_doc
 export -f show_doc_help
 
@@ -202,6 +311,7 @@ export -f show_doc_help
 # ═══════════════════════════════════════════════════════════════
 
 alias clear-doc='clear_doc'
+alias del-doc='delete_doc'
 alias doc-help='show_doc_help'
 
 # ═══════════════════════════════════════════════════════════════
@@ -219,7 +329,7 @@ if [ "${_script_name#-}" = "$_script_name" ]; then
             # This is direct execution - run with arguments
             if [ "${DOTFILES_TEST_MODE:-0}" != "1" ] && [ -n "${1:-}" ]; then
                 case "$1" in
-                    clear_doc|archive_doc|show_doc_help)
+                    clear_doc|delete_doc|archive_doc|show_doc_help)
                         "$@"
                         ;;
                     *)
