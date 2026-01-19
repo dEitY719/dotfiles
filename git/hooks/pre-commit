@@ -16,7 +16,8 @@
 #
 # Reference: docs/abc-review-CX.md, docs/abc-review-G.md, docs/analysis/2025-01-19-shell-function-propagation-issues.md
 
-set -e
+# Error handling is managed with explicit 'return' statements and '||true' patterns
+# rather than relying on 'set -e', which can interfere with process substitution
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Configuration and setup
@@ -161,17 +162,24 @@ check_subshell_sourcing() {
 
     # Find pattern: variable=$(. file) or variable=$(source file)
     # This breaks function/alias propagation
-    while IFS= read -r line_info; do
-        local line_num=$(echo "$line_info" | cut -d: -f1)
-        local line_text=$(echo "$line_info" | cut -d: -f2-)
+    local matches
+    matches=$(grep -n '[a-z_][a-z0-9_]*\s*=\s*\$(' "$file" 2>/dev/null | grep -E '\.(sh|zsh|bash)\s*\)' || true)
 
-        # Extract the variable name for context
-        local var_name=$(echo "$line_text" | sed 's/.*\([a-z_][a-z0-9_]*\)\s*=\s*\$(.*/\1/')
+    if [ -n "$matches" ]; then
+        while IFS= read -r line_info; do
+            [ -z "$line_info" ] && continue
+            local line_num=$(echo "$line_info" | cut -d: -f1)
+            local line_text=$(echo "$line_info" | cut -d: -f2-)
 
-        echo "$file:$line_num: [WARNING] Subshell sourcing breaks function propagation: '${var_name}=\$(...)'
+            # Extract the variable name for context
+            local var_name=$(echo "$line_text" | sed 's/.*\([a-z_][a-z0-9_]*\)\s*=\s*\$(.*/\1/')
+
+            echo "$file:$line_num: [WARNING] Subshell sourcing breaks function propagation: '${var_name}=\$(...)'
   Fix: Use direct sourcing '. file' instead of '\${var_name}=\$(. file)'
   Reference: https://github.com/bwyoon/dotfiles/blob/main/para/archive/rca-knowledge/docs/analysis/2025-01-19-shell-function-propagation-issues.md" >> "$SUBSHELL_VIOLATIONS_FILE"
-    done < <(grep -n '[a-z_][a-z0-9_]*\s*=\s*\$(' "$file" 2>/dev/null | grep -E '\.(sh|zsh|bash)\s*\)' || true)
+        done <<< "$matches"
+    fi
+    return 0
 }
 
 check_alias_function_conflict() {
@@ -211,6 +219,7 @@ check_alias_function_conflict() {
             done <<< "$func_names"
         done <<< "$alias_names"
     fi
+    return 0
 }
 
 check_wrapper_function() {
@@ -218,36 +227,43 @@ check_wrapper_function() {
 
     # Find functions that only call another function with same arguments
     # Pattern: func() { other_func "$@" } or func() { other_func_name }
-    while IFS= read -r line_info; do
-        local line_num=$(echo "$line_info" | cut -d: -f1)
-        local line_text=$(echo "$line_info" | cut -d: -f2-)
+    local matches
+    matches=$(grep -n "^[a-z_-][a-z0-9_-]*()[[:space:]]*{" "$file" 2>/dev/null || true)
 
-        # Extract function name
-        local func_name=$(echo "$line_text" | sed 's/^\s*\([a-z_-][a-z0-9_-]*\)().*/\1/')
+    if [ -n "$matches" ]; then
+        while IFS= read -r line_info; do
+            [ -z "$line_info" ] && continue
+            local line_num=$(echo "$line_info" | cut -d: -f1)
+            local line_text=$(echo "$line_info" | cut -d: -f2-)
 
-        # Look for the closing brace and extract body
-        local start_line=$line_num
-        local end_line=$(awk "NR>$start_line && /^[}]/ {print NR; exit}" "$file")
-        [ -z "$end_line" ] && end_line=$((start_line + 5))
+            # Extract function name
+            local func_name=$(echo "$line_text" | sed 's/^\s*\([a-z_-][a-z0-9_-]*\)().*/\1/')
 
-        # Get function body (strip braces and whitespace)
-        local body=$(sed -n "${start_line},$end_line p" "$file" | sed '1s/.*{\(.*\)/\1/;$s/\(.*\)}.*/\1/' | grep -v '^[[:space:]]*$' | head -1)
+            # Look for the closing brace and extract body
+            local start_line=$line_num
+            local end_line=$(awk "NR>$start_line && /^[}]/ {print NR; exit}" "$file")
+            [ -z "$end_line" ] && end_line=$((start_line + 5))
 
-        # Check if body is just a function call
-        if [[ "$body" =~ ^[[:space:]]*\$?\{?[a-z_-][a-z0-9_-]*\}?[[:space:]]*\"\$@\"[[:space:]]*$ ]] || \
-           [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*\"\$@\" ]] || \
-           [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*$ ]]; then
+            # Get function body (strip braces and whitespace)
+            local body=$(sed -n "${start_line},$end_line p" "$file" | sed '1s/.*{\(.*\)/\1/;$s/\(.*\)}.*/\1/' | grep -v '^[[:space:]]*$' | head -1)
 
-            local called_func=$(echo "$body" | sed 's/.*\s*\([a-z_-][a-z0-9_-]*\).*/\1/')
+            # Check if body is just a function call
+            if [[ "$body" =~ ^[[:space:]]*\$?\{?[a-z_-][a-z0-9_-]*\}?[[:space:]]*\"\$@\"[[:space:]]*$ ]] || \
+               [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*\"\$@\" ]] || \
+               [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*$ ]]; then
 
-            echo "$file:$line_num: [WARNING] Wrapper function anti-pattern: '$func_name() { $called_func ... }'
+                local called_func=$(echo "$body" | sed 's/.*\s*\([a-z_-][a-z0-9_-]*\).*/\1/')
+
+                echo "$file:$line_num: [WARNING] Wrapper function anti-pattern: '$func_name() { $called_func ... }'
   This wrapper function only delegates to another function.
   Consider removing the wrapper or using an alias:
     - Option A: alias ${func_name}='${called_func}'
     - Option B: Enhance the wrapper with additional logic
   Reference: https://github.com/bwyoon/dotfiles/blob/main/para/archive/rca-knowledge/docs/analysis/2025-01-19-shell-function-propagation-issues.md" >> "$WRAPPER_VIOLATIONS_FILE"
-        fi
-    done < <(grep -n "^[a-z_-][a-z0-9_-]*()[[:space:]]*{" "$file" 2>/dev/null)
+            fi
+        done <<< "$matches"
+    fi
+    return 0
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
