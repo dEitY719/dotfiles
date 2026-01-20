@@ -85,11 +85,5 @@
   "claudeCode.preferredLocation": "panel",
   "makefile.configureOnOpen": true,
   "peacock.remoteColor": "#f9e64f",
-  "chat.mcp.gallery.enabled": true,
-  "settingsSync.ignoredSettings": [
-    "pgsql.connections",
-    "pgsql.serverGroups",
-    "mssql.connectionGroups",
-    "geminicodeassist.project"
-  ]
+  "chat.mcp.gallery.enabled": true
 }
