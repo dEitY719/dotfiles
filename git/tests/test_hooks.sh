@@ -66,6 +66,9 @@ make_repo() {
   cp "${DOTFILES_ROOT}/git/hooks/pre-commit" "$repo_dir/git/hooks/pre-commit"
   chmod +x "$repo_dir/git/hooks/pre-commit"
 
+  mkdir -p "$repo_dir/git/hooks/checks"
+  cp -R "${DOTFILES_ROOT}/git/hooks/checks/." "$repo_dir/git/hooks/checks/"
+
   mkdir -p "$repo_dir/bash" "$repo_dir/zsh"
   cat >"$repo_dir/bash/main.bash" <<'EOF'
 #!/bin/bash

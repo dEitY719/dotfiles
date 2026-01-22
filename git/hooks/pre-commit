@@ -1,23 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # git/hooks/pre-commit
-# Comprehensive pre-commit validation hook
+# Project-level pre-commit hook for dotfiles repo.
 #
-# Checks:
-# 1. Shebang consistency (shell-common, bash, zsh dirs)
-# 2. Naming convention violations (dash-form in user-facing text)
-# 3. Function naming consistency (snake_case only)
-# 4. UX library usage consistency
-# 5. Subshell sourcing anti-pattern (source_var=$(. file)) [WARNING]
-# 6. Alias/Function name conflicts (same name as both alias and function) [BLOCKING]
-# 7. Wrapper function anti-pattern (function only calls other function) [WARNING]
+# Runner responsibilities:
+# - Collect staged files
+# - Dispatch checks
+# - Aggregate results and exit appropriately
 #
-# Performance: Optimized for staged files only (git diff --cached)
-# All checks run in single pass per file
-#
-# Reference: git/doc/ANTI_PATTERNS.md, docs/postmortem/postmortem-auto-sourcing-utility-scripts.md
-
-# Error handling is managed with explicit 'return' statements and '||true' patterns
-# rather than relying on 'set -e', which can interfere with process substitution
+# Check implementations live in: git/hooks/checks/
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Configuration and setup
@@ -30,10 +20,14 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Get repo root (navigate from hook location)
-HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+CHECKS_DIR="${HOOK_DIR}/checks"
 REPO_ROOT="$(cd "$HOOK_DIR/../.." && pwd)"
-FUNCTIONS_DIR="$REPO_ROOT/shell-common/functions"
+
+if [ ! -d "$CHECKS_DIR" ]; then
+    echo -e "${RED}✗ BLOCKING: Checks directory not found: $CHECKS_DIR${NC}"
+    exit 1
+fi
 
 # Create temporary files for error collection
 TMPDIR="${TMPDIR:-/tmp}"
@@ -43,589 +37,128 @@ SHEBANG_VIOLATIONS_FILE=$(mktemp "$TMPDIR/shebang_violations_XXXXXX.txt")
 SUBSHELL_VIOLATIONS_FILE=$(mktemp "$TMPDIR/subshell_violations_XXXXXX.txt")
 ALIAS_CONFLICT_FILE=$(mktemp "$TMPDIR/alias_conflict_XXXXXX.txt")
 WRAPPER_VIOLATIONS_FILE=$(mktemp "$TMPDIR/wrapper_violations_XXXXXX.txt")
-PURITY_VIOLATIONS_FILE=$(mktemp "$TMPDIR/purity_violations_XXXXXX.txt")
 CUSTOM_TOOLS_SOURCING_FILE=$(mktemp "$TMPDIR/custom_tools_sourcing_XXXXXX.txt")
 AUTO_EXEC_CUSTOM_FILE=$(mktemp "$TMPDIR/auto_exec_custom_XXXXXX.txt")
+PURITY_VIOLATIONS_FILE=$(mktemp "$TMPDIR/purity_violations_XXXXXX.txt")
 
-# Ensure cleanup on exit (trap is essential for avoiding orphaned temp files)
-trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$WRAPPER_VIOLATIONS_FILE" "$PURITY_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE"' EXIT
+trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$PURITY_VIOLATIONS_FILE"' EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Helper functions
+# Load check modules
 # ═══════════════════════════════════════════════════════════════════════════
 
-write_staged_or_worktree_to_tmp() {
-    local repo_rel_path="$1"
-    local tmp_path="$2"
-
-    # Prefer staged content (commit accuracy), fall back to worktree
-    if git cat-file -e ":$repo_rel_path" 2>/dev/null; then
-        git show ":$repo_rel_path" >"$tmp_path" 2>/dev/null || return 1
-        return 0
-    fi
-
-    local worktree_path="$REPO_ROOT/$repo_rel_path"
-    [ -f "$worktree_path" ] || return 1
-    cp "$worktree_path" "$tmp_path" 2>/dev/null
-}
-
-get_expected_shebang() {
-    local file="$1"
-    if [[ "$file" == "$REPO_ROOT/shell-common"* ]]; then
-        echo "#!/bin/sh"
-    elif [[ "$file" == "$REPO_ROOT/bash"* ]]; then
-        echo "#!/bin/bash"
-    elif [[ "$file" == "$REPO_ROOT/zsh"* ]]; then
-        echo "#!/bin/zsh"
-    else
-        echo ""
+source_check_or_exit() {
+    local path="$1"
+    # shellcheck source=/dev/null
+    if ! . "$path"; then
+        echo -e "${RED}✗ BLOCKING: Failed to load hook module: $path${NC}"
+        exit 1
     fi
 }
 
-check_shebang_violation() {
-    local file="$1"
-    local expected_shebang
-    expected_shebang=$(get_expected_shebang "$file")
-
-    [ -z "$expected_shebang" ] && return 0  # Flexible location
-
-    local actual_shebang
-    actual_shebang=$(head -n1 "$file")
-    [ "$actual_shebang" = "$expected_shebang" ] && return 0
-
-    return 1
-}
-
-check_function_naming() {
-    local file="$1"
-    local violations_found=0
-
-    # Look for function definitions with kebab-case (dashes) - which is wrong
-    while IFS= read -r line_info; do
-        [ -z "$line_info" ] && continue
-        local line_num=$(echo "$line_info" | cut -d: -f1)
-        local line_text=$(echo "$line_info" | cut -d: -f2-)
-
-        # Extract function name
-        local func_name="${line_text##*( )}"  # Remove leading spaces
-        func_name="${func_name%%\(\)*}"        # Remove everything from ( onwards
-
-        # If function name contains dash, it's a violation
-        if [[ "$func_name" == *"-"* ]]; then
-            local corrected="${func_name//-/_}"
-            echo "$file:$line_num: Function '$func_name' uses dash-form. Use snake_case: '$corrected'" >> "$FUNC_VIOLATIONS_FILE"
-            violations_found=1
-        fi
-    done < <(grep -n "[a-z0-9_]*-[a-z0-9_]*()[[:space:]]*{" "$file" 2>/dev/null || true)
-
-    return $violations_found
-}
-
-check_naming_violations() {
-    local file="$1"
-    local filename=$(basename "$file" .sh)
-    local violations_found=0
-
-    # Skip files without underscore (no snake_case to worry about)
-    [[ "$filename" != *_* ]] && return
-
-    # Get function names from the file
-    while IFS= read -r func_name; do
-        [[ -z "$func_name" ]] && continue
-
-        # Search for the function name in quoted strings (user-facing)
-        if grep -n "\".*$func_name.*\"" "$file" | \
-           grep -v "^[[:space:]]*#" | \
-           grep -v "alias.*=" | \
-           grep -v "^[[:space:]]*$func_name()" | \
-           sed "s|^|$file:|" >> "$VIOLATIONS_FILE" 2>/dev/null; then
-            violations_found=1
-        fi
-    done < <(grep "^[[:space:]]*[a-z_][a-z0-9_]*()[[:space:]]*{" "$file" | \
-             sed 's/^[[:space:]]*\([a-z_][a-z0-9_]*\)().*/\1/')
-
-    return $violations_found
-}
-
-check_ux_library_usage() {
-    local file="$1"
-
-    # Only check files that explicitly use UX library functions
-    grep -q "ux_header\|ux_error\|ux_success" "$file" || return
-
-    # Check if file has defensive programming patterns
-    if grep -q "if.*\(type\|command -v\).*ux_[a-z_]*.*>/dev/null" "$file"; then
-        return  # File handles fallbacks properly
-    fi
-
-    # Check for raw echo with text content (non-empty)
-    local violation_count=0
-    while IFS= read -r line_text; do
-        # Skip various acceptable echo patterns
-        [[ "$line_text" =~ ^[[:space:]]*# ]] && continue
-        [[ "$line_text" =~ echo[[:space:]]*\"\"$ ]] && continue
-        [[ "$line_text" =~ echo[[:space:]]*\'\'$ ]] && continue
-        [[ "$line_text" =~ echo[[:space:]]*\"\s*\"$ ]] && continue
-        [[ "$line_text" =~ ^[[:space:]]*(local[[:space:]]+)?[A-Z_a-z].*\$\(echo ]] && continue
-        [[ "$line_text" =~ \|.*echo ]] && continue
-        [[ "$line_text" =~ echo.*\| ]] && continue
-        [[ "$line_text" =~ if[[:space:]]+echo.*\| ]] && continue
-        [[ "$line_text" =~ ^[[:space:]]*\([[:space:]]*echo ]] && continue
-        [[ "$line_text" =~ ^[[:space:]]*echo.*\).*\| ]] && continue
-
-        # Found a potential raw echo with content
-        if [[ "$line_text" =~ echo[[:space:]]+.*[a-zA-Z0-9] ]]; then
-            ((violation_count++))
-        fi
-    done < <(grep "^[^#]*echo[[:space:]]" "$file" | grep -v "ux_" | grep -v "() {" || true)
-
-    [ $violation_count -eq 0 ] && return
-    return 1
-}
-
-check_subshell_sourcing() {
-    local file="$1"
-
-    # Find pattern: variable=$(. file) or variable=$(source file)
-    # This breaks function/alias propagation
-    local matches
-    matches=$(grep -n '[a-z_][a-z0-9_]*\s*=\s*\$(' "$file" 2>/dev/null | grep -E '\.(sh|zsh|bash)\s*\)' || true)
-
-    if [ -n "$matches" ]; then
-        while IFS= read -r line_info; do
-            [ -z "$line_info" ] && continue
-            local line_num=$(echo "$line_info" | cut -d: -f1)
-            local line_text=$(echo "$line_info" | cut -d: -f2-)
-
-            # Extract the variable name for context
-            local var_name=$(echo "$line_text" | sed 's/.*\([a-z_][a-z0-9_]*\)\s*=\s*\$(.*/\1/')
-
-            echo "$file:$line_num: [WARNING] Subshell sourcing breaks function propagation: '${var_name}=\$(...)'
-  Fix: Use direct sourcing '. file' instead of '\${var_name}=\$(. file)'
-  Reference: git/doc/ANTI_PATTERNS.md" >> "$SUBSHELL_VIOLATIONS_FILE"
-        done <<< "$matches"
-        return 1  # Violations found
-    fi
-    return 0  # No violations
-}
-
-check_alias_function_conflict() {
-    local file="$1"
-    local violations_found=0
-
-    # Extract all alias names
-    local alias_names=$(grep -o "^alias[[:space:]]*[a-z_-][a-z0-9_-]*=" "$file" 2>/dev/null | sed "s/.*alias[[:space:]]*\([^=]*\)=.*/\1/" | sort -u)
-
-    # Extract all function names
-    local func_names=$(grep -o "^[a-z_-][a-z0-9_-]*()[[:space:]]*{" "$file" 2>/dev/null | sed "s/(.*//;s/^[[:space:]]*//;s/[[:space:]]*$//" | sort -u)
-
-    # Find conflicts (same name in both alias and function)
-    if [ -n "$alias_names" ] && [ -n "$func_names" ]; then
-        while IFS= read -r alias_name; do
-            [ -z "$alias_name" ] && continue
-
-            # Normalize name (remove/convert dashes)
-            local normalized_alias="${alias_name//-/_}"
-
-            while IFS= read -r func_name; do
-                [ -z "$func_name" ] && continue
-                local normalized_func="${func_name//-/_}"
-
-                # Check if names conflict (exact or underscore/dash variant)
-                if [ "$alias_name" = "$func_name" ] || [ "$normalized_alias" = "$normalized_func" ]; then
-                    local alias_line=$(grep -n "^alias[[:space:]]*$alias_name=" "$file" 2>/dev/null | cut -d: -f1 | head -1)
-                    local func_line=$(grep -n "^$func_name()[[:space:]]*{" "$file" 2>/dev/null | cut -d: -f1 | head -1)
-
-                    echo "$file:$alias_line,$func_line: [BLOCKING] Alias/function name conflict: '$alias_name'
-  The same name exists as both:
-    - Alias (line $alias_line): alias $alias_name='...'
-    - Function (line $func_line): $func_name() { ... }
-  This causes parse errors on reload in zsh.
-  Fix: Use different names (e.g., alias 'my-cmd' and function 'my_cmd_impl')
-  Reference: git/doc/ANTI_PATTERNS.md" >> "$ALIAS_CONFLICT_FILE"
-                    violations_found=1
-                fi
-            done <<< "$func_names"
-        done <<< "$alias_names"
-    fi
-    return $violations_found
-}
-
-check_wrapper_function() {
-    local file="$1"
-    local violations_found=0
-
-    # Find functions that only call another function with same arguments
-    # Pattern: func() { other_func "$@" } or func() { other_func_name }
-    local matches
-    matches=$(grep -n "^[a-z_-][a-z0-9_-]*()[[:space:]]*{" "$file" 2>/dev/null || true)
-
-    if [ -n "$matches" ]; then
-        while IFS= read -r line_info; do
-            [ -z "$line_info" ] && continue
-            local line_num=$(echo "$line_info" | cut -d: -f1)
-            local line_text=$(echo "$line_info" | cut -d: -f2-)
-
-            # Extract function name
-            local func_name=$(echo "$line_text" | sed 's/^\s*\([a-z_-][a-z0-9_-]*\)().*/\1/')
-
-            # Look for the closing brace and extract body
-            local start_line=$line_num
-            local end_line=$(awk "NR>$start_line && /^[}]/ {print NR; exit}" "$file")
-            [ -z "$end_line" ] && end_line=$((start_line + 5))
-
-            # Get function body (strip braces and whitespace)
-            local body=$(sed -n "${start_line},$end_line p" "$file" | sed '1s/.*{\(.*\)/\1/;$s/\(.*\)}.*/\1/' | grep -v '^[[:space:]]*$' | head -1)
-
-            # Check if body is just a function call
-            if [[ "$body" =~ ^[[:space:]]*\$?\{?[a-z_-][a-z0-9_-]*\}?[[:space:]]*\"\$@\"[[:space:]]*$ ]] || \
-               [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*\"\$@\" ]] || \
-               [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*$ ]]; then
-
-                local called_func=$(echo "$body" | sed 's/.*\s*\([a-z_-][a-z0-9_-]*\).*/\1/')
-
-                echo "$file:$line_num: [WARNING] Wrapper function anti-pattern: '$func_name() { $called_func ... }'
-  This wrapper function only delegates to another function.
-  Consider removing the wrapper or using an alias:
-    - Option A: alias ${func_name}='${called_func}'
-    - Option B: Enhance the wrapper with additional logic
-  Reference: git/doc/ANTI_PATTERNS.md" >> "$WRAPPER_VIOLATIONS_FILE"
-                violations_found=1
-            fi
-        done <<< "$matches"
-    fi
-    return $violations_found
-}
-
-check_init_auto_sourcing() {
-    local repo_rel_path="$1"
-
-    case "$repo_rel_path" in
-        bash/main.bash|zsh/main.zsh) ;;
-        *) return 0 ;;
-    esac
-
-    local tmp_file
-    tmp_file=$(mktemp "$TMPDIR/init_stage_XXXXXX.txt")
-    write_staged_or_worktree_to_tmp "$repo_rel_path" "$tmp_file" 2>/dev/null || { rm -f "$tmp_file"; return 0; }
-
-    # Postmortem guard: init files must NOT auto-source tools/custom.
-    # We only block sourcing-like patterns, not plain mentions in comments/docs.
-    local matches
-    matches=$(awk '
-        function is_comment(line) { return line ~ /^[[:space:]]*#/ }
-        BEGIN { in_custom_loop=0 }
-        {
-            line=$0
-            if (is_comment(line)) next
-
-            # Direct sourcing of tools/custom paths
-            if (line ~ /(^|[[:space:];])(source)[[:space:]]+.*tools\/custom/ ||
-                line ~ /(^|[[:space:];])\.[[:space:]]+.*tools\/custom/ ||
-                line ~ /(^|[[:space:];])(safe_source)[[:space:]]+.*tools\/custom/) {
-                printf "%d:%s\n", NR, line
-            }
-
-            # Detect loop over tools/custom (common anti-pattern)
-            if (line ~ /^[[:space:]]*for[[:space:]].*in[[:space:]].*tools\/custom/ &&
-                line ~ /\.sh/ ) {
-                in_custom_loop=1
-                next
-            }
-            if (in_custom_loop && line ~ /^[[:space:]]*done([[:space:]]|$)/) {
-                in_custom_loop=0
-                next
-            }
-            if (in_custom_loop &&
-                (line ~ /(^|[[:space:];])(source)[[:space:]]+/ ||
-                 line ~ /(^|[[:space:];])\.[[:space:]]+/ ||
-                 line ~ /(^|[[:space:];])(safe_source)[[:space:]]+/)) {
-                printf "%d:%s\n", NR, line
-            }
-        }
-    ' "$tmp_file" 2>/dev/null || true)
-
-    if [ -n "$matches" ]; then
-        {
-            echo "$repo_rel_path: [BLOCKING] Forbidden reference to 'shell-common/tools/custom' in init file"
-            echo "  Risk: Re-introduces auto-sourcing of executable utilities (hangs, infinite loops, blocked shell init)"
-            echo "  Reference: docs/postmortem/postmortem-auto-sourcing-utility-scripts.md"
-            echo "  Matches:"
-            echo "$matches" | sed 's/^/    /'
-            echo ""
-        } >>"$CUSTOM_TOOLS_SOURCING_FILE"
-        rm -f "$tmp_file"
-        return 1
-    fi
-
-    rm -f "$tmp_file"
-    return 0
-}
-
-check_auto_executable_in_custom() {
-    local repo_rel_path="$1"
-
-    case "$repo_rel_path" in
-        shell-common/tools/custom/*.sh) ;;
-        *) return 0 ;;
-    esac
-
-    local tmp_file
-    tmp_file=$(mktemp "$TMPDIR/custom_stage_XXXXXX.txt")
-    write_staged_or_worktree_to_tmp "$repo_rel_path" "$tmp_file" 2>/dev/null || { rm -f "$tmp_file"; return 0; }
-
-    # If the script uses a main() entrypoint, it must be guarded so that
-    # accidental sourcing does not auto-execute (postmortem recurrence).
-    # Allow guarded patterns like:
-    #   if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi
-    #   [ "${BASH_SOURCE[0]}" = "$0" ] && main "$@"
-    if grep -qE '^[[:space:]]*main[[:space:]]*\(\)[[:space:]]*\{' "$tmp_file" 2>/dev/null; then
-        local tail_calls
-        tail_calls=$(tail -n 30 "$tmp_file" | \
-            grep -nE '^[[:space:]]*main([[:space:]]+"?\$@"?)?[[:space:]]*$' | \
-            grep -vE '^[0-9]+:[[:space:]]*#' || true)
-
-        if [ -n "$tail_calls" ]; then
-            local guard_present=0
-            if tail -n 80 "$tmp_file" | grep -Eq 'BASH_SOURCE\[0\].*(\$\{?0\}?|\$0)|(\$\{?0\}?|\$0).*BASH_SOURCE\[0\]'; then
-                guard_present=1
-            fi
-
-            if [ $guard_present -eq 0 ]; then
-                {
-                    echo "$repo_rel_path: [BLOCKING] Auto-executable main() without direct-exec guard"
-                    echo "  Postmortem risk: if tools/custom is accidentally sourced, this will execute at shell init"
-                    echo "  Matches (near EOF):"
-                    echo "$tail_calls" | sed 's/^/    /'
-                    echo "  Fix (example):"
-                    echo "    if [ \"\${BASH_SOURCE[0]}\" = \"\$0\" ]; then main \"\$@\"; fi"
-                    echo "  Reference: docs/postmortem/postmortem-auto-sourcing-utility-scripts.md"
-                    echo ""
-                } >>"$AUTO_EXEC_CUSTOM_FILE"
-                rm -f "$tmp_file"
-                return 1
-            fi
-        fi
-    fi
-
-    rm -f "$tmp_file"
-    return 0
-}
-
-check_library_purity() {
-    local repo_rel_path="$1"
-
-    case "$repo_rel_path" in
-        shell-common/functions/*.sh|shell-common/tools/integrations/*.sh) ;;
-        *) return 0 ;;
-    esac
-
-    local tmp_file
-    tmp_file=$(mktemp "$TMPDIR/purity_stage_XXXXXX.txt")
-    write_staged_or_worktree_to_tmp "$repo_rel_path" "$tmp_file" 2>/dev/null || { rm -f "$tmp_file"; return 0; }
-
-    local violation_count=0
-
-    # Heuristic: top-level executable behavior in auto-sourced files
-    # Very small parser: track function blocks by "{...}" on "name() {"
-    # We only flag when depth==0 (top-level), because code inside functions
-    # does not execute during sourcing.
-    local purity_hits
-    purity_hits=$(awk '
-        function is_comment(line) { return line ~ /^[[:space:]]*#/ }
-        BEGIN { depth=0 }
-        {
-            line=$0
-            if (is_comment(line)) next
-            if (line ~ /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*\\(\\)[[:space:]]*\\{/) { depth++; next }
-            if (line ~ /^[[:space:]]*\\}/) { if (depth>0) depth--; next }
-            if (depth==0 && line ~ /^[[:space:]]*(read|select)[[:space:]]/) {
-                printf "INTERACTIVE:%d:%s\n", NR, line
-            }
-            if (depth==0 && line ~ /^[[:space:]]*(main|[a-z_][a-z0-9_]*_main)([[:space:]]+|$)/ &&
-                line !~ /^[[:space:]]*(main|[a-z_][a-z0-9_]*_main)[[:space:]]*\\(\\)[[:space:]]*\\{/) {
-                printf "MAIN_CALL:%d:%s\n", NR, line
-            }
-            if (depth==0 && line ~ /(apt-get[[:space:]]+install|apt[[:space:]]+install|dnf[[:space:]]+install|yum[[:space:]]+install|pacman[[:space:]]+-S|pip[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|npm[[:space:]]+install|brew[[:space:]]+install)/) {
-                printf "INSTALL:%d:%s\n", NR, line
-            }
-        }
-    ' "$tmp_file" 2>/dev/null || true)
-
-    if echo "$purity_hits" | grep -q '^MAIN_CALL:'; then
-        violation_count=1
-        {
-            echo "$repo_rel_path: [BLOCKING] Library purity violation (auto-sourced path)"
-            echo "  - Top-level main/_main call (will execute when sourced)"
-            echo "  Matches:"
-            echo "$purity_hits" | grep '^MAIN_CALL:' | sed 's/^MAIN_CALL:/    /'
-        } >>"$PURITY_VIOLATIONS_FILE"
-    fi
-
-    if echo "$purity_hits" | grep -q '^INTERACTIVE:'; then
-        violation_count=1
-        {
-            echo "$repo_rel_path: [BLOCKING] Library purity violation (auto-sourced path)"
-            echo "  - Top-level interactive prompt (read/select) found outside functions"
-            echo "  Matches:"
-            echo "$purity_hits" | grep '^INTERACTIVE:' | sed 's/^INTERACTIVE:/    /'
-        } >>"$PURITY_VIOLATIONS_FILE"
-    fi
-
-    if echo "$purity_hits" | grep -q '^INSTALL:'; then
-        violation_count=1
-        {
-            echo "$repo_rel_path: [BLOCKING] Library purity violation (auto-sourced path)"
-            echo "  - Top-level installation command found (belongs in tools/custom, executed explicitly)"
-            echo "  Matches:"
-            echo "$purity_hits" | grep '^INSTALL:' | sed 's/^INSTALL:/    /'
-        } >>"$PURITY_VIOLATIONS_FILE"
-    fi
-
-    if [ $violation_count -ne 0 ]; then
-        {
-            echo "  Fix: Move executable/interactive logic to 'shell-common/tools/custom/' and invoke explicitly"
-            echo "  Reference: docs/postmortem/postmortem-auto-sourcing-utility-scripts.md"
-            echo ""
-        } >>"$PURITY_VIOLATIONS_FILE"
-        rm -f "$tmp_file"
-        return 1
-    fi
-
-    rm -f "$tmp_file"
-    return 0
-}
+source_check_or_exit "${CHECKS_DIR}/shared.sh"
+source_check_or_exit "${CHECKS_DIR}/shebang_check.sh"
+source_check_or_exit "${CHECKS_DIR}/naming_check.sh"
+source_check_or_exit "${CHECKS_DIR}/ux_usage_check.sh"
+source_check_or_exit "${CHECKS_DIR}/subshell_sourcing_check.sh"
+source_check_or_exit "${CHECKS_DIR}/alias_conflict_check.sh"
+source_check_or_exit "${CHECKS_DIR}/wrapper_check.sh"
+source_check_or_exit "${CHECKS_DIR}/postmortem_init_check.sh"
+source_check_or_exit "${CHECKS_DIR}/custom_tools_entrypoint_check.sh"
+source_check_or_exit "${CHECKS_DIR}/library_purity_check.sh"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Get staged files (git diff --cached)
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Get staged files (include rename to catch files moved into auto-sourced paths)
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null || echo "")
-
 if [ -z "$STAGED_FILES" ]; then
-    # No staged files, all checks pass
     exit 0
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Part 1: Check Shebang Consistency (staged *.sh files only)
+# Run checks
 # ═══════════════════════════════════════════════════════════════════════════
 
 shebang_violations=0
-
-while IFS= read -r file; do
-    # Only check shell scripts
-    [[ "$file" != *.sh ]] && continue
-
-    # Check if file is in one of the checked directories
-    [[ "$file" == shell-common/* ]] || [[ "$file" == bash/* ]] || [[ "$file" == zsh/* ]] || continue
-
-    full_path="$REPO_ROOT/$file"
-    [ -f "$full_path" ] || continue
-
-    if ! check_shebang_violation "$full_path"; then
-        expected=$(get_expected_shebang "$full_path")
-        actual=$(head -n1 "$full_path")
-        echo "$file:1: Expected: $expected Got: $actual" >> "$SHEBANG_VIOLATIONS_FILE"
-        ((shebang_violations++))
-    fi
-done <<< "$STAGED_FILES"
-
-# ═══════════════════════════════════════════════════════════════════════════
-# Part 2-7: Unified check for function files (single loop)
-# ═══════════════════════════════════════════════════════════════════════════
-
 naming_violations=0
 function_naming_violations=0
 ux_violations=0
 subshell_violations=0
 alias_conflict_violations=0
 wrapper_violations=0
-library_purity_violations=0
+custom_tools_sourcing_violations=0
 auto_exec_custom_violations=0
+library_purity_violations=0
 
+# 1) Shebang consistency for staged .sh files under shell-common/bash/zsh
 while IFS= read -r file; do
-    # Check both function files and integration tools
+    [[ "$file" != *.sh ]] && continue
+    [[ "$file" == shell-common/* ]] || [[ "$file" == bash/* ]] || [[ "$file" == zsh/* ]] || continue
+
+    abs_path="$REPO_ROOT/$file"
+    [ -f "$abs_path" ] || continue
+
+    if ! check_shebang_violation "$REPO_ROOT" "$abs_path"; then
+        expected=$(get_expected_shebang "$REPO_ROOT" "$abs_path")
+        actual=$(head -n1 "$abs_path")
+        echo "$file:1: Expected: $expected Got: $actual" >>"$SHEBANG_VIOLATIONS_FILE"
+        ((shebang_violations++))
+    fi
+done <<<"$STAGED_FILES"
+
+# 2) Unified checks for function files & integration tools
+while IFS= read -r file; do
     [[ "$file" != shell-common/functions/*.sh && "$file" != shell-common/tools/integrations/*.sh ]] && continue
     [[ "$file" == *NAMING_CONVENTION* ]] && continue
 
-    full_path="$REPO_ROOT/$file"
-    [ -f "$full_path" ] || continue
+    abs_path="$REPO_ROOT/$file"
+    [ -f "$abs_path" ] || continue
 
-    # Run all checks in single pass (performance optimization)
-    # Check 1: Naming violations (functions only)
     if [[ "$file" == shell-common/functions/*.sh ]]; then
-        if ! check_naming_violations "$full_path" 2>/dev/null; then
+        if ! check_naming_violations "$abs_path" "$VIOLATIONS_FILE" 2>/dev/null; then
             ((naming_violations++))
         fi
 
-        # Check 2: Function naming (functions only)
-        # Returns 1 if violations found, 0 if all pass
-        if ! check_function_naming "$full_path" 2>/dev/null; then
+        if ! check_function_naming "$abs_path" "$FUNC_VIOLATIONS_FILE" 2>/dev/null; then
             ((function_naming_violations++))
         fi
 
-        # Check 3: UX library usage
-        if ! check_ux_library_usage "$full_path" 2>/dev/null; then
+        if ! check_ux_library_usage "$abs_path" 2>/dev/null; then
             ((ux_violations++))
         fi
     fi
 
-    # Anti-pattern checks (all .sh files)
-    # Check 5: Subshell sourcing [WARNING]
-    # Returns 1 if violations found, 0 if all pass
-    if ! check_subshell_sourcing "$full_path" 2>/dev/null; then
+    if ! check_subshell_sourcing "$abs_path" "$SUBSHELL_VIOLATIONS_FILE" 2>/dev/null; then
         ((subshell_violations++))
     fi
 
-    # Check 6: Alias/Function conflicts [BLOCKING]
-    # Returns 1 if violations found, 0 if all pass
-    if ! check_alias_function_conflict "$full_path" 2>/dev/null; then
+    if ! check_alias_function_conflict "$abs_path" "$ALIAS_CONFLICT_FILE" 2>/dev/null; then
         ((alias_conflict_violations++))
     fi
 
-    # Check 7: Wrapper function anti-pattern [WARNING]
-    # Returns 1 if violations found, 0 if all pass
-    if ! check_wrapper_function "$full_path" 2>/dev/null; then
+    if ! check_wrapper_function "$abs_path" "$WRAPPER_VIOLATIONS_FILE" 2>/dev/null; then
         ((wrapper_violations++))
     fi
 
-    # Check 8: Library purity (auto-sourced paths) [BLOCKING]
-    # Returns 1 if violations found, 0 if all pass
-    if ! check_library_purity "$file" 2>/dev/null; then
+    if ! check_library_purity "$REPO_ROOT" "$TMPDIR" "$file" "$PURITY_VIOLATIONS_FILE" 2>/dev/null; then
         ((library_purity_violations++))
     fi
-done <<< "$STAGED_FILES"
+done <<<"$STAGED_FILES"
 
-# ═══════════════════════════════════════════════════════════════════════════
-# Part 9: Postmortem guardrails (init files)
-# ═══════════════════════════════════════════════════════════════════════════
-
-custom_tools_sourcing_violations=0
+# 3) Postmortem guardrails: init files
 while IFS= read -r file; do
-    case "$file" in
-        bash/main.bash|zsh/main.zsh)
-            if ! check_init_auto_sourcing "$file" 2>/dev/null; then
-                ((custom_tools_sourcing_violations++))
-            fi
-            ;;
-    esac
-done <<< "$STAGED_FILES"
+    if ! check_init_auto_sourcing "$REPO_ROOT" "$TMPDIR" "$file" "$CUSTOM_TOOLS_SOURCING_FILE" 2>/dev/null; then
+        ((custom_tools_sourcing_violations++))
+    fi
+done <<<"$STAGED_FILES"
 
-# ═══════════════════════════════════════════════════════════════════════════
-# Part 10: Postmortem guardrails (tools/custom scripts)
-# ═══════════════════════════════════════════════════════════════════════════
-
+# 4) Postmortem guardrails: tools/custom scripts
 while IFS= read -r file; do
-    case "$file" in
-        shell-common/tools/custom/*.sh)
-            if ! check_auto_executable_in_custom "$file" 2>/dev/null; then
-                ((auto_exec_custom_violations++))
-            fi
-            ;;
-    esac
-done <<< "$STAGED_FILES"
+    if ! check_auto_executable_in_custom "$REPO_ROOT" "$TMPDIR" "$file" "$AUTO_EXEC_CUSTOM_FILE" 2>/dev/null; then
+        ((auto_exec_custom_violations++))
+    fi
+done <<<"$STAGED_FILES"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Reporting and exit logic
@@ -635,46 +168,16 @@ echo ""
 echo -e "${BLUE}Pre-commit validation (staged files only)${NC}"
 echo ""
 
-# Separate BLOCKING violations from WARNINGS
-blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + library_purity_violations + custom_tools_sourcing_violations + auto_exec_custom_violations))
+blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + custom_tools_sourcing_violations + auto_exec_custom_violations + library_purity_violations))
 warning_count=$((subshell_violations + wrapper_violations + ux_violations))
 
 if [ $blocking_violations -eq 0 ]; then
-    # Blocking checks passed - show warnings if any
     has_warnings=0
-
-    if [ $alias_conflict_violations -gt 0 ] && [ -s "$ALIAS_CONFLICT_FILE" ]; then
-        echo -e "${RED}✗ BLOCKING: Alias/Function name conflicts ($alias_conflict_violations file(s)):${NC}"
-        cat "$ALIAS_CONFLICT_FILE" | sed 's/^/  /'
-        echo ""
-        exit 1
-    fi
-
-    if [ $custom_tools_sourcing_violations -gt 0 ] && [ -s "$CUSTOM_TOOLS_SOURCING_FILE" ]; then
-        echo -e "${RED}✗ BLOCKING: Forbidden tools/custom sourcing in init files ($custom_tools_sourcing_violations file(s)):${NC}"
-        cat "$CUSTOM_TOOLS_SOURCING_FILE" | sed 's/^/  /'
-        echo ""
-        exit 1
-    fi
-
-    if [ $auto_exec_custom_violations -gt 0 ] && [ -s "$AUTO_EXEC_CUSTOM_FILE" ]; then
-        echo -e "${RED}✗ BLOCKING: Auto-executable tools/custom scripts without guard ($auto_exec_custom_violations file(s)):${NC}"
-        cat "$AUTO_EXEC_CUSTOM_FILE" | sed 's/^/  /'
-        echo ""
-        exit 1
-    fi
-
-    if [ $library_purity_violations -gt 0 ] && [ -s "$PURITY_VIOLATIONS_FILE" ]; then
-        echo -e "${RED}✗ BLOCKING: Library purity violations ($library_purity_violations file(s)):${NC}"
-        cat "$PURITY_VIOLATIONS_FILE" | sed 's/^/  /'
-        echo ""
-        exit 1
-    fi
 
     if [ $subshell_violations -gt 0 ] && [ -s "$SUBSHELL_VIOLATIONS_FILE" ]; then
         echo -e "${YELLOW}⚠ [WARNING] Subshell sourcing anti-pattern ($subshell_violations violation(s)):${NC}"
         head -n 3 "$SUBSHELL_VIOLATIONS_FILE" | sed 's/^/  /'
-        [ $(wc -l < "$SUBSHELL_VIOLATIONS_FILE") -gt 3 ] && echo "  ... and more" && echo ""
+        [ $(wc -l <"$SUBSHELL_VIOLATIONS_FILE") -gt 3 ] && echo "  ... and more" && echo ""
         echo ""
         has_warnings=1
     fi
@@ -682,7 +185,7 @@ if [ $blocking_violations -eq 0 ]; then
     if [ $wrapper_violations -gt 0 ] && [ -s "$WRAPPER_VIOLATIONS_FILE" ]; then
         echo -e "${YELLOW}⚠ [WARNING] Wrapper function anti-patterns ($wrapper_violations violation(s)):${NC}"
         head -n 3 "$WRAPPER_VIOLATIONS_FILE" | sed 's/^/  /'
-        [ $(wc -l < "$WRAPPER_VIOLATIONS_FILE") -gt 3 ] && echo "  ... and more" && echo ""
+        [ $(wc -l <"$WRAPPER_VIOLATIONS_FILE") -gt 3 ] && echo "  ... and more" && echo ""
         echo ""
         has_warnings=1
     fi
@@ -701,67 +204,66 @@ if [ $blocking_violations -eq 0 ]; then
     fi
     echo ""
     exit 0
-else
-    # BLOCKING violations found - report and fail
-    echo -e "${RED}✗ Found $blocking_violations BLOCKING violation(s)${NC}"
-    echo ""
-
-    if [ $alias_conflict_violations -gt 0 ] && [ -s "$ALIAS_CONFLICT_FILE" ]; then
-        echo -e "${RED}[BLOCKING] Alias/Function name conflicts ($alias_conflict_violations):${NC}"
-        cat "$ALIAS_CONFLICT_FILE" | sed 's/^/  /'
-        echo ""
-    fi
-
-    if [ $custom_tools_sourcing_violations -gt 0 ] && [ -s "$CUSTOM_TOOLS_SOURCING_FILE" ]; then
-        echo -e "${RED}[BLOCKING] Forbidden tools/custom sourcing in init files ($custom_tools_sourcing_violations):${NC}"
-        cat "$CUSTOM_TOOLS_SOURCING_FILE" | sed 's/^/  /'
-        echo ""
-    fi
-
-    if [ $auto_exec_custom_violations -gt 0 ] && [ -s "$AUTO_EXEC_CUSTOM_FILE" ]; then
-        echo -e "${RED}[BLOCKING] Auto-executable tools/custom scripts without guard ($auto_exec_custom_violations):${NC}"
-        cat "$AUTO_EXEC_CUSTOM_FILE" | sed 's/^/  /'
-        echo ""
-    fi
-
-    if [ $library_purity_violations -gt 0 ] && [ -s "$PURITY_VIOLATIONS_FILE" ]; then
-        echo -e "${RED}[BLOCKING] Library purity violations ($library_purity_violations):${NC}"
-        cat "$PURITY_VIOLATIONS_FILE" | sed 's/^/  /'
-        echo ""
-    fi
-
-    if [ $shebang_violations -gt 0 ] && [ -s "$SHEBANG_VIOLATIONS_FILE" ]; then
-        echo -e "${RED}[BLOCKING] Shebang violations ($shebang_violations):${NC}"
-        cat "$SHEBANG_VIOLATIONS_FILE" | sed 's/^/  /'
-        echo ""
-    fi
-
-    if [ $naming_violations -gt 0 ] && [ -s "$VIOLATIONS_FILE" ]; then
-        echo -e "${RED}[BLOCKING] Naming convention violations ($naming_violations):${NC}"
-        echo "  User-facing text must use dash-form, not snake_case:"
-        tail -n 5 "$VIOLATIONS_FILE" | sed 's/^/  /'
-        echo ""
-    fi
-
-    if [ $function_naming_violations -gt 0 ] && [ -s "$FUNC_VIOLATIONS_FILE" ]; then
-        echo -e "${RED}[BLOCKING] Function naming violations ($function_naming_violations):${NC}"
-        echo "  Function definitions must use snake_case only:"
-        tail -n 5 "$FUNC_VIOLATIONS_FILE" | sed 's/^/  /'
-        echo ""
-    fi
-
-    # Show warnings too
-    if [ $subshell_violations -gt 0 ] && [ -s "$SUBSHELL_VIOLATIONS_FILE" ]; then
-        echo -e "${YELLOW}[WARNING] Subshell sourcing anti-pattern ($subshell_violations):${NC}"
-        head -n 2 "$SUBSHELL_VIOLATIONS_FILE" | sed 's/^/  /'
-        echo ""
-    fi
-
-    if [ $wrapper_violations -gt 0 ] && [ -s "$WRAPPER_VIOLATIONS_FILE" ]; then
-        echo -e "${YELLOW}[WARNING] Wrapper function anti-patterns ($wrapper_violations):${NC}"
-        head -n 2 "$WRAPPER_VIOLATIONS_FILE" | sed 's/^/  /'
-        echo ""
-    fi
-
-    exit 1
 fi
+
+echo -e "${RED}✗ Found $blocking_violations BLOCKING violation(s)${NC}"
+echo ""
+
+if [ $custom_tools_sourcing_violations -gt 0 ] && [ -s "$CUSTOM_TOOLS_SOURCING_FILE" ]; then
+    echo -e "${RED}[BLOCKING] tools/custom auto-sourcing in init files ($custom_tools_sourcing_violations):${NC}"
+    cat "$CUSTOM_TOOLS_SOURCING_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+if [ $auto_exec_custom_violations -gt 0 ] && [ -s "$AUTO_EXEC_CUSTOM_FILE" ]; then
+    echo -e "${RED}[BLOCKING] Auto-executable tools/custom scripts without guard ($auto_exec_custom_violations):${NC}"
+    cat "$AUTO_EXEC_CUSTOM_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+if [ $library_purity_violations -gt 0 ] && [ -s "$PURITY_VIOLATIONS_FILE" ]; then
+    echo -e "${RED}[BLOCKING] Library purity violations ($library_purity_violations):${NC}"
+    cat "$PURITY_VIOLATIONS_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+if [ $alias_conflict_violations -gt 0 ] && [ -s "$ALIAS_CONFLICT_FILE" ]; then
+    echo -e "${RED}[BLOCKING] Alias/Function name conflicts ($alias_conflict_violations):${NC}"
+    cat "$ALIAS_CONFLICT_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+if [ $shebang_violations -gt 0 ] && [ -s "$SHEBANG_VIOLATIONS_FILE" ]; then
+    echo -e "${RED}[BLOCKING] Shebang violations ($shebang_violations):${NC}"
+    cat "$SHEBANG_VIOLATIONS_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+if [ $naming_violations -gt 0 ] && [ -s "$VIOLATIONS_FILE" ]; then
+    echo -e "${RED}[BLOCKING] Naming convention violations ($naming_violations):${NC}"
+    echo "  User-facing text must use dash-form, not snake_case:"
+    tail -n 5 "$VIOLATIONS_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+if [ $function_naming_violations -gt 0 ] && [ -s "$FUNC_VIOLATIONS_FILE" ]; then
+    echo -e "${RED}[BLOCKING] Function naming violations ($function_naming_violations):${NC}"
+    echo "  Function definitions must use snake_case only:"
+    tail -n 5 "$FUNC_VIOLATIONS_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+# Show warnings too
+if [ $subshell_violations -gt 0 ] && [ -s "$SUBSHELL_VIOLATIONS_FILE" ]; then
+    echo -e "${YELLOW}[WARNING] Subshell sourcing anti-pattern ($subshell_violations):${NC}"
+    head -n 2 "$SUBSHELL_VIOLATIONS_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+if [ $wrapper_violations -gt 0 ] && [ -s "$WRAPPER_VIOLATIONS_FILE" ]; then
+    echo -e "${YELLOW}[WARNING] Wrapper function anti-patterns ($wrapper_violations):${NC}"
+    head -n 2 "$WRAPPER_VIOLATIONS_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+exit 1
