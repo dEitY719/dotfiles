@@ -71,13 +71,51 @@ get_realpath() {
 # ═══════════════════════════════════════════════════════════════════════════
 
 # Patterns that should NEVER be committed (single source of truth)
-# Core forbidden patterns: credentials, keys, env files, aws configs
-# Note: Allowed templates are filtered via grep -vE afterward
-FORBIDDEN_FILENAMES="\.git-credentials|\.env|id_rsa|id_dsa|.*\.pem|credentials\.json|private\.key|secret\.key|\.aws"
+# Structured approach: basename rules, path rules, env rules with allowlist
 
-# Allowed environment file templates (whitelist for false positive reduction)
-# These are allowed because they're templates without actual secrets
-ALLOWED_ENV_TEMPLATES="\.env\.(example|sample|template|dist)"
+# Basename that should almost never be committed (file credentials/keys only)
+FORBIDDEN_BASENAME_ERE='^(\.git-credentials|credentials\.json|private\.key|secret\.key|id_rsa|id_dsa|id_ed25519|.*\.pem)$'
+
+# Env files: blocked by default, but allow example/sample/template/dist
+ENV_BASENAME_BLOCK_ERE='^\.env(\..*)?$'
+ENV_BASENAME_ALLOW_ERE='^\.env\.(example|sample|template|dist)$'
+
+# Path-based sensitive locations (repo-relative, including directories)
+FORBIDDEN_PATH_ERE='(^|/)\.aws/(credentials|config)$'
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FUNCTION: Check if a staged path contains forbidden filename/pattern
+# ═══════════════════════════════════════════════════════════════════════════
+# Returns 0 if forbidden, 1 if allowed
+# Separates basename checks from path checks for precision and maintainability
+is_forbidden_staged_path() {
+    local path="$1"
+    local base="${path##*/}"  # Extract basename (everything after last /)
+
+    # 1. Check path-based rules first (most specific: .aws/credentials, etc.)
+    if printf '%s\n' "$path" | grep -Eq "$FORBIDDEN_PATH_ERE"; then
+        return 0
+    fi
+
+    # 2. Check basename-based forbidden files (credentials.json, id_rsa, etc.)
+    if printf '%s\n' "$base" | grep -Eq "$FORBIDDEN_BASENAME_ERE"; then
+        return 0
+    fi
+
+    # 3. Check env files with allowlist
+    # Default: .env* is blocked, but allow .env.example, .env.sample, .env.template, .env.dist
+    if printf '%s\n' "$base" | grep -Eq "$ENV_BASENAME_BLOCK_ERE"; then
+        # If it matches the allow pattern, it's safe
+        if printf '%s\n' "$base" | grep -Eq "$ENV_BASENAME_ALLOW_ERE"; then
+            return 1
+        fi
+        # Otherwise it's forbidden
+        return 0
+    fi
+
+    # 4. All other files are allowed
+    return 1
+}
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Environment Variables
@@ -164,21 +202,18 @@ if [ "$SKIP_GLOBAL" = "0" ]; then
 
     # ───────────────────────────────────────────────────────────────────────
     # A-B. Forbidden Filename Check (CRITICAL - P0)
-    # Using SSOT constants for consistency and maintainability
+    # Using function-based check for modularity and testability
+    # Include rename (R) to catch sensitive files moved into repo
     # ───────────────────────────────────────────────────────────────────────
     [ "$DEBUG" = "1" ] && echo "[Debug] Checking for forbidden filenames..."
 
-    # Include rename (R) to catch sensitive files moved into repo
-    # ACM = Add/Copy/Modify, R = Rename
-    STAGED_FILES_ALL=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null || true)
-
-    # Step 1: Find files matching forbidden patterns (SSOT)
-    FORBIDDEN_FILES=$(echo "$STAGED_FILES_ALL" | grep -E "$FORBIDDEN_FILENAMES" || true)
-
-    # Step 2: Filter out allowed templates (.env.example, .env.sample, .env.template, .env.dist)
-    if [ -n "$FORBIDDEN_FILES" ]; then
-        FORBIDDEN_FILES=$(echo "$FORBIDDEN_FILES" | grep -vE "$ALLOWED_ENV_TEMPLATES" || true)
-    fi
+    FORBIDDEN_FILES=""
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        if is_forbidden_staged_path "$file"; then
+            FORBIDDEN_FILES="${FORBIDDEN_FILES}${file}"$'\n'
+        fi
+    done < <(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null || true)
 
     if [ -n "$FORBIDDEN_FILES" ]; then
         echo -e "${RED}❌ BLOCKING: Forbidden filename(s) detected - likely contains secrets!${NC}"
@@ -186,9 +221,9 @@ if [ "$SKIP_GLOBAL" = "0" ]; then
         echo ""
         echo "   This file should NOT be committed. Likely contains:"
         echo "   - Credentials (.git-credentials, credentials.json)"
-        echo "   - Private keys (id_rsa, *.pem, secret.key)"
+        echo "   - Private keys (id_rsa, id_dsa, id_ed25519, *.pem, secret.key)"
         echo "   - Environment variables (.env, .env.local, .env.dev)"
-        echo "   - AWS credentials"
+        echo "   - AWS credentials (.aws/credentials, .aws/config)"
         echo ""
         echo "   Template files ALLOWED: .env.example, .env.sample, .env.template, .env.dist"
         echo ""

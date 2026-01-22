@@ -488,18 +488,22 @@ new_violations=$((after - before))
 - [x] 토큰 폐기/재발급 (이미 노출되었다고 가정)
 - 완료 시간: 2026-01-22
 
-**2. Hook에 파일명 기반 Secret 차단 추가 (동료 리뷰 반영)** ✅ **완료**
-- [x] `FORBIDDEN_FILENAMES` 상수 정의 (SSOT)
-- [x] 파일명 기반 차단 로직 구현
+**2. Hook에 파일명 기반 Secret 차단 추가 (동료 우수 패턴 채용)** ✅ **완료**
+- [x] 규칙 세분화: basename/path 분리된 SSOT 상수
+  - FORBIDDEN_BASENAME_ERE: .git-credentials, credentials.json, id_rsa, id_dsa, id_ed25519, *.pem
+  - ENV_BASENAME_BLOCK_ERE/ALLOW_ERE: .env* 기본 차단, 템플릿만 허용
+  - FORBIDDEN_PATH_ERE: .aws/credentials, .aws/config (경로 기반)
+- [x] 함수 캡슐화: `is_forbidden_staged_path()` 구현
+  - 경로 기반 체크 → basename 체크 → env 허용리스트 (우선순위 명확)
+  - 재사용 가능, 단위 테스트 가능
 - [x] rename(R) 케이스 포함 (`--diff-filter=ACMR`)
-- [x] 오탐 제거: `.env.example`, `.env.sample`, `.env.template`, `.env.dist` 허용
-- [x] 포괄적 테스트 완료 (8개 시나리오, 모두 통과)
-- 완료 시간: 2026-01-22
-- 동료 피드백 반영:
-  - SSOT 드리프트 제거 (상수 실제 사용)
-  - rename 케이스 추가
-  - 오탐 감소 (templates 허용)
-- 효과: Secret 파일 커밋 원천 차단, 사용성 향상
+- [x] 포괄적 테스트 완료 (15개 시나리오, 모두 통과)
+- 완료 시간: 2026-01-22 (즉시 리팩토링, "내일은 오지 않는다")
+- 동료 우수 패턴 채용:
+  - ✅ 함수 캡슐화로 테스트/재사용 가능
+  - ✅ basename/path 분리로 정확성 향상
+  - ✅ P1 NUL-safe 이행 준비 완료
+- 효과: Secret 파일 커밋 원천 차단, 유지보수성 우수
 
 ### P1: 신뢰도 회복 (1-2주 내)
 
