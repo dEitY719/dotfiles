@@ -79,7 +79,7 @@ fi
 
 ```bash
 # git/hooks/pre-commit:179
-Reference: https://github.com/bwyoon/dotfiles/blob/main/para/archive/rca-knowledge/docs/analysis/2025-01-19-shell-function-propagation-issues.md
+Reference: git/doc/ANTI_PATTERNS.md
 ```
 
 **문제**: 해당 경로에 문서가 없음. SSOT가 깨지고, 팀원이 Hook 메시지를 따라가도 근거 문서에 도달 못 함.
@@ -174,7 +174,7 @@ export HOOK_DEBUG_PATTERNS="pdb\.set_trace\(\)|binding\.pry|^[[:space:]]*debugge
 
 ```bash
 # git/hooks/pre-commit:179
-Reference: docs/analysis/2025-01-19-shell-function-propagation-issues.md
+Reference: git/doc/ANTI_PATTERNS.md
 # ← 이 파일이 실제로 없음!
 ```
 

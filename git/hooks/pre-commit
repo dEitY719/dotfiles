@@ -14,7 +14,7 @@
 # Performance: Optimized for staged files only (git diff --cached)
 # All checks run in single pass per file
 #
-# Reference: docs/abc-review-CX.md, docs/abc-review-G.md, docs/analysis/2025-01-19-shell-function-propagation-issues.md
+# Reference: git/doc/ANTI_PATTERNS.md, docs/postmortem/postmortem-auto-sourcing-utility-scripts.md
 
 # Error handling is managed with explicit 'return' statements and '||true' patterns
 # rather than relying on 'set -e', which can interfere with process substitution
@@ -202,7 +202,7 @@ check_subshell_sourcing() {
 
             echo "$file:$line_num: [WARNING] Subshell sourcing breaks function propagation: '${var_name}=\$(...)'
   Fix: Use direct sourcing '. file' instead of '\${var_name}=\$(. file)'
-  Reference: https://github.com/bwyoon/dotfiles/blob/main/para/archive/rca-knowledge/docs/analysis/2025-01-19-shell-function-propagation-issues.md" >> "$SUBSHELL_VIOLATIONS_FILE"
+  Reference: git/doc/ANTI_PATTERNS.md" >> "$SUBSHELL_VIOLATIONS_FILE"
         done <<< "$matches"
         return 1  # Violations found
     fi
@@ -242,7 +242,7 @@ check_alias_function_conflict() {
     - Function (line $func_line): $func_name() { ... }
   This causes parse errors on reload in zsh.
   Fix: Use different names (e.g., alias 'my-cmd' and function 'my_cmd_impl')
-  Reference: https://github.com/bwyoon/dotfiles/blob/main/para/archive/rca-knowledge/docs/analysis/2025-01-19-shell-function-propagation-issues.md" >> "$ALIAS_CONFLICT_FILE"
+  Reference: git/doc/ANTI_PATTERNS.md" >> "$ALIAS_CONFLICT_FILE"
                     violations_found=1
                 fi
             done <<< "$func_names"
@@ -289,7 +289,7 @@ check_wrapper_function() {
   Consider removing the wrapper or using an alias:
     - Option A: alias ${func_name}='${called_func}'
     - Option B: Enhance the wrapper with additional logic
-  Reference: https://github.com/bwyoon/dotfiles/blob/main/para/archive/rca-knowledge/docs/analysis/2025-01-19-shell-function-propagation-issues.md" >> "$WRAPPER_VIOLATIONS_FILE"
+  Reference: git/doc/ANTI_PATTERNS.md" >> "$WRAPPER_VIOLATIONS_FILE"
                 violations_found=1
             fi
         done <<< "$matches"

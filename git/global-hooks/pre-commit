@@ -193,9 +193,17 @@ if [ "$SKIP_GLOBAL" = "0" ]; then
     [ "$DEBUG" = "1" ] && echo "[Debug] Checking for conflict markers..."
 
     # Check for conflict markers in staged content
-    if git grep --cached -I -lE "^(<<<<<<<|=======|>>>>>>>)" 2>/dev/null | head -1 | grep -q .; then
+    #
+    # IMPORTANT: Keep this regex strict to avoid false positives.
+    # - "=======" conflict separator is exactly 7 '=' (optionally with whitespace)
+    # - Exclude documentation files; docs may intentionally show conflict marker examples
+    CONFLICT_MARKERS_REGEX="^(<<<<<<<([[:space:]]|$)|=======[[:space:]]*$|>>>>>>>([[:space:]]|$))"
+    CONFLICT_MARKER_MATCHES=$(git grep --cached -I -lE "$CONFLICT_MARKERS_REGEX" -- \
+        ':!*.md' ':!*.txt' ':!*.rst' ':!*.adoc' 2>/dev/null || true)
+
+    if [ -n "$CONFLICT_MARKER_MATCHES" ]; then
         echo -e "${RED}❌ BLOCKING: Git conflict markers left in code!${NC}"
-        git grep --cached -I -lE "^(<<<<<<<|=======|>>>>>>>)" 2>/dev/null | sed 's/^/   - /'
+        echo "$CONFLICT_MARKER_MATCHES" | sed 's/^/   - /'
         echo "   Hint: Resolve merge conflicts before committing"
         CHECKS_FAILED=1
     fi
