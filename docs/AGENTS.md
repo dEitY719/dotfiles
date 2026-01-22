@@ -20,7 +20,7 @@
 - **Links**: Use relative paths (`../bash/README.md`, not absolute)
 
 ## AGENTS.md Protocol
-Based on `AGENTS_md_Master_Prompt.md`:
+Based on `AGENTS_md_Master_Prompt.md` (in `docs/archive/`):
 - 500-line hard limit per file
 - No emojis (token efficiency)
 - No tables for Context Maps (use lists)
@@ -52,13 +52,14 @@ Structure:
 - **DON'T**: Archive without documenting reason (use `archive/` with README)
 
 ## Master Prompt Modifications
-- **Critical File**: `AGENTS_md_Master_Prompt.md` governs AGENTS.md generation
+- **Critical File**: `AGENTS_md_Master_Prompt.md` (archived at `docs/archive/AGENTS_md_Master_Prompt.md`) governs AGENTS.md generation
 - **Change Protocol**:
-  1. Backup existing version (`cp AGENTS_md_Master_Prompt.md AGENTS_md_Master_Prompt_v<date>.md`)
-  2. Update master prompt
-  3. Regenerate `~/.claude/skills/agents-md/SKILL.md` from new master
+  1. Backup existing version: `cp docs/archive/AGENTS_md_Master_Prompt.md docs/archive/AGENTS_md_Master_Prompt_v<date>.md`
+  2. Update master prompt in archive
+  3. Regenerate `~/.claude/skills/agents-md/SKILL.md` from updated master
   4. Test on sample project before applying to dotfiles
 - **Version Suffix**: `_C` (Claude), `_CX` (ChatGPT), `_G` (Gemini)
+- **Note**: Master prompt is archived but still governs the skill and documentation protocol
 
 ## Review Workflow
 After implementing changes from reviews:
@@ -68,13 +69,14 @@ After implementing changes from reviews:
 
 # File Descriptions
 
-## AGENTS_md_Master_Prompt.md (15,511 bytes)
-Master protocol for AGENTS.md system generation:
+## AGENTS_md_Master_Prompt.md (15,511 bytes) [in docs/archive/]
+Master protocol for AGENTS.md system generation (archived):
 - 10 phases (Analysis, Root Gen, Nested Gen, Validation, etc.)
 - SOLID & TDD enforcement
 - Token efficiency rules (no emojis, lists not tables)
 - 500-line limit with auto-split logic
 - Error handling and rollback mechanisms
+- **Note**: This is the canonical reference; kept in archive/ for version control
 
 ## abc-review-C.md (13,147 bytes)
 Claude Opus 4.5 SOLID review of dotfiles:

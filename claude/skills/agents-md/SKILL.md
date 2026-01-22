@@ -216,12 +216,14 @@ Example:
 
 #### Linting
 ```bash
-# Markdown linter
-tox -e mdlint
+# Markdown linter (if enabled in repo - check AGENTS.md for repo override)
+tox -e mdlint  # Note: May be disabled in some repos
 
 # Line count - MUST be < 500
 wc -l AGENTS.md
 ```
+
+**Repository Override**: Some repos intentionally disable `tox -e mdlint`. Check the root `AGENTS.md` for policy (search "Markdown linting").
 
 If >500 lines: auto-split into nested files, update Context Map
 
