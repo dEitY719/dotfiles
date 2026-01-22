@@ -31,15 +31,37 @@ if [[ ! -f "$BASE_FILE" ]]; then
     exit 1
 fi
 
+# WSL 환경 감지 함수
+is_wsl() {
+    if [[ -f /proc/version ]] && grep -qi "microsoft\|wsl" /proc/version 2>/dev/null; then
+        return 0
+    fi
+    if [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+        return 0
+    fi
+    return 1
+}
+
 # OS별 VS Code 설정 경로 결정
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
     # Windows (Git Bash, MSYS2, Cygwin에서 실행됨)
     VSCODE_SETTINGS_PATH="$APPDATA/Code/User/settings.json"
+elif is_wsl; then
+    # WSL 환경: Windows의 VS Code 설정 경로 사용
+    # Windows APPDATA 경로를 가져와서 WSL 경로로 변환
+    WIN_APPDATA=$(cmd.exe /c "echo %APPDATA%" 2>/dev/null | tr -d '\r')
+    if [[ -n "$WIN_APPDATA" ]]; then
+        WSL_APPDATA=$(wslpath "$WIN_APPDATA")
+        VSCODE_SETTINGS_PATH="$WSL_APPDATA/Code/User/settings.json"
+    else
+        log_error "Windows APPDATA 경로를 가져올 수 없습니다"
+        exit 1
+    fi
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS
     VSCODE_SETTINGS_PATH="$HOME/Library/Application Support/Code/User/settings.json"
 else
-    # Linux
+    # Linux (native)
     VSCODE_SETTINGS_PATH="$HOME/.config/Code/User/settings.json"
 fi
 
