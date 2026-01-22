@@ -271,8 +271,11 @@ if [ "$SKIP_GLOBAL" = "0" ]; then
     # breakpoint(): Python 3.7+ debugger
     DEBUG_PATTERNS="pdb\.set_trace\(\)|binding\.pry|^[[:space:]]*debugger;|breakpoint\(\)"
 
-    # Use git grep --cached, exclude documentation files
-    DEBUG_MATCHES=$(git grep --cached -I -lE "$DEBUG_PATTERNS" -- ':!*.md' ':!*.txt' ':!*.json' ':!*.yaml' ':!*.yml' 2>/dev/null || true)
+    # Use git grep --cached, exclude documentation and shell scripts.
+    # Note: This hook contains comments like "breakpoint()" which would otherwise self-match.
+    DEBUG_MATCHES=$(git grep --cached -I -lE "$DEBUG_PATTERNS" -- \
+        ':!*.md' ':!*.txt' ':!*.json' ':!*.yaml' ':!*.yml' ':!*.sh' \
+        ':!git/global-hooks/pre-commit' ':!git/hooks/pre-commit' 2>/dev/null || true)
 
     if [ -n "$DEBUG_MATCHES" ]; then
         echo -e "${YELLOW}⚠️  WARNING: Debug code detected (consider removing):${NC}"
