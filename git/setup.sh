@@ -262,9 +262,9 @@ if [ -f "$GLOBAL_HOOK_SOURCE" ]; then
     create_symlink "$GLOBAL_HOOK_SOURCE" "$GLOBAL_HOOK_TARGET"
     chmod +x "$GLOBAL_HOOK_SOURCE"
     
-    # Configure git to use global hooks path
-    git config --global core.hooksPath "$GLOBAL_HOOKS_DIR"
-    ux_success "Global core.hooksPath가 ${GLOBAL_HOOKS_DIR}로 설정되었습니다."
+    # Configure git to use global hooks path (use ~ for portability across machines)
+    git config --global core.hooksPath "~/.config/git/hooks"
+    ux_success "Global core.hooksPath가 ~/.config/git/hooks로 설정되었습니다."
 else
     ux_warning "경고: Global pre-commit hook 파일이 '${GLOBAL_HOOK_SOURCE}' 경로에 없습니다."
 fi

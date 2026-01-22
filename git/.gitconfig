@@ -5,6 +5,7 @@
 	helper = store
 [core]
 	editor = code --wait
+	hooksPath = ~/.config/git/hooks
 [pull]
 	rebase = true
 [filter "lfs"]
