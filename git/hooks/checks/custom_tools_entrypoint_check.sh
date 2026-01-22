@@ -17,13 +17,16 @@ check_auto_executable_in_custom() {
 
     if grep -qE '^[[:space:]]*main[[:space:]]*\(\)[[:space:]]*\{' "$tmp_file" 2>/dev/null; then
         local tail_calls
-        tail_calls=$(tail -n 30 "$tmp_file" | \
+        local main_tail_lines="${DOTFILES_HOOKS_CUSTOM_MAIN_TAIL_LINES:-30}"
+        local guard_tail_lines="${DOTFILES_HOOKS_CUSTOM_GUARD_TAIL_LINES:-80}"
+
+        tail_calls=$(tail -n "$main_tail_lines" "$tmp_file" | \
             grep -nE '^[[:space:]]*main([[:space:]]+"?\$@"?)?[[:space:]]*$' | \
             grep -vE '^[0-9]+:[[:space:]]*#' || true)
 
         if [ -n "$tail_calls" ]; then
             local guard_present=0
-            if tail -n 80 "$tmp_file" | grep -Eq 'BASH_SOURCE\[0\].*(\$\{?0\}?|\$0)|(\$\{?0\}?|\$0).*BASH_SOURCE\[0\]'; then
+            if tail -n "$guard_tail_lines" "$tmp_file" | grep -Eq 'BASH_SOURCE\[0\].*(\$\{?0\}?|\$0)|(\$\{?0\}?|\$0).*BASH_SOURCE\[0\]'; then
                 guard_present=1
             fi
 

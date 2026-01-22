@@ -69,6 +69,9 @@ make_repo() {
   mkdir -p "$repo_dir/git/hooks/checks"
   cp -R "${DOTFILES_ROOT}/git/hooks/checks/." "$repo_dir/git/hooks/checks/"
 
+  mkdir -p "$repo_dir/git/config"
+  cp "${DOTFILES_ROOT}/git/config/hook-config.sh" "$repo_dir/git/config/hook-config.sh"
+
   mkdir -p "$repo_dir/bash" "$repo_dir/zsh"
   cat >"$repo_dir/bash/main.bash" <<'EOF'
 #!/bin/bash

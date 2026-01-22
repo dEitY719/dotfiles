@@ -67,6 +67,22 @@ get_realpath() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Load SSOT Hook Config (optional)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Attempt to source dotfiles hook config when this hook is installed as a symlink
+# to the dotfiles repo (recommended). If the config can't be found, fall back to
+# script-local defaults so this hook still works in all repositories.
+SCRIPT_REALPATH=$(get_realpath "$0")
+SCRIPT_DIR=$(dirname "$SCRIPT_REALPATH")
+HOOK_CONFIG_PATH="$SCRIPT_DIR/../config/hook-config.sh"
+
+if [ -f "$HOOK_CONFIG_PATH" ]; then
+    # shellcheck source=/dev/null
+    . "$HOOK_CONFIG_PATH"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION: Forbidden Filenames (P0 Security - SSOT)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -74,14 +90,14 @@ get_realpath() {
 # Structured approach: basename rules, path rules, env rules with allowlist
 
 # Basename that should almost never be committed (file credentials/keys only)
-FORBIDDEN_BASENAME_ERE='^(\.git-credentials|credentials\.json|private\.key|secret\.key|id_rsa|id_dsa|id_ed25519|.*\.pem)$'
+FORBIDDEN_BASENAME_ERE="${GIT_HOOKS_FORBIDDEN_BASENAME_ERE:-^(\.git-credentials|credentials\.json|private\.key|secret\.key|id_rsa|id_dsa|id_ed25519|.*\.pem)$}"
 
 # Env files: blocked by default, but allow example/sample/template/dist
-ENV_BASENAME_BLOCK_ERE='^\.env(\..*)?$'
-ENV_BASENAME_ALLOW_ERE='^\.env\.(example|sample|template|dist)$'
+ENV_BASENAME_BLOCK_ERE="${GIT_HOOKS_ENV_BASENAME_BLOCK_ERE:-^\.env(\..*)?$}"
+ENV_BASENAME_ALLOW_ERE="${GIT_HOOKS_ENV_BASENAME_ALLOW_ERE:-^\.env\.(example|sample|template|dist)$}"
 
 # Path-based sensitive locations (repo-relative, including directories)
-FORBIDDEN_PATH_ERE='(^|/)\.aws/(credentials|config)$'
+FORBIDDEN_PATH_ERE="${GIT_HOOKS_FORBIDDEN_PATH_ERE:-(^|/)\.aws/(credentials|config)$}"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # FUNCTION: Check if a staged path contains forbidden filename/pattern
@@ -174,7 +190,7 @@ if [ "$SKIP_GLOBAL" = "0" ]; then
     [ "$DEBUG" = "1" ] && echo "[Debug] Checking for secrets/keys..."
 
     # Look for private keys and generic API tokens
-    FORBIDDEN_KEYS="-----BEGIN OPENSSH PRIVATE KEY-----|-----BEGIN RSA PRIVATE KEY-----|-----BEGIN PRIVATE KEY-----|AKIA[0-9A-Z]{16}"
+    FORBIDDEN_KEYS="${GIT_HOOKS_FORBIDDEN_KEYS_ERE:------BEGIN OPENSSH PRIVATE KEY-----|-----BEGIN RSA PRIVATE KEY-----|-----BEGIN PRIVATE KEY-----|AKIA[0-9A-Z]{16}}"
 
     # Use git grep --cached to check index content (NUL-safe)
     # -I: ignore binary files
@@ -197,7 +213,7 @@ if [ "$SKIP_GLOBAL" = "0" ]; then
     # IMPORTANT: Keep this regex strict to avoid false positives.
     # - "=======" conflict separator is exactly 7 '=' (optionally with whitespace)
     # - Exclude documentation files; docs may intentionally show conflict marker examples
-    CONFLICT_MARKERS_REGEX="^(<<<<<<<([[:space:]]|$)|=======[[:space:]]*$|>>>>>>>([[:space:]]|$))"
+    CONFLICT_MARKERS_REGEX="${GIT_HOOKS_CONFLICT_MARKERS_ERE:-^(<<<<<<<([[:space:]]|$)|=======[[:space:]]*$|>>>>>>>([[:space:]]|$))}"
     CONFLICT_MARKER_MATCHES=$(git grep --cached -I -lE "$CONFLICT_MARKERS_REGEX" -- \
         ':!*.md' ':!*.txt' ':!*.rst' ':!*.adoc' 2>/dev/null || true)
 
@@ -269,13 +285,15 @@ if [ "$SKIP_GLOBAL" = "0" ]; then
     # binding.pry: Ruby debugger
     # debugger;: JavaScript debugger keyword
     # breakpoint(): Python 3.7+ debugger
-    DEBUG_PATTERNS="pdb\.set_trace\(\)|binding\.pry|^[[:space:]]*debugger;|breakpoint\(\)"
+    DEBUG_PATTERNS="${GIT_HOOKS_DEBUG_PATTERNS_ERE:-pdb\\.set_trace\\(\\)|binding\\.pry|^[[:space:]]*debugger;|breakpoint\\(\\)}"
 
     # Use git grep --cached, exclude documentation and shell scripts.
     # Note: This hook contains comments like "breakpoint()" which would otherwise self-match.
-    DEBUG_MATCHES=$(git grep --cached -I -lE "$DEBUG_PATTERNS" -- \
-        ':!*.md' ':!*.txt' ':!*.json' ':!*.yaml' ':!*.yml' ':!*.sh' \
-        ':!git/global-hooks/pre-commit' ':!git/hooks/pre-commit' 2>/dev/null || true)
+    if declare -p GIT_HOOKS_DEBUG_GREP_EXCLUDES >/dev/null 2>&1; then
+        DEBUG_MATCHES=$(git grep --cached -I -lE "$DEBUG_PATTERNS" -- "${GIT_HOOKS_DEBUG_GREP_EXCLUDES[@]}" 2>/dev/null || true)
+    else
+        DEBUG_MATCHES=$(git grep --cached -I -lE "$DEBUG_PATTERNS" -- ':!*.md' ':!*.txt' ':!*.json' ':!*.yaml' ':!*.yml' ':!*.sh' 2>/dev/null || true)
+    fi
 
     if [ -n "$DEBUG_MATCHES" ]; then
         echo -e "${YELLOW}⚠️  WARNING: Debug code detected (consider removing):${NC}"
@@ -299,8 +317,9 @@ if [ "$SKIP_GLOBAL" = "0" ]; then
         # Get blob size from index
         BLOB_SIZE=$(git cat-file -s ":$file" 2>/dev/null || echo "0")
 
-        # 10MB = 10485760 bytes
-        if [ "$BLOB_SIZE" -gt 10485760 ]; then
+        # 10MB default (SSOT override via hook-config.sh)
+        LARGE_THRESHOLD_BYTES="${GIT_HOOKS_LARGE_FILE_BYTES:-10485760}"
+        if [ "$BLOB_SIZE" -gt "$LARGE_THRESHOLD_BYTES" ]; then
             LARGE_FILES="${LARGE_FILES}${file} ($(($BLOB_SIZE / 1048576))MB)"$'\n'
         fi
     done < <(git diff --cached --name-only -z --diff-filter=ACMR 2>/dev/null)

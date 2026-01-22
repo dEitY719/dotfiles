@@ -24,6 +24,15 @@ HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 CHECKS_DIR="${HOOK_DIR}/checks"
 REPO_ROOT="$(cd "$HOOK_DIR/../.." && pwd)"
 
+HOOK_CONFIG_PATH="${HOOK_DIR}/../config/hook-config.sh"
+if [ -f "$HOOK_CONFIG_PATH" ]; then
+    # shellcheck source=/dev/null
+    . "$HOOK_CONFIG_PATH"
+else
+    echo -e "${RED}✗ BLOCKING: Hook config not found: $HOOK_CONFIG_PATH${NC}"
+    exit 1
+fi
+
 if [ ! -d "$CHECKS_DIR" ]; then
     echo -e "${RED}✗ BLOCKING: Checks directory not found: $CHECKS_DIR${NC}"
     exit 1

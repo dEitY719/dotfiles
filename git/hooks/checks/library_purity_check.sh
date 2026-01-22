@@ -31,11 +31,13 @@ check_library_purity() {
                 line !~ /^[[:space:]]*(main|[a-z_][a-z0-9_]*_main)[[:space:]]*\\(\\)[[:space:]]*\\{/) {
                 printf "MAIN_CALL:%d:%s\n", NR, line
             }
-            if (depth==0 && line ~ /(apt-get[[:space:]]+install|apt[[:space:]]+install|dnf[[:space:]]+install|yum[[:space:]]+install|pacman[[:space:]]+-S|pip[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|npm[[:space:]]+install|brew[[:space:]]+install)/) {
-                printf "INSTALL:%d:%s\n", NR, line
-            }
+            # INSTALL lines are detected outside awk using SSOT regex (from hook-config.sh)
         }
     ' "$tmp_file" 2>/dev/null || true)
+
+    local install_ere="${DOTFILES_HOOKS_LIBRARY_PURITY_INSTALL_ERE:-apt-get[[:space:]]+install|apt[[:space:]]+install|dnf[[:space:]]+install|yum[[:space:]]+install|pacman[[:space:]]+-S|pip[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|npm[[:space:]]+install|brew[[:space:]]+install}"
+    local install_hits
+    install_hits=$(grep -nE "$install_ere" "$tmp_file" 2>/dev/null || true)
 
     local violation_count=0
 
@@ -59,13 +61,13 @@ check_library_purity() {
         } >>"$output_file"
     fi
 
-    if echo "$hits" | grep -q '^INSTALL:'; then
+    if [ -n "$install_hits" ]; then
         violation_count=1
         {
             echo "$repo_rel_path: [BLOCKING] Library purity violation (auto-sourced path)"
             echo "  - Top-level installation command found (belongs in tools/custom, executed explicitly)"
             echo "  Matches:"
-            echo "$hits" | grep '^INSTALL:' | sed 's/^INSTALL:/    /'
+            echo "$install_hits" | sed 's/^/    /'
         } >>"$output_file"
     fi
 

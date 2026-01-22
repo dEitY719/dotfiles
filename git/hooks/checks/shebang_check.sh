@@ -5,11 +5,11 @@ get_expected_shebang() {
     local abs_path="$2"
 
     if [[ "$abs_path" == "$repo_root/shell-common"* ]]; then
-        echo "#!/bin/sh"
+        echo "${DOTFILES_HOOKS_SHEBANG_SHELL_COMMON:-#!/bin/sh}"
     elif [[ "$abs_path" == "$repo_root/bash"* ]]; then
-        echo "#!/bin/bash"
+        echo "${DOTFILES_HOOKS_SHEBANG_BASH:-#!/bin/bash}"
     elif [[ "$abs_path" == "$repo_root/zsh"* ]]; then
-        echo "#!/bin/zsh"
+        echo "${DOTFILES_HOOKS_SHEBANG_ZSH:-#!/bin/zsh}"
     else
         echo ""
     fi
