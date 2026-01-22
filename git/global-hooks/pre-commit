@@ -46,19 +46,19 @@ get_realpath() {
             # Absolute path
             echo "$link_target"
         else
-            # Relative path
+            # Relative path - suppress cd errors internally
             local dir
             dir=$(dirname "$path")
-            echo "$(cd "$dir" && pwd -P)/$(basename "$link_target")" 2>/dev/null || echo "$path"
+            echo "$(cd "$dir" 2>/dev/null && pwd -P)/$(basename "$link_target")" || echo "$path"
         fi
     elif [ -e "$path" ]; then
         # Regular file/directory
         if [ -d "$path" ]; then
-            echo "$(cd "$path" && pwd -P)" 2>/dev/null || echo "$path"
+            echo "$(cd "$path" 2>/dev/null && pwd -P)" || echo "$path"
         else
             local dir
             dir=$(dirname "$path")
-            echo "$(cd "$dir" && pwd -P)/$(basename "$path")" 2>/dev/null || echo "$path"
+            echo "$(cd "$dir" 2>/dev/null && pwd -P)/$(basename "$path")" || echo "$path"
         fi
     else
         # Doesn't exist
@@ -67,10 +67,17 @@ get_realpath() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
-# CONFIGURATION: Forbidden Filenames (P0 Security)
+# CONFIGURATION: Forbidden Filenames (P0 Security - SSOT)
 # ═══════════════════════════════════════════════════════════════════════════
-# Filenames that should NEVER be committed (credentials, keys, env files)
-FORBIDDEN_FILENAMES="(\.git-credentials|\.env(\..*)?|id_rsa|id_dsa|.*\.pem|credentials\.json|private\.key|secret\.key|\.aws/credentials|\.aws/config)"
+
+# Patterns that should NEVER be committed (single source of truth)
+# Core forbidden patterns: credentials, keys, env files, aws configs
+# Note: Allowed templates are filtered via grep -vE afterward
+FORBIDDEN_FILENAMES="\.git-credentials|\.env|id_rsa|id_dsa|.*\.pem|credentials\.json|private\.key|secret\.key|\.aws"
+
+# Allowed environment file templates (whitelist for false positive reduction)
+# These are allowed because they're templates without actual secrets
+ALLOWED_ENV_TEMPLATES="\.env\.(example|sample|template|dist)"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Environment Variables
@@ -157,12 +164,21 @@ if [ "$SKIP_GLOBAL" = "0" ]; then
 
     # ───────────────────────────────────────────────────────────────────────
     # A-B. Forbidden Filename Check (CRITICAL - P0)
+    # Using SSOT constants for consistency and maintainability
     # ───────────────────────────────────────────────────────────────────────
     [ "$DEBUG" = "1" ] && echo "[Debug] Checking for forbidden filenames..."
 
-    # Forbidden filenames that should NEVER be committed
-    # Pattern: credentials, keys, env files, aws configs
-    FORBIDDEN_FILES=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -E '(\.git-credentials|\.env|id_rsa|id_dsa|.*\.pem|credentials\.json|secret.*key|\.aws/(credentials|config))' || true)
+    # Include rename (R) to catch sensitive files moved into repo
+    # ACM = Add/Copy/Modify, R = Rename
+    STAGED_FILES_ALL=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null || true)
+
+    # Step 1: Find files matching forbidden patterns (SSOT)
+    FORBIDDEN_FILES=$(echo "$STAGED_FILES_ALL" | grep -E "$FORBIDDEN_FILENAMES" || true)
+
+    # Step 2: Filter out allowed templates (.env.example, .env.sample, .env.template, .env.dist)
+    if [ -n "$FORBIDDEN_FILES" ]; then
+        FORBIDDEN_FILES=$(echo "$FORBIDDEN_FILES" | grep -vE "$ALLOWED_ENV_TEMPLATES" || true)
+    fi
 
     if [ -n "$FORBIDDEN_FILES" ]; then
         echo -e "${RED}❌ BLOCKING: Forbidden filename(s) detected - likely contains secrets!${NC}"
@@ -171,8 +187,10 @@ if [ "$SKIP_GLOBAL" = "0" ]; then
         echo "   This file should NOT be committed. Likely contains:"
         echo "   - Credentials (.git-credentials, credentials.json)"
         echo "   - Private keys (id_rsa, *.pem, secret.key)"
-        echo "   - Environment variables (.env, .env.local)"
+        echo "   - Environment variables (.env, .env.local, .env.dev)"
         echo "   - AWS credentials"
+        echo ""
+        echo "   Template files ALLOWED: .env.example, .env.sample, .env.template, .env.dist"
         echo ""
         echo "   Action required:"
         echo "   1. git rm --cached <file>"

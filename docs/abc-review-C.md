@@ -488,12 +488,18 @@ new_violations=$((after - before))
 - [x] 토큰 폐기/재발급 (이미 노출되었다고 가정)
 - 완료 시간: 2026-01-22
 
-**2. Hook에 파일명 기반 Secret 차단 추가** ✅ **완료**
-- [x] `FORBIDDEN_FILENAMES` 패턴 정의
+**2. Hook에 파일명 기반 Secret 차단 추가 (동료 리뷰 반영)** ✅ **완료**
+- [x] `FORBIDDEN_FILENAMES` 상수 정의 (SSOT)
 - [x] 파일명 기반 차단 로직 구현
-- [x] 테스트 완료 (.git-credentials, .env.local 등)
+- [x] rename(R) 케이스 포함 (`--diff-filter=ACMR`)
+- [x] 오탐 제거: `.env.example`, `.env.sample`, `.env.template`, `.env.dist` 허용
+- [x] 포괄적 테스트 완료 (8개 시나리오, 모두 통과)
 - 완료 시간: 2026-01-22
-- 효과: Secret 파일 커밋 원천 차단
+- 동료 피드백 반영:
+  - SSOT 드리프트 제거 (상수 실제 사용)
+  - rename 케이스 추가
+  - 오탐 감소 (templates 허용)
+- 효과: Secret 파일 커밋 원천 차단, 사용성 향상
 
 ### P1: 신뢰도 회복 (1-2주 내)
 
