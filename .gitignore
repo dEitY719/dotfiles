@@ -28,3 +28,6 @@ claude/settings.json
 # VS Code settings (bidirectional sync system, PC-specific)
 .vscode/settings.json
 .vscode/base.json.backup.*
+
+# AGENTS.md generator backups
+**/AGENTS.md.backup.*

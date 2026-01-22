@@ -2,7 +2,7 @@
 
 - **Objective**: Opinionated Bash dotfiles for reproducible terminal environments (WSL, Linux, macOS).
 - **Stack**: Bash 5.x+, Python 3.10+, Tox, Ruff, Mypy.
-- **Structure**: Modular Bash (`bash/`), Python tools (`mytool/`), Tests (`tests/`), Docs (`docs/`), Git hooks (`git/`), Claude Code (`claude/`).
+- **Structure**: Modular Bash (`bash/`), Zsh (`zsh/`), shared shell (`shell-common/`), Tests (`tests/`), Docs (`docs/`), Git hooks (`git/`), Claude Code (`claude/`).
 
 # Operational Commands
 
@@ -11,7 +11,7 @@
 - **Linting (Python)**: `tox -e ruff` (fixes), `tox -e mypy`.
 - **Linting (Bash)**: `tox -e shellcheck`, `tox -e shfmt` (formats).
 - **Note**: Markdown linting (mdlint) is DISABLED. Do NOT perform markdown lint checks automatically.
-- **Testing**: `pytest` (if tests exist), manual validation via `shell-common/tools/custom/demo_ux.sh`.
+- **Testing**: `./tests/test`, `pytest tests/`, manual validation via `shell-common/tools/custom/demo_ux.sh`.
 
 # Golden Rules
 
@@ -73,8 +73,10 @@ Auto-sourced. Thin wrappers around system tools or external packages.
 # SOLID & Design Principles
 
 - **SRP**: Each Bash file manages ONE domain (e.g., `docker.bash` only for Docker).
-- **OCP**: Extend behavior via new files in `bash/app/`, don't clutter `main.bash`.
-- **DRY**: Replicate logic? Move to `bash/util/` or `bash/ux_lib/`.
+- **OCP**: Extend behavior via new files in `bash/env/`, `bash/util/`, or `shell-common/`; don't clutter `bash/main.bash` or `zsh/main.zsh`.
+- **LSP**: Wrapper functions must preserve expected behavior; avoid breaking existing flags and output contracts.
+- **ISP**: Prefer small focused functions over monolithic “do-everything” commands.
+- **DRY**: Replicate logic? Move to `bash/util/` or `shell-common/tools/ux_lib/`.
 - **DIP**: Scripts should depend on `ux_lib` abstractions, not raw colors.
 
 # TDD Protocol
@@ -87,7 +89,7 @@ Auto-sourced. Thin wrappers around system tools or external packages.
 
 # Standards & References
 
-- **Coding Style**: See `bash/ux_lib/UX_GUIDELINES.md` and `tox.ini`.
+- **Coding Style**: See `shell-common/tools/ux_lib/UX_GUIDELINES.md` and `tox.ini`.
 - **Git Strategy**: Semantic commits (`Type: Summary`).
 - **Maintenance**: Update AGENTS.md when adding new modules.
 
@@ -96,7 +98,9 @@ Auto-sourced. Thin wrappers around system tools or external packages.
 - **[Bash Module](./bash/AGENTS.md)** — Bash-specific configuration and utilities
 - **[Zsh Module](./zsh/AGENTS.md)** — Zsh-specific configuration and applications
 - **[Shell Common](./shell-common/AGENTS.md)** — POSIX-compatible shared utilities (env, aliases, functions, tools, projects)
+- **[Git Hooks & Config](./git/AGENTS.md)** — Hook system, git config, and hook documentation
 - **[Claude Code](./claude/AGENTS.md)** — Claude Code configuration, settings, skills, and automation
+- **[Python Tests](./tests/AGENTS.md)** — pytest suite and cross-shell compatibility checks
 - **[Documentation](./docs/AGENTS.md)** — Project docs, AGENTS.md master prompt, SOLID reviews
 
 # Naming Rules (Bash/Zsh)

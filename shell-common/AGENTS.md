@@ -230,14 +230,14 @@ fi
 
 | Type | Location | Auto-sourced? | Example |
 |------|----------|---|---------|
-| Alias | `aliases/*.sh` | ✓ | `gs='git status'` |
-| Environment | `env/*.sh` | ✓ | `export PATH=...` |
-| Help function | `functions/*_help.sh` | ✓ | `apt_help()` |
-| Utility function | `functions/*.sh` | ✓ | `devx()`, `gitlog()` |
-| 3rd-party wrapper | `tools/integrations/*.sh` | ✓ | `npm.sh`, `docker.sh` |
-| Executable script | `tools/custom/*.sh` | ✗ | `install_npm.sh`, `setup.sh` |
+| Alias | `aliases/*.sh` | yes | `gs='git status'` |
+| Environment | `env/*.sh` | yes | `export PATH=...` |
+| Help function | `functions/*_help.sh` | yes | `apt_help()` |
+| Utility function | `functions/*.sh` | yes | `devx()`, `gitlog()` |
+| 3rd-party wrapper | `tools/integrations/*.sh` | yes | `npm.sh`, `docker.sh` |
+| Executable script | `tools/custom/*.sh` | no | `install_npm.sh`, `setup.sh` |
 | Shell-specific | `bash/*.bash` or `zsh/*.zsh` | varies | bash prompt setup |
-| Project-specific | `projects/<name>/*.sh` | ✓ | finrx utilities |
+| Project-specific | `projects/<name>/*.sh` | yes | finrx utilities |
 
 # Testing Strategy
 
