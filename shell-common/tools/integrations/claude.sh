@@ -4,74 +4,23 @@
 # Shared between bash and zsh
 
 # ═══════════════════════════════════════════════════════════════
-# Installation Instructions
+# Claude Code Installation
+# Reference: https://code.claude.com/docs/en/getting-started
 # ═══════════════════════════════════════════════════════════════
-
-# Method 1: Global npm prefix (using ~/.npm-global)
-# Recommended if you already have this directory from other npm packages
 #
-# 1) Install:
-#    npm install -g @anthropic-ai/claude-code --prefix=$HOME/.npm-global
-# 2) Ensure PATH is set (if not already):
-#    export PATH="$HOME/.npm-global/bin:$PATH"
-#
-# Verify:
-#    which claude && claude --version
-#
-#
-# Method 2: Using nvm (Node Version Manager) - RECOMMENDED
-# Cleaner approach: nvm manages Node.js and npm packages in your home directory
-#
-# 1) Install nvm:
-#    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-#    source ~/.bashrc   # or ~/.zshrc
-#
-# 2) Install Node.js (e.g., version 20):
-#    nvm install 20
-#    nvm use 20
-#
-# 3) Install Claude Code:
-#    npm install -g @anthropic-ai/claude-code
-#
-# Verify:
-#    which claude && claude --version
+# Use: clinstall (runs official native installer)
+# Use: delete_claude (uninstall and clean)
 
 # ═══════════════════════════════════════════════════════════════
 # Mount management functions (loaded from shell-common/functions/mount.sh)
 # ═══════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════
 # Dependency Check: Ensure jq is installed
 # ═══════════════════════════════════════════════════════════════
 
 ensure_jq() {
-    if command -v jq > /dev/null 2>&1; then
-        # jq already installed - silent pass
-        return 0
-    else
-        ux_warning "jq is not installed. Installing..."
-        if command -v apt-get > /dev/null 2>&1; then
-            sudo apt-get update && sudo apt-get install -y jq
-        elif command -v brew > /dev/null 2>&1; then
-            brew install jq
-        elif command -v yum > /dev/null 2>&1; then
-            sudo yum install -y jq
-        else
-            ux_error "Cannot determine package manager. Please install jq manually."
-            ux_bullet "Ubuntu/Debian: ${UX_BOLD}sudo apt-get install jq${UX_RESET}"
-            ux_bullet "macOS: ${UX_BOLD}brew install jq${UX_RESET}"
-            ux_bullet "CentOS/RHEL: ${UX_BOLD}sudo yum install jq${UX_RESET}"
-            return 1
-        fi
-
-        if command -v jq > /dev/null 2>&1; then
-            ux_success "jq installed successfully"
-            jq --version
-            return 0
-        else
-            ux_error "Failed to install jq"
-            return 1
-        fi
-    fi
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ensure_jq.sh"
 }
 
 # NOTE: Do not auto-install dependencies at shell init time.
@@ -83,6 +32,14 @@ ensure_jq() {
 
 clinstall() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_claude.sh"
+}
+
+# ═══════════════════════════════════════════════════════════════
+# Claude Code Uninstallation
+# ═══════════════════════════════════════════════════════════════
+
+delete_claude() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/delete_claude.sh"
 }
 
 # ═══════════════════════════════════════════════════════════════
