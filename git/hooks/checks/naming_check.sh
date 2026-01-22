@@ -39,9 +39,9 @@ check_naming_violations() {
         [[ -z "$func_name" ]] && continue
 
         if grep -n "\".*$func_name.*\"" "$abs_path" | \
-            grep -v "^[[:space:]]*#" | \
+            grep -v ":[[:space:]]*#" | \
             grep -v "alias.*=" | \
-            grep -v "^[[:space:]]*$func_name()" | \
+            grep -v ":[[:space:]]*$func_name()" | \
             sed "s|^|$abs_path:|" >>"$violations_file" 2>/dev/null; then
             violations_found=1
         fi

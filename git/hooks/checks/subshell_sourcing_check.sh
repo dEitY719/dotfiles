@@ -5,7 +5,7 @@ check_subshell_sourcing() {
     local subshell_violations_file="$2"
 
     local matches
-    matches=$(grep -n '[a-z_][a-z0-9_]*\\s*=\\s*\\$(' "$abs_path" 2>/dev/null | grep -E '\\.(sh|zsh|bash)\\s*\\)' || true)
+    matches=$(grep -n '[a-z_][a-z0-9_]*[[:space:]]*=[[:space:]]*\$(' "$abs_path" 2>/dev/null | grep -E '\.(sh|zsh|bash)[[:space:]]*\)' || true)
 
     if [ -n "$matches" ]; then
         while IFS= read -r line_info; do
@@ -16,7 +16,7 @@ check_subshell_sourcing() {
             line_text=$(echo "$line_info" | cut -d: -f2-)
 
             local var_name
-            var_name=$(echo "$line_text" | sed 's/.*\\([a-z_][a-z0-9_]*\\)\\s*=\\s*\\$(.*/\\1/')
+            var_name=$(echo "$line_text" | sed 's/.*\([a-z_][a-z0-9_]*\)[[:space:]]*=[[:space:]]*\$(.*/\1/')
 
             echo "$abs_path:$line_num: [WARNING] Subshell sourcing breaks function propagation: '${var_name}=\$(...)'
   Fix: Use direct sourcing '. file' instead of '\${var_name}=\$(. file)'

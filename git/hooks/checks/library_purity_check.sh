@@ -22,13 +22,26 @@ check_library_purity() {
         {
             line=$0
             if (is_comment(line)) next
-            if (line ~ /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*\\(\\)[[:space:]]*\\{/) { depth++; next }
-            if (line ~ /^[[:space:]]*\\}/) { if (depth>0) depth--; next }
+
+            # Handle one-line functions: func() { ... }
+            if (line ~ /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*\(\)[[:space:]]*\{/) {
+                # Check if it also has a closing brace on the same line
+                if (line ~ /\}/) {
+                    # One-line function, depth stays 0
+                    next
+                } else {
+                    # Multi-line function begins
+                    depth++
+                    next
+                }
+            }
+
+            if (line ~ /^[[:space:]]*\}/) { if (depth>0) depth--; next }
             if (depth==0 && line ~ /^[[:space:]]*(read|select)[[:space:]]/) {
                 printf "INTERACTIVE:%d:%s\n", NR, line
             }
             if (depth==0 && line ~ /^[[:space:]]*(main|[a-z_][a-z0-9_]*_main)([[:space:]]+|$)/ &&
-                line !~ /^[[:space:]]*(main|[a-z_][a-z0-9_]*_main)[[:space:]]*\\(\\)[[:space:]]*\\{/) {
+                line !~ /^[[:space:]]*(main|[a-z_][a-z0-9_]*_main)[[:space:]]*\(\)[[:space:]]*\{/) {
                 printf "MAIN_CALL:%d:%s\n", NR, line
             }
             # INSTALL lines are detected outside awk using SSOT regex (from hook-config.sh)

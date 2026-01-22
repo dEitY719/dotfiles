@@ -17,7 +17,7 @@ check_wrapper_function() {
             line_text=$(echo "$line_info" | cut -d: -f2-)
 
             local func_name
-            func_name=$(echo "$line_text" | sed 's/^\\s*\\([a-z_-][a-z0-9_-]*\\)().*/\\1/')
+            func_name=$(echo "$line_text" | sed 's/^[[:space:]]*\([a-z_-][a-z0-9_-]*\)().*/\1/')
 
             local start_line=$line_num
             local end_line
@@ -26,15 +26,15 @@ check_wrapper_function() {
 
             local body
             body=$(sed -n "${start_line},$end_line p" "$abs_path" | \
-                sed '1s/.*{\\(.*\\)/\\1/;$s/\\(.*\\)}.*/\\1/' | \
+                sed '1s/.*{\(.*\)/\1/;$s/\(.*\)}.*/\1/' | \
                 grep -v '^[[:space:]]*$' | head -1)
 
-            if [[ "$body" =~ ^[[:space:]]*\\$?\\{?[a-z_-][a-z0-9_-]*\\}?[[:space:]]*\"\\$@\"[[:space:]]*$ ]] || \
-               [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*\"\\$@\" ]] || \
+            if [[ "$body" =~ ^[[:space:]]*\$?[a-z_-][a-z0-9_-]*[[:space:]]*\"$@\"[[:space:]]*$ ]] || \
+               [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*\"$@\" ]] || \
                [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*$ ]]; then
 
                 local called_func
-                called_func=$(echo "$body" | sed 's/.*\\s*\\([a-z_-][a-z0-9_-]*\\).*/\\1/')
+                called_func=$(echo "$body" | sed 's/.*[[:space:]]*\([a-z_-][a-z0-9_-]*\).*/\1/')
 
                 echo "$abs_path:$line_num: [WARNING] Wrapper function anti-pattern: '$func_name() { $called_func ... }'
   This wrapper function only delegates to another function.
