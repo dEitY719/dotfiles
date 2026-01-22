@@ -80,9 +80,11 @@ check_shebang_violation() {
 
 check_function_naming() {
     local file="$1"
+    local violations_found=0
 
     # Look for function definitions with kebab-case (dashes) - which is wrong
     while IFS= read -r line_info; do
+        [ -z "$line_info" ] && continue
         local line_num=$(echo "$line_info" | cut -d: -f1)
         local line_text=$(echo "$line_info" | cut -d: -f2-)
 
@@ -94,8 +96,11 @@ check_function_naming() {
         if [[ "$func_name" == *"-"* ]]; then
             local corrected="${func_name//-/_}"
             echo "$file:$line_num: Function '$func_name' uses dash-form. Use snake_case: '$corrected'" >> "$FUNC_VIOLATIONS_FILE"
+            violations_found=1
         fi
     done < <(grep -n "[a-z0-9_]*-[a-z0-9_]*()[[:space:]]*{" "$file" 2>/dev/null || true)
+
+    return $violations_found
 }
 
 check_naming_violations() {
@@ -178,12 +183,14 @@ check_subshell_sourcing() {
   Fix: Use direct sourcing '. file' instead of '\${var_name}=\$(. file)'
   Reference: https://github.com/bwyoon/dotfiles/blob/main/para/archive/rca-knowledge/docs/analysis/2025-01-19-shell-function-propagation-issues.md" >> "$SUBSHELL_VIOLATIONS_FILE"
         done <<< "$matches"
+        return 1  # Violations found
     fi
-    return 0
+    return 0  # No violations
 }
 
 check_alias_function_conflict() {
     local file="$1"
+    local violations_found=0
 
     # Extract all alias names
     local alias_names=$(grep -o "^alias[[:space:]]*[a-z_-][a-z0-9_-]*=" "$file" 2>/dev/null | sed "s/.*alias[[:space:]]*\([^=]*\)=.*/\1/" | sort -u)
@@ -215,15 +222,17 @@ check_alias_function_conflict() {
   This causes parse errors on reload in zsh.
   Fix: Use different names (e.g., alias 'my-cmd' and function 'my_cmd_impl')
   Reference: https://github.com/bwyoon/dotfiles/blob/main/para/archive/rca-knowledge/docs/analysis/2025-01-19-shell-function-propagation-issues.md" >> "$ALIAS_CONFLICT_FILE"
+                    violations_found=1
                 fi
             done <<< "$func_names"
         done <<< "$alias_names"
     fi
-    return 0
+    return $violations_found
 }
 
 check_wrapper_function() {
     local file="$1"
+    local violations_found=0
 
     # Find functions that only call another function with same arguments
     # Pattern: func() { other_func "$@" } or func() { other_func_name }
@@ -260,10 +269,11 @@ check_wrapper_function() {
     - Option A: alias ${func_name}='${called_func}'
     - Option B: Enhance the wrapper with additional logic
   Reference: https://github.com/bwyoon/dotfiles/blob/main/para/archive/rca-knowledge/docs/analysis/2025-01-19-shell-function-propagation-issues.md" >> "$WRAPPER_VIOLATIONS_FILE"
+                violations_found=1
             fi
         done <<< "$matches"
     fi
-    return 0
+    return $violations_found
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -329,6 +339,7 @@ while IFS= read -r file; do
         fi
 
         # Check 2: Function naming (functions only)
+        # Returns 1 if violations found, 0 if all pass
         if ! check_function_naming "$full_path" 2>/dev/null; then
             ((function_naming_violations++))
         fi
@@ -341,18 +352,21 @@ while IFS= read -r file; do
 
     # Anti-pattern checks (all .sh files)
     # Check 5: Subshell sourcing [WARNING]
-    if check_subshell_sourcing "$full_path" 2>/dev/null; then
-        [ -s "$SUBSHELL_VIOLATIONS_FILE" ] && ((subshell_violations++))
+    # Returns 1 if violations found, 0 if all pass
+    if ! check_subshell_sourcing "$full_path" 2>/dev/null; then
+        ((subshell_violations++))
     fi
 
     # Check 6: Alias/Function conflicts [BLOCKING]
-    if check_alias_function_conflict "$full_path" 2>/dev/null; then
-        [ -s "$ALIAS_CONFLICT_FILE" ] && ((alias_conflict_violations++))
+    # Returns 1 if violations found, 0 if all pass
+    if ! check_alias_function_conflict "$full_path" 2>/dev/null; then
+        ((alias_conflict_violations++))
     fi
 
     # Check 7: Wrapper function anti-pattern [WARNING]
-    if check_wrapper_function "$full_path" 2>/dev/null; then
-        [ -s "$WRAPPER_VIOLATIONS_FILE" ] && ((wrapper_violations++))
+    # Returns 1 if violations found, 0 if all pass
+    if ! check_wrapper_function "$full_path" 2>/dev/null; then
+        ((wrapper_violations++))
     fi
 done <<< "$STAGED_FILES"
 
