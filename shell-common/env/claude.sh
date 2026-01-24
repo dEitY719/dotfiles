@@ -1,3 +1,5 @@
+#!/bin/sh
+# shell-common/env/claude.sh
 # Claude Code environment variables
 # Auto-mount configuration for Claude Code directories
 
@@ -14,3 +16,7 @@ export CLAUDE_AUTO_MOUNT_DOCS=1
 # Options: claude (default), gemini, codex, or any CLI tool accepting -p/--prompt
 # Can be overridden per-command or per-session
 export CLAUDE_DOC_GENERATOR=claude
+
+# Skills directory path (used by skill_loader and other tools)
+# Points to version-controlled skills repository
+export CLAUDE_SKILLS_PATH="${DOTFILES_ROOT}/claude/skills"

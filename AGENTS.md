@@ -103,6 +103,58 @@ Auto-sourced. Thin wrappers around system tools or external packages.
 - **[Python Tests](./tests/AGENTS.md)** — pytest suite and cross-shell compatibility checks
 - **[Documentation](./docs/AGENTS.md)** — Project docs, AGENTS.md master prompt, SOLID reviews
 
+# Skills Management
+
+## Multi-CLI Skills Registry
+
+Skills are reusable AI agent behaviors stored in `./claude/skills/`. Each skill directory contains a `SKILL.md` file with YAML frontmatter (name, description, allowed-tools) and markdown instructions.
+
+## Using Skills Across CLIs
+
+### Claude Code (Built-in Support)
+Use the built-in `/skill` command to load skills interactively within Claude Code sessions.
+
+### Other CLIs (Codex, Gemini, etc.)
+Use `skill-loader` to get the absolute path to skill files, then pipe into other CLIs:
+```bash
+# Get skill path
+skill-loader req-define
+
+# View skill content directly
+cat "$(skill-loader cli-dev)"
+
+# Pass skill to Codex
+codex -p "$(cat "$(skill-loader req-define)")"
+
+# Pass skill to Gemini
+gemini -p @"$(skill-loader cli-dev)"
+```
+
+### Common Skills
+
+| Skill | Description | Use Case |
+|-------|-------------|----------|
+| cli-dev | CLI development with TDD | Implement REQ-CLI-* requirements |
+| req-define | Convert freeform to REQ format | Define feature requirements |
+| req-workflow | 4-phase REQ implementation | Build features systematically |
+| agents-md | AGENTS.md system generator | Create/update documentation |
+| tox-lint | Auto-fix lint issues | Pre-commit standardization |
+
+## Commands
+
+```bash
+skill-loader <skill-name>    # Get absolute path to skill file
+skill-loader --list          # List all available skills
+claude-skills                # List all available skills (function)
+claude-help                  # Show Claude Code configuration
+```
+
+## Environment Variable
+
+```bash
+export CLAUDE_SKILLS_PATH="${DOTFILES_ROOT}/claude/skills"
+```
+
 # Naming Rules (Bash/Zsh)
 
 - **File names**: snake_case with `.sh` (e.g., `git_help.sh`, `install_docker.sh`).
