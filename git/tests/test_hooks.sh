@@ -145,6 +145,23 @@ EOF
   rm -rf "$repo_dir"
 }
 
+test_blocks_custom_script_wrong_shebang() {
+  local repo_dir
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_repo "$repo_dir"
+
+  mkdir -p "$repo_dir/shell-common/tools/custom"
+  cat >"$repo_dir/shell-common/tools/custom/wrong_shebang.sh" <<'EOF'
+#!/bin/sh
+echo "hi"
+EOF
+
+  git -C "$repo_dir" add shell-common/tools/custom/wrong_shebang.sh
+  assert_failure "git -C \"$repo_dir\" commit -m \"wrong shebang\""
+
+  rm -rf "$repo_dir"
+}
+
 test_blocks_library_purity_top_level_read() {
   local repo_dir
   repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
@@ -186,6 +203,7 @@ main() {
   test_blocks_forbidden_env_file
   test_blocks_init_sourcing_tools_custom
   test_blocks_auto_exec_custom_script_without_guard
+  test_blocks_custom_script_wrong_shebang
   test_blocks_library_purity_top_level_read
   test_blocks_library_purity_top_level_install
   ux_success "All hook tests passed"

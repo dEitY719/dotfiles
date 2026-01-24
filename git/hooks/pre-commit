@@ -21,10 +21,13 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
-CHECKS_DIR="${HOOK_DIR}/checks"
-REPO_ROOT="$(cd "$HOOK_DIR/../.." && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -z "$REPO_ROOT" ] || [ ! -d "$REPO_ROOT" ]; then
+    exit 0
+fi
 
-HOOK_CONFIG_PATH="${HOOK_DIR}/../config/hook-config.sh"
+CHECKS_DIR="${REPO_ROOT}/git/hooks/checks"
+HOOK_CONFIG_PATH="${REPO_ROOT}/git/config/hook-config.sh"
 if [ -f "$HOOK_CONFIG_PATH" ]; then
     # shellcheck source=/dev/null
     . "$HOOK_CONFIG_PATH"

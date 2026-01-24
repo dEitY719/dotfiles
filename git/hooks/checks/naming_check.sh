@@ -37,12 +37,16 @@ check_naming_violations() {
 
     while IFS= read -r func_name; do
         [[ -z "$func_name" ]] && continue
+        local matches
+        matches=$(
+            grep -n "\".*$func_name.*\"" "$abs_path" 2>/dev/null | \
+                grep -v ":[[:space:]]*#" | \
+                grep -v "alias.*=" | \
+                grep -v ":[[:space:]]*$func_name()" || true
+        )
 
-        if grep -n "\".*$func_name.*\"" "$abs_path" | \
-            grep -v ":[[:space:]]*#" | \
-            grep -v "alias.*=" | \
-            grep -v ":[[:space:]]*$func_name()" | \
-            sed "s|^|$abs_path:|" >>"$violations_file" 2>/dev/null; then
+        if [ -n "$matches" ]; then
+            printf '%s\n' "$matches" | sed "s|^|$abs_path:|" >>"$violations_file" 2>/dev/null
             violations_found=1
         fi
     done < <(grep "^[[:space:]]*[a-z_][a-z0-9_]*()[[:space:]]*{" "$abs_path" | \

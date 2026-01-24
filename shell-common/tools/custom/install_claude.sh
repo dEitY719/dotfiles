@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # shell-common/tools/custom/install_claude.sh
 # Claude Code CLI Install Script
 # Uses official native installer (recommended by Anthropic)

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # shell-common/tools/custom/delete_claude.sh
 # Claude Code CLI Uninstall Script
 # Safely removes Claude Code binary and cleans cached/session data

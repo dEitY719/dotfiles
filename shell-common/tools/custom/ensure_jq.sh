@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # shell-common/tools/custom/ensure_jq.sh
 # Ensure jq is installed (dependency checker)
 

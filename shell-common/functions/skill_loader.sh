@@ -78,7 +78,7 @@ _skill_loader() {
     fi
 
     # Output skill file path (always to stdout)
-    echo "$skill_file"
+    printf '%s\n' "$skill_file"
 
     # Show context-aware message only in interactive mode (not piped/redirected)
     if [ "$is_interactive" = true ]; then
@@ -97,7 +97,7 @@ _skill_loader() {
 
         # Show helpful message for Claude Code (interactive mode only)
         if [ "$cli_type" = "claude-code" ]; then
-            echo "" >&2
+            printf '\n' >&2
             ux_info "To load this skill in Claude Code, use:" >&2
             ux_success "/skill $skill_name" >&2
         fi

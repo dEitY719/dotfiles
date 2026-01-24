@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # shell-common/tools/custom/skill_loader.sh
 # Standalone skill loader utility for programmatic access
 # Works with Claude Code, Codex, Gemini, and other CLIs
@@ -133,7 +133,7 @@ list_skills() {
     ux_info "Skills location: $skills_dir" >&2
 }
 
-# Only run main() if script is executed directly (not sourced)
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
+# Execute only if run directly (not sourced)
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ "${0##*/}" = "skill_loader.sh" ]; then
     main "$@"
 fi
