@@ -11,6 +11,34 @@
 - **Automation**: Shell function (claude_mount_skills) for auto-mounting
 - **Permissions**: Sudoers configuration for passwordless bind mount
 
+# Permission Modes
+
+Claude Code supports the following permission modes in `settings.json`:
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `default` | Request user approval on first tool use | Standard, security-focused |
+| `acceptEdits` | Auto-accept file edit permissions | Trusted environments |
+| `dontAsk` | Auto-deny except allow-listed tools | Minimal interruption |
+| `plan` | Analysis-only mode (no modifications) | Planning & exploration |
+| `bypassPermissions` | Skip all permission checks | CI/CD, sandboxed environments |
+
+Set via CLI:
+```bash
+claude --permission-mode bypassPermissions
+```
+
+Or configure in `settings.json` (line 174):
+```json
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  }
+}
+```
+
+⚠️ **Warning**: `bypassPermissions` disables all security checks. Use only in trusted, isolated environments.
+
 # Implementation Patterns
 
 ## Configuration Files
