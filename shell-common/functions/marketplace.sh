@@ -282,33 +282,47 @@ claude_skills_marketplace_group() {
     # Extract unique categories/plugins
     local categories
     if [ -n "$category_filter" ]; then
-        # Filter by specific category
+        # For filter case, get partial matches to check against
         categories=$(jq -r --arg cat "$category_filter" \
             '.skills | map(select(.plugin | contains($cat))) | map(.plugin) | unique | .[]' \
             "$MANIFEST_CACHE_PATH")
     else
+        # For no filter case, get all plugins
         categories=$(jq -r '.skills | map(.plugin) | unique | sort | .[]' "$MANIFEST_CACHE_PATH")
     fi
 
-    [ -z "$categories" ] && {
-        ux_warning "No plugins found matching filter: $category_filter"
+    [ -z "$categories" ] && [ -z "$category_filter" ] && {
+        ux_warning "No plugins found"
         return 0
     }
 
     if [ -n "$category_filter" ]; then
-        # Show detailed view for filtered plugin
-        # Use the matched categories (not the filter) to find actual skills
+        # Show detailed view for exact plugin match only
         local matched_plugin=""
 
-        # If exact match exists, use it; otherwise use first substring match
+        # Check for exact match only (not substring)
         if echo "$categories" | grep -q "^${category_filter}$"; then
             matched_plugin="$category_filter"
-        else
-            matched_plugin=$(echo "$categories" | head -1)
         fi
 
         if [ -z "$matched_plugin" ]; then
-            ux_error "Plugin not found: $category_filter"
+            # No exact match - show helpful error with partial matches
+            ux_error "No exact match for plugin: ${UX_PRIMARY}$category_filter${UX_RESET}"
+            echo ""
+
+            if [ -n "$categories" ]; then
+                ux_section "Did you mean one of these?"
+                echo "$categories" | while IFS= read -r plugin; do
+                    local count
+                    count=$(jq -r --arg plugin "$plugin" \
+                        '.skills | map(select(.plugin == $plugin)) | length' \
+                        "$MANIFEST_CACHE_PATH")
+                    printf "  ${UX_PRIMARY}•${UX_RESET} %-40s ${UX_MUTED}(%d skills)${UX_RESET}\n" "$plugin" "$count"
+                done
+                echo ""
+            fi
+
+            ux_info "Or use: ${UX_SUCCESS}csm search $category_filter${UX_RESET} to find skills"
             return 1
         fi
 
