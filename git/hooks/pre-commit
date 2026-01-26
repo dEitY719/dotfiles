@@ -52,8 +52,9 @@ WRAPPER_VIOLATIONS_FILE=$(mktemp "$TMPDIR/wrapper_violations_XXXXXX.txt")
 CUSTOM_TOOLS_SOURCING_FILE=$(mktemp "$TMPDIR/custom_tools_sourcing_XXXXXX.txt")
 AUTO_EXEC_CUSTOM_FILE=$(mktemp "$TMPDIR/auto_exec_custom_XXXXXX.txt")
 PURITY_VIOLATIONS_FILE=$(mktemp "$TMPDIR/purity_violations_XXXXXX.txt")
+BACKUP_FILES_FILE=$(mktemp "$TMPDIR/backup_files_XXXXXX.txt")
 
-trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$PURITY_VIOLATIONS_FILE"' EXIT
+trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE"' EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Load check modules
@@ -78,6 +79,7 @@ source_check_or_exit "${CHECKS_DIR}/wrapper_check.sh"
 source_check_or_exit "${CHECKS_DIR}/postmortem_init_check.sh"
 source_check_or_exit "${CHECKS_DIR}/custom_tools_entrypoint_check.sh"
 source_check_or_exit "${CHECKS_DIR}/library_purity_check.sh"
+source_check_or_exit "${CHECKS_DIR}/backup_file_check.sh"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Get staged files (git diff --cached)
@@ -102,6 +104,7 @@ wrapper_violations=0
 custom_tools_sourcing_violations=0
 auto_exec_custom_violations=0
 library_purity_violations=0
+backup_files_found=0
 
 # 1) Shebang consistency for staged .sh files under shell-common/bash/zsh
 while IFS= read -r file; do
@@ -172,6 +175,11 @@ while IFS= read -r file; do
     fi
 done <<<"$STAGED_FILES"
 
+# 5) Backup files check: warn about *.backup.* files in repo
+if ! check_backup_files "$REPO_ROOT" "$BACKUP_FILES_FILE" 2>/dev/null; then
+    ((backup_files_found++))
+fi
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Reporting and exit logic
 # ═══════════════════════════════════════════════════════════════════════════
@@ -181,7 +189,7 @@ echo -e "${BLUE}Pre-commit validation (staged files only)${NC}"
 echo ""
 
 blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + custom_tools_sourcing_violations + auto_exec_custom_violations + library_purity_violations))
-warning_count=$((subshell_violations + wrapper_violations + ux_violations))
+warning_count=$((subshell_violations + wrapper_violations + ux_violations + backup_files_found))
 
 if [ $blocking_violations -eq 0 ]; then
     has_warnings=0
@@ -205,6 +213,17 @@ if [ $blocking_violations -eq 0 ]; then
     if [ $ux_violations -gt 0 ]; then
         echo -e "${YELLOW}⚠ [INFO] UX Library suggestions ($ux_violations file(s)):${NC}"
         echo "  Consider using UX functions for consistent output styling"
+        echo ""
+        has_warnings=1
+    fi
+
+    if [ $backup_files_found -gt 0 ] && [ -s "$BACKUP_FILES_FILE" ]; then
+        echo -e "${YELLOW}⚠ [CLEANUP] Backup files found in repository:${NC}"
+        cat "$BACKUP_FILES_FILE" | sed 's/^/  /'
+        echo ""
+        echo -e "${YELLOW}  Delete with:${NC}"
+        backup_list=$(cat "$BACKUP_FILES_FILE" | tr '\n' ' ')
+        echo -e "${YELLOW}  rm -f $backup_list${NC}"
         echo ""
         has_warnings=1
     fi
@@ -275,6 +294,15 @@ fi
 if [ $wrapper_violations -gt 0 ] && [ -s "$WRAPPER_VIOLATIONS_FILE" ]; then
     echo -e "${YELLOW}[WARNING] Wrapper function anti-patterns ($wrapper_violations):${NC}"
     head -n 2 "$WRAPPER_VIOLATIONS_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+if [ $backup_files_found -gt 0 ] && [ -s "$BACKUP_FILES_FILE" ]; then
+    echo -e "${YELLOW}[CLEANUP] Backup files found in repository:${NC}"
+    cat "$BACKUP_FILES_FILE" | sed 's/^/  /'
+    echo ""
+    backup_list=$(cat "$BACKUP_FILES_FILE" | tr '\n' ' ')
+    echo -e "${YELLOW}  Delete with: rm -f $backup_list${NC}"
     echo ""
 fi
 
