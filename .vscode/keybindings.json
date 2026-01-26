@@ -1,0 +1,14 @@
+[
+  {
+    "key": "ctrl+f10",
+    "command": "notebook.cell.executeCellsAbove"
+  },
+  {
+    "key": "shift+enter",
+    "command": "workbench.action.terminal.sendSequence",
+    "args": {
+      "text": "\u001b\r"
+    },
+    "when": "terminalFocus"
+  }
+]
