@@ -297,16 +297,37 @@ claude_skills_marketplace_group() {
 
     if [ -n "$category_filter" ]; then
         # Show detailed view for filtered plugin
-        ux_header "Plugin: $category_filter"
+        # Use the matched categories (not the filter) to find actual skills
+        local matched_plugin=""
+
+        # If exact match exists, use it; otherwise use first substring match
+        if echo "$categories" | grep -q "^${category_filter}$"; then
+            matched_plugin="$category_filter"
+        else
+            matched_plugin=$(echo "$categories" | head -1)
+        fi
+
+        if [ -z "$matched_plugin" ]; then
+            ux_error "Plugin not found: $category_filter"
+            return 1
+        fi
+
+        ux_header "Plugin: $matched_plugin"
         echo ""
 
         local count
-        count=$(jq -r --arg plugin "$category_filter" \
+        count=$(jq -r --arg plugin "$matched_plugin" \
             '.skills | map(select(.plugin == $plugin)) | length' \
             "$MANIFEST_CACHE_PATH")
 
+        if [ "$count" -eq 0 ]; then
+            ux_warning "No skills found for plugin: $matched_plugin"
+            echo ""
+            return 0
+        fi
+
         ux_section "Skills ($count)"
-        jq -r --arg plugin "$category_filter" \
+        jq -r --arg plugin "$matched_plugin" \
             '.skills | map(select(.plugin == $plugin)) | .[] | .name' \
             "$MANIFEST_CACHE_PATH" | \
         while IFS= read -r skill_name; do
