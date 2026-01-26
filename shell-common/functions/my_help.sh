@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/bin/sh
 # shell-common/functions/my_help.sh
 # Help system for bash/zsh dotfiles
 # Provides centralized help registry for all commands
-# Bash/Zsh compatible (POSIX not supported)
+# Bash/Zsh/POSIX compatible
 
 # ═══════════════════════════════════════════════════════════════
 # UX Library Loading (bash/zsh compatible)
@@ -112,12 +112,11 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[crt_help]="${HELP_DESCRIPTIONS[crt_help]:-CA Certificate setup and management guide}"
     HELP_DESCRIPTIONS[pip_help]="${HELP_DESCRIPTIONS[pip_help]:-Pip package manager configuration and diagnostics}"
     HELP_DESCRIPTIONS[mount_help]="${HELP_DESCRIPTIONS[mount_help]:-Mount management commands for Claude environment}"
-    HELP_DESCRIPTIONS[category_help]="${HELP_DESCRIPTIONS[category_help]:-View help organized by category (shell, git, system, all)}"
     HELP_DESCRIPTIONS[claude_plugins_help]="${HELP_DESCRIPTIONS[claude_plugins_help]:-Claude plugins and integrations setup}"
+    HELP_DESCRIPTIONS[claude_skills_marketplace_help]="${HELP_DESCRIPTIONS[claude_skills_marketplace_help]:-Marketplace skills management system with caching}"
     HELP_DESCRIPTIONS[notion_help]="${HELP_DESCRIPTIONS[notion_help]:-Notion API integration and commands}"
     HELP_DESCRIPTIONS[ollama_help]="${HELP_DESCRIPTIONS[ollama_help]:-Ollama local LLM setup and usage}"
     HELP_DESCRIPTIONS[opencode_help]="${HELP_DESCRIPTIONS[opencode_help]:-OpenCode CLI setup and configuration}"
-    HELP_DESCRIPTIONS[register_help]="${HELP_DESCRIPTIONS[register_help]:-Help registry management and registration functions}"
     HELP_DESCRIPTIONS[show_doc_help]="${HELP_DESCRIPTIONS[show_doc_help]:-Documentation viewer and manager commands}"
 }
 
@@ -129,54 +128,59 @@ _register_default_help_descriptions() {
 _my_help_show_all() {
     ux_header "Dotfiles Help Functions"
 
-    # Collect help functions
-    local help_funcs=()
+    # Collect help functions (using temp file instead of array)
+    local temp_funcs="/tmp/.help_funcs_$$"
+    local temp_raw="/tmp/.help_raw_$$"
+    > "$temp_funcs"
+
+    _get_help_functions > "$temp_raw"
+
     while IFS= read -r func; do
         # Extract function name (before '(' or first space)
         local func_name="${func%%[( ]*}"
 
         # Include functions ending with 'help' (both dash and underscore)
-        # Exclude:
-        # - my-help (main help function)
-        # - _* (internal functions starting with underscore)
-        # - run-help (zsh builtin)
-        if [[ "$func_name" == *help ]] && \
-           [[ "$func_name" != "my-help" ]] && \
-           [[ "$func_name" != "run-help" ]] && \
-           [[ "$func_name" != _* ]]; then
+        # Exclude: my-help, run-help, _* (internal functions)
+        case "$func_name" in
+            *help)
+                case "$func_name" in
+                    my-help|run-help) ;;
+                    _*) ;;
+                    *)
+                        # Normalize to dash format for display
+                        local display_name
+                        display_name=$(echo "$func_name" | tr '_' '-')
+                        echo "$display_name" >> "$temp_funcs"
+                        ;;
+                esac
+                ;;
+        esac
+    done < "$temp_raw"
 
-            # Normalize to dash format for display
-            local display_name="${func_name//_/-}"
-            help_funcs+=("$display_name")
-        fi
-    done < <(_get_help_functions)
+    rm -f "$temp_raw"
 
     # Remove duplicates and sort
-    local unique_funcs=($(printf '%s\n' "${help_funcs[@]}" | sort -u))
+    local unique_count
+    unique_count=$(sort -u "$temp_funcs" | wc -l)
 
     # Show section with count of available help commands
-    ux_section "Available help commands(${#unique_funcs[@]})"
-
-    # Calculate max width for alignment
-    local max_width=0
-    local func
-    for func in "${unique_funcs[@]}"; do
-        ((${#func} > max_width)) && max_width=${#func}
-    done
+    ux_section "Available help commands($unique_count)"
 
     # Display help functions with descriptions
-    for func in "${unique_funcs[@]}"; do
+    sort -u "$temp_funcs" | while IFS= read -r func; do
         # Try both dash and underscore format for description lookup
         local desc="${HELP_DESCRIPTIONS[$func]}"
         if [ -z "$desc" ]; then
             # Try underscore format
-            local func_underscore="${func//-/_}"
+            local func_underscore
+            func_underscore=$(echo "$func" | tr '-' '_')
             desc="${HELP_DESCRIPTIONS[$func_underscore]}"
         fi
         desc="${desc:-⛔No description available}"
-        printf "  ${UX_SUCCESS}%-${max_width}s${UX_RESET}  ${UX_MUTED}:${UX_RESET}  %s\n" "$func" "$desc"
+        printf "  ${UX_SUCCESS}%-30s${UX_RESET}  ${UX_MUTED}:${UX_RESET}  %s\n" "$func" "$desc"
     done
 
+    rm -f "$temp_funcs"
 
     ux_divider
 
@@ -192,7 +196,7 @@ _my_help_show_all() {
 }
 
 # Main help function - displays all registered commands or specific help
-my_help() {
+my_help_impl() {
     # Register default descriptions (only once)
     if [ -z "${_HELP_DEFAULTS_REGISTERED}" ]; then
         _register_default_help_descriptions
@@ -209,13 +213,15 @@ my_help() {
 
     # Prefer canonical underscore helpers to avoid alias-only lookups (bash cannot
     # execute aliases when the name comes from parameter expansion)
-    local normalized="${cmd_name//-/_}"
+    local normalized
+    normalized=$(echo "$cmd_name" | tr '-' '_')
     local helper_name="$normalized"
-    if [[ "$helper_name" != *_help ]]; then
-        helper_name="${helper_name}_help"
-    fi
+    case "$helper_name" in
+        *_help) ;;
+        *) helper_name="${helper_name}_help" ;;
+    esac
 
-    if typeset -f "$helper_name" &>/dev/null; then
+    if typeset -f "$helper_name" >/dev/null 2>&1; then
         "$helper_name"
         return 0
     fi
@@ -223,23 +229,28 @@ my_help() {
     # Some modules only expose a dash-style alias (e.g., apt-help). Safely detect
     # aliases/functions using dash notation and execute them via eval so alias
     # expansion occurs in both bash and zsh.
-    if [[ "$cmd_name" =~ ^[A-Za-z0-9_-]+$ ]]; then
-        local dash_name="${cmd_name//_/-}"
-        if [[ "$dash_name" != *-help ]]; then
-            dash_name="${dash_name}-help"
-        fi
-        if type "$dash_name" &>/dev/null 2>&1; then
-            eval "$dash_name"
-            return 0
-        fi
-    fi
+    case "$cmd_name" in
+        *[!A-Za-z0-9_-]*) ;;
+        *)
+            local dash_name
+            dash_name=$(echo "$cmd_name" | tr '_' '-')
+            case "$dash_name" in
+                *-help) ;;
+                *) dash_name="${dash_name}-help" ;;
+            esac
+            if type "$dash_name" >/dev/null 2>&1; then
+                eval "$dash_name"
+                return 0
+            fi
+            ;;
+    esac
 
-    if typeset -f "$cmd_name" &>/dev/null; then
+    if typeset -f "$cmd_name" >/dev/null 2>&1; then
         "$cmd_name"
         return 0
     fi
 
-    if type "$cmd_name" &>/dev/null 2>&1; then
+    if type "$cmd_name" >/dev/null 2>&1; then
         # Try calling command with --help
         "$cmd_name" --help 2>/dev/null || {
             ux_info "Help for '${cmd_name}' not available."
@@ -257,7 +268,7 @@ my_help() {
 
 # Show help organized by category
 category_help() {
-    local category="${1:all}"
+    local category="${1:-all}"
 
     case "$category" in
         shell|zsh)
@@ -280,7 +291,7 @@ category_help() {
 # ═══════════════════════════════════════════════════════════════
 
 # Register built-in help functions (can be overridden)
-HELP_DESCRIPTIONS[my_help]="Main help system"
+HELP_DESCRIPTIONS[my_help_impl]="Main help system"
 
 # Alias for my-help format (using dash instead of underscore)
-alias my-help='my_help'
+alias my-help='my_help_impl'
