@@ -93,5 +93,6 @@
     "claudeCode.preferredLocation": "panel",
     "makefile.configureOnOpen": true,
     "peacock.remoteColor": "#f9e64f",
-    "chat.mcp.gallery.enabled": true
+    "chat.mcp.gallery.enabled": true,
+    "tabnine.experimentalAutoImports": true
 }
