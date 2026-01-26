@@ -187,6 +187,7 @@ _ensure_manifest_fresh() {
 # List all marketplace skills grouped by plugin (default) or all skills by marketplace (--all)
 claude_skills_marketplace_list() {
     local show_all=false
+    local marketplace_filter=""
 
     # Parse options
     while [ $# -gt 0 ]; do
@@ -196,6 +197,7 @@ claude_skills_marketplace_list() {
                 shift
                 ;;
             *)
+                marketplace_filter="$1"
                 shift
                 ;;
         esac
@@ -218,28 +220,57 @@ claude_skills_marketplace_list() {
     fi
 
     if [ "$show_all" = true ]; then
-        # Show all marketplaces with skill counts
-        ux_header "Marketplaces"
+        if [ -n "$marketplace_filter" ]; then
+            # Show skills for specific marketplace
+            ux_header "Marketplace: $marketplace_filter"
+            echo ""
 
-        local total
-        total=$(jq -r '.total_skills' "$MANIFEST_CACHE_PATH")
-        ux_info "Total: $total skills across"
-        echo ""
+            local skills
+            skills=$(jq -r --arg mp "$marketplace_filter" \
+                '.skills | map(select(.marketplace == $mp)) | .[]' "$MANIFEST_CACHE_PATH")
 
-        # List marketplaces with counts
-        jq -r '.skills | group_by(.marketplace) | .[] | "\(.[0].marketplace)|\(length)"' "$MANIFEST_CACHE_PATH" | \
-        while IFS='|' read -r mp_name count; do
-            printf "  ${UX_PRIMARY}•${UX_RESET} %-30s ${UX_MUTED}(%d skills)${UX_RESET}\n" "$mp_name" "$count"
-        done
-        echo ""
-        ux_info "Run: ${UX_SUCCESS}csm list --all <marketplace>${UX_RESET} to see skills"
+            if [ -z "$skills" ]; then
+                ux_warning "No skills found for marketplace: $marketplace_filter"
+                return 0
+            fi
+
+            # Group by plugin within this marketplace
+            jq -r --arg mp "$marketplace_filter" \
+                '.skills | map(select(.marketplace == $mp)) | group_by(.plugin) | .[] |
+                 "Plugin: \(.[0].plugin)\n" + (.[] | "  • \(.name)")' "$MANIFEST_CACHE_PATH" | \
+            while IFS= read -r line; do
+                if [[ "$line" == Plugin:* ]]; then
+                    echo ""
+                    echo "$line"
+                else
+                    echo "$line"
+                fi
+            done
+            echo ""
+        else
+            # Show all marketplaces with skill counts
+            ux_header "Marketplaces"
+
+            local total
+            total=$(jq -r '.total_skills' "$MANIFEST_CACHE_PATH")
+            ux_info "Total: $total skills across"
+            echo ""
+
+            # List marketplaces with counts
+            jq -r '.skills | group_by(.marketplace) | .[] | "\(.[0].marketplace)|\(length)"' "$MANIFEST_CACHE_PATH" | \
+            while IFS='|' read -r mp_name count; do
+                printf "  ${UX_PRIMARY}•${UX_RESET} %-30s ${UX_MUTED}(%d skills)${UX_RESET}\n" "$mp_name" "$count"
+            done
+            echo ""
+            ux_info "Run: ${UX_SUCCESS}csm list --all <marketplace>${UX_RESET} to see skills"
+        fi
     else
         # Default: show plugin groups (headers only)
         claude_skills_marketplace_group
     fi
 }
 
-# Group skills by category/plugin (show headers only)
+# Group skills by category/plugin (show headers only, or detailed list if filter provided)
 claude_skills_marketplace_group() {
     local category_filter="${1:-}"
 
@@ -247,8 +278,6 @@ claude_skills_marketplace_group() {
         ux_error "Failed to generate marketplace manifest"
         return 1
     }
-
-    ux_header "Plugins"
 
     # Extract unique categories/plugins
     local categories
@@ -266,18 +295,40 @@ claude_skills_marketplace_group() {
         return 0
     }
 
-    echo ""
-    while IFS= read -r plugin; do
+    if [ -n "$category_filter" ]; then
+        # Show detailed view for filtered plugin
+        ux_header "Plugin: $category_filter"
+        echo ""
+
         local count
-        count=$(jq -r --arg plugin "$plugin" \
-            '[.skills | map(select(.plugin == $plugin))] | length' \
+        count=$(jq -r --arg plugin "$category_filter" \
+            '.skills | map(select(.plugin == $plugin)) | length' \
             "$MANIFEST_CACHE_PATH")
 
-        printf "  ${UX_PRIMARY}•${UX_RESET} %-35s ${UX_MUTED}(%d skills)${UX_RESET}\n" "$plugin" "$count"
-    done <<< "$categories"
-    echo ""
+        ux_section "Skills ($count)"
+        jq -r --arg plugin "$category_filter" \
+            '.skills | map(select(.plugin == $plugin)) | .[] | .name' \
+            "$MANIFEST_CACHE_PATH" | \
+        while IFS= read -r skill_name; do
+            printf "  ${UX_PRIMARY}•${UX_RESET} %s\n" "$skill_name"
+        done
+        echo ""
+        ux_info "Run: ${UX_SUCCESS}csm info <skill-name>${UX_RESET} for details"
+    else
+        # Show header view for all plugins
+        ux_header "Plugins"
+        echo ""
 
-    if [ -z "$category_filter" ]; then
+        while IFS= read -r plugin; do
+            local count
+            count=$(jq -r --arg plugin "$plugin" \
+                '.skills | map(select(.plugin == $plugin)) | length' \
+                "$MANIFEST_CACHE_PATH")
+
+            printf "  ${UX_PRIMARY}•${UX_RESET} %-35s ${UX_MUTED}(%d skills)${UX_RESET}\n" "$plugin" "$count"
+        done <<< "$categories"
+        echo ""
+
         ux_info "Run: ${UX_SUCCESS}csm info <skill-name>${UX_RESET} for details"
         ux_info "Run: ${UX_SUCCESS}csm search <keyword>${UX_RESET} to find skills"
     fi
