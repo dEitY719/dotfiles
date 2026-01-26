@@ -184,16 +184,27 @@ _ensure_manifest_fresh() {
 # User-Facing Functions (snake_case, suffixed with _marketplace)
 # =============================================================================
 
-# List all marketplace skills (default command)
+# List all marketplace skills grouped by plugin (default) or all skills by marketplace (--all)
 claude_skills_marketplace_list() {
-    local output_format="${1:-default}"
+    local show_all=false
+
+    # Parse options
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --all|-A)
+                show_all=true
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
 
     _ensure_manifest_fresh || {
         ux_error "Failed to generate marketplace manifest"
         return 1
     }
-
-    ux_header "Marketplace Skills"
 
     # Verify manifest exists and is valid
     if [ ! -f "$MANIFEST_CACHE_PATH" ]; then
@@ -206,26 +217,34 @@ claude_skills_marketplace_list() {
         _generate_manifest
     fi
 
-    local total
-    total=$(jq -r '.total_skills' "$MANIFEST_CACHE_PATH")
-    ux_info "Total: $total skills"
-    echo ""
+    if [ "$show_all" = true ]; then
+        # Show all skills grouped by marketplace
+        ux_header "All Marketplace Skills"
 
-    # Group by marketplace
-    jq -r '.skills | group_by(.marketplace) | .[] | "\(.[0].marketplace)|\(length)"' "$MANIFEST_CACHE_PATH" | \
-    while IFS='|' read -r mp_name count; do
-        ux_section "$mp_name ($count skills)"
-
-        jq -r --arg mp "$mp_name" \
-            '.skills | map(select(.marketplace == $mp)) | sort_by(.plugin) | .[] |
-             "\(.plugin)|\(.name)|\(.description)"' "$MANIFEST_CACHE_PATH" | \
-        while IFS='|' read -r plugin name desc; do
-            desc_short="${desc:0:50}"
-            [ ${#desc} -gt 50 ] && desc_short="${desc_short}..."
-            printf "  ${UX_PRIMARY}%-30s${UX_RESET} ${UX_MUTED}[%-20s]${UX_RESET} %s\n" "$name" "$plugin" "$desc_short"
-        done
+        local total
+        total=$(jq -r '.total_skills' "$MANIFEST_CACHE_PATH")
+        ux_info "Total: $total skills"
         echo ""
-    done
+
+        # Group by marketplace
+        jq -r '.skills | group_by(.marketplace) | .[] | "\(.[0].marketplace)|\(length)"' "$MANIFEST_CACHE_PATH" | \
+        while IFS='|' read -r mp_name count; do
+            ux_section "$mp_name ($count skills)"
+
+            jq -r --arg mp "$mp_name" \
+                '.skills | map(select(.marketplace == $mp)) | sort_by(.plugin) | .[] |
+                 "\(.plugin)|\(.name)|\(.description)"' "$MANIFEST_CACHE_PATH" | \
+            while IFS='|' read -r plugin name desc; do
+                desc_short="${desc:0:50}"
+                [ ${#desc} -gt 50 ] && desc_short="${desc_short}..."
+                printf "  ${UX_PRIMARY}%-30s${UX_RESET} ${UX_MUTED}[%-20s]${UX_RESET} %s\n" "$name" "$plugin" "$desc_short"
+            done
+            echo ""
+        done
+    else
+        # Default: show skills grouped by plugin
+        claude_skills_marketplace_group
+    fi
 }
 
 # Group skills by category/plugin
@@ -420,9 +439,16 @@ claude_skills_marketplace_refresh() {
 claude_skills_marketplace_help() {
     ux_header "Marketplace Skills Commands"
 
+    ux_section "Quick Start"
+    ux_bullet "Group by plugin (default): ${UX_SUCCESS}csm${UX_RESET}"
+    ux_bullet "All skills by marketplace: ${UX_SUCCESS}csm list --all${UX_RESET}"
+    ux_bullet "Search skills: ${UX_SUCCESS}csm search python${UX_RESET}"
+    ux_bullet "Get details: ${UX_SUCCESS}csm info api-design-principles${UX_RESET}"
+    echo ""
+
     ux_section "Available Commands"
 
-    ux_numbered 1 "list                    - List all marketplace skills (default)"
+    ux_numbered 1 "list [--all|-A]         - Group by plugin (default), or --all for marketplace view"
     ux_numbered 2 "group [plugin]          - Group skills by plugin (optionally filter)"
     ux_numbered 3 "stats                   - Show marketplace statistics"
     ux_numbered 4 "search <keyword>        - Search skills by keyword"
@@ -431,13 +457,19 @@ claude_skills_marketplace_help() {
     ux_numbered 7 "help                    - Show this help message"
     echo ""
 
+    ux_section "Aliases"
+    ux_bullet "Long form: ${UX_SUCCESS}claude_skills_marketplace${UX_RESET}"
+    ux_bullet "Short form: ${UX_SUCCESS}csm${UX_RESET}"
+    echo ""
+
     ux_section "Examples"
 
-    ux_bullet "List all skills: ${UX_SUCCESS}claude-skills-marketplace${UX_RESET}"
-    ux_bullet "Search for Python: ${UX_SUCCESS}claude-skills-marketplace search python${UX_RESET}"
-    ux_bullet "Show API design: ${UX_SUCCESS}claude-skills-marketplace info api-design-principles${UX_RESET}"
-    ux_bullet "Group by plugin: ${UX_SUCCESS}claude-skills-marketplace group${UX_RESET}"
-    ux_bullet "Show stats: ${UX_SUCCESS}claude-skills-marketplace stats${UX_RESET}"
+    ux_bullet "Group by plugin: ${UX_SUCCESS}csm${UX_RESET} or ${UX_SUCCESS}csm list${UX_RESET}"
+    ux_bullet "All by marketplace: ${UX_SUCCESS}csm list --all${UX_RESET} or ${UX_SUCCESS}csm list -A${UX_RESET}"
+    ux_bullet "Search for Python: ${UX_SUCCESS}csm search python${UX_RESET}"
+    ux_bullet "Skill details: ${UX_SUCCESS}csm info api-design-principles${UX_RESET}"
+    ux_bullet "Statistics: ${UX_SUCCESS}csm stats${UX_RESET}"
+    ux_bullet "Filter by plugin: ${UX_SUCCESS}csm group backend${UX_RESET}"
     echo ""
 
     ux_section "Caching"
@@ -482,5 +514,6 @@ claude_skills_marketplace() {
     esac
 }
 
-# Note: The function 'claude_skills_marketplace' can be called directly
-# and may be aliased to 'claude-skills-marketplace' by shell configuration.
+# Create short alias for convenience
+# This is safe as a function alias (no naming conflicts with my_help.sh pattern)
+alias csm='claude_skills_marketplace'
