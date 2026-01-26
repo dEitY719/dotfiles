@@ -218,36 +218,28 @@ claude_skills_marketplace_list() {
     fi
 
     if [ "$show_all" = true ]; then
-        # Show all skills grouped by marketplace
-        ux_header "All Marketplace Skills"
+        # Show all marketplaces with skill counts
+        ux_header "Marketplaces"
 
         local total
         total=$(jq -r '.total_skills' "$MANIFEST_CACHE_PATH")
-        ux_info "Total: $total skills"
+        ux_info "Total: $total skills across"
         echo ""
 
-        # Group by marketplace
+        # List marketplaces with counts
         jq -r '.skills | group_by(.marketplace) | .[] | "\(.[0].marketplace)|\(length)"' "$MANIFEST_CACHE_PATH" | \
         while IFS='|' read -r mp_name count; do
-            ux_section "$mp_name ($count skills)"
-
-            jq -r --arg mp "$mp_name" \
-                '.skills | map(select(.marketplace == $mp)) | sort_by(.plugin) | .[] |
-                 "\(.plugin)|\(.name)|\(.description)"' "$MANIFEST_CACHE_PATH" | \
-            while IFS='|' read -r plugin name desc; do
-                desc_short="${desc:0:50}"
-                [ ${#desc} -gt 50 ] && desc_short="${desc_short}..."
-                printf "  ${UX_PRIMARY}%-30s${UX_RESET} ${UX_MUTED}[%-20s]${UX_RESET} %s\n" "$name" "$plugin" "$desc_short"
-            done
-            echo ""
+            printf "  ${UX_PRIMARY}•${UX_RESET} %-30s ${UX_MUTED}(%d skills)${UX_RESET}\n" "$mp_name" "$count"
         done
+        echo ""
+        ux_info "Run: ${UX_SUCCESS}csm list --all <marketplace>${UX_RESET} to see skills"
     else
-        # Default: show skills grouped by plugin
+        # Default: show plugin groups (headers only)
         claude_skills_marketplace_group
     fi
 }
 
-# Group skills by category/plugin
+# Group skills by category/plugin (show headers only)
 claude_skills_marketplace_group() {
     local category_filter="${1:-}"
 
@@ -256,7 +248,7 @@ claude_skills_marketplace_group() {
         return 1
     }
 
-    ux_header "Skills Grouped by Plugin"
+    ux_header "Plugins"
 
     # Extract unique categories/plugins
     local categories
@@ -274,25 +266,21 @@ claude_skills_marketplace_group() {
         return 0
     }
 
+    echo ""
     while IFS= read -r plugin; do
         local count
         count=$(jq -r --arg plugin "$plugin" \
             '[.skills | map(select(.plugin == $plugin))] | length' \
             "$MANIFEST_CACHE_PATH")
 
-        ux_section "$plugin ($count skills)"
-
-        # List skills in this plugin
-        jq -r --arg plugin "$plugin" \
-            '.skills | map(select(.plugin == $plugin)) | sort_by(.name) | .[] |
-             "\(.name)|\(.description)"' "$MANIFEST_CACHE_PATH" | \
-        while IFS='|' read -r name desc; do
-            desc_short="${desc:0:50}"
-            [ ${#desc} -gt 50 ] && desc_short="${desc_short}..."
-            printf "    ${UX_PRIMARY}•${UX_RESET} %-28s %s\n" "$name" "$desc_short"
-        done
-        echo ""
+        printf "  ${UX_PRIMARY}•${UX_RESET} %-35s ${UX_MUTED}(%d skills)${UX_RESET}\n" "$plugin" "$count"
     done <<< "$categories"
+    echo ""
+
+    if [ -z "$category_filter" ]; then
+        ux_info "Run: ${UX_SUCCESS}csm info <skill-name>${UX_RESET} for details"
+        ux_info "Run: ${UX_SUCCESS}csm search <keyword>${UX_RESET} to find skills"
+    fi
 }
 
 # Show marketplace statistics
@@ -464,12 +452,13 @@ claude_skills_marketplace_help() {
 
     ux_section "Examples"
 
-    ux_bullet "Group by plugin: ${UX_SUCCESS}csm${UX_RESET} or ${UX_SUCCESS}csm list${UX_RESET}"
-    ux_bullet "All by marketplace: ${UX_SUCCESS}csm list --all${UX_RESET} or ${UX_SUCCESS}csm list -A${UX_RESET}"
-    ux_bullet "Search for Python: ${UX_SUCCESS}csm search python${UX_RESET}"
+    ux_bullet "Show plugins: ${UX_SUCCESS}csm${UX_RESET} (shows plugin headers)"
+    ux_bullet "Same as above: ${UX_SUCCESS}csm list${UX_RESET}"
+    ux_bullet "Show marketplaces: ${UX_SUCCESS}csm list --all${UX_RESET}"
+    ux_bullet "Explore plugin: ${UX_SUCCESS}csm search backend${UX_RESET} (or filter: ${UX_SUCCESS}csm group backend${UX_RESET})"
+    ux_bullet "Search skills: ${UX_SUCCESS}csm search python${UX_RESET}"
     ux_bullet "Skill details: ${UX_SUCCESS}csm info api-design-principles${UX_RESET}"
     ux_bullet "Statistics: ${UX_SUCCESS}csm stats${UX_RESET}"
-    ux_bullet "Filter by plugin: ${UX_SUCCESS}csm group backend${UX_RESET}"
     echo ""
 
     ux_section "Caching"
@@ -481,7 +470,7 @@ claude_skills_marketplace_help() {
 
 # Main router function
 claude_skills_marketplace() {
-    local command="${1:-list}"
+    local command="${1:-help}"
     shift || true
 
     case "$command" in
