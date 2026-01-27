@@ -52,9 +52,10 @@ class TestHelpTopicsBasic:
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_function_exists(self, shell_runner, shell):
-        """Verify that my_help function is defined and callable."""
-        result = shell_runner(shell, "declare -f my_help | head -1")
-        assert result.exit_code == 0, f"{shell}: my_help not defined"
+        """Verify that my_help_impl is callable."""
+        result = shell_runner(shell, "declare -f my_help_impl")
+        assert result.exit_code == 0, f"{shell}: my_help_impl function not defined"
+        assert "my_help_impl" in result.stdout, f"{shell}: my_help_impl not in function list"
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_alias_exists(self, shell_runner, shell):
@@ -120,9 +121,9 @@ class TestHelpTopicsWithDifferentFormats:
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_invocation_with_subtopic(self, shell_runner, shell):
-        """Test my_help() with specific subtopic argument."""
-        result = shell_runner(shell, "my_help git")
-        assert result.exit_code == 0, f"{shell}: my_help git failed"
+        """Test my_help_impl with specific subtopic argument."""
+        result = shell_runner(shell, "my_help_impl git")
+        assert result.exit_code == 0, f"{shell}: my_help_impl git failed"
 
 
 class TestHelpTopicsErrorHandling:
@@ -141,11 +142,11 @@ class TestHelpTopicsErrorHandling:
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_without_args_lists_topics(self, shell_runner, shell):
-        """Test my_help without arguments lists available help topics."""
-        result = shell_runner(shell, "my_help")
-        assert result.exit_code == 0, f"{shell}: my_help with no args failed"
+        """Test my_help_impl without arguments lists available help topics."""
+        result = shell_runner(shell, "my_help_impl")
+        assert result.exit_code == 0, f"{shell}: my_help_impl with no args failed"
         # Should list multiple help topics
-        assert len(result.stdout.split("\n")) > 5, f"{shell}: my_help output seems incomplete"
+        assert len(result.stdout.split("\n")) > 5, f"{shell}: my_help_impl output seems incomplete"
 
 
 class TestHelpTopicsEnvironmentIntegrity:

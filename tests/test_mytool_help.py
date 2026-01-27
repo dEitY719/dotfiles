@@ -179,22 +179,22 @@ class TestMytoolIntegration:
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_includes_mytool(self, shell_runner, shell):
-        """Test that my_help function includes mytool in its list or produces output."""
-        result = shell_runner(shell, "my_help")
-        # In some shells, help topics may not all be found, but my_help should work
-        assert result.exit_code == 0, f"{shell}: my_help failed"
+        """Test that my_help_impl command includes mytool in its list or produces output."""
+        result = shell_runner(shell, "my_help_impl")
+        # In some shells, help topics may not all be found, but my_help_impl should work
+        assert result.exit_code == 0, f"{shell}: my_help_impl failed"
         # Either mytool is listed, or we at least have the help output
         mytool_listed = "mytool" in result.stdout.lower()
         has_help_output = len(result.stdout.strip()) > 100  # More than just header
-        assert mytool_listed or has_help_output, f"{shell}: No meaningful output from my_help or mytool not listed"
+        assert mytool_listed or has_help_output, f"{shell}: No meaningful output from my_help_impl or mytool not listed"
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_mytool_invocation(self, shell_runner, shell):
-        """Test invoking mytool_help via my_help system.
+        """Test invoking mytool_help via my_help_impl system.
 
-        Example: my_help mytool should show mytool_help
+        Example: my_help_impl mytool should show mytool_help
         """
-        result = shell_runner(shell, "my_help mytool")
-        assert result.exit_code == 0, f"{shell}: my_help mytool failed"
+        result = shell_runner(shell, "my_help_impl mytool")
+        assert result.exit_code == 0, f"{shell}: my_help_impl mytool failed"
         # Should show tool list
-        assert len(result.stdout.strip()) > 0, f"{shell}: my_help mytool produced no output"
+        assert len(result.stdout.strip()) > 0, f"{shell}: my_help_impl mytool produced no output"

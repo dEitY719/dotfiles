@@ -43,9 +43,9 @@ class TestFunctionAvailability:
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_function_available(self, shell_runner, shell):
-        """Test my_help function is available."""
-        result = shell_runner(shell, "declare -f my_help | head -1")
-        assert result.exit_code == 0, f"{shell}: my_help function not available"
+        """Test my_help_impl function is available."""
+        result = shell_runner(shell, "declare -f my_help_impl | head -1")
+        assert result.exit_code == 0, f"{shell}: my_help_impl function not available"
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_mytool_help_function_available(self, shell_runner, shell):
@@ -132,19 +132,19 @@ class TestHelpSystemConsistency:
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_lists_topics(self, shell_runner, shell):
-        """Test my_help function lists help topics."""
-        result = shell_runner(shell, "my_help")
-        assert result.exit_code == 0, f"{shell}: my_help failed"
+        """Test my_help_impl command lists help topics."""
+        result = shell_runner(shell, "my_help_impl")
+        assert result.exit_code == 0, f"{shell}: my_help_impl failed"
         lines = len([line for line in result.stdout.strip().split("\n") if line])
-        assert lines > 10, f"{shell}: my_help lists too few topics: {lines}"
+        assert lines > 10, f"{shell}: my_help_impl lists too few topics: {lines}"
 
     def test_bash_zsh_help_output_similar(self, shell_runner):
         """Test that bash and zsh produce similar help output format."""
-        result_bash = shell_runner("bash", "my_help")
-        result_zsh = shell_runner("zsh", "my_help")
+        result_bash = shell_runner("bash", "my_help_impl")
+        result_zsh = shell_runner("zsh", "my_help_impl")
 
-        assert result_bash.exit_code == 0, "bash: my_help failed"
-        assert result_zsh.exit_code == 0, "zsh: my_help failed"
+        assert result_bash.exit_code == 0, "bash: my_help_impl failed"
+        assert result_zsh.exit_code == 0, "zsh: my_help_impl failed"
 
         # Both should produce output
         assert len(result_bash.stdout.strip()) > 0, "bash: no output"

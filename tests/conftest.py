@@ -208,9 +208,9 @@ def dotfiles_state(shell_runner):
         checks["shell_common_path"] = result.stdout.strip()
         checks["shell_common_path_exit"] = result.exit_code
 
-        # Check if my_help function exists
-        result = shell_runner(shell, "declare -f my_help | head -1")
-        checks["my_help_exists"] = result.exit_code == 0
+        # Check if my_help_impl function exists
+        result = shell_runner(shell, "declare -f my_help_impl | head -1")
+        checks["my_help_impl_exists"] = result.exit_code == 0
 
         # Check if my-help alias exists
         result = shell_runner(shell, "alias my-help")
