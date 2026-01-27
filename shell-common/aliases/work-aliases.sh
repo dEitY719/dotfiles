@@ -1,7 +1,10 @@
 #!/bin/sh
 # shell-common/aliases/work-aliases.sh
-# Work management command aliases (make-jira, make-confluence)
+# Work management command aliases (make-jira, make-confluence, work-help)
 # Supports both bash and zsh
+
+# Work-help: Show work management commands help
+alias work-help='work_help'
 
 # Make-jira: Generate weekly Jira reports from work logs
 alias make-jira='bash ~/dotfiles/shell-common/tools/custom/make_jira.sh'
