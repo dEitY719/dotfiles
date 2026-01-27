@@ -391,3 +391,291 @@ chmod +x .git/hooks/post-commit
 
 **마지막 업데이트**: 2026-01-27
 **다음 단계**: Week 1 체크리스트 실행 👉
+
+---
+
+# 부록A: SSOT 저장소 선택 (Appendix A: SSOT Repository Selection)
+
+## 추가 요구사항
+
+**상황**: make-jira, make-confluence 스킬의 output을 dotfiles 프로젝트의 docs/ 아래에 저장하고 싶지 않다.
+**이유**: 여러 프로젝트에서 작업한 내용도 공유하기 때문에 중앙화된 SSOT 저장소 필요
+
+```
+Project A (Claude Code)
+    └─ make-jira/make-confluence 실행
+         ↓
+    /home/bwyoon/para/archive/{SSOT}  ← 여기에 저장!
+         ↑
+Project B (Claude Code)
+    └─ make-jira/make-confluence 실행
+```
+
+---
+
+## 현황 분석: 2개 저장소 비교
+
+### 1️⃣ rca-knowledge (현재 추천)
+
+**경로**: `/home/bwyoon/para/archive/rca-knowledge`
+
+**구조**:
+```
+rca-knowledge/
+├── docs/analysis/
+│   ├── 2025-01-19-shell-function-propagation-issues.md
+│   └── 2025-01-15-mapfile-compatibility/
+├── _index.json       (메타데이터 관리 가능)
+└── README.md
+```
+
+**평가**:
+- ✅ 깔끔한 구조 (확장에 유리)
+- ✅ 분석 중심 (자동 생성 콘텐츠와 어울림)
+- ✅ 메타데이터 관리 용이 (JSON)
+- ✅ 날짜별 정렬
+- ⭐ **즉시 사용 가능 (단기 솔루션)**
+
+### 2️⃣ til (비추천)
+
+**경로**: `/home/bwyoon/para/archive/til`
+
+**구조**:
+```
+til/ (Jekyll 블로그)
+├── _posts/
+├── _includes/
+├── _layouts/
+├── _config.yml
+├── Gemfile
+└── docs/
+```
+
+**평가**:
+- ❌ Jekyll 블로그 구조 (복잡함)
+- ❌ 개인 학습 기록 중심
+- ❌ 자동화와 맞지 않음
+- ❌ 팀 협업 용도 미흡
+
+---
+
+## 🎯 최종 권장: 2단계 전략
+
+### 단기 (즉시 ~ 1주): rca-knowledge 사용
+
+**설정**:
+```bash
+# make-jira output
+/home/bwyoon/para/archive/rca-knowledge/docs/analysis/
+├── testing/
+│   └── 2026-01-27-parallel-testing-xdist.md
+├── infrastructure/
+└── documentation/
+
+# make-confluence output (동일 위치)
+/home/bwyoon/para/archive/rca-knowledge/docs/analysis/
+├── testing/
+│   └── 2026-01-27-confluence-parallel-testing-guide.md
+└── ...
+
+# 메타데이터 자동 업데이트
+/home/bwyoon/para/archive/rca-knowledge/_index.json
+```
+
+**효과**:
+- ⏱️ 즉시 구현 (5분)
+- 📊 90% 요구사항 만족
+- 🔗 여러 프로젝트 지원
+- 🤖 자동화 가능
+
+### 장기 (2-4주): 새 team-knowledge 저장소 (최적)
+
+**생성**:
+```bash
+mkdir -p /home/bwyoon/para/archive/team-knowledge
+```
+
+**구조** (권장):
+```
+team-knowledge/
+├── docs/
+│   ├── jira-records/        (자동 생성)
+│   │   ├── 2026-01/
+│   │   │   ├── PROJ-245-parallel-testing.md
+│   │   │   └── PROJ-246-docker-optimization.md
+│   │   └── 2026-02/
+│   │
+│   ├── confluence-guides/   (자동 생성)
+│   │   ├── testing/
+│   │   │   ├── parallel-testing-with-xdist.md
+│   │   │   └── pytest-fixtures-guide.md
+│   │   ├── infrastructure/
+│   │   └── documentation/
+│   │
+│   └── team-knowledge-base/
+│       ├── testing/
+│       ├── infrastructure/
+│       └── best-practices/
+│
+├── metadata/
+│   ├── _index.json          (전체 인덱스)
+│   ├── projects.json        (프로젝트 맵핑)
+│   └── categories.json      (카테고리 정의)
+│
+├── scripts/
+│   ├── update_index.py      (인덱스 자동 생성)
+│   └── sync_jira.py         (동기화)
+│
+├── README.md                (사용 방법)
+└── CONTRIBUTING.md          (팀 기여 가이드)
+```
+
+**효과**:
+- ⏱️ 2-4주 준비
+- 📊 100% 요구사항 만족
+- 🤖 완전 자동화
+- 📈 확장성 우수
+
+---
+
+## make-jira/make-confluence 스킬 업데이트
+
+### make-jira 스킬 (수정)
+
+```yaml
+# 기존: docs/abc-review-C.md에 있던 설정
+# 수정: SSOT 저장소로 변경
+
+output_path: |
+  rca-knowledge 사용 (단기):
+  /home/bwyoon/para/archive/rca-knowledge/docs/analysis/{category}/{date}-{jira_key}-{title}.md
+
+  team-knowledge 사용 (장기):
+  /home/bwyoon/para/archive/team-knowledge/docs/jira-records/{year}-{month}/{jira_key}-{title}.md
+
+metadata_location: |
+  rca-knowledge:
+  /home/bwyoon/para/archive/rca-knowledge/_index.json
+
+  team-knowledge:
+  /home/bwyoon/para/archive/team-knowledge/metadata/_index.json
+```
+
+### make-confluence 스킬 (수정)
+
+```yaml
+output_path: |
+  rca-knowledge 사용 (단기):
+  /home/bwyoon/para/archive/rca-knowledge/docs/analysis/{category}/{date}-{title}.md
+
+  team-knowledge 사용 (장기):
+  /home/bwyoon/para/archive/team-knowledge/docs/confluence-guides/{category}/{title}.md
+
+structure: |
+  team-knowledge/
+  ├── docs/confluence-guides/
+  │   ├── testing/
+  │   │   ├── parallel-testing-with-xdist.md
+  │   │   └── pytest-fixtures-guide.md
+  │   ├── infrastructure/
+  │   │   ├── docker-optimization.md
+  │   │   └── kubernetes-setup.md
+  │   └── documentation/
+  │       └── ...
+```
+
+---
+
+## 비교표
+
+| 항목 | rca-knowledge | til | 새 team-knowledge |
+|------|--------------|-----|-------------------|
+| **목적** | 문제 분석 | 개인 학습 | 팀 지식 기반 |
+| **즉시 사용** | ✅ (지금) | ❌ | ❌ (2주 후) |
+| **구조 복잡도** | 낮음 | 높음 (Jekyll) | 중간 |
+| **자동화 가능** | 가능 ✅ | 어려움 | 최적 ⭐ |
+| **메타데이터** | JSON ✅ | YAML | JSON ✅ |
+| **팀 협업** | 가능 | 어려움 | 최적 |
+| **확장성** | 좋음 | 고정적 | 우수 |
+| **자동화 지원** | 부분 | 낮음 | 완전 |
+
+---
+
+## 🚀 즉시 실행 계획
+
+### Week 1: rca-knowledge 사용
+
+```bash
+# 1. 디렉토리 구조 생성
+mkdir -p /home/bwyoon/para/archive/rca-knowledge/docs/analysis/{testing,infrastructure,documentation}
+
+# 2. make-jira 설정
+# output: /home/bwyoon/para/archive/rca-knowledge/docs/analysis/testing/2026-01-27-PROJ-245-parallel-testing.md
+
+# 3. make-confluence 설정
+# output: /home/bwyoon/para/archive/rca-knowledge/docs/analysis/testing/2026-01-27-parallel-testing-guide.md
+
+# 4. _index.json 자동 업데이트
+cat > /home/bwyoon/para/archive/rca-knowledge/_index.json << 'EOF'
+{
+  "version": "1.0",
+  "last_updated": "2026-01-27",
+  "documents": [
+    {
+      "id": "parallel-testing-xdist",
+      "title": "Parallel Testing with pytest-xdist",
+      "date": "2026-01-27",
+      "category": "testing",
+      "projects": ["dotfiles", "other-projects"],
+      "jira_key": "PROJ-245",
+      "source": "make-jira/make-confluence",
+      "path": "docs/analysis/testing/2026-01-27-parallel-testing-xdist.md"
+    }
+  ]
+}
+EOF
+```
+
+### Week 2-4: team-knowledge 저장소 준비
+
+```bash
+# 1. 새 저장소 생성
+mkdir -p /home/bwyoon/para/archive/team-knowledge
+cd /home/bwyoon/para/archive/team-knowledge
+git init
+
+# 2. 폴더 구조 생성
+mkdir -p docs/jira-records/{2026-01,2026-02}
+mkdir -p docs/confluence-guides/{testing,infrastructure,documentation}
+mkdir -p docs/team-knowledge-base/{testing,infrastructure,best-practices}
+mkdir -p metadata
+mkdir -p scripts
+
+# 3. 기본 파일 작성
+touch README.md CONTRIBUTING.md
+touch metadata/_index.json metadata/projects.json metadata/categories.json
+touch scripts/update_index.py scripts/sync_jira.py
+
+# 4. rca-knowledge에서 마이그레이션 (선택)
+# (필요시 기존 파일 복사)
+```
+
+---
+
+## 최종 결론
+
+| 시기 | 선택 | 이유 |
+|------|------|------|
+| **즉시** | rca-knowledge | 즉시 구현 가능 (5분), 90% 만족 |
+| **2-4주 후** | team-knowledge | 최적 구조, 완전 자동화, 100% 만족 |
+
+**추천**:
+1. 이번 주: rca-knowledge로 시작
+2. 다음 주: team-knowledge 구조 설계
+3. 3주 후: 마이그레이션 (점진적)
+
+---
+
+**업데이트**: 2026-01-27
+**상태**: Ready for Implementation
+**다음 단계**: Week 1 make-jira/make-confluence 설정 시작
