@@ -30,7 +30,8 @@
 - **DO**: Run `tox` before committing.
 - **DO**: Use environment variables (e.g., `$SHELL_COMMON`) or absolute paths when sourcing files across shell contexts.
 - **DO**: Test scripts in both bash and zsh for cross-shell compatibility.
-- **DO**: Place shell functions in `shell-common/functions/` (auto-sourced by main.bash/main.zsh).
+- **DO**: Place aliases in `shell-common/aliases/` (auto-sourced first by main.bash/main.zsh).
+- **DO**: Place shell functions in `shell-common/functions/` (auto-sourced after aliases).
 - **DO**: Place executable utility scripts in `shell-common/tools/custom/` (run explicitly, not sourced).
 - **DO**: Add direct-exec guard to ALL executable scripts in `shell-common/tools/custom/` (see Guard Pattern below).
 - **DON'T**: Use raw `echo` or `printf` (violates UX consistency).
@@ -43,11 +44,19 @@
 
 **CRITICAL**: Correct directory placement prevents "function not found" and "command not found" errors.
 
+### shell-common/aliases/ - AUTO-SOURCED ALIASES
+Loaded automatically by `main.bash` and `main.zsh` during shell initialization (before functions).
+
+**Use this for:** Command aliases, shorthand commands, wrapper aliases to external tools.
+**Pattern**: `shell-common/aliases/COMMAND_aliases.sh` (only `alias` statements, no functions).
+**CRITICAL**: Aliases MUST be in this directory, NEVER in `shell-common/functions/`
+
 ### shell-common/functions/ - AUTO-SOURCED FUNCTIONS
-Loaded automatically by `main.bash` and `main.zsh` during shell initialization.
+Loaded automatically by `main.bash` and `main.zsh` during shell initialization (after aliases).
 
 **Use this for:** Commands that users call from the terminal, wrapper functions, helper functions.
 **Pattern**: `shell-common/functions/COMMAND_help.sh` or `shell-common/functions/COMMAND.sh`.
+**CRITICAL**: Functions MUST be in this directory, NEVER mix with aliases.
 
 ### shell-common/tools/custom/ - EXECUTABLE UTILITY SCRIPTS
 Run explicitly as scripts, NOT auto-sourced. Used for development tools, CLI utilities, analysis scripts.
@@ -61,9 +70,10 @@ Auto-sourced. Thin wrappers around system tools or external packages.
 **Use this for:** Wrapper functions for external CLIs (npm, pip, etc.), system tool integrations.
 
 ### Decision Tree
-1. Will users call this as a command? -> `shell-common/functions/`
-2. Is this a standalone utility script? -> `shell-common/tools/custom/`
-3. Is this a wrapper for an external tool? -> `shell-common/tools/external/`
+1. Is this an alias (shorthand for existing command)? -> `shell-common/aliases/`
+2. Will users call this as a function? -> `shell-common/functions/`
+3. Is this a standalone utility script? -> `shell-common/tools/custom/`
+4. Is this a wrapper function for an external tool? -> `shell-common/tools/external/`
 
 ## Direct-Exec Guard Pattern (CRITICAL)
 

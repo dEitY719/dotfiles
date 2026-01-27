@@ -133,6 +133,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[category_help]="${HELP_DESCRIPTIONS[category_help]:-Show help topics by category}"
     HELP_DESCRIPTIONS[register_help]="${HELP_DESCRIPTIONS[register_help]:-Register help topic descriptions}"
     HELP_DESCRIPTIONS[work_log_help]="${HELP_DESCRIPTIONS[work_log_help]:-Work log tracking for non-development activities}"
+    HELP_DESCRIPTIONS[work_help]="${HELP_DESCRIPTIONS[work_help]:-Work management system integration (make-jira, make-confluence, work-log)}"
 }
 
 # ═══════════════════════════════════════════════════════════════
