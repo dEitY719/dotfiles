@@ -63,6 +63,32 @@ class TestHelpTopicsBasic:
         result = shell_runner(shell, "alias my-help")
         assert result.exit_code == 0, f"{shell}: my-help alias not defined"
 
+    def test_my_help_dash_command_works_with_no_aliases_in_zsh(self, shell_runner):
+        """Verify `my-help` works in zsh even when alias expansion is disabled."""
+        result = shell_runner("zsh", "setopt no_aliases; my-help")
+        assert result.exit_code == 0, f"zsh: my-help failed with exit code {result.exit_code}"
+        assert "Dotfiles Help Functions" in result.stdout
+
+    def test_my_help_dash_command_survives_conflicting_alias_in_zsh(self, shell_runner):
+        """Verify sourcing `my_help.sh` doesn't fail even if `my-help` alias already exists."""
+        cmd = (
+            "unfunction my-help >/dev/null 2>&1 || true; "
+            "alias my-help=\"echo should_not_run\"; "
+            "source ${SHELL_COMMON}/functions/my_help.sh; "
+            "setopt no_aliases; "
+            "my-help"
+        )
+        result = shell_runner("zsh", cmd)
+        assert result.exit_code == 0
+        assert "Dotfiles Help Functions" in result.stdout
+
+    def test_my_help_works_under_strict_zsh_options(self, shell_runner):
+        """`my-help` should work even with common strict options enabled."""
+        cmd = "setopt err_exit pipe_fail noclobber; my-help"
+        result = shell_runner("zsh", cmd)
+        assert result.exit_code == 0
+        assert "Available help commands" in result.stdout
+
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_help_descriptions_initialized(self, shell_runner, shell):
         """Verify that HELP_DESCRIPTIONS associative array is initialized."""

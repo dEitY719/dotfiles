@@ -44,8 +44,8 @@ fi
 # ═══════════════════════════════════════════════════════════════
 
 # Register a help function
-# Usage: register_help "function_name" "Description of function"
-register_help() {
+# Usage: _register_help "function_name" "Description of function"
+_register_help() {
     local func_name="$1"
     local description="$2"
     HELP_DESCRIPTIONS["$func_name"]="$description"
@@ -63,8 +63,20 @@ get_help_description() {
 # ═══════════════════════════════════════════════════════════════
 
 _get_help_functions() {
-    # bash/zsh compatible: use compgen
-    compgen -A function | { grep 'help$' || true; } | LC_ALL=C sort
+    # Prefer bash builtin when available.
+    if command -v compgen >/dev/null 2>&1; then
+        compgen -A function | { grep 'help$' || true; } | LC_ALL=C sort
+        return 0
+    fi
+
+    # zsh fallback: compgen is not available unless bashcompinit is enabled.
+    if [ -n "$ZSH_VERSION" ]; then
+        # NOTE: Use eval to avoid zsh-only syntax being parsed by bash at source time.
+        eval 'print -rl -- ${(k)functions}' | { grep 'help$' || true; } | LC_ALL=C sort
+        return 0
+    fi
+
+    return 0
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -129,9 +141,25 @@ _my_help_show_all() {
     ux_header "Dotfiles Help Functions"
 
     # Collect help functions (using temp file instead of array)
-    local temp_funcs="/tmp/.help_funcs_$$"
-    local temp_raw="/tmp/.help_raw_$$"
-    > "$temp_funcs"
+    local tmp_dir="${TMPDIR:-/tmp}"
+    local temp_funcs
+    local temp_raw
+    local temp_sorted
+
+    if command -v mktemp >/dev/null 2>&1; then
+        temp_funcs=$(mktemp "${tmp_dir%/}/my_help_funcs.XXXXXX" 2>/dev/null) || temp_funcs="${tmp_dir%/}/.help_funcs_$$"
+        temp_raw=$(mktemp "${tmp_dir%/}/my_help_raw.XXXXXX" 2>/dev/null) || temp_raw="${tmp_dir%/}/.help_raw_$$"
+        temp_sorted=$(mktemp "${tmp_dir%/}/my_help_sorted.XXXXXX" 2>/dev/null) || temp_sorted="${tmp_dir%/}/.help_sorted_$$"
+    else
+        temp_funcs="${tmp_dir%/}/.help_funcs_$$"
+        temp_raw="${tmp_dir%/}/.help_raw_$$"
+        temp_sorted="${tmp_dir%/}/.help_sorted_$$"
+    fi
+
+    # Ensure clean slate even under noclobber.
+    rm -f "$temp_funcs" "$temp_raw" "$temp_sorted" 2>/dev/null || true
+    : > "$temp_funcs"
+    : > "$temp_raw"
 
     _get_help_functions > "$temp_raw"
 
@@ -148,7 +176,7 @@ _my_help_show_all() {
                     _*) ;;
                     *)
                         # Normalize to dash format for display
-                        local display_name
+                        local display_name=""
                         display_name=$(echo "$func_name" | tr '_' '-')
                         echo "$display_name" >> "$temp_funcs"
                         ;;
@@ -167,20 +195,21 @@ _my_help_show_all() {
     ux_section "Available help commands($unique_count)"
 
     # Display help functions with descriptions
-    sort -u "$temp_funcs" | while IFS= read -r func; do
+    sort -u "$temp_funcs" > "$temp_sorted"
+    while IFS= read -r func; do
         # Try both dash and underscore format for description lookup
         local desc="${HELP_DESCRIPTIONS[$func]}"
         if [ -z "$desc" ]; then
             # Try underscore format
-            local func_underscore
+            local func_underscore=""
             func_underscore=$(echo "$func" | tr '-' '_')
             desc="${HELP_DESCRIPTIONS[$func_underscore]}"
         fi
         desc="${desc:-⛔No description available}"
         printf "  ${UX_SUCCESS}%-30s${UX_RESET}  ${UX_MUTED}:${UX_RESET}  %s\n" "$func" "$desc"
-    done
+    done < "$temp_sorted"
 
-    rm -f "$temp_funcs"
+    rm -f "$temp_sorted" "$temp_funcs" 2>/dev/null || true
 
     ux_divider
 
@@ -193,10 +222,29 @@ _my_help_show_all() {
     ux_bullet "Display name will be normalized to dash format (docker-help)"
     ux_bullet "It will be automatically detected by ${UX_SUCCESS}my-help${UX_RESET}"
 
+    return 0
 }
 
 # Main help function - displays all registered commands or specific help
 my_help_impl() {
+    local rc=0
+
+    # Keep output clean even when users enable tracing (set -x / setopt xtrace).
+    local _my_help_restore_xtrace=0
+    if [ -n "$BASH_VERSION" ]; then
+        case "$-" in
+            *x*)
+                _my_help_restore_xtrace=1
+                set +x
+                ;;
+        esac
+    elif [ -n "$ZSH_VERSION" ]; then
+        if [[ -o xtrace ]]; then
+            _my_help_restore_xtrace=1
+            unsetopt xtrace
+        fi
+    fi
+
     # Register default descriptions (only once)
     if [ -z "${_HELP_DEFAULTS_REGISTERED}" ]; then
         _register_default_help_descriptions
@@ -205,61 +253,70 @@ my_help_impl() {
 
     if [ -z "$1" ]; then
         _my_help_show_all
-        return 0
-    fi
-
-    # If argument is provided, show specific help for that command
-    local cmd_name="$1"
-
-    # Prefer canonical underscore helpers to avoid alias-only lookups (bash cannot
-    # execute aliases when the name comes from parameter expansion)
-    local normalized
-    normalized=$(echo "$cmd_name" | tr '-' '_')
-    local helper_name="$normalized"
-    case "$helper_name" in
-        *_help) ;;
-        *) helper_name="${helper_name}_help" ;;
-    esac
-
-    if typeset -f "$helper_name" >/dev/null 2>&1; then
-        "$helper_name"
-        return 0
-    fi
-
-    # Some modules only expose a dash-style alias (e.g., apt-help). Safely detect
-    # aliases/functions using dash notation and execute them via eval so alias
-    # expansion occurs in both bash and zsh.
-    case "$cmd_name" in
-        *[!A-Za-z0-9_-]*) ;;
-        *)
-            local dash_name
-            dash_name=$(echo "$cmd_name" | tr '_' '-')
-            case "$dash_name" in
-                *-help) ;;
-                *) dash_name="${dash_name}-help" ;;
-            esac
-            if type "$dash_name" >/dev/null 2>&1; then
-                eval "$dash_name"
-                return 0
-            fi
-            ;;
-    esac
-
-    if typeset -f "$cmd_name" >/dev/null 2>&1; then
-        "$cmd_name"
-        return 0
-    fi
-
-    if type "$cmd_name" >/dev/null 2>&1; then
-        # Try calling command with --help
-        "$cmd_name" --help 2>/dev/null || {
-            ux_info "Help for '${cmd_name}' not available."
-            ux_bullet "Try: ${UX_BOLD}$cmd_name --help${UX_RESET} or ${UX_BOLD}$cmd_name -h${UX_RESET}"
-        }
+        rc=$?
     else
-        ux_error "Command '$cmd_name' not found."
-        return 1
+        # If argument is provided, show specific help for that command
+        local cmd_name="$1"
+
+        # Prefer canonical underscore helpers to avoid alias-only lookups (bash cannot
+        # execute aliases when the name comes from parameter expansion)
+        local normalized
+        normalized=$(echo "$cmd_name" | tr '-' '_')
+        local helper_name="$normalized"
+        case "$helper_name" in
+            *_help) ;;
+            *) helper_name="${helper_name}_help" ;;
+        esac
+
+        if typeset -f "$helper_name" >/dev/null 2>&1; then
+            "$helper_name"
+            rc=$?
+        else
+            # Some modules only expose a dash-style alias (e.g., apt-help). Safely detect
+            # aliases/functions using dash notation and execute them via eval so alias
+            # expansion occurs in both bash and zsh.
+            case "$cmd_name" in
+                *[!A-Za-z0-9_-]*)
+                    rc=1
+                    ;;
+                *)
+                    local dash_name
+                    dash_name=$(echo "$cmd_name" | tr '_' '-')
+                    case "$dash_name" in
+                        *-help) ;;
+                        *) dash_name="${dash_name}-help" ;;
+                    esac
+                    if type "$dash_name" >/dev/null 2>&1; then
+                        eval "$dash_name"
+                        rc=$?
+                    elif typeset -f "$cmd_name" >/dev/null 2>&1; then
+                        "$cmd_name"
+                        rc=$?
+                    elif type "$cmd_name" >/dev/null 2>&1; then
+                        # Try calling command with --help
+                        "$cmd_name" --help 2>/dev/null || {
+                            ux_info "Help for '${cmd_name}' not available."
+                            ux_bullet "Try: ${UX_BOLD}$cmd_name --help${UX_RESET} or ${UX_BOLD}$cmd_name -h${UX_RESET}"
+                        }
+                        rc=0
+                    else
+                        ux_error "Command '$cmd_name' not found."
+                        rc=1
+                    fi
+                    ;;
+            esac
+        fi
     fi
+
+    if [ "$_my_help_restore_xtrace" = "1" ]; then
+        if [ -n "$BASH_VERSION" ]; then
+            set -x
+        elif [ -n "$ZSH_VERSION" ]; then
+            setopt xtrace
+        fi
+    fi
+
+    return "$rc"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -267,7 +324,7 @@ my_help_impl() {
 # ═══════════════════════════════════════════════════════════════
 
 # Show help organized by category
-category_help() {
+_category_help() {
     local category="${1:-all}"
 
     case "$category" in
