@@ -5,6 +5,64 @@ set -uo pipefail
 
 # Configuration (dotfiles project - bash configuration management)
 
+# Helper function to check help function integrity
+_check_help_integrity() {
+  local repo_root
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+  local my_help_path="$repo_root/shell-common/functions/my_help.sh"
+  if [ ! -f "$my_help_path" ]; then
+    echo "ERROR: my_help.sh not found."
+    return 1
+  fi
+
+  local found=0
+  local checked=0
+  local violations=""
+
+  # Find all public help functions in shell-common/functions (exclude internal _* functions)
+  while IFS= read -r file; do
+    [ -z "$file" ] && continue
+
+    # Extract function names ending with 'help' (excluding those starting with _)
+    local funcs
+    funcs=$(grep -E '^[[:space:]]*(function[[:space:]]+)?[a-zA-Z][a-zA-Z0-9_-]*help[[:space:]]*(\(\))?[[:space:]]*\{' "$file" | \
+      sed -E 's/^[[:space:]]*(function[[:space:]]+)?//; s/[[:space:]]*(\(\))?[[:space:]]*\{.*//' | \
+      grep -v '^_')
+
+    while read -r func; do
+      [ -z "$func" ] && continue
+      ((checked++))
+
+      # Check if registered in my_help.sh
+      # Try both underscore and dash versions since they can be registered either way
+      local dash_version="${func//_/-}"
+      local underscore_version="${func//-/_}"
+
+      if ! grep -Eq "HELP_DESCRIPTIONS\\[\"?${func}\"?\\]|HELP_DESCRIPTIONS\\[\"?${dash_version}\"?\\]|HELP_DESCRIPTIONS\\[\"?${underscore_version}\"?\\]" "$my_help_path"; then
+        violations="${violations}  ⚠ $file: Public function '$func' not registered in HELP_DESCRIPTIONS\\n"
+        ((found++))
+      fi
+    done <<< "$funcs"
+  done < <(find "$repo_root/shell-common/functions" -name "*.sh" -type f)
+
+  if [ $checked -eq 0 ]; then
+    echo "No help functions found."
+    return 0
+  fi
+
+  if [ $found -eq 0 ]; then
+    echo "✓ All $checked help functions are properly registered."
+    return 0
+  else
+    echo ""
+    echo "⚠ Found $found unregistered help function(s) out of $checked checked:"
+    echo ""
+    echo -e "$violations"
+    return 1
+  fi
+}
+
 # Helper function to check for unused internal functions
 _check_deadcode() {
   local repo_root
@@ -109,6 +167,13 @@ case "$cmd" in
     fi
     ;;
 
+  lint-helpfunc)
+    echo "Checking help function integrity (*help)..."
+    echo ""
+    _check_help_integrity
+    EXIT_CODE=$?
+    ;;
+
   lint-deadcode)
     echo "Checking for potentially unused internal functions (_*)..."
     echo ""
@@ -153,14 +218,15 @@ case "$cmd" in
 Usage: ./tools/dev.sh <command>
 
 Commands:
-  test           Run test suite (tests/test)
-  format         Format and lint Python code (tox -e ruff)
-  lint           Run linters (ruff, mypy, shellcheck) - excludes markdown
-  mdlint         Run markdown linter separately (tox -e mdlint)
-  lint-deadcode  Check for unused internal functions (_*) in shell-common/functions
-  setup          Run setup script (symlinks only)
-  install        Run full installation
-  shell          Enter project shell
+  test            Run test suite (tests/test)
+  format          Format and lint Python code (tox -e ruff)
+  lint            Run linters (ruff, mypy, shellcheck) - excludes markdown
+  mdlint          Run markdown linter separately (tox -e mdlint)
+  lint-helpfunc   Check help functions are registered in HELP_DESCRIPTIONS
+  lint-deadcode   Check for unused internal functions (_*) in shell-common/functions
+  setup           Run setup script (symlinks only)
+  install         Run full installation
+  shell           Enter project shell
 
 Examples:
   ./tools/dev.sh test
@@ -169,6 +235,7 @@ Examples:
   ./tools/dev.sh format
   ./tools/dev.sh lint
   ./tools/dev.sh mdlint
+  ./tools/dev.sh lint-helpfunc
   ./tools/dev.sh lint-deadcode
   ./tools/dev.sh setup
   ./tools/dev.sh install
