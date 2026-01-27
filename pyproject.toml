@@ -102,7 +102,7 @@ disallow_untyped_calls = false # 타입 힌트가 없는 함수 호출에 경고
 
 # mypy 검사에서 제외할 디렉터리 및 파일 패턴 (정규 표현식)
 # (?x) 플래그는 정규 표현식 내에서 공백과 주석을 허용하여 가독성을 높입니다.
-exclude = '(?x)( \.venv/ | \.tox/ | \.vscode/ | \.git/ | build/ | config/tox/ | tests )'
+exclude = '(?x)( \.venv/ | \.tox/ | \.vscode/ | \.git/ | build/ | config/tox/ | tests | claude/ )'
 
 
 [tool.ruff]
