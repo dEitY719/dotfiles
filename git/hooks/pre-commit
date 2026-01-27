@@ -55,8 +55,9 @@ AUTO_EXEC_SOURCED_FILE=$(mktemp "$TMPDIR/auto_exec_sourced_XXXXXX.txt")
 PURITY_VIOLATIONS_FILE=$(mktemp "$TMPDIR/purity_violations_XXXXXX.txt")
 BACKUP_FILES_FILE=$(mktemp "$TMPDIR/backup_files_XXXXXX.txt")
 HELP_INTEGRITY_VIOLATIONS_FILE=$(mktemp "$TMPDIR/help_integrity_violations_XXXXXX.txt")
+DIRECT_EXEC_GUARD_FILE=$(mktemp "$TMPDIR/direct_exec_guard_XXXXXX.txt")
 
-trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$AUTO_EXEC_SOURCED_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE" "$HELP_INTEGRITY_VIOLATIONS_FILE"' EXIT
+trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$AUTO_EXEC_SOURCED_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE" "$HELP_INTEGRITY_VIOLATIONS_FILE" "$DIRECT_EXEC_GUARD_FILE"' EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Load check modules
@@ -84,6 +85,7 @@ source_check_or_exit "${CHECKS_DIR}/library_purity_check.sh"
 source_check_or_exit "${CHECKS_DIR}/backup_file_check.sh"
 source_check_or_exit "${CHECKS_DIR}/help_integrity_check.sh"
 source_check_or_exit "${CHECKS_DIR}/auto_execution_check.sh"
+source_check_or_exit "${CHECKS_DIR}/direct_exec_guard_check.sh"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Get staged files (git diff --cached)
@@ -111,6 +113,7 @@ auto_exec_sourced_violations=0
 library_purity_violations=0
 backup_files_found=0
 help_integrity_violations=0
+direct_exec_guard_violations=0
 
 # 1) Shebang consistency for staged .sh files under shell-common/bash/zsh
 while IFS= read -r file; do
@@ -195,6 +198,13 @@ if ! check_backup_files "$REPO_ROOT" "$BACKUP_FILES_FILE" 2>/dev/null; then
     ((backup_files_found++))
 fi
 
+# 6) Direct-exec guard check: executable scripts must have proper guards
+while IFS= read -r file; do
+    if ! check_direct_exec_guard "$REPO_ROOT" "$TMPDIR" "$file" "$DIRECT_EXEC_GUARD_FILE" 2>/dev/null; then
+        ((direct_exec_guard_violations++))
+    fi
+done <<<"$STAGED_FILES"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Reporting and exit logic
 # ═══════════════════════════════════════════════════════════════════════════
@@ -203,7 +213,7 @@ echo ""
 echo -e "${BLUE}Pre-commit validation (staged files only)${NC}"
 echo ""
 
-blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + custom_tools_sourcing_violations + auto_exec_custom_violations + auto_exec_sourced_violations + library_purity_violations + help_integrity_violations))
+blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + custom_tools_sourcing_violations + auto_exec_custom_violations + auto_exec_sourced_violations + library_purity_violations + help_integrity_violations + direct_exec_guard_violations))
 warning_count=$((subshell_violations + wrapper_violations + ux_violations + backup_files_found))
 
 if [ $blocking_violations -eq 0 ]; then
@@ -308,6 +318,12 @@ fi
 if [ $help_integrity_violations -gt 0 ] && [ -s "$HELP_INTEGRITY_VIOLATIONS_FILE" ]; then
     echo -e "${RED}[BLOCKING] Help Integrity violations ($help_integrity_violations):${NC}"
     cat "$HELP_INTEGRITY_VIOLATIONS_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+if [ $direct_exec_guard_violations -gt 0 ] && [ -s "$DIRECT_EXEC_GUARD_FILE" ]; then
+    echo -e "${RED}[BLOCKING] Direct-exec guard violations ($direct_exec_guard_violations):${NC}"
+    cat "$DIRECT_EXEC_GUARD_FILE" | sed 's/^/  /'
     echo ""
 fi
 

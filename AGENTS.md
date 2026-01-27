@@ -32,6 +32,7 @@
 - **DO**: Test scripts in both bash and zsh for cross-shell compatibility.
 - **DO**: Place shell functions in `shell-common/functions/` (auto-sourced by main.bash/main.zsh).
 - **DO**: Place executable utility scripts in `shell-common/tools/custom/` (run explicitly, not sourced).
+- **DO**: Add direct-exec guard to ALL executable scripts in `shell-common/tools/custom/` (see Guard Pattern below).
 - **DON'T**: Use raw `echo` or `printf` (violates UX consistency).
 - **DON'T**: Hardcode paths; use `$HOME` or relative paths.
 - **DON'T**: Commit secrets or sensitive data.
@@ -63,6 +64,75 @@ Auto-sourced. Thin wrappers around system tools or external packages.
 1. Will users call this as a command? -> `shell-common/functions/`
 2. Is this a standalone utility script? -> `shell-common/tools/custom/`
 3. Is this a wrapper for an external tool? -> `shell-common/tools/external/`
+
+## Direct-Exec Guard Pattern (CRITICAL)
+
+**RULE**: All files in `shell-common/tools/custom/` MUST have a direct-exec guard at END of script.
+
+### Why This Matters
+- Prevents code execution when file is sourced (e.g., during initialization)
+- Avoids console pollution, side effects, and shell conflicts (p10k instant prompt, etc)
+- Required for POSIX shell compatibility (bash, zsh, sh)
+- **ENFORCED**: Pre-commit hook will reject files without proper guards
+
+### Required Pattern
+
+Place at **END of script**, after ALL function definitions:
+
+```bash
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+    main "$@"
+fi
+```
+
+### What Each Condition Does
+
+| Condition | When True | Scenario |
+|-----------|-----------|----------|
+| `"${BASH_SOURCE[0]}" = "$0"` | Script executed directly in bash | User runs: `./script.sh` or `bash script.sh` |
+| `-z "$BASH_SOURCE"` | BASH_SOURCE is empty (POSIX sh) | User runs: `sh script.sh` |
+| Both false | File being sourced | User runs: `source script.sh` or `.  script.sh` |
+
+### Example: Complete Executable Script
+
+```bash
+#!/usr/bin/env bash
+# tool-name.sh - Description
+
+# Try to load ux_lib
+if ! type ux_header >/dev/null 2>&1; then
+    if [ -n "$SHELL_COMMON" ] && [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
+        source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
+    fi
+fi
+
+# Function definitions
+main() {
+    ux_header "Tool Name"
+    ux_success "Operation completed"
+}
+
+# CRITICAL: Direct-exec guard (end of file)
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+    main "$@"
+fi
+```
+
+### Testing Your Guard
+
+```bash
+# Test 1: Direct execution (should run)
+./script.sh
+# Expected: Output from main()
+
+# Test 2: Sourcing (should NOT run main, only define functions)
+bash -c "source script.sh; type main"
+# Expected: "main is a function" (no other output)
+
+# Test 3: Zsh compatibility
+zsh -c "source script.sh; type main"
+# Expected: "main is a function" (no other output)
+```
 
 ## Bash/Zsh Compatibility Rules
 
