@@ -130,6 +130,8 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[ollama_help]="${HELP_DESCRIPTIONS[ollama_help]:-Ollama local LLM setup and usage}"
     HELP_DESCRIPTIONS[opencode_help]="${HELP_DESCRIPTIONS[opencode_help]:-OpenCode CLI setup and configuration}"
     HELP_DESCRIPTIONS[show_doc_help]="${HELP_DESCRIPTIONS[show_doc_help]:-Documentation viewer and manager commands}"
+    HELP_DESCRIPTIONS[category_help]="${HELP_DESCRIPTIONS[category_help]:-Show help topics by category}"
+    HELP_DESCRIPTIONS[register_help]="${HELP_DESCRIPTIONS[register_help]:-Register help topic descriptions}"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -139,6 +141,12 @@ _register_default_help_descriptions() {
 # Internal: Show all available commands
 _my_help_show_all() {
     ux_header "Dotfiles Help Functions"
+
+    # In zsh, users may enable strict options (e.g., noclobber) that break temp-file
+    # redirections. Make these option changes local to this function only.
+    if [ -n "$ZSH_VERSION" ]; then
+        setopt localoptions clobber 2>/dev/null || true
+    fi
 
     # Collect help functions (using temp file instead of array)
     local tmp_dir="${TMPDIR:-/tmp}"
@@ -320,30 +328,6 @@ my_help_impl() {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# Help Categories
-# ═══════════════════════════════════════════════════════════════
-
-# Show help organized by category
-_category_help() {
-    local category="${1:-all}"
-
-    case "$category" in
-        shell|zsh)
-            zsh-help --all 2>/dev/null || ux_error "zsh-help not available"
-            ;;
-        git)
-            git_help
-            ;;
-        system)
-            sys_help 2>/dev/null || ux_info "System help not available"
-            ;;
-        *)
-            _my_help_show_all
-            ;;
-    esac
-}
-
-# ═══════════════════════════════════════════════════════════════
 # Initial Help Descriptions
 # ═══════════════════════════════════════════════════════════════
 
@@ -352,3 +336,34 @@ HELP_DESCRIPTIONS[my_help_impl]="Main help system"
 
 # Alias for my-help format (using dash instead of underscore)
 alias my-help='my_help_impl'
+
+# zsh compatibility: when `setopt no_aliases` is enabled, dash-style aliases won't expand.
+# Provide a narrow `command_not_found_handler` shim so typing `my-help` still works.
+if [ -n "$ZSH_VERSION" ]; then
+    if [ -z "${_DOTFILES_MY_HELP_CNF_INSTALLED:-}" ]; then
+        _DOTFILES_MY_HELP_CNF_INSTALLED=1
+
+        # Preserve any existing handler.
+        if typeset -f command_not_found_handler >/dev/null 2>&1; then
+            eval 'functions[_dotfiles_prev_command_not_found_handler]=$functions[command_not_found_handler]'
+        fi
+
+        command_not_found_handler() {
+            local cmd_name="$1"
+            shift || true
+
+            if [ "$cmd_name" = "my-help" ]; then
+                my_help_impl "$@"
+                return $?
+            fi
+
+            if typeset -f _dotfiles_prev_command_not_found_handler >/dev/null 2>&1; then
+                _dotfiles_prev_command_not_found_handler "$cmd_name" "$@"
+                return $?
+            fi
+
+            print -u2 -- "zsh: command not found: ${cmd_name}"
+            return 127
+        }
+    fi
+fi
