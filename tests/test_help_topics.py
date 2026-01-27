@@ -73,7 +73,7 @@ class TestHelpTopicsBasic:
         """Verify sourcing `my_help.sh` doesn't fail even if `my-help` alias already exists."""
         cmd = (
             "unfunction my-help >/dev/null 2>&1 || true; "
-            "alias my-help=\"echo should_not_run\"; "
+            'alias my-help="echo should_not_run"; '
             "source ${SHELL_COMMON}/functions/my_help.sh; "
             "setopt no_aliases; "
             "my-help"
