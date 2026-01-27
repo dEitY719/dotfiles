@@ -1,0 +1,47 @@
+# Work Management System - Remaining Tasks
+
+## ✅ COMPLETED (2026-01-27)
+- P1: SSOT Repository Setup (rca-knowledge directory structure + templates + _index.json v2.0)
+- P2-3: work-help() function + work-aliases.sh + my_help.sh registration
+- AGENTS.md improvements: shell-common/aliases/ rules + alias_location_check.sh
+
+## ⏳ TODO (Priority Order)
+
+### P2-3: work-log CLI Tool (4 hours) - PRIORITY #1
+Location: /home/bwyoon/dotfiles/shell-common/tools/custom/work_log.sh
+- Interactive mode: work-log add (with prompts)
+- Argument mode: work-log add SWINNOTEAM-903 -t coordination -c Communication -T 2.5h
+- List mode: work-log list --today
+- Validation: jira_key, time, type, category
+- Output format: [YYYY-MM-DD HH:MM:SS] [JIRA-KEY] | type | category | time | manual
+
+### P2-1: make-jira Claude Skill (6 hours)
+Location: /home/bwyoon/dotfiles/claude/skills/make-jira/
+- skill.md: invocation syntax + success criteria
+- instructions.md: 240+ lines (parsing + filtering + grouping + git log + template)
+- Input: ~/work_log.txt (post-commit format + manual entries)
+- Output: rca-knowledge/docs/jira-records/YYYY-W##-report.md
+
+### P2-2: make-confluence Claude Skill (6 hours)
+Location: /home/bwyoon/dotfiles/claude/skills/make-confluence/
+- skill.md: invocation syntax + success criteria
+- instructions.md: 240+ lines (file reading + metadata + section extraction + TL;DR)
+- Input: docs/technic/*.md or rca-knowledge/docs/analysis/*.md
+- Output: rca-knowledge/docs/confluence-guides/{category}/YYYY-MM-DD-{title}.md
+
+## Key Files
+- /home/bwyoon/dotfiles/shell-common/aliases/work-aliases.sh ✅
+- /home/bwyoon/dotfiles/shell-common/functions/work.sh ✅
+- /home/bwyoon/dotfiles/shell-common/functions/my_help.sh ✅
+- /home/bwyoon/dotfiles/AGENTS.md ✅ (updated)
+- /home/bwyoon/dotfiles/git/hooks/checks/alias_location_check.sh ✅
+- /home/bwyoon/dotfiles/git/hooks/pre-commit ✅ (updated)
+
+## Commands to Resume Tomorrow
+```bash
+exec bash  # Reload shell
+work-help  # Test integration
+make-jira  # Verify aliases
+```
+
+## Next Session: Start with P2-3 (work-log CLI)
