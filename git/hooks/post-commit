@@ -2,13 +2,16 @@
 # Post-commit hook: Automatic work log recording
 # Records JIRA key and time spent to ~/work_log.txt
 
-set -e
-
 # Get commit message
 MSG=$(git log -1 --pretty=%B)
 
-# Extract JIRA key (e.g., [PROJ-245])
-JIRA=$(echo "$MSG" | grep -oP '\[PROJ-\d+\]' | head -1)
+# Extract JIRA key (e.g., [PROJ-245]) - support multiple patterns
+JIRA=$(echo "$MSG" | grep -o '\[PROJ-[0-9]*\]' | head -1)
+
+# If no PROJ found, try other patterns
+if [ -z "$JIRA" ]; then
+    JIRA=$(echo "$MSG" | grep -o '\[.*-[0-9]*\]' | head -1)
+fi
 
 # Extract TimeSpent from metadata (e.g., TimeSpent: 4.5h)
 TIME=$(echo "$MSG" | grep "TimeSpent:" | sed 's/.*TimeSpent:\s*//;s/h.*/h/' | head -1)
@@ -29,12 +32,12 @@ TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 if [ -n "$JIRA" ]; then
     LOG_ENTRY="[$TIMESTAMP] $JIRA | $BRANCH | $TIME | $HASH"
 
-    # Append to work log
-    echo "$LOG_ENTRY" >> ~/work_log.txt
+    # Append to work log (create if doesn't exist)
+    echo "$LOG_ENTRY" >> ~/work_log.txt 2>/dev/null
 
-    # Also log category and branch (optional)
+    # Also log category if present
     if [ -n "$CATEGORY" ]; then
-        echo "  └─ Category: $CATEGORY" >> ~/work_log.txt
+        echo "  └─ Category: $CATEGORY" >> ~/work_log.txt 2>/dev/null
     fi
 fi
 
