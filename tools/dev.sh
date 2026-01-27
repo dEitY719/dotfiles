@@ -5,6 +5,62 @@ set -uo pipefail
 
 # Configuration (dotfiles project - bash configuration management)
 
+# Helper function to check for unused internal functions
+_check_deadcode() {
+  local repo_root
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+  if [ ! -d "$repo_root/shell-common/functions" ]; then
+    echo "ERROR: shell-common/functions directory not found."
+    return 1
+  fi
+
+  local found=0
+  local checked=0
+
+  while IFS= read -r file; do
+    [ -z "$file" ] && continue
+
+    # Find all internal functions: ^_function_name()
+    while IFS= read -r line_num line_text; do
+      [ -z "$line_num" ] && continue
+
+      # Extract function name
+      local func_name
+      func_name=$(echo "$line_text" | sed -E 's/^[[:space:]]*([a-z_][a-z0-9_]*)\(\).*/\1/')
+
+      ((checked++))
+
+      # Count occurrences in entire repo (grepping for the function name)
+      # Use word boundaries to avoid partial matches
+      local count
+      count=$(grep -rw "$func_name" "$repo_root" \
+        --include="*.sh" --include="*.zsh" --include="*.bash" 2>/dev/null | \
+        wc -l)
+
+      # If only 1 match (the definition line itself), potentially unused
+      if [ "$count" -eq 1 ]; then
+        local file_relative
+        file_relative="${file#$repo_root/}"
+        echo "  ⚠ $file_relative:$line_num - Potentially unused: $func_name()"
+        ((found++))
+      fi
+    done < <(grep -n "^[[:space:]]*_[a-z_][a-z0-9_]*()[[:space:]]*{" "$file")
+  done < <(find "$repo_root/shell-common/functions" -name "*.sh" -type f)
+
+  echo ""
+  if [ $checked -eq 0 ]; then
+    echo "No internal functions found."
+    return 0
+  elif [ $found -eq 0 ]; then
+    echo "✓ All $checked internal functions are in use."
+    return 0
+  else
+    echo "⚠ Found $found potentially unused internal function(s) out of $checked checked."
+    return 1
+  fi
+}
+
 cmd="${1:-help}"
 EXIT_CODE=0
 
@@ -53,6 +109,13 @@ case "$cmd" in
     fi
     ;;
 
+  lint-deadcode)
+    echo "Checking for potentially unused internal functions (_*)..."
+    echo ""
+    _check_deadcode
+    EXIT_CODE=$?
+    ;;
+
   setup)
     echo "Running setup (symlinks)..."
     if [ -f ./setup.sh ]; then
@@ -90,13 +153,14 @@ case "$cmd" in
 Usage: ./tools/dev.sh <command>
 
 Commands:
-  test         Run test suite (tests/test)
-  format       Format and lint Python code (tox -e ruff)
-  lint         Run linters (ruff, mypy, shellcheck) - excludes markdown
-  mdlint       Run markdown linter separately (tox -e mdlint)
-  setup        Run setup script (symlinks only)
-  install      Run full installation
-  shell        Enter project shell
+  test           Run test suite (tests/test)
+  format         Format and lint Python code (tox -e ruff)
+  lint           Run linters (ruff, mypy, shellcheck) - excludes markdown
+  mdlint         Run markdown linter separately (tox -e mdlint)
+  lint-deadcode  Check for unused internal functions (_*) in shell-common/functions
+  setup          Run setup script (symlinks only)
+  install        Run full installation
+  shell          Enter project shell
 
 Examples:
   ./tools/dev.sh test
@@ -105,6 +169,7 @@ Examples:
   ./tools/dev.sh format
   ./tools/dev.sh lint
   ./tools/dev.sh mdlint
+  ./tools/dev.sh lint-deadcode
   ./tools/dev.sh setup
   ./tools/dev.sh install
 
