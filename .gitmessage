@@ -1,0 +1,17 @@
+[JIRA-XXX] type: description
+
+상세 설명
+- 주요 변경사항 1
+- 주요 변경사항 2
+
+메타정보:
+- Category: {Testing/Infrastructure/Documentation/Performance/Security/Other}
+- TimeSpent: {시간}h
+- WorkLogTime: {시간}h
+- Audience: {All/Dev/QA/Internal}
+
+태그 (선택):
+- [결정] 중요한 의사결정
+- [변경] 주요 변경사항
+- [리스크] 잠재적 위험
+- [검증] 테스트/검증 방법
