@@ -77,7 +77,13 @@ work_log_help() {
     ux_info "Use these entries for weekly reports and time tracking"
 }
 
-# Only call function if this script is executed directly (not sourced)
-if [ "${0##*/}" = "work-log-help.sh" ]; then
-    work_log_help
-fi
+# NOTE: This script defines the work_log_help function only.
+# It should NEVER auto-execute when sourced.
+#
+# The function is invoked by:
+# 1. my_help_impl (from my_help.sh): work_log_help
+# 2. work-log help: bash /path/to/work_log.sh help
+# 3. Explicit user call: work_log_help
+#
+# Reason: Auto-execution during zsh initialization causes p10k instant prompt
+# conflicts and pollutes shell startup with help text.

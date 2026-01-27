@@ -51,11 +51,12 @@ ALIAS_CONFLICT_FILE=$(mktemp "$TMPDIR/alias_conflict_XXXXXX.txt")
 WRAPPER_VIOLATIONS_FILE=$(mktemp "$TMPDIR/wrapper_violations_XXXXXX.txt")
 CUSTOM_TOOLS_SOURCING_FILE=$(mktemp "$TMPDIR/custom_tools_sourcing_XXXXXX.txt")
 AUTO_EXEC_CUSTOM_FILE=$(mktemp "$TMPDIR/auto_exec_custom_XXXXXX.txt")
+AUTO_EXEC_SOURCED_FILE=$(mktemp "$TMPDIR/auto_exec_sourced_XXXXXX.txt")
 PURITY_VIOLATIONS_FILE=$(mktemp "$TMPDIR/purity_violations_XXXXXX.txt")
 BACKUP_FILES_FILE=$(mktemp "$TMPDIR/backup_files_XXXXXX.txt")
 HELP_INTEGRITY_VIOLATIONS_FILE=$(mktemp "$TMPDIR/help_integrity_violations_XXXXXX.txt")
 
-trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE" "$HELP_INTEGRITY_VIOLATIONS_FILE"' EXIT
+trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$AUTO_EXEC_SOURCED_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE" "$HELP_INTEGRITY_VIOLATIONS_FILE"' EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Load check modules
@@ -82,6 +83,7 @@ source_check_or_exit "${CHECKS_DIR}/custom_tools_entrypoint_check.sh"
 source_check_or_exit "${CHECKS_DIR}/library_purity_check.sh"
 source_check_or_exit "${CHECKS_DIR}/backup_file_check.sh"
 source_check_or_exit "${CHECKS_DIR}/help_integrity_check.sh"
+source_check_or_exit "${CHECKS_DIR}/auto_execution_check.sh"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Get staged files (git diff --cached)
@@ -105,6 +107,7 @@ alias_conflict_violations=0
 wrapper_violations=0
 custom_tools_sourcing_violations=0
 auto_exec_custom_violations=0
+auto_exec_sourced_violations=0
 library_purity_violations=0
 backup_files_found=0
 help_integrity_violations=0
@@ -163,6 +166,11 @@ while IFS= read -r file; do
         ((wrapper_violations++))
     fi
 
+    # Check for auto-execution in sourced files (functions, integrations)
+    if ! check_auto_execution_in_sourced_files "$REPO_ROOT" "$TMPDIR" "$file" "$AUTO_EXEC_SOURCED_FILE" 2>/dev/null; then
+        ((auto_exec_sourced_violations++))
+    fi
+
     if ! check_library_purity "$REPO_ROOT" "$TMPDIR" "$file" "$PURITY_VIOLATIONS_FILE" 2>/dev/null; then
         ((library_purity_violations++))
     fi
@@ -195,7 +203,7 @@ echo ""
 echo -e "${BLUE}Pre-commit validation (staged files only)${NC}"
 echo ""
 
-blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + custom_tools_sourcing_violations + auto_exec_custom_violations + library_purity_violations + help_integrity_violations))
+blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + custom_tools_sourcing_violations + auto_exec_custom_violations + auto_exec_sourced_violations + library_purity_violations + help_integrity_violations))
 warning_count=$((subshell_violations + wrapper_violations + ux_violations + backup_files_found))
 
 if [ $blocking_violations -eq 0 ]; then
@@ -256,6 +264,12 @@ fi
 if [ $auto_exec_custom_violations -gt 0 ] && [ -s "$AUTO_EXEC_CUSTOM_FILE" ]; then
     echo -e "${RED}[BLOCKING] Auto-executable tools/custom scripts without guard ($auto_exec_custom_violations):${NC}"
     cat "$AUTO_EXEC_CUSTOM_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+if [ $auto_exec_sourced_violations -gt 0 ] && [ -s "$AUTO_EXEC_SOURCED_FILE" ]; then
+    echo -e "${RED}[BLOCKING] Auto-execution in sourced files ($auto_exec_sourced_violations):${NC}"
+    cat "$AUTO_EXEC_SOURCED_FILE" | sed 's/^/  /'
     echo ""
 fi
 
