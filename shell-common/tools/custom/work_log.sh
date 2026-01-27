@@ -47,7 +47,15 @@ else
 fi
 
 # Work log file location
-WORK_LOG_FILE="${HOME}/work_log.txt"
+# Absolute path to dotfiles managed work_log.txt (allows git tracking + multi-PC sync)
+# Falls back to ~/work_log.txt if symlink not configured
+WORK_LOG_DIR_DATA="${WORK_LOG_DIR}/../data"
+if [ -f "${WORK_LOG_DIR_DATA}/work_log.txt" ]; then
+    WORK_LOG_FILE="${WORK_LOG_DIR_DATA}/work_log.txt"
+else
+    # Fallback if dotfiles structure is different
+    WORK_LOG_FILE="${HOME}/work_log.txt"
+fi
 
 # =============================================================================
 # Validation Functions (from post-commit hook)

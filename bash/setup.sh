@@ -130,6 +130,39 @@ else
 
 fi
 
+# Setup work_log.txt symlink (git-tracked, multi-PC sync)
+# Points: ~/work_log.txt → dotfiles/shell-common/data/work_log.txt
+
+WORK_LOG_SRC="${DOTFILES_BASH_DIR}/../shell-common/data/work_log.txt"
+WORK_LOG_LINK="${HOME}/work_log.txt"
+
+if [ -f "$WORK_LOG_SRC" ]; then
+    # Ensure symlink exists
+    if [ -L "$WORK_LOG_LINK" ]; then
+        # Already a symlink, verify it points to correct location
+        current_target=$(readlink "$WORK_LOG_LINK")
+        if [ "$current_target" != "$WORK_LOG_SRC" ]; then
+            log_error "경고: ~/.work_log.txt는 다른 위치를 가리키고 있습니다"
+            log_dim "기존: $current_target"
+            log_dim "새로: $WORK_LOG_SRC"
+        else
+            log_debug "✓ work_log.txt 심볼릭 링크 확인됨"
+        fi
+    elif [ -f "$WORK_LOG_LINK" ]; then
+        # Regular file exists, backup and create symlink
+        backup_file="${WORK_LOG_LINK}.backup.$(date +%s)"
+        log_error "경고: ~/work_log.txt가 일반 파일입니다"
+        log_dim "백업: $backup_file로 이동"
+        mv "$WORK_LOG_LINK" "$backup_file"
+        create_symlink "$WORK_LOG_SRC" "$WORK_LOG_LINK"
+    else
+        # File doesn't exist, create symlink
+        create_symlink "$WORK_LOG_SRC" "$WORK_LOG_LINK"
+    fi
+else
+    log_error "경고: work_log.txt 소스를 찾을 수 없습니다: $WORK_LOG_SRC"
+fi
+
 log_debug "--- dotfiles setup 완료 ---"
 
 log_dim "변경 사항을 적용하려면 'source ~/.bashrc' 또는 셸을 재시작하십시오."

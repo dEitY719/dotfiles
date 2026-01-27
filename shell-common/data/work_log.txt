@@ -1,0 +1,12 @@
+[2026-01-27 17:29:01] [PROJ-999] | main | 0.5h | 7addef2
+  └─ Category: Testing
+[2026-01-27 17:29:07] [PROJ-999] | main | 0.5h | 7addef2
+  └─ Category: Testing
+[2026-01-27 18:23:45] [SWINNOTEAM-903] | coordination | Communication | 2.5h | manual
+  └─ Category: Communication
+[2026-01-27 18:24:43] [SWINNOTEAM-904] | assessment | Communication | 1.5h | manual
+  └─ Category: Communication
+[2026-01-27 18:25:31] [SWINNOTEAM-906] | meeting | Communication | 1h | manual
+  └─ Category: Communication
+[2026-01-27 18:34:47] [SWINNOTEAM-907] | coordination | Infrastructure | 1.5h | manual
+  └─ Category: Infrastructure

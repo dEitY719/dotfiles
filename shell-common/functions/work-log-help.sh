@@ -72,7 +72,8 @@ work_log_help() {
     ux_bullet "Team planning:  work-log add [ADMIN-001] -t coordination -c Coordination -T 2h"
 
     ux_divider
-    ux_info "All entries are appended to: ${UX_SUCCESS}${HOME}/work_log.txt${UX_RESET}"
+    ux_info "All entries stored in: ${UX_SUCCESS}${HOME}/work_log.txt${UX_RESET} (symlink → dotfiles)"
+    ux_info "Git tracking: Automatically versioned in dotfiles/shell-common/data/"
     ux_info "Use these entries for weekly reports and time tracking"
 }
 

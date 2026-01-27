@@ -1,6 +1,16 @@
 #!/bin/bash
 # Post-commit hook: Automatic work log recording
-# Records JIRA key and time spent to ~/work_log.txt
+# Records JIRA key and time spent to dotfiles-managed work_log.txt
+# Path: dotfiles/shell-common/data/work_log.txt (symlinked to ~/work_log.txt)
+
+# Get git repo root directory to locate work_log.txt
+GIT_ROOT="$(git rev-parse --show-toplevel)"
+WORK_LOG_FILE="${GIT_ROOT}/shell-common/data/work_log.txt"
+
+# Fallback to ~/work_log.txt if not in dotfiles structure
+if [ ! -f "$WORK_LOG_FILE" ]; then
+    WORK_LOG_FILE="${HOME}/work_log.txt"
+fi
 
 # Get commit message
 MSG=$(git log -1 --pretty=%B)
@@ -34,11 +44,11 @@ if [ -n "$JIRA" ]; then
     LOG_ENTRY="[$TIMESTAMP] $JIRA | $BRANCH | $TIME | $HASH"
 
     # Append to work log (create if doesn't exist)
-    echo "$LOG_ENTRY" >> ~/work_log.txt 2>/dev/null
+    echo "$LOG_ENTRY" >> "$WORK_LOG_FILE" 2>/dev/null
 
     # Also log category if present
     if [ -n "$CATEGORY" ]; then
-        echo "  └─ Category: $CATEGORY" >> ~/work_log.txt 2>/dev/null
+        echo "  └─ Category: $CATEGORY" >> "$WORK_LOG_FILE" 2>/dev/null
     fi
 fi
 
