@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # make_jira.sh - Generate weekly Jira reports from work logs
 #
 # Simple version handling both:

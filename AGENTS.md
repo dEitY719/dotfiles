@@ -175,6 +175,29 @@ zsh -c "source script.sh; type main"
 
 # Skills Management
 
+## Skill File Location (CRITICAL)
+
+**RULE**: All skills MUST be created in `./claude/skills/` within the dotfiles repository.
+
+### Why This Matters
+- `/home/bwyoon/.claude/skills/` is a mount point for `./dotfiles/claude/skills/`
+- Creating skills in `/home/bwyoon/.claude/skills/` bypasses git version control
+- Skills must be committed to dotfiles for team sharing and history
+
+### Correct Pattern
+```bash
+# Create skill in dotfiles repository
+mkdir -p /home/bwyoon/dotfiles/claude/skills/my-skill/
+echo "# My Skill" > /home/bwyoon/dotfiles/claude/skills/my-skill/skill.md
+echo "[instructions]" > /home/bwyoon/dotfiles/claude/skills/my-skill/instructions.md
+
+# Files automatically available at /home/bwyoon/.claude/skills/my-skill/ via mount
+# Git tracks files in dotfiles/claude/skills/
+```
+
+### Pre-commit Check
+The pre-commit hook validates that new skill files are in the correct dotfiles location (not bypassing git).
+
 ## Multi-CLI Skills Registry
 
 Skills are reusable AI agent behaviors stored in `./claude/skills/`. Each skill directory contains a `SKILL.md` file with YAML frontmatter (name, description, allowed-tools) and markdown instructions.
