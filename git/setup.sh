@@ -250,6 +250,19 @@ else
 fi
 
 
+# Post-commit hook 심볼릭 링크 생성
+# Source: git/hooks/post-commit (tracked in git)
+# Target: .git/hooks/post-commit (symlink, not tracked)
+if [ -f "${GIT_HOOKS_SOURCE_DIR}/post-commit" ]; then
+    POST_COMMIT_TARGET="${REPO_GIT_HOOKS_DIR}/post-commit"
+    create_symlink "${GIT_HOOKS_SOURCE_DIR}/post-commit" "$POST_COMMIT_TARGET"
+    chmod +x "${GIT_HOOKS_SOURCE_DIR}/post-commit"
+    ux_info "Post-commit hook 설정 완료: ${POST_COMMIT_TARGET}"
+else
+    ux_info "정보: post-commit hook 파일이 '${GIT_HOOKS_SOURCE_DIR}/post-commit' 경로에 없습니다."
+fi
+
+
 # --- Global Git Hooks Setup ---
 GLOBAL_HOOKS_DIR="${HOME}/.config/git/hooks"
 GLOBAL_HOOK_SOURCE="${DOTFILES_GIT_DIR}/global-hooks/pre-commit"
