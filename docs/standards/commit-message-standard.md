@@ -16,18 +16,22 @@
 
 ### 예시
 
+**회사 Jira 키 사용**:
 ```bash
 # 기능 개발
-proj-245-parallel-testing
-proj-246-docker-optimization
+swinno-943-parallel-testing
+swinno-944-docker-optimization
 
 # 버그 수정
-hotfix-123-login-bug
-hotfix-124-memory-leak
+swinno-945-login-bug
+swinno-946-memory-leak
 
 # 리팩토링
-refactor-145-auth-module
+swinno-947-auth-module
 ```
+
+**참고**: 회사 Jira에서 자동 생성되는 키(SWINNO-XXX)를 사용합니다.
+각 Jira 티켓을 먼저 create한 후 해당 키를 브랜치/커밋에 포함합니다.
 
 ### 규칙
 
@@ -64,8 +68,9 @@ refactor-145-auth-module
 
 ### 실전 예시
 
+**회사 상황 예시**:
 ```
-[PROJ-245] feat: implement parallel testing with pytest-xdist
+[SWINNO-943] feat: implement parallel testing with pytest-xdist
 
 Implemented 3-4x faster test execution:
 - pytest-xdist 설정 추가
@@ -83,6 +88,26 @@ Implemented 3-4x faster test execution:
 - [변경] conftest.py에 worker_id, temp_dir fixture 추가
 - [리스크] Worker 간 파일 충돌 가능성 → 격리로 해결
 - [검증] 275개 테스트 모두 통과, 순차 250s → 병렬 8s 확인
+```
+
+**워크플로우**:
+```
+1. Jira에서 작업 티켓 확인/생성
+   예: SWINNO-943 생성 (Status: To Do)
+
+2. 브랜치 생성 (Jira 키 포함)
+   git checkout -b swinno-943-parallel-testing
+
+3. 개발 후 커밋 (Jira 키 포함)
+   git commit -m "[SWINNO-943] feat: ..."
+
+4. Hook 자동 실행
+   ↓
+   work_log.txt에 기록
+   [2026-01-27 HH:MM:SS] [SWINNO-943] | branch | 4.5h | hash
+
+5. PR/Merge 후 Jira 업데이트
+   Status: Done (make-jira 스킬로 자동)
 ```
 
 ---
@@ -128,43 +153,66 @@ Implemented 3-4x faster test execution:
 
 ## 6. Daily 루틴
 
-### 작업 시작 시 (2분)
+### 작업 시작 시 (2분) - "Jira First"
 
 ```bash
-# 1. 브랜치 생성 (티켓 키 포함)
-git checkout -b proj-245-parallel-testing
+# 1️⃣ Jira에서 오늘의 티켓 확인/생성
+# 예: SWINNO-943 (Status: To Do)
+# 목표: "병렬 테스트 구현"
+# 예상시간: 4.5h
 
-# 2. 오늘 할 일 3개 작성 (임시 메모)
-echo "- [PROJ-245] 테스트 수정
-- [PROJ-246] 문서 작성
-- [PROJ-247] 리뷰 반영" > /tmp/today.txt
+# 2️⃣ 브랜치 생성 (Jira 키 포함)
+git checkout -b swinno-943-parallel-testing
+
+# 3️⃣ 오늘 할 일 3개 작성 (임시 메모)
+echo "- [SWINNO-943] 테스트 수정
+- [SWINNO-944] 문서 작성
+- [SWINNO-945] 리뷰 반영" > /tmp/today.txt
 ```
 
 ### 작업 중 (0분 오버헤드)
 
 ```bash
-# 1. 작은 단위로 자주 커밋
+# 1️⃣ 작은 단위로 자주 커밋
 git add <file>
 git commit  # .gitmessage 템플릿 사용
 
-# 2. 메시지에 태그 추가 (선택)
-# [결정], [변경], [리스크], [검증]
+# 예: git commit
+# → 에디터에 .gitmessage 템플릿 자동 로드
+# → [SWINNO-943] type: description 형식 입력
+# → 저장하면 post-commit hook 자동 실행
+
+# 2️⃣ 메시지에 태그 추가 (선택)
+# [결정] 선택한 이유
+# [변경] 무엇을 변경했는지
+# [리스크] 잠재적 위험
+# [검증] 테스트 방법
 ```
 
 ### 작업 종료 전 (5분)
 
 ```bash
-# 1. 3줄 정리 (중요!)
+# 1️⃣ 3줄 정리 (중요!)
+# Jira에 댓글로 작성:
 오늘 한 일: 15개 테스트 수정 완료
 내일 할 일: 문서 작성
 막힌 것: 없음
 
-# 2. Git push
-git push origin proj-245-parallel-testing
+# 2️⃣ Git push
+git push origin swinno-943-parallel-testing
 
-# 3. work_log.txt 자동 생성 확인 (hook)
+# 3️⃣ work_log.txt 자동 생성 확인 (hook)
 cat ~/work_log.txt | tail -5
+# 결과 예시:
+# [2026-01-27 17:29] [SWINNO-943] | swinno-943-parallel-testing | 4.5h | abc1234
+#   └─ Category: Testing
 ```
+
+**⚠️ 중요: "Jira First" 워크플로우**:
+- 작업 시작 전에 **반드시** Jira 티켓 생성/확인
+- Git 브랜치명과 커밋 메시지에 **반드시** Jira 키 포함
+- Hook이 자동으로 work_log.txt에 기록
+- 이 로그로 주간보고, Jira 업데이트 자동화
 
 ---
 
