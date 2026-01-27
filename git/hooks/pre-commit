@@ -53,8 +53,9 @@ CUSTOM_TOOLS_SOURCING_FILE=$(mktemp "$TMPDIR/custom_tools_sourcing_XXXXXX.txt")
 AUTO_EXEC_CUSTOM_FILE=$(mktemp "$TMPDIR/auto_exec_custom_XXXXXX.txt")
 PURITY_VIOLATIONS_FILE=$(mktemp "$TMPDIR/purity_violations_XXXXXX.txt")
 BACKUP_FILES_FILE=$(mktemp "$TMPDIR/backup_files_XXXXXX.txt")
+HELP_INTEGRITY_VIOLATIONS_FILE=$(mktemp "$TMPDIR/help_integrity_violations_XXXXXX.txt")
 
-trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE"' EXIT
+trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE" "$HELP_INTEGRITY_VIOLATIONS_FILE"' EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Load check modules
@@ -80,6 +81,7 @@ source_check_or_exit "${CHECKS_DIR}/postmortem_init_check.sh"
 source_check_or_exit "${CHECKS_DIR}/custom_tools_entrypoint_check.sh"
 source_check_or_exit "${CHECKS_DIR}/library_purity_check.sh"
 source_check_or_exit "${CHECKS_DIR}/backup_file_check.sh"
+source_check_or_exit "${CHECKS_DIR}/help_integrity_check.sh"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Get staged files (git diff --cached)
@@ -105,6 +107,7 @@ custom_tools_sourcing_violations=0
 auto_exec_custom_violations=0
 library_purity_violations=0
 backup_files_found=0
+help_integrity_violations=0
 
 # 1) Shebang consistency for staged .sh files under shell-common/bash/zsh
 while IFS= read -r file; do
@@ -141,6 +144,10 @@ while IFS= read -r file; do
 
         if ! check_ux_library_usage "$abs_path" 2>/dev/null; then
             ((ux_violations++))
+        fi
+
+        if ! check_help_integrity "$abs_path" "$HELP_INTEGRITY_VIOLATIONS_FILE" "$REPO_ROOT" 2>/dev/null; then
+            ((help_integrity_violations++))
         fi
     fi
 
@@ -188,7 +195,7 @@ echo ""
 echo -e "${BLUE}Pre-commit validation (staged files only)${NC}"
 echo ""
 
-blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + custom_tools_sourcing_violations + auto_exec_custom_violations + library_purity_violations))
+blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + custom_tools_sourcing_violations + auto_exec_custom_violations + library_purity_violations + help_integrity_violations))
 warning_count=$((subshell_violations + wrapper_violations + ux_violations + backup_files_found))
 
 if [ $blocking_violations -eq 0 ]; then
@@ -281,6 +288,12 @@ if [ $function_naming_violations -gt 0 ] && [ -s "$FUNC_VIOLATIONS_FILE" ]; then
     echo -e "${RED}[BLOCKING] Function naming violations ($function_naming_violations):${NC}"
     echo "  Function definitions must use snake_case only:"
     tail -n 5 "$FUNC_VIOLATIONS_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+if [ $help_integrity_violations -gt 0 ] && [ -s "$HELP_INTEGRITY_VIOLATIONS_FILE" ]; then
+    echo -e "${RED}[BLOCKING] Help Integrity violations ($help_integrity_violations):${NC}"
+    cat "$HELP_INTEGRITY_VIOLATIONS_FILE" | sed 's/^/  /'
     echo ""
 fi
 
