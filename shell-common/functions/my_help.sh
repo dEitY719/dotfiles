@@ -132,6 +132,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[show_doc_help]="${HELP_DESCRIPTIONS[show_doc_help]:-Documentation viewer and manager commands}"
     HELP_DESCRIPTIONS[category_help]="${HELP_DESCRIPTIONS[category_help]:-Show help topics by category}"
     HELP_DESCRIPTIONS[register_help]="${HELP_DESCRIPTIONS[register_help]:-Register help topic descriptions}"
+    HELP_DESCRIPTIONS[work_log_help]="${HELP_DESCRIPTIONS[work_log_help]:-Work log tracking for non-development activities}"
 }
 
 # ═══════════════════════════════════════════════════════════════

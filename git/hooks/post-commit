@@ -5,10 +5,11 @@
 # Get commit message
 MSG=$(git log -1 --pretty=%B)
 
-# Extract JIRA key (e.g., [PROJ-245]) - support multiple patterns
-JIRA=$(echo "$MSG" | grep -o '\[PROJ-[0-9]*\]' | head -1)
+# Extract JIRA key - support multiple patterns (case-insensitive)
+# Patterns: [SWINNOTEAM-906], [PROJ-245], [SWINNO-943], etc.
+JIRA=$(echo "$MSG" | grep -io '\[[A-Z][A-Z0-9]*-[0-9]*\]' | head -1)
 
-# If no PROJ found, try other patterns
+# If no match, try alternative patterns
 if [ -z "$JIRA" ]; then
     JIRA=$(echo "$MSG" | grep -o '\[.*-[0-9]*\]' | head -1)
 fi

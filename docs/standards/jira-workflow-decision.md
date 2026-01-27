@@ -8,7 +8,7 @@
 
 ## 핵심 질문
 
-> **작업을 시작할 때, Jira 티켓(SWINNO-943)을 먼저 생성한 후 Git 작업을 시작해야 하는가?**
+> **작업을 시작할 때, Jira 티켓(SWINNOTEAM-906)을 먼저 생성한 후 Git 작업을 시작해야 하는가?**
 
 ---
 
@@ -20,13 +20,13 @@
 ```
 1. Jira에서 티켓 create
    Status: To Do
-   예: SWINNO-943 생성
+   예: SWINNOTEAM-906 생성 (회사 키 형식)
 
-2. Git 작업 시작
-   git checkout -b swinno-943-feature
+2. Git 작업 시작 (키를 소문자로 변환)
+   git checkout -b swinnoteam-906-feature
 
-3. 개발 + 커밋
-   git commit -m "[SWINNO-943] feat: ..."
+3. 개발 + 커밋 (키를 대문자로 사용)
+   git commit -m "[SWINNOTEAM-906] feat: ..."
 
 4. Hook 자동 실행
    ↓
@@ -43,7 +43,7 @@
 - ✅ **주간보고 자동화**: Git 로그 → 주간보고 변환 가능
 - ✅ **팀장 병목 제거**: 개인이 티켓 생성
 - ✅ **Jira ↔ Git 일관성**: 1:1 매핑
-- ✅ **다중 프로젝트 추적**: SWINNO-943 vs SWINNO-944 구분 명확
+- ✅ **다중 프로젝트 추적**: SWINNOTEAM-906 vs SWINNOTEAM-907 구분 명확
 - ✅ **자동화 최대화**: make-jira 스킬로 Jira 자동 업데이트
 
 **단점**:
@@ -64,10 +64,10 @@
    git commit -m "WIP: feature description"
 
 3. 작업 완료 후 Jira 생성
-   SWINNO-943 create
+   SWINNOTEAM-906 create
 
 4. 커밋 수정 (선택)
-   git commit --amend -m "[SWINNO-943] ..."
+   git commit --amend -m "[SWINNOTEAM-906] ..."
 ```
 
 **장점**:
