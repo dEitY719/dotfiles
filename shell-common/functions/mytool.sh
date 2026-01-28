@@ -102,3 +102,13 @@ install_pet() {
     fi
     bash "$script" "$@"
 }
+
+# zsh-autosuggestions (command history suggestions) 설치 함수
+install_zsh_autosuggestions() {
+    local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_zsh_autosuggestions.sh"
+    if [ ! -f "$script" ]; then
+        echo "Error: install-zsh-autosuggestions script not found: $script" >&2
+        return 2
+    fi
+    bash "$script" "$@"
+}
