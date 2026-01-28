@@ -283,6 +283,41 @@ work_log_add_args() {
     fi
 }
 
+# Display help for work-log list command
+work_log_list_help() {
+    ux_header "work-log list - Display work log entries"
+
+    ux_section "Usage"
+    ux_bullet "work-log list              - Show last 10 entries"
+    ux_bullet "work-log list --count N    - Show last N entries"
+    ux_bullet "work-log list --today      - Show today's entries only"
+    ux_bullet "work-log list help         - Show this help"
+
+    ux_section "Options"
+    ux_numbered 1 "--count N (or -n N)"
+    ux_bullet "Display the last N entries from the work log"
+    ux_bullet "Default: 10"
+    ux_bullet "Example: work-log list --count 20"
+
+    ux_numbered 2 "--today (or -d)"
+    ux_bullet "Show only entries from today (YYYY-MM-DD)"
+    ux_bullet "Filtered by current date"
+    ux_bullet "Example: work-log list --today"
+
+    ux_section "Examples"
+    echo "  ${UX_SUCCESS}work-log list${UX_RESET}                    # Last 10 entries"
+    echo "  ${UX_SUCCESS}work-log list --count 5${UX_RESET}          # Last 5 entries"
+    echo "  ${UX_SUCCESS}work-log list --today${UX_RESET}            # Today's entries"
+    echo "  ${UX_SUCCESS}work-log list --count 20 --today${UX_RESET} # Last 20 today's entries"
+
+    ux_section "Output Format"
+    ux_bullet "[YYYY-MM-DD HH:MM:SS] [JIRA-KEY] | type | category | time | source"
+    ux_bullet "└─ Category: CategoryName"
+
+    echo ""
+    ux_info "Log file: $WORK_LOG_FILE"
+}
+
 # List recent work log entries
 work_log_list() {
     local count=10
@@ -291,15 +326,21 @@ work_log_list() {
     # Parse arguments
     while [ $# -gt 0 ]; do
         case "$1" in
-            --count)
+            help|--help|-h)
+                work_log_list_help
+                return 0
+                ;;
+            --count|-n)
                 shift
                 count="$1"
                 ;;
-            --today)
+            --today|-d)
                 today_only=true
                 ;;
             *)
                 ux_error "Unknown option: $1"
+                echo ""
+                work_log_list_help
                 return 1
                 ;;
         esac
@@ -361,9 +402,10 @@ work_log_help() {
     ux_numbered 1 "work-log list              - Show last 10 entries"
     ux_numbered 2 "work-log list --count 20  - Show last 20 entries"
     ux_numbered 3 "work-log list --today     - Show today's entries"
+    ux_info "For detailed list options: ${UX_SUCCESS}work-log list help${UX_RESET}"
 
     ux_section "Output Format"
-    ux_bullet "[YYYY-MM-DD HH:MM:SS] [JIRA-KEY] | type | category | time | manual"
+    ux_bullet "[YYYY-MM-DD HH:MM:SS] [JIRA-KEY] | type | category | time | source"
     ux_bullet "└─ Category: CategoryName"
 
     ux_section "Work Types"
