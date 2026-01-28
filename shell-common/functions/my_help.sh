@@ -109,6 +109,9 @@ _get_help_functions() {
 # ═══════════════════════════════════════════════════════════════
 
 _register_default_help_categories() {
+    # Suppress zsh debug output - must be first command
+    [ -n "$ZSH_VERSION" ] && { setopt localoptions no_xtrace 2>/dev/null || true; }
+
     # Category descriptions (values) are used for category detail pages.
     HELP_CATEGORIES[ai]="${HELP_CATEGORIES[ai]:-AI/LLM assistants (Claude, Gemini, Codex, etc.)}"
     HELP_CATEGORIES[cli]="${HELP_CATEGORIES[cli]:-CLI utilities (search, navigation, snippets, shell helpers)}"
@@ -141,7 +144,7 @@ _register_default_help_categories() {
         local category
         for category in $(_my_help_get_category_keys 2>/dev/null); do
             local members="${HELP_CATEGORY_MEMBERS[$category]}"
-            local topic
+            # FIX: Don't declare topic separately - declare it in the for loop
             for topic in $members; do
                 HELP_COMMAND_TO_CATEGORY["$topic"]="$category"
             done
@@ -291,6 +294,9 @@ _my_help_get_category_matches() {
 }
 
 _my_help_show_categories() {
+    # Suppress zsh debug output - must be first command
+    [ -n "$ZSH_VERSION" ] && { setopt localoptions no_xtrace no_warn_create_global 2>/dev/null || true; }
+
     ux_section "Categories"
     ux_table_header "Category" "Topics"
 
@@ -301,8 +307,8 @@ _my_help_show_categories() {
         local preview=""
         local shown=0
         local total=0
-        local topic
 
+        # FIX: Don't declare topic/label separately in zsh - causes debug output
         for topic in $members; do
             total=$((total + 1))
             if [ "$shown" -lt 5 ]; then
@@ -319,13 +325,17 @@ _my_help_show_categories() {
             preview="${preview}, +$((total - shown)) more"
         fi
 
-        local label
+        # FIX: Suppress zsh debug output - redirect stdout during local declaration
+        { local label; } >/dev/null 2>&1
         label=$(_my_help_category_label "$category")
         ux_table_row "${label} (${total})" "$preview"
     done
 }
 
 _my_help_show_category() {
+    # Suppress zsh debug output - must be first command
+    [ -n "$ZSH_VERSION" ] && { setopt localoptions no_xtrace no_warn_create_global 2>/dev/null || true; }
+
     local category="$1"
 
     local members="${HELP_CATEGORY_MEMBERS[$category]}"
@@ -334,14 +344,15 @@ _my_help_show_category() {
         return 1
     fi
 
-    local label
+    # FIX: Suppress zsh debug output - redirect stdout during local declaration
+    { local label; } >/dev/null 2>&1
     label=$(_my_help_category_label "$category")
 
     ux_header "Help Category: ${label}"
     ux_info "${HELP_CATEGORIES[$category]}"
 
+    # FIX: Don't declare topic separately - it causes zsh debug output
     local total=0
-    local topic
     for topic in $members; do
         total=$((total + 1))
     done
@@ -350,6 +361,7 @@ _my_help_show_category() {
     ux_table_header "Topic" "Description"
 
     for topic in $members; do
+        # FIX: Combine declaration and assignment
         local desc
         desc=$(_my_help_topic_description "$topic")
         ux_table_row "$topic" "$desc"
