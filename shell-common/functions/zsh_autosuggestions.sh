@@ -5,6 +5,16 @@
 # Shared between bash and zsh
 
 # ═══════════════════════════════════════════════════════════════
+# Load UX Library (if not already loaded)
+# ═══════════════════════════════════════════════════════════════
+
+if ! type ux_header &>/dev/null 2>&1; then
+    SHELL_COMMON="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
+    # shellcheck source=/dev/null
+    source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+fi
+
+# ═══════════════════════════════════════════════════════════════
 # zsh-autosuggestions Help and Documentation
 # ═══════════════════════════════════════════════════════════════
 
@@ -56,14 +66,14 @@ zsh_autosuggestions_help() {
     ux_section "Customization Example"
     ux_info "Add to ~/.zshrc (before sourcing zsh-autosuggestions):"
     echo ""
-    ux_code "# Accept suggestion with Tab key"
-    ux_code "bindkey '\\t' autosuggest-accept"
-    ux_code ""
-    ux_code "# Change suggestion highlight color"
-    ux_code "export ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=10'"
-    ux_code ""
-    ux_code "# Use history strategy only"
-    ux_code "export ZSH_AUTOSUGGEST_STRATEGY=(history)"
+    echo "  # Accept suggestion with Tab key"
+    echo "  bindkey '\\t' autosuggest-accept"
+    echo ""
+    echo "  # Change suggestion highlight color"
+    echo "  export ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=10'"
+    echo ""
+    echo "  # Use history strategy only"
+    echo "  export ZSH_AUTOSUGGEST_STRATEGY=(history)"
     echo ""
 
     ux_section "Installation Status"
