@@ -2,7 +2,7 @@
 # shell-common/functions/dir_help.sh
 # dirHelp - shared between bash and zsh
 
-_dir_help() {
+dir_help() {
     ux_header "Directory Navigation"
 
     ux_section "Core Directories"
@@ -47,5 +47,5 @@ _dir_help() {
     echo ""
 }
 
-# Alias for dir-help format (using dash instead of underscore)
-alias dir-help='_dir_help'
+# Alias for dash format (interactive shells)
+alias dir-help='dir_help'

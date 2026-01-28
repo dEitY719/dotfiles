@@ -23,6 +23,15 @@ check_alias_function_conflict() {
                 local normalized_func="${func_name//-/_}"
 
                 if [ "$alias_name" = "$func_name" ] || [ "$normalized_alias" = "$normalized_func" ]; then
+                    # Check if alias points to the function (allowed pattern: alias my-cmd='my_cmd')
+                    local alias_value
+                    alias_value=$(grep "^alias[[:space:]]*$alias_name=" "$abs_path" 2>/dev/null | sed "s/.*alias[[:space:]]*[^=]*=[[:space:]]*['\"]\\([^'\"]*\\)['\"].*/\\1/" | head -1)
+
+                    # Allow if alias value matches function name (with or without normalization)
+                    if [ "$alias_value" = "$func_name" ] || [ "${alias_value//-/_}" = "$normalized_func" ]; then
+                        continue  # This is the recommended pattern (alias points to function)
+                    fi
+
                     local alias_line
                     alias_line=$(grep -n "^alias[[:space:]]*$alias_name=" "$abs_path" 2>/dev/null | cut -d: -f1 | head -1)
                     local func_line

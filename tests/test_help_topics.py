@@ -87,7 +87,7 @@ class TestHelpTopicsBasic:
         cmd = "setopt err_exit pipe_fail noclobber; my-help"
         result = shell_runner("zsh", cmd)
         assert result.exit_code == 0
-        assert "Available help commands" in result.stdout
+        assert "Discovered help functions" in result.stdout
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_help_descriptions_initialized(self, shell_runner, shell):
