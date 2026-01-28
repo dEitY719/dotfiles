@@ -44,6 +44,30 @@ _is_registered() {
     [ -f "$zshrc" ] && grep -q "zsh-autosuggestions" "$zshrc"
 }
 
+# Remove zsh-autosuggestions from plugins array (cleanup broken/incomplete installations)
+_remove_from_plugins() {
+    local zshrc="${HOME}/.zshrc"
+
+    if [ ! -f "$zshrc" ] || ! grep -q "zsh-autosuggestions" "$zshrc"; then
+        return 0
+    fi
+
+    # Create backup before modification
+    local backup_file="${zshrc}.backup.$(date +%s)"
+    cp "$zshrc" "$backup_file" || return 1
+
+    # Remove zsh-autosuggestions from plugins array
+    # Handles both "zsh-autosuggestions" and " zsh-autosuggestions "
+    if sed -i.bak 's/ zsh-autosuggestions//g; s/zsh-autosuggestions //g; s/zsh-autosuggestions$//g' "$zshrc" 2>/dev/null; then
+        rm -f "${zshrc}.bak" 2>/dev/null
+        return 0
+    else
+        # Restore backup if sed failed
+        cp "$backup_file" "$zshrc"
+        return 1
+    fi
+}
+
 # Display current status
 _show_status() {
     echo ""
@@ -222,6 +246,23 @@ install-zsh-autosuggestions() {
         return 1
     fi
 
+    # Cleanup: Remove broken/incomplete installations first
+    if _is_registered && ! _check_installed; then
+        echo ""
+        ux_section "Cleanup: Removing Broken Plugin Reference"
+        ux_info "Found zsh-autosuggestions in ~/.zshrc but plugin not installed"
+        ux_info "This causes '[oh-my-zsh] plugin not found' error when zsh starts"
+        echo ""
+        _step running "Removing from plugins array..."
+        if _remove_from_plugins; then
+            _step done "Removed broken reference"
+            ux_success "✓ Zsh will no longer show plugin not found error"
+        else
+            ux_warning "Could not clean up ~/.zshrc, but continuing with installation..."
+        fi
+        echo ""
+    fi
+
     # Check if already fully installed
     if _check_installed && _is_registered; then
         _step skip "zsh-autosuggestions is already fully installed"
@@ -243,7 +284,7 @@ install-zsh-autosuggestions() {
         return 1
     }
 
-    # Step 2: Register plugin
+    # Step 2: Register plugin (AFTER successful installation)
     _register_plugin || {
         echo ""
         ux_error "Installation failed at registration step"

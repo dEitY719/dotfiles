@@ -31,3 +31,9 @@ claude/settings.json
 
 # AGENTS.md generator backups
 **/AGENTS.md.backup.*
+
+# Oh-My-Zsh plugin installations (managed by install scripts)
+# Users run install-* commands which clone plugins to ~/.oh-my-zsh/custom/plugins/
+# These should NOT be tracked in dotfiles repo (environment-specific)
+~/.oh-my-zsh/
+.oh-my-zsh/
