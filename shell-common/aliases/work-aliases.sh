@@ -6,6 +6,9 @@
 # Work-help: Show work management commands help
 alias work-help='work_help'
 
+# Work-log: CLI tool for logging work activities
+alias work-log='bash ~/dotfiles/shell-common/tools/custom/work_log.sh'
+
 # Make-jira: Generate weekly Jira reports from work logs
 alias make-jira='bash ~/dotfiles/shell-common/tools/custom/make_jira.sh'
 
