@@ -163,6 +163,122 @@ else
     log_error "경고: work_log.txt 소스를 찾을 수 없습니다: $WORK_LOG_SRC"
 fi
 
+# Cleanup: Remove broken plugin references from ~/.zshrc
+# Prevents "plugin not found" errors when zsh starts
+_cleanup_broken_zsh_plugins() {
+    local zshrc="${HOME}/.zshrc"
+    local omz_custom="${ZSH_CUSTOM:-${HOME}/.oh-my-zsh/custom}"
+
+    if [ ! -f "$zshrc" ]; then
+        return 0
+    fi
+
+    # Check for plugins that are registered but not installed
+    local broken_plugins=""
+
+    # Common plugins to check
+    local plugins_to_check="zsh-autosuggestions zsh-syntax-highlighting zsh-history-substring-search"
+
+    for plugin in $plugins_to_check; do
+        # If plugin is registered in zshrc but not installed, mark for removal
+        if grep -q "$plugin" "$zshrc" && [ ! -d "$omz_custom/plugins/$plugin" ]; then
+            broken_plugins="$broken_plugins $plugin"
+        fi
+    done
+
+    if [ -z "$broken_plugins" ]; then
+        return 0
+    fi
+
+    # Create backup
+    local backup_file="${zshrc}.backup.$(date +%s)"
+    cp "$zshrc" "$backup_file" || return 1
+
+    log_debug "정리: ~/.zshrc에서 설치되지 않은 플러그인 제거: $broken_plugins"
+
+    # Remove each broken plugin
+    local temp_zshrc="${zshrc}.tmp"
+    cp "$zshrc" "$temp_zshrc"
+
+    for plugin in $broken_plugins; do
+        # Remove plugin from plugins array
+        # Handles: "plugin" " plugin" "plugin " and variations
+        sed -i.bak "s/ $plugin//g; s/$plugin //g; s/$plugin$//g" "$temp_zshrc" 2>/dev/null || true
+    done
+
+    # Verify the file is valid before replacing
+    if grep -q "plugins=(" "$temp_zshrc" 2>/dev/null; then
+        mv "$temp_zshrc" "$zshrc"
+        rm -f "${zshrc}.bak" 2>/dev/null
+        log_dim "✓ ~/.zshrc에서 미설치 플러그인 제거 완료"
+        log_dim "  이제 zsh 시작 시 'plugin not found' 에러가 나타나지 않습니다"
+    else
+        # Restore backup if something went wrong
+        mv "$backup_file" "$zshrc"
+        log_error "경고: ~/.zshrc 정리 중 오류 발생, 백업에서 복구됨"
+        return 1
+    fi
+}
+
+# Run cleanup if zshrc exists
+_cleanup_broken_zsh_plugins
+
+# Add auto-cleanup code to ~/.zshrc (if not already there)
+_add_zshrc_auto_cleanup() {
+    local zshrc="${HOME}/.zshrc"
+    local marker="# DOTFILES AUTO-CLEANUP: Remove broken plugin references"
+
+    if [ ! -f "$zshrc" ]; then
+        return 0
+    fi
+
+    # Check if auto-cleanup code is already added
+    if grep -q "$marker" "$zshrc" 2>/dev/null; then
+        return 0
+    fi
+
+    # Add auto-cleanup code at the beginning of ~/.zshrc
+    # This runs every time zsh starts to ensure no broken plugins
+    cat > "${zshrc}.cleanup_insert" << 'CLEANUP_CODE'
+
+# ═══════════════════════════════════════════════════════════════
+# DOTFILES AUTO-CLEANUP: Remove broken plugin references
+# ═══════════════════════════════════════════════════════════════
+# This code runs automatically when zsh starts to ensure no
+# "plugin not found" errors occur. Plugins are only loaded if
+# they are actually installed in ~/.oh-my-zsh/custom/plugins/
+
+_dotfiles_auto_cleanup_plugins() {
+    local omz_custom="${ZSH_CUSTOM:-${HOME}/.oh-my-zsh/custom}"
+    local modified=0
+
+    # Check for broken plugin references in plugins array
+    for plugin_name in zsh-autosuggestions zsh-syntax-highlighting zsh-history-substring-search; do
+        if [[ "$plugins" == *"$plugin_name"* ]] && [ ! -d "$omz_custom/plugins/$plugin_name" ]; then
+            # Remove broken plugin reference
+            plugins=("${(@)plugins[@]//$plugin_name}")
+            modified=1
+        fi
+    done
+}
+
+_dotfiles_auto_cleanup_plugins
+unfunction _dotfiles_auto_cleanup_plugins 2>/dev/null || true
+
+CLEANUP_CODE
+
+    if [ $? -eq 0 ]; then
+        # Prepend cleanup code to zshrc
+        cat "${zshrc}.cleanup_insert" "$zshrc" > "${zshrc}.new"
+        mv "${zshrc}.new" "$zshrc"
+        rm -f "${zshrc}.cleanup_insert"
+        log_debug "✓ ~/.zshrc에 자동 정리 코드 추가됨 (매번 zsh 시작 시 자동 실행)"
+    fi
+}
+
+# Add auto-cleanup to zshrc
+_add_zshrc_auto_cleanup
+
 log_debug "--- dotfiles setup 완료 ---"
 
 log_dim "변경 사항을 적용하려면 'source ~/.bashrc' 또는 셸을 재시작하십시오."
