@@ -10,8 +10,8 @@
 # ═══════════════════════════════════════════════════════════════════════════
 
 WORK_LOG_FILE="${HOME}/work_log.txt"
-if [ -f "${HOME}/dotfiles/shell-common/data/work_log.txt" ]; then
-    WORK_LOG_FILE="${HOME}/dotfiles/shell-common/data/work_log.txt"
+if [ -f "${HOME}/dotfiles/work/log/work_log.txt" ]; then
+    WORK_LOG_FILE="${HOME}/dotfiles/work/log/work_log.txt"
 fi
 
 OUTPUT_DIR="${HOME}/para/archive/rca-knowledge/docs/jira-records"

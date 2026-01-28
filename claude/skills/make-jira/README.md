@@ -57,7 +57,7 @@ Generate comprehensive weekly Jira reports from work log entries.
 
 ## Requirements
 
-- `work_log.txt` (either `~/work_log.txt` or `~/dotfiles/shell-common/data/work_log.txt`)
+- `work_log.txt` (either `~/work_log.txt` or `~/dotfiles/work/log/work_log.txt`)
 - `rca-knowledge/docs/jira-records/` directory (auto-created)
 - GNU `date` command for week calculations
 

@@ -131,9 +131,9 @@ else
 fi
 
 # Setup work_log.txt symlink (git-tracked, multi-PC sync)
-# Points: ~/work_log.txt → dotfiles/shell-common/data/work_log.txt
+# Points: ~/work_log.txt → dotfiles/work/log/work_log.txt
 
-WORK_LOG_SRC="${DOTFILES_BASH_DIR}/../shell-common/data/work_log.txt"
+WORK_LOG_SRC="${DOTFILES_BASH_DIR}/../work/log/work_log.txt"
 WORK_LOG_LINK="${HOME}/work_log.txt"
 
 if [ -f "$WORK_LOG_SRC" ]; then
