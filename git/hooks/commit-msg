@@ -1,0 +1,53 @@
+#!/bin/bash
+# Git commit-msg hook: Validate Conventional Commits format
+# Enforces: commit type, message length, forbidden patterns
+# Installed: git config core.hooksPath git/hooks
+# See: git/config/commit-msg-rules.sh for detailed rules
+
+set -o errexit
+set -o pipefail
+
+# Get hook directory and import validator
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# shellcheck source=/dev/null
+source "${HOOK_DIR}/../lib/commit-msg-validator.sh"
+
+# ============================================
+# MAIN HOOK LOGIC
+# ============================================
+
+# Get commit message file (first argument passed by git)
+COMMIT_MSG_FILE="$1"
+
+# If not provided, use default
+if [ -z "$COMMIT_MSG_FILE" ]; then
+    COMMIT_MSG_FILE="$(git rev-parse --git-dir)/COMMIT_EDITMSG"
+fi
+
+# Read commit message (remove comments)
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE" | grep -v '^#' | tr -d '\0' | sed -e :a -e '/^\s*$/d;N;ba')
+
+# Trim trailing whitespace
+COMMIT_MSG="$(echo "$COMMIT_MSG" | sed -e 's/[[:space:]]*$//')"
+
+# Validate message
+if ! validate_commit_message "$COMMIT_MSG"; then
+    echo ""
+    echo "📝 Please follow Conventional Commits format:"
+    echo "   <type>(<scope>): <subject>"
+    echo ""
+    echo "   Examples:"
+    echo "   - feat(auth): add JWT token refresh"
+    echo "   - fix(api): resolve null pointer in handler"
+    echo "   - docs: update README with setup instructions"
+    echo ""
+    echo "   Types: feat, fix, docs, style, refactor, perf, test, chore"
+    echo ""
+    echo "💡 Tip: Keep subject < 50 chars, body lines < 72 chars"
+    echo ""
+    exit 1
+fi
+
+exit 0
