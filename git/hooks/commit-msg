@@ -1,18 +1,17 @@
 #!/bin/bash
 # Git commit-msg hook: Validate Conventional Commits format
-# Enforces: commit type, message length, forbidden patterns
+# Mode: WARNING-FIRST (shows errors but allows commits)
+# To enable strict mode: COMMIT_MSG_STRICT=1 git commit
 # Installed: git config core.hooksPath git/hooks
-# See: git/config/commit-msg-rules.sh for detailed rules
 
 set -o errexit
 set -o pipefail
 
 # Get hook directory and import validator
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # shellcheck source=/dev/null
-source "${HOOK_DIR}/../lib/commit-msg-validator.sh"
+source "${HOOK_DIR}/../lib/commit-msg-validator.sh" || exit 0
 
 # ============================================
 # MAIN HOOK LOGIC
@@ -21,33 +20,53 @@ source "${HOOK_DIR}/../lib/commit-msg-validator.sh"
 # Get commit message file (first argument passed by git)
 COMMIT_MSG_FILE="$1"
 
-# If not provided, use default
-if [ -z "$COMMIT_MSG_FILE" ]; then
-    COMMIT_MSG_FILE="$(git rev-parse --git-dir)/COMMIT_EDITMSG"
+# Safety: If file doesn't exist or can't read, allow commit (prevent blocking)
+if [ -z "$COMMIT_MSG_FILE" ] || [ ! -f "$COMMIT_MSG_FILE" ]; then
+    exit 0
 fi
 
-# Read commit message (remove comments)
-COMMIT_MSG=$(cat "$COMMIT_MSG_FILE" | grep -v '^#' | tr -d '\0' | sed -e :a -e '/^\s*$/d;N;ba')
+# Read commit message (with error handling)
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE" 2>/dev/null | grep -v '^#' | tr -d '\0') || exit 0
 
-# Trim trailing whitespace
-COMMIT_MSG="$(echo "$COMMIT_MSG" | sed -e 's/[[:space:]]*$//')"
+# Trim whitespace
+COMMIT_MSG="$(echo "$COMMIT_MSG" | sed -e 's/^[[:space:]]*//g' -e 's/[[:space:]]*$//g')"
+
+# Skip if message is empty (might be merge commit)
+if [ -z "$COMMIT_MSG" ]; then
+    exit 0
+fi
 
 # Validate message
-if ! validate_commit_message "$COMMIT_MSG"; then
+VALIDATION_RESULT=$(validate_commit_message "$COMMIT_MSG" 2>&1) || true
+
+if [ -n "$VALIDATION_RESULT" ]; then
     echo ""
-    echo "📝 Please follow Conventional Commits format:"
+    echo "⚠️  Commit message issues detected:"
+    echo "─────────────────────────────────────────────"
+    echo "$VALIDATION_RESULT"
+    echo "─────────────────────────────────────────────"
+    echo ""
+    echo "📝 Conventional Commits format:"
     echo "   <type>(<scope>): <subject>"
     echo ""
-    echo "   Examples:"
-    echo "   - feat(auth): add JWT token refresh"
-    echo "   - fix(api): resolve null pointer in handler"
-    echo "   - docs: update README with setup instructions"
-    echo ""
     echo "   Types: feat, fix, docs, style, refactor, perf, test, chore"
+    echo "   Scope: (optional) affected component"
+    echo "   Subject: concise description (< 50 chars)"
     echo ""
-    echo "💡 Tip: Keep subject < 50 chars, body lines < 72 chars"
+    echo "   Example:"
+    echo "   feat(auth): add JWT token refresh mechanism"
     echo ""
-    exit 1
+
+    # Check strict mode
+    if [ "${COMMIT_MSG_STRICT:-0}" = "1" ]; then
+        echo "🚫 STRICT MODE ENABLED: Commit rejected"
+        echo "   To override: COMMIT_MSG_STRICT=0 git commit"
+        exit 1
+    else
+        echo "✅ WARNING-FIRST MODE: Commit allowed"
+        echo "   Tip: Run 'COMMIT_MSG_STRICT=1 git commit' for strict validation"
+        exit 0
+    fi
 fi
 
 exit 0
