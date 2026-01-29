@@ -7,9 +7,9 @@
 git-crypt Quickstart (Transparent Git encryption)
 ==========================================================
 
-1) 설치
+1) 설정
 --------
-apt-get install git-crypt
+apt-get get git-crypt
 또는: bash shell-common/tools/custom/install_git_crypt.sh
 
 2) 초기화 및 GPG 키 추가
@@ -43,8 +43,12 @@ alias gcstatus='git-crypt status'
 alias gclock='git-crypt lock'
 alias gcunlock='git-crypt unlock'
 alias gcls='git-crypt status -f'
-alias gchelp='gc_help'
-alias gc-help='gc_help'
+alias gchelp='_gc_help_wrapper'
+alias gc-help='_gc_help_wrapper'
+
+_gc_help_wrapper() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/gc_help.sh"
+}
 alias gcinstall='git_crypt_install'
 alias gcsetup='gc_setup'
 alias gcsetup-cache='gc_setup_cache'
@@ -97,7 +101,7 @@ gc_setup() {
     # 2. Check if git-crypt installed
     if ! command -v git-crypt &>/dev/null; then
         ux_error "git-crypt이 설치되어 있지 않습니다."
-        ux_info "설치: gcinstall 또는 bash shell-common/tools/custom/install_git_crypt.sh"
+        ux_info "필수: gcinstall 또는 bash shell-common/tools/custom/install_git_crypt.sh"
         return 1
     fi
 
@@ -281,7 +285,7 @@ gc_push_env() {
 
     if ! command -v git-crypt &>/dev/null; then
         ux_error "git-crypt이 설치되어 있지 않습니다."
-        ux_info "설치: gcinstall 또는 sudo apt-get install git-crypt"
+        ux_info "필수: gcinstall 또는 sudo apt-get get git-crypt"
         return 1
     fi
 
@@ -698,7 +702,7 @@ gc_restore_key() {
     # Check if gpg is installed
     if ! command -v gpg &>/dev/null; then
         ux_error "gpg가 설치되어 있지 않습니다."
-        ux_info "설치: sudo apt-get install gnupg"
+        ux_info "필수: sudo apt-get get gnupg"
         return 1
     fi
 
