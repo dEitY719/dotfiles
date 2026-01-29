@@ -971,7 +971,8 @@ gc_check() {
     # 1. Git 리포지토리 확인
     # ========================================
     ((check_count++))
-    ux_section "Check 1/8: Git 리포지토리"
+    # Note: Total checks = 7 (removed Check 8 for remote sync as it's not git-crypt related)
+    ux_section "Check 1/7: Git 리포지토리"
 
     if git rev-parse --is-inside-work-tree &>/dev/null; then
         ux_success "✓ Git 리포지토리 확인됨"
@@ -987,7 +988,7 @@ gc_check() {
     # 2. git-crypt 초기화 확인
     # ========================================
     ((check_count++))
-    ux_section "Check 2/8: git-crypt 초기화"
+    ux_section "Check 2/7: git-crypt 초기화"
 
     if [[ -d .git-crypt ]] && [[ -f .git-crypt/.gitattributes ]]; then
         ux_success "✓ git-crypt 초기화됨"
@@ -998,7 +999,7 @@ gc_check() {
 
         if [[ -n "$crypt_warnings" ]]; then
             echo ""
-            ux_warning "⚠️  암호화 경고 발견:"
+            ux_warning "암호화 경고 발견:"
             echo "$crypt_warnings" | while read -r warning; do
                 ux_bullet "$warning"
             done
@@ -1017,7 +1018,7 @@ gc_check() {
     # 3. Repository 잠금 상태 확인
     # ========================================
     ((check_count++))
-    ux_section "Check 3/8: Repository 잠금 상태"
+    ux_section "Check 3/7: Repository 잠금 상태"
 
     if [[ -f .env ]] && head -c 8 .env 2>/dev/null | LC_ALL=C grep -q "^GITCRYPT"; then
         ux_warning "⚠ Repository가 locked 상태입니다"
@@ -1033,7 +1034,7 @@ gc_check() {
     # 4. .gitattributes 확인
     # ========================================
     ((check_count++))
-    ux_section "Check 4/8: .gitattributes 설정"
+    ux_section "Check 4/7: .gitattributes 설정"
 
     if [[ ! -f .gitattributes ]]; then
         ux_warning "⚠ .gitattributes 파일이 없습니다"
@@ -1055,7 +1056,7 @@ gc_check() {
     # 5. .gitignore 설정 확인
     # ========================================
     ((check_count++))
-    ux_section "Check 5/8: .gitignore 설정"
+    ux_section "Check 5/7: .gitignore 설정"
 
     local gitignore_ok=false
 
@@ -1080,7 +1081,7 @@ gc_check() {
     # 6. GPG 키 확인
     # ========================================
     ((check_count++))
-    ux_section "Check 6/8: GPG 개인키"
+    ux_section "Check 6/7: GPG 개인키"
 
     if gpg --list-secret-keys | grep -q "sec"; then
         local key_count
@@ -1099,10 +1100,10 @@ gc_check() {
     echo ""
 
     # ========================================
-    # 7. Staged/Unstaged 파일 확인
+    # 7. Staged/Unstaged 파일 확인 (Final check)
     # ========================================
     ((check_count++))
-    ux_section "Check 7/8: Git 상태 (Staged/Unstaged)"
+    ux_section "Check 7/7: Git 상태 (Staged/Unstaged)"
 
     local unstaged
     unstaged=$(git diff --name-only 2>/dev/null)
@@ -1142,39 +1143,6 @@ gc_check() {
                 ((warnings++))
             fi
         fi
-    fi
-    echo ""
-
-    # ========================================
-    # 8. 원격 저장소 동기화
-    # ========================================
-    ((check_count++))
-    ux_section "Check 8/8: 원격 저장소 상태"
-
-    local local_count
-    local remote_count
-
-    local_count=$(git rev-list --count HEAD 2>/dev/null)
-    remote_count=$(git rev-list --count @{u} 2>/dev/null || echo "0")
-
-    if git rev-parse @{u} &>/dev/null; then
-        if [[ $local_count -eq $remote_count ]]; then
-            ux_success "✓ 원격 저장소와 동기화됨"
-            ((passed++))
-        elif [[ $local_count -gt $remote_count ]]; then
-            ux_warning "⚠ 로컬 commit이 remote보다 앞서있습니다"
-            echo "  로컬: $local_count commits, 원격: $remote_count commits"
-            ux_info "push: git push"
-            ((warnings++))
-        else
-            ux_warning "⚠ 원격 commit이 로컬보다 앞서있습니다"
-            echo "  로컬: $local_count commits, 원격: $remote_count commits"
-            ux_info "pull: git pull"
-            ((warnings++))
-        fi
-    else
-        ux_warning "⚠ Upstream branch가 설정되지 않았습니다"
-        ((warnings++))
     fi
     echo ""
 
