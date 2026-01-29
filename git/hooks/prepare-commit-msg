@@ -1,0 +1,105 @@
+#!/bin/bash
+# Git prepare-commit-msg hook: Auto-fill commit templates from branch
+# Installed: git config core.hooksPath git/hooks
+# Purpose: Extract JIRA keys from branch, auto-generate message template
+
+set -o errexit
+set -o pipefail
+
+# Get hook directory and import rules
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=/dev/null
+source "${HOOK_DIR}/../config/prepare-commit-msg-rules.sh" || exit 0
+
+# ============================================
+# MAIN HOOK LOGIC
+# ============================================
+
+# prepare-commit-msg receives:
+# $1: name of the file that contains the commit message
+# $2: description of the commit source (message, template, squash, commit, merge)
+# $3: commit hash (only for amend)
+
+COMMIT_MSG_FILE="$1"
+COMMIT_SOURCE="${2:-}"
+COMMIT_HASH="${3:-}"
+
+# Skip for merge commits, squash, amend (they have pre-generated messages)
+if [ "$COMMIT_SOURCE" = "merge" ] || [ "$COMMIT_SOURCE" = "squash" ] || [ "$COMMIT_SOURCE" = "commit" ]; then
+    exit 0
+fi
+
+# Skip if file doesn't exist
+if [ ! -f "$COMMIT_MSG_FILE" ]; then
+    exit 0
+fi
+
+# Get current branch name
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || exit 0
+
+# Don't process if on detached HEAD or special branches
+if [ "$BRANCH" = "HEAD" ] || [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+    exit 0
+fi
+
+# Check if branch matches template pattern
+should_process=0
+for pattern in "${TEMPLATE_BRANCHES[@]}"; do
+    if [[ "$BRANCH" == $pattern ]]; then
+        should_process=1
+        break
+    fi
+done
+
+if [ $should_process -eq 0 ]; then
+    exit 0
+fi
+
+# ============================================
+# EXTRACT JIRA KEY FROM BRANCH
+# ============================================
+
+# Extract JIRA key (e.g., SWINNOTEAM-906 from feature/SWINNOTEAM-906-xxx)
+JIRA=""
+if [[ "$BRANCH" =~ $JIRA_PATTERN ]]; then
+    JIRA="${BASH_REMATCH[0]}"
+fi
+
+# ============================================
+# PREPARE TEMPLATE
+# ============================================
+
+# Read current message content
+CURRENT_MSG=$(cat "$COMMIT_MSG_FILE" 2>/dev/null || echo "")
+
+# Skip if message already has content (user already started typing)
+# Check if first line has more than just comments
+FIRST_LINE=$(echo "$CURRENT_MSG" | head -1 | grep -v '^#' | tr -d ' \t\n')
+if [ -n "$FIRST_LINE" ]; then
+    # Message already has content, don't override
+    exit 0
+fi
+
+# Prepare template based on whether JIRA key exists
+if [ -n "$JIRA" ]; then
+    # With JIRA key: [SWINNOTEAM-906]
+    TEMPLATE="[$JIRA] "
+else
+    # Without JIRA key: empty template (user will type)
+    TEMPLATE=""
+fi
+
+# ============================================
+# WRITE TEMPLATE TO MESSAGE FILE
+# ============================================
+
+# Prepend template to commit message (preserve any existing comments)
+{
+    echo -n "$TEMPLATE"
+    cat "$COMMIT_MSG_FILE"
+} > "$COMMIT_MSG_FILE.tmp"
+
+mv "$COMMIT_MSG_FILE.tmp" "$COMMIT_MSG_FILE"
+
+exit 0
