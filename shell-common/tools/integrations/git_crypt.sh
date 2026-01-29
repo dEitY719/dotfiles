@@ -37,28 +37,48 @@ git-crypt unlock                       # GPG 키로 자동 복호화
 GIT_CRYPT_DOC
 
 # --- Alias & Helpers ---
-alias gci='git-crypt init'
-alias gcadduser='git-crypt add-gpg-user'
-alias gcstatus='git-crypt status'
-alias gclock='git-crypt lock'
-alias gcunlock='git-crypt unlock'
-alias gcls='git-crypt status -f'
-alias gchelp='_gc_help_wrapper'
+alias gc-init='git-crypt init'
+alias gc-add-user='git-crypt add-gpg-user'
+alias gc-status='git-crypt status'
+alias gc-lock='git-crypt lock'
+alias gc-unlock='git-crypt unlock'
+alias gc-ls='git-crypt status -f'
 alias gc-help='_gc_help_wrapper'
-alias gccheck='gc_check'
+alias gc-check='gc_check'
+
+# Backward compatibility
+alias gc-init='gc-init'
+alias gc-add-user='gc-add-user'
+alias gc-status='gc-status'
+alias gc-lock='gc-lock'
+alias gc-unlock='gc-unlock'
+alias gc-ls='gc-ls'
+alias gchelp='gc-help'
+alias gccheck='gc-check'
 
 _gc_help_wrapper() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/gc_help.sh"
 }
-alias gcinstall='git_crypt_install'
-alias gcsetup='gc_setup'
-alias gcsetup-cache='gc_setup_cache'
-alias gcpurge='gc_purge_cache'
-alias gcaddme='gc_addme'
-alias gcbackup='gc_backup_key'
-alias gcrestore='gc_restore_key'
-alias gcnewpc='gc_setup_new_pc'
-alias gcpush='gc_push_env'
+alias gc-install='git_crypt_install'
+alias gc-setup='gc_setup'
+alias gc-setup-cache='gc_setup_cache'
+alias gc-purge='gc_purge_cache'
+alias gc-add-me='gc_addme'
+alias gc-backup='gc_backup_key'
+alias gc-restore='gc_restore_key'
+alias gc-new-pc='gc_setup_new_pc'
+alias gc-push='gc_push_env'
+
+# Backward compatibility
+alias gc-install='gc-install'
+alias gc-setup='gc-setup'
+alias gc-setup-cache='gc-setup-cache'
+alias gc-purge='gc-purge'
+alias gc-add-me='gc-add-me'
+alias gc-backup='gc-backup'
+alias gc-restore='gc-restore'
+alias gc-new-pc='gc-new-pc'
+alias gc-push='gc-push'
 
 # Color shortcuts for UX output
 bold="${UX_BOLD:-}"
@@ -102,7 +122,7 @@ gc_setup() {
     # 2. Check if git-crypt installed
     if ! command -v git-crypt &>/dev/null; then
         ux_error "git-crypt이 설치되어 있지 않습니다."
-        ux_info "필수: gcinstall 또는 bash shell-common/tools/custom/install_git_crypt.sh"
+        ux_info "필수: gc-install 또는 bash shell-common/tools/custom/install_git_crypt.sh"
         return 1
     fi
 
@@ -142,7 +162,7 @@ gc_setup() {
 
     ux_info "git-crypt add-gpg-user 명령어를 사용하여 GPG 키를 추가하세요."
     ux_info "예시: git-crypt add-gpg-user YOUR_GPG_KEY_ID"
-    ux_info "또는: gcadduser YOUR_GPG_KEY_ID"
+    ux_info "또는: gc-add-user YOUR_GPG_KEY_ID"
     echo ""
 
     # 6. .gitattributes setup
@@ -286,7 +306,7 @@ gc_push_env() {
 
     if ! command -v git-crypt &>/dev/null; then
         ux_error "git-crypt이 설치되어 있지 않습니다."
-        ux_info "필수: gcinstall 또는 sudo apt-get get git-crypt"
+        ux_info "필수: gc-install 또는 sudo apt-get get git-crypt"
         return 1
     fi
 
@@ -317,7 +337,7 @@ gc_push_env() {
             ux_info "→ 무심코 git-crypt init을 다시 하면 기존 암호문 복호화가 불가해질 수 있습니다."
             echo ""
             ux_bullet "다시 실행"
-            echo "  gcpush"
+            echo "  gc-push"
             echo ""
             return 1
         fi
@@ -365,7 +385,7 @@ gc_push_env() {
         ux_info "자동으로 GPG 키를 추가합니다..."
         echo ""
 
-        # Call gcaddme function with error handling
+        # Call gc-add-me function with error handling
         if ! gc_addme; then
             local error_msg="GPG 키 추가 실패"
             ux_error "$error_msg"
@@ -392,7 +412,7 @@ gc_push_env() {
             echo "  gpg --list-secret-keys --keyid-format=long"
             echo "  git-crypt add-gpg-user <KEY_ID>"
             echo ""
-            echo "자세한 정보는 'gc-help' 또는 'gcsetup' 명령어를 참고하세요."
+            echo "자세한 정보는 'gc-help' 또는 'gc-setup' 명령어를 참고하세요."
             echo ""
             return 1
         fi
@@ -515,7 +535,7 @@ gc_cache_status() {
     # Check if config exists
     if [[ ! -f "$gpg_agent_conf" ]]; then
         ux_warning "gpg-agent.conf 파일이 없습니다."
-        ux_info "캐싱 설정: gcsetup-cache"
+        ux_info "캐싱 설정: gc-setup-cache"
         return 1
     fi
 
@@ -527,7 +547,7 @@ gc_cache_status() {
         done
     else
         ux_warning "캐싱 설정이 없습니다."
-        ux_info "캐싱 설정: gcsetup-cache"
+        ux_info "캐싱 설정: gc-setup-cache"
     fi
     echo ""
 
@@ -667,7 +687,7 @@ gc_backup_key() {
 
                 ux_section "다른 PC에서 복원 (워크플로우)"
                 echo "  1. ${bold}git clone <repo>${reset}"
-                echo "  2. ${bold}cd dotfiles && gcrestore${reset}"
+                echo "  2. ${bold}cd dotfiles && gc-restore${reset}"
                 echo "  3. 암호화된 백업 파일 선택 (.secrets/gpg-backup-*.asc.gpg)"
                 echo "  4. Passphrase 입력 → 자동 복호화 & import"
 
@@ -685,8 +705,8 @@ gc_backup_key() {
             echo ""
 
             ux_section "다음 단계 (다른 PC에서)"
-            echo "  1. git-crypt 설치: ${bold}gcinstall${reset}"
-            echo "  2. GPG 키 복원: ${bold}gcrestore${reset}"
+            echo "  1. git-crypt 설치: ${bold}gc-install${reset}"
+            echo "  2. GPG 키 복원: ${bold}gc-restore${reset}"
             echo "  3. 리포지토리 clone: ${bold}git clone <repo>${reset}"
             echo "  4. 복호화: ${bold}git-crypt unlock${reset}"
         fi
@@ -803,7 +823,7 @@ gc_restore_key() {
         echo ""
 
         ux_section "다음 단계"
-        ux_bullet "GPG 캐싱 설정: gcsetup-cache (선택)"
+        ux_bullet "GPG 캐싱 설정: gc-setup-cache (선택)"
         ux_bullet "git-crypt 복호화: git-crypt unlock"
         ux_bullet ".env 파일 확인: cat .env"
     else
@@ -823,7 +843,7 @@ gc_addme() {
     # Check if git-crypt is installed
     if ! command -v git-crypt &>/dev/null; then
         ux_error "git-crypt이 설치되어 있지 않습니다."
-        ux_info "설치: gcinstall"
+        ux_info "설치: gc-install"
         return 1
     fi
 
@@ -836,7 +856,7 @@ gc_addme() {
     # Check if git-crypt is initialized
     if ! git-crypt status &>/dev/null; then
         ux_error "git-crypt이 초기화되지 않았습니다."
-        ux_info "초기화: gci (git-crypt init)"
+        ux_info "초기화: gc-init (git-crypt init)"
         return 1
     fi
 
@@ -926,7 +946,7 @@ gc_addme() {
             echo "  git-crypt init"
             echo ""
             ux_bullet "3단계: 명령어 재실행"
-            echo "  gcaddme"
+            echo "  gc-add-me"
             echo ""
         elif echo "$add_gpg_output" | grep -q "invalid key id\|gpg.*error"; then
             ux_section "에러 분석"
@@ -941,7 +961,7 @@ gc_addme() {
             echo "  gpg --list-secret-keys --keyid-format=long"
             echo ""
             ux_bullet "2단계: 다시 시도"
-            echo "  gcaddme"
+            echo "  gc-add-me"
             echo ""
         else
             ux_section "에러 상세 메시지"
@@ -1009,7 +1029,7 @@ gc_check() {
         fi
     else
         ux_error "✗ git-crypt이 초기화되지 않았습니다"
-        ux_info "초기화: gci (git-crypt init)"
+        ux_info "초기화: gc-init (git-crypt init)"
         ((failed++))
     fi
     echo ""
@@ -1022,7 +1042,7 @@ gc_check() {
 
     if [[ -f .env ]] && head -c 8 .env 2>/dev/null | LC_ALL=C grep -q "^GITCRYPT"; then
         ux_warning "⚠ Repository가 locked 상태입니다"
-        ux_info "복호화: gcunlock 또는 git-crypt unlock"
+        ux_info "복호화: gc-unlock 또는 git-crypt unlock"
         ((warnings++))
     else
         ux_success "✓ Repository가 unlocked 상태입니다"
@@ -1094,7 +1114,7 @@ gc_check() {
     else
         ux_error "✗ GPG 개인키가 없습니다"
         ux_info "생성: gpg --full-generate-key"
-        ux_info "또는 복원: gcrestore"
+        ux_info "또는 복원: gc-restore"
         ((failed++))
     fi
     echo ""
