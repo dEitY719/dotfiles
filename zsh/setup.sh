@@ -19,7 +19,19 @@
 # --- Constants ---
 
 # Initialize DOTFILES_ROOT and other paths
-DOTFILES_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Handle both bash and zsh execution contexts
+if [ -n "${BASH_SOURCE[0]}" ]; then
+    # Bash context
+    DOTFILES_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+elif [ -n "${ZSH_VERSION}" ]; then
+    # Zsh context: Use zsh-specific $0 (relative to script location)
+    _THIS_SCRIPT="${(%):-%N}"
+    DOTFILES_ROOT="$(cd "$(dirname "${_THIS_SCRIPT:-.}")/.." && pwd)"
+else
+    # Fallback
+    DOTFILES_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fi
+
 ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"
 ZSH_ZSHRC_SOURCE="${ZSH_DOTFILES}/zshrc"
 HOME_ZSHRC="${HOME}/.zshrc"
@@ -43,7 +55,7 @@ log_critical() {
     exit 1
 }
 log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
-log_debug() { echo "${UX_MUTED}[DEBUG] $1${UX_RESET}"; }
+log_debug() { echo -e "${UX_MUTED}[DEBUG] $1${UX_RESET}"; }
 log_warning() { ux_warning "$1"; }
 
 # --- Functions ---

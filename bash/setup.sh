@@ -50,7 +50,7 @@ log_critical() {
     exit 1
 }
 log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
-log_debug() { echo "${UX_MUTED}[DEBUG] $1${UX_RESET}"; }
+log_debug() { echo -e "${UX_MUTED}[DEBUG] $1${UX_RESET}"; }
 log_warning() { ux_warning "$1"; }
 
 # --- Functions ---
@@ -133,18 +133,20 @@ fi
 # Setup work_log.txt symlink (git-tracked, multi-PC sync)
 # Points: ~/work_log.txt → dotfiles/work/log/work_log.txt
 
-WORK_LOG_SRC="${DOTFILES_BASH_DIR}/../work/log/work_log.txt"
+# Normalize path by resolving .. components
+WORK_LOG_SRC="$(cd "${DOTFILES_BASH_DIR}/../work/log" && pwd)/work_log.txt"
 WORK_LOG_LINK="${HOME}/work_log.txt"
 
 if [ -f "$WORK_LOG_SRC" ]; then
     # Ensure symlink exists
     if [ -L "$WORK_LOG_LINK" ]; then
         # Already a symlink, verify it points to correct location
-        current_target=$(readlink "$WORK_LOG_LINK")
-        if [ "$current_target" != "$WORK_LOG_SRC" ]; then
+        current_target=$(readlink -f "$WORK_LOG_LINK")
+        expected_target=$(readlink -f "$WORK_LOG_SRC")
+        if [ "$current_target" != "$expected_target" ]; then
             log_error "경고: ~/.work_log.txt는 다른 위치를 가리키고 있습니다"
             log_dim "기존: $current_target"
-            log_dim "새로: $WORK_LOG_SRC"
+            log_dim "새로: $expected_target"
         else
             log_debug "✓ work_log.txt 심볼릭 링크 확인됨"
         fi
