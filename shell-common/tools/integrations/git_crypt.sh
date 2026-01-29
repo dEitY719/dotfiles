@@ -989,9 +989,23 @@ gc_check() {
     ((check_count++))
     ux_section "Check 2/8: git-crypt 초기화"
 
-    if git-crypt status &>/dev/null; then
+    if [[ -d .git-crypt ]] && [[ -f .git-crypt/.gitattributes ]]; then
         ux_success "✓ git-crypt 초기화됨"
-        ((passed++))
+
+        # Check for encryption warnings
+        local crypt_warnings
+        crypt_warnings=$(git-crypt status 2>&1 | grep "WARNING: staged/committed version is NOT ENCRYPTED" || true)
+
+        if [[ -n "$crypt_warnings" ]]; then
+            echo ""
+            ux_warning "⚠️  암호화 경고 발견:"
+            echo "$crypt_warnings" | while read -r warning; do
+                ux_bullet "$warning"
+            done
+            ((warnings++))
+        else
+            ((passed++))
+        fi
     else
         ux_error "✗ git-crypt이 초기화되지 않았습니다"
         ux_info "초기화: gci (git-crypt init)"
