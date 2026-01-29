@@ -57,8 +57,9 @@ PURITY_VIOLATIONS_FILE=$(mktemp "$TMPDIR/purity_violations_XXXXXX.txt")
 BACKUP_FILES_FILE=$(mktemp "$TMPDIR/backup_files_XXXXXX.txt")
 HELP_INTEGRITY_VIOLATIONS_FILE=$(mktemp "$TMPDIR/help_integrity_violations_XXXXXX.txt")
 DIRECT_EXEC_GUARD_FILE=$(mktemp "$TMPDIR/direct_exec_guard_XXXXXX.txt")
+SHELLCHECK_VIOLATIONS_FILE=$(mktemp "$TMPDIR/shellcheck_violations_XXXXXX.txt")
 
-trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$ALIAS_LOCATION_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$AUTO_EXEC_SOURCED_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE" "$HELP_INTEGRITY_VIOLATIONS_FILE" "$DIRECT_EXEC_GUARD_FILE"' EXIT
+trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$ALIAS_LOCATION_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$AUTO_EXEC_SOURCED_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE" "$HELP_INTEGRITY_VIOLATIONS_FILE" "$DIRECT_EXEC_GUARD_FILE" "$SHELLCHECK_VIOLATIONS_FILE"' EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Load check modules
@@ -88,6 +89,7 @@ source_check_or_exit "${CHECKS_DIR}/backup_file_check.sh"
 source_check_or_exit "${CHECKS_DIR}/help_integrity_check.sh"
 source_check_or_exit "${CHECKS_DIR}/auto_execution_check.sh"
 source_check_or_exit "${CHECKS_DIR}/direct_exec_guard_check.sh"
+source_check_or_exit "${CHECKS_DIR}/shellcheck_check.sh"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Get staged files (git diff --cached)
@@ -117,6 +119,7 @@ library_purity_violations=0
 backup_files_found=0
 help_integrity_violations=0
 direct_exec_guard_violations=0
+shellcheck_violations=0
 
 # 1) Shebang consistency for staged .sh files under shell-common/bash/zsh
 while IFS= read -r file; do
@@ -186,26 +189,38 @@ while IFS= read -r file; do
     fi
 done <<<"$STAGED_FILES"
 
-# 3) Postmortem guardrails: init files
+# 3) ShellCheck static analysis for shell scripts
+while IFS= read -r file; do
+    [[ "$file" != *.sh && "$file" != *.bash ]] && ! head -1 "$REPO_ROOT/$file" 2>/dev/null | grep -qE '^#!.*\b(bash|sh|zsh)' && continue
+
+    abs_path="$REPO_ROOT/$file"
+    [ -f "$abs_path" ] || continue
+
+    if ! check_shellcheck "$SHELLCHECK_VIOLATIONS_FILE" <<<"$file"; then
+        ((shellcheck_violations++))
+    fi
+done <<<"$STAGED_FILES"
+
+# 4) Postmortem guardrails: init files
 while IFS= read -r file; do
     if ! check_init_auto_sourcing "$REPO_ROOT" "$TMPDIR" "$file" "$CUSTOM_TOOLS_SOURCING_FILE" 2>/dev/null; then
         ((custom_tools_sourcing_violations++))
     fi
 done <<<"$STAGED_FILES"
 
-# 4) Postmortem guardrails: tools/custom scripts
+# 5) Postmortem guardrails: tools/custom scripts
 while IFS= read -r file; do
     if ! check_auto_executable_in_custom "$REPO_ROOT" "$TMPDIR" "$file" "$AUTO_EXEC_CUSTOM_FILE" 2>/dev/null; then
         ((auto_exec_custom_violations++))
     fi
 done <<<"$STAGED_FILES"
 
-# 5) Backup files check: warn about *.backup.* files in repo
+# 6) Backup files check: warn about *.backup.* files in repo
 if ! check_backup_files "$REPO_ROOT" "$BACKUP_FILES_FILE" 2>/dev/null; then
     ((backup_files_found++))
 fi
 
-# 6) Direct-exec guard check: executable scripts must have proper guards
+# 7) Direct-exec guard check: executable scripts must have proper guards
 while IFS= read -r file; do
     if ! check_direct_exec_guard "$REPO_ROOT" "$TMPDIR" "$file" "$DIRECT_EXEC_GUARD_FILE" 2>/dev/null; then
         ((direct_exec_guard_violations++))
@@ -220,7 +235,7 @@ echo ""
 echo -e "${BLUE}Pre-commit validation (staged files only)${NC}"
 echo ""
 
-blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + alias_location_violations + custom_tools_sourcing_violations + auto_exec_custom_violations + auto_exec_sourced_violations + library_purity_violations + help_integrity_violations + direct_exec_guard_violations))
+blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + alias_location_violations + custom_tools_sourcing_violations + auto_exec_custom_violations + auto_exec_sourced_violations + library_purity_violations + help_integrity_violations + direct_exec_guard_violations + shellcheck_violations))
 warning_count=$((subshell_violations + wrapper_violations + ux_violations + backup_files_found))
 
 if [ $blocking_violations -eq 0 ]; then
@@ -337,6 +352,13 @@ fi
 if [ $direct_exec_guard_violations -gt 0 ] && [ -s "$DIRECT_EXEC_GUARD_FILE" ]; then
     echo -e "${RED}[BLOCKING] Direct-exec guard violations ($direct_exec_guard_violations):${NC}"
     cat "$DIRECT_EXEC_GUARD_FILE" | sed 's/^/  /'
+    echo ""
+fi
+
+if [ $shellcheck_violations -gt 0 ] && [ -s "$SHELLCHECK_VIOLATIONS_FILE" ]; then
+    echo -e "${RED}[BLOCKING] ShellCheck static analysis issues ($shellcheck_violations):${NC}"
+    head -n 10 "$SHELLCHECK_VIOLATIONS_FILE" | sed 's/^/  /'
+    [ $(wc -l <"$SHELLCHECK_VIOLATIONS_FILE") -gt 10 ] && echo "  ... and more"
     echo ""
 fi
 
