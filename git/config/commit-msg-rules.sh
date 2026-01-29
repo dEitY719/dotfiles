@@ -29,18 +29,20 @@ MIN_MESSAGE_LENGTH=10          # Minimum meaningful message length
 # FORBIDDEN MESSAGE PATTERNS (차단할 메시지)
 # ============================================
 # These patterns indicate temporary/debug commits that should not be pushed
+# IMPORTANT: Use exact patterns to avoid blocking valid types like "test:"
 FORBIDDEN_PATTERNS=(
-    "^WIP"                     # Work In Progress
+    "^WIP"                     # Work In Progress (any message starting with WIP)
+    "^WIP:"                    # WIP: format
     "^tmp"                     # Temporary commit
-    "^test"                    # Random test commit (not 'test:' type)
-    "^fix$"                    # Single word 'fix' (too vague)
+    "^test$"                   # ONLY single word "test" (not "test: description")
+    "^fix$"                    # ONLY single word "fix" (not "fix: description")
     "^TEMP"                    # Temporary marker
     "^DEBUG"                   # Debug marker
-    "^XX"                      # Placeholder
+    "^XX[^A-Z0-9]"            # XX followed by non-alphanumeric (not release version)
     "^TODO"                    # Incomplete work
     "^FIXME"                   # Incomplete fix
     "^XXX"                     # Another placeholder
-    "^!!!"                      # Urgency marker (not formal)
+    "^!!!"                     # Urgency marker (not formal)
 )
 
 # ============================================
