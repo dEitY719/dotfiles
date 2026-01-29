@@ -2,9 +2,16 @@
 # Git pre-push hook: Prevent direct pushes to protected branches
 # Installed: git config core.hooksPath git/hooks
 # Enforces: PR-based workflow (no direct pushes to main/release)
+#
+# Skip this hook: SKIP_PRE_PUSH=1 git push origin main
 
 set -o errexit
 set -o pipefail
+
+# Allow skipping this hook for fast development
+if [ "${SKIP_PRE_PUSH:-0}" = "1" ]; then
+    exit 0
+fi
 
 # Get hook directory and import rules
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
