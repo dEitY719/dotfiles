@@ -11,6 +11,7 @@ main() {
 
     ux_section "📚 주요 명령어"
     echo ""
+    ux_bullet "gccheck          : 🔍 git-crypt 상태 진단 (Health Check)"
     ux_bullet "gcsetup          : git-crypt 초기 설정 (대화형)"
     ux_bullet "gcnewpc          : 새 PC에서 한 번에 설정"
     ux_bullet "gcpush           : .env 파일 암호화 & 한 번에 push"
@@ -50,6 +51,7 @@ main() {
     echo ""
 
     echo "💡 더 많은 정보:"
+    echo "   gccheck   : 🔍 종합 상태 진단 (항상 실행 권장!)"
     echo "   gcsetup   : 초기 설정 가이드"
     echo "   gcnewpc   : 새 PC 온보딩"
     echo ""

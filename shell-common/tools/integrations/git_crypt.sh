@@ -45,6 +45,7 @@ alias gcunlock='git-crypt unlock'
 alias gcls='git-crypt status -f'
 alias gchelp='_gc_help_wrapper'
 alias gc-help='_gc_help_wrapper'
+alias gccheck='gc_check'
 
 _gc_help_wrapper() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/gc_help.sh"
@@ -953,4 +954,236 @@ gc_addme() {
 
         return 1
     fi
+}
+
+# git-crypt 상태 종합 진단
+gc_check() {
+    ux_header "git-crypt 상태 진단 (Health Check)"
+
+    local check_count=0
+    local passed=0
+    local failed=0
+    local warnings=0
+
+    echo ""
+
+    # ========================================
+    # 1. Git 리포지토리 확인
+    # ========================================
+    ((check_count++))
+    ux_section "Check 1/8: Git 리포지토리"
+
+    if git rev-parse --is-inside-work-tree &>/dev/null; then
+        ux_success "✓ Git 리포지토리 확인됨"
+        ((passed++))
+    else
+        ux_error "✗ Git 리포지토리가 아닙니다"
+        ((failed++))
+        return 1
+    fi
+    echo ""
+
+    # ========================================
+    # 2. git-crypt 초기화 확인
+    # ========================================
+    ((check_count++))
+    ux_section "Check 2/8: git-crypt 초기화"
+
+    if git-crypt status &>/dev/null; then
+        ux_success "✓ git-crypt 초기화됨"
+        ((passed++))
+    else
+        ux_error "✗ git-crypt이 초기화되지 않았습니다"
+        ux_info "초기화: gci (git-crypt init)"
+        ((failed++))
+    fi
+    echo ""
+
+    # ========================================
+    # 3. Repository 잠금 상태 확인
+    # ========================================
+    ((check_count++))
+    ux_section "Check 3/8: Repository 잠금 상태"
+
+    if [[ -f .env ]] && head -c 8 .env 2>/dev/null | LC_ALL=C grep -q "^GITCRYPT"; then
+        ux_warning "⚠ Repository가 locked 상태입니다"
+        ux_info "복호화: gcunlock 또는 git-crypt unlock"
+        ((warnings++))
+    else
+        ux_success "✓ Repository가 unlocked 상태입니다"
+        ((passed++))
+    fi
+    echo ""
+
+    # ========================================
+    # 4. .gitattributes 확인
+    # ========================================
+    ((check_count++))
+    ux_section "Check 4/8: .gitattributes 설정"
+
+    if [[ ! -f .gitattributes ]]; then
+        ux_warning "⚠ .gitattributes 파일이 없습니다"
+        ux_info "생성하기: echo '.env filter=git-crypt diff=git-crypt' >> .gitattributes"
+        ((warnings++))
+    elif grep -q "filter=git-crypt" .gitattributes; then
+        ux_success "✓ .gitattributes에 git-crypt 설정 있음"
+        grep "filter=git-crypt" .gitattributes | while read -r line; do
+            ux_bullet "$line"
+        done
+        ((passed++))
+    else
+        ux_warning "⚠ .gitattributes에 git-crypt 설정이 없습니다"
+        ((warnings++))
+    fi
+    echo ""
+
+    # ========================================
+    # 5. .gitignore 설정 확인
+    # ========================================
+    ((check_count++))
+    ux_section "Check 5/8: .gitignore 설정"
+
+    local gitignore_ok=false
+
+    if [[ ! -f .gitignore ]]; then
+        ux_warning "⚠ .gitignore 파일이 없습니다"
+        ((warnings++))
+    elif grep -q "\.secrets" .gitignore 2>/dev/null; then
+        ux_success "✓ .gitignore에 .secrets 설정 있음"
+        grep "\.secrets" .gitignore | while read -r line; do
+            ux_bullet "$line"
+        done
+        gitignore_ok=true
+        ((passed++))
+    else
+        ux_warning "⚠ .gitignore에 .secrets가 없습니다"
+        ux_info "추가: echo '.secrets/*.asc' >> .gitignore"
+        ((warnings++))
+    fi
+    echo ""
+
+    # ========================================
+    # 6. GPG 키 확인
+    # ========================================
+    ((check_count++))
+    ux_section "Check 6/8: GPG 개인키"
+
+    if gpg --list-secret-keys | grep -q "sec"; then
+        local key_count
+        key_count=$(gpg --list-secret-keys --keyid-format=long 2>/dev/null | grep "^sec" | wc -l)
+        ux_success "✓ GPG 개인키 확인됨 ($key_count개)"
+        gpg --list-secret-keys --keyid-format=long 2>/dev/null | grep "^uid" | head -n 3 | while read -r line; do
+            ux_bullet "$line"
+        done
+        ((passed++))
+    else
+        ux_error "✗ GPG 개인키가 없습니다"
+        ux_info "생성: gpg --full-generate-key"
+        ux_info "또는 복원: gcrestore"
+        ((failed++))
+    fi
+    echo ""
+
+    # ========================================
+    # 7. Staged/Unstaged 파일 확인
+    # ========================================
+    ((check_count++))
+    ux_section "Check 7/8: Git 상태 (Staged/Unstaged)"
+
+    local unstaged
+    unstaged=$(git diff --name-only 2>/dev/null)
+
+    local staged
+    staged=$(git diff --cached --name-only 2>/dev/null)
+
+    if [[ -z "$unstaged" && -z "$staged" ]]; then
+        ux_success "✓ Working tree이 깨끗합니다"
+        ((passed++))
+    else
+        if [[ -n "$staged" ]]; then
+            ux_warning "⚠ Staged 파일이 있습니다:"
+            echo "$staged" | while read -r file; do
+                ux_bullet "$file"
+            done
+        fi
+
+        if [[ -n "$unstaged" ]]; then
+            ux_warning "⚠ Unstaged 수정사항이 있습니다:"
+            echo "$unstaged" | while read -r file; do
+                ux_bullet "$file"
+            done
+
+            # .secrets 파일 특별 체크
+            if echo "$unstaged" | grep -q "\.secrets"; then
+                echo ""
+                ux_error "🚨 .secrets 파일이 modified 상태입니다"
+                ux_info "원인: .gitignore 설정이 없거나 파일이 이미 추적 중일 수 있습니다"
+                ux_info "해결 방법:"
+                echo "  1. git rm --cached .secrets/ (추적 제거)"
+                echo "  2. echo '.secrets/*.asc' >> .gitignore"
+                echo "  3. git add .gitignore"
+                echo "  4. git commit -m 'chore: ignore .secrets'"
+                ((failed++))
+            else
+                ((warnings++))
+            fi
+        fi
+    fi
+    echo ""
+
+    # ========================================
+    # 8. 원격 저장소 동기화
+    # ========================================
+    ((check_count++))
+    ux_section "Check 8/8: 원격 저장소 상태"
+
+    local local_count
+    local remote_count
+
+    local_count=$(git rev-list --count HEAD 2>/dev/null)
+    remote_count=$(git rev-list --count @{u} 2>/dev/null || echo "0")
+
+    if git rev-parse @{u} &>/dev/null; then
+        if [[ $local_count -eq $remote_count ]]; then
+            ux_success "✓ 원격 저장소와 동기화됨"
+            ((passed++))
+        elif [[ $local_count -gt $remote_count ]]; then
+            ux_warning "⚠ 로컬 commit이 remote보다 앞서있습니다"
+            echo "  로컬: $local_count commits, 원격: $remote_count commits"
+            ux_info "push: git push"
+            ((warnings++))
+        else
+            ux_warning "⚠ 원격 commit이 로컬보다 앞서있습니다"
+            echo "  로컬: $local_count commits, 원격: $remote_count commits"
+            ux_info "pull: git pull"
+            ((warnings++))
+        fi
+    else
+        ux_warning "⚠ Upstream branch가 설정되지 않았습니다"
+        ((warnings++))
+    fi
+    echo ""
+
+    # ========================================
+    # 결과 요약
+    # ========================================
+    ux_section "📊 진단 결과"
+    echo ""
+    echo "  총 검사: $check_count"
+    echo "  ${green}✓ 통과: $passed${reset}"
+    echo "  ${bold}⚠ 경고: $warnings${reset}"
+    echo "  ${bold}✗ 실패: $failed${reset}"
+    echo ""
+
+    if [[ $failed -eq 0 ]]; then
+        if [[ $warnings -eq 0 ]]; then
+            ux_success "🎉 모든 상태가 정상입니다!"
+        else
+            ux_warning "⚠️  경고 사항이 있습니다. 위 내용을 확인하세요."
+        fi
+    else
+        ux_error "❌ 실패 항목이 있습니다. 위 지시사항을 따르세요."
+        return 1
+    fi
+    echo ""
 }
