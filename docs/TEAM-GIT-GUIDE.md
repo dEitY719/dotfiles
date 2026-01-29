@@ -1,8 +1,6 @@
 # 팀 Git Hooks 가이드
 
-**작성일:** 2026-01-29
-**대상:** SWINNOTEAM 개발자 (3명)
-**목적:** Git hooks를 통한 자동화된 품질 관리 & 워크플로우 표준화
+**작성일:** 2026-01-29 | **대상:** 3명 팀 | **목적:** 자동화된 품질 관리 & 워크플로우 표준화
 
 ---
 
@@ -22,11 +20,13 @@
 ## 개요
 
 **현재 상황:**
+
 - ✅ `commit-msg` hook: 메시지 형식 강제 (STRICT MODE)
 - ✅ `pre-push` hook: main 브랜치 보호
 - ✅ `prepare-commit-msg` hook: JIRA 키 자동 추출
 
 **효과:**
+
 ```
 버그 예방 ↑
 work log 자동화 ↑
@@ -69,11 +69,13 @@ work log 자동화 ↑
 ### 1️⃣ commit-msg: 메시지 검증 (STRICT MODE)
 
 **작동:**
+
 - ✓ Conventional Commits 형식 강제
 - ✓ 메시지 길이 제한 (subject < 50자)
 - ✓ 금지 패턴 차단 (WIP, tmp, DEBUG 등)
 
 **형식:**
+
 ```
 <type>(<scope>): <subject>
 
@@ -82,6 +84,7 @@ work log 자동화 ↑
 ```
 
 **허용 타입:**
+
 ```
 feat     - 새로운 기능
 fix      - 버그 수정
@@ -94,6 +97,7 @@ chore    - 빌드, 의존성 업데이트
 ```
 
 **예시 (좋음):**
+
 ```
 feat(auth): add OAuth2 login
 
@@ -103,6 +107,7 @@ feat(auth): add OAuth2 login
 ```
 
 **예시 (나쁨 - 차단됨):**
+
 ```
 WIP: work in progress           ❌ 임시 메시지
 tmp fix                         ❌ 랜덤 메시지
@@ -115,6 +120,7 @@ fix(auth): add OAuth2 login that includes token refresh and... ❌ 너무 김 (>
 ### 2️⃣ prepare-commit-msg: JIRA 키 자동 추출
 
 **작동:**
+
 - Branch 이름에서 JIRA 키를 자동으로 추출
 - 에디터 열기 전에 메시지 템플릿 미리 생성
 - 사용자는 템플릿 완성만 하면 됨
@@ -138,6 +144,7 @@ $ git commit
 ```
 
 **JIRA 키 없는 경우:**
+
 ```bash
 $ git checkout -b feature/refactor-auth-module
 $ git commit
@@ -152,8 +159,9 @@ feat(auth): refactor module
 ### 3️⃣ pre-push: main 브랜치 보호
 
 **작동:**
+
 - main, master로의 직접 push 차단
-- release/* 브랜치로의 push 차단
+- release/\* 브랜치로의 push 차단
 - feature 브랜치는 push 허용
 
 **시나리오:**
@@ -252,16 +260,19 @@ $ git push origin feature/SWINNOTEAM-906-add-oauth2
 ### 좋은 예시들
 
 **단순 메시지:**
+
 ```
 feat(user): add profile page
 ```
 
 **JIRA 키 포함 (자동):**
+
 ```
 [SWINNOTEAM-906] feat(auth): add OAuth2 login
 ```
 
 **상세 메시지:**
+
 ```
 feat(api): implement webhook handler
 
@@ -274,6 +285,7 @@ Closes SWINNOTEAM-906
 ```
 
 **버그 수정:**
+
 ```
 fix(auth): resolve null pointer in token check
 
