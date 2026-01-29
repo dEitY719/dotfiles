@@ -87,5 +87,30 @@ zsh_autosuggestions_help() {
     echo ""
 }
 
+# ═══════════════════════════════════════════════════════════════
+# Installation Command (wrapper for mytool.sh function)
+# ═══════════════════════════════════════════════════════════════
+
+# Display installation helper
+zsh_autosuggestions_install_help() {
+    ux_header "zsh-autosuggestions Installation"
+    ux_info "Installing command history suggestions for zsh"
+    echo ""
+    ux_section "Installation"
+    ux_bullet "Step 1: Clone plugin from GitHub"
+    ux_bullet "Step 2: Register in Oh-My-Zsh plugins array"
+    ux_bullet "Step 3: Configure key bindings"
+    echo ""
+    ux_section "During Installation"
+    ux_bullet "You will see step-by-step progress indicators"
+    ux_bullet "Any existing plugin references will be cleaned up"
+    ux_bullet "Automatic backups are created if needed"
+    echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════
 # Naming Convention: Support both dash and underscore
+# ═══════════════════════════════════════════════════════════════
+
 alias zsh-autosuggestions-help='zsh_autosuggestions_help'
+alias install-zsh-autosuggestions='install_zsh_autosuggestions'
