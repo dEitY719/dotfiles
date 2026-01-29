@@ -170,7 +170,11 @@ validate_commit_message() {
     return 0
 }
 
-# Only run if sourced with function name as argument
-if [ $# -gt 0 ]; then
-    "$@"
+# Only run when executed directly (not when sourced by git hooks).
+# When sourced, positional parameters belong to the caller (e.g., commit message file path),
+# so auto-executing "$@" would try to run that path as a command.
+if [ "${BASH_SOURCE:-}" = "$0" ] || [ -z "${BASH_SOURCE:-}" ]; then
+    if [ $# -gt 0 ]; then
+        "$@"
+    fi
 fi
