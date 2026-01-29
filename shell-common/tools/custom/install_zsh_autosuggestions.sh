@@ -29,7 +29,8 @@ _step() {
 
 # Check if zsh-autosuggestions is already installed
 _check_installed() {
-    local plugin_dir="${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions"
+    local omz_custom="${ZSH_CUSTOM:-${HOME}/.oh-my-zsh/custom}"
+    local plugin_dir="${omz_custom}/plugins/zsh-autosuggestions"
     [ -d "$plugin_dir" ]
 }
 
@@ -73,9 +74,11 @@ _show_status() {
     echo ""
     ux_section "Installation Status"
 
+    local omz_custom="${ZSH_CUSTOM:-${HOME}/.oh-my-zsh/custom}"
+
     if _check_installed; then
         ux_success "✓ Plugin directory"
-        echo "  ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions"
+        echo "  ${omz_custom}/plugins/zsh-autosuggestions"
     else
         ux_warning "✗ Plugin directory not found"
     fi
@@ -90,7 +93,8 @@ _show_status() {
 
 # Install zsh-autosuggestions plugin
 _install_plugin() {
-    local plugin_dir="${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions"
+    local omz_custom="${ZSH_CUSTOM:-${HOME}/.oh-my-zsh/custom}"
+    local plugin_dir="${omz_custom}/plugins/zsh-autosuggestions"
 
     # Already installed
     if [ -d "$plugin_dir" ]; then
