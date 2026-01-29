@@ -1,0 +1,58 @@
+#!/bin/bash
+# Git pre-push hook: Prevent direct pushes to protected branches
+# Installed: git config core.hooksPath git/hooks
+# Enforces: PR-based workflow (no direct pushes to main/release)
+
+set -o errexit
+set -o pipefail
+
+# Get hook directory and import rules
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=/dev/null
+source "${HOOK_DIR}/../config/pre-push-rules.sh" || exit 0
+
+# ============================================
+# MAIN HOOK LOGIC
+# ============================================
+
+# Pre-push receives refs from stdin
+# Format: <local ref> <local sha> <remote ref> <remote sha>
+# Example: refs/heads/main abc123... refs/heads/main def456...
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    # Extract branch name from local_ref (refs/heads/main → main)
+    local_branch="${local_ref#refs/heads/}"
+
+    # Check if branch is protected
+    is_protected=0
+    for protected in "${PROTECTED_BRANCHES[@]}"; do
+        # Handle wildcard patterns (e.g., release/*)
+        if [[ "$protected" == *"*" ]]; then
+            # Convert glob to regex: release/* → release/.*
+            pattern="${protected//\*/.*}"
+            if [[ "$local_branch" =~ ^${pattern}$ ]]; then
+                is_protected=1
+                break
+            fi
+        else
+            # Exact match
+            if [ "$local_branch" = "$protected" ]; then
+                is_protected=1
+                break
+            fi
+        fi
+    done
+
+    # If protected, reject the push
+    if [ $is_protected -eq 1 ]; then
+        echo ""
+        echo "🚫 $MSG_PROTECTED_BRANCH: '$local_branch'"
+        echo "   $MSG_USE_PR"
+        echo "   $MSG_MERGE_VIA_PR"
+        echo "$MSG_HINT_FIX"
+        exit 1
+    fi
+done
+
+exit 0
