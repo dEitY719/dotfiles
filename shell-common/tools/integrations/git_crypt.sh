@@ -46,16 +46,6 @@ alias gc-ls='git-crypt status -f'
 alias gc-help='_gc_help_wrapper'
 alias gc-check='gc_check'
 
-# Backward compatibility
-alias gc-init='gc-init'
-alias gc-add-user='gc-add-user'
-alias gc-status='gc-status'
-alias gc-lock='gc-lock'
-alias gc-unlock='gc-unlock'
-alias gc-ls='gc-ls'
-alias gchelp='gc-help'
-alias gccheck='gc-check'
-
 _gc_help_wrapper() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/gc_help.sh"
 }
@@ -68,17 +58,6 @@ alias gc-backup='gc_backup_key'
 alias gc-restore='gc_restore_key'
 alias gc-new-pc='gc_setup_new_pc'
 alias gc-push='gc_push_env'
-
-# Backward compatibility
-alias gc-install='gc-install'
-alias gc-setup='gc-setup'
-alias gc-setup-cache='gc-setup-cache'
-alias gc-purge='gc-purge'
-alias gc-add-me='gc-add-me'
-alias gc-backup='gc-backup'
-alias gc-restore='gc-restore'
-alias gc-new-pc='gc-new-pc'
-alias gc-push='gc-push'
 
 # Color shortcuts for UX output
 bold="${UX_BOLD:-}"

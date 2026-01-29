@@ -12,6 +12,7 @@ main() {
     ux_section "📚 주요 명령어"
     echo ""
     ux_bullet "gc-check          : 🔍 git-crypt 상태 진단 (Health Check)"
+    ux_bullet "gc-init           : git-crypt 초기화 (1회만)"
     ux_bullet "gc-setup          : git-crypt 초기 설정 (대화형)"
     ux_bullet "gc-new-pc         : 새 PC에서 한 번에 설정"
     ux_bullet "gc-push           : .env 파일 암호화 & 한 번에 push"
