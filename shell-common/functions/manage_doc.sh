@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # shell-common/functions/manage_doc.sh
 # Document management utilities for dotfiles
 # Provides functions to manage documentation files (clear, archive, etc.)
@@ -122,7 +122,10 @@ clear_doc() {
     local error_count=0
 
     for file in "${files[@]}"; do
-        if > "$file" 2>/dev/null; then
+        # NOTE: Avoid a "bare" redirection (`> file`) in zsh.
+        # In interactive zsh, it can redirect the current shell's stdout,
+        # causing subsequent output (including the prompt) to disappear.
+        if : > "$file" 2>/dev/null; then
             ux_success "Cleared: $file"
             ((success_count++))
         else

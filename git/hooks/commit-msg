@@ -57,15 +57,14 @@ if [ -n "$VALIDATION_RESULT" ]; then
     echo "   feat(auth): add JWT token refresh mechanism"
     echo ""
 
-    # Check strict mode
-    if [ "${COMMIT_MSG_STRICT:-0}" = "1" ]; then
-        echo "🚫 STRICT MODE ENABLED: Commit rejected"
-        echo "   To override: COMMIT_MSG_STRICT=0 git commit"
-        exit 1
-    else
-        echo "✅ WARNING-FIRST MODE: Commit allowed"
-        echo "   Tip: Run 'COMMIT_MSG_STRICT=1 git commit' for strict validation"
+    # Check if warning-only mode is enabled
+    if [ "${COMMIT_MSG_WARN_ONLY:-0}" = "1" ]; then
+        echo "✅ WARNING MODE: Commit allowed (COMMIT_MSG_WARN_ONLY=1)"
         exit 0
+    else
+        echo "🚫 STRICT MODE: Commit rejected"
+        echo "   To override: COMMIT_MSG_WARN_ONLY=1 git commit"
+        exit 1
     fi
 fi
 
