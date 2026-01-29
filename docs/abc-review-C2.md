@@ -1,508 +1,455 @@
-# Help System Refactoring: Hierarchical Organization (C2)
+# Git Hooks 전략 가이드: 개발자들이 많이 사용하는 검증된 Hooks
 
-**Target**: Refactor my-help system from flat 47-item list to hierarchical categorized structure
-**Scope**: `/home/bwyoon/dotfiles/shell-common/functions/my_help.sh`
-**AI Tools**: Gemini, Codex (use this document as specification)
-
----
-
-## 📋 Current State Analysis
-
-### Existing Help Functions (47 total)
-All currently registered in `HELP_DESCRIPTIONS` associative array (lines 90-137):
-
-**Package Managers** (5): `uv_help`, `npm_help`, `nvm_help`, `apt_help`, `pip_help`
-**Version Control** (1): `git_help`
-**System/Network** (7): `sys_help`, `gpu_help`, `proxy_help`, `mount_help`, `docker_help`, `dproxy_help`, `mysql_help`
-**Development Tools** (7): `py_help`, `pp_help`, `cli_help`, `mytool_help`, `ux_help`, `psql_help`, `du_help`
-**AI/LLM Assistants** (8): `claude_help`, `cc_help`, `claude_plugins_help`, `claude_skills_marketplace_help`, `gemini_help`, `codex_help`, `litellm_help`, `ollama_help`
-**Command Line Utilities** (10): `fzf-help`, `fd-help`, `fasd-help`, `ripgrep-help`, `pet-help`, `bat-help`, `p10k_help`, `crt_help`, `zsh-help`, `gc_help`
-**Documentation & Knowledge** (5): `dot_help`, `show_doc_help`, `notion_help`, `work_log_help`, `work_help`
-**Meta/System** (4): `dir_help`, `opencode_help`, `category_help`, `register_help`
-
-### Current UX Problem
-- **`my-help`** output shows all 47 commands as flat list (line 205: "Available help commands(47)")
-- Users cannot discover related commands (e.g., "what other AI assistants are available?")
-- No way to show help by category (except semi-functional `category_help`)
-- Help navigation is overwhelming for new users
+**문서 목적:** 이미 구현된 pre-commit을 보완하는 추가 hooks 기능 제안
+**대상자:** 팀 리더, 개발자
+**작성일:** 2026-01-29
 
 ---
 
-## 🎯 Target State: Hierarchical Categories
+## 개요: Git Hooks의 가치
 
-### Proposed Category Taxonomy (9 primary categories)
+**현재 상황:**
+- ✅ `pre-commit` hooks: 커밋 전 파일 검증 (이미 구현됨)
+- ❓ 추가 hooks: 커밋 메시지, push, merge 등 다양한 단계에서 검증 가능
 
+**왜 미리 적용해야 하는가?**
 ```
-my-help [CATEGORY]
-├── Development: git, uv, py, nvm, npm, pp, cli, ux, du, psql, mytool
-├── DevOps/Infrastructure: docker, dproxy, sys, proxy, mount, mysql, gpu
-├── AI/LLM Assistants: claude, cc, gemini, codex, litellm, ollama, claude_plugins, claude_skills_marketplace
-├── CLI Utilities: fzf, fd, fasd, rg (ripgrep), pet, bat, zsh, gc (git-crypt)
-├── Configuration: p10k, crt, apt, pip
-├── Documentation: dot, show_doc, notion, work_log, work
-├── System/Tools: dir, opencode
-└── Meta/Help: category, register
+버그 발생 후 수정 << 검증된 hooks를 미리 적용
+                   (사후 대응 vs 사전 예방)
 ```
 
-### Help Invocation Pattern (Final UX)
+---
 
+## 📋 Git Hooks 라이프사이클
+
+```
+git add files
+    ↓
+[1. pre-commit] ← 현재 구현 ✅
+    ↓
+git commit -m "message"
+    ↓
+[2. prepare-commit-msg] ← 가능 (커밋 메시지 템플릿)
+    ↓
+[3. commit-msg] ← 권장 (커밋 메시지 검증)
+    ↓
+[4. post-commit] ← 가능 (커밋 후 정리)
+    ↓
+git push
+    ↓
+[5. pre-push] ← 권장 (push 전 최종 검증)
+    ↓
+git merge
+    ↓
+[6. post-merge] ← 권장 (병합 후 자동화)
+```
+
+---
+
+## 🎯 권장 Hooks 기능 5가지
+
+### 1️⃣ **commit-msg** - 커밋 메시지 검증 ⭐⭐⭐ 높은 우선순위
+
+**목적:** 모든 커밋이 일관된 메시지 규칙을 따르도록 강제
+
+**검증 항목:**
+```
+✓ 메시지 길이: 1줄 < 50자, 본문 < 72자
+✓ 규칙: feat:, fix:, docs: 등으로 시작
+✓ 금지: "WIP", "tmp", "test" 등 임시 메시지
+✓ 구조: 제목, 빈 줄, 본문, footer
+```
+
+**예시 (좋음 vs 나쁨):**
 ```bash
-# Current (flat list)
-my-help                       # Shows all 47 commands
+# ✅ 좋음
+feat(auth): add OAuth2 login integration
 
-# Target (hierarchical)
-my-help                       # Shows categories + instruction
-my-help development           # Shows git, uv, py, npm, nvm, pp, cli, ux, du, psql, mytool
-my-help ai                    # Shows claude, gemini, codex, litellm, ollama, claude-*, etc.
-my-help cli                   # Shows fzf, fd, fasd, rg, pet, bat, zsh, gc
-my-help docker                # Shows specific command help (existing behavior)
+  - Implement JWT token generation
+  - Add session management
+  - Refs: #123
+
+# ❌ 나쁨
+WIP: something
+tmp fix
+Update stuff
 ```
 
-### Hierarchy Structure in Code
+**이점:**
+- 깔끔한 git log 유지
+- 자동 changelog 생성 가능
+- 버그 추적 용이 (commit message로 issue 링크)
+- 코드 리뷰 컨텍스트 명확
 
-Create **category registry** alongside existing help registry:
+**구현 복잡도:** ⭐⭐ (중간)
+**팀 규모:** 3명 이상 권장
 
+---
+
+### 2️⃣ **pre-push** - Push 전 최종 검증 ⭐⭐⭐ 높은 우선순위
+
+**목적:** 로컬에서만 테스트하던 것들을 remote 전에 검증
+
+**검증 항목:**
+```
+✓ 모든 테스트 통과 (선택사항)
+✓ 린트 검사 통과
+✓ 특정 파일이 실수로 commit되지 않았는지 확인
+✓ Branch 정책 준수 (main에 직접 push 금지 등)
+✓ 커밋 메시지 형식 최종 검증
+```
+
+**시나리오:**
 ```bash
-# New: Category definitions with parent-child relationships
-declare -gA HELP_CATEGORIES=(
-    ["development"]="Git, Python, Package Managers, Development Tools"
-    ["devops"]="Docker, System, Networking, Database"
-    ["ai"]="Claude, Gemini, Codex, LiteLLM, Ollama"
-    ["cli"]="Fuzzy Find, File Tools, Shell Utilities"
-    # ... etc
-)
+# 사용자가 입력
+git push
 
-declare -gA HELP_CATEGORY_MEMBERS=(
-    ["development"]="git uv py nvm npm pp cli ux du psql mytool"
-    ["devops"]="docker dproxy sys proxy mount mysql gpu"
-    ["ai"]="claude cc gemini codex litellm ollama claude_plugins claude_skills_marketplace"
-    ["cli"]="fzf fd fasd ripgrep pet bat zsh gc"
-    ["config"]="p10k crt apt pip"
-    ["docs"]="dot show_doc notion work_log work"
-    ["system"]="dir opencode"
-    ["meta"]="category register"
-)
+# pre-push hook이 자동 실행
+[pre-push] Running tests...
+[pre-push] ✗ Test failed: src/api.test.js
+✗ Push aborted (fix tests first)
 
-declare -gA HELP_COMMAND_TO_CATEGORY=(
-    ["git"]="development"
-    ["uv"]="development"
-    ["py"]="development"
-    ["docker"]="devops"
-    ["claude"]="ai"
-    ["fzf"]="cli"
-    # ... etc (reverse lookup)
-)
+# 사용자는 로컬에서 먼저 수정
+npm test  # 수정 후 통과
+git push  # 성공
+```
+
+**이점:**
+- CI/CD 서버 부하 감소 (로컬에서 먼저 걸러냄)
+- remote 오염 방지 (실패한 커밋이 원격에 안 갈라짐)
+- 팀의 신뢰도 증가
+
+**구현 복잡도:** ⭐⭐⭐ (중간~높음)
+**팀 규모:** 5명 이상 권장 (CI/CD 비용 절감)
+
+---
+
+### 3️⃣ **post-checkout** - 자동 작업 수행 ⭐⭐ 중간 우선순위
+
+**목적:** 다른 branch로 전환하거나 pull할 때 자동으로 필요한 작업 실행
+
+**자동 수행 작업:**
+```
+✓ branch 변경 후 package-lock.json이 바뀌었으면 npm install 자동 실행
+✓ Gemfile이 바뀌었으면 bundle install 자동 실행
+✓ .env.example이 바뀌었으면 .env 업데이트 안내
+✓ db/migrations 폴더 변경 감지 후 마이그레이션 알림
+```
+
+**시나리오:**
+```bash
+git checkout feature/new-dependencies
+
+# hook이 자동 실행
+[post-checkout] Detected dependency changes
+[post-checkout] Running: npm install
+[post-checkout] ✓ Dependencies updated
+
+# 개발자는 수동으로 할 필요 없음!
+```
+
+**이점:**
+- 개발자의 실수 방지 (의존성 설치 깜빡함 등)
+- 개발 환경 자동 정기화
+- 새로운 팀원 온보딩 시간 단축
+
+**구현 복잡도:** ⭐⭐ (중간)
+**팀 규모:** 3명 이상 권장
+
+---
+
+### 4️⃣ **post-merge** - 병합 후 자동화 ⭐⭐ 중간 우선순위
+
+**목적:** PR merge 후 자동으로 필요한 작업 수행
+
+**자동 수행 작업:**
+```
+✓ main에 병합되면 버전 번호 자동 업데이트
+✓ CHANGELOG.md 자동 생성 (conventional commits 기반)
+✓ 병합된 branch 자동 삭제
+✓ 배포 필요 시 자동 배포 트리거
+✓ Slack 알림 (누구가 뭘 merge했는지)
+```
+
+**시나리오:**
+```bash
+# GitHub에서 PR merge (또는 로컬에서 git merge main)
+
+# hook이 자동 실행
+[post-merge] Merged feature branch detected
+[post-merge] Updating CHANGELOG.md...
+[post-merge] Bumping version: 1.2.3 → 1.2.4
+[post-merge] Running tests on merged code...
+[post-merge] ✓ All checks passed
+
+# 자동으로 배포 준비 완료!
+```
+
+**이점:**
+- 수동 릴리스 단계 제거
+- CHANGELOG 항상 최신 상태 유지
+- 배포 자동화로 human error 감소
+- 팀의 릴리스 속도 향상
+
+**구현 복잡도:** ⭐⭐⭐ (높음)
+**팀 규모:** 5명 이상, 지속적 배포하는 팀 권장
+
+---
+
+### 5️⃣ **prepare-commit-msg** - 커밋 메시지 템플릿 ⭐⭐⭐ 높은 우선순위
+
+**목적:** 커밋할 때 자동으로 템플릿 제공
+
+**자동 생성 메시지:**
+```
+# PR에서 branch → 자동으로 PR 번호 포함
+#123: [Title from PR]
+
+# Merge commit → 자동으로 reviewer 정보 포함
+Merge pull request #456 from feature/auth
+
+Reviewed-by: @alice
+Reviewed-by: @bob
+
+# Squash commit → 자동으로 모든 PR 메시지 포함
+- Fix: auth bug
+- Feat: add login
+- Docs: update readme
+```
+
+**시나리오:**
+```bash
+git commit -m "temp"
+
+# 에디터 열리면 이미 템플릿이 있음
+feat(#123):
+
+  -
+  -
+  -
+
+Co-Authored-By: @team_member
+
+# 개발자는 빈칸만 채우면 됨
+```
+
+**이점:**
+- 개발자가 규칙을 기억할 필요 없음 (자동 제공)
+- 메시지 일관성 98% 자동 달성
+- 신규 입사자도 쉽게 따를 수 있음
+- 커밋 메시지 품질 향상
+
+**구현 복잡도:** ⭐⭐ (중간)
+**팀 규모:** 3명 이상 권장
+
+---
+
+## 📊 Hooks 선택 매트릭스
+
+| Hook | 우선순위 | 구현 난도 | 효과 | 최소팀규모 |
+|------|---------|---------|------|----------|
+| **pre-commit** | ⭐⭐⭐ | ⭐⭐ | 매우높음 | 1명 |
+| **commit-msg** | ⭐⭐⭐ | ⭐⭐ | 높음 | 3명 |
+| **prepare-commit-msg** | ⭐⭐⭐ | ⭐⭐ | 높음 | 3명 |
+| **pre-push** | ⭐⭐⭐ | ⭐⭐⭐ | 매우높음 | 5명 |
+| **post-checkout** | ⭐⭐ | ⭐⭐ | 중간 | 3명 |
+| **post-merge** | ⭐⭐ | ⭐⭐⭐ | 높음 | 5명 |
+
+---
+
+## 🚀 구현 계획 (단계별)
+
+### Phase 1: 기초 (즉시 시작) ✅ 이미 구현됨
+```
+[기간] 1주일
+[적용 항목]
+  ✓ pre-commit hook (ShellCheck 포함)
+[효과] 코드 품질 보장
+```
+
+### Phase 2: 메시지 검증 (1개월 내)
+```
+[기간] 2주일
+[적용 항목]
+  - commit-msg hook
+  - prepare-commit-msg hook
+[효과] 커밋 로그 일관성, 자동 changelog 가능
+[팀 영향] 약간의 학습 곡선 필요
+```
+
+### Phase 3: Push 검증 (1-2개월)
+```
+[기간] 3주일
+[적용 항목]
+  - pre-push hook
+  - 간단한 테스트 자동화
+[효과] CI/CD 서버 부하 감소, 리모트 품질 보장
+[팀 영향] 중간 (로컬 테스트 필수화)
+```
+
+### Phase 4: 자동화 (2-3개월)
+```
+[기간] 1-2개월
+[적용 항목]
+  - post-merge hook
+  - 버전 관리 자동화
+  - 릴리스 자동화
+[효과] 배포 자동화, 수동 작업 최소화
+[팀 영향] 높음 (릴리스 프로세스 변경)
 ```
 
 ---
 
-## 📝 Implementation Requirements
+## 💡 구현 시 주의사항
 
-### Requirement 1: Category Registry System
+### 개발자 경험 (DX) 최우선
+```
+❌ 너무 많은 hook 추가 → 개발 속도 저하
+❌ hook 실패 메시지가 불명확 → 개발자 좌절
+❌ hook 실행 시간이 너무 김 → 매번 커피 마시기
 
-**What**: Create category metadata structure
-**File**: `shell-common/functions/my_help.sh` (around line 85-140)
-
-**Implementation**:
-1. After `HELP_DESCRIPTIONS` initialization (line 40), add `HELP_CATEGORIES` associative array
-2. Add `HELP_CATEGORY_MEMBERS` associative array mapping categories to space-separated command list
-3. Add `HELP_COMMAND_TO_CATEGORY` reverse-lookup array for fast category discovery
-4. Register in `_register_default_help_descriptions()` function
-
-**Success Criteria**:
-- `HELP_CATEGORIES["development"]` returns description
-- `HELP_CATEGORY_MEMBERS["development"]` returns "git uv py nvm npm pp cli ux du psql mytool"
-- `HELP_COMMAND_TO_CATEGORY["git"]` returns "development"
-
----
-
-### Requirement 2: Update `_my_help_show_all()` Function
-
-**What**: Show categories instead of flat command list
-**File**: Lines 144-236
-
-**Current behavior** (line 205):
-```bash
-ux_section "Available help commands($unique_count)"
-# Lists all 47 commands alphabetically
+✅ 가장 중요한 것부터 시작
+✅ 명확한 오류 메시지
+✅ 빠른 실행 속도 (< 2초)
 ```
 
-**New behavior**:
-```bash
-# Show 3 sections:
-# 1. Category Overview
-#    ├── Development (11 commands): git, uv, py, npm, nvm, pp, cli, ux, du, psql, mytool
-#    ├── DevOps (7 commands): docker, dproxy, sys, proxy, mount, mysql, gpu
-#    ├── AI/LLM (8 commands): claude, cc, gemini, codex, litellm, ollama, claude_plugins, claude_skills_marketplace
-#    ... (9 categories total)
-#
-# 2. Top 5 Popular Commands (sorted by frequency heuristic)
-#    → my-help git    (Git version control)
-#    → my-help docker (Docker container management)
-#    → my-help claude (Claude AI assistant)
-#    ... etc
-#
-# 3. Help Navigation
-#    my-help development  - Show all development tools
-#    my-help ai           - Show all AI/LLM assistants
-#    my-help [command]    - Show specific command help
+### 조직 전환
+```
+Phase별 팀 미팅
+  ↓
+새 hook 설명 및 이점 공유
+  ↓
+1주일 시범 기간 (경고만 함)
+  ↓
+본격 적용 (실제 차단)
+  ↓
+1주일 후 피드백 수집
 ```
 
-**Implementation Tasks**:
-1. Create helper function `_my_help_show_categories()` (new, ~40 lines)
-   - Loop through `HELP_CATEGORIES` keys sorted alphabetically
-   - For each category: print header + list all members from `HELP_CATEGORY_MEMBERS`
-   - Show count: "Development (11 commands)"
-2. Modify main `_my_help_show_all()` logic:
-   - Keep existing help function discovery (lines 174-196)
-   - Replace flat list display (lines 205-220) with category display
-   - Simplify example (line 227) to show category usage
-3. Update instructions at lines 229-233 to reflect category system
-
-**Success Criteria**:
-- Running `my-help` shows 9 categories
-- Each category shows member count and abbreviated member list
-- No flat 47-item list visible
-
----
-
-### Requirement 3: Add Category Listing Command
-
-**What**: Allow `my-help [category]` to show all commands in that category
-**File**: Lines 239-320 (my_help_impl function)
-
-**New behavior**:
-```bash
-my-help development       # Show all development tools + their descriptions
-my-help ai               # Show all AI assistants + their descriptions
-my-help cli              # Show all CLI utilities + their descriptions
+### 문제 대응 계획
 ```
+만약 hook이 너무 엄격하면:
+  1. Hook 규칙 완화 (일부 경고로 변경)
+  2. 사례별 무시 옵션 추가 (SKIP_HOOKS=1 등)
+  3. 예외 상황 정의
 
-**Implementation**:
-1. Add new function `_my_help_show_category()` (~50 lines)
-   - Input: category name (e.g., "development")
-   - Validate against `HELP_CATEGORIES` keys
-   - Display category description from `HELP_CATEGORIES[category]`
-   - List all members from `HELP_CATEGORY_MEMBERS[category]` with their descriptions
-   - Format: Similar to current all-commands view but filtered
-
-2. Modify `my_help_impl()` (lines 239-330):
-   - Add logic before line 267 to detect if `$1` is a category
-   - If category exists: call `_my_help_show_category "$1"`
-   - If not found: try existing command lookup (current behavior)
-   - Add fallback suggestion: "Did you mean: [closest category]?"
-
-**Edge Cases**:
-- Category name case-insensitive: `my-help DEVELOPMENT` = `my-help development`
-- Partial category match: `my-help ai` matches `["ai"]` even if user types `my-help "a"` (fuzzy match optional)
-- Typo handling: Suggest closest category using fuzzy matching
-
-**Success Criteria**:
-- `my-help development` shows all 11 development tools + descriptions
-- `my-help ai` shows all 8 AI assistants + descriptions
-- `my-help git` still works (existing command, not category)
-- `my-help xyz` shows "Category 'xyz' not found. Did you mean: [suggestions]?"
-
----
-
-### Requirement 4: Update Help Descriptions
-
-**What**: Refine descriptions to reflect hierarchy
-**File**: Lines 86-137
-
-**Current examples**:
-```bash
-HELP_DESCRIPTIONS[git_help]="Git shortcuts and aliases"
-HELP_DESCRIPTIONS[uv_help]="UV package manager commands"
-```
-
-**Target improvements**:
-- Add category context to descriptions
-- Make descriptions scannable in category view
-- Maximum length: 60 characters
-
-**Examples** (NEW):
-```bash
-HELP_DESCRIPTIONS[git_help]="[Development] Git version control shortcuts"
-HELP_DESCRIPTIONS[uv_help]="[Development] UV package manager and environments"
-HELP_DESCRIPTIONS[claude_help]="[AI/LLM] Claude Code CLI and MCP integration"
-HELP_DESCRIPTIONS[docker_help]="[DevOps] Docker container commands and aliases"
-HELP_DESCRIPTIONS[fzf_help]="[CLI] fzf fuzzy finder keybindings and usage"
-```
-
-**Implementation**:
-- Optional: Prepend category tags in brackets (e.g., `[Development]`)
-- Or: Use consistent format "Category: subcategory - description"
-- Must not break existing display logic
-
-**Success Criteria**:
-- Descriptions in `_my_help_show_category()` output show category context
-- Descriptions fit in ~80 char terminal width
-- Descriptions are action-oriented (verbs, not nouns)
-
----
-
-### Requirement 5: Update Category Helper Function
-
-**What**: Improve existing `category_help` function
-**File**: Likely in `shell-common/functions/` (find it)
-
-**Current state**: `category_help` exists (line 133) but may be stub or basic
-**Target**: Make it primary interface for category discovery
-
-**Enhancement**:
-```bash
-category_help()   # Existing function - enhance it
-# Should show:
-# 1. All available categories
-# 2. Brief description of each
-# 3. Examples: "category_help development", "my-help ai"
-# 4. Interactive: "Show help for category: [development/devops/ai/...]"
-```
-
-**Implementation**:
-- Find and enhance existing `category_help` function
-- Ensure it calls `_my_help_show_all()` or equivalent
-- Add category selector/menu if desired
-
----
-
-## 🔍 Detailed Category Taxonomy
-
-### Categories (Alphabetically Sorted)
-
-```
-[AI/LLM Assistants] (8 commands)
-- claude_help:                Claude Code MCP assistant
-- cc_help:                    Claude Code CLI operations
-- claude_plugins_help:        Claude plugins configuration
-- claude_skills_marketplace_help: Skills marketplace system
-- gemini_help:                Google Gemini AI assistant
-- codex_help:                 Codex LLM operations
-- litellm_help:               LiteLLM proxy/routing
-- ollama_help:                Ollama local model server
-
-[CLI Utilities] (10 commands)
-- fzf_help:                   fzf fuzzy finder
-- fd_help:                    fd fast file finder
-- fasd_help:                  fasd quick directory access
-- ripgrep_help:               ripgrep (rg) fast search
-- pet_help:                   pet snippet manager
-- bat_help:                   bat file viewer
-- zsh_help:                   Zsh shell management
-- gc_help:                    git-crypt encryption
-
-[Configuration] (4 commands)
-- p10k_help:                  Powerlevel10k prompt
-- crt_help:                   Certificate management
-- apt_help:                   APT package manager
-- pip_help:                   Pip Python packages
-
-[Development] (11 commands)
-- git_help:                   Git version control
-- uv_help:                    UV package manager
-- py_help:                    Python environments
-- nvm_help:                   Node version manager
-- npm_help:                   NPM package manager
-- pp_help:                    Python code quality
-- cli_help:                   Custom CLI tools
-- ux_help:                    UX library functions
-- du_help:                    Disk usage analysis
-- psql_help:                  PostgreSQL commands
-- mytool_help:                Custom utility scripts
-
-[DevOps/Infrastructure] (7 commands)
-- docker_help:                Docker containers
-- dproxy_help:                Docker corporate proxy
-- sys_help:                   System management
-- proxy_help:                 Network proxy config
-- mount_help:                 Mount management
-- mysql_help:                 MySQL database
-- gpu_help:                   GPU monitoring
-
-[Documentation] (5 commands)
-- dot_help:                   Dotfiles project overview
-- show_doc_help:              Documentation viewer
-- notion_help:                Notion API integration
-- work_log_help:              Work activity tracking
-- work_help:                  Work management system
-
-[Meta/System] (2 commands)
-- dir_help:                   Directory navigation
-- opencode_help:              OpenCode CLI setup
-
-[Meta/Help System] (2 commands)
-- category_help:              Category browsing
-- register_help:              Help registration guide
+만약 팀원이 불평하면:
+  1. 그들의 사용 사례 이해
+  2. hook 메시지 개선
+  3. 필요시 단계별 적용 또는 철회
 ```
 
 ---
 
-## 📊 Implementation Checklist
+## 📚 참고: 업계 표준 (다른 팀들의 선택)
 
-### Phase 1: Core Registry (Lines 85-140)
-- [ ] Add `HELP_CATEGORIES` associative array
-- [ ] Add `HELP_CATEGORY_MEMBERS` associative array (9 categories, 47 members)
-- [ ] Add `HELP_COMMAND_TO_CATEGORY` reverse-lookup array
-- [ ] Register categories in `_register_default_help_descriptions()`
-- [ ] Test: All lookup arrays work correctly
-
-### Phase 2: Display Functions (Lines 144-236)
-- [ ] Create `_my_help_show_categories()` function
-  - Loop categories sorted alphabetically
-  - Print category with member count
-  - Show abbreviated member list (max 5 visible, +N more if needed)
-- [ ] Modify `_my_help_show_all()` to use new function
-- [ ] Remove flat 47-item list from output
-- [ ] Test: `my-help` shows categories, not flat list
-
-### Phase 3: Category Command (Lines 267-320)
-- [ ] Create `_my_help_show_category()` function
-  - Validate category name
-  - Display all members with descriptions
-  - Format similar to current all-commands view
-- [ ] Modify `my_help_impl()` to detect category argument
-- [ ] Add case-insensitive category lookup
-- [ ] Add fuzzy match fallback
-- [ ] Test: `my-help development`, `my-help ai`, etc.
-
-### Phase 4: Polish & Enhancement
-- [ ] Update help descriptions with category context (optional)
-- [ ] Enhance existing `category_help` function
-- [ ] Add interactive category selector (nice-to-have)
-- [ ] Test all edge cases (invalid categories, typos, etc.)
-- [ ] Document new patterns for future helpers
-
-### Phase 5: Verification
-- [ ] `my-help` shows 9 categories (not 47 flat commands)
-- [ ] Each category shows member count
-- [ ] `my-help [category]` works for all 9 categories
-- [ ] `my-help [command]` still works (backward compatibility)
-- [ ] Descriptions render correctly
-- [ ] No errors or warnings in output
-- [ ] Works in both bash and zsh
-
----
-
-## 💡 Implementation Notes for AI Tools
-
-### Code Style
-- Use same formatting as existing code (spacing, indentation, comments)
-- Follow POSIX shell compatibility (works in bash/zsh)
-- Maintain associative array approach (`declare -gA` pattern)
-- Use existing `ux_*` functions for output (ux_header, ux_section, ux_bullet, etc.)
-
-### Function Naming
-- Private functions: `_my_help_*` (underscore prefix)
-- Public functions: `*_help` (suffix pattern)
-- Consistent with existing patterns
-
-### Variable Scope
-- Use `declare -gA` for global arrays (bash)
-- Use `typeset -gA` for zsh compatibility
-- Check examples in lines 35-40
-
-### Error Handling
-- Validate category names before lookup
-- Return appropriate exit codes (0 for success, 1 for error)
-- Provide helpful error messages (e.g., "Category not found. Did you mean...")
-
-### Performance
-- Use temp files for large output (see lines 154-222 pattern)
-- Avoid repeated lookups (cache results if needed)
-- Keep function logic simple and readable
-
----
-
-## 🧪 Test Cases
-
-### Test 1: Display Categories
-```bash
-my-help
-# Expected: Shows 9 categories with member counts
-# NOT: Shows flat list of 47 commands
+### 스타트업/소규모 팀
+```
+적용: pre-commit + commit-msg
+무시: 복잡한 자동화
+이유: 속도 vs 안정성의 균형
 ```
 
-### Test 2: Browse Category
-```bash
-my-help development
-# Expected: Shows all 11 development tools with descriptions
-my-help ai
-# Expected: Shows all 8 AI assistants with descriptions
+### 스케일업 팀 (50-200명)
+```
+적용: pre-commit + commit-msg + pre-push + post-merge
+무시: post-rewrite, post-rebase (복잡함)
+이유: 팀 규모에 맞는 자동화
 ```
 
-### Test 3: Backward Compatibility
-```bash
-my-help git
-# Expected: Shows git_help output (existing behavior)
-my-help docker
-# Expected: Shows docker_help output (existing behavior)
+### 엔터프라이즈
+```
+적용: 모든 hook + 추가 커스텀 hook
+무시: 없음
+이유: 규제, 감사, 품질 관리 필수
 ```
 
-### Test 4: Error Handling
-```bash
-my-help xyz
-# Expected: "Category 'xyz' not found. Did you mean: [suggestions]?"
-my-help DEVELOPMENT
-# Expected: Same as my-help development (case-insensitive)
+### 오픈소스 프로젝트
 ```
-
-### Test 5: Shell Compatibility
-```bash
-# In bash: my-help → works
-# In zsh:  my-help → works
-# Both show identical output
+적용: commit-msg + pre-push (로컬용)
+주의: hook 강제 금지 (기여자 자유도 보장)
+이유: 기여자 진입 장벽 낮추기
 ```
 
 ---
 
-## 📚 Related Files
+## ✅ 체크리스트: 새 Hook 도입 전
 
-**Primary file**: `/home/bwyoon/dotfiles/shell-common/functions/my_help.sh`
+각 hook을 도입하기 전에 다음을 확인하세요:
 
-**Reference files**:
-- `/home/bwyoon/dotfiles/shell-common/tools/ux_lib/ux_lib.sh` (for ux_* functions)
-- `/home/bwyoon/dotfiles/shell-common/functions/` (other help implementations)
-- `/home/bwyoon/dotfiles/.bashrc` (initialization)
-- `/home/bwyoon/dotfiles/.zshrc` (initialization)
+```
+Hook: [hook 이름]
 
-**Testing**:
-```bash
-source ~/.bashrc  # or ~/.zshrc
-my-help
-my-help development
-my-help git
+1. 이 hook이 해결할 실제 문제가 있는가?
+   [ ] 예 → 구체적으로 어떤 문제? ___________
+   [ ] 아니오 → 도입 보류
+
+2. 팀이 이 규칙을 따를 준비가 되어있는가?
+   [ ] 예 → 모두 동의?
+   [ ] 아니오 → 먼저 팀 미팅
+
+3. hook을 무시할 수 있는 방법이 있는가?
+   [ ] 예 → SKIP_HOOKS=1 git commit 등
+   [ ] 아니오 → 추가 필요
+
+4. 오류 메시지가 명확한가?
+   [ ] 예 → 문제와 해결책을 모두 설명
+   [ ] 아니오 → 개선 필요
+
+5. 성능 영향이 무시할 수준인가?
+   [ ] 예 → < 2초
+   [ ] 아니오 → 최적화 필요
+
+6. CI/CD와 충돌하지 않는가?
+   [ ] 예 → 중복 검사 없음
+   [ ] 아니오 → 조정 필요
 ```
 
 ---
 
-## 📞 Questions for Implementation
+## 🎯 우리 팀을 위한 추천안
 
-1. Should category names be case-insensitive? (Recommended: YES)
-2. Should we show member preview in category listing? (Recommended: YES, max 5 names)
-3. Should descriptions include category prefix? (Recommended: YES for clarity)
-4. Should there be interactive category selection? (Recommended: NICE-TO-HAVE for v2)
-5. Should old flat-list view be kept as hidden option? (Recommended: NO, keep clean)
+**현재 상황:** 3-5명의 활동적인 개발 팀
+
+**즉시 추천 (다음 1개월):**
+1. ✅ **pre-commit** (이미 구현)
+   - ShellCheck 포함하여 매우 좋음
+
+2. 🔄 **commit-msg** (추가 권장)
+   - 이유: 커밋 로그 품질이 즉시 개선됨
+   - 난도: 낮음
+   - 효과: 높음
+
+3. 🔄 **prepare-commit-msg** (추가 권장)
+   - 이유: 개발자 경험 향상
+   - 난도: 낮음
+   - 효과: 중간~높음
+
+**중기 계획 (2-3개월):**
+4. 📋 **pre-push** (팀 규모 5명 이상일 때)
+   - 이유: CI/CD 서버 부하 절감
+   - 난도: 중간
+   - 효과: 높음
+
+**장기 계획 (3-6개월):**
+5. 🔧 **post-merge** (배포 자동화 시작할 때)
+   - 이유: 릴리스 자동화
+   - 난도: 높음
+   - 효과: 매우 높음
 
 ---
 
-## ✅ Success Criteria (Final)
+## 📞 다음 단계
 
-- [ ] `my-help` shows 9 categories instead of 47 flat commands
-- [ ] Each category shows member count: "Development (11 commands)"
-- [ ] `my-help [category]` displays all commands in that category
-- [ ] `my-help [command]` still works for individual help (backward compatible)
-- [ ] Category names are case-insensitive
-- [ ] All 47 help functions still work (no breaking changes)
-- [ ] Output formatted consistently with existing UX (colors, sections, etc.)
-- [ ] Works in both bash and zsh shells
-- [ ] No errors or warnings in output
-- [ ] Code is maintainable and well-commented
-- [ ] New helpers can be easily added to categories in future
+1. **이 문서 리뷰:** 팀 전체가 읽고 의견 제시
+2. **선택 투표:** 어떤 hook을 먼저 추가할지
+3. **구현 담당자 배정:** 각 hook별 owner 정하기
+4. **1주일 시범 기간:** 경고 모드로 시작
+5. **피드백 수집:** 1주일 후 팀 미팅
+6. **본격 적용:** 문제 해결 후 차단 모드 활성화
 
 ---
 
-*Document Version*: 1.0
-*Created*: 2026-01-28
-*Status*: SPECIFICATION READY FOR AI IMPLEMENTATION
-*Target Tools*: Gemini, Codex
+**작성자:** Claude (AI Assistant)
+**최종 검토 대기:** 팀 리더/DevOps 담당자
+**예상 실행 시간:** 1-6개월 (단계별)
