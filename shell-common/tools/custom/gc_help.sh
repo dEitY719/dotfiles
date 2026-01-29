@@ -2,6 +2,9 @@
 # shell-common/tools/custom/gc_help.sh
 # git-crypt help reference - run explicitly via gchelp/gc-help alias
 
+# Source UX library for formatting functions
+source "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/ux_lib/ux_lib.sh"
+
 main() {
     ux_header "git-crypt Helper Commands"
     echo ""
