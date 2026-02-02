@@ -4,29 +4,24 @@
 
 ### Issue 1: Shebang Violation
 **File**: shell-common/functions/devx.sh:1
-**Current**: #!/bin/bash
+**Current**: #!/bin/sh
 **Required**: #!/bin/sh
 **Reason**: Project standard for shell-common utilities
 
-**Complexity**: HIGH
-- File uses bash-specific features:
-  - `local` keyword (line 225, 226, etc)
-  - `BASH_SOURCE` array (line 56)
-  - ${...} parameter expansion with bash semantics
-  - Approx 50 lines need bash→POSIX conversion
-- File already documents "Primarily for bash (uses local keyword, BASH_SOURCE, and other bash-isms)"
+**Complexity**: Completed
+- Converted `shell-common/functions/devx.sh` to POSIX-safe (no `local`, no `BASH_SOURCE`, no top-level side effects).
 
 **Impact**: Medium
 - Changes semantics of existing functions
 - May break zsh compatibility despite current claims
 
-**Status**: Deferred (requires careful refactoring)
+**Status**: Completed (2026-02-02)
 
 ---
 
 ### Issue 2: Library Purity Violation
-**File**: shell-common/functions/devx.sh:364-366
-**Problem**: Top-level main execution when sourced
+**File**: shell-common/functions/devx.sh
+**Problem**: Top-level execution / side effects in auto-sourced library file
 
 ```bash
 # Current (problematic):
@@ -38,19 +33,16 @@ fi
 **Required Fix**:
 1. Remove main execution from shell-common/functions/devx.sh
 2. Create shell-common/tools/custom/devx wrapper script
-3. Update bash/main.bash devx loading logic
 
-**Complexity**: HIGH
-- Structural change affecting multiple files
-- Changes devx command invocation pattern
-- All dependent scripts may need updates
-- Approx 100+ lines of code changes
+**Complexity**: Completed
+- `shell-common/functions/devx.sh` now only defines functions (no execution).
+- Added `shell-common/tools/custom/devx.sh` as the standalone entrypoint.
 
-**Impact**: High
-- Breaks existing devx command flow
-- Requires comprehensive testing
+**Impact**: Low
+- Interactive shells still get `devx()` via auto-sourcing.
+- Standalone execution is available via `bash shell-common/tools/custom/devx.sh ...` (or by adding a PATH/alias wrapper later).
 
-**Status**: Deferred (requires architectural review)
+**Status**: Completed (2026-02-02)
 
 ---
 
@@ -69,8 +61,7 @@ fi
 
 **Critical Issues Deferred**:
 1. devx.sh exit code standardization (return 1 instead of return 2)
-   - Cannot implement due to pre-commit blocking violations above
-   - Blocked by Issue 1 + Issue 2 above
+   - Now unblocked (Issue 1 + Issue 2 resolved)
 
 **Recommendations for Future Work**:
 1. Prioritize devx.sh refactoring (Issues 1 + 2 above)
