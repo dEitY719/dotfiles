@@ -300,6 +300,3 @@ fi
 if command -v fasd &>/dev/null; then
     eval "$(fasd --init auto)"
 fi
-
-# opencode
-export PATH=/home/bwyoon/.opencode/bin:$PATH
