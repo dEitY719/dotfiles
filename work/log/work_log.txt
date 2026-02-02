@@ -12,3 +12,8 @@
   └─ Category: Infrastructure
 [2026-01-29 15:36:33] [SWINNOTEAM-906] | main |  | 53279d0
 [2026-01-29 15:36:48] [SWINNOTEAM-906] | main |  | af811b2
+[2026-02-02 18:45:04] [8263024] chore(git): chore(git): setup commit workflow with auto-logging [0.5hh] [Infrastructure]
+[2026-02-02 18:53:00] [DOTFILES-AUTO] | chore | Infrastructure | 0.3h | 7aa1d85
+[2026-02-02 18:27:00] [SWINNOTEAM-719] | refactor | Infrastructure | 2.0h | 902f232
+  └─ Category: Infrastructure
+[2026-02-02 19:03:16] [DOTFILES-AUTO] | docs | Infrastructure | 1.5h | 020840e
