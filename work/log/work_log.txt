@@ -1,1 +1,1 @@
-../../para/archive/rca-knowledge/logs/work_log.txt
+../../../para/archive/rca-knowledge/logs/work_log.txt
