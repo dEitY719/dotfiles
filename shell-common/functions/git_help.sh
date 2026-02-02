@@ -28,16 +28,16 @@ git_help() {
     echo ""
 
     ux_section "Logs"
-    ux_table_row "gl" "git_log" "Graph log (default 11)"
+    ux_table_row "gl" "git-log" "Graph log (default 11)"
     ux_table_row "gl1" "log --oneline" "One-line graph log"
-    ux_table_row "gl2" "git_log2" "Alternative log format"
+    ux_table_row "gl2" "git-log2" "Alternative log format"
     ux_table_row "glref" "log ref/main" "Ref log for main"
     echo ""
 
     ux_section "Upstream"
     ux_table_row "gupa" "remote add upstream" "Add upstream remote"
     ux_table_row "gupdel" "gupdel <remote>" "Remove remote"
-    ux_table_row "glum" "log upstream/main" "Upstream main log"
+    ux_table_row "glum" "git-log-upstream" "Upstream main log"
     ux_table_row "glub" "glub [branch]" "Upstream branch log"
     echo ""
 
@@ -45,7 +45,7 @@ git_help() {
     ux_table_row "gset-main" "set-upstream main" "Track origin/main"
     ux_table_row "gset-dev" "set-upstream dev" "Track origin/dev"
     ux_table_row "gset" "gset [branch]" "Track origin/[branch]"
-    ux_table_row "gprune" "gprune <remote>" "Delete all branches except main"
+    ux_table_row "gprune" "git-prune-remote <remote>" "Delete all branches except main"
     echo ""
 
     ux_section "Cherry-pick"

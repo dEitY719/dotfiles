@@ -121,8 +121,8 @@ _is_mounted() {
     return $?
 }
 
-# Internal: Show help for addmnt function (use _addmnt_help_ prefix for internal functions)
-_addmnt_help() {
+# Internal: Show help for mount_add function (use _mount_add_help_ prefix for internal functions)
+_mount_add_help() {
     if type ux_header >/dev/null 2>&1; then
         ux_header "Mount Bind Usage"
 
@@ -131,7 +131,7 @@ _addmnt_help() {
 
 
         ux_section "Usage"
-        ux_bullet "addmnt <source> <target>"
+        ux_bullet "mount_add <source> <target>"
 
 
         ux_section "Parameters"
@@ -140,8 +140,8 @@ _addmnt_help() {
 
 
         ux_section "Examples"
-        ux_bullet "addmnt ${DOTFILES_ROOT:-$HOME/dotfiles}/skills ~/.claude/skills"
-        ux_bullet "addmnt ~/projects ~/.local/mounts/projects"
+        ux_bullet "mount_add ${DOTFILES_ROOT:-$HOME/dotfiles}/skills ~/.claude/skills"
+        ux_bullet "mount_add ~/projects ~/.local/mounts/projects"
 
 
         ux_section "Notes"
@@ -150,17 +150,17 @@ _addmnt_help() {
 
     else
         cat << 'HELP'
-addmnt - Create bind mount
+mount_add - Create bind mount
 
-Usage: addmnt <source> <target>
+Usage: mount_add <source> <target>
 
 Parameters:
   source   Source directory path (required, must exist)
   target   Target mount point (required, created if missing)
 
 Examples:
-  addmnt $DOTFILES_ROOT/skills ~/.claude/skills
-  addmnt ~/projects ~/.local/mounts/projects
+  mount_add $DOTFILES_ROOT/skills ~/.claude/skills
+  mount_add ~/projects ~/.local/mounts/projects
 
 Notes:
   - Requires sudo permissions
@@ -175,13 +175,13 @@ HELP
 #   $1: source path (required)
 #   $2: target path (required)
 # Returns: 0 on success, 1 on failure
-addmnt() {
+mount_add() {
     local source="$1"
     local target="$2"
 
     # Show help if no arguments
     if [ -z "$source" ] || [ -z "$target" ]; then
-        _addmnt_help
+        _mount_add_help
         return 1
     fi
 
@@ -237,8 +237,8 @@ addmnt() {
     fi
 }
 
-# Internal: Show help for show_mnt function
-_show_mnt_help() {
+# Internal: Show help for mount_show function
+_mount_show_help() {
     if type ux_header >/dev/null 2>&1; then
         ux_header "Mount Status Display"
 
@@ -247,14 +247,14 @@ _show_mnt_help() {
 
 
         ux_section "Usage"
-        ux_bullet "show_mnt              Show all Claude mounts under ~/.claude"
-        ux_bullet "show_mnt <path>       Show specific mount path status"
+        ux_bullet "mount_show              Show all Claude mounts under ~/.claude"
+        ux_bullet "mount_show <path>       Show specific mount path status"
 
 
         ux_section "Examples"
-        ux_bullet "show_mnt                           All Claude mounts"
-        ux_bullet "show_mnt ~/.claude/skills          Skills directory mount"
-        ux_bullet "show_mnt ~/.claude/agents          Agents directory mount"
+        ux_bullet "mount_show                           All Claude mounts"
+        ux_bullet "mount_show ~/.claude/skills          Skills directory mount"
+        ux_bullet "mount_show ~/.claude/agents          Agents directory mount"
 
 
         ux_section "Notes"
@@ -262,13 +262,13 @@ _show_mnt_help() {
 
     else
         cat << 'HELP'
-show_mnt - Display mount status
+mount_show - Display mount status
 
-Usage: show_mnt [path]
+Usage: mount_show [path]
 
 Examples:
-  show_mnt                          All Claude mounts
-  show_mnt ~/.claude/skills         Specific mount status
+  mount_show                          All Claude mounts
+  mount_show ~/.claude/skills         Specific mount status
 
 Notes:
   - Requires findmnt or mount command
@@ -282,12 +282,12 @@ HELP
 # Parameters:
 #   $1: mount path to check (optional, defaults to all ~/.claude mounts)
 # Returns: 0 if mounted and displayed, 1 if command not available or error
-show_mnt() {
+mount_show() {
     local mount_path="${1}"
 
     # Show help if requested with -h or --help
     if [ "$mount_path" = "-h" ] || [ "$mount_path" = "--help" ]; then
-        _show_mnt_help
+        _mount_show_help
         return 0
     fi
 
@@ -346,7 +346,13 @@ show_mnt() {
         fi
     fi
 }
-alias show-mnt='show_mnt'
+
+# ============================================================================
+# Backward Compatibility Aliases
+# ============================================================================
+alias addmnt='mount_add'
+alias show-mnt='mount_show'
+alias mount-help='mount_help'
 
 # Note: Functions are automatically exported in both bash and zsh
 # No need for explicit export declarations in POSIX-compatible scripts

@@ -50,19 +50,19 @@ _git_log_formatter() {
 
 # Smart git log function (shows last 11 commits by default, all with -a/--all flag)
 # Usage:
-#   gl        - Show last 11 commits in graph format
-#   gl -a     - Show all commits in graph format
-#   gl --all  - Show all commits in graph format
-gl() {
+#   git_log        - Show last 11 commits in graph format
+#   git_log -a     - Show all commits in graph format
+#   git_log --all  - Show all commits in graph format
+git_log() {
     _git_log_formatter "" "$@"
 }
 
 # Upstream git log function (shows commits from upstream/main by default)
 # Usage:
-#   glum       - Show last 11 commits from upstream/main
-#   glum -a    - Show all commits from upstream/main
-#   glum --all - Show all commits from upstream/main
-glum() {
+#   git_log_upstream       - Show last 11 commits from upstream/main
+#   git_log_upstream -a    - Show all commits from upstream/main
+#   git_log_upstream --all - Show all commits from upstream/main
+git_log_upstream() {
     _git_log_formatter "upstream/main" "$@"
 }
 
@@ -71,9 +71,9 @@ glum() {
 # ============================================================================
 # Delete all branches from a specific remote except the main branch
 # Usage:
-#   gprune origin   - Delete all origin/* branches except origin/main
-#   gprune upstream - Delete all upstream/* branches except upstream/main
-gprune() {
+#   git_prune_remote origin   - Delete all origin/* branches except origin/main
+#   git_prune_remote upstream - Delete all upstream/* branches except upstream/main
+git_prune_remote() {
     if [ -z "$1" ]; then
         ux_error "Usage: gprune <remote-name>"
         ux_error "Example: gprune origin"
@@ -99,3 +99,11 @@ gprune() {
 
     ux_success "Done!"
 }
+
+# ============================================================================
+# Backward Compatibility Aliases
+# ============================================================================
+# Maintain short-form aliases for convenience while supporting standard naming
+alias gl='git_log'
+alias glum='git_log_upstream'
+alias gprune='git_prune_remote'
