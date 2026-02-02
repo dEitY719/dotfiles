@@ -150,45 +150,16 @@ shopt -s nullglob
 # Priority 2: ENV directory (bash-specific environment variables)
 # Priority 3: All other directories (auto-discovered, no manual addition needed)
 
-# --- Load shell-common environment variables first ---
-# These are POSIX-compatible and work in both bash and zsh
-# (SHELL_COMMON already defined earlier for UX library loading)
-if [ -d "${SHELL_COMMON}/env" ]; then
-    for f in "${SHELL_COMMON}/env/"*.sh; do
-        [ -f "$f" ] || continue
-        case "$f" in
-        *.local.sh) continue ;;
-        esac
-        safe_source "$f" "Shell-common environment file not found"
-    done
-fi
+# --- Load shell-common modules via loader ---
+# Centralized module loading with configuration-based filtering
+source "${SHELL_COMMON}/util/loader.sh"
 
-# --- Load shell-common aliases ---
-# These are POSIX-compatible and work in both bash and zsh
-if [ -d "${SHELL_COMMON}/aliases" ]; then
-    for f in "${SHELL_COMMON}/aliases/"*.sh; do
-        [ -f "$f" ] || continue
-        case "$f" in
-        *.local.sh) continue ;;
-        esac
-        safe_source "$f" "Shell-common aliases file not found"
-    done
-fi
+load_category "env"
+load_category "aliases"
+load_category "functions"
 
-# --- Load shell-common functions ---
-# These are POSIX-compatible and work in both bash and zsh
-if [ -d "${SHELL_COMMON}/functions" ]; then
-    for f in "${SHELL_COMMON}/functions/"*.sh; do
-        [ -f "$f" ] || continue
-        case "$f" in
-        *.local.sh) continue ;;
-        esac
-        safe_source "$f" "Shell-common functions file not found"
-    done
-fi
-
-# --- Load shell-common tools (integrations) ---
-# 3rd-party integrations: apt, ccusage, claude, codex, git, npm, etc
+# --- Load shell-common tools (integrations) separately ---
+# 3rd-party integrations: apt, ccusage, claude, codex, git, npm, opencode, etc
 if [ -d "${SHELL_COMMON}/tools/integrations" ]; then
     for f in "${SHELL_COMMON}/tools/integrations/"*.sh; do
         [ -f "$f" ] || continue
@@ -199,22 +170,7 @@ if [ -d "${SHELL_COMMON}/tools/integrations" ]; then
     done
 fi
 
-# --- Load shell-common tools (custom) ---
-# NOTE: shell-common/tools/custom/ contains executable utility scripts
-# that should NOT be auto-sourced. They are meant to be run explicitly
-# as commands, not loaded as shell functions. Examples: demo_ux.sh, check_ux_consistency.sh
-
-# --- Load shell-common projects ---
-# Project-specific configurations and utilities
-if [ -d "${SHELL_COMMON}/projects" ]; then
-    for f in "${SHELL_COMMON}/projects/"*.sh; do
-        [ -f "$f" ] || continue
-        case "$f" in
-        *.local.sh) continue ;;
-        esac
-        safe_source "$f" "Shell-common projects file not found"
-    done
-fi
+load_category "projects"
 
 # --- Load bash-specific ENV directory ---
 for f in "${DOTFILES_BASH_DIR}/env/"*.bash; do
@@ -226,42 +182,9 @@ done
 # This was previously loaded here as bash/util/my_help.bash but we now use
 # the unified shell-common version for parity with zsh
 
-# --- Auto-load all other directories ---
-# This automatically discovers and loads all .bash files from subdirectories
-# New directories are automatically included without modifying this file
-
-# Directories to skip (add new entries here instead of modifying loop logic)
-SKIP_DIRS=(
-    "core"    # Deprecated files
-    "ux_lib"  # Already loaded explicitly
-    "util"    # Skipped - using shell-common/functions/my_help.sh instead
-    "env"     # Already loaded above
-    "scripts" # Executable scripts, not sourced
-    "config"  # Configuration files only
-    "claude"  # Claude-specific settings
-    "app"     # Moved to shell-common/tools/integrations/
-)
-
-for dir in "${DOTFILES_BASH_DIR}"/*; do
-    [ -d "$dir" ] || continue
-    dir_name=$(basename "$dir")
-
-    # Check if directory is in skip list
-    skip=false
-    for skip_dir in "${SKIP_DIRS[@]}"; do
-        [[ "$dir_name" == "$skip_dir" ]] && {
-            skip=true
-            break
-        }
-    done
-    [[ "$skip" == true ]] && continue
-
-    # Load all .bash files in this directory
-    for f in "$dir"/*.bash; do
-        [ -f "$f" ] || continue
-        safe_source "$f" "File not found in $dir_name"
-    done
-done
+# --- Auto-load bash-specific directories ---
+# Load all .bash files from DOTFILES_BASH_DIR subdirectories (except skip list in config)
+load_auto_directories "${DOTFILES_BASH_DIR}" ".bash"
 
 # --- Restore nullglob to previous state ---
 if [[ ${__NULLGLOB_WAS_ON} -eq 0 ]]; then
