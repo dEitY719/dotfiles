@@ -75,8 +75,8 @@ glum() {
 #   gprune upstream - Delete all upstream/* branches except upstream/main
 gprune() {
     if [ -z "$1" ]; then
-        echo "Usage: gprune <remote-name>"
-        echo "Example: gprune origin"
+        ux_error "Usage: gprune <remote-name>"
+        ux_error "Example: gprune origin"
         return 1
     fi
 
@@ -87,15 +87,15 @@ gprune() {
     branch_count=$(git branch -r | grep "^[[:space:]]*$remote/" | grep -v "^[[:space:]]*$remote/main" | wc -l)
 
     if [ "$branch_count" -eq 0 ]; then
-        echo "No branches to delete (keeping $remote/main)"
+        ux_info "No branches to delete (keeping $remote/main)"
         return 0
     fi
 
-    echo "${UX_PRIMARY}Deleting $branch_count branch(es) from '$remote':${UX_RESET}"
+    ux_header "Deleting $branch_count branch(es) from '$remote':"
     git branch -r | grep "^[[:space:]]*$remote/" | grep -v "^[[:space:]]*$remote/main" | sed 's/^[[:space:]]*//' | while read -r branch; do
-        echo "${UX_DIM}Deleting: $branch${UX_RESET}"
+        ux_info "Deleting: $branch"
         git branch -dr "$branch" >/dev/null 2>&1
     done
 
-    echo "${UX_SUCCESS}Done!${UX_RESET}"
+    ux_success "Done!"
 }
