@@ -1,5 +1,5 @@
 #!/bin/bash
-# Post-commit hook: 작업 로그 자동 기록
+# Post-commit hook: 작업 로그 자동 기록 (make-jira/make-confluence 호환)
 
 # Git 메시지 파싱
 MSG=$(git log -1 --pretty=%B)
@@ -7,19 +7,35 @@ HASH=$(git log -1 --pretty=format:%h)
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
 # type(scope): description 에서 파싱
-TYPE=$(echo "$MSG" | head -1 | grep -oE '^[a-z]+' || echo "unknown")
+TYPE=$(echo "$MSG" | head -1 | grep -oE '^[a-z]+' || echo "main")
 SCOPE=$(echo "$MSG" | head -1 | grep -oE '\([^)]+\)' | tr -d '()' || echo "")
 SUBJECT=$(echo "$MSG" | head -1)
 
-# TimeSpent 파싱
-TIME=$(echo "$MSG" | grep -iE '^TimeSpent:' | cut -d: -f2 | xargs || echo "-")
+# TimeSpent 파싱 (정규화: "2h", "30m" → "2" or "0.5")
+TIME=$(echo "$MSG" | grep -iE '^TimeSpent:' | cut -d: -f2 | xargs)
+if [ -z "$TIME" ]; then
+    TIME="-"
+else
+    # "2h" → "2", "30m" → "0.5"
+    if [[ "$TIME" =~ m$ ]]; then
+        TIME=$(echo "scale=1; ${TIME%m} / 60" | bc)
+    else
+        TIME="${TIME%h}"
+    fi
+fi
 
 # Category 파싱
 CATEGORY=$(echo "$MSG" | grep -iE '^Category:' | cut -d: -f2 | xargs || echo "other")
 
-# work_log.txt에 기록
-LOGFILE="$HOME/work_log.txt"
-echo "[$TIMESTAMP] [$HASH] $TYPE($SCOPE): $SUBJECT [${TIME}h] [${CATEGORY}]" >> "$LOGFILE"
+# Jira Key 파싱 (커밋 메시지에서 [KEY-123] 추출, 없으면 환경변수 사용)
+JIRA_KEY=$(echo "$MSG" | grep -oE '\[[A-Z]+[A-Z0-9]*-[0-9]+\]' | head -1 | tr -d '[]' || echo "$JIRA_KEY")
+if [ -z "$JIRA_KEY" ]; then
+    JIRA_KEY="${JIRA_KEY_DEFAULT:-DOTFILES-AUTO}"
+fi
 
-# 디버그 (선택사항 - 제거 가능)
-# echo "✅ Logged: $SUBJECT"
+# work_log.txt에 기록 (make-jira 호환 형식)
+LOGFILE="$HOME/work_log.txt"
+echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | ${TIME}h | $HASH" >> "$LOGFILE"
+
+# 메타정보 (선택사항)
+# echo "  └─ Category: $CATEGORY" >> "$LOGFILE"
