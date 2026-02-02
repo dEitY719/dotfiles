@@ -1,55 +1,25 @@
 #!/bin/bash
-# Post-commit hook: Automatic work log recording
-# Records JIRA key and time spent to dotfiles-managed work_log.txt
-# Path: dotfiles/work/log/work_log.txt (symlinked to ~/work_log.txt)
+# Post-commit hook: 작업 로그 자동 기록
 
-# Get git repo root directory to locate work_log.txt
-GIT_ROOT="$(git rev-parse --show-toplevel)"
-WORK_LOG_FILE="${GIT_ROOT}/work/log/work_log.txt"
-
-# Fallback to ~/work_log.txt if not in dotfiles structure
-if [ ! -f "$WORK_LOG_FILE" ]; then
-    WORK_LOG_FILE="${HOME}/work_log.txt"
-fi
-
-# Get commit message
+# Git 메시지 파싱
 MSG=$(git log -1 --pretty=%B)
-
-# Extract JIRA key - support multiple patterns (case-insensitive)
-# Patterns: [SWINNOTEAM-906], [PROJ-245], [SWINNO-943], etc.
-JIRA=$(echo "$MSG" | grep -io '\[[A-Z][A-Z0-9]*-[0-9]*\]' | head -1)
-
-# If no match, try alternative patterns
-if [ -z "$JIRA" ]; then
-    JIRA=$(echo "$MSG" | grep -o '\[.*-[0-9]*\]' | head -1)
-fi
-
-# Extract TimeSpent from metadata (e.g., TimeSpent: 4.5h)
-TIME=$(echo "$MSG" | grep "TimeSpent:" | sed 's/.*TimeSpent:\s*//;s/h.*/h/' | head -1)
-
-# Extract Category
-CATEGORY=$(echo "$MSG" | grep "Category:" | sed 's/.*Category:\s*//;s/[^A-Za-z].*//' | head -1)
-
-# Get commit short hash
-HASH=$(git log -1 --pretty=%h)
-
-# Get branch name
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
-
-# Get timestamp
+HASH=$(git log -1 --pretty=format:%h)
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
-# Create log entry if JIRA key exists
-if [ -n "$JIRA" ]; then
-    LOG_ENTRY="[$TIMESTAMP] $JIRA | $BRANCH | $TIME | $HASH"
+# type(scope): description 에서 파싱
+TYPE=$(echo "$MSG" | head -1 | grep -oE '^[a-z]+' || echo "unknown")
+SCOPE=$(echo "$MSG" | head -1 | grep -oE '\([^)]+\)' | tr -d '()' || echo "")
+SUBJECT=$(echo "$MSG" | head -1)
 
-    # Append to work log (create if doesn't exist)
-    echo "$LOG_ENTRY" >> "$WORK_LOG_FILE" 2>/dev/null
+# TimeSpent 파싱
+TIME=$(echo "$MSG" | grep -iE '^TimeSpent:' | cut -d: -f2 | xargs || echo "-")
 
-    # Also log category if present
-    if [ -n "$CATEGORY" ]; then
-        echo "  └─ Category: $CATEGORY" >> "$WORK_LOG_FILE" 2>/dev/null
-    fi
-fi
+# Category 파싱
+CATEGORY=$(echo "$MSG" | grep -iE '^Category:' | cut -d: -f2 | xargs || echo "other")
 
-exit 0
+# work_log.txt에 기록
+LOGFILE="$HOME/work_log.txt"
+echo "[$TIMESTAMP] [$HASH] $TYPE($SCOPE): $SUBJECT [${TIME}h] [${CATEGORY}]" >> "$LOGFILE"
+
+# 디버그 (선택사항 - 제거 가능)
+# echo "✅ Logged: $SUBJECT"

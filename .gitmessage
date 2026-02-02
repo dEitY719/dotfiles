@@ -1,17 +1,30 @@
-[JIRA-XXX] type: description
-
-상세 설명
-- 주요 변경사항 1
-- 주요 변경사항 2
-
-메타정보:
-- Category: {Testing/Infrastructure/Documentation/Performance/Security/Other}
-- TimeSpent: {시간}h
-- WorkLogTime: {시간}h
-- Audience: {All/Dev/QA/Internal}
-
-태그 (선택):
-- [결정] 중요한 의사결정
-- [변경] 주요 변경사항
-- [리스크] 잠재적 위험
-- [검증] 테스트/검증 방법
+# type(scope): 짧은 설명 (50자 이하)
+#
+# 자세한 설명 (필요시)
+# - 주요 변경사항 1
+# - 주요 변경사항 2
+#
+# 메타정보:
+# Category: {Refactoring/Feature/Documentation/Testing/Infrastructure/BugFix}
+# TimeSpent: {예: 2h, 30m}
+# Audience: {All/Dev/DevOps/Security}
+#
+# 태그 (선택사항):
+# [결정] 중요한 아키텍처 결정
+# [변경] 주요 동작 변화
+# [리스크] 주의할 부분
+# [검증] 테스트 방법
+#
+# ---
+# Conventional Commits 가이드:
+# feat:     새 기능 추가
+# fix:      버그 수정
+# refactor: 코드 구조 개선 (동작 변화 없음)
+# test:     테스트 추가/수정
+# docs:     문서화
+# chore:    빌드, 의존성, 도구 등
+# ci:       CI/CD 관련
+# perf:     성능 개선
+# style:    포맷팅, 세미콜론 등
+#
+# scope 예시: devx, git, shell, loader, ux_lib, mount, etc.
