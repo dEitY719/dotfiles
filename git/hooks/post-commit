@@ -58,7 +58,7 @@ if [ -d "$PLAYBOOK_DIR/.git" ]; then
     else
         # 변경이 있으면 자동 커밋
         git add logs/work_log.txt 2>/dev/null
-        git commit -m "chore(work-log): auto updated by $HASH" 2>/dev/null || true
+        git commit -m "chore(work-log): $HASH $SUBJECT" 2>/dev/null || true
     fi
 
     cd - >/dev/null 2>&1 || true
