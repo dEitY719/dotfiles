@@ -35,7 +35,7 @@ alias cd-resource='cd ~/para/resource'
 alias cd-archive='cd ~/para/archive'
 
 # PROJECT directories
-alias cd-rca='cd ~/para/archive/playbook'
+alias cd-pb='cd ~/para/archive/playbook'
 alias cd-til='cd ~/para/archive/til'
 
 # Symlink management

@@ -40,3 +40,29 @@ alias grmc='git rm --cached'                     # 파일을 스테이징에서 
 alias gcpa='git cherry-pick --abort'             # Cherry-pick 작업 중단
 alias gcpc='git cherry-pick --continue'          # Cherry-pick 작업 계속
 alias gcps='git cherry-pick --skip'              # Cherry-pick 작업 건너뛰기
+
+# Git hook diagnostics
+hook_check() {
+    # Find shell-common/tools/custom directory dynamically
+    local dotfiles_root
+    if [ -n "${DOTFILES_ROOT:-}" ]; then
+        dotfiles_root="$DOTFILES_ROOT"
+    else
+        # Try to find it by searching for shell-common directory
+        dotfiles_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)" || {
+            echo "Error: Could not determine DOTFILES_ROOT" >&2
+            return 1
+        }
+    fi
+
+    local hook_check_script="$dotfiles_root/shell-common/tools/custom/hook_check.sh"
+
+    if [ ! -f "$hook_check_script" ]; then
+        echo "Error: hook_check.sh not found at: $hook_check_script" >&2
+        return 1
+    fi
+
+    bash "$hook_check_script"
+}
+
+alias hook-check='hook_check'                     # Git hook 설정 진단
