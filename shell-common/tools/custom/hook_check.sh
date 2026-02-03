@@ -165,13 +165,23 @@ check_permissions() {
 check_project_hooks() {
     ux_header "CHECK 4: Project-level Hooks Setup"
 
-    if [ ! -d "$DOTFILES_ROOT/.git" ]; then
+    # Find git directory of current repository (not DOTFILES_ROOT)
+    local git_dir
+    git_dir=$(git rev-parse --git-dir 2>/dev/null)
+
+    if [ -z "$git_dir" ] || [ ! -d "$git_dir" ]; then
         ux_warning "Not in a git repository"
         echo ""
         return 0
     fi
 
-    local project_hook="$DOTFILES_ROOT/.git/hooks/pre-commit"
+    # Resolve to absolute path (git rev-parse can return relative paths like .git)
+    if [ "${git_dir#/}" = "$git_dir" ]; then
+        # Relative path, convert to absolute
+        git_dir="$(cd "$(pwd)" && pwd)/$git_dir"
+    fi
+
+    local project_hook="$git_dir/hooks/pre-commit"
 
     if [ -f "$project_hook" ]; then
         _format_check ".git/hooks/pre-commit" "✓" "Exists"
@@ -266,7 +276,21 @@ run_all_checks() {
         echo ""
         ux_section "Your git hooks are ready to use:"
         ux_bullet "Global hook: ~/.config/git/hooks/pre-commit"
-        ux_bullet "Project hook: $DOTFILES_ROOT/.git/hooks/pre-commit"
+
+        # Show current project hook if in git repo
+        local current_git_dir
+        current_git_dir=$(git rev-parse --git-dir 2>/dev/null)
+        if [ -n "$current_git_dir" ]; then
+            # Resolve to absolute path (git rev-parse can return relative paths like .git)
+            if [ "${current_git_dir#/}" = "$current_git_dir" ]; then
+                # Relative path, convert to absolute
+                current_git_dir="$(cd "$(pwd)" && pwd)/$current_git_dir"
+            fi
+            ux_bullet "Project hook: $current_git_dir/hooks/pre-commit"
+        else
+            ux_bullet "Project hook: (not in a git repository)"
+        fi
+
         echo ""
         ux_info "Next: Try making a commit to test the hooks"
         ux_bullet "Example: echo 'test' >> README.md && git add README.md && git commit -m 'test'"
