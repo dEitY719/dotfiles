@@ -34,8 +34,8 @@ if [ -z "$JIRA_KEY" ]; then
 fi
 
 # work_log.txt에 기록 (make-jira 호환 형식)
-# work_log.txt는 rca-knowledge/logs/work_log.txt로 symlink되어 있음
-LOGFILE="$(git rev-parse --show-toplevel)/work/log/work_log.txt"
+# work_log.txt는 ~/para/archive/playbook/logs/work_log.txt로 symlink되어 있음
+LOGFILE="${HOME}/work_log.txt"
 echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | ${TIME}h | $HASH" >> "$LOGFILE"
 
 # 메타정보 (선택사항)

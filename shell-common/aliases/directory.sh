@@ -35,5 +35,11 @@ alias cd-resource='cd ~/para/resource'
 alias cd-archive='cd ~/para/archive'
 
 # PROJECT directories
-alias cd-rca='cd ~/para/archive/rca-knowledge'
+alias cd-rca='cd ~/para/archive/playbook'
 alias cd-til='cd ~/para/archive/til'
+
+# Symlink management
+alias symlink-manager='${HOME}/dotfiles/bash/app/symlink-manager.sh'
+alias symlink-init='${HOME}/dotfiles/bash/app/symlink-manager.sh init'
+alias symlink-check='${HOME}/dotfiles/bash/app/symlink-manager.sh check'
+alias symlink-config='${HOME}/dotfiles/bash/app/symlink-manager.sh config'

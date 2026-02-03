@@ -15,7 +15,7 @@ set -euo pipefail
 # ═══════════════════════════════════════════════════════════════════════════
 
 DOTFILES_ROOT="${HOME}/dotfiles"
-RCA_KNOWLEDGE="${HOME}/para/archive/rca-knowledge"
+RCA_KNOWLEDGE="${HOME}/para/archive/playbook"
 OUTPUT_BASE="${RCA_KNOWLEDGE}/docs/confluence-guides"
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -59,7 +59,7 @@ get_category() {
 
     # 2. Try to extract from directory structure
     # docs/technic/testing/ → testing
-    # rca-knowledge/docs/analysis/infrastructure/ → infrastructure
+    # playbook/docs/analysis/infrastructure/ → infrastructure
     local path_category=$(echo "$file" | sed -n 's/.*\/\(testing\|infrastructure\|documentation\|performance\|security\|communication\|training\|other\)\/.*$/\1/p')
     if [ -n "$path_category" ]; then
         echo "$path_category"

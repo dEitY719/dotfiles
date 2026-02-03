@@ -24,7 +24,7 @@ work_help() {
     ux_section "Overview"
     ux_bullet "Integrated workflow for work tracking and documentation"
     ux_bullet "Combines: work-log (manual tracking) + make-jira (reports) + make-confluence (guides)"
-    ux_bullet "All data git-tracked in dotfiles and rca-knowledge"
+    ux_bullet "All data git-tracked in dotfiles and playbook"
 
     ux_section "Commands"
 
@@ -42,7 +42,7 @@ work_help() {
     echo "  ${UX_MUTED}make-jira --week 2026-W05${UX_RESET}    # Specific week"
     echo "  ${UX_MUTED}make-jira SWINNOTEAM-906${UX_RESET}     # Filter by key"
     echo ""
-    ux_bullet "Output: rca-knowledge/docs/jira-records/YYYY-W##-report.md"
+    ux_bullet "Output: playbook/docs/jira-records/YYYY-W##-report.md"
     echo ""
 
     ux_step "3. Transform Docs to Confluence Guides" "make-confluence"
@@ -51,7 +51,7 @@ work_help() {
     echo "  ${UX_MUTED}make-confluence docs/technic/file.md${UX_RESET}                        # Auto-detect category"
     echo "  ${UX_MUTED}make-confluence docs/analysis/file.md --category testing${UX_RESET}  # Explicit category"
     echo ""
-    ux_bullet "Output: rca-knowledge/docs/confluence-guides/{category}/YYYY-MM-DD-{title}.md"
+    ux_bullet "Output: playbook/docs/confluence-guides/{category}/YYYY-MM-DD-{title}.md"
     echo ""
 
     ux_section "Workflow Examples"
@@ -75,23 +75,23 @@ work_help() {
 Work Input
   ├─ Git commits (post-commit hook → work_log.txt)
   ├─ work-log add (manual → work_log.txt)
-  └─ Technical markdown (docs/technic/, rca-knowledge/docs/analysis/)
+  └─ Technical markdown (docs/technic/, playbook/docs/analysis/)
 
 Processing
   ├─ make-jira: work_log.txt → Jira reports
   └─ make-confluence: markdown → Confluence guides
 
 Output
-  ├─ rca-knowledge/docs/jira-records/ (weekly reports)
-  ├─ rca-knowledge/docs/confluence-guides/ (technical guides)
+  ├─ playbook/docs/jira-records/ (weekly reports)
+  ├─ playbook/docs/confluence-guides/ (technical guides)
   └─ All git-tracked in dotfiles (multi-PC sync via symlink)
 EOF
 
     ux_section "File Locations"
 
     ux_bullet "work_log.txt: ~/work_log.txt (symlink → ~/dotfiles/work/log/work_log.txt)"
-    ux_bullet "Jira reports: ~/para/archive/rca-knowledge/docs/jira-records/"
-    ux_bullet "Confluence guides: ~/para/archive/rca-knowledge/docs/confluence-guides/"
+    ux_bullet "Jira reports: ~/para/archive/playbook/docs/jira-records/"
+    ux_bullet "Confluence guides: ~/para/archive/playbook/docs/confluence-guides/"
     ux_bullet "CLI tools: ~/dotfiles/shell-common/tools/custom/make_{jira,confluence}.sh"
     echo ""
 
@@ -99,7 +99,7 @@ EOF
 
     ux_info "All commands are git-tracked:"
     echo "  ${UX_SUCCESS}dotfiles${UX_RESET}:                CLI tools + alias definitions"
-    echo "  ${UX_SUCCESS}rca-knowledge${UX_RESET}:           Reports and guides"
+    echo "  ${UX_SUCCESS}playbook${UX_RESET}:           Reports and guides"
     echo "  ${UX_SUCCESS}Multi-PC sync${UX_RESET}:           Symlink abstraction (automatic)"
     echo ""
 

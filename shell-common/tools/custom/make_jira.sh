@@ -14,7 +14,7 @@ if [ -f "${HOME}/dotfiles/work/log/work_log.txt" ]; then
     WORK_LOG_FILE="${HOME}/dotfiles/work/log/work_log.txt"
 fi
 
-OUTPUT_DIR="${HOME}/para/archive/rca-knowledge/docs/jira-records"
+OUTPUT_DIR="${HOME}/para/archive/playbook/docs/jira-records"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Main Logic
