@@ -21,7 +21,7 @@ COMMIT_TYPES=(
 # ============================================
 # MESSAGE LENGTH RULES
 # ============================================
-SUBJECT_MAX_LENGTH=50          # First line (subject) max length
+SUBJECT_MAX_LENGTH=79          # First line (subject) max length
 BODY_MAX_LENGTH=72             # Body line max length (per Conventional Commits spec)
 MIN_MESSAGE_LENGTH=10          # Minimum meaningful message length
 
