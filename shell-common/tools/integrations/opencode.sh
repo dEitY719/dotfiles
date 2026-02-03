@@ -148,8 +148,8 @@ opencode_help() {
 
     ux_section "Installation & Setup"
     ux_bullet "${UX_PRIMARY}install-opencode${UX_RESET}             : Interactive OpenCode installer"
-    ux_bullet "${UX_PRIMARY}openinstall${UX_RESET}                  : Shortcut for install-opencode"
     ux_bullet "${UX_PRIMARY}opencode-verify${UX_RESET}              : Verify installation & configuration"
+    ux_bullet "${UX_PRIMARY}uninstall-opencode${UX_RESET}           : Remove OpenCode and configuration"
     echo ""
 
     ux_section "Environments"
@@ -180,7 +180,7 @@ opencode_help() {
     ux_bullet "Not installed?          : Run ${UX_PRIMARY}install-opencode${UX_RESET}"
     ux_bullet "PATH issues?            : Run ${UX_PRIMARY}source ~/.bashrc${UX_RESET}"
     ux_bullet "LLM not working?        : Run ${UX_PRIMARY}opencode-verify${UX_RESET}"
-    ux_bullet "Reset config?           : ${UX_PRIMARY}rm -f \"\$OPENCODE_CONFIG_FILE\" && install-opencode${UX_RESET}"
+    ux_bullet "Want to remove?         : Run ${UX_PRIMARY}uninstall-opencode${UX_RESET}"
     echo ""
 
     ux_section "Resources"
@@ -281,7 +281,6 @@ uninstall_opencode() {
 # ═══════════════════════════════════════════════════════════════
 
 alias install-opencode='install_opencode'
-alias openinstall='install_opencode'
 alias opencode-verify='opencode_verify'
 alias opencode-help='opencode_help'
 alias opencode-edit='opencode_edit'
@@ -293,13 +292,12 @@ alias opencfg='opencode_edit'
 # ═══════════════════════════════════════════════════════════════
 
 # This ensures that re-sourcing this file doesn't cause alias conflicts
-for alias_name in openinstall opencode-verify opencode-help opencode-edit uninstall-opencode; do
+for alias_name in opencode-verify opencode-help opencode-edit uninstall-opencode; do
     unalias "$alias_name" 2>/dev/null || true
 done
 
 # Re-define aliases after unaliasing (for zsh re-sourcing compatibility)
 alias install-opencode='install_opencode'
-alias openinstall='install_opencode'
 alias opencode-verify='opencode_verify'
 alias opencode-help='opencode_help'
 alias opencode-edit='opencode_edit'

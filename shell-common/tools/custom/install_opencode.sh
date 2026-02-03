@@ -343,11 +343,15 @@ main() {
 
     ux_section "Useful Commands"
     ux_bullet "install-opencode     : Run the installer again"
-    ux_bullet "opencode-help        : Show dotfiles OpenCode help"
-    ux_bullet "opencode-verify      : Verify LLM configuration"
+    ux_bullet "opencode-help        : Show OpenCode help and commands"
+    ux_bullet "opencode-verify      : Verify installation & configuration"
     ux_bullet "opencode-edit        : Edit configuration file"
+    ux_bullet "uninstall-opencode   : Remove OpenCode and configuration"
     ux_bullet "opencode             : Start OpenCode CLI"
     echo ""
 }
 
-main "$@"
+# Direct-exec guard: run main() only if script is executed directly, not sourced
+if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
+    main "$@"
+fi
