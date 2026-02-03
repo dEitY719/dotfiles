@@ -31,21 +31,17 @@ if ! source "$_INIT_PATH" 2>/dev/null; then
     exit 1
 fi
 
-# Load environment variables from .env file (for API keys, credentials, etc.)
+# Load environment variables from dotfiles/.env (SSOT - Single Source of Truth)
 # This ensures that environment-specific variables like SSAI_LLM_API_KEY are available
 # for expansion into configuration files (e.g., opencode.json)
-#
-# Checks multiple paths: dotfiles/.env → ~/.env
-for _env_file in "${DOTFILES_ROOT:-$HOME/dotfiles}/.env" "$HOME/.env"; do
-    if [ -f "$_env_file" ]; then
-        # shellcheck source=/dev/null
-        set -a  # Export all variables
-        source "$_env_file"
-        set +a  # Stop exporting
-        break
-    fi
-done
-unset _env_file
+_dotfiles_env="${DOTFILES_ROOT:-$HOME/dotfiles}/.env"
+if [ -f "$_dotfiles_env" ]; then
+    # shellcheck source=/dev/null
+    set -a  # Export all variables
+    source "$_dotfiles_env"
+    set +a  # Stop exporting
+fi
+unset _dotfiles_env
 
 # ═══════════════════════════════════════════════════════════════
 # Helper Functions
