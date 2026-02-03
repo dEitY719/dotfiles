@@ -13,11 +13,37 @@
 #   '-' = already merged in base
 #
 
+_gcp_scan_is_empty_cherry_pick() {
+    # True when cherry-pick is in progress, has no conflicts, and results in an empty commit
+    # (git suggests: git cherry-pick --skip).
+    git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 || return 1
+    git ls-files -u 2>/dev/null | grep -q . && return 1
+    git diff --quiet >/dev/null 2>&1 || return 1
+    git diff --cached --quiet >/dev/null 2>&1 || return 1
+    return 0
+}
+
 gcp_scan() {
     local base="main"
     local source="upstream/main"
     local author="dEitY719"
     local arg1="" arg2=""
+
+    # Check for incomplete cherry-pick
+    if git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
+        if type ux_error >/dev/null 2>&1; then
+            ux_error "Cherry-pick currently in progress!"
+            ux_error "Please resolve it first:"
+            ux_error "  git cherry-pick --continue  (or)"
+            ux_error "  git cherry-pick --abort"
+        else
+            echo "Error: Cherry-pick currently in progress!" >&2
+            echo "Please resolve it first:" >&2
+            echo "  git cherry-pick --continue  (or)" >&2
+            echo "  git cherry-pick --abort" >&2
+        fi
+        return 1
+    fi
 
     # Parse arguments (simpler than bash array approach, works in all shells)
     while [ $# -gt 0 ]; do
@@ -219,6 +245,17 @@ EOF
         echo "=== Commit List ==="
     fi
     echo "Commits to cherry-pick:"
+
+    # Keep the list clean even when users enable tracing (set -x / setopt xtrace)
+    # and route it to stdout (e.g., BASH_XTRACEFD=1 / XTRACEFD=1).
+    local RESTORE_XTRACE=0
+    case $- in
+    *x*)
+        RESTORE_XTRACE=1
+        set +x
+        ;;
+    esac
+
     {
         local line_num=1
         echo "$selected_list" | while IFS= read -r sha; do
@@ -243,6 +280,10 @@ EOF
         done | nl -w 2 -s '. '
     }
 
+    if [ "$RESTORE_XTRACE" -eq 1 ]; then
+        set -x
+    fi
+
 
     # Interactive Confirmation
     if type ux_confirm >/dev/null 2>&1; then
@@ -257,6 +298,22 @@ EOF
                         ux_success "Cherry-pick complete!"
                     fi
                 else
+                    # Some environments treat an empty pick as an error (exit 1) and require --skip.
+                    # Auto-skip empty commits when there are no conflicts.
+                    while _gcp_scan_is_empty_cherry_pick; do
+                        if type ux_warning >/dev/null 2>&1; then
+                            ux_warning "Empty commit encountered during cherry-pick sequence; skipping..."
+                        fi
+                        if ! git cherry-pick --skip; then
+                            break
+                        fi
+                    done
+                    if ! git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
+                        if type ux_success >/dev/null 2>&1; then
+                            ux_success "Cherry-pick complete! (Skipped empty commit(s))"
+                        fi
+                        return 0
+                    fi
                     if type ux_error >/dev/null 2>&1; then
                         ux_error "Cherry-pick encountered conflicts. Resolve manually and run:"
                         ux_error "  git cherry-pick --continue"
@@ -276,7 +333,7 @@ EOF
                 fi
                 local picked=0
                 local skipped=0
-                echo "$selected_list" | while IFS= read -r sha; do
+                while IFS= read -r sha; do
                     [ -z "$sha" ] && continue
                     local subject
                     subject=$(git show -s --format='%s' "$sha")
@@ -299,13 +356,29 @@ EOF
                         if git cherry-pick "$sha"; then
                             picked=$((picked + 1))
                         else
+                            while _gcp_scan_is_empty_cherry_pick; do
+                                if type ux_warning >/dev/null 2>&1; then
+                                    ux_warning "Empty commit at $sha; skipping..."
+                                fi
+                                if git cherry-pick --skip; then
+                                    skipped=$((skipped + 1))
+                                    break
+                                fi
+                                break
+                            done
+                            # If we successfully skipped, move on.
+                            if ! git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
+                                continue
+                            fi
                             if type ux_error >/dev/null 2>&1; then
                                 ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
                             fi
                             return 1
                         fi
                     fi
-                done
+                done <<EOF
+$selected_list
+EOF
                 if type ux_success >/dev/null 2>&1; then
                     ux_success "Cherry-picked $picked/$count commits successfully! (Skipped $skipped duplicates)"
                 fi
@@ -320,4 +393,3 @@ EOF
 
 # Quick shorthand for gcp_scan
 alias gcs='gcp_scan'
-
