@@ -46,11 +46,7 @@
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 OPENCODE_CONFIG_FILE="${OPENCODE_CONFIG_FILE:-$OPENCODE_CONFIG_DIR/opencode.json}"
 
-# Unalias potentially conflicting aliases to allow function re-definition in zsh
-# This fixes "defining function based on alias" errors when re-sourcing
-for alias_name in openinstall opencode-verify opencode-help opencode-edit; do
-    unalias "$alias_name" 2>/dev/null || true
-done
+# Note: Aliases are unaliased after being defined below (re-sourcing compatibility)
 
 # ═══════════════════════════════════════════════════════════════
 # OpenCode Installation
@@ -113,7 +109,7 @@ opencode_verify() {
             fi
         else
             ux_warning "jq not installed - unable to parse configuration details"
-            ux_info "Install jq to see detailed configuration: sudo apt-get install jq"
+            ux_info "For detailed configuration view, get jq via your package manager"
             echo ""
             ux_info "Configuration file contents:"
             cat "$OPENCODE_CONFIG_FILE"
@@ -237,10 +233,77 @@ opentest() {
 }
 
 # ═══════════════════════════════════════════════════════════════
+# OpenCode Uninstallation
+# ═══════════════════════════════════════════════════════════════
+
+uninstall_opencode() {
+    ux_header "OpenCode CLI Uninstaller"
+    echo ""
+
+    # Confirmation
+    printf "%sAre you sure you want to uninstall OpenCode? (y/N): %s" "$UX_PRIMARY" "$UX_RESET"
+    read -r confirm
+    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+        ux_info "Uninstall cancelled"
+        return 0
+    fi
+    echo ""
+
+    ux_section "Uninstalling OpenCode..."
+
+    # Remove global npm package
+    if command -v npm &>/dev/null; then
+        ux_info "Removing OpenCode npm package..."
+        npm uninstall -g opencode-ai 2>/dev/null || npm uninstall -g opencode 2>/dev/null || true
+        ux_success "OpenCode package removed"
+    else
+        ux_warning "npm not found - skipping npm uninstall"
+    fi
+    echo ""
+
+    # Remove configuration directory
+    if [ -d "$OPENCODE_CONFIG_DIR" ]; then
+        ux_info "Removing configuration directory: $OPENCODE_CONFIG_DIR"
+        rm -rf "$OPENCODE_CONFIG_DIR"
+        ux_success "Configuration removed"
+    else
+        ux_info "No configuration directory found"
+    fi
+    echo ""
+
+    ux_header "✅ OpenCode Uninstallation Complete"
+    ux_info "OpenCode has been removed from your system"
+    echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════
 # Alias Definitions
 # ═══════════════════════════════════════════════════════════════
 
 alias install-opencode='install_opencode'
+alias openinstall='install_opencode'
+alias opencode-verify='opencode_verify'
+alias opencode-help='opencode_help'
+alias opencode-edit='opencode_edit'
+alias uninstall-opencode='uninstall_opencode'
+alias opencfg='opencode_edit'
+
+# ═══════════════════════════════════════════════════════════════
+# Re-sourcing Compatibility (unalias previous definitions)
+# ═══════════════════════════════════════════════════════════════
+
+# This ensures that re-sourcing this file doesn't cause alias conflicts
+for alias_name in openinstall opencode-verify opencode-help opencode-edit uninstall-opencode; do
+    unalias "$alias_name" 2>/dev/null || true
+done
+
+# Re-define aliases after unaliasing (for zsh re-sourcing compatibility)
+alias install-opencode='install_opencode'
+alias openinstall='install_opencode'
+alias opencode-verify='opencode_verify'
+alias opencode-help='opencode_help'
+alias opencode-edit='opencode_edit'
+alias uninstall-opencode='uninstall_opencode'
 alias opencfg='opencode_edit'
 
 # ═══════════════════════════════════════════════════════════════
