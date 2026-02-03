@@ -34,12 +34,18 @@ fi
 # Load environment variables from .env file (for API keys, credentials, etc.)
 # This ensures that environment-specific variables like SSAI_LLM_API_KEY are available
 # for expansion into configuration files (e.g., opencode.json)
-if [ -f "$HOME/.env" ]; then
-    # shellcheck source=/dev/null
-    set -a  # Export all variables
-    source "$HOME/.env"
-    set +a  # Stop exporting
-fi
+#
+# Checks multiple paths: dotfiles/.env → ~/.env
+for _env_file in "${DOTFILES_ROOT:-$HOME/dotfiles}/.env" "$HOME/.env"; do
+    if [ -f "$_env_file" ]; then
+        # shellcheck source=/dev/null
+        set -a  # Export all variables
+        source "$_env_file"
+        set +a  # Stop exporting
+        break
+    fi
+done
+unset _env_file
 
 # ═══════════════════════════════════════════════════════════════
 # Helper Functions
