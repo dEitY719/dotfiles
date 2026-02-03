@@ -235,32 +235,20 @@ main() {
     echo ""
 
     # ========================================
-    # Step 3: Configure npm for Internal Network (Corporate Proxy)
+    # Step 3: Install OpenCode CLI via npm
     # ========================================
-    ux_step "3/5" "Configuring npm for corporate environment..."
+    ux_step "3/6" "Installing OpenCode CLI via npm..."
 
-    # For internal networks: explicitly set no-proxy to bypass corporate proxy for internal IPs
-    # This prevents 502 errors when accessing internal npm registries (Artifactory)
-    if [ -n "$no_proxy" ]; then
-        ux_info "Applying no-proxy configuration to npm..."
-        npm config set no-proxy "$no_proxy" 2>/dev/null || true
-        ux_success "npm no-proxy configured"
-    fi
-    echo ""
-
-    # ========================================
-    # Step 4: Install OpenCode CLI (Direct npm)
-    # ========================================
-    ux_step "4/5" "Installing OpenCode CLI via npm..."
-
-    ux_info "Installing from npm registry (direct method)..."
+    ux_info "Using npm registry (corporate proxy settings auto-applied)..."
     echo ""
 
     # Create temp file for error capture
     local install_log=$(mktemp)
 
-    # Use npm directly instead of curl | bash to avoid security policy blocks
-    # This approach is more secure and works better with corporate proxies
+    # Use npm directly instead of curl | bash:
+    # - Avoids NewGenAI domain blocking (opencode.ai → 403)
+    # - Uses whitelisted internal Artifactory
+    # - npm config (including no-proxy) is auto-synced from proxy.local.sh
     ux_with_spinner "Installing opencode-ai package..." npm install -g opencode-ai 2>"$install_log" >>"$install_log"
 
     if [ $? -eq 0 ]; then
@@ -272,19 +260,19 @@ main() {
         cat "$install_log" 2>/dev/null | sed 's/^/  /' || echo "  (No error details available)"
         echo ""
         ux_info "Troubleshooting:"
-        ux_bullet "For Internal PC: Check proxy settings with: npm-config"
-        ux_bullet "Verify npm registry: npm info opencode-ai"
-        ux_bullet "Check no-proxy: npm config get no-proxy"
-        ux_bullet "Reset npm config: npm config delete no-proxy"
+        ux_bullet "Check proxy settings: npm-config"
+        ux_bullet "Verify Artifactory: npm info opencode-ai"
+        ux_bullet "Check no-proxy: npm config get noproxy"
+        ux_bullet "For manual config: npm config set noproxy \"<value>\""
         rm -f "$install_log"
         exit 1
     fi
     echo ""
 
     # ========================================
-    # Step 5: Create Configuration
+    # Step 4: Create Configuration
     # ========================================
-    ux_step "5/6" "Configuring OpenCode for $environment environment..."
+    ux_step "4/5" "Configuring OpenCode for $environment environment..."
     create_config_dir
 
     case "$environment" in
@@ -301,9 +289,9 @@ main() {
     echo ""
 
     # ========================================
-    # Step 6: Verify Installation
+    # Step 5: Verify Installation
     # ========================================
-    ux_step "6/6" "Verifying installation..."
+    ux_step "5/5" "Verifying installation..."
     if command -v opencode &>/dev/null; then
         ux_success "OpenCode CLI is installed."
         opencode --version || ux_warning "Could not determine OpenCode version."

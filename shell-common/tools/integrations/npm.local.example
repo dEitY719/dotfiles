@@ -13,10 +13,11 @@
 # 참고:
 #   - CA 인증서(NODE_EXTRA_CA_CERTS) 설정은 shell-common/env/security.local.sh에서 관리됩니다
 #   - NPM PATH 설정(~/.npm-global/bin)은 npm.sh의 PATH export로 관리됩니다
+#   - 프록시 설정(proxy, https-proxy, noproxy)은 proxy.local.sh에서 정의하고,
+#     proxy.sh에서 자동으로 npm config에 동기화됩니다 (SSOT 원칙)
 #   - npm prefix 값은 이 파일에서 정의하고, 적용은 npm-apply-config로 수행합니다
-#   - 이 파일은 "값(Desired settings) 정의"만 담당합니다.
-#     실제 적용(npm config set 등)은 자동 실행하지 않습니다.
-#     적용은 `npm-apply-config`(shell-common/tools/integrations/npm.sh)로 수행하세요.
+#   - DESIRED_* 변수는 "값(Desired settings) 정의"만 담당합니다.
+#     실제 적용(npm config set 등)은 `npm-apply-config` 함수로 수행하세요.
 
 # --- Desired Settings (values only; no side effects) ---
 if :; then
