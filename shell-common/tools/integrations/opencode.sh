@@ -74,7 +74,7 @@ opencode_verify() {
         opencode --version
     else
         ux_error "OpenCode CLI is not installed"
-        ux_info "Run 'openinstall' to install it"
+        ux_info "Run 'install-opencode' to install it"
         echo ""
         return 1
     fi
@@ -264,6 +264,16 @@ uninstall_opencode() {
     fi
     echo ""
 
+    # Remove OpenCode installation directory (cleanup incomplete installations)
+    if [ -d "$HOME/.opencode" ]; then
+        ux_info "Removing OpenCode installation directory: $HOME/.opencode"
+        rm -rf "$HOME/.opencode"
+        ux_success "Installation directory removed"
+    else
+        ux_info "No OpenCode installation directory found"
+    fi
+    echo ""
+
     # Remove configuration directory
     if [ -d "$OPENCODE_CONFIG_DIR" ]; then
         ux_info "Removing configuration directory: $OPENCODE_CONFIG_DIR"
@@ -274,8 +284,20 @@ uninstall_opencode() {
     fi
     echo ""
 
+    ux_section "Environment Settings"
+    ux_info "Terminal environment variables configured in: ~/.config/dotfiles/shell-common/env/locale.sh"
+    ux_bullet "${UX_INFO}export TERM=xterm-256color${UX_RESET}        # Terminal color support"
+    ux_bullet "${UX_INFO}export LC_ALL=en_US.UTF-8${UX_RESET}         # Character encoding"
+    echo ""
+    ux_info "Reload your shell to apply settings:"
+    ux_bullet "source ~/.bashrc        # For bash"
+    ux_bullet "source ~/.zshrc         # For zsh"
+    ux_bullet "exec \$SHELL             # Or restart your shell"
+    echo ""
+
     ux_header "✅ OpenCode Uninstallation Complete"
     ux_info "OpenCode has been removed from your system"
+    ux_info "Run 'install-opencode' to reinstall"
     echo ""
 }
 
