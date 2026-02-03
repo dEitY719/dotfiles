@@ -16,3 +16,5 @@
 [lfs]
 	activitytimeout = 300
 	locksverify = false
+[push]
+	autoSetupRemote = true

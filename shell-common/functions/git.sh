@@ -101,6 +101,28 @@ git_prune_remote() {
 }
 
 # ============================================================================
+# Git configuration setup
+# ============================================================================
+# Configure automatic upstream branch setup on push (recommended)
+# Usage:
+#   git_setup_auto_remote - Enable automatic remote branch creation on first push
+git_setup_auto_remote() {
+    git config --global push.autoSetupRemote true
+    if [ $? -eq 0 ]; then
+        ux_success "✓ push.autoSetupRemote enabled"
+        ux_info "Now 'git push' will automatically create and track remote branches"
+    else
+        ux_error "Failed to set git config"
+        return 1
+    fi
+}
+
+# Auto-setup on shell load (runs only once, silently if already configured)
+if ! git config --get push.autoSetupRemote >/dev/null 2>&1; then
+    git config --global push.autoSetupRemote true 2>/dev/null || true
+fi
+
+# ============================================================================
 # Backward Compatibility Aliases
 # ============================================================================
 # Maintain short-form aliases for convenience while supporting standard naming
