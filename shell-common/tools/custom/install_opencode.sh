@@ -134,9 +134,11 @@ generate_internal_config() {
 
     ux_info "Setting up internal environment with Samsung DS LiteLLM..."
 
-    cat > "$config_file" << 'EOF'
+    # Use unquoted EOF to enable variable expansion (SSAI_LLM_API_KEY from .env)
+    # Note: This is safe because we control the content, not user input
+    cat > "$config_file" << EOF
 {
-  "$schema": "https://opencode.ai/config.json",
+  "\$schema": "https://opencode.ai/config.json",
   "provider": {
     "litellm": {
       "npm": "@ai-sdk/openai-compatible",
