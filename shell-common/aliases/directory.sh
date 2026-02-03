@@ -39,7 +39,7 @@ alias cd-rca='cd ~/para/archive/playbook'
 alias cd-til='cd ~/para/archive/til'
 
 # Symlink management
-alias symlink-manager='${HOME}/dotfiles/bash/app/symlink-manager.sh'
-alias symlink-init='${HOME}/dotfiles/bash/app/symlink-manager.sh init'
-alias symlink-check='${HOME}/dotfiles/bash/app/symlink-manager.sh check'
-alias symlink-config='${HOME}/dotfiles/bash/app/symlink-manager.sh config'
+alias symlink-manager='${SHELL_COMMON_ROOT:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/symlink-manager.sh'
+alias symlink-init='symlink-manager init'
+alias symlink-check='symlink-manager check'
+alias symlink-config='symlink-manager config'

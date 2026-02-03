@@ -5,7 +5,7 @@
 set -u
 
 DOTFILES_ROOT="${DOTFILES_ROOT:-${HOME}/dotfiles}"
-SYMLINKS_CONF="${DOTFILES_ROOT}/bash/config/symlinks.conf"
+SYMLINKS_CONF="${SHELL_COMMON_ROOT:-${DOTFILES_ROOT}/shell-common}/config/symlinks.conf"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Helper Functions
