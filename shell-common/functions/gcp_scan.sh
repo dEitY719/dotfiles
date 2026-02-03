@@ -246,8 +246,8 @@ EOF
     fi
     echo "Commits to cherry-pick:"
 
-    # Keep the list clean even when users enable tracing (set -x / setopt xtrace)
-    # and route it to stdout (e.g., BASH_XTRACEFD=1 / XTRACEFD=1).
+    # Disable tracing to prevent debug output from polluting the list
+    # (Handles cases where set -x is enabled and redirected to stdout)
     local RESTORE_XTRACE=0
     case $- in
     *x*)
@@ -256,29 +256,26 @@ EOF
         ;;
     esac
 
-    {
-        local line_num=1
-        echo "$selected_list" | while IFS= read -r sha; do
-            [ -z "$sha" ] && continue
-            local subject
-            subject=$(git show -s --format='%s' "$sha")
+    echo "$selected_list" | while IFS= read -r sha; do
+        [ -z "$sha" ] && continue
+        local subject
+        subject=$(git show -s --format='%s' "$sha")
 
-            # Check if this is a duplicate
-            local is_dup=0
-            if git log "$base" -n 200 --format='%s' 2>/dev/null | grep -Fqx "$subject"; then
-                is_dup=1
-            fi
+        # Check if this is a duplicate
+        local is_dup=0
+        if git log "$base" -n 200 --format='%s' 2>/dev/null | grep -Fqx "$subject"; then
+            is_dup=1
+        fi
 
-            local line
-            line=$(git log --no-walk --format="%C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short "$sha")
+        local line
+        line=$(git log --no-walk --format="%C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short "$sha")
 
-            if [ $is_dup -eq 1 ]; then
-                echo "${line} [DUPLICATE - Already in $base]"
-            else
-                echo "$line"
-            fi
-        done | nl -w 2 -s '. '
-    }
+        if [ $is_dup -eq 1 ]; then
+            echo "${line} [DUPLICATE - Already in $base]"
+        else
+            echo "$line"
+        fi
+    done | awk '{printf " %d. %s\n", NR, $0}'
 
     if [ "$RESTORE_XTRACE" -eq 1 ]; then
         set -x
