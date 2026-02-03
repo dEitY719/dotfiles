@@ -3,6 +3,11 @@
 # Portable git aliases for bash and zsh
 # (No bash-specific features)
 
+# Load UX library if not already loaded
+if ! declare -f ux_header >/dev/null 2>&1; then
+    source "${BASH_SOURCE[0]%/*}/../tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+fi
+
 # Git status shortcuts
 alias gs='git status -sb'                        # 간략한 상태 보기
 alias ga='git add .'                             # 모든 변경사항 스테이징
@@ -56,7 +61,7 @@ hook_check() {
     else
         # Try to find it by searching for shell-common directory
         dotfiles_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)" || {
-            echo "Error: Could not determine DOTFILES_ROOT" >&2
+            ux_error "Could not determine DOTFILES_ROOT"
             return 1
         }
     fi
@@ -64,7 +69,7 @@ hook_check() {
     local hook_check_script="$dotfiles_root/shell-common/tools/custom/hook_check.sh"
 
     if [ ! -f "$hook_check_script" ]; then
-        echo "Error: hook_check.sh not found at: $hook_check_script" >&2
+        ux_error "hook_check.sh not found at: $hook_check_script"
         return 1
     fi
 
