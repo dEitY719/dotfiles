@@ -10,9 +10,6 @@
 # ═══════════════════════════════════════════════════════════════════════════
 
 WORK_LOG_FILE="${HOME}/work_log.txt"
-if [ -f "${HOME}/dotfiles/work/log/work_log.txt" ]; then
-    WORK_LOG_FILE="${HOME}/dotfiles/work/log/work_log.txt"
-fi
 
 OUTPUT_DIR="${HOME}/para/archive/playbook/docs/jira-records"
 

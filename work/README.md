@@ -4,15 +4,21 @@ Work-related data and logs for productivity tracking and reporting.
 
 ## Directory Structure
 
+The work log is now managed as a symlink:
+
 ```
-work/
-└── log/
-    └── work_log.txt          # Main work activity log
+~/work_log.txt → ~/para/archive/playbook/logs/work_log.txt
 ```
+
+All work data is centralized in the playbook directory for better organization and version control.
 
 ## Files
 
-### `log/work_log.txt`
+### `work_log.txt`
+
+**Location**: `~/para/archive/playbook/logs/work_log.txt`
+
+**Symlink**: `~/work_log.txt` → `~/para/archive/playbook/logs/work_log.txt`
 
 **Purpose**: Central work activity log tracking both development and non-development work.
 
@@ -25,8 +31,6 @@ work/
 **Sources**:
 - **Automatic**: Post-commit hook (development work)
 - **Manual**: `work-log` CLI (coordination, meetings, assessments)
-
-**Symlink**: `~/work_log.txt` → `~/dotfiles/work/log/work_log.txt`
 
 ## Related Tools
 
@@ -46,15 +50,25 @@ work/
 
 ## Output Locations
 
-- **Jira Reports**: `~/para/archive/rca-knowledge/docs/jira-records/`
-- **Confluence Guides**: `~/para/archive/rca-knowledge/docs/confluence-guides/`
+- **Work Log**: `~/para/archive/playbook/logs/work_log.txt`
+- **Jira Reports**: `~/para/archive/playbook/docs/jira-records/`
+- **Confluence Guides**: `~/para/archive/playbook/docs/confluence-guides/`
 
 ## Setup
 
-Symlink is automatically created by `bash/setup.sh`:
+Symlink is managed by the centralized symlink manager:
 ```bash
-ln -sf ~/dotfiles/work/log/work_log.txt ~/work_log.txt
+# Initialize all symlinks
+symlink-init
+
+# Check symlink status
+symlink-check
+
+# Or manually:
+ln -sf ~/para/archive/playbook/logs/work_log.txt ~/work_log.txt
 ```
+
+See `shell-common/config/symlinks.conf` for SSOT configuration.
 
 ## Usage Examples
 

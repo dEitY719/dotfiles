@@ -1,1 +1,0 @@
-../../../para/archive/playbook/logs/work_log.txt
