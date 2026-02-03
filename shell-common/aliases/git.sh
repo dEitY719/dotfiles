@@ -43,6 +43,12 @@ alias gcps='git cherry-pick --skip'              # Cherry-pick 작업 건너뛰�
 
 # Git hook diagnostics
 hook_check() {
+    # Handle help option
+    if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+        hook_help
+        return 0
+    fi
+
     # Find shell-common/tools/custom directory dynamically
     local dotfiles_root
     if [ -n "${DOTFILES_ROOT:-}" ]; then
@@ -62,7 +68,7 @@ hook_check() {
         return 1
     fi
 
-    bash "$hook_check_script"
+    bash "$hook_check_script" "$@"
 }
 
-alias hook-check='hook_check'                     # Git hook 설정 진단
+alias hook-check='hook_check'                     # Git hook 설정 진단 (hook-check --help로 도움말 보기)
