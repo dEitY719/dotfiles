@@ -235,61 +235,56 @@ main() {
     echo ""
 
     # ========================================
-    # Step 3: Install OpenCode CLI
+    # Step 3: Configure npm for Internal Network (Corporate Proxy)
     # ========================================
-    ux_step "3/5" "Installing OpenCode CLI..."
+    ux_step "3/5" "Configuring npm for corporate environment..."
 
-    ux_info "Installing OpenCode using versioned approach (avoids GitHub API rate limits)..."
+    # For internal networks: explicitly set no-proxy to bypass corporate proxy for internal IPs
+    # This prevents 502 errors when accessing internal npm registries (Artifactory)
+    if [ -n "$no_proxy" ]; then
+        ux_info "Applying no-proxy configuration to npm..."
+        npm config set no-proxy "$no_proxy" 2>/dev/null || true
+        ux_success "npm no-proxy configured"
+    fi
+    echo ""
+
+    # ========================================
+    # Step 4: Install OpenCode CLI (Direct npm)
+    # ========================================
+    ux_step "4/5" "Installing OpenCode CLI via npm..."
+
+    ux_info "Installing from npm registry (direct method)..."
     echo ""
 
     # Create temp file for error capture
     local install_log=$(mktemp)
-    local install_script=$(mktemp)
 
-    # Use explicit version for all environments (avoids GitHub API rate limit issues)
-    # Known stable versions: 1.0.180+
-    local opencode_version="1.0.180"
-
-    ux_info "Using OpenCode version: $opencode_version"
-    echo ""
-
-    # Download installer script with spinner
-    ux_with_spinner "Downloading OpenCode installer..." curl -fsSL -L https://opencode.ai/install -o "$install_script" 2>"$install_log"
-
-    if [ ! -f "$install_script" ] || [ ! -s "$install_script" ]; then
-        ux_error "Failed to download OpenCode installer."
-        ux_warning "Network error details:"
-        cat "$install_log" 2>/dev/null | sed 's/^/  /' || echo "  (No error details available)"
-        rm -f "$install_log" "$install_script"
-        exit 1
-    fi
-
-    echo ""
-
-    # Run installer with explicit version (bypasses GitHub API call) with spinner
-    ux_with_spinner "Installing OpenCode $opencode_version..." bash "$install_script" -v "$opencode_version" 2>"$install_log" >>"$install_log"
+    # Use npm directly instead of curl | bash to avoid security policy blocks
+    # This approach is more secure and works better with corporate proxies
+    ux_with_spinner "Installing opencode-ai package..." npm install -g opencode-ai 2>"$install_log" >>"$install_log"
 
     if [ $? -eq 0 ]; then
-        ux_success "OpenCode $opencode_version installed successfully"
-        rm -f "$install_log" "$install_script"
+        ux_success "OpenCode installed successfully"
+        rm -f "$install_log"
     else
         ux_error "OpenCode installation failed."
-        ux_warning "Installer error details:"
+        ux_warning "Installation error details:"
         cat "$install_log" 2>/dev/null | sed 's/^/  /' || echo "  (No error details available)"
         echo ""
         ux_info "Troubleshooting:"
-        ux_bullet "Verify curl works: curl -I https://opencode.ai/install"
-        ux_bullet "Check GitHub releases: https://github.com/anomalyco/opencode/releases"
-        ux_bullet "For Internal PC: Verify proxy and firewall settings"
-        rm -f "$install_log" "$install_script"
+        ux_bullet "For Internal PC: Check proxy settings with: npm-config"
+        ux_bullet "Verify npm registry: npm info opencode-ai"
+        ux_bullet "Check no-proxy: npm config get no-proxy"
+        ux_bullet "Reset npm config: npm config delete no-proxy"
+        rm -f "$install_log"
         exit 1
     fi
     echo ""
 
     # ========================================
-    # Step 4: Create Configuration
+    # Step 5: Create Configuration
     # ========================================
-    ux_step "4/5" "Configuring OpenCode for $environment environment..."
+    ux_step "5/6" "Configuring OpenCode for $environment environment..."
     create_config_dir
 
     case "$environment" in
@@ -306,9 +301,9 @@ main() {
     echo ""
 
     # ========================================
-    # Step 5: Verify Installation
+    # Step 6: Verify Installation
     # ========================================
-    ux_step "5/5" "Verifying installation..."
+    ux_step "6/6" "Verifying installation..."
     if command -v opencode &>/dev/null; then
         ux_success "OpenCode CLI is installed."
         opencode --version || ux_warning "Could not determine OpenCode version."

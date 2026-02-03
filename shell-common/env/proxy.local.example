@@ -16,7 +16,7 @@ export HTTPS_PROXY="$https_proxy"
 
 # Ref. https://confluence.samsungds.net/pages/viewpage.action?pageId=1367083095
 # FYI. NO_PROXY 값 사이에 공백이 있으면 제대로 인식되지 않을 수 있으니, 콤마(,)로만 구분 추천
-export no_proxy="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,ssai.samsungds.net,dsvdi.net,pfs.nprotect.com"
+export no_proxy="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,ssai.samsungds.net,dsvdi.net,pfs.nprotect.com,10.227.253.89"
 export NO_PROXY="$no_proxy"
 
 # ============================================================
