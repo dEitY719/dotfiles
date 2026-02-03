@@ -31,6 +31,16 @@ if ! source "$_INIT_PATH" 2>/dev/null; then
     exit 1
 fi
 
+# Load environment variables from .env file (for API keys, credentials, etc.)
+# This ensures that environment-specific variables like SSAI_LLM_API_KEY are available
+# for expansion into configuration files (e.g., opencode.json)
+if [ -f "$HOME/.env" ]; then
+    # shellcheck source=/dev/null
+    set -a  # Export all variables
+    source "$HOME/.env"
+    set +a  # Stop exporting
+fi
+
 # ═══════════════════════════════════════════════════════════════
 # Helper Functions
 # ═══════════════════════════════════════════════════════════════
