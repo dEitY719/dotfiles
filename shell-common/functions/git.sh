@@ -36,7 +36,9 @@ _git_log_formatter() {
     done
 
     # Git log format string (shared between functions)
-    local log_format="--graph --pretty=tformat:'%Cred%h%Creset %s %C(dim white)(%an, %ad)%Creset' --date=short"
+    # Keep it compact + copy-friendly while still showing date/author.
+    # (Avoid custom colors; rely on git's default coloring for decorations, if any.)
+    local log_format="--graph --abbrev-commit --decorate=short --date=short --pretty=format:'%Cred%h%Creset %s %C(dim white)(%ad %an)%Creset %C(blue)%d%Creset'"
 
     # Execute git log with appropriate flags
     if [ $show_all -eq 1 ]; then
