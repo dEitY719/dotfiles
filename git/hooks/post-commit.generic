@@ -1,0 +1,79 @@
+#!/bin/bash
+# Generic Post-commit Hook: 작업 로그 자동 기록
+# 용도: 모든 프로젝트에서 work_log.txt 에 커밋 기록 자동화
+#
+# 설치 방법:
+#   ln -s ~/dotfiles/git/hooks/post-commit.generic <project>/.git/hooks/post-commit
+#
+# 설정 (선택사항):
+#   - WORK_LOG_DIR: work_log.txt의 위치 (기본값: ${HOME}/para/archive/playbook/logs)
+#   - AUTO_COMMIT_REPO: 자동 커밋할 저장소 (기본값: ${HOME}/para/archive/playbook)
+
+set -u
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Configuration
+# ═══════════════════════════════════════════════════════════════════════════
+
+WORK_LOG_DIR="${WORK_LOG_DIR:-${HOME}/para/archive/playbook/logs}"
+AUTO_COMMIT_REPO="${AUTO_COMMIT_REPO:-${HOME}/para/archive/playbook}"
+LOGFILE="${WORK_LOG_DIR}/work_log.txt"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Git Message Parsing
+# ═══════════════════════════════════════════════════════════════════════════
+
+MSG=$(git log -1 --pretty=%B)
+HASH=$(git log -1 --pretty=format:%h)
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+
+# Extract type(scope): description
+TYPE=$(echo "$MSG" | head -1 | grep -oE '^[a-z]+' || echo "main")
+SCOPE=$(echo "$MSG" | head -1 | grep -oE '\([^)]+\)' | tr -d '()' || echo "")
+SUBJECT=$(echo "$MSG" | head -1)
+
+# Parse TimeSpent (normalize: "2h", "30m" → "2" or "0.5")
+TIME=$(echo "$MSG" | grep -iE '^TimeSpent:' | cut -d: -f2 | xargs || echo "-")
+if [ "$TIME" != "-" ]; then
+    if [[ "$TIME" =~ m$ ]]; then
+        TIME=$(echo "scale=1; ${TIME%m} / 60" | bc)
+    else
+        TIME="${TIME%h}"
+    fi
+fi
+
+# Parse Category
+CATEGORY=$(echo "$MSG" | grep -iE '^Category:' | cut -d: -f2 | xargs || echo "other")
+
+# Parse Jira Key (extract from commit message, fallback to env var)
+JIRA_KEY=$(echo "$MSG" | grep -oE '\[[A-Z]+[A-Z0-9]*-[0-9]+\]' | head -1 | tr -d '[]' || echo "$JIRA_KEY")
+if [ -z "$JIRA_KEY" ]; then
+    JIRA_KEY="${JIRA_KEY_DEFAULT:-$(basename $(git rev-parse --show-toplevel) | tr '[:lower:]' '[:upper:]')-AUTO}"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Log Recording
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Create directory if needed
+mkdir -p "$WORK_LOG_DIR"
+
+# Record to work_log.txt
+echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | ${TIME}h | $HASH" >> "$LOGFILE"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Auto-commit to Target Repository
+# ═══════════════════════════════════════════════════════════════════════════
+
+if [ -d "$AUTO_COMMIT_REPO/.git" ]; then
+    cd "$AUTO_COMMIT_REPO" || exit 1
+
+    # Check if work_log.txt has changes
+    if ! git diff-index --quiet HEAD -- logs/work_log.txt 2>/dev/null; then
+        # Commit changes
+        git add logs/work_log.txt 2>/dev/null
+        git commit -m "chore(work-log): auto updated by $HASH" 2>/dev/null || true
+    fi
+
+    cd - >/dev/null 2>&1 || true
+fi

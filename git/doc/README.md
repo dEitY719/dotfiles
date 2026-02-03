@@ -8,6 +8,26 @@
 
 ## 📚 문서 목록
 
+### 📝 [POST_COMMIT_GUIDE.md](./POST_COMMIT_GUIDE.md)
+
+**모든 프로젝트에 work_log.txt 자동 기록 설정하기**
+
+- ✅ Post-commit hook의 개념과 범위
+- ✅ 3단계 Quick Start
+- ✅ 상세 설정 (3가지 설치 방법)
+- ✅ **실제 예제: litellm 프로젝트에 설치하기** (단계별)
+- ✅ 환경변수 커스터마이징
+- ✅ 커밋 메시지 패턴
+- ✅ FAQ 및 문제 해결
+
+**이 문서를 읽으면**:
+- 모든 프로젝트에 hook을 설치하는 방법 학습
+- work_log.txt에 자동으로 기록되는 원리 이해
+- litellm을 비롯한 여러 프로젝트에 적용 가능
+- 문제 발생 시 디버깅 방법 습득
+
+---
+
 ### 🔄 [HOOK_WORKFLOW.md](./HOOK_WORKFLOW.md)
 
 **User-level과 Project-level Hook의 완전한 가이드**
@@ -121,6 +141,7 @@ git commit --no-verify -m "message"
 | 토픽 | 위치 | 내용 |
 |------|------|------|
 | SSH 설정 | [SSH_SETUP_GUIDE.md](./SSH_SETUP_GUIDE.md) | Enterprise GitHub SSH 인증 완전 가이드 |
+| Post-commit Hook | [POST_COMMIT_GUIDE.md](./POST_COMMIT_GUIDE.md) | 모든 프로젝트에 work_log 자동 기록 설정 |
 
 ### 🔍 Hook 동작 이해하기
 
