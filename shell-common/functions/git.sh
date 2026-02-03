@@ -36,7 +36,7 @@ _git_log_formatter() {
     done
 
     # Git log format string (shared between functions)
-    local log_format="--graph --pretty=tformat:'%Cred%h %C(bold blue)%d%Creset %s %Cgreen%ad %C(yellow)%an' --date=short"
+    local log_format="--graph --pretty=tformat:'%Cred%h%C(bold blue)%d%Creset %s %Cgreen%ad %C(yellow)%an' --date=short"
 
     # Execute git log with appropriate flags
     if [ $show_all -eq 1 ]; then
