@@ -46,6 +46,9 @@
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 OPENCODE_CONFIG_FILE="${OPENCODE_CONFIG_FILE:-$OPENCODE_CONFIG_DIR/opencode.json}"
 
+# OpenCode binary path
+export PATH="$HOME/.opencode/bin:$PATH"
+
 # Note: Aliases are unaliased after being defined below (re-sourcing compatibility)
 
 # ═══════════════════════════════════════════════════════════════
