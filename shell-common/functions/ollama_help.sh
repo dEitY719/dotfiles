@@ -62,8 +62,8 @@ _ollama_help_local() {
         echo ""
 
         ux_section "Install WSL Ollama"
-        ux_info "Run the installation script:"
-        ux_info "  bash ~/dotfiles/shell-common/tools/custom/install_ollama.sh"
+        ux_info "Run the installation command:"
+        ux_info "  install-ollama"
         echo ""
 
         ux_section "For Now"

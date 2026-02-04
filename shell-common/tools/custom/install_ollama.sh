@@ -110,10 +110,10 @@ EOF
     ux_info "  ollama serve"
 
     ux_bullet "Test installation:"
-    ux_info "  ollama_status  # or: ollama list"
+    ux_info "  ollama-status  # or: ollama-models"
 
     ux_bullet "Download models:"
-    ux_info "  ollama_pull gpt-oss:20b"
+    ux_info "  ollama-pull gpt-oss:20b"
 
     ux_success "Installation complete! Ollama is ready to use."
 }

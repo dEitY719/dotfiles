@@ -5,6 +5,9 @@ alias register-help='register_help'
 alias ollama-help='ollama_help'
 alias llm-help='ollama_help'
 
+# Installation helpers
+alias install-ollama='install_ollama'
+
 # Ollama command aliases (dash-case for consistency)
 alias ollama-status='ollama_status'
 alias ollama-version='ollama_version'

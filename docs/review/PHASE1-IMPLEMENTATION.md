@@ -86,10 +86,10 @@ API Base URL: http://ollama:11434
 
 ## 🚀 사용자 검증 단계
 
-### Step 1: 설치 스크립트 실행
+### Step 1: 설치 명령어 실행
 ```bash
 # WSL 호스트에서 실행
-bash ~/dotfiles/shell-common/tools/custom/install_ollama.sh
+install-ollama
 ```
 
 **예상 동작**:
