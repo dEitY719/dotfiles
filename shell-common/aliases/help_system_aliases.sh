@@ -2,8 +2,8 @@
 # Help system aliases
 alias category-help='category_help'
 alias register-help='register_help'
-alias ollama-help='ollama_help --auto'
-alias llm-help='ollama_help --auto'
+alias ollama-help='ollama_help'
+alias llm-help='ollama_help'
 
 # Ollama command aliases (dash-case for consistency)
 alias ollama-status='ollama_status'

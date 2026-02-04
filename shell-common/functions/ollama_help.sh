@@ -22,7 +22,7 @@ ollama_help() {
         --backend)
             _ollama_help_backend
             ;;
-        --auto | "")
+        --auto | auto | "")
             _ollama_help_auto
             ;;
         --help | -h)
@@ -52,6 +52,27 @@ _ollama_help_auto() {
 
 # WSL Local Ollama Help
 _ollama_help_local() {
+    # Check if local ollama is available
+    if ! command -v ollama &> /dev/null; then
+        ux_header "WSL Ollama — Not Installed"
+        echo ""
+        ux_section "Current Status"
+        ux_error "WSL Ollama is not installed"
+        ux_info "Currently using: Docker Ollama only"
+        echo ""
+
+        ux_section "Install WSL Ollama"
+        ux_info "Run the installation script:"
+        ux_info "  bash ~/dotfiles/shell-common/tools/custom/install_ollama.sh"
+        echo ""
+
+        ux_section "For Now"
+        ux_info "Docker Ollama is running and ready to use."
+        ux_info "View Docker commands with: ${UX_CODE}ollama-help --docker${UX_RESET}"
+        echo ""
+        return 0
+    fi
+
     ux_header "Ollama Management (WSL Local)"
 
     ux_section "Model Management"
