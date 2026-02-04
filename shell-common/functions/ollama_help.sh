@@ -19,8 +19,8 @@ ollama_help() {
         --local)
             _ollama_help_local
             ;;
-        --backend)
-            _ollama_help_backend
+        --status | --backend)
+            _ollama_help_status
             ;;
         --auto | auto | "")
             _ollama_help_auto
@@ -168,8 +168,8 @@ _ollama_help_docker() {
     echo ""
 }
 
-# Show current backend status
-_ollama_help_backend() {
+# Show current Ollama status
+_ollama_help_status() {
     ux_header "Current Ollama Backend Status"
     echo ""
 
@@ -207,7 +207,7 @@ _ollama_help_usage() {
     ux_bullet "--auto     Auto-detect backend (default when no option given)"
     ux_bullet "--docker   Show Docker-specific commands"
     ux_bullet "--local    Show WSL-specific commands"
-    ux_bullet "--backend  Display current backend status"
+    ux_bullet "--status   Display current Ollama status"
     ux_bullet "-h, --help Show this help"
     echo ""
 
@@ -215,7 +215,7 @@ _ollama_help_usage() {
     ux_info "ollama-help           # Auto-detect (recommended)"
     ux_info "ollama-help --docker  # Docker-specific help"
     ux_info "ollama-help --local   # WSL-specific help"
-    ux_info "ollama-help --backend # Show current status"
+    ux_info "ollama-help --status  # Show current status"
     echo ""
 }
 
