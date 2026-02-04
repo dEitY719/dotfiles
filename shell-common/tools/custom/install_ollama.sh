@@ -1,6 +1,7 @@
 #!/bin/bash
 # shell-common/tools/custom/install_ollama.sh
 # WSL Environment: Ollama Binary Installation Script
+# Supports: online installation (download from GitHub) & offline installation (local file)
 # Handles installation, validation, and port conflict detection
 
 set -e
@@ -11,7 +12,28 @@ source /home/bwyoon/dotfiles/shell-common/tools/ux_lib/ux_lib.sh 2>/dev/null || 
 }
 
 main() {
+    local offline_file="${1:-}"
+
+    # Check for --offline flag or auto-detect ollama*.tar.zst in current directory
+    if [ "$offline_file" = "--offline" ] && [ -n "$2" ]; then
+        offline_file="$2"
+    elif [ -z "$offline_file" ]; then
+        # Auto-detect ollama tar.zst in current directory
+        if ls ollama*.tar.zst 1> /dev/null 2>&1; then
+            offline_file=$(ls ollama*.tar.zst 2>/dev/null | head -1)
+            ux_info "Detected local installation file: $offline_file"
+        fi
+    fi
+
     ux_header "Ollama WSL Installation Script"
+
+    # Show mode
+    if [ -n "$offline_file" ]; then
+        echo ""
+        ux_section "Installation Mode"
+        ux_info "Mode: OFFLINE (using local file)"
+        ux_info "File: $offline_file"
+    fi
 
     # Step 1: Pre-check - Is Ollama already installed?
     if command -v ollama &> /dev/null; then
@@ -109,16 +131,40 @@ main() {
     rm -f "$net_check"
 
     # Step 3: Installation
-    ux_section "Installing Ollama from Official Script"
-    ux_info "Downloading and running official installation script..."
-    echo ""
+    ux_section "Installing Ollama"
 
-    # Attempt installation and capture error output
     local install_log=$(mktemp)
-    if curl -fsSL https://ollama.ai/install.sh 2>"$install_log" | sh 2>>"$install_log"; then
-        ux_success "Ollama installation completed"
-        rm -f "$install_log"
+
+    if [ -n "$offline_file" ]; then
+        # OFFLINE MODE: Install from local tar file
+        if [ ! -f "$offline_file" ]; then
+            ux_error "File not found: $offline_file"
+            return 1
+        fi
+
+        ux_info "Installing from local file: $offline_file"
+        echo ""
+
+        # Extract tar file
+        if sudo tar -xzf "$offline_file" -C /usr/local 2>"$install_log"; then
+            ux_success "Ollama installation completed from local file"
+            rm -f "$install_log"
+        else
+            ux_error "Failed to extract Ollama archive"
+            tail -5 "$install_log" | sed 's/^/  /'
+            rm -f "$install_log"
+            return 1
+        fi
     else
+        # ONLINE MODE: Download from GitHub via official script
+        ux_info "Downloading and running official installation script..."
+        echo ""
+
+        # Attempt installation and capture error output
+        if curl -fsSL https://ollama.ai/install.sh 2>"$install_log" | sh 2>>"$install_log"; then
+            ux_success "Ollama installation completed"
+            rm -f "$install_log"
+        else
         local exit_code=$?
         ux_error "Installation script failed (exit code: $exit_code)"
         echo ""
@@ -163,6 +209,7 @@ main() {
 
         rm -f "$install_log"
         return 1
+        fi
     fi
 
     # Step 4: Post-installation validation
