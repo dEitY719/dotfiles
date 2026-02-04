@@ -283,6 +283,7 @@ main() {
     echo ""
     ux_numbered "3" "Download a model:"
     ux_info "   ollama-pull gpt-oss:20b"
+    ux_info "   ollama-pull glm-4.7-flash"
     echo ""
     ux_numbered "4" "Connect Claude Code:"
     ux_info "   ollama-launch claude"
