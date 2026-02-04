@@ -47,6 +47,8 @@ _git_log_formatter() {
     else
         # Show only last 11 commits (no pager needed for small output)
         eval "git --no-pager log $log_format -n 11 $branch $args"
+        # Ensure newline after output so prompt appears on new line
+        echo
     fi
 }
 
@@ -126,8 +128,8 @@ git_setup_auto_remote() {
     fi
 }
 
-# Auto-setup on shell load (silent: redirects errors)
-git_setup_auto_remote 2>/dev/null || true
+# Auto-setup on shell load (silent: redirects all output)
+git_setup_auto_remote >/dev/null 2>&1 || true
 
 # ============================================================================
 # Backward Compatibility Aliases
