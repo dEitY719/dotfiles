@@ -23,3 +23,6 @@ alias ollama-run='ollama_run'
 alias ollama-prompt='ollama_prompt'
 alias ollama-logs='ollama_logs'
 alias ollama-stats='ollama_stats'
+
+# System management
+alias ollama-restart='ollama_systemd_restart'

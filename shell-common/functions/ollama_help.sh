@@ -97,6 +97,10 @@ _ollama_help_local() {
     ux_bullet "ollama-launch claude — Connect Claude Code to Ollama"
     echo ""
 
+    ux_section "System Management"
+    ux_bullet "ollama-restart — Restart systemd service and verify all checks"
+    echo ""
+
     ux_section "Popular Models"
     ux_table_row "tinyllama:latest" "637 MB"  "Fast, lightweight"
     ux_table_row "gpt-oss:20b"      "13 GB"   "High-capability model"

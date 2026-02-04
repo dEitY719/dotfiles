@@ -261,6 +261,40 @@ ollama_run() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# System Management Functions
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Restart Ollama systemd service and verify
+ollama_systemd_restart() {
+    ux_header "Ollama Systemd Service Management"
+    echo ""
+
+    ux_section "1. Reloading systemd configuration"
+    sudo systemctl daemon-reload
+    ux_success "Configuration reloaded"
+    echo ""
+
+    ux_section "2. Restarting Ollama service"
+    sudo systemctl restart ollama
+    ux_success "Service restarted"
+    echo ""
+
+    ux_section "3. Checking service status"
+    sudo systemctl status ollama --no-pager | grep -E "Active|Main PID"
+    echo ""
+
+    ux_section "4. Verifying port binding"
+    sudo ss -lntp | grep ollama || ux_error "Ollama not listening"
+    echo ""
+
+    ux_section "5. Testing version"
+    ollama --version
+    echo ""
+
+    ux_success "All checks complete!"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
 # P1: Advanced Functions (Optional)
 # ═══════════════════════════════════════════════════════════════════════════
 
