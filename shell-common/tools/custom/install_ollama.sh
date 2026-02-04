@@ -29,6 +29,23 @@ main() {
     fi
     ux_success "curl found"
 
+    # Check for zstd (required by Ollama installation)
+    if ! command -v zstd &> /dev/null; then
+        ux_error "zstd is required but not installed"
+        echo ""
+        ux_section "Install zstd"
+        ux_info "Run this command first:"
+        ux_info "  ensure-ollama-deps"
+        echo ""
+        ux_info "Or install manually:"
+        ux_info "  - Debian/Ubuntu: sudo apt-get install zstd"
+        ux_info "  - RHEL/CentOS/Fedora: sudo dnf install zstd"
+        ux_info "  - Arch: sudo pacman -S zstd"
+        echo ""
+        return 1
+    fi
+    ux_success "zstd found"
+
     # Check if running on Linux/WSL
     if [[ ! "$OSTYPE" == "linux-gnu"* ]]; then
         ux_error "This script is for Linux/WSL only"

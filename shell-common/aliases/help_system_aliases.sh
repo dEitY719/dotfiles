@@ -6,6 +6,7 @@ alias ollama-help='ollama_help'
 alias llm-help='ollama_help'
 
 # Installation and launcher helpers
+alias ensure-ollama-deps='ensure_ollama_deps'
 alias install-ollama='install_ollama'
 alias ollama-serve='ollama_serve'
 alias ollama-launch='ollama_launch'
