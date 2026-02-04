@@ -259,31 +259,34 @@ main() {
     export OLLAMA_NUM_GPU=-1
     export OLLAMA_KEEP_ALIVE=5m
 
-    ux_info "Recommended environment variables:"
+    ux_success "Environment variables automatically configured!"
+    ux_info "Source: ~/dotfiles/shell-common/env/ollama.sh"
+    echo ""
+    ux_section "Settings (Currently Active)"
     ux_bullet "OLLAMA_NUM_CTX=65536 (64K context length)"
     ux_bullet "OLLAMA_NUM_GPU=-1 (GPU auto-detect)"
     ux_bullet "OLLAMA_KEEP_ALIVE=5m (Memory efficiency)"
+    ux_bullet "DOTFILES_OLLAMA_BACKEND=auto (auto-detect local/docker)"
+    echo ""
+    ux_info "These are automatically loaded in new shell sessions."
+    ux_info "To customize: edit ~/dotfiles/shell-common/env/ollama.sh"
+    echo ""
 
-    # Suggestion to add to shell profile
+    # Next steps
     ux_section "Next Steps"
-    ux_bullet "Add to ~/.bashrc or ~/.zshrc:"
+    ux_numbered "1" "Start Ollama service:"
+    ux_info "   ollama serve"
     echo ""
-    cat << 'EOF'
-export OLLAMA_NUM_CTX=65536
-export OLLAMA_NUM_GPU=-1
-export OLLAMA_KEEP_ALIVE=5m
-export DOTFILES_OLLAMA_BACKEND=auto
-EOF
+    ux_numbered "2" "Test installation (new terminal):"
+    ux_info "   ollama-status"
+    ux_info "   ollama-models"
     echo ""
-
-    ux_bullet "Start Ollama service:"
-    ux_info "  ollama serve"
-
-    ux_bullet "Test installation:"
-    ux_info "  ollama-status  # or: ollama-models"
-
-    ux_bullet "Download models:"
-    ux_info "  ollama-pull gpt-oss:20b"
+    ux_numbered "3" "Download a model:"
+    ux_info "   ollama-pull gpt-oss:20b"
+    echo ""
+    ux_numbered "4" "Connect Claude Code:"
+    ux_info "   ollama-launch claude"
+    echo ""
 
     ux_success "Installation complete! Ollama is ready to use."
 }

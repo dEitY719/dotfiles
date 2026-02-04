@@ -159,6 +159,30 @@ ollama_version() {
     ollama_cmd --auto version 2>/dev/null || ollama_cmd --auto --version
 }
 
+# Check environment variables configuration
+ollama_status_env() {
+    ux_header "Ollama Environment Configuration"
+    echo ""
+
+    ux_section "Environment Variables"
+    ux_bullet "OLLAMA_NUM_CTX=$OLLAMA_NUM_CTX (context length)"
+    ux_bullet "OLLAMA_NUM_GPU=$OLLAMA_NUM_GPU (GPU selection)"
+    ux_bullet "OLLAMA_KEEP_ALIVE=$OLLAMA_KEEP_ALIVE (cache timeout)"
+    ux_bullet "DOTFILES_OLLAMA_BACKEND=$DOTFILES_OLLAMA_BACKEND (backend mode)"
+    echo ""
+
+    ux_section "Configuration Source"
+    ux_info "File: ~/dotfiles/shell-common/env/ollama.sh"
+    ux_info "Auto-loaded: Yes (via shell initialization)"
+    echo ""
+
+    ux_section "Customization"
+    ux_info "To change settings:"
+    ux_info "  1. Edit: ~/dotfiles/shell-common/env/ollama.sh"
+    ux_info "  2. Reload shell: exec \$SHELL"
+    echo ""
+}
+
 # Get Ollama status
 ollama_status() {
     ux_header "Ollama Status"

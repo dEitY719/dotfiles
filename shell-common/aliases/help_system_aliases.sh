@@ -13,6 +13,7 @@ alias ollama-launch='ollama_launch'
 
 # Ollama command aliases (dash-case for consistency)
 alias ollama-status='ollama_status'
+alias ollama-status-env='ollama_status_env'
 alias ollama-version='ollama_version'
 alias ollama-models='ollama_models'
 alias ollama-pull='ollama_pull'
