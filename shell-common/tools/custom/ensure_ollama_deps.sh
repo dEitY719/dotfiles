@@ -53,7 +53,11 @@ main() {
     MISSING_PKGS=""
     
     for pkg in $REQUIRED_PKGS; do
-        if command -v "$pkg" &> /dev/null || dpkg -l | grep -q "^ii.*$pkg" 2>/dev/null; then
+        # First check: command exists and is executable
+        if command -v "$pkg" &> /dev/null; then
+            ux_success "$pkg — already installed"
+        # Second check: exact package name match in dpkg (avoid matching libzstd1 when checking for zstd)
+        elif dpkg -l 2>/dev/null | awk "/^ii/ {print \$2}" | grep -q "^${pkg}$"; then
             ux_success "$pkg — already installed"
         else
             ux_error "$pkg — NOT installed (required)"
