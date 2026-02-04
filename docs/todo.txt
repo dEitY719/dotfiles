@@ -1,78 +1,80 @@
-# Dotfiles Project TODO List
+# Ollama WSL + Docker Hybrid Integration - TODO List
+# Last Updated: 2026-02-04 18:50 KST
 
-## P4: devx.sh Structural Refactoring (Blocked by pre-commit violations)
+## ✅ 완료된 항목 (2026-02-04)
 
-### Issue 1: Shebang Violation
-**File**: shell-common/functions/devx.sh:1
-**Current**: #!/bin/sh
-**Required**: #!/bin/sh
-**Reason**: Project standard for shell-common utilities
+### Phase 1: 기초 인프라 구축
+- ✅ install_ollama.sh: 오프라인 설치 모드 구현
+- ✅ ollama.sh (integrations): Backend 감지 및 통합 함수 구현
+- ✅ shell-common/env/ollama.sh: 환경변수 중앙화
+- ✅ ollama-status-env: 환경 설정 검증 명령어
+- ✅ install-ollama 공식 스크립트로 변경 (ollama.com 사용)
+- ✅ WSL Ollama 0.15.4 설치 완료
+- ✅ systemd 서비스 설정 (포트 11434)
 
-**Complexity**: Completed
-- Converted `shell-common/functions/devx.sh` to POSIX-safe (no `local`, no `BASH_SOURCE`, no top-level side effects).
+### Phase 2: 분리 운영 정책 수립
+- ✅ Docker Ollama (11434) vs WSL Ollama (11435) 분리 전략 결정
+- ✅ ollama-restart 시스템 관리 명령어 추가
+- ✅ 포트 11434에서 WSL Ollama 기본 실행 (Docker 중지 상태)
 
-**Impact**: Medium
-- Changes semantics of existing functions
-- May break zsh compatibility despite current claims
+## ⏳ 진행 중인 항목
 
-**Status**: Completed (2026-02-02)
-
----
-
-### Issue 2: Library Purity Violation
-**File**: shell-common/functions/devx.sh
-**Problem**: Top-level execution / side effects in auto-sourced library file
-
-```bash
-# Current (problematic):
-if [ "$_should_run_main" = "true" ]; then
-    devx__main "$@"  # ← Executes during auto-sourcing
-fi
-```
-
-**Required Fix**:
-1. Remove main execution from shell-common/functions/devx.sh
-2. Create shell-common/tools/custom/devx wrapper script
-
-**Complexity**: Completed
-- `shell-common/functions/devx.sh` now only defines functions (no execution).
-- Added `shell-common/tools/custom/devx.sh` as the standalone entrypoint.
-
-**Impact**: Low
-- Interactive shells still get `devx()` via auto-sourcing.
-- Standalone execution is available via `bash shell-common/tools/custom/devx.sh ...` (or by adding a PATH/alias wrapper later).
-
-**Status**: Completed (2026-02-02)
+### GLM-4.7-Flash 다운로드
+- 📥 다운로드 진행 중: 2% (422 MB / 19 GB, 약 17분 소요)
+- 예상 완료 시간: 18:50 + 17분 ≈ 19:07
 
 ---
 
-## Related Work
+## 🚀 다음 해야할 일 (내일 또는 다음 작업)
 
-### LSP Audit Findings (P1-4)
-**Priority**: Medium
-**Date**: 2026-02-02
+### 1️⃣ GLM-4.7-Flash 검증 (우선순위: 높음)
+- [ ] 다운로드 완료 확인: `ollama-models`
+- [ ] 모델 실행 테스트: `ollama-run glm-4.7-flash`
+- [ ] 메모리 및 GPU 사용량 모니터링
 
-**Consistency Score**: 71% (2.12/3.0)
+### 2️⃣ 분리 운영 구조 완성
+- [ ] Docker Ollama 재시작: `docker start ollama`
+- [ ] 포트 상태 확인: `sudo ss -lntp | grep -E '11434|11435'`
+- [ ] 양쪽 모델 동시 운영 테스트
+  - gpt-oss:20b (Docker, 11434)
+  - glm-4.7-flash (WSL, 11434)
 
-**Files Analyzed**:
-- git.sh: 1.62/3.0 (missing help function, basic validation)
-- devx.sh: 2.37/3.0 (good structure but pre-commit violations)
-- mount.sh: 2.37/3.0 (comprehensive validation)
+### 3️⃣ ollama-pull Wrapper 함수 버그 수정
+- [ ] ollama-pull vs ollama pull 동작 차이 진단
+- [ ] 함수 정의 확인: `type ollama-pull` / `declare -f ollama-pull`
+- [ ] 버그 원인 파악 및 수정
+- [ ] 테스트: `ollama-pull <model>` 정상 작동 확인
 
-**Critical Issues Deferred**:
-1. devx.sh exit code standardization (return 1 instead of return 2)
-   - Now unblocked (Issue 1 + Issue 2 resolved)
+### 4️⃣ Claude Code / AI Agent 통합
+- [ ] Claude Code와 WSL Ollama (11434) 연동 테스트
+- [ ] LiteLLM과 Docker Ollama (11434) 연동 테스트
+- [ ] ollama-launch claude 명령어 검증
 
-**Recommendations for Future Work**:
-1. Prioritize devx.sh refactoring (Issues 1 + 2 above)
-2. After that, implement exit code standardization
-3. Then proceed with error message unified logging (Phase 2)
-4. Finally, help system standardization and function naming
+### 5️⃣ 환경 최적화
+- [ ] OLLAMA_HOST 환경변수 ~/.bashrc에 고정 (필요시)
+- [ ] ollama-local, ollama-docker alias 추가 (선택사항)
+- [ ] 포트별 wrapper 함수 정리
 
 ---
 
-## Notes
-- devx.sh is a "technical debt" file that was exempted from recent migrations
-- Both violations are pre-commit BLOCKING (not just warnings)
-- Recommend scheduling as separate major refactoring task
-- Consider creating devx.sh v2 with proper architecture
+## 📊 현재 상태 요약
+
+| 항목 | 상태 | 상세 |
+|------|------|------|
+| **WSL Ollama** | ✅ 설치됨 | 0.15.4, 포트 11434, systemd 실행 중 |
+| **GLM-4.7-Flash** | 📥 다운로드 중 | 2% (약 17분 소요) |
+| **Docker Ollama** | 🛑 중지됨 | 필요시 재시작 가능 |
+| **포트 분리** | ✅ 정책 수립 | 11434 (기본), 11435 (예약) |
+| **시스템 관리** | ✅ 개선됨 | ollama-restart 명령어 추가 |
+
+---
+
+## 🔗 관련 문서
+- @docs/review/abc-review-C.md - Ollama 통합 계획
+- shell-common/tools/custom/install_ollama.sh - 설치 스크립트
+- shell-common/tools/integrations/ollama.sh - 백엔드 통합 함수
+- shell-common/env/ollama.sh - 환경변수 중앙화
+
+---
+
+**다음 퇴근: 복귀 시 GLM-4.7-Flash 다운로드 완료 확인 + 분리 운영 테스트**
