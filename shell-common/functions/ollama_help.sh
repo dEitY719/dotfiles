@@ -1,59 +1,201 @@
 #!/bin/sh
 # shell-common/functions/ollama_help.sh
-# Ollama / LLM Model Management Help
+# Ollama / LLM Model Management Help (Hybrid: WSL + Docker)
+# Follows UX_GUIDELINES.md for consistent, semantic output
 
+# Load UX library - absolute path (most reliable)
+if ! declare -f ux_header > /dev/null 2>&1; then
+    source /home/bwyoon/dotfiles/shell-common/tools/ux_lib/ux_lib.sh 2>/dev/null || true
+fi
+
+# Main help function with auto-detection
 ollama_help() {
-    ux_header "Ollama / LLM Model Management"
+    local mode="${1:-auto}"
+
+    case "$mode" in
+        --docker)
+            _ollama_help_docker
+            ;;
+        --local)
+            _ollama_help_local
+            ;;
+        --backend)
+            _ollama_help_backend
+            ;;
+        --auto | "")
+            _ollama_help_auto
+            ;;
+        --help | -h)
+            _ollama_help_usage
+            ;;
+        *)
+            ux_error "Unknown option: $mode"
+            _ollama_help_usage
+            return 1
+            ;;
+    esac
+}
+
+# Auto-detect and show appropriate help
+_ollama_help_auto() {
+    if command -v ollama_backend_detect &> /dev/null; then
+        local backend=$(ollama_backend_detect 2>/dev/null || echo "docker")
+        if [[ "$backend" == "local" ]]; then
+            _ollama_help_local
+        else
+            _ollama_help_docker
+        fi
+    else
+        _ollama_help_docker
+    fi
+}
+
+# WSL Local Ollama Help
+_ollama_help_local() {
+    ux_header "Ollama Management (WSL Local)"
 
     ux_section "Model Management"
-    ux_table_row "docker exec ollama ollama list" "List all models" "Show model info (ID, size, modified)"
-    ux_table_row "docker exec ollama ollama pull <name>" "Download model" "e.g., tinyllama, gpt-oss:20b"
-    ux_table_row "docker exec ollama ollama rm <name>" "Remove model" "Delete model from local storage"
-    ux_table_row "docker exec ollama ollama show <name>" "Show model details" "Display model configuration"
+    ux_bullet "ollama_models       — List all installed models"
+    ux_bullet "ollama_pull <name>  — Download a model (e.g., gpt-oss:20b)"
+    ux_bullet "ollama_rm <name>    — Remove a model"
+    ux_bullet "ollama_show <name>  — Display model configuration"
     echo ""
 
-    ux_section "Model Usage (Command Line)"
-    ux_table_row "docker exec ollama ollama run <model>" "Interactive chat" "Start conversation with model"
-    ux_table_row "docker exec ollama ollama run <model> <prompt>" "Single request" "Get response to one query"
+    ux_section "Model Usage"
+    ux_bullet "ollama_run <model>          — Interactive chat session"
+    ux_bullet "ollama_prompt <model> <txt> — Single prompt execution"
     echo ""
 
-    ux_section "Container Logs & Monitoring"
-    ux_table_row "docker logs -f ollama" "Follow logs" "Real-time container output"
-    ux_table_row "docker stats ollama" "Resource usage" "Monitor CPU, memory, network"
-    ux_table_row "docker exec ollama ps aux" "Container processes" "List running processes"
+    ux_section "Status & Information"
+    ux_bullet "ollama_version — Display Ollama version"
+    ux_bullet "ollama_status  — Check service status and API health"
     echo ""
 
-    ux_section "Common Models"
-    ux_table_row "tinyllama:latest" "637 MB" "Fast, lightweight model"
-    ux_table_row "bge-m3:latest" "1.2 GB" "Embedding/semantic search model"
-    ux_table_row "gpt-oss:20b" "13 GB" "Larger capability model"
-    ux_table_row "mistral" "4.1 GB" "Fast, general-purpose model"
-    ux_table_row "neural-chat" "3.8 GB" "Chat-optimized model"
+    ux_section "Popular Models"
+    ux_table_row "tinyllama:latest" "637 MB"  "Fast, lightweight"
+    ux_table_row "gpt-oss:20b"      "13 GB"   "High-capability model"
+    ux_table_row "mistral"          "4.1 GB"  "General-purpose"
+    ux_table_row "neural-chat"      "3.8 GB"  "Chat-optimized"
+    ux_table_row "bge-m3:latest"    "1.2 GB"  "Embeddings/search"
     echo ""
 
-    ux_section "Practical Examples"
-    ux_bullet "List all installed models:"
-    ux_info "  docker exec ollama ollama list"
+    ux_section "Examples"
+    ux_numbered "1" "List all models:"
+    ux_info "   ollama_models"
     echo ""
-    ux_bullet "Pull and use a specific model:"
-    ux_info "  docker exec ollama ollama pull mistral"
-    ux_info "  docker exec ollama ollama run mistral 'Explain quantum computing'"
+    ux_numbered "2" "Download and use a model:"
+    ux_info "   ollama_pull gpt-oss:20b"
+    ux_info "   ollama_run gpt-oss:20b"
     echo ""
-    ux_bullet "Interactive chat with a model:"
-    ux_info "  docker exec -it ollama ollama run tinyllama"
-    echo ""
-    ux_bullet "View model details:"
-    ux_info "  docker exec ollama ollama show tinyllama:latest"
+    ux_numbered "3" "Single prompt:"
+    ux_info "   ollama_prompt gpt-oss:20b 'Explain quantum computing'"
     echo ""
 
-    ux_section "Tips"
-    ux_bullet "Use '-it' flags for interactive mode: ${UX_CODE}docker exec -it ollama ...${UX_RESET}"
-    ux_bullet "Models are stored in container volume: ${UX_CODE}/root/.ollama${UX_RESET}"
-    ux_bullet "Model downloads can be large; check disk space before pulling"
-    ux_bullet "Combine with ${UX_HIGHLIGHT}docker-help${UX_RESET} for container management"
+    ux_section "Quick Reference"
+    ux_info "Storage:   ~/.ollama"
+    ux_info "API:       http://127.0.0.1:11434"
+    ux_info "Use ${UX_CODE}ollama-help --docker${UX_RESET} for Docker commands"
     echo ""
 }
 
-# Aliases for easy access
-alias ollama-help='ollama_help'
-alias llm-help='ollama_help'
+# Docker Ollama Help
+_ollama_help_docker() {
+    ux_header "Ollama Management (Docker Container)"
+
+    ux_section "Model Management"
+    ux_bullet "ollama_models [--docker]       — List all models"
+    ux_bullet "ollama_pull --docker <name>    — Download a model"
+    ux_bullet "ollama_rm --docker <name>      — Remove a model"
+    ux_bullet "ollama_show --docker <name>    — Show model details"
+    echo ""
+
+    ux_section "Model Usage"
+    ux_bullet "ollama_run --docker <model>    — Interactive chat"
+    ux_bullet "ollama_prompt --docker <...>   — Single prompt"
+    echo ""
+
+    ux_section "Container Operations"
+    ux_bullet "ollama_logs       — Follow container logs (real-time)"
+    ux_bullet "ollama_stats      — Monitor resource usage"
+    ux_bullet "docker logs -f ollama   — Raw Docker logs"
+    echo ""
+
+    ux_section "Popular Models"
+    ux_table_row "tinyllama:latest" "637 MB"  "Fast, lightweight"
+    ux_table_row "gpt-oss:20b"      "13 GB"   "High-capability model"
+    ux_table_row "mistral"          "4.1 GB"  "General-purpose"
+    ux_table_row "neural-chat"      "3.8 GB"  "Chat-optimized"
+    ux_table_row "bge-m3:latest"    "1.2 GB"  "Embeddings/search"
+    echo ""
+
+    ux_section "Examples"
+    ux_numbered "1" "List models:"
+    ux_info "   ollama_models --docker"
+    echo ""
+    ux_numbered "2" "Download and use:"
+    ux_info "   ollama_pull --docker mistral"
+    ux_info "   ollama_run --docker mistral"
+    echo ""
+    ux_numbered "3" "Interactive chat:"
+    ux_info "   docker exec -it ollama ollama run tinyllama"
+    echo ""
+
+    ux_section "Quick Reference"
+    ux_info "Storage:   /root/.ollama (container volume)"
+    ux_info "API:       http://localhost:11434"
+    ux_info "Use ${UX_CODE}ollama-help --local${UX_RESET} for WSL commands"
+    echo ""
+}
+
+# Show current backend status
+_ollama_help_backend() {
+    ux_header "Current Ollama Backend Status"
+    echo ""
+
+    if command -v ollama_backend_status &> /dev/null; then
+        ollama_backend_status
+    else
+        if command -v ollama &> /dev/null; then
+            ux_success "Backend: LOCAL (WSL)"
+            ux_info "Version: $(ollama --version 2>/dev/null || echo 'unknown')"
+            ux_info "API: http://127.0.0.1:11434"
+        elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^ollama$"; then
+            ux_success "Backend: DOCKER"
+            ux_info "Container: ollama (running)"
+            ux_info "API: http://ollama:11434"
+        else
+            ux_error "No Ollama backend available"
+            ux_info "Install options:"
+            ux_bullet "WSL: bash ~/dotfiles/shell-common/tools/custom/install_ollama.sh"
+            ux_bullet "Docker: docker start ollama"
+        fi
+    fi
+    echo ""
+}
+
+# Show usage information
+_ollama_help_usage() {
+    ux_header "ollama-help — Ollama Command Reference"
+    echo ""
+
+    ux_section "Usage"
+    ux_info "ollama-help [OPTION]"
+    echo ""
+
+    ux_section "Options"
+    ux_bullet "--auto     Auto-detect backend (default when no option given)"
+    ux_bullet "--docker   Show Docker-specific commands"
+    ux_bullet "--local    Show WSL-specific commands"
+    ux_bullet "--backend  Display current backend status"
+    ux_bullet "-h, --help Show this help"
+    echo ""
+
+    ux_section "Examples"
+    ux_info "ollama-help           # Auto-detect (recommended)"
+    ux_info "ollama-help --docker  # Docker-specific help"
+    ux_info "ollama-help --local   # WSL-specific help"
+    ux_info "ollama-help --backend # Show current status"
+    echo ""
+}
+
+# Aliases defined in shell initialization (bashrc/zshrc) to avoid conflicts

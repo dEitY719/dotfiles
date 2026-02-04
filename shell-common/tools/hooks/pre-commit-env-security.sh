@@ -93,4 +93,37 @@ fi
 
 echo "✓ 환경 파일 보안 검사 통과"
 echo "  (민감한 파일 커밋 방지됨)"
+
+# ═══════════════════════════════════════════════════════════════
+# Check 3: Detect duplicate UX function definitions
+# Prevents issues like multiple files defining fallback ux_header
+# ═══════════════════════════════════════════════════════════════
+echo ""
+echo "🔍 검사: 중복된 UX 함수 정의..."
+
+FUNCTIONS_TO_CHECK="ux_header ux_section ux_bullet ux_info ux_success ux_error"
+DUPLICATE_FOUND=0
+
+for func in $FUNCTIONS_TO_CHECK; do
+    # Count definitions (excluding ux_lib.sh which is the source of truth)
+    COUNT=$(grep -r "^${func}()" shell-common --include="*.sh" 2>/dev/null | grep -v "ux_lib.sh" | wc -l)
+
+    if [ "$COUNT" -gt 1 ]; then
+        echo "❌ ERROR: '${func}' 함수가 여러 파일에서 정의되었습니다:"
+        grep -r "^${func}()" shell-common --include="*.sh" 2>/dev/null | grep -v "ux_lib.sh" | cut -d: -f1 | sed 's/^/     /'
+        DUPLICATE_FOUND=1
+    fi
+done
+
+if [ "$DUPLICATE_FOUND" -eq 1 ]; then
+    echo ""
+    echo "해결 방법:"
+    echo "  1) shell-common/tools/ux_lib/ux_lib.sh에서 함수가 정의됨"
+    echo "  2) 다른 파일의 fallback 정의 제거"
+    echo "  3) 대신 절대 경로로 ux_lib.sh 로드:"
+    echo "     source /home/bwyoon/dotfiles/shell-common/tools/ux_lib/ux_lib.sh"
+    exit 1
+fi
+
+echo "✓ UX 함수 중복 정의 검사 통과"
 exit 0
