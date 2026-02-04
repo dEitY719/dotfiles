@@ -92,6 +92,11 @@ _ollama_help_local() {
     ux_bullet "ollama-status  — Check service status and API health"
     echo ""
 
+    ux_section "Server Management"
+    ux_bullet "ollama-serve         — Start Ollama server (foreground)"
+    ux_bullet "ollama-launch claude — Connect Claude Code to Ollama"
+    echo ""
+
     ux_section "Popular Models"
     ux_table_row "tinyllama:latest" "637 MB"  "Fast, lightweight"
     ux_table_row "gpt-oss:20b"      "13 GB"   "High-capability model"
@@ -101,14 +106,17 @@ _ollama_help_local() {
     echo ""
 
     ux_section "Examples"
-    ux_numbered "1" "List all models:"
-    ux_info "   ollama-models"
+    ux_numbered "1" "Start Ollama server:"
+    ux_info "   ollama-serve"
     echo ""
-    ux_numbered "2" "Download and use a model:"
+    ux_numbered "2" "Connect Claude Code (in another terminal):"
+    ux_info "   ollama-launch claude"
+    echo ""
+    ux_numbered "3" "Download and use a model:"
     ux_info "   ollama-pull gpt-oss:20b"
     ux_info "   ollama-run gpt-oss:20b"
     echo ""
-    ux_numbered "3" "Single prompt:"
+    ux_numbered "4" "Single prompt:"
     ux_info "   ollama-prompt gpt-oss:20b 'Explain quantum computing'"
     echo ""
 
