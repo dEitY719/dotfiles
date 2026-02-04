@@ -145,8 +145,8 @@ main() {
         ux_info "Installing from local file: $offline_file"
         echo ""
 
-        # Extract tar file
-        if sudo tar -xzf "$offline_file" -C /usr/local 2>"$install_log"; then
+        # Extract tar file (zstd compressed)
+        if sudo tar -xf "$offline_file" --zstd -C /usr/local 2>"$install_log"; then
             ux_success "Ollama installation completed from local file"
             rm -f "$install_log"
         else
