@@ -101,13 +101,13 @@ main() {
     # Step 2.5: Network connectivity check
     ux_section "Network Connectivity Check"
     local net_check=$(mktemp)
-    curl -I -m 5 https://github.com > "$net_check" 2>&1
+    curl -I -m 5 https://ollama.com > "$net_check" 2>&1
     local curl_exit=$?
 
     if [ $curl_exit -ne 0 ] && grep -q "Connection reset by peer\|Recv failure\|Failed to connect\|timeout" "$net_check" 2>/dev/null; then
-        ux_error "Cannot reach github.com (required for installation)"
+        ux_error "Cannot reach ollama.com (required for installation)"
         ux_info "This is needed to download Ollama binary from:"
-        ux_info "  https://github.com/ollama/ollama/releases"
+        ux_info "  https://ollama.com/install.sh"
         echo ""
         ux_section "Diagnostics"
         grep "Connection reset\|error\|Failed" "$net_check" | sed 's/^/  /'
@@ -124,7 +124,7 @@ main() {
             return 1
         fi
     elif grep -q "200\|301\|302" "$net_check" 2>/dev/null; then
-        ux_success "GitHub connectivity verified"
+        ux_success "ollama.com connectivity verified"
     else
         ux_info "Network check inconclusive, proceeding with installation..."
     fi
@@ -156,12 +156,12 @@ main() {
             return 1
         fi
     else
-        # ONLINE MODE: Download from GitHub via official script
+        # ONLINE MODE: Download from official Ollama site via official script
         ux_info "Downloading and running official installation script..."
         echo ""
 
         # Attempt installation and capture error output
-        if curl -fsSL https://ollama.ai/install.sh 2>"$install_log" | sh 2>>"$install_log"; then
+        if curl -fsSL https://ollama.com/install.sh 2>"$install_log" | sh 2>>"$install_log"; then
             ux_success "Ollama installation completed"
             rm -f "$install_log"
         else
@@ -172,25 +172,25 @@ main() {
         # Check for network/connectivity errors
         if grep -q "Connection reset by peer\|Recv failure\|Failed to connect\|Network is unreachable" "$install_log" 2>/dev/null; then
             ux_section "Network Connectivity Issue"
-            ux_error "Cannot reach GitHub to download Ollama binary"
+            ux_error "Cannot reach ollama.com to download Ollama binary"
             echo ""
             ux_section "Possible Causes"
-            ux_bullet "Company firewall/proxy blocking github.com"
+            ux_bullet "Company firewall/proxy blocking ollama.com"
             ux_bullet "ISP/Network policy restriction"
             ux_bullet "DNS resolution failure"
             echo ""
             ux_section "Solutions"
             echo ""
-            ux_numbered "1" "Request GitHub access from IT (Recommended):"
+            ux_numbered "1" "Request ollama.com access from IT (Recommended):"
             ux_info "   Request access to:"
-            ux_info "   • Domain: github.com:443 (HTTPS)"
-            ux_info "   • URL: https://github.com/ollama/ollama/releases"
+            ux_info "   • Domain: ollama.com:443 (HTTPS)"
+            ux_info "   • URL: https://ollama.com/install.sh"
             ux_info "   Then retry: install-ollama"
             echo ""
             ux_numbered "2" "Manual Offline Installation (Step-by-Step):"
             echo ""
             ux_section "Step 1: Download on Accessible Network"
-            ux_info "On a PC with GitHub access (home, cafe, different network):"
+            ux_info "On a PC with internet access (home, cafe, different network):"
             ux_info ""
             ux_info "Run this command:"
             echo "  curl -L -O https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst"
