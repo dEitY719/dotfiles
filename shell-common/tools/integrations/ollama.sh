@@ -138,12 +138,6 @@ ollama_api_base_url() {
     esac
 }
 
-# Normalize model name (gpt-oss-20b → gpt-oss:20b)
-ollama_normalize_model_name() {
-    local model="$1"
-    # Replace hyphen before numbers with colon (if looks like version)
-    echo "$model" | sed 's/-\([0-9]\)/:\1/'
-}
 
 # ═══════════════════════════════════════════════════════════════════════════
 # P0: Basic Management Functions (Required)
@@ -227,9 +221,6 @@ ollama_models() {
 ollama_pull() {
     local model="${1:?Model name required}"
 
-    # Normalize model name if needed
-    model=$(ollama_normalize_model_name "$model")
-
     ux_info "Pulling model: $model"
     ollama_cmd --auto pull "$model"
 }
@@ -237,7 +228,6 @@ ollama_pull() {
 # Remove a model
 ollama_rm() {
     local model="${1:?Model name required}"
-    model=$(ollama_normalize_model_name "$model")
 
     ux_info "Removing model: $model"
     ollama_cmd --auto rm "$model"
@@ -246,7 +236,6 @@ ollama_rm() {
 # Show model details
 ollama_show() {
     local model="${1:?Model name required}"
-    model=$(ollama_normalize_model_name "$model")
 
     ollama_cmd --auto show "$model"
 }
@@ -254,7 +243,6 @@ ollama_show() {
 # Run a model (interactive)
 ollama_run() {
     local model="${1:?Model name required}"
-    model=$(ollama_normalize_model_name "$model")
 
     ux_info "Starting interactive chat with: $model"
     ollama_cmd --auto run "$model"
@@ -314,8 +302,6 @@ ollama_stats() {
 ollama_prompt() {
     local model="${1:?Model name required}"
     local prompt="${2:?Prompt text required}"
-
-    model=$(ollama_normalize_model_name "$model")
 
     ollama_cmd --auto run "$model" "$prompt"
 }
