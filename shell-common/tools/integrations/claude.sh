@@ -424,3 +424,9 @@ clskip() {
     echo ""
     claude --dangerously-skip-permissions -p "$1"
 }
+
+# ═══════════════════════════════════════════════════════════════
+# Claude Code Direct Permission Bypass Alias
+# ═══════════════════════════════════════════════════════════════
+
+alias claude-skip='claude --dangerously-skip-permissions'
