@@ -1,132 +1,93 @@
-# [CX] WSL 환경 Ollama 통합 구현 계획 (Docker 컨테이너 + 로컬 바이너리)
+# abc-review-CX
 
-## 1. Reviewer Info
+**Reviewer (Model):** GPT-5.2 (Codex CLI)  
+**Date:** 2026-02-08  
+**Scope:** `docs/review/abc-review-CM.md`, `docs/review/abc-review-R.md` 제안 검토 + 현재 저장소 상태(동일 워크스페이스) 대조
 
-- Reviewer: ChatGPT (GPT-5.2, Codex CLI)
-- Date: 2026-02-04
-- Scope: dotfiles에 Ollama 실행/관리/도구연동(Claude Code, LiteLLM)을 표준화
+---
 
-## 2. Current State Summary
+## 1. 프로젝트 구조 요약
 
-- Docker 컨테이너 `ollama` 내부에서 `ollama 0.13.1`이 `serve`로 실행 중
-- WSL 호스트에는 `ollama` 바이너리가 설치되어 있지 않음 (`command -v ollama` 실패)
-- 과거 `litellm` 프로젝트에서 `gpt-oss-20b`(Ollama 표기: `gpt-oss:20b`) 모델을 사용한 이력 있음
+- `bash/`: bash 초기화 및 bash 전용 모듈
+- `zsh/`: zsh 초기화 및 zsh 전용 모듈
+- `shell-common/`: 공용 env/aliases/functions/tools/projects
+- `tests/`: 테스트
+- `docs/`: 문서/리뷰
+- `git/`: git 훅/설정
+- `.github/workflows/`: CI
 
-이 상태에서 필요한 것은 “도커 기반 Ollama”와 “WSL 로컬 Ollama”를 모두 지원하는 일관된 UX(명령어/헬프/설치)입니다.
+---
 
-## 3. Project Structure (Relevant)
+## 2. SOLID 평가 (각 10점 만점)
 
-- `shell-common/tools/integrations/`: 외부 도구 wrapper (자동 로드; bash/zsh 공용을 목표)
-- `shell-common/tools/custom/`: 직접 실행하는 유틸 스크립트 (반드시 direct-exec guard 필요)
-- `shell-common/functions/`: 쉘 함수(자동 로드; aliases 이후 로드)
-- `shell-common/aliases/`: alias 전용(자동 로드; 함수보다 먼저 로드)
-- `docs/technic/ollama-local-claude-code-integration.md`: 최종 목표(예: `ollama launch claude`)에 대한 방향성 문서
+- **SRP:** 7/10  
+  - 로더/통합이 정리되어 가는 방향은 좋지만, `shell-common/aliases/`에 함수/로직이 섞여 있어 책임 분리가 깨진 부분이 큼.
+- **OCP:** 8/10  
+  - `shell-common/util/loader.sh` + `shell-common/config/loader.conf` 형태로 확장 포인트가 이미 마련돼 있음.
+- **LSP:** 8/10  
+  - 래퍼/alias가 원래 커맨드 계약을 크게 깨지 않는 편. 다만 일부 alias 파일이 zsh에서 로딩 실패하면 기대 동작이 달라질 수 있음.
+- **ISP:** 7/10  
+  - `ux_lib` 단일 파일이 무겁다는 문제 제기는 타당하지만, 당장 분리의 실익 대비 변경면이 큼(테스트/훅 의존 포함).
+- **DIP:** 7/10  
+  - 공용 로더/설정 파일로 의존이 어느 정도 역전됐으나, 여전히 일부 파일이 `BASH_SOURCE` 등 구체 구현에 직접 의존.
 
-## 4. SOLID Evaluation (Target Design)
+**총점:** 37/50
 
-- SRP (7/10): “Ollama 통합”을 한 파일로 묶되, 설치(install)와 런타임 wrapper를 분리하면 점수 상승
-- OCP (8/10): backend(로컬/도커) 추가를 env var + 감지 로직으로 확장 가능
-- LSP (7/10): 동일한 사용자 명령이 backend에 따라 동작만 바뀌고 의미는 유지돼야 함
-- ISP (8/10): `ollama_*` 단위 함수 + 얇은 사용자 명령 조합으로 과도한 만능함수 방지
-- DIP (8/10): “로컬 바이너리/도커 exec” 구현 세부사항을 `ollama_cmd`에 캡슐화
+---
 
-총점: 38/50
+## 3. 검토 결과 (제안 타당성 및 중복/시의성)
 
-## 5. Issues (Why This Plan Is Needed)
+- `abc-review-CM.md`의 “플러그인형 로더 + skip 설정 파일” 방향은 타당하며, 현재 저장소에는 이미 `shell-common/util/loader.sh` 및 `shell-common/config/loader.conf` 형태로 상당 부분 반영돼 있다.
+- `abc-review-R.md`의 일부 권고(예: `pyproject.toml` 추가, CI 워크플로 도입)는 현재 저장소에 이미 존재해 “새 리팩터링”으로 보기 어렵다.
+- 따라서 “추가로 해야 할 일”은 **새 아키텍처를 더 만드는 것**보다, **규칙 위반/호환성 깨짐/가드 누락** 같은 “현재 실제 결함”을 먼저 정리하는 것이 우선이다.
+
+---
+
+## 4. 이슈 (필수 리팩터링만, 심각도별)
 
 ### High
 
-- Backend 불명확성: 현재는 도커 컨테이너 기반만 암묵적으로 가정(WSL 로컬 설치/연동 시 충돌 가능)
-- 도움말 불완전: `ollama_help`가 도커 명령만 안내하므로 “로컬 설치 후” UX가 단절됨
-- 포트 충돌 리스크: 도커가 `11434`를 이미 점유 중이면 로컬 `ollama serve`는 기본 설정으로 충돌
+1. **`shell-common/aliases/`에 함수/로직 혼재 + 비호환(bashism)**
+   - 규칙: `shell-common/AGENTS.md`에 “aliases는 alias만”이 명시돼 있음.
+   - 현재: `shell-common/aliases/git.sh`, `shell-common/aliases/core.sh`, `shell-common/aliases/kill.sh`, `shell-common/aliases/directory.sh` 등에서 함수 정의가 발견됨.
+   - 특히 `shell-common/aliases/git.sh`는 `declare -f`, `source`, `local`, `BASH_SOURCE` 등으로 POSIX/zsh 호환성이 깨질 수 있고(로딩 실패 시 git alias 전체가 누락), “Portable” 주석과도 불일치.
+
+2. **`shell-common/tools/custom/` 스크립트의 direct-exec guard 누락**
+   - 규칙(루트 AGENTS): `shell-common/tools/custom/` 내 스크립트는 소스될 때 실행되지 않도록 guard 필요.
+   - 현재: `shell-common/tools/custom/demo_ux.sh` 등 일부가 파일 끝에서 `main`을 바로 호출해, 실수로 `source`될 경우 부작용이 발생할 수 있음.
 
 ### Medium
 
-- Alias 위치: alias는 `shell-common/aliases/`에 있어야 로딩 순서/규칙이 명확해짐
-- Cross-shell 호환: `BASH_SOURCE` 등 bash 전용을 피하고 `$SHELL_COMMON` 기반 경로를 사용해야 함
-- 출력 일관성: ux_lib 기반 출력으로 통일(도구별 임의 `echo` 남발 방지)
+3. **bash/zsh 로딩 로직 중복(드리프트 위험)**
+   - `bash/main.bash`는 `shell-common/util/loader.sh`를 사용하지만, `zsh/main.zsh`는 유사 로직을 자체 구현(루프/에러 정책/카운터).
+   - 단기적으로는 동작하지만, 로딩 정책이 바뀔 때 bash/zsh가 어긋나기 쉬움.
 
-### Low
+4. **`bash/setup.sh` vs `zsh/setup.sh` 공통 로직 중복**
+   - 제안 자체는 타당. 다만 “필수” 기준에서는 High 이슈(호환성/가드/규칙 위반) 정리 후에 착수하는 편이 안전.
 
-- 모델 이름 혼선: 사용자 기억(`gpt-oss-20b`)과 Ollama 태그(`gpt-oss:20b`) 차이로 사용성 저하
+### Low (이번 문서에서 “필수” 제외)
 
-## 6. Implementation Plan (Action Items)
+- `ux_lib`를 다중 파일로 분리(ISP 개선): 변경면이 넓고 현재 훅/툴 의존이 있어 우선순위 낮음.
+- `VERSION` 파일/배지, README 다이어그램 강화: 품질 개선이지만 기능/안정성 리스크 대비 우선순위 낮음.
+- 신규 테스트 대폭 확장: 가치가 크지만, 우선 “로딩 실패/규칙 위반” 제거가 선행돼야 함.
 
-### P0. `shell-common/tools/integrations/ollama.sh` 신규 생성
+---
 
-목표: “명령 1개(또는 함수 1세트)”로 로컬/도커 backend를 통일해 사용 가능하게 만들기.
+## 5. 액션 아이템 (우선순위)
 
-핵심 설계:
+- [ ] **P0:** `shell-common/aliases/`에서 함수 제거(함수는 `shell-common/functions/`로 이동) + aliases는 alias만 남기기
+- [ ] **P0:** `shell-common/aliases/git.sh`의 bashism 제거 및 zsh 로딩 실패 방지(UX 로드는 메인 로더에 맡기고 alias 파일은 선언만)
+- [ ] **P0:** `shell-common/tools/custom/`의 실행형 스크립트에 direct-exec guard 추가(특히 `demo_ux.sh` 같이 `main`을 즉시 호출하는 파일)
+- [ ] **P1:** `zsh/main.zsh`에서 공용 `shell-common/util/loader.sh` 재사용(로딩 정책/skip 설정을 bash와 SSOT로 맞추기)
+- [ ] **P2:** `bash/setup.sh`/`zsh/setup.sh` 공통부 추출(`shell-common/tools/custom/setup_common.sh` 등) 및 테스트 보강
 
-- Backend 선택 규칙(우선순위):
-  1. `DOTFILES_OLLAMA_BACKEND`가 `local|docker`면 강제
-  2. 로컬 `ollama` 바이너리 존재 시 `local`
-  3. 도커 컨테이너 이름(기본 `ollama`)이 존재하고 exec 가능하면 `docker`
-  4. 그 외: 사용 불가로 안내
-- 컨테이너 이름/옵션:
-  - `DOTFILES_OLLAMA_DOCKER_CONTAINER` 기본값: `ollama`
-- 구현 캡슐화:
-  - `ollama_backend_detect`
-  - `ollama_cmd ...` (실행 경로를 `ollama ...` 또는 `docker exec <container> ollama ...`로 통일)
-  - `ollama_api_base_url` (예: `http://127.0.0.1:11434`)
-  - (선택) `ollama_normalize_model_name`로 `gpt-oss-20b` → `gpt-oss:20b` 변환
+---
 
-사용자-facing 함수(예시):
+## 6. 결론
 
-- `ollama_version`, `ollama_status`
-- `ollama_models` (`ollama list`)
-- `ollama_pull <model>`, `ollama_rm <model>`, `ollama_show <model>`
-- `ollama_run <model> [prompt...]`
-- (도커일 때만 의미 있는) `ollama_logs`, `ollama_stats`
+두 문서의 방향성 자체(SOLID/SSOT/중복 제거)는 대체로 타당하지만, 현재 저장소 상태를 기준으로 보면 “새 아키텍처 추가”보다 먼저 해결해야 할 필수 항목은 다음 2가지다:
 
-### P0. 설치 스크립트 추가: `shell-common/tools/custom/install_ollama.sh`
+1. `shell-common/aliases/` 규칙 위반(함수/로직 혼재)과 그로 인한 bash/zsh 호환성 문제
+2. `shell-common/tools/custom/` direct-exec guard 누락으로 인한 부작용 위험
 
-목표: WSL 호스트에 Ollama 바이너리 설치를 재현 가능하게 만들기.
-
-- 동작:
-  - 이미 설치되어 있으면 버전 출력 후 종료
-  - Linux 공식 설치 스크립트 기반 설치(네트워크 필요, sudo 필요)
-  - 설치 후 `ollama --version` 확인
-  - (선택) 포트 충돌 안내: 도커가 `11434`를 쓰는 중이면 도커 중단 또는 로컬 포트 변경 가이드 제공
-- UX/규칙:
-  - ux_lib 사용
-  - `shell-common/tools/custom/` 규칙에 따라 파일 맨 끝에 direct-exec guard 추가
-
-### P0. 도움말/명령 UX 정리: `ollama-help`
-
-목표: 도움말이 “도커/로컬 모두”를 안내하고, 실제 실행도 자동 선택으로 이어지게 만들기.
-
-- `shell-common/functions/ollama_help.sh`:
-  - `--docker`, `--local`, `--auto`(기본) 옵션으로 도움말 섹션 분리
-  - 가능하면 `ollama_cmd`를 사용해 “실제 실행 예시”가 현재 backend에 맞게 보이도록 구성
-- `shell-common/aliases/ollama_aliases.sh` 신규:
-  - `alias ollama-help='ollama_help'`
-  - `alias llm-help='ollama_help'`
-  - (선택) `alias ollama-models='ollama_models'` 같은 사용자 명령 체계는 합의 후 결정
-
-### P1. Claude Code/LiteLLM 연동 포인트 정리
-
-- `docs/technic/ollama-local-claude-code-integration.md`에 맞춰 아래를 검증/문서화:
-  - `ollama launch claude` 서브커맨드가 현재 사용하는 Ollama(도커/로컬)에서 실제로 제공되는지 확인
-  - LiteLLM에서 사용할 endpoint 및 모델명 표기(`gpt-oss:20b`) 고정
-
-### P2. 최소 검증(테스트/스모크) 추가
-
-- bash/zsh에서 동일하게 로드되는지 확인하는 스모크 테스트 추가(가능하면 `tests/`에 자동화)
-- “도커만 있는 환경”, “로컬만 있는 환경”, “둘 다 있는 환경”을 각각 가정한 분기 테스트
-
-## 7. Validation Checklist (Manual First)
-
-- WSL 로컬 설치 전(도커만 존재):
-  - `ollama-help --docker` 출력 확인
-  - `ollama_models`가 `docker exec ...`로 동작하는지 확인
-- WSL 로컬 설치 후(로컬 존재):
-  - `DOTFILES_OLLAMA_BACKEND=local`에서 로컬 `ollama`로 동작하는지 확인
-  - 도커와 포트 충돌 여부 확인(11434)
-- 모델:
-  - `ollama_pull gpt-oss:20b` 또는 `ollama_pull gpt-oss-20b`가 기대대로 처리되는지 확인
-
-## 8. Conclusion
-
-`integrations/ollama.sh`로 “backend 추상화”를 만들고, `install_ollama.sh`로 “WSL 로컬 설치 재현성”을 확보한 뒤,
-`ollama-help`를 “도커/로컬 동시 안내”로 확장하면 문서의 최종 목적(로컬 AI 코딩 환경)으로 자연스럽게 이어집니다.
+이 두 가지를 P0로 정리한 뒤에, zsh 로더 공통화(P1) 및 setup 스크립트 공통화(P2)를 진행하는 순서가 가장 비용 대비 효과가 좋다.
