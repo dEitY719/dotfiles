@@ -3,10 +3,16 @@
 # ~/dotfiles/shell-common/tools/custom/get_hw_info.sh
 # Display comprehensive hardware information
 
-# Initialize DOTFILES_BASH_DIR using common initialization function
+# Initialize paths using unified path resolution
 _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
-source "$(dirname "$_SCRIPT_PATH")/../../bash/util/init.bash"
-DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
+_SCRIPT_DIR="$(dirname "$_SCRIPT_PATH")"
+
+# Navigate from shell-common/tools/custom to DOTFILES_ROOT
+SHELL_COMMON="${_SCRIPT_DIR%/tools/custom}"
+export SHELL_COMMON
+DOTFILES_ROOT="${SHELL_COMMON%/shell-common}"
+export DOTFILES_ROOT
+DOTFILES_BASH_DIR="${DOTFILES_ROOT}/bash"
 export DOTFILES_BASH_DIR
 
 # Load UX library
@@ -191,4 +197,10 @@ main() {
     echo ""
 }
 
-main "$@"
+# ═══════════════════════════════════════════════════════════════
+# Direct-Execution Guard
+# ═══════════════════════════════════════════════════════════════
+# Only run main() if this script is executed directly, not sourced
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+    main "$@"
+fi

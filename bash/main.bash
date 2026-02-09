@@ -51,19 +51,19 @@ if should_skip_init; then
     return 0
 fi
 
-# Set the base directory for dotfiles bash configurations
-# Use common initialization function for consistency across all scripts
-# NOTE: BASH_SOURCE is bash-specific (won't execute in zsh due to zsh check above)
-_SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
-source "$(dirname "$_SCRIPT_PATH")/util/init.bash"
-DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
-export DOTFILES_BASH_DIR
-
-# Set DOTFILES_ROOT + SHELL_COMMON early for unified path SSOT across modules
-DOTFILES_ROOT="${DOTFILES_BASH_DIR%/bash}"
+# Set DOTFILES_ROOT + SHELL_COMMON using unified path resolution
+# This ensures single source of truth across bash and zsh
+# NOTE: Use realpath to follow symlinks (e.g., .bashrc → bash/main.bash)
+_BASH_SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
+_BASH_SCRIPT_DIR="$(dirname "$_BASH_SCRIPT_PATH")"
+DOTFILES_ROOT="${_BASH_SCRIPT_DIR%/bash}"
 export DOTFILES_ROOT
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 export SHELL_COMMON
+
+# Set DOTFILES_BASH_DIR for bash-specific configurations
+DOTFILES_BASH_DIR="$_BASH_SCRIPT_DIR"
+export DOTFILES_BASH_DIR
 
 # --- UX Library Initialization ---
 # Load central UX library for consistent styling across all functions

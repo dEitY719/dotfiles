@@ -20,9 +20,8 @@ unset DOTFILES_BASH_DIR
 
 # If zshrc already set these, use them. Otherwise detect them.
 if [ -z "$DOTFILES_ROOT" ]; then
-    # Compute DOTFILES_ROOT from this script's location
-    # In zsh, use ${(%):-%N} to get the sourced script name
-    # Fallback to $0 if in zsh < 4.2 or in other contexts
+    # Compute DOTFILES_ROOT from this script's location (unified with bash)
+    # In zsh, ${(%):-%N} gets the sourced script name
     _ZSH_SCRIPT="${${(%):-%N}:-$0}"
     _ZSH_SCRIPT_DIR="$(cd "$(dirname "$_ZSH_SCRIPT")" 2>/dev/null && pwd)" || _ZSH_SCRIPT_DIR=""
 
@@ -36,8 +35,7 @@ if [ -z "$DOTFILES_ROOT" ]; then
     fi
 fi
 
-# Set derived paths with zsh-specific values (always recompute SHELL_COMMON and ZSH_DOTFILES
-# in zsh context to avoid inheriting bash-computed paths from parent shell)
+# Set derived paths (unified with bash via consistent path resolution)
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"
 

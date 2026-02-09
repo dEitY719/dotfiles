@@ -4,10 +4,30 @@
 # Interactive demo of UX library features
 # This script showcases all the styling and interactive capabilities
 
-# Initialize DOTFILES_BASH_DIR using common initialization function
+# ═══════════════════════════════════════════════════════════════
+# Direct-Execution Guard
+# ═══════════════════════════════════════════════════════════════
+# This script is meant to be executed directly, not sourced
+# No guard needed here (it's a runnable script, not a library)
+
+# ═══════════════════════════════════════════════════════════════
+# Initialize Path Resolution
+# ═══════════════════════════════════════════════════════════════
+# Initialize DOTFILES_ROOT and SHELL_COMMON using standard path resolution
+# NOTE: Use realpath to follow symlinks if this script is symlinked
 _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
-source "$(dirname "$_SCRIPT_PATH")/../../bash/util/init.bash"
-DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
+_SCRIPT_DIR="$(dirname "$_SCRIPT_PATH")"
+
+# Navigate from shell-common/tools/custom to shell-common
+SHELL_COMMON="${_SCRIPT_DIR%/tools/custom}"
+export SHELL_COMMON
+
+# Navigate from shell-common to DOTFILES_ROOT
+DOTFILES_ROOT="${SHELL_COMMON%/shell-common}"
+export DOTFILES_ROOT
+
+# Set DOTFILES_BASH_DIR for reference
+DOTFILES_BASH_DIR="${DOTFILES_ROOT}/bash"
 export DOTFILES_BASH_DIR
 
 # Load UX library
@@ -377,5 +397,10 @@ main() {
     done
 }
 
-# Run the demo
-main
+# ═══════════════════════════════════════════════════════════════
+# Direct-Execution Guard
+# ═══════════════════════════════════════════════════════════════
+# Only run main() if this script is executed directly, not sourced
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+    main "$@"
+fi

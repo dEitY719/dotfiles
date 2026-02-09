@@ -18,14 +18,16 @@
 
 # --- Constants ---
 
-# Initialize DOTFILES_BASH_DIR using common initialization function
+# Initialize DOTFILES_BASH_DIR using unified path resolution
+# NOTE: Use realpath to follow symlinks
 _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
-source "$(dirname "$_SCRIPT_PATH")/util/init.bash"
-DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
+_SCRIPT_DIR="$(dirname "$_SCRIPT_PATH")"
+DOTFILES_BASH_DIR="$_SCRIPT_DIR"
 export DOTFILES_BASH_DIR
 
 # Set up SHELL_COMMON for unified UX library loading
-SHELL_COMMON="${DOTFILES_BASH_DIR}/../shell-common"
+DOTFILES_ROOT="${DOTFILES_BASH_DIR%/bash}"
+SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 export SHELL_COMMON
 
 MAIN_BASH_SOURCE="${DOTFILES_BASH_DIR}/main.bash"

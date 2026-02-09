@@ -1,17 +1,24 @@
 #!/bin/bash
 # Check UX consistency across all bash files
 
-# Initialize DOTFILES_BASH_DIR using common initialization function
+# Initialize paths using unified path resolution
 _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
-source "$(dirname "$_SCRIPT_PATH")/../../bash/util/init.bash"
-DOTFILES_BASH_DIR="$(init_dotfiles_bash_dir "$_SCRIPT_PATH")"
+_SCRIPT_DIR="$(dirname "$_SCRIPT_PATH")"
+
+# Navigate from shell-common/tools/custom to DOTFILES_ROOT
+SHELL_COMMON="${_SCRIPT_DIR%/tools/custom}"
+export SHELL_COMMON
+DOTFILES_ROOT="${SHELL_COMMON%/shell-common}"
+export DOTFILES_ROOT
+DOTFILES_BASH_DIR="${DOTFILES_ROOT}/bash"
 export DOTFILES_BASH_DIR
 
 # Load UX library for reporting
 source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 
-ux_header "UX Consistency Checker"
-total_issues=0
+main() {
+    ux_header "UX Consistency Checker"
+    local total_issues=0
 
 # =============================================================================
 # Check 1: Find deprecated raw `tput` color definitions
@@ -82,14 +89,23 @@ else
 fi
 
 
-# =============================================================================
-# Summary
-# =============================================================================
-ux_divider_thick
-if [ "$total_issues" -eq 0 ]; then
-    ux_success "All UX consistency checks passed!"
-    exit 0
-else
-    ux_error "Found $total_issues total UX consistency issue(s)."
-    exit 1
+    # =============================================================================
+    # Summary
+    # =============================================================================
+    ux_divider_thick
+    if [ "$total_issues" -eq 0 ]; then
+        ux_success "All UX consistency checks passed!"
+        return 0
+    else
+        ux_error "Found $total_issues total UX consistency issue(s)."
+        return 1
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════
+# Direct-Execution Guard
+# ═══════════════════════════════════════════════════════════════
+# Only run main() if this script is executed directly, not sourced
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+    main "$@"
 fi
