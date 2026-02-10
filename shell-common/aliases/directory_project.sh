@@ -6,6 +6,7 @@
 alias cd-project='cd ~/para/project'
 alias cd-ss='cd ~/para/project/slea-ssem'
 alias cd-ll='cd ~/para/project/litellm'
+alias cd-jv='cd ~/para/project/JIRAvis'
 
 # PARA/area shortcuts (custom areas)
 alias cd-vault='cd ~/para/area/vault'
