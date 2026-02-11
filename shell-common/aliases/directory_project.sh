@@ -10,3 +10,5 @@ alias cd-jv='cd ~/para/project/JIRAvis'
 
 # PARA/area shortcuts (custom areas)
 alias cd-vault='cd ~/para/area/vault'
+
+# Note: Project-specific CLI commands are defined in project-cli-aliases.sh
