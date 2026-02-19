@@ -1522,7 +1522,7 @@ describe('Home screen', () => {
 
 **자체 검증:**
 ```bash
-npm run dev
+npm run build && node packages/cli/dist/index.js help
 # 카테고리 선택 → 토픽 목록 표시 확인
 # / 입력 → 검색 필터링 작동 확인
 ```
@@ -1546,11 +1546,11 @@ npm run dev
 
 **자체 검증:**
 ```bash
-npm run dev
+npm run build && node packages/cli/dist/index.js help
 # 전체 흐름 테스트:
 # Home → 카테고리 선택 → TopicList → 토픽 선택 → Detail → Pager
 # 모든 키 입력이 정상 작동하는가?
-npm run test -- tui.test.ts
+npm test
 ```
 
 **커밋:** `feat: Add topic detail screen with pager and integrated keyboard navigation`

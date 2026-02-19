@@ -5,8 +5,10 @@
 
 import React, { useState } from 'react';
 import { Box, useInput } from 'ink';
-import { HelpRegistry, HelpCategory } from '@my-cli/core';
+import { HelpRegistry, HelpCategory, HelpTopic } from '@my-cli/core';
 import Home from './screens/Home.js';
+import Topics from './screens/Topics.js';
+import TopicDetail from './screens/TopicDetail.js';
 
 interface AppProps {
   /**
@@ -15,7 +17,7 @@ interface AppProps {
   registry: HelpRegistry;
 }
 
-type ScreenType = 'home' | 'topics';
+type ScreenType = 'home' | 'topics' | 'detail';
 
 interface KeyInput {
   escape?: boolean;
@@ -30,18 +32,20 @@ interface KeyInput {
  * @returns Rendered app
  */
 const App: React.FC<AppProps> = ({ registry }) => {
-  const [currentScreen] = useState<ScreenType>('home');
+  const [currentScreen, setCurrentScreen] = useState<ScreenType>('home');
+  const [selectedCategory, setSelectedCategory] = useState<HelpCategory | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState<HelpTopic | null>(null);
 
-  // Handle quit key (q or Escape)
+  // Handle quit key (q or Escape) - only on home screen
   useInput((input: string, key: KeyInput) => {
-    if (input === 'q' || key.escape) {
+    if (currentScreen === 'home' && (input === 'q' || key.escape)) {
       process.exit(0);
     }
   });
 
-  const handleCategorySelect = (_category: HelpCategory) => {
-    // CL-4.2 will implement topics screen navigation
-    // setCurrentScreen('topics');
+  const handleCategorySelect = (category: HelpCategory) => {
+    setSelectedCategory(category);
+    setCurrentScreen('topics');
   };
 
   return (
@@ -49,7 +53,23 @@ const App: React.FC<AppProps> = ({ registry }) => {
       {currentScreen === 'home' && (
         <Home registry={registry} onSelect={handleCategorySelect} />
       )}
-      {/* CL-4.2: Topics screen will be added here */}
+      {currentScreen === 'topics' && selectedCategory && (
+        <Topics
+          registry={registry}
+          category={selectedCategory}
+          onBack={() => setCurrentScreen('home')}
+          onSelect={(topic) => {
+            setSelectedTopic(topic);
+            setCurrentScreen('detail');
+          }}
+        />
+      )}
+      {currentScreen === 'detail' && selectedTopic && (
+        <TopicDetail
+          topic={selectedTopic}
+          onBack={() => setCurrentScreen('topics')}
+        />
+      )}
     </Box>
   );
 };
