@@ -7,9 +7,9 @@
  */
 
 import { readFileSync } from 'fs';
-import { HelpRegistry } from './Registry';
-import { HelpTopic, HelpCategory } from './types';
-import { ValidationError } from '../errors';
+import { HelpRegistry } from './Registry.js';
+import { HelpTopic, HelpCategory } from './types.js';
+import { ValidationError } from '../errors.js';
 
 /**
  * Regex patterns for parsing shell script help definitions

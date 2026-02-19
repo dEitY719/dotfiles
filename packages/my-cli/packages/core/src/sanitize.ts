@@ -3,7 +3,7 @@
  * Prevents injection attacks and validates topic names
  */
 
-import { ValidationError, SecurityError } from './errors';
+import { ValidationError, SecurityError } from './errors.js';
 
 /**
  * Whitelist pattern for safe topic names

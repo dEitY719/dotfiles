@@ -6,8 +6,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { homedir } from 'os';
-import { InternalError } from '../errors';
-import { Config, DEFAULT_CONFIG, XDGDirs } from './types';
+import { InternalError } from '../errors.js';
+import { Config, DEFAULT_CONFIG, XDGDirs } from './types.js';
 
 /**
  * Finds the dotfiles root directory using multiple strategies

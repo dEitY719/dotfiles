@@ -5,10 +5,10 @@
  * CL-2.4: Registry Integration and Loader Selection
  */
 
-import { HelpRegistry } from './Registry';
-import { parseStaticRegistry } from './parse_static';
-import { loadByShell, LoadByShellOptions } from './load_by_shell';
-import { ValidationError, InternalError } from '../errors';
+import { HelpRegistry } from './Registry.js';
+import { parseStaticRegistry } from './parse_static.js';
+import { loadByShell, LoadByShellOptions } from './load_by_shell.js';
+import { ValidationError, InternalError } from '../errors.js';
 
 /**
  * Loader mode for registry loading strategy

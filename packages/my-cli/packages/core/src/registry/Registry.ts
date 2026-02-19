@@ -3,8 +3,8 @@
  * Provides methods to query, search, and manage help information
  */
 
-import { HelpTopic, HelpCategory, RegistryStats, RegistrySnapshot } from './types';
-import { ValidationError, NotFoundError } from '../errors';
+import { HelpTopic, HelpCategory, RegistryStats, RegistrySnapshot } from './types.js';
+import { ValidationError, NotFoundError } from '../errors.js';
 
 /**
  * Main registry class for managing help topics and categories

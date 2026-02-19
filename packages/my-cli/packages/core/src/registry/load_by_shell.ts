@@ -8,9 +8,9 @@
 
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { HelpRegistry } from './Registry';
-import { HelpTopic, HelpCategory } from './types';
-import { ValidationError, InternalError } from '../errors';
+import { HelpRegistry } from './Registry.js';
+import { HelpTopic, HelpCategory } from './types.js';
+import { ValidationError, InternalError } from '../errors.js';
 
 const execFileAsync = promisify(execFile);
 
