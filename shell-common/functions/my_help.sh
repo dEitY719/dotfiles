@@ -154,6 +154,7 @@ _register_default_help_categories() {
 
 _register_default_help_descriptions() {
     _register_default_help_categories
+    _register_default_help_content
 
     # Only set if not already registered by the module itself
     # Use simple unconditional assignment (modules load first, so they take precedence)
@@ -635,6 +636,72 @@ my_help_impl() {
 
     return "$rc"
 }
+
+# ═══════════════════════════════════════════════════════════════
+# Help Content (Detailed information for topics)
+# ═══════════════════════════════════════════════════════════════
+
+_register_default_help_content() {
+    # Initialize HELP_CONTENT as associative array (if not already)
+    if [ -n "$BASH_VERSION" ]; then
+        declare -gA HELP_CONTENT 2>/dev/null || true
+    elif [ -n "$ZSH_VERSION" ]; then
+        typeset -gA HELP_CONTENT 2>/dev/null || true
+    fi
+
+    # Git content
+    HELP_CONTENT[git]="Git is a distributed version control system.
+Key Features:
+- Distributed repository model
+- Branching and merging
+- Fast performance
+- Cryptographic history integrity
+- Staging area for selective commits
+
+Common Workflows:
+- Feature branches for isolation
+- Commit messages for documentation
+- Rebase for clean history
+- Tags for releases
+- Hooks for automation"
+
+    # Docker content
+    HELP_CONTENT[docker]="Docker is a containerization platform.
+Benefits:
+- Lightweight virtualization
+- Environment consistency
+- Easy deployment
+- Container orchestration ready
+- Multi-platform support
+- Image layering for efficiency
+
+Concepts:
+- Images: Blueprints for containers
+- Containers: Running instances
+- Registries: Image storage
+- Volumes: Persistent data
+- Networks: Container communication"
+
+    # Python content
+    HELP_CONTENT[py]="Python is a high-level programming language.
+Strengths:
+- Readable and expressive syntax
+- Extensive standard library
+- Large ecosystem of packages
+- Dynamic typing
+- Support for multiple paradigms
+- Strong community support
+
+Popular Frameworks:
+- Django: Web framework
+- FastAPI: Modern async API framework
+- NumPy: Numerical computing
+- Pandas: Data analysis
+- Matplotlib: Data visualization
+- PyTorch: Machine learning"
+}
+
+_register_default_help_content
 
 # ═══════════════════════════════════════════════════════════════
 # Initial Help Descriptions

@@ -10,6 +10,13 @@ import { HelpRegistry, HelpCategory } from '@my-cli/core';
 import Home from '../../src/tui/screens/Home';
 
 /**
+ * Strip ANSI color codes from output for easier testing
+ */
+function stripAnsi(str: string): string {
+  return str.replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+/**
  * Create a test registry with sample categories
  */
 function createTestRegistry(): HelpRegistry {
@@ -68,7 +75,7 @@ describe('Home', () => {
       <Home registry={registry} onSelect={mockOnSelect} />,
     );
 
-    const output = lastFrame()!;
+    const output = stripAnsi(lastFrame()!);
     // Check that the first category has a selection indicator
     expect(output).toMatch(/^[\s>]*development/m);
   });

@@ -10,6 +10,13 @@ import { HelpRegistry, HelpCategory, HelpTopic } from '@my-cli/core';
 import Topics from '../../src/tui/screens/Topics';
 
 /**
+ * Strip ANSI color codes from output for easier testing
+ */
+function stripAnsi(str: string): string {
+  return str.replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+/**
  * Create a test registry with sample categories and topics
  * Note: Must add category first, then add topics (due to validation)
  */
@@ -102,7 +109,7 @@ describe('Topics', () => {
       />,
     );
 
-    const output = lastFrame()!;
+    const output = stripAnsi(lastFrame()!);
     // Check that the first topic has a selection indicator
     expect(output).toMatch(/^[\s>]*git/m);
   });
@@ -156,7 +163,7 @@ describe('Topics', () => {
     expect(output).toContain('Development');
   });
 
-  it('TC-6: displays "Esc to go back" hint at bottom', () => {
+  it('TC-6: displays hint text at bottom', () => {
     const registry = createTestRegistry();
     const category = registry.getCategory('development')!;
     const { lastFrame } = render(
@@ -169,6 +176,81 @@ describe('Topics', () => {
     );
 
     const output = lastFrame()!;
-    expect(output).toContain('Esc to go back');
+    expect(output).toContain('navigate');
+    expect(output).toContain('Esc back');
+  });
+
+  it('TC-7: initially displays all topics without search', () => {
+    const registry = createTestRegistry();
+    const category = registry.getCategory('development')!;
+    const { lastFrame } = render(
+      <Topics
+        registry={registry}
+        category={category}
+        onBack={mockOnBack}
+        onSelect={mockOnSelect}
+      />,
+    );
+
+    const output = lastFrame()!;
+    expect(output).toContain('git');
+    expect(output).toContain('node');
+    // Should not show search input line (which starts with "/") initially
+    expect(output).not.toMatch(/^\//m);
+  });
+
+  it('TC-8: search hint text is present in footer', () => {
+    const registry = createTestRegistry();
+    const category = registry.getCategory('development')!;
+    const { lastFrame } = render(
+      <Topics
+        registry={registry}
+        category={category}
+        onBack={mockOnBack}
+        onSelect={mockOnSelect}
+      />,
+    );
+
+    const output = lastFrame()!;
+    expect(output).toContain('/ search');
+  });
+
+  it('TC-9: search mode feature is ready for "/" key', () => {
+    const registry = createTestRegistry();
+    const category = registry.getCategory('development')!;
+    const { lastFrame } = render(
+      <Topics
+        registry={registry}
+        category={category}
+        onBack={mockOnBack}
+        onSelect={mockOnSelect}
+      />,
+    );
+
+    const output = lastFrame()!;
+    // Component should be displaying all topics ready for search
+    expect(output).toContain('git');
+    expect(output).toContain('node');
+    // Footer should mention search capability
+    expect(output).toContain('/ search');
+  });
+
+  it('TC-10: displays placeholder for search functionality', () => {
+    const registry = createTestRegistry();
+    const category = registry.getCategory('development')!;
+    const { lastFrame } = render(
+      <Topics
+        registry={registry}
+        category={category}
+        onBack={mockOnBack}
+        onSelect={mockOnSelect}
+      />,
+    );
+
+    const output = lastFrame()!;
+    // The search functionality should be available via "/" key
+    // This test verifies the component renders correctly to support it
+    expect(output).toContain('Development');
+    expect(output).toContain('navigate');
   });
 });

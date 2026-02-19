@@ -67,7 +67,7 @@ export async function loadByShell(
   // Construct shell command
   // Use --noprofile --norc to isolate from user configuration
   // Source the file, initialize default help data, then dump all HELP_* variables
-  const command = `source "${filePath}" 2>/dev/null && _register_default_help_descriptions 2>/dev/null && declare -p HELP_CATEGORIES HELP_DESCRIPTIONS HELP_CATEGORY_MEMBERS 2>/dev/null || echo ""`;
+  const command = `source "${filePath}" 2>/dev/null && _register_default_help_descriptions 2>/dev/null && declare -p HELP_CATEGORIES HELP_DESCRIPTIONS HELP_CATEGORY_MEMBERS HELP_CONTENT 2>/dev/null || echo ""`;
 
   if (debug) {
     // eslint-disable-next-line no-console
@@ -136,6 +136,7 @@ function parseShellOutput(output: string): HelpRegistry {
   const categories: Record<string, string> = {};
   const descriptions: Record<string, string> = {};
   const members: Record<string, string> = {};
+  const contents: Record<string, string> = {};
 
   // Extract each declare statement
   const lines = output.split('\n');
@@ -149,12 +150,28 @@ function parseShellOutput(output: string): HelpRegistry {
         const content = match[2];
 
         // Parse array elements
+        // Support both "value" and $'value\nwith\nescapes' formats
         const elements: Record<string, string> = {};
-        const elementRegex = /\[([^\]]+)\]="([^"]*)"/g;
+
+        // Match both [key]="value" and [key]=$'value' formats
+        const elementRegex = /\[([^\]]+)\]=(?:\$'([^']*)'|"([^"]*)"|([^ )]*))/g;
         let elementMatch;
 
         while ((elementMatch = elementRegex.exec(content)) !== null) {
-          const [, key, value] = elementMatch;
+          const [, key, singleQuotedValue, doubleQuotedValue, unquotedValue] = elementMatch;
+          // Use whichever value format was matched
+          let value = singleQuotedValue || doubleQuotedValue || unquotedValue || '';
+
+          // Decode bash $'...' escape sequences
+          if (singleQuotedValue) {
+            value = singleQuotedValue
+              .replace(/\\n/g, '\n')
+              .replace(/\\t/g, '\t')
+              .replace(/\\r/g, '\r')
+              .replace(/\\'/g, "'")
+              .replace(/\\\\/g, '\\');
+          }
+
           elements[key] = value;
         }
 
@@ -165,6 +182,8 @@ function parseShellOutput(output: string): HelpRegistry {
           Object.assign(descriptions, elements);
         } else if (varName === 'HELP_CATEGORY_MEMBERS') {
           Object.assign(members, elements);
+        } else if (varName === 'HELP_CONTENT') {
+          Object.assign(contents, elements);
         }
       }
     }
@@ -205,6 +224,7 @@ function parseShellOutput(output: string): HelpRegistry {
         description: descriptions[topicId] || `Help for ${topicId}`,
         source: 'shell',
         updatedAt: new Date(),
+        ...(contents[topicId] && { content: contents[topicId] }),
       };
 
       try {

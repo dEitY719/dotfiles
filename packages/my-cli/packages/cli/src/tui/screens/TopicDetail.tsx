@@ -3,7 +3,7 @@
  * Displays detailed information about a selected help topic
  */
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { HelpTopic } from '@my-cli/core';
 
@@ -21,6 +21,8 @@ interface TopicDetailProps {
 
 interface KeyInput {
   escape?: boolean;
+  pageUp?: boolean;
+  pageDown?: boolean;
 }
 
 /**
@@ -38,10 +40,37 @@ interface KeyInput {
  * ```
  */
 const TopicDetail: React.FC<TopicDetailProps> = ({ topic, onBack }) => {
-  // Handle Escape key to go back
+  const LINES_PER_PAGE = 10;
+  const [scrollOffset, setScrollOffset] = useState(0);
+
+  // Split content into lines and calculate pagination
+  const contentLines = useMemo(
+    () => (topic.content ? topic.content.split('\n') : []),
+    [topic.content],
+  );
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(contentLines.length / LINES_PER_PAGE)),
+    [contentLines],
+  );
+
+  const visibleLines = useMemo(
+    () =>
+      contentLines.slice(
+        scrollOffset * LINES_PER_PAGE,
+        (scrollOffset + 1) * LINES_PER_PAGE,
+      ),
+    [contentLines, scrollOffset],
+  );
+
+  // Handle key navigation
   useInput((_input: string, key: KeyInput) => {
     if (key.escape) {
       onBack();
+    } else if (key.pageDown) {
+      setScrollOffset((prev) => Math.min(totalPages - 1, prev + 1));
+    } else if (key.pageUp) {
+      setScrollOffset((prev) => Math.max(0, prev - 1));
     }
   });
 
@@ -69,10 +98,17 @@ const TopicDetail: React.FC<TopicDetailProps> = ({ topic, onBack }) => {
         <Text>{topic.description}</Text>
       </Box>
 
-      {/* Content section */}
+      {/* Content section (paginated) */}
       <Box marginBottom={1} flexDirection="column">
         {topic.content ? (
-          <Text>{topic.content}</Text>
+          <>
+            {visibleLines.map((line) => (
+              <Text key={line || Math.random()}>{line}</Text>
+            ))}
+            {scrollOffset < totalPages - 1 && (
+              <Text dimColor>▼ more</Text>
+            )}
+          </>
         ) : (
           <Text dimColor>No content</Text>
         )}
@@ -101,7 +137,9 @@ const TopicDetail: React.FC<TopicDetailProps> = ({ topic, onBack }) => {
 
       {/* Footer hint */}
       <Box marginTop={1}>
-        <Text dimColor>Esc to go back</Text>
+        <Text dimColor>
+          {totalPages > 1 ? 'PgUp/PgDn to scroll, ' : ''}Esc to go back
+        </Text>
       </Box>
     </Box>
   );

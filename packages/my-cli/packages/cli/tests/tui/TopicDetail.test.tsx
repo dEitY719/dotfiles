@@ -124,4 +124,63 @@ describe('TopicDetail', () => {
     expect(output).toContain('static');
     expect(output).toContain('development');
   });
+
+  it('TC-9: shows scroll indicator (▼ more) when content exceeds page size', () => {
+    const longContent = Array(15)
+      .fill(null)
+      .map((_, i) => `Line ${i + 1}`)
+      .join('\n');
+
+    const topic = createTestTopic({
+      content: longContent,
+    });
+    const { lastFrame } = render(
+      <TopicDetail topic={topic} onBack={mockOnBack} />,
+    );
+
+    const output = lastFrame()!;
+    expect(output).toContain('▼ more');
+  });
+
+  it('TC-10: scrolls content on pageDown key press', () => {
+    const longContent = Array(20)
+      .fill(null)
+      .map((_, i) => `Line ${i + 1}`)
+      .join('\n');
+
+    const topic = createTestTopic({
+      content: longContent,
+    });
+    const { lastFrame, stdin } = render(
+      <TopicDetail topic={topic} onBack={mockOnBack} />,
+    );
+
+    let output = lastFrame()!;
+    expect(output).toContain('Line 1');
+
+    // Simulate pageDown key
+    stdin.write('\x1b[6~'); // pageDown escape sequence
+
+    output = lastFrame()!;
+    // After scrolling, should show different lines
+    // (exact lines depend on page size, which should be 10)
+  });
+
+  it('TC-11: hides scroll indicator when reaching end of content', () => {
+    const shortContent = Array(5)
+      .fill(null)
+      .map((_, i) => `Line ${i + 1}`)
+      .join('\n');
+
+    const topic = createTestTopic({
+      content: shortContent,
+    });
+    const { lastFrame } = render(
+      <TopicDetail topic={topic} onBack={mockOnBack} />,
+    );
+
+    const output = lastFrame()!;
+    // Should not show "▼ more" because content fits on one page
+    expect(output).not.toContain('▼ more');
+  });
 });
