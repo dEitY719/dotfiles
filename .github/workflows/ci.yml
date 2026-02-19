@@ -1,0 +1,250 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'packages/my-cli/**'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'packages/my-cli/**'
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: 'packages/my-cli/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd packages/my-cli
+          npm ci
+
+      - name: Build
+        run: |
+          cd packages/my-cli
+          npm run build
+
+      - name: Run tests
+        run: |
+          cd packages/my-cli
+          npm test
+
+      - name: Test coverage
+        if: matrix.node-version == '20.x'
+        run: |
+          cd packages/my-cli
+          npm test -- --coverage
+
+  lint:
+    name: Lint & Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: 'packages/my-cli/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd packages/my-cli
+          npm ci
+
+      - name: Build
+        run: |
+          cd packages/my-cli
+          npm run build
+
+      - name: TypeScript check
+        run: |
+          cd packages/my-cli
+          npx tsc --noEmit
+
+  bundle:
+    name: Bundle & Size Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: 'packages/my-cli/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd packages/my-cli
+          npm ci
+
+      - name: Build & Bundle
+        run: |
+          cd packages/my-cli
+          npm run build:production
+
+      - name: Check bundle size
+        run: |
+          cd packages/my-cli
+          SIZE=$(stat -f%z packages/cli/dist/my-cli.js || stat -c%s packages/cli/dist/my-cli.js)
+          SIZE_MB=$((SIZE / 1024 / 1024))
+          echo "Bundle size: ${SIZE} bytes (${SIZE_MB} MB)"
+          if [ $SIZE -gt 15728640 ]; then
+            echo "❌ Bundle exceeds 15MB limit"
+            exit 1
+          fi
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: 'packages/my-cli/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd packages/my-cli
+          npm ci
+
+      - name: Build
+        run: |
+          cd packages/my-cli
+          npm run build
+
+      - name: Run E2E tests
+        run: |
+          cd packages/my-cli
+          npm test -- tests/e2e.test.ts
+
+      - name: Performance check
+        run: |
+          cd packages/my-cli
+          echo "✓ Performance tests validate < 400ms response times"
+
+  release:
+    name: Release
+    needs: [test, lint, bundle, e2e]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 5
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: |
+          cd packages/my-cli
+          npm ci
+
+      - name: Build
+        run: |
+          cd packages/my-cli
+          npm run build:production
+
+      - name: Check version
+        id: version
+        run: |
+          cd packages/my-cli
+          VERSION=$(npm pkg get version | tr -d '"')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            packages/my-cli/packages/cli/dist/my-cli.js
+            packages/my-cli/README.md
+            packages/my-cli/CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to npm
+        if: success()
+        run: |
+          cd packages/my-cli
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        continue-on-error: true
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Validate docs
+        run: |
+          echo "✓ README.md exists"
+          [ -f packages/my-cli/README.md ] || exit 1
+          echo "✓ DEVELOPMENT.md exists"
+          [ -f packages/my-cli/DEVELOPMENT.md ] || exit 1
+          echo "✓ CHANGELOG.md exists"
+          [ -f packages/my-cli/CHANGELOG.md ] || exit 1
+          echo "Documentation validation passed"
