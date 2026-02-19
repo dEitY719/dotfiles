@@ -98,19 +98,19 @@ run_jiravis_test() {
 
     case "${1:-all}" in
         all)
-            pytest tests/unit_test/jira/ -v --tb=short "${@:2}"
+            poetry run pytest tests/unit_test/jira/ -v --tb=short "${@:2}"
             ;;
         func)
-            pytest tests/unit_test/jira/issues/test_functions.py -v "${@:2}"
+            poetry run pytest tests/unit_test/jira/issues/test_functions.py -v "${@:2}"
             ;;
         api)
-            pytest tests/unit_test/jira/api/test_issues_router.py -v "${@:2}"
+            poetry run pytest tests/unit_test/jira/api/test_issues_router.py -v "${@:2}"
             ;;
         coverage)
-            pytest tests/unit_test/jira/ -v --cov=jira --cov-report=term-missing "${@:2}"
+            poetry run pytest tests/unit_test/jira/ -v --cov=jira --cov-report=term-missing "${@:2}"
             ;;
         parallel)
-            pytest tests/unit_test/jira/ -v -n auto "${@:2}"
+            poetry run pytest tests/unit_test/jira/ -v -n auto "${@:2}"
             ;;
         help|--help|-h|'')
             _jiravis_test_help
