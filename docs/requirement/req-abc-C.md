@@ -784,6 +784,7 @@ packages/my-cli/
 
 **자체 검증:**
 ```bash
+cd packages/my-cli       # 프로젝트 디렉토리로 이동
 npm install              # 의존성 설치 성공
 npm run typecheck        # TypeScript 컴파일 성공
 ls packages/*/src/       # 디렉토리 구조 확인
@@ -833,6 +834,7 @@ enum ExitCode { Success = 0, InvalidInput = 1, ... }
 
 **자체 검증:**
 ```bash
+cd packages/my-cli       # 프로젝트 디렉토리로 이동
 npm run typecheck        # 타입 검증
 npm run test -- errors.test.ts  # 단위 테스트 통과
 ```
@@ -887,6 +889,7 @@ const SAFE_TOPIC_PATTERN = /^[A-Za-z0-9_-]+$/
 
 **자체 검증:**
 ```bash
+cd packages/my-cli       # 프로젝트 디렉토리로 이동
 npm run test -- sanitize.test.ts
 # 테스트 통과 및 커버리지 90%+
 ```
@@ -958,6 +961,8 @@ interface Config { theme?: string; ... }
 
 **자체 검증:**
 ```bash
+cd packages/my-cli       # 프로젝트 디렉토리로 이동
+
 # 현재 dotfiles 위치 탐지 확인
 npx tsx -e "import {findDotfilesRoot} from './src/config'; console.log(findDotfilesRoot())"
 
@@ -1018,6 +1023,8 @@ feat: Add dotfiles root detection and config loader
 
 **자체 검증:**
 ```bash
+cd packages/my-cli       # 프로젝트 디렉토리로 이동
+
 npm run test                           # 모든 테스트 통과
 npm run test -- --coverage             # 커버리지 80%+
 npm run typecheck                      # 타입 체크 통과
