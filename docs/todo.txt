@@ -77,4 +77,18 @@
 
 ---
 
-**다음 퇴근: 복귀 시 GLM-4.7-Flash 다운로드 완료 확인 + 분리 운영 테스트**
+## 🛠️ 신규 프로젝트: my-cli 개발 (2026-02-19)
+
+### 1️⃣ 초기 설계 및 준비 (우선순위: 보통)
+- [x] 설계 문서 작성: `@docs/requirement/req-abc-G.md`
+- [ ] 동료 리뷰 및 피드백 반영
+- [ ] 프로젝트 스캐폴딩 생성 (Python Typer 기반)
+
+### 2️⃣ 핵심 기능 구현
+- [ ] Shell Help Discovery 로직 (Python)
+- [ ] Category-based UI (Rich)
+- [ ] Fuzzy matching & Ambiguity handling
+
+---
+
+**다음 퇴근: 복귀 시 GLM-4.7-Flash 다운로드 완료 확인 + 분리 운영 테스트 + my-cli 리뷰 시작**
