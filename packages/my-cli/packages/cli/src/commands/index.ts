@@ -175,6 +175,7 @@ export async function parseArgs(args: string[]): Promise<ParsedArguments> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let argv = (await yargs(args)
+      .version(false)
       .option('json', {
         describe: 'Output in JSON format',
         type: 'boolean',
@@ -283,7 +284,7 @@ export function createYargsInstance(): Argv {
       type: 'boolean',
       alias: 'r',
     })
-    .version('0.1.0')
+    .version(false)
     .help()
     .strict();
 }
