@@ -430,3 +430,4 @@ clskip() {
 # ═══════════════════════════════════════════════════════════════
 
 alias claude-skip='claude --dangerously-skip-permissions'
+alias claude-yolo='claude --dangerously-skip-permissions'
