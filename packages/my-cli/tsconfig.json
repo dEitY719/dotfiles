@@ -6,7 +6,7 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -25,6 +25,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["packages/*/src/**/*.ts"],
+  "include": ["packages/*/src/**/*.ts", "packages/*/src/**/*.tsx"],
   "exclude": ["node_modules", "dist", "packages/*/dist"]
 }

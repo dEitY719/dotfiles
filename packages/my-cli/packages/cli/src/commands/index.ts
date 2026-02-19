@@ -294,3 +294,6 @@ export { listCommand, listCategories, listTopics } from './list.js';
 
 // Export show command
 export { showCommand, getTopicDetail } from './show.js';
+
+// Export help command
+export { helpCommand } from './help.js';

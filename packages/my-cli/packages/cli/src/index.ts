@@ -5,7 +5,7 @@
  * Routes commands and handles global options
  */
 
-import { parseArgs, createCommandRouter, listCommand, showCommand } from './commands/index.js';
+import { parseArgs, createCommandRouter, listCommand, showCommand, helpCommand } from './commands/index.js';
 
 /**
  * Main entry point
@@ -55,6 +55,12 @@ Examples:
     // Get command from first positional argument
     const command = argv._[0];
 
+    // Handle help command - interactive TUI mode
+    if (command === 'help' || (!command && process.stdin.isTTY)) {
+      const exitCode = await helpCommand();
+      process.exit(exitCode);
+    }
+
     if (!command) {
       // eslint-disable-next-line no-console
       console.log('my-cli v0.1.0 - Personal CLI tool suite');
@@ -67,6 +73,7 @@ Examples:
     const router = createCommandRouter();
     router.registerCommand('list', 'List categories or topics', listCommand);
     router.registerCommand('show', 'Show topic details', showCommand);
+    router.registerCommand('help', 'Interactive help (TUI)', helpCommand);
 
     // Route to command
     try {
