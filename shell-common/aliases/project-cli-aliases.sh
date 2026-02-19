@@ -19,7 +19,7 @@
 # Example: _run_project_cli "JIRAvis" "jira.cli" "list" "--verbose"
 #
 # Each project must have:
-#   - src/backend/{PYTHON_MODULE}/__main__.py
+#   - backend/{PYTHON_MODULE}/__main__.py
 #
 _run_project_cli() {
     local project_name="$1"
@@ -41,16 +41,16 @@ _run_project_cli() {
     # Navigate to project root
     cd "$project_dir" || return 1
 
-    # Validate src/backend/{module}/__main__.py exists
+    # Validate backend/{module}/__main__.py exists
     local module_path="${python_module//.//}"
-    if [ ! -f "src/backend/$module_path/__main__.py" ]; then
-        echo "Error: Python module not found: src/backend/$module_path/__main__.py"
+    if [ ! -f "backend/$module_path/__main__.py" ]; then
+        echo "Error: Python module not found: backend/$module_path/__main__.py"
         return 1
     fi
 
     # Remove project_name and python_module from arguments and pass rest to python -m
     shift 2
-    PYTHONPATH="src/backend" python -m "$python_module" "$@"
+    PYTHONPATH="backend" python -m "$python_module" "$@"
 }
 
 # ============================================================================
@@ -58,7 +58,7 @@ _run_project_cli() {
 # ============================================================================
 # Purpose: Run JIRAvis project CLI tool
 # Location: ~/para/project/JIRAvis
-# Entry point: src/backend/jira/cli/__main__.py
+# Entry point: backend/jira/cli/__main__.py
 #
 # Usage:
 #   jira-cli                    # Show help/main menu
@@ -165,7 +165,7 @@ alias jira-test='run_jiravis_test'
 # ============================================================================
 # Purpose: Run Confluence project CLI tool
 # Location: ~/para/project/confluence (TBD)
-# Entry point: src/backend/confluence/cli/__main__.py (TBD)
+# Entry point: backend/confluence/cli/__main__.py (TBD)
 #
 # Usage:
 #   confluence-cli              # Show help/main menu
@@ -182,7 +182,7 @@ alias jira-test='run_jiravis_test'
 # ============================================================================
 # Purpose: Run Agent project CLI tool
 # Location: ~/para/project/agent (TBD)
-# Entry point: src/backend/agent/cli/__main__.py (TBD)
+# Entry point: backend/agent/cli/__main__.py (TBD)
 #
 # Usage:
 #   agent-cli                   # Show help/main menu
