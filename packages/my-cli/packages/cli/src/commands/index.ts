@@ -298,3 +298,6 @@ export { showCommand, getTopicDetail } from './show.js';
 
 // Export help command
 export { helpCommand } from './help.js';
+
+// Export completion command
+export { completionCommand } from './completion.js';

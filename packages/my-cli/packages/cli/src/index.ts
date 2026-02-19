@@ -5,7 +5,7 @@
  * Routes commands and handles global options
  */
 
-import { parseArgs, createCommandRouter, listCommand, showCommand, helpCommand } from './commands/index.js';
+import { parseArgs, createCommandRouter, listCommand, showCommand, helpCommand, completionCommand } from './commands/index.js';
 
 /**
  * Main entry point
@@ -42,12 +42,15 @@ Global Options:
 Commands:
   list                    List categories or topics
   show                    Show topic details
+  completion              Generate shell completion scripts
 
 Examples:
   my-cli list categories
   my-cli list topics --search git
   my-cli show git --json
   my-cli show git --raw
+  my-cli completion bash
+  my-cli completion zsh
 `);
       process.exit(0);
     }
@@ -74,6 +77,7 @@ Examples:
     router.registerCommand('list', 'List categories or topics', listCommand);
     router.registerCommand('show', 'Show topic details', showCommand);
     router.registerCommand('help', 'Interactive help (TUI)', helpCommand);
+    router.registerCommand('completion', 'Generate shell completion scripts', completionCommand);
 
     // Route to command
     try {
