@@ -5,7 +5,7 @@
  * Routes commands and handles global options
  */
 
-import { parseArgs, createCommandRouter, listCommand } from './commands/index.js';
+import { parseArgs, createCommandRouter, listCommand, showCommand } from './commands/index.js';
 
 /**
  * Main entry point
@@ -35,6 +35,7 @@ Global Options:
   --format <type>         Output format (json, text)
   --search, -s <term>     Search term for filtering
   --filter, -f <category> Filter by category
+  --raw, -r               Raw output without formatting
   --version, -v           Show version
   --help, -h              Show help
 
@@ -46,6 +47,7 @@ Examples:
   my-cli list categories
   my-cli list topics --search git
   my-cli show git --json
+  my-cli show git --raw
 `);
       process.exit(0);
     }
@@ -64,6 +66,7 @@ Examples:
     // Create router and register commands
     const router = createCommandRouter();
     router.registerCommand('list', 'List categories or topics', listCommand);
+    router.registerCommand('show', 'Show topic details', showCommand);
 
     // Route to command
     try {

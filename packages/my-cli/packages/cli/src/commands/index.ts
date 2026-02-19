@@ -48,6 +48,11 @@ export interface ParsedArguments extends Arguments {
   help?: boolean;
 
   /**
+   * Raw output without formatting
+   */
+  raw?: boolean;
+
+  /**
    * Positional arguments (commands, subcommands, etc.)
    */
   _: string[];
@@ -195,6 +200,11 @@ export async function parseArgs(args: string[]): Promise<ParsedArguments> {
         type: 'string',
         alias: 'f',
       })
+      .option('raw', {
+        describe: 'Raw output without formatting',
+        type: 'boolean',
+        alias: 'r',
+      })
       .option('version', {
         describe: 'Show version',
         type: 'boolean',
@@ -268,6 +278,11 @@ export function createYargsInstance(): Argv {
       type: 'string',
       alias: 'f',
     })
+    .option('raw', {
+      describe: 'Raw output without formatting',
+      type: 'boolean',
+      alias: 'r',
+    })
     .version('0.1.0')
     .help()
     .strict();
@@ -275,3 +290,6 @@ export function createYargsInstance(): Argv {
 
 // Export list command
 export { listCommand, listCategories, listTopics } from './list.js';
+
+// Export show command
+export { showCommand, getTopicDetail } from './show.js';
