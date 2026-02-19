@@ -25,11 +25,14 @@ export async function helpCommand(): Promise<number> {
     // Load registry - use shell mode for accurate current state
     const registry = await loadRegistry(helpFilePath, 'shell');
 
-    // Render TUI
-    render(React.createElement(App, { registry }));
+    // Render TUI and wait for it to finish
+    const { waitUntilExit } = render(
+      React.createElement(App, { registry }),
+    );
 
     // Wait for the app to finish (process.exit will be called from quit)
-    // This line will never be reached in normal operation
+    await waitUntilExit();
+
     return 0;
   } catch (error) {
     // eslint-disable-next-line no-console
