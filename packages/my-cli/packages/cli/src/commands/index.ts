@@ -272,3 +272,6 @@ export function createYargsInstance(): Argv {
     .help()
     .strict();
 }
+
+// Export list command
+export { listCommand, listCategories, listTopics } from './list.js';

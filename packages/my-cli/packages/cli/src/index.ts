@@ -5,7 +5,7 @@
  * Routes commands and handles global options
  */
 
-import { parseArgs } from './commands/index.js';
+import { parseArgs, createCommandRouter, listCommand } from './commands/index.js';
 
 /**
  * Main entry point
@@ -61,13 +61,21 @@ Examples:
       process.exit(0);
     }
 
-    // Commands will be registered here in later CLs (CL-3.2, CL-3.3)
-    // For now, show unsupported command message
-    // eslint-disable-next-line no-console
-    console.error(`Error: Unknown command "${command}"`);
-    // eslint-disable-next-line no-console
-    console.error('Use "my-cli --help" for usage information');
-    process.exit(1);
+    // Create router and register commands
+    const router = createCommandRouter();
+    router.registerCommand('list', 'List categories or topics', listCommand);
+
+    // Route to command
+    try {
+      const exitCode = await router.execute(command, argv);
+      process.exit(exitCode);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error(`Error: Unknown command "${command}"`);
+      // eslint-disable-next-line no-console
+      console.error('Use "my-cli --help" for usage information');
+      process.exit(1);
+    }
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Error:', error instanceof Error ? error.message : error);
