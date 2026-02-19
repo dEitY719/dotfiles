@@ -133,7 +133,7 @@ export function loadConfigFromFile(configPath: string): Config {
     }
 
     if (error instanceof Error && 'code' in error) {
-      const ioError = error as NodeJS.ErrnoException;
+      const ioError = error as Error & { code?: string };
       if (ioError.code === 'EACCES') {
         throw new InternalError(
           `Configuration file is not readable: ${configPath}`

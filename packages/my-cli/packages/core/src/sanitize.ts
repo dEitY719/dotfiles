@@ -48,10 +48,10 @@ export function validateTopic(topic: string): void {
 
   // Check for shell injection patterns
   const injectionPatterns = [
-    /[;&|`$()\[\]{}<>*?]/,  // Shell metacharacters
-    /\$\{/,                   // Variable expansion ${...}
-    /`/,                       // Backtick command substitution
-    /\$\(/,                    // $(...) command substitution
+    /[;&|`$()[\]{}><*?]/,  // Shell metacharacters
+    /\$\{/u,                   // Variable expansion ${...}
+    /`/u,                       // Backtick command substitution
+    /\$\(/u,                    // $(...) command substitution
   ];
 
   for (const pattern of injectionPatterns) {

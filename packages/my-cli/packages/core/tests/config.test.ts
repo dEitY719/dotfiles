@@ -3,7 +3,7 @@
  * CL-1.4: Configuration loader
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -50,8 +50,7 @@ describe('Configuration Loader', () => {
 
     it('should find .git directory in parent directories', () => {
       const root = findDotfilesRoot();
-      const gitPath = path.join(root, '.git');
-      // .git should exist somewhere in the hierarchy
+      // Root should exist and be valid
       expect(fs.existsSync(root)).toBe(true);
     });
   });
