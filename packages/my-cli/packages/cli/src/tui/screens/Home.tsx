@@ -69,7 +69,7 @@ const Home: React.FC<HomeProps> = ({ registry, onSelect }) => {
         const color = isSelected ? 'cyan' : 'white';
 
         return (
-          <Box key={category.key} flexDirection="row" paddingY={0}>
+          <Box key={`category-${index}`} flexDirection="row" paddingY={0}>
             <Text color={color} bold={isSelected}>
               {prefix}
               {category.label.padEnd(20)}

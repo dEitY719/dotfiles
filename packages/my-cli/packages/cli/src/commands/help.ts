@@ -20,7 +20,7 @@ export async function helpCommand(): Promise<number> {
   try {
     // Get dotfiles root and construct path to help file
     const dotfilesRoot = findDotfilesRoot();
-    const helpFilePath = `${dotfilesRoot}/my_help.sh`;
+    const helpFilePath = `${dotfilesRoot}/shell-common/functions/my_help.sh`;
 
     // Load registry - use shell mode for accurate current state
     const registry = await loadRegistry(helpFilePath, 'shell');
