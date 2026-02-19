@@ -9,3 +9,4 @@ export * from './registry/Registry.js';
 export * from './registry/parse_static.js';
 export * from './registry/load_by_shell.js';
 export * from './registry/loader.js';
+export * from './adapters/ShellFunctionAdapter.js';
