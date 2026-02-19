@@ -6,3 +6,4 @@ export * from './config/types';
 export * from './config/dotfiles-root';
 export * from './registry/types';
 export * from './registry/Registry';
+export * from './registry/parse_static';
