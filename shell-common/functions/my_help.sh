@@ -27,6 +27,26 @@ if ! type ux_header >/dev/null 2>&1; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
+# Load Help Function Files (bash/zsh compatible)
+# ═══════════════════════════════════════════════════════════════
+if [ -z "$SHELL_COMMON" ]; then
+    if [ -n "$ZSH_VERSION" ]; then
+        _MYHELP_DIR="${0:h}"
+    else
+        _MYHELP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    fi
+    SHELL_COMMON="${_MYHELP_DIR%/functions}"
+fi
+
+# Source all *_help.sh files from the functions directory
+for _help_file in "${SHELL_COMMON}/functions"/*_help.sh; do
+    if [ -f "$_help_file" ] && [ "$_help_file" != "${SHELL_COMMON}/functions/my_help.sh" ]; then
+        source "$_help_file" 2>/dev/null || true
+    fi
+done
+unset _help_file
+
+# ═══════════════════════════════════════════════════════════════
 # Help Registry Initialization (bash/zsh compatible)
 # ═══════════════════════════════════════════════════════════════
 
