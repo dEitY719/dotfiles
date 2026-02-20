@@ -5,24 +5,32 @@
  * CL-3.3: Display topic details with optional raw output and paging
  */
 
-import { loadRegistry } from '@my-cli/core';
+import { loadRegistry, ShellFunctionAdapter } from '@my-cli/core';
 import { ParsedArguments, CommandHandler } from './index.js';
 
 /**
  * Retrieves a topic by ID from the registry
+ * First attempts to get live content via ShellFunctionAdapter,
+ * then falls back to the static registry
  */
 export async function getTopicDetail(topicId: string): Promise<any | null> {
   try {
-    const registry = await loadRegistry(
-      '/home/bwyoon/dotfiles/shell-common/functions/my_help.sh',
-      'auto',
-      {
-        cacheEnabled: true,
-      },
-    );
+    const helpFilePath = '/home/bwyoon/dotfiles/shell-common/functions/my_help.sh';
 
-    const topics = registry.getTopics();
-    return topics.find((t: any) => t.id === topicId) || null;
+    // Try to get live content from shell function first
+    try {
+      const adapter = new ShellFunctionAdapter(helpFilePath);
+      const liveTopic = await adapter.getTopic(topicId);
+      return liveTopic;
+    } catch (shellError) {
+      // If shell adapter fails, fall back to static registry
+      const registry = await loadRegistry(helpFilePath, 'static', {
+        cacheEnabled: true,
+      });
+
+      const topics = registry.getTopics();
+      return topics.find((t: any) => t.id === topicId) || null;
+    }
   } catch (error) {
     return null;
   }

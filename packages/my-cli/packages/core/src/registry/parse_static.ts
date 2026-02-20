@@ -17,6 +17,7 @@ import { ValidationError } from '../errors.js';
 const CATEGORY_PATTERN = /HELP_CATEGORIES\[([a-z0-9_]+)\]="([^"]+)"/g;
 const MEMBER_PATTERN = /HELP_CATEGORY_MEMBERS\[([a-z0-9_]+)\]="([^"]+)"/g;
 const DESCRIPTION_PATTERN = /HELP_DESCRIPTIONS\[([a-z0-9_]+)\]="([^"]+)"/g;
+const CONTENT_PATTERN = /HELP_CONTENT\[([a-z0-9_]+)\]="([^"]*(?:\\.[^"]*)*?)"/gs;
 
 /**
  * Parses a shell script file and creates a populated HelpRegistry
@@ -65,6 +66,7 @@ export function parseStaticRegistryFromString(content: string): HelpRegistry {
   const categories: Record<string, string> = {};
   const descriptions: Record<string, string> = {};
   const members: Record<string, string> = {};
+  const contents: Record<string, string> = {};
 
   // Extract HELP_CATEGORIES - reset lastIndex before each loop
   let match;
@@ -86,6 +88,20 @@ export function parseStaticRegistryFromString(content: string): HelpRegistry {
   while ((match = MEMBER_PATTERN.exec(content)) !== null) {
     const [, key, value] = match;
     members[key] = value;
+  }
+
+  // Extract HELP_CONTENT - multiline support
+  CONTENT_PATTERN.lastIndex = 0;
+  while ((match = CONTENT_PATTERN.exec(content)) !== null) {
+    let [, key, value] = match;
+    // Unescape content
+    value = value
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\r/g, '\r')
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
+    contents[key] = value;
   }
 
   // Validate that we found at least some data
@@ -129,6 +145,7 @@ export function parseStaticRegistryFromString(content: string): HelpRegistry {
         name: topicId.charAt(0).toUpperCase() + topicId.slice(1), // Capitalize for display name
         category: categoryKey,
         description: descriptions[topicId] || `Help for ${topicId}`,
+        content: contents[topicId], // Load content if available
         source: 'static',
         updatedAt: new Date(),
       };

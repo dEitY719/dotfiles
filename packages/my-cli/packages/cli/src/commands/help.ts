@@ -22,8 +22,8 @@ export async function helpCommand(): Promise<number> {
     const dotfilesRoot = findDotfilesRoot();
     const helpFilePath = `${dotfilesRoot}/shell-common/functions/my_help.sh`;
 
-    // Load registry - use shell mode for accurate current state
-    const registry = await loadRegistry(helpFilePath, 'shell');
+    // Load registry - use static mode to parse HELP_CONTENT from file
+    const registry = await loadRegistry(helpFilePath, 'static');
 
     // Render TUI and wait for it to finish
     const { waitUntilExit } = render(
