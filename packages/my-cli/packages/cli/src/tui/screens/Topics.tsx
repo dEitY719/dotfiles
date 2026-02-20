@@ -26,8 +26,9 @@ interface TopicsProps {
 
   /**
    * Callback when topic is selected (for CL-4.3 detail screen)
+   * Can be async to load topic content
    */
-  onSelect: (topic: HelpTopic) => void;
+  onSelect: (topic: HelpTopic) => void | Promise<void>;
 }
 
 interface KeyInput {

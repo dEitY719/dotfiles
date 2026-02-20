@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Box, useInput } from 'ink';
-import { HelpRegistry, HelpCategory, HelpTopic } from '@my-cli/core';
+import { HelpRegistry, HelpCategory, HelpTopic, ShellFunctionAdapter } from '@my-cli/core';
 import Home from './screens/Home.js';
 import Topics from './screens/Topics.js';
 import TopicDetail from './screens/TopicDetail.js';
@@ -48,6 +48,19 @@ const App: React.FC<AppProps> = ({ registry }) => {
     setCurrentScreen('topics');
   };
 
+  const handleTopicSelect = async (topic: HelpTopic) => {
+    // Try to load live content from shell first
+    try {
+      const adapter = new ShellFunctionAdapter('/home/bwyoon/dotfiles/shell-common/functions/my_help.sh');
+      const liveContent = await adapter.getTopic(topic.id);
+      setSelectedTopic(liveContent);
+    } catch {
+      // Fall back to the topic from registry (which may have static content)
+      setSelectedTopic(topic);
+    }
+    setCurrentScreen('detail');
+  };
+
   return (
     <Box flexDirection="column" padding={1}>
       {currentScreen === 'home' && (
@@ -58,10 +71,7 @@ const App: React.FC<AppProps> = ({ registry }) => {
           registry={registry}
           category={selectedCategory}
           onBack={() => setCurrentScreen('home')}
-          onSelect={(topic) => {
-            setSelectedTopic(topic);
-            setCurrentScreen('detail');
-          }}
+          onSelect={handleTopicSelect}
         />
       )}
       {currentScreen === 'detail' && selectedTopic && (

@@ -109,13 +109,20 @@ export function parseStaticRegistryFromString(content: string): HelpRegistry {
     throw new ValidationError('No HELP_CATEGORIES found in file');
   }
 
+  // Helper function to extract default value from parameter expansion syntax
+  // Handles: "${HELP_CATEGORIES[key]:-defaultValue}" → "defaultValue"
+  function extractDefaultValue(value: string): string {
+    const match = value.match(/\$\{[^}]*:-([^}]*)\}/);
+    return match ? match[1] : value;
+  }
+
   // Add categories to registry
   for (const [key, description] of Object.entries(categories)) {
     try {
       const category: HelpCategory = {
         key,
         label: key.charAt(0).toUpperCase() + key.slice(1), // Capitalize key for label
-        description,
+        description: extractDefaultValue(description), // Parse parameter expansion syntax
         topics: [],
       };
       registry.addCategory(category);
