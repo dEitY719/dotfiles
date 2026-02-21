@@ -66,9 +66,9 @@ cleanup_local_files() {
 
     # Delete all .local.sh files (sh-compatible approach)
     if find "$SHELL_COMMON_DIR" -name "*.local.sh" -type f >/dev/null 2>&1; then
-        find "$SHELL_COMMON_DIR" -name "*.local.sh" -type f | while read local_file; do
+        find "$SHELL_COMMON_DIR" -name "*.local.sh" -type f | while IFS= read -r local_file; do
             rm -f "$local_file"
-            ux_success "Removed: ${local_file#$SHELL_COMMON_DIR/}"
+            ux_success "Removed: ${local_file#"$SHELL_COMMON_DIR"/}"
         done
     else
         ux_info "No .local.sh files found"
@@ -77,17 +77,12 @@ cleanup_local_files() {
 }
 
 copy_local_files() {
-    local environment="$1"
+    environment="$1"
 
     ux_header "Copying template files for: $environment"
 
     # Copy .local.example files to .local.sh (sh-compatible approach)
-    find "$SHELL_COMMON_DIR" -name "*.local.example" -type f | while read example_file; do
-        local dir
-        local filename
-        local local_file
-        local basename_file
-
+    find "$SHELL_COMMON_DIR" -name "*.local.example" -type f | while IFS= read -r example_file; do
         dir="$(dirname "$example_file")"
         filename="$(basename "$example_file" .example)"
         local_file="${dir}/${filename%.*}.local.sh"
@@ -98,7 +93,7 @@ copy_local_files() {
             internal)
                 # Internal company PC: copy ALL .local.example files
                 cp "$example_file" "$local_file"
-                ux_success "Created: ${local_file#$SHELL_COMMON_DIR/}"
+                ux_success "Created: ${local_file#"$SHELL_COMMON_DIR"/}"
                 ;;
             external)
                 # External company PC (VPN): skip proxy.local.example
@@ -107,7 +102,7 @@ copy_local_files() {
                     ux_info "Skipped (not needed for VPN): ${basename_file}"
                 else
                     cp "$example_file" "$local_file"
-                    ux_success "Created: ${local_file#$SHELL_COMMON_DIR/}"
+                    ux_success "Created: ${local_file#"$SHELL_COMMON_DIR"/}"
                 fi
                 ;;
         esac
@@ -115,9 +110,9 @@ copy_local_files() {
 }
 
 read_config_value() {
-    local environment="$1"
-    local config_key="$2"
-    local config_file="${SHELL_COMMON_DIR}/config/environments.conf"
+    environment="$1"
+    config_key="$2"
+    config_file="${SHELL_COMMON_DIR}/config/environments.conf"
 
     if [ ! -f "$config_file" ]; then
         return 1
@@ -127,12 +122,11 @@ read_config_value() {
 }
 
 setup_security_config() {
-    local environment="$1"
-    local security_template="${SHELL_COMMON_DIR}/env/security.local.example"
-    local security_local="${SHELL_COMMON_DIR}/env/security.local.sh"
+    environment="$1"
+    security_template="${SHELL_COMMON_DIR}/env/security.local.example"
+    security_local="${SHELL_COMMON_DIR}/env/security.local.sh"
 
     # Try to get CA_CERT from environments.conf (Stage 3 approach)
-    local ca_cert
     ca_cert="$(read_config_value "$environment" "CA_CERT")"
 
     # Fallback to predefined variables (Stage 1-2 approach)
@@ -167,21 +161,19 @@ setup_security_config() {
 }
 
 setup_npm_config() {
-    local environment="$1"
-    local npm_local="${SHELL_COMMON_DIR}/tools/integrations/npm.local.sh"
+    environment="$1"
+    npm_local="${SHELL_COMMON_DIR}/tools/integrations/npm.local.sh"
 
     if [ ! -f "$npm_local" ]; then
         return 0
     fi
 
     # Get configuration values
-    local registry
     registry="$(read_config_value "$environment" "NPM_REGISTRY")"
     if [ -z "$registry" ]; then
         eval "registry=\$NPM_REGISTRY_${environment}"
     fi
 
-    local proxy
     proxy="$(read_config_value "$environment" "NPM_PROXY")"
     if [ -z "$proxy" ]; then
         eval "proxy=\$NPM_PROXY_${environment}"
@@ -243,17 +235,15 @@ setup_npm_config() {
 }
 
 verify_config() {
-    local environment="$1"
+    environment="$1"
 
     ux_header "Verifying configuration for: $environment"
 
     # Verify npm config if npm is available
     if command -v npm >/dev/null 2>&1; then
-        local npm_registry
         npm_registry="$(npm config get registry 2>/dev/null || echo "unknown")"
         ux_info "npm registry: $npm_registry"
 
-        local npm_cafile
         npm_cafile="$(npm config get cafile 2>/dev/null || echo "none")"
         ux_info "npm cafile: $npm_cafile"
     else
@@ -262,7 +252,7 @@ verify_config() {
 
     # Verify CA cert is accessible if configured
     if [ -n "$SHELL_COMMON_DIR" ]; then
-        local ca_cert
+        ca_cert=""
         eval "ca_cert=\$SECURITY_CONFIG_${environment}"
         if [ -n "$ca_cert" ] && [ -f "$ca_cert" ]; then
             ux_success "CA Certificate accessible: $ca_cert"
@@ -273,7 +263,7 @@ verify_config() {
 }
 
 setup_local_files() {
-    local environment="$1"
+    environment="$1"
 
     ux_header "Setting up environment-specific files for: $environment"
 
@@ -289,9 +279,9 @@ setup_local_files() {
 }
 
 setup_pip_config() {
-    local environment="$1"
-    local pip_config_dir="${HOME}/.config/pip"
-    local pip_conf="${pip_config_dir}/pip.conf"
+    environment="$1"
+    pip_config_dir="${HOME}/.config/pip"
+    pip_conf="${pip_config_dir}/pip.conf"
 
     # Ensure ~/.config/pip directory exists
     mkdir -p "$pip_config_dir"
@@ -342,7 +332,8 @@ main() {
     echo "3) External company PC (VPN)"
     echo ""
 
-    read -p "Enter your choice (1-3): " choice
+    printf "Enter your choice (1-3): "
+    read -r choice
     echo ""
 
     case "$choice" in
