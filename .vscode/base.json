@@ -41,10 +41,7 @@
     "editor.linkedEditing": true,
     "editor.bracketPairColorization.enabled": true,
     "editor.guides.bracketPairs": true,
-    "editor.rulers": [
-        80,
-        120
-    ],
+    "editor.rulers": [80, 120],
     "editor.stickyScroll.enabled": true,
     "editor.suggest.localityBonus": true,
     "editor.fontFamily": "D2Coding, Consolas, 'Courier New', monospace, 'MesloLGS NF'",
@@ -74,10 +71,7 @@
     "workbench.secondarySideBar.defaultVisibility": "hidden",
     "explorer.confirmDragAndDrop": false,
     "explorer.confirmPasteNative": false,
-    "cSpell.userWords": [
-        "pkstock",
-        "smtm"
-    ],
+    "cSpell.userWords": ["pkstock", "smtm"],
     "python.analysis.typeCheckingMode": "strict",
     "notebook.output.wordWrap": true,
     "jupyter.askForKernelRestart": false,
@@ -86,9 +80,7 @@
     "testing.automaticallyOpenPeekViewDuringAutoRun": true,
     "testing.followRunningTest": true,
     "testing.showAllMessages": true,
-    "security.allowedUNCHosts": [
-        "wsl.localhost"
-    ],
+    "security.allowedUNCHosts": ["wsl.localhost"],
     "remote.autoForwardPortsSource": "hybrid",
     "claudeCode.preferredLocation": "panel",
     "makefile.configureOnOpen": true,

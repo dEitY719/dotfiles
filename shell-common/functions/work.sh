@@ -89,7 +89,7 @@ EOF
 
     ux_section "File Locations"
 
-    ux_bullet "work_log.txt: ~/work_log.txt (symlink → ~/dotfiles/work/log/work_log.txt)"
+    ux_bullet "work_log.txt: ~/work_log.txt (symlink → ~/para/archive/playbook/logs/work_log.txt)"
     ux_bullet "Jira reports: ~/para/archive/playbook/docs/jira-records/"
     ux_bullet "Confluence guides: ~/para/archive/playbook/docs/confluence-guides/"
     ux_bullet "CLI tools: ~/dotfiles/shell-common/tools/custom/make_{jira,confluence}.sh"

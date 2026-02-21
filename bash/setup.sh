@@ -132,15 +132,15 @@ else
 
 fi
 
-# Setup work_log.txt symlink (git-tracked, multi-PC sync)
-# Points: ~/work_log.txt → dotfiles/work/log/work_log.txt
+# Setup work_log.txt symlink (multi-PC sync)
+# Points: ~/work_log.txt → para/archive/playbook/logs/work_log.txt
+# Note: Managed via playbook/logs, not dotfiles
 
-# Normalize path by resolving .. components
-WORK_LOG_SRC="$(cd "${DOTFILES_BASH_DIR}/../work/log" && pwd)/work_log.txt"
+WORK_LOG_SRC="${HOME}/para/archive/playbook/logs/work_log.txt"
 WORK_LOG_LINK="${HOME}/work_log.txt"
 
+# Only setup if source file exists
 if [ -f "$WORK_LOG_SRC" ]; then
-    # Ensure symlink exists
     if [ -L "$WORK_LOG_LINK" ]; then
         # Already a symlink, verify it points to correct location
         current_target=$(readlink -f "$WORK_LOG_LINK")
@@ -160,11 +160,9 @@ if [ -f "$WORK_LOG_SRC" ]; then
         mv "$WORK_LOG_LINK" "$backup_file"
         create_symlink "$WORK_LOG_SRC" "$WORK_LOG_LINK"
     else
-        # File doesn't exist, create symlink
+        # Symlink doesn't exist, create it
         create_symlink "$WORK_LOG_SRC" "$WORK_LOG_LINK"
     fi
-else
-    log_error "경고: work_log.txt 소스를 찾을 수 없습니다: $WORK_LOG_SRC"
 fi
 
 # Cleanup: Remove broken plugin references from ~/.zshrc

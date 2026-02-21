@@ -19,12 +19,13 @@
 
 set -e
 
-# Run setup scripts for shell-common, bash, zsh, git, and claude
+# Run setup scripts for shell-common, bash, zsh, git, claude, and vscode-extensions
 ./shell-common/setup.sh
 ./bash/setup.sh
 ./zsh/setup.sh
 ./git/setup.sh
 ./claude/setup.sh
+./vscode-extensions/setup.sh
 
 
 

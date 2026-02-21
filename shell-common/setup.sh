@@ -4,12 +4,12 @@
 
 set -e
 
-# Get the directory where this script is located
-SHELL_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get the directory where this script is located (sh-compatible)
+SHELL_COMMON_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Source UX library for consistent output styling
+# Source UX library for consistent output styling (sh-compatible: use . instead of source)
 if [ -f "${SHELL_COMMON_DIR}/tools/ux_lib/ux_lib.sh" ]; then
-    source "${SHELL_COMMON_DIR}/tools/ux_lib/ux_lib.sh"
+    . "${SHELL_COMMON_DIR}/tools/ux_lib/ux_lib.sh"
 else
     # Fallback: define basic functions if ux_lib is not available
     ux_header() { echo "=== $1 ==="; }
@@ -24,44 +24,37 @@ fi
 # ============================================================================
 # These are extracted settings values for maintainability
 # If values change, update only here (not in sed patterns)
+# Note: Using sh-compatible variable naming (no associative arrays)
 
-declare -A SECURITY_CONFIG=(
-    [external]="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-    [internal]="/etc/ssl/certs/ca-certificates.crt"
-)
+# Security configuration
+SECURITY_CONFIG_external="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
+SECURITY_CONFIG_internal="/etc/ssl/certs/ca-certificates.crt"
 
-declare -A NPM_REGISTRY=(
-    [external]="https://registry.npmjs.org/"
-    [internal]="http://repo.samsungds.net:8081/artifactory/api/npm/npm/"
-)
+# NPM Registry configuration
+NPM_REGISTRY_external="https://registry.npmjs.org/"
+NPM_REGISTRY_internal="http://repo.samsungds.net:8081/artifactory/api/npm/npm/"
 
-declare -A NPM_CAFILE=(
-    [external]="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-    [internal]="/etc/ssl/certs/ca-certificates.crt"
-)
+# NPM CA File configuration
+NPM_CAFILE_external="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
+NPM_CAFILE_internal="/etc/ssl/certs/ca-certificates.crt"
 
-declare -A NPM_STRICT_SSL=(
-    [external]="true"
-    [internal]="false"
-)
+# NPM Strict SSL configuration
+NPM_STRICT_SSL_external="true"
+NPM_STRICT_SSL_internal="false"
 
-declare -A NPM_PROXY=(
-    [external]=""
-    [internal]="http://12.26.204.100:8080"
-)
+# NPM Proxy configuration
+NPM_PROXY_external=""
+NPM_PROXY_internal="http://12.26.204.100:8080"
 
-declare -A NPM_NOPROXY=(
-    [external]=""
-    [internal]="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,dsvdi.net,pfs.nprotect.com"
-)
+# NPM No-proxy configuration
+NPM_NOPROXY_external=""
+NPM_NOPROXY_internal="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,dsvdi.net,pfs.nprotect.com"
 
-declare -A PROXY_HTTP=(
-    [internal]="http://12.26.204.100:8080/"
-)
+# HTTP Proxy configuration
+PROXY_HTTP_internal="http://12.26.204.100:8080/"
 
-declare -A PROXY_NO=(
-    [internal]="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,ssai.samsungds.net,dsvdi.net,pfs.nprotect.com"
-)
+# No-proxy configuration
+PROXY_NO_internal="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,ssai.samsungds.net,dsvdi.net,pfs.nprotect.com"
 
 # ============================================================================
 # Helper Functions
@@ -69,39 +62,27 @@ declare -A PROXY_NO=(
 
 cleanup_local_files() {
     # Find all .local.sh files
-    local local_files
-    mapfile -t local_files < <(find "$SHELL_COMMON_DIR" -name "*.local.sh" -type f)
+    ux_header "Cleaning up environment-specific files"
 
-    if [ ${#local_files[@]} -eq 0 ]; then
+    # Delete all .local.sh files (sh-compatible approach)
+    if find "$SHELL_COMMON_DIR" -name "*.local.sh" -type f >/dev/null 2>&1; then
+        find "$SHELL_COMMON_DIR" -name "*.local.sh" -type f | while read local_file; do
+            rm -f "$local_file"
+            ux_success "Removed: ${local_file#$SHELL_COMMON_DIR/}"
+        done
+    else
         ux_info "No .local.sh files found"
         return 0
     fi
-
-    ux_header "Cleaning up environment-specific files"
-
-    # Delete all .local.sh files
-    for local_file in "${local_files[@]}"; do
-        rm -f "$local_file"
-        ux_success "Removed: ${local_file#$SHELL_COMMON_DIR/}"
-    done
 }
 
 copy_local_files() {
     local environment="$1"
 
-    # Find all .local.example files
-    local local_examples
-    mapfile -t local_examples < <(find "$SHELL_COMMON_DIR" -name "*.local.example" -type f)
-
-    if [ ${#local_examples[@]} -eq 0 ]; then
-        ux_info "No .local.example files found"
-        return 0
-    fi
-
     ux_header "Copying template files for: $environment"
 
-    # Copy .local.example files to .local.sh (with environment-specific filtering)
-    for example_file in "${local_examples[@]}"; do
+    # Copy .local.example files to .local.sh (sh-compatible approach)
+    find "$SHELL_COMMON_DIR" -name "*.local.example" -type f | while read example_file; do
         local dir
         local filename
         local local_file
@@ -154,9 +135,9 @@ setup_security_config() {
     local ca_cert
     ca_cert="$(read_config_value "$environment" "CA_CERT")"
 
-    # Fallback to associative array (Stage 1-2 approach)
+    # Fallback to predefined variables (Stage 1-2 approach)
     if [ -z "$ca_cert" ]; then
-        ca_cert="${SECURITY_CONFIG[$environment]}"
+        eval "ca_cert=\$SECURITY_CONFIG_${environment}"
     fi
 
     if [ -z "$ca_cert" ]; then
@@ -196,11 +177,15 @@ setup_npm_config() {
     # Get configuration values
     local registry
     registry="$(read_config_value "$environment" "NPM_REGISTRY")"
-    [ -z "$registry" ] && registry="${NPM_REGISTRY[$environment]}"
+    if [ -z "$registry" ]; then
+        eval "registry=\$NPM_REGISTRY_${environment}"
+    fi
 
     local proxy
     proxy="$(read_config_value "$environment" "NPM_PROXY")"
-    [ -z "$proxy" ] && proxy="${NPM_PROXY[$environment]}"
+    if [ -z "$proxy" ]; then
+        eval "proxy=\$NPM_PROXY_${environment}"
+    fi
 
     if [ -z "$registry" ]; then
         ux_error "Unknown environment: $environment"
@@ -276,8 +261,9 @@ verify_config() {
     fi
 
     # Verify CA cert is accessible if configured
-    if [ -v SHELL_COMMON_DIR ]; then
-        local ca_cert="${SECURITY_CONFIG[$environment]}"
+    if [ -n "$SHELL_COMMON_DIR" ]; then
+        local ca_cert
+        eval "ca_cert=\$SECURITY_CONFIG_${environment}"
         if [ -n "$ca_cert" ] && [ -f "$ca_cert" ]; then
             ux_success "CA Certificate accessible: $ca_cert"
         elif [ -n "$ca_cert" ]; then
