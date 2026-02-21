@@ -35,9 +35,15 @@ check_shellcheck() {
                 ;;
         esac
 
-        # Run shellcheck with severity warnings and above
-        # Focus on SC2088 (tilde expansion) and other critical issues
-        if ! shellcheck -S warning "$file" 2>&1 | grep -v "^$" | while read -r line; do
+        # Run shellcheck with strict rules for shell-common (portable sh)
+        # and default rules for others
+        local shellcheck_args="-S warning"
+        if [[ "$file" == shell-common/* ]]; then
+            # Stricter for shell-common: enforce sh compatibility
+            shellcheck_args="-S info -x"  # -x enables sourceability check
+        fi
+
+        if ! shellcheck $shellcheck_args "$file" 2>&1 | grep -v "^$" | while read -r line; do
             echo "$file: $line" >> "$shellcheck_violations_file"
         done; then
             :  # shellcheck can return non-zero, that's ok
