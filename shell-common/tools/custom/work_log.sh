@@ -47,13 +47,11 @@ else
 fi
 
 # Work log file location
-# Absolute path to dotfiles managed work_log.txt (allows git tracking + multi-PC sync)
-# Falls back to ~/work_log.txt if symlink not configured
-WORK_LOG_DIR_WORK="${WORK_LOG_DIR}/../../work/log"
-if [ -f "${WORK_LOG_DIR_WORK}/work_log.txt" ]; then
-    WORK_LOG_FILE="${WORK_LOG_DIR_WORK}/work_log.txt"
-else
-    # Fallback if dotfiles structure is different
+# Absolute path to para/archive/playbook/logs/work_log.txt (allows git tracking + multi-PC sync)
+# Falls back to ~/work_log.txt symlink if above doesn't exist
+WORK_LOG_FILE="${HOME}/para/archive/playbook/logs/work_log.txt"
+if [ ! -f "$WORK_LOG_FILE" ]; then
+    # Fallback to symlink
     WORK_LOG_FILE="${HOME}/work_log.txt"
 fi
 
@@ -361,7 +359,7 @@ work_log_list() {
         grep "^\[$today" "$WORK_LOG_FILE" | tail -n "$count" || ux_info "No entries for today"
     else
         ux_section "Recent $count entries"
-        tail -n $((count * 2)) "$WORK_LOG_FILE"  # Multiply by 2 to account for metadata lines
+        tail -n "$count" "$WORK_LOG_FILE"
     fi
 
     echo ""

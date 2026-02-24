@@ -25,7 +25,10 @@ else
 fi
 
 # Category 파싱
-CATEGORY=$(echo "$MSG" | grep -iE '^Category:' | cut -d: -f2 | xargs || echo "other")
+CATEGORY=$(echo "$MSG" | grep -iE '^Category:' | cut -d: -f2 | xargs)
+if [ -z "$CATEGORY" ]; then
+    CATEGORY="other"
+fi
 
 # Jira Key 파싱 (커밋 메시지에서 [KEY-123] 추출, 없으면 환경변수 사용)
 JIRA_KEY=$(echo "$MSG" | grep -oE '\[[A-Z]+[A-Z0-9]*-[0-9]+\]' | head -1 | tr -d '[]' || echo "$JIRA_KEY")
@@ -36,7 +39,11 @@ fi
 # work_log.txt에 기록 (make-jira 호환 형식)
 # work_log.txt는 ~/para/archive/playbook/logs/work_log.txt로 symlink되어 있음
 LOGFILE="${HOME}/work_log.txt"
-echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | ${TIME}h | $HASH" >> "$LOGFILE"
+if [ "$TIME" = "-" ]; then
+    echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | - | $HASH" >> "$LOGFILE"
+else
+    echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | ${TIME}h | $HASH" >> "$LOGFILE"
+fi
 
 # 메타정보 (선택사항)
 # echo "  └─ Category: $CATEGORY" >> "$LOGFILE"
