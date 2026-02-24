@@ -256,7 +256,7 @@ EOF
         ;;
     esac
 
-    echo "$selected_list" | while IFS= read -r sha; do
+    while IFS= read -r sha; do
         [ -z "$sha" ] && continue
         local subject
         subject=$(git show -s --format='%s' "$sha")
@@ -275,7 +275,9 @@ EOF
         else
             echo "$line"
         fi
-    done | awk '{printf " %d. %s\n", NR, $0}'
+    done <<EOF | awk '{printf " %d. %s\n", NR, $0}'
+$selected_list
+EOF
 
     if [ "$RESTORE_XTRACE" -eq 1 ]; then
         set -x

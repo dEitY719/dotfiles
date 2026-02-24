@@ -316,6 +316,41 @@ work_log_list_help() {
     ux_info "Log file: $WORK_LOG_FILE"
 }
 
+# Format and display a single work log entry
+# Input: "[TIMESTAMP] [JIRA-KEY] | TYPE | CATEGORY | TIME | HASH"
+# Output: "HH:MM TYPE (CATEGORY)                             HASH"
+format_work_log_entry() {
+    local entry="$1"
+    local timestamp category type time hash jira
+
+    # Parse the entry
+    timestamp=$(echo "$entry" | cut -d'[' -f2 | cut -d']' -f1 | cut -d' ' -f2)  # HH:MM:SS
+    jira=$(echo "$entry" | cut -d'[' -f3 | cut -d']' -f1)
+    type=$(echo "$entry" | grep -o '| [^ |]*' | head -1 | sed 's/| //')
+    category=$(echo "$entry" | grep -o '| [^ |]*' | head -2 | tail -1 | sed 's/| //')
+    time=$(echo "$entry" | grep -o '| [^ |]*' | head -3 | tail -1 | sed 's/| //')
+    hash=$(echo "$entry" | awk -F'|' '{print $NF}' | xargs)
+
+    # Format timestamp (HH:MM only)
+    local time_short=$(echo "$timestamp" | cut -d':' -f1-2)
+
+    # Format category display (omit if empty or "other")
+    local cat_display=""
+    if [ -n "$category" ] && [ "$category" != "other" ]; then
+        cat_display=" (${category})"
+    fi
+
+    # Format time display (omit if dash)
+    local time_display=""
+    if [ "$time" != "-" ] && [ -z "${time##*[0-9]*}" ]; then
+        time_display=" • ${time}"
+    fi
+
+    # Print formatted entry with proper spacing
+    printf "%s ${UX_MUTED}%-45s${UX_RESET} ${UX_SUCCESS}%s${UX_RESET}${UX_MUTED}${time_display}${UX_RESET}\n" \
+        "$time_short" "${type}${cat_display}" "$hash"
+}
+
 # List recent work log entries
 work_log_list() {
     local count=10
@@ -356,10 +391,14 @@ work_log_list() {
     if $today_only; then
         local today=$(date '+%Y-%m-%d')
         ux_section "Today's entries"
-        grep "^\[$today" "$WORK_LOG_FILE" | tail -n "$count" || ux_info "No entries for today"
+        grep "^\[$today" "$WORK_LOG_FILE" | tail -n "$count" | while IFS= read -r line; do
+            format_work_log_entry "$line"
+        done || ux_info "No entries for today"
     else
         ux_section "Recent $count entries"
-        tail -n "$count" "$WORK_LOG_FILE"
+        tail -n "$count" "$WORK_LOG_FILE" | while IFS= read -r line; do
+            format_work_log_entry "$line"
+        done
     fi
 
     echo ""
