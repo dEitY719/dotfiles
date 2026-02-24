@@ -317,38 +317,43 @@ work_log_list_help() {
 }
 
 # Format and display a single work log entry
-# Input: "[TIMESTAMP] [JIRA-KEY] | TYPE | CATEGORY | TIME | HASH"
-# Output: "HH:MM TYPE (CATEGORY)                             HASH"
+# Input: "[TIMESTAMP] [JIRA-KEY] | TYPE | CATEGORY | TIME | HASH [| SUBJECT]"
+# Output: "TIMESTAMP TYPE | HASH | SUBJECT"
 format_work_log_entry() {
     local entry="$1"
-    local timestamp category type time hash jira
+    local timestamp category type time hash subject jira
 
-    # Parse the entry
-    timestamp=$(echo "$entry" | cut -d'[' -f2 | cut -d']' -f1 | cut -d' ' -f2)  # HH:MM:SS
+    # Parse the entry - split by |
+    timestamp=$(echo "$entry" | cut -d'[' -f2 | cut -d']' -f1)  # YYYY-MM-DD HH:MM:SS
     jira=$(echo "$entry" | cut -d'[' -f3 | cut -d']' -f1)
-    type=$(echo "$entry" | grep -o '| [^ |]*' | head -1 | sed 's/| //')
-    category=$(echo "$entry" | grep -o '| [^ |]*' | head -2 | tail -1 | sed 's/| //')
-    time=$(echo "$entry" | grep -o '| [^ |]*' | head -3 | tail -1 | sed 's/| //')
-    hash=$(echo "$entry" | awk -F'|' '{print $NF}' | xargs)
 
-    # Format timestamp (HH:MM only)
-    local time_short=$(echo "$timestamp" | cut -d':' -f1-2)
+    # Split by | and extract fields (after [JIRA-KEY])
+    local fields=$(echo "$entry" | sed 's/.*] | //')
+    type=$(echo "$fields" | cut -d'|' -f1 | xargs)
+    category=$(echo "$fields" | cut -d'|' -f2 | xargs)
+    time=$(echo "$fields" | cut -d'|' -f3 | xargs)
+    hash=$(echo "$fields" | cut -d'|' -f4 | xargs)
+
+    # Extract subject if present (pipe-separated after hash)
+    # Handle both old format (no subject) and new format (with subject)
+    local subject_part=$(echo "$fields" | cut -d'|' -f5-)
+    subject=$(echo "$subject_part" | xargs)  # trim whitespace
 
     # Format category display (omit if empty or "other")
     local cat_display=""
     if [ -n "$category" ] && [ "$category" != "other" ]; then
-        cat_display=" (${category})"
+        cat_display=" [${category}]"
     fi
 
-    # Format time display (omit if dash)
-    local time_display=""
-    if [ "$time" != "-" ] && [ -z "${time##*[0-9]*}" ]; then
-        time_display=" • ${time}"
+    # Format subject display (only if present)
+    local subject_display=""
+    if [ -n "$subject" ]; then
+        subject_display=" | $subject"
     fi
 
-    # Print formatted entry with proper spacing
-    printf "%s ${UX_MUTED}%-45s${UX_RESET} ${UX_SUCCESS}%s${UX_RESET}${UX_MUTED}${time_display}${UX_RESET}\n" \
-        "$time_short" "${type}${cat_display}" "$hash"
+    # Print formatted entry: TIMESTAMP TYPE [CATEGORY] HASH | SUBJECT
+    printf "%s ${UX_SUCCESS}%-10s${UX_RESET}${UX_MUTED}${cat_display}${UX_RESET} ${UX_SUCCESS}%s${UX_RESET}${UX_MUTED}${subject_display}${UX_RESET}\n" \
+        "$timestamp" "$type" "$hash"
 }
 
 # List recent work log entries

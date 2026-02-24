@@ -40,9 +40,9 @@ fi
 # work_log.txt는 ~/para/archive/playbook/logs/work_log.txt로 symlink되어 있음
 LOGFILE="${HOME}/work_log.txt"
 if [ "$TIME" = "-" ]; then
-    echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | - | $HASH" >> "$LOGFILE"
+    echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | - | $HASH | $SUBJECT" >> "$LOGFILE"
 else
-    echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | ${TIME}h | $HASH" >> "$LOGFILE"
+    echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | ${TIME}h | $HASH | $SUBJECT" >> "$LOGFILE"
 fi
 
 # 메타정보 (선택사항)
