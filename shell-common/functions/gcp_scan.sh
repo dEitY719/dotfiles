@@ -256,8 +256,10 @@ EOF
         ;;
     esac
 
+    local line_num=0
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
+        line_num=$((line_num + 1))
         local subject
         subject=$(git show -s --format='%s' "$sha")
 
@@ -271,11 +273,11 @@ EOF
         line=$(git log --no-walk --format="%C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short "$sha")
 
         if [ $is_dup -eq 1 ]; then
-            echo "${line} [DUPLICATE - Already in $base]"
+            echo " $line_num. ${line} [DUPLICATE - Already in $base]"
         else
-            echo "$line"
+            echo " $line_num. $line"
         fi
-    done <<EOF | awk '{printf " %d. %s\n", NR, $0}'
+    done <<EOF
 $selected_list
 EOF
 
