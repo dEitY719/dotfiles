@@ -69,7 +69,9 @@ run_jiravis_cli() {
     _run_project_cli "JIRAvis" "jira.cli" "$@"
 }
 
-alias jira-cli='run_jiravis_cli'
+# ✅ jira-cli는 각 프로젝트의 pyproject.toml에서 정의됨
+# (tools.cli.jira.main:main 진입점)
+# alias 제거 - 프로젝트별 pyproject.toml 스크립트 사용
 
 # ============================================================================
 # JIRAvis Test Runner
