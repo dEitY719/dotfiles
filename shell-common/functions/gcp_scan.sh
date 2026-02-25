@@ -24,6 +24,16 @@ _gcp_scan_is_empty_cherry_pick() {
 }
 
 gcp_scan() {
+    # zsh compatibility: emulate POSIX sh to ensure consistent behavior
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
+
+    # zsh/bash compatibility: disable debug tracing
+    local _xtrace_set=0
+    case $- in *x*) _xtrace_set=1; esac
+    set +x 2>/dev/null
+
     local base="main"
     local source="upstream/main"
     local author="dEitY719"
@@ -246,26 +256,15 @@ EOF
     fi
     echo "Commits to cherry-pick:"
 
-    # Disable tracing to prevent debug output from polluting the list
-    # (Handles cases where set -x is enabled and redirected to stdout)
-    local RESTORE_XTRACE=0
-    case $- in
-    *x*)
-        RESTORE_XTRACE=1
-        set +x
-        ;;
-    esac
-
     local line_num=0
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
         line_num=$((line_num + 1))
-        local subject
-        subject=$(git show -s --format='%s' "$sha")
 
-        # Check if this is a duplicate
+        # zsh compatibility: avoid intermediate variable assignments that get traced
+        # Instead, embed subject check directly in the grep pipeline
         local is_dup=0
-        if git log "$base" -n 200 --format='%s' 2>/dev/null | grep -Fqx "$subject"; then
+        if git log "$base" -n 200 --format='%s' 2>/dev/null | grep -Fqx "$(git show -s --format='%s' "$sha" 2>/dev/null)"; then
             is_dup=1
         fi
 
@@ -273,18 +272,13 @@ EOF
         line=$(git log --no-walk --format="%C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short "$sha")
 
         if [ $is_dup -eq 1 ]; then
-            echo " $line_num. ${line} [DUPLICATE - Already in $base]"
+            printf " %d. %s [DUPLICATE - Already in %s]\n" "$line_num" "$line" "$base"
         else
-            echo " $line_num. $line"
+            printf " %d. %s\n" "$line_num" "$line"
         fi
     done <<EOF
 $selected_list
 EOF
-
-    if [ "$RESTORE_XTRACE" -eq 1 ]; then
-        set -x
-    fi
-
 
     # Interactive Confirmation
     if type ux_confirm >/dev/null 2>&1; then
@@ -389,6 +383,11 @@ EOF
                 ux_info "Cancelled. You can use the range above manually: git cherry-pick $range_str"
             fi
         fi
+    fi
+
+    # Restore tracing if it was enabled
+    if [ $_xtrace_set -eq 1 ]; then
+        set -x
     fi
 }
 
