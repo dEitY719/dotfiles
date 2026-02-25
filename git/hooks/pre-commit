@@ -48,6 +48,7 @@ FUNC_VIOLATIONS_FILE=$(mktemp "$TMPDIR/func_violations_XXXXXX.txt")
 SHEBANG_VIOLATIONS_FILE=$(mktemp "$TMPDIR/shebang_violations_XXXXXX.txt")
 SUBSHELL_VIOLATIONS_FILE=$(mktemp "$TMPDIR/subshell_violations_XXXXXX.txt")
 PIPE_LOOP_VIOLATIONS_FILE=$(mktemp "$TMPDIR/pipe_loop_violations_XXXXXX.txt")
+ZSH_EMULATION_FILE=$(mktemp "$TMPDIR/zsh_emulation_XXXXXX.txt")
 ALIAS_CONFLICT_FILE=$(mktemp "$TMPDIR/alias_conflict_XXXXXX.txt")
 ALIAS_LOCATION_FILE=$(mktemp "$TMPDIR/alias_location_XXXXXX.txt")
 WRAPPER_VIOLATIONS_FILE=$(mktemp "$TMPDIR/wrapper_violations_XXXXXX.txt")
@@ -60,7 +61,7 @@ HELP_INTEGRITY_VIOLATIONS_FILE=$(mktemp "$TMPDIR/help_integrity_violations_XXXXX
 DIRECT_EXEC_GUARD_FILE=$(mktemp "$TMPDIR/direct_exec_guard_XXXXXX.txt")
 SHELLCHECK_VIOLATIONS_FILE=$(mktemp "$TMPDIR/shellcheck_violations_XXXXXX.txt")
 
-trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$PIPE_LOOP_VIOLATIONS_FILE" "$ALIAS_CONFLICT_FILE" "$ALIAS_LOCATION_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$AUTO_EXEC_SOURCED_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE" "$HELP_INTEGRITY_VIOLATIONS_FILE" "$DIRECT_EXEC_GUARD_FILE" "$SHELLCHECK_VIOLATIONS_FILE"' EXIT
+trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$PIPE_LOOP_VIOLATIONS_FILE" "$ZSH_EMULATION_FILE" "$ALIAS_CONFLICT_FILE" "$ALIAS_LOCATION_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$AUTO_EXEC_SOURCED_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE" "$HELP_INTEGRITY_VIOLATIONS_FILE" "$DIRECT_EXEC_GUARD_FILE" "$SHELLCHECK_VIOLATIONS_FILE"' EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Load check modules
@@ -81,6 +82,7 @@ source_check_or_exit "${CHECKS_DIR}/naming_check.sh"
 source_check_or_exit "${CHECKS_DIR}/ux_usage_check.sh"
 source_check_or_exit "${CHECKS_DIR}/subshell_sourcing_check.sh"
 source_check_or_exit "${CHECKS_DIR}/pipe_loop_check.sh"
+source_check_or_exit "${CHECKS_DIR}/zsh_emulation_check.sh"
 source_check_or_exit "${CHECKS_DIR}/alias_conflict_check.sh"
 source_check_or_exit "${CHECKS_DIR}/alias_location_check.sh"
 source_check_or_exit "${CHECKS_DIR}/wrapper_check.sh"
@@ -112,6 +114,7 @@ function_naming_violations=0
 ux_violations=0
 subshell_violations=0
 pipe_loop_violations=0
+zsh_emulation_violations=0
 alias_conflict_violations=0
 alias_location_violations=0
 wrapper_violations=0
@@ -172,6 +175,10 @@ while IFS= read -r file; do
 
     if ! check_pipe_loop_antipattern "$abs_path" "$PIPE_LOOP_VIOLATIONS_FILE" 2>/dev/null; then
         ((pipe_loop_violations++))
+    fi
+
+    if ! check_zsh_emulation_issues "$abs_path" "$ZSH_EMULATION_FILE" 2>/dev/null; then
+        ((zsh_emulation_violations++))
     fi
 
     if ! check_alias_function_conflict "$abs_path" "$ALIAS_CONFLICT_FILE" 2>/dev/null; then
@@ -278,6 +285,14 @@ if [ $blocking_violations -eq 0 ]; then
         echo -e "${YELLOW}  Delete with:${NC}"
         backup_list=$(cat "$BACKUP_FILES_FILE" | tr '\n' ' ')
         echo -e "${YELLOW}  rm -f $backup_list${NC}"
+        echo ""
+        has_warnings=1
+    fi
+
+    if [ $zsh_emulation_violations -gt 0 ] && [ -s "$ZSH_EMULATION_FILE" ]; then
+        echo -e "${YELLOW}ℹ [INFO] Zsh compatibility suggestions ($zsh_emulation_violations):${NC}"
+        head -n 2 "$ZSH_EMULATION_FILE" | sed 's/^/  /'
+        [ $(wc -l <"$ZSH_EMULATION_FILE") -gt 2 ] && echo "  ..." && echo ""
         echo ""
         has_warnings=1
     fi
