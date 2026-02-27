@@ -146,8 +146,11 @@ setup_security_config() {
             if [ -f "$security_local" ]; then
                 sed -i 's/^CA_CERT="\/usr\/local\/share/#CA_CERT="\/usr\/local\/share/' "$security_local"
                 sed -i 's/^#CA_CERT="\/etc\/ssl\/certs/CA_CERT="\/etc\/ssl\/certs/' "$security_local"
+                # SSL_CERT_FILE: Option 2 (McAfee) is already active - verify it
+                # (no sed needed: McAfee cert is default in security.local.example)
             fi
             ux_success "CA Certificate: ${ca_cert}"
+            ux_success "SSL Certificate: /usr/share/ca-certificates/extra/McAfee_Certificate.crt"
             ;;
         external)
             ux_info "Configuring security for external company PC (Custom Certificate)"
@@ -159,6 +162,7 @@ setup_security_config() {
                 sed -i 's/^#SSL_CERT_FILE="\/usr\/local\/share/SSL_CERT_FILE="\/usr\/local\/share/' "$security_local"
             fi
             ux_success "CA Certificate: ${ca_cert}"
+            ux_success "SSL Certificate: /usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
             ;;
     esac
 }
