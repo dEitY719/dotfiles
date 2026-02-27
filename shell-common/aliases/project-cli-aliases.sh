@@ -7,7 +7,7 @@
 #   2. An alias for convenience: PROJECT-cli
 #
 # Supported projects:
-#   - JIRAvis: jira-cli (calls run_jiravis_cli)
+#   - jiravis: jira-cli (calls run_jiravis_cli)
 #   - Confluence: confluence-cli (calls run_confluence_cli) [TODO]
 #   - Agent: agent-cli (calls run_agent_cli) [TODO]
 
@@ -15,8 +15,8 @@
 # INTERNAL HELPER: Generic project CLI runner
 # ============================================================================
 # Usage: _run_project_cli PROJECT_NAME PYTHON_MODULE [cli_args...]
-# Example: _run_project_cli "JIRAvis" "jira.cli"
-# Example: _run_project_cli "JIRAvis" "jira.cli" "list" "--verbose"
+# Example: _run_project_cli "jiravis" "jira.cli"
+# Example: _run_project_cli "jiravis" "jira.cli" "list" "--verbose"
 #
 # Each project must have:
 #   - backend/{PYTHON_MODULE}/__main__.py
@@ -54,10 +54,10 @@ _run_project_cli() {
 }
 
 # ============================================================================
-# JIRAvis CLI
+# jiravis CLI
 # ============================================================================
-# Purpose: Run JIRAvis project CLI tool
-# Location: ~/para/project/JIRAvis
+# Purpose: Run jiravis project CLI tool
+# Location: ~/para/project/jiravis
 # Entry point: backend/jira/cli/__main__.py
 #
 # Usage:
@@ -66,7 +66,7 @@ _run_project_cli() {
 #   jira-cli --help             # Show CLI options
 #
 run_jiravis_cli() {
-    _run_project_cli "JIRAvis" "jira.cli" "$@"
+    _run_project_cli "jiravis" "jira.cli" "$@"
 }
 
 # ✅ jira-cli는 각 프로젝트의 pyproject.toml에서 정의됨
@@ -74,10 +74,10 @@ run_jiravis_cli() {
 # alias 제거 - 프로젝트별 pyproject.toml 스크립트 사용
 
 # ============================================================================
-# JIRAvis Test Runner
+# jiravis Test Runner
 # ============================================================================
-# Purpose: Run JIRAvis project tests with various options
-# Location: ~/para/project/JIRAvis
+# Purpose: Run jiravis project tests with various options
+# Location: ~/para/project/jiravis
 #
 # Usage:
 #   jira-test              # Run all tests (recommended)
@@ -89,7 +89,7 @@ run_jiravis_cli() {
 #   jira-test help         # Show help
 #
 run_jiravis_test() {
-    local project_dir="$HOME/para/project/JIRAvis"
+    local project_dir="$HOME/para/project/jiravis"
 
     if [ ! -d "$project_dir" ]; then
         echo "Error: Project directory not found: $project_dir"
@@ -132,7 +132,7 @@ _jiravis_test_help() {
         source "${BASH_SOURCE[0]%/*}/../tools/ux_lib/ux_lib.sh" 2>/dev/null || true
     fi
 
-    ux_header "JIRAvis Test Runner"
+    ux_header "jiravis Test Runner"
     echo ""
 
     ux_section "Commands"
