@@ -144,7 +144,7 @@ _register_default_help_categories() {
 
     # Category membership (space-separated topic keys)
     HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git uv py nvm npm pp cli ux du psql mytool}"
-    HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy mount mysql gpu}"
+    HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql gpu}"
     HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc gemini codex litellm ollama claude_plugins claude_skills_marketplace}"
     HELP_CATEGORY_MEMBERS[cli]="${HELP_CATEGORY_MEMBERS[cli]:-fzf fd fasd ripgrep pet bat zsh zsh_autosuggestions gc}"
     HELP_CATEGORY_MEMBERS[config]="${HELP_CATEGORY_MEMBERS[config]:-p10k crt apt pip}"
@@ -208,6 +208,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[bat_help]="${HELP_DESCRIPTIONS[bat_help]:-[CLI] bat file viewer}"
     HELP_DESCRIPTIONS[dot_help]="${HELP_DESCRIPTIONS[dot_help]:-[Docs] Dotfiles overview and setup}"
     HELP_DESCRIPTIONS[proxy_help]="${HELP_DESCRIPTIONS[proxy_help]:-[DevOps] Proxy config and diagnostics}"
+    HELP_DESCRIPTIONS[ssl_help]="${HELP_DESCRIPTIONS[ssl_help]:-[DevOps] SSL certificate config and diagnostics}"
     HELP_DESCRIPTIONS[fasd_help]="${HELP_DESCRIPTIONS[fasd_help]:-[CLI] fasd directory jump}"
     HELP_DESCRIPTIONS[fd_help]="${HELP_DESCRIPTIONS[fd_help]:-[CLI] fd file finder}"
     HELP_DESCRIPTIONS[fzf_help]="${HELP_DESCRIPTIONS[fzf_help]:-[CLI] fzf keybindings and usage}"
