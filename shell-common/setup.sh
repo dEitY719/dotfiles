@@ -363,8 +363,14 @@ main() {
             ux_info "Changes made:"
             ux_info "  - Copied all .local.example files to .local.sh"
             ux_info "  - Security: System CA Bundle (Option 2) activated"
+            ux_info "  - SSL Certificate: McAfee (/usr/share/ca-certificates/extra/McAfee_Certificate.crt)"
             ux_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
             ux_info "  - Pip: Samsung internal repository configured"
+            echo ""
+            ux_section "⚠️  IMPORTANT: Reload your shell to apply changes"
+            ux_bullet "Option 1 (Current shell): source ~/.bashrc"
+            ux_bullet "Option 2 (New shell): exec bash  or  exec zsh"
+            ux_bullet "Verify: ssl-help  (or: echo \$SSL_CERT_FILE)"
             echo ""
             ;;
         3)
@@ -377,9 +383,15 @@ main() {
             ux_info "Changes made:"
             ux_info "  - Copied .local.example files to .local.sh (except proxy)"
             ux_info "  - Security: Custom Certificate (Option 1) activated"
+            ux_info "  - SSL Certificate: samsungsemi (/usr/local/share/ca-certificates/samsungsemi-prx.com.crt)"
             ux_info "  - Proxy: Skipped (not needed for VPN - direct connection)"
             ux_info "  - Pip: Public PyPI configured"
             ux_info "  - Next: Run 'setup_crt.sh' to install the certificate"
+            echo ""
+            ux_section "⚠️  IMPORTANT: Reload your shell to apply changes"
+            ux_bullet "Option 1 (Current shell): source ~/.bashrc"
+            ux_bullet "Option 2 (New shell): exec bash  or  exec zsh"
+            ux_bullet "Verify: ssl-help  (or: echo \$SSL_CERT_FILE)"
             echo ""
             ;;
         *)
