@@ -25,10 +25,26 @@ if [ -f "$CA_CERT" ]; then
     export REQUESTS_CA_BUNDLE="$CA_CERT"
 fi
 
+# ========================================
+# SSL Certificate Configuration for curl, wget, and other tools
+# ========================================
+# Used by: curl, wget, git, and other command-line tools
+# Option 1: Corporate external PC - Custom certificate
+#SSL_CERT_FILE="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
+
+# Option 2: Corporate internal PC - McAfee proxy certificate
+SSL_CERT_FILE="/usr/share/ca-certificates/extra/McAfee_Certificate.crt"
+
+# Export only if file exists
+if [ -f "$SSL_CERT_FILE" ]; then
+    export SSL_CERT_FILE
+fi
 
 # ========================================
 # Notes
 # ========================================
 # - Corporate external PC: Use option 1 after installing certificate with setup_crt.sh
-# - Corporate internal PC: Use option 2 (system CA bundle)
+# - Corporate internal PC: Use option 2 (McAfee Certificate - default)
+#   - NODE_EXTRA_CA_CERTS + REQUESTS_CA_BUNDLE: uses system CA bundle
+#   - SSL_CERT_FILE: uses McAfee proxy certificate for curl, wget, git
 # - Home environment: Do not create security.local.sh (CA setup not needed)
