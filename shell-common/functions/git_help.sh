@@ -73,6 +73,11 @@ git_help() {
     ux_table_row "git_lfs_install" "Install LFS" "Ubuntu setup"
     ux_table_row "glfs" "track <pattern>" "Track files with LFS"
     echo ""
+
+    ux_section "SSH & Authentication"
+    ux_table_row "git_ssh_check" "Test GitHub SSH" "Verify GitHub SSH connection"
+    ux_table_row "git_ssh_setup" "Setup SSH" "Manual SSH configuration guide"
+    echo ""
 }
 
 # Alias for git-help format (using dash instead of underscore)

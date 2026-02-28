@@ -197,19 +197,7 @@ setup_ssh_auto() {
     # 3. SSH 키를 에이전트에 등록
     register_ssh_key || return 1
 
-    # 4. GitHub SSH 연결 테스트
-    ux_info "GitHub SSH 연결을 테스트합니다..."
-    if check_github_ssh_access; then
-        ux_success "✓ GitHub SSH 연결 성공"
-    else
-        ux_warning "⚠ GitHub SSH 연결 실패"
-        ux_info "다음 단계를 확인하세요:"
-        ux_info "  1. 공개키를 GitHub에 등록했는지 확인"
-        ux_info "  2. SSH 설정 가이드: git/doc/SSH_SETUP_GUIDE.md"
-        return 1
-    fi
-
-    # 5. Git 리모트를 SSH로 변경 (해당 프로젝트)
+    # 4. Git 리모트를 SSH로 변경 (해당 프로젝트)
     configure_git_remote_ssh "$DOTFILES_REPO_ROOT"
 
     ux_success "SSH 설정이 완료되었습니다"
