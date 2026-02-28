@@ -348,9 +348,11 @@ main() {
             ux_info "Selected: Public PC"
             cleanup_local_files
             setup_pip_config "public"
+            echo "$choice" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for public PC (home environment)"
             ux_info "All environment-specific configuration removed"
+            ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
             echo ""
             ;;
         2)
@@ -358,6 +360,7 @@ main() {
             cleanup_local_files
             setup_local_files "internal"
             setup_pip_config "internal"
+            echo "$choice" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for internal company PC"
             ux_info "Changes made:"
@@ -366,6 +369,7 @@ main() {
             ux_info "  - SSL Certificate: McAfee (/usr/share/ca-certificates/extra/McAfee_Certificate.crt)"
             ux_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
             ux_info "  - Pip: Samsung internal repository configured"
+            ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
             echo ""
             ux_section "⚠️  IMPORTANT: Reload your shell to apply changes"
             ux_bullet "Option 1 (Current shell): source ~/.bashrc"
@@ -378,6 +382,7 @@ main() {
             cleanup_local_files
             setup_local_files "external"
             setup_pip_config "external"
+            echo "$choice" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for external company PC"
             ux_info "Changes made:"
@@ -387,6 +392,7 @@ main() {
             ux_info "  - Proxy: Skipped (not needed for VPN - direct connection)"
             ux_info "  - Pip: Public PyPI configured"
             ux_info "  - Next: Run 'setup_crt.sh' to install the certificate"
+            ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
             echo ""
             ux_section "⚠️  IMPORTANT: Reload your shell to apply changes"
             ux_bullet "Option 1 (Current shell): source ~/.bashrc"

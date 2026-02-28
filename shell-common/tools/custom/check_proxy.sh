@@ -20,14 +20,79 @@ _format_env() {
 # Diagnostic functions
 # ============================================================
 
+check_setup_mode() {
+    ux_header "0. Setup Mode Status"
+
+    local setup_mode_file="$HOME/.dotfiles-setup-mode"
+    if [ ! -f "$setup_mode_file" ]; then
+        ux_warning "Setup mode not configured"
+        ux_bullet "Run: ./setup.sh in ~/dotfiles to configure"
+        echo ""
+        return 0
+    fi
+
+    local mode
+    mode=$(cat "$setup_mode_file" 2>/dev/null)
+
+    case "$mode" in
+        1)
+            ux_success "Setup Mode: Public PC (Home environment)"
+            ux_info "Expected behavior: NO proxy variables should be set"
+            ;;
+        2)
+            ux_success "Setup Mode: Internal company PC (Direct connection)"
+            ux_info "Expected behavior: Company proxy SHOULD be set (12.26.204.100:8080)"
+            ;;
+        3)
+            ux_success "Setup Mode: External company PC (VPN)"
+            ux_info "Expected behavior: NO proxy variables should be set"
+            ;;
+        *)
+            ux_error "Unknown setup mode: $mode"
+            ;;
+    esac
+    echo ""
+}
+
 check_proxy_env() {
     ux_header "1. Current Environment Variables"
 
     ux_section "HTTP/HTTPS Proxy"
+    local has_proxy=0
+    if [ -n "${http_proxy:-}" ] || [ -n "${https_proxy:-}" ] || [ -n "${HTTP_PROXY:-}" ] || [ -n "${HTTPS_PROXY:-}" ]; then
+        has_proxy=1
+    fi
+
     _format_env "http_proxy" "${http_proxy:-[NOT SET]}"
     _format_env "HTTP_PROXY" "${HTTP_PROXY:-[NOT SET]}"
     _format_env "https_proxy" "${https_proxy:-[NOT SET]}"
     _format_env "HTTPS_PROXY" "${HTTPS_PROXY:-[NOT SET]}"
+
+    # Validate against setup mode
+    local setup_mode_file="$HOME/.dotfiles-setup-mode"
+    if [ -f "$setup_mode_file" ]; then
+        local mode
+        mode=$(cat "$setup_mode_file" 2>/dev/null)
+        case "$mode" in
+            1|3)
+                # Should NOT have proxy
+                if [ "$has_proxy" -eq 1 ]; then
+                    echo ""
+                    ux_error "⚠️  ISSUE DETECTED: Proxy is set but shouldn't be (Mode $mode)"
+                    ux_info "This may be inherited from WSL/system level"
+                    ux_info "Solution: Restart your shell or run: source ~/.bashrc"
+                fi
+                ;;
+            2)
+                # Should have proxy
+                if [ "$has_proxy" -eq 0 ]; then
+                    echo ""
+                    ux_warning "⚠️  No proxy set but Mode 2 (Internal PC) expects proxy"
+                    ux_info "Check if proxy.local.sh exists and is properly sourced"
+                fi
+                ;;
+        esac
+    fi
     echo ""
 
     ux_section "NO Proxy (Exceptions)"
@@ -159,13 +224,19 @@ check_proxy() {
     local mode="${1:-all}"
 
     case "$mode" in
+        mode)
+            check_setup_mode
+            ;;
         env)
+            check_setup_mode
             check_proxy_env
             ;;
         file)
+            check_setup_mode
             check_proxy_local_sh
             ;;
         shell)
+            check_setup_mode
             check_proxy_shell_loading
             ;;
         conn|test)
@@ -175,6 +246,7 @@ check_proxy() {
             check_git_config
             ;;
         all|*)
+            check_setup_mode
             check_proxy_env
             check_proxy_local_sh
             check_proxy_shell_loading
@@ -191,6 +263,6 @@ check_proxy() {
 # Execute if run directly (not sourced)
 # ============================================================
 
-if [ "${0##*/}" = "check_proxy.sh" ] || [ "$1" != "" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
     check_proxy "$@"
 fi
