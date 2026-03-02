@@ -3,10 +3,21 @@
 # Ollama / LLM Model Management Help (Hybrid: WSL + Docker)
 # Follows UX_GUIDELINES.md for consistent, semantic output
 
-# Load UX library - use dynamic path detection
+# Load UX library - use dynamic path detection with fallback
 if ! declare -f ux_header > /dev/null 2>&1; then
-    if [ -n "${SHELL_COMMON}" ] && [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
-        source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+    local ux_lib_path="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh"
+    if [ -f "$ux_lib_path" ]; then
+        source "$ux_lib_path" 2>/dev/null || true
+    else
+        # Fallback functions if UX library not found
+        ux_header() { echo "=== $1 ==="; echo ""; }
+        ux_section() { echo ""; echo "$1"; echo "---"; }
+        ux_info() { echo "ℹ️  $1"; }
+        ux_warning() { echo "⚠️  $1"; }
+        ux_error() { echo "❌ $1" >&2; }
+        ux_success() { echo "✅ $1"; }
+        ux_bullet() { echo "  • $1"; }
+        ux_table_row() { printf "  %-20s : %s\n" "$1" "$2"; }
     fi
 fi
 
