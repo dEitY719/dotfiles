@@ -90,15 +90,20 @@ ZSH_THEME="powerlevel10k/powerlevel10k"
 # Build plugins list dynamically based on what's installed
 _zsh_plugins=(git)
 
-# Add zsh-autosuggestions if installed
-if [ -d "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions" ] || \
-   [ -f "/usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
+# Add zsh-autosuggestions only if installed via oh-my-zsh
+if [ -d "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions" ]; then
     _zsh_plugins+=(zsh-autosuggestions)
 fi
 
 plugins=("${_zsh_plugins[@]}")
 
 source $ZSH/oh-my-zsh.sh
+
+# Load system-installed zsh-autosuggestions if not loaded via oh-my-zsh
+if [[ ! " ${plugins[@]} " =~ " zsh-autosuggestions " ]] && \
+   [ -f "/usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
+    source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+fi
 
 # ═══════════════════════════════════════════════════════════════
 # Load Zsh Dotfiles (Native Zsh - No Bash Emulation)
