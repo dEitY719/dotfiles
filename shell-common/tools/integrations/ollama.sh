@@ -3,10 +3,14 @@
 # Ollama Hybrid Integration: WSL + Docker Seamless Management
 # Provides unified interface for both WSL and Docker Ollama environments
 
-# Load UX library - use absolute path
-source /home/bwyoon/dotfiles/shell-common/tools/ux_lib/ux_lib.sh 2>/dev/null || {
+# Load UX library - use dynamic path detection
+if [ -n "${SHELL_COMMON}" ] && [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
+    source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null || {
+        echo "Warning: UX library not found" >&2
+    }
+else
     echo "Warning: UX library not found" >&2
-}
+fi
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CORE: Backend Detection and Command Execution

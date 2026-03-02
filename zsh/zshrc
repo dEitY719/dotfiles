@@ -3,6 +3,10 @@ if [[ "${DOTFILES_KEEP_NOUNSET:-0}" != "1" ]]; then
   unsetopt nounset
 fi
 
+# Suppress dotfiles init message to avoid Powerlevel10k instant prompt warnings
+# (Console output after instant prompt causes prompt jump)
+export DOTFILES_SUPPRESS_MESSAGE=1
+
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
 # Initialization code that may require console input (password prompts, [y/n]
 # confirmations, etc.) must go above this block; everything else may go below.
@@ -82,7 +86,17 @@ ZSH_THEME="powerlevel10k/powerlevel10k"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git zsh-autosuggestions)
+
+# Build plugins list dynamically based on what's installed
+_zsh_plugins=(git)
+
+# Add zsh-autosuggestions if installed
+if [ -d "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions" ] || \
+   [ -f "/usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
+    _zsh_plugins+=(zsh-autosuggestions)
+fi
+
+plugins=("${_zsh_plugins[@]}")
 
 source $ZSH/oh-my-zsh.sh
 

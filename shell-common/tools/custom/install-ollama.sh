@@ -6,10 +6,14 @@
 
 set -e
 
-# Load UX library - use absolute path
-source /home/bwyoon/dotfiles/shell-common/tools/ux_lib/ux_lib.sh 2>/dev/null || {
+# Load UX library - use dynamic path detection
+if [ -n "${SHELL_COMMON}" ] && [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
+    source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null || {
+        echo "Warning: UX library not found" >&2
+    }
+else
     echo "Warning: UX library not found" >&2
-}
+fi
 
 main() {
     local offline_file="${1:-}"

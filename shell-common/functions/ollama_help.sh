@@ -3,9 +3,11 @@
 # Ollama / LLM Model Management Help (Hybrid: WSL + Docker)
 # Follows UX_GUIDELINES.md for consistent, semantic output
 
-# Load UX library - absolute path (most reliable)
+# Load UX library - use dynamic path detection
 if ! declare -f ux_header > /dev/null 2>&1; then
-    source /home/bwyoon/dotfiles/shell-common/tools/ux_lib/ux_lib.sh 2>/dev/null || true
+    if [ -n "${SHELL_COMMON}" ] && [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
+        source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+    fi
 fi
 
 # Main help function with auto-detection

@@ -3,5 +3,10 @@
 # Convenience wrapper for Ollama WSL installation
 
 install_ollama() {
-    bash /home/bwyoon/dotfiles/shell-common/tools/custom/install_ollama.sh "$@"
+    if [ -n "${SHELL_COMMON}" ]; then
+        bash "${SHELL_COMMON}/tools/custom/install-ollama.sh" "$@"
+    else
+        echo "Error: SHELL_COMMON not set" >&2
+        return 1
+    fi
 }
