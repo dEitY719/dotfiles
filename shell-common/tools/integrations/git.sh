@@ -81,7 +81,24 @@ else
         fi
     }
 fi
-export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[35m\]\$(_prompt_virtualenv)\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_pwd)\[\e[36m\]\$(__git_ps1 '(%s)' '')\[\e[0m\]\$ "
+
+_set_dotfiles_bash_ps1() {
+    export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[35m\]\$(_prompt_virtualenv)\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_pwd)\[\e[36m\]\$(__git_ps1 '(%s)' '')\[\e[0m\]\$ "
+}
+
+_dotfiles_bash_prompt_hook() {
+    _set_dotfiles_bash_ps1
+}
+
+_set_dotfiles_bash_ps1
+
+if [[ "${PROMPT_COMMAND-}" != *"_dotfiles_bash_prompt_hook"* ]]; then
+    if [ -n "${PROMPT_COMMAND-}" ]; then
+        PROMPT_COMMAND="_dotfiles_bash_prompt_hook;${PROMPT_COMMAND}"
+    else
+        PROMPT_COMMAND="_dotfiles_bash_prompt_hook"
+    fi
+fi
 
 # ============================================================
 # BASH-SPECIFIC FUNCTIONS
