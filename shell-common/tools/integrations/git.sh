@@ -39,9 +39,11 @@ _short_pwd() {
 }
 
 # Render active Python virtual environment for bash prompt.
-# Priority: VIRTUAL_ENV_PROMPT -> basename of VIRTUAL_ENV.
+# Show venv only when VIRTUAL_ENV is actually set.
 _prompt_virtualenv() {
     local venv_prompt venv_name
+
+    [ -n "${VIRTUAL_ENV:-}" ] || return 0
 
     venv_prompt="${VIRTUAL_ENV_PROMPT:-}"
     if [ -n "$venv_prompt" ]; then
@@ -86,17 +88,13 @@ _set_dotfiles_bash_ps1() {
     export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[35m\]\$(_prompt_virtualenv)\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_pwd)\[\e[36m\]\$(__git_ps1 '(%s)' '')\[\e[0m\]\$ "
 }
 
-_dotfiles_bash_prompt_hook() {
-    _set_dotfiles_bash_ps1
-}
-
 _set_dotfiles_bash_ps1
 
-if [[ "${PROMPT_COMMAND-}" != *"_dotfiles_bash_prompt_hook"* ]]; then
+if [[ "${PROMPT_COMMAND-}" != *"_set_dotfiles_bash_ps1"* ]]; then
     if [ -n "${PROMPT_COMMAND-}" ]; then
-        PROMPT_COMMAND="_dotfiles_bash_prompt_hook;${PROMPT_COMMAND}"
+        PROMPT_COMMAND="_set_dotfiles_bash_ps1;${PROMPT_COMMAND}"
     else
-        PROMPT_COMMAND="_dotfiles_bash_prompt_hook"
+        PROMPT_COMMAND="_set_dotfiles_bash_ps1"
     fi
 fi
 
