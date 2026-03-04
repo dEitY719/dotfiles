@@ -52,5 +52,8 @@
     "excludedCommands": [
       "docker"
     ]
+  },
+  "telemetry": {
+    "enabled": false
   }
 }
