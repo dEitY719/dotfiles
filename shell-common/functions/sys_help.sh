@@ -6,6 +6,7 @@ sys_help() {
     ux_header "System Management Commands"
 
     ux_section "Process Management"
+    ux_table_row "psgrep" "ps aux | grep <pattern>" "Find process by pattern"
     ux_table_row "psg" "ps aux | grep" "Find process"
     ux_table_row "kill9" "kill -9" "Force kill"
     ux_table_row "psa" "ps aux" "List all processes"
@@ -28,9 +29,8 @@ sys_help() {
     ux_section "Package Management (APT)"
     ux_table_row "update" "apt update" "Update lists"
     ux_table_row "upgrade" "apt upgrade" "Upgrade packages"
-    ux_table_row "install" "apt install" "Install package"
     ux_table_row "remove" "apt remove" "Remove package"
-    ux_table_row "auto_remove" "apt autoremove" "Remove unused"
+    ux_table_row "auto-remove" "apt autoremove" "Remove unused"
     echo ""
 
     ux_section "Log Viewing"
