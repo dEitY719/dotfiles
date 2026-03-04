@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # shell-common/tools/external/git.sh
 # Bash-specific git functions and features
 # (This file requires bash and should not be sourced in other shells)
@@ -38,6 +38,32 @@ _short_pwd() {
     fi
 }
 
+# Render active Python virtual environment for bash prompt.
+# Priority: VIRTUAL_ENV_PROMPT -> basename of VIRTUAL_ENV.
+_prompt_virtualenv() {
+    local venv_prompt venv_name
+
+    venv_prompt="${VIRTUAL_ENV_PROMPT:-}"
+    if [ -n "$venv_prompt" ]; then
+        # activate scripts often set a trailing space in VIRTUAL_ENV_PROMPT.
+        venv_prompt="${venv_prompt% }"
+        case "$venv_prompt" in
+            \(*\))
+                printf '%s ' "$venv_prompt"
+                ;;
+            *)
+                printf '(%s) ' "$venv_prompt"
+                ;;
+        esac
+        return 0
+    fi
+
+    if [ -n "${VIRTUAL_ENV:-}" ]; then
+        venv_name="${VIRTUAL_ENV##*/}"
+        [ -n "$venv_name" ] && printf '(%s) ' "$venv_name"
+    fi
+}
+
 # Git prompt setup (PS1 only for bash, zsh uses oh-my-zsh themes)
 if [ -f /usr/share/git-core/contrib/completion/git-prompt.sh ]; then
     # shellcheck source=/usr/share/git-core/contrib/completion/git-prompt.sh
@@ -55,7 +81,7 @@ else
         fi
     }
 fi
-export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_pwd)\[\e[36m\]\$(__git_ps1 '(%s)' '')\[\e[0m\]\$ "
+export PS1="\[\e]0;\u@\h: \$(_short_pwd)\a\]\[\e[35m\]\$(_prompt_virtualenv)\[\e[32m\]\u@\h:\[\e[33m\]\$(_short_pwd)\[\e[36m\]\$(__git_ps1 '(%s)' '')\[\e[0m\]\$ "
 
 # ============================================================
 # BASH-SPECIFIC FUNCTIONS
@@ -265,24 +291,15 @@ gset() {
 
 # Git LFS install function (Ubuntu only)
 git_lfs_install() {
-    ux_info "Starting Git LFS installation"
+    local script_path
+    script_path="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_git_lfs.sh"
 
-    # Update apt
-    sudo apt-get update
-
-    # Install git-lfs
-    sudo apt-get install -y git-lfs
-
-    # Initialize git-lfs
-    git lfs install
-
-    # Verify installation
-    if command -v git-lfs &>/dev/null; then
-        ux_success "Git LFS installed successfully"
-        git lfs version
-    else
-        ux_error "Git LFS installation did not complete correctly"
+    if [ ! -f "$script_path" ]; then
+        ux_error "install_git_lfs.sh not found: $script_path"
+        return 1
     fi
+
+    bash "$script_path" "$@"
 }
 
 # Git LFS track function
