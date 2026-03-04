@@ -193,7 +193,8 @@ _cleanup_broken_zsh_plugins() {
     fi
 
     # Create backup
-    local backup_file="${zshrc}.backup.$(date +%s)"
+    local backup_file
+    backup_file="${zshrc}.backup.$(date +%s)"
     cp "$zshrc" "$backup_file" || return 1
 
     log_debug "정리: ~/.zshrc에서 설치되지 않은 플러그인 제거: $broken_plugins"
@@ -241,7 +242,7 @@ _add_zshrc_auto_cleanup() {
 
     # Add auto-cleanup code at the beginning of ~/.zshrc
     # This runs every time zsh starts to ensure no broken plugins
-    cat > "${zshrc}.cleanup_insert" << 'CLEANUP_CODE'
+    if cat >"${zshrc}.cleanup_insert" <<'CLEANUP_CODE'
 
 # ═══════════════════════════════════════════════════════════════
 # DOTFILES AUTO-CLEANUP: Remove broken plugin references
@@ -269,9 +270,9 @@ unfunction _dotfiles_auto_cleanup_plugins 2>/dev/null || true
 
 CLEANUP_CODE
 
-    if [ $? -eq 0 ]; then
+    then
         # Prepend cleanup code to zshrc
-        cat "${zshrc}.cleanup_insert" "$zshrc" > "${zshrc}.new"
+        cat "${zshrc}.cleanup_insert" "$zshrc" >"${zshrc}.new"
         mv "${zshrc}.new" "$zshrc"
         rm -f "${zshrc}.cleanup_insert"
         log_debug "✓ ~/.zshrc에 자동 정리 코드 추가됨 (매번 zsh 시작 시 자동 실행)"
