@@ -184,6 +184,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[py_help]="${HELP_DESCRIPTIONS[py_help]:-[Development] Python environments and tooling}"
     HELP_DESCRIPTIONS[dir_help]="${HELP_DESCRIPTIONS[dir_help]:-[System] Directory navigation shortcuts}"
     HELP_DESCRIPTIONS[sys_help]="${HELP_DESCRIPTIONS[sys_help]:-[DevOps] System management helpers}"
+    HELP_DESCRIPTIONS[ssh_help]="${HELP_DESCRIPTIONS[ssh_help]:-[DevOps] SSH hosts and file transfer}"
     HELP_DESCRIPTIONS[pp_help]="${HELP_DESCRIPTIONS[pp_help]:-[Development] Python quality tools}"
     HELP_DESCRIPTIONS[cli_help]="${HELP_DESCRIPTIONS[cli_help]:-[Development] Custom project CLIs}"
     HELP_DESCRIPTIONS[du_help]="${HELP_DESCRIPTIONS[du_help]:-[Development] Disk usage analysis}"

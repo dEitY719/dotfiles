@@ -12,6 +12,7 @@ git/.git-credentials
 
 # Local machine-specific configurations
 *.local.sh
+ssh/*.local
 shell-common/config/pg_services.list
 # Note: pip.conf is symlinked to ~/.config/pip/pip.conf (outside this repo, not version controlled)
 
