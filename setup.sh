@@ -26,6 +26,7 @@ set -e
 ./git/setup.sh
 ./claude/setup.sh
 ./vscode-extensions/setup.sh
+./ssh/setup.sh
 
 
 
