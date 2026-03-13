@@ -31,6 +31,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest pexpect
 
+      - name: Install zsh
+        run: sudo apt-get install -y zsh
+
       - name: Verify shells available
         run: |
           which bash zsh
