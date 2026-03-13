@@ -14,8 +14,8 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # DEVELOPER NOTES - NAMING CONVENTION (See AGENTS.md:174-178)
 # ═══════════════════════════════════════════════════════════════════════════════
-# User-facing commands: scp-pull, scp-push
-# Internal functions:   scp_pull(), scp_push(), _scp_resolve_host()
+# User-facing commands: pull-file, push-file
+# Internal functions:   pull_file(), push_file(), _scp_resolve_host()
 # Always use dash-form in help text, examples, and error messages
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -32,19 +32,19 @@ _scp_resolve_host() {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# scp_pull() - Pull files from a remote server
-# Usage: scp-pull <server> <remote_src> [local_dst=.]
+# pull_file() - Pull files from a remote server
+# Usage: pull-file <server> <remote_src> [local_dst=.]
 # ═══════════════════════════════════════════════════════════════
 
-scp_pull() {
+pull_file() {
     if [ $# -lt 2 ]; then
-        ux_error "Usage: scp-pull <server> <remote_src> [local_dst=.]"
+        ux_error "Usage: pull-file <server> <remote_src> [local_dst=.]"
         echo ""
         ux_info "Server name maps to variable: ssai-dev → \$SSAI_DEV"
         echo ""
         ux_info "Examples:"
-        echo "  scp-pull ssai-dev /home/devops/certs/server.*"
-        echo "  scp-pull ssai-ops /home/devops/certs/server.* ~/download/"
+        echo "  pull-file ssai-dev /home/devops/certs/server.*"
+        echo "  pull-file ssai-ops /home/devops/certs/server.* ~/download/"
         return 1
     fi
     local server="$1"
@@ -64,19 +64,19 @@ scp_pull() {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# scp_push() - Push files to a remote server
-# Usage: scp-push <server> <local_src> <remote_dst>
+# push_file() - Push files to a remote server
+# Usage: push-file <server> <local_src> <remote_dst>
 # ═══════════════════════════════════════════════════════════════
 
-scp_push() {
+push_file() {
     if [ $# -lt 3 ]; then
-        ux_error "Usage: scp-push <server> <local_src> <remote_dst>"
+        ux_error "Usage: push-file <server> <local_src> <remote_dst>"
         echo ""
         ux_info "Server name maps to variable: ssai-dev → \$SSAI_DEV"
         echo ""
         ux_info "Examples:"
-        echo "  scp-push ssai-dev ~/myfile.txt /home/devops/"
-        echo "  scp-push ssai-ops ./config.yaml /home/devops/configs/"
+        echo "  push-file ssai-dev ~/myfile.txt /home/devops/"
+        echo "  push-file ssai-ops ./config.yaml /home/devops/configs/"
         return 1
     fi
     local server="$1"
@@ -99,5 +99,5 @@ scp_push() {
 # Aliases
 # ═══════════════════════════════════════════════════════════════
 
-alias scp-pull='scp_pull'
-alias scp-push='scp_push'
+alias pull-file='pull_file'
+alias push-file='push_file'
