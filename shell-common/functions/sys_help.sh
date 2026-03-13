@@ -17,6 +17,7 @@ sys_help() {
     ux_table_row "myip" "curl ipecho.net" "Public IP"
     ux_table_row "localip" "hostname -I" "Local IP"
     ux_table_row "ping" "ping -c 5" "Ping (5 times)"
+    ux_table_row "ssh-help" "ssh-help" "SSH hosts and examples"
     echo ""
 
     ux_section "Monitoring"

@@ -14,3 +14,5 @@ alias make-jira='bash ~/dotfiles/shell-common/tools/custom/make_jira.sh'
 
 # Make-confluence: Transform markdown docs to Confluence guides
 alias make-confluence='bash ~/dotfiles/shell-common/tools/custom/make_confluence.sh'
+
+# SSAI Server Access: defined in ~/.ssh/config (use 'ssh ssai-dev', 'scp ssai-dev:/path .')
