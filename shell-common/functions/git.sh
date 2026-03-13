@@ -132,9 +132,41 @@ git_setup_auto_remote() {
 git_setup_auto_remote >/dev/null 2>&1 || true
 
 # ============================================================================
+# Clean all local branches except main
+# ============================================================================
+# Switch to main and force-delete every other local branch in one shot
+# Usage:
+#   git_clean_local - Delete all local branches except main
+git_clean_local() {
+    local branch_count=0
+
+    # Count branches to be deleted (everything except main)
+    branch_count=$(git for-each-ref --format='%(refname:short)' refs/heads | grep -cvE '^main$')
+
+    if [ "$branch_count" -eq 0 ]; then
+        ux_info "No local branches to delete (only main exists)"
+        return 0
+    fi
+
+    ux_header "Deleting $branch_count local branch(es) except main:"
+    git for-each-ref --format='%(refname:short)' refs/heads | grep -vE '^main$' | while read -r branch; do
+        ux_info "  $branch"
+    done
+
+    # Switch to main first (required when currently on a branch to be deleted)
+    git switch main || return 1
+
+    # Force delete all branches except main
+    git for-each-ref --format='%(refname:short)' refs/heads | grep -vE '^main$' | xargs -r git branch -D
+
+    ux_success "Done! All local branches except main deleted."
+}
+
+# ============================================================================
 # Backward Compatibility Aliases
 # ============================================================================
 # Maintain short-form aliases for convenience while supporting standard naming
 alias gl='git_log'
 alias glum='git_log_upstream'
 alias gprune='git_prune_remote'
+alias git-clean-local='git_clean_local'
