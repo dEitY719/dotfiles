@@ -132,9 +132,55 @@ git_setup_auto_remote() {
 git_setup_auto_remote >/dev/null 2>&1 || true
 
 # ============================================================================
+# Clean all local branches except main and current branch
+# ============================================================================
+# Force-delete every local branch except main and the one currently checked out.
+# No branch switching required — safe to run from any branch.
+# Usage:
+#   git_clean_local - Delete all local branches except main and current
+git_clean_local() {
+    local current_branch exclude_pattern branch_count=0
+
+    current_branch=$(git symbolic-ref --short HEAD 2>/dev/null) || {
+        ux_error "Not in a git repository or in detached HEAD state"
+        return 1
+    }
+
+    # Build exclusion pattern: always protect main + current branch
+    if [ "$current_branch" = "main" ]; then
+        exclude_pattern='^main$'
+    else
+        exclude_pattern="^(main|${current_branch})$"
+    fi
+
+    branch_count=$(git for-each-ref --format='%(refname:short)' refs/heads | grep -cvE "$exclude_pattern")
+
+    if [ "$branch_count" -eq 0 ]; then
+        ux_info "No local branches to delete"
+        return 0
+    fi
+
+    if [ "$current_branch" = "main" ]; then
+        ux_header "Deleting $branch_count local branch(es) except main:"
+    else
+        ux_header "Deleting $branch_count local branch(es) (keeping: main, $current_branch):"
+    fi
+
+    git for-each-ref --format='%(refname:short)' refs/heads | grep -vE "$exclude_pattern" | while read -r branch; do
+        ux_info "  $branch"
+    done
+
+    # Force delete all branches matching the exclusion pattern
+    git for-each-ref --format='%(refname:short)' refs/heads | grep -vE "$exclude_pattern" | xargs -r git branch -D
+
+    ux_success "Done! All local branches deleted (kept: main${current_branch:+ and $current_branch})."
+}
+
+# ============================================================================
 # Backward Compatibility Aliases
 # ============================================================================
 # Maintain short-form aliases for convenience while supporting standard naming
 alias gl='git_log'
 alias glum='git_log_upstream'
 alias gprune='git_prune_remote'
+alias git-clean-local='git_clean_local'
