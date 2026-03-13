@@ -30,11 +30,15 @@ ssh_help() {
     ux_section "Registered Hosts (~/.ssh/config)"
     if [ -f "${HOME}/.ssh/config" ]; then
         while IFS= read -r line; do
-            case "$line" in
-                Host\ \*) continue ;;
+            # Trim leading whitespace
+            line_trimmed=$(echo "$line" | sed 's/^[[:space:]]*//')
+            case "$line_trimmed" in
+                \#* | "") continue ;;   # Skip comments and empty lines
                 Host\ *)
-                    host="${line#Host }"
-                    ux_bullet "$host"
+                    hosts="${line_trimmed#Host }"
+                    for host in $hosts; do
+                        [ "$host" != "*" ] && ux_bullet "$host"
+                    done
                     ;;
             esac
         done < "${HOME}/.ssh/config"

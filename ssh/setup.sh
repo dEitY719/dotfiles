@@ -38,5 +38,5 @@ elif [ -f "${SSH_CONFIG_LINK}" ]; then
 fi
 
 ln -s "${SSH_CONFIG_SRC}" "${SSH_CONFIG_LINK}"
-chmod 644 "${SSH_CONFIG_SRC}"
+chmod 600 "${SSH_CONFIG_SRC}"
 ux_success "Created: ~/.ssh/config → ${SSH_CONFIG_SRC}"
