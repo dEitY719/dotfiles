@@ -17,8 +17,8 @@ sys_help() {
     ux_table_row "myip" "curl ipecho.net" "Public IP"
     ux_table_row "localip" "hostname -I" "Local IP"
     ux_table_row "ping" "ping -c 5" "Ping (5 times)"
-    ux_table_row "ssai-dev-server" "ssh bwyoon@12.81.221.129" "SSAI development server SSH"
-    ux_table_row "ssai-ops-server" "ssh bwyoon@12.81.221.140" "SSAI operations server SSH"
+    ux_table_row "ssh-ssai-dev" "ssh \$SSAI_DEV" "Dev server (SSAI)"
+    ux_table_row "ssh-ssai-ops" "ssh \$SSAI_OPS" "Ops server (SSAI)"
     echo ""
 
     ux_section "Monitoring"
