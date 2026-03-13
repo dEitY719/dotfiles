@@ -132,34 +132,48 @@ git_setup_auto_remote() {
 git_setup_auto_remote >/dev/null 2>&1 || true
 
 # ============================================================================
-# Clean all local branches except main
+# Clean all local branches except main and current branch
 # ============================================================================
-# Switch to main and force-delete every other local branch in one shot
+# Force-delete every local branch except main and the one currently checked out.
+# No branch switching required — safe to run from any branch.
 # Usage:
-#   git_clean_local - Delete all local branches except main
+#   git_clean_local - Delete all local branches except main and current
 git_clean_local() {
-    local branch_count=0
+    local current_branch exclude_pattern branch_count=0
 
-    # Count branches to be deleted (everything except main)
-    branch_count=$(git for-each-ref --format='%(refname:short)' refs/heads | grep -cvE '^main$')
+    current_branch=$(git symbolic-ref --short HEAD 2>/dev/null) || {
+        ux_error "Not in a git repository or in detached HEAD state"
+        return 1
+    }
+
+    # Build exclusion pattern: always protect main + current branch
+    if [ "$current_branch" = "main" ]; then
+        exclude_pattern='^main$'
+    else
+        exclude_pattern="^(main|${current_branch})$"
+    fi
+
+    branch_count=$(git for-each-ref --format='%(refname:short)' refs/heads | grep -cvE "$exclude_pattern")
 
     if [ "$branch_count" -eq 0 ]; then
-        ux_info "No local branches to delete (only main exists)"
+        ux_info "No local branches to delete"
         return 0
     fi
 
-    ux_header "Deleting $branch_count local branch(es) except main:"
-    git for-each-ref --format='%(refname:short)' refs/heads | grep -vE '^main$' | while read -r branch; do
+    if [ "$current_branch" = "main" ]; then
+        ux_header "Deleting $branch_count local branch(es) except main:"
+    else
+        ux_header "Deleting $branch_count local branch(es) (keeping: main, $current_branch):"
+    fi
+
+    git for-each-ref --format='%(refname:short)' refs/heads | grep -vE "$exclude_pattern" | while read -r branch; do
         ux_info "  $branch"
     done
 
-    # Switch to main first (required when currently on a branch to be deleted)
-    git switch main || return 1
+    # Force delete all branches matching the exclusion pattern
+    git for-each-ref --format='%(refname:short)' refs/heads | grep -vE "$exclude_pattern" | xargs -r git branch -D
 
-    # Force delete all branches except main
-    git for-each-ref --format='%(refname:short)' refs/heads | grep -vE '^main$' | xargs -r git branch -D
-
-    ux_success "Done! All local branches except main deleted."
+    ux_success "Done! All local branches deleted (kept: main${current_branch:+ and $current_branch})."
 }
 
 # ============================================================================
