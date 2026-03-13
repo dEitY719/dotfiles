@@ -19,10 +19,8 @@ sys_help() {
     ux_table_row "ping" "ping -c 5" "Ping (5 times)"
     ux_table_row "ssh-ssai-dev" "ssh \$SSAI_DEV" "Dev server (SSAI)"
     ux_table_row "ssh-ssai-ops" "ssh \$SSAI_OPS" "Ops server (SSAI)"
-    ux_table_row "ssai-dev-pull" "scp \$SSAI_DEV:<src> <dst>" "Pull from dev (SSAI)"
-    ux_table_row "ssai-dev-push" "scp <src> \$SSAI_DEV:<dst>" "Push to dev (SSAI)"
-    ux_table_row "ssai-ops-pull" "scp \$SSAI_OPS:<src> <dst>" "Pull from ops (SSAI)"
-    ux_table_row "ssai-ops-push" "scp <src> \$SSAI_OPS:<dst>" "Push to ops (SSAI)"
+    ux_table_row "scp-pull" "scp-pull <server> <src> [dst]" "Pull from server"
+    ux_table_row "scp-push" "scp-push <server> <src> <dst>" "Push to server"
     echo ""
 
     ux_section "Monitoring"

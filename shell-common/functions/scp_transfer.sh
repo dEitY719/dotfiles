@@ -1,92 +1,103 @@
 #!/bin/sh
-# shell-common/functions/ssai_scp.sh
-# SSAI server file transfer utilities (push/pull via scp)
+# shell-common/functions/scp_transfer.sh
+# Generic server file transfer utilities (push/pull via scp)
+#
+# Server name is automatically mapped to a shell variable:
+#   ssai-dev  →  SSAI_DEV
+#   ssai-ops  →  SSAI_OPS
+#   xxx-server  →  XXX_SERVER
+#
+# To add a new server, just define a variable in work-aliases.sh:
+#   NEW_HOST='user@host'
+# Then use: scp-pull new-host <src>
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 # DEVELOPER NOTES - NAMING CONVENTION (See AGENTS.md:174-178)
 # ═══════════════════════════════════════════════════════════════════════════════
-# User-facing commands: ssai-dev-pull, ssai-dev-push, ssai-ops-pull, ssai-ops-push
-# Internal functions:   ssai_dev_pull(), ssai_dev_push(), ssai_ops_pull(), ssai_ops_push()
+# User-facing commands: scp-pull, scp-push
+# Internal functions:   scp_pull(), scp_push(), _scp_resolve_host()
 # Always use dash-form in help text, examples, and error messages
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════
-# ssai_dev_pull() - Pull files from SSAI dev server
+# _scp_resolve_host() - Resolve server name to host string
+#   ssai-dev → SSAI_DEV → 'bwyoon@12.81.221.129'
 # ═══════════════════════════════════════════════════════════════
 
-ssai_dev_pull() {
-    if [ $# -lt 1 ]; then
-        ux_error "Usage: ssai-dev-pull <remote_src> [local_dst=.]"
-        echo ""
-        ux_info "Examples:"
-        echo "  ssai-dev-pull /home/devops/certs/server.*"
-        echo "  ssai-dev-pull /home/devops/certs/server.* ~/download/"
-        return 1
-    fi
-    local remote_src="$1"
-    local local_dst="${2:-.}"
-    scp "$SSAI_DEV:$remote_src" "$local_dst"
+_scp_resolve_host() {
+    local server="$1"
+    local var_name
+    var_name=$(echo "$server" | tr '[:lower:]-' '[:upper:]_')
+    eval "echo \$$var_name"
 }
 
 # ═══════════════════════════════════════════════════════════════
-# ssai_dev_push() - Push files to SSAI dev server
+# scp_pull() - Pull files from a remote server
+# Usage: scp-pull <server> <remote_src> [local_dst=.]
 # ═══════════════════════════════════════════════════════════════
 
-ssai_dev_push() {
+scp_pull() {
     if [ $# -lt 2 ]; then
-        ux_error "Usage: ssai-dev-push <local_src> <remote_dst>"
+        ux_error "Usage: scp-pull <server> <remote_src> [local_dst=.]"
+        echo ""
+        ux_info "Server name maps to variable: ssai-dev → \$SSAI_DEV"
         echo ""
         ux_info "Examples:"
-        echo "  ssai-dev-push ~/myfile.txt /home/devops/"
-        echo "  ssai-dev-push ./config.yaml /home/devops/configs/"
+        echo "  scp-pull ssai-dev /home/devops/certs/server.*"
+        echo "  scp-pull ssai-ops /home/devops/certs/server.* ~/download/"
         return 1
     fi
-    local local_src="$1"
-    local remote_dst="$2"
-    scp "$local_src" "$SSAI_DEV:$remote_dst"
+    local server="$1"
+    local remote_src="$2"
+    local local_dst="${3:-.}"
+
+    local host
+    host=$(_scp_resolve_host "$server")
+    if [ -z "$host" ]; then
+        local var_name
+        var_name=$(echo "$server" | tr '[:lower:]-' '[:upper:]_')
+        ux_error "Unknown server: '$server' (\$$var_name is not set)"
+        return 1
+    fi
+
+    scp "$host:$remote_src" "$local_dst"
 }
 
 # ═══════════════════════════════════════════════════════════════
-# ssai_ops_pull() - Pull files from SSAI ops server
+# scp_push() - Push files to a remote server
+# Usage: scp-push <server> <local_src> <remote_dst>
 # ═══════════════════════════════════════════════════════════════
 
-ssai_ops_pull() {
-    if [ $# -lt 1 ]; then
-        ux_error "Usage: ssai-ops-pull <remote_src> [local_dst=.]"
+scp_push() {
+    if [ $# -lt 3 ]; then
+        ux_error "Usage: scp-push <server> <local_src> <remote_dst>"
+        echo ""
+        ux_info "Server name maps to variable: ssai-dev → \$SSAI_DEV"
         echo ""
         ux_info "Examples:"
-        echo "  ssai-ops-pull /home/devops/certs/server.*"
-        echo "  ssai-ops-pull /home/devops/certs/server.* ~/download/"
+        echo "  scp-push ssai-dev ~/myfile.txt /home/devops/"
+        echo "  scp-push ssai-ops ./config.yaml /home/devops/configs/"
         return 1
     fi
-    local remote_src="$1"
-    local local_dst="${2:-.}"
-    scp "$SSAI_OPS:$remote_src" "$local_dst"
-}
+    local server="$1"
+    local local_src="$2"
+    local remote_dst="$3"
 
-# ═══════════════════════════════════════════════════════════════
-# ssai_ops_push() - Push files to SSAI ops server
-# ═══════════════════════════════════════════════════════════════
-
-ssai_ops_push() {
-    if [ $# -lt 2 ]; then
-        ux_error "Usage: ssai-ops-push <local_src> <remote_dst>"
-        echo ""
-        ux_info "Examples:"
-        echo "  ssai-ops-push ~/myfile.txt /home/devops/"
-        echo "  ssai-ops-push ./config.yaml /home/devops/configs/"
+    local host
+    host=$(_scp_resolve_host "$server")
+    if [ -z "$host" ]; then
+        local var_name
+        var_name=$(echo "$server" | tr '[:lower:]-' '[:upper:]_')
+        ux_error "Unknown server: '$server' (\$$var_name is not set)"
         return 1
     fi
-    local local_src="$1"
-    local remote_dst="$2"
-    scp "$local_src" "$SSAI_OPS:$remote_dst"
+
+    scp "$local_src" "$host:$remote_dst"
 }
 
 # ═══════════════════════════════════════════════════════════════
 # Aliases
 # ═══════════════════════════════════════════════════════════════
 
-alias ssai-dev-pull='ssai_dev_pull'
-alias ssai-dev-push='ssai_dev_push'
-alias ssai-ops-pull='ssai_ops_pull'
-alias ssai-ops-push='ssai_ops_push'
+alias scp-pull='scp_pull'
+alias scp-push='scp_push'
