@@ -34,7 +34,7 @@ GIT_HOOKS_DEBUG_GREP_EXCLUDES=(
 # Forbidden filename detection (basename/path + env allowlist)
 GIT_HOOKS_FORBIDDEN_BASENAME_ERE="${GIT_HOOKS_FORBIDDEN_BASENAME_ERE:-^(\\.git-credentials|credentials\\.json|private\\.key|secret\\.key|id_rsa|id_dsa|id_ed25519|.*\\.pem)$}"
 GIT_HOOKS_ENV_BASENAME_BLOCK_ERE="${GIT_HOOKS_ENV_BASENAME_BLOCK_ERE:-^\\.env(\\..*)?$}"
-GIT_HOOKS_ENV_BASENAME_ALLOW_ERE="${GIT_HOOKS_ENV_BASENAME_ALLOW_ERE:-^\\.env\\.(example|sample|template|dist)$}"
+GIT_HOOKS_ENV_BASENAME_ALLOW_ERE="${GIT_HOOKS_ENV_BASENAME_ALLOW_ERE:-^\\.env\\.(example|sample|template|dist|.*\\.corp\\.example)$}"
 GIT_HOOKS_FORBIDDEN_PATH_ERE="${GIT_HOOKS_FORBIDDEN_PATH_ERE:-(^|/)\\.aws/(credentials|config)$}"
 
 # Large file threshold
