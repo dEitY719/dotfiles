@@ -1,0 +1,33 @@
+Host *
+     PubkeyAcceptedKeyTypes +ssh-rsa
+
+Host Replica-Gerrit
+     HostName 10.166.101.44
+     Port 29418
+     User byoungwoo.yoon
+     PreferredAuthentications publickey
+     HostkeyAlgorithms +ssh-rsa
+     PubkeyAcceptedKeyTypes +ssh-rsa
+
+Host 10.227.36.179
+     HostName 10.227.36.179
+     Port 29418
+     User byoungwoo.yoon
+     PreferredAuthentications publickey
+     KexAlgorithms diffie-hellman-group-exchange-sha256
+     HostkeyAlgorithms +ssh-rsa
+     PubkeyAcceptedKeyTypes +ssh-rsa
+
+Host github.samsungds.net
+     ControlMaster auto
+     ControlPath ~/.ssh/control-%h-%p-%r
+     ControlPersist 300
+
+# SSAI Server Access
+Host ssai-dev
+     HostName 12.81.221.129
+     User bwyoon
+
+Host ssai-ops
+     HostName 12.81.221.140
+     User bwyoon
