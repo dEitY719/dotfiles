@@ -38,11 +38,14 @@ fi
 
 # work_log.txt에 기록 (make-jira 호환 형식)
 # work_log.txt는 ~/para/archive/playbook/logs/work_log.txt로 symlink되어 있음
-LOGFILE="${HOME}/work_log.txt"
-if [ "$TIME" = "-" ]; then
-    echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | - | $HASH | $SUBJECT" >> "$LOGFILE"
-else
-    echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | ${TIME}h | $HASH | $SUBJECT" >> "$LOGFILE"
+# 활성화: DOTFILES_WORKLOG_ENABLED=1 (기본값: 비활성)
+if [ "${DOTFILES_WORKLOG_ENABLED:-0}" = "1" ]; then
+    LOGFILE="${HOME}/work_log.txt"
+    time_log_part="-"
+    if [ "$TIME" != "-" ]; then
+        time_log_part="${TIME}h"
+    fi
+    echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | $time_log_part | $HASH | $SUBJECT" >> "$LOGFILE"
 fi
 
 # 메타정보 (선택사항)
