@@ -94,7 +94,7 @@ FORBIDDEN_BASENAME_ERE="${GIT_HOOKS_FORBIDDEN_BASENAME_ERE:-^(\.git-credentials|
 
 # Env files: blocked by default, but allow example/sample/template/dist
 ENV_BASENAME_BLOCK_ERE="${GIT_HOOKS_ENV_BASENAME_BLOCK_ERE:-^\.env(\..*)?$}"
-ENV_BASENAME_ALLOW_ERE="${GIT_HOOKS_ENV_BASENAME_ALLOW_ERE:-^\.env\.(example|sample|template|dist)$}"
+ENV_BASENAME_ALLOW_ERE="${GIT_HOOKS_ENV_BASENAME_ALLOW_ERE:-^\.env\.([^.]+\.)?(example|sample|template|dist)$}"
 
 # Path-based sensitive locations (repo-relative, including directories)
 FORBIDDEN_PATH_ERE="${GIT_HOOKS_FORBIDDEN_PATH_ERE:-(^|/)\.aws/(credentials|config)$}"
