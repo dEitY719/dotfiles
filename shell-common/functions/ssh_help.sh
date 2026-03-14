@@ -29,19 +29,22 @@ ssh_help() {
 
     ux_section "Registered Hosts (~/.ssh/config)"
     if [ -f "${HOME}/.ssh/config" ]; then
+        set -f  # Disable glob expansion to prevent Host * from expanding
         while IFS= read -r line; do
             # Trim leading whitespace
             line_trimmed=$(echo "$line" | sed 's/^[[:space:]]*//')
             case "$line_trimmed" in
-                \#* | "") continue ;;   # Skip comments and empty lines
+                \#* | "")  continue ;;  # Skip comments and empty lines
+                Host\ \*)  continue ;;  # Skip wildcard Host *
                 Host\ *)
                     hosts="${line_trimmed#Host }"
                     for host in $hosts; do
-                        [ "$host" != "*" ] && ux_bullet "$host"
+                        ux_bullet "$host"
                     done
                     ;;
             esac
         done < "${HOME}/.ssh/config"
+        set +f  # Re-enable glob expansion
     else
         ux_info "~/.ssh/config not found. Run ./setup.sh to create symlink."
     fi
