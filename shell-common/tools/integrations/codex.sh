@@ -24,6 +24,7 @@
 alias cx='codex'                    # Basic command
 alias cxhelp='codex --help'         # Show help
 alias cxver='codex --version'       # Show version
+alias codex-yolo='codex --dangerously-bypass-approvals-and-sandbox'
 
 # ═══════════════════════════════════════════════════════════════
 # Codex Installation
