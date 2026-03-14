@@ -197,6 +197,26 @@ EOF
   rm -rf "$repo_dir"
 }
 
+test_allows_library_purity_commented_install() {
+  local repo_dir
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_repo "$repo_dir"
+
+  mkdir -p "$repo_dir/shell-common/tools/integrations"
+  cat >"$repo_dir/shell-common/tools/integrations/ok.sh" <<'EOF'
+#!/bin/sh
+# Example:
+#   npm install -g some-package
+#   apt-get install -y something
+alias foo='bar'
+EOF
+
+  git -C "$repo_dir" add shell-common/tools/integrations/ok.sh
+  assert_success "git -C \"$repo_dir\" commit -m \"commented install ok\""
+
+  rm -rf "$repo_dir"
+}
+
 main() {
   ux_header "Hook integration tests"
   test_allows_spaces_in_filename
@@ -206,6 +226,7 @@ main() {
   test_blocks_custom_script_wrong_shebang
   test_blocks_library_purity_top_level_read
   test_blocks_library_purity_top_level_install
+  test_allows_library_purity_commented_install
   ux_success "All hook tests passed"
 }
 

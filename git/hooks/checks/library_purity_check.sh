@@ -15,8 +15,9 @@ check_library_purity() {
     tmp_file=$(mktemp "$tmpdir/purity_stage_XXXXXX.txt")
     write_staged_or_worktree_to_tmp "$repo_root" "$repo_rel_path" "$tmp_file" 2>/dev/null || { rm -f "$tmp_file"; return 0; }
 
+    local install_ere="${DOTFILES_HOOKS_LIBRARY_PURITY_INSTALL_ERE:-apt-get[[:space:]]+install|apt[[:space:]]+install|dnf[[:space:]]+install|yum[[:space:]]+install|pacman[[:space:]]+-S|pip[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|npm[[:space:]]+install|brew[[:space:]]+install}"
     local hits
-    hits=$(awk '
+    hits=$(awk -v install_ere="$install_ere" '
         function is_comment(line) { return line ~ /^[[:space:]]*#/ }
         BEGIN { depth=0 }
         {
@@ -44,13 +45,14 @@ check_library_purity() {
                 line !~ /^[[:space:]]*(main|[a-z_][a-z0-9_]*_main)[[:space:]]*\(\)[[:space:]]*\{/) {
                 printf "MAIN_CALL:%d:%s\n", NR, line
             }
-            # INSTALL lines are detected outside awk using SSOT regex (from hook-config.sh)
+            if (depth==0 && line ~ install_ere) {
+                printf "INSTALL:%d:%s\n", NR, line
+            }
         }
     ' "$tmp_file" 2>/dev/null || true)
 
-    local install_ere="${DOTFILES_HOOKS_LIBRARY_PURITY_INSTALL_ERE:-apt-get[[:space:]]+install|apt[[:space:]]+install|dnf[[:space:]]+install|yum[[:space:]]+install|pacman[[:space:]]+-S|pip[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|npm[[:space:]]+install|brew[[:space:]]+install}"
     local install_hits
-    install_hits=$(grep -nE "$install_ere" "$tmp_file" 2>/dev/null || true)
+    install_hits=$(echo "$hits" | grep '^INSTALL:' | sed 's/^INSTALL://' || true)
 
     local violation_count=0
 
