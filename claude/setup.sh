@@ -180,8 +180,8 @@ setup_skills_mount
 
 # global memory 디렉토리 심볼릭 링크 생성
 if [ ! -d "$(dirname "$HOME_GLOBAL_MEMORY")" ]; then
-    log_info "~/.claude/projects/GLOBAL 디렉토리 생성"
-    mkdir -p "$(dirname "$HOME_GLOBAL_MEMORY")" || log_error_and_exit "~/.claude/projects/GLOBAL 디렉토리 생성 실패"
+    log_info "'$(dirname "$HOME_GLOBAL_MEMORY")' 디렉토리 생성"
+    mkdir -p "$(dirname "$HOME_GLOBAL_MEMORY")" || log_error_and_exit "'$(dirname "$HOME_GLOBAL_MEMORY")' 디렉토리 생성 실패"
 fi
 create_symlink "$CLAUDE_GLOBAL_MEMORY_SOURCE" "$HOME_GLOBAL_MEMORY"
 
