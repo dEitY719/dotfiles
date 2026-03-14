@@ -45,7 +45,7 @@ Follow this structure strictly:
 
 ```markdown
 # [Catchy Korean title describing the pain point]
-## (feat. [2-3 key technical keywords from the incident])
+(feat. [2-3 key technical keywords from the incident])
 
 ---
 
