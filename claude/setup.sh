@@ -9,7 +9,8 @@
 #   1. Creates ~/.claude/settings.json symlink (Claude Code settings)
 #   2. Creates ~/.claude/statusline-command.sh symlink (status line script)
 #   3. Creates ~/.claude/skills symlink (custom skills directory)
-#   4. Verifies ~/.claude directory structure
+#   4. Creates ~/.claude/projects/GLOBAL/memory symlink (global memory)
+#   5. Verifies ~/.claude directory structure
 #
 # These files/directories are version-controlled in dotfiles and should
 # be managed via symbolic links for consistency across machines.
@@ -28,11 +29,13 @@ HOME_CLAUDE="${HOME}/.claude"
 HOME_SETTINGS="${HOME_CLAUDE}/settings.json"
 HOME_STATUSLINE="${HOME_CLAUDE}/statusline-command.sh"
 HOME_SKILLS="${HOME_CLAUDE}/skills"
+HOME_GLOBAL_MEMORY="${HOME_CLAUDE}/projects/GLOBAL/memory"
 
 # Dotfiles source locations
 CLAUDE_SETTINGS_SOURCE="${CLAUDE_DOTFILES}/settings.json"
 CLAUDE_STATUSLINE_SOURCE="${CLAUDE_DOTFILES}/statusline-command.sh"
 CLAUDE_SKILLS_SOURCE="${CLAUDE_DOTFILES}/skills"
+CLAUDE_GLOBAL_MEMORY_SOURCE="${CLAUDE_DOTFILES}/global-memory"
 
 # Load UX library (unified library at shell-common/tools/ux_lib/)
 UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
@@ -155,6 +158,11 @@ if [ ! -d "$CLAUDE_SKILLS_SOURCE" ]; then
     log_error_and_exit "skills 디렉토리가 '${CLAUDE_SKILLS_SOURCE}' 경로에 존재하지 않습니다."
 fi
 
+# global-memory 디렉토리 존재 여부 확인
+if [ ! -d "$CLAUDE_GLOBAL_MEMORY_SOURCE" ]; then
+    log_error_and_exit "global-memory 디렉토리가 '${CLAUDE_GLOBAL_MEMORY_SOURCE}' 경로에 존재하지 않습니다."
+fi
+
 # settings.json 심볼릭 링크 생성
 create_symlink "$CLAUDE_SETTINGS_SOURCE" "$HOME_SETTINGS"
 
@@ -169,6 +177,13 @@ fi
 
 # skills bind mount를 위한 sudoers 설정
 setup_skills_mount
+
+# global memory 디렉토리 심볼릭 링크 생성
+if [ ! -d "$(dirname "$HOME_GLOBAL_MEMORY")" ]; then
+    log_info "'$(dirname "$HOME_GLOBAL_MEMORY")' 디렉토리 생성"
+    mkdir -p "$(dirname "$HOME_GLOBAL_MEMORY")" || log_error_and_exit "'$(dirname "$HOME_GLOBAL_MEMORY")' 디렉토리 생성 실패"
+fi
+create_symlink "$CLAUDE_GLOBAL_MEMORY_SOURCE" "$HOME_GLOBAL_MEMORY"
 
 # --- Verify Links ---
 
@@ -192,6 +207,12 @@ else
     log_error_and_exit "skills 디렉토리 생성 실패"
 fi
 
+if [ -L "$HOME_GLOBAL_MEMORY" ]; then
+    log_dim "✓ global memory 심볼릭 링크 확인됨"
+else
+    log_error_and_exit "global memory 심볼릭 링크 생성 실패"
+fi
+
 # --- Completion Messages ---
 
 log_debug "--- Claude Code dotfiles setup 완료 ---"
@@ -202,6 +223,7 @@ ux_info "다음 설정이 적용되었습니다:"
 ux_bullet "~/.claude/settings.json → ~/dotfiles/claude/settings.json (symlink)"
 ux_bullet "~/.claude/statusline-command.sh → ~/dotfiles/claude/statusline-command.sh (symlink)"
 ux_bullet "~/.claude/skills ← ~/dotfiles/claude/skills (bind mount)"
+ux_bullet "~/.claude/projects/GLOBAL/memory → ~/dotfiles/claude/global-memory (symlink)"
 ux_bullet "/etc/sudoers.d/claude-skills-mount (passwordless mount)"
 echo ""
 
