@@ -505,8 +505,8 @@ git log --oneline | grep "auto updated" | head -10
 
 ```bash
 # 켜기: ~/.env 또는 shell-common/env/*.local.sh 에 추가
-export DOTFILES_WORKLOG_ENABLED=1                  # work_log.txt 기록 활성화
-export DOTFILES_WORKLOG_PLAYBOOK_AUTOCOMMIT=1      # playbook 자동 커밋 활성화
+export DOTFILES_WORKLOG_ENABLED=1             # work_log.txt 기록 활성화
+export DOTFILES_WORKLOG_PLAYBOOK_AUTOCOMMIT=1 # playbook 자동 커밋 활성화
 
 # 끄기 (기본값, 별도 설정 불필요)
 ```
