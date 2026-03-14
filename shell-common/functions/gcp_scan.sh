@@ -202,11 +202,32 @@ EOF
         count=$((count - duplicate_count))
     fi
 
-    # Calculate range (Oldest..Newest)
+    # Early return: all commits are duplicates (already applied)
+    if [ $count -eq 0 ]; then
+        if type ux_section >/dev/null 2>&1; then
+            ux_section "Analysis Result"
+            ux_bullet "Missing (all authors): $total_count"
+            ux_bullet "Author filter: $author -> 0 new commit(s)"
+            ux_bullet "Duplicates (already applied): $duplicate_count"
+        else
+            echo "=== Analysis Result ==="
+            echo "  Missing (all authors): $total_count"
+            echo "  Author filter: $author -> 0 new commit(s)"
+            echo "  Duplicates (already applied): $duplicate_count"
+        fi
+        if type ux_success >/dev/null 2>&1; then
+            ux_success "All matching commits are already applied to '$base'. Nothing to do."
+        else
+            echo "✓ All matching commits are already applied to '$base'. Nothing to do."
+        fi
+        return 0
+    fi
+
+    # Calculate range (Oldest..Newest) from non-duplicate commits only
     local first_sha
-    first_sha=$(echo "$selected_list" | head -n 1)
+    first_sha=$(echo "$final_selected_list" | head -n 1)
     local last_sha
-    last_sha=$(echo "$selected_list" | tail -n 1)
+    last_sha=$(echo "$final_selected_list" | tail -n 1)
     local range_str="${first_sha}^..${last_sha}"
 
     # Verify contiguity
@@ -261,30 +282,19 @@ EOF
         [ -z "$sha" ] && continue
         line_num=$((line_num + 1))
 
-        # zsh compatibility: avoid intermediate variable assignments that get traced
-        # Instead, embed subject check directly in the grep pipeline
-        local is_dup=0
-        if git log "$base" -n 200 --format='%s' 2>/dev/null | grep -Fqx "$(git show -s --format='%s' "$sha" 2>/dev/null)"; then
-            is_dup=1
-        fi
-
         local line
         line=$(git log --no-walk --format="%C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short "$sha")
 
-        if [ $is_dup -eq 1 ]; then
-            printf " %d. %s [DUPLICATE - Already in %s]\n" "$line_num" "$line" "$base"
-        else
-            printf " %d. %s\n" "$line_num" "$line"
-        fi
+        printf " %d. %s\n" "$line_num" "$line"
     done <<EOF
-$selected_list
+$final_selected_list
 EOF
 
     # Interactive Confirmation
     if type ux_confirm >/dev/null 2>&1; then
         if ux_confirm "Do you want to cherry-pick these $count commits?" "n"; then
 
-            if [ $is_contiguous -eq 1 ] && [ $duplicate_count -eq 0 ]; then
+            if [ $is_contiguous -eq 1 ]; then
                 if type ux_info >/dev/null 2>&1; then
                     ux_info "Executing: git cherry-pick $range_str"
                 fi
@@ -316,66 +326,44 @@ EOF
                     return 1
                 fi
             else
-                # Non-contiguous OR has duplicates: cherry-pick individually for better control
-                if [ $duplicate_count -gt 0 ]; then
-                    if type ux_warning >/dev/null 2>&1; then
-                        ux_warning "Duplicates detected. Cherry-picking individually with auto-skip for duplicates..."
-                    fi
-                elif [ $is_contiguous -eq 0 ]; then
-                    if type ux_warning >/dev/null 2>&1; then
-                        ux_warning "Non-contiguous range detected. Cherry-picking individually..."
-                    fi
+                # Non-contiguous: cherry-pick individually for better control
+                if type ux_warning >/dev/null 2>&1; then
+                    ux_warning "Non-contiguous range detected. Cherry-picking individually..."
                 fi
                 local picked=0
                 local skipped=0
                 while IFS= read -r sha; do
                     [ -z "$sha" ] && continue
-                    local subject
-                    subject=$(git show -s --format='%s' "$sha")
-
-                    # Check if this commit is a duplicate (already in base)
-                    local is_dup=0
-                    if git log "$base" -n 200 --format='%s' 2>/dev/null | grep -Fqx "$subject"; then
-                        is_dup=1
+                    if type ux_info >/dev/null 2>&1; then
+                        ux_info "Cherry-picking $sha..."
                     fi
-
-                    if [ $is_dup -eq 1 ]; then
-                        if type ux_warning >/dev/null 2>&1; then
-                            ux_warning "Skipping $sha (already in $base)..."
-                        fi
-                        skipped=$((skipped + 1))
+                    if git cherry-pick "$sha"; then
+                        picked=$((picked + 1))
                     else
-                        if type ux_info >/dev/null 2>&1; then
-                            ux_info "Cherry-picking $sha..."
-                        fi
-                        if git cherry-pick "$sha"; then
-                            picked=$((picked + 1))
-                        else
-                            while _gcp_scan_is_empty_cherry_pick; do
-                                if type ux_warning >/dev/null 2>&1; then
-                                    ux_warning "Empty commit at $sha; skipping..."
-                                fi
-                                if git cherry-pick --skip; then
-                                    skipped=$((skipped + 1))
-                                    break
-                                fi
+                        while _gcp_scan_is_empty_cherry_pick; do
+                            if type ux_warning >/dev/null 2>&1; then
+                                ux_warning "Empty commit at $sha; skipping..."
+                            fi
+                            if git cherry-pick --skip; then
+                                skipped=$((skipped + 1))
                                 break
-                            done
-                            # If we successfully skipped, move on.
-                            if ! git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
-                                continue
                             fi
-                            if type ux_error >/dev/null 2>&1; then
-                                ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
-                            fi
-                            return 1
+                            break
+                        done
+                        # If we successfully skipped, move on.
+                        if ! git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
+                            continue
                         fi
+                        if type ux_error >/dev/null 2>&1; then
+                            ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
+                        fi
+                        return 1
                     fi
                 done <<EOF
-$selected_list
+$final_selected_list
 EOF
                 if type ux_success >/dev/null 2>&1; then
-                    ux_success "Cherry-picked $picked/$count commits successfully! (Skipped $skipped duplicates)"
+                    ux_success "Cherry-picked $picked/$count commits successfully! (Skipped $skipped empty)"
                 fi
             fi
         else
