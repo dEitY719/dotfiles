@@ -50,7 +50,7 @@ check_library_purity() {
 
     local install_ere="${DOTFILES_HOOKS_LIBRARY_PURITY_INSTALL_ERE:-apt-get[[:space:]]+install|apt[[:space:]]+install|dnf[[:space:]]+install|yum[[:space:]]+install|pacman[[:space:]]+-S|pip[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|npm[[:space:]]+install|brew[[:space:]]+install}"
     local install_hits
-    install_hits=$(grep -nE "$install_ere" "$tmp_file" 2>/dev/null || true)
+    install_hits=$(grep -nE "$install_ere" "$tmp_file" 2>/dev/null | grep -vE '^[0-9]+:[[:space:]]*#' || true)
 
     local violation_count=0
 
