@@ -494,16 +494,21 @@ cd ~/para/archive/playbook
 git log --oneline | grep "auto updated" | head -10
 ```
 
-### 문제: playbook 자동 커밋을 끄고 싶어요
+### 문제: work_log.txt 기록 또는 playbook 자동 커밋을 끄고 싶어요
 
-`DOTFILES_WORKLOG_PLAYBOOK_AUTOCOMMIT` 환경변수로 제어합니다 (기본값: `0` = 비활성).
+두 기능은 독립적으로 제어됩니다 (모두 기본값 `0` = 비활성).
+
+| 환경변수 | 기본값 | 역할 |
+|---|---|---|
+| `DOTFILES_WORKLOG_ENABLED` | `0` | work_log.txt 쓰기 |
+| `DOTFILES_WORKLOG_PLAYBOOK_AUTOCOMMIT` | `0` | playbook 자동 커밋 |
 
 ```bash
-# 끄기 (기본값, 별도 설정 불필요)
-# DOTFILES_WORKLOG_PLAYBOOK_AUTOCOMMIT=0  ← 설정 안 해도 꺼져있음
-
 # 켜기: ~/.env 또는 shell-common/env/*.local.sh 에 추가
-export DOTFILES_WORKLOG_PLAYBOOK_AUTOCOMMIT=1
+export DOTFILES_WORKLOG_ENABLED=1             # work_log.txt 기록 활성화
+export DOTFILES_WORKLOG_PLAYBOOK_AUTOCOMMIT=1 # playbook 자동 커밋 활성화
+
+# 끄기 (기본값, 별도 설정 불필요)
 ```
 
 변경 후 쉘 재시작 또는 `source ~/.bashrc` / `source ~/.zshrc`.
