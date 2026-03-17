@@ -227,52 +227,9 @@ claude_mount_skills() {
     fi
 }
 
-# ═══════════════════════════════════════════════════════════════
-# Claude Code Agents Directory Bind Mount
-# ═══════════════════════════════════════════════════════════════
-
-claude_mount_agents() {
-    local agents_source="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/agents"
-    local agents_target="$HOME/.claude/agents"
-
-    # Check if source directory exists
-    if [ ! -d "$agents_source" ]; then
-        return 0
-    fi
-
-    # Create target directory if not exists
-    if [ ! -d "$agents_target" ]; then
-        mkdir -p "$agents_target"
-    fi
-
-    # Check if already mounted (using unified _is_mounted function if available)
-    if declare -f _is_mounted >/dev/null 2>&1; then
-        _is_mounted "$agents_target" && return 0
-    else
-        # Fallback: Check if already mounted using findmnt
-        if command -v findmnt > /dev/null 2>&1; then
-            findmnt "$agents_target" > /dev/null 2>&1 && return 0
-        else
-            # Final fallback to mount command
-            mount | grep -q "${agents_target}" && return 0
-        fi
-    fi
-
-    # Perform bind mount (will prompt for sudo password if needed)
-    sudo mount --bind "$agents_source" "$agents_target" 2>/dev/null
-
-    if [ $? -eq 0 ]; then
-        return 0
-    else
-        # Silent fail - don't spam errors on every shell startup
-        return 1
-    fi
-}
-
 # NOTE: Auto-mount functionality removed from shell init to prevent sudo prompts
 # during shell startup. Use explicit functions instead:
 #   claude_mount_skills   - Mount skills directory
-#   claude_mount_agents   - Mount agents directory
 #   claude_mount_docs     - Mount docs directory
 
 # ═══════════════════════════════════════════════════════════════
@@ -339,16 +296,6 @@ claude_mount_all() {
         mounted_count=$((mounted_count + 1))
     else
         ux_warning "skills directory mount failed or already mounted"
-        failed_count=$((failed_count + 1))
-    fi
-
-    # Try mounting agents
-    ux_info "Mounting agents directory..."
-    if claude_mount_agents; then
-        ux_success "agents directory mounted"
-        mounted_count=$((mounted_count + 1))
-    else
-        ux_warning "agents directory mount failed or already mounted"
         failed_count=$((failed_count + 1))
     fi
 
