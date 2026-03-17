@@ -139,41 +139,91 @@ git_setup_auto_remote >/dev/null 2>&1 || true
 # Usage:
 #   git_clean_local - Delete all local branches except main and current
 git_clean_local() {
-    local current_branch exclude_pattern branch_count=0
+    # zsh compatibility: emulate POSIX sh to ensure word splitting on unquoted vars
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
+
+    local current_branch protected_keywords branches branch
+    local delete_list="" protected_list=""
+    local delete_count=0 protected_count=0
+
+    # Keywords that protect branches from deletion (contains matching)
+    protected_keywords="backup keep wip"
 
     current_branch=$(git symbolic-ref --short HEAD 2>/dev/null) || {
         ux_error "Not in a git repository or in detached HEAD state"
         return 1
     }
 
-    # Build exclusion pattern: always protect main + current branch
-    if [ "$current_branch" = "main" ]; then
-        exclude_pattern='^main$'
-    else
-        exclude_pattern="^(main|${current_branch})$"
+    branches=$(git for-each-ref --format='%(refname:short)' refs/heads)
+
+    # Classify each branch: protected or delete candidate
+    while IFS= read -r branch; do
+        [ -n "$branch" ] || continue
+
+        # Always protect main and current branch
+        if [ "$branch" = "main" ] || [ "$branch" = "$current_branch" ]; then
+            continue
+        fi
+
+        # Keyword-based protection: contains matching via case statement
+        local is_protected=false
+        for keyword in $protected_keywords; do
+            case "$branch" in
+                *"$keyword"*)
+                    protected_list="${protected_list}  ${branch}
+"
+                    protected_count=$((protected_count + 1))
+                    is_protected=true
+                    break
+                    ;;
+            esac
+        done
+        [ "$is_protected" = true ] && continue
+
+        delete_list="${delete_list}${branch}
+"
+        delete_count=$((delete_count + 1))
+    done <<EOF
+$branches
+EOF
+
+    # Count implicit protected branches (main + current)
+    local total_protected=$protected_count
+    total_protected=$((total_protected + 1))  # main
+    if [ "$current_branch" != "main" ]; then
+        total_protected=$((total_protected + 1))  # current branch
     fi
 
-    branch_count=$(git for-each-ref --format='%(refname:short)' refs/heads | grep -cvE "$exclude_pattern")
+    # Show protected branches first (safety-first UX)
+    ux_header "Protected branches:"
+    ux_info "  main (always)"
+    if [ "$current_branch" != "main" ]; then
+        ux_info "  $current_branch (current)"
+    fi
+    while IFS= read -r branch; do
+        [ -n "$branch" ] && ux_info "$branch (keyword)"
+    done <<EOF
+$protected_list
+EOF
 
-    if [ "$branch_count" -eq 0 ]; then
+    if [ "$delete_count" -eq 0 ]; then
         ux_info "No local branches to delete"
         return 0
     fi
 
-    if [ "$current_branch" = "main" ]; then
-        ux_header "Deleting $branch_count local branch(es) except main:"
-    else
-        ux_header "Deleting $branch_count local branch(es) (keeping: main, $current_branch):"
-    fi
-
-    git for-each-ref --format='%(refname:short)' refs/heads | grep -vE "$exclude_pattern" | while read -r branch; do
+    # Show and execute deletions
+    ux_header "Deleting $delete_count local branch(es):"
+    while IFS= read -r branch; do
+        [ -n "$branch" ] || continue
         ux_info "  $branch"
-    done
+        git branch -D "$branch" >/dev/null 2>&1
+    done <<EOF
+$delete_list
+EOF
 
-    # Force delete all branches matching the exclusion pattern
-    git for-each-ref --format='%(refname:short)' refs/heads | grep -vE "$exclude_pattern" | xargs -r git branch -D
-
-    ux_success "Done! All local branches deleted (kept: main${current_branch:+ and $current_branch})."
+    ux_success "Done! Deleted $delete_count branch(es). Protected $total_protected branch(es)."
 }
 
 # ============================================================================
