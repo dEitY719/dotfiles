@@ -25,6 +25,7 @@ __pycache__/
 
 # Claude Code personal settings (user-specific, environment-dependent)
 claude/settings.json
+.claude/scheduled_tasks.lock
 
 # VS Code settings (bidirectional sync system, PC-specific)
 .vscode/settings.json
