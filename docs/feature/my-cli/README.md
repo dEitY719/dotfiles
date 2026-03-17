@@ -8,7 +8,7 @@
 
 ## 📚 문서 가이드
 
-### 1. **LEGACY_ANALYSIS.md** (종합 분석)
+### 1. **analysis/legacy-analysis.md** (종합 분석)
 - 전체 34개 help 파일 개요
 - 카테고리별 분류
 - Tier 우선순위 정의
@@ -18,7 +18,7 @@
 
 ---
 
-### 2. **01-DEVELOPMENT.md** (Development 카테고리)
+### 2. **analysis/development-category-analysis.md** (Development 카테고리)
 - Git (79줄, ⭐⭐⭐⭐⭐ Tier 1)
   - 기본 7개 명령어 정리 완료
   - Full Mode 구현 계획 수립
@@ -29,35 +29,35 @@
 
 ---
 
-### 3. **02-DEVOPS.md** (DevOps 카테고리)
+### 3. **analysis/devops-category-analysis.md** (DevOps 카테고리)
 - Docker, Proxy, Sys, MySQL 등
 - Tier 2 우선순위
 - Quick + Full Mode 계획 수립
 
 ---
 
-### 4. **03-AI_LLM.md** (AI/LLM 카테고리)
+### 4. **analysis/ai-llm-category-analysis.md** (AI/LLM 카테고리)
 - Claude, Gemini, Codex, Ollama 등
 - 대부분 Tier 3 (낮은 우선순위)
 - 향후 처리
 
 ---
 
-### 5. **04-CLI_TOOLS.md** (CLI Tools 카테고리)
+### 5. **analysis/cli-tools-category-analysis.md** (CLI Tools 카테고리)
 - Bat, GC, Zsh, Fzf, Fd 등
 - Tier 2 우선순위
 - 상세 분석 진행 중
 
 ---
 
-### 6. **05-CONFIG_SYSTEM_META.md** (나머지)
+### 6. **analysis/config-system-meta-category-analysis.md** (나머지)
 - Config, System, Meta, Docs 카테고리
 - 통합 우선순위 정의
 - 향후 처리 계획
 
 ---
 
-### 7. **IMPLEMENTATION_ROADMAP.md** (구현 계획) ⭐ 중요
+### 7. **planning/implementation-roadmap.md** (구현 계획) ⭐ 중요
 - Phase 1~4 상세 로드맵
 - CL-7.1 ~ CL-7.9 일정
 - Tier별 구현 순서
@@ -146,10 +146,10 @@ TopicDetail에서 색상 렌더링
 
 1. ✅ **분석 문서 검토**
    - 위 6개 분석 문서 읽기
-   - IMPLEMENTATION_ROADMAP.md 정독
+   - `planning/implementation-roadmap.md` 정독
 
 2. ⏳ **Phase 1 구체화**
-   - `PHASE_1_DETAIL.md` 작성
+   - `planning/phase-1-detail.md` 검토 및 갱신
    - 구체적인 파일/코드 변경 내용 정의
    - 예상 시간 재계산
 
@@ -191,7 +191,7 @@ TopicDetail에서 색상 렌더링
 ### 분석 문서 활용법
 
 1. **개발 전**
-   - IMPLEMENTATION_ROADMAP.md 읽기
+   - `planning/implementation-roadmap.md` 읽기
    - 해당 카테고리 분석 문서 검토
 
 2. **개발 중**
@@ -214,8 +214,8 @@ TopicDetail에서 색상 렌더링
 
 질문이 있다면:
 1. 관련 분석 문서 검색
-2. LEGACY_ANALYSIS.md 재검토
-3. IMPLEMENTATION_ROADMAP.md의 FAQ 섹션 확인
+2. `analysis/legacy-analysis.md` 재검토
+3. `planning/implementation-roadmap.md`의 FAQ 섹션 확인
 
 ---
 

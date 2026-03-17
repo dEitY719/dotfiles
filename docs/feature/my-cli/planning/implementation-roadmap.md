@@ -316,15 +316,15 @@ shell-common/functions/*.sh                  (데이터 포맷)
 
 ### 생성될 파일
 ```
-docs/requirements/LEGACY_ANALYSIS.md         ✅ 완료
-docs/requirements/01-DEVELOPMENT.md          ✅ 완료
-docs/requirements/02-DEVOPS.md              ✅ 완료
-docs/requirements/03-AI_LLM.md              ✅ 완료
-docs/requirements/04-CLI_TOOLS.md           ✅ 완료
-docs/requirements/05-CONFIG_SYSTEM_META.md  ✅ 완료
-docs/requirements/IMPLEMENTATION_ROADMAP.md ✅ 완료
-docs/requirements/PHASE_1_DETAIL.md         (다음)
-docs/requirements/PHASE_2_DETAIL.md         (다음)
+docs/feature/my-cli/analysis/legacy-analysis.md                       ✅ 완료
+docs/feature/my-cli/analysis/development-category-analysis.md         ✅ 완료
+docs/feature/my-cli/analysis/devops-category-analysis.md              ✅ 완료
+docs/feature/my-cli/analysis/ai-llm-category-analysis.md              ✅ 완료
+docs/feature/my-cli/analysis/cli-tools-category-analysis.md           ✅ 완료
+docs/feature/my-cli/analysis/config-system-meta-category-analysis.md  ✅ 완료
+docs/feature/my-cli/planning/implementation-roadmap.md                ✅ 완료
+docs/feature/my-cli/planning/phase-1-detail.md                        (다음)
+docs/feature/my-cli/planning/phase-2-detail.md                        (다음)
 ```
 
 ---

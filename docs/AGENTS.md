@@ -1,6 +1,6 @@
 # Module Context
 - **Purpose**: Project documentation, guides, AI agent prompts, and code reviews
-- **Structure**: Master prompts, review documents, todo tracking
+- **Structure**: Master prompts, feature docs, review documents, todo tracking
 - **Key Files**:
   - `AGENTS_md_Master_Prompt.md` - AGENTS.md generation protocol (source for agents-md skill)
   - `abc-review-C.md` - SOLID principle review (Claude Opus 4.5)
@@ -48,6 +48,7 @@ Structure:
 - **DO**: Update docs when code changes (especially AGENTS.md Context Maps)
 - **DO**: Use consistent terminology across all docs
 - **DO**: Include concrete examples (code snippets, commands)
+- **DO**: Group feature-specific docs under `docs/feature/<feature-name>/`
 - **DON'T**: Leave TODO markers without tracking (move to todo.txt)
 - **DON'T**: Archive without documenting reason (use `archive/` with README)
 
@@ -91,6 +92,13 @@ Project task tracking (plain text format):
 - Pending improvements
 - Long-term refactoring ideas
 
+## docs/feature/<feature-name>/ (feature bundles)
+Feature-centric documentation bundles:
+- `README.md` - Feature index and reading order
+- `analysis/` - Discovery, legacy analysis, category breakdowns
+- `planning/` - Roadmaps, phase detail, progress tracking, quick start
+- `requirements/` - REQ and design specification documents
+
 # Testing Strategy
 
 ## AGENTS.md Validation
@@ -109,8 +117,9 @@ grep -r "http://\|https://\|file://" **/AGENTS.md
 
 ## Adding New Documentation
 1. Create file in `docs/` with descriptive name
-2. Add entry to this AGENTS.md under "File Descriptions"
-3. Update root AGENTS.md Context Map if major doc
+2. If it is feature-specific, place it under `docs/feature/<feature-name>/`
+3. Add entry to this AGENTS.md under "File Descriptions"
+4. Update root AGENTS.md Context Map if major doc
 
 ## Updating Master Prompt
 See "Master Prompt Modifications" in Golden Rules above.
