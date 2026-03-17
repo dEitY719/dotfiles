@@ -177,9 +177,6 @@ vim ~/dotfiles/claude/statusline-command.sh
 show_mnt                    # Show all Claude mounts
 show_mnt ~/.claude/skills   # Show specific mount
 
-# Add new mount (e.g., agents directory)
-addmnt ~/dotfiles/claude/agents ~/.claude/agents
-
 # Unmount (if needed)
 sudo umount ~/.claude/skills
 
