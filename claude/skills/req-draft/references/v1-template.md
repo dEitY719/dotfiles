@@ -5,7 +5,7 @@ Use this template when generating initial scratch documents. Adapt sections base
 ```markdown
 # <Feature Title>
 
-**초안** | <tech stack if known> | <date>
+**초안** | <tech stack if known> | <YYYY-MM-DD>
 
 | Field | Value |
 |-------|-------|

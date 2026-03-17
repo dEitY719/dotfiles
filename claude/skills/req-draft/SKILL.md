@@ -125,9 +125,10 @@ Peer Roles:
 1. **Locate documents**: Find the original and all colleague review files in the target directory.
    ```bash
    # Original: <feature-slug>.md
-   # Colleague reviews: <feature-slug>-*.md (e.g., -CX.md, -G.md, -S.md)
+   # Colleague reviews: <feature-slug>-<ID>.md where ID is 1-3 uppercase chars
+   # Known IDs: CX (Codex/ChatGPT), G (Gemini), S (other)
    ```
-   - If path not specified, scan `docs/feature/` for the most recently modified directory.
+   - If path not specified, scan `docs/feature/` for the most recently modified directory and **confirm with the user** before proceeding: `"docs/feature/<dir> 디렉토리를 사용합니다. 맞나요? (y/n)"`
    - If multiple originals exist, ask the user which one to update.
 
 2. **Read all documents**: Read the original and every colleague review file.
