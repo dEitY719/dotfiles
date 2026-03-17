@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Phoenix — February 2026 Status Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    
+    
+    html.theme-dark {
+      --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C;
+      --border: rgba(255,255,255,0.08);
+      --text: #EDEDED; --text-secondary: #888;
+      --accent: #3b82f6; --accent-secondary: #2563eb;
+      --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b;
+    }
+    html.theme-light {
+      --bg: #FAFAF9; --surface: #ffffff; --surface-hover: #F5F5F4;
+      --border: rgba(0,0,0,0.08);
+      --text: #0f172a; --text-secondary: #64748b;
+      --accent: #3b82f6; --accent-secondary: #2563eb;
+      --positive: #059669; --negative: #e11d48; --warning: #d97706;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6; letter-spacing: -0.011em; -webkit-font-smoothing: antialiased;
+      font-feature-settings: 'cv11', 'ss01';
+      scrollbar-gutter: stable;
+      transition: background 0.3s, color 0.3s;
+      padding: 32px 16px;
+    }
+    body::after {
+      content: ''; position: fixed; inset: 0; z-index: -1; opacity: 0.03;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card:hover {
+      box-shadow: 0 0 0 1px var(--border), 0 8px 16px rgba(0,0,0,0.08);
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate { animation: fadeInUp 0.6s ease-out both; }
+    .animate.delay-1 { animation-delay: 0.1s; }
+    .animate.delay-2 { animation-delay: 0.2s; }
+    .animate.delay-3 { animation-delay: 0.3s; }
+    .animate.delay-4 { animation-delay: 0.4s; }
+    .animate.delay-5 { animation-delay: 0.5s; }
+    .animate.delay-6 { animation-delay: 0.6s; }
+
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      .reveal { opacity: 1; transform: none; }
+    }
+
+    @media print {
+      body { background: white !important; color: black !important; padding: 16px !important; }
+      .viz-menu { display: none !important; }
+      .reveal { opacity: 1 !important; transform: none !important; }
+      .card { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
+      .report { box-shadow: none !important; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+
+    /* === Hamburger Menu === */
+    .viz-menu {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 9999;
+      font-family: var(--font, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    }
+
+    .viz-menu-toggle {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .viz-menu-toggle:hover {
+      background: var(--surface-hover);
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .viz-menu-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 200px;
+      background: var(--surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 6px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-8px) scale(0.96);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+
+    .viz-menu-dropdown.open {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0) scale(1);
+    }
+
+    .viz-menu-dropdown button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 0.875rem;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.15s;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .viz-menu-dropdown button:hover {
+      background: var(--surface-hover);
+    }
+
+    .viz-menu-dropdown button:focus-visible { 
+      outline: 2px solid var(--accent); 
+      outline-offset: 2px; 
+    }
+
+    .viz-menu-icon {
+      font-size: 1rem;
+      width: 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    /* ===== REPORT ===== */
+    .report {
+      max-width: 900px; margin: 0 auto;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 24px; padding: 48px; position: relative;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.15);
+    }
+
+    .report-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px; margin-bottom: 40px;
+      padding-bottom: 24px; border-bottom: 1px solid var(--border);
+    }
+    .report-title { font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 700; text-wrap: balance; }
+    .report-subtitle { font-size: 0.9rem; color: var(--text-secondary); margin-top: 4px; }
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 16px; border-radius: 8px; font-weight: 700; font-size: 0.85rem;
+      white-space: nowrap;
+    }
+    .status-badge.on-track { background: color-mix(in srgb, var(--positive), transparent 85%); color: var(--positive); }
+    .status-badge.at-risk { background: color-mix(in srgb, var(--warning), transparent 85%); color: var(--warning); }
+    .status-badge.delayed { background: color-mix(in srgb, var(--negative), transparent 85%); color: var(--negative); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+    .section-title {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.15em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 16px;
+      text-wrap: balance;
+    }
+    .report-section { margin-bottom: 36px; }
+
+    /* KPI Cards */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+    .kpi-card {
+      background: var(--surface-hover); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px; text-align: center;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .kpi-card:hover { box-shadow: 0 0 0 1px var(--border), 0 8px 16px rgba(0,0,0,0.08); }
+    .kpi-value { font-size: 2rem; font-weight: 700; margin-bottom: 4px; }
+    .kpi-label { font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; }
+    .kpi-sub { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; }
+
+    /* Progress bars */
+    .workstream { margin-bottom: 16px; }
+    .workstream-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .workstream-name { font-weight: 600; font-size: 0.95rem; }
+    .workstream-pct { font-weight: 700; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+    .progress-track {
+      width: 100%; height: 8px; background: var(--surface);
+      border-radius: 4px; overflow: hidden; border: 1px solid var(--border);
+    }
+    .progress-fill {
+      height: 100%; border-radius: 4px;
+      transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Milestones */
+    .milestone-timeline { display: flex; flex-direction: column; gap: 0; }
+    .milestone {
+      display: flex; align-items: flex-start; gap: 16px; padding: 12px 0;
+      position: relative;
+    }
+    .milestone:not(:last-child)::after {
+      content: ''; position: absolute; left: 15px; top: 36px;
+      width: 2px; height: calc(100% - 24px);
+      background: var(--border);
+    }
+    .milestone-dot {
+      width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; position: relative; z-index: 1;
+    }
+    .milestone-dot.completed { background: var(--positive); color: #fff; }
+    .milestone-dot.current { background: var(--accent); color: #fff; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent), transparent 70%); }
+    .milestone-dot.upcoming { background: var(--surface-hover); color: var(--text-secondary); border: 2px solid var(--border); }
+    .milestone-info { flex: 1; padding-top: 4px; }
+    .milestone-name { font-weight: 600; font-size: 0.9rem; }
+    .milestone-date { font-size: 0.8rem; color: var(--text-secondary); }
+
+    /* Risks */
+    .risk-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 14px 16px; background: var(--surface-hover);
+      border-radius: 10px; margin-bottom: 10px;
+      border: 1px solid var(--border);
+    }
+    .severity-badge {
+      padding: 3px 10px; border-radius: 6px; font-size: 0.7rem;
+      font-weight: 700; text-transform: uppercase; white-space: nowrap; flex-shrink: 0;
+    }
+    .severity-badge.high { background: color-mix(in srgb, var(--negative), transparent 85%); color: var(--negative); }
+    .severity-badge.medium { background: color-mix(in srgb, var(--warning), transparent 85%); color: var(--warning); }
+    .severity-badge.low { background: color-mix(in srgb, var(--positive), transparent 85%); color: var(--positive); }
+    .risk-text { font-size: 0.9rem; }
+
+    /* Action items */
+    .action-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+    }
+    .action-item:last-child { border-bottom: none; }
+    .action-check {
+      width: 20px; height: 20px; border-radius: 6px;
+      border: 2px solid var(--border); flex-shrink: 0;
+    }
+    .action-text { flex: 1; font-size: 0.9rem; }
+    .action-meta { font-size: 0.75rem; color: var(--text-secondary); text-align: right; white-space: nowrap; }
+
+    .skip-link {
+      position: absolute; top: -100px; left: 16px; padding: 8px 16px;
+      background: var(--accent); color: #fff; border-radius: 8px;
+      text-decoration: none; z-index: 99999; font-weight: 600;
+    }
+    .skip-link:focus { top: 16px; }
+  
+    .stat-card, .metric-card, .kpi-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .stat-card:hover, .metric-card:hover, .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); } /* hover-lift */
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+  <main id="main-content">
+
+  <!-- Hamburger Menu -->
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="5" x2="17" y2="5"/>
+        <line x1="3" y1="10" x2="17" y2="10"/>
+        <line x1="3" y1="15" x2="17" y2="15"/>
+      </svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()">
+        <span class="viz-menu-icon">◐</span>
+        <span>Theme: <span id="themeLabel">Dark</span></span>
+      </button>
+      <button onclick="downloadImage()">
+        <span class="viz-menu-icon">⤓</span>
+        <span>Download PNG</span>
+      </button>
+      <button onclick="printPDF()">
+        <span class="viz-menu-icon">⎙</span>
+        <span>Print / PDF</span>
+      </button>
+    </div>
+  </div>
+
+  <article class="report">
+
+    <header class="report-header animate">
+      <div>
+        <h1 class="report-title">Project Phoenix</h1>
+        <div class="report-subtitle">Monthly Status Report · February 1–28, 2026</div>
+      </div>
+      <div class="status-badge on-track" aria-label="Status: On Track">
+        <span class="status-dot"></span> On Track
+      </div>
+    </header>
+
+    <!-- KPIs -->
+    <section class="report-section animate delay-1" data-reveal aria-label="Key Performance Indicators">
+      <h2 class="section-title">Key Metrics</h2>
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-value" style="color: var(--accent);">$<span data-count="1200" data-prefix="">1,200</span>K</div>
+          <div class="kpi-label">Budget Spent</div>
+          <div class="kpi-sub">of $1,500K allocated</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" style="color: var(--positive);"><span data-count="68" data-suffix="%">68%</span></div>
+          <div class="kpi-label">Timeline Complete</div>
+          <div class="kpi-sub">Target: 65% by Feb 28</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" style="color: var(--accent-secondary);"><span data-count="12">12</span></div>
+          <div class="kpi-label">Team Members</div>
+          <div class="kpi-sub">3 eng · 2 design · 4 dev · 3 QA</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" style="color: var(--warning);"><span data-count="42">42</span></div>
+          <div class="kpi-label">Sprint Velocity</div>
+          <div class="kpi-sub">pts/sprint (avg last 3)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Workstreams -->
+    <section class="report-section animate delay-2" data-reveal aria-label="Workstream Progress">
+      <h2 class="section-title">Workstream Progress</h2>
+
+      <div class="workstream">
+        <div class="workstream-header">
+          <span class="workstream-name">Backend API & Infrastructure</span>
+          <span class="workstream-pct" style="color: var(--positive);">82%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" style="width: 82%; background: var(--positive);"></div>
+        </div>
+      </div>
+
+      <div class="workstream">
+        <div class="workstream-header">
+          <span class="workstream-name">Frontend & User Experience</span>
+          <span class="workstream-pct" style="color: var(--accent);">61%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" style="width: 61%; background: var(--accent);"></div>
+        </div>
+      </div>
+
+      <div class="workstream">
+        <div class="workstream-header">
+          <span class="workstream-name">Data Pipeline & ML Models</span>
+          <span class="workstream-pct" style="color: var(--warning);">45%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" style="width: 45%; background: var(--warning);"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Milestones -->
+    <section class="report-section animate delay-3" data-reveal aria-label="Milestones">
+      <h2 class="section-title">Milestones</h2>
+      <div class="milestone-timeline">
+        <div class="milestone">
+          <div class="milestone-dot completed" aria-label="Completed">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          </div>
+          <div class="milestone-info">
+            <div class="milestone-name">Project kickoff & team onboarding</div>
+            <div class="milestone-date">Completed · Nov 1, 2025</div>
+          </div>
+        </div>
+        <div class="milestone">
+          <div class="milestone-dot completed" aria-label="Completed">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          </div>
+          <div class="milestone-info">
+            <div class="milestone-name">Architecture review & tech stack finalized</div>
+            <div class="milestone-date">Completed · Dec 15, 2025</div>
+          </div>
+        </div>
+        <div class="milestone">
+          <div class="milestone-dot completed" aria-label="Completed">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          </div>
+          <div class="milestone-info">
+            <div class="milestone-name">MVP backend API deployed to staging</div>
+            <div class="milestone-date">Completed · Jan 20, 2026</div>
+          </div>
+        </div>
+        <div class="milestone">
+          <div class="milestone-dot current" aria-label="Current milestone">●</div>
+          <div class="milestone-info">
+            <div class="milestone-name">Frontend alpha release (internal)</div>
+            <div class="milestone-date">In Progress · Target: Mar 10, 2026</div>
+          </div>
+        </div>
+        <div class="milestone">
+          <div class="milestone-dot upcoming" aria-label="Upcoming">○</div>
+          <div class="milestone-info">
+            <div class="milestone-name">Beta launch with 50 pilot users</div>
+            <div class="milestone-date">Planned · Apr 15, 2026</div>
+          </div>
+        </div>
+        <div class="milestone">
+          <div class="milestone-dot upcoming" aria-label="Upcoming">○</div>
+          <div class="milestone-info">
+            <div class="milestone-name">Production GA release</div>
+            <div class="milestone-date">Planned · Jun 1, 2026</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Risks -->
+    <section class="report-section animate delay-4" data-reveal aria-label="Risks and Blockers">
+      <h2 class="section-title">Risks & Blockers</h2>
+      <div class="risk-item">
+        <span class="severity-badge high" aria-label="High severity">High</span>
+        <span class="risk-text">ML model training data pipeline has intermittent failures; reliability at 94% (target 99.5%)</span>
+      </div>
+      <div class="risk-item">
+        <span class="severity-badge medium" aria-label="Medium severity">Medium</span>
+        <span class="risk-text">Design system migration to new component library causing 1-week frontend delay</span>
+      </div>
+      <div class="risk-item">
+        <span class="severity-badge low" aria-label="Low severity">Low</span>
+        <span class="risk-text">Third-party auth provider deprecating v2 API; migration to v3 needed by Q3</span>
+      </div>
+    </section>
+
+    <!-- Next Steps -->
+    <section class="report-section animate delay-5" data-reveal aria-label="Next Steps">
+      <h2 class="section-title">Next Steps</h2>
+      <div class="action-item">
+        <div class="action-check"></div>
+        <div class="action-text">Resolve ML pipeline reliability to 99%+ uptime</div>
+        <div class="action-meta">Sarah L. · Mar 7</div>
+      </div>
+      <div class="action-item">
+        <div class="action-check"></div>
+        <div class="action-text">Complete frontend component library migration</div>
+        <div class="action-meta">James C. · Mar 14</div>
+      </div>
+      <div class="action-item">
+        <div class="action-check"></div>
+        <div class="action-text">User testing sessions with 10 internal stakeholders</div>
+        <div class="action-meta">Aisha P. · Mar 10</div>
+      </div>
+      <div class="action-item">
+        <div class="action-check"></div>
+        <div class="action-text">Security audit & penetration testing for beta</div>
+        <div class="action-meta">Marcus K. · Mar 21</div>
+      </div>
+    </section>
+
+  </article>
+
+  </main>
+  <script>
+    // === Menu ===
+    function toggleMenu() { document.getElementById('vizMenuDropdown').classList.toggle('open'); }
+    document.addEventListener('click', function(e) { if (!e.target.closest('.viz-menu')) document.getElementById('vizMenuDropdown').classList.remove('open'); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') document.getElementById('vizMenuDropdown').classList.remove('open'); });
+
+    // === Theme system ===
+    const themes = [
+      { name: 'Dark', class: 'theme-dark' },
+      { name: 'Light', class: 'theme-light' },
+      { name: 'Auto', class: 'theme-auto' },
+    ];
+    let currentTheme = 0;
+
+    function cycleTheme() {
+      // Remove all theme classes
+      themes.forEach(t => document.documentElement.classList.remove(t.class));
+      // Advance to next
+      currentTheme = (currentTheme + 1) % themes.length;
+      document.documentElement.classList.add(themes[currentTheme].class);
+      document.getElementById('themeLabel').textContent = themes[currentTheme].name;
+      // Persist
+      localStorage.setItem('viz-theme', currentTheme);
+      if (typeof onThemeChange === 'function') onThemeChange();
+    }
+
+    // Restore saved theme on load
+    (function() {
+      const saved = localStorage.getItem('viz-theme');
+      if (saved !== null) {
+        currentTheme = parseInt(saved);
+        document.documentElement.classList.add(themes[currentTheme].class);
+        document.getElementById('themeLabel').textContent = themes[currentTheme].name;
+      }
+    })();
+
+    // === Print as PDF ===
+    function printPDF() {
+      window.print();
+    }
+
+    // === Scroll Reveal ===
+    document.querySelectorAll('[data-reveal]').forEach(function(el) { el.classList.add('reveal'); });
+    var revealObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) { if (e.isIntersecting) { e.target.classList.add('visible'); revealObserver.unobserve(e.target); } });
+    }, { threshold: 0.15 });
+    document.querySelectorAll('.reveal').forEach(function(el) { revealObserver.observe(el); });
+    setTimeout(function() { document.querySelectorAll('.reveal').forEach(function(el) { el.classList.add('visible'); }); }, 500);
+
+    // === Number Counter ===
+    function animateCounters() {
+      document.querySelectorAll('[data-count]').forEach(function(el) {
+        if (el.dataset.counted) return;
+        el.dataset.counted = '1';
+        var target = parseFloat(el.dataset.count), prefix = el.dataset.prefix || '', suffix = el.dataset.suffix || '';
+        var start = performance.now(), duration = 1200;
+        (function tick(now) {
+          var p = Math.min((now - start) / duration, 1), eased = 1 - Math.pow(1 - p, 3);
+          el.textContent = prefix + Math.round(target * eased).toLocaleString() + suffix;
+          if (p < 1) requestAnimationFrame(tick);
+        })(start);
+      });
+    }
+    var counterEl = document.querySelector('[data-count]');
+    if (counterEl) {
+      var cObs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(e) { if (e.isIntersecting) { animateCounters(); cObs.disconnect(); } });
+      }, { threshold: 0.3 });
+      cObs.observe(counterEl);
+    }
+
+    // === Download PNG ===
+    async function downloadImage() {
+      var menu = document.querySelector('.viz-menu');
+      menu.style.display = 'none';
+      try {
+        var report = document.querySelector('.report');
+        var url = await htmlToImage.toPng(report, { quality: 1, pixelRatio: 2 });
+        var a = document.createElement('a'); a.href = url;
+        a.download = 'project-phoenix-feb-2026.png'; a.click();
+      } catch(e) { console.error('Download failed:', e); }
+      menu.style.display = '';
+    }
+  </script>
+</body>
+</html>

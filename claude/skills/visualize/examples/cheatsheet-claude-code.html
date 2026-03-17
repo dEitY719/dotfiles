@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Code Cheat Sheet</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { interpolate-size: allow-keywords; }
+
+    
+    
+    html.theme-dark { --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C; --border: rgba(255,255,255,0.04); --text: #EDEDED; --text-secondary: #888; --accent: #f97316; --accent-secondary: #ea580c; --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b; }
+    html.theme-light { --bg: #FAFAF9; --surface: #ffffff; --surface-hover: #F5F5F4; --border: rgba(0,0,0,0.08); --text: #0f172a; --text-secondary: #64748b; --accent: #f97316; --accent-secondary: #ea580c; --positive: #059669; --negative: #e11d48; --warning: #d97706; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.5; -webkit-font-smoothing: antialiased;
+      font-feature-settings: 'cv11', 'ss01';
+      scrollbar-gutter: stable;
+      transition: background 0.3s, color 0.3s;
+    }
+    body::after {
+      content: ''; position: fixed; inset: 0; z-index: -1; opacity: 0.03;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+    .animate { animation: fadeInUp 0.6s ease-out both; }
+    .animate.delay-1 { animation-delay: 0.1s; }
+    .animate.delay-2 { animation-delay: 0.2s; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    /* ===== LAYOUT ===== */
+    .cheatsheet { max-width: 1100px; margin: 0 auto; padding: 32px 24px 16px; }
+
+    .cheatsheet-header { text-align: center; margin-bottom: 20px; }
+    .cheatsheet-header h1 { font-size: 2.2rem; font-weight: 900; letter-spacing: -0.03em; color: var(--text); margin-bottom: 4px; text-wrap: balance; }
+    .cheatsheet-header .subtitle { font-size: 0.9rem; color: var(--text-secondary); }
+
+    /* Search */
+    .search-bar {
+      max-width: 480px; margin: 20px auto; position: relative;
+    }
+    .search-bar input {
+      width: 100%; padding: 12px 16px 12px 44px; border-radius: 12px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); font-family: inherit; font-size: 0.9rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .search-bar input::placeholder { color: var(--text-secondary); }
+    .search-bar input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent), transparent 80%); }
+    .search-bar svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); }
+    .search-count { text-align: center; font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; min-height: 1.2em; }
+
+    /* Sections as details */
+    .sections-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+    details.section-card {
+      background: var(--surface); border: 4px solid var(--border);
+      border-radius: 14px; overflow: hidden;
+      transition: all 0.2s; position: relative;
+    }
+    details.section-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--section-color, var(--accent)), color-mix(in srgb, var(--section-color, var(--accent)), var(--accent-secondary) 50%));
+    }
+    details.section-card:hover { 
+      box-shadow: 0 0 0 1px var(--section-color, var(--accent)), 0 8px 24px rgba(0,0,0,0.12);
+      transform: translateY(-1px);
+    }
+    details.section-card[open] { 
+      box-shadow: 0 0 0 1px var(--section-color, var(--accent)), 0 8px 24px rgba(0,0,0,0.12);
+      border-color: var(--section-color, var(--accent));
+    }
+
+    details.section-card summary {
+      padding: 14px 16px; cursor: pointer; list-style: none;
+      font-size: 0.82rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--section-color, var(--accent));
+      display: flex; align-items: center; gap: 8px;
+      border-bottom: 4px solid var(--section-color, var(--accent));
+    }
+    details.section-card summary::-webkit-details-marker { display: none; }
+    details.section-card summary::after {
+      content: ''; width: 0; height: 0; margin-left: auto;
+      border-left: 5px solid transparent; border-right: 5px solid transparent;
+      border-top: 5px solid var(--text-secondary);
+      transition: transform 0.2s;
+    }
+    details.section-card[open] summary::after { transform: rotate(180deg); }
+    details.section-card summary svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+    ::details-content {
+      transition: block-size 0.3s ease, opacity 0.3s ease;
+      block-size: 0; opacity: 0; overflow: hidden;
+    }
+    details[open]::details-content { block-size: auto; opacity: 1; }
+
+    .section-body { padding: 12px 16px 14px; }
+
+    .cmd-list { list-style: none; }
+    .cmd-list li {
+      padding: 5px 0; font-size: 0.8rem; line-height: 1.45;
+      border-bottom: 1px solid var(--border);
+      display: flex; gap: 8px; align-items: baseline;
+    }
+    .cmd-list li:last-child { border-bottom: none; }
+    .cmd-list li.hidden { display: none; }
+
+    code {
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 0.73rem; background: var(--surface-hover);
+      padding: 2px 6px; border-radius: 4px; white-space: nowrap;
+      color: var(--accent); font-weight: 500; cursor: pointer;
+      transition: background 0.15s;
+    }
+    code:hover { background: color-mix(in srgb, var(--accent), transparent 85%); }
+    .desc { color: var(--text-secondary); font-size: 0.78rem; }
+
+    .tip-box {
+      background: color-mix(in srgb, var(--warning), transparent 88%);
+      border: 1px solid color-mix(in srgb, var(--warning), transparent 60%);
+      border-radius: 8px; padding: 8px 10px; font-size: 0.78rem;
+      margin-top: 8px; line-height: 1.4; display: flex; align-items: flex-start; gap: 6px;
+    }
+    .tip-box svg { flex-shrink: 0; color: var(--warning); margin-top: 1px; }
+
+    .span-2 { grid-column: span 2; }
+
+    .footer { text-align: center; padding: 12px 0 8px; font-size: 0.75rem; color: var(--text-secondary); border-top: 1px solid var(--border); margin-top: 20px; }
+    
+    /* Copy toast notification */
+    .copy-toast {
+      position: fixed; top: 20px; right: 20px; z-index: 1000;
+      background: var(--positive); color: white; padding: 12px 16px;
+      border-radius: 8px; font-size: 0.875rem; font-weight: 600;
+      transform: translateX(100%); opacity: 0;
+      transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .copy-toast.show {
+      transform: translateX(0); opacity: 1;
+    }
+
+    .s-setup { --section-color: #3b82f6; }
+    .s-commands { --section-color: #8b5cf6; }
+    .s-workflow { --section-color: #10b981; }
+    .s-multifile { --section-color: #ec4899; }
+    .s-tools { --section-color: #f59e0b; }
+    .s-keyboard { --section-color: #06b6d4; }
+    .s-protips { --section-color: #f43f5e; }
+    .s-perms { --section-color: #3b82f6; }
+
+    @media (max-width: 768px) {
+      .sections-grid { grid-template-columns: 1fr; }
+      .span-2 { grid-column: span 1; }
+    }
+
+    @media print {
+      body { background: white !important; color: black !important; font-size: 10pt; }
+      .viz-menu, .search-bar, .search-count { display: none !important; }
+      details.section-card { break-inside: avoid; }
+      details.section-card[open] summary::after { display: none; }
+      code { background: #f1f5f9; color: #2563eb; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+
+    .theme-toggle { position: fixed; top: 16px; right: 68px; z-index: 9999; width: 44px; height: 44px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(12px); transition: all 0.2s; }
+    .theme-toggle:hover { background: var(--surface-hover); }
+    .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .theme-dark .theme-toggle .sun-icon { display: none; }
+    .theme-light .theme-toggle .moon-icon { display: none; }
+    .viz-menu { position: fixed; top: 16px; right: 16px; z-index: 9999; }
+    .viz-menu-toggle { width: 44px; height: 44px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(12px); transition: all 0.2s; }
+    .viz-menu-toggle:hover { background: var(--surface-hover); }
+    .viz-menu-dropdown { position: absolute; top: 52px; right: 0; min-width: 200px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px; opacity: 0; visibility: hidden; transform: translateY(-8px); transition: all 0.2s; backdrop-filter: blur(16px); }
+    .viz-menu-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); }
+    .viz-menu-dropdown button { width: 100%; padding: 10px 14px; border: none; border-radius: 8px; background: transparent; color: var(--text); font-size: 14px; font-family: inherit; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 10px; transition: background 0.15s; }
+    .viz-menu-dropdown button:hover { background: var(--surface-hover); }
+
+    .skip-link { position: absolute; top: -100px; left: 16px; padding: 8px 16px; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; z-index: 99999; font-weight: 600; }
+    .skip-link:focus { top: 16px; }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+  <main id="main-content">
+
+  <button class="theme-toggle" onclick="cycleTheme()" aria-label="Toggle theme">
+    <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+  </button>
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/></svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg><span id="themeLabel">Dark</span></button>
+      <button onclick="downloadImage()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Download PNG</span></button>
+      <button onclick="window.print()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>Print / PDF</span></button>
+    </div>
+  </div>
+
+  <div class="cheatsheet">
+    <header class="cheatsheet-header animate" role="banner">
+      <h1>Claude Code Cheat Sheet</h1>
+      <p class="subtitle">The essential reference for Anthropic's AI coding CLI</p>
+    </header>
+
+    <div class="search-bar animate delay-1">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" id="searchInput" placeholder="Search commands..." aria-label="Search commands" oninput="filterCommands()">
+    </div>
+    <div class="search-count" id="searchCount"></div>
+
+    <div class="sections-grid" role="region" aria-label="Cheat sheet sections">
+
+      <details class="section-card s-setup animate delay-1" name="cheatsheet" open aria-label="Setup and Install">
+        <summary>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
+          Setup &amp; Install
+        </summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><code>npm i -g @anthropic-ai/claude-code</code> <span class="desc">Install globally</span></li>
+            <li><code>claude</code> <span class="desc">Launch in current directory</span></li>
+            <li><code>claude -p "query"</code> <span class="desc">One-shot prompt mode</span></li>
+            <li><code>claude config</code> <span class="desc">Open settings</span></li>
+            <li><code>claude update</code> <span class="desc">Update to latest version</span></li>
+            <li><code>cat file | claude -p "fix"</code> <span class="desc">Pipe input as context</span></li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="section-card s-commands animate delay-1" name="cheatsheet" aria-label="Key Commands">
+        <summary>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 3a3 3 0 00-3 3v12a3 3 0 003 3 3 3 0 003-3 3 3 0 00-3-3H6a3 3 0 00-3 3 3 3 0 003 3 3 3 0 003-3V6a3 3 0 00-3-3"/></svg>
+          Key Commands
+        </summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><code>/help</code> <span class="desc">Show all slash commands</span></li>
+            <li><code>/compact</code> <span class="desc">Summarize &amp; compress context</span></li>
+            <li><code>/clear</code> <span class="desc">Reset conversation history</span></li>
+            <li><code>/cost</code> <span class="desc">Show token usage &amp; cost</span></li>
+            <li><code>/model</code> <span class="desc">Switch model mid-session</span></li>
+            <li><code>/review</code> <span class="desc">Code review current changes</span></li>
+            <li><code>/init</code> <span class="desc">Create CLAUDE.md for project</span></li>
+            <li><code>/memory</code> <span class="desc">Edit project memory file</span></li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="section-card s-workflow animate delay-2" name="cheatsheet" aria-label="Workflow Tips">
+        <summary>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+          Workflow Tips
+        </summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><span class="desc">Start with a plan — ask Claude to outline before coding</span></li>
+            <li><span class="desc">Use <code>/compact</code> when context gets long</span></li>
+            <li><span class="desc">Add <code>CLAUDE.md</code> to repos for persistent instructions</span></li>
+            <li><span class="desc">Give Claude tests to validate against</span></li>
+            <li><span class="desc">Commit often — Claude can revert if needed</span></li>
+            <li><span class="desc">Use headless mode for CI/CD pipelines</span></li>
+          </ul>
+          <div class="tip-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            Run <code>claude -p "..." | pbcopy</code> to pipe output directly to clipboard.
+          </div>
+        </div>
+      </details>
+
+      <details class="section-card s-multifile animate delay-2" name="cheatsheet" aria-label="Multi-file Editing">
+        <summary>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/></svg>
+          Multi-file Editing
+        </summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><span class="desc">Claude reads &amp; writes files across your project</span></li>
+            <li><span class="desc">Reference files by name — "update App.tsx and its tests"</span></li>
+            <li><span class="desc">Ask "find all files that..." for codebase search</span></li>
+            <li><span class="desc">Claude auto-creates new files when needed</span></li>
+            <li><span class="desc">Uses git diff to track all changes made</span></li>
+            <li><span class="desc">Respects .gitignore for file discovery</span></li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="section-card s-tools animate delay-2" name="cheatsheet" aria-label="Tool Use Patterns">
+        <summary>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+          Tool Use Patterns
+        </summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><code>Read</code> <span class="desc">Read file contents</span></li>
+            <li><code>Write</code> <span class="desc">Create/overwrite files</span></li>
+            <li><code>Edit</code> <span class="desc">Surgical find &amp; replace edits</span></li>
+            <li><code>Bash</code> <span class="desc">Run shell commands</span></li>
+            <li><code>Glob</code> <span class="desc">Search for files by pattern</span></li>
+            <li><code>Grep</code> <span class="desc">Search file contents (regex)</span></li>
+            <li><code>LS</code> <span class="desc">List directory contents</span></li>
+          </ul>
+          <div class="tip-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            Claude chains tools automatically — just describe the goal.
+          </div>
+        </div>
+      </details>
+
+      <details class="section-card s-keyboard animate delay-2" name="cheatsheet" aria-label="Keyboard Shortcuts">
+        <summary>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>
+          Keyboard Shortcuts
+        </summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><code>Ctrl+C</code> <span class="desc">Cancel current generation</span></li>
+            <li><code>Ctrl+D</code> <span class="desc">Exit Claude Code</span></li>
+            <li><code>Esc</code> <span class="desc">Cancel current input</span></li>
+            <li><code>Up Arrow</code> <span class="desc">Previous message</span></li>
+            <li><code>Tab</code> <span class="desc">Accept suggestion</span></li>
+            <li><code>Shift+Tab</code> <span class="desc">Toggle vim mode</span></li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="section-card s-protips span-2 animate delay-2" name="cheatsheet" aria-label="Pro Tips">
+        <summary>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>
+          Pro Tips
+        </summary>
+        <div class="section-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <ul class="cmd-list">
+              <li><span class="desc">Be specific: "Add error handling to the fetch in api.ts line 42"</span></li>
+              <li><span class="desc">Paste error messages directly — Claude reads stack traces</span></li>
+              <li><span class="desc">Use git branches for experimental Claude changes</span></li>
+              <li><span class="desc">"Write tests first, then implement" — TDD with Claude</span></li>
+            </ul>
+            <ul class="cmd-list">
+              <li><span class="desc">Add CLAUDE.md to every repo with project conventions</span></li>
+              <li><span class="desc">Use <code>--allowedTools</code> flag to pre-approve tools</span></li>
+              <li><span class="desc">Chain sessions: output of one becomes input to next</span></li>
+              <li><span class="desc">"Show me the plan first" before big refactors</span></li>
+            </ul>
+          </div>
+        </div>
+      </details>
+
+      <details class="section-card s-perms animate delay-2" name="cheatsheet" aria-label="Permission Model">
+        <summary>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          Permissions
+        </summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><span class="desc"><strong>Read</strong> — always allowed (safe)</span></li>
+            <li><span class="desc"><strong>Write/Edit</strong> — asks on first use</span></li>
+            <li><span class="desc"><strong>Bash</strong> — asks for each new command</span></li>
+            <li><span class="desc">Accept once = allowed for session</span></li>
+            <li><span class="desc"><code>--dangerously-skip-permissions</code> for CI</span></li>
+          </ul>
+        </div>
+      </details>
+
+    </div>
+
+    <footer class="footer">careerhackeralex.com · Claude Code by Anthropic · 2025</footer>
+  </div>
+
+  </main>
+  <script>
+    function toggleMenu() { document.getElementById('vizMenuDropdown').classList.toggle('open'); }
+    document.addEventListener('click', function(e) { if (!e.target.closest('.viz-menu')) document.getElementById('vizMenuDropdown').classList.remove('open'); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') document.getElementById('vizMenuDropdown').classList.remove('open'); });
+
+    var savedTheme = localStorage.getItem('viz-theme'); var currentTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    function applyTheme(t) {
+      document.documentElement.className = 'theme-' + t;
+      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark' : 'Light';
+      localStorage.setItem('viz-theme', t); currentTheme = t;
+    }
+    function cycleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
+    applyTheme(currentTheme);
+
+    // Search/filter
+    function filterCommands() {
+      var query = document.getElementById('searchInput').value.toLowerCase().trim();
+      var allItems = document.querySelectorAll('.cmd-list li');
+      var visible = 0;
+      allItems.forEach(function(li) {
+        var text = li.textContent.toLowerCase();
+        var match = !query || text.indexOf(query) !== -1;
+        li.classList.toggle('hidden', !match);
+        if (match) visible++;
+      });
+      var countEl = document.getElementById('searchCount');
+      countEl.textContent = query ? visible + ' result' + (visible !== 1 ? 's' : '') : '';
+      // Open sections with matches
+      if (query) {
+        document.querySelectorAll('details.section-card').forEach(function(d) {
+          var hasVisible = d.querySelector('.cmd-list li:not(.hidden)');
+          d.open = !!hasVisible;
+        });
+      }
+    }
+
+    // Copy code on click with toast notification
+    document.addEventListener('click', function(e) {
+      if (e.target.tagName === 'CODE') {
+        navigator.clipboard.writeText(e.target.textContent).then(function() {
+          e.target.style.background = 'color-mix(in srgb, var(--positive), transparent 80%)';
+          setTimeout(function() { e.target.style.background = ''; }, 600);
+          
+          // Show toast notification
+          showCopyToast();
+        });
+      }
+    });
+    
+    function showCopyToast() {
+      var existingToast = document.querySelector('.copy-toast');
+      if (existingToast) existingToast.remove();
+      
+      var toast = document.createElement('div');
+      toast.className = 'copy-toast';
+      toast.textContent = 'Copied! ✓';
+      document.body.appendChild(toast);
+      
+      setTimeout(function() { toast.classList.add('show'); }, 10);
+      setTimeout(function() { 
+        toast.classList.remove('show');
+        setTimeout(function() { if (toast.parentNode) toast.remove(); }, 300);
+      }, 2000);
+    }
+
+    async function downloadImage() {
+      var menu = document.querySelector('.viz-menu');
+      menu.style.display = 'none';
+      // Open all sections for export
+      document.querySelectorAll('details.section-card').forEach(function(d) { d.open = true; });
+      try {
+        var url = await htmlToImage.toPng(document.body, { quality: 1, pixelRatio: 2, filter: function(n) { return !n.classList || !n.classList.contains('viz-menu'); } });
+        var a = document.createElement('a'); a.href = url; a.download = 'claude-code-cheat-sheet.png'; a.click();
+      } catch(e) { console.error('Download failed:', e); }
+      menu.style.display = '';
+    }
+  </script>
+</body>
+</html>

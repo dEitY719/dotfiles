@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ko" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 시대, 개발자가 살아남는 5가지 방법</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    
+    
+    html.theme-dark {
+      --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C;
+      --border: rgba(255,255,255,0.08);
+      --text: #EDEDED; --text-secondary: #888;
+      --accent: #8b5cf6; --accent-secondary: #7c3aed;
+      --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b;
+    }
+    html.theme-light {
+      --bg: #FAFAF9; --surface: #ffffff; --surface-hover: #F5F5F4;
+      --border: rgba(0,0,0,0.08);
+      --text: #0f172a; --text-secondary: #64748b;
+      --accent: #8b5cf6; --accent-secondary: #7c3aed;
+      --positive: #059669; --negative: #e11d48; --warning: #d97706;
+    }
+
+    body {
+      font-family: 'Noto Sans KR', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6; letter-spacing: -0.011em; -webkit-font-smoothing: antialiased;
+      scrollbar-gutter: stable;
+      font-feature-settings: 'cv11', 'ss01';
+      transition: background 0.3s, color 0.3s;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; overflow: hidden;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: -1;
+      background: radial-gradient(ellipse 80% 50% at 50% 20%, 
+        color-mix(in srgb, var(--accent), transparent 92%), transparent);
+    }
+
+    *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slideInFromRight {
+      from { opacity: 0; transform: translateX(40px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .animate { animation: fadeInUp 0.6s ease-out both; }
+    .animate.delay-1 { animation-delay: 0.1s; }
+    .animate.delay-2 { animation-delay: 0.2s; }
+    .animate.delay-3 { animation-delay: 0.3s; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    @media print {
+      body { background: white !important; color: black !important; overflow: visible !important; height: auto !important; }
+      .viz-menu, .theme-toggle, .carousel-nav, .card-counter { display: none !important; }
+      .carousel-viewport { overflow: visible !important; }
+      .carousel-track { display: grid !important; grid-template-columns: repeat(2, 1fr) !important; gap: 16px !important; transform: none !important; transition: none !important; }
+      .carousel-card { width: auto !important; min-width: 0 !important; break-inside: avoid; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+
+    /* === Hamburger Menu === */
+    .viz-menu {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 9999;
+      font-family: var(--font, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    }
+
+    .viz-menu-toggle {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .viz-menu-toggle:hover {
+      background: var(--surface-hover);
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .viz-menu-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 200px;
+      background: var(--surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 6px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-8px) scale(0.96);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+
+    .viz-menu-dropdown.open {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0) scale(1);
+    }
+
+    .viz-menu-dropdown button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 0.875rem;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.15s;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .viz-menu-dropdown button:hover {
+      background: var(--surface-hover);
+    }
+
+    .viz-menu-icon {
+      font-size: 1rem;
+      width: 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    /* ===== CAROUSEL ===== */
+    .carousel-wrapper {
+      width: min(1200px, 95vmin); height: min(1200px, 95vmin);
+      position: relative;
+    }
+    .carousel-viewport {
+      width: 100%; height: 100%; overflow: hidden; border-radius: 12px;
+      border: 1px solid var(--border); 
+      box-shadow: 0 4px 24px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0.05);
+    }
+    .carousel-track {
+      display: flex; height: 100%;
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .carousel-card {
+      min-width: 100%; height: 100%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 64px; text-align: center; position: relative;
+      background: var(--surface);
+      overflow: hidden;
+      border-left: 4px solid transparent;
+      transition: border-color 0.3s ease;
+    }
+    .carousel-card.active {
+      border-left: 3px solid transparent;
+      animation: slideInFromRight 0.6s ease-out;
+    }
+
+    /* Per-card accent colors */
+    .carousel-card:nth-child(1) { --card-accent: #3b82f6; }
+    .carousel-card:nth-child(2) { --card-accent: #8b5cf6; }
+    .carousel-card:nth-child(3) { --card-accent: #ec4899; }
+    .carousel-card:nth-child(4) { --card-accent: #10b981; }
+    .carousel-card:nth-child(5) { --card-accent: #f59e0b; }
+    .carousel-card:nth-child(6) { --card-accent: #06b6d4; }
+    .carousel-card:nth-child(7) { --card-accent: #f43f5e; }
+
+    /* Subtle radial glow per card */
+    .carousel-card::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 60% 50% at 50% 30%, var(--card-accent) 0%, transparent 70%);
+      opacity: 0.7; pointer-events: none;
+    }
+
+    /* Enhanced cover decoration */
+    .cover-decoration {
+      position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+    }
+    .cover-decoration svg { position: absolute; opacity: 0.75; }
+    .cover-decoration .mesh-tl { top: -10%; left: -10%; width: 60%; height: 60%; }
+    .cover-decoration .mesh-br { bottom: -10%; right: -10%; width: 50%; height: 50%; }
+    .cover-decoration .mesh-ring { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; height: 80%; opacity:  0.5; }
+
+    .card-number {
+      font-size: clamp(4rem, 12vmin, 8rem); font-weight: 900;
+      color: var(--card-accent); opacity: 0.4;
+      position: absolute; top: 32px; left: 48px; line-height: 1;
+      font-family: 'Inter', sans-serif;
+      text-shadow: 0 0 32px color-mix(in srgb, var(--card-accent), transparent 50%);
+    }
+    .card-tip-title {
+      font-size: clamp(1.8rem, 5.5vmin, 3rem); font-weight: 700;
+      line-height: 1.25; margin-bottom: 24px; max-width: 16ch;
+      letter-spacing: -0.03em;
+      text-wrap: balance;
+      }
+    .card-description {
+      font-size: clamp(1rem, 2.5vmin, 1.35rem); color: var(--text-secondary);
+      max-width: 28ch; line-height: 1.7;
+    }
+    .card-title-main {
+      font-size: clamp(2.8rem, 9vmin, 5rem); font-weight: 900;
+      line-height: 1.15; margin-bottom: 20px;
+      color: var(--text);
+      letter-spacing: -0.03em;
+      text-wrap: balance;
+      }
+    .card-subtitle {
+      font-size: clamp(0.75rem, 2vmin, 0.875rem); color: var(--accent);
+      font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+      background: color-mix(in srgb, var(--accent), transparent 90%);
+      padding: 8px 16px; border-radius: 6px; display: inline-block;
+      border: 1px solid color-mix(in srgb, var(--accent), transparent 70%);
+    }
+    .card-handle {
+      font-size: clamp(0.875rem, 2vmin, 1rem); color: var(--text-secondary);
+      font-weight: 600; margin-top: 24px;
+    }
+    .card-icon {
+      width: 56px; height: 56px; margin-bottom: 24px;
+      color: var(--card-accent);
+    }
+
+    /* Enhanced step indicator dots on content cards */
+    .step-dots {
+      display: flex; gap: 12px; margin-bottom: 32px;
+    }
+    .step-dots span {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--border);
+      transition: all 0.3s ease;
+      position: relative;
+    }
+    .step-dots span.active {
+      background: var(--card-accent);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--card-accent), transparent 80%);
+    }
+
+    /* Navigation */
+    .carousel-nav {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      width: 48px; height: 48px; border-radius: 50%;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(12px); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); z-index: 10;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .carousel-nav:hover { 
+      background: var(--surface-hover); 
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25); 
+      transform: translateY(-50%) scale(1.05);
+    }
+    .carousel-nav.prev { left: -24px; }
+    .carousel-nav.next { right: -24px; }
+    .carousel-nav:disabled { 
+      opacity: 0.3; 
+      cursor: default; 
+      transform: translateY(-50%) scale(1);
+    }
+    
+    /* Mobile responsiveness for navigation */
+    @media (max-width: 768px) {
+      .carousel-nav.prev { left: 16px; }
+      .carousel-nav.next { right: 16px; }
+      .carousel-nav {
+        width: 40px; height: 40px;
+        bottom: 16px; top: auto; transform: none;
+      }
+      .carousel-nav.prev { bottom: 16px; left: 16px; }
+      .carousel-nav.next { bottom: 16px; right: 16px; }
+    }
+
+    .card-counter {
+      position: absolute; bottom: 24px; right: 32px;
+      font-size: 0.875rem; color: var(--text-secondary);
+      font-weight: 600; font-variant-numeric: tabular-nums;
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* CTA card */
+    .cta-list {
+      list-style: none; text-align: left; margin: 24px 0;
+      font-size: clamp(0.875rem, 2vmin, 1.1rem); color: var(--text-secondary);
+      line-height: 2.2;
+    }
+    .cta-list li { 
+      display: flex; align-items: center; gap: 12px; 
+      padding: 8px 12px; margin: 4px 0; border-radius: 8px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+    }
+    .cta-list li:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+      transform: translateX(4px);
+    }
+    .cta-list li svg { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
+    .cta-handle {
+      font-size: clamp(1.25rem, 3.5vmin, 1.75rem); font-weight: 700;
+      margin-top: 24px; color: var(--accent);
+    }
+
+    .skip-link {
+      position: absolute; top: -100px; left: 16px; padding: 8px 16px;
+      background: var(--accent); color: #fff; border-radius: 8px;
+      text-decoration: none; z-index: 99999; font-weight: 600;
+    }
+    .skip-link:focus { top: 16px; }
+
+    /* Hero content previews */
+    .hero-previews {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 18px; margin-top: 40px; max-width: 450px;
+    }
+    .hero-preview {
+      aspect-ratio: 1; background: color-mix(in srgb, var(--preview-accent), transparent 88%);
+      border: 1px solid color-mix(in srgb, var(--preview-accent), transparent 30%); border-radius: 12px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 0.8rem; color: var(--preview-accent); text-align: center;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer;
+      position: relative; overflow: hidden;
+      padding: 16px 12px; font-weight: 600;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .hero-preview::before {
+      content: ''; position: absolute; inset: 0;
+      background: var(--preview-accent); opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .hero-preview:hover {
+      background: color-mix(in srgb, var(--preview-accent), transparent 80%);
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 8px 24px color-mix(in srgb, var(--preview-accent), transparent 65%);
+      border-color: var(--preview-accent);
+    }
+    .hero-preview:hover::before { opacity: 0.1; }
+    .hero-preview:nth-child(1) { --preview-accent: #8b5cf6; }
+    .hero-preview:nth-child(2) { --preview-accent: #ec4899; }
+    .hero-preview:nth-child(3) { --preview-accent: #10b981; }
+    .hero-preview:nth-child(4) { --preview-accent: #f59e0b; }
+    .hero-preview:nth-child(5) { --preview-accent: #06b6d4; }
+    .hero-preview svg {
+      width: 24px; height: 24px; margin-bottom: 10px;
+      color: var(--preview-accent);
+      filter: brightness(1.1);
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">콘텐츠로 건너뛰기</a>
+  <main id="main-content">
+
+  <!-- Hamburger Menu -->
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="메뉴">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="5" x2="17" y2="5"/>
+        <line x1="3" y1="10" x2="17" y2="10"/>
+        <line x1="3" y1="15" x2="17" y2="15"/>
+      </svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()">
+        <span class="viz-menu-icon">◐</span>
+        <span>테마: <span id="themeLabel">Dark</span></span>
+      </button>
+      <button onclick="downloadCurrentCard()">
+        <span class="viz-menu-icon">⤓</span>
+        <span>카드 PNG 다운로드</span>
+      </button>
+      <button onclick="printPDF()">
+        <span class="viz-menu-icon">⎙</span>
+        <span>인쇄 / PDF</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="carousel-wrapper" role="region" aria-label="캐러셀: AI 시대, 개발자가 살아남는 5가지 방법" aria-roledescription="carousel">
+    <button class="carousel-nav prev" onclick="goTo(currentSlide-1)" aria-label="이전 카드">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <button class="carousel-nav next" onclick="goTo(currentSlide+1)" aria-label="다음 카드">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+    </button>
+
+    <div class="carousel-viewport">
+      <div class="carousel-track" id="carouselTrack" aria-live="polite">
+
+        <!-- Card 1: Title -->
+        <div class="carousel-card" role="group" aria-roledescription="slide" aria-label="슬라이드 1/7: 타이틀">
+          <!-- Enhanced hero section with gradient background -->
+          <div style="position:absolute;inset:0;pointer-events:none;overflow:hidden;">
+            <div style="position:absolute;inset:0;background:linear-gradient(135deg, color-mix(in srgb, var(--accent), transparent 88%) 0%, color-mix(in srgb, var(--accent-secondary), transparent 92%) 50%, transparent 100%);"></div>
+          </div>
+          <!-- Bold AI-themed hero visual element -->
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:1;">
+            <svg viewBox="0 0 480 480" fill="none" style="width:380px;height:380px;opacity:0.2;">
+              <!-- Central AI brain/processor -->
+              <circle cx="240" cy="240" r="120" fill="var(--accent)" opacity="0.8"/>
+              <circle cx="240" cy="240" r="80" fill="var(--surface)" opacity="0.9"/>
+              <!-- Neural network nodes -->
+              <circle cx="180" cy="160" r="16" fill="var(--accent)" opacity="0.9"/>
+              <circle cx="300" cy="160" r="16" fill="var(--accent-secondary)" opacity="0.9"/>
+              <circle cx="160" cy="240" r="16" fill="var(--positive)" opacity="0.9"/>
+              <circle cx="320" cy="240" r="16" fill="var(--warning)" opacity="0.9"/>
+              <circle cx="180" cy="320" r="16" fill="var(--negative)" opacity="0.9"/>
+              <circle cx="300" cy="320" r="16" fill="var(--accent-secondary)" opacity="0.9"/>
+              <!-- Connections between nodes -->
+              <line x1="180" y1="160" x2="240" y2="200" stroke="var(--accent)" stroke-width="3" opacity="0.6"/>
+              <line x1="300" y1="160" x2="240" y2="200" stroke="var(--accent-secondary)" stroke-width="3" opacity="0.6"/>
+              <line x1="160" y1="240" x2="200" y2="240" stroke="var(--positive)" stroke-width="3" opacity="0.6"/>
+              <line x1="320" y1="240" x2="280" y2="240" stroke="var(--warning)" stroke-width="3" opacity="0.6"/>
+              <line x1="180" y1="320" x2="240" y2="280" stroke="var(--negative)" stroke-width="3" opacity="0.6"/>
+              <line x1="300" y1="320" x2="240" y2="280" stroke="var(--accent-secondary)" stroke-width="3" opacity="0.6"/>
+              <!-- Central number 5 for "5가지 방법" -->
+              <text x="240" y="260" text-anchor="middle" font-family="Noto Sans KR, Inter" font-size="64" font-weight="900" fill="var(--accent)">5</text>
+            </svg>
+          </div>
+          <div class="card-subtitle animate">개발자 생존 가이드</div>
+          <h1 class="card-title-main animate delay-1">AI 시대,<br>개발자가 살아남는<br>5가지 방법</h1>
+          <p class="card-description animate delay-2">스와이프하여 확인하세요 →</p>
+          <!-- Colored section divider -->
+          <div style="width:80px;height:4px;background:linear-gradient(90deg,var(--accent),var(--accent-secondary));border-radius:2px;margin:24px auto;" class="animate delay-3"></div>
+          
+          <!-- Content previews -->
+          <div class="hero-previews animate delay-3">
+            <div class="hero-preview" onclick="goTo(1)" title="AI 도구 활용">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+              </svg>
+              AI 도구
+            </div>
+            <div class="hero-preview" onclick="goTo(2)" title="프롬프트 엔지니어링">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+              </svg>
+              프롬프트
+            </div>
+            <div class="hero-preview" onclick="goTo(3)" title="시스템 사고">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33"/>
+              </svg>
+              시스템
+            </div>
+            <div class="hero-preview" onclick="goTo(4)" title="1인 팀">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+              1인 팀
+            </div>
+            <div class="hero-preview" onclick="goTo(5)" title="학습과 실행">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+              학습
+            </div>
+          </div>
+          
+          <div class="card-handle animate delay-3">@careerhackeralex</div>
+          <div class="card-counter" aria-live="polite" id="cardCounter">1 / 7</div>
+        </div>
+
+        <!-- Card 2: Tip 1 -->
+        <div class="carousel-card" role="group" aria-roledescription="slide" aria-label="슬라이드 2/7: AI 도구를 활용하라">
+          <div class="card-number">01</div>
+          <div class="step-dots"><span class="active"></span><span></span><span></span><span></span><span></span></div>
+          <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          <h2 class="card-tip-title">AI 도구를 두려워하지 말고 활용하라</h2>
+          <p class="card-description">AI는 당신의 대체재가 아니라 부조종사입니다. 함께 일하면 혼자보다 10배 빠릅니다.</p>
+          <div class="card-counter">2 / 7</div>
+        </div>
+
+        <!-- Card 3: Tip 2 -->
+        <div class="carousel-card" role="group" aria-roledescription="slide" aria-label="슬라이드 3/7: 프롬프트 엔지니어링">
+          <div class="card-number">02</div>
+          <div class="step-dots"><span></span><span class="active"></span><span></span><span></span><span></span></div>
+          <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <h2 class="card-tip-title">프롬프트 엔지니어링을 마스터하라</h2>
+          <p class="card-description">AI와 소통하는 능력이 새로운 코딩 스킬입니다. 질문을 잘하는 사람이 답을 잘 얻습니다.</p>
+          <div class="card-counter">3 / 7</div>
+        </div>
+
+        <!-- Card 4: Tip 3 -->
+        <div class="carousel-card" role="group" aria-roledescription="slide" aria-label="슬라이드 4/7: 시스템 사고">
+          <div class="card-number">03</div>
+          <div class="step-dots"><span></span><span></span><span class="active"></span><span></span><span></span></div>
+          <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          <h2 class="card-tip-title">시스템 사고를 키워라</h2>
+          <p class="card-description">AI가 코드를 생성하지만, 시스템을 설계하는 건 인간입니다. 큰 그림을 보는 능력이 핵심입니다.</p>
+          <div class="card-counter">4 / 7</div>
+        </div>
+
+        <!-- Card 5: Tip 4 -->
+        <div class="carousel-card" role="group" aria-roledescription="slide" aria-label="슬라이드 5/7: 1인 팀의 힘">
+          <div class="card-number">04</div>
+          <div class="step-dots"><span></span><span></span><span></span><span class="active"></span><span></span></div>
+          <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <h2 class="card-tip-title">1인 팀의 힘을 믿어라</h2>
+          <p class="card-description">한 사람 + AI는 AI 없는 대규모 팀보다 강력합니다. 레버리지의 시대가 왔습니다.</p>
+          <div class="card-counter">5 / 7</div>
+        </div>
+
+        <!-- Card 6: Tip 5 -->
+        <div class="carousel-card" role="group" aria-roledescription="slide" aria-label="슬라이드 6/7: 끊임없이 배우고 실행하라">
+          <div class="card-number">05</div>
+          <div class="step-dots"><span></span><span></span><span></span><span></span><span class="active"></span></div>
+          <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          <h2 class="card-tip-title">끊임없이 배우고 빠르게 실행하라</h2>
+          <p class="card-description">배움의 속도가 유일한 경쟁 우위입니다. 완벽보다 속도, 이론보다 실행이 중요합니다.</p>
+          <div class="card-counter">6 / 7</div>
+        </div>
+
+        <!-- Card 7: CTA -->
+        <div class="carousel-card" role="group" aria-roledescription="slide" aria-label="슬라이드 7/7: 팔로우 CTA">
+          <div class="cover-decoration">
+            <svg class="mesh-ring" viewBox="0 0 400 400" fill="none">
+              <circle cx="200" cy="200" r="180" stroke="var(--accent)" stroke-width="0.4" stroke-dasharray="8 12"/>
+              <circle cx="200" cy="200" r="140" stroke="var(--accent-secondary)" stroke-width="0.4" stroke-dasharray="6 10"/>
+              <!-- Success/completion pattern -->
+              <path d="M140 200 L180 240 L260 160" stroke="var(--positive)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+              <circle cx="200" cy="200" r="80" stroke="var(--positive)" stroke-width="0.6" opacity="0.4"/>
+            </svg>
+          </div>
+          <h2 class="card-tip-title" style="margin-bottom: 8px;">요약하면</h2>
+          <ul class="cta-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> AI 도구를 활용하라</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> 프롬프트 엔지니어링을 마스터하라</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> 시스템 사고를 키워라</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> 1인 팀의 힘을 믿어라</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> 끊임없이 배우고 빠르게 실행하라</li>
+          </ul>
+          <div class="cta-handle">팔로우하세요 @careerhackeralex</div>
+          <div class="card-counter">7 / 7</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  </main>
+  <script>
+    function toggleMenu() { document.getElementById('vizMenuDropdown').classList.toggle('open'); }
+    document.addEventListener('click', function(e) { if (!e.target.closest('.viz-menu')) document.getElementById('vizMenuDropdown').classList.remove('open'); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') document.getElementById('vizMenuDropdown').classList.remove('open'); });
+
+    // === Theme system ===
+    const themes = [
+      { name: 'Dark', class: 'theme-dark' },
+      { name: 'Light', class: 'theme-light' },
+      { name: 'Auto', class: 'theme-auto' },
+    ];
+    let currentTheme = 0;
+
+    function cycleTheme() {
+      // Remove all theme classes
+      themes.forEach(t => document.documentElement.classList.remove(t.class));
+      // Advance to next
+      currentTheme = (currentTheme + 1) % themes.length;
+      document.documentElement.classList.add(themes[currentTheme].class);
+      document.getElementById('themeLabel').textContent = themes[currentTheme].name;
+      // Persist
+      localStorage.setItem('viz-theme', currentTheme);
+    }
+
+    // Restore saved theme on load
+    (function() {
+      const saved = localStorage.getItem('viz-theme');
+      if (saved !== null) {
+        currentTheme = parseInt(saved);
+        document.documentElement.classList.add(themes[currentTheme].class);
+        document.getElementById('themeLabel').textContent = themes[currentTheme].name;
+      }
+    })();
+
+    // === Print as PDF ===
+    function printPDF() {
+      window.print();
+    }
+
+    var currentSlide = 0;
+    var totalSlides = document.querySelectorAll('.carousel-card').length;
+    var track = document.getElementById('carouselTrack');
+
+    function goTo(index) {
+      if (index < 0 || index >= totalSlides) return;
+      currentSlide = index;
+      track.style.transform = 'translateX(-' + (currentSlide * 100) + '%)';
+      document.querySelector('.carousel-nav.prev').disabled = currentSlide === 0;
+      document.querySelector('.carousel-nav.next').disabled = currentSlide === totalSlides - 1;
+      document.getElementById('cardCounter').textContent = (currentSlide + 1) + ' / ' + totalSlides;
+      
+      // Update active slide animation
+      document.querySelectorAll('.carousel-card').forEach(function(card, i) {
+        card.classList.toggle('active', i === currentSlide);
+      });
+    }
+    goTo(0);
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(currentSlide - 1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); goTo(currentSlide + 1); }
+    });
+
+    var touchStartX = 0;
+    var viewport = document.querySelector('.carousel-viewport');
+    viewport.addEventListener('touchstart', function(e) { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
+    viewport.addEventListener('touchend', function(e) {
+      var diff = touchStartX - e.changedTouches[0].screenX;
+      if (Math.abs(diff) > 50) { diff > 0 ? goTo(currentSlide + 1) : goTo(currentSlide - 1); }
+    });
+
+    async function downloadCurrentCard() {
+      var menu = document.querySelector('.viz-menu');
+      var navs = document.querySelectorAll('.carousel-nav');
+      menu.style.display = 'none';
+      navs.forEach(function(n) { n.style.display = 'none'; });
+      try {
+        var card = document.querySelectorAll('.carousel-card')[currentSlide];
+        var url = await htmlToImage.toPng(card, { 
+          quality: 1, 
+          pixelRatio: 2, 
+          width: 1080, 
+          height: 1080,
+          filter: function(n) { 
+            return !n.classList || (!n.classList.contains('viz-menu') && !n.classList.contains('carousel-nav')); 
+          } 
+        });
+        var a = document.createElement('a'); a.href = url;
+        a.download = 'ai-시대-카드-' + (currentSlide + 1) + '.png'; a.click();
+      } catch(e) { 
+        console.error('다운로드 실패:', e); 
+        alert('카드 다운로드에 실패했습니다. 인쇄 기능을 사용해 보세요.');
+      }
+      menu.style.display = '';
+      navs.forEach(function(n) { n.style.display = ''; });
+    }
+  </script>
+</body>
+</html>

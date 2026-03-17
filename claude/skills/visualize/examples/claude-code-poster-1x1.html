@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ko" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Code — 노트북 하나로 모든 것을</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Noto Sans KR', 'Inter', sans-serif;
+      width: 1080px; height: 1080px;
+      overflow: hidden;
+      background: #050505;
+      color: #f0f0f0;
+      -webkit-font-smoothing: antialiased;
+      position: relative;
+    }
+
+    /* === Ambient glow === */
+    .glow-1 {
+      position: absolute; top: -200px; left: -200px;
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(217,119,87,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .glow-2 {
+      position: absolute; bottom: -200px; right: -150px;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .glow-3 {
+      position: absolute; top: 40%; left: 50%;
+      width: 400px; height: 400px;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(59,130,246,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* === Header === */
+    .header {
+      padding: 56px 60px 0;
+      position: relative; z-index: 1;
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(217,119,87,0.1); border: 1px solid rgba(217,119,87,0.2);
+      border-radius: 100px; padding: 6px 14px;
+      font-size: 12px; font-weight: 600; color: #d97757;
+      letter-spacing: 0.02em;
+      margin-bottom: 20px;
+    }
+    .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #d97757; }
+    .title {
+      font-size: 42px; font-weight: 800; line-height: 1.15;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #ffffff 0%, #d97757 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      font-size: 16px; color: #888; font-weight: 400;
+      letter-spacing: -0.01em;
+    }
+
+    /* === Grid === */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 10px;
+      padding: 32px 60px 0;
+      position: relative; z-index: 1;
+      height: 620px;
+    }
+    .cell {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px;
+      padding: 20px;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+    .cell::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--cell-accent, transparent);
+      opacity: 0.6;
+    }
+    .cell-icon {
+      font-size: 24px;
+      margin-bottom: 8px;
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+    }
+    .cell-title {
+      font-size: 15px; font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.3;
+      margin-bottom: 4px;
+    }
+    .cell-desc {
+      font-size: 11.5px; color: #666; font-weight: 400;
+      line-height: 1.5;
+    }
+    .cell-tag {
+      display: inline-block;
+      font-size: 10px; font-weight: 600;
+      padding: 3px 8px; border-radius: 4px;
+      margin-top: auto;
+      background: rgba(255,255,255,0.04);
+      color: #555;
+      letter-spacing: 0.03em;
+    }
+
+    /* Feature cell — larger */
+    .cell.featured {
+      grid-column: span 2;
+      background: rgba(217,119,87,0.04);
+      border-color: rgba(217,119,87,0.1);
+      --cell-accent: #d97757;
+    }
+    .cell.featured .cell-title { font-size: 18px; }
+
+    /* Accent colors per row */
+    .cell.c-orange { --cell-accent: #d97757; }
+    .cell.c-blue { --cell-accent: #3b82f6; }
+    .cell.c-purple { --cell-accent: #8b5cf6; }
+    .cell.c-green { --cell-accent: #10b981; }
+    .cell.c-pink { --cell-accent: #ec4899; }
+    .cell.c-yellow { --cell-accent: #f59e0b; }
+
+    /* === Footer === */
+    .footer {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 0 60px 40px;
+      display: flex; justify-content: space-between; align-items: flex-end;
+      z-index: 1;
+    }
+    .footer-left {
+      font-size: 12px; color: #444; font-weight: 500;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .footer-logo {
+      width: 16px; height: 16px; border-radius: 4px;
+      background: linear-gradient(135deg, #d97757, #c2410c);
+    }
+    .footer-right {
+      font-size: 11px; color: #333; font-weight: 400;
+    }
+    .footer-cta {
+      font-size: 13px; color: #d97757; font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+  </style>
+</head>
+<body>
+  <div class="glow-1"></div>
+  <div class="glow-2"></div>
+  <div class="glow-3"></div>
+
+  <div class="header">
+    <div class="badge">Claude Code</div>
+    <div class="title">노트북 하나로<br>모든 것을 만든다</div>
+    <div class="subtitle">AI 코딩 에이전트가 바꾸는 1인 개발의 새로운 기준</div>
+  </div>
+
+  <div class="grid">
+    <!-- Row 1 -->
+    <div class="cell featured c-orange">
+      <div>
+        <div class="cell-icon">🚀</div>
+        <div class="cell-title">풀스택 앱 개발</div>
+        <div class="cell-desc">프론트엔드부터 백엔드, DB 설계까지<br>"앱 만들어줘" 한 마디면 끝</div>
+      </div>
+      <div class="cell-tag">REACT · NEXT.JS · POSTGRES</div>
+    </div>
+    <div class="cell c-blue">
+      <div>
+        <div class="cell-icon">🔧</div>
+        <div class="cell-title">리팩토링 & 디버깅</div>
+        <div class="cell-desc">10만 줄 코드베이스도 한번에 분석</div>
+      </div>
+      <div class="cell-tag">레거시 → 모던</div>
+    </div>
+    <div class="cell c-purple">
+      <div>
+        <div class="cell-icon">🧪</div>
+        <div class="cell-title">테스트 자동 생성</div>
+        <div class="cell-desc">유닛 · 통합 · E2E 테스트를 알아서</div>
+      </div>
+      <div class="cell-tag">COVERAGE ↑</div>
+    </div>
+
+    <!-- Row 2 -->
+    <div class="cell c-green">
+      <div>
+        <div class="cell-icon">📊</div>
+        <div class="cell-title">데이터 분석</div>
+        <div class="cell-desc">CSV → 인사이트 → 시각화까지 원스톱</div>
+      </div>
+      <div class="cell-tag">PANDAS · D3</div>
+    </div>
+    <div class="cell c-pink">
+      <div>
+        <div class="cell-icon">🎨</div>
+        <div class="cell-title">UI/UX 디자인</div>
+        <div class="cell-desc">피그마 없이 픽셀 퍼펙트 인터페이스</div>
+      </div>
+      <div class="cell-tag">TAILWIND CSS</div>
+    </div>
+    <div class="cell featured c-blue">
+      <div>
+        <div class="cell-icon">🤖</div>
+        <div class="cell-title">멀티 에이전트 시스템</div>
+        <div class="cell-desc">AI 에이전트가 AI 에이전트를 만들고<br>스스로 개선하는 자동화 파이프라인</div>
+      </div>
+      <div class="cell-tag">AGENT → AGENT → SHIP</div>
+    </div>
+
+    <!-- Row 3 -->
+    <div class="cell c-yellow">
+      <div>
+        <div class="cell-icon">📱</div>
+        <div class="cell-title">모바일 앱</div>
+        <div class="cell-desc">React Native / Flutter 앱도 혼자서</div>
+      </div>
+      <div class="cell-tag">iOS + ANDROID</div>
+    </div>
+    <div class="cell c-purple">
+      <div>
+        <div class="cell-icon">🔐</div>
+        <div class="cell-title">인프라 & 배포</div>
+        <div class="cell-desc">Docker, CI/CD, 클라우드 셋업</div>
+      </div>
+      <div class="cell-tag">AWS · VERCEL</div>
+    </div>
+    <div class="cell c-orange">
+      <div>
+        <div class="cell-icon">✍️</div>
+        <div class="cell-title">콘텐츠 제작</div>
+        <div class="cell-desc">블로그, 문서, 프레젠테이션 자동화</div>
+      </div>
+      <div class="cell-tag">마크다운 → HTML</div>
+    </div>
+    <div class="cell c-green">
+      <div>
+        <div class="cell-icon">🧠</div>
+        <div class="cell-title">AI 모델 파인튜닝</div>
+        <div class="cell-desc">데이터 준비부터 학습, 배포까지</div>
+      </div>
+      <div class="cell-tag">ML OPS</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-left">
+      <div class="footer-logo"></div>
+      claude code · anthropic
+    </div>
+    <div class="footer-cta">개발자 1명 = 팀 전체</div>
+    <div class="footer-right">@careerhackeralex</div>
+  </div>
+</body>
+</html>
