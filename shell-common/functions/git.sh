@@ -213,13 +213,15 @@ EOF
         return 0
     fi
 
-    # Show and execute deletions
+    # Show deletion targets, then delete all at once via xargs
     ux_header "Deleting $delete_count local branch(es):"
     while IFS= read -r branch; do
-        [ -n "$branch" ] || continue
-        ux_info "  $branch"
-        git branch -D "$branch" >/dev/null 2>&1
+        [ -n "$branch" ] && ux_info "  $branch"
     done <<EOF
+$delete_list
+EOF
+
+    xargs -r git branch -D >/dev/null 2>&1 <<EOF
 $delete_list
 EOF
 
