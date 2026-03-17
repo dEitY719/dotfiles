@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SaaS Analytics Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    
+    
+    html.theme-dark { --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C; --border: rgba(255,255,255,0.04); --text: #EDEDED; --text-secondary: #888; --accent: #10b981; --accent-secondary: #059669; --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b; }
+    html.theme-light { --bg: #FAFAF9; --surface: #ffffff; --surface-hover: #F5F5F4; --border: rgba(0,0,0,0.08); --text: #0f172a; --text-secondary: #64748b; --accent: #10b981; --accent-secondary: #059669; --positive: #059669; --negative: #e11d48; --warning: #d97706; }
+
+    body { 
+      font-family: 'Inter', -apple-system, sans-serif; 
+      background: var(--bg);
+      color: var(--text); 
+      line-height: 1.6; 
+      -webkit-font-smoothing: antialiased; 
+      scrollbar-gutter: stable;
+      letter-spacing: -0.011em; 
+      font-feature-settings: 'cv11', 'ss01'; 
+      font-weight: 400;
+      transition: background 0.3s, color 0.3s;
+    }
+    body::after {
+      content: ''; position: fixed; inset: 0; z-index: -1; opacity: 0.03;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+    h1, h2, h3, h4 { color: var(--text); letter-spacing: -0.03em; line-height: 1.05; font-weight: 700; text-wrap: balance; }
+    h2, h3 { font-weight: 600; letter-spacing: -0.02em; }
+    h4 { font-weight: 600; }
+    *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    .kpi:nth-child(1) { animation: fadeInUp 0.5s ease both 0s; }
+    .kpi:nth-child(2) { animation: fadeInUp 0.5s ease both 0.08s; }
+    .kpi:nth-child(3) { animation: fadeInUp 0.5s ease both 0.16s; }
+    .kpi:nth-child(4) { animation: fadeInUp 0.5s ease both 0.24s; }
+    .chart-card { animation: fadeInUp 0.5s ease both 0.32s; }
+    .bottom-card:nth-child(1) { animation: fadeInUp 0.5s ease both 0.4s; }
+    .bottom-card:nth-child(2) { animation: fadeInUp 0.5s ease both 0.48s; }
+
+    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; z-index: 10000; padding: 8px 16px; background: var(--accent); color: #fff; text-decoration: none; border-radius: 8px; }
+    .skip-link:focus { left: 16px; top: 16px; width: auto; height: auto; overflow: visible; }
+
+    @media print { body { background: #fff !important; color: #000 !important; } .viz-menu { display: none !important; } * { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+
+    .theme-toggle { position: fixed; top: 16px; right: 68px; z-index: 9999; width: 44px; height: 44px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(12px); transition: all 0.2s; }
+    .theme-toggle:hover { background: var(--surface-hover); }
+    .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .theme-dark .theme-toggle .sun-icon { display: none; }
+    .theme-light .theme-toggle .moon-icon { display: none; }
+    .viz-menu { position: fixed; top: 16px; right: 16px; z-index: 9999; }
+    .viz-menu-toggle { width: 40px; height: 40px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .viz-menu-toggle:hover { background: var(--surface-hover); }
+    .viz-menu-dropdown { position: absolute; top: 48px; right: 0; min-width: 160px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05); opacity: 0; visibility: hidden; transform: translateY(-4px); transition: all 0.15s; }
+    .viz-menu-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); animation: dropdownIn 0.15s ease; }
+    @keyframes dropdownIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+    .viz-menu-dropdown button { width: 100%; padding: 8px 12px; border: none; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 0.875rem; font-family: inherit; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 8px; transition: background 0.15s, color 0.15s; }
+    .viz-menu-dropdown button:hover { background: var(--surface-hover); color: var(--text); }
+
+    .dashboard { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .dash-header { margin-bottom: 32px; }
+    .dash-header h1 { 
+      font-size: clamp(1.75rem, 4vw, 2.5rem); 
+      margin-bottom: 8px; 
+      letter-spacing: -0.03em;
+      text-wrap: balance;
+        line-height: 1.05;
+      font-weight: 700;
+    }
+    .dash-header p { color: var(--text-secondary); font-size: 1rem; line-height: 1.5; }
+
+    /* KPI row */
+    .kpi-grid { 
+      display: grid; 
+      grid-template-columns: repeat(4, 1fr); 
+      gap: 2px; 
+      background: var(--border); 
+      border-radius: 12px; 
+      overflow: hidden; 
+      margin-bottom: 32px; 
+      border: 4px solid rgba(255,255,255,0.08);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    }
+    .theme-light .kpi-grid { border: 4px solid rgba(0,0,0,0.08); }
+    .kpi { 
+      background: var(--surface); 
+      padding: 28px; 
+      transition: all 0.2s ease, transform 0.2s ease; 
+      position: relative;
+    }
+    .kpi:hover {
+      box-shadow: inset 0 0 0 1px var(--accent);
+      background: color-mix(in srgb, var(--accent), transparent 96%);
+      transform: scale(1.02);
+    }
+    .kpi:hover {
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+    }
+    .theme-light .kpi:hover {
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+    }
+    .kpi-label { 
+      font-size: 0.6875rem; 
+      color: var(--text-secondary); 
+      text-transform: uppercase; 
+      letter-spacing: 0.1em; 
+      font-weight: 500; 
+      margin-bottom: 12px; 
+    }
+    .kpi-value { 
+      font-size: 2.25rem; 
+      font-weight: 700; 
+      letter-spacing: -0.04em; 
+      margin-bottom: 8px; 
+      color: var(--accent);
+      line-height: 1;
+    }
+    .kpi-change { font-size: 0.8125rem; font-weight: 500; }
+    .kpi-change.up { color: var(--positive); }
+    .kpi-change.down { color: var(--negative); }
+
+    /* Charts */
+    .charts-row { display: grid; grid-template-columns: 3fr 2fr; gap: 20px; margin-bottom: 24px; }
+    .chart-card { 
+      background: var(--surface); 
+      border: 1px solid rgba(255,255,255,0.08); 
+      border-radius: 8px; 
+      padding: 24px; 
+      transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .chart-card:hover {
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 8px 16px rgba(0,0,0,0.08);
+      border-color: rgba(255,255,255,0.12);
+    }
+    .theme-light .chart-card { border: 1px solid rgba(0,0,0,0.08); }
+    .theme-light .chart-card:hover { 
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.08); 
+      border-color: rgba(0,0,0,0.12);
+    }
+    .chart-card h3 { 
+      font-size: 1rem; 
+      font-weight: 600; 
+      margin-bottom: 6px; 
+      letter-spacing: -0.02em; 
+    }
+    .chart-card .chart-sub { 
+      font-size: 0.8125rem; 
+      color: var(--text-secondary); 
+      margin-bottom: 24px; 
+      line-height: 1.5;
+    }
+    .chart-wrap { position: relative; height: 320px; }
+
+    /* Bottom row */
+    .bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .bottom-card { 
+      background: var(--surface); 
+      border: 1px solid rgba(255,255,255,0.08); 
+      border-radius: 8px; 
+      padding: 24px; 
+      transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .bottom-card:hover {
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 8px 16px rgba(0,0,0,0.08);
+      border-color: rgba(255,255,255,0.12);
+    }
+    .theme-light .bottom-card { border: 1px solid rgba(0,0,0,0.08); }
+    .theme-light .bottom-card:hover { 
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.08); 
+      border-color: rgba(0,0,0,0.12);
+    }
+    .comparison-block:hover, .card:hover, [data-reveal]:hover { border-color: rgba(255,255,255,0.12); }
+    .bottom-card h3 { 
+      font-size: 1rem; 
+      font-weight: 600; 
+      margin-bottom: 20px; 
+      letter-spacing: -0.02em; 
+    }
+
+    .activity-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+    .activity-text { flex: 1; }
+    .activity-text h4 { font-size: 0.8125rem; font-weight: 500; margin-bottom: 2px; }
+    .activity-text p { font-size: 0.75rem; color: var(--text-secondary); }
+    .activity-time { font-size: 0.6875rem; color: var(--text-secondary); white-space: nowrap; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 8px 0; font-size: 0.6875rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; border-bottom: 1px solid var(--border); }
+    td { padding: 10px 0; font-size: 0.8125rem; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    .badge { font-size: 0.6875rem; font-weight: 500; padding: 2px 8px; border-radius: 4px; }
+    .badge.up { background: rgba(12,206,107,0.1); color: var(--positive); }
+    .badge.down { background: rgba(238,0,0,0.1); color: var(--negative); }
+
+    @media (max-width: 768px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .charts-row, .bottom-row { grid-template-columns: 1fr; }
+      .kpi-value { font-size: 1.5rem; }
+    }
+    @media (max-width: 480px) {
+      .kpi-grid { grid-template-columns: 1fr; }
+    }
+  
+    .stat-card, .metric-card, .kpi-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .stat-card:hover, .metric-card:hover, .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); } /* hover-lift */
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+
+  <button class="theme-toggle" onclick="cycleTheme()" aria-label="Toggle theme">
+    <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+  </button>
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/></svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()"><span id="themeIcon">🌙</span><span id="themeLabel">Dark</span></button>
+      <button onclick="downloadImage()"><span>📥</span> Download PNG</button>
+      <button onclick="window.print()"><span>🖨️</span> Print / PDF</button>
+    </div>
+  </div>
+
+  <main id="main-content">
+    <div class="dashboard">
+      <header class="dash-header">
+        <h1>Analytics Dashboard</h1>
+        <p>Real-time performance metrics</p>
+      </header>
+
+      <section class="kpi-grid" role="region" aria-label="Key metrics">
+        <div class="kpi" role="group" aria-label="Active Users: 8,547">
+          <div class="kpi-label">Active Users</div>
+          <div class="kpi-value" data-count="8547">8,547</div>
+          <div class="kpi-change up">↑ 12.5% from last month</div>
+        </div>
+        <div class="kpi" role="group" aria-label="Revenue: $142K">
+          <div class="kpi-label">Monthly Revenue</div>
+          <div class="kpi-value" data-count="142" data-prefix="$" data-suffix="K">$142K</div>
+          <div class="kpi-change up">↑ 8.2% from last month</div>
+        </div>
+        <div class="kpi" role="group" aria-label="Churn Rate: 3.2%">
+          <div class="kpi-label">Churn Rate</div>
+          <div class="kpi-value" data-count="3.2" data-suffix="%">3.2%</div>
+          <div class="kpi-change down">↑ 0.4% from last month</div>
+        </div>
+        <div class="kpi" role="group" aria-label="Uptime: 96.8%">
+          <div class="kpi-label">System Uptime</div>
+          <div class="kpi-value" data-count="96.8" data-suffix="%">96.8%</div>
+          <div class="kpi-change up">↑ 0.3% from last month</div>
+        </div>
+      </section>
+
+      <section class="charts-row" aria-label="Charts">
+        <div class="chart-card" role="img" aria-label="Revenue growth line chart">
+          <h3>Revenue Growth</h3>
+          <p class="chart-sub">Last 12 months</p>
+          <div class="sr-only">Revenue by month: Jan $98K, Feb $102K, Mar $108K, Apr $115K, May $121K, Jun $128K, Jul $124K, Aug $132K, Sep $138K, Oct $135K, Nov $142K, Dec $142K.</div>
+          <div class="chart-wrap"><canvas id="revenueChart"></canvas></div>
+        </div>
+        <div class="chart-card" role="img" aria-label="User acquisition doughnut chart">
+          <h3>User Acquisition</h3>
+          <p class="chart-sub">Current month breakdown</p>
+          <div class="sr-only">Organic: 45%. Paid Ads: 28%. Referrals: 15%. Direct: 12%.</div>
+          <div class="chart-wrap"><canvas id="acquisitionChart"></canvas></div>
+        </div>
+      </section>
+
+      <section class="bottom-row" aria-label="Activity and features">
+        <div class="bottom-card">
+          <h3>Recent Activity</h3>
+          <div class="activity-item"><div class="activity-dot"></div><div class="activity-text"><h4>New user registration</h4><p>sarah.chen@example.com</p></div><span class="activity-time">2m ago</span></div>
+          <div class="activity-item"><div class="activity-dot" style="background:var(--positive)"></div><div class="activity-text"><h4>Payment received</h4><p>$299 annual — Acme Corp</p></div><span class="activity-time">15m ago</span></div>
+          <div class="activity-item"><div class="activity-dot" style="background:var(--text-secondary)"></div><div class="activity-text"><h4>Maintenance complete</h4><p>Server cluster updated</p></div><span class="activity-time">1h ago</span></div>
+          <div class="activity-item"><div class="activity-dot" style="background:var(--warning)"></div><div class="activity-text"><h4>Security alert</h4><p>Failed logins from unknown IP</p></div><span class="activity-time">3h ago</span></div>
+        </div>
+
+        <div class="bottom-card">
+          <h3>Top Features</h3>
+          <table aria-label="Feature usage and growth">
+            <thead><tr><th>Feature</th><th>Usage</th><th>Growth</th></tr></thead>
+            <tbody>
+              <tr><td>Analytics Dashboard</td><td>89.2%</td><td><span class="badge up">+5.1%</span></td></tr>
+              <tr><td>API Integration</td><td>76.8%</td><td><span class="badge up">+12.3%</span></td></tr>
+              <tr><td>Team Collaboration</td><td>68.4%</td><td><span class="badge up">+8.7%</span></td></tr>
+              <tr><td>Mobile App</td><td>54.6%</td><td><span class="badge down">-2.1%</span></td></tr>
+              <tr><td>Reporting Tools</td><td>43.2%</td><td><span class="badge up">+15.8%</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    var revenueChart, acquisitionChart;
+
+    function toggleMenu() { document.getElementById('vizMenuDropdown').classList.toggle('open'); }
+    document.addEventListener('click', function(e) { if (!e.target.closest('.viz-menu')) document.getElementById('vizMenuDropdown').classList.remove('open'); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') document.getElementById('vizMenuDropdown').classList.remove('open'); });
+
+    var savedTheme = localStorage.getItem('viz-theme'); var currentTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    function applyTheme(t) {
+      document.documentElement.className = 'theme-' + t;
+      document.getElementById('themeIcon').textContent = t === 'dark' ? '🌙' : '☀️';
+      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark' : 'Light';
+      localStorage.setItem('viz-theme', t); currentTheme = t;
+      if (typeof onThemeChange === 'function') onThemeChange();
+    }
+    function cycleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
+    applyTheme(currentTheme);
+
+    function animateCounters() {
+      document.querySelectorAll('[data-count]').forEach(function(el) {
+        if (el.dataset.counted) return; el.dataset.counted = '1';
+        var target = parseFloat(el.dataset.count), prefix = el.dataset.prefix || '', suffix = el.dataset.suffix || '';
+        var start = performance.now(), dur = 1000;
+        (function tick(now) { var p = Math.min((now - start) / dur, 1), e = 1 - Math.pow(1 - p, 3), cur = target * e; el.textContent = prefix + (target % 1 !== 0 ? cur.toFixed(1) : Math.round(cur)).toLocaleString() + suffix; if (p < 1) requestAnimationFrame(tick); })(start);
+      });
+    }
+    setTimeout(animateCounters, 300);
+
+    function getColors() {
+      var s = getComputedStyle(document.documentElement);
+      return { text: s.getPropertyValue('--text').trim(), sub: s.getPropertyValue('--text-secondary').trim(), border: s.getPropertyValue('--border').trim(), surface: s.getPropertyValue('--surface').trim(), accent: s.getPropertyValue('--accent').trim(), accent2: s.getPropertyValue('--accent-secondary').trim(), positive: s.getPropertyValue('--positive').trim(), warning: s.getPropertyValue('--warning').trim() };
+    }
+    function getCanvas(id) { return document.getElementById(id); }
+
+    function buildCharts() {
+      var c = getColors();
+      Chart.defaults.color = c.sub; 
+      Chart.defaults.borderColor = 'transparent';
+      Chart.defaults.animation = false;      var tt = { backgroundColor: c.surface, titleColor: c.text, bodyColor: c.text, borderColor: c.border, borderWidth: 1, padding: 12, cornerRadius: 8, titleFont: { size: 14 }, bodyFont: { size: 13 } };
+
+      try { if (revenueChart) revenueChart.destroy(); } catch(e) {}
+      try { if (acquisitionChart) acquisitionChart.destroy(); } catch(e) {}
+
+      // Use explicit colors for better reliability
+      var accentColor = '#3b82f6';
+      var accent2Color = '#8b5cf6';
+      var positiveColor = '#10b981';
+      var warningColor = '#f59e0b';
+
+      var rc = getCanvas('revenueChart'), ctx = rc.getContext('2d');
+      var grad = ctx.createLinearGradient(0, 0, 0, 320); 
+      grad.addColorStop(0, 'rgba(59, 130, 246, 0.3)'); 
+      grad.addColorStop(1, 'rgba(59, 130, 246, 0)');
+      
+      revenueChart = new Chart(rc, {
+        type: 'line',
+        data: { labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+          datasets: [{ 
+            label: 'Revenue ($K)', 
+            data: [98,102,108,115,121,128,124,132,138,135,142,142], 
+            borderColor: accentColor, 
+            backgroundColor: grad, 
+            borderWidth: 3, 
+            fill: true, 
+            tension: 0.4, 
+            pointRadius: 3, 
+            pointHoverRadius: 8, 
+            pointBackgroundColor: accentColor,
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 2
+          }] },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          layout: { padding: { top: 20, right: 20, bottom: 20, left: 20 } },
+          plugins: { 
+            tooltip: { enabled: true, mode: 'index', intersect: false, ...tt, callbacks: { label: function(ctx) { return '$' + ctx.parsed.y + 'K'; } } }, 
+            legend: { display: false }
+          },
+          scales: { 
+            y: { beginAtZero: false, grid: { color: c.border }, ticks: { color: c.sub, font: { size: 14 }, callback: function(v) { return '$' + v + 'K'; } }, border: { display: false } }, 
+            x: { grid: { display: false }, ticks: { color: c.sub, font: { size: 14 } }, border: { display: false } } 
+          },
+          interaction: { intersect: false, mode: 'index' } 
+        }
+      });
+
+      acquisitionChart = new Chart(getCanvas('acquisitionChart'), {
+        type: 'doughnut',
+        data: { 
+          labels: ['Organic', 'Paid Ads', 'Referrals', 'Direct'], 
+          datasets: [{ 
+            data: [45, 28, 15, 12], 
+            backgroundColor: [accentColor, accent2Color, positiveColor, warningColor], 
+            borderWidth: 2, 
+            borderColor: c.surface,
+            hoverOffset: 6 
+          }] 
+        },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          layout: { padding: 20 },
+          plugins: { 
+            tooltip: { enabled: true, ...tt, callbacks: { label: function(ctx) { return ctx.label + ': ' + ctx.parsed + '%'; } } }, 
+            legend: { position: 'bottom', labels: { color: c.text, font: { size: 14 }, usePointStyle: true, padding: 20 } } 
+          }, 
+          cutout: '60%' 
+        }
+      });
+    }
+
+    function onThemeChange() { 
+      requestAnimationFrame(function() {
+        setTimeout(buildCharts, 100); 
+      });
+    }
+    
+    // Ensure charts render after DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(buildCharts, 500);
+    });
+    
+    // Fallback in case DOMContentLoaded already fired
+    if (document.readyState === 'loading') {
+      setTimeout(buildCharts, 800);
+    } else {
+      setTimeout(buildCharts, 300);
+    }
+
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) { setTimeout(buildCharts, 200); }
+    });
+
+    async function downloadImage() {
+      var m = document.querySelector('.viz-menu'); m.style.display = 'none';
+      try { var url = await htmlToImage.toPng(document.body, { quality: 1, pixelRatio: 2, filter: function(n) { return !n.classList || !n.classList.contains('viz-menu'); } }); var a = document.createElement('a'); a.href = url; a.download = 'saas-dashboard.png'; a.click(); } catch(e) { console.error(e); }
+      m.style.display = '';
+    }
+  </script>
+</body>
+</html>

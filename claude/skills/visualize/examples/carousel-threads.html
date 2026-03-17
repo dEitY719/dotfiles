@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>5 AI Tools That Replaced My Entire Team</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { interpolate-size: allow-keywords; }
+
+    
+    
+    html.theme-dark { --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C; --border: rgba(255,255,255,0.04); --text: #EDEDED; --text-secondary: #888; --accent: #f43f5e; --accent-secondary: #e11d48; --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b; }
+    html.theme-light { --bg: #FAFAF9; --surface: #ffffff; --surface-hover: #F5F5F4; --border: rgba(0,0,0,0.08); --text: #0f172a; --text-secondary: #64748b; --accent: #f43f5e; --accent-secondary: #e11d48; --positive: #059669; --negative: #e11d48; --warning: #d97706; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.5; -webkit-font-smoothing: antialiased;
+      font-feature-settings: 'cv11', 'ss01';
+      scrollbar-gutter: stable;
+      transition: background 0.3s, color 0.3s;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 24px;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: -1;
+      background: radial-gradient(ellipse 80% 50% at 50% 20%, color-mix(in srgb, var(--accent), transparent 92%), transparent);
+    }
+    *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideInFromRight { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+    .animate { animation: fadeInUp 0.6s ease-out both; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    /* ===== CAROUSEL ===== */
+    .carousel-wrapper { display: flex; flex-direction: column; align-items: center; gap: 20px; max-width: 600px; width: 100%; }
+    .carousel-viewport { width: 100%; aspect-ratio: 1; max-width: 540px; position: relative; overflow: hidden; border-radius: 20px; box-shadow: 0 12px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08); }
+    .carousel-track { display: flex; height: 100%; transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+
+    .carousel-card {
+      min-width: 100%; height: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 48px 40px;
+      position: relative; text-align: center;
+      border-left: 4px solid transparent;
+      transition: border-color 0.3s ease;
+    }
+    .carousel-card.active {
+      border-left: 3px solid transparent;
+      animation: slideInFromRight 0.6s ease-out;
+    }
+
+    /* Card gradients — dark */
+    .card-0 { background: linear-gradient(145deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%); }
+    .card-1 { background: linear-gradient(145deg, #0f172a 0%, #1e3a5f 50%, #1e40af 100%); }
+    .card-2 { background: linear-gradient(145deg, #0f172a 0%, #14532d 50%, #166534 100%); }
+    .card-3 { background: linear-gradient(145deg, #0f172a 0%, #4a1d6a 50%, #6b21a8 100%); }
+    .card-4 { background: linear-gradient(145deg, #0f172a 0%, #78350f 50%, #92400e 100%); }
+    .card-5 { background: linear-gradient(145deg, #0f172a 0%, #701a1a 50%, #991b1b 100%); }
+    .card-6 { background: linear-gradient(145deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%); }
+
+    .theme-light .card-0 { background: linear-gradient(145deg, #e0e7ff 0%, #c7d2fe 50%, #a5b4fc 100%); }
+    .theme-light .card-1 { background: linear-gradient(145deg, #dbeafe 0%, #bfdbfe 50%, #93c5fd 100%); }
+    .theme-light .card-2 { background: linear-gradient(145deg, #d1fae5 0%, #a7f3d0 50%, #6ee7b7 100%); }
+    .theme-light .card-3 { background: linear-gradient(145deg, #ede9fe 0%, #ddd6fe 50%, #c4b5fd 100%); }
+    .theme-light .card-4 { background: linear-gradient(145deg, #fef3c7 0%, #fde68a 50%, #fcd34d 100%); }
+    .theme-light .card-5 { background: linear-gradient(145deg, #ffe4e6 0%, #fecdd3 50%, #fda4af 100%); }
+    .theme-light .card-6 { background: linear-gradient(145deg, #e0e7ff 0%, #c7d2fe 50%, #a5b4fc 100%); }
+
+    .carousel-card * { color: #f9fafb; }
+    .theme-light .carousel-card * { color: #0f172a; }
+
+    .card-number { font-size: 6rem; font-weight: 900; line-height: 1; opacity: 0.4; position: absolute; top: 24px; right: 32px; text-shadow: 0 0 32px rgba(255,255,255,0.5); }
+
+    .card-icon {
+      width: 56px; height: 56px; border-radius: 14px;
+      background: rgba(255,255,255,0.12); backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px;
+    }
+    .theme-light .card-icon { background: rgba(0,0,0,0.08); }
+
+    .card-tool-name { font-size: 2.2rem; font-weight: 700; line-height: 1.1; margin-bottom: 8px; text-shadow: 0 2px 8px rgba(0,0,0,0.3); text-wrap: balance; }
+    .theme-light .card-tool-name { text-shadow: none; }
+    .card-replaces { font-size: 0.9rem; font-weight: 600; opacity: 0.7; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .card-insight { font-size: 1.05rem; line-height: 1.5; max-width: 380px; opacity: 0.9; }
+
+    /* Cover card */
+    .card-title-main { font-size: 3.5rem; font-weight: 900; line-height: 1.08; text-shadow: 0 2px 12px rgba(0,0,0,0.3); margin-bottom: 16px; text-wrap: balance; }
+    .theme-light .card-title-main { text-shadow: none; }
+    .card-subtitle { font-size: 1rem; font-weight: 500; opacity: 0.75; margin-bottom: 32px; }
+    .card-handle { font-size: 0.9rem; opacity: 0.5; position: absolute; bottom: 32px; }
+    .cover-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(59,130,246,0.2); backdrop-filter: blur(8px); padding: 12px 20px; border-radius: 99px; font-size: 0.9rem; font-weight: 700; margin-bottom: 24px; border: 1px solid rgba(59,130,246,0.4); }
+    .theme-light .cover-badge { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); }
+
+    /* CTA card */
+    .card-cta-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 24px; text-shadow: 0 2px 8px rgba(0,0,0,0.3); text-wrap: balance; }
+    .theme-light .card-cta-title { text-shadow: none; }
+    .cta-summary { font-size: 0.85rem; line-height: 1.7; opacity: 0.8; max-width: 340px; text-align: left; list-style: none; }
+    .cta-summary li { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+
+    /* NAV */
+    .carousel-nav { display: flex; align-items: center; gap: 16px; }
+    .nav-btn {
+      width: 44px; height: 44px; border-radius: 50%;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); cursor: pointer; display: flex;
+      align-items: center; justify-content: center; 
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+    .nav-btn:hover { 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+      transform: scale(1.05);
+      background: var(--surface-hover);
+    }
+    .nav-btn:disabled { 
+      opacity: 0.3; 
+      cursor: not-allowed; 
+      transform: scale(1);
+    }
+
+    .progress-bar { display: flex; gap: 4px; align-items: center; }
+    .progress-segment { 
+      width: 24px; height: 3px; border-radius: 2px; 
+      background: var(--text-secondary); opacity: 0.2; 
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+    }
+    .progress-segment:hover {
+      opacity: 0.4;
+      transform: scaleY(1.5);
+    }
+    .progress-segment.active { 
+      opacity: 1; 
+      background: var(--accent); 
+      width: 32px; 
+      box-shadow: 0 0 8px color-mix(in srgb, var(--accent), transparent 50%);
+    }
+    .progress-segment.past { 
+      opacity: 0.6; 
+      background: var(--accent); 
+    }
+
+    .card-counter { font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; min-width: 40px; text-align: center; }
+
+    .download-card-btn {
+      padding: 10px 20px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); cursor: pointer;
+      font-family: inherit; font-size: 0.85rem; font-weight: 500;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
+      display: flex; align-items: center; gap: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+    .download-card-btn:hover { 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+      transform: translateY(-1px);
+      background: var(--surface-hover);
+      border-color: var(--accent);
+    }
+
+    @media print {
+      body { background: white !important; color: black !important; }
+      .viz-menu, .carousel-nav, .download-card-btn { display: none !important; }
+      .carousel-track { flex-wrap: wrap; transform: none !important; }
+      .carousel-card { min-width: 50%; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+
+    /* === Hamburger Menu === */
+    .viz-menu {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 9999;
+      font-family: var(--font, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    }
+
+    .viz-menu-toggle {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .viz-menu-toggle:hover {
+      background: var(--surface-hover);
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .viz-menu-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 200px;
+      background: var(--surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 6px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-8px) scale(0.96);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+
+    .viz-menu-dropdown.open {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0) scale(1);
+    }
+
+    .viz-menu-dropdown button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 0.875rem;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.15s;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .viz-menu-dropdown button:hover {
+      background: var(--surface-hover);
+    }
+
+    .viz-menu-icon {
+      font-size: 1rem;
+      width: 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .skip-link { position: absolute; top: -100px; left: 16px; padding: 8px 16px; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; z-index: 99999; font-weight: 600; }
+    .skip-link:focus { top: 16px; }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+  <main id="main-content">
+
+  <!-- Hamburger Menu -->
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="5" x2="17" y2="5"/>
+        <line x1="3" y1="10" x2="17" y2="10"/>
+        <line x1="3" y1="15" x2="17" y2="15"/>
+      </svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()">
+        <span class="viz-menu-icon">◐</span>
+        <span>Theme: <span id="themeLabel">Dark</span></span>
+      </button>
+      <button onclick="downloadCurrentCard()">
+        <span class="viz-menu-icon">⤓</span>
+        <span>Download Card PNG</span>
+      </button>
+      <button onclick="printPDF()">
+        <span class="viz-menu-icon">⎙</span>
+        <span>Print / PDF</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="carousel-wrapper animate" role="region" aria-label="Carousel: 5 AI Tools That Replaced My Entire Team">
+    <div class="carousel-viewport">
+      <div class="carousel-track" id="carouselTrack" role="group" aria-label="Carousel cards">
+
+        <!-- Cover -->
+        <article class="carousel-card card-0">
+          <!-- Bold hero visual element -->
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:1;">
+            <svg viewBox="0 0 360 360" fill="none" style="width:300px;height:300px;opacity:0.25;">
+              <!-- Central automation hub -->
+              <circle cx="180" cy="180" r="80" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+              <circle cx="180" cy="180" r="40" fill="rgba(255,255,255,0.3)"/>
+              <!-- Number 5 in center -->
+              <text x="180" y="195" text-anchor="middle" font-family="Inter" font-size="42" font-weight="900" fill="rgba(255,255,255,0.9)">5</text>
+              <!-- Tool nodes arranged around the center -->
+              <g opacity="0.8">
+                <!-- Top: Code -->
+                <circle cx="180" cy="80" r="24" fill="rgba(59,130,246,0.8)"/>
+                <text x="180" y="88" text-anchor="middle" font-family="Inter" font-size="20" font-weight="700" fill="white">&lt;/&gt;</text>
+                <!-- Top Right: Design -->
+                <circle cx="260" cy="120" r="24" fill="rgba(139,92,246,0.8)"/>
+                <rect x="248" y="108" width="24" height="24" rx="3" fill="none" stroke="white" stroke-width="2"/>
+                <rect x="252" y="112" width="16" height="2" fill="white"/>
+                <rect x="252" y="116" width="16" height="2" fill="white"/>
+                <!-- Bottom Right: Search -->
+                <circle cx="260" cy="240" r="24" fill="rgba(16,185,129,0.8)"/>
+                <circle cx="257" cy="237" r="8" fill="none" stroke="white" stroke-width="2"/>
+                <line x1="263" y1="243" x2="268" y2="248" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                <!-- Bottom: Voice -->
+                <circle cx="180" cy="280" r="24" fill="rgba(244,63,94,0.8)"/>
+                <ellipse cx="180" cy="275" rx="6" ry="10" fill="none" stroke="white" stroke-width="2"/>
+                <path d="M165 280 Q180 290 195 280" stroke="white" stroke-width="2" fill="none"/>
+                <!-- Bottom Left: AI -->
+                <circle cx="100" cy="240" r="24" fill="rgba(245,158,11,0.8)"/>
+                <circle cx="95" cy="235" r="3" fill="white"/>
+                <circle cx="105" cy="235" r="3" fill="white"/>
+                <circle cx="95" cy="245" r="3" fill="white"/>
+                <circle cx="105" cy="245" r="3" fill="white"/>
+                <line x1="95" y1="235" x2="105" y2="245" stroke="white" stroke-width="1.5"/>
+                <line x1="105" y1="235" x2="95" y2="245" stroke="white" stroke-width="1.5"/>
+                <!-- Top Left: Edit -->
+                <circle cx="100" cy="120" r="24" fill="rgba(6,182,212,0.8)"/>
+                <path d="M90 125 L95 130 L110 115" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              </g>
+              <!-- Connection lines removed for cleaner design -->
+            </svg>
+          </div>
+          <div class="cover-badge">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Automation Revolution
+          </div>
+          <div class="card-title-main">5 AI Tools<br>That Replaced<br>My Entire Team</div>
+          <div class="card-subtitle">Real productivity gains from the builders who shipped</div>
+          <!-- Colored section divider -->
+          <div style="width:80px;height:4px;background:linear-gradient(90deg,rgba(59,130,246,0.8),rgba(139,92,246,0.8));border-radius:2px;margin:16px auto;"></div>
+          <div class="card-handle">@careerhackeralex</div>
+        </article>
+
+        <!-- Card 1: Claude Code -->
+        <article class="carousel-card card-1">
+          <div class="card-number">1</div>
+          <div class="card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16,18 22,12 16,6"/><polyline points="8,6 2,12 8,18"/></svg></div>
+          <div class="card-tool-name">Claude Code</div>
+          <div class="card-replaces">Replaces: Junior Developer</div>
+          <div class="card-insight">Writes, edits, and debugs code across your entire codebase. Reads files, runs tests, commits changes — like pair programming with a senior dev.</div>
+          <div class="card-handle">@careerhackeralex</div>
+        </article>
+
+        <!-- Card 2: Cursor -->
+        <article class="carousel-card card-2">
+          <div class="card-number">2</div>
+          <div class="card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+          <div class="card-tool-name">Cursor</div>
+          <div class="card-replaces">Replaces: Code Review Team</div>
+          <div class="card-insight">AI-native IDE that autocompletes entire functions, refactors on command, and understands your full project context. 10x faster than VS Code alone.</div>
+          <div class="card-handle">@careerhackeralex</div>
+        </article>
+
+        <!-- Card 3: v0 -->
+        <article class="carousel-card card-3">
+          <div class="card-number">3</div>
+          <div class="card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg></div>
+          <div class="card-tool-name">v0 by Vercel</div>
+          <div class="card-replaces">Replaces: UI/UX Designer</div>
+          <div class="card-insight">Describe any interface and get production-ready React components. From wireframe to deployed UI in minutes, not weeks.</div>
+          <div class="card-handle">@careerhackeralex</div>
+        </article>
+
+        <!-- Card 4: Perplexity -->
+        <article class="carousel-card card-4">
+          <div class="card-number">4</div>
+          <div class="card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
+          <div class="card-tool-name">Perplexity</div>
+          <div class="card-replaces">Replaces: Research Analyst</div>
+          <div class="card-insight">AI search engine that reads the entire internet for you. Cites sources, synthesizes findings, and delivers answers — not links.</div>
+          <div class="card-handle">@careerhackeralex</div>
+        </article>
+
+        <!-- Card 5: ElevenLabs -->
+        <article class="carousel-card card-5">
+          <div class="card-number">5</div>
+          <div class="card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
+          <div class="card-tool-name">ElevenLabs</div>
+          <div class="card-replaces">Replaces: Voice Actor / Audio Team</div>
+          <div class="card-insight">Clone any voice, generate podcasts, narrate videos — with emotion and nuance that's indistinguishable from real humans.</div>
+          <div class="card-handle">@careerhackeralex</div>
+        </article>
+
+        <!-- CTA -->
+        <article class="carousel-card card-6">
+          <div class="card-cta-title">Follow<br>@careerhackeralex<br>for more</div>
+          <ul class="cta-summary">
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20,6 9,17 4,12"/></svg> Claude Code — Developer</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20,6 9,17 4,12"/></svg> Cursor — Code Review</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20,6 9,17 4,12"/></svg> v0 — UI/UX Design</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20,6 9,17 4,12"/></svg> Perplexity — Research</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20,6 9,17 4,12"/></svg> ElevenLabs — Voice/Audio</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+
+    <nav class="carousel-nav" aria-label="Carousel navigation">
+      <button class="nav-btn" id="prevBtn" onclick="goTo(currentSlide - 1)" aria-label="Previous card">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="progress-bar" id="progressBar" role="tablist" aria-label="Card indicators"></div>
+      <span class="card-counter" id="cardCounter" aria-live="polite">1 / 7</span>
+      <button class="nav-btn" id="nextBtn" onclick="goTo(currentSlide + 1)" aria-label="Next card">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </nav>
+
+    <button class="download-card-btn" onclick="downloadCurrentCard()" aria-label="Download current card as PNG">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download this card as PNG
+    </button>
+  </div>
+
+  </main>
+  <script>
+    function toggleMenu() { document.getElementById('vizMenuDropdown').classList.toggle('open'); }
+    document.addEventListener('click', function(e) { if (!e.target.closest('.viz-menu')) document.getElementById('vizMenuDropdown').classList.remove('open'); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') document.getElementById('vizMenuDropdown').classList.remove('open'); });
+
+    // === Theme system ===
+    const themes = [
+      { name: 'Dark', class: 'theme-dark' },
+      { name: 'Light', class: 'theme-light' },
+      { name: 'Auto', class: 'theme-auto' },
+    ];
+    let currentTheme = 0;
+
+    function cycleTheme() {
+      // Remove all theme classes
+      themes.forEach(t => document.documentElement.classList.remove(t.class));
+      // Advance to next
+      currentTheme = (currentTheme + 1) % themes.length;
+      document.documentElement.classList.add(themes[currentTheme].class);
+      document.getElementById('themeLabel').textContent = themes[currentTheme].name;
+      // Persist
+      localStorage.setItem('viz-theme', currentTheme);
+    }
+
+    // Restore saved theme on load
+    (function() {
+      const saved = localStorage.getItem('viz-theme');
+      if (saved !== null) {
+        currentTheme = parseInt(saved);
+        document.documentElement.classList.add(themes[currentTheme].class);
+        document.getElementById('themeLabel').textContent = themes[currentTheme].name;
+      }
+    })();
+
+    // === Print as PDF ===
+    function printPDF() {
+      window.print();
+    }
+
+    var currentSlide = 0, totalSlides = 7;
+    var track = document.getElementById('carouselTrack');
+    var counter = document.getElementById('cardCounter');
+    var prevBtn = document.getElementById('prevBtn');
+    var nextBtn = document.getElementById('nextBtn');
+    var progressBar = document.getElementById('progressBar');
+
+    for (var i = 0; i < totalSlides; i++) {
+      var seg = document.createElement('button');
+      seg.className = 'progress-segment' + (i === 0 ? ' active' : '');
+      seg.setAttribute('aria-label', 'Go to card ' + (i + 1));
+      seg.setAttribute('role', 'tab');
+      seg.dataset.index = i;
+      seg.onclick = function() { goTo(parseInt(this.dataset.index)); };
+      progressBar.appendChild(seg);
+    }
+
+    function goTo(index) {
+      if (index < 0 || index >= totalSlides) return;
+      currentSlide = index;
+      track.style.transform = 'translateX(-' + (currentSlide * 100) + '%)';
+      counter.textContent = (currentSlide + 1) + ' / ' + totalSlides;
+      prevBtn.disabled = currentSlide === 0;
+      nextBtn.disabled = currentSlide === totalSlides - 1;
+      
+      // Update active slide animation
+      document.querySelectorAll('.carousel-card').forEach(function(card, i) {
+        card.classList.toggle('active', i === currentSlide);
+      });
+      
+      var segs = progressBar.querySelectorAll('.progress-segment');
+      segs.forEach(function(s, i) {
+        s.classList.toggle('active', i === currentSlide);
+        s.classList.toggle('past', i < currentSlide);
+      });
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'ArrowLeft') goTo(currentSlide - 1);
+      if (e.key === 'ArrowRight') goTo(currentSlide + 1);
+    });
+
+    var touchStartX = 0;
+    var viewport = document.querySelector('.carousel-viewport');
+    viewport.addEventListener('touchstart', function(e) { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
+    viewport.addEventListener('touchend', function(e) {
+      var diff = touchStartX - e.changedTouches[0].screenX;
+      if (Math.abs(diff) > 50) { diff > 0 ? goTo(currentSlide + 1) : goTo(currentSlide - 1); }
+    }, { passive: true });
+
+    goTo(0);
+
+    async function downloadCurrentCard() {
+      var cards = document.querySelectorAll('.carousel-card');
+      var menu = document.querySelector('.viz-menu');
+      menu.style.display = 'none';
+      try {
+        var url = await htmlToImage.toPng(cards[currentSlide], { quality: 1, pixelRatio: 2, width: 1080, height: 1080 });
+        var a = document.createElement('a'); a.href = url; a.download = 'card-' + (currentSlide + 1) + '.png'; a.click();
+      } catch(e) { console.error('Download failed:', e); }
+      menu.style.display = '';
+    }
+  </script>
+</body>
+</html>

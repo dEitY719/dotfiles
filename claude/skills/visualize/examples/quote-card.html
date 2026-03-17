@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Leader Quotes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { interpolate-size: allow-keywords; }
+
+    
+    
+    html.theme-dark { --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C; --border: rgba(255,255,255,0.04); --text: #EDEDED; --text-secondary: #888; --accent: #f59e0b; --accent-secondary: #d97706; --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b; }
+    html.theme-light { --bg: #FAFAF9; --surface: #ffffff; --surface-hover: #F5F5F4; --border: rgba(0,0,0,0.08); --text: #0f172a; --text-secondary: #64748b; --accent: #f59e0b; --accent-secondary: #d97706; --positive: #059669; --negative: #e11d48; --warning: #d97706; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6; letter-spacing: -0.011em; -webkit-font-smoothing: antialiased;
+      font-feature-settings: 'cv11', 'ss01';
+      scrollbar-gutter: stable;
+      transition: background 0.3s, color 0.3s;
+      min-height: 100vh; padding: 48px 16px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: -1;
+      background: radial-gradient(ellipse 80% 50% at 50% 20%, 
+        color-mix(in srgb, var(--accent-secondary), transparent 94%), transparent);
+    }
+
+    *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+    .animate { animation: fadeInUp 0.6s ease-out both; }
+    .animate.delay-1 { animation-delay: 0.1s; }
+    .animate.delay-2 { animation-delay: 0.2s; }
+    .animate.delay-3 { animation-delay: 0.3s; }
+    .animate.delay-4 { animation-delay: 0.4s; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    .page-title { font-size: clamp(1.5rem, 4vw, 2.5rem); font-weight: 700; text-align: center; margin-bottom: 8px; letter-spacing: -0.03em; text-wrap: balance; }
+    .page-subtitle { font-size: 1rem; color: var(--text-secondary); text-align: center; margin-bottom: 40px; }
+
+    /* Category filters */
+    .category-filters {
+      display: flex; gap: 12px; margin-bottom: 32px; flex-wrap: wrap;
+      justify-content: center; align-items: center;
+    }
+    .category-filter {
+      padding: 8px 16px; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--surface); color: var(--text-secondary); cursor: pointer;
+      font-size: 0.875rem; font-family: inherit; font-weight: 500;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .category-filter:hover { 
+      background: var(--surface-hover); 
+      color: var(--text); 
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .category-filter.active { 
+      background: var(--accent); 
+      color: #fff; 
+      border-color: var(--accent);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--accent), transparent 70%);
+      transform: translateY(-1px);
+    }
+    .category-filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* Masonry-style grid */
+    .quotes-grid {
+      columns: 2; column-gap: 20px; max-width: 1000px; width: 100%;
+    }
+    @media (max-width: 700px) { .quotes-grid { columns: 1; } }
+    @media (min-width: 1200px) { .quotes-grid { columns: 3; } }
+
+    .quote-card {
+      break-inside: avoid; margin-bottom: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 32px; position: relative; overflow: hidden;
+      cursor: pointer; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      border-left: 4px solid var(--q-accent, var(--accent));
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .quote-card::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--q-accent, var(--accent)), transparent 96%), transparent);
+      pointer-events: none;
+      opacity: 0; transition: opacity 0.25s ease;
+    }
+    .quote-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.1);
+      border-left-width: 6px;
+    }
+    .quote-card:hover::before {
+      opacity: 1;
+    }
+    .quote-card:focus-visible {
+      outline: 2px solid var(--q-accent, var(--accent));
+      outline-offset: 2px;
+    }
+
+    /* Hero quote - larger featured quote */
+    .quote-card.hero {
+      grid-column: span 1;
+      padding: 48px;
+      margin-bottom: 32px;
+      border-left-width: 5px;
+    }
+    .quote-card.hero .quote-text {
+      font-size: clamp(1.25rem, 3vw, 1.75rem);
+      line-height: 1.5;
+    }
+    .quote-card.hero .quote-mark {
+      font-size: 6rem;
+      top: 16px; left: 32px;
+    }
+
+    /* Staggered animation */
+    .quote-card:nth-child(1) { animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both 0s; }
+    .quote-card:nth-child(2) { animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both 0.1s; }
+    .quote-card:nth-child(3) { animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both 0.15s; }
+    .quote-card:nth-child(4) { animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both 0.2s; }
+    .quote-card:nth-child(5) { animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both 0.25s; }
+    .quote-card:nth-child(6) { animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both 0.3s; }
+
+    /* Muted theme accent colors */
+    .quote-card:nth-child(1) { --q-accent: #3b82f6; }
+    .quote-card:nth-child(2) { --q-accent: #8b5cf6; }
+    .quote-card:nth-child(3) { --q-accent: #10b981; }
+    .quote-card:nth-child(4) { --q-accent: #f59e0b; }
+
+    .quote-mark {
+      font-size: 4rem; line-height: 1; font-weight: 900;
+      color: var(--q-accent, var(--accent)); opacity: 0.3;
+      position: absolute; top: 16px; left: 24px;
+      font-family: 'Lora', Georgia, serif;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      transform: scale(1);
+    }
+    .quote-text {
+      font-family: 'Lora', Georgia, serif;
+      font-size: clamp(1rem, 2.2vw, 1.25rem);
+      font-style: italic; line-height: 1.6;
+      color: var(--text); margin-bottom: 24px;
+      position: relative; z-index: 1;
+    }
+    .quote-attribution { position: relative; z-index: 1; }
+    .quote-divider { width: 60px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--q-accent, var(--accent)), color-mix(in srgb, var(--q-accent, var(--accent)), var(--accent-secondary) 50%)); margin-bottom: 12px; opacity: 0.9; }
+    .quote-name { font-weight: 700; font-size: 0.95rem; }
+    .quote-title-company { font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; }
+
+    /* Enhanced copy button */
+    .copy-btn {
+      position: absolute; bottom: 16px; right: 16px;
+      width: 36px; height: 36px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text-secondary); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      backdrop-filter: blur(8px);
+    }
+    .quote-card:hover .copy-btn { 
+      opacity: 1; 
+      transform: translateY(-2px);
+    }
+    .copy-btn:hover { 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      color: var(--q-accent, var(--accent)); 
+      background: var(--surface-hover);
+      border-color: var(--q-accent, var(--accent));
+      transform: translateY(-2px) scale(1.05);
+    }
+
+    /* Expandable quote functionality */
+    .quote-card.expanded {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 9998; max-width: 600px; max-height: 80vh;
+      overflow-y: auto; cursor: default;
+      border-left-width: 5px;
+    }
+    .quote-overlay {
+      position: fixed; inset: 0; z-index: 9997;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+      opacity: 0; visibility: hidden; transition: all 0.3s ease;
+    }
+    .quote-overlay.active {
+      opacity: 1; visibility: visible;
+    }
+
+    /* Fullscreen */
+    .fullscreen-overlay {
+      position: fixed; inset: 0; z-index: 9998;
+      background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+      display: none; align-items: center; justify-content: center;
+      padding: 32px; cursor: pointer;
+    }
+    .fullscreen-overlay.active { display: flex; }
+    .fullscreen-overlay .quote-card { 
+      width: min(90vmin, 600px); max-width: none; cursor: default;
+      border-left-width: 5px;
+    }
+    .fullscreen-overlay .quote-card:hover { box-shadow: none; }
+    .fullscreen-overlay .copy-btn { opacity: 1; }
+    .fullscreen-close {
+      position: absolute; top: 24px; right: 24px;
+      width: 44px; height: 44px; border-radius: 8px;
+      background: rgba(255,255,255,0.1); border: none;
+      color: #fff; cursor: pointer; display: flex;
+      align-items: center; justify-content: center; 
+      transition: background 0.2s;
+    }
+    .fullscreen-close:hover { background: rgba(255,255,255,0.2); }
+
+    @media print {
+      body { background: white !important; color: black !important; }
+      .viz-menu, .theme-toggle, .fullscreen-overlay, .copy-btn, .category-filters { display: none !important; }
+      .quote-card { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+
+    /* === Hamburger Menu === */
+    .viz-menu {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 9999;
+      font-family: var(--font, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    }
+
+    .viz-menu-toggle {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .viz-menu-toggle:hover {
+      background: var(--surface-hover);
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .viz-menu-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 200px;
+      background: var(--surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 6px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-8px) scale(0.96);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+
+    .viz-menu-dropdown.open {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0) scale(1);
+    }
+
+    .viz-menu-dropdown button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 0.875rem;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.15s;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .viz-menu-dropdown button:hover {
+      background: var(--surface-hover);
+    }
+
+    .viz-menu-icon {
+      font-size: 1rem;
+      width: 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .skip-link { 
+      position: absolute; top: -100px; left: 16px; padding: 8px 16px; 
+      background: var(--accent); color: #fff; border-radius: 8px; 
+      text-decoration: none; z-index: 99999; font-weight: 600; 
+    }
+    .skip-link:focus { top: 16px; }
+  
+    .quote-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .quote-card:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(0,0,0,0.12); } /* hover-lift */
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+  <main id="main-content">
+
+  <!-- Hamburger Menu -->
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="5" x2="17" y2="5"/>
+        <line x1="3" y1="10" x2="17" y2="10"/>
+        <line x1="3" y1="15" x2="17" y2="15"/>
+      </svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()">
+        <span class="viz-menu-icon">◐</span>
+        <span>Theme: <span id="themeLabel">Dark</span></span>
+      </button>
+      <button onclick="downloadImage()">
+        <span class="viz-menu-icon">⤓</span>
+        <span>Download as PNG</span>
+      </button>
+      <button onclick="printPDF()">
+        <span class="viz-menu-icon">⎙</span>
+        <span>Print / Save PDF</span>
+      </button>
+    </div>
+  </div>
+
+  <header>
+    <h1 class="page-title animate">Voices in Tech</h1>
+    <p class="page-subtitle animate delay-1">Wisdom from the builders shaping our future</p>
+    
+    <!-- Category filters -->
+    <div class="category-filters animate delay-2">
+      <button class="category-filter active" onclick="filterQuotes('all')">All</button>
+      <button class="category-filter" onclick="filterQuotes('leadership')">Leadership</button>
+      <button class="category-filter" onclick="filterQuotes('innovation')">Innovation</button>
+      <button class="category-filter" onclick="filterQuotes('ai')">AI & Future</button>
+    </div>
+  </header>
+
+  <section class="quotes-grid" role="region" aria-label="Quote cards">
+    <!-- Hero quote - larger featured quote -->
+    <div class="quote-card hero" tabindex="0" role="button" aria-label="View quote by Satya Nadella fullscreen" onclick="openFullscreen(0)" data-category="leadership">
+      <div class="quote-mark" aria-hidden="true">"</div>
+      <blockquote class="quote-text">Our industry does not respect tradition — it only respects innovation. The true scarce commodity is increasingly human attention.</blockquote>
+      <div class="quote-attribution">
+        <div class="quote-divider"></div>
+        <div class="quote-name">Satya Nadella</div>
+        <div class="quote-title-company">CEO, Microsoft</div>
+      </div>
+      <button class="copy-btn" onclick="event.stopPropagation();copyQuote(0)" aria-label="Copy quote">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      </button>
+    </div>
+
+    <div class="quote-card" tabindex="0" role="button" aria-label="View quote by Jensen Huang fullscreen" onclick="openFullscreen(1)" data-category="ai">
+      <div class="quote-mark" aria-hidden="true">"</div>
+      <blockquote class="quote-text">Software is eating the world, but AI is going to eat software. The more you learn, the more you realize how much you don't know.</blockquote>
+      <div class="quote-attribution">
+        <div class="quote-divider"></div>
+        <div class="quote-name">Jensen Huang</div>
+        <div class="quote-title-company">CEO, NVIDIA</div>
+      </div>
+      <button class="copy-btn" onclick="event.stopPropagation();copyQuote(1)" aria-label="Copy quote">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      </button>
+    </div>
+
+    <div class="quote-card" tabindex="0" role="button" aria-label="View quote by Mira Murati fullscreen" onclick="openFullscreen(2)" data-category="innovation">
+      <div class="quote-mark" aria-hidden="true">"</div>
+      <blockquote class="quote-text">The most important thing is to build technology that genuinely helps people. Safety and capability aren't at odds — they reinforce each other.</blockquote>
+      <div class="quote-attribution">
+        <div class="quote-divider"></div>
+        <div class="quote-name">Mira Murati</div>
+        <div class="quote-title-company">Former CTO, OpenAI</div>
+      </div>
+      <button class="copy-btn" onclick="event.stopPropagation();copyQuote(2)" aria-label="Copy quote">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      </button>
+    </div>
+
+    <div class="quote-card" tabindex="0" role="button" aria-label="View quote by Gwynne Shotwell fullscreen" onclick="openFullscreen(3)" data-category="leadership">
+      <div class="quote-mark" aria-hidden="true">"</div>
+      <blockquote class="quote-text">I always tell people: focus on being really good at what you do. Success follows competence. Simplicity scales, complexity fails.</blockquote>
+      <div class="quote-attribution">
+        <div class="quote-divider"></div>
+        <div class="quote-name">Gwynne Shotwell</div>
+        <div class="quote-title-company">President &amp; COO, SpaceX</div>
+      </div>
+      <button class="copy-btn" onclick="event.stopPropagation();copyQuote(3)" aria-label="Copy quote">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      </button>
+    </div>
+
+    <!-- Additional quotes for more variety -->
+    <div class="quote-card" tabindex="0" role="button" aria-label="View quote by Tim Cook fullscreen" onclick="openFullscreen(4)" data-category="innovation">
+      <div class="quote-mark" aria-hidden="true">"</div>
+      <blockquote class="quote-text">Technology alone is not enough. It's technology married with the liberal arts and humanities that yields results that make our hearts sing.</blockquote>
+      <div class="quote-attribution">
+        <div class="quote-divider"></div>
+        <div class="quote-name">Tim Cook</div>
+        <div class="quote-title-company">CEO, Apple</div>
+      </div>
+      <button class="copy-btn" onclick="event.stopPropagation();copyQuote(4)" aria-label="Copy quote">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      </button>
+    </div>
+
+    <div class="quote-card" tabindex="0" role="button" aria-label="View quote by Sam Altman fullscreen" onclick="openFullscreen(5)" data-category="ai">
+      <div class="quote-mark" aria-hidden="true">"</div>
+      <blockquote class="quote-text">The biggest thing is that we need to become much better at creating systems that can adapt and learn. The future belongs to those who can learn fast.</blockquote>
+      <div class="quote-attribution">
+        <div class="quote-divider"></div>
+        <div class="quote-name">Sam Altman</div>
+        <div class="quote-title-company">CEO, OpenAI</div>
+      </div>
+      <button class="copy-btn" onclick="event.stopPropagation();copyQuote(5)" aria-label="Copy quote">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      </button>
+    </div>
+  </section>
+
+  <div class="fullscreen-overlay" id="fullscreenOverlay" onclick="closeFullscreen(event)">
+    <button class="fullscreen-close" onclick="closeFullscreen(event)" aria-label="Close fullscreen view">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+    </button>
+    <div id="fullscreenContent"></div>
+  </div>
+
+  </main>
+  <script>
+    function toggleMenu() { document.getElementById('vizMenuDropdown').classList.toggle('open'); }
+    document.addEventListener('click', function(e) { if (!e.target.closest('.viz-menu')) document.getElementById('vizMenuDropdown').classList.remove('open'); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { document.getElementById('vizMenuDropdown').classList.remove('open'); closeFullscreen(e); } });
+
+    // === Theme system ===
+    const themes = [
+      { name: 'Dark', class: 'theme-dark' },
+      { name: 'Light', class: 'theme-light' },
+      { name: 'Auto', class: 'theme-auto' },
+    ];
+    let currentTheme = 0;
+
+    function cycleTheme() {
+      // Remove all theme classes
+      themes.forEach(t => document.documentElement.classList.remove(t.class));
+      // Advance to next
+      currentTheme = (currentTheme + 1) % themes.length;
+      document.documentElement.classList.add(themes[currentTheme].class);
+      document.getElementById('themeLabel').textContent = themes[currentTheme].name;
+      // Persist
+      localStorage.setItem('viz-theme', currentTheme);
+    }
+
+    // Restore saved theme on load
+    (function() {
+      const saved = localStorage.getItem('viz-theme');
+      if (saved !== null) {
+        currentTheme = parseInt(saved);
+        document.documentElement.classList.add(themes[currentTheme].class);
+        document.getElementById('themeLabel').textContent = themes[currentTheme].name;
+      }
+    })();
+
+    // === Print as PDF ===
+    function printPDF() {
+      window.print();
+    }
+
+    var quoteCards = document.querySelectorAll('.quotes-grid .quote-card');
+    var quoteTexts = [];
+    quoteCards.forEach(function(c) {
+      var q = c.querySelector('.quote-text').textContent.trim();
+      var n = c.querySelector('.quote-name').textContent.trim();
+      quoteTexts.push('"' + q + '" — ' + n);
+    });
+
+    function copyQuote(i) {
+      navigator.clipboard.writeText(quoteTexts[i]).then(function() {
+        var btn = quoteCards[i].querySelector('.copy-btn');
+        var originalHTML = btn.innerHTML;
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--positive)" stroke-width="2.5" stroke-linecap="round"><polyline points="20,6 9,17 4,12"/></svg>';
+        setTimeout(function() {
+          btn.innerHTML = originalHTML;
+        }, 1500);
+      });
+    }
+
+    function openFullscreen(index) {
+      var card = quoteCards[index];
+      var clone = card.cloneNode(true);
+      clone.removeAttribute('onclick'); clone.removeAttribute('tabindex'); clone.removeAttribute('role');
+      clone.style.cursor = 'default';
+      var container = document.getElementById('fullscreenContent');
+      container.innerHTML = '';
+      container.appendChild(clone);
+      document.getElementById('fullscreenOverlay').classList.add('active');
+    }
+    
+    function closeFullscreen(e) {
+      if (e && e.target && e.target.closest('.quote-card')) return;
+      document.getElementById('fullscreenOverlay').classList.remove('active');
+    }
+
+    // Category filtering
+    function filterQuotes(category) {
+      // Update filter buttons
+      document.querySelectorAll('.category-filter').forEach(function(btn) {
+        btn.classList.remove('active');
+      });
+      event.target.classList.add('active');
+
+      // Filter quote cards
+      quoteCards.forEach(function(card, i) {
+        var cardCategory = card.getAttribute('data-category');
+        if (category === 'all' || cardCategory === category) {
+          card.style.display = 'block';
+          card.style.animation = 'fadeInUp 0.4s ease both ' + (i * 0.05) + 's';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    }
+
+    async function downloadImage() {
+      var menu = document.querySelector('.viz-menu');
+      var themeToggle = document.querySelector('.theme-toggle');
+      menu.style.display = 'none';
+      themeToggle.style.display = 'none';
+      try {
+        var url = await htmlToImage.toPng(document.querySelector('main'), { 
+          quality: 1, 
+          pixelRatio: 2, 
+          filter: function(n) { 
+            return !n.classList || (!n.classList.contains('viz-menu') && !n.classList.contains('theme-toggle')); 
+          } 
+        });
+        var a = document.createElement('a'); 
+        a.href = url; 
+        a.download = 'tech-leader-quotes.png'; 
+        a.click();
+      } catch(e) { console.error('Download failed:', e); }
+      menu.style.display = '';
+      themeToggle.style.display = '';
+    }
+
+    // Smooth quote mark animations on hover
+    quoteCards.forEach(function(card) {
+      const quoteMark = card.querySelector('.quote-mark');
+      card.addEventListener('mouseenter', function() {
+        if (quoteMark) {
+          quoteMark.style.opacity = '0.5';
+          quoteMark.style.transform = 'scale(1.05)';
+        }
+      });
+      card.addEventListener('mouseleave', function() {
+        if (quoteMark) {
+          quoteMark.style.opacity = '0.3';
+          quoteMark.style.transform = 'scale(1)';
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ko" class="theme-light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NeuralChef — AI 푸드테크 피치덱</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html.theme-dark {
+      --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C;
+      --border: rgba(255,255,255,0.06);
+      --text: #EDEDED; --text-secondary: #888;
+      --accent: #f97316; --accent-secondary: #ea580c;
+      --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b;
+      --slide-gradient-1: linear-gradient(135deg, #1a0800 0%, #431407 50%, #1c1917 100%);
+      --slide-gradient-2: linear-gradient(135deg, #0c0a09 0%, #292524 100%);
+    }
+    html.theme-light {
+      --bg: #FAFAF9; --surface: #FFFFFF; --surface-hover: #F5F5F4;
+      --border: rgba(0,0,0,0.06);
+      --text: #0f172a; --text-secondary: #64748b;
+      --accent: #ea580c; --accent-secondary: #c2410c;
+      --positive: #059669; --negative: #e11d48; --warning: #d97706;
+      --slide-gradient-1: linear-gradient(135deg, #fff7ed 0%, #fed7aa 50%, #fef3c7 100%);
+      --slide-gradient-2: linear-gradient(135deg, #FAFAF9 0%, #f5f5f4 100%);
+    }
+
+    body {
+      font-family: 'Noto Sans KR', 'Inter', -apple-system, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6; -webkit-font-smoothing: antialiased;
+      overflow: hidden; height: 100vh; width: 100vw;
+    }
+    h1,h2,h3,h4 { letter-spacing: -0.03em; line-height: 1.1; text-wrap: balance; }
+
+    /* ===== SLIDES ===== */
+    .deck { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+    .slide {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      padding: clamp(2rem, 5vw, 6rem);
+      opacity: 0; transform: translateX(60px);
+      transition: opacity 0.5s cubic-bezier(.4,0,.2,1), transform 0.5s cubic-bezier(.4,0,.2,1);
+      pointer-events: none;
+    }
+    .slide.active { opacity: 1; transform: translateX(0); pointer-events: all; }
+    .slide.prev { opacity: 0; transform: translateX(-60px); }
+
+    .slide-title { background: var(--slide-gradient-1); }
+    .slide-content { background: var(--slide-gradient-2); }
+    .slide-section {
+      background: var(--accent);
+      --text: #fff; --text-secondary: rgba(255,255,255,0.8);
+    }
+
+    /* ===== PROGRESS ===== */
+    .progress { position: fixed; top: 0; left: 0; height: 3px; background: var(--accent); z-index: 100; transition: width 0.4s ease; }
+    .slide-counter {
+      position: fixed; bottom: 24px; right: 32px; font-size: 13px;
+      color: var(--text-secondary); font-weight: 500; z-index: 100;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ===== CARDS ===== */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 28px;
+      transition: box-shadow 0.2s ease;
+    }
+    .card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+
+    .stat-card { text-align: center; }
+    .stat-number { font-size: clamp(2.5rem, 6vw, 4rem); font-weight: 800; color: var(--accent); line-height: 1; }
+    .stat-label { font-size: 0.875rem; color: var(--text-secondary); margin-top: 8px; font-weight: 500; }
+    .stat-delta { font-size: 0.8rem; color: var(--positive); margin-top: 4px; font-weight: 600; }
+
+    /* ===== GRID ===== */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; width: 100%; max-width: 900px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; width: 100%; max-width: 1000px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; width: 100%; max-width: 1000px; }
+
+    /* ===== TYPOGRAPHY ===== */
+    .slide-h1 { font-size: clamp(2.5rem, 7vw, 4.5rem); font-weight: 800; color: var(--text); margin-bottom: 16px; }
+    .slide-h2 { font-size: clamp(1.8rem, 5vw, 3rem); font-weight: 700; color: var(--text); margin-bottom: 24px; }
+    .slide-subtitle { font-size: clamp(1rem, 2.5vw, 1.4rem); color: var(--text-secondary); font-weight: 400; max-width: 600px; text-align: center; }
+    .slide-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 12px; }
+    .bullet { color: var(--text-secondary); font-size: 1.05rem; line-height: 1.8; }
+    .bullet li { padding-left: 4px; }
+    .bullet li::marker { color: var(--accent); }
+
+    .icon-circle {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    /* ===== TEAM ===== */
+    .team-card { text-align: center; padding: 24px 16px; }
+    .team-avatar {
+      width: 64px; height: 64px; border-radius: 50%;
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 12px; font-size: 1.5rem;
+    }
+    .team-name { font-weight: 700; font-size: 1rem; margin-bottom: 2px; }
+    .team-role { font-size: 0.8rem; color: var(--text-secondary); }
+    .team-exp { font-size: 0.75rem; color: var(--accent); margin-top: 6px; font-weight: 500; }
+
+    /* ===== CHART ===== */
+    .chart-wrap { width: 100%; max-width: 700px; min-height: 360px; position: relative; }
+
+    /* ===== ENTRANCE ANIMATIONS ===== */
+    .animate { animation: fadeInUp 0.6s ease-out both; }
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+    .delay-4 { animation-delay: 0.4s; }
+    .delay-5 { animation-delay: 0.5s; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    /* ===== MENU ===== */
+    .viz-menu { position: fixed; top: 16px; right: 16px; z-index: 9999; }
+    .viz-menu-toggle {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(12px); transition: all 0.2s;
+    }
+    .viz-menu-toggle:hover { background: var(--surface-hover); }
+    .viz-menu-dropdown {
+      position: absolute; top: 52px; right: 0; min-width: 200px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 8px;
+      opacity: 0; visibility: hidden; transform: translateY(-8px);
+      transition: all 0.2s; backdrop-filter: blur(16px);
+    }
+    .viz-menu-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); }
+    .viz-menu-dropdown button {
+      width: 100%; padding: 10px 14px; border: none; border-radius: 8px;
+      background: transparent; color: var(--text); font-size: 14px;
+      font-family: inherit; cursor: pointer; text-align: left;
+      display: flex; align-items: center; gap: 10px; transition: background 0.15s;
+    }
+    .viz-menu-dropdown button:hover { background: var(--surface-hover); }
+
+    /* ===== NAV DOTS ===== */
+    .nav-dots {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 8px; z-index: 100;
+    }
+    .nav-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--border); border: none; cursor: pointer;
+      transition: all 0.3s; padding: 0;
+    }
+    .nav-dot.active { background: var(--accent); width: 24px; border-radius: 4px; }
+
+    @media print {
+      body { overflow: visible; height: auto; }
+      .slide { position: relative; opacity: 1; transform: none; pointer-events: all; page-break-after: always; height: 100vh; }
+      .viz-menu, .progress, .slide-counter, .nav-dots { display: none; }
+    }
+
+    @container (width < 768px) {
+      .grid-3, .grid-4 { grid-template-columns: 1fr 1fr; }
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+
+  <!-- MENU -->
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="메뉴">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/>
+      </svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()"><span id="themeIcon">☀️</span><span id="themeLabel">Light</span></button>
+      <button onclick="downloadImage()"><span>📥</span><span>PNG 다운로드</span></button>
+      <button onclick="window.print()"><span>🖨️</span><span>프린트 / PDF</span></button>
+    </div>
+  </div>
+
+  <div class="progress" id="progress"></div>
+  <div class="slide-counter" id="slideCounter"></div>
+
+  <div class="deck" id="deck">
+
+    <!-- SLIDE 1: Title -->
+    <section class="slide slide-title active" data-notes="오프닝 슬라이드 - AI 기반 개인화 푸드테크">
+      <div class="animate">
+        <div class="slide-label">시리즈 A 투자 제안서</div>
+      </div>
+      <h1 class="slide-h1 animate delay-1">NeuralChef</h1>
+      <p class="slide-subtitle animate delay-2">AI가 당신의 냉장고를 분석하고,<br>완벽한 레시피를 제안합니다</p>
+      <div class="animate delay-3" style="margin-top: 32px; display: flex; gap: 16px; align-items: center;">
+        <div style="font-size: 0.85rem; color: var(--text-secondary);">2026년 3월 · Confidential</div>
+      </div>
+    </section>
+
+    <!-- SLIDE 2: Problem -->
+    <section class="slide slide-content" data-notes="문제 정의 - 음식물 쓰레기와 시간 낭비">
+      <div class="slide-label animate">문제</div>
+      <h2 class="slide-h2 animate delay-1">매일 반복되는 고민</h2>
+      <div class="grid-3 animate delay-2" style="container-type: inline-size;">
+        <div class="card stat-card">
+          <div class="icon-circle" style="margin: 0 auto 12px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+          </div>
+          <div class="stat-number" style="font-size: 2rem;">30%</div>
+          <div class="stat-label">가정 식재료 폐기율</div>
+        </div>
+        <div class="card stat-card">
+          <div class="icon-circle" style="margin: 0 auto 12px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </div>
+          <div class="stat-number" style="font-size: 2rem;">47분</div>
+          <div class="stat-label">일일 평균 식사 고민 시간</div>
+        </div>
+        <div class="card stat-card">
+          <div class="icon-circle" style="margin: 0 auto 12px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          </div>
+          <div class="stat-number" style="font-size: 2rem;">₩54만</div>
+          <div class="stat-label">월 평균 외식비 (2인 가구)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 3: Solution -->
+    <section class="slide slide-content" data-notes="솔루션 - 냉장고 인식 → AI 레시피 추천">
+      <div class="slide-label animate">솔루션</div>
+      <h2 class="slide-h2 animate delay-1">냉장고 → AI → 레시피</h2>
+      <div class="grid-2 animate delay-2" style="max-width: 850px; container-type: inline-size;">
+        <div>
+          <ul class="bullet">
+            <li>📸 냉장고 사진 한 장으로 식재료 자동 인식</li>
+            <li>🧠 개인 취향 + 건강 데이터 기반 레시피 추천</li>
+            <li>🛒 부족한 재료는 원클릭 장보기 연동</li>
+            <li>👨‍🍳 단계별 AI 쿡킹 가이드 (영상 + 음성)</li>
+          </ul>
+        </div>
+        <div class="card" style="display: flex; align-items: center; justify-content: center; min-height: 240px; background: color-mix(in srgb, var(--accent) 5%, var(--surface));">
+          <div style="text-align: center;">
+            <svg width="80" height="80" viewBox="0 0 80 80" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round">
+              <rect x="15" y="10" width="50" height="60" rx="8"/>
+              <line x1="25" y1="35" x2="55" y2="35"/>
+              <circle cx="40" cy="52" r="8"/>
+              <path d="M36 52l3 3 5-6"/>
+            </svg>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 12px;">앱 프로토타입</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 4: Market -->
+    <section class="slide slide-content" data-notes="시장 규모 - TAM/SAM/SOM">
+      <div class="slide-label animate">시장 규모</div>
+      <h2 class="slide-h2 animate delay-1">₩180조 푸드테크 시장</h2>
+      <div class="grid-3 animate delay-2" style="container-type: inline-size;">
+        <div class="card stat-card">
+          <div class="stat-label" style="color: var(--text-secondary);">TAM</div>
+          <div class="stat-number">₩180조</div>
+          <div class="stat-label">글로벌 푸드테크</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label" style="color: var(--text-secondary);">SAM</div>
+          <div class="stat-number">₩12조</div>
+          <div class="stat-label">한국 밀키트 + 레시피</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label" style="color: var(--text-secondary);">SOM</div>
+          <div class="stat-number">₩3,600억</div>
+          <div class="stat-label">AI 레시피 플랫폼</div>
+        </div>
+      </div>
+      <div class="animate delay-3" style="margin-top: 20px; font-size: 0.9rem; color: var(--text-secondary);">
+        한국 1인 가구 비율 34.5% · 밀키트 시장 연 23% 성장 · Z세대 AI 서비스 수용률 78%
+      </div>
+    </section>
+
+    <!-- SLIDE 5: Traction -->
+    <section class="slide slide-content" data-notes="트랙션 - MAU 12만, MRR 3억원">
+      <div class="slide-label animate">트랙션</div>
+      <h2 class="slide-h2 animate delay-1">폭발적 성장</h2>
+      <div class="grid-4 animate delay-2" style="margin-bottom: 24px; container-type: inline-size;">
+        <div class="card stat-card">
+          <div class="stat-number" data-count="120000" style="font-size: 2.2rem;">0</div>
+          <div class="stat-label">MAU</div>
+          <div class="stat-delta">↑ 340% YoY</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-number" data-count="3" data-suffix="억" style="font-size: 2.2rem;">0</div>
+          <div class="stat-label">MRR (₩)</div>
+          <div class="stat-delta">↑ 28% MoM</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-number" style="font-size: 2.2rem;">72%</div>
+          <div class="stat-label">D30 리텐션</div>
+          <div class="stat-delta">업계 평균 대비 3.6x</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-number" style="font-size: 2.2rem;">4.8</div>
+          <div class="stat-label">앱스토어 평점</div>
+          <div class="stat-delta">리뷰 2.3만개</div>
+        </div>
+      </div>
+      <div class="chart-wrap animate delay-3" role="img" aria-label="월별 MAU 성장 차트">
+        <canvas id="tractionChart"></canvas>
+      </div>
+    </section>
+
+    <!-- SLIDE 6: Business Model -->
+    <section class="slide slide-content" data-notes="비즈니스 모델 - 프리미엄 + 커머스">
+      <div class="slide-label animate">비즈니스 모델</div>
+      <h2 class="slide-h2 animate delay-1">이중 수익 구조</h2>
+      <div class="grid-2 animate delay-2" style="container-type: inline-size;">
+        <div class="card">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <div class="icon-circle">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            </div>
+            <h3 style="font-weight: 700; font-size: 1.1rem;">프리미엄 구독</h3>
+          </div>
+          <ul class="bullet" style="font-size: 0.95rem;">
+            <li>무제한 AI 레시피 추천</li>
+            <li>영양 분석 + 식단 관리</li>
+            <li>월 ₩9,900 · 전환율 12%</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <div class="icon-circle">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
+            </div>
+            <h3 style="font-weight: 700; font-size: 1.1rem;">커머스 수수료</h3>
+          </div>
+          <ul class="bullet" style="font-size: 0.95rem;">
+            <li>장보기 연동 (쿠팡, 마켓컬리)</li>
+            <li>밀키트 브랜드 파트너십</li>
+            <li>CPS 8-12% 수수료</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 7: Team -->
+    <section class="slide slide-content" data-notes="팀 소개">
+      <div class="slide-label animate">팀</div>
+      <h2 class="slide-h2 animate delay-1">검증된 팀</h2>
+      <div class="grid-4 animate delay-2" style="container-type: inline-size;">
+        <div class="card team-card">
+          <div class="team-avatar">👨‍💻</div>
+          <div class="team-name">김민수</div>
+          <div class="team-role">CEO / Co-founder</div>
+          <div class="team-exp">전 쿠팡 PM Lead · 카이스트 CS</div>
+        </div>
+        <div class="card team-card">
+          <div class="team-avatar">👩‍🔬</div>
+          <div class="team-name">박서연</div>
+          <div class="team-role">CTO / Co-founder</div>
+          <div class="team-exp">전 네이버 AI Lab · MLOps 전문</div>
+        </div>
+        <div class="card team-card">
+          <div class="team-avatar">👨‍🍳</div>
+          <div class="team-name">이준호</div>
+          <div class="team-role">CPO</div>
+          <div class="team-exp">전 배달의민족 디자인 리드</div>
+        </div>
+        <div class="card team-card">
+          <div class="team-avatar">👩‍💼</div>
+          <div class="team-name">최윤지</div>
+          <div class="team-role">COO</div>
+          <div class="team-exp">전 마켓컬리 그로스 매니저</div>
+        </div>
+      </div>
+      <div class="animate delay-3" style="margin-top: 20px; font-size: 0.9rem; color: var(--text-secondary);">
+        엔지니어 12명 · 데이터 사이언티스트 4명 · 푸드 전문가 3명 · 총 23명
+      </div>
+    </section>
+
+    <!-- SLIDE 8: Ask -->
+    <section class="slide slide-title" data-notes="투자 요청 - 시리즈 A 50억원">
+      <div class="slide-label animate">투자 요청</div>
+      <h2 class="slide-h2 animate delay-1" style="font-size: clamp(2rem, 5vw, 3.5rem);">시리즈 A · ₩50억</h2>
+      <div class="grid-3 animate delay-2" style="margin-top: 8px; container-type: inline-size;">
+        <div class="card stat-card" style="background: color-mix(in srgb, var(--accent) 8%, var(--surface));">
+          <div class="stat-number" style="font-size: 1.8rem;">60%</div>
+          <div class="stat-label">제품 개발 + AI 고도화</div>
+        </div>
+        <div class="card stat-card" style="background: color-mix(in srgb, var(--accent) 8%, var(--surface));">
+          <div class="stat-number" style="font-size: 1.8rem;">25%</div>
+          <div class="stat-label">마케팅 + 유저 확보</div>
+        </div>
+        <div class="card stat-card" style="background: color-mix(in srgb, var(--accent) 8%, var(--surface));">
+          <div class="stat-number" style="font-size: 1.8rem;">15%</div>
+          <div class="stat-label">팀 빌딩 + 운영</div>
+        </div>
+      </div>
+      <div class="animate delay-3" style="margin-top: 32px; text-align: center;">
+        <div style="font-size: 1.1rem; font-weight: 600; color: var(--text);">목표: 2027년 MAU 100만 · ARR ₩500억</div>
+        <div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 8px;">contact@neuralchef.ai · neuralchef.ai</div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- NAV DOTS -->
+  <div class="nav-dots" id="navDots"></div>
+
+  </main>
+
+  <script>
+    // === Menu ===
+    function toggleMenu() { document.getElementById('vizMenuDropdown').classList.toggle('open'); }
+    document.addEventListener('click', function(e) { if (!e.target.closest('.viz-menu')) document.getElementById('vizMenuDropdown').classList.remove('open'); });
+
+    // === Theme ===
+    var savedTheme = localStorage.getItem('viz-theme');
+    var currentTheme = savedTheme || 'light';
+    function applyTheme(t) {
+      document.documentElement.className = 'theme-' + t;
+      document.getElementById('themeIcon').textContent = t === 'dark' ? '🌙' : '☀️';
+      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark' : 'Light';
+      localStorage.setItem('viz-theme', t);
+      currentTheme = t;
+      if (typeof onThemeChange === 'function') onThemeChange();
+    }
+    function cycleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
+    applyTheme(currentTheme);
+
+    // === Slide Navigation ===
+    var slides = document.querySelectorAll('.slide');
+    var currentSlide = 0;
+    var totalSlides = slides.length;
+
+    function showSlide(n) {
+      if (n < 0 || n >= totalSlides) return;
+      slides[currentSlide].classList.remove('active');
+      slides[currentSlide].classList.add(n > currentSlide ? 'prev' : '');
+      currentSlide = n;
+      slides[currentSlide].classList.remove('prev');
+      slides[currentSlide].classList.add('active');
+      document.getElementById('progress').style.width = ((currentSlide + 1) / totalSlides * 100) + '%';
+      document.getElementById('slideCounter').textContent = (currentSlide + 1) + ' / ' + totalSlides;
+      document.querySelectorAll('.nav-dot').forEach(function(d, i) { d.classList.toggle('active', i === currentSlide); });
+      animateCounters();
+    }
+
+    // Build nav dots
+    var dotsContainer = document.getElementById('navDots');
+    for (var i = 0; i < totalSlides; i++) {
+      var dot = document.createElement('button');
+      dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+      dot.setAttribute('aria-label', '슬라이드 ' + (i + 1));
+      dot.dataset.slide = i;
+      dot.onclick = function() { showSlide(parseInt(this.dataset.slide)); };
+      dotsContainer.appendChild(dot);
+    }
+
+    // Keyboard nav
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); showSlide(currentSlide + 1); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); showSlide(currentSlide - 1); }
+      if (e.key === 'Escape') document.getElementById('vizMenuDropdown').classList.remove('open');
+    });
+
+    // Touch nav
+    var touchStartX = 0;
+    document.addEventListener('touchstart', function(e) { touchStartX = e.touches[0].clientX; });
+    document.addEventListener('touchend', function(e) {
+      var diff = touchStartX - e.changedTouches[0].clientX;
+      if (Math.abs(diff) > 50) { diff > 0 ? showSlide(currentSlide + 1) : showSlide(currentSlide - 1); }
+    });
+
+    // Click nav (left third = prev, right two-thirds = next)
+    document.querySelector('.deck').addEventListener('click', function(e) {
+      if (e.target.closest('.viz-menu') || e.target.closest('.nav-dots') || e.target.closest('button') || e.target.closest('a')) return;
+      e.clientX < window.innerWidth / 3 ? showSlide(currentSlide - 1) : showSlide(currentSlide + 1);
+    });
+
+    // Init
+    showSlide(0);
+
+    // === Chart.js (Traction) ===
+    Chart.defaults.animation = false;
+    var tractionCtx = document.getElementById('tractionChart');
+    var tractionChart = null;
+
+    function buildTractionChart() {
+      var style = getComputedStyle(document.documentElement);
+      var accent = style.getPropertyValue('--accent').trim();
+      var textColor = style.getPropertyValue('--text-secondary').trim();
+      var borderColor = style.getPropertyValue('--border').trim();
+      if (tractionChart) tractionChart.destroy();
+      tractionChart = new Chart(tractionCtx, {
+        type: 'bar',
+        data: {
+          labels: ['9월', '10월', '11월', '12월', '1월', '2월'],
+          datasets: [{
+            label: 'MAU (만)',
+            data: [3.2, 4.8, 6.5, 8.1, 10.2, 12.0],
+            backgroundColor: accent,
+            borderRadius: 6,
+            barPercentage: 0.6
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true, grid: { color: borderColor }, ticks: { color: textColor, font: { family: 'Noto Sans KR' } } },
+            x: { grid: { display: false }, ticks: { color: textColor, font: { family: 'Noto Sans KR' } } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: true, backgroundColor: 'rgba(0,0,0,0.8)', titleFont: { family: 'Noto Sans KR' }, bodyFont: { family: 'Noto Sans KR' } }
+          }
+        }
+      });
+    }
+    buildTractionChart();
+
+    function onThemeChange() { buildTractionChart(); }
+
+    // === Number Counters ===
+    function animateCounters() {
+      document.querySelectorAll('[data-count]').forEach(function(el) {
+        if (el.dataset.counted) return;
+        el.dataset.counted = '1';
+        var target = parseFloat(el.dataset.count), prefix = el.dataset.prefix || '', suffix = el.dataset.suffix || '';
+        var start = performance.now(), duration = 1200;
+        (function tick(now) {
+          var p = Math.min((now - start) / duration, 1), eased = 1 - Math.pow(1 - p, 3);
+          el.textContent = prefix + Math.round(target * eased).toLocaleString() + suffix;
+          if (p < 1) requestAnimationFrame(tick);
+        })(start);
+      });
+    }
+
+    // === Download PNG ===
+    async function downloadImage() {
+      var menu = document.querySelector('.viz-menu');
+      menu.style.display = 'none';
+      try {
+        var url = await htmlToImage.toPng(document.body, { quality: 1, pixelRatio: 2, filter: function(n) { return !n.classList || !n.classList.contains('viz-menu'); } });
+        var a = document.createElement('a'); a.href = url;
+        a.download = 'neuralchef-pitch-slide-' + (currentSlide + 1) + '.png'; a.click();
+      } catch(e) { console.error('Download failed:', e); }
+      menu.style.display = '';
+    }
+  </script>
+</body>
+</html>
