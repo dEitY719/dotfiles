@@ -278,7 +278,7 @@ Week 6: CL-7.8~7.9  (Release: 4-6시간)
 
 ```bash
 # 1. 이 파일 수정
-docs/requirements/PROGRESS_CHECKLIST.md
+docs/feature/my-cli/planning/progress-checklist.md
 
 # 2. 해당 섹션의 Tasks 체크박스 업데이트
 # 예: - [x] Task completed
@@ -287,7 +287,7 @@ docs/requirements/PROGRESS_CHECKLIST.md
 # 예: 완료: 50% ✅
 
 # 4. Git 커밋
-git add docs/requirements/PROGRESS_CHECKLIST.md
+git add docs/feature/my-cli/planning/progress-checklist.md
 git commit -m "docs: Update progress for CL-7.X"
 ```
 
@@ -307,10 +307,10 @@ git commit -m "docs: Update progress for CL-7.X"
 
 ## 🔗 관련 문서
 
-- **Overview**: LEGACY_ANALYSIS.md
-- **Roadmap**: IMPLEMENTATION_ROADMAP.md
-- **CL-7.1**: PHASE_1_DETAIL.md
-- **Quick Start**: QUICK_START.md
+- **Overview**: ../analysis/legacy-analysis.md
+- **Roadmap**: implementation-roadmap.md
+- **CL-7.1**: phase-1-detail.md
+- **Quick Start**: quick-start.md
 
 ---
 
