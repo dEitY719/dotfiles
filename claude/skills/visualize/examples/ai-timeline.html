@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Evolution Timeline - 1950 to 2025</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    
+    
+    html.theme-dark {
+      --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C;
+      --border: rgba(255,255,255,0.04);
+      --text: #EDEDED; --text-secondary: #888888;
+      --accent: #14b8a6; --accent-secondary: #0d9488;
+      --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b;
+    }
+    html.theme-light {
+      --bg: #FAFAF9; --surface: #FFFFFF; --surface-hover: #F5F5F4;
+      --border: rgba(0,0,0,0.06);
+      --text: #0f172a; --text-secondary: #64748b;
+      --accent: #14b8a6; --accent-secondary: #0d9488;
+      --positive: #059669; --negative: #e11d48; --warning: #d97706;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6; -webkit-font-smoothing: antialiased;
+      letter-spacing: -0.011em; font-feature-settings: 'cv11', 'ss01';
+      transition: background 0.3s, color 0.3s;
+      font-weight: 400;
+      scrollbar-gutter: stable;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: -1;
+      background: radial-gradient(ellipse 80% 50% at 50% 20%, 
+        color-mix(in srgb, var(--accent), transparent 92%), transparent);
+    }
+    html.theme-light body { background: #f8fafc; }
+    html.theme-light body::before {
+      background: radial-gradient(ellipse 80% 50% at 50% 20%, 
+        color-mix(in srgb, var(--accent), transparent 95%), transparent);
+    }
+    h1, h2, h3 { color: var(--text); letter-spacing: -0.03em; line-height: 1.05; font-weight: 700; text-wrap: balance; }
+    h2 { font-weight: 600; letter-spacing: -0.02em; }
+    h3 { font-weight: 600; letter-spacing: -0.02em; }
+    .text-secondary { color: var(--text-secondary); }
+
+    .skip-link {
+      position: absolute; top: -40px; left: 16px; padding: 8px 16px;
+      background: var(--accent); color: #fff; text-decoration: none;
+      border-radius: 8px; z-index: 10000; font-weight: 600;
+    }
+    .skip-link:focus { top: 16px; }
+    *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes timelinePulse { 
+      0%, 100% { box-shadow: 0 0 20px rgba(20,184,166,0.5); transform: translate(0, -50%) scale(1); } 
+      50% { box-shadow: 0 0 25px rgba(20,184,166,0.8); transform: translate(0, -50%) scale(1.1); } 
+    }
+    @keyframes timelineDotPulse { 
+      0%, 100% { border-color: var(--accent); box-shadow: 0 0 0 4px var(--bg); } 
+      50% { border-color: var(--accent); box-shadow: 0 0 0 4px var(--bg), 0 0 15px rgba(20,184,166,0.6); } 
+    }
+    .animate { animation: fadeInUp 0.5s ease-out both; }
+    .animate.delay-1 { animation-delay: 0.1s; }
+    .animate.delay-2 { animation-delay: 0.2s; }
+    .animate.delay-3 { animation-delay: 0.3s; }
+    .animate.delay-4 { animation-delay: 0.4s; }
+
+    .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.5s ease, transform 0.5s ease; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      .reveal { opacity: 1; transform: none; }
+    }
+
+    @media print {
+      body { background: #fff !important; color: #000 !important; }
+      .viz-menu, .section-nav { display: none !important; }
+      .reveal { opacity: 1 !important; transform: none !important; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+
+    /* Menu */
+    .theme-toggle { position: fixed; top: 16px; right: 68px; z-index: 9999; width: 44px; height: 44px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(12px); transition: all 0.2s; }
+    .theme-toggle:hover { background: var(--surface-hover); }
+    .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    html.theme-dark .theme-toggle .sun-icon { display: none; }
+    html.theme-light .theme-toggle .moon-icon { display: none; }
+    .viz-menu { position: fixed; top: 16px; right: 16px; z-index: 9999; }
+    .viz-menu-toggle {
+      width: 40px; height: 40px; border-radius: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); cursor: pointer; display: flex;
+      align-items: center; justify-content: center; transition: background 0.15s;
+    }
+    .viz-menu-toggle:hover { background: var(--surface-hover); }
+    .viz-menu-dropdown {
+      position: absolute; top: 48px; right: 0; min-width: 160px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05);
+      opacity: 0; visibility: hidden;
+      transform: translateY(-4px); transition: all 0.15s;
+    }
+    .viz-menu-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); animation: dropdownIn 0.15s ease; }
+    @keyframes dropdownIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+    .viz-menu-dropdown button {
+      width: 100%; padding: 8px 12px; border: none; border-radius: 6px;
+      background: transparent; color: var(--text-secondary); font-size: 0.875rem;
+      font-family: inherit; cursor: pointer; text-align: left;
+      display: flex; align-items: center; gap: 8px; transition: background 0.15s, color 0.15s;
+    }
+    .viz-menu-dropdown button:hover { background: var(--surface-hover); color: var(--text); }
+
+    /* Layout */
+    .container { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+
+    /* Hero */
+    .hero { padding: 48px 0 32px; text-align: center; }
+    .hero h1 { 
+      font-size: clamp(3rem, 8vw, 4.5rem); 
+      margin-bottom: 16px; 
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      font-weight: 700;
+    }
+    .hero p { font-size: 1.125rem; color: var(--text-secondary); max-width: 540px; margin: 0 auto; line-height: 1.6; }
+
+    /* Stats */
+    .stats { 
+      display: grid; 
+      grid-template-columns: repeat(4, 1fr); 
+      gap: 1px; 
+      background: var(--border); 
+      border-radius: 12px; 
+      overflow: hidden; 
+      margin-bottom: 64px; 
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    html.theme-light .stats { border: 1px solid rgba(0,0,0,0.08); }
+    .stat { 
+      background: var(--surface); 
+      padding: 32px 24px; 
+      text-align: center; 
+      transition: box-shadow 0.2s ease;
+    }
+    .stat:hover {
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+    }
+    html.theme-light .stat:hover {
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+    }
+    .stat-number { 
+      font-size: 2.5rem; 
+      font-weight: 700; 
+      letter-spacing: -0.04em; 
+      color: var(--accent); 
+      display: block; 
+      margin-bottom: 6px;
+      text-shadow: 0 0 40px rgba(20,184,166,0.4);
+      line-height: 1;
+    }
+    .stat-label { 
+      font-size: 0.6875rem; 
+      color: var(--text-secondary); 
+      text-transform: uppercase; 
+      letter-spacing: 0.1em; 
+      font-weight: 500; 
+    }
+
+    /* Section nav */
+    .section-nav {
+      position: sticky; top: 0; z-index: 100; background: var(--bg);
+      border-bottom: 1px solid var(--border); padding: 12px 0;
+      display: flex; gap: 8px; overflow-x: auto; margin-bottom: 48px;
+    }
+    .section-nav a {
+      color: var(--text-secondary); text-decoration: none; font-size: 13px;
+      padding: 4px 12px; border-radius: 6px; white-space: nowrap;
+      transition: color 0.15s, background 0.15s; font-weight: 500;
+    }
+    .section-nav a:hover { color: var(--text); background: var(--surface); }
+
+    /* Timeline */
+    .timeline { position: relative; padding-left: 40px; }
+    .timeline::before {
+      content: ''; position: absolute; left: 10px; top: 0; bottom: 0;
+      width: 4px; 
+      background: linear-gradient(180deg, var(--accent) 0%, var(--accent-secondary) 100%);
+      border-radius: 2px;
+      box-shadow: 0 0 8px rgba(59,130,246,0.3);
+    }
+
+    .era-label {
+      font-size: 0.6875rem; 
+      font-weight: 500; 
+      text-transform: uppercase;
+      letter-spacing: 0.1em; 
+      color: var(--text-secondary);
+      padding: 32px 0 20px; 
+      position: relative;
+    }
+    .era-label::before {
+      content: ''; position: absolute; left: -40px; top: 50%;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--accent); 
+      transform: translate(0, -50%);
+      box-shadow: 0 0 20px rgba(59,130,246,0.4);
+      border: 2px solid var(--bg);
+    }
+
+    .timeline-item { 
+      padding-bottom: 48px; 
+      position: relative; 
+      background: var(--surface);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 20px;
+      margin-left: 24px;
+      transition: box-shadow 0.2s ease, transform 0.2s ease;
+    }
+    .timeline-item:hover {
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 8px 16px rgba(0,0,0,0.15);
+    }
+    .comparison-block:hover, .card:hover, [data-reveal]:hover { border-color: rgba(255,255,255,0.12); }
+    html.theme-light .timeline-item { 
+      border: 1px solid rgba(0,0,0,0.08); 
+    }
+    html.theme-light .timeline-item:hover {
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.08);
+    }
+    .timeline-item::before {
+      content: ''; position: absolute; left: -53px; top: 40px;
+      width: 12px; height: 12px; border-radius: 50%;
+      border: 3px solid var(--accent); 
+      background: var(--bg);
+      box-shadow: 0 0 0 4px var(--bg);
+      animation: timelineDotPulse 3s infinite ease-in-out;
+    }
+
+    .timeline-year {
+      font-size: 0.75rem; 
+      font-weight: 600; 
+      color: var(--accent);
+      margin-bottom: 6px; 
+      font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 20px rgba(20,184,166,0.5);
+    }
+    .timeline-title { 
+      font-size: 1.25rem; 
+      font-weight: 600; 
+      margin-bottom: 12px; 
+      letter-spacing: -0.02em; 
+      line-height: 1.2;
+    }
+    .timeline-desc { 
+      color: var(--text-secondary); 
+      font-size: 1rem; 
+      line-height: 1.6; 
+      margin-bottom: 16px; 
+    }
+
+    .timeline-impact {
+      font-size: 0.875rem; 
+      color: var(--text-secondary);
+      padding: 16px 20px; 
+      background: rgba(20,184,166,0.05); 
+      border-radius: 10px;
+      border: 1px solid rgba(20,184,166,0.15);
+      border-left: 3px solid transparent;
+    }
+    .timeline-impact strong { 
+      color: var(--accent); 
+      font-weight: 600; 
+    }
+
+    /* Era color variations */
+    .timeline-item.era-foundations { border-left: 3px solid transparent; }
+    .timeline-item.era-strategic { border-left: 3px solid transparent; }
+    .timeline-item.era-deep { border-left: 3px solid transparent; }
+    .timeline-item.era-generative { border-left: 3px solid transparent; }
+    
+    /* Width variations */
+    .timeline-item.width-compact { width: 85%; }
+    .timeline-item.width-wide { width: 110%; margin-left: 8px; }
+
+    /* Future */
+    .future { 
+      text-align: center; 
+      padding: 48px 32px; 
+      margin: 48px 0 0; 
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    html.theme-light .future { border: 1px solid rgba(0,0,0,0.08); }
+    .future h2 { 
+      font-size: 2.5rem; 
+      margin-bottom: 16px; 
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      color: var(--accent);
+    }
+    .future p { 
+      color: var(--text-secondary); 
+      max-width: 600px; 
+      margin: 0 auto; 
+      font-size: 1.125rem; 
+      line-height: 1.6; 
+    }
+
+    @media (max-width: 640px) {
+      .container { padding: 0 16px; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .stat { padding: 24px 16px; }
+      .stat-number { font-size: 2rem; }
+      .hero { padding: 60px 0 48px; }
+      .timeline { padding-left: 24px; }
+      .timeline-item { 
+        padding: 20px; 
+        margin-left: 12px;
+      }
+      .timeline-item:hover {
+        background: var(--surface-hover);
+      }
+      .timeline-item::before {
+        left: -37px;
+      }
+      .era-label::before {
+        left: -24px;
+      }
+      .future { padding: 60px 24px; }
+      .future h2 { font-size: 2rem; }
+    }
+  
+    @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--accent); } 50% { box-shadow: 0 0 0 8px transparent; } }
+    .timeline-dot, .era-marker { animation: pulse 2s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+
+  <button class="theme-toggle" onclick="cycleTheme()" aria-label="Toggle theme">
+    <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+  </button>
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/>
+      </svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()"><span id="themeIcon">🌙</span><span id="themeLabel">Dark</span></button>
+      <button onclick="downloadImage()"><span>📥</span><span>Download PNG</span></button>
+      <button onclick="window.print()"><span>🖨️</span><span>Print / PDF</span></button>
+    </div>
+  </div>
+
+  <main id="main-content">
+    <div class="container">
+      <header class="hero animate">
+        <h1>The Evolution of AI</h1>
+        <p>Seven decades of breakthroughs, from Turing's vision to modern generative intelligence</p>
+      </header>
+
+      <section class="stats animate delay-1" role="region" aria-label="Key statistics">
+        <div class="stat">
+          <span class="stat-number" data-count="75" data-suffix="+">75+</span>
+          <span class="stat-label">Years of Research</span>
+        </div>
+        <div class="stat">
+          <span class="stat-number" data-count="1956">1956</span>
+          <span class="stat-label">AI Coined</span>
+        </div>
+        <div class="stat">
+          <span class="stat-number" data-count="2012">2012</span>
+          <span class="stat-label">Deep Learning</span>
+        </div>
+        <div class="stat">
+          <span class="stat-number" data-count="100" data-suffix="B+">100B+</span>
+          <span class="stat-label">Parameters Today</span>
+        </div>
+      </section>
+
+      <nav class="section-nav" aria-label="Era navigation">
+        <a href="#era-foundations">Foundations</a>
+        <a href="#era-strategic">Strategic AI</a>
+        <a href="#era-deep">Deep Learning</a>
+        <a href="#era-generative">Generative AI</a>
+      </nav>
+
+      <section class="timeline" role="list" aria-label="Timeline">
+
+        <div class="era-label" id="era-foundations">Early Foundations</div>
+
+        <article class="timeline-item era-foundations width-compact" role="listitem" data-reveal>
+          <div class="timeline-year">1950</div>
+          <h3 class="timeline-title">The Turing Test</h3>
+          <p class="timeline-desc">Alan Turing publishes "Computing Machinery and Intelligence," proposing the fundamental question: can machines think?</p>
+          <div class="timeline-impact"><strong>Impact:</strong> Established the philosophical foundation for AI research and the first benchmark for machine intelligence.</div>
+        </article>
+
+        <article class="timeline-item era-foundations width-wide" role="listitem" data-reveal>
+          <div class="timeline-year">1956</div>
+          <h3 class="timeline-title">Birth of AI</h3>
+          <p class="timeline-desc">The Dartmouth Summer Research Project coins "Artificial Intelligence." McCarthy, Minsky, and others formally launch AI as a field of study.</p>
+          <div class="timeline-impact"><strong>Impact:</strong> Created AI as a discipline and attracted the first wave of research funding.</div>
+        </article>
+
+        <article class="timeline-item era-foundations" role="listitem" data-reveal>
+          <div class="timeline-year">1966</div>
+          <h3 class="timeline-title">ELIZA Chatbot</h3>
+          <p class="timeline-desc">Joseph Weizenbaum creates ELIZA, the first chatbot that engaged in conversation through pattern matching and substitution.</p>
+          <div class="timeline-impact"><strong>Impact:</strong> Demonstrated that simple algorithms could create convincing human-like interactions.</div>
+        </article>
+
+        <article class="timeline-item era-foundations width-compact" role="listitem" data-reveal>
+          <div class="timeline-year">1980s</div>
+          <h3 class="timeline-title">Expert Systems Boom</h3>
+          <p class="timeline-desc">Systems like MYCIN and XCON demonstrate AI's commercial potential, generating billions in revenue across specialized domains.</p>
+          <div class="timeline-impact"><strong>Impact:</strong> First successful commercial AI applications, proving business value.</div>
+        </article>
+
+        <div class="era-label" id="era-strategic">Strategic AI</div>
+
+        <article class="timeline-item era-strategic width-wide" role="listitem" data-reveal>
+          <div class="timeline-year">1997</div>
+          <h3 class="timeline-title">Deep Blue Defeats Kasparov</h3>
+          <p class="timeline-desc">IBM's Deep Blue becomes the first computer to defeat a world chess champion, beating Garry Kasparov 3.5–2.5.</p>
+          <div class="timeline-impact"><strong>Impact:</strong> Proved AI could exceed human expertise in complex strategic domains.</div>
+        </article>
+
+        <div class="era-label" id="era-deep">Deep Learning Era</div>
+
+        <article class="timeline-item era-deep" role="listitem" data-reveal>
+          <div class="timeline-year">2006</div>
+          <h3 class="timeline-title">Deep Learning Renaissance</h3>
+          <p class="timeline-desc">Geoffrey Hinton's breakthroughs in deep neural networks, combined with GPU computing, make training large networks feasible.</p>
+          <div class="timeline-impact"><strong>Impact:</strong> Launched the modern AI era — vision, speech, and language understanding all advanced rapidly.</div>
+        </article>
+
+        <article class="timeline-item era-deep width-compact" role="listitem" data-reveal>
+          <div class="timeline-year">2012</div>
+          <h3 class="timeline-title">ImageNet Breakthrough</h3>
+          <p class="timeline-desc">AlexNet wins ImageNet with 15.3% error rate, dramatically outperforming traditional approaches at 26.2%.</p>
+          <div class="timeline-impact"><strong>Impact:</strong> Proved deep learning's superiority in computer vision, triggering massive AI investment.</div>
+        </article>
+
+        <article class="timeline-item era-deep width-wide" role="listitem" data-reveal>
+          <div class="timeline-year">2016</div>
+          <h3 class="timeline-title">AlphaGo Masters Go</h3>
+          <p class="timeline-desc">DeepMind's AlphaGo defeats world champion Lee Sedol 4–1 in Go, previously thought impossible for computers.</p>
+          <div class="timeline-impact"><strong>Impact:</strong> Showed AI could handle intuitive, creative thinking beyond brute-force calculation.</div>
+        </article>
+
+        <div class="era-label" id="era-generative">Generative AI</div>
+
+        <article class="timeline-item era-generative width-compact" role="listitem" data-reveal>
+          <div class="timeline-year">2020</div>
+          <h3 class="timeline-title">GPT-3</h3>
+          <p class="timeline-desc">OpenAI releases GPT-3 with 175B parameters, demonstrating unprecedented language understanding and generation.</p>
+          <div class="timeline-impact"><strong>Impact:</strong> Sparked the generative AI boom, leading to ChatGPT and widespread AI adoption.</div>
+        </article>
+
+        <article class="timeline-item era-generative width-wide" role="listitem" data-reveal>
+          <div class="timeline-year">2022</div>
+          <h3 class="timeline-title">ChatGPT Goes Mainstream</h3>
+          <p class="timeline-desc">ChatGPT reaches 100M users in 2 months — the fastest-growing consumer application in history.</p>
+          <div class="timeline-impact"><strong>Impact:</strong> Made AI accessible to everyone, transforming how people work, learn, and create.</div>
+        </article>
+      </section>
+
+      <section class="future" data-reveal>
+        <h2>The Next Frontier</h2>
+        <p>AI continues evolving toward artificial general intelligence, with potential to revolutionize healthcare, education, scientific discovery, and creative expression.</p>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    function toggleMenu() { document.getElementById('vizMenuDropdown').classList.toggle('open'); }
+    document.addEventListener('click', function(e) { if (!e.target.closest('.viz-menu')) document.getElementById('vizMenuDropdown').classList.remove('open'); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') document.getElementById('vizMenuDropdown').classList.remove('open'); });
+
+    var savedTheme = localStorage.getItem('viz-theme');
+    var currentTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    function applyTheme(t) {
+      document.documentElement.className = 'theme-' + t;
+      document.getElementById('themeIcon').textContent = t === 'dark' ? '🌙' : '☀️';
+      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark' : 'Light';
+      localStorage.setItem('viz-theme', t); currentTheme = t;
+    }
+    function cycleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
+    applyTheme(currentTheme);
+
+    document.querySelectorAll('[data-reveal]').forEach(function(el) { el.classList.add('reveal'); });
+    var ro = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) { if (e.isIntersecting) { e.target.classList.add('visible'); ro.unobserve(e.target); } });
+    }, { threshold: 0.15 });
+    document.querySelectorAll('.reveal').forEach(function(el) { ro.observe(el); });
+    setTimeout(function() { document.querySelectorAll('.reveal').forEach(function(el) { el.classList.add('visible'); }); }, 500);
+
+    function animateCounters() {
+      document.querySelectorAll('[data-count]').forEach(function(el) {
+        if (el.dataset.counted) return; el.dataset.counted = '1';
+        var target = parseFloat(el.dataset.count), prefix = el.dataset.prefix || '', suffix = el.dataset.suffix || '';
+        var start = performance.now(), dur = 1000;
+        (function tick(now) {
+          var p = Math.min((now - start) / dur, 1), e = 1 - Math.pow(1 - p, 3);
+          el.textContent = prefix + Math.round(target * e).toLocaleString() + suffix;
+          if (p < 1) requestAnimationFrame(tick);
+        })(start);
+      });
+    }
+    var ce = document.querySelector('[data-count]');
+    if (ce) { var co = new IntersectionObserver(function(es) { es.forEach(function(e) { if (e.isIntersecting) { animateCounters(); co.disconnect(); } }); }, { threshold: 0.3 }); co.observe(ce); }
+
+    async function downloadImage() {
+      var m = document.querySelector('.viz-menu'); m.style.display = 'none';
+      try {
+        var url = await htmlToImage.toPng(document.body, { quality: 1, pixelRatio: 2, filter: function(n) { return !n.classList || !n.classList.contains('viz-menu'); } });
+        var a = document.createElement('a'); a.href = url; a.download = 'ai-timeline.png'; a.click();
+      } catch(e) { console.error(e); }
+      m.style.display = '';
+    }
+  </script>
+</body>
+</html>

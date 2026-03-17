@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-Commerce Microservices Architecture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html.theme-dark { --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C; --border: rgba(255,255,255,0.04); --text: #EDEDED; --text-secondary: #888888; --accent: #6366f1; --accent-secondary: #4f46e5; --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b; }
+    html.theme-light { --bg: #FAFAF9; --surface: #ffffff; --surface-hover: #F5F5F4; --border: rgba(0,0,0,0.06); --text: #0f172a; --text-secondary: #64748b; --accent: #6366f1; --accent-secondary: #4f46e5; --positive: #059669; --negative: #e11d48; --warning: #d97706; }
+
+    body { 
+      font-family: 'Inter', -apple-system, sans-serif; 
+      background: var(--bg); 
+      background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 24px 24px;
+      color: var(--text); 
+      line-height: 1.6; 
+      -webkit-font-smoothing: antialiased;
+      font-feature-settings: 'cv11', 'ss01'; 
+      scrollbar-gutter: stable;
+      letter-spacing: -0.011em; 
+      font-weight: 400;
+    }
+    html.theme-light body {
+      background: #f8fafc;
+      background-image: radial-gradient(circle, rgba(0,0,0,0.04) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    h1, h2, h3 { 
+      color: var(--text); 
+      letter-spacing: -0.03em; 
+      line-height: 1.05; 
+      font-weight: 700; 
+      text-wrap: balance;
+    }
+    h2 { font-weight: 600; letter-spacing: -0.02em; }
+    *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+    .skip-link { position: absolute; top: -40px; left: 16px; padding: 8px 16px; background: var(--accent); color: #fff; text-decoration: none; border-radius: 8px; z-index: 10000; }
+    .skip-link:focus { top: 16px; }
+
+    .reveal { opacity: 0; transform: translateY(16px); transition: opacity 0.4s, transform 0.4s; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+    @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; } *, *::before, *::after { animation: none !important; transition: none !important; } }
+    @media print { body { background: #fff !important; color: #000 !important; } .viz-menu { display: none !important; } .reveal { opacity: 1 !important; transform: none !important; } * { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+
+    .theme-toggle { position: fixed; top: 16px; right: 68px; z-index: 9999; width: 44px; height: 44px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(12px); transition: all 0.2s; }
+    .theme-toggle:hover { background: var(--surface-hover); }
+    .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .theme-dark .theme-toggle .sun-icon { display: none; }
+    .theme-light .theme-toggle .moon-icon { display: none; }
+    .viz-menu { position: fixed; top: 16px; right: 16px; z-index: 9999; }
+    .viz-menu-toggle { width: 40px; height: 40px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .viz-menu-toggle:hover { background: var(--surface-hover); }
+    .viz-menu-dropdown { position: absolute; top: 48px; right: 0; min-width: 160px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05); opacity: 0; visibility: hidden; transform: translateY(-4px); transition: all 0.15s; }
+    .viz-menu-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); animation: dropdownIn 0.15s ease; }
+    @keyframes dropdownIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+    .viz-menu-dropdown button { width: 100%; padding: 8px 12px; border: none; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 0.875rem; font-family: inherit; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 8px; transition: background 0.15s, color 0.15s; }
+    .viz-menu-dropdown button:hover { background: var(--surface-hover); color: var(--text); }
+
+    .container { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+
+    .hero { padding: 48px 0 48px; text-align: center; }
+    .hero h1 { 
+      font-size: clamp(3.5rem, 10vw, 6rem); 
+      margin-bottom: 16px; 
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+      font-weight: 700;
+      text-shadow: 0 0 60px rgba(0,112,243,0.3);
+    }
+    .hero p { 
+      color: var(--text-secondary); 
+      font-size: 1.125rem; 
+      line-height: 1.5;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* Stats bar */
+    .stats-bar { 
+      display: grid; 
+      grid-template-columns: repeat(4, 1fr); 
+      gap: 1px; 
+      background: var(--border); 
+      border-radius: 8px; 
+      overflow: hidden; 
+      margin-bottom: 48px; 
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .theme-light .stats-bar { border: 1px solid rgba(0,0,0,0.08); }
+    .stat { 
+      background: var(--surface); 
+      padding: 24px; 
+      text-align: center; 
+      transition: box-shadow 0.2s ease;
+    }
+    .stat:hover {
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+    }
+    .theme-light .stat:hover {
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+    }
+    .stat-num { 
+      font-size: 2rem; 
+      font-weight: 700; 
+      letter-spacing: -0.04em; 
+      display: block; 
+      margin-bottom: 6px; 
+      text-shadow: 0 0 40px rgba(0,112,243,0.3);
+      line-height: 1;
+    }
+    .stat-label { 
+      font-size: 0.6875rem; 
+      color: var(--text-secondary); 
+      text-transform: uppercase; 
+      letter-spacing: 0.1em; 
+      font-weight: 500; 
+    }
+
+    /* Section nav */
+    .section-nav { 
+      position: sticky; 
+      top: 0; 
+      z-index: 100; 
+      background: var(--bg); 
+      border-bottom: 1px solid var(--border); 
+      padding: 12px 0; 
+      display: flex; 
+      gap: 8px; 
+      overflow-x: auto; 
+      margin-bottom: 48px; 
+      backdrop-filter: blur(8px);
+    }
+    .section-nav a { 
+      color: var(--text-secondary); 
+      text-decoration: none; 
+      font-size: 0.8125rem; 
+      padding: 6px 16px; 
+      border-radius: 8px; 
+      white-space: nowrap; 
+      font-weight: 500; 
+      transition: all 0.2s ease;
+    }
+    .section-nav a:hover { 
+      color: var(--text); 
+      background: var(--surface); 
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    /* Layer */
+    .layer { margin-bottom: 48px; }
+    .layer-header { 
+      display: flex; 
+      align-items: center; 
+      gap: 12px; 
+      margin-bottom: 24px; 
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .layer-dot { 
+      width: 10px; 
+      height: 10px; 
+      border-radius: 50%; 
+      box-shadow: 0 0 20px currentColor;
+    }
+    .layer-name { 
+      font-size: 0.75rem; 
+      font-weight: 600; 
+      text-transform: uppercase; 
+      letter-spacing: 0.1em; 
+      color: var(--text-secondary); 
+    }
+
+    .nodes { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    .node { 
+      background: var(--surface); 
+      border: 2px solid rgba(255,255,255,0.08); 
+      border-radius: 16px; 
+      padding: 24px; 
+      display: flex; 
+      gap: 16px; 
+      transition: all 0.2s ease; 
+      cursor: pointer; 
+      position: relative;
+    }
+    .node::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-secondary));
+      border-radius: 16px 16px 0 0; opacity: 0; transition: opacity 0.2s ease;
+    }
+    .node:hover { 
+      box-shadow: 0 0 0 1px var(--accent), 0 12px 32px rgba(0,0,0,0.15); 
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+    .node:hover::before { opacity: 1; }
+    .theme-light .node { border: 1px solid rgba(0,0,0,0.08); }
+    .theme-light .node:hover { 
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.08); 
+      border-color: rgba(0,0,0,0.12);
+    }
+
+    .node-icon { 
+      width: 40px; 
+      height: 40px; 
+      border-radius: 8px; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      flex-shrink: 0; 
+      background: var(--surface-hover); 
+      color: var(--text-secondary); 
+      transition: background 0.2s ease;
+    }
+    .node:hover .node-icon {
+      background: var(--accent);
+      color: #fff;
+    }
+    .node h4 { 
+      font-size: 0.875rem; 
+      font-weight: 600; 
+      margin-bottom: 6px; 
+      display: flex; 
+      align-items: center; 
+      gap: 8px; 
+      letter-spacing: -0.02em; 
+    }
+    .node p { 
+      font-size: 0.8125rem; 
+      color: var(--text-secondary); 
+      line-height: 1.5; 
+      margin-bottom: 12px; 
+    }
+    .node-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+    .tag { font-size: 0.625rem; padding: 2px 6px; border-radius: 4px; background: var(--surface-hover); color: var(--text-secondary); font-weight: 500; }
+
+    .status { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .status.ok { background: var(--positive); }
+    .status.warn { background: var(--warning); }
+
+    /* Connection indicator */
+    .connector { display: flex; justify-content: center; padding: 8px 0; }
+    .conn-arrow { width: 2px; height: 24px; background: var(--text-secondary); position: relative; border-radius: 1px; }
+    .conn-arrow::after { content: ''; position: absolute; bottom: -4px; left: -4px; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--text-secondary); }
+
+    /* Notes */
+    .notes-section { margin-top: 48px; border-top: 1px solid var(--border); padding-top: 40px; }
+    .notes-section h2 { font-size: 1.25rem; margin-bottom: 20px; }
+    .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .note { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+    .note h3 { font-size: 0.8125rem; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.01em; }
+    .note p { font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.5; }
+
+    @media (max-width: 640px) {
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+      .nodes { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+
+  <button class="theme-toggle" onclick="cycleTheme()" aria-label="Toggle theme">
+    <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+  </button>
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/></svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()"><span id="themeIcon">🌙</span><span id="themeLabel">Dark</span></button>
+      <button onclick="downloadImage()"><span>📥</span> Download PNG</button>
+      <button onclick="window.print()"><span>🖨️</span> Print / PDF</button>
+    </div>
+  </div>
+
+  <main id="main-content">
+    <div class="container">
+
+      <header class="hero">
+        <h1>Microservices Architecture</h1>
+        <p>E-Commerce Platform System Overview</p>
+      </header>
+
+      <section class="stats-bar" role="region" aria-label="System stats">
+        <div class="stat"><span class="stat-num" data-count="99.97" data-suffix="%">99.97%</span><span class="stat-label">Uptime</span></div>
+        <div class="stat"><span class="stat-num" data-count="12" data-suffix="K">12K</span><span class="stat-label">Req/sec</span></div>
+        <div class="stat"><span class="stat-num" data-count="47">47</span><span class="stat-label">Services</span></div>
+        <div class="stat"><span class="stat-num" data-count="2.3" data-suffix="TB">2.3TB</span><span class="stat-label">Daily Data</span></div>
+      </section>
+
+      <nav class="section-nav" aria-label="Layer navigation">
+        <a href="#clients">Clients</a>
+        <a href="#gateway">Gateway</a>
+        <a href="#services">Services</a>
+        <a href="#data">Data</a>
+        <a href="#external">External</a>
+        <a href="#principles">Principles</a>
+      </nav>
+
+      <!-- Clients -->
+      <section class="layer" id="clients" data-reveal role="region" aria-label="Client Applications layer">
+        <div class="layer-header"><div class="layer-dot" style="background:var(--accent)" aria-hidden="true"></div><span class="layer-name">Client Applications</span></div>
+        <div class="nodes">
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15 15 0 014 10 15 15 0 01-4 10 15 15 0 01-4-10 15 15 0 014-10z"/></svg></div><div><h4>Web App <span class="status ok" aria-label="Status: Healthy"></span></h4><p>React SPA with SSR, edge caching, 8K concurrent users</p><div class="node-tags"><span class="tag">React</span><span class="tag">SSR</span><span class="tag">CDN</span></div></div></div>
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div><div><h4>Mobile Apps <span class="status ok" aria-label="Status: Healthy"></span></h4><p>React Native iOS/Android with offline-first architecture</p><div class="node-tags"><span class="tag">React Native</span><span class="tag">Offline</span></div></div></div>
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><div><h4>Admin Dashboard <span class="status ok" aria-label="Status: Healthy"></span></h4><p>Vue.js internal ops dashboard with RBAC and SAML SSO</p><div class="node-tags"><span class="tag">Vue.js</span><span class="tag">RBAC</span></div></div></div>
+        </div>
+      </section>
+
+      <div class="connector"><div class="conn-arrow"></div></div>
+
+      <!-- Gateway -->
+      <section class="layer" id="gateway" data-reveal role="region" aria-label="API Gateway layer">
+        <div class="layer-header"><div class="layer-dot" style="background:var(--warning)" aria-hidden="true"></div><span class="layer-name">API Gateway</span></div>
+        <div class="nodes">
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div><div><h4>Auth Gateway <span class="status ok" aria-label="Status: Healthy"></span></h4><p>JWT + OAuth2, rate limiting at 1K req/min, circuit breaker</p><div class="node-tags"><span class="tag">JWT</span><span class="tag">OAuth2</span><span class="tag">Rate Limit</span></div></div></div>
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg></div><div><h4>Load Balancer <span class="status ok" aria-label="Status: Healthy"></span></h4><p>NGINX with health checks, TLS 1.3, automatic failover</p><div class="node-tags"><span class="tag">NGINX</span><span class="tag">HA</span><span class="tag">TLS</span></div></div></div>
+        </div>
+      </section>
+
+      <div class="connector"><div class="conn-arrow"></div></div>
+
+      <!-- Services -->
+      <section class="layer" id="services" data-reveal role="region" aria-label="Business Services layer">
+        <div class="layer-header"><div class="layer-dot" style="background:var(--positive)" aria-hidden="true"></div><span class="layer-name">Business Services</span></div>
+        <div class="nodes">
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div><h4>User Service <span class="status ok" aria-label="Status: Healthy"></span></h4><p>Auth, profiles, GDPR compliance with encrypted PII</p><div class="node-tags"><span class="tag">Go</span><span class="tag">GDPR</span></div></div></div>
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></div><div><h4>Product Catalog <span class="status ok" aria-label="Status: Healthy"></span></h4><p>2M+ products, dynamic pricing, Elasticsearch sync</p><div class="node-tags"><span class="tag">Python</span><span class="tag">ES</span></div></div></div>
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg></div><div><h4>Orders <span class="status ok" aria-label="Status: Healthy"></span></h4><p>Cart, checkout, saga pattern, 5K+ orders/day</p><div class="node-tags"><span class="tag">Java</span><span class="tag">Saga</span></div></div></div>
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div><div><h4>Payments <span class="status warn" aria-label="Status: Warning"></span></h4><p>Stripe, elevated latency (p99 &gt; 800ms), auto-scaling</p><div class="node-tags"><span class="tag">Node.js</span><span class="tag">PCI-DSS</span></div></div></div>
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg></div><div><h4>Notifications <span class="status ok" aria-label="Status: Healthy"></span></h4><p>Email, push, SMS — 50K+ messages/day, 99.7% delivery</p><div class="node-tags"><span class="tag">SendGrid</span><span class="tag">Twilio</span></div></div></div>
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div><h4>Search <span class="status ok" aria-label="Status: Healthy"></span></h4><p>Elasticsearch, semantic search, &lt;50ms p95, 100K queries/day</p><div class="node-tags"><span class="tag">Rust</span><span class="tag">ML</span></div></div></div>
+        </div>
+      </section>
+
+      <div class="connector"><div class="conn-arrow"></div></div>
+
+      <!-- Data -->
+      <section class="layer" id="data" data-reveal role="region" aria-label="Data and Storage layer">
+        <div class="layer-header"><div class="layer-dot" style="background:#ec4899" aria-hidden="true"></div><span class="layer-name">Data &amp; Storage</span></div>
+        <div class="nodes">
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div><div><h4>PostgreSQL <span class="status ok" aria-label="Status: Healthy"></span></h4><p>3-node cluster, streaming replication, 12K queries/sec</p><div class="node-tags"><span class="tag">HA</span><span class="tag">PgBouncer</span><span class="tag">2.3TB</span></div></div></div>
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><div><h4>Redis Cache <span class="status ok" aria-label="Status: Healthy"></span></h4><p>6-node cluster, 128GB, 99.99% hit rate, Sentinel HA</p><div class="node-tags"><span class="tag">Redis</span><span class="tag">128GB</span></div></div></div>
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div><div><h4>Message Queue <span class="status ok" aria-label="Status: Healthy"></span></h4><p>RabbitMQ, 200K+ msg/min, durable queues, DLX</p><div class="node-tags"><span class="tag">RabbitMQ</span><span class="tag">AMQP</span></div></div></div>
+        </div>
+      </section>
+
+      <div class="connector"><div class="conn-arrow"></div></div>
+
+      <!-- External -->
+      <section class="layer" id="external" data-reveal role="region" aria-label="External Services layer">
+        <div class="layer-header"><div class="layer-dot" style="background:var(--accent-secondary)" aria-hidden="true"></div><span class="layer-name">External Services</span></div>
+        <div class="nodes">
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div><div><h4>Payment Gateways <span class="status ok" aria-label="Status: Healthy"></span></h4><p>Stripe + PayPal, PCI-DSS L1, $5M+/month</p><div class="node-tags"><span class="tag">Stripe</span><span class="tag">PayPal</span></div></div></div>
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div><div><h4>Fulfillment <span class="status ok" aria-label="Status: Healthy"></span></h4><p>ShipStation, multi-carrier, real-time tracking</p><div class="node-tags"><span class="tag">ShipStation</span><span class="tag">UPS</span></div></div></div>
+          <div class="node"><div class="node-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><div><h4>Monitoring <span class="status ok" aria-label="Status: Healthy"></span></h4><p>DataDog + Mixpanel + GA4, real-time alerting</p><div class="node-tags"><span class="tag">DataDog</span><span class="tag">Mixpanel</span></div></div></div>
+        </div>
+      </section>
+
+      <!-- Architecture Notes -->
+      <section class="notes-section" id="principles" data-reveal role="region" aria-label="Architecture principles">
+        <h2>Architecture Principles</h2>
+        <div class="notes-grid">
+          <div class="note"><h3>Event-Driven</h3><p>Services communicate via RabbitMQ for loose coupling. Each publishes domain events others subscribe to.</p></div>
+          <div class="note"><h3>Auto-Scaling</h3><p>Kubernetes HPA scales pods based on CPU/memory. Circuit breakers prevent cascade failures.</p></div>
+          <div class="note"><h3>Security-First</h3><p>Zero-trust networking, mTLS between services, encrypted at rest. SOC 2 Type II compliant.</p></div>
+          <div class="note"><h3>Observability</h3><p>Distributed tracing with Jaeger, structured logging with ELK stack, custom dashboards.</p></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    function toggleMenu() { document.getElementById('vizMenuDropdown').classList.toggle('open'); }
+    document.addEventListener('click', function(e) { if (!e.target.closest('.viz-menu')) document.getElementById('vizMenuDropdown').classList.remove('open'); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') document.getElementById('vizMenuDropdown').classList.remove('open'); });
+
+    var savedTheme = localStorage.getItem('viz-theme'); var currentTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    function applyTheme(t) {
+      document.documentElement.className = 'theme-' + t;
+      document.getElementById('themeIcon').textContent = t === 'dark' ? '🌙' : '☀️';
+      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark' : 'Light';
+      localStorage.setItem('viz-theme', t); currentTheme = t;
+    }
+    function cycleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
+    applyTheme(currentTheme);
+
+    document.querySelectorAll('[data-reveal]').forEach(function(el) { el.classList.add('reveal'); });
+    var ro = new IntersectionObserver(function(entries) { entries.forEach(function(e) { if (e.isIntersecting) { e.target.classList.add('visible'); ro.unobserve(e.target); } }); }, { threshold: 0.1 });
+    document.querySelectorAll('.reveal').forEach(function(el) { ro.observe(el); });
+    setTimeout(function() { document.querySelectorAll('.reveal').forEach(function(el) { el.classList.add('visible'); }); }, 500);
+
+    function animateCounters() {
+      document.querySelectorAll('[data-count]').forEach(function(el) {
+        if (el.dataset.counted) return; el.dataset.counted = '1';
+        var target = parseFloat(el.dataset.count), prefix = el.dataset.prefix || '', suffix = el.dataset.suffix || '';
+        var start = performance.now(), dur = 1000;
+        (function tick(now) { var p = Math.min((now - start) / dur, 1), e = 1 - Math.pow(1 - p, 3), cur = target * e; el.textContent = prefix + (target % 1 !== 0 ? cur.toFixed(2) : Math.round(cur)).toLocaleString() + suffix; if (p < 1) requestAnimationFrame(tick); })(start);
+      });
+    }
+    setTimeout(animateCounters, 300);
+
+    async function downloadImage() {
+      var m = document.querySelector('.viz-menu'); m.style.display = 'none';
+      try { var url = await htmlToImage.toPng(document.body, { quality: 1, pixelRatio: 2, filter: function(n) { return !n.classList || !n.classList.contains('viz-menu'); } }); var a = document.createElement('a'); a.href = url; a.download = 'architecture.png'; a.click(); } catch(e) { console.error(e); }
+      m.style.display = '';
+    }
+  </script>
+</body>
+</html>

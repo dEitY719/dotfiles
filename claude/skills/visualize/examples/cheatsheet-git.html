@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Git Commands Cheat Sheet</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { interpolate-size: allow-keywords; }
+
+    
+    
+    html.theme-dark { --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C; --border: rgba(255,255,255,0.04); --text: #EDEDED; --text-secondary: #888; --accent: #ef4444; --accent-secondary: #dc2626; --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b; }
+    html.theme-light { --bg: #FAFAF9; --surface: #ffffff; --surface-hover: #F5F5F4; --border: rgba(0,0,0,0.08); --text: #0f172a; --text-secondary: #64748b; --accent: #ef4444; --accent-secondary: #dc2626; --positive: #059669; --negative: #e11d48; --warning: #d97706; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.5; -webkit-font-smoothing: antialiased;
+      font-feature-settings: 'cv11', 'ss01';
+      scrollbar-gutter: stable;
+      transition: background 0.3s, color 0.3s;
+    }
+    body::after {
+      content: ''; position: fixed; inset: 0; z-index: -1; opacity: 0.03;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+    .animate { animation: fadeInUp 0.6s ease-out both; }
+    .animate.delay-1 { animation-delay: 0.1s; }
+    .animate.delay-2 { animation-delay: 0.2s; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    .cheatsheet { max-width: 1100px; margin: 0 auto; padding: 28px 24px 16px; }
+    .cheatsheet-header { text-align: center; margin-bottom: 16px; }
+    .cheatsheet-header h1 { font-size: 2.2rem; font-weight: 900; letter-spacing: -0.03em; color: var(--text); text-wrap: balance; }
+    .cheatsheet-header .subtitle { font-size: 0.9rem; color: var(--text-secondary); margin-top: 4px; }
+
+    /* Search */
+    .search-bar { max-width: 480px; margin: 16px auto; position: relative; }
+    .search-bar input {
+      width: 100%; padding: 12px 16px 12px 44px; border-radius: 12px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); font-family: inherit; font-size: 0.9rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .search-bar input::placeholder { color: var(--text-secondary); }
+    .search-bar input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent), transparent 80%); }
+    .search-bar svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); }
+    .search-count { text-align: center; font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; min-height: 1.2em; }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex; align-items: center; justify-content: center; gap: 0;
+      margin-bottom: 16px; padding: 16px 20px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    }
+    .flow-box { padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 0.8rem; text-align: center; white-space: nowrap; }
+    .flow-working { background: color-mix(in srgb, #f97316, transparent 82%); border: 1px solid color-mix(in srgb, #f97316, transparent 50%); color: #f97316; }
+    .flow-staging { background: color-mix(in srgb, #3b82f6, transparent 82%); border: 1px solid color-mix(in srgb, #3b82f6, transparent 50%); color: #3b82f6; }
+    .flow-local { background: color-mix(in srgb, #10b981, transparent 82%); border: 1px solid color-mix(in srgb, #10b981, transparent 50%); color: #10b981; }
+    .flow-remote { background: color-mix(in srgb, #8b5cf6, transparent 82%); border: 1px solid color-mix(in srgb, #8b5cf6, transparent 50%); color: #8b5cf6; }
+    .flow-arrow { font-size: 0.7rem; color: var(--text-secondary); padding: 0 10px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+    .flow-arrow svg { width: 24px; height: 16px; color: var(--text-secondary); }
+
+    .sections-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+
+    details.section-card {
+      background: var(--surface); border: 4px solid var(--border);
+      border-radius: 8px; overflow: hidden; transition: box-shadow 0.2s;
+    }
+    details.section-card:hover { box-shadow: 0 0 0 1px var(--border), 0 4px 16px rgba(0,0,0,0.08); }
+
+    details.section-card summary {
+      padding: 14px 16px; cursor: pointer; list-style: none;
+      font-size: 0.82rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--section-color, var(--accent));
+      display: flex; align-items: center; gap: 8px;
+      border-bottom: 4px solid var(--section-color, var(--accent));
+    }
+    details.section-card summary::-webkit-details-marker { display: none; }
+    details.section-card summary::after {
+      content: ''; width: 0; height: 0; margin-left: auto;
+      border-left: 5px solid transparent; border-right: 5px solid transparent;
+      border-top: 5px solid var(--text-secondary); transition: transform 0.2s;
+    }
+    details.section-card[open] summary::after { transform: rotate(180deg); }
+    details.section-card summary svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+    ::details-content {
+      transition: block-size 0.3s ease, opacity 0.3s ease;
+      block-size: 0; opacity: 0; overflow: hidden;
+    }
+    details[open]::details-content { block-size: auto; opacity: 1; }
+
+    .section-body { padding: 12px 16px 14px; }
+
+    .cmd-list { list-style: none; }
+    .cmd-list li {
+      padding: 4px 0; font-size: 0.78rem; line-height: 1.4;
+      border-bottom: 1px solid var(--border);
+      display: flex; gap: 6px; align-items: baseline;
+    }
+    .cmd-list li:last-child { border-bottom: none; }
+    .cmd-list li.hidden { display: none; }
+
+    code {
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 0.72rem; background: var(--surface-hover);
+      padding: 1px 5px; border-radius: 4px; white-space: nowrap;
+      color: var(--section-color, var(--accent)); font-weight: 500;
+      cursor: pointer; transition: background 0.15s;
+    }
+    code:hover { background: color-mix(in srgb, var(--accent), transparent 85%); }
+    .desc { color: var(--text-secondary); font-size: 0.76rem; }
+    .span-2 { grid-column: span 2; }
+
+    .s-setup { --section-color: #3b82f6; }
+    .s-basic { --section-color: #10b981; }
+    .s-branch { --section-color: #f97316; }
+    .s-merge { --section-color: #ec4899; }
+    .s-remote { --section-color: #8b5cf6; }
+    .s-undo { --section-color: #f43f5e; }
+    .s-stash { --section-color: #06b6d4; }
+    .s-advanced { --section-color: #f59e0b; }
+
+    .footer { text-align: center; padding: 12px 0 8px; font-size: 0.75rem; color: var(--text-secondary); border-top: 1px solid var(--border); margin-top: 18px; }
+
+    @media (max-width: 768px) {
+      .sections-grid { grid-template-columns: 1fr; }
+      .span-2 { grid-column: span 1; }
+      .flow-diagram { flex-wrap: wrap; gap: 8px; }
+    }
+
+    @media print {
+      body { background: white !important; color: black !important; font-size: 9.5pt; }
+      .viz-menu, .search-bar, .search-count { display: none !important; }
+      details.section-card { break-inside: avoid; }
+      code { background: #f1f5f9; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+
+    .theme-toggle { position: fixed; top: 16px; right: 68px; z-index: 9999; width: 44px; height: 44px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(12px); transition: all 0.2s; }
+    .theme-toggle:hover { background: var(--surface-hover); }
+    .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .theme-dark .theme-toggle .sun-icon { display: none; }
+    .theme-light .theme-toggle .moon-icon { display: none; }
+    .viz-menu { position: fixed; top: 16px; right: 16px; z-index: 9999; }
+    .viz-menu-toggle { width: 44px; height: 44px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(12px); transition: all 0.2s; }
+    .viz-menu-toggle:hover { background: var(--surface-hover); }
+    .viz-menu-dropdown { position: absolute; top: 52px; right: 0; min-width: 200px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px; opacity: 0; visibility: hidden; transform: translateY(-8px); transition: all 0.2s; backdrop-filter: blur(16px); }
+    .viz-menu-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); }
+    .viz-menu-dropdown button { width: 100%; padding: 10px 14px; border: none; border-radius: 8px; background: transparent; color: var(--text); font-size: 14px; font-family: inherit; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 10px; transition: background 0.15s; }
+    .viz-menu-dropdown button:hover { background: var(--surface-hover); }
+
+    .skip-link { position: absolute; top: -100px; left: 16px; padding: 8px 16px; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; z-index: 99999; font-weight: 600; }
+    .skip-link:focus { top: 16px; }
+    
+    /* Copy toast notification */
+    .copy-toast {
+      position: fixed; top: 20px; right: 20px; z-index: 1000;
+      background: var(--positive); color: white; padding: 12px 16px;
+      border-radius: 8px; font-size: 0.875rem; font-weight: 600;
+      transform: translateX(100%); opacity: 0;
+      transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .copy-toast.show {
+      transform: translateX(0); opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+  <main id="main-content">
+
+  <button class="theme-toggle" onclick="cycleTheme()" aria-label="Toggle theme">
+    <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+  </button>
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/></svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg><span id="themeLabel">Dark</span></button>
+      <button onclick="downloadImage()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Download PNG</span></button>
+      <button onclick="window.print()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>Print / PDF</span></button>
+    </div>
+  </div>
+
+  <div class="cheatsheet">
+    <header class="cheatsheet-header animate" role="banner">
+      <h1>Git Commands Cheat Sheet</h1>
+      <p class="subtitle">Every command you need — from basics to advanced workflows</p>
+    </header>
+
+    <div class="search-bar animate delay-1">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" id="searchInput" placeholder="Search git commands..." aria-label="Search git commands" oninput="filterCommands()">
+    </div>
+    <div class="search-count" id="searchCount"></div>
+
+    <section class="flow-diagram animate delay-1" role="img" aria-label="Git workflow: Working Directory to Staging Area to Local Repository to Remote Repository">
+      <div class="flow-box flow-working">Working<br>Directory</div>
+      <div class="flow-arrow">git add<svg viewBox="0 0 24 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8h18M16 4l4 4-4 4"/></svg></div>
+      <div class="flow-box flow-staging">Staging<br>Area</div>
+      <div class="flow-arrow">git commit<svg viewBox="0 0 24 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8h18M16 4l4 4-4 4"/></svg></div>
+      <div class="flow-box flow-local">Local<br>Repository</div>
+      <div class="flow-arrow">git push<svg viewBox="0 0 24 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8h18M16 4l4 4-4 4"/></svg></div>
+      <div class="flow-box flow-remote">Remote<br>Repository</div>
+    </section>
+
+    <div class="sections-grid" role="region" aria-label="Git command sections">
+
+      <details class="section-card s-setup animate delay-2" name="git" open aria-label="Setup">
+        <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Setup</summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><code>git init</code> <span class="desc">Initialize new repo</span></li>
+            <li><code>git clone &lt;url&gt;</code> <span class="desc">Clone remote repo</span></li>
+            <li><code>git config user.name "N"</code> <span class="desc">Set name</span></li>
+            <li><code>git config user.email "E"</code> <span class="desc">Set email</span></li>
+            <li><code>git config --global -l</code> <span class="desc">List config</span></li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="section-card s-basic animate delay-2" name="git" aria-label="Basic Workflow">
+        <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9,11 12,14 22,4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>Basic Workflow</summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><code>git status</code> <span class="desc">Show working tree status</span></li>
+            <li><code>git add .</code> <span class="desc">Stage all changes</span></li>
+            <li><code>git add &lt;file&gt;</code> <span class="desc">Stage specific file</span></li>
+            <li><code>git commit -m "msg"</code> <span class="desc">Commit staged changes</span></li>
+            <li><code>git log --oneline</code> <span class="desc">Compact commit history</span></li>
+            <li><code>git diff</code> <span class="desc">Show unstaged changes</span></li>
+            <li><code>git diff --staged</code> <span class="desc">Show staged changes</span></li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="section-card s-branch animate delay-2" name="git" aria-label="Branching">
+        <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></svg>Branching</summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><code>git branch</code> <span class="desc">List branches</span></li>
+            <li><code>git branch &lt;name&gt;</code> <span class="desc">Create branch</span></li>
+            <li><code>git checkout &lt;name&gt;</code> <span class="desc">Switch branch</span></li>
+            <li><code>git switch -c &lt;name&gt;</code> <span class="desc">Create &amp; switch</span></li>
+            <li><code>git branch -d &lt;name&gt;</code> <span class="desc">Delete branch</span></li>
+            <li><code>git branch -a</code> <span class="desc">List all (incl. remote)</span></li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="section-card s-merge animate delay-2" name="git" aria-label="Merging">
+        <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v9"/><path d="M9 6h6a3 3 0 013 3v6"/></svg>Merging</summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><code>git merge &lt;branch&gt;</code> <span class="desc">Merge into current</span></li>
+            <li><code>git merge --no-ff &lt;b&gt;</code> <span class="desc">Merge with commit</span></li>
+            <li><code>git merge --abort</code> <span class="desc">Abort merge</span></li>
+            <li><code>git mergetool</code> <span class="desc">Open merge tool</span></li>
+            <li><code>git log --merge</code> <span class="desc">Show conflicting commits</span></li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="section-card s-remote animate delay-2" name="git" aria-label="Remote">
+        <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>Remote</summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><code>git remote -v</code> <span class="desc">List remotes</span></li>
+            <li><code>git remote add origin &lt;u&gt;</code> <span class="desc">Add remote</span></li>
+            <li><code>git push -u origin main</code> <span class="desc">Push &amp; set upstream</span></li>
+            <li><code>git pull</code> <span class="desc">Fetch &amp; merge</span></li>
+            <li><code>git fetch</code> <span class="desc">Download without merge</span></li>
+            <li><code>git push --force-with-lease</code> <span class="desc">Safe force push</span></li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="section-card s-undo animate delay-2" name="git" aria-label="Undoing Changes">
+        <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,4 1,10 7,10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>Undoing Changes</summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><code>git restore &lt;file&gt;</code> <span class="desc">Discard changes</span></li>
+            <li><code>git restore --staged &lt;f&gt;</code> <span class="desc">Unstage file</span></li>
+            <li><code>git reset HEAD~1</code> <span class="desc">Undo last commit (keep)</span></li>
+            <li><code>git reset --hard HEAD~1</code> <span class="desc">Undo &amp; discard</span></li>
+            <li><code>git revert &lt;hash&gt;</code> <span class="desc">Reverse a commit</span></li>
+            <li><code>git clean -fd</code> <span class="desc">Remove untracked files</span></li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="section-card s-stash animate delay-2" name="git" aria-label="Stashing">
+        <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>Stashing</summary>
+        <div class="section-body">
+          <ul class="cmd-list">
+            <li><code>git stash</code> <span class="desc">Save dirty working dir</span></li>
+            <li><code>git stash pop</code> <span class="desc">Apply &amp; remove stash</span></li>
+            <li><code>git stash list</code> <span class="desc">List all stashes</span></li>
+            <li><code>git stash apply</code> <span class="desc">Apply without removing</span></li>
+            <li><code>git stash drop</code> <span class="desc">Delete latest stash</span></li>
+            <li><code>git stash -m "msg"</code> <span class="desc">Stash with message</span></li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="section-card s-advanced span-2 animate delay-2" name="git" aria-label="Advanced">
+        <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>Advanced</summary>
+        <div class="section-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;">
+            <ul class="cmd-list">
+              <li><code>git rebase main</code> <span class="desc">Rebase onto main</span></li>
+              <li><code>git rebase -i HEAD~3</code> <span class="desc">Interactive rebase (last 3)</span></li>
+              <li><code>git cherry-pick &lt;hash&gt;</code> <span class="desc">Apply specific commit</span></li>
+              <li><code>git bisect start</code> <span class="desc">Binary search for bugs</span></li>
+              <li><code>git reflog</code> <span class="desc">History of HEAD changes</span></li>
+            </ul>
+            <ul class="cmd-list">
+              <li><code>git tag v1.0</code> <span class="desc">Create lightweight tag</span></li>
+              <li><code>git tag -a v1.0 -m "msg"</code> <span class="desc">Annotated tag</span></li>
+              <li><code>git blame &lt;file&gt;</code> <span class="desc">Show who changed what</span></li>
+              <li><code>git log --graph --all</code> <span class="desc">Visual branch graph</span></li>
+              <li><code>git worktree add ../fix b</code> <span class="desc">Multiple working trees</span></li>
+            </ul>
+          </div>
+        </div>
+      </details>
+
+    </div>
+
+    <footer class="footer">careerhackeralex.com · Git by Linus Torvalds · 2025</footer>
+  </div>
+
+  </main>
+  <script>
+    function toggleMenu() { document.getElementById('vizMenuDropdown').classList.toggle('open'); }
+    document.addEventListener('click', function(e) { if (!e.target.closest('.viz-menu')) document.getElementById('vizMenuDropdown').classList.remove('open'); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') document.getElementById('vizMenuDropdown').classList.remove('open'); });
+
+    var savedTheme = localStorage.getItem('viz-theme'); var currentTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    function applyTheme(t) {
+      document.documentElement.className = 'theme-' + t;
+      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark' : 'Light';
+      localStorage.setItem('viz-theme', t); currentTheme = t;
+    }
+    function cycleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
+    applyTheme(currentTheme);
+
+    function filterCommands() {
+      var query = document.getElementById('searchInput').value.toLowerCase().trim();
+      var allItems = document.querySelectorAll('.cmd-list li');
+      var visible = 0;
+      allItems.forEach(function(li) {
+        var match = !query || li.textContent.toLowerCase().indexOf(query) !== -1;
+        li.classList.toggle('hidden', !match);
+        if (match) visible++;
+      });
+      document.getElementById('searchCount').textContent = query ? visible + ' result' + (visible !== 1 ? 's' : '') : '';
+      if (query) {
+        document.querySelectorAll('details.section-card').forEach(function(d) {
+          d.open = !!d.querySelector('.cmd-list li:not(.hidden)');
+        });
+      }
+    }
+
+    // Copy code on click with toast notification
+    document.addEventListener('click', function(e) {
+      if (e.target.tagName === 'CODE') {
+        navigator.clipboard.writeText(e.target.textContent).then(function() {
+          e.target.style.background = 'color-mix(in srgb, var(--positive), transparent 80%)';
+          setTimeout(function() { e.target.style.background = ''; }, 600);
+          
+          // Show toast notification
+          showCopyToast();
+        });
+      }
+    });
+    
+    function showCopyToast() {
+      var existingToast = document.querySelector('.copy-toast');
+      if (existingToast) existingToast.remove();
+      
+      var toast = document.createElement('div');
+      toast.className = 'copy-toast';
+      toast.textContent = 'Copied! ✓';
+      document.body.appendChild(toast);
+      
+      setTimeout(function() { toast.classList.add('show'); }, 10);
+      setTimeout(function() { 
+        toast.classList.remove('show');
+        setTimeout(function() { if (toast.parentNode) toast.remove(); }, 300);
+      }, 2000);
+    }
+
+    async function downloadImage() {
+      var menu = document.querySelector('.viz-menu');
+      menu.style.display = 'none';
+      document.querySelectorAll('details.section-card').forEach(function(d) { d.open = true; });
+      try {
+        var url = await htmlToImage.toPng(document.body, { quality: 1, pixelRatio: 2, filter: function(n) { return !n.classList || !n.classList.contains('viz-menu'); } });
+        var a = document.createElement('a'); a.href = url; a.download = 'git-cheat-sheet.png'; a.click();
+      } catch(e) { console.error('Download failed:', e); }
+      menu.style.display = '';
+    }
+  </script>
+</body>
+</html>
