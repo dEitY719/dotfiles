@@ -1,0 +1,15 @@
+# 현재 상황
+(.venv) bwyoon@SERAPH:~/dotfiles(backup/sso-feature)$ gb -a
+* backup/sso-feature
+  fix/gcp-scan-duplicate-handling
+  main
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/main
+
+# 요청사항
+1. git_clean_local 명령어 개선 요청
+2. git_clean_local 명령어를 실행하면 위와 같은 상황에서 backup/sso-feature, fix/gcp-scan-duplicate-handling 브랜치 2개가 삭제됩니다.
+3. git_clean_local 명령어를 실행할때, 특정 키워드가 포함되어 있으면 삭제하지 않도록 기능을 개선하고 싶어요.
+4. 예를 들어, backup 이라는 키워드가 포함된 브랜치는 삭제하지 말것.
+5. 키워드는 N개까지 쉽게 추가 가능. git_clean_local 함수 내의 list 변수로 관리
+6. 혹시 이와 유사한 기능이 이미 git에 있다면 알려주세요. 또는 backup 키워드 말고, 개발자들이 많이 쓰는 prefix가 있다면 추천해줘.
