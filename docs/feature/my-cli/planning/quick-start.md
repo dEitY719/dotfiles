@@ -18,8 +18,8 @@ git log --oneline | head -5
 ### 2단계: 분석 문서 재검토 (10분)
 ```
 읽을 순서:
-1. docs/requirements/README.md         (2분)
-2. docs/requirements/IMPLEMENTATION_ROADMAP.md (5분)
+1. docs/feature/my-cli/README.md                           (2분)
+2. docs/feature/my-cli/planning/implementation-roadmap.md (5분)
 3. 해당 작업의 상세 문서 (3분)
 ```
 
@@ -32,30 +32,39 @@ npm run build  # 빌드 성공 확인
 
 ### 4단계: CL-7.1 시작!
 ```
-PHASE_1_DETAIL.md를 읽고 즉시 개발 시작
+phase-1-detail.md를 읽고 즉시 개발 시작
 ```
 
 ---
 
 ## 📚 현재 완료된 문서들
 
-### ✅ 분석 문서 (8개)
+### ✅ 분석 문서 (정리된 구조)
 ```
-docs/requirements/
-├── README.md                    ← 가장 먼저 읽기!
-├── LEGACY_ANALYSIS.md           ← 전체 개요
-├── IMPLEMENTATION_ROADMAP.md    ← 큰 그림
-├── 01-DEVELOPMENT.md            ← Tier 1, 2 항목들
-├── 02-DEVOPS.md
-├── 03-AI_LLM.md
-├── 04-CLI_TOOLS.md
-└── 05-CONFIG_SYSTEM_META.md
+docs/feature/my-cli/
+├── README.md
+├── analysis/
+│   ├── legacy-analysis.md
+│   ├── development-category-analysis.md
+│   ├── devops-category-analysis.md
+│   ├── ai-llm-category-analysis.md
+│   ├── cli-tools-category-analysis.md
+│   └── config-system-meta-category-analysis.md
+├── planning/
+│   ├── implementation-roadmap.md
+│   ├── phase-1-detail.md
+│   ├── progress-checklist.md
+│   └── quick-start.md
+└── requirements/
+    ├── req-cli-mycli-1.md
+    ├── req-cli-mycli-1-learning-guide.md
+    └── req-abc-c.md
 ```
 
-### ⏳ 준비 중 문서 (다음 작성)
+### ⏳ 핵심 운영 문서
 ```
-- PHASE_1_DETAIL.md            (CL-7.1 상세 구현 계획)
-- PROGRESS_CHECKLIST.md        (진행 상태 추적)
+- planning/phase-1-detail.md      (CL-7.1 상세 구현 계획)
+- planning/progress-checklist.md  (진행 상태 추적)
 ```
 
 ---
@@ -64,7 +73,7 @@ docs/requirements/
 
 ### Phase 1 재개 시
 ```
-1. PHASE_1_DETAIL.md 읽기
+1. phase-1-detail.md 읽기
 2. TopicDetail.tsx 수정 시작
 3. 색상 복구 구현
 4. 테스트 & 커밋
@@ -72,7 +81,7 @@ docs/requirements/
 
 ### Phase 2 재개 시
 ```
-1. 01-DEVELOPMENT.md (Git 섹션) 읽기
+1. development-category-analysis.md (Git 섹션) 읽기
 2. git_help.sh 구조 파악
 3. Quick Mode 데이터 정의
 4. 테스트 & 커밋
@@ -80,7 +89,7 @@ docs/requirements/
 
 ### 나중에 재개 시
 ```
-1. IMPLEMENTATION_ROADMAP.md에서 해당 Phase 확인
+1. implementation-roadmap.md에서 해당 Phase 확인
 2. 해당 카테고리 분석 문서 읽기
 3. 상세 계획 문서 읽기
 4. 구현 시작
@@ -138,23 +147,23 @@ Phase 2~4:
 
 ### 재개할 때 확인사항
 - [ ] git log에서 최근 커밋 확인
-- [ ] docs/requirements/ 폴더 존재 확인
+- [ ] docs/feature/my-cli/ 폴더 존재 확인
 - [ ] packages/my-cli/npm test 통과 확인
 - [ ] 긴급 업무 이후 git pull 확인
 
 ### 변경 사항 있으면
 - [ ] 분석 문서 업데이트
-- [ ] PROGRESS_CHECKLIST.md 갱신
+- [ ] progress-checklist.md 갱신
 - [ ] Phase별 계획 조정
 
 ---
 
 ## 📞 참고 링크
 
-- **Overview**: docs/requirements/README.md
-- **Implementation Plan**: docs/requirements/IMPLEMENTATION_ROADMAP.md
-- **Git Details**: docs/requirements/01-DEVELOPMENT.md (Git 섹션)
-- **Python Details**: docs/requirements/01-DEVELOPMENT.md (Python 섹션)
+- **Overview**: docs/feature/my-cli/README.md
+- **Implementation Plan**: docs/feature/my-cli/planning/implementation-roadmap.md
+- **Git Details**: docs/feature/my-cli/analysis/development-category-analysis.md (Git 섹션)
+- **Python Details**: docs/feature/my-cli/analysis/development-category-analysis.md (Python 섹션)
 
 ---
 
@@ -162,5 +171,5 @@ Phase 2~4:
 
 긴급 업무 완료 후:
 1. 이 파일 읽기 (5분)
-2. IMPLEMENTATION_ROADMAP.md 재읽기 (10분)
+2. implementation-roadmap.md 재읽기 (10분)
 3. CL-7.1 시작! ✨

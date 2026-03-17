@@ -9,7 +9,7 @@
 | **프로젝트 위치** | 📁 dotfiles 내부 | `/home/bwyoon/dotfiles/packages/my-cli` |
 | **일정** | ⏱️ 8주 | v0.1.0 릴리스 목표 |
 
-**주의**: TypeScript 초보자이므로 학습 가이드 (`req-CLI-MyCLI-1-learning-guide.md`)를 반드시 참고하세요.
+**주의**: TypeScript 초보자이므로 학습 가이드 (`req-cli-mycli-1-learning-guide.md`)를 반드시 참고하세요.
 
 ---
 
@@ -883,8 +883,8 @@ describe('HelpRegistry', () => {
 ### Phase 0: Design Review & Learning (현재)
 
 **✅ 완료**:
-- 설계문서 작성: `req-CLI-MyCLI-1.md`
-- 학습 가이드 작성: `req-CLI-MyCLI-1-learning-guide.md`
+- 설계문서 작성: `req-cli-mycli-1.md`
+- 학습 가이드 작성: `req-cli-mycli-1-learning-guide.md`
 - 기술 결정: **ink 기반 즉시 개발** (chalk 스킵)
 
 **📋 동료 리뷰 (예정)**:
@@ -1132,8 +1132,8 @@ Week 8: 버퍼 (오버런 대비)
 
 | 문서 | 경로 | 목적 |
 |------|------|------|
-| **설계문서** | `docs/requirement/req-CLI-MyCLI-1.md` | 전체 구조 및 목표 |
-| **학습 가이드** | `docs/requirement/req-CLI-MyCLI-1-learning-guide.md` | TypeScript/React/ink 학습 |
+| **설계문서** | `docs/feature/my-cli/requirements/req-cli-mycli-1.md` | 전체 구조 및 목표 |
+| **학습 가이드** | `docs/feature/my-cli/requirements/req-cli-mycli-1-learning-guide.md` | TypeScript/React/ink 학습 |
 | **개발 가이드** | `packages/my-cli/DEVELOPMENT.md` | (작성 예정) |
 | **사용자 가이드** | `packages/my-cli/README.md` | (작성 예정) |
 | **플러그인 API** | `packages/core/docs/PLUGIN_API.md` | (작성 예정) |

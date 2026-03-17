@@ -80,7 +80,7 @@
 ## 🛠️ 신규 프로젝트: my-cli 개발 (2026-02-19)
 
 ### 1️⃣ 초기 설계 및 준비 (우선순위: 보통)
-- [x] 설계 문서 작성: `@docs/requirement/req-abc-G.md`
+- [x] 설계 문서 작성: `@docs/feature/my-cli/requirements/req-abc-c.md`
 - [ ] 동료 리뷰 및 피드백 반영
 - [ ] 프로젝트 스캐폴딩 생성 (Python Typer 기반)
 
