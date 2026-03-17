@@ -296,6 +296,7 @@ setup_uv_config() {
     ux_header "Setting up uv configuration for: $environment"
 
     # Remove existing uv.toml (symlink or file)
+    # Note: -L needed because -e returns false for broken symlinks (dangling links)
     if [ -e "$uv_conf" ] || [ -L "$uv_conf" ]; then
         rm -f "$uv_conf"
         ux_info "Removed existing: $uv_conf"
