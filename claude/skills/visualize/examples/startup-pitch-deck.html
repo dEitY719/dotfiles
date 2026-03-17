@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoFlow - AI-Powered Sustainability</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html.theme-dark { 
+      --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C; 
+      --border: rgba(255,255,255,0.08); --text: #EDEDED; --text-secondary: #888; 
+      --accent: #8b5cf6; --accent-secondary: #7c3aed; 
+      --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b; 
+    }
+    html.theme-light { 
+      --bg: #FAFAF9; --surface: #ffffff; --surface-hover: #F5F5F4; 
+      --border: rgba(0,0,0,0.08); --text: #0f172a; --text-secondary: #64748b; 
+      --accent: #8b5cf6; --accent-secondary: #7c3aed; 
+      --positive: #059669; --negative: #e11d48; --warning: #d97706; 
+    }
+
+    body { 
+      font-family: 'Inter', -apple-system, sans-serif; 
+      background: var(--bg); color: var(--text); 
+      line-height: 1.6; -webkit-font-smoothing: antialiased;
+      font-feature-settings: 'cv11', 'ss01'; 
+      scrollbar-gutter: stable;
+      letter-spacing: -0.011em; overflow: hidden; font-weight: 400;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: -1;
+      background: radial-gradient(ellipse 80% 50% at 50% 20%, 
+        color-mix(in srgb, var(--accent), transparent 92%), transparent);
+    }
+    
+    h1, h2, h3 { 
+      color: var(--text); letter-spacing: -0.03em; 
+      line-height: 1.05; font-weight: 700; 
+      text-wrap: balance;
+    }
+    *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+
+    .skip-link { 
+      position: absolute; top: -40px; left: 16px; padding: 8px 16px; 
+      background: var(--accent); color: #fff; text-decoration: none; 
+      border-radius: 8px; z-index: 10000; 
+    }
+    .skip-link:focus { top: 16px; }
+
+    @media (prefers-reduced-motion: reduce) { 
+      *, *::before, *::after { animation: none !important; transition: none !important; } 
+    }
+    @media print { 
+      body { background: #fff !important; color: #000 !important; overflow: visible; } 
+      .viz-menu, .theme-toggle, .slide-nav { display: none !important; } 
+      .slide { position: static !important; page-break-after: always; } 
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; } 
+    }
+
+    /* ===== VISIBLE THEME TOGGLE ===== */
+    .theme-toggle {
+      position: fixed; top: 16px; right: 16px; z-index: 9999;
+      width: 44px; height: 44px; border-radius: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(12px); transition: all 0.2s;
+      font-size: 20px;
+    }
+    .theme-toggle:hover { background: var(--surface-hover); }
+    .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* ===== MENU ===== */
+    .viz-menu { position: fixed; top: 16px; left: 16px; z-index: 9999; }
+    .viz-menu-toggle { 
+      width: 44px; height: 44px; border-radius: 8px; 
+      background: var(--surface); border: 1px solid var(--border); 
+      color: var(--text); cursor: pointer; display: flex; 
+      align-items: center; justify-content: center; 
+    }
+    .viz-menu-toggle:hover { background: var(--surface-hover); }
+    .viz-menu-dropdown { 
+      position: absolute; top: 52px; left: 0; min-width: 160px; 
+      background: var(--surface); border: 1px solid var(--border); 
+      border-radius: 8px; padding: 4px; 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05); 
+      opacity: 0; visibility: hidden; transform: translateY(-4px); 
+      transition: all 0.15s; 
+    }
+    .viz-menu-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); animation: dropdownIn 0.15s ease; }
+    @keyframes dropdownIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+    .viz-menu-dropdown button { 
+      width: 100%; padding: 8px 12px; border: none; border-radius: 8px; 
+      background: transparent; color: var(--text-secondary); font-size: 0.875rem; 
+      font-family: inherit; cursor: pointer; text-align: left; 
+      display: flex; align-items: center; gap: 8px; transition: background 0.15s, color 0.15s; 
+    }
+    .viz-menu-dropdown button:hover { background: var(--surface-hover); color: var(--text); }
+
+    .slides-container { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+    .slide { 
+      position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; 
+      display: flex; flex-direction: column; justify-content: center; align-items: center; 
+      padding: 48px; text-align: center; opacity: 0; visibility: hidden; 
+      pointer-events: none; transition: opacity 0.4s ease, visibility 0.4s; 
+    }
+    .slide.active { opacity: 1; visibility: visible; pointer-events: auto; }
+
+    /* Title slide with sustainability visual */
+    .slide.title-slide { 
+      background: linear-gradient(135deg, var(--bg) 0%, #0d1117 50%, var(--bg) 100%);
+      position: relative;
+    }
+    .slide.title-slide::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background-image: 
+        radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 32px 32px, 64px 64px, 64px 64px;
+      pointer-events: none;
+    }
+    .theme-light .slide.title-slide { 
+      background: linear-gradient(180deg, #f5f5f0 0%, #eeeee8 50%, #f5f5f0 100%);
+    }
+    .theme-light .slide.title-slide::before {
+      background-image: radial-gradient(circle at 1px 1px, rgba(0,0,0,0.06) 1px, transparent 0);
+      background-size: 24px 24px;
+    }
+    .slide.title-slide h1 { 
+      font-size: clamp(4rem, 12vw, 8rem); margin-bottom: 24px; 
+      letter-spacing: -0.04em; line-height: 1; font-weight: 700;
+      text-shadow: 0 0 60px rgba(16,185,129,0.3);
+    }
+    .slide.title-slide p { 
+      font-size: 1.75rem; color: var(--text-secondary); 
+      max-width: 700px; line-height: 1.4; margin-bottom: 32px; position: relative;
+    }
+    .slide.title-slide p::after {
+      content: ''; position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%);
+      width: 80px; height: 1px; 
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    }
+    .slide.title-slide .meta { 
+      margin-top: 40px; font-size: 1rem; color: var(--text-secondary); font-weight: 500;
+    }
+
+    /* Enhanced EcoFlow hero visual */
+    .hero-visual {
+      position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+    }
+    .hero-visual svg {
+      position: absolute; inset: 0; width: 100%; height: 100%; opacity:  0.5;
+    }
+
+    /* Section slide */
+    .slide.section-slide { 
+      background: linear-gradient(135deg, #065f46 0%, #059669 50%, #047857 100%);
+      position: relative;
+    }
+    .slide.section-slide::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background-image: linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+                        linear-gradient(0deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 40px 40px; pointer-events: none;
+    }
+    .theme-light .slide.section-slide { 
+      background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 50%, #d1fae5 100%);
+    }
+    .theme-light .slide.section-slide::before {
+      background-image: linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px),
+                        linear-gradient(0deg, rgba(0,0,0,0.05) 1px, transparent 1px);
+    }
+    .slide.section-slide h2 { 
+      font-size: clamp(3.5rem, 10vw, 6rem); color: #fff; 
+      letter-spacing: -0.04em; line-height: 1; font-weight: 700;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    .theme-light .slide.section-slide h2 {
+      color: #065f46; text-shadow: none;
+    }
+    .slide.section-slide p { 
+      color: rgba(255,255,255,0.9); font-size: 1.5rem; 
+      max-width: 700px; margin-top: 24px; line-height: 1.4;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .theme-light .slide.section-slide p {
+      color: rgba(6,95,70,0.8); text-shadow: none;
+    }
+
+    /* Content slide with unique background accents */
+    .slide.content-slide { 
+      background: linear-gradient(135deg, var(--bg) 0%, #0d1117 50%, var(--bg) 100%);
+      position: relative;
+    }
+    .slide.content-slide::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at var(--slide-position, 30% 20%), var(--slide-accent, var(--accent)) 0%, transparent 60%);
+      opacity:  0.5; pointer-events: none;
+    }
+    .theme-light .slide.content-slide { 
+      background: linear-gradient(180deg, #f5f5f0 0%, #eeeee8 50%, #f5f5f0 100%);
+    }
+    
+    /* Slide-specific accents */
+    .slide:nth-child(2) { --slide-accent: #f43f5e; --slide-position: 70% 30%; }
+    .slide:nth-child(3) { --slide-accent: #10b981; --slide-position: 20% 70%; }
+    .slide:nth-child(4) { --slide-accent: #06b6d4; --slide-position: 80% 70%; }
+    .slide:nth-child(5) { --slide-accent: #f59e0b; --slide-position: 50% 80%; }
+    .slide:nth-child(6) { --slide-accent: #8b5cf6; --slide-position: 30% 20%; }
+    .slide:nth-child(7) { --slide-accent: #ec4899; --slide-position: 70% 40%; }
+    .slide:nth-child(8) { --slide-accent: #3b82f6; --slide-position: 40% 60%; }
+    .slide:nth-child(9) { --slide-accent: #10b981; --slide-position: 60% 30%; }
+    .slide:nth-child(10) { --slide-accent: #06b6d4; --slide-position: 30% 70%; }
+
+    .slide.content-slide h2 { 
+      font-size: clamp(2.5rem, 8vw, 4rem); margin-bottom: 40px; 
+      letter-spacing: -0.03em; line-height: 1.05; font-weight: 700;
+      text-wrap: balance;
+      }
+    .slide.content-slide p { 
+      color: var(--text-secondary); font-size: 1.25rem; 
+      max-width: 720px; margin-bottom: 48px; line-height: 1.5;
+    }
+
+    .stat-grid { 
+      display: grid; grid-template-columns: repeat(3, 1fr); 
+      gap: 1px; background: var(--border); border-radius: 8px; 
+      overflow: hidden; max-width: 800px; width: 100%; 
+      border: 1px solid var(--border);
+    }
+    .theme-light .stat-grid { border: 1px solid var(--border); }
+    .stat-grid.cols-4 { grid-template-columns: repeat(4, 1fr); max-width: 1000px; }
+    .stat-cell { 
+      background: var(--surface); padding: 32px 24px; text-align: center; 
+      transition: all 0.2s ease;
+    }
+    .stat-cell:hover { background: var(--surface-hover); }
+    .stat-cell .num { 
+      font-size: 5rem; font-weight: 700; letter-spacing: -0.05em; 
+      color: var(--text); display: block; margin-bottom: 12px; 
+      line-height: 1; text-shadow: 0 0 60px rgba(16,185,129,0.4);
+    }
+    .stat-cell .label { 
+      font-size: 0.75rem; color: var(--text-secondary); 
+      text-transform: uppercase; letter-spacing: 0.1em; 
+      font-weight: 500; line-height: 1.3;
+    }
+
+    .problem-list { 
+      list-style: none; text-align: left; max-width: 560px; width: 100%; 
+    }
+    .problem-list li { 
+      display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; 
+      font-size: 1rem; color: var(--text-secondary); border-bottom: 1px solid var(--border);
+      transition: all 0.2s ease;
+    }
+    .problem-list li:hover {
+      color: var(--text); transform: translateX(4px);
+    }
+    .problem-list li:last-child { border-bottom: none; }
+    .problem-list .icon { 
+      width: 20px; height: 20px; color: var(--negative); 
+      flex-shrink: 0; margin-top: 2px; 
+    }
+
+    .solution-grid { 
+      display: grid; grid-template-columns: repeat(2, 1fr); 
+      gap: 16px; max-width: 700px; width: 100%; 
+    }
+    .solution-card { 
+      background: var(--surface); border: 1px solid var(--border); 
+      border-radius: 8px; padding: 32px 24px; text-align: left; 
+      transition: all 0.2s ease;
+    }
+    .solution-card:hover {
+      box-shadow: 0 0 0 1px var(--border), 0 8px 16px rgba(0,0,0,0.08);
+      border-color: var(--accent);
+    }
+    .theme-light .solution-card { border: 1px solid var(--border); }
+    .theme-light .solution-card:hover { 
+      box-shadow: 0 0 0 1px var(--border), 0 8px 16px rgba(0,0,0,0.08); 
+      border-color: var(--accent);
+    }
+    .solution-card h4 { 
+      font-size: 0.875rem; font-weight: 600; margin-bottom: 8px; 
+      color: var(--accent); letter-spacing: -0.01em; 
+    }
+    .solution-card p { 
+      font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.5; 
+    }
+
+    .pricing-grid { 
+      display: grid; grid-template-columns: repeat(3, 1fr); 
+      gap: 16px; max-width: 640px; width: 100%; 
+    }
+    .price-card { 
+      background: var(--surface); border: 1px solid var(--border); 
+      border-radius: 8px; padding: 24px; text-align: center; 
+      transition: all 0.2s ease;
+    }
+    .price-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent), 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .price-card h4 { font-size: 0.875rem; font-weight: 600; margin-bottom: 8px; }
+    .price-card .price { 
+      font-size: 2rem; font-weight: 700; letter-spacing: -0.03em; 
+      text-wrap: balance;
+        color: var(--accent); margin-bottom: 4px; 
+    }
+    .price-card .desc { font-size: 0.75rem; color: var(--text-secondary); }
+
+    .team-grid { 
+      display: grid; grid-template-columns: repeat(4, 1fr); 
+      gap: 24px; max-width: 640px; width: 100%; 
+    }
+    .team-member { text-align: center; }
+    .team-avatar { 
+      width: 64px; height: 64px; border-radius: 50%; 
+      background: var(--surface); border: 1px solid var(--border); 
+      margin: 0 auto 8px; display: flex; align-items: center; justify-content: center; 
+      font-size: 1.125rem; font-weight: 600; color: var(--text-secondary); 
+    }
+    .team-name { font-size: 0.8125rem; font-weight: 600; margin-bottom: 2px; }
+    .team-role { 
+      font-size: 0.6875rem; color: var(--accent); 
+      text-transform: uppercase; letter-spacing: 0.03em; 
+    }
+
+    .chart-card { 
+      background: var(--surface); border: 1px solid var(--border); 
+      border-radius: 8px; padding: 24px; max-width: 520px; 
+      width: 100%; transition: box-shadow 0.2s ease;
+    }
+    .chart-card:hover {
+      box-shadow: 0 0 0 1px var(--border), 0 8px 16px rgba(0,0,0,0.08);
+    }
+    .theme-light .chart-card { border: 1px solid var(--border); }
+    .theme-light .chart-card:hover { box-shadow: 0 0 0 1px var(--border), 0 8px 16px rgba(0,0,0,0.08); }
+    .chart-wrap { height: 300px; position: relative; }
+
+    .slide-nav { 
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); 
+      background: var(--surface); border: 1px solid var(--border); 
+      border-radius: 24px; padding: 8px 16px; display: flex; 
+      align-items: center; gap: 12px; z-index: 1000; 
+    }
+    .nav-btn { 
+      width: 32px; height: 32px; border: none; border-radius: 50%; 
+      background: transparent; color: var(--text); cursor: pointer; 
+      display: flex; align-items: center; justify-content: center; 
+    }
+    .nav-btn:hover { background: var(--surface-hover); }
+    .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .slide-counter { 
+      font-size: 0.875rem; color: var(--text); min-width: 48px; 
+      text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; 
+    }
+    .progress-bar { 
+      position: fixed; top: 0; left: 0; right: 0; height: 3px; 
+      background: var(--border); z-index: 1000; 
+    }
+    .progress-fill { 
+      height: 100%; background: var(--accent); transition: width 0.4s; 
+    }
+
+    /* Keyboard navigation hints */
+    .keyboard-hint {
+      position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+      font-size: 0.75rem; color: var(--text-secondary);
+      display: flex; align-items: center; gap: 8px;
+      opacity: 0; animation: fadeIn 1s ease 2s both;
+    }
+    .keyboard-hint kbd {
+      background: var(--surface-hover); border: 1px solid var(--border);
+      border-radius: 4px; padding: 2px 6px; font-size: 0.625rem;
+      color: var(--text); font-family: inherit;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    @media (max-width: 768px) {
+      .slide { padding: 24px; }
+      .stat-grid, .stat-grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+      .solution-grid, .pricing-grid { grid-template-columns: 1fr; }
+      .team-grid { grid-template-columns: repeat(2, 1fr); }
+      .stat-cell { padding: 24px 16px; }
+      .stat-cell .num { font-size: 3rem; }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+
+  <!-- VISIBLE THEME TOGGLE -->
+  <button class="theme-toggle" onclick="cycleTheme()" aria-label="Toggle theme">
+    <span id="themeIcon">🌙</span>
+  </button>
+
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/>
+      </svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="downloadImage()"><span>📥</span> Download PNG</button>
+      <button onclick="window.print()"><span>🖨️</span> Print / PDF</button>
+    </div>
+  </div>
+
+  <main id="main-content" role="main">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div id="slideAnnounce" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);"></div>
+
+    <div class="slides-container" id="slidesContainer" role="region" aria-roledescription="slide deck">
+
+      <section class="slide title-slide" role="group" aria-roledescription="slide" aria-label="EcoFlow">
+        <!-- Enhanced sustainability hero visual -->
+        <div class="hero-visual">
+          <svg viewBox="0 0 1200 800" fill="none">
+            <!-- Leaf/nature pattern -->
+            <path d="M600 100 Q550 150 600 200 Q650 150 600 100" fill="var(--accent)" opacity="0.1"/>
+            <path d="M600 100 Q580 130 600 160 Q620 130 600 100" fill="var(--accent)" opacity="0.15"/>
+            <path d="M600 120 L600 180" stroke="var(--accent)" stroke-width="1" opacity="0.6"/>
+            
+            <!-- Removed decorative flow circles for cleaner design -->
+            
+            <!-- Trees/sustainability symbols -->
+            <rect x="250" y="250" width="4" height="40" fill="var(--accent)" opacity="0.5"/>
+            <circle cx="252" cy="240" r="15" fill="var(--accent)" opacity="0.3"/>
+            
+            <rect x="850" y="250" width="4" height="40" fill="var(--accent-secondary)" opacity="0.5"/>
+            <circle cx="852" cy="240" r="15" fill="var(--accent-secondary)" opacity="0.3"/>
+            
+            <rect x="550" y="450" width="4" height="40" fill="var(--accent)" opacity="0.5"/>
+            <circle cx="552" cy="440" r="15" fill="var(--accent)" opacity="0.3"/>
+            
+            <!-- Data visualization elements -->
+            <rect x="100" y="600" width="200" height="100" rx="8" stroke="var(--accent)" stroke-width="0.8" fill="none" opacity="0.4"/>
+            <rect x="120" y="660" width="20" height="20" fill="var(--accent)" opacity="0.5"/>
+            <rect x="150" y="650" width="20" height="30" fill="var(--accent)" opacity="0.6"/>
+            <rect x="180" y="640" width="20" height="40" fill="var(--accent)" opacity="0.7"/>
+            <rect x="210" y="630" width="20" height="50" fill="var(--accent)" opacity="0.8"/>
+            <rect x="240" y="620" width="20" height="60" fill="var(--accent)" opacity="0.9"/>
+            
+            <!-- CO2 reduction arrows -->
+            <path d="M900 600 L900 550" stroke="var(--positive)" stroke-width="2" marker-end="url(#arrowhead)" opacity="0.6"/>
+            <path d="M950 600 L950 540" stroke="var(--positive)" stroke-width="2" marker-end="url(#arrowhead)" opacity="0.7"/>
+            <path d="M1000 600 L1000 530" stroke="var(--positive)" stroke-width="2" marker-end="url(#arrowhead)" opacity="0.8"/>
+            
+            <defs>
+              <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="var(--positive)" opacity="0.8"/>
+              </marker>
+            </defs>
+            
+            <!-- Grid pattern -->
+            <defs>
+              <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                <path d="M 50 0 L 0 0 0 50" fill="none" stroke="var(--accent)" stroke-width="0.3" opacity="0.2"/>
+              </pattern>
+            </defs>
+            <rect width="1200" height="800" fill="url(#grid)"/>
+          </svg>
+        </div>
+        
+        <div class="keyboard-hint">
+          <span>Navigate:</span>
+          <kbd>←</kbd>
+          <kbd>→</kbd>
+          <kbd>Space</kbd>
+        </div>
+        <h1>EcoFlow</h1>
+        <p>AI-powered sustainability platform for enterprise</p>
+        <div class="meta">Seed Round · $2M Raising · 2026</div>
+      </section>
+
+      <section class="slide content-slide" role="group" aria-roledescription="slide" aria-label="The Problem">
+        <h2>The Problem</h2>
+        <p>Companies struggle to measure and reduce their environmental impact</p>
+        <ul class="problem-list">
+          <li>
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/>
+              <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            73% lack comprehensive carbon tracking
+          </li>
+          <li>
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/>
+              <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            Reporting takes 120+ hours/month
+          </li>
+          <li>
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/>
+              <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            ESG compliance costs $2.3M/year avg
+          </li>
+          <li>
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/>
+              <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            Fragmented data blocks optimization
+          </li>
+        </ul>
+      </section>
+
+      <section class="slide section-slide" role="group" aria-roledescription="slide" aria-label="Our Solution">
+        <h2>Our Solution</h2>
+        <p>AI platform that automates sustainability tracking, reporting, and optimization</p>
+      </section>
+
+      <section class="slide content-slide" role="group" aria-roledescription="slide" aria-label="How It Works">
+        <h2>How It Works</h2>
+        <div class="solution-grid">
+          <div class="solution-card">
+            <h4>Smart Collection</h4>
+            <p>Connects to 200+ enterprise systems for real-time environmental data</p>
+          </div>
+          <div class="solution-card">
+            <h4>AI Analytics</h4>
+            <p>ML models identify patterns, predict trends, recommend optimizations</p>
+          </div>
+          <div class="solution-card">
+            <h4>Compliance</h4>
+            <p>One-click reporting for GRI, SASB, TCFD, EU Taxonomy</p>
+          </div>
+          <div class="solution-card">
+            <h4>Action Insights</h4>
+            <p>Personalized recommendations to reduce emissions and waste</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide content-slide" role="group" aria-roledescription="slide" aria-label="Market">
+        <h2>Market Opportunity</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; max-width: 800px; width: 100%; align-items: center;">
+          <div class="stat-grid" style="grid-template-columns: 1fr;">
+            <div class="stat-cell"><span class="num" data-count="16.2" data-prefix="$" data-suffix="B">$16.2B</span><span class="label">TAM by 2030</span></div>
+            <div class="stat-cell"><span class="num" data-count="28" data-suffix="%">28%</span><span class="label">CAGR</span></div>
+            <div class="stat-cell"><span class="num" data-count="84" data-suffix="%">84%</span><span class="label">F500 with ESG goals</span></div>
+          </div>
+          <div class="chart-card" role="img" aria-label="Market growth chart">
+            <div class="chart-wrap"><canvas id="marketChart"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide content-slide" role="group" aria-roledescription="slide" aria-label="Business Model">
+        <h2>Business Model</h2>
+        <p>SaaS subscription tiered by company size</p>
+        <div class="pricing-grid">
+          <div class="price-card">
+            <h4>Starter</h4>
+            <div class="price">$2K</div>
+            <div class="desc">per month · ≤500 employees</div>
+          </div>
+          <div class="price-card">
+            <h4>Professional</h4>
+            <div class="price">$8K</div>
+            <div class="desc">per month · ≤5,000 employees</div>
+          </div>
+          <div class="price-card">
+            <h4>Enterprise</h4>
+            <div class="price">$25K</div>
+            <div class="desc">per month · unlimited</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide content-slide" role="group" aria-roledescription="slide" aria-label="Traction">
+        <h2>Traction</h2>
+        <p>Strong early validation from pilot customers</p>
+        <div class="stat-grid cols-4">
+          <div class="stat-cell"><span class="num" data-count="12">12</span><span class="label">Pilots</span></div>
+          <div class="stat-cell"><span class="num" data-count="340" data-prefix="$" data-suffix="K">$340K</span><span class="label">Pipeline</span></div>
+          <div class="stat-cell"><span class="num" data-count="87" data-suffix="%">87%</span><span class="label">CSAT</span></div>
+          <div class="stat-cell"><span class="num" data-count="42" data-suffix="%">42%</span><span class="label">CO₂ Reduction</span></div>
+        </div>
+      </section>
+
+      <section class="slide content-slide" role="group" aria-roledescription="slide" aria-label="Team">
+        <h2>Our Team</h2>
+        <p>Deep expertise in AI, sustainability, and enterprise software</p>
+        <div class="team-grid">
+          <div class="team-member">
+            <div class="team-avatar">SL</div>
+            <div class="team-name">Sarah Liu</div>
+            <div class="team-role">CEO</div>
+          </div>
+          <div class="team-member">
+            <div class="team-avatar">MK</div>
+            <div class="team-name">Marcus Kim</div>
+            <div class="team-role">CTO</div>
+          </div>
+          <div class="team-member">
+            <div class="team-avatar">AR</div>
+            <div class="team-name">Amara Raj</div>
+            <div class="team-role">Product</div>
+          </div>
+          <div class="team-member">
+            <div class="team-avatar">DC</div>
+            <div class="team-name">David Chen</div>
+            <div class="team-role">Sales</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide section-slide" role="group" aria-roledescription="slide" aria-label="The Ask">
+        <h2>Raising $2M Seed</h2>
+        <p>60% Product · 25% Go-to-Market · 15% Operations</p>
+      </section>
+
+      <section class="slide content-slide" role="group" aria-roledescription="slide" aria-label="Use of Funds">
+        <h2>Use of Funds</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; max-width: 700px; width: 100%; align-items: center;">
+          <div class="stat-grid" style="grid-template-columns: 1fr;">
+            <div class="stat-cell"><span class="num" data-count="60" data-suffix="%">60%</span><span class="label">Product Dev</span></div>
+            <div class="stat-cell"><span class="num" data-count="25" data-suffix="%">25%</span><span class="label">Sales & Marketing</span></div>
+            <div class="stat-cell"><span class="num" data-count="15" data-suffix="%">15%</span><span class="label">Operations</span></div>
+          </div>
+          <div class="chart-card" role="img" aria-label="Funding allocation chart">
+            <div class="chart-wrap"><canvas id="fundingChart"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide title-slide" role="group" aria-roledescription="slide" aria-label="Thank You">
+        <h1 style="font-size: clamp(2.5rem, 6vw, 4rem);">Let's Build Sustainably</h1>
+        <p>Join us in transforming enterprise sustainability</p>
+        <div class="meta">sarah@ecoflow.ai · ecoflow.ai</div>
+      </section>
+    </div>
+
+    <nav class="slide-nav" aria-label="Slide navigation">
+      <button class="nav-btn" id="prevBtn" onclick="prevSlide()" aria-label="Previous">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15,18 9,12 15,6"/>
+        </svg>
+      </button>
+      <span class="slide-counter" id="slideCounter">1 / 11</span>
+      <button class="nav-btn" id="nextBtn" onclick="nextSlide()" aria-label="Next">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9,18 15,12 9,6"/>
+        </svg>
+      </button>
+    </nav>
+  </main>
+
+  <script>
+    var currentSlide = 0, totalSlides = 11, marketChart, fundingChart;
+
+    function toggleMenu() { document.getElementById('vizMenuDropdown').classList.toggle('open'); }
+    document.addEventListener('click', function(e) { if (!e.target.closest('.viz-menu')) document.getElementById('vizMenuDropdown').classList.remove('open'); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') document.getElementById('vizMenuDropdown').classList.remove('open'); });
+
+    var savedTheme = localStorage.getItem('viz-theme'); var currentTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    function applyTheme(t) {
+      document.documentElement.className = 'theme-' + t;
+      document.getElementById('themeIcon').textContent = t === 'dark' ? '🌙' : '☀️';
+      localStorage.setItem('viz-theme', t); currentTheme = t;
+      if (typeof onThemeChange === 'function') onThemeChange();
+    }
+    function cycleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
+    applyTheme(currentTheme);
+
+    function updateSlide() {
+      var slides = document.querySelectorAll('.slide');
+      slides.forEach(function(s, i) { s.classList.toggle('active', i === currentSlide); });
+      document.getElementById('slideCounter').textContent = (currentSlide + 1) + ' / ' + totalSlides;
+      document.getElementById('progressFill').style.width = ((currentSlide + 1) / totalSlides * 100) + '%';
+      document.getElementById('prevBtn').disabled = currentSlide === 0;
+      document.getElementById('nextBtn').disabled = currentSlide === totalSlides - 1;
+      document.getElementById('slideAnnounce').textContent = slides[currentSlide].getAttribute('aria-label') || '';
+      setTimeout(function() { animateCounters(slides[currentSlide]); }, 200);
+    }
+    function nextSlide() { if (currentSlide < totalSlides - 1) { currentSlide++; updateSlide(); } }
+    function prevSlide() { if (currentSlide > 0) { currentSlide--; updateSlide(); } }
+
+    document.addEventListener('keydown', function(e) {
+      if (document.getElementById('vizMenuDropdown').classList.contains('open')) return;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); prevSlide(); }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); nextSlide(); }
+    });
+    var touchX = 0;
+    document.addEventListener('touchstart', function(e) { touchX = e.changedTouches[0].screenX; });
+    document.addEventListener('touchend', function(e) { var d = touchX - e.changedTouches[0].screenX; if (Math.abs(d) > 50) { d > 0 ? nextSlide() : prevSlide(); } });
+    document.addEventListener('click', function(e) { if (e.target.closest('.viz-menu,.theme-toggle,.slide-nav,button,canvas')) return; e.clientX < window.innerWidth / 3 ? prevSlide() : nextSlide(); });
+
+    function animateCounters(container) {
+      (container || document).querySelectorAll('[data-count]').forEach(function(el) {
+        if (el.dataset.counted) return; el.dataset.counted = '1';
+        var target = parseFloat(el.dataset.count), prefix = el.dataset.prefix || '', suffix = el.dataset.suffix || '';
+        var start = performance.now(), dur = 1000;
+        (function tick(now) { 
+          var p = Math.min((now - start) / dur, 1), e = 1 - Math.pow(1 - p, 3), cur = target * e; 
+          el.textContent = prefix + (target % 1 !== 0 ? cur.toFixed(1) : Math.round(cur)).toLocaleString() + suffix; 
+          if (p < 1) requestAnimationFrame(tick); 
+        })(start);
+      });
+    }
+
+    function getColors() { 
+      var s = getComputedStyle(document.documentElement); 
+      return { 
+        text: s.getPropertyValue('--text').trim(), 
+        sub: s.getPropertyValue('--text-secondary').trim(), 
+        border: s.getPropertyValue('--border').trim(), 
+        surface: s.getPropertyValue('--surface').trim(), 
+        accent: s.getPropertyValue('--accent').trim(), 
+        accent2: s.getPropertyValue('--accent-secondary').trim(), 
+        warning: s.getPropertyValue('--warning').trim() 
+      }; 
+    }
+    function getCanvas(id) { return document.getElementById(id); }
+
+    function buildCharts() {
+      var c = getColors();
+      Chart.defaults.color = c.sub;
+      Chart.defaults.animation = false;
+      var tt = { backgroundColor: c.surface, titleColor: c.text, bodyColor: c.text, borderColor: c.border, borderWidth: 1, padding: 12, cornerRadius: 8, titleFont: { size: 14 }, bodyFont: { size: 13 } };
+      try { if (marketChart) marketChart.destroy(); } catch(e) {}
+      try { if (fundingChart) fundingChart.destroy(); } catch(e) {}
+
+      var mc = getCanvas('marketChart');
+      if (mc) {
+        var ctx = mc.getContext('2d'), g = ctx.createLinearGradient(0,0,0,260); 
+        g.addColorStop(0, c.accent + '30'); g.addColorStop(1, c.accent + '00');
+        marketChart = new Chart(mc, {
+          type: 'line', 
+          data: { labels: ['2022','2024','2026','2028','2030'], datasets: [{ data: [2.1,4.8,7.2,11.3,16.2], borderColor: c.accent, backgroundColor: g, borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0, pointHoverRadius: 6 }] },
+          options: { responsive: true, maintainAspectRatio: false, layout: { padding: 10 }, plugins: { tooltip: { enabled: true, mode: 'index', intersect: false, ...tt, callbacks: { label: function(ctx) { return '$'+ctx.parsed.y+'B'; } } }, legend: { display: false } },
+            scales: { y: { grid: { color: c.border }, ticks: { color: c.sub, font: { size: 13 }, callback: function(v){return '$'+v+'B';} }, border: { display: false } }, x: { grid: { display: false }, ticks: { color: c.sub, font: { size: 13 } }, border: { display: false } } }, interaction: { intersect: false, mode: 'index' } }
+        });
+      }
+      var fc = getCanvas('fundingChart');
+      if (fc) {
+        fundingChart = new Chart(fc, {
+          type: 'doughnut', data: { labels: ['Product','Sales & Marketing','Operations'], datasets: [{ data: [60,25,15], backgroundColor: [c.accent, c.accent2, c.warning], borderWidth: 0 }] },
+          options: { responsive: true, maintainAspectRatio: false, layout: { padding: 10 }, plugins: { tooltip: { enabled: true, ...tt, callbacks: { label: function(ctx) { return ctx.label+': '+ctx.parsed+'%'; } } }, legend: { position: 'bottom', labels: { color: c.text, font: { size: 13 }, usePointStyle: true, padding: 16 } } }, cutout: '65%' }
+        });
+      }
+    }
+    function onThemeChange() { setTimeout(buildCharts, 50); }
+    updateSlide(); setTimeout(buildCharts, 300);
+
+    async function downloadImage() {
+      var els = ['.viz-menu','.theme-toggle','.slide-nav'].map(function(s){return document.querySelector(s);});
+      els.forEach(function(el){if(el)el.style.display='none';});
+      try { 
+        var url = await htmlToImage.toPng(document.querySelectorAll('.slide')[currentSlide], { 
+          quality: 1, pixelRatio: 2, width: 1920, height: 1080 
+        }); 
+        var a = document.createElement('a'); 
+        a.href = url; 
+        a.download = 'ecoflow-slide-'+(currentSlide+1)+'.png'; 
+        a.click(); 
+      } catch(e) { console.error(e); }
+      els.forEach(function(el){if(el)el.style.display='';});
+    }
+  </script>
+</body>
+</html>

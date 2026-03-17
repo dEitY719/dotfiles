@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Summit 2026 — San Francisco</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { interpolate-size: allow-keywords; }
+
+    
+    
+    html.theme-dark { --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C; --border: rgba(255,255,255,0.04); --text: #EDEDED; --text-secondary: #888; --accent: #ec4899; --accent-secondary: #db2777; --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b; }
+    html.theme-light { --bg: #FAFAF9; --surface: #ffffff; --surface-hover: #F5F5F4; --border: rgba(0,0,0,0.08); --text: #0f172a; --text-secondary: #64748b; --accent: #ec4899; --accent-secondary: #db2777; --positive: #059669; --negative: #e11d48; --warning: #d97706; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6; letter-spacing: -0.011em; -webkit-font-smoothing: antialiased;
+      font-feature-settings: 'cv11', 'ss01';
+      scrollbar-gutter: stable;
+      transition: background 0.3s, color 0.3s;
+      display: flex; align-items: flex-start; justify-content: center;
+      min-height: 100vh; padding: 32px 16px;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: -1;
+      background: radial-gradient(ellipse 80% 50% at 50% 20%, color-mix(in srgb, var(--accent), transparent 92%), transparent);
+    }
+    *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+    .animate { animation: fadeInUp 0.6s ease-out both; }
+    .animate.delay-1 { animation-delay: 0.1s; }
+    .animate.delay-2 { animation-delay: 0.2s; }
+    .animate.delay-3 { animation-delay: 0.3s; }
+    .animate.delay-4 { animation-delay: 0.4s; }
+    .animate.delay-5 { animation-delay: 0.5s; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    /* ===== POSTER ===== */
+    .poster {
+      width: 100%; max-width: 720px;
+      background: var(--surface); border: 4px solid var(--border);
+      border-radius: 32px; overflow: hidden;
+      box-shadow: 0 32px 96px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05);
+    }
+
+    .poster-hero {
+      padding: 56px 48px 40px; text-align: center; position: relative;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent), var(--bg) 60%), color-mix(in srgb, var(--accent-secondary), var(--bg) 60%));
+    }
+    .poster-hero::after {
+      content: ''; position: absolute; inset: 0; opacity: 0.04;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    .poster-eyebrow { font-size: 0.85rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; position: relative; z-index: 1; background: color-mix(in srgb, var(--accent), transparent 85%); padding: 8px 16px; border-radius: 8px; display: inline-block; border: 4px solid var(--accent); }
+    .poster-title { font-size: clamp(3.5rem, 9vw, 6rem); font-weight: 900; line-height: 0.9; margin-bottom: 8px; color: var(--text); position: relative; z-index: 1; letter-spacing: -0.04em; text-shadow: 0 4px 8px rgba(0,0,0,0.3); text-wrap: balance; }
+    .poster-location-line { font-size: 1.1rem; color: var(--text-secondary); font-weight: 500; position: relative; z-index: 1; }
+
+    /* Countdown */
+    .countdown-section { padding: 0 48px; position: relative; z-index: 1; margin-top: -20px; }
+    .countdown {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+      background: var(--surface); border: 4px solid var(--border);
+      border-radius: 16px; padding: 20px; text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+    }
+    .countdown-unit { display: flex; flex-direction: column; gap: 4px; }
+    .countdown-value { font-size: 2rem; font-weight: 700; color: var(--accent); line-height: 1; letter-spacing: -0.02em; }
+    .countdown-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary); }
+
+    .poster-body { padding: 32px 48px 48px; }
+
+    .date-badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+      color: #fff; padding: 12px 24px; border-radius: 12px;
+      font-weight: 700; font-size: 1.1rem; margin: 16px 0 32px;
+    }
+
+    .poster-section { margin-bottom: 28px; }
+    .poster-section-title { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); margin-bottom: 16px; }
+
+    .speaker-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .speaker-card {
+      background: var(--surface-hover); border-radius: 12px; padding: 16px;
+      border: 4px solid var(--border); display: flex; gap: 12px; align-items: center;
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .speaker-card:hover { 
+      box-shadow: 0 0 0 1px var(--border), 0 4px 12px rgba(0,0,0,0.08); 
+      transform: translateY(-2px);
+    }
+    .speaker-avatar {
+      width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; color: #fff; font-size: 0.8rem;
+    }
+    .speaker-name { font-weight: 700; font-size: 0.9rem; }
+    .speaker-topic { font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; }
+
+    .schedule-tracks { display: flex; flex-direction: column; gap: 10px; }
+    .track {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--surface-hover); border-radius: 10px; padding: 12px 16px;
+      border: 4px solid var(--border); transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .track:hover { 
+      box-shadow: 0 0 0 1px var(--border), 0 4px 12px rgba(0,0,0,0.08); 
+      transform: translateY(-1px);
+    }
+    .track-color { width: 4px; height: 32px; border-radius: 4px; flex-shrink: 0; }
+    .track-name { font-weight: 700; font-size: 0.9rem; }
+    .track-desc { font-size: 0.8rem; color: var(--text-secondary); }
+
+    .location-row { display: flex; align-items: center; gap: 16px; }
+    .map-placeholder {
+      width: 80px; height: 80px; border-radius: 12px; flex-shrink: 0;
+      background: var(--surface-hover); border: 4px solid var(--border);
+      display: flex; align-items: center; justify-content: center; color: var(--text-secondary);
+    }
+    .location-name { font-weight: 700; font-size: 1rem; }
+    .location-address { font-size: 0.85rem; color: var(--text-secondary); }
+
+    .cta-section {
+      text-align: center; padding: 24px;
+      background: color-mix(in srgb, var(--accent), transparent 92%);
+      border-radius: 16px; border: 4px solid var(--border);
+    }
+    .cta-button {
+      display: inline-block; padding: 16px 40px; border-radius: 16px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+      color: #fff; font-weight: 700; font-size: 1.1rem;
+      text-decoration: none; border: none; cursor: pointer;
+      transition: all 0.2s; box-shadow: 0 4px 16px rgba(59,130,246,0.2);
+    }
+    .cta-button:hover { 
+      box-shadow: 0 12px 32px rgba(59,130,246,0.4); 
+      transform: translateY(-2px);
+    }
+
+    .qr-placeholder {
+      width: 96px; height: 96px; margin: 16px auto 0;
+      background: #fff; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    @media (max-width: 560px) {
+      .poster-hero { padding: 40px 24px 32px; }
+      .poster-body { padding: 24px; }
+      .countdown-section { padding: 0 24px; }
+      .speaker-grid { grid-template-columns: 1fr; }
+    }
+
+    @media print {
+      body { background: white !important; color: black !important; padding: 0 !important; }
+      .viz-menu { display: none !important; }
+      .poster { box-shadow: none !important; border: 1px solid #ddd !important; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+
+    .theme-toggle { position: fixed; top: 16px; right: 68px; z-index: 9999; width: 44px; height: 44px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(12px); transition: all 0.2s; }
+    .theme-toggle:hover { background: var(--surface-hover); }
+    .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .theme-dark .theme-toggle .sun-icon { display: none; }
+    .theme-light .theme-toggle .moon-icon { display: none; }
+    .viz-menu { position: fixed; top: 16px; right: 16px; z-index: 9999; }
+    .viz-menu-toggle { width: 44px; height: 44px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(12px); transition: all 0.2s; }
+    .viz-menu-toggle:hover { background: var(--surface-hover); }
+    .viz-menu-dropdown { position: absolute; top: 52px; right: 0; min-width: 200px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px; opacity: 0; visibility: hidden; transform: translateY(-8px); transition: all 0.2s; backdrop-filter: blur(16px); }
+    .viz-menu-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); }
+    .viz-menu-dropdown button { width: 100%; padding: 10px 14px; border: none; border-radius: 8px; background: transparent; color: var(--text); font-size: 14px; font-family: inherit; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 10px; transition: background 0.15s; }
+    .viz-menu-dropdown button:hover { background: var(--surface-hover); }
+
+    .skip-link { position: absolute; top: -100px; left: 16px; padding: 8px 16px; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; z-index: 99999; font-weight: 600; }
+    .skip-link:focus { top: 16px; }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+  <main id="main-content">
+
+  <button class="theme-toggle" onclick="cycleTheme()" aria-label="Toggle theme">
+    <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+  </button>
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/></svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg><span id="themeLabel">Dark</span></button>
+      <button onclick="downloadImage()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Download PNG</span></button>
+      <button onclick="window.print()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>Print / PDF</span></button>
+    </div>
+  </div>
+
+  <article class="poster animate" role="region" aria-label="AI Summit 2026 event poster">
+    <header class="poster-hero">
+      <!-- Bold hero visual element -->
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:1;">
+        <svg viewBox="0 0 400 320" fill="none" style="width:350px;height:280px;opacity:0.15;">
+          <!-- Central conference symbol -->
+          <circle cx="200" cy="160" r="100" fill="var(--accent)" opacity="0.3"/>
+          <circle cx="200" cy="160" r="60" fill="var(--surface)" opacity="0.8"/>
+          <!-- Conference podium -->
+          <rect x="170" y="140" width="60" height="40" rx="8" fill="var(--accent)" opacity="0.6"/>
+          <rect x="175" y="145" width="50" height="6" rx="3" fill="var(--surface)" opacity="0.9"/>
+          <!-- Year 2026 in large text -->
+          <text x="200" y="85" text-anchor="middle" font-family="Inter" font-size="72" font-weight="900" fill="var(--accent)" opacity="0.4">2026</text>
+        </svg>
+      </div>
+      <div class="poster-eyebrow animate delay-1">The Premier AI Conference</div>
+      <h1 class="poster-title animate delay-1">AI Summit 2026</h1>
+      <div class="poster-location-line animate delay-2">San Francisco, California</div>
+    </header>
+
+    <div class="countdown-section animate delay-2">
+      <div class="countdown" role="timer" aria-label="Countdown to event">
+        <div class="countdown-unit"><span class="countdown-value" id="cd-days">---</span><span class="countdown-label">Days</span></div>
+        <div class="countdown-unit"><span class="countdown-value" id="cd-hours">--</span><span class="countdown-label">Hours</span></div>
+        <div class="countdown-unit"><span class="countdown-value" id="cd-min">--</span><span class="countdown-label">Minutes</span></div>
+        <div class="countdown-unit"><span class="countdown-value" id="cd-sec">--</span><span class="countdown-label">Seconds</span></div>
+      </div>
+    </div>
+
+    <div class="poster-body">
+      <div style="text-align:center;" class="animate delay-2">
+        <div class="date-badge">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          September 15–17, 2026 · 9 AM – 6 PM
+        </div>
+      </div>
+
+      <section class="poster-section animate delay-3" role="region" aria-label="Featured speakers">
+        <h2 class="poster-section-title">Featured Speakers</h2>
+        <div class="speaker-grid">
+          <div class="speaker-card">
+            <div class="speaker-avatar" aria-hidden="true">SL</div>
+            <div><div class="speaker-name">Dr. Sarah Lin</div><div class="speaker-topic">The Future of Multimodal AI</div></div>
+          </div>
+          <div class="speaker-card">
+            <div class="speaker-avatar" aria-hidden="true">MK</div>
+            <div><div class="speaker-name">Marcus Kim</div><div class="speaker-topic">Scaling LLMs to 10T Parameters</div></div>
+          </div>
+          <div class="speaker-card">
+            <div class="speaker-avatar" aria-hidden="true">AP</div>
+            <div><div class="speaker-name">Aisha Patel</div><div class="speaker-topic">AI Safety &amp; Alignment</div></div>
+          </div>
+          <div class="speaker-card">
+            <div class="speaker-avatar" aria-hidden="true">JC</div>
+            <div><div class="speaker-name">James Chen</div><div class="speaker-topic">Autonomous Agents in Production</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="poster-section animate delay-4" role="region" aria-label="Conference tracks">
+        <h2 class="poster-section-title">Tracks</h2>
+        <div class="schedule-tracks">
+          <div class="track"><div class="track-color" style="background: var(--accent);"></div><div><div class="track-name">Research &amp; Foundations</div><div class="track-desc">Cutting-edge papers, model architectures, training techniques</div></div></div>
+          <div class="track"><div class="track-color" style="background: var(--accent-secondary);"></div><div><div class="track-name">Engineering &amp; Infrastructure</div><div class="track-desc">MLOps, deployment, scaling, monitoring in production</div></div></div>
+          <div class="track"><div class="track-color" style="background: var(--positive);"></div><div><div class="track-name">Ethics, Safety &amp; Policy</div><div class="track-desc">Responsible AI, governance frameworks, alignment research</div></div></div>
+        </div>
+      </section>
+
+      <section class="poster-section animate delay-4" role="region" aria-label="Venue information">
+        <h2 class="poster-section-title">Venue</h2>
+        <div class="location-row">
+          <div class="map-placeholder" aria-hidden="true">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <div>
+            <div class="location-name">Moscone Center West</div>
+            <div class="location-address">747 Howard St, San Francisco, CA 94103</div>
+            <div class="location-address" style="margin-top: 4px;">Parking available · Transit accessible (BART Powell St)</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cta-section animate delay-5" role="region" aria-label="Registration">
+        <div style="font-weight: 700; font-size: 1.25rem; margin-bottom: 4px;">Early Bird Tickets Available</div>
+        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;">$499 until June 30 · $799 after</div>
+        <button class="cta-button" aria-label="Register for AI Summit 2026">Register Now
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:middle;margin-left:4px;"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+        </button>
+        <div class="qr-placeholder" aria-label="QR code for registration">
+          <svg width="80" height="80" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="7" height="7" fill="#000"/><rect x="1" y="1" width="5" height="5" fill="#fff"/><rect x="2" y="2" width="3" height="3" fill="#000"/>
+            <rect x="14" y="0" width="7" height="7" fill="#000"/><rect x="15" y="1" width="5" height="5" fill="#fff"/><rect x="16" y="2" width="3" height="3" fill="#000"/>
+            <rect x="0" y="14" width="7" height="7" fill="#000"/><rect x="1" y="15" width="5" height="5" fill="#fff"/><rect x="2" y="16" width="3" height="3" fill="#000"/>
+            <rect x="8" y="0" width="1" height="1" fill="#000"/><rect x="10" y="0" width="1" height="1" fill="#000"/><rect x="12" y="0" width="1" height="1" fill="#000"/>
+            <rect x="9" y="9" width="1" height="1" fill="#000"/><rect x="11" y="9" width="1" height="1" fill="#000"/><rect x="13" y="9" width="1" height="1" fill="#000"/>
+            <rect x="9" y="11" width="1" height="1" fill="#000"/><rect x="12" y="11" width="1" height="1" fill="#000"/><rect x="15" y="11" width="1" height="1" fill="#000"/>
+            <rect x="9" y="13" width="1" height="1" fill="#000"/><rect x="14" y="13" width="1" height="1" fill="#000"/><rect x="18" y="13" width="1" height="1" fill="#000"/>
+            <rect x="10" y="15" width="1" height="1" fill="#000"/><rect x="13" y="15" width="1" height="1" fill="#000"/><rect x="18" y="15" width="1" height="1" fill="#000"/>
+            <rect x="9" y="17" width="1" height="1" fill="#000"/><rect x="12" y="17" width="1" height="1" fill="#000"/><rect x="17" y="17" width="1" height="1" fill="#000"/>
+            <rect x="10" y="19" width="1" height="1" fill="#000"/><rect x="15" y="19" width="1" height="1" fill="#000"/><rect x="18" y="19" width="1" height="1" fill="#000"/>
+          </svg>
+        </div>
+      </section>
+    </div>
+  </article>
+
+  </main>
+  <script>
+    function toggleMenu() { document.getElementById('vizMenuDropdown').classList.toggle('open'); }
+    document.addEventListener('click', function(e) { if (!e.target.closest('.viz-menu')) document.getElementById('vizMenuDropdown').classList.remove('open'); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') document.getElementById('vizMenuDropdown').classList.remove('open'); });
+
+    var savedTheme = localStorage.getItem('viz-theme'); var currentTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    function applyTheme(t) {
+      document.documentElement.className = 'theme-' + t;
+      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark' : 'Light';
+      localStorage.setItem('viz-theme', t); currentTheme = t;
+    }
+    function cycleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
+    applyTheme(currentTheme);
+
+    // Countdown timer
+    var eventDate = new Date('2026-09-15T09:00:00-07:00').getTime();
+    function updateCountdown() {
+      var now = Date.now();
+      var diff = eventDate - now;
+      if (diff <= 0) {
+        document.getElementById('cd-days').textContent = '0';
+        document.getElementById('cd-hours').textContent = '0';
+        document.getElementById('cd-min').textContent = '0';
+        document.getElementById('cd-sec').textContent = '0';
+        return;
+      }
+      var d = Math.floor(diff / 86400000);
+      var h = Math.floor((diff % 86400000) / 3600000);
+      var m = Math.floor((diff % 3600000) / 60000);
+      var s = Math.floor((diff % 60000) / 1000);
+      document.getElementById('cd-days').textContent = d;
+      document.getElementById('cd-hours').textContent = h;
+      document.getElementById('cd-min').textContent = m;
+      document.getElementById('cd-sec').textContent = s;
+    }
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+
+    async function downloadImage() {
+      var menu = document.querySelector('.viz-menu');
+      menu.style.display = 'none';
+      try {
+        var url = await htmlToImage.toPng(document.querySelector('.poster'), { quality: 1, pixelRatio: 2 });
+        var a = document.createElement('a'); a.href = url; a.download = 'ai-summit-2026-poster.png'; a.click();
+      } catch(e) { console.error('Download failed:', e); }
+      menu.style.display = '';
+    }
+  </script>
+</body>
+</html>
