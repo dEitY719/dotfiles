@@ -285,6 +285,38 @@ setup_local_files() {
     verify_config "$environment"
 }
 
+setup_uv_config() {
+    environment="$1"
+    uv_config_dir="${HOME}/.config/uv"
+    uv_conf="${uv_config_dir}/uv.toml"
+
+    # Ensure ~/.config/uv directory exists
+    mkdir -p "$uv_config_dir"
+
+    ux_header "Setting up uv configuration for: $environment"
+
+    # Remove existing uv.toml (symlink or file)
+    # Note: -L needed because -e returns false for broken symlinks (dangling links)
+    if [ -e "$uv_conf" ] || [ -L "$uv_conf" ]; then
+        rm -f "$uv_conf"
+        ux_info "Removed existing: $uv_conf"
+    fi
+
+    # Create symlink based on environment
+    case "$environment" in
+        internal)
+            # Internal company PC: use internal repository + proxy
+            ln -s "${SHELL_COMMON_DIR}/config/uv/uv.toml.internal" "$uv_conf"
+            ux_success "Created symlink: $uv_conf → uv.toml.internal"
+            ux_info "Using: Samsung internal repositories + proxy"
+            ;;
+        external|public)
+            # External/Public: no uv.toml needed (defaults to public PyPI)
+            ux_info "No uv.toml needed (using default public PyPI)"
+            ;;
+    esac
+}
+
 setup_pip_config() {
     environment="$1"
     pip_config_dir="${HOME}/.config/pip"
@@ -348,6 +380,7 @@ main() {
             ux_info "Selected: Public PC"
             cleanup_local_files
             setup_pip_config "public"
+            setup_uv_config "public"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for public PC (home environment)"
@@ -360,6 +393,7 @@ main() {
             cleanup_local_files
             setup_local_files "internal"
             setup_pip_config "internal"
+            setup_uv_config "internal"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for internal company PC"
@@ -369,6 +403,7 @@ main() {
             ux_info "  - SSL Certificate: McAfee (/usr/share/ca-certificates/extra/McAfee_Certificate.crt)"
             ux_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
             ux_info "  - Pip: Samsung internal repository configured"
+            ux_info "  - uv: Samsung internal repository + proxy configured"
             ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
             echo ""
             ux_section "⚠️  IMPORTANT: Reload your shell to apply changes"
@@ -382,6 +417,7 @@ main() {
             cleanup_local_files
             setup_local_files "external"
             setup_pip_config "external"
+            setup_uv_config "external"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for external company PC"
