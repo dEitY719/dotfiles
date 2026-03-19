@@ -6,6 +6,26 @@
 # Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
 source "$(dirname "$0")/init.sh" || exit 1
 
+# Shared target constant (SSOT: same default as check_network.sh)
+NETWORK_GIT_TARGET="${NETWORK_GIT_TARGET:-https://github.com/git/git.git}"
+
+# Result counters (consistent with check_network.sh)
+PROXY_PASS_COUNT=0
+PROXY_WARN_COUNT=0
+PROXY_FAIL_COUNT=0
+
+record_pass() {
+    PROXY_PASS_COUNT=$((PROXY_PASS_COUNT + 1))
+}
+
+record_warn() {
+    PROXY_WARN_COUNT=$((PROXY_WARN_COUNT + 1))
+}
+
+record_fail() {
+    PROXY_FAIL_COUNT=$((PROXY_FAIL_COUNT + 1))
+}
+
 # ============================================================
 # Helper functions
 # ============================================================
@@ -27,6 +47,7 @@ check_setup_mode() {
     if [ ! -f "$setup_mode_file" ]; then
         ux_warning "Setup mode not configured"
         ux_bullet "Run: ./setup.sh in ~/dotfiles to configure"
+        record_warn
         echo ""
         return 0
     fi
@@ -38,17 +59,21 @@ check_setup_mode() {
         1)
             ux_success "Setup Mode: Public PC (Home environment)"
             ux_info "Expected behavior: NO proxy variables should be set"
+            record_pass
             ;;
         2)
             ux_success "Setup Mode: Internal company PC (Direct connection)"
             ux_info "Expected behavior: Company proxy SHOULD be set (12.26.204.100:8080)"
+            record_pass
             ;;
         3)
             ux_success "Setup Mode: External company PC (VPN)"
             ux_info "Expected behavior: NO proxy variables should be set"
+            record_pass
             ;;
         *)
             ux_error "Unknown setup mode: $mode"
+            record_fail
             ;;
     esac
     echo ""
@@ -85,6 +110,9 @@ check_proxy_env() {
                 ux_error "ISSUE DETECTED: Proxy is set but should not be (Mode $mode)"
                 ux_info "This may be inherited from WSL or the system environment"
                 ux_info "Solution: Restart your shell or run: source ~/.bashrc"
+                record_fail
+            else
+                record_pass
             fi
             ;;
         2)
@@ -92,6 +120,9 @@ check_proxy_env() {
                 echo ""
                 ux_warning "No proxy set but Mode 2 (Internal PC) expects proxy"
                 ux_info "Check if proxy.local.sh exists and is properly sourced"
+                record_warn
+            else
+                record_pass
             fi
             ;;
     esac
@@ -125,14 +156,18 @@ check_proxy_local_sh() {
         ux_section "Content Validation"
         if grep -q "export http_proxy" "$proxy_local"; then
             ux_success "http_proxy export found"
+            record_pass
         else
             ux_warning "http_proxy export not found"
+            record_warn
         fi
 
         if grep -q "export no_proxy" "$proxy_local"; then
             ux_success "no_proxy export found"
+            record_pass
         else
             ux_warning "no_proxy export not found"
+            record_warn
         fi
     else
         ux_warning "proxy.local.sh NOT FOUND"
@@ -141,6 +176,7 @@ check_proxy_local_sh() {
         ux_bullet "Option 2 (Internal PC): Run setup.sh and select option 2"
         ux_bullet "Option 3 (VPN): Uses direct connection - file not needed"
         ux_info "Continue with diagnostics for public/VPN environments..."
+        record_warn
     fi
     echo ""
 }
@@ -164,26 +200,33 @@ check_proxy_shell_loading() {
     bash_result=$(bash -c "source \"$proxy_sh\" 2>/dev/null && echo \${http_proxy:-[NOT SET]}" 2>/dev/null)
     if [ "$bash_result" != "[NOT SET]" ] && [ -n "$bash_result" ]; then
         ux_success "Bash loading: $bash_result"
+        record_pass
     elif [ "$expected_proxy" -eq 1 ]; then
         ux_warning "Bash loading: proxy not loaded but Mode 2 expects one"
+        record_warn
     else
         ux_success "Bash loading: no proxy configured (expected for this environment)"
+        record_pass
     fi
     echo ""
 
     ux_section "Zsh"
-    if command -v zsh >/dev/null 2>&1; then
+    if have_command zsh; then
         ux_info "Testing: zsh -c 'source proxy.sh && echo \$http_proxy'"
         zsh_result=$(zsh -c "source \"$proxy_sh\" 2>/dev/null && echo \${http_proxy:-[NOT SET]}" 2>/dev/null)
         if [ "$zsh_result" != "[NOT SET]" ] && [ -n "$zsh_result" ]; then
             ux_success "Zsh loading: $zsh_result"
+            record_pass
         elif [ "$expected_proxy" -eq 1 ]; then
             ux_warning "Zsh loading: proxy not loaded but Mode 2 expects one"
+            record_warn
         else
             ux_success "Zsh loading: no proxy configured (expected for this environment)"
+            record_pass
         fi
     else
         ux_warning "Zsh not installed"
+        record_warn
     fi
     echo ""
 }
@@ -193,10 +236,11 @@ check_proxy_connectivity() {
 
     local mode
     mode="$(get_setup_mode)"
-    if [ -z "$http_proxy" ] && [ -z "$HTTP_PROXY" ]; then
+    if [ -z "${http_proxy:-}" ] && [ -z "${HTTP_PROXY:-}" ]; then
         if [ "$mode" = "2" ]; then
             ux_warning "No proxy configured but Mode 2 expects one"
             ux_info "Check proxy.local.sh and shell loading diagnostics"
+            record_warn
         else
             ux_info "No proxy configured, skipping proxy connectivity test"
             ux_info "Run check-network quick for general internet connectivity"
@@ -212,10 +256,12 @@ check_proxy_connectivity() {
     ux_bullet "Target: https://github.com"
     echo ""
 
-    if timeout 5 curl -v --proxy "$proxy" https://github.com 2>&1 | grep -q "HTTP\|Connected"; then
+    if run_with_timeout 5 curl -v --proxy "$proxy" https://github.com 2>&1 | grep -q "HTTP\|Connected"; then
         ux_success "Proxy connection successful"
+        record_pass
     else
         ux_error "Proxy connection failed or timeout"
+        record_fail
     fi
     echo ""
 }
@@ -233,12 +279,23 @@ check_git_config() {
     echo ""
 
     ux_section "Git Remote Access Test"
-    ux_info "Testing: timeout 5 git ls-remote https://github.com/git/git.git HEAD"
-    if timeout 5 git ls-remote https://github.com/git/git.git HEAD >/dev/null 2>&1; then
+    ux_info "Testing: timeout 5 git ls-remote $NETWORK_GIT_TARGET HEAD"
+    if run_with_timeout 5 git ls-remote "$NETWORK_GIT_TARGET" HEAD >/dev/null 2>&1; then
         ux_success "Git remote access successful"
+        record_pass
     else
         ux_error "Git remote access failed"
+        record_fail
     fi
+    echo ""
+}
+
+show_summary() {
+    ux_divider_thick
+    ux_section "Summary"
+    ux_bullet "Passed: $PROXY_PASS_COUNT"
+    ux_bullet "Warnings: $PROXY_WARN_COUNT"
+    ux_bullet "Failures: $PROXY_FAIL_COUNT"
     echo ""
 }
 
@@ -271,7 +328,7 @@ check_proxy() {
         git)
             check_git_config
             ;;
-        all|*)
+        all)
             check_setup_mode
             check_proxy_env
             check_proxy_local_sh
@@ -279,10 +336,20 @@ check_proxy() {
             check_proxy_connectivity
             check_git_config
             ;;
+        *)
+            ux_error "Unknown mode: $mode"
+            ux_info "Usage: check_proxy [mode|env|file|shell|conn|git|all]"
+            record_fail
+            ;;
     esac
 
-    ux_divider_thick
-    echo ""
+    show_summary
+
+    if [ "$PROXY_FAIL_COUNT" -gt 0 ]; then
+        return 1
+    fi
+
+    return 0
 }
 
 # ============================================================
