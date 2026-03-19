@@ -5,26 +5,10 @@
 #   Symlinked to ~/.config/uv/uv.toml by shell-common/setup.sh
 #   Choose this option when using company internal repositories
 #
-# Note: Proxy is configured here (uv does not read shell proxy variables)
+# Note: Proxy is managed via environment variables (proxy.local.sh sets
+#       HTTP_PROXY, HTTPS_PROXY, NO_PROXY which uv respects automatically).
+#       uv.toml does NOT support proxy fields (https-proxy, http-proxy, no-proxy).
 # Note: native-tls required for corporate CA certificates (uv uses own TLS by default)
 
 native-tls = true
-https-proxy = "http://12.26.204.100:8080/"
-http-proxy = "http://12.26.204.100:8080/"
-no-proxy = [
-  "10.229.95.200",
-  "10.229.95.220",
-  "12.36.155.91",
-  "12.36.154.116",
-  "12.36.154.130",
-  "localhost",
-  "127.0.0.1",
-  ".samsung.net",
-  ".samsungds.net",
-  "ssai.samsungds.net",
-  "stsds.secsso.net",
-  "dsvdi.net",
-  "pfs.nprotect.com",
-  "10.227.253.89",
-]
 extra-index-url = ["http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/simple"]
