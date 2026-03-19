@@ -15,12 +15,13 @@ REPO_ROOT = Path(__file__).parent.parent
 SHELL_COMMON = REPO_ROOT / "shell-common"
 TOOLS_CUSTOM = SHELL_COMMON / "tools" / "custom"
 
-# Custom tool commands (37 total)
+# Custom tool commands (38 total)
 # Note: devx is now a function in shell-common/functions/devx.sh, not a custom tool
 # Note: mount is now a function in shell-common/functions/mount.sh, not a custom tool
 MYTOOL_COMMANDS = [
     "analyze_bash_scripts",
     "check_proxy",
+    "check_network",
     "check_ux_consistency",
     "demo_ux",
     "docker_configure_proxy",
