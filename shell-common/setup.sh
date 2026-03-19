@@ -141,10 +141,14 @@ setup_npm_symlink() {
 
     ux_header "Setting up npm configuration for: $environment"
 
-    # Handle existing ~/.npmrc
+    # Handle existing ~/.npmrc (symlink, file, or directory)
     if [ -L "$npmrc_target" ]; then
         rm -f "$npmrc_target"
         ux_info "Removed existing symlink: $npmrc_target"
+    elif [ -d "$npmrc_target" ]; then
+        backup="${npmrc_target}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$npmrc_target" "$backup"
+        ux_warning "Backed up existing directory: $backup"
     elif [ -f "$npmrc_target" ]; then
         backup="${npmrc_target}.backup.$(date +%Y%m%d%H%M%S)"
         mv "$npmrc_target" "$backup"
@@ -213,10 +217,14 @@ setup_uv_config() {
 
     ux_header "Setting up uv configuration for: $environment"
 
-    # Handle existing uv.toml
+    # Handle existing uv.toml (symlink, file, or directory)
     if [ -L "$uv_conf" ]; then
         rm -f "$uv_conf"
         ux_info "Removed existing symlink: $uv_conf"
+    elif [ -d "$uv_conf" ]; then
+        backup="${uv_conf}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$uv_conf" "$backup"
+        ux_warning "Backed up existing directory: $backup"
     elif [ -f "$uv_conf" ]; then
         backup="${uv_conf}.backup.$(date +%Y%m%d%H%M%S)"
         mv "$uv_conf" "$backup"
@@ -247,10 +255,14 @@ setup_pip_config() {
 
     ux_header "Setting up pip configuration for: $environment"
 
-    # Handle existing pip.conf
+    # Handle existing pip.conf (symlink, file, or directory)
     if [ -L "$pip_conf" ]; then
         rm -f "$pip_conf"
         ux_info "Removed existing symlink: $pip_conf"
+    elif [ -d "$pip_conf" ]; then
+        backup="${pip_conf}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$pip_conf" "$backup"
+        ux_warning "Backed up existing directory: $backup"
     elif [ -f "$pip_conf" ]; then
         backup="${pip_conf}.backup.$(date +%Y%m%d%H%M%S)"
         mv "$pip_conf" "$backup"
