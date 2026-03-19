@@ -128,7 +128,7 @@ check_pip_repository() {
     # Additional info about Samsung internal repos (for reference only)
     ux_section "Samsung Internal Repositories (Reference - requires internal network)"
     ux_info "These URLs are only accessible from internal company network or with proper proxy:"
-    ux_bullet "Primary: https://repository.samsungds.net/artifactory/api/pypi/pypi-remote/simple"
+    ux_bullet "Primary: http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/simple"
     ux_bullet "DataService: http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple"
     echo ""
 }

@@ -6,7 +6,9 @@
 #   Choose this option when using company internal repositories
 #
 # Note: Proxy is configured here (uv does not read shell proxy variables)
+# Note: native-tls required for corporate CA certificates (uv uses own TLS by default)
 
+native-tls = true
 https-proxy = "http://12.26.204.100:8080/"
 http-proxy = "http://12.26.204.100:8080/"
 no-proxy = [
@@ -20,8 +22,9 @@ no-proxy = [
   ".samsung.net",
   ".samsungds.net",
   "ssai.samsungds.net",
+  "stsds.secsso.net",
   "dsvdi.net",
   "pfs.nprotect.com",
   "10.227.253.89",
 ]
-extra-index-url = ["https://repository.samsungds.net/artifactory/api/pypi/pypi/simple"]
+extra-index-url = ["http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/simple"]
