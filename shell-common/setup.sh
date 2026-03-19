@@ -41,6 +41,43 @@ SECURITY_CONFIG_internal="/etc/ssl/certs/ca-certificates.crt"
 # Helper Functions
 # ============================================================================
 
+# Prepare a config target path for symlink creation.
+# Removes existing symlinks, backs up regular files and directories.
+# Usage: _prepare_config_target "/path/to/config"
+_prepare_config_target() {
+    _target="$1"
+    if [ -L "$_target" ]; then
+        rm -f "$_target"
+        ux_info "Removed existing symlink: $_target"
+    elif [ -d "$_target" ]; then
+        _backup="${_target}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$_target" "$_backup"
+        ux_warning "Backed up existing directory: $_backup"
+    elif [ -f "$_target" ]; then
+        _backup="${_target}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$_target" "$_backup"
+        ux_info "Backed up existing file: $_backup"
+    fi
+}
+
+# Restore a config target from the latest backup after removing a dotfiles symlink.
+# Usage: _restore_config_from_backup "/path/to/config"
+_restore_config_from_backup() {
+    _target="$1"
+    if [ -L "$_target" ]; then
+        rm -f "$_target"
+        _latest="$(ls -t "${_target}".backup.* 2>/dev/null | head -1)"
+        if [ -n "$_latest" ]; then
+            mv "$_latest" "$_target"
+            ux_success "Restored: $(basename "$_latest") → $_target"
+        else
+            ux_info "Removed dotfiles symlink (no backup to restore, using defaults)"
+        fi
+    else
+        ux_info "No dotfiles config to remove: $_target"
+    fi
+}
+
 cleanup_local_files() {
     # Find all .local.sh files
     ux_header "Cleaning up environment-specific files"
@@ -141,19 +178,7 @@ setup_npm_symlink() {
 
     ux_header "Setting up npm configuration for: $environment"
 
-    # Handle existing ~/.npmrc (symlink, file, or directory)
-    if [ -L "$npmrc_target" ]; then
-        rm -f "$npmrc_target"
-        ux_info "Removed existing symlink: $npmrc_target"
-    elif [ -d "$npmrc_target" ]; then
-        backup="${npmrc_target}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$npmrc_target" "$backup"
-        ux_warning "Backed up existing directory: $backup"
-    elif [ -f "$npmrc_target" ]; then
-        backup="${npmrc_target}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$npmrc_target" "$backup"
-        ux_info "Backed up existing file: $backup"
-    fi
+    _prepare_config_target "$npmrc_target"
 
     # Create symlink based on environment
     case "$environment" in
@@ -217,19 +242,7 @@ setup_uv_config() {
 
     ux_header "Setting up uv configuration for: $environment"
 
-    # Handle existing uv.toml (symlink, file, or directory)
-    if [ -L "$uv_conf" ]; then
-        rm -f "$uv_conf"
-        ux_info "Removed existing symlink: $uv_conf"
-    elif [ -d "$uv_conf" ]; then
-        backup="${uv_conf}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$uv_conf" "$backup"
-        ux_warning "Backed up existing directory: $backup"
-    elif [ -f "$uv_conf" ]; then
-        backup="${uv_conf}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$uv_conf" "$backup"
-        ux_info "Backed up existing file: $backup"
-    fi
+    _prepare_config_target "$uv_conf"
 
     # Create symlink based on environment
     case "$environment" in
@@ -255,19 +268,7 @@ setup_pip_config() {
 
     ux_header "Setting up pip configuration for: $environment"
 
-    # Handle existing pip.conf (symlink, file, or directory)
-    if [ -L "$pip_conf" ]; then
-        rm -f "$pip_conf"
-        ux_info "Removed existing symlink: $pip_conf"
-    elif [ -d "$pip_conf" ]; then
-        backup="${pip_conf}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$pip_conf" "$backup"
-        ux_warning "Backed up existing directory: $backup"
-    elif [ -f "$pip_conf" ]; then
-        backup="${pip_conf}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$pip_conf" "$backup"
-        ux_info "Backed up existing file: $backup"
-    fi
+    _prepare_config_target "$pip_conf"
 
     # Create symlink based on environment
     case "$environment" in
@@ -296,38 +297,13 @@ setup_cargo_config() {
 
     case "$environment" in
         internal)
-            # Handle existing config.toml (symlink, file, or directory)
-            if [ -L "$cargo_conf" ]; then
-                rm -f "$cargo_conf"
-                ux_info "Removed existing symlink: $cargo_conf"
-            elif [ -d "$cargo_conf" ]; then
-                backup="${cargo_conf}.backup.$(date +%Y%m%d%H%M%S)"
-                mv "$cargo_conf" "$backup"
-                ux_warning "Backed up existing directory: $backup"
-            elif [ -f "$cargo_conf" ]; then
-                backup="${cargo_conf}.backup.$(date +%Y%m%d%H%M%S)"
-                mv "$cargo_conf" "$backup"
-                ux_info "Backed up existing file: $backup"
-            fi
-
+            _prepare_config_target "$cargo_conf"
             ln -s "${DOTFILES_ROOT}/cargo/config.toml.internal" "$cargo_conf"
             ux_success "Created symlink: ~/.cargo/config.toml → cargo/config.toml.internal"
             ux_info "Using: Samsung internal Nexus proxy for crates.io"
             ;;
         external|public)
-            # Remove dotfiles symlink and restore backup if available
-            if [ -L "$cargo_conf" ]; then
-                rm -f "$cargo_conf"
-                _cargo_latest_backup="$(ls -t "${cargo_conf}".backup.* 2>/dev/null | head -1)"
-                if [ -n "$_cargo_latest_backup" ]; then
-                    mv "$_cargo_latest_backup" "$cargo_conf"
-                    ux_success "Restored: $_cargo_latest_backup → $cargo_conf"
-                else
-                    ux_info "Removed dotfiles symlink (no backup to restore, using defaults)"
-                fi
-            else
-                ux_info "No dotfiles Cargo config to remove"
-            fi
+            _restore_config_from_backup "$cargo_conf"
             ;;
     esac
 }
@@ -342,20 +318,9 @@ setup_nuget_config() {
 
     case "$environment" in
         internal)
-            # Deploy symlinks to both paths
             for _nuget_conf in "$nuget_primary" "$nuget_secondary"; do
                 mkdir -p "$(dirname "$_nuget_conf")"
-                if [ -L "$_nuget_conf" ]; then
-                    rm -f "$_nuget_conf"
-                elif [ -d "$_nuget_conf" ]; then
-                    backup="${_nuget_conf}.backup.$(date +%Y%m%d%H%M%S)"
-                    mv "$_nuget_conf" "$backup"
-                    ux_warning "Backed up existing directory: $backup"
-                elif [ -f "$_nuget_conf" ]; then
-                    backup="${_nuget_conf}.backup.$(date +%Y%m%d%H%M%S)"
-                    mv "$_nuget_conf" "$backup"
-                    ux_info "Backed up existing file: $backup"
-                fi
+                _prepare_config_target "$_nuget_conf"
                 ln -s "${DOTFILES_ROOT}/nuget/NuGet.Config.internal" "$_nuget_conf"
             done
             ux_success "Created symlinks: NuGet.Config → nuget/NuGet.Config.internal"
@@ -363,16 +328,8 @@ setup_nuget_config() {
             ux_info "Using: Samsung internal Nexus proxy for NuGet"
             ;;
         external|public)
-            # Remove dotfiles symlinks and restore backups
             for _nuget_conf in "$nuget_primary" "$nuget_secondary"; do
-                if [ -L "$_nuget_conf" ]; then
-                    rm -f "$_nuget_conf"
-                    _nuget_latest_backup="$(ls -t "${_nuget_conf}".backup.* 2>/dev/null | head -1)"
-                    if [ -n "$_nuget_latest_backup" ]; then
-                        mv "$_nuget_latest_backup" "$_nuget_conf"
-                        ux_success "Restored: $(basename "$_nuget_latest_backup") → $_nuget_conf"
-                    fi
-                fi
+                _restore_config_from_backup "$_nuget_conf"
             done
             ux_info "NuGet config restored to defaults"
             ;;
