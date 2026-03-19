@@ -25,4 +25,4 @@ no-proxy = [
   "pfs.nprotect.com",
   "10.227.253.89",
 ]
-extra-index-url = ["http://repo.samsungds.net:8081/artifactory/api/pypi/pypi/simple"]
+extra-index-url = ["https://repository.samsungds.net/artifactory/api/pypi/pypi/simple"]
