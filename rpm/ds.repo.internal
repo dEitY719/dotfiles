@@ -1,12 +1,6 @@
-# ds.repo.internal
+# MANAGED_BY_DOTFILES — do not edit manually (deployed by setup.sh)
 # Samsung DS internal RPM repository configuration (RHEL 8.6)
-#
-# Usage:
-#   Copied to /etc/yum.repos.d/ds.repo by shell-common/setup.sh
-#   Choose "Internal company PC" option when running setup
-#
-# Note: Requires sudo for deployment to /etc/yum.repos.d/
-#       Uses Samsung internal Nexus repository (repository.samsungds.net)
+# Source: ~/dotfiles/rpm/ds.repo.internal
 
 [ds]
 name=Repo DS

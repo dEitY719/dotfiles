@@ -287,12 +287,46 @@ setup_pip_config() {
 setup_rpm_repo() {
     environment="$1"
     repo_target="/etc/yum.repos.d/ds.repo"
+    marker="MANAGED_BY_DOTFILES"
 
     ux_header "Setting up RPM repository configuration for: $environment"
 
-    # Only deploy if yum or dnf is available
+    # Gate 1: Only proceed if yum or dnf is available
     if ! command -v yum >/dev/null 2>&1 && ! command -v dnf >/dev/null 2>&1; then
         ux_info "Skipped: yum/dnf not found (not a RHEL/CentOS system)"
+        return 0
+    fi
+
+    # Gate 2: Verify RHEL 8 — do not deploy RHEL 8.6 repos to Fedora/Rocky/RHEL 9
+    if [ -f /etc/os-release ]; then
+        _rpm_os_id="$(. /etc/os-release && echo "${ID:-}")"
+        _rpm_os_version="$(. /etc/os-release && echo "${VERSION_ID:-}")"
+        case "$_rpm_os_id" in
+            rhel|centos)
+                case "$_rpm_os_version" in
+                    8|8.*) ;; # RHEL 8.x — proceed
+                    *)
+                        ux_info "Skipped: RHEL ${_rpm_os_version} detected (repo is RHEL 8.6 only)"
+                        return 0
+                        ;;
+                esac
+                ;;
+            *)
+                ux_info "Skipped: ${_rpm_os_id} detected (repo is RHEL 8 only)"
+                return 0
+                ;;
+        esac
+    fi
+
+    # Gate 3: Verify privilege — use sudo if needed, skip if unavailable
+    _rpm_run_privileged=""
+    if [ "$(id -u)" = "0" ]; then
+        _rpm_run_privileged=""  # already root, no sudo needed
+    elif command -v sudo >/dev/null 2>&1; then
+        _rpm_run_privileged="sudo"
+        ux_info "Root privileges required for /etc/yum.repos.d/ — sudo will prompt for password"
+    else
+        ux_warning "Skipped: sudo not available and not running as root"
         return 0
     fi
 
@@ -300,28 +334,31 @@ setup_rpm_repo() {
         internal)
             # Ensure target directory exists
             if [ ! -d "/etc/yum.repos.d" ]; then
-                sudo mkdir -p "/etc/yum.repos.d"
+                $_rpm_run_privileged mkdir -p "/etc/yum.repos.d"
                 ux_info "Created directory: /etc/yum.repos.d"
             fi
 
             # Backup existing repo file if present
             if [ -f "$repo_target" ]; then
                 backup="${repo_target}.backup.$(date +%Y%m%d%H%M%S)"
-                sudo mv "$repo_target" "$backup"
+                $_rpm_run_privileged mv "$repo_target" "$backup"
                 ux_info "Backed up existing file: $backup"
             fi
 
             # Copy (not symlink) since this is a system-level config in /etc/
-            sudo cp "${DOTFILES_ROOT}/rpm/ds.repo.internal" "$repo_target"
+            $_rpm_run_privileged cp "${DOTFILES_ROOT}/rpm/ds.repo.internal" "$repo_target"
             ux_success "Copied: rpm/ds.repo.internal → $repo_target"
             ux_info "Using: Samsung DS internal repositories (RHEL 8.6)"
             ;;
         external|public)
-            if [ -f "$repo_target" ]; then
-                sudo rm -f "$repo_target"
-                ux_info "Removed internal repo config: $repo_target"
+            # Only remove if the file was deployed by dotfiles (has marker)
+            if [ -f "$repo_target" ] && grep -q "$marker" "$repo_target" 2>/dev/null; then
+                backup="${repo_target}.backup.$(date +%Y%m%d%H%M%S)"
+                $_rpm_run_privileged mv "$repo_target" "$backup"
+                ux_info "Backed up and removed dotfiles-managed repo: $backup"
+            elif [ -f "$repo_target" ]; then
+                ux_info "Existing $repo_target is not managed by dotfiles — leaving untouched"
             fi
-            ux_info "No custom RPM repository needed"
             ;;
     esac
 }
