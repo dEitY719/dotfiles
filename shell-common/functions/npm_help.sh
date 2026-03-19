@@ -70,6 +70,7 @@ npm_help() {
     ux_bullet "EACCES permission error (npm WARN): npm config set prefix ~/.npm-global"
     ux_bullet "nvm과 npm prefix 충돌: .npmrc 파일의 prefix 라인 제거"
     ux_bullet "Certificate error: Run ${UX_SUCCESS}crt-help${UX_RESET} for CA setup guide"
+    ux_bullet "Config mismatch: Run ${UX_SUCCESS}./shell-common/setup.sh${UX_RESET} to reconfigure symlink"
 
 
     ux_section "Common Commands"

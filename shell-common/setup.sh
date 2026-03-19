@@ -30,31 +30,11 @@ fi
 SECURITY_CONFIG_external="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
 SECURITY_CONFIG_internal="/etc/ssl/certs/ca-certificates.crt"
 
-# NPM Registry configuration
-NPM_REGISTRY_external="https://registry.npmjs.org/"
-NPM_REGISTRY_internal="http://repo.samsungds.net:8081/artifactory/api/npm/npm/"
-
-# NPM CA File configuration
-NPM_CAFILE_external="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-NPM_CAFILE_internal="/etc/ssl/certs/ca-certificates.crt"
-
-# NPM Strict SSL configuration
-NPM_STRICT_SSL_external="true"
-NPM_STRICT_SSL_internal="false"
-
-# NPM Proxy configuration
-NPM_PROXY_external=""
-NPM_PROXY_internal="http://12.26.204.100:8080"
-
-# NPM No-proxy configuration
-NPM_NOPROXY_external=""
-NPM_NOPROXY_internal="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,dsvdi.net,pfs.nprotect.com"
-
-# HTTP Proxy configuration
-PROXY_HTTP_internal="http://12.26.204.100:8080/"
-
-# No-proxy configuration
-PROXY_NO_internal="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,ssai.samsungds.net,dsvdi.net,pfs.nprotect.com"
+# NPM configuration is managed via tracked files in npm/ directory
+# and symlinked to ~/.npmrc (see setup_npm_symlink function)
+#
+# HTTP Proxy and No-proxy values are defined in environments.conf (SSOT)
+# and consumed by tracked config files (npm/npmrc.*, uv.toml.*, etc.)
 
 # ============================================================================
 # Helper Functions
@@ -167,76 +147,34 @@ setup_security_config() {
     esac
 }
 
-setup_npm_config() {
+setup_npm_symlink() {
     environment="$1"
-    npm_local="${SHELL_COMMON_DIR}/tools/integrations/npm.local.sh"
+    dotfiles_root="$(cd "$SHELL_COMMON_DIR/.." && pwd)"
+    npmrc_target="$HOME/.npmrc"
 
-    if [ ! -f "$npm_local" ]; then
-        return 0
+    ux_header "Setting up npm configuration for: $environment"
+
+    # Remove existing ~/.npmrc (symlink or file)
+    if [ -e "$npmrc_target" ] || [ -L "$npmrc_target" ]; then
+        rm -f "$npmrc_target"
+        ux_info "Removed existing: $npmrc_target"
     fi
 
-    # Get configuration values
-    registry="$(read_config_value "$environment" "NPM_REGISTRY")"
-    if [ -z "$registry" ]; then
-        eval "registry=\$NPM_REGISTRY_${environment}"
-    fi
-
-    proxy="$(read_config_value "$environment" "NPM_PROXY")"
-    if [ -z "$proxy" ]; then
-        eval "proxy=\$NPM_PROXY_${environment}"
-    fi
-
-    if [ -z "$registry" ]; then
-        ux_error "Unknown environment: $environment"
-        return 1
-    fi
-
+    # Create symlink based on environment
     case "$environment" in
         internal)
-            ux_info "Configuring NPM for internal company PC (Artifactory + Proxy)"
-            # Comment out Option 1 lines
-            sed -i '/^    # === Option1:/,/^    # === Option2:/ {
-                /DESIRED_REGISTRY=.*npmjs/s/^    /    # /
-                /DESIRED_CAFILE=.*samsungsemi/s/^    /    # /
-                /DESIRED_STRICT_SSL="true"/s/^    /    # /
-                /DESIRED_PROXY=""/s/^    /    # /
-                /DESIRED_HTTPS_PROXY=""/s/^    /    # /
-                /DESIRED_NOPROXY=""/s/^    /    # /
-            }' "$npm_local"
-            # Uncomment Option 2 lines
-            sed -i '/^    # === Option2:/,/^    # === 공통 설정/ {
-                /DESIRED_REGISTRY=.*artifactory/s/^    # /    /
-                /DESIRED_CAFILE=.*ca-certificates.crt/s/^    # /    /
-                /DESIRED_STRICT_SSL="false"/s/^    # /    /
-                /DESIRED_PROXY=.*12.26/s/^    # /    /
-                /DESIRED_HTTPS_PROXY=.*12.26/s/^    # /    /
-                /DESIRED_NOPROXY=.*10.229/s/^    # /    /
-            }' "$npm_local"
-            ux_success "NPM Registry: $registry"
-            ux_success "NPM Proxy: $proxy"
+            ln -s "${dotfiles_root}/npm/npmrc.internal" "$npmrc_target"
+            ux_success "Created symlink: ~/.npmrc → npm/npmrc.internal"
+            ux_info "Using: Samsung internal Artifactory + proxy"
             ;;
         external)
-            ux_info "Configuring NPM for external company PC (npmjs + No Proxy)"
-            # Uncomment Option 1 lines
-            sed -i '/^    # === Option1:/,/^    # === Option2:/ {
-                /DESIRED_REGISTRY=.*npmjs/s/^    # /    /
-                /DESIRED_CAFILE=.*samsungsemi/s/^    # /    /
-                /DESIRED_STRICT_SSL="true"/s/^    # /    /
-                /DESIRED_PROXY=""/s/^    # /    /
-                /DESIRED_HTTPS_PROXY=""/s/^    # /    /
-                /DESIRED_NOPROXY=""/s/^    # /    /
-            }' "$npm_local"
-            # Comment out Option 2 lines
-            sed -i '/^    # === Option2:/,/^    # === 공통 설정/ {
-                /DESIRED_REGISTRY=.*artifactory/s/^    /    # /
-                /DESIRED_CAFILE=.*ca-certificates.crt/s/^    /    # /
-                /DESIRED_STRICT_SSL="false"/s/^    /    # /
-                /DESIRED_PROXY=.*12.26/s/^    /    # /
-                /DESIRED_HTTPS_PROXY=.*12.26/s/^    /    # /
-                /DESIRED_NOPROXY=.*10.229/s/^    /    # /
-            }' "$npm_local"
-            ux_success "NPM Registry: $registry"
-            ux_success "NPM Proxy: (none - direct connection)"
+            ln -s "${dotfiles_root}/npm/npmrc.external" "$npmrc_target"
+            ux_success "Created symlink: ~/.npmrc → npm/npmrc.external"
+            ux_info "Using: Public npmjs registry (no proxy)"
+            ;;
+        public)
+            # Public PC: no .npmrc needed (defaults)
+            ux_info "No .npmrc needed (using npm defaults)"
             ;;
     esac
 }
@@ -279,7 +217,6 @@ setup_local_files() {
 
     # Stage 2: Configure each setting type
     setup_security_config "$environment"
-    setup_npm_config "$environment"
 
     # Stage 3: Verify configuration
     verify_config "$environment"
@@ -379,6 +316,7 @@ main() {
         1)
             ux_info "Selected: Public PC"
             cleanup_local_files
+            setup_npm_symlink "public"
             setup_pip_config "public"
             setup_uv_config "public"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
@@ -392,6 +330,7 @@ main() {
             ux_info "Selected: Internal company PC (direct connection)"
             cleanup_local_files
             setup_local_files "internal"
+            setup_npm_symlink "internal"
             setup_pip_config "internal"
             setup_uv_config "internal"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
@@ -402,6 +341,7 @@ main() {
             ux_info "  - Security: System CA Bundle (Option 2) activated"
             ux_info "  - SSL Certificate: McAfee (/usr/share/ca-certificates/extra/McAfee_Certificate.crt)"
             ux_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
+            ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Artifactory + proxy)"
             ux_info "  - Pip: Samsung internal repository configured"
             ux_info "  - uv: Samsung internal repository + proxy configured"
             ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
@@ -416,6 +356,7 @@ main() {
             ux_info "Selected: External company PC (VPN)"
             cleanup_local_files
             setup_local_files "external"
+            setup_npm_symlink "external"
             setup_pip_config "external"
             setup_uv_config "external"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
@@ -426,6 +367,7 @@ main() {
             ux_info "  - Security: Custom Certificate (Option 1) activated"
             ux_info "  - SSL Certificate: samsungsemi (/usr/local/share/ca-certificates/samsungsemi-prx.com.crt)"
             ux_info "  - Proxy: Skipped (not needed for VPN - direct connection)"
+            ux_info "  - NPM: ~/.npmrc → npm/npmrc.external (npmjs + no proxy)"
             ux_info "  - Pip: Public PyPI configured"
             ux_info "  - Next: Run 'setup_crt.sh' to install the certificate"
             ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
