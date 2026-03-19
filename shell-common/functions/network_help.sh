@@ -3,11 +3,7 @@
 # Network connectivity diagnostic help (POSIX-compatible, shared between bash and zsh)
 
 network_help() {
-    if type ux_header >/dev/null 2>&1; then
-        ux_header "Network Connectivity Diagnostics"
-    else
-        ux_header "Network Connectivity Diagnostics"
-    fi
+    ux_header "Network Connectivity Diagnostics"
 
     if type ux_section >/dev/null 2>&1; then
         ux_section "Diagnostic Commands"
@@ -53,7 +49,7 @@ network_check() {
         if type ux_error >/dev/null 2>&1; then
             ux_error "check_network.sh not found at $check_network_script"
         else
-            echo "ERROR: check_network.sh not found at $check_network_script" >&2
+            echo "Error: check_network.sh not found at $check_network_script" >&2
         fi
         return 1
     fi

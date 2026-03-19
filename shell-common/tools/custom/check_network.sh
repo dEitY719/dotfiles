@@ -27,27 +27,6 @@ record_fail() {
     NETWORK_FAIL_COUNT=$((NETWORK_FAIL_COUNT + 1))
 }
 
-have_command() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-run_with_timeout() {
-    local seconds="$1"
-    shift
-
-    if have_command timeout; then
-        timeout "$seconds" "$@"
-        return $?
-    fi
-
-    if have_command gtimeout; then
-        gtimeout "$seconds" "$@"
-        return $?
-    fi
-
-    "$@"
-}
-
 test_http_head() {
     local url="$1"
     local http_code=""
@@ -420,6 +399,7 @@ check_network() {
             ;;
         help|-h|--help)
             show_usage
+            return 0
             ;;
         all)
             run_all_checks

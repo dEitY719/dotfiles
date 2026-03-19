@@ -3,13 +3,7 @@
 # Proxy help function (bash/zsh compatible, uses local keyword)
 
 proxy_help() {
-    if type ux_header >/dev/null 2>&1; then
-        ux_header "Proxy Configuration & Diagnostics"
-    else
-
-        ux_header "Proxy Configuration & Diagnostics"
-
-    fi
+    ux_header "Proxy Configuration & Diagnostics"
 
     if type ux_section >/dev/null 2>&1; then
         ux_section "Diagnostic Commands"
