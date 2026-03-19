@@ -294,68 +294,87 @@ setup_cargo_config() {
 
     ux_header "Setting up Cargo configuration for: $environment"
 
-    # Handle existing config.toml (symlink, file, or directory)
-    if [ -L "$cargo_conf" ]; then
-        rm -f "$cargo_conf"
-        ux_info "Removed existing symlink: $cargo_conf"
-    elif [ -d "$cargo_conf" ]; then
-        backup="${cargo_conf}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$cargo_conf" "$backup"
-        ux_warning "Backed up existing directory: $backup"
-    elif [ -f "$cargo_conf" ]; then
-        backup="${cargo_conf}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$cargo_conf" "$backup"
-        ux_info "Backed up existing file: $backup"
-    fi
-
-    # Create symlink based on environment
     case "$environment" in
         internal)
+            # Handle existing config.toml (symlink, file, or directory)
+            if [ -L "$cargo_conf" ]; then
+                rm -f "$cargo_conf"
+                ux_info "Removed existing symlink: $cargo_conf"
+            elif [ -d "$cargo_conf" ]; then
+                backup="${cargo_conf}.backup.$(date +%Y%m%d%H%M%S)"
+                mv "$cargo_conf" "$backup"
+                ux_warning "Backed up existing directory: $backup"
+            elif [ -f "$cargo_conf" ]; then
+                backup="${cargo_conf}.backup.$(date +%Y%m%d%H%M%S)"
+                mv "$cargo_conf" "$backup"
+                ux_info "Backed up existing file: $backup"
+            fi
+
             ln -s "${DOTFILES_ROOT}/cargo/config.toml.internal" "$cargo_conf"
             ux_success "Created symlink: ~/.cargo/config.toml → cargo/config.toml.internal"
             ux_info "Using: Samsung internal Nexus proxy for crates.io"
             ;;
         external|public)
-            # No custom config needed (defaults to crates.io)
-            ux_info "No custom Cargo config needed (using crates.io defaults)"
+            # Remove dotfiles symlink and restore backup if available
+            if [ -L "$cargo_conf" ]; then
+                rm -f "$cargo_conf"
+                _cargo_latest_backup="$(ls -t "${cargo_conf}".backup.* 2>/dev/null | head -1)"
+                if [ -n "$_cargo_latest_backup" ]; then
+                    mv "$_cargo_latest_backup" "$cargo_conf"
+                    ux_success "Restored: $_cargo_latest_backup → $cargo_conf"
+                else
+                    ux_info "Removed dotfiles symlink (no backup to restore, using defaults)"
+                fi
+            else
+                ux_info "No dotfiles Cargo config to remove"
+            fi
             ;;
     esac
 }
 
 setup_nuget_config() {
     environment="$1"
-    nuget_config_dir="${HOME}/.nuget/NuGet"
-    nuget_conf="${nuget_config_dir}/NuGet.Config"
-
-    # Ensure ~/.nuget/NuGet directory exists
-    mkdir -p "$nuget_config_dir"
+    # NuGet config can be read from two paths depending on tooling
+    nuget_primary="${HOME}/.nuget/NuGet/NuGet.Config"
+    nuget_secondary="${HOME}/.config/NuGet/NuGet.Config"
 
     ux_header "Setting up NuGet configuration for: $environment"
 
-    # Handle existing NuGet.Config (symlink, file, or directory)
-    if [ -L "$nuget_conf" ]; then
-        rm -f "$nuget_conf"
-        ux_info "Removed existing symlink: $nuget_conf"
-    elif [ -d "$nuget_conf" ]; then
-        backup="${nuget_conf}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$nuget_conf" "$backup"
-        ux_warning "Backed up existing directory: $backup"
-    elif [ -f "$nuget_conf" ]; then
-        backup="${nuget_conf}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$nuget_conf" "$backup"
-        ux_info "Backed up existing file: $backup"
-    fi
-
-    # Create symlink based on environment
     case "$environment" in
         internal)
-            ln -s "${DOTFILES_ROOT}/nuget/NuGet.Config.internal" "$nuget_conf"
-            ux_success "Created symlink: ~/.nuget/NuGet/NuGet.Config → nuget/NuGet.Config.internal"
+            # Deploy symlinks to both paths
+            for _nuget_conf in "$nuget_primary" "$nuget_secondary"; do
+                mkdir -p "$(dirname "$_nuget_conf")"
+                if [ -L "$_nuget_conf" ]; then
+                    rm -f "$_nuget_conf"
+                elif [ -d "$_nuget_conf" ]; then
+                    backup="${_nuget_conf}.backup.$(date +%Y%m%d%H%M%S)"
+                    mv "$_nuget_conf" "$backup"
+                    ux_warning "Backed up existing directory: $backup"
+                elif [ -f "$_nuget_conf" ]; then
+                    backup="${_nuget_conf}.backup.$(date +%Y%m%d%H%M%S)"
+                    mv "$_nuget_conf" "$backup"
+                    ux_info "Backed up existing file: $backup"
+                fi
+                ln -s "${DOTFILES_ROOT}/nuget/NuGet.Config.internal" "$_nuget_conf"
+            done
+            ux_success "Created symlinks: NuGet.Config → nuget/NuGet.Config.internal"
+            ux_info "  ~/.nuget/NuGet/ (dotnet CLI) + ~/.config/NuGet/ (mono)"
             ux_info "Using: Samsung internal Nexus proxy for NuGet"
             ;;
         external|public)
-            # No custom config needed (defaults to nuget.org)
-            ux_info "No custom NuGet config needed (using nuget.org defaults)"
+            # Remove dotfiles symlinks and restore backups
+            for _nuget_conf in "$nuget_primary" "$nuget_secondary"; do
+                if [ -L "$_nuget_conf" ]; then
+                    rm -f "$_nuget_conf"
+                    _nuget_latest_backup="$(ls -t "${_nuget_conf}".backup.* 2>/dev/null | head -1)"
+                    if [ -n "$_nuget_latest_backup" ]; then
+                        mv "$_nuget_latest_backup" "$_nuget_conf"
+                        ux_success "Restored: $(basename "$_nuget_latest_backup") → $_nuget_conf"
+                    fi
+                fi
+            done
+            ux_info "NuGet config restored to defaults"
             ;;
     esac
 }
