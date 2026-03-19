@@ -7,7 +7,7 @@
 #
 # Note: prefix uses ${HOME} for portability (npm expands env vars in .npmrc)
 
-registry=http://repo.samsungds.net:8081/artifactory/api/npm/npm/
+registry=https://repository.samsungds.net/artifactory/api/npm/npm/
 strict-ssl=false
 cafile=/etc/ssl/certs/ca-certificates.crt
 proxy=http://12.26.204.100:8080
