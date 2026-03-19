@@ -1,0 +1,13 @@
+# npmrc.external
+# Samsung external PC configuration (VPN, direct internet access)
+#
+# Usage:
+#   This file is symlinked to ~/.npmrc by shell-common/setup.sh
+#   Choose this option when using VPN connection to company network
+#
+# Note: No proxy needed (direct internet access via VPN)
+
+registry=https://registry.npmjs.org/
+strict-ssl=true
+cafile=/usr/local/share/ca-certificates/samsungsemi-prx.com.crt
+prefix=${HOME}/.npm-global

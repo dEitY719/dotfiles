@@ -41,14 +41,7 @@ fi
 unset _proxy_root
 
 # ============================================================
-# Auto-sync proxy settings to npm config (SSOT principle)
+# NPM proxy note
 # ============================================================
-# When no_proxy is set in shell environment (from proxy.local.sh),
-# automatically sync it to npm config for consistency across all npm commands
-if [ -n "${no_proxy:-}" ] && command -v npm >/dev/null 2>&1; then
-    _current_npm_noproxy="$(npm config get noproxy 2>/dev/null || echo "")"
-    if [ "$_current_npm_noproxy" != "$no_proxy" ]; then
-        npm config set noproxy "$no_proxy" 2>/dev/null || true
-    fi
-    unset _current_npm_noproxy
-fi
+# npm proxy/noproxy settings are managed via ~/.npmrc symlink
+# (see npm/npmrc.{environment} files, configured by setup.sh)
