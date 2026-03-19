@@ -1,9 +1,0 @@
-# pip.conf.external (template)
-# Public PyPI configuration for external/home environments
-#
-# Usage:
-#   This file is symlinked to ~/.config/pip/pip.conf by setup.sh
-#   Choose this option when using public PyPI (internet connection)
-
-[global]
-index-url = https://pypi.org/simple/

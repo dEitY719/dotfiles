@@ -1,10 +1,9 @@
-# pip.conf.internal (template)
+# pip.conf.internal
 # Samsung internal repository configuration for corporate PC
 #
 # Usage:
-#   This file is symlinked to ~/.config/pip/pip.conf by setup.sh
+#   Symlinked to ~/.config/pip/pip.conf by shell-common/setup.sh
 #   Choose this option when using company internal repositories
-#   (requires direct connection to company network)
 #
 # Note: CA certificate is configured via security.local.sh -> REQUESTS_CA_BUNDLE
 #       Proxy is configured via proxy.local.sh -> environment variables
