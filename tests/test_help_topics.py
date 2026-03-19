@@ -7,7 +7,7 @@ without errors in both bash and zsh environments.
 
 import pytest
 
-# Auto-sourced help topics (34 total)
+# Auto-sourced help topics (35 total)
 # Excludes: mount-help, addmnt-help (not auto-loaded by main.bash/main.zsh)
 # Use function names (underscores) instead of aliases (dashes) for non-interactive subprocess testing
 HELP_TOPICS = [
@@ -32,6 +32,7 @@ HELP_TOPICS = [
     "litellm_help",
     "mytool_help",
     "mysql_help",
+    "network_help",
     "npm_help",
     "nvm_help",
     "p10k_help",

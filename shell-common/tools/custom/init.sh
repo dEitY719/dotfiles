@@ -71,5 +71,34 @@ if [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
     # UX library loaded successfully (fallback already replaced)
 fi
 
+# Shared utility functions (SSOT: used by check_network.sh, check_proxy.sh, etc.)
+have_command() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+run_with_timeout() {
+    local seconds="$1"
+    shift
+
+    if have_command timeout; then
+        timeout "$seconds" "$@"
+        return $?
+    fi
+
+    if have_command gtimeout; then
+        gtimeout "$seconds" "$@"
+        return $?
+    fi
+
+    "$@"
+}
+
 # Mark as initialized to prevent re-sourcing
 _CUSTOM_TOOLS_INITIALIZED=1
+
+# Direct-exec guard: this file is source-only, not meant to be executed directly
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+    echo "Error: init.sh is meant to be sourced, not executed directly." >&2
+    echo "Usage: source \"\$(dirname \"\$0\")/init.sh\"" >&2
+    exit 1
+fi
