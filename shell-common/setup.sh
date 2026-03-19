@@ -141,10 +141,14 @@ setup_npm_symlink() {
 
     ux_header "Setting up npm configuration for: $environment"
 
-    # Remove existing ~/.npmrc (symlink or file)
-    if [ -e "$npmrc_target" ] || [ -L "$npmrc_target" ]; then
+    # Handle existing ~/.npmrc
+    if [ -L "$npmrc_target" ]; then
         rm -f "$npmrc_target"
-        ux_info "Removed existing: $npmrc_target"
+        ux_info "Removed existing symlink: $npmrc_target"
+    elif [ -f "$npmrc_target" ]; then
+        backup="${npmrc_target}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$npmrc_target" "$backup"
+        ux_info "Backed up existing file: $backup"
     fi
 
     # Create symlink based on environment
@@ -171,29 +175,16 @@ verify_config() {
 
     ux_header "Verifying configuration for: $environment"
 
-    # Verify npm config if npm is available
-    if command -v npm >/dev/null 2>&1; then
-        npm_registry="$(npm config get registry 2>/dev/null || echo "unknown")"
-        ux_info "npm registry: $npm_registry"
-
-        npm_cafile="$(npm config get cafile 2>/dev/null || echo "none")"
-        ux_info "npm cafile: $npm_cafile"
-    else
-        ux_info "npm is not installed, skipping npm config verification"
-    fi
-
     # Verify CA cert is accessible if configured
-    if [ -n "$SHELL_COMMON_DIR" ]; then
-        case "$environment" in
-            internal) ca_cert="$SECURITY_CONFIG_internal" ;;
-            external) ca_cert="$SECURITY_CONFIG_external" ;;
-            *) ca_cert="" ;;
-        esac
-        if [ -n "$ca_cert" ] && [ -f "$ca_cert" ]; then
-            ux_success "CA Certificate accessible: $ca_cert"
-        elif [ -n "$ca_cert" ]; then
-            ux_info "CA Certificate not found yet: $ca_cert (will be installed by setup_crt.sh)"
-        fi
+    case "$environment" in
+        internal) ca_cert="$SECURITY_CONFIG_internal" ;;
+        external) ca_cert="$SECURITY_CONFIG_external" ;;
+        *) ca_cert="" ;;
+    esac
+    if [ -n "$ca_cert" ] && [ -f "$ca_cert" ]; then
+        ux_success "CA Certificate accessible: $ca_cert"
+    elif [ -n "$ca_cert" ]; then
+        ux_info "CA Certificate not found yet: $ca_cert (will be installed by setup_crt.sh)"
     fi
 }
 
@@ -222,11 +213,14 @@ setup_uv_config() {
 
     ux_header "Setting up uv configuration for: $environment"
 
-    # Remove existing uv.toml (symlink or file)
-    # Note: -L needed because -e returns false for broken symlinks (dangling links)
-    if [ -e "$uv_conf" ] || [ -L "$uv_conf" ]; then
+    # Handle existing uv.toml
+    if [ -L "$uv_conf" ]; then
         rm -f "$uv_conf"
-        ux_info "Removed existing: $uv_conf"
+        ux_info "Removed existing symlink: $uv_conf"
+    elif [ -f "$uv_conf" ]; then
+        backup="${uv_conf}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$uv_conf" "$backup"
+        ux_info "Backed up existing file: $backup"
     fi
 
     # Create symlink based on environment
@@ -253,10 +247,14 @@ setup_pip_config() {
 
     ux_header "Setting up pip configuration for: $environment"
 
-    # Remove existing pip.conf (symlink or file)
-    if [ -e "$pip_conf" ] || [ -L "$pip_conf" ]; then
+    # Handle existing pip.conf
+    if [ -L "$pip_conf" ]; then
         rm -f "$pip_conf"
-        ux_info "Removed existing: $pip_conf"
+        ux_info "Removed existing symlink: $pip_conf"
+    elif [ -f "$pip_conf" ]; then
+        backup="${pip_conf}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$pip_conf" "$backup"
+        ux_info "Backed up existing file: $backup"
     fi
 
     # Create symlink based on environment
