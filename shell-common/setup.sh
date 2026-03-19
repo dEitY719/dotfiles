@@ -30,11 +30,11 @@ fi
 SECURITY_CONFIG_external="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
 SECURITY_CONFIG_internal="/etc/ssl/certs/ca-certificates.crt"
 
-# NPM configuration is managed via tracked files in npm/ directory
-# and symlinked to ~/.npmrc (see setup_npm_symlink function)
-#
-# HTTP Proxy and No-proxy values are defined in environments.conf (SSOT)
-# and consumed by tracked config files (npm/npmrc.*, uv.toml.*, etc.)
+# Tool-specific configurations are managed via tracked files at project root
+# and symlinked to their respective locations:
+#   npm/   → ~/.npmrc
+#   pip/   → ~/.config/pip/pip.conf
+#   uv/    → ~/.config/uv/uv.toml
 
 # ============================================================================
 # Helper Functions
@@ -89,30 +89,14 @@ copy_local_files() {
     done
 }
 
-read_config_value() {
-    environment="$1"
-    config_key="$2"
-    config_file="${SHELL_COMMON_DIR}/config/environments.conf"
-
-    if [ ! -f "$config_file" ]; then
-        return 1
-    fi
-
-    grep "^${environment}:${config_key}=" "$config_file" 2>/dev/null | cut -d= -f2- | sed 's/"//g'
-}
-
 setup_security_config() {
     environment="$1"
     security_template="${SHELL_COMMON_DIR}/env/security.local.example"
     security_local="${SHELL_COMMON_DIR}/env/security.local.sh"
 
-    # Try to get CA_CERT from environments.conf (Stage 3 approach)
-    ca_cert="$(read_config_value "$environment" "CA_CERT")"
-
-    # Fallback to predefined variables (Stage 1-2 approach)
-    if [ -z "$ca_cert" ]; then
-        eval "ca_cert=\$SECURITY_CONFIG_${environment}"
-    fi
+    # Get CA_CERT path from predefined variables
+    ca_cert=""
+    eval "ca_cert=\$SECURITY_CONFIG_${environment}"
 
     if [ -z "$ca_cert" ]; then
         ux_error "Unknown environment: $environment"
@@ -224,6 +208,7 @@ setup_local_files() {
 
 setup_uv_config() {
     environment="$1"
+    dotfiles_root="$(cd "$SHELL_COMMON_DIR/.." && pwd)"
     uv_config_dir="${HOME}/.config/uv"
     uv_conf="${uv_config_dir}/uv.toml"
 
@@ -242,9 +227,8 @@ setup_uv_config() {
     # Create symlink based on environment
     case "$environment" in
         internal)
-            # Internal company PC: use internal repository + proxy
-            ln -s "${SHELL_COMMON_DIR}/config/uv/uv.toml.internal" "$uv_conf"
-            ux_success "Created symlink: $uv_conf → uv.toml.internal"
+            ln -s "${dotfiles_root}/uv/uv.toml.internal" "$uv_conf"
+            ux_success "Created symlink: ~/.config/uv/uv.toml → uv/uv.toml.internal"
             ux_info "Using: Samsung internal repositories + proxy"
             ;;
         external|public)
@@ -256,6 +240,7 @@ setup_uv_config() {
 
 setup_pip_config() {
     environment="$1"
+    dotfiles_root="$(cd "$SHELL_COMMON_DIR/.." && pwd)"
     pip_config_dir="${HOME}/.config/pip"
     pip_conf="${pip_config_dir}/pip.conf"
 
@@ -264,8 +249,8 @@ setup_pip_config() {
 
     ux_header "Setting up pip configuration for: $environment"
 
-    # Remove existing pip.conf if it exists
-    if [ -f "$pip_conf" ]; then
+    # Remove existing pip.conf (symlink or file)
+    if [ -e "$pip_conf" ] || [ -L "$pip_conf" ]; then
         rm -f "$pip_conf"
         ux_info "Removed existing: $pip_conf"
     fi
@@ -273,21 +258,18 @@ setup_pip_config() {
     # Create symlink based on environment
     case "$environment" in
         internal)
-            # Internal company PC: use internal repository
-            ln -s "${SHELL_COMMON_DIR}/config/pip/pip.conf.internal" "$pip_conf"
-            ux_success "Created symlink: $pip_conf → pip.conf.internal"
+            ln -s "${dotfiles_root}/pip/pip.conf.internal" "$pip_conf"
+            ux_success "Created symlink: ~/.config/pip/pip.conf → pip/pip.conf.internal"
             ux_info "Using: Samsung internal repositories"
             ;;
         external)
-            # External company PC (VPN): use public PyPI
-            ln -s "${SHELL_COMMON_DIR}/config/pip/pip.conf.external" "$pip_conf"
-            ux_success "Created symlink: $pip_conf → pip.conf.external"
+            ln -s "${dotfiles_root}/pip/pip.conf.external" "$pip_conf"
+            ux_success "Created symlink: ~/.config/pip/pip.conf → pip/pip.conf.external"
             ux_info "Using: Public PyPI"
             ;;
         public)
-            # Public PC (home): use public PyPI
-            ln -s "${SHELL_COMMON_DIR}/config/pip/pip.conf.external" "$pip_conf"
-            ux_success "Created symlink: $pip_conf → pip.conf.external"
+            ln -s "${dotfiles_root}/pip/pip.conf.external" "$pip_conf"
+            ux_success "Created symlink: ~/.config/pip/pip.conf → pip/pip.conf.external"
             ux_info "Using: Public PyPI"
             ;;
     esac
