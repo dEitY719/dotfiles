@@ -284,6 +284,82 @@ setup_pip_config() {
     esac
 }
 
+setup_cargo_config() {
+    environment="$1"
+    cargo_config_dir="${HOME}/.cargo"
+    cargo_conf="${cargo_config_dir}/config.toml"
+
+    # Ensure ~/.cargo directory exists
+    mkdir -p "$cargo_config_dir"
+
+    ux_header "Setting up Cargo configuration for: $environment"
+
+    # Handle existing config.toml (symlink, file, or directory)
+    if [ -L "$cargo_conf" ]; then
+        rm -f "$cargo_conf"
+        ux_info "Removed existing symlink: $cargo_conf"
+    elif [ -d "$cargo_conf" ]; then
+        backup="${cargo_conf}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$cargo_conf" "$backup"
+        ux_warning "Backed up existing directory: $backup"
+    elif [ -f "$cargo_conf" ]; then
+        backup="${cargo_conf}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$cargo_conf" "$backup"
+        ux_info "Backed up existing file: $backup"
+    fi
+
+    # Create symlink based on environment
+    case "$environment" in
+        internal)
+            ln -s "${DOTFILES_ROOT}/cargo/config.toml.internal" "$cargo_conf"
+            ux_success "Created symlink: ~/.cargo/config.toml → cargo/config.toml.internal"
+            ux_info "Using: Samsung internal Nexus proxy for crates.io"
+            ;;
+        external|public)
+            # No custom config needed (defaults to crates.io)
+            ux_info "No custom Cargo config needed (using crates.io defaults)"
+            ;;
+    esac
+}
+
+setup_nuget_config() {
+    environment="$1"
+    nuget_config_dir="${HOME}/.nuget/NuGet"
+    nuget_conf="${nuget_config_dir}/NuGet.Config"
+
+    # Ensure ~/.nuget/NuGet directory exists
+    mkdir -p "$nuget_config_dir"
+
+    ux_header "Setting up NuGet configuration for: $environment"
+
+    # Handle existing NuGet.Config (symlink, file, or directory)
+    if [ -L "$nuget_conf" ]; then
+        rm -f "$nuget_conf"
+        ux_info "Removed existing symlink: $nuget_conf"
+    elif [ -d "$nuget_conf" ]; then
+        backup="${nuget_conf}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$nuget_conf" "$backup"
+        ux_warning "Backed up existing directory: $backup"
+    elif [ -f "$nuget_conf" ]; then
+        backup="${nuget_conf}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$nuget_conf" "$backup"
+        ux_info "Backed up existing file: $backup"
+    fi
+
+    # Create symlink based on environment
+    case "$environment" in
+        internal)
+            ln -s "${DOTFILES_ROOT}/nuget/NuGet.Config.internal" "$nuget_conf"
+            ux_success "Created symlink: ~/.nuget/NuGet/NuGet.Config → nuget/NuGet.Config.internal"
+            ux_info "Using: Samsung internal Nexus proxy for NuGet"
+            ;;
+        external|public)
+            # No custom config needed (defaults to nuget.org)
+            ux_info "No custom NuGet config needed (using nuget.org defaults)"
+            ;;
+    esac
+}
+
 setup_rpm_repo() {
     environment="$1"
     repo_target="/etc/yum.repos.d/ds.repo"
@@ -468,6 +544,8 @@ main() {
             setup_npm_symlink "public"
             setup_pip_config "public"
             setup_uv_config "public"
+            setup_cargo_config "public"
+            setup_nuget_config "public"
             setup_rpm_repo "public"
             setup_apt_sources "public"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
@@ -484,6 +562,8 @@ main() {
             setup_npm_symlink "internal"
             setup_pip_config "internal"
             setup_uv_config "internal"
+            setup_cargo_config "internal"
+            setup_nuget_config "internal"
             setup_rpm_repo "internal"
             setup_apt_sources "internal"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
@@ -497,6 +577,8 @@ main() {
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Nexus + proxy)"
             ux_info "  - Pip: Samsung internal repository configured"
             ux_info "  - uv: Samsung internal repository + proxy configured"
+            ux_info "  - Cargo: ~/.cargo/config.toml (Nexus proxy for crates.io)"
+            ux_info "  - NuGet: ~/.nuget/NuGet/NuGet.Config (Nexus proxy for nuget.org)"
             ux_info "  - RPM: /etc/yum.repos.d/ds.repo (if yum/dnf available)"
             ux_info "  - APT: /etc/apt/sources.list (if Ubuntu jammy)"
             ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
@@ -514,6 +596,8 @@ main() {
             setup_npm_symlink "external"
             setup_pip_config "external"
             setup_uv_config "external"
+            setup_cargo_config "external"
+            setup_nuget_config "external"
             setup_rpm_repo "external"
             setup_apt_sources "external"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
