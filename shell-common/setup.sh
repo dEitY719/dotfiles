@@ -376,18 +376,7 @@ setup_apt_sources() {
         return 0
     fi
 
-    # Gate 2: Verify Ubuntu codename — match against available config files
-    _apt_codename=""
-    if [ -f /etc/os-release ]; then
-        _apt_codename="$(. /etc/os-release && echo "${VERSION_CODENAME:-}")"
-    fi
-    _apt_source="${DOTFILES_ROOT}/apt/sources.list.${_apt_codename}.internal"
-    if [ -z "$_apt_codename" ] || [ ! -f "$_apt_source" ]; then
-        ux_info "Skipped: no apt config for '${_apt_codename:-unknown}' (available: $(ls "${DOTFILES_ROOT}"/apt/sources.list.*.internal 2>/dev/null | sed 's/.*sources\.list\.\(.*\)\.internal/\1/' | tr '\n' ' ' || echo 'none'))"
-        return 0
-    fi
-
-    # Gate 3: Verify privilege — use sudo if needed, skip if unavailable
+    # Gate 2: Verify privilege — use sudo if needed, skip if unavailable
     _apt_run_privileged=""
     if [ "$(id -u)" = "0" ]; then
         _apt_run_privileged=""
@@ -399,8 +388,27 @@ setup_apt_sources() {
         return 0
     fi
 
+    # Read OS identity (used by both deploy and restore paths)
+    _apt_os_id=""
+    _apt_codename=""
+    if [ -f /etc/os-release ]; then
+        _apt_os_id="$(. /etc/os-release && echo "${ID:-}")"
+        _apt_codename="$(. /etc/os-release && echo "${VERSION_CODENAME:-}")"
+    fi
+
     case "$environment" in
         internal)
+            # Deploy gate: verify Ubuntu + matching config file exists
+            if [ "$_apt_os_id" != "ubuntu" ]; then
+                ux_info "Skipped: ${_apt_os_id:-unknown} detected (only Ubuntu is supported)"
+                return 0
+            fi
+            _apt_source="${DOTFILES_ROOT}/apt/sources.list.${_apt_codename}.internal"
+            if [ -z "$_apt_codename" ] || [ ! -f "$_apt_source" ]; then
+                ux_info "Skipped: no apt config for '${_apt_codename:-unknown}' (available: $(ls "${DOTFILES_ROOT}"/apt/sources.list.*.internal 2>/dev/null | sed 's/.*sources\.list\.\(.*\)\.internal/\1/' | tr '\n' ' ' || echo 'none'))"
+                return 0
+            fi
+
             # Backup existing sources.list if present and not already managed
             if [ -f "$sources_target" ]; then
                 if ! grep -q "$marker" "$sources_target" 2>/dev/null; then
@@ -416,9 +424,9 @@ setup_apt_sources() {
             ux_info "Run 'sudo apt update' to refresh package lists"
             ;;
         external|public)
-            # Only restore if current file was deployed by dotfiles
+            # Restore path: no codename/OS gate — must always reach here
+            # to handle post-upgrade scenarios (e.g., jammy → noble)
             if [ -f "$sources_target" ] && grep -q "$marker" "$sources_target" 2>/dev/null; then
-                # Find the most recent non-dotfiles backup
                 _apt_latest_backup="$(ls -t "${sources_target}".backup.* 2>/dev/null | head -1)"
                 if [ -n "$_apt_latest_backup" ]; then
                     $_apt_run_privileged cp "$_apt_latest_backup" "$sources_target"
