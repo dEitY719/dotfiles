@@ -160,7 +160,7 @@ check_nuget_connectivity() {
     local sources=""
 
     if have_command dotnet; then
-        sources=$(dotnet nuget list source 2>/dev/null | grep "http" | sed 's/.*\(http[^ ]*\).*/\1/')
+        sources=$(dotnet nuget list source 2>/dev/null | grep -Eo 'https?://[^ ]+')
     fi
 
     # Fallback: parse NuGet.Config XML directly (covers nuget-only environments)

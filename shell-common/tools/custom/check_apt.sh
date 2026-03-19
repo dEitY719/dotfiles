@@ -73,17 +73,30 @@ check_apt_config_files() {
         sed 's/^/    /' "$_SOURCES_TARGET"
         echo ""
 
-        # Compare with dotfiles source
-        local source_file="${DOTFILES_ROOT}/apt/sources.list.jammy.internal"
-        if [ -f "$source_file" ]; then
-            ux_section "Drift Check"
-            if diff -q "$_SOURCES_TARGET" "$source_file" >/dev/null 2>&1; then
-                ux_success "Content matches dotfiles source"
+        # Compare with dotfiles source (codename-aware)
+        local os_codename=""
+        if [ -f /etc/os-release ]; then
+            os_codename=$(. /etc/os-release && echo "${VERSION_CODENAME:-}")
+        fi
+
+        if [ -n "$os_codename" ]; then
+            local source_file="${DOTFILES_ROOT}/apt/sources.list.${os_codename}.internal"
+            if [ -f "$source_file" ]; then
+                ux_section "Drift Check"
+                if diff -q "$_SOURCES_TARGET" "$source_file" >/dev/null 2>&1; then
+                    ux_success "Content matches dotfiles source"
+                else
+                    ux_warning "Content differs from dotfiles source"
+                    ux_bullet "Source: $source_file"
+                    ux_bullet "Fix: Run ./shell-common/setup.sh to redeploy"
+                fi
+                echo ""
             else
-                ux_warning "Content differs from dotfiles source"
-                ux_bullet "Source: $source_file"
-                ux_bullet "Fix: Run ./shell-common/setup.sh to redeploy"
+                ux_info "No dotfiles source for codename '$os_codename', skipping drift check"
+                echo ""
             fi
+        else
+            ux_warning "Could not determine OS codename, skipping drift check"
             echo ""
         fi
     else
