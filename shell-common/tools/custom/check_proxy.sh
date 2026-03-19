@@ -1,7 +1,7 @@
 #!/bin/bash
 # shell-common/tools/custom/check_proxy.sh
 # Comprehensive proxy diagnostic script
-# Usage: check_proxy [env|file|shell|conn|git|all]
+# Usage: check_proxy [mode|env|file|shell|conn|git|all]
 
 # Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
 source "$(dirname "$0")/init.sh" || exit 1
@@ -54,6 +54,13 @@ check_setup_mode() {
     echo ""
 }
 
+get_setup_mode() {
+    local setup_mode_file="$HOME/.dotfiles-setup-mode"
+    if [ -f "$setup_mode_file" ]; then
+        cat "$setup_mode_file" 2>/dev/null
+    fi
+}
+
 check_proxy_env() {
     ux_header "1. Current Environment Variables"
 
@@ -69,36 +76,34 @@ check_proxy_env() {
     _format_env "HTTPS_PROXY" "${HTTPS_PROXY:-[NOT SET]}"
 
     # Validate against setup mode
-    local setup_mode_file="$HOME/.dotfiles-setup-mode"
-    if [ -f "$setup_mode_file" ]; then
-        local mode
-        mode=$(cat "$setup_mode_file" 2>/dev/null)
-        case "$mode" in
-            1|3)
-                # Should NOT have proxy
-                if [ "$has_proxy" -eq 1 ]; then
-                    echo ""
-                    ux_error "⚠️  ISSUE DETECTED: Proxy is set but shouldn't be (Mode $mode)"
-                    ux_info "This may be inherited from WSL/system level"
-                    ux_info "Solution: Restart your shell or run: source ~/.bashrc"
-                fi
-                ;;
-            2)
-                # Should have proxy
-                if [ "$has_proxy" -eq 0 ]; then
-                    echo ""
-                    ux_warning "⚠️  No proxy set but Mode 2 (Internal PC) expects proxy"
-                    ux_info "Check if proxy.local.sh exists and is properly sourced"
-                fi
-                ;;
-        esac
-    fi
+    local mode
+    mode="$(get_setup_mode)"
+    case "$mode" in
+        1|3)
+            if [ "$has_proxy" -eq 1 ]; then
+                echo ""
+                ux_error "ISSUE DETECTED: Proxy is set but should not be (Mode $mode)"
+                ux_info "This may be inherited from WSL or the system environment"
+                ux_info "Solution: Restart your shell or run: source ~/.bashrc"
+            fi
+            ;;
+        2)
+            if [ "$has_proxy" -eq 0 ]; then
+                echo ""
+                ux_warning "No proxy set but Mode 2 (Internal PC) expects proxy"
+                ux_info "Check if proxy.local.sh exists and is properly sourced"
+            fi
+            ;;
+    esac
     echo ""
 
     ux_section "NO Proxy (Exceptions)"
-    if [ -n "$no_proxy" ]; then
+    if [ -n "${no_proxy:-}" ]; then
         ux_bullet "no_proxy (lowercase) entries:"
         echo "$no_proxy" | tr ',' '\n' | sed 's/^/    - /'
+    elif [ -n "${NO_PROXY:-}" ]; then
+        ux_bullet "NO_PROXY (uppercase) entries:"
+        echo "$NO_PROXY" | tr ',' '\n' | sed 's/^/    - /'
     else
         ux_warning "no_proxy: [NOT SET]"
     fi
@@ -144,14 +149,25 @@ check_proxy_shell_loading() {
     ux_header "3. Shell Loading Test"
 
     local proxy_sh="${SHELL_COMMON}/env/proxy.sh"
+    local mode
+    mode="$(get_setup_mode)"
+    local bash_result=""
+    local zsh_result=""
+    local expected_proxy=0
+
+    if [ "$mode" = "2" ]; then
+        expected_proxy=1
+    fi
 
     ux_section "Bash"
     ux_info "Testing: bash -c 'source proxy.sh && echo \$http_proxy'"
     bash_result=$(bash -c "source \"$proxy_sh\" 2>/dev/null && echo \${http_proxy:-[NOT SET]}" 2>/dev/null)
     if [ "$bash_result" != "[NOT SET]" ] && [ -n "$bash_result" ]; then
         ux_success "Bash loading: $bash_result"
+    elif [ "$expected_proxy" -eq 1 ]; then
+        ux_warning "Bash loading: proxy not loaded but Mode 2 expects one"
     else
-        ux_warning "Bash loading: [NOT SET] or failed"
+        ux_success "Bash loading: no proxy configured (expected for this environment)"
     fi
     echo ""
 
@@ -161,8 +177,10 @@ check_proxy_shell_loading() {
         zsh_result=$(zsh -c "source \"$proxy_sh\" 2>/dev/null && echo \${http_proxy:-[NOT SET]}" 2>/dev/null)
         if [ "$zsh_result" != "[NOT SET]" ] && [ -n "$zsh_result" ]; then
             ux_success "Zsh loading: $zsh_result"
+        elif [ "$expected_proxy" -eq 1 ]; then
+            ux_warning "Zsh loading: proxy not loaded but Mode 2 expects one"
         else
-            ux_warning "Zsh loading: [NOT SET] or failed"
+            ux_success "Zsh loading: no proxy configured (expected for this environment)"
         fi
     else
         ux_warning "Zsh not installed"
@@ -173,8 +191,16 @@ check_proxy_shell_loading() {
 check_proxy_connectivity() {
     ux_header "4. Proxy Connectivity Test"
 
+    local mode
+    mode="$(get_setup_mode)"
     if [ -z "$http_proxy" ] && [ -z "$HTTP_PROXY" ]; then
-        ux_warning "No proxy configured, skipping connectivity test"
+        if [ "$mode" = "2" ]; then
+            ux_warning "No proxy configured but Mode 2 expects one"
+            ux_info "Check proxy.local.sh and shell loading diagnostics"
+        else
+            ux_info "No proxy configured, skipping proxy connectivity test"
+            ux_info "Run check-network quick for general internet connectivity"
+        fi
         echo ""
         return 0
     fi
@@ -207,8 +233,8 @@ check_git_config() {
     echo ""
 
     ux_section "Git Remote Access Test"
-    ux_info "Testing: timeout 5 git ls-remote https://github.com/anthropics/claude-code.git"
-    if timeout 5 git ls-remote https://github.com/anthropics/claude-code.git >/dev/null 2>&1; then
+    ux_info "Testing: timeout 5 git ls-remote https://github.com/git/git.git HEAD"
+    if timeout 5 git ls-remote https://github.com/git/git.git HEAD >/dev/null 2>&1; then
         ux_success "Git remote access successful"
     else
         ux_error "Git remote access failed"
