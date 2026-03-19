@@ -261,7 +261,7 @@ main() {
 
     # Use npm directly instead of curl | bash:
     # - Avoids NewGenAI domain blocking (opencode.ai → 403)
-    # - Uses whitelisted internal Artifactory
+    # - Uses whitelisted internal Nexus repository
     # - npm config (including no-proxy) is auto-synced from proxy.local.sh
     ux_with_spinner "Installing opencode-ai package..." npm install -g opencode-ai 2>"$install_log" >>"$install_log"
 
@@ -275,7 +275,7 @@ main() {
         echo ""
         ux_info "Troubleshooting:"
         ux_bullet "Check proxy settings: npm-config"
-        ux_bullet "Verify Artifactory: npm info opencode-ai"
+        ux_bullet "Verify registry: npm info opencode-ai"
         ux_bullet "Check no-proxy: npm config get noproxy"
         ux_bullet "For manual config: npm config set noproxy \"<value>\""
         rm -f "$install_log"

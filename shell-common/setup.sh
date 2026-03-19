@@ -156,7 +156,7 @@ setup_npm_symlink() {
         internal)
             ln -s "${DOTFILES_ROOT}/npm/npmrc.internal" "$npmrc_target"
             ux_success "Created symlink: ~/.npmrc → npm/npmrc.internal"
-            ux_info "Using: Samsung internal Artifactory + proxy"
+            ux_info "Using: Samsung internal Nexus repository + proxy"
             ;;
         external)
             ln -s "${DOTFILES_ROOT}/npm/npmrc.external" "$npmrc_target"
@@ -320,7 +320,7 @@ main() {
             ux_info "  - Security: System CA Bundle (Option 2) activated"
             ux_info "  - SSL Certificate: McAfee (/usr/share/ca-certificates/extra/McAfee_Certificate.crt)"
             ux_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
-            ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Artifactory + proxy)"
+            ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Nexus + proxy)"
             ux_info "  - Pip: Samsung internal repository configured"
             ux_info "  - uv: Samsung internal repository + proxy configured"
             ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
