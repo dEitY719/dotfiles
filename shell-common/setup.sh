@@ -6,6 +6,7 @@ set -e
 
 # Get the directory where this script is located (sh-compatible)
 SHELL_COMMON_DIR="$(cd "$(dirname "$0")" && pwd)"
+DOTFILES_ROOT="$(cd "$SHELL_COMMON_DIR/.." && pwd)"
 
 # Source UX library for consistent output styling (sh-compatible: use . instead of source)
 if [ -f "${SHELL_COMMON_DIR}/tools/ux_lib/ux_lib.sh" ]; then
@@ -95,8 +96,11 @@ setup_security_config() {
     security_local="${SHELL_COMMON_DIR}/env/security.local.sh"
 
     # Get CA_CERT path from predefined variables
-    ca_cert=""
-    eval "ca_cert=\$SECURITY_CONFIG_${environment}"
+    case "$environment" in
+        internal) ca_cert="$SECURITY_CONFIG_internal" ;;
+        external) ca_cert="$SECURITY_CONFIG_external" ;;
+        *) ca_cert="" ;;
+    esac
 
     if [ -z "$ca_cert" ]; then
         ux_error "Unknown environment: $environment"
@@ -133,7 +137,6 @@ setup_security_config() {
 
 setup_npm_symlink() {
     environment="$1"
-    dotfiles_root="$(cd "$SHELL_COMMON_DIR/.." && pwd)"
     npmrc_target="$HOME/.npmrc"
 
     ux_header "Setting up npm configuration for: $environment"
@@ -147,12 +150,12 @@ setup_npm_symlink() {
     # Create symlink based on environment
     case "$environment" in
         internal)
-            ln -s "${dotfiles_root}/npm/npmrc.internal" "$npmrc_target"
+            ln -s "${DOTFILES_ROOT}/npm/npmrc.internal" "$npmrc_target"
             ux_success "Created symlink: ~/.npmrc → npm/npmrc.internal"
             ux_info "Using: Samsung internal Artifactory + proxy"
             ;;
         external)
-            ln -s "${dotfiles_root}/npm/npmrc.external" "$npmrc_target"
+            ln -s "${DOTFILES_ROOT}/npm/npmrc.external" "$npmrc_target"
             ux_success "Created symlink: ~/.npmrc → npm/npmrc.external"
             ux_info "Using: Public npmjs registry (no proxy)"
             ;;
@@ -181,8 +184,11 @@ verify_config() {
 
     # Verify CA cert is accessible if configured
     if [ -n "$SHELL_COMMON_DIR" ]; then
-        ca_cert=""
-        eval "ca_cert=\$SECURITY_CONFIG_${environment}"
+        case "$environment" in
+            internal) ca_cert="$SECURITY_CONFIG_internal" ;;
+            external) ca_cert="$SECURITY_CONFIG_external" ;;
+            *) ca_cert="" ;;
+        esac
         if [ -n "$ca_cert" ] && [ -f "$ca_cert" ]; then
             ux_success "CA Certificate accessible: $ca_cert"
         elif [ -n "$ca_cert" ]; then
@@ -208,7 +214,6 @@ setup_local_files() {
 
 setup_uv_config() {
     environment="$1"
-    dotfiles_root="$(cd "$SHELL_COMMON_DIR/.." && pwd)"
     uv_config_dir="${HOME}/.config/uv"
     uv_conf="${uv_config_dir}/uv.toml"
 
@@ -227,7 +232,7 @@ setup_uv_config() {
     # Create symlink based on environment
     case "$environment" in
         internal)
-            ln -s "${dotfiles_root}/uv/uv.toml.internal" "$uv_conf"
+            ln -s "${DOTFILES_ROOT}/uv/uv.toml.internal" "$uv_conf"
             ux_success "Created symlink: ~/.config/uv/uv.toml → uv/uv.toml.internal"
             ux_info "Using: Samsung internal repositories + proxy"
             ;;
@@ -240,7 +245,6 @@ setup_uv_config() {
 
 setup_pip_config() {
     environment="$1"
-    dotfiles_root="$(cd "$SHELL_COMMON_DIR/.." && pwd)"
     pip_config_dir="${HOME}/.config/pip"
     pip_conf="${pip_config_dir}/pip.conf"
 
@@ -258,17 +262,12 @@ setup_pip_config() {
     # Create symlink based on environment
     case "$environment" in
         internal)
-            ln -s "${dotfiles_root}/pip/pip.conf.internal" "$pip_conf"
+            ln -s "${DOTFILES_ROOT}/pip/pip.conf.internal" "$pip_conf"
             ux_success "Created symlink: ~/.config/pip/pip.conf → pip/pip.conf.internal"
             ux_info "Using: Samsung internal repositories"
             ;;
-        external)
-            ln -s "${dotfiles_root}/pip/pip.conf.external" "$pip_conf"
-            ux_success "Created symlink: ~/.config/pip/pip.conf → pip/pip.conf.external"
-            ux_info "Using: Public PyPI"
-            ;;
-        public)
-            ln -s "${dotfiles_root}/pip/pip.conf.external" "$pip_conf"
+        external|public)
+            ln -s "${DOTFILES_ROOT}/pip/pip.conf.external" "$pip_conf"
             ux_success "Created symlink: ~/.config/pip/pip.conf → pip/pip.conf.external"
             ux_info "Using: Public PyPI"
             ;;
