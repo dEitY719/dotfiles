@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NuGet.Config.internal
+     Samsung internal NuGet repository configuration
+
+     Usage:
+       Symlinked to ~/.nuget/NuGet/NuGet.Config and
+       ~/.config/NuGet/NuGet.Config by shell-common/setup.sh
+       Choose "Internal company PC" option when running setup
+
+     Install example:
+       nuget install BlazorDownloadFile -Version 2.1.6 -Source DSNuget
+       dotnet add package BlazorDownloadFile -s DSNuget
+
+     Note: <clear/> prevents merging with machine-level NuGet sources.
+           DSNuget is listed first to be preferred during restore.
+-->
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="DSNuget" value="https://repository.samsungds.net/repository/proxy-nuget-www.nuget.org/index.json" protocolVersion="3" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+</configuration>

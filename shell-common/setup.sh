@@ -41,6 +41,43 @@ SECURITY_CONFIG_internal="/etc/ssl/certs/ca-certificates.crt"
 # Helper Functions
 # ============================================================================
 
+# Prepare a config target path for symlink creation.
+# Removes existing symlinks, backs up regular files and directories.
+# Usage: _prepare_config_target "/path/to/config"
+_prepare_config_target() {
+    _target="$1"
+    if [ -L "$_target" ]; then
+        rm -f "$_target"
+        ux_info "Removed existing symlink: $_target"
+    elif [ -d "$_target" ]; then
+        _backup="${_target}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$_target" "$_backup"
+        ux_warning "Backed up existing directory: $_backup"
+    elif [ -f "$_target" ]; then
+        _backup="${_target}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$_target" "$_backup"
+        ux_info "Backed up existing file: $_backup"
+    fi
+}
+
+# Restore a config target from the latest backup after removing a dotfiles symlink.
+# Usage: _restore_config_from_backup "/path/to/config"
+_restore_config_from_backup() {
+    _target="$1"
+    if [ -L "$_target" ]; then
+        rm -f "$_target"
+        _latest="$(ls -t "${_target}".backup.* 2>/dev/null | head -1)"
+        if [ -n "$_latest" ]; then
+            mv "$_latest" "$_target"
+            ux_success "Restored: $(basename "$_latest") → $_target"
+        else
+            ux_info "Removed dotfiles symlink (no backup to restore, using defaults)"
+        fi
+    else
+        ux_info "No dotfiles config to remove: $_target"
+    fi
+}
+
 cleanup_local_files() {
     # Find all .local.sh files
     ux_header "Cleaning up environment-specific files"
@@ -141,19 +178,7 @@ setup_npm_symlink() {
 
     ux_header "Setting up npm configuration for: $environment"
 
-    # Handle existing ~/.npmrc (symlink, file, or directory)
-    if [ -L "$npmrc_target" ]; then
-        rm -f "$npmrc_target"
-        ux_info "Removed existing symlink: $npmrc_target"
-    elif [ -d "$npmrc_target" ]; then
-        backup="${npmrc_target}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$npmrc_target" "$backup"
-        ux_warning "Backed up existing directory: $backup"
-    elif [ -f "$npmrc_target" ]; then
-        backup="${npmrc_target}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$npmrc_target" "$backup"
-        ux_info "Backed up existing file: $backup"
-    fi
+    _prepare_config_target "$npmrc_target"
 
     # Create symlink based on environment
     case "$environment" in
@@ -217,19 +242,7 @@ setup_uv_config() {
 
     ux_header "Setting up uv configuration for: $environment"
 
-    # Handle existing uv.toml (symlink, file, or directory)
-    if [ -L "$uv_conf" ]; then
-        rm -f "$uv_conf"
-        ux_info "Removed existing symlink: $uv_conf"
-    elif [ -d "$uv_conf" ]; then
-        backup="${uv_conf}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$uv_conf" "$backup"
-        ux_warning "Backed up existing directory: $backup"
-    elif [ -f "$uv_conf" ]; then
-        backup="${uv_conf}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$uv_conf" "$backup"
-        ux_info "Backed up existing file: $backup"
-    fi
+    _prepare_config_target "$uv_conf"
 
     # Create symlink based on environment
     case "$environment" in
@@ -255,19 +268,7 @@ setup_pip_config() {
 
     ux_header "Setting up pip configuration for: $environment"
 
-    # Handle existing pip.conf (symlink, file, or directory)
-    if [ -L "$pip_conf" ]; then
-        rm -f "$pip_conf"
-        ux_info "Removed existing symlink: $pip_conf"
-    elif [ -d "$pip_conf" ]; then
-        backup="${pip_conf}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$pip_conf" "$backup"
-        ux_warning "Backed up existing directory: $backup"
-    elif [ -f "$pip_conf" ]; then
-        backup="${pip_conf}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$pip_conf" "$backup"
-        ux_info "Backed up existing file: $backup"
-    fi
+    _prepare_config_target "$pip_conf"
 
     # Create symlink based on environment
     case "$environment" in
@@ -280,6 +281,57 @@ setup_pip_config() {
             ln -s "${DOTFILES_ROOT}/pip/pip.conf.external" "$pip_conf"
             ux_success "Created symlink: ~/.config/pip/pip.conf → pip/pip.conf.external"
             ux_info "Using: Public PyPI"
+            ;;
+    esac
+}
+
+setup_cargo_config() {
+    environment="$1"
+    cargo_config_dir="${HOME}/.cargo"
+    cargo_conf="${cargo_config_dir}/config.toml"
+
+    # Ensure ~/.cargo directory exists
+    mkdir -p "$cargo_config_dir"
+
+    ux_header "Setting up Cargo configuration for: $environment"
+
+    case "$environment" in
+        internal)
+            _prepare_config_target "$cargo_conf"
+            ln -s "${DOTFILES_ROOT}/cargo/config.toml.internal" "$cargo_conf"
+            ux_success "Created symlink: ~/.cargo/config.toml → cargo/config.toml.internal"
+            ux_info "Using: Samsung internal Nexus proxy for crates.io"
+            ;;
+        external|public)
+            _restore_config_from_backup "$cargo_conf"
+            ;;
+    esac
+}
+
+setup_nuget_config() {
+    environment="$1"
+    # NuGet config can be read from two paths depending on tooling
+    nuget_primary="${HOME}/.nuget/NuGet/NuGet.Config"
+    nuget_secondary="${HOME}/.config/NuGet/NuGet.Config"
+
+    ux_header "Setting up NuGet configuration for: $environment"
+
+    case "$environment" in
+        internal)
+            for _nuget_conf in "$nuget_primary" "$nuget_secondary"; do
+                mkdir -p "$(dirname "$_nuget_conf")"
+                _prepare_config_target "$_nuget_conf"
+                ln -s "${DOTFILES_ROOT}/nuget/NuGet.Config.internal" "$_nuget_conf"
+            done
+            ux_success "Created symlinks: NuGet.Config → nuget/NuGet.Config.internal"
+            ux_info "  ~/.nuget/NuGet/ (dotnet CLI) + ~/.config/NuGet/ (mono)"
+            ux_info "Using: Samsung internal Nexus proxy for NuGet"
+            ;;
+        external|public)
+            for _nuget_conf in "$nuget_primary" "$nuget_secondary"; do
+                _restore_config_from_backup "$_nuget_conf"
+            done
+            ux_info "NuGet config restored to defaults"
             ;;
     esac
 }
@@ -468,6 +520,8 @@ main() {
             setup_npm_symlink "public"
             setup_pip_config "public"
             setup_uv_config "public"
+            setup_cargo_config "public"
+            setup_nuget_config "public"
             setup_rpm_repo "public"
             setup_apt_sources "public"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
@@ -484,6 +538,8 @@ main() {
             setup_npm_symlink "internal"
             setup_pip_config "internal"
             setup_uv_config "internal"
+            setup_cargo_config "internal"
+            setup_nuget_config "internal"
             setup_rpm_repo "internal"
             setup_apt_sources "internal"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
@@ -497,6 +553,8 @@ main() {
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Nexus + proxy)"
             ux_info "  - Pip: Samsung internal repository configured"
             ux_info "  - uv: Samsung internal repository + proxy configured"
+            ux_info "  - Cargo: ~/.cargo/config.toml (Nexus proxy for crates.io)"
+            ux_info "  - NuGet: ~/.nuget/NuGet/NuGet.Config (Nexus proxy for nuget.org)"
             ux_info "  - RPM: /etc/yum.repos.d/ds.repo (if yum/dnf available)"
             ux_info "  - APT: /etc/apt/sources.list (if Ubuntu jammy)"
             ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
@@ -514,6 +572,8 @@ main() {
             setup_npm_symlink "external"
             setup_pip_config "external"
             setup_uv_config "external"
+            setup_cargo_config "external"
+            setup_nuget_config "external"
             setup_rpm_repo "external"
             setup_apt_sources "external"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
