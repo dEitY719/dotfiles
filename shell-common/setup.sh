@@ -6,6 +6,7 @@ set -e
 
 # Get the directory where this script is located (sh-compatible)
 SHELL_COMMON_DIR="$(cd "$(dirname "$0")" && pwd)"
+DOTFILES_ROOT="$(cd "$SHELL_COMMON_DIR/.." && pwd)"
 
 # Source UX library for consistent output styling (sh-compatible: use . instead of source)
 if [ -f "${SHELL_COMMON_DIR}/tools/ux_lib/ux_lib.sh" ]; then
@@ -30,11 +31,11 @@ fi
 SECURITY_CONFIG_external="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
 SECURITY_CONFIG_internal="/etc/ssl/certs/ca-certificates.crt"
 
-# NPM configuration is managed via tracked files in npm/ directory
-# and symlinked to ~/.npmrc (see setup_npm_symlink function)
-#
-# HTTP Proxy and No-proxy values are defined in environments.conf (SSOT)
-# and consumed by tracked config files (npm/npmrc.*, uv.toml.*, etc.)
+# Tool-specific configurations are managed via tracked files at project root
+# and symlinked to their respective locations:
+#   npm/   → ~/.npmrc
+#   pip/   → ~/.config/pip/pip.conf
+#   uv/    → ~/.config/uv/uv.toml
 
 # ============================================================================
 # Helper Functions
@@ -89,30 +90,17 @@ copy_local_files() {
     done
 }
 
-read_config_value() {
-    environment="$1"
-    config_key="$2"
-    config_file="${SHELL_COMMON_DIR}/config/environments.conf"
-
-    if [ ! -f "$config_file" ]; then
-        return 1
-    fi
-
-    grep "^${environment}:${config_key}=" "$config_file" 2>/dev/null | cut -d= -f2- | sed 's/"//g'
-}
-
 setup_security_config() {
     environment="$1"
     security_template="${SHELL_COMMON_DIR}/env/security.local.example"
     security_local="${SHELL_COMMON_DIR}/env/security.local.sh"
 
-    # Try to get CA_CERT from environments.conf (Stage 3 approach)
-    ca_cert="$(read_config_value "$environment" "CA_CERT")"
-
-    # Fallback to predefined variables (Stage 1-2 approach)
-    if [ -z "$ca_cert" ]; then
-        eval "ca_cert=\$SECURITY_CONFIG_${environment}"
-    fi
+    # Get CA_CERT path from predefined variables
+    case "$environment" in
+        internal) ca_cert="$SECURITY_CONFIG_internal" ;;
+        external) ca_cert="$SECURITY_CONFIG_external" ;;
+        *) ca_cert="" ;;
+    esac
 
     if [ -z "$ca_cert" ]; then
         ux_error "Unknown environment: $environment"
@@ -149,26 +137,29 @@ setup_security_config() {
 
 setup_npm_symlink() {
     environment="$1"
-    dotfiles_root="$(cd "$SHELL_COMMON_DIR/.." && pwd)"
     npmrc_target="$HOME/.npmrc"
 
     ux_header "Setting up npm configuration for: $environment"
 
-    # Remove existing ~/.npmrc (symlink or file)
-    if [ -e "$npmrc_target" ] || [ -L "$npmrc_target" ]; then
+    # Handle existing ~/.npmrc
+    if [ -L "$npmrc_target" ]; then
         rm -f "$npmrc_target"
-        ux_info "Removed existing: $npmrc_target"
+        ux_info "Removed existing symlink: $npmrc_target"
+    elif [ -f "$npmrc_target" ]; then
+        backup="${npmrc_target}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$npmrc_target" "$backup"
+        ux_info "Backed up existing file: $backup"
     fi
 
     # Create symlink based on environment
     case "$environment" in
         internal)
-            ln -s "${dotfiles_root}/npm/npmrc.internal" "$npmrc_target"
+            ln -s "${DOTFILES_ROOT}/npm/npmrc.internal" "$npmrc_target"
             ux_success "Created symlink: ~/.npmrc → npm/npmrc.internal"
             ux_info "Using: Samsung internal Artifactory + proxy"
             ;;
         external)
-            ln -s "${dotfiles_root}/npm/npmrc.external" "$npmrc_target"
+            ln -s "${DOTFILES_ROOT}/npm/npmrc.external" "$npmrc_target"
             ux_success "Created symlink: ~/.npmrc → npm/npmrc.external"
             ux_info "Using: Public npmjs registry (no proxy)"
             ;;
@@ -184,26 +175,16 @@ verify_config() {
 
     ux_header "Verifying configuration for: $environment"
 
-    # Verify npm config if npm is available
-    if command -v npm >/dev/null 2>&1; then
-        npm_registry="$(npm config get registry 2>/dev/null || echo "unknown")"
-        ux_info "npm registry: $npm_registry"
-
-        npm_cafile="$(npm config get cafile 2>/dev/null || echo "none")"
-        ux_info "npm cafile: $npm_cafile"
-    else
-        ux_info "npm is not installed, skipping npm config verification"
-    fi
-
     # Verify CA cert is accessible if configured
-    if [ -n "$SHELL_COMMON_DIR" ]; then
-        ca_cert=""
-        eval "ca_cert=\$SECURITY_CONFIG_${environment}"
-        if [ -n "$ca_cert" ] && [ -f "$ca_cert" ]; then
-            ux_success "CA Certificate accessible: $ca_cert"
-        elif [ -n "$ca_cert" ]; then
-            ux_info "CA Certificate not found yet: $ca_cert (will be installed by setup_crt.sh)"
-        fi
+    case "$environment" in
+        internal) ca_cert="$SECURITY_CONFIG_internal" ;;
+        external) ca_cert="$SECURITY_CONFIG_external" ;;
+        *) ca_cert="" ;;
+    esac
+    if [ -n "$ca_cert" ] && [ -f "$ca_cert" ]; then
+        ux_success "CA Certificate accessible: $ca_cert"
+    elif [ -n "$ca_cert" ]; then
+        ux_info "CA Certificate not found yet: $ca_cert (will be installed by setup_crt.sh)"
     fi
 }
 
@@ -232,19 +213,21 @@ setup_uv_config() {
 
     ux_header "Setting up uv configuration for: $environment"
 
-    # Remove existing uv.toml (symlink or file)
-    # Note: -L needed because -e returns false for broken symlinks (dangling links)
-    if [ -e "$uv_conf" ] || [ -L "$uv_conf" ]; then
+    # Handle existing uv.toml
+    if [ -L "$uv_conf" ]; then
         rm -f "$uv_conf"
-        ux_info "Removed existing: $uv_conf"
+        ux_info "Removed existing symlink: $uv_conf"
+    elif [ -f "$uv_conf" ]; then
+        backup="${uv_conf}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$uv_conf" "$backup"
+        ux_info "Backed up existing file: $backup"
     fi
 
     # Create symlink based on environment
     case "$environment" in
         internal)
-            # Internal company PC: use internal repository + proxy
-            ln -s "${SHELL_COMMON_DIR}/config/uv/uv.toml.internal" "$uv_conf"
-            ux_success "Created symlink: $uv_conf → uv.toml.internal"
+            ln -s "${DOTFILES_ROOT}/uv/uv.toml.internal" "$uv_conf"
+            ux_success "Created symlink: ~/.config/uv/uv.toml → uv/uv.toml.internal"
             ux_info "Using: Samsung internal repositories + proxy"
             ;;
         external|public)
@@ -264,30 +247,26 @@ setup_pip_config() {
 
     ux_header "Setting up pip configuration for: $environment"
 
-    # Remove existing pip.conf if it exists
-    if [ -f "$pip_conf" ]; then
+    # Handle existing pip.conf
+    if [ -L "$pip_conf" ]; then
         rm -f "$pip_conf"
-        ux_info "Removed existing: $pip_conf"
+        ux_info "Removed existing symlink: $pip_conf"
+    elif [ -f "$pip_conf" ]; then
+        backup="${pip_conf}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$pip_conf" "$backup"
+        ux_info "Backed up existing file: $backup"
     fi
 
     # Create symlink based on environment
     case "$environment" in
         internal)
-            # Internal company PC: use internal repository
-            ln -s "${SHELL_COMMON_DIR}/config/pip/pip.conf.internal" "$pip_conf"
-            ux_success "Created symlink: $pip_conf → pip.conf.internal"
+            ln -s "${DOTFILES_ROOT}/pip/pip.conf.internal" "$pip_conf"
+            ux_success "Created symlink: ~/.config/pip/pip.conf → pip/pip.conf.internal"
             ux_info "Using: Samsung internal repositories"
             ;;
-        external)
-            # External company PC (VPN): use public PyPI
-            ln -s "${SHELL_COMMON_DIR}/config/pip/pip.conf.external" "$pip_conf"
-            ux_success "Created symlink: $pip_conf → pip.conf.external"
-            ux_info "Using: Public PyPI"
-            ;;
-        public)
-            # Public PC (home): use public PyPI
-            ln -s "${SHELL_COMMON_DIR}/config/pip/pip.conf.external" "$pip_conf"
-            ux_success "Created symlink: $pip_conf → pip.conf.external"
+        external|public)
+            ln -s "${DOTFILES_ROOT}/pip/pip.conf.external" "$pip_conf"
+            ux_success "Created symlink: ~/.config/pip/pip.conf → pip/pip.conf.external"
             ux_info "Using: Public PyPI"
             ;;
     esac

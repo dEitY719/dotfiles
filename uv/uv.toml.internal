@@ -1,10 +1,9 @@
-# uv.toml.internal (template)
+# uv.toml.internal
 # Samsung internal repository configuration for corporate PC
 #
 # Usage:
-#   This file is symlinked to ~/.config/uv/uv.toml by setup.sh
+#   Symlinked to ~/.config/uv/uv.toml by shell-common/setup.sh
 #   Choose this option when using company internal repositories
-#   (requires direct connection to company network)
 #
 # Note: Proxy is configured here (uv does not read shell proxy variables)
 

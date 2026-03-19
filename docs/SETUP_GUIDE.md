@@ -109,10 +109,12 @@ check-npm files    # symlink 상태 확인
 ```
 - **특수 작업**: 환경별 설정 (Public/Internal/External)
 - **언제 실행**: setup.sh에서 자동 호출 (수동 호출 가능)
-- **생성되는 파일**:
+- **생성되는 파일/심볼릭 링크**:
   - `shell-common/env/proxy.local.sh`
   - `shell-common/env/security.local.sh`
-  - `shell-common/tools/integrations/npm.local.sh`
+  - `~/.npmrc` → `npm/npmrc.{environment}` (symlink)
+  - `~/.config/pip/pip.conf` → `pip/pip.conf.{environment}` (symlink)
+  - `~/.config/uv/uv.toml` → `uv/uv.toml.{environment}` (symlink)
 
 ### bash/setup.sh
 ```bash
