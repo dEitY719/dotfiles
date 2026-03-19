@@ -4,6 +4,24 @@
 - **Stack**: Bash 5.x+, Python 3.10+, Tox, Ruff, Mypy.
 - **Structure**: Modular Bash (`bash/`), Zsh (`zsh/`), shared shell (`shell-common/`), Tests (`tests/`), Docs (`docs/`), Git hooks (`git/`), Claude Code (`claude/`).
 
+# Package Manager Configuration
+
+All managed by `shell-common/setup.sh` (environment menu: public / internal / external).
+
+| Manager | Config Dir | Target | Method | Gate |
+|---------|-----------|--------|--------|------|
+| npm | `npm/` | `~/.npmrc` | symlink | -- |
+| pip | `pip/` | `~/.config/pip/pip.conf` | symlink | -- |
+| uv | `uv/` | `~/.config/uv/uv.toml` | symlink | -- |
+| Cargo | `cargo/` | `~/.cargo/config.toml` | symlink | -- |
+| NuGet | `nuget/` | `~/.nuget/NuGet/` + `~/.config/NuGet/` | symlink (dual) | -- |
+| RPM | `rpm/` | `/etc/yum.repos.d/ds.repo` | sudo copy | RHEL 8.x + yum/dnf |
+| APT | `apt/` | `/etc/apt/sources.list` | sudo copy | Ubuntu + codename match |
+
+- **User-level** (npm/pip/uv/cargo/nuget): symlink to `{dir}/{config}.internal`, backup+restore on switch.
+- **System-level** (rpm/apt): sudo copy with 3-gate safety (tool exists, OS match, privilege), `MANAGED_BY_DOTFILES` marker for ownership.
+- **Adding new manager**: create `{dir}/{config}.internal`, add `setup_{name}()` function, wire into `main()` 3 menu cases.
+
 # Operational Commands
 
 - **Setup**: `./setup.sh` (Symlinks), `./install.sh` (Full install).
