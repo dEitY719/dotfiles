@@ -104,7 +104,7 @@ setup_mode_help() {
     echo "  Mode 2: Internal company PC (Direct connection)"
     echo "  ───────────────────────────────────────────────"
     echo "    • Company proxy: http://12.26.204.100:8080"
-    echo "    • Internal repositories (Artifactory)"
+    echo "    • Internal repositories (Nexus)"
     echo "    • Company CA certificates"
     echo "    • McAfee proxy certificate"
     echo ""

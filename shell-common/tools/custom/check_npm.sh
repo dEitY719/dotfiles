@@ -63,7 +63,7 @@ check_npm_config_files() {
 
         # Detect environment from symlink target
         case "$npmrc_target" in
-            *npmrc.internal*) ux_info "Environment: Internal PC (Artifactory + proxy)" ;;
+            *npmrc.internal*) ux_info "Environment: Internal PC (Nexus + proxy)" ;;
             *npmrc.external*) ux_info "Environment: External PC (npmjs + no proxy)" ;;
             *) ux_info "Environment: Unknown (custom symlink target)" ;;
         esac
@@ -224,6 +224,6 @@ main() {
     esac
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
     main "$@"
 fi
