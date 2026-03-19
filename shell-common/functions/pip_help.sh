@@ -36,7 +36,7 @@ pip_help() {
 
         ux_section "Proxy & Repository Info"
         ux_bullet "Proxy:            http://12.26.204.100:8080"
-        ux_bullet "Internal Repo:    https://repository.samsungds.net/artifactory/api/pypi/pypi/simple"
+        ux_bullet "Internal Repo:    http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/simple"
         ux_bullet "DataService Repo: http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple"
 
 
