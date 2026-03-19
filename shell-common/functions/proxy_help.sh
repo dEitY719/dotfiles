@@ -1,15 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 # shell-common/functions/proxy_help.sh
 # Proxy help function (bash/zsh compatible, uses local keyword)
 
 proxy_help() {
-    if type ux_header >/dev/null 2>&1; then
-        ux_header "Proxy Configuration & Diagnostics"
-    else
-
-        ux_header "Proxy Configuration & Diagnostics"
-
-    fi
+    ux_header "Proxy Configuration & Diagnostics"
 
     if type ux_section >/dev/null 2>&1; then
         ux_section "Diagnostic Commands"
@@ -17,7 +11,7 @@ proxy_help() {
         ux_bullet "check-proxy env      Environment variables only"
         ux_bullet "check-proxy file     proxy.local.sh file check"
         ux_bullet "check-proxy shell    Shell loading test"
-        ux_bullet "check-proxy conn     Connectivity test"
+        ux_bullet "check-proxy conn     Configured proxy connectivity test"
         ux_bullet "check-proxy git      Git configuration"
 
 
@@ -45,36 +39,36 @@ proxy_help() {
         ux_bullet "git config --global -l | grep proxy           View git proxy config"
 
 
+        ux_section "Related Diagnostics"
+        ux_bullet "check-network quick       General internet access check"
+        ux_bullet "check-network             DNS, HTTPS, git, apt, pip, curl checks"
+
+
         ux_section "Important Notes"
         ux_warning "NO_PROXY with spaces is not recognized - use commas only"
         ux_info "Some tools only recognize uppercase (HTTP_PROXY, HTTPS_PROXY)"
+        ux_info "check-proxy focuses on proxy configuration only"
 
     else
         # Fallback for minimal shells without UX library
-        ux_header "Diagnostic Commands:"
-        ux_bullet "check-proxy          Run full diagnostic"
-        ux_bullet "check-proxy env      Environment variables only"
-        ux_bullet "check-proxy file     proxy.local.sh file check"
-
-        ux_header "Quick Commands:"
-        ux_bullet "echo \$http_proxy         Current proxy setting"
-        ux_bullet "env | grep -i proxy      Show all proxy vars"
+        echo "Diagnostic Commands:"
+        echo "  check-proxy          Run full diagnostic"
+        echo "  check-proxy env      Environment variables only"
+        echo "  check-proxy file     proxy.local.sh file check"
+        echo "  check-network quick  General internet access check"
+        echo ""
+        echo "Quick Commands:"
+        echo "  echo \$http_proxy         Current proxy setting"
+        echo "  env | grep -i proxy      Show all proxy vars"
 
     fi
 }
 
 # Wrapper function for check_proxy.sh diagnostic
-# Also runs pip_check for comprehensive network diagnostics
 proxy_check() {
     local check_proxy_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/check_proxy.sh"
     if [ -f "$check_proxy_script" ]; then
         bash "$check_proxy_script" "$@"
-
-
-        # Also run pip check for comprehensive diagnostics
-        if type pip_check >/dev/null 2>&1; then
-            pip_check "$@"
-        fi
     else
         # Error handling with fallback (guard ux_error)
         if type ux_error >/dev/null 2>&1; then
