@@ -4,7 +4,7 @@
 # Usage: check_cargo [config|files|env|connectivity|all]
 
 # Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
-source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/init.sh" || exit 1
 
 # ============================================================
 # Helper functions

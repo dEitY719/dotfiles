@@ -4,7 +4,7 @@
 # Usage: check_apt [config|files|env|connectivity|all]
 
 # Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
-source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/init.sh" || exit 1
 
 # ============================================================
 # Helper functions
@@ -187,19 +187,8 @@ EOF
         else
             ux_info "No deb lines found in sources.list"
         fi
-        echo ""
-    fi
-
-    ux_section "APT Update (dry-run)"
-    ux_info "Testing: apt update --dry-run (may require sudo)"
-    if run_with_timeout 15 apt update --dry-run 2>&1 | tail -5 | sed 's/^/    /'; then
-        ux_success "apt update dry-run completed"
     else
-        ux_warning "apt update dry-run failed"
-        ux_info "Possible causes:"
-        ux_bullet "Network connectivity issue"
-        ux_bullet "Mirror URL is incorrect"
-        ux_bullet "Proxy settings are misconfigured"
+        ux_info "No sources.list found - skipping URL tests"
     fi
     echo ""
 }

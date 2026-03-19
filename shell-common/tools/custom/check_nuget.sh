@@ -4,7 +4,7 @@
 # Usage: check_nuget [config|files|env|connectivity|all]
 
 # Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
-source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/init.sh" || exit 1
 
 # ============================================================
 # Helper functions
@@ -151,42 +151,53 @@ check_nuget_environment() {
 check_nuget_connectivity() {
     ux_header "4. Source Connectivity Test"
 
-    if ! have_command dotnet && ! have_command nuget; then
-        ux_warning "Neither dotnet nor nuget found - skipping connectivity test"
+    if ! have_command curl; then
+        ux_warning "curl not found - skipping connectivity test"
         return 1
     fi
 
-    # Test each configured source
-    if have_command dotnet; then
-        # Extract source URLs from dotnet nuget list source
-        local sources
-        sources=$(dotnet nuget list source 2>/dev/null | grep "http" | sed 's/.*\(http[^ ]*\).*/\1/')
+    # Collect source URLs: prefer dotnet CLI, fall back to NuGet.Config XML
+    local sources=""
 
-        if [ -z "$sources" ]; then
-            ux_info "No NuGet sources configured"
-            return 0
+    if have_command dotnet; then
+        sources=$(dotnet nuget list source 2>/dev/null | grep "http" | sed 's/.*\(http[^ ]*\).*/\1/')
+    fi
+
+    # Fallback: parse NuGet.Config XML directly (covers nuget-only environments)
+    if [ -z "$sources" ]; then
+        local nuget_conf=""
+        if [ -f "$HOME/.nuget/NuGet/NuGet.Config" ]; then
+            nuget_conf="$HOME/.nuget/NuGet/NuGet.Config"
+        elif [ -f "$HOME/.config/NuGet/NuGet.Config" ]; then
+            nuget_conf="$HOME/.config/NuGet/NuGet.Config"
         fi
 
-        while read -r source_url; do
-            if [ -z "$source_url" ]; then
-                continue
-            fi
-            ux_section "Testing: $source_url"
-            if have_command curl; then
-                local http_code
-                http_code=$(curl -s -w "%{http_code}" -o /dev/null --connect-timeout 5 --max-time 10 "$source_url" 2>/dev/null)
-                if [ "$http_code" = "200" ] || [ "$http_code" = "301" ] || [ "$http_code" = "302" ]; then
-                    ux_success "Source accessible (HTTP $http_code)"
-                else
-                    ux_warning "Source NOT accessible (HTTP $http_code)"
-                fi
-            else
-                ux_info "curl not available - skipping HTTP test"
-            fi
-        done <<EOF
+        if [ -n "$nuget_conf" ]; then
+            ux_info "Parsing source URLs from: $nuget_conf"
+            sources=$(sed -n 's/.*value="\(http[^"]*\)".*/\1/p' "$nuget_conf")
+        fi
+    fi
+
+    if [ -z "$sources" ]; then
+        ux_info "No NuGet sources configured"
+        return 0
+    fi
+
+    while read -r source_url; do
+        if [ -z "$source_url" ]; then
+            continue
+        fi
+        ux_section "Testing: $source_url"
+        local http_code
+        http_code=$(curl -s -w "%{http_code}" -o /dev/null --connect-timeout 5 --max-time 10 "$source_url" 2>/dev/null)
+        if [ "$http_code" = "200" ] || [ "$http_code" = "301" ] || [ "$http_code" = "302" ]; then
+            ux_success "Source accessible (HTTP $http_code)"
+        else
+            ux_warning "Source NOT accessible (HTTP $http_code)"
+        fi
+    done <<EOF
 $sources
 EOF
-    fi
     echo ""
 }
 
