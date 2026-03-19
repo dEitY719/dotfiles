@@ -14,13 +14,14 @@ Opinionated Bash/Zsh dotfiles for reproducible terminal environments across WSL,
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Bash 4.0+ or Zsh 5.0+
 - Git
 
 ### Installation
 
 ```bash
-git clone https://github.com/yourusername/dotfiles.git ~/dotfiles
+git clone https://github.com/dEitY719/dotfiles.git ~/dotfiles
 cd ~/dotfiles
 ./setup.sh
 ```
@@ -28,12 +29,14 @@ cd ~/dotfiles
 If you install to a different location, use that path instead of `~/dotfiles`. Most scripts resolve paths via `DOTFILES_ROOT`/`SHELL_COMMON`.
 
 The setup script will:
+
 1. **Ask for your environment** (Public PC / Internal company PC / External company PC)
 2. **Configure environment-specific files** (.local.sh files)
 3. **Create shell symlinks** (~/.bashrc, ~/.zshrc, ~/.gitconfig)
 4. **Set up environment variables**
 
 After setup, reload your shell:
+
 ```bash
 exec bash  # or exec zsh
 ```
@@ -41,9 +44,11 @@ exec bash  # or exec zsh
 ## 📚 Documentation
 
 ### For Initial Setup
+
 → See **[Setup Guide](docs/SETUP_GUIDE.md)** for detailed installation instructions
 
 ### Detailed Documentation
+
 - **[shell-common/README.md](shell-common/README.md)** - Shared shell configuration, module loading, and best practices
 - **[bash/setup.sh](bash/setup.sh)** - Bash-specific setup and configuration
 - **[zsh/setup.sh](zsh/setup.sh)** - Zsh-specific setup and configuration
@@ -103,13 +108,9 @@ cp shell-common/env/proxy.local.example shell-common/env/proxy.local.sh
 # Edit the file to match your environment
 ```
 
-### npm config (explicit apply)
+### npm config (symlink)
 
-`shell-common/tools/integrations/npm.local.sh` only defines desired values. Apply them explicitly:
-
-```bash
-npm-apply-config
-```
+`~/.npmrc` is managed as a symlink to `npm/npmrc.{environment}`. Configured automatically by `./setup.sh`.
 
 ## 🔐 Secret Management with git-crypt
 
@@ -171,10 +172,11 @@ gcrestore
 ### How It Works
 
 1. `.gitattributes` marks files to encrypt:
-   ```
-   .env filter=git-crypt diff=git-crypt
-   .secrets/** filter=git-crypt diff=git-crypt
-   ```
+
+    ```
+    .env filter=git-crypt diff=git-crypt
+    .secrets/** filter=git-crypt diff=git-crypt
+    ```
 
 2. When you `git push`, git-crypt encrypts these files before storing in the repository
 
@@ -240,12 +242,12 @@ For more help, see [Setup Guide](docs/SETUP_GUIDE.md).
 
 ## 📋 Project Details
 
-| Item | Description |
-|------|-------------|
-| **Language** | Bash/Zsh/Python |
+| Item         | Description        |
+| ------------ | ------------------ |
+| **Language** | Bash/Zsh/Python    |
 | **Platform** | WSL2, Linux, macOS |
-| **License** | MIT |
-| **Author** | BW-Yoon |
+| **License**  | MIT                |
+| **Author**   | BW-Yoon            |
 
 ## 📖 Additional Resources
 

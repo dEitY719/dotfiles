@@ -1,23 +1,18 @@
-#!/bin/bash
-# shell-common/tools/external/npm.sh
-# NPM/NVM 기본 설정 및 유틸리티
+#!/bin/sh
+# shell-common/tools/integrations/npm.sh
+# NPM aliases, helpers, and PATH setup
 #
-# 환경별 설정 방법:
-#   1. NVM을 사용하는 경우 (집 또는 회사):
-#      shell-common/tools/external/npm.local.example을 npm.local.sh로 복사
-#   2. npm.local.sh에서 환경에 맞게 NPM/NVM 설정 수정
-#   3. npm.local.sh는 자동으로 로드됨 (.gitignore에 의해 제외됨)
-#
-# 참고:
-#   - 이 파일은 기본 NPM aliases와 helper functions만 제공합니다
-#   - NVM 관련 설정은 npm.local.sh에서 처리해야 합니다
-#   - npm.local.sh가 없으면 시스템에 설치된 기본 npm을 사용합니다
+# Configuration:
+#   ~/.npmrc is managed as a symlink to npm/npmrc.{environment}
+#   Run ./shell-common/setup.sh to configure for your environment
 
 # ========================================
 # Load UX Library
 # ========================================
-if ! declare -f ux_header >/dev/null 2>&1; then
-    source "$(dirname "${BASH_SOURCE[0]}")/../tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+if ! type ux_header >/dev/null 2>&1; then
+    _npm_dir="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
+    . "${_npm_dir}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+    unset _npm_dir
 fi
 
 # ========================================
@@ -28,13 +23,12 @@ alias npm-outdated='npm outdated -g'
 alias npm-update='npm update -g'
 alias npm-cache-clean='npm cache clean --force'
 
-# NPM Install Aliases
-alias npm-i='npm install'
-alias npm-is='npm install --save'
-alias npm-isd='npm install --save-dev'
-alias npm-ig='npm install -g'
-
-# NPM Uninstall Aliases
+# NPM Package Management Aliases
+# shellcheck disable=SC2139  # aliases are intentionally lazy-evaluated
+alias npm-i='npm i'
+alias npm-is='npm i --save'
+alias npm-isd='npm i --save-dev'
+alias npm-ig='npm i -g'
 alias npm-un='npm uninstall'
 alias npm-ung='npm uninstall -g'
 
@@ -91,64 +85,6 @@ npm_list() {
 alias npm-list='npm_list'
 
 # ========================================
-# NPM Configuration Apply (explicit)
-# ========================================
-
-_npm_apply_one() {
-    local key="$1"
-    local desired="${2-}"
-
-    local current
-    current="$(npm config get "$key" 2>/dev/null || true)"
-    case "$current" in
-        null | undefined) current="" ;;
-    esac
-
-    if [ "$current" = "$desired" ]; then
-        ux_success "$key already set"
-        return 0
-    fi
-
-    ux_info "Setting $key"
-    if npm config set "$key" "$desired" >/dev/null 2>&1; then
-        ux_success "$key updated"
-        return 0
-    fi
-
-    ux_error "Failed to set $key"
-    return 1
-}
-
-npm_apply_config() {
-    if ! command -v npm >/dev/null 2>&1; then
-        ux_error "npm not found"
-        ux_info "Install: ${UX_BOLD}npminstall${UX_RESET}"
-        return 1
-    fi
-
-    if [ -z "${DESIRED_REGISTRY:-}" ]; then
-        ux_error "npm.local.sh not loaded (DESIRED_REGISTRY is empty)"
-        ux_info "Create: ${UX_BOLD}shell-common/tools/integrations/npm.local.sh${UX_RESET}"
-        ux_info "Or run: ${UX_BOLD}./shell-common/setup.sh${UX_RESET}"
-        return 1
-    fi
-
-    ux_header "Apply npm config (explicit)"
-    ux_info "This does not run automatically at shell init."
-
-    _npm_apply_one "registry" "$DESIRED_REGISTRY" || return 1
-    _npm_apply_one "cafile" "$DESIRED_CAFILE" || return 1
-    _npm_apply_one "strict-ssl" "$DESIRED_STRICT_SSL" || return 1
-    _npm_apply_one "proxy" "$DESIRED_PROXY" || return 1
-    _npm_apply_one "https-proxy" "$DESIRED_HTTPS_PROXY" || return 1
-    _npm_apply_one "noproxy" "$DESIRED_NOPROXY" || return 1
-    _npm_apply_one "prefix" "$DESIRED_PREFIX" || return 1
-
-    ux_success "npm config applied"
-}
-alias npm-apply-config='npm_apply_config'
-
-# ========================================
 # NPM Helper Function
 # ========================================
 
@@ -180,11 +116,7 @@ crtsetup() {
 export PATH="$HOME/.npm-global/bin:$PATH"
 
 # ========================================
-# 환경별 로컬 NPM 설정 로드 (있는 경우)
+# NPM Configuration
 # ========================================
-if [ -f "${BASH_SOURCE[0]%/*}/npm.local.sh" ]; then
-    . "${BASH_SOURCE[0]%/*}/npm.local.sh"
-elif [ -f "${0:a:h}/npm.local.sh" ]; then
-    # zsh support
-    . "${0:a:h}/npm.local.sh"
-fi
+# ~/.npmrc is managed as a symlink to npm/npmrc.{environment}
+# Run ./shell-common/setup.sh to configure for your environment

@@ -56,34 +56,39 @@ check_npm_config_files() {
     ux_header "2. NPM Configuration Files"
 
     ux_section ".npmrc File (User Config)"
-    if [ -f "$HOME/.npmrc" ]; then
-        ux_success "Found: ~/.npmrc"
-        ux_bullet "Size: $(wc -c < "$HOME/.npmrc") bytes"
+    if [ -L "$HOME/.npmrc" ]; then
+        local npmrc_target
+        npmrc_target="$(readlink "$HOME/.npmrc")"
+        ux_success "Found: ~/.npmrc (symlink → $npmrc_target)"
+
+        # Detect environment from symlink target
+        case "$npmrc_target" in
+            *npmrc.internal*) ux_info "Environment: Internal PC (Artifactory + proxy)" ;;
+            *npmrc.external*) ux_info "Environment: External PC (npmjs + no proxy)" ;;
+            *) ux_info "Environment: Unknown (custom symlink target)" ;;
+        esac
+        echo ""
+
+        if [ -f "$HOME/.npmrc" ]; then
+            ux_section "Content:"
+            sed 's/^/    /' "$HOME/.npmrc"
+            echo ""
+        else
+            ux_warning "Symlink target does not exist: $npmrc_target"
+            ux_bullet "Run: ./shell-common/setup.sh to reconfigure"
+            echo ""
+        fi
+    elif [ -f "$HOME/.npmrc" ]; then
+        ux_warning "Found: ~/.npmrc (regular file, not symlink)"
+        ux_bullet "Expected: symlink to dotfiles/npm/npmrc.{environment}"
+        ux_bullet "Fix: Run ./shell-common/setup.sh to reconfigure"
         echo ""
         ux_section "Content:"
-        cat "$HOME/.npmrc" | sed 's/^/    /'
+        sed 's/^/    /' "$HOME/.npmrc"
         echo ""
     else
         ux_info "NOT FOUND: ~/.npmrc (using default or global config)"
-        echo ""
-    fi
-
-    ux_section "npm.local.sh Status (Environment-specific)"
-    local npm_local="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/integrations/npm.local.sh"
-    if [ -f "$npm_local" ]; then
-        ux_success "Found: npm.local.sh"
-        echo ""
-
-        if grep -q "^    DESIRED_REGISTRY=\"https://registry.npmjs.org/\"" "$npm_local"; then
-            ux_info "Active Option: Option1 (External/VPN - npmjs + no proxy)"
-        elif grep -q "^    DESIRED_REGISTRY=\"http://repo.samsungds.net" "$npm_local"; then
-            ux_info "Active Option: Option2 (Internal PC - Artifactory + proxy)"
-        fi
-        echo ""
-    else
-        ux_warning "NOT FOUND: npm.local.sh"
-        ux_info "This is normal - file is environment-specific and may not exist yet"
-        ux_bullet "Run: ./setup.sh to configure npm.local.sh"
+        ux_bullet "Run: ./shell-common/setup.sh to configure"
         echo ""
     fi
 }
@@ -219,4 +224,6 @@ main() {
     esac
 }
 
-main "$@"
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    main "$@"
+fi

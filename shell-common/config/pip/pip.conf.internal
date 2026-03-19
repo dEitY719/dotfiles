@@ -12,10 +12,10 @@
 [global]
 # Minimal configuration - matches company standard
 # Primary Samsung internal PyPI repository
-index-url = http://repo.samsungds.net/artifactory/api/pypi/pypi-remote/simple
+index-url = https://repository.samsungds.net/artifactory/api/pypi/pypi-remote/simple
 
 # Trust the repository host (disable SSL verification if needed)
-trusted-host = repo.samsungds.net
+trusted-host = repository.samsungds.net
 
 # ============================================================
 # Commented out - managed by other configuration files
@@ -28,4 +28,4 @@ trusted-host = repo.samsungds.net
 # extra-index-url = http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple
 
 # PyTorch wheels (commented - install via dedicated channel if needed)
-# find-links = https://repo.samsungds.net/artifactory/api/pypi/pypi-torch/torch_stable.html
+# find-links = https://repository.samsungds.net/artifactory/api/pypi/pypi-torch/torch_stable.html
