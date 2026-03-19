@@ -185,6 +185,20 @@ zsh -c "source script.sh; type main"
 4. **Refactor**: Optimize while keeping tests green.
 5. **Verify**: Run `tox` to ensure style compliance.
 
+# High-Quality Diagnostic & Tool Design
+
+**CRITICAL**: Diagnostic tools must be more reliable than the tools they monitor. Accuracy and Robustness are non-negotiable.
+
+## Design Standards
+
+- **Command Verification**: NEVER assume CLI subcommands exist (e.g., `uv pip config` is invalid). Verify via `--help` or official docs before use. When no CLI query exists, parse config files directly (e.g., `sed` on `uv.toml`).
+- **Explicit Connectivity**: Connectivity tests MUST target the specific configured endpoint (e.g., extra-index-url from uv.toml) via `curl`. NEVER use generic commands (e.g., `uv pip install --dry-run pip`) that succeed on public fallback while the internal registry is down.
+- **Exit Code Integrity**: NEVER pipe diagnostic commands directly (e.g., `cmd | tail | sed`) — the pipe returns the last command's exit code, masking failures. Capture output to a variable first, then check `$?`.
+- **Fallback Path Coverage**: Every conditional branch (`if dotnet; ... elif nuget; ...`) MUST perform an actual test. If a branch only prints a header and exits 0, the diagnostic falsely claims coverage. Verify all paths execute meaningful checks (e.g., XML config parsing as fallback).
+- **Presence Validation**: If the target tool is missing, diagnostics MUST report a clear warning and return 1, not silently succeed.
+- **Sourcing Portability**: Use `.` instead of `source` (POSIX compatible). Shebang follows directory rules: `#!/bin/bash` for `tools/custom/` (enforced by pre-commit hook), `#!/bin/sh` for `functions/`.
+- **Environment Isolation**: Diagnostic commands must not pollute the user's environment or leave behind temporary artifacts.
+
 # Standards & References
 
 - **Coding Style**: See `shell-common/tools/ux_lib/UX_GUIDELINES.md` and `tox.ini`.
