@@ -261,8 +261,8 @@ main() {
 
     # Use npm directly instead of curl | bash:
     # - Avoids NewGenAI domain blocking (opencode.ai → 403)
-    # - Uses whitelisted internal Nexus repository
-    # - npm config (including no-proxy) is auto-synced from proxy.local.sh
+    # - Uses configured npm registry (public or internal)
+    # - Proxy/no-proxy settings from ~/.npmrc apply automatically
     ux_with_spinner "Installing opencode-ai package..." npm install -g opencode-ai 2>"$install_log" >>"$install_log"
 
     if [ $? -eq 0 ]; then
