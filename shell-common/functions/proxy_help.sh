@@ -51,15 +51,15 @@ proxy_help() {
 
     else
         # Fallback for minimal shells without UX library
-        ux_header "Diagnostic Commands:"
-        ux_bullet "check-proxy          Run full diagnostic"
-        ux_bullet "check-proxy env      Environment variables only"
-        ux_bullet "check-proxy file     proxy.local.sh file check"
-        ux_bullet "check-network quick  General internet access check"
-
-        ux_header "Quick Commands:"
-        ux_bullet "echo \$http_proxy         Current proxy setting"
-        ux_bullet "env | grep -i proxy      Show all proxy vars"
+        echo "Diagnostic Commands:"
+        echo "  check-proxy          Run full diagnostic"
+        echo "  check-proxy env      Environment variables only"
+        echo "  check-proxy file     proxy.local.sh file check"
+        echo "  check-network quick  General internet access check"
+        echo ""
+        echo "Quick Commands:"
+        echo "  echo \$http_proxy         Current proxy setting"
+        echo "  env | grep -i proxy      Show all proxy vars"
 
     fi
 }

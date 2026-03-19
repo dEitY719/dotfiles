@@ -33,11 +33,11 @@ network_help() {
         ux_info "APT check is skipped automatically on non-APT systems"
         ux_info "Use check-proxy for proxy variables and proxy.local.sh issues"
     else
-        ux_header "Diagnostic Commands:"
-        ux_bullet "check-network       Run full network diagnostic"
-        ux_bullet "check-network dns   DNS resolution test"
-        ux_bullet "check-network ping  ICMP ping test"
-        ux_bullet "check-network https HTTPS HEAD request test"
+        echo "Diagnostic Commands:"
+        echo "  check-network       Run full network diagnostic"
+        echo "  check-network dns   DNS resolution test"
+        echo "  check-network ping  ICMP ping test"
+        echo "  check-network https HTTPS HEAD request test"
     fi
 }
 
