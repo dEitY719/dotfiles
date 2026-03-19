@@ -32,12 +32,9 @@ SECURITY_CONFIG_internal="/etc/ssl/certs/ca-certificates.crt"
 
 # NPM configuration is managed via tracked files in npm/ directory
 # and symlinked to ~/.npmrc (see setup_npm_symlink function)
-
-# HTTP Proxy configuration
-PROXY_HTTP_internal="http://12.26.204.100:8080/"
-
-# No-proxy configuration
-PROXY_NO_internal="10.229.95.200,10.229.95.220,12.36.155.91,12.36.154.116,12.36.154.130,localhost,127.0.0.1,.samsung.net,.samsungds.net,ssai.samsungds.net,dsvdi.net,pfs.nprotect.com,10.227.253.89"
+#
+# HTTP Proxy and No-proxy values are defined in environments.conf (SSOT)
+# and consumed by tracked config files (npm/npmrc.*, uv.toml.*, etc.)
 
 # ============================================================================
 # Helper Functions
