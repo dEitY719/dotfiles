@@ -1,0 +1,8 @@
+# pip.conf.external
+# Public PyPI configuration for external/home environments
+#
+# Usage:
+#   Symlinked to ~/.config/pip/pip.conf by shell-common/setup.sh
+
+[global]
+index-url = https://pypi.org/simple/

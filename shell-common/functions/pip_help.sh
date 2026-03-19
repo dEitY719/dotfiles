@@ -50,7 +50,7 @@ pip_help() {
         ux_section "Important Notes"
         ux_warning "CA certificate: Configured via security.local.sh (REQUESTS_CA_BUNDLE)"
         ux_info "Config files are managed by setup.sh - do not edit manually"
-        ux_info "Symlink: ~/.config/pip/pip.conf -> shell-common/config/pip/pip.conf.*"
+        ux_info "Symlink: ~/.config/pip/pip.conf -> pip/pip.conf.{environment}"
 
     else
         # Fallback for minimal shells without UX library
