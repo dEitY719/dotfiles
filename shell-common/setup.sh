@@ -284,6 +284,48 @@ setup_pip_config() {
     esac
 }
 
+setup_rpm_repo() {
+    environment="$1"
+    repo_target="/etc/yum.repos.d/ds.repo"
+
+    ux_header "Setting up RPM repository configuration for: $environment"
+
+    # Only deploy if yum or dnf is available
+    if ! command -v yum >/dev/null 2>&1 && ! command -v dnf >/dev/null 2>&1; then
+        ux_info "Skipped: yum/dnf not found (not a RHEL/CentOS system)"
+        return 0
+    fi
+
+    case "$environment" in
+        internal)
+            # Ensure target directory exists
+            if [ ! -d "/etc/yum.repos.d" ]; then
+                sudo mkdir -p "/etc/yum.repos.d"
+                ux_info "Created directory: /etc/yum.repos.d"
+            fi
+
+            # Backup existing repo file if present
+            if [ -f "$repo_target" ]; then
+                backup="${repo_target}.backup.$(date +%Y%m%d%H%M%S)"
+                sudo mv "$repo_target" "$backup"
+                ux_info "Backed up existing file: $backup"
+            fi
+
+            # Copy (not symlink) since this is a system-level config in /etc/
+            sudo cp "${DOTFILES_ROOT}/rpm/ds.repo.internal" "$repo_target"
+            ux_success "Copied: rpm/ds.repo.internal → $repo_target"
+            ux_info "Using: Samsung DS internal repositories (RHEL 8.6)"
+            ;;
+        external|public)
+            if [ -f "$repo_target" ]; then
+                sudo rm -f "$repo_target"
+                ux_info "Removed internal repo config: $repo_target"
+            fi
+            ux_info "No custom RPM repository needed"
+            ;;
+    esac
+}
+
 # ============================================================================
 # Main Menu
 # ============================================================================
@@ -310,6 +352,7 @@ main() {
             setup_npm_symlink "public"
             setup_pip_config "public"
             setup_uv_config "public"
+            setup_rpm_repo "public"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for public PC (home environment)"
@@ -324,6 +367,7 @@ main() {
             setup_npm_symlink "internal"
             setup_pip_config "internal"
             setup_uv_config "internal"
+            setup_rpm_repo "internal"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for internal company PC"
@@ -335,6 +379,7 @@ main() {
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Nexus + proxy)"
             ux_info "  - Pip: Samsung internal repository configured"
             ux_info "  - uv: Samsung internal repository + proxy configured"
+            ux_info "  - RPM: /etc/yum.repos.d/ds.repo (if yum/dnf available)"
             ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
             echo ""
             ux_section "⚠️  IMPORTANT: Reload your shell to apply changes"
@@ -350,6 +395,7 @@ main() {
             setup_npm_symlink "external"
             setup_pip_config "external"
             setup_uv_config "external"
+            setup_rpm_repo "external"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for external company PC"

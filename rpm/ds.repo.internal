@@ -1,0 +1,30 @@
+# ds.repo.internal
+# Samsung DS internal RPM repository configuration (RHEL 8.6)
+#
+# Usage:
+#   Copied to /etc/yum.repos.d/ds.repo by shell-common/setup.sh
+#   Choose "Internal company PC" option when running setup
+#
+# Note: Requires sudo for deployment to /etc/yum.repos.d/
+#       Uses Samsung internal Nexus repository (repository.samsungds.net)
+
+[ds]
+name=Repo DS
+baseurl=http://repository.samsungds.net/repository/proxy-yum-cdn.redhat.com-content-eus-rhel8-8.6-x86_64-baseos-os
+enabled=1
+gpgcheck=0
+gpgkey=
+
+[ds-app-stream]
+name=Repo DS App Stream
+baseurl=http://repository.samsungds.net/repository/proxy-yum-cdn.redhat.com-content-eus-rhel8-8.6-x86_64-appstream-os
+enabled=1
+gpgcheck=0
+gpgkey=
+
+[ds-codeready]
+name=Repo DS codeready
+baseurl=http://repository.samsungds.net/repository/proxy-yum-cdn.redhat.com-content-dist-rhel8-8-x86_64-codeready-builder-os
+enabled=1
+gpgcheck=0
+gpgkey=
