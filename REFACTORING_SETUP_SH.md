@@ -1,10 +1,18 @@
 # Setup.sh Refactoring Summary
 
+> **DEPRECATED (2026-03-19)**: This document is a historical record only.
+> Key changes since this was written:
+> - `environments.conf` was **deleted** in PR #24 — config values now live in
+>   tracked files: `npm/npmrc.*`, `pip/pip.conf.*`, `uv/uv.toml.*`
+> - Repository URLs migrated from Artifactory to **Nexus** in PR #25
+>   (`repo.samsungds.net` → `repository.samsungds.net`)
+> - Do NOT use the URLs or file paths below for current configuration.
+
 ## Overview
 
 Comprehensive refactoring of `shell-common/setup.sh` to improve code maintainability, follow SOLID principles, and establish Single Source of Truth (SSOT) for configuration values.
 
-**Status**: Stages 1-2 Complete, Stage 3 Infrastructure Ready
+**Status**: ARCHIVED — see PR #24, #25 for current state
 
 ---
 
