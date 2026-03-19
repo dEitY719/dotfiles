@@ -4,7 +4,7 @@
 # Usage: check_uv [config|files|env|connectivity|all]
 
 # Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
-source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/init.sh" || exit 1
 
 # ============================================================
 # Helper functions
@@ -14,6 +14,17 @@ _format_setting() {
     local label="$1"
     local value="${2:-[NOT SET]}"
     printf "  %-35s : %s\n" "$label" "$value"
+}
+
+# Read a key from uv.toml (TOML simple key = value parsing)
+# uv has no CLI to query config; parse the file directly.
+_uv_toml_get() {
+    local key="$1"
+    local uv_conf="$HOME/.config/uv/uv.toml"
+    if [ -f "$uv_conf" ]; then
+        # Match 'key = value' lines, strip quotes/brackets
+        sed -n "s/^${key}[[:space:]]*=[[:space:]]*//p" "$uv_conf" | sed 's/^"//;s/"$//'
+    fi
 }
 
 # ============================================================
@@ -32,11 +43,12 @@ check_uv_config() {
         return 1
     fi
 
-    ux_section "Active Settings"
-    if have_command uv; then
-        _format_setting "native-tls" "$(uv pip config get native-tls 2>/dev/null || echo '[NOT SET]')"
-        _format_setting "extra-index-url" "$(uv pip config get extra-index-url 2>/dev/null || echo '[NOT SET]')"
-    fi
+    ux_section "Active Settings (from ~/.config/uv/uv.toml)"
+    local native_tls extra_index
+    native_tls="$(_uv_toml_get native-tls)"
+    extra_index="$(_uv_toml_get extra-index-url)"
+    _format_setting "native-tls" "${native_tls:-[NOT SET]}"
+    _format_setting "extra-index-url" "${extra_index:-[NOT SET]}"
     echo ""
 }
 
@@ -108,23 +120,61 @@ check_uv_environment() {
 check_uv_connectivity() {
     ux_header "4. Repository Connectivity Test"
 
-    if ! have_command uv; then
-        ux_warning "uv not found - skipping connectivity test"
+    if ! have_command curl; then
+        ux_warning "curl not found - skipping connectivity test"
         return 1
     fi
 
-    ux_section "Dry-run Package Install"
-    ux_info "Testing: uv pip install --dry-run pip"
+    # Collect all configured index URLs from uv.toml and env vars
+    local uv_conf="$HOME/.config/uv/uv.toml"
+    local tested=0
 
-    if run_with_timeout 10 uv pip install --dry-run pip 2>&1 | head -5; then
-        ux_success "uv can resolve packages from configured index"
-    else
-        ux_warning "uv dry-run failed - repository may not be accessible"
-        ux_info "Possible causes:"
-        ux_bullet "Network connectivity issue"
-        ux_bullet "Proxy settings are misconfigured"
-        ux_bullet "native-tls not enabled (required for corporate CA)"
-        ux_bullet "extra-index-url is incorrect"
+    # 1) extra-index-url from uv.toml (the internal Nexus URL)
+    if [ -f "$uv_conf" ]; then
+        # Extract URLs from extra-index-url list (handles TOML array)
+        local extra_urls
+        extra_urls=$(sed -n 's/^extra-index-url[[:space:]]*=[[:space:]]*//p' "$uv_conf" \
+            | tr -d '[]"' | tr ',' '\n' | sed 's/^[[:space:]]*//' | grep "^http")
+
+        if [ -n "$extra_urls" ]; then
+            while read -r url; do
+                if [ -z "$url" ]; then
+                    continue
+                fi
+                ux_section "Extra Index: $url"
+                local http_code
+                http_code=$(curl -s -w "%{http_code}" -o /dev/null --connect-timeout 5 --max-time 10 "$url" 2>/dev/null)
+                if [ "$http_code" = "200" ] || [ "$http_code" = "301" ] || [ "$http_code" = "302" ] || [ "$http_code" = "404" ]; then
+                    ux_success "Accessible (HTTP $http_code)"
+                else
+                    ux_warning "NOT accessible (HTTP $http_code)"
+                    ux_info "Possible causes:"
+                    ux_bullet "Network connectivity issue"
+                    ux_bullet "Proxy settings are misconfigured"
+                    ux_bullet "native-tls not enabled (required for corporate CA)"
+                fi
+                tested=$((tested + 1))
+            done <<EOF
+$extra_urls
+EOF
+        fi
+    fi
+
+    # 2) UV_EXTRA_INDEX_URL env var (overrides/supplements uv.toml)
+    if [ -n "$UV_EXTRA_INDEX_URL" ]; then
+        ux_section "Extra Index (env): $UV_EXTRA_INDEX_URL"
+        local http_code
+        http_code=$(curl -s -w "%{http_code}" -o /dev/null --connect-timeout 5 --max-time 10 "$UV_EXTRA_INDEX_URL" 2>/dev/null)
+        if [ "$http_code" = "200" ] || [ "$http_code" = "301" ] || [ "$http_code" = "302" ] || [ "$http_code" = "404" ]; then
+            ux_success "Accessible (HTTP $http_code)"
+        else
+            ux_warning "NOT accessible (HTTP $http_code)"
+        fi
+        tested=$((tested + 1))
+    fi
+
+    if [ "$tested" -eq 0 ]; then
+        ux_info "No extra index URLs configured (using default public PyPI only)"
     fi
     echo ""
 }
