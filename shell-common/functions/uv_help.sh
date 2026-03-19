@@ -30,5 +30,11 @@ uv_help() {
     echo ""
 }
 
+# UV Check Wrapper - calls the diagnostic script
+uv_check() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/check_uv.sh" "$@"
+}
+
 # Alias for uv-help format (using dash instead of underscore)
 alias uv-help='uv_help'
+alias check-uv='uv_check'
