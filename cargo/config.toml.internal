@@ -1,0 +1,18 @@
+# config.toml.internal
+# Samsung internal Cargo registry configuration
+#
+# Usage:
+#   Symlinked to ~/.cargo/config.toml by shell-common/setup.sh
+#   Choose "Internal company PC" option when running setup
+#
+# Note: Uses Samsung internal Nexus proxy for crates.io
+
+# Makes internal Nexus the default registry
+[registry]
+default = "cargo-proxy"
+
+[registries.cargo-proxy]
+index = "sparse+http://repository.samsungds.net/repository/proxy-cargo-index.crates.io/"
+
+[source.crates-io]
+replace-with = "cargo-proxy"
