@@ -48,7 +48,7 @@ packages = []
 
 # [[tool.uv.index]]
 # name = "samsung"
-# url = "https://repository.samsungds.net/artifactory/api/pypi/pypi/simple"
+# url = "http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/simple"
 # default = true
 
 
