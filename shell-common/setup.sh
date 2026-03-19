@@ -363,6 +363,77 @@ setup_rpm_repo() {
     esac
 }
 
+setup_apt_sources() {
+    environment="$1"
+    sources_target="/etc/apt/sources.list"
+    marker="MANAGED_BY_DOTFILES"
+
+    ux_header "Setting up APT sources configuration for: $environment"
+
+    # Gate 1: Only proceed if apt is available
+    if ! command -v apt >/dev/null 2>&1; then
+        ux_info "Skipped: apt not found (not a Debian/Ubuntu system)"
+        return 0
+    fi
+
+    # Gate 2: Verify Ubuntu codename — match against available config files
+    _apt_codename=""
+    if [ -f /etc/os-release ]; then
+        _apt_codename="$(. /etc/os-release && echo "${VERSION_CODENAME:-}")"
+    fi
+    _apt_source="${DOTFILES_ROOT}/apt/sources.list.${_apt_codename}.internal"
+    if [ -z "$_apt_codename" ] || [ ! -f "$_apt_source" ]; then
+        ux_info "Skipped: no apt config for '${_apt_codename:-unknown}' (available: $(ls "${DOTFILES_ROOT}"/apt/sources.list.*.internal 2>/dev/null | sed 's/.*sources\.list\.\(.*\)\.internal/\1/' | tr '\n' ' ' || echo 'none'))"
+        return 0
+    fi
+
+    # Gate 3: Verify privilege — use sudo if needed, skip if unavailable
+    _apt_run_privileged=""
+    if [ "$(id -u)" = "0" ]; then
+        _apt_run_privileged=""
+    elif command -v sudo >/dev/null 2>&1; then
+        _apt_run_privileged="sudo"
+        ux_info "Root privileges required for /etc/apt/sources.list — sudo will prompt for password"
+    else
+        ux_warning "Skipped: sudo not available and not running as root"
+        return 0
+    fi
+
+    case "$environment" in
+        internal)
+            # Backup existing sources.list if present and not already managed
+            if [ -f "$sources_target" ]; then
+                if ! grep -q "$marker" "$sources_target" 2>/dev/null; then
+                    backup="${sources_target}.backup.$(date +%Y%m%d%H%M%S)"
+                    $_apt_run_privileged cp "$sources_target" "$backup"
+                    ux_info "Backed up original: $backup"
+                fi
+            fi
+
+            $_apt_run_privileged cp "$_apt_source" "$sources_target"
+            ux_success "Copied: apt/sources.list.${_apt_codename}.internal → $sources_target"
+            ux_info "Using: Samsung internal Nexus mirror (Ubuntu ${_apt_codename})"
+            ux_info "Run 'sudo apt update' to refresh package lists"
+            ;;
+        external|public)
+            # Only restore if current file was deployed by dotfiles
+            if [ -f "$sources_target" ] && grep -q "$marker" "$sources_target" 2>/dev/null; then
+                # Find the most recent non-dotfiles backup
+                _apt_latest_backup="$(ls -t "${sources_target}".backup.* 2>/dev/null | head -1)"
+                if [ -n "$_apt_latest_backup" ]; then
+                    $_apt_run_privileged cp "$_apt_latest_backup" "$sources_target"
+                    ux_success "Restored original: $_apt_latest_backup → $sources_target"
+                else
+                    $_apt_run_privileged rm -f "$sources_target"
+                    ux_warning "Removed dotfiles-managed sources.list (no backup found to restore)"
+                fi
+            elif [ -f "$sources_target" ]; then
+                ux_info "Existing $sources_target is not managed by dotfiles — leaving untouched"
+            fi
+            ;;
+    esac
+}
+
 # ============================================================================
 # Main Menu
 # ============================================================================
@@ -390,6 +461,7 @@ main() {
             setup_pip_config "public"
             setup_uv_config "public"
             setup_rpm_repo "public"
+            setup_apt_sources "public"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for public PC (home environment)"
@@ -405,6 +477,7 @@ main() {
             setup_pip_config "internal"
             setup_uv_config "internal"
             setup_rpm_repo "internal"
+            setup_apt_sources "internal"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for internal company PC"
@@ -417,6 +490,7 @@ main() {
             ux_info "  - Pip: Samsung internal repository configured"
             ux_info "  - uv: Samsung internal repository + proxy configured"
             ux_info "  - RPM: /etc/yum.repos.d/ds.repo (if yum/dnf available)"
+            ux_info "  - APT: /etc/apt/sources.list (if Ubuntu jammy)"
             ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
             echo ""
             ux_section "⚠️  IMPORTANT: Reload your shell to apply changes"
@@ -433,6 +507,7 @@ main() {
             setup_pip_config "external"
             setup_uv_config "external"
             setup_rpm_repo "external"
+            setup_apt_sources "external"
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for external company PC"

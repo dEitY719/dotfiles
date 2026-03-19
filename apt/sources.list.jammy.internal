@@ -1,0 +1,17 @@
+# MANAGED_BY_DOTFILES — do not edit manually (deployed by setup.sh)
+# Ubuntu 22.04 (jammy) APT sources via Samsung internal Nexus mirror
+# Source: ~/dotfiles/apt/sources.list.jammy.internal
+#
+# Original backed up to /etc/apt/sources.list.backup.YYYYMMDDHHMMSS
+
+deb http://repository.samsungds.net/repository/proxy-apt-mirror.kakao.com-ubuntu/ubuntu jammy main restricted
+deb http://repository.samsungds.net/repository/proxy-apt-mirror.kakao.com-ubuntu/ubuntu jammy-updates main restricted
+deb http://repository.samsungds.net/repository/proxy-apt-mirror.kakao.com-ubuntu/ubuntu jammy universe
+deb http://repository.samsungds.net/repository/proxy-apt-mirror.kakao.com-ubuntu/ubuntu jammy-updates universe
+deb http://repository.samsungds.net/repository/proxy-apt-mirror.kakao.com-ubuntu/ubuntu jammy multiverse
+deb http://repository.samsungds.net/repository/proxy-apt-mirror.kakao.com-ubuntu/ubuntu jammy-updates multiverse
+deb http://repository.samsungds.net/repository/proxy-apt-mirror.kakao.com-ubuntu/ubuntu jammy-backports main restricted universe multiverse
+
+deb http://repository.samsungds.net/repository/proxy-apt-mirror.kakao.com-ubuntu/ubuntu jammy-security main restricted
+deb http://repository.samsungds.net/repository/proxy-apt-mirror.kakao.com-ubuntu/ubuntu jammy-security universe
+deb http://repository.samsungds.net/repository/proxy-apt-mirror.kakao.com-ubuntu/ubuntu jammy-security multiverse
