@@ -315,6 +315,10 @@ claude_mount_all() {
     echo "Failed or already mounted: $failed_count"
 }
 
+alias claude-mount-all='claude_mount_all'
+alias claude-mount-skills='claude_mount_skills'
+alias claude-mount-docs='claude_mount_docs'
+
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Marketplace Plugins Management
 # ═══════════════════════════════════════════════════════════════
