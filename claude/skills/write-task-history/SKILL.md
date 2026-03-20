@@ -1,12 +1,6 @@
 ---
 name: write-task-history
-description: >
-  Write task history from current conversation to a daily task list file.
-  Generates two copy-paste-ready formats: JIRA ticket (plain text with section symbols)
-  and git PR description (markdown). Use this skill whenever the user wants to record,
-  document, or summarize completed work from the current session. Also trigger when the
-  user mentions task history, work log, JIRA ticket drafting from conversation context,
-  or preparing PR descriptions based on what was just done. Works across any project.
+description: Write task history from current conversation to a daily task list file. Generates two copy-paste-ready formats: JIRA ticket (plain text with section symbols) and git PR description (markdown). Use this skill whenever the user wants to record, document, or summarize completed work from the current session. Also trigger when the user mentions task history, work log, JIRA ticket drafting from conversation context, or preparing PR descriptions based on what was just done. Works across any project.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
