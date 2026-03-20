@@ -98,6 +98,41 @@ Each skill requires:
 - `SKILL.md` with frontmatter (name, description, allowed-tools)
 - Optional `README.md` for documentation
 
+## Sub-Agent Parallel Execution
+
+When a skill or workflow has independent tasks, use the Agent tool to run them concurrently in a single message. This reduces wall-clock time and matches how `/simplify` runs 3 review agents in parallel.
+
+**When to parallelize:**
+- Tasks have no data dependency between them (output of one is not input to another)
+- Each task produces a separate artifact (different files, different analysis)
+
+**When NOT to parallelize:**
+- Task B requires Task A's output (e.g., analysis must finish before writing summary)
+- Tasks modify the same file
+
+**Pattern — parallel agents in SKILL.md:**
+
+```markdown
+### Step N: Launch agents in parallel
+
+Use the Agent tool to launch all agents concurrently in a single message.
+
+#### Agent 1: <task description>
+<what this agent does and writes>
+
+#### Agent 2: <task description>
+<what this agent does and writes>
+```
+
+**Example — `dissect-builtin` skill:**
+
+| Agent | Task | Dependency |
+|-------|------|-----------|
+| Agent 1 | Analyze prompt + write README.md | Needs loaded prompt (from Step 1) |
+| Agent 2 | Copy raw prompt to PROMPT.md | Needs loaded prompt (from Step 1) |
+
+Both depend on Step 1 (load prompt) but not on each other → parallel.
+
 # Testing Strategy
 
 ## Manual Verification
