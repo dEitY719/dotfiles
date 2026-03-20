@@ -28,24 +28,6 @@ mount_help() {
         ux_bullet "addmnt <source> <target>    Create bind mount"
         ux_bullet "show-mnt [path]             Display mount status"
         ux_bullet "claude-mount-all            Mount all Claude directories (skills, agents, docs)"
-        ux_bullet "mount-help                  Show this help message"
-
-
-        ux_section "Quick Examples"
-        ux_numbered 1 "Mount all Claude directories at once:"
-        ux_bullet "claude-mount-all"
-
-
-        ux_numbered 2 "View all Claude mounts:"
-        ux_bullet "show-mnt"
-
-
-        ux_numbered 3 "View specific mount:"
-        ux_bullet "show-mnt ~/.claude/skills"
-
-
-        ux_numbered 4 "Add new bind mount:"
-        ux_bullet "addmnt ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/docs ~/.claude/docs"
 
 
         ux_section "For More Information"
@@ -67,16 +49,10 @@ Available Commands:
   addmnt <source> <target>       Create bind mount
   show-mnt [path]                Display mount status
   claude-mount-all               Mount all Claude directories (skills, docs)
-  mount-help                     Show this help message
-
-Examples:
-  claude-mount-all                              Mount all Claude directories
-  show-mnt                                      View all mounts
-  show-mnt ~/.claude/skills                     View specific mount
-  addmnt $DOTFILES_ROOT/claude/docs ~/.claude/docs      Add new mount
 
 Notes:
   - Requires sudo for mount operations
+  - addmnt --help, show-mnt --help for details
 HELP
     fi
 }
@@ -316,7 +292,7 @@ mount_show() {
             if type ux_info >/dev/null 2>&1; then
                 ux_info "Not mounted: $mount_path"
             else
-                ux_bullet "(not mounted)" >&2
+                echo "(not mounted)" >&2
             fi
             return 1
         }
@@ -346,73 +322,11 @@ mount_show() {
     fi
 }
 
-# Mount all Claude directories (skills, agents, docs)
-# Reads mount pairs from claude/setup.sh bind mount configuration
-# and re-mounts any that are not currently mounted.
-claude_mount_all() {
-    local dotfiles_root="${DOTFILES_ROOT:-$HOME/dotfiles}"
-    local claude_source="${dotfiles_root}/claude"
-    local home_claude="${HOME}/.claude"
-    local mounted=0
-    local skipped=0
-
-    if type ux_header >/dev/null 2>&1; then
-        ux_header "Claude Bind Mount (remount all)"
-    else
-        echo "=== Claude Bind Mount (remount all) ==="
-    fi
-
-    # Define mount pairs: source -> target
-    # skills directory (primary, required)
-    _claude_mount_one "${claude_source}/skills" "${home_claude}/skills" "skills"
-
-    # Add more mount pairs here as needed:
-    # _claude_mount_one "${claude_source}/docs" "${home_claude}/docs" "docs"
-}
-
-# Internal: mount a single source->target pair if not already mounted
-_claude_mount_one() {
-    local source="$1"
-    local target="$2"
-    local label="$3"
-
-    if [ ! -d "$source" ]; then
-        if type ux_warning >/dev/null 2>&1; then
-            ux_warning "Source not found: $source"
-        fi
-        return 1
-    fi
-
-    mkdir -p "$target" 2>/dev/null
-
-    if _is_mounted "$target"; then
-        if type ux_info >/dev/null 2>&1; then
-            ux_info "Already mounted: $label ($target)"
-        fi
-        return 0
-    fi
-
-    if sudo mount --bind "$source" "$target" 2>/dev/null; then
-        if type ux_success >/dev/null 2>&1; then
-            ux_success "Mounted: $label ($source -> $target)"
-        fi
-        return 0
-    else
-        if type ux_error >/dev/null 2>&1; then
-            ux_error "Failed to mount: $label"
-        fi
-        return 1
-    fi
-}
-
-alias claude-mount-all='claude_mount_all'
-
 # ============================================================================
 # Backward Compatibility Aliases
 # ============================================================================
 alias addmnt='mount_add'
 alias show-mnt='mount_show'
-alias mount-help='mount_help'
 
 # Note: Functions are automatically exported in both bash and zsh
 # No need for explicit export declarations in POSIX-compatible scripts
