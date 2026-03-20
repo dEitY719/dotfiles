@@ -8,7 +8,9 @@
 - **스킬 이름**: `write-task-history`
 - **호출**: `/write-task-history [설명]`
 - **적용 범위**: 모든 프로젝트 (dotfiles, rca-knowledge 등)
-- **저장 위치**: `~/para/archive/playbook/docs/task-history/YYYY-MM-DD-task-list.md` (Single Source)
+- **저장 위치**: `$TASK_HISTORY_DIR/YYYY-MM-DD-task-list.md` (Single Source)
+- **기본 경로**: `~/para/archive/playbook/docs/task-history/`
+- **환경변수**: `TASK_HISTORY_DIR`로 오버라이드 가능
 
 ## 2. 요구사항
 
@@ -17,8 +19,8 @@
 | ID | 요구사항 | 비고 |
 |---|---|---|
 | R1 | 현재 대화 내용을 분석하여 작업 내역 추출 | 대화 컨텍스트 기반 |
-| R2 | JIRA 티켓 형태 출력 (text, ▶◇ 기호 활용) | JIRA가 마크다운 미지원이므로 |
-| R3 | git PR 형태 출력 (마크다운, 섹션별 이모지) | 커밋이 있는 경우만 |
+| R2 | JIRA 티켓 형태 출력 (text, 기호 활용) | JIRA가 마크다운 미지원이므로 |
+| R3 | git PR 형태 출력 (마크다운) | 대화 중 커밋이 있는 경우만 |
 | R4 | 일별 파일에 append (덮어쓰기 아님) | 하루에 여러 번 호출 가능 |
 | R5 | 모든 프로젝트에서 사용 가능 | 프로젝트 비종속적 |
 | R6 | 커밋 없으면 PR 섹션 생략 | 선택적 출력 |
@@ -26,7 +28,8 @@
 
 ### 출력 파일 규칙
 
-- **경로**: `~/para/archive/playbook/docs/task-history/YYYY-MM-DD-task-list.md`
+- **경로**: `$TASK_HISTORY_DIR/YYYY-MM-DD-task-list.md`
+- **기본값**: `TASK_HISTORY_DIR=~/para/archive/playbook/docs/task-history`
 - **파일명 예시**: `2026-03-20-task-list.md`
 - **동작**: 파일이 없으면 생성, 있으면 append (`---` 구분선 포함)
 - **타임스탬프**: 각 항목에 HH:MM 표시
@@ -37,7 +40,7 @@
 | 소스 | 용도 | 필수 여부 |
 |---|---|---|
 | 현재 대화 컨텍스트 | 작업 내역 추출 | 필수 |
-| `git log` (현재 프로젝트) | 커밋 목록, PR 내용 | 선택 (커밋 있을 때) |
+| `git log` (현재 대화에서 생성된 커밋) | 커밋 목록, PR 내용 | 선택 |
 | `git diff main...HEAD` | 변경 사항 요약 | 선택 (브랜치 있을 때) |
 | `git remote -v` | 프로젝트명 추출 | 선택 |
 | 사용자 인자 (`[설명]`) | 추가 컨텍스트 | 선택 |
@@ -46,49 +49,48 @@
 
 ### 4-A. JIRA 티켓 형태
 
-JIRA가 마크다운을 지원하지 않으므로, ▶◇ 기호를 활용한 텍스트로 작성.
-가독성을 위해 섹션 구분에 ▶, 하위 항목에 ◇ 기호 사용.
+JIRA가 마크다운을 지원하지 않으므로, 기호를 활용한 텍스트로 작성.
+가독성을 위해 섹션 구분에 >, 하위 항목에 - 기호 사용.
 
 ```text
 [Title]
 [프로젝트명] 작업 제목 요약
 
 [Description]
-▶ 배경
-◇ 작업 배경 또는 원인 설명
-◇ 추가 배경 설명
+> 배경
+- 작업 배경 또는 원인 설명
+- 추가 배경 설명
 
-▶ 수행 내용
-◇ 수행한 작업 1
-◇ 수행한 작업 2
-◇ 수행한 작업 3
+> 수행 내용
+- 수행한 작업 1
+- 수행한 작업 2
+- 수행한 작업 3
 
-▶ 결과
-◇ 결과 요약 1
-◇ 결과 요약 2
+> 결과
+- 결과 요약 1
+- 결과 요약 2
 
-▶ 비고
-◇ 참고 사항 (있을 경우)
+> 비고
+- 참고 사항 (있을 경우)
 ```
 
 ### 4-B. git PR 형태
 
-커밋이 있는 경우에만 작성. GitHub PR 마크다운 형식.
-섹션 제목에 이모지를 포함.
+현재 대화에서 커밋이 있는 경우에만 작성. GitHub PR 마크다운 형식.
 
 ```markdown
 ## Title
 작업 제목 요약 (70자 이내)
 
-## 📋 Summary
+## Summary
 - 변경 사항 요약 1
 - 변경 사항 요약 2
 
-## 📝 Changes
+## Changes
 - `파일1`: 변경 내용
 - `파일2`: 변경 내용
 
-## ✅ Test plan
+## Test plan
 - [ ] 테스트 항목 1
 - [ ] 테스트 항목 2
 ```
@@ -113,8 +115,8 @@ JIRA/PR 내용은 각각 코드블럭으로 감싸서
 ...
 
 [Description]
-▶ 배경
-◇ ...
+> 배경
+- ...
 \`\`\`
 
 ### PR
@@ -123,7 +125,7 @@ JIRA/PR 내용은 각각 코드블럭으로 감싸서
 ## Title
 ...
 
-## 📋 Summary
+## Summary
 ...
 \`\`\`
 
@@ -137,7 +139,7 @@ JIRA/PR 내용은 각각 코드블럭으로 감싸서
 ...
 \`\`\`
 
-(커밋 없으므로 PR 섹션 생략)
+(현재 대화에서 커밋 없으므로 PR 섹션 생략)
 ```
 
 ## 5. 처리 흐름
@@ -146,8 +148,9 @@ JIRA/PR 내용은 각각 코드블럭으로 감싸서
 /write-task-history [설명]
         |
         v
-[Step 1] 현재 날짜로 파일 경로 결정
-         ~/para/archive/playbook/docs/task-history/YYYY-MM-DD-task-list.md
+[Step 1] 저장 경로 결정
+         $TASK_HISTORY_DIR/YYYY-MM-DD-task-list.md
+         (미설정 시 ~/para/archive/playbook/docs/task-history/)
         |
         v
 [Step 2] 현재 대화 컨텍스트에서 작업 내역 분석
@@ -157,17 +160,17 @@ JIRA/PR 내용은 각각 코드블럭으로 감싸서
         |
         v
 [Step 3] git 정보 수집 (선택)
-         - git log: 오늘 커밋한 내역
+         - 현재 대화에서 생성된 커밋 파악
          - git remote: 프로젝트명
          - git diff main...HEAD: 변경 범위
         |
         v
 [Step 4] JIRA 티켓 형태 생성
-         - Title + Description (▶◇ 기호 활용 text)
+         - Title + Description (기호 활용 text)
         |
         v
-[Step 5] 커밋이 있는가?
-         ├─ YES → PR 형태 생성 (이모지 포함 마크다운)
+[Step 5] 현재 대화에서 커밋이 있는가?
+         ├─ YES → PR 형태 생성
          └─ NO  → PR 섹션 생략
         |
         v
@@ -194,7 +197,7 @@ claude/skills/write-task-history/
 name: write-task-history
 description: >
   Write task history from current conversation to daily task list file.
-  Generates JIRA ticket (text with ▶◇ symbols) and git PR (markdown with emoji) formats.
+  Generates JIRA ticket (text) and git PR (markdown) formats.
   Use when user wants to document completed work for internal tracking.
 triggers:
   - /write-task-history
@@ -210,12 +213,13 @@ triggers:
 
 ## 출력
 
-1. JIRA 티켓 형태 (text + ▶◇ 기호)
-2. git PR 형태 (마크다운 + 이모지) — 커밋이 있는 경우만
+1. JIRA 티켓 형태 (text + 기호)
+2. git PR 형태 (마크다운) — 현재 대화에서 커밋이 있는 경우만
 
 ## 저장 위치
 
-~/para/archive/playbook/docs/task-history/YYYY-MM-DD-task-list.md
+$TASK_HISTORY_DIR/YYYY-MM-DD-task-list.md
+기본값: ~/para/archive/playbook/docs/task-history/
 ```
 
 ## 7. 설계 결정 사항 (리뷰 확정)
@@ -224,25 +228,23 @@ triggers:
 
 - `2026-03-20-task-list.md`
 - 이유: 검색 편의성, ISO 8601 표준 준수
-- ~~기존안 YYMMDD~~: 리뷰에서 YYYY-MM-DD 선택
 
-### 결정 2: 저장 경로 task-history
+### 결정 2: 저장 경로 외부화
 
-- `~/para/archive/playbook/docs/task-history/`
-- 이유: 스킬명(`write-task-history`)과 일관, "작업 이력" 의미 명확
-- ~~기존안 task/~~: "할 일 목록"으로 오해 가능
-- ~~동료안 history/~~: 너무 범용적
+- 환경변수 `TASK_HISTORY_DIR`로 오버라이드 가능
+- 기본값: `~/para/archive/playbook/docs/task-history/`
+- 이유: 다른 머신/사용자 계정에서도 동작 보장 (Finding #3 반영)
 
-### 결정 3: JIRA 형태는 ▶◇ 기호 텍스트
+### 결정 3: JIRA 형태는 기호 텍스트
 
-- ▶: 섹션 구분 (배경, 수행 내용, 결과, 비고)
-- ◇: 하위 항목
+- `>`: 섹션 구분 (배경, 수행 내용, 결과, 비고)
+- `-`: 하위 항목
 - 마크다운 렌더링이 안 되는 JIRA에서도 시각적 구분 가능
 
-### 결정 4: PR 섹션에 이모지
+### 결정 4: PR 섹션은 plain 마크다운
 
-- 📋 Summary, 📝 Changes, ✅ Test plan
-- 사내 PR 템플릿과 일치하면서 가독성 향상
+- 저장소 규칙에 따라 이모지를 사용하지 않음 (Finding #1 반영)
+- Summary, Changes, Test plan 등 섹션명만 사용
 
 ### 결정 5: append 구분선 `---`
 
@@ -254,10 +256,12 @@ triggers:
 - 각 항목 헤더에 `## HH:MM | 프로젝트명 | 작업 제목` 형식
 - 작업 시간대를 기록하여 추후 참조 용이
 
-### 결정 7: PR은 조건부 생성
+### 결정 7: PR 생성 기준은 대화 컨텍스트
 
-- `git log --since="today" --oneline` 결과가 비어있으면 PR 섹션 생략
-- 이유: 커밋 없는 작업(리서치, 문서 작성 등)에는 PR이 불필요
+- ~~기존안: `git log --since="today"`~~: 날짜 기반은 오탐/누락 발생 (Finding #2 반영)
+- 확정: 현재 대화에서 실제로 수행한 커밋 유무로 판정
+- 대화 컨텍스트에서 커밋 해시, 브랜치, PR 생성 여부를 파악
+- 커밋 없는 작업(리서치, 문서 작성 등)에는 PR 생략
 
 ### 결정 8: 프로젝트 비종속
 
@@ -275,7 +279,8 @@ triggers:
 | 케이스 | 처리 |
 |---|---|
 | task-history 디렉터리 미존재 | 자동 생성 (`mkdir -p`) |
+| TASK_HISTORY_DIR 미설정 | 기본 경로 사용 |
 | 같은 날 여러 번 호출 | `---` 구분선 후 append |
-| 커밋 없음 | PR 섹션 생략, JIRA만 작성 |
+| 현재 대화에서 커밋 없음 | PR 섹션 생략, JIRA만 작성 |
 | git repo 아닌 디렉터리에서 호출 | 프로젝트명 "N/A", PR 생략 |
 | 사용자 설명 미제공 | 대화 컨텍스트에서 자동 추출 |
