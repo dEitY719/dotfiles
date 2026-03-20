@@ -51,7 +51,7 @@ Run these commands to collect context:
 
 ```bash
 # Project name from remote
-git remote -v 2>/dev/null | head -1 | sed 's/.*\/\([^.]*\).*/\1/'
+basename "$(git remote get-url origin 2>/dev/null)" .git 2>/dev/null
 
 # Commits made during this conversation (look for hashes mentioned in conversation)
 git log --oneline -10
@@ -150,11 +150,39 @@ Each entry uses this structure:
 
 The timestamp is the current time when the skill runs (24-hour format).
 
-### Step 7: Confirm to user
+### Step 7: Auto-commit to the task-history repository
 
-After writing, tell the user:
+After writing the file, automatically commit it in the repository where the file lives.
+The task-history file may be in a different repository than the current working directory.
+
+Commit format (fixed pattern):
+
+```
+chore(task-history): YYYY-MM-DD short task summary
+```
+
+Example:
+
+```
+chore(task-history): 2026-03-20 write-task-history skill design
+```
+
+Steps:
+
+```bash
+cd <directory-containing-the-task-history-file>
+git add <task-history-file>
+git commit -m "chore(task-history): YYYY-MM-DD short task summary"
+```
+
+This commit is low-importance and does not require review, so commit directly
+without asking the user for confirmation.
+
+### Step 8: Confirm to user
+
+After writing and committing, tell the user:
 - The file path that was written to
-- A brief summary of what was recorded
+- The commit hash and message
 - Whether a PR section was included or skipped
 
 ## Important rules
