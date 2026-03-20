@@ -26,31 +26,13 @@ mount_help() {
 
         ux_section "Available Commands"
         ux_bullet "addmnt <source> <target>    Create bind mount"
-        ux_bullet "show_mnt [path]             Display mount status"
-        ux_bullet "claude_mount_all            Mount all Claude directories (skills, agents, docs)"
-        ux_bullet "mount_help                  Show this help message"
-
-
-        ux_section "Quick Examples"
-        ux_numbered 1 "Mount all Claude directories at once:"
-        ux_bullet "claude_mount_all"
-
-
-        ux_numbered 2 "View all Claude mounts:"
-        ux_bullet "show_mnt"
-
-
-        ux_numbered 3 "View specific mount:"
-        ux_bullet "show_mnt ~/.claude/skills"
-
-
-        ux_numbered 4 "Add new bind mount:"
-        ux_bullet "addmnt ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/docs ~/.claude/docs"
+        ux_bullet "show-mnt [path]             Display mount status"
+        ux_bullet "claude-mount-all            Mount all Claude directories (skills, agents, docs)"
 
 
         ux_section "For More Information"
         ux_bullet "addmnt --help       Usage for addmnt command"
-        ux_bullet "show_mnt --help     Usage for show_mnt command"
+        ux_bullet "show-mnt --help     Usage for show-mnt command"
 
 
         ux_warning "Requires sudo for mount operations"
@@ -65,19 +47,12 @@ Description:
 
 Available Commands:
   addmnt <source> <target>       Create bind mount
-  show_mnt [path]                Display mount status
-  claude_mount_all               Mount all Claude directories (skills, docs)
-  mount_help                     Show this help message
-
-Examples:
-  claude_mount_all                              Mount all Claude directories
-  show_mnt                                      View all mounts
-  show_mnt ~/.claude/skills                     View specific mount
-  addmnt $DOTFILES_ROOT/claude/docs ~/.claude/docs      Add new mount
+  show-mnt [path]                Display mount status
+  claude-mount-all               Mount all Claude directories (skills, docs)
 
 Notes:
   - Requires sudo for mount operations
-  - Alias: show-mnt, mount-help
+  - addmnt --help, show-mnt --help for details
 HELP
     fi
 }
@@ -317,7 +292,7 @@ mount_show() {
             if type ux_info >/dev/null 2>&1; then
                 ux_info "Not mounted: $mount_path"
             else
-                ux_bullet "(not mounted)" >&2
+                echo "(not mounted)" >&2
             fi
             return 1
         }
@@ -352,7 +327,6 @@ mount_show() {
 # ============================================================================
 alias addmnt='mount_add'
 alias show-mnt='mount_show'
-alias mount-help='mount_help'
 
 # Note: Functions are automatically exported in both bash and zsh
 # No need for explicit export declarations in POSIX-compatible scripts
