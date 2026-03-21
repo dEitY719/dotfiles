@@ -1,20 +1,16 @@
 #!/bin/sh
 # shell-common/functions/cc_help.sh
-# ccHelp - shared between bash and zsh
 
 cc_help() {
     ux_header "Claude Code Usage Commands"
 
     ux_section "Installation"
     ux_bullet "Global prefix: npm install -g ccusage --prefix=\$HOME/.npm-global"
-    echo ""
 
-    ux_section "Quick Commands (Aliases)"
+    ux_section "Commands"
     ux_table_row "ccd" "ccusage daily --breakdown" "Token usage by model"
     ux_table_row "ccs" "ccusage session --sort tokens" "Session analysis"
     ux_table_row "ccb" "ccusage blocks --live" "Cache hit ratio (live)"
-    echo ""
 }
 
-# Alias for cc-help format (using dash instead of underscore)
 alias cc-help='cc_help'
