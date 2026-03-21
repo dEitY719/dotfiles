@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # shell-common/tools/external/pyenv.sh
 # Auto-generated from bash/app/pyenv.bash
 
@@ -20,16 +20,17 @@ if command -v pyenv >/dev/null; then
 fi
 
 # Python 설치 (대화형 스크립트)
-pyinstall() {
+py_install() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_python.sh" "$@"
 }
+alias install-pyenv='py_install'
 
 # 특정 Python 버전 제거
 py_uninstall() {
     local version="$1"
 
     if [ -z "$version" ]; then
-        ux_error "Usage: py-uninstall <python_version>"
+        ux_error "Usage: uninstall-pyenv <python_version>"
         return 1
     fi
 
@@ -56,4 +57,4 @@ py_uninstall() {
     fi
 }
 
-alias py-uninstall='py_uninstall'
+alias uninstall-pyenv='py_uninstall'
