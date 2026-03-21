@@ -87,7 +87,7 @@ detect_apt_target() {
         return 1
     fi
 
-    apt_uri="$(apt-get indextargets --format '$(URI)' 2>/dev/null | head -n 1)"
+    apt_uri="$(apt-get indextargets --format '$(URI)' 2>/dev/null | grep -E -m 1 '^https?://')"
     if [ -n "$apt_uri" ]; then
         printf "%s\n" "$apt_uri"
         return 0
