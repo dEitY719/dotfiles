@@ -22,8 +22,8 @@ py_help() {
     echo ""
 
     ux_section "Setup Tools"
-    ux_table_row "pyinstall [version...]" "Install Script" "Install default or specific Python versions"
-    ux_table_row "py-uninstall <version>" "pyenv uninstall" "Remove a specific Python version"
+    ux_table_row "install-py [version...]" "Install Script" "Install default or specific Python versions"
+    ux_table_row "uninstall-py <version>" "pyenv uninstall" "Remove a specific Python version"
     echo ""
 
     ux_section "Quick Workflow"
