@@ -1,36 +1,30 @@
 #!/bin/sh
-# shell-common/tools/external/pyenv.sh
-# Auto-generated from bash/app/pyenv.bash
+# shell-common/tools/integrations/pyenv.sh
 
 
 # pyenv의 루트 경로
 export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
 
-# 인터랙티브 셸에서 pyenv hook 활성화
-# (pyenv shell, pyenv activate 같은 기능이 정상 동작하려면 필요)
+# pyenv 초기화 (인터랙티브 셸 hook + PATH)
 if command -v pyenv >/dev/null; then
     eval "$(pyenv init -)"
     eval "$(pyenv virtualenv-init -)" # pyenv-virtualenv 사용 시
-fi
-
-# pyenv PATH 초기화 (로그인 셸용)
-if command -v pyenv >/dev/null; then
-    eval "$(pyenv init --path)"
+    eval "$(pyenv init --path)"       # 로그인 셸용 PATH
 fi
 
 # Python 설치 (대화형 스크립트)
 py_install() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_python.sh" "$@"
 }
-alias install-pyenv='py_install'
+alias install-py='py_install'
 
 # 특정 Python 버전 제거
 py_uninstall() {
     local version="$1"
 
     if [ -z "$version" ]; then
-        ux_error "Usage: uninstall-pyenv <python_version>"
+        ux_error "Usage: uninstall-py <python_version>"
         return 1
     fi
 
@@ -57,4 +51,4 @@ py_uninstall() {
     fi
 }
 
-alias uninstall-pyenv='py_uninstall'
+alias uninstall-py='py_uninstall'
