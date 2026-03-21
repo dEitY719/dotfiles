@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # shell-common/functions/security_help.sh
 # CA Certificate setup help and utilities
 
@@ -6,10 +6,6 @@
 if ! type ux_header >/dev/null 2>&1; then
     source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 fi
-
-# ═══════════════════════════════════════════════════════════════
-# CA Certificate Setup Help
-# ═══════════════════════════════════════════════════════════════
 
 crt_help() {
     ux_header "CA Certificate Setup Guide"
@@ -19,77 +15,28 @@ crt_help() {
     ux_bullet "Supports custom certificates (company proxy) and system CA bundles"
     ux_bullet "Configuration stored in: shell-common/env/security.local.sh"
 
-
-    ux_section "Quick Start"
-    ux_info "1. Run setup.sh to initialize your environment:"
-    ux_bullet " ${UX_SUCCESS}./setup.sh${UX_RESET}"
-
-    ux_info "2. Select your environment (Public/Internal/External PC)"
-
-    ux_info "3. For external company PC with custom certificate:"
-    ux_bullet " ${UX_SUCCESS}crtsetup${UX_RESET}"
-
-
     ux_section "Two Options"
-
     ux_bullet "Option 1: Custom Certificate (External Company PC - VPN)"
-    ux_bullet " • Use when connecting via company VPN"
     ux_bullet " • Certificate path: ${UX_MUTED}/usr/local/share/ca-certificates/samsungsemi-prx.com.crt${UX_RESET}"
     ux_bullet " • Install with: ${UX_SUCCESS}crtsetup${UX_RESET}"
-
-
     ux_bullet "Option 2: System CA Bundle (Internal Company PC)"
-    ux_bullet " • Use when connecting directly from company network"
     ux_bullet " • Certificate path: ${UX_MUTED}/etc/ssl/certs/ca-certificates.crt${UX_RESET}"
     ux_bullet " • Already system default, no setup needed"
 
-
     ux_section "Setup Command"
     ux_table_row "crtsetup" "Interactive CA certificate setup script"
-
-    ux_info "This command will:"
-    ux_bullet "Check current certificate status"
-    ux_bullet "Obtain certificate file (from local file or manual setup)"
-    ux_bullet "Install certificate to system"
-    ux_bullet "Update system certificate store"
-    ux_bullet "Verify installation"
-
 
     ux_section "Environment Variables"
     ux_table_row "NODE_EXTRA_CA_CERTS" "Used by Node.js/npm for certificate validation"
     ux_table_row "REQUESTS_CA_BUNDLE" "Used by Python for certificate validation"
 
-
     ux_section "Configuration File"
     ux_info "Location: ${UX_BOLD}shell-common/env/security.local.sh${UX_RESET}"
-
-    ux_info "To configure:"
-    ux_bullet "1. Check current environment: ${UX_SUCCESS}./setup.sh${UX_RESET}"
-    ux_bullet "2. Edit file: ${UX_SUCCESS}vim shell-common/env/security.local.sh${UX_RESET}"
-    ux_bullet "3. Uncomment one CA_CERT option (choose based on your environment)"
-
-
-    ux_section "Troubleshooting"
-    ux_bullet "Certificate not found: Run ${UX_SUCCESS}crtsetup${UX_RESET} to install"
-    ux_bullet "NODE_EXTRA_CA_CERTS not set: Source ~/.bashrc (${UX_SUCCESS}source ~/.bashrc${UX_RESET})"
-    ux_bullet "npm fails with certificate error: Check ${UX_SUCCESS}echo \$NODE_EXTRA_CA_CERTS${UX_RESET}}"
-    ux_bullet "Need to remove certificate: ${UX_SUCCESS}sudo rm /usr/local/share/ca-certificates/<cert>.crt${UX_RESET}}"
-
 
     ux_section "Related Commands"
     ux_table_row "npm-help" "NPM package manager commands and setup"
     ux_table_row "security.sh" "Security environment variable configuration"
     ux_table_row "setup.sh" "Initial environment-specific setup"
-
 }
 
-# ═══════════════════════════════════════════════════════════════
-# Help Registration
-# ═══════════════════════════════════════════════════════════════
-
-# Note: HELP_DESCRIPTIONS registration is handled by my_help.sh
-# which loads before this file and properly initializes the array
-# in a shell-independent way
-
-# Alias for crt-help format (using dash instead of underscore)
 alias crt-help='crt_help'

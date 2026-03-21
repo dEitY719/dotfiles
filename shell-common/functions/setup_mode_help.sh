@@ -73,11 +73,9 @@ show_setup_mode() {
             ;;
     esac
 
-    echo ""
     ux_section "Setup Mode File"
     ux_bullet "Path: ~/.dotfiles-setup-mode"
     ux_bullet "Content: $mode"
-    echo ""
 }
 
 # ============================================================
@@ -90,39 +88,17 @@ setup_mode_help() {
     ux_bullet "Tracks which environment your PC is configured for"
     ux_bullet "Automatically applies environment-specific settings"
     ux_bullet "Stored in: ~/.dotfiles-setup-mode"
-    echo ""
 
     ux_section "Available Modes"
-    echo ""
-    echo "  Mode 1: Public PC (Home environment)"
-    echo "  ────────────────────────────────────"
-    echo "    • No corporate proxy"
-    echo "    • No company-specific configurations"
-    echo "    • Clean home environment"
-    echo ""
-
-    echo "  Mode 2: Internal company PC (Direct connection)"
-    echo "  ───────────────────────────────────────────────"
-    echo "    • Company proxy: http://12.26.204.100:8080"
-    echo "    • Internal repositories (Nexus)"
-    echo "    • Company CA certificates"
-    echo "    • McAfee proxy certificate"
-    echo ""
-
-    echo "  Mode 3: External company PC (VPN)"
-    echo "  ──────────────────────────────────"
-    echo "    • No company proxy (direct internet via VPN)"
-    echo "    • External repositories (npmjs, PyPI, etc)"
-    echo "    • VPN certificate configuration"
-    echo "    • samsungsemi CA certificate"
-    echo ""
+    ux_table_row "Mode 1" "Public PC (Home environment)" "No proxy, no company configs"
+    ux_table_row "Mode 2" "Internal company PC (Direct)" "Company proxy, internal repos, CA certs"
+    ux_table_row "Mode 3" "External company PC (VPN)" "No proxy, VPN certificate"
 
     ux_section "Usage"
-    ux_bullet "Show current mode: ${UX_BOLD}show-setup-mode${UX_RESET}"
+    ux_table_row "show-setup-mode" "Show current mode"
+    ux_table_row "setup-mode-help" "View this help"
     ux_bullet "Reconfigure: ${UX_BOLD}cd ~/dotfiles && ./setup.sh${UX_RESET}"
     ux_bullet "Check proxy: ${UX_BOLD}check-proxy${UX_RESET}"
-    ux_bullet "View this help: ${UX_BOLD}setup-mode-help${UX_RESET}"
-    echo ""
 }
 
 # ============================================================
