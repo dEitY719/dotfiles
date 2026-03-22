@@ -1,6 +1,5 @@
-#!/bin/bash
+#!/bin/sh
 # shell-common/functions/claude_help.sh
-# claudeHelp - shared between bash and zsh
 
 claude_help() {
     # Load UX library (unified library at shell-common/tools/ux_lib/)
@@ -14,13 +13,11 @@ claude_help() {
     ux_table_row "claude mcp add <name> ..." "Add MCP server" ""
     ux_table_row "claude mcp remove <name>" "Remove MCP server" ""
 
-
     ux_section "Recommended MCP Servers"
     ux_bullet "Playwright MCP: Web browser automation"
     ux_bullet "Install: ${UX_SUCCESS}claude mcp add playwright --transport stdio -- npx -y @playwright/mcp@latest${UX_RESET}"
     ux_bullet "Sequential Thinking MCP: Logical analysis"
     ux_bullet "Install: ${UX_SUCCESS}claude mcp add sequential-thinking --transport stdio -- npx -y @modelcontextprotocol/server-sequential-thinking${UX_RESET}"
-
 
     ux_section "Setup & Requirements"
     ux_table_row "clinstall" "Install Claude Code CLI" ""
@@ -28,18 +25,10 @@ claude_help() {
     ux_table_row "claude_init" "Initialize config & skills" ""
     ux_table_row "claude_edit_settings" "Edit settings.json" ""
 
-
-    ux_section "Workflow Patterns"
-    ux_bullet "Plan mode (recommended): ${UX_SUCCESS}claude${UX_RESET} → plan → approve → execute"
-    ux_bullet "Test workflow: ${UX_SUCCESS}cltest \"test description\"${UX_RESET}}"
-    ux_bullet "Skip permissions (caution): ${UX_SUCCESS}clskip \"request\"${UX_RESET}"
-
-
     ux_section "Sandbox Mode"
     ux_info "Use in Claude conversation: ${UX_SUCCESS}/sandbox${UX_RESET}"
     ux_bullet "Select Auto-allow mode"
     ux_bullet "pytest, git, npm auto-approved"
-
 
     ux_section "Configuration"
     ux_info "Settings file: ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/settings.json"
@@ -47,7 +36,6 @@ claude_help() {
     ux_bullet "Auto-allow: pytest, ruff, mypy, tox"
     ux_bullet "Block: .env, ~/.aws, ~/.ssh"
     ux_bullet "Block commands: rm -rf, sudo rm"
-
 
     ux_section "Statusline Display"
     ux_info "Real-time session information in Claude Code status bar"
@@ -57,11 +45,9 @@ claude_help() {
     ux_bullet "📊 Context usage percentage + weekly percentage"
     ux_bullet "💰 Session cost (Green <\$5, Orange \$5-20, Red >\$20)"
 
-
     ux_section "Skills Management"
     ux_table_row "claude-skills" "List available Claude Code skills" ""
     ux_info "Skills location: ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills/"
-
 }
 
 # Function to list Claude Code skills
@@ -77,10 +63,8 @@ get_claude_skills() {
     # Load UX library if available
     if command -v ux_header >/dev/null 2>&1; then
         ux_header "Claude Code Skills"
-
     else
         ux_info "=== Claude Code Skills ==="
-
     fi
 
     # Track if any skills found
@@ -125,14 +109,10 @@ get_claude_skills() {
         return 0
     fi
 
-
     if command -v ux_info >/dev/null 2>&1; then
-        ux_info "Skills location: $skills_dir"
-    else
         ux_info "Skills location: $skills_dir"
     fi
 }
 
-# Alias for claude-help format (using dash instead of underscore)
 alias claude-help='claude_help'
 alias claude-skills='get_claude_skills'

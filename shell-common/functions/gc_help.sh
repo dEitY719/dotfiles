@@ -1,24 +1,12 @@
 #!/bin/sh
 # shell-common/functions/gc_help.sh
-# gc Help - shared between bash and zsh
 
 gc_help() {
     ux_header "git-crypt (Transparent Git encryption)"
 
     ux_section "설치"
     ux_table_row "gcinstall" "설치 스크립트" "apt-get 기반 설치"
-    ux_table_row "패키지" "git-crypt" "apt-get install git-crypt"
     ux_bullet "필수: git, gpg, GPG 키"
-
-
-    ux_section "기본 워크플로 (자동 암호화/복호화)"
-    ux_table_row "1. 초기화" "gci (git-crypt init)" "리포지토리 설정"
-    ux_table_row "2. GPG 키 추가" "gcaddme (자동) ⭐" "내 GPG 키 자동 찾기 & 추가"
-    ux_table_row "   또는" "gcadduser KEY_ID (수동)" "GPG Key ID로 직접 추가"
-    ux_table_row "3. .gitattributes" "gc_encrypt_env (자동)" ".env 암호화 설정"
-    ux_table_row "4. Commit & Push" "git add && git commit && git push" "자동 암호화됨"
-    ux_table_row "5. Clone & Pull" "git clone && gcunlock" "자동 복호화됨"
-
 
     ux_section "Alias"
     ux_table_row "gci" "git-crypt init" "초기화"
@@ -28,9 +16,8 @@ gc_help() {
     ux_table_row "gcunlock" "git-crypt unlock" "수동 복호화 (해제)"
     ux_table_row "gcls" "git-crypt status -f" "암호화된 파일 목록"
 
-
     ux_section "Helper Functions"
-    ux_table_row "gcpush" "gc_push_env" ".env 암호화 & Push 🚀 (올인원, 가장 쉬움)"
+    ux_table_row "gcpush" "gc_push_env" ".env 암호화 & Push 🚀 (올인원)"
     ux_table_row "gcsetup" "gc_setup" "대화형 초기 설정 도우미"
     ux_table_row "gcaddme" "gc_addme" "내 GPG 키 자동 찾기 & 추가"
     ux_table_row "gc_encrypt_env" "암호화 .env" ".env 파일 암호화 퀵 스타트"
@@ -39,88 +26,7 @@ gc_help() {
     ux_table_row "gc_cache_status" "캐싱 상태" "GPG agent 캐싱 상태 확인"
     ux_table_row "gcbackup" "gc_backup_key" "GPG 개인키 백업 (다른 PC 이동용)"
     ux_table_row "gcrestore" "gc_restore_key" "GPG 개인키 복원 (다른 PC에서)"
-    ux_table_row "gcnewpc" "gc_setup_new_pc" "다른 PC 올인원 설정 (가장 쉬움)"
-
-
-    ux_section "git-secret과의 비교"
-    ux_bullet "${bold}git-crypt${reset}           ${bold}git-secret${reset}"
-    ux_bullet "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    ux_bullet "자동 암호화/복호화    수동 hide/reveal 필요"
-    ux_bullet ".gitattributes       .gitsecret/ 디렉토리"
-    ux_bullet "투명한 통합           명시적 명령어"
-    ux_bullet "git add 시 암호화    git secret hide 실행"
-    ux_bullet "git pull 시 복호화   git secret reveal 실행"
-
-
-    ux_section "다른 PC에서 사용하기 (개인 프로젝트)"
-
-    ux_bullet "${bold}⭐ 한 방에 설정 (올인원, 가장 쉬움)${reset}"
-    ux_bullet "════════════════════════════════════════════════════"
-    ux_bullet "  ${bold}git clone <repo> && cd dotfiles && bash shell-common/tools/custom/setup_new_pc.sh${reset}"
-
-    ux_bullet "  또는 dotfiles 적용 후: ${bold}gcnewpc${reset}"
-
-    ux_bullet "${green}→ 모든 단계를 인터랙티브하게 자동 진행!${reset}"
-    ux_bullet "  (git-crypt 설치 → GPG 복원 → 캐싱 설정 → unlock → 확인)"
-
-    ux_bullet "${bold}수동 설정 (단계별 제어)${reset}"
-    ux_bullet "────────────────────────────────────"
-    ux_bullet "${bold}현재 PC:${reset}"
-    ux_bullet "  1. gcbackup              # GPG 키 백업 + 대칭키 암호화"
-    ux_bullet "  2. git add .secrets/ && git commit && git push"
-
-    ux_bullet "${bold}다른 PC:${reset}"
-    ux_bullet "  1. git clone <repo> && cd dotfiles"
-    ux_bullet "  2. gcinstall             # git-crypt 설치"
-    ux_bullet "  3. gcrestore             # GPG 키 복원"
-    ux_bullet "  4. gcsetup-cache         # 캐싱 설정 (선택)"
-    ux_bullet "  5. git-crypt unlock      # .env 복호화"
-
-
-    ux_section "여러 프로젝트에서 사용하기 (개인 프로젝트)"
-
-    ux_bullet "${bold}⭐ 가장 쉬운 방법 (각 프로젝트마다)${reset}"
-    ux_bullet "════════════════════════════════════════════════════"
-    ux_bullet "  ${bold}cd ~/project-A && gcpush${reset}"
-    ux_bullet "  ${bold}cd ~/project-B && gcpush${reset}"
-
-    ux_bullet "${green}→ 한 명령어로 자동 진행!${reset}"
-    ux_bullet "  (git-crypt init → GPG 추가 → .gitattributes → commit → push)"
-
-
-    ux_section "Team 프로젝트에 Join하기"
-
-    ux_bullet "${bold}상황${reset}: 다른 팀원이 만든 프로젝트에 처음 join"
-
-    ux_bullet "${bold}Step 1️⃣  (프로젝트 소유자가 실행 - 1회만)${reset}"
-    ux_bullet "─────────────────────────────────"
-    ux_bullet "  1. 당신의 GPG 공개키 받기:"
-    ux_bullet "     ${bold}당신: gpg --export YOUR_EMAIL | 프로젝트 소유자에게 전달${reset}"
-
-    ux_bullet "  2. 소유자가 repo에서 add-gpg-user 실행:"
-    ux_bullet "     ${bold}소유자: git-crypt add-gpg-user YOUR_GPG_KEY_ID${reset}"
-    ux_bullet "     ${bold}소유자: git add .git-crypt/ && git commit && git push${reset}"
-
-    ux_bullet "${bold}Step 2️⃣  (당신이 이후 실행)${reset}"
-    ux_bullet "──────────────────────────────────"
-    ux_bullet "  ${bold}git clone <repo> && cd <repo>${reset}"
-    ux_bullet "  ${bold}git pull${reset}"
-    ux_bullet "  ${bold}git-crypt unlock${reset}"
-    ux_bullet "  ${bold}cat .env  # 성공 확인${reset}"
-
-
-    ux_section "Symmetric Key로 Join (소유자가 key 제공)"
-
-    ux_bullet "${bold}Step 1️⃣  (프로젝트 소유자가 1회만)${reset}"
-    ux_bullet "─────────────────────────────────"
-    ux_bullet "  ${bold}git-crypt export-key ~/repo-key.txt${reset}"
-    ux_bullet "  👉 이 파일을 안전하게 당신에게 전달"
-
-    ux_bullet "${bold}Step 2️⃣  (당신이 받은 후)${reset}"
-    ux_bullet "──────────────────────────────"
-    ux_bullet "  ${bold}git clone <repo> && cd <repo>${reset}"
-    ux_bullet "  ${bold}git-crypt unlock ~/repo-key.txt${reset}"
-
+    ux_table_row "gcnewpc" "gc_setup_new_pc" "다른 PC 올인원 설정"
 
     ux_section "Tips"
     ux_bullet ".env는 .gitignore에 추가하되, .gitattributes로 암호화"
@@ -128,9 +34,4 @@ gc_help() {
     ux_bullet "팀원 추가 시 각자의 GPG 공개키로 add-gpg-user 실행"
     ux_bullet "암호화 상태 확인: gcstatus 또는 gcls"
     ux_bullet "GPG passphrase 캐싱: gcsetup-cache (24시간 동안 재입력 불필요)"
-    ux_bullet ".gitattributes 예시:"
-    ux_bullet "  .env filter=git-crypt diff=git-crypt"
-    ux_bullet "  *.secret filter=git-crypt diff=git-crypt"
-    ux_bullet "  secrets/* filter=git-crypt diff=git-crypt"
-
 }

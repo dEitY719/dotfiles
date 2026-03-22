@@ -1,6 +1,5 @@
 #!/bin/sh
 # shell-common/functions/docker_help.sh
-# dockerHelp - shared between bash and zsh
 
 docker_help() {
     ux_header "Docker / Docker Compose Quick Commands"
@@ -12,7 +11,6 @@ docker_help() {
     ux_table_row "dcd" "docker compose down" "Stop & remove"
     ux_table_row "dcl" "logs <svc>" "Smart logs (service/container)"
     ux_table_row "dce" "exec <svc> <cmd>" "Execute command"
-    echo ""
 
     ux_section "Docker Compose Extra"
     ux_table_row "dcps" "docker compose ps" "Status"
@@ -21,7 +19,6 @@ docker_help() {
     ux_table_row "dcdv" "down -v" "Stop & remove volumes"
     ux_table_row "dcstop" "stop" "Stop containers"
     ux_table_row "dcstart" "start" "Start containers"
-    echo ""
 
     ux_section "Docker Basics"
     ux_table_row "dps" "docker ps" "Running containers"
@@ -33,7 +30,6 @@ docker_help() {
     ux_table_row "drmi" "docker rmi" "Remove image"
     ux_table_row "dlogs" "docker logs -f" "Follow logs"
     ux_table_row "dinspect" "docker inspect" "Inspect object"
-    echo ""
 
     ux_section "Resource Management"
     ux_table_row "ddf" "system df" "Disk usage"
@@ -43,7 +39,6 @@ docker_help() {
     ux_table_row "dvol_rm" "volume rm" "Remove volume"
     ux_table_row "dnetwork_prune" "network prune" "Cleanup networks"
     ux_table_row "dbuild_prune" "builder prune" "Cleanup build cache"
-    echo ""
 
     ux_section "Utilities"
     ux_table_row "dbash" "dbash <name>" "Shell access (bash/sh)"
@@ -54,11 +49,8 @@ docker_help() {
     ux_table_row "dexport" "Export all" "Backup to tar files"
     ux_table_row "dinstall" "Install script" "Install Docker on WSL"
     ux_table_row "dproxy_setup" "Proxy setup" "Corporate proxy config"
-    echo ""
 
     ux_info "Note: 'docker compose' (V2) is used by default."
-    echo ""
 }
 
-# Alias for docker-help format (using dash instead of underscore)
 alias docker-help='docker_help'
