@@ -3,10 +3,10 @@
 # Setup mode management and help functions
 
 # Load UX library if not already loaded
-if ! declare -f ux_header >/dev/null 2>&1; then
+if ! type ux_header >/dev/null 2>&1; then
     _ux_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/ux_lib/ux_lib.sh"
     if [ -f "$_ux_lib" ]; then
-        source "$_ux_lib"
+        . "$_ux_lib"
     fi
 fi
 
