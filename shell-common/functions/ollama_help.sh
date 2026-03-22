@@ -3,10 +3,10 @@
 # Ollama / LLM Model Management Help (Hybrid: WSL + Docker)
 
 # Load UX library - use dynamic path detection with fallback
-if ! declare -f ux_header > /dev/null 2>&1; then
-    local ux_lib_path="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh"
+if ! type ux_header > /dev/null 2>&1; then
+    ux_lib_path="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh"
     if [ -f "$ux_lib_path" ]; then
-        source "$ux_lib_path" 2>/dev/null || true
+        . "$ux_lib_path" 2>/dev/null || true
     else
         # Fallback functions if UX library not found
         ux_header() { echo "=== $1 ==="; echo ""; }
