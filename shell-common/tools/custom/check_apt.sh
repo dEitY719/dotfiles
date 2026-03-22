@@ -80,7 +80,7 @@ check_apt_config_files() {
         fi
 
         if [ -n "$os_codename" ]; then
-            local source_file="${DOTFILES_ROOT}/apt/sources.list.${os_codename}.internal"
+            local source_file="${DOTFILES_ROOT}/apt/sources.list.${os_codename}"
             if [ -f "$source_file" ]; then
                 ux_section "Drift Check"
                 if diff -q "$_SOURCES_TARGET" "$source_file" >/dev/null 2>&1; then
