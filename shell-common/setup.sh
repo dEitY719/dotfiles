@@ -455,9 +455,9 @@ setup_apt_sources() {
                 ux_info "Skipped: ${_apt_os_id:-unknown} detected (only Ubuntu is supported)"
                 return 0
             fi
-            _apt_source="${DOTFILES_ROOT}/apt/sources.list.${_apt_codename}.internal"
+            _apt_source="${DOTFILES_ROOT}/apt/sources.list.${_apt_codename}"
             if [ -z "$_apt_codename" ] || [ ! -f "$_apt_source" ]; then
-                ux_info "Skipped: no apt config for '${_apt_codename:-unknown}' (available: $(ls "${DOTFILES_ROOT}"/apt/sources.list.*.internal 2>/dev/null | sed 's/.*sources\.list\.\(.*\)\.internal/\1/' | tr '\n' ' ' || echo 'none'))"
+                ux_info "Skipped: no apt config for '${_apt_codename:-unknown}' (available: $(ls "${DOTFILES_ROOT}"/apt/sources.list.* 2>/dev/null | sed 's/.*sources\.list\.//' | grep -v '\.internal$' | tr '\n' ' ' || echo 'none'))"
                 return 0
             fi
 
@@ -471,8 +471,8 @@ setup_apt_sources() {
             fi
 
             $_apt_run_privileged cp "$_apt_source" "$sources_target"
-            ux_success "Copied: apt/sources.list.${_apt_codename}.internal → $sources_target"
-            ux_info "Using: Samsung internal Nexus mirror (Ubuntu ${_apt_codename})"
+            ux_success "Copied: apt/sources.list.${_apt_codename} → $sources_target"
+            ux_info "Using: official Ubuntu mirrors (Ubuntu ${_apt_codename})"
             ux_info "Run 'sudo apt update' to refresh package lists"
             ;;
         external|public)
