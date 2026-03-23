@@ -148,7 +148,7 @@ Users invoke this **mid-conversation** with Claude Code. Use the full conversati
 
 - Write ONE `.html` file. Output path rules:
   1. **File input** (`/visualize /path/to/abc.md`) → save as `/path/to/abc.html` (same directory, same basename, `.html` extension)
-  2. **No file input** (conversation context, pasted data, URL) → save to `~/downloads/` with descriptive kebab-case name
+  2. **No file input** (conversation context, pasted data, URL) → save to `~/Downloads/` with descriptive kebab-case name
   3. **User-specified path** → always honor the user's explicit path
 - Filename: descriptive kebab-case, e.g., `q4-revenue-dashboard.html`, `team-roadmap-deck.html`
 - Start with skeleton.md template, add your content to the `<!-- YOUR CONTENT HERE -->` section
