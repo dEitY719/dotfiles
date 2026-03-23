@@ -57,6 +57,30 @@ Edit `claude/settings.json` to match your personal environment:
 - **`claude/settings.template.json`** - Shared template with basic, team-friendly defaults
 - Use relative paths (e.g., `./script.sh`) instead of absolute paths when possible for better team compatibility
 
+## SKILL.md Writing Rules
+
+### description must be a single line
+
+The `description` field in SKILL.md YAML frontmatter **MUST be written on a single line**.
+The `claude-skills` command (`get_claude_skills`) uses `grep '^description:'` to extract it,
+so multi-line YAML syntax (`>`, `|`, or line continuations) will break the display.
+
+```yaml
+# WRONG - folded scalar, shows only ">" in claude-skills output
+description: >
+  Create beautiful visualizations...
+
+# WRONG - literal scalar, shows only "|"
+description: |
+  Create beautiful visualizations...
+
+# CORRECT - single line (can be long, truncated at 60 chars for display)
+description: Create beautiful visualizations from any content or idea. Use for slide decks, dashboards, diagrams, and more.
+```
+
+> **History**: This issue has occurred 3 times (as of 2026-03-23). Each time a new skill was added
+> with multi-line YAML description, causing the `claude-skills` listing to show broken output.
+
 ## File Structure
 
 ```
