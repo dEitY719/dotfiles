@@ -1,0 +1,14 @@
+# bunfig.toml.external
+# Samsung external PC configuration (VPN, direct internet access)
+#
+# Usage:
+#   This file is symlinked to ~/.bunfig.toml by shell-common/setup.sh
+#   Choose this option when using VPN connection to company network
+#
+# Note: No proxy needed (direct internet access via VPN)
+
+[install]
+# Public npm registry (default)
+registry = "https://registry.npmjs.org/"
+# Corporate CA certificate for SSL verification
+cafile = "/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
