@@ -1,13 +1,6 @@
 ---
 name: visualize
-description: >
-  Create beautiful, self-contained HTML visualizations from any content or idea.
-  Use for: slide decks, presentations, infographics, dashboards, flowcharts, diagrams,
-  timelines, comparison tables, data visualizations, landing pages, one-pagers, org charts,
-  mind maps, process flows, kanban boards, report summaries, or any visual that helps
-  humans digest information faster. Trigger on requests like "visualize this," "make a deck,"
-  "create a slide," "build an infographic," "show me a dashboard," "make this visual,"
-  or any request to present information in a visual HTML format.
+description: Create beautiful, self-contained HTML visualizations from any content or idea. Use for slide decks, presentations, infographics, dashboards, flowcharts, diagrams, timelines, comparison tables, data visualizations, landing pages, one-pagers, org charts, mind maps, process flows, kanban boards, report summaries, or any visual that helps humans digest information faster. Trigger on requests like "visualize this," "make a deck," "create a slide," "build an infographic," "show me a dashboard," "make this visual," or any request to present information in a visual HTML format.
 license: MIT
 metadata:
   author: careerhackeralex
@@ -153,7 +146,10 @@ Users invoke this **mid-conversation** with Claude Code. Use the full conversati
 
 **MANDATORY FIRST STEP: Copy the complete skeleton from [references/skeleton.md](references/skeleton.md) — this includes all required elements (menu, theme system, CSS properties, semantic HTML, accessibility features). Never write HTML from scratch.**
 
-- Write ONE `.html` file to `~/Downloads/` (or user-specified path)
+- Write ONE `.html` file. Output path rules:
+  1. **File input** (`/visualize /path/to/abc.md`) → save as `/path/to/abc.html` (same directory, same basename, `.html` extension)
+  2. **No file input** (conversation context, pasted data, URL) → save to `~/Downloads/` with descriptive kebab-case name
+  3. **User-specified path** → always honor the user's explicit path
 - Filename: descriptive kebab-case, e.g., `q4-revenue-dashboard.html`, `team-roadmap-deck.html`
 - Start with skeleton.md template, add your content to the `<!-- YOUR CONTENT HERE -->` section
 - All custom styles in `<style>` after the skeleton's base styles
@@ -465,6 +461,49 @@ This skill is used mid-conversation. Leverage everything:
 - **Code/architecture** — visualize system designs, data flows
 
 Always use real content. Never generate placeholder data when real context exists.
+
+## Auto-Recommend Workflow (for file/document input)
+
+When the user provides a markdown file, document, or URL to visualize **without specifying a format**, do NOT pick a format silently. Instead:
+
+1. **Read and analyze** the content structure (headings, lists, tables, data, narrative flow)
+2. **Recommend 1-2 best-fit visualization types** with a one-line reason each
+3. **Wait for user confirmation** before building
+
+### Content-to-Type Mapping
+
+| Content Structure | 1st Recommendation | 2nd Recommendation |
+|---|---|---|
+| Headings + bullet lists (presentation-like) | **Slide Deck** — each heading becomes a slide | **Infographic** — long-scroll summary |
+| Tables / comparison data | **Comparison Infographic** — side-by-side visual | **Dashboard** — if numeric-heavy |
+| Chronological / dated entries | **Timeline** — alternating left/right | **Status Report** — if progress-oriented |
+| KPIs / numbers / metrics | **Dashboard** — cards + charts | **Status Report** — executive summary |
+| Step-by-step / how-to | **Process Guide** — numbered accordion | **Slide Deck** — one step per slide |
+| Code snippets / commands | **Cheatsheet** — searchable + copy buttons | — |
+| System design / components | **Architecture Diagram** — Mermaid + cards | **Slide Deck** — walkthrough |
+| Key quotes / insights | **Quote Card** — hero quote layout | **Carousel** — one quote per card |
+| Short summary for sharing | **Carousel Cards** — SNS-optimized | **One-Pager** — single viewport |
+| Event / announcement | **Event Poster** — portrait, bold headline | **Slide Deck** — if multi-topic |
+| Mixed / unclear | **Infographic** — versatile long-scroll | **Slide Deck** — universal fallback |
+
+### Example Response
+
+```
+This document has 5 sections with bullet points and 2 data tables.
+
+Recommended formats:
+1. **Slide Deck** — 5 sections map cleanly to 7-8 slides with chart slides for the tables
+2. **Infographic** — single long-scroll with big numbers and comparison sections
+
+Which format would you prefer? (or just say "1" or "2")
+```
+
+### When to Skip Recommendation
+
+Skip and build immediately if the user already specifies a format:
+- "make a dashboard from this" → build dashboard
+- "visualize as slides" → build slide deck
+- "carousel로 만들어" → build carousel
 
 ## Type-Specific Interactivity (Mandatory)
 
