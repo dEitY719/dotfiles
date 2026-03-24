@@ -7,12 +7,10 @@ set -e
 # Initialize common tools environment
 source "$(dirname "$0")/init.sh" || exit 1
 
-# Internal: check if systemd is PID 1
 _installer_has_systemd() {
     command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]
 }
 
-# Internal: restart redis-server using appropriate init system
 _installer_restart_redis() {
     if _installer_has_systemd; then
         sudo systemctl restart redis-server
@@ -21,20 +19,22 @@ _installer_restart_redis() {
     fi
 }
 
-# Internal: safely write requirepass to redis.conf without sed interpolation issues
-# Uses grep + tee to avoid special character problems (/, &, \ in passwords)
+# Safely write requirepass to redis.conf.
+# Uses grep + printf to avoid sed special-character injection (/, &, \).
+# Temp file is created in /etc/redis/ for atomic mv on same filesystem.
 _installer_set_requirepass() {
     local redis_conf="$1"
     local password="$2"
+    local conf_dir
+    conf_dir=$(dirname "$redis_conf")
     local tmp_conf
+    tmp_conf=$(sudo mktemp "${conf_dir}/redis.conf.XXXXXX")
+    trap 'sudo rm -f "$tmp_conf"' RETURN
 
-    tmp_conf=$(mktemp)
-    # Remove existing requirepass line(s) and append the new one
     grep -v "^requirepass " "$redis_conf" | sudo tee "$tmp_conf" >/dev/null
     printf "requirepass %s\n" "$password" | sudo tee -a "$tmp_conf" >/dev/null
-    sudo cp "$tmp_conf" "$redis_conf"
-    sudo chmod 640 "$redis_conf"
-    rm -f "$tmp_conf"
+    sudo chmod 640 "$tmp_conf"
+    sudo mv "$tmp_conf" "$redis_conf"
 }
 
 main() {
@@ -57,7 +57,6 @@ main() {
         exit 0
     fi
 
-    # Request sudo privileges upfront
     ux_info "Requesting sudo privileges for the installation..."
     if ! sudo -v; then
         ux_error "Sudo privileges are required. Aborting."
@@ -67,26 +66,17 @@ main() {
     local sudo_keep_alive_pid=$!
     trap 'kill "$sudo_keep_alive_pid" 2>/dev/null' EXIT
 
-    # ========================================
-    # Step 1: Update package manager
-    # ========================================
     ux_step "1/5" "Updating package sources..."
     if ! ux_with_spinner "Updating apt cache" sudo apt-get update -qq; then
         exit 1
     fi
 
-    # ========================================
-    # Step 2: Install Redis
-    # ========================================
     ux_step "2/5" "Installing Redis server..."
     if ! ux_with_spinner "Installing redis-server" sudo apt-get install -y -qq redis-server redis-tools; then
         ux_error "Redis installation failed."
         exit 1
     fi
 
-    # ========================================
-    # Step 3: Start & Enable Service
-    # ========================================
     ux_step "3/5" "Starting and enabling Redis service..."
 
     if _installer_has_systemd; then
@@ -101,7 +91,6 @@ main() {
             ux_success "Redis service enabled on boot."
         fi
     else
-        # WSL without systemd: use service command
         if ! sudo service redis-server start; then
             ux_warning "Failed to start Redis service."
         else
@@ -115,9 +104,6 @@ main() {
     fi
     echo ""
 
-    # ========================================
-    # Step 4: Optional Configuration
-    # ========================================
     ux_step "4/5" "Configuring Redis (optional)..."
 
     local redis_conf="/etc/redis/redis.conf"
@@ -132,7 +118,6 @@ main() {
             else
                 echo "maxmemory 256mb" | sudo tee -a "$redis_conf" >/dev/null
             fi
-            # Set eviction policy
             if grep -q "^maxmemory-policy " "$redis_conf"; then
                 sudo sed -i 's/^maxmemory-policy .*/maxmemory-policy allkeys-lru/' "$redis_conf"
             else
@@ -160,9 +145,6 @@ main() {
     fi
     echo ""
 
-    # ========================================
-    # Step 5: Verify Installation
-    # ========================================
     ux_step "5/5" "Verifying installation..."
 
     if command -v redis-server &>/dev/null; then
@@ -176,7 +158,6 @@ main() {
         ux_info "Redis CLI Version:"
         redis-cli --version
 
-        # Ping test (use password if it was just set)
         local ping_result
         if [[ "$password_was_set" = "true" ]]; then
             ping_result=$(REDISCLI_AUTH="$redis_pass" redis-cli ping 2>/dev/null)
@@ -192,13 +173,9 @@ main() {
         ux_error "redis-cli command not found."
     fi
 
-    # Clean up sudo keep-alive
     kill "$sudo_keep_alive_pid" 2>/dev/null || true
     trap - EXIT
 
-    # ========================================
-    # Completion
-    # ========================================
     echo ""
     ux_header "Redis Installation Complete!"
 

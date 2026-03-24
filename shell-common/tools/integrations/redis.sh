@@ -12,10 +12,14 @@ REDIS_DEFAULT_PORT="${REDIS_DEFAULT_PORT:-6379}"
 # work transparently with or without a password.
 
 # -------------------------------
-# Internal: systemd availability check
+# Internal helpers
 # -------------------------------
 _redis_has_systemd() {
     command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]
+}
+
+_redis_cli() {
+    redis-cli -h "$REDIS_DEFAULT_HOST" -p "$REDIS_DEFAULT_PORT" "$@"
 }
 
 # -------------------------------
@@ -53,17 +57,7 @@ redis_server() {
 }
 
 # -------------------------------
-# 2) Connection Helper
-# -------------------------------
-redis_cli_connect() {
-    local host="${1:-$REDIS_DEFAULT_HOST}"
-    local port="${2:-$REDIS_DEFAULT_PORT}"
-
-    redis-cli -h "$host" -p "$port"
-}
-
-# -------------------------------
-# 3) Quick Commands
+# 2) Quick Commands
 # -------------------------------
 redis_ping() {
     local host="${1:-$REDIS_DEFAULT_HOST}"
@@ -83,18 +77,18 @@ redis_ping() {
 
 redis_info() {
     local section="${1:-server}"
-    redis-cli -h "$REDIS_DEFAULT_HOST" -p "$REDIS_DEFAULT_PORT" INFO "$section"
+    _redis_cli INFO "$section"
 }
 
 redis_monitor() {
     ux_warning "Entering MONITOR mode (Ctrl+C to exit)"
     ux_info "Shows all commands processed by Redis in real-time"
-    redis-cli -h "$REDIS_DEFAULT_HOST" -p "$REDIS_DEFAULT_PORT" MONITOR
+    _redis_cli MONITOR
 }
 
 redis_dbsize() {
     local result
-    result=$(redis-cli -h "$REDIS_DEFAULT_HOST" -p "$REDIS_DEFAULT_PORT" DBSIZE 2>/dev/null)
+    result=$(_redis_cli DBSIZE 2>/dev/null)
     ux_info "Database size: $result"
 }
 
@@ -102,7 +96,7 @@ redis_keys() {
     local pattern="${1:-*}"
     local limit="${2:-20}"
     ux_info "Scanning keys matching '$pattern' (max: $limit results)"
-    redis-cli -h "$REDIS_DEFAULT_HOST" -p "$REDIS_DEFAULT_PORT" --scan --pattern "$pattern" | head -n "$limit"
+    _redis_cli --scan --pattern "$pattern" | head -n "$limit"
 }
 
 redis_flush() {
@@ -117,7 +111,7 @@ redis_flush() {
     case "$target" in
     db)
         if ux_confirm "Flush current Redis database?" "n"; then
-            redis-cli -h "$REDIS_DEFAULT_HOST" -p "$REDIS_DEFAULT_PORT" FLUSHDB
+            _redis_cli FLUSHDB
             ux_success "Current database flushed."
         else
             ux_info "Operation cancelled."
@@ -125,7 +119,7 @@ redis_flush() {
         ;;
     all)
         if ux_confirm "Flush ALL Redis databases? This cannot be undone!" "n"; then
-            redis-cli -h "$REDIS_DEFAULT_HOST" -p "$REDIS_DEFAULT_PORT" FLUSHALL
+            _redis_cli FLUSHALL
             ux_success "All databases flushed."
         else
             ux_info "Operation cancelled."
@@ -145,34 +139,34 @@ redis_config_get() {
         ux_bullet "Example: redis-config-get maxmemory"
         return 1
     fi
-    redis-cli -h "$REDIS_DEFAULT_HOST" -p "$REDIS_DEFAULT_PORT" CONFIG GET "$param"
+    _redis_cli CONFIG GET "$param"
 }
 
 redis_slowlog() {
     local count="${1:-10}"
     ux_header "Redis Slow Log (last $count entries)"
-    redis-cli -h "$REDIS_DEFAULT_HOST" -p "$REDIS_DEFAULT_PORT" SLOWLOG GET "$count"
+    _redis_cli SLOWLOG GET "$count"
 }
 
 redis_clients() {
     ux_header "Connected Redis Clients"
-    redis-cli -h "$REDIS_DEFAULT_HOST" -p "$REDIS_DEFAULT_PORT" CLIENT LIST
+    _redis_cli CLIENT LIST
 }
 
 redis_memory() {
     ux_header "Redis Memory Usage"
-    redis-cli -h "$REDIS_DEFAULT_HOST" -p "$REDIS_DEFAULT_PORT" INFO memory
+    _redis_cli INFO memory
 }
 
 # -------------------------------
-# 4) Install Wrapper
+# 3) Install Wrapper
 # -------------------------------
 install_redis() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_redis.sh"
 }
 
 # -------------------------------
-# 5) Aliases (dash-form)
+# 4) Aliases (dash-form)
 # -------------------------------
 alias redis-server-ctl='redis_server'
 alias redis-ping='redis_ping'
