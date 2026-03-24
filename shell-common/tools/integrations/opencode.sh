@@ -2,74 +2,28 @@
 # shell-common/tools/integrations/opencode.sh
 # OpenCode CLI - setup, utilities, and workflow helpers
 # Shared between bash and zsh
+#
+# Configuration is managed via symlinks:
+#   dotfiles/opencode/opencode.json.internal  → ~/.config/opencode/opencode.json
+#   dotfiles/opencode/opencode.json.external  → ~/.config/opencode/opencode.json
+#   (public/home: no symlink, uses OpenCode defaults)
+# Symlinks are created by setup.sh (setup_opencode_config)
 
-# ═══════════════════════════════════════════════════════════════
-# Installation Instructions
-# ═══════════════════════════════════════════════════════════════
-
-# Quick Installation (Interactive)
-# Run: install-opencode
-#
-# This will guide you through:
-#   1. Environment selection (home/external/internal)
-#   2. Verification of Node.js and npm
-#   3. OpenCode installation via: npm i -g opencode-ai
-#   4. Environment-specific configuration setup
-#
-# Requirements:
-#   - Node.js 16.x or higher
-#   - npm 8.x or higher
-#   - bash: this script requires bash features
-#
-# Shell Compatibility:
-#   - Works with bash and zsh
-#   - The shebang (#!/bin/bash) ensures proper execution
-#
-# Reference:
-#   - Official: https://opencode.ai/
-#   - npm package: https://www.npmjs.com/package/opencode-ai
-#
-# Configuration Locations:
-#   - Home/Default: Uses OpenCode's default configuration
-#   - External/Internal: ~/.config/opencode/opencode.json
-#
-# Environment Details:
-#   HOME     - Personal PC, local development, SSL verified
-#   EXTERNAL - Public network access, GitHub accessible, LiteLLM enabled
-#   INTERNAL - Corporate network, Samsung DS proxy, multiple LLM models
-
-# ═══════════════════════════════════════════════════════════════
-# Environment Variables
-# ═══════════════════════════════════════════════════════════════
-
-# OpenCode configuration directory
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 OPENCODE_CONFIG_FILE="${OPENCODE_CONFIG_FILE:-$OPENCODE_CONFIG_DIR/opencode.json}"
 
-# OpenCode binary path
 export PATH="$HOME/.opencode/bin:$PATH"
-
-# Note: Aliases are unaliased after being defined below (re-sourcing compatibility)
-
-# ═══════════════════════════════════════════════════════════════
-# OpenCode Installation
-# ═══════════════════════════════════════════════════════════════
 
 install_opencode() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_opencode.sh"
 }
 
-# ═══════════════════════════════════════════════════════════════
-# OpenCode Configuration Verification
-# ═══════════════════════════════════════════════════════════════
-
 opencode_verify() {
     ux_header "OpenCode Configuration Verification"
     echo ""
 
-    # Check if OpenCode is installed
     ux_section "Installation Status"
-    if command -v opencode &>/dev/null; then
+    if command -v opencode >/dev/null 2>&1; then
         ux_success "OpenCode CLI is installed"
         opencode --version
     else
@@ -80,14 +34,18 @@ opencode_verify() {
     fi
     echo ""
 
-    # Check configuration file
     ux_section "Configuration"
-    if [ -f "$OPENCODE_CONFIG_FILE" ]; then
+    if [ -L "$OPENCODE_CONFIG_FILE" ]; then
+        local link_target
+        link_target=$(readlink "$OPENCODE_CONFIG_FILE")
+        ux_success "Configuration symlink: $OPENCODE_CONFIG_FILE → $link_target"
+    elif [ -f "$OPENCODE_CONFIG_FILE" ]; then
         ux_success "Configuration file found: $OPENCODE_CONFIG_FILE"
-        echo ""
+    fi
 
-        # Parse and display configuration
-        if command -v jq &>/dev/null; then
+    if [ -f "$OPENCODE_CONFIG_FILE" ]; then
+        echo ""
+        if command -v jq >/dev/null 2>&1; then
             ux_bullet "Provider: $(jq -r '.provider | keys[0]' "$OPENCODE_CONFIG_FILE" 2>/dev/null || echo 'unknown')"
 
             local provider_name
@@ -112,38 +70,31 @@ opencode_verify() {
             fi
         else
             ux_warning "jq not installed - unable to parse configuration details"
-            ux_info "For detailed configuration view, get jq via your package manager"
-            echo ""
             ux_info "Configuration file contents:"
             cat "$OPENCODE_CONFIG_FILE"
         fi
     else
         ux_info "Using OpenCode default configuration"
-        ux_info "Custom config file not found: $OPENCODE_CONFIG_FILE"
+        ux_info "Run setup.sh to configure environment-specific symlink"
     fi
     echo ""
 
-    # Check Node.js and npm
     ux_section "Runtime Environment"
-    if command -v node &>/dev/null; then
+    if command -v node >/dev/null 2>&1; then
         ux_success "Node.js: $(node --version)"
     else
         ux_error "Node.js not found"
     fi
 
-    if command -v npm &>/dev/null; then
+    if command -v npm >/dev/null 2>&1; then
         ux_success "npm: $(npm --version)"
     else
         ux_error "npm not found"
     fi
     echo ""
 
-    ux_header "✅ Verification Complete"
+    ux_header "Verification Complete"
 }
-
-# ═══════════════════════════════════════════════════════════════
-# OpenCode Help and Documentation
-# ═══════════════════════════════════════════════════════════════
 
 opencode_help() {
     ux_header "OpenCode CLI Reference"
@@ -155,16 +106,15 @@ opencode_help() {
     ux_bullet "${UX_PRIMARY}uninstall-opencode${UX_RESET}           : Remove OpenCode and configuration"
     echo ""
 
-    ux_section "Environments"
-    ux_bullet "home                    : Personal PC (local dev, SSL verified)"
-    ux_bullet "external                : Public network (GitHub, LiteLLM)"
-    ux_bullet "internal                : Corporate (Samsung DS, proxy)"
+    ux_section "Environments (managed by setup.sh)"
+    ux_bullet "home/public             : OpenCode defaults (no symlink)"
+    ux_bullet "external                : localhost:4444 LiteLLM proxy"
+    ux_bullet "internal                : Samsung DS LiteLLM endpoint"
     echo ""
 
     ux_section "Configuration"
-    ux_bullet "Config directory        : ${UX_INFO}$OPENCODE_CONFIG_DIR${UX_RESET}"
     ux_bullet "Config file             : ${UX_INFO}$OPENCODE_CONFIG_FILE${UX_RESET}"
-    ux_bullet "Edit configuration      : ${UX_PRIMARY}${EDITOR:-vim} \"\$OPENCODE_CONFIG_FILE\"${UX_RESET}"
+    ux_bullet "Edit configuration      : ${UX_PRIMARY}opencode-edit${UX_RESET}"
     echo ""
 
     ux_section "Models (LiteLLM Integration)"
@@ -181,53 +131,33 @@ opencode_help() {
 
     ux_section "Troubleshooting"
     ux_bullet "Not installed?          : Run ${UX_PRIMARY}install-opencode${UX_RESET}"
-    ux_bullet "PATH issues?            : Run ${UX_PRIMARY}source ~/.bashrc${UX_RESET}"
     ux_bullet "LLM not working?        : Run ${UX_PRIMARY}opencode-verify${UX_RESET}"
     ux_bullet "Want to remove?         : Run ${UX_PRIMARY}uninstall-opencode${UX_RESET}"
     echo ""
-
-    ux_section "Resources"
-    ux_bullet "Official Docs           : https://opencode.ai/"
-    ux_bullet "GitHub Repository       : https://github.com/opencode-ai/opencode"
-    ux_bullet "Local Help              : ${UX_PRIMARY}opencode-help${UX_RESET}"
-    echo ""
 }
-
-# ═══════════════════════════════════════════════════════════════
-# OpenCode Edit Configuration
-# ═══════════════════════════════════════════════════════════════
 
 opencode_edit() {
     local config_file="$OPENCODE_CONFIG_FILE"
 
     if [ ! -f "$config_file" ]; then
         ux_error "Configuration file not found: $config_file"
-        ux_info "Run 'openinstall' to create it"
+        ux_info "Run setup.sh to configure environment-specific symlink"
         return 1
     fi
 
-    ux_header "Editing OpenCode Configuration"
-    ux_info "File: $config_file"
-    echo ""
+    if [ -L "$config_file" ]; then
+        ux_info "Symlink target: $(readlink "$config_file")"
+        ux_warning "Editing symlinked file will modify the dotfiles source"
+    fi
 
     ${EDITOR:-vim} "$config_file"
-
-    echo ""
     ux_success "Configuration file edited"
-    ux_info "Changes will take effect immediately"
 }
 
-# ═══════════════════════════════════════════════════════════════
-# OpenCode Workflow Aliases
-# ═══════════════════════════════════════════════════════════════
-
-# Main interactive mode (recommended for planning)
 alias openplan='opencode'
 
-# Test writing mode
 opentest() {
     if [ -z "$1" ]; then
-        ux_header "opentest"
         ux_usage "opentest" "\"request\"" "Run OpenCode for test writing"
         ux_bullet "Example: ${UX_INFO}opentest \"Write authentication tests\"${UX_RESET}"
         return 1
@@ -235,15 +165,10 @@ opentest() {
     opencode -p "$1"
 }
 
-# ═══════════════════════════════════════════════════════════════
-# OpenCode Uninstallation
-# ═══════════════════════════════════════════════════════════════
-
 uninstall_opencode() {
     ux_header "OpenCode CLI Uninstaller"
     echo ""
 
-    # Confirmation
     printf "%sAre you sure you want to uninstall OpenCode? (y/N): %s" "$UX_PRIMARY" "$UX_RESET"
     read -r confirm
     if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
@@ -254,8 +179,7 @@ uninstall_opencode() {
 
     ux_section "Uninstalling OpenCode..."
 
-    # Remove global npm package
-    if command -v npm &>/dev/null; then
+    if command -v npm >/dev/null 2>&1; then
         ux_info "Removing OpenCode npm package..."
         npm uninstall -g opencode-ai 2>/dev/null || npm uninstall -g opencode 2>/dev/null || true
         ux_success "OpenCode package removed"
@@ -264,7 +188,6 @@ uninstall_opencode() {
     fi
     echo ""
 
-    # Remove OpenCode installation directory (cleanup incomplete installations)
     if [ -d "$HOME/.opencode" ]; then
         ux_info "Removing OpenCode installation directory: $HOME/.opencode"
         rm -rf "$HOME/.opencode"
@@ -274,8 +197,11 @@ uninstall_opencode() {
     fi
     echo ""
 
-    # Remove configuration directory
-    if [ -d "$OPENCODE_CONFIG_DIR" ]; then
+    if [ -L "$OPENCODE_CONFIG_FILE" ]; then
+        ux_info "Removing configuration symlink: $OPENCODE_CONFIG_FILE"
+        rm -f "$OPENCODE_CONFIG_FILE"
+        ux_success "Symlink removed"
+    elif [ -d "$OPENCODE_CONFIG_DIR" ]; then
         ux_info "Removing configuration directory: $OPENCODE_CONFIG_DIR"
         rm -rf "$OPENCODE_CONFIG_DIR"
         ux_success "Configuration removed"
@@ -284,54 +210,14 @@ uninstall_opencode() {
     fi
     echo ""
 
-    ux_section "Environment Settings"
-    ux_info "Terminal environment variables configured in: ~/.config/dotfiles/shell-common/env/locale.sh"
-    ux_bullet "${UX_INFO}export TERM=xterm-256color${UX_RESET}        # Terminal color support"
-    ux_bullet "${UX_INFO}export LC_ALL=en_US.UTF-8${UX_RESET}         # Character encoding"
-    echo ""
-    ux_info "Reload your shell to apply settings:"
-    ux_bullet "source ~/.bashrc        # For bash"
-    ux_bullet "source ~/.zshrc         # For zsh"
-    ux_bullet "exec \$SHELL             # Or restart your shell"
-    echo ""
-
-    ux_header "✅ OpenCode Uninstallation Complete"
-    ux_info "OpenCode has been removed from your system"
+    ux_header "OpenCode Uninstallation Complete"
     ux_info "Run 'install-opencode' to reinstall"
     echo ""
 }
 
-# ═══════════════════════════════════════════════════════════════
-# Alias Definitions
-# ═══════════════════════════════════════════════════════════════
-
 alias install-opencode='install_opencode'
 alias opencode-verify='opencode_verify'
 alias opencode-help='opencode_help'
 alias opencode-edit='opencode_edit'
 alias uninstall-opencode='uninstall_opencode'
 alias opencfg='opencode_edit'
-
-# ═══════════════════════════════════════════════════════════════
-# Re-sourcing Compatibility (unalias previous definitions)
-# ═══════════════════════════════════════════════════════════════
-
-# This ensures that re-sourcing this file doesn't cause alias conflicts
-for alias_name in opencode-verify opencode-help opencode-edit uninstall-opencode; do
-    unalias "$alias_name" 2>/dev/null || true
-done
-
-# Re-define aliases after unaliasing (for zsh re-sourcing compatibility)
-alias install-opencode='install_opencode'
-alias opencode-verify='opencode_verify'
-alias opencode-help='opencode_help'
-alias opencode-edit='opencode_edit'
-alias uninstall-opencode='uninstall_opencode'
-alias opencfg='opencode_edit'
-
-# ═══════════════════════════════════════════════════════════════
-# Initialization
-# ═══════════════════════════════════════════════════════════════
-
-# Do not auto-run at shell init time
-# All functions are available on-demand
