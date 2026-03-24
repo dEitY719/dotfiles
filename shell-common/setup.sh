@@ -206,23 +206,22 @@ setup_bun_config() {
 
     ux_header "Setting up Bun configuration for: $environment"
 
-    _prepare_config_target "$bunfig_target"
-
     # Create symlink based on environment
     case "$environment" in
         internal)
+            _prepare_config_target "$bunfig_target"
             ln -s "${DOTFILES_ROOT}/bun/bunfig.toml.internal" "$bunfig_target"
             ux_success "Created symlink: ~/.bunfig.toml → bun/bunfig.toml.internal"
             ux_info "Using: Samsung internal Nexus registry for npm packages"
             ;;
         external)
+            _prepare_config_target "$bunfig_target"
             ln -s "${DOTFILES_ROOT}/bun/bunfig.toml.external" "$bunfig_target"
             ux_success "Created symlink: ~/.bunfig.toml → bun/bunfig.toml.external"
             ux_info "Using: Public npmjs registry (no proxy)"
             ;;
         public)
-            # Public PC: no bunfig.toml needed (defaults)
-            ux_info "No bunfig.toml needed (using bun defaults)"
+            _restore_config_from_backup "$bunfig_target"
             ;;
     esac
 }
