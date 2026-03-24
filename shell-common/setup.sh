@@ -34,6 +34,7 @@ SECURITY_CONFIG_internal="/etc/ssl/certs/ca-certificates.crt"
 # Tool-specific configurations are managed via tracked files at project root
 # and symlinked to their respective locations:
 #   npm/   → ~/.npmrc
+#   bun/   → ~/.bunfig.toml
 #   pip/   → ~/.config/pip/pip.conf
 #   uv/    → ~/.config/uv/uv.toml
 
@@ -195,6 +196,32 @@ setup_npm_symlink() {
         public)
             # Public PC: no .npmrc needed (defaults)
             ux_info "No .npmrc needed (using npm defaults)"
+            ;;
+    esac
+}
+
+setup_bun_config() {
+    environment="$1"
+    bunfig_target="$HOME/.bunfig.toml"
+
+    ux_header "Setting up Bun configuration for: $environment"
+
+    # Create symlink based on environment
+    case "$environment" in
+        internal)
+            _prepare_config_target "$bunfig_target"
+            ln -s "${DOTFILES_ROOT}/bun/bunfig.toml.internal" "$bunfig_target"
+            ux_success "Created symlink: ~/.bunfig.toml → bun/bunfig.toml.internal"
+            ux_info "Using: Samsung internal Nexus registry for npm packages"
+            ;;
+        external)
+            _prepare_config_target "$bunfig_target"
+            ln -s "${DOTFILES_ROOT}/bun/bunfig.toml.external" "$bunfig_target"
+            ux_success "Created symlink: ~/.bunfig.toml → bun/bunfig.toml.external"
+            ux_info "Using: Public npmjs registry (no proxy)"
+            ;;
+        public)
+            _restore_config_from_backup "$bunfig_target"
             ;;
     esac
 }
@@ -518,6 +545,7 @@ main() {
             ux_info "Selected: Public PC"
             cleanup_local_files
             setup_npm_symlink "public"
+            setup_bun_config "public"
             setup_pip_config "public"
             setup_uv_config "public"
             setup_cargo_config "public"
@@ -536,6 +564,7 @@ main() {
             cleanup_local_files
             setup_local_files "internal"
             setup_npm_symlink "internal"
+            setup_bun_config "internal"
             setup_pip_config "internal"
             setup_uv_config "internal"
             setup_cargo_config "internal"
@@ -551,6 +580,7 @@ main() {
             ux_info "  - SSL Certificate: McAfee (/usr/share/ca-certificates/extra/McAfee_Certificate.crt)"
             ux_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Nexus + proxy)"
+            ux_info "  - Bun: ~/.bunfig.toml → bun/bunfig.toml.internal (Nexus registry)"
             ux_info "  - Pip: Samsung internal repository configured"
             ux_info "  - uv: Samsung internal repository + proxy configured"
             ux_info "  - Cargo: ~/.cargo/config.toml (Nexus proxy for crates.io)"
@@ -570,6 +600,7 @@ main() {
             cleanup_local_files
             setup_local_files "external"
             setup_npm_symlink "external"
+            setup_bun_config "external"
             setup_pip_config "external"
             setup_uv_config "external"
             setup_cargo_config "external"
@@ -585,6 +616,7 @@ main() {
             ux_info "  - SSL Certificate: samsungsemi (/usr/local/share/ca-certificates/samsungsemi-prx.com.crt)"
             ux_info "  - Proxy: Skipped (not needed for VPN - direct connection)"
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.external (npmjs + no proxy)"
+            ux_info "  - Bun: ~/.bunfig.toml → bun/bunfig.toml.external (public registry)"
             ux_info "  - Pip: Public PyPI configured"
             ux_info "  - Next: Run 'setup_crt.sh' to install the certificate"
             ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
