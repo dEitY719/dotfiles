@@ -10,7 +10,7 @@ redis_help() {
     ux_table_row "redis-info [section]" "Server info" "server, memory, clients, etc."
     ux_table_row "redis-monitor" "Live monitor" "Real-time command stream"
     ux_table_row "redis-dbsize" "Key count" "Current DB key count"
-    ux_table_row "redis-keys [pattern]" "Scan keys" "SCAN with glob pattern"
+    ux_table_row "redis-keys [pattern] [limit]" "Scan keys" "SCAN with glob pattern (default: 20)"
     ux_table_row "redis-flush <db|all>" "Flush data" "Clear current DB or all DBs"
     ux_table_row "redis-config-get <param>" "Config value" "Get runtime config"
     ux_table_row "redis-slowlog [count]" "Slow queries" "Recent slow log entries"
@@ -19,6 +19,7 @@ redis_help() {
     ux_table_row "install-redis" "Install Redis" "Interactive installer for WSL"
 
     ux_section "Environment"
+    ux_table_row "REDISCLI_AUTH" "Password" "Auto-auth for all commands"
     ux_table_row "REDIS_DEFAULT_HOST" "Server host" "Default: 127.0.0.1"
     ux_table_row "REDIS_DEFAULT_PORT" "Server port" "Default: 6379"
 }

@@ -7,6 +7,16 @@
 # -------------------------------
 REDIS_DEFAULT_HOST="${REDIS_DEFAULT_HOST:-127.0.0.1}"
 REDIS_DEFAULT_PORT="${REDIS_DEFAULT_PORT:-6379}"
+# Authentication: set REDISCLI_AUTH env var for password-protected instances.
+# redis-cli reads REDISCLI_AUTH automatically, so all wrapper functions
+# work transparently with or without a password.
+
+# -------------------------------
+# Internal: systemd availability check
+# -------------------------------
+_redis_has_systemd() {
+    command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]
+}
 
 # -------------------------------
 # 1) Server Management
@@ -26,7 +36,7 @@ redis_server() {
 
     case "$action" in
     start | stop | restart | status)
-        if command -v systemctl >/dev/null 2>&1; then
+        if _redis_has_systemd; then
             ux_info "Running: sudo systemctl $action redis-server"
             sudo systemctl "$action" redis-server
         else
@@ -48,13 +58,8 @@ redis_server() {
 redis_cli_connect() {
     local host="${1:-$REDIS_DEFAULT_HOST}"
     local port="${2:-$REDIS_DEFAULT_PORT}"
-    local password="${3:-}"
 
-    if [ -n "$password" ]; then
-        redis-cli -h "$host" -p "$port" -a "$password"
-    else
-        redis-cli -h "$host" -p "$port"
-    fi
+    redis-cli -h "$host" -p "$port"
 }
 
 # -------------------------------
@@ -69,6 +74,9 @@ redis_ping() {
         ux_success "Redis is running (${host}:${port})"
     else
         ux_error "Redis is not responding (${host}:${port})"
+        if [ -z "${REDISCLI_AUTH:-}" ]; then
+            ux_info "If Redis requires a password, set: export REDISCLI_AUTH=<password>"
+        fi
         return 1
     fi
 }
@@ -92,9 +100,9 @@ redis_dbsize() {
 
 redis_keys() {
     local pattern="${1:-*}"
-    local count="${2:-20}"
-    ux_info "Scanning keys matching '$pattern' (limit: $count)"
-    redis-cli -h "$REDIS_DEFAULT_HOST" -p "$REDIS_DEFAULT_PORT" --scan --pattern "$pattern" --count "$count"
+    local limit="${2:-20}"
+    ux_info "Scanning keys matching '$pattern' (max: $limit results)"
+    redis-cli -h "$REDIS_DEFAULT_HOST" -p "$REDIS_DEFAULT_PORT" --scan --pattern "$pattern" | head -n "$limit"
 }
 
 redis_flush() {

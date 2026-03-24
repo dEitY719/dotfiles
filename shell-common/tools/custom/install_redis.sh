@@ -7,6 +7,36 @@ set -e
 # Initialize common tools environment
 source "$(dirname "$0")/init.sh" || exit 1
 
+# Internal: check if systemd is PID 1
+_installer_has_systemd() {
+    command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]
+}
+
+# Internal: restart redis-server using appropriate init system
+_installer_restart_redis() {
+    if _installer_has_systemd; then
+        sudo systemctl restart redis-server
+    else
+        sudo service redis-server restart
+    fi
+}
+
+# Internal: safely write requirepass to redis.conf without sed interpolation issues
+# Uses grep + tee to avoid special character problems (/, &, \ in passwords)
+_installer_set_requirepass() {
+    local redis_conf="$1"
+    local password="$2"
+    local tmp_conf
+
+    tmp_conf=$(mktemp)
+    # Remove existing requirepass line(s) and append the new one
+    grep -v "^requirepass " "$redis_conf" | sudo tee "$tmp_conf" >/dev/null
+    printf "requirepass %s\n" "$password" | sudo tee -a "$tmp_conf" >/dev/null
+    sudo cp "$tmp_conf" "$redis_conf"
+    sudo chmod 640 "$redis_conf"
+    rm -f "$tmp_conf"
+}
+
 main() {
     clear
     ux_header "Redis Server Installer for WSL/Ubuntu"
@@ -59,8 +89,7 @@ main() {
     # ========================================
     ux_step "3/5" "Starting and enabling Redis service..."
 
-    # Check if systemd is available
-    if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+    if _installer_has_systemd; then
         if ! sudo systemctl start redis-server; then
             ux_warning "Failed to start Redis service via systemctl."
         else
@@ -91,8 +120,9 @@ main() {
     # ========================================
     ux_step "4/5" "Configuring Redis (optional)..."
 
-    # Bind to localhost only (security)
     local redis_conf="/etc/redis/redis.conf"
+    local password_was_set=false
+
     if [[ -f "$redis_conf" ]]; then
         ux_info "Redis config file: $redis_conf"
 
@@ -109,13 +139,7 @@ main() {
                 echo "maxmemory-policy allkeys-lru" | sudo tee -a "$redis_conf" >/dev/null
             fi
             ux_success "maxmemory set to 256mb with allkeys-lru eviction."
-
-            # Restart to apply config
-            if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
-                sudo systemctl restart redis-server
-            else
-                sudo service redis-server restart
-            fi
+            _installer_restart_redis
         else
             ux_info "Configuration skipped. Using defaults."
         fi
@@ -125,19 +149,10 @@ main() {
             read -r -s redis_pass
             echo ""
             if [[ -n "$redis_pass" ]]; then
-                if grep -q "^requirepass " "$redis_conf"; then
-                    sudo sed -i "s/^requirepass .*/requirepass $redis_pass/" "$redis_conf"
-                else
-                    echo "requirepass $redis_pass" | sudo tee -a "$redis_conf" >/dev/null
-                fi
-                ux_success "Password set. Use: redis-cli -a <password>"
-
-                # Restart to apply
-                if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
-                    sudo systemctl restart redis-server
-                else
-                    sudo service redis-server restart
-                fi
+                _installer_set_requirepass "$redis_conf" "$redis_pass"
+                password_was_set=true
+                ux_success "Password set."
+                _installer_restart_redis
             fi
         fi
     else
@@ -161,9 +176,13 @@ main() {
         ux_info "Redis CLI Version:"
         redis-cli --version
 
-        # Ping test
+        # Ping test (use password if it was just set)
         local ping_result
-        ping_result=$(redis-cli ping 2>/dev/null)
+        if [[ "$password_was_set" = "true" ]]; then
+            ping_result=$(REDISCLI_AUTH="$redis_pass" redis-cli ping 2>/dev/null)
+        else
+            ping_result=$(redis-cli ping 2>/dev/null)
+        fi
         if [[ "$ping_result" == "PONG" ]]; then
             ux_success "Redis is responding to PING."
         else
@@ -182,6 +201,15 @@ main() {
     # ========================================
     echo ""
     ux_header "Redis Installation Complete!"
+
+    if [[ "$password_was_set" = "true" ]]; then
+        ux_section "Authentication"
+        ux_info "Password was configured. Add this to your shell profile:"
+        echo "  ${UX_PRIMARY}export REDISCLI_AUTH=\"<your-password>\"${UX_RESET}"
+        echo ""
+        ux_info "All redis-* helper commands will authenticate automatically via REDISCLI_AUTH."
+    fi
+
     ux_section "Next Steps"
     ux_numbered 1 "Check status: ${UX_PRIMARY}redis-server-ctl status${UX_RESET}"
     ux_numbered 2 "Test connection: ${UX_PRIMARY}redis-ping${UX_RESET}"
