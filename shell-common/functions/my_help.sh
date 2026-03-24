@@ -144,7 +144,7 @@ _register_default_help_categories() {
 
     # Category membership (space-separated topic keys)
     HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git uv py nvm npm pp cli ux du psql mytool}"
-    HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql gpu network}"
+    HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql redis gpu network}"
     HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc gemini codex litellm ollama claude_plugins claude_skills_marketplace}"
     HELP_CATEGORY_MEMBERS[cli]="${HELP_CATEGORY_MEMBERS[cli]:-fzf fd fasd ripgrep pet bat zsh zsh_autosuggestions gc}"
     HELP_CATEGORY_MEMBERS[config]="${HELP_CATEGORY_MEMBERS[config]:-p10k crt apt pip}"
@@ -204,6 +204,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[gc_help]="${HELP_DESCRIPTIONS[gc_help]:-[CLI] git-crypt encryption}"
     HELP_DESCRIPTIONS[mytool_help]="${HELP_DESCRIPTIONS[mytool_help]:-[Development] Custom tools and scripts}"
     HELP_DESCRIPTIONS[mysql_help]="${HELP_DESCRIPTIONS[mysql_help]:-[DevOps] MySQL service management}"
+    HELP_DESCRIPTIONS[redis_help]="${HELP_DESCRIPTIONS[redis_help]:-[DevOps] Redis service management}"
     HELP_DESCRIPTIONS[zsh_help]="${HELP_DESCRIPTIONS[zsh_help]:-[CLI] Zsh shell management}"
     HELP_DESCRIPTIONS[zsh_autosuggestions_help]="${HELP_DESCRIPTIONS[zsh_autosuggestions_help]:-[CLI] zsh-autosuggestions plugin}"
     HELP_DESCRIPTIONS[bat_help]="${HELP_DESCRIPTIONS[bat_help]:-[CLI] bat file viewer}"
