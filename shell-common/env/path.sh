@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # path.bash
 # PATH 관련 환경 변수 설정
 
@@ -10,6 +10,13 @@ export PATH="/usr/local/go/bin:$PATH" # Go
 
 # 사용자 정의 스크립트 경로
 export PATH="${DOTFILES_BASH_DIR:-${DOTFILES_ROOT:-$HOME/dotfiles}/bash}/scripts:$PATH"
+
+# Bun (JavaScript runtime/package manager)
+# bun.sh/install 로 설치 시 ~/.bun/bin 에 바이너리 설치됨
+if [ -d "$HOME/.bun/bin" ]; then
+    export BUN_INSTALL="$HOME/.bun"
+    export PATH="$BUN_INSTALL/bin:$PATH"
+fi
 
 # PATH 변수 중복 제거 함수
 # PathCleaner.clean_paths()
