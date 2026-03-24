@@ -40,7 +40,7 @@ alias gfu='git fetch upstream'                   # upstream에서 fetch
 alias gfa='git fetch --all --prune'              # 원격 전체 fetch + 필요없는 브랜치 정리
 
 # Git cleanup
-alias grmc='git rm --cached'                     # 파일을 스테이징에서 제거 (파일 시스템은 유지)
+alias grmc='git_rm_cached'                        # 파일을 스테이징에서 제거 (파일 시스템은 유지)
 
 # Git cherry-pick
 alias gcpa='git cherry-pick --abort'             # Cherry-pick 작업 중단
