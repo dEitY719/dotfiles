@@ -226,6 +226,33 @@ setup_bun_config() {
     esac
 }
 
+setup_opencode_config() {
+    environment="$1"
+    opencode_target="$HOME/.config/opencode/opencode.json"
+
+    ux_header "Setting up OpenCode configuration for: $environment"
+
+    case "$environment" in
+        internal)
+            mkdir -p "$(dirname "$opencode_target")"
+            _prepare_config_target "$opencode_target"
+            ln -s "${DOTFILES_ROOT}/opencode/opencode.json.internal" "$opencode_target"
+            ux_success "Created symlink: ~/.config/opencode/opencode.json → opencode/opencode.json.internal"
+            ux_info "Using: Samsung internal LiteLLM endpoint"
+            ;;
+        external)
+            mkdir -p "$(dirname "$opencode_target")"
+            _prepare_config_target "$opencode_target"
+            ln -s "${DOTFILES_ROOT}/opencode/opencode.json.external" "$opencode_target"
+            ux_success "Created symlink: ~/.config/opencode/opencode.json → opencode/opencode.json.external"
+            ux_info "Using: Local LiteLLM proxy (localhost:4444)"
+            ;;
+        public)
+            _restore_config_from_backup "$opencode_target"
+            ;;
+    esac
+}
+
 verify_config() {
     environment="$1"
 
@@ -546,6 +573,7 @@ main() {
             cleanup_local_files
             setup_npm_symlink "public"
             setup_bun_config "public"
+            setup_opencode_config "public"
             setup_pip_config "public"
             setup_uv_config "public"
             setup_cargo_config "public"
@@ -565,6 +593,7 @@ main() {
             setup_local_files "internal"
             setup_npm_symlink "internal"
             setup_bun_config "internal"
+            setup_opencode_config "internal"
             setup_pip_config "internal"
             setup_uv_config "internal"
             setup_cargo_config "internal"
@@ -581,6 +610,7 @@ main() {
             ux_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Nexus + proxy)"
             ux_info "  - Bun: ~/.bunfig.toml → bun/bunfig.toml.internal (Nexus registry)"
+            ux_info "  - OpenCode: ~/.config/opencode/opencode.json → opencode/opencode.json.internal"
             ux_info "  - Pip: Samsung internal repository configured"
             ux_info "  - uv: Samsung internal repository + proxy configured"
             ux_info "  - Cargo: ~/.cargo/config.toml (Nexus proxy for crates.io)"
@@ -601,6 +631,7 @@ main() {
             setup_local_files "external"
             setup_npm_symlink "external"
             setup_bun_config "external"
+            setup_opencode_config "external"
             setup_pip_config "external"
             setup_uv_config "external"
             setup_cargo_config "external"
@@ -617,6 +648,7 @@ main() {
             ux_info "  - Proxy: Skipped (not needed for VPN - direct connection)"
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.external (npmjs + no proxy)"
             ux_info "  - Bun: ~/.bunfig.toml → bun/bunfig.toml.external (public registry)"
+            ux_info "  - OpenCode: ~/.config/opencode/opencode.json → opencode/opencode.json.external"
             ux_info "  - Pip: Public PyPI configured"
             ux_info "  - Next: Run 'setup_crt.sh' to install the certificate"
             ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
