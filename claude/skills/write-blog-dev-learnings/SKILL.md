@@ -124,18 +124,46 @@ Step-by-step으로 구체적으로. 코드블록 필수.
 - **Naming**: kebab-case, `-blog` suffix, no date prefix
 - **Examples**: `redis-password-sed-injection-blog.md`, `wsl-systemd-false-positive-blog.md`
 
+## How This Skill Is Invoked
+
+The user runs this skill from **any project directory** via Claude Code TUI:
+
+```
+/write-blog-dev-learnings "지금까지 너와 작업한 내용"
+/write-blog-dev-learnings "오늘 redis sed injection 삽질"
+/write-blog-dev-learnings "WSL systemd 감지 문제"
+```
+
+The quoted text is the **topic hint**. It can be:
+- A summary of the current conversation ("지금까지 작업한 내용")
+- A specific incident ("docker env-file 대체 문제")
+- A vague pointer ("오늘 삽질한 거")
+
 ## Process
 
-1. **Interview**: Ask the user about the incident/lesson:
+### When the user provides conversation context ("지금까지 작업한 내용")
+
+The current conversation already contains the war story. Extract from it:
+
+1. **Mine the conversation** for: symptoms, failed attempts, root cause, solution, and lessons learned
+2. **Read 1-2 existing posts** from `~/para/archive/playbook/docs/dev-learnings/` to calibrate voice and style
+3. **Propose 3 title candidates** — let the user pick (or pick the best one if the user says "알아서 해")
+4. **Write the full post** following the structure above
+5. **Save** to `~/para/archive/playbook/docs/dev-learnings/{topic}-blog.md`
+
+### When the user provides a specific topic without context
+
+If the conversation doesn't contain enough detail about the incident:
+
+1. **Interview** — ask the user:
    - What happened? (symptoms)
    - What did you try? (failed attempts)
    - What was the real cause? (root cause)
    - How did you fix it? (solution)
-   - What's the one-liner lesson? (TL;DR candidate)
-2. **Draft title options**: Propose 3 title candidates — let the user pick
-3. **Write the full post** following the structure above
-4. **Save** to `~/para/archive/playbook/docs/dev-learnings/{topic}-blog.md`
+2. **Read 1-2 existing posts** to calibrate voice
+3. **Propose 3 title candidates**
+4. **Write and save**
 
-## Before Writing: Read Existing Posts
+### Important: Always write to the absolute path
 
-Before drafting, read 1-2 existing posts from `~/para/archive/playbook/docs/dev-learnings/` to calibrate your voice and style. Match the energy, humor level, and technical depth of the existing posts.
+The output path is always `~/para/archive/playbook/docs/dev-learnings/{topic}-blog.md`, regardless of the current working directory. This skill writes across project boundaries.
