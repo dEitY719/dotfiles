@@ -275,8 +275,8 @@ claude_mount_docs() {
 }
 
 # NOTE: Auto-mount functionality removed from shell init to prevent sudo prompts
-# during shell startup. Use explicit function instead:
-#   claude_mount_docs - Mount docs directory
+# during shell startup. Since dotfiles configures passwordless sudoers for skills,
+# we can safely attempt a silent auto-mount in interactive shells.
 
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Mount All Helper
@@ -318,6 +318,23 @@ claude_mount_all() {
 alias claude-mount-all='claude_mount_all'
 alias claude-mount-skills='claude_mount_skills'
 alias claude-mount-docs='claude_mount_docs'
+
+_claude_try_auto_mount() {
+    case "$-" in
+        *i*) ;;
+        *) return 0 ;;
+    esac
+
+    if [ "${CLAUDE_AUTO_MOUNT_SKILLS:-0}" = "1" ]; then
+        claude_mount_skills >/dev/null 2>&1 || true
+    fi
+
+    if [ "${CLAUDE_AUTO_MOUNT_DOCS:-0}" = "1" ]; then
+        claude_mount_docs >/dev/null 2>&1 || true
+    fi
+}
+
+_claude_try_auto_mount
 
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Marketplace Plugins Management
