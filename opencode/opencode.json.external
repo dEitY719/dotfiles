@@ -5,7 +5,7 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "LiteLLM Provider",
       "options": {
-        "baseURL": "http://localhost:4444/",
+        "baseURL": "http://localhost:4444/v1",
         "apiKey": "sk-4444"
       },
       "models": {
