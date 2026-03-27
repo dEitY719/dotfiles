@@ -143,7 +143,7 @@ _register_default_help_categories() {
     HELP_CATEGORIES[system]="${HELP_CATEGORIES[system]:-System tools (directory navigation, opencode)}"
 
     # Category membership (space-separated topic keys)
-    HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git uv py nvm npm pp cli ux du psql mytool}"
+    HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git uv py nvm npm bun pp cli ux du psql mytool}"
     HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql redis gpu network}"
     HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc gemini codex litellm ollama claude_plugins claude_skills_marketplace}"
     HELP_CATEGORY_MEMBERS[cli]="${HELP_CATEGORY_MEMBERS[cli]:-fzf fd fasd ripgrep pet bat zsh zsh_autosuggestions gc}"
@@ -197,6 +197,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[codex_help]="${HELP_DESCRIPTIONS[codex_help]:-[AI/LLM] Codex CLI commands}"
     HELP_DESCRIPTIONS[dproxy_help]="${HELP_DESCRIPTIONS[dproxy_help]:-[DevOps] Docker corporate proxy}"
     HELP_DESCRIPTIONS[npm_help]="${HELP_DESCRIPTIONS[npm_help]:-[Development] npm package manager}"
+    HELP_DESCRIPTIONS[bun_help]="${HELP_DESCRIPTIONS[bun_help]:-[Development] Bun runtime and bunx}"
     HELP_DESCRIPTIONS[nvm_help]="${HELP_DESCRIPTIONS[nvm_help]:-[Development] nvm node versions}"
     HELP_DESCRIPTIONS[litellm_help]="${HELP_DESCRIPTIONS[litellm_help]:-[AI/LLM] LiteLLM proxy and routing}"
     HELP_DESCRIPTIONS[gpu_help]="${HELP_DESCRIPTIONS[gpu_help]:-[DevOps] GPU monitoring (WSL)}"
