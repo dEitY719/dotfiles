@@ -29,12 +29,14 @@ HOME_CLAUDE="${HOME}/.claude"
 HOME_SETTINGS="${HOME_CLAUDE}/settings.json"
 HOME_STATUSLINE="${HOME_CLAUDE}/statusline-command.sh"
 HOME_SKILLS="${HOME_CLAUDE}/skills"
+HOME_DOCS="${HOME_CLAUDE}/docs"
 HOME_GLOBAL_MEMORY="${HOME_CLAUDE}/projects/GLOBAL/memory"
 
 # Dotfiles source locations
 CLAUDE_SETTINGS_SOURCE="${CLAUDE_DOTFILES}/settings.json"
 CLAUDE_STATUSLINE_SOURCE="${CLAUDE_DOTFILES}/statusline-command.sh"
 CLAUDE_SKILLS_SOURCE="${CLAUDE_DOTFILES}/skills"
+CLAUDE_DOCS_SOURCE="${CLAUDE_DOTFILES}/docs"
 CLAUDE_GLOBAL_MEMORY_SOURCE="${CLAUDE_DOTFILES}/global-memory"
 
 # Load UX library (unified library at shell-common/tools/ux_lib/)
@@ -130,13 +132,17 @@ EOF
     fi
 }
 
-_is_skills_mounted() {
+_is_mounted() {
+    local target="$1"
     if command -v findmnt >/dev/null 2>&1; then
-        findmnt "$HOME_SKILLS" >/dev/null 2>&1
+        findmnt "$target" >/dev/null 2>&1
     else
-        mount | grep -q "on ${HOME_SKILLS} " 2>/dev/null
+        mount | grep -q "on ${target} " 2>/dev/null
     fi
 }
+
+_is_skills_mounted() { _is_mounted "$HOME_SKILLS"; }
+_is_docs_mounted()   { _is_mounted "$HOME_DOCS"; }
 
 _mount_skills_directory() {
     if _is_skills_mounted; then
@@ -151,6 +157,60 @@ _mount_skills_directory() {
     fi
 
     log_error "skills bind mount 실패"
+    return 1
+}
+
+setup_docs_mount() {
+    local sudoers_file="/etc/sudoers.d/claude-docs-mount"
+
+    log_info "Docs 디렉토리 bind mount 설정"
+
+    if [ -f "$sudoers_file" ]; then
+        log_dim "✓ docs sudoers 설정이 이미 존재합니다"
+        return 0
+    fi
+
+    log_info "sudoers 파일 생성: $sudoers_file"
+    if ! cat << EOF | sudo tee "$sudoers_file" > /dev/null
+# Allow passwordless bind mount for Claude Code docs directory
+# Created by dotfiles/claude/setup.sh
+${USER} ALL=(ALL) NOPASSWD: /bin/mount --bind ${CLAUDE_DOCS_SOURCE} ${HOME_DOCS}
+${USER} ALL=(ALL) NOPASSWD: /usr/bin/mount --bind ${CLAUDE_DOCS_SOURCE} ${HOME_DOCS}
+${USER} ALL=(ALL) NOPASSWD: /bin/umount ${HOME_DOCS}
+${USER} ALL=(ALL) NOPASSWD: /usr/bin/umount ${HOME_DOCS}
+EOF
+    then
+        log_error "docs sudoers 파일 생성 실패"
+        return 1
+    fi
+
+    if sudo chmod 440 "$sudoers_file"; then
+        log_dim "✓ docs sudoers 설정 완료"
+    else
+        log_error "docs sudoers 파일 권한 설정 실패"
+        return 1
+    fi
+}
+
+_mount_docs_directory() {
+    [ -d "$CLAUDE_DOCS_SOURCE" ] || return 0
+
+    if _is_docs_mounted; then
+        log_dim "✓ docs bind mount가 이미 활성화되어 있습니다"
+        return 0
+    fi
+
+    if [ ! -d "$HOME_DOCS" ]; then
+        mkdir -p "$HOME_DOCS" || { log_error "~/.claude/docs 디렉토리 생성 실패"; return 1; }
+    fi
+
+    log_info "docs bind mount 활성화: $HOME_DOCS <- $CLAUDE_DOCS_SOURCE"
+    if sudo mount --bind "$CLAUDE_DOCS_SOURCE" "$HOME_DOCS" 2>/dev/null; then
+        log_dim "✓ docs bind mount 완료"
+        return 0
+    fi
+
+    log_error "docs bind mount 실패"
     return 1
 }
 
@@ -202,6 +262,12 @@ setup_skills_mount
 # skills bind mount 활성화
 _mount_skills_directory
 
+# docs bind mount를 위한 sudoers 설정
+setup_docs_mount
+
+# docs bind mount 활성화
+_mount_docs_directory
+
 # global memory 디렉토리 심볼릭 링크 생성
 if [ ! -d "$(dirname "$HOME_GLOBAL_MEMORY")" ]; then
     log_info "'$(dirname "$HOME_GLOBAL_MEMORY")' 디렉토리 생성"
@@ -248,11 +314,18 @@ ux_bullet "~/.claude/settings.json → ~/dotfiles/claude/settings.json (symlink)
 ux_bullet "~/.claude/statusline-command.sh → ~/dotfiles/claude/statusline-command.sh (symlink)"
 ux_bullet "~/.claude/projects/GLOBAL/memory → ~/dotfiles/claude/global-memory (symlink)"
 ux_bullet "/etc/sudoers.d/claude-skills-mount (passwordless mount)"
+ux_bullet "/etc/sudoers.d/claude-docs-mount (passwordless mount)"
 
 if _is_skills_mounted; then
     ux_bullet "~/.claude/skills ← ~/dotfiles/claude/skills (bind mount active)"
 else
     ux_bullet "~/.claude/skills mount failed during setup; sudoers is configured"
+fi
+
+if _is_docs_mounted; then
+    ux_bullet "~/.claude/docs ← ~/dotfiles/claude/docs (bind mount active)"
+else
+    ux_bullet "~/.claude/docs mount failed during setup; sudoers is configured"
 fi
 echo ""
 
