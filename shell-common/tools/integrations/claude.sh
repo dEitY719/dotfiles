@@ -274,9 +274,11 @@ claude_mount_docs() {
     fi
 }
 
-# NOTE: Auto-mount functionality removed from shell init to prevent sudo prompts
-# during shell startup. Since dotfiles configures passwordless sudoers for skills,
-# we can safely attempt a silent auto-mount in interactive shells.
+# NOTE: Auto-mount is controlled by environment variables:
+#   CLAUDE_AUTO_MOUNT_SKILLS=1
+#   CLAUDE_AUTO_MOUNT_DOCS=1
+# This repository sets defaults in shell-common/env/claude.sh.
+# Requires passwordless sudoers configured by dotfiles/claude/setup.sh
 
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Mount All Helper
@@ -319,6 +321,9 @@ alias claude-mount-all='claude_mount_all'
 alias claude-mount-skills='claude_mount_skills'
 alias claude-mount-docs='claude_mount_docs'
 
+# Auto-mount configuration via environment variables
+# Set to "1" to enable auto-mounting in interactive shells
+# Example: export CLAUDE_AUTO_MOUNT_SKILLS=1
 _claude_try_auto_mount() {
     case "$-" in
         *i*) ;;
