@@ -108,6 +108,7 @@ opencode_help() {
 
     ux_section "필수 유틸리티"
     ux_bullet "${UX_PRIMARY}bunx oh-my-opencode install${UX_RESET}   : Oh My OpenCode (OMO) 인터페이스 설치"
+    ux_bullet "bunx 없을 때             : ${UX_PRIMARY}install-bun${UX_RESET} 또는 ${UX_PRIMARY}bun-help${UX_RESET} 참고"
     echo ""
 
     ux_section "Environments (managed by setup.sh)"
