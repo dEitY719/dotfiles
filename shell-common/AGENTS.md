@@ -282,6 +282,32 @@ zsh -c "source shell-common/functions/git.sh && type git_help"
 5. Test with both bash and zsh
 6. Run `shellcheck -s sh <file>.sh`
 
+## Adding a New Tool Integration (3-Step Pattern)
+
+새 외부 도구(예: bun, foo) 통합 시 항상 3개 파일이 필요:
+
+**Step 1** — `tools/integrations/<tool>.sh` (자동 로드됨)
+- PATH export, aliases, install/uninstall 함수
+- UX lib guard 패턴 포함:
+  ```sh
+  if ! type ux_header >/dev/null 2>&1; then
+      _dir="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
+      . "${_dir}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+      unset _dir
+  fi
+  ```
+
+**Step 2** — `functions/<tool>_help.sh` (자동 로드됨)
+- `<tool>_help()` 함수 + `alias <tool>-help='<tool>_help'`
+- `ux_table_row` / `ux_section` / `ux_bullet` 사용
+
+**Step 3** — `functions/my_help.sh` 수동 등록 (자동 등록 안 됨!)
+- `HELP_CATEGORY_MEMBERS[<category>]`에 토픽 추가
+- `HELP_DESCRIPTIONS[<tool>_help]` 항목 추가
+- 카테고리: `development`, `devops`, `ai`, `cli`, `config`, `docs`, `system`, `meta`
+
+**참조 예시**: `npm.sh` + `npm_help.sh` + `my_help.sh`의 npm 항목
+
 ## Splitting Large Files
 If any file exceeds 200 lines:
 - Split by functional boundary
