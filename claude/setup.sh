@@ -130,18 +130,16 @@ EOF
     fi
 }
 
-is_skills_mounted() {
+_is_skills_mounted() {
     if command -v findmnt >/dev/null 2>&1; then
         findmnt "$HOME_SKILLS" >/dev/null 2>&1
-        return $?
+    else
+        mount | grep -q "on ${HOME_SKILLS} " 2>/dev/null
     fi
-
-    mount | grep -q "on ${HOME_SKILLS} " 2>/dev/null
-    return $?
 }
 
-mount_skills_directory() {
-    if is_skills_mounted; then
+_mount_skills_directory() {
+    if _is_skills_mounted; then
         log_dim "✓ skills bind mount가 이미 활성화되어 있습니다"
         return 0
     fi
@@ -202,10 +200,7 @@ fi
 setup_skills_mount
 
 # skills bind mount 활성화
-skills_mount_active=0
-if mount_skills_directory; then
-    skills_mount_active=1
-fi
+_mount_skills_directory
 
 # global memory 디렉토리 심볼릭 링크 생성
 if [ ! -d "$(dirname "$HOME_GLOBAL_MEMORY")" ]; then
@@ -254,7 +249,7 @@ ux_bullet "~/.claude/statusline-command.sh → ~/dotfiles/claude/statusline-comm
 ux_bullet "~/.claude/projects/GLOBAL/memory → ~/dotfiles/claude/global-memory (symlink)"
 ux_bullet "/etc/sudoers.d/claude-skills-mount (passwordless mount)"
 
-if [ "$skills_mount_active" -eq 1 ]; then
+if _is_skills_mounted; then
     ux_bullet "~/.claude/skills ← ~/dotfiles/claude/skills (bind mount active)"
 else
     ux_bullet "~/.claude/skills mount failed during setup; sudoers is configured"
@@ -262,7 +257,7 @@ fi
 echo ""
 
 ux_section "다음 단계"
-if [ "$skills_mount_active" -eq 1 ]; then
+if _is_skills_mounted; then
     ux_bullet "새 쉘에서도 skills bind mount를 자동으로 유지합니다"
 else
     ux_bullet "새 쉘에서 자동 mount를 재시도합니다"
