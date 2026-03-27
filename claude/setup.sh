@@ -48,6 +48,15 @@ else
     exit 1
 fi
 
+# Load mount utilities (provides _is_mounted)
+MOUNT_LIB="${DOTFILES_ROOT}/shell-common/functions/mount.sh"
+if [ -f "$MOUNT_LIB" ]; then
+    source "$MOUNT_LIB"
+else
+    echo "Error: Mount library not found at $MOUNT_LIB"
+    exit 1
+fi
+
 # --- Logging Compatibility Functions ---
 
 log_info() { ux_info "$1"; }
@@ -96,123 +105,71 @@ create_symlink() {
     ln -s "$target" "$link_name" || log_error_and_exit "심볼릭 링크 생성 실패: $link_name -> $target"
 }
 
-setup_skills_mount() {
-    local sudoers_file="/etc/sudoers.d/claude-skills-mount"
+_setup_bind_mount_sudoers() {
+    local sudoers_file="$1"
+    local description="$2"
+    local source="$3"
+    local target="$4"
 
-    log_info "Skills 디렉토리 bind mount 설정"
-
-    # Check if sudoers file already exists
+    log_info "$description 디렉토리 bind mount sudoers 설정"
     if [ -f "$sudoers_file" ]; then
         log_dim "✓ sudoers 설정이 이미 존재합니다"
         return 0
     fi
 
-    # Create sudoers configuration
-    log_info "sudoers 파일 생성: $sudoers_file"
     if ! cat << EOF | sudo tee "$sudoers_file" > /dev/null
-# Allow passwordless bind mount for Claude Code skills directory
+# Allow passwordless bind mount for Claude Code $description directory
 # Created by dotfiles/claude/setup.sh
-${USER} ALL=(ALL) NOPASSWD: /bin/mount --bind ${CLAUDE_SKILLS_SOURCE} ${HOME_SKILLS}
-${USER} ALL=(ALL) NOPASSWD: /usr/bin/mount --bind ${CLAUDE_SKILLS_SOURCE} ${HOME_SKILLS}
-${USER} ALL=(ALL) NOPASSWD: /bin/umount ${HOME_SKILLS}
-${USER} ALL=(ALL) NOPASSWD: /usr/bin/umount ${HOME_SKILLS}
+${USER} ALL=(ALL) NOPASSWD: /bin/mount --bind ${source} ${target}
+${USER} ALL=(ALL) NOPASSWD: /usr/bin/mount --bind ${source} ${target}
+${USER} ALL=(ALL) NOPASSWD: /bin/umount ${target}
+${USER} ALL=(ALL) NOPASSWD: /usr/bin/umount ${target}
 EOF
     then
-        log_error "sudoers 파일 생성 실패"
+        log_error "$description sudoers 파일 생성 실패"
         return 1
     fi
 
-    # Set proper permissions
-    log_info "sudoers 파일 권한 설정"
     if sudo chmod 440 "$sudoers_file"; then
-        log_dim "✓ sudoers 설정 완료"
+        log_dim "✓ $description sudoers 설정 완료"
     else
-        log_error "sudoers 파일 권한 설정 실패"
+        log_error "$description sudoers 파일 권한 설정 실패"
         return 1
     fi
 }
 
-_is_mounted() {
-    local target="$1"
-    if command -v findmnt >/dev/null 2>&1; then
-        findmnt "$target" >/dev/null 2>&1
-    else
-        mount | grep -q "on ${target} " 2>/dev/null
-    fi
-}
+setup_skills_mount() { _setup_bind_mount_sudoers "/etc/sudoers.d/claude-skills-mount" "Skills" "$CLAUDE_SKILLS_SOURCE" "$HOME_SKILLS"; }
+setup_docs_mount()   { _setup_bind_mount_sudoers "/etc/sudoers.d/claude-docs-mount"   "Docs"   "$CLAUDE_DOCS_SOURCE"   "$HOME_DOCS"; }
 
 _is_skills_mounted() { _is_mounted "$HOME_SKILLS"; }
 _is_docs_mounted()   { _is_mounted "$HOME_DOCS"; }
 
-_mount_skills_directory() {
-    if _is_skills_mounted; then
-        log_dim "✓ skills bind mount가 이미 활성화되어 있습니다"
+_mount_bind_mount() {
+    local source="$1"
+    local target="$2"
+    local description="$3"
+
+    [ -d "$source" ] || return 0
+
+    if _is_mounted "$target"; then
+        log_dim "✓ $description bind mount가 이미 활성화되어 있습니다"
         return 0
     fi
 
-    log_info "skills bind mount 활성화: $HOME_SKILLS <- $CLAUDE_SKILLS_SOURCE"
-    if sudo mount --bind "$CLAUDE_SKILLS_SOURCE" "$HOME_SKILLS" 2>/dev/null; then
-        log_dim "✓ skills bind mount 완료"
+    mkdir -p "$target" || { log_error "$description 디렉토리 생성 실패"; return 1; }
+
+    log_info "$description bind mount 활성화: $target <- $source"
+    if sudo mount --bind "$source" "$target" 2>/dev/null; then
+        log_dim "✓ $description bind mount 완료"
         return 0
     fi
 
-    log_error "skills bind mount 실패"
+    log_error "$description bind mount 실패"
     return 1
 }
 
-setup_docs_mount() {
-    local sudoers_file="/etc/sudoers.d/claude-docs-mount"
-
-    log_info "Docs 디렉토리 bind mount 설정"
-
-    if [ -f "$sudoers_file" ]; then
-        log_dim "✓ docs sudoers 설정이 이미 존재합니다"
-        return 0
-    fi
-
-    log_info "sudoers 파일 생성: $sudoers_file"
-    if ! cat << EOF | sudo tee "$sudoers_file" > /dev/null
-# Allow passwordless bind mount for Claude Code docs directory
-# Created by dotfiles/claude/setup.sh
-${USER} ALL=(ALL) NOPASSWD: /bin/mount --bind ${CLAUDE_DOCS_SOURCE} ${HOME_DOCS}
-${USER} ALL=(ALL) NOPASSWD: /usr/bin/mount --bind ${CLAUDE_DOCS_SOURCE} ${HOME_DOCS}
-${USER} ALL=(ALL) NOPASSWD: /bin/umount ${HOME_DOCS}
-${USER} ALL=(ALL) NOPASSWD: /usr/bin/umount ${HOME_DOCS}
-EOF
-    then
-        log_error "docs sudoers 파일 생성 실패"
-        return 1
-    fi
-
-    if sudo chmod 440 "$sudoers_file"; then
-        log_dim "✓ docs sudoers 설정 완료"
-    else
-        log_error "docs sudoers 파일 권한 설정 실패"
-        return 1
-    fi
-}
-
-_mount_docs_directory() {
-    [ -d "$CLAUDE_DOCS_SOURCE" ] || return 0
-
-    if _is_docs_mounted; then
-        log_dim "✓ docs bind mount가 이미 활성화되어 있습니다"
-        return 0
-    fi
-
-    if [ ! -d "$HOME_DOCS" ]; then
-        mkdir -p "$HOME_DOCS" || { log_error "~/.claude/docs 디렉토리 생성 실패"; return 1; }
-    fi
-
-    log_info "docs bind mount 활성화: $HOME_DOCS <- $CLAUDE_DOCS_SOURCE"
-    if sudo mount --bind "$CLAUDE_DOCS_SOURCE" "$HOME_DOCS" 2>/dev/null; then
-        log_dim "✓ docs bind mount 완료"
-        return 0
-    fi
-
-    log_error "docs bind mount 실패"
-    return 1
-}
+_mount_skills_directory() { _mount_bind_mount "$CLAUDE_SKILLS_SOURCE" "$HOME_SKILLS" "skills"; }
+_mount_docs_directory()   { _mount_bind_mount "$CLAUDE_DOCS_SOURCE"   "$HOME_DOCS"   "docs"; }
 
 # --- Main Script Logic ---
 
@@ -250,22 +207,10 @@ create_symlink "$CLAUDE_SETTINGS_SOURCE" "$HOME_SETTINGS"
 # statusline-command.sh 심볼릭 링크 생성
 create_symlink "$CLAUDE_STATUSLINE_SOURCE" "$HOME_STATUSLINE"
 
-# skills 디렉토리 생성 (bind mount 사용)
-if [ ! -d "$HOME_SKILLS" ]; then
-    log_info "~/.claude/skills 디렉토리 생성"
-    mkdir -p "$HOME_SKILLS" || log_error_and_exit "~/.claude/skills 디렉토리 생성 실패"
-fi
-
-# skills bind mount를 위한 sudoers 설정
 setup_skills_mount
-
-# skills bind mount 활성화
 _mount_skills_directory
 
-# docs bind mount를 위한 sudoers 설정
 setup_docs_mount
-
-# docs bind mount 활성화
 _mount_docs_directory
 
 # global memory 디렉토리 심볼릭 링크 생성
