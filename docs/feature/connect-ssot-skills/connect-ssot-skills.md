@@ -85,7 +85,9 @@
 - [x] Codex Skills 경로: `~/.codex/skills/` ✅
 - [x] Gemini Skills 경로: `~/.gemini/skills/` ✅
 - [x] Claude Skills 경로: `~/.claude/skills` ✅
-- [ ] 각 도구가 symlink를 따라 Skills를 로드하는지 실제 동작 테스트 필요 (Claude 제외)
-- [ ] `~/.claude/skills`가 이미 mount된 상태에서 symlink로 전환할 때의 영향도 확인
-- [ ] OpenCode/Codex/Gemini가 symlink를 통해 Skill을 로드할 때 보안 정책이나 접근 제한이 있는지 확인
-- [ ] 여러 도구가 동시에 동일한 Skill 파일을 읽기/쓰기할 때의 Lock 문제 발생 여부
+- [x] symlink 생성 검증: opencode/gemini 전체 dir symlink, codex 36개 개별 symlink 모두 성공 ✅
+- [x] idempotency 검증: 재실행 시 "이미 연결됨" skip 동작 확인 ✅
+- [x] Codex `.system` 내장 스킬 보존 확인 ✅
+- [ ] 각 도구가 symlink를 통해 Skills를 실제로 로드하는지 동작 테스트 필요 (도구 실행 필요)
+- [ ] `~/.claude/skills` bind mount → symlink 전환 가능 여부 검토 (현재 bind mount 유지 중)
+- [ ] 동시 읽기/쓰기 Lock 문제 발생 여부 (실사용 중 모니터링)
