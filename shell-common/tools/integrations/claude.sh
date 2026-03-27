@@ -212,14 +212,12 @@ claude_mount_skills() {
             findmnt "$skills_target" > /dev/null 2>&1 && return 0
         else
             # Final fallback to mount command
-            mount | grep -q "${skills_target}" && return 0
+            mount | grep -q "on ${skills_target} " && return 0
         fi
     fi
 
     # Perform bind mount (will prompt for sudo password if needed)
-    sudo mount --bind "$skills_source" "$skills_target" 2>/dev/null
-
-    if [ $? -eq 0 ]; then
+    if sudo mount --bind "$skills_source" "$skills_target" 2>/dev/null; then
         return 0
     else
         # Silent fail - don't spam errors on every shell startup
@@ -259,14 +257,12 @@ claude_mount_docs() {
             findmnt "$docs_target" > /dev/null 2>&1 && return 0
         else
             # Final fallback to mount command
-            mount | grep -q "${docs_target}" && return 0
+            mount | grep -q "on ${docs_target} " && return 0
         fi
     fi
 
     # Perform bind mount (will prompt for sudo password if needed)
-    sudo mount --bind "$docs_source" "$docs_target" 2>/dev/null
-
-    if [ $? -eq 0 ]; then
+    if sudo mount --bind "$docs_source" "$docs_target" 2>/dev/null; then
         return 0
     else
         # Silent fail - don't spam errors on every shell startup
