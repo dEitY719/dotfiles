@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="ko" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dotfiles Setup Guide - Infographic</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { interpolate-size: allow-keywords; }
+
+    html.theme-dark {
+      --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C;
+      --border: rgba(255,255,255,0.04);
+      --text: #EDEDED; --text-secondary: #888;
+      --accent: #3b82f6; --accent-secondary: #8b5cf6;
+      --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b;
+    }
+    html.theme-light {
+      --bg: #FAFAF9; --surface: #FFFFFF; --surface-hover: #F5F5F4;
+      --border: rgba(0,0,0,0.06);
+      --text: #0f172a; --text-secondary: #64748b;
+      --accent: #2563eb; --accent-secondary: #7c3aed;
+      --positive: #059669; --negative: #e11d48; --warning: #d97706;
+    }
+
+    body {
+      font-family: 'Inter', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6; -webkit-font-smoothing: antialiased;
+      letter-spacing: -0.01em;
+      transition: background 0.3s, color 0.3s;
+      scrollbar-gutter: stable;
+    }
+    h1,h2,h3,h4,h5,h6 { 
+      color: var(--text); 
+      letter-spacing: -0.03em; 
+      line-height: 1.15;
+      text-wrap: balance;
+    }
+    h1 { font-weight: 800; }
+    h2 { font-weight: 700; }
+    h3 { font-weight: 600; }
+    p,li,td,th,span,label { color: var(--text); }
+    .text-secondary { color: var(--text-secondary); }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ===== HERO ===== */
+    .hero {
+      padding: 80px 0 60px;
+      text-align: center;
+      background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+    }
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 3.5rem);
+      margin-bottom: 16px;
+    }
+    .hero p {
+      font-size: 1.25rem;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* ===== STAT CARDS ===== */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-bottom: 64px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      transition: box-shadow 0.2s;
+    }
+    .stat-card:hover {
+      box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgba(0,0,0,0.12);
+    }
+    .stat-card .number {
+      font-size: 3.5rem;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .stat-card .label {
+      font-size: 1rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    /* ===== SECTION ===== */
+    .section {
+      padding: 48px 0;
+      border-top: 1px solid var(--border);
+    }
+    .section-header {
+      margin-bottom: 32px;
+    }
+    .section-header h2 {
+      font-size: clamp(1.75rem, 4vw, 2.25rem);
+      margin-bottom: 8px;
+    }
+    .section-header p {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+    }
+
+    /* ===== PROCESS FLOW ===== */
+    .process-flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: stretch;
+      margin-bottom: 48px;
+    }
+    .process-step {
+      flex: 1;
+      min-width: 200px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      position: relative;
+      transition: box-shadow 0.2s;
+    }
+    .process-step:hover {
+      box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgba(0,0,0,0.12);
+    }
+    .process-step::after {
+      content: '';
+      position: absolute;
+      right: -20px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-left: 12px solid var(--accent);
+      border-top: 8px solid transparent;
+      border-bottom: 8px solid transparent;
+    }
+    .process-step:last-child::after {
+      display: none;
+    }
+    .process-step .step-num {
+      display: inline-block;
+      background: var(--accent);
+      color: white;
+      font-size: 0.875rem;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+    .process-step h3 {
+      font-size: 1.25rem;
+      margin-bottom: 8px;
+    }
+    .process-step p {
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+    }
+
+    /* ===== COMPARISON TABLE ===== */
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 48px;
+    }
+    .comparison-table th,
+    .comparison-table td {
+      padding: 20px 24px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .comparison-table th {
+      background: var(--surface);
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .comparison-table td {
+      font-size: 1rem;
+    }
+    .comparison-table tr:hover td {
+      background: var(--surface);
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .badge-required {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--accent);
+    }
+    .badge-optional {
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--accent-secondary);
+    }
+    .badge-warning {
+      background: rgba(244, 63, 94, 0.15);
+      color: var(--negative);
+    }
+
+    /* ===== FILE CARDS ===== */
+    .file-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+    .file-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      transition: box-shadow 0.2s;
+    }
+    .file-card:hover {
+      box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgba(0,0,0,0.12);
+    }
+    .file-card .file-name {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.95rem;
+      color: var(--accent);
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+    .file-card h3 {
+      font-size: 1.15rem;
+      margin-bottom: 8px;
+    }
+    .file-card p {
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+    }
+    .file-card .role {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+    .file-card .role strong {
+      color: var(--text);
+    }
+
+    /* ===== WARNING BOX ===== */
+    .warning-box {
+      background: rgba(244, 63, 94, 0.08);
+      border: 1px solid rgba(244, 63, 94, 0.2);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 48px;
+    }
+    .warning-box h3 {
+      color: var(--negative);
+      font-size: 1.1rem;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .warning-box ul {
+      list-style: none;
+      padding: 0;
+    }
+    .warning-box li {
+      padding: 8px 0;
+      padding-left: 24px;
+      position: relative;
+      color: var(--text-secondary);
+    }
+    .warning-box li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 14px;
+      width: 8px;
+      height: 8px;
+      background: var(--negative);
+      border-radius: 50%;
+    }
+
+    /* ===== TROUBLESHOOTING ACCORDION ===== */
+    .accordion-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .accordion-item summary {
+      padding: 20px 24px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 1.05rem;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      list-style: none;
+    }
+    .accordion-item summary::-webkit-details-marker { display: none; }
+    .accordion-item summary::before {
+      content: '';
+      width: 24px;
+      height: 24px;
+      background: var(--accent);
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .accordion-item[open] summary::before {
+      background: var(--positive);
+    }
+    .accordion-item .accordion-content {
+      padding: 0 24px 20px;
+      color: var(--text-secondary);
+    }
+    .accordion-item .accordion-content code {
+      background: var(--bg);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.9em;
+      color: var(--accent);
+    }
+
+    /* ===== PRINCIPLES ===== */
+    .principles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+    .principle-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .principle-card .num {
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+      margin-bottom: 12px;
+    }
+    .principle-card h3 {
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+    }
+    .principle-card p {
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+    }
+
+    /* ===== ANIMATIONS ===== */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate { animation: fadeInUp 0.6s ease-out both; }
+    .animate.delay-1 { animation-delay: 0.1s; }
+    .animate.delay-2 { animation-delay: 0.2s; }
+    .animate.delay-3 { animation-delay: 0.3s; }
+    .animate.delay-4 { animation-delay: 0.4s; }
+    .animate.delay-5 { animation-delay: 0.5s; }
+    .animate.delay-6 { animation-delay: 0.6s; }
+
+    /* ===== MENU ===== */
+    .viz-menu { position: fixed; top: 16px; right: 16px; z-index: 9999; }
+    .viz-menu-toggle {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(12px); transition: all 0.2s;
+    }
+    .viz-menu-toggle:hover { background: var(--surface-hover); }
+    .viz-menu-dropdown {
+      position: absolute; top: 52px; right: 0; min-width: 200px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 8px;
+      opacity: 0; visibility: hidden; transform: translateY(-8px);
+      transition: all 0.2s; backdrop-filter: blur(16px);
+    }
+    .viz-menu-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); }
+    .viz-menu-dropdown button {
+      width: 100%; padding: 10px 14px; border: none; border-radius: 8px;
+      background: transparent; color: var(--text); font-size: 14px;
+      font-family: inherit; cursor: pointer; text-align: left;
+      display: flex; align-items: center; gap: 10px; transition: background 0.15s;
+    }
+    .viz-menu-dropdown button:hover { background: var(--surface-hover); }
+
+    /* ===== SKIP ===== */
+    .skip-to-content {
+      position: absolute; top: -40px; left: 6px; background: var(--accent);
+      color: white; padding: 8px 12px; text-decoration: none;
+      border-radius: 4px; opacity: 0; pointer-events: none;
+      transition: all 0.2s; z-index: 10000;
+    }
+    .skip-to-content:focus { top: 6px; opacity: 1; pointer-events: auto; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    @media print {
+      body { background: white !important; color: black !important; }
+      .viz-menu { display: none; }
+      .card { break-inside: avoid; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+
+    @media (max-width: 768px) {
+      .process-step::after { display: none; }
+      .process-flow { flex-direction: column; }
+      .comparison-table { font-size: 0.9rem; }
+      .comparison-table th, .comparison-table td { padding: 12px 16px; }
+    }
+
+    @media (max-width: 375px) {
+      body { overflow-x: hidden; }
+      .container { padding: 0 16px; }
+      .hero { padding: 48px 0 40px; }
+      .section { padding: 32px 0; }
+      .stat-card .number { font-size: 2.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-to-content">Skip to content</a>
+
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/>
+      </svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()"><span id="themeIcon">☀️</span><span id="themeLabel">Light</span></button>
+      <button onclick="downloadImage()"><span>📥</span><span>Download PNG</span></button>
+      <button onclick="window.print()"><span>🖨️</span><span>Print / PDF</span></button>
+    </div>
+  </div>
+
+  <main id="main-content">
+    <!-- HERO -->
+    <section class="hero">
+      <div class="container">
+        <h1 class="animate">Dotfiles Setup Guide</h1>
+        <p class="animate delay-1">Shell 환경 설정의 핵심 가이드 — 2개의 스크립트, 5개 섹션, 손끝의 재현 가능한 터미널 환경</p>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section class="section">
+      <div class="container">
+        <div class="stats-grid">
+          <div class="stat-card animate delay-1">
+            <div class="number" data-count="2" data-suffix="">2</div>
+            <div class="label">Setup Scripts</div>
+          </div>
+          <div class="stat-card animate delay-2">
+            <div class="number" data-count="4" data-suffix="">4</div>
+            <div class="label">Shell Components</div>
+          </div>
+          <div class="stat-card animate delay-3">
+            <div class="number" data-count="5" data-suffix="">5</div>
+            <div class="label">Core Principles</div>
+          </div>
+          <div class="stat-card animate delay-4">
+            <div class="number" data-count="3" data-suffix="">3</div>
+            <div class="label">Environment Options</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OVERVIEW -->
+    <section class="section">
+      <div class="container">
+        <div class="section-header animate">
+          <h2>Scripts Overview</h2>
+          <p>두 개의 스크립트, 각각 다른 역할</p>
+        </div>
+
+        <table class="comparison-table animate delay-1">
+          <thead>
+            <tr>
+              <th>Script</th>
+              <th>Purpose</th>
+              <th>Type</th>
+              <th>When</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>./setup.sh</code></td>
+              <td>Shell 환경 설정</td>
+              <td><span class="badge badge-required">Required</span></td>
+              <td>Initial install</td>
+            </tr>
+            <tr>
+              <td><code>./install.sh</code></td>
+              <td>Claude / PG 보조 설정</td>
+              <td><span class="badge badge-optional">Optional</span></td>
+              <td>Optional</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PROCESS -->
+    <section class="section">
+      <div class="container">
+        <div class="section-header animate">
+          <h2>New User Setup</h2>
+          <p>3단계로 완료하는 초기 설치</p>
+        </div>
+
+        <div class="process-flow">
+          <div class="process-step animate delay-1">
+            <span class="step-num">Step 1</span>
+            <h3>Environment Setup</h3>
+            <p>setup.sh 실행으로 환경 선택 (Public / Internal / External)</p>
+          </div>
+          <div class="process-step animate delay-2">
+            <span class="step-num">Step 2</span>
+            <h3>Claude / PG Setup</h3>
+            <p>install.sh 실행으로 Claude 설정 및 PostgreSQL 구성</p>
+          </div>
+          <div class="process-step animate delay-3">
+            <span class="step-num">Step 3</span>
+            <h3>Restart Shell</h3>
+            <p>exec bash 또는 exec zsh로 새 shell 진입</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- WARNING -->
+    <section class="section">
+      <div class="container">
+        <div class="warning-box animate">
+          <h3>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            절대 삭제하면 안 되는 파일
+          </h3>
+          <ul>
+            <li>shell-common/setup.sh — 환경별 설정 필수</li>
+            <li>bash/setup.sh — bash 환경변수 설정 필수</li>
+            <li>zsh/setup.sh — zsh 초기화 필수</li>
+            <li>git/setup.sh — git config symlink 필수</li>
+            <li>setup.sh (루트) — 위 파일들의 orchestrator</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- FILE ROLES -->
+    <section class="section">
+      <div class="container">
+        <div class="section-header animate">
+          <h2>Each File's Role</h2>
+          <p>각 파일이 수행하는 정확한 작업</p>
+        </div>
+
+        <div class="file-grid">
+          <div class="file-card animate delay-1">
+            <div class="file-name">shell-common/setup.sh</div>
+            <h3>Environment Manager</h3>
+            <p>사용자에게 3가지 환경 선택 요청, proxy.local.sh / security.local.sh 생성</p>
+            <div class="role"><strong>Special:</strong> 환경별 설정 (Public/Internal/External)</div>
+          </div>
+          <div class="file-card animate delay-2">
+            <div class="file-name">bash/setup.sh</div>
+            <h3>Bash Initializer</h3>
+            <p>DOTFILES_BASH_DIR, SHELL_COMMON 환경변수 설정, ~/.bashrc symlink 생성</p>
+            <div class="role"><strong>Special:</strong> 환경변수 설정 (필수!)</div>
+          </div>
+          <div class="file-card animate delay-3">
+            <div class="file-name">zsh/setup.sh</div>
+            <h3>Zsh Initializer</h3>
+            <p>~/.zshrc symlink, ~/.p10k.zsh symlink, 완료 메시지 출력</p>
+            <div class="role"><strong>Special:</strong> 사용자 안내, p10k 설정</div>
+          </div>
+          <div class="file-card animate delay-4">
+            <div class="file-name">git/setup.sh</div>
+            <h3>Git Config Manager</h3>
+            <p>~/.gitconfig symlink 생성, UX 함수를 이용한 피드백</p>
+            <div class="role"><strong>Special:</strong> UX 피드백</div>
+          </div>
+          <div class="file-card animate delay-5">
+            <div class="file-name">install.sh</div>
+            <h3>Claude / PG Setup</h3>
+            <p>Claude 설정, PostgreSQL 설정, Bash/Zsh/Git symlink 재설정</p>
+            <div class="role"><strong>Note:</strong> Claude, PG 추가 설정만 가능</div>
+          </div>
+          <div class="file-card animate delay-6">
+            <div class="file-name">setup.sh (root)</div>
+            <h3>Orchestrator</h3>
+            <p>순서대로 모든 shell 및 환경 setup 실행</p>
+            <div class="role"><strong>Side effect:</strong> 없음 (하위 스크립트 호출만)</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- EXECUTION ORDER -->
+    <section class="section">
+      <div class="container">
+        <div class="section-header animate">
+          <h2>Recommended Execution Order</h2>
+          <p>상황별 올바른 실행 방법</p>
+        </div>
+
+        <div class="file-grid">
+          <div class="file-card animate delay-1" style="border-left: 4px solid var(--accent);">
+            <h3 style="color: var(--accent);">New Users</h3>
+            <p style="margin-bottom: 16px;">처음 설치하는 사용자를 위한 순서</p>
+            <div style="font-family: monospace; background: var(--bg); padding: 16px; border-radius: 8px;">
+              <div style="color: var(--text-secondary);">$ cd ~/dotfiles</div>
+              <div>$ ./setup.sh</div>
+              <div style="color: var(--text-secondary);"># Step 1: Shell 설정</div>
+              <div>$ ./install.sh</div>
+              <div style="color: var(--text-secondary);"># Step 2: Claude/PG 설정</div>
+              <div>$ exec bash</div>
+            </div>
+          </div>
+          <div class="file-card animate delay-2" style="border-left: 4px solid var(--positive);">
+            <h3 style="color: var(--positive);">Existing Users</h3>
+            <p style="margin-bottom: 16px;">업데이트만 필요할 때</p>
+            <div style="font-family: monospace; background: var(--bg); padding: 16px; border-radius: 8px;">
+              <div style="color: var(--text-secondary);">$ cd ~/dotfiles</div>
+              <div>$ ./install.sh</div>
+              <div style="color: var(--text-secondary);"># Claude/PG 설정만 업데이트</div>
+            </div>
+          </div>
+          <div class="file-card animate delay-3" style="border-left: 4px solid var(--warning);">
+            <h3 style="color: var(--warning);">Specific Shell</h3>
+            <p style="margin-bottom: 16px;">특정 shell만 재설정</p>
+            <div style="font-family: monospace; background: var(--bg); padding: 16px; border-radius: 8px;">
+              <div>$ ./bash/setup.sh</div>
+              <div style="color: var(--text-secondary);"># Bash만 재설정</div>
+              <div>$ ./zsh/setup.sh</div>
+              <div style="color: var(--text-secondary);"># Zsh만 재설정</div>
+              <div>$ ./git/setup.sh</div>
+              <div style="color: var(--text-secondary);"># Git만 재설정</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TROUBLESHOOTING -->
+    <section class="section">
+      <div class="container">
+        <div class="section-header animate">
+          <h2>Troubleshooting</h2>
+          <p>일반적인 문제와 해결 방법</p>
+        </div>
+
+        <details class="accordion-item animate delay-1" open>
+          <summary>ux_header: command not found 오류</summary>
+          <div class="accordion-content">
+            <p><strong>원인:</strong> ux_lib.sh가 로드되지 않음</p>
+            <p style="margin-top: 12px;"><strong>해결:</strong></p>
+            <ol style="margin-top: 8px; padding-left: 20px;">
+              <li>zsh/zshrc 98번 줄 확인: <code>$SHELL_COMMON/tools/ux_lib/ux_lib.sh</code> 경로 확인</li>
+              <li>bash/main.bash에서 ux_lib.sh 로드 확인</li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="accordion-item animate delay-2">
+          <summary>~/.bashrc 또는 ~/.zshrc symlink 깨짐</summary>
+          <div class="accordion-content">
+            <p><strong>원인:</strong> setup.sh를 실행하지 않았거나, symlink가 잘못 설정됨</p>
+            <p style="margin-top: 12px;"><strong>해결:</strong></p>
+            <p style="margin-top: 8px;"><code>./setup.sh</code> 다시 실행</p>
+          </div>
+        </details>
+
+        <details class="accordion-item animate delay-3">
+          <summary>새 shell에서 alias/function 로드되지 않음</summary>
+          <div class="accordion-content">
+            <p><strong>원인:</strong> 기존 ~/.bashrc 또는 ~/.zshrc 파일이 존재하거나, setup.sh를 실행하지 않음</p>
+            <p style="margin-top: 12px;"><strong>해결:</strong></p>
+            <p style="margin-top: 8px;"><code>./setup.sh</code> — setup.sh가 symlink를 생성하면서 기존 파일을 백업함</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- PRINCIPLES -->
+    <section class="section">
+      <div class="container">
+        <div class="section-header animate">
+          <h2>Core Principles</h2>
+          <p>이해해야 할 5가지 핵심 원칙</p>
+        </div>
+
+        <div class="principles-grid">
+          <div class="principle-card animate delay-1">
+            <div class="num">01</div>
+            <h3>Complementary Relationship</h3>
+            <p>setup.sh와 install.sh는 보완 관계 — setup.sh: Shell 환경, install.sh: Claude/PG</p>
+          </div>
+          <div class="principle-card animate delay-2">
+            <div class="num">02</div>
+            <h3>Special Initialization</h3>
+            <p>setup.sh의 하위 파일들은 특수 초기화 수행 — bash: 환경변수, zsh: 피드백</p>
+          </div>
+          <div class="principle-card animate delay-3">
+            <div class="num">03</div>
+            <h3>Symlink Only</h3>
+            <p>install.sh는 symlink 재설정만 가능 — bash/zsh 환경변수 설정 안 함</p>
+          </div>
+          <div class="principle-card animate delay-4">
+            <div class="num">04</div>
+            <h3>Never Delete</h3>
+            <p>setup.sh 파일들 절대 삭제하면 안 됨 — 특수 초기화 로직이 손실됨</p>
+          </div>
+          <div class="principle-card animate delay-5">
+            <div class="num">05</div>
+            <h3>Recovery Impossible</h3>
+            <p>install.sh로 복구 불가능 — 초기 설치 시 setup.sh 필수</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REFERENCE -->
+    <section class="section" style="padding-bottom: 80px;">
+      <div class="container">
+        <div class="section-header animate">
+          <h2>Quick Reference</h2>
+          <p>핵심 디렉토리 구조</p>
+        </div>
+
+        <div class="file-card animate delay-1" style="font-family: 'SF Mono', 'Fira Code', monospace; background: var(--bg);">
+          <pre style="font-size: 0.9rem; line-height: 1.8; color: var(--text-secondary);">
+dotfiles/
+├── bash/          # bash 셸 초기화
+├── zsh/           # zsh 셸 초기화  
+├── git/           # git 설정
+├── shell-common/  # bash/zsh 공유 리소스
+│   ├── aliases/   # 명령어 aliases
+│   ├── functions/ # shell 함수
+│   ├── env/       # 환경 설정
+│   └── tools/     # 유틸리티 도구
+├── setup.sh       # Orchestrator (필수)
+└── install.sh     # Claude/PG (선택)
+          </pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function toggleMenu() { 
+      var dropdown = document.getElementById('vizMenuDropdown');
+      if (dropdown) dropdown.classList.toggle('open'); 
+    }
+    document.addEventListener('click', e => { 
+      if (!e.target.closest('.viz-menu')) {
+        var dropdown = document.getElementById('vizMenuDropdown');
+        if (dropdown) dropdown.classList.remove('open');
+      }
+    });
+    document.addEventListener('keydown', e => { 
+      if (e.key === 'Escape') {
+        var dropdown = document.getElementById('vizMenuDropdown');
+        if (dropdown) dropdown.classList.remove('open');
+      }
+    });
+
+    var savedTheme = localStorage.getItem('viz-theme');
+    var currentTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    function applyTheme(t) {
+      document.documentElement.className = 'theme-' + t;
+      document.getElementById('themeIcon').textContent = t === 'dark' ? '☀️' : '🌙';
+      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Light' : 'Dark';
+      localStorage.setItem('viz-theme', t);
+      currentTheme = t;
+    }
+    function cycleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
+    applyTheme(currentTheme);
+
+    function animateCounters() {
+      document.querySelectorAll('[data-count]').forEach(function(el) {
+        if (el.dataset.counted) return;
+        el.dataset.counted = '1';
+        var target = parseFloat(el.dataset.count), prefix = el.dataset.prefix || '', suffix = el.dataset.suffix || '';
+        var start = performance.now(), duration = 1200;
+        (function tick(now) {
+          var p = Math.min((now - start) / duration, 1), eased = 1 - Math.pow(1 - p, 3);
+          el.textContent = prefix + Math.round(target * eased).toLocaleString() + suffix;
+          if (p < 1) requestAnimationFrame(tick);
+        })(start);
+      });
+    }
+    var counterEl = document.querySelector('[data-count]');
+    if (counterEl) {
+      var cObs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(e) { if (e.isIntersecting) { animateCounters(); cObs.disconnect(); } });
+      }, { threshold: 0.3 });
+      cObs.observe(counterEl);
+    }
+
+    async function downloadImage() {
+      var menu = document.querySelector('.viz-menu');
+      menu.style.display = 'none';
+      try {
+        var url = await htmlToImage.toPng(document.body, { quality: 1, pixelRatio: 2, filter: function(n) { return !n.classList || !n.classList.contains('viz-menu'); } });
+        var a = document.createElement('a'); a.href = url;
+        a.download = document.title.replace(/\s+/g, '-').toLowerCase() + '.png'; a.click();
+      } catch(e) { console.error('Download failed:', e); }
+      menu.style.display = '';
+    }
+  </script>
+</body>
+</html>
