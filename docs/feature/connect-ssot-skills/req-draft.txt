@@ -1,0 +1,5 @@
+1. claude/skills/ 의 내용을 ~/.config/opencode/skills/ 아래에서도 공통으로 사용하고 싶어.
+2. 내가 우려하는 것은 이미 claude/skills/의 내용이 ~/.claude/skills mount 되어 있는 상태에서 ~/.config/opencode/skills/  을 mount 하는 것이 정상인지 궁금해.
+3. symlink 전략으로 변경하는 것이 좋을지?
+4. 최종 목표는 claude/skills/ 의 내용은 Single Source of Truth
+5. 다양한 Tools(claude, opencode, codex, gemini)에서 Skills 를 모두 사용하도록 연결하는 기능을 설계해서 docs/feature/connect-ssot-skills/ 아래에 마크다운 문서로 작성해. 동료들과 리뷰하고 구현 여부를 결정할게.

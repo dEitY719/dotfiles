@@ -25,6 +25,7 @@ set -e
 ./zsh/setup.sh
 ./git/setup.sh
 ./claude/setup.sh
+./scripts/setup-skills-ssot.sh
 ./vscode-extensions/setup.sh
 ./ssh/setup.sh
 
