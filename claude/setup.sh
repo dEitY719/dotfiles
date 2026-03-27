@@ -111,11 +111,14 @@ _setup_bind_mount_sudoers() {
     local source="$3"
     local target="$4"
 
+    [ -d "$source" ] || return 0
+
     log_info "$description 디렉토리 bind mount sudoers 설정"
-    if [ -f "$sudoers_file" ]; then
+    if [ -f "$sudoers_file" ] && sudo grep -qF "$source" "$sudoers_file" 2>/dev/null; then
         log_dim "✓ sudoers 설정이 이미 존재합니다"
         return 0
     fi
+    [ -f "$sudoers_file" ] && log_info "sudoers 경로가 변경되었습니다. 재생성합니다: $sudoers_file"
 
     if ! cat << EOF | sudo tee "$sudoers_file" > /dev/null
 # Allow passwordless bind mount for Claude Code $description directory
