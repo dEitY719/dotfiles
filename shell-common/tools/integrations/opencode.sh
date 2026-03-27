@@ -106,6 +106,10 @@ opencode_help() {
     ux_bullet "${UX_PRIMARY}uninstall-opencode${UX_RESET}           : Remove OpenCode and configuration"
     echo ""
 
+    ux_section "필수 유틸리티"
+    ux_bullet "${UX_PRIMARY}bunx oh-my-opencode install${UX_RESET}   : Oh My OpenCode (OMO) 인터페이스 설치"
+    echo ""
+
     ux_section "Environments (managed by setup.sh)"
     ux_bullet "home/public             : OpenCode defaults (no symlink)"
     ux_bullet "external                : localhost:4444 LiteLLM proxy"
