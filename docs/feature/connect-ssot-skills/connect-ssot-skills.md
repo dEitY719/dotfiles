@@ -7,7 +7,7 @@
 | **Document ID** | connect-ssot-skills |
 | **Title** | Multi-Tool Skill Integration with Single Source of Truth |
 | **Type** | Feature Requirement Scratch |
-| **Status** | Draft (v1) |
+| **Status** | Implemented ✅ |
 | **Author** | Claude |
 
 ---
@@ -90,6 +90,6 @@
 - [x] Codex `.system` 내장 스킬 보존 확인 ✅
 - [x] Codex symlink를 통한 Skills 로드 동작 확인 ✅
 - [x] Gemini symlink를 통한 Skills 로드 동작 확인 ✅
-- [ ] OpenCode symlink를 통한 Skills 로드 동작 확인 (미설치 — 설치 후 검증 필요)
+- [x] OpenCode symlink를 통한 Skills 로드 동작 확인 ✅
 - [ ] `~/.claude/skills` bind mount → symlink 전환 가능 여부 검토 (현재 bind mount 유지 중)
 - [ ] 동시 읽기/쓰기 Lock 문제 발생 여부 (실사용 중 모니터링)
