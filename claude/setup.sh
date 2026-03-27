@@ -107,7 +107,7 @@ setup_skills_mount() {
 
     # Create sudoers configuration
     log_info "sudoers 파일 생성: $sudoers_file"
-    cat << EOF | sudo tee "$sudoers_file" > /dev/null
+    if ! cat << EOF | sudo tee "$sudoers_file" > /dev/null
 # Allow passwordless bind mount for Claude Code skills directory
 # Created by dotfiles/claude/setup.sh
 ${USER} ALL=(ALL) NOPASSWD: /bin/mount --bind ${CLAUDE_SKILLS_SOURCE} ${HOME_SKILLS}
@@ -115,22 +115,43 @@ ${USER} ALL=(ALL) NOPASSWD: /usr/bin/mount --bind ${CLAUDE_SKILLS_SOURCE} ${HOME
 ${USER} ALL=(ALL) NOPASSWD: /bin/umount ${HOME_SKILLS}
 ${USER} ALL=(ALL) NOPASSWD: /usr/bin/umount ${HOME_SKILLS}
 EOF
-
-    if [ $? -ne 0 ]; then
+    then
         log_error "sudoers 파일 생성 실패"
         return 1
     fi
 
     # Set proper permissions
     log_info "sudoers 파일 권한 설정"
-    sudo chmod 440 "$sudoers_file"
-
-    if [ $? -eq 0 ]; then
+    if sudo chmod 440 "$sudoers_file"; then
         log_dim "✓ sudoers 설정 완료"
     else
         log_error "sudoers 파일 권한 설정 실패"
         return 1
     fi
+}
+
+_is_skills_mounted() {
+    if command -v findmnt >/dev/null 2>&1; then
+        findmnt "$HOME_SKILLS" >/dev/null 2>&1
+    else
+        mount | grep -q "on ${HOME_SKILLS} " 2>/dev/null
+    fi
+}
+
+_mount_skills_directory() {
+    if _is_skills_mounted; then
+        log_dim "✓ skills bind mount가 이미 활성화되어 있습니다"
+        return 0
+    fi
+
+    log_info "skills bind mount 활성화: $HOME_SKILLS <- $CLAUDE_SKILLS_SOURCE"
+    if sudo mount --bind "$CLAUDE_SKILLS_SOURCE" "$HOME_SKILLS" 2>/dev/null; then
+        log_dim "✓ skills bind mount 완료"
+        return 0
+    fi
+
+    log_error "skills bind mount 실패"
+    return 1
 }
 
 # --- Main Script Logic ---
@@ -178,6 +199,9 @@ fi
 # skills bind mount를 위한 sudoers 설정
 setup_skills_mount
 
+# skills bind mount 활성화
+_mount_skills_directory
+
 # global memory 디렉토리 심볼릭 링크 생성
 if [ ! -d "$(dirname "$HOME_GLOBAL_MEMORY")" ]; then
     log_info "'$(dirname "$HOME_GLOBAL_MEMORY")' 디렉토리 생성"
@@ -222,13 +246,23 @@ ux_success "Claude Code 설정이 완료되었습니다!"
 ux_info "다음 설정이 적용되었습니다:"
 ux_bullet "~/.claude/settings.json → ~/dotfiles/claude/settings.json (symlink)"
 ux_bullet "~/.claude/statusline-command.sh → ~/dotfiles/claude/statusline-command.sh (symlink)"
-ux_bullet "~/.claude/skills ← ~/dotfiles/claude/skills (bind mount)"
 ux_bullet "~/.claude/projects/GLOBAL/memory → ~/dotfiles/claude/global-memory (symlink)"
 ux_bullet "/etc/sudoers.d/claude-skills-mount (passwordless mount)"
+
+if _is_skills_mounted; then
+    ux_bullet "~/.claude/skills ← ~/dotfiles/claude/skills (bind mount active)"
+else
+    ux_bullet "~/.claude/skills mount failed during setup; sudoers is configured"
+fi
 echo ""
 
 ux_section "다음 단계"
-ux_bullet "새 쉘을 열면 skills가 자동으로 bind mount됩니다"
+if _is_skills_mounted; then
+    ux_bullet "새 쉘에서도 skills bind mount를 자동으로 유지합니다"
+else
+    ux_bullet "새 쉘에서 자동 mount를 재시도합니다"
+    ux_bullet "즉시 수동 실행: claude-mount-skills"
+fi
 ux_bullet "Claude Code 재시작하여 변경 사항 적용"
 ux_bullet "필요시 설정 파일 편집: ${UX_BOLD}vim ~/dotfiles/claude/settings.json${UX_RESET}"
 echo ""

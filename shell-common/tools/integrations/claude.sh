@@ -212,14 +212,12 @@ claude_mount_skills() {
             findmnt "$skills_target" > /dev/null 2>&1 && return 0
         else
             # Final fallback to mount command
-            mount | grep -q "${skills_target}" && return 0
+            mount | grep -q "on ${skills_target} " && return 0
         fi
     fi
 
     # Perform bind mount (will prompt for sudo password if needed)
-    sudo mount --bind "$skills_source" "$skills_target" 2>/dev/null
-
-    if [ $? -eq 0 ]; then
+    if sudo mount --bind "$skills_source" "$skills_target" 2>/dev/null; then
         return 0
     else
         # Silent fail - don't spam errors on every shell startup
@@ -259,14 +257,12 @@ claude_mount_docs() {
             findmnt "$docs_target" > /dev/null 2>&1 && return 0
         else
             # Final fallback to mount command
-            mount | grep -q "${docs_target}" && return 0
+            mount | grep -q "on ${docs_target} " && return 0
         fi
     fi
 
     # Perform bind mount (will prompt for sudo password if needed)
-    sudo mount --bind "$docs_source" "$docs_target" 2>/dev/null
-
-    if [ $? -eq 0 ]; then
+    if sudo mount --bind "$docs_source" "$docs_target" 2>/dev/null; then
         return 0
     else
         # Silent fail - don't spam errors on every shell startup
@@ -274,9 +270,11 @@ claude_mount_docs() {
     fi
 }
 
-# NOTE: Auto-mount functionality removed from shell init to prevent sudo prompts
-# during shell startup. Use explicit function instead:
-#   claude_mount_docs - Mount docs directory
+# NOTE: Auto-mount is controlled by environment variables:
+#   CLAUDE_AUTO_MOUNT_SKILLS=1
+#   CLAUDE_AUTO_MOUNT_DOCS=1
+# This repository sets defaults in shell-common/env/claude.sh.
+# Requires passwordless sudoers configured by dotfiles/claude/setup.sh
 
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Mount All Helper
@@ -318,6 +316,26 @@ claude_mount_all() {
 alias claude-mount-all='claude_mount_all'
 alias claude-mount-skills='claude_mount_skills'
 alias claude-mount-docs='claude_mount_docs'
+
+# Auto-mount configuration via environment variables
+# Set to "1" to enable auto-mounting in interactive shells
+# Example: export CLAUDE_AUTO_MOUNT_SKILLS=1
+_claude_try_auto_mount() {
+    case "$-" in
+        *i*) ;;
+        *) return 0 ;;
+    esac
+
+    if [ "${CLAUDE_AUTO_MOUNT_SKILLS:-0}" = "1" ]; then
+        claude_mount_skills >/dev/null 2>&1 || true
+    fi
+
+    if [ "${CLAUDE_AUTO_MOUNT_DOCS:-0}" = "1" ]; then
+        claude_mount_docs >/dev/null 2>&1 || true
+    fi
+}
+
+_claude_try_auto_mount
 
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Marketplace Plugins Management
