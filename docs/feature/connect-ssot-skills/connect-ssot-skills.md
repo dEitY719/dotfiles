@@ -88,6 +88,8 @@
 - [x] symlink 생성 검증: opencode/gemini 전체 dir symlink, codex 36개 개별 symlink 모두 성공 ✅
 - [x] idempotency 검증: 재실행 시 "이미 연결됨" skip 동작 확인 ✅
 - [x] Codex `.system` 내장 스킬 보존 확인 ✅
-- [ ] 각 도구가 symlink를 통해 Skills를 실제로 로드하는지 동작 테스트 필요 (도구 실행 필요)
+- [x] Codex symlink를 통한 Skills 로드 동작 확인 ✅
+- [x] Gemini symlink를 통한 Skills 로드 동작 확인 ✅
+- [ ] OpenCode symlink를 통한 Skills 로드 동작 확인 (미설치 — 설치 후 검증 필요)
 - [ ] `~/.claude/skills` bind mount → symlink 전환 가능 여부 검토 (현재 bind mount 유지 중)
 - [ ] 동시 읽기/쓰기 Lock 문제 발생 여부 (실사용 중 모니터링)
