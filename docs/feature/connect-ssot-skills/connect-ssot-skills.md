@@ -1,6 +1,6 @@
 # Connect SSOT Skills
 
-**초안** | Shell, Linux Configuration | 2026-03-27
+**구현 완료** | Shell, Linux Configuration | 2026-03-27
 
 | Field | Value |
 |-------|-------|
