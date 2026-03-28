@@ -1,0 +1,55 @@
+$ tree ai_orch/ -a
+ai_orch/
+├── .claude
+│   ├── agents
+│   │   ├── ai-ceo-cmo.md
+│   │   ├── ai-ceo-cto.md
+│   │   ├── ai-ceo-init.md
+│   │   └── ai-ceo-morning.md
+│   ├── commands
+│   │   ├── ai-ceo-approve.md
+│   │   ├── ai-ceo-cs-escalations.md
+│   │   ├── ai-ceo-dev-hotfix.md
+│   │   ├── ai-ceo-dev-sprint.md
+│   │   ├── ai-ceo-fin-monthly-report.md
+│   │   ├── ai-ceo-init.md
+│   │   ├── ai-ceo-legal-review.md
+│   │   ├── ai-ceo-mkt-campaign.md
+│   │   ├── ai-ceo-mkt-content-plan.md
+│   │   ├── ai-ceo-morning.md
+│   │   ├── ai-ceo-reject.md
+│   │   ├── ai-ceo-sales-pipeline.md
+│   │   └── ai-ceo-sales-proposal.md
+│   └── .DS_Store
+├── CLAUDE.md
+├── .company
+│   ├── approval-queue.md
+│   ├── decisions
+│   │   └── 2026-03.md
+│   ├── departments
+│   │   ├── cs
+│   │   │   └── STATE.md
+│   │   ├── dev
+│   │   │   └── STATE.md
+│   │   ├── finance
+│   │   │   └── STATE.md
+│   │   ├── legal
+│   │   │   └── STATE.md
+│   │   ├── marketing
+│   │   │   └── STATE.md
+│   │   └── sales
+│   │       └── STATE.md
+│   ├── .DS_Store
+│   ├── products
+│   ├── ROADMAP.md
+│   ├── scripts
+│   ├── STATE.md
+│   ├── steering
+│   │   ├── brand.md
+│   │   ├── permissions.md
+│   │   ├── policies.md
+│   │   └── tech-stack.md
+│   └── VISION.md
+└── .DS_Store
+
+15 directories, 36 files
