@@ -183,9 +183,9 @@ get_claude_skills() {
         [ -n "$yaml_name" ] || yaml_name="$skill_name"
         [ -n "$yaml_desc" ] || yaml_desc="(No description)"
 
-        # Truncate description to 160 chars for readability
-        if [ ${#yaml_desc} -gt 160 ]; then
-            yaml_desc="$(printf '%s' "$yaml_desc" | cut -c1-157)..."
+        # Truncate description to 80 chars for readability
+        if [ ${#yaml_desc} -gt 80 ]; then
+            yaml_desc="$(printf '%s' "$yaml_desc" | cut -c1-77)..."
         fi
 
         # Output formatted line (ux_bullet preferred for readability)
