@@ -35,7 +35,7 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 
 ## Immutable Constraints
 
-- **500-Line Limit**: Every AGENTS.md file must be under 500 lines.
+- **100-Line Limit**: Every AGENTS.md file must be under 100 lines — use nested AGENTS.md files for detail.
 - **No Emojis**: Strictly prohibited to save tokens.
 - **Interactive Guards**: Bash files must guard execution: `[[ $- == *i* ]]`.
 - **Loading Order**: Respect `bash/main.bash` priority (Env -> UX -> Alias -> App).
@@ -242,7 +242,7 @@ The pre-commit hook validates that new skill files are in the correct dotfiles l
 
 ## Multi-CLI Skills Registry
 
-Skills are reusable AI agent behaviors stored in `./claude/skills/`. Each skill directory contains a `SKILL.md` file with YAML frontmatter (name, description, allowed-tools) and markdown instructions.
+Skills are reusable AI agent behaviors stored in `./claude/skills/`. Each skill directory contains a `SKILL.md` file with YAML frontmatter (`name`, `description`, `allowed-tools` or `compatibility.tools`) and markdown instructions. Skill names use `{namespace}:{action}` colon notation (e.g. `agents-md:check`, `skill:refactor`).
 
 ## Using Skills Across CLIs
 
