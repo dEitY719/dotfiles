@@ -1,6 +1,12 @@
 ---
 name: dissect-builtin
-description: Analyze and document Claude Code built-in skills. Load a built-in skill's prompt via the Skill tool, explain its behavior in Korean, and save structured documentation (README.md + PROMPT.md) to the dotfiles repository. Use when the user wants to study, dissect, or document a built-in skill (e.g., "/dissect-builtin simplify", "/dissect-builtin loop"). Trigger on requests like "내장 스킬 분석", "built-in skill 공부", or "스킬 해부".
+description: >-
+  Analyze and document Claude Code built-in skills. Load a built-in skill's
+  prompt via the Skill tool, explain its behavior in Korean, and save structured
+  documentation (README.md + PROMPT.md) to the dotfiles repository. Use when the
+  user wants to study, dissect, or document a built-in skill (e.g.,
+  "/dissect-builtin simplify", "/dissect-builtin loop"). Trigger on requests
+  like "내장 스킬 분석", "built-in skill 공부", or "스킬 해부".
 ---
 
 # Dissect Built-in Skill
