@@ -185,6 +185,43 @@ EOF
 }
 
 # ============================================================================
+# Worktree add (git-crypt safe)
+# Creates a worktree without checking out git-crypt encrypted files
+# Usage: git_worktree_add <path> [<new-branch> [<start-point>]]
+# ============================================================================
+git_worktree_add() {
+    if [ -z "$1" ]; then
+        ux_error "Usage: git_worktree_add <path> [<new-branch> [<start-point>]]"
+        return 1
+    fi
+
+    local wt_path="$1"
+    local branch="$2"
+    local start_point="$3"
+
+    # Build worktree add command
+    if [ -n "$branch" ] && [ -n "$start_point" ]; then
+        git worktree add --no-checkout -b "$branch" "$wt_path" "$start_point"
+    elif [ -n "$branch" ]; then
+        git worktree add --no-checkout -b "$branch" "$wt_path"
+    else
+        git worktree add --no-checkout "$wt_path"
+    fi || return 1
+
+    # Sparse-checkout: include everything except git-crypt encrypted files
+    git -C "$wt_path" sparse-checkout init --no-cone
+    printf '/*\n!/.env\n!/.secrets\n' | git -C "$wt_path" sparse-checkout set --stdin
+
+    git -C "$wt_path" checkout || {
+        ux_error "Checkout failed in worktree: $wt_path"
+        return 1
+    }
+
+    ux_success "Worktree ready: $wt_path"
+    ux_info "  (git-crypt files excluded: .env, .secrets/)"
+}
+
+# ============================================================================
 # Aliases
 # ============================================================================
 alias gl='git_log'
