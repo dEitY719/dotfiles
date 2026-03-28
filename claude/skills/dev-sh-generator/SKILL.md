@@ -549,13 +549,13 @@ If `tools/AGENTS.md` not found:
 
 1. **Graceful Degradation**: Use intelligent defaults based on project detection
 2. **Notify User**: Warn that AGENTS.md should be created for consistency
-3. **Suggest Creation**: Recommend running agents-md skill first
+3. **Suggest Creation**: Recommend running agents-md:create skill first
 
 ```text
 WARNING: tools/AGENTS.md not found. Using detected configuration.
 
 For better consistency, create AGENTS.md first:
-  Run: agents-md skill or create manually
+  Run: agents-md:create skill or create manually
 ```
 
 ### No Entry Point Detected
