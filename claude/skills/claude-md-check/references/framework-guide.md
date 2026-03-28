@@ -1,8 +1,7 @@
 # AI Agent Orchestrator Framework — Core Principles
 
 This guide summarizes the design principles behind well-structured AI agent
-orchestrator systems. Use this as a reference when auditing or building a
-CLAUDE.md for any AI agent framework.
+orchestrator systems, based on real-world implementations.
 
 ---
 
@@ -10,122 +9,130 @@ CLAUDE.md for any AI agent framework.
 
 An orchestrator is a top-level AI agent that:
 - Receives high-level instructions from a human operator
-- Decomposes them into tasks
-- Delegates tasks to specialized subagents
-- Synthesizes results and manages state
+- Routes tasks to specialized subagents or executes commands
+- Manages shared state and approval workflows
+- Synthesizes results and reports back
 
-The orchestrator does NOT do implementation work directly. Its job is coordination.
-
----
-
-## The Six Principles
-
-### 1. Role Clarity
-
-Every orchestrator needs an explicit identity:
-
-```markdown
-> You are the [Name] Orchestrator.
-> You are responsible for [scope].
-> You do NOT handle: [delegation targets].
-```
-
-Without this, the agent has no self-model and will drift into doing
-implementation work it should delegate.
-
-### 2. Reference File Pattern
-
-The orchestrator CLAUDE.md should contain:
-- WHERE to find information (file paths)
-- HOW to route tasks (which subagent handles what)
-- WHAT rules apply (operating constraints)
-
-It should NOT contain:
-- The information itself (KPIs, personnel lists, product specs)
-- Implementation details (code patterns, CLI commands for specific tools)
-- Data that changes frequently (current state, metrics)
-
-Rationale: inlining data bloats context, creates staleness, and breaks the
-single-responsibility principle. Reference files stay current independently.
-
-### 3. Commands Interface
-
-Users interact with orchestrators through named commands. A command is:
-- A trigger phrase or slash-command
-- A defined action or workflow
-- A predictable output or side effect
-
-Without a commands section, the orchestrator's capabilities are opaque and
-the human operator must guess what to ask.
-
-### 4. Permission Tiers
-
-Every agent system needs at least two permission tiers:
-
-| Tier | Description | Examples |
-|------|-------------|---------|
-| Autonomous | Execute without asking | Read files, generate reports, update internal state |
-| Confirm | Require human approval | Send messages, deploy, publish, delete |
-
-Add more tiers as complexity grows (e.g., "draft", "execute with notification").
-The key rule: **any action visible to the outside world requires approval.**
-
-### 5. Thin Orchestrator
-
-Context window is a finite resource. The orchestrator should use as little of it
-as possible, because:
-- Deep context = slow responses
-- Full context = less room for task results
-- Bloated context = the orchestrator "forgets" earlier instructions
-
-The three rules:
-1. Keep context usage to 10-15% of the window
-2. Pass file paths to subagents, never file contents
-3. Never do implementation work directly — delegate everything
-
-### 6. Operating Rules
-
-Cross-cutting rules prevent drift over long sessions:
-- Version control conventions (commit format, when to commit)
-- State update discipline (which files to update after which actions)
-- Error handling (retry policy, escalation path)
-- Logging conventions (where decisions are recorded)
+The orchestrator does NOT do implementation work directly.
 
 ---
 
-## Directory Structure Pattern
+## Directory Structure
 
 ```
 project/
-├── CLAUDE.md                  # Orchestrator definition (thin)
+├── CLAUDE.md                        # Orchestrator definition (thin)
 ├── .claude/
-│   └── agents/                # Subagent definitions
-│       ├── agent-a.md
-│       └── agent-b.md
-└── .state/                    # Mutable state files (referenced by path)
-    ├── STATE.md               # Current system state
-    ├── decisions/             # Decision log
-    │   └── YYYY-MM.md
-    └── queue/                 # Pending approvals
-        └── approval-queue.md
+│   ├── agents/                      # Subagent definitions (personas + workflows)
+│   │   ├── agent-cto.md
+│   │   ├── agent-cmo.md
+│   │   └── agent-morning.md
+│   └── commands/                    # Command execution scripts (thin instructions)
+│       ├── cmd-approve.md
+│       ├── cmd-dev-sprint.md
+│       └── cmd-mkt-campaign.md
+└── .company/                        # Mutable state (referenced by path, never inlined)
+    ├── STATE.md                     # Company-wide state
+    ├── VISION.md                    # Mission / vision (stable, rarely changes)
+    ├── ROADMAP.md                   # Quarterly plan
+    ├── approval-queue.md            # Pending approvals
+    ├── decisions/
+    │   └── YYYY-MM.md               # Decision log per month
+    ├── departments/
+    │   ├── dev/STATE.md
+    │   ├── marketing/STATE.md
+    │   ├── sales/STATE.md
+    │   └── cs/STATE.md
+    ├── products/
+    │   └── {product-name}/STATE.md
+    └── steering/
+        ├── permissions.md           # Permission thresholds
+        ├── policies.md              # Company-wide policies
+        ├── brand.md                 # Brand guidelines
+        └── tech-stack.md           # Tech stack reference
 ```
-
-The exact directory names don't matter. What matters:
-- CLAUDE.md stays thin (routing + rules only)
-- State lives in dedicated files, updated by agents
-- Subagents are defined in their own files with clear scope
 
 ---
 
-## When to Use This Pattern
+## agents/ vs commands/ — Critical Distinction
 
-This framework pattern is appropriate when:
-- Multiple specialized agents need coordination
-- Tasks span multiple sessions (state must persist)
-- External actions need human oversight
-- The system will grow over time (new agents, new commands)
+This is the most commonly misunderstood part of the framework.
 
-It is overkill for:
-- Single-purpose scripts
-- One-off automation tasks
-- Simple read-only analysis pipelines
+### `.claude/agents/` — Subagent Definitions
+Rich files that define WHO handles a domain and HOW they think:
+- **Persona**: character, motto, decision-making style
+- **Responsibility scope**: what they own (RACI)
+- **Domain expertise**: what they know deeply
+- **Permission level**: what they can execute vs. what needs approval
+- **Reference files**: state/config files they read while working
+- **Workflows**: step-by-step process per command
+- **Output templates**: what their deliverables look like
+- **Quality checklist**: completion criteria
+
+### `.claude/commands/` — Command Execution Scripts
+Thin files that define WHAT happens when a command runs:
+- 5-10 steps describing the execution sequence
+- References to which agent handles what
+- References to which state files to update
+- No persona, no expertise sections
+
+**Rule**: agents/ is for domain experts. commands/ is for process scripts.
+
+---
+
+## The Six Design Principles
+
+### 1. Role Clarity
+
+```markdown
+> You are the [Framework Name] Orchestrator.
+> You coordinate [N] specialized agents to handle [domain].
+> You do NOT implement tasks — all execution is delegated to subagents.
+```
+
+### 2. Reference File Pattern
+
+CLAUDE.md lists WHERE to find information, never contains the information:
+
+```markdown
+## 참조처
+- 전사 상태: `.company/STATE.md`
+- 승인 대기: `.company/approval-queue.md`
+- 권한 설정: `.company/steering/permissions.md`
+```
+
+Never inline KPIs, personnel lists, product specs, or operational data.
+
+### 3. Commands Interface
+
+Commands are discoverable and have predictable behavior:
+```markdown
+- `/cmd:approve <id>`       — Approve item in approval queue
+- `/cmd:dev:sprint`         — Trigger dev agent sprint workflow
+- `/cmd:mkt:content-plan`   — Trigger CMO content planning
+```
+
+### 4. Permission Tiers
+
+Based on real implementations, the typical two-tier model:
+
+| Tier | Korean term | When to use |
+|------|-------------|-------------|
+| **execute** | 자동 실행 | Internal analysis, report generation, state file updates, drafts |
+| **draft** | 승인 필요 | Public posts, deploys, external messages, price changes |
+
+Actions in **draft** tier go to `.company/approval-queue.md` and require
+`/cmd:approve <id>` before execution.
+
+### 5. Thin Orchestrator
+
+- Context usage target: 10–15% of window
+- Pass file paths to subagents, never file contents
+- Orchestrator routes — subagents execute
+
+### 6. Operating Rules
+
+- All decisions → `.company/decisions/YYYY-MM.md`
+- Every task completion → update relevant `STATE.md`
+- State files use status emoji: 🟢 정상 / 🟡 주의 / 🔴 문제 있음 / ⚪ 미가동
+- Subagent failure: retry 3 times, then escalate to approval queue

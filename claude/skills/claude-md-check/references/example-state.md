@@ -1,144 +1,163 @@
 # Example: State File Structures
 
-State files are the persistent memory of an AI agent system. They are:
-- Written by agents after task completion
-- Read by the orchestrator to understand current system status
-- Never embedded in CLAUDE.md — always referenced by path
+State files are the persistent memory of an AI agent system. All state is
+referenced by file path from CLAUDE.md — never inlined.
+
+State files use emoji status indicators as standard:
+🟢 정상 | 🟡 주의 | 🔴 문제 있음 | ⚪ 미가동
 
 ---
 
-## System State (.state/STATE.md)
-
-The single source of truth for overall system health and current focus.
+## Company-Wide State (.company/STATE.md)
 
 ```markdown
-# System State
+# 전사 경영 상태
 
-## Status: [ACTIVE / PAUSED / ERROR]
+## 상태: 🟢 정상
 
-## Current Focus
-<one-line description of what the system is working on right now>
+## 회사 기본 정보
 
-## Active Tasks
-| Agent | Task | Started | Status |
-|-------|------|---------|--------|
-| dev   | ... | YYYY-MM-DD | in progress |
-| content | ... | YYYY-MM-DD | waiting |
+- 회사명: (여기에 기재)
+- 사업 내용: (여기에 기재)
+- 대표자: (여기에 기재)
 
-## Recent Completions (last 7 days)
-- YYYY-MM-DD: <what was completed>
-- YYYY-MM-DD: <what was completed>
+## 사업 포트폴리오
 
-## Blockers
-- <blocker description> — waiting on: <what/who>
+| 서비스명 | 상태 | 비고 |
+|---------|------|------|
+| (서비스1) | 운영 중 | |
 
-## Last Updated: YYYY-MM-DD by <agent-name>
+## 전사 KPI
+
+| 지표 | 현재값 | 목표값 | 상태 |
+|------|--------|--------|------|
+| 월간 매출 | — | — | — |
+| AI 운용 비용 | — | — | — |
+
+## 최종 업데이트: YYYY-MM-DD
 ```
 
 ---
 
-## Agent State (.state/{domain}/STATE.md)
+## Department State (.company/departments/{dept}/STATE.md)
 
-Each agent maintains its own state file. The orchestrator reads these
-when generating a system-wide status report.
+Each department maintains its own STATE.md. The orchestrator reads these
+when generating a system-wide morning digest.
 
 ```markdown
-# {Agent Name} — State
+# {부서명} — 부서 상태
 
-## Status: [ACTIVE / IDLE / ERROR]
+## 상태: ⚪ 미가동
 
-## Current Tasks
-- [ ] <task> — due: YYYY-MM-DD
-- [x] <completed task> — done: YYYY-MM-DD
+## 진행 중 태스크
 
-## KPIs (if applicable)
-| Metric | Current | Target | Trend |
-|--------|---------|--------|-------|
-| ...    | ...     | ...    | up/down/flat |
+- [ ] {태스크명} — {상태} — 기한: YYYY-MM-DD
 
-## Recent Output
-| Date | Output | Notes |
-|------|--------|-------|
-| YYYY-MM-DD | <deliverable> | ... |
+## KPI
 
-## Blockers
-- <blocker or "none">
+| 지표 | 현재값 | 목표값 | 상태 |
+|------|--------|--------|------|
 
-## Last Updated: YYYY-MM-DD
+## 최근 성과물
+
+| 날짜 | 성과물 | 비고 |
+|------|--------|------|
+
+## 주의 사항
+
+- (주요 문제점 또는 "없음")
+
+## 최종 업데이트: YYYY-MM-DD
+```
+
+Department state files follow this pattern for all departments:
+`dev/`, `marketing/`, `sales/`, `finance/`, `cs/`, `legal/`
+
+---
+
+## Approval Queue (.company/approval-queue.md)
+
+All draft-tier actions wait here before execution.
+
+```markdown
+# 승인 대기 큐
+
+## 승인 대기 (N건)
+
+### [ID-001] {액션 제목}
+- **요청 부서**: {에이전트명}
+- **요청일**: YYYY-MM-DD
+- **내용**: {구체적인 실행 내용}
+- **근거**: {왜 이 액션이 필요한가}
+- **승인**: `/cmd:approve ID-001`
+- **반려**: `/cmd:reject ID-001 "이유"`
+
+## 최근 승인/반려
+
+| ID | 내용 | 결과 | 날짜 |
+|----|------|------|------|
+| ID-000 | ... | 승인 | YYYY-MM-DD |
+```
+
+The queue starts empty:
+```markdown
+# 승인 대기 큐
+
+## 승인 대기 (0건)
+
+승인 대기 아이템이 없습니다.
+
+## 최근 승인/반려
+
+(아직 이력이 없습니다)
 ```
 
 ---
 
-## Approval Queue (.state/queue/approvals.md)
-
-All external-facing actions wait here for human approval before execution.
+## Decision Log (.company/decisions/YYYY-MM.md)
 
 ```markdown
-# Approval Queue
+# CEO 의사결정 로그 — YYYY년 MM월
 
-## Pending
+## YYYY-MM-DD: {결정 제목}
 
-### [ID-001] Deploy v2.3.1 to production
-- **Requested by**: dev agent
-- **Date**: YYYY-MM-DD
-- **Action**: `./deploy.sh v2.3.1 --env production`
-- **Rationale**: Hotfix for login bug (see .state/decisions/YYYY-MM.md)
-- **Risk**: Low — reverts cleanly with `./rollback.sh`
-- **Approve**: `/approve ID-001`
-- **Reject**: `/reject ID-001 "reason"`
-
-### [ID-002] Send weekly newsletter
-- **Requested by**: content agent
-- **Date**: YYYY-MM-DD
-- **Action**: Send to 1,200 subscribers via Mailchimp
-- **Preview**: `.state/content/newsletter-YYYY-MM-DD.md`
-- **Approve**: `/approve ID-002`
-
-## Approved (last 30 days)
-| ID | Action | Approved | By |
-|----|--------|----------|----|
-| ID-000 | ... | YYYY-MM-DD | human |
-
-## Rejected
-| ID | Action | Rejected | Reason |
-|----|--------|----------|--------|
+- **결정**: {무엇을 결정했는가}
+- **이유**: {왜 이 결정을 내렸는가}
+- **영향 범위**: {어느 부서/서비스에 영향}
+- **다음 액션**: {이후 실행 사항}
 ```
 
 ---
 
-## Decision Log (.state/decisions/YYYY-MM.md)
+## Steering Files (.company/steering/)
 
-Persistent record of significant decisions. Enables retrospectives and
-prevents re-litigating resolved questions.
+Configuration files that rarely change. Agents reference these by path.
 
-```markdown
-# Decision Log — YYYY-MM
+### permissions.md — Permission thresholds and rules
+### policies.md — Company-wide operating policies
+### brand.md — Brand guidelines for content/marketing agents
+### tech-stack.md — Technology choices for dev/CTO agents
 
-## YYYY-MM-DD: <Short Decision Title>
-
-- **Decision**: <what was decided>
-- **Context**: <why this came up>
-- **Rationale**: <why this option was chosen>
-- **Alternatives considered**: <other options and why they were rejected>
-- **Impact**: <which agents / parts of the system are affected>
-- **Next action**: <what happens now>
-```
+These are READ by agents, never modified during task execution.
+Modifications require human review and explicit update.
 
 ---
 
-## State File Design Rules
+## State File Lifecycle
 
-1. **Agent writes, orchestrator reads** — agents update their own state;
-   the orchestrator reads state to coordinate, not to store data itself
-
-2. **Flat over nested** — prefer `.state/dev/STATE.md` over `.state/STATE.md`
-   having a dev section; easier to delegate and reason about ownership
-
-3. **Date every update** — always include "Last Updated: YYYY-MM-DD" so
-   the orchestrator can detect stale state
-
-4. **Status emoji-free** — use text status (ACTIVE/IDLE/ERROR) not emoji,
-   for terminal compatibility and grep-friendliness
-
-5. **Queue is append-only** — never delete from approval queue; move to
-   Approved/Rejected sections for audit trail
+```
+Agent completes task
+    ↓
+Agent updates .company/departments/{dept}/STATE.md
+    ↓
+If external action needed:
+    Agent adds item to .company/approval-queue.md
+    ↓
+    Orchestrator notifies human: "승인 대기 N건"
+    ↓
+    Human runs /cmd:approve <id>
+    ↓
+    Agent executes and removes from queue
+    ↓
+    Agent records decision in .company/decisions/YYYY-MM.md
+```
