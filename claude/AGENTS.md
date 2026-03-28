@@ -86,9 +86,11 @@ Called automatically on shell startup. Uses `_is_mounted()` from `mount.sh` for 
 
 ```
 claude/skills/
-├── agents-md/          # AGENTS.md system generator
-│   ├── SKILL.md       # Skill definition
-│   └── README.md      # Documentation
+├── agents-md-check/    # AGENTS.md compliance auditor
+├── agents-md-create/   # AGENTS.md generator (Progressive Disclosure)
+│   ├── SKILL.md       # Workflow only (<100 lines)
+│   └── references/    # Project-size templates (loaded on demand)
+├── agents-md-refactor/ # AGENTS.md splitter and optimizer
 ├── cli-dev/           # CLI development workflow
 ├── req-define/        # Requirements definition
 └── ...                # Other skills

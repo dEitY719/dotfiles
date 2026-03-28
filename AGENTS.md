@@ -272,7 +272,9 @@ gemini -p @"$(skill-loader cli-dev)"
 | cli-dev | CLI development with TDD | Implement REQ-CLI-* requirements |
 | req-define | Convert freeform to REQ format | Define feature requirements |
 | req-workflow | 4-phase REQ implementation | Build features systematically |
-| agents-md | AGENTS.md system generator | Create/update documentation |
+| agents-md:create | Create new AGENTS.md from scratch | Greenfield project setup |
+| agents-md:check | Audit AGENTS.md compliance | Validate existing documentation |
+| agents-md:refactor | Split and optimize AGENTS.md | Slim down bloated context files |
 | tox-lint | Auto-fix lint issues | Pre-commit standardization |
 
 ## Commands
