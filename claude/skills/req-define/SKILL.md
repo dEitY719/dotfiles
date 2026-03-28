@@ -1,6 +1,9 @@
 ---
 name: req-define
-description: Convert free-form requirements into structured REQ format. Use when defining new features, documenting urgent requests, or creating requirement specifications for feature_requirement_mvp1.md.
+description: >-
+  Convert free-form requirements into structured REQ format. Use when defining
+  new features, documenting urgent requests, or creating requirement
+  specifications for feature_requirement_mvp1.md.
 allowed-tools: Read, Glob, Grep, Write, Edit
 ---
 

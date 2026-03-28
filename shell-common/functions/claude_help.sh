@@ -51,6 +51,99 @@ claude_help() {
 }
 
 # Function to list Claude Code skills
+_extract_skill_field_fallback() {
+    local skill_md="$1"
+    local field="$2"
+
+    awk -v field="$field" '
+BEGIN { in_fm=0; capturing=0; value="" }
+NR==1 && $0=="---" { in_fm=1; next }
+in_fm && $0=="---" {
+    if (capturing) {
+        gsub(/[[:space:]]+/, " ", value)
+        sub(/^ /, "", value)
+        sub(/ $/, "", value)
+        capturing = 0
+        print value
+    }
+    exit
+}
+!in_fm { next }
+capturing {
+    if ($0 ~ /^[^[:space:]][^:]*:[[:space:]]*/) {
+        gsub(/[[:space:]]+/, " ", value)
+        sub(/^ /, "", value)
+        sub(/ $/, "", value)
+        capturing = 0
+        print value
+        exit
+    }
+    line=$0
+    sub(/^[[:space:]]+/, "", line)
+    if (line != "") {
+        if (value != "") value = value " " line
+        else value = line
+    }
+    next
+}
+{
+    pattern = "^" field ":[[:space:]]*(.*)$"
+    if (match($0, pattern, m)) {
+        raw = m[1]
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", raw)
+        if (raw ~ /^[>|]/) {
+            capturing = 1
+            value = ""
+            next
+        }
+        sub(/^"/, "", raw)
+        sub(/"$/, "", raw)
+        print raw
+        exit
+    }
+}
+END {
+    if (capturing) {
+        gsub(/[[:space:]]+/, " ", value)
+        sub(/^ /, "", value)
+        sub(/ $/, "", value)
+        print value
+    }
+}
+' "$skill_md" 2>/dev/null
+}
+
+_extract_skill_metadata() {
+    local skill_md="$1"
+    local parsed=""
+
+    # Prefer robust YAML parsing for multiline descriptions (>- and |)
+    if command -v ruby >/dev/null 2>&1; then
+        parsed="$(ruby -ryaml -e '
+path = ARGV[0]
+content = File.read(path)
+match = content.match(/\A---\n(.*?)\n---\n/m)
+exit 0 unless match
+data = YAML.safe_load(match[1]) || {}
+name = data["name"].to_s.gsub(/\s+/, " ").strip
+desc = data["description"].to_s.gsub(/\s+/, " ").strip
+puts name
+puts desc
+' "$skill_md" 2>/dev/null || true)"
+    fi
+
+    if [ -n "$parsed" ]; then
+        printf '%s\n' "$parsed"
+        return 0
+    fi
+
+    # Fallback for environments without ruby
+    local fallback_name fallback_desc
+    fallback_name=$(_extract_skill_field_fallback "$skill_md" "name")
+    fallback_desc=$(_extract_skill_field_fallback "$skill_md" "description")
+    printf '%s\n%s\n' "$fallback_name" "$fallback_desc"
+}
+
 get_claude_skills() {
     local skills_dir="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills"
 
@@ -81,12 +174,11 @@ get_claude_skills() {
         # Skip if SKILL.md doesn't exist
         [ -f "$skill_md" ] || continue
 
-        # Extract YAML content (between --- markers, excluding the markers)
-        local yaml_content="$(sed -n '/^---$/,/^---$/p' "$skill_md" | sed '1d;$d')"
-
         # Extract name and description from YAML frontmatter
-        local yaml_name="$(echo "$yaml_content" | grep '^name:' | head -1 | sed 's/^name: *//')"
-        local yaml_desc="$(echo "$yaml_content" | grep '^description:' | head -1 | sed 's/^description: *//')"
+        local metadata
+        metadata=$(_extract_skill_metadata "$skill_md")
+        local yaml_name="$(printf '%s\n' "$metadata" | sed -n '1p')"
+        local yaml_desc="$(printf '%s\n' "$metadata" | sed -n '2p')"
 
         # Use directory name as fallback
         [ -n "$yaml_name" ] || yaml_name="$skill_name"

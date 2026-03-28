@@ -1,6 +1,11 @@
 ---
 name: req-draft
-description: Create and iterate on feature requirement draft documents. Use when starting new feature discussions, writing initial requirement drafts, or synthesizing colleague review documents. Triggered by "/req-draft", "요구사항 초안", "기능 초안 작성", or any request to create/update feature requirement documents in docs/feature/.
+description: >-
+  Create and iterate on feature requirement draft documents. Use when starting
+  new feature discussions, writing initial requirement drafts, or synthesizing
+  colleague review documents. Triggered by "/req-draft", "요구사항 초안", "기능 초안 작성",
+  or any request to create/update feature requirement documents in
+  docs/feature/.
 ---
 
 # Requirement Draft
