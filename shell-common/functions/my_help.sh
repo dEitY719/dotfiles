@@ -107,6 +107,19 @@ get_help_description() {
 # Helper: Get all help functions (bash/zsh compatible)
 # ═══════════════════════════════════════════════════════════════
 
+# Cross-shell function existence check.
+# - bash: typeset -f inside a function is reliable
+# - zsh:  typeset -f inside a function can shadow/declare a local variable;
+#         use whence -w instead which only inspects, never declares
+_my_help_is_function() {
+    if [ -n "$ZSH_VERSION" ]; then
+        # whence -w prints "name: function" for functions
+        whence -w "$1" 2>/dev/null | grep -q ": function$"
+    else
+        declare -f "$1" >/dev/null 2>&1
+    fi
+}
+
 _get_help_functions() {
     # Prefer bash builtin when available.
     if command -v compgen >/dev/null 2>&1; then
@@ -599,13 +612,13 @@ my_help_impl() {
                 *) helper_name="${helper_name}_help" ;;
             esac
 
-            if typeset -f "$helper_name" >/dev/null 2>&1; then
+            if _my_help_is_function "$helper_name"; then
                 "$helper_name"
                 rc=$?
             else
-                # Some modules only expose a dash-style alias (e.g., apt-help). Safely detect
-                # aliases/functions using dash notation and execute them via eval so alias
-                # expansion occurs in both bash and zsh.
+                # Some modules only expose a dash-style function (e.g., apt-help). Only
+                # call dash-style names if they resolve to actual *functions* — not aliases
+                # that point to binaries (e.g., codex-help='codex --help').
                 case "$cmd_name" in
                     *[!A-Za-z0-9_-]*)
                         rc=1
@@ -617,10 +630,10 @@ my_help_impl() {
                             *-help) ;;
                             *) dash_name="${dash_name}-help" ;;
                         esac
-                        if type "$dash_name" >/dev/null 2>&1; then
-                            eval "$dash_name"
+                        if _my_help_is_function "$dash_name"; then
+                            "$dash_name"
                             rc=$?
-                        elif typeset -f "$cmd_name" >/dev/null 2>&1; then
+                        elif _my_help_is_function "$cmd_name"; then
                             "$cmd_name"
                             rc=$?
                         elif type "$cmd_name" >/dev/null 2>&1; then
