@@ -7,7 +7,7 @@ Apply the same pattern for any domain specialist agent.
 
 ## Complete Agent File Structure
 
-```markdown
+````markdown
 ---
 name: agent-cto
 description: CTO/개발부장 에이전트. 서비스 개발 전반을 통괄한다.
@@ -87,7 +87,7 @@ tools:
 ### CC-SDD (기술 설계서)
 출력처: `.company/departments/dev/sdd-{task-name}.md`
 
-\`\`\`
+```
 # CC-SDD: {태스크명}
 ## Requirements
 - {요건}
@@ -95,7 +95,7 @@ tools:
 - 기술 스택: {사용 기술}
 ## Tasks
 1. {구현 태스크}
-\`\`\`
+```
 
 ## 품질 검증
 
@@ -149,7 +149,7 @@ tools:
 - 신규 함수에는 유닛 테스트 필수
 - 테스트명: "무엇을 하면 무엇이 일어나는가" 형식
 - 커버리지 목표: 80% 이상
-```
+````
 
 ---
 
