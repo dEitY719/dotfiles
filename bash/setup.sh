@@ -242,7 +242,7 @@ _add_zshrc_auto_cleanup() {
 
     # Add auto-cleanup code at the beginning of ~/.zshrc
     # This runs every time zsh starts to ensure no broken plugins
-    if cat >"${zshrc}.cleanup_insert" <<'CLEANUP_CODE'
+    if cat >"${zshrc}.cleanup_insert" <<'CLEANUP_CODE'; then
 
 # ═══════════════════════════════════════════════════════════════
 # DOTFILES AUTO-CLEANUP: Remove broken plugin references
@@ -269,8 +269,6 @@ _dotfiles_auto_cleanup_plugins
 unfunction _dotfiles_auto_cleanup_plugins 2>/dev/null || true
 
 CLEANUP_CODE
-
-    then
         # Prepend cleanup code to zshrc
         cat "${zshrc}.cleanup_insert" "$zshrc" >"${zshrc}.new"
         mv "${zshrc}.new" "$zshrc"
