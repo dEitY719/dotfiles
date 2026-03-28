@@ -22,8 +22,9 @@ report with PASS/WARN/FAIL per check and actionable improvement suggestions.
 For reference examples and framework patterns, see `references/`:
 - `references/framework-guide.md` — Core principles explained
 - `references/example-orchestrator.md` — Well-structured CLAUDE.md example
-- `references/example-agent.md` — Subagent definition example
+- `references/example-agent.md` — Subagent definition example (CTO + RACI)
 - `references/example-state.md` — State file structure examples
+- `references/example-permissions.md` — Permission control file structure
 
 Read these only when you need to show the user a concrete "how to fix" example.
 
@@ -101,13 +102,20 @@ Every agent needs guardrails on what it can do autonomously.
 
 **Look for:**
 - Explicit classification: what runs automatically vs. what needs approval
-- At minimum two tiers: autonomous actions vs. human-confirmed actions
-- Rules for external/irreversible actions (sending messages, deploying, modifying
-  shared state)
+- At minimum two tiers; well-structured systems have four:
+  - `read-only` — analysis/reports, no side effects, auto-execute
+  - `execute` — internal actions within threshold, auto-execute
+  - `auto_after_approval` — template-based, approved once then auto
+  - `always_draft` — external-facing actions, always require human approval
+- The `always_draft` list must cover: deploys, client comms, SNS, invoices
+- The approval workflow pipeline: draft → approval-queue → `/approve` → execute
+- Reference to a permissions file (e.g., `.company/steering/permissions.md`)
 
-**PASS** — permission levels defined and approval workflow clear
-**WARN** — some rules exist but external or irreversible actions are uncovered
+**PASS** — permission tiers defined, approval workflow clear, external actions covered
+**WARN** — some rules exist but external actions or thresholds are undefined
 **FAIL** — no permission or authorization rules at all
+
+See `references/example-permissions.md` for a complete permissions file structure.
 
 ---
 
