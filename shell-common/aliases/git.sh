@@ -78,3 +78,6 @@ hook_check() {
 }
 
 alias hook-check='hook_check'                     # Git hook 설정 진단 (hook-check --help로 도움말 보기)
+
+# Git worktree
+alias gwt='git_worktree_add'                      # git-crypt safe worktree 생성 (gwt <path> [<branch>])
