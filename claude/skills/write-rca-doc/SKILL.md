@@ -1,6 +1,12 @@
 ---
 name: write-rca-doc
-description: Auto-document incidents, bug fixes, and technical challenges as structured markdown with root cause analysis, prevention checklists, and learning resources. Produces Jekyll-compatible publication-ready markdown (YAML frontmatter + single .md files) for postmortem review, technical blogging, AI tool training, and junior engineer onboarding. Saves to ~/para/archive/rca-knowledge with centralized media in _assets/.
+description: >-
+  Auto-document incidents, bug fixes, and technical challenges as structured
+  markdown with root cause analysis, prevention checklists, and learning
+  resources. Produces Jekyll-compatible publication-ready markdown (YAML
+  frontmatter + single .md files) for postmortem review, technical blogging, AI
+  tool training, and junior engineer onboarding. Saves to
+  ~/para/archive/rca-knowledge with centralized media in _assets/.
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash, Ask
 ---
 

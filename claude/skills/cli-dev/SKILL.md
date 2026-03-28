@@ -1,6 +1,9 @@
 ---
 name: cli-dev
-description: CLI feature development skill. Implements CLI commands that wrap backend API endpoints. Follows TDD workflow with pytest, Rich console formatting, and session management. Use when implementing REQ-CLI-* requirements.
+description: >-
+  CLI feature development skill. Implements CLI commands that wrap backend API
+  endpoints. Follows TDD workflow with pytest, Rich console formatting, and
+  session management. Use when implementing REQ-CLI-* requirements.
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
 ---
 

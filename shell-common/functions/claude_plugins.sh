@@ -1,3 +1,4 @@
+#!/bin/sh
 # Claude Code Marketplace Plugins Management
 # Advanced utilities for managing and translating marketplace plugins
 
@@ -444,11 +445,93 @@ generate_plugin_doc_ko() {
 _get_plugin_description() {
     local file="$1"
 
+    _extract_yaml_field_fallback() {
+        local yaml_file="$1"
+        local field="$2"
+
+        awk -v field="$field" '
+BEGIN { in_fm=0; capturing=0; value="" }
+NR==1 && $0=="---" { in_fm=1; next }
+in_fm && $0=="---" {
+    if (capturing) {
+        gsub(/[[:space:]]+/, " ", value)
+        sub(/^ /, "", value)
+        sub(/ $/, "", value)
+        capturing = 0
+        print value
+    }
+    exit
+}
+!in_fm { next }
+capturing {
+    if ($0 ~ /^[^[:space:]][^:]*:[[:space:]]*/) {
+        gsub(/[[:space:]]+/, " ", value)
+        sub(/^ /, "", value)
+        sub(/ $/, "", value)
+        capturing = 0
+        print value
+        exit
+    }
+    line=$0
+    sub(/^[[:space:]]+/, "", line)
+    if (line != "") {
+        if (value != "") value = value " " line
+        else value = line
+    }
+    next
+}
+{
+    pattern = "^" field ":[[:space:]]*(.*)$"
+    if (match($0, pattern, m)) {
+        raw = m[1]
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", raw)
+        if (raw ~ /^[>|]/) {
+            capturing = 1
+            value = ""
+            next
+        }
+        sub(/^"/, "", raw)
+        sub(/"$/, "", raw)
+        print raw
+        exit
+    }
+}
+END {
+    if (capturing) {
+        gsub(/[[:space:]]+/, " ", value)
+        sub(/^ /, "", value)
+        sub(/ $/, "", value)
+        print value
+    }
+}
+' "$yaml_file" 2>/dev/null
+    }
+
     # 1. Try to extract description from YAML frontmatter
-    local yaml_desc
-    yaml_desc=$(grep "^description:" "$file" 2>/dev/null | head -1 | sed 's/^description: *//; s/"//g' | cut -c1-100)
+    local yaml_desc=""
+
+    # Prefer robust YAML parsing for multiline descriptions (>- and |)
+    if command -v ruby >/dev/null 2>&1; then
+        yaml_desc="$(ruby -ryaml -e '
+path = ARGV[0]
+content = File.read(path)
+match = content.match(/\A---\n(.*?)\n---\n/m)
+exit 0 unless match
+data = YAML.safe_load(match[1]) || {}
+desc = data["description"].to_s.gsub(/\s+/, " ").strip
+puts desc
+' "$file" 2>/dev/null || true)"
+    fi
+
+    # Fallback for environments without ruby
+    if [ -z "$yaml_desc" ]; then
+        yaml_desc=$(_extract_yaml_field_fallback "$file" "description")
+    fi
 
     if [ -n "$yaml_desc" ]; then
+        if [ ${#yaml_desc} -gt 100 ]; then
+            yaml_desc="$(echo "$yaml_desc" | cut -c1-100)"
+        fi
         ux_info "$yaml_desc"
         return 0
     fi

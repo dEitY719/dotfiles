@@ -1,6 +1,10 @@
 ---
 name: notion-knowledge-capture
-description: Transforms conversations and discussions into structured documentation pages in Notion. Captures insights, decisions, and knowledge from chat context, formats appropriately, and saves to wikis or databases with proper organization and linking for easy discovery.
+description: >-
+  Transforms conversations and discussions into structured documentation pages
+  in Notion. Captures insights, decisions, and knowledge from chat context,
+  formats appropriately, and saves to wikis or databases with proper
+  organization and linking for easy discovery.
 allowed-tools: Read, Glob
 ---
 

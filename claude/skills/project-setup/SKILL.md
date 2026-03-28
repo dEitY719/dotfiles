@@ -1,6 +1,9 @@
 ---
 name: project-setup
-description: Initialize Python projects with standard configuration files (.markdownlint.json, tox.ini, pyproject.toml). Use when starting new Python projects or standardizing existing ones.
+description: >-
+  Initialize Python projects with standard configuration files
+  (.markdownlint.json, tox.ini, pyproject.toml). Use when starting new Python
+  projects or standardizing existing ones.
 allowed-tools: Write, Bash, Read, Glob
 ---
 
