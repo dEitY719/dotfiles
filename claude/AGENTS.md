@@ -175,7 +175,7 @@ vim ~/dotfiles/claude/settings.json
 - **DO**: Use SKILL.md frontmatter format (`name`, `description`, `allowed-tools` or `compatibility.tools`)
 - **DO**: Use `{namespace}:{action}` colon notation in skill `name` (e.g. `skill:check`, `agents-md:create`)
 - **DO**: Write `description:` as either a single line or YAML multi-line scalar (`>-`) — multi-line is supported by the YAML parser
-- **DO**: Keep SKILL.md under 500 lines
+- **DO**: Keep SKILL.md under 100 lines — use `references/` and Progressive Disclosure to extract detail
 - **DON'T**: Manually create files in `~/.claude/skills/` (managed by bind mount)
 - **DON'T**: Use symlinks for skills directory (use bind mount instead)
 
