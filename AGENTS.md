@@ -35,7 +35,7 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 
 ## Immutable Constraints
 
-- **500-Line Limit**: Every AGENTS.md file must be under 500 lines.
+- **100-Line Limit**: Every AGENTS.md file must be under 100 lines — use nested AGENTS.md files for detail.
 - **No Emojis**: Strictly prohibited to save tokens.
 - **Interactive Guards**: Bash files must guard execution: `[[ $- == *i* ]]`.
 - **Loading Order**: Respect `bash/main.bash` priority (Env -> UX -> Alias -> App).
