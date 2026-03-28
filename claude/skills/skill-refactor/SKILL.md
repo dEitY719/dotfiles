@@ -1,11 +1,11 @@
 ---
-name: skill-refactor
+name: skill:refactor
 description: >-
   Refactor a SKILL.md that is too long or lacks Progressive Disclosure structure.
   Shrinks the body to under 100 lines by extracting detail into references/ files.
   Use when the user says "my skill is too long", "refactor my skill", "apply
-  progressive disclosure to my skill", "slim down my SKILL.md", "/skill-refactor",
-  or after /skill-check reports FAIL/WARN. Distinct from skill-check (audit only).
+  progressive disclosure to my skill", "slim down my SKILL.md", "/skill:refactor",
+  or after /skill:check reports FAIL/WARN. Distinct from skill:check (audit only).
 compatibility:
   tools: Read, Glob, Grep, Write, Edit, Bash
 ---

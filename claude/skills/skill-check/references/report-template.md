@@ -29,10 +29,10 @@ Score: X/5 checks passed (Y warnings)
 **How to fix:** <concrete suggestion>
 
 ## Summary
-<2–3 sentences: overall quality, most critical fix, ready for /skill-refactor?>
+<2–3 sentences: overall quality, most critical fix, ready for /skill:refactor?>
 ```
 
 Rules:
 - Only include WARN and FAIL items in Issues section
 - Quote actual lines from the file when describing problems
-- If score < 4/5, end Summary with: "Run /skill-refactor to fix structural issues."
+- If score < 4/5, end Summary with: "Run /skill:refactor to fix structural issues."
