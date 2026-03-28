@@ -171,7 +171,7 @@ Lines: <count>
 | 2 | Reference File Path Pattern | WARN   | ...                                |
 | 3 | Commands List               | PASS   | ...                                |
 | 4 | Permission Control Rules    | FAIL   | ...                                |
-| 5 | Thin Orchestrator Principle | WARN   | 5a:PASS 5b:WARN 5c:FAIL            |
+| 5 | Thin Orchestrator Principle | WARN   | 5a: PASS, 5b: WARN, 5c: FAIL       |
 | 6 | Basic Rules                 | PASS   | ...                                |
 
 Score: X/6 passed (Y warnings)
