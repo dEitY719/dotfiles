@@ -146,6 +146,7 @@ puts desc
 
 get_claude_skills() {
     local skills_dir="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills"
+    local skill_path skill_name skill_md yaml_name yaml_desc
 
     # Check if skills directory exists
     if [ ! -d "$skills_dir" ]; then
@@ -168,29 +169,31 @@ get_claude_skills() {
         # Skip if not a directory
         [ -d "$skill_path" ] || continue
 
-        local skill_name="$(basename "$skill_path")"
-        local skill_md="$skill_path/SKILL.md"
+        skill_name="$(basename "$skill_path")"
+        skill_md="$skill_path/SKILL.md"
 
         # Skip if SKILL.md doesn't exist
         [ -f "$skill_md" ] || continue
 
         # Extract name and description from YAML frontmatter
-        local metadata
-        metadata=$(_extract_skill_metadata "$skill_md")
-        local yaml_name="$(printf '%s\n' "$metadata" | sed -n '1p')"
-        local yaml_desc="$(printf '%s\n' "$metadata" | sed -n '2p')"
+        yaml_name=$(_extract_skill_metadata "$skill_md" | sed -n '1p')
+        yaml_desc=$(_extract_skill_metadata "$skill_md" | sed -n '2p')
 
         # Use directory name as fallback
         [ -n "$yaml_name" ] || yaml_name="$skill_name"
         [ -n "$yaml_desc" ] || yaml_desc="(No description)"
 
-        # Truncate description to 60 chars (more readable than 30)
-        if [ ${#yaml_desc} -gt 60 ]; then
-            yaml_desc="$(echo "$yaml_desc" | cut -c1-57)..."
+        # Truncate description to 160 chars for readability
+        if [ ${#yaml_desc} -gt 160 ]; then
+            yaml_desc="$(printf '%s' "$yaml_desc" | cut -c1-157)..."
         fi
 
-        # Output formatted line
-        printf "%-20s | %s\n" "$yaml_name" "$yaml_desc"
+        # Output formatted line (ux_bullet preferred for readability)
+        if command -v ux_bullet >/dev/null 2>&1; then
+            ux_bullet "$(printf '%-20s | %s' "$yaml_name" "$yaml_desc")"
+        else
+            printf "%-20s | %s\n" "$yaml_name" "$yaml_desc"
+        fi
 
         found_skills=1
     done
