@@ -49,7 +49,7 @@ Before: <N> lines → After: <M> lines (↓ X%)
 | Output format preserved  | PASS/FAIL |
 
 ### Next step
-Run /skill-check to verify the result.
+Run /skill:check to verify the result.
 ```
 
 ---

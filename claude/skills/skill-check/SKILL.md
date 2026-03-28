@@ -1,12 +1,12 @@
 ---
-name: skill-check
+name: skill:check
 description: >-
   Audit a SKILL.md file for Progressive Disclosure compliance — checks if it
   follows the under-100-lines rule and properly separates detail into references/.
   Use when the user says "check my skill", "is my SKILL.md too long?", "audit
   my skill structure", "does this skill follow progressive disclosure?",
-  "/skill-check". Reports PASS/WARN/FAIL per criterion with concrete fixes.
-  Do NOT use for AGENTS.md or CLAUDE.md files — use agents-md-check or
+  "/skill:check". Reports PASS/WARN/FAIL per criterion with concrete fixes.
+  Do NOT use for AGENTS.md or CLAUDE.md files — use agents-md:check or
   claude-md-check instead.
 compatibility:
   tools: Read, Glob, Grep, Bash
