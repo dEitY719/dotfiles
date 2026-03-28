@@ -71,7 +71,7 @@ For each planned nested file:
 1. Extract the relevant content from the root file
 2. Add a minimal header: `# <Module Name> — <one-line purpose>`
 3. Keep only content specific to that directory
-4. Ensure it stays under 500 lines
+4. Ensure it stays under 100 lines
 
 ### 3b. Update root AGENTS.md
 
@@ -84,10 +84,10 @@ For each planned nested file:
 ### 3c. Validate
 
 Run a mental agents-md:check on the result:
-- Root file < 400 lines? PASS/FAIL
+- Root file < 100 lines? PASS/FAIL
 - No emojis? PASS/FAIL
 - Context Map updated? PASS/FAIL
-- All nested files < 500 lines? PASS/FAIL
+- All nested files < 100 lines? PASS/FAIL
 
 ## Step 4: Report
 
