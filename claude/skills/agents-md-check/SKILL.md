@@ -123,23 +123,23 @@ Lines: <count>
 
 | # | Check                    | Result   | Notes                              |
 |---|--------------------------|----------|------------------------------------|
-| 1 | Line Count               | ✅ PASS  | 302 lines — within limit           |
-| 2 | No Emojis                | ✅ PASS  | Zero emojis found                  |
-| 3 | Context Map Quality      | ⚠️ WARN  | Uses table format instead of list  |
-| 4 | Operational Commands     | ✅ PASS  | 6 executable commands              |
-| 5 | Golden Rules             | ✅ PASS  | Do's, Don'ts, Constraints present  |
-| 6 | Reference vs Inline      | ⚠️ WARN  | 3 code blocks >20 lines inline     |
-| 7 | Naming Conventions       | ✅ PASS  | snake_case and dash-case defined   |
+| 1 | Line Count               | PASS | 302 lines — within limit           |
+| 2 | No Emojis                | PASS | Zero emojis found                  |
+| 3 | Context Map Quality      | WARN | Uses table format instead of list  |
+| 4 | Operational Commands     | PASS | 6 executable commands              |
+| 5 | Golden Rules             | PASS | Do's, Don'ts, Constraints present  |
+| 6 | Reference vs Inline      | WARN | 3 code blocks >20 lines inline     |
+| 7 | Naming Conventions       | PASS | snake_case and dash-case defined   |
 
 Score: X/7 checks passed (Y warnings)
 
 ## Issues & Improvements
 
-### ❌ Check N: <Name> — FAIL
+### FAIL: Check N — <Name>
 **Problem:** <quote the specific lines that fail>
 **How to fix:** <concrete example of the fix>
 
-### ⚠️ Check N: <Name> — WARN
+### WARN: Check N — <Name>
 **Problem:** <specific issue>
 **How to fix:** <concrete suggestion>
 
