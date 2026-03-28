@@ -71,21 +71,27 @@ The CLAUDE.md should be a routing layer, not a data store.
 
 ---
 
-### Check 3: Commands List
+### Check 3: Commands Interface
 
-Users and other agents need a clear interface.
+Users and other agents need a clear, discoverable interface.
 
 **Look for:**
-- Dedicated section listing available slash-commands or invocation patterns
-- Commands grouped by domain or responsibility
-- Each command has a one-line description of what it does
+- Dedicated section listing available slash-commands
+- Commands grouped by domain or agent responsibility
+- Each command has a one-line description
 
-**PASS** — commands section with entries and descriptions
-**WARN** — commands exist but undocumented, scattered, or incomplete
-**FAIL** — no commands section (for an orchestrator-type file)
+**Also check** whether the project uses a `.claude/commands/` directory:
+- `commands/` files are thin execution scripts (5-10 steps, no persona)
+- `agents/` files are rich domain experts (persona, RACI, workflows)
+- If `commands/` exists, CLAUDE.md commands list should map to those files
 
-*Note: if this CLAUDE.md is for a simple single-purpose agent rather than an
-orchestrator, absence of commands is acceptable — note this and downgrade to WARN.*
+**PASS** — commands section exists with entries and descriptions
+**WARN** — commands exist but undocumented, scattered, or incomplete;
+  OR agents/ exists but commands/ separation is missing/unclear
+**FAIL** — no commands section at all (for an orchestrator-type file)
+
+*Note: if this CLAUDE.md is for a simple single-purpose agent, absence of
+commands is acceptable — note this and downgrade to WARN.*
 
 ---
 
