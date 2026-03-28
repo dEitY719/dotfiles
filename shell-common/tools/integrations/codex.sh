@@ -21,17 +21,19 @@
 # Essential Command Aliases
 # ═══════════════════════════════════════════════════════════════
 
-alias cx='codex'                    # Basic command
-alias cxhelp='codex --help'         # Show help
-alias cxver='codex --version'       # Show version
+alias codex-help='codex --help'     # Show help
+alias codex-version='codex --version' # Show version
 alias codex-yolo='codex --dangerously-bypass-approvals-and-sandbox'
-alias cxsync='cxskills_sync'        # Sync skills symlinks
+alias codex-skills-sync='codex_skills_sync' # Sync skills symlinks
+alias codex-install='codex_install' # Install Codex CLI
+alias codex-uninstall='codex_uninstall' # Uninstall Codex CLI
+alias codex-status='codex_status'   # Check Codex status
 
 # ═══════════════════════════════════════════════════════════════
 # Codex Skills Sync
 # ═══════════════════════════════════════════════════════════════
 
-cxskills_sync() {
+codex_skills_sync() {
     local src="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills"
     local dst="$HOME/.codex/skills"
     local added=0
@@ -76,7 +78,7 @@ EOF
 # Codex Installation
 # ═══════════════════════════════════════════════════════════════
 
-cxinstall() {
+codex_install() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_codex.sh"
 }
 
@@ -84,7 +86,7 @@ cxinstall() {
 # Codex Uninstallation
 # ═══════════════════════════════════════════════════════════════
 
-cxuninstall() {
+codex_uninstall() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/uninstall_codex.sh"
 }
 
@@ -92,7 +94,7 @@ cxuninstall() {
 # Codex Status Check
 # ═══════════════════════════════════════════════════════════════
 
-cxstatus() {
+codex_status() {
     ux_header "Codex Status"
 
     if command -v codex > /dev/null 2>&1; then

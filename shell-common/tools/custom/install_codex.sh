@@ -99,8 +99,10 @@ main() {
     ux_bullet "Check your PATH if the command is not found: ${UX_PRIMARY}echo \$PATH${UX_RESET}"
     ux_bullet "View help: ${UX_PRIMARY}codex --help${UX_RESET}"
     echo ""
-    ux_info "For more project-specific commands, run: ${UX_PRIMARY}codex-help${UX_RESET}"
+    ux_info "For more project-specific commands, run: ${UX_PRIMARY}codex-quick-help${UX_RESET}"
     echo ""
 }
 
-main "$@"
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+    main "$@"
+fi
