@@ -26,7 +26,7 @@ Identify:
    - Reference tables, configuration examples
    - Domain knowledge, long checklists, examples > 15 lines
 3. **Workflow-only content** — phases, steps, decision logic → stays in SKILL.md
-4. **Existing `references/`** — check if directory exists
+4. **Existing `references/`** — check with `test -d $(dirname <path>)/references/`; if exists, list contents
 
 ## Step 2: Build Refactoring Plan
 
