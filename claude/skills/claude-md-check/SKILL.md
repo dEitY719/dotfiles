@@ -142,18 +142,18 @@ Lines: <line count>
 
 | # | Check                      | Result | Notes                          |
 |---|----------------------------|--------|--------------------------------|
-| 1 | Role Definition            | ✅ PASS | ...                            |
-| 2 | Reference File Path Pattern| ⚠️ WARN | ...                            |
-| 3 | Commands List              | ✅ PASS | ...                            |
-| 4 | Permission Control Rules   | ❌ FAIL | ...                            |
-| 5 | Thin Orchestrator Principle| ⚠️ WARN | 5a✅ 5b⚠️ 5c❌                |
-| 6 | Basic Rules                | ✅ PASS | ...                            |
+| 1 | Role Definition            | PASS | ...                            |
+| 2 | Reference File Path Pattern| WARN | ...                            |
+| 3 | Commands List              | PASS | ...                            |
+| 4 | Permission Control Rules   | FAIL | ...                            |
+| 5 | Thin Orchestrator Principle| WARN | 5a:PASS 5b:WARN 5c:FAIL        |
+| 6 | Basic Rules                | PASS | ...                            |
 
 Score: X/6 checks passed (Y warnings)
 
 ## Issues & Improvements
 
-### ❌ Check 4: Permission Control Rules — FAIL
+### FAIL: Check 4 — Permission Control Rules
 **Problem:** <specific issue found in the file>
 **How to fix:**
 Add a permission control section like:
@@ -164,7 +164,7 @@ Add a permission control section like:
     - execute: 임계값 내 내부 액션 → 자동 실행
     참조: `.company/steering/permissions.md`
 
-### ⚠️ Check 2: Reference File Path Pattern — WARN
+### WARN: Check 2 — Reference File Path Pattern
 **Problem:** <specific issue found>
 **How to fix:** <concrete suggestion>
 

@@ -84,10 +84,10 @@ For each planned nested file:
 ### 3c. Validate
 
 Run a mental agents-md:check on the result:
-- Root file < 400 lines? ✓/✗
-- No emojis? ✓/✗
-- Context Map updated? ✓/✗
-- All nested files < 500 lines? ✓/✗
+- Root file < 400 lines? PASS/FAIL
+- No emojis? PASS/FAIL
+- Context Map updated? PASS/FAIL
+- All nested files < 500 lines? PASS/FAIL
 
 ## Step 4: Report
 
