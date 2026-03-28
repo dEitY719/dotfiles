@@ -25,6 +25,52 @@ alias cx='codex'                    # Basic command
 alias cxhelp='codex --help'         # Show help
 alias cxver='codex --version'       # Show version
 alias codex-yolo='codex --dangerously-bypass-approvals-and-sandbox'
+alias cxsync='cxskills_sync'        # Sync skills symlinks
+
+# ═══════════════════════════════════════════════════════════════
+# Codex Skills Sync
+# ═══════════════════════════════════════════════════════════════
+
+cxskills_sync() {
+    local src="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills"
+    local dst="$HOME/.codex/skills"
+    local added=0
+    local removed=0
+    local name link
+
+    ux_header "Codex Skills Sync"
+
+    if [ ! -d "$dst" ]; then
+        ux_warning "Target directory not found: $dst"
+        return 1
+    fi
+
+    # Remove broken symlinks
+    while read -r link; do
+        if [ -L "$link" ] && [ ! -e "$link" ]; then
+            name=$(basename "$link")
+            rm "$link"
+            ux_warning "Removed: $name"
+            removed=$((removed + 1))
+        fi
+    done <<EOF
+$(find "$dst" -maxdepth 1 -type l)
+EOF
+
+    # Add missing symlinks for each skill directory
+    for dir in "$src"/*/; do
+        name=$(basename "$dir")
+        if [ ! -e "$dst/$name" ]; then
+            ln -s "$dir" "$dst/$name"
+            ux_success "Added: $name"
+            added=$((added + 1))
+        fi
+    done
+
+    echo ""
+    ux_table_row "Added"   "$added"   ""
+    ux_table_row "Removed" "$removed" ""
+}
 
 # ═══════════════════════════════════════════════════════════════
 # Codex Installation
