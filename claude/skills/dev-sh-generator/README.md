@@ -331,13 +331,13 @@ This skill follows the standards defined in tools/AGENTS.md:
 
 ## Related Skills
 
-- **agents-md**: Generate tools/AGENTS.md documentation
+- **agents-md:create**: Generate tools/AGENTS.md documentation
 - **project-setup**: Initialize Python project config files
 - **tox-lint**: Run linting and formatting checks
 
 ## Workflow Recommendation
 
-1. **First**: Run `agents-md` skill to create tools/AGENTS.md
+1. **First**: Run `agents-md:create` skill to create tools/AGENTS.md
 2. **Second**: Run `dev-sh-generator` skill to create tools/dev.sh
 3. **Third**: Run `project-setup` skill for tox.ini, pyproject.toml
 
