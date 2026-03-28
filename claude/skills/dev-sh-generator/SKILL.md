@@ -1,6 +1,9 @@
 ---
 name: dev-sh-generator
-description: Generate project-specific tools/dev.sh task runner following AGENTS.md standards. Use when creating or updating developer workflow automation scripts for Python/FastAPI projects.
+description: >-
+  Generate project-specific tools/dev.sh task runner following AGENTS.md
+  standards. Use when creating or updating developer workflow automation scripts
+  for Python/FastAPI projects.
 allowed-tools: Read, Glob, Grep, Write, Bash, Edit
 ---
 

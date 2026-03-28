@@ -1,6 +1,9 @@
 ---
 name: tox-lint
-description: Run lint checks and auto-fix issues across Python, Markdown, and shell scripts. Use when running tox -e ruff/mdlint/shellcheck/shfmt, standardizing code before commits, or fixing CI lint failures.
+description: >-
+  Run lint checks and auto-fix issues across Python, Markdown, and shell
+  scripts. Use when running tox -e ruff/mdlint/shellcheck/shfmt, standardizing
+  code before commits, or fixing CI lint failures.
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
 ---
 

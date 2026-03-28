@@ -1,6 +1,9 @@
 ---
 name: req-workflow
-description: REQ-based 4-phase development workflow. Use when implementing features with "REQ-X-Y 개발해" format. Orchestrates Specification, Test Design, Implementation, Summary phases with user approval gates.
+description: >-
+  REQ-based 4-phase development workflow. Use when implementing features with
+  "REQ-X-Y 개발해" format. Orchestrates Specification, Test Design, Implementation,
+  Summary phases with user approval gates.
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
 ---
 

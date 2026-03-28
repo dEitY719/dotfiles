@@ -1,6 +1,10 @@
 ---
 name: agents-md
-description: Generate or update AGENTS.md documentation system following SOLID principles and TDD. Use when creating project documentation, setting up context routing, or optimizing AI agent context windows. Enforces 500-line limit, token efficiency, and hierarchical structure.
+description: >-
+  Generate or update AGENTS.md documentation system following SOLID principles
+  and TDD. Use when creating project documentation, setting up context routing,
+  or optimizing AI agent context windows. Enforces 500-line limit, token
+  efficiency, and hierarchical structure.
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
 ---
 

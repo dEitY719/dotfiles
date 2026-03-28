@@ -1,6 +1,17 @@
 ---
 name: write-blog-dev-learnings
-description: Write entertaining Korean developer blog posts about debugging war stories, production incidents, and technical gotchas. Saves to ~/para/archive/playbook/docs/dev-learnings/{topic}-blog.md. TRIGGER when user mentions writing a blog about a technical lesson, sharing a debugging experience, or documenting a "삽질" story for teammates. Common triggers include "블로그 써줘", "삽질 블로그", "dev-learnings에 글", "blog post about debugging", "이거 블로그로 정리", "동료한테 공유할 글", "오늘 삽질한 거 글로", or any request to turn a painful technical experience into a shareable narrative. Also trigger when the user recounts a debugging story and wants to preserve it. Do NOT trigger for formal RCA documents (use write-rca-doc), API documentation, README files, or non-narrative technical docs.
+description: >-
+  Write entertaining Korean developer blog posts about debugging war stories,
+  production incidents, and technical gotchas. Saves to
+  ~/para/archive/playbook/docs/dev-learnings/{topic}-blog.md. TRIGGER when user
+  mentions writing a blog about a technical lesson, sharing a debugging
+  experience, or documenting a "삽질" story for teammates. Common triggers include
+  "블로그 써줘", "삽질 블로그", "dev-learnings에 글", "blog post about debugging", "이거 블로그로
+  정리", "동료한테 공유할 글", "오늘 삽질한 거 글로", or any request to turn a painful technical
+  experience into a shareable narrative. Also trigger when the user recounts a
+  debugging story and wants to preserve it. Do NOT trigger for formal RCA
+  documents (use write-rca-doc), API documentation, README files, or
+  non-narrative technical docs.
 ---
 
 # Developer Blog Writer — "삽질 블로그"

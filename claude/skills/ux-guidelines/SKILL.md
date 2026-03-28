@@ -1,6 +1,9 @@
 ---
 name: ux-guidelines
-description: Apply UX_GUIDELINES.md standards to shell functions and help text. Use when refactoring help functions, creating new help commands, or ensuring consistent formatting with semantic UX functions (ux_header, ux_section, ux_bullet, etc).
+description: >-
+  Apply UX_GUIDELINES.md standards to shell functions and help text. Use when
+  refactoring help functions, creating new help commands, or ensuring consistent
+  formatting with semantic UX functions (ux_header, ux_section, ux_bullet, etc).
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
 ---
 
