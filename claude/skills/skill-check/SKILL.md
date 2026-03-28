@@ -17,7 +17,7 @@ compatibility:
 ## Step 1: Locate the File
 
 If the user specifies a path, use it. Otherwise search for SKILL.md from the
-current directory. Also check: `ls $(dirname <path>)/` for a `references/` dir.
+current directory.
 
 ## Step 2: Run Five Checks
 
@@ -33,9 +33,10 @@ WARN — mostly workflow but some templates/tables inline
 FAIL — large reference content embedded directly in SKILL.md
 
 **Check 3: Frontmatter Validity**
-Look for: `name` (no colons, lowercase + hyphens only), `description` present,
-only supported attributes (`name`, `description`, `compatibility`, `metadata`,
-`user-invocable`, `argument-hint`, `disable-model-invocation`, `license`).
+Look for: `name` present (colons allowed as namespace separator, e.g. `skill:check`),
+`description` present, only supported attributes (`name`, `description`,
+`compatibility`, `metadata`, `user-invocable`, `argument-hint`,
+`disable-model-invocation`, `license`).
 No `allowed-tools` — use `compatibility.tools` instead.
 PASS — valid | WARN — minor issues | FAIL — missing fields or unsupported attrs
 

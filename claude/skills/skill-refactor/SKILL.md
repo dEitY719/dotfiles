@@ -14,19 +14,23 @@ compatibility:
 
 ## Step 1: Analyze
 
-Read the target SKILL.md completely. Identify:
+Read the target SKILL.md completely. Also read `references/plan-and-report-templates.md`
+now — you'll need it for both the plan (Step 2) and the completion report (Step 4).
 
-1. **Line count** — how far over 100?
+Identify:
+
+1. **Line count** — if already ≤ 100 lines with good Progressive Disclosure structure,
+   tell the user the skill passes and stop here.
 2. **Extractable content** — detail, not workflow:
    - Full output templates, report format blocks
    - Reference tables, configuration examples
    - Domain knowledge, long checklists, examples > 15 lines
 3. **Workflow-only content** — phases, steps, decision logic → stays in SKILL.md
-4. **Existing `references/`** — `ls $(dirname <path>)/references/` if exists
+4. **Existing `references/`** — check if directory exists
 
 ## Step 2: Build Refactoring Plan
 
-Read `references/plan-and-report-templates.md` for the plan template format.
+Use the plan template from `references/plan-and-report-templates.md`.
 Present the plan and wait for user confirmation before writing any files.
 
 ## Step 3: Execute
@@ -53,7 +57,8 @@ After confirmation:
 
 ## Step 4: Report
 
-Read `references/plan-and-report-templates.md` for the completion report format.
+Use the completion report template from `references/plan-and-report-templates.md`
+(already loaded in Step 1).
 
 ## Guiding Principle
 
