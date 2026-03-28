@@ -51,7 +51,6 @@ After confirmation:
 
 **3c. Validate**
 - SKILL.md ≤ 100 lines?
-- No `allowed-tools` in frontmatter?
 - All `references/` files triggered from SKILL.md?
 - Output format still reachable?
 

@@ -34,11 +34,10 @@ FAIL — large reference content embedded directly in SKILL.md
 
 **Check 3: Frontmatter Validity**
 Look for: `name` present (colons allowed as namespace separator, e.g. `skill:check`),
-`description` present, only supported attributes (`name`, `description`,
-`compatibility`, `metadata`, `user-invocable`, `argument-hint`,
-`disable-model-invocation`, `license`).
-No `allowed-tools` — use `compatibility.tools` instead.
-PASS — valid | WARN — minor issues | FAIL — missing fields or unsupported attrs
+`description` present, only known attributes present.
+Known attributes: `name`, `description`, `allowed-tools`, `compatibility`,
+`metadata`, `user-invocable`, `argument-hint`, `disable-model-invocation`, `license`.
+PASS — valid | WARN — minor issues | FAIL — missing fields or unknown attributes
 
 **Check 4: References Directory Usage**
 PASS — `references/` exists with focused files, each referenced from SKILL.md
