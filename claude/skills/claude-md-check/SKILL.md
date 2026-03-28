@@ -1,14 +1,15 @@
 ---
-name: claude-md:check
+name: claude-md-check
 description: >-
   Audit a CLAUDE.md file for an AI agent orchestrator system. Use when building
   or reviewing any AI agent framework — task automation agents, multi-agent
   pipelines, domain-specific orchestrators, or AI-assisted workflows — and you
   want to verify the CLAUDE.md follows sound orchestrator design principles.
   Triggers on: "check my CLAUDE.md", "is my orchestrator config good?",
-  "validate my AI agent setup", "review my agent framework", "/claude-md:check".
-  Do NOT use for project context files (AGENTS.md) — use agents-md:check instead.
-allowed-tools: Read, Glob, Grep, Bash
+  "validate my AI agent setup", "review my agent framework", "/claude-md-check".
+  Do NOT use for project context files (AGENTS.md) — use agents-md-check instead.
+compatibility:
+  tools: Read, Glob, Grep, Bash
 ---
 
 # CLAUDE.md Orchestrator Auditor
