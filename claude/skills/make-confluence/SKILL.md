@@ -5,9 +5,7 @@ description: >-
   with structured problem-solution-results format.
 ---
 
-# make-confluence: Technical Documentation to Confluence Guide
-
-Transform markdown technical documentation into Confluence-formatted guides with structured problem-solution-results format.
+# make-confluence
 
 ## Invocation
 
