@@ -1,6 +1,10 @@
-# make-jira: Weekly Jira Report Generator
+---
+name: make-jira
+description: >-
+  Generate comprehensive weekly Jira reports from work logs.
+---
 
-Generate comprehensive weekly Jira reports from work logs.
+# make-jira
 
 ## Invocation
 

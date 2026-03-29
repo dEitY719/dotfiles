@@ -1,6 +1,11 @@
-# make-confluence: Technical Documentation to Confluence Guide
+---
+name: make-confluence
+description: >-
+  Transform markdown technical documentation into Confluence-formatted guides
+  with structured problem-solution-results format.
+---
 
-Transform markdown technical documentation into Confluence-formatted guides with structured problem-solution-results format.
+# make-confluence
 
 ## Invocation
 
