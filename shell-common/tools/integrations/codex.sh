@@ -51,9 +51,12 @@ codex_skills_sync() {
     while read -r link; do
         if [ -L "$link" ] && [ ! -e "$link" ]; then
             name=$(basename "$link")
-            rm "$link"
-            ux_warning "Removed: $name"
-            removed=$((removed + 1))
+            if rm -f "$link"; then
+                ux_warning "Removed: $name"
+                removed=$((removed + 1))
+            else
+                ux_error "Failed to remove: $name"
+            fi
         fi
     done <<EOF
 $(find "$dst" -maxdepth 1 -type l)
