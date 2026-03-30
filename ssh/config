@@ -17,9 +17,8 @@ Host github.com
      IdentityFile ~/.ssh/id_ed25519
      IdentitiesOnly yes
      ConnectTimeout 5
-     # 사내망에서 port 22 차단 시 아래 두 줄 주석 해제
-     # Hostname ssh.github.com
-     # Port 443
+     Hostname ssh.github.com
+     Port 443
 
 Host Replica-Gerrit
      HostName 10.166.101.44
