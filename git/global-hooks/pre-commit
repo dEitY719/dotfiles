@@ -105,7 +105,11 @@ FORBIDDEN_PATH_ERE="${GIT_HOOKS_FORBIDDEN_PATH_ERE:-(^|/)\.aws/(credentials|conf
 # Returns 0 if git-crypt managed, 1 otherwise
 is_git_crypt_managed() {
     local path="$1"
-    git check-attr filter -- "$path" 2>/dev/null | grep -q "filter: git-crypt"
+    if [ "$DEBUG" = "1" ]; then
+        git check-attr filter -- "$path" | grep -q "filter: git-crypt"
+    else
+        git check-attr filter -- "$path" 2>/dev/null | grep -q "filter: git-crypt"
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
