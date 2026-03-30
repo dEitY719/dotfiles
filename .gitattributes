@@ -7,3 +7,5 @@
 # Encrypted files
 .env filter=git-crypt diff=git-crypt
 .secrets/** filter=git-crypt diff=git-crypt
+opencode/opencode.json.internal     filter=git-crypt diff=git-crypt
+opencode/opencode.json.internal-a2g filter=git-crypt diff=git-crypt
