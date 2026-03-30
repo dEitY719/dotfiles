@@ -1,5 +1,25 @@
 Host *
      PubkeyAcceptedKeyTypes +ssh-rsa
+     ServerAliveInterval 60
+     ServerAliveCountMax 3
+     ConnectTimeout 10
+
+Host github.samsungds.net
+     User git
+     IdentityFile ~/.ssh/id_ed25519
+     IdentitiesOnly yes
+     ControlMaster auto
+     ControlPath ~/.ssh/control-%h-%p-%r
+     ControlPersist 600
+
+Host github.com
+     User git
+     IdentityFile ~/.ssh/id_ed25519
+     IdentitiesOnly yes
+     ConnectTimeout 5
+     # 사내망에서 port 22 차단 시 아래 두 줄 주석 해제
+     # Hostname ssh.github.com
+     # Port 443
 
 Host Replica-Gerrit
      HostName 10.166.101.44
@@ -17,11 +37,6 @@ Host 10.227.36.179
      KexAlgorithms diffie-hellman-group-exchange-sha256
      HostkeyAlgorithms +ssh-rsa
      PubkeyAcceptedKeyTypes +ssh-rsa
-
-Host github.samsungds.net
-     ControlMaster auto
-     ControlPath ~/.ssh/control-%h-%p-%r
-     ControlPersist 300
 
 # SSAI Server Access
 Host ssai-dev
