@@ -100,6 +100,15 @@ ENV_BASENAME_ALLOW_ERE="${GIT_HOOKS_ENV_BASENAME_ALLOW_ERE:-^\.env\.([^.]+\.)*(e
 FORBIDDEN_PATH_ERE="${GIT_HOOKS_FORBIDDEN_PATH_ERE:-(^|/)\.aws/(credentials|config)$}"
 
 # ═══════════════════════════════════════════════════════════════════════════
+# FUNCTION: Check if a path is managed by git-crypt (will be encrypted)
+# ═══════════════════════════════════════════════════════════════════════════
+# Returns 0 if git-crypt managed, 1 otherwise
+is_git_crypt_managed() {
+    local path="$1"
+    git check-attr filter -- "$path" 2>/dev/null | grep -q "filter: git-crypt"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
 # FUNCTION: Check if a staged path contains forbidden filename/pattern
 # ═══════════════════════════════════════════════════════════════════════════
 # Returns 0 if forbidden, 1 if allowed
@@ -107,6 +116,11 @@ FORBIDDEN_PATH_ERE="${GIT_HOOKS_FORBIDDEN_PATH_ERE:-(^|/)\.aws/(credentials|conf
 is_forbidden_staged_path() {
     local path="$1"
     local base="${path##*/}"  # Extract basename (everything after last /)
+
+    # 0. Allow git-crypt managed files (stored encrypted in the index)
+    if is_git_crypt_managed "$path"; then
+        return 1
+    fi
 
     # 1. Check path-based rules first (most specific: .aws/credentials, etc.)
     if printf '%s\n' "$path" | grep -Eq "$FORBIDDEN_PATH_ERE"; then
