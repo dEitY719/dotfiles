@@ -118,7 +118,7 @@ opencode_help() {
     echo ""
 
     ux_section "Profile Management (internal only)"
-    ux_bullet "${UX_PRIMARY}oc-profile dsgpt${UX_RESET}     : DSGPT  (cloud.dtgpt.samsungds.net)"
+    ux_bullet "${UX_PRIMARY}oc-profile dtgpt${UX_RESET}     : DTGPT  (cloud.dtgpt.samsungds.net)"
     ux_bullet "${UX_PRIMARY}oc-profile a2g${UX_RESET}       : A2G    (a2g.samsungds.net) — Thinking models"
     echo ""
 
@@ -130,7 +130,7 @@ opencode_help() {
     ux_section "Models (LiteLLM Integration)"
     ux_bullet "Home       : OpenCode defaults"
     ux_bullet "External   : gpt-oss-20b"
-    ux_bullet "DSGPT      : GLM4.7, Kimi-K2.5, MiniMax-M2.1"
+    ux_bullet "DTGPT      : GLM4.7, Kimi-K2.5, MiniMax-M2.1"
     ux_bullet "A2G        : GLM-5-Thinking, Qwen3.5-Thinking, Kimi-K2.5-Thinking"
     echo ""
 
@@ -152,15 +152,15 @@ oc_profile() {
     local dotfiles_root="${DOTFILES_ROOT:-$HOME/dotfiles}"
 
     case "$profile" in
-        dsgpt)
+        dtgpt)
             local src="$dotfiles_root/opencode/opencode.json.internal"
             ;;
         a2g)
             local src="$dotfiles_root/opencode/opencode.json.internal-a2g"
             ;;
         *)
-            ux_usage "oc-profile" "<dsgpt|a2g>" "Switch OpenCode internal profile"
-            ux_bullet "  dsgpt : DSGPT  (cloud.dtgpt.samsungds.net) — GLM4.7, Kimi-K2.5, MiniMax-M2.1"
+            ux_usage "oc-profile" "<dtgpt|a2g>" "Switch OpenCode internal profile"
+            ux_bullet "  dtgpt : DTGPT  (cloud.dtgpt.samsungds.net) — GLM4.7, Kimi-K2.5, MiniMax-M2.1"
             ux_bullet "  a2g   : A2G    (a2g.samsungds.net)         — GLM-5-Thinking, Kimi-K2.5-Thinking"
             return 1
             ;;
