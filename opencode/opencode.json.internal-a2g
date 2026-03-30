@@ -1,0 +1,30 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "model": "litellm/GLM-5-Thinking",
+  "small_model": "litellm/Kimi-K2.5-Thinking",
+  "provider": {
+    "litellm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteLLM Provider (A2G)",
+      "options": {
+        "baseURL": "http://a2g.samsungds.net:7620/v1/",
+        "apiKey": "${A2G_API_KEY}"
+      },
+      "models": {
+        "GLM-5-Thinking": {
+          "name": "GLM-5-Thinking"
+        },
+        "Qwen3.5-Thinking": {
+          "name": "Qwen3.5-Thinking"
+        },
+        "Kimi-K2.5-Thinking": {
+          "name": "Kimi-K2.5-Thinking"
+        }
+      }
+    }
+  },
+  "plugin": [
+    "opencode-notify"
+  ]
+}
