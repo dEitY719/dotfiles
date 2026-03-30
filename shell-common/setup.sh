@@ -236,15 +236,15 @@ setup_opencode_config() {
         internal)
             mkdir -p "$(dirname "$opencode_target")"
             _prepare_config_target "$opencode_target"
-            ln -s "${DOTFILES_ROOT}/opencode/opencode.json.internal" "$opencode_target"
-            ux_success "Created symlink: ~/.config/opencode/opencode.json → opencode/opencode.json.internal"
+            envsubst < "${DOTFILES_ROOT}/opencode/opencode.json.internal" > "$opencode_target"
+            ux_success "Created config: ~/.config/opencode/opencode.json (env vars resolved)"
             ux_info "Using: Samsung internal LiteLLM endpoint"
             ;;
         external)
             mkdir -p "$(dirname "$opencode_target")"
             _prepare_config_target "$opencode_target"
-            ln -s "${DOTFILES_ROOT}/opencode/opencode.json.external" "$opencode_target"
-            ux_success "Created symlink: ~/.config/opencode/opencode.json → opencode/opencode.json.external"
+            envsubst < "${DOTFILES_ROOT}/opencode/opencode.json.external" > "$opencode_target"
+            ux_success "Created config: ~/.config/opencode/opencode.json (env vars resolved)"
             ux_info "Using: Local LiteLLM proxy (localhost:4444)"
             ;;
         public)
