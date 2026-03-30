@@ -171,9 +171,16 @@ oc_profile() {
         return 1
     fi
 
-    ln -sf "$src" "$OPENCODE_CONFIG_FILE"
+    if ! command -v envsubst >/dev/null 2>&1; then
+        ux_error "envsubst not found — install gettext package"
+        ux_bullet "  Ubuntu/Debian: sudo apt install gettext-base"
+        return 1
+    fi
+
+    mkdir -p "$(dirname "$OPENCODE_CONFIG_FILE")"
+    envsubst < "$src" > "$OPENCODE_CONFIG_FILE"
     ux_success "OpenCode profile: $profile"
-    ux_bullet "Config → $src"
+    ux_bullet "Config → $OPENCODE_CONFIG_FILE (env vars resolved)"
 }
 
 alias oc-profile='oc_profile'
