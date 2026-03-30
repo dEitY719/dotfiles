@@ -117,6 +117,11 @@ opencode_help() {
     ux_bullet "internal                : Samsung DS LiteLLM endpoint"
     echo ""
 
+    ux_section "Profile Management (internal only)"
+    ux_bullet "${UX_PRIMARY}oc-profile dtgpt${UX_RESET}     : DTGPT  (cloud.dtgpt.samsungds.net)"
+    ux_bullet "${UX_PRIMARY}oc-profile a2g${UX_RESET}       : A2G    (a2g.samsungds.net) — Thinking models"
+    echo ""
+
     ux_section "Configuration"
     ux_bullet "Config file             : ${UX_INFO}$OPENCODE_CONFIG_FILE${UX_RESET}"
     ux_bullet "Edit configuration      : ${UX_PRIMARY}opencode-edit${UX_RESET}"
@@ -125,7 +130,8 @@ opencode_help() {
     ux_section "Models (LiteLLM Integration)"
     ux_bullet "Home       : OpenCode defaults"
     ux_bullet "External   : gpt-oss-20b"
-    ux_bullet "Internal   : GLM-4.6, gpt-oss-120b, DeepSeek-V3.2"
+    ux_bullet "DTGPT      : GLM4.7, Kimi-K2.5, MiniMax-M2.1"
+    ux_bullet "A2G        : GLM-5-Thinking, Qwen3.5-Thinking, Kimi-K2.5-Thinking"
     echo ""
 
     ux_section "Usage"
@@ -140,6 +146,37 @@ opencode_help() {
     ux_bullet "Want to remove?         : Run ${UX_PRIMARY}uninstall-opencode${UX_RESET}"
     echo ""
 }
+
+oc_profile() {
+    local profile="$1"
+    local dotfiles_root="${DOTFILES_ROOT:-$HOME/dotfiles}"
+
+    case "$profile" in
+        dtgpt)
+            local src="$dotfiles_root/opencode/opencode.json.internal"
+            ;;
+        a2g)
+            local src="$dotfiles_root/opencode/opencode.json.internal-a2g"
+            ;;
+        *)
+            ux_usage "oc-profile" "<dtgpt|a2g>" "Switch OpenCode internal profile"
+            ux_bullet "  dtgpt : DTGPT  (cloud.dtgpt.samsungds.net) — GLM4.7, Kimi-K2.5, MiniMax-M2.1"
+            ux_bullet "  a2g   : A2G    (a2g.samsungds.net)         — GLM-5-Thinking, Kimi-K2.5-Thinking"
+            return 1
+            ;;
+    esac
+
+    if [ ! -f "$src" ]; then
+        ux_error "Profile source not found: $src"
+        return 1
+    fi
+
+    ln -sf "$src" "$OPENCODE_CONFIG_FILE"
+    ux_success "OpenCode profile: $profile"
+    ux_bullet "Config → $src"
+}
+
+alias oc-profile='oc_profile'
 
 opencode_edit() {
     local config_file="$OPENCODE_CONFIG_FILE"
