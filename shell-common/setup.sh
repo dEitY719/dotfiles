@@ -234,6 +234,11 @@ setup_opencode_config() {
 
     case "$environment" in
         internal)
+            if ! command -v envsubst >/dev/null 2>&1; then
+                ux_error "envsubst not found — install gettext-base"
+                ux_bullet "  Ubuntu/Debian: sudo apt install gettext-base"
+                return 1
+            fi
             mkdir -p "$(dirname "$opencode_target")"
             _prepare_config_target "$opencode_target"
             envsubst '${DTGPT_API_KEY}' < "${DOTFILES_ROOT}/opencode/opencode.json.internal" > "$opencode_target"
@@ -248,7 +253,18 @@ setup_opencode_config() {
             ux_info "Using: Local LiteLLM proxy (localhost:4444)"
             ;;
         public)
-            _restore_config_from_backup "$opencode_target"
+            if [ -L "$opencode_target" ]; then
+                _restore_config_from_backup "$opencode_target"
+            elif [ -f "$opencode_target" ]; then
+                rm -f "$opencode_target"
+                _latest="$(ls -t "${opencode_target}.backup."* 2>/dev/null | head -1)"
+                if [ -n "$_latest" ]; then
+                    mv "$_latest" "$opencode_target"
+                    ux_success "Restored: $(basename "$_latest") → $opencode_target"
+                else
+                    ux_info "Removed dotfiles-managed config (using OpenCode defaults)"
+                fi
+            fi
             ;;
     esac
 }
@@ -610,7 +626,7 @@ main() {
             ux_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Nexus + proxy)"
             ux_info "  - Bun: ~/.bunfig.toml → bun/bunfig.toml.internal (Nexus registry)"
-            ux_info "  - OpenCode: ~/.config/opencode/opencode.json → opencode/opencode.json.internal"
+            ux_info "  - OpenCode: ~/.config/opencode/opencode.json (generated from opencode.json.internal)"
             ux_info "  - Pip: Samsung internal repository configured"
             ux_info "  - uv: Samsung internal repository + proxy configured"
             ux_info "  - Cargo: ~/.cargo/config.toml (Nexus proxy for crates.io)"
