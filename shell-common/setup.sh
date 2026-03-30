@@ -234,15 +234,10 @@ setup_opencode_config() {
 
     case "$environment" in
         internal)
-            if ! command -v envsubst >/dev/null 2>&1; then
-                ux_error "envsubst not found — install gettext-base"
-                ux_bullet "  Ubuntu/Debian: sudo apt install gettext-base"
-                return 1
-            fi
             mkdir -p "$(dirname "$opencode_target")"
             _prepare_config_target "$opencode_target"
-            envsubst '${DTGPT_API_KEY}' < "${DOTFILES_ROOT}/opencode/opencode.json.internal" > "$opencode_target"
-            ux_success "Created config: ~/.config/opencode/opencode.json (env vars resolved)"
+            ln -s "${DOTFILES_ROOT}/opencode/opencode.json.internal" "$opencode_target"
+            ux_success "Created symlink: ~/.config/opencode/opencode.json → opencode/opencode.json.internal"
             ux_info "Using: Samsung internal LiteLLM endpoint"
             ;;
         external)
@@ -626,7 +621,7 @@ main() {
             ux_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Nexus + proxy)"
             ux_info "  - Bun: ~/.bunfig.toml → bun/bunfig.toml.internal (Nexus registry)"
-            ux_info "  - OpenCode: ~/.config/opencode/opencode.json (generated from opencode.json.internal)"
+            ux_info "  - OpenCode: ~/.config/opencode/opencode.json → opencode/opencode.json.internal"
             ux_info "  - Pip: Samsung internal repository configured"
             ux_info "  - uv: Samsung internal repository + proxy configured"
             ux_info "  - Cargo: ~/.cargo/config.toml (Nexus proxy for crates.io)"
