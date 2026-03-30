@@ -178,7 +178,10 @@ oc_profile() {
     fi
 
     mkdir -p "$(dirname "$OPENCODE_CONFIG_FILE")"
-    envsubst < "$src" > "$OPENCODE_CONFIG_FILE"
+    case "$profile" in
+        dtgpt) envsubst '${DTGPT_API_KEY}' < "$src" > "$OPENCODE_CONFIG_FILE" ;;
+        a2g)   envsubst '${A2G_API_KEY}'   < "$src" > "$OPENCODE_CONFIG_FILE" ;;
+    esac
     ux_success "OpenCode profile: $profile"
     ux_bullet "Config → $OPENCODE_CONFIG_FILE (env vars resolved)"
 }
