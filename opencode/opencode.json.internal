@@ -1,24 +1,30 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "model": "litellm/GLM4.7",
+  "small_model": "litellm/GLM4.7",
   "provider": {
     "litellm": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "LiteLLM Provider",
+      "name": "LiteLLM Provider(DSGPT)",
       "options": {
-        "baseURL": "http://ssai.samsungds.net:9090",
-        "apiKey": "${SSAI_LLM_API_KEY}"
+        "baseURL": "http://cloud.dtgpt.samsungds.net/llm/v1",
+        "apiKey": "your-api-key"
       },
       "models": {
-        "GLM-4.6": {
-          "name": "GLM-4.6"
+        "Kimi-K2.5": {
+          "name": "Kimi-K2.5"
         },
-        "gpt-oss-120b": {
-          "name": "gpt-oss-120b"
+        "MiniMax-M2.1": {
+          "name": "MiniMax-M2.1"
         },
-        "DeepSeek-V3.2": {
-          "name": "DeepSeek-V3.2"
+        "GLM4.7": {
+          "name": "GLM4.7"
         }
       }
     }
-  }
+  },
+  "plugin": [
+    "opencode-notify"
+  ]
 }
