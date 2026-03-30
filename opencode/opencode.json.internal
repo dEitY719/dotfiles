@@ -9,7 +9,7 @@
       "name": "LiteLLM Provider(DSGPT)",
       "options": {
         "baseURL": "http://cloud.dtgpt.samsungds.net/llm/v1",
-        "apiKey": "your-api-key"
+        "apiKey": "${DSGPT_API_KEY}"
       },
       "models": {
         "Kimi-K2.5": {
