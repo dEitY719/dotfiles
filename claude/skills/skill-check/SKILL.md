@@ -16,26 +16,11 @@ compatibility:
 
 ## Help
 
-If the argument is `help`, output the following and stop:
+If the argument is `help`, read `references/help.md` and output its content verbatim, then stop.
 
-```
-/skill:check — Audit a SKILL.md for Progressive Disclosure compliance
-
-Usage:
-  /skill:check [path/to/SKILL.md]
-
-Arguments:
-  [path]    Path to the SKILL.md file to audit (optional)
-            If omitted, searches for SKILL.md from the current directory
-
-Examples:
-  /skill:check
-  /skill:check claude/skills/my-skill/SKILL.md
-  /skill:check help
-
-Options:
-  help    Show this message
-```
+> **Pattern**: All skills should place help content (usage, arguments, examples) in
+> `references/help.md` and use a one-line pointer here. This keeps SKILL.md under
+> the 100-line limit while making help always reachable.
 
 ## Step 1: Locate the File
 

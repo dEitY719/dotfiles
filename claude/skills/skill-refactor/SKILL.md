@@ -14,28 +14,12 @@ compatibility:
 
 ## Help
 
-If the argument is `help`, output the following and stop:
+If the argument is `help`, read `references/help.md` and output its content verbatim, then stop.
 
-```
-/skill:refactor — Refactor a SKILL.md to under 100 lines using Progressive Disclosure
-
-Usage:
-  /skill:refactor [path/to/SKILL.md]
-
-Arguments:
-  [path]    Path to the SKILL.md file to refactor (optional)
-            If omitted, searches for SKILL.md from the current directory
-
-Examples:
-  /skill:refactor
-  /skill:refactor claude/skills/my-skill/SKILL.md
-  /skill:refactor help
-
-Options:
-  help    Show this message
-
-Note: Always shows a refactoring plan and waits for confirmation before writing files.
-```
+> **Pattern**: All skills should place help content (usage, arguments, examples) in
+> `references/help.md` and use a one-line pointer here. This keeps SKILL.md under
+> the 100-line limit while making help always reachable. When refactoring a skill,
+> create `references/help.md` if the skill lacks one.
 
 ## Step 1: Analyze
 
