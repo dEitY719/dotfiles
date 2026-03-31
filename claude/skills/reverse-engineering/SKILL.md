@@ -70,27 +70,23 @@ If input is a **file path**:
 ### Step 2: Deep Dive
 
 For each core file identified:
-- Read its contents
-- Note: what it does, what it imports/requires, how data flows through it
-- Track which external libraries (not project-internal) are being used
-
-For configuration files (package.json, pyproject.toml, requirements.txt, etc.):
-- Cross-reference to confirm library versions and dependencies related to the feature
+- For large files (>200 lines), read the imports and exported symbols first to understand the file's role — read the full body only if implementation details are unclear from that alone
+- Note: what it does, how data flows through it, which components/modules it interacts with
 
 ### Step 3: Extract Key Libraries
 
-For each essential library identified:
-- Its name and version (if discoverable)
-- Why it's used for this feature (not just "it's a graph library" but "it's used because it supports SVG-based force layouts")
+Scan the imports collected in Step 2 and identify all external (non-project) libraries used by the feature. For each:
+- Its name and version — check the package manifest (package.json, pyproject.toml, requirements.txt, Cargo.toml, etc.) once here, not per-file
+- Why it's used for this feature specifically (not just "it's a graph library" but "it's used because it supports SVG-based force layouts")
 - Its role in the implementation (rendering, data transformation, state management, etc.)
 
 ### Step 4: Explain the Working Mechanism
 
-Write a concise explanation (3–5 paragraphs or a numbered flow):
+Write a concise explanation (3–5 paragraphs or a numbered flow) focused on **data flow and key abstractions**:
 - What the feature does from the user's perspective
-- How data flows from source to output
-- Which components/modules interact and in what order
-- Any non-obvious design choices worth noting
+- How data flows from source to output (input → transform → render/response)
+- Which components/modules hand off to each other and in what order
+- Any non-obvious design choices worth noting (e.g., why a specific pattern was chosen)
 
 Keep this section digestible — it should help someone understand the feature in 5 minutes, not replace the source code.
 
@@ -107,7 +103,7 @@ The prompt must:
 - Be phrased as a direct instruction to an AI assistant (imperative, specific)
 
 The prompt should NOT:
-- Reference the original project name or file paths (it must work in any new project)
+- Reference the original project name or internal file paths — abstract them into generic descriptions (e.g., "a data transformation module" not "src/lib/graph-data.ts")
 - Be vague or leave implementation details to guesswork
 - Require the user to fill in placeholders — it should be paste-and-go
 
@@ -182,12 +178,10 @@ Please implement this step by step, starting with [entry point].
 
 ## Quality Checklist
 
-Before writing the final markdown, verify:
-- [ ] All key libraries are identified (check imports, not just package files)
-- [ ] The explanation covers the full data flow, not just one file
-- [ ] The AI prompt is self-contained — someone with no knowledge of the original project can use it
-- [ ] Library install commands are correct (npm install, pip install, cargo add, etc.)
-- [ ] The output file is written to the correct directory
+Before writing the output file, verify these things the workflow steps don't explicitly enforce:
+- [ ] No internal file paths or project-specific names leaked into the AI prompt
+- [ ] Library install commands are correct for the target ecosystem (npm install, pip install, cargo add, etc.)
+- [ ] The output file is written to the correct directory and named `analysis.md`
 
 ---
 
