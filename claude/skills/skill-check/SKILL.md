@@ -14,6 +14,14 @@ compatibility:
 
 # SKILL.md Progressive Disclosure Auditor
 
+## Help
+
+If the argument is `help`, read `references/help.md` and output its content verbatim, then stop.
+
+> **Pattern**: All skills should place help content (usage, arguments, examples) in
+> `references/help.md` and use a one-line pointer here. This keeps SKILL.md under
+> the 100-line limit while making help always reachable.
+
 ## Step 1: Locate the File
 
 If the user specifies a path, use it. Otherwise search for SKILL.md from the

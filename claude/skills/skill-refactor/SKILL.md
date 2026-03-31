@@ -12,6 +12,15 @@ compatibility:
 
 # SKILL.md Progressive Disclosure Refactoring Specialist
 
+## Help
+
+If the argument is `help`, read `references/help.md` and output its content verbatim, then stop.
+
+> **Pattern**: All skills should place help content (usage, arguments, examples) in
+> `references/help.md` and use a one-line pointer here. This keeps SKILL.md under
+> the 100-line limit while making help always reachable. When refactoring a skill,
+> create `references/help.md` if the skill lacks one.
+
 ## Step 1: Analyze
 
 Read the target SKILL.md completely. Also read `references/plan-and-report-templates.md`

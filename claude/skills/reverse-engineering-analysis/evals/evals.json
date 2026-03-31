@@ -1,0 +1,24 @@
+{
+  "skill_name": "reverse-engineering",
+  "note": "Replace <PROJECT_ROOT> with the absolute path of the project to analyze when running these evals.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "<PROJECT_ROOT> 프로젝트의 frontend graph 기능을 분석하고, docs/feature/frontend-graph/ 디렉토리 아래에 analysis.md로 생성해줘.",
+      "expected_output": "analysis.md with: (1) Key Libraries table with Library/Version/Role columns, (2) How It Works section covering data flow, (3) File Map listing source files, (4) AI Implementation Prompt section with install commands and no project-specific paths",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "<PROJECT_ROOT> 프로젝트의 CI/CD 워크플로우 설정 파일을 분석하고, docs/feature/ci-cd/ 디렉토리 아래에 analysis.md로 생성해줘.",
+      "expected_output": "analysis.md with: (1) Key tools/actions table, (2) How It Works explaining pipeline stages and triggers, (3) File Map of workflow files, (4) AI Implementation Prompt describing how to set up the same pipeline in a new repo",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "<PROJECT_ROOT> 프로젝트의 backend 인증(auth) 기능을 분석하고, docs/feature/backend-auth/ 디렉토리 아래에 analysis.md로 생성해줘.",
+      "expected_output": "analysis.md with: (1) Auth libraries table, (2) How It Works covering token lifecycle and middleware chain, (3) File Map, (4) AI Implementation Prompt with install commands and auth flow description",
+      "files": []
+    }
+  ]
+}
