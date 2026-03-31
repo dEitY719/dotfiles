@@ -50,6 +50,10 @@ The final deliverable lets the user paste one prompt into any AI coding assistan
 
 If the argument is `help`, read `references/help.md` and output its content verbatim, then stop.
 
+> **Pattern**: All skills should place help content (usage, arguments, examples) in
+> `references/help.md` and use a one-line pointer here. This keeps SKILL.md under
+> the 100-line limit while making help always reachable.
+
 ---
 
 ## Analysis Workflow
