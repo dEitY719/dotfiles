@@ -12,7 +12,7 @@ description: >-
 license: MIT
 metadata:
   author: careerhackeralex
-  version: 0.3.1
+  version: 0.3.2
   category: document-creation
   tags: [visualization, html, slides, dashboard, infographic]
 ---
@@ -24,7 +24,7 @@ Turn any idea, data, or content into a stunning single-file HTML visualization.
 ## After Creating a File
 
 **Always do BOTH after writing the HTML file:**
-1. **Auto-open:** `wslview <filename>.html`
+1. **Auto-open:** `wslview <filename>.html` (WSL) · `xdg-open <filename>.html` (Linux) · `open <filename>.html` (macOS)
 2. **Return URL:** Include `file://<absolute-path>` in response
 
 Example: `Created your visualization! 📄 file:///home/user/project/output.html`
@@ -41,7 +41,7 @@ Example: `Created your visualization! 📄 file:///home/user/project/output.html
 6. **Responsive Design:** No horizontal overflow at 375px. Font hierarchy: `h1 ≥ 3rem, h2 ≥ 2rem, h3 ≥ 1.5rem, body = 1rem`. See [references/sizing-rules.md](references/sizing-rules.md).
 7. **Print & Accessibility:** `@media print`, `@media (prefers-reduced-motion: reduce)`, aria-labels on all interactive elements and charts.
 8. **Entrance Animations (MANDATORY):** `.animate` classes or `data-reveal` — evaluation detects and requires animation presence. See [references/animations.md](references/animations.md) for patterns.
-9. **JavaScript:** `cycleTheme()`, `toggleMenu()`, all top-level variables use `var` (never `let`/`const`).
+9. **JavaScript:** `cycleTheme()`, `toggleMenu()`, all top-level variables in the **generated HTML** use `var` (never `let`/`const` — avoids TDZ errors with CDN-loaded libraries).
 
 🔥 **Copy skeleton → Replace "YOUR CONTENT HERE" → Save file.**
 
