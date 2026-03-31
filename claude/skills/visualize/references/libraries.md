@@ -202,6 +202,51 @@ graph TD
 - Built-in speaker notes, PDF export, overview mode
 - When the basic slide template isn't enough
 
+### Initialization (CRITICAL)
+
+```javascript
+Reveal.initialize({
+  width: 1280,      // MUST be numeric — never '100%' (causes zero-height blank slides)
+  height: 720,
+  center: true,
+  controls: false   // MANDATORY: disable ugly default arrow overlays
+});
+```
+
+### Custom Minimal Nav Bar (MANDATORY — replace default controls)
+
+```html
+<nav class="slide-nav" aria-label="Slide navigation">
+  <button onclick="prevSlide()" aria-label="Previous slide">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
+  <span class="slide-counter" id="slideCounter">1 / 8</span>
+  <button onclick="nextSlide()" aria-label="Next slide">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+</nav>
+```
+
+```css
+.slide-nav {
+  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px; z-index: 9998;
+}
+.slide-nav button {
+  width: 28px; height: 28px; border-radius: 6px; background: transparent;
+  border: none; color: var(--text-secondary); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0.3; transition: opacity 0.2s;
+}
+.slide-nav button:hover { opacity: 0.7; }
+.slide-counter {
+  font-size: 12px; color: var(--text-secondary); font-weight: 400;
+  min-width: 40px; text-align: center; opacity: 0.35;
+}
+```
+
+Also set `html, body { height: 100%; overflow: hidden; }` and `.reveal { height: 100%; }`.
+
 ### Tips
 - Themes: `white`, `black`, `league`, `beige`, `moon`, `night`, `serif`, `simple`, `solarized`
 - Fragments for step-by-step reveals
