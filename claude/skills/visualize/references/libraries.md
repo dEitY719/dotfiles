@@ -109,18 +109,18 @@ new Chart(document.getElementById('myChart'), {
 ```html
 <div id="viz"></div>
 <script>
-const data = [30, 86, 168, 281, 303, 365];
-const width = 600, height = 400, margin = { top: 20, right: 20, bottom: 30, left: 40 };
+var data = [30, 86, 168, 281, 303, 365];
+var width = 600, height = 400, margin = { top: 20, right: 20, bottom: 30, left: 40 };
 
-const svg = d3.select('#viz').append('svg')
-  .attr('viewBox', `0 0 ${width} ${height}`);
+var svg = d3.select('#viz').append('svg')
+  .attr('viewBox', '0 0 ' + width + ' ' + height);
 
-const x = d3.scaleBand()
-  .domain(data.map((_, i) => i))
+var x = d3.scaleBand()
+  .domain(data.map(function(_, i) { return i; }))
   .range([margin.left, width - margin.right])
   .padding(0.2);
 
-const y = d3.scaleLinear()
+var y = d3.scaleLinear()
   .domain([0, d3.max(data)])
   .range([height - margin.bottom, margin.top]);
 
@@ -202,6 +202,51 @@ graph TD
 - Built-in speaker notes, PDF export, overview mode
 - When the basic slide template isn't enough
 
+### Initialization (CRITICAL)
+
+```javascript
+Reveal.initialize({
+  width: 1280,      // MUST be numeric — never '100%' (causes zero-height blank slides)
+  height: 720,
+  center: true,
+  controls: false   // MANDATORY: disable ugly default arrow overlays
+});
+```
+
+### Custom Minimal Nav Bar (MANDATORY — replace default controls)
+
+```html
+<nav class="slide-nav" aria-label="Slide navigation">
+  <button onclick="prevSlide()" aria-label="Previous slide">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
+  <span class="slide-counter" id="slideCounter">1 / 8</span>
+  <button onclick="nextSlide()" aria-label="Next slide">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+</nav>
+```
+
+```css
+.slide-nav {
+  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px; z-index: 9998;
+}
+.slide-nav button {
+  width: 28px; height: 28px; border-radius: 6px; background: transparent;
+  border: none; color: var(--text-secondary); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0.3; transition: opacity 0.2s;
+}
+.slide-nav button:hover { opacity: 0.7; }
+.slide-counter {
+  font-size: 12px; color: var(--text-secondary); font-weight: 400;
+  min-width: 40px; text-align: center; opacity: 0.35;
+}
+```
+
+Also set `html, body { height: 100%; overflow: hidden; }` and `.reveal { height: 100%; }`.
+
 ### Tips
 - Themes: `white`, `black`, `league`, `beige`, `moon`, `night`, `serif`, `simple`, `solarized`
 - Fragments for step-by-step reveals
@@ -228,7 +273,7 @@ graph TD
 ```html
 <div id="map" style="height: 500px; border-radius: 12px;"></div>
 <script>
-const map = L.map('map').setView([37.5, -122.3], 10);
+var map = L.map('map').setView([37.5, -122.3], 10);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '© OpenStreetMap'
 }).addTo(map);
