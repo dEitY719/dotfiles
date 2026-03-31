@@ -12,6 +12,31 @@ compatibility:
 
 # SKILL.md Progressive Disclosure Refactoring Specialist
 
+## Help
+
+If the argument is `help`, output the following and stop:
+
+```
+/skill:refactor — Refactor a SKILL.md to under 100 lines using Progressive Disclosure
+
+Usage:
+  /skill:refactor [path/to/SKILL.md]
+
+Arguments:
+  [path]    Path to the SKILL.md file to refactor (optional)
+            If omitted, searches for SKILL.md from the current directory
+
+Examples:
+  /skill:refactor
+  /skill:refactor claude/skills/my-skill/SKILL.md
+  /skill:refactor help
+
+Options:
+  help    Show this message
+
+Note: Always shows a refactoring plan and waits for confirmation before writing files.
+```
+
 ## Step 1: Analyze
 
 Read the target SKILL.md completely. Also read `references/plan-and-report-templates.md`

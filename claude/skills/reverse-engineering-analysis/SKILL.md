@@ -46,6 +46,12 @@ The final deliverable lets the user paste one prompt into any AI coding assistan
 
 ---
 
+## Help
+
+If the argument is `help`, read `references/help.md` and output its content verbatim, then stop.
+
+---
+
 ## Analysis Workflow
 
 See [`references/workflow.md`](references/workflow.md) for full step details.
