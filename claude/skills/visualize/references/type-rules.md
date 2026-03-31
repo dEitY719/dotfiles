@@ -3,6 +3,8 @@
 Load relevant sections based on the requested visualization type.
 
 ## Table of Contents
+- [AI-Native Information Architecture](#ai-native-information-architecture) — hierarchy principles for all types
+- [Data Ingestion](#data-ingestion) — handling CSV, JSON, URLs, pasted data
 - [Auto-Recommend Workflow](#auto-recommend-workflow) — when user doesn't specify format
 - [Carousel Cards](#carousel-cards)
 - [Event Poster](#event-poster)
@@ -11,6 +13,40 @@ Load relevant sections based on the requested visualization type.
 - [Slide Deck](#slide-deck)
 - [Type-Specific Interactivity](#type-specific-interactivity) — required interactions per type
 - [Layout Variation](#layout-variation) — grid, rhythm, density rules
+
+---
+
+## AI-Native Information Architecture
+
+Modern designs prioritize **insight-driven hierarchy**. Apply to every visualization type:
+
+- **Lead with conclusions** — place the most important metric/insight above the fold
+- **Progressive revelation** — show key data immediately, provide drill-down on hover/click
+- **Contextual actions** — controls and CTAs appear near the relevant content they act on
+- **Support with details** — raw data, footnotes, and secondary info live below or in expandable sections
+
+**Background atmosphere:** Use one subtle technique per file to establish mood:
+- Radial gradient (soft, modern)
+- Noise texture (editorial, premium)
+- Dot grid (technical, structured)
+
+Adapt the atmosphere to the content — a game dashboard should feel different from a financial report. Adjust accent colors and gradient hues to match the subject matter.
+
+---
+
+## Data Ingestion
+
+When the user provides data, parse and render it intelligently:
+
+| Input type | How to handle |
+|---|---|
+| **CSV** | Parse with JS, auto-detect headers from first row, choose appropriate chart type based on data shape |
+| **JSON** | Extract keys as labels, values as data; nested objects become separate series |
+| **Markdown/HTML tables** | Convert to visual comparison or chart |
+| **Numbers in text** | Extract and highlight as stat cards with surrounding context as label |
+| **URLs** | Crawl the page, extract key information, visualize as a summary |
+
+Always use real content. Never generate placeholder data when real context exists.
 
 ---
 

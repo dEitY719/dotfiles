@@ -57,13 +57,6 @@ Example valid hierarchy: h1: 3rem, h2: 2.5rem, h3: 1.5rem, body: 1rem.
 - **NEVER** set text color close to the background color
 - Mental test: "Would this text be visible on BOTH dark (`#030712`) and light (`#f8fafc`) backgrounds?"
 
-### Stat Value Colors (Semantic Use Only)
+### Stat Value Colors
 
-Colored numbers must have semantic meaning:
-- `var(--positive)` / green → good metric
-- `var(--negative)` / red → bad metric
-- `var(--accent)` → primary/neutral highlight
-
-**For KPI grids with 4+ cards:** use at most 2 accent colors — `var(--accent)` for the single most important metric, `var(--text)` for all others. Reserve `var(--positive)`/`var(--negative)` only for delta indicators (arrows, ±percentages), not the main card value.
-
-If no clear semantic meaning → use `var(--text)`. Never randomly colorize stat values.
+For stat value color semantics (which colors mean good/bad, KPI grid accent restraint), see [references/design-system.md](references/design-system.md) → "Accent Restraint Rules" section.

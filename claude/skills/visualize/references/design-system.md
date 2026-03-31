@@ -33,6 +33,8 @@ Apply these defaults. They are opinionated and tested — override only when use
   - **Arabic:** Noto Sans Arabic — `https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800;900&display=swap`
   - Set `font-family: 'Noto Sans KR', 'Inter', sans-serif;` (CJK font first, then Inter fallback for numbers/Latin)
   - Set `<html lang="ko">` (or appropriate language code)
+  - Apply `line-height: 1.6` for Korean body text (vs 1.4 for Latin)
+  - Korean Medium weight (500) maps to Western Regular (400) — don't over-bold Korean text
 - **Custom fonts:** When the user requests a specific font or vibe:
   - **Serif/editorial:** Lora, Playfair Display, Source Serif Pro
   - **Monospace/code:** JetBrains Mono, Fira Code, Source Code Pro
