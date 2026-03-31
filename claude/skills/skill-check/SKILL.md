@@ -14,6 +14,29 @@ compatibility:
 
 # SKILL.md Progressive Disclosure Auditor
 
+## Help
+
+If the argument is `help`, output the following and stop:
+
+```
+/skill:check — Audit a SKILL.md for Progressive Disclosure compliance
+
+Usage:
+  /skill:check [path/to/SKILL.md]
+
+Arguments:
+  [path]    Path to the SKILL.md file to audit (optional)
+            If omitted, searches for SKILL.md from the current directory
+
+Examples:
+  /skill:check
+  /skill:check claude/skills/my-skill/SKILL.md
+  /skill:check help
+
+Options:
+  help    Show this message
+```
+
 ## Step 1: Locate the File
 
 If the user specifies a path, use it. Otherwise search for SKILL.md from the
