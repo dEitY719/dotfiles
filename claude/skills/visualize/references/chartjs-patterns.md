@@ -231,18 +231,7 @@ if (typeof Chart === 'undefined') { console.error('Chart.js not loaded'); return
 
 Read CSS vars at render time; rebuild charts on theme change (never just swap colors in-place).
 
-```javascript
-function getChartColors() {
-  var s = getComputedStyle(document.documentElement);
-  return {
-    text:          s.getPropertyValue('--text').trim(),
-    textSecondary: s.getPropertyValue('--text-secondary').trim(),
-    border:        s.getPropertyValue('--border').trim(),
-    surface:       s.getPropertyValue('--surface').trim(),
-    accent:        s.getPropertyValue('--accent').trim(),
-  };
-}
-```
+`getChartColors()` is defined in the [buildCharts Pattern](#buildcharts-pattern) above — use it directly.
 
 Apply to chart defaults:
 ```javascript

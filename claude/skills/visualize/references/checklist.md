@@ -21,7 +21,7 @@ Run through every item before delivering the HTML file.
 ## Menu & Interactions
 
 - [ ] `.viz-menu` with toggle, theme, download PNG, print buttons present?
-- [ ] `.card:hover` has transform/shadow effect?
+- [ ] `.card:hover` has shadow effect (NO translateY/scale transforms — shadow only)?
 - [ ] At least ONE meaningful interaction beyond theme toggle + menu?
 
 ## Animations

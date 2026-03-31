@@ -4,7 +4,7 @@ Load this when charts, counters, or menus behave unexpectedly.
 
 ## Table of Contents
 - [Counter Animation Debug](#counter-animation-debug)
-- [Chart.js Safety Pattern](#chartjs-safety-pattern)
+- [Chart.js Blank-White-Space Checklist](#chartjs-blank-white-space-checklist)
 - [Menu Outside-Click Fix](#menu-outside-click-fix)
 
 ---
@@ -42,75 +42,9 @@ Common causes:
 
 ---
 
-## Chart.js Safety Pattern
+## Chart.js Blank-White-Space Checklist
 
-Full defensive initialization to prevent console errors:
-
-```javascript
-// STEP 1: Global variables - MUST use var, never let/const
-var chartsBuilt = false;
-
-// STEP 2: Chart building function with validation
-function buildCharts() {
-  // CRITICAL: Always validate Chart.js loaded first
-  if (chartsBuilt || typeof Chart === 'undefined') return;
-
-  // STEP 3: Destroy existing charts to prevent "Canvas already in use"
-  if (window.myChart) {
-    try { window.myChart.destroy(); } catch(e) {}
-  }
-
-  // STEP 4: Reset canvas elements
-  var canvas = document.getElementById('chartId');
-  if (!canvas) return;
-
-  // STEP 5: Get theme colors from CSS variables
-  var isDark = document.documentElement.className.includes('theme-dark');
-  var textColor = isDark ? '#EDEDED' : '#0f172a';
-  var gridColor = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)';
-
-  // STEP 6: Create chart with proper options
-  try {
-    window.myChart = new Chart(canvas.getContext('2d'), {
-      // Your chart configuration here
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,   // REQUIRED
-        plugins: {
-          tooltip: { enabled: true }, // REQUIRED - never disable
-          legend: {
-            labels: { color: textColor, font: { family: 'Inter' } }
-          }
-        },
-        scales: {
-          x: {
-            ticks: { color: textColor },
-            grid: { color: gridColor }
-          },
-          y: {
-            ticks: { color: textColor },
-            grid: { color: gridColor }
-          }
-        }
-      }
-    });
-    chartsBuilt = true;
-  } catch (error) {
-    console.error('Chart creation failed:', error);
-  }
-}
-
-// STEP 7: Theme change handler
-function onThemeChange() {
-  if (chartsBuilt) {
-    chartsBuilt = false;
-    buildCharts();
-  }
-}
-
-// STEP 8: Wire up
-document.addEventListener('DOMContentLoaded', buildCharts);
-```
+For full chart initialization patterns (ChartManager, buildCharts, `chartsBuilt` guard, `onThemeChange`), see [references/chartjs-patterns.md](references/chartjs-patterns.md).
 
 **If charts appear as blank white spaces, verify in order:**
 1. Chart.js CDN is included before `</head>`
