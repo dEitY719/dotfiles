@@ -1,0 +1,23 @@
+{
+  "skill_name": "reverse-engineering",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "jiravis 프로젝트(/home/bwyoon/para/project/jiravis)의 frontend graph 기능을 분석하고, docs/feature/frontend-graph/ 디렉토리 아래에 analysis.md로 생성해줘.",
+      "expected_output": "analysis.md containing: key libraries table, how-it-works explanation, file map, and a self-contained AI implementation prompt",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "jiravis 프로젝트(/home/bwyoon/para/project/jiravis)에서 .github/workflows/ 또는 CI/CD 관련 설정 파일을 분석하고, docs/feature/ci-cd/ 디렉토리 아래에 analysis.md로 생성해줘.",
+      "expected_output": "analysis.md containing: CI/CD tools and config breakdown, workflow steps explanation, and AI prompt for replicating the same pipeline",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "jiravis 프로젝트(/home/bwyoon/para/project/jiravis)의 backend 인증(auth) 기능을 분석하고, docs/feature/backend-auth/ 디렉토리 아래에 analysis.md로 생성해줘.",
+      "expected_output": "analysis.md containing: auth libraries, token/session handling explanation, and copy-pasteable AI prompt to implement same auth pattern",
+      "files": []
+    }
+  ]
+}
