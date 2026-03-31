@@ -109,18 +109,18 @@ new Chart(document.getElementById('myChart'), {
 ```html
 <div id="viz"></div>
 <script>
-const data = [30, 86, 168, 281, 303, 365];
-const width = 600, height = 400, margin = { top: 20, right: 20, bottom: 30, left: 40 };
+var data = [30, 86, 168, 281, 303, 365];
+var width = 600, height = 400, margin = { top: 20, right: 20, bottom: 30, left: 40 };
 
-const svg = d3.select('#viz').append('svg')
-  .attr('viewBox', `0 0 ${width} ${height}`);
+var svg = d3.select('#viz').append('svg')
+  .attr('viewBox', '0 0 ' + width + ' ' + height);
 
-const x = d3.scaleBand()
-  .domain(data.map((_, i) => i))
+var x = d3.scaleBand()
+  .domain(data.map(function(_, i) { return i; }))
   .range([margin.left, width - margin.right])
   .padding(0.2);
 
-const y = d3.scaleLinear()
+var y = d3.scaleLinear()
   .domain([0, d3.max(data)])
   .range([height - margin.bottom, margin.top]);
 
@@ -273,7 +273,7 @@ Also set `html, body { height: 100%; overflow: hidden; }` and `.reveal { height:
 ```html
 <div id="map" style="height: 500px; border-radius: 12px;"></div>
 <script>
-const map = L.map('map').setView([37.5, -122.3], 10);
+var map = L.map('map').setView([37.5, -122.3], 10);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '© OpenStreetMap'
 }).addTo(map);
