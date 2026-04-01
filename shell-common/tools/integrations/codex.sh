@@ -140,7 +140,15 @@ _codex_auto_sync_quiet() {
 }
 
 _codex_maybe_auto_sync() {
+    local prev_in_progress
+    prev_in_progress="${CODEX_AUTO_SYNC_IN_PROGRESS:-0}"
+    if [ "$prev_in_progress" = "1" ]; then
+        return 0
+    fi
+    CODEX_AUTO_SYNC_IN_PROGRESS=1
+
     if ! _codex_auto_sync_enabled; then
+        CODEX_AUTO_SYNC_IN_PROGRESS="$prev_in_progress"
         return 0
     fi
 
@@ -149,11 +157,66 @@ _codex_maybe_auto_sync() {
     else
         codex_skills_sync_if_needed 0 0
     fi
+
+    CODEX_AUTO_SYNC_IN_PROGRESS="$prev_in_progress"
 }
 
-codex() {
+_codex_should_sync_for_command() {
+    case "$1" in
+        codex|codex\ *)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+_codex_zsh_preexec_auto_sync() {
+    _codex_should_sync_for_command "$1" || return 0
     _codex_maybe_auto_sync
-    command codex "$@"
+}
+
+_codex_register_zsh_hook() {
+    [ -n "$ZSH_VERSION" ] || return 0
+    case "$-" in
+        *i*) ;;
+        *) return 0 ;;
+    esac
+
+    autoload -Uz add-zsh-hook 2>/dev/null || return 0
+    add-zsh-hook preexec _codex_zsh_preexec_auto_sync
+}
+
+_codex_bash_debug_auto_sync() {
+    _codex_should_sync_for_command "${BASH_COMMAND:-}" || return 0
+    _codex_maybe_auto_sync
+}
+
+_codex_register_bash_hook() {
+    [ -n "$BASH_VERSION" ] || return 0
+    case "$-" in
+        *i*) ;;
+        *) return 0 ;;
+    esac
+    [ "${CODEX_BASH_HOOK_REGISTERED:-0}" = "1" ] && return 0
+
+    local existing_debug_trap
+    existing_debug_trap="$(trap -p DEBUG)"
+    case "$existing_debug_trap" in
+        *"_codex_bash_debug_auto_sync"*)
+            CODEX_BASH_HOOK_REGISTERED=1
+            return 0
+            ;;
+    esac
+
+    if [ -n "$existing_debug_trap" ]; then
+        ux_warning "DEBUG trap already configured; skipping codex auto-sync hook (bash)"
+        return 0
+    fi
+
+    trap '_codex_bash_debug_auto_sync' DEBUG
+    CODEX_BASH_HOOK_REGISTERED=1
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -196,5 +259,7 @@ codex_status() {
     fi
 }
 
-# Prime skills state once per interactive shell session.
+# Register hooks and prime state once per interactive shell session.
+_codex_register_zsh_hook
+_codex_register_bash_hook
 _codex_maybe_auto_sync
