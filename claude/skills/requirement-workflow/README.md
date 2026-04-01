@@ -64,10 +64,7 @@ project:
     format: ruff check --fix . && ruff format .
 ```
 
-## Related Files
+## Related Skills
 
-- `req-phases/_common.md` - Shared configuration
-- `req-phases/phase1-spec.md` - Specification protocol
-- `req-phases/phase2-test.md` - Test design protocol
-- `req-phases/phase3-impl.md` - Implementation protocol
-- `req-phases/phase4-summary.md` - Summary protocol
+- `requirement-draft` - 초안 작성 & 동료 리뷰 종합
+- `requirement-spec` - 정형화된 REQ 사양서 생성
