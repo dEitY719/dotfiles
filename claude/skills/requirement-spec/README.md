@@ -54,4 +54,4 @@ Copy markdown to: docs/feature_requirement_mvp1.md
 
 ## Related Skills
 
-- `req-workflow` - Execute 4-phase development after REQ is defined
+- `requirement-workflow` - Execute 4-phase development after REQ is defined

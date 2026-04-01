@@ -1,5 +1,5 @@
 ---
-name: req-workflow
+name: requirement-workflow
 description: >-
   REQ-based 4-phase development workflow. Use when implementing features with
   "REQ-X-Y 개발해" format. Orchestrates Specification, Test Design, Implementation,

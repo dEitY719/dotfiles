@@ -35,5 +35,5 @@ User: "CLI에 survey schema 추가해"
 
 ## Related
 
-- `req-workflow` - Full 4-phase development
+- `requirement-workflow` - Full 4-phase development
 - `tox-lint` - Code quality checks
