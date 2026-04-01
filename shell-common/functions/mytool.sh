@@ -112,3 +112,5 @@ install_zsh_autosuggestions() {
     fi
     bash "$script" "$@"
 }
+
+alias install-zsh-autosuggestions='install_zsh_autosuggestions'

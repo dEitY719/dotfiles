@@ -113,4 +113,3 @@ zsh_autosuggestions_install_help() {
 # ═══════════════════════════════════════════════════════════════
 
 alias zsh-autosuggestions-help='zsh_autosuggestions_help'
-alias install-zsh-autosuggestions='install_zsh_autosuggestions'
