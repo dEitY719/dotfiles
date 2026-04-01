@@ -42,28 +42,12 @@ _codex_skills_state_file() {
 
 _codex_skills_fingerprint() {
     local src="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills"
-    local skill_dir entry entry_name
 
     [ -d "$src" ] || return 1
 
-    # zsh: prevent nomatch errors for patterns like "$skill_dir".*
-    if [ -n "$ZSH_VERSION" ]; then
-        setopt local_options nonomatch
-    fi
-
     (
-        for skill_dir in "$src"/*/; do
-            [ -d "$skill_dir" ] || continue
-            echo "skill:$(basename "$skill_dir")"
-            for entry in "$skill_dir"* "$skill_dir".*; do
-                [ -e "$entry" ] || continue
-                entry_name=$(basename "$entry")
-                if [ "$entry_name" = "." ] || [ "$entry_name" = ".." ]; then
-                    continue
-                fi
-                echo "entry:$(basename "$skill_dir")/$entry_name"
-            done
-        done
+        cd "$src" || exit 1
+        find . -mindepth 1 -maxdepth 2 -not -name "." -not -name ".."
     ) | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
 }
 
@@ -160,62 +144,9 @@ _codex_maybe_auto_sync() {
     CODEX_AUTO_SYNC_IN_PROGRESS="$prev_in_progress"
 }
 
-_codex_should_sync_for_command() {
-    case "$1" in
-        codex|codex\ *)
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-}
-
-_codex_zsh_preexec_auto_sync() {
-    _codex_should_sync_for_command "$1" || return 0
+codex() {
     _codex_maybe_auto_sync
-}
-
-_codex_register_zsh_hook() {
-    [ -n "$ZSH_VERSION" ] || return 0
-    case "$-" in
-        *i*) ;;
-        *) return 0 ;;
-    esac
-
-    autoload -Uz add-zsh-hook 2>/dev/null || return 0
-    add-zsh-hook preexec _codex_zsh_preexec_auto_sync
-}
-
-_codex_bash_debug_auto_sync() {
-    _codex_should_sync_for_command "${BASH_COMMAND:-}" || return 0
-    _codex_maybe_auto_sync
-}
-
-_codex_register_bash_hook() {
-    [ -n "$BASH_VERSION" ] || return 0
-    case "$-" in
-        *i*) ;;
-        *) return 0 ;;
-    esac
-    [ "${CODEX_BASH_HOOK_REGISTERED:-0}" = "1" ] && return 0
-
-    local existing_debug_trap
-    existing_debug_trap="$(trap -p DEBUG)"
-    case "$existing_debug_trap" in
-        *"_codex_bash_debug_auto_sync"*)
-            CODEX_BASH_HOOK_REGISTERED=1
-            return 0
-            ;;
-    esac
-
-    if [ -n "$existing_debug_trap" ]; then
-        ux_warning "DEBUG trap already configured; skipping codex auto-sync hook (bash)"
-        return 0
-    fi
-
-    trap '_codex_bash_debug_auto_sync' DEBUG
-    CODEX_BASH_HOOK_REGISTERED=1
+    command codex "$@"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -258,7 +189,5 @@ codex_status() {
     fi
 }
 
-# Register hooks and prime state once per interactive shell session.
-_codex_register_zsh_hook
-_codex_register_bash_hook
+# Prime state once per interactive shell session.
 _codex_maybe_auto_sync
