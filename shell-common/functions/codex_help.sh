@@ -16,6 +16,7 @@ codex_help() {
     ux_table_row "codex-uninstall" "Uninstall Script" "Remove Codex CLI"
     ux_table_row "codex-status" "Status Check" "Show installation status"
     ux_table_row "codex-skills-sync" "Skills Sync" "Sync skills symlinks"
+    ux_table_row "Auto skill sync" "Enabled by default" "Before codex command"
 
     ux_section "Interactive Mode"
     ux_table_row "codex" "codex" "Start interactive"
@@ -24,6 +25,8 @@ codex_help() {
     ux_section "Tips"
     ux_bullet "Config: ~/.codex/ or ~/.config/codex/"
     ux_bullet "Auth: Use 'codex' to authenticate"
+    ux_bullet "Disable auto sync: export CODEX_SKILLS_AUTO_SYNC=0"
+    ux_bullet "Verbose auto sync: export CODEX_SKILLS_AUTO_SYNC_VERBOSE=1"
 }
 
 alias codex-quick-help='codex_help'
