@@ -1,9 +1,9 @@
 ---
-name: req-draft
+name: requirement-draft
 description: >-
   Create and iterate on feature requirement draft documents. Use when starting
   new feature discussions, writing initial requirement drafts, or synthesizing
-  colleague review documents. Triggered by "/req-draft", "요구사항 초안", "기능 초안 작성",
+  colleague review documents. Triggered by "/requirement-draft", "요구사항 초안", "기능 초안 작성",
   or any request to create/update feature requirement documents in
   docs/feature/.
 ---
@@ -17,14 +17,14 @@ Create structured feature requirement drafts and synthesize multi-agent review f
 When invoked with `-h` or `--help`, display this usage and stop:
 
 ```
-/req-draft — 요구사항 초안 작성 & 동료 리뷰 종합
+/requirement-draft — 요구사항 초안 작성 & 동료 리뷰 종합
 
 Usage:
-  /req-draft v1 <input>                    초안 생성 (자동 경로)
-  /req-draft <path> v1 <input>             초안 생성 (경로 지정)
-  /req-draft v2                            동료 리뷰 종합 (최근 디렉토리)
-  /req-draft <path> v2                     동료 리뷰 종합 (경로 지정)
-  /req-draft -h | --help                   이 도움말 표시
+  /requirement-draft v1 <input>                    초안 생성 (자동 경로)
+  /requirement-draft <path> v1 <input>             초안 생성 (경로 지정)
+  /requirement-draft v2                            동료 리뷰 종합 (최근 디렉토리)
+  /requirement-draft <path> v2                     동료 리뷰 종합 (경로 지정)
+  /requirement-draft -h | --help                   이 도움말 표시
 
 Arguments:
   <path>      docs/feature/ 하위 경로 (optional, 생략시 자동 생성)
@@ -32,10 +32,10 @@ Arguments:
   <input>     자유 텍스트 설명 또는 파일 경로
 
 Examples:
-  /req-draft v1 GCP 스캔에 parallel 처리 추가
-  /req-draft docs/feature/gcp-parallel v1 input.md
-  /req-draft v2
-  /req-draft docs/feature/gcp-parallel v2
+  /requirement-draft v1 GCP 스캔에 parallel 처리 추가
+  /requirement-draft docs/feature/gcp-parallel v1 input.md
+  /requirement-draft v2
+  /requirement-draft docs/feature/gcp-parallel v2
 
 Workflow:
   v1  →  동료 프롬프트 복사/전달  →  동료가 -CX.md, -G.md 작성  →  v2
@@ -115,7 +115,7 @@ Peer Roles:
    File: docs/feature/<path>/<feature-slug>.md
    Topic: <title>
    ──────────────────────────────────────────────────
-   동료 문서 완료 후: /req-draft v2
+   동료 문서 완료 후: /requirement-draft v2
    ══════════════════════════════════════════════════
    ```
 
@@ -176,7 +176,7 @@ Peer Roles:
    ──────────────────────────────────────────────────
    다음 단계:
    - 충돌 사항 검토 후 최종 확정
-   - 정식 REQ 문서로 전환: /req-define <feature description>
+   - 정식 REQ 문서로 전환: /requirement-spec <feature description>
    ══════════════════════════════════════════════════
    ```
 
