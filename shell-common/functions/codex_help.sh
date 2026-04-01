@@ -25,8 +25,10 @@ codex_help() {
     ux_section "Tips"
     ux_bullet "Config: ~/.codex/ or ~/.config/codex/"
     ux_bullet "Auth: Use 'codex' to authenticate"
+    ux_bullet "Auto sync: before codex command + prompt cycle"
     ux_bullet "Disable auto sync: export CODEX_SKILLS_AUTO_SYNC=0"
     ux_bullet "Verbose auto sync: export CODEX_SKILLS_AUTO_SYNC_VERBOSE=1"
+    ux_bullet "Auto sync interval(sec): export CODEX_SKILLS_AUTO_SYNC_INTERVAL=5"
 }
 
 alias codex-help='codex_help'
