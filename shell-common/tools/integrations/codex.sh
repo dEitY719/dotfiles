@@ -21,7 +21,6 @@
 # Essential Command Aliases
 # ═══════════════════════════════════════════════════════════════
 
-alias codex-help='codex --help'     # Show help
 alias codex-version='codex --version' # Show version
 alias codex-yolo='codex --dangerously-bypass-approvals-and-sandbox'
 alias codex-skills-sync='codex_skills_sync' # Sync skills symlinks
