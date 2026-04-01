@@ -33,48 +33,127 @@ alias codex-status='codex_status'   # Check Codex status
 # Codex Skills Sync
 # ═══════════════════════════════════════════════════════════════
 
-codex_skills_sync() {
+_codex_skills_sync_script() {
+    echo "${DOTFILES_ROOT:-$HOME/dotfiles}/scripts/setup-skills-ssot.sh"
+}
+
+_codex_skills_state_file() {
+    echo "$HOME/.codex/.skills-sync-state"
+}
+
+_codex_skills_fingerprint() {
     local src="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills"
-    local dst="$HOME/.codex/skills"
-    local added=0
-    local removed=0
-    local name link
+    local skill_dir entry entry_name
 
-    ux_header "Codex Skills Sync"
+    [ -d "$src" ] || return 1
 
-    if [ ! -d "$dst" ]; then
-        ux_warning "Target directory not found: $dst"
+    # zsh: prevent nomatch errors for patterns like "$skill_dir".*
+    if [ -n "$ZSH_VERSION" ]; then
+        setopt local_options nonomatch
+    fi
+
+    (
+        for skill_dir in "$src"/*/; do
+            [ -d "$skill_dir" ] || continue
+            echo "skill:$(basename "$skill_dir")"
+            for entry in "$skill_dir"* "$skill_dir".*; do
+                [ -e "$entry" ] || continue
+                entry_name=$(basename "$entry")
+                if [ "$entry_name" = "." ] || [ "$entry_name" = ".." ]; then
+                    continue
+                fi
+                echo "entry:$(basename "$skill_dir")/$entry_name"
+            done
+        done
+    ) | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
+}
+
+_codex_skills_write_state() {
+    local fingerprint="$1"
+    local state_file
+    state_file="$(_codex_skills_state_file)"
+    mkdir -p "$(dirname "$state_file")" >/dev/null 2>&1 || true
+    printf "%s\n" "$fingerprint" > "$state_file"
+}
+
+_codex_skills_read_state() {
+    local state_file
+    state_file="$(_codex_skills_state_file)"
+    [ -f "$state_file" ] || return 1
+    head -n 1 "$state_file"
+}
+
+_codex_skills_run_sync_script() {
+    local quiet="${1:-0}"
+    local sync_script
+    sync_script="$(_codex_skills_sync_script)"
+
+    if [ ! -f "$sync_script" ]; then
+        [ "$quiet" -eq 1 ] || ux_error "Sync script not found: $sync_script"
         return 1
     fi
 
-    # Remove broken symlinks
-    while read -r link; do
-        if [ -L "$link" ] && [ ! -e "$link" ]; then
-            name=$(basename "$link")
-            if rm -f "$link"; then
-                ux_warning "Removed: $name"
-                removed=$((removed + 1))
-            else
-                ux_error "Failed to remove: $name"
-            fi
-        fi
-    done <<EOF
-$(find "$dst" -maxdepth 1 -type l)
-EOF
+    if [ "$quiet" -eq 1 ]; then
+        bash "$sync_script" >/dev/null 2>&1
+    else
+        bash "$sync_script"
+    fi
+}
 
-    # Add missing symlinks for each skill directory
-    for dir in "$src"/*/; do
-        name=$(basename "$dir")
-        if [ ! -e "$dst/$name" ]; then
-            ln -s "$dir" "$dst/$name"
-            ux_success "Added: $name"
-            added=$((added + 1))
-        fi
-    done
+codex_skills_sync_if_needed() {
+    local quiet="${1:-0}"
+    local force="${2:-0}"
+    local current_fingerprint previous_fingerprint
 
-    echo ""
-    ux_table_row "Added"   "$added"   ""
-    ux_table_row "Removed" "$removed" ""
+    current_fingerprint="$(_codex_skills_fingerprint 2>/dev/null)" || return 0
+    previous_fingerprint="$(_codex_skills_read_state 2>/dev/null || true)"
+
+    if [ "$force" -eq 0 ] && [ "$current_fingerprint" = "$previous_fingerprint" ]; then
+        return 0
+    fi
+
+    if [ "$quiet" -eq 0 ]; then
+        ux_info "Skill changes detected. Syncing codex skills..."
+    fi
+
+    if _codex_skills_run_sync_script "$quiet"; then
+        _codex_skills_write_state "$current_fingerprint"
+        [ "$quiet" -eq 1 ] || ux_success "Codex skills sync completed"
+        return 0
+    fi
+
+    [ "$quiet" -eq 1 ] || ux_error "Codex skills sync failed"
+    return 1
+}
+
+codex_skills_sync() {
+    ux_header "Codex Skills Sync"
+    codex_skills_sync_if_needed 0 1
+}
+
+_codex_auto_sync_enabled() {
+    [ "${CODEX_SKILLS_AUTO_SYNC:-1}" != "0" ]
+}
+
+_codex_auto_sync_quiet() {
+    [ "${CODEX_SKILLS_AUTO_SYNC_VERBOSE:-0}" != "1" ]
+}
+
+_codex_maybe_auto_sync() {
+    if ! _codex_auto_sync_enabled; then
+        return 0
+    fi
+
+    if _codex_auto_sync_quiet; then
+        codex_skills_sync_if_needed 1 0
+    else
+        codex_skills_sync_if_needed 0 0
+    fi
+}
+
+codex() {
+    _codex_maybe_auto_sync
+    command codex "$@"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -116,3 +195,6 @@ codex_status() {
         echo "  (No codex packages found)"
     fi
 }
+
+# Prime skills state once per interactive shell session.
+_codex_maybe_auto_sync
