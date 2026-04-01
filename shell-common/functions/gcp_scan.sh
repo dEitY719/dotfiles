@@ -380,4 +380,4 @@ EOF
 }
 
 # Quick shorthand for gcp_scan
-alias gcs='gcp_scan'
+alias gcp-scan='gcp_scan'

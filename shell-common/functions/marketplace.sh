@@ -591,4 +591,4 @@ claude_skills_marketplace() {
 
 # Create short alias for convenience
 # This is safe as a function alias (no naming conflicts with my_help.sh pattern)
-alias csm='claude_skills_marketplace'
+alias claude-skills-marketplace='claude_skills_marketplace'
