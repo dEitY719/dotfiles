@@ -134,7 +134,9 @@ link_skills_individual_codex() {
             local current_target
             current_target="$(readlink -f "$skill_target_dir" 2>/dev/null)"
             if [ "$current_target" = "$source_realpath" ]; then
-                rm "$skill_target_dir"
+                if [ -e "$skill_target_dir" ] || [ -L "$skill_target_dir" ]; then
+                    rm -f "$skill_target_dir"
+                fi
                 migrated=$((migrated + 1))
             else
                 log_dim "[codex] 기존 사용자 symlink 보존: $skill_target_dir"
@@ -275,7 +277,9 @@ else
     if [ -L "$CODEX_SKILLS" ]; then
         local_codex_target="$(readlink -f "$CODEX_SKILLS" 2>/dev/null)"
         if [ "$local_codex_target" = "$(readlink -f "$SKILLS_SOURCE")" ]; then
-            rm "$CODEX_SKILLS"
+            if [ -e "$CODEX_SKILLS" ] || [ -L "$CODEX_SKILLS" ]; then
+                rm -f "$CODEX_SKILLS"
+            fi
         else
             log_warning "Codex skills 경로가 사용자 symlink입니다. 건너뜁니다: $CODEX_SKILLS"
             codex_can_manage=0
