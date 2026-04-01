@@ -325,7 +325,7 @@ mount_show() {
 # ============================================================================
 # Backward Compatibility Aliases
 # ============================================================================
-alias addmnt='mount_add'
+alias mount-add='mount_add'
 alias show-mnt='mount_show'
 
 # Note: Functions are automatically exported in both bash and zsh

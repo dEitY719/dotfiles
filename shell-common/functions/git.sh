@@ -224,7 +224,7 @@ git_worktree_add() {
 # ============================================================================
 # Aliases
 # ============================================================================
-alias gl='git_log'
-alias glum='git_log_upstream'
-alias gprune='git_prune_remote'
+alias git-log='git_log'
+alias git-log-upstream='git_log_upstream'
+alias git-prune-remote='git_prune_remote'
 alias git-clean-local='git_clean_local'
