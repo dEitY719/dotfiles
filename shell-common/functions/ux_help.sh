@@ -1,9 +1,12 @@
-#!/bin/bash
+#!/bin/sh
 # shell-common/functions/ux_help.sh
 # UX library help function
 
-# Alias to run the interactive UX demo
-alias ux-demo='bash "${SHELL_COMMON}/tools/custom/demo_ux.sh"'
+# Alias target function to run the interactive UX demo
+ux_demo() {
+    bash "${SHELL_COMMON}/tools/custom/demo_ux.sh" "$@"
+}
+alias ux-demo='ux_demo'
 
 # =============================================================================
 # UX Help Function
