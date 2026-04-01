@@ -1,9 +1,9 @@
 ---
-name: req-define
+name: requirement-spec
 description: >-
   Convert free-form requirements into structured REQ format. Use when defining
   new features, documenting urgent requests, or creating requirement
-  specifications for feature_requirement_mvp1.md.
+  specifications for feature_requirement_mvp1.md. Triggered by "/requirement-spec", "REQ 문서 만들어", "기능 요구사항 정의".
 allowed-tools: Read, Glob, Grep, Write, Edit
 ---
 
