@@ -45,8 +45,8 @@ if [ -L "$HOME_GEMINIMD" ]; then
         ln -sf "$GEMINI_GEMINIMD_SOURCE" "$HOME_GEMINIMD"
         log_success "GEMINI.md 심볼릭 링크 업데이트 완료."
     fi
-elif [ -f "$HOME_GEMINIMD" ]; then
-    log_info "기존 GEMINI.md 파일 백업 및 심볼릭 링크 생성"
+elif [ -e "$HOME_GEMINIMD" ] || [ -L "$HOME_GEMINIMD" ]; then
+    log_info "기존 GEMINI.md 항목 백업 및 심볼릭 링크 생성"
     mv "$HOME_GEMINIMD" "${HOME_GEMINIMD}.bak-$(date +%Y%m%d%H%M%S)"
     ln -sf "$GEMINI_GEMINIMD_SOURCE" "$HOME_GEMINIMD"
     log_success "GEMINI.md 백업 및 심볼릭 링크 생성 완료."
