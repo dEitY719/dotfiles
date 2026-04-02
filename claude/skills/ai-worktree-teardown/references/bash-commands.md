@@ -1,0 +1,162 @@
+# Bash Commands — implementation details for each execution step
+
+## Step 1: Validate — Must Be Inside a Worktree
+
+```bash
+GIT_COMMON="$(git rev-parse --git-common-dir)"
+GIT_DIR="$(git rev-parse --git-dir)"
+
+if [[ "$GIT_DIR" == "$GIT_COMMON" ]]; then
+  echo "Error: Not inside a worktree. Nothing to tear down."
+  echo "  Run this from inside an AI worktree (e.g., ../my-app-claude-1)"
+  exit 1
+fi
+```
+
+## Step 2: Pre-flight Checks
+
+```bash
+preflight_check() {
+  local force="${1:-false}"
+
+  # Uncommitted changes (staged or unstaged)
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    if [[ "$force" == true ]]; then
+      echo "Warning: Discarding uncommitted changes (--force)"
+    else
+      echo "Error: Uncommitted changes detected."
+      echo "  Commit, stash, or use --force to discard."
+      exit 1
+    fi
+  fi
+
+  # Unpushed commits
+  local local_rev remote_rev
+  local_rev="$(git rev-parse HEAD)"
+  remote_rev="$(git rev-parse @{u} 2>/dev/null || echo "no-upstream")"
+
+  if [[ "$remote_rev" != "no-upstream" && "$local_rev" != "$remote_rev" ]]; then
+    if [[ "$force" == true ]]; then
+      echo "Warning: Discarding unpushed commits (--force)"
+    else
+      echo "Error: Unpushed commits detected."
+      echo "  Push first, or use --force to discard."
+      exit 1
+    fi
+  fi
+}
+
+preflight_check "${FORCE:-false}"
+```
+
+## Step 3: Identify Main Repo and Worktree Info
+
+```bash
+WORKTREE_PATH="$(git rev-parse --show-toplevel)"
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+WORKTREE_NAME="$(basename "$WORKTREE_PATH")"
+
+# Derive main repo path from git-common-dir
+# git-common-dir returns something like /path/to/main-repo/.git
+GIT_COMMON="$(git rev-parse --git-common-dir)"
+MAIN_REPO="$(dirname "$GIT_COMMON")"
+
+# Verify main repo exists
+if [[ ! -d "$MAIN_REPO/.git" && ! -f "$MAIN_REPO/.git" ]]; then
+  echo "Error: Cannot find main repo at $MAIN_REPO"
+  exit 1
+fi
+```
+
+## Step 4: Switch to Main Repo
+
+```bash
+cd "$MAIN_REPO" || { echo "Error: Cannot cd to $MAIN_REPO"; exit 1; }
+echo "Switched to main repo: $MAIN_REPO"
+```
+
+## Step 5: Remove Worktree
+
+```bash
+if ! git worktree remove "$WORKTREE_PATH" 2>/dev/null; then
+  if [[ "${FORCE:-false}" == true ]]; then
+    echo "Warning: Force-removing worktree"
+    git worktree remove --force "$WORKTREE_PATH"
+  else
+    echo "Error: Cannot remove worktree. It may have uncommitted changes."
+    echo "  Use --force to override."
+    exit 1
+  fi
+fi
+git worktree prune
+echo "Worktree removed: $WORKTREE_PATH"
+```
+
+## Step 6: Delete Branch
+
+```bash
+delete_branch() {
+  local branch="$1"
+  local keep="${KEEP_BRANCH:-false}"
+
+  if [[ "$keep" == true ]]; then
+    echo "Branch kept: $branch (--keep-branch)"
+    return
+  fi
+
+  if git branch -d "$branch" 2>/dev/null; then
+    echo "Branch deleted: $branch"
+  else
+    if [[ "${FORCE:-false}" == true ]]; then
+      git branch -D "$branch"
+      echo "Branch force-deleted: $branch (was not fully merged)"
+    else
+      echo "Warning: Branch '$branch' not fully merged into main."
+      echo "  Use --force to delete anyway, or --keep-branch to keep it."
+    fi
+  fi
+}
+
+delete_branch "$BRANCH"
+```
+
+## Step 7: Sync Main
+
+```bash
+# Resolve main branch name
+resolve_main_branch() {
+  if git rev-parse --verify --quiet "main" >/dev/null 2>&1; then
+    echo "main"
+  elif git rev-parse --verify --quiet "master" >/dev/null 2>&1; then
+    echo "master"
+  else
+    echo "Error: Neither 'main' nor 'master' branch found." >&2
+    exit 1
+  fi
+}
+
+MAIN_BRANCH="$(resolve_main_branch)"
+git checkout "$MAIN_BRANCH"
+
+# Pull with conflict detection
+if ! git pull origin "$MAIN_BRANCH"; then
+  echo "Conflict detected during pull."
+  echo "Attempting to resolve..."
+  # List conflicting files
+  git diff --name-only --diff-filter=U
+  # AI agent should analyze and resolve conflicts here
+  # If resolved:
+  #   git add <resolved-files>
+  #   git commit -m "chore: resolve merge conflicts after teardown"
+  # If unresolvable:
+  #   echo "Error: Cannot auto-resolve conflicts. Manual intervention needed."
+fi
+```
+
+## Step 8: Log
+
+```bash
+GIT_COMMON="$(git rev-parse --git-common-dir)"
+echo "[$(date +%Y-%m-%dT%H:%M:%S%z)] TEARDOWN worktree=${WORKTREE_NAME} branch=${BRANCH} path=${WORKTREE_PATH}" \
+  >> "${GIT_COMMON}/ai-worktree-spawn.log"
+```
