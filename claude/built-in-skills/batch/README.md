@@ -111,7 +111,7 @@ background agent 완료 알림이 도착하면:
 | 1 | Simplify | `/simplify` skill을 호출하여 변경사항 리뷰 및 정리 |
 | 2 | Unit Test | 프로젝트 테스트 스위트 실행 (`npm test`, `pytest`, `go test` 등). 실패 시 수정 |
 | 3 | E2E Test | coordinator가 제공한 e2e 레시피 실행. skip 지시가 있으면 건너뜀 |
-| 4 | Commit & Push | 명확한 메시지로 commit, push, `gh pr create`로 PR 생성 |
+| 4 | Commit & Push | 명확한 메시지로 commit, push, `gh pr create`로 PR 생성 시도 |
 | 5 | Report | 마지막 줄에 `PR: <url>` 출력. PR 미생성 시 `PR: none — <reason>` |
 
 ## 전제 조건
