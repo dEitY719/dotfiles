@@ -174,8 +174,6 @@ link_skills_individual_codex() {
             fi
 
             local entry_target="${skill_target_dir}/${entry_name}"
-            local entry_source_realpath
-            entry_source_realpath="$(readlink -f "$entry_path")"
 
             if [ "$entry_name" = "SKILL.md" ]; then
                 if [ -L "$entry_target" ]; then
@@ -196,6 +194,9 @@ link_skills_individual_codex() {
                 continue
             fi
 
+            local entry_source_realpath
+            entry_source_realpath="$(readlink -f "$entry_path")"
+
             if [ -L "$entry_target" ]; then
                 local current_entry_target
                 current_entry_target="$(readlink -f "$entry_target" 2>/dev/null)"
@@ -203,7 +204,7 @@ link_skills_individual_codex() {
                     continue
                 fi
                 rm "$entry_target"
-            elif [ -e "$entry_target" ]; then
+            elif [ -e "$entry_target" ] || [ -L "$entry_target" ]; then
                 log_dim "[codex] 기존 엔트리 보존: $entry_target"
                 continue
             fi
