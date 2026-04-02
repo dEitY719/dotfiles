@@ -270,7 +270,7 @@ zsh_fix_vscode() {
 
     # Remove p10k instant prompt cache
     local p10k_cache="${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${USER}.zsh"
-    if [ -f "$p10k_cache" ]; then
+    if [ -e "$p10k_cache" ] || [ -L "$p10k_cache" ]; then
         rm -f "$p10k_cache"
         ux_success "Cleared p10k instant prompt cache"
         fixed=1
