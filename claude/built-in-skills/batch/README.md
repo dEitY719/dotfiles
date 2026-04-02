@@ -1,6 +1,8 @@
 # /batch - 대규모 병렬 코드 변경 오케스트레이터
 
-Claude Code 내장(built-in) 스킬. 플러그인/마켓플레이스가 아닌 Claude Code 바이너리에 포함되어 있어 파일시스템에 별도의 `SKILL.md`가 존재하지 않는다. 대규모 기계적 변경(마이그레이션, 리팩터링, 일괄 rename 등)을 5~30개의 독립된 worktree agent로 분해하여 병렬 실행하고, 각각 PR을 생성한다.
+**Claude Code 전용** 내장(built-in) 스킬. 플러그인/마켓플레이스가 아닌 Claude Code 바이너리에 포함되어 있어 파일시스템에 별도의 `SKILL.md`가 존재하지 않는다. `EnterPlanMode`, `ExitPlanMode`, `AskUserQuestion`, `Agent` 등 Claude Code 런타임 도구에 의존하므로 Codex 등 다른 코딩 에이전트에서는 동작하지 않는다.
+
+대규모 기계적 변경(마이그레이션, 리팩터링, 일괄 rename 등)을 5~30개의 독립된 worktree agent로 분해하여 병렬 실행하고, 각각 PR 생성을 시도한다.
 
 ## 동작 요약
 
