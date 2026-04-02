@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # shell-common/functions/zsh.sh
 # Zsh shell management functions
 # Shared between bash and zsh
@@ -255,6 +255,34 @@ zsh_snippets() {
     fi
 }
 
+# Fix VS Code terminal prompt after VS Code update
+# Clears stale caches that cause default prompt (HOSTNAME%) instead of p10k
+zsh_fix_vscode() {
+    local fixed=0
+
+    # Remove stale .zcompdump from VS Code temp ZDOTDIR
+    local vscode_zdotdir="/tmp/${USER}-code-zsh"
+    if [ -d "$vscode_zdotdir" ]; then
+        rm -f "$vscode_zdotdir"/.zcompdump*
+        ux_success "Cleared VS Code ZDOTDIR cache: $vscode_zdotdir/.zcompdump*"
+        fixed=1
+    fi
+
+    # Remove p10k instant prompt cache
+    local p10k_cache="${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${USER}.zsh"
+    if [ -f "$p10k_cache" ]; then
+        rm -f "$p10k_cache"
+        ux_success "Cleared p10k instant prompt cache"
+        fixed=1
+    fi
+
+    if [ "$fixed" -eq 0 ]; then
+        ux_info "No stale caches found."
+    else
+        ux_info "Open a new VS Code terminal to verify the fix."
+    fi
+}
+
 # ═══════════════════════════════════════════════════════════════
 # Naming Convention: Function uses underscore, alias provides dash format
 # ═══════════════════════════════════════════════════════════════
@@ -271,3 +299,4 @@ alias zsh-reload='zsh_reload'
 alias zsh-edit='zsh_edit'
 alias zsh-snippet='zsh_snippet'
 alias zsh-snippets='zsh_snippets'
+alias zsh-fix-vscode='zsh_fix_vscode'
