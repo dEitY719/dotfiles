@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -124,7 +125,10 @@ def render(
 
     with sync_playwright() as p:
         try:
-            browser = p.chromium.launch(headless=True, args=["--ignore-certificate-errors"])
+            launch_args = []
+            if os.environ.get("EXCALIDRAW_IGNORE_CERT_ERRORS"):
+                launch_args.append("--ignore-certificate-errors")
+            browser = p.chromium.launch(headless=True, args=launch_args or None)
         except Exception as e:
             if "Executable doesn't exist" in str(e) or "browserType.launch" in str(e):
                 print("ERROR: Chromium not installed for Playwright.", file=sys.stderr)

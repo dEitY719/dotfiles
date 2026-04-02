@@ -42,12 +42,20 @@ _codex_skills_state_file() {
 
 _codex_skills_fingerprint() {
     local src="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills"
+    local skill_path skill_file
 
     [ -d "$src" ] || return 1
 
     (
         cd "$src" || exit 1
-        find . -mindepth 1 -maxdepth 2 -not -name "." -not -name ".."
+        find . -mindepth 1 -maxdepth 2 -not -name "." -not -name ".." | LC_ALL=C sort | while IFS= read -r skill_path; do
+            printf "entry:%s\n" "$skill_path"
+        done
+        find . -mindepth 2 -maxdepth 2 -name "SKILL.md" | LC_ALL=C sort | while IFS= read -r skill_path; do
+            skill_file="$src/${skill_path#./}"
+            [ -f "$skill_file" ] || continue
+            printf "skill-md:%s:%s\n" "$skill_path" "$(cksum < "$skill_file" | awk '{print $1 ":" $2}')"
+        done
     ) | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
 }
 
@@ -122,6 +130,80 @@ _codex_auto_sync_quiet() {
     [ "${CODEX_SKILLS_AUTO_SYNC_VERBOSE:-0}" != "1" ]
 }
 
+_codex_auto_sync_interval_seconds() {
+    local interval
+    interval="${CODEX_SKILLS_AUTO_SYNC_INTERVAL:-5}"
+    case "$interval" in
+        ''|*[!0-9]*)
+            interval=5
+            ;;
+    esac
+    echo "$interval"
+}
+
+_codex_should_run_periodic_sync() {
+    local now last interval
+    interval="$(_codex_auto_sync_interval_seconds)"
+    now="$(date +%s 2>/dev/null || echo 0)"
+    last="${CODEX_SKILLS_AUTO_SYNC_LAST_CHECK:-0}"
+
+    if [ "$((now - last))" -lt "$interval" ]; then
+        return 1
+    fi
+
+    CODEX_SKILLS_AUTO_SYNC_LAST_CHECK="$now"
+    return 0
+}
+
+_codex_periodic_auto_sync() {
+    if ! _codex_auto_sync_enabled; then
+        return 0
+    fi
+
+    if ! _codex_should_run_periodic_sync; then
+        return 0
+    fi
+
+    if _codex_auto_sync_quiet; then
+        codex_skills_sync_if_needed 1 0
+    else
+        codex_skills_sync_if_needed 0 0
+    fi
+}
+
+_codex_register_auto_sync_hooks() {
+    # Only interactive shells should register prompt hooks.
+    case "$-" in
+        *i*) ;;
+        *) return 0 ;;
+    esac
+
+    if [ "${CODEX_AUTO_SYNC_HOOKS_REGISTERED:-0}" = "1" ]; then
+        return 0
+    fi
+    CODEX_AUTO_SYNC_HOOKS_REGISTERED=1
+
+    if [ -n "${BASH_VERSION:-}" ]; then
+        case ";${PROMPT_COMMAND:-};" in
+            *";_codex_periodic_auto_sync;"*)
+                ;;
+            *)
+                if [ -n "${PROMPT_COMMAND:-}" ]; then
+                    PROMPT_COMMAND="_codex_periodic_auto_sync; ${PROMPT_COMMAND}"
+                else
+                    PROMPT_COMMAND="_codex_periodic_auto_sync"
+                fi
+                ;;
+        esac
+        return 0
+    fi
+
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        autoload -Uz add-zsh-hook >/dev/null 2>&1 || return 0
+        add-zsh-hook precmd _codex_periodic_auto_sync >/dev/null 2>&1 || true
+    fi
+}
+
 _codex_maybe_auto_sync() {
     local prev_in_progress
     prev_in_progress="${CODEX_AUTO_SYNC_IN_PROGRESS:-0}"
@@ -191,3 +273,4 @@ codex_status() {
 
 # Prime state once per interactive shell session.
 _codex_maybe_auto_sync
+_codex_register_auto_sync_hooks
