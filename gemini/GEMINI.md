@@ -9,7 +9,6 @@ Key requirements include:
 - The project should be structured for easy reuse in future projects.
 - We will proceed step-by-step, starting with package installation.
 - Do not modify `[tool.black]` or `[tool.isort]` sections in `pyproject.toml` or `tox.ini` as they are working correctly.
-- Do not modify `[tool.black]` or `[tool.isort]` sections in `pyproject.toml` or `tox.ini` as they are working correctly.
 - Always write git commit messages in English.
 - The user prefers to communicate in Korean by default.
 - Gemini CLI에서는 Alt+Enter로 줄바꿈
