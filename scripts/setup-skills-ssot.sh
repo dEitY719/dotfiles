@@ -10,8 +10,9 @@
 #     ~/.config/opencode/skills/ → ~/dotfiles/claude/skills/
 #     ~/.gemini/skills/          → ~/dotfiles/claude/skills/
 #   - Codex 전용 개별 연결: skill 디렉토리는 실제 폴더로 만들고
-#     내부 항목(SKILL.md, references/, scripts/...)만 symlink
-#     ~/.codex/skills/<skill>/<entry> → ~/dotfiles/claude/skills/<skill>/<entry>
+#     SKILL.md는 실파일 copy, 나머지 항목(references/, scripts/...)은 symlink
+#     ~/.codex/skills/<skill>/SKILL.md                ← copy
+#     ~/.codex/skills/<skill>/<entry(except SKILL.md)> → ~/dotfiles/claude/skills/<skill>/<entry>
 #
 # ~/.claude/skills 는 claude/setup.sh (bind mount) 가 관리
 
@@ -106,8 +107,8 @@ link_skills_individual() {
     log_info "[$tool] 개별 skill 연결 완료: ${linked}개 신규, ${skipped}개 기존 유지"
 }
 
-# Codex는 symlink된 skill 디렉토리를 스캔하지 못할 수 있어,
-# skill 디렉토리는 실디렉토리로 유지하고 내부 엔트리만 symlink 한다.
+# Codex는 symlink된 SKILL.md를 인식하지 못할 수 있어,
+# skill 디렉토리는 실디렉토리로 유지하고 SKILL.md는 copy, 나머지는 symlink 한다.
 # Usage: link_skills_individual_codex <target_dir>
 link_skills_individual_codex() {
     local target_dir="$1"
@@ -173,6 +174,26 @@ link_skills_individual_codex() {
             fi
 
             local entry_target="${skill_target_dir}/${entry_name}"
+
+            if [ "$entry_name" = "SKILL.md" ]; then
+                if [ -L "$entry_target" ]; then
+                    rm -f "$entry_target"
+                elif [ -e "$entry_target" ] && [ ! -f "$entry_target" ]; then
+                    log_warning "[codex] SKILL.md 엔트리 보존(일반 파일 아님): $entry_target"
+                    continue
+                fi
+
+                if [ -f "$entry_target" ] && cmp -s "$entry_path" "$entry_target"; then
+                    continue
+                fi
+
+                cp "$entry_path" "$entry_target" || {
+                    log_error "[codex] SKILL.md copy 실패: $entry_target"
+                    continue
+                }
+                continue
+            fi
+
             local entry_source_realpath
             entry_source_realpath="$(readlink -f "$entry_path")"
 
@@ -183,7 +204,7 @@ link_skills_individual_codex() {
                     continue
                 fi
                 rm "$entry_target"
-            elif [ -e "$entry_target" ]; then
+            elif [ -e "$entry_target" ] || [ -L "$entry_target" ]; then
                 log_dim "[codex] 기존 엔트리 보존: $entry_target"
                 continue
             fi
@@ -226,6 +247,9 @@ link_skills_individual_codex() {
             local existing_entry_name
             existing_entry_name="$(basename "$existing_entry")"
             if [ "$existing_entry_name" = "." ] || [ "$existing_entry_name" = ".." ] || [ "$existing_entry_name" = "$CODEX_MANAGED_MARKER" ]; then
+                continue
+            fi
+            if [ "$existing_entry_name" = "SKILL.md" ] && [ -f "$existing_entry" ]; then
                 continue
             fi
             if [ ! -L "$existing_entry" ]; then

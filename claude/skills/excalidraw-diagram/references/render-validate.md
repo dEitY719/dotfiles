@@ -67,3 +67,11 @@ cd .claude/skills/excalidraw-diagram
 uv sync
 cd references && uv run playwright install chromium
 ```
+
+## Troubleshooting
+
+**`ERR_CERT_AUTHORITY_INVALID`** — If Chromium rejects the SSL certificate for esm.sh (common in corporate proxy / SSL inspection environments), set:
+
+```bash
+EXCALIDRAW_IGNORE_CERT_ERRORS=1 uv run python render_excalidraw.py <file.excalidraw>
+```
