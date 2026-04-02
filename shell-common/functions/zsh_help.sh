@@ -54,6 +54,13 @@ _zsh_help_full() {
     ux_bullet "Shared config: Add to shell-common/ for portable settings"
     ux_bullet "Shell-specific: Use shell-specific files for unique functions"
     ux_bullet "Use snippets: Organize $HOME/.zshrc.d/ for better management"
+
+    ux_section "Troubleshooting"
+    ux_bullet "${UX_BOLD}VS Code 터미널에서 기본 프롬프트(HOSTNAME%)만 표시될 때:${UX_RESET}"
+    ux_bullet "  원인: VS Code 업데이트 후 셸 통합 캐시 불일치"
+    ux_bullet "  해결: ${UX_BOLD}zsh-fix-vscode${UX_RESET}"
+    ux_bullet "${UX_BOLD}p10k 프롬프트가 깨지거나 느릴 때:${UX_RESET}"
+    ux_bullet "  해결: ${UX_BOLD}p10k configure${UX_RESET} 로 재설정"
 }
 
 zsh_help() {
@@ -90,6 +97,9 @@ zsh_help() {
     ux_table_row "install-fd" "Install fd (fast file finder)"
     ux_table_row "install-bat" "Install bat (cat with highlighting)"
     ux_table_row "install-pet" "Install pet (command snippet manager)"
+
+    ux_section "Troubleshooting"
+    ux_table_row "zsh-fix-vscode" "Fix VS Code terminal prompt after update"
 
     ux_section "Status"
     ux_table_row "zsh-version" "Show zsh version"
