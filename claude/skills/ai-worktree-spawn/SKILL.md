@@ -33,7 +33,7 @@ Priority: `--agent` arg > `$AI_AGENT_NAME` > agent-specific env vars > `agent`.
 
 ### Step 3: Compute Project Name and Index
 
-Extract project name via `basename $(git rev-parse --show-toplevel)`.
+Extract project name via `basename "$(git rev-parse --show-toplevel)"`.
 Scan parent directory for `{project}-{agent}-N` pattern, assign max(N)+1.
 
 ### Step 4: Determine Branch Name
