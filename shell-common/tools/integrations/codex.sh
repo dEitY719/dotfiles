@@ -36,8 +36,43 @@ _codex_skills_sync_script() {
     echo "${DOTFILES_ROOT:-$HOME/dotfiles}/scripts/setup-skills-ssot.sh"
 }
 
+_codex_home_dir() {
+    local xdg_codex_home
+
+    if [ -n "${CODEX_HOME:-}" ]; then
+        echo "$CODEX_HOME"
+        return 0
+    fi
+
+    if [ -d "$HOME/.codex" ]; then
+        echo "$HOME/.codex"
+        return 0
+    fi
+
+    xdg_codex_home="${XDG_CONFIG_HOME:-$HOME/.config}/codex"
+    if [ -d "$xdg_codex_home" ]; then
+        echo "$xdg_codex_home"
+        return 0
+    fi
+
+    if [ -d "$HOME/.cod" ]; then
+        echo "$HOME/.cod"
+        return 0
+    fi
+
+    echo "$HOME/.codex"
+}
+
+_codex_skills_target_dir() {
+    echo "$(_codex_home_dir)/skills"
+}
+
 _codex_skills_state_file() {
-    echo "$HOME/.codex/.skills-sync-state"
+    echo "$(_codex_home_dir)/.skills-sync-state"
+}
+
+_codex_skills_state_version() {
+    echo "2"
 }
 
 _codex_skills_fingerprint() {
@@ -59,12 +94,29 @@ _codex_skills_fingerprint() {
     ) | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
 }
 
+_codex_skills_state_signature() {
+    local sync_script skills_fingerprint script_fingerprint codex_home
+
+    skills_fingerprint="$(_codex_skills_fingerprint 2>/dev/null)" || return 1
+    sync_script="$(_codex_skills_sync_script)"
+    codex_home="$(_codex_home_dir)"
+    codex_home="$(readlink -f "$codex_home" 2>/dev/null || printf "%s" "$codex_home")"
+
+    if [ -f "$sync_script" ]; then
+        script_fingerprint="$(cksum < "$sync_script" | awk '{print $1 ":" $2}')"
+    else
+        script_fingerprint="missing"
+    fi
+
+    printf "%s|%s|%s|%s\n" "$(_codex_skills_state_version)" "$skills_fingerprint" "$script_fingerprint" "$codex_home"
+}
+
 _codex_skills_write_state() {
-    local fingerprint="$1"
+    local signature="$1"
     local state_file
     state_file="$(_codex_skills_state_file)"
     mkdir -p "$(dirname "$state_file")" >/dev/null 2>&1 || true
-    printf "%s\n" "$fingerprint" > "$state_file"
+    printf "%s\n" "$signature" > "$state_file"
 }
 
 _codex_skills_read_state() {
@@ -72,6 +124,17 @@ _codex_skills_read_state() {
     state_file="$(_codex_skills_state_file)"
     [ -f "$state_file" ] || return 1
     head -n 1 "$state_file"
+}
+
+_codex_skills_has_legacy_symlinked_skill_md() {
+    local target_dir
+    local legacy_link
+
+    target_dir="$(_codex_skills_target_dir)"
+    [ -d "$target_dir" ] || return 1
+
+    legacy_link="$(find "$target_dir" -mindepth 2 -maxdepth 2 -type l -name "SKILL.md" -print -quit 2>/dev/null)"
+    [ -n "$legacy_link" ]
 }
 
 _codex_skills_run_sync_script() {
@@ -94,21 +157,30 @@ _codex_skills_run_sync_script() {
 codex_skills_sync_if_needed() {
     local quiet="${1:-0}"
     local force="${2:-0}"
-    local current_fingerprint previous_fingerprint
+    local current_signature previous_signature sync_reason
 
-    current_fingerprint="$(_codex_skills_fingerprint 2>/dev/null)" || return 0
-    previous_fingerprint="$(_codex_skills_read_state 2>/dev/null || true)"
+    current_signature="$(_codex_skills_state_signature 2>/dev/null)" || return 0
+    previous_signature="$(_codex_skills_read_state 2>/dev/null || true)"
+    sync_reason="changes"
 
-    if [ "$force" -eq 0 ] && [ "$current_fingerprint" = "$previous_fingerprint" ]; then
-        return 0
+    if [ "$force" -eq 0 ] && [ "$current_signature" = "$previous_signature" ]; then
+        if _codex_skills_has_legacy_symlinked_skill_md; then
+            sync_reason="legacy-layout"
+        else
+            return 0
+        fi
     fi
 
     if [ "$quiet" -eq 0 ]; then
-        ux_info "Skill changes detected. Syncing codex skills..."
+        if [ "$sync_reason" = "legacy-layout" ]; then
+            ux_info "Legacy codex skill layout detected. Syncing codex skills..."
+        else
+            ux_info "Skill changes detected. Syncing codex skills..."
+        fi
     fi
 
     if _codex_skills_run_sync_script "$quiet"; then
-        _codex_skills_write_state "$current_fingerprint"
+        _codex_skills_write_state "$current_signature"
         [ "$quiet" -eq 1 ] || ux_success "Codex skills sync completed"
         return 0
     fi
