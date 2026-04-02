@@ -364,7 +364,12 @@ AI: [dry-run] 아래 계획을 실행할 예정입니다:
 
 ### 9.1 파일 구조
 
+**SSOT(Single Source of Truth)**: 스킬 정의는 `claude/skills/` 아래에 위치한다. 이 프로젝트의 모든 스킬은 `claude/skills/`가 유일한 원천이며, 다른 위치에 스킬 정의를 중복 배치하지 않는다.
+
 ```
+claude/skills/ai-worktree-spawn/     # SSOT: 스킬 정의 (프롬프트 + 트리거)
+  SKILL.md                     # 스킬 프롬프트 (spawn 로직 + 트리거 정의)
+
 tools/
   ai-worktree-spawn.sh        # 공통 shell 스크립트 (모든 AI 에이전트 공용)
     - detect_ai_agent()        # 에이전트 감지 함수
@@ -374,7 +379,7 @@ tools/
     - main()                   # 옵션 파싱 + 오케스트레이션
 ```
 
-> Claude Code 전용 skill loader(SKILL.md, README.md 등)는 사용하지 않는다. 모든 AI 에이전트가 동일한 `tools/ai-worktree-spawn.sh`를 호출하는 구조이다.
+`claude/skills/ai-worktree-spawn/SKILL.md`는 Claude Code의 스킬 트리거 및 실행 지침을 정의하고, 실제 로직은 `tools/ai-worktree-spawn.sh`를 호출한다. 다른 AI 에이전트(Gemini, Codex, OpenCode)도 동일한 shell 스크립트를 호출하되, 각자의 설정 파일에 프롬프트 포인터만 기재한다.
 
 ### 9.2 AI 에이전트별 프롬프트 포인터
 
