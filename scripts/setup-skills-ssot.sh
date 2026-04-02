@@ -41,6 +41,38 @@ CODEX_MANAGED_MARKER=".dotfiles-skill-source"
 
 # --- Helper Functions ---
 
+collect_codex_homes() {
+    local default_config_home
+    local -a candidates=()
+    local candidate
+    local resolved
+    local seen="|"
+
+    if [ -n "${CODEX_HOME:-}" ]; then
+        candidates+=("${CODEX_HOME}")
+    fi
+
+    candidates+=("${HOME}/.codex")
+    default_config_home="${XDG_CONFIG_HOME:-${HOME}/.config}/codex"
+    candidates+=("${default_config_home}")
+    candidates+=("${HOME}/.cod")
+
+    for candidate in "${candidates[@]}"; do
+        [ -n "$candidate" ] || continue
+        [ -d "$candidate" ] || continue
+
+        resolved="$(readlink -f "$candidate" 2>/dev/null || printf "%s" "$candidate")"
+        case "$seen" in
+            *"|${resolved}|"*)
+                continue
+                ;;
+        esac
+
+        seen="${seen}${resolved}|"
+        printf "%s\n" "$resolved"
+    done
+}
+
 # 전체 디렉토리를 SSOT로 symlink
 # Usage: link_skills_dir <tool_name> <target_path>
 link_skills_dir() {
@@ -292,27 +324,34 @@ else
 fi
 
 # 2. Codex: skill 디렉토리는 실디렉토리, 내부 엔트리만 symlink (.system 보존)
-CODEX_SKILLS="${HOME}/.codex/skills"
-if [ ! -d "${HOME}/.codex" ]; then
-    log_warning "Codex 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.codex"
+CODEX_HOME_LIST="$(collect_codex_homes)"
+if [ -z "$CODEX_HOME_LIST" ]; then
+    log_warning "Codex 설정 디렉토리가 없습니다. 건너뜁니다: ~/.codex 또는 ~/.config/codex"
 else
-    codex_can_manage=1
-    # 기존에 전체 dir symlink였다면 해제 후 codex 전용 방식으로 마이그레이션
-    if [ -L "$CODEX_SKILLS" ]; then
-        local_codex_target="$(readlink -f "$CODEX_SKILLS" 2>/dev/null)"
-        if [ "$local_codex_target" = "$(readlink -f "$SKILLS_SOURCE")" ]; then
-            if [ -e "$CODEX_SKILLS" ] || [ -L "$CODEX_SKILLS" ]; then
-                rm -f "$CODEX_SKILLS"
+    while IFS= read -r codex_home; do
+        [ -n "$codex_home" ] || continue
+
+        CODEX_SKILLS="${codex_home}/skills"
+        codex_can_manage=1
+
+        # 기존에 전체 dir symlink였다면 해제 후 codex 전용 방식으로 마이그레이션
+        if [ -L "$CODEX_SKILLS" ]; then
+            codex_link_target="$(readlink -f "$CODEX_SKILLS" 2>/dev/null)"
+            if [ "$codex_link_target" = "$(readlink -f "$SKILLS_SOURCE")" ]; then
+                if [ -e "$CODEX_SKILLS" ] || [ -L "$CODEX_SKILLS" ]; then
+                    rm -f "$CODEX_SKILLS"
+                fi
+            else
+                log_warning "Codex skills 경로가 사용자 symlink입니다. 건너뜁니다: $CODEX_SKILLS"
+                codex_can_manage=0
             fi
-        else
-            log_warning "Codex skills 경로가 사용자 symlink입니다. 건너뜁니다: $CODEX_SKILLS"
-            codex_can_manage=0
         fi
-    fi
-    if [ "$codex_can_manage" -eq 1 ]; then
-        mkdir -p "$CODEX_SKILLS"
-        link_skills_individual_codex "$CODEX_SKILLS"
-    fi
+
+        if [ "$codex_can_manage" -eq 1 ]; then
+            mkdir -p "$CODEX_SKILLS"
+            link_skills_individual_codex "$CODEX_SKILLS"
+        fi
+    done <<< "$CODEX_HOME_LIST"
 fi
 
 # 3. Gemini: 전체 디렉토리 symlink
@@ -350,8 +389,11 @@ verify_link() {
 }
 
 [ -d "${HOME}/.config/opencode" ] && verify_link "opencode" "$OPENCODE_SKILLS" "dir"
-if [ -d "${HOME}/.codex" ]; then
-    verify_link "codex" "$CODEX_SKILLS" "codex"
+if [ -n "${CODEX_HOME_LIST:-}" ]; then
+    while IFS= read -r codex_home; do
+        [ -n "$codex_home" ] || continue
+        verify_link "codex" "${codex_home}/skills" "codex"
+    done <<< "$CODEX_HOME_LIST"
 fi
 [ -d "${HOME}/.gemini" ] && verify_link "gemini" "$GEMINI_SKILLS" "dir"
 
