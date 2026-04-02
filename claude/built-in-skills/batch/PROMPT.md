@@ -99,7 +99,7 @@ After you finish implementing the change:
 ```javascript
 {
   name: "batch",
-  description: "Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR.",
+  description: "Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each attempt to open a PR.",
   whenToUse: "Use when the user wants to make a sweeping, mechanical change across many files (migrations, refactors, bulk renames) that can be decomposed into independent parallel units.",
   argumentHint: "<instruction>",
   userInvocable: true,
