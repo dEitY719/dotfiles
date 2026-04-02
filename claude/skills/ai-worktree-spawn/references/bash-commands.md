@@ -53,6 +53,22 @@ detect_ai_agent() {
 AGENT="$(detect_ai_agent "${AGENT_OVERRIDE:-}")"
 ```
 
+## Step 1.5: Detect git-crypt
+
+```bash
+# Check if repo uses git-crypt by looking for .gitattributes filter entries
+GIT_CRYPT_ACTIVE=false
+if git config --get filter.git-crypt.smudge >/dev/null 2>&1; then
+  GIT_CRYPT_ACTIVE=true
+fi
+
+# Build git-crypt bypass flags for worktree creation
+GIT_CRYPT_FLAGS=()
+if [[ "$GIT_CRYPT_ACTIVE" == true ]]; then
+  GIT_CRYPT_FLAGS=(-c filter.git-crypt.smudge=cat -c filter.git-crypt.clean=cat)
+fi
+```
+
 ## Step 3: Compute Project Name and Index
 
 ```bash
@@ -177,12 +193,24 @@ BASE_REF="$(resolve_base_ref "${BASE_OVERRIDE:-}")"
 ## Step 6: Create Worktree
 
 ```bash
+# Use GIT_CRYPT_FLAGS from Step 1.5 (empty array if no git-crypt)
 if git show-ref --verify --quiet "refs/heads/${BRANCH}"; then
     # Existing branch -- no -b flag
-    git worktree add "${WORKTREE_PATH}" "${BRANCH}"
+    git "${GIT_CRYPT_FLAGS[@]}" worktree add "${WORKTREE_PATH}" "${BRANCH}"
 else
     # New branch -- create with -b
-    git worktree add -b "${BRANCH}" "${WORKTREE_PATH}" "${BASE_REF}"
+    git "${GIT_CRYPT_FLAGS[@]}" worktree add -b "${BRANCH}" "${WORKTREE_PATH}" "${BASE_REF}"
+fi
+
+# If git-crypt is active, disable filters in the new worktree permanently.
+# Encrypted files (.env, .secrets) stay as binary -- this is intentional.
+# The worktree is for code work; secrets are not needed.
+if [[ "$GIT_CRYPT_ACTIVE" == true ]]; then
+    git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.smudge cat
+    git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.clean cat
+    git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.required false
+    # Re-checkout so worktree-local config takes effect cleanly
+    git -C "${WORKTREE_PATH}" checkout -- . 2>/dev/null
 fi
 ```
 

@@ -26,3 +26,4 @@ command) and stop without creating anything.
 | Parent dir not writable | Print error, stop |
 | Lock acquisition failed (3 retries) | Print error, stop |
 | Stale lock (age > 10s) | Auto-remove lock, retry |
+| git-crypt active in repo | Auto-bypass: create worktree with filter disabled, encrypted files stay as binary |
