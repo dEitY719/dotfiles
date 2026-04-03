@@ -196,8 +196,9 @@ EOF
 gwt() {
     case "${1:-}" in
         add)      shift; git_worktree_add "$@" ;;
-        list|ls)  shift; git worktree list "$@" ;;
-        remove|rm) shift; git worktree remove "$@" ;;
+        list|ls)  shift; git_worktree_list "$@" ;;
+        remove|rm) shift; git_worktree_remove "$@" ;;
+        prune)    shift; git worktree prune "$@" ;;
         spawn)    shift; git_worktree_spawn "$@" ;;
         teardown) shift; git_worktree_teardown "$@" ;;
         -h|--help|help|"")
@@ -206,8 +207,9 @@ gwt() {
             ux_info ""
             ux_info "Commands:"
             ux_info "  add <path> [branch] [start]    create git-crypt safe worktree"
-            ux_info "  list, ls                       list worktrees"
-            ux_info "  remove, rm <path>              remove worktree"
+            ux_info "  list, ls                       list worktrees (with hints)"
+            ux_info "  remove, rm <path> [--force]    remove worktree + branch"
+            ux_info "  prune                          clean up stale worktree refs"
             ux_info "  spawn [agent] [--task slug]    auto-create AI worktree"
             ux_info "  teardown [--force]             auto-remove AI worktree"
             ux_info ""
@@ -219,6 +221,164 @@ gwt() {
             return 1
             ;;
     esac
+}
+
+# ============================================================================
+# Worktree list — formatted output with column headers and remove hint
+# Usage: git_worktree_list
+# ============================================================================
+git_worktree_list() {
+    local wt_output
+    wt_output="$(git worktree list)"
+
+    local wt_count
+    wt_count=$(printf '%s\n' "$wt_output" | wc -l)
+
+    ux_header "Git worktrees ($wt_count)"
+    {
+        printf '[path] [commit] [branch]\n'
+        printf '%s\n' "$wt_output"
+    } | column -t
+
+    if [ "$wt_count" -gt 1 ]; then
+        echo
+        ux_info "To remove: gwt remove [path]"
+    fi
+}
+
+# ============================================================================
+# Worktree remove — remove worktree AND its associated branch
+# Usage: git_worktree_remove <path> [--force]
+# ============================================================================
+git_worktree_remove() {
+    # zsh compatibility
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
+
+    case "${1:-}" in
+        -h|--help|help)
+            ux_header "gwt remove - remove worktree and branch"
+            ux_info "Usage: gwt remove <path|agent> [--force]"
+            ux_info ""
+            ux_info "  <path>     full or relative worktree path"
+            ux_info "  <agent>    agent name (claude, codex, gemini, ...)"
+            ux_info "             removes ALL worktrees matching *-<agent>-*"
+            ux_info "  --force    force remove + force delete unmerged branch"
+            return 0
+            ;;
+        "")
+            ux_error "Usage: gwt remove <path|agent> [--force]"
+            return 1
+            ;;
+    esac
+
+    local target="$1"
+    local force=false
+    [ "${2:-}" = "--force" ] && force=true
+
+    # Known agent names — always resolve as agent pattern, never as local path
+    case "$target" in
+        claude|codex|gemini|opencode|cursor|copilot|agent)
+            ;;  # fall through to agent resolve below
+        *)
+            # Not an agent name: treat as direct path
+            if [ -d "$target" ] || [ -e "$target" ]; then
+                _gwt_remove_one "$target" "$force"
+                return $?
+            fi
+            ;;
+    esac
+
+    # Resolve agent name (or unknown target) to worktree path(s)
+    local project parent matches=""
+    project="$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")"
+    parent="$(dirname "$(git rev-parse --show-toplevel 2>/dev/null)")"
+    local match_count=0
+
+    for dir in "$parent/${project}-${target}"-*/; do
+        if [ -d "$dir" ]; then
+            matches="${matches}${dir%/}
+"
+            match_count=$((match_count + 1))
+        fi
+    done
+
+    if [ "$match_count" -eq 0 ]; then
+        # Fallback: check for registered but missing worktrees (orphan cleanup)
+        local wt_registered=""
+        wt_registered="$(git worktree list --porcelain | while IFS= read -r line; do
+            case "$line" in
+                "worktree "*"-${target}-"*) printf '%s\n' "${line#worktree }" ;;
+            esac
+        done)"
+
+        if [ -n "$wt_registered" ]; then
+            git worktree prune
+            ux_success "Pruned stale worktree refs for '$target'"
+            git for-each-ref --format='%(refname:short)' "refs/heads/wt/${target}/" | while IFS= read -r branch; do
+                if git branch -d "$branch" 2>/dev/null; then
+                    ux_success "Branch deleted: $branch"
+                elif [ "$force" = true ]; then
+                    git branch -D "$branch" 2>/dev/null
+                    ux_success "Branch force-deleted: $branch"
+                else
+                    ux_warning "Branch '$branch' not fully merged. Use --force to delete."
+                fi
+            done
+            return 0
+        fi
+
+        ux_error "No worktree found: $target"
+        ux_info "  No *-${target}-* worktrees exist."
+        ux_info "  Run 'gwt list' to see available worktrees."
+        return 1
+    fi
+
+    # Remove each matched worktree
+    while IFS= read -r wt_path; do
+        [ -n "$wt_path" ] || continue
+        _gwt_remove_one "$wt_path" "$force"
+    done <<EOF
+$matches
+EOF
+}
+
+# Internal: remove a single worktree + its branch
+_gwt_remove_one() {
+    local wt_path="$1" force="$2"
+
+    # Detect branch before removing worktree
+    local branch=""
+    if [ -d "$wt_path" ]; then
+        branch="$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null)" || true
+    fi
+
+    # Remove worktree
+    if ! git worktree remove "$wt_path" 2>/dev/null; then
+        if [ "$force" = true ]; then
+            git worktree remove --force "$wt_path" || { ux_error "Failed to remove: $wt_path"; return 1; }
+        else
+            ux_error "Cannot remove: $wt_path"
+            ux_info "  Use: gwt remove $wt_path --force"
+            return 1
+        fi
+    fi
+    git worktree prune
+
+    ux_success "Worktree removed: $wt_path"
+
+    # Delete branch (skip main/master)
+    if [ -n "$branch" ] && [ "$branch" != "main" ] && [ "$branch" != "master" ] && [ "$branch" != "HEAD" ]; then
+        if git branch -d "$branch" 2>/dev/null; then
+            ux_success "Branch deleted: $branch"
+        elif [ "$force" = true ]; then
+            git branch -D "$branch" 2>/dev/null
+            ux_success "Branch force-deleted: $branch"
+        else
+            ux_warning "Branch '$branch' not fully merged. Use --force to delete."
+        fi
+    fi
 }
 
 git_worktree_add() {
@@ -249,8 +409,24 @@ git_worktree_add() {
     fi || return 1
 
     # Sparse-checkout: include everything except git-crypt encrypted files
+    # Dynamically parse .gitattributes for filter=git-crypt patterns
+    local repo_root excludes="" exclude_display=""
+    repo_root="$(git rev-parse --show-toplevel)"
+    if [ -f "$repo_root/.gitattributes" ]; then
+        while IFS= read -r line; do
+            case "$line" in
+                *filter=git-crypt*)
+                    local pattern
+                    pattern="$(printf '%s' "$line" | awk '{print $1}')"
+                    excludes="${excludes}!/${pattern}\n"
+                    exclude_display="${exclude_display} ${pattern}"
+                    ;;
+            esac
+        done < "$repo_root/.gitattributes"
+    fi
+
     git -C "$wt_path" sparse-checkout init --no-cone
-    printf '/*\n!/.env\n!/.secrets\n' | git -C "$wt_path" sparse-checkout set --stdin
+    printf "/*\n${excludes}" | git -C "$wt_path" sparse-checkout set --stdin
 
     git -C "$wt_path" checkout || {
         ux_error "Checkout failed in worktree: $wt_path"
@@ -258,7 +434,9 @@ git_worktree_add() {
     }
 
     ux_success "Worktree ready: $wt_path"
-    ux_info "  (git-crypt files excluded: .env, .secrets/)"
+    if [ -n "$exclude_display" ]; then
+        ux_info "  git-crypt excluded:${exclude_display}"
+    fi
 }
 
 # ============================================================================
