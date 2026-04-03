@@ -3,7 +3,7 @@
 #   ~/.config/ghostty/config -> ~/dotfiles/ghostty/config
 
 # Appearance
-theme = dark:catppuccin-mocha,light:catppuccin-latte
+theme = dark:Catppuccin Mocha,light:Catppuccin Latte
 font-family = "Hack Nerd Font Mono"
 font-size = 14
 background-opacity = 0.8
