@@ -223,7 +223,7 @@ git_worktree_add() {
 
 # ============================================================================
 # Worktree spawn — auto-index, auto-branch, log
-# Usage: git_worktree_spawn [--task <slug>] [--base <ref>]
+# Usage: git_worktree_spawn [<agent>] [--task <slug>] [--base <ref>]
 # ============================================================================
 git_worktree_spawn() {
     # zsh compatibility
@@ -231,14 +231,31 @@ git_worktree_spawn() {
         emulate -L sh
     fi
 
-    local task="" base=""
+    local task="" base="" agent=""
 
     # Parse arguments
     while [ $# -gt 0 ]; do
         case "$1" in
+            -h|--help|help)
+                ux_header "gwt-spawn - AI worktree auto-creation"
+                ux_info "Usage: gwt-spawn [<agent>] [--task <slug>] [--base <ref>]"
+                ux_info ""
+                ux_info "Arguments:"
+                ux_info "  <agent>          claude | codex | gemini | opencode | cursor (auto-detect if omitted)"
+                ux_info "  --task <slug>    Add task slug to branch name"
+                ux_info "  --base <ref>     Base branch/commit (default: origin/main)"
+                ux_info ""
+                ux_info "Examples:"
+                ux_info "  gwt-spawn                          # auto-detect agent"
+                ux_info "  gwt-spawn claude                   # ../<project>-claude-1  wt/claude/1"
+                ux_info "  gwt-spawn codex --task login-fix   # ../<project>-codex-1   wt/codex/1-login-fix"
+                return 0
+                ;;
             --task) task="$2"; shift 2 ;;
             --base) base="$2"; shift 2 ;;
-            *) ux_error "Unknown option: $1"; return 1 ;;
+            claude|codex|gemini|opencode|cursor|copilot)
+                agent="$1"; shift ;;
+            *) ux_error "Unknown option: $1. Use --help for usage."; return 1 ;;
         esac
     done
 
@@ -253,12 +270,14 @@ git_worktree_spawn() {
         return 1
     fi
 
-    # Detect agent
-    local agent="agent"
-    if [ "${CLAUDECODE:-}" = "1" ]; then agent="claude"
-    elif [ "${GEMINI_CLI:-}" = "1" ]; then agent="gemini"
-    elif [ "${CODEX_CLI:-}" = "1" ]; then agent="codex"
-    elif [ "${CURSOR:-}" = "1" ] || [ "${TERM_PROGRAM:-}" = "cursor" ]; then agent="cursor"
+    # Detect agent (explicit arg > env vars > fallback)
+    if [ -z "$agent" ]; then
+        if [ "${CLAUDECODE:-}" = "1" ]; then agent="claude"
+        elif [ "${GEMINI_CLI:-}" = "1" ]; then agent="gemini"
+        elif [ "${CODEX_CLI:-}" = "1" ]; then agent="codex"
+        elif [ "${CURSOR:-}" = "1" ] || [ "${TERM_PROGRAM:-}" = "cursor" ]; then agent="cursor"
+        else agent="agent"
+        fi
     fi
 
     # Compute project, parent, next index
