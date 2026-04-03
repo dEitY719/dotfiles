@@ -53,6 +53,7 @@ tmux_help() {
     ux_bullet "tmux 안에서 prefix+I 로 플러그인 활성화"
 
     ux_section "Related Help"
+    ux_bullet "Cheat sheet: ${UX_BOLD}https://tmuxcheatsheet.com/${UX_RESET}"
     ux_bullet "Terminal: ${UX_BOLD}ghostty-help${UX_RESET}"
     ux_bullet "Zsh shell: ${UX_BOLD}zsh-help${UX_RESET}"
 }
