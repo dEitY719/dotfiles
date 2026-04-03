@@ -190,10 +190,23 @@ EOF
 # Usage: git_worktree_add <path> [<new-branch> [<start-point>]]
 # ============================================================================
 git_worktree_add() {
-    if [ -z "$1" ]; then
-        ux_error "Usage: git_worktree_add <path> [<new-branch> [<start-point>]]"
-        return 1
-    fi
+    case "${1:-}" in
+        -h|--help|help)
+            ux_info "Usage: gwt <path> [<new-branch> [<start-point>]]"
+            ux_info "  Creates a git-crypt safe worktree (encrypted files excluded)"
+            ux_info ""
+            ux_info "Related commands:"
+            ux_info "  gwtl              list worktrees"
+            ux_info "  gwtr <path>       remove worktree"
+            ux_info "  gwt-spawn [agent] auto-create AI worktree (gwt-spawn --help)"
+            ux_info "  gwt-teardown      auto-remove AI worktree from inside it"
+            return 0
+            ;;
+        "")
+            ux_error "Usage: gwt <path> [<new-branch> [<start-point>]]"
+            return 1
+            ;;
+    esac
 
     local wt_path="$1"
     local branch="$2"
