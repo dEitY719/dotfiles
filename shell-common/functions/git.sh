@@ -189,21 +189,47 @@ EOF
 # Creates a worktree without checking out git-crypt encrypted files
 # Usage: git_worktree_add <path> [<new-branch> [<start-point>]]
 # ============================================================================
+# ============================================================================
+# gwt — git worktree dispatcher
+# Usage: gwt <subcommand> [args...]
+# ============================================================================
+gwt() {
+    case "${1:-}" in
+        add)      shift; git_worktree_add "$@" ;;
+        list|ls)  shift; git worktree list "$@" ;;
+        remove|rm) shift; git worktree remove "$@" ;;
+        spawn)    shift; git_worktree_spawn "$@" ;;
+        teardown) shift; git_worktree_teardown "$@" ;;
+        -h|--help|help|"")
+            ux_header "gwt - git worktree manager"
+            ux_info "Usage: gwt <command> [args...]"
+            ux_info ""
+            ux_info "Commands:"
+            ux_info "  add <path> [branch] [start]   create git-crypt safe worktree"
+            ux_info "  list                           list worktrees"
+            ux_info "  remove <path>                  remove worktree"
+            ux_info "  spawn [agent] [--task slug]    auto-create AI worktree"
+            ux_info "  teardown [--force]             auto-remove AI worktree"
+            ux_info ""
+            ux_info "Run 'gwt <command> --help' for command-specific help."
+            return 0
+            ;;
+        *)
+            ux_error "Unknown command: $1. Run 'gwt help' for usage."
+            return 1
+            ;;
+    esac
+}
+
 git_worktree_add() {
     case "${1:-}" in
-        -h|--help|help)
-            ux_header "gwt - git-crypt safe worktree"
-            ux_info "Usage: gwt <path> [<new-branch> [<start-point>]]"
-            ux_info ""
-            ux_info "Related commands:"
-            ux_info "  gwtl              list worktrees"
-            ux_info "  gwtr <path>       remove worktree"
-            ux_info "  gwt-spawn [agent] auto-create AI worktree (gwt-spawn --help)"
-            ux_info "  gwt-teardown      auto-remove AI worktree from inside it"
+        -h|--help)
+            ux_info "Usage: gwt add <path> [<new-branch> [<start-point>]]"
+            ux_info "  Creates a git-crypt safe worktree (encrypted files excluded)"
             return 0
             ;;
         "")
-            ux_error "Usage: gwt <path> [<new-branch> [<start-point>]]"
+            ux_error "Usage: gwt add <path> [<new-branch> [<start-point>]]"
             return 1
             ;;
     esac
@@ -250,8 +276,8 @@ git_worktree_spawn() {
     while [ $# -gt 0 ]; do
         case "$1" in
             -h|--help|help)
-                ux_header "gwt-spawn - AI worktree auto-creation"
-                ux_info "Usage: gwt-spawn [<agent>] [--task <slug>] [--base <ref>]"
+                ux_header "gwt spawn - AI worktree auto-creation"
+                ux_info "Usage: gwt spawn [<agent>] [--task <slug>] [--base <ref>]"
                 ux_info ""
                 ux_info "Arguments:"
                 ux_info "  <agent>          claude | codex | gemini | opencode | cursor (auto-detect if omitted)"
@@ -259,9 +285,9 @@ git_worktree_spawn() {
                 ux_info "  --base <ref>     Base branch/commit (default: origin/main)"
                 ux_info ""
                 ux_info "Examples:"
-                ux_info "  gwt-spawn                          # auto-detect agent"
-                ux_info "  gwt-spawn claude                   # ../<project>-claude-1  wt/claude/1"
-                ux_info "  gwt-spawn codex --task login-fix   # ../<project>-codex-1   wt/codex/1-login-fix"
+                ux_info "  gwt spawn                          # auto-detect agent"
+                ux_info "  gwt spawn claude                   # ../<project>-claude-1  wt/claude/1"
+                ux_info "  gwt spawn codex --task login-fix   # ../<project>-codex-1   wt/codex/1-login-fix"
                 return 0
                 ;;
             --task) task="$2"; shift 2 ;;

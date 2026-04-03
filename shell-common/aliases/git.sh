@@ -79,9 +79,5 @@ hook_check() {
 
 alias hook-check='hook_check'                     # Git hook 설정 진단 (hook-check --help로 도움말 보기)
 
-# Git worktree
-alias gwt='git_worktree_add'                      # git-crypt safe worktree 생성 (gwt <path> [<branch>])
-alias gwtl='git worktree list'                     # worktree 목록 보기
-alias gwtr='git worktree remove'                   # worktree 제거 (gwtr <path>)
-alias gwt-spawn='git_worktree_spawn'               # AI worktree 자동 생성 (auto-index, auto-branch)
-alias gwt-teardown='git_worktree_teardown'          # AI worktree 정리 (remove + sync + branch delete)
+# Git worktree (gwt is a function in functions/git.sh)
+# Usage: gwt add|list|remove|spawn|teardown [args...]
