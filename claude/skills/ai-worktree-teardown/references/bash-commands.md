@@ -92,35 +92,9 @@ git worktree prune
 echo "Worktree removed: $WORKTREE_PATH"
 ```
 
-## Step 6: Delete Branch
+## Step 6: Sync Main
 
-```bash
-delete_branch() {
-  local branch="$1"
-  local keep="${KEEP_BRANCH:-false}"
-
-  if [[ "$keep" == true ]]; then
-    echo "Branch kept: $branch (--keep-branch)"
-    return
-  fi
-
-  if git branch -d "$branch" 2>/dev/null; then
-    echo "Branch deleted: $branch"
-  else
-    if [[ "${FORCE:-false}" == true ]]; then
-      git branch -D "$branch"
-      echo "Branch force-deleted: $branch (was not fully merged)"
-    else
-      echo "Warning: Branch '$branch' not fully merged into main."
-      echo "  Use --force to delete anyway, or --keep-branch to keep it."
-    fi
-  fi
-}
-
-delete_branch "$BRANCH"
-```
-
-## Step 7: Sync Main
+Sync main BEFORE branch delete so `git branch -d` can verify merge status.
 
 ```bash
 # Resolve main branch name
@@ -151,6 +125,36 @@ if ! git pull origin "$MAIN_BRANCH"; then
   # If unresolvable:
   #   echo "Error: Cannot auto-resolve conflicts. Manual intervention needed."
 fi
+```
+
+## Step 7: Delete Branch
+
+Runs after sync so local main contains the merge commit.
+
+```bash
+delete_branch() {
+  local branch="$1"
+  local keep="${KEEP_BRANCH:-false}"
+
+  if [[ "$keep" == true ]]; then
+    echo "Branch kept: $branch (--keep-branch)"
+    return
+  fi
+
+  if git branch -d "$branch" 2>/dev/null; then
+    echo "Branch deleted: $branch"
+  else
+    if [[ "${FORCE:-false}" == true ]]; then
+      git branch -D "$branch"
+      echo "Branch force-deleted: $branch (was not fully merged)"
+    else
+      echo "Warning: Branch '$branch' not fully merged into main."
+      echo "  Use --force to delete anyway, or --keep-branch to keep it."
+    fi
+  fi
+}
+
+delete_branch "$BRANCH"
 ```
 
 ## Step 8: Log
