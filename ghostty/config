@@ -1,0 +1,15 @@
+# Ghostty Terminal Configuration
+# Managed via dotfiles symlink:
+#   ~/.config/ghostty/config -> ~/dotfiles/ghostty/config
+
+# Appearance
+theme = dark:Catppuccin Mocha,light:Catppuccin Latte
+font-family = "Hack Nerd Font Mono"
+font-size = 14
+background-opacity = 0.8
+background-blur-radius = 10
+
+# Quick Terminal
+keybind = global:cmd+grave_accent=toggle_quick_terminal
+quick-terminal-position = bottom
+quick-terminal-autohide
