@@ -6,25 +6,35 @@ ghostty_init() {
     local source="${DOTFILES_ROOT:-$HOME/dotfiles}/ghostty/config"
     local target="$HOME/.config/ghostty/config"
 
+    local target_dir="$(dirname "$target")"
+
     echo "Initializing Ghostty configuration..."
 
     # Create directory if needed
-    if [ ! -d "$(dirname "$target")" ]; then
-        echo "Creating $(dirname "$target") directory..."
-        mkdir -p "$(dirname "$target")"
+    if [ ! -d "$target_dir" ]; then
+        echo "Creating $target_dir directory..."
+        mkdir -p "$target_dir"
     fi
 
-    # Remove auto-generated config.ghostty if empty
-    if [ -f "$HOME/.config/ghostty/config.ghostty" ]; then
-        if [ ! -s "$HOME/.config/ghostty/config.ghostty" ]; then
-            rm "$HOME/.config/ghostty/config.ghostty"
+    # Ghostty snap auto-generates an empty config.ghostty on first run;
+    # remove it to avoid confusion with our managed config file.
+    if [ -f "$target_dir/config.ghostty" ]; then
+        if [ ! -s "$target_dir/config.ghostty" ]; then
+            rm "$target_dir/config.ghostty"
             echo "Removed empty config.ghostty (auto-generated)"
         fi
     fi
 
-    # Handle symbolic link
+    # Handle symbolic link (including dangling symlinks)
     if [ -L "$target" ]; then
-        echo "config symbolic link already exists"
+        if [ -e "$target" ]; then
+            echo "config symbolic link already exists"
+        else
+            echo "Removing dangling symbolic link..."
+            rm -f "$target"
+            ln -s "$source" "$target"
+            echo "Created symbolic link for config"
+        fi
     elif [ -f "$target" ]; then
         echo "config exists as regular file"
         echo "Backing up to config.backup..."
