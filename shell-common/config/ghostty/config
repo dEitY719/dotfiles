@@ -1,5 +1,6 @@
 # Ghostty Terminal Configuration
-# Managed via dotfiles symlink: ~/.config/ghostty/config -> this file
+# Managed via dotfiles symlink:
+#   ~/.config/ghostty/config -> ~/dotfiles/shell-common/config/ghostty/config
 
 # Appearance
 theme = dark:catppuccin-mocha,light:catppuccin-latte
