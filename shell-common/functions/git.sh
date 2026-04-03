@@ -210,8 +210,8 @@ gwt() {
             ux_info "  list, ls                       list worktrees (with hints)"
             ux_info "  remove, rm <path> [--force]    remove worktree + branch"
             ux_info "  prune                          clean up stale worktree refs"
-            ux_info "  spawn [agent] [--task slug]    auto-create AI worktree"
-            ux_info "  teardown [--force]             auto-remove AI worktree"
+            ux_info "  spawn [agent] [--task slug]    create AI worktree (run from main repo)"
+            ux_info "  teardown [--force]             self-cleanup (run from inside worktree)"
             ux_info ""
             ux_info "Run 'gwt <command> --help' for command-specific help."
             return 0
