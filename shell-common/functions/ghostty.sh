@@ -3,7 +3,7 @@
 # Ghostty terminal configuration management
 
 ghostty_init() {
-    local source="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/config/ghostty/config"
+    local source="${DOTFILES_ROOT:-$HOME/dotfiles}/ghostty/config"
     local target="$HOME/.config/ghostty/config"
 
     echo "Initializing Ghostty configuration..."
@@ -44,7 +44,7 @@ ghostty_init() {
 }
 
 ghostty_edit_config() {
-    local config_file="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/config/ghostty/config"
+    local config_file="${DOTFILES_ROOT:-$HOME/dotfiles}/ghostty/config"
 
     if [ ! -f "$config_file" ]; then
         echo "Config file not found: $config_file"
