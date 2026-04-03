@@ -192,8 +192,8 @@ EOF
 git_worktree_add() {
     case "${1:-}" in
         -h|--help|help)
+            ux_header "gwt - git-crypt safe worktree"
             ux_info "Usage: gwt <path> [<new-branch> [<start-point>]]"
-            ux_info "  Creates a git-crypt safe worktree (encrypted files excluded)"
             ux_info ""
             ux_info "Related commands:"
             ux_info "  gwtl              list worktrees"
