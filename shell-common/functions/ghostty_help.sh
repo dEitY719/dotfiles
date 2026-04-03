@@ -29,7 +29,7 @@ ghostty_help() {
     ux_table_row "ghostty +show-config" "Show current configuration"
 
     ux_section "Related Help"
-    ux_bullet "Terminal multiplexer: ${UX_BOLD}tmux${UX_RESET}"
+    ux_bullet "Terminal multiplexer: ${UX_BOLD}tmux-help${UX_RESET}"
     ux_bullet "Zsh shell: ${UX_BOLD}zsh-help${UX_RESET}"
 }
 
