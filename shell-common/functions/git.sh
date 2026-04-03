@@ -4,7 +4,7 @@
 # (No bash-specific features)
 
 # Override Oh My Zsh's git aliases with our functions (zsh only)
-unalias gl gd glum glog 2>/dev/null || true
+unalias gl gd glum glog gwt 2>/dev/null || true
 
 # ============================================================================
 # Shared git log formatter
