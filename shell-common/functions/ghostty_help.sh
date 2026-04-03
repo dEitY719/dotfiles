@@ -14,7 +14,7 @@ ghostty_help() {
     ux_table_row "ghostty_edit_config" "config 파일 편집 (symlinked)"
 
     ux_section "Symlink Path"
-    ux_bullet "Source: ~/dotfiles/shell-common/config/ghostty/config"
+    ux_bullet "Source: ~/dotfiles/ghostty/config"
     ux_bullet "Target: ~/.config/ghostty/config"
 
     ux_section "Key Settings"
