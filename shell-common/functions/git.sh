@@ -205,9 +205,9 @@ gwt() {
             ux_info "Usage: gwt <command> [args...]"
             ux_info ""
             ux_info "Commands:"
-            ux_info "  add <path> [branch] [start]   create git-crypt safe worktree"
-            ux_info "  list                           list worktrees"
-            ux_info "  remove <path>                  remove worktree"
+            ux_info "  add <path> [branch] [start]    create git-crypt safe worktree"
+            ux_info "  list, ls                       list worktrees"
+            ux_info "  remove, rm <path>              remove worktree"
             ux_info "  spawn [agent] [--task slug]    auto-create AI worktree"
             ux_info "  teardown [--force]             auto-remove AI worktree"
             ux_info ""
@@ -223,9 +223,10 @@ gwt() {
 
 git_worktree_add() {
     case "${1:-}" in
-        -h|--help)
+        -h|--help|help)
+            ux_header "gwt add - git-crypt safe worktree"
             ux_info "Usage: gwt add <path> [<new-branch> [<start-point>]]"
-            ux_info "  Creates a git-crypt safe worktree (encrypted files excluded)"
+            ux_info "  Creates a worktree with git-crypt encrypted files excluded"
             return 0
             ;;
         "")
@@ -390,9 +391,18 @@ git_worktree_teardown() {
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            -h|--help|help)
+                ux_header "gwt teardown - AI worktree cleanup"
+                ux_info "Usage: gwt teardown [--force] [--keep-branch]"
+                ux_info ""
+                ux_info "Options:"
+                ux_info "  --force        discard uncommitted changes and force remove"
+                ux_info "  --keep-branch  keep the branch after removing worktree"
+                return 0
+                ;;
             --force) force=true; shift ;;
             --keep-branch) keep_branch=true; shift ;;
-            *) ux_error "Unknown option: $1"; return 1 ;;
+            *) ux_error "Unknown option: $1. Use --help for usage."; return 1 ;;
         esac
     done
 
