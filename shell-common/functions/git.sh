@@ -290,7 +290,7 @@ git_worktree_spawn() {
             local n="${dir##*-}"
             n="${n%/}"
             case "$n" in
-                *[!0-9]*) continue ;;
+                "" | *[!0-9]*) continue ;;
             esac
             if [ "$n" -ge "$next_index" ]; then
                 next_index=$((n + 1))
@@ -417,7 +417,10 @@ git_worktree_teardown() {
     if ! git rev-parse --verify --quiet "main" >/dev/null 2>&1; then
         main_branch="master"
     fi
-    git checkout "$main_branch" 2>/dev/null
+    if ! git checkout "$main_branch" 2>/dev/null; then
+        ux_error "Failed to checkout $main_branch in main repository."
+        return 1
+    fi
     git pull origin "$main_branch" 2>/dev/null || ux_warning "Pull failed (network?). Branch delete may misjudge merge status."
 
     # Delete branch
