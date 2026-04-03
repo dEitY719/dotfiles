@@ -46,15 +46,16 @@ Extract from current worktree:
 
 `git worktree remove <path>`. On failure, try `--force` if user opted in.
 
-### Step 6: Delete Branch
+### Step 6: Sync Main
+
+`git checkout main && git pull origin main`.
+Must run BEFORE branch delete so `git branch -d` can verify merge status.
+If pull conflicts, the AI agent attempts to resolve them and reports.
+
+### Step 7: Delete Branch
 
 `git branch -d <branch>` (safe delete — verifies merge status).
 Skip if `--keep-branch` is given. Warn if branch is not fully merged.
-
-### Step 7: Sync Main
-
-`git checkout main && git pull origin main`.
-If pull conflicts, the AI agent attempts to resolve them and reports.
 
 ### Step 8: Log
 
