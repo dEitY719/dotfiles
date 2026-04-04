@@ -210,7 +210,7 @@ gwt() {
             ux_info "  list, ls                       list worktrees (with hints)"
             ux_info "  remove, rm <path|all> [--force] remove worktree + branch"
             ux_info "  prune                          clean up stale worktree refs"
-            ux_info "  spawn [agent] [--task slug]    create AI worktree (run from main repo)"
+            ux_info "  spawn [ai] [--task slug]       create AI worktree (run from main repo)"
             ux_info "  teardown [--force]             self-cleanup (run from inside worktree)"
             ux_info ""
             ux_info "Run 'gwt <command> --help' for command-specific help."
@@ -519,7 +519,7 @@ git_worktree_spawn() {
                 ux_info "  --base <ref>     Base branch/commit (default: origin/main)"
                 ux_info ""
                 ux_info "Examples:"
-                ux_info "  gwt spawn                          # auto-detect agent"
+                ux_info "  gwt spawn                          # auto-detect AI (default=claude)"
                 ux_info "  gwt spawn claude                   # ../<project>-claude-1  wt/claude/1"
                 ux_info "  gwt spawn codex --task login-fix   # ../<project>-codex-1   wt/codex/1-login-fix"
                 return 0
@@ -548,8 +548,9 @@ git_worktree_spawn() {
         if [ "${CLAUDECODE:-}" = "1" ]; then agent="claude"
         elif [ "${GEMINI_CLI:-}" = "1" ]; then agent="gemini"
         elif [ "${CODEX_CLI:-}" = "1" ]; then agent="codex"
+        elif [ "${OPENCODE:-}" = "1" ]; then agent="opencode"
         elif [ "${CURSOR:-}" = "1" ] || [ "${TERM_PROGRAM:-}" = "cursor" ]; then agent="cursor"
-        else agent="agent"
+        else agent="claude"
         fi
     fi
 
