@@ -52,6 +52,10 @@ tmux_help() {
     ux_bullet "Setup:   ${UX_BOLD}marmonitor setup tmux${UX_RESET}"
     ux_bullet "tmux 안에서 prefix+I 로 플러그인 활성화"
 
+    ux_section "Custom Commands"
+    ux_table_row "tmux-spawn [agent]" "3-pane AI 세션 생성"
+    ux_table_row "tmux-teardown [name|all]" "세션 정리 (기본: all)"
+
     ux_section "Related Help"
     ux_bullet "Cheat sheet: ${UX_BOLD}https://tmuxcheatsheet.com/${UX_RESET}"
     ux_bullet "Terminal: ${UX_BOLD}ghostty-help${UX_RESET}"
