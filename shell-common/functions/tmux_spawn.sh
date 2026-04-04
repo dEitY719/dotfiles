@@ -36,9 +36,16 @@ tmux_spawn() {
     case "${1:-}" in
         -h|--help|help)
             ux_header "tmux-spawn - create tmux session with 3-pane layout"
-            ux_info "Usage: tmux-spawn [<agent>]"
+            ux_info "Usage: tmux-spawn [-w] [<agent>]"
+            ux_info ""
+            ux_info "Options:"
+            ux_info "  -w           Add new window to current session (must be inside tmux)"
             ux_info ""
             ux_info "Modes:"
+            ux_info "  (default)    Create new session with 3-pane layout"
+            ux_info "  -w           Add 3-pane window to current session"
+            ux_info ""
+            ux_info "Session naming:"
             ux_info "  Worktree dir  session = dir name, agent auto-detected"
             ux_info "  Main repo     session = <project>-<branch>, agent = claude"
             ux_info ""
@@ -53,6 +60,13 @@ tmux_spawn() {
             return 0
             ;;
     esac
+
+    # Parse -w flag
+    _ts_window_mode=0
+    if [ "${1:-}" = "-w" ]; then
+        _ts_window_mode=1
+        shift
+    fi
 
     _ts_arg="${1:-}"
     _ts_dir="$(pwd)"
@@ -93,6 +107,39 @@ tmux_spawn() {
 
     _ts_yolo="${_ts_agent}-yolo"
 
+    # --- Window mode: add new window to current session ---
+    if [ "$_ts_window_mode" = 1 ]; then
+        if [ -z "$TMUX" ]; then
+            ux_error "Option -w requires being inside a tmux session"
+            unset _ts_arg _ts_dir _ts_basename _ts_agent _ts_session \
+                  _ts_without_index _ts_candidate _ts_yolo _ts_window_mode
+            return 1
+        fi
+
+        _ts_cur_session="$(tmux display-message -p '#{session_name}')"
+
+        # Create new window named after agent
+        tmux new-window -t "$_ts_cur_session" -n "$_ts_agent" -c "$_ts_dir"
+        # Pane 1: right-top
+        tmux split-window -h -t "$_ts_cur_session" -c "$_ts_dir"
+        # Pane 2: right-bottom
+        tmux split-window -v -t "$_ts_cur_session" -c "$_ts_dir"
+
+        # Run ai-yolo in left pane (pane 0 of the new window)
+        _ts_new_win="$(tmux display-message -p '#{window_index}')"
+        tmux send-keys -t "${_ts_cur_session}:${_ts_new_win}.0" "$_ts_yolo" Enter
+
+        # Focus left pane
+        tmux select-pane -t "${_ts_cur_session}:${_ts_new_win}.0"
+
+        ux_success "Window '$_ts_agent' added to session '$_ts_cur_session' (3 panes, running $_ts_yolo)"
+
+        unset _ts_arg _ts_dir _ts_basename _ts_agent _ts_session \
+              _ts_without_index _ts_candidate _ts_yolo _ts_window_mode \
+              _ts_cur_session _ts_new_win
+        return 0
+    fi
+
     # Check if session already exists
     if tmux has-session -t "=$_ts_session" 2>/dev/null; then
         ux_warning "Session '$_ts_session' already exists"
@@ -103,7 +150,7 @@ tmux_spawn() {
             ux_info "Switch: tmux switch-client -t '$_ts_session'"
         fi
         unset _ts_arg _ts_dir _ts_basename _ts_agent _ts_session \
-              _ts_without_index _ts_candidate _ts_yolo
+              _ts_without_index _ts_candidate _ts_yolo _ts_window_mode
         return 0
     fi
 
@@ -133,7 +180,7 @@ tmux_spawn() {
     fi
 
     unset _ts_arg _ts_dir _ts_basename _ts_agent _ts_session \
-          _ts_without_index _ts_candidate _ts_yolo
+          _ts_without_index _ts_candidate _ts_yolo _ts_window_mode
 }
 
 tmux_teardown() {
