@@ -33,6 +33,27 @@ tmux_spawn() {
         return 1
     fi
 
+    case "${1:-}" in
+        -h|--help|help)
+            ux_header "tmux-spawn - create tmux session with 3-pane layout"
+            ux_info "Usage: tmux-spawn [<agent>]"
+            ux_info ""
+            ux_info "Modes:"
+            ux_info "  Worktree dir  session = dir name, agent auto-detected"
+            ux_info "  Main repo     session = <project>-<branch>, agent = claude"
+            ux_info ""
+            ux_info "Agents: claude, codex, gemini, opencode, cursor, copilot"
+            ux_info ""
+            ux_info "Layout:"
+            ux_info "  +----------+----------+"
+            ux_info "  |          | right-top|"
+            ux_info "  |   LEFT   +----------+"
+            ux_info "  | (ai-yolo)| right-bot|"
+            ux_info "  +----------+----------+"
+            return 0
+            ;;
+    esac
+
     _ts_arg="${1:-}"
     _ts_dir="$(pwd)"
     _ts_basename="$(basename "$_ts_dir")"
@@ -77,9 +98,9 @@ tmux_spawn() {
         ux_warning "Session '$_ts_session' already exists"
         if [ -z "$TMUX" ]; then
             ux_info "Attaching..."
-            tmux attach -t "=$_ts_session"
+            tmux attach -t "$_ts_session"
         else
-            ux_info "Switch: tmux switch-client -t '=$_ts_session'"
+            ux_info "Switch: tmux switch-client -t '$_ts_session'"
         fi
         unset _ts_arg _ts_dir _ts_basename _ts_agent _ts_session \
               _ts_without_index _ts_candidate _ts_yolo
@@ -87,30 +108,85 @@ tmux_spawn() {
     fi
 
     # --- Create session with 3-pane layout ---
+    # Note: = prefix works for has-session but NOT for pane-targeting
+    # commands (split-window, send-keys, select-pane) in tmux 3.4
     # Pane 0: left  (will run ai-yolo)
     tmux new-session -d -s "$_ts_session" -c "$_ts_dir"
     # Pane 1: right-top
-    tmux split-window -h -t "=$_ts_session" -c "$_ts_dir"
+    tmux split-window -h -t "$_ts_session" -c "$_ts_dir"
     # Pane 2: right-bottom (split right pane vertically)
-    tmux split-window -v -t "=$_ts_session" -c "$_ts_dir"
+    tmux split-window -v -t "$_ts_session" -c "$_ts_dir"
 
     # Run ai-yolo in the left pane (pane 0)
-    tmux send-keys -t "=${_ts_session}:0.0" "$_ts_yolo" Enter
+    tmux send-keys -t "${_ts_session}:0.0" "$_ts_yolo" Enter
 
     # Focus left pane
-    tmux select-pane -t "=${_ts_session}:0.0"
+    tmux select-pane -t "${_ts_session}:0.0"
 
     ux_success "Session '$_ts_session' created (3 panes, running $_ts_yolo)"
 
     # Attach or advise
     if [ -z "$TMUX" ]; then
-        tmux attach -t "=$_ts_session"
+        tmux attach -t "$_ts_session"
     else
-        ux_info "Switch: Ctrl+b s  or  tmux switch-client -t '=$_ts_session'"
+        ux_info "Switch: Ctrl+b s  or  tmux switch-client -t '$_ts_session'"
     fi
 
     unset _ts_arg _ts_dir _ts_basename _ts_agent _ts_session \
           _ts_without_index _ts_candidate _ts_yolo
 }
 
+tmux_teardown() {
+    if ! command -v tmux >/dev/null 2>&1; then
+        ux_error "tmux is not installed"
+        return 1
+    fi
+
+    _tt_target="${1:-all}"
+
+    case "$_tt_target" in
+        -h|--help|help)
+            ux_header "tmux-teardown - kill tmux sessions"
+            ux_info "Usage: tmux-teardown [all | <session-name>]"
+            ux_info ""
+            ux_info "  all (default)      kill ALL sessions"
+            ux_info "  <session-name>     kill a specific session"
+            unset _tt_target
+            return 0
+            ;;
+        all)
+            _tt_sessions="$(tmux list-sessions -F '#{session_name}' 2>/dev/null)"
+            if [ -z "$_tt_sessions" ]; then
+                ux_info "No tmux sessions running."
+                unset _tt_target _tt_sessions
+                return 0
+            fi
+
+            _tt_count="$(printf '%s\n' "$_tt_sessions" | wc -l)"
+            ux_warning "Killing $_tt_count session(s):"
+            printf '%s\n' "$_tt_sessions" | while IFS= read -r s; do
+                ux_info "  $s"
+            done
+
+            tmux kill-server
+            ux_success "All sessions killed."
+            unset _tt_target _tt_sessions _tt_count
+            ;;
+        *)
+            if tmux has-session -t "=$_tt_target" 2>/dev/null; then
+                tmux kill-session -t "=$_tt_target"
+                ux_success "Session '$_tt_target' killed."
+            else
+                ux_error "Session not found: $_tt_target"
+                ux_info "Running sessions:"
+                tmux list-sessions -F '  #{session_name}' 2>/dev/null || ux_info "  (none)"
+                unset _tt_target
+                return 1
+            fi
+            unset _tt_target
+            ;;
+    esac
+}
+
 alias tmux-spawn='tmux_spawn'
+alias tmux-teardown='tmux_teardown'
