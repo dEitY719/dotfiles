@@ -465,7 +465,14 @@
     # +42 if have staged changes.
     (( VCS_STATUS_NUM_STAGED     )) && res+=" ${modified}+${VCS_STATUS_NUM_STAGED}"
     # !42 if have unstaged changes.
-    (( VCS_STATUS_NUM_UNSTAGED   )) && res+=" ${modified}!${VCS_STATUS_NUM_UNSTAGED}"
+    # Subtract skip-worktree (sparse-checkout excluded) files from unstaged count
+    local _num_unstaged=$VCS_STATUS_NUM_UNSTAGED
+    if (( _num_unstaged )); then
+      local _skip_wt
+      _skip_wt=$(command git -C "${VCS_STATUS_WORKDIR}" ls-files -v 2>/dev/null | command grep -c '^S ')
+      (( _num_unstaged -= _skip_wt ))
+    fi
+    (( _num_unstaged > 0 )) && res+=" ${modified}!${_num_unstaged}"
     # ?42 if have untracked files. It's really a question mark, your font isn't broken.
     # See POWERLEVEL9K_VCS_UNTRACKED_ICON above if you want to use a different icon.
     # Remove the next line if you don't want to see untracked files at all.
