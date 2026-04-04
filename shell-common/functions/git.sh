@@ -496,7 +496,7 @@ git_worktree_add() {
 
 # ============================================================================
 # Worktree spawn — auto-index, auto-branch, log
-# Usage: git_worktree_spawn [<agent>] [--task <slug>] [--base <ref>]
+# Usage: git_worktree_spawn [<agent>] [--task <slug>] [--base <ref>] [--tmux]
 # ============================================================================
 git_worktree_spawn() {
     # zsh compatibility
@@ -504,33 +504,42 @@ git_worktree_spawn() {
         emulate -L sh
     fi
 
-    local task="" base="" agent=""
+    local task="" base="" agent="" use_tmux=0
 
     # Parse arguments
     while [ $# -gt 0 ]; do
         case "$1" in
             -h|--help|help)
                 ux_header "gwt spawn - AI worktree auto-creation"
-                ux_info "Usage: gwt spawn [<agent>] [--task <slug>] [--base <ref>]"
+                ux_info "Usage: gwt spawn [<agent>] [--task <slug>] [--base <ref>] [--tmux]"
                 ux_info ""
                 ux_info "Arguments:"
                 ux_info "  <agent>          claude | codex | gemini | opencode | cursor (auto-detect if omitted)"
                 ux_info "  --task <slug>    Add task slug to branch name"
                 ux_info "  --base <ref>     Base branch/commit (default: origin/main)"
+                ux_info "  --tmux           Auto-create tmux session/window with 3-pane layout"
                 ux_info ""
                 ux_info "Examples:"
                 ux_info "  gwt spawn                          # auto-detect AI (default=claude)"
                 ux_info "  gwt spawn claude                   # ../<project>-claude-1  wt/claude/1"
                 ux_info "  gwt spawn codex --task login-fix   # ../<project>-codex-1   wt/codex/1-login-fix"
+                ux_info "  gwt spawn gemini --tmux            # worktree + tmux window"
                 return 0
                 ;;
             --task) task="$2"; shift 2 ;;
             --base) base="$2"; shift 2 ;;
+            --tmux) use_tmux=1; shift ;;
             claude|codex|gemini|opencode|cursor|copilot)
                 agent="$1"; shift ;;
             *) ux_error "Unknown option: $1. Use --help for usage."; return 1 ;;
         esac
     done
+
+    # Validate --tmux dependency
+    if [ "$use_tmux" = 1 ] && ! command -v tmux >/dev/null 2>&1; then
+        ux_error "tmux is not installed (required for --tmux)"
+        return 1
+    fi
 
     # Must be inside a git repo, NOT a worktree
     local git_common git_dir
@@ -607,8 +616,18 @@ git_worktree_spawn() {
     ux_info "  Path:   $wt_path"
     ux_info "  Branch: $branch"
     ux_info "  Base:   $base"
-    ux_info ""
-    ux_info "  cd $wt_path"
+
+    # --- Optional tmux integration ---
+    if [ "$use_tmux" = 1 ]; then
+        _tmux_add_agent_window "$project" "$agent" "$wt_path"
+        ux_info "  tmux:   session '$project', window '$agent'"
+        if [ -z "$TMUX" ]; then
+            tmux attach -t "$project"
+        fi
+    else
+        ux_info ""
+        ux_info "  cd $wt_path"
+    fi
 }
 
 # ============================================================================
