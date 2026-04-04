@@ -158,7 +158,7 @@ tmux_spawn() {
     # Note: = prefix works for has-session but NOT for
     # session/pane-targeting commands in tmux 3.4
     # Pane 0: left  (will run ai-yolo)
-    tmux new-session -d -s "$_ts_session" -c "$_ts_dir"
+    tmux new-session -d -s "$_ts_session" -n "$_ts_agent" -c "$_ts_dir"
     # Pane 1: right-top
     tmux split-window -h -t "$_ts_session" -c "$_ts_dir"
     # Pane 2: right-bottom (split right pane vertically)
