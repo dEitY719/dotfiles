@@ -208,7 +208,7 @@ gwt() {
             ux_info "Commands:"
             ux_info "  add <path> [branch] [start]    create git-crypt safe worktree"
             ux_info "  list, ls                       list worktrees (with hints)"
-            ux_info "  remove, rm <path> [--force]    remove worktree + branch"
+            ux_info "  remove, rm <path|all> [--force] remove worktree + branch"
             ux_info "  prune                          clean up stale worktree refs"
             ux_info "  spawn [agent] [--task slug]    create AI worktree (run from main repo)"
             ux_info "  teardown [--force]             self-cleanup (run from inside worktree)"
@@ -259,11 +259,12 @@ git_worktree_remove() {
     case "${1:-}" in
         -h|--help|help)
             ux_header "gwt remove - remove worktree and branch"
-            ux_info "Usage: gwt remove <path|agent> [--force]"
+            ux_info "Usage: gwt remove <path|agent|all> [--force]"
             ux_info ""
             ux_info "  <path>     full or relative worktree path"
             ux_info "  <agent>    agent name (claude, codex, gemini, ...)"
             ux_info "             removes ALL worktrees matching *-<agent>-*"
+            ux_info "  all        remove ALL non-main worktrees"
             ux_info "  --force    force remove + force delete unmerged branch"
             return 0
             ;;
@@ -276,6 +277,60 @@ git_worktree_remove() {
     local target="$1"
     local force=false
     [ "${2:-}" = "--force" ] && force=true
+
+    # "all" — remove every non-main worktree
+    if [ "$target" = "all" ]; then
+        local main_wt
+        main_wt="$(git worktree list --porcelain | head -1)"
+        main_wt="${main_wt#worktree }"
+
+        local all_wts="" all_count=0
+        while IFS= read -r line; do
+            case "$line" in
+                "worktree "*)
+                    local wt="${line#worktree }"
+                    if [ "$wt" != "$main_wt" ]; then
+                        all_wts="${all_wts}${wt}
+"
+                        all_count=$((all_count + 1))
+                    fi
+                    ;;
+            esac
+        done <<EOF
+$(git worktree list --porcelain)
+EOF
+
+        if [ "$all_count" -eq 0 ]; then
+            ux_info "No extra worktrees to remove."
+            return 0
+        fi
+
+        ux_warning "This will remove $all_count worktree(s):"
+        while IFS= read -r wt; do
+            [ -n "$wt" ] || continue
+            ux_info "  $wt"
+        done <<EOF
+$all_wts
+EOF
+
+        if [ "$force" != true ]; then
+            printf 'Proceed? [y/N] '
+            read -r answer
+            case "$answer" in
+                [yY]*) ;;
+                *) ux_info "Aborted."; return 0 ;;
+            esac
+        fi
+
+        local fail_count=0
+        while IFS= read -r wt; do
+            [ -n "$wt" ] || continue
+            _gwt_remove_one "$wt" "$force" || fail_count=$((fail_count + 1))
+        done <<EOF
+$all_wts
+EOF
+        [ "$fail_count" -eq 0 ] && return 0 || return 1
+    fi
 
     # Known agent names — always resolve as agent pattern, never as local path
     case "$target" in
