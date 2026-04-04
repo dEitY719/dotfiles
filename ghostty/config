@@ -3,10 +3,12 @@
 #   ~/.config/ghostty/config -> ~/dotfiles/ghostty/config
 
 # Appearance
-theme = dark:Catppuccin Mocha,light:Catppuccin Latte
+# theme = dark:Catppuccin Mocha,light:Catppuccin Latte
+# Catppuccin 팔레트 : Frappe(중간) → Macchiato → Mocha(최어두운) 순입니다.
+theme = Catppuccin Mocha
 font-family = "Hack Nerd Font Mono"
 font-size = 14
-background-opacity = 0.8
+background-opacity = 0.9
 background-blur-radius = 10
 
 # Quick Terminal
