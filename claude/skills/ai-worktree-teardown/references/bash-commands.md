@@ -1,30 +1,65 @@
 # Bash Commands — implementation details for each execution step
 
-## Step 1: Validate — Must Be Inside a Worktree
+## Step 1: Validate — Must Be in Main Repo, NOT a Worktree
 
 ```bash
 GIT_COMMON="$(git rev-parse --git-common-dir)"
 GIT_DIR="$(git rev-parse --git-dir)"
 
-if [[ "$GIT_DIR" == "$GIT_COMMON" ]]; then
-  echo "Error: Not inside a worktree. Nothing to tear down."
-  echo "  Run this from inside an AI worktree (e.g., ../my-app-claude-1)"
+if [[ "$GIT_DIR" != "$GIT_COMMON" ]]; then
+  echo "Error: You are inside a worktree. Run this from the main repo."
+  echo "  cd $(dirname "$GIT_COMMON") && /ai-worktree:teardown <worktree-path>"
+  exit 1
+fi
+
+# Require worktree path argument
+WORKTREE_ARG="$1"
+if [[ -z "$WORKTREE_ARG" ]]; then
+  echo "Error: Missing worktree path argument."
+  echo ""
+  echo "Usage: /ai-worktree:teardown <worktree-path> [--force] [--keep-branch]"
+  echo ""
+  echo "Active worktrees:"
+  git worktree list
   exit 1
 fi
 ```
 
-## Step 2: Pre-flight Checks
+## Step 2: Resolve Worktree Info
+
+```bash
+# Resolve to absolute path
+WORKTREE_PATH="$(realpath "$WORKTREE_ARG")"
+WORKTREE_NAME="$(basename "$WORKTREE_PATH")"
+
+# Verify it's a known worktree and extract branch
+BRANCH="$(git worktree list --porcelain | awk -v wp="$WORKTREE_PATH" '
+  /^worktree / { wt = substr($0, 10) }
+  /^branch /   { if (wt == wp) { sub(/^branch refs\/heads\//, ""); print } }
+')"
+
+if [[ -z "$BRANCH" ]]; then
+  echo "Error: '$WORKTREE_PATH' is not a known worktree of this repo."
+  echo ""
+  echo "Active worktrees:"
+  git worktree list
+  exit 1
+fi
+```
+
+## Step 3: Pre-flight Checks
 
 ```bash
 preflight_check() {
-  local force="${1:-false}"
+  local worktree_path="$1"
+  local force="${2:-false}"
 
-  # Uncommitted changes (staged or unstaged)
-  if ! git diff --quiet || ! git diff --cached --quiet; then
+  # Check for uncommitted changes in the target worktree
+  if ! git -C "$worktree_path" diff --quiet || ! git -C "$worktree_path" diff --cached --quiet; then
     if [[ "$force" == true ]]; then
       echo "Warning: Discarding uncommitted changes (--force)"
     else
-      echo "Error: Uncommitted changes detected."
+      echo "Error: Uncommitted changes detected in $worktree_path."
       echo "  Commit, stash, or use --force to discard."
       exit 1
     fi
@@ -32,8 +67,8 @@ preflight_check() {
 
   # Unpushed commits
   local local_rev remote_rev
-  local_rev="$(git rev-parse HEAD)"
-  remote_rev="$(git rev-parse @{u} 2>/dev/null || echo "no-upstream")"
+  local_rev="$(git -C "$worktree_path" rev-parse HEAD)"
+  remote_rev="$(git -C "$worktree_path" rev-parse @{u} 2>/dev/null || echo "no-upstream")"
 
   if [[ "$remote_rev" != "no-upstream" && "$local_rev" != "$remote_rev" ]]; then
     if [[ "$force" == true ]]; then
@@ -46,36 +81,10 @@ preflight_check() {
   fi
 }
 
-preflight_check "${FORCE:-false}"
+preflight_check "$WORKTREE_PATH" "${FORCE:-false}"
 ```
 
-## Step 3: Identify Main Repo and Worktree Info
-
-```bash
-WORKTREE_PATH="$(git rev-parse --show-toplevel)"
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-WORKTREE_NAME="$(basename "$WORKTREE_PATH")"
-
-# Derive main repo path from git-common-dir
-# git-common-dir returns something like /path/to/main-repo/.git
-GIT_COMMON="$(git rev-parse --git-common-dir)"
-MAIN_REPO="$(dirname "$GIT_COMMON")"
-
-# Verify main repo exists
-if [[ ! -d "$MAIN_REPO/.git" && ! -f "$MAIN_REPO/.git" ]]; then
-  echo "Error: Cannot find main repo at $MAIN_REPO"
-  exit 1
-fi
-```
-
-## Step 4: Switch to Main Repo
-
-```bash
-cd "$MAIN_REPO" || { echo "Error: Cannot cd to $MAIN_REPO"; exit 1; }
-echo "Switched to main repo: $MAIN_REPO"
-```
-
-## Step 5: Remove Worktree
+## Step 4: Remove Worktree
 
 ```bash
 if ! git worktree remove "$WORKTREE_PATH" 2>/dev/null; then
@@ -92,7 +101,7 @@ git worktree prune
 echo "Worktree removed: $WORKTREE_PATH"
 ```
 
-## Step 6: Sync Main
+## Step 5: Sync Main
 
 Sync main BEFORE branch delete so `git branch -d` can verify merge status.
 
@@ -127,7 +136,7 @@ if ! git pull origin "$MAIN_BRANCH"; then
 fi
 ```
 
-## Step 7: Delete Branch
+## Step 6: Delete Branch
 
 Runs after sync so local main contains the merge commit.
 
@@ -157,7 +166,7 @@ delete_branch() {
 delete_branch "$BRANCH"
 ```
 
-## Step 8: Log
+## Step 7: Log
 
 ```bash
 GIT_COMMON="$(git rev-parse --git-common-dir)"
