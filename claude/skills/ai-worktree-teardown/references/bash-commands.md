@@ -17,7 +17,7 @@ WORKTREE_ARG="$1"
 if [[ -z "$WORKTREE_ARG" ]]; then
   echo "Error: Missing worktree path argument."
   echo ""
-  echo "Usage: /ai-worktree:teardown <worktree-path> [--force] [--keep-branch]"
+  echo "Usage: /ai-worktree:teardown <worktree-path> [--force] [--keep-branch] [--dry-run]"
   echo ""
   echo "Active worktrees:"
   git worktree list

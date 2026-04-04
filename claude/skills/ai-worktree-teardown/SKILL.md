@@ -42,8 +42,8 @@ Verify the path is a known worktree. If not, print error and stop.
 
 ### Step 3: Pre-flight Checks
 
-`cd` into the worktree temporarily to check for uncommitted changes or unpushed commits.
-Return to main repo after checks. Block on issues to prevent work loss.
+Use `git -C <worktree-path>` to check for uncommitted changes or unpushed commits.
+Block on issues to prevent work loss.
 Skip these checks if `--force` is given.
 
 ### Step 4: Remove Worktree
