@@ -108,8 +108,8 @@ tmux_spawn() {
     fi
 
     # --- Create session with 3-pane layout ---
-    # Note: = prefix works for has-session but NOT for pane-targeting
-    # commands (split-window, send-keys, select-pane) in tmux 3.4
+    # Note: = prefix works for has-session but NOT for
+    # session/pane-targeting commands in tmux 3.4
     # Pane 0: left  (will run ai-yolo)
     tmux new-session -d -s "$_ts_session" -c "$_ts_dir"
     # Pane 1: right-top
@@ -137,53 +137,45 @@ tmux_spawn() {
 }
 
 tmux_teardown() {
-    if ! command -v tmux >/dev/null 2>&1; then
-        ux_error "tmux is not installed"
-        return 1
-    fi
+    ux_require "tmux" || return 1
 
-    _tt_target="${1:-all}"
+    local target="${1:-all}" sessions count s
 
-    case "$_tt_target" in
+    case "$target" in
         -h|--help|help)
             ux_header "tmux-teardown - kill tmux sessions"
             ux_info "Usage: tmux-teardown [all | <session-name>]"
             ux_info ""
             ux_info "  all (default)      kill ALL sessions"
             ux_info "  <session-name>     kill a specific session"
-            unset _tt_target
             return 0
             ;;
         all)
-            _tt_sessions="$(tmux list-sessions -F '#{session_name}' 2>/dev/null)"
-            if [ -z "$_tt_sessions" ]; then
+            sessions="$(tmux list-sessions -F '#{session_name}' 2>/dev/null)"
+            if [ -z "$sessions" ]; then
                 ux_info "No tmux sessions running."
-                unset _tt_target _tt_sessions
                 return 0
             fi
 
-            _tt_count="$(printf '%s\n' "$_tt_sessions" | wc -l)"
-            ux_warning "Killing $_tt_count session(s):"
-            printf '%s\n' "$_tt_sessions" | while IFS= read -r s; do
+            count="$(printf '%s\n' "$sessions" | wc -l)"
+            ux_warning "Killing $count session(s):"
+            printf '%s\n' "$sessions" | while IFS= read -r s; do
                 ux_info "  $s"
             done
 
             tmux kill-server
             ux_success "All sessions killed."
-            unset _tt_target _tt_sessions _tt_count
             ;;
         *)
-            if tmux has-session -t "=$_tt_target" 2>/dev/null; then
-                tmux kill-session -t "=$_tt_target"
-                ux_success "Session '$_tt_target' killed."
+            if tmux has-session -t "=$target" 2>/dev/null; then
+                tmux kill-session -t "$target"
+                ux_success "Session '$target' killed."
             else
-                ux_error "Session not found: $_tt_target"
+                ux_error "Session not found: $target"
                 ux_info "Running sessions:"
                 tmux list-sessions -F '  #{session_name}' 2>/dev/null || ux_info "  (none)"
-                unset _tt_target
                 return 1
             fi
-            unset _tt_target
             ;;
     esac
 }
