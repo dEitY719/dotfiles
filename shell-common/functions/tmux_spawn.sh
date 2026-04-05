@@ -27,6 +27,30 @@ _ts_known_agent() {
     esac
 }
 
+# _tmux_add_agent_window <session> <agent> <dir>
+# Add a 3-pane window to a tmux session (creates session if needed).
+# Layout: LEFT (agent-yolo) | RIGHT-TOP / RIGHT-BOTTOM
+_tmux_add_agent_window() {
+    local session="$1" agent="$2" dir="$3"
+    local yolo="${agent}-yolo" win
+
+    if tmux has-session -t "=$session" 2>/dev/null; then
+        win=$(tmux new-window -P -F '#{window_index}' \
+            -t "$session" -n "$agent" -c "$dir")
+    else
+        win=$(tmux new-session -d -P -F '#{window_index}' \
+            -s "$session" -n "$agent" -c "$dir")
+    fi
+
+    # 3-pane layout
+    tmux split-window -h -t "${session}:${win}" -c "$dir"
+    tmux split-window -v -t "${session}:${win}" -c "$dir"
+
+    # Run ai-yolo in pane 0, focus it
+    tmux send-keys -t "${session}:${win}.0" "$yolo" Enter
+    tmux select-pane -t "${session}:${win}.0"
+}
+
 tmux_spawn() {
     if ! command -v tmux >/dev/null 2>&1; then
         ux_error "tmux is not installed"
@@ -117,26 +141,13 @@ tmux_spawn() {
         fi
 
         _ts_cur_session="$(tmux display-message -p '#{session_name}')"
+        _tmux_add_agent_window "$_ts_cur_session" "$_ts_agent" "$_ts_dir"
 
-        # Create new window named after agent
-        tmux new-window -t "$_ts_cur_session" -n "$_ts_agent" -c "$_ts_dir"
-        # Pane 1: right-top
-        tmux split-window -h -t "$_ts_cur_session" -c "$_ts_dir"
-        # Pane 2: right-bottom
-        tmux split-window -v -t "$_ts_cur_session" -c "$_ts_dir"
-
-        # Run ai-yolo in left pane (pane 0 of the new window)
-        _ts_new_win="$(tmux display-message -p '#{window_index}')"
-        tmux send-keys -t "${_ts_cur_session}:${_ts_new_win}.0" "$_ts_yolo" Enter
-
-        # Focus left pane
-        tmux select-pane -t "${_ts_cur_session}:${_ts_new_win}.0"
-
-        ux_success "Window '$_ts_agent' added to session '$_ts_cur_session' (3 panes, running $_ts_yolo)"
+        ux_success "Window '$_ts_agent' added to session '$_ts_cur_session' (3 panes, running ${_ts_agent}-yolo)"
 
         unset _ts_arg _ts_dir _ts_basename _ts_agent _ts_session \
               _ts_without_index _ts_candidate _ts_yolo _ts_window_mode \
-              _ts_cur_session _ts_new_win
+              _ts_cur_session
         return 0
     fi
 
@@ -155,22 +166,9 @@ tmux_spawn() {
     fi
 
     # --- Create session with 3-pane layout ---
-    # Note: = prefix works for has-session but NOT for
-    # session/pane-targeting commands in tmux 3.4
-    # Pane 0: left  (will run ai-yolo)
-    tmux new-session -d -s "$_ts_session" -n "$_ts_agent" -c "$_ts_dir"
-    # Pane 1: right-top
-    tmux split-window -h -t "$_ts_session" -c "$_ts_dir"
-    # Pane 2: right-bottom (split right pane vertically)
-    tmux split-window -v -t "$_ts_session" -c "$_ts_dir"
+    _tmux_add_agent_window "$_ts_session" "$_ts_agent" "$_ts_dir"
 
-    # Run ai-yolo in the left pane (pane 0)
-    tmux send-keys -t "${_ts_session}:0.0" "$_ts_yolo" Enter
-
-    # Focus left pane
-    tmux select-pane -t "${_ts_session}:0.0"
-
-    ux_success "Session '$_ts_session' created (3 panes, running $_ts_yolo)"
+    ux_success "Session '$_ts_session' created (3 panes, running ${_ts_agent}-yolo)"
 
     # Attach or advise
     if [ -z "$TMUX" ]; then
