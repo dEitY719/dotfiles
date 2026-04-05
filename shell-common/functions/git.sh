@@ -623,6 +623,8 @@ git_worktree_spawn() {
         ux_info "  tmux:   session '$project', window '$agent'"
         if [ -z "$TMUX" ]; then
             tmux attach -t "$project"
+        else
+            tmux switch-client -t "${project}:${agent}" 2>/dev/null || true
         fi
     else
         ux_info ""
