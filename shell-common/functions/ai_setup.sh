@@ -192,4 +192,142 @@ ai_setup() {
     fi
 }
 
+ai_teardown() {
+    # zsh compatibility
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
+
+    local force=false
+    case "${1:-}" in
+        -h|--help|help)
+            ux_header "ai-teardown - tear down AI workspace"
+            ux_info "Usage: ai-teardown [--force]"
+            ux_info ""
+            ux_info "Kills tmux sessions for this project's worktrees"
+            ux_info "and removes all worktrees, leaving only main repo."
+            ux_info ""
+            ux_info "Options:"
+            ux_info "  --force    discard uncommitted changes"
+            return 0
+            ;;
+        --force) force=true ;;
+    esac
+
+    # --- Guards ---
+    if ! command -v git >/dev/null 2>&1; then
+        ux_error "git is not installed"; return 1
+    fi
+
+    local git_common git_dir
+    git_common="$(git rev-parse --git-common-dir 2>/dev/null)" || \
+        { ux_error "Not inside a git repository"; return 1; }
+    git_dir="$(git rev-parse --git-dir)"
+    if [ "$git_dir" != "$git_common" ]; then
+        ux_error "Cannot run from inside a worktree. Run from the main repo."
+        return 1
+    fi
+
+    local project parent
+    project="$(basename "$(git rev-parse --show-toplevel)")"
+    parent="$(dirname "$(git rev-parse --show-toplevel)")"
+
+    # --- Discover worktrees ---
+    local main_wt wt_paths="" wt_count=0
+    main_wt="$(git rev-parse --show-toplevel)"
+
+    while IFS= read -r line; do
+        case "$line" in
+            "worktree "*)
+                local wt="${line#worktree }"
+                if [ "$wt" != "$main_wt" ]; then
+                    wt_paths="$wt_paths $wt"
+                    wt_count=$((wt_count + 1))
+                fi
+                ;;
+        esac
+    done <<EOF
+$(git worktree list --porcelain)
+EOF
+    wt_paths="${wt_paths# }"
+
+    if [ "$wt_count" -eq 0 ]; then
+        ux_info "No worktrees to tear down."
+        return 0
+    fi
+
+    ux_header "AI Workspace Teardown"
+    ux_info "Project: $project"
+    echo
+
+    # --- Step 1: Kill tmux sessions for worktrees ---
+    local sessions_killed=0
+    ux_info "Killing tmux sessions..."
+    for wt_path in $wt_paths; do
+        local session_name
+        session_name="$(basename "$wt_path")"
+        if tmux has-session -t "=$session_name" 2>/dev/null; then
+            tmux kill-session -t "$session_name"
+            ux_success "  $session_name"
+            sessions_killed=$((sessions_killed + 1))
+        fi
+    done
+    if [ "$sessions_killed" -eq 0 ]; then
+        ux_info "  (no matching sessions)"
+    fi
+
+    echo
+
+    # --- Step 2: Remove worktrees ---
+    ux_info "Removing worktrees..."
+    local wt_removed=0
+    for wt_path in $wt_paths; do
+        local wt_name branch
+        wt_name="$(basename "$wt_path")"
+
+        # Check for uncommitted changes
+        if [ "$force" != true ]; then
+            if ! git -C "$wt_path" diff --quiet 2>/dev/null || \
+               ! git -C "$wt_path" diff --cached --quiet 2>/dev/null; then
+                ux_error "  $wt_name: uncommitted changes (use --force)"
+                continue
+            fi
+        fi
+
+        # Get branch before removing
+        branch="$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null)" || true
+
+        # Remove worktree
+        if git worktree remove "$wt_path" 2>/dev/null || \
+           { [ "$force" = true ] && git worktree remove --force "$wt_path" 2>/dev/null; }; then
+            wt_removed=$((wt_removed + 1))
+
+            # Delete branch
+            if [ -n "$branch" ] && [ "$branch" != "main" ] && \
+               [ "$branch" != "master" ] && [ "$branch" != "HEAD" ]; then
+                if git branch -d "$branch" 2>/dev/null; then
+                    ux_success "  $wt_name ($branch deleted)"
+                elif [ "$force" = true ] && git branch -D "$branch" 2>/dev/null; then
+                    ux_success "  $wt_name ($branch force-deleted)"
+                else
+                    ux_success "  $wt_name (branch '$branch' kept — not merged)"
+                fi
+            else
+                ux_success "  $wt_name"
+            fi
+        else
+            ux_error "  $wt_name: failed to remove"
+        fi
+    done
+
+    git worktree prune 2>/dev/null
+
+    echo
+
+    # --- Summary ---
+    ux_header "Teardown complete"
+    ux_info "  $sessions_killed sessions killed, $wt_removed worktrees removed"
+}
+
 alias ai-setup='ai_setup'
+alias ai-teardown='ai_teardown'
