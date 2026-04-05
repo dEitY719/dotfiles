@@ -31,28 +31,24 @@ _ts_known_agent() {
 # Add a 3-pane window to a tmux session (creates session if needed).
 # Layout: LEFT (agent-yolo) | RIGHT-TOP / RIGHT-BOTTOM
 _tmux_add_agent_window() {
-    _taw_session="$1" _taw_agent="$2" _taw_dir="$3"
-    _taw_yolo="${_taw_agent}-yolo"
+    local session="$1" agent="$2" dir="$3"
+    local yolo="${agent}-yolo" win
 
-    if tmux has-session -t "=$_taw_session" 2>/dev/null; then
-        tmux new-window -t "$_taw_session" -n "$_taw_agent" -c "$_taw_dir"
+    if tmux has-session -t "=$session" 2>/dev/null; then
+        win=$(tmux new-window -P -F '#{window_index}' \
+            -t "$session" -n "$agent" -c "$dir")
     else
-        tmux new-session -d -s "$_taw_session" -n "$_taw_agent" -c "$_taw_dir"
+        win=$(tmux new-session -d -P -F '#{window_index}' \
+            -s "$session" -n "$agent" -c "$dir")
     fi
 
-    # Get the active window index (the one just created)
-    _taw_win="$(tmux list-windows -t "$_taw_session" \
-        -F '#{window_active} #{window_index}' | awk '$1 == 1 { print $2 }')"
-
     # 3-pane layout
-    tmux split-window -h -t "${_taw_session}:${_taw_win}" -c "$_taw_dir"
-    tmux split-window -v -t "${_taw_session}:${_taw_win}" -c "$_taw_dir"
+    tmux split-window -h -t "${session}:${win}" -c "$dir"
+    tmux split-window -v -t "${session}:${win}" -c "$dir"
 
     # Run ai-yolo in pane 0, focus it
-    tmux send-keys -t "${_taw_session}:${_taw_win}.0" "$_taw_yolo" Enter
-    tmux select-pane -t "${_taw_session}:${_taw_win}.0"
-
-    unset _taw_session _taw_agent _taw_dir _taw_yolo _taw_win
+    tmux send-keys -t "${session}:${win}.0" "$yolo" Enter
+    tmux select-pane -t "${session}:${win}.0"
 }
 
 tmux_spawn() {
