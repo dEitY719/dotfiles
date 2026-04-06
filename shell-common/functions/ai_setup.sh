@@ -29,6 +29,16 @@ ai_setup() {
             ux_info "Requirements: git, tmux, run from main repo (not worktree)"
             return 0
             ;;
+        "")
+            # No arguments — proceed to interactive mode
+            ;;
+        *)
+            ux_warning "Unexpected arguments: $*"
+            ux_info "Usage: ai-setup"
+            ux_info "This command takes no arguments. It prompts interactively."
+            ux_info "Run 'ai-setup --help' for details."
+            return 1
+            ;;
     esac
 
     # --- Guards ---
@@ -211,6 +221,15 @@ ai_teardown() {
             return 0
             ;;
         --force) force=true ;;
+        "")
+            # No arguments — proceed normally
+            ;;
+        *)
+            ux_warning "Unexpected arguments: $*"
+            ux_info "Usage: ai-teardown [--force]"
+            ux_info "Run 'ai-teardown --help' for details."
+            return 1
+            ;;
     esac
 
     # --- Guards ---
