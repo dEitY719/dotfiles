@@ -32,12 +32,8 @@ ai_setup() {
     esac
 
     # --- Guards ---
-    if ! command -v git >/dev/null 2>&1; then
-        ux_error "git is not installed"; return 1
-    fi
-    if ! command -v tmux >/dev/null 2>&1; then
-        ux_error "tmux is not installed"; return 1
-    fi
+    ux_require "git" || return 1
+    ux_require "tmux" || return 1
 
     local git_common git_dir
     git_common="$(git rev-parse --git-common-dir 2>/dev/null)" || \
@@ -48,10 +44,9 @@ ai_setup() {
         return 1
     fi
 
-    local project parent
+    local project parent repo_root
     project="$(basename "$(git rev-parse --show-toplevel)")"
     parent="$(dirname "$(git rev-parse --show-toplevel)")"
-    local repo_root
     repo_root="$(git rev-parse --show-toplevel)"
 
     ux_header "AI Workspace Setup"
@@ -59,11 +54,11 @@ ai_setup() {
     echo
 
     # --- Step 1: Read worktree agents ---
-    local wt_input=""
+    local wt_input="" a
     while [ -z "$wt_input" ]; do
         printf "%s❯%s Worktree agents (space-separated): " \
-            "$(printf '\033[1;36m')" "$(printf '\033[0m')"
-        read -r wt_input
+            "${UX_BOLD}${UX_INFO}" "${UX_RESET}"
+        read -r wt_input || return 1
         if [ -z "$wt_input" ]; then
             ux_error "At least one agent required."
         fi
@@ -86,8 +81,8 @@ ai_setup() {
     local win_input=""
     while [ -z "$win_input" ]; do
         printf "%s❯%s Tmux windows per session (space-separated): " \
-            "$(printf '\033[1;36m')" "$(printf '\033[0m')"
-        read -r win_input
+            "${UX_BOLD}${UX_INFO}" "${UX_RESET}"
+        read -r win_input || return 1
         if [ -z "$win_input" ]; then
             ux_error "At least one window required."
         fi
@@ -110,10 +105,10 @@ ai_setup() {
 
     # --- Step 3: Create worktrees ---
     ux_info "Creating worktrees..."
-    local wt_paths="" wt_created=0
+    local wt_paths="" wt_created=0 agent existing_path new_path new_branch dir
     for agent in $wt_agents; do
         # Check if worktree already exists for this agent
-        local existing_path=""
+        existing_path=""
         for dir in "$parent/${project}-${agent}"-*/; do
             if [ -d "$dir" ]; then
                 existing_path="${dir%/}"
@@ -125,16 +120,18 @@ ai_setup() {
             ux_warning "  $(basename "$existing_path") already exists — skipping"
             wt_paths="$wt_paths $existing_path"
         else
-            git_worktree_spawn "$agent" >/dev/null 2>&1
-            # Discover the path just created
-            local new_path=""
-            for dir in "$parent/${project}-${agent}"-*/; do
-                if [ -d "$dir" ]; then
-                    new_path="${dir%/}"
-                fi
-            done
+            git_worktree_spawn "$agent" >/dev/null
+            # Discover path from git worktree list (reliable across any index)
+            new_path=""
+            while IFS= read -r line; do
+                case "$line" in
+                    "worktree "*"-${agent}-"*)
+                        new_path="${line#worktree }" ;;
+                esac
+            done <<EOF
+$(git worktree list --porcelain)
+EOF
             if [ -n "$new_path" ]; then
-                local new_branch
                 new_branch="$(git -C "$new_path" rev-parse --abbrev-ref HEAD 2>/dev/null)"
                 ux_success "  $(basename "$new_path") ($new_branch)"
                 wt_paths="$wt_paths $new_path"
@@ -150,9 +147,8 @@ ai_setup() {
 
     # --- Step 4: Create tmux sessions + windows ---
     ux_info "Creating tmux sessions..."
-    local session_count=0 total_windows=0
+    local session_count=0 total_windows=0 wt_path session_name win_display win_agent
     for wt_path in $wt_paths; do
-        local session_name
         session_name="$(basename "$wt_path")"
 
         # Skip if session already exists
@@ -161,7 +157,7 @@ ai_setup() {
             continue
         fi
 
-        local win_display=""
+        win_display=""
         for win_agent in $win_agents; do
             _tmux_add_agent_window "$session_name" "$win_agent" "$wt_path"
             if [ -z "$win_display" ]; then
@@ -218,9 +214,7 @@ ai_teardown() {
     esac
 
     # --- Guards ---
-    if ! command -v git >/dev/null 2>&1; then
-        ux_error "git is not installed"; return 1
-    fi
+    ux_require "git" || return 1
 
     local git_common git_dir
     git_common="$(git rev-parse --git-common-dir 2>/dev/null)" || \
@@ -236,13 +230,13 @@ ai_teardown() {
     parent="$(dirname "$(git rev-parse --show-toplevel)")"
 
     # --- Discover worktrees ---
-    local main_wt wt_paths="" wt_count=0
+    local main_wt wt_paths="" wt_count=0 line wt
     main_wt="$(git rev-parse --show-toplevel)"
 
     while IFS= read -r line; do
         case "$line" in
             "worktree "*)
-                local wt="${line#worktree }"
+                wt="${line#worktree }"
                 if [ "$wt" != "$main_wt" ]; then
                     wt_paths="$wt_paths $wt"
                     wt_count=$((wt_count + 1))
@@ -264,10 +258,9 @@ EOF
     echo
 
     # --- Step 1: Kill tmux sessions for worktrees ---
-    local sessions_killed=0
+    local sessions_killed=0 wt_path session_name
     ux_info "Killing tmux sessions..."
     for wt_path in $wt_paths; do
-        local session_name
         session_name="$(basename "$wt_path")"
         if tmux has-session -t "=$session_name" 2>/dev/null; then
             tmux kill-session -t "$session_name"
@@ -283,9 +276,8 @@ EOF
 
     # --- Step 2: Remove worktrees ---
     ux_info "Removing worktrees..."
-    local wt_removed=0
+    local wt_removed=0 wt_name branch
     for wt_path in $wt_paths; do
-        local wt_name branch
         wt_name="$(basename "$wt_path")"
 
         # Check for uncommitted changes
