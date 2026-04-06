@@ -178,6 +178,9 @@ ai_setup() {
 
     echo
 
+    # Restore terminal state (tmux session creation can disable onlcr)
+    stty onlcr 2>/dev/null || true
+
     # --- Step 5: Summary ---
     ux_header "Setup complete"
     ux_info "  $wt_count worktrees, $session_count sessions, $total_windows windows total"
@@ -321,6 +324,9 @@ EOF
     done
 
     git worktree prune 2>/dev/null
+
+    # Restore terminal state (tmux operations can disable onlcr)
+    stty onlcr 2>/dev/null || true
 
     echo
 
