@@ -36,7 +36,10 @@ tmux_help() {
 
     ux_section "Scroll & Copy - Ctrl+b +"
     ux_table_row "[" "카피 모드 (스크롤 가능)"
+    ux_table_row "Space" "선택 시작 (카피 모드 내)"
+    ux_table_row "Enter" "선택 영역 복사 (카피 모드 내)"
     ux_table_row "q" "카피 모드 종료"
+    ux_table_row "]" "buffer_0 붙여넣기"
 
     ux_section "Practical Example"
     ux_bullet "tmux new -s dev        # 세션 시작"
