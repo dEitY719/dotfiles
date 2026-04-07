@@ -93,26 +93,7 @@ alias check-pip='pip_check'
 
 # --- npm_help (from npm_help.sh) ---
 
-# ========================================
-# Load UX Library (POSIX portable)
-# ========================================
-if ! type ux_header >/dev/null 2>&1; then
-    # Try multiple paths to find ux_lib.sh
-    _ux_lib_paths="
-        ${SHELL_COMMON}/tools/ux_lib/ux_lib.sh
-        ${HOME}/.local/dotfiles/shell-common/tools/ux_lib/ux_lib.sh
-        $(dirname "$0")/../tools/ux_lib/ux_lib.sh
-    "
-
-    for _ux_lib_path in $_ux_lib_paths; do
-        if [ -f "$_ux_lib_path" ]; then
-            # shellcheck disable=SC1090
-            . "$_ux_lib_path"
-            break
-        fi
-    done
-    unset _ux_lib_path _ux_lib_paths
-fi
+# NOTE: UX library is loaded by the loader before functions/ — no need to reload here
 
 npm_help() {
     ux_header "NPM Quick Commands"

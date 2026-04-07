@@ -1,13 +1,15 @@
 #!/bin/sh
 # shell-common/functions/ai_tools_help.sh
 # Bundle: AI/LLM tool help functions
+#
+# Cross-file dependencies (auto-sourced before this file):
+#   ollama_backend_detect() — from tools/integrations/ollama.sh
+#     Used by: _ollama_help_auto() to detect local vs docker backend
+#     Guarded by: command -v check (graceful fallback to docker mode)
 
 # --- claude_help (from claude_help.sh) ---
 
 claude_help() {
-    # Load UX library (unified library at shell-common/tools/ux_lib/)
-    source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
-
     ux_header "Claude Code - MCP & Workflow Guide"
 
     ux_section "MCP (Model Context Protocol) Commands"
@@ -296,23 +298,7 @@ alias llm-help='litellm_help'
 
 # --- ollama_help (from ollama_help.sh) ---
 
-# Load UX library - use dynamic path detection with fallback
-if ! type ux_header > /dev/null 2>&1; then
-    ux_lib_path="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh"
-    if [ -f "$ux_lib_path" ]; then
-        . "$ux_lib_path" 2>/dev/null || true
-    else
-        # Fallback functions if UX library not found
-        ux_header() { echo "=== $1 ==="; echo ""; }
-        ux_section() { echo ""; echo "$1"; echo "---"; }
-        ux_info() { echo "ℹ️  $1"; }
-        ux_warning() { echo "⚠️  $1"; }
-        ux_error() { echo "❌ $1" >&2; }
-        ux_success() { echo "✅ $1"; }
-        ux_bullet() { echo "  • $1"; }
-        ux_table_row() { printf "  %-20s : %s\n" "$1" "$2"; }
-    fi
-fi
+# NOTE: UX library is loaded by the loader before functions/ — no need to reload here
 
 # Main help function with auto-detection
 ollama_help() {
@@ -343,6 +329,7 @@ ollama_help() {
 }
 
 # Auto-detect and show appropriate help
+# Depends on: ollama_backend_detect() from tools/integrations/ollama.sh (auto-sourced)
 _ollama_help_auto() {
     if command -v ollama_backend_detect &> /dev/null; then
         local backend=$(ollama_backend_detect 2>/dev/null || echo "docker")
