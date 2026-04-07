@@ -1,6 +1,90 @@
 #!/bin/sh
-# shell-common/functions/ssl_help.sh
-# SSL certificate help function (bash/zsh compatible)
+# shell-common/functions/security_ssh_help.sh
+# Bundle: security, SSL, and SSH help functions
+
+# --- crt_help (from security_help.sh) ---
+
+# Load UX library (unified library at shell-common/tools/ux_lib/)
+if ! type ux_header >/dev/null 2>&1; then
+    . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
+fi
+
+crt_help() {
+    ux_header "CA Certificate Setup Guide"
+
+    ux_section "Overview"
+    ux_bullet "Manages CA certificates for npm, Node.js, and Python"
+    ux_bullet "Supports custom certificates (company proxy) and system CA bundles"
+    ux_bullet "Configuration stored in: shell-common/env/security.local.sh"
+
+    ux_section "Two Options"
+    ux_bullet "Option 1: Custom Certificate (External Company PC - VPN)"
+    ux_bullet " • Certificate path: ${UX_MUTED}/usr/local/share/ca-certificates/samsungsemi-prx.com.crt${UX_RESET}"
+    ux_bullet " • Install with: ${UX_SUCCESS}crtsetup${UX_RESET}"
+    ux_bullet "Option 2: System CA Bundle (Internal Company PC)"
+    ux_bullet " • Certificate path: ${UX_MUTED}/etc/ssl/certs/ca-certificates.crt${UX_RESET}"
+    ux_bullet " • Already system default, no setup needed"
+
+    ux_section "Setup Command"
+    ux_table_row "crtsetup" "Interactive CA certificate setup script"
+
+    ux_section "Environment Variables"
+    ux_table_row "NODE_EXTRA_CA_CERTS" "Used by Node.js/npm for certificate validation"
+    ux_table_row "REQUESTS_CA_BUNDLE" "Used by Python for certificate validation"
+
+    ux_section "Configuration File"
+    ux_info "Location: ${UX_BOLD}shell-common/env/security.local.sh${UX_RESET}"
+
+    ux_section "Related Commands"
+    ux_table_row "npm-help" "NPM package manager commands and setup"
+    ux_table_row "security.sh" "Security environment variable configuration"
+    ux_table_row "setup.sh" "Initial environment-specific setup"
+}
+
+alias crt-help='crt_help'
+
+# --- ssh_help (from ssh_help.sh) ---
+
+ssh_help() {
+    ux_header "SSH / SCP Commands"
+
+    ux_section "SSH - Connect & Run"
+    ux_table_row "ssh <host>" "ssh ssai-dev" "Connect to server"
+    ux_table_row "ssh <host> <cmd>" "ssh ssai-dev 'ls /home'" "Run remote command"
+
+    ux_section "SCP - File Transfer"
+    ux_table_row "pull" "scp <host>:<src> <dst>" "Download from server"
+    ux_table_row "push" "scp <src> <host>:<dst>" "Upload to server"
+
+    ux_section "Registered Hosts (~/.ssh/config)"
+    if [ -f "${HOME}/.ssh/config" ]; then
+        set -f  # Disable glob expansion to prevent Host * from expanding
+        while IFS= read -r line; do
+            # Trim leading whitespace
+            line_trimmed=$(echo "$line" | sed 's/^[[:space:]]*//')
+            case "$line_trimmed" in
+                \#* | "")  continue ;;  # Skip comments and empty lines
+                Host\ \*)  continue ;;  # Skip wildcard Host *
+                Host\ *)
+                    hosts="${line_trimmed#Host }"
+                    for host in $hosts; do
+                        ux_bullet "$host"
+                    done
+                    ;;
+            esac
+        done < "${HOME}/.ssh/config"
+        set +f  # Re-enable glob expansion
+    else
+        ux_info "~/.ssh/config not found. Run ./setup.sh to create symlink."
+    fi
+
+    ux_section "Config"
+    ux_table_row "config file" "~/.ssh/config → dotfiles/ssh/config" "Managed by dotfiles"
+}
+
+alias ssh-help='ssh_help'
+
+# --- ssl_help (from ssl_help.sh) ---
 
 ssl_help() {
     if type ux_header >/dev/null 2>&1; then

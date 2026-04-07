@@ -3,6 +3,8 @@
 #
 # PURPOSE: Create ~/.ssh/config symlink pointing to dotfiles/ssh/config
 # WHEN TO RUN: Via ./setup.sh (do NOT run manually)
+# SSOT: Symlink target declared in shell-common/config/symlinks.conf
+#       This script adds permissions/backup logic on top of the declarative config.
 
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_ROOT="${_SCRIPT_DIR%/ssh}"
