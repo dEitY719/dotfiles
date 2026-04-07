@@ -158,7 +158,7 @@ _register_default_help_categories() {
     # Category membership (space-separated topic keys)
     HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git uv py nvm npm bun pp cli ux du psql mytool}"
     HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql redis gpu network}"
-    HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc gemini codex litellm ollama claude_plugins claude_skills_marketplace}"
+    HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc gemini codex litellm ollama claude_plugins claude_skills_marketplace superpowers}"
     HELP_CATEGORY_MEMBERS[cli]="${HELP_CATEGORY_MEMBERS[cli]:-fzf fd fasd ripgrep pet bat zsh zsh_autosuggestions gc tmux}"
     HELP_CATEGORY_MEMBERS[config]="${HELP_CATEGORY_MEMBERS[config]:-p10k crt apt pip ghostty}"
     HELP_CATEGORY_MEMBERS[docs]="${HELP_CATEGORY_MEMBERS[docs]:-dot show_doc notion work_log work}"
@@ -237,6 +237,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[mount_help]="${HELP_DESCRIPTIONS[mount_help]:-[DevOps] Mount helpers}"
     HELP_DESCRIPTIONS[claude_plugins_help]="${HELP_DESCRIPTIONS[claude_plugins_help]:-[AI/LLM] Claude plugins setup}"
     HELP_DESCRIPTIONS[claude_skills_marketplace_help]="${HELP_DESCRIPTIONS[claude_skills_marketplace_help]:-[AI/LLM] Skills marketplace system}"
+    HELP_DESCRIPTIONS[superpowers_help]="${HELP_DESCRIPTIONS[superpowers_help]:-[AI/LLM] Superpowers plugin skills reference}"
     HELP_DESCRIPTIONS[notion_help]="${HELP_DESCRIPTIONS[notion_help]:-[Docs] Notion integration}"
     HELP_DESCRIPTIONS[ollama_help]="${HELP_DESCRIPTIONS[ollama_help]:-[AI/LLM] Ollama local models}"
     HELP_DESCRIPTIONS[tmux_help]="${HELP_DESCRIPTIONS[tmux_help]:-[CLI] tmux terminal multiplexer}"
