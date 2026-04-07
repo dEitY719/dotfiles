@@ -134,6 +134,7 @@ fi
 
 # Setup work_log.txt symlink (multi-PC sync)
 # Points: ~/work_log.txt → para/archive/playbook/logs/work_log.txt
+# SSOT: Symlink target declared in shell-common/config/symlinks.conf
 # Note: Managed via playbook/logs, not dotfiles
 
 WORK_LOG_SRC="${HOME}/para/archive/playbook/logs/work_log.txt"

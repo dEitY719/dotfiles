@@ -111,24 +111,8 @@ while IFS= read -r func; do
 done < <(_get_help_functions)
 
 # ------------------------------------------------------------------
-# Function to safely source a file and increment counter
-safe_source() {
-    local file_path="$1"
-    local error_msg="${2:-File not found}"
-
-    if [[ -f "$file_path" ]]; then
-        # shellcheck source=/dev/null
-        source "$file_path"
-
-        # 전역 정수 보장 (혹시 글로벌 선언이 없었다면 이 안에서라도 보강)
-        declare -gi SOURCED_FILES_COUNT=${SOURCED_FILES_COUNT:-0}
-        # 전위 증가 → set -e 환경에서도 성공 상태 유지
-        ((++SOURCED_FILES_COUNT))
-    else
-        # 오류 로깅은 하되, 초기화 흐름은 끊지 않음
-        ux_error "${error_msg}: ${file_path}" || true
-    fi
-}
+# Safe source function (SSOT: shell-common/util/safe_source.sh)
+. "${SHELL_COMMON}/util/safe_source.sh"
 
 # ------------------------------------------------------------------
 # NOTE: WSL default bashrc has been replaced by env/bash_settings.bash
@@ -227,30 +211,5 @@ fi
 # ============================================================
 # SETUP MODE-BASED CONFIGURATION
 # ============================================================
-# Auto-detect and apply setup mode specific behavior
-_apply_setup_mode_config() {
-    local setup_mode_file="$HOME/.dotfiles-setup-mode"
-
-    if [ ! -f "$setup_mode_file" ]; then
-        return 0
-    fi
-
-    local mode
-    mode=$(cat "$setup_mode_file" 2>/dev/null)
-
-    case "$mode" in
-    1 | 3)
-        # Mode 1 (Public PC/Home) or Mode 3 (External PC/VPN)
-        # These modes should NOT have corporate proxy settings
-        # Auto-clean proxy variables to prevent inherited settings
-        # (common in WSL2 where Windows proxy is auto-inherited)
-        unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY no_proxy
-        ;;
-    2)
-        # Mode 2 (Internal PC) - proxy configured via proxy.local.sh
-        # Do nothing here, let proxy.local.sh handle it
-        ;;
-    esac
-}
-
+. "${SHELL_COMMON}/util/setup_mode.sh"
 _apply_setup_mode_config
