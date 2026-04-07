@@ -100,7 +100,8 @@ main() {
     # Step 3: Load Pyenv
     # ========================================
     ux_step "3/4" "Loading pyenv..."
-    export PYENV_ROOT="$HOME/.pyenv"
+    # Defer to integrations/pyenv.sh (SSOT); fallback for standalone execution
+    export PYENV_ROOT="${PYENV_ROOT:-$HOME/.pyenv}"
     export PATH="$PYENV_ROOT/bin:$PATH"
     if ! command -v pyenv &>/dev/null; then
         ux_error "pyenv command not found after installation."
@@ -147,4 +148,6 @@ main() {
     echo ""
 }
 
-main "$@"
+if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
+    main "$@"
+fi

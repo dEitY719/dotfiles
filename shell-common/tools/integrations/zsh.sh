@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # shell-common/tools/external/zsh.sh
 # Auto-generated from bash/app/zsh.bash
 
@@ -20,35 +20,17 @@ install-zsh() {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# Bash-Specific Shell Switching
+# Shell Switching (SSOT: shell-common/functions/shell_switch.sh)
 # ═══════════════════════════════════════════════════════════════
-
-# Switch to zsh shell (bash-specific version)
-zsh-switch() {
-    if command -v zsh &>/dev/null; then
-        ux_success "Switching to zsh..."
-        exec zsh -i
-    else
-        ux_error "zsh is not installed. Run 'install-zsh' to install it."
-        return 1
-    fi
-}
-
-# Switch to bash shell (bash-specific version)
-bash-switch() {
-    if command -v bash &>/dev/null; then
-        ux_success "Switching to bash..."
-        exec bash -i
-    else
-        ux_error "bash is not installed."
-        return 1
-    fi
-}
 
 # ═══════════════════════════════════════════════════════════════
 # Bash Quick Aliases
 # ═══════════════════════════════════════════════════════════════
 
+alias zsh-switch='zsh_switch'
+alias bash-switch='bash_switch'
+alias zsh-to='zsh_switch'
+alias bash-to='bash_switch'
 alias zsh-config='cat ~/.zshrc'                    # View zsh config
 alias zsh-edit-quick='nano ~/.zshrc'               # Quick edit
 alias zsh-info='zsh --version && echo && uname -a' # Zsh system info
@@ -60,4 +42,4 @@ alias zsh-info='zsh --version && echo && uname -a' # Zsh system info
 
 # Export functions for use in other shells
 # (POSIX functions are auto-loaded from shell-common/)
-export -f install-zsh zsh-switch bash-switch
+export -f install-zsh

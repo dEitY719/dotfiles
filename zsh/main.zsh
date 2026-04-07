@@ -52,58 +52,9 @@ fi
 typeset -gi SOURCED_FILES_COUNT=0
 
 # ═══════════════════════════════════════════════════════════════
-# Helper: Safe Source Function (consistent with bash loader)
+# Safe source function (SSOT: shell-common/util/safe_source.sh)
 # ═══════════════════════════════════════════════════════════════
-
-safe_source() {
-    local file_path="$1"
-    local error_msg="${2:-File not found}"
-
-    if [ ! -f "$file_path" ]; then
-        # File doesn't exist - silently skip (common for optional files)
-        return 0
-    fi
-
-    # Source file directly in parent shell (critical for function/alias propagation)
-    # NOTE: MUST NOT use $(...) subshell as it breaks function definitions
-    . "$file_path" 2>/dev/null
-    local source_exit=$?
-
-    if [ $source_exit -eq 0 ]; then
-        # Increment counter after successful source
-        ((++SOURCED_FILES_COUNT))
-        return 0
-    fi
-
-    # Source failed - report error for important files
-    # Skip errors for optional files (like .local.sh)
-    case "$file_path" in
-        *.local.sh)
-            # Optional local overrides - silently skip
-            return 0
-            ;;
-        */tools/integrations/*|*/functions/*|*/env/*)
-            # Important files - report error
-            if type ux_error >/dev/null 2>&1; then
-                ux_error "${error_msg}: ${file_path}"
-            else
-                echo "Error: ${error_msg}: ${file_path}" >&2
-            fi
-            return 1
-            ;;
-        *)
-            # Other files - report error only in debug mode
-            if [ "${DEBUG_DOTFILES:-0}" = "1" ]; then
-                if type ux_error >/dev/null 2>&1; then
-                    ux_error "${error_msg}: ${file_path}"
-                else
-                    echo "Error: ${error_msg}: ${file_path}" >&2
-                fi
-            fi
-            return 1
-            ;;
-    esac
-}
+. "${SHELL_COMMON}/util/safe_source.sh"
 
 # ═══════════════════════════════════════════════════════════════
 # Phase 1: Load UX Library FIRST (consistent with bash loader)
@@ -251,32 +202,7 @@ _load_zsh_apps
 # ═══════════════════════════════════════════════════════════════
 # Setup Mode-Based Configuration
 # ═══════════════════════════════════════════════════════════════
-# Auto-detect and apply setup mode specific behavior
-_apply_setup_mode_config() {
-    local setup_mode_file="$HOME/.dotfiles-setup-mode"
-
-    if [ ! -f "$setup_mode_file" ]; then
-        return 0
-    fi
-
-    local mode
-    mode=$(cat "$setup_mode_file" 2>/dev/null)
-
-    case "$mode" in
-        1|3)
-            # Mode 1 (Public PC/Home) or Mode 3 (External PC/VPN)
-            # These modes should NOT have corporate proxy settings
-            # Auto-clean proxy variables to prevent inherited settings
-            # (common in WSL2 where Windows proxy is auto-inherited)
-            unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY no_proxy
-            ;;
-        2)
-            # Mode 2 (Internal PC) - proxy configured via proxy.local.sh
-            # Do nothing here, let proxy.local.sh handle it
-            ;;
-    esac
-}
-
+. "${SHELL_COMMON}/util/setup_mode.sh"
 _apply_setup_mode_config
 
 # ═══════════════════════════════════════════════════════════════

@@ -5,29 +5,12 @@
 # POSIX-compatible functions are in shell-common/functions/zsh.sh
 
 # ═══════════════════════════════════════════════════════════════
-# Zsh-Specific Shell Switching
+# Shell Switching (SSOT: shell-common/functions/shell_switch.sh)
 # ═══════════════════════════════════════════════════════════════
-
-# Switch to zsh shell (zsh-specific, optimized for current shell)
-zsh-switch() {
-    if command -v zsh &>/dev/null; then
-        ux_success "Switching to zsh..."
-        exec zsh -i
-    else
-        ux_error "zsh is not installed. Run 'install-zsh' to install it."
-        return 1
-    fi
-}
-
-# Switch to bash shell (zsh-specific version)
-bash-switch() {
-    ux_success "Switching to bash..."
-    exec bash -i
-}
-
-# Shorthand for shell switches (zsh-specific aliases)
-alias zsh-to='zsh-switch'
-alias bash-to='bash-switch'
+alias zsh-switch='zsh_switch'
+alias bash-switch='bash_switch'
+alias zsh-to='zsh_switch'
+alias bash-to='bash_switch'
 
 # ═══════════════════════════════════════════════════════════════
 # Zsh Quick Aliases
