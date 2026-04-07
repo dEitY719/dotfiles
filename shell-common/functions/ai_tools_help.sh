@@ -1,6 +1,11 @@
 #!/bin/sh
 # shell-common/functions/ai_tools_help.sh
 # Bundle: AI/LLM tool help functions
+#
+# Cross-file dependencies (auto-sourced before this file):
+#   ollama_backend_detect() — from tools/integrations/ollama.sh
+#     Used by: _ollama_help_auto() to detect local vs docker backend
+#     Guarded by: command -v check (graceful fallback to docker mode)
 
 # --- claude_help (from claude_help.sh) ---
 
@@ -324,6 +329,7 @@ ollama_help() {
 }
 
 # Auto-detect and show appropriate help
+# Depends on: ollama_backend_detect() from tools/integrations/ollama.sh (auto-sourced)
 _ollama_help_auto() {
     if command -v ollama_backend_detect &> /dev/null; then
         local backend=$(ollama_backend_detect 2>/dev/null || echo "docker")
