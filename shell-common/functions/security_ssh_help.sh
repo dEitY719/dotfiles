@@ -4,10 +4,7 @@
 
 # --- crt_help (from security_help.sh) ---
 
-# Load UX library (unified library at shell-common/tools/ux_lib/)
-if ! type ux_header >/dev/null 2>&1; then
-    . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
-fi
+# NOTE: UX library is loaded by the loader before functions/ — no need to reload here
 
 crt_help() {
     ux_header "CA Certificate Setup Guide"
