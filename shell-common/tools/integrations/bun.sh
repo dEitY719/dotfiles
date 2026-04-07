@@ -15,10 +15,7 @@ if ! type ux_header >/dev/null 2>&1; then
     unset _bun_dir
 fi
 
-# ========================================
-# PATH Setup
-# ========================================
-export PATH="$HOME/.bun/bin:$PATH"
+# NOTE: $HOME/.bun/bin PATH is managed by env/path.sh (SSOT)
 
 # ========================================
 # Bun Aliases

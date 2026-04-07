@@ -1,8 +1,7 @@
 #!/bin/sh
 # shell-common/tools/integrations/python.sh
 
-# Add user-installed Python scripts to the PATH (for pip packages like gemini-cli)
-export PATH="$HOME/.local/bin:$PATH"
+# NOTE: $HOME/.local/bin PATH is managed by env/path.sh (SSOT)
 
 # Python Virtual Environment
 # pyenv-virtualenv: deactivate must be dot-sourced ('. deactivate')

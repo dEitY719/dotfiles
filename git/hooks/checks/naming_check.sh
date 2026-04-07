@@ -37,12 +37,15 @@ check_naming_violations() {
 
     while IFS= read -r func_name; do
         [[ -z "$func_name" ]] && continue
+        # Skip short function names (<=3 chars) — too many false positives in help text
+        [[ ${#func_name} -le 3 ]] && continue
         local matches
         matches=$(
             grep -n "\".*$func_name.*\"" "$abs_path" 2>/dev/null | \
                 grep -v ":[[:space:]]*#" | \
                 grep -v "alias.*=" | \
-                grep -v ":[[:space:]]*$func_name()" || true
+                grep -v ":[[:space:]]*$func_name()" | \
+                grep -v "ux_info\|ux_header\|ux_error\|ux_success\|ux_warning\|ux_bullet" || true
         )
 
         if [ -n "$matches" ]; then
