@@ -118,9 +118,11 @@ check_requirements() {
     fi
 
     # Check pytest-xdist (optional, for parallel execution)
+    HAS_XDIST=0
     if python3 -m pip show pytest-xdist >/dev/null 2>&1; then
         local xdist_version=$(python3 -m pip show pytest-xdist 2>&1 | grep Version | awk '{print $2}')
         print_info "pytest-xdist $xdist_version (parallel execution enabled)"
+        HAS_XDIST=1
     else
         print_warning "pytest-xdist not found. Tests will run serially. Install with: pip install pytest-xdist"
     fi
@@ -144,10 +146,11 @@ run_bats() {
     fi
 
     print_header "Running Bats Shell Unit Tests"
+    # Auto-discover bats test directories, excluding lib/ (submodules)
     local bats_dirs=()
-    for d in "${SCRIPT_DIR}/bats/init" "${SCRIPT_DIR}/bats/functions" "${SCRIPT_DIR}/bats/tools"; do
-        [ -d "$d" ] && bats_dirs+=("$d")
-    done
+    while IFS= read -r d; do
+        bats_dirs+=("$d")
+    done < <(find "${SCRIPT_DIR}/bats" -type f -name '*.bats' -not -path '*/lib/*' -exec dirname {} \; | sort -u)
     if [ ${#bats_dirs[@]} -eq 0 ]; then
         print_warning "No bats test directories found"
         return 0
@@ -176,7 +179,8 @@ run_pytest() {
     fi
 
     print_header "Running Pytest Integration Tests"
-    if [ "$SERIAL" = "1" ]; then
+    if [ "$SERIAL" = "1" ] || [ "$HAS_XDIST" = "0" ]; then
+        # Serial: override addopts to remove xdist options
         python3 -m pytest tests/integration/ \
             $verbose_flag \
             --tb=short \
