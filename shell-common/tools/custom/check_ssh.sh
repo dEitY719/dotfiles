@@ -10,7 +10,7 @@ source "$(dirname "$0")/init.sh" || exit 1
 # Configuration
 # ============================================================
 
-KEY_NAME="id_rsa_ssai_bwyoon"
+KEY_NAME="id_rsa_ssai"
 WSL_SSH_DIR="$HOME/.ssh"
 
 # Detect Windows username from WSL
@@ -112,7 +112,7 @@ check_ssh_copy() {
     cp "${WSL_SSH_DIR}/${KEY_NAME}" "${WIN_SSH_DIR}/${KEY_NAME}"
     cp "${WSL_SSH_DIR}/${KEY_NAME}.pub" "${WIN_SSH_DIR}/${KEY_NAME}.pub" 2>/dev/null
     ux_success "Copied to: ${WIN_SSH_DIR}/${KEY_NAME}"
-    ux_info "VSCode SSH Config can now use: C:/Users/${WIN_USER}/.ssh/${KEY_NAME}"
+    ux_info "SSH config IdentityFile uses: ~/.ssh/${KEY_NAME}"
     echo ""
 }
 
