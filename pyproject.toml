@@ -54,7 +54,7 @@ packages = []
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["tests"]
+testpaths = ["tests/integration"]
 addopts = "-v --strict-markers -n auto --dist load"
 # -n auto: parallel execution using all available CPU cores
 # --dist load: distribute tests evenly across workers (better for heterogeneous tests)

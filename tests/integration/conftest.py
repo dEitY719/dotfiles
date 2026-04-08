@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 # Repository root detection
-REPO_ROOT = Path(__file__).parent.parent
+REPO_ROOT = Path(__file__).parent.parent.parent
 SHELL_COMMON = REPO_ROOT / "shell-common"
 BASH_DIR = REPO_ROOT / "bash"
 ZSH_DIR = REPO_ROOT / "zsh"
