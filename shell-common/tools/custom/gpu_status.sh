@@ -9,6 +9,8 @@ set -e
 
 source "$(dirname "$0")/init.sh" || exit 1
 
+main() {
+
 ux_header "GPU Status Monitor (for WSL2)"
 echo ""
 
@@ -184,3 +186,9 @@ ux_table_row "make gpu-info" "Simple GPU hardware info"
 ux_table_row "make gpu-status" "This detailed diagnostic script"
 ux_table_row "make health" "Full stack health check"
 echo ""
+
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+    main "$@"
+fi

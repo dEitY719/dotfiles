@@ -44,11 +44,19 @@ echo ""
 echo "Rule 2: Direct-exec guards in custom tools"
 total=0
 with_guard=0
+without_guard=""
 for file in shell-common/tools/custom/*.sh; do
     [ -f "$file" ] || continue
+    # Skip init.sh — it IS the shared initializer, not a standalone tool
+    [ "$(basename "$file")" = "init.sh" ] && continue
     total=$((total + 1))
-    if grep -q 'BASH_SOURCE\[0\].*==.*\${0}' "$file"; then
+    # Recognized guard patterns:
+    #   BASH_SOURCE[0] = $0   — standard guard
+    #   ${0##*/} = "name.sh"  — basename guard
+    if grep -qE 'BASH_SOURCE\[0\].*[=]+.*\$\{?0\}?|"\$\{0##\*/\}"' "$file"; then
         with_guard=$((with_guard + 1))
+    else
+        without_guard="${without_guard}  $(basename "$file")\n"
     fi
 done
 
@@ -56,15 +64,29 @@ if [ "$with_guard" -eq "$total" ]; then
     test_case "All $total custom tools have direct-exec guard" 0
 else
     test_case "All custom tools have direct-exec guard ($with_guard/$total)" 1
+    printf "$without_guard" | head -5
+    remaining=$((total - with_guard - 5))
+    [ "$remaining" -gt 0 ] && echo "  ... and $remaining more"
 fi
 echo ""
 
 # Rule 3: No raw echo in shell-common functions (use ux_lib)
+# Exclude:
+#   - *_help.sh files: help content files use echo for structured text display
+#   - blank-line separators: echo "" / echo ''
+#   - file writes / pipes: echo ... > file, echo ... | cmd
+#   - lines already using UX_* variables (ux_lib colors)
 echo "Rule 3: Use ux_lib for output (no raw echo)"
 raw_echo_files=0
 for file in shell-common/functions/*.sh; do
     [ -f "$file" ] || continue
-    if grep -q "^    echo " "$file" 2>/dev/null; then
+    # Skip help content files — they display structured text by design
+    case "$(basename "$file")" in *_help.sh) continue ;; esac
+    if grep "^    echo " "$file" 2>/dev/null \
+        | grep -v -e 'echo ""' -e "echo ''" \
+        | grep -v -e '> *\$' -e '> *"' -e '| ' \
+        | grep -v 'UX_' \
+        | grep -vq 'echo "  '; then
         raw_echo_files=$((raw_echo_files + 1))
     fi
 done

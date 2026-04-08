@@ -8,7 +8,11 @@ ghostty_init() {
 
     local target_dir="$(dirname "$target")"
 
-    echo "Initializing Ghostty configuration..."
+    if type ux_info >/dev/null 2>&1; then
+        ux_info "Initializing Ghostty configuration..."
+    else
+        echo "Initializing Ghostty configuration..."
+    fi
 
     # Create directory if needed
     if [ ! -d "$target_dir" ]; then
@@ -47,9 +51,15 @@ ghostty_init() {
     fi
 
     echo ""
-    echo "Ghostty configuration initialization complete!"
-    echo ""
-    echo "Symbolic link:"
+    if type ux_success >/dev/null 2>&1; then
+        ux_success "Ghostty configuration initialization complete!"
+        echo ""
+        ux_info "Symbolic link:"
+    else
+        echo "Ghostty configuration initialization complete!"
+        echo ""
+        echo "Symbolic link:"
+    fi
     ls -la "$target"
 }
 
@@ -61,13 +71,23 @@ ghostty_edit_config() {
         return 1
     fi
 
-    echo "Editing Ghostty configuration..."
-    echo "File: $config_file"
+    if type ux_info >/dev/null 2>&1; then
+        ux_info "Editing Ghostty configuration..."
+        ux_info "File: $config_file"
+    else
+        echo "Editing Ghostty configuration..."
+        echo "File: $config_file"
+    fi
     echo ""
 
     ${EDITOR:-vim} "$config_file"
 
     echo ""
-    echo "Configuration file edited"
-    echo "Changes will take effect immediately (symlinked)"
+    if type ux_success >/dev/null 2>&1; then
+        ux_success "Configuration file edited"
+        ux_info "Changes will take effect immediately (symlinked)"
+    else
+        echo "Configuration file edited"
+        echo "Changes will take effect immediately (symlinked)"
+    fi
 }

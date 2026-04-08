@@ -86,24 +86,28 @@ print_results() {
 # 메인 로직
 # ==============================================================================
 
-if [[ -z "$1" ]]; then
-    usage
+main() {
+    if [[ -z "${1:-}" ]]; then
+        usage
+    fi
+
+    TARGET_DIR="$1"
+
+    if [[ ! -d "$TARGET_DIR" ]]; then
+        echo "오류: '$TARGET_DIR' 디렉토리를 찾을 수 없습니다."
+        usage
+    fi
+
+    mapfile -t sh_files < <(find "$TARGET_DIR" -type f -name "*.sh")
+
+    for sh_file in "${sh_files[@]}"; do
+        parse_aliases "$sh_file"
+        parse_functions "$sh_file"
+    done
+
+    print_results
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+    main "$@"
 fi
-
-TARGET_DIR="$1"
-
-if [[ ! -d "$TARGET_DIR" ]]; then
-    echo "오류: '$TARGET_DIR' 디렉토리를 찾을 수 없습니다."
-    usage
-fi
-
-mapfile -t sh_files < <(find "$TARGET_DIR" -type f -name "*.sh")
-
-for sh_file in "${sh_files[@]}"; do
-    parse_aliases "$sh_file"
-    parse_functions "$sh_file"
-done
-
-print_results
-
-exit 0
