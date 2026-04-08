@@ -4,8 +4,8 @@
 새 스킬 작성/개선을 TDD 방식으로 검증하며 완성하는 스킬
 
 ## 이 스킬이 해결하는 문제
-- 작업 흐름에서 자주 발생하는 실수(순서 누락, 검증 생략, 범위 과대화)를 줄인다.
-- 팀 단위 협업에서 의사결정 기준과 보고 형식을 통일한다.
+- 스킬을 검증 없이 배포해 실제 적용성이 낮아지는 문제를 줄인다.
+- 스킬 설명이 모호해 검색/트리거 정확도가 낮아지는 문제를 줄인다.
 
 ## 핵심 포인트
 - 스킬 문서 작성을 RED-GREEN-REFACTOR로 운영한다.
@@ -25,8 +25,7 @@
 
 ## 산출물
 - 한국어 가이드: `SKILL_ko.md`
-- 원문: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/writing-skills/SKILL.md`
-
+- 원문: `superpowers/5.0.7/skills/writing-skills/SKILL.md`
 ## 추천 학습 순서
 1. `SKILL_ko.md`를 먼저 읽어 전체 흐름을 파악한다.
 2. 실제 적용 전에 원문 `SKILL.md`의 세부 규칙(금지/예외)을 재확인한다.

@@ -4,8 +4,8 @@
 개발 브랜치 완료 후 테스트 검증, 통합 방식 선택, 정리까지 마무리하는 스킬
 
 ## 이 스킬이 해결하는 문제
-- 작업 흐름에서 자주 발생하는 실수(순서 누락, 검증 생략, 범위 과대화)를 줄인다.
-- 팀 단위 협업에서 의사결정 기준과 보고 형식을 통일한다.
+- 완료 시점에 머지/PR/보류/폐기 판단이 뒤섞이는 문제를 줄인다.
+- 테스트 확인 없이 브랜치를 정리해 품질 리스크가 생기는 문제를 줄인다.
 
 ## 핵심 포인트
 - 먼저 테스트 통과를 증거로 확인한다.
@@ -24,8 +24,7 @@
 
 ## 산출물
 - 한국어 가이드: `SKILL_ko.md`
-- 원문: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/finishing-a-development-branch/SKILL.md`
-
+- 원문: `superpowers/5.0.7/skills/finishing-a-development-branch/SKILL.md`
 ## 추천 학습 순서
 1. `SKILL_ko.md`를 먼저 읽어 전체 흐름을 파악한다.
 2. 실제 적용 전에 원문 `SKILL.md`의 세부 규칙(금지/예외)을 재확인한다.

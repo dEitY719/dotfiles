@@ -4,8 +4,8 @@
 완료/성공 주장 전에 반드시 최신 검증 증거를 확인하게 하는 스킬
 
 ## 이 스킬이 해결하는 문제
-- 작업 흐름에서 자주 발생하는 실수(순서 누락, 검증 생략, 범위 과대화)를 줄인다.
-- 팀 단위 협업에서 의사결정 기준과 보고 형식을 통일한다.
+- 검증 없이 완료 선언해 신뢰가 떨어지는 문제를 줄인다.
+- 부분 실행 결과로 전체 성공을 오판하는 문제를 줄인다.
 
 ## 핵심 포인트
 - 주장마다 증명 명령을 식별한다.
@@ -24,8 +24,7 @@
 
 ## 산출물
 - 한국어 가이드: `SKILL_ko.md`
-- 원문: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/verification-before-completion/SKILL.md`
-
+- 원문: `superpowers/5.0.7/skills/verification-before-completion/SKILL.md`
 ## 추천 학습 순서
 1. `SKILL_ko.md`를 먼저 읽어 전체 흐름을 파악한다.
 2. 실제 적용 전에 원문 `SKILL.md`의 세부 규칙(금지/예외)을 재확인한다.

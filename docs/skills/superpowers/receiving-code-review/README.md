@@ -4,8 +4,8 @@
 코드 리뷰 피드백을 방어적으로 처리하지 않고 정확히 반영/응답하는 스킬
 
 ## 이 스킬이 해결하는 문제
-- 작업 흐름에서 자주 발생하는 실수(순서 누락, 검증 생략, 범위 과대화)를 줄인다.
-- 팀 단위 협업에서 의사결정 기준과 보고 형식을 통일한다.
+- 리뷰 코멘트에 방어적으로 반응해 논의가 길어지는 문제를 줄인다.
+- 피드백 반영 기준이 불명확해 재리뷰가 반복되는 문제를 줄인다.
 
 ## 핵심 포인트
 - 피드백을 먼저 정확히 이해하고 사실 관계를 검증한다.
@@ -24,8 +24,7 @@
 
 ## 산출물
 - 한국어 가이드: `SKILL_ko.md`
-- 원문: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/receiving-code-review/SKILL.md`
-
+- 원문: `superpowers/5.0.7/skills/receiving-code-review/SKILL.md`
 ## 추천 학습 순서
 1. `SKILL_ko.md`를 먼저 읽어 전체 흐름을 파악한다.
 2. 실제 적용 전에 원문 `SKILL.md`의 세부 규칙(금지/예외)을 재확인한다.

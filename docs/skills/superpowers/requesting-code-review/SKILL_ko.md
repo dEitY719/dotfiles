@@ -1,11 +1,10 @@
 ---
 name: requesting-code-review
-source: /home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/requesting-code-review/SKILL.md
+source: superpowers/5.0.7/skills/requesting-code-review/SKILL.md
 language: ko
 ---
 
-# requesting-code-review 스킬 한국어 번역 가이드
-
+# requesting-code-review
 ## 개요
 리뷰 요청 시 맥락/검증정보/검토범위를 구조화해 전달하는 스킬
 
@@ -35,4 +34,3 @@ language: ko
 ## 비고
 - 이 문서는 팀 학습용 한국어 번역 가이드다.
 - 원문 전체의 문장 단위 직역보다, 실무 적용 시 필요한 규칙/절차를 한국어로 명확하게 정리했다.
-- 원문 기준 파일: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/requesting-code-review/SKILL.md`

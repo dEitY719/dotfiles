@@ -1,11 +1,10 @@
 ---
 name: subagent-driven-development
-source: /home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/subagent-driven-development/SKILL.md
+source: superpowers/5.0.7/skills/subagent-driven-development/SKILL.md
 language: ko
 ---
 
-# subagent-driven-development 스킬 한국어 번역 가이드
-
+# subagent-driven-development
 ## 개요
 작업 단위를 서브에이전트로 위임하고 단계별 리뷰로 통제하는 개발 스킬
 
@@ -35,4 +34,3 @@ language: ko
 ## 비고
 - 이 문서는 팀 학습용 한국어 번역 가이드다.
 - 원문 전체의 문장 단위 직역보다, 실무 적용 시 필요한 규칙/절차를 한국어로 명확하게 정리했다.
-- 원문 기준 파일: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/subagent-driven-development/SKILL.md`

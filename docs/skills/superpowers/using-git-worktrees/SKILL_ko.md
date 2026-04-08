@@ -1,11 +1,10 @@
 ---
 name: using-git-worktrees
-source: /home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/using-git-worktrees/SKILL.md
+source: superpowers/5.0.7/skills/using-git-worktrees/SKILL.md
 language: ko
 ---
 
-# using-git-worktrees 스킬 한국어 번역 가이드
-
+# using-git-worktrees
 ## 개요
 안전한 분리 작업공간(worktree) 생성 및 초기 검증을 표준화하는 스킬
 
@@ -35,4 +34,3 @@ language: ko
 ## 비고
 - 이 문서는 팀 학습용 한국어 번역 가이드다.
 - 원문 전체의 문장 단위 직역보다, 실무 적용 시 필요한 규칙/절차를 한국어로 명확하게 정리했다.
-- 원문 기준 파일: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/using-git-worktrees/SKILL.md`

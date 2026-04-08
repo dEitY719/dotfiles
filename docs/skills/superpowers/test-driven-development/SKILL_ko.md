@@ -1,11 +1,10 @@
 ---
 name: test-driven-development
-source: /home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/test-driven-development/SKILL.md
+source: superpowers/5.0.7/skills/test-driven-development/SKILL.md
 language: ko
 ---
 
-# test-driven-development 스킬 한국어 번역 가이드
-
+# test-driven-development
 ## 개요
 Red-Green-Refactor 순서를 강제해 안정적으로 기능을 구현하는 TDD 스킬
 
@@ -36,4 +35,3 @@ Red-Green-Refactor 순서를 강제해 안정적으로 기능을 구현하는 TD
 ## 비고
 - 이 문서는 팀 학습용 한국어 번역 가이드다.
 - 원문 전체의 문장 단위 직역보다, 실무 적용 시 필요한 규칙/절차를 한국어로 명확하게 정리했다.
-- 원문 기준 파일: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/test-driven-development/SKILL.md`

@@ -4,8 +4,8 @@
 추측 대신 증거 기반으로 원인을 찾는 체계적 디버깅 스킬
 
 ## 이 스킬이 해결하는 문제
-- 작업 흐름에서 자주 발생하는 실수(순서 누락, 검증 생략, 범위 과대화)를 줄인다.
-- 팀 단위 협업에서 의사결정 기준과 보고 형식을 통일한다.
+- 근거 없는 추측 패치로 버그가 재발하는 문제를 줄인다.
+- 원인 분석 없이 증상만 고쳐 디버깅 시간이 늘어나는 문제를 줄인다.
 
 ## 핵심 포인트
 - 근본 원인 파악 전 수정 금지(철칙).
@@ -24,8 +24,7 @@
 
 ## 산출물
 - 한국어 가이드: `SKILL_ko.md`
-- 원문: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/systematic-debugging/SKILL.md`
-
+- 원문: `superpowers/5.0.7/skills/systematic-debugging/SKILL.md`
 ## 추천 학습 순서
 1. `SKILL_ko.md`를 먼저 읽어 전체 흐름을 파악한다.
 2. 실제 적용 전에 원문 `SKILL.md`의 세부 규칙(금지/예외)을 재확인한다.

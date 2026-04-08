@@ -1,11 +1,10 @@
 ---
 name: finishing-a-development-branch
-source: /home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/finishing-a-development-branch/SKILL.md
+source: superpowers/5.0.7/skills/finishing-a-development-branch/SKILL.md
 language: ko
 ---
 
-# finishing-a-development-branch 스킬 한국어 번역 가이드
-
+# finishing-a-development-branch
 ## 개요
 개발 브랜치 완료 후 테스트 검증, 통합 방식 선택, 정리까지 마무리하는 스킬
 
@@ -34,4 +33,3 @@ language: ko
 ## 비고
 - 이 문서는 팀 학습용 한국어 번역 가이드다.
 - 원문 전체의 문장 단위 직역보다, 실무 적용 시 필요한 규칙/절차를 한국어로 명확하게 정리했다.
-- 원문 기준 파일: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/finishing-a-development-branch/SKILL.md`

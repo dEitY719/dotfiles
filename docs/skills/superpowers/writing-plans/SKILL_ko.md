@@ -1,11 +1,10 @@
 ---
 name: writing-plans
-source: /home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/writing-plans/SKILL.md
+source: superpowers/5.0.7/skills/writing-plans/SKILL.md
 language: ko
 ---
 
-# writing-plans 스킬 한국어 번역 가이드
-
+# writing-plans
 ## 개요
 스펙을 구현 가능한 세부 실행계획으로 문서화하는 스킬
 
@@ -35,4 +34,3 @@ language: ko
 ## 비고
 - 이 문서는 팀 학습용 한국어 번역 가이드다.
 - 원문 전체의 문장 단위 직역보다, 실무 적용 시 필요한 규칙/절차를 한국어로 명확하게 정리했다.
-- 원문 기준 파일: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/writing-plans/SKILL.md`
