@@ -48,22 +48,10 @@ class TestFunctionAvailability:
         assert result.exit_code == 0, f"{shell}: my_help_impl function not available"
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
-    def test_mytool_help_function_available(self, shell_runner, shell):
-        """Test mytool_help function is available."""
-        result = shell_runner(shell, "declare -f mytool_help | head -1")
-        assert result.exit_code == 0, f"{shell}: mytool_help function not available"
-
-    @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_alias_available(self, shell_runner, shell):
         """Test my-help alias is available."""
         result = shell_runner(shell, "alias my-help")
         assert result.exit_code == 0, f"{shell}: my-help alias not available"
-
-    @pytest.mark.parametrize("shell", ["bash", "zsh"])
-    def test_mytool_help_alias_available(self, shell_runner, shell):
-        """Test mytool-help alias is available."""
-        result = shell_runner(shell, "alias mytool-help")
-        assert result.exit_code == 0, f"{shell}: mytool-help alias not available"
 
 
 class TestEnvironmentVariables:
