@@ -177,3 +177,18 @@ ssl_check() {
 
 alias ssl-help='ssl_help'
 alias check-ssl='ssl_check'
+
+# --- ssh_check (WSL SSH key setup) ---
+
+ssh_check() {
+    local check_ssh_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/check_ssh.sh"
+    if [ -f "$check_ssh_script" ]; then
+        bash "$check_ssh_script" "$@"
+    else
+        if type ux_error >/dev/null 2>&1; then
+            ux_error "check_ssh.sh not found: $check_ssh_script"
+        fi
+    fi
+}
+
+alias ssh-check='ssh_check'

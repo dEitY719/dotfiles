@@ -1,3 +1,6 @@
+# Environment-specific configs (e.g., SSAI servers for internal PC)
+Include ~/.ssh/config.d/*
+
 Host *
      PubkeyAcceptedKeyTypes +ssh-rsa
      ServerAliveInterval 60
@@ -36,12 +39,3 @@ Host 10.227.36.179
      KexAlgorithms diffie-hellman-group-exchange-sha256
      HostkeyAlgorithms +ssh-rsa
      PubkeyAcceptedKeyTypes +ssh-rsa
-
-# SSAI Server Access
-Host ssai-dev
-     HostName 12.81.221.129
-     User bwyoon
-
-Host ssai-ops
-     HostName 12.81.221.140
-     User bwyoon
