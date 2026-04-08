@@ -275,7 +275,11 @@ EOF
     else
         echo "=== Commit List ==="
     fi
-    echo "Commits to cherry-pick:"
+    if type ux_info >/dev/null 2>&1; then
+        ux_info "Commits to cherry-pick:"
+    else
+        echo "Commits to cherry-pick:"
+    fi
 
     local line_num=0
     while IFS= read -r sha; do

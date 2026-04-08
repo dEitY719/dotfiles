@@ -133,4 +133,6 @@ main() {
     trap - EXIT
 }
 
-main "$@"
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+    main "$@"
+fi
