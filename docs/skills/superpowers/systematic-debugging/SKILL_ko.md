@@ -1,0 +1,38 @@
+---
+name: systematic-debugging
+source: /home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/systematic-debugging/SKILL.md
+language: ko
+---
+
+# systematic-debugging 스킬 한국어 번역 가이드
+
+## 개요
+추측 대신 증거 기반으로 원인을 찾는 체계적 디버깅 스킬
+
+## 언제 사용하나
+- 버그 원인이 불명확하거나 재현이 불안정할 때
+- 동일 계열 장애가 반복될 때
+
+## 핵심 절차(번역)
+1. 근본 원인 파악 전 수정 금지(철칙).
+2. 4단계(원인 조사→패턴 분석→가설 검증→구현)로 진행한다.
+3. 재현 조건, 로그, 실험 결과를 명시적으로 기록한다.
+
+## 주의/금지 사항(번역)
+- 원인 미확인 상태의 임시 패치
+- 증거 없는 "아마 이거" 판단
+- 실험 없이 코드 변경 반복
+
+## 실행 체크리스트
+- 작업 시작 전에 이 스킬이 현재 과제에 실제로 필요한지 확인한다.
+- 필요하면 해당 스킬의 원문 `SKILL.md`에서 세부 규칙을 다시 확인한다.
+- 진행 중에는 체크리스트/게이트 조건을 생략하지 않는다.
+- 완료 보고 전에는 관련 검증 명령과 결과를 함께 남긴다.
+
+## 빠른 예시
+> "간헐 실패 버그를 systematic-debugging 4단계로 분석해서 근본 원인부터 찾아줘."
+
+## 비고
+- 이 문서는 팀 학습용 한국어 번역 가이드다.
+- 원문 전체의 문장 단위 직역보다, 실무 적용 시 필요한 규칙/절차를 한국어로 명확하게 정리했다.
+- 원문 기준 파일: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/systematic-debugging/SKILL.md`

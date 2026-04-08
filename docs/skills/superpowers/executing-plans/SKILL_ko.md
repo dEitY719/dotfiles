@@ -1,0 +1,37 @@
+---
+name: executing-plans
+source: /home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/executing-plans/SKILL.md
+language: ko
+---
+
+# executing-plans 스킬 한국어 번역 가이드
+
+## 개요
+작성된 구현 계획을 단계별로 실행하고 체크포인트를 통과시키는 스킬
+
+## 언제 사용하나
+- 이미 합의된 plan 문서를 실제 구현으로 옮길 때
+
+## 핵심 절차(번역)
+1. 계획 문서를 먼저 비판적으로 검토하고 의문점을 해결한다.
+2. 작업별로 in_progress→검증→completed 순서로 진행한다.
+3. 모든 작업 완료 후 `finishing-a-development-branch`로 마무리한다.
+
+## 주의/금지 사항(번역)
+- 계획 이해 없이 바로 구현
+- 검증 단계 생략
+- 막혔는데 추측으로 진행
+
+## 실행 체크리스트
+- 작업 시작 전에 이 스킬이 현재 과제에 실제로 필요한지 확인한다.
+- 필요하면 해당 스킬의 원문 `SKILL.md`에서 세부 규칙을 다시 확인한다.
+- 진행 중에는 체크리스트/게이트 조건을 생략하지 않는다.
+- 완료 보고 전에는 관련 검증 명령과 결과를 함께 남긴다.
+
+## 빠른 예시
+> "이제 plan 문서대로 그대로 구현해줘. executing-plans 방식으로 체크포인트 포함해서 진행해."
+
+## 비고
+- 이 문서는 팀 학습용 한국어 번역 가이드다.
+- 원문 전체의 문장 단위 직역보다, 실무 적용 시 필요한 규칙/절차를 한국어로 명확하게 정리했다.
+- 원문 기준 파일: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/executing-plans/SKILL.md`
