@@ -1,11 +1,10 @@
 ---
 name: brainstorming
-source: /home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/brainstorming/SKILL.md
+source: superpowers/5.0.7/skills/brainstorming/SKILL.md
 language: ko
 ---
 
-# brainstorming 스킬 한국어 번역 가이드
-
+# brainstorming
 ## 개요
 구현 전에 사용자 의도와 요구사항을 설계로 구체화하는 사전 브레인스토밍 스킬
 
@@ -36,4 +35,3 @@ language: ko
 ## 비고
 - 이 문서는 팀 학습용 한국어 번역 가이드다.
 - 원문 전체의 문장 단위 직역보다, 실무 적용 시 필요한 규칙/절차를 한국어로 명확하게 정리했다.
-- 원문 기준 파일: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/brainstorming/SKILL.md`
