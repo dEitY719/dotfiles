@@ -10,7 +10,7 @@ source "$(dirname "$0")/init.sh" || exit 1
 # Configuration
 # ============================================================
 
-KEY_NAME="id_rsa_ssai"
+KEY_NAME="id_rsa_ssai_bwyoon"
 WSL_SSH_DIR="$HOME/.ssh"
 
 # Detect Windows username from WSL
