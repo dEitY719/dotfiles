@@ -1,0 +1,38 @@
+---
+name: dispatching-parallel-agents
+source: /home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/dispatching-parallel-agents/SKILL.md
+language: ko
+---
+
+# dispatching-parallel-agents 스킬 한국어 번역 가이드
+
+## 개요
+독립적인 문제를 병렬 서브에이전트로 분할해 동시에 해결하는 스킬
+
+## 언제 사용하나
+- 서로 원인이 다른 실패가 2개 이상 존재할 때
+- 파일/서브시스템이 분리되어 공유 상태가 거의 없을 때
+
+## 핵심 절차(번역)
+1. 문제를 독립 도메인으로 먼저 분류한다.
+2. 에이전트마다 범위를 1개 도메인으로 제한하고 산출물을 명확히 정의한다.
+3. 동시에 실행 후 충돌 여부를 검토하고 통합 검증한다.
+
+## 주의/금지 사항(번역)
+- 연관된 실패를 무리하게 병렬 분해
+- 범위가 너무 넓은 프롬프트 전달
+- 통합 테스트 없이 병합
+
+## 실행 체크리스트
+- 작업 시작 전에 이 스킬이 현재 과제에 실제로 필요한지 확인한다.
+- 필요하면 해당 스킬의 원문 `SKILL.md`에서 세부 규칙을 다시 확인한다.
+- 진행 중에는 체크리스트/게이트 조건을 생략하지 않는다.
+- 완료 보고 전에는 관련 검증 명령과 결과를 함께 남긴다.
+
+## 빠른 예시
+> "서로 다른 테스트 파일 3개가 독립적으로 깨졌어. 파일별 병렬 에이전트로 원인 분석/수정해줘."
+
+## 비고
+- 이 문서는 팀 학습용 한국어 번역 가이드다.
+- 원문 전체의 문장 단위 직역보다, 실무 적용 시 필요한 규칙/절차를 한국어로 명확하게 정리했다.
+- 원문 기준 파일: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/dispatching-parallel-agents/SKILL.md`

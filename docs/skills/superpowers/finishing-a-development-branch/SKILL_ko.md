@@ -1,0 +1,37 @@
+---
+name: finishing-a-development-branch
+source: /home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/finishing-a-development-branch/SKILL.md
+language: ko
+---
+
+# finishing-a-development-branch 스킬 한국어 번역 가이드
+
+## 개요
+개발 브랜치 완료 후 테스트 검증, 통합 방식 선택, 정리까지 마무리하는 스킬
+
+## 언제 사용하나
+- 기능 구현이 끝나고 브랜치 처리 결정을 내려야 할 때
+
+## 핵심 절차(번역)
+1. 먼저 테스트 통과를 증거로 확인한다.
+2. base 브랜치를 확인한 뒤 4가지 선택지(로컬 머지/PR/유지/폐기)를 제시한다.
+3. 선택지에 맞는 git 절차를 수행하고 필요 시 worktree를 정리한다.
+
+## 주의/금지 사항(번역)
+- 테스트 실패 상태로 머지/PR 진행
+- 폐기 전에 명시적 확인 없이 삭제
+- 옵션 3(유지)인데 worktree를 자동 삭제
+
+## 실행 체크리스트
+- 작업 시작 전에 이 스킬이 현재 과제에 실제로 필요한지 확인한다.
+- 필요하면 해당 스킬의 원문 `SKILL.md`에서 세부 규칙을 다시 확인한다.
+- 진행 중에는 체크리스트/게이트 조건을 생략하지 않는다.
+- 완료 보고 전에는 관련 검증 명령과 결과를 함께 남긴다.
+
+## 빠른 예시
+> "구현 완료했으니 finishing-a-development-branch 절차로 마무리 옵션을 제시해줘."
+
+## 비고
+- 이 문서는 팀 학습용 한국어 번역 가이드다.
+- 원문 전체의 문장 단위 직역보다, 실무 적용 시 필요한 규칙/절차를 한국어로 명확하게 정리했다.
+- 원문 기준 파일: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/finishing-a-development-branch/SKILL.md`

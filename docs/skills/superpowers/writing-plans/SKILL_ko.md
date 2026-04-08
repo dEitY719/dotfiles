@@ -1,0 +1,38 @@
+---
+name: writing-plans
+source: /home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/writing-plans/SKILL.md
+language: ko
+---
+
+# writing-plans 스킬 한국어 번역 가이드
+
+## 개요
+스펙을 구현 가능한 세부 실행계획으로 문서화하는 스킬
+
+## 언제 사용하나
+- 설계(spec)는 확정됐고, 코드 변경 전에 구현 계획이 필요할 때
+
+## 핵심 절차(번역)
+1. 파일 구조와 책임 경계를 먼저 설계한다.
+2. 2~5분 단위의 체크박스 작업으로 세분화한다.
+3. 각 단계에 실제 코드/명령/예상 결과를 명시한다.
+4. 계획 완료 후 실행 방식(서브에이전트/인라인)을 선택하게 한다.
+
+## 주의/금지 사항(번역)
+- TBD/TODO placeholder 남김
+- 파일 경로/명령/테스트 예시 누락
+- 요구사항 대비 누락된 태스크 방치
+
+## 실행 체크리스트
+- 작업 시작 전에 이 스킬이 현재 과제에 실제로 필요한지 확인한다.
+- 필요하면 해당 스킬의 원문 `SKILL.md`에서 세부 규칙을 다시 확인한다.
+- 진행 중에는 체크리스트/게이트 조건을 생략하지 않는다.
+- 완료 보고 전에는 관련 검증 명령과 결과를 함께 남긴다.
+
+## 빠른 예시
+> "spec 기반으로 writing-plans 형식의 구현 계획서를 만들어줘. 단계별 코드/검증 명령까지 포함해."
+
+## 비고
+- 이 문서는 팀 학습용 한국어 번역 가이드다.
+- 원문 전체의 문장 단위 직역보다, 실무 적용 시 필요한 규칙/절차를 한국어로 명확하게 정리했다.
+- 원문 기준 파일: `/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/writing-plans/SKILL.md`
