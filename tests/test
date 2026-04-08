@@ -118,9 +118,11 @@ check_requirements() {
     fi
 
     # Check pytest-xdist (optional, for parallel execution)
+    HAS_XDIST=0
     if python3 -m pip show pytest-xdist >/dev/null 2>&1; then
         local xdist_version=$(python3 -m pip show pytest-xdist 2>&1 | grep Version | awk '{print $2}')
         print_info "pytest-xdist $xdist_version (parallel execution enabled)"
+        HAS_XDIST=1
     else
         print_warning "pytest-xdist not found. Tests will run serially. Install with: pip install pytest-xdist"
     fi
@@ -134,32 +136,74 @@ check_requirements() {
 }
 
 
-# Run tests
-run_tests() {
+# Run bats tests
+run_bats() {
+    local bats_bin="${SCRIPT_DIR}/bats/lib/bats-core/bin/bats"
+    if [ ! -x "$bats_bin" ]; then
+        print_warning "bats-core not found. Skipping shell unit tests."
+        print_info "Run: git submodule update --init --recursive"
+        return 0
+    fi
+
+    print_header "Running Bats Shell Unit Tests"
+    # Auto-discover bats test directories, excluding lib/ (submodules)
+    local bats_dirs=()
+    while IFS= read -r d; do
+        bats_dirs+=("$d")
+    done < <(find "${SCRIPT_DIR}/bats" -type f -name '*.bats' -not -path '*/lib/*' -exec dirname {} \; | sort -u)
+    if [ ${#bats_dirs[@]} -eq 0 ]; then
+        print_warning "No bats test directories found"
+        return 0
+    fi
+    "$bats_bin" "${bats_dirs[@]}"
+    return $?
+}
+
+# Run golden rules
+run_golden_rules() {
+    local gr_script="${SCRIPT_DIR}/golden_rules/test_golden_rules.sh"
+    if [ -f "$gr_script" ]; then
+        print_header "Running Golden Rules"
+        bash "$gr_script"
+        return $?
+    fi
+    return 0
+}
+
+# Run pytest integration tests
+run_pytest() {
     local verbose_flag=""
-    local addopts_override=""
 
     if [ "$VERBOSE" = "1" ]; then
         verbose_flag="-v"
     fi
 
-    cd "$REPO_ROOT"
-    export DOTFILES_TEST_MODE=1
-
-    print_header "Running Test Suite"
-    if [ "$SERIAL" = "1" ]; then
-        # Serial execution: override addopts to remove xdist options
-        # Use -o flag to override pyproject.toml addopts
-        python3 -m pytest tests/ \
+    print_header "Running Pytest Integration Tests"
+    if [ "$SERIAL" = "1" ] || [ "$HAS_XDIST" = "0" ]; then
+        # Serial: override addopts to remove xdist options
+        python3 -m pytest tests/integration/ \
             $verbose_flag \
             --tb=short \
             -o addopts="-v --strict-markers" \
             -p no:xdist
     else
-        # Use pytest.ini defaults which include -n auto --dist load
-        python3 -m pytest tests/ $verbose_flag --tb=short
+        python3 -m pytest tests/integration/ $verbose_flag --tb=short
     fi
     return $?
+}
+
+# Run all tests
+run_tests() {
+    cd "$REPO_ROOT"
+    export DOTFILES_TEST_MODE=1
+
+    local exit_code=0
+
+    run_bats || exit_code=1
+    run_golden_rules || exit_code=1
+    run_pytest || exit_code=1
+
+    return $exit_code
 }
 
 # Main
