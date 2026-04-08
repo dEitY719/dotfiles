@@ -21,7 +21,7 @@ TOTAL_FUNCTION_COUNT=0
 usage() {
     echo "사용법: $0 <bash_files_directory>"
     echo "예시: $0 ~/my_bash_config"
-    exit 1
+    return 1
 }
 
 # alias 정의를 파싱하고 전역 변수에 업데이트하는 함수
@@ -91,14 +91,15 @@ main() {
         usage
     fi
 
-    TARGET_DIR="$1"
+    local TARGET_DIR="$1"
 
     if [[ ! -d "$TARGET_DIR" ]]; then
         echo "오류: '$TARGET_DIR' 디렉토리를 찾을 수 없습니다."
         usage
     fi
 
-    mapfile -t sh_files < <(find "$TARGET_DIR" -type f -name "*.sh")
+    local sh_files
+    mapfile -t sh_files < <(find "$TARGET_DIR" -type f -name "*.sh" -not -path '*/lib/*')
 
     for sh_file in "${sh_files[@]}"; do
         parse_aliases "$sh_file"
