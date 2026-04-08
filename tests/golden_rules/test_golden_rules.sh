@@ -64,7 +64,7 @@ if [ "$with_guard" -eq "$total" ]; then
     test_case "All $total custom tools have direct-exec guard" 0
 else
     test_case "All custom tools have direct-exec guard ($with_guard/$total)" 1
-    printf "$without_guard" | head -5
+    printf "%b" "$without_guard" | head -5
     remaining=$((total - with_guard - 5))
     [ "$remaining" -gt 0 ] && echo "  ... and $remaining more"
 fi

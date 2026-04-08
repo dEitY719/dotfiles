@@ -120,9 +120,9 @@ check_requirements() {
     # Check pytest-xdist (optional, for parallel execution)
     # Use import check instead of pip show — uv-managed venvs may not have pip
     HAS_XDIST=0
-    if python3 -c "import xdist; print(xdist.__version__)" >/dev/null 2>&1; then
-        local xdist_version
-        xdist_version=$(python3 -c "import xdist; print(xdist.__version__)" 2>/dev/null)
+    local xdist_version
+    xdist_version=$(python3 -c "import xdist; print(xdist.__version__)" 2>/dev/null)
+    if [ $? -eq 0 ]; then
         print_info "pytest-xdist $xdist_version (parallel execution enabled)"
         HAS_XDIST=1
     else
