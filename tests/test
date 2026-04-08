@@ -118,13 +118,15 @@ check_requirements() {
     fi
 
     # Check pytest-xdist (optional, for parallel execution)
+    # Use import check instead of pip show — uv-managed venvs may not have pip
     HAS_XDIST=0
-    if python3 -m pip show pytest-xdist >/dev/null 2>&1; then
-        local xdist_version=$(python3 -m pip show pytest-xdist 2>&1 | grep Version | awk '{print $2}')
+    local xdist_version
+    xdist_version=$(python3 -c "import xdist; print(xdist.__version__)" 2>/dev/null)
+    if [ $? -eq 0 ]; then
         print_info "pytest-xdist $xdist_version (parallel execution enabled)"
         HAS_XDIST=1
     else
-        print_warning "pytest-xdist not found. Tests will run serially. Install with: pip install pytest-xdist"
+        print_warning "pytest-xdist not found. Tests will run serially. Install with: uv sync --group dev"
     fi
 
     if [ $missing -eq 1 ]; then

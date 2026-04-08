@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 # Initialize common tools environment
@@ -26,6 +26,7 @@ format_number() {
     printf '%s%s' "$sign" "$formatted"
 }
 
+main() {
 TARGET_DIR=${1:-.}
 if [[ ! -d $TARGET_DIR ]]; then
     ux_error "'${TARGET_DIR}' is not a directory" >&2
@@ -132,3 +133,8 @@ for ext in "${exts[@]}"; do
     fi
 done
 echo ""
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+    main "$@"
+fi

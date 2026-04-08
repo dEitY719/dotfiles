@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # =============================================================================
 # run_agents_md_master_prompt.sh
@@ -18,16 +18,17 @@ fi
 DOTFILES_ROOT="${DOTFILES_ROOT:-${SCRIPT_DIR%/shell-common/tools/custom}}"
 PROMPT_FILE="${DOTFILES_ROOT:-$HOME/dotfiles}/docs/AGENTS_md_Master_Prompt.md"
 
+main() {
 # 프롬프트 파일 존재 확인
 if [[ ! -f "$PROMPT_FILE" ]]; then
     [[ -n "${UX_ERROR+x}" ]] && ux_error "Master prompt file not found: $PROMPT_FILE" || echo "Error: Master prompt file not found: $PROMPT_FILE" >&2
-    exit 1
+    return 1
 fi
 
 # Claude Code CLI 존재 확인
 if ! command -v claude &> /dev/null; then
     [[ -n "${UX_ERROR+x}" ]] && ux_error "'claude' command not found. Please install Claude Code CLI." || echo "Error: 'claude' command not found. Please install Claude Code CLI." >&2
-    exit 1
+    return 1
 fi
 
 # 현재 디렉토리 확인
@@ -43,14 +44,14 @@ PROMPT="Read $PROMPT_FILE and execute all the commands in it to create the AGENT
 if claude "$PROMPT" 2>/dev/null; then
     echo ""
     [[ -n "${UX_SUCCESS+x}" ]] && ux_success "AGENTS.md generation completed successfully" || echo "✓ AGENTS.md generation completed successfully"
-    exit 0
+    return 0
 fi
 
 # 대안: stdin 방식
 if echo "$PROMPT" | claude 2>/dev/null; then
     echo ""
     [[ -n "${UX_SUCCESS+x}" ]] && ux_success "AGENTS.md generation completed successfully" || echo "✓ AGENTS.md generation completed successfully"
-    exit 0
+    return 0
 fi
 
 # 실패 시 안내 메시지
@@ -63,4 +64,9 @@ echo ""
 [[ -n "${UX_INFO+x}" ]] && ux_info "Then paste the following command:" || echo "Then paste the following command:"
 echo "  Read $PROMPT_FILE and execute the commands."
 echo ""
-exit 1
+return 1
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+    main "$@"
+fi
