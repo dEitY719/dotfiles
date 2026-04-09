@@ -65,12 +65,11 @@ preflight_check() {
     fi
   fi
 
-  # Unpushed commits
-  local local_rev remote_rev
-  local_rev="$(git -C "$worktree_path" rev-parse HEAD)"
-  remote_rev="$(git -C "$worktree_path" rev-parse @{u} 2>/dev/null || echo "no-upstream")"
+  # Unpushed commits (only commits in HEAD that are NOT in upstream)
+  local unpushed
+  unpushed="$(git -C "$worktree_path" log --oneline @{u}..HEAD 2>/dev/null)"
 
-  if [[ "$remote_rev" != "no-upstream" && "$local_rev" != "$remote_rev" ]]; then
+  if [[ -n "$unpushed" ]]; then
     if [[ "$force" == true ]]; then
       echo "Warning: Discarding unpushed commits (--force)"
     else
