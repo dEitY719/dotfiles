@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="ko" class="theme-light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Superpowers Plugin Skills v5.0.7</title>
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js"></script>
+  <style>
+    :root {
+      --bg: #f2f5f9;
+      --surface: #ffffff;
+      --surface-hover: #eef4ff;
+      --border: #d6deea;
+      --text: #0f172a;
+      --text-secondary: #475569;
+      --accent: #0f5de6;
+      --accent-secondary: #0b8f78;
+      --positive: #0f9d58;
+      --negative: #bf1d1d;
+      --warning: #b06a00;
+      --radius: 14px;
+      --shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+      --max: 1200px;
+      --mono: "JetBrains Mono", "Cascadia Code", monospace;
+    }
+
+    .theme-dark {
+      --bg: #0b1220;
+      --surface: #111a2b;
+      --surface-hover: #1a2640;
+      --border: #2b3952;
+      --text: #e8eefc;
+      --text-secondary: #9cb0ce;
+      --accent: #7fafff;
+      --accent-secondary: #52d7bd;
+      --positive: #4bd98c;
+      --negative: #ff9f9f;
+      --warning: #ffc677;
+      --shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 0% 0%, #e8f0ff 0%, var(--bg) 36%), var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 16px;
+    }
+
+    .skip-link {
+      position: absolute;
+      left: -9999px;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+
+    .skip-link:focus {
+      left: 1rem;
+      top: 1rem;
+      width: auto;
+      height: auto;
+      padding: 0.5rem 0.8rem;
+      border-radius: 8px;
+      color: #fff;
+      background: var(--accent);
+      z-index: 100;
+    }
+
+    .viz-menu {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--surface) 92%, transparent);
+      backdrop-filter: blur(10px);
+    }
+
+    .menu-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 0.75rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .menu-brand {
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      color: var(--text-secondary);
+      font-size: 0.93rem;
+    }
+
+    .menu-wrap {
+      position: relative;
+    }
+
+    .viz-menu-toggle {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.4rem 0.8rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+
+    .viz-menu-dropdown {
+      position: absolute;
+      top: calc(100% + 0.45rem);
+      right: 0;
+      display: none;
+      min-width: 160px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .viz-menu-dropdown.open {
+      display: block;
+    }
+
+    .viz-menu-dropdown button {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      padding: 0.58rem 0.7rem;
+      cursor: pointer;
+      font-size: 0.89rem;
+    }
+
+    .viz-menu-dropdown button:hover {
+      background: var(--surface-hover);
+    }
+
+    main {
+      max-width: var(--max);
+      margin: 1.2rem auto 2rem;
+      padding: 0 1rem;
+      display: grid;
+      grid-template-columns: minmax(0, 290px) minmax(0, 1fr);
+      gap: 1rem;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .toc {
+      position: sticky;
+      top: 4.4rem;
+      align-self: start;
+      padding: 1rem;
+    }
+
+    .toc h2 {
+      margin: 0 0 0.6rem;
+      font-size: 1rem;
+    }
+
+    .toc a {
+      display: block;
+      padding: 0.36rem 0.42rem;
+      border-radius: 8px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+
+    .toc a:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+
+    .doc {
+      padding: 1.15rem 1.3rem;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 3vw, 3rem);
+      margin: 0 0 0.6rem;
+      line-height: 1.18;
+    }
+
+    h2 {
+      font-size: clamp(1.4rem, 2.2vw, 2rem);
+      margin: 1.5rem 0 0.5rem;
+      line-height: 1.2;
+    }
+
+    h3 {
+      font-size: clamp(1.1rem, 1.8vw, 1.5rem);
+      margin: 1.1rem 0 0.45rem;
+      line-height: 1.3;
+    }
+
+    p { margin: 0.4rem 0 0.8rem; }
+
+    .hero {
+      padding: 1rem 1.1rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 10%, var(--surface) 90%), var(--surface));
+      margin-bottom: 1rem;
+    }
+
+    .hero pre {
+      margin: 0;
+      white-space: pre-wrap;
+      font-family: var(--mono);
+      font-size: 0.86rem;
+      line-height: 1.45;
+      color: var(--text-secondary);
+    }
+
+    .skill-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.8rem;
+      margin-top: 0.7rem;
+    }
+
+    .skill-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.8rem;
+      background: var(--surface);
+    }
+
+    .skill-card h3 {
+      margin-top: 0;
+      font-size: 1.08rem;
+    }
+
+    ul { margin: 0.4rem 0 0.8rem 1.1rem; padding: 0; }
+    li { margin: 0.36rem 0; }
+
+    a.skill-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 650;
+    }
+
+    a.skill-link:hover {
+      color: var(--accent-secondary);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .flow {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.85rem;
+      background: color-mix(in srgb, var(--surface) 88%, var(--accent) 12%);
+      margin-bottom: 0.9rem;
+    }
+
+    .flow ol {
+      margin: 0.35rem 0 0.15rem 1.2rem;
+    }
+
+    .notes {
+      margin-top: 0.65rem;
+      color: var(--text-secondary);
+    }
+
+    .path-box {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #0f172a;
+      color: #dbeafe;
+      padding: 0.8rem 0.9rem;
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      overflow-x: auto;
+    }
+
+    .animate {
+      opacity: 0;
+      transform: translateY(8px);
+      animation: rise 0.45s ease forwards;
+    }
+
+    .delay-1 { animation-delay: 0.08s; }
+    .delay-2 { animation-delay: 0.16s; }
+
+    @keyframes rise {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 980px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      .toc {
+        position: static;
+      }
+
+      .skill-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+
+    @media print {
+      .viz-menu, .toc {
+        display: none !important;
+      }
+
+      body {
+        background: #fff;
+      }
+
+      main {
+        display: block;
+        margin: 0;
+        padding: 0;
+        max-width: 100%;
+      }
+
+      .doc {
+        border: 0;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">본문으로 건너뛰기</a>
+
+  <header class="viz-menu" aria-label="문서 유틸리티 메뉴">
+    <div class="menu-inner">
+      <div class="menu-brand">Superpowers Plugin Skills v5.0.7</div>
+      <div class="menu-wrap">
+        <button class="viz-menu-toggle" type="button" aria-label="메뉴 열기" onclick="toggleMenu()">유틸리티</button>
+        <div class="viz-menu-dropdown" id="menu-dropdown" aria-label="유틸리티 드롭다운">
+          <button type="button" onclick="cycleTheme()">테마 전환</button>
+          <button type="button" onclick="downloadImage()">PNG 저장</button>
+          <button type="button" onclick="window.print()">인쇄</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main id="main-content" aria-label="Superpowers Skills Index">
+    <aside class="panel toc animate" aria-label="문서 목차">
+      <h2>목차</h2>
+      <a href="#overview">개요</a>
+      <a href="#process-skills">Process Skills</a>
+      <a href="#execution-skills">Execution Skills</a>
+      <a href="#review-skills">Review and Completion</a>
+      <a href="#meta-skills">Meta Skills</a>
+      <a href="#skill-flow">Skill Usage Flow</a>
+      <a href="#location">Skill Files Location</a>
+    </aside>
+
+    <section class="panel doc animate delay-1">
+      <h1 id="overview">Superpowers Plugin Skills</h1>
+      <div class="hero">
+        <pre>Superpowers Plugin Skills (v5.0.7)
+Process Skills + Execution Skills + Review/Completion + Meta Skills</pre>
+      </div>
+
+      <h2 id="process-skills">Process Skills (HOW to approach)</h2>
+      <div class="skill-grid">
+        <article class="skill-card">
+          <h3><a class="skill-link" href="brainstorming/README-CX.html">brainstorming</a></h3>
+          <p>Creative work, feature design, requirements exploration before implementation.</p>
+        </article>
+        <article class="skill-card">
+          <h3><a class="skill-link" href="writing-plans/README-CX.html">writing-plans</a></h3>
+          <p>Multi-step task planning from spec/requirements, before touching code.</p>
+        </article>
+        <article class="skill-card">
+          <h3><a class="skill-link" href="executing-plans/README-CX.html">executing-plans</a></h3>
+          <p>Execute written implementation plans in separate sessions with review checkpoints.</p>
+        </article>
+        <article class="skill-card">
+          <h3><a class="skill-link" href="systematic-debugging/README-CX.html">systematic-debugging</a></h3>
+          <p>Bug/test failure diagnosis with root cause analysis before proposing fixes.</p>
+        </article>
+        <article class="skill-card">
+          <h3><a class="skill-link" href="test-driven-development/README-CX.html">test-driven-development</a></h3>
+          <p>Red-green-refactor: write tests before implementation code.</p>
+        </article>
+        <article class="skill-card">
+          <h3><a class="skill-link" href="verification-before-completion/README-CX.html">verification-before-completion</a></h3>
+          <p>Run verification commands and confirm output before claiming done.</p>
+        </article>
+      </div>
+
+      <h2 id="execution-skills">Execution Skills (parallel and isolation)</h2>
+      <div class="skill-grid">
+        <article class="skill-card">
+          <h3><a class="skill-link" href="dispatching-parallel-agents/README-CX.html">dispatching-parallel-agents</a></h3>
+          <p>Run two or more independent tasks concurrently without shared state.</p>
+        </article>
+        <article class="skill-card">
+          <h3><a class="skill-link" href="subagent-driven-development/README-CX.html">subagent-driven-development</a></h3>
+          <p>Execute implementation plans with independent sub-agents.</p>
+        </article>
+        <article class="skill-card">
+          <h3><a class="skill-link" href="using-git-worktrees/README-CX.html">using-git-worktrees</a></h3>
+          <p>Isolated feature work via git worktrees with safety checks.</p>
+        </article>
+      </div>
+
+      <h2 id="review-skills">Review and Completion Skills</h2>
+      <div class="skill-grid">
+        <article class="skill-card">
+          <h3><a class="skill-link" href="requesting-code-review/README-CX.html">requesting-code-review</a></h3>
+          <p>Request review after feature completion or before merge.</p>
+        </article>
+        <article class="skill-card">
+          <h3><a class="skill-link" href="receiving-code-review/README-CX.html">receiving-code-review</a></h3>
+          <p>Handle review feedback with technical rigor, not blind agreement.</p>
+        </article>
+        <article class="skill-card">
+          <h3><a class="skill-link" href="finishing-a-development-branch/README-CX.html">finishing-a-development-branch</a></h3>
+          <p>Branch integration: merge, PR, or cleanup options.</p>
+        </article>
+      </div>
+
+      <h2 id="meta-skills">Meta Skills</h2>
+      <div class="skill-grid">
+        <article class="skill-card">
+          <h3><a class="skill-link" href="using-superpowers/README-CX.html">using-superpowers</a></h3>
+          <p>Skill discovery and invocation at conversation start.</p>
+        </article>
+        <article class="skill-card">
+          <h3><a class="skill-link" href="writing-skills/README-CX.html">writing-skills</a></h3>
+          <p>Create, edit, or verify skills before deployment.</p>
+        </article>
+      </div>
+
+      <h2 id="skill-flow">Skill Usage Flow</h2>
+      <h3>Feature Development (full lifecycle)</h3>
+      <div class="flow">
+        <ol>
+          <li><a class="skill-link" href="brainstorming/README-CX.html">brainstorming</a> - explore requirements, design spec</li>
+          <li><a class="skill-link" href="writing-plans/README-CX.html">writing-plans</a> - break spec into bite-sized tasks</li>
+          <li><a class="skill-link" href="executing-plans/README-CX.html">executing-plans</a> - execute tasks (TDD per step)</li>
+          <li>or <a class="skill-link" href="subagent-driven-development/README-CX.html">subagent-driven-development</a> (parallel, same session)</li>
+          <li><a class="skill-link" href="requesting-code-review/README-CX.html">requesting-code-review</a> - dispatch reviewer subagent</li>
+          <li><a class="skill-link" href="receiving-code-review/README-CX.html">receiving-code-review</a> - evaluate and apply feedback</li>
+          <li><a class="skill-link" href="finishing-a-development-branch/README-CX.html">finishing-a-development-branch</a> - merge, PR, or cleanup</li>
+        </ol>
+      </div>
+
+      <p class="notes">verification-before-completion runs at every completion claim.</p>
+      <p class="notes">test-driven-development runs inside each execution step.</p>
+
+      <h3>Bug Fix (shorter cycle)</h3>
+      <div class="flow">
+        <ol>
+          <li><a class="skill-link" href="systematic-debugging/README-CX.html">systematic-debugging</a> - root cause analysis first</li>
+          <li><a class="skill-link" href="test-driven-development/README-CX.html">test-driven-development</a> - write failing test for the bug</li>
+          <li><a class="skill-link" href="verification-before-completion/README-CX.html">verification-before-completion</a></li>
+          <li><a class="skill-link" href="finishing-a-development-branch/README-CX.html">finishing-a-development-branch</a> - merge the fix</li>
+        </ol>
+      </div>
+
+      <p class="notes">Parallel tasks: <a class="skill-link" href="dispatching-parallel-agents/README-CX.html">dispatching-parallel-agents</a> or <a class="skill-link" href="using-git-worktrees/README-CX.html">using-git-worktrees</a>.</p>
+
+      <h2 id="location">Skill Files Location</h2>
+      <div class="path-box">/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/</div>
+    </section>
+  </main>
+
+  <script>
+    var root = document.documentElement;
+    var menu = document.getElementById('menu-dropdown');
+
+    function toggleMenu() {
+      menu.classList.toggle('open');
+    }
+
+    function cycleTheme() {
+      if (root.classList.contains('theme-dark')) {
+        root.classList.remove('theme-dark');
+        root.classList.add('theme-light');
+        localStorage.setItem('superpowers-theme', 'light');
+      } else {
+        root.classList.remove('theme-light');
+        root.classList.add('theme-dark');
+        localStorage.setItem('superpowers-theme', 'dark');
+      }
+      menu.classList.remove('open');
+    }
+
+    function downloadImage() {
+      var main = document.getElementById('main-content');
+      var prevDisplay = menu.style.display;
+      menu.style.display = 'none';
+
+      htmlToImage.toPng(main, {
+        pixelRatio: 2,
+        backgroundColor: getComputedStyle(document.body).backgroundColor
+      }).then(function(dataUrl) {
+        var link = document.createElement('a');
+        link.download = 'superpowers-index-cx.png';
+        link.href = dataUrl;
+        link.click();
+      }).catch(function(error) {
+        console.error('PNG export failed:', error);
+      }).finally(function() {
+        menu.style.display = prevDisplay;
+      });
+    }
+
+    (function initTheme() {
+      var saved = localStorage.getItem('superpowers-theme');
+      if (saved === 'dark') {
+        root.classList.remove('theme-light');
+        root.classList.add('theme-dark');
+      }
+    })();
+
+    document.addEventListener('click', function(event) {
+      var toggle = document.querySelector('.viz-menu-toggle');
+      if (!menu.contains(event.target) && event.target !== toggle) {
+        menu.classList.remove('open');
+      }
+    });
+  </script>
+</body>
+</html>

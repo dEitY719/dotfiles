@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ko" class="theme-light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>subagent-driven-development | Superpowers Skill</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --surface-hover: #f2f7ff;
+      --border: #d7dee8;
+      --text: #1b2838;
+      --text-secondary: #5a6b7e;
+      --accent: #1463ff;
+      --accent-secondary: #0f8d78;
+      --positive: #1b8f4b;
+      --negative: #b42318;
+      --warning: #ad6800;
+      --code-bg: #0f172a;
+      --code-text: #dbe8ff;
+      --radius: 14px;
+      --shadow: 0 12px 32px rgba(16, 24, 40, 0.08);
+      --max: 1200px;
+    }
+
+    .theme-dark {
+      --bg: #0b1320;
+      --surface: #131d2d;
+      --surface-hover: #1a2941;
+      --border: #2e3d54;
+      --text: #e8f0ff;
+      --text-secondary: #9fb0c7;
+      --accent: #79a9ff;
+      --accent-secondary: #58d4b6;
+      --positive: #45d483;
+      --negative: #ff8f8f;
+      --warning: #ffcc79;
+      --code-bg: #050a12;
+      --code-text: #d6e4ff;
+      --shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 5% 0%, #eaf1ff 0%, var(--bg) 40%), var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 16px;
+    }
+
+    .theme-dark body {
+      background: radial-gradient(circle at 10% 0%, #1b2740 0%, var(--bg) 45%), var(--bg);
+    }
+
+    .skip-link {
+      position: absolute;
+      left: -9999px;
+      top: auto;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+    .skip-link:focus {
+      left: 1rem;
+      top: 1rem;
+      width: auto;
+      height: auto;
+      background: var(--accent);
+      color: #fff;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.5rem;
+      z-index: 1000;
+    }
+
+    .viz-menu {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: color-mix(in srgb, var(--surface) 92%, transparent);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .menu-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 0.75rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+      letter-spacing: 0.02em;
+    }
+
+    .menu-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .menu-actions button {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.42rem 0.75rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .menu-actions button:hover { background: var(--surface-hover); transform: translateY(-1px); }
+
+    main {
+      max-width: var(--max);
+      margin: 1.5rem auto 2.5rem;
+      padding: 0 1rem;
+      display: grid;
+      grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+      gap: 1rem;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .toc { position: sticky; top: 4.4rem; align-self: start; padding: 1rem; }
+    .toc h2 { margin: 0 0 0.7rem; font-size: 1rem; }
+    .toc-item {
+      display: block;
+      padding: 0.35rem 0.45rem;
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+    }
+    .toc-item:hover { background: var(--surface-hover); color: var(--text); }
+    .toc-h3 { padding-left: 1rem; font-size: 0.86rem; }
+    .toc-empty { color: var(--text-secondary); margin: 0; font-size: 0.92rem; }
+
+    .article { padding: 1.25rem 1.4rem; }
+    .meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-bottom: 0.8rem;
+      padding: 0.32rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text-secondary);
+      font-size: 0.82rem;
+      background: color-mix(in srgb, var(--surface) 90%, var(--accent) 10%);
+    }
+
+    h1 { font-size: clamp(2rem, 2.8vw, 2.6rem); margin: 0.2rem 0 1rem; line-height: 1.2; }
+    h2 { font-size: clamp(1.3rem, 2vw, 1.7rem); margin: 1.4rem 0 0.6rem; line-height: 1.3; }
+    h3 { font-size: clamp(1.05rem, 1.5vw, 1.2rem); margin: 1rem 0 0.45rem; }
+    p { margin: 0.65rem 0; }
+
+    ul, ol { margin: 0.55rem 0 0.95rem 1.25rem; padding: 0; }
+    li { margin: 0.3rem 0; }
+
+    code {
+      background: color-mix(in srgb, var(--surface) 75%, var(--accent) 25%);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: "JetBrains Mono", "Cascadia Code", monospace;
+      font-size: 0.9em;
+      padding: 0.1rem 0.38rem;
+    }
+
+    pre {
+      margin: 0.8rem 0 1rem;
+      background: var(--code-bg);
+      color: var(--code-text);
+      border-radius: 12px;
+      padding: 0.85rem;
+      overflow-x: auto;
+      border: 1px solid color-mix(in srgb, var(--code-bg) 70%, #ffffff 30%);
+    }
+
+    pre code {
+      border: none;
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      font-size: 0.86rem;
+      line-height: 1.5;
+    }
+
+    a { color: var(--accent); text-underline-offset: 2px; }
+    a:hover { color: var(--accent-secondary); }
+
+    .animate { opacity: 0; transform: translateY(8px); animation: rise 0.45s ease forwards; }
+    .animate.delay-1 { animation-delay: 0.08s; }
+    .animate.delay-2 { animation-delay: 0.16s; }
+    @keyframes rise { to { opacity: 1; transform: translateY(0); } }
+
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      .toc { position: relative; top: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    @media print {
+      .viz-menu, .toc { display: none !important; }
+      body { background: #fff; }
+      main { display: block; max-width: 100%; margin: 0; padding: 0; }
+      .article { border: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">본문으로 건너뛰기</a>
+
+  <header class="viz-menu" aria-label="문서 유틸리티 메뉴">
+    <div class="menu-inner">
+      <div class="brand">Superpowers Skill Docs</div>
+      <div class="menu-actions">
+        <button type="button" aria-label="테마 전환" onclick="cycleTheme()">테마 전환</button>
+        <button type="button" aria-label="문서 인쇄" onclick="window.print()">인쇄</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main-content" aria-label="문서 본문">
+    <aside class="panel toc animate" aria-label="문서 목차">
+      <h2>목차</h2>
+      <a class="toc-item toc-h2" href="#한-줄-설명">한 줄 설명</a>
+<a class="toc-item toc-h2" href="#이-스킬이-해결하는-문제">이 스킬이 해결하는 문제</a>
+<a class="toc-item toc-h2" href="#핵심-포인트">핵심 포인트</a>
+<a class="toc-item toc-h2" href="#팀-적용-가이드">팀 적용 가이드</a>
+<a class="toc-item toc-h2" href="#example-usage">Example usage</a>
+<a class="toc-item toc-h2" href="#산출물">산출물</a>
+<a class="toc-item toc-h2" href="#추천-학습-순서">추천 학습 순서</a>
+    </aside>
+
+    <section class="panel article animate delay-1">
+      <div class="meta">Source: <code>docs/skills/superpowers/subagent-driven-development/README.md</code></div>
+      <h1 id="subagent-driven-development">subagent-driven-development</h1>
+<h2 id="한-줄-설명">한 줄 설명</h2>
+<p>작업 단위를 서브에이전트로 위임하고 단계별 리뷰로 통제하는 개발 스킬</p>
+<h2 id="이-스킬이-해결하는-문제">이 스킬이 해결하는 문제</h2>
+<ul>
+<li>큰 작업을 한 세션에서 처리하며 집중력이 분산되는 문제를 줄인다.</li>
+<li>위임 결과를 무검증으로 합치는 품질 리스크를 줄인다.</li>
+</ul>
+<h2 id="핵심-포인트">핵심 포인트</h2>
+<ul>
+<li>작업을 독립적인 단위로 분해해 서브에이전트에 할당한다.</li>
+<li>각 단위 완료 후 스펙 준수/코드 품질 2단계 리뷰를 수행한다.</li>
+<li>필요 시 모델 선택을 조정하고 상태를 모니터링해 병목을 해소한다.</li>
+</ul>
+<h2 id="팀-적용-가이드">팀 적용 가이드</h2>
+<ul>
+<li>PR/리뷰/디버깅/계획 수립 시 이 문서의 체크리스트를 먼저 확인한다.</li>
+<li>개인 선호보다 스킬의 게이트 조건(승인, 검증, 옵션 제시)을 우선 적용한다.</li>
+<li>예외가 필요하면 근거를 남기고 팀에 공유한다.</li>
+</ul>
+<h2 id="example-usage">Example usage</h2>
+<pre><code class="language-text">&quot;plan의 Task 1~4를 subagent-driven-development 방식으로 태스크별 위임해서 진행해줘.&quot;</code></pre>
+<h2 id="산출물">산출물</h2>
+<ul>
+<li>한국어 가이드: <code>SKILL_ko.md</code></li>
+<li>원문: <code>superpowers/5.0.7/skills/subagent-driven-development/SKILL.md</code></li>
+</ul>
+<h2 id="추천-학습-순서">추천 학습 순서</h2>
+<ol>
+<li><code>SKILL_ko.md</code>를 먼저 읽어 전체 흐름을 파악한다.</li>
+<li>실제 적용 전에 원문 <code>SKILL.md</code>의 세부 규칙(금지/예외)을 재확인한다.</li>
+<li>작은 작업에서 1~2회 반복 적용 후 팀 표준으로 확장한다.</li>
+</ol>
+    </section>
+  </main>
+
+  <script>
+    var root = document.documentElement;
+
+    function cycleTheme() {
+      if (root.classList.contains('theme-dark')) {
+        root.classList.remove('theme-dark');
+        root.classList.add('theme-light');
+        localStorage.setItem('skill-doc-theme', 'light');
+      } else {
+        root.classList.remove('theme-light');
+        root.classList.add('theme-dark');
+        localStorage.setItem('skill-doc-theme', 'dark');
+      }
+    }
+
+    (function initTheme() {
+      var saved = localStorage.getItem('skill-doc-theme');
+      if (saved === 'dark') {
+        root.classList.remove('theme-light');
+        root.classList.add('theme-dark');
+      }
+    })();
+  </script>
+</body>
+</html>
