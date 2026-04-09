@@ -21,7 +21,6 @@ Key requirements include:
 3. 처음 배우는 기술에 대한 코딩랩 스타일의 가이드 문서를 많이 작성
 ex. 처음 배우는 라이브러리는 ipynb 파일에서 마크다운 형태로 개념 설명과 코드를 작성/실행
 4. 최근에는 Agentic AI 서비스를 개발하기 위해 공부 중
-- When creating git commits, I should guide the user to use the `./tools/commit.sh` script instead of a direct `git commit -m '...'` command.
 - I am in a multi-AI collaboration environment. I must tag my work (commits, files) with 'Gemini' as per the `GEMINI.md` coordination guidelines.
 - Before updating `docs/DEV-PROGRESS.md`, I must first read the file to understand its structure and format.
 - When the user requests to use the '/batch' skill (e.g., '/batch 스킬을 사용해서...'), interpret and execute it as a request to use the 'generalist' sub-agent ('generalist를 사용하여...').
