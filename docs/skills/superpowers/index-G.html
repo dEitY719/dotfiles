@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ko" class="theme-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Superpowers Plugin Skills (v5.0.7)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { interpolate-size: allow-keywords; }
+
+    html.theme-dark {
+      --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C;
+      --border: rgba(255,255,255,0.08);
+      --text: #EDEDED; --text-secondary: #A0A0A0;
+      --accent: #3b82f6; --accent-secondary: #8b5cf6; --accent-hover: #60a5fa;
+      --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b;
+    }
+    html.theme-light {
+      --bg: #F8FAFC; --surface: #FFFFFF; --surface-hover: #F1F5F9;
+      --border: rgba(0,0,0,0.08);
+      --text: #0f172a; --text-secondary: #475569;
+      --accent: #2563eb; --accent-secondary: #7c3aed; --accent-hover: #1d4ed8;
+      --positive: #059669; --negative: #e11d48; --warning: #d97706;
+    }
+
+    body {
+      font-family: 'Inter', 'Noto Sans KR', -apple-system, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6; -webkit-font-smoothing: antialiased;
+      transition: background 0.3s, color 0.3s;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    h1, h2, h3 { color: var(--text); line-height: 1.2; margin-bottom: 0.5em; font-weight: 700; letter-spacing: -0.02em; }
+    h1 { font-size: 2.5rem; text-align: center; margin-bottom: 10px; background: -webkit-linear-gradient(45deg, var(--accent), var(--accent-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    h2 { font-size: 1.5rem; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-top: 40px; margin-bottom: 20px; }
+    p { margin-bottom: 1em; color: var(--text-secondary); }
+
+    .subtitle { text-align: center; font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 50px; }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px; margin-bottom: 20px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+      border-color: var(--accent);
+    }
+
+    .skill-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    @media (min-width: 768px) {
+      .skill-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .skill-item {
+      display: flex;
+      flex-direction: column;
+      background: var(--surface-hover);
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .skill-name {
+      font-family: 'Fira Code', monospace;
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent);
+      text-decoration: none;
+      margin-bottom: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.2s;
+    }
+    .skill-name:hover {
+      color: var(--accent-hover);
+      text-decoration: underline;
+    }
+    .skill-name::before {
+      content: '⚡';
+      font-size: 0.9em;
+    }
+
+    .skill-desc {
+      font-size: 0.95rem;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .flow-box {
+      background: var(--surface-hover);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .flow-box h3 { margin-top: 0; color: var(--accent); font-size: 1.2rem; display: flex; align-items: center; gap: 8px; }
+    .flow-box ol { margin-left: 24px; margin-top: 16px; color: var(--text); }
+    .flow-box li { margin-bottom: 12px; padding-left: 8px; }
+    .flow-box li span { font-family: 'Fira Code', monospace; color: var(--accent-secondary); font-weight: 500; }
+    
+    .info-box {
+      display: flex; gap: 12px; align-items: flex-start;
+      background: rgba(59, 130, 246, 0.1);
+      border-left: 4px solid var(--accent);
+      padding: 16px;
+      border-radius: 0 8px 8px 0;
+      margin: 20px 0;
+      color: var(--text);
+    }
+    .info-icon { font-size: 1.2rem; }
+
+    /* ANIMATIONS */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* MENU */
+    .viz-menu { position: fixed; top: 16px; right: 16px; z-index: 9999; }
+    .viz-menu-toggle {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(12px); transition: all 0.2s;
+    }
+    .viz-menu-toggle:hover { background: var(--surface-hover); transform: scale(1.05); }
+    .viz-menu-dropdown {
+      position: absolute; top: 52px; right: 0; min-width: 200px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 8px;
+      opacity: 0; visibility: hidden; transform: translateY(-8px);
+      transition: all 0.2s; backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    .viz-menu-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); }
+    .viz-menu-dropdown button {
+      width: 100%; padding: 10px 14px; border: none; border-radius: 8px;
+      background: transparent; color: var(--text); font-size: 14px;
+      font-family: inherit; cursor: pointer; text-align: left;
+      display: flex; align-items: center; gap: 10px; transition: background 0.15s;
+    }
+    .viz-menu-dropdown button:hover { background: var(--surface-hover); }
+
+    .location { font-family: 'Fira Code', monospace; font-size: 0.85rem; background: var(--surface); padding: 12px; border-radius: 8px; border: 1px solid var(--border); color: var(--text-secondary); word-break: break-all; }
+
+    @media print {
+      body { background: white !important; color: black !important; padding: 0; }
+      .viz-menu { display: none !important; }
+      .card, .flow-box { break-inside: avoid; border: 1px solid #ddd; box-shadow: none; background: white !important; }
+      .skill-name { text-decoration: none !important; color: #000 !important; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/>
+      </svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()"><span id="themeIcon">🌙</span><span id="themeLabel">Dark</span></button>
+      <button onclick="downloadImage()"><span>📥</span><span>Download PNG</span></button>
+      <button onclick="window.print()"><span>🖨️</span><span>Print / PDF</span></button>
+    </div>
+  </div>
+
+  <main id="main-content" class="container">
+    
+    <header class="reveal" data-reveal>
+      <h1>Superpowers Plugin Skills</h1>
+      <p class="subtitle">v5.0.7</p>
+    </header>
+
+    <section class="reveal" data-reveal>
+      <h2>Process Skills <span style="font-size:1rem; font-weight:400; color:var(--text-secondary);">(HOW to approach)</span></h2>
+      <div class="skill-grid">
+        <div class="skill-item">
+          <a href="./brainstorming/README-G.html" class="skill-name">brainstorming</a>
+          <div class="skill-desc">Creative work, feature design, requirements exploration before implementation</div>
+        </div>
+        <div class="skill-item">
+          <a href="./writing-plans/README-G.html" class="skill-name">writing-plans</a>
+          <div class="skill-desc">Multi-step task planning from spec/requirements, before touching code</div>
+        </div>
+        <div class="skill-item">
+          <a href="./executing-plans/README-G.html" class="skill-name">executing-plans</a>
+          <div class="skill-desc">Execute written implementation plans in separate sessions with review checkpoints</div>
+        </div>
+        <div class="skill-item">
+          <a href="./systematic-debugging/README-G.html" class="skill-name">systematic-debugging</a>
+          <div class="skill-desc">Bug/test failure diagnosis - root cause analysis before proposing fixes</div>
+        </div>
+        <div class="skill-item">
+          <a href="./test-driven-development/README-G.html" class="skill-name">test-driven-development</a>
+          <div class="skill-desc">Red-green-refactor: write tests before implementation code</div>
+        </div>
+        <div class="skill-item">
+          <a href="./verification-before-completion/README-G.html" class="skill-name">verification-before-completion</a>
+          <div class="skill-desc">Run verification commands and confirm output before claiming done</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="reveal" data-reveal>
+      <h2>Execution Skills <span style="font-size:1rem; font-weight:400; color:var(--text-secondary);">(parallel & isolation)</span></h2>
+      <div class="skill-grid">
+        <div class="skill-item">
+          <a href="./dispatching-parallel-agents/README-G.html" class="skill-name">dispatching-parallel-agents</a>
+          <div class="skill-desc">Run 2+ independent tasks concurrently without shared state</div>
+        </div>
+        <div class="skill-item">
+          <a href="./subagent-driven-development/README-G.html" class="skill-name">subagent-driven-development</a>
+          <div class="skill-desc">Execute implementation plans with independent sub-agents</div>
+        </div>
+        <div class="skill-item">
+          <a href="./using-git-worktrees/README-G.html" class="skill-name">using-git-worktrees</a>
+          <div class="skill-desc">Isolated feature work via git worktrees with safety checks</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="reveal" data-reveal>
+      <h2>Review & Completion Skills</h2>
+      <div class="skill-grid">
+        <div class="skill-item">
+          <a href="./requesting-code-review/README-G.html" class="skill-name">requesting-code-review</a>
+          <div class="skill-desc">Request review after feature completion or before merge</div>
+        </div>
+        <div class="skill-item">
+          <a href="./receiving-code-review/README-G.html" class="skill-name">receiving-code-review</a>
+          <div class="skill-desc">Handle review feedback with technical rigor, not blind agreement</div>
+        </div>
+        <div class="skill-item">
+          <a href="./finishing-a-development-branch/README-G.html" class="skill-name">finishing-a-development-branch</a>
+          <div class="skill-desc">Branch integration: merge, PR, or cleanup options</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="reveal" data-reveal>
+      <h2>Meta Skills</h2>
+      <div class="skill-grid">
+        <div class="skill-item">
+          <a href="./using-superpowers/README-G.html" class="skill-name">using-superpowers</a>
+          <div class="skill-desc">Skill discovery and invocation at conversation start</div>
+        </div>
+        <div class="skill-item">
+          <a href="./writing-skills/README-G.html" class="skill-name">writing-skills</a>
+          <div class="skill-desc">Create, edit, or verify skills before deployment</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="reveal" data-reveal>
+      <h2>Skill Usage Flow</h2>
+      
+      <div class="flow-box">
+        <h3>🚀 Feature Development (full lifecycle)</h3>
+        <ol>
+          <li><span>brainstorming</span> - explore requirements, design spec</li>
+          <li><span>writing-plans</span> - break spec into bite-sized tasks</li>
+          <li><span>executing-plans</span> - execute tasks (TDD per step)<br>
+              <em style="color:var(--text-secondary); margin-left:20px;">or <span>subagent-driven-development</span> (parallel, same session)</em></li>
+          <li><span>requesting-code-review</span> - dispatch reviewer subagent</li>
+          <li><span>receiving-code-review</span> - evaluate & apply feedback</li>
+          <li><span>finishing-a-dev-branch</span> - merge, PR, or cleanup</li>
+        </ol>
+      </div>
+
+      <div class="info-box">
+        <div class="info-icon">ℹ️</div>
+        <div>
+          <strong>Note:</strong> <br>
+          <span style="font-family: 'Fira Code', monospace; color:var(--accent);">verification-before-completion</span> runs at every completion claim.<br>
+          <span style="font-family: 'Fira Code', monospace; color:var(--accent);">test-driven-development</span> runs inside each execution step.
+        </div>
+      </div>
+
+      <div class="flow-box">
+        <h3>🐛 Bug Fix (shorter cycle)</h3>
+        <ol>
+          <li><span>systematic-debugging</span> - root cause analysis first</li>
+          <li><span>test-driven-development</span> - write failing test for the bug</li>
+          <li><span>verification-before-completion</span></li>
+          <li><span>finishing-a-dev-branch</span> - merge the fix</li>
+        </ol>
+      </div>
+
+      <div class="info-box">
+        <div class="info-icon">⚡</div>
+        <div>
+          <strong>Parallel tasks:</strong> use <span style="font-family: 'Fira Code', monospace; color:var(--accent);">dispatching-parallel-agents</span> or <span style="font-family: 'Fira Code', monospace; color:var(--accent);">using-git-worktrees</span>
+        </div>
+      </div>
+
+    </section>
+
+    <section class="reveal" data-reveal>
+      <h2>Skill Files Location</h2>
+      <div class="location">/home/bwyoon/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/</div>
+    </section>
+
+  </main>
+
+  <script>
+    function toggleMenu() { 
+      var dropdown = document.getElementById('vizMenuDropdown');
+      if (dropdown) dropdown.classList.toggle('open'); 
+    }
+    document.addEventListener('click', e => { 
+      if (!e.target.closest('.viz-menu')) {
+        var dropdown = document.getElementById('vizMenuDropdown');
+        if (dropdown) dropdown.classList.remove('open');
+      }
+    });
+    document.addEventListener('keydown', e => { 
+      if (e.key === 'Escape') {
+        var dropdown = document.getElementById('vizMenuDropdown');
+        if (dropdown) dropdown.classList.remove('open');
+      }
+    });
+
+    var savedTheme = localStorage.getItem('viz-theme');
+    var currentTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    function applyTheme(t) {
+      document.documentElement.className = 'theme-' + t;
+      document.getElementById('themeIcon').textContent = t === 'dark' ? '🌙' : '☀️';
+      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark' : 'Light';
+      localStorage.setItem('viz-theme', t);
+      currentTheme = t;
+    }
+    function cycleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
+    applyTheme(currentTheme);
+
+    document.querySelectorAll('[data-reveal]').forEach(el => el.classList.add('reveal'));
+    var revealObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) { if (e.isIntersecting) { e.target.classList.add('visible'); revealObserver.unobserve(e.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+    async function downloadImage() {
+      var menu = document.querySelector('.viz-menu');
+      menu.style.display = 'none';
+      try {
+        var url = await htmlToImage.toPng(document.body, { quality: 1, pixelRatio: 2, filter: function(n) { return !n.classList || !n.classList.contains('viz-menu'); } });
+        var a = document.createElement('a'); a.href = url;
+        a.download = 'superpowers-skills.png'; a.click();
+      } catch(e) { console.error('Download failed:', e); }
+      menu.style.display = '';
+    }
+  </script>
+</body>
+</html>
