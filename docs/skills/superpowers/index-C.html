@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ko" class="theme-dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Superpowers Plugin Skills (v5.0.7)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+<style>
+/* ===== Theme System ===== */
+html.theme-dark {
+  --bg: #0A0A0A; --surface: #141414; --surface-hover: #1C1C1C;
+  --border: rgba(255,255,255,0.06); --border-strong: rgba(255,255,255,0.1);
+  --text: #EDEDED; --text-secondary: #888;
+  --accent: #8b5cf6; --accent-secondary: #a78bfa;
+  --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b;
+  --info: #06b6d4;
+  --code-bg: #111;
+  --cat-process: #f59e0b; --cat-exec: #06b6d4; --cat-review: #10b981; --cat-meta: #8b5cf6;
+  --flow-line: rgba(255,255,255,0.08);
+}
+html.theme-light {
+  --bg: #FAFAF9; --surface: #FFFFFF; --surface-hover: #F5F5F4;
+  --border: rgba(0,0,0,0.06); --border-strong: rgba(0,0,0,0.12);
+  --text: #1a1a1a; --text-secondary: #666;
+  --accent: #7c3aed; --accent-secondary: #6d28d9;
+  --positive: #059669; --negative: #e11d48; --warning: #d97706;
+  --info: #0891b2;
+  --code-bg: #f5f5f0;
+  --cat-process: #d97706; --cat-exec: #0891b2; --cat-review: #059669; --cat-meta: #7c3aed;
+  --flow-line: rgba(0,0,0,0.08);
+}
+
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Noto Sans KR', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg); color: var(--text);
+  line-height: 1.7; -webkit-font-smoothing: antialiased;
+  overflow-x: hidden; min-height: 100vh;
+}
+a { color: inherit; text-decoration: none; }
+*:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px;
+}
+
+/* ===== Skip Link ===== */
+.skip-link {
+  position: absolute; top: -100%; left: 16px;
+  background: var(--accent); color: #fff; padding: 8px 16px;
+  border-radius: 0 0 8px 8px; font-weight: 600; z-index: 1000;
+}
+.skip-link:focus { top: 0; }
+
+/* ===== Viz Menu ===== */
+.viz-menu {
+  position: fixed; top: 16px; right: 16px; z-index: 100;
+  display: flex; gap: 8px;
+}
+.viz-menu button {
+  background: var(--surface); border: 1px solid var(--border-strong);
+  color: var(--text-secondary); padding: 8px 12px;
+  border-radius: 8px; cursor: pointer; font-size: 13px;
+  font-family: inherit; display: flex; align-items: center; gap: 6px;
+  transition: background 0.2s, color 0.2s;
+  backdrop-filter: blur(12px);
+}
+.viz-menu button:hover { background: var(--surface-hover); color: var(--text); }
+
+/* ===== Layout ===== */
+main { max-width: 960px; margin: 0 auto; padding: 0 24px 80px; position: relative; z-index: 1; }
+section { margin-top: 64px; }
+
+/* ===== Atmosphere ===== */
+body::before {
+  content: '';
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in srgb, var(--accent), transparent 92%), transparent);
+  pointer-events: none; z-index: 0;
+}
+
+/* ===== Hero ===== */
+.hero { text-align: center; padding: 100px 20px 48px; position: relative; }
+.hero-gradient {
+  position: absolute; top: 0; left: 0; right: 0; height: 500px;
+  background: radial-gradient(ellipse 90% 70% at 50% 0%, color-mix(in srgb, var(--accent), transparent 90%), transparent);
+  pointer-events: none; z-index: -1;
+}
+.hero-icon {
+  width: 80px; height: 80px; margin: 0 auto 20px;
+  color: var(--accent); opacity: 0.9;
+}
+.hero-badge {
+  display: inline-block; padding: 5px 14px; margin-bottom: 20px;
+  background: color-mix(in srgb, var(--accent), transparent 88%);
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 70%);
+  border-radius: 100px; font-size: 12px; font-weight: 700;
+  color: var(--accent); letter-spacing: 0.08em;
+  font-family: 'Inter', sans-serif; text-transform: uppercase;
+}
+.hero-title {
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(2.2rem, 6vw, 3.4rem);
+  font-weight: 900; letter-spacing: -0.03em;
+  color: var(--text); margin-bottom: 12px; line-height: 1.1;
+}
+.hero-desc {
+  font-size: clamp(0.95rem, 2.5vw, 1.1rem);
+  color: var(--text-secondary); max-width: 600px; margin: 0 auto;
+}
+.hero-stats {
+  display: flex; justify-content: center; gap: 40px; margin-top: 32px;
+}
+.hero-stat-num {
+  font-family: 'Inter', sans-serif; font-size: 2rem;
+  font-weight: 800; color: var(--accent);
+}
+.hero-stat-label {
+  font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;
+}
+
+/* ===== Section Titles ===== */
+.section-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.12em; margin-bottom: 10px;
+}
+.section-title {
+  font-size: clamp(1.4rem, 3.5vw, 1.8rem);
+  font-weight: 700; margin-bottom: 24px; letter-spacing: -0.02em;
+}
+
+/* ===== Category Colors ===== */
+.cat-process .section-label, .cat-process .cat-icon { color: var(--cat-process); }
+.cat-exec .section-label, .cat-exec .cat-icon { color: var(--cat-exec); }
+.cat-review .section-label, .cat-review .cat-icon { color: var(--cat-review); }
+.cat-meta .section-label, .cat-meta .cat-icon { color: var(--cat-meta); }
+
+/* ===== Skill Cards ===== */
+.skill-grid {
+  display: grid; grid-template-columns: 1fr; gap: 12px;
+}
+.skill-card {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 20px 24px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: box-shadow 0.2s, border-color 0.2s;
+  cursor: pointer;
+}
+.skill-card:hover {
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  border-color: var(--border-strong);
+}
+.skill-card-icon {
+  flex-shrink: 0; width: 40px; height: 40px;
+  border-radius: 10px; display: flex; align-items: center; justify-content: center;
+}
+.cat-process .skill-card-icon { background: color-mix(in srgb, var(--cat-process), transparent 85%); color: var(--cat-process); }
+.cat-exec .skill-card-icon { background: color-mix(in srgb, var(--cat-exec), transparent 85%); color: var(--cat-exec); }
+.cat-review .skill-card-icon { background: color-mix(in srgb, var(--cat-review), transparent 85%); color: var(--cat-review); }
+.cat-meta .skill-card-icon { background: color-mix(in srgb, var(--cat-meta), transparent 85%); color: var(--cat-meta); }
+
+.skill-name {
+  font-family: 'Inter', sans-serif; font-size: 0.95rem;
+  font-weight: 700; letter-spacing: -0.01em; margin-bottom: 4px;
+}
+.skill-desc {
+  font-size: 0.87rem; color: var(--text-secondary); line-height: 1.6;
+}
+.skill-arrow {
+  flex-shrink: 0; width: 20px; height: 20px;
+  color: var(--text-secondary); margin-top: 10px; margin-left: auto;
+  opacity: 0; transition: opacity 0.2s, transform 0.2s;
+}
+.skill-card:hover .skill-arrow {
+  opacity: 1; transform: translateX(2px);
+}
+
+/* ===== Workflow ===== */
+.flow-container {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 32px; margin-top: 16px;
+}
+.flow-container + .flow-container { margin-top: 20px; }
+.flow-title {
+  font-family: 'Inter', sans-serif; font-size: 1rem;
+  font-weight: 700; margin-bottom: 24px; display: flex; align-items: center; gap: 10px;
+}
+.flow-title-icon {
+  width: 28px; height: 28px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+.flow-steps {
+  display: flex; flex-direction: column; gap: 0;
+}
+.flow-step {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 16px; border-radius: 10px;
+  transition: background 0.15s;
+}
+.flow-step:hover { background: var(--surface-hover); }
+.flow-step-num {
+  flex-shrink: 0; width: 28px; height: 28px;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-family: 'Inter', sans-serif; font-weight: 800; font-size: 0.75rem;
+  background: var(--border); color: var(--text-secondary);
+}
+.flow-step-name {
+  font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.88rem;
+}
+.flow-step-name a {
+  color: var(--text); transition: color 0.15s;
+  text-decoration: none; border-bottom: 1px dashed var(--border-strong);
+}
+.flow-step-name a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.flow-step-desc {
+  font-size: 0.8rem; color: var(--text-secondary); margin-left: auto; text-align: right;
+}
+.flow-connector {
+  width: 2px; height: 12px; background: var(--flow-line);
+  margin-left: 29px; flex-shrink: 0;
+}
+.flow-note {
+  margin-top: 16px; padding: 12px 16px;
+  background: color-mix(in srgb, var(--info), transparent 92%);
+  border: 1px solid color-mix(in srgb, var(--info), transparent 80%);
+  border-radius: 8px; font-size: 0.82rem; color: var(--text-secondary);
+  display: flex; align-items: flex-start; gap: 8px;
+}
+.flow-note svg { flex-shrink: 0; margin-top: 1px; color: var(--info); }
+
+/* ===== Location ===== */
+.location-box {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 20px; background: var(--code-bg);
+  border: 1px solid var(--border); border-radius: 10px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.82rem; color: var(--text-secondary);
+  overflow-x: auto;
+}
+.location-icon { flex-shrink: 0; color: var(--accent); }
+
+/* ===== Footer ===== */
+.footer {
+  text-align: center; padding: 48px 20px 0;
+  border-top: 1px solid var(--border); margin-top: 80px;
+}
+.badge {
+  display: inline-block; padding: 6px 18px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 100px; font-size: 12px; font-weight: 600;
+  color: var(--accent); letter-spacing: 0.06em;
+  font-family: 'Inter', sans-serif; text-transform: uppercase;
+}
+
+/* ===== Animations ===== */
+.animate { opacity: 0; transform: translateY(20px); animation: fadeUp 0.6s ease forwards; }
+.animate-d1 { animation-delay: 0.1s; }
+.animate-d2 { animation-delay: 0.15s; }
+.animate-d3 { animation-delay: 0.2s; }
+.animate-d4 { animation-delay: 0.25s; }
+@keyframes fadeUp {
+  to { opacity: 1; transform: translateY(0); }
+}
+[data-reveal] {
+  opacity: 0; transform: translateY(24px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+[data-reveal].revealed { opacity: 1; transform: translateY(0); }
+
+/* ===== Print ===== */
+@media print {
+  .viz-menu, .skip-link { display: none !important; }
+  body { background: #fff; color: #000; }
+  body::before { display: none; }
+  .skill-card, .flow-container { break-inside: avoid; border-color: #ccc; }
+  [data-reveal] { opacity: 1 !important; transform: none !important; }
+  .animate { opacity: 1 !important; transform: none !important; animation: none !important; }
+  .skill-arrow { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate { animation: none !important; opacity: 1; transform: none; }
+  [data-reveal] { transition: none !important; opacity: 1; transform: none; }
+}
+
+/* ===== Responsive ===== */
+@media (min-width: 640px) {
+  .skill-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .hero { padding: 80px 12px 36px; }
+  .hero-stats { gap: 24px; }
+  .hero-stat-num { font-size: 1.6rem; }
+  main { padding: 0 16px 60px; }
+  section { margin-top: 48px; }
+  .skill-card { padding: 16px; gap: 12px; }
+  .skill-card-icon { width: 36px; height: 36px; }
+  .flow-container { padding: 20px 16px; }
+  .flow-step { padding: 10px 8px; gap: 12px; }
+  .flow-step-desc { display: none; }
+  .viz-menu { top: 8px; right: 8px; gap: 4px; }
+  .viz-menu button { padding: 6px 8px; font-size: 11px; }
+}
+
+/* ===== Screen Reader Only ===== */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0);
+}
+</style>
+</head>
+<body>
+
+<a href="#main-content" class="skip-link">Skip to content</a>
+
+<nav class="viz-menu" aria-label="Page tools">
+  <button onclick="toggleTheme()" aria-label="Toggle theme">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    Theme
+  </button>
+  <button onclick="downloadPNG()" aria-label="Download as PNG">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    PNG
+  </button>
+  <button onclick="window.print()" aria-label="Print page">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+    Print
+  </button>
+</nav>
+
+<main id="main-content">
+
+  <!-- Hero -->
+  <section class="hero" aria-label="Hero">
+    <div class="hero-gradient"></div>
+    <div class="animate">
+      <svg class="hero-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </svg>
+    </div>
+    <div class="hero-badge animate animate-d1">v5.0.7</div>
+    <h1 class="hero-title animate animate-d2">Superpowers Skills</h1>
+    <p class="hero-desc animate animate-d3">Claude Code의 개발 워크플로우를 체계화하는 14개 스킬 모음</p>
+    <div class="hero-stats animate animate-d4">
+      <div><div class="hero-stat-num" data-count="14">14</div><div class="hero-stat-label">Skills</div></div>
+      <div><div class="hero-stat-num" data-count="4">4</div><div class="hero-stat-label">Categories</div></div>
+      <div><div class="hero-stat-num" data-count="2">2</div><div class="hero-stat-label">Workflows</div></div>
+    </div>
+  </section>
+
+  <!-- Process Skills -->
+  <section class="cat-process" data-reveal aria-labelledby="process-title">
+    <p class="section-label">Process Skills</p>
+    <h2 class="section-title" id="process-title">접근 방법론 (HOW to approach)</h2>
+    <div class="skill-grid">
+
+      <a href="brainstorming/README-C.html" class="skill-card" aria-label="brainstorming 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 1 4 12.9V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.1A7 7 0 0 1 12 2z"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">brainstorming</div>
+          <div class="skill-desc">요구사항 탐색, 설계, 구현 전 브레인스토밍</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="writing-plans/README-C.html" class="skill-card" aria-label="writing-plans 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">writing-plans</div>
+          <div class="skill-desc">스펙/요구사항에서 세부 실행계획 문서화</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="executing-plans/README-C.html" class="skill-card" aria-label="executing-plans 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">executing-plans</div>
+          <div class="skill-desc">작성된 계획을 체크포인트와 함께 단계별 실행</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="systematic-debugging/README-C.html" class="skill-card" aria-label="systematic-debugging 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><path d="M8 11h6"/><path d="M11 8v6"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">systematic-debugging</div>
+          <div class="skill-desc">증거 기반 4단계 근본 원인 분석</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="test-driven-development/README-C.html" class="skill-card" aria-label="test-driven-development 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6"/><path d="M2.5 16A10 10 0 0 1 8 3.5"/><path d="M21.5 8A10 10 0 0 1 16 20.5"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">test-driven-development</div>
+          <div class="skill-desc">Red-Green-Refactor 사이클로 기능 구현</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="verification-before-completion/README-C.html" class="skill-card" aria-label="verification-before-completion 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">verification-before-completion</div>
+          <div class="skill-desc">완료 선언 전 검증 증거 확인 필수</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- Execution Skills -->
+  <section class="cat-exec" data-reveal aria-labelledby="exec-title">
+    <p class="section-label">Execution Skills</p>
+    <h2 class="section-title" id="exec-title">병렬 실행 및 격리 (Parallel & Isolation)</h2>
+    <div class="skill-grid">
+
+      <a href="dispatching-parallel-agents/README-C.html" class="skill-card" aria-label="dispatching-parallel-agents 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="8" x2="19" y2="8"/><polyline points="15 4 19 8 15 12"/><line x1="5" y1="16" x2="19" y2="16"/><polyline points="15 12 19 16 15 20"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">dispatching-parallel-agents</div>
+          <div class="skill-desc">2개+ 독립 태스크를 동시에 실행</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="subagent-driven-development/README-C.html" class="skill-card" aria-label="subagent-driven-development 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="5" y2="16"/><line x1="12" y1="8" x2="19" y2="16"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">subagent-driven-development</div>
+          <div class="skill-desc">서브에이전트로 구현 계획 위임 실행</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="using-git-worktrees/README-C.html" class="skill-card" aria-label="using-git-worktrees 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">using-git-worktrees</div>
+          <div class="skill-desc">git worktree로 격리된 피처 작업</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- Review & Completion Skills -->
+  <section class="cat-review" data-reveal aria-labelledby="review-title">
+    <p class="section-label">Review &amp; Completion</p>
+    <h2 class="section-title" id="review-title">리뷰 및 마무리</h2>
+    <div class="skill-grid">
+
+      <a href="requesting-code-review/README-C.html" class="skill-card" aria-label="requesting-code-review 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="12" y1="8" x2="12" y2="8.01"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">requesting-code-review</div>
+          <div class="skill-desc">기능 완료 후 또는 머지 전 리뷰 요청</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="receiving-code-review/README-C.html" class="skill-card" aria-label="receiving-code-review 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 9 8 12 2 12"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">receiving-code-review</div>
+          <div class="skill-desc">리뷰 피드백을 기술적 근거로 반영/응답</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="finishing-a-development-branch/README-C.html" class="skill-card" aria-label="finishing-a-development-branch 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">finishing-a-development-branch</div>
+          <div class="skill-desc">머지, PR, 정리 등 브랜치 통합 옵션</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- Meta Skills -->
+  <section class="cat-meta" data-reveal aria-labelledby="meta-title">
+    <p class="section-label">Meta Skills</p>
+    <h2 class="section-title" id="meta-title">메타 스킬</h2>
+    <div class="skill-grid">
+
+      <a href="using-superpowers/README-C.html" class="skill-card" aria-label="using-superpowers 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">using-superpowers</div>
+          <div class="skill-desc">대화 시작 시 스킬 탐색 및 호출 규칙</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <a href="writing-skills/README-C.html" class="skill-card" aria-label="writing-skills 스킬 상세 보기">
+        <div class="skill-card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        </div>
+        <div>
+          <div class="skill-name">writing-skills</div>
+          <div class="skill-desc">새 스킬 작성/검증/배포</div>
+        </div>
+        <svg class="skill-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- Skill Usage Flow -->
+  <section data-reveal aria-labelledby="flow-title">
+    <p class="section-label" style="color: var(--accent);">Skill Usage Flow</p>
+    <h2 class="section-title" id="flow-title">워크플로우</h2>
+
+    <!-- Feature Development -->
+    <div class="flow-container">
+      <div class="flow-title">
+        <div class="flow-title-icon" style="background: color-mix(in srgb, var(--positive), transparent 85%); color: var(--positive);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        </div>
+        Feature Development (풀 라이프사이클)
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <span class="flow-step-num">1</span>
+          <span class="flow-step-name"><a href="brainstorming/README-C.html">brainstorming</a></span>
+          <span class="flow-step-desc">요구사항 탐색, 설계</span>
+        </div>
+        <div class="flow-connector"></div>
+        <div class="flow-step">
+          <span class="flow-step-num">2</span>
+          <span class="flow-step-name"><a href="writing-plans/README-C.html">writing-plans</a></span>
+          <span class="flow-step-desc">스펙을 세부 태스크로 분해</span>
+        </div>
+        <div class="flow-connector"></div>
+        <div class="flow-step">
+          <span class="flow-step-num">3</span>
+          <span class="flow-step-name"><a href="executing-plans/README-C.html">executing-plans</a></span>
+          <span class="flow-step-desc">태스크 실행 (단계별 TDD)</span>
+        </div>
+        <div class="flow-connector"></div>
+        <div class="flow-step">
+          <span class="flow-step-num" style="font-size:0.6rem;">or</span>
+          <span class="flow-step-name"><a href="subagent-driven-development/README-C.html">subagent-driven-development</a></span>
+          <span class="flow-step-desc">병렬, 같은 세션</span>
+        </div>
+        <div class="flow-connector"></div>
+        <div class="flow-step">
+          <span class="flow-step-num">5</span>
+          <span class="flow-step-name"><a href="requesting-code-review/README-C.html">requesting-code-review</a></span>
+          <span class="flow-step-desc">리뷰어 서브에이전트 디스패치</span>
+        </div>
+        <div class="flow-connector"></div>
+        <div class="flow-step">
+          <span class="flow-step-num">6</span>
+          <span class="flow-step-name"><a href="receiving-code-review/README-C.html">receiving-code-review</a></span>
+          <span class="flow-step-desc">피드백 평가 및 반영</span>
+        </div>
+        <div class="flow-connector"></div>
+        <div class="flow-step">
+          <span class="flow-step-num">7</span>
+          <span class="flow-step-name"><a href="finishing-a-development-branch/README-C.html">finishing-a-development-branch</a></span>
+          <span class="flow-step-desc">머지, PR, 정리</span>
+        </div>
+      </div>
+      <div class="flow-note">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span><a href="verification-before-completion/README-C.html" style="color:var(--info); font-weight:600;">verification-before-completion</a>은 모든 완료 선언 시점에서 실행됩니다. <a href="test-driven-development/README-C.html" style="color:var(--info); font-weight:600;">test-driven-development</a>는 각 실행 단계 안에서 실행됩니다.</span>
+      </div>
+    </div>
+
+    <!-- Bug Fix -->
+    <div class="flow-container">
+      <div class="flow-title">
+        <div class="flow-title-icon" style="background: color-mix(in srgb, var(--negative), transparent 85%); color: var(--negative);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        </div>
+        Bug Fix (짧은 사이클)
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <span class="flow-step-num">1</span>
+          <span class="flow-step-name"><a href="systematic-debugging/README-C.html">systematic-debugging</a></span>
+          <span class="flow-step-desc">근본 원인 분석 우선</span>
+        </div>
+        <div class="flow-connector"></div>
+        <div class="flow-step">
+          <span class="flow-step-num">2</span>
+          <span class="flow-step-name"><a href="test-driven-development/README-C.html">test-driven-development</a></span>
+          <span class="flow-step-desc">버그에 대한 실패 테스트 작성</span>
+        </div>
+        <div class="flow-connector"></div>
+        <div class="flow-step">
+          <span class="flow-step-num">3</span>
+          <span class="flow-step-name"><a href="verification-before-completion/README-C.html">verification-before-completion</a></span>
+          <span class="flow-step-desc">검증 증거 확인</span>
+        </div>
+        <div class="flow-connector"></div>
+        <div class="flow-step">
+          <span class="flow-step-num">4</span>
+          <span class="flow-step-name"><a href="finishing-a-development-branch/README-C.html">finishing-a-development-branch</a></span>
+          <span class="flow-step-desc">수정 사항 머지</span>
+        </div>
+      </div>
+      <div class="flow-note">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span>병렬 태스크에는 <a href="dispatching-parallel-agents/README-C.html" style="color:var(--info); font-weight:600;">dispatching-parallel-agents</a> 또는 <a href="using-git-worktrees/README-C.html" style="color:var(--info); font-weight:600;">using-git-worktrees</a>를 사용하세요.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Skill Files Location -->
+  <section data-reveal aria-labelledby="location-title">
+    <p class="section-label" style="color: var(--accent);">Files Location</p>
+    <h2 class="section-title" id="location-title">스킬 파일 위치</h2>
+    <div class="location-box">
+      <svg class="location-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span>~/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/</span>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <span class="badge">Superpowers Plugin v5.0.7</span>
+  </footer>
+
+</main>
+
+<script>
+var html = document.documentElement;
+
+function toggleTheme() {
+  var isDark = html.classList.contains('theme-dark');
+  html.classList.remove(isDark ? 'theme-dark' : 'theme-light');
+  html.classList.add(isDark ? 'theme-light' : 'theme-dark');
+}
+
+function downloadPNG() {
+  var node = document.getElementById('main-content');
+  if (window.htmlToImage) {
+    htmlToImage.toPng(node, { backgroundColor: getComputedStyle(document.body).getPropertyValue('background-color') })
+      .then(function(dataUrl) {
+        var link = document.createElement('a');
+        link.download = 'superpowers-skills-index.png';
+        link.href = dataUrl;
+        link.click();
+      })
+      .catch(function(err) { console.error('PNG export failed:', err); });
+  }
+}
+
+/* Scroll Reveal */
+var revealEls = document.querySelectorAll('[data-reveal]');
+var observer = new IntersectionObserver(function(entries) {
+  entries.forEach(function(entry) {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('revealed');
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.1 });
+revealEls.forEach(function(el) { observer.observe(el); });
+
+/* Ensure all reveals visible after 500ms for screenshots */
+setTimeout(function() {
+  document.querySelectorAll('[data-reveal]').forEach(function(el) { el.classList.add('revealed'); });
+}, 500);
+</script>
+
+</body>
+</html>
