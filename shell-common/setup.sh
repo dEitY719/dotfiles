@@ -559,6 +559,33 @@ setup_apt_sources() {
     esac
 }
 
+setup_ssh_internal() {
+    ux_header "Setting up SSH SSAI config (Internal PC)"
+
+    local ssh_config_d="${HOME}/.ssh/config.d"
+    local ssai_src="${DOTFILES_ROOT}/ssh/config.d/ssai.conf"
+    local ssai_link="${ssh_config_d}/ssai.conf"
+
+    mkdir -p "$ssh_config_d"
+
+    if [ -L "$ssai_link" ]; then
+        local current_target
+        current_target=$(readlink "$ssai_link")
+        if [ "$current_target" = "$ssai_src" ]; then
+            ux_success "Symlink already correct: ${ssai_link}"
+            return 0
+        fi
+        rm "$ssai_link"
+    elif [ -f "$ssai_link" ]; then
+        local backup="${ssai_link}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$ssai_link" "$backup"
+        ux_info "Backed up existing file: ${backup}"
+    fi
+
+    ln -s "$ssai_src" "$ssai_link"
+    ux_success "Created: ${ssai_link} -> ${ssai_src}"
+}
+
 # ============================================================================
 # Main Menu
 # ============================================================================
@@ -611,11 +638,13 @@ main() {
             setup_nuget_config "internal"
             setup_rpm_repo "internal"
             setup_apt_sources "internal"
+            setup_ssh_internal
             echo "$choice" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for internal company PC"
             ux_info "Changes made:"
             ux_info "  - Copied all .local.example files to .local.sh"
+            ux_info "  - SSH: SSAI server config installed (~/.ssh/config.d/)"
             ux_info "  - Security: System CA Bundle (Option 2) activated"
             ux_info "  - SSL Certificate: McAfee (/usr/share/ca-certificates/extra/McAfee_Certificate.crt)"
             ux_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
