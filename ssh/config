@@ -1,41 +1,40 @@
 # Environment-specific configs (e.g., SSAI servers for internal PC)
 Include ~/.ssh/config.d/*
 
+# ==========================================
+# 1. Global Settings (공통 설정)
+# ==========================================
 Host *
-     PubkeyAcceptedKeyTypes +ssh-rsa
-     ServerAliveInterval 60
-     ServerAliveCountMax 3
-     ConnectTimeout 10
+    PubkeyAcceptedKeyTypes +ssh-rsa
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    ConnectTimeout 10
 
+# ==========================================
+# 2. Corporate Gerrit & Git (삼성 내부 및 Gerrit)
+# ==========================================
 Host github.samsungds.net
-     User git
-     IdentityFile ~/.ssh/id_ed25519
-     IdentitiesOnly yes
-     ControlMaster auto
-     ControlPath ~/.ssh/control-%h-%p-%r
-     ControlPersist 600
-
-Host github.com
-     User git
-     IdentityFile ~/.ssh/id_ed25519
-     IdentitiesOnly yes
-     ConnectTimeout 5
-     Hostname ssh.github.com
-     Port 443
+    User git
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+    ControlMaster auto
+    ControlPath ~/.ssh/control-%h-%p-%r
+    ControlPersist 600
 
 Host Replica-Gerrit
-     HostName 10.166.101.44
-     Port 29418
-     User byoungwoo.yoon
-     PreferredAuthentications publickey
-     HostkeyAlgorithms +ssh-rsa
-     PubkeyAcceptedKeyTypes +ssh-rsa
+    HostName 10.166.101.44
+    Port 29418
+    User byoungwoo.yoon
+    PreferredAuthentications publickey
+    HostkeyAlgorithms +ssh-rsa
 
-Host 10.227.36.179
-     HostName 10.227.36.179
-     Port 29418
-     User byoungwoo.yoon
-     PreferredAuthentications publickey
-     KexAlgorithms diffie-hellman-group-exchange-sha256
-     HostkeyAlgorithms +ssh-rsa
-     PubkeyAcceptedKeyTypes +ssh-rsa
+# ==========================================
+# 3. Public GitHub (HTTPS over SSH)
+# ==========================================
+Host github.com
+    Hostname ssh.github.com
+    Port 443
+    User git
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+    ConnectTimeout 5
