@@ -2,16 +2,7 @@
 Include ~/.ssh/config.d/*
 
 # ==========================================
-# 1. Global Settings (공통 설정)
-# ==========================================
-Host *
-    PubkeyAcceptedKeyTypes +ssh-rsa
-    ServerAliveInterval 60
-    ServerAliveCountMax 3
-    ConnectTimeout 10
-
-# ==========================================
-# 2. Corporate Gerrit & Git (삼성 내부 및 Gerrit)
+# 1. Corporate Gerrit & Git (삼성 내부 및 Gerrit)
 # ==========================================
 Host github.samsungds.net
     User git
@@ -29,7 +20,7 @@ Host Replica-Gerrit
     HostkeyAlgorithms +ssh-rsa
 
 # ==========================================
-# 3. Public GitHub (HTTPS over SSH)
+# 2. Public GitHub (HTTPS over SSH)
 # ==========================================
 Host github.com
     Hostname ssh.github.com
@@ -38,3 +29,12 @@ Host github.com
     IdentityFile ~/.ssh/id_ed25519
     IdentitiesOnly yes
     ConnectTimeout 5
+
+# ==========================================
+# 3. Global Settings (최하단 배치 - first match wins)
+# ==========================================
+Host *
+    PubkeyAcceptedKeyTypes +ssh-rsa
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    ConnectTimeout 10
