@@ -45,7 +45,7 @@
     }
     .hero-title {
       font-size: 2.5rem;
-      font-weight: 800;
+      font-weight: 700;
       margin-bottom: 12px;
       background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
@@ -65,7 +65,7 @@
       background: var(--surface);
       border: 1px solid var(--border);
       padding: 4px 12px;
-      border-radius: 20px;
+      border-radius: 16px;
       font-weight: 500;
     }
 
@@ -94,8 +94,7 @@
       cursor: pointer;
     }
     .card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 32px rgba(0,0,0,0.15);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.1);
       border-color: var(--card-color, var(--accent));
     }
     .card:focus-visible {
@@ -212,9 +211,15 @@
       </svg>
     </button>
     <div class="viz-menu-dropdown" id="vizMenuDropdown">
-      <button onclick="cycleTheme()"><span id="themeIcon">&#127769;</span><span id="themeLabel">Dark</span></button>
-      <button onclick="downloadImage()"><span>&#128229;</span><span>Download PNG</span></button>
-      <button onclick="window.print()"><span>&#128424;</span><span>Print / PDF</span></button>
+      <button onclick="cycleTheme()">
+        <span id="themeIcon">
+          <svg class="theme-icon-dark" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          <svg class="theme-icon-light" style="display:none;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        </span>
+        <span id="themeLabel">Dark</span>
+      </button>
+      <button onclick="downloadImage()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg><span>Download PNG</span></button>
+      <button onclick="window.print()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg><span>Print / PDF</span></button>
     </div>
   </div>
 
@@ -253,19 +258,20 @@
 
   <script>
     // === Menu ===
+    var dropdown = document.getElementById('vizMenuDropdown');
+    var themeIconDark = document.querySelector('#themeIcon .theme-icon-dark');
+    var themeIconLight = document.querySelector('#themeIcon .theme-icon-light');
+    var themeLabel = document.getElementById('themeLabel');
     function toggleMenu() {
-      var dropdown = document.getElementById('vizMenuDropdown');
       if (dropdown) dropdown.classList.toggle('open');
     }
     document.addEventListener('click', function(e) {
       if (!e.target.closest('.viz-menu')) {
-        var dropdown = document.getElementById('vizMenuDropdown');
         if (dropdown) dropdown.classList.remove('open');
       }
     });
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') {
-        var dropdown = document.getElementById('vizMenuDropdown');
         if (dropdown) dropdown.classList.remove('open');
       }
     });
@@ -275,8 +281,9 @@
     var currentTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
     function applyTheme(t) {
       document.documentElement.className = 'theme-' + t;
-      document.getElementById('themeIcon').innerHTML = t === 'dark' ? '&#127769;' : '&#9728;&#65039;';
-      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark' : 'Light';
+      if (themeIconDark) themeIconDark.style.display = t === 'dark' ? '' : 'none';
+      if (themeIconLight) themeIconLight.style.display = t === 'dark' ? 'none' : '';
+      if (themeLabel) themeLabel.textContent = t === 'dark' ? 'Dark' : 'Light';
       localStorage.setItem('viz-theme', t);
       currentTheme = t;
     }
@@ -285,14 +292,13 @@
 
     // === Download PNG ===
     async function downloadImage() {
-      var menu = document.querySelector('.viz-menu');
-      menu.style.display = 'none';
       try {
         var url = await htmlToImage.toPng(document.body, { quality: 1, pixelRatio: 2, filter: function(n) { return !n.classList || !n.classList.contains('viz-menu'); } });
         var a = document.createElement('a'); a.href = url;
         a.download = 'superpowers-skills-comparison.png'; a.click();
-      } catch(e) { console.error('Download failed:', e); }
-      menu.style.display = '';
+      } catch(e) {
+        console.error('Download failed:', e);
+      }
     }
   </script>
 </body>
