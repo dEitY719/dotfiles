@@ -259,6 +259,9 @@
   <script>
     // === Menu ===
     var dropdown = document.getElementById('vizMenuDropdown');
+    var themeIconDark = document.querySelector('#themeIcon .theme-icon-dark');
+    var themeIconLight = document.querySelector('#themeIcon .theme-icon-light');
+    var themeLabel = document.getElementById('themeLabel');
     function toggleMenu() {
       if (dropdown) dropdown.classList.toggle('open');
     }
@@ -278,9 +281,9 @@
     var currentTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
     function applyTheme(t) {
       document.documentElement.className = 'theme-' + t;
-      document.querySelector('#themeIcon .theme-icon-dark').style.display = t === 'dark' ? '' : 'none';
-      document.querySelector('#themeIcon .theme-icon-light').style.display = t === 'dark' ? 'none' : '';
-      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark' : 'Light';
+      if (themeIconDark) themeIconDark.style.display = t === 'dark' ? '' : 'none';
+      if (themeIconLight) themeIconLight.style.display = t === 'dark' ? 'none' : '';
+      if (themeLabel) themeLabel.textContent = t === 'dark' ? 'Dark' : 'Light';
       localStorage.setItem('viz-theme', t);
       currentTheme = t;
     }
@@ -289,16 +292,12 @@
 
     // === Download PNG ===
     async function downloadImage() {
-      var menu = document.querySelector('.viz-menu');
-      menu.style.display = 'none';
       try {
         var url = await htmlToImage.toPng(document.body, { quality: 1, pixelRatio: 2, filter: function(n) { return !n.classList || !n.classList.contains('viz-menu'); } });
         var a = document.createElement('a'); a.href = url;
         a.download = 'superpowers-skills-comparison.png'; a.click();
       } catch(e) {
         console.error('Download failed:', e);
-      } finally {
-        menu.style.display = '';
       }
     }
   </script>
