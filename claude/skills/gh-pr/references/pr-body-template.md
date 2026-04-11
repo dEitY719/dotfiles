@@ -35,13 +35,16 @@ Refs #<N>          ← if related but not fully resolving
 
 ## Create Command
 
-Write the body to a temp file, then run:
+Write the body to a unique temp file via `mktemp` (avoids concurrent-run
+collisions), then run:
 
 ```bash
+BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
+# ... write the drafted body to "$BODY" ...
 gh pr create \
   --base <base> \
   --title "<title>" \
-  --body-file /tmp/gh-pr-body.md
+  --body-file "$BODY"
 ```
 
 Do NOT set `--draft`, `--reviewer`, `--assignee`, or `--label` unless the user

@@ -52,10 +52,13 @@ abbreviate the discussion log to 2–3 bullets.
 
 ## Step 4: Create the Issue
 
-Write the body to a temp file (to avoid shell escaping issues), then:
+Write the body to a unique temp file via `mktemp` (avoids shell escaping
+issues and concurrent-run collisions), then:
 
 ```bash
-gh issue create --title "<title>" --body-file /tmp/gh-issue-body.md
+BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
+# ... write the drafted body to "$BODY" ...
+gh issue create --title "<title>" --body-file "$BODY"
 ```
 
 Do NOT add `--assignee`, `--label`, or `--milestone` unless the user explicitly

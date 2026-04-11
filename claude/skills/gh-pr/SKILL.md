@@ -62,8 +62,8 @@ if commits are Korean).
 - If upstream is diverged: **stop and ask the user before force-pushing**
   (never force-push without explicit approval).
 
-Then write the body to a temp file and run `gh pr create` as documented in
-`references/pr-body-template.md`.
+Then write the body to a unique temp file via `mktemp` and run `gh pr create`
+as documented in `references/pr-body-template.md`.
 
 ## Step 6: Report
 
