@@ -29,9 +29,32 @@ gh api "repos/<owner>/<repo>/pulls/<N>/reviews" --paginate
 
 ## Deduplication rule
 
-Skip threads where a human or Claude has already posted a reply. Check the
-`in_reply_to_id` chains: if any descendant in the thread is authored by the
-current user or by Claude, treat the thread as already addressed.
+Skip a thread only if the **latest** comment in the thread is authored by
+the current user or by Claude. This allows the skill to respond when a
+reviewer leaves a follow-up comment after a previous Claude reply.
+
+Algorithm:
+1. Build threads by chaining `in_reply_to_id` from each comment back to its
+   root (comments with `in_reply_to_id == null`).
+2. For each thread, sort descendants by `created_at`.
+3. Look at the last (most recent) comment. If its `user.login` is the
+   current user or Claude, skip the thread. Otherwise process it.
 
 Exception: if the user explicitly asks to re-process, ignore this filter and
 reply to everything fresh.
+
+## Review summaries
+
+`/pulls/<N>/reviews` entries have no line anchor and no `replies` sub-resource.
+Handle each review summary as follows:
+
+- **Actionable content** (reviewer wrote a critical concern in the summary
+  body itself, not just linking to inline comments): post a new top-level
+  issue comment that blockquotes the review summary and addresses it, using
+  the top-level reply shape from `reply-templates.md`.
+- **Meta content** (summary just recaps the inline comments, or is a service
+  notice like "your repo doesn't have access to X"): no reply needed; note
+  it in the Step 7 report as "skipped (meta summary)".
+
+Judgment: if deleting the summary would lose information not already
+captured in an inline comment, it is actionable.
