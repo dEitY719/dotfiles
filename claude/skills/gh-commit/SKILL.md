@@ -37,49 +37,20 @@ Check in this order and use the first hit:
 
 ## Step 3: Draft the Commit Message
 
-Follow the repo's style (derived from `git log`). Typical structure:
-
-```
-<type>(<scope>): <concise summary in imperative mood>
-
-<body explaining the WHY, not the WHAT — the diff shows the what>
-
-Refs #<N>        ← only if issue number resolved
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
-```
-
-Rules:
-- **Why, not what** — the diff already shows what changed.
-- Match the repo's conventions: if recent commits use `feat:`/`fix:`, follow
-  suit; if they use plain sentences, follow that.
-- Use `Closes #N` only if the commit fully resolves the issue; otherwise
-  `Refs #N`.
-- If the change is a bug fix for a tracked issue, prefer `Fixes #N`.
+Read `references/commit-message-format.md` for the message template, HEREDOC
+pattern, and `Closes` / `Refs` / `Fixes` rules. Match the repo's commit style
+derived from `git log`.
 
 ## Step 4: Stage and Commit
 
-- Stage only the files relevant to this commit. Prefer listing files by name
-  over `git add -A` / `git add .` to avoid sweeping in secrets or unrelated
-  changes.
-- Never stage files that look like secrets (`.env`, `credentials.json`, keys).
-  If the diff touches such files, stop and warn the user.
-- Commit using HEREDOC to preserve formatting:
-
-```bash
-git commit -m "$(cat <<'EOF'
-<type>(<scope>): <summary>
-
-<body>
-
-Refs #<N>
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
-EOF
-)"
-```
-
+- Stage only files relevant to this commit. Prefer listing files by name over
+  `git add -A` / `git add .` to avoid sweeping in secrets or unrelated changes.
+- **Never stage files that look like secrets** (`.env`, `credentials.json`,
+  keys). If the diff touches such files, stop and warn the user.
 - **NEVER** use `--amend` unless the user explicitly asked.
 - **NEVER** use `--no-verify` / `--no-gpg-sign`. If a pre-commit hook fails,
   fix the underlying issue, re-stage, and create a **new** commit.
+- See `references/commit-message-format.md` for the exact HEREDOC command.
 
 ## Step 5: Verify
 

@@ -37,72 +37,18 @@ Pick exactly one category based on the dominant intent of the chat:
 - **bug** — 에러 로그 분석, 버그 재현, 원인 추적
 - **misc** — 질문/논의/조사/문서화 등 위 두 가지에 속하지 않는 것
 
-The category determines the title prefix and section layout below.
+The category determines the title prefix and section layout.
 
 ## Step 3: Draft the Issue Body
 
+Read `references/issue-body-templates.md` and select the title format + body
+structure matching the category from Step 2. Write the body in the language
+the user was speaking (Korean for Korean chats).
+
 **DO NOT over-compress.** This issue is reused later for PR descriptions and
 blog posts. Preserve concrete file paths, command outputs, decisions, and
-reasoning. A 200-line issue is fine if the conversation warranted it.
-
-Write the body in the language the user was speaking (Korean for Korean chats).
-
-### Title format
-- feature: `[Feature] <구체적인 한 줄 요약>`
-- bug: `[Bug] <증상 한 줄 요약>`
-- misc: `[Misc] <주제 한 줄 요약>`
-
-### Body structure (feature)
-```markdown
-## Context
-<왜 이 기능이 필요한가 — 사용자가 말한 배경/동기>
-
-## Proposal
-<무엇을 만들 것인가 — 요구사항 목록>
-
-## Discussion Log
-<대화에서 오간 의사결정, 대안 검토, 네이밍 논의 등 원문에 가깝게>
-
-## Open Questions
-<아직 결정 안 된 것, 확인 필요한 것>
-
-## References
-- 관련 파일: `path/to/file.ext`
-- 관련 이슈/PR: (있으면)
-```
-
-### Body structure (bug)
-```markdown
-## Symptom
-<에러 메시지, 실패 증상>
-
-## Reproduction
-<재현 절차 — 대화에서 나온 명령, 환경>
-
-## Root Cause Analysis
-<원인 추적 과정과 결론>
-
-## Fix Plan
-<수정 방향 — 아직 수정 안 했으면 계획만>
-
-## Logs / Evidence
-<로그 발췌, 파일 위치 등>
-```
-
-### Body structure (misc)
-```markdown
-## Topic
-<대화 주제>
-
-## Summary
-<논의된 내용 정리>
-
-## Decisions
-<도출된 결론>
-
-## Notes
-<추가 맥락>
-```
+reasoning. A 200-line issue is fine if the conversation warranted it. Never
+abbreviate the discussion log to 2–3 bullets.
 
 ## Step 4: Create the Issue
 
