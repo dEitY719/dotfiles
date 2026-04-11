@@ -10,6 +10,7 @@
 - `shell-common/functions/*.sh`의 함수형 명령어
 - `*-help` 형태의 도움말 명령어
 - `my-help`를 통한 topic 라우팅
+- `shell-common/tools/ux_lib/UX_GUIDELINES.md`와의 상호 보완 규칙
 
 ## 표준 인터페이스
 
@@ -17,9 +18,9 @@
 
 - Canonical: `<topic>-help`
 - 상세 조회: `<topic>-help <section>`
-- 섹션 목록: `<topic>-help --list`
-- 전체 상세: `<topic>-help --all`
-- 통합 라우팅: `my-help <topic> [section|--list|--all]`
+- 섹션 목록: `<topic>-help [--list|list]`
+- 전체 상세: `<topic>-help [--all|all]`
+- 통합 라우팅: `my-help [<topic>] [section|--list|--all]` (인자 생략 시 카테고리 목록 표시)
 
 ### 2) 출력 정책
 
@@ -31,7 +32,7 @@
 
 - 1단계 항목: `ux_bullet`
 - 2단계 항목: `ux_bullet_sub`
-- 문자열 앞 공백으로 들여쓰기하지 않는다.
+- 문자열 앞 공백으로 들여쓰기하지 않는다 (`ux_bullet`, `ux_bullet_sub`가 들여쓰기와 bullet 스타일을 처리).
 
 ## SSOT 원칙
 
@@ -58,7 +59,7 @@
 
 - `gwt` 같은 멀티 커맨드 함수도 help 표준은 동일하게 적용한다.
 - 사용자 안내는 `gwt-help [section]`을 canonical로 사용한다.
-- 구형 help 진입점 유지 여부는 명시적으로 결정하고 테스트로 고정한다.
+- 구형 help 진입점(예: `gwt help`, `gwt spawn help`) 유지 여부는 명시적으로 결정하고 테스트로 고정한다.
 
 ## 테스트 체크리스트
 
