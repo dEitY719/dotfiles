@@ -19,15 +19,24 @@ gh api "repos/<owner>/<repo>/pulls/<N>/comments/<comment_id>/replies" \
 ### Top-level issue comment (from `/issues/<N>/comments`)
 
 No thread reply endpoint exists; post a new issue comment that blockquotes
-the original so the context is clear:
+the original so the context is clear. **Every line of the original must be
+prefixed with `> ` individually** — a single `> ` only quotes the first
+line in GitHub-flavored Markdown.
 
 ```bash
+# Build a properly quoted blockquote from the original body
+QUOTED=$(printf '%s\n' "$ORIGINAL_BODY" | sed 's/^/> /')
+
 gh api "repos/<owner>/<repo>/issues/<N>/comments" \
   -X POST \
-  -f body="> <blockquote of original>
+  -f body="$QUOTED
 
 <reply text>"
 ```
+
+The same pattern applies when replying to a review summary from
+`/pulls/<N>/reviews`: there is no per-review reply endpoint, so post a
+top-level issue comment that blockquotes the review body and addresses it.
 
 ## Reply body templates
 
