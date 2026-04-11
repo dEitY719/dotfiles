@@ -55,17 +55,28 @@ Read `references/pr-body-template.md` for title rules, body structure, and
 the `gh pr create` command. Match the language of existing commits (Korean
 if commits are Korean).
 
-## Step 5: Push and Create (parallel where possible)
+## Step 5: Push and Create
 
 - If no upstream: `git push -u origin HEAD`
 - If upstream exists and local is ahead: `git push`
 - If upstream is diverged: **stop and ask the user before force-pushing**
   (never force-push without explicit approval).
 
-Then write the body to a unique temp file via `mktemp` and run `gh pr create`
-as documented in `references/pr-body-template.md`.
+Write the body to a unique temp file via `mktemp`, then create the PR with
+`--assignee @me` (always self-assigned). Full command in
+`references/pr-body-template.md`.
 
-## Step 6: Report
+## Step 6: Apply Labels
+
+Derive labels from conventional-commit types in `git log <base>..HEAD`
+(`feat` → enhancement, `fix` → bug, `docs` → documentation, `refactor`,
+`style`, `perf`, `test`, `chore`, `ci`, `build`) plus judgment-based
+labels matching the PR scope (e.g., `skill` for `claude/skills/` changes).
+Query existing labels via `gh label list` and apply only labels that
+**already exist** in the repo — never create new labels. Details and the
+safe-application loop in `references/pr-body-template.md`.
+
+## Step 7: Report
 
 Output **only** the PR URL:
 
