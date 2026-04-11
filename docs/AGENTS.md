@@ -3,6 +3,7 @@
 - **Structure**: Master prompts, feature docs, review documents, todo tracking
 - **Key Files**:
   - `AGENTS_md_Master_Prompt.md` - AGENTS.md generation protocol (source for agents-md skill)
+  - `standards/command-guidelines.md` - Command/help interface and output formatting SSOT
   - `abc-review-C.md` - SOLID principle review (Claude Opus 4.5)
   - `todo.txt` - Project task tracking
 
