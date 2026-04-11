@@ -421,7 +421,14 @@ ux_table_header() {
 # Display a bullet point
 # Usage: ux_bullet "Item description"
 ux_bullet() {
-    printf "  ${UX_PRIMARY}•${UX_RESET} %s\n" "$1"
+    printf "  ${UX_PRIMARY}◆${UX_RESET} %s\n" "$1"
+}
+
+# Display a second-level bullet point (deeper indentation + alternate bullet)
+# Usage: ux_bullet_sub "Nested item description"
+# Old style: ◦
+ux_bullet_sub() {
+    printf "    ${UX_INFO}•${UX_RESET} %s\n" "$1"
 }
 
 # Display a numbered item
