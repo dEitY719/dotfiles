@@ -473,7 +473,17 @@ git_worktree_teardown() {
                 ;;
             --force) force=true; shift ;;
             --keep-branch) keep_branch=true; shift ;;
-            *) ux_error "Unknown option: $1. Use --help for usage."; return 1 ;;
+            -*)
+                ux_error "Unknown option: $1. Use --help for usage."
+                return 1
+                ;;
+            *)
+                ux_error "'gwt teardown' is a self-cleanup command (run from inside a worktree)."
+                ux_info "  It does not accept a path argument."
+                ux_info "  To remove a specific worktree by path, use:"
+                ux_info "    gwt remove $1"
+                return 1
+                ;;
         esac
     done
 
