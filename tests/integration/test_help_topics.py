@@ -7,7 +7,7 @@ without errors in both bash and zsh environments.
 
 import pytest
 
-# Auto-sourced help topics (35 total)
+# Auto-sourced help topics
 # Excludes: mount-help, addmnt-help (not auto-loaded by main.bash/main.zsh)
 # Use function names (underscores) instead of aliases (dashes) for non-interactive subprocess testing
 HELP_TOPICS = [
@@ -28,6 +28,7 @@ HELP_TOPICS = [
     "gc_help",
     "gemini_help",
     "git_help",
+    "gwt_help",
     "gpu_help",
     "litellm_help",
     "mytool_help",
@@ -151,6 +152,13 @@ class TestHelpTopicsWithDifferentFormats:
         """Test my_help_impl with specific subtopic argument."""
         result = shell_runner(shell, "my_help_impl git")
         assert result.exit_code == 0, f"{shell}: my_help_impl git failed"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_my_help_invocation_with_topic_args(self, shell_runner, shell):
+        """Test my_help_impl forwards args to topic function."""
+        result = shell_runner(shell, "my_help_impl git stash")
+        assert result.exit_code == 0, f"{shell}: my_help_impl git stash failed"
+        assert "git stash" in result.stdout.lower(), f"{shell}: stash content not shown"
 
 
 class TestHelpTopicsErrorHandling:

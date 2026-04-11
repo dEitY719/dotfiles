@@ -6,6 +6,60 @@
 unalias gwt 2>/dev/null || true
 
 # ============================================================================
+# gwt-help — compact help (canonical)
+# Usage: gwt-help [section]
+# ============================================================================
+gwt_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            ux_info "gwt-help [section]"
+            ux_info "sections: add | list | remove | prune | spawn | teardown"
+            ux_info "add      : gwt add <path> [branch] [start]"
+            ux_info "list     : gwt list | gwt ls"
+            ux_info "remove   : gwt remove <path|agent|all> [--force]"
+            ux_info "prune    : gwt prune"
+            ux_info "spawn    : gwt spawn [agent] [--task slug] [--base ref] [--tmux]"
+            ux_info "teardown : gwt teardown [--force] [--keep-branch]"
+            ux_info "example  : gwt-help spawn"
+            ;;
+        add)
+            ux_info "gwt add <path> [<new-branch> [<start-point>]]"
+            ux_info "Creates git-crypt safe worktree (encrypted paths excluded via sparse-checkout)."
+            ;;
+        list|ls)
+            ux_info "gwt list (or gwt ls)"
+            ux_info "Shows linked worktrees with path/commit/branch."
+            ;;
+        remove|rm)
+            ux_info "gwt remove <path|agent|all> [--force]"
+            ux_info "<agent> removes all *-<agent>-* worktrees, 'all' removes all non-main worktrees."
+            ux_info "--force also force-removes worktree and unmerged branch."
+            ;;
+        prune)
+            ux_info "gwt prune"
+            ux_info "Runs: git worktree prune"
+            ;;
+        spawn)
+            ux_info "gwt spawn [<agent>] [--task <slug>] [--base <ref>] [--tmux]"
+            ux_info "Must run from main repo (not inside a worktree)."
+            ux_info "agent: claude | codex | gemini | opencode | cursor | copilot"
+            ux_info "example: gwt spawn codex --task login-fix --base origin/main"
+            ;;
+        teardown)
+            ux_info "gwt teardown [--force] [--keep-branch]"
+            ux_info "Must run inside a worktree. Removes worktree and syncs main repo."
+            ux_info "--force discards local changes/unpushed commits."
+            ux_info "--keep-branch keeps current branch after cleanup."
+            ;;
+        *)
+            ux_error "Unknown gwt-help section: $1"
+            ux_info "Try: gwt-help"
+            return 1
+            ;;
+    esac
+}
+
+# ============================================================================
 # gwt — git worktree dispatcher
 # Usage: gwt <subcommand> [args...]
 # ============================================================================
@@ -18,22 +72,13 @@ gwt() {
         spawn)    shift; git_worktree_spawn "$@" ;;
         teardown) shift; git_worktree_teardown "$@" ;;
         -h|--help|help|"")
-            ux_header "gwt - git worktree manager"
-            ux_info "Usage: gwt <command> [args...]"
-            ux_info ""
-            ux_info "Commands:"
-            ux_info "  add <path> [branch] [start]    create git-crypt safe worktree"
-            ux_info "  list, ls                       list worktrees (with hints)"
-            ux_info "  remove, rm <path|all> [--force] remove worktree + branch"
-            ux_info "  prune                          clean up stale worktree refs"
-            ux_info "  spawn [ai] [--task slug]       create AI worktree (run from main repo)"
-            ux_info "  teardown [--force]             self-cleanup (run from inside worktree)"
-            ux_info ""
-            ux_info "Run 'gwt <command> --help' for command-specific help."
-            return 0
+            ux_error "Usage: gwt <command> [args...]"
+            ux_info "Run: gwt-help"
+            return 1
             ;;
         *)
-            ux_error "Unknown command: $1. Run 'gwt help' for usage."
+            ux_error "Unknown command: $1"
+            ux_info "Run: gwt-help"
             return 1
             ;;
     esac
@@ -73,7 +118,7 @@ git_worktree_remove() {
     fi
 
     case "${1:-}" in
-        -h|--help|help)
+        -h|--help)
             ux_header "gwt remove - remove worktree and branch"
             ux_info "Usage: gwt remove <path|agent|all> [--force]"
             ux_info ""
@@ -254,7 +299,7 @@ _gwt_remove_one() {
 
 git_worktree_add() {
     case "${1:-}" in
-        -h|--help|help)
+        -h|--help)
             ux_header "gwt add - git-crypt safe worktree"
             ux_info "Usage: gwt add <path> [<new-branch> [<start-point>]]"
             ux_info "  Creates a worktree with git-crypt encrypted files excluded"
@@ -325,7 +370,7 @@ git_worktree_spawn() {
     # Parse arguments
     while [ $# -gt 0 ]; do
         case "$1" in
-            -h|--help|help)
+            -h|--help)
                 ux_header "gwt spawn - AI worktree auto-creation"
                 ux_info "Usage: gwt spawn [<agent>] [--task <slug>] [--base <ref>] [--tmux]"
                 ux_info ""
@@ -462,7 +507,7 @@ git_worktree_teardown() {
 
     while [ $# -gt 0 ]; do
         case "$1" in
-            -h|--help|help)
+            -h|--help)
                 ux_header "gwt teardown - AI worktree cleanup"
                 ux_info "Usage: gwt teardown [--force] [--keep-branch]"
                 ux_info ""
@@ -573,3 +618,5 @@ git_worktree_teardown() {
     ux_info "  Removed: $wt_path"
     ux_info "  Now on:  $main_branch"
 }
+
+alias gwt-help='gwt_help'
