@@ -156,7 +156,7 @@ _register_default_help_categories() {
     HELP_CATEGORIES[system]="${HELP_CATEGORIES[system]:-System tools (directory navigation, opencode)}"
 
     # Category membership (space-separated topic keys)
-    HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git uv py nvm npm bun pp cli ux du psql mytool}"
+    HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git gwt uv py nvm npm bun pp cli ux du psql mytool}"
     HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql redis gpu network}"
     HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc gemini codex litellm ollama claude_plugins claude_skills_marketplace superpowers}"
     HELP_CATEGORY_MEMBERS[cli]="${HELP_CATEGORY_MEMBERS[cli]:-fzf fd fasd ripgrep pet bat zsh zsh_autosuggestions gc tmux}"
@@ -194,6 +194,7 @@ _register_default_help_descriptions() {
     # This approach works in both bash and zsh
     HELP_DESCRIPTIONS[uv_help]="${HELP_DESCRIPTIONS[uv_help]:-[Development] UV packages and environments}"
     HELP_DESCRIPTIONS[git_help]="${HELP_DESCRIPTIONS[git_help]:-[Development] Git version control shortcuts}"
+    HELP_DESCRIPTIONS[gwt_help]="${HELP_DESCRIPTIONS[gwt_help]:-[Development] Git worktree command guide}"
     HELP_DESCRIPTIONS[py_help]="${HELP_DESCRIPTIONS[py_help]:-[Development] Python environments and tooling}"
     HELP_DESCRIPTIONS[dir_help]="${HELP_DESCRIPTIONS[dir_help]:-[System] Directory navigation shortcuts}"
     HELP_DESCRIPTIONS[sys_help]="${HELP_DESCRIPTIONS[sys_help]:-[DevOps] System management helpers}"
@@ -411,7 +412,7 @@ _my_help_show_category() {
     done
 
     ux_divider
-    ux_info "Run: my-help <topic> (example: my-help git)"
+    ux_info "Run: my-help <topic> [args] (example: my-help git stash)"
     ux_bullet "Tip: Use dash form too (example: git-help)"
 
     if [ "$category" = "cli" ]; then
@@ -506,7 +507,7 @@ _my_help_show_all() {
     ux_section "Navigation"
     ux_bullet "my-help                 - Show categories"
     ux_bullet "my-help <category>      - Show a category (example: my-help ai)"
-    ux_bullet "my-help <topic>         - Show a topic (example: my-help git)"
+    ux_bullet "my-help <topic> [args]  - Show a topic (example: my-help git stash)"
     ux_bullet "category-help           - Browse categories"
     ux_bullet "register-help           - How to add new topics"
 
@@ -579,6 +580,7 @@ my_help_impl() {
     else
         # If argument is provided, show specific help for that command
         local cmd_name="$1"
+        shift || true
 
         # Category browsing: exact or unique prefix match (case-insensitive).
         local cat_matches=0
@@ -616,7 +618,7 @@ my_help_impl() {
             esac
 
             if _my_help_is_function "$helper_name"; then
-                "$helper_name"
+                "$helper_name" "$@"
                 rc=$?
             else
                 # Some modules only expose a dash-style function (e.g., apt-help). Only
@@ -634,10 +636,10 @@ my_help_impl() {
                             *) dash_name="${dash_name}-help" ;;
                         esac
                         if _my_help_is_function "$dash_name"; then
-                            "$dash_name"
+                            "$dash_name" "$@"
                             rc=$?
                         elif _my_help_is_function "$cmd_name"; then
-                            "$cmd_name"
+                            "$cmd_name" "$@"
                             rc=$?
                         elif type "$cmd_name" >/dev/null 2>&1; then
                             # Try calling command with --help
@@ -781,6 +783,11 @@ if [ -n "$ZSH_VERSION" ]; then
 
             if [ "$cmd_name" = "register-help" ]; then
                 register_help "$@"
+                return $?
+            fi
+
+            if [ "$cmd_name" = "gwt-help" ]; then
+                gwt_help "$@"
                 return $?
             fi
 
