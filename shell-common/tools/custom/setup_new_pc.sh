@@ -63,12 +63,14 @@ main() {
     # ========================================
     info "Step 0/5: dotfiles 리포지토리 확인 중..."
 
-    if [[ ! -d .git ]] || [[ ! -f bash/app/git-crypt.bash ]]; then
+    if [[ ! -d .git ]] \
+        || [[ ! -f setup.sh ]] \
+        || [[ ! -f shell-common/tools/integrations/git_crypt.sh ]]; then
         error "dotfiles 리포지토리가 아닙니다."
         warning "다음 명령어를 먼저 실행하세요:"
         echo "  git clone <your-dotfiles-repo>"
         echo "  cd dotfiles"
-        echo "  bash mytool/setup_new_pc.sh"
+        echo "  bash shell-common/tools/custom/setup_new_pc.sh"
         exit 1
     fi
     success "dotfiles 리포지토리 확인됨"
