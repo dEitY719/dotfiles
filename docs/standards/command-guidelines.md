@@ -27,6 +27,11 @@
 - 기본 출력(`*-help`)은 15줄 이내를 목표로 한다.
 - 기본 출력은 요약 중심으로 구성한다.
 - 상세 표/긴 설명은 `--all`로 분리한다.
+- 기본 요약은 아래 템플릿을 기본값으로 사용한다:
+  - 첫 줄: `ux_info "Usage: <topic>-help [section|--list|--all]"`
+  - 섹션 루트: `ux_bullet "sections"`
+  - 섹션 항목: `ux_bullet_sub "..."`
+  - 금지: `ux_info "sections: ..."` 형태의 flat 나열 요약
 
 ### 3) 계층 출력 규칙
 
@@ -65,6 +70,7 @@
 
 - bash/zsh 모두에서 canonical help 호출 성공
 - `*-help` 기본 출력 줄 수 검증 (<= 15)
+- `*-help` 기본 출력이 템플릿(Usage + `ux_bullet`/`ux_bullet_sub`)을 따르는지 검증
 - `<topic>-help <section>` 출력이 `--all`의 동일 섹션 row와 일치
 - `my-help <topic> [args]` 인자 전달 정상 동작
 
