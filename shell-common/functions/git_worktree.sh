@@ -9,52 +9,114 @@ unalias gwt 2>/dev/null || true
 # gwt-help — compact help (canonical)
 # Usage: gwt-help [section]
 # ============================================================================
-gwt_help() {
-    case "${1:-}" in
-        ""|-h|--help|help)
-            ux_info "gwt-help [section]"
-            ux_info "sections: add | list | remove | prune | spawn | teardown"
-            ux_info "add      : gwt add <path> [branch] [start]"
-            ux_info "list     : gwt list | gwt ls"
-            ux_info "remove   : gwt remove <path|agent|all> [--force]"
-            ux_info "prune    : gwt prune"
-            ux_info "spawn    : gwt spawn [agent] [--task slug] [--base ref] [--tmux]"
-            ux_info "teardown : gwt teardown [--force] [--keep-branch]"
-            ux_info "example  : gwt-help spawn"
-            ;;
+_gwt_help_summary() {
+    ux_info "Usage: gwt-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "add: gwt add <path> [branch] [start]"
+    ux_bullet_sub "list: gwt list | gwt ls"
+    ux_bullet_sub "remove: gwt remove <path|agent|all> [--force]"
+    ux_bullet_sub "prune: gwt prune"
+    ux_bullet_sub "spawn: gwt spawn [agent] [--task slug] [--base ref] [--tmux]"
+    ux_bullet_sub "teardown: gwt teardown [--force] [--keep-branch]"
+    ux_bullet_sub "details: gwt-help <section> (example: gwt-help spawn)"
+}
+
+_gwt_help_list_sections() {
+    ux_info "gwt sections"
+    ux_info "add list remove prune spawn teardown"
+}
+
+_gwt_help_rows_add() {
+    ux_table_row "syntax" "gwt add <path> [<new-branch> [<start-point>]]" "Create git-crypt-safe worktree"
+    ux_table_row "behavior" "Sparse checkout excludes encrypted paths" "Keeps encrypted layout safe"
+}
+
+_gwt_help_rows_list() {
+    ux_table_row "syntax" "gwt list | gwt ls" "List linked worktrees"
+    ux_table_row "output" "path | commit | branch" "Adds remove hint when count > 1"
+}
+
+_gwt_help_rows_remove() {
+    ux_table_row "syntax" "gwt remove <path|agent|all> [--force]" "Remove worktree + branch"
+    ux_table_row "agent mode" "<agent> matches *-<agent>-*" "Batch remove by agent"
+    ux_table_row "all mode" "all removes non-main worktrees" "Batch cleanup"
+    ux_table_row "force" "--force" "Force remove and branch delete"
+}
+
+_gwt_help_rows_prune() {
+    ux_table_row "syntax" "gwt prune" "Run: git worktree prune"
+}
+
+_gwt_help_rows_spawn() {
+    ux_table_row "syntax" "gwt spawn [<agent>] [--task <slug>] [--base <ref>] [--tmux]" "Create AI worktree"
+    ux_table_row "context" "Run from main repo only" "Fails inside a worktree"
+    ux_table_row "agents" "claude | codex | gemini | opencode | cursor | copilot" "Default: auto-detect"
+    ux_table_row "example" "gwt spawn codex --task login-fix --base origin/main" "Task + base branch"
+}
+
+_gwt_help_rows_teardown() {
+    ux_table_row "syntax" "gwt teardown [--force] [--keep-branch]" "Cleanup current AI worktree"
+    ux_table_row "context" "Run inside a worktree" "Syncs main repo after cleanup"
+    ux_table_row "flags" "--force / --keep-branch" "Discard changes / keep branch"
+}
+
+_gwt_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_gwt_help_section_rows() {
+    case "$1" in
         add)
-            ux_info "gwt add <path> [<new-branch> [<start-point>]]"
-            ux_info "Creates git-crypt safe worktree (encrypted paths excluded via sparse-checkout)."
+            _gwt_help_rows_add
             ;;
         list|ls)
-            ux_info "gwt list (or gwt ls)"
-            ux_info "Shows linked worktrees with path/commit/branch."
+            _gwt_help_rows_list
             ;;
         remove|rm)
-            ux_info "gwt remove <path|agent|all> [--force]"
-            ux_info "<agent> removes all *-<agent>-* worktrees, 'all' removes all non-main worktrees."
-            ux_info "--force also force-removes worktree and unmerged branch."
+            _gwt_help_rows_remove
             ;;
         prune)
-            ux_info "gwt prune"
-            ux_info "Runs: git worktree prune"
+            _gwt_help_rows_prune
             ;;
         spawn)
-            ux_info "gwt spawn [<agent>] [--task <slug>] [--base <ref>] [--tmux]"
-            ux_info "Must run from main repo (not inside a worktree)."
-            ux_info "agent: claude | codex | gemini | opencode | cursor | copilot"
-            ux_info "example: gwt spawn codex --task login-fix --base origin/main"
+            _gwt_help_rows_spawn
             ;;
         teardown)
-            ux_info "gwt teardown [--force] [--keep-branch]"
-            ux_info "Must run inside a worktree. Removes worktree and syncs main repo."
-            ux_info "--force discards local changes/unpushed commits."
-            ux_info "--keep-branch keeps current branch after cleanup."
+            _gwt_help_rows_teardown
             ;;
         *)
             ux_error "Unknown gwt-help section: $1"
-            ux_info "Try: gwt-help"
+            ux_info "Try: gwt-help --list"
             return 1
+            ;;
+    esac
+}
+
+_gwt_help_full() {
+    ux_header "Git Worktree Commands"
+
+    _gwt_help_render_section "Add" _gwt_help_rows_add
+    _gwt_help_render_section "List" _gwt_help_rows_list
+    _gwt_help_render_section "Remove" _gwt_help_rows_remove
+    _gwt_help_render_section "Prune" _gwt_help_rows_prune
+    _gwt_help_render_section "Spawn" _gwt_help_rows_spawn
+    _gwt_help_render_section "Teardown" _gwt_help_rows_teardown
+}
+
+gwt_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _gwt_help_summary
+            ;;
+        --list|list)
+            _gwt_help_list_sections
+            ;;
+        --all|all)
+            _gwt_help_full
+            ;;
+        *)
+            _gwt_help_section_rows "$1"
             ;;
     esac
 }
