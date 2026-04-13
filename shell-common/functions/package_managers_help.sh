@@ -139,7 +139,7 @@ pip_help() {
         ""|-h|--help|help)
             _pip_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _pip_help_list_sections
             ;;
         --all|all)
@@ -304,7 +304,7 @@ npm_help() {
         ""|-h|--help|help)
             _npm_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _npm_help_list_sections
             ;;
         --all|all)
@@ -441,7 +441,7 @@ uv_help() {
         ""|-h|--help|help)
             _uv_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _uv_help_list_sections
             ;;
         --all|all)
@@ -571,7 +571,7 @@ bun_help() {
         ""|-h|--help|help)
             _bun_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _bun_help_list_sections
             ;;
         --all|all)

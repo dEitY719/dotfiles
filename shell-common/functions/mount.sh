@@ -114,7 +114,7 @@ HELP
         ""|-h|--help|help)
             _mount_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _mount_help_list_sections
             ;;
         --all|all)

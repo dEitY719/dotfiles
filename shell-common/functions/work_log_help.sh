@@ -160,7 +160,7 @@ work_log_help() {
         ""|-h|--help|help)
             _work_log_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _work_log_help_list_sections
             ;;
         --all|all)

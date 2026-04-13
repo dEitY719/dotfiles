@@ -612,7 +612,7 @@ claude_skills_marketplace_help() {
         ""|-h|--help|help)
             _claude_skills_marketplace_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _claude_skills_marketplace_help_list_sections
             ;;
         --all|all)

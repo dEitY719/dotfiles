@@ -135,7 +135,7 @@ claude_help() {
         ""|-h|--help|help)
             _claude_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _claude_help_list_sections
             ;;
         --all|all)
@@ -400,7 +400,7 @@ codex_help() {
         ""|-h|--help|help)
             _codex_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _codex_help_list_sections
             ;;
         --all|all)
@@ -487,7 +487,7 @@ gemini_help() {
         ""|-h|--help|help)
             _gemini_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _gemini_help_list_sections
             ;;
         --all|all)
@@ -565,7 +565,7 @@ litellm_help() {
         ""|-h|--help|help)
             _litellm_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _litellm_help_list_sections
             ;;
         --all|all)
@@ -643,7 +643,7 @@ ollama_help() {
         ""|-h|--help|help)
             _ollama_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _ollama_help_list_sections
             ;;
         --all|all)

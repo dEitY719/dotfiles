@@ -157,7 +157,7 @@ superpowers_help() {
         ""|-h|--help|help)
             _superpowers_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _superpowers_help_list_sections
             ;;
         --all|all)

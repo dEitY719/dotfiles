@@ -206,7 +206,7 @@ _opencode_help_full() {
 opencode_help() {
     case "${1:-}" in
         ""|-h|--help|help) _opencode_help_summary ;;
-        --list|list)        _opencode_help_list_sections ;;
+        --list|list|section|sections)        _opencode_help_list_sections ;;
         --all|all)          _opencode_help_full ;;
         *)                  _opencode_help_section_rows "$1" ;;
     esac

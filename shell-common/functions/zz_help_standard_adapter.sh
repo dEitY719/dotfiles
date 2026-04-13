@@ -108,7 +108,7 @@ ${func_name}() {
         \"\"|-h|--help|help)
             _help_std_summary_${func_name}
             ;;
-        --list|list)
+        --list|list|section|sections)
             _help_std_list_${func_name}
             ;;
         --all|all)

@@ -129,7 +129,7 @@ dot_help() {
         ""|-h|--help|help)
             _dot_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _dot_help_list_sections
             ;;
         --all|all)

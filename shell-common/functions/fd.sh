@@ -191,7 +191,7 @@ _fd_help_full() {
 fd_help() {
     case "${1:-}" in
         ""|-h|--help|help) _fd_help_summary ;;
-        --list|list)        _fd_help_list_sections ;;
+        --list|list|section|sections)        _fd_help_list_sections ;;
         --all|all)          _fd_help_full ;;
         *)                  _fd_help_section_rows "$1" ;;
     esac

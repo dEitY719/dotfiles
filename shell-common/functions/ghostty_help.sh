@@ -91,7 +91,7 @@ _ghostty_help_full() {
 ghostty_help() {
     case "${1:-}" in
         ""|-h|--help|help) _ghostty_help_summary ;;
-        --list|list)        _ghostty_help_list_sections ;;
+        --list|list|section|sections)        _ghostty_help_list_sections ;;
         --all|all)          _ghostty_help_full ;;
         *)                  _ghostty_help_section_rows "$1" ;;
     esac

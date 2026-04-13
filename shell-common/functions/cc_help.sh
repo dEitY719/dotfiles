@@ -51,7 +51,7 @@ _cc_help_full() {
 cc_help() {
     case "${1:-}" in
         ""|-h|--help|help) _cc_help_summary ;;
-        --list|list)        _cc_help_list_sections ;;
+        --list|list|section|sections)        _cc_help_list_sections ;;
         --all|all)          _cc_help_full ;;
         *)                  _cc_help_section_rows "$1" ;;
     esac

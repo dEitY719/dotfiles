@@ -148,7 +148,7 @@ _notion_help_full() {
 notion_help() {
     case "${1:-}" in
         ""|-h|--help|help) _notion_help_summary ;;
-        --list|list)        _notion_help_list_sections ;;
+        --list|list|section|sections)        _notion_help_list_sections ;;
         --all|all)          _notion_help_full ;;
         *)                  _notion_help_section_rows "$1" ;;
     esac

@@ -163,7 +163,7 @@ mytool_help() {
         ""|-h|--help|help)
             _mytool_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _mytool_help_list_sections
             ;;
         --all|all)

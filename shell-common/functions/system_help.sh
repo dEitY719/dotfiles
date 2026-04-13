@@ -105,7 +105,7 @@ sys_help() {
         ""|-h|--help|help)
             _sys_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _sys_help_list_sections
             ;;
         --all|all)
@@ -254,7 +254,7 @@ gpu_help() {
         ""|-h|--help|help)
             _gpu_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _gpu_help_list_sections
             ;;
         --all|all|-a)
@@ -328,7 +328,7 @@ du_help() {
         ""|-h|--help|help)
             _du_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _du_help_list_sections
             ;;
         --all|all)
@@ -436,7 +436,7 @@ dir_help() {
         ""|-h|--help|help)
             _dir_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _dir_help_list_sections
             ;;
         --all|all)
@@ -550,7 +550,7 @@ network_help() {
         ""|-h|--help|help)
             _network_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _network_help_list_sections
             ;;
         --all|all)

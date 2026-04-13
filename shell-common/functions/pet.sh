@@ -207,7 +207,7 @@ _pet_help_full() {
 pet_help() {
     case "${1:-}" in
         ""|-h|--help|help) _pet_help_summary ;;
-        --list|list)        _pet_help_list_sections ;;
+        --list|list|section|sections)        _pet_help_list_sections ;;
         --all|all)          _pet_help_full ;;
         *)                  _pet_help_section_rows "$1" ;;
     esac

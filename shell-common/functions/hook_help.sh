@@ -103,7 +103,7 @@ _hook_help_full() {
 hook_help() {
     case "${1:-}" in
         ""|-h|--help|help) _hook_help_summary ;;
-        --list|list)        _hook_help_list_sections ;;
+        --list|list|section|sections)        _hook_help_list_sections ;;
         --all|all)          _hook_help_full ;;
         *)                  _hook_help_section_rows "$1" ;;
     esac

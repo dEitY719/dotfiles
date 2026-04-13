@@ -85,7 +85,7 @@ category_help() {
         ""|-h|--help|help)
             _category_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _category_help_list_sections
             ;;
         --all|all)

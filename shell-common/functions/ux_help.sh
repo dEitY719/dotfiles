@@ -211,7 +211,7 @@ ux_help() {
         ""|-h|--help|help)
             _ux_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _ux_help_list_sections
             ;;
         --all|all)
