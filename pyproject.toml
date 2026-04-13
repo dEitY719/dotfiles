@@ -55,8 +55,8 @@ packages = []
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests/integration"]
-addopts = "-v --strict-markers -n auto --dist load"
-# -n auto: parallel execution using all available CPU cores
+addopts = "-v --strict-markers -n 4 --dist load"
+# -n 4: 4 parallel workers (reduced from auto to prevent resource contention on WSL2/slower machines)
 # --dist load: distribute tests evenly across workers (better for heterogeneous tests)
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
