@@ -6,36 +6,121 @@
 
 # NOTE: UX library is loaded by the loader before functions/ — no need to reload here
 
-crt_help() {
-    ux_header "CA Certificate Setup Guide"
+_crt_help_summary() {
+    ux_info "Usage: crt-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "overview: npm/Node/Python CA | custom & system | security.local.sh"
+    ux_bullet_sub "options: External (custom crt) | Internal (system CA)"
+    ux_bullet_sub "setup: crtsetup"
+    ux_bullet_sub "env: NODE_EXTRA_CA_CERTS | REQUESTS_CA_BUNDLE"
+    ux_bullet_sub "config: shell-common/env/security.local.sh"
+    ux_bullet_sub "related: npm-help | security.sh | setup.sh"
+    ux_bullet_sub "details: crt-help <section>  (example: crt-help options)"
+}
 
-    ux_section "Overview"
+_crt_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "overview"
+    ux_bullet_sub "options"
+    ux_bullet_sub "setup"
+    ux_bullet_sub "env"
+    ux_bullet_sub "config"
+    ux_bullet_sub "related"
+}
+
+_crt_help_rows_overview() {
     ux_bullet "Manages CA certificates for npm, Node.js, and Python"
     ux_bullet "Supports custom certificates (company proxy) and system CA bundles"
     ux_bullet "Configuration stored in: shell-common/env/security.local.sh"
+}
 
-    ux_section "Two Options"
+_crt_help_rows_options() {
     ux_bullet "Option 1: Custom Certificate (External Company PC - VPN)"
     ux_bullet " • Certificate path: ${UX_MUTED}/usr/local/share/ca-certificates/samsungsemi-prx.com.crt${UX_RESET}"
     ux_bullet " • Install with: ${UX_SUCCESS}crtsetup${UX_RESET}"
     ux_bullet "Option 2: System CA Bundle (Internal Company PC)"
     ux_bullet " • Certificate path: ${UX_MUTED}/etc/ssl/certs/ca-certificates.crt${UX_RESET}"
     ux_bullet " • Already system default, no setup needed"
+}
 
-    ux_section "Setup Command"
+_crt_help_rows_setup() {
     ux_table_row "crtsetup" "Interactive CA certificate setup script"
+}
 
-    ux_section "Environment Variables"
+_crt_help_rows_env() {
     ux_table_row "NODE_EXTRA_CA_CERTS" "Used by Node.js/npm for certificate validation"
     ux_table_row "REQUESTS_CA_BUNDLE" "Used by Python for certificate validation"
+}
 
-    ux_section "Configuration File"
+_crt_help_rows_config() {
     ux_info "Location: ${UX_BOLD}shell-common/env/security.local.sh${UX_RESET}"
+}
 
-    ux_section "Related Commands"
+_crt_help_rows_related() {
     ux_table_row "npm-help" "NPM package manager commands and setup"
     ux_table_row "security.sh" "Security environment variable configuration"
     ux_table_row "setup.sh" "Initial environment-specific setup"
+}
+
+_crt_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_crt_help_section_rows() {
+    case "$1" in
+        overview)
+            _crt_help_rows_overview
+            ;;
+        options|option)
+            _crt_help_rows_options
+            ;;
+        setup|install)
+            _crt_help_rows_setup
+            ;;
+        env|environment)
+            _crt_help_rows_env
+            ;;
+        config|configuration)
+            _crt_help_rows_config
+            ;;
+        related)
+            _crt_help_rows_related
+            ;;
+        *)
+            ux_error "Unknown crt-help section: $1"
+            ux_info "Try: crt-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_crt_help_full() {
+    ux_header "CA Certificate Setup Guide"
+
+    _crt_help_render_section "Overview" _crt_help_rows_overview
+    _crt_help_render_section "Two Options" _crt_help_rows_options
+    _crt_help_render_section "Setup Command" _crt_help_rows_setup
+    _crt_help_render_section "Environment Variables" _crt_help_rows_env
+    _crt_help_render_section "Configuration File" _crt_help_rows_config
+    _crt_help_render_section "Related Commands" _crt_help_rows_related
+}
+
+crt_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _crt_help_summary
+            ;;
+        --list|list)
+            _crt_help_list_sections
+            ;;
+        --all|all)
+            _crt_help_full
+            ;;
+        *)
+            _crt_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias crt-help='crt_help'
