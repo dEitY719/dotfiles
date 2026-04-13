@@ -137,53 +137,121 @@ alias docker-help='docker_help'
 
 # --- proxy_help (from proxy_help.sh) ---
 
-proxy_help() {
+_proxy_help_summary() {
+    ux_info "Usage: proxy-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "diagnostics: check-proxy | env | file | shell | conn | git"
+    ux_bullet_sub "commands: \$http_proxy | \$https_proxy | \$no_proxy | env | grep proxy"
+    ux_bullet_sub "set: export http_proxy | https_proxy | no_proxy"
+    ux_bullet_sub "unset: unset HTTP_PROXY HTTPS_PROXY NO_PROXY"
+    ux_bullet_sub "git: connectTimeout | lowSpeedLimit | lowSpeedTime | view config"
+    ux_bullet_sub "related: check-network quick | check-network"
+    ux_bullet_sub "notes: NO_PROXY commas | uppercase env | proxy-only check"
+    ux_bullet_sub "details: proxy-help <section>  (example: proxy-help set)"
+}
+
+_proxy_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "diagnostics"
+    ux_bullet_sub "commands"
+    ux_bullet_sub "set"
+    ux_bullet_sub "unset"
+    ux_bullet_sub "git"
+    ux_bullet_sub "related"
+    ux_bullet_sub "notes"
+}
+
+_proxy_help_rows_diagnostics() {
+    ux_bullet "check-proxy          Run full diagnostic"
+    ux_bullet "check-proxy env      Environment variables only"
+    ux_bullet "check-proxy file     proxy.local.sh file check"
+    ux_bullet "check-proxy shell    Shell loading test"
+    ux_bullet "check-proxy conn     Configured proxy connectivity test"
+    ux_bullet "check-proxy git      Git configuration"
+}
+
+_proxy_help_rows_commands() {
+    ux_bullet "echo \$http_proxy          Current proxy setting"
+    ux_bullet "echo \$https_proxy         Current HTTPS proxy"
+    ux_bullet "echo \$no_proxy            NO_PROXY exceptions"
+    ux_bullet "env | grep -i proxy        Show all proxy vars"
+}
+
+_proxy_help_rows_set() {
+    ux_bullet "export http_proxy=\"http://proxy.example.com:8080/\""
+    ux_bullet "export https_proxy=\"http://proxy.example.com:8080/\""
+    ux_bullet "export no_proxy=\"localhost,127.0.0.1,.internal.domain.com\""
+}
+
+_proxy_help_rows_unset() {
+    ux_bullet "unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY"
+}
+
+_proxy_help_rows_git() {
+    ux_bullet "git config --global http.connectTimeout 60    Increase timeout"
+    ux_bullet "git config --global http.lowSpeedLimit 0      Disable low speed limit"
+    ux_bullet "git config --global http.lowSpeedTime 999999   Disable low speed time"
+    ux_bullet "git config --global -l | grep proxy           View git proxy config"
+}
+
+_proxy_help_rows_related() {
+    ux_bullet "check-network quick       General internet access check"
+    ux_bullet "check-network             DNS, HTTPS, git, apt, pip, curl checks"
+}
+
+_proxy_help_rows_notes() {
+    ux_warning "NO_PROXY with spaces is not recognized - use commas only"
+    ux_info "Some tools only recognize uppercase (HTTP_PROXY, HTTPS_PROXY)"
+    ux_info "check-proxy focuses on proxy configuration only"
+}
+
+_proxy_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_proxy_help_section_rows() {
+    case "$1" in
+        diagnostics|diag)
+            _proxy_help_rows_diagnostics
+            ;;
+        commands|quick)
+            _proxy_help_rows_commands
+            ;;
+        set|setting|setup)
+            _proxy_help_rows_set
+            ;;
+        unset|disable|disabling)
+            _proxy_help_rows_unset
+            ;;
+        git)
+            _proxy_help_rows_git
+            ;;
+        related)
+            _proxy_help_rows_related
+            ;;
+        notes|important)
+            _proxy_help_rows_notes
+            ;;
+        *)
+            ux_error "Unknown proxy-help section: $1"
+            ux_info "Try: proxy-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_proxy_help_full() {
     ux_header "Proxy Configuration & Diagnostics"
 
     if type ux_section >/dev/null 2>&1; then
-        ux_section "Diagnostic Commands"
-        ux_bullet "check-proxy          Run full diagnostic"
-        ux_bullet "check-proxy env      Environment variables only"
-        ux_bullet "check-proxy file     proxy.local.sh file check"
-        ux_bullet "check-proxy shell    Shell loading test"
-        ux_bullet "check-proxy conn     Configured proxy connectivity test"
-        ux_bullet "check-proxy git      Git configuration"
-
-
-        ux_section "Quick Commands"
-        ux_bullet "echo \$http_proxy          Current proxy setting"
-        ux_bullet "echo \$https_proxy         Current HTTPS proxy"
-        ux_bullet "echo \$no_proxy            NO_PROXY exceptions"
-        ux_bullet "env | grep -i proxy        Show all proxy vars"
-
-
-        ux_section "Setting Proxy (Corporate Environment)"
-        ux_bullet "export http_proxy=\"http://proxy.example.com:8080/\""
-        ux_bullet "export https_proxy=\"http://proxy.example.com:8080/\""
-        ux_bullet "export no_proxy=\"localhost,127.0.0.1,.internal.domain.com\""
-
-
-        ux_section "Disabling Proxy"
-        ux_bullet "unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY"
-
-
-        ux_section "Git Configuration"
-        ux_bullet "git config --global http.connectTimeout 60    Increase timeout"
-        ux_bullet "git config --global http.lowSpeedLimit 0      Disable low speed limit"
-        ux_bullet "git config --global http.lowSpeedTime 999999   Disable low speed time"
-        ux_bullet "git config --global -l | grep proxy           View git proxy config"
-
-
-        ux_section "Related Diagnostics"
-        ux_bullet "check-network quick       General internet access check"
-        ux_bullet "check-network             DNS, HTTPS, git, apt, pip, curl checks"
-
-
-        ux_section "Important Notes"
-        ux_warning "NO_PROXY with spaces is not recognized - use commas only"
-        ux_info "Some tools only recognize uppercase (HTTP_PROXY, HTTPS_PROXY)"
-        ux_info "check-proxy focuses on proxy configuration only"
-
+        _proxy_help_render_section "Diagnostic Commands" _proxy_help_rows_diagnostics
+        _proxy_help_render_section "Quick Commands" _proxy_help_rows_commands
+        _proxy_help_render_section "Setting Proxy (Corporate Environment)" _proxy_help_rows_set
+        _proxy_help_render_section "Disabling Proxy" _proxy_help_rows_unset
+        _proxy_help_render_section "Git Configuration" _proxy_help_rows_git
+        _proxy_help_render_section "Related Diagnostics" _proxy_help_rows_related
+        _proxy_help_render_section "Important Notes" _proxy_help_rows_notes
     else
         # Fallback for minimal shells without UX library
         echo "Diagnostic Commands:"
@@ -195,8 +263,24 @@ proxy_help() {
         echo "Quick Commands:"
         echo "  echo \$http_proxy         Current proxy setting"
         echo "  env | grep -i proxy      Show all proxy vars"
-
     fi
+}
+
+proxy_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _proxy_help_summary
+            ;;
+        --list|list)
+            _proxy_help_list_sections
+            ;;
+        --all|all)
+            _proxy_help_full
+            ;;
+        *)
+            _proxy_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # Wrapper function for check_proxy.sh diagnostic
