@@ -53,7 +53,7 @@ mysql_help() {
         ""|-h|--help|help)
             _mysql_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _mysql_help_list_sections
             ;;
         --all|all)
@@ -132,7 +132,7 @@ psql_help() {
         ""|-h|--help|help)
             _psql_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _psql_help_list_sections
             ;;
         --all|all)
@@ -216,7 +216,7 @@ redis_help() {
         ""|-h|--help|help)
             _redis_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _redis_help_list_sections
             ;;
         --all|all)

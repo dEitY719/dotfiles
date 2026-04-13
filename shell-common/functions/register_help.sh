@@ -78,7 +78,7 @@ register_help() {
     _register_help_bootstrap
     case "${1:-}" in
         ""|-h|--help|help) _register_help_summary ;;
-        --list|list)        _register_help_list_sections ;;
+        --list|list|section|sections)        _register_help_list_sections ;;
         --all|all)          _register_help_full ;;
         *)                  _register_help_section_rows "$1" ;;
     esac

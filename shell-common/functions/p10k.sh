@@ -103,7 +103,7 @@ _p10k_help_full() {
 p10k_help() {
     case "${1:-}" in
         ""|-h|--help|help) _p10k_help_summary ;;
-        --list|list)        _p10k_help_list_sections ;;
+        --list|list|section|sections)        _p10k_help_list_sections ;;
         --all|all)          _p10k_help_full ;;
         *)                  _p10k_help_section_rows "$1" ;;
     esac

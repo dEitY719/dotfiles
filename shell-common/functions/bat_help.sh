@@ -129,7 +129,7 @@ _bat_help_full() {
 bat_help() {
     case "${1:-}" in
         ""|-h|--help|help) _bat_help_summary ;;
-        --list|list)        _bat_help_list_sections ;;
+        --list|list|section|sections)        _bat_help_list_sections ;;
         --all|all)          _bat_help_full ;;
         *)                  _bat_help_section_rows "$1" ;;
     esac

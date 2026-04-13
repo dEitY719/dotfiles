@@ -150,7 +150,7 @@ _fzf_help_full() {
 fzf_help() {
     case "${1:-}" in
         ""|-h|--help|help) _fzf_help_summary ;;
-        --list|list)        _fzf_help_list_sections ;;
+        --list|list|section|sections)        _fzf_help_list_sections ;;
         --all|all)          _fzf_help_full ;;
         *)                  _fzf_help_section_rows "$1" ;;
     esac

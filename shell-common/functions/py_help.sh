@@ -54,7 +54,7 @@ _py_help_full() {
 py_help() {
     case "${1:-}" in
         ""|-h|--help|help) _py_help_summary ;;
-        --list|list)        _py_help_list_sections ;;
+        --list|list|section|sections)        _py_help_list_sections ;;
         --all|all)          _py_help_full ;;
         *)                  _py_help_section_rows "$1" ;;
     esac

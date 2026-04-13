@@ -121,7 +121,7 @@ docker_help() {
         ""|-h|--help|help)
             _docker_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _docker_help_list_sections
             ;;
         --all|all)
@@ -271,7 +271,7 @@ proxy_help() {
         ""|-h|--help|help)
             _proxy_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _proxy_help_list_sections
             ;;
         --all|all)
@@ -374,7 +374,7 @@ dproxy_help() {
         ""|-h|--help|help)
             _dproxy_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _dproxy_help_list_sections
             ;;
         --all|all)

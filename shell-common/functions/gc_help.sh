@@ -84,7 +84,7 @@ _gc_help_full() {
 gc_help() {
     case "${1:-}" in
         ""|-h|--help|help) _gc_help_summary ;;
-        --list|list)        _gc_help_list_sections ;;
+        --list|list|section|sections)        _gc_help_list_sections ;;
         --all|all)          _gc_help_full ;;
         *)                  _gc_help_section_rows "$1" ;;
     esac

@@ -347,7 +347,7 @@ show_doc_help() {
         ""|-h|--help|help)
             _show_doc_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _show_doc_help_list_sections
             ;;
         --all|all)

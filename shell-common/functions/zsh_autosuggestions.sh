@@ -163,7 +163,7 @@ zsh_autosuggestions_help() {
         ""|-h|--help|help)
             _zsh_autosuggestions_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _zsh_autosuggestions_help_list_sections
             ;;
         --all|all)

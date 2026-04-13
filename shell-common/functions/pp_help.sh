@@ -74,7 +74,7 @@ _pp_help_full() {
 pp_help() {
     case "${1:-}" in
         ""|-h|--help|help) _pp_help_summary ;;
-        --list|list)        _pp_help_list_sections ;;
+        --list|list|section|sections)        _pp_help_list_sections ;;
         --all|all)          _pp_help_full ;;
         *)                  _pp_help_section_rows "$1" ;;
     esac

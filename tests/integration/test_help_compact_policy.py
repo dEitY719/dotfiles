@@ -126,7 +126,7 @@ class TestHelpStandardInterface:
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     @pytest.mark.parametrize("func_name", HELP_TOPICS)
     def test_supports_list_and_all(self, shell_runner, shell, func_name):
-        for arg in ("--list", "list", "--all", "all"):
+        for arg in ("--list", "list", "section", "sections", "--all", "all"):
             result = shell_runner(shell, f"{func_name} {arg}")
             assert result.exit_code == 0, f"{shell}: '{func_name} {arg}' failed"
             assert result.stdout.strip(), f"{shell}: '{func_name} {arg}' returned empty output"

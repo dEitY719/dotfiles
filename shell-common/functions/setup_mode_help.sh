@@ -152,7 +152,7 @@ setup_mode_help() {
         ""|-h|--help|help)
             _setup_mode_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _setup_mode_help_list_sections
             ;;
         --all|all)

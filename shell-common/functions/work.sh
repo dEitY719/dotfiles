@@ -174,7 +174,7 @@ work_help() {
         ""|-h|--help|help)
             _work_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _work_help_list_sections
             ;;
         --all|all)

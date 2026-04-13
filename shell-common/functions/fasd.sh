@@ -158,7 +158,7 @@ _fasd_help_full() {
 fasd_help() {
     case "${1:-}" in
         ""|-h|--help|help) _fasd_help_summary ;;
-        --list|list)        _fasd_help_list_sections ;;
+        --list|list|section|sections)        _fasd_help_list_sections ;;
         --all|all)          _fasd_help_full ;;
         *)                  _fasd_help_section_rows "$1" ;;
     esac

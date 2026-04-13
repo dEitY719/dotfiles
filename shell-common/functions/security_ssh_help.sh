@@ -111,7 +111,7 @@ crt_help() {
         ""|-h|--help|help)
             _crt_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _crt_help_list_sections
             ;;
         --all|all)
@@ -223,7 +223,7 @@ ssh_help() {
         ""|-h|--help|help)
             _ssh_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _ssh_help_list_sections
             ;;
         --all|all)
@@ -389,7 +389,7 @@ ssl_help() {
         ""|-h|--help|help)
             _ssl_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _ssl_help_list_sections
             ;;
         --all|all)

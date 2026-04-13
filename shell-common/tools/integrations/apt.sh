@@ -282,7 +282,7 @@ _apt_help_full() {
 apt_help() {
     case "${1:-}" in
         ""|-h|--help|help) _apt_help_summary ;;
-        --list|list)        _apt_help_list_sections ;;
+        --list|list|section|sections)        _apt_help_list_sections ;;
         --all|all)          _apt_help_full ;;
         *)                  _apt_help_section_rows "$1" ;;
     esac

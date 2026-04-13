@@ -140,7 +140,7 @@ _tmux_help_full() {
 tmux_help() {
     case "${1:-}" in
         ""|-h|--help|help) _tmux_help_summary ;;
-        --list|list)        _tmux_help_list_sections ;;
+        --list|list|section|sections)        _tmux_help_list_sections ;;
         --all|all)          _tmux_help_full ;;
         *)                  _tmux_help_section_rows "$1" ;;
     esac

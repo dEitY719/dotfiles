@@ -51,7 +51,7 @@ _nvm_help_full() {
 nvm_help() {
     case "${1:-}" in
         ""|-h|--help|help) _nvm_help_summary ;;
-        --list|list)        _nvm_help_list_sections ;;
+        --list|list|section|sections)        _nvm_help_list_sections ;;
         --all|all)          _nvm_help_full ;;
         *)                  _nvm_help_section_rows "$1" ;;
     esac

@@ -93,7 +93,7 @@ _cli_help_full() {
 cli_help() {
     case "${1:-}" in
         ""|-h|--help|help) _cli_help_summary ;;
-        --list|list)        _cli_help_list_sections ;;
+        --list|list|section|sections)        _cli_help_list_sections ;;
         --all|all)          _cli_help_full ;;
         *)                  _cli_help_section_rows "$1" ;;
     esac
