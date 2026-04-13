@@ -84,7 +84,7 @@ class TestHelpTopicsBasic:
         """Verify `my-help` works in zsh even when alias expansion is disabled."""
         result = shell_runner("zsh", "setopt no_aliases; my-help")
         assert result.exit_code == 0, f"zsh: my-help failed with exit code {result.exit_code}"
-        assert "Dotfiles Help Functions" in result.stdout
+        assert "Usage: my-help [topic|category|section|--list|--all]" in result.stdout
 
     def test_my_help_dash_command_survives_conflicting_alias_in_zsh(self, shell_runner):
         """Verify sourcing `my_help.sh` doesn't fail even if `my-help` alias already exists."""
@@ -97,14 +97,22 @@ class TestHelpTopicsBasic:
         )
         result = shell_runner("zsh", cmd)
         assert result.exit_code == 0
-        assert "Dotfiles Help Functions" in result.stdout
+        assert "Usage: my-help [topic|category|section|--list|--all]" in result.stdout
 
     def test_my_help_works_under_strict_zsh_options(self, shell_runner):
         """`my-help` should work even with common strict options enabled."""
         cmd = "setopt err_exit pipe_fail noclobber; my-help"
         result = shell_runner("zsh", cmd)
         assert result.exit_code == 0
-        assert "Discovered help functions" in result.stdout
+        assert "sections" in result.stdout.lower()
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    @pytest.mark.parametrize("arg", ["--list", "list", "--all", "all", "categories", "popular", "navigation"])
+    def test_my_help_standard_section_interface(self, shell_runner, shell, arg):
+        """my-help should support list/all/section interface."""
+        result = shell_runner(shell, f"my_help_impl {arg}")
+        assert result.exit_code == 0, f"{shell}: my_help_impl {arg} failed"
+        assert result.stdout.strip(), f"{shell}: my_help_impl {arg} returned empty output"
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_help_descriptions_initialized(self, shell_runner, shell):
@@ -192,11 +200,11 @@ class TestHelpTopicsErrorHandling:
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_without_args_lists_topics(self, shell_runner, shell):
-        """Test my_help_impl without arguments lists available help topics."""
+        """Test my_help_impl without arguments shows compact summary."""
         result = shell_runner(shell, "my_help_impl")
         assert result.exit_code == 0, f"{shell}: my_help_impl with no args failed"
-        # Should list multiple help topics
-        assert len(result.stdout.split("\n")) > 5, f"{shell}: my_help_impl output seems incomplete"
+        assert "Usage: my-help [topic|category|section|--list|--all]" in result.stdout
+        assert "sections" in result.stdout.lower()
 
 
 class TestHelpTopicsEnvironmentIntegrity:
