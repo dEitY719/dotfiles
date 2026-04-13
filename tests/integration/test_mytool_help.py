@@ -36,8 +36,8 @@ class TestMytoolHelpLists:
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_mytool_help_lists_all_tools(self, shell_runner, shell):
-        """Test that mytool_help output contains key tool names."""
-        result = shell_runner(shell, "mytool_help")
+        """Detailed mytool output should contain key tool names."""
+        result = shell_runner(shell, "mytool_help --all")
         assert result.exit_code == 0
 
         output = result.stdout.lower()
@@ -65,5 +65,5 @@ class TestMytoolErrorHandling:
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_mytool_help_resilient_to_missing_tools(self, shell_runner, shell):
         """Test that mytool_help function handles missing tool descriptions gracefully."""
-        result = shell_runner(shell, "mytool_help")
+        result = shell_runner(shell, "mytool_help --all")
         assert result.exit_code == 0, f"{shell}: mytool_help failed"

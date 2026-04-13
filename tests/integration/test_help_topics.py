@@ -1,22 +1,24 @@
 """
 Test suite for my-help() help topics.
 
-Tests that all auto-sourced help topics (34 total) are callable
+Tests that all registered my-help topics are callable
 without errors in both bash and zsh environments.
 """
 
 import pytest
 
-# Auto-sourced help topics
-# Excludes: mount-help, addmnt-help (not auto-loaded by main.bash/main.zsh)
-# Use function names (underscores) instead of aliases (dashes) for non-interactive subprocess testing
 HELP_TOPICS = [
     "apt_help",
     "bat_help",
+    "bun_help",
+    "category_help",
     "cc_help",
     "claude_help",
+    "claude_plugins_help",
+    "claude_skills_marketplace_help",
     "cli_help",
     "codex_help",
+    "crt_help",
     "dir_help",
     "docker_help",
     "dot_help",
@@ -34,18 +36,31 @@ HELP_TOPICS = [
     "mytool_help",
     "mysql_help",
     "network_help",
+    "notion_help",
     "npm_help",
     "nvm_help",
+    "ollama_help",
+    "opencode_help",
     "p10k_help",
+    "pip_help",
     "pet_help",
     "pp_help",
     "proxy_help",
     "psql_help",
     "py_help",
+    "redis_help",
+    "register_help",
     "ripgrep_help",
+    "show_doc_help",
+    "ssl_help",
+    "superpowers_help",
     "sys_help",
+    "tmux_help",
     "uv_help",
+    "work_help",
+    "work_log_help",
     "zsh_help",
+    "zsh_autosuggestions_help",
 ]
 
 
