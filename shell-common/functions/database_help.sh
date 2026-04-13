@@ -69,31 +69,79 @@ alias mysql-help='mysql_help'
 
 # --- psql_help (from psql_help.sh) ---
 
-psql_help() {
-    if [[ $# -gt 0 ]]; then
-        # Legacy/Direct mode support: psql_help <service> <cmd>
-        local svc=""
-        shift
-        local sql_cmd="$*"
-        PGSERVICE="$svc" psql -c "$sql_cmd"
-        return
-    fi
+_psql_help_summary() {
+    ux_info "Usage: psql-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "primary: psql_list | psql_bootstrap | psql_sync | psql_add | psql_del"
+    ux_bullet_sub "lowlevel: psql_db | psql_user"
+    ux_bullet_sub "details: psql-help <section>  (example: psql-help primary)"
+}
 
-    ux_header "PostgreSQL Manager"
+_psql_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "primary"
+    ux_bullet_sub "lowlevel"
+}
 
-    ux_section "Primary Commands"
+_psql_help_rows_primary() {
     ux_table_row "psql_list" "List Services" "Show all configured connections"
     ux_table_row "psql_bootstrap" "Create New" "Full Setup: Create DB, User, Grant & Save"
     ux_table_row "psql_sync" "Sync DBs" "Scan server and add existing DBs to config"
     ux_table_row "psql_add" "Add Link" "Manually add a shortcut for existing DB"
     ux_table_row "psql_del" "Remove" "Remove service (and optionally drop DB)"
+}
 
-    ux_section "Low-Level Management"
+_psql_help_rows_lowlevel() {
     ux_table_row "psql_db" "DB Ops" "list, create, delete, grant"
     ux_table_row "psql_user" "User Ops" "list, create, attr, passwd, delete"
+}
+
+_psql_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_psql_help_section_rows() {
+    case "$1" in
+        primary|main)
+            _psql_help_rows_primary
+            ;;
+        lowlevel|low|management)
+            _psql_help_rows_lowlevel
+            ;;
+        *)
+            ux_error "Unknown psql-help section: $1"
+            ux_info "Try: psql-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_psql_help_full() {
+    ux_header "PostgreSQL Manager"
+
+    _psql_help_render_section "Primary Commands" _psql_help_rows_primary
+    _psql_help_render_section "Low-Level Management" _psql_help_rows_lowlevel
 
     # Show services table
     psql_list
+}
+
+psql_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _psql_help_summary
+            ;;
+        --list|list)
+            _psql_help_list_sections
+            ;;
+        --all|all)
+            _psql_help_full
+            ;;
+        *)
+            _psql_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias psql-help='psql_help'
