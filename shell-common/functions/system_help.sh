@@ -270,16 +270,74 @@ alias gpu-help='gpu_help'
 
 # --- du_help (from du_help.sh) ---
 
-du_help() {
-    ux_header "Disk Usage Helper (du aliases)"
+_du_help_summary() {
+    ux_info "Usage: du-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "commands: dus | dud | dsql | dubig"
+    ux_bullet_sub "tips: -h means human-readable (K, M, G)"
+    ux_bullet_sub "details: du-help <section>  (example: du-help commands)"
+}
 
-    ux_section "Commands"
+_du_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "commands"
+    ux_bullet_sub "tips"
+}
+
+_du_help_rows_commands() {
     ux_table_row "dus" "du -sh ." "Current dir summary"
     ux_table_row "dud" "du -sh *" "Subdir summary (sorted)"
     ux_table_row "dsql" "du .sql" "SQL dump sizes"
     ux_table_row "dubig" "du top 10" "Top 10 largest items"
+}
 
+_du_help_rows_tips() {
     ux_info "Tip: -h option means 'human-readable' (K, M, G)"
+}
+
+_du_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_du_help_section_rows() {
+    case "$1" in
+        commands|cmd)
+            _du_help_rows_commands
+            ;;
+        tips|tip)
+            _du_help_rows_tips
+            ;;
+        *)
+            ux_error "Unknown du-help section: $1"
+            ux_info "Try: du-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_du_help_full() {
+    ux_header "Disk Usage Helper (du aliases)"
+
+    _du_help_render_section "Commands" _du_help_rows_commands
+    _du_help_render_section "Tips" _du_help_rows_tips
+}
+
+du_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _du_help_summary
+            ;;
+        --list|list)
+            _du_help_list_sections
+            ;;
+        --all|all)
+            _du_help_full
+            ;;
+        *)
+            _du_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias du-help='du_help'
