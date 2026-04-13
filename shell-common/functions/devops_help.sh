@@ -4,26 +4,45 @@
 
 # --- docker_help (from docker_help.sh) ---
 
-docker_help() {
-    ux_header "Docker / Docker Compose Quick Commands"
+_docker_help_summary() {
+    ux_info "Usage: docker-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "compose: dc | dcu | dcud | dcd | dcl | dce"
+    ux_bullet_sub "compose-extra: dcps | dcb | dcr | dcdv | dcstop | dcstart"
+    ux_bullet_sub "basics: dps | dpsa | di | dstats | dstop | drm | drmi | dlogs | dinspect"
+    ux_bullet_sub "resources: ddf | dprune | dprune_full | dvols | dvol_rm | dnetwork_prune | dbuild_prune"
+    ux_bullet_sub "utilities: dbash | denv | dinspect_env | dstopall | drmall | dexport | dinstall | dproxy_setup"
+    ux_bullet_sub "details: docker-help <section>  (example: docker-help compose)"
+}
 
-    ux_section "Docker Compose Basics"
+_docker_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "compose"
+    ux_bullet_sub "compose-extra"
+    ux_bullet_sub "basics"
+    ux_bullet_sub "resources"
+    ux_bullet_sub "utilities"
+}
+
+_docker_help_rows_compose() {
     ux_table_row "dc" "docker compose" "Base command"
     ux_table_row "dcu" "docker compose up" "Foreground start"
     ux_table_row "dcud" "docker compose up -d" "Detached start"
     ux_table_row "dcd" "docker compose down" "Stop & remove"
     ux_table_row "dcl" "logs <svc>" "Smart logs (service/container)"
     ux_table_row "dce" "exec <svc> <cmd>" "Execute command"
+}
 
-    ux_section "Docker Compose Extra"
+_docker_help_rows_compose_extra() {
     ux_table_row "dcps" "docker compose ps" "Status"
     ux_table_row "dcb" "docker compose build" "Build services"
     ux_table_row "dcr" "docker compose restart" "Restart services"
     ux_table_row "dcdv" "down -v" "Stop & remove volumes"
     ux_table_row "dcstop" "stop" "Stop containers"
     ux_table_row "dcstart" "start" "Start containers"
+}
 
-    ux_section "Docker Basics"
+_docker_help_rows_basics() {
     ux_table_row "dps" "docker ps" "Running containers"
     ux_table_row "dpsa" "docker ps -a" "All containers"
     ux_table_row "di/dim" "docker images" "List images"
@@ -33,8 +52,9 @@ docker_help() {
     ux_table_row "drmi" "docker rmi" "Remove image"
     ux_table_row "dlogs" "docker logs -f" "Follow logs"
     ux_table_row "dinspect" "docker inspect" "Inspect object"
+}
 
-    ux_section "Resource Management"
+_docker_help_rows_resources() {
     ux_table_row "ddf" "system df" "Disk usage"
     ux_table_row "dprune" "system prune -f" "Basic cleanup"
     ux_table_row "dprune_full" "full prune" "Deep cleanup (interactive)"
@@ -42,8 +62,9 @@ docker_help() {
     ux_table_row "dvol_rm" "volume rm" "Remove volume"
     ux_table_row "dnetwork_prune" "network prune" "Cleanup networks"
     ux_table_row "dbuild_prune" "builder prune" "Cleanup build cache"
+}
 
-    ux_section "Utilities"
+_docker_help_rows_utilities() {
     ux_table_row "dbash" "dbash <name>" "Shell access (bash/sh)"
     ux_table_row "denv" "denv <name>" "Show env vars"
     ux_table_row "dinspect_env" "inspect env" "Inspect env section"
@@ -52,8 +73,64 @@ docker_help() {
     ux_table_row "dexport" "Export all" "Backup to tar files"
     ux_table_row "dinstall" "Install script" "Install Docker on WSL"
     ux_table_row "dproxy_setup" "Proxy setup" "Corporate proxy config"
-
     ux_info "Note: 'docker compose' (V2) is used by default."
+}
+
+_docker_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_docker_help_section_rows() {
+    case "$1" in
+        compose)
+            _docker_help_rows_compose
+            ;;
+        compose-extra|extra)
+            _docker_help_rows_compose_extra
+            ;;
+        basics|basic)
+            _docker_help_rows_basics
+            ;;
+        resources|resource|prune)
+            _docker_help_rows_resources
+            ;;
+        utilities|util|utils)
+            _docker_help_rows_utilities
+            ;;
+        *)
+            ux_error "Unknown docker-help section: $1"
+            ux_info "Try: docker-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_docker_help_full() {
+    ux_header "Docker / Docker Compose Quick Commands"
+
+    _docker_help_render_section "Docker Compose Basics" _docker_help_rows_compose
+    _docker_help_render_section "Docker Compose Extra" _docker_help_rows_compose_extra
+    _docker_help_render_section "Docker Basics" _docker_help_rows_basics
+    _docker_help_render_section "Resource Management" _docker_help_rows_resources
+    _docker_help_render_section "Utilities" _docker_help_rows_utilities
+}
+
+docker_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _docker_help_summary
+            ;;
+        --list|list)
+            _docker_help_list_sections
+            ;;
+        --all|all)
+            _docker_help_full
+            ;;
+        *)
+            _docker_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias docker-help='docker_help'
