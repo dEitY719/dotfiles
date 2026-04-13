@@ -304,22 +304,86 @@ alias check-proxy='proxy_check'
 
 # --- dproxy_help (from dproxy_help.sh) ---
 
-dproxy_help() {
-    ux_header "Docker Corporate Proxy Setup Guide"
+_dproxy_help_summary() {
+    ux_info "Usage: dproxy-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "commands: dproxy_setup | dproxy_show | dproxy-help"
+    ux_bullet_sub "config: /etc/systemd/system/docker.service.d/http-proxy.conf"
+    ux_bullet_sub "reference: systemctl show | nano edit | daemon-reload | docker pull test"
+    ux_bullet_sub "details: dproxy-help <section>  (example: dproxy-help reference)"
+}
 
-    ux_section "Commands"
+_dproxy_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "commands"
+    ux_bullet_sub "config"
+    ux_bullet_sub "reference"
+}
+
+_dproxy_help_rows_commands() {
     ux_table_row "dproxy_setup" "Interactive setup script" "Configure Docker proxy"
     ux_table_row "dproxy_show" "Show current proxy config" "Display active settings"
     ux_table_row "dproxy-help" "Show this help" ""
+}
 
-    ux_section "Config File"
+_dproxy_help_rows_config() {
     ux_info "/etc/systemd/system/docker.service.d/http-proxy.conf"
+}
 
-    ux_section "Quick Reference"
+_dproxy_help_rows_reference() {
     ux_bullet "Check config: systemctl show --property=Environment docker"
     ux_bullet "Edit config: sudo nano /etc/systemd/system/docker.service.d/http-proxy.conf"
     ux_bullet "Apply changes: sudo systemctl daemon-reload && sudo systemctl restart docker"
     ux_bullet "Test connection: docker pull alpine:latest"
+}
+
+_dproxy_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_dproxy_help_section_rows() {
+    case "$1" in
+        commands|cmd)
+            _dproxy_help_rows_commands
+            ;;
+        config|file)
+            _dproxy_help_rows_config
+            ;;
+        reference|ref|quick)
+            _dproxy_help_rows_reference
+            ;;
+        *)
+            ux_error "Unknown dproxy-help section: $1"
+            ux_info "Try: dproxy-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_dproxy_help_full() {
+    ux_header "Docker Corporate Proxy Setup Guide"
+
+    _dproxy_help_render_section "Commands" _dproxy_help_rows_commands
+    _dproxy_help_render_section "Config File" _dproxy_help_rows_config
+    _dproxy_help_render_section "Quick Reference" _dproxy_help_rows_reference
+}
+
+dproxy_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _dproxy_help_summary
+            ;;
+        --list|list)
+            _dproxy_help_list_sections
+            ;;
+        --all|all)
+            _dproxy_help_full
+            ;;
+        *)
+            _dproxy_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias dproxy-help='dproxy_help'
