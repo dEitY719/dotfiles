@@ -509,19 +509,35 @@ claude_skills_marketplace_refresh() {
     ux_success "Manifest regenerated: $total skills indexed"
 }
 
-# Help documentation
-claude_skills_marketplace_help() {
-    ux_header "Marketplace Skills Commands"
+# Help documentation (SSOT pattern)
+_claude_skills_marketplace_help_summary() {
+    ux_info "Usage: claude-skills-marketplace-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "quickstart: csm | csm list --all | csm search | csm info"
+    ux_bullet_sub "commands: list | group | stats | search | info | refresh | help"
+    ux_bullet_sub "aliases: claude_skills_marketplace | csm"
+    ux_bullet_sub "examples: common usage examples"
+    ux_bullet_sub "caching: manifest cache details"
+    ux_bullet_sub "details: claude-skills-marketplace-help <section>"
+}
 
-    ux_section "Quick Start"
+_claude_skills_marketplace_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "quickstart"
+    ux_bullet_sub "commands"
+    ux_bullet_sub "aliases"
+    ux_bullet_sub "examples"
+    ux_bullet_sub "caching"
+}
+
+_claude_skills_marketplace_help_rows_quickstart() {
     ux_bullet "Group by plugin (default): ${UX_SUCCESS}csm${UX_RESET}"
     ux_bullet "All skills by marketplace: ${UX_SUCCESS}csm list --all${UX_RESET}"
     ux_bullet "Search skills: ${UX_SUCCESS}csm search python${UX_RESET}"
     ux_bullet "Get details: ${UX_SUCCESS}csm info api-design-principles${UX_RESET}"
-    echo ""
+}
 
-    ux_section "Available Commands"
-
+_claude_skills_marketplace_help_rows_commands() {
     ux_numbered 1 "list [--all|-A]         - Group by plugin (default), or --all for marketplace view"
     ux_numbered 2 "group [plugin]          - Group skills by plugin (optionally filter)"
     ux_numbered 3 "stats                   - Show marketplace statistics"
@@ -529,15 +545,14 @@ claude_skills_marketplace_help() {
     ux_numbered 5 "info <skill-name>       - Show detailed skill information"
     ux_numbered 6 "refresh                 - Force rebuild skill manifest"
     ux_numbered 7 "help                    - Show this help message"
-    echo ""
+}
 
-    ux_section "Aliases"
+_claude_skills_marketplace_help_rows_aliases() {
     ux_bullet "Long form: ${UX_SUCCESS}claude_skills_marketplace${UX_RESET}"
     ux_bullet "Short form: ${UX_SUCCESS}csm${UX_RESET}"
-    echo ""
+}
 
-    ux_section "Examples"
-
+_claude_skills_marketplace_help_rows_examples() {
     ux_bullet "Show plugins: ${UX_SUCCESS}csm${UX_RESET} (shows plugin headers)"
     ux_bullet "Same as above: ${UX_SUCCESS}csm list${UX_RESET}"
     ux_bullet "Show marketplaces: ${UX_SUCCESS}csm list --all${UX_RESET}"
@@ -545,13 +560,68 @@ claude_skills_marketplace_help() {
     ux_bullet "Search skills: ${UX_SUCCESS}csm search python${UX_RESET}"
     ux_bullet "Skill details: ${UX_SUCCESS}csm info api-design-principles${UX_RESET}"
     ux_bullet "Statistics: ${UX_SUCCESS}csm stats${UX_RESET}"
-    echo ""
+}
 
-    ux_section "Caching"
+_claude_skills_marketplace_help_rows_caching() {
     ux_bullet "Manifest cache: ${UX_MUTED}${MANIFEST_CACHE_PATH}${UX_RESET}"
     ux_bullet "Cache TTL: ${UX_MUTED}24 hours${UX_RESET}"
     ux_bullet "Auto-refresh: ${UX_MUTED}When cache expires or manifest missing${UX_RESET}"
-    echo ""
+}
+
+_claude_skills_marketplace_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_claude_skills_marketplace_help_section_rows() {
+    case "$1" in
+        quickstart|quick|start)
+            _claude_skills_marketplace_help_rows_quickstart
+            ;;
+        commands|cmds|cmd)
+            _claude_skills_marketplace_help_rows_commands
+            ;;
+        aliases|alias)
+            _claude_skills_marketplace_help_rows_aliases
+            ;;
+        examples|example|ex)
+            _claude_skills_marketplace_help_rows_examples
+            ;;
+        caching|cache)
+            _claude_skills_marketplace_help_rows_caching
+            ;;
+        *)
+            ux_error "Unknown claude-skills-marketplace-help section: $1"
+            ux_info "Try: claude-skills-marketplace-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_claude_skills_marketplace_help_full() {
+    ux_header "Marketplace Skills Commands"
+    _claude_skills_marketplace_help_render_section "Quick Start" _claude_skills_marketplace_help_rows_quickstart
+    _claude_skills_marketplace_help_render_section "Available Commands" _claude_skills_marketplace_help_rows_commands
+    _claude_skills_marketplace_help_render_section "Aliases" _claude_skills_marketplace_help_rows_aliases
+    _claude_skills_marketplace_help_render_section "Examples" _claude_skills_marketplace_help_rows_examples
+    _claude_skills_marketplace_help_render_section "Caching" _claude_skills_marketplace_help_rows_caching
+}
+
+claude_skills_marketplace_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _claude_skills_marketplace_help_summary
+            ;;
+        --list|list)
+            _claude_skills_marketplace_help_list_sections
+            ;;
+        --all|all)
+            _claude_skills_marketplace_help_full
+            ;;
+        *)
+            _claude_skills_marketplace_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # Main router function
@@ -592,3 +662,4 @@ claude_skills_marketplace() {
 # Create short alias for convenience
 # This is safe as a function alias (no naming conflicts with my_help.sh pattern)
 alias claude-skills-marketplace='claude_skills_marketplace'
+alias claude-skills-marketplace-help='claude_skills_marketplace_help'
