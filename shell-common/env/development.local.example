@@ -1,0 +1,14 @@
+#!/bin/sh
+# development.local.example — machine-specific dev env overrides template
+#
+# 사용 방법:
+#   cp development.local.example development.local.sh
+#   # 필요한 설정 수정 후 저장 (자동으로 gitignore 적용됨)
+#
+# development.local.sh는 development.sh에서 자동으로 sourcing됩니다.
+
+# 예: 홈PC(WSL2) — pytest 워커 수 제한으로 리소스 경합 방지
+# export PYTEST_ADDOPTS="-n 4"
+
+# 예: 회사PC — 전체 코어 사용 (기본값과 동일하므로 설정 불필요)
+# export PYTEST_ADDOPTS="-n auto"
