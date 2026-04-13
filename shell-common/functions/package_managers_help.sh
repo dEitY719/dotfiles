@@ -463,40 +463,124 @@ alias check-uv='uv_check'
 
 # --- bun_help (from bun_help.sh) ---
 
-bun_help() {
-    ux_header "Bun Quick Commands"
+_bun_help_summary() {
+    ux_info "Usage: bun-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "install: install-bun | uninstall-bun | bun-v"
+    ux_bullet_sub "packages: bun-i | bun-id | bun-ig | bun-un | bun-update | bun-outdated"
+    ux_bullet_sub "run: bun-run | bunx"
+    ux_bullet_sub "examples: bunx oh-my-opencode | bunx create-next-app"
+    ux_bullet_sub "config: ~/.bunfig.toml | internal vs external"
+    ux_bullet_sub "troubleshoot: not found | registry | SSL"
+    ux_bullet_sub "details: bun-help <section>  (example: bun-help packages)"
+}
 
-    ux_section "Installation"
+_bun_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "install"
+    ux_bullet_sub "packages"
+    ux_bullet_sub "run"
+    ux_bullet_sub "examples"
+    ux_bullet_sub "config"
+    ux_bullet_sub "troubleshoot"
+}
+
+_bun_help_rows_install() {
     ux_table_row "install-bun" "curl .../bun.sh/install" "Install Bun"
     ux_table_row "uninstall-bun" "Remove ~/.bun" "Uninstall Bun"
     ux_table_row "bun-v" "bun --version" "Check version"
+}
 
-    ux_section "Package Management"
+_bun_help_rows_packages() {
     ux_table_row "bun-i" "bun install" "Install deps"
     ux_table_row "bun-id" "install --dev" "Dev dependency"
     ux_table_row "bun-ig" "install --global" "Global install"
     ux_table_row "bun-un" "bun remove" "Remove package"
     ux_table_row "bun-update" "bun update" "Update deps"
     ux_table_row "bun-outdated" "bun outdated" "Check outdated"
+}
 
-    ux_section "Run"
+_bun_help_rows_run() {
     ux_table_row "bun-run" "bun run <script>" "Run package.json script"
     ux_table_row "bunx" "bun x <pkg>" "Run package without install"
+}
 
-    ux_section "Bunx Usage Examples"
+_bun_help_rows_examples() {
     ux_bullet "${UX_INFO}bunx oh-my-opencode install${UX_RESET}  : OMO 설치"
     ux_bullet "${UX_INFO}bunx create-next-app${UX_RESET}         : Next.js 프로젝트 생성"
+}
 
-    ux_section "Configuration"
+_bun_help_rows_config() {
     ux_bullet "Config file  : ${UX_INFO}~/.bunfig.toml${UX_RESET} (dotfiles symlink)"
     ux_bullet "Environments : internal (Samsung registry), external (default)"
+}
 
-    ux_section "Troubleshooting"
+_bun_help_rows_troubleshoot() {
     ux_bullet "bun not found?   : Run ${UX_PRIMARY}install-bun${UX_RESET}"
     ux_bullet "Registry error?  : Check ${UX_PRIMARY}~/.bunfig.toml${UX_RESET} registry setting"
     ux_bullet "SSL error?       : Verify ${UX_PRIMARY}cafile${UX_RESET} path in bunfig.toml"
-
     ux_info "Binary path: ~/.bun/bin"
+}
+
+_bun_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_bun_help_section_rows() {
+    case "$1" in
+        install|installation)
+            _bun_help_rows_install
+            ;;
+        packages|package|pkg)
+            _bun_help_rows_packages
+            ;;
+        run)
+            _bun_help_rows_run
+            ;;
+        examples|bunx)
+            _bun_help_rows_examples
+            ;;
+        config|configuration)
+            _bun_help_rows_config
+            ;;
+        troubleshoot|troubleshooting)
+            _bun_help_rows_troubleshoot
+            ;;
+        *)
+            ux_error "Unknown bun-help section: $1"
+            ux_info "Try: bun-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_bun_help_full() {
+    ux_header "Bun Quick Commands"
+
+    _bun_help_render_section "Installation" _bun_help_rows_install
+    _bun_help_render_section "Package Management" _bun_help_rows_packages
+    _bun_help_render_section "Run" _bun_help_rows_run
+    _bun_help_render_section "Bunx Usage Examples" _bun_help_rows_examples
+    _bun_help_render_section "Configuration" _bun_help_rows_config
+    _bun_help_render_section "Troubleshooting" _bun_help_rows_troubleshoot
+}
+
+bun_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _bun_help_summary
+            ;;
+        --list|list)
+            _bun_help_list_sections
+            ;;
+        --all|all)
+            _bun_help_full
+            ;;
+        *)
+            _bun_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias bun-help='bun_help'
