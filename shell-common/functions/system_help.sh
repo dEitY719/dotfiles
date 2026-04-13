@@ -121,93 +121,149 @@ alias sys-help='sys_help'
 
 # --- gpu_help (from gpu_help.sh) ---
 
-# Internal: Full help function (moved from tools/integrations/gpu.sh for co-location)
-# Pure help-display function — no GPU tool dependencies, only ux_* calls
-_gpu_help_full() {
-    ux_header "GPU Monitoring Commands (Complete)"
+_gpu_help_summary() {
+    ux_info "Usage: gpu-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "diagnostics: gpustatus | gpuinfo"
+    ux_bullet_sub "docker: gpu-offload | gpu-mem"
+    ux_bullet_sub "fixes: docker compose restart ollama | docker restart ollama | dcr ollama"
+    ux_bullet_sub "wsl: gpu-info-basic | gpu-memory | gpu-watch"
+    ux_bullet_sub "test: tinyllama | llama3:instruct"
+    ux_bullet_sub "troubleshoot: OLLAMA_NUM_GPU | OLLAMA_FLASH_ATTENTION"
+    ux_bullet_sub "examples: good vs bad layer offload"
+    ux_bullet_sub "tips: gpustatus | gpuinfo | gpu-offload | gpu-memory | gpu-watch"
+    ux_bullet_sub "details: gpu-help <section>  (example: gpu-help diagnostics)"
+}
 
-    ux_section "Core GPU Diagnostics"
+_gpu_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "diagnostics"
+    ux_bullet_sub "docker"
+    ux_bullet_sub "fixes"
+    ux_bullet_sub "wsl"
+    ux_bullet_sub "test"
+    ux_bullet_sub "troubleshoot"
+    ux_bullet_sub "examples"
+    ux_bullet_sub "tips"
+}
+
+_gpu_help_rows_diagnostics() {
     ux_table_row "gpustatus" "bash gpu_status.sh" "5-part detailed GPU diagnostic"
     ux_table_row "gpuinfo" "Compact GPU summary" "Brief GPU hardware + layer offload"
-    echo ""
+}
 
-    ux_section "Ollama Docker GPU Status"
+_gpu_help_rows_docker() {
     ux_table_row "gpu-offload" "docker logs ollama | grep offloaded" "Layer offload status (25/25 = good)"
     ux_table_row "gpu-mem" "docker logs ollama | grep gpu memory" "GPU memory recognition check"
-    echo ""
+}
 
-    ux_section "GPU Acceleration / Fixes"
+_gpu_help_rows_fixes() {
     ux_table_row "docker compose restart ollama" "Restart Ollama" "Forces GPU layer re-init"
     ux_table_row "docker restart ollama" "Restart container" "Direct restart without compose"
     ux_table_row "dcr ollama" "Auto-detect restart" "Compose-aware restart"
-    echo ""
+}
 
-    ux_section "WSL2 Host GPU Commands"
+_gpu_help_rows_wsl() {
     ux_table_row "gpu-info-basic" "nvidia-smi" "GPU hardware info, workload, temp"
     ux_table_row "gpu-memory" "nvidia-smi memory (CSV)" "Detailed memory info"
     ux_table_row "gpu-watch" "Real-time GPU monitor" "Live monitoring (Ctrl+C to exit)"
-    echo ""
+}
 
-    ux_section "Quick GPU Test"
+_gpu_help_rows_test() {
     ux_bullet "Fast test (1-2s): ${UX_BOLD}docker exec ollama ollama run tinyllama \"hi\"${UX_RESET}"
     ux_bullet "Full test (10s+): ${UX_BOLD}docker exec ollama ollama run llama3:instruct \"hi\"${UX_RESET}"
-    echo ""
+}
 
-    ux_section "Troubleshooting: GPU Layers at 0/25"
+_gpu_help_rows_troubleshoot() {
     ux_bullet "Add to docker-compose.yml (Ollama service):"
     echo "  environment:"
     echo "    OLLAMA_NUM_GPU: '25'           # or your GPU's layer count"
     echo "    OLLAMA_FLASH_ATTENTION: '1'    # enables flash attention"
     ux_bullet "Then restart: ${UX_BOLD}docker compose up -d ollama${UX_RESET}"
-    echo ""
+}
 
-    ux_section "Output Examples"
-    echo ""
+_gpu_help_rows_examples() {
     ux_info "✅ Good GPU layer offload:"
     echo "  offloaded 25/25 layers to GPU"
     echo ""
     ux_info "❌ Bad GPU layer offload:"
     echo "  offloaded 0/25 layers to GPU"
-    echo ""
+}
 
-    ux_section "Usage Tips"
+_gpu_help_rows_tips() {
     ux_bullet "Full diagnosis: ${UX_BOLD}gpustatus${UX_RESET}"
     ux_bullet "Quick overview: ${UX_BOLD}gpuinfo${UX_RESET}"
     ux_bullet "Monitor layers: ${UX_BOLD}gpu-offload${UX_RESET}"
     ux_bullet "Check memory: ${UX_BOLD}gpu-memory${UX_RESET} or ${UX_BOLD}gpu-watch${UX_RESET}"
-    echo ""
+}
+
+_gpu_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_gpu_help_section_rows() {
+    case "$1" in
+        diagnostics|diag)
+            _gpu_help_rows_diagnostics
+            ;;
+        docker)
+            _gpu_help_rows_docker
+            ;;
+        fixes|fix|acceleration)
+            _gpu_help_rows_fixes
+            ;;
+        wsl|host)
+            _gpu_help_rows_wsl
+            ;;
+        test)
+            _gpu_help_rows_test
+            ;;
+        troubleshoot|troubleshooting)
+            _gpu_help_rows_troubleshoot
+            ;;
+        examples|output)
+            _gpu_help_rows_examples
+            ;;
+        tips|usage)
+            _gpu_help_rows_tips
+            ;;
+        *)
+            ux_error "Unknown gpu-help section: $1"
+            ux_info "Try: gpu-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_gpu_help_full() {
+    ux_header "GPU Monitoring Commands (Complete)"
+
+    _gpu_help_render_section "Core GPU Diagnostics" _gpu_help_rows_diagnostics
+    _gpu_help_render_section "Ollama Docker GPU Status" _gpu_help_rows_docker
+    _gpu_help_render_section "GPU Acceleration / Fixes" _gpu_help_rows_fixes
+    _gpu_help_render_section "WSL2 Host GPU Commands" _gpu_help_rows_wsl
+    _gpu_help_render_section "Quick GPU Test" _gpu_help_rows_test
+    _gpu_help_render_section "Troubleshooting: GPU Layers at 0/25" _gpu_help_rows_troubleshoot
+    _gpu_help_render_section "Output Examples" _gpu_help_rows_examples
+    _gpu_help_render_section "Usage Tips" _gpu_help_rows_tips
 }
 
 gpu_help() {
-    # Show full help with --all or -a flag
-    if [[ "$1" == "--all" ]] || [[ "$1" == "-a" ]]; then
-        _gpu_help_full
-        return 0
-    fi
-
-    ux_header "GPU Monitoring Commands"
-
-    ux_section "Diagnostics & Monitoring"
-    ux_table_row "gpustatus" "Full GPU diagnosis (5 sections)"
-    ux_table_row "gpuinfo" "Quick GPU overview"
-    ux_table_row "gpu-offload" "Layer offload status"
-    ux_table_row "gpu-mem" "GPU memory check"
-    ux_table_row "gpu-watch" "Real-time GPU monitor"
-
-
-    ux_section "Quick Test"
-    ux_bullet "Fast (1-2s): ${UX_BOLD}docker exec ollama ollama run tinyllama \"hi\"${UX_RESET}"
-    ux_bullet "Full (10s+): ${UX_BOLD}docker exec ollama ollama run llama3:instruct \"hi\"${UX_RESET}"
-
-
-    ux_section "Fix: GPU Layers at 0/25"
-    ux_bullet "Edit docker-compose.yml (add to Ollama service):"
-    ux_bullet "  OLLAMA_NUM_GPU: '25'"
-    ux_bullet "  OLLAMA_FLASH_ATTENTION: '1'"
-    ux_bullet "Restart: ${UX_BOLD}docker compose up -d ollama${UX_RESET}"
-
-
-    ux_info "More details: ${UX_BOLD}gpu-help --all${UX_RESET}"
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _gpu_help_summary
+            ;;
+        --list|list)
+            _gpu_help_list_sections
+            ;;
+        --all|all|-a)
+            _gpu_help_full
+            ;;
+        *)
+            _gpu_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias gpu-help='gpu_help'
