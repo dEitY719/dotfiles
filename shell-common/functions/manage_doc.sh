@@ -255,45 +255,108 @@ archive_doc() {
 # show_doc_help() - Show help for document management
 # ═══════════════════════════════════════════════════════════════
 
-show_doc_help() {
-    ux_header "Document Management Commands"
-    echo ""
+_show_doc_help_summary() {
+    ux_info "Usage: show-doc-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "clear: clear-doc <file|pattern> usage and examples"
+    ux_bullet_sub "delete: del-doc <file|pattern> usage and examples"
+    ux_bullet_sub "description: behavior and safety notes"
+    ux_bullet_sub "patterns: glob pattern reference"
+    ux_bullet_sub "details: show-doc-help <section>  (example: show-doc-help clear)"
+}
 
-    ux_section "clear-doc"
+_show_doc_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "clear"
+    ux_bullet_sub "delete"
+    ux_bullet_sub "description"
+    ux_bullet_sub "patterns"
+}
+
+_show_doc_help_rows_clear() {
     ux_bullet "Clear content of documentation files"
-    echo ""
     ux_info "Usage: clear-doc <file|pattern>"
-    echo ""
     ux_info "Examples:"
     ux_bullet "clear-doc docs/review/abc-review-G.md       // Clear single file"
     ux_bullet "clear-doc docs/review/abc-review*           // Unquoted glob (both work!)"
     ux_bullet "clear-doc 'docs/review/abc-review*'         // Quoted pattern"
     ux_bullet "clear-doc docs/file1.md docs/file2.md       // Multiple files"
     ux_bullet "clear-doc 'docs/*.md' notes.txt             // Mixed patterns + files"
+}
 
-    ux_section "del-doc"
+_show_doc_help_rows_delete() {
     ux_bullet "Permanently delete documentation files"
-    echo ""
     ux_info "Usage: del-doc <file|pattern>"
-    echo ""
     ux_info "Examples:"
     ux_bullet "del-doc docs/review/abc-review-G.md         // Delete single file"
     ux_bullet "del-doc docs/review/abc-plan*               // Unquoted glob"
     ux_bullet "del-doc 'docs/review/abc-review*2.md'       // Quoted pattern (deletes *2.md files)"
     ux_bullet "del-doc docs/file1.md docs/file2.md         // Multiple files"
     ux_bullet "del-doc 'docs/abc-*' notes.txt              // Mixed patterns + files"
+}
 
-    ux_section "Description"
+_show_doc_help_rows_description() {
     ux_info "Safely clears the content of documentation files (clear-doc)"
     ux_info "Permanently deletes documentation files (del-doc)"
     ux_info "Both operations require user confirmation (destructive)"
     ux_info "Support both individual files and glob patterns"
-    echo ""
+}
 
-    ux_section "Patterns"
+_show_doc_help_rows_patterns() {
     ux_bullet "* matches any characters"
     ux_bullet "? matches single character"
-    echo ""
+}
+
+_show_doc_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_show_doc_help_section_rows() {
+    case "$1" in
+        clear|clear-doc)
+            _show_doc_help_rows_clear
+            ;;
+        delete|del|del-doc)
+            _show_doc_help_rows_delete
+            ;;
+        description|desc|about)
+            _show_doc_help_rows_description
+            ;;
+        patterns|pattern|glob)
+            _show_doc_help_rows_patterns
+            ;;
+        *)
+            ux_error "Unknown show-doc-help section: $1"
+            ux_info "Try: show-doc-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_show_doc_help_full() {
+    ux_header "Document Management Commands"
+    _show_doc_help_render_section "clear-doc" _show_doc_help_rows_clear
+    _show_doc_help_render_section "del-doc" _show_doc_help_rows_delete
+    _show_doc_help_render_section "Description" _show_doc_help_rows_description
+    _show_doc_help_render_section "Patterns" _show_doc_help_rows_patterns
+}
+
+show_doc_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _show_doc_help_summary
+            ;;
+        --list|list)
+            _show_doc_help_list_sections
+            ;;
+        --all|all)
+            _show_doc_help_full
+            ;;
+        *)
+            _show_doc_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -316,6 +379,7 @@ fi
 alias clear-doc='clear_doc'
 alias del-doc='delete_doc'
 alias doc-help='show_doc_help'
+alias show-doc-help='show_doc_help'
 
 # ═══════════════════════════════════════════════════════════════
 # Main execution - Only run if directly executed, not sourced
