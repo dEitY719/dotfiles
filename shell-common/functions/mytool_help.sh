@@ -60,28 +60,39 @@ EOF
     printf "%s\n" "$description"
 }
 
-mytool_help() {
+_mytool_help_load_ux() {
     if ! command -v ux_header >/dev/null 2>&1 && [ -n "$SHELL_COMMON" ]; then
         # shellcheck source=/dev/null
         . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
     fi
+}
 
-    ux_header "MyTool - Custom Utility Scripts"
+_mytool_help_summary() {
+    ux_info "Usage: mytool-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "tools: list all .sh files in shell-common/tools/custom/"
+    ux_bullet_sub "usage: how to run custom tools"
+    ux_bullet_sub "details: mytool-help <section>  (example: mytool-help tools)"
+}
 
-    # Check if SHELL_COMMON is set
+_mytool_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "tools"
+    ux_bullet_sub "usage"
+}
+
+_mytool_help_rows_tools() {
     if [ -z "$SHELL_COMMON" ]; then
         ux_warning "SHELL_COMMON environment variable not set"
         return 1
     fi
 
-    # List all .sh files in custom tools directory
     local custom_dir="${SHELL_COMMON}/tools/custom"
     if [ ! -d "$custom_dir" ]; then
         ux_error "Custom tools directory not found: $custom_dir"
         return 1
     fi
 
-    ux_section "Available Custom Tools"
     ux_info "Executable utility scripts in ${custom_dir}"
 
     local scripts
@@ -89,13 +100,11 @@ mytool_help() {
 
     if [ -z "$scripts" ]; then
         ux_warning "No custom tools found in ${custom_dir}"
-        echo ""
         return 0
     fi
 
     ux_table_header "Tool" "Description"
 
-    # Find and display all .sh files
     local count=0
     while IFS= read -r script; do
         [ -n "$script" ] || continue
@@ -112,15 +121,58 @@ mytool_help() {
 $scripts
 EOF
 
-    echo ""
     ux_info "Total: $count custom tools available"
     ux_info "Location: ${custom_dir}"
-    echo ""
+}
 
-    ux_section "Usage"
+_mytool_help_rows_usage() {
     ux_bullet "Run a tool directly: ${UX_BOLD}\${SHELL_COMMON}/tools/custom/tool-name.sh${UX_RESET}"
     ux_bullet "Or add to PATH for direct execution: ${UX_BOLD}tool-name.sh${UX_RESET}"
-    echo ""
+}
+
+_mytool_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_mytool_help_section_rows() {
+    case "$1" in
+        tools|tool|list-tools)
+            _mytool_help_rows_tools
+            ;;
+        usage|use|run)
+            _mytool_help_rows_usage
+            ;;
+        *)
+            ux_error "Unknown mytool-help section: $1"
+            ux_info "Try: mytool-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_mytool_help_full() {
+    ux_header "MyTool - Custom Utility Scripts"
+    _mytool_help_render_section "Available Custom Tools" _mytool_help_rows_tools
+    _mytool_help_render_section "Usage" _mytool_help_rows_usage
+}
+
+mytool_help() {
+    _mytool_help_load_ux
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _mytool_help_summary
+            ;;
+        --list|list)
+            _mytool_help_list_sections
+            ;;
+        --all|all)
+            _mytool_help_full
+            ;;
+        *)
+            _mytool_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # Alias for mytool-help format (using dash instead of underscore)
