@@ -28,13 +28,30 @@ fi
 # Color Definitions (tput-based with fallback to empty strings)
 # =============================================================================
 
+_UX_DISABLE_ANSI=false
+if [ "${DOTFILES_TEST_MODE:-}" = "1" ] || [ "${TERM:-}" = "dumb" ] || [ -n "${NO_COLOR:-}" ]; then
+    _UX_DISABLE_ANSI=true
+fi
+
 # Text styles
 export UX_BOLD
-UX_BOLD=$(tput bold 2>/dev/null || echo "")
+if $_UX_DISABLE_ANSI; then
+    UX_BOLD=""
+else
+    UX_BOLD=$(tput bold 2>/dev/null || echo "")
+fi
 export UX_DIM
-UX_DIM=$(tput dim 2>/dev/null || echo "")
+if $_UX_DISABLE_ANSI; then
+    UX_DIM=""
+else
+    UX_DIM=$(tput dim 2>/dev/null || echo "")
+fi
 export UX_RESET
-UX_RESET=$(tput sgr0 2>/dev/null || echo "")
+if $_UX_DISABLE_ANSI; then
+    UX_RESET=""
+else
+    UX_RESET=$(tput sgr0 2>/dev/null || echo "")
+fi
 
 # Determine directory where this script is located
 # This allows the library to be self-contained and portable
@@ -69,17 +86,41 @@ ux_get_safe_script_name() {
 # Semantic colors (named by purpose, not appearance)
 # Use these instead of direct color codes for consistency
 export UX_PRIMARY
-UX_PRIMARY=$(tput setaf 4 2>/dev/null || echo "") # blue - headers, titles
+if $_UX_DISABLE_ANSI; then
+    UX_PRIMARY=""
+else
+    UX_PRIMARY=$(tput setaf 4 2>/dev/null || echo "") # blue - headers, titles
+fi
 export UX_SUCCESS
-UX_SUCCESS=$(tput setaf 2 2>/dev/null || echo "") # green - success states
+if $_UX_DISABLE_ANSI; then
+    UX_SUCCESS=""
+else
+    UX_SUCCESS=$(tput setaf 2 2>/dev/null || echo "") # green - success states
+fi
 export UX_WARNING
-UX_WARNING=$(tput setaf 3 2>/dev/null || echo "") # yellow - warnings
+if $_UX_DISABLE_ANSI; then
+    UX_WARNING=""
+else
+    UX_WARNING=$(tput setaf 3 2>/dev/null || echo "") # yellow - warnings
+fi
 export UX_ERROR
-UX_ERROR=$(tput setaf 1 2>/dev/null || echo "") # red - errors
+if $_UX_DISABLE_ANSI; then
+    UX_ERROR=""
+else
+    UX_ERROR=$(tput setaf 1 2>/dev/null || echo "") # red - errors
+fi
 export UX_INFO
-UX_INFO=$(tput setaf 6 2>/dev/null || echo "") # cyan - info messages
+if $_UX_DISABLE_ANSI; then
+    UX_INFO=""
+else
+    UX_INFO=$(tput setaf 6 2>/dev/null || echo "") # cyan - info messages
+fi
 export UX_MUTED
-UX_MUTED=$(tput setaf 8 2>/dev/null || echo "") # gray - secondary info
+if $_UX_DISABLE_ANSI; then
+    UX_MUTED=""
+else
+    UX_MUTED=$(tput setaf 8 2>/dev/null || echo "") # gray - secondary info
+fi
 
 # =============================================================================
 # Standard Output Functions

@@ -548,6 +548,65 @@ _my_help_show_all() {
     return 0
 }
 
+_my_help_summary() {
+    ux_info "Usage: my-help [topic|category|section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "categories: ai | cli | config | development | devops | docs | meta | system"
+    ux_bullet_sub "popular: git | docker | claude | uv | fzf"
+    ux_bullet_sub "navigation: my-help <topic> [args] / my-help <category>"
+    ux_bullet_sub "details: my-help <section>  (example: my-help categories)"
+}
+
+_my_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "categories"
+    ux_bullet_sub "popular"
+    ux_bullet_sub "navigation"
+}
+
+_my_help_show_popular() {
+    ux_section "Popular Topics"
+    ux_table_header "Topic" "Description"
+    local desc
+    desc=$(_my_help_topic_description git)
+    ux_table_row "git" "$desc"
+    desc=$(_my_help_topic_description docker)
+    ux_table_row "docker" "$desc"
+    desc=$(_my_help_topic_description claude)
+    ux_table_row "claude" "$desc"
+    desc=$(_my_help_topic_description uv)
+    ux_table_row "uv" "$desc"
+    desc=$(_my_help_topic_description fzf)
+    ux_table_row "fzf" "$desc"
+}
+
+_my_help_show_navigation() {
+    ux_section "Navigation"
+    ux_bullet "my-help <category>      - Show a category (example: my-help ai)"
+    ux_bullet "my-help <topic> [args]  - Show a topic (example: my-help git stash)"
+    ux_bullet "category-help           - Browse categories"
+    ux_bullet "register-help           - How to add new topics"
+}
+
+_my_help_section_rows() {
+    case "$1" in
+        categories)
+            _my_help_show_categories
+            ;;
+        popular)
+            _my_help_show_popular
+            ;;
+        navigation)
+            _my_help_show_navigation
+            ;;
+        *)
+            ux_error "Unknown my-help section: $1"
+            ux_info "Try: my-help --list"
+            return 1
+            ;;
+    esac
+}
+
 # Main help function - displays all registered commands or specific help
 my_help_impl() {
     local rc=0
@@ -574,10 +633,24 @@ my_help_impl() {
         _HELP_DEFAULTS_REGISTERED=1
     fi
 
-    if [ -z "$1" ]; then
-        _my_help_show_all
-        rc=$?
-    else
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _my_help_summary
+            rc=$?
+            ;;
+        --list|list)
+            _my_help_list_sections
+            rc=$?
+            ;;
+        --all|all)
+            _my_help_show_all
+            rc=$?
+            ;;
+        categories|popular|navigation)
+            _my_help_section_rows "$1"
+            rc=$?
+            ;;
+        *)
         # If argument is provided, show specific help for that command
         local cmd_name="$1"
         shift || true
@@ -667,7 +740,8 @@ my_help_impl() {
                 esac
             fi
         fi
-    fi
+            ;;
+    esac
 
     if [ "$_my_help_restore_xtrace" = "1" ]; then
         if [ -n "$BASH_VERSION" ]; then
