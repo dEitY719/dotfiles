@@ -584,30 +584,85 @@ alias llm-help='litellm_help'
 
 # NOTE: UX library is loaded by the loader before functions/ — no need to reload here
 
+_ollama_help_summary() {
+    ux_info "Usage: ollama-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "auto: auto-detect backend (local vs docker)"
+    ux_bullet_sub "docker: ollama-models | ollama-pull | ollama-rm | ollama-show | logs | stats"
+    ux_bullet_sub "local: ollama-models | ollama-pull | ollama-run | ollama-status | ollama-serve"
+    ux_bullet_sub "status: backend status & API health"
+    ux_bullet_sub "details: ollama-help <section>  (example: ollama-help docker)"
+}
+
+_ollama_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "auto"
+    ux_bullet_sub "docker"
+    ux_bullet_sub "local"
+    ux_bullet_sub "status"
+}
+
+_ollama_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_ollama_help_section_rows() {
+    case "$1" in
+        auto)
+            _ollama_help_auto
+            ;;
+        docker)
+            _ollama_help_docker
+            ;;
+        local|wsl)
+            _ollama_help_local
+            ;;
+        status|backend)
+            _ollama_help_status
+            ;;
+        *)
+            ux_error "Unknown ollama-help section: $1"
+            ux_info "Try: ollama-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_ollama_help_full() {
+    ux_header "Ollama Management (All Backends)"
+
+    _ollama_help_render_section "Backend Status" _ollama_help_status
+    _ollama_help_render_section "Docker Backend" _ollama_help_docker
+    _ollama_help_render_section "Local (WSL) Backend" _ollama_help_local
+}
+
 # Main help function with auto-detection
 ollama_help() {
-    local mode="${1:-auto}"
-
-    case "$mode" in
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _ollama_help_summary
+            ;;
+        --list|list)
+            _ollama_help_list_sections
+            ;;
+        --all|all)
+            _ollama_help_full
+            ;;
+        --auto)
+            _ollama_help_auto
+            ;;
         --docker)
             _ollama_help_docker
             ;;
         --local)
             _ollama_help_local
             ;;
-        --status | --backend)
+        --status|--backend)
             _ollama_help_status
             ;;
-        --auto | auto | "")
-            _ollama_help_auto
-            ;;
-        --help | -h)
-            _ollama_help_usage
-            ;;
         *)
-            ux_error "Unknown option: $mode"
-            _ollama_help_usage
-            return 1
+            _ollama_help_section_rows "$1"
             ;;
     esac
 }
@@ -751,3 +806,5 @@ _ollama_help_usage() {
     ux_table_row "--status" "Display current Ollama status"
     ux_table_row "-h, --help" "Show this help"
 }
+
+alias ollama-help='ollama_help'
