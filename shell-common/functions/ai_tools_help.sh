@@ -503,21 +503,78 @@ alias gemini-help='gemini_help'
 
 # --- litellm_help (from litellm_help.sh) ---
 
-litellm_help() {
-    ux_header "LiteLLM Commands"
+_litellm_help_summary() {
+    ux_info "Usage: litellm-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "basic: llm-start | llm-stop | llm-restart | llm-status | llm-models | llm-test"
+    ux_bullet_sub "info: Path | URL | Key"
+    ux_bullet_sub "details: litellm-help <section>  (example: litellm-help basic)"
+}
 
-    ux_section "Basic Commands"
+_litellm_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "basic"
+    ux_bullet_sub "info"
+}
+
+_litellm_help_rows_basic() {
     ux_table_row "llm-start" "Start Stack" "docker compose up"
     ux_table_row "llm-stop" "Stop Stack" "docker compose down"
     ux_table_row "llm-restart" "Restart" "Stop & Start"
     ux_table_row "llm-status" "Status" "Check health & models"
     ux_table_row "llm-models" "List Models" "Show loaded models"
     ux_table_row "llm-test" "Test Model" "Run basic prompt"
+}
 
-    ux_section "Project Info"
+_litellm_help_rows_info() {
     ux_table_row "Path" "$LITELLM_PROJECT_PATH" ""
     ux_table_row "URL" "$LITELLM_URL" ""
     ux_table_row "Key" "$LITELLM_API_KEY" ""
+}
+
+_litellm_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_litellm_help_section_rows() {
+    case "$1" in
+        basic|commands)
+            _litellm_help_rows_basic
+            ;;
+        info|project)
+            _litellm_help_rows_info
+            ;;
+        *)
+            ux_error "Unknown litellm-help section: $1"
+            ux_info "Try: litellm-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_litellm_help_full() {
+    ux_header "LiteLLM Commands"
+
+    _litellm_help_render_section "Basic Commands" _litellm_help_rows_basic
+    _litellm_help_render_section "Project Info" _litellm_help_rows_info
+}
+
+litellm_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _litellm_help_summary
+            ;;
+        --list|list)
+            _litellm_help_list_sections
+            ;;
+        --all|all)
+            _litellm_help_full
+            ;;
+        *)
+            _litellm_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias litellm-help='litellm_help'
