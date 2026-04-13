@@ -148,10 +148,21 @@ alias psql-help='psql_help'
 
 # --- redis_help (from redis_help.sh) ---
 
-redis_help() {
-    ux_header "Redis Service Management"
+_redis_help_summary() {
+    ux_info "Usage: redis-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "commands: server-ctl | ping | info | monitor | dbsize | keys | flush | config-get | slowlog | clients | memory | install-redis"
+    ux_bullet_sub "env: REDISCLI_AUTH | REDIS_DEFAULT_HOST | REDIS_DEFAULT_PORT"
+    ux_bullet_sub "details: redis-help <section>  (example: redis-help commands)"
+}
 
-    ux_section "Commands"
+_redis_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "commands"
+    ux_bullet_sub "env"
+}
+
+_redis_help_rows_commands() {
     ux_table_row "redis-server-ctl <action>" "Manage service" "start, stop, restart, status"
     ux_table_row "redis-ping" "Health check" "PING/PONG test"
     ux_table_row "redis-info [section]" "Server info" "server, memory, clients, etc."
@@ -164,11 +175,57 @@ redis_help() {
     ux_table_row "redis-clients" "Client list" "Connected clients info"
     ux_table_row "redis-memory" "Memory stats" "Memory usage details"
     ux_table_row "install-redis" "Install Redis" "Interactive installer for WSL"
+}
 
-    ux_section "Environment"
+_redis_help_rows_env() {
     ux_table_row "REDISCLI_AUTH" "Password" "Auto-auth for all commands"
     ux_table_row "REDIS_DEFAULT_HOST" "Server host" "Default: 127.0.0.1"
     ux_table_row "REDIS_DEFAULT_PORT" "Server port" "Default: 6379"
+}
+
+_redis_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_redis_help_section_rows() {
+    case "$1" in
+        commands|cmd)
+            _redis_help_rows_commands
+            ;;
+        env|environment)
+            _redis_help_rows_env
+            ;;
+        *)
+            ux_error "Unknown redis-help section: $1"
+            ux_info "Try: redis-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_redis_help_full() {
+    ux_header "Redis Service Management"
+
+    _redis_help_render_section "Commands" _redis_help_rows_commands
+    _redis_help_render_section "Environment" _redis_help_rows_env
+}
+
+redis_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _redis_help_summary
+            ;;
+        --list|list)
+            _redis_help_list_sections
+            ;;
+        --all|all)
+            _redis_help_full
+            ;;
+        *)
+            _redis_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias redis-help='redis_help'
