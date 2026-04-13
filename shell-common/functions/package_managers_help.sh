@@ -358,28 +358,99 @@ alias npm-help='npm_help'
 
 # --- uv_help (from uv_help.sh) ---
 
-uv_help() {
-    ux_header "UV Quick Commands"
+_uv_help_summary() {
+    ux_info "Usage: uv-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "sync: uvs | uvu | uvd | uv-install"
+    ux_bullet_sub "lock: uvk | uvl | uvc | uvr"
+    ux_bullet_sub "maintenance: uvcheck"
+    ux_bullet_sub "recipes: --all-extras | backend dev | frontend dev"
+    ux_bullet_sub "details: uv-help <section>  (example: uv-help recipes)"
+}
 
-    ux_section "Sync & Install"
+_uv_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "sync"
+    ux_bullet_sub "lock"
+    ux_bullet_sub "maintenance"
+    ux_bullet_sub "recipes"
+}
+
+_uv_help_rows_sync() {
     ux_table_row "uvs" "uv sync" "Sync env & prune (Prod)"
     ux_table_row "uvu" "uv sync --upgrade" "Upgrade deps"
     ux_table_row "uvd" "uv sync --dev" "Dev install"
     ux_table_row "uv-install" "install script" "Install UV tool"
+}
 
-    ux_section "Lock & Export"
+_uv_help_rows_lock() {
     ux_table_row "uvk" "uv lock" "Refresh lockfile"
     ux_table_row "uvl" "uv pip list" "List packages"
     ux_table_row "uvc" "uv pip compile" "Export requirements"
     ux_table_row "uvr" "uv pip sync" "Sync from reqs"
+}
 
-    ux_section "Maintenance"
+_uv_help_rows_maintenance() {
     ux_table_row "uvcheck" "uv pip check" "Verify env"
+}
 
-    ux_section "Recipes"
+_uv_help_rows_recipes() {
     ux_bullet "Install all extras: ${UX_SUCCESS}uv pip sync --all-extras${UX_RESET}"
     ux_bullet "Backend dev:      ${UX_SUCCESS}uv pip sync --extra backend --extra dev${UX_RESET}"
     ux_bullet "Frontend dev:     ${UX_SUCCESS}uv pip sync --extra frontend --extra dev${UX_RESET}"
+}
+
+_uv_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_uv_help_section_rows() {
+    case "$1" in
+        sync|install)
+            _uv_help_rows_sync
+            ;;
+        lock|export)
+            _uv_help_rows_lock
+            ;;
+        maintenance|check)
+            _uv_help_rows_maintenance
+            ;;
+        recipes|recipe)
+            _uv_help_rows_recipes
+            ;;
+        *)
+            ux_error "Unknown uv-help section: $1"
+            ux_info "Try: uv-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_uv_help_full() {
+    ux_header "UV Quick Commands"
+
+    _uv_help_render_section "Sync & Install" _uv_help_rows_sync
+    _uv_help_render_section "Lock & Export" _uv_help_rows_lock
+    _uv_help_render_section "Maintenance" _uv_help_rows_maintenance
+    _uv_help_render_section "Recipes" _uv_help_rows_recipes
+}
+
+uv_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _uv_help_summary
+            ;;
+        --list|list)
+            _uv_help_list_sections
+            ;;
+        --all|all)
+            _uv_help_full
+            ;;
+        *)
+            _uv_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # UV Check Wrapper - calls the diagnostic script
