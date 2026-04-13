@@ -18,6 +18,10 @@ alias ac='sudo apt-get clean'         # Remove all .deb files from cache
 # All-in-one cleanup (update → upgrade → autoremove → autoclean)
 alias auug='sudo apt-get update && sudo apt-get upgrade && sudo apt-get autoremove && sudo apt-get autoclean'
 
+# Migration guard: previous versions of this file defined `ai` as an alias.
+# In interactive zsh, an active alias causes `ai() { ... }` to fail parsing
+# ("defining function based on alias") on reload. Drop any stale alias first.
+unalias ai 2>/dev/null || true
 ai() { sudo apt-get install "$@"; } # Install package
 alias ar='sudo apt-get remove'  # Remove package (keep config)
 alias arp='sudo apt-get purge'  # Remove package (delete config)
@@ -32,6 +36,8 @@ alias aunhold='apt-mark unhold'      # Unhold package version
 
 # Low-level commands
 alias adpkg='sudo dpkg -i'          # Install .deb file directly
+# Migration guard: see note on `ai` above.
+unalias afd 2>/dev/null || true
 afd() { sudo apt-get install -f "$@"; } # Fix broken dependencies
 
 # Cache/Status check
