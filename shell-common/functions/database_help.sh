@@ -4,16 +4,68 @@
 
 # --- mysql_help (from mysql_help.sh) ---
 
-mysql_help() {
-    ux_header "MySQL Service Management"
+_mysql_help_summary() {
+    ux_info "Usage: mysql-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "service: mysql_list | mysql_dmc_dev | mysql_dmc_test | mysql_cmd | mysql_server"
+    ux_bullet_sub "details: mysql-help <section>  (example: mysql-help service)"
+}
 
-    ux_section "Service Commands"
+_mysql_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "service"
+}
+
+_mysql_help_rows_service() {
     ux_table_row "mysql_list" "List configured services" "Show all database connections"
     ux_table_row "mysql_dmc_dev" "Connect to dev database" "Use .my.cnf config"
     ux_table_row "mysql_dmc_test" "Connect to test database" "Use .my.cnf config"
     ux_table_row "mysql_cmd <svc> <cmd>" "Execute SQL command" "databases, tables, version, describe, status, etc."
     ux_table_row "mysql_server <action>" "Manage service" "start, stop, restart, status, reload"
 }
+
+_mysql_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_mysql_help_section_rows() {
+    case "$1" in
+        service|commands)
+            _mysql_help_rows_service
+            ;;
+        *)
+            ux_error "Unknown mysql-help section: $1"
+            ux_info "Try: mysql-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_mysql_help_full() {
+    ux_header "MySQL Service Management"
+
+    _mysql_help_render_section "Service Commands" _mysql_help_rows_service
+}
+
+mysql_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _mysql_help_summary
+            ;;
+        --list|list)
+            _mysql_help_list_sections
+            ;;
+        --all|all)
+            _mysql_help_full
+            ;;
+        *)
+            _mysql_help_section_rows "$1"
+            ;;
+    esac
+}
+
+alias mysql-help='mysql_help'
 
 # --- psql_help (from psql_help.sh) ---
 
