@@ -239,7 +239,125 @@ alias ssh-help='ssh_help'
 
 # --- ssl_help (from ssl_help.sh) ---
 
-ssl_help() {
+_ssl_help_summary() {
+    ux_info "Usage: ssl-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "status: SSL_CERT_FILE | REQUESTS_CA_BUNDLE | NODE_EXTRA_CA_CERTS"
+    ux_bullet_sub "commands: echo \$SSL_CERT_FILE | env grep cert"
+    ux_bullet_sub "files: security.local.sh status"
+    ux_bullet_sub "paths: Internal | External | System CA"
+    ux_bullet_sub "tools: curl | wget | git | python | npm"
+    ux_bullet_sub "notes: SSL_CERT_FILE | REQUESTS_CA_BUNDLE | NODE_EXTRA_CA_CERTS"
+    ux_bullet_sub "details: ssl-help <section>  (example: ssl-help status)"
+}
+
+_ssl_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "status"
+    ux_bullet_sub "commands"
+    ux_bullet_sub "files"
+    ux_bullet_sub "paths"
+    ux_bullet_sub "tools"
+    ux_bullet_sub "notes"
+}
+
+_ssl_help_rows_status() {
+    if [ -n "$SSL_CERT_FILE" ]; then
+        ux_success "SSL_CERT_FILE: $SSL_CERT_FILE"
+        if [ -f "$SSL_CERT_FILE" ]; then
+            ux_success "  ✓ File exists and is readable"
+        else
+            ux_warning "  ✗ File NOT found (may need to be installed)"
+        fi
+    else
+        ux_warning "SSL_CERT_FILE: [NOT SET]"
+        ux_info "  This is normal for public/home environments"
+    fi
+
+    if [ -n "$REQUESTS_CA_BUNDLE" ]; then
+        ux_success "REQUESTS_CA_BUNDLE: $REQUESTS_CA_BUNDLE (Python requests)"
+    else
+        ux_info "REQUESTS_CA_BUNDLE: [NOT SET]"
+    fi
+
+    if [ -n "$NODE_EXTRA_CA_CERTS" ]; then
+        ux_success "NODE_EXTRA_CA_CERTS: $NODE_EXTRA_CA_CERTS (Node.js)"
+    else
+        ux_info "NODE_EXTRA_CA_CERTS: [NOT SET]"
+    fi
+}
+
+_ssl_help_rows_commands() {
+    ux_bullet "echo \$SSL_CERT_FILE                  Show SSL certificate file"
+    ux_bullet "echo \$REQUESTS_CA_BUNDLE             Show Python requests CA bundle"
+    ux_bullet "env | grep -i cert                   Show all certificate vars"
+}
+
+_ssl_help_rows_files() {
+    local security_local="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/env/security.local.sh"
+    if [ -f "$security_local" ]; then
+        ux_success "security.local.sh: exists"
+        ux_bullet "Location: $security_local"
+    else
+        ux_info "security.local.sh: not configured (public environment)"
+    fi
+}
+
+_ssl_help_rows_paths() {
+    ux_bullet "Internal PC:  /usr/share/ca-certificates/extra/McAfee_Certificate.crt"
+    ux_bullet "External PC:  /usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
+    ux_bullet "System CA:    /etc/ssl/certs/ca-certificates.crt"
+}
+
+_ssl_help_rows_tools() {
+    ux_bullet "curl                 - Web requests and downloads"
+    ux_bullet "wget                 - File downloads"
+    ux_bullet "git                  - Git operations (HTTPS)"
+    ux_bullet "python (requests)    - HTTP library"
+    ux_bullet "npm                  - Node.js package manager"
+}
+
+_ssl_help_rows_notes() {
+    ux_warning "Different variables for different tools:"
+    ux_info "  - SSL_CERT_FILE:        curl, wget, git"
+    ux_info "  - REQUESTS_CA_BUNDLE:   Python requests"
+    ux_info "  - NODE_EXTRA_CA_CERTS:  Node.js"
+}
+
+_ssl_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_ssl_help_section_rows() {
+    case "$1" in
+        status|current)
+            _ssl_help_rows_status
+            ;;
+        commands|quick)
+            _ssl_help_rows_commands
+            ;;
+        files|config)
+            _ssl_help_rows_files
+            ;;
+        paths|environment)
+            _ssl_help_rows_paths
+            ;;
+        tools)
+            _ssl_help_rows_tools
+            ;;
+        notes|important)
+            _ssl_help_rows_notes
+            ;;
+        *)
+            ux_error "Unknown ssl-help section: $1"
+            ux_info "Try: ssl-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_ssl_help_full() {
     if type ux_header >/dev/null 2>&1; then
         ux_header "SSL Certificate Configuration & Diagnostics"
     else
@@ -247,64 +365,12 @@ ssl_help() {
     fi
 
     if type ux_section >/dev/null 2>&1; then
-        ux_section "Current SSL Certificate Status"
-
-        if [ -n "$SSL_CERT_FILE" ]; then
-            ux_success "SSL_CERT_FILE: $SSL_CERT_FILE"
-            if [ -f "$SSL_CERT_FILE" ]; then
-                ux_success "  ✓ File exists and is readable"
-            else
-                ux_warning "  ✗ File NOT found (may need to be installed)"
-            fi
-        else
-            ux_warning "SSL_CERT_FILE: [NOT SET]"
-            ux_info "  This is normal for public/home environments"
-        fi
-
-        if [ -n "$REQUESTS_CA_BUNDLE" ]; then
-            ux_success "REQUESTS_CA_BUNDLE: $REQUESTS_CA_BUNDLE (Python requests)"
-        else
-            ux_info "REQUESTS_CA_BUNDLE: [NOT SET]"
-        fi
-
-        if [ -n "$NODE_EXTRA_CA_CERTS" ]; then
-            ux_success "NODE_EXTRA_CA_CERTS: $NODE_EXTRA_CA_CERTS (Node.js)"
-        else
-            ux_info "NODE_EXTRA_CA_CERTS: [NOT SET]"
-        fi
-
-        ux_section "Quick Commands"
-        ux_bullet "echo \$SSL_CERT_FILE                  Show SSL certificate file"
-        ux_bullet "echo \$REQUESTS_CA_BUNDLE             Show Python requests CA bundle"
-        ux_bullet "env | grep -i cert                   Show all certificate vars"
-
-        ux_section "Security Configuration Files"
-        local security_local="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/env/security.local.sh"
-        if [ -f "$security_local" ]; then
-            ux_success "security.local.sh: exists"
-            ux_bullet "Location: $security_local"
-        else
-            ux_info "security.local.sh: not configured (public environment)"
-        fi
-
-        ux_section "Certificate Paths by Environment"
-        ux_bullet "Internal PC:  /usr/share/ca-certificates/extra/McAfee_Certificate.crt"
-        ux_bullet "External PC:  /usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-        ux_bullet "System CA:    /etc/ssl/certs/ca-certificates.crt"
-
-        ux_section "Tools That Use SSL_CERT_FILE"
-        ux_bullet "curl                 - Web requests and downloads"
-        ux_bullet "wget                 - File downloads"
-        ux_bullet "git                  - Git operations (HTTPS)"
-        ux_bullet "python (requests)    - HTTP library"
-        ux_bullet "npm                  - Node.js package manager"
-
-        ux_section "Important Notes"
-        ux_warning "Different variables for different tools:"
-        ux_info "  - SSL_CERT_FILE:        curl, wget, git"
-        ux_info "  - REQUESTS_CA_BUNDLE:   Python requests"
-        ux_info "  - NODE_EXTRA_CA_CERTS:  Node.js"
-
+        _ssl_help_render_section "Current SSL Certificate Status" _ssl_help_rows_status
+        _ssl_help_render_section "Quick Commands" _ssl_help_rows_commands
+        _ssl_help_render_section "Security Configuration Files" _ssl_help_rows_files
+        _ssl_help_render_section "Certificate Paths by Environment" _ssl_help_rows_paths
+        _ssl_help_render_section "Tools That Use SSL_CERT_FILE" _ssl_help_rows_tools
+        _ssl_help_render_section "Important Notes" _ssl_help_rows_notes
     else
         # Fallback for minimal shells without UX library
         echo ""
@@ -316,6 +382,23 @@ ssl_help() {
         echo "  env | grep -i cert        # Show all certificate variables"
         echo ""
     fi
+}
+
+ssl_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _ssl_help_summary
+            ;;
+        --list|list)
+            _ssl_help_list_sections
+            ;;
+        --all|all)
+            _ssl_help_full
+            ;;
+        *)
+            _ssl_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # Wrapper function for future check_ssl.sh diagnostic (placeholder)
