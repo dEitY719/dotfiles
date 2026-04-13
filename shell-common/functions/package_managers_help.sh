@@ -173,49 +173,147 @@ alias check-pip='pip_check'
 
 # NOTE: UX library is loaded by the loader before functions/ — no need to reload here
 
-npm_help() {
-    ux_header "NPM Quick Commands"
+_npm_help_summary() {
+    ux_info "Usage: npm-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "info: npm-v | npm-list | npm-info | npm-search | npm-outdated"
+    ux_bullet_sub "install: npm-i | npm-is | npm-isd | npm-ig"
+    ux_bullet_sub "uninstall: npm-un | npm-ung"
+    ux_bullet_sub "maintenance: npm-update | npm-cache-clean"
+    ux_bullet_sub "config: npm-config"
+    ux_bullet_sub "setup: npminstall | npmuninstall"
+    ux_bullet_sub "cert: crt-help | crtsetup"
+    ux_bullet_sub "troubleshoot: EACCES | nvm conflict | certificate | config mismatch"
+    ux_bullet_sub "details: npm-help <section>  (example: npm-help install)"
+}
 
-    ux_section "Info & Version"
+_npm_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "info"
+    ux_bullet_sub "install"
+    ux_bullet_sub "uninstall"
+    ux_bullet_sub "maintenance"
+    ux_bullet_sub "config"
+    ux_bullet_sub "setup"
+    ux_bullet_sub "cert"
+    ux_bullet_sub "troubleshoot"
+}
+
+_npm_help_rows_info() {
     ux_table_row "npm-v" "npm --version" "Check version"
     ux_table_row "npm-list" "list -g --depth=0" "Global packages"
     ux_table_row "npm-info" "info <pkg>" "Package details"
     ux_table_row "npm-search" "search <keyword>" "Search packages"
     ux_table_row "npm-outdated" "outdated -g" "Check updates"
+}
 
-    ux_section "Install"
+_npm_help_rows_install() {
     ux_table_row "npm-i" "npm install" "Install deps"
     ux_table_row "npm-is" "install --save" "Save prod dep"
     ux_table_row "npm-isd" "install --save-dev" "Save dev dep"
     ux_table_row "npm-ig" "install -g" "Global install"
+}
 
-    ux_section "Uninstall"
+_npm_help_rows_uninstall() {
     ux_table_row "npm-un" "npm uninstall" "Remove dep"
     ux_table_row "npm-ung" "uninstall -g" "Remove global"
+}
 
-    ux_section "Maintenance"
+_npm_help_rows_maintenance() {
     ux_table_row "npm-update" "update -g" "Update global"
     ux_table_row "npm-cache-clean" "cache clean --force" "Clear cache"
+}
 
-    ux_section "Configuration"
+_npm_help_rows_config() {
     ux_table_row "npm-config" "Show current config" "Registry, CA, SSL"
+}
 
-    ux_section "Setup Tools"
+_npm_help_rows_setup() {
     ux_table_row "npminstall" "Install Script" "Install Node/NPM"
     ux_table_row "npmuninstall" "Uninstall Script" "Remove Node/NPM"
+}
 
-    ux_section "Certificate Management"
+_npm_help_rows_cert() {
     ux_info "For CA certificate setup (company proxy/internal network):"
     ux_bullet "Run: ${UX_SUCCESS}crt-help${UX_RESET} for detailed guide"
     ux_bullet "Setup: ${UX_SUCCESS}crtsetup${UX_RESET} to install certificate"
+}
 
-    ux_section "Troubleshooting"
+_npm_help_rows_troubleshoot() {
     ux_bullet "EACCES permission error (npm WARN): npm config set prefix ~/.npm-global"
     ux_bullet "nvm과 npm prefix 충돌: .npmrc 파일의 prefix 라인 제거"
     ux_bullet "Certificate error: Run ${UX_SUCCESS}crt-help${UX_RESET} for CA setup guide"
     ux_bullet "Config mismatch: Run ${UX_SUCCESS}./shell-common/setup.sh${UX_RESET} to reconfigure symlink"
-
     ux_info "Global Path: ~/.npm-global"
+}
+
+_npm_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_npm_help_section_rows() {
+    case "$1" in
+        info|version)
+            _npm_help_rows_info
+            ;;
+        install|i)
+            _npm_help_rows_install
+            ;;
+        uninstall|un)
+            _npm_help_rows_uninstall
+            ;;
+        maintenance|update)
+            _npm_help_rows_maintenance
+            ;;
+        config|configuration)
+            _npm_help_rows_config
+            ;;
+        setup|tools)
+            _npm_help_rows_setup
+            ;;
+        cert|certificate|ca)
+            _npm_help_rows_cert
+            ;;
+        troubleshoot|troubleshooting)
+            _npm_help_rows_troubleshoot
+            ;;
+        *)
+            ux_error "Unknown npm-help section: $1"
+            ux_info "Try: npm-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_npm_help_full() {
+    ux_header "NPM Quick Commands"
+
+    _npm_help_render_section "Info & Version" _npm_help_rows_info
+    _npm_help_render_section "Install" _npm_help_rows_install
+    _npm_help_render_section "Uninstall" _npm_help_rows_uninstall
+    _npm_help_render_section "Maintenance" _npm_help_rows_maintenance
+    _npm_help_render_section "Configuration" _npm_help_rows_config
+    _npm_help_render_section "Setup Tools" _npm_help_rows_setup
+    _npm_help_render_section "Certificate Management" _npm_help_rows_cert
+    _npm_help_render_section "Troubleshooting" _npm_help_rows_troubleshoot
+}
+
+npm_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _npm_help_summary
+            ;;
+        --list|list)
+            _npm_help_list_sections
+            ;;
+        --all|all)
+            _npm_help_full
+            ;;
+        *)
+            _npm_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # Helper function to normalize npm config output
