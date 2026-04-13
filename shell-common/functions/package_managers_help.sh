@@ -40,37 +40,115 @@ alias check-rpm='rpm_check'
 
 # --- pip_help (from pip_help.sh) ---
 
-pip_help() {
-    ux_header "Pip Configuration & Diagnostics"
+_pip_help_summary() {
+    ux_info "Usage: pip-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "diagnostics: check-pip | config | file | repo | env"
+    ux_bullet_sub "commands: pip config list | --verbose | view conf | --version"
+    ux_bullet_sub "setup: ./setup.sh (Public | Internal | External)"
+    ux_bullet_sub "repos: Proxy | Internal Repo | DataService Repo"
+    ux_bullet_sub "notes: CA cert | setup.sh managed | symlink"
+    ux_bullet_sub "details: pip-help <section>  (example: pip-help repos)"
+}
 
-    ux_section "Diagnostic Commands"
+_pip_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "diagnostics"
+    ux_bullet_sub "commands"
+    ux_bullet_sub "setup"
+    ux_bullet_sub "repos"
+    ux_bullet_sub "notes"
+}
+
+_pip_help_rows_diagnostics() {
     ux_bullet "check-pip            Run full pip diagnostic"
     ux_bullet "check-pip config     Show pip configuration"
     ux_bullet "check-pip file       pip.conf file check"
     ux_bullet "check-pip repo       Repository connectivity test"
     ux_bullet "check-pip env        Environment variables"
+}
 
-    ux_section "Quick Commands"
+_pip_help_rows_commands() {
     ux_bullet "pip config list                 Show all pip settings"
     ux_bullet "pip config list --verbose       Show pip config files loading"
     ux_bullet "cat \$HOME/.config/pip/pip.conf  View user pip config"
     ux_bullet "pip --version                   Check pip version"
+}
 
-    ux_section "Environment Setup"
+_pip_help_rows_setup() {
     ux_bullet "./setup.sh                      Run setup (choose environment)"
     ux_bullet "               1) Public PC"
     ux_bullet "               2) Internal company PC (proxy + internal repo)"
     ux_bullet "               3) External company PC (VPN)"
+}
 
-    ux_section "Proxy & Repository Info"
+_pip_help_rows_repos() {
     ux_bullet "Proxy:            http://12.26.204.100:8080"
     ux_bullet "Internal Repo:    http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/simple"
     ux_bullet "DataService Repo: http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple"
+}
 
-    ux_section "Important Notes"
+_pip_help_rows_notes() {
     ux_warning "CA certificate: Configured via security.local.sh (REQUESTS_CA_BUNDLE)"
     ux_info "Config files are managed by setup.sh - do not edit manually"
     ux_info "Symlink: ~/.config/pip/pip.conf -> pip/pip.conf.{environment}"
+}
+
+_pip_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_pip_help_section_rows() {
+    case "$1" in
+        diagnostics|diag)
+            _pip_help_rows_diagnostics
+            ;;
+        commands|quick)
+            _pip_help_rows_commands
+            ;;
+        setup|env|environment)
+            _pip_help_rows_setup
+            ;;
+        repos|proxy|repo)
+            _pip_help_rows_repos
+            ;;
+        notes|important)
+            _pip_help_rows_notes
+            ;;
+        *)
+            ux_error "Unknown pip-help section: $1"
+            ux_info "Try: pip-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_pip_help_full() {
+    ux_header "Pip Configuration & Diagnostics"
+
+    _pip_help_render_section "Diagnostic Commands" _pip_help_rows_diagnostics
+    _pip_help_render_section "Quick Commands" _pip_help_rows_commands
+    _pip_help_render_section "Environment Setup" _pip_help_rows_setup
+    _pip_help_render_section "Proxy & Repository Info" _pip_help_rows_repos
+    _pip_help_render_section "Important Notes" _pip_help_rows_notes
+}
+
+pip_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _pip_help_summary
+            ;;
+        --list|list|section|sections)
+            _pip_help_list_sections
+            ;;
+        --all|all)
+            _pip_help_full
+            ;;
+        *)
+            _pip_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # Wrapper function for check_pip.sh diagnostic
@@ -95,49 +173,147 @@ alias check-pip='pip_check'
 
 # NOTE: UX library is loaded by the loader before functions/ — no need to reload here
 
-npm_help() {
-    ux_header "NPM Quick Commands"
+_npm_help_summary() {
+    ux_info "Usage: npm-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "info: npm-v | npm-list | npm-info | npm-search | npm-outdated"
+    ux_bullet_sub "install: npm-i | npm-is | npm-isd | npm-ig"
+    ux_bullet_sub "uninstall: npm-un | npm-ung"
+    ux_bullet_sub "maintenance: npm-update | npm-cache-clean"
+    ux_bullet_sub "config: npm-config"
+    ux_bullet_sub "setup: npminstall | npmuninstall"
+    ux_bullet_sub "cert: crt-help | crtsetup"
+    ux_bullet_sub "troubleshoot: EACCES | nvm conflict | certificate | config mismatch"
+    ux_bullet_sub "details: npm-help <section>  (example: npm-help install)"
+}
 
-    ux_section "Info & Version"
+_npm_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "info"
+    ux_bullet_sub "install"
+    ux_bullet_sub "uninstall"
+    ux_bullet_sub "maintenance"
+    ux_bullet_sub "config"
+    ux_bullet_sub "setup"
+    ux_bullet_sub "cert"
+    ux_bullet_sub "troubleshoot"
+}
+
+_npm_help_rows_info() {
     ux_table_row "npm-v" "npm --version" "Check version"
     ux_table_row "npm-list" "list -g --depth=0" "Global packages"
     ux_table_row "npm-info" "info <pkg>" "Package details"
     ux_table_row "npm-search" "search <keyword>" "Search packages"
     ux_table_row "npm-outdated" "outdated -g" "Check updates"
+}
 
-    ux_section "Install"
+_npm_help_rows_install() {
     ux_table_row "npm-i" "npm install" "Install deps"
     ux_table_row "npm-is" "install --save" "Save prod dep"
     ux_table_row "npm-isd" "install --save-dev" "Save dev dep"
     ux_table_row "npm-ig" "install -g" "Global install"
+}
 
-    ux_section "Uninstall"
+_npm_help_rows_uninstall() {
     ux_table_row "npm-un" "npm uninstall" "Remove dep"
     ux_table_row "npm-ung" "uninstall -g" "Remove global"
+}
 
-    ux_section "Maintenance"
+_npm_help_rows_maintenance() {
     ux_table_row "npm-update" "update -g" "Update global"
     ux_table_row "npm-cache-clean" "cache clean --force" "Clear cache"
+}
 
-    ux_section "Configuration"
+_npm_help_rows_config() {
     ux_table_row "npm-config" "Show current config" "Registry, CA, SSL"
+}
 
-    ux_section "Setup Tools"
+_npm_help_rows_setup() {
     ux_table_row "npminstall" "Install Script" "Install Node/NPM"
     ux_table_row "npmuninstall" "Uninstall Script" "Remove Node/NPM"
+}
 
-    ux_section "Certificate Management"
+_npm_help_rows_cert() {
     ux_info "For CA certificate setup (company proxy/internal network):"
     ux_bullet "Run: ${UX_SUCCESS}crt-help${UX_RESET} for detailed guide"
     ux_bullet "Setup: ${UX_SUCCESS}crtsetup${UX_RESET} to install certificate"
+}
 
-    ux_section "Troubleshooting"
+_npm_help_rows_troubleshoot() {
     ux_bullet "EACCES permission error (npm WARN): npm config set prefix ~/.npm-global"
     ux_bullet "nvm과 npm prefix 충돌: .npmrc 파일의 prefix 라인 제거"
     ux_bullet "Certificate error: Run ${UX_SUCCESS}crt-help${UX_RESET} for CA setup guide"
     ux_bullet "Config mismatch: Run ${UX_SUCCESS}./shell-common/setup.sh${UX_RESET} to reconfigure symlink"
-
     ux_info "Global Path: ~/.npm-global"
+}
+
+_npm_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_npm_help_section_rows() {
+    case "$1" in
+        info|version)
+            _npm_help_rows_info
+            ;;
+        install|i)
+            _npm_help_rows_install
+            ;;
+        uninstall|un)
+            _npm_help_rows_uninstall
+            ;;
+        maintenance|update)
+            _npm_help_rows_maintenance
+            ;;
+        config|configuration)
+            _npm_help_rows_config
+            ;;
+        setup|tools)
+            _npm_help_rows_setup
+            ;;
+        cert|certificate|ca)
+            _npm_help_rows_cert
+            ;;
+        troubleshoot|troubleshooting)
+            _npm_help_rows_troubleshoot
+            ;;
+        *)
+            ux_error "Unknown npm-help section: $1"
+            ux_info "Try: npm-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_npm_help_full() {
+    ux_header "NPM Quick Commands"
+
+    _npm_help_render_section "Info & Version" _npm_help_rows_info
+    _npm_help_render_section "Install" _npm_help_rows_install
+    _npm_help_render_section "Uninstall" _npm_help_rows_uninstall
+    _npm_help_render_section "Maintenance" _npm_help_rows_maintenance
+    _npm_help_render_section "Configuration" _npm_help_rows_config
+    _npm_help_render_section "Setup Tools" _npm_help_rows_setup
+    _npm_help_render_section "Certificate Management" _npm_help_rows_cert
+    _npm_help_render_section "Troubleshooting" _npm_help_rows_troubleshoot
+}
+
+npm_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _npm_help_summary
+            ;;
+        --list|list|section|sections)
+            _npm_help_list_sections
+            ;;
+        --all|all)
+            _npm_help_full
+            ;;
+        *)
+            _npm_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # Helper function to normalize npm config output
@@ -182,28 +358,99 @@ alias npm-help='npm_help'
 
 # --- uv_help (from uv_help.sh) ---
 
-uv_help() {
-    ux_header "UV Quick Commands"
+_uv_help_summary() {
+    ux_info "Usage: uv-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "sync: uvs | uvu | uvd | uv-install"
+    ux_bullet_sub "lock: uvk | uvl | uvc | uvr"
+    ux_bullet_sub "maintenance: uvcheck"
+    ux_bullet_sub "recipes: --all-extras | backend dev | frontend dev"
+    ux_bullet_sub "details: uv-help <section>  (example: uv-help recipes)"
+}
 
-    ux_section "Sync & Install"
+_uv_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "sync"
+    ux_bullet_sub "lock"
+    ux_bullet_sub "maintenance"
+    ux_bullet_sub "recipes"
+}
+
+_uv_help_rows_sync() {
     ux_table_row "uvs" "uv sync" "Sync env & prune (Prod)"
     ux_table_row "uvu" "uv sync --upgrade" "Upgrade deps"
     ux_table_row "uvd" "uv sync --dev" "Dev install"
     ux_table_row "uv-install" "install script" "Install UV tool"
+}
 
-    ux_section "Lock & Export"
+_uv_help_rows_lock() {
     ux_table_row "uvk" "uv lock" "Refresh lockfile"
     ux_table_row "uvl" "uv pip list" "List packages"
     ux_table_row "uvc" "uv pip compile" "Export requirements"
     ux_table_row "uvr" "uv pip sync" "Sync from reqs"
+}
 
-    ux_section "Maintenance"
+_uv_help_rows_maintenance() {
     ux_table_row "uvcheck" "uv pip check" "Verify env"
+}
 
-    ux_section "Recipes"
+_uv_help_rows_recipes() {
     ux_bullet "Install all extras: ${UX_SUCCESS}uv pip sync --all-extras${UX_RESET}"
     ux_bullet "Backend dev:      ${UX_SUCCESS}uv pip sync --extra backend --extra dev${UX_RESET}"
     ux_bullet "Frontend dev:     ${UX_SUCCESS}uv pip sync --extra frontend --extra dev${UX_RESET}"
+}
+
+_uv_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_uv_help_section_rows() {
+    case "$1" in
+        sync|install)
+            _uv_help_rows_sync
+            ;;
+        lock|export)
+            _uv_help_rows_lock
+            ;;
+        maintenance|check)
+            _uv_help_rows_maintenance
+            ;;
+        recipes|recipe)
+            _uv_help_rows_recipes
+            ;;
+        *)
+            ux_error "Unknown uv-help section: $1"
+            ux_info "Try: uv-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_uv_help_full() {
+    ux_header "UV Quick Commands"
+
+    _uv_help_render_section "Sync & Install" _uv_help_rows_sync
+    _uv_help_render_section "Lock & Export" _uv_help_rows_lock
+    _uv_help_render_section "Maintenance" _uv_help_rows_maintenance
+    _uv_help_render_section "Recipes" _uv_help_rows_recipes
+}
+
+uv_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _uv_help_summary
+            ;;
+        --list|list|section|sections)
+            _uv_help_list_sections
+            ;;
+        --all|all)
+            _uv_help_full
+            ;;
+        *)
+            _uv_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # UV Check Wrapper - calls the diagnostic script
@@ -216,40 +463,124 @@ alias check-uv='uv_check'
 
 # --- bun_help (from bun_help.sh) ---
 
-bun_help() {
-    ux_header "Bun Quick Commands"
+_bun_help_summary() {
+    ux_info "Usage: bun-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "install: install-bun | uninstall-bun | bun-v"
+    ux_bullet_sub "packages: bun-i | bun-id | bun-ig | bun-un | bun-update | bun-outdated"
+    ux_bullet_sub "run: bun-run | bunx"
+    ux_bullet_sub "examples: bunx oh-my-opencode | bunx create-next-app"
+    ux_bullet_sub "config: ~/.bunfig.toml | internal vs external"
+    ux_bullet_sub "troubleshoot: not found | registry | SSL"
+    ux_bullet_sub "details: bun-help <section>  (example: bun-help packages)"
+}
 
-    ux_section "Installation"
+_bun_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "install"
+    ux_bullet_sub "packages"
+    ux_bullet_sub "run"
+    ux_bullet_sub "examples"
+    ux_bullet_sub "config"
+    ux_bullet_sub "troubleshoot"
+}
+
+_bun_help_rows_install() {
     ux_table_row "install-bun" "curl .../bun.sh/install" "Install Bun"
     ux_table_row "uninstall-bun" "Remove ~/.bun" "Uninstall Bun"
     ux_table_row "bun-v" "bun --version" "Check version"
+}
 
-    ux_section "Package Management"
+_bun_help_rows_packages() {
     ux_table_row "bun-i" "bun install" "Install deps"
     ux_table_row "bun-id" "install --dev" "Dev dependency"
     ux_table_row "bun-ig" "install --global" "Global install"
     ux_table_row "bun-un" "bun remove" "Remove package"
     ux_table_row "bun-update" "bun update" "Update deps"
     ux_table_row "bun-outdated" "bun outdated" "Check outdated"
+}
 
-    ux_section "Run"
+_bun_help_rows_run() {
     ux_table_row "bun-run" "bun run <script>" "Run package.json script"
     ux_table_row "bunx" "bun x <pkg>" "Run package without install"
+}
 
-    ux_section "Bunx Usage Examples"
+_bun_help_rows_examples() {
     ux_bullet "${UX_INFO}bunx oh-my-opencode install${UX_RESET}  : OMO 설치"
     ux_bullet "${UX_INFO}bunx create-next-app${UX_RESET}         : Next.js 프로젝트 생성"
+}
 
-    ux_section "Configuration"
+_bun_help_rows_config() {
     ux_bullet "Config file  : ${UX_INFO}~/.bunfig.toml${UX_RESET} (dotfiles symlink)"
     ux_bullet "Environments : internal (Samsung registry), external (default)"
+}
 
-    ux_section "Troubleshooting"
+_bun_help_rows_troubleshoot() {
     ux_bullet "bun not found?   : Run ${UX_PRIMARY}install-bun${UX_RESET}"
     ux_bullet "Registry error?  : Check ${UX_PRIMARY}~/.bunfig.toml${UX_RESET} registry setting"
     ux_bullet "SSL error?       : Verify ${UX_PRIMARY}cafile${UX_RESET} path in bunfig.toml"
-
     ux_info "Binary path: ~/.bun/bin"
+}
+
+_bun_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_bun_help_section_rows() {
+    case "$1" in
+        install|installation)
+            _bun_help_rows_install
+            ;;
+        packages|package|pkg)
+            _bun_help_rows_packages
+            ;;
+        run)
+            _bun_help_rows_run
+            ;;
+        examples|bunx)
+            _bun_help_rows_examples
+            ;;
+        config|configuration)
+            _bun_help_rows_config
+            ;;
+        troubleshoot|troubleshooting)
+            _bun_help_rows_troubleshoot
+            ;;
+        *)
+            ux_error "Unknown bun-help section: $1"
+            ux_info "Try: bun-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_bun_help_full() {
+    ux_header "Bun Quick Commands"
+
+    _bun_help_render_section "Installation" _bun_help_rows_install
+    _bun_help_render_section "Package Management" _bun_help_rows_packages
+    _bun_help_render_section "Run" _bun_help_rows_run
+    _bun_help_render_section "Bunx Usage Examples" _bun_help_rows_examples
+    _bun_help_render_section "Configuration" _bun_help_rows_config
+    _bun_help_render_section "Troubleshooting" _bun_help_rows_troubleshoot
+}
+
+bun_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _bun_help_summary
+            ;;
+        --list|list|section|sections)
+            _bun_help_list_sections
+            ;;
+        --all|all)
+            _bun_help_full
+            ;;
+        *)
+            _bun_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias bun-help='bun_help'
