@@ -311,34 +311,105 @@ alias claude-skills='get_claude_skills'
 
 # --- codex_help (from codex_help.sh) ---
 
-codex_help() {
-    ux_header "Codex Quick Commands"
+_codex_help_summary() {
+    ux_info "Usage: codex-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "basic: codex | codex-help | official help | codex-version | codex-yolo"
+    ux_bullet_sub "setup: codex-install | codex-uninstall | codex-status | codex-skills-sync | auto sync"
+    ux_bullet_sub "interactive: codex | codex prompt"
+    ux_bullet_sub "tips: config dir | auth | auto sync env vars"
+    ux_bullet_sub "details: codex-help <section>  (example: codex-help setup)"
+}
 
-    ux_section "Basic Commands"
+_codex_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "basic"
+    ux_bullet_sub "setup"
+    ux_bullet_sub "interactive"
+    ux_bullet_sub "tips"
+}
+
+_codex_help_rows_basic() {
     ux_table_row "codex" "codex" "Base command"
     ux_table_row "codex-help" "codex-help" "Show dotfiles codex commands"
     ux_table_row "Official help" "codex help | --help | -h" "Show CLI help"
     ux_table_row "codex-version" "codex --version" "Check version"
     ux_table_row "codex-yolo" "codex --dangerously-bypass-approvals-and-sandbox" "Bypass guardrails"
+}
 
-    ux_section "Installation & Setup"
+_codex_help_rows_setup() {
     ux_table_row "codex-install" "Install Script" "Install Codex CLI"
     ux_table_row "codex-uninstall" "Uninstall Script" "Remove Codex CLI"
     ux_table_row "codex-status" "Status Check" "Show installation status"
     ux_table_row "codex-skills-sync" "Skills Sync" "Sync skills symlinks"
     ux_table_row "Auto skill sync" "Enabled by default" "Before codex command"
+}
 
-    ux_section "Interactive Mode"
+_codex_help_rows_interactive() {
     ux_table_row "codex" "codex" "Start interactive"
     ux_table_row "codex prompt" "codex prompt" "Run with prompt"
+}
 
-    ux_section "Tips"
+_codex_help_rows_tips() {
     ux_bullet "Config: ~/.codex/ or ~/.config/codex/"
     ux_bullet "Auth: Use 'codex' to authenticate"
     ux_bullet "Auto sync: before codex command + prompt cycle"
     ux_bullet "Disable auto sync: export CODEX_SKILLS_AUTO_SYNC=0"
     ux_bullet "Verbose auto sync: export CODEX_SKILLS_AUTO_SYNC_VERBOSE=1"
     ux_bullet "Auto sync interval(sec): export CODEX_SKILLS_AUTO_SYNC_INTERVAL=5"
+}
+
+_codex_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_codex_help_section_rows() {
+    case "$1" in
+        basic|commands)
+            _codex_help_rows_basic
+            ;;
+        setup|install|installation)
+            _codex_help_rows_setup
+            ;;
+        interactive|run)
+            _codex_help_rows_interactive
+            ;;
+        tips|tip)
+            _codex_help_rows_tips
+            ;;
+        *)
+            ux_error "Unknown codex-help section: $1"
+            ux_info "Try: codex-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_codex_help_full() {
+    ux_header "Codex Quick Commands"
+
+    _codex_help_render_section "Basic Commands" _codex_help_rows_basic
+    _codex_help_render_section "Installation & Setup" _codex_help_rows_setup
+    _codex_help_render_section "Interactive Mode" _codex_help_rows_interactive
+    _codex_help_render_section "Tips" _codex_help_rows_tips
+}
+
+codex_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _codex_help_summary
+            ;;
+        --list|list)
+            _codex_help_list_sections
+            ;;
+        --all|all)
+            _codex_help_full
+            ;;
+        *)
+            _codex_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias codex-help='codex_help'
