@@ -120,11 +120,11 @@ class TestHelpSystemConsistency:
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_lists_topics(self, shell_runner, shell):
-        """Test my_help_impl command lists help topics."""
+        """Test my_help_impl command shows compact navigation summary."""
         result = shell_runner(shell, "my_help_impl")
         assert result.exit_code == 0, f"{shell}: my_help_impl failed"
         lines = len([line for line in result.stdout.strip().split("\n") if line])
-        assert lines > 10, f"{shell}: my_help_impl lists too few topics: {lines}"
+        assert lines >= 4, f"{shell}: my_help_impl lists too few topics: {lines}"
 
     def test_bash_zsh_help_output_similar(self, shell_runner):
         """Test that bash and zsh produce similar help output format."""

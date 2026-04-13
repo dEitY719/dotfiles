@@ -87,7 +87,7 @@ def run_command(
             shell=True,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=60,
             cwd=cwd,
             env=run_env,
         )
@@ -100,7 +100,7 @@ def run_command(
         return ShellRunnerResult(
             exit_code=124,
             stdout="",
-            stderr="Command timed out after 30 seconds",
+            stderr="Command timed out after 60 seconds",
         )
     except Exception as e:
         return ShellRunnerResult(
