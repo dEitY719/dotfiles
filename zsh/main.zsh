@@ -131,6 +131,10 @@ if [ -d "${SHELL_COMMON}/tools/integrations" ]; then
     done
 fi
 
+# Normalize help interfaces after all help providers are sourced
+# (functions + integrations).
+typeset -f apply_help_standard_adapter >/dev/null 2>&1 && apply_help_standard_adapter
+
 # ═══════════════════════════════════════════════════════════════
 # Phase 7: Load Shared Tools - Custom (shell-common/tools/custom/)
 # NOTE: shell-common/tools/custom/ contains executable utility scripts
