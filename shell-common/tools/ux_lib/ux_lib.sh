@@ -273,14 +273,18 @@ ux_progress_dots() {
 # Ask for confirmation (yes/no)
 # Usage: if ux_confirm "Are you sure?" "n"; then ... fi
 # Second argument is default: "y" or "n"
+#
+# Prompts are written to stderr so they remain visible when the caller
+# captures stdout (e.g., inside $(...)). Return value is conveyed via
+# exit code, so no stdout pollution either way.
 ux_confirm() {
     local prompt="$1"
     local default="${2:-n}"
 
     if [ "$default" = "y" ]; then
-        printf "%s❓%s %s [Y/n]: " "${UX_WARNING}" "${UX_RESET}" "$prompt"
+        printf "%s❓%s %s [Y/n]: " "${UX_WARNING}" "${UX_RESET}" "$prompt" >&2
     else
-        printf "%s❓%s %s [y/N]: " "${UX_WARNING}" "${UX_RESET}" "$prompt"
+        printf "%s❓%s %s [y/N]: " "${UX_WARNING}" "${UX_RESET}" "$prompt" >&2
     fi
 
     read -r response
@@ -294,13 +298,18 @@ ux_confirm() {
 
 # Ask for text input with validation
 # Usage: result=$(ux_input "Enter name:" "^[a-zA-Z]+$")
+#
+# The prompt is written to stderr so it remains visible when the caller
+# captures stdout with $(...). The user's validated response is written
+# to stdout — that is the function's return value. Matches bash's own
+# `read -p` convention, which also routes the prompt to stderr.
 ux_input() {
     local prompt="$1"
     local pattern="${2:-.*}"
     local response
 
     while true; do
-        printf "%s❯%s %s " "${UX_INFO}" "${UX_RESET}" "$prompt"
+        printf "%s❯%s %s " "${UX_INFO}" "${UX_RESET}" "$prompt" >&2
         read -r response
 
         if echo "$response" | grep -qE "$pattern"; then
