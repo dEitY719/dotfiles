@@ -24,6 +24,14 @@ _help_std_is_wrapped() {
 
 _help_std_is_guideline_compliant() {
     local func_name="$1"
+
+    # SSOT pattern: presence of paired _<func>_summary helper indicates
+    # the topic has been refactored into native summary/list/full helpers
+    # that the dispatcher delegates to. This avoids redundant wrapping.
+    if _help_std_is_function "_${func_name}_summary"; then
+        return 0
+    fi
+
     local def
     local get_definition_fn='_help_std_get_definition'
     def="$($get_definition_fn "$func_name")" || return 1
