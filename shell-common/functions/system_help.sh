@@ -4,39 +4,117 @@
 
 # --- sys_help (from sys_help.sh) ---
 
-sys_help() {
-    ux_header "System Management Commands"
+_sys_help_summary() {
+    ux_info "Usage: sys-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "process: psgrep | psg | kill9 | psa"
+    ux_bullet_sub "network: ports | myip | localip | ping | check-network | ssh-help"
+    ux_bullet_sub "monitoring: top | meminfo | cpuinfo | diskusage"
+    ux_bullet_sub "apt: update | upgrade | remove | auto-remove"
+    ux_bullet_sub "logs: logs | error | auth"
+    ux_bullet_sub "details: sys-help <section>  (example: sys-help network)"
+}
 
-    ux_section "Process Management"
+_sys_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "process"
+    ux_bullet_sub "network"
+    ux_bullet_sub "monitoring"
+    ux_bullet_sub "apt"
+    ux_bullet_sub "logs"
+}
+
+_sys_help_rows_process() {
     ux_table_row "psgrep" "ps aux | grep <pattern>" "Find process by pattern"
     ux_table_row "psg" "ps aux | grep" "Find process"
     ux_table_row "kill9" "kill -9" "Force kill"
     ux_table_row "psa" "ps aux" "List all processes"
+}
 
-    ux_section "Network"
+_sys_help_rows_network() {
     ux_table_row "ports" "ss -tulanp" "Show open ports"
     ux_table_row "myip" "curl ipecho.net" "Public IP"
     ux_table_row "localip" "hostname -I" "Local IP"
     ux_table_row "ping" "ping -c 5" "Ping (5 times)"
     ux_table_row "check-network" "check-network" "Internet connectivity diagnostics"
     ux_table_row "ssh-help" "ssh-help" "SSH hosts and examples"
+}
 
-    ux_section "Monitoring"
+_sys_help_rows_monitoring() {
     ux_table_row "top" "htop" "Process monitor"
     ux_table_row "meminfo" "free -m" "Memory usage"
     ux_table_row "cpuinfo" "lscpu" "CPU info"
     ux_table_row "diskusage" "df -h" "Disk usage"
+}
 
-    ux_section "Package Management (APT)"
+_sys_help_rows_apt() {
     ux_table_row "update" "apt update" "Update lists"
     ux_table_row "upgrade" "apt upgrade" "Upgrade packages"
     ux_table_row "remove" "apt remove" "Remove package"
     ux_table_row "auto-remove" "apt autoremove" "Remove unused"
+}
 
-    ux_section "Log Viewing"
+_sys_help_rows_logs() {
     ux_table_row "logs" "syslog" "System logs"
     ux_table_row "error" "error.log" "Error logs"
     ux_table_row "auth" "auth.log" "Auth logs"
+}
+
+_sys_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_sys_help_section_rows() {
+    case "$1" in
+        process|proc)
+            _sys_help_rows_process
+            ;;
+        network|net)
+            _sys_help_rows_network
+            ;;
+        monitoring|monitor|mon)
+            _sys_help_rows_monitoring
+            ;;
+        apt|package|packages)
+            _sys_help_rows_apt
+            ;;
+        logs|log)
+            _sys_help_rows_logs
+            ;;
+        *)
+            ux_error "Unknown sys-help section: $1"
+            ux_info "Try: sys-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_sys_help_full() {
+    ux_header "System Management Commands"
+
+    _sys_help_render_section "Process Management" _sys_help_rows_process
+    _sys_help_render_section "Network" _sys_help_rows_network
+    _sys_help_render_section "Monitoring" _sys_help_rows_monitoring
+    _sys_help_render_section "Package Management (APT)" _sys_help_rows_apt
+    _sys_help_render_section "Log Viewing" _sys_help_rows_logs
+}
+
+sys_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _sys_help_summary
+            ;;
+        --list|list)
+            _sys_help_list_sections
+            ;;
+        --all|all)
+            _sys_help_full
+            ;;
+        *)
+            _sys_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias sys-help='sys_help'
