@@ -40,37 +40,115 @@ alias check-rpm='rpm_check'
 
 # --- pip_help (from pip_help.sh) ---
 
-pip_help() {
-    ux_header "Pip Configuration & Diagnostics"
+_pip_help_summary() {
+    ux_info "Usage: pip-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "diagnostics: check-pip | config | file | repo | env"
+    ux_bullet_sub "commands: pip config list | --verbose | view conf | --version"
+    ux_bullet_sub "setup: ./setup.sh (Public | Internal | External)"
+    ux_bullet_sub "repos: Proxy | Internal Repo | DataService Repo"
+    ux_bullet_sub "notes: CA cert | setup.sh managed | symlink"
+    ux_bullet_sub "details: pip-help <section>  (example: pip-help repos)"
+}
 
-    ux_section "Diagnostic Commands"
+_pip_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "diagnostics"
+    ux_bullet_sub "commands"
+    ux_bullet_sub "setup"
+    ux_bullet_sub "repos"
+    ux_bullet_sub "notes"
+}
+
+_pip_help_rows_diagnostics() {
     ux_bullet "check-pip            Run full pip diagnostic"
     ux_bullet "check-pip config     Show pip configuration"
     ux_bullet "check-pip file       pip.conf file check"
     ux_bullet "check-pip repo       Repository connectivity test"
     ux_bullet "check-pip env        Environment variables"
+}
 
-    ux_section "Quick Commands"
+_pip_help_rows_commands() {
     ux_bullet "pip config list                 Show all pip settings"
     ux_bullet "pip config list --verbose       Show pip config files loading"
     ux_bullet "cat \$HOME/.config/pip/pip.conf  View user pip config"
     ux_bullet "pip --version                   Check pip version"
+}
 
-    ux_section "Environment Setup"
+_pip_help_rows_setup() {
     ux_bullet "./setup.sh                      Run setup (choose environment)"
     ux_bullet "               1) Public PC"
     ux_bullet "               2) Internal company PC (proxy + internal repo)"
     ux_bullet "               3) External company PC (VPN)"
+}
 
-    ux_section "Proxy & Repository Info"
+_pip_help_rows_repos() {
     ux_bullet "Proxy:            http://12.26.204.100:8080"
     ux_bullet "Internal Repo:    http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/simple"
     ux_bullet "DataService Repo: http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple"
+}
 
-    ux_section "Important Notes"
+_pip_help_rows_notes() {
     ux_warning "CA certificate: Configured via security.local.sh (REQUESTS_CA_BUNDLE)"
     ux_info "Config files are managed by setup.sh - do not edit manually"
     ux_info "Symlink: ~/.config/pip/pip.conf -> pip/pip.conf.{environment}"
+}
+
+_pip_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_pip_help_section_rows() {
+    case "$1" in
+        diagnostics|diag)
+            _pip_help_rows_diagnostics
+            ;;
+        commands|quick)
+            _pip_help_rows_commands
+            ;;
+        setup|env|environment)
+            _pip_help_rows_setup
+            ;;
+        repos|proxy|repo)
+            _pip_help_rows_repos
+            ;;
+        notes|important)
+            _pip_help_rows_notes
+            ;;
+        *)
+            ux_error "Unknown pip-help section: $1"
+            ux_info "Try: pip-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_pip_help_full() {
+    ux_header "Pip Configuration & Diagnostics"
+
+    _pip_help_render_section "Diagnostic Commands" _pip_help_rows_diagnostics
+    _pip_help_render_section "Quick Commands" _pip_help_rows_commands
+    _pip_help_render_section "Environment Setup" _pip_help_rows_setup
+    _pip_help_render_section "Proxy & Repository Info" _pip_help_rows_repos
+    _pip_help_render_section "Important Notes" _pip_help_rows_notes
+}
+
+pip_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _pip_help_summary
+            ;;
+        --list|list)
+            _pip_help_list_sections
+            ;;
+        --all|all)
+            _pip_help_full
+            ;;
+        *)
+            _pip_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # Wrapper function for check_pip.sh diagnostic
