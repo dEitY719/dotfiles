@@ -79,26 +79,89 @@ show_setup_mode() {
 }
 
 # ============================================================
-# Help function for setup_mode
+# Help function for setup_mode (SSOT pattern)
 # ============================================================
-setup_mode_help() {
-    ux_header "Setup Mode Management"
+_setup_mode_help_summary() {
+    ux_info "Usage: setup-mode-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "overview: tracks PC environment, auto-applies settings"
+    ux_bullet_sub "modes: 1=Public | 2=Internal | 3=External(VPN)"
+    ux_bullet_sub "usage: show-setup-mode | setup-mode-help | setup.sh"
+    ux_bullet_sub "details: setup-mode-help <section>  (example: setup-mode-help modes)"
+}
 
-    ux_section "Overview"
+_setup_mode_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "overview"
+    ux_bullet_sub "modes"
+    ux_bullet_sub "usage"
+}
+
+_setup_mode_help_rows_overview() {
     ux_bullet "Tracks which environment your PC is configured for"
     ux_bullet "Automatically applies environment-specific settings"
     ux_bullet "Stored in: ~/.dotfiles-setup-mode"
+}
 
-    ux_section "Available Modes"
+_setup_mode_help_rows_modes() {
     ux_table_row "Mode 1" "Public PC (Home environment)" "No proxy, no company configs"
     ux_table_row "Mode 2" "Internal company PC (Direct)" "Company proxy, internal repos, CA certs"
     ux_table_row "Mode 3" "External company PC (VPN)" "No proxy, VPN certificate"
+}
 
-    ux_section "Usage"
+_setup_mode_help_rows_usage() {
     ux_table_row "show-setup-mode" "Show current mode"
     ux_table_row "setup-mode-help" "View this help"
     ux_bullet "Reconfigure: ${UX_BOLD}cd ~/dotfiles && ./setup.sh${UX_RESET}"
     ux_bullet "Check proxy: ${UX_BOLD}check-proxy${UX_RESET}"
+}
+
+_setup_mode_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_setup_mode_help_section_rows() {
+    case "$1" in
+        overview|about)
+            _setup_mode_help_rows_overview
+            ;;
+        modes|mode)
+            _setup_mode_help_rows_modes
+            ;;
+        usage|use|commands|cmds)
+            _setup_mode_help_rows_usage
+            ;;
+        *)
+            ux_error "Unknown setup-mode-help section: $1"
+            ux_info "Try: setup-mode-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_setup_mode_help_full() {
+    ux_header "Setup Mode Management"
+    _setup_mode_help_render_section "Overview" _setup_mode_help_rows_overview
+    _setup_mode_help_render_section "Available Modes" _setup_mode_help_rows_modes
+    _setup_mode_help_render_section "Usage" _setup_mode_help_rows_usage
+}
+
+setup_mode_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _setup_mode_help_summary
+            ;;
+        --list|list)
+            _setup_mode_help_list_sections
+            ;;
+        --all|all)
+            _setup_mode_help_full
+            ;;
+        *)
+            _setup_mode_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # ============================================================
