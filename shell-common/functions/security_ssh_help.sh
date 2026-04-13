@@ -127,18 +127,35 @@ alias crt-help='crt_help'
 
 # --- ssh_help (from ssh_help.sh) ---
 
-ssh_help() {
-    ux_header "SSH / SCP Commands"
+_ssh_help_summary() {
+    ux_info "Usage: ssh-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "ssh: ssh <host> | ssh <host> <cmd>"
+    ux_bullet_sub "scp: pull | push"
+    ux_bullet_sub "hosts: registered hosts in ~/.ssh/config"
+    ux_bullet_sub "config: ~/.ssh/config -> dotfiles/ssh/config"
+    ux_bullet_sub "details: ssh-help <section>  (example: ssh-help hosts)"
+}
 
-    ux_section "SSH - Connect & Run"
+_ssh_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "ssh"
+    ux_bullet_sub "scp"
+    ux_bullet_sub "hosts"
+    ux_bullet_sub "config"
+}
+
+_ssh_help_rows_ssh() {
     ux_table_row "ssh <host>" "ssh ssai-dev" "Connect to server"
     ux_table_row "ssh <host> <cmd>" "ssh ssai-dev 'ls /home'" "Run remote command"
+}
 
-    ux_section "SCP - File Transfer"
+_ssh_help_rows_scp() {
     ux_table_row "pull" "scp <host>:<src> <dst>" "Download from server"
     ux_table_row "push" "scp <src> <host>:<dst>" "Upload to server"
+}
 
-    ux_section "Registered Hosts (~/.ssh/config)"
+_ssh_help_rows_hosts() {
     if [ -f "${HOME}/.ssh/config" ]; then
         set -f  # Disable glob expansion to prevent Host * from expanding
         while IFS= read -r line; do
@@ -159,9 +176,63 @@ ssh_help() {
     else
         ux_info "~/.ssh/config not found. Run ./setup.sh to create symlink."
     fi
+}
 
-    ux_section "Config"
+_ssh_help_rows_config() {
     ux_table_row "config file" "~/.ssh/config → dotfiles/ssh/config" "Managed by dotfiles"
+}
+
+_ssh_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_ssh_help_section_rows() {
+    case "$1" in
+        ssh|connect)
+            _ssh_help_rows_ssh
+            ;;
+        scp|transfer)
+            _ssh_help_rows_scp
+            ;;
+        hosts|registered)
+            _ssh_help_rows_hosts
+            ;;
+        config|configuration)
+            _ssh_help_rows_config
+            ;;
+        *)
+            ux_error "Unknown ssh-help section: $1"
+            ux_info "Try: ssh-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_ssh_help_full() {
+    ux_header "SSH / SCP Commands"
+
+    _ssh_help_render_section "SSH - Connect & Run" _ssh_help_rows_ssh
+    _ssh_help_render_section "SCP - File Transfer" _ssh_help_rows_scp
+    _ssh_help_render_section "Registered Hosts (~/.ssh/config)" _ssh_help_rows_hosts
+    _ssh_help_render_section "Config" _ssh_help_rows_config
+}
+
+ssh_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _ssh_help_summary
+            ;;
+        --list|list)
+            _ssh_help_list_sections
+            ;;
+        --all|all)
+            _ssh_help_full
+            ;;
+        *)
+            _ssh_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias ssh-help='ssh_help'
