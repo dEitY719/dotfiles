@@ -18,8 +18,17 @@ _git_help_summary() {
 }
 
 _git_help_list_sections() {
-    ux_info "Git sections"
-    ux_info "basic sync logs upstream branch stash pick special lfs ssh"
+    ux_bullet "sections"
+    ux_bullet_sub "basic"
+    ux_bullet_sub "sync"
+    ux_bullet_sub "logs"
+    ux_bullet_sub "upstream"
+    ux_bullet_sub "branch"
+    ux_bullet_sub "stash"
+    ux_bullet_sub "pick"
+    ux_bullet_sub "special"
+    ux_bullet_sub "lfs"
+    ux_bullet_sub "ssh"
 }
 
 _git_help_rows_basic() {

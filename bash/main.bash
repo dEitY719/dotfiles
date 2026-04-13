@@ -154,6 +154,10 @@ if [ -d "${SHELL_COMMON}/tools/integrations" ]; then
     done
 fi
 
+# Normalize help interfaces after all help providers are sourced
+# (functions + integrations).
+type -t apply_help_standard_adapter &>/dev/null && apply_help_standard_adapter
+
 load_category "projects"
 
 # --- Load bash-specific ENV directory ---
