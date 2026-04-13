@@ -452,36 +452,90 @@ alias dir-help='dir_help'
 
 # --- network_help (from network_help.sh) ---
 
-network_help() {
+_network_help_summary() {
+    ux_info "Usage: network-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "diagnostics: check-network | quick | dns | ping | https | git | apt | pip | curl"
+    ux_bullet_sub "typical: check-network | check-network quick | check-proxy"
+    ux_bullet_sub "checks: DNS | ICMP | HTTPS | git | apt | pip"
+    ux_bullet_sub "notes: ICMP fallback | APT auto-skip | check-proxy"
+    ux_bullet_sub "details: network-help <section>  (example: network-help diagnostics)"
+}
+
+_network_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "diagnostics"
+    ux_bullet_sub "typical"
+    ux_bullet_sub "checks"
+    ux_bullet_sub "notes"
+}
+
+_network_help_rows_diagnostics() {
+    ux_bullet "check-network         Run full network diagnostic"
+    ux_bullet "check-network quick   DNS + HTTPS + git quick check"
+    ux_bullet "check-network dns     DNS resolution test"
+    ux_bullet "check-network ping    ICMP ping test"
+    ux_bullet "check-network https   HTTPS HEAD request test"
+    ux_bullet "check-network git     Git remote access test"
+    ux_bullet "check-network apt     APT repository reachability"
+    ux_bullet "check-network pip     pip repository reachability"
+    ux_bullet "check-network curl    curl GET request test"
+}
+
+_network_help_rows_typical() {
+    ux_bullet "check-network         Verify internet access end-to-end"
+    ux_bullet "check-network quick   Fast sanity check after shell startup"
+    ux_bullet "check-proxy           Diagnose proxy-specific configuration"
+}
+
+_network_help_rows_checks() {
+    ux_bullet "DNS lookup to confirm name resolution"
+    ux_bullet "ICMP ping to detect low-level reachability"
+    ux_bullet "HTTPS and curl requests to validate outbound web access"
+    ux_bullet "git, apt, and pip endpoints for real tool-level access"
+}
+
+_network_help_rows_notes() {
+    ux_info "ICMP ping may fail even when normal web traffic works"
+    ux_info "APT check is skipped automatically on non-APT systems"
+    ux_info "Use check-proxy for proxy variables and proxy.local.sh issues"
+}
+
+_network_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_network_help_section_rows() {
+    case "$1" in
+        diagnostics|diag|commands)
+            _network_help_rows_diagnostics
+            ;;
+        typical|use)
+            _network_help_rows_typical
+            ;;
+        checks|what)
+            _network_help_rows_checks
+            ;;
+        notes|important)
+            _network_help_rows_notes
+            ;;
+        *)
+            ux_error "Unknown network-help section: $1"
+            ux_info "Try: network-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_network_help_full() {
     ux_header "Network Connectivity Diagnostics"
 
     if type ux_section >/dev/null 2>&1; then
-        ux_section "Diagnostic Commands"
-        ux_bullet "check-network         Run full network diagnostic"
-        ux_bullet "check-network quick   DNS + HTTPS + git quick check"
-        ux_bullet "check-network dns     DNS resolution test"
-        ux_bullet "check-network ping    ICMP ping test"
-        ux_bullet "check-network https   HTTPS HEAD request test"
-        ux_bullet "check-network git     Git remote access test"
-        ux_bullet "check-network apt     APT repository reachability"
-        ux_bullet "check-network pip     pip repository reachability"
-        ux_bullet "check-network curl    curl GET request test"
-
-        ux_section "Typical Use"
-        ux_bullet "check-network         Verify internet access end-to-end"
-        ux_bullet "check-network quick   Fast sanity check after shell startup"
-        ux_bullet "check-proxy           Diagnose proxy-specific configuration"
-
-        ux_section "What It Checks"
-        ux_bullet "DNS lookup to confirm name resolution"
-        ux_bullet "ICMP ping to detect low-level reachability"
-        ux_bullet "HTTPS and curl requests to validate outbound web access"
-        ux_bullet "git, apt, and pip endpoints for real tool-level access"
-
-        ux_section "Important Notes"
-        ux_info "ICMP ping may fail even when normal web traffic works"
-        ux_info "APT check is skipped automatically on non-APT systems"
-        ux_info "Use check-proxy for proxy variables and proxy.local.sh issues"
+        _network_help_render_section "Diagnostic Commands" _network_help_rows_diagnostics
+        _network_help_render_section "Typical Use" _network_help_rows_typical
+        _network_help_render_section "What It Checks" _network_help_rows_checks
+        _network_help_render_section "Important Notes" _network_help_rows_notes
     else
         echo "Diagnostic Commands:"
         echo "  check-network       Run full network diagnostic"
@@ -489,6 +543,23 @@ network_help() {
         echo "  check-network ping  ICMP ping test"
         echo "  check-network https HTTPS HEAD request test"
     fi
+}
+
+network_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _network_help_summary
+            ;;
+        --list|list)
+            _network_help_list_sections
+            ;;
+        --all|all)
+            _network_help_full
+            ;;
+        *)
+            _network_help_section_rows "$1"
+            ;;
+    esac
 }
 
 network_check() {
