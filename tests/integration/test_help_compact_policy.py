@@ -173,7 +173,15 @@ class TestGwtHelpCanonicalEntrypoint:
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     @pytest.mark.parametrize(
         "cmd",
-        ["gwt-help", "gwt-help spawn", "gwt-help teardown", "gwt-help --list", "gwt-help --all"],
+        [
+            "gwt-help",
+            "gwt-help spawn",
+            "gwt-help teardown",
+            "gwt-help --list",
+            "gwt-help --all",
+            "gwt-help section",
+            "gwt-help sections",
+        ],
     )
     def test_gwt_help_canonical_commands_work(self, shell_runner, shell, cmd):
         if shell == "bash":
@@ -194,7 +202,17 @@ class TestGwtHelpSotInterface:
     """gwt-help supports list/all forms and reuses section rows in --all output."""
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
-    @pytest.mark.parametrize("cmd", ["gwt_help --list", "gwt_help list", "gwt_help --all", "gwt_help all"])
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "gwt_help --list",
+            "gwt_help list",
+            "gwt_help section",
+            "gwt_help sections",
+            "gwt_help --all",
+            "gwt_help all",
+        ],
+    )
     def test_gwt_help_supports_list_and_all_forms(self, shell_runner, shell, cmd):
         result = shell_runner(shell, cmd)
         assert result.exit_code == 0, f"{shell}: '{cmd}' failed"
