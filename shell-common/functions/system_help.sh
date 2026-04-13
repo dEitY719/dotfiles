@@ -344,16 +344,32 @@ alias du-help='du_help'
 
 # --- dir_help (from dir_help.sh) ---
 
-dir_help() {
-    ux_header "Directory Navigation"
+_dir_help_summary() {
+    ux_info "Usage: dir-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "core: cd-dot | cd-down | cd-work"
+    ux_bullet_sub "windows: cd-wdocu | cd-wobsidian | cd-wdown | cd-wpicture | cd-tilnote | cd-obsidian"
+    ux_bullet_sub "para: mkpara | cd-para | cd-project | cd-area | cd-vault | cd-resource | cd-archive"
+    ux_bullet_sub "copy: cp_wdown"
+    ux_bullet_sub "details: dir-help <section>  (example: dir-help para)"
+}
 
-    ux_section "Core Directories"
+_dir_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "core"
+    ux_bullet_sub "windows"
+    ux_bullet_sub "para"
+    ux_bullet_sub "copy"
+}
+
+_dir_help_rows_core() {
     ux_table_header "Command" "Destination" "Purpose"
     ux_table_row "cd-dot" "\$DOTFILES_ROOT" "Dotfiles repository root"
     ux_table_row "cd-down" "\$HOME/downloads" "Downloads folder"
     ux_table_row "cd-work" "\$HOME/workspace" "Workspace root"
+}
 
-    ux_section "Windows (WSL)"
+_dir_help_rows_windows() {
     ux_table_header "Command" "Destination" "Purpose"
     ux_table_row "cd-wdocu" "Windows Documents" "Access Windows documents"
     ux_table_row "cd-wobsidian" "Windows Obsidian" "Obsidian vault location"
@@ -361,8 +377,9 @@ dir_help() {
     ux_table_row "cd-wpicture" "Windows Pictures" "Photo library"
     ux_table_row "cd-tilnote" "Obsidian TilNote" "TilNote vault"
     ux_table_row "cd-obsidian" "Obsidian vault" "Default vault in WSL"
+}
 
-    ux_section "PARA Method"
+_dir_help_rows_para() {
     ux_table_header "Command" "Destination" "Purpose"
     ux_table_row "mkpara" "para/{archive,area,project,resource}" "Create PARA directories"
     ux_table_row "cd-para" "\$HOME/para" "PARA root"
@@ -371,10 +388,64 @@ dir_help() {
     ux_table_row "cd-vault" "\$HOME/para/area/vault" "Vault under Areas"
     ux_table_row "cd-resource" "\$HOME/para/resource" "Reference materials"
     ux_table_row "cd-archive" "\$HOME/para/archive" "Archived items"
+}
 
-    ux_section "Windows Copy Utility"
+_dir_help_rows_copy() {
     ux_table_header "Command" "Usage" "Purpose"
     ux_table_row "cp_wdown" "cp_wdown [options] <file...>" "Copy from Windows Downloads into WSL (run -h for details)"
+}
+
+_dir_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_dir_help_section_rows() {
+    case "$1" in
+        core)
+            _dir_help_rows_core
+            ;;
+        windows|wsl)
+            _dir_help_rows_windows
+            ;;
+        para)
+            _dir_help_rows_para
+            ;;
+        copy|cp)
+            _dir_help_rows_copy
+            ;;
+        *)
+            ux_error "Unknown dir-help section: $1"
+            ux_info "Try: dir-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_dir_help_full() {
+    ux_header "Directory Navigation"
+
+    _dir_help_render_section "Core Directories" _dir_help_rows_core
+    _dir_help_render_section "Windows (WSL)" _dir_help_rows_windows
+    _dir_help_render_section "PARA Method" _dir_help_rows_para
+    _dir_help_render_section "Windows Copy Utility" _dir_help_rows_copy
+}
+
+dir_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _dir_help_summary
+            ;;
+        --list|list)
+            _dir_help_list_sections
+            ;;
+        --all|all)
+            _dir_help_full
+            ;;
+        *)
+            _dir_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias dir-help='dir_help'
