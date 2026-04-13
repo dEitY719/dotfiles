@@ -9,50 +9,142 @@
 
 # --- claude_help (from claude_help.sh) ---
 
-claude_help() {
-    ux_header "Claude Code - MCP & Workflow Guide"
+_claude_help_summary() {
+    ux_info "Usage: claude-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "mcp: list | get | add | remove"
+    ux_bullet_sub "recommended: Playwright MCP | Sequential Thinking MCP"
+    ux_bullet_sub "setup: clinstall | ensure_jq | claude_init | claude_edit_settings"
+    ux_bullet_sub "sandbox: /sandbox | Auto-allow | pytest, git, npm"
+    ux_bullet_sub "config: settings.json | autoAllow | block paths | block cmds"
+    ux_bullet_sub "statusline: time | model | project | context | cost"
+    ux_bullet_sub "skills: claude-skills"
+    ux_bullet_sub "details: claude-help <section>  (example: claude-help mcp)"
+}
 
-    ux_section "MCP (Model Context Protocol) Commands"
+_claude_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "mcp"
+    ux_bullet_sub "recommended"
+    ux_bullet_sub "setup"
+    ux_bullet_sub "sandbox"
+    ux_bullet_sub "config"
+    ux_bullet_sub "statusline"
+    ux_bullet_sub "skills"
+}
+
+_claude_help_rows_mcp() {
     ux_table_row "claude mcp list" "List installed MCP servers" ""
     ux_table_row "claude mcp get <name>" "Show MCP server details" ""
     ux_table_row "claude mcp add <name> ..." "Add MCP server" ""
     ux_table_row "claude mcp remove <name>" "Remove MCP server" ""
+}
 
-    ux_section "Recommended MCP Servers"
+_claude_help_rows_recommended() {
     ux_bullet "Playwright MCP: Web browser automation"
     ux_bullet "Install: ${UX_SUCCESS}claude mcp add playwright --transport stdio -- npx -y @playwright/mcp@latest${UX_RESET}"
     ux_bullet "Sequential Thinking MCP: Logical analysis"
     ux_bullet "Install: ${UX_SUCCESS}claude mcp add sequential-thinking --transport stdio -- npx -y @modelcontextprotocol/server-sequential-thinking${UX_RESET}"
+}
 
-    ux_section "Setup & Requirements"
+_claude_help_rows_setup() {
     ux_table_row "clinstall" "Install Claude Code CLI" ""
     ux_table_row "ensure_jq" "Install jq (required for statusline)" ""
     ux_table_row "claude_init" "Initialize config & skills" ""
     ux_table_row "claude_edit_settings" "Edit settings.json" ""
+}
 
-    ux_section "Sandbox Mode"
+_claude_help_rows_sandbox() {
     ux_info "Use in Claude conversation: ${UX_SUCCESS}/sandbox${UX_RESET}"
     ux_bullet "Select Auto-allow mode"
     ux_bullet "pytest, git, npm auto-approved"
+}
 
-    ux_section "Configuration"
+_claude_help_rows_config() {
     ux_info "Settings file: ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/settings.json"
     ux_bullet "Sandbox: autoAllowBashIfSandboxed"
     ux_bullet "Auto-allow: pytest, ruff, mypy, tox"
     ux_bullet "Block: .env, ~/.aws, ~/.ssh"
     ux_bullet "Block commands: rm -rf, sudo rm"
+}
 
-    ux_section "Statusline Display"
+_claude_help_rows_statusline() {
     ux_info "Real-time session information in Claude Code status bar"
     ux_bullet "🕐 Time (morning/afternoon/night emoji + YY-MM-DD HH:MM:SS)"
     ux_bullet "🤖 Model (emoji + display name: 🐰 Haiku, 🎼 Sonnet, 🎭 Opus)"
     ux_bullet "📁 Project (folder name + git branch with emoji)"
     ux_bullet "📊 Context usage percentage + weekly percentage"
     ux_bullet "💰 Session cost (Green <\$5, Orange \$5-20, Red >\$20)"
+}
 
-    ux_section "Skills Management"
+_claude_help_rows_skills() {
     ux_table_row "claude-skills" "List available Claude Code skills" ""
     ux_info "Skills location: ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills/"
+}
+
+_claude_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_claude_help_section_rows() {
+    case "$1" in
+        mcp)
+            _claude_help_rows_mcp
+            ;;
+        recommended|servers)
+            _claude_help_rows_recommended
+            ;;
+        setup|install)
+            _claude_help_rows_setup
+            ;;
+        sandbox)
+            _claude_help_rows_sandbox
+            ;;
+        config|configuration)
+            _claude_help_rows_config
+            ;;
+        statusline|status)
+            _claude_help_rows_statusline
+            ;;
+        skills)
+            _claude_help_rows_skills
+            ;;
+        *)
+            ux_error "Unknown claude-help section: $1"
+            ux_info "Try: claude-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_claude_help_full() {
+    ux_header "Claude Code - MCP & Workflow Guide"
+
+    _claude_help_render_section "MCP (Model Context Protocol) Commands" _claude_help_rows_mcp
+    _claude_help_render_section "Recommended MCP Servers" _claude_help_rows_recommended
+    _claude_help_render_section "Setup & Requirements" _claude_help_rows_setup
+    _claude_help_render_section "Sandbox Mode" _claude_help_rows_sandbox
+    _claude_help_render_section "Configuration" _claude_help_rows_config
+    _claude_help_render_section "Statusline Display" _claude_help_rows_statusline
+    _claude_help_render_section "Skills Management" _claude_help_rows_skills
+}
+
+claude_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _claude_help_summary
+            ;;
+        --list|list)
+            _claude_help_list_sections
+            ;;
+        --all|all)
+            _claude_help_full
+            ;;
+        *)
+            _claude_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # Function to list Claude Code skills
