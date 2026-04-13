@@ -416,23 +416,87 @@ alias codex-help='codex_help'
 
 # --- gemini_help (from gemini_help.sh) ---
 
-gemini_help() {
-    ux_header "Gemini CLI Quick Commands"
+_gemini_help_summary() {
+    ux_info "Usage: gemini-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "basic: gg | gflash | gpro | gver | ghelp"
+    ux_bullet_sub "setup: ginstall | guninstall"
+    ux_bullet_sub "tips: web login auth | ghelp for CLI options"
+    ux_bullet_sub "details: gemini-help <section>  (example: gemini-help basic)"
+}
 
-    ux_section "Basic Commands"
+_gemini_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "basic"
+    ux_bullet_sub "setup"
+    ux_bullet_sub "tips"
+}
+
+_gemini_help_rows_basic() {
     ux_table_row "gg" "gcloud gemini" "Base command"
     ux_table_row "gflash" "gemini --model flash" "Use Flash model"
     ux_table_row "gpro" "gemini --model pro" "Use Pro model"
     ux_table_row "gver" "gemini --version" "Check version"
     ux_table_row "ghelp" "gemini --help" "Gemini Help"
+}
 
-    ux_section "Installation & Setup"
+_gemini_help_rows_setup() {
     ux_table_row "ginstall" "Install Script" "Install Gemini CLI"
     ux_table_row "guninstall" "Uninstall Script" "Remove Gemini CLI"
+}
 
-    ux_section "Tips"
+_gemini_help_rows_tips() {
     ux_bullet "Auth via web login (no API key file needed)"
     ux_bullet "Use 'ghelp' for detailed CLI options"
+}
+
+_gemini_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_gemini_help_section_rows() {
+    case "$1" in
+        basic|commands)
+            _gemini_help_rows_basic
+            ;;
+        setup|install|installation)
+            _gemini_help_rows_setup
+            ;;
+        tips|tip)
+            _gemini_help_rows_tips
+            ;;
+        *)
+            ux_error "Unknown gemini-help section: $1"
+            ux_info "Try: gemini-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_gemini_help_full() {
+    ux_header "Gemini CLI Quick Commands"
+
+    _gemini_help_render_section "Basic Commands" _gemini_help_rows_basic
+    _gemini_help_render_section "Installation & Setup" _gemini_help_rows_setup
+    _gemini_help_render_section "Tips" _gemini_help_rows_tips
+}
+
+gemini_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _gemini_help_summary
+            ;;
+        --list|list)
+            _gemini_help_list_sections
+            ;;
+        --all|all)
+            _gemini_help_full
+            ;;
+        *)
+            _gemini_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias gemini-help='gemini_help'
