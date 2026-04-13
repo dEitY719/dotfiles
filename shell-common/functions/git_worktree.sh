@@ -22,8 +22,13 @@ _gwt_help_summary() {
 }
 
 _gwt_help_list_sections() {
-    ux_info "gwt sections"
-    ux_info "add list remove prune spawn teardown"
+    ux_bullet "sections"
+    ux_bullet_sub "add"
+    ux_bullet_sub "list"
+    ux_bullet_sub "remove"
+    ux_bullet_sub "prune"
+    ux_bullet_sub "spawn"
+    ux_bullet_sub "teardown"
 }
 
 _gwt_help_rows_add() {
