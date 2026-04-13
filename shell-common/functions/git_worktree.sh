@@ -114,7 +114,7 @@ gwt_help() {
         ""|-h|--help|help)
             _gwt_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _gwt_help_list_sections
             ;;
         --all|all)
