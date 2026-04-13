@@ -638,7 +638,7 @@ my_help_impl() {
             _my_help_summary
             rc=$?
             ;;
-        --list|list)
+        --list|list|section|sections)
             _my_help_list_sections
             rc=$?
             ;;

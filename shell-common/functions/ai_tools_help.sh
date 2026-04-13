@@ -9,50 +9,142 @@
 
 # --- claude_help (from claude_help.sh) ---
 
-claude_help() {
-    ux_header "Claude Code - MCP & Workflow Guide"
+_claude_help_summary() {
+    ux_info "Usage: claude-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "mcp: list | get | add | remove"
+    ux_bullet_sub "recommended: Playwright MCP | Sequential Thinking MCP"
+    ux_bullet_sub "setup: clinstall | ensure_jq | claude_init | claude_edit_settings"
+    ux_bullet_sub "sandbox: /sandbox | Auto-allow | pytest, git, npm"
+    ux_bullet_sub "config: settings.json | autoAllow | block paths | block cmds"
+    ux_bullet_sub "statusline: time | model | project | context | cost"
+    ux_bullet_sub "skills: claude-skills"
+    ux_bullet_sub "details: claude-help <section>  (example: claude-help mcp)"
+}
 
-    ux_section "MCP (Model Context Protocol) Commands"
+_claude_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "mcp"
+    ux_bullet_sub "recommended"
+    ux_bullet_sub "setup"
+    ux_bullet_sub "sandbox"
+    ux_bullet_sub "config"
+    ux_bullet_sub "statusline"
+    ux_bullet_sub "skills"
+}
+
+_claude_help_rows_mcp() {
     ux_table_row "claude mcp list" "List installed MCP servers" ""
     ux_table_row "claude mcp get <name>" "Show MCP server details" ""
     ux_table_row "claude mcp add <name> ..." "Add MCP server" ""
     ux_table_row "claude mcp remove <name>" "Remove MCP server" ""
+}
 
-    ux_section "Recommended MCP Servers"
+_claude_help_rows_recommended() {
     ux_bullet "Playwright MCP: Web browser automation"
     ux_bullet "Install: ${UX_SUCCESS}claude mcp add playwright --transport stdio -- npx -y @playwright/mcp@latest${UX_RESET}"
     ux_bullet "Sequential Thinking MCP: Logical analysis"
     ux_bullet "Install: ${UX_SUCCESS}claude mcp add sequential-thinking --transport stdio -- npx -y @modelcontextprotocol/server-sequential-thinking${UX_RESET}"
+}
 
-    ux_section "Setup & Requirements"
+_claude_help_rows_setup() {
     ux_table_row "clinstall" "Install Claude Code CLI" ""
     ux_table_row "ensure_jq" "Install jq (required for statusline)" ""
     ux_table_row "claude_init" "Initialize config & skills" ""
     ux_table_row "claude_edit_settings" "Edit settings.json" ""
+}
 
-    ux_section "Sandbox Mode"
+_claude_help_rows_sandbox() {
     ux_info "Use in Claude conversation: ${UX_SUCCESS}/sandbox${UX_RESET}"
     ux_bullet "Select Auto-allow mode"
     ux_bullet "pytest, git, npm auto-approved"
+}
 
-    ux_section "Configuration"
+_claude_help_rows_config() {
     ux_info "Settings file: ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/settings.json"
     ux_bullet "Sandbox: autoAllowBashIfSandboxed"
     ux_bullet "Auto-allow: pytest, ruff, mypy, tox"
     ux_bullet "Block: .env, ~/.aws, ~/.ssh"
     ux_bullet "Block commands: rm -rf, sudo rm"
+}
 
-    ux_section "Statusline Display"
+_claude_help_rows_statusline() {
     ux_info "Real-time session information in Claude Code status bar"
     ux_bullet "🕐 Time (morning/afternoon/night emoji + YY-MM-DD HH:MM:SS)"
     ux_bullet "🤖 Model (emoji + display name: 🐰 Haiku, 🎼 Sonnet, 🎭 Opus)"
     ux_bullet "📁 Project (folder name + git branch with emoji)"
     ux_bullet "📊 Context usage percentage + weekly percentage"
     ux_bullet "💰 Session cost (Green <\$5, Orange \$5-20, Red >\$20)"
+}
 
-    ux_section "Skills Management"
+_claude_help_rows_skills() {
     ux_table_row "claude-skills" "List available Claude Code skills" ""
     ux_info "Skills location: ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills/"
+}
+
+_claude_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_claude_help_section_rows() {
+    case "$1" in
+        mcp)
+            _claude_help_rows_mcp
+            ;;
+        recommended|servers)
+            _claude_help_rows_recommended
+            ;;
+        setup|install)
+            _claude_help_rows_setup
+            ;;
+        sandbox)
+            _claude_help_rows_sandbox
+            ;;
+        config|configuration)
+            _claude_help_rows_config
+            ;;
+        statusline|status)
+            _claude_help_rows_statusline
+            ;;
+        skills)
+            _claude_help_rows_skills
+            ;;
+        *)
+            ux_error "Unknown claude-help section: $1"
+            ux_info "Try: claude-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_claude_help_full() {
+    ux_header "Claude Code - MCP & Workflow Guide"
+
+    _claude_help_render_section "MCP (Model Context Protocol) Commands" _claude_help_rows_mcp
+    _claude_help_render_section "Recommended MCP Servers" _claude_help_rows_recommended
+    _claude_help_render_section "Setup & Requirements" _claude_help_rows_setup
+    _claude_help_render_section "Sandbox Mode" _claude_help_rows_sandbox
+    _claude_help_render_section "Configuration" _claude_help_rows_config
+    _claude_help_render_section "Statusline Display" _claude_help_rows_statusline
+    _claude_help_render_section "Skills Management" _claude_help_rows_skills
+}
+
+claude_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _claude_help_summary
+            ;;
+        --list|list|section|sections)
+            _claude_help_list_sections
+            ;;
+        --all|all)
+            _claude_help_full
+            ;;
+        *)
+            _claude_help_section_rows "$1"
+            ;;
+    esac
 }
 
 # Function to list Claude Code skills
@@ -219,28 +311,46 @@ alias claude-skills='get_claude_skills'
 
 # --- codex_help (from codex_help.sh) ---
 
-codex_help() {
-    ux_header "Codex Quick Commands"
+_codex_help_summary() {
+    ux_info "Usage: codex-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "basic: codex | codex-help | official help | codex-version | codex-yolo"
+    ux_bullet_sub "setup: codex-install | codex-uninstall | codex-status | codex-skills-sync | auto sync"
+    ux_bullet_sub "interactive: codex | codex prompt"
+    ux_bullet_sub "tips: config dir | auth | auto sync env vars"
+    ux_bullet_sub "details: codex-help <section>  (example: codex-help setup)"
+}
 
-    ux_section "Basic Commands"
+_codex_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "basic"
+    ux_bullet_sub "setup"
+    ux_bullet_sub "interactive"
+    ux_bullet_sub "tips"
+}
+
+_codex_help_rows_basic() {
     ux_table_row "codex" "codex" "Base command"
     ux_table_row "codex-help" "codex-help" "Show dotfiles codex commands"
     ux_table_row "Official help" "codex help | --help | -h" "Show CLI help"
     ux_table_row "codex-version" "codex --version" "Check version"
     ux_table_row "codex-yolo" "codex --dangerously-bypass-approvals-and-sandbox" "Bypass guardrails"
+}
 
-    ux_section "Installation & Setup"
+_codex_help_rows_setup() {
     ux_table_row "codex-install" "Install Script" "Install Codex CLI"
     ux_table_row "codex-uninstall" "Uninstall Script" "Remove Codex CLI"
     ux_table_row "codex-status" "Status Check" "Show installation status"
     ux_table_row "codex-skills-sync" "Skills Sync" "Sync skills symlinks"
     ux_table_row "Auto skill sync" "Enabled by default" "Before codex command"
+}
 
-    ux_section "Interactive Mode"
+_codex_help_rows_interactive() {
     ux_table_row "codex" "codex" "Start interactive"
     ux_table_row "codex prompt" "codex prompt" "Run with prompt"
+}
 
-    ux_section "Tips"
+_codex_help_rows_tips() {
     ux_bullet "Config: ~/.codex/ or ~/.config/codex/"
     ux_bullet "Auth: Use 'codex' to authenticate"
     ux_bullet "Auto sync: before codex command + prompt cycle"
@@ -249,48 +359,222 @@ codex_help() {
     ux_bullet "Auto sync interval(sec): export CODEX_SKILLS_AUTO_SYNC_INTERVAL=5"
 }
 
+_codex_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_codex_help_section_rows() {
+    case "$1" in
+        basic|commands)
+            _codex_help_rows_basic
+            ;;
+        setup|install|installation)
+            _codex_help_rows_setup
+            ;;
+        interactive|run)
+            _codex_help_rows_interactive
+            ;;
+        tips|tip)
+            _codex_help_rows_tips
+            ;;
+        *)
+            ux_error "Unknown codex-help section: $1"
+            ux_info "Try: codex-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_codex_help_full() {
+    ux_header "Codex Quick Commands"
+
+    _codex_help_render_section "Basic Commands" _codex_help_rows_basic
+    _codex_help_render_section "Installation & Setup" _codex_help_rows_setup
+    _codex_help_render_section "Interactive Mode" _codex_help_rows_interactive
+    _codex_help_render_section "Tips" _codex_help_rows_tips
+}
+
+codex_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _codex_help_summary
+            ;;
+        --list|list|section|sections)
+            _codex_help_list_sections
+            ;;
+        --all|all)
+            _codex_help_full
+            ;;
+        *)
+            _codex_help_section_rows "$1"
+            ;;
+    esac
+}
+
 alias codex-help='codex_help'
 
 # --- gemini_help (from gemini_help.sh) ---
 
-gemini_help() {
-    ux_header "Gemini CLI Quick Commands"
+_gemini_help_summary() {
+    ux_info "Usage: gemini-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "basic: gg | gflash | gpro | gver | ghelp"
+    ux_bullet_sub "setup: ginstall | guninstall"
+    ux_bullet_sub "tips: web login auth | ghelp for CLI options"
+    ux_bullet_sub "details: gemini-help <section>  (example: gemini-help basic)"
+}
 
-    ux_section "Basic Commands"
+_gemini_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "basic"
+    ux_bullet_sub "setup"
+    ux_bullet_sub "tips"
+}
+
+_gemini_help_rows_basic() {
     ux_table_row "gg" "gcloud gemini" "Base command"
     ux_table_row "gflash" "gemini --model flash" "Use Flash model"
     ux_table_row "gpro" "gemini --model pro" "Use Pro model"
     ux_table_row "gver" "gemini --version" "Check version"
     ux_table_row "ghelp" "gemini --help" "Gemini Help"
+}
 
-    ux_section "Installation & Setup"
+_gemini_help_rows_setup() {
     ux_table_row "ginstall" "Install Script" "Install Gemini CLI"
     ux_table_row "guninstall" "Uninstall Script" "Remove Gemini CLI"
+}
 
-    ux_section "Tips"
+_gemini_help_rows_tips() {
     ux_bullet "Auth via web login (no API key file needed)"
     ux_bullet "Use 'ghelp' for detailed CLI options"
+}
+
+_gemini_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_gemini_help_section_rows() {
+    case "$1" in
+        basic|commands)
+            _gemini_help_rows_basic
+            ;;
+        setup|install|installation)
+            _gemini_help_rows_setup
+            ;;
+        tips|tip)
+            _gemini_help_rows_tips
+            ;;
+        *)
+            ux_error "Unknown gemini-help section: $1"
+            ux_info "Try: gemini-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_gemini_help_full() {
+    ux_header "Gemini CLI Quick Commands"
+
+    _gemini_help_render_section "Basic Commands" _gemini_help_rows_basic
+    _gemini_help_render_section "Installation & Setup" _gemini_help_rows_setup
+    _gemini_help_render_section "Tips" _gemini_help_rows_tips
+}
+
+gemini_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _gemini_help_summary
+            ;;
+        --list|list|section|sections)
+            _gemini_help_list_sections
+            ;;
+        --all|all)
+            _gemini_help_full
+            ;;
+        *)
+            _gemini_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias gemini-help='gemini_help'
 
 # --- litellm_help (from litellm_help.sh) ---
 
-litellm_help() {
-    ux_header "LiteLLM Commands"
+_litellm_help_summary() {
+    ux_info "Usage: litellm-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "basic: llm-start | llm-stop | llm-restart | llm-status | llm-models | llm-test"
+    ux_bullet_sub "info: Path | URL | Key"
+    ux_bullet_sub "details: litellm-help <section>  (example: litellm-help basic)"
+}
 
-    ux_section "Basic Commands"
+_litellm_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "basic"
+    ux_bullet_sub "info"
+}
+
+_litellm_help_rows_basic() {
     ux_table_row "llm-start" "Start Stack" "docker compose up"
     ux_table_row "llm-stop" "Stop Stack" "docker compose down"
     ux_table_row "llm-restart" "Restart" "Stop & Start"
     ux_table_row "llm-status" "Status" "Check health & models"
     ux_table_row "llm-models" "List Models" "Show loaded models"
     ux_table_row "llm-test" "Test Model" "Run basic prompt"
+}
 
-    ux_section "Project Info"
+_litellm_help_rows_info() {
     ux_table_row "Path" "$LITELLM_PROJECT_PATH" ""
     ux_table_row "URL" "$LITELLM_URL" ""
     ux_table_row "Key" "$LITELLM_API_KEY" ""
+}
+
+_litellm_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_litellm_help_section_rows() {
+    case "$1" in
+        basic|commands)
+            _litellm_help_rows_basic
+            ;;
+        info|project)
+            _litellm_help_rows_info
+            ;;
+        *)
+            ux_error "Unknown litellm-help section: $1"
+            ux_info "Try: litellm-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_litellm_help_full() {
+    ux_header "LiteLLM Commands"
+
+    _litellm_help_render_section "Basic Commands" _litellm_help_rows_basic
+    _litellm_help_render_section "Project Info" _litellm_help_rows_info
+}
+
+litellm_help() {
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _litellm_help_summary
+            ;;
+        --list|list|section|sections)
+            _litellm_help_list_sections
+            ;;
+        --all|all)
+            _litellm_help_full
+            ;;
+        *)
+            _litellm_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias litellm-help='litellm_help'
@@ -300,30 +584,85 @@ alias llm-help='litellm_help'
 
 # NOTE: UX library is loaded by the loader before functions/ — no need to reload here
 
+_ollama_help_summary() {
+    ux_info "Usage: ollama-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "auto: auto-detect backend (local vs docker)"
+    ux_bullet_sub "docker: ollama-models | ollama-pull | ollama-rm | ollama-show | logs | stats"
+    ux_bullet_sub "local: ollama-models | ollama-pull | ollama-run | ollama-status | ollama-serve"
+    ux_bullet_sub "status: backend status & API health"
+    ux_bullet_sub "details: ollama-help <section>  (example: ollama-help docker)"
+}
+
+_ollama_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "auto"
+    ux_bullet_sub "docker"
+    ux_bullet_sub "local"
+    ux_bullet_sub "status"
+}
+
+_ollama_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_ollama_help_section_rows() {
+    case "$1" in
+        auto)
+            _ollama_help_auto
+            ;;
+        docker)
+            _ollama_help_docker
+            ;;
+        local|wsl)
+            _ollama_help_local
+            ;;
+        status|backend)
+            _ollama_help_status
+            ;;
+        *)
+            ux_error "Unknown ollama-help section: $1"
+            ux_info "Try: ollama-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_ollama_help_full() {
+    ux_header "Ollama Management (All Backends)"
+
+    _ollama_help_render_section "Backend Status" _ollama_help_status
+    _ollama_help_render_section "Docker Backend" _ollama_help_docker
+    _ollama_help_render_section "Local (WSL) Backend" _ollama_help_local
+}
+
 # Main help function with auto-detection
 ollama_help() {
-    local mode="${1:-auto}"
-
-    case "$mode" in
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _ollama_help_summary
+            ;;
+        --list|list|section|sections)
+            _ollama_help_list_sections
+            ;;
+        --all|all)
+            _ollama_help_full
+            ;;
+        --auto)
+            _ollama_help_auto
+            ;;
         --docker)
             _ollama_help_docker
             ;;
         --local)
             _ollama_help_local
             ;;
-        --status | --backend)
+        --status|--backend)
             _ollama_help_status
             ;;
-        --auto | auto | "")
-            _ollama_help_auto
-            ;;
-        --help | -h)
-            _ollama_help_usage
-            ;;
         *)
-            ux_error "Unknown option: $mode"
-            _ollama_help_usage
-            return 1
+            _ollama_help_section_rows "$1"
             ;;
     esac
 }
@@ -467,3 +806,5 @@ _ollama_help_usage() {
     ux_table_row "--status" "Display current Ollama status"
     ux_table_row "-h, --help" "Show this help"
 }
+
+alias ollama-help='ollama_help'

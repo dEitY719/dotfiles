@@ -177,7 +177,7 @@ git_help() {
         ""|-h|--help|help)
             _git_help_summary
             ;;
-        --list|list)
+        --list|list|section|sections)
             _git_help_list_sections
             ;;
         --all|all)

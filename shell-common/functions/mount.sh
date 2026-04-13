@@ -14,31 +14,84 @@ if ! type ux_bullet >/dev/null 2>&1; then
     [ -f "$_SCRIPT_DIR/../tools/ux_lib/ux_lib.sh" ] && source "$_SCRIPT_DIR/../tools/ux_lib/ux_lib.sh" 2>/dev/null
 fi
 
+# SSOT helpers for mount-help
+_mount_help_summary() {
+    ux_info "Usage: mount-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "description: manage bind mounts for Claude environment"
+    ux_bullet_sub "commands: addmnt | show-mnt | claude-mount-all"
+    ux_bullet_sub "info: per-command --help references"
+    ux_bullet_sub "notes: sudo & sudoers configuration"
+    ux_bullet_sub "details: mount-help <section>  (example: mount-help commands)"
+}
+
+_mount_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "description"
+    ux_bullet_sub "commands"
+    ux_bullet_sub "info"
+    ux_bullet_sub "notes"
+}
+
+_mount_help_rows_description() {
+    ux_info "Manage bind mounts for Claude environment (skills, agents, etc.)"
+}
+
+_mount_help_rows_commands() {
+    ux_bullet "addmnt <source> <target>    Create bind mount"
+    ux_bullet "show-mnt [path]             Display mount status"
+    ux_bullet "claude-mount-all            Mount all Claude directories (skills, agents, docs)"
+}
+
+_mount_help_rows_info() {
+    ux_bullet "addmnt --help       Usage for addmnt command"
+    ux_bullet "show-mnt --help     Usage for show-mnt command"
+}
+
+_mount_help_rows_notes() {
+    ux_warning "Requires sudo for mount operations"
+    ux_info "Configure sudoers for passwordless mounting in /etc/sudoers.d/"
+}
+
+_mount_help_render_section() {
+    ux_section "$1"
+    "$2"
+}
+
+_mount_help_section_rows() {
+    case "$1" in
+        description|desc|about)
+            _mount_help_rows_description
+            ;;
+        commands|cmds|cmd)
+            _mount_help_rows_commands
+            ;;
+        info|more)
+            _mount_help_rows_info
+            ;;
+        notes|note|sudo)
+            _mount_help_rows_notes
+            ;;
+        *)
+            ux_error "Unknown mount-help section: $1"
+            ux_info "Try: mount-help --list"
+            return 1
+            ;;
+    esac
+}
+
+_mount_help_full() {
+    ux_header "Mount Management Commands"
+    _mount_help_render_section "Description" _mount_help_rows_description
+    _mount_help_render_section "Available Commands" _mount_help_rows_commands
+    _mount_help_render_section "For More Information" _mount_help_rows_info
+    _mount_help_render_section "Notes" _mount_help_rows_notes
+}
+
 # Show comprehensive help for mount functions
 # Single Responsibility: Only display mount module help information
 mount_help() {
-    if type ux_header >/dev/null 2>&1; then
-        ux_header "Mount Management Commands"
-
-        ux_section "Description"
-        ux_info "Manage bind mounts for Claude environment (skills, agents, etc.)"
-
-
-        ux_section "Available Commands"
-        ux_bullet "addmnt <source> <target>    Create bind mount"
-        ux_bullet "show-mnt [path]             Display mount status"
-        ux_bullet "claude-mount-all            Mount all Claude directories (skills, agents, docs)"
-
-
-        ux_section "For More Information"
-        ux_bullet "addmnt --help       Usage for addmnt command"
-        ux_bullet "show-mnt --help     Usage for show-mnt command"
-
-
-        ux_warning "Requires sudo for mount operations"
-        ux_info "Configure sudoers for passwordless mounting in /etc/sudoers.d/"
-
-    else
+    if ! type ux_header >/dev/null 2>&1; then
         cat << 'HELP'
 Mount Management Commands
 
@@ -54,7 +107,23 @@ Notes:
   - Requires sudo for mount operations
   - addmnt --help, show-mnt --help for details
 HELP
+        return 0
     fi
+
+    case "${1:-}" in
+        ""|-h|--help|help)
+            _mount_help_summary
+            ;;
+        --list|list|section|sections)
+            _mount_help_list_sections
+            ;;
+        --all|all)
+            _mount_help_full
+            ;;
+        *)
+            _mount_help_section_rows "$1"
+            ;;
+    esac
 }
 
 alias mount-help='mount_help'
