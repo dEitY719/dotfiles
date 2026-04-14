@@ -590,10 +590,37 @@ git_worktree_teardown() {
                 return 1
                 ;;
             *)
-                ux_error "'gwt teardown' is a self-cleanup command (run from inside a worktree)."
-                ux_info "  It does not accept a path argument."
-                ux_info "  To remove a specific worktree by path, use:"
-                ux_info "    gwt remove $1"
+                # Detect whether current pwd is main repo or inside a worktree
+                # so we can tailor the error guidance to the mistake actually made.
+                local _gwt_common _gwt_dir _gwt_in_wt=false _gwt_loc
+                _gwt_common="$(git rev-parse --git-common-dir 2>/dev/null)" || {
+                    ux_error "Not inside a git repository"
+                    return 1
+                }
+                _gwt_dir="$(git rev-parse --git-dir 2>/dev/null)"
+                [ "$_gwt_dir" != "$_gwt_common" ] && _gwt_in_wt=true
+                _gwt_loc="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+                ux_error "'gwt teardown' does not accept a path argument."
+                echo ""
+                if [ "$_gwt_in_wt" = true ]; then
+                    # Scenario B: user is already in a worktree but still typed a path
+                    ux_info "You are already inside a worktree: $_gwt_loc"
+                    ux_info "Drop the path argument and just run:"
+                    echo ""
+                    ux_bullet "gwt teardown"
+                else
+                    # Scenario A: user is in the main repo (most common mistake)
+                    ux_info "You are in:  main repo ($_gwt_loc)"
+                    ux_info "You passed:  $1"
+                    echo ""
+                    ux_warning "'gwt teardown' is SELF-CLEANUP — it tears down the worktree"
+                    ux_warning "you are currently inside (cd into it first, then run)."
+                    echo ""
+                    ux_info "Did you mean:"
+                    ux_bullet "cd \"$1\" && gwt teardown     # full cleanup: remove + sync main + delete branch"
+                    ux_bullet "gwt remove \"$1\"             # remove worktree only (no main sync, no branch delete)"
+                fi
                 return 1
                 ;;
         esac
