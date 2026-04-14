@@ -41,10 +41,13 @@ WARN — mostly workflow but some templates/tables inline
 FAIL — large reference content embedded directly in SKILL.md
 
 **Check 3: Frontmatter Validity**
-Look for: `name` present (colons allowed as namespace separator, e.g. `skill:check`),
-`description` present, only known attributes present.
+Look for: `name` present, `description` present, only known attributes present.
 Known attributes: `name`, `description`, `allowed-tools`, `compatibility`,
 `metadata`, `user-invocable`, `argument-hint`, `disable-model-invocation`, `license`.
+**Naming**: read `references/naming-convention.md` — `category:action` colon
+form is the SSOT convention and reports as PASS, not WARN. Folder/name
+kebab-vs-colon mismatch is also PASS when folder is the kebab form of the
+colon name (e.g., `name: gh:pr` + folder `gh-pr/`).
 PASS — valid | WARN — minor issues | FAIL — missing fields or unknown attributes
 
 **Check 4: References Directory Usage**

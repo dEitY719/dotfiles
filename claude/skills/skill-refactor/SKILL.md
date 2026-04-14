@@ -53,6 +53,10 @@ After confirmation:
 
 **3b. Rewrite SKILL.md**
 - Keep frontmatter unchanged (fix only if frontmatter has issues)
+- **Naming**: never silently rewrite `name: foo:bar` → `foo-bar` to "fix"
+  a VS Code diagnostic. Read `references/naming-convention.md` if the
+  skill uses `category:action` colon form — that is the SSOT convention,
+  preserve it byte-for-byte.
 - Replace extracted blocks with pointer lines:
   `Read references/<filename>.md when <trigger condition>.`
 - Compress step descriptions to action-oriented one-liners
