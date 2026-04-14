@@ -58,5 +58,5 @@ ux_bullet "gwt remove \"$1\"             # remove only"
 
 - **가이드라인**: [`shell-common/tools/ux_lib/UX_GUIDELINES.md`](../../shell-common/tools/ux_lib/UX_GUIDELINES.md) — Color Semantics 섹션
 - **스킬**: [`claude/skills/ux-guidelines/README.md`](../../claude/skills/ux-guidelines/README.md)
-- **구현 참조**: `shell-common/functions/git_worktree.sh:592-624` (fix/gwt-teardown-path-error-ux 브랜치)
+- **구현 참조**: `shell-common/functions/git_worktree.sh` 의 `git_worktree_teardown` 함수 `*)` 분기 — [PR #130](https://github.com/dEitY719/dotfiles/pull/130) 에서 main 에 머지. 라인 번호는 시간이 지나면 바뀔 수 있으므로 함수명으로 찾을 것
 - **ux_lib 함수 정의**: `shell-common/tools/ux_lib/ux_lib.sh:131-181`

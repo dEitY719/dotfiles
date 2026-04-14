@@ -40,10 +40,29 @@ gh api -X POST "repos/OWNER/REPO/issues/N/comments" \
 
 ## 실전 팁
 
-- 코멘트 ID 는 `gh api "repos/OWNER/REPO/pulls/N/comments"` 응답의 `.id` 필드
+- 코멘트 ID 추출 — `--jq` 로 바로 파이프 가능:
+  ```sh
+  gh api "repos/OWNER/REPO/pulls/N/comments" --jq '.[] | {id, user: .user.login, path, line, body}'
+  # 또는 미답변 스레드만 필터
+  gh api "repos/OWNER/REPO/pulls/N/comments" --jq '.[] | select(.in_reply_to_id == null) | .id'
+  ```
 - `pull_request_review_id` 는 리뷰 전체 ID 이지 개별 코멘트 ID 가 **아님** — 혼동 주의
 - 답글은 리뷰어의 언어로 (영어 리뷰 → 영어 답글, 한국어 리뷰 → 한국어 답글)
 - 봇 리뷰도 동일 정책으로 답글을 남김 — 마케팅 메시지도 "Declined: non-actionable" 한 줄 기록해야 감사 이력이 깔끔
+
+## 주의: 리뷰 요약(summary) 답글은 직접 API 가 없음
+
+`/pulls/{n}/reviews` 의 리뷰 바디(gemini-code-assist 가 남기는 "## Code Review" 같은
+전체 요약)에는 **직접 답글 API 가 존재하지 않습니다.** 대응 방법:
+
+1. 요약의 개별 항목이 inline 코멘트로도 존재한다면, 각 inline 스레드에 답글
+   (가장 흔한 경우 — 요약은 자동으로 맥락이 커버됨)
+2. 요약 자체에 actionable 내용이 있고 inline 이 없다면, `/issues/{n}/comments`
+   로 top-level 답글을 남기면서 `> blockquote` 로 요약 발췌를 인용
+3. Non-actionable (마케팅, 인사, 저작권 등) → 간단한 Declined 라벨 한 줄만
+
+이 문서의 "Pattern" 표에서 `/issues/{n}/comments` 를 답글 엔드포인트로 적은
+것이 바로 이 우회 방법입니다.
 
 ## When to use
 

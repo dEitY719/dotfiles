@@ -36,8 +36,9 @@ _git_dir="$(git rev-parse --git-dir 2>/dev/null)"
 [ "$_git_dir" != "$_git_common" ] && _in_worktree=true
 
 # worktree 또는 main repo 의 절대 경로
+# early-exit 을 이미 거쳤으므로 실패하지 않음 — fallback 불필요
 local _toplevel
-_toplevel="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+_toplevel="$(git rev-parse --show-toplevel)"
 ```
 
 ## 실제 출력 예시
