@@ -197,13 +197,15 @@ git_branch_teardown() {
         fi
     fi
 
-    # Upstream check — `[gone]` means remote branch was deleted (PR merge signal)
+    # Upstream check — `[gone]` means remote branch was deleted (PR merge signal).
+    # Use `branch.<name>.remote` config (not `@{u}`) to detect "was ever pushed",
+    # because `@{u}` fails to resolve once the remote-tracking ref is pruned.
     if [ "$force" != true ]; then
-        local upstream_ref upstream_track
-        upstream_ref="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)" || upstream_ref=""
+        local upstream_remote upstream_track
+        upstream_remote="$(git config --get "branch.$branch.remote" 2>/dev/null)"
         upstream_track="$(git for-each-ref --format='%(upstream:track)' "refs/heads/$branch" 2>/dev/null)"
 
-        if [ -z "$upstream_ref" ]; then
+        if [ -z "$upstream_remote" ]; then
             ux_error "Branch '$branch' has no upstream — never pushed?"
             ux_info "Push and open a PR first, or use --force to delete anyway."
             return 1
@@ -211,12 +213,12 @@ git_branch_teardown() {
 
         case "$upstream_track" in
             *gone*)
-                : # expected: upstream deleted after PR merge
+                : # expected: remote branch deleted (PR merged + auto-delete or manual Delete button)
                 ;;
             *)
-                ux_error "Upstream '$upstream_ref' still exists — PR not merged yet?"
+                ux_error "Remote branch '$upstream_remote/$branch' still exists — PR not merged yet?"
                 ux_info "Track status: ${upstream_track:-up-to-date}"
-                ux_info "Fetch first (git fetch --prune) or use --force to override."
+                ux_info "Run 'git fetch --prune' first (refreshes [gone]), or use --force to override."
                 return 1
                 ;;
         esac
