@@ -69,6 +69,26 @@ After implementing changes from reviews:
 2. Update root AGENTS.md if Golden Rules changed
 3. Commit with reference to review item (e.g., "Fix: Issue #3 from abc-review-C")
 
+## Learnings vs Technic vs Memory (Boundary Rules)
+Four knowledge locations have distinct roles. Do not duplicate content — link instead.
+- **`docs/learnings/`**: Short reusable patterns/snippets (50–80 lines target) learned from actual PR/commit experience. Korean by default (for human teammates).
+- **`docs/technic/`**: Verified stack-centric technical docs (hundreds of lines). Full setup + tradeoffs.
+- **`docs/standards/`**: Project SSOTs and decision records.
+- **`memory/` (Claude-private)**: Cross-session context for AI. Entries should use pointers to `docs/learnings/` rather than duplicating content.
+
+## Learnings Reference-Linking Rule
+Every `docs/learnings/*.md` file SHOULD include traceability to its origin:
+- **PR number** (most stable, survives merges): `PR #130`
+- **Commit hash**: for pointing at a specific code example
+- **Issue number**: when related discussion/bug exists
+- **Review comment URL**: when the insight came from a bot/human review
+
+If no such reference is possible (local experiment, conversation-only discovery), omit the links but record the **situation** in the Context section concretely.
+
+## Language Policy for Docs
+- **Human-teammate docs** (learnings/, technic/ narrative, standards/): Korean
+- **AI-instruction docs** (SKILL.md, system prompts, machine-read templates): English
+
 # File Descriptions
 
 ## AGENTS_md_Master_Prompt.md (15,511 bytes) [in docs/archive/]
@@ -99,6 +119,12 @@ Feature-centric documentation bundles:
 - `analysis/` - Discovery, legacy analysis, category breakdowns
 - `planning/` - Roadmaps, phase detail, progress tracking, quick start
 - `requirements/` - REQ and design specification documents
+
+## docs/learnings/ (reusable-pattern knowledge base)
+Short snippets (50–80 lines) of reusable patterns extracted from real PRs/commits.
+- `README.md` - Index + authoring rules + boundary vs technic/standards/memory
+- Per-topic files follow 5-section template: Context / Pattern / Code / When to use / Related
+- See "Learnings Reference-Linking Rule" and "Language Policy for Docs" in Golden Rules above
 
 # Testing Strategy
 
@@ -139,3 +165,4 @@ echo "Archived: Replaced by new-guide.md (2026-01-01)" >> docs/archive/README.md
 - **[Parent Context](../AGENTS.md)** — Project root and TDD protocol
 - **[Bash Documentation](../bash/README.md)** — Detailed bash module docs
 - **[Shell Common](../shell-common/AGENTS.md)** — Shared utilities context
+- **[Learnings](./learnings/README.md)** — Reusable pattern snippets from actual PRs
