@@ -81,3 +81,6 @@ alias hook-check='hook_check'                     # Git hook 설정 진단 (hook
 
 # Git worktree (gwt is a function in functions/git.sh)
 # Usage: gwt add|list|remove|spawn|teardown [args...]
+
+# Git branch teardown (gbr is a function in functions/git_branch.sh)
+# Usage: gbr teardown [--force] [--keep-branch]

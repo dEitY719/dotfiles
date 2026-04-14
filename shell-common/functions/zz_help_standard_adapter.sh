@@ -154,7 +154,7 @@ _help_std_wrap_one() {
     _help_std_define_zsh_dash_function "$alias_name" "$func_name"
 
     case "$func_name" in
-        git_help|gwt_help)
+        git_help|gwt_help|gbr_help)
             alias "${alias_name}=${func_name}" 2>/dev/null || true
             return 0
             ;;
@@ -183,6 +183,7 @@ _help_std_wrap_topics() {
     done <<'EOF'
 git
 gwt
+gbr
 uv
 py
 nvm
