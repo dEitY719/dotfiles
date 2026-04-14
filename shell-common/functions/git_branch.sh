@@ -107,13 +107,26 @@ git_branch_teardown() {
 
     while [ $# -gt 0 ]; do
         case "$1" in
-            -h|--help)
+            -h|--help|help)
                 ux_header "gbr teardown - feature branch cleanup after PR merge"
                 ux_info "Usage: gbr teardown [--force] [--keep-branch]"
+                ux_info ""
+                ux_info "Concept: SELF-CLEANUP on the CURRENT branch."
+                ux_info "  Stand on the branch, run teardown, land on main."
                 ux_info ""
                 ux_info "Options:"
                 ux_info "  --force        delete branch even if upstream still exists or not fully merged"
                 ux_info "  --keep-branch  sync main only, keep the current branch"
+                ux_info ""
+                ux_info "Typical flow (single branch):"
+                ux_bullet "gbr teardown                           # current branch, after PR merge"
+                ux_info ""
+                ux_info "Backlog of N merged PRs (order-independent):"
+                ux_bullet "git fetch --prune"
+                ux_bullet "git checkout <br1> && gbr teardown"
+                ux_bullet "git checkout <br2> && gbr teardown"
+                ux_info ""
+                ux_info "See also: 'gbr-help teardown' for the summary table."
                 return 0
                 ;;
             --force) force=true; shift ;;
