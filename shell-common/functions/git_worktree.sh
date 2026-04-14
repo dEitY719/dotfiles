@@ -593,11 +593,12 @@ git_worktree_teardown() {
                 # Detect whether current pwd is main repo or inside a worktree
                 # so we can tailor the error guidance to the mistake actually made.
                 local _gwt_common _gwt_dir _gwt_in_wt=false _gwt_loc
-                _gwt_common="$(git rev-parse --git-common-dir 2>/dev/null)"
-                if [ -n "$_gwt_common" ]; then
-                    _gwt_dir="$(git rev-parse --git-dir 2>/dev/null)"
-                    [ "$_gwt_dir" != "$_gwt_common" ] && _gwt_in_wt=true
-                fi
+                _gwt_common="$(git rev-parse --git-common-dir 2>/dev/null)" || {
+                    ux_error "Not inside a git repository"
+                    return 1
+                }
+                _gwt_dir="$(git rev-parse --git-dir 2>/dev/null)"
+                [ "$_gwt_dir" != "$_gwt_common" ] && _gwt_in_wt=true
                 _gwt_loc="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
                 ux_error "'gwt teardown' does not accept a path argument."
@@ -617,8 +618,8 @@ git_worktree_teardown() {
                     ux_warning "you are currently inside (cd into it first, then run)."
                     echo ""
                     ux_info "Did you mean:"
-                    ux_bullet "cd $1 && gwt teardown     # full cleanup: remove + sync main + delete branch"
-                    ux_bullet "gwt remove $1             # remove worktree only (no main sync, no branch delete)"
+                    ux_bullet "cd \"$1\" && gwt teardown     # full cleanup: remove + sync main + delete branch"
+                    ux_bullet "gwt remove \"$1\"             # remove worktree only (no main sync, no branch delete)"
                 fi
                 return 1
                 ;;
