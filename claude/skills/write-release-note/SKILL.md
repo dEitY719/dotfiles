@@ -64,7 +64,7 @@ ls docs/release-notes/ 2>/dev/null || ls CHANGELOG* 2>/dev/null
 ### 5. 저장 및 커밋
 
 ```bash
-git add <release-notes-path>
+git add "<release-notes-path>"
 git commit -m "docs: add <version> release notes"
 ```
 

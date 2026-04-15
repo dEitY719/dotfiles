@@ -1,5 +1,7 @@
 # Git Commands for Release Notes
 
+> **전제 조건**: 아래 명령어는 git repository 내부에서 실행되어야 한다. 호출 전 `git rev-parse --show-toplevel >/dev/null 2>&1` 로 확인하거나, 실패 시 사용자에게 "릴리즈 노트 작성은 git repo 안에서 실행해 주세요"로 안내할 것.
+
 ## 앵커 커밋 찾기
 
 ### 1) 태그 기반 (가장 신뢰할 수 있음)
