@@ -45,7 +45,7 @@
 ```bash
 # AI와 대화 후에 중요한 내용을 issue로 등록하고 싶을때
 # 스킬 사용전,
-지금 너와 대화한 내용을 요약해서 현재 repository의 issue로 등록해. label은 enhnacement 로 설정.
+지금 너와 대화한 내용을 요약해서 현재 repository의 issue로 등록해. label은 enhancement 로 설정.
 
 # 스킬 사용후,
 /gh:issue
@@ -90,7 +90,7 @@ claude/skills/gh-pr/SKILL.md 내용을 이해하기 쉽게 핵심 3줄 이내로
 /gh:pr-reply
 ```
 
-claude/skills/gh-reply/SKILL.md 내용을 이해하기 쉽게 핵심 3줄 이내로 요약
+claude/skills/gh-pr-reply/SKILL.md 내용을 이해하기 쉽게 핵심 3줄 이내로 요약
 
 2. visualize 스킬
    `요즘 내가 자주 사용하는 최애 스킬` 입니다.
