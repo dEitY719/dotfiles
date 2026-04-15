@@ -1,21 +1,16 @@
 ---
 name: write:insight
 description: >-
-  Archive a reusable insight from the current conversation as a short Korean
-  learning note under `docs/learnings/<slug>.md`, following this repo's
-  README.md conventions (5-section template, 50–80 lines, source links to
-  PR / commit / file:line). Use when the user runs `/write:insight`,
-  `/write-insight`, or asks "이 내용 learning 으로 정리해줘", "방금 발견한 거
-  learnings 에 남겨", "insight 아카이브해줘", or otherwise wants to capture a
-  concrete pattern, debugging path, or review-driven discovery from the chat.
-  Pulls source material from the live conversation (recent PRs, commits,
-  review threads, repro experiments) rather than asking the user to retype
-  it. Refuses topics that belong in `docs/technic/`, `docs/standards/`,
-  `docs/feature/`, or `claude/skills/` and routes them to the correct home.
-  Do NOT trigger for narrative "삽질" blog posts (use `write-blog-dev-learnings`),
-  formal RCA postmortems (use `write-rca-doc`), or JIRA/PR description drafts
-  (use `write-task-history`) — those write to `~/para/archive/`. This skill
-  writes inside the current repo's `docs/learnings/` and is repo-specific.
+  Archive one reusable insight from the current conversation into
+  `docs/learnings/<slug>.md` as a short Korean note that follows the repo
+  README rules (5 sections, 50-80 lines, and source links to PR/commit/file:line).
+  Use when the user runs `/write:insight` or asks to capture a concrete
+  pattern, debugging path, or review-driven discovery from this chat. Build the
+  note from conversation evidence (PRs, commits, review threads, repro steps)
+  instead of asking the user to restate context. Decline topics that belong in
+  `docs/technic/`, `docs/standards/`, `docs/feature/`, or `claude/skills/`.
+  Do not use this for narrative "삽질" posts (`write-blog-dev-learnings`), formal
+  postmortems (`write-rca-doc`), or JIRA/PR draft summaries (`write-task-history`).
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 ---
 
