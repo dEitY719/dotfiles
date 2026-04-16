@@ -561,6 +561,62 @@ git_worktree_spawn() {
 }
 
 # ============================================================================
+# Internal: check if current HEAD's commits are safe to discard
+# Returns 0 (safe) if: upstream matches, or HEAD is in origin/main,
+# or all patches are already in origin/main (rebase/squash merge).
+# ============================================================================
+_gwt_commits_safe() {
+    local local_rev remote_rev
+    local_rev="$(git rev-parse HEAD)"
+
+    # 1. Upstream tracking branch matches exactly
+    remote_rev="$(git rev-parse '@{u}' 2>/dev/null || echo "no-upstream")"
+    if [ "$remote_rev" != "no-upstream" ] && [ "$local_rev" = "$remote_rev" ]; then
+        return 0
+    fi
+
+    # 2. HEAD is an ancestor of origin/main (fast-forward or true merge)
+    local main_ref="origin/main"
+    git rev-parse --verify --quiet "$main_ref" >/dev/null 2>&1 || main_ref="origin/master"
+    if git merge-base --is-ancestor HEAD "$main_ref" 2>/dev/null; then
+        return 0
+    fi
+
+    # 3. All patches already applied via rebase/squash merge (patch-id comparison)
+    # git cherry marks already-applied commits with '-', unapplied with '+'
+    local unapplied
+    unapplied="$(git cherry "$main_ref" HEAD 2>/dev/null | grep -c '^+' || echo "0")"
+    if [ "$unapplied" = "0" ]; then
+        return 0
+    fi
+
+    # 4. Upstream exists but remote branch was deleted (PR merged + branch auto-deleted)
+    if [ "$remote_rev" = "no-upstream" ]; then
+        # No upstream ever set — could be genuinely unpushed
+        # Check if there are any commits beyond the merge-base with main
+        local ahead
+        ahead="$(git rev-list --count "$main_ref"..HEAD 2>/dev/null || echo "999")"
+        if [ "$ahead" = "0" ]; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# ============================================================================
+# Internal: check if a branch's patches are in target (rebase/squash merge)
+# Usage: _gwt_branch_merged <branch> <target>
+# Returns 0 if all patches in <branch> are already in <target>.
+# ============================================================================
+_gwt_branch_merged() {
+    local branch="$1" target="$2"
+    local unapplied
+    unapplied="$(git cherry "$target" "$branch" 2>/dev/null | grep -c '^+' || echo "0")"
+    [ "$unapplied" = "0" ]
+}
+
+# ============================================================================
 # Worktree teardown — remove worktree, sync main, delete branch, log
 # Usage: git_worktree_teardown [--force] [--keep-branch]
 # ============================================================================
@@ -648,10 +704,10 @@ git_worktree_teardown() {
     fi
 
     # Pre-flight: unpushed commits
-    local local_rev remote_rev
-    local_rev="$(git rev-parse HEAD)"
-    remote_rev="$(git rev-parse '@{u}' 2>/dev/null || echo "no-upstream")"
-    if [ "$remote_rev" != "no-upstream" ] && [ "$local_rev" != "$remote_rev" ]; then
+    # Fetch origin so origin/main is current for merge-base / cherry checks
+    git fetch origin 2>/dev/null || ux_warning "Fetch failed (network?). Merge status check may be stale."
+    # Checks (in order): upstream match → ancestor of origin/main → patch-id (rebase merge)
+    if ! _gwt_commits_safe; then
         if [ "$force" = true ]; then
             ux_warning "Discarding unpushed commits (--force)"
         else
@@ -696,9 +752,14 @@ git_worktree_teardown() {
     if [ "$keep_branch" = true ]; then
         ux_info "Branch kept: $branch (--keep-branch)"
     elif git branch -d "$branch" 2>/dev/null; then
-        : # deleted successfully
+        : # deleted successfully (fast-forward or true merge)
+    elif _gwt_branch_merged "$branch" "$main_branch"; then
+        # Rebase/squash merge: commits are in main but SHAs differ
+        git branch -D "$branch" 2>/dev/null
+        ux_success "Branch deleted (rebase-merged): $branch"
     elif [ "$force" = true ]; then
         git branch -D "$branch" 2>/dev/null
+        ux_success "Branch force-deleted: $branch"
     else
         ux_warning "Branch '$branch' not fully merged. Use --force or --keep-branch."
     fi
