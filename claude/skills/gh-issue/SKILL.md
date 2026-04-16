@@ -5,7 +5,7 @@ description: >-
   Use when the user runs /gh:issue, /gh-issue, or asks to "이 대화 이슈로 등록",
   "chat을 깃허브 이슈로 남겨", "기록용 이슈 만들어". Summarizes the conversation so
   far into a structured issue body (feature request / error analysis / misc),
-  creates it via `gh issue create` on the current repo's origin without asking
+  creates it via `gh issue create` on the target remote's repo without asking
   for confirmation, and prints only the issue number and URL. Do NOT over-
   compress — the issue is reused for PR drafts and blog posts, so preserve
   reasoning, decisions, and concrete details.
@@ -52,12 +52,9 @@ Usage examples:
    upstream  https://github.com/org/repo.git (fetch)
    ```
 
-4. Resolve the GitHub `owner/repo` for the target remote:
-   ```bash
-   gh repo view --json nameWithOwner -q .nameWithOwner <owner/repo-from-url>
-   ```
-   Or parse the remote URL directly — extract `owner/repo` from
-   `https://github.com/<owner>/<repo>.git` or `git@github.com:<owner>/<repo>.git`.
+4. Extract `owner/repo` from the remote URL returned in step 3:
+   - `https://github.com/<owner>/<repo>.git` → `<owner>/<repo>`
+   - `git@github.com:<owner>/<repo>.git` → `<owner>/<repo>`
 
 Store the resolved `owner/repo` as `TARGET_REPO` for use in Step 4.
 
@@ -92,9 +89,6 @@ BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
 # ... write the drafted body to "$BODY" ...
 gh issue create --repo "$TARGET_REPO" --title "<title>" --body-file "$BODY"
 ```
-
-Always pass `--repo "$TARGET_REPO"` so the issue lands on the correct
-repository regardless of which remote is the default.
 
 Do NOT add `--assignee`, `--label`, or `--milestone` unless the user explicitly
 asked. Do NOT ask for confirmation — run it immediately.
