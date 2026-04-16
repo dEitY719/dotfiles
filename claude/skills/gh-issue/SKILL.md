@@ -5,10 +5,12 @@ description: >-
   Use when the user runs /gh:issue, /gh-issue, or asks to "이 대화 이슈로 등록",
   "chat을 깃허브 이슈로 남겨", "기록용 이슈 만들어". Summarizes the conversation so
   far into a structured issue body (feature request / error analysis / misc),
-  creates it via `gh issue create` on the current repo's origin without asking
+  creates it via `gh issue create` on the target remote's repo without asking
   for confirmation, and prints only the issue number and URL. Do NOT over-
   compress — the issue is reused for PR drafts and blog posts, so preserve
   reasoning, decisions, and concrete details.
+  Accepts an optional remote name argument (e.g., `/gh-issue upstream`) to
+  target a different remote's repository instead of origin.
 allowed-tools: Bash, Read, Grep
 ---
 
@@ -16,18 +18,45 @@ allowed-tools: Bash, Read, Grep
 
 ## Role
 
-Convert the current chat into a well-structured GitHub issue on the current
-repo's origin. Execute immediately without confirmation. Print only the issue
+Convert the current chat into a well-structured GitHub issue on the target
+repo. Execute immediately without confirmation. Print only the issue
 number + URL at the end — the user will open GitHub directly.
+
+## Arguments
+
+| Position | Name | Default | Description |
+|----------|------|---------|-------------|
+| 1 | `remote-name` | `origin` | Git remote to target (e.g., `upstream`) |
+
+Usage examples:
+- `/gh-issue` — create issue on `origin`
+- `/gh-issue upstream` — create issue on `upstream` remote's repo
 
 ## Step 1: Detect Repo Context
 
-Run in parallel:
-- `git rev-parse --show-toplevel` — confirm we're in a git repo
-- `gh repo view --json nameWithOwner -q .nameWithOwner` — get owner/repo
+1. `git rev-parse --show-toplevel` — confirm we're in a git repo.
 
-If either fails, stop and tell the user the skill requires a git repo with a
-GitHub remote configured.
+2. Determine the target remote:
+   - If the user passed an argument, use it as remote name.
+   - Otherwise default to `origin`.
+
+3. Validate the remote and resolve owner/repo:
+   ```bash
+   git remote get-url <remote-name>
+   ```
+   If this fails, list available remotes (`git remote -v`) and stop with an
+   error like:
+   ```
+   Error: remote '<remote-name>' not found. Available remotes:
+   origin  https://github.com/user/repo.git (fetch)
+   upstream  https://github.com/org/repo.git (fetch)
+   ```
+
+4. Extract `owner/repo` from the remote URL returned in step 3:
+   - `https://github.com/<owner>/<repo>.git` → `<owner>/<repo>`
+   - `git@github.com:<owner>/<repo>.git` → `<owner>/<repo>`
+
+Store the resolved `owner/repo` as `TARGET_REPO` for use in Step 4.
 
 ## Step 2: Classify the Conversation
 
@@ -58,7 +87,7 @@ issues and concurrent-run collisions), then:
 ```bash
 BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
 # ... write the drafted body to "$BODY" ...
-gh issue create --title "<title>" --body-file "$BODY"
+gh issue create --repo "$TARGET_REPO" --title "<title>" --body-file "$BODY"
 ```
 
 Do NOT add `--assignee`, `--label`, or `--milestone` unless the user explicitly
@@ -78,7 +107,9 @@ directly.
 ## Constraints
 
 - Never use `--assignee @me` or labels unless the user asked.
-- Never create the issue on a different repo than the current `origin`.
+- Always use `--repo "$TARGET_REPO"` — never rely on implicit repo detection.
+- If the user-specified remote does not exist, fail immediately with the list
+  of available remotes. Do not fall back to `origin` silently.
 - Never abbreviate the discussion log to 2–3 bullets — preserve detail.
 - Never ask "should I create it?" — the user already said yes by running the
   skill.
