@@ -23,7 +23,7 @@
 
 ### 팀 Epic → 팀 Story (이미 존재하는 것들)
 
-```
+```text
 [E4] Avatar 7000명 양성
   ├─ [팀 Story] SW Coding Agent 개발 (MAU 40% 달성)
   ├─ [팀 Story] AX - SOC, LSI, Sensor 사업팀 AI 과제 수행
@@ -37,7 +37,7 @@
 **핵심 아이디어**: 팀 과제 기여(조직목표달성)는 기존 팀 Story(SWINNOTEAM-1274)에 연결하고,
 나머지 평가 항목(혁신/개선, 시너지, 역량)은 **파트 독립 Story로 신규 생성**하여 Structure에 추가합니다.
 
-```
+```text
 [E4] Avatar 7000명 양성 (팀 Epic — 이미 존재)
   └─ SWINNOTEAM-1274: Document Agent 개발 (팀 Story — 이미 존재)
       └─ [AIE 파트] 조직목표달성 (P-1)
@@ -85,7 +85,7 @@
 
 **Description**:
 
-```
+```text
 ■ 목적
 AI Enable 파트의 2026년 핵심과제를 OKR 프레임워크로 정의하고,
 팀 Epic [E4: Avatar 7000명 양성]의 달성에 기여한다.
@@ -137,7 +137,7 @@ AI Enable 파트의 2026년 핵심과제를 OKR 프레임워크로 정의하고,
 
 **Description**:
 
-```
+```text
 ■ 제품 개요
 임직원이 사내 AI 앱을 탐색·실행하고, 직접 Prompt + RAG + Tools 기반
 에이전트를 만들어 배포할 수 있는 사내 AI 앱 스토어.
@@ -172,7 +172,7 @@ Agent App과 Service Link App 두 타입을 지원.
 
 **Description**:
 
-```
+```text
 ■ 제품 개요
 임직원이 본인 업무에 맞게 사내 시스템과 연동해서 적극적으로 활용하는
 개인화된 대화형 Agent 시스템. 다른 시스템, Agent와 연계 기능 제공.
@@ -206,7 +206,7 @@ Agent App과 Service Link App 두 타입을 지원.
 
 **Description**:
 
-```
+```text
 ■ 제품 개요
 직무 구분 없이 누구나 쉽게 Agent를 사용해서 데이터를 정리하고,
 문서를 편집하고, 인사이트를 추출한 보고서를 만들 수 있는 문서 특화 범용 Agent.
@@ -242,7 +242,7 @@ SW 직군 외 전체 임직원 대상.
 
 **Description**:
 
-```
+```text
 ■ 제품 개요
 사내 MCP(Model Context Protocol) 서버 마켓플레이스.
 STDIO/HTTP/WebSocket/SSE 등 다양한 transport 지원.
@@ -278,7 +278,7 @@ LLM 연동 플레이그라운드 제공, Agent Skill 메타정보 제공.
 
 **Description**:
 
-```
+```text
 ■ 목적
 파트 내 공통 업무 프로세스를 개선하고,
 업무 효율화를 위한 Tool/AI를 제작하여 팀에 기여한다.
@@ -319,7 +319,7 @@ LLM 연동 플레이그라운드 제공, Agent Skill 메타정보 제공.
 
 **Description**:
 
-```
+```text
 ■ 목적
 타 조직과의 협업을 통해 사업부 전체 성과에 기여하고
 조직 시너지를 극대화한다.
@@ -358,7 +358,7 @@ LLM 연동 플레이그라운드 제공, Agent Skill 메타정보 제공.
 
 **Description**:
 
-```
+```text
 ■ 목적
 파트 구성원의 역량 향상을 체계적으로 관리하여 조직 경쟁력을 강화한다.
 
@@ -396,7 +396,7 @@ LLM 연동 플레이그라운드 제공, Agent Skill 메타정보 제공.
 
 **Description**:
 
-```
+```text
 ■ 목적
 계획되지 않은 리더 지시 업무·임시 과제를 체계적으로 추적하고 대응한다.
 단기(1~3일) 및 중기(1~2주) 범위의 비계획 업무를 본 Story 하위 Task 로 등록.
@@ -451,7 +451,7 @@ P-1~P-4 중 해당 카테고리로 귀속되어 평가됨.
 
 **Description**:
 
-```
+```text
 ■ 목적
 담당 파트원의 2026년 핵심과제를 OKR 프레임워크로 관리하고,
 파트 목표 달성에 기여한다.
@@ -507,7 +507,7 @@ P-1~P-4 중 해당 카테고리로 귀속되어 평가됨.
 
 **Description**:
 
-```
+```text
 ■ 목적
 팀/파트 내 공통 업무를 개선하고,
 필요한 Tool/AI 제작에 기여한다.
@@ -553,7 +553,7 @@ P-1~P-4 중 해당 카테고리로 귀속되어 평가됨.
 
 **Description**:
 
-```
+```text
 ■ 목적
 Confluence/Jira를 활용한 데이터 공유와
 동료의 성공에 적극 기여하여 조직 시너지를 창출한다.
@@ -601,7 +601,7 @@ Confluence/Jira를 활용한 데이터 공유와
 
 **Description**:
 
-```
+```text
 ■ 목적
 개인의 전문 역량을 지속적으로 강화하여 업무 경쟁력을 높인다.
 
@@ -683,7 +683,7 @@ Confluence/Jira를 활용한 데이터 공유와
 
 ### 최종 Structure 트리
 
-```
+```text
 [E4] Avatar 7000명 양성 (팀 Epic — 이미 존재)
 │
 ├─ [팀 Story] SW Coding Agent 개발 (이미 존재)
@@ -746,7 +746,7 @@ Confluence/Jira를 활용한 데이터 공유와
 
 각 파트원 Story 하위에 4월~10월 기간 동안 **5개 Task**를 생성:
 
-```
+```text
 예시) [K1-δ] 조직목표달성 Story 하위:
   - Task 1: [4월] OKR 수립 및 파트장 승인
   - Task 2: [5월] 1차 KPI 중간 점검 및 1:1 feedback
