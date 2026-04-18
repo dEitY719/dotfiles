@@ -72,7 +72,7 @@ _codex_skills_state_file() {
 }
 
 _codex_skills_state_version() {
-    echo "2"
+    echo "3"
 }
 
 _codex_skills_fingerprint() {
@@ -126,15 +126,55 @@ _codex_skills_read_state() {
     head -n 1 "$state_file"
 }
 
-_codex_skills_has_legacy_symlinked_skill_md() {
+_codex_skills_has_legacy_layout() {
     local target_dir
+    local src_root
     local legacy_link
+    local legacy_marker
+    local skill_dir
+    local entry
 
     target_dir="$(_codex_skills_target_dir)"
     [ -d "$target_dir" ] || return 1
 
+    # Old migration marker layout
+    legacy_marker="$(find "$target_dir" -mindepth 2 -maxdepth 2 -type f -name ".dotfiles-skill-source" -print -quit 2>/dev/null)"
+    [ -n "$legacy_marker" ] && return 0
+
+    # Very old layout where SKILL.md itself was symlinked
     legacy_link="$(find "$target_dir" -mindepth 2 -maxdepth 2 -type l -name "SKILL.md" -print -quit 2>/dev/null)"
-    [ -n "$legacy_link" ]
+    [ -n "$legacy_link" ] && return 0
+
+    src_root="$(readlink -f "${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills" 2>/dev/null || true)"
+    [ -n "$src_root" ] || return 1
+
+    # Copy layout heuristic: non-symlink skill dir containing SKILL.md plus symlinked entries to SSOT
+    for skill_dir in "$target_dir"/*; do
+        [ -d "$skill_dir" ] || continue
+        [ -L "$skill_dir" ] && continue
+        [ "$(basename "$skill_dir")" = ".system" ] && continue
+        [ -f "$skill_dir/SKILL.md" ] || continue
+
+        for entry in "$skill_dir"/* "$skill_dir"/.*; do
+            [ -e "$entry" ] || continue
+            case "$(basename "$entry")" in
+                .|..|SKILL.md|.dotfiles-skill-source)
+                    continue
+                    ;;
+            esac
+            if [ -L "$entry" ]; then
+                local entry_target
+                entry_target="$(readlink -f "$entry" 2>/dev/null || true)"
+                case "$entry_target" in
+                    "$src_root"/*)
+                        return 0
+                        ;;
+                esac
+            fi
+        done
+    done
+
+    return 1
 }
 
 _codex_skills_run_sync_script() {
@@ -164,7 +204,7 @@ codex_skills_sync_if_needed() {
     sync_reason="changes"
 
     if [ "$force" -eq 0 ] && [ "$current_signature" = "$previous_signature" ]; then
-        if _codex_skills_has_legacy_symlinked_skill_md; then
+        if _codex_skills_has_legacy_layout; then
             sync_reason="legacy-layout"
         else
             return 0

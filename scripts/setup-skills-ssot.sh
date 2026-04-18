@@ -10,9 +10,9 @@
 #     ~/.config/opencode/skills/ → ~/dotfiles/claude/skills/
 #     ~/.gemini/skills/          → ~/dotfiles/claude/skills/
 #   - Codex 전용 개별 연결: skill 디렉토리는 실제 폴더로 만들고
-#     SKILL.md는 실파일 copy, 나머지 항목(references/, scripts/...)은 symlink
-#     ~/.codex/skills/<skill>/SKILL.md                ← copy
-#     ~/.codex/skills/<skill>/<entry(except SKILL.md)> → ~/dotfiles/claude/skills/<skill>/<entry>
+#     .system 디렉토리는 로컬 보존, 나머지 custom skill 디렉토리는 symlink
+#     ~/.codex/skills/.system                          ← local (codex managed)
+#     ~/.codex/skills/<custom-skill>                   → ~/dotfiles/claude/skills/<custom-skill>
 #
 # ~/.claude/skills 는 claude/setup.sh (bind mount) 가 관리
 
@@ -139,16 +139,21 @@ link_skills_individual() {
     log_info "[$tool] 개별 skill 연결 완료: ${linked}개 신규, ${skipped}개 기존 유지"
 }
 
-# Codex는 symlink된 SKILL.md를 인식하지 못할 수 있어,
-# skill 디렉토리는 실디렉토리로 유지하고 SKILL.md는 copy, 나머지는 symlink 한다.
+# Codex skills 연결:
+# - .system 은 로컬 보존
+# - custom skill 은 디렉토리 symlink (SSOT 직결)
+# - 기존 copy/marker 레이아웃(.dotfiles-skill-source)은 자동 마이그레이션
 # Usage: link_skills_individual_codex <target_dir>
 link_skills_individual_codex() {
     local target_dir="$1"
     local linked=0
+    local unchanged=0
     local migrated=0
     local skipped=0
     local pruned=0
     local prune_skipped=0
+    local source_root
+    source_root="$(readlink -f "$SKILLS_SOURCE")"
 
     mkdir -p "$target_dir"
 
@@ -157,153 +162,136 @@ link_skills_individual_codex() {
 
         local skill_name
         skill_name="$(basename "$skill_path")"
-
-        local skill_target_dir="${target_dir}/${skill_name}"
-        local marker_file="${skill_target_dir}/${CODEX_MANAGED_MARKER}"
-        local source_realpath
-        source_realpath="$(readlink -f "$skill_path")"
-
-        if [ -L "$skill_target_dir" ]; then
-            local current_target
-            current_target="$(readlink -f "$skill_target_dir" 2>/dev/null)"
-            if [ "$current_target" = "$source_realpath" ]; then
-                if [ -e "$skill_target_dir" ] || [ -L "$skill_target_dir" ]; then
-                    rm -f "$skill_target_dir"
-                fi
-                migrated=$((migrated + 1))
-            else
-                log_dim "[codex] 기존 사용자 symlink 보존: $skill_target_dir"
-                skipped=$((skipped + 1))
-                continue
-            fi
-        fi
-
-        if [ -d "$skill_target_dir" ]; then
-            if [ -f "$marker_file" ] && grep -Fqx "$source_realpath" "$marker_file"; then
-                :
-            elif [ -f "$marker_file" ]; then
-                printf "%s\n" "$source_realpath" > "$marker_file"
-            elif [ -z "$(ls -A "$skill_target_dir" 2>/dev/null)" ]; then
-                printf "%s\n" "$source_realpath" > "$marker_file"
-            else
-                log_dim "[codex] 기존 디렉토리 보존: $skill_target_dir"
-                skipped=$((skipped + 1))
-                continue
-            fi
-        else
-            mkdir -p "$skill_target_dir"
-            printf "%s\n" "$source_realpath" > "$marker_file"
-        fi
-
-        local entry_path
-        for entry_path in "$skill_path"* "$skill_path".*; do
-            [ -e "$entry_path" ] || continue
-
-            local entry_name
-            entry_name="$(basename "$entry_path")"
-            if [ "$entry_name" = "." ] || [ "$entry_name" = ".." ]; then
-                continue
-            fi
-
-            local entry_target="${skill_target_dir}/${entry_name}"
-
-            if [ "$entry_name" = "SKILL.md" ]; then
-                if [ -L "$entry_target" ]; then
-                    rm -f "$entry_target"
-                elif [ -e "$entry_target" ] && [ ! -f "$entry_target" ]; then
-                    log_warning "[codex] SKILL.md 엔트리 보존(일반 파일 아님): $entry_target"
-                    continue
-                fi
-
-                if [ -f "$entry_target" ] && cmp -s "$entry_path" "$entry_target"; then
-                    continue
-                fi
-
-                cp "$entry_path" "$entry_target" || {
-                    log_error "[codex] SKILL.md copy 실패: $entry_target"
-                    continue
-                }
-                continue
-            fi
-
-            local entry_source_realpath
-            entry_source_realpath="$(readlink -f "$entry_path")"
-
-            if [ -L "$entry_target" ]; then
-                local current_entry_target
-                current_entry_target="$(readlink -f "$entry_target" 2>/dev/null)"
-                if [ "$current_entry_target" = "$entry_source_realpath" ]; then
-                    continue
-                fi
-                rm "$entry_target"
-            elif [ -e "$entry_target" ] || [ -L "$entry_target" ]; then
-                log_dim "[codex] 기존 엔트리 보존: $entry_target"
-                continue
-            fi
-
-            ln -s "$entry_path" "$entry_target" || {
-                log_error "[codex] skill 엔트리 symlink 생성 실패: $entry_target"
-                continue
-            }
-        done
-
-        if [ -e "${skill_target_dir}/SKILL.md" ]; then
-            linked=$((linked + 1))
-        else
-            log_warning "[codex] SKILL.md 미연결: $skill_target_dir"
-        fi
-    done
-
-    local existing_skill_dir
-    for existing_skill_dir in "$target_dir"/*/; do
-        [ -d "$existing_skill_dir" ] || continue
-
-        local existing_name
-        existing_name="$(basename "$existing_skill_dir")"
-        if [ "$existing_name" = ".system" ]; then
+        if [ "$skill_name" = ".system" ]; then
             continue
         fi
 
-        local existing_marker
-        existing_marker="${existing_skill_dir%/}/${CODEX_MANAGED_MARKER}"
-        [ -f "$existing_marker" ] || continue
+        local skill_target="${target_dir}/${skill_name}"
+        local source_realpath
+        source_realpath="$(readlink -f "$skill_path")"
+
+        if [ -L "$skill_target" ]; then
+            local current_target
+            current_target="$(readlink -f "$skill_target" 2>/dev/null || true)"
+            if [ "$current_target" = "$source_realpath" ]; then
+                unchanged=$((unchanged + 1))
+                continue
+            fi
+
+            log_dim "[codex] 기존 사용자 symlink 보존: $skill_target"
+            skipped=$((skipped + 1))
+            continue
+        fi
+
+        if [ -e "$skill_target" ] && [ ! -d "$skill_target" ]; then
+            log_warning "[codex] 기존 엔트리 보존(디렉토리 아님): $skill_target"
+            skipped=$((skipped + 1))
+            continue
+        fi
+
+        if [ -d "$skill_target" ]; then
+            local marker_file="${skill_target}/${CODEX_MANAGED_MARKER}"
+            local can_migrate=0
+            local has_user_data=0
+
+            if [ -f "$marker_file" ]; then
+                can_migrate=1
+            else
+                local existing_entry
+                for existing_entry in "${skill_target}"/* "${skill_target}"/.*; do
+                    [ -e "$existing_entry" ] || continue
+                    local existing_entry_name
+                    existing_entry_name="$(basename "$existing_entry")"
+                    if [ "$existing_entry_name" = "." ] || [ "$existing_entry_name" = ".." ]; then
+                        continue
+                    fi
+                    if [ "$existing_entry_name" = "SKILL.md" ] && [ -f "$existing_entry" ]; then
+                        can_migrate=1
+                        continue
+                    fi
+                    if [ -L "$existing_entry" ]; then
+                        local existing_entry_target
+                        existing_entry_target="$(readlink -f "$existing_entry" 2>/dev/null || true)"
+                        case "$existing_entry_target" in
+                            "$source_realpath"/*)
+                                can_migrate=1
+                                continue
+                                ;;
+                        esac
+                    fi
+                    has_user_data=1
+                    break
+                done
+            fi
+
+            if [ "$has_user_data" -eq 1 ] || [ "$can_migrate" -eq 0 ]; then
+                log_dim "[codex] 기존 디렉토리 보존: $skill_target"
+                skipped=$((skipped + 1))
+                continue
+            fi
+
+            rm -rf "$skill_target" || {
+                log_error "[codex] 기존 디렉토리 제거 실패: $skill_target"
+                skipped=$((skipped + 1))
+                continue
+            }
+            migrated=$((migrated + 1))
+        fi
+
+        ln -s "$skill_path" "$skill_target" || {
+            log_error "[codex] skill symlink 생성 실패: $skill_target"
+            continue
+        }
+        linked=$((linked + 1))
+    done
+
+    local existing_skill_entry
+    for existing_skill_entry in "$target_dir"/*; do
+        [ -e "$existing_skill_entry" ] || [ -L "$existing_skill_entry" ] || continue
+
+        local existing_name
+        existing_name="$(basename "$existing_skill_entry")"
+        if [ "$existing_name" = ".system" ]; then
+            continue
+        fi
 
         if [ -d "${SKILLS_SOURCE}/${existing_name}" ]; then
             continue
         fi
 
-        local has_nonsymlink=0
-        local existing_entry
-        for existing_entry in "${existing_skill_dir%/}"/* "${existing_skill_dir%/}"/.*; do
-            [ -e "$existing_entry" ] || continue
-            local existing_entry_name
-            existing_entry_name="$(basename "$existing_entry")"
-            if [ "$existing_entry_name" = "." ] || [ "$existing_entry_name" = ".." ] || [ "$existing_entry_name" = "$CODEX_MANAGED_MARKER" ]; then
-                continue
-            fi
-            if [ "$existing_entry_name" = "SKILL.md" ] && [ -f "$existing_entry" ]; then
-                continue
-            fi
-            if [ ! -L "$existing_entry" ]; then
-                has_nonsymlink=1
-                break
-            fi
-        done
+        if [ -L "$existing_skill_entry" ]; then
+            local stale_target
+            stale_target="$(readlink -f "$existing_skill_entry" 2>/dev/null || true)"
+            case "$stale_target" in
+                "$source_root"/*)
+                    rm -f "$existing_skill_entry" || {
+                        log_error "[codex] stale skill 제거 실패: $existing_skill_entry"
+                        continue
+                    }
+                    pruned=$((pruned + 1))
+                    continue
+                    ;;
+            esac
 
-        if [ "$has_nonsymlink" -eq 1 ]; then
-            log_warning "[codex] stale skill 보존(사용자 데이터 감지): ${existing_skill_dir%/}"
+            log_warning "[codex] stale skill symlink 보존(사용자 데이터 감지): $existing_skill_entry"
             prune_skipped=$((prune_skipped + 1))
             continue
         fi
 
-        rm -rf "${existing_skill_dir%/}" || {
-            log_error "[codex] stale skill 제거 실패: ${existing_skill_dir%/}"
+        if [ -d "$existing_skill_entry" ] && [ -f "${existing_skill_entry}/${CODEX_MANAGED_MARKER}" ]; then
+            rm -rf "$existing_skill_entry" || {
+                log_error "[codex] stale managed dir 제거 실패: $existing_skill_entry"
+                continue
+            }
+            pruned=$((pruned + 1))
             continue
-        }
-        pruned=$((pruned + 1))
+        fi
+
+        log_warning "[codex] stale skill 보존(사용자 데이터 감지): $existing_skill_entry"
+        prune_skipped=$((prune_skipped + 1))
     done
 
-    log_info "[codex] skill 연결 완료: ${linked}개 준비, ${migrated}개 마이그레이션, ${skipped}개 기존 유지, ${pruned}개 정리, ${prune_skipped}개 보존"
+    log_info "[codex] skill 연결 완료: ${linked}개 신규, ${unchanged}개 유지, ${migrated}개 마이그레이션, ${skipped}개 보존, ${pruned}개 정리, ${prune_skipped}개 stale 보존"
 }
 
 # --- Main ---
@@ -323,7 +311,7 @@ else
     link_skills_dir "opencode" "$OPENCODE_SKILLS"
 fi
 
-# 2. Codex: skill 디렉토리는 실디렉토리, 내부 엔트리만 symlink (.system 보존)
+# 2. Codex: .system 보존 + custom skill 디렉토리 symlink
 CODEX_HOME_LIST="$(collect_codex_homes)"
 if [ -z "$CODEX_HOME_LIST" ]; then
     log_warning "Codex 설정 디렉토리가 없습니다. 건너뜁니다: ~/.codex 또는 ~/.config/codex"
@@ -382,9 +370,15 @@ verify_link() {
         count=$(find "$path" -maxdepth 1 -type l 2>/dev/null | wc -l)
         log_dim "✓ [$tool] $path (개별 symlink: ${count}개)"
     else
-        local count
-        count=$(find "$path" -mindepth 2 -maxdepth 2 -name "SKILL.md" 2>/dev/null | wc -l)
-        log_dim "✓ [$tool] $path (SKILL.md 감지: ${count}개)"
+        local link_count
+        local system_state
+        link_count=$(find "$path" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l)
+        if [ -d "$path/.system" ]; then
+            system_state="present"
+        else
+            system_state="missing"
+        fi
+        log_dim "✓ [$tool] $path (custom symlink: ${link_count}개, .system: ${system_state})"
     fi
 }
 
