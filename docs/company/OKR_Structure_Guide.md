@@ -87,10 +87,10 @@ AIE-{letter}   N=1..5   n=1..4
 | 1 | 파트 Epic | `[AIE M&V]` | `[AIE M&V] 임직원이 체감하는 AI 효용성` | 1 |
 | 2 | 파트 Story | `[AIE O-N]` | `[AIE O-2] 2026 혁신/개선업무` | 5 (N=1..5) |
 | 3 | 파트 제품 Story | `[AIE O-1 K-n]` | `[AIE O-1 K-1] SLSI Agent App Store` | 4 (n=1..4) |
-| 4 | 파트원 M-1 Story | `[AIE-{letter} O-1 K-n]` | `[AIE-δ O-1 K-1] 2026 조직목표달성` | 9 (인당 1개, 담당 제품 n) |
-| 5 | 파트원 M-2~M-4 Story | `[AIE-{letter} O-N]` (N=2..4) | `[AIE-δ O-2] 2026 혁신/개선업무` | 27 (9명 × 3개) |
+| 4 | 파트원 O-1 Story | `[AIE-{letter} O-1 K-n]` | `[AIE-δ O-1 K-1] 2026 조직목표달성` | 9 (인당 1개, 담당 제품 n) |
+| 5 | 파트원 O-2~O-4 Story | `[AIE-{letter} O-N]` (N=2..4) | `[AIE-δ O-2] 2026 혁신/개선업무` | 27 (9명 × 3개) |
 
-합계 **46개** — Epic 1 + 파트 Story 5 + 제품 Story 4 + 파트원 Story 36 (M-1: 9 + M-2~4: 27). 수명업무(O-5) 는 **파트 Story 한 개만** 존재하고 파트원 개별 Story 는 없음 — Task 만 동적 생성됩니다.
+합계 **46개** — Epic 1 + 파트 Story 5 + 제품 Story 4 + 파트원 Story 36 (O-1: 9 + O-2~O-4: 27). 수명업무(O-5) 는 **파트 Story 한 개만** 존재하고 파트원 개별 Story 는 없음 — Task 만 동적 생성됩니다.
 
 > **근거 문서**: PR [#147](https://github.com/dEitY719/dotfiles/pull/147) — `[AIE 파트]` 공통 prefix 의 가독성 문제를 해결하기 위해 OKR 업계 표준(`O` = Objective) 을 도입, 동시에 향후 KR 레벨(`[AIE O-1 KR-1.1]`) 확장 여지까지 확보.
 
