@@ -1,8 +1,70 @@
 # 파트 독립 영역 Structure — Paste-Ready JIRA Stories
 
-AI Enable 파트의 **파트 레벨 Story (P-1..P-4)** 및 **핵심제품 Story (K-1..K-4)**. 총 8개, letter 치환 불필요.
+AI Enable 파트의 **파트 Epic (PE-1)**, **파트 레벨 Story (P-1..P-5)**, **핵심제품 Story (K-1..K-4)**. PE-1 은 P-Story 들의 상위 Epic.
 
-각 Story 는 `### Summary` / `### Parent / 팀 Epic 연결` / `### Description` 3부분 — JIRA 티켓 생성 시 각 섹션의 코드 블록을 통째로 복사.
+각 Epic/Story 는 `### Summary` / `### Parent / 팀 Epic 연결` / `### Description` 3부분 — JIRA 티켓 생성 시 각 섹션의 코드 블록을 통째로 복사.
+
+---
+
+## PE-1 파트 Epic — 임직원 AI 효용성 체감 및 시장 확산
+
+> 파트 미션·비전을 담는 최상위 Epic. P-1~P-5 및 K-1~K-4 Story 의 **나침반(North Star)** 역할.
+
+### Summary
+```text
+[AIE 파트 Epic] 임직원이 체감하는 AI 효용성 — 현업 수요 중심 AI 제품 라인업 구축
+```
+
+### Parent / 팀 Epic 연결
+파트 독립 영역 최상위 Epic — 팀 Epic(E1~E4)과 병렬. 하위에 P-1~P-5, K-1~K-4 Story 배치.
+
+### Description
+```text
+■ 미션 (Mission)
+임직원들이 개발 업무에서 AI 의 효용성을 체감하는 것.
+
+■ 비전 (Vision)
+우리가 가진 기술과 능력이 세상의 빛을 보기 위해서는 고객을 찾아 시장으로 가야 한다.
+창업자의 흔한 실수는 자신이 관심을 가지는 문제에만 중점을 두는 것이며,
+그보다 중요한 것은 시장의 규모다.
+
+■ 에픽 배경
+- 공급자(개발자) 중심 사고에서 시장(임직원)·효용 중심 사고로 전환
+- 단순 기술 과시형 프로젝트 지양, 수요(Market Demand)가 명확한 제품에 집중
+- "고맙다"는 인사가 아닌, 데이터로 증명되는 체감·확산 지표(MAU, 절감 MM)로 성과 측정
+- SSOT 기반 운영 — 모든 제품의 효용성 지표는 통합 관리, 중복·분산 금지
+
+■ 핵심 전략
+1. Customer-Centric — 개발자가 만들고 싶은 기능이 아닌, 현업이 고통받는 지점을 해결
+2. Market-Size First — 소수용 툴보다 전사 임직원이 사용할 범용 가치에 우선순위
+3. Measurable Impact — "체감"을 정성 평가가 아닌 정량 지표(MAU·세션·자동화 건수)로 증명
+4. SSOT 운영 — 효용성 지표·KPI 를 통합 관리, 제품 간 중복·분산 금지
+
+■ 하위 Story 구조
+- P-1 조직목표달성 (50%) — OKR 기반 파트 핵심과제
+  └ K-1 SLSI Agent App Store — 임직원 참여형 AI 앱 생태계
+  └ K-2 SLSI Alpha Agent — 사내 시스템 연동 개인화 Agent
+  └ K-3 SLSI Cowork — 비SW 직군 포함 문서 특화 범용 Agent
+  └ K-4 MCP/Skill Hub — 고품질 Skill 공유 및 BP 전파
+- P-2 혁신/개선업무 (20%) — 프로세스 개선 및 AI Tool 제작
+- P-3 조직시너지 창출 (20%) — 타 조직 협업 및 파트 간 시너지
+- P-4 부서원역량강화 (10%) — 파트원 역량 개발·SCI 관리·기술 지식 공유
+- P-5 수명업무 (0%, Tracking-only) — 비계획 지시 업무 추적 버킷
+
+■ 성공 기준 (North Star Metrics)
+- 체감 지표 : 사용자 만족도(NPS), 재방문율, 평균 세션 시간
+- 확산 지표 : MAU / DAU, 등록 앱·Skill 수, 연동 사내 시스템 수
+- 가치 지표 : 업무 절감 MM, 자동화 건수, 사업부 기여도
+- 품질 지표 : BP 확산률, Skill·MCP 재사용률
+
+■ 자문 기준 (Guiding Questions)
+- 우리는 지금 정말 시장(임직원)이 원하는 것을 만들고 있는가?
+- 이 기능은 "개발자가 재미있는 문제"인가, "현업이 고통받는 문제"인가?
+- 성공 여부를 "고맙다" 대신 어떤 숫자로 증명할 것인가?
+
+■ 기간
+2026.04 ~ 2026.10
+```
 
 ---
 
