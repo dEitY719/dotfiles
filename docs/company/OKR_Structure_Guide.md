@@ -6,7 +6,8 @@
 > **관련 문서**:
 > - 상세 스펙: `JIRA_Story_draft_2026.md`
 > - 붙여넣기용: `paste_ready/` (개인별 `AIE-{letter}.md`)
-> - 코드 ↔ 실명 매핑 (PL 전용): `AIE_member_code_mapping.md`
+> - 코드 ↔ 실명 매핑 (TL 전용): `AIE_member_code_mapping.md`
+> - **Prefix 규칙 근거 PR**: [#147 `docs(company): rename [AIE 파트] prefix to [AIE O-N]`](https://github.com/dEitY719/dotfiles/pull/147) — 구 `[AIE 파트]` 공통 prefix 를 OKR 정렬(`[AIE O-N]`)로 재명명하며 공통 문법을 확정
 
 ---
 
@@ -51,13 +52,49 @@ GHRP 에서는 다음 5개 항목으로 평가합니다.
 | 부서원/개인역량강화 | 10% | 교육·자격·특허·논문 |
 | 수명업무 | tracking | 비계획 지시 업무 |
 
-**여기서의 설계 결정**: 각 평가 항목을 **하나의 Story** 로 만들어서 **Objective** 로 취급합니다. 그래서 Summary 접두어에 `O-N` 을 붙였습니다 (N = 1..5).
+**설계 결정**: 각 평가 항목을 **하나의 Story** 로 만들어 **Objective** 로 취급합니다. 그 결과, 모든 JIRA Summary 접두어가 **단 하나의 공통 문법** 하나로 귀결됩니다.
 
-- `[AIE O-1]` = 파트 레벨의 Objective 1 (조직목표달성)
-- `[AIE-δ O-1 K-n]` = 파트원 δ 의 Objective 1 — **M-1 은 제품별로 분류** 해야 해서 담당 제품 번호 `K-n` (n=1..4) 이 끝에 붙습니다
-- `[AIE-δ O-2]` = 파트원 δ 의 Objective 2 (혁신/개선업무, K 없음)
+### 1-1. Prefix 공통 문법 (확정)
 
-이렇게 하면 "평가받는 항목 = 일하는 단위" 가 되어 따로 매핑할 필요가 없습니다.
+모든 Summary 는 아래 한 문법으로 통일됩니다 — 이게 본 Structure 의 **설계 언어** 입니다.
+
+```text
+[ 소속   Objective-N   Key-N ]
+   ↓         ↓            ↓
+AIE      O-N (필수)     K-n (선택, O-1 에만)
+AIE-{letter}   N=1..5   n=1..4
+(파트 or 파트원)
+```
+
+**구성 요소**:
+
+| 요소 | 값 | 의미 |
+|------|-----|------|
+| **소속** | `AIE` | 파트 자신 |
+|       | `AIE-{letter}` | 파트원 (letter ∈ {δ, ξ, λ, ψ, σ, π, θ, ζ, γ}) |
+| **Objective** | `O-N` (N=1..5) | GHRP 5개 평가 항목과 1:1 대응 (필수) |
+| **Key** | `K-n` (n=1..4) | 핵심제품 번호 — **O-1 (조직목표달성) 에만** 부착 |
+
+**문법 규칙**:
+1. **왼쪽일수록 상위 레벨**, 오른쪽일수록 세부 분류 (읽기 순서 = 계층 순서)
+2. **Key (`K-n`) 는 항상 브라켓 맨 끝** — 담당 제품은 "어느 Objective 의 세부 분기인가" 를 표시하는 꼬리표
+3. **Epic 만 예외**: 파트 Epic 은 `[AIE M&V]` (Mission & Vision) — 최상위 미션이라 Objective 번호가 없음
+
+### 1-2. 공통 문법의 5가지 실제 인스턴스
+
+| # | 인스턴스 | 형식 | 예시 | 수량 |
+|---|---------|------|------|------|
+| 1 | 파트 Epic | `[AIE M&V]` | `[AIE M&V] 임직원이 체감하는 AI 효용성` | 1 |
+| 2 | 파트 Story | `[AIE O-N]` | `[AIE O-2] 2026 혁신/개선업무` | 5 (N=1..5) |
+| 3 | 파트 제품 Story | `[AIE O-1 K-n]` | `[AIE O-1 K-1] SLSI Agent App Store` | 4 (n=1..4) |
+| 4 | 파트원 M-1 Story | `[AIE-{letter} O-1 K-n]` | `[AIE-δ O-1 K-1] 2026 조직목표달성` | 9 (인당 1개, 담당 제품 n) |
+| 5 | 파트원 M-2~M-4 Story | `[AIE-{letter} O-N]` (N=2..4) | `[AIE-δ O-2] 2026 혁신/개선업무` | 27 (9명 × 3개) |
+
+합계 **46개** — Epic 1 + 파트 Story 5 + 제품 Story 4 + 파트원 Story 36 (M-1: 9 + M-2~4: 27). 수명업무(O-5) 는 **파트 Story 한 개만** 존재하고 파트원 개별 Story 는 없음 — Task 만 동적 생성됩니다.
+
+> **근거 문서**: PR [#147](https://github.com/dEitY719/dotfiles/pull/147) — `[AIE 파트]` 공통 prefix 의 가독성 문제를 해결하기 위해 OKR 업계 표준(`O` = Objective) 을 도입, 동시에 향후 KR 레벨(`[AIE O-1 KR-1.1]`) 확장 여지까지 확보.
+
+이렇게 하면 **"평가받는 항목 = 일하는 단위 = Summary 접두어"** 가 1:1 매핑되어 별도 Label/Component 없이 접두어만으로 JQL 필터링이 가능해집니다 (→ §6 참조).
 
 ---
 
@@ -92,7 +129,7 @@ Story 는 **큰 틀** 입니다. 그 아래에 실제 업무를 **Task / Sub-tas
 
 ### Summary 의 letter 가 왜 Greek 문자인가?
 
-δ, ξ, λ 같은 Greek letter 는 **실명 비노출** 을 위한 토큰입니다. Evaluation grade 같은 민감 정보를 JIRA Summary 에 실수로 노출하지 않기 위한 장치 — 실명 매핑은 PL 전용 `AIE_member_code_mapping.md` 에만 존재합니다.
+δ, ξ, λ 같은 Greek letter 는 **실명 비노출** 을 위한 토큰입니다. Evaluation grade 같은 민감 정보를 JIRA Summary 에 실수로 노출하지 않기 위한 장치 — 실명 매핑은 TL 전용 `AIE_member_code_mapping.md` 에만 존재합니다.
 
 **letter 는 평생 토큰** 입니다. 한 번 배정된 letter 는 변경하지 않습니다. 과거 JIRA 이력·평가 기록·검색 쿼리 전체가 letter 를 키로 연결되기 때문입니다.
 
@@ -247,7 +284,7 @@ summary ~ "AIE O-5"
 1. **본인의 4개 Story 만 관리** 하세요. (조직목표달성 1, 혁신/개선 1, 시너지 1, 역량강화 1)
 2. 그 아래에 Task / Sub-task 를 **자유롭게** 만드세요. 규칙은 **Link 를 해당 Story 하위로** 유지하는 것 하나.
 3. Task 완료 시마다 Status 를 업데이트하세요. rollup 은 Structure 가 자동 처리합니다.
-4. 월 1회 1:1 때 본인의 Story 를 펼쳐서 같이 리뷰합니다 (PL 이 준비).
+4. 월 1회 1:1 때 본인의 Story 를 펼쳐서 같이 리뷰합니다 (TL 이 준비).
 5. 수명업무(비계획 지시)는 `[AIE O-5]` 하위에 Task 로 등록하세요 — 나중에 OKR 재조정의 근거가 됩니다.
 
 ### 기억해주세요
@@ -263,7 +300,7 @@ summary ~ "AIE O-5"
 | 문서 | 용도 | 접근 권한 |
 |------|------|-----------|
 | `JIRA_Story_draft_2026.md` | 전체 45 Story 상세 스펙 | 파트 전체 |
-| `paste_ready/AIE-{letter}.md` | 개인별 JIRA 복붙용 | 본인 + PL |
-| `paste_ready/part_independent.md` | 파트 Story 복붙용 | PL |
-| `AIE_member_code_mapping.md` | letter ↔ 실명 매핑 | **PL 전용** |
+| `paste_ready/AIE-{letter}.md` | 개인별 JIRA 복붙용 | 본인 + TL |
+| `paste_ready/part_independent.md` | 파트 Story 복붙용 | TL |
+| `AIE_member_code_mapping.md` | letter ↔ 실명 매핑 | **TL 전용** |
 | 본 문서 | 컨셉 설명 (onboarding) | 파트 전체 |
