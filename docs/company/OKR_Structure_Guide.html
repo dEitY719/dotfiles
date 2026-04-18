@@ -10,6 +10,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <script>
+    // === FOUC prevention: apply theme before body renders ===
+    (function () {
+      var t = localStorage.getItem('viz-theme');
+      if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.className = 'theme-' + t;
+    })();
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root { interpolate-size: allow-keywords; }
@@ -1143,7 +1151,10 @@
         a.href = url;
         a.download = 'okr-structure-guide.png';
         a.click();
-      } catch (e) { console.error('Download failed:', e); }
+      } catch (e) {
+        console.error('Download failed:', e);
+        alert('이미지 다운로드에 실패했습니다. 브라우저 콘솔에서 오류를 확인해 주세요.');
+      }
       menu.style.display = '';
     }
   </script>
