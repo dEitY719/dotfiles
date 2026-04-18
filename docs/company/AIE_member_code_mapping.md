@@ -33,7 +33,7 @@
   - 예: `[K1-δ] 2026 조직목표달성 - ...` → **명, Agent App Store 담당
 - **M-2/M-3/M-4 (평가 항목)**: `[AIE-{letter}] 2026 <평가 항목> - ...`
   - 예: `[AIE-δ] 2026 혁신/개선업무 - ...` → **명
-- **P-1..P-4 (파트 Story)**: `[AIE 파트] 2026 <평가 항목> - ...` (letter 미사용)
+- **P-1..P-4 (파트 Story)**: `[AIE O-N] 2026 <평가 항목> - ...` (letter 미사용)
 
 ### Letter는 평생 토큰
 
@@ -43,7 +43,7 @@
 
 - 특정 파트원 전체 이력: `summary ~ "-δ"` → **명의 M-1~M-4 전부
 - 특정 제품 담당자 전체: `summary ~ "[K1-"` → Agent App Store 담당 파트원 전부
-- 파트 단위 조회: `summary ~ "[AIE 파트]" OR summary ~ "[AIE-"`
+- 파트 단위 조회: `summary ~ "[AIE O-" OR summary ~ "[AIE-"`
 
 ---
 
