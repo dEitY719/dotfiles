@@ -254,7 +254,7 @@ E1~E4 전체 지원 — 파트 독립 영역
 
 ### Summary
 ```text
-[AIE 핵심제품] SLSI Agent App Store - 사내 AI 앱 스토어 개발
+[AIE O-1 K-1] SLSI Agent App Store - 사내 AI 앱 스토어 개발
 ```
 
 ### Parent / 팀 Epic 연결
@@ -292,7 +292,7 @@ Agent App과 Service Link App 두 타입을 지원.
 
 ### Summary
 ```text
-[AIE 핵심제품] SLSI Alpha Agent - 개인화된 대화형 Agent 시스템
+[AIE O-1 K-2] SLSI Alpha Agent - 개인화된 대화형 Agent 시스템
 ```
 
 ### Parent / 팀 Epic 연결
@@ -329,7 +329,7 @@ Story P-1 (파트 조직목표달성)
 
 ### Summary
 ```text
-[AIE 핵심제품] SLSI Cowork - 문서 특화 범용 Agent
+[AIE O-1 K-3] SLSI Cowork - 문서 특화 범용 Agent
 ```
 
 ### Parent / 팀 Epic 연결
@@ -368,7 +368,7 @@ SW 직군 외 전체 임직원 대상.
 
 ### Summary
 ```text
-[AIE 핵심제품] MCP/Skill Hub - 사내 MCP 마켓플레이스
+[AIE O-1 K-4] MCP/Skill Hub - 사내 MCP 마켓플레이스
 ```
 
 ### Parent / 팀 Epic 연결

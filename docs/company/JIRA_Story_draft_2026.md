@@ -41,14 +41,14 @@
 [E4] Avatar 7000명 양성 (팀 Epic — 이미 존재)
   └─ SWINNOTEAM-1274: Document Agent 개발 (팀 Story — 이미 존재)
       └─ [AIE O-1] 조직목표달성 (P-1)
-          ├─ [AIE 핵심제품] SLSI Agent App Store (K-1)    ← 파트 핵심과제
-          │   └─ [K1-{letter}] 조직목표달성 (M-1, 담당 파트원)
-          ├─ [AIE 핵심제품] SLSI Alpha Agent (K-2)
-          │   └─ [K2-{letter}] ...
-          ├─ [AIE 핵심제품] SLSI Cowork (K-3)
-          │   └─ [K3-{letter}] ...
-          └─ [AIE 핵심제품] MCP/Skill Hub (K-4)
-              └─ [K4-{letter}] ...
+          ├─ [AIE O-1 K-1] SLSI Agent App Store    ← 파트 핵심과제
+          │   └─ [AIE-{letter} O-1 K-1] 조직목표달성 (M-1, 담당 파트원)
+          ├─ [AIE O-1 K-2] SLSI Alpha Agent
+          │   └─ [AIE-{letter} O-1 K-2] ...
+          ├─ [AIE O-1 K-3] SLSI Cowork
+          │   └─ [AIE-{letter} O-1 K-3] ...
+          └─ [AIE O-1 K-4] MCP/Skill Hub
+              └─ [AIE-{letter} O-1 K-4] ...
           ※ 9명의 파트원은 K-1~K-4 중 담당 제품에 따라 분산 배치
 
 [파트 독립 영역] (팀 Epic에 직접 연결되지 않는 Story)
@@ -131,7 +131,7 @@ AI Enable 파트의 2026년 핵심과제를 OKR 프레임워크로 정의하고,
 
 ### Story K-1: SLSI Agent App Store
 
-**Summary**: `[AIE 핵심제품] SLSI Agent App Store - 사내 AI 앱 스토어 개발`
+**Summary**: `[AIE O-1 K-1] SLSI Agent App Store - 사내 AI 앱 스토어 개발`
 
 **Parent**: Story P-1 (파트 조직목표달성)
 
@@ -166,7 +166,7 @@ Agent App과 Service Link App 두 타입을 지원.
 
 ### Story K-2: SLSI Alpha Agent
 
-**Summary**: `[AIE 핵심제품] SLSI Alpha Agent - 개인화된 대화형 Agent 시스템`
+**Summary**: `[AIE O-1 K-2] SLSI Alpha Agent - 개인화된 대화형 Agent 시스템`
 
 **Parent**: Story P-1 (파트 조직목표달성)
 
@@ -200,7 +200,7 @@ Agent App과 Service Link App 두 타입을 지원.
 
 ### Story K-3: SLSI Cowork
 
-**Summary**: `[AIE 핵심제품] SLSI Cowork - 문서 특화 범용 Agent`
+**Summary**: `[AIE O-1 K-3] SLSI Cowork - 문서 특화 범용 Agent`
 
 **Parent**: Story P-1 (파트 조직목표달성)
 
@@ -236,7 +236,7 @@ SW 직군 외 전체 임직원 대상.
 
 ### Story K-4: MCP/Skill Hub
 
-**Summary**: `[AIE 핵심제품] MCP/Skill Hub - 사내 MCP 마켓플레이스`
+**Summary**: `[AIE O-1 K-4] MCP/Skill Hub - 사내 MCP 마켓플레이스`
 
 **Parent**: Story P-1 (파트 조직목표달성)
 
@@ -443,7 +443,7 @@ P-1~P-4 중 해당 카테고리로 귀속되어 평가됨.
 
 ### Story M-1: 조직목표달성 (50%)
 
-**Summary**: `[K{n}-{letter}] 2026 조직목표달성 - OKR 기반 핵심과제 수행` (n ∈ {1..4})
+**Summary**: `[AIE-{letter} O-1 K-n] 2026 조직목표달성 - OKR 기반 핵심과제 수행` (n ∈ {1..4})
 
 **Parent**: K-1~K-4 중 담당 제품 (파트원별 담당 제품에 따라 결정; 논리적 상위는 P-1)
 
@@ -657,16 +657,16 @@ Confluence/Jira를 활용한 데이터 공유와
 
 | ID | Summary | Parent | 포지셔닝 |
 |----|---------|--------|---------|
-| K-1 | [AIE 핵심제품] SLSI Agent App Store - 사내 AI 앱 스토어 개발 | P-1 | 경량 AI 앱 탐색·실행 |
-| K-2 | [AIE 핵심제품] SLSI Alpha Agent - 개인화된 대화형 Agent 시스템 | P-1 | 고성능 업무 자동화 |
-| K-3 | [AIE 핵심제품] SLSI Cowork - 문서 특화 범용 Agent | P-1 | 문서 기반 생산성 |
-| K-4 | [AIE 핵심제품] MCP/Skill Hub - 사내 MCP 마켓플레이스 | P-1 | Agent Skill 큐레이션 |
+| K-1 | [AIE O-1 K-1] SLSI Agent App Store - 사내 AI 앱 스토어 개발 | P-1 | 경량 AI 앱 탐색·실행 |
+| K-2 | [AIE O-1 K-2] SLSI Alpha Agent - 개인화된 대화형 Agent 시스템 | P-1 | 고성능 업무 자동화 |
+| K-3 | [AIE O-1 K-3] SLSI Cowork - 문서 특화 범용 Agent | P-1 | 문서 기반 생산성 |
+| K-4 | [AIE O-1 K-4] MCP/Skill Hub - 사내 MCP 마켓플레이스 | P-1 | Agent Skill 큐레이션 |
 
 ### 파트원 평가 Story (9명 × 4개 = 36개)
 
 | ID | Summary 패턴 | 비중 | Parent |
 |----|-------------|------|--------|
-| M-1 | [K{n}-{letter}] 2026 조직목표달성 - OKR 기반 핵심과제 수행 | 50% | K-1~K-4 중 담당 제품 |
+| M-1 | [AIE-{letter} O-1 K-n] 2026 조직목표달성 - OKR 기반 핵심과제 수행 | 50% | K-1~K-4 중 담당 제품 |
 | M-2 | [AIE-{letter}] 2026 혁신/개선업무 - 공통업무 개선 및 Tool/AI 기여 | 20% | P-2 |
 | M-3 | [AIE-{letter}] 2026 조직시너지 창출 - 데이터 공유 및 동료 성공 기여 | 20% | P-3 |
 | M-4 | [AIE-{letter}] 2026 개인역량강화 - 전문성 및 성장 | 10% | P-4 |
@@ -692,20 +692,20 @@ Confluence/Jira를 활용한 데이터 공유와
     │
     └─ [AIE O-1] 조직목표달성 (P-1)              ← 신규
         │
-        ├─ [AIE 핵심제품] SLSI Agent App Store (K-1)  ← 신규
-        │   ├─ [K1-{letter}] 조직목표달성 (M-1)     ← 담당 파트원
+        ├─ [AIE O-1 K-1] SLSI Agent App Store  ← 신규
+        │   ├─ [AIE-{letter} O-1 K-1] 조직목표달성 (M-1)     ← 담당 파트원
         │   └─ ...
         │
-        ├─ [AIE 핵심제품] SLSI Alpha Agent (K-2)
-        │   ├─ [K2-{letter}] 조직목표달성 (M-1)
+        ├─ [AIE O-1 K-2] SLSI Alpha Agent
+        │   ├─ [AIE-{letter} O-1 K-2] 조직목표달성 (M-1)
         │   └─ ...
         │
-        ├─ [AIE 핵심제품] SLSI Cowork (K-3)
-        │   ├─ [K3-{letter}] 조직목표달성 (M-1)
+        ├─ [AIE O-1 K-3] SLSI Cowork
+        │   ├─ [AIE-{letter} O-1 K-3] 조직목표달성 (M-1)
         │   └─ ...
         │
-        └─ [AIE 핵심제품] MCP/Skill Hub (K-4)
-            ├─ [K4-{letter}] 조직목표달성 (M-1)
+        └─ [AIE O-1 K-4] MCP/Skill Hub
+            ├─ [AIE-{letter} O-1 K-4] 조직목표달성 (M-1)
             └─ ...
         ※ 9명의 letter 배정은 AIE_member_code_mapping.md 참조
 
@@ -726,7 +726,7 @@ Confluence/Jira를 활용한 데이터 공유와
 
 ### Structure 활용 팁
 
-1. **필터링**: Summary의 접두어(`[AIE M&V]`, `[AIE O-N]`, `[K{n}-{letter} O-1]`, `[AIE-{letter} O-N]`)로 JQL 필터
+1. **필터링**: Summary의 접두어(`[AIE M&V]`, `[AIE O-N]`, `[AIE-{letter} O-1 K-n]`, `[AIE-{letter} O-N]`)로 JQL 필터
    - 파트 Story 전체: `summary ~ "AIE O-"`
    - 특정 파트원 4개 Story 전부: `summary ~ "-{letter}"` (예: `"-δ"`)
    - 특정 제품 담당자: `summary ~ "K1-"` (Agent App Store 담당자 전원)
@@ -745,7 +745,7 @@ Confluence/Jira를 활용한 데이터 공유와
 각 파트원 Story 하위에 4월~10월 기간 동안 **5개 Task**를 생성:
 
 ```text
-예시) [K1-δ O-1] 조직목표달성 Story 하위:
+예시) [AIE-δ O-1 K-1] 조직목표달성 Story 하위:
   - Task 1: [4월] OKR 수립 및 파트장 승인
   - Task 2: [5월] 1차 KPI 중간 점검 및 1:1 feedback
   - Task 3: [6~7월] 핵심과제 중간 리뷰 및 방향 조정
