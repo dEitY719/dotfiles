@@ -42,8 +42,8 @@
 ### JQL 필터 예시
 
 - 특정 파트원 전체 이력: `summary ~ "-δ"` → **명의 M-1~M-4 전부
-- 특정 제품 담당자 전체: `summary ~ "[K1-"` → Agent App Store 담당 파트원 전부
-- 파트 단위 조회: `summary ~ "[AIE O-" OR summary ~ "[AIE-"`
+- 특정 제품 담당자 전체: `summary ~ "K1-"` → Agent App Store 담당 파트원 전부
+- 파트 단위 조회: `summary ~ "AIE O-" OR summary ~ "AIE-"`
 
 ---
 

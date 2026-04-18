@@ -727,9 +727,9 @@ Confluence/Jira를 활용한 데이터 공유와
 ### Structure 활용 팁
 
 1. **필터링**: Summary의 접두어(`[AIE O-N]`, `[K{n}-{letter}]`, `[AIE-{letter}]`)로 JQL 필터
-   - 파트 Story 전체: `summary ~ "[AIE O-"`
+   - 파트 Story 전체: `summary ~ "AIE O-"`
    - 특정 파트원 4개 Story 전부: `summary ~ "-{letter}"` (예: `"-δ"`)
-   - 특정 제품 담당자: `summary ~ "[K1-"` (Agent App Store 담당자 전원)
+   - 특정 제품 담당자: `summary ~ "K1-"` (Agent App Store 담당자 전원)
    - 특정 평가항목: `summary ~ "조직목표달성"`
 
 2. **계층 추적**: Structure에서 파트 Story를 펼치면 해당 항목에 기여하는 모든 파트원이 한눈에 보임
