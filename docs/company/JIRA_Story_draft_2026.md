@@ -726,7 +726,7 @@ Confluence/Jira를 활용한 데이터 공유와
 
 ### Structure 활용 팁
 
-1. **필터링**: Summary의 접두어(`[AIE O-N]`, `[K{n}-{letter}]`, `[AIE-{letter}]`)로 JQL 필터
+1. **필터링**: Summary의 접두어(`[AIE M&V]`, `[AIE O-N]`, `[K{n}-{letter} O-1]`, `[AIE-{letter} O-N]`)로 JQL 필터
    - 파트 Story 전체: `summary ~ "AIE O-"`
    - 특정 파트원 4개 Story 전부: `summary ~ "-{letter}"` (예: `"-δ"`)
    - 특정 제품 담당자: `summary ~ "K1-"` (Agent App Store 담당자 전원)
