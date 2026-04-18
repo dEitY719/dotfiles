@@ -24,7 +24,7 @@ Turn any idea, data, or content into a stunning single-file HTML visualization.
 ## After Creating a File
 
 **Always do BOTH after writing the HTML file:**
-1. **Auto-open:** `wslview <filename>.html` (WSL) · `xdg-open <filename>.html` (Linux) · `open <filename>.html` (macOS)
+1. **Auto-open:** `xdg-open <filename>.html` (Linux/WSL) · `open <filename>.html` (macOS). **Do NOT use `wslview`** — it frequently errors on HTML files; `xdg-open` works reliably on WSL.
 2. **Return URL:** Include `file://<absolute-path>` in response
 
 Example: `Created your visualization! 📄 file:///home/user/project/output.html`
