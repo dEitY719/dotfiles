@@ -96,7 +96,7 @@ All files in `aliases/` contain portable `alias` definitions. Bash-specific util
 | File | Description |
 |------|-------------|
 | `core.sh` | Basic command aliases (reload, src, cd shortcuts) |
-| `directory.sh` | Directory navigation aliases (ls variants, cd helpers, PARA shortcuts) |
+| `directory.sh` | Directory navigation aliases (ls variants, cd helpers, PARA & project shortcuts) |
 | `disk_usage.sh` | Disk usage and cleanup aliases |
 | `git.sh` | Git command shortcuts and aliases |
 | `kill.sh` | Process management aliases |
