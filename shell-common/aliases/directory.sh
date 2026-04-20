@@ -30,9 +30,23 @@ alias cd-para='cd ~/para'
 
 # PARA directories
 alias cd-proj='cd ~/para/project'
+alias cd-project='cd ~/para/project'
 alias cd-area='cd ~/para/area'
 alias cd-resource='cd ~/para/resource'
 alias cd-archive='cd ~/para/archive'
+
+# PROJECT directories
+alias cd-ss='cd ~/para/project/slea-ssem'
+alias cd-ll='cd ~/para/project/litellm'
+alias cd-jv='cd ~/para/project/jiravis'
+alias cd-sh='cd ~/para/project/skill-hub'
+alias cd-jmcp='cd ~/para/project/jira-mcp'
+alias cd-jmcp-as='cd ~/para/project/jira-mcp/mcp-atlassian'
+alias cd-jmcp-as-ds='cd ~/para/project/jira-mcp/mcp-atlassian-ds'
+# Note: Project-specific CLI commands are defined in project-cli-aliases.sh
+
+# AREA directories
+alias cd-vault='cd ~/para/area/vault'
 
 # ARCHIVE directories
 alias cd-pb='cd ~/para/archive/playbook'
