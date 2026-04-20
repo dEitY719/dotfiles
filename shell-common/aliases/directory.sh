@@ -34,9 +34,12 @@ alias cd-area='cd ~/para/area'
 alias cd-resource='cd ~/para/resource'
 alias cd-archive='cd ~/para/archive'
 
-# PROJECT directories
+# ARCHIVE directories
 alias cd-pb='cd ~/para/archive/playbook'
 alias cd-til='cd ~/para/archive/til'
+
+# PROJECT directories
+alias cd-sh='cd ~/para/project/skill-hub'
 
 # Symlink management
 alias symlink-manager='${SHELL_COMMON_ROOT:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/symlink-manager.sh'
