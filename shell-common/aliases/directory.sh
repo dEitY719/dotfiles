@@ -34,7 +34,7 @@ alias cd-area='cd ~/para/area'
 alias cd-resource='cd ~/para/resource'
 alias cd-archive='cd ~/para/archive'
 
-# PROJECT directories
+# ARCHIVE directories
 alias cd-pb='cd ~/para/archive/playbook'
 alias cd-til='cd ~/para/archive/til'
 
