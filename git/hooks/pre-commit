@@ -94,6 +94,25 @@ source_check_or_exit "${CHECKS_DIR}/help_integrity_check.sh"
 source_check_or_exit "${CHECKS_DIR}/auto_execution_check.sh"
 source_check_or_exit "${CHECKS_DIR}/direct_exec_guard_check.sh"
 source_check_or_exit "${CHECKS_DIR}/shellcheck_check.sh"
+source_check_or_exit "${CHECKS_DIR}/main_branch_guard.sh"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Protected-branch guard (fail fast, before any file scanning)
+# ═══════════════════════════════════════════════════════════════════════════
+
+if ! check_main_branch_guard; then
+    current_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "<unknown>")
+    echo ""
+    echo -e "${RED}✗ BLOCKING: direct commit on protected branch '${current_branch}'${NC}"
+    echo ""
+    echo -e "${YELLOW}  Create a feature branch first, for example:${NC}"
+    echo -e "${YELLOW}    git switch -c feat/your-change${NC}"
+    echo ""
+    echo -e "${YELLOW}  Escape hatch (use sparingly, e.g. release/hotfix commits):${NC}"
+    echo -e "${YELLOW}    ALLOW_MAIN_COMMIT=1 git commit ...${NC}"
+    echo ""
+    exit 1
+fi
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Get staged files (git diff --cached)
