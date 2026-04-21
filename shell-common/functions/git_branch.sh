@@ -122,8 +122,7 @@ git_branch_teardown() {
                 ux_bullet "gbr teardown                           # current branch, after PR merge"
                 ux_info ""
                 ux_info "Backlog of N merged PRs (order-independent):"
-                ux_bullet "git fetch --prune"
-                ux_bullet "git checkout <br1> && gbr teardown"
+                ux_bullet "git checkout <br1> && gbr teardown   # auto-fetches refs"
                 ux_bullet "git checkout <br2> && gbr teardown"
                 ux_info ""
                 ux_info "See also: 'gbr-help teardown' for the summary table."
@@ -197,6 +196,16 @@ git_branch_teardown() {
         fi
     fi
 
+    # Auto-refresh remote tracking refs so `[gone]` is accurate.
+    # Without this, a just-merged PR leaves stale `origin/<branch>` and the
+    # upstream check below would reject with "PR not merged yet". Fail-soft:
+    # offline sessions continue with whatever refs are cached locally.
+    local upstream_gone=false
+    if [ "$force" != true ]; then
+        git fetch --prune --quiet origin 2>/dev/null \
+            || ux_warning "Fetch failed (offline?) — proceeding with stale refs."
+    fi
+
     # Upstream check — `[gone]` means remote branch was deleted (PR merge signal).
     # Use `%(upstream:short)` (not `@{u}`) to detect "was ever pushed",
     # because `@{u}` fails to resolve once the remote-tracking ref is pruned.
@@ -215,7 +224,7 @@ git_branch_teardown() {
 
         case "$upstream_track" in
             *gone*)
-                : # expected: remote branch deleted (PR merged + auto-delete or manual Delete button)
+                upstream_gone=true
                 ;;
             *)
                 # Best-effort PR lookup — surfaces "#151 OPEN" so the blocker is obvious
@@ -237,7 +246,7 @@ git_branch_teardown() {
                 fi
                 echo ""
                 ux_info "What to do next:"
-                ux_bullet "Merge the PR on GitHub, then: git fetch --prune && gbr teardown"
+                ux_bullet "Merge the PR on GitHub, then re-run: gbr teardown"
                 ux_bullet "Or override the safety check: gbr teardown --force"
                 return 1
                 ;;
@@ -256,15 +265,23 @@ git_branch_teardown() {
     fi
 
     # Delete branch
+    #
+    # `git branch -d` only sees branches whose commits appear verbatim in main.
+    # Squash/rebase merges rewrite the commits, so -d rejects them even though
+    # the PR was merged. When upstream is `[gone]` we already know the PR
+    # landed, so upgrade to -D without requiring --force.
     if [ "$keep_branch" = true ]; then
         ux_info "Branch kept: $branch (--keep-branch)"
     elif git branch -d "$branch" 2>/dev/null; then
-        : # safe-deleted
-    elif [ "$force" = true ]; then
+        : # safe-deleted (merge-commit merge)
+    elif [ "$force" = true ] || [ "$upstream_gone" = true ]; then
         git branch -D "$branch" 2>/dev/null || {
             ux_error "Failed to force-delete branch '$branch'."
             return 1
         }
+        if [ "$upstream_gone" = true ] && [ "$force" != true ]; then
+            ux_info "Force-deleted (squash/rebase merge detected via [gone] upstream)."
+        fi
     else
         ux_warning "Branch '$branch' not fully merged into $main_branch. Use --force or --keep-branch."
         return 1
