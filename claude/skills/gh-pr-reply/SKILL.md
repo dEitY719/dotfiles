@@ -44,19 +44,10 @@ threads.
 
 ## Step 3: Evaluate Each Comment
 
-For each unaddressed comment, read the referenced file (`path` at `line`) and
-classify:
-
-- **ACCEPT** — reviewer is correct; the code should change
-- **ACCEPT-PARTIAL** — valid concern, but a different fix is better; note the
-  deviation in the reply
-- **DECLINE** — reviewer is wrong, misunderstanding the context, or the
-  suggestion would regress something; must explain why
-- **QUESTION** — reviewer asked for clarification rather than a change;
-  answer the question
-
+For each unaddressed comment, read the referenced file (`path` at `line`)
+and classify as **ACCEPT** / **ACCEPT-PARTIAL** / **DECLINE** / **QUESTION**.
 Bot comments (gemini-code-assist, sourcery-ai, copilot) follow the same
-rules — a bot nit is still a legitimate comment that deserves a reply.
+rules. See `references/reply-templates.md` for the full rubric.
 
 ## Step 4: Apply Fixes (ACCEPT / ACCEPT-PARTIAL only)
 

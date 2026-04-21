@@ -72,3 +72,19 @@ docs, other PR, or file that justifies the current design>.
   replies — reviewers need a pointer to verify the fix.
 - Declined replies must state a concrete reason, never a dismissive one-liner.
 - Bot comments get the exact same templates — no shortcuts.
+
+## Classification rubric
+
+Use these four classes in Step 3 of the SKILL.md workflow. Every
+unaddressed comment falls into exactly one.
+
+- **ACCEPT** — reviewer is correct; the code should change.
+- **ACCEPT-PARTIAL** — valid concern, but a different fix is better; note
+  the deviation in the reply (use the "Accepted with modification" body).
+- **DECLINE** — reviewer is wrong, misunderstanding the context, or the
+  suggestion would regress something; must explain why in the reply.
+- **QUESTION** — reviewer asked for clarification rather than a change;
+  answer the question directly.
+
+Bot comments (gemini-code-assist, sourcery-ai, copilot) follow the same
+rules — a bot nit is still a legitimate comment that deserves a reply.
