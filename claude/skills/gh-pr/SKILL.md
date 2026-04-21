@@ -6,11 +6,16 @@ description: >-
   /gh-pr, or asks "PR 생성", "풀리퀘 만들어", "지금까지 커밋들로 PR 올려". Pushes
   the branch if needed, drafts a structured PR body covering every commit in
   the range (not just HEAD), auto-links a related issue when known, and
-  returns only the PR URL.
+  returns only the PR URL. Accepts `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Grep
 ---
 
 # gh:pr — Create Pull Request
+
+## Help
+
+If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
+output its content verbatim, then stop. No API calls.
 
 ## Role
 

@@ -7,11 +7,17 @@ description: >-
   /gh-pr-reply, or asks "PR 리뷰 코멘트 확인하고 수정", "리뷰 답변 달아", "PR 123
   코멘트 처리해". Defaults to the PR for the current branch; accepts an explicit
   PR number as an argument. Every comment MUST get a reply — bot comments
-  (gemini, sourcery, copilot) included.
+  (gemini, sourcery, copilot) included. Accepts `-h`/`--help`/`help` to
+  print usage.
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 ---
 
 # gh:pr-reply — Address PR Review Comments
+
+## Help
+
+If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
+output its content verbatim, then stop. No API calls.
 
 ## Role
 
