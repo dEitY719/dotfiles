@@ -54,7 +54,9 @@ derived from `git log`.
 their own manual edits), derive intent from the diff itself:
 - File paths and function/alias names tell you *what* area changed.
 - Small additions (one new alias, one new config line) get a short subject
-  like `chore(aliases): add <name> shortcut` — no body required.
+  like `chore(aliases): add <name> shortcut` — explanation body can be omitted
+  (but mandatory footers like `Co-Authored-By` still apply per
+  `references/commit-message-format.md`).
 - Do NOT ask the user "what was the intent?" for obviously self-describing
   changes. Only ask if the diff is ambiguous or spans unrelated areas.
 
