@@ -15,16 +15,19 @@ ai_setup() {
 
     case "${1:-}" in
         -h|--help|help)
-            ux_header "ai-setup - AI workspace orchestrator"
+            ux_header "ai-setup - workspace orchestrator"
             ux_info "Usage: ai-setup"
             ux_info ""
             ux_info "Interactive setup that creates git worktrees and"
             ux_info "tmux sessions with 3-pane windows in one step."
             ux_info ""
             ux_info "Steps:"
-            ux_info "  1. Enter worktree agents  (e.g. claude codex)"
-            ux_info "  2. Enter tmux windows     (e.g. claude codex gemini)"
+            ux_info "  1. Enter worktree names   (free-form: issue-11 login-fix)"
+            ux_info "  2. Enter tmux windows     (AI agents: claude codex gemini)"
             ux_info "  3. Worktrees + tmux sessions are created automatically"
+            ux_info ""
+            ux_info "Note: worktree names are free-form (task/issue/feature slugs)."
+            ux_info "      tmux windows must be AI agent names (they run <agent>-yolo)."
             ux_info ""
             ux_info "Requirements: git, tmux, run from main repo (not worktree)"
             return 0
@@ -63,34 +66,35 @@ ai_setup() {
     ux_info "Project: $project ($repo_root)"
     echo
 
-    # --- Step 1: Read worktree agents ---
+    # --- Step 1: Read worktree names (free-form) ---
     local wt_input="" a
     while [ -z "$wt_input" ]; do
-        printf "%s❯%s Worktree agents (space-separated): " \
+        printf "%s❯%s Worktree names (space-separated, e.g. issue-11 login-fix): " \
             "${UX_BOLD}${UX_INFO}" "${UX_RESET}"
         read -r wt_input || return 1
         if [ -z "$wt_input" ]; then
-            ux_error "At least one agent required."
+            ux_error "At least one name required."
         fi
     done
 
-    # Validate worktree agents
-    local wt_agents="" wt_count=0
+    # Validate worktree names (free-form slug; no '/', no spaces, no leading dash)
+    local wt_names="" wt_count=0
     for a in $wt_input; do
-        if ! _ts_known_agent "$a"; then
-            ux_error "Unknown agent: $a"
-            ux_info "Available: claude, codex, gemini, opencode, cursor, copilot"
-            return 1
-        fi
-        wt_agents="$wt_agents $a"
+        case "$a" in
+            -* | */* | *" "*)
+                ux_error "Invalid name: '$a' (no '/', no spaces, no leading dash)"
+                return 1
+                ;;
+        esac
+        wt_names="$wt_names $a"
         wt_count=$((wt_count + 1))
     done
-    wt_agents="${wt_agents# }"
+    wt_names="${wt_names# }"
 
-    # --- Step 2: Read tmux window agents ---
+    # --- Step 2: Read tmux window agents (still AI-only: they run <agent>-yolo) ---
     local win_input=""
     while [ -z "$win_input" ]; do
-        printf "%s❯%s Tmux windows per session (space-separated): " \
+        printf "%s❯%s Tmux window agents (space-separated, e.g. claude codex): " \
             "${UX_BOLD}${UX_INFO}" "${UX_RESET}"
         read -r win_input || return 1
         if [ -z "$win_input" ]; then
@@ -98,7 +102,7 @@ ai_setup() {
         fi
     done
 
-    # Validate window agents
+    # Validate window agents (must be known AI agents)
     local win_agents="" win_count=0
     for a in $win_input; do
         if ! _ts_known_agent "$a"; then
@@ -115,11 +119,11 @@ ai_setup() {
 
     # --- Step 3: Create worktrees ---
     ux_info "Creating worktrees..."
-    local wt_paths="" wt_created=0 agent existing_path new_path new_branch dir
-    for agent in $wt_agents; do
-        # Check if worktree already exists for this agent
+    local wt_paths="" wt_created=0 name existing_path new_path new_branch dir
+    for name in $wt_names; do
+        # Check if worktree already exists for this name
         existing_path=""
-        for dir in "$parent/${project}-${agent}"-*/; do
+        for dir in "$parent/${project}-${name}"-*/; do
             if [ -d "$dir" ]; then
                 existing_path="${dir%/}"
                 break
@@ -130,12 +134,12 @@ ai_setup() {
             ux_warning "  $(basename "$existing_path") already exists — skipping"
             wt_paths="$wt_paths $existing_path"
         else
-            git_worktree_spawn "$agent" >/dev/null
+            git_worktree_spawn "$name" >/dev/null
             # Discover path from git worktree list (reliable across any index)
             new_path=""
             while IFS= read -r line; do
                 case "$line" in
-                    "worktree "*"-${agent}-"*)
+                    "worktree "*"-${name}-"*)
                         new_path="${line#worktree }" ;;
                 esac
             done <<EOF
@@ -147,7 +151,7 @@ EOF
                 wt_paths="$wt_paths $new_path"
                 wt_created=$((wt_created + 1))
             else
-                ux_error "  Failed to create worktree for $agent"
+                ux_error "  Failed to create worktree for $name"
             fi
         fi
     done
