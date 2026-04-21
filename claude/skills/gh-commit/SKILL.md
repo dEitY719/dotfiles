@@ -9,11 +9,17 @@ description: >-
   alias additions). Use when the user runs /gh:commit, /gh-commit, or asks
   "커밋해", "지금까지 작업 커밋", "이슈 N번 연결해서 커밋". The user does NOT
   need to prefix with "git status 확인하고" — that is step 1 of this skill.
-  Creates a new commit — never amends. Never skips hooks.
+  Creates a new commit — never amends. Never skips hooks. Accepts
+  `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Grep
 ---
 
 # gh:commit — Git Commit with Issue Linking
+
+## Help
+
+If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
+output its content verbatim, then stop. No API calls.
 
 ## Role
 

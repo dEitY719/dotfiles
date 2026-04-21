@@ -10,11 +10,17 @@ description: >-
   compress — the issue is reused for PR drafts and blog posts, so preserve
   reasoning, decisions, and concrete details.
   Accepts an optional remote name argument (e.g., `/gh-issue upstream`) to
-  target a different remote's repository instead of origin.
+  target a different remote's repository instead of origin. Accepts
+  `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Grep
 ---
 
 # gh:issue — Conversation → GitHub Issue
+
+## Help
+
+If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
+output its content verbatim, then stop. No API calls.
 
 ## Role
 
@@ -22,41 +28,15 @@ Convert the current chat into a well-structured GitHub issue on the target
 repo. Execute immediately without confirmation. Print only the issue
 number + URL at the end — the user will open GitHub directly.
 
-## Arguments
-
-| Position | Name | Default | Description |
-|----------|------|---------|-------------|
-| 1 | `remote-name` | `origin` | Git remote to target (e.g., `upstream`) |
-
-Usage examples:
-- `/gh-issue` — create issue on `origin`
-- `/gh-issue upstream` — create issue on `upstream` remote's repo
-
 ## Step 1: Detect Repo Context
 
-1. `git rev-parse --show-toplevel` — confirm we're in a git repo.
+Confirm we're in a git repo (`git rev-parse --show-toplevel`), then pick
+the target remote (arg #1 if given, else `origin`) and resolve it to
+`TARGET_REPO=<owner>/<repo>`. If the remote does not exist, list
+`git remote -v` and stop — never fall back to `origin` silently.
 
-2. Determine the target remote:
-   - If the user passed an argument, use it as remote name.
-   - Otherwise default to `origin`.
-
-3. Validate the remote and resolve owner/repo:
-   ```bash
-   git remote get-url <remote-name>
-   ```
-   If this fails, list available remotes (`git remote -v`) and stop with an
-   error like:
-   ```
-   Error: remote '<remote-name>' not found. Available remotes:
-   origin  https://github.com/user/repo.git (fetch)
-   upstream  https://github.com/org/repo.git (fetch)
-   ```
-
-4. Extract `owner/repo` from the remote URL returned in step 3:
-   - `https://github.com/<owner>/<repo>.git` → `<owner>/<repo>`
-   - `git@github.com:<owner>/<repo>.git` → `<owner>/<repo>`
-
-Store the resolved `owner/repo` as `TARGET_REPO` for use in Step 4.
+Read `references/repo-resolution.md` for the full substeps, error-message
+template, and `https` / `ssh` URL parsing rules.
 
 ## Step 2: Classify the Conversation
 
