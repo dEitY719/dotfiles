@@ -218,9 +218,27 @@ git_branch_teardown() {
                 : # expected: remote branch deleted (PR merged + auto-delete or manual Delete button)
                 ;;
             *)
-                ux_error "Remote branch '$upstream_ref' still exists — PR not merged yet?"
-                ux_info "Track status: ${upstream_track:-up-to-date}"
-                ux_info "Run 'git fetch --prune' first (refreshes [gone]), or use --force to override."
+                # Best-effort PR lookup — surfaces "#151 OPEN" so the blocker is obvious
+                # at a glance. Silent on gh missing/unauthed; table row is just skipped.
+                local pr_info=""
+                if command -v gh >/dev/null 2>&1; then
+                    pr_info="$(gh pr list --head "$branch" --state all --limit 1 \
+                        --json number,state,url \
+                        --jq '.[0] | "#\(.number) \(.state)  \(.url)"' 2>/dev/null)"
+                fi
+
+                ux_error "Cannot tear down — PR not merged yet"
+                echo ""
+                ux_table_row "Branch" "$branch"
+                ux_table_row "Upstream" "$upstream_ref  (still on remote)"
+                ux_table_row "Track status" "${upstream_track:-up-to-date}"
+                if [ -n "$pr_info" ]; then
+                    ux_table_row "Pull request" "$pr_info"
+                fi
+                echo ""
+                ux_info "What to do next:"
+                ux_bullet "Merge the PR on GitHub, then: git fetch --prune && gbr teardown"
+                ux_bullet "Or override the safety check: gbr teardown --force"
                 return 1
                 ;;
         esac
