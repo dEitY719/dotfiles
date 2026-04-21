@@ -197,13 +197,21 @@ git_branch_teardown() {
     fi
 
     # Auto-refresh remote tracking refs so `[gone]` is accurate.
-    # Without this, a just-merged PR leaves stale `origin/<branch>` and the
+    # Without this, a just-merged PR leaves stale `<remote>/<branch>` and the
     # upstream check below would reject with "PR not merged yet". Fail-soft:
     # offline sessions continue with whatever refs are cached locally.
+    #
+    # Remote is derived from the branch's own upstream (fork workflows may
+    # track `upstream/<branch>` instead of `origin/<branch>`); fall back to
+    # `origin` when no upstream is configured.
     local upstream_gone=false
     if [ "$force" != true ]; then
-        git fetch --prune --quiet origin 2>/dev/null \
-            || ux_warning "Fetch failed (offline?) — proceeding with stale refs."
+        local fetch_remote upstream_short
+        upstream_short="$(git for-each-ref --format='%(upstream:short)' "refs/heads/$branch" 2>/dev/null)"
+        fetch_remote="${upstream_short%%/*}"
+        [ -z "$fetch_remote" ] && fetch_remote="origin"
+        git fetch --prune --quiet "$fetch_remote" 2>/dev/null \
+            || ux_warning "Fetch from '$fetch_remote' failed (offline?) — proceeding with stale refs."
     fi
 
     # Upstream check — `[gone]` means remote branch was deleted (PR merge signal).
