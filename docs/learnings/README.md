@@ -94,6 +94,15 @@ inline diff 코멘트는 `/pulls/{n}/comments/{id}/replies` (스레드 유지),
 리뷰 요약·이슈 코멘트는 `/issues/{n}/comments` (top-level) 로 POST 해야
 하는 이유와 선택 기준.
 
+### 4. git-crypt + worktree 부트스트랩 함정
+
+**파일**: [`git-crypt-worktree-bootstrap.md`](./git-crypt-worktree-bootstrap.md)
+
+`.gitattributes`에 `filter=git-crypt` 매핑이 있으면 `git worktree add`가
+새 worktree에서 smudge filter를 통과 못해 `fatal: .env: smudge filter
+git-crypt failed`로 막힌다. AI 에이전트의 `isolation: "worktree"` 병렬
+디스패치 실패 시 sequential 전환 또는 `--no-checkout` + 수동 unlock.
+
 ## 성장 전략
 
 - 3–10개: 플랫 구조 유지 (현재)
