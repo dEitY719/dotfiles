@@ -59,20 +59,22 @@ reply → ask again. Exact prompt template in `references/audit-templates.md`.
 
 Order matters — comment first so the audit survives branch deletion.
 
-1. `gh pr comment <N>` with the "PR audit comment" body from
-   `references/audit-templates.md`; capture the comment URL for Step 6.
-2. `gh pr merge <N> --admin --squash --delete-branch` (flag rationale in
-   the same reference file). If it fails with "Must have admin rights",
-   **stop** and report — do NOT fall back to `--merge`/`--rebase`.
+1. `gh pr comment <N> --repo "$TARGET_REPO"` with the "PR audit comment"
+   body from `references/audit-templates.md`; capture the comment URL for
+   Step 6.
+2. `gh pr merge <N> --repo "$TARGET_REPO" --admin --squash --delete-branch`
+   (flag rationale in the same reference file). If it fails with "Must
+   have admin rights", **stop** and report — do NOT fall back to
+   `--merge`/`--rebase`.
 3. Capture the merge SHA:
-   `gh pr view <N> --json mergeCommit -q .mergeCommit.oid`.
+   `gh pr view <N> --repo "$TARGET_REPO" --json mergeCommit -q .mergeCommit.oid`.
 
 ## Step 5: Create Post-Merge Incident Issue
 
 Non-negotiable audit tail. File `incident: emergency merge of PR #<N> —
 <reason first line>` with the body + retro checklist from
 `references/audit-templates.md`. Attach an `incident` label **only if**
-`gh label list` confirms it exists.
+`gh label list --repo "$TARGET_REPO"` confirms it exists.
 
 ## Step 6: Report
 

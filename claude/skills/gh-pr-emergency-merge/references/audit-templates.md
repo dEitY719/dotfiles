@@ -169,7 +169,7 @@ are complete.
 gh issue create --repo "$TARGET_REPO" --title "<title>" --body-file "$ISSUE"
 ```
 
-Do NOT add labels/milestones unless `gh label list` confirms an `incident`
-label already exists; if it does, apply it.
+Do NOT add labels/milestones unless `gh label list --repo "$TARGET_REPO"`
+confirms an `incident` label already exists; if it does, apply it.
 
 Capture the issue URL + number from the command output for Step 7's report.
