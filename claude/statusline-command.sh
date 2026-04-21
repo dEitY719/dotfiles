@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Status line command for Claude Code
-# Format: YY-MM-DD HH:MM:SS | model | project-name(git-branch)
+# Format: YY-MM-DD HH:MM:SS | model | project(branch) | git-status
 
 # ANSI color codes
 CYAN='\033[36m'
@@ -14,62 +14,10 @@ RESET='\033[0m'
 # Read JSON input from stdin
 input=$(cat)
 
-# Debug: Log full JSON to find weekly usage information
-{
-  echo "=== Full JSON Structure ==="
-  echo "$input" | jq . 2>/dev/null || echo "$input"
-  echo "=== Debug Info ==="
-  echo "Time: $(date)"
-  echo "---"
-} >> /tmp/statusline-weekly-debug.log 2>&1
-
 # Extract current directory and model from JSON input
 cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
 model_id=$(echo "$input" | jq -r '.model.id // ""')
 model_display=$(echo "$input" | jq -r '.model.display_name // ""')
-
-# Extract context window information from Claude Code input
-total_input_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
-total_output_tokens=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
-context_window_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
-
-# Prefer ccusage-based current usage percentage:
-# current_usage% = totalTokens / tokenLimitStatus.limit * 100
-context_used=""
-if command -v ccusage >/dev/null 2>&1; then
-    ccusage_json="$(ccusage blocks --active --token-limit max --json 2>/dev/null || true)"
-    if [[ -n "$ccusage_json" ]]; then
-        ccusage_pct="$(
-            echo "$ccusage_json" | jq -r '
-                if (.blocks | length) > 0
-                   and (.blocks[0].tokenLimitStatus.limit // 0) > 0
-                   and (.blocks[0].totalTokens // 0) >= 0
-                then
-                    ((.blocks[0].totalTokens / .blocks[0].tokenLimitStatus.limit) * 100)
-                else
-                    empty
-                end
-            ' 2>/dev/null
-        )"
-        if [[ -n "$ccusage_pct" ]] && [[ "$ccusage_pct" != "null" ]]; then
-            context_used="$(LC_ALL=C printf "%.0f" "$ccusage_pct" 2>/dev/null || true)"
-        fi
-    fi
-fi
-
-# Fallback: use Claude Code's official used_percentage
-if [[ -z "$context_used" ]] || [[ "$context_used" == "null" ]]; then
-    context_used=$(echo "$input" | jq -r '.context_window.used_percentage // ""')
-fi
-
-# If not available, calculate from token counts
-if [[ -z "$context_used" ]] || [[ "$context_used" == "null" ]]; then
-    if [[ "$total_input_tokens" =~ ^[0-9]+$ ]] && [[ "$total_output_tokens" =~ ^[0-9]+$ ]] && [[ "$context_window_size" -gt 0 ]]; then
-        total_tokens=$((total_input_tokens + total_output_tokens))
-        # Simple calculation: (total_tokens / context_window_size) * 100
-        context_used=$(( (total_tokens * 100) / context_window_size ))
-    fi
-fi
 
 # Get current time in YY-MM-DD HH:MM:SS format
 current_time=$(date +%y-%m-%d\ %H:%M:%S)
@@ -148,26 +96,50 @@ fi
 # Combine project name with branch: "📁 quantfolio(🌳 main)"
 project_branch="📁 ${project_name}(${branch_emoji} ${git_branch})"
 
-# Format usage information and determine color based on usage percentage
-usage_info=""
-usage_color="$GREEN"  # Default to green
-if [[ -n "$context_used" ]]; then
-    # Determine color based on usage percentage
-    if ((context_used >= 90)); then
-        usage_color="$RED"
-    elif ((context_used >= 70)); then
-        usage_color="$ORANGE"
-    else
-        usage_color="$GREEN"
+# Compact git status: dirty count / ahead / behind
+# Shows what workflow step is next:
+#   ●N  = N uncommitted changes (staged + unstaged + untracked) → /gh-commit
+#   ↑N  = N commits ahead of upstream → /gh-pr (after push)
+#   ↓N  = N commits behind upstream (need pull)
+#   ✓   = clean and in sync
+git_status_text=""
+git_status_color="$GREEN"
+if [ -n "$cwd" ] && [ -d "$cwd" ] && git -C "$cwd" rev-parse --git-dir >/dev/null 2>&1; then
+    dirty_count=$(git -C "$cwd" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+    ahead=0
+    behind=0
+    if git -C "$cwd" rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
+        ahead=$(git -C "$cwd" rev-list --count '@{u}..HEAD' 2>/dev/null || echo 0)
+        behind=$(git -C "$cwd" rev-list --count 'HEAD..@{u}' 2>/dev/null || echo 0)
     fi
 
-    usage_info="${usage_color}📊 ${context_used}% used${RESET}"
+    parts=()
+    [ "${dirty_count:-0}" -gt 0 ] && parts+=("●${dirty_count}")
+    [ "${ahead:-0}"       -gt 0 ] && parts+=("↑${ahead}")
+    [ "${behind:-0}"      -gt 0 ] && parts+=("↓${behind}")
+
+    if [ ${#parts[@]} -eq 0 ]; then
+        git_status_text="✓"
+        git_status_color="$GREEN"
+    else
+        git_status_text="${parts[*]}"
+        if [ "${dirty_count:-0}" -gt 0 ]; then
+            git_status_color="$RED"      # uncommitted work — commit first
+        else
+            git_status_color="$ORANGE"   # committed but not in sync with remote
+        fi
+    fi
+fi
+
+git_status_info=""
+if [ -n "$git_status_text" ]; then
+    git_status_info="${git_status_color}📝 ${git_status_text}${RESET}"
 fi
 
 # Output format with colors and emojis
-# Time: Cyan, Model: Orange, Project+Branch: Magenta, Usage: Dynamic color (Red/Orange/Green)
-if [[ -n "$usage_info" ]]; then
-    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET} | ${usage_info}"
+# Time: Cyan, Model: Orange, Project+Branch: Magenta, Git status: Red/Orange/Green
+if [[ -n "$git_status_info" ]]; then
+    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET} | ${git_status_info}"
 else
     echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET}"
 fi
