@@ -74,12 +74,9 @@ Write the body to a unique temp file via `mktemp`, then create the PR with
 ## Step 6: Apply Labels
 
 Derive labels from conventional-commit types in `git log <base>..HEAD`
-(`feat` → enhancement, `fix` → bug, `docs` → documentation, `refactor`,
-`style`, `perf`, `test`, `chore`, `ci`, `build`) plus judgment-based
-labels matching the PR scope (e.g., `skill` for `claude/skills/` changes).
-Query existing labels via `gh label list` and apply only labels that
-**already exist** in the repo — never create new labels. Details and the
-safe-application loop in `references/pr-body-template.md`.
+and PR scope (e.g. `skill` for `claude/skills/` changes). Apply only
+labels that exist in the repo (`gh label list`) — never create new ones.
+See `references/pr-body-template.md` for the full mapping + safe-apply loop.
 
 ## Step 7: Report
 
