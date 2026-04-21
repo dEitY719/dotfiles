@@ -237,11 +237,13 @@ git_branch_teardown() {
             *)
                 # Best-effort PR lookup — surfaces "#151 OPEN" so the blocker is obvious
                 # at a glance. Silent on gh missing/unauthed; table row is just skipped.
+                # Use `.[]` (not `.[0]`) so an empty array yields empty output instead
+                # of stringifying null fields into "#null null  null".
                 local pr_info=""
                 if command -v gh >/dev/null 2>&1; then
                     pr_info="$(gh pr list --head "$branch" --state all --limit 1 \
                         --json number,state,url \
-                        --jq '.[0] | "#\(.number) \(.state)  \(.url)"' 2>/dev/null)"
+                        --jq '.[] | "#\(.number) \(.state)  \(.url)"' 2>/dev/null)"
                 fi
 
                 ux_error "Cannot tear down — PR not merged yet"
