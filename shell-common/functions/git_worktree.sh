@@ -16,7 +16,7 @@ _gwt_help_summary() {
     ux_bullet_sub "list: gwt list | gwt ls"
     ux_bullet_sub "remove: gwt remove <path|agent|all> [--force]"
     ux_bullet_sub "prune: gwt prune"
-    ux_bullet_sub "spawn: gwt spawn [agent] [--task slug] [--base ref] [--tmux]"
+    ux_bullet_sub "spawn: gwt spawn <name> [--task slug] [--base ref] [--tmux]"
     ux_bullet_sub "teardown: gwt teardown [--force] [--keep-branch]"
     ux_bullet_sub "details: gwt-help <section> (example: gwt-help spawn)"
 }
@@ -42,8 +42,8 @@ _gwt_help_rows_list() {
 }
 
 _gwt_help_rows_remove() {
-    ux_table_row "syntax" "gwt remove <path|agent|all> [--force]" "Remove worktree + branch"
-    ux_table_row "agent mode" "<agent> matches *-<agent>-*" "Batch remove by agent"
+    ux_table_row "syntax" "gwt remove <path|name|all> [--force]" "Remove worktree + branch"
+    ux_table_row "name mode" "<name> matches *-<name>-*" "Batch remove by worktree name"
     ux_table_row "all mode" "all removes non-main worktrees" "Batch cleanup"
     ux_table_row "force" "--force" "Force remove and branch delete"
 }
@@ -53,10 +53,11 @@ _gwt_help_rows_prune() {
 }
 
 _gwt_help_rows_spawn() {
-    ux_table_row "syntax" "gwt spawn [<agent>] [--task <slug>] [--base <ref>] [--tmux]" "Create AI worktree"
+    ux_table_row "syntax" "gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux]" "Create named worktree"
     ux_table_row "context" "Run from main repo only" "Fails inside a worktree"
-    ux_table_row "agents" "claude | codex | gemini | opencode | cursor | copilot" "Default: auto-detect"
-    ux_table_row "example" "gwt spawn codex --task login-fix --base origin/main" "Task + base branch"
+    ux_table_row "name" "Free-form slug (required)" "e.g. issue-11, login-fix"
+    ux_table_row "--tmux caveat" "Runs <name>-yolo in pane" "Only AI names (claude, ...) have yolo aliases"
+    ux_table_row "example" "gwt spawn issue-11 --task auth --base origin/main" "Name + task + base"
 }
 
 _gwt_help_rows_teardown() {
@@ -187,17 +188,17 @@ git_worktree_remove() {
     case "${1:-}" in
         -h|--help)
             ux_header "gwt remove - remove worktree and branch"
-            ux_info "Usage: gwt remove <path|agent|all> [--force]"
+            ux_info "Usage: gwt remove <path|name|all> [--force]"
             ux_info ""
             ux_info "  <path>     full or relative worktree path"
-            ux_info "  <agent>    agent name (claude, codex, gemini, ...)"
-            ux_info "             removes ALL worktrees matching *-<agent>-*"
+            ux_info "  <name>     worktree name (free-form: issue-11, login-fix, ...)"
+            ux_info "             removes ALL worktrees matching *-<name>-*"
             ux_info "  all        remove ALL non-main worktrees"
             ux_info "  --force    force remove + force delete unmerged branch"
             return 0
             ;;
         "")
-            ux_error "Usage: gwt remove <path|agent> [--force]"
+            ux_error "Usage: gwt remove <path|name> [--force]"
             return 1
             ;;
     esac
@@ -260,20 +261,14 @@ EOF
         [ "$fail_count" -eq 0 ] && return 0 || return 1
     fi
 
-    # Known agent names — always resolve as agent pattern, never as local path
-    case "$target" in
-        claude|codex|gemini|opencode|cursor|copilot|agent)
-            ;;  # fall through to agent resolve below
-        *)
-            # Not an agent name: treat as direct path
-            if [ -d "$target" ] || [ -e "$target" ]; then
-                _gwt_remove_one "$target" "$force"
-                return $?
-            fi
-            ;;
-    esac
+    # If target is an existing path, remove directly.
+    # Otherwise treat it as a worktree name and resolve to *-<name>-* worktrees.
+    if [ -d "$target" ] || [ -e "$target" ]; then
+        _gwt_remove_one "$target" "$force"
+        return $?
+    fi
 
-    # Resolve agent name (or unknown target) to worktree path(s)
+    # Resolve worktree name to path(s)
     local project parent matches=""
     project="$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")"
     parent="$(dirname "$(git rev-parse --show-toplevel 2>/dev/null)")"
@@ -424,44 +419,84 @@ git_worktree_add() {
 
 # ============================================================================
 # Worktree spawn — auto-index, auto-branch, log
-# Usage: git_worktree_spawn [<agent>] [--task <slug>] [--base <ref>] [--tmux]
+# Usage: git_worktree_spawn <name> [--task <slug>] [--base <ref>] [--tmux]
 # ============================================================================
+_git_worktree_spawn_show_help() {
+    ux_header "gwt spawn - create a named worktree"
+    ux_info "Usage: gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux]"
+    ux_info ""
+    ux_info "Arguments:"
+    ux_info "  <name>           Free-form worktree name (required)."
+    ux_info "                   Safe chars only: no '/', no spaces, no leading dash."
+    ux_info "                   Examples: issue-11, login-fix, claude, feature-x"
+    ux_info "  --task <slug>    Add task slug to branch name"
+    ux_info "  --base <ref>     Base branch/commit (default: origin/main)"
+    ux_info "  --tmux           Auto-create tmux session/window with 3-pane layout"
+    ux_info ""
+    ux_warning "Caveat for --tmux:"
+    ux_info "  The pane runs '<name>-yolo'. This alias only exists for known AI"
+    ux_info "  agents (claude, codex, gemini, opencode, cursor, copilot)."
+    ux_info "  For non-AI names, skip --tmux and run 'tmux-spawn <agent>' after."
+    ux_info "  (Follow-up: decouple via --agent flag — see issue #162)"
+    ux_info ""
+    ux_info "Examples:"
+    ux_info "  gwt spawn issue-11                   # ../<proj>-issue-11-1  wt/issue-11/1"
+    ux_info "  gwt spawn login-fix --task auth      # ../<proj>-login-fix-1 wt/login-fix/1-auth"
+    ux_info "  gwt spawn claude --tmux              # AI name: tmux compatible"
+}
+
 git_worktree_spawn() {
     # zsh compatibility
     if [ -n "${ZSH_VERSION-}" ]; then
         emulate -L sh
     fi
 
-    local task="" base="" agent="" use_tmux=0
+    local task="" base="" name="" use_tmux=0
 
     # Parse arguments
     while [ $# -gt 0 ]; do
         case "$1" in
             -h|--help)
-                ux_header "gwt spawn - AI worktree auto-creation"
-                ux_info "Usage: gwt spawn [<agent>] [--task <slug>] [--base <ref>] [--tmux]"
-                ux_info ""
-                ux_info "Arguments:"
-                ux_info "  <agent>          claude | codex | gemini | opencode | cursor (auto-detect if omitted)"
-                ux_info "  --task <slug>    Add task slug to branch name"
-                ux_info "  --base <ref>     Base branch/commit (default: origin/main)"
-                ux_info "  --tmux           Auto-create tmux session/window with 3-pane layout"
-                ux_info ""
-                ux_info "Examples:"
-                ux_info "  gwt spawn                          # auto-detect AI (default=claude)"
-                ux_info "  gwt spawn claude                   # ../<project>-claude-1  wt/claude/1"
-                ux_info "  gwt spawn codex --task login-fix   # ../<project>-codex-1   wt/codex/1-login-fix"
-                ux_info "  gwt spawn gemini --tmux            # worktree + tmux window"
+                _git_worktree_spawn_show_help
                 return 0
                 ;;
             --task) task="$2"; shift 2 ;;
             --base) base="$2"; shift 2 ;;
             --tmux) use_tmux=1; shift ;;
-            claude|codex|gemini|opencode|cursor|copilot)
-                agent="$1"; shift ;;
-            *) ux_error "Unknown option: $1. Use --help for usage."; return 1 ;;
+            -*)
+                ux_error "Unknown option: $1"
+                echo ""
+                _git_worktree_spawn_show_help
+                return 1
+                ;;
+            *)
+                if [ -n "$name" ]; then
+                    ux_error "Multiple names given: '$name', '$1' (only one allowed)"
+                    echo ""
+                    _git_worktree_spawn_show_help
+                    return 1
+                fi
+                name="$1"
+                shift
+                ;;
         esac
     done
+
+    # Name is required
+    if [ -z "$name" ]; then
+        ux_error "<name> is required"
+        echo ""
+        _git_worktree_spawn_show_help
+        return 1
+    fi
+
+    # Validate name: no path separators, no spaces, no leading dash
+    case "$name" in
+        -* | */* | *" "*)
+            ux_error "Invalid name: '$name' (no '/', no spaces, no leading dash)"
+            return 1
+            ;;
+    esac
 
     # Validate --tmux dependency
     if [ "$use_tmux" = 1 ] && ! command -v tmux >/dev/null 2>&1; then
@@ -480,23 +515,12 @@ git_worktree_spawn() {
         return 1
     fi
 
-    # Detect agent (explicit arg > env vars > fallback)
-    if [ -z "$agent" ]; then
-        if [ "${CLAUDECODE:-}" = "1" ]; then agent="claude"
-        elif [ "${GEMINI_CLI:-}" = "1" ]; then agent="gemini"
-        elif [ "${CODEX_CLI:-}" = "1" ]; then agent="codex"
-        elif [ "${OPENCODE:-}" = "1" ]; then agent="opencode"
-        elif [ "${CURSOR:-}" = "1" ] || [ "${TERM_PROGRAM:-}" = "cursor" ]; then agent="cursor"
-        else agent="claude"
-        fi
-    fi
-
     # Compute project, parent, next index
     local project parent next_index=1
     project="$(basename "$(git rev-parse --show-toplevel)")"
     parent="$(dirname "$(git rev-parse --show-toplevel)")"
 
-    for dir in "$parent/${project}-${agent}"-*/; do
+    for dir in "$parent/${project}-${name}"-*/; do
         if [ -d "$dir" ]; then
             local n="${dir##*-}"
             n="${n%/}"
@@ -509,16 +533,16 @@ git_worktree_spawn() {
         fi
     done
 
-    local wt_path="${parent}/${project}-${agent}-${next_index}"
+    local wt_path="${parent}/${project}-${name}-${next_index}"
 
     # Branch name
     local branch
     if [ -n "$task" ]; then
         local slug
         slug=$(printf '%s' "$task" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//' | cut -c1-30)
-        branch="wt/${agent}/${next_index}-${slug}"
+        branch="wt/${name}/${next_index}-${slug}"
     else
-        branch="wt/${agent}/${next_index}"
+        branch="wt/${name}/${next_index}"
     fi
 
     # Base ref
@@ -536,8 +560,8 @@ git_worktree_spawn() {
     git_worktree_add "$wt_path" "$branch" "$base" || return 1
 
     # Log
-    printf '[%s] SPAWN agent=%s index=%s path=%s branch=%s base=%s\n' \
-        "$(date +%Y-%m-%dT%H:%M:%S%z)" "$agent" "$next_index" "$wt_path" "$branch" "$base" \
+    printf '[%s] SPAWN name=%s index=%s path=%s branch=%s base=%s\n' \
+        "$(date +%Y-%m-%dT%H:%M:%S%z)" "$name" "$next_index" "$wt_path" "$branch" "$base" \
         >> "${git_common}/ai-worktree-spawn.log"
 
     ux_header "Worktree spawned"
@@ -547,12 +571,12 @@ git_worktree_spawn() {
 
     # --- Optional tmux integration ---
     if [ "$use_tmux" = 1 ]; then
-        _tmux_add_agent_window "$project" "$agent" "$wt_path"
-        ux_info "  tmux:   session '$project', window '$agent'"
+        _tmux_add_agent_window "$project" "$name" "$wt_path"
+        ux_info "  tmux:   session '$project', window '$name'"
         if [ -z "$TMUX" ]; then
             tmux attach -t "$project"
         else
-            tmux switch-client -t "${project}:${agent}" 2>/dev/null || true
+            tmux switch-client -t "${project}:${name}" 2>/dev/null || true
         fi
     else
         ux_info ""

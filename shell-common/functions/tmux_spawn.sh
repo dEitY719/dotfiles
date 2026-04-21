@@ -98,33 +98,34 @@ tmux_spawn() {
     _ts_agent=""
     _ts_session=""
 
-    # --- Detect mode: worktree vs main repo ---
-    # Worktree pattern: <project>-<agent>-<index>
-    _ts_without_index="${_ts_basename%-*}"
-    _ts_candidate="${_ts_without_index##*-}"
+    # --- Detect mode: worktree vs main repo (via git, not filename) ---
+    # Filename-based detection fails once worktree names are free-form
+    # (e.g. dotfiles-issue-11-1), so rely on git's own notion of worktree.
+    _ts_git_common="$(git rev-parse --git-common-dir 2>/dev/null)"
+    _ts_git_dir="$(git rev-parse --git-dir 2>/dev/null)"
 
-    if _ts_known_agent "$_ts_candidate"; then
-        # Mode 1: worktree directory
-        _ts_agent="$_ts_candidate"
+    if [ -n "$_ts_git_common" ] && [ "$_ts_git_dir" != "$_ts_git_common" ]; then
+        # Mode 1: inside a worktree — session = current dir basename
         _ts_session="$_ts_basename"
+        _ts_agent="${_ts_arg:-claude}"
     else
-        # Mode 2: main repo — use <project>-<branch>
+        # Mode 2: main repo (or not in git) — session = <project>-<branch>
         _ts_project="$_ts_basename"
         _ts_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")"
         _ts_session="${_ts_project}-${_ts_branch}"
         _ts_agent="${_ts_arg:-claude}"
         unset _ts_project _ts_branch
     fi
+    unset _ts_git_common _ts_git_dir
 
-    # Override agent if argument given
+    # Validate agent if argument given
     if [ -n "$_ts_arg" ]; then
         if _ts_known_agent "$_ts_arg"; then
             _ts_agent="$_ts_arg"
         else
             ux_error "Unknown agent: $_ts_arg"
             ux_info  "Available: claude, codex, gemini, opencode, cursor, copilot"
-            unset _ts_arg _ts_dir _ts_basename _ts_agent _ts_session \
-                  _ts_without_index _ts_candidate
+            unset _ts_arg _ts_dir _ts_basename _ts_agent _ts_session
             return 1
         fi
     fi
