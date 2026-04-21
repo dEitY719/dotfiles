@@ -7,11 +7,17 @@ description: >-
   /gh-pr-reply, or asks "PR 리뷰 코멘트 확인하고 수정", "리뷰 답변 달아", "PR 123
   코멘트 처리해". Defaults to the PR for the current branch; accepts an explicit
   PR number as an argument. Every comment MUST get a reply — bot comments
-  (gemini, sourcery, copilot) included.
+  (gemini, sourcery, copilot) included. Accepts `-h`/`--help`/`help` to
+  print usage.
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 ---
 
 # gh:pr-reply — Address PR Review Comments
+
+## Help
+
+If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
+output its content verbatim, then stop. No API calls.
 
 ## Role
 
@@ -38,19 +44,10 @@ threads.
 
 ## Step 3: Evaluate Each Comment
 
-For each unaddressed comment, read the referenced file (`path` at `line`) and
-classify:
-
-- **ACCEPT** — reviewer is correct; the code should change
-- **ACCEPT-PARTIAL** — valid concern, but a different fix is better; note the
-  deviation in the reply
-- **DECLINE** — reviewer is wrong, misunderstanding the context, or the
-  suggestion would regress something; must explain why
-- **QUESTION** — reviewer asked for clarification rather than a change;
-  answer the question
-
+For each unaddressed comment, read the referenced file (`path` at `line`)
+and classify as **ACCEPT** / **ACCEPT-PARTIAL** / **DECLINE** / **QUESTION**.
 Bot comments (gemini-code-assist, sourcery-ai, copilot) follow the same
-rules — a bot nit is still a legitimate comment that deserves a reply.
+rules. See `references/reply-templates.md` for the full rubric.
 
 ## Step 4: Apply Fixes (ACCEPT / ACCEPT-PARTIAL only)
 

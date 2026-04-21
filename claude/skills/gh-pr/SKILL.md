@@ -6,11 +6,16 @@ description: >-
   /gh-pr, or asks "PR 생성", "풀리퀘 만들어", "지금까지 커밋들로 PR 올려". Pushes
   the branch if needed, drafts a structured PR body covering every commit in
   the range (not just HEAD), auto-links a related issue when known, and
-  returns only the PR URL.
+  returns only the PR URL. Accepts `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Grep
 ---
 
 # gh:pr — Create Pull Request
+
+## Help
+
+If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
+output its content verbatim, then stop. No API calls.
 
 ## Role
 
@@ -69,12 +74,9 @@ Write the body to a unique temp file via `mktemp`, then create the PR with
 ## Step 6: Apply Labels
 
 Derive labels from conventional-commit types in `git log <base>..HEAD`
-(`feat` → enhancement, `fix` → bug, `docs` → documentation, `refactor`,
-`style`, `perf`, `test`, `chore`, `ci`, `build`) plus judgment-based
-labels matching the PR scope (e.g., `skill` for `claude/skills/` changes).
-Query existing labels via `gh label list` and apply only labels that
-**already exist** in the repo — never create new labels. Details and the
-safe-application loop in `references/pr-body-template.md`.
+and PR scope (e.g. `skill` for `claude/skills/` changes). Apply only
+labels that exist in the repo (`gh label list`) — never create new ones.
+See `references/pr-body-template.md` for the full mapping + safe-apply loop.
 
 ## Step 7: Report
 
