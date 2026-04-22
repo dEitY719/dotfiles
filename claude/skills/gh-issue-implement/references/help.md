@@ -26,13 +26,14 @@ worktrees.
 
 1. Fetches the issue (same JSON fields as gh:issue-read).
 2. Verifies precondition: inside a git repo, on a non-base branch, working tree clean.
-3. Depending on mode:
+3. Claims the issue via `gh issue edit <N> --add-assignee @me` so teammates can see it's being worked (soft-fail: a permission/network error prints a single `⚠️` warning and continues; already-assigned is a no-op). Details in `references/claim-issue.md`.
+4. Depending on mode:
    - **direct** — explores the codebase, edits/creates files, runs tests.
    - **plan** — invokes superpowers:writing-plans with the issue body as context. If issue is ambiguous (see `references/implementation-flow.md` → "Ambiguity signals"), auto-promotes to brainstorming.
    - **brainstorming** — invokes superpowers:brainstorming, then writing-plans, then implements.
-4. Auto-detects the test runner from AGENTS.md → `tox.ini` → `pyproject.toml` → `package.json` → `tests/*.bats`, using the first that matches.
-5. Test-failure loop: up to 3 attempts to fix failures caused by its own edits; pre-existing failures are reported separately, not fixed.
-6. Prints a compact report: changed files, test result, next-step hint.
+5. Auto-detects the test runner from AGENTS.md → `tox.ini` → `pyproject.toml` → `package.json` → `tests/*.bats`, using the first that matches.
+6. Test-failure loop: up to 3 attempts to fix failures caused by its own edits; pre-existing failures are reported separately, not fixed.
+7. Prints a compact report: changed files, test result, next-step hint.
 
 ## superpowers plugin not installed → fallback
 
