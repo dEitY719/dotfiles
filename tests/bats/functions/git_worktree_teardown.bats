@@ -142,3 +142,88 @@ teardown() {
     after_main_sha="$(git -C "$CLONE" rev-parse main)"
     [ "$after_main_sha" = "$origin_main_sha" ]
 }
+
+# ---------------------------------------------------------------------------
+# D/E/F: merge target = origin/main + actionable unpushed msg + quiet checkout
+# ---------------------------------------------------------------------------
+
+# Simulate a squash-merge of the worktree branch into origin/main.
+# After this: origin/main contains the worktree's change under a different SHA.
+_squash_merge_branch_into_origin_main() {
+    # Record the worktree's work commit tree contents
+    local wt_file wt_content
+    wt_file="$1"
+    wt_content="$2"
+
+    local helper="$TEST_TEMP_HOME/squash-helper"
+    rm -rf "$helper"
+    git clone -q "$ORIGIN" "$helper"
+    (
+        cd "$helper"
+        # Apply the same change as a single commit (squash equivalent)
+        printf '%s\n' "$wt_content" > "$wt_file"
+        git add "$wt_file"
+        git commit -q -m "squash: merged via PR"
+        git push -q origin main
+    )
+    rm -rf "$helper"
+    git -C "$CLONE" fetch -q origin
+}
+
+@test "teardown: D — rebase-merged detection uses origin/main even when local main stale" {
+    # 1. Worktree makes a commit with content X
+    (
+        cd "$WORKTREE"
+        echo contentX > feature.txt
+        git add feature.txt
+        git commit -q -m "feat: X"
+    )
+    # 2. Simulate PR squash-merge: origin/main gets X under a new SHA
+    _squash_merge_branch_into_origin_main feature.txt contentX
+
+    # 3. Make LOCAL main diverge so ff-only fails — _gwt_branch_merged will be
+    #    called with a stale local main. Without D fix, it compares patches
+    #    against the stale local main (which lacks X) and misses the merge.
+    _diverge_local_main
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    # Main sync fails (local diverged) so exit 1 per C-2. But branch delete
+    # should still announce "rebase-merged" because origin/main contains the
+    # branch's patches.
+    assert_failure
+    assert_output --partial "rebase-merged"
+    refute_output --partial "force-deleted"
+    refute_output --partial "not fully merged"
+}
+
+@test "teardown: E — unpushed-commits error shows ahead count and push hint" {
+    # Worktree branch is ahead of origin/main but never pushed. No --force.
+    (
+        cd "$WORKTREE"
+        echo a > a.txt && git add a.txt && git commit -q -m "a"
+        echo b > b.txt && git add b.txt && git commit -q -m "b"
+        echo c > c.txt && git add c.txt && git commit -q -m "c"
+    )
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
+    # Must show how many commits are unpushed
+    assert_output --partial "3"
+    # Must suggest an actual push command the user can run
+    assert_output --partial "git push"
+    assert_output --partial "wt/test/1"
+    # And still mention --force as the alternative
+    assert_output --partial "--force"
+}
+
+@test "teardown: F — git checkout stdout noise ('Your branch is behind') suppressed" {
+    # Make local main behind origin/main. git checkout main would normally print
+    # "Your branch is behind 'origin/main' by 1 commits, and can be fast-forwarded."
+    # to stdout (unsilenceable by 2>/dev/null). With `checkout -q` it's gone.
+    _advance_origin_main
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown --force 2>&1"
+    assert_success
+    refute_output --partial "Your branch is behind"
+    refute_output --partial "use \"git pull\""
+}

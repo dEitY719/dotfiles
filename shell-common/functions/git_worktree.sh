@@ -607,10 +607,10 @@ _gwt_commits_safe() {
     fi
 
     # 3. All patches already applied via rebase/squash merge (patch-id comparison)
-    # git cherry marks already-applied commits with '-', unapplied with '+'
-    local unapplied
-    unapplied="$(git cherry "$main_ref" HEAD 2>/dev/null | grep -c '^+' || echo "0")"
-    if [ "$unapplied" = "0" ]; then
+    # git cherry marks already-applied commits with '-', unapplied with '+'.
+    # If grep finds no '+' line, every HEAD commit is patch-id-equivalent to
+    # something already in main_ref → safe.
+    if ! git cherry "$main_ref" HEAD 2>/dev/null | grep -q '^+'; then
         return 0
     fi
 
@@ -635,9 +635,44 @@ _gwt_commits_safe() {
 # ============================================================================
 _gwt_branch_merged() {
     local branch="$1" target="$2"
-    local unapplied
-    unapplied="$(git cherry "$target" "$branch" 2>/dev/null | grep -c '^+' || echo "0")"
-    [ "$unapplied" = "0" ]
+    # No '+' line from git cherry → all patches already in target.
+    ! git cherry "$target" "$branch" 2>/dev/null | grep -q '^+'
+}
+
+# ============================================================================
+# Internal: pick the best merge-detection target. Prefer origin/<main> if
+# fetched, else fall back to local <main> (stale detection better than none).
+# Usage: _gwt_merge_target <main_branch>
+# ============================================================================
+_gwt_merge_target() {
+    local main_branch="$1"
+    if git rev-parse --verify --quiet "origin/$main_branch" >/dev/null 2>&1; then
+        printf '%s\n' "origin/$main_branch"
+    else
+        printf '%s\n' "$main_branch"
+    fi
+}
+
+# ============================================================================
+# Internal: render an actionable "unpushed commits" diagnostic.
+# Usage: _gwt_report_unpushed <branch>
+# ============================================================================
+_gwt_report_unpushed() {
+    local branch="$1"
+    local main_ref="origin/main"
+    git rev-parse --verify --quiet "$main_ref" >/dev/null 2>&1 || main_ref="origin/master"
+
+    local upstream ahead
+    upstream="$(git rev-parse --abbrev-ref '@{u}' 2>/dev/null || echo "(none)")"
+    ahead="$(git rev-list --count "$main_ref"..HEAD 2>/dev/null || echo "?")"
+
+    ux_error "Unpushed commits on '$branch' ($ahead ahead of $main_ref, upstream: $upstream)."
+    ux_info "  Push:   git push -u origin $branch"
+    ux_info "  Or:     gwt teardown --force   # discard the unpushed commits"
+    if [ "$ahead" != "?" ] && [ "$ahead" != "0" ]; then
+        ux_info "  Unpushed commits (newest first):"
+        git log --no-color --format='    %h %s' "$main_ref"..HEAD 2>/dev/null | head -10
+    fi
 }
 
 # ============================================================================
@@ -743,7 +778,9 @@ git_worktree_teardown() {
         if [ "$force" = true ]; then
             ux_warning "Discarding unpushed commits (--force)"
         else
-            ux_error "Unpushed commits. Push first, or use --force."
+            # (E) Actionable diagnostic: show ahead count, upstream state,
+            # push command, and the list of unpushed commits.
+            _gwt_report_unpushed "$(git rev-parse --abbrev-ref HEAD)"
             return 1
         fi
     fi
@@ -774,7 +811,9 @@ git_worktree_teardown() {
     if ! git rev-parse --verify --quiet "main" >/dev/null 2>&1; then
         main_branch="master"
     fi
-    if ! git checkout "$main_branch" 2>/dev/null; then
+    # (F) -q suppresses "Your branch is behind 'origin/<main>' by N commits"
+    # which git checkout prints to stdout (unsilenceable via 2>/dev/null).
+    if ! git checkout -q "$main_branch" 2>/dev/null; then
         ux_error "Failed to checkout $main_branch in main repository."
         return 1
     fi
@@ -800,13 +839,19 @@ git_worktree_teardown() {
     fi
     rm -f "$_gwt_ff_err_file"
 
+    # (D) Prefer origin/<main> over local <main> for rebase-merge detection.
+    # Local <main> can be stale when the ff-only sync above failed — exactly
+    # the scenario where we most need merge detection to still fire.
+    local merge_target
+    merge_target=$(_gwt_merge_target "$main_branch")
+
     # Delete branch
     if [ "$keep_branch" = true ]; then
         ux_info "Branch kept: $branch (--keep-branch)"
     elif git branch -d "$branch" 2>/dev/null; then
         : # deleted successfully (fast-forward or true merge)
-    elif _gwt_branch_merged "$branch" "$main_branch"; then
-        # Rebase/squash merge: commits are in main but SHAs differ
+    elif _gwt_branch_merged "$branch" "$merge_target"; then
+        # Rebase/squash merge: commits are in main_ref but SHAs differ.
         git branch -D "$branch" 2>/dev/null
         ux_success "Branch deleted (rebase-merged): $branch"
     elif [ "$force" = true ]; then
