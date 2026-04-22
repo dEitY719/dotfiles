@@ -727,9 +727,17 @@ git_worktree_teardown() {
         fi
     fi
 
-    # Pre-flight: unpushed commits
-    # Fetch origin so origin/main is current for merge-base / cherry checks
-    git fetch origin 2>/dev/null || ux_warning "Fetch failed (network?). Merge status check may be stale."
+    # Pre-flight: unpushed commits.
+    # (A) Capture fetch stderr so failures surface the actual cause, not a
+    # misleading "network?" blurb. Real reason (auth, hook, URL, etc.) wins.
+    local _gwt_fetch_err_file="${TMPDIR:-/tmp}/gwt-fetch.$$.err"
+    if ! git fetch origin 2>"$_gwt_fetch_err_file" >/dev/null; then
+        ux_warning "git fetch origin failed — merge status check may be stale."
+        if [ -s "$_gwt_fetch_err_file" ]; then
+            sed 's/^/    /' "$_gwt_fetch_err_file" >&2
+        fi
+    fi
+    rm -f "$_gwt_fetch_err_file"
     # Checks (in order): upstream match → ancestor of origin/main → patch-id (rebase merge)
     if ! _gwt_commits_safe; then
         if [ "$force" = true ]; then
@@ -761,7 +769,7 @@ git_worktree_teardown() {
     fi
     git worktree prune
 
-    # Sync main BEFORE branch delete
+    # Sync main BEFORE branch delete.
     local main_branch="main"
     if ! git rev-parse --verify --quiet "main" >/dev/null 2>&1; then
         main_branch="master"
@@ -770,7 +778,27 @@ git_worktree_teardown() {
         ux_error "Failed to checkout $main_branch in main repository."
         return 1
     fi
-    git pull origin "$main_branch" 2>/dev/null || ux_warning "Pull failed (network?). Branch delete may misjudge merge status."
+    # (B) Replace `git pull origin <main>` with local `git merge --ff-only
+    # origin/<main>`. We already fetched above — no second network round-trip,
+    # no rebase-merge surprises under pull.rebase=true. Diverged local main is
+    # reported clearly rather than collapsed into "network?".
+    local _gwt_ff_err_file="${TMPDIR:-/tmp}/gwt-ff.$$.err"
+    local main_sync_ok=true
+    if git rev-parse --verify --quiet "origin/$main_branch" >/dev/null 2>&1; then
+        if ! git merge --ff-only "origin/$main_branch" 2>"$_gwt_ff_err_file" >/dev/null; then
+            main_sync_ok=false
+            ux_error "Main sync failed — git merge --ff-only origin/$main_branch"
+            if [ -s "$_gwt_ff_err_file" ]; then
+                sed 's/^/    /' "$_gwt_ff_err_file" >&2
+            fi
+            ux_info "  Local '$main_branch' has diverged from origin/$main_branch."
+            ux_info "  Resolve manually (rebase / reset) before spawning new worktrees from local '$main_branch'."
+        fi
+    else
+        main_sync_ok=false
+        ux_warning "origin/$main_branch not found — skipping ff-sync (fetch likely failed)."
+    fi
+    rm -f "$_gwt_ff_err_file"
 
     # Delete branch
     if [ "$keep_branch" = true ]; then
@@ -793,9 +821,20 @@ git_worktree_teardown() {
         "$(date +%Y-%m-%dT%H:%M:%S%z)" "$wt_name" "$branch" "$wt_path" \
         >> "$(git rev-parse --git-common-dir)/ai-worktree-spawn.log"
 
-    ux_success "Teardown complete"
+    # (C-2) Strict exit: if main is not in sync with origin, report partial
+    # teardown and return non-zero so callers (CI, hooks, chained aliases)
+    # notice. Worktree removal and branch delete still ran.
+    if [ "$main_sync_ok" = true ]; then
+        ux_success "Teardown complete"
+        ux_info "  Removed: $wt_path"
+        ux_info "  Now on:  $main_branch"
+        return 0
+    fi
+
+    ux_warning "Teardown partial — worktree removed, main NOT in sync with origin/$main_branch"
     ux_info "  Removed: $wt_path"
-    ux_info "  Now on:  $main_branch"
+    ux_info "  Now on:  $main_branch (out of sync)"
+    return 1
 }
 
 alias gwt-help='gwt_help'
