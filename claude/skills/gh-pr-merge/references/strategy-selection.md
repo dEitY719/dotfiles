@@ -34,7 +34,7 @@ Do NOT silently switch strategies.
 ```bash
 gh pr view <N> --repo "$TARGET_REPO" --json \
   number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,\
-  baseRefName,headRefName,author
+  baseRefName,headRefName,url
 ```
 
 ## Hard-stop decisions
@@ -45,6 +45,8 @@ gh pr view <N> --repo "$TARGET_REPO" --json \
 | `isDraft` | `true` → "draft PR — mark ready first" |
 | `mergeable` | `CONFLICTING` → "resolve conflicts first" |
 | `reviewDecision` | `!= APPROVED` → "not approved — use /gh-pr-emergency-merge for admin bypass" |
+| `mergeStateStatus` | `BEHIND`/`BLOCKED`/`DIRTY` → "rebase or fix conflicts first" |
+| required checks | any `FAILURE` / `IN_PROGRESS` / `QUEUED` → "CI not green — fix or wait" |
 
 ## Required checks
 
@@ -60,6 +62,10 @@ Only proceed when all required checks are `SUCCESS`.
 ```bash
 gh pr view <N> --repo "$TARGET_REPO" --json mergeCommit -q .mergeCommit.oid
 ```
+
+If `.mergeCommit.oid` is null (API hasn't settled yet), retry once after
+1 second. Still null → print the SHA as `(pending)` in the report and
+include the PR URL so the user can resolve manually.
 
 ## Final report format
 

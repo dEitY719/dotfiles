@@ -22,6 +22,8 @@
 - **`squash`** — collapse all PR commits into one. GitHub web "Squash and merge" button. Best for PRs with noisy WIP commits.
 - **`merge`** — preserve all commits + add a merge commit. GitHub web "Create a merge commit" button. Best when commit history carries meaning (releases, multi-author collaboration).
 
+_Availability depends on repo settings → General → Pull Requests. If a strategy is disabled the skill stops with a guidance message — it does NOT fall back to another strategy._
+
 ## What the skill does
 
 1. Parses args. Validates strategy ∈ {rebase, squash, merge}.
