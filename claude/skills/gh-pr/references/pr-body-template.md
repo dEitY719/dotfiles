@@ -27,8 +27,8 @@ Language: match the repo. Use Korean if existing commits are Korean.
 - [ ] <another check>
 
 ## Related
-Closes #<N>        ← required when the PR fully resolves the issue
-Refs #<N>          ← if related but not fully resolving
+Closes #<N>
+Refs #<N>
 ```
 
 - When Step 3 resolved an issue number AND the PR fully addresses it,
