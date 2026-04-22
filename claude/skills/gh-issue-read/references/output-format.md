@@ -7,7 +7,7 @@ The skill prints sections in this exact order. Empty sections are omitted except
 ### 1. Header
 
 ```
-#<N> <title> by @<author> (<state>, labels: <csv> | none)
+#<N> <title> by @<author.login> (<state>, labels: <csv> | none)
 <url>
 ```
 

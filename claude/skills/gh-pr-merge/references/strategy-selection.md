@@ -63,9 +63,9 @@ Only proceed when all required checks are `SUCCESS`.
 gh pr view <N> --repo "$TARGET_REPO" --json mergeCommit -q .mergeCommit.oid
 ```
 
-If `.mergeCommit.oid` is null (API hasn't settled yet), retry once after
-1 second. Still null → print the SHA as `(pending)` in the report and
-include the PR URL so the user can resolve manually.
+If `.mergeCommit.oid` is null (API hasn't settled yet), retry once
+after `sleep 1`. Still null → print the SHA as `(pending)` in the
+report and include the PR URL so the user can resolve manually.
 
 ## Final report format
 

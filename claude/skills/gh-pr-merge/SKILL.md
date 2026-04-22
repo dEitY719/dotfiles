@@ -26,7 +26,10 @@ Positional args: `<pr-number> [strategy] [remote]`.
   usage pointer and stop.
 - `strategy` — default `rebase`. Must be `rebase`, `squash`, or `merge`.
   Any other value → print allowed values and stop.
-- `remote` — default `origin`. Missing remote → `git remote -v` + stop.
+- `remote` — default `origin`. Resolve `TARGET_REPO=<owner>/<repo>`
+  via `git remote get-url <remote>` (parse `https://github.com/<o>/<r>.git`
+  or `git@github.com:<o>/<r>.git`). Missing remote → list `git remote -v`
+  and stop (no silent fallback).
 
 ## Step 2: Pre-flight (parallel)
 
