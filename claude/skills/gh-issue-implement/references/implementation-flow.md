@@ -41,30 +41,42 @@ Store the chosen command as `$TEST_CMD`.
 
 ## Test-failure loop (max 3 iterations)
 
-```
-attempt = 1
-while attempt <= 3 and tests fail:
-    a. Parse failure output. Identify failing test(s) + error message.
-    b. Determine if failure is caused by the skill's edits:
-       - Git diff since skill start shows touched files overlapping the
-         failing test's module → CAUSED by skill edits.
-       - Otherwise → PRE-EXISTING.
-    c. If CAUSED:
-       - Re-read the failing test and the edited file.
-       - Make a targeted fix (smallest possible edit).
-       - Re-run $TEST_CMD.
-       - attempt += 1
-    d. If PRE-EXISTING:
-       - Move it to the pre-existing bucket, not the fix loop.
-       - Stop looping on this test.
+Before starting edits, capture a baseline: run `$TEST_CMD` once with
+no edits and record the set of failing tests as `pre_existing_failures`.
+Any test failing in that baseline is never "caused" by this skill's
+edits.
 
-If attempt > 3 and tests still fail:
-    Stop. Report with:
-    - Files changed so far (diff summary)
-    - Failing tests + their last error output
-    - Whether each is skill-caused or pre-existing
-    - "Manual intervention needed."
+Then loop:
+
 ```
+attempt = 0
+while attempt < 3:
+    result = run($TEST_CMD)
+    failing = parse_failing_tests(result)
+    caused = failing - pre_existing_failures
+
+    if caused is empty:
+        break   # all remaining failures are pre-existing, done
+
+    for test in caused:
+        re_read(failing_test_file, edited_source_files)
+        make_targeted_fix(test)    # smallest edit
+    attempt += 1
+
+# After loop:
+if caused still non-empty:
+    emit "stopped after 3 test-fix attempts" report
+else:
+    emit "complete" report with <n pre-existing> count
+```
+
+**Invariants:**
+- PRE-EXISTING failures are NEVER fixed by this skill — reported as
+  pre-existing in the final output.
+- `attempt` counts `$TEST_CMD` runs that had at least one CAUSED
+  failure. Runs with only PRE-EXISTING failures do not consume attempts.
+- Baseline run happens before any edit — this is what makes the
+  CAUSED vs PRE-EXISTING split well-defined.
 
 ## Final report format
 
