@@ -54,10 +54,13 @@ Triggered only when preflight detects a non-empty working tree
 
 ## In-progress operation guard
 
+Always resolve marker paths through `git rev-parse --git-path`. In a git
+worktree the actual paths are under `.git/worktrees/<wt>/`, and hardcoded
+`.git/<name>` checks silently miss the marker.
+
 ```bash
-for marker in \
-  .git/rebase-merge .git/rebase-apply \
-  .git/MERGE_HEAD .git/CHERRY_PICK_HEAD .git/REVERT_HEAD; do
+for name in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD; do
+    marker=$(git rev-parse --git-path "$name")
     if [ -e "$marker" ]; then
         echo "in-progress operation detected: $marker"
         echo "finish or abort it first:"
