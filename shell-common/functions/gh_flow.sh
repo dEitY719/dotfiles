@@ -18,7 +18,10 @@ _gh_flow_repo_name() {
 
 _gh_flow_issue_dir() {
     # $1 = issue number
-    printf '%s/%s/%s' "$(_gh_flow_state_root)" "$(_gh_flow_repo_name)" "$1"
+    local _root _name
+    _root=$(_gh_flow_state_root)
+    _name=$(_gh_flow_repo_name)
+    printf '%s/%s/%s' "$_root" "$_name" "$1"
 }
 
 _gh_flow_set_state() {
@@ -34,7 +37,7 @@ _gh_flow_set_state() {
 _gh_flow_get_state() {
     # $1 = issue; prints state or "nonexistent"
     local _dir
-    _dir="$(_gh_flow_issue_dir "$1")"
+    _dir=$(_gh_flow_issue_dir "$1")
     if [ -f "$_dir/state" ]; then
         cat "$_dir/state"
     else
@@ -145,12 +148,12 @@ gh_flow() {
 _gh_flow_spawn_worker() {
     local _issue="$1"
     local _dir _log _state _pid
-    _dir="$(_gh_flow_issue_dir "$_issue")"
+    _dir=$(_gh_flow_issue_dir "$_issue")
     mkdir -p "$_dir"
     _log="$_dir/log"
 
     # Idempotency check
-    _state="$(_gh_flow_get_state "$_issue")"
+    _state=$(_gh_flow_get_state "$_issue")
     case "$_state" in
         done)
             ux_info "#$_issue already done, skipping"
@@ -194,7 +197,7 @@ _gh_flow_spawn_worker() {
 _gh_flow_worker() {
     local _issue="$1"
     local _dir _worktree _pr _spawn_name _decision _comments
-    _dir="$(_gh_flow_issue_dir "$_issue")"
+    _dir=$(_gh_flow_issue_dir "$_issue")
     _spawn_name="issue-$_issue"
 
     printf '[gh-flow-worker] issue=#%s start=%s\n' "$_issue" "$(date -Iseconds 2>/dev/null || date)"
