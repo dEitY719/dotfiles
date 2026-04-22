@@ -6,7 +6,9 @@ Run these in parallel at start; all must pass:
 
 - `git rev-parse --show-toplevel` — must succeed (in a git repo).
 - `git rev-parse --abbrev-ref HEAD` — must NOT equal the default branch.
-  Get default via `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`.
+  Get default via `gh repo view "$TARGET_REPO" --json defaultBranchRef -q .defaultBranchRef.name`
+  (pass the resolved repo explicitly — avoids implicit repo detection
+  when the cwd is under a fork or unusual remote setup).
 - `git status --porcelain` — must be empty (clean working tree).
 
 **Failure responses:**
