@@ -9,8 +9,15 @@ git rev-parse --is-inside-work-tree
 git rev-parse --abbrev-ref HEAD
 gh repo view --json defaultBranchRef -q .defaultBranchRef.name
 git status --porcelain
-ls .git/rebase-merge .git/rebase-apply .git/MERGE_HEAD .git/CHERRY_PICK_HEAD 2>/dev/null
+ls "$(git rev-parse --git-path rebase-merge)" \
+   "$(git rev-parse --git-path rebase-apply)" \
+   "$(git rev-parse --git-path MERGE_HEAD)" \
+   "$(git rev-parse --git-path CHERRY_PICK_HEAD)" 2>/dev/null
 ```
+
+Use `git rev-parse --git-path <name>` instead of hardcoded `.git/<name>`
+— in a git worktree the real path is `.git/worktrees/<wt>/<name>`, and
+hardcoded paths silently miss the in-progress marker.
 
 Stop conditions:
 
@@ -18,7 +25,7 @@ Stop conditions:
 |---|---|
 | not a git repo | "not inside a git repository" |
 | current branch == default | "refuse to rebase the default branch" |
-| any of `.git/rebase-*`, `.git/MERGE_HEAD`, `.git/CHERRY_PICK_HEAD` | "rebase/merge/cherry-pick already in progress — finish or abort first" |
+| any of `rebase-merge` / `rebase-apply` / `MERGE_HEAD` / `CHERRY_PICK_HEAD` exists (resolved via `git rev-parse --git-path`) | "rebase/merge/cherry-pick already in progress — finish or abort first" |
 
 Dirty working tree is NOT a stop — it triggers the stash flow in
 `safety.md`.
