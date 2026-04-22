@@ -30,7 +30,7 @@ worktrees.
    - **direct** — explores the codebase, edits/creates files, runs tests.
    - **plan** — invokes superpowers:writing-plans with the issue body as context. If issue is ambiguous (see `references/implementation-flow.md` → "Ambiguity signals"), auto-promotes to brainstorming.
    - **brainstorming** — invokes superpowers:brainstorming, then writing-plans, then implements.
-4. Auto-detects the test runner (tox / pytest / bats / npm test / ...) from AGENTS.md, `pyproject.toml`, `package.json`, or `tox.ini`.
+4. Auto-detects the test runner from AGENTS.md → `tox.ini` → `pyproject.toml` → `package.json` → `tests/*.bats`, using the first that matches.
 5. Test-failure loop: up to 3 attempts to fix failures caused by its own edits; pre-existing failures are reported separately, not fixed.
 6. Prints a compact report: changed files, test result, next-step hint.
 

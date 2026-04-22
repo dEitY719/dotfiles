@@ -21,13 +21,16 @@ allowed-tools: Bash, Read, Grep, Glob, Edit, Write
 If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
 output its content verbatim, then stop. No API calls.
 
-## Step 1: Parse Args + Preconditions
+## Step 1: Parse Args + Resolve Repo + Preconditions
 
 Positional args: `<issue-number> [mode] [remote]`.
 
 - `issue-number` — required, positive integer.
 - `mode` — default `direct`. Must be `direct`, `plan`, or `brainstorming`.
-- `remote` — default `origin`.
+- `remote` — default `origin`. Resolve `TARGET_REPO=<owner>/<repo>` via
+  `git remote get-url <remote>`. Missing remote → list `git remote -v`
+  and stop (no silent fallback to `origin`). Substeps in
+  `references/repo-resolution.md`.
 
 Check preconditions in parallel (exact rules in
 `references/implementation-flow.md` → "Preconditions"):
@@ -47,10 +50,16 @@ Per `references/superpowers-detection.md`:
 
 ```bash
 gh issue view <N> --repo "$TARGET_REPO" --json \
-  number,title,body,author,labels,state,comments,url
+  number,title,body,state,comments,url
 ```
 
 On error (not found, auth) → print stderr + stop.
+
+If `state == CLOSED`, stop with:
+```
+Issue #<N> is CLOSED. Refuse to implement a closed issue — reopen it
+or pass a different number.
+```
 
 ## Step 4: Mode Dispatch
 

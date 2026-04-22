@@ -2,12 +2,22 @@
 
 ## Detection rule
 
-```bash
-test -d "$HOME/.claude/plugins/cache/superpowers-dev"
-```
+superpowers is present if EITHER is true:
 
-- Exit 0 → plugin installed → honor requested mode.
-- Exit non-zero → plugin missing → force `direct` mode.
+1. Plugin cache directory exists:
+   ```bash
+   test -d "$HOME/.claude/plugins/cache/superpowers-dev"
+   ```
+2. The required skills are resolvable via the Skill tool (checked by
+   attempting to describe `superpowers:writing-plans` and
+   `superpowers:brainstorming` and verifying both return a skill
+   definition, not a "not found" error).
+
+If either check passes → honor requested mode.
+If both fail → force `direct` mode.
+
+This disjunction handles manual/symlink installs that bypass the
+plugin cache but still expose the skills to the Skill tool.
 
 ## Fallback behavior
 
