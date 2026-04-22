@@ -26,7 +26,7 @@ worktrees.
 
 1. Fetches the issue (same JSON fields as gh:issue-read).
 2. Verifies precondition: inside a git repo, on a non-base branch, working tree clean.
-3. Claims the issue via `gh issue edit <N> --add-assignee @me` so teammates can see it's being worked (soft-fail: a permission/network error prints a single `⚠️` warning and continues; already-assigned is a no-op). Details in `references/claim-issue.md`.
+3. Claims the issue via `gh issue edit <N> --add-assignee @me` so teammates see it's being worked (soft-fail on error; see `references/claim-issue.md`).
 4. Depending on mode:
    - **direct** — explores the codebase, edits/creates files, runs tests.
    - **plan** — invokes superpowers:writing-plans with the issue body as context. If issue is ambiguous (see `references/implementation-flow.md` → "Ambiguity signals"), auto-promotes to brainstorming.
