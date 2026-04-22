@@ -46,7 +46,7 @@ Per `references/superpowers-detection.md`:
 - If plugin missing → force mode = `direct` + print one warning line.
 - Else → honor the requested mode.
 
-## Step 3: Fetch Issue
+## Step 3: Fetch + Claim Issue
 
 ```bash
 gh issue view <N> --repo "$TARGET_REPO" --json \
@@ -60,6 +60,15 @@ If `state == CLOSED`, stop with:
 Issue #<N> is CLOSED. Refuse to implement a closed issue — reopen it
 or pass a different number.
 ```
+
+Then claim the issue so teammates see it's being worked:
+
+```bash
+gh issue edit <N> --repo "$TARGET_REPO" --add-assignee @me
+```
+
+Soft-fail: on error print one stderr warning and continue. Rules in
+`references/claim-issue.md`.
 
 ## Step 4: Mode Dispatch
 
