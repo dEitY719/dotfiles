@@ -203,23 +203,27 @@ _gh_flow_worker() {
     printf '[gh-flow-worker] issue=#%s start=%s\n' "$_issue" "$(date -Iseconds 2>/dev/null || date)"
 
     # ---- Step 1: spawn worktree ----
+    # Snapshot the worktree list before and after `gwt spawn` and diff them
+    # to identify the new one. This avoids coupling to gwt's internal
+    # branch-naming convention (previously: parsing `wt/<name>/<idx>`).
+    local _wt_before _wt_after
     _gh_flow_set_state "$_dir" "spawning"
+    _wt_before=$(git worktree list --porcelain 2>/dev/null | awk '$1=="worktree"{print $2}')
     if ! gwt spawn "$_spawn_name"; then
         _gh_flow_set_state "$_dir" "failed:spawning"
         printf '[gh-flow-worker] gwt spawn failed\n' >&2
         return 1
     fi
 
-    # Locate the worktree just created (branch pattern: wt/<name>/<idx>)
-    _worktree="$(git worktree list --porcelain 2>/dev/null \
-        | awk -v n="$_spawn_name" '
-            $1 == "worktree" { p = $2 }
-            $1 == "branch" && index($2, "/wt/" n "/") { print p }
-        ' | tail -n 1)"
+    _wt_after=$(git worktree list --porcelain 2>/dev/null | awk '$1=="worktree"{print $2}')
+    _worktree=$(comm -13 \
+        <(printf '%s\n' "$_wt_before" | sort) \
+        <(printf '%s\n' "$_wt_after" | sort) \
+        | head -n 1)
 
     if [ -z "$_worktree" ] || [ ! -d "$_worktree" ]; then
         _gh_flow_set_state "$_dir" "failed:spawning"
-        printf '[gh-flow-worker] could not locate created worktree\n' >&2
+        printf '[gh-flow-worker] could not locate newly-created worktree\n' >&2
         return 1
     fi
     printf '%s\n' "$_worktree" >"$_dir/worktree.path"
