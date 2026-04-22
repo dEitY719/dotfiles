@@ -15,20 +15,24 @@ RESET='\033[0m'
 # Read JSON input from stdin
 input=$(cat)
 
-# Extract current directory and model from JSON input
-cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
-model_id=$(echo "$input" | jq -r '.model.id // ""')
-model_display=$(echo "$input" | jq -r '.model.display_name // ""')
-
-# Extract context window usage (tokens + percentage)
-used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // ""')
-total_tokens=$(echo "$input" | jq -r '
-  (.context_window.current_usage // {}) as $u
-  | (($u.input_tokens // 0)
-      + ($u.cache_read_input_tokens // 0)
-      + ($u.cache_creation_input_tokens // 0)
-      | if . > 0 then tostring else "" end)
-')
+# Extract everything we need in a single jq pass — statusline runs on every
+# prompt render, so consolidating 5 jq forks into 1 is a meaningful win.
+IFS=$'\t' read -r cwd model_id model_display used_pct total_tokens < <(
+    echo "$input" | jq -r '
+      (.context_window.current_usage // {}) as $u
+      | [
+          (.workspace.current_dir // .cwd // ""),
+          (.model.id // ""),
+          (.model.display_name // ""),
+          (.context_window.used_percentage // ""),
+          (($u.input_tokens // 0)
+            + ($u.cache_read_input_tokens // 0)
+            + ($u.cache_creation_input_tokens // 0)
+            | if . > 0 then tostring else "" end)
+        ]
+      | @tsv
+    '
+)
 
 # Get current time in YY-MM-DD HH:MM:SS format
 current_time=$(date +%y-%m-%d\ %H:%M:%S)
