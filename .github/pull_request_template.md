@@ -14,4 +14,4 @@ Closes #<N> 키워드가 반드시 포함되어야 Project 보드의 Done 자동
 - [ ]
 
 ## Related
-Closes #
+Closes #<N>
