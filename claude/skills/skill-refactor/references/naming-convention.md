@@ -11,7 +11,7 @@ The colon is intentional and should be preserved across refactors.
 | `gh:commit` | `gh-commit/` |
 | `gh:pr` | `gh-pr/` |
 | `gh:pr-reply` | `gh-pr-reply/` |
-| `gh:issue` | `gh-issue/` |
+| `gh:issue-create` | `gh-issue-create/` |
 | `skill:refactor` | `skill-refactor/` |
 | `skill:check` | `skill-check/` |
 | `skill:create` | `skill-create/` |

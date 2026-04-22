@@ -47,7 +47,7 @@ Check in this order and use the first hit:
 1. **Explicit argument** — if the user said `/gh:commit 123` or mentioned
    "이슈 123번 연결" in their latest message.
 2. **Recent conversation** — scan the last ~10 messages for `#N` or
-   "Issue #N created" (gh:issue's output format). If found, use it.
+   "Issue #N created" (gh:issue-create's output format). If found, use it.
 3. **None** — skip the footer. Do NOT invent an issue number.
 
 ## Step 3: Draft the Commit Message
