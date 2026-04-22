@@ -9,6 +9,7 @@ ORANGE='\033[33m'
 GREEN='\033[32m'
 RED='\033[31m'
 MAGENTA='\033[35m'
+BLUE='\033[34m'
 RESET='\033[0m'
 
 # Read JSON input from stdin
@@ -18,6 +19,16 @@ input=$(cat)
 cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
 model_id=$(echo "$input" | jq -r '.model.id // ""')
 model_display=$(echo "$input" | jq -r '.model.display_name // ""')
+
+# Extract context window usage (tokens + percentage)
+used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // ""')
+total_tokens=$(echo "$input" | jq -r '
+  (.context_window.current_usage // {}) as $u
+  | (($u.input_tokens // 0)
+      + ($u.cache_read_input_tokens // 0)
+      + ($u.cache_creation_input_tokens // 0)
+      | if . > 0 then tostring else "" end)
+')
 
 # Get current time in YY-MM-DD HH:MM:SS format
 current_time=$(date +%y-%m-%d\ %H:%M:%S)
@@ -136,10 +147,38 @@ if [ -n "$git_status_text" ]; then
     git_status_info="${git_status_color}📝 ${git_status_text}${RESET}"
 fi
 
-# Output format with colors and emojis
-# Time: Cyan, Model: Orange, Project+Branch: Magenta, Git status: Red/Orange/Green
-if [[ -n "$git_status_info" ]]; then
-    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET} | ${git_status_info}"
-else
-    echo -e "${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET}"
+# Format tokens: 65700 -> 65.7k
+fmt_tokens() {
+    local n=$1
+    if [ "$n" -ge 1000 ]; then
+        awk -v n="$n" 'BEGIN{ printf "%.1fk", n/1000 }'
+    else
+        printf '%s' "$n"
+    fi
+}
+
+# Build context segment like "65.7k / 7%"
+ctx_segment=""
+if [ -n "$total_tokens" ] && [ -n "$used_pct" ]; then
+    ctx_segment="$(printf '%s / %.0f%%' "$(fmt_tokens "$total_tokens")" "$used_pct")"
+elif [ -n "$used_pct" ]; then
+    ctx_segment="$(printf '%.0f%%' "$used_pct")"
+elif [ -n "$total_tokens" ]; then
+    ctx_segment="$(fmt_tokens "$total_tokens")"
 fi
+
+ctx_info=""
+if [ -n "$ctx_segment" ]; then
+    ctx_info="${BLUE}🧮 ${ctx_segment}${RESET}"
+fi
+
+# Output format with colors and emojis
+# Time: Cyan, Model: Orange, Project+Branch: Magenta, Context: Blue, Git status: Red/Orange/Green
+out="${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET}"
+if [[ -n "$ctx_info" ]]; then
+    out="${out} | ${ctx_info}"
+fi
+if [[ -n "$git_status_info" ]]; then
+    out="${out} | ${git_status_info}"
+fi
+echo -e "$out"
