@@ -31,7 +31,7 @@ Positional args: `<pr-number> [strategy] [remote]`.
 ## Step 2: Pre-flight (parallel)
 
 Run in one message:
-- `gh pr view <N> --repo $TARGET_REPO --json number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefName,author`
+- `gh pr view <N> --repo $TARGET_REPO --json number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefName,url`
 - `gh pr checks <N> --repo $TARGET_REPO --required`
 
 **Hard stops** (see `references/strategy-selection.md` for exact table):
@@ -39,6 +39,7 @@ Run in one message:
 - `isDraft == true`
 - `mergeable == CONFLICTING`
 - `reviewDecision != APPROVED` → suggest `/gh-pr-emergency-merge` for admin bypass
+- `mergeStateStatus ∈ {BEHIND, BLOCKED, DIRTY}`
 - Any required check FAILURE or pending
 
 ## Step 3: Merge (no confirmation)
