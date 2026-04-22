@@ -1,4 +1,4 @@
-# Issue Body Templates — for gh:issue skill
+# Issue Body Templates — for gh:issue-create skill
 
 Title format and body structures for the three issue categories (feature / bug / misc). Select the template matching the category chosen in Step 2.
 
