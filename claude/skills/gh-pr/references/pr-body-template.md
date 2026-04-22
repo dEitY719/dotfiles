@@ -27,11 +27,20 @@ Language: match the repo. Use Korean if existing commits are Korean.
 - [ ] <another check>
 
 ## Related
-Closes #<N>        ← only if issue resolved
+Closes #<N>        ← required when the PR fully resolves the issue
 Refs #<N>          ← if related but not fully resolving
 ```
 
-- Omit the `## Related` section entirely if no issue number is known.
+- When Step 3 resolved an issue number AND the PR fully addresses it,
+  `Closes #<N>` is **mandatory** — not optional. The dotfiles
+  Project board relies on this keyword to move the Issue card to
+  `Done` on merge (see `docs/standards/github-project-board.md`).
+  Omitting it means the Issue stays open and the card never reaches
+  `Done`.
+- Use `Refs #<N>` instead only when the PR does not fully resolve
+  the issue (partial work, follow-up required).
+- Omit the `## Related` section entirely only when no issue number
+  is known.
 
 ## Create Command
 

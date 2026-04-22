@@ -69,6 +69,7 @@ TDD cycle: Analyze → Write test (`pytest` or `demo_ux.sh`) → Implement minim
 - **Coding Style**: See `shell-common/tools/ux_lib/UX_GUIDELINES.md` and `tox.ini`.
 - **Command UX Standard**: See `docs/standards/command-guidelines.md` (SSOT for command/help interface and formatting).
 - **Git Strategy**: Semantic commits (`Type: Summary`).
+- **Project Board**: See `docs/standards/github-project-board.md` (SSOT for Issue kanban workflow and closing-keyword policy).
 - **Maintenance**: Update AGENTS.md when adding new modules.
 
 # Context Map
