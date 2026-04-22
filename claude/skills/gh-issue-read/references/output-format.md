@@ -8,6 +8,7 @@ The skill prints sections in this exact order. Empty sections are omitted except
 
 ```
 #<N> <title> by @<author> (<state>, labels: <csv> | none)
+<url>
 ```
 
 `state` is one of `OPEN`, `CLOSED`. If the issue is closed as `not_planned` or `completed`, include that in parens:
@@ -19,9 +20,9 @@ Extract what the issue asks for. Start with a verb when possible.
 Example:
 ```
 Summary:
-- 기존 gh:issue 스킬을 gh:issue-create 로 rename.
-- 추가로 gh:issue-read, gh:issue-implement, gh:pr-merge, gh:issue-flow 스킬 신설.
-- 얇은 합성 스킬 패턴 도입.
+- Upload API 에 retry + exponential backoff 추가.
+- 실패 시 최대 5회까지 재시도, 간격 1s → 16s 지수 증가.
+- 테스트: unit + integration (flaky network mock).
 ```
 
 ### 3. Body (verbatim)
@@ -33,6 +34,9 @@ Reproduce the issue body **as written**. Preserve:
 - Discussion links
 
 Do NOT summarize or compress.
+
+If the issue body is empty, render `(empty)` as a placeholder — do not
+omit the Body section header.
 
 ### 4. Discussion (if comments > 0)
 
@@ -49,7 +53,6 @@ Chronological, one comment per block:
 Created:  <ISO-8601>
 Updated:  <ISO-8601>
 Assignees: @<user1>, @<user2>  (or "none")
-Linked PRs: #<pr1>, #<pr2>      (only if GitHub auto-detected; skip otherwise)
 ```
 
 ### 6. Checklist (if issue contains `- [ ]` items)

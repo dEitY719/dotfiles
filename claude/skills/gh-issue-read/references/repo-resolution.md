@@ -32,7 +32,7 @@ the substeps and error-message shape.
    - `https://github.com/<owner>/<repo>.git` → `<owner>/<repo>`
    - `git@github.com:<owner>/<repo>.git` → `<owner>/<repo>`
 
-Store the resolved `owner/repo` as `TARGET_REPO` for use in Step 4 of the
+Store the resolved `owner/repo` as `TARGET_REPO` for use in Step 2 of the
 main workflow.
 
 ## Failure rule
