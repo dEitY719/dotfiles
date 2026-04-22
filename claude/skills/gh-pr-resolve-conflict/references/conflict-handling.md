@@ -70,7 +70,7 @@ For `uv.lock`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`,
 1. Accept the base version: `git checkout --theirs <lockfile>`.
 2. Regenerate from the matching manifest in this commit:
    `uv lock` / `npm install --package-lock-only` / `pnpm install
-   --lockfile-only` / `cargo generate-lockfile`.
+   --lockfile-only` / `yarn install` / `cargo generate-lockfile`.
 3. `git add <lockfile>`, then continue.
 
 If the manifest itself conflicts, resolve the manifest first, then the
