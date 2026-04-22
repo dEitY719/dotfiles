@@ -182,11 +182,19 @@ t=2m..    리뷰어가 각 PR에 개별 페이스로 리뷰/코멘트/승인
 ### 6.2 타 worker 영향 없음
 각 worker는 독립 프로세스 + 독립 worktree + 독립 상태 디렉토리. 한 worker의 실패는 다른 worker에 전파 안 됨.
 
-### 6.3 멱등 재실행
+### 6.3 실패 후 재실행
+
+현재 구현은 "단순 재시도" 모델이다 — step-level resume 은 v1 out of scope.
+
 사용자가 실패 후 `gh-flow 13` 재실행:
-- `state=done` → "already done, skipping" 메시지 후 종료
-- `state=failed:<step>` → `<step>`부터 재개 시도 (예: `implementing`에서 실패했으면 기존 worktree 재사용해서 `/gh-issue-flow` 재시도)
-- `state=<in-progress-state>` → 같은 이슈의 worker가 이미 실행 중인지 pid 체크 후 결정
+- `state=done` → "already done, skipping" 메시지 후 종료.
+- `state=<in-progress-state>`:
+  - pid 살아있음 → skip (중복 실행 방지).
+  - pid 죽어있음 → 새 worker fork. 아래 `failed:*` 와 동일 동작.
+- `state=failed:<step>` → 새 worker fork. **새 worker는 항상 Step 1(gwt spawn)부터 시작**하고, `gwt spawn` 이 자동으로 새 인덱스를 붙여 **새 worktree**(`<proj>-issue-13-2`)를 만든다. 이전 실패한 worktree(`<proj>-issue-13-1`)는 디스크에 그대로 남아 사용자가 수동으로 조사·정리할 수 있다.
+
+#### 후속 개선 (v1 out of scope)
+진정한 step-level resume — 예: `implementing` 단계에서 실패했으면 기존 worktree를 재사용해 `/gh-issue-flow`만 재실행 — 은 worker가 시작 시 `state` 와 `worktree.path` 를 읽어 Step 1~2를 건너뛰는 로직이 필요하다. 별도 follow-up.
 
 ### 6.4 전역 타임아웃
 **명시적으로 없음.** 승인이 영영 안 오면 worker는 영원히 polling. 사용자가 판단해서 `kill <pid>` + 수동 정리. (첫 버전은 이 단순성 유지)
