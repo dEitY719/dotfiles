@@ -2,14 +2,14 @@
 name: gh:issue-create
 description: >-
   Save the current conversation as a GitHub issue in the current repository.
-  Use when the user runs /gh:issue-create, /gh-issue, or asks to "이 대화 이슈로 등록",
+  Use when the user runs /gh:issue-create, /gh-issue-create, or asks to "이 대화 이슈로 등록",
   "chat을 깃허브 이슈로 남겨", "기록용 이슈 만들어". Summarizes the conversation so
   far into a structured issue body (feature request / error analysis / misc),
   creates it via `gh issue create` on the target remote's repo without asking
   for confirmation, and prints only the issue number and URL. Do NOT over-
   compress — the issue is reused for PR drafts and blog posts, so preserve
   reasoning, decisions, and concrete details.
-  Accepts an optional remote name argument (e.g., `/gh-issue upstream`) to
+  Accepts an optional remote name argument (e.g., `/gh-issue-create upstream`) to
   target a different remote's repository instead of origin. Accepts
   `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Grep

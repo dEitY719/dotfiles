@@ -10,7 +10,7 @@
 
 - `/gh:issue-create` — create issue on `origin`'s repo (the most common case)
 - `/gh:issue-create upstream` — create issue on the `upstream` remote's repo
-- `/gh-issue -h` / `--help` / `help` — print this help
+- `/gh-issue-create -h` / `--help` / `help` — print this help
 
 ## What the skill does
 
