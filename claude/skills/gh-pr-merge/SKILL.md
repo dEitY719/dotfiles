@@ -37,11 +37,25 @@ Run in one message:
 - `gh pr view <N> --repo $TARGET_REPO --json number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefName,url`
 - `gh pr checks <N> --repo $TARGET_REPO --required`
 
+Then detect whether the base branch has protection rules (uses
+`baseRefName` from the previous call):
+
+- `gh api repos/$TARGET_REPO/branches/<baseRefName>/protection`
+  - HTTP 200 → protection **present**; strict rules apply.
+  - HTTP 403 (Free plan locks the feature) or 404 (not configured)
+    → protection **absent**; empty `reviewDecision` is accepted
+    (solo / personal repos where no one can approve your own PR).
+
 **Hard stops** (see `references/strategy-selection.md` for exact table):
 - `state != OPEN`
 - `isDraft == true`
 - `mergeable == CONFLICTING`
 - `reviewDecision != APPROVED` → suggest `/gh-pr-emergency-merge` for admin bypass
+  - Exception: protection **absent** (403/404) **AND** `reviewDecision == ""`
+    → accept and print an informational line:
+    `INFO: No branch protection on <baseRefName> — accepting empty reviewDecision.`
+    A non-empty non-APPROVED value (`REVIEW_REQUIRED`,
+    `CHANGES_REQUESTED`) still stops regardless of protection.
 - `mergeStateStatus ∈ {BEHIND, BLOCKED, DIRTY}`
 - Any required check FAILURE or pending
 
