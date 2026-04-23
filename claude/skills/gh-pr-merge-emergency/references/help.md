@@ -1,4 +1,4 @@
-# gh:pr-emergency-merge — Help
+# gh:pr-merge-emergency — Help
 
 ## Arguments
 
@@ -11,9 +11,9 @@
 ## Usage
 
 ```
-/gh-pr-emergency-merge 42 "INC-1031 prod 500 error on login since 14:00 KST"
-/gh-pr-emergency-merge 42 "revenue impact — checkout broken for 12% of users" upstream
-/gh-pr-emergency-merge -h
+/gh-pr-merge-emergency 42 "INC-1031 prod 500 error on login since 14:00 KST"
+/gh-pr-merge-emergency 42 "revenue impact — checkout broken for 12% of users" upstream
+/gh-pr-merge-emergency -h
 ```
 
 ## When to use this skill

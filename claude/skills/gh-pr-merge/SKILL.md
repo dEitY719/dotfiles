@@ -5,7 +5,7 @@ description: >-
   (default), squash, or merge commit — without asking for confirmation.
   Use when the user runs /gh:pr-merge, /gh-pr-merge, or asks "PR 51
   머지해", "rebase merge", "squash merge", "#99 머지". Refuses to merge
-  un-approved PRs (suggests gh:pr-emergency-merge instead), failing CI,
+  un-approved PRs (suggests gh:pr-merge-emergency instead), failing CI,
   draft PRs, or PRs with conflicts. Accepts
   `<pr-number> [rebase|squash|merge] [remote]`. Accepts `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Grep
@@ -50,7 +50,7 @@ Then detect whether the base branch has protection rules (uses
 - `state != OPEN`
 - `isDraft == true`
 - `mergeable == CONFLICTING`
-- `reviewDecision != APPROVED` → suggest `/gh-pr-emergency-merge` for admin bypass
+- `reviewDecision != APPROVED` → suggest `/gh-pr-merge-emergency` for admin bypass
   - Exception: protection **absent** (403/404) **AND** `reviewDecision == ""`
     → accept and print an informational line:
     `INFO: No branch protection on <baseRefName> — accepting empty reviewDecision.`
@@ -83,7 +83,7 @@ Print **only** the compact report (format in
 ## Constraints
 
 - Never ask for confirmation — running the skill is the confirmation.
-- Never merge an un-approved PR. Redirect to `gh:pr-emergency-merge`.
+- Never merge an un-approved PR. Redirect to `gh:pr-merge-emergency`.
 - Never swap to a different strategy if the chosen one fails.
 - Always `--delete-branch` — head branches accumulate fast.
 - Never bypass CI. Required checks must pass.

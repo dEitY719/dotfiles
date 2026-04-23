@@ -1,10 +1,10 @@
 ---
-name: gh:pr-emergency-merge
+name: gh:pr-merge-emergency
 description: >-
   Emergency-merge a GitHub PR by bypassing branch-protection approval
   requirements via admin override, while forcing an audit trail: a reason
   comment on the PR and a follow-up incident issue for later retro. Use
-  when the user runs /gh-pr-emergency-merge, /gh:pr-emergency-merge, or
+  when the user runs /gh-pr-merge-emergency, /gh:pr-merge-emergency, or
   asks "긴급 머지", "주말 핫픽스 머지", "approval 없이 머지", "admin bypass
   merge". NOT a replacement for normal review — the skill actively blocks
   overuse by requiring a written reason and creating a post-merge issue.
@@ -14,7 +14,7 @@ description: >-
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
-# gh:pr-emergency-merge — Admin-Bypass Merge with Audit Trail
+# gh:pr-merge-emergency — Admin-Bypass Merge with Audit Trail
 
 ## Help
 

@@ -1,4 +1,4 @@
-# Audit Templates — for gh:pr-emergency-merge skill
+# Audit Templates — for gh:pr-merge-emergency skill
 
 All bodies are written to `mktemp` files first (avoids shell escaping and
 concurrent-run collisions). Match the language dominant in the PR body
