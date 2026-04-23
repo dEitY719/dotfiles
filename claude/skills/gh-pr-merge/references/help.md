@@ -55,11 +55,11 @@ merge through `gh:pr-emergency-merge`.
 
 To avoid that, the skill detects whether the base branch has protection:
 
-- `gh api repos/<owner>/<repo>/branches/<base>/protection` returning
+- `gh api "repos/<owner>/<repo>/branches/<baseRefName>/protection"` returning
   HTTP 200 → protection **present** → strict `APPROVED` required.
 - HTTP 403 (Free plan locks the feature) or 404 (not configured) →
   protection **absent** → empty `reviewDecision` is accepted and the
-  skill prints `INFO: No branch protection on <base> — accepting empty reviewDecision.`
+  skill prints `INFO: No branch protection on <baseRefName> — accepting empty reviewDecision.`
 
 Non-empty non-APPROVED values (`CHANGES_REQUESTED`, `REVIEW_REQUIRED`)
 still hard-stop regardless of protection — someone explicitly blocked
