@@ -44,3 +44,32 @@ _Availability depends on repo settings → General → Pull Requests. If a strat
 - Fall back to another strategy on failure.
 - Merge an un-approved PR — use `gh:pr-emergency-merge` for admin bypass with audit trail.
 - Keep the head branch — always `--delete-branch`.
+
+## Solo / personal repo behavior
+
+GitHub disallows PR authors from self-approving, and Branch Protection
+Rules are locked on Free-plan private repos. The combination leaves
+`reviewDecision` permanently empty (`""`) on solo repos — so a strict
+`APPROVED` check would make this skill unusable without routing every
+merge through `gh:pr-emergency-merge`.
+
+To avoid that, the skill detects whether the base branch has protection:
+
+- `gh api repos/<owner>/<repo>/branches/<base>/protection` returning
+  HTTP 200 → protection **present** → strict `APPROVED` required.
+- HTTP 403 (Free plan locks the feature) or 404 (not configured) →
+  protection **absent** → empty `reviewDecision` is accepted and the
+  skill prints `INFO: No branch protection on <base> — accepting empty reviewDecision.`
+
+Non-empty non-APPROVED values (`CHANGES_REQUESTED`, `REVIEW_REQUIRED`)
+still hard-stop regardless of protection — someone explicitly blocked
+the PR, and protection absence does not override that signal.
+
+### When to use which skill
+
+| Situation | Skill |
+|---|---|
+| Protected base, reviewer approved | `gh:pr-merge` |
+| No branch protection (solo repo), no blocking review | `gh:pr-merge` (auto-accepts empty `reviewDecision`) |
+| Protected base, needs bypass for incident/hotfix | `gh:pr-emergency-merge` (forces audit comment + incident issue) |
+| Protected base, explicit `CHANGES_REQUESTED` | neither — address the review or use emergency-merge with a written reason |
