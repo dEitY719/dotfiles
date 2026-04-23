@@ -73,6 +73,6 @@
 ## Related skills
 
 - `gh:pr-merge` — merge an already-clean PR (rebase/squash/merge).
-- `gh:pr-emergency-merge` — admin-bypass merge with audit trail.
+- `gh:pr-merge-emergency` — admin-bypass merge with audit trail.
 - `gh:pr` — create a PR from the current branch.
 - `gh:pr-reply` — reply to PR review comments after rebasing.

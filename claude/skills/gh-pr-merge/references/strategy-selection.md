@@ -44,7 +44,7 @@ gh pr view <N> --repo "$TARGET_REPO" --json \
 | `state` | `!= OPEN` → "PR already <closed\|merged>" |
 | `isDraft` | `true` → "draft PR — mark ready first" |
 | `mergeable` | `CONFLICTING` → "resolve conflicts first" |
-| `reviewDecision` | `!= APPROVED` → "not approved — use /gh-pr-emergency-merge for admin bypass". **Conditional exception**: see "Branch protection detection" below — empty `reviewDecision` is accepted when the base branch has no protection rules (solo / personal repos). |
+| `reviewDecision` | `!= APPROVED` → "not approved — use /gh-pr-merge-emergency for admin bypass". **Conditional exception**: see "Branch protection detection" below — empty `reviewDecision` is accepted when the base branch has no protection rules (solo / personal repos). |
 | `mergeStateStatus` | `BEHIND`/`BLOCKED`/`DIRTY` → "rebase or fix conflicts first" |
 | required checks | any `FAILURE` / `IN_PROGRESS` / `QUEUED` → "CI not green — fix or wait" |
 
@@ -54,7 +54,7 @@ GitHub Free on private repos disables Branch Protection Rules, and
 GitHub forbids PR authors from self-approving. Together, that means
 solo / personal repos produce a permanently empty `reviewDecision`
 (`""`) for every PR — strict `APPROVED` enforcement would make the
-skill unusable there and force users into `gh-pr-emergency-merge`,
+skill unusable there and force users into `gh-pr-merge-emergency`,
 which is reserved for audited admin bypass.
 
 Detect protection presence:
@@ -70,7 +70,7 @@ Behavior table for the `reviewDecision` check:
 | Protection | `reviewDecision` | Action |
 |---|---|---|
 | present | `APPROVED` | proceed |
-| present | anything else (`""`, `REVIEW_REQUIRED`, `CHANGES_REQUESTED`) | hard stop — redirect to `gh-pr-emergency-merge` |
+| present | anything else (`""`, `REVIEW_REQUIRED`, `CHANGES_REQUESTED`) | hard stop — redirect to `gh-pr-merge-emergency` |
 | absent | `APPROVED` | proceed |
 | absent | `""` (empty) | proceed; print `INFO: No branch protection on <baseRefName> — accepting empty reviewDecision.` |
 | absent | `CHANGES_REQUESTED` / `REVIEW_REQUIRED` | hard stop — someone explicitly blocked this PR, protection absence does not override that |
