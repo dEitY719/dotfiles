@@ -420,7 +420,7 @@ Write to `claude/skills/gh-pr-merge/references/help.md`:
    - `gh pr checks` — required checks must pass
 4. Hard-stops on any of:
    - PR not OPEN / is draft / has merge conflicts
-   - Review decision ≠ APPROVED → suggests `gh:pr-emergency-merge` instead
+   - Review decision ≠ APPROVED → suggests `gh:pr-merge-emergency` instead
    - Required check failing or pending
 5. Runs `gh pr merge <N> --repo $TARGET_REPO --<strategy> --delete-branch` **without confirmation**.
 6. Fetches the merge SHA and prints a compact report.
@@ -429,7 +429,7 @@ Write to `claude/skills/gh-pr-merge/references/help.md`:
 
 - Ask "proceed?" — running the skill IS the confirmation.
 - Fall back to another strategy on failure.
-- Merge an un-approved PR — use `gh:pr-emergency-merge` for admin bypass with audit trail.
+- Merge an un-approved PR — use `gh:pr-merge-emergency` for admin bypass with audit trail.
 - Keep the head branch — always `--delete-branch`.
 ````
 
@@ -484,7 +484,7 @@ gh pr view <N> --repo "$TARGET_REPO" --json \
 | `state` | `!= OPEN` → "PR already <closed\|merged>" |
 | `isDraft` | `true` → "draft PR — mark ready first" |
 | `mergeable` | `CONFLICTING` → "resolve conflicts first" |
-| `reviewDecision` | `!= APPROVED` → "not approved — use /gh:pr-emergency-merge for admin bypass" |
+| `reviewDecision` | `!= APPROVED` → "not approved — use /gh:pr-merge-emergency for admin bypass" |
 
 ## Required checks
 
@@ -523,7 +523,7 @@ description: >-
   (default), squash, or merge commit — without asking for confirmation.
   Use when the user runs /gh:pr-merge, /gh-pr-merge, or asks "PR 51
   머지해", "rebase merge", "squash merge", "#99 머지". Refuses to merge
-  un-approved PRs (suggests gh:pr-emergency-merge instead), failing CI,
+  un-approved PRs (suggests gh:pr-merge-emergency instead), failing CI,
   draft PRs, or PRs with conflicts. Accepts
   `<pr-number> [rebase|squash|merge] [remote]`. Accepts `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Grep
@@ -556,7 +556,7 @@ Run in one message:
 - `state != OPEN`
 - `isDraft == true`
 - `mergeable == CONFLICTING`
-- `reviewDecision != APPROVED` → suggest `/gh:pr-emergency-merge` for admin bypass
+- `reviewDecision != APPROVED` → suggest `/gh:pr-merge-emergency` for admin bypass
 - Any required check FAILURE or pending
 
 ## Step 3: Merge (no confirmation)
@@ -583,7 +583,7 @@ Print **only** the compact report (format in
 ## Constraints
 
 - Never ask for confirmation — running the skill is the confirmation.
-- Never merge an un-approved PR. Redirect to `gh:pr-emergency-merge`.
+- Never merge an un-approved PR. Redirect to `gh:pr-merge-emergency`.
 - Never swap to a different strategy if the chosen one fails.
 - Always `--delete-branch` — head branches accumulate fast.
 - Never bypass CI. Required checks must pass.
@@ -607,7 +607,7 @@ git add claude/skills/gh-pr-merge
 git commit -m "feat(skill): add gh:pr-merge
 
 Merge approved PRs with rebase (default), squash, or merge commit
-strategy. Refuses un-approved PRs — directs to gh:pr-emergency-merge
+strategy. Refuses un-approved PRs — directs to gh:pr-merge-emergency
 for admin bypass. Complements gh:pr-approve in the review workflow."
 ```
 
@@ -1212,7 +1212,7 @@ After Task 6:
 
 - [ ] All 5 commits landed on `wt/feat/1`.
 - [ ] PR open with all 5 commits visible.
-- [ ] `ls claude/skills/` shows: gh-commit, gh-issue-create, gh-issue-flow, gh-issue-implement, gh-issue-read, gh-pr, gh-pr-approve, gh-pr-emergency-merge, gh-pr-merge, gh-pr-reply (10 gh:* skills total).
+- [ ] `ls claude/skills/` shows: gh-commit, gh-issue-create, gh-issue-flow, gh-issue-implement, gh-issue-read, gh-pr, gh-pr-approve, gh-pr-merge-emergency, gh-pr-merge, gh-pr-reply (10 gh:* skills total).
 - [ ] No references to bare `gh:issue` remain (grep confirms).
 - [ ] Spec referenced in commit bodies where relevant.
 

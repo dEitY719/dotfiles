@@ -33,7 +33,7 @@ _Availability depends on repo settings → General → Pull Requests. If a strat
    - `gh pr checks` — required checks must pass
 4. Hard-stops on any of:
    - PR not OPEN / is draft / has merge conflicts
-   - Review decision ≠ APPROVED → suggests `gh:pr-emergency-merge` instead
+   - Review decision ≠ APPROVED → suggests `gh:pr-merge-emergency` instead
    - Required check failing or pending
 5. Runs `gh pr merge <N> --repo $TARGET_REPO --<strategy> --delete-branch` **without confirmation**.
 6. Fetches the merge SHA and prints a compact report.
@@ -42,7 +42,7 @@ _Availability depends on repo settings → General → Pull Requests. If a strat
 
 - Ask "proceed?" — running the skill IS the confirmation.
 - Fall back to another strategy on failure.
-- Merge an un-approved PR — use `gh:pr-emergency-merge` for admin bypass with audit trail.
+- Merge an un-approved PR — use `gh:pr-merge-emergency` for admin bypass with audit trail.
 - Keep the head branch — always `--delete-branch`.
 
 ## Solo / personal repo behavior
@@ -51,7 +51,7 @@ GitHub disallows PR authors from self-approving, and Branch Protection
 Rules are locked on Free-plan private repos. The combination leaves
 `reviewDecision` permanently empty (`""`) on solo repos — so a strict
 `APPROVED` check would make this skill unusable without routing every
-merge through `gh:pr-emergency-merge`.
+merge through `gh:pr-merge-emergency`.
 
 To avoid that, the skill detects whether the base branch has protection:
 
@@ -71,5 +71,5 @@ the PR, and protection absence does not override that signal.
 |---|---|
 | Protected base, reviewer approved | `gh:pr-merge` |
 | No branch protection (solo repo), no blocking review | `gh:pr-merge` (auto-accepts empty `reviewDecision`) |
-| Protected base, needs bypass for incident/hotfix | `gh:pr-emergency-merge` (forces audit comment + incident issue) |
+| Protected base, needs bypass for incident/hotfix | `gh:pr-merge-emergency` (forces audit comment + incident issue) |
 | Protected base, explicit `CHANGES_REQUESTED` | neither — address the review or use emergency-merge with a written reason |
