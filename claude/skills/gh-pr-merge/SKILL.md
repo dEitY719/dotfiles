@@ -40,7 +40,7 @@ Run in one message:
 Then detect whether the base branch has protection rules (uses
 `baseRefName` from the previous call):
 
-- `gh api repos/$TARGET_REPO/branches/<baseRefName>/protection`
+- `gh api "repos/$TARGET_REPO/branches/<baseRefName>/protection"`
   - HTTP 200 → protection **present**; strict rules apply.
   - HTTP 403 (Free plan locks the feature) or 404 (not configured)
     → protection **absent**; empty `reviewDecision` is accepted

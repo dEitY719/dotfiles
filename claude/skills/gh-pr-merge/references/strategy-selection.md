@@ -72,7 +72,7 @@ Behavior table for the `reviewDecision` check:
 | present | `APPROVED` | proceed |
 | present | anything else (`""`, `REVIEW_REQUIRED`, `CHANGES_REQUESTED`) | hard stop — redirect to `gh-pr-emergency-merge` |
 | absent | `APPROVED` | proceed |
-| absent | `""` (empty) | proceed; print `INFO: No branch protection on <BASE> — accepting empty reviewDecision.` |
+| absent | `""` (empty) | proceed; print `INFO: No branch protection on <baseRefName> — accepting empty reviewDecision.` |
 | absent | `CHANGES_REQUESTED` / `REVIEW_REQUIRED` | hard stop — someone explicitly blocked this PR, protection absence does not override that |
 
 Rationale for treating 403 and 404 the same: both mean "branch
