@@ -484,7 +484,7 @@ gh pr view <N> --repo "$TARGET_REPO" --json \
 | `state` | `!= OPEN` → "PR already <closed\|merged>" |
 | `isDraft` | `true` → "draft PR — mark ready first" |
 | `mergeable` | `CONFLICTING` → "resolve conflicts first" |
-| `reviewDecision` | `!= APPROVED` → "not approved — use /gh:pr-merge-emergency for admin bypass" |
+| `reviewDecision` | `!= APPROVED` → "not approved — use /gh-pr-merge-emergency for admin bypass" |
 
 ## Required checks
 
@@ -556,7 +556,7 @@ Run in one message:
 - `state != OPEN`
 - `isDraft == true`
 - `mergeable == CONFLICTING`
-- `reviewDecision != APPROVED` → suggest `/gh:pr-merge-emergency` for admin bypass
+- `reviewDecision != APPROVED` → suggest `/gh-pr-merge-emergency` for admin bypass
 - Any required check FAILURE or pending
 
 ## Step 3: Merge (no confirmation)
@@ -1212,7 +1212,7 @@ After Task 6:
 
 - [ ] All 5 commits landed on `wt/feat/1`.
 - [ ] PR open with all 5 commits visible.
-- [ ] `ls claude/skills/` shows: gh-commit, gh-issue-create, gh-issue-flow, gh-issue-implement, gh-issue-read, gh-pr, gh-pr-approve, gh-pr-merge-emergency, gh-pr-merge, gh-pr-reply (10 gh:* skills total).
+- [ ] `ls claude/skills/` shows: gh-commit, gh-issue-create, gh-issue-flow, gh-issue-implement, gh-issue-read, gh-pr, gh-pr-approve, gh-pr-merge, gh-pr-merge-emergency, gh-pr-reply (10 gh:* skills total).
 - [ ] No references to bare `gh:issue` remain (grep confirms).
 - [ ] Spec referenced in commit bodies where relevant.
 
