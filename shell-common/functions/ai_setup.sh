@@ -13,36 +13,56 @@ ai_setup() {
         emulate -L sh
     fi
 
-    case "${1:-}" in
-        -h|--help|help)
-            ux_header "ai-setup - workspace orchestrator"
-            ux_info "Usage: ai-setup"
-            ux_info ""
-            ux_info "Interactive setup that creates git worktrees and"
-            ux_info "tmux sessions with 3-pane windows in one step."
-            ux_info ""
-            ux_info "Steps:"
-            ux_info "  1. Enter worktree names   (free-form: issue-11 login-fix)"
-            ux_info "  2. Enter tmux windows     (AI agents: claude codex gemini)"
-            ux_info "  3. Worktrees + tmux sessions are created automatically"
-            ux_info ""
-            ux_info "Note: worktree names are free-form (task/issue/feature slugs)."
-            ux_info "      tmux windows must be AI agent names (they run <agent>-yolo)."
-            ux_info ""
-            ux_info "Requirements: git, tmux, run from main repo (not worktree)"
-            return 0
-            ;;
-        "")
-            # No arguments — proceed to interactive mode
-            ;;
-        *)
-            ux_warning "Unexpected arguments: $*"
-            ux_info "Usage: ai-setup"
-            ux_info "This command takes no arguments. It prompts interactively."
-            ux_info "Run 'ai-setup --help' for details."
-            return 1
-            ;;
-    esac
+    local default_agent=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                ux_header "ai-setup - workspace orchestrator"
+                ux_info "Usage: ai-setup [--agent <agent>]"
+                ux_info ""
+                ux_info "Interactive setup that creates git worktrees and"
+                ux_info "tmux sessions with 3-pane windows in one step."
+                ux_info ""
+                ux_info "Options:"
+                ux_info "  --agent <agent>   Pre-fill the 'Tmux window agents' prompt"
+                ux_info "                    default (claude, codex, gemini,"
+                ux_info "                    opencode, cursor, copilot)."
+                ux_info ""
+                ux_info "Steps:"
+                ux_info "  1. Enter worktree names   (free-form: issue-11 login-fix)"
+                ux_info "  2. Enter tmux windows     (AI agents: claude codex gemini)"
+                ux_info "  3. Worktrees + tmux sessions are created automatically"
+                ux_info ""
+                ux_info "Note: worktree names are free-form (task/issue/feature slugs)."
+                ux_info "      tmux windows must be AI agent names (they run <agent>-yolo)."
+                ux_info ""
+                ux_info "Requirements: git, tmux, run from main repo (not worktree)"
+                return 0
+                ;;
+            --agent)
+                if [ -z "${2:-}" ]; then
+                    ux_error "--agent requires an argument"
+                    return 1
+                fi
+                if ! _ts_known_agent "$2"; then
+                    ux_error "Unknown agent: $2"
+                    ux_info "Available: claude, codex, gemini, opencode, cursor, copilot"
+                    return 1
+                fi
+                default_agent="$2"
+                shift 2
+                ;;
+            "")
+                shift
+                ;;
+            *)
+                ux_warning "Unexpected argument: $1"
+                ux_info "Usage: ai-setup [--agent <agent>]"
+                ux_info "Run 'ai-setup --help' for details."
+                return 1
+                ;;
+        esac
+    done
 
     # --- Guards ---
     ux_require "git" || return 1
@@ -92,11 +112,18 @@ ai_setup() {
     wt_names="${wt_names# }"
 
     # --- Step 2: Read tmux window agents (still AI-only: they run <agent>-yolo) ---
-    local win_input=""
+    local win_input="" win_prompt_hint="e.g. claude codex"
+    if [ -n "$default_agent" ]; then
+        win_prompt_hint="Enter for default: $default_agent"
+    fi
     while [ -z "$win_input" ]; do
-        printf "%s❯%s Tmux window agents (space-separated, e.g. claude codex): " \
-            "${UX_BOLD}${UX_INFO}" "${UX_RESET}"
+        printf "%s❯%s Tmux window agents (space-separated, %s): " \
+            "${UX_BOLD}${UX_INFO}" "${UX_RESET}" "$win_prompt_hint"
         read -r win_input || return 1
+        if [ -z "$win_input" ] && [ -n "$default_agent" ]; then
+            win_input="$default_agent"
+            break
+        fi
         if [ -z "$win_input" ]; then
             ux_error "At least one window required."
         fi
