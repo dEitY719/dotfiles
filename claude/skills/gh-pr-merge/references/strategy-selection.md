@@ -44,9 +44,42 @@ gh pr view <N> --repo "$TARGET_REPO" --json \
 | `state` | `!= OPEN` → "PR already <closed\|merged>" |
 | `isDraft` | `true` → "draft PR — mark ready first" |
 | `mergeable` | `CONFLICTING` → "resolve conflicts first" |
-| `reviewDecision` | `!= APPROVED` → "not approved — use /gh-pr-emergency-merge for admin bypass" |
+| `reviewDecision` | `!= APPROVED` → "not approved — use /gh-pr-emergency-merge for admin bypass". **Conditional exception**: see "Branch protection detection" below — empty `reviewDecision` is accepted when the base branch has no protection rules (solo / personal repos). |
 | `mergeStateStatus` | `BEHIND`/`BLOCKED`/`DIRTY` → "rebase or fix conflicts first" |
 | required checks | any `FAILURE` / `IN_PROGRESS` / `QUEUED` → "CI not green — fix or wait" |
+
+## Branch protection detection
+
+GitHub Free on private repos disables Branch Protection Rules, and
+GitHub forbids PR authors from self-approving. Together, that means
+solo / personal repos produce a permanently empty `reviewDecision`
+(`""`) for every PR — strict `APPROVED` enforcement would make the
+skill unusable there and force users into `gh-pr-emergency-merge`,
+which is reserved for audited admin bypass.
+
+Detect protection presence:
+
+```bash
+gh api "repos/$TARGET_REPO/branches/$BASE/protection" >/dev/null 2>&1
+# exit 0 → protection PRESENT  (strict rules apply)
+# non-zero → protection ABSENT (403 Free-plan or 404 not-configured)
+```
+
+Behavior table for the `reviewDecision` check:
+
+| Protection | `reviewDecision` | Action |
+|---|---|---|
+| present | `APPROVED` | proceed |
+| present | anything else (`""`, `REVIEW_REQUIRED`, `CHANGES_REQUESTED`) | hard stop — redirect to `gh-pr-emergency-merge` |
+| absent | `APPROVED` | proceed |
+| absent | `""` (empty) | proceed; print `INFO: No branch protection on <BASE> — accepting empty reviewDecision.` |
+| absent | `CHANGES_REQUESTED` / `REVIEW_REQUIRED` | hard stop — someone explicitly blocked this PR, protection absence does not override that |
+
+Rationale for treating 403 and 404 the same: both mean "branch
+protection is not gating this merge" from the caller's perspective.
+403 means the feature is locked by plan; 404 means it is unlocked
+but not configured. Either way, no rule would have required an
+approval. Distinguishing them in the log adds noise without value.
 
 ## Required checks
 
