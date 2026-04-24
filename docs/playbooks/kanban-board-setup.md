@@ -27,24 +27,33 @@ gh auth refresh -s project
 gh auth status   # Token scopes 에 'project' 가 포함돼야 함
 ```
 
-## 3. 변수 (실행 전 치환)
+## 3. 변수 (실행 전 export)
 
-- `<OWNER>`: GitHub user/org 슬러그 (예: `dEitY719`)
-- `<REPO>`: 대상 저장소 이름 (예: `my-project`)
-- `<PROJECT_TITLE>`: 프로젝트 보드 제목 (대개 `<REPO>` 와 동일)
+bash 코드 블록에서 `<PLACEHOLDER>` 형식은 쉘 리다이렉션으로 오해될
+위험이 있어 모두 `$VAR` 형식으로 사용한다. 아래 블록을 먼저 실행해
+세션에 변수를 export 해두고, 이후 섹션의 명령을 그대로 복사-실행.
+
+```bash
+export OWNER="dEitY719"           # GitHub user/org 슬러그
+export REPO="my-project"          # 대상 저장소 이름
+export PROJECT_TITLE="$REPO"      # 보드 제목 (대개 $REPO 와 동일)
+```
+
+`$PROJECT_ID`, `$PROJECT_NUMBER`, `$STATUS_FIELD_ID`는 4.1/4.2 에서
+명령을 실행한 뒤 반환값으로 export 한다.
 
 ## 4. 셋업 단계
 
 ### 4.1 Project 생성
 
 ```bash
-gh project create --owner <OWNER> --title "<PROJECT_TITLE>" --format json
+gh project create --owner "$OWNER" --title "$PROJECT_TITLE" --format json
 ```
 
-반환 JSON에서 다음 두 값을 기록:
+반환 JSON에서 다음 두 값을 export:
 
-- `id` → `<PROJECT_ID>` (예: `PVT_xxx...`)
-- `number` → `<PROJECT_NUMBER>` (예: `3`)
+- `id` → `PROJECT_ID` (예: `PVT_xxx...`) → `export PROJECT_ID=PVT_xxx...`
+- `number` → `PROJECT_NUMBER` (예: `3`) → `export PROJECT_NUMBER=3`
 
 ### 4.2 Status 필드 ID 조회
 
@@ -60,10 +69,11 @@ query($pid: ID!) {
       }
     }
   }
-}' -f pid="<PROJECT_ID>"
+}' -f pid="$PROJECT_ID"
 ```
 
-`name: "Status"` 인 필드의 `id` → `<STATUS_FIELD_ID>` (예: `PVTSSF_xxx...`)
+`name: "Status"` 인 필드의 `id` → `STATUS_FIELD_ID` export
+(예: `export STATUS_FIELD_ID=PVTSSF_xxx...`)
 
 ### 4.3 Status 필드 옵션 6개로 교체
 
@@ -71,9 +81,9 @@ query($pid: ID!) {
 
 ```bash
 gh api graphql -f query='
-mutation {
+mutation($fid: ID!) {
   updateProjectV2Field(input: {
-    fieldId: "<STATUS_FIELD_ID>"
+    fieldId: $fid
     singleSelectOptions: [
       {name: "Backlog",     color: GRAY,   description: "Idea or request only"}
       {name: "Ready",       color: BLUE,   description: "Reserved — unused in normal flow"}
@@ -83,7 +93,7 @@ mutation {
       {name: "Done",        color: GREEN,  description: "Merged and closed"}
     ]
   }) { projectV2Field { ... on ProjectV2SingleSelectField { options { id name } } } }
-}'
+}' -f fid="$STATUS_FIELD_ID"
 ```
 
 ### 4.4 PR 템플릿 생성
@@ -165,7 +175,7 @@ PR:
 
 ```bash
 # Test issue 생성
-gh issue create --repo <OWNER>/<REPO> --title "[Test] kanban smoke" --body "ignore"
+gh issue create --repo "$OWNER/$REPO" --title "[Test] kanban smoke" --body "ignore"
 ```
 
 기대:
