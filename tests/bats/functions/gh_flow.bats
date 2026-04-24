@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 # tests/bats/functions/gh_flow.bats
-# Unit tests for gh_flow subcommands and post-condition helpers introduced
-# by issue #188. The worker pipeline itself (Step 2: implement → commit → pr)
-# is not exercised here — it needs claude / gh / gwt and is covered by
-# manual integration testing.
+# Unit tests for gh_flow subcommands, post-condition helpers, and the
+# _gh_flow_set_project_status board-sync helper. The worker pipeline itself
+# (Step 2: implement → commit → pr) is not exercised here — it needs claude /
+# gh / gwt and is covered by manual integration testing.
 
 load '../test_helper'
 
@@ -217,4 +217,41 @@ teardown() {
     run_in_bash "cd '$REPO_DIR' && _gh_flow_has_branch_commits && echo YES || echo NO"
     assert_success
     assert_output --partial "YES"
+}
+
+# ---------------------------------------------------------------------------
+# _gh_flow_set_project_status — loading and guard paths (no network required)
+# ---------------------------------------------------------------------------
+
+@test "bash: _gh_flow_set_project_status helper exists" {
+    run_in_bash 'declare -f _gh_flow_set_project_status >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "zsh: _gh_flow_set_project_status helper exists" {
+    run_in_zsh 'typeset -f _gh_flow_set_project_status >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "project-status: opt-out via GH_FLOW_PROJECT_STATUS_SYNC=0 returns silently" {
+    run_in_bash 'GH_FLOW_PROJECT_STATUS_SYNC=0 _gh_flow_set_project_status issue 1 "In progress" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    refute_output --partial "project-status:"
+}
+
+@test "project-status: missing args returns silently" {
+    run_in_bash '_gh_flow_set_project_status 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    refute_output --partial "project-status:"
+}
+
+@test "project-status: invalid kind returns 0 with warning" {
+    run_in_bash '_gh_flow_set_project_status bogus 42 "In progress" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "invalid kind=bogus"
 }
