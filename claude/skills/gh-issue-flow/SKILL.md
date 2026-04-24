@@ -90,10 +90,9 @@ Resume hint logic:
 - Never skip a step. All 3 or stop.
 - Never mutate state between steps beyond what the sub-skills do.
 - Do NOT preface or summarize beyond the compact report.
-- Do NOT end the turn before Step 2.3 completes. A `Next:` /
-  resume-hint from a sub-skill (notably gh:issue-implement's
-  `Next: /gh-commit && /gh-pr <N>`) is a waypoint during this
-  composition, not a final answer — keep going. Only the Step 3
-  compact report ends the turn. On sub-skill failure, use the
-  failure template; don't let a success hint from 2.1 or 2.2 stop
-  the flow.
+- Do NOT end the turn until the Step 3 report is issued (success or
+  failure template). A `Next:` / resume-hint from a sub-skill
+  (notably gh:issue-implement's `Next: /gh-commit && /gh-pr <N>`) is
+  a waypoint during this composition, not a final answer — keep
+  going. Don't let a success hint from 2.1 or 2.2 end the flow
+  before Step 3.
