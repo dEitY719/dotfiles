@@ -9,7 +9,7 @@ SSOT이다.
 ## 적용 범위
 
 - 저장소: `dEitY719/dotfiles` (repo-level project)
-- 카드 종류: Issue만 (PR은 제외)
+- 카드 종류: Issue와 PR 모두 (보드에서 함께 추적)
 - 자동화 수단: GitHub Projects v2 빌트인 워크플로우 (별도 Action 없음)
 - 관련 스킬: `gh:issue-create`, `gh:pr`, `gh:pr-merge`, `gh:issue-flow`
 
@@ -38,15 +38,21 @@ Backlog -> Ready -> In progress -> In review -> Approved -> Done
 
 ## 카드 정책 (Open Question #1 결정)
 
-**결정: Issue 카드만 등록한다 (Option A)**.
+**결정: Issue와 PR 카드를 모두 등록한다 (Option B)**.
+2026-04-24 Option A(Issue-only)에서 전환 — 운영자의 다른
+Project 보드와 일관된 운영 방식 확보가 목적.
 
-- 보드에는 Issue 카드만 존재하며, 관련 PR은 Issue 카드의
-  "linked PR" 배지로 표시된다.
-- Issue = 작업 단위 (SSOT), PR = 구현 단위. 1:N 대응이므로
-  보드의 SSOT는 항상 Issue로 유지한다.
-- 트레이드오프: PR 자체의 진행 상태(`In review` vs `Approved`)는
-  보드에서 직접 보이지 않는다. 승인 여부는 CLI로 확인한다:
-  `gh pr view <N> --json reviewDecision`.
+- 보드에는 Issue 카드와 PR 카드가 동시에 존재한다.
+- Issue = 요구사항·상태의 SSOT, PR = 리뷰·머지 진행의 SSOT.
+  각각 별도 카드로 보드에 노출된다.
+- 1개 Issue에 여러 PR이 붙는 경우 각 PR이 별도 카드로 올라온다.
+- 장점: PR 리뷰 단계(In review → Approved → Done)를 별도 도구
+  없이 보드에서 직접 관찰·조작할 수 있고, `Code review approved`·
+  `Pull request merged` 빌트인 워크플로우를 자연스럽게 활용한다.
+- 트레이드오프: 카드 수가 대략 2배가 되고 Issue/PR이 중복
+  노출된다. 혼잡을 감수하는 대신 투명성을 얻는 선택.
+  필요 시 View를 분리(`Issues only`, `PRs only`)해 가시성을
+  보완한다.
 
 ## 프로젝트 범위 (Open Question #2 결정)
 
@@ -84,22 +90,30 @@ Backlog -> Ready -> In progress -> In review -> Approved -> Done
 
 ## 자동 전환 규칙
 
-GitHub Projects v2의 빌트인 워크플로우 세 개만 활성화한다.
+GitHub Projects v2의 빌트인 워크플로우 네 개를 활성화한다
+(+ 선택 한 개).
 
-| 전환 시점         | From        | To      | 트리거                                                       |
-|-------------------|-------------|---------|--------------------------------------------------------------|
-| Issue 등록        | —           | Backlog | `gh issue create` (Auto-add workflow)                        |
-| PR 생성 (리뷰 대기) | Backlog/Ready | In review | PR 본문의 `Closes #N`으로 GitHub이 Issue를 PR에 linked로 추가 |
-| PR 머지 → Done    | In review   | Done    | PR 머지 시 `Closes #N` 키워드로 Issue가 자동 close → Item closed workflow |
+| 전환 시점        | From | To       | 트리거                                                   |
+|------------------|------|----------|----------------------------------------------------------|
+| Issue/PR 등록    | —    | Backlog  | `Auto-add to project`(필터) + `Item added to project`    |
+| PR 리뷰 승인     | 임의 | Approved | `Code review approved` (PR 카드, 선택적 활성화)          |
+| PR 머지          | 임의 | Done     | `Pull request merged` (PR 카드)                          |
+| Issue/PR close   | 임의 | Done     | `Item closed` (Issue는 PR의 `Closes #N` 키워드로 자동 close 시 포함) |
 
-`Ready`, `In progress`, `Approved`는 **수동 이동**한다.
-빌트인 워크플로우만으로는 커버하지 못하는 중간 상태이므로
-작업자가 보드 UI에서 직접 옮긴다.
+2024년 UI 변경으로 `Auto-add to project`는 "카드 추가"만
+담당하고 Status 세팅은 `Item added to project`가 맡는다 —
+둘을 세트로 켠다.
+
+`Ready`, `In progress`, `In review`는 **수동 이동**한다.
+빌트인 워크플로우가 건드리지 않는 중간 상태이므로 작업자가
+보드 UI에서 직접 옮긴다.
 
 - `Backlog -> Ready`: 이슈 분석이 끝나고 구현 준비가 됐을 때.
 - `Ready -> In progress`: 브랜치를 생성하고 작업을 시작할 때.
-- `In review -> Approved`: 리뷰가 승인됐을 때
-  (`gh pr view <N> --json reviewDecision`으로 확인한 뒤).
+- `In progress -> In review`: PR을 열고 리뷰를 요청할 때
+  (PR 카드도 Backlog에서 In review로 수동 이동).
+- `In review -> Approved`: 리뷰가 승인됐을 때 — 자동화를
+  원하면 `Code review approved` 워크플로우를 켠다.
 
 ## 보드 초기 셋업
 
@@ -124,21 +138,36 @@ gh auth refresh -s project
    `Backlog`, `Ready`, `In progress`, `In review`,
    `Approved`, `Done`.
 
-4. 저장소 연결 및 빌트인 워크플로우 활성화
-   (Project 설정 > Workflows):
-   - `Auto-add to project`: `dEitY719/dotfiles` 저장소의
-     open Issue를 자동으로 `Backlog`에 추가.
-   - `Item closed`: Issue가 close되면 카드를 `Done`으로 이동.
+4. 빌트인 워크플로우 활성화 (Project > Workflows):
+   - `Auto-add to project`: repo 드롭다운에서 `dotfiles`
+     선택 + 필터 `is:issue,pr is:open`. Issue와 PR 카드를
+     보드에 자동 추가한다 (Status 세팅 없음 — 5번에서 처리).
+   - `Item added to project`: `issues` + `pull requests`
+     체크, Status=`Backlog`. Auto-add 또는 수동 추가로 들어온
+     카드를 Backlog 컬럼에 배치한다.
+   - `Item closed`: `issues` + `pull requests` 체크,
+     Status=`Done`. PR의 `Closes #N` 키워드로 자동 close된
+     Issue도 동일 경로로 Done 이동.
+   - `Pull request merged`: Status=`Done`. PR 카드가 머지된
+     순간 Done으로 이동.
+   - (선택) `Code review approved`: Status=`Approved`. PR
+     승인 자동 전환을 원하면 활성화.
 
 ## 운영 상의 유의사항
 
 - PR 본문에 `Closes #N`이 빠지면 머지 후에도 Issue가 열려 있고
-  카드가 `Done`으로 가지 않는다. PR 템플릿과 `gh:pr` 스킬이
-  이를 방지하지만, 사람이 수동으로 본문을 지울 경우를 대비해
-  머지 전에 한 번 더 확인한다.
+  Issue 카드가 `Done`으로 가지 않는다 (PR 카드는 `Pull request
+  merged`로 Done 이동). PR 템플릿과 `gh:pr` 스킬이 이를
+  방지하지만, 사람이 수동으로 본문을 지울 경우를 대비해 머지
+  전에 한 번 더 확인한다.
 - 카드를 웹 UI에서 수동으로 옮긴 경우, 다음 자동 이벤트가 오면
   상태가 덮어써질 수 있다. 수동 이동은 `Ready`, `In progress`,
-  `Approved`에만 사용한다 — 이 셋은 자동화가 건드리지 않는다.
+  `In review`에만 사용한다 — 이 셋은 자동화가 건드리지 않는다.
+  (`Approved`는 `Code review approved` 워크플로우를 켠 경우
+  자동 영역으로 이동하며, 끈 상태라면 수동 영역에 포함된다.)
+- Issue와 PR 카드가 보드에서 중복되어 보이는 현상은 Option B의
+  의도된 결과다. 혼잡하다면 `Issues only` / `PRs only` View를
+  분리해 관리한다.
 - Project 보드 쿼리는 CLI로도 가능하다:
   ```bash
   gh project item-list <PROJECT_NUM> --owner dEitY719 --format json
