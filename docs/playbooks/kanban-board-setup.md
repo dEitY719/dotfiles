@@ -14,11 +14,12 @@ GitHub Projects v2 기반 단일 저장소 칸반보드를 30분 안에 셋업
 - Project v2 보드 1개, 특정 repo에 연결.
 - Status 필드 6 옵션: `Backlog`, `Ready`, `In progress`, `In review`,
   `Approved`, `Done`.
-- 9개 빌트인 워크플로우 전부 `enabled` + 목적별 Status 기본값 설정.
+- 10개 빌트인 워크플로우 중 9개 기본 `enabled`, `Auto-archive items`는
+  기본 `disabled` — 본 playbook §4.5 필터 적용 후 수동 enable.
 - **Issue 4단계**: `Backlog → In progress → In review → Done`.
 - **PR 4단계**: `Backlog → In review → Approved → Done`
   (+ Changes requested 발생 시 `In progress`로 일시 루프).
-- 개인 repo 사용 시 `Approved` 컬럼은 view-level hide 권장.
+- 개인 repo 사용 시 `Approved`·`Ready` 컬럼은 view-level hide 권장.
 
 ## 2. Prerequisites
 
@@ -127,30 +128,52 @@ URL: `https://github.com/users/<OWNER>/projects/<PROJECT_NUMBER>/workflows`
 
 (org 소유면 `/users/`를 `/orgs/`로 교체.)
 
-신규 Project는 9개 워크플로우가 모두 `enabled` 상태로 생성된다.
-아래 Status 값만 확인·조정하면 된다.
+신규 Project는 10개 워크플로우 중 `Auto-archive items`만 `disabled`,
+나머지 9개는 `enabled` 상태로 생성된다. 아래 Status 값·필터만
+확인·조정하면 된다.
 
-| # | 워크플로우                      | When                       | Set Status         |
-|---|---------------------------------|----------------------------|--------------------|
-| 1 | `Auto-add to project`           | Filter: `is:issue,pr is:open` + repo: `<REPO>` | —        |
-| 2 | `Item added to project`         | issues + pull requests     | `Backlog`          |
-| 3 | `Pull request linked to issue`  | —                          | `In review`        |
-| 4 | `Code review approved`          | —                          | `Approved`         |
-| 5 | `Code changes requested`        | —                          | `In progress`      |
-| 6 | `Pull request merged`           | —                          | `Done`             |
-| 7 | `Item closed`                   | issues + pull requests     | `Done`             |
-| 8 | `Auto-close issue`              | — (구조적; 기본 유지)       | (Status 미설정)    |
-| 9 | `Auto-add sub-issues to project`| — (구조적; 기본 유지)       | (Status 미설정)    |
+| #  | 워크플로우                      | When                       | Set Status / Filter |
+|----|---------------------------------|----------------------------|---------------------|
+| 1  | `Auto-add to project`           | Filter: `is:issue,pr is:open` + repo: `<REPO>` | —          |
+| 2  | `Item added to project`         | issues + pull requests     | `Backlog`           |
+| 3  | `Pull request linked to issue`  | —                          | `In review`         |
+| 4  | `Code review approved`          | —                          | `Approved`          |
+| 5  | `Code changes requested`        | —                          | `In progress`       |
+| 6  | `Pull request merged`           | —                          | `Done`              |
+| 7  | `Item closed`                   | issues + pull requests     | `Done`              |
+| 8  | `Auto-close issue`              | — (구조적; 기본 유지)       | (Status 미설정)     |
+| 9  | `Auto-add sub-issues to project`| — (구조적; 기본 유지)       | (Status 미설정)     |
+| 10 | `Auto-archive items`            | Filter 매칭 카드 주기적 archive | **수동 enable** + Filter: `is:issue,pr is:closed updated:<@today-1d` |
 
-### 4.6 `Approved` 컬럼 hide (solo repo 권장)
+**#10 `Auto-archive items` 설정 상세**:
 
-개인 repo에서는 `Code review approved` 워크플로우가 거의 발화하지
-않아 `Approved`가 dead column이 된다. Board 뷰에서 컬럼 헤더 옆
-`⋯` → `Hide from view`로 숨긴다.
+- 기본 disabled — 명시적으로 enable 해야 한다.
+- Filter 문법은 Issue/PR search query 문법을 따른다:
+  - `is:issue,pr` — Issue·PR 카드 모두 (Option B 운영 전제)
+  - `is:closed` — 닫힌(=머지된) 카드만. 본 문서 라이프사이클에서
+    Done 컬럼과 동치.
+  - `updated:<@today-1d` — 1일 동안 손대지 않은 것. 기간은 운영
+    취향에 따라 `-5d`, `-2w` 등으로 조정. dotfiles는 `-1d` 채택
+    (Done 컬럼을 항상 당일분으로만 유지).
+- archive 된 카드는 삭제가 아니라 기본 뷰에서 숨김 — 필터 바에
+  `is:archived` 입력 시 재조회, 카드 우클릭 `Restore from archive`로
+  복원 가능.
+
+### 4.6 `Approved`·`Ready` 컬럼 hide (solo repo 권장)
+
+개인 repo에서는 다음 두 컬럼이 라이프사이클에서 방문되지 않아
+dead column이 된다. Board 뷰에서 컬럼 헤더 옆 `⋯` →
+`Hide from view`로 숨긴다.
+
+- **`Approved`**: `Code review approved` 워크플로우가 거의 발화하지
+  않아 PR 카드가 도달하지 않음.
+- **`Ready`**: Issue·PR 두 라이프사이클 모두 방문하지 않는 예약
+  컬럼 (미래 확장용). SSOT §컬럼별 의미 참고.
 
 - 중요: 이는 **view-level 설정**이며 Status 옵션 자체는 유지된다.
-  따라서 PR이 Approved에 들어가는 일이 생기면(예: 협업자 합류)
-  데이터는 건재하고, hide만 해제하면 즉시 가시화된다.
+  따라서 카드가 해당 컬럼에 들어가는 일이 생기면(예: 협업자 합류로
+  Approved 발화, 또는 Ready 단계 도입) 데이터는 건재하고, hide만
+  해제하면 즉시 가시화된다.
 
 ## 5. 라이프사이클 (한눈에)
 
