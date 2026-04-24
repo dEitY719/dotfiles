@@ -31,7 +31,12 @@ Status 필드는 아래 6개 옵션을 이 순서로 가진다:
 컬럼은 다르다 (2026-04-24 확정).
 
 - **Issue 카드 (4단계)**: `Backlog → In progress → In review → Done`
-- **PR 카드 (4단계)**: `Backlog → In review → Approved → Done`
+- **PR 카드 (기본 4단계)**:
+  `Backlog → In review → Approved → Done`.
+  리뷰에서 `Changes requested`가 제출되면 `Code changes requested`
+  워크플로우가 PR 카드를 `In progress`로 되돌린다 — 수정·재푸시
+  후 `In review`로 수동 복귀시킨 뒤 이어서 `Approved → Done`
+  으로 진행한다.
 
 `Ready`는 두 카드 타입 모두 방문하지 않는다. 미래 확장(예:
 "분석 완료·착수 대기" 단계가 필요해지는 시점) 여지로 남겨둔다.
@@ -42,7 +47,7 @@ Status 필드는 아래 6개 옵션을 이 순서로 가진다:
 |-------------|------------------------------------|-----------------------------|
 | Backlog     | 신규 등록, 미착수                   | 신규 PR, 리뷰 시작 전        |
 | Ready       | (사용 안 함)                        | (사용 안 함)                 |
-| In progress | 작업 중 (브랜치 생성, 커밋 진행)     | (사용 안 함)                 |
+| In progress | 작업 중 (브랜치 생성, 커밋 진행)     | 리뷰 피드백 반영 중 (Changes requested 루프) |
 | In review   | 연결된 PR이 열려 리뷰 대기           | 본인의 리뷰 대기             |
 | Approved    | (사용 안 함 — Issue는 도달하지 않음) | 리뷰 승인됨, 머지 대기        |
 | Done        | 연결된 PR 머지로 close됨             | 머지 완료                   |
@@ -128,7 +133,13 @@ GitHub Projects v2의 빌트인 워크플로우 9개가 모두 `enabled`
 
 - **Issue 카드 `Backlog → In progress`**: 작업자가 브랜치 생성·
   작업 시작 시점에 직접 옮긴다. Issue 카드의 유일한 수동 단계다.
-- **PR 카드**: 모든 전환이 자동이므로 수동 이동이 필요 없다.
+- **PR 카드 `Backlog → In review`**: Projects v2 빌트인에 "PR
+  open → In review" 전환을 담당하는 워크플로우가 **존재하지 않는다**.
+  PR을 열어 리뷰를 기대하는 시점에 작업자가 직접 옮긴다.
+- **PR 카드 `In progress → In review` (재리뷰 요청 시)**:
+  `Changes requested` 루프에서 수정·재푸시 후 리뷰가 다시 달리기를
+  기대할 때 수동으로 복귀시킨다. 이 외의 PR 전환(`→ Approved`,
+  `→ Done`)은 모두 자동이다.
 
 ### 용어 교정 (2026-04-24)
 
@@ -194,7 +205,10 @@ gh auth refresh -s project
 - Issue 카드의 `Backlog → In progress` 는 유일한 **수동 이동**
   지점이다 (브랜치 생성·작업 시작 시점). 이후 전환(`→ In review`
   `→ Done`)은 모두 자동이다.
-- PR 카드는 모든 전환이 자동이므로 수동 이동이 필요 없다.
+- PR 카드도 두 지점에 수동 이동이 필요하다: `Backlog → In review`
+  (PR 오픈 후 리뷰 대기 상태로 알릴 때), `In progress → In review`
+  (`Changes requested` 루프에서 재리뷰 요청 시). 그 외 PR 전환은
+  모두 자동이다.
 - 수동으로 카드를 옮긴 경우 다음 자동 이벤트가 상태를 덮어쓸
   수 있다. 특히 Issue 카드를 `Approved`로 옮겨도 `Item closed`가
   PR 머지 시점에 곧바로 `Done`으로 이동시키므로 의미가 없다
