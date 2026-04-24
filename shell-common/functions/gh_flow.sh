@@ -539,8 +539,14 @@ _gh_flow_set_project_status() {
             ;;
     esac
 
-    _owner=$(gh repo view --json owner --jq '.owner.login' 2>/dev/null)
-    _repo=$(gh repo view --json name --jq '.name' 2>/dev/null)
+    # Single `gh repo view` call — two forks were redundant.
+    if ! read -r _owner _repo <<EOF
+$(gh repo view --json owner,name --jq '"\(.owner.login) \(.name)"' 2>/dev/null)
+EOF
+    then
+        printf '[gh-flow-worker] project-status: could not determine owner/repo, skipping\n' >&2
+        return 0
+    fi
     if [ -z "$_owner" ] || [ -z "$_repo" ]; then
         printf '[gh-flow-worker] project-status: could not determine owner/repo, skipping\n' >&2
         return 0
@@ -570,9 +576,9 @@ _gh_flow_set_project_status() {
               }
             }
           }" \
-        -F owner="$_owner" -F repo="$_repo" -F number="$_num" -f target="$_target" \
+        -f owner="$_owner" -f repo="$_repo" -F number="$_num" -f target="$_target" \
         --jq ".data.repository.${_q_field}.projectItems.nodes[]
-              | select(.project.field.options | length > 0)
+              | select(.project.field.options? | length > 0)
               | \"\(.project.id)|\(.id)|\(.project.field.id)|\(.project.field.options[0].id)\"" \
         2>/dev/null) || {
         printf '[gh-flow-worker] project-status: query failed for %s #%s (target=%s)\n' \
