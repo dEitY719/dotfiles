@@ -46,20 +46,175 @@ _gh_flow_get_state() {
 }
 
 # ============================================================================
+# Post-condition helpers (worker uses these to verify each step did real work)
+# ============================================================================
+
+# Returns 0 if the current tree has something /gh-commit could commit:
+# staged, unstaged, or untracked changes. (Runs inside the worktree.)
+_gh_flow_has_work_for_commit() {
+    [ -n "$(git status --porcelain 2>/dev/null | head -n1)" ]
+}
+
+# Returns 0 if the current branch has at least one commit ahead of
+# the upstream default branch (origin/HEAD). Used to verify /gh-commit.
+_gh_flow_has_branch_commits() {
+    local _base _count
+    _base="$(git symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null | sed 's|^refs/remotes/||')"
+    if [ -z "$_base" ]; then
+        _base="origin/main"
+    fi
+    _count="$(git rev-list --count "HEAD" "^$_base" 2>/dev/null || echo 0)"
+    [ "${_count:-0}" -gt 0 ]
+}
+
+# ============================================================================
+# status / prune subcommands
+# ============================================================================
+
+# List all known gh-flow entries for the current repo. No args.
+# Output: a table of issue / state / pid-liveness / worktree path. Non-fatal
+# if there are no entries.
+_gh_flow_status() {
+    local _root _name _repo_dir _entry _issue _state _pid _wt _pid_state
+    _root=$(_gh_flow_state_root)
+    _name=$(_gh_flow_repo_name)
+    if [ -z "$_name" ]; then
+        ux_error "gh-flow status: not inside a git repo"
+        return 1
+    fi
+    _repo_dir="$_root/$_name"
+
+    ux_header "gh-flow status - $_name"
+    if [ ! -d "$_repo_dir" ]; then
+        ux_info "no state — no workers have ever run in this repo"
+        return 0
+    fi
+
+    local _found=0
+    ux_table_header "ISSUE" "STATE" "PID / WORKTREE"
+    for _entry in "$_repo_dir"/*/; do
+        [ -d "$_entry" ] || continue
+        _issue="$(basename "$_entry")"
+        _state="$(cat "$_entry/state" 2>/dev/null || printf 'unknown')"
+        _pid="$(cat "$_entry/pid" 2>/dev/null || printf '')"
+        _wt="$(cat "$_entry/worktree.path" 2>/dev/null || printf '')"
+
+        if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+            _pid_state="pid=$_pid (alive)"
+        elif [ -n "$_pid" ]; then
+            _pid_state="pid=$_pid (dead)"
+        else
+            _pid_state="-"
+        fi
+
+        if [ -n "$_wt" ]; then
+            ux_table_row "#$_issue" "$_state" "$_pid_state  $_wt"
+        else
+            ux_table_row "#$_issue" "$_state" "$_pid_state"
+        fi
+        _found=1
+    done
+    if [ "$_found" = "0" ]; then
+        ux_info "no state entries under $_repo_dir"
+    fi
+    ux_info ""
+    ux_info "Run 'gh-flow prune' to clean done entries and list failed worktrees."
+}
+
+# Remove state dirs whose state is 'done'; report still-present worktrees for
+# 'failed:*' entries. Args: [--force] → with --force, also 'gwt teardown
+# --force' each failed worktree.
+_gh_flow_prune() {
+    local _force=0
+    case "${1:-}" in
+        --force|-f) _force=1 ;;
+        '') : ;;
+        *)
+            ux_error "gh-flow prune: unknown arg '$1' (only --force is accepted)"
+            return 1
+            ;;
+    esac
+
+    local _root _name _repo_dir _entry _issue _state _wt
+    _root=$(_gh_flow_state_root)
+    _name=$(_gh_flow_repo_name)
+    if [ -z "$_name" ]; then
+        ux_error "gh-flow prune: not inside a git repo"
+        return 1
+    fi
+    _repo_dir="$_root/$_name"
+
+    ux_header "gh-flow prune - $_name"
+    if [ ! -d "$_repo_dir" ]; then
+        ux_info "nothing to prune"
+        return 0
+    fi
+
+    local _removed=0 _failed=0 _torn_down=0
+    for _entry in "$_repo_dir"/*/; do
+        [ -d "$_entry" ] || continue
+        _issue="$(basename "$_entry")"
+        _state="$(cat "$_entry/state" 2>/dev/null || printf '')"
+        _wt="$(cat "$_entry/worktree.path" 2>/dev/null || printf '')"
+
+        case "$_state" in
+            done)
+                rm -rf "$_entry"
+                ux_success "removed state for #$_issue (done)"
+                _removed=$((_removed + 1))
+                ;;
+            failed:*)
+                _failed=$((_failed + 1))
+                if [ "$_force" = "1" ] && [ -n "$_wt" ] && [ -d "$_wt" ]; then
+                    ux_warning "#$_issue $_state — tearing down $_wt"
+                    if (cd "$_wt" && gwt teardown --force); then
+                        rm -rf "$_entry"
+                        _torn_down=$((_torn_down + 1))
+                    else
+                        ux_error "  gwt teardown failed for $_wt; leaving state dir intact"
+                    fi
+                else
+                    ux_warning "#$_issue $_state"
+                    if [ -n "$_wt" ] && [ -d "$_wt" ]; then
+                        ux_bullet_sub "worktree: $_wt"
+                        ux_bullet_sub "cleanup: cd $_wt && gwt teardown --force"
+                    fi
+                fi
+                ;;
+        esac
+    done
+
+    ux_info ""
+    if [ "$_force" = "1" ]; then
+        ux_success "pruned $_removed done entr(ies), torn down $_torn_down failed worktree(s); $((_failed - _torn_down)) failure(s) still need attention"
+    else
+        ux_success "pruned $_removed done entr(ies); $_failed failure(s) need attention (pass --force to gwt teardown them)"
+    fi
+}
+
+# ============================================================================
 # Help
 # ============================================================================
 
 gh_flow_help() {
     ux_header "gh-flow - fire-and-forget GitHub issue → PR automation"
-    ux_info "Usage: gh-flow <issue-number>... | -h|--help"
+    ux_info "Usage:"
+    ux_bullet "gh-flow <issue-number>...       spawn N parallel workers"
+    ux_bullet "gh-flow status                  show state of known issues in this repo"
+    ux_bullet "gh-flow prune [--force]         clean 'done' state; list 'failed:*' worktrees"
+    ux_bullet "gh-flow -h|--help|help          this help"
     ux_info ""
-    ux_info "Spawns one background worker per issue. Each worker:"
-    ux_bullet "gwt spawn → /gh-issue-flow → poll reviews → /gh-pr-reply (once, if comments)"
-    ux_bullet "→ poll for APPROVED → /gh-pr-merge → gwt teardown"
+    ux_info "Spawn pipeline (each worker runs these sequentially):"
+    ux_bullet "gwt spawn → /gh-issue-implement → /gh-commit → /gh-pr"
+    ux_bullet "poll reviews → /gh-pr-reply (once, if comments)"
+    ux_bullet "poll for APPROVED → /gh-pr-merge → gwt teardown"
     ux_info ""
     ux_info "Examples:"
     ux_bullet "gh-flow 13                  # single issue"
     ux_bullet "gh-flow 13 42 88            # 3 issues in parallel"
+    ux_bullet "gh-flow status              # who's still running, who failed"
+    ux_bullet "gh-flow prune               # remove 'done' state dirs; print hints for failures"
+    ux_bullet "gh-flow prune --force       # also gwt teardown failed worktrees"
     ux_info ""
     ux_info "State directory: ~/.local/state/gh-flow/<repo>/<issue>/"
     ux_bullet_sub "state         - current step"
@@ -72,6 +227,8 @@ gh_flow_help() {
     ux_info "Failure isolation:"
     ux_bullet "One worker failure does not affect others."
     ux_bullet "Failed worker leaves worktree intact; state shows 'failed:<step>'."
+    ux_bullet "Distinct failure states: failed:implementing, failed:committing,"
+    ux_bullet_sub "failed:opening-pr, failed:replying, failed:merging, failed:tearing-down."
     ux_info ""
     ux_info "Preconditions:"
     ux_bullet "Run from main repo (not inside a worktree)"
@@ -92,6 +249,16 @@ gh_flow() {
         ""|-h|--help|help)
             gh_flow_help
             return 0
+            ;;
+        status)
+            shift
+            _gh_flow_status "$@"
+            return $?
+            ;;
+        prune)
+            shift
+            _gh_flow_prune "$@"
+            return $?
             ;;
     esac
 
@@ -133,6 +300,7 @@ gh_flow() {
         case "$_issue" in
             ''|*[!0-9]*)
                 ux_error "invalid issue number: '$_issue' (must be positive integer)"
+                ux_info "subcommands: status, prune; or pass one or more issue numbers"
                 return 1
                 ;;
         esac
@@ -159,7 +327,7 @@ _gh_flow_spawn_worker() {
             ux_info "#$_issue already done, skipping"
             return 0
             ;;
-        spawning|implementing|polling|replying|merging|tearing-down)
+        spawning|implementing|committing|opening-pr|polling|replying|merging|tearing-down)
             if [ -f "$_dir/pid" ]; then
                 _pid="$(cat "$_dir/pid")"
                 if kill -0 "$_pid" 2>/dev/null; then
@@ -235,18 +403,47 @@ _gh_flow_worker() {
         return 1
     }
 
-    # ---- Step 2: implement (claude runs /gh-issue-flow) ----
+    # ---- Step 2a: implement (claude runs /gh-issue-implement) ----
+    # The original single `/gh-issue-flow` call was unreliable under `claude -p`
+    # (non-interactive): it often stopped after the implement phase and printed
+    # a "Next: …" hint without running commit/PR. We invoke the 3 atomic skills
+    # ourselves so each phase has a distinct state + post-condition check.
     _gh_flow_set_state "$_dir" "implementing"
-    if ! claude --dangerously-skip-permissions -p "/gh-issue-flow $_issue"; then
+    if ! claude --dangerously-skip-permissions -p "/gh-issue-implement $_issue direct"; then
         _gh_flow_set_state "$_dir" "failed:implementing"
-        printf '[gh-flow-worker] /gh-issue-flow failed\n' >&2
+        printf '[gh-flow-worker] /gh-issue-implement failed\n' >&2
+        return 1
+    fi
+    if ! _gh_flow_has_work_for_commit; then
+        _gh_flow_set_state "$_dir" "failed:implementing"
+        printf '[gh-flow-worker] /gh-issue-implement produced no changes\n' >&2
         return 1
     fi
 
+    # ---- Step 2b: commit (claude runs /gh-commit) ----
+    _gh_flow_set_state "$_dir" "committing"
+    if ! claude --dangerously-skip-permissions -p "/gh-commit"; then
+        _gh_flow_set_state "$_dir" "failed:committing"
+        printf '[gh-flow-worker] /gh-commit failed\n' >&2
+        return 1
+    fi
+    if ! _gh_flow_has_branch_commits; then
+        _gh_flow_set_state "$_dir" "failed:committing"
+        printf '[gh-flow-worker] /gh-commit left no new commit on branch\n' >&2
+        return 1
+    fi
+
+    # ---- Step 2c: open PR (claude runs /gh-pr) ----
+    _gh_flow_set_state "$_dir" "opening-pr"
+    if ! claude --dangerously-skip-permissions -p "/gh-pr $_issue"; then
+        _gh_flow_set_state "$_dir" "failed:opening-pr"
+        printf '[gh-flow-worker] /gh-pr failed\n' >&2
+        return 1
+    fi
     _pr="$(gh pr view --json number --jq '.number' 2>/dev/null)"
     if [ -z "$_pr" ]; then
-        _gh_flow_set_state "$_dir" "failed:implementing"
-        printf '[gh-flow-worker] no PR created by /gh-issue-flow\n' >&2
+        _gh_flow_set_state "$_dir" "failed:opening-pr"
+        printf '[gh-flow-worker] /gh-pr did not create a PR\n' >&2
         return 1
     fi
     printf '%s\n' "$_pr" >"$_dir/pr.number"
