@@ -762,6 +762,22 @@ git_worktree_teardown() {
         fi
     fi
 
+    # Pre-flight: untracked files.
+    # `git worktree remove` (without --force) refuses when untracked files
+    # exist. Catch it here with a message the user can act on, instead of
+    # letting the later remove call fail with a stderr we'd have to surface.
+    if git status --porcelain 2>/dev/null | grep -q '^??'; then
+        if [ "$force" = true ]; then
+            ux_warning "Discarding untracked files (--force)"
+        else
+            ux_error "Untracked files present — git worktree remove will refuse."
+            ux_info "  Inspect:  git status --short"
+            ux_info "  Clean:    git clean -fd"
+            ux_info "  Override: gwt teardown --force"
+            return 1
+        fi
+    fi
+
     # Pre-flight: unpushed commits.
     # (A) Capture fetch stderr so failures surface the actual cause, not a
     # misleading "network?" blurb. Real reason (auth, hook, URL, etc.) wins.
@@ -795,15 +811,39 @@ git_worktree_teardown() {
     # Switch to main repo
     cd "$main_repo" || { ux_error "Cannot cd to $main_repo"; return 1; }
 
-    # Remove worktree
-    if ! git worktree remove "$wt_path" 2>/dev/null; then
+    # Remove worktree. Capture stderr so the actual git reason (locked, dirty
+    # submodule, untracked residuals, etc.) reaches the user instead of being
+    # swallowed — same pattern as the fetch-stderr capture above. On failure,
+    # cd back into $wt_path so the user stays in the worktree they asked to
+    # remove (we already cd'd to $main_repo above) and can investigate.
+    local _gwt_rm_err_file="${TMPDIR:-/tmp}/gwt-rm.$$.err"
+    if ! git worktree remove "$wt_path" 2>"$_gwt_rm_err_file"; then
         if [ "$force" = true ]; then
-            git worktree remove --force "$wt_path" || { ux_error "Failed to remove worktree"; return 1; }
+            if ! git worktree remove --force "$wt_path" 2>"$_gwt_rm_err_file"; then
+                ux_error "Failed to remove worktree: $wt_path"
+                if [ -s "$_gwt_rm_err_file" ]; then
+                    ux_info "  git says:"
+                    sed 's/^/    /' "$_gwt_rm_err_file" >&2
+                fi
+                rm -f "$_gwt_rm_err_file"
+                cd "$wt_path" 2>/dev/null || true
+                return 1
+            fi
         else
-            ux_error "Cannot remove worktree. Use --force to override."
+            ux_error "Cannot remove worktree: $wt_path"
+            if [ -s "$_gwt_rm_err_file" ]; then
+                ux_info "  git says:"
+                sed 's/^/    /' "$_gwt_rm_err_file" >&2
+            fi
+            ux_info "  Inspect:  git status --short"
+            ux_info "  Clean:    git clean -fd"
+            ux_info "  Override: gwt teardown --force"
+            rm -f "$_gwt_rm_err_file"
+            cd "$wt_path" 2>/dev/null || true
             return 1
         fi
     fi
+    rm -f "$_gwt_rm_err_file"
     git worktree prune
 
     # Sync main BEFORE branch delete.

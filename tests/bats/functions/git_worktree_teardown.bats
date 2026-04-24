@@ -227,3 +227,71 @@ _squash_merge_branch_into_origin_main() {
     refute_output --partial "Your branch is behind"
     refute_output --partial "use \"git pull\""
 }
+
+# ---------------------------------------------------------------------------
+# Issue #195: untracked-files pre-flight, stderr surfacing, cwd-on-failure
+# ---------------------------------------------------------------------------
+
+@test "teardown: untracked files block teardown with actionable guidance (no --force)" {
+    # Put an untracked file inside the worktree — git worktree remove would
+    # refuse with a swallowed stderr. The new pre-flight should catch it.
+    printf 'stray\n' > "$WORKTREE/.DS_Store"
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
+    assert_output --partial "Untracked files present"
+    # Actionable next-steps surface the three commands from the issue spec.
+    assert_output --partial "git status --short"
+    assert_output --partial "git clean -fd"
+    assert_output --partial "gwt teardown --force"
+    # Worktree and branch still exist — we refused cleanly.
+    [ -d "$WORKTREE" ]
+    run git -C "$CLONE" rev-parse --verify --quiet wt/test/1
+    assert_success
+}
+
+@test "teardown: untracked files pass with --force and worktree is removed" {
+    printf 'stray\n' > "$WORKTREE/.DS_Store"
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown --force 2>&1"
+    assert_success
+    # Worktree directory is gone and branch deleted.
+    [ ! -d "$WORKTREE" ]
+    run git -C "$CLONE" rev-parse --verify --quiet wt/test/1
+    assert_failure
+}
+
+@test "teardown: failed remove surfaces git stderr + path (not just 'use --force')" {
+    # Force the `git worktree remove` step to fail with a git-reported reason
+    # by locking the worktree. The pre-flights pass (no dirty/untracked/
+    # unpushed), so control reaches the remove call. Without the fix, stderr
+    # is swallowed and the user sees only "Cannot remove worktree...".
+    git -C "$CLONE" worktree lock --reason "held for test" "$WORKTREE"
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
+    # Path appears so the user knows WHICH worktree failed.
+    assert_output --partial "$WORKTREE"
+    # git's own reason is surfaced under a "git says:" header, not silenced.
+    assert_output --partial "git says:"
+    assert_output --partial "locked"
+    # Next-action hints still render.
+    assert_output --partial "Override: gwt teardown --force"
+
+    # Cleanup: unlock so teardown doesn't leave the temp tree poisoned.
+    git -C "$CLONE" worktree unlock "$WORKTREE" 2>/dev/null || true
+}
+
+@test "teardown: on failure, cwd stays in the worktree (not main repo)" {
+    # Same locked-worktree scenario as above. After teardown fails, the shell
+    # should still be inside $WORKTREE so the user can `git status` without
+    # having to cd back. Verify by echoing pwd from inside the same subshell
+    # after the failing call.
+    git -C "$CLONE" worktree lock --reason "held for test" "$WORKTREE"
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>/dev/null; printf 'CWD=%s\n' \"\$(pwd)\""
+    # Function returned non-zero but we chained with ; so the subshell exits 0.
+    assert_output --partial "CWD=$WORKTREE"
+
+    git -C "$CLONE" worktree unlock "$WORKTREE" 2>/dev/null || true
+}
