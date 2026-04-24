@@ -216,14 +216,14 @@ _gh_pr_approve_worker() {
     # gwt's internal branch-naming convention.
     local _wt_before _wt_after
     _gh_pr_approve_set_state "$_dir" "spawning"
-    _wt_before=$(git worktree list --porcelain 2>/dev/null | awk '$1=="worktree"{print $2}')
+    _wt_before=$(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
     if ! gwt spawn "$_spawn_name"; then
         _gh_pr_approve_set_state "$_dir" "failed:spawning"
         printf '[gh-pr-approve-worker] gwt spawn failed\n' >&2
         return 1
     fi
 
-    _wt_after=$(git worktree list --porcelain 2>/dev/null | awk '$1=="worktree"{print $2}')
+    _wt_after=$(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
     _worktree=$(comm -13 \
         <(printf '%s\n' "$_wt_before" | sort) \
         <(printf '%s\n' "$_wt_after" | sort) \
