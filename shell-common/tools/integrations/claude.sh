@@ -399,4 +399,27 @@ clskip() {
 # ═══════════════════════════════════════════════════════════════
 
 alias claude-skip='claude --dangerously-skip-permissions'
-alias claude-yolo='claude --dangerously-skip-permissions'
+
+# claude_yolo: run `claude --dangerously-skip-permissions`, but auto-switch
+# off main/master to `scratch/MMDD-HHMMSS` first so YOLO sessions never
+# land commits on the protected branch. Bypass with CLAUDE_YOLO_STAY=1.
+claude_yolo() {
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        command claude --dangerously-skip-permissions "$@"
+        return
+    fi
+
+    branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+    case "$branch" in
+        main | master)
+            if [ -z "${CLAUDE_YOLO_STAY:-}" ]; then
+                new_branch="scratch/$(date +%m%d-%H%M%S)"
+                ux_warning "main 브랜치 감지 → ${new_branch} 로 전환 (bypass: CLAUDE_YOLO_STAY=1)"
+                git switch -c "$new_branch" || return 1
+            fi
+            ;;
+    esac
+
+    command claude --dangerously-skip-permissions "$@"
+}
+alias claude-yolo='claude_yolo'
