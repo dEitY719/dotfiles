@@ -813,35 +813,37 @@ git_worktree_teardown() {
 
     # Remove worktree. Capture stderr so the actual git reason (locked, dirty
     # submodule, untracked residuals, etc.) reaches the user instead of being
-    # swallowed — same pattern as the fetch-stderr capture above. On failure,
-    # cd back into $wt_path so the user stays in the worktree they asked to
-    # remove (we already cd'd to $main_repo above) and can investigate.
+    # swallowed — same pattern as the fetch-stderr capture above. Choose the
+    # remove command upfront from $force so a single error-handling block
+    # covers both paths. On failure, cd back into $wt_path so the user stays
+    # in the worktree they asked to remove (we already cd'd to $main_repo
+    # above) and can investigate.
     local _gwt_rm_err_file="${TMPDIR:-/tmp}/gwt-rm.$$.err"
-    if ! git worktree remove "$wt_path" 2>"$_gwt_rm_err_file"; then
+    local _gwt_rm_exit=0
+    if [ "$force" = true ]; then
+        git worktree remove --force "$wt_path" 2>"$_gwt_rm_err_file" || _gwt_rm_exit=$?
+    else
+        git worktree remove "$wt_path" 2>"$_gwt_rm_err_file" || _gwt_rm_exit=$?
+    fi
+
+    if [ "$_gwt_rm_exit" -ne 0 ]; then
         if [ "$force" = true ]; then
-            if ! git worktree remove --force "$wt_path" 2>"$_gwt_rm_err_file"; then
-                ux_error "Failed to remove worktree: $wt_path"
-                if [ -s "$_gwt_rm_err_file" ]; then
-                    ux_info "  git says:"
-                    sed 's/^/    /' "$_gwt_rm_err_file" >&2
-                fi
-                rm -f "$_gwt_rm_err_file"
-                cd "$wt_path" 2>/dev/null || true
-                return 1
-            fi
+            ux_error "Failed to remove worktree: $wt_path"
         else
             ux_error "Cannot remove worktree: $wt_path"
-            if [ -s "$_gwt_rm_err_file" ]; then
-                ux_info "  git says:"
-                sed 's/^/    /' "$_gwt_rm_err_file" >&2
-            fi
+        fi
+        if [ -s "$_gwt_rm_err_file" ]; then
+            ux_info "  git says:"
+            sed 's/^/    /' "$_gwt_rm_err_file" >&2
+        fi
+        if [ "$force" != true ]; then
             ux_info "  Inspect:  git status --short"
             ux_info "  Clean:    git clean -fd"
             ux_info "  Override: gwt teardown --force"
-            rm -f "$_gwt_rm_err_file"
-            cd "$wt_path" 2>/dev/null || true
-            return 1
         fi
+        rm -f "$_gwt_rm_err_file"
+        cd "$wt_path" 2>/dev/null || true
+        return 1
     fi
     rm -f "$_gwt_rm_err_file"
     git worktree prune
