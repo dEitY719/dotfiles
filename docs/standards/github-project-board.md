@@ -146,7 +146,8 @@ gh auth refresh -s project
 4. 빌트인 워크플로우 활성화 (Project > Workflows):
    - `Auto-add to project`: repo 드롭다운에서 `dotfiles`
      선택 + 필터 `is:issue,pr is:open`. Issue와 PR 카드를
-     보드에 자동 추가한다 (Status 세팅 없음 — 5번에서 처리).
+     보드에 자동 추가한다 (Status 세팅 없음 — 아래
+     `Item added to project`에서 처리).
    - `Item added to project`: `issues` + `pull requests`
      체크, Status=`Backlog`. Auto-add 또는 수동 추가로 들어온
      카드를 Backlog 컬럼에 배치한다.
