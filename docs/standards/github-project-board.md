@@ -93,25 +93,30 @@ Project 보드와 일관된 운영 방식 확보가 목적.
 GitHub Projects v2의 빌트인 워크플로우 네 개를 활성화한다
 (+ 선택 한 개).
 
-| 전환 시점        | From | To       | 트리거                                                   |
-|------------------|------|----------|----------------------------------------------------------|
-| Issue/PR 등록    | —    | Backlog  | `Auto-add to project`(필터) + `Item added to project`    |
-| PR 리뷰 승인     | 임의 | Approved | `Code review approved` (PR 카드, 선택적 활성화)          |
-| PR 머지          | 임의 | Done     | `Pull request merged` (PR 카드)                          |
-| Issue/PR close   | 임의 | Done     | `Item closed` (Issue는 PR의 `Closes #N` 키워드로 자동 close 시 포함) |
+| 전환 시점            | From          | To        | 트리거                                                                                      |
+|----------------------|---------------|-----------|---------------------------------------------------------------------------------------------|
+| Issue/PR 등록        | —             | Backlog   | `Auto-add to project`(필터) + `Item added to project`                                       |
+| PR open (linked)     | Backlog/Ready | In review | PR의 `Closes #N`으로 연결된 Issue 카드를 GitHub이 자동 전환 (Workflows 목록에 노출되지 않는 암묵적 훅) |
+| PR 리뷰 승인         | 임의          | Approved  | `Code review approved` (PR 카드, 선택적 활성화)                                              |
+| PR 머지              | 임의          | Done      | `Pull request merged` (PR 카드)                                                              |
+| Issue/PR close       | 임의          | Done      | `Item closed` (Issue는 PR의 `Closes #N` 키워드로 자동 close 시 포함)                         |
 
 2024년 UI 변경으로 `Auto-add to project`는 "카드 추가"만
 담당하고 Status 세팅은 `Item added to project`가 맡는다 —
 둘을 세트로 켠다.
 
-`Ready`, `In progress`, `In review`는 **수동 이동**한다.
-빌트인 워크플로우가 건드리지 않는 중간 상태이므로 작업자가
-보드 UI에서 직접 옮긴다.
+"PR open (linked)" 행은 Workflows 페이지에 노출되지 않는
+Projects v2의 기본 동작이다: `Closes/Fixes/Resolves #N`으로
+연결된 Issue 카드의 Status가 PR 개설 시 자동으로 `In review`로
+올라간다. PR 카드 자신은 이 훅의 영향을 받지 않는다.
+
+`Ready`, `In progress`는 **수동 이동**한다. `In review`는
+Issue 카드에 대해서는 자동(위 표), PR 카드에 대해서는 수동이다.
 
 - `Backlog -> Ready`: 이슈 분석이 끝나고 구현 준비가 됐을 때.
 - `Ready -> In progress`: 브랜치를 생성하고 작업을 시작할 때.
-- `In progress -> In review`: PR을 열고 리뷰를 요청할 때
-  (PR 카드도 Backlog에서 In review로 수동 이동).
+- `In progress -> In review`: **PR 카드에 한해** 수동 이동.
+  연결된 Issue 카드는 자동으로 전환된다.
 - `In review -> Approved`: 리뷰가 승인됐을 때 — 자동화를
   원하면 `Code review approved` 워크플로우를 켠다.
 
