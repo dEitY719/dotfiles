@@ -151,8 +151,8 @@ Use one of:
 - **Sequential dispatch** — call `Agent` without `isolation` and let tasks
   run in the main workspace serially.
 - **Manual worktree first** — invoke the `ai-worktree:spawn` skill (or run
-  `gwt`); it passes `-c filter.git-crypt.smudge=cat` so worktree creation
-  succeeds. Then dispatch non-isolated agents into that path.
+  `gwt`), which handles the git-crypt filter bypass automatically. Then
+  dispatch non-isolated agents into that path.
 
 See `docs/learnings/git-crypt-worktree-bootstrap.md` for the failing log,
 the `--no-checkout` + manual unlock fallback, and tracking issue
