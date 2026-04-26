@@ -137,6 +137,27 @@ Use the Agent tool to launch all agents concurrently in a single message.
 
 Both depend on Step 1 (load prompt) but not on each other → parallel.
 
+## Known Pitfall: Agent isolation + git-crypt
+
+Claude Code's built-in `Agent({ isolation: "worktree" })` (used by `/batch` and
+similar) calls `git worktree add` without any git-crypt filter bypass. This
+dotfiles repo sets `filter.git-crypt.required=true` and maps `.env` plus
+`.secrets/**` through git-crypt in `.gitattributes`, so harness-spawned
+worktrees abort with `fatal: .env: smudge filter git-crypt failed`.
+
+**In this repo, do NOT pass `isolation: "worktree"` to the `Agent` tool.**
+Use one of:
+
+- **Sequential dispatch** — call `Agent` without `isolation` and let tasks
+  run in the main workspace serially.
+- **Manual worktree first** — invoke the `ai-worktree:spawn` skill (or run
+  `gwt`); it passes `-c filter.git-crypt.smudge=cat` so worktree creation
+  succeeds. Then dispatch non-isolated agents into that path.
+
+See `docs/learnings/git-crypt-worktree-bootstrap.md` for the failing log,
+the `--no-checkout` + manual unlock fallback, and tracking issue
+[#153](https://github.com/dEitY719/dotfiles/issues/153).
+
 # Testing Strategy
 
 ## Manual Verification
