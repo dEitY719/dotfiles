@@ -18,6 +18,7 @@ main() {
     ux_bullet "gc-push           : .env 파일 암호화 & 한 번에 push"
     ux_bullet "gc-backup         : GPG 개인키 백업 (GitHub에 안전하게 업로드)"
     ux_bullet "gc-restore        : GPG 개인키 복원"
+    ux_bullet "gc-export-key     : git-crypt symmetric key export (ai-worktree-spawn 자동 unlock용)"
     ux_bullet "gc-unlock         : git-crypt unlock (저장소 복호화)"
     ux_bullet "gc-lock           : git-crypt lock (저장소 암호화)"
     ux_bullet "gc-status         : git-crypt 상태 확인"

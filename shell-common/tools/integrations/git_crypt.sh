@@ -56,6 +56,7 @@ alias gc-purge='gc_purge_cache'
 alias gc-add-me='gc_addme'
 alias gc-backup='gc_backup_key'
 alias gc-restore='gc_restore_key'
+alias gc-export-key='gc_export_key'
 alias gc-new-pc='gc_setup_new_pc'
 alias gc-push='gc_push_env'
 
@@ -811,6 +812,64 @@ gc_restore_key() {
         if [[ "$backup_file" == /tmp/* ]]; then
             rm -f "$backup_file"
         fi
+        return 1
+    fi
+}
+
+# git-crypt symmetric key를 ai-worktree-spawn 표준 위치로 export
+# 주의: gc-backup(GPG 개인키 백업)과 다름. 이 키는 git-crypt 자체 키.
+gc_export_key() {
+    local project_name
+    local key_path
+    local default_path
+
+    if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+        ux_error "Git 리포지토리가 아닙니다."
+        return 1
+    fi
+
+    if ! command -v git-crypt &>/dev/null; then
+        ux_error "git-crypt이 설치되어 있지 않습니다."
+        ux_info "설치: gc-install"
+        return 1
+    fi
+
+    if ! git-crypt status &>/dev/null; then
+        ux_error "git-crypt이 초기화되지 않았거나 unlocked 상태가 아닙니다."
+        ux_info "확인: gc-check, gc-status"
+        return 1
+    fi
+
+    project_name="$(basename "$(git rev-parse --show-toplevel)")"
+    default_path="${HOME}/.config/git-crypt/${project_name}.key"
+    key_path="${1:-$default_path}"
+
+    ux_header "git-crypt symmetric key export"
+    ux_info "Project : ${project_name}"
+    ux_info "Key path: ${key_path}"
+    echo ""
+
+    if [[ -f "$key_path" ]]; then
+        ux_warning "이미 키 파일이 존재합니다: ${key_path}"
+        if ! ux_confirm "덮어쓸까요?" "n"; then
+            ux_info "취소됨."
+            return 1
+        fi
+    fi
+
+    mkdir -p "$(dirname "$key_path")"
+
+    if git-crypt export-key "$key_path"; then
+        chmod 600 "$key_path"
+        ux_success "키 export 완료: ${key_path} (mode 0600)"
+        echo ""
+        ux_section "사용처"
+        ux_bullet "ai-worktree:spawn — 새 worktree에서 .env 자동 unlock"
+        ux_bullet "다른 PC로 옮길 때: 안전한 채널(USB, 1Password 등)로만 전송"
+        echo ""
+        ux_warning "절대 git에 commit하거나 클라우드/이메일에 업로드 금지"
+    else
+        ux_error "키 export 실패"
         return 1
     fi
 }
