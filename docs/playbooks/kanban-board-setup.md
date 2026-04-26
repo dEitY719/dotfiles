@@ -156,20 +156,32 @@ URL: `https://github.com/users/<OWNER>/projects/<PROJECT_NUMBER>/workflows`
 
 ```
 Issue:
-    Backlog ─[수동]──▶ In progress ─[PR open via Closes #N]──▶ In review ─[PR merge]──▶ Done
+    Backlog ─[/gh-commit]──▶ In progress ─[PR open via Closes #N]──▶ In review ─[PR merge]──▶ Done
 
 PR:
-    Backlog ─[수동]──▶ In review ─[Approve]──▶ Approved ─[merge]──▶ Done
-                           ▲                        │
-                           └─ [수동 재리뷰] ── In progress ◀─ [Changes requested]
+    Backlog ─[/gh-pr]──▶ In review ─[Approve]──▶ Approved ─[merge]──▶ Done
+                            ▲                        │
+                            └─ [수동 재리뷰] ── In progress ◀─ [Changes requested]
 ```
+
+`/gh-flow`, `/gh-pr`, `/gh-commit` 가 호출되면 위 두 진입 전환은
+자동으로 발생한다 (보드가 없는 repo 에서는 헬퍼가 자동으로 no-op).
+raw `git commit` / `gh pr create` 를 직접 사용하는 경로에서만 수동
+이동이 필요하다.
 
 ## 6. 자동 vs 수동
 
-- **Issue `Backlog → In progress`**: 수동 (브랜치 생성 시점).
-- **PR `Backlog → In review`**: 수동 (리뷰 기대 시점).
-- **PR `In progress → In review`**: 수동 (Changes requested 루프 탈출 시).
-- 그 외 모든 전환: 자동.
+- **Issue `Backlog → In progress`**: `/gh-flow`·`/gh-commit` 자동 /
+  raw `git commit` 사용 시 수동. `/gh-commit` 은 `--only-from Backlog`
+  가드를 사용하므로 PR 오픈 후 follow-up 커밋은 역행시키지 않는다.
+- **PR `Backlog → In review`**: `/gh-flow`·`/gh-pr` 자동 /
+  raw `gh pr create` 사용 시 수동.
+- **PR `In progress → In review`**: 수동 (Changes requested 루프
+  탈출 시 — 자동화 미지원).
+- **보드 미연결 repo**: 헬퍼 (`_gh_project_status_sync`) 가
+  `projectItems` 가 0건이면 조용히 return 0 — 즉 `dotfiles` 외 다른
+  프로젝트에서 `/gh-pr`·`/gh-commit` 을 써도 부작용이 없다.
+- 그 외 모든 전환: 자동 (GitHub Projects v2 빌트인 워크플로우).
 
 ## 7. 검증 (smoke test)
 
@@ -202,5 +214,8 @@ gh issue create --repo "$OWNER/$REPO" --title "[Test] kanban smoke" --body "igno
 - 본 playbook 출처 SSOT: [docs/standards/github-project-board.md](../standards/github-project-board.md)
 - GitHub Projects v2 빌트인 automations:
   <https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/using-the-built-in-automations>
-- 관련 skills (본 repo): `gh-issue-create`, `gh-pr`, `gh-pr-merge`,
-  `gh-pr-reply`, `gh-issue-flow`.
+- 관련 skills (본 repo): `gh-issue-create`, `gh-commit`, `gh-pr`,
+  `gh-pr-merge`, `gh-pr-reply`, `gh-issue-flow`.
+- 관련 헬퍼: `shell-common/functions/gh_project_status.sh`
+  (공용 `_gh_project_status_sync` — `/gh-flow`, `/gh-pr`,
+  `/gh-commit` 이 모두 호출).

@@ -409,7 +409,7 @@ _gh_flow_worker() {
     # a "Next: …" hint without running commit/PR. We invoke the 3 atomic skills
     # ourselves so each phase has a distinct state + post-condition check.
     _gh_flow_set_state "$_dir" "implementing"
-    _gh_flow_set_project_status issue "$_issue" "In progress"
+    _gh_project_status_sync issue "$_issue" "In progress"
     if ! claude --dangerously-skip-permissions -p "/gh-issue-implement $_issue direct"; then
         _gh_flow_set_state "$_dir" "failed:implementing"
         printf '[gh-flow-worker] /gh-issue-implement failed\n' >&2
@@ -451,7 +451,7 @@ _gh_flow_worker() {
     printf '[gh-flow-worker] PR=#%s\n' "$_pr"
     # PR card auto-transition is not covered by any built-in workflow;
     # move it to "In review" explicitly so reviewers see it on the board.
-    _gh_flow_set_project_status pr "$_pr" "In review"
+    _gh_project_status_sync pr "$_pr" "In review"
 
     # ---- Step 3: poll for review / approval ----
     _gh_flow_set_state "$_dir" "polling"
@@ -507,120 +507,11 @@ _gh_flow_worker() {
 # ============================================================================
 # Project board Status sync
 # ============================================================================
-# Push a projectV2 Status transition for an Issue or PR. Auto-discovers every
-# projectV2 the target belongs to; for each project that has a "Status" field
-# with an option matching $3, updates the item's Status to that option.
-#
-# Failure is always quiet (returns 0) — the worker's primary job is
-# implement/commit/PR, not board bookkeeping. Opt out with
-# GH_FLOW_PROJECT_STATUS_SYNC=0.
-#
-# Usage: _gh_flow_set_project_status <issue|pr> <number> <status-name>
-#   _gh_flow_set_project_status issue 42 "In progress"
-#   _gh_flow_set_project_status pr    17 "In review"
-
-_gh_flow_set_project_status() {
-    local _kind="$1" _num="$2" _target="$3"
-    local _owner _repo _q_field _triples _proj _item _field _option
-
-    if [ "${GH_FLOW_PROJECT_STATUS_SYNC-1}" = "0" ]; then
-        return 0
-    fi
-    if [ -z "$_kind" ] || [ -z "$_num" ] || [ -z "$_target" ]; then
-        return 0
-    fi
-
-    case "$_kind" in
-        issue) _q_field='issue' ;;
-        pr) _q_field='pullRequest' ;;
-        *)
-            printf '[gh-flow-worker] project-status: invalid kind=%s, skipping\n' "$_kind" >&2
-            return 0
-            ;;
-    esac
-
-    # Single `gh repo view` call — two forks were redundant.
-    if ! read -r _owner _repo <<EOF
-$(gh repo view --json owner,name --jq '"\(.owner.login) \(.name)"' 2>/dev/null)
-EOF
-    then
-        printf '[gh-flow-worker] project-status: could not determine owner/repo, skipping\n' >&2
-        return 0
-    fi
-    if [ -z "$_owner" ] || [ -z "$_repo" ]; then
-        printf '[gh-flow-worker] project-status: could not determine owner/repo, skipping\n' >&2
-        return 0
-    fi
-
-    # Single query: find every projectV2 item for this issue/PR along with
-    # the project's Status field and the target option (if it exists there).
-    _triples=$(gh api graphql \
-        -f query="
-          query(\$owner: String!, \$repo: String!, \$number: Int!, \$target: String!) {
-            repository(owner: \$owner, name: \$repo) {
-              ${_q_field}(number: \$number) {
-                projectItems(first: 10) {
-                  nodes {
-                    id
-                    project {
-                      id
-                      field(name: \"Status\") {
-                        ... on ProjectV2SingleSelectField {
-                          id
-                          options(names: [\$target]) { id name }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }" \
-        -f owner="$_owner" -f repo="$_repo" -F number="$_num" -f target="$_target" \
-        --jq ".data.repository.${_q_field}.projectItems.nodes[]
-              | select(.project.field.options? | length > 0)
-              | \"\(.project.id)|\(.id)|\(.project.field.id)|\(.project.field.options[0].id)\"" \
-        2>/dev/null) || {
-        printf '[gh-flow-worker] project-status: query failed for %s #%s (target=%s)\n' \
-            "$_kind" "$_num" "$_target" >&2
-        return 0
-    }
-
-    if [ -z "$_triples" ]; then
-        printf '[gh-flow-worker] project-status: %s #%s not in any project with "%s" option\n' \
-            "$_kind" "$_num" "$_target" >&2
-        return 0
-    fi
-
-    # Avoid subshell — keep heredoc pattern instead of pipe (zsh/bash tracing).
-    while IFS='|' read -r _proj _item _field _option; do
-        [ -z "$_proj" ] && continue
-        # GraphQL variables ($proj, $item, ...) are NOT shell vars — they
-        # are bound via the -f flags below, so single quotes are intended.
-        # shellcheck disable=SC2016
-        if gh api graphql \
-            -f query='
-              mutation($proj: ID!, $item: ID!, $field: ID!, $option: String!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $proj
-                  itemId: $item
-                  fieldId: $field
-                  value: { singleSelectOptionId: $option }
-                }) { clientMutationId }
-              }' \
-            -f proj="$_proj" -f item="$_item" -f field="$_field" -f option="$_option" \
-            >/dev/null 2>&1; then
-            printf '[gh-flow-worker] project-status: %s #%s -> "%s"\n' "$_kind" "$_num" "$_target"
-        else
-            printf '[gh-flow-worker] project-status: mutation failed for %s #%s (target=%s)\n' \
-                "$_kind" "$_num" "$_target" >&2
-        fi
-    done <<EOF
-$_triples
-EOF
-
-    return 0
-}
+# Helper extracted to shell-common/functions/gh_project_status.sh so /gh-pr
+# and /gh-commit (single-skill execution paths, not the gh-flow worker) can
+# also push board transitions. The worker calls _gh_project_status_sync at
+# Step 2a (implement → "In progress") and after Step 2c (PR opened →
+# "In review"); see lines 412 and 454.
 
 # ============================================================================
 # Aliases (hyphenated command names per shell-common convention)

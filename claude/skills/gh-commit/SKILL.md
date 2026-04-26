@@ -77,7 +77,28 @@ their own manual edits), derive intent from the diff itself:
   fix the underlying issue, re-stage, and create a **new** commit.
 - See `references/commit-message-format.md` for the exact HEREDOC command.
 
-## Step 5: Verify
+## Step 5: Sync Project Board Status
+
+If the commit message contains `Closes|Fixes|Refs #N` (i.e. the issue
+number resolved in Step 2 was actually written into the footer), push
+the linked Issue's project-board card to `In progress` — but only when
+its current Status is `Backlog`. The `--only-from Backlog` guard is
+mandatory: `/gh-commit` is invoked many times per branch (initial
+commit + follow-up fix commits), and after a PR opens the issue moves
+to `In review`; without the guard a follow-up fix commit would bounce
+it back to `In progress`.
+
+Skip this step entirely when no issue footer was written.
+
+```bash
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
+_gh_project_status_sync issue <ISSUE_NUMBER> "In progress" --only-from Backlog
+```
+
+If the repo has no projectV2 board (auto-detected) the helper silently
+returns 0. Opt out with `GH_PROJECT_STATUS_SYNC=0`.
+
+## Step 6: Verify
 
 After commit succeeds, run `git status` and report:
 

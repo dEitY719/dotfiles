@@ -78,7 +78,25 @@ and PR scope (e.g. `skill` for `claude/skills/` changes). Apply only
 labels that exist in the repo (`gh label list`) — never create new ones.
 See `references/pr-body-template.md` for the full mapping + safe-apply loop.
 
-## Step 7: Report
+## Step 7: Sync Project Board Status
+
+After the PR is created, push its project-board card to `In review` so
+reviewers see it on the kanban without manual drag. Source the shared
+helper (it lives in `shell-common/functions/gh_project_status.sh`) and
+call it with the new PR number — no guard option, because the PR
+lifecycle is linear and `In review` is the canonical resting state from
+PR open through approval:
+
+```bash
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
+_gh_project_status_sync pr <PR_NUMBER> "In review"
+```
+
+If the repo has no projectV2 board attached (auto-detected — the helper
+finds zero project items and silently returns 0), nothing happens. Opt
+out per-invocation with `GH_PROJECT_STATUS_SYNC=0`.
+
+## Step 8: Report
 
 Output **only** the PR URL:
 
