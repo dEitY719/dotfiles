@@ -143,7 +143,7 @@ URL: `https://github.com/users/<OWNER>/projects/<PROJECT_NUMBER>/workflows`
 | 7  | `Item closed`                   | issues + pull requests     | `Done`              |
 | 8  | `Auto-close issue`              | — (구조적; 기본 유지)       | (Status 미설정)     |
 | 9  | `Auto-add sub-issues to project`| — (구조적; 기본 유지)       | (Status 미설정)     |
-| 10 | `Auto-archive items`            | Filter 매칭 카드 주기적 archive | **수동 enable** + Filter: `is:issue,pr is:closed updated:<@today` |
+| 10 | `Auto-archive items`            | Filter 매칭 카드 주기적 archive | **수동 enable** + Filter: `is:issue,pr is:closed updated:<@today-2d` |
 
 **#10 `Auto-archive items` 설정 상세**:
 
@@ -152,9 +152,11 @@ URL: `https://github.com/users/<OWNER>/projects/<PROJECT_NUMBER>/workflows`
   - `is:issue,pr` — Issue·PR 카드 모두 (Option B 운영 전제)
   - `is:closed` — 닫힌(=머지된) 카드만. 본 문서 라이프사이클에서
     Done 컬럼과 동치.
-  - `updated:<@today` — 오늘 이전에 업데이트된 카드. 기간은 운영
-    취향에 따라 `<@today-1d`, `<@today-2w` 등으로 조정. dotfiles는
-    `<@today` 채택 (Done 컬럼을 항상 당일분으로만 유지).
+  - `updated:<@today-2d` — 그제(2일 전) 자정 이전에 업데이트된
+    카드. 기간은 운영 취향에 따라 `<@today` (당일분만), `<@today-1w`
+    (1주분) 등으로 조정. dotfiles는 `<@today-2d` 채택 (Done 컬럼을
+    최근 2일분만 유지하여, 어제 머지된 카드도 오늘 시점에 보드
+    상에서 즉시 확인 가능).
 - archive 된 카드는 삭제가 아니라 기본 뷰에서 숨김 — 필터 바에
   `is:archived` 입력 시 재조회, 카드 우클릭 `Restore from archive`로
   복원 가능.
