@@ -129,7 +129,7 @@ GitHub Projects v2의 빌트인 워크플로우 10개 중 9개가 `enabled`
 |----|-------------------------------------|---------------------------------------------------|
 | 8  | `Auto-close issue`                  | 부모 Issue의 모든 sub-issue가 close되면 부모를 auto-close |
 | 9  | `Auto-add sub-issues to project`    | 부모 Issue가 보드에 있으면 sub-issue도 자동 추가      |
-| 10 | `Auto-archive items`                | 필터 매칭 카드를 주기적으로 archive (Done 컬럼 정리용). 기본 `disabled` — 수동 enable 필요. dotfiles 채택 필터: `is:issue,pr is:closed updated:<@today-1d` |
+| 10 | `Auto-archive items`                | 필터 매칭 카드를 주기적으로 archive (Done 컬럼 정리용). 기본 `disabled` — 수동 enable 필요. dotfiles 채택 필터: `is:issue,pr is:closed updated:<@today` |
 
 ### 수동 이동
 
@@ -197,8 +197,8 @@ gh auth refresh -s project
    - `Auto-close issue`, `Auto-add sub-issues to project`:
      Status를 건드리지 않는 구조적 워크플로우로 기본 설정 유지.
    - `Auto-archive items`: 수동 enable + 필터
-     `is:issue,pr is:closed updated:<@today-1d` 입력 — Done 컬럼을
-     1일 경과분부터 자동 archive 하여 항상 당일분만 유지한다.
+     `is:issue,pr is:closed updated:<@today` 입력 — Done 컬럼을
+     오늘 이전 분부터 자동 archive 하여 항상 당일분만 유지한다.
 
 ## 운영 상의 유의사항
 
