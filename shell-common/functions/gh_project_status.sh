@@ -115,8 +115,8 @@ EOF
           }" \
         -f owner="$_owner" -f repo="$_repo" -F number="$_num" -f target="$_target" \
         --jq ".data.repository.${_q_field}.projectItems.nodes[]
-              | select(.project.field.options? | length > 0)
-              | \"\(.project.id)|\(.id)|\(.project.field.id)|\(.project.field.options[0].id)|\(.fieldValueByName.name // \"\")\"" \
+              | select(.project?.field?.options? | length > 0)
+              | \"\(.project?.id)|\(.id)|\(.project?.field?.id)|\(.project?.field?.options?[0]?.id)|\(.fieldValueByName?.name? // \"\")\"" \
         2>/dev/null) || {
         printf '[gh-project-status] query failed for %s #%s (target=%s)\n' \
             "$_kind" "$_num" "$_target" >&2
