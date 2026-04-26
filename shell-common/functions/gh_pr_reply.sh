@@ -22,7 +22,9 @@ _gh_pr_reply_state_root() {
 }
 
 _gh_pr_reply_repo_name() {
-    basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null
+    local _top
+    _top=$(git rev-parse --show-toplevel 2>/dev/null) || return 1
+    basename "$_top"
 }
 
 _gh_pr_reply_pr_dir() {
