@@ -1,6 +1,6 @@
-#!/bin/bash
-# shell-common/tools/external/git_crypt.sh
-# Git-crypt helper - shared across bash and zsh
+#!/bin/sh
+# shell-common/tools/integrations/git_crypt.sh
+# Git-crypt helper - shared across bash and zsh (sourced, not executed)
 
 : <<'GIT_CRYPT_DOC'
 ==========================================================
