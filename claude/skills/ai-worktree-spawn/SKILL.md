@@ -53,9 +53,16 @@ Priority: `--base` arg > `origin/main` > `main`/`master` > current HEAD.
 
 ### Step 6: Create Worktree
 
-Detect git-crypt first. If the repo uses git-crypt, pass `-c filter.git-crypt.smudge=cat
--c filter.git-crypt.clean=cat` to `git worktree add` to prevent smudge filter failure.
-After creation, set worktree-local config to disable git-crypt filters permanently.
+git-crypt detection happens in Step 1.5. When active, resolve a key file via priority:
+`$GIT_CRYPT_KEY_FILE` > `~/.config/git-crypt/<project>.key` > `~/.config/git-crypt/default.key`.
+
+- **Key found (auto-unlock path)**: `git worktree add --no-checkout` first, then
+  `git-crypt unlock <key>` inside the new worktree, then `git checkout -- .`.
+  Encrypted files (`.env`, `.secrets/`) decrypt normally — full functionality.
+- **Key not found (bypass path, backward-compatible)**: pass `-c filter.git-crypt.smudge=cat
+  -c filter.git-crypt.clean=cat` to `git worktree add`, set worktree-local config
+  to disable filters permanently. Encrypted files stay binary. Print a hint about
+  `git-crypt export-key ~/.config/git-crypt/<project>.key` so next spawn can unlock.
 
 If branch exists: `git worktree add <path> <branch>` (no `-b`).
 If new branch: `git worktree add -b <branch> <path> <base_ref>`.
@@ -73,7 +80,7 @@ Print result, then `cd` into the new worktree:
   Path:   ../my-app-claude-1
   Branch: wt/claude/1
   Base:   origin/main
-  git-crypt: disabled (encrypted files not decrypted)
+  git-crypt: unlocked via ~/.config/git-crypt/my-app.key
 
   Teardown after work is done:
     git push -u origin wt/claude/1
@@ -81,7 +88,9 @@ Print result, then `cd` into the new worktree:
     git branch -d wt/claude/1
 ```
 
-The `git-crypt` line only appears when the repo uses git-crypt.
+The `git-crypt` line only appears when the repo uses git-crypt. It shows either
+`unlocked via <key path>` (auto-unlock path) or `disabled (no key file)` (bypass
+path). When bypassed, the report also prints the `git-crypt export-key` hint.
 
 The script cannot change the caller's cwd. Print the `cd` command as guidance,
 then execute it yourself as the AI agent.
