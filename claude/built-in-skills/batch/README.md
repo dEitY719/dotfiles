@@ -16,7 +16,7 @@ git-crypt 필터 우회 플래그를 주지 않으므로 모든 워커가
 
 - **Sequential 인라인 실행** — 메인 워크스페이스에서 작업을 순차 진행 (단위 수가 적을 때)
 - **수동 worktree 부트스트랩** — `gwt` 또는 `ai-worktree:spawn` 스킬로 worktree를 먼저
-  만들고(이쪽은 `-c filter.git-crypt.smudge=cat`을 명시적으로 전달함), 그 안에서
+  만들고(git-crypt 필터 우회를 자동 처리), 그 안에서
   isolation 없는 `Agent`를 디스패치
 - 추적 이슈: [#153](https://github.com/dEitY719/dotfiles/issues/153)
 - 상세: `docs/learnings/git-crypt-worktree-bootstrap.md`
