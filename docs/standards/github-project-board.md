@@ -129,17 +129,29 @@ GitHub Projects v2의 빌트인 워크플로우 9개가 모두 `enabled`
 | 8 | `Auto-close issue`                  | 부모 Issue의 모든 sub-issue가 close되면 부모를 auto-close |
 | 9 | `Auto-add sub-issues to project`    | 부모 Issue가 보드에 있으면 sub-issue도 자동 추가      |
 
-### 수동 이동
+### 자동 전환 규칙 (스킬 경유)
 
-- **Issue 카드 `Backlog → In progress`**: 작업자가 브랜치 생성·
-  작업 시작 시점에 직접 옮긴다. Issue 카드의 유일한 수동 단계다.
-- **PR 카드 `Backlog → In review`**: Projects v2 빌트인에 "PR
-  open → In review" 전환을 담당하는 워크플로우가 **존재하지 않는다**.
-  PR을 열어 리뷰를 기대하는 시점에 작업자가 직접 옮긴다.
+GitHub 빌트인이 커버하지 않는 두 진입 전환은 dotfiles 의 스킬이
+공용 헬퍼 `_gh_project_status_sync`
+(`shell-common/functions/gh_project_status.sh`) 를 통해 자동화한다.
+보드가 없는 repo (예: `dotfiles` 이외의 사이드 프로젝트) 에선 헬퍼가
+`projectItems` 0건을 감지하고 조용히 no-op 하므로 추가 분기가 필요
+없다.
+
+- **Issue 카드 `Backlog → In progress`**: `/gh-flow` 워커 또는
+  `/gh-commit` 단독 실행이 커밋 메시지에서 `Closes|Fixes|Refs #N` 을
+  찾으면 자동 전환한다. 단, `--only-from Backlog` 가드가 적용되어
+  같은 이슈에 대해 follow-up 커밋이 들어와도 `In review` 상태를
+  되돌리지 않는다. raw `git commit` 으로 진행하는 경로에선 작업자가
+  수동으로 옮긴다.
+- **PR 카드 `Backlog → In review`**: `/gh-flow` 워커 또는 `/gh-pr`
+  단독 실행이 PR 생성 직후 자동 전환한다. raw `gh pr create` 로
+  PR 을 만든 경우엔 수동 이동이 필요하다.
 - **PR 카드 `In progress → In review` (재리뷰 요청 시)**:
   `Changes requested` 루프에서 수정·재푸시 후 리뷰가 다시 달리기를
-  기대할 때 수동으로 복귀시킨다. 이 외의 PR 전환(`→ Approved`,
-  `→ Done`)은 모두 자동이다.
+  기대할 때 **수동**으로 복귀시킨다. Projects v2 빌트인에도 dotfiles
+  스킬에도 이 전환을 자동화하는 경로가 없다. 이 외의 PR 전환(`→
+  Approved`, `→ Done`)은 모두 빌트인 워크플로우로 자동 처리된다.
 
 ### 용어 교정 (2026-04-24)
 
@@ -202,13 +214,19 @@ gh auth refresh -s project
   merged`로 Done 이동). PR 템플릿과 `gh:pr` 스킬이 이를 방지하지만,
   사람이 수동으로 본문을 지울 경우를 대비해 머지 전에 한 번 더
   확인한다.
-- Issue 카드의 `Backlog → In progress` 는 유일한 **수동 이동**
-  지점이다 (브랜치 생성·작업 시작 시점). 이후 전환(`→ In review`
-  `→ Done`)은 모두 자동이다.
-- PR 카드도 두 지점에 수동 이동이 필요하다: `Backlog → In review`
-  (PR 오픈 후 리뷰 대기 상태로 알릴 때), `In progress → In review`
-  (`Changes requested` 루프에서 재리뷰 요청 시). 그 외 PR 전환은
-  모두 자동이다.
+- Issue 카드의 `Backlog → In progress` 는 dotfiles 스킬
+  (`/gh-flow`, `/gh-commit`) 사용 시 자동, raw `git commit` 사용
+  시에만 수동이다. `/gh-commit` 은 `--only-from Backlog` 가드를
+  사용하므로 PR 오픈 후 follow-up 커밋이 들어와도 `In review` 상태를
+  되돌리지 않는다.
+- PR 카드 `Backlog → In review` 는 dotfiles 스킬 (`/gh-flow`,
+  `/gh-pr`) 사용 시 자동, raw `gh pr create` 사용 시에만 수동이다.
+  `In progress → In review` (`Changes requested` 루프 탈출 시)
+  전환만 항상 수동이다 — 빌트인·스킬 모두 이 경로를 자동화하지
+  않는다.
+- 보드가 없는 repo 에서 `/gh-pr` 또는 `/gh-commit` 을 실행하면
+  공용 헬퍼 `_gh_project_status_sync` 가 `projectItems` 가 0건임을
+  자동 감지하고 조용히 no-op 한다 (별도 분기 불필요).
 - 수동으로 카드를 옮긴 경우 다음 자동 이벤트가 상태를 덮어쓸
   수 있다. 특히 Issue 카드를 `Approved`로 옮겨도 `Item closed`가
   PR 머지 시점에 곧바로 `Done`으로 이동시키므로 의미가 없다
@@ -230,7 +248,11 @@ gh auth refresh -s project
 - 관련 Issue: #169 (본 문서의 도입 근거).
 - 관련 스킬:
   - `claude/skills/gh-issue-create/SKILL.md`
+  - `claude/skills/gh-commit/SKILL.md`
   - `claude/skills/gh-pr/SKILL.md`
   - `claude/skills/gh-pr-merge/SKILL.md`
   - `claude/skills/gh-issue-flow/SKILL.md`
+- 관련 헬퍼: `shell-common/functions/gh_project_status.sh` (공용
+  `_gh_project_status_sync` — `/gh-flow`, `/gh-pr`, `/gh-commit` 이
+  모두 호출).
 - 관련 템플릿: `.github/pull_request_template.md`.
