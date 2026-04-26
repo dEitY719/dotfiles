@@ -53,18 +53,35 @@ detect_ai_agent() {
 AGENT="$(detect_ai_agent "${AGENT_OVERRIDE:-}")"
 ```
 
-## Step 1.5: Detect git-crypt
+## Step 1.5: Detect git-crypt and resolve key file
 
 ```bash
-# Check if repo uses git-crypt by looking for .gitattributes filter entries
+# Check if repo uses git-crypt
 GIT_CRYPT_ACTIVE=false
 if git config --get filter.git-crypt.smudge >/dev/null 2>&1; then
   GIT_CRYPT_ACTIVE=true
 fi
 
-# Build git-crypt bypass flags for worktree creation
-GIT_CRYPT_FLAGS=()
+# Resolve git-crypt key file via priority chain
+# 1) $GIT_CRYPT_KEY_FILE  2) ~/.config/git-crypt/<project>.key  3) ~/.config/git-crypt/default.key
+GIT_CRYPT_KEY=""
+PROJECT_NAME="$(basename "$(git rev-parse --show-toplevel)")"
 if [[ "$GIT_CRYPT_ACTIVE" == true ]]; then
+  for candidate in \
+    "${GIT_CRYPT_KEY_FILE:-}" \
+    "${HOME}/.config/git-crypt/${PROJECT_NAME}.key" \
+    "${HOME}/.config/git-crypt/default.key"; do
+    if [[ -n "$candidate" && -r "$candidate" ]]; then
+      GIT_CRYPT_KEY="$candidate"
+      break
+    fi
+  done
+fi
+
+# Bypass flags ONLY when git-crypt is active AND no key file resolved.
+# When a key is found, auto-unlock path runs in Step 6 instead.
+GIT_CRYPT_FLAGS=()
+if [[ "$GIT_CRYPT_ACTIVE" == true && -z "$GIT_CRYPT_KEY" ]]; then
   GIT_CRYPT_FLAGS=(-c filter.git-crypt.smudge=cat -c filter.git-crypt.clean=cat)
 fi
 ```
@@ -193,24 +210,46 @@ BASE_REF="$(resolve_base_ref "${BASE_OVERRIDE:-}")"
 ## Step 6: Create Worktree
 
 ```bash
-# Use GIT_CRYPT_FLAGS from Step 1.5 (empty array if no git-crypt)
-if git show-ref --verify --quiet "refs/heads/${BRANCH}"; then
-    # Existing branch -- no -b flag
-    git "${GIT_CRYPT_FLAGS[@]}" worktree add "${WORKTREE_PATH}" "${BRANCH}"
-else
-    # New branch -- create with -b
-    git "${GIT_CRYPT_FLAGS[@]}" worktree add -b "${BRANCH}" "${WORKTREE_PATH}" "${BASE_REF}"
-fi
+# GIT_CRYPT_REPORT is consumed by Step 8 (skill report).
+GIT_CRYPT_REPORT=""
 
-# If git-crypt is active, disable filters in the new worktree permanently.
-# Encrypted files (.env, .secrets) stay as binary -- this is intentional.
-# The worktree is for code work; secrets are not needed.
-if [[ "$GIT_CRYPT_ACTIVE" == true ]]; then
-    git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.smudge cat
-    git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.clean cat
-    git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.required false
-    # Re-checkout so worktree-local config takes effect cleanly
-    git -C "${WORKTREE_PATH}" checkout -- . 2>/dev/null
+if [[ "$GIT_CRYPT_ACTIVE" == true && -n "$GIT_CRYPT_KEY" ]]; then
+    # ---- Auto-unlock path: --no-checkout, then unlock, then real checkout ----
+    if git show-ref --verify --quiet "refs/heads/${BRANCH}"; then
+        git worktree add --no-checkout "${WORKTREE_PATH}" "${BRANCH}"
+    else
+        git worktree add --no-checkout -b "${BRANCH}" "${WORKTREE_PATH}" "${BASE_REF}"
+    fi
+
+    # Run git-crypt unlock inside the new worktree (subshell preserves caller cwd).
+    if (cd "${WORKTREE_PATH}" && git-crypt unlock "${GIT_CRYPT_KEY}"); then
+        # Smudge filter now has the key; checkout decrypts encrypted files normally.
+        git -C "${WORKTREE_PATH}" checkout -- .
+        GIT_CRYPT_REPORT="unlocked via ${GIT_CRYPT_KEY}"
+    else
+        # Unlock failed -- fall through to bypass so worktree is at least usable.
+        echo "Warning: git-crypt unlock failed with ${GIT_CRYPT_KEY}; switching to bypass"
+        git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.smudge cat
+        git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.clean cat
+        git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.required false
+        git -C "${WORKTREE_PATH}" checkout -- . 2>/dev/null
+        GIT_CRYPT_REPORT="disabled (unlock failed; encrypted files stay binary)"
+    fi
+else
+    # ---- Bypass path (no git-crypt, or git-crypt active but no key file) ----
+    if git show-ref --verify --quiet "refs/heads/${BRANCH}"; then
+        git "${GIT_CRYPT_FLAGS[@]}" worktree add "${WORKTREE_PATH}" "${BRANCH}"
+    else
+        git "${GIT_CRYPT_FLAGS[@]}" worktree add -b "${BRANCH}" "${WORKTREE_PATH}" "${BASE_REF}"
+    fi
+    if [[ "$GIT_CRYPT_ACTIVE" == true ]]; then
+        # Make bypass permanent in the worktree.
+        git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.smudge cat
+        git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.clean cat
+        git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.required false
+        git -C "${WORKTREE_PATH}" checkout -- . 2>/dev/null
+        GIT_CRYPT_REPORT="disabled (no key; run from main repo: git-crypt export-key ~/.config/git-crypt/${PROJECT_NAME}.key)"
+    fi
 fi
 ```
 
