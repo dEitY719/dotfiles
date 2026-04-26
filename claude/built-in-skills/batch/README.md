@@ -4,6 +4,23 @@
 
 대규모 기계적 변경(마이그레이션, 리팩터링, 일괄 rename 등)을 5~30개의 독립된 worktree agent로 분해하여 병렬 실행하고, 각각 PR 생성을 시도한다.
 
+## 주의: 이 dotfiles repo에서는 동작하지 않음
+
+이 repo는 `.gitattributes`에서 `.env` / `.secrets/**`를 git-crypt 필터에 매핑하고
+로컬 git config에 `filter.git-crypt.required=true`를 두고 있다. `/batch`는 각 워커를
+`Agent({ isolation: "worktree" })`로 띄우는데, harness가 `git worktree add`를 호출할 때
+git-crypt 필터 우회 플래그를 주지 않으므로 모든 워커가
+`fatal: .env: smudge filter git-crypt failed`로 종료된다.
+
+**대안**:
+
+- **Sequential 인라인 실행** — 메인 워크스페이스에서 작업을 순차 진행 (단위 수가 적을 때)
+- **수동 worktree 부트스트랩** — `gwt` 또는 `ai-worktree:spawn` 스킬로 worktree를 먼저
+  만들고(이쪽은 `-c filter.git-crypt.smudge=cat`을 명시적으로 전달함), 그 안에서
+  isolation 없는 `Agent`를 디스패치
+- 추적 이슈: [#153](https://github.com/dEitY719/dotfiles/issues/153)
+- 상세: `docs/learnings/git-crypt-worktree-bootstrap.md`
+
 ## 동작 요약
 
 | Phase | 이름 | 모드 | 핵심 동작 |
