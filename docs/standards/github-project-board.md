@@ -133,7 +133,7 @@ GitHub Projects v2의 빌트인 워크플로우 10개 중 9개가 `enabled`
 
 ### 자동 전환 규칙 (스킬 경유)
 
-GitHub 빌트인이 커버하지 않는 두 진입 전환은 dotfiles 의 스킬이
+GitHub 빌트인이 커버하지 않는 세 전환은 dotfiles 의 스킬이
 공용 헬퍼 `_gh_project_status_sync`
 (`shell-common/functions/gh_project_status.sh`) 를 통해 자동화한다.
 보드가 없는 repo (예: `dotfiles` 이외의 사이드 프로젝트) 에선 헬퍼가
@@ -149,11 +149,22 @@ GitHub 빌트인이 커버하지 않는 두 진입 전환은 dotfiles 의 스킬
 - **PR 카드 `Backlog → In review`**: `/gh-flow` 워커 또는 `/gh-pr`
   단독 실행이 PR 생성 직후 자동 전환한다. raw `gh pr create` 로
   PR 을 만든 경우엔 수동 이동이 필요하다.
+- **PR 카드 `In review → Approved`**: `/gh-pr-reply` 가 reply 라운드
+  종료 후 자동 전환한다. GitHub 빌트인 `Code review approved` 는
+  누군가 `APPROVED` 상태의 review 를 제출해야만 트리거되는데,
+  GitHub 정책상 **PR 작성자는 자기 PR 을 Approve 할 수 없으므로**
+  1인 repo (`dotfiles` 처럼 단독 운영하는 저장소) 에서는 빌트인이
+  영원히 작동하지 않는다. `/gh-pr-reply` 가 그 갭을 메운다 — reply
+  라운드가 닫혔다는 것은 의미적으로 "리뷰 사이클 종료, 머지 대기"
+  이므로 `Approved` 와 정합한다. `--only-from "Backlog,In progress,In
+  review"` 가드를 적용해 머지된 PR (`Done`) 에 잘못 호출되었을 때
+  카드가 `Approved` 로 되돌아가는 regression 을 막는다.
 - **PR 카드 `In progress → In review` (재리뷰 요청 시)**:
   `Changes requested` 루프에서 수정·재푸시 후 리뷰가 다시 달리기를
   기대할 때 **수동**으로 복귀시킨다. Projects v2 빌트인에도 dotfiles
-  스킬에도 이 전환을 자동화하는 경로가 없다. 이 외의 PR 전환(`→
-  Approved`, `→ Done`)은 모두 빌트인 워크플로우로 자동 처리된다.
+  스킬에도 이 전환을 자동화하는 경로가 없다. 이 외의 PR 전환
+  (`→ Done`) 은 빌트인 `Pull request merged` / `Item closed` 가
+  자동 처리한다.
 
 ### 용어 교정 (2026-04-24)
 
@@ -226,12 +237,15 @@ gh auth refresh -s project
   되돌리지 않는다.
 - PR 카드 `Backlog → In review` 는 dotfiles 스킬 (`/gh-flow`,
   `/gh-pr`) 사용 시 자동, raw `gh pr create` 사용 시에만 수동이다.
-  `In progress → In review` (`Changes requested` 루프 탈출 시)
-  전환만 항상 수동이다 — 빌트인·스킬 모두 이 경로를 자동화하지
-  않는다.
-- 보드가 없는 repo 에서 `/gh-pr` 또는 `/gh-commit` 을 실행하면
-  공용 헬퍼 `_gh_project_status_sync` 가 `projectItems` 가 0건임을
-  자동 감지하고 조용히 no-op 한다 (별도 분기 불필요).
+  `In review → Approved` 는 `/gh-pr-reply` 가 자동 처리한다 (1인
+  repo 에서 self-approve 불가로 빌트인 `Code review approved` 가
+  영원히 트리거되지 않는 갭을 메우기 위함). `In progress → In
+  review` (`Changes requested` 루프 탈출 시) 전환만 항상 수동이다
+  — 빌트인·스킬 모두 이 경로를 자동화하지 않는다.
+- 보드가 없는 repo 에서 `/gh-pr`, `/gh-commit`, 또는
+  `/gh-pr-reply` 를 실행하면 공용 헬퍼 `_gh_project_status_sync` 가
+  `projectItems` 가 0건임을 자동 감지하고 조용히 no-op 한다 (별도
+  분기 불필요).
 - 수동으로 카드를 옮긴 경우 다음 자동 이벤트가 상태를 덮어쓸
   수 있다. 특히 Issue 카드를 `Approved`로 옮겨도 `Item closed`가
   PR 머지 시점에 곧바로 `Done`으로 이동시키므로 의미가 없다
@@ -255,9 +269,10 @@ gh auth refresh -s project
   - `claude/skills/gh-issue-create/SKILL.md`
   - `claude/skills/gh-commit/SKILL.md`
   - `claude/skills/gh-pr/SKILL.md`
+  - `claude/skills/gh-pr-reply/SKILL.md`
   - `claude/skills/gh-pr-merge/SKILL.md`
   - `claude/skills/gh-issue-flow/SKILL.md`
 - 관련 헬퍼: `shell-common/functions/gh_project_status.sh` (공용
-  `_gh_project_status_sync` — `/gh-flow`, `/gh-pr`, `/gh-commit` 이
-  모두 호출).
+  `_gh_project_status_sync` — `/gh-flow`, `/gh-pr`, `/gh-commit`,
+  `/gh-pr-reply` 가 모두 호출).
 - 관련 템플릿: `.github/pull_request_template.md`.
