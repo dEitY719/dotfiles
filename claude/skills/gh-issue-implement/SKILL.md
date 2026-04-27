@@ -23,7 +23,7 @@ output its content verbatim, then stop. No API calls.
 
 ## Step 1: Parse Args + Resolve Repo + Preconditions
 
-Positional args: `<issue-number> [mode] [remote]`.
+Positional args: `<issue-number> [mode] [remote]`. Optional flag: `--no-next-hint`.
 
 - `issue-number` — required, positive integer.
 - `mode` — default `direct`. Must be `direct`, `plan`, or `brainstorming`.
