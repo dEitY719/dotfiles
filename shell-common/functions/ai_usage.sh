@@ -13,9 +13,12 @@
 # Format of usage.jsonl: one JSON object per ai invocation. For the
 # `claude` runner we store the full upstream `usage`, `total_cost_usd`,
 # and timing fields (everything is parseable by jq). `codex` exposes
-# turn-completion usage via `--json`, so we normalize that into the same
-# usage shape. `gemini` still only records exit code because its CLI
-# does not expose a stable parseable usage block here.
+# turn-completion usage via `--json`, so we normalize the input/cached/
+# output counts into a usage shape compatible with claude's. `gemini`
+# exposes per-model token stats via `--output-format json`; we keep its
+# native fields (total/cached/candidates/...) under `usage` and the
+# per-model breakdown under `modelUsage`, since its cache semantics
+# don't map cleanly onto claude's create/read split.
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -207,13 +210,73 @@ _ai_usage_run() {
         return 0
         ;;
     gemini)
-        gemini --yolo -p "$_prompt"
+        _tmp=$(mktemp -t ai_usage_gemini.XXXXXX) || {
+            printf '[ai-usage] mktemp failed; running gemini without tracking\n' >&2
+            gemini --yolo -p "$_prompt"
+            _ec=$?
+            printf '{"ai":"gemini","ts":"%s","label":%s,"exit_code":%d,"tracking":"cli_failed"}\n' \
+                "$_now" \
+                "$(printf '%s' "$_label" | jq -Rsc . 2>/dev/null || printf '"%s"' "$_label")" \
+                "$_ec" >>"$_log"
+            return $_ec
+        }
+
+        gemini --yolo --output-format json -p "$_prompt" >"$_tmp"
         _ec=$?
-        printf '{"ai":"gemini","ts":"%s","label":%s,"exit_code":%d,"tracking":"unsupported"}\n' \
-            "$_now" \
-            "$(printf '%s' "$_label" | jq -Rsc . 2>/dev/null || printf '"%s"' "$_label")" \
-            "$_ec" >>"$_log"
-        return $_ec
+
+        if [ "$_ec" -ne 0 ] || ! [ -s "$_tmp" ]; then
+            printf '{"ai":"gemini","ts":"%s","label":%s,"exit_code":%d,"tracking":"cli_failed"}\n' \
+                "$_now" \
+                "$(printf '%s' "$_label" | jq -Rsc . 2>/dev/null || printf '"%s"' "$_label")" \
+                "$_ec" >>"$_log"
+            cat "$_tmp" 2>/dev/null
+            rm -f "$_tmp"
+            return $_ec
+        fi
+
+        # Echo just the human-readable response so the worker log stays
+        # legible. The full JSON (including stats/error) lives in usage.jsonl.
+        jq -r '.response // ""' <"$_tmp" 2>/dev/null
+
+        # gemini's `.stats.models` is keyed by model name; one prompt can
+        # accumulate counts under several models when an internal sub-agent
+        # is invoked. We sum each `tokens.*` field across models for the
+        # top-level usage block and keep the per-model split under
+        # modelUsage for later analysis.
+        if jq -e '(.stats.models | type) == "object"' <"$_tmp" >/dev/null 2>&1; then
+            jq -c \
+                --arg ts "$_now" \
+                --arg label "$_label" \
+                '{
+                    ai: "gemini",
+                    ts: $ts,
+                    label: $label,
+                    exit_code: 0,
+                    tracking: "usage",
+                    usage: (
+                        [(.stats.models // {}) | to_entries[] | (.value.tokens // {})]
+                        | reduce .[] as $t (
+                            {input:0, prompt:0, candidates:0, total:0, cached:0, thoughts:0, tool:0};
+                            .input      += ($t.input      // 0)
+                            | .prompt   += ($t.prompt     // 0)
+                            | .candidates += ($t.candidates // 0)
+                            | .total    += ($t.total      // 0)
+                            | .cached   += ($t.cached     // 0)
+                            | .thoughts += ($t.thoughts   // 0)
+                            | .tool     += ($t.tool       // 0)
+                          )
+                    ),
+                    modelUsage: ((.stats.models // {}) | with_entries(.value = (.value.tokens // {})))
+                }' <"$_tmp" >>"$_log" 2>/dev/null
+        else
+            printf '{"ai":"gemini","ts":"%s","label":%s,"exit_code":%d,"tracking":"usage_missing"}\n' \
+                "$_now" \
+                "$(printf '%s' "$_label" | jq -Rsc . 2>/dev/null || printf '"%s"' "$_label")" \
+                "$_ec" >>"$_log"
+        fi
+
+        rm -f "$_tmp"
+        return 0
         ;;
     *)
         printf '[ai-usage] invalid ai runner: %s\n' "$_ai" >&2
@@ -245,34 +308,43 @@ _ai_usage_summary() {
         return 0
     fi
 
-    # One pass with jq -s aggregates every record that actually contains a
-    # normalized usage block. That includes assistant-side failures with
-    # usage (still billable) and excludes pure CLI failures where the tool
-    # died before we received usage. Invocation counts stay split so users
-    # can distinguish successful runs from failed-but-billed ones.
+    # One pass with jq -s computes per-runner aggregates. We deliberately
+    # do NOT collapse claude+codex+gemini token counts into a single sum —
+    # cache semantics differ (claude has create/read split, codex exposes
+    # cached_input_tokens, gemini exposes its own total/cached), and a
+    # mixed sum would silently lie about each. Cost is summed only over
+    # claude because the other CLIs do not expose a billable amount.
     local _summary
     _summary=$(jq -s '
         [.[] | select(.ai == "claude" and ((.is_error // false) | not) and ((.tracking // "") != "cli_failed"))] as $claude_ok
         | [.[] | select(.ai == "claude" and ((.is_error // false) or ((.tracking // "") == "cli_failed")))] as $claude_err
         | [.[] | select(.ai == "codex" and ((.tracking // "") == "usage"))] as $codex_ok
         | [.[] | select(.ai == "codex" and ((.tracking // "") != "usage"))] as $codex_err
-        | [.[] | select(.tracking == "unsupported")] as $other
-        | [.[] | select((.usage | type?) == "object")] as $tracked
+        | [.[] | select(.ai == "gemini" and ((.tracking // "") == "usage"))] as $gemini_ok
+        | [.[] | select(.ai == "gemini" and ((.tracking // "") != "usage"))] as $gemini_err
         | {
-            claude_ok: ($claude_ok | length),
-            claude_err: ($claude_err | length),
-            codex_ok: ($codex_ok | length),
-            codex_err: ($codex_err | length),
-            other:     ($other | length),
-            input_tokens:   ([$tracked[].usage.input_tokens // 0]                | add // 0),
-            cache_creation: ([$tracked[].usage.cache_creation_input_tokens // 0] | add // 0),
-            cache_read:     ([$tracked[].usage.cache_read_input_tokens // 0]     | add // 0),
-            output_tokens:  ([$tracked[].usage.output_tokens // 0]               | add // 0),
-            cost_usd:       ([.[] | select(.ai == "claude") | .total_cost_usd // 0]  | add // 0),
-            wall_ms:        ([.[] | select(.ai == "claude") | .duration_ms // 0]      | add // 0),
-            api_ms:         ([.[] | select(.ai == "claude") | .duration_api_ms // 0]  | add // 0),
-            turns:          ([.[] | select(.ai == "claude") | .num_turns // 0]        | add // 0),
-            models:         ([.[] | select(.ai == "claude") | .modelUsage // {} | keys[]] | unique)
+            claude_n_ok:    ($claude_ok | length),
+            claude_n_err:   ($claude_err | length),
+            claude_in:      ([$claude_ok[].usage.input_tokens // 0]                | add // 0),
+            claude_cc:      ([$claude_ok[].usage.cache_creation_input_tokens // 0] | add // 0),
+            claude_cr:      ([$claude_ok[].usage.cache_read_input_tokens // 0]     | add // 0),
+            claude_out:     ([$claude_ok[].usage.output_tokens // 0]               | add // 0),
+            claude_cost:    ([$claude_ok[].total_cost_usd // 0]                    | add // 0),
+            claude_wall_ms: ([$claude_ok[].duration_ms // 0]                       | add // 0),
+            claude_api_ms:  ([$claude_ok[].duration_api_ms // 0]                   | add // 0),
+            claude_turns:   ([$claude_ok[].num_turns // 0]                         | add // 0),
+            claude_models:  ([$claude_ok[].modelUsage // {} | keys[]]              | unique),
+            codex_n_ok:     ($codex_ok | length),
+            codex_n_err:    ($codex_err | length),
+            codex_in:       ([$codex_ok[].usage.input_tokens // 0]                 | add // 0),
+            codex_cached:   ([$codex_ok[].usage.cache_read_input_tokens // 0]      | add // 0),
+            codex_out:      ([$codex_ok[].usage.output_tokens // 0]                | add // 0),
+            gemini_n_ok:    ($gemini_ok | length),
+            gemini_n_err:   ($gemini_err | length),
+            gemini_total:   ([$gemini_ok[].usage.total // 0]                       | add // 0),
+            gemini_cached:  ([$gemini_ok[].usage.cached // 0]                      | add // 0),
+            gemini_out:     ([$gemini_ok[].usage.candidates // 0]                  | add // 0),
+            gemini_models:  ([$gemini_ok[].modelUsage // {} | keys[]]              | unique)
         }
     ' "$_log" 2>/dev/null)
 
@@ -281,18 +353,25 @@ _ai_usage_summary() {
         return 0
     fi
 
-    local _claude_ok _claude_err _codex_ok _codex_err _other _in _cc _cr _out _cost _wall _api _turns _models _total_in _vals
+    local _claude_n_ok _claude_n_err _claude_in _claude_cc _claude_cr _claude_out
+    local _claude_cost _claude_wall _claude_api _claude_turns _claude_models
+    local _codex_n_ok _codex_n_err _codex_in _codex_cached _codex_out
+    local _gemini_n_ok _gemini_n_err _gemini_total _gemini_cached _gemini_out _gemini_models
+    local _vals
 
-    # Consolidate the 14-field extraction into one jq invocation. Was
-    # 14 forks per worker exit; PR #224 review (gemini-code-assist)
-    # called this out as a hot path that hands out usage records on
-    # every detached worker shutdown. `?` keeps it null-tolerant if a
-    # field is ever absent in the upstream `_summary` document.
+    # Single jq fork emits all fields as TSV — same hot-path concern as
+    # before (PR #224 review). `?` keeps it null-tolerant if a field is
+    # absent in the upstream summary document.
     _vals=$(printf '%s' "$_summary" | jq -r '[
-        .claude_ok?, .claude_err?, .codex_ok?, .codex_err?, .other?,
-        .input_tokens?, .cache_creation?, .cache_read?, .output_tokens?,
-        .cost_usd?, .wall_ms?, .api_ms?, .turns?,
-        ((.models? // []) | join(", "))
+        .claude_n_ok?, .claude_n_err?,
+        .claude_in?, .claude_cc?, .claude_cr?, .claude_out?,
+        .claude_cost?, .claude_wall_ms?, .claude_api_ms?, .claude_turns?,
+        ((.claude_models? // []) | join(", ")),
+        .codex_n_ok?, .codex_n_err?,
+        .codex_in?, .codex_cached?, .codex_out?,
+        .gemini_n_ok?, .gemini_n_err?,
+        .gemini_total?, .gemini_cached?, .gemini_out?,
+        ((.gemini_models? // []) | join(", "))
     ] | @tsv' 2>/dev/null)
 
     if [ -z "$_vals" ]; then
@@ -303,52 +382,68 @@ _ai_usage_summary() {
     # `read` runs in the current shell when fed by a here-doc, so the
     # locals stick. IFS=$'\t' is bash-specific; the file header already
     # pins the runtime to bash via the shell directive on line 2.
-    IFS=$'\t' read -r _claude_ok _claude_err _codex_ok _codex_err _other \
-        _in _cc _cr _out _cost _wall _api _turns _models <<EOF
+    IFS=$'\t' read -r \
+        _claude_n_ok _claude_n_err \
+        _claude_in _claude_cc _claude_cr _claude_out \
+        _claude_cost _claude_wall _claude_api _claude_turns _claude_models \
+        _codex_n_ok _codex_n_err \
+        _codex_in _codex_cached _codex_out \
+        _gemini_n_ok _gemini_n_err \
+        _gemini_total _gemini_cached _gemini_out _gemini_models <<EOF
 $_vals
 EOF
-
-    # Input-side total: fresh input + cache creation + cache reads.
-    _total_in=$((${_in:-0} + ${_cc:-0} + ${_cr:-0}))
 
     # Pre-format the integer/float fields into locals so the printf lines
     # below contain only `"$var"` references — the project's pre-commit
     # naming check flags any function-name that appears between two `"`
     # on the same line as user-facing text, even when it's a command
     # substitution. Splitting the formatting out sidesteps that rule.
-    local _in_fmt _cc_fmt _cr_fmt _total_in_fmt _out_fmt _cost_fmt _wall_s _api_s
-    _in_fmt=$(_ai_usage_fmt_int "${_in:-0}")
-    _cc_fmt=$(_ai_usage_fmt_int "${_cc:-0}")
-    _cr_fmt=$(_ai_usage_fmt_int "${_cr:-0}")
-    _total_in_fmt=$(_ai_usage_fmt_int "${_total_in:-0}")
-    _out_fmt=$(_ai_usage_fmt_int "${_out:-0}")
-    _cost_fmt=$(printf '%.4f' "${_cost:-0}" 2>/dev/null || printf '%s' "${_cost:-0}")
-    _wall_s=$((${_wall:-0} / 1000))
-    _api_s=$((${_api:-0} / 1000))
+    local _claude_in_fmt _claude_cc_fmt _claude_cr_fmt _claude_out_fmt _claude_cost_fmt
+    local _codex_in_fmt _codex_cached_fmt _codex_out_fmt
+    local _gemini_total_fmt _gemini_cached_fmt _gemini_out_fmt
+    local _wall_s _api_s
+    _claude_in_fmt=$(_ai_usage_fmt_int "${_claude_in:-0}")
+    _claude_cc_fmt=$(_ai_usage_fmt_int "${_claude_cc:-0}")
+    _claude_cr_fmt=$(_ai_usage_fmt_int "${_claude_cr:-0}")
+    _claude_out_fmt=$(_ai_usage_fmt_int "${_claude_out:-0}")
+    _claude_cost_fmt=$(printf '%.4f' "${_claude_cost:-0}" 2>/dev/null || printf '%s' "${_claude_cost:-0}")
+    _codex_in_fmt=$(_ai_usage_fmt_int "${_codex_in:-0}")
+    _codex_cached_fmt=$(_ai_usage_fmt_int "${_codex_cached:-0}")
+    _codex_out_fmt=$(_ai_usage_fmt_int "${_codex_out:-0}")
+    _gemini_total_fmt=$(_ai_usage_fmt_int "${_gemini_total:-0}")
+    _gemini_cached_fmt=$(_ai_usage_fmt_int "${_gemini_cached:-0}")
+    _gemini_out_fmt=$(_ai_usage_fmt_int "${_gemini_out:-0}")
+    _wall_s=$((${_claude_wall:-0} / 1000))
+    _api_s=$((${_claude_api:-0} / 1000))
 
     printf '─── %s ───\n' "$_label"
-    printf '  Invocations:    claude=%s ok / %s failed · codex=%s ok / %s failed' \
-        "${_claude_ok:-0}" \
-        "${_claude_err:-0}" \
-        "${_codex_ok:-0}" \
-        "${_codex_err:-0}"
-    if [ "${_other:-0}" -gt 0 ]; then
-        printf ' · %s untracked (gemini)' "$_other"
+    printf '  Invocations:    claude=%s ok / %s failed · codex=%s ok / %s failed · gemini=%s ok / %s failed\n' \
+        "${_claude_n_ok:-0}" "${_claude_n_err:-0}" \
+        "${_codex_n_ok:-0}" "${_codex_n_err:-0}" \
+        "${_gemini_n_ok:-0}" "${_gemini_n_err:-0}"
+    if [ "${_claude_n_ok:-0}" -gt 0 ]; then
+        printf '  claude:         %s fresh + %s cache-create + %s cache-read + %s out · $%s\n' \
+            "$_claude_in_fmt" "$_claude_cc_fmt" "$_claude_cr_fmt" "$_claude_out_fmt" "$_claude_cost_fmt"
+        if [ -n "$_claude_models" ] && [ "$_claude_models" != "" ]; then
+            printf '    models:       %s\n' "$_claude_models"
+        fi
     fi
-    printf '\n'
-    if [ -n "$_models" ] && [ "$_models" != "" ]; then
-        printf '  Models:         %s\n' "$_models"
+    if [ "${_codex_n_ok:-0}" -gt 0 ]; then
+        printf '  codex:          %s input (%s cached) + %s out · cost: n/a\n' \
+            "$_codex_in_fmt" "$_codex_cached_fmt" "$_codex_out_fmt"
     fi
-    printf '  Input tokens:   %s (fresh)\n'       "$_in_fmt"
-    printf '  Cache creation: %s\n'               "$_cc_fmt"
-    printf '  Cache read:     %s\n'               "$_cr_fmt"
-    printf '  Input total:    %s (incl. cache)\n' "$_total_in_fmt"
-    printf '  Output tokens:  %s\n'               "$_out_fmt"
-    printf '  Cost (USD):     $%s (claude only)\n' "$_cost_fmt"
-    if [ "${_wall:-0}" -gt 0 ] || [ "${_api:-0}" -gt 0 ] || [ "${_turns:-0}" -gt 0 ]; then
-        printf '  Wall / API:     %ss / %ss\n'        "$_wall_s" "$_api_s"
-        printf '  Turns:          %s\n'               "${_turns:-0}"
+    if [ "${_gemini_n_ok:-0}" -gt 0 ]; then
+        printf '  gemini:         %s total (%s cached) + %s out · cost: n/a\n' \
+            "$_gemini_total_fmt" "$_gemini_cached_fmt" "$_gemini_out_fmt"
+        if [ -n "$_gemini_models" ] && [ "$_gemini_models" != "" ]; then
+            printf '    models:       %s\n' "$_gemini_models"
+        fi
     fi
-    printf '  Log:            %s\n'               "$_log"
+    if [ "${_claude_wall:-0}" -gt 0 ] || [ "${_claude_api:-0}" -gt 0 ] || [ "${_claude_turns:-0}" -gt 0 ]; then
+        printf '  Wall / API:     %ss / %ss · turns: %s (claude only)\n' \
+            "$_wall_s" "$_api_s" "${_claude_turns:-0}"
+    fi
+    printf '  Cost note:      claude tracked; codex/gemini cost excluded (no upstream cost field).\n'
+    printf '  Log:            %s\n' "$_log"
     printf '────────────────────────────────────\n'
 }
