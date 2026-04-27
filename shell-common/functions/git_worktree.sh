@@ -914,6 +914,8 @@ _gwt_teardown_one_inplace() {
         : > "$_gwt_rm_err_file"
         if git worktree remove --force "$wt_path" 2>"$_gwt_rm_err_file"; then
             _gwt_rm_exit=0
+        else
+            _gwt_rm_exit=$?
         fi
     fi
 
