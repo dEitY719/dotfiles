@@ -295,3 +295,157 @@ _squash_merge_branch_into_origin_main() {
 
     git -C "$CLONE" worktree unlock "$WORKTREE" 2>/dev/null || true
 }
+
+# ---------------------------------------------------------------------------
+# Issue #204: --all batch teardown
+# ---------------------------------------------------------------------------
+
+# Add N extra worktrees on top of the default wt/test/1 fixture.
+# Each is rooted at $TEST_TEMP_HOME/clone-extra-<i> on branch wt/extra/<i>.
+_add_extra_worktrees() {
+    local count="$1" i
+    for i in $(seq 1 "$count"); do
+        git -C "$CLONE" worktree add -q -b "wt/extra/$i" \
+            "$TEST_TEMP_HOME/clone-extra-$i" origin/main
+    done
+}
+
+@test "teardown --all: from main repo tears down every linked worktree" {
+    _add_extra_worktrees 2
+
+    # Sanity: 4 worktrees total (main + wt/test/1 + 2 extras).
+    [ "$(git -C "$CLONE" worktree list --porcelain | grep -c '^worktree ')" -eq 4 ]
+
+    run_in_bash "cd '$CLONE' && gwt teardown --all --force 2>&1"
+    assert_success
+    assert_output --partial "Succeeded: 3"
+    assert_output --partial "Failed:    0"
+    assert_output --partial "All worktrees torn down."
+
+    # Only main repo remains.
+    [ "$(git -C "$CLONE" worktree list --porcelain | grep -c '^worktree ')" -eq 1 ]
+    [ ! -d "$WORKTREE" ]
+    [ ! -d "$TEST_TEMP_HOME/clone-extra-1" ]
+    [ ! -d "$TEST_TEMP_HOME/clone-extra-2" ]
+
+    # Branches deleted too.
+    run git -C "$CLONE" rev-parse --verify --quiet wt/test/1
+    assert_failure
+    run git -C "$CLONE" rev-parse --verify --quiet wt/extra/1
+    assert_failure
+    run git -C "$CLONE" rev-parse --verify --quiet wt/extra/2
+    assert_failure
+}
+
+@test "teardown --all: short alias -a works the same as --all" {
+    _add_extra_worktrees 1
+
+    run_in_bash "cd '$CLONE' && gwt teardown -a --force 2>&1"
+    assert_success
+    assert_output --partial "Succeeded: 2"
+}
+
+@test "teardown --all: positional 'all' works the same as --all" {
+    _add_extra_worktrees 1
+
+    run_in_bash "cd '$CLONE' && gwt teardown all --force 2>&1"
+    assert_success
+    assert_output --partial "Succeeded: 2"
+}
+
+@test "teardown --all: from inside a worktree tears down self too" {
+    _add_extra_worktrees 1
+
+    # Run from inside one of the worktrees; --all should tear down everything,
+    # including the cwd worktree.
+    run_in_bash "cd '$WORKTREE' && gwt teardown --all --force 2>&1"
+    assert_success
+    assert_output --partial "Succeeded: 2"
+    [ ! -d "$WORKTREE" ]
+    [ ! -d "$TEST_TEMP_HOME/clone-extra-1" ]
+}
+
+@test "teardown --all: no extra worktrees prints info and exits 0" {
+    # Tear down the default fixture first so only main remains.
+    run_in_bash "cd '$WORKTREE' && gwt teardown --force 2>&1"
+    assert_success
+
+    run_in_bash "cd '$CLONE' && gwt teardown --all --force 2>&1"
+    assert_success
+    assert_output --partial "No worktrees to tear down."
+}
+
+@test "teardown --all: --keep-branch keeps branches" {
+    _add_extra_worktrees 1
+
+    run_in_bash "cd '$CLONE' && gwt teardown --all --force --keep-branch 2>&1"
+    assert_success
+    assert_output --partial "Succeeded: 2"
+
+    # Worktrees gone, branches still exist.
+    [ ! -d "$WORKTREE" ]
+    [ ! -d "$TEST_TEMP_HOME/clone-extra-1" ]
+    run git -C "$CLONE" rev-parse --verify --quiet wt/test/1
+    assert_success
+    run git -C "$CLONE" rev-parse --verify --quiet wt/extra/1
+    assert_success
+}
+
+@test "teardown --all: best-effort — one failure does not abort the rest" {
+    _add_extra_worktrees 2
+
+    # Lock the first extra so its teardown fails. Other two should still run.
+    git -C "$CLONE" worktree lock --reason "held for test" "$TEST_TEMP_HOME/clone-extra-1"
+
+    run_in_bash "cd '$CLONE' && gwt teardown --all --force 2>&1"
+    assert_failure
+    assert_output --partial "Succeeded: 2"
+    assert_output --partial "Failed:    1"
+    assert_output --partial "clone-extra-1"
+
+    # The two unlocked ones are gone.
+    [ ! -d "$WORKTREE" ]
+    [ ! -d "$TEST_TEMP_HOME/clone-extra-2" ]
+    # The locked one survived.
+    [ -d "$TEST_TEMP_HOME/clone-extra-1" ]
+
+    git -C "$CLONE" worktree unlock "$TEST_TEMP_HOME/clone-extra-1" 2>/dev/null || true
+}
+
+@test "teardown --all: confirmation prompt rejects on default 'no'" {
+    _add_extra_worktrees 1
+
+    # Pipe an empty answer (defaults to N). Without --force the prompt fires.
+    run_in_bash "cd '$CLONE' && printf '\n' | gwt teardown --all 2>&1"
+    assert_failure
+    assert_output --partial "Aborted."
+    # Nothing was actually torn down.
+    [ -d "$WORKTREE" ]
+    [ -d "$TEST_TEMP_HOME/clone-extra-1" ]
+}
+
+@test "teardown --all: confirmation prompt proceeds on 'y'" {
+    _add_extra_worktrees 1
+
+    run_in_bash "cd '$CLONE' && printf 'y\n' | gwt teardown --all 2>&1"
+    assert_success
+    assert_output --partial "Succeeded: 2"
+    [ ! -d "$WORKTREE" ]
+    [ ! -d "$TEST_TEMP_HOME/clone-extra-1" ]
+}
+
+@test "teardown --all: --help mentions the new option" {
+    run_in_bash "gwt teardown --help 2>&1"
+    assert_success
+    assert_output --partial "--all"
+    assert_output --partial "tear down every non-main worktree"
+}
+
+@test "teardown (no --all) from main repo suggests --all in error" {
+    # Backward-compat: bare 'gwt teardown' from main repo still errors,
+    # but the error now points to --all as a way out.
+    run_in_bash "cd '$CLONE' && gwt teardown 2>&1"
+    assert_failure
+    assert_output --partial "Not inside a worktree"
+    assert_output --partial "gwt teardown --all"
+}
