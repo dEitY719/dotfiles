@@ -62,34 +62,11 @@ _gh_pr_reply_get_state() {
 # Mirrors the contract introduced by `gh-flow --ai` (#208) so all three
 # user-facing runners accept the same agent set with identical error UX.
 
-# Returns 0 if the ai runner is one of: claude, codex, gemini.
-_gh_pr_reply_known_ai() {
-    case "$1" in
-        claude|codex|gemini) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
-# Ensure the selected ai CLI exists in PATH.
+# Validate the requested ai runner is supported and its CLI is on PATH.
 _gh_pr_reply_require_ai_cli() {
     case "$1" in
-        claude)
-            if ! _have claude; then
-                ux_error "claude CLI not found"
-                return 1
-            fi
-            ;;
-        codex)
-            if ! _have codex; then
-                ux_error "codex CLI not found"
-                return 1
-            fi
-            ;;
-        gemini)
-            if ! _have gemini; then
-                ux_error "gemini CLI not found"
-                return 1
-            fi
+        claude|codex|gemini)
+            ux_require "$1" || return 1
             ;;
         *)
             ux_error "invalid --ai value: '$1' (expected: claude|codex|gemini)"
@@ -220,11 +197,6 @@ gh_pr_reply() {
     if [ $# -eq 0 ]; then
         ux_error "no PR numbers provided"
         ux_info "Usage: gh-pr-reply <pr-number>... [--ai <claude|codex|gemini>]"
-        return 1
-    fi
-
-    if ! _gh_pr_reply_known_ai "$_ai"; then
-        ux_error "invalid --ai value: '$_ai' (expected: claude|codex|gemini)"
         return 1
     fi
 
