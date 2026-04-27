@@ -9,7 +9,8 @@ description: >-
   modes invoke the matching superpowers skills when the plugin is
   installed (falls back to direct with a warning if not). Precondition:
   user is already inside a dedicated git worktree on a feature branch.
-  Accepts `<issue-number> [direct|plan|brainstorming] [remote]` and
+  Accepts `<issue-number> [direct|plan|brainstorming] [remote]`,
+  optional `--no-next-hint` (suppress final `Next:` hint), and
   `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write
 ---
@@ -31,6 +32,8 @@ Positional args: `<issue-number> [mode] [remote]`. Optional flag: `--no-next-hin
   `git remote get-url <remote>`. Missing remote → list `git remote -v`
   and stop (no silent fallback to `origin`). Substeps in
   `references/repo-resolution.md`.
+- `--no-next-hint` — optional flag. When present, omit the final
+  `Next:` guidance line in Step 6 output.
 
 Check preconditions in parallel (exact rules in
 `references/implementation-flow.md` → "Preconditions"):
@@ -96,7 +99,7 @@ Use the direct-mode flow in `references/implementation-flow.md`:
 Print the success or failure report per
 `references/implementation-flow.md` → "Final report format". Always
 include the `Next:` hint pointing to `gh:commit` / `gh:pr` /
-`gh:issue-flow`.
+`gh:issue-flow`, unless `--no-next-hint` is set.
 
 ## Constraints
 
