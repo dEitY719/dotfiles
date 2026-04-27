@@ -828,15 +828,20 @@ gc_export_key() {
         return 1
     fi
 
-    if ! command -v git-crypt &>/dev/null; then
-        ux_error "git-crypt이 설치되어 있지 않습니다."
+    if ! ux_require "git-crypt" "git-crypt이 설치되어 있지 않습니다."; then
         ux_info "설치: gc-install"
         return 1
     fi
 
     if ! git-crypt status &>/dev/null; then
-        ux_error "git-crypt이 초기화되지 않았거나 unlocked 상태가 아닙니다."
+        ux_error "git-crypt이 초기화되지 않았습니다."
         ux_info "확인: gc-check, gc-status"
+        return 1
+    fi
+
+    if ! git-crypt export-key /dev/null &>/dev/null; then
+        ux_error "git-crypt이 locked 상태입니다."
+        ux_info "실행: gc-unlock"
         return 1
     fi
 
@@ -859,7 +864,7 @@ gc_export_key() {
 
     mkdir -p "$(dirname "$key_path")"
 
-    if git-crypt export-key "$key_path"; then
+    if (umask 077 && git-crypt export-key "$key_path"); then
         chmod 600 "$key_path"
         ux_success "키 export 완료: ${key_path} (mode 0600)"
         echo ""
