@@ -985,13 +985,16 @@ _gwt_teardown_all() {
     # flagging the `read -r` below as top-level interactive code.
     git rev-parse --git-common-dir >/dev/null 2>&1 || { ux_error "Not inside a git repository"; return 1; }
 
-    # Resolve main worktree (first entry of `git worktree list --porcelain`).
-    local main_wt
-    main_wt="$(git worktree list --porcelain | head -1)"
+    # Resolve main worktree and collect non-main worktrees from a single
+    # `git worktree list --porcelain` snapshot — one fork instead of two,
+    # and both parses see the same repo state.
+    local porcelain main_wt all_wts="" all_count=0
+    porcelain="$(git worktree list --porcelain)"
+    IFS= read -r main_wt <<EOF
+$porcelain
+EOF
     main_wt="${main_wt#worktree }"
 
-    # Collect non-main worktree paths.
-    local all_wts="" all_count=0
     while IFS= read -r line; do
         case "$line" in
             "worktree "*)
@@ -1004,7 +1007,7 @@ _gwt_teardown_all() {
                 ;;
         esac
     done <<EOF
-$(git worktree list --porcelain)
+$porcelain
 EOF
 
     if [ "$all_count" -eq 0 ]; then
@@ -1021,12 +1024,10 @@ $all_wts
 EOF
 
     if [ "$force" != true ]; then
-        printf 'Proceed? [y/N] '
-        read -r answer
-        case "$answer" in
-            [yY]*) ;;
-            *) ux_info "Aborted."; return 1 ;;
-        esac
+        if ! ux_confirm "Proceed with teardown?" "n"; then
+            ux_info "Aborted."
+            return 1
+        fi
     fi
 
     # Park in main repo so loop iterations have a stable cwd between runs.
