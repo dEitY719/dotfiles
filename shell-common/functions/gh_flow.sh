@@ -67,6 +67,62 @@ _gh_flow_has_branch_commits() {
     [ "${_count:-0}" -gt 0 ]
 }
 
+# Returns 0 if the ai runner is one of: claude, codex, gemini.
+_gh_flow_known_ai() {
+    case "$1" in
+    claude | codex | gemini) return 0 ;;
+    *) return 1 ;;
+    esac
+}
+
+# Ensure the selected ai CLI exists in PATH.
+_gh_flow_require_ai_cli() {
+    case "$1" in
+    claude)
+        if ! _have claude; then
+            ux_error "claude CLI not found"
+            return 1
+        fi
+        ;;
+    codex)
+        if ! _have codex; then
+            ux_error "codex CLI not found"
+            return 1
+        fi
+        ;;
+    gemini)
+        if ! _have gemini; then
+            ux_error "gemini CLI not found"
+            return 1
+        fi
+        ;;
+    *)
+        ux_error "invalid --ai value: '$1' (allowed: claude, codex, gemini)"
+        return 1
+        ;;
+    esac
+}
+
+# Run one non-interactive prompt with the selected ai runner.
+_gh_flow_run_ai_prompt() {
+    local _ai="$1" _prompt="$2"
+    case "$_ai" in
+    claude)
+        claude --dangerously-skip-permissions -p "$_prompt"
+        ;;
+    codex)
+        codex exec --dangerously-bypass-approvals-and-sandbox "$_prompt"
+        ;;
+    gemini)
+        gemini --yolo -p "$_prompt"
+        ;;
+    *)
+        printf '[gh-flow-worker] invalid ai runner: %s\n' "$_ai" >&2
+        return 1
+        ;;
+    esac
+}
+
 # ============================================================================
 # status / prune subcommands
 # ============================================================================
@@ -127,12 +183,12 @@ _gh_flow_status() {
 _gh_flow_prune() {
     local _force=0
     case "${1:-}" in
-        --force|-f) _force=1 ;;
-        '') : ;;
-        *)
-            ux_error "gh-flow prune: unknown arg '$1' (only --force is accepted)"
-            return 1
-            ;;
+    --force | -f) _force=1 ;;
+    '') : ;;
+    *)
+        ux_error "gh-flow prune: unknown arg '$1' (only --force is accepted)"
+        return 1
+        ;;
     esac
 
     local _root _name _repo_dir _entry _issue _state _wt
@@ -158,29 +214,29 @@ _gh_flow_prune() {
         _wt="$(cat "$_entry/worktree.path" 2>/dev/null || printf '')"
 
         case "$_state" in
-            done)
-                rm -rf "$_entry"
-                ux_success "removed state for #$_issue (done)"
-                _removed=$((_removed + 1))
-                ;;
-            failed:*)
-                _failed=$((_failed + 1))
-                if [ "$_force" = "1" ] && [ -n "$_wt" ] && [ -d "$_wt" ]; then
-                    ux_warning "#$_issue $_state — tearing down $_wt"
-                    if (cd "$_wt" && gwt teardown --force); then
-                        rm -rf "$_entry"
-                        _torn_down=$((_torn_down + 1))
-                    else
-                        ux_error "  gwt teardown failed for $_wt; leaving state dir intact"
-                    fi
+        done)
+            rm -rf "$_entry"
+            ux_success "removed state for #$_issue (done)"
+            _removed=$((_removed + 1))
+            ;;
+        failed:*)
+            _failed=$((_failed + 1))
+            if [ "$_force" = "1" ] && [ -n "$_wt" ] && [ -d "$_wt" ]; then
+                ux_warning "#$_issue $_state — tearing down $_wt"
+                if (cd "$_wt" && gwt teardown --force); then
+                    rm -rf "$_entry"
+                    _torn_down=$((_torn_down + 1))
                 else
-                    ux_warning "#$_issue $_state"
-                    if [ -n "$_wt" ] && [ -d "$_wt" ]; then
-                        ux_bullet_sub "worktree: $_wt"
-                        ux_bullet_sub "cleanup: cd $_wt && gwt teardown --force"
-                    fi
+                    ux_error "  gwt teardown failed for $_wt; leaving state dir intact"
                 fi
-                ;;
+            else
+                ux_warning "#$_issue $_state"
+                if [ -n "$_wt" ] && [ -d "$_wt" ]; then
+                    ux_bullet_sub "worktree: $_wt"
+                    ux_bullet_sub "cleanup: cd $_wt && gwt teardown --force"
+                fi
+            fi
+            ;;
         esac
     done
 
@@ -199,7 +255,8 @@ _gh_flow_prune() {
 gh_flow_help() {
     ux_header "gh-flow - fire-and-forget GitHub issue → PR automation"
     ux_info "Usage:"
-    ux_bullet "gh-flow <issue-number>...       spawn N parallel workers"
+    ux_bullet "gh-flow <issue-number>... [--ai <agent>]  spawn N parallel workers"
+    ux_bullet_sub "agent: claude (default) | codex | gemini"
     ux_bullet "gh-flow status                  show state of known issues in this repo"
     ux_bullet "gh-flow prune [--force]         clean 'done' state; list 'failed:*' worktrees"
     ux_bullet "gh-flow -h|--help|help          this help"
@@ -212,6 +269,8 @@ gh_flow_help() {
     ux_info "Examples:"
     ux_bullet "gh-flow 13                  # single issue"
     ux_bullet "gh-flow 13 42 88            # 3 issues in parallel"
+    ux_bullet "gh-flow 33 --ai codex       # run workers with codex CLI"
+    ux_bullet "gh-flow --ai gemini 44      # run workers with gemini CLI"
     ux_bullet "gh-flow status              # who's still running, who failed"
     ux_bullet "gh-flow prune               # remove 'done' state dirs; print hints for failures"
     ux_bullet "gh-flow prune --force       # also gwt teardown failed worktrees"
@@ -232,7 +291,7 @@ gh_flow_help() {
     ux_info ""
     ux_info "Preconditions:"
     ux_bullet "Run from main repo (not inside a worktree)"
-    ux_bullet "gh CLI authenticated, claude CLI on PATH, gwt loaded"
+    ux_bullet "gh CLI authenticated, selected AI CLI on PATH, gwt loaded"
 }
 
 # ============================================================================
@@ -246,21 +305,65 @@ gh_flow() {
     fi
 
     case "${1:-}" in
-        ""|-h|--help|help)
-            gh_flow_help
-            return 0
-            ;;
-        status)
-            shift
-            _gh_flow_status "$@"
-            return $?
-            ;;
-        prune)
-            shift
-            _gh_flow_prune "$@"
-            return $?
-            ;;
+    "" | -h | --help | help)
+        gh_flow_help
+        return 0
+        ;;
+    status)
+        shift
+        _gh_flow_status "$@"
+        return $?
+        ;;
+    prune)
+        shift
+        _gh_flow_prune "$@"
+        return $?
+        ;;
     esac
+
+    # Parse optional args:
+    #   --ai <claude|codex|gemini>
+    #   --ai=<claude|codex|gemini>
+    local _ai="claude"
+    local _issue_args=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --ai)
+            shift
+            if [ $# -eq 0 ]; then
+                ux_error "--ai requires a value (claude|codex|gemini)"
+                return 1
+            fi
+            _ai="$1"
+            ;;
+        --ai=*)
+            _ai="${1#--ai=}"
+            ;;
+        -*)
+            ux_error "unknown option: '$1'"
+            ux_info "Usage: gh-flow <issue-number>... [--ai <claude|codex|gemini>]"
+            return 1
+            ;;
+        *)
+            _issue_args="$_issue_args $1"
+            ;;
+        esac
+        shift
+    done
+
+    # Restore issue args for numeric validation / spawn loop.
+    # shellcheck disable=SC2086
+    set -- $_issue_args
+    if [ $# -eq 0 ]; then
+        ux_error "no issue numbers provided"
+        ux_info "Usage: gh-flow <issue-number>... [--ai <claude|codex|gemini>]"
+        return 1
+    fi
+
+    if ! _gh_flow_known_ai "$_ai"; then
+        ux_error "invalid --ai value: '$_ai' (allowed: claude, codex, gemini)"
+        return 1
+    fi
 
     # Preconditions
     if ! _have git; then
@@ -271,8 +374,7 @@ gh_flow() {
         ux_error "gh CLI not found"
         return 1
     fi
-    if ! _have claude; then
-        ux_error "claude CLI not found"
+    if ! _gh_flow_require_ai_cli "$_ai"; then
         return 1
     fi
     if ! command -v gwt >/dev/null 2>&1; then
@@ -298,45 +400,47 @@ gh_flow() {
     local _issue
     for _issue in "$@"; do
         case "$_issue" in
-            ''|*[!0-9]*)
-                ux_error "invalid issue number: '$_issue' (must be positive integer)"
-                ux_info "subcommands: status, prune; or pass one or more issue numbers"
-                return 1
-                ;;
+        '' | *[!0-9]*)
+            ux_error "invalid issue number: '$_issue' (must be positive integer)"
+            ux_info "subcommands: status, prune; or pass one or more issue numbers"
+            return 1
+            ;;
         esac
     done
 
-    ux_header "gh-flow: spawning $# worker(s)"
+    ux_header "gh-flow: spawning $# worker(s) (ai=$_ai)"
     for _issue in "$@"; do
-        _gh_flow_spawn_worker "$_issue"
+        _gh_flow_spawn_worker "$_issue" "$_ai"
     done
     ux_success "All workers detached. Your shell is free. Results will appear on the kanban."
 }
 
 _gh_flow_spawn_worker() {
     local _issue="$1"
+    local _ai="${2:-claude}"
     local _dir _log _state _pid
     _dir=$(_gh_flow_issue_dir "$_issue")
     mkdir -p "$_dir"
     _log="$_dir/log"
+    printf '%s\n' "$_ai" >"$_dir/ai"
 
     # Idempotency check
     _state=$(_gh_flow_get_state "$_issue")
     case "$_state" in
-        done)
-            ux_info "#$_issue already done, skipping"
-            return 0
-            ;;
-        spawning|implementing|committing|opening-pr|polling|replying|merging|tearing-down)
-            if [ -f "$_dir/pid" ]; then
-                _pid="$(cat "$_dir/pid")"
-                if kill -0 "$_pid" 2>/dev/null; then
-                    ux_warning "#$_issue already running (pid=$_pid), skipping"
-                    return 0
-                fi
+    done)
+        ux_info "#$_issue already done, skipping"
+        return 0
+        ;;
+    spawning | implementing | committing | opening-pr | polling | replying | merging | tearing-down)
+        if [ -f "$_dir/pid" ]; then
+            _pid="$(cat "$_dir/pid")"
+            if kill -0 "$_pid" 2>/dev/null; then
+                ux_warning "#$_issue already running (pid=$_pid), skipping"
+                return 0
             fi
-            ux_info "#$_issue was in-progress but pid is dead — resuming with a new worker"
-            ;;
+        fi
+        ux_info "#$_issue was in-progress but pid is dead — resuming with a new worker"
+        ;;
     esac
 
     # Rotate previous log (keep one .prev for debugging)
@@ -350,12 +454,12 @@ _gh_flow_spawn_worker() {
     # shellcheck disable=SC2016
     nohup env DOTFILES_FORCE_INIT=1 bash -c '
         . "$HOME/.bashrc" 2>/dev/null || true
-        _gh_flow_worker "$1"
-    ' -- "$_issue" >"$_log" 2>&1 &
+        _gh_flow_worker "$1" "$2"
+    ' -- "$_issue" "$_ai" >"$_log" 2>&1 &
     _pid=$!
     disown "$_pid" 2>/dev/null || true
     printf '%s\n' "$_pid" >"$_dir/pid"
-    ux_info "#$_issue → pid=$_pid  log=$_log"
+    ux_info "#$_issue → pid=$_pid  ai=$_ai  log=$_log"
 }
 
 # ============================================================================
@@ -364,11 +468,12 @@ _gh_flow_spawn_worker() {
 
 _gh_flow_worker() {
     local _issue="$1"
+    local _ai="${2:-claude}"
     local _dir _worktree _pr _spawn_name _decision _comments
     _dir=$(_gh_flow_issue_dir "$_issue")
     _spawn_name="issue-$_issue"
 
-    printf '[gh-flow-worker] issue=#%s start=%s\n' "$_issue" "$(date -Iseconds 2>/dev/null || date)"
+    printf '[gh-flow-worker] issue=#%s ai=%s start=%s\n' "$_issue" "$_ai" "$(date -Iseconds 2>/dev/null || date)"
 
     # ---- Step 1: spawn worktree ----
     # Snapshot the worktree list before and after `gwt spawn` and diff them
@@ -386,8 +491,8 @@ _gh_flow_worker() {
     _wt_after=$(git worktree list --porcelain 2>/dev/null | awk '$1=="worktree"{print $2}')
     _worktree=$(comm -13 \
         <(printf '%s\n' "$_wt_before" | sort) \
-        <(printf '%s\n' "$_wt_after" | sort) \
-        | head -n 1)
+        <(printf '%s\n' "$_wt_after" | sort) |
+        head -n 1)
 
     if [ -z "$_worktree" ] || [ ! -d "$_worktree" ]; then
         _gh_flow_set_state "$_dir" "failed:spawning"
@@ -403,14 +508,14 @@ _gh_flow_worker() {
         return 1
     }
 
-    # ---- Step 2a: implement (claude runs /gh-issue-implement) ----
-    # The original single `/gh-issue-flow` call was unreliable under `claude -p`
-    # (non-interactive): it often stopped after the implement phase and printed
+    # ---- Step 2a: implement (selected ai runs /gh-issue-implement) ----
+    # The original single `/gh-issue-flow` call was unreliable in
+    # non-interactive mode: it often stopped after the implement phase and printed
     # a "Next: …" hint without running commit/PR. We invoke the 3 atomic skills
     # ourselves so each phase has a distinct state + post-condition check.
     _gh_flow_set_state "$_dir" "implementing"
     _gh_project_status_sync issue "$_issue" "In progress"
-    if ! claude --dangerously-skip-permissions -p "/gh-issue-implement $_issue direct"; then
+    if ! _gh_flow_run_ai_prompt "$_ai" "/gh-issue-implement $_issue direct"; then
         _gh_flow_set_state "$_dir" "failed:implementing"
         printf '[gh-flow-worker] /gh-issue-implement failed\n' >&2
         return 1
@@ -421,9 +526,9 @@ _gh_flow_worker() {
         return 1
     fi
 
-    # ---- Step 2b: commit (claude runs /gh-commit) ----
+    # ---- Step 2b: commit (selected ai runs /gh-commit) ----
     _gh_flow_set_state "$_dir" "committing"
-    if ! claude --dangerously-skip-permissions -p "/gh-commit"; then
+    if ! _gh_flow_run_ai_prompt "$_ai" "/gh-commit"; then
         _gh_flow_set_state "$_dir" "failed:committing"
         printf '[gh-flow-worker] /gh-commit failed\n' >&2
         return 1
@@ -434,9 +539,9 @@ _gh_flow_worker() {
         return 1
     fi
 
-    # ---- Step 2c: open PR (claude runs /gh-pr) ----
+    # ---- Step 2c: open PR (selected ai runs /gh-pr) ----
     _gh_flow_set_state "$_dir" "opening-pr"
-    if ! claude --dangerously-skip-permissions -p "/gh-pr $_issue"; then
+    if ! _gh_flow_run_ai_prompt "$_ai" "/gh-pr $_issue"; then
         _gh_flow_set_state "$_dir" "failed:opening-pr"
         printf '[gh-flow-worker] /gh-pr failed\n' >&2
         return 1
@@ -472,7 +577,7 @@ _gh_flow_worker() {
             if [ -n "$_comments" ] && [ "$_comments" -gt 0 ]; then
                 _gh_flow_set_state "$_dir" "replying"
                 printf '[gh-flow-worker] running /gh-pr-reply (%s review(s))\n' "$_comments"
-                if claude --dangerously-skip-permissions -p "/gh-pr-reply"; then
+                if _gh_flow_run_ai_prompt "$_ai" "/gh-pr-reply"; then
                     touch "$_dir/reply.done"
                     _gh_flow_set_state "$_dir" "polling"
                 else
@@ -486,7 +591,7 @@ _gh_flow_worker() {
 
     # ---- Step 4: merge ----
     _gh_flow_set_state "$_dir" "merging"
-    if ! claude --dangerously-skip-permissions -p "/gh-pr-merge"; then
+    if ! _gh_flow_run_ai_prompt "$_ai" "/gh-pr-merge"; then
         _gh_flow_set_state "$_dir" "failed:merging"
         printf '[gh-flow-worker] /gh-pr-merge failed\n' >&2
         return 1
