@@ -34,7 +34,7 @@ Positional args: `<issue-number> [mode] [remote]`. Optional flag: `--no-next-hin
 - `--no-next-hint` — when present, omit the final `Next:` line in Step 6.
 
 Check preconditions in parallel per `references/implementation-flow.md`
-→ "Preconditions" (in a git repo, not on default branch, clean tree).
+→ "Preconditions" (in a `git` repo, not on default branch, clean tree).
 Fail-fast with the reasons from that file.
 
 ## Step 2: superpowers Plugin Detection
@@ -59,7 +59,7 @@ rules (warning on failure, never blocks the flow).
   `brainstorming`. Else invoke `Skill(superpowers:writing-plans)`.
   After plan is approved, proceed to Step 5 guided by the plan.
 - **`brainstorming`** → invoke `Skill(superpowers:brainstorming)`.
-  Its terminal state invokes writing-plans. After plan is approved,
+  Its terminal state invokes `writing-plans`. After plan is approved,
   proceed to Step 5 guided by the plan.
 
 ## Step 5: Implement + Test
