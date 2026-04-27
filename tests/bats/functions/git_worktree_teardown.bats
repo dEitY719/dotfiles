@@ -282,10 +282,14 @@ _squash_merge_branch_into_origin_main() {
     git -C "$CLONE" worktree unlock "$WORKTREE" 2>/dev/null || true
 }
 
-@test "teardown: submodule block explains cause and suggests force" {
-    local sub_origin="$TEST_TEMP_HOME/sub-origin.git"
-    local sub_seed="$TEST_TEMP_HOME/sub-seed"
-    local sub_wt="$TEST_TEMP_HOME/clone-submodule-1"
+# Helper: bootstrap a parent clone whose main branch carries one submodule,
+# then create a worktree that has the submodule populated. Echoes the worktree
+# path on stdout. Caller passes a unique branch+worktree suffix.
+_setup_clone_with_submodule() {
+    local suffix="$1"
+    local sub_origin="$TEST_TEMP_HOME/sub-origin-$suffix.git"
+    local sub_seed="$TEST_TEMP_HOME/sub-seed-$suffix"
+    local sub_wt="$TEST_TEMP_HOME/clone-submodule-$suffix"
 
     git init --bare --initial-branch=main "$sub_origin" >/dev/null
     git clone -q "$sub_origin" "$sub_seed"
@@ -301,21 +305,28 @@ _squash_merge_branch_into_origin_main() {
     (
         cd "$CLONE"
         git checkout -q main
-        git -c protocol.file.allow=always submodule add "$sub_origin" tests/bats/lib/bats-core >/dev/null
-        git commit -q -m "add test submodule"
+        git -c protocol.file.allow=always submodule add "$sub_origin" "tests/bats/lib/bats-core-$suffix" >/dev/null
+        git commit -q -m "add test submodule $suffix"
         git push -q origin main
     )
 
-    git -C "$CLONE" worktree add -q -b wt/submodule/1 "$sub_wt" origin/main
+    git -C "$CLONE" worktree add -q -b "wt/submodule/$suffix" "$sub_wt" origin/main
     git -C "$sub_wt" -c protocol.file.allow=always submodule update --init --recursive >/dev/null
+    printf '%s\n' "$sub_wt"
+}
+
+@test "teardown: submodule block triggers auto-recovery and removes worktree" {
+    # Populated submodules block `git worktree remove`, but the parent worktree
+    # already passed every dirty-state pre-flight, so retrying with --force
+    # only authorizes dropping disposable submodule contents. Teardown should
+    # do this automatically — no manual --force rerun.
+    local sub_wt
+    sub_wt="$(_setup_clone_with_submodule clean)"
 
     run_in_bash "cd '$sub_wt' && gwt teardown 2>&1"
-    assert_failure
-    assert_output --partial "working trees containing submodules cannot be moved or removed"
-    assert_output --partial "Git blocked removal because this worktree contains submodule"
-    assert_output --partial "Submodules in this repository:"
-    assert_output --partial "tests/bats/lib/bats-core"
-    assert_output --partial "gwt teardown --force"
+    assert_success
+    assert_output --partial "Submodules detected — retrying removal"
+    [ ! -d "$sub_wt" ]
 }
 
 @test "teardown: on failure, cwd stays in the worktree (not main repo)" {

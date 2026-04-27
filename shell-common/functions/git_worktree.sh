@@ -899,6 +899,24 @@ _gwt_teardown_one_inplace() {
         git worktree remove "$wt_path" 2>"$_gwt_rm_err_file" || _gwt_rm_exit=$?
     fi
 
+    # Auto-recovery for the submodule-block case. `git worktree remove` refuses
+    # any tree that contains submodules, even when their working trees are
+    # untouched — the AI-worktree workflow re-clones submodules on the next
+    # spawn, so their populated state is disposable. The parent worktree has
+    # already passed every dirty-state pre-flight above (uncommitted, staged,
+    # untracked, unpushed), so retrying with --force here only adds permission
+    # to drop populated submodule contents — exactly what we want. Without
+    # this, every teardown of a repo with submodules would force the user to
+    # rerun manually, which is what issue #211 was filed against.
+    if [ "$_gwt_rm_exit" -ne 0 ] && [ "$force" != true ] \
+       && grep -q "working trees containing submodules cannot be moved or removed" "$_gwt_rm_err_file" 2>/dev/null; then
+        ux_info "Submodules detected — retrying removal (parent worktree already verified clean)."
+        : > "$_gwt_rm_err_file"
+        if git worktree remove --force "$wt_path" 2>"$_gwt_rm_err_file"; then
+            _gwt_rm_exit=0
+        fi
+    fi
+
     if [ "$_gwt_rm_exit" -ne 0 ]; then
         local _gwt_submodule_blocked=false
         if grep -q "working trees containing submodules cannot be moved or removed" "$_gwt_rm_err_file" 2>/dev/null; then
@@ -915,7 +933,11 @@ _gwt_teardown_one_inplace() {
             sed 's/^/    /' "$_gwt_rm_err_file" >&2
         fi
         if [ "$_gwt_submodule_blocked" = true ]; then
-            ux_warning "  Git blocked removal because this worktree contains submodule(s)."
+            # Auto-recovery already retried with --force above; reaching here
+            # means even --force could not remove this worktree (locked
+            # submodule, permissions, gitlink corruption, etc.). The user has
+            # to investigate manually.
+            ux_warning "  Git blocked removal even with --force — a submodule is in an unusual state."
             local _gwt_submodule_paths _gwt_submodule_path _gwt_submodule_count=0
             _gwt_submodule_paths="$(git -C "$wt_path" config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}')"
             if [ -n "$_gwt_submodule_paths" ]; then
@@ -929,8 +951,8 @@ _gwt_teardown_one_inplace() {
 $_gwt_submodule_paths
 EOF
             fi
-            ux_info "  If worktree-local submodule state is disposable, rerun:"
-            ux_info "    cd \"$wt_path\" && gwt teardown --force"
+            ux_info "  Inspect:  git -C \"$wt_path\" submodule foreach 'git status --short'"
+            ux_info "  Locks:    git -C \"$wt_path\" submodule foreach 'git config --get core.bare; git status'"
         elif [ "$force" != true ]; then
             ux_info "  Inspect:  git -C \"$wt_path\" status --short"
             ux_info "  Clean:    git -C \"$wt_path\" clean -fd"
