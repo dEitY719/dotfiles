@@ -73,6 +73,7 @@
     "explorer.confirmPasteNative": false,
     "cSpell.userWords": ["pkstock", "smtm"],
     "python.analysis.typeCheckingMode": "strict",
+    "python.terminal.useEnvFile": true,
     "notebook.output.wordWrap": true,
     "jupyter.askForKernelRestart": false,
     "testing.coverageToolbarEnabled": true,
