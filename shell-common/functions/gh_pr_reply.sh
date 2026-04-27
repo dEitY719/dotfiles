@@ -76,24 +76,13 @@ _gh_pr_reply_require_ai_cli() {
 }
 
 # Run one non-interactive prompt with the selected ai runner.
-# Used by the worker to invoke /gh-pr-reply via the chosen CLI.
+# Used by the worker to invoke /gh-pr-reply via the chosen CLI. Delegates
+# to ai_usage.sh so each invocation appends a usage record (tokens,
+# cost, duration) to <state-dir>/usage.jsonl, and the worker's tail-end
+# _ai_usage_summary prints the totals.
 _gh_pr_reply_run_ai_prompt() {
-    local _ai="$1" _prompt="$2"
-    case "$_ai" in
-        claude)
-            claude --dangerously-skip-permissions -p "$_prompt"
-            ;;
-        codex)
-            codex exec --dangerously-bypass-approvals-and-sandbox "$_prompt"
-            ;;
-        gemini)
-            gemini --yolo -p "$_prompt"
-            ;;
-        *)
-            printf '[gh-pr-reply-worker] invalid ai runner: %s\n' "$_ai" >&2
-            return 1
-            ;;
-    esac
+    local _ai="$1" _usage_log="$2" _label="$3" _prompt="$4"
+    _ai_usage_run "$_ai" "$_usage_log" "$_label" "$_prompt"
 }
 
 # ============================================================================
@@ -126,6 +115,7 @@ gh_pr_reply_help() {
     ux_bullet_sub "worktree.path - git worktree path"
     ux_bullet_sub "log           - full stdout+stderr"
     ux_bullet_sub "log.prev      - previous run's log (one generation)"
+    ux_bullet_sub "usage.jsonl   - per-invocation token usage + cost (claude only)"
     ux_info ""
     ux_info "Failure isolation:"
     ux_bullet "One worker failure does not affect others."
@@ -316,9 +306,13 @@ _gh_pr_reply_spawn_worker() {
 _gh_pr_reply_worker() {
     local _pr="$1"
     local _ai="${2:-claude}"
-    local _dir _worktree _spawn_name
+    local _dir _worktree _spawn_name _usage_log
     _dir=$(_gh_pr_reply_pr_dir "$_pr")
     _spawn_name="pr-$_pr"
+    # Resolve the usage log path while still in the main repo: once we cd
+    # into the worktree, _gh_pr_reply_pr_dir would point elsewhere.
+    _usage_log="$_dir/usage.jsonl"
+    : >"$_usage_log"
 
     printf '[gh-pr-reply-worker] pr=#%s ai=%s start=%s\n' "$_pr" "$_ai" "$(date -Iseconds 2>/dev/null || date)"
 
@@ -366,9 +360,12 @@ _gh_pr_reply_worker() {
     # 'failed:replying' for human recovery (#198 Open Question — Option 1).
     # The data-loss policy is invariant across ai runners.
     _gh_pr_reply_set_state "$_dir" "replying"
-    if ! _gh_pr_reply_run_ai_prompt "$_ai" "/gh-pr-reply $_pr"; then
+    if ! _gh_pr_reply_run_ai_prompt "$_ai" "$_usage_log" "/gh-pr-reply $_pr" "/gh-pr-reply $_pr"; then
         _gh_pr_reply_set_state "$_dir" "failed:replying"
         printf '[gh-pr-reply-worker] /gh-pr-reply failed — worktree preserved at %s for recovery\n' "$_worktree" >&2
+        # Print usage even on failure so the user can correlate quota
+        # spend with the recovery worktree they're about to inspect.
+        _ai_usage_summary "$_usage_log" "Token Usage (PR #$_pr — failed)"
         return 1
     fi
 
@@ -379,11 +376,13 @@ _gh_pr_reply_worker() {
     if ! gwt teardown --force; then
         _gh_pr_reply_set_state "$_dir" "failed:tearing-down"
         printf '[gh-pr-reply-worker] gwt teardown failed\n' >&2
+        _ai_usage_summary "$_usage_log" "Token Usage (PR #$_pr — teardown failed)"
         return 1
     fi
 
     _gh_pr_reply_set_state "$_dir" "done"
     printf '[gh-pr-reply-worker] done pr=#%s end=%s\n' "$_pr" "$(date -Iseconds 2>/dev/null || date)"
+    _ai_usage_summary "$_usage_log" "Token Usage (PR #$_pr)"
 }
 
 # ============================================================================
