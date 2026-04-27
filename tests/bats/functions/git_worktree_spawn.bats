@@ -7,11 +7,26 @@
 
 load '../test_helper'
 
+_setup_fake_main_repo() {
+    FAKE_REPO="$TEST_TEMP_HOME/fake-main"
+    export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@test \
+           GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@test
+    git init -q --initial-branch=main "$FAKE_REPO"
+    (
+        cd "$FAKE_REPO"
+        echo base >base.txt
+        git add base.txt
+        git commit -q -m base
+    )
+}
+
 setup() {
     setup_isolated_home
+    _setup_fake_main_repo
 }
 
 teardown() {
+    unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
     teardown_isolated_home
 }
 
@@ -59,4 +74,18 @@ teardown() {
     run_in_zsh 'git_worktree_spawn --help'
     assert_success
     assert_output --partial "--agent"
+}
+
+@test "bash: spawn auto-increments when branch exists without worktree" {
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        git branch wt/feat/1
+        git_worktree_spawn feat 2>&1
+        git show-ref --verify --quiet refs/heads/wt/feat/2 && echo BRANCH2_OK
+        [ -d '$TEST_TEMP_HOME/fake-main-feat-2' ] && echo PATH2_OK
+    "
+    assert_success
+    assert_output --partial "Branch: wt/feat/2"
+    assert_output --partial "BRANCH2_OK"
+    assert_output --partial "PATH2_OK"
 }
