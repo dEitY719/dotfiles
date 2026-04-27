@@ -26,6 +26,6 @@ _gh_project_status_sync pr <PR_NUMBER> "Approved" --only-from "Backlog,In progre
 
 ## When it does nothing
 
-If the repo has no projectV2 board attached (auto-detected — the helper
+If the repo has no `projectV2` board attached (auto-detected — the helper
 finds zero project items and silently returns 0), nothing happens. Opt
 out per-invocation with `GH_PROJECT_STATUS_SYNC=0`.
