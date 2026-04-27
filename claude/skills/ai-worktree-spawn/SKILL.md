@@ -56,13 +56,16 @@ Priority: `--base` arg > `origin/main` > `main`/`master` > current HEAD.
 git-crypt detection happens in Step 1.5. When active, resolve a key file via priority:
 `$GIT_CRYPT_KEY_FILE` > `~/.config/git-crypt/<project>.key` > `~/.config/git-crypt/default.key`.
 
-- **Key found (auto-unlock path)**: `git worktree add --no-checkout` first, then
-  `git-crypt unlock <key>` inside the new worktree, then `git checkout -- .`.
-  Encrypted files (`.env`, `.secrets/`) decrypt normally — full functionality.
+- **Key found (auto-unlock path)**: 4-step sequence — bypass-checkout (clean
+  ciphertext), worktree-local temp bypass, `git-crypt unlock <key>`, then
+  restore filter to git-crypt. Encrypted files (`.env`, `.secrets/`) decrypt
+  normally. **Caveat**: `git status` may show git-crypt files as `M` after
+  unlock (raw byte vs. textconv mismatch) — use explicit `git add <path>`,
+  never `-A` / `.` in auto-unlocked worktrees.
 - **Key not found (bypass path, backward-compatible)**: pass `-c filter.git-crypt.smudge=cat
   -c filter.git-crypt.clean=cat` to `git worktree add`, set worktree-local config
-  to disable filters permanently. Encrypted files stay binary. Print a hint about
-  `git-crypt export-key ~/.config/git-crypt/<project>.key` so next spawn can unlock.
+  to disable filters permanently. Encrypted files stay binary. Print hint:
+  run `gc-export-key` from main repo so next spawn can auto-unlock.
 
 If branch exists: `git worktree add <path> <branch>` (no `-b`).
 If new branch: `git worktree add -b <branch> <path> <base_ref>`.
