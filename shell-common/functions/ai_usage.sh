@@ -212,7 +212,7 @@ _ai_usage_run() {
     gemini)
         _tmp=$(mktemp -t ai_usage_gemini.XXXXXX) || {
             printf '[ai-usage] mktemp failed; running gemini without tracking\n' >&2
-            gemini --yolo -p "$_prompt"
+            gemini --approval-mode=yolo --skip-trust -p "$_prompt"
             _ec=$?
             printf '{"ai":"gemini","ts":"%s","label":%s,"exit_code":%d,"tracking":"cli_failed"}\n' \
                 "$_now" \
@@ -221,7 +221,7 @@ _ai_usage_run() {
             return $_ec
         }
 
-        gemini --yolo --output-format json -p "$_prompt" >"$_tmp"
+        gemini --approval-mode=yolo --skip-trust --output-format json -p "$_prompt" >"$_tmp"
         _ec=$?
 
         if [ "$_ec" -ne 0 ] || ! [ -s "$_tmp" ]; then

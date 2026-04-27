@@ -38,5 +38,5 @@ guninstall() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/uninstall_gemini.sh"
 }
 
-alias gemini-skip='gemini --yolo'
-alias gemini-yolo='gemini --yolo'
+alias gemini-skip='gemini --approval-mode=yolo --skip-trust'
+alias gemini-yolo='gemini --approval-mode=yolo --skip-trust'

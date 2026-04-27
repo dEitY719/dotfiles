@@ -87,7 +87,7 @@ spawn → worker 호출에 `_ai` 전달 추가:
 AI별 명령 매핑:
 - `claude`: `claude --dangerously-skip-permissions -p "<prompt>"`
 - `codex`: `codex exec --dangerously-bypass-approvals-and-sandbox "<prompt>"`
-- `gemini`: `gemini --yolo -p "<prompt>"`
+- `gemini`: `gemini --approval-mode=yolo --skip-trust -p "<prompt>"`
 
 ### 4.4 실패 보존 정책 유지 (핵심)
 
