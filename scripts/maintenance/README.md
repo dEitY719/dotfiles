@@ -28,6 +28,15 @@ Dotfiles 유지보수를 위한 1회성/주기적 도구 모음
   - Progress bar 및 rich formatting
   - 더 읽기 쉬운 출력 형식
 
+### check_codex_skills_budget.py
+- **목적**: Codex skill description 컨텍스트 예산 (~5440자) 초과 감지 (issue #216)
+- **사용**: `python3 check_codex_skills_budget.py [--budget N] [--top N] [--all] [--quiet]`
+- **요구사항**: Python stdlib 만 (외부 의존성 없음)
+- **기능**:
+  - `claude/skills/*/SKILL.md` frontmatter 의 `description` 길이 합산
+  - 가장 긴 설명 Top N 노출 (기본 10개)
+  - 예산 초과 시 종료 코드 1, 트리밍 또는 `.codex-allowlist` 사용 안내
+
 ## 💡 사용 시나리오
 
 ### Shebang 검증
@@ -39,6 +48,11 @@ Dotfiles 유지보수를 위한 1회성/주기적 도구 모음
 - Bash 파일 수정 후 동작 검증
 - 대규모 리팩토링 후 회귀 방지
 - 새로운 .bash 파일 추가 후 통합 테스트
+
+### Codex skill 예산 감시
+- 신규 skill 추가 / description 갱신 후 합계 점검
+- 트렁케이션 경고 발견 시 origin 추적
+- `.codex-allowlist` 운영 결정 자료로 활용
 
 ## 🔗 관련 문서
 
