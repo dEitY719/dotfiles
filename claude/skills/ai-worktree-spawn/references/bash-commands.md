@@ -214,25 +214,35 @@ BASE_REF="$(resolve_base_ref "${BASE_OVERRIDE:-}")"
 GIT_CRYPT_REPORT=""
 
 if [[ "$GIT_CRYPT_ACTIVE" == true && -n "$GIT_CRYPT_KEY" ]]; then
-    # ---- Auto-unlock path: --no-checkout, then unlock, then real checkout ----
+    # ---- Auto-unlock path: 4-step sequence ----
+    # Step 1: worktree add WITH command-level smudge bypass.
+    # Why not --no-checkout: git-crypt unlock runs `git status` and rejects if
+    # working tree is "not clean"; an empty (--no-checkout) worktree counts as
+    # "all tracked files deleted" and unlock aborts. So we checkout ciphertext
+    # cleanly first, then have unlock decrypt in place.
     if git show-ref --verify --quiet "refs/heads/${BRANCH}"; then
-        git worktree add --no-checkout "${WORKTREE_PATH}" "${BRANCH}"
+        git -c filter.git-crypt.smudge=cat -c filter.git-crypt.clean=cat \
+            worktree add "${WORKTREE_PATH}" "${BRANCH}"
     else
-        git worktree add --no-checkout -b "${BRANCH}" "${WORKTREE_PATH}" "${BASE_REF}"
+        git -c filter.git-crypt.smudge=cat -c filter.git-crypt.clean=cat \
+            worktree add -b "${BRANCH}" "${WORKTREE_PATH}" "${BASE_REF}"
     fi
 
-    # Run git-crypt unlock inside the new worktree (subshell preserves caller cwd).
+    # Step 2: worktree-local TEMPORARY bypass so unlock's git-status check passes.
+    git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.smudge cat
+    git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.clean cat
+    git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.required false
+
+    # Step 3: git-crypt unlock -- decrypts working tree + stores key in worktree GIT_DIR.
     if (cd "${WORKTREE_PATH}" && git-crypt unlock "${GIT_CRYPT_KEY}"); then
-        # Smudge filter now has the key; checkout decrypts encrypted files normally.
-        git -C "${WORKTREE_PATH}" checkout -- .
+        # Step 4: RESTORE filter to git-crypt so future commits encrypt properly.
+        git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.smudge "git-crypt smudge"
+        git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.clean "git-crypt clean"
+        git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.required true
         GIT_CRYPT_REPORT="unlocked via ${GIT_CRYPT_KEY}"
     else
-        # Unlock failed -- fall through to bypass so worktree is at least usable.
-        echo "Warning: git-crypt unlock failed with ${GIT_CRYPT_KEY}; switching to bypass"
-        git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.smudge cat
-        git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.clean cat
-        git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.required false
-        git -C "${WORKTREE_PATH}" checkout -- . 2>/dev/null
+        # Unlock failed -- temp bypass from step 2 stays; worktree usable as binary.
+        echo "Warning: git-crypt unlock failed with ${GIT_CRYPT_KEY}; staying on bypass"
         GIT_CRYPT_REPORT="disabled (unlock failed; encrypted files stay binary)"
     fi
 else
@@ -248,7 +258,7 @@ else
         git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.clean cat
         git -C "${WORKTREE_PATH}" config --worktree filter.git-crypt.required false
         git -C "${WORKTREE_PATH}" checkout -- . 2>/dev/null
-        GIT_CRYPT_REPORT="disabled (no key; run from main repo: git-crypt export-key ~/.config/git-crypt/${PROJECT_NAME}.key)"
+        GIT_CRYPT_REPORT="disabled (no key; run from main repo: gc-export-key)"
     fi
 fi
 ```
