@@ -101,7 +101,7 @@ POSIX 쉘 파일. bash/zsh에서 sourcing됨. 다음을 정의:
 - 실행 주체별 호출 규칙:
   - `claude` → `claude --dangerously-skip-permissions -p "<slash-command>"`
   - `codex` → `codex exec --dangerously-bypass-approvals-and-sandbox "<slash-command>"`
-  - `gemini` → `gemini --yolo -p "<slash-command>"`
+  - `gemini` → `gemini --approval-mode=yolo --skip-trust -p "<slash-command>"`
 
 - **`_gh_flow_poll_reviews`** (헬퍼 함수): PR 리뷰 상태 조회
   - Args: `<pr-number>`
