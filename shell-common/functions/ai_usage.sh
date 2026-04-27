@@ -281,21 +281,32 @@ _ai_usage_summary() {
         return 0
     fi
 
-    local _claude_ok _claude_err _codex_ok _codex_err _other _in _cc _cr _out _cost _wall _api _turns _models _total_in
-    _claude_ok=$(printf '%s' "$_summary" | jq -r '.claude_ok')
-    _claude_err=$(printf '%s' "$_summary" | jq -r '.claude_err')
-    _codex_ok=$(printf '%s' "$_summary" | jq -r '.codex_ok')
-    _codex_err=$(printf '%s' "$_summary" | jq -r '.codex_err')
-    _other=$(printf '%s' "$_summary" | jq -r '.other')
-    _in=$(printf '%s' "$_summary" | jq -r '.input_tokens')
-    _cc=$(printf '%s' "$_summary" | jq -r '.cache_creation')
-    _cr=$(printf '%s' "$_summary" | jq -r '.cache_read')
-    _out=$(printf '%s' "$_summary" | jq -r '.output_tokens')
-    _cost=$(printf '%s' "$_summary" | jq -r '.cost_usd')
-    _wall=$(printf '%s' "$_summary" | jq -r '.wall_ms')
-    _api=$(printf '%s' "$_summary" | jq -r '.api_ms')
-    _turns=$(printf '%s' "$_summary" | jq -r '.turns')
-    _models=$(printf '%s' "$_summary" | jq -r '.models | join(", ")')
+    local _claude_ok _claude_err _codex_ok _codex_err _other _in _cc _cr _out _cost _wall _api _turns _models _total_in _vals
+
+    # Consolidate the 14-field extraction into one jq invocation. Was
+    # 14 forks per worker exit; PR #224 review (gemini-code-assist)
+    # called this out as a hot path that hands out usage records on
+    # every detached worker shutdown. `?` keeps it null-tolerant if a
+    # field is ever absent in the upstream `_summary` document.
+    _vals=$(printf '%s' "$_summary" | jq -r '[
+        .claude_ok?, .claude_err?, .codex_ok?, .codex_err?, .other?,
+        .input_tokens?, .cache_creation?, .cache_read?, .output_tokens?,
+        .cost_usd?, .wall_ms?, .api_ms?, .turns?,
+        ((.models? // []) | join(", "))
+    ] | @tsv' 2>/dev/null)
+
+    if [ -z "$_vals" ]; then
+        printf '─── %s ─── (failed to parse %s)\n' "$_label" "$_log"
+        return 0
+    fi
+
+    # `read` runs in the current shell when fed by a here-doc, so the
+    # locals stick. IFS=$'\t' is bash-specific; the file header already
+    # pins the runtime to bash via the shell directive on line 2.
+    IFS=$'\t' read -r _claude_ok _claude_err _codex_ok _codex_err _other \
+        _in _cc _cr _out _cost _wall _api _turns _models <<EOF
+$_vals
+EOF
 
     # Input-side total: fresh input + cache creation + cache reads.
     _total_in=$((${_in:-0} + ${_cc:-0} + ${_cr:-0}))
