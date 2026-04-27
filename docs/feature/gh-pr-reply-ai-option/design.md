@@ -50,7 +50,7 @@ gh-pr-reply --ai gemini '#56' '#78'     # gemini + #prefix
 ### 3.3 에러 UX
 
 - `--ai` 값 누락: `missing value for --ai (expected: claude|codex|gemini)`
-- 잘못된 값: `invalid --ai value: '<value>' (expected: claude|codex|gemini)`
+- 잘못된 값: `invalid --ai value: '<value>' (expected: claude|codex|gemini)` (실행기 선택 단계)
 - 미지원 옵션: `unknown option: '<arg>'`
 
 ## 4. 설계
@@ -60,15 +60,17 @@ gh-pr-reply --ai gemini '#56' '#78'     # gemini + #prefix
 `gh_pr_reply()`에 옵션 파서를 추가한다.
 
 - `_ai=claude` 기본
-- `--ai <agent>` 1회 허용 (중복 지정 시 마지막 값 사용 또는 즉시 실패 중 택1; 구현 시 일관된 정책 필요)
+- `--ai <agent>` 허용 (중복 지정 시 마지막 값 사용; last-one-wins)
 - 옵션 파싱 후 PR 번호 검증 수행
 
 ### 4.2 Precondition 변경
 
-기존 `claude` 고정 체크를 `_ai` 기반 검사로 변경한다.
+기존 `claude` 고정 체크를 `_ai_raw` 기반 실행기 선택 + CLI 검사로 변경한다.
 
 - 공통 유지: `git`, `gh`, `gwt`, main repo 체크
-- AI별 검사:
+- 실행기 선택:
+  - `claude|codex|gemini` 외 값이면 `invalid --ai value`로 실패
+- 선택된 AI별 검사:
   - `claude`: `_have claude`
   - `codex`: `_have codex`
   - `gemini`: `_have gemini`
@@ -78,7 +80,7 @@ gh-pr-reply --ai gemini '#56' '#78'     # gemini + #prefix
 spawn → worker 호출에 `_ai` 전달 추가:
 
 - spawn: `_gh_pr_reply_worker "$_pr" "$_ai"`
-- worker: `_gh_pr_reply_run_agent "$_ai" "/gh-pr-reply $_pr"`
+- worker: `_gh_run_ai_agent "$_ai" "/gh-pr-reply $_pr"`
 
 AI별 명령 매핑:
 - `claude`: `claude --dangerously-skip-permissions -p "<prompt>"`
@@ -121,7 +123,7 @@ AI가 달라도 이 정책은 동일해야 한다.
 
 1. `codex`/`gemini` 경로에서 `/gh-pr-reply`의 "수정→commit→push→reply" 파이프라인 안정성 실측 필요
 2. CLI별 실패 코드/출력 포맷 차이로 워커 로그 판독성이 달라질 수 있음
-3. `--ai` 중복 지정 정책(마지막 우선 vs 에러) 확정 필요
+3. 공통 헬퍼 도입 시 `gh-pr-approve`/`gh-flow`와의 공통화 경계 점검 필요
 
 ## 7. 구현 파일
 

@@ -48,7 +48,7 @@ gh-pr-approve --ai gemini '#56' '#78'    # gemini + #prefix
 ### 3.3 에러 UX
 
 - `--ai` 값 누락: `missing value for --ai (expected: claude|codex|gemini)`
-- 잘못된 값: `invalid --ai value: '<value>' (expected: claude|codex|gemini)`
+- 잘못된 값: `invalid --ai value: '<value>' (expected: claude|codex|gemini)` (실행기 선택 단계)
 - 미지원 옵션: `unknown option: '<arg>'`
 
 ## 4. 설계
@@ -57,29 +57,31 @@ gh-pr-approve --ai gemini '#56' '#78'    # gemini + #prefix
 
 `gh_pr_approve()`의 인자 파싱을 2단계로 분리한다.
 
-1. 옵션 파싱: `--ai <agent>` 추출 (위치 무관)
+1. 옵션 파싱: `--ai <agent>` 추출 (위치 무관, 값 존재 여부만 검증)
 2. 위치 인자 검증: PR 번호 목록 검증(기존 `#` strip 규칙 유지)
 
 결과 변수:
-- `_ai` (`claude` 기본)
+- `_ai_raw` (`claude` 기본, raw string)
 - `_pr_args` (정규화된 숫자 목록)
 
 ### 4.2 Precondition 변경
 
-기존의 `claude CLI not found` 하드코딩을 제거하고 선택된 `_ai` 기준으로 검사한다.
+기존의 `claude CLI not found` 하드코딩을 제거하고 실행기 선택 단계에서 `_ai_raw` 의미 검증 + CLI 존재 검사를 수행한다.
 
 - 공통 유지: `git`, `gh`, `gwt`, main repo 체크
-- AI별 검사:
+- 실행기 선택:
+  - `claude|codex|gemini` 외 값이면 `invalid --ai value`로 실패
+- 선택된 AI별 검사:
   - `claude`: `_have claude`
   - `codex`: `_have codex`
   - `gemini`: `_have gemini`
 
 ### 4.3 워커 실행 분기
 
-워커에 `_ai`를 전달하고, 승인 단계에서 실행기 헬퍼를 사용한다.
+워커에 `_ai`를 전달하고, 승인 단계에서 공통 실행기 헬퍼를 사용한다.
 
 - spawn: `_gh_pr_approve_worker "$_pr" "$_ai"`
-- worker: `_gh_pr_approve_run_agent "$_ai" "/gh-pr-approve $_pr"`
+- worker: `_gh_run_ai_agent "$_ai" "/gh-pr-approve $_pr"`
 
 AI별 명령 매핑:
 - `claude`: `claude --dangerously-skip-permissions -p "<prompt>"`
@@ -113,7 +115,7 @@ AI별 명령 매핑:
 
 1. `codex exec`/`gemini -p`에서 slash command(`/gh-pr-approve`) 실행 결과가 `claude -p`와 완전히 동일한지 실측 필요
 2. CLI별 인증/정책(예: yolo/bypass) 차이로 결과 편차 가능
-3. 공통 헬퍼를 `gh_flow`까지 재사용할지(중복 제거) 범위 결정 필요
+3. 공통 헬퍼 적용 시 `gh_flow` 마이그레이션 순서/호환성 점검 필요
 
 ## 7. 구현 파일
 
