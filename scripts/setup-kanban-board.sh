@@ -133,7 +133,7 @@ auth_scopes_csv() {
     local scopes
 
     scopes="$(gh auth status --json hosts 2>/dev/null | jq -r '
-        .hosts["github.com"][]
+        .hosts?["github.com"]?[]?
         | select(.active == true)
         | .scopes // empty
     ' | head -n1)"
@@ -200,7 +200,7 @@ load_repo_context() {
         }
     ' -f owner="$OWNER" -f repo="$REPO")" || die "Failed to query repository ${OWNER}/${REPO}"
 
-    if [ "$(printf '%s' "$repo_json" | jq -r '.data.repository == null')" = "true" ]; then
+    if [ "$(printf '%s' "$repo_json" | jq -r '.data?.repository? == null')" = "true" ]; then
         die "Repository ${OWNER}/${REPO} was not found or is not accessible."
     fi
 
@@ -249,7 +249,7 @@ find_existing_project() {
     ' -f owner="$OWNER")" || die "Failed to list existing projects for ${OWNER}"
 
     match="$(printf '%s' "$projects_json" | jq -r --arg title "$TITLE" '
-        .data.repositoryOwner.projectsV2.nodes[]
+        .data.repositoryOwner?.projectsV2?.nodes?[]?
         | select(.title == $title)
         | [.id, (.number | tostring), .url]
         | @tsv
@@ -347,7 +347,7 @@ fetch_status_field_id() {
     ' -f projectId="$PROJECT_ID")" || die "Failed to fetch Status field for project #${PROJECT_NUMBER}"
 
     printf '%s' "$field_json" | jq -r '
-        .data.node.fields.nodes[]
+        .data.node?.fields?.nodes?[]?
         | select(.name == "Status")
         | .id
     ' | head -n1
@@ -433,7 +433,7 @@ fetch_existing_pr_template() {
           }
         }
     ' -f owner="$OWNER" -f repo="$REPO" -f expr="${DEFAULT_BRANCH}:${PR_TEMPLATE_PATH}" |
-        jq -r '.data.repository.object.text // empty'
+        jq -r '.data.repository?.object?.text? // empty'
 }
 
 ensure_pr_template() {
