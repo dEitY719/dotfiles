@@ -63,7 +63,6 @@ def parse_skill_md(path: Path, fallback_name: str) -> tuple[str, str]:
     name = fallback_name
     desc_parts: list[str] = []
     in_block = False
-    folded = False
 
     for raw in lines[1:]:
         line = raw.rstrip("\r")
@@ -81,7 +80,6 @@ def parse_skill_md(path: Path, fallback_name: str) -> tuple[str, str]:
             value = m.group(1).strip()
             if value in FOLD_INDICATORS:
                 in_block = True
-                folded = value.startswith(">")
                 desc_parts = []
             else:
                 desc_parts = [value.strip("\"'")]
@@ -95,10 +93,7 @@ def parse_skill_md(path: Path, fallback_name: str) -> tuple[str, str]:
                 continue
             desc_parts.append(line.strip())
 
-    if in_block and folded:
-        text = " ".join(p for p in desc_parts if p)
-    else:
-        text = " ".join(p for p in desc_parts if p)
+    text = " ".join(p for p in desc_parts if p)
 
     return (name, re.sub(r"\s+", " ", text).strip())
 
