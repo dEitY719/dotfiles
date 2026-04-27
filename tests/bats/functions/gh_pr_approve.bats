@@ -132,3 +132,63 @@ teardown() {
     assert_failure
     assert_output --partial "main repo"
 }
+
+# ---------------------------------------------------------------------------
+# --ai option (mirrors gh-flow #208 contract)
+# ---------------------------------------------------------------------------
+
+@test "help: documents --ai option and supported runners" {
+    # The whole point of #214 is discoverability — if --ai isn't surfaced
+    # in help, users will keep assuming claude is the only option.
+    run_in_bash 'gh_pr_approve --help'
+    assert_success
+    assert_output --partial "--ai"
+    assert_output --partial "claude (default) | codex | gemini"
+}
+
+@test "bash: '--ai codex' parses (precondition fails on missing codex CLI, not parser)" {
+    # We can't easily fake the codex/gemini CLI here, so we assert the
+    # parser accepted the value and produced a precondition-shaped error
+    # rather than the generic 'unknown option' or 'invalid --ai value'
+    # parser errors.
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve 42 --ai codex 2>&1 || true"
+    refute_output --partial "unknown option"
+    refute_output --partial "invalid --ai value"
+}
+
+@test "bash: '--ai gemini' parses with leading position" {
+    # --ai may appear before PR numbers — position-agnostic.
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve --ai gemini 42 2>&1 || true"
+    refute_output --partial "unknown option"
+    refute_output --partial "invalid --ai value"
+    refute_output --partial "invalid PR number"
+}
+
+@test "bash: trailing '42 --ai codex' is accepted" {
+    # Regression guard: --ai after PR numbers must be parsed, not
+    # treated as a stray PR number.
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve 42 --ai codex 2>&1 || true"
+    refute_output --partial "invalid PR number: '--ai'"
+}
+
+@test "bash: '--ai' without value fails with clear message" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve 42 --ai 2>&1"
+    assert_failure
+    assert_output --partial "missing value for --ai"
+    assert_output --partial "claude|codex|gemini"
+}
+
+@test "bash: invalid --ai value is rejected" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve 42 --ai bogus 2>&1"
+    assert_failure
+    assert_output --partial "invalid --ai value"
+    assert_output --partial "claude|codex|gemini"
+}
+
+@test "bash: unknown long option is rejected" {
+    # Anything starting with '-' that isn't --ai/--ai=... should be
+    # rejected up-front rather than reaching the PR-number validator.
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve --bogus 42 2>&1"
+    assert_failure
+    assert_output --partial "unknown option"
+}
