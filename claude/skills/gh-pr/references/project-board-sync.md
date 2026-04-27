@@ -15,7 +15,7 @@ Source the shared helper, then call it with the new PR number:
 
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
-_gh_project_status_sync pr <PR_NUMBER> "In review"
+_gh_project_status_sync pr "$PR_NUMBER" "In review"
 ```
 
 ## Behavior
