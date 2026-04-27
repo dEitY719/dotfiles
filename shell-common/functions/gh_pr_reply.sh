@@ -57,28 +57,95 @@ _gh_pr_reply_get_state() {
 }
 
 # ============================================================================
+# AI runner helpers
+# ============================================================================
+# Mirrors the contract introduced by `gh-flow --ai` (#208) so all three
+# user-facing runners accept the same agent set with identical error UX.
+
+# Returns 0 if the ai runner is one of: claude, codex, gemini.
+_gh_pr_reply_known_ai() {
+    case "$1" in
+        claude|codex|gemini) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Ensure the selected ai CLI exists in PATH.
+_gh_pr_reply_require_ai_cli() {
+    case "$1" in
+        claude)
+            if ! _have claude; then
+                ux_error "claude CLI not found"
+                return 1
+            fi
+            ;;
+        codex)
+            if ! _have codex; then
+                ux_error "codex CLI not found"
+                return 1
+            fi
+            ;;
+        gemini)
+            if ! _have gemini; then
+                ux_error "gemini CLI not found"
+                return 1
+            fi
+            ;;
+        *)
+            ux_error "invalid --ai value: '$1' (expected: claude|codex|gemini)"
+            return 1
+            ;;
+    esac
+}
+
+# Run one non-interactive prompt with the selected ai runner.
+# Used by the worker to invoke /gh-pr-reply via the chosen CLI.
+_gh_pr_reply_run_ai_prompt() {
+    local _ai="$1" _prompt="$2"
+    case "$_ai" in
+        claude)
+            claude --dangerously-skip-permissions -p "$_prompt"
+            ;;
+        codex)
+            codex exec --dangerously-bypass-approvals-and-sandbox "$_prompt"
+            ;;
+        gemini)
+            gemini --yolo -p "$_prompt"
+            ;;
+        *)
+            printf '[gh-pr-reply-worker] invalid ai runner: %s\n' "$_ai" >&2
+            return 1
+            ;;
+    esac
+}
+
+# ============================================================================
 # Help
 # ============================================================================
 
 gh_pr_reply_help() {
     ux_header "gh-pr-reply - fire-and-forget GitHub PR review-reply runner"
-    ux_info "Usage: gh-pr-reply <pr-number>... | -h|--help"
+    ux_info "Usage: gh-pr-reply <pr-number>... [--ai <agent>] | -h|--help"
+    ux_bullet_sub "agent: claude (default) | codex | gemini"
     ux_info ""
     ux_info "Spawns one background worker per PR. Each worker:"
-    ux_bullet "gwt spawn → claude -p '/gh-pr-reply <N>' → gwt teardown"
+    ux_bullet "gwt spawn → <ai> -p '/gh-pr-reply <N>' → gwt teardown"
     ux_info ""
     ux_info "The /gh-pr-reply skill edits files, commits, pushes, and replies"
     ux_info "to each review comment (Accepted or Declined). This runner only"
     ux_info "manages the worktree lifecycle around the skill."
     ux_info ""
     ux_info "Examples:"
-    ux_bullet "gh-pr-reply 42                  # single PR"
+    ux_bullet "gh-pr-reply 42                  # single PR (claude)"
     ux_bullet "gh-pr-reply 12 34 56            # 3 PRs in parallel"
     ux_bullet "gh-pr-reply '#42'               # '#' prefix accepted"
+    ux_bullet "gh-pr-reply 33 --ai codex       # run worker with codex CLI"
+    ux_bullet "gh-pr-reply --ai gemini 44 55   # run workers with gemini CLI"
     ux_info ""
     ux_info "State directory: ~/.local/state/gh-pr-reply/<repo>/<pr>/"
     ux_bullet_sub "state         - current step"
     ux_bullet_sub "pid           - worker process id"
+    ux_bullet_sub "ai            - selected ai runner (claude|codex|gemini)"
     ux_bullet_sub "worktree.path - git worktree path"
     ux_bullet_sub "log           - full stdout+stderr"
     ux_bullet_sub "log.prev      - previous run's log (one generation)"
@@ -91,7 +158,7 @@ gh_pr_reply_help() {
     ux_info ""
     ux_info "Preconditions:"
     ux_bullet "Run from main repo (not inside a worktree)"
-    ux_bullet "gh CLI authenticated, claude CLI on PATH, gwt loaded"
+    ux_bullet "gh CLI authenticated, selected AI CLI on PATH, gwt loaded"
     ux_info ""
     ux_info "Related:"
     ux_bullet "gh-flow         - issue → PR automation (author side)"
@@ -116,6 +183,51 @@ gh_pr_reply() {
             ;;
     esac
 
+    # Parse optional args (PR numbers and --ai may interleave):
+    #   --ai <claude|codex|gemini>
+    #   --ai=<claude|codex|gemini>
+    # Last --ai wins on duplicates — same policy gh-flow chose for #208.
+    local _ai="claude"
+    local _pr_args=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --ai)
+                shift
+                if [ $# -eq 0 ]; then
+                    ux_error "--ai requires a value (expected: claude|codex|gemini)"
+                    return 1
+                fi
+                _ai="$1"
+                ;;
+            --ai=*)
+                _ai="${1#--ai=}"
+                ;;
+            -*)
+                ux_error "unknown option: '$1'"
+                ux_info "Usage: gh-pr-reply <pr-number>... [--ai <claude|codex|gemini>]"
+                return 1
+                ;;
+            *)
+                _pr_args="$_pr_args $1"
+                ;;
+        esac
+        shift
+    done
+
+    # Restore PR args for downstream validation / spawn loop.
+    # shellcheck disable=SC2086
+    set -- $_pr_args
+    if [ $# -eq 0 ]; then
+        ux_error "no PR numbers provided"
+        ux_info "Usage: gh-pr-reply <pr-number>... [--ai <claude|codex|gemini>]"
+        return 1
+    fi
+
+    if ! _gh_pr_reply_known_ai "$_ai"; then
+        ux_error "invalid --ai value: '$_ai' (expected: claude|codex|gemini)"
+        return 1
+    fi
+
     # Preconditions
     if ! _have git; then
         ux_error "git not found"
@@ -125,8 +237,7 @@ gh_pr_reply() {
         ux_error "gh CLI not found"
         return 1
     fi
-    if ! _have claude; then
-        ux_error "claude CLI not found"
+    if ! _gh_pr_reply_require_ai_cli "$_ai"; then
         return 1
     fi
     if ! command -v gwt >/dev/null 2>&1; then
@@ -152,7 +263,7 @@ gh_pr_reply() {
     # so `gh-pr-reply '#42'` works the same as `gh-pr-reply 42` — same
     # ergonomic deviation gh-pr-approve makes, since PR numbers are
     # almost always written as #N in conversation.
-    local _pr _pr_clean _pr_args=""
+    local _pr _pr_clean _pr_clean_args=""
     for _pr in "$@"; do
         _pr_clean="${_pr#\#}"
         case "$_pr_clean" in
@@ -161,22 +272,24 @@ gh_pr_reply() {
                 return 1
                 ;;
         esac
-        _pr_args="$_pr_args $_pr_clean"
+        _pr_clean_args="$_pr_clean_args $_pr_clean"
     done
 
-    ux_header "gh-pr-reply: spawning $# worker(s)"
-    for _pr in $_pr_args; do
-        _gh_pr_reply_spawn_worker "$_pr"
+    ux_header "gh-pr-reply: spawning $# worker(s) (ai=$_ai)"
+    for _pr in $_pr_clean_args; do
+        _gh_pr_reply_spawn_worker "$_pr" "$_ai"
     done
     ux_success "All workers detached. Your shell is free. Results appear on the PR."
 }
 
 _gh_pr_reply_spawn_worker() {
     local _pr="$1"
+    local _ai="${2:-claude}"
     local _dir _log _state _pid
     _dir=$(_gh_pr_reply_pr_dir "$_pr")
     mkdir -p "$_dir"
     _log="$_dir/log"
+    printf '%s\n' "$_ai" >"$_dir/ai"
 
     # Idempotency check — mirrors gh-pr-approve / gh-flow semantics.
     _state=$(_gh_pr_reply_get_state "$_pr")
@@ -216,12 +329,12 @@ _gh_pr_reply_spawn_worker() {
     # shellcheck disable=SC2016
     nohup env DOTFILES_FORCE_INIT=1 bash -c '
         . "$HOME/.bashrc" 2>/dev/null || true
-        _gh_pr_reply_worker "$1"
-    ' -- "$_pr" >"$_log" 2>&1 &
+        _gh_pr_reply_worker "$1" "$2"
+    ' -- "$_pr" "$_ai" >"$_log" 2>&1 &
     _pid=$!
     disown "$_pid" 2>/dev/null || true
     printf '%s\n' "$_pid" >"$_dir/pid"
-    ux_info "#$_pr → pid=$_pid  log=$_log"
+    ux_info "#$_pr → pid=$_pid  ai=$_ai  log=$_log"
 }
 
 # ============================================================================
@@ -230,11 +343,12 @@ _gh_pr_reply_spawn_worker() {
 
 _gh_pr_reply_worker() {
     local _pr="$1"
+    local _ai="${2:-claude}"
     local _dir _worktree _spawn_name
     _dir=$(_gh_pr_reply_pr_dir "$_pr")
     _spawn_name="pr-$_pr"
 
-    printf '[gh-pr-reply-worker] pr=#%s start=%s\n' "$_pr" "$(date -Iseconds 2>/dev/null || date)"
+    printf '[gh-pr-reply-worker] pr=#%s ai=%s start=%s\n' "$_pr" "$_ai" "$(date -Iseconds 2>/dev/null || date)"
 
     # ---- Step 1: spawn worktree ----
     # Snapshot the worktree list before and after `gwt spawn` and diff them
@@ -269,7 +383,7 @@ _gh_pr_reply_worker() {
         return 1
     }
 
-    # ---- Step 2: reply (claude runs /gh-pr-reply <N>) ----
+    # ---- Step 2: reply (selected ai runs /gh-pr-reply <N>) ----
     # The skill is responsible for: review-comment fetch → evaluate → fix
     # files → commit → push → reply on each comment. The skill's exit
     # code is the source of truth for success/failure.
@@ -278,8 +392,9 @@ _gh_pr_reply_worker() {
     # local commits that were never pushed (e.g. push step failed mid-skill);
     # tearing down would permanently delete them. State is left as
     # 'failed:replying' for human recovery (#198 Open Question — Option 1).
+    # The data-loss policy is invariant across ai runners.
     _gh_pr_reply_set_state "$_dir" "replying"
-    if ! claude --dangerously-skip-permissions -p "/gh-pr-reply $_pr"; then
+    if ! _gh_pr_reply_run_ai_prompt "$_ai" "/gh-pr-reply $_pr"; then
         _gh_pr_reply_set_state "$_dir" "failed:replying"
         printf '[gh-pr-reply-worker] /gh-pr-reply failed — worktree preserved at %s for recovery\n' "$_worktree" >&2
         return 1
