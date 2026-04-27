@@ -47,22 +47,88 @@ _gh_pr_approve_get_state() {
 }
 
 # ============================================================================
+# AI runner helpers (mirror gh_flow.sh — keep both modules in sync)
+# ============================================================================
+
+# Returns 0 if the ai runner is one of: claude, codex, gemini.
+_gh_pr_approve_known_ai() {
+    case "$1" in
+        claude|codex|gemini) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Ensure the selected ai CLI exists in PATH.
+_gh_pr_approve_require_ai_cli() {
+    case "$1" in
+        claude)
+            if ! _have claude; then
+                ux_error "claude CLI not found"
+                return 1
+            fi
+            ;;
+        codex)
+            if ! _have codex; then
+                ux_error "codex CLI not found"
+                return 1
+            fi
+            ;;
+        gemini)
+            if ! _have gemini; then
+                ux_error "gemini CLI not found"
+                return 1
+            fi
+            ;;
+        *)
+            ux_error "invalid --ai value: '$1' (allowed: claude, codex, gemini)"
+            return 1
+            ;;
+    esac
+}
+
+# Run one non-interactive prompt with the selected ai runner.
+_gh_pr_approve_run_ai_prompt() {
+    local _ai="$1" _prompt="$2"
+    case "$_ai" in
+        claude)
+            claude --dangerously-skip-permissions -p "$_prompt"
+            ;;
+        codex)
+            codex exec --dangerously-bypass-approvals-and-sandbox "$_prompt"
+            ;;
+        gemini)
+            gemini --yolo -p "$_prompt"
+            ;;
+        *)
+            printf '[gh-pr-approve-worker] invalid ai runner: %s\n' "$_ai" >&2
+            return 1
+            ;;
+    esac
+}
+
+# ============================================================================
 # Help
 # ============================================================================
 
 gh_pr_approve_help() {
     ux_header "gh-pr-approve - fire-and-forget GitHub PR approval runner"
-    ux_info "Usage: gh-pr-approve <pr-number>... | -h|--help"
+    ux_info "Usage:"
+    ux_bullet "gh-pr-approve <pr-number>... [--ai <agent>]"
+    ux_bullet_sub "agent: claude (default) | codex | gemini"
+    ux_bullet "gh-pr-approve -h|--help|help"
     ux_info ""
     ux_info "Spawns one background worker per PR. Each worker:"
-    ux_bullet "gwt spawn → claude -p '/gh-pr-approve <N>' → gwt teardown"
+    ux_bullet "gwt spawn → <ai> -p '/gh-pr-approve <N>' → gwt teardown"
     ux_info ""
     ux_info "Examples:"
-    ux_bullet "gh-pr-approve 42                # single PR"
-    ux_bullet "gh-pr-approve 12 34 56          # 3 PRs in parallel"
+    ux_bullet "gh-pr-approve 42                       # single PR (default: claude)"
+    ux_bullet "gh-pr-approve 12 34 56                 # 3 PRs in parallel"
+    ux_bullet "gh-pr-approve 42 --ai codex            # run worker with codex CLI"
+    ux_bullet "gh-pr-approve --ai gemini '#56' '#78'  # gemini + #prefix"
     ux_info ""
     ux_info "State directory: ~/.local/state/gh-pr-approve/<repo>/<pr>/"
     ux_bullet_sub "state         - current step"
+    ux_bullet_sub "ai            - selected ai runner (claude|codex|gemini)"
     ux_bullet_sub "pid           - worker process id"
     ux_bullet_sub "worktree.path - git worktree path"
     ux_bullet_sub "log           - full stdout+stderr"
@@ -74,7 +140,7 @@ gh_pr_approve_help() {
     ux_info ""
     ux_info "Preconditions:"
     ux_bullet "Run from main repo (not inside a worktree)"
-    ux_bullet "gh CLI authenticated, claude CLI on PATH, gwt loaded"
+    ux_bullet "gh CLI authenticated, selected AI CLI on PATH, gwt loaded"
     ux_info ""
     ux_info "Related:"
     ux_bullet "gh-flow         - issue → PR automation (author side)"
@@ -98,6 +164,42 @@ gh_pr_approve() {
             ;;
     esac
 
+    # Parse optional args:
+    #   --ai <claude|codex|gemini>
+    #   --ai=<claude|codex|gemini>
+    # Position-agnostic: --ai may appear before, between, or after PR numbers.
+    local _ai="claude"
+    local _pr_input=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --ai)
+                shift
+                if [ $# -eq 0 ]; then
+                    ux_error "missing value for --ai (expected: claude|codex|gemini)"
+                    return 1
+                fi
+                _ai="$1"
+                ;;
+            --ai=*)
+                _ai="${1#--ai=}"
+                ;;
+            -*)
+                ux_error "unknown option: '$1'"
+                ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>]"
+                return 1
+                ;;
+            *)
+                _pr_input="$_pr_input $1"
+                ;;
+        esac
+        shift
+    done
+
+    if ! _gh_pr_approve_known_ai "$_ai"; then
+        ux_error "invalid --ai value: '$_ai' (expected: claude|codex|gemini)"
+        return 1
+    fi
+
     # Preconditions
     if ! _have git; then
         ux_error "git not found"
@@ -107,8 +209,7 @@ gh_pr_approve() {
         ux_error "gh CLI not found"
         return 1
     fi
-    if ! _have claude; then
-        ux_error "claude CLI not found"
+    if ! _gh_pr_approve_require_ai_cli "$_ai"; then
         return 1
     fi
     if ! command -v gwt >/dev/null 2>&1; then
@@ -134,8 +235,8 @@ gh_pr_approve() {
     # so `gh-pr-approve '#42'` works the same as `gh-pr-approve 42` — this is
     # a deliberate ergonomic deviation from gh-flow, since PR numbers are
     # almost always written as #N in conversation.
-    local _pr _pr_clean _pr_args=""
-    for _pr in "$@"; do
+    local _pr _pr_clean _pr_args="" _pr_count=0
+    for _pr in $_pr_input; do
         _pr_clean="${_pr#\#}"
         case "$_pr_clean" in
             ''|*[!0-9]*)
@@ -144,21 +245,30 @@ gh_pr_approve() {
                 ;;
         esac
         _pr_args="$_pr_args $_pr_clean"
+        _pr_count=$((_pr_count + 1))
     done
 
-    ux_header "gh-pr-approve: spawning $# worker(s)"
+    if [ "$_pr_count" -eq 0 ]; then
+        ux_error "no PR numbers provided"
+        ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>]"
+        return 1
+    fi
+
+    ux_header "gh-pr-approve: spawning $_pr_count worker(s) (ai=$_ai)"
     for _pr in $_pr_args; do
-        _gh_pr_approve_spawn_worker "$_pr"
+        _gh_pr_approve_spawn_worker "$_pr" "$_ai"
     done
     ux_success "All workers detached. Your shell is free. Results appear on the PR."
 }
 
 _gh_pr_approve_spawn_worker() {
     local _pr="$1"
+    local _ai="${2:-claude}"
     local _dir _log _state _pid
     _dir=$(_gh_pr_approve_pr_dir "$_pr")
     mkdir -p "$_dir"
     _log="$_dir/log"
+    printf '%s\n' "$_ai" >"$_dir/ai"
 
     # Idempotency check — mirrors gh-flow semantics.
     _state=$(_gh_pr_approve_get_state "$_pr")
@@ -190,12 +300,12 @@ _gh_pr_approve_spawn_worker() {
     # shellcheck disable=SC2016
     nohup env DOTFILES_FORCE_INIT=1 bash -c '
         . "$HOME/.bashrc" 2>/dev/null || true
-        _gh_pr_approve_worker "$1"
-    ' -- "$_pr" >"$_log" 2>&1 &
+        _gh_pr_approve_worker "$1" "$2"
+    ' -- "$_pr" "$_ai" >"$_log" 2>&1 &
     _pid=$!
     disown "$_pid" 2>/dev/null || true
     printf '%s\n' "$_pid" >"$_dir/pid"
-    ux_info "#$_pr → pid=$_pid  log=$_log"
+    ux_info "#$_pr → pid=$_pid  ai=$_ai  log=$_log"
 }
 
 # ============================================================================
@@ -204,11 +314,12 @@ _gh_pr_approve_spawn_worker() {
 
 _gh_pr_approve_worker() {
     local _pr="$1"
+    local _ai="${2:-claude}"
     local _dir _worktree _spawn_name
     _dir=$(_gh_pr_approve_pr_dir "$_pr")
     _spawn_name="pr-$_pr"
 
-    printf '[gh-pr-approve-worker] pr=#%s start=%s\n' "$_pr" "$(date -Iseconds 2>/dev/null || date)"
+    printf '[gh-pr-approve-worker] pr=#%s ai=%s start=%s\n' "$_pr" "$_ai" "$(date -Iseconds 2>/dev/null || date)"
 
     # ---- Step 1: spawn worktree ----
     # Snapshot the worktree list before and after `gwt spawn` and diff them
@@ -243,11 +354,11 @@ _gh_pr_approve_worker() {
         return 1
     }
 
-    # ---- Step 2: approve (claude runs /gh-pr-approve <N>) ----
+    # ---- Step 2: approve (selected ai runs /gh-pr-approve <N>) ----
     # Single-shot. The skill either approves with LGTM or files follow-up
     # issues and exits. No polling, no reply loop — that's gh-flow's job.
     _gh_pr_approve_set_state "$_dir" "approving"
-    if ! claude --dangerously-skip-permissions -p "/gh-pr-approve $_pr"; then
+    if ! _gh_pr_approve_run_ai_prompt "$_ai" "/gh-pr-approve $_pr"; then
         _gh_pr_approve_set_state "$_dir" "failed:approving"
         printf '[gh-pr-approve-worker] /gh-pr-approve failed\n' >&2
         return 1
