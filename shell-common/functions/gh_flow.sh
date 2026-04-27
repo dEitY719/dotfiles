@@ -104,23 +104,15 @@ _gh_flow_require_ai_cli() {
 }
 
 # Run one non-interactive prompt with the selected ai runner.
+# Delegates to ai_usage.sh so each invocation appends a usage record
+# (tokens, cost, duration) to <state-dir>/usage.jsonl. A gh-flow worker
+# typically issues 4–6 ai calls per issue (implement, commit, pr, reply
+# on demand, merge); the tail-end _ai_usage_summary aggregates them so
+# the user sees the per-issue total — which was the missing signal
+# behind the "10-minute MAX quota burn" incident.
 _gh_flow_run_ai_prompt() {
-    local _ai="$1" _prompt="$2"
-    case "$_ai" in
-    claude)
-        claude --dangerously-skip-permissions -p "$_prompt"
-        ;;
-    codex)
-        codex exec --dangerously-bypass-approvals-and-sandbox "$_prompt"
-        ;;
-    gemini)
-        gemini --yolo -p "$_prompt"
-        ;;
-    *)
-        printf '[gh-flow-worker] invalid ai runner: %s\n' "$_ai" >&2
-        return 1
-        ;;
-    esac
+    local _ai="$1" _usage_log="$2" _label="$3" _prompt="$4"
+    _ai_usage_run "$_ai" "$_usage_log" "$_label" "$_prompt"
 }
 
 # ============================================================================
@@ -282,6 +274,7 @@ gh_flow_help() {
     ux_bullet_sub "pr.number     - PR number"
     ux_bullet_sub "reply.done    - marker (present if reply already ran)"
     ux_bullet_sub "log           - full stdout+stderr"
+    ux_bullet_sub "usage.jsonl   - per-invocation token usage + cost (claude only)"
     ux_info ""
     ux_info "Failure isolation:"
     ux_bullet "One worker failure does not affect others."
@@ -469,9 +462,13 @@ _gh_flow_spawn_worker() {
 _gh_flow_worker() {
     local _issue="$1"
     local _ai="${2:-claude}"
-    local _dir _worktree _pr _spawn_name _decision _comments
+    local _dir _worktree _pr _spawn_name _decision _comments _usage_log
     _dir=$(_gh_flow_issue_dir "$_issue")
     _spawn_name="issue-$_issue"
+    # Resolve the usage log path while still in the main repo: once we cd
+    # into the worktree, _gh_flow_issue_dir would point elsewhere.
+    _usage_log="$_dir/usage.jsonl"
+    : >"$_usage_log"
 
     printf '[gh-flow-worker] issue=#%s ai=%s start=%s\n' "$_issue" "$_ai" "$(date -Iseconds 2>/dev/null || date)"
 
@@ -515,41 +512,47 @@ _gh_flow_worker() {
     # ourselves so each phase has a distinct state + post-condition check.
     _gh_flow_set_state "$_dir" "implementing"
     _gh_project_status_sync issue "$_issue" "In progress"
-    if ! _gh_flow_run_ai_prompt "$_ai" "/gh-issue-implement $_issue direct"; then
+    if ! _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-issue-implement $_issue direct" "/gh-issue-implement $_issue direct"; then
         _gh_flow_set_state "$_dir" "failed:implementing"
         printf '[gh-flow-worker] /gh-issue-implement failed\n' >&2
+        _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: implementing)"
         return 1
     fi
     if ! _gh_flow_has_work_for_commit; then
         _gh_flow_set_state "$_dir" "failed:implementing"
         printf '[gh-flow-worker] /gh-issue-implement produced no changes\n' >&2
+        _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: implementing/no-op)"
         return 1
     fi
 
     # ---- Step 2b: commit (selected ai runs /gh-commit) ----
     _gh_flow_set_state "$_dir" "committing"
-    if ! _gh_flow_run_ai_prompt "$_ai" "/gh-commit"; then
+    if ! _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-commit" "/gh-commit"; then
         _gh_flow_set_state "$_dir" "failed:committing"
         printf '[gh-flow-worker] /gh-commit failed\n' >&2
+        _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: committing)"
         return 1
     fi
     if ! _gh_flow_has_branch_commits; then
         _gh_flow_set_state "$_dir" "failed:committing"
         printf '[gh-flow-worker] /gh-commit left no new commit on branch\n' >&2
+        _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: committing/no-commit)"
         return 1
     fi
 
     # ---- Step 2c: open PR (selected ai runs /gh-pr) ----
     _gh_flow_set_state "$_dir" "opening-pr"
-    if ! _gh_flow_run_ai_prompt "$_ai" "/gh-pr $_issue"; then
+    if ! _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-pr $_issue" "/gh-pr $_issue"; then
         _gh_flow_set_state "$_dir" "failed:opening-pr"
         printf '[gh-flow-worker] /gh-pr failed\n' >&2
+        _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: opening-pr)"
         return 1
     fi
     _pr="$(gh pr view --json number --jq '.number' 2>/dev/null)"
     if [ -z "$_pr" ]; then
         _gh_flow_set_state "$_dir" "failed:opening-pr"
         printf '[gh-flow-worker] /gh-pr did not create a PR\n' >&2
+        _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: opening-pr/no-pr)"
         return 1
     fi
     printf '%s\n' "$_pr" >"$_dir/pr.number"
@@ -577,12 +580,13 @@ _gh_flow_worker() {
             if [ -n "$_comments" ] && [ "$_comments" -gt 0 ]; then
                 _gh_flow_set_state "$_dir" "replying"
                 printf '[gh-flow-worker] running /gh-pr-reply (%s review(s))\n' "$_comments"
-                if _gh_flow_run_ai_prompt "$_ai" "/gh-pr-reply"; then
+                if _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-pr-reply" "/gh-pr-reply"; then
                     touch "$_dir/reply.done"
                     _gh_flow_set_state "$_dir" "polling"
                 else
                     _gh_flow_set_state "$_dir" "failed:replying"
                     printf '[gh-flow-worker] /gh-pr-reply failed\n' >&2
+                    _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: replying)"
                     return 1
                 fi
             fi
@@ -591,9 +595,10 @@ _gh_flow_worker() {
 
     # ---- Step 4: merge ----
     _gh_flow_set_state "$_dir" "merging"
-    if ! _gh_flow_run_ai_prompt "$_ai" "/gh-pr-merge"; then
+    if ! _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-pr-merge" "/gh-pr-merge"; then
         _gh_flow_set_state "$_dir" "failed:merging"
         printf '[gh-flow-worker] /gh-pr-merge failed\n' >&2
+        _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: merging)"
         return 1
     fi
 
@@ -602,11 +607,13 @@ _gh_flow_worker() {
     if ! gwt teardown --force; then
         _gh_flow_set_state "$_dir" "failed:tearing-down"
         printf '[gh-flow-worker] gwt teardown failed\n' >&2
+        _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: tearing-down)"
         return 1
     fi
 
     _gh_flow_set_state "$_dir" "done"
     printf '[gh-flow-worker] done issue=#%s end=%s\n' "$_issue" "$(date -Iseconds 2>/dev/null || date)"
+    _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue)"
 }
 
 # ============================================================================

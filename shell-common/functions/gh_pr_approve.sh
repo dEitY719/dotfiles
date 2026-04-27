@@ -87,23 +87,14 @@ _gh_pr_approve_require_ai_cli() {
 }
 
 # Run one non-interactive prompt with the selected ai runner.
+# Delegates to ai_usage.sh so per-call token usage and cost are appended
+# to <state-dir>/usage.jsonl. The worker tail-prints _ai_usage_summary,
+# which is what made the "100% of MAX quota in 10 minutes" incident
+# previously invisible — every claude `-p` session on a 1M-context Opus
+# default model creates ~33k cache tokens (~$0.20) just to start.
 _gh_pr_approve_run_ai_prompt() {
-    local _ai="$1" _prompt="$2"
-    case "$_ai" in
-        claude)
-            claude --dangerously-skip-permissions -p "$_prompt"
-            ;;
-        codex)
-            codex exec --dangerously-bypass-approvals-and-sandbox "$_prompt"
-            ;;
-        gemini)
-            gemini --yolo -p "$_prompt"
-            ;;
-        *)
-            printf '[gh-pr-approve-worker] invalid ai runner: %s\n' "$_ai" >&2
-            return 1
-            ;;
-    esac
+    local _ai="$1" _usage_log="$2" _label="$3" _prompt="$4"
+    _ai_usage_run "$_ai" "$_usage_log" "$_label" "$_prompt"
 }
 
 # ============================================================================
@@ -133,6 +124,7 @@ gh_pr_approve_help() {
     ux_bullet_sub "worktree.path - git worktree path"
     ux_bullet_sub "log           - full stdout+stderr"
     ux_bullet_sub "log.prev      - previous run's log (one generation)"
+    ux_bullet_sub "usage.jsonl   - per-invocation token usage + cost (claude only)"
     ux_info ""
     ux_info "Failure isolation:"
     ux_bullet "One worker failure does not affect others."
@@ -315,9 +307,13 @@ _gh_pr_approve_spawn_worker() {
 _gh_pr_approve_worker() {
     local _pr="$1"
     local _ai="${2:-claude}"
-    local _dir _worktree _spawn_name
+    local _dir _worktree _spawn_name _usage_log
     _dir=$(_gh_pr_approve_pr_dir "$_pr")
     _spawn_name="pr-$_pr"
+    # Resolve the usage log path while still in the main repo: once we cd
+    # into the worktree, _gh_pr_approve_pr_dir would point elsewhere.
+    _usage_log="$_dir/usage.jsonl"
+    : >"$_usage_log"
 
     printf '[gh-pr-approve-worker] pr=#%s ai=%s start=%s\n' "$_pr" "$_ai" "$(date -Iseconds 2>/dev/null || date)"
 
@@ -358,9 +354,12 @@ _gh_pr_approve_worker() {
     # Single-shot. The skill either approves with LGTM or files follow-up
     # issues and exits. No polling, no reply loop — that's gh-flow's job.
     _gh_pr_approve_set_state "$_dir" "approving"
-    if ! _gh_pr_approve_run_ai_prompt "$_ai" "/gh-pr-approve $_pr"; then
+    if ! _gh_pr_approve_run_ai_prompt "$_ai" "$_usage_log" "/gh-pr-approve $_pr" "/gh-pr-approve $_pr"; then
         _gh_pr_approve_set_state "$_dir" "failed:approving"
         printf '[gh-pr-approve-worker] /gh-pr-approve failed\n' >&2
+        # Print usage even on failure — knowing how much quota a failed
+        # call consumed is half the reason this tracking exists.
+        _ai_usage_summary "$_usage_log" "Token Usage (PR #$_pr — failed)"
         return 1
     fi
 
@@ -371,11 +370,13 @@ _gh_pr_approve_worker() {
     if ! gwt teardown --force; then
         _gh_pr_approve_set_state "$_dir" "failed:tearing-down"
         printf '[gh-pr-approve-worker] gwt teardown failed\n' >&2
+        _ai_usage_summary "$_usage_log" "Token Usage (PR #$_pr — teardown failed)"
         return 1
     fi
 
     _gh_pr_approve_set_state "$_dir" "done"
     printf '[gh-pr-approve-worker] done pr=#%s end=%s\n' "$_pr" "$(date -Iseconds 2>/dev/null || date)"
+    _ai_usage_summary "$_usage_log" "Token Usage (PR #$_pr)"
 }
 
 # ============================================================================
