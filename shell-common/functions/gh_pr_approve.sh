@@ -124,7 +124,7 @@ gh_pr_approve_help() {
     ux_bullet_sub "worktree.path - git worktree path"
     ux_bullet_sub "log           - full stdout+stderr"
     ux_bullet_sub "log.prev      - previous run's log (one generation)"
-    ux_bullet_sub "usage.jsonl   - per-invocation token usage + cost (claude only)"
+    ux_bullet_sub "usage.jsonl   - per-invocation token usage (claude + codex + gemini)"
     ux_info ""
     ux_info "Failure isolation:"
     ux_bullet "One worker failure does not affect others."

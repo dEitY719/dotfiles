@@ -274,7 +274,7 @@ gh_flow_help() {
     ux_bullet_sub "pr.number     - PR number"
     ux_bullet_sub "reply.done    - marker (present if reply already ran)"
     ux_bullet_sub "log           - full stdout+stderr"
-    ux_bullet_sub "usage.jsonl   - per-invocation token usage + cost (claude only)"
+    ux_bullet_sub "usage.jsonl   - per-invocation token usage (claude + codex + gemini)"
     ux_info ""
     ux_info "Failure isolation:"
     ux_bullet "One worker failure does not affect others."
