@@ -14,6 +14,12 @@
 #     ~/.codex/skills/.system                          ← local (codex managed)
 #     ~/.codex/skills/<custom-skill>                   → ~/dotfiles/claude/skills/<custom-skill>
 #
+#   - Codex 선택적 연결: claude/skills/.codex-allowlist 가 존재하고 비어 있지 않으면
+#     해당 파일에 나열된 skill 만 연결되고 나머지 SSOT skill 은 codex 관리 대상에서 제거됨.
+#     description 합계가 Codex 의 2% 컨텍스트 예산 (~5440자) 을 초과해 트렁케이션이
+#     발생하는 것을 막는 용도. 한 줄에 하나의 skill 디렉토리 이름, '#' 으로 시작하는
+#     주석과 빈 줄은 무시됨. 파일이 없거나 모두 비어 있으면 종전대로 전체 연결.
+#
 # ~/.claude/skills 는 claude/setup.sh (bind mount) 가 관리
 
 # --- Constants ---
@@ -38,8 +44,45 @@ log_warning() { ux_warning "$1"; }
 log_critical() { ux_error "$1"; exit 1; }
 
 CODEX_MANAGED_MARKER=".dotfiles-skill-source"
+CODEX_ALLOWLIST_FILE="${SKILLS_SOURCE}/.codex-allowlist"
 
 # --- Helper Functions ---
+
+# Read codex allowlist file and emit one skill name per line.
+# Strips comments (#...) and blank lines. Stdout is empty if no entries
+# were found, allowing callers to detect "no allowlist" via -z check.
+read_codex_allowlist() {
+    local file="${1:-$CODEX_ALLOWLIST_FILE}"
+    [ -f "$file" ] || return 0
+
+    awk '
+        {
+            sub(/#.*/, "")        # strip inline comments
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+            if (length($0) == 0) next
+            print
+        }
+    ' "$file"
+}
+
+# Test whether a skill name is allowed.
+# Args: <skill_name> <allowlist_text>
+# Returns 0 if skill is allowed (allowlist empty OR skill listed), 1 otherwise.
+codex_skill_is_allowed() {
+    local skill="$1"
+    local allowlist="$2"
+
+    [ -z "$allowlist" ] && return 0
+
+    case "
+${allowlist}
+" in
+        *"
+${skill}
+"*) return 0 ;;
+    esac
+    return 1
+}
 
 collect_codex_homes() {
     local default_config_home
@@ -143,15 +186,18 @@ link_skills_individual() {
 # - .system 은 로컬 보존
 # - custom skill 은 디렉토리 symlink (SSOT 직결)
 # - 기존 copy/marker 레이아웃(.dotfiles-skill-source)은 자동 마이그레이션
-# Usage: link_skills_individual_codex <target_dir>
+# - allowlist 가 존재하면 그 안에 명시된 skill 만 연결 (Codex 컨텍스트 예산 보호)
+# Usage: link_skills_individual_codex <target_dir> [allowlist_text]
 link_skills_individual_codex() {
     local target_dir="$1"
+    local allowlist="${2:-}"
     local linked=0
     local unchanged=0
     local migrated=0
     local skipped=0
     local pruned=0
     local prune_skipped=0
+    local excluded=0
     local source_root
     source_root="$(readlink -f "$SKILLS_SOURCE")"
 
@@ -163,6 +209,11 @@ link_skills_individual_codex() {
         local skill_name
         skill_name="$(basename "$skill_path")"
         if [ "$skill_name" = ".system" ]; then
+            continue
+        fi
+
+        if ! codex_skill_is_allowed "$skill_name" "$allowlist"; then
+            excluded=$((excluded + 1))
             continue
         fi
 
@@ -255,7 +306,8 @@ link_skills_individual_codex() {
             continue
         fi
 
-        if [ -d "${SKILLS_SOURCE}/${existing_name}" ]; then
+        if [ -d "${SKILLS_SOURCE}/${existing_name}" ] && \
+           codex_skill_is_allowed "$existing_name" "$allowlist"; then
             continue
         fi
 
@@ -291,7 +343,11 @@ link_skills_individual_codex() {
         prune_skipped=$((prune_skipped + 1))
     done
 
-    log_info "[codex] skill 연결 완료: ${linked}개 신규, ${unchanged}개 유지, ${migrated}개 마이그레이션, ${skipped}개 보존, ${pruned}개 정리, ${prune_skipped}개 stale 보존"
+    if [ -n "$allowlist" ]; then
+        log_info "[codex] skill 연결 완료: ${linked}개 신규, ${unchanged}개 유지, ${migrated}개 마이그레이션, ${skipped}개 보존, ${pruned}개 정리, ${prune_skipped}개 stale 보존, ${excluded}개 allowlist 제외"
+    else
+        log_info "[codex] skill 연결 완료: ${linked}개 신규, ${unchanged}개 유지, ${migrated}개 마이그레이션, ${skipped}개 보존, ${pruned}개 정리, ${prune_skipped}개 stale 보존"
+    fi
 }
 
 # --- Main ---
@@ -311,11 +367,17 @@ else
     link_skills_dir "opencode" "$OPENCODE_SKILLS"
 fi
 
-# 2. Codex: .system 보존 + custom skill 디렉토리 symlink
+# 2. Codex: .system 보존 + custom skill 디렉토리 symlink (선택적 allowlist 적용)
 CODEX_HOME_LIST="$(collect_codex_homes)"
 if [ -z "$CODEX_HOME_LIST" ]; then
     log_warning "Codex 설정 디렉토리가 없습니다. 건너뜁니다: ~/.codex 또는 ~/.config/codex"
 else
+    CODEX_ALLOWLIST_TEXT="$(read_codex_allowlist "$CODEX_ALLOWLIST_FILE")"
+    if [ -n "$CODEX_ALLOWLIST_TEXT" ]; then
+        codex_allowlist_count="$(printf '%s\n' "$CODEX_ALLOWLIST_TEXT" | grep -c .)"
+        log_info "[codex] allowlist 적용: ${codex_allowlist_count}개 skill (출처: $CODEX_ALLOWLIST_FILE)"
+    fi
+
     while IFS= read -r codex_home; do
         [ -n "$codex_home" ] || continue
 
@@ -337,7 +399,7 @@ else
 
         if [ "$codex_can_manage" -eq 1 ]; then
             mkdir -p "$CODEX_SKILLS"
-            link_skills_individual_codex "$CODEX_SKILLS"
+            link_skills_individual_codex "$CODEX_SKILLS" "$CODEX_ALLOWLIST_TEXT"
         fi
     done <<< "$CODEX_HOME_LIST"
 fi
