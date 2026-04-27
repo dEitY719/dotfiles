@@ -12,10 +12,10 @@
 #
 # Format of usage.jsonl: one JSON object per ai invocation. For the
 # `claude` runner we store the full upstream `usage`, `total_cost_usd`,
-# and timing fields (everything is parseable by jq). For `codex` and
-# `gemini` we currently only record exit code — neither CLI exposes
-# usage in a stable parseable form, so we mark `tracking:"unsupported"`
-# rather than fabricate numbers.
+# and timing fields (everything is parseable by jq). `codex` exposes
+# turn-completion usage via `--json`, so we normalize that into the same
+# usage shape. `gemini` still only records exit code because its CLI
+# does not expose a stable parseable usage block here.
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -59,12 +59,15 @@ _ai_usage_now() {
 #   the usage log. Returns 1 if the upstream `is_error` flag is true,
 #   otherwise the CLI exit code (so the worker's "skill failed" branch
 #   still triggers correctly).
-# - codex/gemini: invoked unchanged; we append a minimal record with
+# - codex: invoked with `--json`; we capture the JSONL transcript to a
+#   tempfile, echo the final assistant message for log readability, and
+#   append a normalized usage record when `turn.completed.usage` exists.
+# - gemini: invoked unchanged; we append a minimal record with
 #   tracking:"unsupported" so the summary clearly says we have no
 #   numbers for those calls (rather than silently reporting 0 tokens).
 _ai_usage_run() {
     local _ai="$1" _log="$2" _label="$3" _prompt="$4"
-    local _tmp _ec _is_error _now
+    local _tmp _tmp_msg _ec _is_error _now
 
     if [ -z "$_ai" ] || [ -z "$_log" ]; then
         printf '[ai-usage] internal error: _ai_usage_run requires <ai> <log> <label> <prompt>\n' >&2
@@ -142,13 +145,66 @@ _ai_usage_run() {
         return 0
         ;;
     codex)
-        codex exec --dangerously-bypass-approvals-and-sandbox "$_prompt"
+        _tmp=$(mktemp -t ai_usage_codex.XXXXXX) || {
+            printf '[ai-usage] mktemp failed; running codex without tracking\n' >&2
+            codex exec --dangerously-bypass-approvals-and-sandbox "$_prompt"
+            return $?
+        }
+        _tmp_msg=$(mktemp -t ai_usage_codex_msg.XXXXXX) || {
+            rm -f "$_tmp"
+            printf '[ai-usage] mktemp failed; running codex without tracking\n' >&2
+            codex exec --dangerously-bypass-approvals-and-sandbox "$_prompt"
+            return $?
+        }
+
+        codex exec \
+            --json \
+            --output-last-message "$_tmp_msg" \
+            --dangerously-bypass-approvals-and-sandbox \
+            "$_prompt" >"$_tmp"
         _ec=$?
-        printf '{"ai":"codex","ts":"%s","label":%s,"exit_code":%d,"tracking":"unsupported"}\n' \
-            "$_now" \
-            "$(printf '%s' "$_label" | jq -Rsc . 2>/dev/null || printf '"%s"' "$_label")" \
-            "$_ec" >>"$_log"
-        return $_ec
+
+        if [ -s "$_tmp_msg" ]; then
+            cat "$_tmp_msg"
+        fi
+
+        if [ "$_ec" -ne 0 ] || ! [ -s "$_tmp" ]; then
+            printf '{"ai":"codex","ts":"%s","label":%s,"exit_code":%d,"tracking":"cli_failed"}\n' \
+                "$_now" \
+                "$(printf '%s' "$_label" | jq -Rsc . 2>/dev/null || printf '"%s"' "$_label")" \
+                "$_ec" >>"$_log"
+            jq -r 'select(.type == "error") | .message // empty' <"$_tmp" 2>/dev/null >&2
+            rm -f "$_tmp" "$_tmp_msg"
+            return $_ec
+        fi
+
+        if jq -e 'select(.type == "turn.completed" and (.usage | type == "object"))' <"$_tmp" >/dev/null 2>&1; then
+            jq -cs \
+                --arg ts "$_now" \
+                --arg label "$_label" \
+                'map(select(.type == "turn.completed" and (.usage | type == "object"))) | last as $done
+                | {
+                    ai: "codex",
+                    ts: $ts,
+                    label: $label,
+                    exit_code: 0,
+                    tracking: "usage",
+                    usage: {
+                        input_tokens: ($done.usage.input_tokens // 0),
+                        cache_creation_input_tokens: 0,
+                        cache_read_input_tokens: ($done.usage.cached_input_tokens // 0),
+                        output_tokens: ($done.usage.output_tokens // 0)
+                    }
+                }' <"$_tmp" >>"$_log" 2>/dev/null
+        else
+            printf '{"ai":"codex","ts":"%s","label":%s,"exit_code":%d,"tracking":"usage_missing"}\n' \
+                "$_now" \
+                "$(printf '%s' "$_label" | jq -Rsc . 2>/dev/null || printf '"%s"' "$_label")" \
+                "$_ec" >>"$_log"
+        fi
+
+        rm -f "$_tmp" "$_tmp_msg"
+        return 0
         ;;
     gemini)
         gemini --yolo -p "$_prompt"
@@ -189,31 +245,34 @@ _ai_usage_summary() {
         return 0
     fi
 
-    # One pass with jq -s aggregates only valid claude records. Failed
-    # claude runs (is_error=true OR tracking=cli_failed) are reported in
-    # a separate counter so users notice when "0 tokens, $0 cost" is
-    # because the call exploded, not because the call was efficient.
+    # One pass with jq -s aggregates every record that actually contains a
+    # normalized usage block. That includes assistant-side failures with
+    # usage (still billable) and excludes pure CLI failures where the tool
+    # died before we received usage. Invocation counts stay split so users
+    # can distinguish successful runs from failed-but-billed ones.
     local _summary
     _summary=$(jq -s '
-        # Parens around `.tracking // ""` matter: jq parses
-        # `.tracking // "" == "x"` as `.tracking // ("" == "x")`,
-        # which silently flipped ok/err counts in the first cut.
-        [.[] | select(.ai == "claude" and ((.is_error // false) | not) and ((.tracking // "") != "cli_failed"))] as $ok
-        | [.[] | select(.ai == "claude" and ((.is_error // false) or ((.tracking // "") == "cli_failed")))] as $err
+        [.[] | select(.ai == "claude" and ((.is_error // false) | not) and ((.tracking // "") != "cli_failed"))] as $claude_ok
+        | [.[] | select(.ai == "claude" and ((.is_error // false) or ((.tracking // "") == "cli_failed")))] as $claude_err
+        | [.[] | select(.ai == "codex" and ((.tracking // "") == "usage"))] as $codex_ok
+        | [.[] | select(.ai == "codex" and ((.tracking // "") != "usage"))] as $codex_err
         | [.[] | select(.tracking == "unsupported")] as $other
+        | [.[] | select((.usage | type?) == "object")] as $tracked
         | {
-            claude_ok: ($ok | length),
-            claude_err: ($err | length),
+            claude_ok: ($claude_ok | length),
+            claude_err: ($claude_err | length),
+            codex_ok: ($codex_ok | length),
+            codex_err: ($codex_err | length),
             other:     ($other | length),
-            input_tokens:   ([$ok[].usage.input_tokens // 0]                | add // 0),
-            cache_creation: ([$ok[].usage.cache_creation_input_tokens // 0] | add // 0),
-            cache_read:     ([$ok[].usage.cache_read_input_tokens // 0]    | add // 0),
-            output_tokens:  ([$ok[].usage.output_tokens // 0]               | add // 0),
-            cost_usd:       ([$ok[].total_cost_usd // 0]                    | add // 0),
-            wall_ms:        ([$ok[].duration_ms // 0]                       | add // 0),
-            api_ms:         ([$ok[].duration_api_ms // 0]                   | add // 0),
-            turns:          ([$ok[].num_turns // 0]                         | add // 0),
-            models:         ([$ok[].modelUsage // {} | keys[]] | unique)
+            input_tokens:   ([$tracked[].usage.input_tokens // 0]                | add // 0),
+            cache_creation: ([$tracked[].usage.cache_creation_input_tokens // 0] | add // 0),
+            cache_read:     ([$tracked[].usage.cache_read_input_tokens // 0]     | add // 0),
+            output_tokens:  ([$tracked[].usage.output_tokens // 0]               | add // 0),
+            cost_usd:       ([.[] | select(.ai == "claude") | .total_cost_usd // 0]  | add // 0),
+            wall_ms:        ([.[] | select(.ai == "claude") | .duration_ms // 0]      | add // 0),
+            api_ms:         ([.[] | select(.ai == "claude") | .duration_api_ms // 0]  | add // 0),
+            turns:          ([.[] | select(.ai == "claude") | .num_turns // 0]        | add // 0),
+            models:         ([.[] | select(.ai == "claude") | .modelUsage // {} | keys[]] | unique)
         }
     ' "$_log" 2>/dev/null)
 
@@ -222,9 +281,11 @@ _ai_usage_summary() {
         return 0
     fi
 
-    local _ok _err _other _in _cc _cr _out _cost _wall _api _turns _models _total_in
-    _ok=$(printf '%s' "$_summary" | jq -r '.claude_ok')
-    _err=$(printf '%s' "$_summary" | jq -r '.claude_err')
+    local _claude_ok _claude_err _codex_ok _codex_err _other _in _cc _cr _out _cost _wall _api _turns _models _total_in
+    _claude_ok=$(printf '%s' "$_summary" | jq -r '.claude_ok')
+    _claude_err=$(printf '%s' "$_summary" | jq -r '.claude_err')
+    _codex_ok=$(printf '%s' "$_summary" | jq -r '.codex_ok')
+    _codex_err=$(printf '%s' "$_summary" | jq -r '.codex_err')
     _other=$(printf '%s' "$_summary" | jq -r '.other')
     _in=$(printf '%s' "$_summary" | jq -r '.input_tokens')
     _cc=$(printf '%s' "$_summary" | jq -r '.cache_creation')
@@ -236,8 +297,7 @@ _ai_usage_summary() {
     _turns=$(printf '%s' "$_summary" | jq -r '.turns')
     _models=$(printf '%s' "$_summary" | jq -r '.models | join(", ")')
 
-    # Bill-relevant total: input + cache_creation + cache_read + output.
-    # Surfacing this lets users sanity-check against the dashboard.
+    # Input-side total: fresh input + cache creation + cache reads.
     _total_in=$((${_in:-0} + ${_cc:-0} + ${_cr:-0}))
 
     # Pre-format the integer/float fields into locals so the printf lines
@@ -256,9 +316,13 @@ _ai_usage_summary() {
     _api_s=$((${_api:-0} / 1000))
 
     printf '─── %s ───\n' "$_label"
-    printf '  Invocations:    claude=%s ok / %s failed' "${_ok:-0}" "${_err:-0}"
+    printf '  Invocations:    claude=%s ok / %s failed · codex=%s ok / %s failed' \
+        "${_claude_ok:-0}" \
+        "${_claude_err:-0}" \
+        "${_codex_ok:-0}" \
+        "${_codex_err:-0}"
     if [ "${_other:-0}" -gt 0 ]; then
-        printf ' · %s untracked (codex/gemini)' "$_other"
+        printf ' · %s untracked (gemini)' "$_other"
     fi
     printf '\n'
     if [ -n "$_models" ] && [ "$_models" != "" ]; then
@@ -269,9 +333,11 @@ _ai_usage_summary() {
     printf '  Cache read:     %s\n'               "$_cr_fmt"
     printf '  Input total:    %s (incl. cache)\n' "$_total_in_fmt"
     printf '  Output tokens:  %s\n'               "$_out_fmt"
-    printf '  Cost (USD):     $%s\n'              "$_cost_fmt"
-    printf '  Wall / API:     %ss / %ss\n'        "$_wall_s" "$_api_s"
-    printf '  Turns:          %s\n'               "${_turns:-0}"
+    printf '  Cost (USD):     $%s (claude only)\n' "$_cost_fmt"
+    if [ "${_wall:-0}" -gt 0 ] || [ "${_api:-0}" -gt 0 ] || [ "${_turns:-0}" -gt 0 ]; then
+        printf '  Wall / API:     %ss / %ss\n'        "$_wall_s" "$_api_s"
+        printf '  Turns:          %s\n'               "${_turns:-0}"
+    fi
     printf '  Log:            %s\n'               "$_log"
     printf '────────────────────────────────────\n'
 }
