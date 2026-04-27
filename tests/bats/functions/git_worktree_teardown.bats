@@ -282,6 +282,42 @@ _squash_merge_branch_into_origin_main() {
     git -C "$CLONE" worktree unlock "$WORKTREE" 2>/dev/null || true
 }
 
+@test "teardown: submodule block explains cause and suggests force" {
+    local sub_origin="$TEST_TEMP_HOME/sub-origin.git"
+    local sub_seed="$TEST_TEMP_HOME/sub-seed"
+    local sub_wt="$TEST_TEMP_HOME/clone-submodule-1"
+
+    git init --bare --initial-branch=main "$sub_origin" >/dev/null
+    git clone -q "$sub_origin" "$sub_seed"
+    (
+        cd "$sub_seed"
+        echo sub > sub.txt
+        git add sub.txt
+        git commit -q -m "sub-base"
+        git push -q origin main
+    )
+    rm -rf "$sub_seed"
+
+    (
+        cd "$CLONE"
+        git checkout -q main
+        git -c protocol.file.allow=always submodule add "$sub_origin" tests/bats/lib/bats-core >/dev/null
+        git commit -q -m "add test submodule"
+        git push -q origin main
+    )
+
+    git -C "$CLONE" worktree add -q -b wt/submodule/1 "$sub_wt" origin/main
+    git -C "$sub_wt" -c protocol.file.allow=always submodule update --init --recursive >/dev/null
+
+    run_in_bash "cd '$sub_wt' && gwt teardown 2>&1"
+    assert_failure
+    assert_output --partial "working trees containing submodules cannot be moved or removed"
+    assert_output --partial "Git blocked removal because this worktree contains submodule"
+    assert_output --partial "Submodules in this repository:"
+    assert_output --partial "tests/bats/lib/bats-core"
+    assert_output --partial "gwt teardown --force"
+}
+
 @test "teardown: on failure, cwd stays in the worktree (not main repo)" {
     # Same locked-worktree scenario as above. After teardown fails, the shell
     # should still be inside $WORKTREE so the user can `git status` without
