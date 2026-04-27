@@ -541,17 +541,30 @@ git_worktree_spawn() {
         fi
     done
 
-    local wt_path="${parent}/${project}-${name}-${next_index}"
-
-    # Branch name
-    local branch
+    # Branch name + path must both be unique. A previous teardown may leave a
+    # branch (e.g., --keep-branch), so don't rely on directory scan alone.
+    local wt_path branch slug=""
     if [ -n "$task" ]; then
-        local slug
         slug=$(printf '%s' "$task" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//' | cut -c1-30)
-        branch="wt/${name}/${next_index}-${slug}"
-    else
-        branch="wt/${name}/${next_index}"
     fi
+    while :; do
+        wt_path="${parent}/${project}-${name}-${next_index}"
+        if [ -n "$slug" ]; then
+            branch="wt/${name}/${next_index}-${slug}"
+        else
+            branch="wt/${name}/${next_index}"
+        fi
+
+        if [ -d "$wt_path" ]; then
+            next_index=$((next_index + 1))
+            continue
+        fi
+        if git rev-parse --verify --quiet "refs/heads/${branch}" >/dev/null 2>&1; then
+            next_index=$((next_index + 1))
+            continue
+        fi
+        break
+    done
 
     # Base ref
     if [ -z "$base" ]; then
