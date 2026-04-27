@@ -292,7 +292,7 @@ _gh_pr_reply_spawn_worker() {
     nohup env DOTFILES_FORCE_INIT=1 bash -c '
         . "$HOME/.bashrc" 2>/dev/null || true
         _gh_pr_reply_worker "$1" "$2"
-    ' -- "$_pr" "$_ai" >"$_log" 2>&1 &
+    ' -- "$_pr" "$_ai" </dev/null >"$_log" 2>&1 &
     _pid=$!
     disown "$_pid" 2>/dev/null || true
     printf '%s\n' "$_pid" >"$_dir/pid"

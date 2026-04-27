@@ -448,7 +448,7 @@ _gh_flow_spawn_worker() {
     nohup env DOTFILES_FORCE_INIT=1 bash -c '
         . "$HOME/.bashrc" 2>/dev/null || true
         _gh_flow_worker "$1" "$2"
-    ' -- "$_issue" "$_ai" >"$_log" 2>&1 &
+    ' -- "$_issue" "$_ai" </dev/null >"$_log" 2>&1 &
     _pid=$!
     disown "$_pid" 2>/dev/null || true
     printf '%s\n' "$_pid" >"$_dir/pid"
