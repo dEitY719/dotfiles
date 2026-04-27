@@ -27,7 +27,7 @@ N개 이슈를 동시에 처리할 때 이 전 과정을 반복해야 해 집중
 ## 2. 목표 / 비목표
 
 ### 목표
-- 한 커맨드 `gh-flow <N> [<N2> ...]` 로 N개 이슈를 **병렬**로 전과정 자동화
+- 한 커맨드 `gh-flow <N> [<N2> ...] [--ai <claude|codex|gemini>]` 로 N개 이슈를 **병렬**로 전과정 자동화
 - **Fire-and-forget** — 커맨드 치고 자리 떠나도 됨, 결과는 칸반 보드에서 확인
 - 리뷰 대기 중 claude 세션 **0개** 유지 (토큰/메모리 소모 없음)
 - 실패 **격리** — 한 worker가 깨져도 다른 N-1개는 계속 진행
@@ -57,13 +57,13 @@ N개 이슈를 동시에 처리할 때 이 전 과정을 반복해야 해 집중
 각 worker 생명주기:
   1. gwt spawn issue-<N>
   2. cd <worktree>
-  3. claude -p "/gh-issue-flow <N>"          # implement → commit → PR
+  3. <ai-runner> -p|exec "/gh-issue-flow <N>" # implement → commit → PR
   4. poll 루프 (60s 간격):
        · gh pr view --json reviewDecision
        · APPROVED → loop 탈출
-       · 리뷰 코멘트 존재 AND reply 미수행 → claude -p "/gh-pr-reply" 1회 실행
+       · 리뷰 코멘트 존재 AND reply 미수행 → <ai-runner> "/gh-pr-reply" 1회 실행
        · 그 외: 계속 polling
-  5. claude -p "/gh-pr-merge"
+  5. <ai-runner> "/gh-pr-merge"
   6. gwt teardown
   7. exit
 
@@ -87,17 +87,21 @@ N개 이슈를 동시에 처리할 때 이 전 과정을 반복해야 해 집중
 POSIX 쉘 파일. bash/zsh에서 sourcing됨. 다음을 정의:
 
 - **`gh-flow`** (함수): 오케스트레이터
-  - Args: `<issue-number>... | -h|--help`
+  - Args: `<issue-number>... [--ai <claude|codex|gemini>] | -h|--help`
   - 전제: 메인 repo 내부 (worktree 아님), `gh` 인증됨
   - 동작: 각 이슈에 대해 `_gh_flow_worker`를 `nohup bash -c '...' &` 로 fork + `disown`
   - 출력: `ux_info "Spawned worker for #13 (pid=12345, log=...)"` 를 N번
   - 종료: 즉시 (백그라운드 워커는 살아있음)
+  - 기본 실행 주체: `claude` (옵션 미지정 시)
 
 - **`_gh_flow_worker`** (함수): worker 본체
   - Args: `<issue-number>`
   - 호출 경로: nohup된 서브셸이 `gh_flow.sh`를 source한 뒤 이 함수 호출
   - 단계별 실패 시 `state` 파일에 `failed:<step>` 쓰고 비정상 종료 (worktree 안 지움)
-  - 각 claude 호출은 `claude --dangerously-skip-permissions -p "<slash-command>"` 형태
+- 실행 주체별 호출 규칙:
+  - `claude` → `claude --dangerously-skip-permissions -p "<slash-command>"`
+  - `codex` → `codex exec --dangerously-bypass-approvals-and-sandbox "<slash-command>"`
+  - `gemini` → `gemini --yolo -p "<slash-command>"`
 
 - **`_gh_flow_poll_reviews`** (헬퍼 함수): PR 리뷰 상태 조회
   - Args: `<pr-number>`
@@ -230,6 +234,8 @@ docs/feature/gh-flow-automation/design.md  # 본 문서
 # 기본
 gh-flow 13                    # 단일 이슈
 gh-flow 13 42 88              # 3개 병렬
+gh-flow 33 --ai codex         # codex 실행
+gh-flow --ai gemini 44        # gemini 실행
 
 # 옵션
 gh-flow --help                # 도움말

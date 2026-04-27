@@ -17,7 +17,7 @@ load '../test_helper'
 # `git rev-parse --show-toplevel`.
 _setup_fake_repo() {
     export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@test \
-           GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@test
+        GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@test
     REPO_DIR="$TEST_TEMP_HOME/repo"
     mkdir -p "$REPO_DIR"
     git -C "$REPO_DIR" init --initial-branch=main -q
@@ -56,6 +56,8 @@ teardown() {
     assert_success
     assert_output --partial "gh-flow status"
     assert_output --partial "gh-flow prune"
+    assert_output --partial "--ai"
+    assert_output --partial "claude (default) | codex | gemini"
     # New distinct failure states must be documented.
     assert_output --partial "failed:committing"
     assert_output --partial "failed:opening-pr"
@@ -175,6 +177,19 @@ teardown() {
     # The error should point users to the subcommands.
     assert_output --partial "status"
     assert_output --partial "prune"
+}
+
+@test "dispatcher: invalid --ai value fails before worker spawn" {
+    run_in_bash "cd '$REPO_DIR' && gh_flow 13 --ai not-supported 2>&1"
+    assert_failure
+    assert_output --partial "invalid --ai value"
+    assert_output --partial "claude, codex, gemini"
+}
+
+@test "dispatcher: --ai without value fails with clear message" {
+    run_in_bash "cd '$REPO_DIR' && gh_flow 13 --ai 2>&1"
+    assert_failure
+    assert_output --partial "--ai requires a value"
 }
 
 # ---------------------------------------------------------------------------
