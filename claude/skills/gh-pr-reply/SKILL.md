@@ -71,7 +71,7 @@ asked) and report new commit SHAs alongside the reply summary.
 ## Step 7: Sync Project Board Status
 
 Read `references/project-board-sync.md` and run the helper to push the PR's
-project card to `Approved` (no-op when no projectV2 board is attached).
+project card to `Approved` (no-op when no `projectV2` board is attached).
 
 ## Step 8: Report
 
