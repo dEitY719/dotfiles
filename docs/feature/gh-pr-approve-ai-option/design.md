@@ -86,7 +86,7 @@ gh-pr-approve --ai gemini '#56' '#78'    # gemini + #prefix
 AI별 명령 매핑:
 - `claude`: `claude --dangerously-skip-permissions -p "<prompt>"`
 - `codex`: `codex exec --dangerously-bypass-approvals-and-sandbox "<prompt>"`
-- `gemini`: `gemini --yolo -p "<prompt>"`
+- `gemini`: `gemini --approval-mode=yolo --skip-trust -p "<prompt>"`
 
 ### 4.4 가시성
 
