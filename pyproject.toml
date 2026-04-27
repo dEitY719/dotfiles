@@ -109,7 +109,7 @@ exclude = '(?x)( \.venv/ | \.tox/ | \.vscode/ | \.git/ | build/ | config/tox/ | 
 [tool.ruff]
 line-length = 120
 target-version = "py310"
-exclude = [".git", ".mypy_cache", ".tox", ".nox", ".venv", "build", "dist", ".vscode"]
+exclude = [".git", ".mypy_cache", ".tox", ".nox", ".venv", "build", "dist", ".vscode", "tests/bats/lib"]
 
 [tool.ruff.lint]
 # E, F: pyflakes/pycodestyle 기본 규칙
