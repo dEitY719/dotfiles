@@ -684,15 +684,26 @@ _gwt_report_unpushed() {
     local main_ref="origin/main"
     git rev-parse --verify --quiet "$main_ref" >/dev/null 2>&1 || main_ref="origin/master"
 
-    local upstream ahead
+    local upstream ahead remote_branch_ref remote_branch_exists
     upstream="$(git rev-parse --abbrev-ref '@{u}' 2>/dev/null || echo "(none)")"
     ahead="$(git rev-list --count "$main_ref"..HEAD 2>/dev/null || echo "?")"
+    remote_branch_ref="origin/$branch"
+    if git rev-parse --verify --quiet "refs/remotes/$remote_branch_ref" >/dev/null 2>&1; then
+        remote_branch_exists=true
+    else
+        remote_branch_exists=false
+    fi
 
-    ux_error "Unpushed commits on '$branch' ($ahead ahead of $main_ref, upstream: $upstream)."
-    ux_info "  Push:   git push -u origin $branch"
-    ux_info "  Or:     gwt teardown --force   # discard the unpushed commits"
+    ux_error "Local commits on '$branch' are not in $main_ref ($ahead ahead, upstream: $upstream)."
+    if [ "$remote_branch_exists" = true ]; then
+        ux_info "  Remote branch exists: $remote_branch_ref"
+        ux_info "  Next:   merge/cherry-pick these commits, or use --force to discard locally."
+    else
+        ux_info "  Push:   git push -u origin $branch"
+    fi
+    ux_info "  Or:     gwt teardown --force   # discard local commits in this worktree"
     if [ "$ahead" != "?" ] && [ "$ahead" != "0" ]; then
-        ux_info "  Unpushed commits (newest first):"
+        ux_info "  Commits not in $main_ref (newest first):"
         git log --no-color --format='    %h %s' "$main_ref"..HEAD 2>/dev/null | head -10
     fi
 }
@@ -845,7 +856,7 @@ _gwt_teardown_one_inplace() {
     # misleading "network?" blurb. Real reason (auth, hook, URL, etc.) wins.
     local _gwt_fetch_err_file="${TMPDIR:-/tmp}/gwt-fetch.$$.err"
     if ! git fetch origin 2>"$_gwt_fetch_err_file" >/dev/null; then
-        ux_warning "git fetch origin failed — merge status check may be stale."
+        ux_warning "git fetch origin failed (non-blocking); using local refs for safety checks."
         if [ -s "$_gwt_fetch_err_file" ]; then
             sed 's/^/    /' "$_gwt_fetch_err_file" >&2
         fi
@@ -918,13 +929,13 @@ _gwt_teardown_one_inplace() {
 $_gwt_submodule_paths
 EOF
             fi
-            ux_info "  If worktree-local submodule state is disposable:"
-            ux_info "    gwt teardown --force"
-        fi
-        if [ "$force" != true ]; then
-            ux_info "  Inspect:  git status --short"
-            ux_info "  Clean:    git clean -fd"
+            ux_info "  If worktree-local submodule state is disposable, rerun:"
+            ux_info "    cd \"$wt_path\" && gwt teardown --force"
+        elif [ "$force" != true ]; then
+            ux_info "  Inspect:  git -C \"$wt_path\" status --short"
+            ux_info "  Clean:    git -C \"$wt_path\" clean -fd"
             ux_info "  Override: gwt teardown --force"
+            ux_info "            (run from inside: $wt_path)"
         fi
         rm -f "$_gwt_rm_err_file"
         cd "$wt_path" 2>/dev/null || true
