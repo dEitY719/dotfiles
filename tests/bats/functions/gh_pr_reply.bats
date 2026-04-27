@@ -100,6 +100,16 @@ teardown() {
     assert_output --partial "preserved"
 }
 
+@test "bash: help documents --ai option and supported runners" {
+    # Issue #215 contract: --ai must be discoverable from help, with
+    # the explicit list of supported agents. If users don't see codex
+    # / gemini in help they have no way to know the option exists.
+    run_in_bash 'gh_pr_reply --help 2>&1'
+    assert_success
+    assert_output --partial "--ai"
+    assert_output --partial "claude (default) | codex | gemini"
+}
+
 # ---------------------------------------------------------------------------
 # Argument validation — must fail before any spawn attempt
 # ---------------------------------------------------------------------------
@@ -147,6 +157,80 @@ teardown() {
 # ---------------------------------------------------------------------------
 # Idempotency — failed runs must not be auto-resumed
 # ---------------------------------------------------------------------------
+
+@test "bash: --ai without value fails with clear message" {
+    # Trailing --ai with nothing after it is a common typo. The parser
+    # must catch it before any worker is spawned and must say what
+    # values are accepted, otherwise the user can't tell the option
+    # from a parser bug.
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_reply 42 --ai 2>&1"
+    assert_failure
+    assert_output --partial "--ai requires a value"
+    assert_output --partial "claude|codex|gemini"
+}
+
+@test "bash: invalid --ai value is rejected with allowed list" {
+    # Misspellings ('claud', 'gpt') must be rejected with the explicit
+    # allowed list so the user can fix the typo without grepping the
+    # source. Same UX as gh-flow #208.
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_reply 42 --ai not-supported 2>&1"
+    assert_failure
+    assert_output --partial "invalid --ai value"
+    assert_output --partial "claude|codex|gemini"
+}
+
+@test "bash: unknown long option is rejected" {
+    # Anything starting with '-' that isn't --ai|-h|--help|help is a
+    # caller error. Catching it pre-spawn prevents nohup'd workers
+    # from inheriting nonsense flags.
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_reply --bogus 42 2>&1"
+    assert_failure
+    assert_output --partial "unknown option"
+}
+
+@test "bash: --ai codex is accepted by the parser (no parser-level error)" {
+    # The codex CLI is not installed in the test environment, so the
+    # call will fail somewhere downstream. What we're asserting here
+    # is that it does NOT fail with a parse-time '--ai' rejection
+    # message — i.e. 'codex' is a recognised value.
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_reply 42 --ai codex 2>&1 || true"
+    refute_output --partial "invalid --ai value"
+    refute_output --partial "--ai requires a value"
+    refute_output --partial "unknown option"
+}
+
+@test "bash: --ai gemini with leading position is accepted" {
+    # Per issue #215 example: `gh-pr-reply --ai gemini '#56' '#78'` —
+    # --ai before PR numbers must parse just as well as after them.
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_reply --ai gemini 42 2>&1 || true"
+    refute_output --partial "invalid --ai value"
+    refute_output --partial "--ai requires a value"
+    refute_output --partial "unknown option"
+}
+
+@test "bash: --ai=value form is accepted" {
+    # Optional --ai=<value> form mirrors gh-flow's parser. Same
+    # parser-level success criterion as the space-separated form.
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_reply 42 --ai=codex 2>&1 || true"
+    refute_output --partial "invalid --ai value"
+    refute_output --partial "--ai requires a value"
+    refute_output --partial "unknown option"
+}
+
+@test "bash: failed-run guard still applies on --ai path" {
+    # The data-loss-prevention guarantee (failed:* must not auto-resume)
+    # is invariant across ai runners — switching --ai must not silently
+    # bypass the inspection step that protects unpushed commits.
+    # Use --ai claude here so we exercise the parser path without
+    # requiring codex/gemini to be installed in the test env.
+    local _state_dir="$HOME/.local/state/gh-pr-reply/fake-main/42"
+    mkdir -p "$_state_dir"
+    printf 'failed:replying\n' >"$_state_dir/state"
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_reply 42 --ai claude 2>&1"
+    assert_success
+    assert_output --partial "previous run failed"
+    assert_output --partial "rm -rf"
+}
 
 @test "bash: refuses to auto-resume a previously failed run" {
     # Distinguishing behavior of gh-pr-reply vs gh-pr-approve. Because
