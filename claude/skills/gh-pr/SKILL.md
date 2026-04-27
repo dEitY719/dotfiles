@@ -14,8 +14,8 @@ allowed-tools: Bash, Read, Grep
 
 ## Help
 
-If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
-output its content verbatim, then stop. No API calls.
+If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output
+its content verbatim, then stop. No API calls.
 
 ## Role
 
@@ -25,30 +25,31 @@ body. Push the branch if needed. Return the PR URL.
 ## Step 1: Determine Base Branch and State (parallel)
 
 Run in a single message:
+
 - `git rev-parse --abbrev-ref HEAD` — current branch
 - `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` — base
 - `git status`
-- `git fetch origin` — refresh remote refs
-
-Then:
-- `git log --oneline <base>..HEAD` — every commit in the PR range
+- `git fetch origin`
+- `git log --oneline <base>..HEAD` — every commit in the range
 - `git diff <base>...HEAD` — full diff
 - `git rev-parse --symbolic-full-name @{u} 2>/dev/null` — upstream check
 
 **Stop conditions:**
+
 - If current branch equals base branch → tell the user to create a feature
   branch first.
 - If `git log <base>..HEAD` is empty → tell the user there's nothing to PR.
 
 ## Step 2: Analyze ALL Commits in the Range
 
-Critical: the PR body must reflect **every commit** in the range, not just
-the latest one. Read `git log <base>..HEAD` output and group changes by
-theme. A 5-commit PR should mention all 5 concerns, not just HEAD's change.
+The PR body must reflect **every commit** in the range, not just the latest.
+Read `git log <base>..HEAD` output and group changes by theme. A 5-commit PR
+mentions all 5 concerns.
 
 ## Step 3: Resolve the Issue Number
 
 Same precedence as `gh:commit`:
+
 1. Explicit argument on `/gh:pr` (e.g., `/gh:pr 123`)
 2. Scan recent conversation for `#N` or `Issue #N created`
 3. Scan commit messages in the range for `Refs #N` / `Closes #N` / `Fixes #N`
@@ -57,44 +58,26 @@ Same precedence as `gh:commit`:
 ## Step 4: Draft Title and Body
 
 Read `references/pr-body-template.md` for title rules, body structure, and
-the `gh pr create` command. Match the language of existing commits (Korean
-if commits are Korean).
+the body markdown. Match the language of existing commits (Korean if commits
+are Korean).
 
 ## Step 5: Push and Create
 
-- If no upstream: `git push -u origin HEAD`
-- If upstream exists and local is ahead: `git push`
-- If upstream is diverged: **stop and ask the user before force-pushing**
-  (never force-push without explicit approval).
-
-Write the body to a unique temp file via `mktemp`, then create the PR with
-`--assignee @me` (always self-assigned). Full command in
-`references/pr-body-template.md`.
+Read `references/push-and-create.md` for the upstream-state push policy and
+the `gh pr create` command (uses `mktemp` body file, `--assignee @me`).
 
 ## Step 6: Apply Labels
 
-Derive labels from conventional-commit types in `git log <base>..HEAD`
-and PR scope (e.g. `skill` for `claude/skills/` changes). Apply only
-labels that exist in the repo (`gh label list`) — never create new ones.
-See `references/pr-body-template.md` for the full mapping + safe-apply loop.
+Derive labels from conventional-commit types in `git log <base>..HEAD` and
+PR scope (e.g. `skill` for `claude/skills/` changes). Apply only labels that
+exist in the repo (`gh label list`) — never create new ones. See
+`references/pr-body-template.md` for the full mapping and safe-apply loop.
 
 ## Step 7: Sync Project Board Status
 
-After the PR is created, push its project-board card to `In review` so
-reviewers see it on the kanban without manual drag. Source the shared
-helper (it lives in `shell-common/functions/gh_project_status.sh`) and
-call it with the new PR number — no guard option, because the PR
-lifecycle is linear and `In review` is the canonical resting state from
-PR open through approval:
-
-```bash
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
-_gh_project_status_sync pr <PR_NUMBER> "In review"
-```
-
-If the repo has no projectV2 board attached (auto-detected — the helper
-finds zero project items and silently returns 0), nothing happens. Opt
-out per-invocation with `GH_PROJECT_STATUS_SYNC=0`.
+Read `references/project-board-sync.md` for the helper-source snippet that
+pushes the new PR's project-board card to `In review`. Auto-skips when no
+projectV2 board is attached.
 
 ## Step 8: Report
 
@@ -104,14 +87,10 @@ Output **only** the PR URL:
 PR created: https://github.com/owner/repo/pull/<N>
 ```
 
-No preamble, no summary of what the PR does — the user opens GitHub directly.
+No preamble, no summary — the user opens GitHub directly.
 
 ## Constraints
 
-- Never force-push without explicit user approval.
-- Never target a base other than the repo's default branch unless the user
-  said so.
-- Never include `🤖 Generated with` or Claude Code footer unless the repo
-  already uses that convention in existing PRs.
-- Never skip commits in the Summary because "they're minor" — the range is
-  the contract.
+Read `references/constraints.md` for hard rules: no force-push without
+approval, default base only, no AI footer unless the repo already uses one,
+never skip commits in the Summary.
