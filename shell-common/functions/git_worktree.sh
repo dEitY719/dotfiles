@@ -889,6 +889,11 @@ _gwt_teardown_one_inplace() {
     fi
 
     if [ "$_gwt_rm_exit" -ne 0 ]; then
+        local _gwt_submodule_blocked=false
+        if grep -q "working trees containing submodules cannot be moved or removed" "$_gwt_rm_err_file" 2>/dev/null; then
+            _gwt_submodule_blocked=true
+        fi
+
         if [ "$force" = true ]; then
             ux_error "Failed to remove worktree: $wt_path"
         else
@@ -897,6 +902,24 @@ _gwt_teardown_one_inplace() {
         if [ -s "$_gwt_rm_err_file" ]; then
             ux_info "  git says:"
             sed 's/^/    /' "$_gwt_rm_err_file" >&2
+        fi
+        if [ "$_gwt_submodule_blocked" = true ]; then
+            ux_warning "  Git blocked removal because this worktree contains submodule(s)."
+            local _gwt_submodule_paths _gwt_submodule_path _gwt_submodule_count=0
+            _gwt_submodule_paths="$(git -C "$wt_path" config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}')"
+            if [ -n "$_gwt_submodule_paths" ]; then
+                ux_info "  Submodules in this repository:"
+                while IFS= read -r _gwt_submodule_path; do
+                    [ -n "$_gwt_submodule_path" ] || continue
+                    ux_info "    - $_gwt_submodule_path"
+                    _gwt_submodule_count=$((_gwt_submodule_count + 1))
+                    [ "$_gwt_submodule_count" -ge 3 ] && break
+                done <<EOF
+$_gwt_submodule_paths
+EOF
+            fi
+            ux_info "  If worktree-local submodule state is disposable:"
+            ux_info "    gwt teardown --force"
         fi
         if [ "$force" != true ]; then
             ux_info "  Inspect:  git status --short"
