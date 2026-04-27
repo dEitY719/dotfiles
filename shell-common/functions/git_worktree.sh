@@ -62,8 +62,9 @@ _gwt_help_rows_spawn() {
 }
 
 _gwt_help_rows_teardown() {
-    ux_table_row "syntax" "gwt teardown [--force] [--keep-branch]" "Cleanup current AI worktree"
-    ux_table_row "context" "Run inside a worktree" "Syncs main repo after cleanup"
+    ux_table_row "syntax" "gwt teardown [--all|-a|all] [--force] [--keep-branch]" "Cleanup AI worktree(s)"
+    ux_table_row "context" "Single mode: run inside a worktree" "Syncs main repo after cleanup"
+    ux_table_row "all mode" "Run from main repo or any worktree" "Tears down every non-main worktree"
     ux_table_row "flags" "--force / --keep-branch" "Discard changes / keep branch"
 }
 
@@ -698,7 +699,7 @@ _gwt_report_unpushed() {
 
 # ============================================================================
 # Worktree teardown — remove worktree, sync main, delete branch, log
-# Usage: git_worktree_teardown [--force] [--keep-branch]
+# Usage: git_worktree_teardown [--all|-a|all] [--force] [--keep-branch]
 # ============================================================================
 git_worktree_teardown() {
     # zsh compatibility
@@ -706,19 +707,22 @@ git_worktree_teardown() {
         emulate -L sh
     fi
 
-    local force=false keep_branch=false
+    local force=false keep_branch=false all_mode=false
 
     while [ $# -gt 0 ]; do
         case "$1" in
             -h|--help)
                 ux_header "gwt teardown - AI worktree cleanup"
-                ux_info "Usage: gwt teardown [--force] [--keep-branch]"
+                ux_info "Usage: gwt teardown [--all|-a|all] [--force] [--keep-branch]"
                 ux_info ""
                 ux_info "Options:"
+                ux_info "  --all, -a, all tear down every non-main worktree (run from main"
+                ux_info "                 repo or inside any worktree)"
                 ux_info "  --force        discard uncommitted changes and force remove"
                 ux_info "  --keep-branch  keep the branch after removing worktree"
                 return 0
                 ;;
+            --all|-a|all) all_mode=true; shift ;;
             --force) force=true; shift ;;
             --keep-branch) keep_branch=true; shift ;;
             -*)
@@ -756,13 +760,50 @@ git_worktree_teardown() {
                     ux_info "Did you mean:"
                     ux_bullet "cd \"$1\" && gwt teardown     # full cleanup: remove + sync main + delete branch"
                     ux_bullet "gwt remove \"$1\"             # remove worktree only (no main sync, no branch delete)"
+                    ux_bullet "gwt teardown --all          # tear down every non-main worktree at once"
                 fi
                 return 1
                 ;;
         esac
     done
 
+    # Batch mode: tear down every non-main worktree.
+    if [ "$all_mode" = true ]; then
+        _gwt_teardown_all "$force" "$keep_branch"
+        return $?
+    fi
+
     # Must be inside a worktree
+    local git_common git_dir
+    git_common="$(git rev-parse --git-common-dir 2>/dev/null)" || {
+        ux_error "Not inside a git repository"; return 1
+    }
+    git_dir="$(git rev-parse --git-dir)"
+    if [ "$git_dir" = "$git_common" ]; then
+        ux_error "Not inside a worktree. Nothing to tear down."
+        ux_info "  Use 'gwt teardown --all' to tear down every linked worktree."
+        return 1
+    fi
+
+    _gwt_teardown_one_inplace "$force" "$keep_branch"
+    return $?
+}
+
+# ============================================================================
+# Internal: tear down the worktree containing $PWD (single-mode pipeline).
+# Caller MUST already be inside the target worktree. Performs pre-flight
+# checks, removes the worktree, ff-syncs main, deletes the branch, logs.
+# Cd's to main repo on success, restores cwd to original worktree on failure.
+# Args: <force> <keep_branch>
+# ============================================================================
+_gwt_teardown_one_inplace() {
+    # zsh compatibility
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
+
+    local force="$1" keep_branch="$2"
+
     local git_common git_dir
     git_common="$(git rev-parse --git-common-dir 2>/dev/null)" || {
         ux_error "Not inside a git repository"; return 1
@@ -943,6 +984,119 @@ git_worktree_teardown() {
     ux_info "  Removed: $wt_path"
     ux_info "  Now on:  $main_branch (out of sync)"
     return 1
+}
+
+# ============================================================================
+# Internal: tear down every non-main worktree (best-effort).
+# Args: <force> <keep_branch>
+# Returns 0 if all teardowns succeed, 1 if any failed (or aborted, or no repo).
+# ============================================================================
+_gwt_teardown_all() {
+    # zsh compatibility
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
+
+    local force="$1" keep_branch="$2"
+
+    # Must be inside a git repo (main or any worktree).
+    # Keep `|| { ...; }` on one line so the closing brace does not appear at
+    # line-start; library_purity_check tracks brace depth via `^\s*\}` and
+    # would otherwise treat this as the enclosing function's close, falsely
+    # flagging the `read -r` below as top-level interactive code.
+    git rev-parse --git-common-dir >/dev/null 2>&1 || { ux_error "Not inside a git repository"; return 1; }
+
+    # Resolve main worktree (first entry of `git worktree list --porcelain`).
+    local main_wt
+    main_wt="$(git worktree list --porcelain | head -1)"
+    main_wt="${main_wt#worktree }"
+
+    # Collect non-main worktree paths.
+    local all_wts="" all_count=0
+    while IFS= read -r line; do
+        case "$line" in
+            "worktree "*)
+                local wt="${line#worktree }"
+                if [ "$wt" != "$main_wt" ]; then
+                    all_wts="${all_wts}${wt}
+"
+                    all_count=$((all_count + 1))
+                fi
+                ;;
+        esac
+    done <<EOF
+$(git worktree list --porcelain)
+EOF
+
+    if [ "$all_count" -eq 0 ]; then
+        ux_info "No worktrees to tear down."
+        return 0
+    fi
+
+    ux_warning "About to tear down $all_count worktree(s):"
+    while IFS= read -r wt; do
+        [ -n "$wt" ] || continue
+        ux_info "  $wt"
+    done <<EOF
+$all_wts
+EOF
+
+    if [ "$force" != true ]; then
+        printf 'Proceed? [y/N] '
+        read -r answer
+        case "$answer" in
+            [yY]*) ;;
+            *) ux_info "Aborted."; return 1 ;;
+        esac
+    fi
+
+    # Park in main repo so loop iterations have a stable cwd between runs.
+    cd "$main_wt" 2>/dev/null || { ux_error "Cannot cd to main repo: $main_wt"; return 1; }
+
+    local ok_count=0 fail_count=0 failed_wts=""
+    while IFS= read -r wt; do
+        [ -n "$wt" ] || continue
+        ux_header "Tearing down: $wt"
+        if [ ! -d "$wt" ]; then
+            ux_warning "  Path missing on disk — skipping (run 'gwt prune' to clean stale refs)."
+            fail_count=$((fail_count + 1))
+            failed_wts="${failed_wts}${wt} (missing)
+"
+            continue
+        fi
+        # Split across lines: naming_check.sh greedy-matches `".*<func>.*"` on
+        # a single line, so keeping `"$wt"` and `"$force"` from sandwiching the
+        # helper name on one physical line avoids a false-positive flag.
+        if ( cd "$wt" \
+             && _gwt_teardown_one_inplace "$force" "$keep_branch" ); then
+            ok_count=$((ok_count + 1))
+        else
+            fail_count=$((fail_count + 1))
+            failed_wts="${failed_wts}${wt}
+"
+        fi
+        # Restore cwd to main_wt — _gwt_teardown_one_inplace ran in subshell,
+        # so caller's cwd is unchanged, but defensively re-anchor.
+        cd "$main_wt" 2>/dev/null || true
+    done <<EOF
+$all_wts
+EOF
+
+    ux_header "Teardown summary"
+    ux_info "  Succeeded: $ok_count"
+    ux_info "  Failed:    $fail_count"
+    if [ "$fail_count" -gt 0 ]; then
+        ux_info "  Failed worktrees:"
+        while IFS= read -r wt; do
+            [ -n "$wt" ] || continue
+            ux_info "    $wt"
+        done <<EOF
+$failed_wts
+EOF
+        return 1
+    fi
+    ux_success "All worktrees torn down."
+    return 0
 }
 
 alias gwt-help='gwt_help'
