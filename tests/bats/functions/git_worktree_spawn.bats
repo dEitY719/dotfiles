@@ -176,6 +176,14 @@ teardown() {
     assert_failure
 }
 
+@test "bash: _gwt_yolo_command --list lists supported agents (SSOT)" {
+    # Co-located with the case body — call sites that print supported agents
+    # must derive from this output to prevent drift from the dispatch table.
+    run_in_bash '_gwt_yolo_command --list'
+    assert_success
+    assert_output "claude, codex, gemini, opencode"
+}
+
 @test "zsh: _gwt_yolo_command claude returns the function, not the alias name" {
     # The actual bug from #243 reproduced under zsh — this test must pass
     # before and after sourcing claude.sh, because we no longer rely on
@@ -207,4 +215,10 @@ teardown() {
 @test "zsh: _gwt_yolo_command rejects unknown agent" {
     run_in_zsh '_gwt_yolo_command notarealagent'
     assert_failure
+}
+
+@test "zsh: _gwt_yolo_command --list lists supported agents (SSOT)" {
+    run_in_zsh '_gwt_yolo_command --list'
+    assert_success
+    assert_output "claude, codex, gemini, opencode"
 }
