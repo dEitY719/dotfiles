@@ -39,10 +39,17 @@ a setup problem and pointing at transient delivery loss (issue #250).
 will auto-close from a merge — they are listed in the PR's
 `closingIssuesReferences` (Closes / Fixes / Resolves keywords).
 
+The closing-issue list comes from a shared helper rather than
+`gh pr view --json closingIssuesReferences`:
+`gh` 2.45.0 (and earlier) does not include `closingIssuesReferences`
+in `pr view --json`'s allow-list and exits with "Unknown JSON field"
+(#264). The `_gh_pr_closing_issue_numbers` helper in
+`shell-common/functions/gh_project_status.sh` issues a direct GraphQL
+query, which is supported across all `gh` versions that ship the
+`api graphql` subcommand.
+
 ```bash
-for _issue in $(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
-                  --json closingIssuesReferences \
-                  --jq '.closingIssuesReferences?[]?.number'); do
+for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$TARGET_REPO"); do
     GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$_issue" "Done" \
         --only-from "Backlog,In progress,In review"
 done
