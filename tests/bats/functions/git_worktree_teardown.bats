@@ -344,6 +344,75 @@ _setup_clone_with_submodule() {
 }
 
 # ---------------------------------------------------------------------------
+# Issue #236: Claude agent worktree locks
+# ---------------------------------------------------------------------------
+
+_dead_pid() {
+    sh -c 'exit 0' &
+    local pid="$!"
+    wait "$pid"
+    printf '%s\n' "$pid"
+}
+
+_worktree_lock_file() {
+    local wt_path="$1"
+    local git_dir
+    git_dir="$(git -C "$wt_path" rev-parse --git-dir)"
+    printf '%s/locked\n' "$git_dir"
+}
+
+@test "teardown: stale Claude agent lock is unlocked and removed without --force" {
+    local stale_pid
+    stale_pid="$(_dead_pid)"
+    git -C "$CLONE" worktree lock --reason "claude agent agent-test (pid $stale_pid)" "$WORKTREE"
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_success
+    assert_output --partial "Stale Claude agent lock detected"
+    assert_output --partial "unlocking worktree"
+    [ ! -d "$WORKTREE" ]
+}
+
+@test "teardown: live Claude agent lock requires --force and uses double force" {
+    git -C "$CLONE" worktree lock --reason "claude agent agent-test (pid $$)" "$WORKTREE"
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown --force 2>&1"
+    assert_success
+    assert_output --partial "Removing Claude agent locked worktree (--force)"
+    [ ! -d "$WORKTREE" ]
+}
+
+@test "teardown: live Claude agent lock without --force explains active session" {
+    git -C "$CLONE" worktree lock --reason "claude agent agent-test (pid $$)" "$WORKTREE"
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
+    assert_output --partial "Claude agent lock is active"
+    assert_output --partial "ps -p $$"
+    assert_output --partial "gwt teardown --force"
+    [ -d "$WORKTREE" ]
+
+    git -C "$CLONE" worktree unlock "$WORKTREE" 2>/dev/null || true
+}
+
+@test "teardown: stale Claude agent lock is unlocked before dirty-worktree guidance" {
+    local stale_pid lock_file
+    stale_pid="$(_dead_pid)"
+    git -C "$CLONE" worktree lock --reason "claude agent agent-test (pid $stale_pid)" "$WORKTREE"
+    lock_file="$(_worktree_lock_file "$WORKTREE")"
+    printf 'dirty\n' >>"$WORKTREE/base.txt"
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
+    assert_output --partial "Stale Claude agent lock detected"
+    assert_output --partial "Uncommitted changes. Commit, stash, or use --force."
+    [ -d "$WORKTREE" ]
+    [ ! -f "$lock_file" ]
+
+    git -C "$WORKTREE" checkout -- base.txt
+}
+
+# ---------------------------------------------------------------------------
 # Issue #204: --all batch teardown
 # ---------------------------------------------------------------------------
 
