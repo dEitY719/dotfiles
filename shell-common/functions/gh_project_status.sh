@@ -225,7 +225,7 @@ _gh_pr_closing_issue_numbers() {
             }
           }
         }' \
-        --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]?.number' \
+        --jq '.data.repository?.pullRequest?.closingIssuesReferences?.nodes[]?.number // empty' \
         2>/dev/null
     return 0
 }
