@@ -133,8 +133,8 @@ GitHub Projects v2의 빌트인 워크플로우 10개 중 9개가 `enabled`
 
 ### 자동 전환 규칙 (스킬 경유)
 
-GitHub 빌트인이 커버하지 않는 세 전환은 dotfiles 의 스킬이
-공용 헬퍼 `_gh_project_status_sync`
+GitHub 빌트인이 커버하지 않거나 누락 시 보강해야 하는 네 전환은
+dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
 (`shell-common/functions/gh_project_status.sh`) 를 통해 자동화한다.
 보드가 없는 repo (예: `dotfiles` 이외의 사이드 프로젝트) 에선 헬퍼가
 `projectItems` 0건을 감지하고 조용히 no-op 하므로 추가 분기가 필요
@@ -165,6 +165,14 @@ GitHub 빌트인이 커버하지 않는 세 전환은 dotfiles 의 스킬이
   스킬에도 이 전환을 자동화하는 경로가 없다. 이 외의 PR 전환
   (`→ Done`) 은 빌트인 `Pull request merged` / `Item closed` 가
   자동 처리한다.
+- **Issue 카드 `In review → Done` (PR-Closes 경로 보강)**:
+  `/gh-pr-merge` 가 머지 직후 PR 의 `closingIssuesReferences` 를
+  순회하며 각 Issue 카드를 `Done` 으로 강제 이동한다. 빌트인
+  `Item closed` 워크플로우는 best-effort delivery 이므로 드물게
+  Status 업데이트 이벤트가 누락되어 Issue 카드가 `In review` 에
+  잔류하는 케이스가 관측된다 (#239 / #250). 본 보강 전환은 그 갭을
+  메우며 `--only-from "Backlog,In progress,In review"` 가드로
+  이미 `Done` 상태인 카드를 다시 건드리지 않는다.
 
 ### 용어 교정 (2026-04-24)
 
@@ -242,10 +250,16 @@ gh auth refresh -s project
   영원히 트리거되지 않는 갭을 메우기 위함). `In progress → In
   review` (`Changes requested` 루프 탈출 시) 전환만 항상 수동이다
   — 빌트인·스킬 모두 이 경로를 자동화하지 않는다.
-- 보드가 없는 repo 에서 `/gh-pr`, `/gh-commit`, 또는
-  `/gh-pr-reply` 를 실행하면 공용 헬퍼 `_gh_project_status_sync` 가
-  `projectItems` 가 0건임을 자동 감지하고 조용히 no-op 한다 (별도
-  분기 불필요).
+- 보드가 없는 repo 에서 `/gh-pr`, `/gh-commit`, `/gh-pr-reply`,
+  또는 `/gh-pr-merge` 를 실행하면 공용 헬퍼
+  `_gh_project_status_sync` 가 `projectItems` 가 0건임을 자동
+  감지하고 조용히 no-op 한다 (별도 분기 불필요).
+- Projects v2 빌트인 워크플로우는 best-effort delivery 라 드물게
+  Status 업데이트 이벤트가 누락된다. PR-Closes 경로 (PR 머지로 Issue
+  가 auto-close 되는 경로) 는 `/gh-pr-merge` 의 Step 4 post-merge
+  reconciliation 이 자동 보강한다. 그 외 경로 (수동 close, 다른 도구로
+  close) 에서 Issue 카드가 `In review` 등에 잔류하면 카드를 수동으로
+  `Done` 으로 옮긴다.
 - 수동으로 카드를 옮긴 경우 다음 자동 이벤트가 상태를 덮어쓸
   수 있다. 특히 Issue 카드를 `Approved`로 옮겨도 `Item closed`가
   PR 머지 시점에 곧바로 `Done`으로 이동시키므로 의미가 없다
@@ -274,5 +288,5 @@ gh auth refresh -s project
   - `claude/skills/gh-issue-flow/SKILL.md`
 - 관련 헬퍼: `shell-common/functions/gh_project_status.sh` (공용
   `_gh_project_status_sync` — `/gh-flow`, `/gh-pr`, `/gh-commit`,
-  `/gh-pr-reply` 가 모두 호출).
+  `/gh-pr-reply`, `/gh-pr-merge` 가 모두 호출).
 - 관련 템플릿: `.github/pull_request_template.md`.
