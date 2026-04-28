@@ -160,12 +160,21 @@ dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
   이므로 `Approved` 와 정합한다. `--only-from "Backlog,In progress,In
   review"` 가드를 적용해 머지된 PR (`Done`) 에 잘못 호출되었을 때
   카드가 `Approved` 로 되돌아가는 regression 을 막는다.
-- **PR 카드 `Approved → Done`**: `/gh-pr-merge` 와
-  `/gh-pr-merge-emergency` 가 머지 성공 직후 자동 전환한다. GitHub
-  Projects 빌트인 `Pull request merged` / `Item closed` 가 켜져 있어도,
-  저장소·보드 설정 차이로 PR 카드가 `Approved` 에 남는 경우를 막기 위한
-  보정 경로다. raw `gh pr merge` 나 웹 UI 머지는 빌트인 워크플로우에
-  의존하므로, PR 카드가 남으면 수동으로 `Done` 으로 옮긴다.
+- **PR 카드 `Approved → Done`**: 두 갈래로 보정한다.
+  - `/gh-pr-merge` / `/gh-pr-merge-emergency` 경유 머지: 스킬이 머지
+    성공 직후 in-skill Step 4(a) 에서 직접 전환한다.
+  - 웹 UI / 모바일 / raw `gh pr merge` 경유 머지 (#266): GitHub Actions
+    워크플로우 `.github/workflows/project-board-sync.yml` 가
+    `pull_request.closed && merged == true` 에 자동 fire 하여 동일
+    헬퍼 (`_gh_project_status_sync pr <N> "Done"`) 를 호출한다. 즉
+    머지 경로가 무엇이든 PR 카드는 `Done` 으로 수렴한다.
+
+  GitHub Projects 빌트인 `Pull request merged` (#6) 는 enabled 이지만
+  저장소·보드 설정 차이로 fire 가 누락되는 사례가 #265 머지에서
+  관측되어 (#266) 위 두 보정 경로가 안전망 역할을 한다. 워크플로우는
+  `secrets.PROJECT_BOARD_PAT` (project 스코프 PAT) 를 사용한다 — PAT
+  미설정 시엔 워크플로우가 warning 을 남기고 no-op 으로 종료하므로
+  포크 PR 도 안전하다.
 - **PR 카드 `In progress → In review` (재리뷰 요청 시)**:
   `Changes requested` 루프에서 수정·재푸시 후 리뷰가 다시 달리기를
   기대할 때 **수동**으로 복귀시킨다. Projects v2 빌트인에도 dotfiles
@@ -173,13 +182,16 @@ dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
   (`→ Done`) 은 빌트인 `Pull request merged` / `Item closed` 가
   자동 처리한다.
 - **Issue 카드 `In review → Done` (PR-Closes 경로 보강)**:
-  `/gh-pr-merge` 가 머지 직후 PR 의 `closingIssuesReferences` 를
-  순회하며 각 Issue 카드를 `Done` 으로 강제 이동한다. 빌트인
-  `Item closed` 워크플로우는 best-effort delivery 이므로 드물게
-  Status 업데이트 이벤트가 누락되어 Issue 카드가 `In review` 에
-  잔류하는 케이스가 관측된다 (#239 / #250). 본 보강 전환은 그 갭을
-  메우며 `--only-from "Backlog,In progress,In review"` 가드로
-  이미 `Done` 상태인 카드를 다시 건드리지 않는다.
+  `/gh-pr-merge` 와 `.github/workflows/project-board-sync.yml` 둘 다
+  머지 직후 PR 의 `closingIssuesReferences` 를 순회하며 각 Issue
+  카드를 `Done` 으로 강제 이동한다. 빌트인 `Item closed` 워크플로우는
+  best-effort delivery 이므로 드물게 Status 업데이트 이벤트가
+  누락되어 Issue 카드가 `In review` 에 잔류하는 케이스가 관측된다
+  (#239 / #250). 본 보강 전환은 그 갭을 메우며 `--only-from
+  "Backlog,In progress,In review"` 가드로 이미 `Done` 상태인 카드를
+  다시 건드리지 않는다. 머지 경로가 스킬이든 웹 UI 든 동일 헬퍼
+  (`_gh_pr_closing_issue_numbers` + `_gh_project_status_sync`) 가
+  호출되므로 동작이 수렴한다.
 
 ### 용어 교정 (2026-04-24)
 
