@@ -71,7 +71,29 @@ If `gh` returns "merge method is not allowed", print the repo-settings
 guidance from `references/strategy-selection.md` and stop. **Never**
 silently switch strategies.
 
-## Step 4: Fetch Merge SHA + Report
+## Step 4: Reconcile linked Issue cards on the project board
+
+GitHub Projects v2 builtin `Item closed` is best-effort and occasionally
+drops events, leaving Issue cards stuck at `In review` even after the
+Issue auto-closes from this merge. Read
+`references/project-board-sync.md` for the failure mode and the gating
+rationale; the call shape:
+
+```bash
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
+for _issue in $(gh pr view <N> --repo "$TARGET_REPO" \
+                  --json closingIssuesReferences \
+                  --jq '.closingIssuesReferences[].number'); do
+    _gh_project_status_sync issue "$_issue" "Done" \
+        --only-from "Backlog,In progress,In review"
+done
+```
+
+The helper auto-detects boards on repos without a projectV2 attachment
+and silently returns. This step never blocks the report — failures are
+logged to stderr and ignored.
+
+## Step 5: Fetch Merge SHA + Report
 
 ```bash
 gh pr view <N> --repo "$TARGET_REPO" --json mergeCommit -q .mergeCommit.oid
