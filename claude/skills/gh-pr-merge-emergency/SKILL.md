@@ -42,18 +42,16 @@ Fetch in parallel; evaluate stops **before** touching merge:
 - PR JSON: `number,title,author,state,isDraft,mergeable,mergeStateStatus,baseRefName,headRefName`
 - `gh pr checks <N> --repo $TARGET_REPO --required`
 
-**Hard stops** (emergency ≠ reckless): `state != OPEN` · `isDraft == true` ·
-`mergeable == CONFLICTING` · any required check failing/pending. Emergency
-bypasses **approval**, not **CI** — fix or rerun CI instead of bypassing.
+**Hard stops**: `state != OPEN`, draft, conflicts, or failing/pending required
+checks. Emergency bypasses **approval**, not **CI**.
 
-**Soft warnings** (print, continue): base `BEHIND` → note in audit. No
-approving review → expected here, but surface it in the confirmation prompt.
+**Soft warnings**: base `BEHIND`; no approving review.
 
 ## Step 3: Confirm with the User
 
 Print the planned action (repo, PR, author, base/head, CI summary, reason)
-followed by `Proceed? (yes/ok/진행/머지)`. Never auto-proceed; ambiguous
-reply → ask again. Exact prompt template in `references/audit-templates.md`.
+followed by `Proceed? (yes/ok/진행/머지)`. Exact prompt template:
+`references/audit-templates.md`. Never auto-proceed.
 
 ## Step 4: Audit Comment + Admin Merge
 
@@ -61,7 +59,7 @@ Order matters — comment first so the audit survives branch deletion.
 
 1. `gh pr comment <N> --repo "$TARGET_REPO"` with the "PR audit comment"
    body from `references/audit-templates.md`; capture the comment URL for
-   Step 6.
+   Step 7.
 2. `gh pr merge <N> --repo "$TARGET_REPO" --admin --squash --delete-branch`
    (flag rationale in the same reference file). If it fails with "Must
    have admin rights", **stop** and report — do NOT fall back to
@@ -76,7 +74,12 @@ Non-negotiable audit tail. File `incident: emergency merge of PR #<N> —
 `references/audit-templates.md`. Attach an `incident` label **only if**
 `gh label list --repo "$TARGET_REPO"` confirms it exists.
 
-## Step 6: Report
+## Step 6: Sync Project Board Status
+
+Read `references/project-board-sync.md` and push the merged PR card to
+`Done`. Sync failure never blocks the audit report.
+
+## Step 7: Report
 
 ```
 Emergency-merged PR #<N>
