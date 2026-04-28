@@ -435,7 +435,11 @@ git_worktree_add() {
 # Failure: exit 1 on unknown / launch-unsupported agent.
 # ============================================================================
 _gwt_yolo_command() {
+    # `--list` returns the supported agent names so call sites (e.g. the
+    # "Supported with --launch" hint) derive from the same SSOT and cannot
+    # drift from the case body below.
     case "$1" in
+        --list)   echo "claude, codex, gemini, opencode" ;;
         claude)   echo "claude_yolo" ;;
         codex)    echo "codex --dangerously-bypass-approvals-and-sandbox" ;;
         gemini)   echo "gemini --approval-mode=yolo --skip-trust" ;;
@@ -649,10 +653,10 @@ git_worktree_spawn() {
         local launch_cmd
         if ! launch_cmd=$(_gwt_yolo_command "$agent"); then
             ux_error "No --launch yolo command for agent: $agent"
-            ux_info "Supported with --launch: claude, codex, gemini, opencode"
+            ux_info "Supported with --launch: $(_gwt_yolo_command --list)"
             return 1
         fi
-        ux_info "  launch: cd $wt_path && ${agent}-yolo"
+        ux_info "  launch: cd \"$wt_path\" && $launch_cmd"
         cd "$wt_path" || { ux_error "Cannot cd to $wt_path"; return 1; }
         eval "$launch_cmd"
     else
