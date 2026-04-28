@@ -22,12 +22,18 @@ output its content verbatim, then stop. No API calls.
 
 ## Step 1: Resolve + Pre-flight Gate (parallel)
 
-Resolve context, then fetch pre-flight signals in parallel before
-reading the diff:
+Parse args first. Positional: `<pr-number>` and `<remote>` (default
+`origin`). Optional flag: `--self-ok` (may appear in any position) —
+when present, set `SELF_OK=1`; otherwise `SELF_OK=0`. Use `--self-ok`
+only when the author and authenticated user collide intentionally
+(e.g. another AI agent acted as author, no human reviewer is
+available). It does NOT relax any other stop condition.
 
-- `TARGET_REPO` from `git remote get-url <remote>` (arg #2, default
-  `origin`). Missing remote → list `git remote -v` and stop.
-- PR number: explicit arg #1 → `gh pr view --json number` on current
+Then fetch pre-flight signals in parallel before reading the diff:
+
+- `TARGET_REPO` from `git remote get-url <remote>`. Missing remote →
+  list `git remote -v` and stop.
+- PR number: explicit arg → `gh pr view --json number` on current
   branch → stop and ask.
 - `ME=$(gh api user -q .login)` for self-review / re-review checks.
 - PR JSON: `number,title,author,state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,files`
@@ -35,8 +41,12 @@ reading the diff:
 - `gh pr checks <N> --repo $TARGET_REPO`
 
 **Stop conditions** (explain, don't approve): `state != OPEN` ·
-`isDraft == true` · `author.login == ME` · `mergeable == CONFLICTING` ·
-any required check failing.
+`isDraft == true` · `author.login == ME` *(skipped when `SELF_OK=1`)* ·
+`mergeable == CONFLICTING` · any required check failing.
+
+When `SELF_OK=1` and `author.login == ME`, proceed but **record the
+bypass in the review body** per `references/approval-templates.md`
+("Self-approval audit trail"). Other stop conditions still apply.
 
 If prior `ME` comments/reviews exist → **re-review mode**: primary goal
 is verifying each prior concern was addressed by a subsequent commit.
