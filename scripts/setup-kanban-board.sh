@@ -136,6 +136,9 @@ auth_scopes_csv() {
         {
             line = $0
             sub(/\r$/, "", line)
+            if (line == "") {
+                exit
+            }
             if (index(tolower(line), "x-oauth-scopes:") == 1) {
                 sub(/^[^:]*:[[:space:]]*/, "", line)
                 print line

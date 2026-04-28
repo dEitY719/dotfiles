@@ -229,3 +229,20 @@ run_setup_kanban() {
     assert_output --partial "Your gh token is missing the project scope required for mutations"
     grep -q '^api user -i$' "$MOCK_LOG"
 }
+
+@test "scope parser ignores x-oauth-scopes text in response body" {
+    export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
+
+    cat >"$MOCK_GH_AUTH_HEADERS" <<'EOF'
+HTTP/2 200
+content-type: application/json
+
+x-oauth-scopes: project
+{"login":"mock"}
+EOF
+
+    run_setup_kanban --owner deity --repo dotfiles
+    assert_failure
+    assert_output --partial "gh api user could not read token scopes"
+    grep -q '^api user -i$' "$MOCK_LOG"
+}
