@@ -38,6 +38,19 @@ teardown() {
     assert_output --partial "ok"
 }
 
+@test "bash: _gh_project_status_mutate helper exists" {
+    # Extracted in #244 so the mutation can be retried once on flake.
+    run_in_bash 'declare -f _gh_project_status_mutate >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "zsh: _gh_project_status_mutate helper exists" {
+    run_in_zsh 'typeset -f _gh_project_status_mutate >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
 # ---------------------------------------------------------------------------
 # Opt-out guards
 # ---------------------------------------------------------------------------
