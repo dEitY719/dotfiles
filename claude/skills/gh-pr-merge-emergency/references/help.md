@@ -37,7 +37,8 @@
 3. Posts a visible audit comment on the PR explaining *why* this is being emergency-merged.
 4. Runs `gh pr merge --admin --squash --delete-branch` to bypass approval requirements.
 5. Creates a follow-up `incident:` issue with a retro checklist so the decision is tracked and reviewed later.
-6. Reports the merge SHA, audit comment URL, and incident issue number.
+6. Moves the PR project-board card to `Done` when a projectV2 board is attached.
+7. Reports the merge SHA, audit comment URL, and incident issue number.
 
 ## Good reason examples
 

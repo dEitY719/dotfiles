@@ -1,30 +1,45 @@
-# Project Board Sync — reconcile linked Issue cards after merge
+# Project Board Sync — reconcile board cards after merge
 
-## Why this step exists
+`/gh-pr-merge` performs two independent reconciliations after a
+successful merge:
 
-GitHub Projects v2 builtin workflows are best-effort only. The
-`Item closed` workflow that should move closed Issue cards to `Done`
-occasionally drops events, leaving Issue cards stuck at `In review` even
-though the Issue itself is `CLOSED`. Concrete observation:
-`dEitY719/dotfiles` Issue #239 stayed at `In review` after PR #241 merged
-at 2026-04-28T03:24:34Z — 16 of 17 other Issues closed around the same
-time on the same board moved to `Done` correctly, ruling out a setup
-problem and pointing at transient delivery loss (issue #250).
+1. **PR card → `Done`** — closes the gap reported in #248 where the
+   merged PR card stayed at `Approved`.
+2. **Linked Issue cards → `Done`** — closes the gap reported in #250
+   where Issue cards stayed at `In review` after auto-close.
 
-`/gh-pr-merge` is the only natural surface that knows which Issues will
-auto-close from a merge — they are listed in the PR's
-`closingIssuesReferences` (Closes / Fixes / Resolves keywords). Adding a
-post-merge reconciliation here closes the gap without depending on
-builtin workflow reliability.
+Both run from the shared helper
+`shell-common/functions/gh_project_status.sh`. Failures never block
+the merge report — the helper logs to stderr and returns 0.
 
-## How to call it
-
-After Step 3 succeeds, fetch the PR's `closingIssuesReferences` and force
-each linked Issue card to `Done`:
+## (1) PR card → `Done`
 
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
+GH_REPO="$TARGET_REPO" _gh_project_status_sync pr "$PR_NUMBER" "Done"
+```
 
+`Done` is the terminal PR state after merge, regardless of which
+column the card was in (`In review`, `Approved`, or `In progress` if a
+`Changes requested` loop was still pending). No `--only-from` guard is
+needed; repeating the sync on an already-`Done` card is a no-op.
+
+## (2) Linked Issue cards → `Done`
+
+GitHub Projects v2 builtin workflows are best-effort only. The
+`Item closed` workflow that should move closed Issue cards to `Done`
+occasionally drops events, leaving Issue cards stuck at `In review`
+even though the Issue itself is `CLOSED`. Concrete observation:
+`dEitY719/dotfiles` Issue #239 stayed at `In review` after PR #241
+merged at 2026-04-28T03:24:34Z — 16 of 17 other Issues closed around
+the same time on the same board moved to `Done` correctly, ruling out
+a setup problem and pointing at transient delivery loss (issue #250).
+
+`/gh-pr-merge` is the only natural surface that knows which Issues
+will auto-close from a merge — they are listed in the PR's
+`closingIssuesReferences` (Closes / Fixes / Resolves keywords).
+
+```bash
 for _issue in $(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
                   --json closingIssuesReferences \
                   --jq '.closingIssuesReferences?[]?.number'); do
@@ -38,26 +53,28 @@ The `--only-from` whitelist enforces three properties:
 - An Issue already at `Done` (builtin fired this round) is left alone —
   no churn, no duplicate update.
 - Issue cards never visit `Approved` per
-  `docs/standards/github-project-board.md`; if one shows up there, it is
-  a manual override worth investigating, so the helper skips rather than
-  silently overwriting.
+  `docs/standards/github-project-board.md`; if one shows up there, it
+  is a manual override worth investigating, so the helper skips rather
+  than silently overwriting.
 - Empty current Status (card never mounted on the board) is also
   skipped, so this never accidentally adds boards to repos that don't
   have one.
 
-## When it does nothing
+## When either step does nothing
 
 - PR body has no `Closes / Fixes / Resolves #N` →
-  `closingIssuesReferences` is empty → loop body never runs.
-- Repo has no projectV2 board attached → helper finds zero project items
-  and silently returns 0.
-- `GH_PROJECT_STATUS_SYNC=0` set in environment → opt-out, helper returns
-  immediately.
-- Issue card already at `Done` → helper skips per `--only-from` guard.
+  `closingIssuesReferences` is empty → step (2) loop body never runs.
+  Step (1) still runs.
+- Repo has no projectV2 board attached → helper finds zero project
+  items and silently returns 0 for both steps.
+- `GH_PROJECT_STATUS_SYNC=0` set in environment → opt-out, helper
+  returns immediately for both steps.
+- For step (2) only: Issue card already at `Done` → helper skips per
+  `--only-from` guard.
 
 ## Where the helper lives
 
 `shell-common/functions/gh_project_status.sh` — shared with `gh:pr`,
-`gh:pr-reply`, `gh:commit`, and `gh:flow`. Source the file each
-invocation; do not inline-copy the snippet so a single fix propagates
-everywhere.
+`gh:pr-reply`, `gh:commit`, `gh:flow`, and `gh:pr-merge-emergency`.
+Source the file each invocation; do not inline-copy the snippet so a
+single fix propagates everywhere.
