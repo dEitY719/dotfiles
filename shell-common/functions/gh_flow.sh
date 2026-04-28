@@ -134,7 +134,7 @@ _gh_flow_pr_state() {
         printf 'EMPTY'
         return 0
     fi
-    _state="$(gh pr view "$_pr_num" --json state --jq '.state' 2>/dev/null)"
+    _state="$(gh pr view "$_pr_num" --json state --jq '.state? // empty' 2>/dev/null)"
     _rc=$?
     if [ "$_rc" -ne 0 ] || [ -z "$_state" ]; then
         printf 'UNREACHABLE'
@@ -281,11 +281,11 @@ _gh_flow_status_single() {
         _pr_state=$(_gh_flow_pr_state "$_dir")
         case "$_pr_state" in
         MERGED)
-            _pr_date="$(gh pr view "$_pr_num" --json mergedAt --jq '.mergedAt | split("T")[0]' 2>/dev/null)"
+            _pr_date="$(gh pr view "$_pr_num" --json mergedAt --jq '.mergedAt? | select(. != null) | split("T")[0]' 2>/dev/null)"
             _pr_info="#$_pr_num (MERGED${_pr_date:+, $_pr_date})"
             ;;
         CLOSED)
-            _pr_date="$(gh pr view "$_pr_num" --json closedAt --jq '.closedAt | split("T")[0]' 2>/dev/null)"
+            _pr_date="$(gh pr view "$_pr_num" --json closedAt --jq '.closedAt? | select(. != null) | split("T")[0]' 2>/dev/null)"
             _pr_info="#$_pr_num (CLOSED${_pr_date:+, $_pr_date})"
             ;;
         OPEN) _pr_info="#$_pr_num (OPEN)" ;;
@@ -413,12 +413,13 @@ _gh_flow_status() {
 # Scoped prune: only the issue numbers passed in are touched. Refuses to
 # remove a state dir whose worker is still alive (unless --force) or whose
 # worktree dir still exists (always rejected — that's `gwt teardown`'s job).
-# $1 = repo state dir, $2 = force flag (0|1), remaining args = issue numbers.
+# $1 = repo state dir, $2 = force flag (0|1), $3 = repo name (for header),
+# remaining args = issue numbers.
 _gh_flow_prune_scoped() {
-    local _repo_dir="$1" _force="$2"
-    shift 2
+    local _repo_dir="$1" _force="$2" _name="$3"
+    shift 3
 
-    ux_header "gh-flow prune - $(basename "$_repo_dir")"
+    ux_header "gh-flow prune - $_name"
 
     local _issue _entry _state _pid _wt _pid_alive
     local _processed=0 _rejected=0 _removed=0
@@ -535,7 +536,7 @@ _gh_flow_prune() {
 
     if [ -n "$_scoped" ]; then
         # shellcheck disable=SC2086
-        _gh_flow_prune_scoped "$_repo_dir" "$_force" $_scoped
+        _gh_flow_prune_scoped "$_repo_dir" "$_force" "$_name" $_scoped
         return $?
     fi
 
