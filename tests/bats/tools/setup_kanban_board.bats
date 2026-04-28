@@ -24,6 +24,15 @@ if [[ "$1" == "auth" && "$2" == "status" ]]; then
     exit 1
 fi
 
+if [[ "$1" == "repo" && "$2" == "view" ]]; then
+    if [ -n "${MOCK_GH_REPO_VIEW_OUTPUT-}" ]; then
+        printf '%s\n' "${MOCK_GH_REPO_VIEW_OUTPUT}"
+        exit 0
+    fi
+    printf 'no git remote found for current directory\n' >&2
+    exit 1
+fi
+
 if [[ "$1" == "api" && "$2" == "user" && "${3-}" == "-i" ]]; then
     cat "${MOCK_GH_AUTH_HEADERS}"
     exit 0
@@ -228,6 +237,69 @@ run_setup_kanban() {
     assert_failure
     assert_output --partial "Your gh token is missing the project scope required for mutations"
     grep -q '^api user -i$' "$MOCK_LOG"
+}
+
+@test "auto-detects --owner and --repo from current git context when both omitted" {
+    export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
+    export MOCK_GH_REPO_CONTEXT_JSON="${TEST_TEMP_HOME}/repo.json"
+    export MOCK_GH_EXISTING_PROJECTS_JSON="${TEST_TEMP_HOME}/projects.json"
+    export MOCK_GH_CREATE_PROJECT_JSON="${TEST_TEMP_HOME}/create.json"
+    export MOCK_GH_STATUS_FIELD_JSON="${TEST_TEMP_HOME}/status.json"
+    export MOCK_GH_TEMPLATE_JSON="${TEST_TEMP_HOME}/template.json"
+    export MOCK_GH_REPO_VIEW_OUTPUT="acme widget"
+
+    write_auth_headers "$MOCK_GH_AUTH_HEADERS" "repo, read:project"
+    write_json_fixture "$MOCK_GH_REPO_CONTEXT_JSON" \
+        '{"data":{"repository":{"id":"R_org","name":"widget","url":"https://github.com/acme/widget","owner":{"__typename":"Organization","login":"acme","id":"O_1"},"defaultBranchRef":{"name":"main"}}}}'
+    write_json_fixture "$MOCK_GH_EXISTING_PROJECTS_JSON" \
+        '{"data":{"repositoryOwner":{"__typename":"Organization","projectsV2":{"nodes":[]}}}}'
+    write_json_fixture "$MOCK_GH_CREATE_PROJECT_JSON" \
+        '{"data":{"createProjectV2":{"projectV2":{"id":"PVT_new","number":77,"title":"widget","url":"https://github.com/orgs/acme/projects/77"}}}}'
+    write_json_fixture "$MOCK_GH_STATUS_FIELD_JSON" \
+        '{"data":{"node":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status"}]}}}}'
+    write_json_fixture "$MOCK_GH_TEMPLATE_JSON" \
+        '{"data":{"repository":{"object":null}}}'
+
+    run_setup_kanban --dry-run
+    assert_success
+    assert_output --partial "[dry-run] Would create project 'widget' under acme"
+    grep -q '^repo view --json owner,name' "$MOCK_LOG"
+}
+
+@test "fails with auto-detect hint when args omitted and gh repo view fails" {
+    export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
+    write_auth_headers "$MOCK_GH_AUTH_HEADERS" "repo, project"
+
+    run_setup_kanban --dry-run
+    assert_failure
+    assert_output --partial "auto-detect"
+    grep -q '^repo view --json owner,name' "$MOCK_LOG"
+}
+
+@test "explicit --owner is preserved when only --repo can be auto-detected" {
+    export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
+    export MOCK_GH_REPO_CONTEXT_JSON="${TEST_TEMP_HOME}/repo.json"
+    export MOCK_GH_EXISTING_PROJECTS_JSON="${TEST_TEMP_HOME}/projects.json"
+    export MOCK_GH_CREATE_PROJECT_JSON="${TEST_TEMP_HOME}/create.json"
+    export MOCK_GH_STATUS_FIELD_JSON="${TEST_TEMP_HOME}/status.json"
+    export MOCK_GH_TEMPLATE_JSON="${TEST_TEMP_HOME}/template.json"
+    export MOCK_GH_REPO_VIEW_OUTPUT="acme widget"
+
+    write_auth_headers "$MOCK_GH_AUTH_HEADERS" "repo, read:project"
+    write_json_fixture "$MOCK_GH_REPO_CONTEXT_JSON" \
+        '{"data":{"repository":{"id":"R_org","name":"widget","url":"https://github.com/myorg/widget","owner":{"__typename":"Organization","login":"myorg","id":"O_2"},"defaultBranchRef":{"name":"main"}}}}'
+    write_json_fixture "$MOCK_GH_EXISTING_PROJECTS_JSON" \
+        '{"data":{"repositoryOwner":{"__typename":"Organization","projectsV2":{"nodes":[]}}}}'
+    write_json_fixture "$MOCK_GH_CREATE_PROJECT_JSON" \
+        '{"data":{"createProjectV2":{"projectV2":{"id":"PVT_new","number":77,"title":"widget","url":"https://github.com/orgs/myorg/projects/77"}}}}'
+    write_json_fixture "$MOCK_GH_STATUS_FIELD_JSON" \
+        '{"data":{"node":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status"}]}}}}'
+    write_json_fixture "$MOCK_GH_TEMPLATE_JSON" \
+        '{"data":{"repository":{"object":null}}}'
+
+    run_setup_kanban --owner myorg --dry-run
+    assert_success
+    assert_output --partial "[dry-run] Would create project 'widget' under myorg"
 }
 
 @test "scope parser ignores x-oauth-scopes text in response body" {
