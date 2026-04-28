@@ -137,3 +137,74 @@ teardown() {
     assert_output --partial "BRANCH2_OK"
     assert_output --partial "PATH2_OK"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #243: --launch must not depend on shell alias expansion.
+# `_gwt_yolo_command <agent>` is a SSOT dispatch table that returns the
+# actual command string to execute, bypassing the brittle alias path.
+# ---------------------------------------------------------------------------
+
+@test "bash: _gwt_yolo_command claude returns the function, not the alias name" {
+    # Critical regression guard: must NOT return the alias 'claude-yolo'
+    # (zsh inside function context fails to expand it — the bug from #243).
+    run_in_bash '_gwt_yolo_command claude'
+    assert_success
+    assert_output "claude_yolo"
+    refute_output --partial "claude-yolo"
+}
+
+@test "bash: _gwt_yolo_command codex returns the bypass-flagged command" {
+    run_in_bash '_gwt_yolo_command codex'
+    assert_success
+    assert_output "codex --dangerously-bypass-approvals-and-sandbox"
+}
+
+@test "bash: _gwt_yolo_command gemini returns the yolo+skip-trust command" {
+    run_in_bash '_gwt_yolo_command gemini'
+    assert_success
+    assert_output "gemini --approval-mode=yolo --skip-trust"
+}
+
+@test "bash: _gwt_yolo_command opencode returns the bare command" {
+    run_in_bash '_gwt_yolo_command opencode'
+    assert_success
+    assert_output "opencode"
+}
+
+@test "bash: _gwt_yolo_command rejects unknown agent" {
+    run_in_bash '_gwt_yolo_command notarealagent'
+    assert_failure
+}
+
+@test "zsh: _gwt_yolo_command claude returns the function, not the alias name" {
+    # The actual bug from #243 reproduced under zsh — this test must pass
+    # before and after sourcing claude.sh, because we no longer rely on
+    # alias expansion at all.
+    run_in_zsh '_gwt_yolo_command claude'
+    assert_success
+    assert_output "claude_yolo"
+    refute_output --partial "claude-yolo"
+}
+
+@test "zsh: _gwt_yolo_command codex returns the bypass-flagged command" {
+    run_in_zsh '_gwt_yolo_command codex'
+    assert_success
+    assert_output "codex --dangerously-bypass-approvals-and-sandbox"
+}
+
+@test "zsh: _gwt_yolo_command gemini returns the yolo+skip-trust command" {
+    run_in_zsh '_gwt_yolo_command gemini'
+    assert_success
+    assert_output "gemini --approval-mode=yolo --skip-trust"
+}
+
+@test "zsh: _gwt_yolo_command opencode returns the bare command" {
+    run_in_zsh '_gwt_yolo_command opencode'
+    assert_success
+    assert_output "opencode"
+}
+
+@test "zsh: _gwt_yolo_command rejects unknown agent" {
+    run_in_zsh '_gwt_yolo_command notarealagent'
+    assert_failure
+}

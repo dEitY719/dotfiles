@@ -422,6 +422,29 @@ git_worktree_add() {
 }
 
 # ============================================================================
+# _gwt_yolo_command — agent → yolo command dispatch (issue #243)
+#
+# Returns the literal command string to run for an agent's yolo mode.
+# Bypasses shell alias expansion, which is unreliable inside function
+# context — zsh in particular fails to expand `claude-yolo` from inside
+# a function body, even via `eval`. Keeping the SSOT here means the
+# alias files (claude.sh, codex.sh, gemini.sh, opencode.sh) and the
+# launch path stay in sync via grep, not via shell alias resolution.
+#
+# Output: command string on stdout, exit 0 on known agent.
+# Failure: exit 1 on unknown / launch-unsupported agent.
+# ============================================================================
+_gwt_yolo_command() {
+    case "$1" in
+        claude)   echo "claude_yolo" ;;
+        codex)    echo "codex --dangerously-bypass-approvals-and-sandbox" ;;
+        gemini)   echo "gemini --approval-mode=yolo --skip-trust" ;;
+        opencode) echo "opencode" ;;
+        *)        return 1 ;;
+    esac
+}
+
+# ============================================================================
 # Worktree spawn — auto-index, auto-branch, log
 # Usage: git_worktree_spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--agent <agent>]
 # ============================================================================
@@ -618,11 +641,20 @@ git_worktree_spawn() {
         fi
     elif [ "$use_launch" = 1 ]; then
         # cd in the caller's shell (gwt is a function, not a subshell), then
-        # run <agent>-yolo. eval re-parses the command so the alias resolves
-        # against the current shell's alias table — handles both bash and zsh.
+        # run the agent's yolo command. Resolved via _gwt_yolo_command rather
+        # than `eval "<agent>-yolo"`, because zsh does NOT expand aliases from
+        # inside a function body even under eval (issue #243). The dispatch
+        # table returns the underlying function/command directly, which is
+        # always resolvable in either shell.
+        local launch_cmd
+        if ! launch_cmd=$(_gwt_yolo_command "$agent"); then
+            ux_error "No --launch yolo command for agent: $agent"
+            ux_info "Supported with --launch: claude, codex, gemini, opencode"
+            return 1
+        fi
         ux_info "  launch: cd $wt_path && ${agent}-yolo"
         cd "$wt_path" || { ux_error "Cannot cd to $wt_path"; return 1; }
-        eval "${agent}-yolo"
+        eval "$launch_cmd"
     else
         ux_info ""
         ux_info "  cd $wt_path"
