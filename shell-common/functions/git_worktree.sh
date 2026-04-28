@@ -16,7 +16,7 @@ _gwt_help_summary() {
     ux_bullet_sub "list: gwt list | gwt ls"
     ux_bullet_sub "remove: gwt remove <path|agent|all> [--force]"
     ux_bullet_sub "prune: gwt prune"
-    ux_bullet_sub "spawn: gwt spawn <name> [--task slug] [--base ref] [--tmux]"
+    ux_bullet_sub "spawn: gwt spawn <name> [--task slug] [--base ref] [--tmux|--launch]"
     ux_bullet_sub "teardown: gwt teardown [--force] [--keep-branch]"
     ux_bullet_sub "details: gwt-help <section> (example: gwt-help spawn)"
 }
@@ -53,12 +53,14 @@ _gwt_help_rows_prune() {
 }
 
 _gwt_help_rows_spawn() {
-    ux_table_row "syntax" "gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux [--agent <agent>]]" "Create named worktree"
+    ux_table_row "syntax" "gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch [--agent <agent>]]" "Create named worktree"
     ux_table_row "context" "Run from main repo only" "Fails inside a worktree"
     ux_table_row "name" "Free-form slug (required)" "e.g. issue-11, login-fix"
-    ux_table_row "--agent" "AI agent for tmux pane (default: claude)" "claude, codex, gemini, opencode, cursor, copilot"
-    ux_table_row "--tmux" "Runs <agent>-yolo in pane" "Decoupled from worktree <name>"
+    ux_table_row "--agent" "AI agent (default: claude)" "claude, codex, gemini, opencode, cursor, copilot"
+    ux_table_row "--tmux" "Runs <agent>-yolo in new tmux pane" "Mutually exclusive with --launch"
+    ux_table_row "--launch" "cd into worktree + run <agent>-yolo inline" "Current shell, no tmux"
     ux_table_row "example" "gwt spawn issue-11 --tmux --agent codex" "Free-form name + codex agent"
+    ux_table_row "example" "gwt spawn feat --launch" "spawn -> cd -> claude-yolo (one shot)"
 }
 
 _gwt_help_rows_teardown() {
@@ -421,11 +423,11 @@ git_worktree_add() {
 
 # ============================================================================
 # Worktree spawn — auto-index, auto-branch, log
-# Usage: git_worktree_spawn <name> [--task <slug>] [--base <ref>] [--tmux]
+# Usage: git_worktree_spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--agent <agent>]
 # ============================================================================
 _git_worktree_spawn_show_help() {
     ux_header "gwt spawn - create a named worktree"
-    ux_info "Usage: gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux [--agent <agent>]]"
+    ux_info "Usage: gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--agent <agent>]"
     ux_info ""
     ux_info "Arguments:"
     ux_info "  <name>           Free-form worktree name (required)."
@@ -434,7 +436,9 @@ _git_worktree_spawn_show_help() {
     ux_info "  --task <slug>    Add task slug to branch name"
     ux_info "  --base <ref>     Base branch/commit (default: origin/main)"
     ux_info "  --tmux           Auto-create tmux session/window with 3-pane layout"
-    ux_info "  --agent <agent>  AI agent to run in the tmux pane (default: claude)"
+    ux_info "  --launch         cd into the new worktree and run <agent>-yolo in the"
+    ux_info "                   current shell. Mutually exclusive with --tmux."
+    ux_info "  --agent <agent>  AI agent for --tmux pane or --launch (default: claude)"
     ux_info "                   Known: claude, codex, gemini, opencode, cursor, copilot"
     ux_info "                   Window name and 'yolo' command follow --agent,"
     ux_info "                   so worktree <name> can be any free-form slug."
@@ -444,6 +448,8 @@ _git_worktree_spawn_show_help() {
     ux_info "  gwt spawn login-fix --task auth              # ../<proj>-login-fix-1 wt/login-fix/1-auth"
     ux_info "  gwt spawn issue-11 --tmux                    # tmux window 'claude' runs 'claude-yolo'"
     ux_info "  gwt spawn issue-11 --tmux --agent codex      # tmux window 'codex'  runs 'codex-yolo'"
+    ux_info "  gwt spawn feat --launch                      # cd into new worktree + claude-yolo"
+    ux_info "  gwt spawn feat --launch --agent codex        # cd + codex-yolo"
 }
 
 git_worktree_spawn() {
@@ -452,7 +458,7 @@ git_worktree_spawn() {
         emulate -L sh
     fi
 
-    local task="" base="" name="" use_tmux=0 agent="claude"
+    local task="" base="" name="" use_tmux=0 use_launch=0 agent="claude"
 
     # Parse arguments
     while [ $# -gt 0 ]; do
@@ -465,6 +471,7 @@ git_worktree_spawn() {
             --base) base="$2"; shift 2 ;;
             --agent) agent="$2"; shift 2 ;;
             --tmux) use_tmux=1; shift ;;
+            --launch) use_launch=1; shift ;;
             -*)
                 ux_error "Unknown option: $1"
                 echo ""
@@ -500,14 +507,23 @@ git_worktree_spawn() {
             ;;
     esac
 
+    # --tmux and --launch are mutually exclusive (tmux opens a new pane,
+    # --launch runs in the current shell — combining them is incoherent).
+    if [ "$use_tmux" = 1 ] && [ "$use_launch" = 1 ]; then
+        ux_error "--tmux and --launch are mutually exclusive"
+        echo ""
+        _git_worktree_spawn_show_help
+        return 1
+    fi
+
     # Validate --tmux dependency
     if [ "$use_tmux" = 1 ] && ! command -v tmux >/dev/null 2>&1; then
         ux_error "tmux is not installed (required for --tmux)"
         return 1
     fi
 
-    # Validate --agent: must be a known AI agent (only when tmux will use it)
-    if [ "$use_tmux" = 1 ] && ! _ts_known_agent "$agent"; then
+    # Validate --agent: must be a known AI agent (only when tmux/launch will use it)
+    if { [ "$use_tmux" = 1 ] || [ "$use_launch" = 1 ]; } && ! _ts_known_agent "$agent"; then
         ux_error "Unknown agent: $agent"
         ux_info "Available: claude, codex, gemini, opencode, cursor, copilot"
         return 1
@@ -600,6 +616,13 @@ git_worktree_spawn() {
         else
             tmux switch-client -t "${project}:${agent}" 2>/dev/null || true
         fi
+    elif [ "$use_launch" = 1 ]; then
+        # cd in the caller's shell (gwt is a function, not a subshell), then
+        # run <agent>-yolo. eval re-parses the command so the alias resolves
+        # against the current shell's alias table — handles both bash and zsh.
+        ux_info "  launch: cd $wt_path && ${agent}-yolo"
+        cd "$wt_path" || { ux_error "Cannot cd to $wt_path"; return 1; }
+        eval "${agent}-yolo"
     else
         ux_info ""
         ux_info "  cd $wt_path"

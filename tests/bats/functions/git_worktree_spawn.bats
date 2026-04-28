@@ -76,6 +76,36 @@ teardown() {
     assert_output --partial "--agent"
 }
 
+@test "bash: spawn --help mentions --launch flag" {
+    run_in_bash 'git_worktree_spawn --help'
+    assert_success
+    assert_output --partial "--launch"
+}
+
+@test "bash: spawn rejects --tmux and --launch together" {
+    run_in_bash "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-xyz --tmux --launch 2>&1
+    "
+    assert_failure
+    assert_output --partial "mutually exclusive"
+}
+
+@test "bash: spawn rejects unknown agent when --launch is used" {
+    run_in_bash "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-xyz --launch --agent notarealagent 2>&1
+    "
+    assert_failure
+    assert_output --partial "Unknown agent: notarealagent"
+}
+
+@test "zsh: spawn --help mentions --launch flag" {
+    run_in_zsh 'git_worktree_spawn --help'
+    assert_success
+    assert_output --partial "--launch"
+}
+
 @test "bash: spawn auto-increments when branch exists without worktree" {
     run_in_bash "
         cd '$FAKE_REPO' || exit 1
