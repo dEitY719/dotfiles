@@ -144,13 +144,37 @@ gh pr review <N> --repo "$TARGET_REPO" --request-changes --body-file "$BODY"
 
 When Step 1 is invoked with `--self-ok` and `author.login == ME`, prepend the
 following note to the review body for **6a** and **6b** (do not add to **6c**
-— request-changes never reaches this branch). Match the review language.
+— request-changes never reaches this branch).
 
 ```markdown
 > ⚠️ Self-approval via `--self-ok`. Author and reviewer are the same GitHub
-> user (`<ME>`). Justification: <multi-AI workflow / no human reviewer
-> available / etc.>.
+> user (`<ME>`). Justification: <one concrete reason — see picker below>.
 ```
+
+**Picking the justification.** Replace `<one concrete reason ...>` with a
+single, specific sentence. Do **not** paste a slash-separated list and do
+**not** leave the placeholder verbatim. Choose by scanning the user's
+invocation context (slash-command transcript, recent chat, PR description)
+in this order:
+
+1. **Explicit user reason.** If the user named one (e.g. "동료 둘 다 연차",
+   "codex가 만든 PR을 claude가 리뷰"), reuse their phrasing trimmed to one
+   sentence.
+2. **Multi-AI workflow.** Use this when the author and reviewer are
+   different AI agents (codex/gemini/claude) acting under the same GitHub
+   user — phrase it concretely, e.g. "Authored by codex, reviewed by
+   claude under shared user `dEitY719`".
+3. **No human reviewer available.** Use when colleagues with review
+   access are unavailable; name the constraint, e.g. "All eligible
+   human reviewers OOO until 2026-05-02".
+4. **Last resort.** If none of the above applies, refuse the bypass —
+   `--self-ok` without a defensible justification defeats the audit trail.
+   Stop and ask the user before proceeding.
+
+**Language convention.** The leading `⚠️ Self-approval via --self-ok` line
+stays in English regardless of the PR language — it's the searchable
+audit anchor across repos. Only the `Justification:` text matches the
+PR's dominant language (Korean PR → Korean justification).
 
 The note is required, not optional — the audit trail is the safety net that
 makes the bypass acceptable.

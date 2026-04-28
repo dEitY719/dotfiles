@@ -104,18 +104,20 @@ _gh_pr_approve_run_ai_prompt() {
 gh_pr_approve_help() {
     ux_header "gh-pr-approve - fire-and-forget GitHub PR approval runner"
     ux_info "Usage:"
-    ux_bullet "gh-pr-approve <pr-number>... [--ai <agent>]"
+    ux_bullet "gh-pr-approve <pr-number>... [--ai <agent>] [--self-ok]"
     ux_bullet_sub "agent: claude (default) | codex | gemini"
+    ux_bullet_sub "--self-ok: bypass author==reviewer pre-flight stop in the worker's skill prompt"
     ux_bullet "gh-pr-approve -h|--help|help"
     ux_info ""
     ux_info "Spawns one background worker per PR. Each worker:"
-    ux_bullet "gwt spawn → <ai> -p '/gh-pr-approve <N>' → gwt teardown"
+    ux_bullet "gwt spawn → <ai> -p '/gh-pr-approve <N> [--self-ok]' → gwt teardown"
     ux_info ""
     ux_info "Examples:"
     ux_bullet "gh-pr-approve 42                       # single PR (default: claude)"
     ux_bullet "gh-pr-approve 12 34 56                 # 3 PRs in parallel"
     ux_bullet "gh-pr-approve 42 --ai codex            # run worker with codex CLI"
     ux_bullet "gh-pr-approve --ai gemini '#56' '#78'  # gemini + #prefix"
+    ux_bullet "gh-pr-approve 42 --self-ok             # multi-AI workflow / no human reviewer"
     ux_info ""
     ux_info "State directory: ~/.local/state/gh-pr-approve/<repo>/<pr>/"
     ux_bullet_sub "state         - current step"
@@ -159,8 +161,10 @@ gh_pr_approve() {
     # Parse optional args:
     #   --ai <claude|codex|gemini>
     #   --ai=<claude|codex|gemini>
-    # Position-agnostic: --ai may appear before, between, or after PR numbers.
+    #   --self-ok                 (bypass author==reviewer pre-flight in skill)
+    # Position-agnostic: any flag may appear before, between, or after PR numbers.
     local _ai="claude"
+    local _self_ok=""
     local _pr_input=""
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -175,9 +179,12 @@ gh_pr_approve() {
             --ai=*)
                 _ai="${1#--ai=}"
                 ;;
+            --self-ok)
+                _self_ok="--self-ok"
+                ;;
             -*)
                 ux_error "unknown option: '$1'"
-                ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>]"
+                ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>] [--self-ok]"
                 return 1
                 ;;
             *)
@@ -242,13 +249,13 @@ gh_pr_approve() {
 
     if [ "$_pr_count" -eq 0 ]; then
         ux_error "no PR numbers provided"
-        ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>]"
+        ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>] [--self-ok]"
         return 1
     fi
 
-    ux_header "gh-pr-approve: spawning $_pr_count worker(s) (ai=$_ai)"
+    ux_header "gh-pr-approve: spawning $_pr_count worker(s) (ai=$_ai${_self_ok:+ self-ok})"
     for _pr in $_pr_args; do
-        _gh_pr_approve_spawn_worker "$_pr" "$_ai"
+        _gh_pr_approve_spawn_worker "$_pr" "$_ai" "$_self_ok"
     done
     ux_success "All workers detached. Your shell is free. Results appear on the PR."
 }
@@ -256,6 +263,7 @@ gh_pr_approve() {
 _gh_pr_approve_spawn_worker() {
     local _pr="$1"
     local _ai="${2:-claude}"
+    local _self_ok="${3:-}"
     local _dir _log _state _pid
     _dir=$(_gh_pr_approve_pr_dir "$_pr")
     mkdir -p "$_dir"
@@ -292,12 +300,12 @@ _gh_pr_approve_spawn_worker() {
     # shellcheck disable=SC2016
     nohup env DOTFILES_FORCE_INIT=1 bash -c '
         . "$HOME/.bashrc" 2>/dev/null || true
-        _gh_pr_approve_worker "$1" "$2"
-    ' -- "$_pr" "$_ai" </dev/null >"$_log" 2>&1 &
+        _gh_pr_approve_worker "$1" "$2" "$3"
+    ' -- "$_pr" "$_ai" "$_self_ok" </dev/null >"$_log" 2>&1 &
     _pid=$!
     disown "$_pid" 2>/dev/null || true
     printf '%s\n' "$_pid" >"$_dir/pid"
-    ux_info "#$_pr → pid=$_pid  ai=$_ai  log=$_log"
+    ux_info "#$_pr → pid=$_pid  ai=$_ai${_self_ok:+ self-ok}  log=$_log"
 }
 
 # ============================================================================
@@ -307,7 +315,8 @@ _gh_pr_approve_spawn_worker() {
 _gh_pr_approve_worker() {
     local _pr="$1"
     local _ai="${2:-claude}"
-    local _dir _worktree _spawn_name _usage_log
+    local _self_ok="${3:-}"
+    local _dir _worktree _spawn_name _usage_log _prompt
     _dir=$(_gh_pr_approve_pr_dir "$_pr")
     _spawn_name="pr-$_pr"
     # Resolve the usage log path while still in the main repo: once we cd
@@ -315,7 +324,7 @@ _gh_pr_approve_worker() {
     _usage_log="$_dir/usage.jsonl"
     : >"$_usage_log"
 
-    printf '[gh-pr-approve-worker] pr=#%s ai=%s start=%s\n' "$_pr" "$_ai" "$(date -Iseconds 2>/dev/null || date)"
+    printf '[gh-pr-approve-worker] pr=#%s ai=%s%s start=%s\n' "$_pr" "$_ai" "${_self_ok:+ self-ok}" "$(date -Iseconds 2>/dev/null || date)"
 
     # ---- Step 1: spawn worktree ----
     # Snapshot the worktree list before and after `gwt spawn` and diff them
@@ -353,8 +362,11 @@ _gh_pr_approve_worker() {
     # ---- Step 2: approve (selected ai runs /gh-pr-approve <N>) ----
     # Single-shot. The skill either approves with LGTM or files follow-up
     # issues and exits. No polling, no reply loop — that's gh-flow's job.
+    # When --self-ok is in effect, append it to the prompt so the skill
+    # bypasses the author==reviewer pre-flight stop.
     _gh_pr_approve_set_state "$_dir" "approving"
-    if ! _gh_pr_approve_run_ai_prompt "$_ai" "$_usage_log" "/gh-pr-approve $_pr" "/gh-pr-approve $_pr"; then
+    _prompt="/gh-pr-approve $_pr${_self_ok:+ $_self_ok}"
+    if ! _gh_pr_approve_run_ai_prompt "$_ai" "$_usage_log" "$_prompt" "$_prompt"; then
         _gh_pr_approve_set_state "$_dir" "failed:approving"
         printf '[gh-pr-approve-worker] /gh-pr-approve failed\n' >&2
         # Print usage even on failure — knowing how much quota a failed

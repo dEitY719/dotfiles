@@ -18,7 +18,10 @@ allowed-tools: Bash, Read, Grep, Glob
 ## Help
 
 If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
-output its content verbatim, then stop. No API calls.
+output its content verbatim, then stop. No API calls. Help is detected
+**only at arg #1** and takes precedence over the Step 1 arg parser —
+`--self-ok -h` is parsed as `--self-ok` followed by an unknown flag,
+not as a help request.
 
 ## Step 1: Resolve + Pre-flight Gate (parallel)
 
