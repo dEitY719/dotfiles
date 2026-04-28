@@ -17,6 +17,49 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
+# Fake `gh` shim used by the _gh_pr_closing_issue_numbers cases below.
+# Behaviour is selected by FAKE_GH_MODE so a single stub covers every case
+# we need (#264): zero closing issues, one, many, and the GraphQL-failure
+# path that proves the helper stays silent and returns 0.
+# ---------------------------------------------------------------------------
+_setup_fake_gh() {
+    STUB_BIN="$TEST_TEMP_HOME/bin"
+    mkdir -p "$STUB_BIN"
+    cat >"$STUB_BIN/gh" <<'GH'
+#!/usr/bin/env bash
+# Only the `gh api graphql ... --jq <expr>` shape is exercised here.
+case "${FAKE_GH_MODE:-zero}" in
+    zero)  exit 0 ;;
+    one)   echo 248 ; exit 0 ;;
+    many)  printf '248\n239\n241\n' ; exit 0 ;;
+    error) echo "graphql: Unknown JSON field" >&2 ; exit 1 ;;
+    *)     exit 0 ;;
+esac
+GH
+    chmod +x "$STUB_BIN/gh"
+}
+
+# Run _gh_pr_closing_issue_numbers in a bash subshell that has the fake gh
+# on PATH and FAKE_GH_MODE set. We can't reuse run_in_bash because it does
+# not forward PATH/env into the subshell.
+_run_closing_issues_bash() {
+    local mode="$1" args="$2"
+    run bash --noprofile --norc -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        export SHELL_COMMON='${SHELL_COMMON}'
+        export DOTFILES_FORCE_INIT=1
+        export DOTFILES_TEST_MODE=1
+        export HOME='${HOME}'
+        export TERM=dumb
+        export PATH='${STUB_BIN}:${PATH}'
+        export FAKE_GH_MODE='${mode}'
+        source '${DOTFILES_ROOT}/bash/main.bash'
+        _gh_pr_closing_issue_numbers ${args}
+        echo \"rc=\$?\"
+    "
+}
+
+# ---------------------------------------------------------------------------
 # Loading: helper available in both bash and zsh after main.* sources it
 # ---------------------------------------------------------------------------
 
@@ -148,4 +191,78 @@ teardown() {
     run_in_bash '_gh_project_status_in_list "In progress" "In progress" && echo MATCH || echo NO'
     assert_success
     assert_output --partial "MATCH"
+}
+
+# ---------------------------------------------------------------------------
+# _gh_pr_closing_issue_numbers — issue #264 (gh pr view --json missing field)
+# ---------------------------------------------------------------------------
+
+@test "bash: _gh_pr_closing_issue_numbers helper exists" {
+    run_in_bash 'declare -f _gh_pr_closing_issue_numbers >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "zsh: _gh_pr_closing_issue_numbers helper exists" {
+    run_in_zsh 'typeset -f _gh_pr_closing_issue_numbers >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "closing-issues: missing pr arg returns silently" {
+    run_in_bash '_gh_pr_closing_issue_numbers "" "owner/repo" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+}
+
+@test "closing-issues: missing repo arg returns silently" {
+    run_in_bash '_gh_pr_closing_issue_numbers 99 "" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+}
+
+@test "closing-issues: malformed repo without slash returns silently" {
+    # Guards against feeding a bare project name to gh, which would surface
+    # as a noisy GraphQL error in the merge report.
+    run_in_bash '_gh_pr_closing_issue_numbers 99 "no-slash" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    refute_output --partial "248"
+}
+
+@test "closing-issues: zero closing issues prints nothing, rc=0" {
+    _setup_fake_gh
+    _run_closing_issues_bash zero '99 owner/repo'
+    assert_success
+    assert_output --partial "rc=0"
+    refute_output --regexp '^[0-9]+$'
+}
+
+@test "closing-issues: one closing issue emits its number" {
+    _setup_fake_gh
+    _run_closing_issues_bash one '99 owner/repo'
+    assert_success
+    assert_output --partial "248"
+    assert_output --partial "rc=0"
+}
+
+@test "closing-issues: multiple closing issues each on their own line" {
+    _setup_fake_gh
+    _run_closing_issues_bash many '99 owner/repo'
+    assert_success
+    assert_output --partial "248"
+    assert_output --partial "239"
+    assert_output --partial "241"
+    assert_output --partial "rc=0"
+}
+
+@test "closing-issues: gh failure stays silent and returns 0" {
+    # This is the regression for #264: when the graphql call (or the older
+    # `gh pr view --json closingIssuesReferences` it replaces) errors out,
+    # the helper must swallow the error so the merge report is not blocked.
+    _setup_fake_gh
+    _run_closing_issues_bash error '99 owner/repo'
+    assert_success
+    assert_output --partial "rc=0"
+    refute_output --partial "Unknown JSON field"
 }
