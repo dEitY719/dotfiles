@@ -2,7 +2,7 @@
 
 ## Why this step exists
 
-GitHub Projects v2 builtin workflows are best-effort delivery. The
+GitHub Projects v2 builtin workflows are best-effort only. The
 `Item closed` workflow that should move closed Issue cards to `Done`
 occasionally drops events, leaving Issue cards stuck at `In review` even
 though the Issue itself is `CLOSED`. Concrete observation:
@@ -27,8 +27,8 @@ each linked Issue card to `Done`:
 
 for _issue in $(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
                   --json closingIssuesReferences \
-                  --jq '.closingIssuesReferences[].number'); do
-    _gh_project_status_sync issue "$_issue" "Done" \
+                  --jq '.closingIssuesReferences?[]?.number'); do
+    GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$_issue" "Done" \
         --only-from "Backlog,In progress,In review"
 done
 ```
@@ -41,8 +41,9 @@ The `--only-from` whitelist enforces three properties:
   `docs/standards/github-project-board.md`; if one shows up there, it is
   a manual override worth investigating, so the helper skips rather than
   silently overwriting.
-- Empty current Status (card never mounted on the board) also skips, so
-  this never accidentally adds boards to repos that don't have one.
+- Empty current Status (card never mounted on the board) is also
+  skipped, so this never accidentally adds boards to repos that don't
+  have one.
 
 ## When it does nothing
 

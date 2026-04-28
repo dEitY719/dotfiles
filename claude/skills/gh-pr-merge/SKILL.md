@@ -81,10 +81,10 @@ rationale; the call shape:
 
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
-for _issue in $(gh pr view <N> --repo "$TARGET_REPO" \
+for _issue in $(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
                   --json closingIssuesReferences \
-                  --jq '.closingIssuesReferences[].number'); do
-    _gh_project_status_sync issue "$_issue" "Done" \
+                  --jq '.closingIssuesReferences?[]?.number'); do
+    GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$_issue" "Done" \
         --only-from "Backlog,In progress,In review"
 done
 ```
