@@ -91,8 +91,26 @@ teardown() {
     assert_output --partial "mutually exclusive"
 }
 
+@test "zsh: spawn rejects --tmux and --launch together" {
+    run_in_zsh "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-xyz --tmux --launch 2>&1
+    "
+    assert_failure
+    assert_output --partial "mutually exclusive"
+}
+
 @test "bash: spawn rejects unknown agent when --launch is used" {
     run_in_bash "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-xyz --launch --agent notarealagent 2>&1
+    "
+    assert_failure
+    assert_output --partial "Unknown agent: notarealagent"
+}
+
+@test "zsh: spawn rejects unknown agent when --launch is used" {
+    run_in_zsh "
         cd '${DOTFILES_ROOT}' || exit 1
         git_worktree_spawn issue-xyz --launch --agent notarealagent 2>&1
     "
