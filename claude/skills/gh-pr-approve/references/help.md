@@ -7,11 +7,18 @@
 | 1 | PR number, or `-h`/`--help`/`help` | required unless current branch has a PR | Target PR, e.g. `99` |
 | 2 | remote name | `origin` | Git remote for the target repo |
 
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--self-ok` | Skip the self-review pre-flight stop (`author.login == ME`). Use when another AI agent authored the PR or when no human reviewer is available. Other stop conditions (draft, conflicting, failing checks) still apply. The bypass is recorded in the review body for audit. |
+
 ## Usage
 
 - `/gh-pr-approve 99` — review PR #99 on `origin`
 - `/gh-pr-approve 99 upstream` — PR #99 on `upstream`'s repo
 - `/gh-pr-approve` — review the PR open on the current branch
+- `/gh-pr-approve 99 --self-ok` — review PR #99 even though you authored it (multi-AI workflow / no human reviewer)
 - `/gh-pr-approve -h` / `--help` / `help` — print this help
 
 ## What the skill does
@@ -34,7 +41,7 @@
 
 ## What the skill won't do
 
-- Approve your own PR.
+- Approve your own PR (unless `--self-ok` is given — see Flags above).
 - Approve without reading the diff.
 - Merge the PR (author decides).
 - Create follow-up issues for trivia that don't justify a tracked item.

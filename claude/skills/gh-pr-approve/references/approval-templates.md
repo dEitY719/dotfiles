@@ -140,6 +140,21 @@ Never approve. List each blocker with a `file:line` pointer and the minimal fix 
 gh pr review <N> --repo "$TARGET_REPO" --request-changes --body-file "$BODY"
 ```
 
+## Self-approval audit trail
+
+When Step 1 is invoked with `--self-ok` and `author.login == ME`, prepend the
+following note to the review body for **6a** and **6b** (do not add to **6c**
+— request-changes never reaches this branch). Match the review language.
+
+```markdown
+> ⚠️ Self-approval via `--self-ok`. Author and reviewer are the same GitHub
+> user (`<ME>`). Justification: <multi-AI workflow / no human reviewer
+> available / etc.>.
+```
+
+The note is required, not optional — the audit trail is the safety net that
+makes the bypass acceptable.
+
 ## Language matching
 
 Scan the PR body + most recent 3 human comments. Reply in the dominant language. Korean PR → Korean review. Mixed → match the PR body.
