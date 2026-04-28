@@ -866,6 +866,29 @@ git_worktree_teardown() {
 # Cd's to main repo on success, restores cwd to original worktree on failure.
 # Args: <force> <keep_branch>
 # ============================================================================
+_gwt_claude_lock_pid() {
+    local wt_path="$1"
+    local git_dir lock_file lock_reason pid
+
+    git_dir="$(git -C "$wt_path" rev-parse --git-dir 2>/dev/null)" || return 1
+    case "$git_dir" in
+        /*) ;;
+        *) git_dir="$wt_path/$git_dir" ;;
+    esac
+    lock_file="${git_dir}/locked"
+    [ -f "$lock_file" ] || return 1
+
+    lock_reason="$(sed -n '1p' "$lock_file" 2>/dev/null)" || return 1
+    case "$lock_reason" in
+        *"claude agent "*" (pid "*")"*) ;;
+        *) return 1 ;;
+    esac
+
+    pid="$(printf '%s\n' "$lock_reason" | sed -n 's/.*(pid \([0-9][0-9]*\)).*/\1/p')"
+    [ -n "$pid" ] || return 1
+    printf '%s\n' "$pid"
+}
+
 _gwt_teardown_one_inplace() {
     # zsh compatibility
     if [ -n "${ZSH_VERSION-}" ]; then
@@ -882,6 +905,34 @@ _gwt_teardown_one_inplace() {
     if [ "$git_dir" = "$git_common" ]; then
         ux_error "Not inside a worktree. Nothing to tear down."
         return 1
+    fi
+
+    # Collect info before pre-flights so lock checks can run before dirty-state
+    # exits and leave stale Claude agent locks cleaned up for the next attempt.
+    local wt_path branch wt_name main_repo
+    wt_path="$(git rev-parse --show-toplevel)"
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    wt_name="$(basename "$wt_path")"
+    main_repo="$(dirname "$git_common")"
+
+    local claude_lock_pid="" claude_lock_live=false
+    if claude_lock_pid=$(_gwt_claude_lock_pid "$wt_path"); then
+        if kill -0 "$claude_lock_pid" 2>/dev/null; then
+            claude_lock_live=true
+            if [ "$force" != true ]; then
+                ux_error "Cannot remove worktree: $wt_path"
+                ux_warning "Claude agent lock is active (pid $claude_lock_pid). Another Claude session may still be using this worktree."
+                ux_info "  Inspect:  ps -p $claude_lock_pid"
+                ux_info "  Override: gwt teardown --force"
+                ux_info "            (only after confirming the Claude session is safe to discard)"
+                return 1
+            fi
+        else
+            ux_info "Stale Claude agent lock detected (pid $claude_lock_pid is not running) - unlocking worktree."
+            if ! git worktree unlock "$wt_path" 2>/dev/null; then
+                ux_warning "Failed to unlock stale Claude agent lock; git will report details if removal fails."
+            fi
+        fi
     fi
 
     # Pre-flight: uncommitted changes
@@ -933,13 +984,6 @@ _gwt_teardown_one_inplace() {
         fi
     fi
 
-    # Collect info before leaving
-    local wt_path branch wt_name main_repo
-    wt_path="$(git rev-parse --show-toplevel)"
-    branch="$(git rev-parse --abbrev-ref HEAD)"
-    wt_name="$(basename "$wt_path")"
-    main_repo="$(dirname "$git_common")"
-
     # Switch to main repo
     cd "$main_repo" || { ux_error "Cannot cd to $main_repo"; return 1; }
 
@@ -953,7 +997,12 @@ _gwt_teardown_one_inplace() {
     local _gwt_rm_err_file="${TMPDIR:-/tmp}/gwt-rm.$$.err"
     local _gwt_rm_exit=0
     if [ "$force" = true ]; then
-        git worktree remove --force "$wt_path" 2>"$_gwt_rm_err_file" || _gwt_rm_exit=$?
+        if [ "$claude_lock_live" = true ]; then
+            ux_warning "Removing Claude agent locked worktree (--force)."
+            git worktree remove -f -f "$wt_path" 2>"$_gwt_rm_err_file" || _gwt_rm_exit=$?
+        else
+            git worktree remove --force "$wt_path" 2>"$_gwt_rm_err_file" || _gwt_rm_exit=$?
+        fi
     else
         git worktree remove "$wt_path" 2>"$_gwt_rm_err_file" || _gwt_rm_exit=$?
     fi
