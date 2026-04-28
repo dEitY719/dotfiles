@@ -116,13 +116,254 @@ _gh_flow_run_ai_prompt() {
 }
 
 # ============================================================================
+# Verdict helpers (shared between status and scoped prune)
+# ============================================================================
+
+# Echo one of: MERGED | CLOSED | OPEN | EMPTY | UNREACHABLE
+# - EMPTY: pr.number missing or empty (worker never opened a PR)
+# - UNREACHABLE: gh CLI failed (network/auth) — verdict layer must tolerate it
+_gh_flow_pr_state() {
+    local _dir="$1"
+    local _pr_num _state _rc
+    if [ ! -s "$_dir/pr.number" ]; then
+        printf 'EMPTY'
+        return 0
+    fi
+    _pr_num="$(cat "$_dir/pr.number" 2>/dev/null)"
+    if [ -z "$_pr_num" ]; then
+        printf 'EMPTY'
+        return 0
+    fi
+    _state="$(gh pr view "$_pr_num" --json state --jq '.state' 2>/dev/null)"
+    _rc=$?
+    if [ "$_rc" -ne 0 ] || [ -z "$_state" ]; then
+        printf 'UNREACHABLE'
+        return 0
+    fi
+    printf '%s' "$_state"
+}
+
+# Print two lines for the given issue:
+#   <verdict-text>
+#   <next-action-text>
+# Reads <issue-dir>/state, /pid, /worktree.path, /pr.number, then composes the
+# matrix from the issue spec. Used by `gh-flow status <N>`; `gh-flow prune <N>`
+# can reuse the same source-of-truth in future iterations.
+_gh_flow_verdict() {
+    local _issue="$1"
+    local _dir _state _wt _pid _pid_alive _pr_state _verdict _action
+    _dir=$(_gh_flow_issue_dir "$_issue")
+    if [ ! -d "$_dir" ]; then
+        printf 'no state — issue not tracked\n(none)\n'
+        return 0
+    fi
+    _state="$(cat "$_dir/state" 2>/dev/null || printf 'unknown')"
+    _wt="$(cat "$_dir/worktree.path" 2>/dev/null || printf '')"
+    _pid="$(cat "$_dir/pid" 2>/dev/null || printf '')"
+    _pid_alive=0
+    if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+        _pid_alive=1
+    fi
+    _pr_state=$(_gh_flow_pr_state "$_dir")
+
+    case "$_state" in
+    done)
+        _verdict="done — safe to prune"
+        _action="gh-flow prune $_issue"
+        ;;
+    polling)
+        case "$_pr_state" in
+        MERGED | CLOSED)
+            _verdict="stuck poller — PR resolved, worker missed it"
+            if [ "$_pid_alive" = "1" ]; then
+                _action="gh-flow prune --force $_issue"
+            else
+                _action="gh-flow prune $_issue"
+            fi
+            ;;
+        OPEN)
+            _verdict="active polling — leave alone"
+            _action="(none — still working)"
+            ;;
+        *)
+            _verdict="stuck pre-PR — investigate log ($_pr_state)"
+            if [ "$_pid_alive" = "1" ]; then
+                _action="review 'tail -40 $_dir/log', then gh-flow prune --force $_issue"
+            else
+                _action="review 'tail -40 $_dir/log', then gh-flow prune $_issue"
+            fi
+            ;;
+        esac
+        ;;
+    failed:*)
+        if [ -n "$_wt" ] && [ -d "$_wt" ]; then
+            _verdict="dead failure, worktree alive"
+            _action="cd $_wt && gwt teardown --force, then gh-flow prune $_issue"
+        else
+            _verdict="dead failure — state-only cleanup"
+            _action="gh-flow prune $_issue"
+        fi
+        ;;
+    spawning | implementing | committing | opening-pr | replying | merging | tearing-down)
+        if [ "$_pid_alive" = "1" ]; then
+            _verdict="active worker ($_state) — leave alone"
+            _action="(none — still working)"
+        else
+            _verdict="dead worker mid-step ($_state)"
+            _action="gh-flow prune $_issue"
+        fi
+        ;;
+    *)
+        _verdict="unknown state ($_state)"
+        _action="inspect $_dir"
+        ;;
+    esac
+
+    printf '%s\n%s\n' "$_verdict" "$_action"
+}
+
+# ============================================================================
 # status / prune subcommands
 # ============================================================================
 
-# List all known gh-flow entries for the current repo. No args.
-# Output: a table of issue / state / pid-liveness / worktree path. Non-fatal
-# if there are no entries.
+# Per-issue diagnostic. Renders the layout from issue #252:
+#   header + State/Worker/PR/Worktree/Markers/Last log (+ tail -5)
+#   + Verdict / Next action (via _gh_flow_verdict).
+# Input: <issue-num> with optional leading '#'.
+_gh_flow_status_single() {
+    local _arg="$1"
+    local _issue _dir _state _pid _wt _pr_num _pid_state _wt_state
+    local _pr_state _pr_date _pr_info _markers _log _log_mtime _etime
+    local _verdict_out _verdict_text _action_text _name
+
+    _issue="${_arg#\#}"
+    case "$_issue" in
+    '' | *[!0-9]*)
+        ux_error "gh-flow status: invalid issue number '$_arg'"
+        return 1
+        ;;
+    esac
+
+    _name=$(_gh_flow_repo_name)
+    if [ -z "$_name" ]; then
+        ux_error "gh-flow status: not inside a git repo"
+        return 1
+    fi
+
+    _dir=$(_gh_flow_issue_dir "$_issue")
+    ux_header "gh-flow status #$_issue - $_name"
+    if [ ! -d "$_dir" ]; then
+        ux_warning "no state for #$_issue in $_name (worker never ran or already pruned)"
+        return 0
+    fi
+
+    _state="$(cat "$_dir/state" 2>/dev/null || printf 'unknown')"
+    _pid="$(cat "$_dir/pid" 2>/dev/null || printf '')"
+    _wt="$(cat "$_dir/worktree.path" 2>/dev/null || printf '')"
+    _pr_num="$(cat "$_dir/pr.number" 2>/dev/null || printf '')"
+
+    # Worker liveness with elapsed time (etime= is "[[DD-]HH:]MM:SS" on Linux).
+    if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+        _etime="$(ps -p "$_pid" -o etime= 2>/dev/null | tr -d ' ')"
+        if [ -n "$_etime" ]; then
+            _pid_state="pid=$_pid (alive, $_etime)"
+        else
+            _pid_state="pid=$_pid (alive)"
+        fi
+    elif [ -n "$_pid" ]; then
+        _pid_state="pid=$_pid (dead)"
+    else
+        _pid_state="-"
+    fi
+
+    # PR detail: state from _gh_flow_pr_state, plus a date for MERGED/CLOSED.
+    if [ -n "$_pr_num" ]; then
+        _pr_state=$(_gh_flow_pr_state "$_dir")
+        case "$_pr_state" in
+        MERGED)
+            _pr_date="$(gh pr view "$_pr_num" --json mergedAt --jq '.mergedAt | split("T")[0]' 2>/dev/null)"
+            _pr_info="#$_pr_num (MERGED${_pr_date:+, $_pr_date})"
+            ;;
+        CLOSED)
+            _pr_date="$(gh pr view "$_pr_num" --json closedAt --jq '.closedAt | split("T")[0]' 2>/dev/null)"
+            _pr_info="#$_pr_num (CLOSED${_pr_date:+, $_pr_date})"
+            ;;
+        OPEN) _pr_info="#$_pr_num (OPEN)" ;;
+        UNREACHABLE) _pr_info="#$_pr_num (unreachable — gh CLI failed)" ;;
+        *) _pr_info="#$_pr_num ($_pr_state)" ;;
+        esac
+    else
+        _pr_info="(none — worker never opened one)"
+    fi
+
+    # Worktree presence.
+    if [ -n "$_wt" ]; then
+        if [ -d "$_wt" ]; then
+            _wt_state="$_wt (present)"
+        else
+            _wt_state="$_wt (absent)"
+        fi
+    else
+        _wt_state="(none)"
+    fi
+
+    # Markers we know about today.
+    _markers=""
+    [ -f "$_dir/reply.done" ] && _markers="${_markers}reply.done "
+    _markers="${_markers% }"
+    [ -z "$_markers" ] && _markers="(none)"
+
+    ux_table_row "State" "$_state"
+    ux_table_row "Worker" "$_pid_state"
+    ux_table_row "PR" "$_pr_info"
+    ux_table_row "Worktree" "$_wt_state"
+    ux_table_row "Markers" "$_markers"
+
+    _log="$_dir/log"
+    if [ -f "$_log" ]; then
+        _log_mtime="$(date -r "$_log" '+%Y-%m-%d %H:%M' 2>/dev/null)"
+        if [ -n "$_log_mtime" ]; then
+            ux_table_row "Last log" "$_log_mtime"
+        else
+            ux_table_row "Last log" "$_log"
+        fi
+        printf '\n  --- tail -5 %s ---\n' "$_log"
+        tail -n 5 "$_log" 2>/dev/null | sed 's/^/  /'
+        printf '  ---\n'
+    else
+        ux_table_row "Last log" "(none)"
+    fi
+
+    # Heredoc (not pipe) so reads land in this shell — see auto-memory:
+    # subshell tracing trap.
+    _verdict_out=$(_gh_flow_verdict "$_issue")
+    {
+        IFS= read -r _verdict_text || _verdict_text=""
+        IFS= read -r _action_text || _action_text=""
+    } <<EOF
+$_verdict_out
+EOF
+
+    ux_info ""
+    ux_table_row "Verdict" "$_verdict_text"
+    ux_table_row "Next action" "$_action_text"
+}
+
+# List all known gh-flow entries for the current repo, OR diagnose a single
+# issue if exactly one positional arg is given. Multiple positional args are
+# rejected (single-issue diagnostic only).
+# Output (no-arg): a table of issue / state / pid-liveness / worktree path.
+# Output (1 arg):  see _gh_flow_status_single.
 _gh_flow_status() {
+    if [ $# -gt 1 ]; then
+        ux_error "gh-flow status: only one issue number accepted (got $#)"
+        return 1
+    fi
+    if [ -n "${1:-}" ]; then
+        _gh_flow_status_single "$1"
+        return $?
+    fi
+
     local _root _name _repo_dir _entry _issue _state _pid _wt _pid_state
     _root=$(_gh_flow_state_root)
     _name=$(_gh_flow_repo_name)
@@ -169,21 +410,121 @@ _gh_flow_status() {
     ux_info "Run 'gh-flow prune' to clean done entries and list failed worktrees."
 }
 
-# Remove state dirs whose state is 'done'; report still-present worktrees for
-# 'failed:*' entries. Args: [--force] → with --force, also 'gwt teardown
-# --force' each failed worktree.
+# Scoped prune: only the issue numbers passed in are touched. Refuses to
+# remove a state dir whose worker is still alive (unless --force) or whose
+# worktree dir still exists (always rejected — that's `gwt teardown`'s job).
+# $1 = repo state dir, $2 = force flag (0|1), remaining args = issue numbers.
+_gh_flow_prune_scoped() {
+    local _repo_dir="$1" _force="$2"
+    shift 2
+
+    ux_header "gh-flow prune - $(basename "$_repo_dir")"
+
+    local _issue _entry _state _pid _wt _pid_alive
+    local _processed=0 _rejected=0 _removed=0
+    for _issue in "$@"; do
+        _entry="$_repo_dir/$_issue"
+        _processed=$((_processed + 1))
+        if [ ! -d "$_entry" ]; then
+            ux_warning "#$_issue no state to prune"
+            continue
+        fi
+        _state="$(cat "$_entry/state" 2>/dev/null || printf '')"
+        _pid="$(cat "$_entry/pid" 2>/dev/null || printf '')"
+        _wt="$(cat "$_entry/worktree.path" 2>/dev/null || printf '')"
+
+        _pid_alive=0
+        if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+            _pid_alive=1
+        fi
+
+        # Worktree present? Always reject — even with --force. Tearing it down
+        # is `gwt teardown`'s job (branch admin, secrets, git worktree prune).
+        if [ -n "$_wt" ] && [ -d "$_wt" ]; then
+            ux_error "#$_issue worktree exists at $_wt — run 'cd $_wt && gwt teardown --force' first"
+            _rejected=$((_rejected + 1))
+            continue
+        fi
+
+        # Alive worker? Accept only with --force.
+        if [ "$_pid_alive" = "1" ]; then
+            if [ "$_force" != "1" ]; then
+                ux_error "#$_issue worker pid=$_pid still alive — pass --force to kill and remove"
+                _rejected=$((_rejected + 1))
+                continue
+            fi
+            ux_warning "#$_issue killing worker pid=$_pid"
+            kill -TERM "$_pid" 2>/dev/null || true
+            sleep 1
+            if kill -0 "$_pid" 2>/dev/null; then
+                kill -KILL "$_pid" 2>/dev/null || true
+            fi
+        fi
+
+        rm -rf "$_entry"
+        ux_success "removed state for #$_issue (was: ${_state:-unknown})"
+        _removed=$((_removed + 1))
+    done
+
+    ux_info ""
+    if [ "$_rejected" -gt 0 ]; then
+        ux_warning "processed $_processed, removed $_removed, rejected $_rejected"
+        return 1
+    fi
+    ux_success "processed $_processed, removed $_removed"
+    return 0
+}
+
+# Prune state dirs. Two modes:
+#   1) No positional args:  full-scan flow — remove 'done', list 'failed:*'
+#      worktrees (and `gwt teardown` them when --force is set).
+#   2) One or more issue numbers: scoped flow (see _gh_flow_prune_scoped).
+# Flag: --force changes scoped behavior (kill alive pid) and full-scan
+# behavior (auto-teardown failed worktrees).
 _gh_flow_prune() {
     local _force=0
-    case "${1:-}" in
-    --force | -f) _force=1 ;;
-    '') : ;;
-    *)
-        ux_error "gh-flow prune: unknown arg '$1' (only --force is accepted)"
-        return 1
-        ;;
-    esac
+    local _scoped="" _arg _issue
 
-    local _root _name _repo_dir _entry _issue _state _wt
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --force | -f) _force=1 ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            ux_error "gh-flow prune: unknown arg '$1' (only --force is accepted)"
+            return 1
+            ;;
+        *)
+            _arg="$1"
+            _issue="${_arg#\#}"
+            case "$_issue" in
+            '' | *[!0-9]*)
+                ux_error "gh-flow prune: invalid issue number '$_arg'"
+                return 1
+                ;;
+            esac
+            _scoped="$_scoped $_issue"
+            ;;
+        esac
+        shift
+    done
+    # After --, any remaining args are positional issue numbers.
+    while [ $# -gt 0 ]; do
+        _arg="$1"
+        _issue="${_arg#\#}"
+        case "$_issue" in
+        '' | *[!0-9]*)
+            ux_error "gh-flow prune: invalid issue number '$_arg'"
+            return 1
+            ;;
+        esac
+        _scoped="$_scoped $_issue"
+        shift
+    done
+
+    local _root _name _repo_dir _entry _state _wt
     _root=$(_gh_flow_state_root)
     _name=$(_gh_flow_repo_name)
     if [ -z "$_name" ]; then
@@ -191,6 +532,12 @@ _gh_flow_prune() {
         return 1
     fi
     _repo_dir="$_root/$_name"
+
+    if [ -n "$_scoped" ]; then
+        # shellcheck disable=SC2086
+        _gh_flow_prune_scoped "$_repo_dir" "$_force" $_scoped
+        return $?
+    fi
 
     ux_header "gh-flow prune - $_name"
     if [ ! -d "$_repo_dir" ]; then
@@ -249,9 +596,9 @@ gh_flow_help() {
     ux_info "Usage:"
     ux_bullet "gh-flow <issue-number>... [--ai <agent>]  spawn N parallel workers"
     ux_bullet_sub "agent: claude (default) | codex | gemini"
-    ux_bullet "gh-flow status                  show state of known issues in this repo"
-    ux_bullet "gh-flow prune [--force]         clean 'done' state; list 'failed:*' worktrees"
-    ux_bullet "gh-flow -h|--help|help          this help"
+    ux_bullet "gh-flow status [<N>]            full table, or per-issue diagnostic"
+    ux_bullet "gh-flow prune [--force] [<N>...] clean 'done' state, or scoped per-issue prune"
+    ux_bullet "gh-flow -h|--help|help           this help"
     ux_info ""
     ux_info "Spawn pipeline (each worker runs these sequentially):"
     ux_bullet "gwt spawn → /gh-issue-implement → /gh-commit → /gh-pr"
@@ -263,9 +610,12 @@ gh_flow_help() {
     ux_bullet "gh-flow 13 42 88            # 3 issues in parallel"
     ux_bullet "gh-flow 33 --ai codex       # run workers with codex CLI"
     ux_bullet "gh-flow --ai gemini 44      # run workers with gemini CLI"
-    ux_bullet "gh-flow status              # who's still running, who failed"
+    ux_bullet "gh-flow status              # full table — who's still running, who failed"
+    ux_bullet "gh-flow status 153          # per-issue diagnostic (verdict + next action)"
     ux_bullet "gh-flow prune               # remove 'done' state dirs; print hints for failures"
     ux_bullet "gh-flow prune --force       # also gwt teardown failed worktrees"
+    ux_bullet "gh-flow prune 153 199       # scoped — refuses if pid alive or worktree present"
+    ux_bullet "gh-flow prune --force 153   # scoped + kill alive pid (worktree still rejected)"
     ux_info ""
     ux_info "State directory: ~/.local/state/gh-flow/<repo>/<issue>/"
     ux_bullet_sub "state         - current step"
