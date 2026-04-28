@@ -20,7 +20,12 @@ set -euo pipefail
 printf '%s\n' "$*" >> "${MOCK_GH_LOG}"
 
 if [[ "$1" == "auth" && "$2" == "status" ]]; then
-    cat "${MOCK_GH_AUTH_JSON}"
+    printf 'unknown flag: --json\n' >&2
+    exit 1
+fi
+
+if [[ "$1" == "api" && "$2" == "user" && "${3-}" == "-i" ]]; then
+    cat "${MOCK_GH_AUTH_HEADERS}"
     exit 0
 fi
 
@@ -96,20 +101,32 @@ $*
 EOF
 }
 
+write_auth_headers() {
+    local path="$1"
+    local scopes="$2"
+
+    cat >"$path" <<EOF
+HTTP/2 200
+x-oauth-scopes: ${scopes}
+content-type: application/json
+
+{"login":"mock"}
+EOF
+}
+
 run_setup_kanban() {
     run bash "$SETUP_KANBAN_SCRIPT" "$@"
 }
 
 @test "dry-run accepts read-only project scope and prints org workflow checklist" {
-    export MOCK_GH_AUTH_JSON="${TEST_TEMP_HOME}/auth.json"
+    export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
     export MOCK_GH_REPO_CONTEXT_JSON="${TEST_TEMP_HOME}/repo.json"
     export MOCK_GH_EXISTING_PROJECTS_JSON="${TEST_TEMP_HOME}/projects.json"
     export MOCK_GH_CREATE_PROJECT_JSON="${TEST_TEMP_HOME}/create.json"
     export MOCK_GH_STATUS_FIELD_JSON="${TEST_TEMP_HOME}/status.json"
     export MOCK_GH_TEMPLATE_JSON="${TEST_TEMP_HOME}/template.json"
 
-    write_json_fixture "$MOCK_GH_AUTH_JSON" \
-        '{"hosts":{"github.com":[{"active":true,"scopes":"repo, read:project"}]}}'
+    write_auth_headers "$MOCK_GH_AUTH_HEADERS" "repo, read:project"
     write_json_fixture "$MOCK_GH_REPO_CONTEXT_JSON" \
         '{"data":{"repository":{"id":"R_org","name":"widget","url":"https://github.com/acme/widget","owner":{"__typename":"Organization","login":"acme","id":"O_1"},"defaultBranchRef":{"name":"main"}}}}'
     write_json_fixture "$MOCK_GH_EXISTING_PROJECTS_JSON" \
@@ -127,6 +144,12 @@ run_setup_kanban() {
     assert_output --partial "Workflows: https://github.com/orgs/acme/projects/0/workflows"
     assert_output --partial "hide 'Approved' and 'Ready'"
 
+    grep -q '^api user -i$' "$MOCK_LOG"
+    if grep -q '^auth status' "$MOCK_LOG"; then
+        echo "auth status should not be used for scope detection"
+        return 1
+    fi
+
     if grep -q 'mutation CreateProject' "$MOCK_LOG"; then
         echo "CreateProject mutation should not run in dry-run mode"
         return 1
@@ -134,15 +157,14 @@ run_setup_kanban() {
 }
 
 @test "existing project exits successfully without mutations" {
-    export MOCK_GH_AUTH_JSON="${TEST_TEMP_HOME}/auth.json"
+    export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
     export MOCK_GH_REPO_CONTEXT_JSON="${TEST_TEMP_HOME}/repo.json"
     export MOCK_GH_EXISTING_PROJECTS_JSON="${TEST_TEMP_HOME}/projects.json"
     export MOCK_GH_CREATE_PROJECT_JSON="${TEST_TEMP_HOME}/create.json"
     export MOCK_GH_STATUS_FIELD_JSON="${TEST_TEMP_HOME}/status.json"
     export MOCK_GH_TEMPLATE_JSON="${TEST_TEMP_HOME}/template.json"
 
-    write_json_fixture "$MOCK_GH_AUTH_JSON" \
-        '{"hosts":{"github.com":[{"active":true,"scopes":"repo, project"}]}}'
+    write_auth_headers "$MOCK_GH_AUTH_HEADERS" "repo, project"
     write_json_fixture "$MOCK_GH_REPO_CONTEXT_JSON" \
         '{"data":{"repository":{"id":"R_user","name":"dotfiles","url":"https://github.com/deity/dotfiles","owner":{"__typename":"User","login":"deity","id":"U_1"},"defaultBranchRef":{"name":"main"}}}}'
     write_json_fixture "$MOCK_GH_EXISTING_PROJECTS_JSON" \
@@ -166,15 +188,14 @@ run_setup_kanban() {
 }
 
 @test "new project path performs project, field, and template mutations" {
-    export MOCK_GH_AUTH_JSON="${TEST_TEMP_HOME}/auth.json"
+    export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
     export MOCK_GH_REPO_CONTEXT_JSON="${TEST_TEMP_HOME}/repo.json"
     export MOCK_GH_EXISTING_PROJECTS_JSON="${TEST_TEMP_HOME}/projects.json"
     export MOCK_GH_CREATE_PROJECT_JSON="${TEST_TEMP_HOME}/create.json"
     export MOCK_GH_STATUS_FIELD_JSON="${TEST_TEMP_HOME}/status.json"
     export MOCK_GH_TEMPLATE_JSON="${TEST_TEMP_HOME}/template.json"
 
-    write_json_fixture "$MOCK_GH_AUTH_JSON" \
-        '{"hosts":{"github.com":[{"active":true,"scopes":"repo, project"}]}}'
+    write_auth_headers "$MOCK_GH_AUTH_HEADERS" "repo, project"
     write_json_fixture "$MOCK_GH_REPO_CONTEXT_JSON" \
         '{"data":{"repository":{"id":"R_new","name":"widget","url":"https://github.com/deity/widget","owner":{"__typename":"User","login":"deity","id":"U_9"},"defaultBranchRef":{"name":"main"}}}}'
     write_json_fixture "$MOCK_GH_EXISTING_PROJECTS_JSON" \
@@ -196,4 +217,15 @@ run_setup_kanban() {
     grep -q 'mutation LinkProject' "$MOCK_LOG"
     grep -q 'mutation UpdateStatusField' "$MOCK_LOG"
     grep -q 'repos/deity/widget/contents/.github/pull_request_template.md' "$MOCK_LOG"
+}
+
+@test "missing project scope fails from gh api header scopes" {
+    export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
+
+    write_auth_headers "$MOCK_GH_AUTH_HEADERS" "repo, gist"
+
+    run_setup_kanban --owner deity --repo dotfiles
+    assert_failure
+    assert_output --partial "Your gh token is missing the project scope required for mutations"
+    grep -q '^api user -i$' "$MOCK_LOG"
 }

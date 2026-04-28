@@ -132,11 +132,17 @@ require_command() {
 auth_scopes_csv() {
     local scopes
 
-    scopes="$(gh auth status --json hosts 2>/dev/null | jq -r '
-        .hosts?["github.com"]?[]?
-        | select(.active == true)
-        | .scopes // empty
-    ' | head -n1)"
+    scopes="$(gh api user -i 2>/dev/null | awk '
+        {
+            line = $0
+            sub(/\r$/, "", line)
+            if (index(tolower(line), "x-oauth-scopes:") == 1) {
+                sub(/^[^:]*:[[:space:]]*/, "", line)
+                print line
+                exit
+            }
+        }
+    ')"
 
     if [ -z "$scopes" ]; then
         return 1
@@ -149,7 +155,7 @@ require_project_scope() {
     local scopes_csv need_scope
 
     if ! scopes_csv="$(auth_scopes_csv)"; then
-        die "gh auth status could not find an active github.com login. Run: gh auth login --scopes \"project\""
+        die "gh api user could not read token scopes. Run: gh auth login --scopes \"project\""
     fi
 
     need_scope="project"
