@@ -146,6 +146,13 @@ teardown() {
     assert_output --partial "claude (default) | codex | gemini"
 }
 
+@test "help: documents self-PR modes" {
+    run_in_bash 'gh_pr_approve --help'
+    assert_success
+    assert_output --partial "--self-record"
+    assert_output --partial "--admin-merge"
+}
+
 @test "bash: '--ai codex' parses (precondition fails on missing codex CLI, not parser)" {
     # We can't easily fake the codex/gemini CLI here, so we assert the
     # parser accepted the value and produced a precondition-shaped error
@@ -191,4 +198,33 @@ teardown() {
     run_in_bash "cd '$FAKE_REPO' && gh_pr_approve --bogus 42 2>&1"
     assert_failure
     assert_output --partial "unknown option"
+}
+
+# ---------------------------------------------------------------------------
+# self-PR options
+# ---------------------------------------------------------------------------
+
+@test "bash: legacy --self-ok is rejected with server-side guidance" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve 42 --self-ok 2>&1"
+    assert_failure
+    assert_output --partial "--self-ok is not supported"
+    assert_output --partial "server-side"
+}
+
+@test "bash: '--self-record' parses as a self-PR mode" {
+    run_in_bash "cd '$FAKE_REPO' && PATH=/nonexistent gh_pr_approve 42 --self-record 2>&1 || true"
+    refute_output --partial "unknown option"
+    refute_output --partial "invalid PR number"
+}
+
+@test "bash: '--admin-merge --squash' parses as a self-PR mode" {
+    run_in_bash "cd '$FAKE_REPO' && PATH=/nonexistent gh_pr_approve 42 --admin-merge --squash 2>&1 || true"
+    refute_output --partial "unknown option"
+    refute_output --partial "invalid PR number"
+}
+
+@test "bash: merge strategy flags require --admin-merge" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve 42 --squash 2>&1"
+    assert_failure
+    assert_output --partial "--squash requires --admin-merge"
 }

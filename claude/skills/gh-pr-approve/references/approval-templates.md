@@ -9,12 +9,12 @@ BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
 
 ## 6a — Clean LGTM
 
-No findings. Approve with 👍 and 2–4 specific compliments.
+No findings. Approve with 2–4 specific compliments.
 
 ### Body template
 
 ```markdown
-LGTM 👍
+LGTM
 
 ### 요약
 <한 문단 — 이 PR이 달성한 것, 리뷰 관점의 핵심 포인트>
@@ -92,7 +92,7 @@ Approve는 별도로 제출합니다 — 아래 리뷰 참고.
 Body template (extends 6a + a follow-up section):
 
 ```markdown
-LGTM 👍
+LGTM
 
 ### 요약
 <PR 핵심 요약 1문단>
@@ -140,44 +140,37 @@ Never approve. List each blocker with a `file:line` pointer and the minimal fix 
 gh pr review <N> --repo "$TARGET_REPO" --request-changes --body-file "$BODY"
 ```
 
-## Self-approval audit trail
+## Self-PR bodies
 
-When Step 1 is invoked with `--self-ok` and `author.login == ME`, prepend the
-following note to the review body for **6a** and **6b** (do not add to **6c**
-— request-changes never reaches this branch).
+Self-authored PRs never use `--approve`; GitHub rejects same-user approval
+server-side. Use `self-pr-handling.md` for mode selection and command shapes.
+
+### `--self-record` body suffix
+
+Append this to the review body before `gh pr review --comment` or fallback
+`gh pr comment`:
 
 ```markdown
-> ⚠️ Self-approval via `--self-ok`. Author and reviewer are the same GitHub
-> user (`<ME>`). Justification: <one concrete reason — see picker below>.
+### Self-PR note
+
+This is a self-authored PR. GitHub blocks self-approval server-side, so this
+comment records review analysis only and does not satisfy review-based branch
+protection. External review or admin merge is still required where protection
+rules apply.
 ```
 
-**Picking the justification.** Replace `<one concrete reason ...>` with a
-single, specific sentence. Do **not** paste a slash-separated list and do
-**not** leave the placeholder verbatim. Choose by scanning the user's
-invocation context (slash-command transcript, recent chat, PR description)
-in this order:
+### `--admin-merge` body note
 
-1. **Explicit user reason.** If the user named one (e.g. "동료 둘 다 연차",
-   "codex가 만든 PR을 claude가 리뷰"), reuse their phrasing trimmed to one
-   sentence.
-2. **Multi-AI workflow.** Use this when the author and reviewer are
-   different AI agents (codex/gemini/claude) acting under the same GitHub
-   user — phrase it concretely, e.g. "Authored by codex, reviewed by
-   claude under shared user `dEitY719`".
-3. **No human reviewer available.** Use when colleagues with review
-   access are unavailable; name the constraint, e.g. "All eligible
-   human reviewers OOO until 2026-05-02".
-4. **Last resort.** If none of the above applies, refuse the bypass —
-   `--self-ok` without a defensible justification defeats the audit trail.
-   Stop and ask the user before proceeding.
+If follow-up issues are created before an admin merge, post one PR comment:
 
-**Language convention.** The leading `⚠️ Self-approval via --self-ok` line
-stays in English regardless of the PR language — it's the searchable
-audit anchor across repos. Only the `Justification:` text matches the
-PR's dominant language (Korean PR → Korean justification).
+```markdown
+Self-authored PR reviewed before admin merge. GitHub blocks self-approval
+server-side, so no approving review was submitted.
 
-The note is required, not optional — the audit trail is the safety net that
-makes the bypass acceptable.
+Follow-up issues:
+- #<A> — <one-line summary>
+- #<B> — <one-line summary>
+```
 
 ## Language matching
 
@@ -186,5 +179,5 @@ Scan the PR body + most recent 3 human comments. Reply in the dominant language.
 ## Don'ts
 
 - **Never** attach `--label`/`--assignee`/`--milestone` to follow-up issues unless verified via `gh label list` / `gh api` that they exist — silent failures or surprise taxonomy damage is worse than terse issues.
-- **Never** submit a `--comment` review as a substitute for `--approve`. "Comment" reviews don't satisfy branch protection and will confuse the author.
+- **Never** submit a `--comment` review as a substitute for `--approve`, except the explicit `--self-record` path. Comment reviews do not satisfy branch protection.
 - **Never** re-submit a review if one already exists — GitHub dismisses stale ones; check `reviewDecision` first.

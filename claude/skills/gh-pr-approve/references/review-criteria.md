@@ -66,4 +66,7 @@ Generic praise ("great job!", "looks good!") is worse than none — it signals a
 
 ## Self-review guard
 
-Before submitting: if the PR author's login equals `ME`, stop. GitHub itself will reject the approval, but the skill should fail fast with a clear message rather than let `gh pr review` error out.
+Before submitting an approving review: if the PR author's login equals
+`ME`, do not call `gh pr review --approve`. GitHub rejects same-user
+self-approval server-side. Use `self-pr-handling.md` for the
+analysis-only, `--self-record`, or `--admin-merge` paths.
