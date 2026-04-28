@@ -337,7 +337,7 @@ _gh_pr_approve_spawn_worker() {
     # shellcheck disable=SC2016
     nohup env DOTFILES_FORCE_INIT=1 bash -c '
         . "$HOME/.bashrc" 2>/dev/null || true
-        _gh_pr_approve_worker "$1" "$2" "$3"
+        _gh_pr_approve_worker "$@"
     ' -- "$_pr" "$_ai" "$_self_args" </dev/null >"$_log" 2>&1 &
     _pid=$!
     disown "$_pid" 2>/dev/null || true
