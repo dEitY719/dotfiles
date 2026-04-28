@@ -484,36 +484,31 @@ _gh_flow_prune_scoped() {
 # behavior (auto-teardown failed worktrees).
 _gh_flow_prune() {
     local _force=0
-    local _scoped="" _arg _issue
+    local _scoped="" _arg _issue _parsing_flags=1
 
+    # Single-pass arg parsing. `_parsing_flags=1` means flags are still
+    # honored; `--` flips to 0 and remaining tokens are issue numbers.
     while [ $# -gt 0 ]; do
-        case "$1" in
-        --force | -f) _force=1 ;;
-        --)
-            shift
-            break
-            ;;
-        -*)
-            ux_error "gh-flow prune: unknown arg '$1' (only --force is accepted)"
-            return 1
-            ;;
-        *)
-            _arg="$1"
-            _issue="${_arg#\#}"
-            case "$_issue" in
-            '' | *[!0-9]*)
-                ux_error "gh-flow prune: invalid issue number '$_arg'"
+        _arg="$1"
+        if [ "$_parsing_flags" = "1" ]; then
+            case "$_arg" in
+            --force | -f)
+                _force=1
+                shift
+                continue
+                ;;
+            --)
+                _parsing_flags=0
+                shift
+                continue
+                ;;
+            -*)
+                ux_error "gh-flow prune: unknown arg '$_arg' (only --force is accepted)"
                 return 1
                 ;;
             esac
-            _scoped="$_scoped $_issue"
-            ;;
-        esac
-        shift
-    done
-    # After --, any remaining args are positional issue numbers.
-    while [ $# -gt 0 ]; do
-        _arg="$1"
+        fi
+
         _issue="${_arg#\#}"
         case "$_issue" in
         '' | *[!0-9]*)
