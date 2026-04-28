@@ -53,36 +53,36 @@ _gh_pr_approve_get_state() {
 # Returns 0 if the ai runner is one of: claude, codex, gemini.
 _gh_pr_approve_known_ai() {
     case "$1" in
-        claude|codex|gemini) return 0 ;;
-        *) return 1 ;;
+    claude | codex | gemini) return 0 ;;
+    *) return 1 ;;
     esac
 }
 
 # Ensure the selected ai CLI exists in PATH.
 _gh_pr_approve_require_ai_cli() {
     case "$1" in
-        claude)
-            if ! _have claude; then
-                ux_error "claude CLI not found"
-                return 1
-            fi
-            ;;
-        codex)
-            if ! _have codex; then
-                ux_error "codex CLI not found"
-                return 1
-            fi
-            ;;
-        gemini)
-            if ! _have gemini; then
-                ux_error "gemini CLI not found"
-                return 1
-            fi
-            ;;
-        *)
-            ux_error "invalid --ai value: '$1' (allowed: claude, codex, gemini)"
+    claude)
+        if ! _have claude; then
+            ux_error "claude CLI not found"
             return 1
-            ;;
+        fi
+        ;;
+    codex)
+        if ! _have codex; then
+            ux_error "codex CLI not found"
+            return 1
+        fi
+        ;;
+    gemini)
+        if ! _have gemini; then
+            ux_error "gemini CLI not found"
+            return 1
+        fi
+        ;;
+    *)
+        ux_error "invalid --ai value: '$1' (allowed: claude, codex, gemini)"
+        return 1
+        ;;
     esac
 }
 
@@ -104,20 +104,23 @@ _gh_pr_approve_run_ai_prompt() {
 gh_pr_approve_help() {
     ux_header "gh-pr-approve - fire-and-forget GitHub PR approval runner"
     ux_info "Usage:"
-    ux_bullet "gh-pr-approve <pr-number>... [--ai <agent>] [--self-ok]"
+    ux_bullet "gh-pr-approve <pr-number>... [--ai <agent>] [--self-record|--admin-merge] [--squash|--rebase|--merge]"
     ux_bullet_sub "agent: claude (default) | codex | gemini"
-    ux_bullet_sub "--self-ok: bypass author==reviewer pre-flight stop in the worker's skill prompt"
+    ux_bullet_sub "--self-record: for self-authored PRs, leave a comment-only review record"
+    ux_bullet_sub "--admin-merge: for self-authored PRs, review then merge with gh pr merge --admin"
+    ux_bullet_sub "--squash|--rebase|--merge: optional merge strategy for --admin-merge"
     ux_bullet "gh-pr-approve -h|--help|help"
     ux_info ""
     ux_info "Spawns one background worker per PR. Each worker:"
-    ux_bullet "gwt spawn → <ai> -p '/gh-pr-approve <N> [--self-ok]' → gwt teardown"
+    ux_bullet "gwt spawn -> <ai> -p '/gh-pr-approve <N> [self-PR flags]' -> gwt teardown"
     ux_info ""
     ux_info "Examples:"
-    ux_bullet "gh-pr-approve 42                       # single PR (default: claude)"
-    ux_bullet "gh-pr-approve 12 34 56                 # 3 PRs in parallel"
-    ux_bullet "gh-pr-approve 42 --ai codex            # run worker with codex CLI"
-    ux_bullet "gh-pr-approve --ai gemini '#56' '#78'  # gemini + #prefix"
-    ux_bullet "gh-pr-approve 42 --self-ok             # multi-AI workflow / no human reviewer"
+    ux_bullet "gh-pr-approve 42                            # single PR (default: claude)"
+    ux_bullet "gh-pr-approve 12 34 56                      # 3 PRs in parallel"
+    ux_bullet "gh-pr-approve 42 --ai codex                 # run worker with codex CLI"
+    ux_bullet "gh-pr-approve --ai gemini '#56' '#78'       # gemini + #prefix"
+    ux_bullet "gh-pr-approve 42 --self-record              # self-PR comment-only record"
+    ux_bullet "gh-pr-approve 42 --admin-merge --squash     # self-PR admin merge"
     ux_info ""
     ux_info "State directory: ~/.local/state/gh-pr-approve/<repo>/<pr>/"
     ux_bullet_sub "state         - current step"
@@ -152,47 +155,81 @@ gh_pr_approve() {
     fi
 
     case "${1:-}" in
-        ""|-h|--help|help)
-            gh_pr_approve_help
-            return 0
-            ;;
+    "" | -h | --help | help)
+        gh_pr_approve_help
+        return 0
+        ;;
     esac
 
     # Parse optional args:
     #   --ai <claude|codex|gemini>
     #   --ai=<claude|codex|gemini>
-    #   --self-ok                 (bypass author==reviewer pre-flight in skill)
+    #   --self-record             (comment-only self-PR mode in skill)
+    #   --admin-merge             (admin merge self-PR mode in skill)
+    #   --squash|--rebase|--merge (optional admin merge strategy)
     # Position-agnostic: any flag may appear before, between, or after PR numbers.
     local _ai="claude"
-    local _self_ok=""
+    local _self_record=0
+    local _admin_merge=0
+    local _merge_strategy=""
+    local _self_args=""
     local _pr_input=""
     while [ $# -gt 0 ]; do
         case "$1" in
-            --ai)
-                shift
-                if [ $# -eq 0 ]; then
-                    ux_error "missing value for --ai (expected: claude|codex|gemini)"
-                    return 1
-                fi
-                _ai="$1"
-                ;;
-            --ai=*)
-                _ai="${1#--ai=}"
-                ;;
-            --self-ok)
-                _self_ok="--self-ok"
-                ;;
-            -*)
-                ux_error "unknown option: '$1'"
-                ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>] [--self-ok]"
+        --ai)
+            shift
+            if [ $# -eq 0 ]; then
+                ux_error "missing value for --ai (expected: claude|codex|gemini)"
                 return 1
-                ;;
-            *)
-                _pr_input="$_pr_input $1"
-                ;;
+            fi
+            _ai="$1"
+            ;;
+        --ai=*)
+            _ai="${1#--ai=}"
+            ;;
+        --self-ok)
+            ux_error "--self-ok is not supported; GitHub blocks self-approval server-side"
+            ux_info "Use --self-record for a comment-only audit trail or --admin-merge if you have admin rights."
+            return 1
+            ;;
+        --self-record)
+            _self_record=1
+            ;;
+        --admin-merge)
+            _admin_merge=1
+            ;;
+        --squash | --rebase | --merge)
+            if [ -n "$_merge_strategy" ]; then
+                ux_error "multiple merge strategies provided: '$_merge_strategy' and '$1'"
+                return 1
+            fi
+            _merge_strategy="$1"
+            ;;
+        -*)
+            ux_error "unknown option: '$1'"
+            ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>] [--self-record|--admin-merge]"
+            return 1
+            ;;
+        *)
+            _pr_input="$_pr_input $1"
+            ;;
         esac
         shift
     done
+
+    if [ "$_self_record" -eq 1 ] && [ "$_admin_merge" -eq 1 ]; then
+        ux_error "--self-record and --admin-merge are mutually exclusive"
+        return 1
+    fi
+    if [ -n "$_merge_strategy" ] && [ "$_admin_merge" -ne 1 ]; then
+        ux_error "$_merge_strategy requires --admin-merge"
+        return 1
+    fi
+    if [ "$_self_record" -eq 1 ]; then
+        _self_args="--self-record"
+    elif [ "$_admin_merge" -eq 1 ]; then
+        _self_args="--admin-merge${_merge_strategy:+ $_merge_strategy}"
+    fi
 
     if ! _gh_pr_approve_known_ai "$_ai"; then
         ux_error "invalid --ai value: '$_ai' (expected: claude|codex|gemini)"
@@ -238,10 +275,10 @@ gh_pr_approve() {
     for _pr in $_pr_input; do
         _pr_clean="${_pr#\#}"
         case "$_pr_clean" in
-            ''|*[!0-9]*)
-                ux_error "invalid PR number: '$_pr' (must be positive integer, '#' prefix allowed)"
-                return 1
-                ;;
+        '' | *[!0-9]*)
+            ux_error "invalid PR number: '$_pr' (must be positive integer, '#' prefix allowed)"
+            return 1
+            ;;
         esac
         _pr_args="$_pr_args $_pr_clean"
         _pr_count=$((_pr_count + 1))
@@ -249,13 +286,13 @@ gh_pr_approve() {
 
     if [ "$_pr_count" -eq 0 ]; then
         ux_error "no PR numbers provided"
-        ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>] [--self-ok]"
+        ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>] [--self-record|--admin-merge]"
         return 1
     fi
 
-    ux_header "gh-pr-approve: spawning $_pr_count worker(s) (ai=$_ai${_self_ok:+ self-ok})"
+    ux_header "gh-pr-approve: spawning $_pr_count worker(s) (ai=$_ai${_self_args:+ flags=$_self_args})"
     for _pr in $_pr_args; do
-        _gh_pr_approve_spawn_worker "$_pr" "$_ai" "$_self_ok"
+        _gh_pr_approve_spawn_worker "$_pr" "$_ai" "$_self_args"
     done
     ux_success "All workers detached. Your shell is free. Results appear on the PR."
 }
@@ -263,7 +300,7 @@ gh_pr_approve() {
 _gh_pr_approve_spawn_worker() {
     local _pr="$1"
     local _ai="${2:-claude}"
-    local _self_ok="${3:-}"
+    local _self_args="${3:-}"
     local _dir _log _state _pid
     _dir=$(_gh_pr_approve_pr_dir "$_pr")
     mkdir -p "$_dir"
@@ -273,20 +310,20 @@ _gh_pr_approve_spawn_worker() {
     # Idempotency check — mirrors gh-flow semantics.
     _state=$(_gh_pr_approve_get_state "$_pr")
     case "$_state" in
-        done)
-            ux_info "#$_pr already done, skipping"
-            return 0
-            ;;
-        spawning|approving|tearing-down)
-            if [ -f "$_dir/pid" ]; then
-                _pid="$(cat "$_dir/pid")"
-                if kill -0 "$_pid" 2>/dev/null; then
-                    ux_warning "#$_pr already running (pid=$_pid), skipping"
-                    return 0
-                fi
+    done)
+        ux_info "#$_pr already done, skipping"
+        return 0
+        ;;
+    spawning | approving | tearing-down)
+        if [ -f "$_dir/pid" ]; then
+            _pid="$(cat "$_dir/pid")"
+            if kill -0 "$_pid" 2>/dev/null; then
+                ux_warning "#$_pr already running (pid=$_pid), skipping"
+                return 0
             fi
-            ux_info "#$_pr was in-progress but pid is dead — resuming with a new worker"
-            ;;
+        fi
+        ux_info "#$_pr was in-progress but pid is dead — resuming with a new worker"
+        ;;
     esac
 
     # Rotate previous log (keep one .prev for debugging)
@@ -301,11 +338,11 @@ _gh_pr_approve_spawn_worker() {
     nohup env DOTFILES_FORCE_INIT=1 bash -c '
         . "$HOME/.bashrc" 2>/dev/null || true
         _gh_pr_approve_worker "$1" "$2" "$3"
-    ' -- "$_pr" "$_ai" "$_self_ok" </dev/null >"$_log" 2>&1 &
+    ' -- "$_pr" "$_ai" "$_self_args" </dev/null >"$_log" 2>&1 &
     _pid=$!
     disown "$_pid" 2>/dev/null || true
     printf '%s\n' "$_pid" >"$_dir/pid"
-    ux_info "#$_pr → pid=$_pid  ai=$_ai${_self_ok:+ self-ok}  log=$_log"
+    ux_info "#$_pr -> pid=$_pid  ai=$_ai${_self_args:+ flags=$_self_args}  log=$_log"
 }
 
 # ============================================================================
@@ -315,7 +352,7 @@ _gh_pr_approve_spawn_worker() {
 _gh_pr_approve_worker() {
     local _pr="$1"
     local _ai="${2:-claude}"
-    local _self_ok="${3:-}"
+    local _self_args="${3:-}"
     local _dir _worktree _spawn_name _usage_log _prompt
     _dir=$(_gh_pr_approve_pr_dir "$_pr")
     _spawn_name="pr-$_pr"
@@ -324,7 +361,7 @@ _gh_pr_approve_worker() {
     _usage_log="$_dir/usage.jsonl"
     : >"$_usage_log"
 
-    printf '[gh-pr-approve-worker] pr=#%s ai=%s%s start=%s\n' "$_pr" "$_ai" "${_self_ok:+ self-ok}" "$(date -Iseconds 2>/dev/null || date)"
+    printf '[gh-pr-approve-worker] pr=#%s ai=%s%s start=%s\n' "$_pr" "$_ai" "${_self_args:+ flags=$_self_args}" "$(date -Iseconds 2>/dev/null || date)"
 
     # ---- Step 1: spawn worktree ----
     # Snapshot the worktree list before and after `gwt spawn` and diff them
@@ -342,8 +379,8 @@ _gh_pr_approve_worker() {
     _wt_after=$(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
     _worktree=$(comm -13 \
         <(printf '%s\n' "$_wt_before" | sort) \
-        <(printf '%s\n' "$_wt_after" | sort) \
-        | head -n 1)
+        <(printf '%s\n' "$_wt_after" | sort) |
+        head -n 1)
 
     if [ -z "$_worktree" ] || [ ! -d "$_worktree" ]; then
         _gh_pr_approve_set_state "$_dir" "failed:spawning"
@@ -362,10 +399,10 @@ _gh_pr_approve_worker() {
     # ---- Step 2: approve (selected ai runs /gh-pr-approve <N>) ----
     # Single-shot. The skill either approves with LGTM or files follow-up
     # issues and exits. No polling, no reply loop — that's gh-flow's job.
-    # When --self-ok is in effect, append it to the prompt so the skill
-    # bypasses the author==reviewer pre-flight stop.
+    # Append selected self-PR mode flags so the skill can avoid GitHub's
+    # server-side self-approval block.
     _gh_pr_approve_set_state "$_dir" "approving"
-    _prompt="/gh-pr-approve $_pr${_self_ok:+ $_self_ok}"
+    _prompt="/gh-pr-approve $_pr${_self_args:+ $_self_args}"
     if ! _gh_pr_approve_run_ai_prompt "$_ai" "$_usage_log" "$_prompt" "$_prompt"; then
         _gh_pr_approve_set_state "$_dir" "failed:approving"
         printf '[gh-pr-approve-worker] /gh-pr-approve failed\n' >&2
