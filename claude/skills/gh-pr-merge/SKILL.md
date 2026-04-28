@@ -85,12 +85,13 @@ GH_REPO="$TARGET_REPO" _gh_project_status_sync pr "$PR_NUMBER" "Done"
 ```
 
 (b) Linked Issue cards from `closingIssuesReferences` → `Done`
-    (boosts the best-effort `Item closed` builtin per #250):
+    (boosts the best-effort `Item closed` builtin per #250). Use the
+    `_gh_pr_closing_issue_numbers` helper instead of
+    `gh pr view --json closingIssuesReferences` — older `gh` (≤ 2.45)
+    rejects that field with "Unknown JSON field" (#264):
 
 ```bash
-for _issue in $(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
-                  --json closingIssuesReferences \
-                  --jq '.closingIssuesReferences?[]?.number'); do
+for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$TARGET_REPO"); do
     GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$_issue" "Done" \
         --only-from "Backlog,In progress,In review"
 done

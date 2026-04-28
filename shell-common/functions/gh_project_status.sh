@@ -187,6 +187,49 @@ _gh_project_status_mutate() {
         >/dev/null 2>&1
 }
 
+# Print one closing-issue number per line for PR <num> in <owner/repo>.
+# Stays silent on every failure mode (boards-not-set-up, GraphQL errors,
+# missing args, malformed repo) so the caller's for-loop just iterates over
+# nothing and the merge report is never blocked.
+#
+# Why this is a helper instead of `gh pr view --json closingIssuesReferences`:
+# the `--json` projection on `gh` 2.45.0 does not list
+# `closingIssuesReferences` in its allow-list — invoking it prints
+# "Unknown JSON field" and exits non-zero (#264). The GraphQL schema has the
+# connection so we go around the CLI's allow-list with a direct query.
+#
+# Args: <pr-number> <owner/repo>
+_gh_pr_closing_issue_numbers() {
+    local _pr="$1" _repo="$2"
+    [ -z "$_pr" ] && return 0
+    [ -z "$_repo" ] && return 0
+    case "$_repo" in
+        */*) ;;
+        *) return 0 ;;
+    esac
+    local _owner _name
+    _owner="${_repo%/*}"
+    _name="${_repo#*/}"
+    [ -z "$_owner" ] && return 0
+    [ -z "$_name" ] && return 0
+
+    # GraphQL variables ($owner, $repo, $num) are bound via the -f/-F flags
+    # below, so single quotes around the query are intentional.
+    # shellcheck disable=SC2016
+    gh api graphql \
+        -f owner="$_owner" -f repo="$_name" -F num="$_pr" \
+        -f query='query($owner: String!, $repo: String!, $num: Int!) {
+          repository(owner: $owner, name: $repo) {
+            pullRequest(number: $num) {
+              closingIssuesReferences(first: 20) { nodes { number } }
+            }
+          }
+        }' \
+        --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]?.number' \
+        2>/dev/null
+    return 0
+}
+
 # Membership test: returns 0 when $1 equals any comma-separated entry of $2.
 # Uses pure parameter expansion to keep Status names with internal spaces
 # (e.g. "In progress") intact. Empty $1 never matches.
