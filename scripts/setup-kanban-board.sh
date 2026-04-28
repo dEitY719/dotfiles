@@ -49,12 +49,12 @@ die() {
 
 print_help() {
     ux_header "Kanban Board Setup"
-    ux_usage "./scripts/setup-kanban-board.sh" "--owner <login> --repo <name> [options]" \
+    ux_usage "./scripts/setup-kanban-board.sh" "[--owner <login>] [--repo <name>] [options]" \
         "Create a GitHub Projects v2 board, link the repo, sync the Status field, and print the remaining UI checklist."
 
     ux_section "Options"
-    ux_bullet "--owner <login>              GitHub user or org that owns the project"
-    ux_bullet "--repo <name>                Repository name to link"
+    ux_bullet "--owner <login>              GitHub user or org (default: current repo's owner via gh repo view)"
+    ux_bullet "--repo <name>                Repository name (default: current repo's name via gh repo view)"
     ux_bullet "--title <board-title>        Project title (default: repo name)"
     ux_bullet "--auto-archive-window <dur>  Filter suffix for Done auto-archive (default: 2d)"
     ux_bullet "--hide-columns               Add solo-repo hide guidance for Approved and Ready"
@@ -108,8 +108,10 @@ parse_args() {
         esac
     done
 
-    [ -n "$OWNER" ] || die "--owner is required"
-    [ -n "$REPO" ] || die "--repo is required"
+    detect_repo_defaults
+
+    [ -n "$OWNER" ] || die "--owner is required (auto-detect failed; pass --owner or run inside a GitHub-linked git repo)"
+    [ -n "$REPO" ] || die "--repo is required (auto-detect failed; pass --repo or run inside a GitHub-linked git repo)"
 
     if [ -z "$TITLE" ]; then
         TITLE="$REPO"
@@ -126,6 +128,24 @@ require_command() {
 
     if ! command -v "$name" >/dev/null 2>&1; then
         die "${name} is required. ${install_hint}"
+    fi
+}
+
+detect_repo_defaults() {
+    if [ -n "$OWNER" ] && [ -n "$REPO" ]; then
+        return 0
+    fi
+
+    local detected_info detected_owner detected_repo
+    detected_info="$(gh repo view --json owner,name -q '.owner.login + " " + .name' 2>/dev/null || true)"
+    [ -n "$detected_info" ] || return 0
+
+    read -r detected_owner detected_repo <<<"$detected_info"
+    if [ -z "$OWNER" ] && [ -n "${detected_owner-}" ]; then
+        OWNER="$detected_owner"
+    fi
+    if [ -z "$REPO" ] && [ -n "${detected_repo-}" ]; then
+        REPO="$detected_repo"
     fi
 }
 
