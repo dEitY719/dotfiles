@@ -71,16 +71,23 @@ If `gh` returns "merge method is not allowed", print the repo-settings
 guidance from `references/strategy-selection.md` and stop. **Never**
 silently switch strategies.
 
-## Step 4: Reconcile linked Issue cards on the project board
+## Step 4: Sync Project Board Status
 
-GitHub Projects v2 builtin `Item closed` is best-effort and occasionally
-drops events, leaving Issue cards stuck at `In review` even after the
-Issue auto-closes from this merge. Read
-`references/project-board-sync.md` for the failure mode and the gating
-rationale; the call shape:
+Read `references/project-board-sync.md` for the failure modes and
+gating rationale. Two reconciliations run after a successful merge:
+
+(a) PR card → `Done` (closes the gap from #248 where the merged PR
+    card stayed at `Approved`):
 
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
+GH_REPO="$TARGET_REPO" _gh_project_status_sync pr "$PR_NUMBER" "Done"
+```
+
+(b) Linked Issue cards from `closingIssuesReferences` → `Done`
+    (boosts the best-effort `Item closed` builtin per #250):
+
+```bash
 for _issue in $(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
                   --json closingIssuesReferences \
                   --jq '.closingIssuesReferences?[]?.number'); do
@@ -89,8 +96,8 @@ for _issue in $(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
 done
 ```
 
-The helper auto-detects boards on repos without a projectV2 attachment
-and silently returns. This step never blocks the report — failures are
+Both helpers auto-detect repos without a projectV2 attachment and
+silently return. This step never blocks the report — failures are
 logged to stderr and ignored.
 
 ## Step 5: Fetch Merge SHA + Report

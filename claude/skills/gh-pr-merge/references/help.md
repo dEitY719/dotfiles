@@ -36,7 +36,8 @@ _Availability depends on repo settings → General → Pull Requests. If a strat
    - Review decision ≠ APPROVED → suggests `gh:pr-merge-emergency` instead
    - Required check failing or pending
 5. Runs `gh pr merge <N> --repo $TARGET_REPO --<strategy> --delete-branch` **without confirmation**.
-6. Fetches the merge SHA and prints a compact report.
+6. Moves the PR project-board card to `Done` when a projectV2 board is attached.
+7. Fetches the merge SHA and prints a compact report.
 
 ## What the skill will NOT do
 

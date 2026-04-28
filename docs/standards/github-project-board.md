@@ -10,12 +10,13 @@ SSOT이다.
 
 - 저장소: `dEitY719/dotfiles` (repo-level project)
 - 카드 종류: Issue와 PR 모두 (보드에서 함께 추적)
-- 자동화 수단: GitHub Projects v2 빌트인 워크플로우 (별도 Action 없음)
-- 관련 스킬: `gh:issue-create`, `gh:pr`, `gh:pr-merge`, `gh:issue-flow`
+- 자동화 수단: GitHub Projects v2 빌트인 워크플로우 + dotfiles 스킬 보정
+- 관련 스킬: `gh:issue-create`, `gh:pr`, `gh:pr-merge`,
+  `gh:pr-merge-emergency`, `gh:issue-flow`
 
 차용 원본: `skill-hub`의 `.claude/workflow.md`와 `github-integration.md`.
-dotfiles는 동일 원칙을 따르되 범위(단일 repo)와 자동화 수준(빌트인만)
-측면에서 최소화한 변형을 사용한다.
+dotfiles는 동일 원칙을 따르되 범위(단일 repo)와 자동화 수준(별도
+Action 없음) 측면에서 최소화한 변형을 사용한다.
 
 ## 보드 구조
 
@@ -159,6 +160,12 @@ dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
   이므로 `Approved` 와 정합한다. `--only-from "Backlog,In progress,In
   review"` 가드를 적용해 머지된 PR (`Done`) 에 잘못 호출되었을 때
   카드가 `Approved` 로 되돌아가는 regression 을 막는다.
+- **PR 카드 `Approved → Done`**: `/gh-pr-merge` 와
+  `/gh-pr-merge-emergency` 가 머지 성공 직후 자동 전환한다. GitHub
+  Projects 빌트인 `Pull request merged` / `Item closed` 가 켜져 있어도,
+  저장소·보드 설정 차이로 PR 카드가 `Approved` 에 남는 경우를 막기 위한
+  보정 경로다. raw `gh pr merge` 나 웹 UI 머지는 빌트인 워크플로우에
+  의존하므로, PR 카드가 남으면 수동으로 `Done` 으로 옮긴다.
 - **PR 카드 `In progress → In review` (재리뷰 요청 시)**:
   `Changes requested` 루프에서 수정·재푸시 후 리뷰가 다시 달리기를
   기대할 때 **수동**으로 복귀시킨다. Projects v2 빌트인에도 dotfiles
@@ -251,7 +258,7 @@ gh auth refresh -s project
   review` (`Changes requested` 루프 탈출 시) 전환만 항상 수동이다
   — 빌트인·스킬 모두 이 경로를 자동화하지 않는다.
 - 보드가 없는 repo 에서 `/gh-pr`, `/gh-commit`, `/gh-pr-reply`,
-  또는 `/gh-pr-merge` 를 실행하면 공용 헬퍼
+  `/gh-pr-merge`, 또는 `/gh-pr-merge-emergency` 를 실행하면 공용 헬퍼
   `_gh_project_status_sync` 가 `projectItems` 가 0건임을 자동
   감지하고 조용히 no-op 한다 (별도 분기 불필요).
 - Projects v2 빌트인 워크플로우는 best-effort delivery 라 드물게
