@@ -501,8 +501,28 @@ workflows_url_from_owner_type() {
     printf "https://github.com/%s/%s/projects/%s/workflows" "$prefix" "$OWNER" "$PROJECT_NUMBER"
 }
 
+workflow_deep_link() {
+    local type="$1"
+    local base_url
+    base_url="$(workflows_url_from_owner_type)"
+    
+    case "$type" in
+        "auto-add") echo "${base_url}/auto_add_items" ;;
+        "item-added") echo "${base_url}/item_added_to_project" ;;
+        "pr-linked") echo "${base_url}/pull_request_linked_to_issue" ;;
+        "review-approved") echo "${base_url}/review_approved" ;;
+        "changes-requested") echo "${base_url}/review_changes_requested" ;;
+        "pr-merged") echo "${base_url}/pull_request_merged" ;;
+        "item-closed") echo "${base_url}/item_closed" ;;
+        "auto-archive") echo "${base_url}/auto_archive" ;;
+        *) echo "${base_url}" ;;
+    esac
+}
+
 print_final_report() {
     local auto_archive_filter="is:issue,pr is:closed updated:<@today-${AUTO_ARCHIVE_WINDOW}"
+    local y="${UX_WARNING}"
+    local r="${UX_RESET}"
 
     WORKFLOWS_URL="$(workflows_url_from_owner_type)"
     if [ -z "$PROJECT_URL" ] || [ "$PROJECT_URL" = "null" ]; then
@@ -518,16 +538,24 @@ print_final_report() {
 
     ux_section "UI Checklist"
     ux_bullet "Auto-add to project: choose ${OWNER}/${REPO} and set filter to 'is:issue,pr is:open' so new open issues and PRs land on the board."
-    ux_bullet "Item added to project: set Status to 'Backlog' so every new card starts in the intake column."
-    ux_bullet "Pull request linked to issue: set Status to 'In review' so linked issue cards move into review automatically."
-    ux_bullet "Code review approved: set Status to 'Approved' so PR cards reflect the pre-merge state."
-    ux_bullet "Code changes requested: set Status to 'In progress' so PR cards loop back during review feedback."
-    ux_bullet "Pull request merged: set Status to 'Done' so merged PR cards exit the active flow."
-    ux_bullet "Item closed: set Status to 'Done' so closed issues and PRs finish cleanly."
+    ux_bullet_sub "Link: $(workflow_deep_link "auto-add")"
+    ux_bullet "Item added to project: set Status to ${y}'Backlog'${r} so every new card starts in the intake column."
+    ux_bullet_sub "Link: $(workflow_deep_link "item-added")"
+    ux_bullet "Pull request linked to issue: set Status to ${y}'In review'${r} so linked issue cards move into review automatically."
+    ux_bullet_sub "Link: $(workflow_deep_link "pr-linked")"
+    ux_bullet "Code review approved: set Status to ${y}'Approved'${r} so PR cards reflect the pre-merge state."
+    ux_bullet_sub "Link: $(workflow_deep_link "review-approved")"
+    ux_bullet "Code changes requested: set Status to ${y}'In progress'${r} so PR cards loop back during review feedback."
+    ux_bullet_sub "Link: $(workflow_deep_link "changes-requested")"
+    ux_bullet "Pull request merged: set Status to ${y}'Done'${r} so merged PR cards exit the active flow."
+    ux_bullet_sub "Link: $(workflow_deep_link "pr-merged")"
+    ux_bullet "Item closed: set Status to ${y}'Done'${r} so closed issues and PRs finish cleanly."
+    ux_bullet_sub "Link: $(workflow_deep_link "item-closed")"
     ux_bullet "Auto-archive items: enable it with '${auto_archive_filter}' so stale Done cards leave the board automatically."
+    ux_bullet_sub "Link: $(workflow_deep_link "auto-archive")"
 
     if $HIDE_COLUMNS; then
-        ux_bullet "Board view: hide 'Approved' and 'Ready' if this is a solo repo and you want to reduce dead columns."
+        ux_bullet "Board view: hide ${y}'Approved'${r} and ${y}'Ready'${r} if this is a solo repo and you want to reduce dead columns."
     fi
 
     ux_section "Smoke Test"
@@ -569,7 +597,11 @@ main() {
     log_success "Linked ${OWNER}/${REPO}"
 
     log_step 5 "Replacing the Status options"
-    update_status_field "$(fetch_status_field_id)"
+    if $DRY_RUN; then
+        log_info "[dry-run] Would replace Status options with the 6-option dotfiles workflow"
+    else
+        update_status_field "$(fetch_status_field_id)"
+    fi
     log_success "Status field synced to the 6-option workflow"
 
     log_step 6 "Ensuring the pull request template"
