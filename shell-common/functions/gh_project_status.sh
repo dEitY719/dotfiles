@@ -142,31 +142,49 @@ EOF
             continue
         fi
 
-        # GraphQL variables ($proj, $item, ...) are NOT shell vars — they
-        # are bound via the -f flags below, so single quotes are intended.
-        # shellcheck disable=SC2016
-        if gh api graphql \
-            -f query='
-              mutation($proj: ID!, $item: ID!, $field: ID!, $option: String!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $proj
-                  itemId: $item
-                  fieldId: $field
-                  value: { singleSelectOptionId: $option }
-                }) { clientMutationId }
-              }' \
-            -f proj="$_proj" -f item="$_item" -f field="$_field" -f option="$_option" \
-            >/dev/null 2>&1; then
+        # One retry on mutation flake (GraphQL connection reset etc.).
+        # 5s fixed backoff — long enough to ride out transient resets,
+        # short enough to keep callers responsive. Query-stage retry is
+        # intentionally not added here (boards-not-attached looks like a
+        # transient failure to gh; tracked separately).
+        if _gh_project_status_mutate "$_proj" "$_item" "$_field" "$_option"; then
             printf '[gh-project-status] %s #%s -> "%s"\n' "$_kind" "$_num" "$_target"
         else
-            printf '[gh-project-status] mutation failed for %s #%s (target=%s)\n' \
-                "$_kind" "$_num" "$_target" >&2
+            sleep 5
+            if _gh_project_status_mutate "$_proj" "$_item" "$_field" "$_option"; then
+                printf '[gh-project-status] %s #%s -> "%s" (after 1 retry)\n' \
+                    "$_kind" "$_num" "$_target"
+            else
+                printf '[gh-project-status] mutation failed for %s #%s (target=%s)\n' \
+                    "$_kind" "$_num" "$_target" >&2
+            fi
         fi
     done <<EOF
 $_records
 EOF
 
     return 0
+}
+
+# Run the projectV2 Status mutation. Args: proj, item, field, option (all ids).
+# Extracted to a helper so the loop can retry it once without duplicating
+# the multi-line GraphQL query block. Stays silent — caller logs outcomes.
+_gh_project_status_mutate() {
+    # GraphQL variables ($proj, $item, ...) are NOT shell vars — they
+    # are bound via the -f flags below, so single quotes are intended.
+    # shellcheck disable=SC2016
+    gh api graphql \
+        -f query='
+          mutation($proj: ID!, $item: ID!, $field: ID!, $option: String!) {
+            updateProjectV2ItemFieldValue(input: {
+              projectId: $proj
+              itemId: $item
+              fieldId: $field
+              value: { singleSelectOptionId: $option }
+            }) { clientMutationId }
+          }' \
+        -f proj="$1" -f item="$2" -f field="$3" -f option="$4" \
+        >/dev/null 2>&1
 }
 
 # Membership test: returns 0 when $1 equals any comma-separated entry of $2.
