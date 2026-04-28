@@ -235,5 +235,196 @@ teardown() {
     assert_output --partial "YES"
 }
 
+# ---------------------------------------------------------------------------
+# verdict matrix (issue #252)
+# ---------------------------------------------------------------------------
+
+# Install a tiny `gh` stub on PATH so _gh_flow_pr_state has predictable input.
+# $1 = state token returned by `gh pr view <n> --json state --jq '.state'`.
+# Empty $1 → simulate gh failure (exit 1) so verdict treats it as UNREACHABLE.
+_install_gh_stub() {
+    local _state="${1:-}"
+    mkdir -p "$TEST_TEMP_HOME/bin"
+    if [ -z "$_state" ]; then
+        printf '#!/usr/bin/env bash\nexit 1\n' >"$TEST_TEMP_HOME/bin/gh"
+    else
+        cat >"$TEST_TEMP_HOME/bin/gh" <<STUB
+#!/usr/bin/env bash
+# minimal gh pr view stub
+if [ "\$1" = "pr" ] && [ "\$2" = "view" ]; then
+    case "\$*" in
+    *"--json state"*) printf '%s' "$_state" ;;
+    *"--json mergedAt"*) printf '%s' "2026-04-26" ;;
+    *"--json closedAt"*) printf '%s' "2026-04-26" ;;
+    esac
+    exit 0
+fi
+exit 0
+STUB
+    fi
+    chmod +x "$TEST_TEMP_HOME/bin/gh"
+    export PATH="$TEST_TEMP_HOME/bin:$PATH"
+}
+
+@test "verdict: done → 'safe to prune' + scoped prune action" {
+    _seed_state 100 "done" "" ""
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 100"
+    assert_success
+    assert_line --index 0 "done — safe to prune"
+    assert_line --index 1 "gh-flow prune 100"
+}
+
+@test "verdict: polling + MERGED PR + alive pid → stuck poller + --force action" {
+    _install_gh_stub "MERGED"
+    _seed_state 201 "polling" "" "$$"
+    printf '999\n' >"$HOME/.local/state/gh-flow/repo/201/pr.number"
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 201"
+    assert_success
+    assert_output --partial "stuck poller"
+    assert_output --partial "gh-flow prune --force 201"
+}
+
+@test "verdict: polling + OPEN PR → active polling, leave alone" {
+    _install_gh_stub "OPEN"
+    _seed_state 202 "polling" "" "$$"
+    printf '888\n' >"$HOME/.local/state/gh-flow/repo/202/pr.number"
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 202"
+    assert_success
+    assert_output --partial "active polling"
+    assert_output --partial "still working"
+}
+
+@test "verdict: polling + no pr.number → stuck pre-PR" {
+    _seed_state 203 "polling" "" "$$"
+    # No pr.number file → _gh_flow_pr_state returns EMPTY → falls through.
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 203"
+    assert_success
+    assert_output --partial "stuck pre-PR"
+    assert_output --partial "review"
+}
+
+@test "verdict: failed:* + worktree absent → state-only cleanup" {
+    _seed_state 301 "failed:committing" "" "12345"
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 301"
+    assert_success
+    assert_output --partial "dead failure"
+    assert_output --partial "gh-flow prune 301"
+}
+
+@test "verdict: failed:* + worktree present → gwt teardown first" {
+    mkdir -p "$TEST_TEMP_HOME/repo-issue-302-1"
+    _seed_state 302 "failed:opening-pr" "$TEST_TEMP_HOME/repo-issue-302-1" "12345"
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 302"
+    assert_success
+    assert_output --partial "worktree alive"
+    assert_output --partial "gwt teardown --force"
+}
+
+# ---------------------------------------------------------------------------
+# scoped prune (issue #252)
+# ---------------------------------------------------------------------------
+
+@test "prune <N>: rejects when worker pid is alive" {
+    _seed_state 401 "polling" "" "$$"
+
+    run_in_bash "cd '$REPO_DIR' && gh_flow prune 401 2>&1"
+    assert_failure
+    assert_output --partial "#401"
+    assert_output --partial "still alive"
+    assert_output --partial "--force"
+    [ -d "$HOME/.local/state/gh-flow/repo/401" ]
+}
+
+@test "prune <N>: rejects when worktree dir is present" {
+    mkdir -p "$TEST_TEMP_HOME/repo-issue-402-1"
+    _seed_state 402 "failed:implementing" "$TEST_TEMP_HOME/repo-issue-402-1" "9999999"
+
+    run_in_bash "cd '$REPO_DIR' && gh_flow prune 402 2>&1"
+    assert_failure
+    assert_output --partial "#402"
+    assert_output --partial "worktree exists"
+    assert_output --partial "gwt teardown --force"
+    [ -d "$HOME/.local/state/gh-flow/repo/402" ]
+}
+
+@test "prune --force <N>: still rejects when worktree dir is present" {
+    mkdir -p "$TEST_TEMP_HOME/repo-issue-403-1"
+    _seed_state 403 "failed:implementing" "$TEST_TEMP_HOME/repo-issue-403-1" "9999999"
+
+    run_in_bash "cd '$REPO_DIR' && gh_flow prune --force 403 2>&1"
+    assert_failure
+    assert_output --partial "worktree exists"
+    [ -d "$HOME/.local/state/gh-flow/repo/403" ]
+}
+
+@test "prune --force <N>: kills alive pid and removes state dir" {
+    sleep 60 &
+    local _victim=$!
+    _seed_state 404 "polling" "" "$_victim"
+
+    run_in_bash "cd '$REPO_DIR' && gh_flow prune --force 404"
+    assert_success
+    [ ! -d "$HOME/.local/state/gh-flow/repo/404" ]
+    # Worker should be gone (SIGTERM, 1s grace, SIGKILL).
+    run kill -0 "$_victim" 2>/dev/null
+    assert_failure
+    wait "$_victim" 2>/dev/null || true
+}
+
+@test "prune <N>: accepts '#N' form (strips leading #)" {
+    _seed_state 405 "done" "" ""
+
+    run_in_bash "cd '$REPO_DIR' && gh_flow prune '#405'"
+    assert_success
+    [ ! -d "$HOME/.local/state/gh-flow/repo/405" ]
+}
+
+@test "prune <N>: rejects non-integer issue arg" {
+    run_in_bash "cd '$REPO_DIR' && gh_flow prune abc 2>&1"
+    assert_failure
+    assert_output --partial "invalid issue number"
+}
+
+# ---------------------------------------------------------------------------
+# per-issue status (issue #252)
+# ---------------------------------------------------------------------------
+
+@test "status <N>: prints header + Verdict + Next action" {
+    _seed_state 501 "done" "" ""
+
+    run_in_bash "cd '$REPO_DIR' && gh_flow status 501"
+    assert_success
+    assert_output --partial "gh-flow status #501"
+    assert_output --partial "State"
+    assert_output --partial "done"
+    assert_output --partial "Verdict"
+    assert_output --partial "Next action"
+}
+
+@test "status <N>: '#N' form also accepted" {
+    _seed_state 502 "done" "" ""
+
+    run_in_bash "cd '$REPO_DIR' && gh_flow status '#502'"
+    assert_success
+    assert_output --partial "#502"
+}
+
+@test "status <N>: missing state dir → warning, exits 0" {
+    run_in_bash "cd '$REPO_DIR' && gh_flow status 503"
+    assert_success
+    assert_output --partial "no state for #503"
+}
+
+@test "status <N>: rejects multiple positional args" {
+    run_in_bash "cd '$REPO_DIR' && gh_flow status 504 505 2>&1"
+    assert_failure
+    assert_output --partial "only one issue number"
+}
+
 # Project-board sync helper tests live in
 # tests/bats/functions/gh_project_status.bats.
