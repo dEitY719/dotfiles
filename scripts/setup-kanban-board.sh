@@ -137,7 +137,7 @@ detect_repo_defaults() {
     fi
 
     local detected_info detected_owner detected_repo
-    detected_info="$(gh repo view --json owner,name -q '.owner.login + " " + .name' 2>/dev/null || true)"
+    detected_info="$(gh repo view --json owner,name -q '(.owner.login? // empty) + " " + (.name? // empty)' 2>/dev/null || true)"
     [ -n "$detected_info" ] || return 0
 
     read -r detected_owner detected_repo <<<"$detected_info"
