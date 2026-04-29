@@ -2,17 +2,72 @@
 
 set -euo pipefail
 
-_SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
-DOTFILES_ROOT="$(cd "$(dirname "$_SCRIPT_PATH")/.." && pwd)"
-UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
-
-if [ -f "$UX_LIB" ]; then
-    # shellcheck disable=SC1090
-    source "$UX_LIB"
+# -----------------------------------------------------------------------------
+# Self-contained UX helpers — no external library required.
+# This script is a single-file SSOT meant to be copy-pasted into other repos
+# to bootstrap a GitHub Projects v2 kanban board, so it cannot depend on the
+# parent dotfiles tree.
+# -----------------------------------------------------------------------------
+if [ -n "${NO_COLOR:-}" ] || [ "${TERM:-}" = "dumb" ] || ! command -v tput >/dev/null 2>&1; then
+    UX_BOLD=""
+    UX_DIM=""
+    UX_RESET=""
+    UX_PRIMARY=""
+    UX_SUCCESS=""
+    UX_WARNING=""
+    UX_ERROR=""
+    UX_INFO=""
+    UX_MUTED=""
 else
-    echo "Error: UX library not found at $UX_LIB" >&2
-    exit 1
+    UX_BOLD="$(tput bold 2>/dev/null || echo '')"
+    UX_DIM="$(tput dim 2>/dev/null || echo '')"
+    UX_RESET="$(tput sgr0 2>/dev/null || echo '')"
+    UX_PRIMARY="$(tput setaf 4 2>/dev/null || echo '')"
+    UX_SUCCESS="$(tput setaf 2 2>/dev/null || echo '')"
+    UX_WARNING="$(tput setaf 3 2>/dev/null || echo '')"
+    UX_ERROR="$(tput setaf 1 2>/dev/null || echo '')"
+    UX_INFO="$(tput setaf 6 2>/dev/null || echo '')"
+    UX_MUTED="$(tput setaf 8 2>/dev/null || echo '')"
 fi
+
+ux_header() {
+    local text="$1"
+    echo ""
+    printf "%s%s╔══════════════════════════════════════════════════════════════╗%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
+    printf "%s%s║%s %-60s %s%s║%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}" "$text" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
+    printf "%s%s╚══════════════════════════════════════════════════════════════╝%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
+    echo ""
+}
+
+ux_section() {
+    local title="$1"
+    local underline
+    underline="$(printf '─%.0s' $(seq 1 ${#title}))"
+    echo ""
+    printf "%s%s%s%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$title" "${UX_RESET}"
+    printf "%s%s%s%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$underline" "${UX_RESET}"
+}
+
+ux_usage() {
+    local cmd_name="$1"
+    local args="$2"
+    local description="${3:-}"
+    ux_section "Usage"
+    echo "  ${UX_SUCCESS}${cmd_name}${UX_RESET} ${UX_MUTED}${args}${UX_RESET}"
+    if [ -n "$description" ]; then
+        echo ""
+        echo "  $description"
+    fi
+    echo ""
+}
+
+ux_success() { printf "%s%s✅%s %s\n" "${UX_BOLD}" "${UX_SUCCESS}" "${UX_RESET}" "$1"; }
+ux_error()   { printf "%s%s❌%s %s\n" "${UX_BOLD}" "${UX_ERROR}"   "${UX_RESET}" "$1" >&2; }
+ux_warning() { printf "%s%s⚠️%s  %s\n" "${UX_BOLD}" "${UX_WARNING}" "${UX_RESET}" "$1"; }
+ux_info()    { printf "%s%sℹ️%s  %s\n" "${UX_BOLD}" "${UX_INFO}"    "${UX_RESET}" "$1"; }
+ux_step()    { printf "%s%s[%s]%s %s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$1" "${UX_RESET}" "$2"; }
+ux_bullet()     { printf "  ${UX_PRIMARY}◆${UX_RESET} %s\n" "$1"; }
+ux_bullet_sub() { printf "    ${UX_INFO}•${UX_RESET} %s\n" "$1"; }
 
 OWNER=""
 REPO=""
@@ -40,7 +95,6 @@ log_success() { ux_success "$1"; }
 log_warning() { ux_warning "$1"; }
 log_error() { ux_error "$1"; }
 log_step() { ux_step "$1" "$2"; }
-log_dim() { printf "%s%s%s\n" "${UX_DIM}" "$1" "${UX_RESET}"; }
 
 die() {
     log_error "$1"
