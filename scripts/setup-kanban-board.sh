@@ -10,7 +10,6 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 if [ -n "${NO_COLOR:-}" ] || [ "${TERM:-}" = "dumb" ] || ! command -v tput >/dev/null 2>&1; then
     UX_BOLD=""
-    UX_DIM=""
     UX_RESET=""
     UX_PRIMARY=""
     UX_SUCCESS=""
@@ -20,7 +19,6 @@ if [ -n "${NO_COLOR:-}" ] || [ "${TERM:-}" = "dumb" ] || ! command -v tput >/dev
     UX_MUTED=""
 else
     UX_BOLD="$(tput bold 2>/dev/null || echo '')"
-    UX_DIM="$(tput dim 2>/dev/null || echo '')"
     UX_RESET="$(tput sgr0 2>/dev/null || echo '')"
     UX_PRIMARY="$(tput setaf 4 2>/dev/null || echo '')"
     UX_SUCCESS="$(tput setaf 2 2>/dev/null || echo '')"
@@ -34,7 +32,7 @@ ux_header() {
     local text="$1"
     echo ""
     printf "%s%s╔══════════════════════════════════════════════════════════════╗%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
-    printf "%s%s║%s %-60s %s%s║%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}" "$text" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
+    printf "%s%s║%s %-58s %s%s║%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}" "$text" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
     printf "%s%s╚══════════════════════════════════════════════════════════════╝%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
     echo ""
 }
