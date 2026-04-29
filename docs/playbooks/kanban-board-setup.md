@@ -293,7 +293,7 @@ PR:
 # 1. 테스트 이슈 생성 → 수 초 내 Backlog 컬럼에 카드 등장 확인
 gh issue create --repo "$OWNER/$REPO" \
     --title "[Test] kanban smoke" --body "ignore"
-# 출력의 이슈 번호를 ISSUE_N 으로 기록
+# 출력 URL 끝의 번호를 변수로 저장. 예: ISSUE_N=42
 
 # 2. 연결된 PR 생성 → Issue 카드가 'In review' 로 이동 확인
 #    실 코드 변경이 부담스러우면 README 등에 공백 한 줄 추가 후 PR 오픈
@@ -301,19 +301,19 @@ git checkout -b smoke/kanban
 echo "" >> README.md && git commit -am "chore: smoke test"
 git push -u origin smoke/kanban
 gh pr create --repo "$OWNER/$REPO" \
-    --title "[Test] kanban smoke PR" --body "Closes #<ISSUE_N>"
-# 출력의 PR 번호를 PR_N 으로 기록
+    --title "[Test] kanban smoke PR" --body "Closes #$ISSUE_N"
+# 출력 URL 끝의 번호를 변수로 저장. 예: PR_N=43
 
 # 3. PR merge → PR 카드와 Issue 카드 모두 'Done' 으로 이동 확인
-gh pr merge "<PR_N>" --repo "$OWNER/$REPO" --squash --delete-branch
+gh pr merge "$PR_N" --repo "$OWNER/$REPO" --squash --delete-branch
 
 # 4. 정리 — 테스트 이슈 close, Done 컬럼에서 자동 archive 동작 확인
-gh issue close "<ISSUE_N>" --repo "$OWNER/$REPO"
+gh issue close "$ISSUE_N" --repo "$OWNER/$REPO"
 git checkout - && git branch -D smoke/kanban 2>/dev/null || true
 ```
 
 PR 생성을 건너뛰고 빠르게만 확인하려면 1번 후 바로
-`gh issue close "<ISSUE_N>"` 로 카드의 `Done` 이동만 확인해도 된다.
+`gh issue close "$ISSUE_N"` 로 카드의 `Done` 이동만 확인해도 된다.
 
 ## 8. References
 
