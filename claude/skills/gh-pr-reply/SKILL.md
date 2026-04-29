@@ -68,12 +68,7 @@ vs top-level) and the four body templates (Accepted / Accepted-with-modification
 If any fixes were committed: `git push` (never force-push unless the user
 asked) and report new commit SHAs alongside the reply summary.
 
-## Step 7: Sync Project Board Status
-
-Read `references/project-board-sync.md` and run the helper to push the PR's
-project card to `Approved` (no-op when no `projectV2` board is attached).
-
-## Step 8: Report
+## Step 7: Report
 
 Print the summary table per `references/final-summary.md` showing
 Accepted / Declined / Answered counts, commit SHAs, and any skipped
