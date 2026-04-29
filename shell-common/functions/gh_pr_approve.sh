@@ -98,6 +98,490 @@ _gh_pr_approve_run_ai_prompt() {
 }
 
 # ============================================================================
+# Verdict + PR-state helpers (used by status / prune)
+# ============================================================================
+
+# Echo a single line describing GitHub-side PR state for the entry whose
+# state-dir is $1. Format:
+#   <state>|<reviewDecision>|<date>
+# or the literal token UNREACHABLE if the gh CLI call fails.
+#
+# - <state>: OPEN | MERGED | CLOSED (per gh pr view --json state)
+# - <reviewDecision>: APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED |
+#   COMMENTED | "" (gh returns empty when no review yet)
+# - <date>: YYYY-MM-DD if MERGED/CLOSED, else empty
+#
+# This is a single gh pr view call. Verdict does NOT use this — it's purely
+# informational for `status <N>` (per issue #268). Verdict stays decoupled
+# from network state because the worker is single-shot: PR closure/merge
+# is unrelated to whether the local worker still has cleanup to do.
+_gh_pr_approve_pr_state() {
+    local _dir="$1"
+    local _pr_num _json _rc _state _decision _merged _closed _date
+    _pr_num="$(basename "$_dir")"
+    case "$_pr_num" in
+    '' | *[!0-9]*)
+        printf 'UNREACHABLE'
+        return 0
+        ;;
+    esac
+    _json="$(gh pr view "$_pr_num" --json state,reviewDecision,mergedAt,closedAt 2>/dev/null)"
+    _rc=$?
+    if [ "$_rc" -ne 0 ] || [ -z "$_json" ]; then
+        printf 'UNREACHABLE'
+        return 0
+    fi
+    # Note: outer "$(...)" intentionally omitted — POSIX sh does not
+    # word-split bare assignments, and a project pre-commit naming check
+    # heuristically flags any private-helper name that appears between two
+    # `"` on a single line as user-facing text.
+    _state=$(printf '%s' "$_json" | _gh_pr_approve_jq_field state)
+    _decision=$(printf '%s' "$_json" | _gh_pr_approve_jq_field reviewDecision)
+    _merged=$(printf '%s' "$_json" | _gh_pr_approve_jq_field mergedAt)
+    _closed=$(printf '%s' "$_json" | _gh_pr_approve_jq_field closedAt)
+    case "$_state" in
+    MERGED) _date="${_merged%%T*}" ;;
+    CLOSED) _date="${_closed%%T*}" ;;
+    *) _date="" ;;
+    esac
+    printf '%s|%s|%s' "$_state" "$_decision" "$_date"
+}
+
+# Pull a single field's plain string out of a gh `--json …` payload using
+# whichever JSON parser is on PATH. Mirrors the helper pattern used by
+# gh_flow.sh and keeps the gh dependency soft (no jq required).
+_gh_pr_approve_jq_field() {
+    local _field="$1"
+    if command -v jq >/dev/null 2>&1; then
+        jq -r ".$_field // empty" 2>/dev/null
+    else
+        # Naive fallback: grep the "field":"value" pair. Good enough for
+        # the simple top-level fields we read from `gh pr view`.
+        sed -n "s/.*\"$_field\":\"\\([^\"]*\\)\".*/\\1/p" | head -n 1
+    fi
+}
+
+# Print two lines for the given PR:
+#   <verdict-text>
+#   <next-action-text>
+# Reads <pr-dir>/state, /pid, /worktree.path, then composes the matrix
+# from the issue spec. gh-pr-approve's worker is single-shot (no polling,
+# no reply loop), so the matrix is strictly simpler than gh-flow's.
+_gh_pr_approve_verdict() {
+    local _pr="$1"
+    local _dir _state _wt _pid _pid_alive _verdict _action
+    _dir=$(_gh_pr_approve_pr_dir "$_pr")
+    if [ ! -d "$_dir" ]; then
+        printf 'no state — PR not tracked\n(none)\n'
+        return 0
+    fi
+    _state="$(cat "$_dir/state" 2>/dev/null || printf 'unknown')"
+    _wt="$(cat "$_dir/worktree.path" 2>/dev/null || printf '')"
+    _pid="$(cat "$_dir/pid" 2>/dev/null || printf '')"
+    _pid_alive=0
+    if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+        _pid_alive=1
+    fi
+
+    case "$_state" in
+    done)
+        _verdict="done — safe to prune"
+        _action="gh-pr-approve prune $_pr"
+        ;;
+    failed:*)
+        if [ -n "$_wt" ] && [ -d "$_wt" ]; then
+            _verdict="dead failure, worktree alive"
+            _action="cd $_wt && gwt teardown --force, then gh-pr-approve prune $_pr"
+        else
+            _verdict="dead failure — state-only cleanup"
+            _action="gh-pr-approve prune $_pr"
+        fi
+        ;;
+    spawning | approving | tearing-down)
+        if [ "$_pid_alive" = "1" ]; then
+            _verdict="active worker ($_state) — leave alone"
+            _action="(none — still working)"
+        else
+            _verdict="dead worker mid-step ($_state)"
+            _action="gh-pr-approve prune $_pr"
+        fi
+        ;;
+    *)
+        _verdict="unknown state ($_state)"
+        _action="inspect $_dir"
+        ;;
+    esac
+
+    printf '%s\n%s\n' "$_verdict" "$_action"
+}
+
+# ============================================================================
+# status / prune subcommands
+# ============================================================================
+
+# Per-PR diagnostic. Renders header + State/Worker/PR/Worktree/Flags/
+# Last log (+ tail -5) + Verdict / Next action (via _gh_pr_approve_verdict).
+# Input: <pr-num> with optional leading '#'.
+_gh_pr_approve_status_single() {
+    local _arg="$1"
+    local _pr _dir _state _pid _wt _pid_state _wt_state
+    local _pr_state_raw _pr_state _pr_decision _pr_date _pr_info
+    local _flags _flags_state _log _log_mtime _etime
+    local _verdict_out _verdict_text _action_text _name
+
+    _pr="${_arg#\#}"
+    case "$_pr" in
+    '' | *[!0-9]*)
+        ux_error "gh-pr-approve status: invalid PR number '$_arg'"
+        return 1
+        ;;
+    esac
+
+    _name=$(_gh_pr_approve_repo_name)
+    if [ -z "$_name" ]; then
+        ux_error "gh-pr-approve status: not inside a git repo"
+        return 1
+    fi
+
+    _dir=$(_gh_pr_approve_pr_dir "$_pr")
+    ux_header "gh-pr-approve status #$_pr - $_name"
+    if [ ! -d "$_dir" ]; then
+        ux_warning "no state for #$_pr in $_name (worker never ran or already pruned)"
+        return 0
+    fi
+
+    _state="$(cat "$_dir/state" 2>/dev/null || printf 'unknown')"
+    _pid="$(cat "$_dir/pid" 2>/dev/null || printf '')"
+    _wt="$(cat "$_dir/worktree.path" 2>/dev/null || printf '')"
+
+    # Worker liveness with elapsed time (etime= is "[[DD-]HH:]MM:SS" on Linux).
+    if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+        _etime="$(ps -p "$_pid" -o etime= 2>/dev/null | tr -d ' ')"
+        if [ -n "$_etime" ]; then
+            _pid_state="pid=$_pid (alive, $_etime)"
+        else
+            _pid_state="pid=$_pid (alive)"
+        fi
+    elif [ -n "$_pid" ]; then
+        _pid_state="pid=$_pid (dead)"
+    else
+        _pid_state="-"
+    fi
+
+    # PR detail: single gh pr view call, includes reviewDecision and date.
+    _pr_state_raw=$(_gh_pr_approve_pr_state "$_dir")
+    if [ "$_pr_state_raw" = "UNREACHABLE" ]; then
+        _pr_info="#$_pr (unreachable — gh CLI failed)"
+    else
+        _pr_state="${_pr_state_raw%%|*}"
+        _pr_decision="${_pr_state_raw#*|}"
+        _pr_date="${_pr_decision#*|}"
+        _pr_decision="${_pr_decision%%|*}"
+        if [ -z "$_pr_state" ]; then
+            _pr_info="#$_pr (state unknown)"
+        else
+            _pr_info="#$_pr ($_pr_state"
+            if [ -n "$_pr_decision" ]; then
+                _pr_info="$_pr_info, review: $_pr_decision"
+            fi
+            if [ -n "$_pr_date" ]; then
+                _pr_info="$_pr_info, $_pr_date"
+            fi
+            _pr_info="$_pr_info)"
+        fi
+    fi
+
+    # Worktree presence.
+    if [ -n "$_wt" ]; then
+        if [ -d "$_wt" ]; then
+            _wt_state="$_wt (present)"
+        else
+            _wt_state="$_wt (absent)"
+        fi
+    else
+        _wt_state="(none)"
+    fi
+
+    # Flags recorded at spawn (only present when --self-record / --admin-merge
+    # were passed). Trim whitespace so a stray newline does not look weird.
+    if [ -f "$_dir/flags" ]; then
+        _flags="$(tr -d '\n' <"$_dir/flags" 2>/dev/null | sed 's/^ *//; s/ *$//')"
+        if [ -n "$_flags" ]; then
+            _flags_state="$_flags"
+        else
+            _flags_state="(none)"
+        fi
+    else
+        _flags_state="(none)"
+    fi
+
+    ux_table_row "State" "$_state"
+    ux_table_row "Worker" "$_pid_state"
+    ux_table_row "PR" "$_pr_info"
+    ux_table_row "Worktree" "$_wt_state"
+    ux_table_row "Flags" "$_flags_state"
+
+    _log="$_dir/log"
+    if [ -f "$_log" ]; then
+        _log_mtime="$(date -r "$_log" '+%Y-%m-%d %H:%M' 2>/dev/null)"
+        if [ -n "$_log_mtime" ]; then
+            ux_table_row "Last log" "$_log_mtime"
+        else
+            ux_table_row "Last log" "$_log"
+        fi
+        printf '\n  --- tail -5 %s ---\n' "$_log"
+        tail -n 5 "$_log" 2>/dev/null | sed 's/^/  /'
+        printf '  ---\n'
+    else
+        ux_table_row "Last log" "(none)"
+    fi
+
+    # Heredoc (not pipe) so reads land in this shell — see auto-memory:
+    # subshell tracing trap.
+    _verdict_out=$(_gh_pr_approve_verdict "$_pr")
+    {
+        IFS= read -r _verdict_text || _verdict_text=""
+        IFS= read -r _action_text || _action_text=""
+    } <<EOF
+$_verdict_out
+EOF
+
+    ux_info ""
+    ux_table_row "Verdict" "$_verdict_text"
+    ux_table_row "Next action" "$_action_text"
+}
+
+# List all known gh-pr-approve entries for the current repo, OR diagnose a
+# single PR if exactly one positional arg is given. Multiple positional args
+# are rejected (single-PR diagnostic only).
+_gh_pr_approve_status() {
+    if [ $# -gt 1 ]; then
+        ux_error "gh-pr-approve status: only one PR number accepted (got $#)"
+        return 1
+    fi
+    if [ -n "${1:-}" ]; then
+        _gh_pr_approve_status_single "$1"
+        return $?
+    fi
+
+    local _root _name _repo_dir _entry _pr _state _pid _wt _pid_state
+    _root=$(_gh_pr_approve_state_root)
+    _name=$(_gh_pr_approve_repo_name)
+    if [ -z "$_name" ]; then
+        ux_error "gh-pr-approve status: not inside a git repo"
+        return 1
+    fi
+    _repo_dir="$_root/$_name"
+
+    ux_header "gh-pr-approve status - $_name"
+    if [ ! -d "$_repo_dir" ]; then
+        ux_info "no state — no workers have ever run in this repo"
+        return 0
+    fi
+
+    local _found=0
+    ux_table_header "PR" "STATE" "PID / WORKTREE"
+    for _entry in "$_repo_dir"/*/; do
+        [ -d "$_entry" ] || continue
+        _pr="$(basename "$_entry")"
+        _state="$(cat "$_entry/state" 2>/dev/null || printf 'unknown')"
+        _pid="$(cat "$_entry/pid" 2>/dev/null || printf '')"
+        _wt="$(cat "$_entry/worktree.path" 2>/dev/null || printf '')"
+
+        if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+            _pid_state="pid=$_pid (alive)"
+        elif [ -n "$_pid" ]; then
+            _pid_state="pid=$_pid (dead)"
+        else
+            _pid_state="-"
+        fi
+
+        if [ -n "$_wt" ]; then
+            ux_table_row "#$_pr" "$_state" "$_pid_state  $_wt"
+        else
+            ux_table_row "#$_pr" "$_state" "$_pid_state"
+        fi
+        _found=1
+    done
+    if [ "$_found" = "0" ]; then
+        ux_info "no state entries under $_repo_dir"
+    fi
+    ux_info ""
+    ux_info "Run 'gh-pr-approve prune' to clean done entries and list failed worktrees."
+}
+
+# Scoped prune: only the PR numbers passed in are touched. Refuses to remove
+# a state dir whose worker is still alive (unless --force) or whose worktree
+# dir still exists (always rejected — that's `gwt teardown`'s job).
+# $1 = repo state dir, $2 = force flag (0|1), $3 = repo name (header),
+# remaining args = PR numbers.
+_gh_pr_approve_prune_scoped() {
+    local _repo_dir="$1" _force="$2" _name="$3"
+    shift 3
+
+    ux_header "gh-pr-approve prune - $_name"
+
+    local _pr _entry _state _pid _wt _pid_alive
+    local _processed=0 _rejected=0 _removed=0
+    for _pr in "$@"; do
+        _entry="$_repo_dir/$_pr"
+        _processed=$((_processed + 1))
+        if [ ! -d "$_entry" ]; then
+            ux_warning "#$_pr no state to prune"
+            continue
+        fi
+        _state="$(cat "$_entry/state" 2>/dev/null || printf '')"
+        _pid="$(cat "$_entry/pid" 2>/dev/null || printf '')"
+        _wt="$(cat "$_entry/worktree.path" 2>/dev/null || printf '')"
+
+        _pid_alive=0
+        if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+            _pid_alive=1
+        fi
+
+        # Worktree present? Always reject — even with --force. Tearing it down
+        # is `gwt teardown`'s job (branch admin, secrets, git worktree prune).
+        if [ -n "$_wt" ] && [ -d "$_wt" ]; then
+            ux_error "#$_pr worktree exists at $_wt — run 'cd $_wt && gwt teardown --force' first"
+            _rejected=$((_rejected + 1))
+            continue
+        fi
+
+        # Alive worker? Accept only with --force.
+        if [ "$_pid_alive" = "1" ]; then
+            if [ "$_force" != "1" ]; then
+                ux_error "#$_pr worker pid=$_pid still alive — pass --force to kill and remove"
+                _rejected=$((_rejected + 1))
+                continue
+            fi
+            ux_warning "#$_pr killing worker pid=$_pid"
+            kill -TERM "$_pid" 2>/dev/null || true
+            sleep 1
+            if kill -0 "$_pid" 2>/dev/null; then
+                kill -KILL "$_pid" 2>/dev/null || true
+            fi
+        fi
+
+        rm -rf "$_entry"
+        ux_success "removed state for #$_pr (was: ${_state:-unknown})"
+        _removed=$((_removed + 1))
+    done
+
+    ux_info ""
+    if [ "$_rejected" -gt 0 ]; then
+        ux_warning "processed $_processed, removed $_removed, rejected $_rejected"
+        return 1
+    fi
+    ux_success "processed $_processed, removed $_removed"
+    return 0
+}
+
+# Prune state dirs. Two modes:
+#   1) No positional args:  full-scan flow — remove 'done', list 'failed:*'
+#      worktrees (and `gwt teardown` them when --force is set).
+#   2) One or more PR numbers: scoped flow (see _gh_pr_approve_prune_scoped).
+# Flag: --force changes scoped behavior (kill alive pid) and full-scan
+# behavior (auto-teardown failed worktrees).
+_gh_pr_approve_prune() {
+    local _force=0
+    local _scoped="" _arg _pr _parsing_flags=1
+
+    while [ $# -gt 0 ]; do
+        _arg="$1"
+        if [ "$_parsing_flags" = "1" ]; then
+            case "$_arg" in
+            --force | -f)
+                _force=1
+                shift
+                continue
+                ;;
+            --)
+                _parsing_flags=0
+                shift
+                continue
+                ;;
+            -*)
+                ux_error "gh-pr-approve prune: unknown arg '$_arg' (only --force is accepted)"
+                return 1
+                ;;
+            esac
+        fi
+
+        _pr="${_arg#\#}"
+        case "$_pr" in
+        '' | *[!0-9]*)
+            ux_error "gh-pr-approve prune: invalid PR number '$_arg'"
+            return 1
+            ;;
+        esac
+        _scoped="$_scoped $_pr"
+        shift
+    done
+
+    local _root _name _repo_dir _entry _state _wt
+    _root=$(_gh_pr_approve_state_root)
+    _name=$(_gh_pr_approve_repo_name)
+    if [ -z "$_name" ]; then
+        ux_error "gh-pr-approve prune: not inside a git repo"
+        return 1
+    fi
+    _repo_dir="$_root/$_name"
+
+    if [ -n "$_scoped" ]; then
+        # shellcheck disable=SC2086
+        _gh_pr_approve_prune_scoped "$_repo_dir" "$_force" "$_name" $_scoped
+        return $?
+    fi
+
+    ux_header "gh-pr-approve prune - $_name"
+    if [ ! -d "$_repo_dir" ]; then
+        ux_info "nothing to prune"
+        return 0
+    fi
+
+    local _removed=0 _failed=0 _torn_down=0
+    for _entry in "$_repo_dir"/*/; do
+        [ -d "$_entry" ] || continue
+        _pr="$(basename "$_entry")"
+        _state="$(cat "$_entry/state" 2>/dev/null || printf '')"
+        _wt="$(cat "$_entry/worktree.path" 2>/dev/null || printf '')"
+
+        case "$_state" in
+        done)
+            rm -rf "$_entry"
+            ux_success "removed state for #$_pr (done)"
+            _removed=$((_removed + 1))
+            ;;
+        failed:*)
+            _failed=$((_failed + 1))
+            if [ "$_force" = "1" ] && [ -n "$_wt" ] && [ -d "$_wt" ]; then
+                ux_warning "#$_pr $_state — tearing down $_wt"
+                if (cd "$_wt" && gwt teardown --force); then
+                    rm -rf "$_entry"
+                    _torn_down=$((_torn_down + 1))
+                else
+                    ux_error "  gwt teardown failed for $_wt; leaving state dir intact"
+                fi
+            else
+                ux_warning "#$_pr $_state"
+                if [ -n "$_wt" ] && [ -d "$_wt" ]; then
+                    ux_bullet_sub "worktree: $_wt"
+                    ux_bullet_sub "cleanup: cd $_wt && gwt teardown --force"
+                fi
+            fi
+            ;;
+        esac
+    done
+
+    ux_info ""
+    if [ "$_force" = "1" ]; then
+        ux_success "pruned $_removed done entr(ies), torn down $_torn_down failed worktree(s); $((_failed - _torn_down)) failure(s) still need attention"
+    else
+        ux_success "pruned $_removed done entr(ies); $_failed failure(s) need attention (pass --force to gwt teardown them)"
+    fi
+}
+
+# ============================================================================
 # Help
 # ============================================================================
 
@@ -109,6 +593,8 @@ gh_pr_approve_help() {
     ux_bullet_sub "--self-record: for self-authored PRs, leave a comment-only review record"
     ux_bullet_sub "--admin-merge: for self-authored PRs, review then merge with gh pr merge --admin"
     ux_bullet_sub "--squash|--rebase|--merge: optional merge strategy for --admin-merge"
+    ux_bullet "gh-pr-approve status [<N>]            full table, or per-PR diagnostic"
+    ux_bullet "gh-pr-approve prune [--force] [<N>...] clean 'done' state, or scoped per-PR prune"
     ux_bullet "gh-pr-approve -h|--help|help"
     ux_info ""
     ux_info "Spawns one background worker per PR. Each worker:"
@@ -121,12 +607,19 @@ gh_pr_approve_help() {
     ux_bullet "gh-pr-approve --ai gemini '#56' '#78'       # gemini + #prefix"
     ux_bullet "gh-pr-approve 42 --self-record              # self-PR comment-only record"
     ux_bullet "gh-pr-approve 42 --admin-merge --squash     # self-PR admin merge"
+    ux_bullet "gh-pr-approve status                        # full table — who's still running, who failed"
+    ux_bullet "gh-pr-approve status 42                     # per-PR diagnostic (verdict + next action)"
+    ux_bullet "gh-pr-approve prune                         # remove 'done' state dirs; print hints for failures"
+    ux_bullet "gh-pr-approve prune --force                 # also gwt teardown failed worktrees"
+    ux_bullet "gh-pr-approve prune 42 56                   # scoped — refuses if pid alive or worktree present"
+    ux_bullet "gh-pr-approve prune --force 42              # scoped + kill alive pid (worktree still rejected)"
     ux_info ""
     ux_info "State directory: ~/.local/state/gh-pr-approve/<repo>/<pr>/"
     ux_bullet_sub "state         - current step"
     ux_bullet_sub "ai            - selected ai runner (claude|codex|gemini)"
     ux_bullet_sub "pid           - worker process id"
     ux_bullet_sub "worktree.path - git worktree path"
+    ux_bullet_sub "flags         - launch flags (--self-record, --admin-merge, etc.)"
     ux_bullet_sub "log           - full stdout+stderr"
     ux_bullet_sub "log.prev      - previous run's log (one generation)"
     ux_bullet_sub "usage.jsonl   - per-invocation token usage (claude + codex + gemini)"
@@ -134,6 +627,7 @@ gh_pr_approve_help() {
     ux_info "Failure isolation:"
     ux_bullet "One worker failure does not affect others."
     ux_bullet "Failed worker leaves worktree intact; state shows 'failed:<step>'."
+    ux_bullet "Distinct failure states: failed:spawning, failed:approving, failed:tearing-down."
     ux_info ""
     ux_info "Preconditions:"
     ux_bullet "Run from main repo (not inside a worktree)"
@@ -158,6 +652,16 @@ gh_pr_approve() {
     "" | -h | --help | help)
         gh_pr_approve_help
         return 0
+        ;;
+    status)
+        shift
+        _gh_pr_approve_status "$@"
+        return $?
+        ;;
+    prune)
+        shift
+        _gh_pr_approve_prune "$@"
+        return $?
         ;;
     esac
 
@@ -306,6 +810,15 @@ _gh_pr_approve_spawn_worker() {
     mkdir -p "$_dir"
     _log="$_dir/log"
     printf '%s\n' "$_ai" >"$_dir/ai"
+    # Record self-PR launch flags so `status <N>` can show them later.
+    # Empty $_self_args → no file (status renders "(none)" then). Single
+    # line, written even before the worker forks so a fail-fast spawn
+    # still leaves a useful breadcrumb.
+    if [ -n "$_self_args" ]; then
+        printf '%s\n' "$_self_args" >"$_dir/flags"
+    else
+        rm -f "$_dir/flags" 2>/dev/null || true
+    fi
 
     # Idempotency check — mirrors gh-flow semantics.
     _state=$(_gh_pr_approve_get_state "$_pr")
