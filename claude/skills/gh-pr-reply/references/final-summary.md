@@ -1,4 +1,4 @@
-# Final Summary — output table printed by `gh:pr-reply` Step 8
+# Final Summary — output table printed by `gh:pr-reply` Step 7
 
 Print a table the user can scan after all replies are posted:
 
