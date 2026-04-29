@@ -4,7 +4,7 @@
 
 | Option | Description | Default |
 |---|---|---|
-| `--agent <name>` | Override agent name | auto-detect |
+| `--ai <name>` | Override agent name | auto-detect |
 | `--task "slug"` | Add task slug to branch name (English only) | none |
 | `--base <ref>` | Base branch/commit | `origin/main` |
 | `--dry-run` | Print plan without creating anything | `false` |

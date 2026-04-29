@@ -18,13 +18,13 @@ ai_setup() {
         case "$1" in
             -h|--help|help)
                 ux_header "ai-setup - workspace orchestrator"
-                ux_info "Usage: ai-setup [--agent <agent>]"
+                ux_info "Usage: ai-setup [--ai <agent>]"
                 ux_info ""
                 ux_info "Interactive setup that creates git worktrees and"
                 ux_info "tmux sessions with 3-pane windows in one step."
                 ux_info ""
                 ux_info "Options:"
-                ux_info "  --agent <agent>   Pre-fill the 'Tmux window agents' prompt"
+                ux_info "  --ai <agent>   Pre-fill the 'Tmux window agents' prompt"
                 ux_info "                    default (claude, codex, gemini,"
                 ux_info "                    opencode, cursor, copilot)."
                 ux_info ""
@@ -39,9 +39,9 @@ ai_setup() {
                 ux_info "Requirements: git, tmux, run from main repo (not worktree)"
                 return 0
                 ;;
-            --agent)
+            --ai)
                 if [ -z "${2:-}" ]; then
-                    ux_error "--agent requires an argument"
+                    ux_error "--ai requires an argument"
                     return 1
                 fi
                 if ! _ts_known_agent "$2"; then
@@ -57,7 +57,7 @@ ai_setup() {
                 ;;
             *)
                 ux_warning "Unexpected argument: $1"
-                ux_info "Usage: ai-setup [--agent <agent>]"
+                ux_info "Usage: ai-setup [--ai <agent>]"
                 ux_info "Run 'ai-setup --help' for details."
                 return 1
                 ;;

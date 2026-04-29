@@ -29,7 +29,7 @@ check parent directory write permission.
 ### Step 2: Detect AI Agent
 
 Read `references/agent-detection.md` for the full priority chain and env var table.
-Priority: `--agent` arg > `$AI_AGENT_NAME` > agent-specific env vars > `agent`.
+Priority: `--ai` arg > `$AI_AGENT_NAME` > agent-specific env vars > `agent`.
 
 ### Step 3: Compute Project Name and Index
 
