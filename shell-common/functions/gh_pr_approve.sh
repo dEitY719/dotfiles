@@ -153,7 +153,7 @@ _gh_pr_approve_pr_state() {
 _gh_pr_approve_jq_field() {
     local _field="$1"
     if command -v jq >/dev/null 2>&1; then
-        jq -r ".$_field // empty" 2>/dev/null
+        jq -r ".$_field? // empty" 2>/dev/null
     else
         # Naive fallback: grep the "field":"value" pair. Good enough for
         # the simple top-level fields we read from `gh pr view`.
