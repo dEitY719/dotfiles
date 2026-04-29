@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/functions/git_worktree_spawn.bats
-# Tests for `gwt spawn --agent` flag (issue #162).
+# Tests for `gwt spawn --ai` flag (issue #162).
 # Focuses on argument parsing + validation paths that do NOT require tmux
 # or a real worktree layout — the interesting behavioral change is the
 # decoupling of worktree <name> from the tmux agent name.
@@ -36,10 +36,10 @@ teardown() {
     assert_output --partial "ok"
 }
 
-@test "bash: spawn --help mentions --agent flag" {
+@test "bash: spawn --help mentions --ai flag" {
     run_in_bash 'git_worktree_spawn --help'
     assert_success
-    assert_output --partial "--agent"
+    assert_output --partial "--ai"
     assert_output --partial "claude"
 }
 
@@ -57,7 +57,7 @@ teardown() {
     # The key assertion: an unknown agent must produce a helpful error.
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --tmux --agent notarealagent 2>&1
+        git_worktree_spawn issue-xyz --tmux --ai notarealagent 2>&1
     "
     assert_failure
     assert_output --partial "Unknown agent: notarealagent"
@@ -70,10 +70,10 @@ teardown() {
     assert_output --partial "ok"
 }
 
-@test "zsh: spawn --help mentions --agent flag" {
+@test "zsh: spawn --help mentions --ai flag" {
     run_in_zsh 'git_worktree_spawn --help'
     assert_success
-    assert_output --partial "--agent"
+    assert_output --partial "--ai"
 }
 
 @test "bash: spawn --help mentions --launch flag" {
@@ -103,7 +103,7 @@ teardown() {
 @test "bash: spawn rejects unknown agent when --launch is used" {
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --launch --agent notarealagent 2>&1
+        git_worktree_spawn issue-xyz --launch --ai notarealagent 2>&1
     "
     assert_failure
     assert_output --partial "Unknown agent: notarealagent"
@@ -112,7 +112,7 @@ teardown() {
 @test "zsh: spawn rejects unknown agent when --launch is used" {
     run_in_zsh "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --launch --agent notarealagent 2>&1
+        git_worktree_spawn issue-xyz --launch --ai notarealagent 2>&1
     "
     assert_failure
     assert_output --partial "Unknown agent: notarealagent"

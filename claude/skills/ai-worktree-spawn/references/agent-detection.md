@@ -4,7 +4,7 @@
 
 Determine `agent_name` using this order (first match wins):
 
-1. `--agent <name>` argument (if user provided)
+1. `--ai <name>` argument (if user provided)
 2. `$AI_AGENT_NAME` environment variable
 3. Agent-specific env vars (see table below)
 4. Fallback: `agent`

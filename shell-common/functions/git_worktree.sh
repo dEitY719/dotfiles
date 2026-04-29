@@ -53,13 +53,13 @@ _gwt_help_rows_prune() {
 }
 
 _gwt_help_rows_spawn() {
-    ux_table_row "syntax" "gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch [--agent <agent>]]" "Create named worktree"
+    ux_table_row "syntax" "gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch [--ai <agent>]]" "Create named worktree"
     ux_table_row "context" "Run from main repo only" "Fails inside a worktree"
     ux_table_row "name" "Free-form slug (required)" "e.g. issue-11, login-fix"
-    ux_table_row "--agent" "AI agent (default: claude)" "claude, codex, gemini, opencode, cursor, copilot"
+    ux_table_row "--ai" "AI agent (default: claude)" "claude, codex, gemini, opencode, cursor, copilot"
     ux_table_row "--tmux" "Runs <agent>-yolo in new tmux pane" "Mutually exclusive with --launch"
     ux_table_row "--launch" "cd into worktree + run <agent>-yolo inline" "Current shell, no tmux"
-    ux_table_row "example" "gwt spawn issue-11 --tmux --agent codex" "Free-form name + codex agent"
+    ux_table_row "example" "gwt spawn issue-11 --tmux --ai codex" "Free-form name + codex agent"
     ux_table_row "example" "gwt spawn feat --launch" "spawn -> cd -> claude-yolo (one shot)"
 }
 
@@ -450,11 +450,11 @@ _gwt_yolo_command() {
 
 # ============================================================================
 # Worktree spawn — auto-index, auto-branch, log
-# Usage: git_worktree_spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--agent <agent>]
+# Usage: git_worktree_spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--ai <agent>]
 # ============================================================================
 _git_worktree_spawn_show_help() {
     ux_header "gwt spawn - create a named worktree"
-    ux_info "Usage: gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--agent <agent>]"
+    ux_info "Usage: gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--ai <agent>]"
     ux_info ""
     ux_info "Arguments:"
     ux_info "  <name>           Free-form worktree name (required)."
@@ -465,18 +465,18 @@ _git_worktree_spawn_show_help() {
     ux_info "  --tmux           Auto-create tmux session/window with 3-pane layout"
     ux_info "  --launch         cd into the new worktree and run <agent>-yolo in the"
     ux_info "                   current shell. Mutually exclusive with --tmux."
-    ux_info "  --agent <agent>  AI agent for --tmux pane or --launch (default: claude)"
+    ux_info "  --ai <agent>  AI agent for --tmux pane or --launch (default: claude)"
     ux_info "                   Known: claude, codex, gemini, opencode, cursor, copilot"
-    ux_info "                   Window name and 'yolo' command follow --agent,"
+    ux_info "                   Window name and 'yolo' command follow --ai,"
     ux_info "                   so worktree <name> can be any free-form slug."
     ux_info ""
     ux_info "Examples:"
     ux_info "  gwt spawn issue-11                           # ../<proj>-issue-11-1  wt/issue-11/1"
     ux_info "  gwt spawn login-fix --task auth              # ../<proj>-login-fix-1 wt/login-fix/1-auth"
     ux_info "  gwt spawn issue-11 --tmux                    # tmux window 'claude' runs 'claude-yolo'"
-    ux_info "  gwt spawn issue-11 --tmux --agent codex      # tmux window 'codex'  runs 'codex-yolo'"
+    ux_info "  gwt spawn issue-11 --tmux --ai codex      # tmux window 'codex'  runs 'codex-yolo'"
     ux_info "  gwt spawn feat --launch                      # cd into new worktree + claude-yolo"
-    ux_info "  gwt spawn feat --launch --agent codex        # cd + codex-yolo"
+    ux_info "  gwt spawn feat --launch --ai codex        # cd + codex-yolo"
 }
 
 git_worktree_spawn() {
@@ -496,7 +496,7 @@ git_worktree_spawn() {
                 ;;
             --task) task="$2"; shift 2 ;;
             --base) base="$2"; shift 2 ;;
-            --agent) agent="$2"; shift 2 ;;
+            --ai) agent="$2"; shift 2 ;;
             --tmux) use_tmux=1; shift ;;
             --launch) use_launch=1; shift ;;
             -*)
@@ -549,7 +549,7 @@ git_worktree_spawn() {
         return 1
     fi
 
-    # Validate --agent: must be a known AI agent (only when tmux/launch will use it)
+    # Validate --ai: must be a known AI agent (only when tmux/launch will use it)
     if { [ "$use_tmux" = 1 ] || [ "$use_launch" = 1 ]; } && ! _ts_known_agent "$agent"; then
         ux_error "Unknown agent: $agent"
         ux_info "Available: claude, codex, gemini, opencode, cursor, copilot"

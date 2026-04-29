@@ -26,7 +26,7 @@ test -w "$PARENT" || { echo "Error: Permission denied: $PARENT"; exit 1; }
 
 ```bash
 detect_ai_agent() {
-  # Priority 1: --agent argument (passed as $1)
+  # Priority 1: --ai argument (passed as $1)
   if [[ -n "${1:-}" ]]; then
     echo "$1"
     return

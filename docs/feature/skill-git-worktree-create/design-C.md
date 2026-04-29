@@ -82,7 +82,7 @@
 
 | 우선순위 | 방법 | 예시 |
 |---|---|---|
-| 1 | 명시 인자 `--agent` | `--agent claude` |
+| 1 | 명시 인자 `--ai` | `--ai claude` |
 | 2 | 환경변수 `AI_AGENT_NAME` | `export AI_AGENT_NAME=gemini` |
 | 3 | 에이전트별 고유 환경변수 | 아래 감지 테이블 참조 |
 | 4 | fallback 기본값 | `agent` |
@@ -188,7 +188,7 @@ git worktree add -b "${branch_name}" "${worktree_path}" "${base_ref}"
 
 | 옵션 | 설명 | 기본값 |
 |---|---|---|
-| `--agent <name>` | 에이전트명 수동 지정 | 자동 감지 |
+| `--ai <name>` | 에이전트명 수동 지정 | 자동 감지 |
 | `--task "slug"` | 브랜치 slug 생성에 사용 (영문만) | 없음 |
 | `--base <ref>` | 기반 브랜치/커밋 지정 | `origin/main` |
 | `--dry-run` | 실제 생성 없이 계획만 출력 | `false` |
@@ -310,7 +310,7 @@ AI: [dry-run] 아래 계획을 실행할 예정입니다:
     |     -> 부모 디렉토리 쓰기 권한 확인
     |
     +-- 2. AI 에이전트 감지 (detect_ai_agent)
-    |     -> --agent > $AI_AGENT_NAME > 고유 env > fallback
+    |     -> --ai > $AI_AGENT_NAME > 고유 env > fallback
     |
     +-- 3. 프로젝트명 추출
     |     -> basename $(git rev-parse --show-toplevel)
@@ -406,7 +406,7 @@ tools/
 tools/ai-worktree-spawn.sh [options] [branch-name]
 
 # 옵션
---agent <name>    에이전트명 수동 지정
+--ai <name>    에이전트명 수동 지정
 --task "slug"     브랜치 slug 생성 (영문 소문자/숫자/하이픈)
 --base <ref>      기반 브랜치 지정 (default: origin/main)
 --dry-run         계획만 출력
@@ -477,7 +477,7 @@ git branch --merged main | grep "^  wt/" | xargs git branch -d
 | 결정 사항 | 채택 출처 | 근거 |
 |---|---|---|
 | 목표/비목표 분리 | design-CX | scope creep 방지. PR 자동화 등은 비목표로 명시 |
-| 에이전트 식별 4단계 우선순위 | design-CX | `--agent` override가 없으면 환경변수 바뀔 때 대응 불가 |
+| 에이전트 식별 4단계 우선순위 | design-CX | `--ai` override가 없으면 환경변수 바뀔 때 대응 불가 |
 | lock 기반 동시성 제어 | design-CX | 6개 TUI 동시 실행 시 번호 충돌은 실제 발생 가능 |
 | 브랜치 네임스페이스 `wt/` | design-CX | 일반 브랜치와 구분, 일괄 정리 용이 (`git branch \| grep wt/`) |
 | `--dry-run` 옵션 | design-CX | 실행 전 검증은 안전성의 기본 |
