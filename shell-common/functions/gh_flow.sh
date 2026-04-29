@@ -556,19 +556,28 @@ _gh_flow_prune() {
             ;;
         failed:*)
             _failed=$((_failed + 1))
-            if [ "$_force" = "1" ] && [ -n "$_wt" ] && [ -d "$_wt" ]; then
-                ux_warning "#$_issue $_state — tearing down $_wt"
-                if (cd "$_wt" && gwt teardown --force); then
+            if [ "$_force" = "1" ]; then
+                if [ -n "$_wt" ] && [ -d "$_wt" ]; then
+                    ux_warning "#$_issue $_state — tearing down $_wt"
+                    if (cd "$_wt" && git_worktree_teardown --force); then
+                        rm -rf "$_entry"
+                        _torn_down=$((_torn_down + 1))
+                    else
+                        ux_error "  teardown failed for $_wt; leaving state dir intact"
+                        ux_bullet_sub "manual fix: cd $_wt && gwt teardown --force, then gh-flow prune --force $_issue"
+                    fi
+                else
+                    ux_warning "#$_issue $_state — worktree gone, removing state"
                     rm -rf "$_entry"
                     _torn_down=$((_torn_down + 1))
-                else
-                    ux_error "  gwt teardown failed for $_wt; leaving state dir intact"
                 fi
             else
                 ux_warning "#$_issue $_state"
                 if [ -n "$_wt" ] && [ -d "$_wt" ]; then
                     ux_bullet_sub "worktree: $_wt"
                     ux_bullet_sub "cleanup: cd $_wt && gwt teardown --force"
+                else
+                    ux_bullet_sub "worktree gone — run 'gh-flow prune --force $_issue' to drop state"
                 fi
             fi
             ;;
@@ -577,7 +586,7 @@ _gh_flow_prune() {
 
     ux_info ""
     if [ "$_force" = "1" ]; then
-        ux_success "pruned $_removed done entr(ies), torn down $_torn_down failed worktree(s); $((_failed - _torn_down)) failure(s) still need attention"
+        ux_success "pruned $_removed done entr(ies), cleaned up $_torn_down failed entr(ies); $((_failed - _torn_down)) failure(s) still need attention"
     else
         ux_success "pruned $_removed done entr(ies); $_failed failure(s) need attention (pass --force to gwt teardown them)"
     fi

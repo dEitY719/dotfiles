@@ -145,6 +145,36 @@ teardown() {
     assert_output --partial "gwt teardown"
 }
 
+@test "prune: failed entry with no worktree shows scoped --force hint" {
+    _seed_state 51 "failed:implementing" "$TEST_TEMP_HOME/repo-issue-51-1" "12345"
+    # worktree.path points somewhere that does not exist on disk — simulates
+    # a worker that died after its own teardown or after the user manually
+    # cleaned up the tree.
+
+    run_in_bash "cd '$REPO_DIR' && gh_flow prune"
+    assert_success
+    assert_output --partial "#51"
+    assert_output --partial "gh-flow prune --force 51"
+    # State preserved when --force absent.
+    [ -d "$HOME/.local/state/gh-flow/repo/51" ]
+}
+
+@test "prune --force: removes failed:* state when worktree is already gone" {
+    _seed_state 61 "failed:implementing" "$TEST_TEMP_HOME/repo-issue-61-1" "12345"
+    _seed_state 62 "failed:opening-pr" "" "12346"
+
+    run_in_bash "cd '$REPO_DIR' && gh_flow prune --force"
+    assert_success
+    assert_output --partial "#61"
+    assert_output --partial "worktree gone"
+    assert_output --partial "#62"
+    # Both orphan-state entries removed.
+    [ ! -d "$HOME/.local/state/gh-flow/repo/61" ]
+    [ ! -d "$HOME/.local/state/gh-flow/repo/62" ]
+    # Counter reflects the cleanup.
+    assert_output --partial "cleaned up 2 failed entr(ies)"
+}
+
 @test "prune: empty state tree — 'nothing to prune' and exits 0" {
     run_in_bash "cd '$REPO_DIR' && gh_flow prune"
     assert_success
