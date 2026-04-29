@@ -228,3 +228,288 @@ teardown() {
     assert_failure
     assert_output --partial "--squash requires --admin-merge"
 }
+
+# ---------------------------------------------------------------------------
+# status / prune subcommands (issue #268)
+# ---------------------------------------------------------------------------
+
+# Seed one gh_pr_approve state dir. Args: <pr> <state> [worktree] [pid] [flags]
+_seed_pr_state() {
+    local _pr="$1" _state="$2" _wt="${3:-}" _pid="${4:-}" _flags="${5:-}"
+    local _dir="$HOME/.local/state/gh-pr-approve/fake-main/$_pr"
+    mkdir -p "$_dir"
+    printf '%s\n' "$_state" >"$_dir/state"
+    if [ -n "$_wt" ]; then printf '%s\n' "$_wt" >"$_dir/worktree.path"; fi
+    if [ -n "$_pid" ]; then printf '%s\n' "$_pid" >"$_dir/pid"; fi
+    if [ -n "$_flags" ]; then printf '%s\n' "$_flags" >"$_dir/flags"; fi
+    return 0
+}
+
+@test "help: documents status and prune subcommands" {
+    run_in_bash 'gh_pr_approve --help'
+    assert_success
+    assert_output --partial "gh-pr-approve status"
+    assert_output --partial "gh-pr-approve prune"
+    assert_output --partial "failed:spawning"
+    assert_output --partial "failed:approving"
+    assert_output --partial "failed:tearing-down"
+    assert_output --partial "flags"
+}
+
+@test "status: empty repo — prints 'no state' and exits 0" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status"
+    assert_success
+    assert_output --partial "no state"
+}
+
+@test "status: lists each seeded entry with its state" {
+    _seed_pr_state 13 "approving" "" "99999"
+    _seed_pr_state 42 "failed:approving" "$TEST_TEMP_HOME/pr-42-wt" "12345"
+    _seed_pr_state 88 "done" "" ""
+
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status"
+    assert_success
+    assert_output --partial "#13"
+    assert_output --partial "approving"
+    assert_output --partial "#42"
+    assert_output --partial "failed:approving"
+    assert_output --partial "pr-42-wt"
+    assert_output --partial "#88"
+    assert_output --partial "done"
+}
+
+@test "status: pid liveness — current shell pid shown as alive" {
+    _seed_pr_state 77 "approving" "" "$$"
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status"
+    assert_success
+    assert_output --partial "#77"
+    assert_output --partial "alive"
+}
+
+@test "status: pid liveness — unreachable pid shown as dead" {
+    _seed_pr_state 55 "failed:approving" "$TEST_TEMP_HOME/pr-55-wt" "9999999"
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status"
+    assert_success
+    assert_output --partial "#55"
+    assert_output --partial "dead"
+}
+
+# ---------------------------------------------------------------------------
+# verdict matrix
+# ---------------------------------------------------------------------------
+
+@test "verdict: done → 'safe to prune' + scoped prune action" {
+    _seed_pr_state 100 "done" "" ""
+    run_in_bash "cd '$FAKE_REPO' && _gh_pr_approve_verdict 100"
+    assert_success
+    assert_line --index 0 "done — safe to prune"
+    assert_line --index 1 "gh-pr-approve prune 100"
+}
+
+@test "verdict: approving + alive pid → active worker, leave alone" {
+    _seed_pr_state 201 "approving" "" "$$"
+    run_in_bash "cd '$FAKE_REPO' && _gh_pr_approve_verdict 201"
+    assert_success
+    assert_output --partial "active worker (approving)"
+    assert_output --partial "still working"
+}
+
+@test "verdict: approving + dead pid → dead worker mid-step" {
+    _seed_pr_state 202 "approving" "" "9999999"
+    run_in_bash "cd '$FAKE_REPO' && _gh_pr_approve_verdict 202"
+    assert_success
+    assert_output --partial "dead worker mid-step (approving)"
+    assert_output --partial "gh-pr-approve prune 202"
+}
+
+@test "verdict: failed:* + worktree absent → state-only cleanup" {
+    _seed_pr_state 301 "failed:approving" "" "12345"
+    run_in_bash "cd '$FAKE_REPO' && _gh_pr_approve_verdict 301"
+    assert_success
+    assert_output --partial "dead failure"
+    assert_output --partial "gh-pr-approve prune 301"
+}
+
+@test "verdict: failed:* + worktree present → gwt teardown first" {
+    mkdir -p "$TEST_TEMP_HOME/pr-302-wt"
+    _seed_pr_state 302 "failed:tearing-down" "$TEST_TEMP_HOME/pr-302-wt" "12345"
+    run_in_bash "cd '$FAKE_REPO' && _gh_pr_approve_verdict 302"
+    assert_success
+    assert_output --partial "worktree alive"
+    assert_output --partial "gwt teardown --force"
+}
+
+@test "verdict: missing dir → 'no state — PR not tracked'" {
+    run_in_bash "cd '$FAKE_REPO' && _gh_pr_approve_verdict 999"
+    assert_success
+    assert_line --index 0 "no state — PR not tracked"
+    assert_line --index 1 "(none)"
+}
+
+# ---------------------------------------------------------------------------
+# full-scan prune
+# ---------------------------------------------------------------------------
+
+@test "prune: removes 'done' state dirs and keeps 'failed:*' ones" {
+    _seed_pr_state 10 "done" "" ""
+    _seed_pr_state 20 "failed:approving" "$TEST_TEMP_HOME/pr-20-wt" "12345"
+    _seed_pr_state 30 "done" "" ""
+
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune"
+    assert_success
+    assert_output --partial "#10"
+    assert_output --partial "#30"
+    assert_output --partial "#20"
+    assert_output --partial "failed:approving"
+
+    [ ! -d "$HOME/.local/state/gh-pr-approve/fake-main/10" ]
+    [ ! -d "$HOME/.local/state/gh-pr-approve/fake-main/30" ]
+    [ -d "$HOME/.local/state/gh-pr-approve/fake-main/20" ]
+}
+
+@test "prune: failed entry shows the gwt teardown hint when worktree exists" {
+    mkdir -p "$TEST_TEMP_HOME/pr-42-wt"
+    _seed_pr_state 42 "failed:approving" "$TEST_TEMP_HOME/pr-42-wt" "12345"
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune"
+    assert_success
+    assert_output --partial "pr-42-wt"
+    assert_output --partial "gwt teardown"
+}
+
+@test "prune: empty state tree — 'nothing to prune' and exits 0" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune"
+    assert_success
+    assert_output --partial "nothing to prune"
+}
+
+@test "prune: rejects unknown flags" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune --bogus 2>&1"
+    assert_failure
+    assert_output --partial "unknown arg"
+}
+
+# ---------------------------------------------------------------------------
+# scoped prune
+# ---------------------------------------------------------------------------
+
+@test "prune <N>: rejects when worker pid is alive" {
+    _seed_pr_state 401 "approving" "" "$$"
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune 401 2>&1"
+    assert_failure
+    assert_output --partial "#401"
+    assert_output --partial "still alive"
+    assert_output --partial "--force"
+    [ -d "$HOME/.local/state/gh-pr-approve/fake-main/401" ]
+}
+
+@test "prune <N>: rejects when worktree dir is present" {
+    mkdir -p "$TEST_TEMP_HOME/pr-402-wt"
+    _seed_pr_state 402 "failed:approving" "$TEST_TEMP_HOME/pr-402-wt" "9999999"
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune 402 2>&1"
+    assert_failure
+    assert_output --partial "#402"
+    assert_output --partial "worktree exists"
+    assert_output --partial "gwt teardown --force"
+    [ -d "$HOME/.local/state/gh-pr-approve/fake-main/402" ]
+}
+
+@test "prune --force <N>: still rejects when worktree dir is present" {
+    mkdir -p "$TEST_TEMP_HOME/pr-403-wt"
+    _seed_pr_state 403 "failed:approving" "$TEST_TEMP_HOME/pr-403-wt" "9999999"
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune --force 403 2>&1"
+    assert_failure
+    assert_output --partial "worktree exists"
+    [ -d "$HOME/.local/state/gh-pr-approve/fake-main/403" ]
+}
+
+@test "prune --force <N>: kills alive pid and removes state dir" {
+    sleep 60 &
+    local _victim=$!
+    _seed_pr_state 404 "approving" "" "$_victim"
+
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune --force 404"
+    assert_success
+    [ ! -d "$HOME/.local/state/gh-pr-approve/fake-main/404" ]
+    run kill -0 "$_victim" 2>/dev/null
+    assert_failure
+    wait "$_victim" 2>/dev/null || true
+}
+
+@test "prune <N>: accepts '#N' form (strips leading #)" {
+    _seed_pr_state 405 "done" "" ""
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune '#405'"
+    assert_success
+    [ ! -d "$HOME/.local/state/gh-pr-approve/fake-main/405" ]
+}
+
+@test "prune <N>: rejects non-integer PR arg" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune abc 2>&1"
+    assert_failure
+    assert_output --partial "invalid PR number"
+}
+
+# ---------------------------------------------------------------------------
+# per-PR status (issue #268 — flags display, full table)
+# ---------------------------------------------------------------------------
+
+@test "status <N>: prints header + Verdict + Next action" {
+    _seed_pr_state 501 "done" "" ""
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status 501"
+    assert_success
+    assert_output --partial "gh-pr-approve status #501"
+    assert_output --partial "State"
+    assert_output --partial "done"
+    assert_output --partial "Verdict"
+    assert_output --partial "Next action"
+}
+
+@test "status <N>: '#N' form also accepted" {
+    _seed_pr_state 502 "done" "" ""
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status '#502'"
+    assert_success
+    assert_output --partial "#502"
+}
+
+@test "status <N>: missing state dir → warning, exits 0" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status 503"
+    assert_success
+    assert_output --partial "no state for #503"
+}
+
+@test "status <N>: rejects multiple positional args" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status 504 505 2>&1"
+    assert_failure
+    assert_output --partial "only one PR number"
+}
+
+@test "status <N>: shows recorded flags" {
+    _seed_pr_state 506 "approving" "" "$$" "--admin-merge --squash"
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status 506"
+    assert_success
+    assert_output --partial "Flags"
+    assert_output --partial "--admin-merge --squash"
+}
+
+@test "status <N>: missing flags file → '(none)'" {
+    _seed_pr_state 507 "approving" "" "$$"
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status 507"
+    assert_success
+    assert_output --partial "Flags"
+    assert_output --partial "(none)"
+}
+
+# ---------------------------------------------------------------------------
+# dispatcher: 'status' / 'prune' must not be parsed as a PR number
+# ---------------------------------------------------------------------------
+
+@test "dispatcher: 'status' is not parsed as an invalid PR number" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status"
+    assert_success
+    refute_output --partial "invalid PR number"
+}
+
+@test "dispatcher: 'prune' is not parsed as an invalid PR number" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune"
+    assert_success
+    refute_output --partial "invalid PR number"
+}
