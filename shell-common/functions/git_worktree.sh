@@ -157,15 +157,25 @@ gwt() {
 }
 
 # ============================================================================
+# Internal: read a worktree's gitdir pointer (.git file). Echoes the bare
+# path on stdout if the file exists and contains a `gitdir:` line; returns 1
+# otherwise. Centralized so callers don't re-invent the parser per PR #284
+# review feedback.
+# ============================================================================
+_gwt_read_gitdir_pointer() {
+    [ -f "$1" ] || return 1
+    sed -n 's/^gitdir:[[:space:]]*//p' "$1"
+}
+
+# ============================================================================
 # Internal: detect an orphaned worktree (parent repo deleted out from under it).
 # Returns 0 and echoes the broken admin-dir path when $PWD/.git is a regular
 # file whose `gitdir:` pointer leads to a missing directory. Returns 1 on a
 # healthy worktree, a main repo (.git is a directory), or a non-git pwd.
 # ============================================================================
 _gwt_diagnose_orphan() {
-    [ -f .git ] || return 1
     local pointer
-    pointer=$(awk '/^gitdir:/ {sub(/^gitdir:[[:space:]]*/, ""); print; exit}' .git 2>/dev/null)
+    pointer=$(_gwt_read_gitdir_pointer .git) || return 1
     [ -n "$pointer" ] || return 1
     [ -d "$pointer" ] && return 1
     printf '%s\n' "$pointer"
@@ -236,7 +246,7 @@ git_worktree_list() {
                     note="path missing on disk"
                 elif [ -f "$wt_path/.git" ]; then
                     local pointer
-                    pointer="$(awk '/^gitdir:/ {sub(/^gitdir:[[:space:]]*/, ""); print; exit}' "$wt_path/.git" 2>/dev/null)"
+                    pointer=$(_gwt_read_gitdir_pointer "$wt_path/.git")
                     if [ -n "$pointer" ]; then
                         if [ ! -d "$pointer" ]; then
                             note=".git -> $pointer (admin dir missing)"
