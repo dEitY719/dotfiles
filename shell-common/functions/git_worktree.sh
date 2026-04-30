@@ -231,18 +231,13 @@ _gwt_report_no_git() {
 # HEAD commit at <wt_path>. Echo "-" if path missing or no commits yet.
 # Args: <wt_path>
 _gwt_age() {
-    local _wt="$1" _ts _now _diff
-    if [ ! -d "$_wt" ]; then
+    local _diff
+    # Delegate timestamp+now+diff to _gwt_age_seconds — keeps a single
+    # source of truth for "how do we measure commit age" (PR #286 review).
+    _diff=$(_gwt_age_seconds "$1" 2>/dev/null) || {
         printf '%s' "-"
         return 0
-    fi
-    _ts="$(git -C "$_wt" log -1 --format=%ct HEAD 2>/dev/null)"
-    if [ -z "$_ts" ]; then
-        printf '%s' "-"
-        return 0
-    fi
-    _now="$(date +%s)"
-    _diff=$((_now - _ts))
+    }
     if [ "$_diff" -lt 3600 ]; then
         printf '%dm' "$((_diff / 60))"
     elif [ "$_diff" -lt 86400 ]; then
@@ -596,8 +591,9 @@ _gwt_list_status() {
     fi
 
     # First worktree in --porcelain output is always the main repo (per
-    # git-worktree(1)). We use that to flag _is_main for column 'clean'.
-    _main_wt="$(printf '%s\n' "$_porcelain" | awk '/^worktree /{print $2; exit}')"
+    # git-worktree(1)). Use sed-strip-prefix instead of awk-column so
+    # paths containing spaces stay intact (PR #286 review).
+    _main_wt="$(printf '%s\n' "$_porcelain" | sed -n 's/^worktree //p;q')"
 
     # Pre-count for header text (just lines starting with "worktree ").
     _wt_count="$(printf '%s\n' "$_porcelain" | grep -c '^worktree ')"
