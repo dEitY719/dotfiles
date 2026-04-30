@@ -14,7 +14,7 @@ SSOT이다.
 - 관련 스킬: `gh:issue-create`, `gh:pr`, `gh:pr-merge`,
   `gh:pr-merge-emergency`, `gh:issue-flow`
 
-차용 원본: `skill-hub`의 `.claude/workflow.md`와 `github-integration.md`.
+차용 원본: `agent-toolbox`의 `.claude/workflow.md`와 `github-integration.md`.
 dotfiles는 동일 원칙을 따르되 범위(단일 repo)와 자동화 수준(별도
 Action 없음) 측면에서 최소화한 변형을 사용한다.
 
@@ -293,7 +293,7 @@ gh auth refresh -s project
 
 ## References
 
-- 차용 원본: `skill-hub`의 `.claude/workflow.md` (60-68번 줄)와
+- 차용 원본: `agent-toolbox`의 `.claude/workflow.md` (60-68번 줄)와
   `.claude/github-integration.md` (Project 보드 상태 전환 정책).
 - GitHub Projects v2 빌트인 워크플로우:
   <https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/using-the-built-in-automations>
