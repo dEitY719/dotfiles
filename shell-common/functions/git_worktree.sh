@@ -140,7 +140,7 @@ gwt() {
         add)      shift; git_worktree_add "$@" ;;
         list|ls)  shift; git_worktree_list "$@" ;;
         remove|rm) shift; git_worktree_remove "$@" ;;
-        prune)    shift; git worktree prune "$@" ;;
+        prune)    shift; git_worktree_prune "$@" ;;
         spawn)    shift; git_worktree_spawn "$@" ;;
         teardown) shift; git_worktree_teardown "$@" ;;
         -h|--help|help|"")
@@ -157,10 +157,52 @@ gwt() {
 }
 
 # ============================================================================
-# Worktree list — formatted output with column headers and remove hint
+# Internal: detect an orphaned worktree (parent repo deleted out from under it).
+# Returns 0 and echoes the broken admin-dir path when $PWD/.git is a regular
+# file whose `gitdir:` pointer leads to a missing directory. Returns 1 on a
+# healthy worktree, a main repo (.git is a directory), or a non-git pwd.
+# ============================================================================
+_gwt_diagnose_orphan() {
+    [ -f .git ] || return 1
+    local pointer
+    pointer=$(awk '/^gitdir:/ {sub(/^gitdir:[[:space:]]*/, ""); print; exit}' .git 2>/dev/null)
+    [ -n "$pointer" ] || return 1
+    [ -d "$pointer" ] && return 1
+    printf '%s\n' "$pointer"
+}
+
+# ============================================================================
+# Internal: emit the right "no git here" diagnostic. Bare error for a true
+# non-git pwd; actionable recovery for an orphaned worktree (.git pointer
+# leads to a deleted admin dir — issue #282). Always returns 1 so callers can
+# `_gwt_report_no_git; return 1` to propagate.
+# ============================================================================
+_gwt_report_no_git() {
+    local broken
+    if broken=$(_gwt_diagnose_orphan); then
+        ux_error "Worktree's parent repo is gone — .git points to: $broken"
+        ux_info "  This worktree was created from a repo that has since been deleted."
+        ux_info "  Recover from outside this directory:"
+        ux_bullet "rm -rf \"$(pwd)\""
+        ux_bullet "Then in any other repo that registered this worktree: gwt prune"
+    else
+        ux_error "Not inside a git repository"
+    fi
+    return 1
+}
+
+# ============================================================================
+# Worktree list — formatted output with column headers and remove hint.
+# Adds a health probe (issue #282) that flags worktrees whose .git pointer is
+# broken or points outside this repo's admin dir — catches the orphan-after-
+# parent-delete case where `git worktree list` itself shows nothing wrong.
 # Usage: git_worktree_list
 # ============================================================================
 git_worktree_list() {
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
+
     local wt_output
     wt_output="$(git worktree list)"
 
@@ -173,10 +215,110 @@ git_worktree_list() {
         printf '%s\n' "$wt_output"
     } | column -t
 
+    # Resolve this repo's admin dir so the foreign-repo check has a baseline.
+    local git_common
+    git_common="$(git rev-parse --git-common-dir 2>/dev/null)"
+    if [ -n "$git_common" ]; then
+        case "$git_common" in
+            /*) ;;
+            *) git_common="$(cd "$git_common" 2>/dev/null && pwd)" ;;
+        esac
+        git_common="${git_common%/}"
+    fi
+
+    local warn_lines="" warn_count=0
+    while IFS= read -r line; do
+        case "$line" in
+            "worktree "*)
+                local wt_path="${line#worktree }"
+                local note=""
+                if [ ! -d "$wt_path" ]; then
+                    note="path missing on disk"
+                elif [ -f "$wt_path/.git" ]; then
+                    local pointer
+                    pointer="$(awk '/^gitdir:/ {sub(/^gitdir:[[:space:]]*/, ""); print; exit}' "$wt_path/.git" 2>/dev/null)"
+                    if [ -n "$pointer" ]; then
+                        if [ ! -d "$pointer" ]; then
+                            note=".git -> $pointer (admin dir missing)"
+                        elif [ -n "$git_common" ]; then
+                            case "$pointer" in
+                                "$git_common"/worktrees/*) ;;
+                                *) note=".git -> $pointer (foreign repo)" ;;
+                            esac
+                        fi
+                    fi
+                fi
+                if [ -n "$note" ]; then
+                    warn_count=$((warn_count + 1))
+                    warn_lines="${warn_lines}  ${wt_path}  [!] ${note}
+"
+                fi
+                ;;
+        esac
+    done <<EOF
+$(git worktree list --porcelain 2>/dev/null)
+EOF
+
+    if [ "$warn_count" -gt 0 ]; then
+        echo
+        ux_warning "$warn_count orphan/broken worktree ref(s):"
+        printf '%s' "$warn_lines"
+        ux_info "  Recover: rm -rf <path> && gwt prune"
+    fi
+
     if [ "$wt_count" -gt 1 ]; then
         echo
         ux_info "To remove: gwt remove [path]"
     fi
+}
+
+# ============================================================================
+# Worktree prune — UX wrapper over `git worktree prune`. Rejects positional
+# args (git's prune takes only flags), surfacing a friendly hint instead of
+# raw `usage: git worktree prune ...` (issue #282).
+# Usage: git_worktree_prune [-n|--dry-run] [-v|--verbose] [--expire <when>]
+# ============================================================================
+git_worktree_prune() {
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
+
+    local expecting_expire_value=false
+    for arg do
+        if [ "$expecting_expire_value" = true ]; then
+            expecting_expire_value=false
+            continue
+        fi
+        case "$arg" in
+            -h|--help)
+                ux_header "gwt prune - remove stale worktree refs"
+                ux_info "Usage: gwt prune [-n|--dry-run] [-v|--verbose] [--expire <when>]"
+                ux_info "  Removes .git/worktrees/<name>/ entries whose path is missing."
+                ux_info "  Does NOT take a path argument."
+                ux_info "  Targeted removal:"
+                ux_bullet "gwt remove <path>      # remove a specific worktree"
+                ux_bullet "gwt teardown           # remove the worktree you're inside"
+                return 0
+                ;;
+            -n|--dry-run|-v|--verbose) ;;
+            --expire) expecting_expire_value=true ;;
+            --expire=*) ;;
+            -*)
+                ux_error "Unknown option for 'gwt prune': $arg"
+                ux_info "Run: gwt prune --help"
+                return 1
+                ;;
+            *)
+                ux_error "'gwt prune' does not accept a path argument: $arg"
+                ux_info "Did you mean:"
+                ux_bullet "gwt remove \"$arg\"        # remove a specific worktree"
+                ux_bullet "gwt prune                # prune stale refs (no path)"
+                return 1
+                ;;
+        esac
+    done
+
+    git worktree prune "$@"
 }
 
 # ============================================================================
@@ -559,7 +701,8 @@ git_worktree_spawn() {
     # Must be inside a git repo, NOT a worktree
     local git_common git_dir
     git_common="$(git rev-parse --git-common-dir 2>/dev/null)" || {
-        ux_error "Not inside a git repository"; return 1
+        _gwt_report_no_git
+        return 1
     }
     git_dir="$(git rev-parse --git-dir)"
     if [ "$git_dir" != "$git_common" ]; then
@@ -804,7 +947,7 @@ git_worktree_teardown() {
                 # so we can tailor the error guidance to the mistake actually made.
                 local _gwt_common _gwt_dir _gwt_in_wt=false _gwt_loc
                 _gwt_common="$(git rev-parse --git-common-dir 2>/dev/null)" || {
-                    ux_error "Not inside a git repository"
+                    _gwt_report_no_git
                     return 1
                 }
                 _gwt_dir="$(git rev-parse --git-dir 2>/dev/null)"
@@ -846,7 +989,8 @@ git_worktree_teardown() {
     # Must be inside a worktree
     local git_common git_dir
     git_common="$(git rev-parse --git-common-dir 2>/dev/null)" || {
-        ux_error "Not inside a git repository"; return 1
+        _gwt_report_no_git
+        return 1
     }
     git_dir="$(git rev-parse --git-dir)"
     if [ "$git_dir" = "$git_common" ]; then
@@ -899,7 +1043,8 @@ _gwt_teardown_one_inplace() {
 
     local git_common git_dir
     git_common="$(git rev-parse --git-common-dir 2>/dev/null)" || {
-        ux_error "Not inside a git repository"; return 1
+        _gwt_report_no_git
+        return 1
     }
     git_dir="$(git rev-parse --git-dir)"
     if [ "$git_dir" = "$git_common" ]; then
@@ -1170,7 +1315,7 @@ _gwt_teardown_all() {
     # line-start; library_purity_check tracks brace depth via `^\s*\}` and
     # would otherwise treat this as the enclosing function's close, falsely
     # flagging the `read -r` below as top-level interactive code.
-    git rev-parse --git-common-dir >/dev/null 2>&1 || { ux_error "Not inside a git repository"; return 1; }
+    git rev-parse --git-common-dir >/dev/null 2>&1 || { _gwt_report_no_git; return 1; }
 
     # Resolve main worktree and collect non-main worktrees from a single
     # `git worktree list --porcelain` snapshot — one fork instead of two,
