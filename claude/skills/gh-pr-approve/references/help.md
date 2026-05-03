@@ -27,7 +27,8 @@
 ## What the skill does
 
 1. Pre-flight gate — checks PR state, draft, author, merge conflicts, required CI.
-   Stops early on any blocker (can't approve a draft, conflicting PR, failing checks, etc.).
+   Stops on draft, closed PR, or required-check failure. Warns (but continues) on merge
+   conflicts — the conflict warning is prepended to the review body.
 2. Fetches diff, commits, and all three comment endpoints (inline / issue / review).
 3. Reviews against `references/review-criteria.md` — correctness, conventions, security,
    performance, tests. If you previously reviewed this PR, enters re-review mode and
