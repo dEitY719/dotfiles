@@ -43,8 +43,10 @@ Fetch in parallel before reading the diff:
 - Prior reviews/comments on this PR by `ME`.
 - `gh pr checks <N> --repo $TARGET_REPO`.
 
-Stop on `state != OPEN`, draft, merge conflicts, or required-check
-failure. If `author.login == ME`, follow `references/self-pr-handling.md`.
+Stop on `state != OPEN`, draft, or required-check failure. Warn (but
+do not stop) on `mergeable: CONFLICTING` — prepend a visible conflict
+warning block to the review body and include it in the Step 5 report.
+If `author.login == ME`, follow `references/self-pr-handling.md`.
 If prior `ME` comments/reviews exist, use re-review mode: every prior
 concern must be verified as fixed, tracked, or acceptably declined.
 
@@ -81,8 +83,9 @@ Match the PR's dominant language.
 
 Re-fetch `reviewDecision` + `mergeStateStatus`; for `--admin-merge`, also
 re-fetch `state` and `mergeCommit`. Report status, blocker/follow-up
-counts, issue links, merge state, and PR URL. For `--self-record`, confirm
-`reviewDecision` did not become `APPROVED`.
+counts, issue links, merge state, and PR URL. If the PR had
+`mergeable: CONFLICTING`, include the conflict warning in the report.
+For `--self-record`, confirm `reviewDecision` did not become `APPROVED`.
 
 ## Constraints
 
