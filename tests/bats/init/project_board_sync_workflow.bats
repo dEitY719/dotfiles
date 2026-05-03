@@ -21,9 +21,10 @@ WORKFLOW="${DOTFILES_ROOT}/.github/workflows/project-board-sync.yml"
     grep -qE "types:.*closed" "$WORKFLOW"
 }
 
-@test "triggers on pull_request opened and ready_for_review events" {
+@test "triggers on pull_request opened, ready_for_review, and reopened events" {
     grep -qE "types:.*opened" "$WORKFLOW"
     grep -qE "types:.*ready_for_review" "$WORKFLOW"
+    grep -qE "types:.*reopened" "$WORKFLOW"
 }
 
 @test "triggers on pull_request_review submitted events" {
