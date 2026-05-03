@@ -3,8 +3,9 @@
 # Static sanity checks for `.github/workflows/project-board-sync.yml`.
 # Behavioural correctness of the helpers it calls is covered in
 # tests/bats/functions/gh_project_status.bats; here we only verify
-# wiring — the workflow exists, triggers on the right event, calls the
-# right helpers, and points at the PROJECT_BOARD_PAT secret.
+# wiring — the workflow exists, triggers on the right events, calls the
+# right helpers with the right guards, and points at the PROJECT_BOARD_PAT
+# secret.
 
 load '../test_helper'
 
@@ -17,11 +18,25 @@ WORKFLOW="${DOTFILES_ROOT}/.github/workflows/project-board-sync.yml"
 @test "triggers on pull_request closed events" {
     grep -q "^on:" "$WORKFLOW"
     grep -q "pull_request:" "$WORKFLOW"
-    grep -q "types: \[closed\]" "$WORKFLOW"
+    grep -qE "types:.*closed" "$WORKFLOW"
+}
+
+@test "triggers on pull_request opened and ready_for_review events" {
+    grep -qE "types:.*opened" "$WORKFLOW"
+    grep -qE "types:.*ready_for_review" "$WORKFLOW"
+}
+
+@test "triggers on pull_request_review submitted events" {
+    grep -q "pull_request_review:" "$WORKFLOW"
+    grep -qE "types:.*\[submitted\]" "$WORKFLOW"
 }
 
 @test "guards on merged == true (closed-without-merge skipped)" {
     grep -q "github.event.pull_request.merged == true" "$WORKFLOW"
+}
+
+@test "guards PR review approved step on review.state == approved" {
+    grep -q "github.event.review.state == 'approved'" "$WORKFLOW"
 }
 
 @test "uses PROJECT_BOARD_PAT secret (not the default GITHUB_TOKEN)" {
@@ -36,7 +51,22 @@ WORKFLOW="${DOTFILES_ROOT}/.github/workflows/project-board-sync.yml"
     grep -q 'shell-common/functions/gh_project_status.sh' "$WORKFLOW"
 }
 
-@test "calls _gh_project_status_sync for the PR card" {
+@test "PR opened step: syncs PR card to In review" {
+    grep -Eq '_gh_project_status_sync[[:space:]]+pr[[:space:]]+"\$PR_NUMBER"[[:space:]]+"In review"' "$WORKFLOW"
+}
+
+@test "PR opened step: syncs linked Issues to In progress with Backlog,Ready guard" {
+    # Issues must not visit "In review" — the opened step immediately corrects
+    # the builtin "Pull request linked to issue" workflow that would move them there.
+    grep -q '_gh_project_status_sync issue' "$WORKFLOW"
+    grep -q -- '--only-from "Backlog,Ready"' "$WORKFLOW"
+}
+
+@test "PR review approved step: syncs PR card to Approved" {
+    grep -Eq '_gh_project_status_sync[[:space:]]+pr[[:space:]]+"\$PR_NUMBER"[[:space:]]+"Approved"' "$WORKFLOW"
+}
+
+@test "PR merged step: calls _gh_project_status_sync for the PR card to Done" {
     grep -Eq '_gh_project_status_sync[[:space:]]+pr[[:space:]]+"\$PR_NUMBER"[[:space:]]+"Done"' "$WORKFLOW"
 }
 
@@ -48,9 +78,9 @@ WORKFLOW="${DOTFILES_ROOT}/.github/workflows/project-board-sync.yml"
     ! grep -q 'gh pr view .* closingIssuesReferences' "$WORKFLOW"
 }
 
-@test "applies --only-from guard when moving Issue cards" {
-    # Mirrors /gh-pr-merge Step 4(b): never bounce a card already at
-    # "Approved" or "Done" backwards.
+@test "applies --only-from guard when moving Issue cards to Done" {
+    # Mirrors /gh-pr-merge Step 4(b): never bounce a card already at Done
+    # backwards. "In review" kept as a safety net for the transition period.
     grep -q -- '--only-from "Backlog,In progress,In review"' "$WORKFLOW"
 }
 

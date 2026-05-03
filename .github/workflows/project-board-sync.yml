@@ -1,24 +1,40 @@
 name: project-board-sync
 
-# Reconcile the projectV2 kanban board for any merged PR, regardless of
-# how it was merged (skill, web UI, mobile, raw `gh pr merge`).
+# Reconcile the projectV2 kanban board across the full PR lifecycle:
 #
-# Why this exists (#266): /gh-pr-merge's in-skill Step 4(a) only fires
-# when the skill is invoked. Web UI / raw `gh pr merge` bypass it, so PR
-# cards stay at "Approved" and linked Issue cards occasionally stick at
-# "In review" when the GitHub builtin "Item closed" workflow drops the
-# event. This job catches every merge and pushes the cards forward.
+# · PR opened / ready_for_review / reopened
+#     → PR card: In review
+#     → Linked Issue cards: In progress  (issue #289 — Issues must NOT visit "In review")
+# · PR review approved
+#     → PR card: Approved
+# · PR merged
+#     → PR card: Done
+#     → Linked Issue cards: Done
+#
+# Why this exists (#266, #289):
+# - /gh-pr-merge's in-skill Step 4(a) only fires when the skill is invoked.
+#   Web UI / raw `gh pr merge` bypass it, so PR cards stay at "Approved" and
+#   linked Issue cards occasionally stick after the builtin "Item closed"
+#   workflow drops the event. This job catches every merge and pushes the
+#   cards forward. (#266)
+# - GitHub's builtin "Pull request linked to issue" (project workflow #3)
+#   moves Issue cards to "In review" when a PR is opened with a Closes keyword.
+#   The intended Issue lifecycle is Backlog → In progress → Done, so Issues
+#   must never visit "In review". This job intercepts the opened event and
+#   immediately moves linked Issue cards to "In progress". (#289)
 
 on:
   pull_request:
-    types: [closed]
+    types: [opened, ready_for_review, reopened, closed]
+  pull_request_review:
+    types: [submitted]
 
 permissions:
   contents: read
 
 jobs:
   sync-cards:
-    if: github.event.pull_request.merged == true
+    # All triggering events are handled by per-step conditions below.
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -26,10 +42,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Sync PR + linked Issue cards to "Done"
+      - name: PR opened → In review (PR) + In progress (linked Issues)
+        if: >-
+          github.event_name == 'pull_request' &&
+          contains(fromJSON('["opened","ready_for_review","reopened"]'), github.event.action)
         env:
-          # PROJECT_BOARD_PAT must carry the `project` scope (read+write).
-          # The default GITHUB_TOKEN cannot mutate projectV2.
           GH_TOKEN: ${{ secrets.PROJECT_BOARD_PAT }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -37,13 +54,62 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
-              echo "::warning::PROJECT_BOARD_PAT secret is not set; skipping project-board sync."
-              exit 0
+            echo "::warning::PROJECT_BOARD_PAT secret is not set; skipping project-board sync."
+            exit 0
+          fi
+          # shellcheck source=shell-common/functions/gh_project_status.sh
+          . shell-common/functions/gh_project_status.sh
+          _gh_project_status_sync pr "$PR_NUMBER" "In review"
+          # Move linked Issues to "In progress" — the builtin "Pull request linked
+          # to issue" workflow moves them to "In review", which is wrong for Issues.
+          # --only-from prevents regressing Issues already past "Ready".
+          for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO"); do
+            _gh_project_status_sync issue "$_issue" "In progress" \
+              --only-from "Backlog,Ready"
+          done
+
+      - name: PR review approved → Approved
+        if: >-
+          github.event_name == 'pull_request_review' &&
+          github.event.review.state == 'approved'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_BOARD_PAT }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::PROJECT_BOARD_PAT secret is not set; skipping project-board sync."
+            exit 0
+          fi
+          # shellcheck source=shell-common/functions/gh_project_status.sh
+          . shell-common/functions/gh_project_status.sh
+          _gh_project_status_sync pr "$PR_NUMBER" "Approved" \
+            --only-from "Backlog,In progress,In review"
+
+      - name: PR merged → Done (PR + linked Issues)
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.action == 'closed' &&
+          github.event.pull_request.merged == true
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_BOARD_PAT }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::PROJECT_BOARD_PAT secret is not set; skipping project-board sync."
+            exit 0
           fi
           # shellcheck source=shell-common/functions/gh_project_status.sh
           . shell-common/functions/gh_project_status.sh
           _gh_project_status_sync pr "$PR_NUMBER" "Done"
           for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO"); do
-              _gh_project_status_sync issue "$_issue" "Done" \
-                  --only-from "Backlog,In progress,In review"
+            # "In review" kept in the guard as a safety net for Issues that were
+            # incorrectly moved there by the builtin before the opened-step fires.
+            _gh_project_status_sync issue "$_issue" "Done" \
+              --only-from "Backlog,In progress,In review"
           done
