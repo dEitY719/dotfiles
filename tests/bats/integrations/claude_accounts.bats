@@ -518,19 +518,11 @@ MOCK
 
 # ---------- Task 11: claude/setup.sh integration ----------
 
-# settings.json is gitignored (PC-specific) — generate from template if missing.
-# Same applies to other source dirs that may be empty in a fresh checkout.
+# Stage an isolated DOTFILES_ROOT under $TEST_TEMP_HOME so setup.sh's writes
+# (settings.json migration, *.pre-statusline-fix-* backup files) land in a
+# throwaway tree instead of the version-controlled checkout (issue #303).
 _setup_sh_prereqs() {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
-    mkdir -p "${DOTFILES_ROOT}/claude/global-memory"
-    if [ ! -f "${DOTFILES_ROOT}/claude/settings.json" ]; then
-        if [ -f "${DOTFILES_ROOT}/claude/settings.template.json" ]; then
-            cp "${DOTFILES_ROOT}/claude/settings.template.json" \
-               "${DOTFILES_ROOT}/claude/settings.json"
-        else
-            echo '{}' > "${DOTFILES_ROOT}/claude/settings.json"
-        fi
-    fi
+    setup_isolated_dotfiles_root
 }
 
 @test "bash: claude/setup.sh creates ~/.claude-personal/ structure" {
@@ -596,18 +588,13 @@ _setup_sh_prereqs() {
 
 # ---------- Issue #300, item A: setup.sh auto-migrates legacy statusLine ----------
 #
-# Helpers below temporarily swap the gitignored claude/settings.json
-# (which lives in the shared DOTFILES_ROOT, not the per-test $HOME) for
-# a fixture, then restore it. Without the restore the next test inherits
-# our fixture and the regression test for #296 sees stale state.
-
-# Stage a fixture settings.json containing exactly the literal that
-# triggers item-A migration. Saves the original to $HOME first.
+# These tests overwrite settings.json with a fixture that triggers (or
+# avoids triggering) the item-A migration. Since _setup_sh_prereqs now
+# stages an isolated DOTFILES_ROOT under $TEST_TEMP_HOME (issue #303),
+# fixture writes and any *.pre-statusline-fix-* backup files setup.sh
+# produces are torn down with $TEST_TEMP_HOME — no save/restore needed.
 _use_settings_fixture() {
-    _uss_src="${DOTFILES_ROOT}/claude/settings.json"
-    _uss_bk="$HOME/.settings-original.json"
-    [ -f "$_uss_src" ] && cp "$_uss_src" "$_uss_bk"
-    cat > "$_uss_src" <<JSON
+    cat > "${DOTFILES_ROOT}/claude/settings.json" <<JSON
 {
   "statusLine": {
     "type": "command",
@@ -615,18 +602,6 @@ _use_settings_fixture() {
   }
 }
 JSON
-}
-
-_restore_settings_fixture() {
-    _rsf_src="${DOTFILES_ROOT}/claude/settings.json"
-    _rsf_bk="$HOME/.settings-original.json"
-    # Wipe migration backup files our test runs may have produced.
-    rm -f "${_rsf_src}".pre-statusline-fix-*
-    if [ -f "$_rsf_bk" ]; then
-        mv "$_rsf_bk" "$_rsf_src"
-    else
-        rm -f "$_rsf_src"
-    fi
 }
 
 @test "issue #300-A: setup.sh rewrites legacy statusLine.command literal" {
@@ -642,8 +617,6 @@ _restore_settings_fixture() {
     [ "$cmd" = '${HOME}/dotfiles/claude/statusline-command.sh' ]
     # Backup file present alongside the source.
     ls "${DOTFILES_ROOT}/claude/" | grep -qE 'settings\.json\.pre-statusline-fix-[0-9]{14}'
-
-    _restore_settings_fixture
 }
 
 @test "issue #300-A: setup.sh leaves already-migrated statusLine.command alone" {
@@ -656,12 +629,7 @@ _restore_settings_fixture() {
     refute_output --partial "자동 마이그레이션 완료"
 
     # No backup spawned for a no-op run.
-    ls "${DOTFILES_ROOT}/claude/" | grep -qE 'settings\.json\.pre-statusline-fix-' && {
-        _restore_settings_fixture
-        return 1
-    }
-
-    _restore_settings_fixture
+    ! ls "${DOTFILES_ROOT}/claude/" | grep -qE 'settings\.json\.pre-statusline-fix-'
 }
 
 @test "issue #300-A: setup.sh preserves user-customised statusLine.command" {
@@ -675,8 +643,6 @@ _restore_settings_fixture() {
 
     cmd=$(jq -r '.statusLine.command' "${DOTFILES_ROOT}/claude/settings.json")
     [ "$cmd" = "$HOME/bin/my-custom-statusline.sh" ]
-
-    _restore_settings_fixture
 }
 
 # ---------- Issue #300, item C: claude_accounts_status shows oauth binding ----------
