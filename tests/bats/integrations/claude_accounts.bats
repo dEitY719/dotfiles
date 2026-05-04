@@ -155,12 +155,25 @@ LOCAL
 }
 
 @test "bash: claude_accounts_init refuses if ~/.claude/ has unmigrated data" {
+    # Use a real user-data artifact (.credentials.json), not a random file.
+    # The guard intentionally ignores empty bind-mount leftovers like skills/.
     mkdir -p "$HOME/.claude"
-    echo "old" > "$HOME/.claude/legacy-file"
+    echo '{"fake":"creds"}' > "$HOME/.claude/.credentials.json"
 
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
     assert_failure
     assert_output --partial "claude-accounts migrate"
+}
+
+@test "bash: claude_accounts_init tolerates empty skills/docs leftovers" {
+    # Real Home-PC scenario: user unmounted bind mounts, leaving empty dirs.
+    # Guard must NOT false-positive on these.
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "$HOME/.claude/skills" "$HOME/.claude/docs"
+
+    run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
+    assert_success
+    [ -d "$HOME/.claude-personal" ]
 }
 
 @test "bash: claude_accounts_init is idempotent (second run skips)" {
