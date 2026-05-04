@@ -27,12 +27,22 @@ _ts_known_agent() {
     esac
 }
 
-# _tmux_add_agent_window <session> <agent> <dir>
+# _tmux_add_agent_window <session> <agent> <dir> [account]
 # Add a 3-pane window to a tmux session (creates session if needed).
 # Layout: LEFT (agent-yolo) | RIGHT-TOP / RIGHT-BOTTOM
+#
+# Optional 4th arg `account` (issue #295): when set with agent=claude, the
+# left pane runs `claude-yolo --user <account>` instead of plain
+# `claude-yolo`. Other agents have no multi-account support so the value is
+# ignored — the caller is responsible for rejecting that combination.
 _tmux_add_agent_window() {
-    local session="$1" agent="$2" dir="$3"
-    local yolo="${agent}-yolo" win
+    local session="$1" agent="$2" dir="$3" account="${4-}"
+    local yolo win
+    if [ "$agent" = "claude" ] && [ -n "$account" ]; then
+        yolo="${agent}-yolo --user ${account}"
+    else
+        yolo="${agent}-yolo"
+    fi
 
     if tmux has-session -t "=$session" 2>/dev/null; then
         win=$(tmux new-window -P -F '#{window_index}' \

@@ -222,3 +222,110 @@ teardown() {
     assert_success
     assert_output "claude, codex, gemini, opencode"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #295: gwt spawn --user <account> wires multi-account dispatch.
+# Phase 1 (PR #292) introduced `claude_yolo --user <account>`. Phase 2 here
+# threads --user through gwt spawn's --tmux/--launch paths so worktree
+# creation can pick a non-default account in one shot.
+# ---------------------------------------------------------------------------
+
+@test "bash: spawn --help mentions --user flag" {
+    run_in_bash 'git_worktree_spawn --help'
+    assert_success
+    assert_output --partial "--user"
+    assert_output --partial "Claude account"
+}
+
+@test "zsh: spawn --help mentions --user flag" {
+    run_in_zsh 'git_worktree_spawn --help'
+    assert_success
+    assert_output --partial "--user"
+}
+
+@test "bash: _gwt_yolo_command claude with account appends --user" {
+    # The launch dispatcher SSOT must thread account through, otherwise the
+    # --launch path silently falls back to the default account.
+    run_in_bash '_gwt_yolo_command claude work'
+    assert_success
+    assert_output "claude_yolo --user work"
+}
+
+@test "bash: _gwt_yolo_command claude with empty account stays unchanged" {
+    # Regression guard: the no-account path (current default) must not
+    # accidentally append a stray --user token.
+    run_in_bash '_gwt_yolo_command claude ""'
+    assert_success
+    assert_output "claude_yolo"
+}
+
+@test "zsh: _gwt_yolo_command claude with account appends --user" {
+    run_in_zsh '_gwt_yolo_command claude work'
+    assert_success
+    assert_output "claude_yolo --user work"
+}
+
+@test "bash: _gwt_yolo_command non-claude agents ignore account" {
+    # Multi-account is claude-only — codex/gemini/opencode have no --user
+    # support, so any value passed in 2nd position must be a no-op for them.
+    run_in_bash '_gwt_yolo_command codex work'
+    assert_success
+    assert_output "codex --dangerously-bypass-approvals-and-sandbox"
+}
+
+@test "bash: spawn rejects --user without --tmux or --launch" {
+    run_in_bash "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-xyz --user work 2>&1
+    "
+    assert_failure
+    assert_output --partial "--user requires --tmux or --launch"
+}
+
+@test "bash: spawn rejects --user with non-claude agent (--launch)" {
+    run_in_bash "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-xyz --launch --ai codex --user work 2>&1
+    "
+    assert_failure
+    assert_output --partial "--user is only supported with --ai claude"
+}
+
+@test "bash: spawn rejects --user with non-claude agent (--tmux)" {
+    run_in_bash "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-xyz --tmux --ai gemini --user work 2>&1
+    "
+    assert_failure
+    assert_output --partial "--user is only supported with --ai claude"
+}
+
+@test "bash: spawn rejects unknown account with helpful list" {
+    # Reuses _claude_resolve_account's error message so the user sees the
+    # same "Available: ..." hint as `claude_yolo --user xyz` would print.
+    run_in_bash "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-xyz --launch --user nonexistent-account 2>&1
+    "
+    assert_failure
+    assert_output --partial "Unknown account: nonexistent-account"
+    assert_output --partial "Available:"
+}
+
+@test "zsh: spawn rejects unknown account with helpful list" {
+    run_in_zsh "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-xyz --launch --user nonexistent-account 2>&1
+    "
+    assert_failure
+    assert_output --partial "Unknown account: nonexistent-account"
+}
+
+@test "zsh: spawn rejects --user with non-claude agent" {
+    run_in_zsh "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-xyz --launch --ai codex --user work 2>&1
+    "
+    assert_failure
+    assert_output --partial "--user is only supported with --ai claude"
+}
