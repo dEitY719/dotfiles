@@ -16,7 +16,7 @@ _gwt_help_summary() {
     ux_bullet_sub "list: gwt list | gwt ls [--quick|--remote]"
     ux_bullet_sub "remove: gwt remove <path|agent|all> [--force]"
     ux_bullet_sub "prune: gwt prune"
-    ux_bullet_sub "spawn: gwt spawn <name> [--task slug] [--base ref] [--tmux|--launch]"
+    ux_bullet_sub "spawn: gwt spawn <name> [--task slug] [--base ref] [--tmux|--launch] [--user account]"
     ux_bullet_sub "status: gwt status [<name>]"
     ux_bullet_sub "teardown: gwt teardown [--force] [--keep-branch]"
     ux_bullet_sub "details: gwt-help <section> (example: gwt-help spawn)"
@@ -66,14 +66,16 @@ _gwt_help_rows_prune() {
 }
 
 _gwt_help_rows_spawn() {
-    ux_table_row "syntax" "gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch [--ai <agent>]]" "Create named worktree"
+    ux_table_row "syntax" "gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch [--ai <agent>]] [--user <account>]" "Create named worktree"
     ux_table_row "context" "Run from main repo only" "Fails inside a worktree"
     ux_table_row "name" "Free-form slug (required)" "e.g. issue-11, login-fix"
     ux_table_row "--ai" "AI agent (default: claude)" "claude, codex, gemini, opencode, cursor, copilot"
+    ux_table_row "--user" "Claude account for --tmux/--launch (only with --ai claude)" "personal, work — default: \$CLAUDE_DEFAULT_ACCOUNT"
     ux_table_row "--tmux" "Runs <agent>-yolo in new tmux pane" "Mutually exclusive with --launch"
     ux_table_row "--launch" "cd into worktree + run <agent>-yolo inline" "Current shell, no tmux"
     ux_table_row "example" "gwt spawn issue-11 --tmux --ai codex" "Free-form name + codex agent"
     ux_table_row "example" "gwt spawn feat --launch" "spawn -> cd -> claude-yolo (one shot)"
+    ux_table_row "example" "gwt spawn feat --launch --user work" "spawn -> cd -> claude-yolo --user work"
 }
 
 _gwt_help_rows_teardown() {
@@ -1340,9 +1342,20 @@ _gwt_yolo_command() {
     # `--list` returns the supported agent names so call sites (e.g. the
     # "Supported with --launch" hint) derive from the same SSOT and cannot
     # drift from the case body below.
+    #
+    # Optional 2nd arg: account name (claude only — multi-account dispatcher,
+    # issue #295). When set with --ai claude, the launch command becomes
+    # `claude_yolo --user <account>`; other agents ignore it because they do
+    # not support multi-account.
     case "$1" in
         --list)   echo "claude, codex, gemini, opencode" ;;
-        claude)   echo "claude_yolo" ;;
+        claude)
+            if [ -n "${2-}" ]; then
+                echo "claude_yolo --user $2"
+            else
+                echo "claude_yolo"
+            fi
+            ;;
         codex)    echo "codex --dangerously-bypass-approvals-and-sandbox" ;;
         gemini)   echo "gemini --approval-mode=yolo --skip-trust" ;;
         opencode) echo "opencode" ;;
@@ -1352,11 +1365,11 @@ _gwt_yolo_command() {
 
 # ============================================================================
 # Worktree spawn — auto-index, auto-branch, log
-# Usage: git_worktree_spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--ai <agent>]
+# Usage: git_worktree_spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--ai <agent>] [--user <account>]
 # ============================================================================
 _git_worktree_spawn_show_help() {
     ux_header "gwt spawn - create a named worktree"
-    ux_info "Usage: gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--ai <agent>]"
+    ux_info "Usage: gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--ai <agent>] [--user <account>]"
     ux_info ""
     ux_info "Arguments:"
     ux_info "  <name>           Free-form worktree name (required)."
@@ -1367,18 +1380,23 @@ _git_worktree_spawn_show_help() {
     ux_info "  --tmux           Auto-create tmux session/window with 3-pane layout"
     ux_info "  --launch         cd into the new worktree and run <agent>-yolo in the"
     ux_info "                   current shell. Mutually exclusive with --tmux."
-    ux_info "  --ai <agent>  AI agent for --tmux pane or --launch (default: claude)"
+    ux_info "  --ai <agent>     AI agent for --tmux pane or --launch (default: claude)"
     ux_info "                   Known: claude, codex, gemini, opencode, cursor, copilot"
     ux_info "                   Window name and 'yolo' command follow --ai,"
     ux_info "                   so worktree <name> can be any free-form slug."
+    ux_info "  --user <account> Claude account for --tmux/--launch (issue #295)."
+    ux_info "                   Only valid with --ai claude (others lack multi-account)."
+    ux_info "                   Default: \$CLAUDE_DEFAULT_ACCOUNT (no --user appended)."
     ux_info ""
     ux_info "Examples:"
     ux_info "  gwt spawn issue-11                           # ../<proj>-issue-11-1  wt/issue-11/1"
     ux_info "  gwt spawn login-fix --task auth              # ../<proj>-login-fix-1 wt/login-fix/1-auth"
     ux_info "  gwt spawn issue-11 --tmux                    # tmux window 'claude' runs 'claude-yolo'"
-    ux_info "  gwt spawn issue-11 --tmux --ai codex      # tmux window 'codex'  runs 'codex-yolo'"
+    ux_info "  gwt spawn issue-11 --tmux --ai codex         # tmux window 'codex'  runs 'codex-yolo'"
     ux_info "  gwt spawn feat --launch                      # cd into new worktree + claude-yolo"
-    ux_info "  gwt spawn feat --launch --ai codex        # cd + codex-yolo"
+    ux_info "  gwt spawn feat --launch --ai codex           # cd + codex-yolo"
+    ux_info "  gwt spawn feat --launch --user work          # cd + claude-yolo --user work"
+    ux_info "  gwt spawn feat --tmux   --user work          # tmux window runs 'claude-yolo --user work'"
 }
 
 git_worktree_spawn() {
@@ -1387,7 +1405,7 @@ git_worktree_spawn() {
         emulate -L sh
     fi
 
-    local task="" base="" name="" use_tmux=0 use_launch=0 agent="claude"
+    local task="" base="" name="" use_tmux=0 use_launch=0 agent="claude" account=""
 
     # Parse arguments
     while [ $# -gt 0 ]; do
@@ -1399,6 +1417,7 @@ git_worktree_spawn() {
             --task) task="$2"; shift 2 ;;
             --base) base="$2"; shift 2 ;;
             --ai) agent="$2"; shift 2 ;;
+            --user) account="$2"; shift 2 ;;
             --tmux) use_tmux=1; shift ;;
             --launch) use_launch=1; shift ;;
             -*)
@@ -1456,6 +1475,26 @@ git_worktree_spawn() {
         ux_error "Unknown agent: $agent"
         ux_info "Available: claude, codex, gemini, opencode, cursor, copilot"
         return 1
+    fi
+
+    # Validate --user (issue #295): only meaningful with claude + tmux/launch.
+    # Other agents have no multi-account support so combining them is a typo
+    # we want to surface, not silently ignore.
+    if [ -n "$account" ]; then
+        if [ "$use_tmux" != 1 ] && [ "$use_launch" != 1 ]; then
+            ux_error "--user requires --tmux or --launch"
+            return 1
+        fi
+        if [ "$agent" != "claude" ]; then
+            ux_error "--user is only supported with --ai claude (got: --ai $agent)"
+            return 1
+        fi
+        # SSOT account validation — reuse claude_yolo's resolver and error shape.
+        if ! _claude_resolve_account "$account" >/dev/null 2>&1; then
+            ux_error "Unknown account: $account"
+            ux_info  "Available: $(_claude_resolve_account --list | tr '\n' ' ')"
+            return 1
+        fi
     fi
 
     # Must be inside a git repo, NOT a worktree
@@ -1539,8 +1578,8 @@ git_worktree_spawn() {
 
     # --- Optional tmux integration ---
     if [ "$use_tmux" = 1 ]; then
-        _tmux_add_agent_window "$project" "$agent" "$wt_path"
-        ux_info "  tmux:   session '$project', window '$agent' (runs ${agent}-yolo)"
+        _tmux_add_agent_window "$project" "$agent" "$wt_path" "$account"
+        ux_info "  tmux:   session '$project', window '$agent' (runs ${agent}-yolo${account:+ --user $account})"
         if [ -z "$TMUX" ]; then
             tmux attach -t "$project"
         else
@@ -1554,7 +1593,7 @@ git_worktree_spawn() {
         # table returns the underlying function/command directly, which is
         # always resolvable in either shell.
         local launch_cmd
-        if ! launch_cmd=$(_gwt_yolo_command "$agent"); then
+        if ! launch_cmd=$(_gwt_yolo_command "$agent" "$account"); then
             ux_error "No --launch yolo command for agent: $agent"
             ux_info "Supported with --launch: $(_gwt_yolo_command --list)"
             return 1
