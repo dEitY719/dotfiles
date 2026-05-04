@@ -174,118 +174,87 @@ _mount_bind_mount() {
 _mount_skills_directory() { _mount_bind_mount "$CLAUDE_SKILLS_SOURCE" "$HOME_SKILLS" "skills"; }
 _mount_docs_directory()   { _mount_bind_mount "$CLAUDE_DOCS_SOURCE"   "$HOME_DOCS"   "docs"; }
 
-# --- Main Script Logic ---
+# --- Main Script Logic (issue #287, Phase 1: multi-account) ---
 
 log_debug "\n--- Claude Code dotfiles setup 시작 ---"
 
-# ~/.claude 디렉토리 확인 및 생성
-if [ ! -d "$HOME_CLAUDE" ]; then
-    log_info "~/.claude 디렉토리 생성"
-    mkdir -p "$HOME_CLAUDE" || log_error_and_exit "~/.claude 디렉토리 생성 실패"
+# 필수 dotfiles source 검증
+[ -f "$CLAUDE_SETTINGS_SOURCE" ]      || log_error_and_exit "settings.json 없음: $CLAUDE_SETTINGS_SOURCE"
+[ -f "$CLAUDE_STATUSLINE_SOURCE" ]    || log_error_and_exit "statusline-command.sh 없음: $CLAUDE_STATUSLINE_SOURCE"
+[ -d "$CLAUDE_SKILLS_SOURCE" ]        || log_error_and_exit "skills 디렉토리 없음: $CLAUDE_SKILLS_SOURCE"
+[ -d "$CLAUDE_DOCS_SOURCE" ]          || log_error_and_exit "docs 디렉토리 없음: $CLAUDE_DOCS_SOURCE"
+[ -d "$CLAUDE_GLOBAL_MEMORY_SOURCE" ] || log_error_and_exit "global-memory 없음: $CLAUDE_GLOBAL_MEMORY_SOURCE"
+
+# 다중 계정 함수 source (env + integration)
+. "$DOTFILES_ROOT/shell-common/env/claude.sh"
+. "$DOTFILES_ROOT/shell-common/tools/integrations/claude.sh"
+
+# 빈 ~/.claude/ 가드 디렉토리
+mkdir -p "$HOME/.claude"
+
+# ~/.claude-shared/plugins/ 보장
+mkdir -p "$HOME/.claude-shared/plugins"
+
+# 마이그레이션 미수행 가드 (실데이터 있으면 setup 중단, migrate 안내)
+if [ -d "$HOME/.claude" ] \
+   && [ ! -d "$HOME/.claude-personal" ] \
+   && [ ! -d "$HOME/.claude-work" ] \
+   && { [ -e "$HOME/.claude/.credentials.json" ] \
+        || [ -d "$HOME/.claude/projects" ] \
+        || [ -d "$HOME/.claude/sessions" ] \
+        || [ -e "$HOME/.claude/history.jsonl" ] \
+        || [ -d "$HOME/.claude/plugins" ]; }; then
+    log_warning "$HOME/.claude/ 에 기존 사용자 데이터가 있습니다."
+    log_warning "쉘 재시작 후 다음 명령으로 마이그레이션하세요:"
+    log_warning "  claude-accounts migrate"
+    exit 0
 fi
 
-# settings.json 파일 존재 여부 확인
-if [ ! -f "$CLAUDE_SETTINGS_SOURCE" ]; then
-    log_error_and_exit "settings.json 파일이 '${CLAUDE_SETTINGS_SOURCE}' 경로에 존재하지 않습니다."
-fi
+# 활성화된 계정마다 sudoers 등록 + setup
+for acct in $(_claude_resolve_account --list); do
+    cdir=$(_claude_resolve_account "$acct")
+    log_info "Account: $acct → $cdir"
 
-# statusline-command.sh 파일 존재 여부 확인
-if [ ! -f "$CLAUDE_STATUSLINE_SOURCE" ]; then
-    log_error_and_exit "statusline-command.sh 파일이 '${CLAUDE_STATUSLINE_SOURCE}' 경로에 존재하지 않습니다."
-fi
+    if [ "${CLAUDE_SKIP_SUDOERS:-0}" != "1" ]; then
+        _setup_bind_mount_sudoers \
+            "/etc/sudoers.d/claude-skills-mount-${acct}" \
+            "Skills (${acct})" \
+            "$CLAUDE_SKILLS_SOURCE" \
+            "${cdir}/skills"
+        _setup_bind_mount_sudoers \
+            "/etc/sudoers.d/claude-docs-mount-${acct}" \
+            "Docs (${acct})" \
+            "$CLAUDE_DOCS_SOURCE" \
+            "${cdir}/docs"
+    fi
 
-# skills 디렉토리 존재 여부 확인
-if [ ! -d "$CLAUDE_SKILLS_SOURCE" ]; then
-    log_error_and_exit "skills 디렉토리가 '${CLAUDE_SKILLS_SOURCE}' 경로에 존재하지 않습니다."
-fi
+    _claude_account_setup_one "$acct" "$cdir"
+done
 
-# global-memory 디렉토리 존재 여부 확인
-if [ ! -d "$CLAUDE_GLOBAL_MEMORY_SOURCE" ]; then
-    log_error_and_exit "global-memory 디렉토리가 '${CLAUDE_GLOBAL_MEMORY_SOURCE}' 경로에 존재하지 않습니다."
-fi
-
-# settings.json 심볼릭 링크 생성
-create_symlink "$CLAUDE_SETTINGS_SOURCE" "$HOME_SETTINGS"
-
-# statusline-command.sh 심볼릭 링크 생성
-create_symlink "$CLAUDE_STATUSLINE_SOURCE" "$HOME_STATUSLINE"
-
-setup_skills_mount
-_mount_skills_directory
-
-setup_docs_mount
-_mount_docs_directory
-
-# global memory 디렉토리 심볼릭 링크 생성
-if [ ! -d "$(dirname "$HOME_GLOBAL_MEMORY")" ]; then
-    log_info "'$(dirname "$HOME_GLOBAL_MEMORY")' 디렉토리 생성"
-    mkdir -p "$(dirname "$HOME_GLOBAL_MEMORY")" || log_error_and_exit "'$(dirname "$HOME_GLOBAL_MEMORY")' 디렉토리 생성 실패"
-fi
-create_symlink "$CLAUDE_GLOBAL_MEMORY_SOURCE" "$HOME_GLOBAL_MEMORY"
-
-# --- Verify Links ---
-
+# --- Verify Links (모든 활성 계정) ---
 log_debug "\n--- 심볼릭 링크 확인 ---"
-
-if [ -L "$HOME_SETTINGS" ]; then
-    log_dim "✓ settings.json 심볼릭 링크 확인됨"
-else
-    log_error_and_exit "settings.json 심볼릭 링크 생성 실패"
-fi
-
-if [ -L "$HOME_STATUSLINE" ]; then
-    log_dim "✓ statusline-command.sh 심볼릭 링크 확인됨"
-else
-    log_error_and_exit "statusline-command.sh 심볼릭 링크 생성 실패"
-fi
-
-if [ -d "$HOME_SKILLS" ]; then
-    log_dim "✓ skills 디렉토리 확인됨"
-else
-    log_error_and_exit "skills 디렉토리 생성 실패"
-fi
-
-if [ -L "$HOME_GLOBAL_MEMORY" ]; then
-    log_dim "✓ global memory 심볼릭 링크 확인됨"
-else
-    log_error_and_exit "global memory 심볼릭 링크 생성 실패"
-fi
+for acct in $(_claude_resolve_account --list); do
+    cdir=$(_claude_resolve_account "$acct")
+    for link in settings.json statusline-command.sh plugins projects/GLOBAL/memory; do
+        if [ -L "${cdir}/${link}" ]; then
+            log_dim "✓ ${acct}/${link} 심볼릭 링크 확인됨"
+        else
+            log_error_and_exit "${acct}/${link} 심볼릭 링크 생성 실패"
+        fi
+    done
+done
 
 # --- Completion Messages ---
-
 log_debug "--- Claude Code dotfiles setup 완료 ---"
 echo ""
-
-ux_success "Claude Code 설정이 완료되었습니다!"
-ux_info "다음 설정이 적용되었습니다:"
-ux_bullet "~/.claude/settings.json → ~/dotfiles/claude/settings.json (symlink)"
-ux_bullet "~/.claude/statusline-command.sh → ~/dotfiles/claude/statusline-command.sh (symlink)"
-ux_bullet "~/.claude/projects/GLOBAL/memory → ~/dotfiles/claude/global-memory (symlink)"
-ux_bullet "/etc/sudoers.d/claude-skills-mount (passwordless mount)"
-ux_bullet "/etc/sudoers.d/claude-docs-mount (passwordless mount)"
-
-if _is_skills_mounted; then
-    ux_bullet "~/.claude/skills ← ~/dotfiles/claude/skills (bind mount active)"
-else
-    ux_bullet "~/.claude/skills mount failed during setup; sudoers is configured"
-fi
-
-if _is_docs_mounted; then
-    ux_bullet "~/.claude/docs ← ~/dotfiles/claude/docs (bind mount active)"
-else
-    ux_bullet "~/.claude/docs mount failed during setup; sudoers is configured"
-fi
+ux_success "Claude Code 다중 계정 설정 완료!"
+ux_info "활성 계정: $(_claude_resolve_account --list | tr '\n' ' ')"
+ux_info "Default: $CLAUDE_DEFAULT_ACCOUNT"
 echo ""
-
 ux_section "다음 단계"
-if _is_skills_mounted; then
-    ux_bullet "새 쉘에서도 skills bind mount를 자동으로 유지합니다"
-else
-    ux_bullet "새 쉘에서 자동 mount를 재시도합니다"
-    ux_bullet "즉시 수동 실행: claude-mount-skills"
-fi
-ux_bullet "Claude Code 재시작하여 변경 사항 적용"
-ux_bullet "필요시 설정 파일 편집: ${UX_BOLD}vim ~/dotfiles/claude/settings.json${UX_RESET}"
+ux_bullet "쉘 재시작 후 진단: ${UX_BOLD}claude-accounts status${UX_RESET}"
+ux_bullet "처음 사용: ${UX_BOLD}claude-yolo${UX_RESET} (브라우저로 ${CLAUDE_DEFAULT_ACCOUNT} 로그인)"
+ux_bullet "다른 계정: ${UX_BOLD}claude-yolo --user <name>${UX_RESET} 또는 ${UX_BOLD}claude-yolo-<name>${UX_RESET}"
 echo ""
 
 exit 0
