@@ -538,6 +538,58 @@ _claude_account_setup_one() {
     fi
 }
 
+# claude_accounts_status — 진단 출력 (모든 ENABLED 계정의 상태).
+claude_accounts_status() {
+    ux_header "Claude Accounts Status"
+    ux_info "Default: $CLAUDE_DEFAULT_ACCOUNT"
+    ux_info "Enabled: $CLAUDE_ENABLED_ACCOUNTS"
+    if [ -d "$HOME/.claude-shared/plugins" ]; then
+        ux_info "Shared:  $HOME/.claude-shared/plugins ✓"
+    else
+        ux_warning "Shared:  $HOME/.claude-shared/plugins ✗ missing"
+    fi
+    echo ""
+
+    # zsh word-splitting parity
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        emulate -L sh
+    fi
+
+    for _cas_acct in $(_claude_resolve_account --list); do
+        _cas_cdir=$(_claude_resolve_account "$_cas_acct")
+        ux_section "Account: $_cas_acct"
+        if [ -d "$_cas_cdir" ]; then
+            echo "  Path:        $_cas_cdir ✓ exists"
+        else
+            echo "  Path:        $_cas_cdir ✗ missing"
+        fi
+
+        if [ -f "$_cas_cdir/.credentials.json" ]; then
+            echo "  Credentials: .credentials.json ✓ logged in"
+        else
+            echo "  Credentials: .credentials.json ✗ NOT logged in"
+            echo "                → Run: claude-yolo --user $_cas_acct"
+        fi
+
+        for _cas_link in settings.json statusline-command.sh plugins projects/GLOBAL/memory; do
+            if [ -L "$_cas_cdir/$_cas_link" ]; then
+                echo "  $_cas_link: symlink ✓"
+            else
+                echo "  $_cas_link: ✗ missing"
+            fi
+        done
+
+        for _cas_mount in skills docs; do
+            if _is_mounted "$_cas_cdir/$_cas_mount"; then
+                echo "  $_cas_mount: bind mount ✓"
+            else
+                echo "  $_cas_mount: ✗ not mounted"
+            fi
+        done
+        echo ""
+    done
+}
+
 # claude_accounts_init — 멱등 setup, 3대 PC 공통 진입점.
 claude_accounts_init() {
     ux_header "Claude Accounts Setup"

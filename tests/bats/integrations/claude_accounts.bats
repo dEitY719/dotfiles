@@ -184,3 +184,28 @@ LOCAL
     assert_success
     assert_output --partial "already"
 }
+
+# ---------- Task 6: status ----------
+
+@test "bash: claude_accounts_status shows enabled accounts" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init && claude_accounts_status'
+    assert_success
+    assert_output --partial "Default: personal"
+    assert_output --partial "Account: personal"
+    assert_output --partial "Account: work"
+}
+
+@test "bash: claude_accounts_status reports NOT logged in when no .credentials.json" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init && claude_accounts_status'
+    assert_output --partial "NOT logged in"
+}
+
+@test "bash: claude_accounts_status hides disabled accounts (Internal-PC)" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="work" CLAUDE_DEFAULT_ACCOUNT=work CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init && CLAUDE_ENABLED_ACCOUNTS="work" CLAUDE_DEFAULT_ACCOUNT=work claude_accounts_status'
+    assert_success
+    refute_output --partial "Account: personal"
+    assert_output --partial "Account: work"
+}
