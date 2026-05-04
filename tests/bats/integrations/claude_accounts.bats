@@ -125,3 +125,49 @@ LOCAL
     # Backup uses claude/setup.sh:100 legacy convention: <name>-YYYYMMDDHHMMSS-original
     ls "$HOME/tgt-dir/" | grep -qE "link-[0-9]{14}-original"
 }
+
+# ---------- Task 5: account setup ----------
+
+@test "bash: _claude_account_setup_one creates symlinks (skips bind mount)" {
+    # bind mount needs sudo; skip via env var
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "$HOME/.claude-shared/plugins"
+
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 _claude_account_setup_one personal '$HOME/.claude-personal'"
+    assert_success
+
+    [ -L "$HOME/.claude-personal/settings.json" ]
+    [ -L "$HOME/.claude-personal/statusline-command.sh" ]
+    [ -L "$HOME/.claude-personal/plugins" ]
+    [ -L "$HOME/.claude-personal/projects/GLOBAL/memory" ]
+}
+
+@test "bash: claude_accounts_init creates only ENABLED account dirs" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+
+    run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="work" CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
+    assert_success
+
+    [ ! -d "$HOME/.claude-personal" ]
+    [ -d "$HOME/.claude-work" ]
+    [ -d "$HOME/.claude" ]
+    [ -d "$HOME/.claude-shared/plugins" ]
+}
+
+@test "bash: claude_accounts_init refuses if ~/.claude/ has unmigrated data" {
+    mkdir -p "$HOME/.claude"
+    echo "old" > "$HOME/.claude/legacy-file"
+
+    run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
+    assert_failure
+    assert_output --partial "claude-accounts migrate"
+}
+
+@test "bash: claude_accounts_init is idempotent (second run skips)" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+
+    run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
+    run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
+    assert_success
+    assert_output --partial "already"
+}
