@@ -140,8 +140,11 @@ fi
 mkdir -p "$HOME/.claude"
 mkdir -p "$HOME/.claude-shared/plugins"
 
+# 활성 계정 목록을 한 번만 조회하여 재사용 (PR #292 review 반영)
+ENABLED_ACCOUNTS=$(_claude_resolve_account --list)
+
 # 활성화된 계정마다 sudoers 등록 + setup
-for acct in $(_claude_resolve_account --list); do
+for acct in $ENABLED_ACCOUNTS; do
     cdir=$(_claude_resolve_account "$acct")
     log_info "Account: $acct → $cdir"
 
@@ -163,7 +166,7 @@ done
 
 # --- Verify Links (모든 활성 계정) ---
 log_debug "\n--- 심볼릭 링크 확인 ---"
-for acct in $(_claude_resolve_account --list); do
+for acct in $ENABLED_ACCOUNTS; do
     cdir=$(_claude_resolve_account "$acct")
     for link in settings.json statusline-command.sh plugins projects/GLOBAL/memory; do
         if [ -L "${cdir}/${link}" ]; then
@@ -178,7 +181,7 @@ done
 log_debug "--- Claude Code dotfiles setup 완료 ---"
 echo ""
 ux_success "Claude Code 다중 계정 설정 완료!"
-ux_info "활성 계정: $(_claude_resolve_account --list | tr '\n' ' ')"
+ux_info "활성 계정: $(echo "$ENABLED_ACCOUNTS" | tr '\n' ' ')"
 ux_info "Default: $CLAUDE_DEFAULT_ACCOUNT"
 echo ""
 ux_section "다음 단계"
