@@ -436,3 +436,34 @@ _setup_sh_prereqs() {
     assert_success
     assert_output --partial "already"
 }
+
+# ---------- Regression: issue #296 ----------
+#
+# After PR #292 (multi-account migration), `~/.claude/` becomes a guard
+# directory and `~/.claude/statusline-command.sh` no longer exists. The
+# template previously hardcoded that legacy path, causing statusline to
+# silently fail under `CLAUDE_CONFIG_DIR=~/.claude-personal`.
+# Fix: settings.template.json points at the dotfiles SSOT path, which is
+# reachable from every account's CONFIG_DIR via $HOME.
+
+@test "regression #296: statusLine.command in account settings.json resolves to executable" {
+    _setup_sh_prereqs
+
+    # Make $HOME/dotfiles resolve to the worktree so the template's
+    # ${HOME}/dotfiles/... path is reachable inside the isolated $HOME.
+    ln -s "${DOTFILES_ROOT}" "$HOME/dotfiles"
+
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+
+    for cdir in "$HOME/.claude-personal" "$HOME/.claude-work"; do
+        cmd=$(jq -r '.statusLine.command' < "$cdir/settings.json")
+
+        # The legacy ~/.claude/ path is the regression we are guarding against.
+        [ "$cmd" != '${HOME}/.claude/statusline-command.sh' ]
+
+        # Expand ${HOME} the same way Claude Code does and verify exec bit.
+        expanded=${cmd//\$\{HOME\}/$HOME}
+        [ -x "$expanded" ]
+    done
+}

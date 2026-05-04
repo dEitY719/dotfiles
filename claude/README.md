@@ -35,11 +35,14 @@ Edit `claude/settings.json` to match your personal environment:
    }
    ```
 
-3. **Status Line** - Configure how Claude Code displays status information
+3. **Status Line** - Configure how Claude Code displays status information.
+   The dotfiles SSOT path works across all multi-account `CLAUDE_CONFIG_DIR`
+   targets (e.g. `~/.claude-personal`, `~/.claude-work`) without depending on
+   per-account symlinks. See issue #296.
    ```json
    "statusLine": {
      "type": "command",
-     "command": "${HOME}/.claude/statusline-command.sh"
+     "command": "${HOME}/dotfiles/claude/statusline-command.sh"
    }
    ```
 
