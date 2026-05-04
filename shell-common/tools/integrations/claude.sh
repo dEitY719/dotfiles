@@ -472,6 +472,11 @@ claude_yolo() {
     # See _claude_restore_if_reset for the heuristic and rationale.
     _claude_restore_if_reset "$_cy_config_dir"
 
+    # Pre-launch account binding sanity (issue #300, item B).
+    # Opt-in via CLAUDE_ACCOUNT_EMAIL_<account>; silent unless the mapping
+    # AND a populated .claude.json AND a mismatch are all present.
+    _claude_validate_login "$_cy_config_dir" "$_cy_account"
+
     CLAUDE_CONFIG_DIR="$_cy_config_dir" command claude --dangerously-skip-permissions "$@"
 }
 
@@ -517,6 +522,41 @@ _claude_restore_if_reset() {
         ux_error "  Restore failed — proceeding anyway (claude may prompt for re-login)"
     fi
 }
+
+# _claude_validate_login — expected ↔ actual oauth email check (issue #300-B).
+#
+# Catches the "wrong Google account on browser" trap: a leftover personal
+# Google session bleeds into the OAuth flow for `claude-yolo --user work`,
+# leaving the work CLAUDE_CONFIG_DIR populated with personal credentials.
+# The code in this repo can't influence the browser, but it CAN cross-check
+# the resulting .claude.json against an expected email and warn loudly so
+# the user can recover before the misbinding becomes load-bearing.
+#
+# Opt-in: caller defines `CLAUDE_ACCOUNT_EMAIL_<account>` (e.g.
+# `CLAUDE_ACCOUNT_EMAIL_work=alice@corp.com`) in claude.local.sh. Without
+# the mapping the function silently returns — zero-config / zero-regression
+# for everyone who doesn't opt in.
+_claude_validate_login() {
+    _cvl_dir="$1"
+    _cvl_acct="$2"
+
+    _cvl_expected=$(_claude_expected_email "$_cvl_acct")
+    [ -n "$_cvl_expected" ] || return 0
+
+    _cvl_json="$_cvl_dir/.claude.json"
+    [ -f "$_cvl_json" ] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+
+    _cvl_actual=$(jq -r '.oauthAccount.emailAddress // empty' "$_cvl_json" 2>/dev/null)
+    [ -n "$_cvl_actual" ] || return 0
+    [ "$_cvl_expected" = "$_cvl_actual" ] && return 0
+
+    ux_warning "Account mismatch on '$_cvl_acct':"
+    ux_warning "  expected: $_cvl_expected (CLAUDE_ACCOUNT_EMAIL_${_cvl_acct})"
+    ux_warning "  actual:   $_cvl_actual (.claude.json oauthAccount)"
+    ux_info    "  → 다른 Google 계정으로 잘못 로그인된 자격증명일 수 있습니다."
+    ux_info    "  → 복구: rm '$_cvl_dir/.credentials.json' '$_cvl_json' && claude-yolo --user $_cvl_acct"
+}
 alias claude-yolo='claude_yolo'
 
 # ═══════════════════════════════════════════════════════════════
@@ -552,6 +592,21 @@ _claude_resolve_account() {
         work)     echo "$HOME/.claude-work" ;;
         *)        return 1 ;;
     esac
+}
+
+# _claude_expected_email <account-name> — expected oauth email lookup.
+# Reads CLAUDE_ACCOUNT_EMAIL_<account> if defined, else echoes nothing.
+# Opt-in mapping convention from issue #300, items B and C — kept in a
+# helper so claude_yolo and claude_accounts_status share the same source
+# of truth.
+#
+# Uses eval (not ${!var}) for POSIX sh portability — the input is always
+# an account name vetted by _claude_resolve_account, so injection is not
+# a concern.
+_claude_expected_email() {
+    _ceeem_acct="$1"
+    [ -n "$_ceeem_acct" ] || return 0
+    eval "echo \"\${CLAUDE_ACCOUNT_EMAIL_${_ceeem_acct}:-}\""
 }
 
 # _claude_ensure_symlink — 멱등 symlink 생성.
@@ -633,6 +688,49 @@ _claude_account_setup_one() {
     fi
 }
 
+# _claude_status_show_oauth — append OAuth binding (email/org) to the
+# Credentials line in claude_accounts_status (issue #300, item C).
+#
+# Visibility goal: the status command already says "✓ logged in" but does
+# not say *which* Anthropic account those credentials map to. Without
+# that, item-B's misbinding trap is invisible at diagnosis time. This
+# helper jq-extracts the .oauthAccount fields populated by Claude after
+# its first authenticated call, and prints two indented lines.
+#
+# Silent skip when: .claude.json missing, jq missing, or oauthAccount
+# field absent (e.g. first-start placeholder before login completes).
+# When item-B's expected mapping is also defined and disagrees with the
+# observed email, append a ⚠️ marker to make the discrepancy obvious.
+_claude_status_show_oauth() {
+    _csso_dir="$1"
+    _csso_acct="$2"
+    _csso_json="$_csso_dir/.claude.json"
+
+    [ -f "$_csso_json" ] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+
+    _csso_email=$(jq -r '.oauthAccount.emailAddress // empty' "$_csso_json" 2>/dev/null)
+    [ -n "$_csso_email" ] || return 0
+
+    _csso_org=$(jq -r '.oauthAccount.organizationName // empty' "$_csso_json" 2>/dev/null)
+    _csso_type=$(jq -r '.oauthAccount.organizationType // empty' "$_csso_json" 2>/dev/null)
+
+    _csso_marker=""
+    _csso_expected=$(_claude_expected_email "$_csso_acct")
+    if [ -n "$_csso_expected" ] && [ "$_csso_expected" != "$_csso_email" ]; then
+        _csso_marker=" ⚠️  expected $_csso_expected"
+    fi
+
+    echo "    └─ Email: $_csso_email$_csso_marker"
+    if [ -n "$_csso_org" ]; then
+        if [ -n "$_csso_type" ]; then
+            echo "    └─ Org:   $_csso_org ($_csso_type)"
+        else
+            echo "    └─ Org:   $_csso_org"
+        fi
+    fi
+}
+
 # claude_accounts_status — 진단 출력 (모든 ENABLED 계정의 상태).
 claude_accounts_status() {
     ux_header "Claude Accounts Status"
@@ -661,6 +759,7 @@ claude_accounts_status() {
 
         if [ -f "$_cas_cdir/.credentials.json" ]; then
             echo "  Credentials: .credentials.json ✓ logged in"
+            _claude_status_show_oauth "$_cas_cdir" "$_cas_acct"
         else
             echo "  Credentials: .credentials.json ✗ NOT logged in"
             echo "                → Run: claude-yolo --user $_cas_acct"
