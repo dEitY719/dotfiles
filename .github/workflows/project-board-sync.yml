@@ -65,41 +65,6 @@ jobs:
           echo "::error::PROJECT_BOARD_PAT secret is missing on $GH_REPO. Project board cards will not sync. Set it via: gh secret set PROJECT_BOARD_PAT --repo $GH_REPO --body '<PAT-with-project-scope>'"
           exit 1
 
-      - name: DEBUG — verify PAT scope and project access
-        if: >-
-          github.event_name == 'pull_request' &&
-          contains(fromJSON('["opened","ready_for_review","reopened","synchronize"]'), github.event.action)
-        env:
-          GH_TOKEN: ${{ secrets.PROJECT_BOARD_PAT }}
-          GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        shell: bash
-        continue-on-error: true
-        run: |
-          set +e
-          echo "--- gh api /user (auth check) ---"
-          gh api /user --jq '.login' || echo "FAIL: gh api /user"
-          echo "--- gh api rate_limit (scope check) ---"
-          gh api /rate_limit --jq '.resources | keys' || echo "FAIL: rate_limit"
-          echo "--- token scopes (response header) ---"
-          gh api /user -i 2>&1 | grep -i "x-oauth-scopes\|x-accepted-oauth-scopes" || echo "no scope headers"
-          echo "--- raw projectItems query (no stderr suppression) ---"
-          gh api graphql -f query='
-            query($owner: String!, $repo: String!, $number: Int!) {
-              repository(owner: $owner, name: $repo) {
-                pullRequest(number: $number) {
-                  projectItems(first: 10) {
-                    nodes {
-                      id
-                      fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
-                      project { id title }
-                    }
-                  }
-                }
-              }
-            }' \
-            -f owner="${GH_REPO%/*}" -f repo="${GH_REPO#*/}" -F number="$PR_NUMBER"
-
       - name: PR opened → In review (PR) + In progress (linked Issues)
         if: >-
           github.event_name == 'pull_request' &&
