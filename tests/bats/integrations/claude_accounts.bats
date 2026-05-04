@@ -360,3 +360,32 @@ MOCK
     assert_success
     assert_output --partial "CLAUDE_CONFIG_DIR=$HOME/.claude-work"
 }
+
+# ---------- Task 10: alias auto-derivation ----------
+
+@test "bash: claude-yolo-personal alias exists (default ENABLED)" {
+    run_in_bash 'shopt -s expand_aliases; alias claude-yolo-personal'
+    assert_success
+    assert_output --partial "claude_yolo --user personal"
+}
+
+@test "bash: claude-yolo-work alias exists (default ENABLED)" {
+    run_in_bash 'shopt -s expand_aliases; alias claude-yolo-work'
+    assert_success
+    assert_output --partial "claude_yolo --user work"
+}
+
+@test "bash: _claude_yolo_register_aliases iterates ENABLED only" {
+    # Verify the function reads from --list (not hardcoded). Clear all aliases
+    # registered at file load, override ENABLED, re-run, then check that only
+    # the work alias was re-registered.
+    run_in_bash 'shopt -s expand_aliases; CLAUDE_ENABLED_ACCOUNTS="work" unalias -a 2>/dev/null; CLAUDE_ENABLED_ACCOUNTS="work" _claude_yolo_register_aliases; alias | grep "claude-yolo-" || echo NONE'
+    assert_success
+    assert_output --partial "claude-yolo-work"
+    refute_output --partial "claude-yolo-personal"
+}
+
+@test "bash: claude-yolo-work alias expansion targets work account" {
+    run_in_bash 'shopt -s expand_aliases; alias claude-yolo-work'
+    assert_output --partial "--user work"
+}
