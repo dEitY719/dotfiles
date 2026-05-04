@@ -291,3 +291,72 @@ LOCAL
     assert_output --partial "setup"
     assert_output --partial "migrate"
 }
+
+# ---------- Task 9: claude_yolo dispatcher ----------
+
+# Mock `claude` binary — instead of real call, echo what would have been invoked.
+_setup_claude_mock() {
+    mkdir -p "$HOME/bin"
+    cat > "$HOME/bin/claude" <<'MOCK'
+#!/bin/sh
+echo "MOCK_CLAUDE: CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR:-unset} ARGS=$*"
+MOCK
+    chmod +x "$HOME/bin/claude"
+}
+
+@test "bash: claude_yolo defaults to personal account" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-personal"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    assert_success
+    assert_output --partial "CLAUDE_CONFIG_DIR=$HOME/.claude-personal"
+}
+
+@test "bash: claude_yolo --user work routes to work" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-work"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --user work"
+    assert_success
+    assert_output --partial "CLAUDE_CONFIG_DIR=$HOME/.claude-work"
+}
+
+@test "bash: claude_yolo --user=work syntax also works" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-work"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --user=work"
+    assert_success
+    assert_output --partial "CLAUDE_CONFIG_DIR=$HOME/.claude-work"
+}
+
+@test "bash: claude_yolo passes extra args through to claude" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-work"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --user work --resume foo"
+    assert_success
+    assert_output --partial "ARGS=--dangerously-skip-permissions --resume foo"
+}
+
+@test "bash: claude_yolo --user xyz fails with available list" {
+    _setup_claude_mock
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --user xyz"
+    assert_failure
+    assert_output --partial "Unknown account: xyz"
+    assert_output --partial "Available"
+}
+
+@test "bash: claude_yolo errors when account dir missing" {
+    _setup_claude_mock
+    rm -rf "$HOME/.claude-work"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --user work"
+    assert_failure
+    assert_output --partial "Account directory missing"
+    assert_output --partial "claude-accounts setup"
+}
+
+@test "bash: claude_yolo respects CLAUDE_DEFAULT_ACCOUNT=work (Internal-PC)" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-work"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_DEFAULT_ACCOUNT=work CLAUDE_YOLO_STAY=1 claude_yolo"
+    assert_success
+    assert_output --partial "CLAUDE_CONFIG_DIR=$HOME/.claude-work"
+}

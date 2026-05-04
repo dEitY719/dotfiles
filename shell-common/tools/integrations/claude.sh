@@ -400,27 +400,75 @@ clskip() {
 
 alias claude-skip='claude --dangerously-skip-permissions'
 
-# claude_yolo: run `claude --dangerously-skip-permissions`, but auto-switch
-# off main/master to `scratch/MMDD-HHMMSS` first so YOLO sessions never
-# land commits on the protected branch. Bypass with CLAUDE_YOLO_STAY=1.
+# claude_yolo — 다중 계정 dispatcher (issue #287, Phase 1).
+#
+# Usage:
+#   claude-yolo                       → CLAUDE_DEFAULT_ACCOUNT 으로 실행
+#   claude-yolo --user work           → work 계정으로 실행
+#   claude-yolo --user=work foo bar   → --user 추출, foo bar 는 claude 통과
+#   claude-yolo -- --user not-flag    → -- 이후는 모두 claude 본체 통과
+#
+# 동작:
+# 1. POSIX 안전 인자 재구성 (sentinel 패턴, eval 없음)
+# 2. 계정 → CLAUDE_CONFIG_DIR 해석 (SSOT: _claude_resolve_account)
+# 3. main/master 브랜치 가드 (기존 동작 유지) — bypass: CLAUDE_YOLO_STAY=1
+# 4. CLAUDE_CONFIG_DIR 환경 주입 + command claude --dangerously-skip-permissions
 claude_yolo() {
-    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        command claude --dangerously-skip-permissions "$@"
-        return
+    _cy_account="${CLAUDE_DEFAULT_ACCOUNT:-personal}"
+
+    # zsh disables word-splitting; emulate sh inside this function.
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        emulate -L sh
     fi
 
-    branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
-    case "$branch" in
-        main | master)
-            if [ -z "${CLAUDE_YOLO_STAY:-}" ]; then
-                new_branch="scratch/$(date +%m%d-%H%M%S)"
-                ux_warning "main 브랜치 감지 → ${new_branch} 로 전환 (bypass: CLAUDE_YOLO_STAY=1)"
-                git switch -c "$new_branch" || return 1
-            fi
-            ;;
-    esac
+    # --user 가로채고 나머지는 위치 인자로 보존 (POSIX 안전)
+    set -- "$@" "__CY_END__"
+    while [ "$1" != "__CY_END__" ]; do
+        case "$1" in
+            --user)
+                _cy_account="$2"
+                shift 2
+                ;;
+            --user=*)
+                _cy_account="${1#--user=}"
+                shift
+                ;;
+            *)
+                set -- "$@" "$1"
+                shift
+                ;;
+        esac
+    done
+    shift   # sentinel 제거
 
-    command claude --dangerously-skip-permissions "$@"
+    # 계정 → CONFIG_DIR (SSOT 호출)
+    _cy_config_dir=$(_claude_resolve_account "$_cy_account") || {
+        ux_error "Unknown account: $_cy_account"
+        ux_info  "Available: $(_claude_resolve_account --list | tr '\n' ' ')"
+        return 1
+    }
+
+    [ -d "$_cy_config_dir" ] || {
+        ux_error "Account directory missing: $_cy_config_dir"
+        ux_info  "Run: claude-accounts setup"
+        return 1
+    }
+
+    # main/master 브랜치 가드 (기존 로직 보존)
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        _cy_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+        case "$_cy_branch" in
+            main|master)
+                if [ -z "${CLAUDE_YOLO_STAY:-}" ]; then
+                    _cy_new_branch="scratch/$(date +%m%d-%H%M%S)"
+                    ux_warning "main 브랜치 감지 → ${_cy_new_branch} 로 전환 (bypass: CLAUDE_YOLO_STAY=1)"
+                    git switch -c "$_cy_new_branch" || return 1
+                fi
+                ;;
+        esac
+    fi
+
+    CLAUDE_CONFIG_DIR="$_cy_config_dir" command claude --dangerously-skip-permissions "$@"
 }
 alias claude-yolo='claude_yolo'
 
