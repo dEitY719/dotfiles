@@ -37,3 +37,17 @@ teardown() {
     assert_success
     assert_output "personal work"
 }
+
+@test "bash: claude.local.sh override is loaded" {
+    cat > "${DOTFILES_ROOT}/shell-common/env/claude.local.sh" <<'LOCAL'
+export CLAUDE_DEFAULT_ACCOUNT="work"
+export CLAUDE_ENABLED_ACCOUNTS="work"
+LOCAL
+
+    run_in_bash 'echo "$CLAUDE_DEFAULT_ACCOUNT|$CLAUDE_ENABLED_ACCOUNTS"'
+
+    rm -f "${DOTFILES_ROOT}/shell-common/env/claude.local.sh"
+
+    assert_success
+    assert_output "work|work"
+}
