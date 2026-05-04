@@ -175,8 +175,15 @@ dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
   GitHub Projects 빌트인 `Pull request merged` (#6) 는 enabled 이지만
   저장소·보드 설정 차이로 fire 가 누락되는 사례가 #265 머지에서
   관측되어 (#266) 위 두 보정 경로가 안전망 역할을 한다. 워크플로우는
-  `secrets.PROJECT_BOARD_PAT` (project 스코프 PAT) 를 사용한다 — PAT
-  미설정 시엔 warning 을 남기고 no-op 으로 종료하므로 포크 PR 도 안전하다.
+  `secrets.PROJECT_BOARD_PAT` (project 스코프 PAT) 를 사용한다.
+  미설정 처리는 fork 와 canonical 이 분기된다:
+  - **Fork PR** (`head.repo.full_name != github.repository`): GitHub
+    이 정책상 secrets 를 주입하지 않으므로 `::warning::` 만 남기고
+    `exit 0` 으로 soft-skip — 외부 기여자가 빨간 CI 를 보지 않게 한다.
+  - **Canonical PR** (same-repo): `::error::` 와 `gh secret set
+    PROJECT_BOARD_PAT` 안내를 출력하고 `exit 1` 로 hard-fail. PR #290
+    머지 후 PAT 미설정으로 워크플로가 silent no-op 한 상태가 #300
+    까지 발견되지 못한 회귀 (#bug/1) 의 재발 방지 가드다.
 - **PR 카드 `In progress → In review` (재리뷰 요청 시)**:
   `Changes requested` 루프에서 수정·재푸시 후 리뷰가 다시 달리기를
   기대할 때 **수동**으로 복귀시킨다. Projects v2 빌트인에도 dotfiles
