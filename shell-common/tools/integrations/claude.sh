@@ -529,7 +529,9 @@ _claude_account_setup_one() {
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/global-memory"          "$_caso_cdir/projects/GLOBAL/memory"
 
     if [ "${CLAUDE_SKIP_BIND_MOUNT:-0}" = "1" ]; then
-        ux_info "  (CLAUDE_SKIP_BIND_MOUNT=1 → skipping bind mounts)"
+        # Visible warning, not info — production users may misuse this and
+        # silently lose bind mounts. Test harness sees the warning too.
+        ux_warning "  (CLAUDE_SKIP_BIND_MOUNT=1 → skipping bind mounts)"
     else
         _claude_ensure_bind_mount "${DOTFILES_ROOT}/claude/skills"  "$_caso_cdir/skills"
         _claude_ensure_bind_mount "${DOTFILES_ROOT}/claude/docs"    "$_caso_cdir/docs"
@@ -540,12 +542,18 @@ _claude_account_setup_one() {
 claude_accounts_init() {
     ux_header "Claude Accounts Setup"
 
-    # 마이그레이션 미수행 가드: ~/.claude/ 에 빈 디렉토리 외 데이터 있으면 거부
+    # 마이그레이션 미수행 가드: 진짜 사용자 데이터(credentials, sessions,
+    # projects, history)가 있을 때만 거부. 빈 skills/docs 디렉토리(기존
+    # bind mount target 잔재)는 false positive 회피를 위해 무시.
     if [ -d "$HOME/.claude" ] \
        && [ ! -d "$HOME/.claude-personal" ] \
        && [ ! -d "$HOME/.claude-work" ] \
-       && [ -n "$(ls -A "$HOME/.claude" 2>/dev/null)" ]; then
-        ux_warning "$HOME/.claude/ 에 기존 데이터가 있습니다."
+       && { [ -e "$HOME/.claude/.credentials.json" ] \
+            || [ -d "$HOME/.claude/projects" ] \
+            || [ -d "$HOME/.claude/sessions" ] \
+            || [ -e "$HOME/.claude/history.jsonl" ] \
+            || [ -d "$HOME/.claude/plugins" ]; }; then
+        ux_warning "$HOME/.claude/ 에 기존 사용자 데이터가 있습니다."
         ux_info    "먼저 마이그레이션을 실행하세요: claude-accounts migrate"
         return 1
     fi
