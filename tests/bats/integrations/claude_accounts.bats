@@ -38,16 +38,16 @@ teardown() {
     assert_output "personal work"
 }
 
-@test "bash: claude.local.sh override is loaded" {
-    cat > "${DOTFILES_ROOT}/shell-common/env/claude.local.sh" <<'LOCAL'
+@test "bash: claude.local.sh exports win over claude.sh defaults" {
+    # Avoid writing into the real repo (unprecedented in this codebase and
+    # gitignored so a leak is invisible). Stage the override under the
+    # isolated $HOME instead — torn down by teardown_isolated_home.
+    cat > "$HOME/claude.local.sh" <<'LOCAL'
 export CLAUDE_DEFAULT_ACCOUNT="work"
 export CLAUDE_ENABLED_ACCOUNTS="work"
 LOCAL
 
-    run_in_bash 'echo "$CLAUDE_DEFAULT_ACCOUNT|$CLAUDE_ENABLED_ACCOUNTS"'
-
-    rm -f "${DOTFILES_ROOT}/shell-common/env/claude.local.sh"
-
+    run_in_bash '. "$HOME/claude.local.sh"; echo "$CLAUDE_DEFAULT_ACCOUNT|$CLAUDE_ENABLED_ACCOUNTS"'
     assert_success
     assert_output "work|work"
 }
