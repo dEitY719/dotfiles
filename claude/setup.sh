@@ -75,36 +75,6 @@ log_error_and_exit() {
 
 # --- Functions ---
 
-backup_file() {
-    local file_to_backup="$1"
-    local backup_destination="$2"
-    if [ -e "$file_to_backup" ]; then
-        log_info "백업 파일 생성: $file_to_backup -> $backup_destination"
-        if [ -d "$file_to_backup" ]; then
-            cp -r "$file_to_backup" "$backup_destination" || log_error_and_exit "백업 디렉토리 생성 실패: $file_to_backup"
-        else
-            cp "$file_to_backup" "$backup_destination" || log_error_and_exit "백업 파일 생성 실패: $file_to_backup"
-        fi
-    fi
-}
-
-create_symlink() {
-    local target="$1"
-    local link_name="$2"
-
-    if [ -L "$link_name" ]; then
-        log_dim "기존 심볼릭 링크 제거: $link_name"
-        rm "$link_name" || log_error_and_exit "기존 심볼릭 링크 제거 실패: $link_name"
-    elif [ -f "$link_name" ] || [ -d "$link_name" ]; then
-        log_warning "경고: $link_name 가 심볼릭 링크가 아닙니다. 백업 후 제거합니다."
-        backup_file "$link_name" "${link_name}-$(date +%Y%m%d%H%M%S)-original"
-        rm -rf "$link_name" || log_error_and_exit "기존 파일/디렉토리 제거 실패: $link_name"
-    fi
-
-    log_info "심볼릭 링크 생성: $link_name -> $target"
-    ln -s "$target" "$link_name" || log_error_and_exit "심볼릭 링크 생성 실패: $link_name -> $target"
-}
-
 _setup_bind_mount_sudoers() {
     local sudoers_file="$1"
     local description="$2"
@@ -140,39 +110,6 @@ EOF
         return 1
     fi
 }
-
-setup_skills_mount() { _setup_bind_mount_sudoers "/etc/sudoers.d/claude-skills-mount" "Skills" "$CLAUDE_SKILLS_SOURCE" "$HOME_SKILLS"; }
-setup_docs_mount()   { _setup_bind_mount_sudoers "/etc/sudoers.d/claude-docs-mount"   "Docs"   "$CLAUDE_DOCS_SOURCE"   "$HOME_DOCS"; }
-
-_is_skills_mounted() { _is_mounted "$HOME_SKILLS"; }
-_is_docs_mounted()   { _is_mounted "$HOME_DOCS"; }
-
-_mount_bind_mount() {
-    local source="$1"
-    local target="$2"
-    local description="$3"
-
-    [ -d "$source" ] || return 0
-
-    if _is_mounted "$target"; then
-        log_dim "✓ $description bind mount가 이미 활성화되어 있습니다"
-        return 0
-    fi
-
-    mkdir -p "$target" || { log_error "$description 디렉토리 생성 실패"; return 1; }
-
-    log_info "$description bind mount 활성화: $target <- $source"
-    if sudo mount --bind "$source" "$target" 2>/dev/null; then
-        log_dim "✓ $description bind mount 완료"
-        return 0
-    fi
-
-    log_error "$description bind mount 실패"
-    return 1
-}
-
-_mount_skills_directory() { _mount_bind_mount "$CLAUDE_SKILLS_SOURCE" "$HOME_SKILLS" "skills"; }
-_mount_docs_directory()   { _mount_bind_mount "$CLAUDE_DOCS_SOURCE"   "$HOME_DOCS"   "docs"; }
 
 # --- Main Script Logic (issue #287, Phase 1: multi-account) ---
 
