@@ -506,12 +506,13 @@ _claude_restore_if_reset() {
     [ "$_crir_size" -lt 500 ] || return 0
 
     grep -q 'firstStartTime' "$_crir_live" 2>/dev/null || return 0
-    grep -q 'oauthAccount\|migrationVersion' "$_crir_live" 2>/dev/null && return 0
+    grep -qE 'oauthAccount|migrationVersion' "$_crir_live" 2>/dev/null && return 0
 
     ux_warning "Detected reset .claude.json (${_crir_size}B, no oauth/migration cache)"
     ux_info    "  → restoring from sealed migrate snapshot: $_crir_snap"
     if cp "$_crir_snap" "$_crir_live" 2>/dev/null; then
-        ux_success "  Restored $_crir_live ($(wc -c < "$_crir_live" | tr -d ' ') bytes)"
+        _crir_restored_size=$(wc -c < "$_crir_live" 2>/dev/null | tr -d ' ')
+        ux_success "  Restored $_crir_live (${_crir_restored_size:-?} bytes)"
     else
         ux_error "  Restore failed — proceeding anyway (claude may prompt for re-login)"
     fi
@@ -806,6 +807,8 @@ claude_accounts_migrate() {
         if cp "$HOME/.claude-personal/.claude.json" "$_cam_snap" 2>/dev/null; then
             ux_info "Sealed snapshot: $_cam_snap"
             ux_info "  (claude-yolo auto-restores from this if .claude.json gets reset)"
+        else
+            ux_error "  Failed to create snapshot: $_cam_snap (recovery will be unavailable)"
         fi
     fi
 
