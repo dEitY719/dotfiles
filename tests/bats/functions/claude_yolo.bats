@@ -11,6 +11,9 @@ setup() {
     setup_isolated_home
     _install_claude_shim
     _setup_fake_repo_on_main
+    # Multi-account dispatcher (issue #287) requires the account directory
+    # to exist. These tests cover the default (personal) path.
+    mkdir -p "$HOME/.claude-personal"
 }
 
 teardown() {
