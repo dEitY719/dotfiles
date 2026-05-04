@@ -67,6 +67,12 @@ teardown_isolated_home() {
 # isolated tree. teardown_isolated_home restores the real values.
 # Precondition: setup_isolated_home must have run (TEST_TEMP_HOME exists).
 setup_isolated_dotfiles_root() {
+    # Hard-fail if the precondition isn't met. Without this, an empty
+    # TEST_TEMP_HOME makes `iso_root` resolve to `/dotfiles-iso` (system root).
+    [ -n "$TEST_TEMP_HOME" ] || {
+        echo "setup_isolated_dotfiles_root: TEST_TEMP_HOME not set — call setup_isolated_home first" >&2
+        return 1
+    }
     local real_root="$_BATS_REAL_DOTFILES_ROOT"
     local iso_root="$TEST_TEMP_HOME/dotfiles-iso"
 
