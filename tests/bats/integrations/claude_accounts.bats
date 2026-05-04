@@ -389,3 +389,50 @@ MOCK
     run_in_bash 'shopt -s expand_aliases; alias claude-yolo-work'
     assert_output --partial "--user work"
 }
+
+# ---------- Task 11: claude/setup.sh integration ----------
+
+# settings.json is gitignored (PC-specific) — generate from template if missing.
+# Same applies to other source dirs that may be empty in a fresh checkout.
+_setup_sh_prereqs() {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/global-memory"
+    if [ ! -f "${DOTFILES_ROOT}/claude/settings.json" ]; then
+        if [ -f "${DOTFILES_ROOT}/claude/settings.template.json" ]; then
+            cp "${DOTFILES_ROOT}/claude/settings.template.json" \
+               "${DOTFILES_ROOT}/claude/settings.json"
+        else
+            echo '{}' > "${DOTFILES_ROOT}/claude/settings.json"
+        fi
+    fi
+}
+
+@test "bash: claude/setup.sh creates ~/.claude-personal/ structure" {
+    _setup_sh_prereqs
+
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+
+    [ -L "$HOME/.claude-personal/settings.json" ]
+    [ -L "$HOME/.claude-personal/projects/GLOBAL/memory" ]
+}
+
+@test "bash: claude/setup.sh respects CLAUDE_ENABLED_ACCOUNTS=work (Internal-PC)" {
+    _setup_sh_prereqs
+
+    run_in_bash "CLAUDE_ENABLED_ACCOUNTS=work CLAUDE_DEFAULT_ACCOUNT=work CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+
+    [ ! -d "$HOME/.claude-personal" ]
+    [ -d "$HOME/.claude-work" ]
+    [ -L "$HOME/.claude-work/settings.json" ]
+}
+
+@test "bash: claude/setup.sh is idempotent (second run)" {
+    _setup_sh_prereqs
+
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+    assert_output --partial "already"
+}
