@@ -436,9 +436,16 @@ alias claude-yolo='claude_yolo'
 #
 # 새 계정 추가 시 case 한 줄 + --list-all 한 단어만 추가.
 _claude_resolve_account() {
+    # zsh disables word-splitting by default; emulate sh inside this function
+    # so `for x in $LIST` behaves identically to bash/dash. (See MEMORY.md
+    # "Zsh-Specific Tracing Behavior" for the same pattern in gcp_scan.sh.)
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        emulate -L sh
+    fi
+
     case "$1" in
         --list)
-            # shellcheck disable=SC2086
+            # shellcheck disable=SC2086  # intentional word-split for POSIX list iteration
             for _cra_acct in $CLAUDE_ENABLED_ACCOUNTS; do
                 _claude_resolve_account "$_cra_acct" >/dev/null 2>&1 && echo "$_cra_acct"
             done
