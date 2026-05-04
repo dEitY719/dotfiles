@@ -752,3 +752,22 @@ claude_accounts() {
     esac
 }
 alias claude-accounts='claude_accounts'
+
+# _claude_yolo_register_aliases — ENABLED 계정마다 단축 alias 자동 생성.
+# 매핑 SSOT (_claude_resolve_account --list) 한 곳에서 파생되므로
+# 새 계정 추가 시 alias 도 자동 등장. 수동 alias 정의 금지.
+_claude_yolo_register_aliases() {
+    # zsh word-splitting parity (same reason as other --list consumers)
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        emulate -L sh
+    fi
+
+    for _cyra_acct in $(_claude_resolve_account --list); do
+        # POSIX-safe: alias 동적 생성 (eval 필요)
+        # shellcheck disable=SC2139  # alias contains expanded value (intentional)
+        eval "alias claude-yolo-${_cyra_acct}='claude_yolo --user ${_cyra_acct}'"
+    done
+}
+
+# claude.sh 로드 시 1회 자동 호출
+_claude_yolo_register_aliases
