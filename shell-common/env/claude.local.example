@@ -20,3 +20,12 @@
 #
 # export CLAUDE_DEFAULT_ACCOUNT="work"
 # export CLAUDE_ENABLED_ACCOUNTS="work"
+
+# ─── 계정 ↔ 이메일 expected 매핑 (issue #300, item B) ───────────
+# 정의하면 `claude-yolo --user <name>` 가 .claude.json 의 실제
+# oauthAccount.emailAddress 와 비교하여 mismatch 면 경고 출력.
+# `claude-accounts status` 도 같은 매핑을 ⚠️ 마커로 시각화.
+# 미정의면 silent (opt-in, 기본 회귀 0).
+#
+# export CLAUDE_ACCOUNT_EMAIL_personal="alice@gmail.com"
+# export CLAUDE_ACCOUNT_EMAIL_work="alice@corp.com"

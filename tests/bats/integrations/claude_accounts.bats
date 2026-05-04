@@ -593,3 +593,174 @@ _setup_sh_prereqs() {
         [ -x "$expanded" ]
     done
 }
+
+# ---------- Issue #300, item A: setup.sh auto-migrates legacy statusLine ----------
+#
+# Helpers below temporarily swap the gitignored claude/settings.json
+# (which lives in the shared DOTFILES_ROOT, not the per-test $HOME) for
+# a fixture, then restore it. Without the restore the next test inherits
+# our fixture and the regression test for #296 sees stale state.
+
+# Stage a fixture settings.json containing exactly the literal that
+# triggers item-A migration. Saves the original to $HOME first.
+_use_settings_fixture() {
+    _uss_src="${DOTFILES_ROOT}/claude/settings.json"
+    _uss_bk="$HOME/.settings-original.json"
+    [ -f "$_uss_src" ] && cp "$_uss_src" "$_uss_bk"
+    cat > "$_uss_src" <<JSON
+{
+  "statusLine": {
+    "type": "command",
+    "command": "$1"
+  }
+}
+JSON
+}
+
+_restore_settings_fixture() {
+    _rsf_src="${DOTFILES_ROOT}/claude/settings.json"
+    _rsf_bk="$HOME/.settings-original.json"
+    # Wipe migration backup files our test runs may have produced.
+    rm -f "${_rsf_src}".pre-statusline-fix-*
+    if [ -f "$_rsf_bk" ]; then
+        mv "$_rsf_bk" "$_rsf_src"
+    else
+        rm -f "$_rsf_src"
+    fi
+}
+
+@test "issue #300-A: setup.sh rewrites legacy statusLine.command literal" {
+    _setup_sh_prereqs
+    _use_settings_fixture '${HOME}/.claude/statusline-command.sh'
+    ln -s "${DOTFILES_ROOT}" "$HOME/dotfiles"
+
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+    assert_output --partial "자동 마이그레이션 완료"
+
+    cmd=$(jq -r '.statusLine.command' "${DOTFILES_ROOT}/claude/settings.json")
+    [ "$cmd" = '${HOME}/dotfiles/claude/statusline-command.sh' ]
+    # Backup file present alongside the source.
+    ls "${DOTFILES_ROOT}/claude/" | grep -qE 'settings\.json\.pre-statusline-fix-[0-9]{14}'
+
+    _restore_settings_fixture
+}
+
+@test "issue #300-A: setup.sh leaves already-migrated statusLine.command alone" {
+    _setup_sh_prereqs
+    _use_settings_fixture '${HOME}/dotfiles/claude/statusline-command.sh'
+    ln -s "${DOTFILES_ROOT}" "$HOME/dotfiles"
+
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+    refute_output --partial "자동 마이그레이션 완료"
+
+    # No backup spawned for a no-op run.
+    ls "${DOTFILES_ROOT}/claude/" | grep -qE 'settings\.json\.pre-statusline-fix-' && {
+        _restore_settings_fixture
+        return 1
+    }
+
+    _restore_settings_fixture
+}
+
+@test "issue #300-A: setup.sh preserves user-customised statusLine.command" {
+    _setup_sh_prereqs
+    _use_settings_fixture "$HOME/bin/my-custom-statusline.sh"
+    ln -s "${DOTFILES_ROOT}" "$HOME/dotfiles"
+
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+    refute_output --partial "자동 마이그레이션 완료"
+
+    cmd=$(jq -r '.statusLine.command' "${DOTFILES_ROOT}/claude/settings.json")
+    [ "$cmd" = "$HOME/bin/my-custom-statusline.sh" ]
+
+    _restore_settings_fixture
+}
+
+# ---------- Issue #300, item C: claude_accounts_status shows oauth binding ----------
+
+@test "issue #300-C: claude_accounts_status prints email/org from .claude.json" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "$HOME/.claude-personal"
+    echo "creds" > "$HOME/.claude-personal/.credentials.json"
+    cat > "$HOME/.claude-personal/.claude.json" <<'JSON'
+{
+  "oauthAccount": {
+    "emailAddress": "alice@example.com",
+    "organizationName": "Example Inc",
+    "organizationType": "claude_team"
+  }
+}
+JSON
+
+    run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init >/dev/null && CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
+    assert_success
+    assert_output --partial "Email: alice@example.com"
+    assert_output --partial "Org:   Example Inc (claude_team)"
+}
+
+@test "issue #300-C: claude_accounts_status omits oauth lines when .claude.json missing" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "$HOME/.claude-personal"
+    echo "creds" > "$HOME/.claude-personal/.credentials.json"
+    # No .claude.json — first run / fresh login.
+
+    run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init >/dev/null && CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
+    assert_success
+    refute_output --partial "Email:"
+    refute_output --partial "Org:"
+}
+
+@test "issue #300-C: claude_accounts_status flags expected/actual mismatch with marker" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "$HOME/.claude-work"
+    echo "creds" > "$HOME/.claude-work/.credentials.json"
+    cat > "$HOME/.claude-work/.claude.json" <<'JSON'
+{"oauthAccount":{"emailAddress":"personal@gmail.com","organizationName":"Personal"}}
+JSON
+
+    run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_ENABLED_ACCOUNTS=work CLAUDE_DEFAULT_ACCOUNT=work claude_accounts_init >/dev/null && CLAUDE_ENABLED_ACCOUNTS=work CLAUDE_DEFAULT_ACCOUNT=work CLAUDE_ACCOUNT_EMAIL_work=work@corp.com claude_accounts_status'
+    assert_success
+    assert_output --partial "Email: personal@gmail.com"
+    assert_output --partial "expected work@corp.com"
+}
+
+# ---------- Issue #300, item B: claude_yolo expected ↔ actual email check ----------
+
+@test "issue #300-B: claude_yolo silent when CLAUDE_ACCOUNT_EMAIL matches actual" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-personal"
+    printf '{"oauthAccount":{"emailAddress":"alice@example.com"}}' \
+        > "$HOME/.claude-personal/.claude.json"
+
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 CLAUDE_ACCOUNT_EMAIL_personal=alice@example.com claude_yolo"
+    assert_success
+    refute_output --partial "Account mismatch"
+}
+
+@test "issue #300-B: claude_yolo warns on CLAUDE_ACCOUNT_EMAIL mismatch" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-work"
+    printf '{"oauthAccount":{"emailAddress":"personal@gmail.com"}}' \
+        > "$HOME/.claude-work/.claude.json"
+
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 CLAUDE_ACCOUNT_EMAIL_work=work@corp.com claude_yolo --user work"
+    assert_success
+    assert_output --partial "Account mismatch on 'work'"
+    assert_output --partial "expected: work@corp.com"
+    assert_output --partial "actual:   personal@gmail.com"
+    assert_output --partial "복구:"
+}
+
+@test "issue #300-B: claude_yolo silent when no CLAUDE_ACCOUNT_EMAIL mapping defined" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-work"
+    printf '{"oauthAccount":{"emailAddress":"anyone@anywhere.com"}}' \
+        > "$HOME/.claude-work/.claude.json"
+
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --user work"
+    assert_success
+    refute_output --partial "Account mismatch"
+}
