@@ -458,3 +458,56 @@ _claude_resolve_account() {
         *)        return 1 ;;
     esac
 }
+
+# _claude_ensure_symlink — 멱등 symlink 생성.
+# - 없음 → 생성
+# - 같은 target 의 symlink → skip (출력 "already")
+# - 다른 file/dir → timestamped backup 후 재생성
+_claude_ensure_symlink() {
+    _ces_src="$1"
+    _ces_tgt="$2"
+
+    if [ -L "$_ces_tgt" ]; then
+        _ces_current=$(readlink "$_ces_tgt")
+        if [ "$_ces_current" = "$_ces_src" ]; then
+            ux_info "  ✓ already linked: $_ces_tgt"
+            return 0
+        fi
+        ux_warning "  symlink target mismatch — recreating: $_ces_tgt"
+        rm "$_ces_tgt"
+    elif [ -e "$_ces_tgt" ]; then
+        _ces_backup="${_ces_tgt}.backup-$(date +%Y%m%d%H%M%S)"
+        ux_warning "  backing up existing file: $_ces_tgt → $_ces_backup"
+        mv "$_ces_tgt" "$_ces_backup"
+    fi
+
+    ln -s "$_ces_src" "$_ces_tgt"
+    ux_success "  created symlink: $_ces_tgt → $_ces_src"
+}
+
+# _claude_ensure_bind_mount — 멱등 bind mount.
+# - 이미 마운트됨 → skip
+# - 안 됨 → sudo mount --bind (sudoers 등록 전제)
+_claude_ensure_bind_mount() {
+    _cebm_src="$1"
+    _cebm_tgt="$2"
+
+    [ -d "$_cebm_src" ] || {
+        ux_warning "  bind mount source missing: $_cebm_src"
+        return 1
+    }
+
+    mkdir -p "$_cebm_tgt"
+
+    if _is_mounted "$_cebm_tgt"; then
+        ux_info "  ✓ already mounted: $_cebm_tgt"
+        return 0
+    fi
+
+    if sudo mount --bind "$_cebm_src" "$_cebm_tgt" 2>/dev/null; then
+        ux_success "  bind mount: $_cebm_tgt ← $_cebm_src"
+    else
+        ux_error "  bind mount failed: $_cebm_tgt (check sudoers)"
+        return 1
+    fi
+}

@@ -95,3 +95,32 @@ LOCAL
     assert_success
     assert_output "personal work "
 }
+
+# ---------- Task 4: ensure helpers (idempotency) ----------
+
+@test "bash: _claude_ensure_symlink creates new symlink" {
+    mkdir -p "$HOME/src" "$HOME/tgt-dir"
+    touch "$HOME/src/file.txt"
+    run_in_bash "_claude_ensure_symlink '$HOME/src/file.txt' '$HOME/tgt-dir/link'"
+    assert_success
+    [ -L "$HOME/tgt-dir/link" ]
+}
+
+@test "bash: _claude_ensure_symlink is idempotent (already correct)" {
+    mkdir -p "$HOME/src" "$HOME/tgt-dir"
+    touch "$HOME/src/file.txt"
+    ln -s "$HOME/src/file.txt" "$HOME/tgt-dir/link"
+    run_in_bash "_claude_ensure_symlink '$HOME/src/file.txt' '$HOME/tgt-dir/link'"
+    assert_success
+    assert_output --partial "already"
+}
+
+@test "bash: _claude_ensure_symlink backs up regular file collision" {
+    mkdir -p "$HOME/src" "$HOME/tgt-dir"
+    touch "$HOME/src/file.txt"
+    echo "old" > "$HOME/tgt-dir/link"
+    run_in_bash "_claude_ensure_symlink '$HOME/src/file.txt' '$HOME/tgt-dir/link'"
+    assert_success
+    [ -L "$HOME/tgt-dir/link" ]
+    ls "$HOME/tgt-dir/" | grep -q "link.*backup\|link.*original"
+}
