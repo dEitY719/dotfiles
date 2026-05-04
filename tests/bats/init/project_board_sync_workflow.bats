@@ -108,5 +108,8 @@ WORKFLOW="${DOTFILES_ROOT}/.github/workflows/project-board-sync.yml"
     # exist), inequality means fork PR (soft-skip is correct).
     grep -q 'PR_HEAD_REPO:' "$WORKFLOW"
     grep -q 'github.event.pull_request.head.repo.full_name' "$WORKFLOW"
-    grep -q '"${PR_HEAD_REPO:-}" != "$GH_REPO"' "$WORKFLOW"
+    # Pin the intent (PR_HEAD_REPO is compared inequality-wise to GH_REPO),
+    # not the quoting or brace style. Tolerates rewrites like
+    # ${PR_HEAD_REPO}, $PR_HEAD_REPO, "${PR_HEAD_REPO:-}", etc.
+    grep -Eq 'PR_HEAD_REPO[^!]*!=[[:space:]]*"?\$\{?GH_REPO' "$WORKFLOW"
 }
