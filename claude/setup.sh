@@ -75,6 +75,65 @@ log_error_and_exit() {
 
 # --- Functions ---
 
+# Auto-migrate legacy statusLine.command (issue #300, item A).
+#
+# PR #297 updated settings.template.json to point at the dotfiles SSOT path
+# (${HOME}/dotfiles/claude/statusline-command.sh) but left the gitignored
+# claude/settings.json copy untouched. Users on the multi-account layout
+# whose live settings.json still hardcodes the legacy ${HOME}/.claude/...
+# path silently lose the statusline because that file no longer exists
+# under the empty guard directory.
+#
+# This helper detects that exact legacy literal and rewrites it in place
+# (preserving any other field), with a timestamped backup. Any other
+# value — user customisation, already-migrated, missing field — is left
+# alone so the helper is fully idempotent.
+_migrate_legacy_statusline_command() {
+    local source_file="$CLAUDE_SETTINGS_SOURCE"
+    # Literal ${HOME}; Claude Code expands it when reading settings.json.
+    # shellcheck disable=SC2016
+    local legacy_literal='${HOME}/.claude/statusline-command.sh'
+    # shellcheck disable=SC2016
+    local new_literal='${HOME}/dotfiles/claude/statusline-command.sh'
+
+    [ -f "$source_file" ] || return 0
+    if ! command -v jq >/dev/null 2>&1; then
+        log_warning "jq 미설치 — settings.json statusLine 자동 마이그레이션 건너뜀"
+        log_warning "  ensure_jq 실행 후 setup.sh 재실행 권장"
+        return 0
+    fi
+
+    local current
+    current=$(jq -r '.statusLine.command // ""' "$source_file" 2>/dev/null)
+    [ "$current" = "$legacy_literal" ] || return 0
+
+    local backup
+    backup="${source_file}.pre-statusline-fix-$(date +%Y%m%d%H%M%S)"
+    if ! cp "$source_file" "$backup"; then
+        log_error "settings.json 백업 실패: $backup — 마이그레이션 중단"
+        return 1
+    fi
+
+    local tmp
+    tmp=$(mktemp "${source_file}.XXXXXX") || {
+        log_error "임시 파일 생성 실패 — 마이그레이션 중단"
+        rm -f "$backup"
+        return 1
+    }
+
+    if jq --arg new "$new_literal" '.statusLine.command = $new' \
+            "$source_file" > "$tmp" && mv "$tmp" "$source_file"; then
+        log_warning "settings.json statusLine.command 자동 마이그레이션 완료:"
+        log_warning "  before: $legacy_literal"
+        log_warning "  after:  $new_literal"
+        log_warning "  backup: $backup"
+    else
+        rm -f "$tmp"
+        log_error "settings.json 갱신 실패 — 백업 보존: $backup"
+        return 1
+    fi
+}
+
 _setup_bind_mount_sudoers() {
     local sudoers_file="$1"
     local description="$2"
@@ -121,6 +180,11 @@ log_debug "\n--- Claude Code dotfiles setup 시작 ---"
 [ -d "$CLAUDE_SKILLS_SOURCE" ]        || log_error_and_exit "skills 디렉토리 없음: $CLAUDE_SKILLS_SOURCE"
 [ -d "$CLAUDE_DOCS_SOURCE" ]          || log_error_and_exit "docs 디렉토리 없음: $CLAUDE_DOCS_SOURCE"
 [ -d "$CLAUDE_GLOBAL_MEMORY_SOURCE" ] || log_error_and_exit "global-memory 없음: $CLAUDE_GLOBAL_MEMORY_SOURCE"
+
+# Auto-migrate legacy statusLine.command in claude/settings.json before any
+# downstream symlink uses it (issue #300, item A). Idempotent — only acts
+# on the exact PR #292 legacy literal, otherwise no-op.
+_migrate_legacy_statusline_command
 
 # 다중 계정 함수 source (env + integration)
 . "$DOTFILES_ROOT/shell-common/env/claude.sh"
