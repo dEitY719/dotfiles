@@ -104,7 +104,9 @@ _migrate_legacy_statusline_command() {
     fi
 
     local current
-    current=$(jq -r '.statusLine.command // ""' "$source_file" 2>/dev/null)
+    # Null-safe (?) so a settings.json that omits .statusLine entirely or
+    # has a non-object value there still falls through cleanly.
+    current=$(jq -r '.statusLine?.command? // empty' "$source_file" 2>/dev/null)
     [ "$current" = "$legacy_literal" ] || return 0
 
     local backup
