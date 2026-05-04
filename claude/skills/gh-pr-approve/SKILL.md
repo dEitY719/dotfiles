@@ -40,12 +40,16 @@ Fetch in parallel before reading the diff:
   branch; if neither exists, stop and ask.
 - `ME=$(gh api user -q .login)`.
 - PR JSON: `number,title,author,state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,files`
+- `REBASEABLE=$(gh api repos/$OWNER/$REPO/pulls/<N> --jq .rebaseable)` —
+  the `rebaseable` field is REST-only; `gh pr view --json rebaseable`
+  fails with `Unknown JSON field` because GraphQL has no such field.
 - Prior reviews/comments on this PR by `ME`.
 - `gh pr checks <N> --repo $TARGET_REPO`.
 
 Stop on `state != OPEN`, draft, or required-check failure. Warn (but
-do not stop) on `mergeable: CONFLICTING` — prepend a visible conflict
-warning block to the review body and include it in the Step 5 report.
+do not stop) on `mergeable: CONFLICTING` or `rebaseable: false` —
+prepend a visible conflict warning block to the review body and include
+it in the Step 5 report.
 If `author.login == ME`, follow `references/self-pr-handling.md`.
 If prior `ME` comments/reviews exist, use re-review mode: every prior
 concern must be verified as fixed, tracked, or acceptably declined.
@@ -84,7 +88,8 @@ Match the PR's dominant language.
 Re-fetch `reviewDecision` + `mergeStateStatus`; for `--admin-merge`, also
 re-fetch `state` and `mergeCommit`. Report status, blocker/follow-up
 counts, issue links, merge state, and PR URL. If the PR had
-`mergeable: CONFLICTING`, include the conflict warning in the report.
+`mergeable: CONFLICTING` or `rebaseable: false`, include the conflict
+warning in the report.
 For `--self-record`, confirm `reviewDecision` did not become `APPROVED`.
 
 ## Constraints
