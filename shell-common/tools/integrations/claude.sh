@@ -547,7 +547,7 @@ _claude_validate_login() {
     [ -f "$_cvl_json" ] || return 0
     command -v jq >/dev/null 2>&1 || return 0
 
-    _cvl_actual=$(jq -r '.oauthAccount.emailAddress // empty' "$_cvl_json" 2>/dev/null)
+    _cvl_actual=$(jq -r '.oauthAccount?.emailAddress? // empty' "$_cvl_json" 2>/dev/null)
     [ -n "$_cvl_actual" ] || return 0
     [ "$_cvl_expected" = "$_cvl_actual" ] && return 0
 
@@ -709,11 +709,16 @@ _claude_status_show_oauth() {
     [ -f "$_csso_json" ] || return 0
     command -v jq >/dev/null 2>&1 || return 0
 
-    _csso_email=$(jq -r '.oauthAccount.emailAddress // empty' "$_csso_json" 2>/dev/null)
+    # Single jq invocation (was 3 separate forks — claude_accounts_status
+    # iterates per account so the saving compounds). `|` delimiter chosen
+    # because the gemini-suggested space form breaks on real-world
+    # organizationName values that contain spaces (observed: "★ S.LSI AX
+    # Agent ★"). POSIX heredoc — no bash process substitution.
+    _csso_blob=$(jq -r '"\(.oauthAccount?.emailAddress? // "")|\(.oauthAccount?.organizationName? // "")|\(.oauthAccount?.organizationType? // "")"' "$_csso_json" 2>/dev/null)
+    IFS='|' read -r _csso_email _csso_org _csso_type <<EOF
+$_csso_blob
+EOF
     [ -n "$_csso_email" ] || return 0
-
-    _csso_org=$(jq -r '.oauthAccount.organizationName // empty' "$_csso_json" 2>/dev/null)
-    _csso_type=$(jq -r '.oauthAccount.organizationType // empty' "$_csso_json" 2>/dev/null)
 
     _csso_marker=""
     _csso_expected=$(_claude_expected_email "$_csso_acct")
