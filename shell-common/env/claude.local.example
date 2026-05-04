@@ -1,0 +1,22 @@
+#!/bin/sh
+# claude.local.sh (template) — PC별 Claude Code 다중 계정 오버라이드
+#
+# 사용 방법:
+#   1. 이 파일을 claude.local.sh 로 복사
+#      cp claude.local.example claude.local.sh
+#   2. PC 환경에 맞게 아래 값을 수정 (필요 시)
+#   3. claude.local.sh 는 자동으로 로드됨 (.gitignore 에 의해 제외됨)
+#
+# 기본값 (claude.sh):
+#   CLAUDE_DEFAULT_ACCOUNT=personal
+#   CLAUDE_ENABLED_ACCOUNTS="personal work"
+
+# ─── External-PC, Home-PC ───────────────────────────────────────
+# 두 계정 모두 사용 → 기본값 그대로. 이 파일 작성 불필요.
+
+# ─── Internal-PC (사내 PC, work 계정만) ─────────────────────────
+# 아래 두 줄의 주석을 해제하면 work 계정만 활성화되고
+# `claude-yolo` 가 work 로 실행됨.
+#
+# export CLAUDE_DEFAULT_ACCOUNT="work"
+# export CLAUDE_ENABLED_ACCOUNTS="work"
