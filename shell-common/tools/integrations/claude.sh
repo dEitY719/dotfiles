@@ -513,3 +513,55 @@ _claude_ensure_bind_mount() {
         return 1
     fi
 }
+
+# _claude_account_setup_one — 단일 계정의 link/mount 멱등 셋업.
+_claude_account_setup_one() {
+    _caso_acct="$1"
+    _caso_cdir="$2"
+    ux_section "Account: $_caso_acct ($_caso_cdir)"
+
+    mkdir -p "$_caso_cdir"
+    mkdir -p "$_caso_cdir/projects/GLOBAL"
+
+    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/settings.json"          "$_caso_cdir/settings.json"
+    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/statusline-command.sh"  "$_caso_cdir/statusline-command.sh"
+    _claude_ensure_symlink "$HOME/.claude-shared/plugins"                   "$_caso_cdir/plugins"
+    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/global-memory"          "$_caso_cdir/projects/GLOBAL/memory"
+
+    if [ "${CLAUDE_SKIP_BIND_MOUNT:-0}" = "1" ]; then
+        ux_info "  (CLAUDE_SKIP_BIND_MOUNT=1 → skipping bind mounts)"
+    else
+        _claude_ensure_bind_mount "${DOTFILES_ROOT}/claude/skills"  "$_caso_cdir/skills"
+        _claude_ensure_bind_mount "${DOTFILES_ROOT}/claude/docs"    "$_caso_cdir/docs"
+    fi
+}
+
+# claude_accounts_init — 멱등 setup, 3대 PC 공통 진입점.
+claude_accounts_init() {
+    ux_header "Claude Accounts Setup"
+
+    # 마이그레이션 미수행 가드: ~/.claude/ 에 빈 디렉토리 외 데이터 있으면 거부
+    if [ -d "$HOME/.claude" ] \
+       && [ ! -d "$HOME/.claude-personal" ] \
+       && [ ! -d "$HOME/.claude-work" ] \
+       && [ -n "$(ls -A "$HOME/.claude" 2>/dev/null)" ]; then
+        ux_warning "$HOME/.claude/ 에 기존 데이터가 있습니다."
+        ux_info    "먼저 마이그레이션을 실행하세요: claude-accounts migrate"
+        return 1
+    fi
+
+    mkdir -p "$HOME/.claude-shared/plugins"
+    mkdir -p "$HOME/.claude"
+
+    # zsh word-splitting parity (same reason as _claude_resolve_account)
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        emulate -L sh
+    fi
+
+    for _cai_acct in $(_claude_resolve_account --list); do
+        _cai_cdir=$(_claude_resolve_account "$_cai_acct")
+        _claude_account_setup_one "$_cai_acct" "$_cai_cdir"
+    done
+
+    ux_success "All accounts ready"
+}
