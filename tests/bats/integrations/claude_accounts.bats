@@ -258,6 +258,132 @@ LOCAL
     [ ! -d "$HOME/.claude-personal" ]
 }
 
+# ---------- Issue #294: .claude.json preservation + recovery ----------
+
+@test "bash: claude_accounts_migrate preserves .claude.json content (issue #294)" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "$HOME/.claude/projects"
+    # Realistic .claude.json with the fields users care about preserving.
+    cat > "$HOME/.claude/.claude.json" <<'JSON'
+{
+  "firstStartTime": "2026-01-01T00:00:00Z",
+  "oauthAccount": {"emailAddress": "test@example.com"},
+  "opusProMigrationComplete": true,
+  "sonnet1m45MigrationComplete": true,
+  "migrationVersion": 5
+}
+JSON
+    pre_size=$(wc -c < "$HOME/.claude/.claude.json")
+
+    run_in_bash 'export CLAUDE_SKIP_BIND_MOUNT=1; printf "y\n" | claude_accounts_migrate'
+    assert_success
+
+    [ -f "$HOME/.claude-personal/.claude.json" ]
+    post_size=$(wc -c < "$HOME/.claude-personal/.claude.json")
+    [ "$pre_size" = "$post_size" ]
+    grep -q "oauthAccount" "$HOME/.claude-personal/.claude.json"
+    grep -q "migrationVersion" "$HOME/.claude-personal/.claude.json"
+}
+
+@test "bash: claude_accounts_migrate logs pre/post .claude.json size (issue #294)" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "$HOME/.claude/projects"
+    printf '{"firstStartTime":"x","oauthAccount":{"e":"a@b"},"migrationVersion":5}' \
+        > "$HOME/.claude/.claude.json"
+
+    run_in_bash 'export CLAUDE_SKIP_BIND_MOUNT=1; printf "y\n" | claude_accounts_migrate'
+    assert_success
+    assert_output --partial "Pre-migrate"
+    assert_output --partial "Post-migrate"
+}
+
+@test "bash: claude_accounts_migrate creates sealed snapshot for recovery (issue #294)" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "$HOME/.claude/projects"
+    printf '{"firstStartTime":"x","oauthAccount":{"e":"a@b"},"migrationVersion":5}' \
+        > "$HOME/.claude/.claude.json"
+
+    run_in_bash 'export CLAUDE_SKIP_BIND_MOUNT=1; printf "y\n" | claude_accounts_migrate'
+    assert_success
+
+    [ -f "$HOME/.claude-personal/.claude.json.preserved-by-migrate" ]
+    grep -q "oauthAccount" "$HOME/.claude-personal/.claude.json.preserved-by-migrate"
+}
+
+@test "bash: claude_accounts_migrate warns when pre-mv .claude.json is tiny (issue #294)" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "$HOME/.claude/projects"
+    # Already in first-start placeholder state before migrate runs.
+    printf '{"firstStartTime":"x"}' > "$HOME/.claude/.claude.json"
+
+    run_in_bash 'export CLAUDE_SKIP_BIND_MOUNT=1; printf "y\n" | claude_accounts_migrate'
+    assert_success
+    assert_output --partial "suspiciously small"
+}
+
+@test "bash: claude_yolo restores reset .claude.json from snapshot (issue #294)" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-personal"
+    # Snapshot has the real content.
+    printf '{"firstStartTime":"x","oauthAccount":{"e":"a@b"},"migrationVersion":5}' \
+        > "$HOME/.claude-personal/.claude.json.preserved-by-migrate"
+    # Live file has been reset to first-start placeholder (50B-ish).
+    printf '{"firstStartTime":"y"}' > "$HOME/.claude-personal/.claude.json"
+
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    assert_success
+    assert_output --partial "Restored"
+    grep -q "oauthAccount" "$HOME/.claude-personal/.claude.json"
+    grep -q "migrationVersion" "$HOME/.claude-personal/.claude.json"
+}
+
+@test "bash: claude_yolo does NOT restore healthy .claude.json (issue #294)" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-personal"
+    # Live file is healthy: > 500B AND has oauth marker.
+    {
+        printf '{"firstStartTime":"x","oauthAccount":{"e":"live@b"},"pad":"'
+        # 600 chars of padding to push size > 500B
+        printf 'x%.0s' $(seq 1 600)
+        printf '"}'
+    } > "$HOME/.claude-personal/.claude.json"
+    # Snapshot exists with DIFFERENT content; must not be used.
+    printf '{"firstStartTime":"y","oauthAccount":{"e":"snapshot@b"},"migrationVersion":5}' \
+        > "$HOME/.claude-personal/.claude.json.preserved-by-migrate"
+
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    assert_success
+    refute_output --partial "Restored"
+    grep -q "live@b" "$HOME/.claude-personal/.claude.json"
+}
+
+@test "bash: claude_yolo does NOT restore when no snapshot (fresh setup, issue #294)" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-personal"
+    # First-start placeholder, but no migrate snapshot — fresh PC.
+    printf '{"firstStartTime":"x"}' > "$HOME/.claude-personal/.claude.json"
+
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    assert_success
+    refute_output --partial "Restored"
+    # Live file untouched.
+    grep -q "firstStartTime" "$HOME/.claude-personal/.claude.json"
+}
+
+@test "bash: claude_yolo does NOT restore when small file has oauth (issue #294)" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-personal"
+    # Small (< 500B) BUT contains oauthAccount → not the reset state.
+    printf '{"oauthAccount":{"e":"a@b"}}' > "$HOME/.claude-personal/.claude.json"
+    printf '{"oauthAccount":{"e":"OLD@b"},"migrationVersion":1}' \
+        > "$HOME/.claude-personal/.claude.json.preserved-by-migrate"
+
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    assert_success
+    refute_output --partial "Restored"
+    grep -q '"a@b"' "$HOME/.claude-personal/.claude.json"
+}
+
 # ---------- Task 8: claude_accounts CLI ----------
 #
 # Aliases need `shopt -s expand_aliases` AND a separate parsing unit

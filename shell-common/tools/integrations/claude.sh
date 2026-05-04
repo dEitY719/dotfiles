@@ -468,7 +468,53 @@ claude_yolo() {
         esac
     fi
 
+    # Pre-launch .claude.json integrity guard (issue #294).
+    # See _claude_restore_if_reset for the heuristic and rationale.
+    _claude_restore_if_reset "$_cy_config_dir"
+
     CLAUDE_CONFIG_DIR="$_cy_config_dir" command claude --dangerously-skip-permissions "$@"
+}
+
+# _claude_restore_if_reset — auto-restore .claude.json from sealed snapshot
+# when it has been reset to the "first-start placeholder" state (issue #294).
+#
+# Trigger requires ALL of:
+#   1. live .claude.json exists and is < 500 bytes (healthy file is 10-100 KB)
+#   2. live file contains `firstStartTime` but neither `oauthAccount` nor
+#      `migrationVersion` (positive evidence of reset state, not a partial
+#      write or unrelated tiny file)
+#   3. .claude.json.preserved-by-migrate snapshot exists in same dir
+#
+# Rationale: Claude CLI sometimes rewrites .claude.json to just
+# `{"firstStartTime":"..."}` on first run with a previously-unseen
+# CLAUDE_CONFIG_DIR, wiping the oauth + migration cache. Since the bug is
+# upstream, we can't prevent the rewrite — but we restore before the next
+# launch, so the user never sees the "configuration file not found" prompt.
+#
+# Bypass: delete the snapshot file (`rm <dir>/.claude.json.preserved-by-migrate`)
+# to opt out — useful if the user intentionally reset their config.
+_claude_restore_if_reset() {
+    _crir_dir="$1"
+    _crir_live="$_crir_dir/.claude.json"
+    _crir_snap="$_crir_dir/.claude.json.preserved-by-migrate"
+
+    [ -f "$_crir_live" ] || return 0
+    [ -f "$_crir_snap" ] || return 0
+
+    _crir_size=$(wc -c < "$_crir_live" 2>/dev/null | tr -d ' ')
+    [ -n "$_crir_size" ] || return 0
+    [ "$_crir_size" -lt 500 ] || return 0
+
+    grep -q 'firstStartTime' "$_crir_live" 2>/dev/null || return 0
+    grep -q 'oauthAccount\|migrationVersion' "$_crir_live" 2>/dev/null && return 0
+
+    ux_warning "Detected reset .claude.json (${_crir_size}B, no oauth/migration cache)"
+    ux_info    "  → restoring from sealed migrate snapshot: $_crir_snap"
+    if cp "$_crir_snap" "$_crir_live" 2>/dev/null; then
+        ux_success "  Restored $_crir_live ($(wc -c < "$_crir_live" | tr -d ' ') bytes)"
+    else
+        ux_error "  Restore failed — proceeding anyway (claude may prompt for re-login)"
+    fi
 }
 alias claude-yolo='claude_yolo'
 
@@ -697,6 +743,21 @@ claude_accounts_migrate() {
         return 0
     fi
 
+    # Diagnostic: capture .claude.json size BEFORE the mv (issue #294).
+    # If the file is already in the "first-start placeholder" state at this
+    # point, the regression is upstream of migrate (bad shutdown, prior
+    # corruption) — and the post-mv size check below will match.
+    _cam_pre_size=""
+    if [ -f "$HOME/.claude/.claude.json" ]; then
+        _cam_pre_size=$(wc -c < "$HOME/.claude/.claude.json" 2>/dev/null | tr -d ' ')
+        ux_info "Pre-migrate ~/.claude/.claude.json size: ${_cam_pre_size:-?} bytes"
+        if [ -n "$_cam_pre_size" ] && [ "$_cam_pre_size" -lt 500 ]; then
+            ux_warning "  .claude.json is suspiciously small (< 500B) — already in"
+            ux_warning "  first-start placeholder state. Migration will preserve it"
+            ux_warning "  as-is, but you may need to re-login on first use."
+        fi
+    fi
+
     ux_warning "Will move ~/.claude → ~/.claude-personal"
     ux_info    "Preserves: credentials, sessions, projects, history"
     printf "Continue? (y/N): "
@@ -727,6 +788,26 @@ claude_accounts_migrate() {
 
     # 3) 디렉토리 자체 이동
     mv "$HOME/.claude" "$HOME/.claude-personal"
+
+    # Diagnostic + safety net (issue #294): verify post-mv size matches and
+    # seal a snapshot so claude_yolo can recover if .claude.json is later
+    # reset (Claude CLI's first-run-with-new-CLAUDE_CONFIG_DIR can wipe it
+    # to a `firstStartTime`-only stub, which kills oauthAccount/migration
+    # cache and triggers a "configuration file not found" prompt).
+    if [ -f "$HOME/.claude-personal/.claude.json" ]; then
+        _cam_post_size=$(wc -c < "$HOME/.claude-personal/.claude.json" 2>/dev/null | tr -d ' ')
+        ux_info "Post-migrate ~/.claude-personal/.claude.json size: ${_cam_post_size:-?} bytes"
+        if [ -n "$_cam_pre_size" ] && [ -n "$_cam_post_size" ] \
+           && [ "$_cam_pre_size" != "$_cam_post_size" ]; then
+            ux_warning "  Size mismatch (pre=${_cam_pre_size}, post=${_cam_post_size}) —"
+            ux_warning "  another process modified .claude.json during migrate."
+        fi
+        _cam_snap="$HOME/.claude-personal/.claude.json.preserved-by-migrate"
+        if cp "$HOME/.claude-personal/.claude.json" "$_cam_snap" 2>/dev/null; then
+            ux_info "Sealed snapshot: $_cam_snap"
+            ux_info "  (claude-yolo auto-restores from this if .claude.json gets reset)"
+        fi
+    fi
 
     # 4) 빈 ~/.claude 재생성 + 모든 계정 init (멱등)
     claude_accounts_init
