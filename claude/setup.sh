@@ -126,26 +126,19 @@ log_debug "\n--- Claude Code dotfiles setup 시작 ---"
 . "$DOTFILES_ROOT/shell-common/env/claude.sh"
 . "$DOTFILES_ROOT/shell-common/tools/integrations/claude.sh"
 
-# 빈 ~/.claude/ 가드 디렉토리
-mkdir -p "$HOME/.claude"
-
-# ~/.claude-shared/plugins/ 보장
-mkdir -p "$HOME/.claude-shared/plugins"
-
-# 마이그레이션 미수행 가드 (실데이터 있으면 setup 중단, migrate 안내)
-if [ -d "$HOME/.claude" ] \
-   && [ ! -d "$HOME/.claude-personal" ] \
-   && [ ! -d "$HOME/.claude-work" ] \
-   && { [ -e "$HOME/.claude/.credentials.json" ] \
-        || [ -d "$HOME/.claude/projects" ] \
-        || [ -d "$HOME/.claude/sessions" ] \
-        || [ -e "$HOME/.claude/history.jsonl" ] \
-        || [ -d "$HOME/.claude/plugins" ]; }; then
+# 마이그레이션 미수행 가드는 mkdir 보다 먼저 — 그래야 stale ~/.claude 가
+# 가드 디렉토리 생성으로 가려지지 않는다. SSOT: _claude_has_unmigrated_data
+# (shell-common/tools/integrations/claude.sh)
+if _claude_has_unmigrated_data; then
     log_warning "$HOME/.claude/ 에 기존 사용자 데이터가 있습니다."
     log_warning "쉘 재시작 후 다음 명령으로 마이그레이션하세요:"
     log_warning "  claude-accounts migrate"
     exit 0
 fi
+
+# 빈 ~/.claude/ 가드 디렉토리 + ~/.claude-shared/plugins
+mkdir -p "$HOME/.claude"
+mkdir -p "$HOME/.claude-shared/plugins"
 
 # 활성화된 계정마다 sudoers 등록 + setup
 for acct in $(_claude_resolve_account --list); do

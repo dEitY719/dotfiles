@@ -638,21 +638,31 @@ claude_accounts_status() {
     done
 }
 
+# _claude_has_unmigrated_data — SSOT for "user has legacy ~/.claude data
+# that must be migrated before setup". Used by claude_accounts_init AND
+# claude/setup.sh — keeping the sentinel list in one place.
+# Returns 0 (true) if migration is needed, 1 (false) otherwise.
+# Tolerates empty bind-mount leftovers (skills/, docs/) — those are not
+# user data, just unmounted dirs from the legacy layout.
+_claude_has_unmigrated_data() {
+    [ -d "$HOME/.claude" ] || return 1
+    [ -d "$HOME/.claude-personal" ] && return 1
+    [ -d "$HOME/.claude-work" ] && return 1
+    [ -e "$HOME/.claude/.credentials.json" ] && return 0
+    [ -d "$HOME/.claude/projects" ] && return 0
+    [ -d "$HOME/.claude/sessions" ] && return 0
+    [ -e "$HOME/.claude/history.jsonl" ] && return 0
+    [ -d "$HOME/.claude/plugins" ] && return 0
+    return 1
+}
+
 # claude_accounts_init — 멱등 setup, 3대 PC 공통 진입점.
 claude_accounts_init() {
     ux_header "Claude Accounts Setup"
 
-    # 마이그레이션 미수행 가드: 진짜 사용자 데이터(credentials, sessions,
-    # projects, history)가 있을 때만 거부. 빈 skills/docs 디렉토리(기존
-    # bind mount target 잔재)는 false positive 회피를 위해 무시.
-    if [ -d "$HOME/.claude" ] \
-       && [ ! -d "$HOME/.claude-personal" ] \
-       && [ ! -d "$HOME/.claude-work" ] \
-       && { [ -e "$HOME/.claude/.credentials.json" ] \
-            || [ -d "$HOME/.claude/projects" ] \
-            || [ -d "$HOME/.claude/sessions" ] \
-            || [ -e "$HOME/.claude/history.jsonl" ] \
-            || [ -d "$HOME/.claude/plugins" ]; }; then
+    # Unmigrated guard runs BEFORE any mkdir, so a stale ~/.claude/ from
+    # another tool can't be silently obscured by guard-dir creation.
+    if _claude_has_unmigrated_data; then
         ux_warning "$HOME/.claude/ 에 기존 사용자 데이터가 있습니다."
         ux_info    "먼저 마이그레이션을 실행하세요: claude-accounts migrate"
         return 1
