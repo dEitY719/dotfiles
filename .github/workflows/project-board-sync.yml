@@ -42,6 +42,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Guard — require PROJECT_BOARD_PAT on canonical PRs
+        # Fail loudly when the secret is missing on a same-repo PR. Without
+        # this guard the workflow silently no-ops and the GitHub builtin
+        # "Pull request linked to issue" (#3) keeps stranding Issue cards
+        # at "In review". For fork PRs GitHub never injects repo secrets,
+        # so we soft-skip those — that is expected and not a regression.
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_BOARD_PAT }}
+          GH_REPO: ${{ github.repository }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${GH_TOKEN:-}" ]; then
+            exit 0
+          fi
+          if [ "${PR_HEAD_REPO:-}" != "$GH_REPO" ]; then
+            echo "::warning::PROJECT_BOARD_PAT not available for fork PR ($PR_HEAD_REPO); skipping project-board sync."
+            exit 0
+          fi
+          echo "::error::PROJECT_BOARD_PAT secret is missing on $GH_REPO. Project board cards will not sync. Set it via: gh secret set PROJECT_BOARD_PAT --repo $GH_REPO --body '<PAT-with-project-scope>'"
+          exit 1
+
       - name: PR opened → In review (PR) + In progress (linked Issues)
         if: >-
           github.event_name == 'pull_request' &&
@@ -53,10 +76,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::warning::PROJECT_BOARD_PAT secret is not set; skipping project-board sync."
-            exit 0
-          fi
+          # Guard step already validated PROJECT_BOARD_PAT presence (or
+          # soft-skipped for fork PRs). If we're here without a token it
+          # means the fork-soft-skip path; nothing more to do.
+          [ -n "${GH_TOKEN:-}" ] || exit 0
           # shellcheck source=shell-common/functions/gh_project_status.sh
           . shell-common/functions/gh_project_status.sh
           _gh_project_status_sync pr "$PR_NUMBER" "In review"
@@ -79,10 +102,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::warning::PROJECT_BOARD_PAT secret is not set; skipping project-board sync."
-            exit 0
-          fi
+          [ -n "${GH_TOKEN:-}" ] || exit 0
           # shellcheck source=shell-common/functions/gh_project_status.sh
           . shell-common/functions/gh_project_status.sh
           _gh_project_status_sync pr "$PR_NUMBER" "Approved" \
@@ -100,10 +120,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::warning::PROJECT_BOARD_PAT secret is not set; skipping project-board sync."
-            exit 0
-          fi
+          [ -n "${GH_TOKEN:-}" ] || exit 0
           # shellcheck source=shell-common/functions/gh_project_status.sh
           . shell-common/functions/gh_project_status.sh
           _gh_project_status_sync pr "$PR_NUMBER" "Done"

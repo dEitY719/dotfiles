@@ -85,8 +85,28 @@ WORKFLOW="${DOTFILES_ROOT}/.github/workflows/project-board-sync.yml"
     grep -q -- '--only-from "Backlog,In progress,In review"' "$WORKFLOW"
 }
 
-@test "skips silently when PROJECT_BOARD_PAT is missing" {
-    # Soft-fail: fork PRs and freshly forked clones have no access to
-    # repo secrets. The workflow must warn and exit 0, not error.
-    grep -q 'PROJECT_BOARD_PAT secret is not set' "$WORKFLOW"
+@test "fork PRs without the PAT soft-skip with a warning" {
+    # GitHub does not pass repo secrets to fork PR runs. The guard step
+    # must warn-and-exit-0 in that case so external contributors do not
+    # get red CI for a sync they cannot perform.
+    grep -q '::warning::PROJECT_BOARD_PAT not available for fork PR' "$WORKFLOW"
+}
+
+@test "canonical PRs without the PAT fail loudly with an actionable error" {
+    # Regression guard for #289 / #300: prior revision warned-and-exit-0
+    # on the canonical repo too, so the workflow silently no-op'd from
+    # PR #290 merge until detection. Now the missing-secret case must
+    # error-and-exit-1 on the canonical repo so a misconfigured setup
+    # cannot ride along undetected.
+    grep -q '::error::PROJECT_BOARD_PAT secret is missing' "$WORKFLOW"
+    grep -q 'gh secret set PROJECT_BOARD_PAT' "$WORKFLOW"
+}
+
+@test "guard step runs first and discriminates fork vs canonical via PR_HEAD_REPO" {
+    # The guard step must compare github.event.pull_request.head.repo.full_name
+    # against github.repository — equality means same-repo PR (PAT must
+    # exist), inequality means fork PR (soft-skip is correct).
+    grep -q 'PR_HEAD_REPO:' "$WORKFLOW"
+    grep -q 'github.event.pull_request.head.repo.full_name' "$WORKFLOW"
+    grep -q '"${PR_HEAD_REPO:-}" != "$GH_REPO"' "$WORKFLOW"
 }
