@@ -89,3 +89,9 @@ LOCAL
     assert_success
     assert_output "work "
 }
+
+@test "zsh: resolve --list works under zsh (POSIX parity smoke test)" {
+    run_in_zsh '_claude_resolve_account --list | tr "\n" " "'
+    assert_success
+    assert_output "personal work "
+}
