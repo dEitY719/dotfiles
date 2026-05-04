@@ -51,3 +51,41 @@ LOCAL
     assert_success
     assert_output "work|work"
 }
+
+# ---------- Task 3: _claude_resolve_account ----------
+
+@test "bash: resolve personal returns ~/.claude-personal" {
+    run_in_bash '_claude_resolve_account personal'
+    assert_success
+    assert_output "$HOME/.claude-personal"
+}
+
+@test "bash: resolve work returns ~/.claude-work" {
+    run_in_bash '_claude_resolve_account work'
+    assert_success
+    assert_output "$HOME/.claude-work"
+}
+
+@test "bash: resolve unknown account returns non-zero" {
+    run_in_bash '_claude_resolve_account xyz'
+    assert_failure
+    refute_output --partial "/"
+}
+
+@test "bash: resolve --list-all returns 'personal work'" {
+    run_in_bash '_claude_resolve_account --list-all'
+    assert_success
+    assert_output "personal work"
+}
+
+@test "bash: resolve --list returns ENABLED accounts only (default)" {
+    run_in_bash '_claude_resolve_account --list | tr "\n" " "'
+    assert_success
+    assert_output "personal work "
+}
+
+@test "bash: resolve --list filters by CLAUDE_ENABLED_ACCOUNTS=work" {
+    run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="work" _claude_resolve_account --list | tr "\n" " "'
+    assert_success
+    assert_output "work "
+}

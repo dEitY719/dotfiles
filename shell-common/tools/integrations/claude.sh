@@ -423,3 +423,31 @@ claude_yolo() {
     command claude --dangerously-skip-permissions "$@"
 }
 alias claude-yolo='claude_yolo'
+
+# ═══════════════════════════════════════════════════════════════
+# Multi-account configuration (issue #287)
+# ═══════════════════════════════════════════════════════════════
+
+# _claude_resolve_account — 계정 매핑 SSOT (case dispatcher).
+# Usage:
+#   _claude_resolve_account <name>     → echo CONFIG_DIR (exit 0) or fail (exit 1)
+#   _claude_resolve_account --list     → echo enabled accounts (one per line)
+#   _claude_resolve_account --list-all → echo all defined accounts (debug)
+#
+# 새 계정 추가 시 case 한 줄 + --list-all 한 단어만 추가.
+_claude_resolve_account() {
+    case "$1" in
+        --list)
+            # shellcheck disable=SC2086
+            for _cra_acct in $CLAUDE_ENABLED_ACCOUNTS; do
+                _claude_resolve_account "$_cra_acct" >/dev/null 2>&1 && echo "$_cra_acct"
+            done
+            ;;
+        --list-all)
+            echo "personal work"
+            ;;
+        personal) echo "$HOME/.claude-personal" ;;
+        work)     echo "$HOME/.claude-work" ;;
+        *)        return 1 ;;
+    esac
+}
