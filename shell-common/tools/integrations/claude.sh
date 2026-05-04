@@ -675,3 +675,32 @@ claude_accounts_migrate() {
 
     ux_success "Migration complete. Personal data preserved at ~/.claude-personal/"
 }
+
+_claude_accounts_help() {
+    ux_header "claude-accounts — Claude Code multi-account management"
+    ux_info "Usage: claude-accounts [<subcommand>]"
+    ux_info ""
+    ux_info "Subcommands:"
+    ux_info "  status     (default) Show all accounts: path/credentials/symlinks/mounts"
+    ux_info "  list       List enabled accounts"
+    ux_info "  setup      Idempotent setup (creates dirs, symlinks, bind mounts)"
+    ux_info "  migrate    One-time migration: ~/.claude → ~/.claude-personal (Home-PC)"
+    ux_info "  -h|--help  This help"
+    ux_info ""
+    ux_info "Env vars:"
+    ux_info "  CLAUDE_DEFAULT_ACCOUNT     Default for \`claude-yolo\` (default: personal)"
+    ux_info "  CLAUDE_ENABLED_ACCOUNTS    Whitelist (default: 'personal work')"
+    ux_info "  Override per-PC in shell-common/env/claude.local.sh"
+}
+
+claude_accounts() {
+    case "${1:-status}" in
+        status)         claude_accounts_status ;;
+        list)           _claude_resolve_account --list ;;
+        setup)          claude_accounts_init ;;
+        migrate)        claude_accounts_migrate ;;
+        -h|--help|help) _claude_accounts_help ;;
+        *)              ux_error "Unknown subcommand: $1"; _claude_accounts_help; return 1 ;;
+    esac
+}
+alias claude-accounts='claude_accounts'
