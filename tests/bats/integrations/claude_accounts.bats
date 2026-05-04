@@ -257,3 +257,37 @@ LOCAL
     [ -d "$HOME/.claude" ]
     [ ! -d "$HOME/.claude-personal" ]
 }
+
+# ---------- Task 8: claude_accounts CLI ----------
+#
+# Aliases need `shopt -s expand_aliases` AND a separate parsing unit
+# (bash parses the whole `-c` string in one go before aliases register).
+# Use `eval` to force re-parsing — same pattern as
+# tests/integration/test_help_compact_policy.py.
+
+@test "bash: claude-accounts list shows enabled accounts" {
+    run_in_bash 'shopt -s expand_aliases; eval "claude-accounts list" | tr "\n" " "'
+    assert_success
+    assert_output "personal work "
+}
+
+@test "bash: claude-accounts (no arg) defaults to status" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    run_in_bash 'shopt -s expand_aliases; CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init && eval "claude-accounts"'
+    assert_success
+    assert_output --partial "Default: personal"
+}
+
+@test "bash: claude-accounts unknown subcommand fails" {
+    run_in_bash 'shopt -s expand_aliases; eval "claude-accounts foo"'
+    assert_failure
+    assert_output --partial "Unknown"
+}
+
+@test "bash: claude-accounts -h shows help" {
+    run_in_bash 'shopt -s expand_aliases; eval "claude-accounts -h"'
+    assert_success
+    assert_output --partial "status"
+    assert_output --partial "setup"
+    assert_output --partial "migrate"
+}
