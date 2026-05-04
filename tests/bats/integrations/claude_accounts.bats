@@ -122,5 +122,6 @@ LOCAL
     run_in_bash "_claude_ensure_symlink '$HOME/src/file.txt' '$HOME/tgt-dir/link'"
     assert_success
     [ -L "$HOME/tgt-dir/link" ]
-    ls "$HOME/tgt-dir/" | grep -q "link.*backup\|link.*original"
+    # Backup uses claude/setup.sh:100 legacy convention: <name>-YYYYMMDDHHMMSS-original
+    ls "$HOME/tgt-dir/" | grep -qE "link-[0-9]{14}-original"
 }
