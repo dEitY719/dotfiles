@@ -476,7 +476,9 @@ _claude_ensure_symlink() {
         ux_warning "  symlink target mismatch — recreating: $_ces_tgt"
         rm "$_ces_tgt"
     elif [ -e "$_ces_tgt" ]; then
-        _ces_backup="${_ces_tgt}.backup-$(date +%Y%m%d%H%M%S)"
+        # Backup naming matches claude/setup.sh:100 legacy convention
+        # so users with a mixed-version setup see one consistent format.
+        _ces_backup="${_ces_tgt}-$(date +%Y%m%d%H%M%S)-original"
         ux_warning "  backing up existing file: $_ces_tgt → $_ces_backup"
         mv "$_ces_tgt" "$_ces_backup"
     fi
