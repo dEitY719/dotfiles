@@ -209,3 +209,51 @@ LOCAL
     refute_output --partial "Account: personal"
     assert_output --partial "Account: work"
 }
+
+# ---------- Task 7: migrate ----------
+
+@test "bash: claude_accounts_migrate moves ~/.claude → ~/.claude-personal" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "$HOME/.claude/projects" "$HOME/.claude/sessions"
+    echo "creds" > "$HOME/.claude/.credentials.json"
+    echo "history" > "$HOME/.claude/history.jsonl"
+
+    # printf instead of `yes` because dotfiles bootstrap enables pipefail —
+    # `yes` gets SIGPIPE (141) when the function returns, masking the
+    # function's true exit status.
+    run_in_bash 'export CLAUDE_SKIP_BIND_MOUNT=1; printf "y\n" | claude_accounts_migrate'
+    assert_success
+
+    [ -d "$HOME/.claude-personal" ]
+    [ -f "$HOME/.claude-personal/.credentials.json" ]
+    [ -f "$HOME/.claude-personal/history.jsonl" ]
+    [ -d "$HOME/.claude-personal/projects" ]
+}
+
+@test "bash: claude_accounts_migrate promotes ~/.claude/plugins → ~/.claude-shared/" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "$HOME/.claude/plugins/marketplaces"
+    echo "plugin" > "$HOME/.claude/plugins/marketplaces/test"
+
+    run_in_bash 'export CLAUDE_SKIP_BIND_MOUNT=1; printf "y\n" | claude_accounts_migrate'
+    assert_success
+
+    [ -d "$HOME/.claude-shared/plugins/marketplaces" ]
+    [ -f "$HOME/.claude-shared/plugins/marketplaces/test" ]
+    [ -L "$HOME/.claude-personal/plugins" ]
+}
+
+@test "bash: claude_accounts_migrate is idempotent (already migrated)" {
+    mkdir -p "$HOME/.claude-personal"
+    run_in_bash 'claude_accounts_migrate'
+    assert_success
+    assert_output --partial "Already migrated"
+}
+
+@test "bash: claude_accounts_migrate aborts on user 'n'" {
+    mkdir -p "$HOME/.claude/projects"
+    run_in_bash 'export CLAUDE_SKIP_BIND_MOUNT=1; printf "n\n" | claude_accounts_migrate'
+    assert_failure
+    [ -d "$HOME/.claude" ]
+    [ ! -d "$HOME/.claude-personal" ]
+}

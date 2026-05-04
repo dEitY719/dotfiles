@@ -625,3 +625,53 @@ claude_accounts_init() {
 
     ux_success "All accounts ready"
 }
+
+# claude_accounts_migrate — 1회 마이그레이션 (Home-PC 등 기존 데이터
+# 보유 PC 한정). 멱등: 이미 마이그됐으면 즉시 skip.
+claude_accounts_migrate() {
+    if [ -d "$HOME/.claude-personal" ]; then
+        ux_info "Already migrated to ~/.claude-personal — skipping"
+        return 0
+    fi
+
+    if [ ! -d "$HOME/.claude" ]; then
+        ux_info "$HOME/.claude not found — nothing to migrate. Run: claude-accounts setup"
+        return 0
+    fi
+
+    ux_warning "Will move ~/.claude → ~/.claude-personal"
+    ux_info    "Preserves: credentials, sessions, projects, history"
+    printf "Continue? (y/N): "
+    read -r _cam_reply
+    if [ "$_cam_reply" != "y" ] && [ "$_cam_reply" != "yes" ]; then
+        ux_info "Aborted"
+        return 1
+    fi
+
+    # 1) 기존 symlink/bind mount 해제
+    [ -L "$HOME/.claude/settings.json" ]                 && rm "$HOME/.claude/settings.json"
+    [ -L "$HOME/.claude/statusline-command.sh" ]         && rm "$HOME/.claude/statusline-command.sh"
+    [ -L "$HOME/.claude/projects/GLOBAL/memory" ]        && rm "$HOME/.claude/projects/GLOBAL/memory"
+    if [ "${CLAUDE_SKIP_BIND_MOUNT:-0}" != "1" ]; then
+        _is_mounted "$HOME/.claude/skills" && sudo umount "$HOME/.claude/skills"
+        _is_mounted "$HOME/.claude/docs"   && sudo umount "$HOME/.claude/docs"
+    fi
+
+    # 2) 기존 plugins 실데이터를 공유 위치로 승격
+    if [ -d "$HOME/.claude/plugins" ] && [ ! -L "$HOME/.claude/plugins" ]; then
+        mkdir -p "$HOME/.claude-shared"
+        if [ -d "$HOME/.claude-shared/plugins" ]; then
+            ux_warning "  ~/.claude-shared/plugins already exists — keeping new, ignoring old"
+        else
+            mv "$HOME/.claude/plugins" "$HOME/.claude-shared/plugins"
+        fi
+    fi
+
+    # 3) 디렉토리 자체 이동
+    mv "$HOME/.claude" "$HOME/.claude-personal"
+
+    # 4) 빈 ~/.claude 재생성 + 모든 계정 init (멱등)
+    claude_accounts_init
+
+    ux_success "Migration complete. Personal data preserved at ~/.claude-personal/"
+}
