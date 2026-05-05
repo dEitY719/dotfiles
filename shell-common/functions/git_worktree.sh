@@ -1631,11 +1631,12 @@ _gwt_commits_safe() {
     fi
 
     # 3. Working tree of HEAD matches origin/main (squash-merge case).
-    # An empty diff means every change is already on main, even if no
-    # individual commit is a patch-id match — squash collapses N→1, so
-    # `git cherry` (step 4) cannot detect this. Check tree equivalence
-    # before the more expensive patch-id walk.
-    if [ -z "$(git diff "$main_ref" HEAD 2>/dev/null)" ]; then
+    # No diff means every change is already on main, even if no individual
+    # commit is a patch-id match — squash collapses N→1, so `git cherry`
+    # (step 4) cannot detect this. `--quiet` is fail-closed: exit 0 only on
+    # genuine no-diff; on bad ref / git error it exits non-zero so we do NOT
+    # mistake a failed comparison for a clean tree.
+    if git diff --quiet "$main_ref" HEAD 2>/dev/null; then
         return 0
     fi
 
@@ -1674,9 +1675,10 @@ _gwt_branch_merged() {
         return 0
     fi
     # Squash merge: target collapsed N commits to 1, so patch-ids no longer
-    # match 1:1 — but the branch's tree is still present in target. Empty diff
-    # means every change has been incorporated.
-    [ -z "$(git diff "$target" "$branch" 2>/dev/null)" ]
+    # match 1:1 — but the branch's tree is still present in target. `--quiet`
+    # is fail-closed: exit 0 only on genuine no-diff; bad ref / git error
+    # exits non-zero so a failed comparison is not mistaken for "merged".
+    git diff --quiet "$target" "$branch" 2>/dev/null
 }
 
 # ============================================================================
