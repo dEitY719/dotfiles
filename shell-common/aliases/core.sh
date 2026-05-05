@@ -1,3 +1,4 @@
+#!/bin/sh
 # core_aliases.bash
 # 기본 명령어에 대한 alias 정의
 
@@ -6,14 +7,39 @@
 alias reload='exec ${SHELL##*/}'
 alias rs='reload'
 
-# Shell-aware configuration reload (sources appropriate rc file)
+# Shell-aware configuration reload — always reloads from the canonical
+# dotfiles tree ($DOTFILES_CANONICAL or $HOME/dotfiles), even when the
+# current shell inherited a worktree-leaked $DOTFILES_ROOT (issue #310).
 src() {
+    local _canon="${DOTFILES_CANONICAL:-$HOME/dotfiles}"
+
+    if [ ! -d "$_canon" ]; then
+        if command -v ux_error >/dev/null 2>&1; then
+            ux_error "src: canonical dotfiles not found at $_canon"
+        else
+            echo "src: canonical dotfiles not found at $_canon" >&2
+        fi
+        return 1
+    fi
+
+    # Force-reset before re-sourcing so zsh/main.zsh's `if [ -z "$DOTFILES_ROOT" ]`
+    # guard cannot preserve a worktree-leaked value.
+    export DOTFILES_ROOT="$_canon"
+    export SHELL_COMMON="$_canon/shell-common"
+    unset DOTFILES_BASH_DIR
+
     if [ -n "$ZSH_VERSION" ]; then
-        # Running in zsh
-        source ~/.zshrc
+        # shellcheck source=/dev/null
+        . "$_canon/zsh/zshrc"
     else
-        # Default to bash
-        source ~/.bashrc
+        # shellcheck source=/dev/null
+        . "$_canon/bash/main.bash"
+    fi
+
+    if command -v ux_info >/dev/null 2>&1; then
+        ux_info "src: reloaded from $_canon"
+    else
+        echo "src: reloaded from $_canon"
     fi
 }
 
