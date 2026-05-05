@@ -56,11 +56,14 @@ WORKFLOW="${DOTFILES_ROOT}/.github/workflows/project-board-sync.yml"
     grep -Eq '_gh_project_status_sync[[:space:]]+pr[[:space:]]+"\$PR_NUMBER"[[:space:]]+"In review"' "$WORKFLOW"
 }
 
-@test "PR opened step: syncs linked Issues to In progress with Backlog,Ready guard" {
+@test "PR opened step: syncs linked Issues to In progress with Backlog,Ready,In review guard" {
     # Issues must not visit "In review" — the opened step immediately corrects
     # the builtin "Pull request linked to issue" workflow that would move them there.
+    # "In review" must be in the guard list so the correction still fires when the
+    # builtin runs first and the Issue is already at "In review" (#309). "Done" is
+    # intentionally excluded so a re-opened PR cannot regress a closed Issue card.
     grep -q '_gh_project_status_sync issue' "$WORKFLOW"
-    grep -q -- '--only-from "Backlog,Ready"' "$WORKFLOW"
+    grep -q -- '--only-from "Backlog,Ready,In review"' "$WORKFLOW"
 }
 
 @test "PR review approved step: syncs PR card to Approved" {
