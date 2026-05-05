@@ -19,6 +19,8 @@ output it verbatim, then stop. Help is detected only at arg #1, so
 
 ## Step 1: Resolve + Pre-flight Gate (parallel)
 
+Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 4.
+
 Parse args first. Positional: `<pr-number>` and `<remote>` (default
 `origin`). Flags may appear anywhere:
 
@@ -82,6 +84,19 @@ Match the PR's dominant language.
 - **4c** Submit `gh pr review --request-changes`; blockers stay on the PR.
 - Self-authored PR: never approve. Use analysis-only, `--self-record`, or
   `--admin-merge` exactly as specified in `references/self-pr-handling.md`.
+
+After submitting the review (any path), post a separate PR comment with
+ai-metrics (soft-fail — warn on error, never block):
+
+```bash
+ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
+gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
+  -X POST \
+  -f body="<!-- ai-metrics:gh-pr-approve tokens=${TOKENS:-5000} human_h=1 ai_min=$ELAPSED -->
+🤖 PR 리뷰: ~$ELAPSED min · 👤 ~1 h (estimate)"
+```
+
+On failure: `⚠️  ai-metrics comment failed — continuing.`
 
 ## Step 5: Verify and Report
 

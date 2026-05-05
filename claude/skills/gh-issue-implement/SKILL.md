@@ -24,6 +24,8 @@ output its content verbatim, then stop. No API calls.
 
 ## Step 1: Parse Args + Resolve Repo + Preconditions
 
+Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 6.
+
 Positional args: `<issue-number> [mode] [remote]`. Optional flag: `--no-next-hint`.
 
 - `issue-number` — required, positive integer.
@@ -75,6 +77,15 @@ Print the success or failure report per
 `references/implementation-flow.md` → "Final report format". Always
 include the `Next:` hint pointing to `gh:commit` / `gh:pr` /
 `gh:issue-flow`, unless `--no-next-hint` is set.
+
+After the report, append the ai-metrics line (context only — no GitHub
+artifact exists yet at this stage):
+
+```
+[ai-metrics:gh-issue-implement] 🤖 ~{ELAPSED} min — will be included in gh-commit metrics
+```
+
+Compute `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))` just before printing.
 
 ## Constraints
 

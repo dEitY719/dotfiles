@@ -26,6 +26,8 @@ feeds downstream skills (like `gh:issue-implement`).
 
 ## Step 1: Parse Args + Resolve Repo
 
+Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 4.
+
 Positional args: `<issue-number> [remote]`.
 
 - `issue-number` — required, positive integer. Missing/invalid → print
@@ -64,6 +66,15 @@ Header → Summary → Body → Discussion → Meta → Checklist.
 Print the formatted output directly. No preamble ("Here's the issue..."),
 no trailing summary ("Let me know if you want..."). The output IS the
 deliverable.
+
+After the formatted output, append the ai-metrics line (stdout only —
+this skill never mutates GitHub):
+
+```
+[ai-metrics:gh-issue-read] 🤖 ~{ELAPSED} min (read-only — not written to GitHub)
+```
+
+Compute `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))` just before printing.
 
 ## Constraints
 
