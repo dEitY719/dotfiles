@@ -37,10 +37,10 @@ if [ -n "${ISSUE_NUMBER-}" ]; then
     # callers that already have $TARGET_REPO bound can pass it explicitly.
     if [ -n "${TARGET_REPO-}" ]; then
         ISSUE_BODY=$(gh issue view "$ISSUE_NUMBER" --repo "$TARGET_REPO" \
-            --json body --jq .body 2>/dev/null) || ISSUE_BODY=""
+            --json body --jq '.body? // empty' 2>/dev/null) || ISSUE_BODY=""
     else
         ISSUE_BODY=$(gh issue view "$ISSUE_NUMBER" \
-            --json body --jq .body 2>/dev/null) || ISSUE_BODY=""
+            --json body --jq '.body? // empty' 2>/dev/null) || ISSUE_BODY=""
     fi
 fi
 COMMIT_LOG=$( { git log "$BASE_BRANCH..HEAD" --format=%B; \
