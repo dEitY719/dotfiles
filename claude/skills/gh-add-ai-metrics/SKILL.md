@@ -92,8 +92,11 @@ classification rows and the dry-run summary line, **never calling
 
 Otherwise, for each `(type, N)` follow `references/footer-detection.md`:
 
-1. **Stop check (top of iteration)** — before fetching this card:
-   - `check_budget "$elapsed" "$BUDGET_SECS"` true → break with
+1. **Stop check (top of iteration)** — before fetching this card.
+   Compute `elapsed_secs=$(( $(date +%s) - START_TS ))` here (seconds,
+   matching `check_budget`'s contract — Step 4's `ELAPSED` is a separate
+   minutes-rounded display value, do not reuse it):
+   - `check_budget "$elapsed_secs" "$BUDGET_SECS"` true → break with
      `stop_reason="--budget"`. (Skipped when `--budget` not set.)
    - `--limit` set and `modified_count >= LIMIT` → break with
      `stop_reason="--limit"`.
