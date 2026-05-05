@@ -51,9 +51,14 @@ feat[(<scope>)]: <한 줄 요약>
 
 ## References
 - 관련 파일·이슈·PR
-- PRD: (있으면) `references/samples/prd-sample.md` 참조
-- TRD: (있으면) `references/samples/trd-sample.md` 참조
+- PRD: (있으면) <PRD 경로 또는 링크>
+- TRD: (있으면) <TRD 경로 또는 링크>
 ```
+
+> 위 본문 골격의 PRD/TRD 항목은 **placeholder** 다 — 실제 이슈에서는
+> 작성한 PRD/TRD 문서 경로로 치환한다. 표준 골격은
+> `references/samples/{prd,trd}-sample.md` 를 따른다 (본 파일 자체에
+> 인용하지 말 것).
 
 ## 대형 feat 가이드
 
