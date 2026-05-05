@@ -115,7 +115,7 @@ _pr_edit_safe_label() {
         printf '[gh-pr-edit-safe] gh pr edit --add-label hit Projects(classic) deprecation; retrying via REST for #%s\n' \
             "$_gh_pr_safe_pr" >&2
         gh api -X POST "repos/$_gh_pr_safe_repo/issues/$_gh_pr_safe_pr/labels" \
-            -f "labels[]=$_gh_pr_safe_label" >/dev/null 2>&1
+            -f "labels[]=$_gh_pr_safe_label" >/dev/null
         _gh_pr_safe_rc=$?
     elif [ "$_gh_pr_safe_rc" -ne 0 ]; then
         cat "$_gh_pr_safe_err" >&2
@@ -162,13 +162,12 @@ _pr_edit_safe_body() {
         grep -q 'Projects (classic) is being deprecated' "$_gh_pr_safe_err"; then
         printf '[gh-pr-edit-safe] gh pr edit --body-file hit Projects(classic) deprecation; retrying via REST for #%s\n' \
             "$_gh_pr_safe_pr" >&2
-        # Read the body from the file so we avoid the gh `-F field=@file`
-        # ambiguity (gh treats `@file` only on a few projection fields).
-        _gh_pr_safe_payload=$(cat "$_gh_pr_safe_body_file")
+        # `-f body=@file` reads the file content directly: avoids ARG_MAX on
+        # large bodies and sidesteps the "@" prefix ambiguity that would hit
+        # if the body were expanded into argv as a string starting with @.
         gh api -X PATCH "repos/$_gh_pr_safe_repo/pulls/$_gh_pr_safe_pr" \
-            -f body="$_gh_pr_safe_payload" >/dev/null 2>&1
+            -f body=@"$_gh_pr_safe_body_file" >/dev/null
         _gh_pr_safe_rc=$?
-        unset _gh_pr_safe_payload
     elif [ "$_gh_pr_safe_rc" -ne 0 ]; then
         cat "$_gh_pr_safe_err" >&2
     fi
