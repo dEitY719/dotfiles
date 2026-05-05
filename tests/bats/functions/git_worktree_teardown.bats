@@ -565,3 +565,71 @@ _add_extra_worktrees() {
     assert_output --partial "Not inside a worktree"
     assert_output --partial "gwt teardown --all"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #307: squash-merge with N>1 local commits + missing upstream
+# ---------------------------------------------------------------------------
+
+# Apply the same final tree as the worktree's N commits, but as a SINGLE
+# commit on origin/main — the actual squash-merge shape that `git cherry`
+# (patch-id 1:1) cannot detect.
+_squash_merge_multi_into_origin_main() {
+    local helper="$TEST_TEMP_HOME/squash-multi-helper"
+    rm -rf "$helper"
+    git clone -q "$ORIGIN" "$helper"
+    (
+        cd "$helper"
+        echo a > a.txt
+        echo b > b.txt
+        echo c > c.txt
+        git add a.txt b.txt c.txt
+        git commit -q -m "squash: merged via PR (3 commits collapsed)"
+        git push -q origin main
+    )
+    rm -rf "$helper"
+    git -C "$CLONE" fetch -q origin
+}
+
+@test "teardown: squash-merged worktree (N>1 local commits) is safe without --force" {
+    # Worktree has 3 distinct commits never pushed. origin/main gains a single
+    # squash commit that materially equals the worktree's tree. Pre-fix:
+    # _gwt_commits_safe rejects via git cherry (3 patch-ids vs 1) and blocks
+    # teardown. Post-fix: tree equivalence (`git diff origin/main HEAD` is
+    # empty) recognizes safety AND _gwt_branch_merged announces rebase-merged
+    # so the branch is also cleaned up.
+    (
+        cd "$WORKTREE"
+        # `git worktree add -b ... origin/main` auto-tracks origin/main; clear
+        # it to faithfully reproduce the never-pushed worktree from issue #307.
+        git branch --unset-upstream 2>/dev/null || true
+        echo a > a.txt && git add a.txt && git commit -q -m "a"
+        echo b > b.txt && git add b.txt && git commit -q -m "b"
+        echo c > c.txt && git add c.txt && git commit -q -m "c"
+    )
+    _squash_merge_multi_into_origin_main
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_success
+    assert_output --partial "rebase-merged"
+    [ ! -d "$WORKTREE" ]
+    run git -C "$CLONE" rev-parse --verify --quiet wt/test/1
+    assert_failure
+}
+
+@test "teardown: unpushed-commits report renders 'upstream: (none)' on one line" {
+    # Reproduce the noisy two-line render from issue #307: when no upstream is
+    # set, `git rev-parse --abbrev-ref '@{u}'` exits non-zero AND prints the
+    # literal "@{u}" to stdout, which used to leak into the error message.
+    (
+        cd "$WORKTREE"
+        # `git worktree add -b ... origin/main` auto-tracks origin/main; clear
+        # it so @{u} is genuinely unset like the real never-pushed scenario.
+        git branch --unset-upstream 2>/dev/null || true
+        echo unpushed > unpushed.txt && git add unpushed.txt && git commit -q -m "unpushed"
+    )
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
+    assert_output --partial "upstream: (none)"
+    refute_output --partial "upstream: @{u}"
+}
