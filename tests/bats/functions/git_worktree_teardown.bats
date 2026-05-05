@@ -640,28 +640,19 @@ _progress_origin_main_overlapping() {
     git -C "$CLONE" fetch -q origin
 }
 
-# Stub `gh` to return MERGED + a configurable merge_commit SHA for any
-# `gh pr view <branch> --json <fields> -q <expr>` invocation. The dotfiles
-# shell init does not call `gh`, so unhandled invocations are real test
-# bugs and exit 1 (same discipline as tests/bats/tools/setup_kanban_board.bats).
+# Stub `gh` for the consolidated `gh pr view <branch> --json state,mergeCommit
+# --jq '.state + " " + (.mergeCommit?.oid // "")'` invocation _gwt_pr_merged_into
+# now uses (PR #316 review). MOCK_GH_MERGE_SHA unset → emit empty merge_sha so
+# the helper's negative-path test exercises the "no merge commit" branch.
+# The dotfiles shell init does not call `gh`, so unhandled invocations are real
+# test bugs and exit 1 (same discipline as tests/bats/tools/setup_kanban_board.bats).
 _install_gh_mock() {
     local mock_bin="$TEST_TEMP_HOME/mock-bin"
     mkdir -p "$mock_bin"
     cat >"$mock_bin/gh" <<'GH_EOF'
 #!/usr/bin/env bash
 if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
-    expr=""
-    while [ $# -gt 0 ]; do
-        case "$1" in
-            -q) shift; expr="$1"; shift ;;
-            *) shift ;;
-        esac
-    done
-    case "$expr" in
-        .state)            printf 'MERGED\n' ;;
-        .mergeCommit.oid)  printf '%s\n' "${MOCK_GH_MERGE_SHA:-}" ;;
-        *)                 exit 1 ;;
-    esac
+    printf 'MERGED %s\n' "${MOCK_GH_MERGE_SHA:-}"
     exit 0
 fi
 printf 'Unhandled gh invocation: %s\n' "$*" >&2
