@@ -21,6 +21,8 @@ output its content verbatim, then stop. No API calls.
 
 ## Step 1: Parse Args + Preflight
 
+Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 5.
+
 Positional args: `[pr-number] [remote]`. Both optional.
 
 - `pr-number` — if omitted, auto-detect via
@@ -86,6 +88,21 @@ If `mergeable == MERGEABLE` and `mergeStateStatus ∈ {CLEAN, UNSTABLE}`,
 the warning is cleared. Print the final report from
 `references/rebase-flow.md` → "Final report format". Still `CONFLICTING`
 / `BEHIND` → print the PR URL, name which side diverged, do not loop.
+
+After the report, post a PR comment with ai-metrics (soft-fail — warn on
+error, never block). `CONFLICT_FILES` is the count of files that had
+`UU`/`AA`/`DU` conflicts in Step 3:
+
+```bash
+ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
+HUMAN_H=$(echo "scale=2; $CONFLICT_FILES * 0.5" | bc)
+gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
+  -X POST \
+  -f body="<!-- ai-metrics:gh-pr-resolve-conflict tokens=${TOKENS:-3000} human_h=$HUMAN_H ai_min=$ELAPSED -->
+🤖 컨플릭트 해결: ~$ELAPSED min · 👤 ~$HUMAN_H h ($CONFLICT_FILES files × 0.5 h)"
+```
+
+On failure: `⚠️  ai-metrics comment failed — continuing.`
 
 ## Constraints
 

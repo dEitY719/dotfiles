@@ -24,6 +24,8 @@ body. Push the branch if needed. Return the PR URL.
 
 ## Step 1: Determine Base Branch and State (parallel)
 
+Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 4.
+
 Run in a single message:
 
 - `git rev-parse --abbrev-ref HEAD` — current branch
@@ -60,6 +62,21 @@ Same precedence as `gh:commit`:
 Read `references/pr-body-template.md` for title rules, body structure, and
 the body markdown. Match the language of existing commits (Korean if commits
 are Korean).
+
+Before writing the body to the temp file, compute and append the ai-metrics
+footer block (soft-fail — warn on error, never block):
+
+1. `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))`
+2. Issue type: the conventional-commit prefix from the first commit subject.
+3. Human time: look up `gh-issue-create/references/metrics-baseline.md`.
+   For `feat`, infer size from the number of files changed.
+4. Token estimate: character count of (issue body + commit log) ÷ 4,
+   rounded to nearest 500. Minimum 1 000.
+
+```bash
+printf '\n---\n<!-- ai-metrics:gh-pr -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics:gh-pr -->\n' \
+  "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
+```
 
 ## Step 5: Push and Create
 

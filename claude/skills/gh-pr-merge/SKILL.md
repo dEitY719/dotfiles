@@ -20,6 +20,8 @@ output its content verbatim, then stop. No API calls.
 
 ## Step 1: Parse Args + Resolve Repo
 
+Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 4.
+
 Positional args: `<pr-number> [strategy] [remote]`.
 
 - `pr-number` — required, positive integer. Missing/invalid → print
@@ -100,6 +102,18 @@ done
 Both helpers auto-detect repos without a projectV2 attachment and
 silently return. This step never blocks the report — failures are
 logged to stderr and ignored.
+
+After the board sync completes, post an ai-metrics PR comment (soft-fail):
+
+```bash
+ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
+gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
+  -X POST \
+  -f body="<!-- ai-metrics:gh-pr-merge tokens=${TOKENS:-2000} human_h=0.25 ai_min=$ELAPSED -->
+🤖 PR merge: ~$ELAPSED min"
+```
+
+On failure: `⚠️  ai-metrics comment failed — continuing.`
 
 ## Step 5: Fetch Merge SHA + Report
 
