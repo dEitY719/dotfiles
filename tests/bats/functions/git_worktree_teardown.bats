@@ -616,6 +616,125 @@ _squash_merge_multi_into_origin_main() {
     assert_failure
 }
 
+# ---------------------------------------------------------------------------
+# Issue #315: PR #307 follow-up — squash-merge then origin/main progresses
+# ---------------------------------------------------------------------------
+
+# Push another commit to origin/main that overlaps the squashed change so
+# tree-equivalence and patch-id BOTH break — the conditions that defeat
+# PR #307's local-only checks. <overlap_file>:<new_content> is what changes.
+_progress_origin_main_overlapping() {
+    local overlap_file="$1" new_content="$2"
+    local helper="$TEST_TEMP_HOME/progress-helper"
+    rm -rf "$helper"
+    git clone -q "$ORIGIN" "$helper"
+    (
+        cd "$helper"
+        printf '%s\n' "$new_content" > "$overlap_file"
+        echo extra > extra.txt
+        git add "$overlap_file" extra.txt
+        git commit -q -m "progress: another PR merged on top of squash"
+        git push -q origin main
+    )
+    rm -rf "$helper"
+    git -C "$CLONE" fetch -q origin
+}
+
+# Stub `gh` to return MERGED + a configurable merge_commit SHA for any
+# `gh pr view <branch> --json <fields> -q <expr>` invocation. The dotfiles
+# shell init does not call `gh`, so unhandled invocations are real test
+# bugs and exit 1 (same discipline as tests/bats/tools/setup_kanban_board.bats).
+_install_gh_mock() {
+    local mock_bin="$TEST_TEMP_HOME/mock-bin"
+    mkdir -p "$mock_bin"
+    cat >"$mock_bin/gh" <<'GH_EOF'
+#!/usr/bin/env bash
+if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
+    expr=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -q) shift; expr="$1"; shift ;;
+            *) shift ;;
+        esac
+    done
+    case "$expr" in
+        .state)            printf 'MERGED\n' ;;
+        .mergeCommit.oid)  printf '%s\n' "${MOCK_GH_MERGE_SHA:-}" ;;
+        *)                 exit 1 ;;
+    esac
+    exit 0
+fi
+printf 'Unhandled gh invocation: %s\n' "$*" >&2
+exit 1
+GH_EOF
+    chmod +x "$mock_bin/gh"
+    export PATH="$mock_bin:$PATH"
+}
+
+@test "teardown: PR-merged + origin/main progressed past squash — safe via gh PR signal (issue #315)" {
+    # Issue #315 follow-up to PR #307. PR #307's tree-equivalence check works
+    # only while origin/main is *exactly* at the squash commit. Once another
+    # PR merges on top with overlapping changes, tree-equivalence AND
+    # patch-id both fail — but the PR is still genuinely merged. Trust the
+    # same `gh pr view` signal `gwt status` already uses.
+    (
+        cd "$WORKTREE"
+        git branch --unset-upstream 2>/dev/null || true
+        echo a > a.txt && git add a.txt && git commit -q -m "a"
+        echo b > b.txt && git add b.txt && git commit -q -m "b"
+        echo c > c.txt && git add c.txt && git commit -q -m "c"
+    )
+    _squash_merge_multi_into_origin_main
+
+    # Capture the squash commit SHA — this is what GitHub's mergeCommit.oid
+    # would return for the (mocked) PR. Read from CLONE so we do not have to
+    # re-fetch into WORKTREE before the assertions below.
+    local squash_sha
+    squash_sha="$(git -C "$CLONE" rev-parse origin/main)"
+
+    # Advance origin/main past the squash with overlapping changes — this is
+    # exactly what defeats PR #307's local-only checks.
+    _progress_origin_main_overlapping a.txt "a-progressed-by-other-pr"
+
+    # Sanity: confirm both local-only signals are now broken. If either
+    # accidentally still detects "safe", this test no longer exercises #315.
+    run git -C "$WORKTREE" diff --quiet origin/main HEAD
+    assert_failure
+    run bash -c "git -C '$WORKTREE' cherry origin/main HEAD | grep -q '^+'"
+    assert_success
+
+    _install_gh_mock
+    export MOCK_GH_MERGE_SHA="$squash_sha"
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_success
+    assert_output --partial "rebase-merged"
+    [ ! -d "$WORKTREE" ]
+    run git -C "$CLONE" rev-parse --verify --quiet wt/test/1
+    assert_failure
+}
+
+@test "teardown: PR-merged signal ignored when merge_commit not in main_ref (issue #315)" {
+    # Defensive: if gh reports MERGED but the merge_commit is unreachable
+    # from origin/main (e.g. a typo SHA, wrong remote, unfetched), the helper
+    # must NOT mark commits safe — we'd rather fall back to the existing
+    # error path than discard real work.
+    (
+        cd "$WORKTREE"
+        git branch --unset-upstream 2>/dev/null || true
+        echo a > a.txt && git add a.txt && git commit -q -m "a"
+        echo b > b.txt && git add b.txt && git commit -q -m "b"
+    )
+
+    _install_gh_mock
+    # Bogus SHA shape (40 hex zeros) — not present anywhere in this repo.
+    export MOCK_GH_MERGE_SHA="0000000000000000000000000000000000000000"
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
+    assert_output --partial "are not in origin/main"
+}
+
 @test "teardown: unpushed-commits report renders 'upstream: (none)' on one line" {
     # Reproduce the noisy two-line render from issue #307: when no upstream is
     # set, `git rev-parse --abbrev-ref '@{u}'` exits non-zero AND prints the
