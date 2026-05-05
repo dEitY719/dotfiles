@@ -24,17 +24,20 @@ A naive `grep '<!-- ai-metrics'` returns false positives on bodies that
 *mention* the marker in inline code spans (e.g. issue #324 itself, which
 documents the footer format and contains many bare `<!-- ai-metrics -->`
 references in backticks). The detector therefore requires the **anchored
-pair**: a `\n---\n` separator immediately before the OPEN marker on its
-own line, followed by content, then the CLOSE marker on its own line.
+pair**: a `---` separator on its own line preceded by 1+ newlines,
+immediately followed by the OPEN marker on its own line, content, then
+the CLOSE marker on its own line.
 
 ```bash
 has_footer() {
   # Returns 0 (true) only when an OPEN+CLOSE block follows the `---`
   # separator that gh:issue-create / PR #320 emit. Inline mentions
-  # (`<!-- ai-metrics -->` in backticks) do not match.
+  # (`<!-- ai-metrics -->` in backticks) do not match. The leading
+  # `\n+` tolerates both PR #320's `\n---\n` (single) and the newer
+  # `\n\n---\n` (double) append conventions.
   printf '%s' "$1" | perl -0777 -ne '
     exit (
-      /\n---\n<!-- ai-metrics(?::[A-Za-z0-9_-]+)? -->\n.*?\n<!-- \/ai-metrics(?::[A-Za-z0-9_-]+)? -->/s
+      /\n+---\n<!-- ai-metrics(?::[A-Za-z0-9_-]+)? -->\n.*?\n<!-- \/ai-metrics(?::[A-Za-z0-9_-]+)? -->/s
       ? 0 : 1
     )'
 }
@@ -114,13 +117,45 @@ gh "$kind" edit "$N" --repo "$TARGET_REPO" --body-file "$TMP"
 When `has_footer` returns 0 and `--force` is off, do not call `gh edit` at
 all. This is the API-quota-friendly path described in SKILL.md Constraints.
 
+## Per-card status output format
+
+Each iteration of the per-card loop prints exactly one of these lines.
+Glyph and field order are part of the user contract — keep them stable.
+
+| Branch | Format |
+|---|---|
+| New footer appended | `✓ added #N <title>` |
+| Existing footer replaced (`--force`) | `↻ replaced #N <title>` |
+| Existing footer left untouched | `→ skipped #N <title>` |
+| API or I/O failure | `✗ failed #N <reason>` |
+
+The `failed` branch must not abort the loop — catch the failure, print
+the line, and continue with the next card. The Step 4 summary counts
+each branch separately (`added=A ↻ replaced=R → skipped=S ✗ failed=F`).
+
+## Final report output format
+
+After the per-card loop completes, print exactly two lines:
+
+```
+Summary: ✓ added=A  ↻ replaced=R  → skipped=S  ✗ failed=F  (total T)
+[ai-metrics:gh-add-ai-metrics] 🤖 ~{ELAPSED} min · {T} cards processed
+```
+
+The second line is **context-only**: this skill does mutate GitHub
+artifacts, but its own runtime metric is informational and not written
+into any specific card's footer (the per-card metrics are what the
+loop just appended). Treat it like the `gh:issue-implement` context
+line — emitted to stdout, not posted as a comment.
+
 ## Test rubric
 
 A retro-fit run is correct iff:
 
-1. Stripping the new `\n---\n<!-- ai-metrics -->…<!-- /ai-metrics -->`
+1. Stripping the new `\n+---\n<!-- ai-metrics -->…<!-- /ai-metrics -->`
    block from the post-edit body yields the original (pre-edit) body
-   byte-for-byte.
+   byte-for-byte (regardless of whether append used `\n---\n` or
+   `\n\n---\n`).
 2. Running the skill twice without `--force` produces zero edit API
    calls on the second run.
 3. Running once with `--force` and once without on the same card

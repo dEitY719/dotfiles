@@ -31,8 +31,10 @@ Record `START_TS=$(date +%s)` immediately for the final summary line.
 
 Parse args per the table in `references/help.md` — positional `issue#N` /
 `pr#M` (case-insensitive), flags `--type`, `--date`, `--force`, `--remote`.
-`YY-MM-DD` expands to `20YY`. Resolve `TARGET_REPO` via the shared flow
-in `gh-issue-create/references/repo-resolution.md`. Missing remote → list
+`--date` accepts either `YYYY-MM-DD` (10 chars, used as-is) or `YY-MM-DD`
+(8 chars, expanded to `20YY-MM-DD`); other lengths → format error and stop.
+Resolve `TARGET_REPO` via the shared flow in
+`gh-issue-create/references/repo-resolution.md`. Missing remote → list
 `git remote -v` and stop (no silent fallback). `--date` + positional
 cards is a hard error: print
 `Error: --date and positional cards are mutually exclusive.` and stop.
@@ -69,31 +71,18 @@ For each `(type, N)` follow `references/footer-detection.md`:
      (single regex pass, no append).
 4. On modification only, write the new body to `mktemp` and call
    `gh {issue,pr} edit N --repo "$TARGET_REPO" --body-file <tmp>`.
-5. Print one-line status:
-   `✓ added #N <title>` / `↻ replaced #N <title>` /
-   `→ skipped #N <title>` / `✗ failed #N <reason>` (continue with next).
+5. Print the one-line status string per the "Per-card status output
+   format" section in `references/footer-detection.md`. Continue on
+   failure — never abort the loop.
 
-Metric values follow `references/post-hoc-metrics.md`:
-
-- **TOKENS** = (title + body chars) ÷ 4, nearest 500, min 1000.
-- **HUMAN_H** = conventional-commit prefix in title → lookup
-  `gh-issue-create/references/metrics-baseline.md`; fallback `misc` (2 h).
-- **ELAPSED** = `max(1, HUMAN_H × 0.05)` — 5% rough estimate (post-hoc).
+Metric values follow `references/post-hoc-metrics.md` (TOKENS / HUMAN_H /
+ELAPSED formulas, SSOT lookup table, post-hoc estimation rules).
 
 ## Step 4: Final Report
 
-```
-Summary: ✓ added=A  ↻ replaced=R  → skipped=S  ✗ failed=F  (total T)
-```
-
-Append the context-only line (this skill mutates GitHub but its own
-runtime metric is informational, not written to any specific card):
-
-```
-[ai-metrics:gh-add-ai-metrics] 🤖 ~{ELAPSED} min · {T} cards processed
-```
-
-`ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))`.
+After the loop, print the summary line + context-only ai-metrics line per
+the "Final report output format" section in `references/footer-detection.md`.
+Compute `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))` just before printing.
 
 ## Constraints
 
