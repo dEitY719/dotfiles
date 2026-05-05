@@ -499,6 +499,130 @@ _seed_pr_state() {
 }
 
 # ---------------------------------------------------------------------------
+# auth pre-flight (issue #327)
+# ---------------------------------------------------------------------------
+# We can't drive a real claude/codex/gemini CLI from the test sandbox, so
+# we install a minimal stub on PATH for each runner. The stub never gets
+# invoked — the auth check (file-existence + env var) runs *before* the
+# CLI is called. Its only job is to satisfy `_have <ai>`.
+
+_install_fake_ai_cli() {
+    local _ai="$1"
+    mkdir -p "$TEST_TEMP_HOME/bin"
+    # Minimal shim — should never run during these tests, but echo
+    # something obvious if it ever does so the failure mode is visible.
+    cat >"$TEST_TEMP_HOME/bin/$_ai" <<EOF
+#!/bin/sh
+echo "fake $_ai stub invoked — should not reach here in auth tests" >&2
+exit 99
+EOF
+    chmod +x "$TEST_TEMP_HOME/bin/$_ai"
+}
+
+@test "auth: claude logged out — refuses spawn before worktree creation" {
+    # No ~/.claude.json, no ~/.claude/.credentials.json, no ANTHROPIC_API_KEY
+    # under the isolated $HOME. The orchestrator must fail with the auth
+    # message and NOT create a state dir under
+    # ~/.local/state/gh-pr-approve/<repo>/<pr>/.
+    _install_fake_ai_cli claude
+    run_in_bash "PATH='$TEST_TEMP_HOME/bin:'\$PATH unset ANTHROPIC_API_KEY 2>/dev/null; cd '$FAKE_REPO' && gh_pr_approve 42 2>&1"
+    assert_failure
+    assert_output --partial "claude CLI not authenticated"
+    assert_output --partial "claude /login"
+    [ ! -d "$HOME/.local/state/gh-pr-approve/fake-main/42" ]
+}
+
+@test "auth: claude credentials file present → auth check passes" {
+    # We seed ~/.claude/.credentials.json (the new dedicated auth store).
+    # gwt isn't loaded in the test shell, so the run fails *later* at the
+    # 'gwt function not loaded' guard — proving the auth check passed.
+    _install_fake_ai_cli claude
+    mkdir -p "$HOME/.claude"
+    printf '{"access_token":"fake"}\n' >"$HOME/.claude/.credentials.json"
+    run_in_bash "PATH='$TEST_TEMP_HOME/bin:'\$PATH cd '$FAKE_REPO' && gh_pr_approve 42 2>&1"
+    refute_output --partial "claude CLI not authenticated"
+}
+
+@test "auth: ANTHROPIC_API_KEY env var → auth check passes" {
+    # Env var alone is enough — overrides missing credentials file.
+    # `export` so the var crosses into `gh_pr_approve`'s subshell scope;
+    # the `VAR=val cmd` prefix form would only bind to the `cd`.
+    _install_fake_ai_cli claude
+    run_in_bash "export PATH='$TEST_TEMP_HOME/bin:'\$PATH; export ANTHROPIC_API_KEY=sk-test; cd '$FAKE_REPO' && gh_pr_approve 42 2>&1"
+    refute_output --partial "claude CLI not authenticated"
+}
+
+@test "auth: codex logged out — refuses spawn" {
+    _install_fake_ai_cli codex
+    run_in_bash "PATH='$TEST_TEMP_HOME/bin:'\$PATH unset OPENAI_API_KEY 2>/dev/null; cd '$FAKE_REPO' && gh_pr_approve 42 --ai codex 2>&1"
+    assert_failure
+    assert_output --partial "codex CLI not authenticated"
+    [ ! -d "$HOME/.local/state/gh-pr-approve/fake-main/42" ]
+}
+
+@test "auth: codex credentials file present → auth check passes" {
+    _install_fake_ai_cli codex
+    mkdir -p "$HOME/.codex"
+    printf '{"token":"fake"}\n' >"$HOME/.codex/auth.json"
+    run_in_bash "PATH='$TEST_TEMP_HOME/bin:'\$PATH cd '$FAKE_REPO' && gh_pr_approve 42 --ai codex 2>&1"
+    refute_output --partial "codex CLI not authenticated"
+}
+
+@test "auth: gemini logged out — refuses spawn" {
+    _install_fake_ai_cli gemini
+    run_in_bash "PATH='$TEST_TEMP_HOME/bin:'\$PATH unset GEMINI_API_KEY GOOGLE_API_KEY 2>/dev/null; cd '$FAKE_REPO' && gh_pr_approve 42 --ai gemini 2>&1"
+    assert_failure
+    assert_output --partial "gemini CLI not authenticated"
+    [ ! -d "$HOME/.local/state/gh-pr-approve/fake-main/42" ]
+}
+
+@test "auth: gemini credentials file present → auth check passes" {
+    _install_fake_ai_cli gemini
+    mkdir -p "$HOME/.gemini"
+    printf '{"refresh_token":"fake"}\n' >"$HOME/.gemini/oauth_creds.json"
+    run_in_bash "PATH='$TEST_TEMP_HOME/bin:'\$PATH cd '$FAKE_REPO' && gh_pr_approve 42 --ai gemini 2>&1"
+    refute_output --partial "gemini CLI not authenticated"
+}
+
+@test "help: documents auth pre-flight" {
+    # Discoverability — users shouldn't have to read shell source to learn
+    # about the new precondition introduced by issue #327.
+    run_in_bash 'gh_pr_approve --help'
+    assert_success
+    assert_output --partial "AI CLI authenticated"
+    assert_output --partial "no worktree"
+}
+
+# ---------------------------------------------------------------------------
+# status <N>: failure-cause surfacing for failed:approving (issue #327)
+# ---------------------------------------------------------------------------
+
+@test "status <N>: failed:approving surfaces the recorded result message" {
+    # Worker writes is_error=true claude records to usage.jsonl on
+    # 'Not logged in' — status should pull that field out instead of
+    # leaving the user to grep the log themselves.
+    _seed_pr_state 601 "failed:approving" "" "9999999"
+    local _usage="$HOME/.local/state/gh-pr-approve/fake-main/601/usage.jsonl"
+    cat >"$_usage" <<'EOF'
+{"ai":"claude","ts":"2026-05-05T17:00:00Z","label":"/gh-pr-approve 601","is_error":true,"duration_ms":38,"result":"Not logged in · Please run /login","usage":{}}
+EOF
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status 601"
+    assert_success
+    assert_output --partial "Failure"
+    assert_output --partial "Not logged in"
+}
+
+@test "status <N>: failed:approving with no usage.jsonl → no Failure row" {
+    # Defensive — older state dirs (pre-ai_usage.sh) may not have a
+    # usage.jsonl. Status must keep working and not print an empty
+    # 'Failure' row that would confuse the eye.
+    _seed_pr_state 602 "failed:approving" "" "9999999"
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status 602"
+    assert_success
+    refute_output --partial "Failure"
+}
+
+# ---------------------------------------------------------------------------
 # dispatcher: 'status' / 'prune' must not be parsed as a PR number
 # ---------------------------------------------------------------------------
 
