@@ -9,8 +9,8 @@
 <한 줄 요약>
 ```
 
-prefix 를 붙이지 않는다 (conventional commit 의 `none` 케이스). 기존
-`[Misc]` 대괄호 형식은 폐기.
+prefix 를 붙이지 않는 케이스 (Conventional Commits 타입을 적용하지
+않음). 기존 `[Misc]` 대괄호 형식은 폐기.
 
 ## 본문 골격
 
