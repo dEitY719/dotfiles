@@ -43,6 +43,7 @@ parse_date_arg() {
     local start end
     start="${arg%%..*}"
     end="${arg##*..}"
+    [ -n "$start" ] && [ -n "$end" ] || return 1
     start=$(_expand_day "$start") || return 1
     end=$(_expand_day "$end") || return 1
     # Half-open: subtract 1 day from end so GitHub's inclusive `created:A..B`

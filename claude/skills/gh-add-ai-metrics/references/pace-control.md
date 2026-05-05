@@ -112,8 +112,11 @@ When both are set, the loop stops on whichever fires first. The stop
 message identifies which one:
 
 ```bash
-# Inside the per-card loop, BEFORE processing the next card:
-if check_budget "$elapsed" "$budget_secs"; then
+# Inside the per-card loop, BEFORE processing the next card.
+# elapsed_secs is in SECONDS — recomputed each iteration. Do not
+# substitute the minutes-rounded ELAPSED used by Step 4's display line.
+elapsed_secs=$(( $(date +%s) - START_TS ))
+if check_budget "$elapsed_secs" "$budget_secs"; then
   stop_reason="--budget ($(format_duration "$budget_secs"))"
   break
 fi
