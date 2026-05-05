@@ -4,7 +4,6 @@
 # Source-of-truth lives at
 #   claude/skills/gh-add-ai-metrics/references/date-parsing.md
 # and is mirrored at tests/bats/skills/_fixtures/date_parsing.sh for testing.
-# Issues #336 + #337.
 
 load '../test_helper'
 
@@ -63,7 +62,7 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
-# parse_date_arg — month form (issue #336 + #337)
+# parse_date_arg — month form
 # ---------------------------------------------------------------------------
 
 @test "parse_date_arg: 5-char YY-MM → month range" {
@@ -91,7 +90,7 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
-# parse_date_arg — range form (issue #337)
+# parse_date_arg — range form
 # ---------------------------------------------------------------------------
 
 @test "parse_date_arg: 8-char range A..B → half-open (end -1 day)" {
