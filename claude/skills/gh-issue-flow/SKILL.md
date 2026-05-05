@@ -58,9 +58,12 @@ if the previous completed successfully.
    Passing the issue number ensures `Closes #<N>` ends up in the PR
    body via gh:pr's Step 3 (issue resolution).
 
-4. **Step 2.4 — Append AI Metrics to PR** (only if 2.3 succeeded; soft-fail)
+4. **Step 2.4 — Post AI Metrics to Issue** (only if 2.3 succeeded; soft-fail)
 
-   Append the AI metrics footer block to the PR body created in Step 2.3.
+   Post a flow-level aggregate metrics comment on the **linked GitHub Issue**.
+   The PR body already carries the per-step `<!-- ai-metrics:gh-pr -->` block
+   written by `gh:pr`; this step adds the total across all three sub-skills to
+   the Issue so the Issue thread is the single place to review full AI effort.
    This step soft-fails — warn on any error but never block the flow.
 
    a. Compute: `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))`
@@ -71,22 +74,25 @@ if the previous completed successfully.
       For `feat`, infer size from the implementation scope.
    d. Token estimate: character count of (issue body + implementation file reads) ÷ 4,
       rounded to nearest 500. Minimum 1 000.
-   e. Get PR number, fetch current body, strip any existing block (idempotency),
-      append fresh block, update:
-      ```bash
-      PR_NUM=$(gh pr view --json number -q .number)
-      BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
-      gh pr view --json body -q .body | \
-        python3 -c "
-import re, sys
-body = sys.stdin.read()
-body = re.sub(r'\n?---\n<!-- ai-metrics -->.*?<!-- /ai-metrics -->\n?', '', body, flags=re.DOTALL)
-sys.stdout.write(body)" > "$BODY"
-      printf '\n---\n<!-- ai-metrics -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics -->\n' \
-        "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
-      gh pr edit "$PR_NUM" --body-file "$BODY"
-      ```
-   f. On failure: print `⚠️  ai-metrics append failed (<reason>) — continuing.`
+   e. Post the aggregate comment on the linked issue (body template below).
+   f. On failure: print `⚠️  ai-metrics comment failed (<reason>) — continuing.`
+
+```bash
+gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
+  -X POST \
+  -f body="### ✅ gh-issue-flow 완료
+
+| 단계 | AI 소요 |
+|------|---------|
+| gh-issue-implement | ~${IMPL_MIN:-?} min |
+| gh-commit | ~${COMMIT_MIN:-?} min |
+| gh-pr | ~${PR_MIN:-?} min |
+| **합계** | **~$ELAPSED min** |
+
+👤 예상 사람 시간: ~$HUMAN_H h · 📊 ~$TOKENS tokens
+
+<!-- ai-metrics:gh-issue-flow tokens=$TOKENS human_h=$HUMAN_H ai_min=$ELAPSED -->"
+```
 
 ## Step 3: Report
 
