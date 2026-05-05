@@ -87,7 +87,10 @@ issue (only when an issue number was resolved in Step 2):
 
 ```bash
 ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
-TOKENS=5000  # fallback; replace with char-count estimate when context is available
+# Token estimate: (char count of commit diff + message) / 4, rounded to nearest 500, min 1000
+# See gh-issue-create/references/metrics-helper.md "Token Estimation" for the formula
+TOKENS=$(( ( ($(git diff HEAD~1 | wc -c) / 4 / 500) + 1 ) * 500 ))
+[ "$TOKENS" -lt 1000 ] && TOKENS=1000
 gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
   -X POST \
   -f body="### 🤖 AI Metrics — gh-commit
