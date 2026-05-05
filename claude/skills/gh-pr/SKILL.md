@@ -70,10 +70,15 @@ footer block (soft-fail — warn on error, never block):
 2. Issue type: the conventional-commit prefix from the first commit subject.
 3. Human time: look up `gh-issue-create/references/metrics-baseline.md`.
    For `feat`, infer size from the number of files changed.
-4. Token estimate: character count of (issue body + commit log) ÷ 4,
-   rounded to nearest 500. Minimum 1 000.
+4. Token estimate: read `references/metrics-helper.md` and paste the
+   `compute_pr_tokens` snippet in full. The inputs are **(linked-issue
+   body) + (commit log over `<base>..HEAD`)**, NOT the drafted PR body.
+   Counting `$BODY` (the PR-body temp file) is the regression that
+   produced PR #325's `📊 ~1000 tokens` footer (issue #326).
 
 ```bash
+# After running the snippet from references/metrics-helper.md, $TOKENS is
+# bound to the correct estimate. Now append the footer to $BODY.
 printf '\n---\n<!-- ai-metrics:gh-pr -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics:gh-pr -->\n' \
   "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
 ```

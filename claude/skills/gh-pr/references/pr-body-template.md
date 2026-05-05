@@ -63,9 +63,17 @@ Do NOT set `--draft` or `--reviewer` unless the user explicitly asked.
 
 ## Label Derivation
 
-Labels are applied **after** `gh pr create` via `gh pr edit --add-label`,
-because the label set must be validated against the repo's existing labels
-first (creating labels on the fly is forbidden).
+Labels are applied **after** `gh pr create` via the
+`_gh_pr_edit_safe_label` wrapper (sourced from
+`shell-common/functions/gh_pr_edit_safe.sh`), because:
+
+1. The label set must be validated against the repo's existing labels first
+   (creating labels on the fly is forbidden).
+2. A bare `gh pr edit --add-label` call exits 1 with a `Projects (classic)
+   is being deprecated` GraphQL warning on repos that still have a classic
+   project board attached, silently dropping every label. The wrapper
+   detects that warning and falls back to the REST endpoint, which is
+   GraphQL-free. See issue #326.
 
 ### Mapping from Conventional Commits
 
@@ -99,18 +107,24 @@ Use judgment; do not stretch — a label should meaningfully describe the PR.
 ### Safe application loop
 
 Labels that don't already exist in the repo **must be skipped silently** —
-never create new labels.
+never create new labels. The `_gh_pr_edit_safe_label` wrapper enforces this
+even on the REST fallback path: it re-checks `gh label list` before POST.
 
 ```bash
-EXISTING=$(gh label list --limit 200 --json name -q '.[].name')
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh"
+
+EXISTING=$(gh label list --repo "$GH_REPO" --limit 200 --json name -q '.[].name')
 PR_NUMBER=<the number gh pr create printed>
 
 for LABEL in <candidate-list>; do
   if printf '%s\n' "$EXISTING" | grep -Fxq "$LABEL"; then
-    gh pr edit "$PR_NUMBER" --add-label "$LABEL"
+    _gh_pr_edit_safe_label "$PR_NUMBER" "$LABEL" --repo "$GH_REPO"
   fi
 done
 ```
+
+`GH_REPO` is `owner/repo` (e.g. `dEitY719/dotfiles`). Resolve via
+`gh repo view --json nameWithOwner --jq .nameWithOwner` if not already set.
 
 Report the applied labels (and skipped ones, if any) alongside the PR URL
 in Step 7.
