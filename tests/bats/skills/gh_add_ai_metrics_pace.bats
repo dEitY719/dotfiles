@@ -4,7 +4,6 @@
 # Source-of-truth lives at
 #   claude/skills/gh-add-ai-metrics/references/pace-control.md
 # and is mirrored at tests/bats/skills/_fixtures/pace_control.sh for testing.
-# Issue #338.
 
 load '../test_helper'
 
