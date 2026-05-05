@@ -30,6 +30,8 @@ gh:issue-implement, gh:commit, gh:pr.
 
 This skill takes no `mode` arg; implementation is always `direct`.
 
+Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 2.4.
+
 ## Step 2: Chain the 3 Skills
 
 Invoke in order. Each uses Claude Code's Skill tool. Each runs only
@@ -56,16 +58,42 @@ if the previous completed successfully.
    Passing the issue number ensures `Closes #<N>` ends up in the PR
    body via gh:pr's Step 3 (issue resolution).
 
+4. **Step 2.4 — Append AI Metrics to PR** (only if 2.3 succeeded; soft-fail)
+
+   Append the AI metrics footer block to the PR body created in Step 2.3.
+   This step soft-fails — warn on any error but never block the flow.
+
+   a. Compute: `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))`
+   b. Issue type: parse the conventional-commit prefix from the issue title
+      fetched in Step 2.1 (e.g. `feat`, `fix`, `refactor`).
+   c. Human time: read `~/.claude/skills/gh-issue-create/references/metrics-baseline.md`
+      and look up the issue type. For `feat`, infer size from the implementation scope.
+   d. Token estimate: character count of (issue body + implementation file reads) ÷ 4,
+      rounded to nearest 500. Minimum 1 000.
+   e. Get PR number and fetch current body, append block, update:
+      ```bash
+      PR_NUM=$(gh pr view --json number -q .number)
+      BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
+      gh pr view --json body -q .body > "$BODY"
+      printf '\n---\n<!-- ai-metrics -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics -->\n' \
+        "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
+      gh pr edit "$PR_NUM" --body-file "$BODY"
+      ```
+   f. On failure: print `⚠️  ai-metrics append failed (<reason>) — continuing.`
+
 ## Step 3: Report
 
-If all 3 succeeded:
+If all steps succeeded:
 ```
 gh:issue-flow complete (#<N>)
   ✓ Step 1: gh:issue-implement  (<n files changed>, <n tests passed>)
   ✓ Step 2: gh:commit            (<sha> "<subject>")
   ✓ Step 3: gh:pr                (PR #<M>)
+  ✓ Step 4: ai-metrics           (📊 ~X tokens · 👤 ~M h · 🤖 ~L min)
   PR URL: <pr-url>
 ```
+
+If Step 2.4 soft-failed, show `⚠️ Step 4: ai-metrics  (skipped — <reason>)` instead.
 
 If a step failed:
 ```
@@ -89,6 +117,8 @@ Resume hint logic:
 - Never retry a failed step. Human decides retry or fix.
 - Never skip a step. All 3 or stop.
 - Never mutate state between steps beyond what the sub-skills do.
+  Exception: Step 2.4 may edit the PR body after Step 2.3 — this is
+  intentional and must soft-fail (never block the flow).
 - Do NOT preface or summarize beyond the compact report.
 - Do NOT end the turn until the Step 3 report is issued (success or
   failure template). A `Next:` / resume-hint from a sub-skill
