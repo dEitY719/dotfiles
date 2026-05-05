@@ -17,9 +17,10 @@ intended Issue lifecycle is `Backlog → In progress → Done` — Issues must n
 visit "In review" or "Approved" (issue #289).
 
 Calling `_gh_project_status_sync issue … "In progress"` immediately after the
-PR is created corrects the builtin's transition. The `--only-from "Backlog,Ready"`
-guard prevents regressing Issues that are already further along (e.g., an Issue
-that was manually at "In progress" before the PR opened is left alone).
+PR is created corrects the builtin's transition. The
+`--only-from "Backlog,Ready,In review"` guard explicitly includes `In review`
+so we can undo the builtin's mis-move even when it fires before our sync, while
+still refusing to drag `Done` Issues backwards if a closed PR is re-opened (#309).
 
 ## Snippet
 
@@ -30,7 +31,7 @@ Source the shared helper, then call it with the new PR number:
 _gh_project_status_sync pr "$PR_NUMBER" "In review"
 for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO"); do
     _gh_project_status_sync issue "$_issue" "In progress" \
-        --only-from "Backlog,Ready"
+        --only-from "Backlog,Ready,In review"
 done
 ```
 

@@ -85,10 +85,12 @@ jobs:
           _gh_project_status_sync pr "$PR_NUMBER" "In review"
           # Move linked Issues to "In progress" — the builtin "Pull request linked
           # to issue" workflow moves them to "In review", which is wrong for Issues.
-          # --only-from prevents regressing Issues already past "Ready".
+          # "In review" is included in --only-from so we can correct the builtin's
+          # mis-move even when it fires first; "Done" is intentionally excluded so
+          # a re-opened PR cannot drag a closed Issue card backwards (#309).
           for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO"); do
             _gh_project_status_sync issue "$_issue" "In progress" \
-              --only-from "Backlog,Ready"
+              --only-from "Backlog,Ready,In review"
           done
 
       - name: PR review approved → Approved
