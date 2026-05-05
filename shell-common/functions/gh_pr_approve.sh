@@ -86,6 +86,55 @@ _gh_pr_approve_require_ai_cli() {
     esac
 }
 
+# Pre-flight check: is the selected ai CLI authenticated?
+# Returns 0 when an auth signal (env var or local credentials file) is
+# present, 1 otherwise. This is heuristic — false positives are possible
+# (expired tokens, malformed credentials) but the dominant "logged out"
+# case from issue #327 is caught before any worktree is created. The
+# check is intentionally cheap and synchronous: env-var lookups + file
+# existence, no API calls and no token spend.
+_gh_pr_approve_check_ai_auth() {
+    case "$1" in
+    claude)
+        # ANTHROPIC_API_KEY shortcuts the OAuth flow; either is enough.
+        # Path mix reflects two CLI generations: ~/.claude/.credentials.json
+        # is the new dedicated auth store; ~/.claude.json is the older
+        # combined config+auth blob still used by stable channels.
+        if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            return 0
+        fi
+        if [ -f "$HOME/.claude/.credentials.json" ] || [ -f "$HOME/.claude.json" ]; then
+            return 0
+        fi
+        ux_error "claude CLI not authenticated. Run 'claude /login' first."
+        return 1
+        ;;
+    codex)
+        if [ -n "${OPENAI_API_KEY:-}" ]; then
+            return 0
+        fi
+        if [ -f "$HOME/.codex/auth.json" ]; then
+            return 0
+        fi
+        ux_error "codex CLI not authenticated. Run 'codex login' first."
+        return 1
+        ;;
+    gemini)
+        if [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${GOOGLE_API_KEY:-}" ]; then
+            return 0
+        fi
+        if [ -f "$HOME/.gemini/oauth_creds.json" ]; then
+            return 0
+        fi
+        ux_error "gemini CLI not authenticated. Run 'gemini' once interactively to sign in."
+        return 1
+        ;;
+    *)
+        return 0
+        ;;
+    esac
+}
+
 # Run one non-interactive prompt with the selected ai runner.
 # Delegates to ai_usage.sh so per-call token usage and cost are appended
 # to <state-dir>/usage.jsonl. The worker tail-prints _ai_usage_summary,
@@ -335,6 +384,28 @@ _gh_pr_approve_status_single() {
     else
         ux_table_row "Last log" "(none)"
     fi
+
+    # For approving failures the tail above usually only shows the Token
+    # Usage block — the actual claude/codex/gemini error message
+    # (e.g. "Not logged in · Please run /login") gets buried earlier in
+    # the log. Surface it directly from usage.jsonl so the diagnosis is
+    # one glance away instead of one tail|grep away.
+    case "$_state" in
+    failed:approving)
+        local _usage _failure
+        _usage="$_dir/usage.jsonl"
+        if [ -f "$_usage" ] && [ -s "$_usage" ] && command -v jq >/dev/null 2>&1; then
+            _failure="$(jq -rs '
+                map(select((.is_error // false) or ((.tracking // "") == "cli_failed")))
+                | last
+                | (.result // .error // "")
+            ' "$_usage" 2>/dev/null)"
+            if [ -n "$_failure" ] && [ "$_failure" != "null" ]; then
+                ux_table_row "Failure" "$_failure"
+            fi
+        fi
+        ;;
+    esac
 
     # Heredoc (not pipe) so reads land in this shell — see auto-memory:
     # subshell tracing trap.
@@ -632,6 +703,11 @@ gh_pr_approve_help() {
     ux_info "Preconditions:"
     ux_bullet "Run from main repo (not inside a worktree)"
     ux_bullet "gh CLI authenticated, selected AI CLI on PATH, gwt loaded"
+    ux_bullet "Selected AI CLI authenticated (env var or local credentials file)"
+    ux_bullet_sub "claude: ANTHROPIC_API_KEY or ~/.claude/.credentials.json or ~/.claude.json"
+    ux_bullet_sub "codex:  OPENAI_API_KEY or ~/.codex/auth.json"
+    ux_bullet_sub "gemini: GEMINI_API_KEY / GOOGLE_API_KEY or ~/.gemini/oauth_creds.json"
+    ux_bullet_sub "if missing, gh-pr-approve refuses to spawn (no worktree, no state dir)"
     ux_info ""
     ux_info "Related:"
     ux_bullet "gh-flow         - issue → PR automation (author side)"
@@ -791,6 +867,15 @@ gh_pr_approve() {
     if [ "$_pr_count" -eq 0 ]; then
         ux_error "no PR numbers provided"
         ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>] [--self-record|--admin-merge]"
+        return 1
+    fi
+
+    # Auth pre-flight (issue #327): bail before any worktree/state I/O when
+    # the selected ai CLI is logged out, so users don't have to clean up a
+    # zombie worktree + 'failed:approving' state dir afterwards. Done here
+    # — after PR-number / main-repo validation — so obvious user errors
+    # still surface their natural message instead of an auth complaint.
+    if ! _gh_pr_approve_check_ai_auth "$_ai"; then
         return 1
     fi
 
