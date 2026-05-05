@@ -6,7 +6,7 @@
 |---|------|---------|-------------|
 | positional | `issue#N` / `pr#M` | — | Cards to retrofit (case-insensitive prefix). Multiple allowed. |
 | flag | `--type {issue\|PR}` | both | Limits date-filter mode to a single artifact kind. |
-| flag | `--date <YYYY-MM-DD>` | — | Date-filter mode trigger. `YY-MM-DD` is expanded to `20YY`. |
+| flag | `--date <YYYY-MM-DD>` | — | Date-filter mode trigger. 10-char input used as-is; 8-char `YY-MM-DD` expanded to `20YY-MM-DD`; other lengths rejected. |
 | flag | `--force` | off | Recompute metrics and replace an existing footer (default skips). |
 | flag | `--remote <name>` | `origin` | Override the target remote. |
 | flag | `-h` / `--help` / `help` | — | Print this help and stop. |
