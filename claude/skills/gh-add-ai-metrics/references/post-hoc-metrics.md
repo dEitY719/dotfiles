@@ -9,13 +9,39 @@ stay deterministic across re-runs.
 ## Inputs (per card)
 
 - `title` — first line of `gh {issue,pr} view --json title`
-- `body` — `--json body`, the user-authored portion only (footer
-  excluded if a previous run wrote one — see "stripping" below)
+- `body` — `--json body`, raw from the API. May or may not contain a
+  prior `<!-- ai-metrics -->` footer; the strip step below is always
+  applied first so downstream computations see only the user-authored
+  portion.
+
+## Always-strip step (must precede TOKENS)
+
+The TOKENS character count must come from the body **without** any
+existing footer; otherwise a `--force` re-run inflates the count by the
+length of the previous footer (~150 chars), feeding back into a slowly
+growing token estimate. The strip is also a no-op when no footer
+exists, so it is safe to run unconditionally.
+
+```bash
+stripped=$(printf '%s' "$body" \
+  | perl -0777 -pe 's|\n+---\n<!-- ai-metrics(?::[A-Za-z0-9_-]+)? -->.*?<!-- /ai-metrics(?::[A-Za-z0-9_-]+)? -->\n?||s')
+```
+
+Regex notes:
+
+- `\n+---\n` matches one or more leading newlines + the `---` separator
+  on its own line. Tolerates both append conventions in the wild —
+  PR #320's `\n---\n` (single) and `gh-issue-create`'s `\n\n---\n`
+  (double) — without leaving a stray newline behind in either case.
+- `<!-- ai-metrics(?::[A-Za-z0-9_-]+)? -->` matches both the colonless
+  form and the suffixed form (`<!-- ai-metrics:gh-pr -->`).
+- `.*?` non-greedy + the `s` flag scopes the match to the nearest
+  closing marker.
 
 ## TOKENS
 
 ```
-TOKENS = max(1000, round_to_500((len(title) + len(body)) / 4))
+TOKENS = max(1000, round_to_500((len(title) + len(stripped)) / 4))
 ```
 
 - Character count (not byte count); `wc -m` for safety on multibyte
@@ -24,10 +50,10 @@ TOKENS = max(1000, round_to_500((len(title) + len(body)) / 4))
   Token Estimation rules.
 - Floor at 1000 — anything smaller is noise.
 
-Bash:
+Bash (consumes `$stripped` from the always-strip step above):
 
 ```bash
-chars=$(printf '%s%s' "$title" "$body" | wc -m | awk '{print $1}')
+chars=$(printf '%s%s' "$title" "$stripped" | wc -m | awk '{print $1}')
 tokens=$(( (chars / 4 + 250) / 500 * 500 ))
 [ "$tokens" -lt 1000 ] && tokens=1000
 ```
@@ -76,19 +102,6 @@ elapsed_min=$(awk -v h="$human_h" 'BEGIN { v = h * 60 * 0.05; printf "%d", (v < 
 The 5% factor reflects the observed ratio in #320's own footer
 (`👤 ~8 h · 🤖 ~15 min` ≈ 3.1%, rounded up for safety) and is intentionally
 conservative — better to over-report AI cost than under-report.
-
-## Stripping the existing footer before recomputation (`--force`)
-
-When recomputing on a card that already has a footer, character counts
-must be taken from the *original* body, not the inflated one with the
-prior footer included. Strip first:
-
-```bash
-stripped=$(printf '%s' "$body" \
-  | perl -0777 -pe 's|\n?---\n<!-- ai-metrics(?::[A-Za-z0-9_-]+)? -->.*?<!-- /ai-metrics(?::[A-Za-z0-9_-]+)? -->\n?||s')
-```
-
-Then feed `stripped` (not `body`) into the TOKENS formula.
 
 ## Determinism
 
