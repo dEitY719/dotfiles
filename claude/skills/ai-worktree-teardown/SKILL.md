@@ -72,4 +72,14 @@ Append `TEARDOWN` entry to `ai-worktree-spawn.log` (same file as spawn).
   Removed:  ../my-app-gemini-1
   Branch:   wt/gemini/1 (deleted)
   Now on:   main (up to date with origin/main)
+
+  Note: if your outer shell (the one that launched claude) was cd'd
+  inside the removed worktree, run `cd <main-repo>` there now —
+  otherwise its next prompt will spew `getcwd: cannot access parent
+  directories` errors from zsh/pyenv/p10k.
 ```
+
+Always include the `Note:` block — the skill cannot detect the outer
+shell's cwd, so the hint is unconditional. Substitute `<main-repo>`
+with the absolute path of the main repo this skill is running from
+(`git rev-parse --show-toplevel`).
