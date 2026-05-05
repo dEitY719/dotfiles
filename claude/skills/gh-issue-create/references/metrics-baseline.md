@@ -28,7 +28,7 @@ pattern-repetition carveout below.
 
 | Signal                  | How to measure                                                |
 |-------------------------|---------------------------------------------------------------|
-| Components touched      | Distinct top-level dirs in `git diff --name-only`             |
+| Components touched      | Distinct top-level dirs from `git diff --name-only`. For changes under `claude/skills/`, count each skill directory (`claude/skills/<skill>/`) as its own component, so a 9-skill cross-cut counts as 9, not 1. |
 | Architectural footprint | Explicit NF reqs, cross-system contracts, new public APIs     |
 | Diff weight             | `additions + deletions` from `git diff --stat`                |
 
@@ -42,11 +42,11 @@ pattern-repetition carveout below.
 ### Carveouts
 
 - **Pattern repetition** (same edit replicated across N files): bump down one
-  tier. Example: PR #321 changed 11 files to add the same `<!-- ai-metrics:* -->`
-  block — `large` by raw file count, but actually `medium` because the work was
-  one edit ×11.
+  tier (floor at **Small** — never goes lower). Example: PR #321 changed 11
+  files to add the same `<!-- ai-metrics:* -->` block — **Large** by raw file
+  count, but actually **Medium** because the work was one edit ×11.
 - **Single component, many files** (≥ 6 files in one top-level dir): stays
-  `medium`. File count alone does not move it to `large`.
+  **Medium**. File count alone does not move it to **Large**.
 
 When unsure, default to **medium** (8 h).
 
