@@ -66,15 +66,22 @@ if the previous completed successfully.
    a. Compute: `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))`
    b. Issue type: parse the conventional-commit prefix from the issue title
       fetched in Step 2.1 (e.g. `feat`, `fix`, `refactor`).
-   c. Human time: read `~/.claude/skills/gh-issue-create/references/metrics-baseline.md`
-      and look up the issue type. For `feat`, infer size from the implementation scope.
+   c. Human time: look up the issue type in `gh-issue-create`'s
+      `references/metrics-baseline.md` (in the same skills directory).
+      For `feat`, infer size from the implementation scope.
    d. Token estimate: character count of (issue body + implementation file reads) ÷ 4,
       rounded to nearest 500. Minimum 1 000.
-   e. Get PR number and fetch current body, append block, update:
+   e. Get PR number, fetch current body, strip any existing block (idempotency),
+      append fresh block, update:
       ```bash
       PR_NUM=$(gh pr view --json number -q .number)
       BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
-      gh pr view --json body -q .body > "$BODY"
+      gh pr view --json body -q .body | \
+        python3 -c "
+import re, sys
+body = sys.stdin.read()
+body = re.sub(r'\n?---\n<!-- ai-metrics -->.*?<!-- /ai-metrics -->\n?', '', body, flags=re.DOTALL)
+sys.stdout.write(body)" > "$BODY"
       printf '\n---\n<!-- ai-metrics -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics -->\n' \
         "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
       gh pr edit "$PR_NUM" --body-file "$BODY"
