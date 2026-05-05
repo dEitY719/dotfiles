@@ -131,7 +131,12 @@ Resume hint logic:
 - Never skip a step. All 3 or stop.
 - Never mutate state between steps beyond what the sub-skills do.
   Exception: Step 2.4 may edit the PR body after Step 2.3 — this is
-  intentional and must soft-fail (never block the flow).
+  intentional and must soft-fail (never block the flow). If a future
+  variant of Step 2.4 needs to mutate PR labels or body, route through
+  `_gh_pr_edit_safe_label` / `_gh_pr_edit_safe_body`
+  (`shell-common/functions/gh_pr_edit_safe.sh`); plain `gh pr edit
+  --add-label` / `--body-file` silently exits 1 on repos with classic
+  Projects attached (issue #326 Bug B).
 - Do NOT preface or summarize beyond the compact report.
 - Do NOT end the turn until the Step 3 report is issued (success or
   failure template). A `Next:` / resume-hint from a sub-skill
