@@ -147,9 +147,12 @@ dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
      가드가 적용되어 follow-up 커밋이 들어와도 상태를 되돌리지 않는다.
      raw `git commit` 경로에선 수동 이동.
   2. `/gh-pr` 또는 `project-board-sync.yml` (PR opened 이벤트) 가 PR 생성
-     직후 `_gh_project_status_sync issue … "In progress" --only-from "Backlog,Ready"` 를
+     직후 `_gh_project_status_sync issue … "In progress" --only-from "Backlog,Ready,In review"` 를
      호출한다. 이는 GitHub 빌트인 `Pull request linked to issue` (#3) 가
-     Issue 카드를 `In review` 로 잘못 이동시키는 것을 즉시 교정한다 (#289).
+     Issue 카드를 `In review` 로 잘못 이동시키는 것을 즉시 교정한다 (#289). 가드에
+     `In review` 가 포함되어 있어 빌트인이 먼저 발화한 뒤에도 보정이 동작하며,
+     `Done` 만은 가드에서 제외해 닫힌 Issue 가 재오픈된 PR 로 인해 역행하지 않는다
+     (#309).
 - **PR 카드 `Backlog → In review`**: `/gh-flow` 워커 또는 `/gh-pr`
   단독 실행이 PR 생성 직후 자동 전환한다. raw `gh pr create` 로
   PR 을 만든 경우엔 수동 이동이 필요하다. `project-board-sync.yml` 의
