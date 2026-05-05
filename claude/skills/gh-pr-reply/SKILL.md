@@ -28,6 +28,8 @@ every thread. Silent fixes are not acceptable; silent declines are worse.
 
 ## Step 1: Resolve Target PR
 
+Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 7.
+
 Precedence:
 1. **Explicit argument** — `/gh:pr-reply 123` → PR #123.
 2. **Current branch auto-detect** — `gh pr view --json number,url,headRefName,baseRefName`; if no PR exists, stop and tell the user.
@@ -73,6 +75,21 @@ asked) and report new commit SHAs alongside the reply summary.
 Print the summary table per `references/final-summary.md` showing
 Accepted / Declined / Answered counts, commit SHAs, and any skipped
 already-replied comments.
+
+After printing the report, post a PR comment with ai-metrics (soft-fail —
+warn on error, never block). `COMMENT_COUNT` is the number of comments
+addressed in Step 5 (including declined and bot comments):
+
+```bash
+ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
+HUMAN_H=$(echo "scale=2; $COMMENT_COUNT * 0.25" | bc)
+gh api "repos/$OWNER_REPO/issues/$PR_NUMBER/comments" \
+  -X POST \
+  -f body="<!-- ai-metrics:gh-pr-reply tokens=${TOKENS:-5000} human_h=$HUMAN_H ai_min=$ELAPSED -->
+🤖 리뷰 답변: ~$ELAPSED min · 👤 ~$HUMAN_H h ($COMMENT_COUNT comments × 0.25 h)"
+```
+
+On failure: `⚠️  ai-metrics comment failed — continuing.`
 
 ## Constraints
 

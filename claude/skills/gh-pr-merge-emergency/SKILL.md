@@ -23,6 +23,8 @@ output it verbatim, then stop. No API calls.
 
 ## Step 1: Parse Args + Resolve Target
 
+Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 5.
+
 Positional args: `<PR> <reason> [remote]`.
 
 - `PR` — number (required). If omitted, try `gh pr view --json number` on
@@ -73,6 +75,16 @@ Non-negotiable audit tail. File `incident: emergency merge of PR #<N> —
 <reason first line>` with the body + retro checklist from
 `references/audit-templates.md`. Attach an `incident` label **only if**
 `gh label list --repo "$TARGET_REPO"` confirms it exists.
+
+Include the ai-metrics block in the incident issue body (append before
+creating — no soft-fail here since the incident issue is a required artifact):
+
+```bash
+ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
+# Append to the issue body temp file before gh issue create:
+printf '\n---\n<!-- ai-metrics:gh-pr-merge-emergency -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics:gh-pr-merge-emergency -->\n' \
+  "${TOKENS:-3000}" "${HUMAN_H:-1}" "$ELAPSED" >> "$INCIDENT_BODY"
+```
 
 ## Step 6: Sync Project Board Status
 

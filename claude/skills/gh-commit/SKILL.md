@@ -29,6 +29,8 @@ footer when a GitHub issue is known.
 
 ## Step 1: Inspect State (parallel) — ALWAYS FIRST
 
+Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 5.
+
 This step runs **unconditionally** on every invocation, even bare `/gh-commit`
 with no prior conversation context. The working-tree state observed here is
 the source of truth — do NOT ask the user "what did you change?" before
@@ -77,18 +79,43 @@ their own manual edits), derive intent from the diff itself:
   fix the underlying issue, re-stage, and create a **new** commit.
 - See `references/commit-message-format.md` for the exact HEREDOC command.
 
-## Step 5: Sync Project Board Status
+## Step 5: AI Metrics + Sync Project Board Status
 
-If the commit message contains `Closes|Fixes|Refs #N` (i.e. the issue
-number resolved in Step 2 was actually written into the footer), push
-the linked Issue's project-board card to `In progress` — but only when
-its current Status is `Backlog`. The `--only-from Backlog` guard is
-mandatory: `/gh-commit` is invoked many times per branch (initial
-commit + follow-up fix commits), and after a PR opens the issue moves
-to `In review`; without the guard a follow-up fix commit would bounce
-it back to `In progress`.
+Before syncing the project board, record AI metrics (soft-fail — warn on
+error, never block). Compute elapsed time and post a comment on the linked
+issue (only when an issue number was resolved in Step 2):
 
-Skip this step entirely when no issue footer was written.
+```bash
+ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
+TOKENS=5000  # fallback; replace with char-count estimate when context is available
+gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
+  -X POST \
+  -f body="### 🤖 AI Metrics — gh-commit
+
+| 항목 | 값 |
+|------|-----|
+| 커밋 | $COMMIT_SHA |
+| 구현 시간 (gh-issue-implement) | ~${IMPL_MIN:-?} min |
+| 커밋 시간 (gh-commit) | ~$ELAPSED min |
+| 토큰 | ~$TOKENS |
+
+<!-- ai-metrics:gh-commit tokens=$TOKENS ai_min=$ELAPSED -->"
+```
+
+If no issue number exists, print the metrics to stdout only and skip the
+comment. On any API failure, print `⚠️  ai-metrics comment failed — continuing.`
+and proceed.
+
+Then sync the project board: if the commit message contains
+`Closes|Fixes|Refs #N` (i.e. the issue number resolved in Step 2 was
+actually written into the footer), push the linked Issue's project-board
+card to `In progress` — but only when its current Status is `Backlog`.
+The `--only-from Backlog` guard is mandatory: `/gh-commit` is invoked
+many times per branch (initial commit + follow-up fix commits), and after
+a PR opens the issue moves to `In review`; without the guard a follow-up
+fix commit would bounce it back to `In progress`.
+
+Skip the board sync entirely when no issue footer was written.
 
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
