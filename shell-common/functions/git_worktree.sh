@@ -1608,10 +1608,40 @@ git_worktree_spawn() {
 }
 
 # ============================================================================
+# Internal: query GitHub for the PR attached to <branch> and verify its
+# merge_commit lives in <main_ref>'s history. Returns 0 only when the PR is
+# MERGED and the merge_commit is reachable from main_ref.
+#
+# Used as a final fallback by _gwt_commits_safe and _gwt_branch_merged for
+# the "squash-merged then origin/main progressed past the squash" case
+# where neither tree-equivalence nor patch-id can detect that the work is
+# already merged (issue #315). gwt status already trusts this signal via
+# _gwt_remote_pr_states; teardown should match for a coherent UX.
+#
+# Soft-fails (returns 1) when gh is missing/unauthenticated, the branch has
+# no PR, the PR is not MERGED, or the merge_commit is not yet fetched.
+# Callers treat 1 as "no signal" and continue with their existing checks.
+#
+# Usage: _gwt_pr_merged_into <branch> <main_ref>
+# ============================================================================
+_gwt_pr_merged_into() {
+    local branch="$1" main_ref="$2"
+    [ -n "$branch" ] && [ -n "$main_ref" ] || return 1
+    command -v gh >/dev/null 2>&1 || return 1
+    local pr_state merge_sha
+    pr_state="$(gh pr view "$branch" --json state -q .state 2>/dev/null)" || return 1
+    [ "$pr_state" = "MERGED" ] || return 1
+    merge_sha="$(gh pr view "$branch" --json mergeCommit -q .mergeCommit.oid 2>/dev/null)" || return 1
+    [ -n "$merge_sha" ] || return 1
+    git merge-base --is-ancestor "$merge_sha" "$main_ref" 2>/dev/null
+}
+
+# ============================================================================
 # Internal: check if current HEAD's commits are safe to discard
-# Returns 0 (safe) if: upstream matches, or HEAD is in origin/main,
-# or HEAD's tree matches origin/main (squash-merge), or all patches are
-# already in origin/main (rebase merge).
+# Returns 0 (safe) if: upstream matches, HEAD is in origin/main,
+# HEAD's tree matches origin/main (squash directly under main HEAD),
+# all patches are already in origin/main (rebase merge), or GitHub reports
+# the branch's PR as MERGED with the merge_commit reachable from main_ref.
 # ============================================================================
 _gwt_commits_safe() {
     local local_rev remote_rev
@@ -1630,12 +1660,14 @@ _gwt_commits_safe() {
         return 0
     fi
 
-    # 3. Working tree of HEAD matches origin/main (squash-merge case).
+    # 3. Working tree of HEAD matches origin/main (squash-merge case, narrow).
     # No diff means every change is already on main, even if no individual
     # commit is a patch-id match — squash collapses N→1, so `git cherry`
     # (step 4) cannot detect this. `--quiet` is fail-closed: exit 0 only on
     # genuine no-diff; on bad ref / git error it exits non-zero so we do NOT
-    # mistake a failed comparison for a clean tree.
+    # mistake a failed comparison for a clean tree. Loses signal once
+    # origin/main progresses past the squash with overlapping changes —
+    # step 5 (PR API) covers that broader case.
     if git diff --quiet "$main_ref" HEAD 2>/dev/null; then
         return 0
     fi
@@ -1644,12 +1676,23 @@ _gwt_commits_safe() {
     # git cherry marks already-applied commits with '-', unapplied with '+'.
     # If grep finds no '+' line, every HEAD commit is patch-id-equivalent to
     # something already in main_ref → safe. Misses squash-merge (handled in
-    # step 3) because squash maps N commits to a single patch-id on main.
+    # step 3 / 5) because squash maps N commits to a single patch-id on main.
     if ! git cherry "$main_ref" HEAD 2>/dev/null | grep -q '^+'; then
         return 0
     fi
 
-    # 5. Upstream exists but remote branch was deleted (PR merged + branch auto-deleted)
+    # 5. PR API verification. When squash collapses N→1 AND origin/main
+    # later progresses with overlapping changes, neither tree-equivalence
+    # (step 3) nor patch-id (step 4) detects it. Trust the same `gh` signal
+    # gwt status already uses; soft-fails when gh is unavailable.
+    local current_branch
+    current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+    if [ -n "$current_branch" ] && [ "$current_branch" != "HEAD" ] \
+       && _gwt_pr_merged_into "$current_branch" "$main_ref"; then
+        return 0
+    fi
+
+    # 6. Upstream exists but remote branch was deleted (PR merged + branch auto-deleted)
     if [ "$remote_rev" = "no-upstream" ]; then
         # No upstream ever set — could be genuinely unpushed
         # Check if there are any commits beyond the merge-base with main
@@ -1674,11 +1717,18 @@ _gwt_branch_merged() {
     if ! git cherry "$target" "$branch" 2>/dev/null | grep -q '^+'; then
         return 0
     fi
-    # Squash merge: target collapsed N commits to 1, so patch-ids no longer
-    # match 1:1 — but the branch's tree is still present in target. `--quiet`
-    # is fail-closed: exit 0 only on genuine no-diff; bad ref / git error
-    # exits non-zero so a failed comparison is not mistaken for "merged".
-    git diff --quiet "$target" "$branch" 2>/dev/null
+    # Squash merge (narrow case): target collapsed N commits to 1, so
+    # patch-ids no longer match 1:1 — but the branch's tree is still present
+    # in target. `--quiet` is fail-closed: exit 0 only on genuine no-diff;
+    # bad ref / git error exits non-zero so a failed comparison is not
+    # mistaken for "merged".
+    if git diff --quiet "$target" "$branch" 2>/dev/null; then
+        return 0
+    fi
+    # PR API fallback (issue #315): once target progresses past the squash
+    # with overlapping changes, the diff is non-empty even though the work
+    # is merged. GitHub still knows.
+    _gwt_pr_merged_into "$branch" "$target"
 }
 
 # ============================================================================
