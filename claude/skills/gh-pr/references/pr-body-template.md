@@ -63,9 +63,11 @@ Do NOT set `--draft` or `--reviewer` unless the user explicitly asked.
 
 ## Label Derivation
 
-Labels are applied **after** `gh pr create` via `gh pr edit --add-label`,
-because the label set must be validated against the repo's existing labels
-first (creating labels on the fly is forbidden).
+Labels are applied **after** `gh pr create` via `_pr_edit_safe_label`
+(a `gh pr edit --add-label` wrapper that falls back to the REST API
+when the GraphQL Projects(classic) deprecation warning trips a fatal
+exit code). The label set must be validated against the repo's
+existing labels first (creating labels on the fly is forbidden).
 
 ### Mapping from Conventional Commits
 
@@ -99,18 +101,29 @@ Use judgment; do not stretch — a label should meaningfully describe the PR.
 ### Safe application loop
 
 Labels that don't already exist in the repo **must be skipped silently** —
-never create new labels.
+never create new labels. Pre-filtering via `gh label list` is the only
+gate that prevents `_pr_edit_safe_label`'s REST fallback (which uses
+`POST /repos/.../labels`, an auto-creating endpoint) from inventing
+labels. Do NOT skip the pre-filter.
 
 ```bash
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh"
 EXISTING=$(gh label list --limit 200 --json name -q '.[].name')
 PR_NUMBER=<the number gh pr create printed>
 
 for LABEL in <candidate-list>; do
   if printf '%s\n' "$EXISTING" | grep -Fxq "$LABEL"; then
-    gh pr edit "$PR_NUMBER" --add-label "$LABEL"
+    _pr_edit_safe_label "$PR_NUMBER" "$LABEL"
   fi
 done
 ```
+
+`_pr_edit_safe_label` first tries `gh pr edit --add-label`; on the
+specific `Projects (classic) is being deprecated` GraphQL warning that
+trips `gh pr edit` to exit 1 in repos with classic boards attached
+(issue #326 Bug B), it retries via `gh api -X POST
+repos/<owner>/<repo>/issues/<pr>/labels`. Other failures are not
+retried — they are forwarded to stderr and surface as non-zero rc.
 
 Report the applied labels (and skipped ones, if any) alongside the PR URL
 in Step 7.

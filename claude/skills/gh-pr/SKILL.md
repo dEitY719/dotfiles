@@ -70,10 +70,15 @@ footer block (soft-fail — warn on error, never block):
 2. Issue type: the conventional-commit prefix from the first commit subject.
 3. Human time: look up `gh-issue-create/references/metrics-baseline.md`.
    For `feat`, infer size from the number of files changed.
-4. Token estimate: character count of (issue body + commit log) ÷ 4,
-   rounded to nearest 500. Minimum 1 000.
+4. Token estimate: source `references/token-compute.sh` and call
+   `compute_pr_tokens "$ISSUE_BODY" "$COMMIT_LOG"`. Do NOT hand-roll
+   the math or pass `$BODY` (the PR body file) — see the helper's
+   header for the issue-#326 regression that motivated pinning this
+   contract in code.
 
 ```bash
+. ~/.claude/skills/gh-pr/references/token-compute.sh
+TOKENS=$(compute_pr_tokens "$ISSUE_BODY" "$COMMIT_LOG")
 printf '\n---\n<!-- ai-metrics:gh-pr -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics:gh-pr -->\n' \
   "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
 ```
