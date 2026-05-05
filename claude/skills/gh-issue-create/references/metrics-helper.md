@@ -96,7 +96,7 @@ When editing an existing PR body (e.g., `gh-issue-flow`):
 python3 -c "
 import re, sys
 body = sys.stdin.read()
-body = re.sub(r'\n?---\n<!-- ai-metrics -->.*?<!-- /ai-metrics -->\n?', '', body, flags=re.DOTALL)
+body = re.sub(r'\n?---\n<!-- ai-metrics(:.*?)? -->.*?<!-- /ai-metrics(:.*?)? -->\n?', '', body, flags=re.DOTALL)
 sys.stdout.write(body)" < existing_body > stripped_body
 ```
 

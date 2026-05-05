@@ -35,7 +35,8 @@ Precedence:
 2. **Current branch auto-detect** — `gh pr view --json number,url,headRefName,baseRefName`; if no PR exists, stop and tell the user.
 3. Never guess. Never pick "the latest PR in the repo".
 
-Also capture `owner/repo` via `gh repo view --json nameWithOwner`.
+Also capture `TARGET_REPO` via `gh repo view --json nameWithOwner -q .nameWithOwner`
+(e.g. `owner/repo`). Use `$TARGET_REPO` consistently in all subsequent API calls.
 
 ## Step 2: Fetch All Review Comments
 
@@ -83,7 +84,7 @@ addressed in Step 5 (including declined and bot comments):
 ```bash
 ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
 HUMAN_H=$(echo "scale=2; $COMMENT_COUNT * 0.25" | bc)
-gh api "repos/$OWNER_REPO/issues/$PR_NUMBER/comments" \
+gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
   -X POST \
   -f body="<!-- ai-metrics:gh-pr-reply tokens=${TOKENS:-5000} human_h=$HUMAN_H ai_min=$ELAPSED -->
 🤖 리뷰 답변: ~$ELAPSED min · 👤 ~$HUMAN_H h ($COMMENT_COUNT comments × 0.25 h)"
