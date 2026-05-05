@@ -4,7 +4,8 @@ description: >-
   Save the current conversation as a GitHub issue in the current repository.
   Use when the user runs /gh:issue-create, /gh-issue-create, or asks to "이 대화 이슈로 등록",
   "chat을 깃허브 이슈로 남겨", "기록용 이슈 만들어". Summarizes the conversation so
-  far into a structured issue body (feature request / error analysis / misc),
+  far into a structured issue body keyed by conventional-commit prefix
+  (feat / fix / refactor / perf / docs / test / chore / misc),
   creates it via `gh issue create` on the target remote's repo without asking
   for confirmation, and prints only the issue number and URL. Do NOT over-
   compress — the issue is reused for PR drafts and blog posts, so preserve
@@ -26,70 +27,74 @@ output its content verbatim, then stop. No API calls.
 
 Convert the current chat into a well-structured GitHub issue on the target
 repo. Execute immediately without confirmation. Print only the issue
-number + URL at the end — the user will open GitHub directly.
+number + URL at the end.
 
 ## Step 1: Detect Repo Context
 
-Confirm we're in a git repo (`git rev-parse --show-toplevel`), then pick
-the target remote (arg #1 if given, else `origin`) and resolve it to
+Confirm we're in a git repo (`git rev-parse --show-toplevel`), pick the
+target remote (arg #1 if given, else `origin`), and resolve it to
 `TARGET_REPO=<owner>/<repo>`. If the remote does not exist, list
-`git remote -v` and stop — never fall back to `origin` silently.
-
-Read `references/repo-resolution.md` for the full substeps, error-message
-template, and `https` / `ssh` URL parsing rules.
+`git remote -v` and stop — never silently fall back to `origin`. Full
+substeps in `references/repo-resolution.md`.
 
 ## Step 2: Classify the Conversation
 
-Pick exactly one category based on the dominant intent of the chat:
+Pick exactly one conventional-commit prefix as the dominant intent.
 
-- **feature** — 신규 기능 요청, 개선 제안, 리팩토링 아이디어
-- **bug** — 에러 로그 분석, 버그 재현, 원인 추적
-- **misc** — 질문/논의/조사/문서화 등 위 두 가지에 속하지 않는 것
+| Prefix | When |
+|--------|------|
+| `feat` | 신규 기능 / 개선 / 확장 |
+| `fix` | 에러 / 실패 / 의도와 다른 동작 |
+| `refactor` | 동작 보존하며 구조 정리 |
+| `perf` | 느림 / 자원 사용 과다 |
+| `docs` | 문서 자체 변경 |
+| `test` | 테스트 갭 / 추가 / 변경 |
+| `chore` | 빌드·CI·도구·deps·스타일 (`build`/`ci`/`style`/`revert` 흡수) |
+| `misc` | 위 어디에도 안 들어감 (fallback) |
 
-The category determines the title prefix and section layout.
+모호하면 묻지 말고 가장 보수적인 `misc` 로 떨어진다. 대형 `feat`
+휴리스틱(영향 컴포넌트 ≥3 / NF 명시 / 결정 누적 — 둘 이상)은
+`references/templates/feat.md` "대형 feat 가이드" 를 따른다.
 
 ## Step 3: Draft the Issue Body
 
-Read `references/issue-body-templates.md` and select the title format + body
-structure matching the category from Step 2. Write the body in the language
-the user was speaking (Korean for Korean chats).
+Step 2 의 prefix 에 매핑되는 템플릿을 로드한다:
+`references/templates/<prefix>.md`. 각 템플릿은 타이틀 형식과 본문
+골격을 모두 포함한다.
 
-**DO NOT over-compress.** This issue is reused later for PR descriptions and
-blog posts. Preserve concrete file paths, command outputs, decisions, and
-reasoning. A 200-line issue is fine if the conversation warranted it. Never
-abbreviate the discussion log to 2–3 bullets.
+타이틀은 conventional commit 형식 `<type>[(<scope>)]: <한 줄 요약>`.
+`misc` 만 prefix 없이 한 줄 요약만 적는다. 기존 `[Feature]` /
+`[Bug]` / `[Misc]` 대괄호 형식은 폐기.
+
+본문은 사용자 대화 언어로(한국어 대화 → 한국어 이슈). **DO NOT
+over-compress** — 파일 경로·명령 출력·결정·근거를 그대로 유지한다.
+대화가 길었다면 200줄짜리 이슈도 정상.
 
 ## Step 4: Create the Issue
 
-Write the body to a unique temp file via `mktemp` (avoids shell escaping
-issues and concurrent-run collisions), then:
+`mktemp` 으로 임시 파일에 본문을 쓰고:
 
 ```bash
 BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
-# ... write the drafted body to "$BODY" ...
+# ... write body to "$BODY" ...
 gh issue create --repo "$TARGET_REPO" --title "<title>" --body-file "$BODY"
 ```
 
-Do NOT add `--assignee`, `--label`, or `--milestone` unless the user explicitly
-asked. Do NOT ask for confirmation — run it immediately.
+`--assignee` / `--label` / `--milestone` 은 사용자가 명시 요청하지
+않은 한 추가하지 않는다. 확인 질문하지 말고 즉시 실행.
 
 ## Step 5: Report
 
-Output **only** the issue number and URL, nothing else:
+이슈 번호와 URL 만 출력:
 
 ```
 Issue #123 created: https://github.com/owner/repo/issues/123
 ```
 
-No summary, no "I created...", no markdown headings. The user checks GitHub
-directly.
-
 ## Constraints
 
-- Never use `--assignee @me` or labels unless the user asked.
-- Always use `--repo "$TARGET_REPO"` — never rely on implicit repo detection.
-- If the user-specified remote does not exist, fail immediately with the list
-  of available remotes. Do not fall back to `origin` silently.
-- Never abbreviate the discussion log to 2–3 bullets — preserve detail.
-- Never ask "should I create it?" — the user already said yes by running the
-  skill.
+- `--assignee @me` / 라벨은 사용자 요청이 있을 때만 추가.
+- 항상 `--repo "$TARGET_REPO"` — 암묵적 repo 감지 의존 금지.
+- 사용자 지정 remote 가 없으면 즉시 실패.
+- discussion log 를 2~3줄로 압축하지 말 것.
+- "should I create it?" 같은 확인 질문 금지.
