@@ -1610,7 +1610,8 @@ git_worktree_spawn() {
 # ============================================================================
 # Internal: check if current HEAD's commits are safe to discard
 # Returns 0 (safe) if: upstream matches, or HEAD is in origin/main,
-# or all patches are already in origin/main (rebase/squash merge).
+# or HEAD's tree matches origin/main (squash-merge), or all patches are
+# already in origin/main (rebase merge).
 # ============================================================================
 _gwt_commits_safe() {
     local local_rev remote_rev
@@ -1629,15 +1630,25 @@ _gwt_commits_safe() {
         return 0
     fi
 
-    # 3. All patches already applied via rebase/squash merge (patch-id comparison)
+    # 3. Working tree of HEAD matches origin/main (squash-merge case).
+    # An empty diff means every change is already on main, even if no
+    # individual commit is a patch-id match — squash collapses N→1, so
+    # `git cherry` (step 4) cannot detect this. Check tree equivalence
+    # before the more expensive patch-id walk.
+    if [ -z "$(git diff "$main_ref" HEAD 2>/dev/null)" ]; then
+        return 0
+    fi
+
+    # 4. All patches already applied via rebase merge (patch-id comparison).
     # git cherry marks already-applied commits with '-', unapplied with '+'.
     # If grep finds no '+' line, every HEAD commit is patch-id-equivalent to
-    # something already in main_ref → safe.
+    # something already in main_ref → safe. Misses squash-merge (handled in
+    # step 3) because squash maps N commits to a single patch-id on main.
     if ! git cherry "$main_ref" HEAD 2>/dev/null | grep -q '^+'; then
         return 0
     fi
 
-    # 4. Upstream exists but remote branch was deleted (PR merged + branch auto-deleted)
+    # 5. Upstream exists but remote branch was deleted (PR merged + branch auto-deleted)
     if [ "$remote_rev" = "no-upstream" ]; then
         # No upstream ever set — could be genuinely unpushed
         # Check if there are any commits beyond the merge-base with main
@@ -1658,8 +1669,14 @@ _gwt_commits_safe() {
 # ============================================================================
 _gwt_branch_merged() {
     local branch="$1" target="$2"
-    # No '+' line from git cherry → all patches already in target.
-    ! git cherry "$target" "$branch" 2>/dev/null | grep -q '^+'
+    # Rebase merge: every commit is patch-id-equivalent to one already in target.
+    if ! git cherry "$target" "$branch" 2>/dev/null | grep -q '^+'; then
+        return 0
+    fi
+    # Squash merge: target collapsed N commits to 1, so patch-ids no longer
+    # match 1:1 — but the branch's tree is still present in target. Empty diff
+    # means every change has been incorporated.
+    [ -z "$(git diff "$target" "$branch" 2>/dev/null)" ]
 }
 
 # ============================================================================
@@ -1686,7 +1703,13 @@ _gwt_report_unpushed() {
     git rev-parse --verify --quiet "$main_ref" >/dev/null 2>&1 || main_ref="origin/master"
 
     local upstream ahead remote_branch_ref remote_branch_exists
-    upstream="$(git rev-parse --abbrev-ref '@{u}' 2>/dev/null || echo "(none)")"
+    # `git rev-parse --abbrev-ref '@{u}'` exits non-zero AND prints the
+    # literal "@{u}" to stdout when no upstream is set, which leaks into
+    # the captured value. Sanitize before display.
+    upstream="$(git rev-parse --abbrev-ref '@{u}' 2>/dev/null)"
+    if [ -z "$upstream" ] || [ "$upstream" = "@{u}" ]; then
+        upstream="(none)"
+    fi
     ahead="$(git rev-list --count "$main_ref"..HEAD 2>/dev/null || echo "?")"
     remote_branch_ref="origin/$branch"
     if git rev-parse --verify --quiet "refs/remotes/$remote_branch_ref" >/dev/null 2>&1; then
