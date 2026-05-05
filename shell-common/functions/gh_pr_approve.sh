@@ -396,11 +396,11 @@ _gh_pr_approve_status_single() {
         _usage="$_dir/usage.jsonl"
         if [ -f "$_usage" ] && [ -s "$_usage" ] && command -v jq >/dev/null 2>&1; then
             _failure="$(jq -rs '
-                map(select((.is_error // false) or ((.tracking // "") == "cli_failed")))
+                map(select((.is_error? // false) or ((.tracking? // "") == "cli_failed")))
                 | last
-                | (.result // .error // "")
+                | (.result? // .error? // empty)
             ' "$_usage" 2>/dev/null)"
-            if [ -n "$_failure" ] && [ "$_failure" != "null" ]; then
+            if [ -n "$_failure" ]; then
                 ux_table_row "Failure" "$_failure"
             fi
         fi
