@@ -1,0 +1,121 @@
+name: JIRA Mirror
+
+# One-way GitHub → JIRA sync (issue #318).
+#
+# Event mapping:
+#   issues.opened        → create JIRA ticket (To Do)
+#   issues.closed        → transition JIRA ticket to Done
+#   pull_request.closed  (merged=true) → transition linked JIRA tickets to Done
+#
+# Required GitHub Secrets:
+#   JIRA_BASE_URL       https://<org>.atlassian.net
+#   JIRA_PROJECT_KEY    e.g. PROJ
+#   JIRA_USER_EMAIL     e.g. user@org.com
+#   JIRA_API_TOKEN      Atlassian API token
+#
+# Optional GitHub Secrets / vars:
+#   JIRA_ISSUE_TYPE         Task (default)
+#   JIRA_FIELD_TOKENS       customfield_10100 (default)
+#   JIRA_FIELD_HUMAN_H      customfield_10101 (default)
+#   JIRA_FIELD_AI_MIN       customfield_10102 (default)
+#   JIRA_FIELD_GITHUB_LINK  customfield_10103 (default)
+
+on:
+  issues:
+    types: [opened, closed]
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Guard — require JIRA secrets
+        # Soft-skip when secrets are absent (e.g. fork PRs, incomplete setup).
+        # Hard-fail on same-repo events so misconfiguration is visible.
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${JIRA_BASE_URL:-}" ]; then
+            exit 0
+          fi
+          if [ "${IS_FORK:-false}" = "true" ]; then
+            echo "::warning::JIRA secrets not available for fork — skipping JIRA mirror."
+            exit 0
+          fi
+          echo "::error::JIRA_BASE_URL secret is missing. Set JIRA_BASE_URL, JIRA_PROJECT_KEY, JIRA_USER_EMAIL, JIRA_API_TOKEN via: gh secret set JIRA_BASE_URL --repo ${{ github.repository }}"
+          exit 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Issue opened → Create JIRA ticket
+        if: github.event_name == 'issues' && github.event.action == 'opened'
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_ISSUE_TYPE: ${{ secrets.JIRA_ISSUE_TYPE }}
+          JIRA_FIELD_TOKENS: ${{ secrets.JIRA_FIELD_TOKENS }}
+          JIRA_FIELD_HUMAN_H: ${{ secrets.JIRA_FIELD_HUMAN_H }}
+          JIRA_FIELD_AI_MIN: ${{ secrets.JIRA_FIELD_AI_MIN }}
+          JIRA_FIELD_GITHUB_LINK: ${{ secrets.JIRA_FIELD_GITHUB_LINK }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${JIRA_BASE_URL:-}" ] || exit 0
+          python3 .github/scripts/jira_sync.py create-issue \
+            --repo "${{ github.repository }}" \
+            --issue "${{ github.event.issue.number }}"
+
+      - name: Issue closed → Transition JIRA ticket to Done
+        if: github.event_name == 'issues' && github.event.action == 'closed'
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${JIRA_BASE_URL:-}" ] || exit 0
+          python3 .github/scripts/jira_sync.py close-issue \
+            --repo "${{ github.repository }}" \
+            --issue "${{ github.event.issue.number }}"
+
+      - name: PR merged → Transition linked JIRA tickets to Done
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.action == 'closed' &&
+          github.event.pull_request.merged == true
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${JIRA_BASE_URL:-}" ] || exit 0
+          python3 .github/scripts/jira_sync.py pr-merged \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}"
