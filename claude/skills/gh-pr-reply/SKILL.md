@@ -99,3 +99,8 @@ On failure: `⚠️  ai-metrics comment failed — continuing.`
 - Never dismiss bot comments as "just a bot".
 - Never fix files outside the PR's diff without flagging scope creep first.
 - Never `--force-push`. If history rewrite is needed, stop and ask.
+- If a future fix flow needs to mutate PR labels or body, route through
+  `_gh_pr_edit_safe_label` / `_gh_pr_edit_safe_body`
+  (`shell-common/functions/gh_pr_edit_safe.sh`). Bare `gh pr edit
+  --add-label` / `--body-file` silently exits 1 on repos with classic
+  Projects attached (issue #326 Bug B).
