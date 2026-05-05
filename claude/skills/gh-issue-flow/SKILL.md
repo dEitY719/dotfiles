@@ -15,6 +15,25 @@ allowed-tools: Bash, Read, Grep
 
 # gh:issue-flow — Issue → PR composition
 
+## ⚠️ CRITICAL CONTRACT — read before editing
+
+**Recurring failure mode: early-stop after Step 2.1.** When `gh:issue-implement`
+emits its `Next: /gh-commit && /gh-pr <N>` success hint, the model treats it
+as a final answer and ends the turn — leaving the user to manually re-trigger
+`gh:commit` and `gh:pr`. Reported by users as "100번 실행하면 50번은 stop"
+(half of all runs stop early). See issue #333 for history.
+
+**The mechanical guard is `--no-next-hint`** on the Step 2.1 invocation
+(`gh:issue-implement` already supports the flag and suppresses its trailing
+`Next:` line when set). With the trip-wire gone, the model sees a plain
+success report and proceeds naturally to Step 2.2. **Do not drop this flag.**
+If you edit Step 2 in any way, re-verify `--no-next-hint` is still present.
+
+**Zero conversational text between the three `Skill()` calls in Step 2.**
+No recap, no "now committing", no markdown headers, no progress bullets —
+those tokens read as a turn-ending summary and re-introduce the early-stop.
+The only text allowed in Step 2 is the final Step 3 report.
+
 ## Help
 
 If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
@@ -39,9 +58,13 @@ if the previous completed successfully.
 
 1. **Step 2.1 — gh:issue-implement**
    ```
-   Skill(gh:issue-implement, "<N> direct <remote>")
+   Skill(gh:issue-implement, "<N> direct <remote> --no-next-hint")
    ```
-   Track success = skill returned its success report (not failure).
+   `--no-next-hint` is **load-bearing** — it suppresses the trailing
+   `Next:` hint that would otherwise read as a turn-ending answer
+   (see CRITICAL CONTRACT above). Track success = skill returned its
+   success report (not failure). **Now invoke Step 2.2 — no recap,
+   no summary, no header.**
 
 2. **Step 2.2 — gh:commit** (only if 2.1 succeeded)
    ```
@@ -49,7 +72,8 @@ if the previous completed successfully.
    ```
    gh:commit auto-detects the issue number from the conversation
    (the `#<N>` was just mentioned by Step 2.1's report), so no
-   explicit args needed.
+   explicit args needed. **Now invoke Step 2.3 — no recap, no
+   summary, no header.**
 
 3. **Step 2.3 — gh:pr** (only if 2.2 succeeded)
    ```
@@ -144,3 +168,12 @@ Resume hint logic:
   a waypoint during this composition, not a final answer — keep
   going. Don't let a success hint from 2.1 or 2.2 end the flow
   before Step 3.
+- **Never drop `--no-next-hint` from the Step 2.1 invocation.** It is
+  the mechanical guard against the early-stop failure mode documented
+  in the CRITICAL CONTRACT section. If a refactor of Step 2 looks
+  cleaner without it, the refactor is wrong.
+- **Zero conversational text between Skill() calls in Step 2.** No
+  recap ("Step 2.1 complete, now committing..."), no progress
+  markdown headers, no per-step bullet summaries. Such text reads as
+  a turn-ending answer and re-introduces the early-stop. The only
+  prose allowed inside Step 2 is the final Step 3 report.
