@@ -20,11 +20,58 @@ Used by `gh:issue-create` and `gh:issue-flow` to populate `<!-- ai-metrics -->` 
 
 ## Size Heuristic for `feat`
 
-- **Small** (소): single component, ≤ 2 files, no NF requirements → 4 h
-- **Medium** (중): 2–5 files, some NF or cross-component work → 8 h
-- **Large** (대): ≥ 3 components, explicit NF requirements, architectural decisions → 24 h
+Tier is decided by **components × architectural footprint**, with diff weight
+as a secondary check. **File count alone never escalates a tier** — see the
+pattern-repetition carveout below.
+
+### Signals
+
+| Signal                  | How to measure                                                |
+|-------------------------|---------------------------------------------------------------|
+| Components touched      | Distinct top-level dirs in `git diff --name-only`             |
+| Architectural footprint | Explicit NF reqs, cross-system contracts, new public APIs     |
+| Diff weight             | `additions + deletions` from `git diff --stat`                |
+
+### Tier rules
+
+- **Large (24 h)** — *all three*: ≥ 3 components, explicit NF or architectural
+  decision, total diff > 500 lines.
+- **Small (4 h)** — single component, ≤ 2 files, no NF, total diff < 100 lines.
+- **Medium (8 h)** — anything else (default for non-trivial `feat`).
+
+### Carveouts
+
+- **Pattern repetition** (same edit replicated across N files): bump down one
+  tier. Example: PR #321 changed 11 files to add the same `<!-- ai-metrics:* -->`
+  block — `large` by raw file count, but actually `medium` because the work was
+  one edit ×11.
+- **Single component, many files** (≥ 6 files in one top-level dir): stays
+  `medium`. File count alone does not move it to `large`.
 
 When unsure, default to **medium** (8 h).
+
+### Decision log — KISS over 4-factor scoring (2026-05-05, issue #322)
+
+Issue #322 proposed a 4-factor weighted score
+(file_count × 25% + diff_lines × 25% + components × 25% + ai_judgment × 25%)
+with thresholds `< 1.5 → small`, `< 2.5 → medium`, `≥ 2.5 → large`.
+
+**Retroactive comparison on the 5 most recent `feat` PRs**
+(#325, #321, #320, #314, #301) at issue authorship time:
+
+| PR  | files | diff  | components | 4-factor score | 4-factor tier | Strict-heuristic tier | Match |
+|-----|-------|-------|------------|----------------|---------------|-----------------------|-------|
+| 325 | 4     | 477   | 1          | 2.00           | medium        | medium                | ✓     |
+| 321 | 11    | 319   | 1          | 1.75           | medium        | medium                | ✓     |
+| 320 | 3     | 107   | 1          | 1.75           | medium        | medium                | ✓     |
+| 314 | 13    | 720   | 1          | 2.25           | medium        | medium                | ✓     |
+| 301 | 4     | 350   | 3          | 2.25           | medium        | medium (borderline)   | ✓     |
+
+Match rate **5/5 = 100 %**, well above the issue's 80 % KISS threshold.
+Therefore: **simple boundary clarification adopted, 4-factor scoring not
+implemented.** The two real defects in the original heuristic were vagueness
+(when do file count and component count disagree?) and missing carveouts
+(pattern repetition). Both are addressed by the rules above.
 
 ## Token Estimation
 
