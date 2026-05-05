@@ -1628,11 +1628,21 @@ _gwt_pr_merged_into() {
     local branch="$1" main_ref="$2"
     [ -n "$branch" ] && [ -n "$main_ref" ] || return 1
     command -v gh >/dev/null 2>&1 || return 1
-    local pr_state merge_sha
-    pr_state="$(gh pr view "$branch" --json state -q .state 2>/dev/null)" || return 1
-    [ "$pr_state" = "MERGED" ] || return 1
-    merge_sha="$(gh pr view "$branch" --json mergeCommit -q .mergeCommit.oid 2>/dev/null)" || return 1
-    [ -n "$merge_sha" ] || return 1
+    # One `gh pr view` invocation, both fields. Two separate calls would
+    # mean two forks + two network round-trips per teardown — wasteful in
+    # `gwt teardown --all` where this runs once per worktree (PR #316
+    # gemini-code-assist review). `.mergeCommit?.oid // ""` is jq's
+    # null-safe pattern: an OPEN/CLOSED PR has `mergeCommit == null`, and
+    # the optional chain emits "" instead of erroring; the MERGED guard
+    # below still rejects non-merged states.
+    local pr_info pr_state merge_sha
+    pr_info="$(gh pr view "$branch" \
+        --json state,mergeCommit \
+        --jq '.state + " " + (.mergeCommit?.oid // "")' \
+        2>/dev/null)" || return 1
+    pr_state="${pr_info%% *}"
+    merge_sha="${pr_info#* }"
+    [ "$pr_state" = "MERGED" ] && [ -n "$merge_sha" ] || return 1
     git merge-base --is-ancestor "$merge_sha" "$main_ref" 2>/dev/null
 }
 
