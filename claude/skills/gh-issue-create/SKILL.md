@@ -31,6 +31,8 @@ number + URL at the end.
 
 ## Step 1: Detect Repo Context
 
+Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 3.5.
+
 Confirm we're in a git repo (`git rev-parse --show-toplevel`), pick the
 target remote (arg #1 if given, else `origin`), and resolve it to
 `TARGET_REPO=<owner>/<repo>`. If the remote does not exist, list
@@ -70,13 +72,29 @@ Step 2 의 prefix 에 매핑되는 템플릿을 로드한다:
 over-compress** — 파일 경로·명령 출력·결정·근거를 그대로 유지한다.
 대화가 길었다면 200줄짜리 이슈도 정상.
 
+## Step 3.5: Compute AI Metrics
+
+Before writing the body to the temp file, compute the metrics block:
+
+1. **Elapsed time**: `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))`
+2. **Issue type**: the prefix from Step 2 (`feat`, `fix`, `refactor`, etc.)
+3. **Human time**: look up `references/metrics-baseline.md` by issue type.
+   For `feat`, infer size (small / medium / large) from the conversation scope.
+4. **Token estimate**: sum character counts of the drafted title + body, divide
+   by 4, round to nearest 500 (minimum 1 000). See `references/metrics-baseline.md`
+   for the full estimation rules.
+
+Store results as `TOKENS`, `HUMAN_H`, `ELAPSED` for use in Step 4.
+
 ## Step 4: Create the Issue
 
-`mktemp` 으로 임시 파일에 본문을 쓰고:
+`mktemp` 으로 임시 파일에 본문을 쓰고 metrics 블록을 append 한 뒤 생성한다:
 
 ```bash
 BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
 # ... write body to "$BODY" ...
+printf '\n---\n<!-- ai-metrics -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics -->\n' \
+  "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
 gh issue create --repo "$TARGET_REPO" --title "<title>" --body-file "$BODY"
 ```
 
