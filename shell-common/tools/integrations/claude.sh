@@ -704,7 +704,10 @@ _claude_ensure_bind_mount() {
 _claude_dir_sync_one() {
     _cdso_cdir="$1"
     _cdso_name="$2"
-    _cdso_src_root="${DOTFILES_ROOT}/claude/$_cdso_name"
+    # Fallback parity with claude_mount_skills/claude_init in this file: if
+    # the function is invoked before the dotfiles env loader runs (or in a
+    # crippled login shell), don't construct paths starting at /.
+    _cdso_src_root="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/$_cdso_name"
     _cdso_tgt_root="$_cdso_cdir/$_cdso_name"
     _CLAUDE_DIR_SYNC_LAST_CHANGED=0
     _CLAUDE_DIR_SYNC_LAST_LINKED=0
@@ -778,7 +781,9 @@ _claude_dir_sync_one() {
 _claude_count_dir_sync() {
     _ccds_cdir="$1"
     _ccds_name="$2"
-    _ccds_src_root="${DOTFILES_ROOT}/claude/$_ccds_name"
+    # Same fallback as _claude_dir_sync_one — must agree, otherwise the
+    # ratio would lie about a sync that did happen.
+    _ccds_src_root="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/$_ccds_name"
     _ccds_tgt_root="$_ccds_cdir/$_ccds_name"
 
     _ccds_source=0
