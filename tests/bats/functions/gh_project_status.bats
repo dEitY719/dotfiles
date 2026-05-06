@@ -94,6 +94,19 @@ _run_closing_issues_bash() {
     assert_output --partial "ok"
 }
 
+@test "bash: _gh_project_status_resolve_owner_repo helper exists" {
+    # Extracted in #341 so the auto-detect step can be retried once on flake.
+    run_in_bash 'declare -f _gh_project_status_resolve_owner_repo >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "zsh: _gh_project_status_resolve_owner_repo helper exists" {
+    run_in_zsh 'typeset -f _gh_project_status_resolve_owner_repo >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
 # ---------------------------------------------------------------------------
 # Opt-out guards
 # ---------------------------------------------------------------------------
@@ -265,4 +278,109 @@ _run_closing_issues_bash() {
     assert_success
     assert_output --partial "rc=0"
     refute_output --partial "Unknown JSON field"
+}
+
+# ---------------------------------------------------------------------------
+# _gh_project_status_resolve_owner_repo — issue #341 (auto-detect retry)
+# ---------------------------------------------------------------------------
+#
+# A stateful fake `gh` covers the retry-on-flake path. The shim records each
+# invocation in a counter file so a single bash subprocess sees deterministic
+# pass/fail sequences, mirroring how a real graphql connection-reset would be
+# observed by the helper (one transient failure followed by recovery).
+
+_setup_fake_gh_repo_view() {
+    STUB_BIN="$TEST_TEMP_HOME/bin"
+    FAKE_GH_COUNTER="$TEST_TEMP_HOME/fake_gh_calls"
+    mkdir -p "$STUB_BIN"
+    : >"$FAKE_GH_COUNTER"
+    cat >"$STUB_BIN/gh" <<'GH'
+#!/usr/bin/env bash
+# Only the `gh repo view --json owner,name --jq ...` shape used by
+# _gh_project_status_resolve_owner_repo is exercised here.
+COUNTER="${FAKE_GH_COUNTER:?FAKE_GH_COUNTER not set}"
+n=$(wc -l <"$COUNTER" 2>/dev/null | tr -d ' ')
+n=$((n + 1))
+echo "$n" >>"$COUNTER"
+case "${FAKE_GH_REPO_MODE:-ok}" in
+    ok)            echo "owner reponame" ; exit 0 ;;
+    empty)         exit 0 ;;
+    error)         echo "graphql: connection reset" >&2 ; exit 1 ;;
+    flake_then_ok) [ "$n" -ge 2 ] && { echo "owner reponame" ; exit 0 ; } ; exit 1 ;;
+    flake_twice)   exit 1 ;;
+    *)             exit 0 ;;
+esac
+GH
+    chmod +x "$STUB_BIN/gh"
+}
+
+# Run a snippet in a bash subshell with fake gh on PATH and counter env wired.
+# Mirrors _run_closing_issues_bash but exposes FAKE_GH_REPO_MODE +
+# FAKE_GH_COUNTER and forwards the counter so cross-call state is visible.
+_run_resolve_bash() {
+    local mode="$1" snippet="$2"
+    run bash --noprofile --norc -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        export SHELL_COMMON='${SHELL_COMMON}'
+        export DOTFILES_FORCE_INIT=1
+        export DOTFILES_TEST_MODE=1
+        export HOME='${HOME}'
+        export TERM=dumb
+        export PATH='${STUB_BIN}:${PATH}'
+        export FAKE_GH_REPO_MODE='${mode}'
+        export FAKE_GH_COUNTER='${FAKE_GH_COUNTER}'
+        export _GH_PROJECT_STATUS_RETRY_SLEEP=0
+        source '${DOTFILES_ROOT}/bash/main.bash'
+        ${snippet}
+    "
+}
+
+@test "resolve: prints owner repo on success" {
+    _setup_fake_gh_repo_view
+    _run_resolve_bash ok '_gh_project_status_resolve_owner_repo; echo "rc=$?"'
+    assert_success
+    assert_output --partial "owner reponame"
+    assert_output --partial "rc=0"
+}
+
+@test "resolve: empty gh output returns failure" {
+    _setup_fake_gh_repo_view
+    _run_resolve_bash empty '_gh_project_status_resolve_owner_repo; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=1"
+}
+
+@test "resolve: gh non-zero exit returns failure" {
+    _setup_fake_gh_repo_view
+    _run_resolve_bash error '_gh_project_status_resolve_owner_repo 2>/dev/null; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=1"
+}
+
+@test "sync auto-detect: retries once and recovers on transient failure" {
+    # Regression for #341 — first `gh repo view` fails (simulated socket
+    # reset), second succeeds. With the retry in place the helper should
+    # proceed past auto-detect into the graphql query stage; that stage
+    # is faked to return zero records so the sync exits with the
+    # "not in any project" branch (proves we got past auto-detect).
+    _setup_fake_gh_repo_view
+    _run_resolve_bash flake_then_ok '_gh_project_status_sync issue 42 "In progress" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    refute_output --partial "could not determine owner/repo"
+    # Counter records each gh invocation: 2 for repo view (fail+ok) plus 1
+    # for the graphql query that fakes back empty.
+    run cat "$FAKE_GH_COUNTER"
+    [ "${#lines[@]}" -ge 2 ]
+}
+
+@test "sync auto-detect: stays fail-quiet when both attempts fail" {
+    _setup_fake_gh_repo_view
+    _run_resolve_bash flake_twice '_gh_project_status_sync issue 42 "In progress" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "could not determine owner/repo, skipping"
+    # Counter must show exactly 2 invocations — one initial, one retry.
+    run cat "$FAKE_GH_COUNTER"
+    [ "${#lines[@]}" -eq 2 ]
 }
