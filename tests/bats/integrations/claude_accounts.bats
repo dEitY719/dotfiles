@@ -780,10 +780,13 @@ run_with_fake_ssot() {
     assert_success
 
     [ -L "$HOME/.claude-personal/skills/cli-dev" ]
-    # Backup directory present with the user's local file preserved
-    local_backup=$(ls -d "$HOME/.claude-personal/skills/"cli-dev-pre-sync-* 2>/dev/null | head -1)
+    # Backup directory present (under .sync-backup/, issue #344) with the
+    # user's local file preserved.
+    local_backup=$(ls -d "$HOME/.claude-personal/.sync-backup/skills/"cli-dev-pre-sync-* 2>/dev/null | head -1)
     [ -n "$local_backup" ]
     [ -f "$local_backup/local-file.md" ]
+    # Issue #344: backup must NOT live alongside the skill in skills/.
+    ! ls -d "$HOME/.claude-personal/skills/"cli-dev-pre-sync-* >/dev/null 2>&1
 }
 
 @test "issue #342: stale symlink (wrong target) is replaced with correct one" {
@@ -819,10 +822,13 @@ run_with_fake_ssot() {
     assert_success
 
     [ ! -d "$HOME/.claude-personal/skills/user-data-dont-touch" ]
-    orphan_backup=$(ls -d "$HOME/.claude-personal/skills/"user-data-dont-touch-orphan-* 2>/dev/null | head -1)
+    # Backup lives under .sync-backup/ (issue #344), not skills/.
+    orphan_backup=$(ls -d "$HOME/.claude-personal/.sync-backup/skills/"user-data-dont-touch-orphan-* 2>/dev/null | head -1)
     [ -n "$orphan_backup" ]
     [ -f "$orphan_backup/keep.txt" ]
     grep -q "important" "$orphan_backup/keep.txt"
+    # Issue #344: orphan backup must NOT pollute the skill scanner directory.
+    ! ls -d "$HOME/.claude-personal/skills/"user-data-dont-touch-orphan-* >/dev/null 2>&1
 }
 
 @test "issue #342: second run is a no-op (idempotent — 0 changes)" {
@@ -924,8 +930,83 @@ run_with_fake_ssot() {
     run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
     assert_success
 
-    backups=$(ls -d "$HOME/.claude-personal/skills/"cli-dev-pre-sync-* 2>/dev/null | wc -l)
+    # Backups land under .sync-backup/ (issue #344). Exactly one backup,
+    # no nested -orphan- chain.
+    backups=$(ls -d "$HOME/.claude-personal/.sync-backup/skills/"cli-dev-pre-sync-* 2>/dev/null | wc -l)
     [ "$backups" -eq 1 ]
-    nested=$(ls -d "$HOME/.claude-personal/skills/"cli-dev-pre-sync-*-orphan-* 2>/dev/null | wc -l)
+    nested=$(ls -d "$HOME/.claude-personal/.sync-backup/skills/"cli-dev-pre-sync-*-orphan-* 2>/dev/null | wc -l)
     [ "$nested" -eq 0 ]
+    # And nothing leaks back into the scan dir.
+    leaked=$(ls -d "$HOME/.claude-personal/skills/"cli-dev-pre-sync-* 2>/dev/null | wc -l)
+    [ "$leaked" -eq 0 ]
+}
+
+# ---------- Issue #344: backups outside the skill scanner ----------
+
+@test "issue #344: skills/ stays free of *-pre-sync-* / *-orphan-* siblings" {
+    _seed_ssot_skills alpha
+    # Trigger BOTH backup branches: real-dir collision (Pass 1) and
+    # orphan real dir (Pass 2).
+    mkdir -p "$HOME/.claude-personal/skills/alpha"          # collision
+    echo "x" > "$HOME/.claude-personal/skills/alpha/x.md"
+    mkdir -p "$HOME/.claude-personal/skills/orphan-real"    # orphan
+    echo "y" > "$HOME/.claude-personal/skills/orphan-real/y.md"
+
+    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
+    assert_success
+
+    # The scan-visible directory contains only real SSOT-linked skills.
+    # Anything matching the backup naming convention is a regression of
+    # the issue #344 symptom (duplicate "<name>-pre-sync-<TS>" skills in
+    # available-skills).
+    leaked_pre=$(find "$HOME/.claude-personal/skills/" -maxdepth 1 -name '*-pre-sync-*' 2>/dev/null | wc -l)
+    leaked_orphan=$(find "$HOME/.claude-personal/skills/" -maxdepth 1 -name '*-orphan-*' 2>/dev/null | wc -l)
+    [ "$leaked_pre" -eq 0 ]
+    [ "$leaked_orphan" -eq 0 ]
+
+    # And both backup payloads are recoverable from .sync-backup/.
+    [ -d "$HOME/.claude-personal/.sync-backup/skills" ]
+    [ "$(find "$HOME/.claude-personal/.sync-backup/skills/" -maxdepth 1 -name '*-pre-sync-*' | wc -l)" -ge 1 ]
+    [ "$(find "$HOME/.claude-personal/.sync-backup/skills/" -maxdepth 1 -name '*-orphan-*' | wc -l)" -ge 1 ]
+}
+
+@test "issue #344: legacy backups in skills/ are migrated to .sync-backup/" {
+    _seed_ssot_skills alpha
+    # Simulate a user already on the buggy version: legacy backups sit
+    # inside the scan dir from a previous run.
+    mkdir -p "$HOME/.claude-personal/skills/cli-dev-pre-sync-20260101000000"
+    echo "legacy-pre" > "$HOME/.claude-personal/skills/cli-dev-pre-sync-20260101000000/SKILL.md"
+    mkdir -p "$HOME/.claude-personal/skills/agents-md-orphan-20260101000000"
+    echo "legacy-orphan" > "$HOME/.claude-personal/skills/agents-md-orphan-20260101000000/SKILL.md"
+
+    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
+    assert_success
+
+    # Legacy entries are gone from the scan dir.
+    [ ! -e "$HOME/.claude-personal/skills/cli-dev-pre-sync-20260101000000" ]
+    [ ! -e "$HOME/.claude-personal/skills/agents-md-orphan-20260101000000" ]
+
+    # And recoverable from .sync-backup/, content intact.
+    [ -d "$HOME/.claude-personal/.sync-backup/skills/cli-dev-pre-sync-20260101000000" ]
+    [ -d "$HOME/.claude-personal/.sync-backup/skills/agents-md-orphan-20260101000000" ]
+    grep -q "legacy-pre" "$HOME/.claude-personal/.sync-backup/skills/cli-dev-pre-sync-20260101000000/SKILL.md"
+    grep -q "legacy-orphan" "$HOME/.claude-personal/.sync-backup/skills/agents-md-orphan-20260101000000/SKILL.md"
+}
+
+@test "issue #344: legacy-backup migration is idempotent (second run is no-op)" {
+    _seed_ssot_skills alpha
+    mkdir -p "$HOME/.claude-personal/skills/cli-dev-pre-sync-20260101000000"
+    echo "x" > "$HOME/.claude-personal/skills/cli-dev-pre-sync-20260101000000/SKILL.md"
+
+    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills; echo "FIRST=$_CLAUDE_DIR_SYNC_LAST_CHANGED"'
+    assert_success
+    assert_output --partial "FIRST=2"   # 1 migration + 1 alpha link
+
+    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills; echo "SECOND=$_CLAUDE_DIR_SYNC_LAST_CHANGED"'
+    assert_success
+    assert_output --partial "SECOND=0"
+
+    # Backup directory not double-nested by the second run.
+    nested=$(find "$HOME/.claude-personal/.sync-backup/" -name 'cli-dev-pre-sync-20260101000000' 2>/dev/null | wc -l)
+    [ "$nested" -eq 1 ]
 }
