@@ -70,19 +70,21 @@ _gh_project_status_sync() {
             ;;
     esac
 
-    # Resolve owner/repo via gh.
-    local _owner _repo
-    if ! read -r _owner _repo <<EOF
-$(gh repo view --json owner,name --jq '"\(.owner.login) \(.name)"' 2>/dev/null)
-EOF
-    then
-        printf '[gh-project-status] could not determine owner/repo, skipping\n' >&2
-        return 0
+    # Resolve owner/repo via gh, with one 5s retry on transient failure
+    # (e.g. graphql socket reset). Mirrors the mutation step's retry —
+    # without it, a single transient `gh repo view` flake silently aborts
+    # the whole sync (issue #341). Override _GH_PROJECT_STATUS_RETRY_SLEEP
+    # in tests to skip the wait.
+    local _owner _repo _resolved
+    if ! _resolved=$(_gh_project_status_resolve_owner_repo); then
+        sleep "${_GH_PROJECT_STATUS_RETRY_SLEEP-5}"
+        if ! _resolved=$(_gh_project_status_resolve_owner_repo); then
+            printf '[gh-project-status] could not determine owner/repo, skipping\n' >&2
+            return 0
+        fi
     fi
-    if [ -z "$_owner" ] || [ -z "$_repo" ]; then
-        printf '[gh-project-status] could not determine owner/repo, skipping\n' >&2
-        return 0
-    fi
+    _owner="${_resolved%% *}"
+    _repo="${_resolved#* }"
 
     # Single query: per projectV2 item, return
     #   project.id | item.id | field.id | target_option.id | current_status_name
@@ -163,6 +165,28 @@ EOF
 $_records
 EOF
 
+    return 0
+}
+
+# Resolve cwd's GitHub owner/repo via `gh repo view`. Prints
+# "<owner> <repo>" on success; returns non-zero on failure (gh exit,
+# empty output, or partial output). Extracted so the auto-detect step in
+# _gh_project_status_sync can mirror the mutation step's single-retry
+# pattern (issue #341): without retry, one transient `gh repo view`
+# socket reset silently aborts the sync.
+_gh_project_status_resolve_owner_repo() {
+    local _output _owner _repo
+    _output=$(gh repo view --json owner,name --jq '"\(.owner.login) \(.name)"' 2>/dev/null) || return 1
+    [ -z "$_output" ] && return 1
+    if ! read -r _owner _repo <<EOF
+$_output
+EOF
+    then
+        return 1
+    fi
+    [ -z "$_owner" ] && return 1
+    [ -z "$_repo" ] && return 1
+    printf '%s %s\n' "$_owner" "$_repo"
     return 0
 }
 
