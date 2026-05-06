@@ -730,3 +730,202 @@ JSON
     assert_success
     refute_output --partial "Account mismatch"
 }
+
+# ---------- Issue #342: skills/docs sync via per-skill symlinks ----------
+#
+# Replaces the legacy bind mount with idempotent per-skill symlinks. Five
+# acceptance scenarios from the issue + status ratio + sub-command wiring.
+
+# Stage a FAKE_DOTFILES_ROOT under $HOME with skills/<name>/SKILL.md fixtures.
+# bash/main.bash unconditionally re-derives DOTFILES_ROOT from its own path
+# (see bash/main.bash:59), so setup_isolated_dotfiles_root cannot survive a
+# run_in_bash. Instead we override DOTFILES_ROOT *after* main.bash sources —
+# claude.sh reads ${DOTFILES_ROOT} at call time, not load time, so the
+# override takes effect for the function call under test.
+_seed_ssot_skills() {
+    export FAKE_DOTFILES_ROOT="$HOME/fake-dotfiles"
+    rm -rf "$FAKE_DOTFILES_ROOT"
+    mkdir -p "$FAKE_DOTFILES_ROOT/claude/skills" "$FAKE_DOTFILES_ROOT/claude/docs"
+    for _skill in "$@"; do
+        mkdir -p "$FAKE_DOTFILES_ROOT/claude/skills/${_skill}"
+        printf -- '---\nname: %s\ndescription: stub for %s\n---\n' "$_skill" "$_skill" \
+            > "$FAKE_DOTFILES_ROOT/claude/skills/${_skill}/SKILL.md"
+    done
+}
+
+# Wrap run_in_bash with a DOTFILES_ROOT override for the seeded fake root.
+run_with_fake_ssot() {
+    run_in_bash "export DOTFILES_ROOT='$FAKE_DOTFILES_ROOT'; $1"
+}
+
+@test "issue #342: empty target → SSOT skills become symlinks" {
+    _seed_ssot_skills alpha beta gamma
+    mkdir -p "$HOME/.claude-personal"
+
+    run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal _claude_dir_sync_one "$HOME/.claude-personal" skills'
+    assert_success
+
+    for s in alpha beta gamma; do
+        [ -L "$HOME/.claude-personal/skills/$s" ]
+        [ "$(readlink "$HOME/.claude-personal/skills/$s")" = "$FAKE_DOTFILES_ROOT/claude/skills/$s" ]
+    done
+}
+
+@test "issue #342: real-dir collision is backed up to *-pre-sync-* and replaced" {
+    _seed_ssot_skills cli-dev
+    mkdir -p "$HOME/.claude-personal/skills/cli-dev"
+    echo "stale-content" > "$HOME/.claude-personal/skills/cli-dev/local-file.md"
+
+    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
+    assert_success
+
+    [ -L "$HOME/.claude-personal/skills/cli-dev" ]
+    # Backup directory present with the user's local file preserved
+    local_backup=$(ls -d "$HOME/.claude-personal/skills/"cli-dev-pre-sync-* 2>/dev/null | head -1)
+    [ -n "$local_backup" ]
+    [ -f "$local_backup/local-file.md" ]
+}
+
+@test "issue #342: stale symlink (wrong target) is replaced with correct one" {
+    _seed_ssot_skills cli-dev
+    mkdir -p "$HOME/.claude-personal/skills" "$HOME/elsewhere/cli-dev"
+    ln -s "$HOME/elsewhere/cli-dev" "$HOME/.claude-personal/skills/cli-dev"
+
+    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
+    assert_success
+
+    [ -L "$HOME/.claude-personal/skills/cli-dev" ]
+    [ "$(readlink "$HOME/.claude-personal/skills/cli-dev")" = "$FAKE_DOTFILES_ROOT/claude/skills/cli-dev" ]
+}
+
+@test "issue #342: orphan symlink (no SSOT match) is auto-removed" {
+    _seed_ssot_skills alpha
+    mkdir -p "$HOME/.claude-personal/skills" "$HOME/leftover"
+    ln -s "$HOME/leftover" "$HOME/.claude-personal/skills/removed-skill"
+
+    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
+    assert_success
+
+    [ ! -e "$HOME/.claude-personal/skills/removed-skill" ]
+    [ ! -L "$HOME/.claude-personal/skills/removed-skill" ]
+}
+
+@test "issue #342: orphan REAL dir is backed up to *-orphan-*, never deleted" {
+    _seed_ssot_skills alpha
+    mkdir -p "$HOME/.claude-personal/skills/user-data-dont-touch"
+    echo "important" > "$HOME/.claude-personal/skills/user-data-dont-touch/keep.txt"
+
+    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
+    assert_success
+
+    [ ! -d "$HOME/.claude-personal/skills/user-data-dont-touch" ]
+    orphan_backup=$(ls -d "$HOME/.claude-personal/skills/"user-data-dont-touch-orphan-* 2>/dev/null | head -1)
+    [ -n "$orphan_backup" ]
+    [ -f "$orphan_backup/keep.txt" ]
+    grep -q "important" "$orphan_backup/keep.txt"
+}
+
+@test "issue #342: second run is a no-op (idempotent — 0 changes)" {
+    _seed_ssot_skills alpha beta
+    mkdir -p "$HOME/.claude-personal"
+
+    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills; echo "FIRST_CHANGED=$_CLAUDE_DIR_SYNC_LAST_CHANGED"'
+    assert_success
+    assert_output --partial "FIRST_CHANGED=2"
+
+    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills; echo "SECOND_CHANGED=$_CLAUDE_DIR_SYNC_LAST_CHANGED"'
+    assert_success
+    assert_output --partial "SECOND_CHANGED=0"
+}
+
+@test "issue #342: claude-skills-sync alias triggers sync across enabled accounts" {
+    _seed_ssot_skills alpha
+    mkdir -p "$HOME/.claude-personal" "$HOME/.claude-work"
+
+    run_with_fake_ssot 'shopt -s expand_aliases; eval "claude-skills-sync"'
+    assert_success
+    [ -L "$HOME/.claude-personal/skills/alpha" ]
+    [ -L "$HOME/.claude-work/skills/alpha" ]
+}
+
+@test "issue #342: claude-accounts skills-sync sub-command works" {
+    _seed_ssot_skills alpha
+    mkdir -p "$HOME/.claude-personal"
+
+    run_with_fake_ssot 'shopt -s expand_aliases; eval "claude-accounts skills-sync"'
+    assert_success
+    [ -L "$HOME/.claude-personal/skills/alpha" ]
+}
+
+@test "issue #342: second claude-skills-sync prints (no changes)" {
+    _seed_ssot_skills alpha
+    mkdir -p "$HOME/.claude-personal" "$HOME/.claude-work"
+
+    run_with_fake_ssot 'claude_skills_sync >/dev/null; claude_skills_sync'
+    assert_success
+    assert_output --partial "no changes"
+}
+
+@test "issue #342: claude_accounts_status shows skills sync ratio" {
+    _seed_ssot_skills alpha beta
+    run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init >/dev/null && CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
+    assert_success
+    assert_output --partial "skills: 2/2 ✓"
+}
+
+@test "issue #342: claude_accounts_status flags drift when symlinks missing" {
+    _seed_ssot_skills alpha beta gamma
+    # Set up only one of three symlinks → ratio shows 1/3 with drift marker.
+    mkdir -p "$HOME/.claude-personal/skills"
+    ln -s "$FAKE_DOTFILES_ROOT/claude/skills/alpha" "$HOME/.claude-personal/skills/alpha"
+
+    run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
+    assert_success
+    assert_output --partial "skills: 1/3"
+    assert_output --partial "claude-accounts skills-sync"
+}
+
+@test "issue #342: claude_yolo --no-sync skips auto-sync" {
+    _setup_claude_mock
+    _seed_ssot_skills alpha
+    mkdir -p "$HOME/.claude-personal"
+
+    run_with_fake_ssot "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --no-sync"
+    assert_success
+    [ ! -e "$HOME/.claude-personal/skills/alpha" ]
+}
+
+@test "issue #342: claude_yolo auto-syncs by default" {
+    _setup_claude_mock
+    _seed_ssot_skills alpha
+    mkdir -p "$HOME/.claude-personal"
+
+    run_with_fake_ssot "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    assert_success
+    [ -L "$HOME/.claude-personal/skills/alpha" ]
+}
+
+@test "issue #342: claude-accounts help mentions skills-sync sub-command" {
+    run_in_bash 'shopt -s expand_aliases; eval "claude-accounts -h"'
+    assert_success
+    assert_output --partial "skills-sync"
+}
+
+@test "issue #342: re-running sync does NOT nest pre-sync backups" {
+    _seed_ssot_skills cli-dev
+    mkdir -p "$HOME/.claude-personal/skills/cli-dev"
+    echo "first-run-content" > "$HOME/.claude-personal/skills/cli-dev/x.md"
+
+    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
+    assert_success
+    # Sleep 1 to ensure a new TS would differ; then run again — Pass 2 must
+    # skip *-pre-sync-* entries so they don't get -orphan- nested.
+    sleep 1
+    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
+    assert_success
+
+    backups=$(ls -d "$HOME/.claude-personal/skills/"cli-dev-pre-sync-* 2>/dev/null | wc -l)
+    [ "$backups" -eq 1 ]
+    nested=$(ls -d "$HOME/.claude-personal/skills/"cli-dev-pre-sync-*-orphan-* 2>/dev/null | wc -l)
+    [ "$nested" -eq 0 ]
+}

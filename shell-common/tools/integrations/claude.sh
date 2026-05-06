@@ -415,13 +415,14 @@ alias claude-skip='claude --dangerously-skip-permissions'
 # 4. CLAUDE_CONFIG_DIR 환경 주입 + command claude --dangerously-skip-permissions
 claude_yolo() {
     _cy_account="${CLAUDE_DEFAULT_ACCOUNT:-personal}"
+    _cy_no_sync=0
 
     # zsh disables word-splitting; emulate sh inside this function.
     if [ -n "${ZSH_VERSION:-}" ]; then
         emulate -L sh
     fi
 
-    # --user 가로채고 나머지는 위치 인자로 보존 (POSIX 안전)
+    # --user / --no-sync 가로채고 나머지는 위치 인자로 보존 (POSIX 안전)
     set -- "$@" "__CY_END__"
     while [ "$1" != "__CY_END__" ]; do
         case "$1" in
@@ -431,6 +432,10 @@ claude_yolo() {
                 ;;
             --user=*)
                 _cy_account="${1#--user=}"
+                shift
+                ;;
+            --no-sync)
+                _cy_no_sync=1
                 shift
                 ;;
             *)
@@ -476,6 +481,14 @@ claude_yolo() {
     # Opt-in via CLAUDE_ACCOUNT_EMAIL_<account>; silent unless the mapping
     # AND a populated .claude.json AND a mismatch are all present.
     _claude_validate_login "$_cy_config_dir" "$_cy_account"
+
+    # Pre-launch skills/docs sync (issue #342). Silent when in-sync; emits
+    # one line per action when something changed (so the user sees newly
+    # added skills landing without having to run `claude-accounts
+    # skills-sync` themselves). Opt out with `claude-yolo --no-sync ...`.
+    if [ "$_cy_no_sync" = "0" ]; then
+        CLAUDE_SKILLS_SYNC_QUIET=1 claude_skills_sync || true
+    fi
 
     CLAUDE_CONFIG_DIR="$_cy_config_dir" command claude --dangerously-skip-permissions "$@"
 }
@@ -664,7 +677,176 @@ _claude_ensure_bind_mount() {
     fi
 }
 
-# _claude_account_setup_one — 단일 계정의 link/mount 멱등 셋업.
+# _claude_dir_sync_one — per-account, per-dir symlink sync (issue #342).
+#
+# Replaces the bind-mount design: each SSOT entry under
+# "${DOTFILES_ROOT}/claude/<name>" gets an individual symlink under
+# "<cdir>/<name>/<entry>". No sudo, persists across reboot, drift visible
+# via plain `ls -la` / `find -type l`.
+#
+# Args: <cdir> <name>   e.g. "$HOME/.claude-personal" "skills"
+#
+# Behavior (idempotent):
+# 1. Each SSOT entry → ensured as symlink. Real-dir collision → backed up
+#    as "<entry>-pre-sync-<TS>". Stale symlink (wrong target) → replaced.
+# 2. Orphan cleanup: entries in target with no SSOT match. Symlinks →
+#    auto-removed. Real dirs → backed up as "<entry>-orphan-<TS>" (never
+#    auto-deleted; preserves any user data the user dropped here).
+# 3. Backup files (already named *-pre-sync-* / *-orphan-*) are skipped
+#    so re-running the sync does not nest backups.
+#
+# Side effect (return globals — POSIX sh has no array returns):
+#   _CLAUDE_DIR_SYNC_LAST_CHANGED — number of mutating actions
+#   _CLAUDE_DIR_SYNC_LAST_LINKED  — symlinks pointing at correct SSOT entry
+#   _CLAUDE_DIR_SYNC_LAST_SOURCE  — total SSOT entries
+#
+# Silent (no output) when fully in-sync. Otherwise emits one line per action.
+_claude_dir_sync_one() {
+    _cdso_cdir="$1"
+    _cdso_name="$2"
+    _cdso_src_root="${DOTFILES_ROOT}/claude/$_cdso_name"
+    _cdso_tgt_root="$_cdso_cdir/$_cdso_name"
+    _CLAUDE_DIR_SYNC_LAST_CHANGED=0
+    _CLAUDE_DIR_SYNC_LAST_LINKED=0
+    _CLAUDE_DIR_SYNC_LAST_SOURCE=0
+
+    if [ ! -d "$_cdso_src_root" ]; then
+        return 0
+    fi
+
+    mkdir -p "$_cdso_tgt_root"
+    _cdso_ts=$(date +%Y%m%d%H%M%S)
+
+    # Pass 1: ensure each SSOT entry has matching symlink
+    for _cdso_src in "$_cdso_src_root"/*/; do
+        [ -d "$_cdso_src" ] || continue
+        _cdso_basename=$(basename "$_cdso_src")
+        _CLAUDE_DIR_SYNC_LAST_SOURCE=$((_CLAUDE_DIR_SYNC_LAST_SOURCE + 1))
+        _cdso_src_canon="$_cdso_src_root/$_cdso_basename"
+        _cdso_tgt="$_cdso_tgt_root/$_cdso_basename"
+
+        if [ -L "$_cdso_tgt" ]; then
+            _cdso_current=$(readlink "$_cdso_tgt")
+            if [ "$_cdso_current" = "$_cdso_src_canon" ]; then
+                _CLAUDE_DIR_SYNC_LAST_LINKED=$((_CLAUDE_DIR_SYNC_LAST_LINKED + 1))
+                continue
+            fi
+            ux_info "  $_cdso_name/$_cdso_basename: replacing stale symlink"
+            rm "$_cdso_tgt"
+        elif [ -e "$_cdso_tgt" ]; then
+            _cdso_backup="${_cdso_tgt}-pre-sync-${_cdso_ts}"
+            ux_warning "  $_cdso_name/$_cdso_basename: backing up real dir → $(basename "$_cdso_backup")"
+            mv "$_cdso_tgt" "$_cdso_backup"
+        fi
+
+        if ln -s "$_cdso_src_canon" "$_cdso_tgt"; then
+            ux_success "  $_cdso_name/$_cdso_basename: linked"
+            _CLAUDE_DIR_SYNC_LAST_LINKED=$((_CLAUDE_DIR_SYNC_LAST_LINKED + 1))
+            _CLAUDE_DIR_SYNC_LAST_CHANGED=$((_CLAUDE_DIR_SYNC_LAST_CHANGED + 1))
+        else
+            ux_error "  $_cdso_name/$_cdso_basename: ln -s failed"
+        fi
+    done
+
+    # Pass 2: orphan cleanup — entries in target that no longer match SSOT
+    for _cdso_entry in "$_cdso_tgt_root"/*; do
+        [ -e "$_cdso_entry" ] || [ -L "$_cdso_entry" ] || continue
+        _cdso_ename=$(basename "$_cdso_entry")
+        case "$_cdso_ename" in
+            *-pre-sync-*|*-orphan-*) continue ;;
+        esac
+        [ -d "$_cdso_src_root/$_cdso_ename" ] && continue
+
+        if [ -L "$_cdso_entry" ]; then
+            if rm "$_cdso_entry"; then
+                ux_info "  $_cdso_name/$_cdso_ename: removed orphan symlink"
+                _CLAUDE_DIR_SYNC_LAST_CHANGED=$((_CLAUDE_DIR_SYNC_LAST_CHANGED + 1))
+            fi
+        else
+            _cdso_obackup="${_cdso_entry}-orphan-${_cdso_ts}"
+            if mv "$_cdso_entry" "$_cdso_obackup"; then
+                ux_warning "  $_cdso_name/$_cdso_ename: orphan dir → $(basename "$_cdso_obackup")"
+                _CLAUDE_DIR_SYNC_LAST_CHANGED=$((_CLAUDE_DIR_SYNC_LAST_CHANGED + 1))
+            fi
+        fi
+    done
+}
+
+# _claude_count_dir_sync — print "<linked>|<source>" counts for one
+# account/dirname. Used by claude_accounts_status to display drift ratio.
+# Read-only; never mutates.
+_claude_count_dir_sync() {
+    _ccds_cdir="$1"
+    _ccds_name="$2"
+    _ccds_src_root="${DOTFILES_ROOT}/claude/$_ccds_name"
+    _ccds_tgt_root="$_ccds_cdir/$_ccds_name"
+
+    _ccds_source=0
+    if [ -d "$_ccds_src_root" ]; then
+        for _ccds_s in "$_ccds_src_root"/*/; do
+            [ -d "$_ccds_s" ] || continue
+            _ccds_source=$((_ccds_source + 1))
+        done
+    fi
+
+    _ccds_linked=0
+    if [ -d "$_ccds_tgt_root" ]; then
+        for _ccds_t in "$_ccds_tgt_root"/*; do
+            [ -L "$_ccds_t" ] || continue
+            _ccds_n=$(basename "$_ccds_t")
+            [ -d "$_ccds_src_root/$_ccds_n" ] || continue
+            _ccds_real=$(readlink "$_ccds_t")
+            if [ "$_ccds_real" = "$_ccds_src_root/$_ccds_n" ]; then
+                _ccds_linked=$((_ccds_linked + 1))
+            fi
+        done
+    fi
+
+    echo "$_ccds_linked|$_ccds_source"
+}
+
+# claude_skills_sync — public entry: sync skills + docs across all enabled
+# accounts via per-skill symlinks. Replaces the legacy bind-mount approach
+# (issue #342). Idempotent — second run reports "no changes".
+#
+# Quiet mode: set CLAUDE_SKILLS_SYNC_QUIET=1 to suppress header/summary
+# (per-action output is preserved so changes remain visible).
+claude_skills_sync() {
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        emulate -L sh
+    fi
+
+    if [ -z "${CLAUDE_SKILLS_SYNC_QUIET:-}" ]; then
+        ux_header "Claude Skills Sync"
+    fi
+
+    _css_total=0
+    for _css_acct in $(_claude_resolve_account --list); do
+        _css_cdir=$(_claude_resolve_account "$_css_acct")
+        [ -d "$_css_cdir" ] || continue
+
+        if [ -z "${CLAUDE_SKILLS_SYNC_QUIET:-}" ]; then
+            ux_section "Account: $_css_acct ($_css_cdir)"
+        fi
+
+        _claude_dir_sync_one "$_css_cdir" skills
+        _css_total=$((_css_total + _CLAUDE_DIR_SYNC_LAST_CHANGED))
+        _claude_dir_sync_one "$_css_cdir" docs
+        _css_total=$((_css_total + _CLAUDE_DIR_SYNC_LAST_CHANGED))
+    done
+
+    if [ "$_css_total" -eq 0 ]; then
+        if [ -z "${CLAUDE_SKILLS_SYNC_QUIET:-}" ]; then
+            ux_info "(no changes — skills/docs already in sync)"
+        fi
+    else
+        ux_success "skills/docs sync: $_css_total change(s)"
+    fi
+    return 0
+}
+alias claude-skills-sync='claude_skills_sync'
+
+# _claude_account_setup_one — 단일 계정의 link/sync 멱등 셋업.
 _claude_account_setup_one() {
     _caso_acct="$1"
     _caso_cdir="$2"
@@ -678,14 +860,12 @@ _claude_account_setup_one() {
     _claude_ensure_symlink "$HOME/.claude-shared/plugins"                   "$_caso_cdir/plugins"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/global-memory"          "$_caso_cdir/projects/GLOBAL/memory"
 
-    if [ "${CLAUDE_SKIP_BIND_MOUNT:-0}" = "1" ]; then
-        # Visible warning, not info — production users may misuse this and
-        # silently lose bind mounts. Test harness sees the warning too.
-        ux_warning "  (CLAUDE_SKIP_BIND_MOUNT=1 → skipping bind mounts)"
-    else
-        _claude_ensure_bind_mount "${DOTFILES_ROOT}/claude/skills"  "$_caso_cdir/skills"
-        _claude_ensure_bind_mount "${DOTFILES_ROOT}/claude/docs"    "$_caso_cdir/docs"
-    fi
+    # Per-skill / per-doc symlinks (issue #342). Replaces the legacy bind
+    # mount: no sudo, persists across reboot, no silent regression when
+    # mount drops. CLAUDE_SKIP_BIND_MOUNT is preserved as a no-op for
+    # backward compat with existing test harnesses.
+    _claude_dir_sync_one "$_caso_cdir" skills
+    _claude_dir_sync_one "$_caso_cdir" docs
 }
 
 # _claude_status_show_oauth — append OAuth binding (email/org) to the
@@ -778,11 +958,19 @@ claude_accounts_status() {
             fi
         done
 
-        for _cas_mount in skills docs; do
-            if _is_mounted "$_cas_cdir/$_cas_mount"; then
-                echo "  $_cas_mount: bind mount ✓"
+        # Skills/docs sync ratio (issue #342) — replaces the legacy bind
+        # mount status. `linked/source ✓` when fully synced, `(drift)`
+        # marker + recovery hint when partial.
+        for _cas_dir in skills docs; do
+            _cas_ratio=$(_claude_count_dir_sync "$_cas_cdir" "$_cas_dir")
+            _cas_linked=${_cas_ratio%|*}
+            _cas_source=${_cas_ratio#*|}
+            if [ "$_cas_source" -eq 0 ]; then
+                echo "  $_cas_dir: source missing ✗"
+            elif [ "$_cas_linked" -eq "$_cas_source" ]; then
+                echo "  $_cas_dir: $_cas_linked/$_cas_source ✓"
             else
-                echo "  $_cas_mount: ✗ not mounted"
+                echo "  $_cas_dir: $_cas_linked/$_cas_source ⚠️  (run: claude-accounts skills-sync)"
             fi
         done
         echo ""
@@ -927,11 +1115,12 @@ _claude_accounts_help() {
     ux_info "Usage: claude-accounts [<subcommand>]"
     ux_info ""
     ux_info "Subcommands:"
-    ux_info "  status     (default) Show all accounts: path/credentials/symlinks/mounts"
-    ux_info "  list       List enabled accounts"
-    ux_info "  setup      Idempotent setup (creates dirs, symlinks, bind mounts)"
-    ux_info "  migrate    One-time migration: ~/.claude → ~/.claude-personal (Home-PC)"
-    ux_info "  -h|--help  This help"
+    ux_info "  status        (default) Show all accounts: path/credentials/symlinks/sync"
+    ux_info "  list          List enabled accounts"
+    ux_info "  setup         Idempotent setup (creates dirs + symlinks)"
+    ux_info "  skills-sync   Re-sync skills/docs symlinks across all enabled accounts"
+    ux_info "  migrate       One-time migration: ~/.claude → ~/.claude-personal (Home-PC)"
+    ux_info "  -h|--help     This help"
     ux_info ""
     ux_info "Env vars:"
     ux_info "  CLAUDE_DEFAULT_ACCOUNT     Default for \`claude-yolo\` (default: personal)"
@@ -944,6 +1133,7 @@ claude_accounts() {
         status)         claude_accounts_status ;;
         list)           _claude_resolve_account --list ;;
         setup)          claude_accounts_init ;;
+        skills-sync)    claude_skills_sync ;;
         migrate)        claude_accounts_migrate ;;
         -h|--help|help) _claude_accounts_help ;;
         *)              ux_error "Unknown subcommand: $1"; _claude_accounts_help; return 1 ;;
