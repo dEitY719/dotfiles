@@ -48,9 +48,13 @@ def _description_file_for_args(args: argparse.Namespace) -> tuple[str, bool]:
         return str(path), False
 
     temp = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".md", delete=False)
-    with temp:
-        temp.write(args.description or "")
-    return temp.name, True
+    try:
+        with temp:
+            temp.write(args.description or "")
+        return temp.name, True
+    except Exception:
+        Path(temp.name).unlink(missing_ok=True)
+        raise
 
 
 def build_jira_command(args: argparse.Namespace, description_file: str) -> list[str]:
@@ -109,6 +113,8 @@ def parse_jira_json(stdout: str) -> dict[str, Any]:
 
 
 def normalize_success(payload: dict[str, Any]) -> dict[str, Any]:
+    if payload.get("status") == "error":
+        return payload
     data = payload.get("data") if payload.get("status") == "success" else payload
     if not isinstance(data, dict):
         data = {}
@@ -128,7 +134,20 @@ def normalize_success(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def render_text(payload: dict[str, Any]) -> str:
+    status = payload.get("status")
     data = payload.get("data", {})
+    if status == "dry-run":
+        return "\n".join(
+            [
+                f"Dry run: would create Jira ticket in project {data.get('project_key') or ''}",
+                f"Summary: {data.get('summary') or ''}",
+                f"Type: {data.get('issue_type') or ''}",
+                f"Priority: {data.get('priority') or ''}",
+            ]
+        )
+    if status == "error":
+        message = payload.get("message") or payload.get("stderr") or "Unknown error"
+        return f"Error: {message}"
     return "\n".join(
         [
             f"Created Jira ticket: {data.get('ticket_id') or ''}",
@@ -180,6 +199,12 @@ def run(args: argparse.Namespace) -> int:
             return completed.returncode
 
         normalized = normalize_success(parse_jira_json(completed.stdout))
+        if normalized.get("status") == "error":
+            print(
+                render_text(normalized) if args.text else json.dumps(normalized, indent=2, ensure_ascii=False),
+                file=sys.stderr,
+            )
+            return 1
         print(render_text(normalized) if args.text else json.dumps(normalized, indent=2, ensure_ascii=False))
         return 0
     finally:

@@ -64,6 +64,8 @@ def _person_name(value: Any) -> str | None:
 
 
 def normalize_detail(payload: dict[str, Any]) -> dict[str, Any]:
+    if payload.get("status") == "error":
+        return payload
     data = payload.get("data") if payload.get("status") == "success" else payload
     if not isinstance(data, dict):
         data = {}
@@ -130,6 +132,9 @@ def run(args: argparse.Namespace) -> int:
         return completed.returncode
 
     normalized = normalize_detail(parse_jira_json(completed.stdout))
+    if normalized.get("status") == "error":
+        print(json.dumps(normalized, indent=2, ensure_ascii=False), file=sys.stderr)
+        return 1
     print(json.dumps(normalized, indent=2, ensure_ascii=False))
     return 0
 
