@@ -146,13 +146,13 @@ _gh_project_status_sync() {
 
         # One retry on mutation flake (GraphQL connection reset etc.).
         # 5s fixed backoff — long enough to ride out transient resets,
-        # short enough to keep callers responsive. Query-stage retry is
-        # intentionally not added here (boards-not-attached looks like a
-        # transient failure to gh; tracked separately).
+        # short enough to keep callers responsive. Override
+        # _GH_PROJECT_STATUS_RETRY_SLEEP in tests to skip the wait,
+        # matching the auto-detect retry above.
         if _gh_project_status_mutate "$_proj" "$_item" "$_field" "$_option"; then
             printf '[gh-project-status] %s #%s -> "%s"\n' "$_kind" "$_num" "$_target"
         else
-            sleep 5
+            sleep "${_GH_PROJECT_STATUS_RETRY_SLEEP-5}"
             if _gh_project_status_mutate "$_proj" "$_item" "$_field" "$_option"; then
                 printf '[gh-project-status] %s #%s -> "%s" (after 1 retry)\n' \
                     "$_kind" "$_num" "$_target"
