@@ -207,7 +207,7 @@ _migrate_legacy_plugin_paths() {
         'with_entries(
             if (.value.installLocation? | type) == "string"
                and (.value.installLocation | startswith($old))
-            then .value.installLocation |= sub("^"+$old; $new)
+            then .value.installLocation |= ($new + .[($old | length):])
             else . end
         )'
 
@@ -219,7 +219,7 @@ _migrate_legacy_plugin_paths() {
             .value |= map(
                 if (.installPath? | type) == "string"
                    and (.installPath | startswith($old))
-                then .installPath |= sub("^"+$old; $new)
+                then .installPath |= ($new + .[($old | length):])
                 else . end
             )
         )'
