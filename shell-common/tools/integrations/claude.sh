@@ -688,12 +688,24 @@ _claude_ensure_bind_mount() {
 #
 # Behavior (idempotent):
 # 1. Each SSOT entry → ensured as symlink. Real-dir collision → backed up
-#    as "<entry>-pre-sync-<TS>". Stale symlink (wrong target) → replaced.
+#    to "<cdir>/.sync-backup/<name>/<entry>-pre-sync-<TS>". Stale symlink
+#    (wrong target) → replaced.
 # 2. Orphan cleanup: entries in target with no SSOT match. Symlinks →
-#    auto-removed. Real dirs → backed up as "<entry>-orphan-<TS>" (never
-#    auto-deleted; preserves any user data the user dropped here).
-# 3. Backup files (already named *-pre-sync-* / *-orphan-*) are skipped
-#    so re-running the sync does not nest backups.
+#    auto-removed. Real dirs → backed up to
+#    "<cdir>/.sync-backup/<name>/<entry>-orphan-<TS>" (never auto-deleted;
+#    preserves any user data the user dropped here).
+# 3. Pre-step migration: any pre-existing legacy backup at
+#    "<cdir>/<name>/*-pre-sync-*" / "*-orphan-*" (created by older
+#    versions of this function) is moved to "<cdir>/.sync-backup/<name>/"
+#    so the Claude Code skill scanner stops indexing backups as skills
+#    (issue #344). Idempotent — no-op once migrated.
+#
+# Backup location rationale (issue #344): the Claude Code skill scanner
+# treats every directory under "<cdir>/skills/" as a skill candidate, so
+# placing backups inside "<cdir>/skills/" caused duplicate skills like
+# "cli-dev" + "cli-dev-pre-sync-<TS>" to appear in available-skills.
+# "<cdir>/.sync-backup/<name>/" sits outside the scanner's view while
+# remaining co-located for easy `ls`-driven discovery.
 #
 # Side effect (return globals — POSIX sh has no array returns):
 #   _CLAUDE_DIR_SYNC_LAST_CHANGED — number of mutating actions
@@ -709,6 +721,7 @@ _claude_dir_sync_one() {
     # crippled login shell), don't construct paths starting at /.
     _cdso_src_root="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/$_cdso_name"
     _cdso_tgt_root="$_cdso_cdir/$_cdso_name"
+    _cdso_backup_root="$_cdso_cdir/.sync-backup/$_cdso_name"
     _CLAUDE_DIR_SYNC_LAST_CHANGED=0
     _CLAUDE_DIR_SYNC_LAST_LINKED=0
     _CLAUDE_DIR_SYNC_LAST_SOURCE=0
@@ -719,6 +732,20 @@ _claude_dir_sync_one() {
 
     mkdir -p "$_cdso_tgt_root"
     _cdso_ts=$(date +%Y%m%d%H%M%S)
+
+    # Pre-step: migrate legacy backups out of the scanner's view (issue #344).
+    # Older versions placed *-pre-sync-* / *-orphan-* directly under
+    # "<cdir>/<name>/", which Claude Code indexed as duplicate skills.
+    # Idempotent: only moves entries that still live in the legacy location.
+    for _cdso_legacy in "$_cdso_tgt_root"/*-pre-sync-* "$_cdso_tgt_root"/*-orphan-*; do
+        [ -e "$_cdso_legacy" ] || [ -L "$_cdso_legacy" ] || continue
+        mkdir -p "$_cdso_backup_root"
+        _cdso_legacy_name=$(basename "$_cdso_legacy")
+        if mv "$_cdso_legacy" "$_cdso_backup_root/$_cdso_legacy_name"; then
+            ux_info "  $_cdso_name/$_cdso_legacy_name: migrated legacy backup → .sync-backup/$_cdso_name/"
+            _CLAUDE_DIR_SYNC_LAST_CHANGED=$((_CLAUDE_DIR_SYNC_LAST_CHANGED + 1))
+        fi
+    done
 
     # Pass 1: ensure each SSOT entry has matching symlink
     for _cdso_src in "$_cdso_src_root"/*/; do
@@ -737,8 +764,9 @@ _claude_dir_sync_one() {
             ux_info "  $_cdso_name/$_cdso_basename: replacing stale symlink"
             rm "$_cdso_tgt"
         elif [ -e "$_cdso_tgt" ]; then
-            _cdso_backup="${_cdso_tgt}-pre-sync-${_cdso_ts}"
-            ux_warning "  $_cdso_name/$_cdso_basename: backing up real dir → $(basename "$_cdso_backup")"
+            mkdir -p "$_cdso_backup_root"
+            _cdso_backup="$_cdso_backup_root/${_cdso_basename}-pre-sync-${_cdso_ts}"
+            ux_warning "  $_cdso_name/$_cdso_basename: backing up real dir → .sync-backup/$_cdso_name/$(basename "$_cdso_backup")"
             mv "$_cdso_tgt" "$_cdso_backup"
         fi
 
@@ -751,7 +779,10 @@ _claude_dir_sync_one() {
         fi
     done
 
-    # Pass 2: orphan cleanup — entries in target that no longer match SSOT
+    # Pass 2: orphan cleanup — entries in target that no longer match SSOT.
+    # The *-pre-sync-* / *-orphan-* skip is defensive: backups now live in
+    # .sync-backup/<name>/ (issue #344) so should never appear here, but
+    # the guard remains in case a leftover somehow lands in the scan dir.
     for _cdso_entry in "$_cdso_tgt_root"/*; do
         [ -e "$_cdso_entry" ] || [ -L "$_cdso_entry" ] || continue
         _cdso_ename=$(basename "$_cdso_entry")
@@ -766,9 +797,10 @@ _claude_dir_sync_one() {
                 _CLAUDE_DIR_SYNC_LAST_CHANGED=$((_CLAUDE_DIR_SYNC_LAST_CHANGED + 1))
             fi
         else
-            _cdso_obackup="${_cdso_entry}-orphan-${_cdso_ts}"
+            mkdir -p "$_cdso_backup_root"
+            _cdso_obackup="$_cdso_backup_root/${_cdso_ename}-orphan-${_cdso_ts}"
             if mv "$_cdso_entry" "$_cdso_obackup"; then
-                ux_warning "  $_cdso_name/$_cdso_ename: orphan dir → $(basename "$_cdso_obackup")"
+                ux_warning "  $_cdso_name/$_cdso_ename: orphan dir → .sync-backup/$_cdso_name/$(basename "$_cdso_obackup")"
                 _CLAUDE_DIR_SYNC_LAST_CHANGED=$((_CLAUDE_DIR_SYNC_LAST_CHANGED + 1))
             fi
         fi
