@@ -136,6 +136,105 @@ _migrate_legacy_statusline_command() {
     fi
 }
 
+# Auto-migrate legacy Claude Code plugin paths (issue #340).
+#
+# Claude Code recently moved its plugin storage from
+# ${HOME}/.claude/plugins/... to ${HOME}/.claude-personal/plugins/... but
+# pre-existing JSON state files still hold the old prefix. Symptoms:
+#   - /doctor: 다수의 "Plugin <name> not found in marketplace" 경고
+#   - /plugin: "Marketplace has corrupted installLocation ... expected a
+#     path inside .claude-personal/plugins/marketplaces" 갱신 실패
+#
+# Fix: rewrite the prefix in two JSON state files in place. Idempotent —
+# only acts when an old-prefix entry is present, otherwise no-op.
+#
+# Targets:
+#   - ~/.claude-shared/plugins/known_marketplaces.json (top-level
+#     <marketplace>.installLocation)
+#   - ~/.claude-shared/plugins/installed_plugins.json
+#     (.plugins[<key>][<idx>].installPath)
+_migrate_legacy_plugin_paths() {
+    local plugins_root="${HOME}/.claude-shared/plugins"
+    local old_prefix="${HOME}/.claude/plugins/"
+    local new_prefix="${HOME}/.claude-personal/plugins/"
+
+    [ -d "$plugins_root" ] || return 0
+
+    if ! command -v jq >/dev/null 2>&1; then
+        log_warning "jq 미설치 — plugin 경로 자동 마이그레이션 건너뜀"
+        return 0
+    fi
+
+    _migrate_one_plugin_json() {
+        local file="$1"
+        local stale_filter="$2"
+        local rewrite_filter="$3"
+
+        [ -f "$file" ] || return 0
+
+        local stale_count
+        stale_count=$(jq --arg old "$old_prefix" "$stale_filter" "$file" 2>/dev/null) || stale_count=0
+        [ "${stale_count:-0}" -gt 0 ] || return 0
+
+        local backup tmp
+        backup="${file}.pre-plugin-path-fix-$(date +%Y%m%d%H%M%S)"
+        if ! cp "$file" "$backup"; then
+            log_error "$(basename "$file") 백업 실패: $backup — 마이그레이션 중단"
+            return 1
+        fi
+        tmp=$(mktemp "${file}.XXXXXX") || {
+            log_error "임시 파일 생성 실패 — 마이그레이션 중단"
+            rm -f "$backup"
+            return 1
+        }
+
+        if jq --arg old "$old_prefix" --arg new "$new_prefix" \
+                "$rewrite_filter" "$file" > "$tmp" && mv "$tmp" "$file"; then
+            log_warning "$(basename "$file") plugin 경로 마이그레이션: ${stale_count}건"
+            log_warning "  backup: $backup"
+        else
+            rm -f "$tmp"
+            log_error "$(basename "$file") 갱신 실패 — 백업 보존: $backup"
+            return 1
+        fi
+    }
+
+    # jq 변수 ($old/$new) 은 --arg 로 주입 — shell 변수 아님.
+    # shellcheck disable=SC2016
+    _migrate_one_plugin_json \
+        "${plugins_root}/known_marketplaces.json" \
+        '[.[] | select(.installLocation? | type == "string" and startswith($old))] | length' \
+        'with_entries(
+            if (.value.installLocation? | type) == "string"
+               and (.value.installLocation | startswith($old))
+            then .value.installLocation |= sub("^"+$old; $new)
+            else . end
+        )'
+
+    # shellcheck disable=SC2016
+    _migrate_one_plugin_json \
+        "${plugins_root}/installed_plugins.json" \
+        '[.plugins // {} | to_entries[] | .value[]? | select(.installPath? | type == "string" and startswith($old))] | length' \
+        '.plugins |= with_entries(
+            .value |= map(
+                if (.installPath? | type) == "string"
+                   and (.installPath | startswith($old))
+                then .installPath |= sub("^"+$old; $new)
+                else . end
+            )
+        )'
+
+    unset -f _migrate_one_plugin_json
+}
+
+# /sandbox 기능은 socat 을 요구하지만 sudo 가 필요한 install 이라
+# 자동 처리하지 않고 경고만 노출 (issue #340).
+_check_socat_for_sandbox() {
+    if ! command -v socat >/dev/null 2>&1; then
+        log_warning "socat 미설치 — /sandbox 사용 시 'sudo apt install -y socat' 필요"
+    fi
+}
+
 _setup_bind_mount_sudoers() {
     local sudoers_file="$1"
     local description="$2"
@@ -205,6 +304,13 @@ fi
 # 빈 ~/.claude/ 가드 디렉토리 + ~/.claude-shared/plugins
 mkdir -p "$HOME/.claude"
 mkdir -p "$HOME/.claude-shared/plugins"
+
+# Claude Code plugin 경로 마이그레이션 (issue #340). 멱등 — 옛 prefix 가
+# 남아있을 때만 갱신, 그 외 no-op. 백업은 timestamped 보존.
+_migrate_legacy_plugin_paths
+
+# /sandbox 의존성 점검 (issue #340).
+_check_socat_for_sandbox
 
 # 활성 계정 목록을 한 번만 조회하여 재사용 (PR #292 review 반영)
 ENABLED_ACCOUNTS=$(_claude_resolve_account --list)
