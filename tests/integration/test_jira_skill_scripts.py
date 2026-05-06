@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
+import tempfile
 from pathlib import Path
 from types import ModuleType
 
@@ -47,6 +48,28 @@ def test_create_ticket_dry_run_uses_description_file_placeholder(capsys) -> None
     assert "--components" in command
 
 
+def test_create_ticket_dry_run_text_does_not_claim_created(capsys) -> None:
+    module = load_module("claude/skills/jira-create/scripts/create_ticket.py", "jira_create_ticket_text")
+
+    exit_code = module.main(
+        [
+            "--project-key",
+            "JIRAVIS",
+            "--summary",
+            "Build adapter",
+            "--description",
+            "Line 1",
+            "--dry-run",
+            "--text",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Dry run: would create Jira ticket in project JIRAVIS" in output
+    assert "Created Jira ticket:" not in output
+
+
 def test_create_ticket_normalizes_jiravis_success(monkeypatch, capsys) -> None:
     module = load_module("claude/skills/jira-create/scripts/create_ticket.py", "jira_create_ticket_success")
     captured_description = {}
@@ -88,6 +111,72 @@ def test_create_ticket_normalizes_jiravis_success(monkeypatch, capsys) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["data"]["ticket_id"] == "JIRAVIS-123"
     assert payload["data"]["summary"] == "Build adapter"
+
+
+def test_create_ticket_preserves_jiravis_error_payload(monkeypatch, capsys) -> None:
+    module = load_module("claude/skills/jira-create/scripts/create_ticket.py", "jira_create_ticket_error")
+
+    def fake_run(command, capture_output, check, text):
+        stdout = json.dumps({"status": "error", "message": "Jira rejected the request"})
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(module.shutil, "which", lambda name: "/usr/local/bin/jira")
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+    exit_code = module.main(
+        [
+            "--project-key",
+            "JIRAVIS",
+            "--summary",
+            "Build adapter",
+            "--description",
+            "Detailed body",
+        ]
+    )
+
+    assert exit_code == 1
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["status"] == "error"
+    assert payload["message"] == "Jira rejected the request"
+
+
+def test_create_ticket_temp_file_is_cleaned_when_write_fails(monkeypatch, tmp_path) -> None:
+    module = load_module("claude/skills/jira-create/scripts/create_ticket.py", "jira_create_ticket_temp_cleanup")
+    temp_path = tmp_path / "description.md"
+
+    class FailingTempFile:
+        name = str(temp_path)
+
+        def __enter__(self):
+            temp_path.touch()
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def write(self, value):
+            raise OSError("disk full")
+
+    monkeypatch.setattr(tempfile, "NamedTemporaryFile", lambda *args, **kwargs: FailingTempFile())
+    args = module.parse_args(
+        [
+            "--project-key",
+            "JIRAVIS",
+            "--summary",
+            "Build adapter",
+            "--description",
+            "Detailed body",
+        ]
+    )
+
+    try:
+        module._description_file_for_args(args)
+    except OSError:
+        pass
+    else:
+        raise AssertionError("expected write failure")
+
+    assert not temp_path.exists()
 
 
 def test_read_ticket_validates_and_uppercases_ticket_id() -> None:
@@ -142,3 +231,21 @@ def test_read_ticket_calls_read_only_jiravis_command(monkeypatch, capsys) -> Non
     assert payload["data"]["ticket_id"] == "JIRAVIS-123"
     assert payload["data"]["assignee"] == "Ada"
     assert payload["data"]["subtasks"][0]["ticket_id"] == "JIRAVIS-124"
+
+
+def test_read_ticket_preserves_jiravis_error_payload(monkeypatch, capsys) -> None:
+    module = load_module("claude/skills/jira-read/scripts/read_ticket.py", "jira_read_ticket_error")
+
+    def fake_run(command, capture_output, check, text):
+        stdout = json.dumps({"status": "error", "message": "Ticket not found"})
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(module.shutil, "which", lambda name: "/usr/local/bin/jira")
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+    exit_code = module.main(["--ticket-id", "JIRAVIS-123"])
+
+    assert exit_code == 1
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["status"] == "error"
+    assert payload["message"] == "Ticket not found"
