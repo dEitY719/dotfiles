@@ -11,7 +11,7 @@ description: >-
   TDD / debugging) that already produced output earlier in the conversation —
   it resumes from the implementation step they led to. Accepts
   `-h`/`--help`/`help` to print usage.
-allowed-tools: Bash, Read, Edit, Write, Grep, Agent
+allowed-tools: Bash, Read, Edit, Write, Grep, Agent, TaskList, TaskUpdate
 ---
 
 # devx:restart — Resume After API Error
