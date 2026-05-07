@@ -18,7 +18,7 @@ allowed-tools: Bash, Read, Write, CronCreate, CronDelete
 > **Claude Code only**. Requires this worktree's Claude Code session to stay
 > open (or be reopened in this worktree) so the durable cron can fire.
 
-If arg #1 is `-h`/`--help`/`help`, or when you need usage/examples, read `references/help.md` verbatim and stop.
+If arg #1 is `-h`/`--help`/`help`, or when you need usage/examples, print `references/help.md` verbatim and stop.
 
 ## Steps
 
