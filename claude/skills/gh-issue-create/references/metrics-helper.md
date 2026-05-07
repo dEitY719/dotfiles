@@ -53,16 +53,21 @@ From `gh-issue-create/references/metrics-baseline.md` by issue type:
 
 ```
 ---
+<details>
+<summary>🤖 AI Metrics · 📊 ~{TOKENS} tokens · 👤 ~{HUMAN_H} h · 🤖 ~{ELAPSED} min</summary>
+
 <!-- ai-metrics:<skill> -->
 📊 ~{TOKENS} tokens · 👤 ~{HUMAN_H} h · 🤖 ~{ELAPSED} min
 <!-- /ai-metrics:<skill> -->
+
+</details>
 ```
 
 Append via `printf` to a temp file before creating the artifact:
 
 ```bash
-printf '\n---\n<!-- ai-metrics:%s -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics:%s -->\n' \
-  "$SKILL" "$TOKENS" "$HUMAN_H" "$ELAPSED" "$SKILL" >> "$BODY"
+printf '\n---\n<details>\n<summary>🤖 AI Metrics · 📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min</summary>\n\n<!-- ai-metrics:%s -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics:%s -->\n\n</details>\n' \
+  "$TOKENS" "$HUMAN_H" "$ELAPSED" "$SKILL" "$TOKENS" "$HUMAN_H" "$ELAPSED" "$SKILL" >> "$BODY"
 ```
 
 ### GitHub PR / Issue comment
@@ -96,7 +101,9 @@ When editing an existing PR body (e.g., `gh-issue-flow`):
 python3 -c "
 import re, sys
 body = sys.stdin.read()
-body = re.sub(r'\n?---\n<!-- ai-metrics(:.*?)? -->.*?<!-- /ai-metrics(:.*?)? -->\n?', '', body, flags=re.DOTALL)
+body = re.sub(
+  r'\n?---\n(?:<details>\n<summary>[^\n]*</summary>\n\n)?<!-- ai-metrics(:.*?)? -->.*?<!-- /ai-metrics(:.*?)? -->(?:\n\n</details>)?\n?',
+  '', body, flags=re.DOTALL)
 sys.stdout.write(body)" < existing_body > stripped_body
 ```
 

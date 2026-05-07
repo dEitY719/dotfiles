@@ -79,8 +79,8 @@ footer block (soft-fail — warn on error, never block):
 ```bash
 # After running the snippet from references/metrics-helper.md, $TOKENS is
 # bound to the correct estimate. Now append the footer to $BODY.
-printf '\n---\n<!-- ai-metrics:gh-pr -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics:gh-pr -->\n' \
-  "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
+printf '\n---\n<details>\n<summary>🤖 AI Metrics · 📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min</summary>\n\n<!-- ai-metrics:gh-pr -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics:gh-pr -->\n\n</details>\n' \
+  "$TOKENS" "$HUMAN_H" "$ELAPSED" "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
 ```
 
 ## Step 5: Push and Create
