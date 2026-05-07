@@ -82,8 +82,8 @@ if the previous completed successfully.
    ```
    Passing the issue number ensures `Closes #<N>` ends up in the PR
    body via gh:pr's Step 3 (issue resolution).
-   After this step succeeds, extract `PR_NUM` from the PR URL in the
-   output (last path segment of the `https://github.com/.../pull/<M>` URL).
+   After this step succeeds, extract <PR_NUM> from the PR URL in the
+   output (e.g., 123 from `.../pull/123`).
    **Now invoke Step 2.4 — no recap, no summary, no header.**
 
 4. **Step 2.4 — devx:schedule** (only if 2.3 succeeded)
@@ -113,6 +113,14 @@ if the previous completed successfully.
    This step soft-fails — warn on any error but never block the flow.
 
    a. Compute: `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))`
+      Track per-step timing by recording `STEP_TS=$(date +%s)` at the
+      start of each sub-skill and computing its elapsed at the end:
+      - `IMPL_MIN` — elapsed for Step 2.1 (gh:issue-implement)
+      - `COMMIT_MIN` — elapsed for Step 2.2 (gh:commit)
+      - `PR_MIN` — elapsed for Step 2.3 (gh:pr)
+      - `SCHEDULE_MIN` — elapsed for Step 2.4 (devx:schedule)
+      - `CONFLICT_MIN` — elapsed for Step 2.5 (gh:pr-resolve-conflict)
+      Any variable not yet computed defaults to `?` in the template.
    b. Issue type: parse the conventional-commit prefix from the issue title
       fetched in Step 2.1 (e.g. `feat`, `fix`, `refactor`).
    c. Human time: look up the issue type in `gh-issue-create`'s
