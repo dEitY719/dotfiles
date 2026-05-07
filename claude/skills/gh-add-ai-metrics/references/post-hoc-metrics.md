@@ -24,7 +24,7 @@ exists, so it is safe to run unconditionally.
 
 ```bash
 stripped=$(printf '%s' "$body" \
-  | perl -0777 -pe 's|\n+---\n<!-- ai-metrics(?::[A-Za-z0-9_-]+)? -->.*?<!-- /ai-metrics(?::[A-Za-z0-9_-]+)? -->\n?||s')
+  | perl -0777 -pe 's|\n+---\n(?:<details>\n<summary>[^\n]*</summary>\n\n)?<!-- ai-metrics(?::[A-Za-z0-9_-]+)? -->.*?<!-- /ai-metrics(?::[A-Za-z0-9_-]+)? -->(?:\n\n</details>)?\n?||s')
 ```
 
 Regex notes:
@@ -33,10 +33,13 @@ Regex notes:
   on its own line. Tolerates both append conventions in the wild —
   PR #320's `\n---\n` (single) and `gh-issue-create`'s `\n\n---\n`
   (double) — without leaving a stray newline behind in either case.
+- `(?:<details>\n<summary>[^\n]*</summary>\n\n)?` optionally matches the
+  new `<details>` wrapper prefix introduced in issue #367.
 - `<!-- ai-metrics(?::[A-Za-z0-9_-]+)? -->` matches both the colonless
   form and the suffixed form (`<!-- ai-metrics:gh-pr -->`).
 - `.*?` non-greedy + the `s` flag scopes the match to the nearest
   closing marker.
+- `(?:\n\n</details>)?` optionally matches the closing `</details>` tag.
 
 ## TOKENS
 

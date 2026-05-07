@@ -5,14 +5,16 @@ Detection and edit logic for the `<!-- ai-metrics -->` footer used by
 
 ## Marker grammar
 
-Two forms exist in the wild — both must be detected as "already tagged":
+Three forms exist in the wild — all must be detected as "already tagged":
 
 - `<!-- ai-metrics -->` … `<!-- /ai-metrics -->`
   (the original PR #320 / `gh-issue-create` shape)
 - `<!-- ai-metrics:<skill-name> -->` … `<!-- /ai-metrics:<skill-name> -->`
-  (the newer `metrics-helper.md` scheme used by post-#320 retro-fit work)
+  (the `metrics-helper.md` scheme used by post-#320 retro-fit work)
+- `<details>\n<summary>🤖 AI Metrics · …</summary>\n\n<!-- ai-metrics(:<skill>)? -->` … `<!-- /ai-metrics(:<skill>)? -->\n\n</details>`
+  (the new `<details>`-wrapped form introduced in issue #367 — default for new cards)
 
-A single regex covers both:
+A single regex covers all three:
 
 ```
 <!-- ai-metrics(:[a-zA-Z0-9_-]+)? -->[\s\S]*?<!-- /ai-metrics(:[a-zA-Z0-9_-]+)? -->
@@ -35,9 +37,10 @@ has_footer() {
   # (`<!-- ai-metrics -->` in backticks) do not match. The leading
   # `\n+` tolerates both PR #320's `\n---\n` (single) and the newer
   # `\n\n---\n` (double) append conventions.
+  # The optional `<details>…</summary>\n\n` allows the new #367 wrapped form.
   printf '%s' "$1" | perl -0777 -ne '
     exit (
-      /\n+---\n<!-- ai-metrics(?::[A-Za-z0-9_-]+)? -->\n.*?\n<!-- \/ai-metrics(?::[A-Za-z0-9_-]+)? -->/s
+      /\n+---\n(?:<details>\n<summary>[^\n]*<\/summary>\n\n)?<!-- ai-metrics(?::[A-Za-z0-9_-]+)? -->\n.*?\n<!-- \/ai-metrics(?::[A-Za-z0-9_-]+)? -->/s
       ? 0 : 1
     )'
 }
@@ -52,37 +55,40 @@ shipping environment, so this stays portable.
 ```bash
 append_footer() {
   local body="$1" tokens="$2" human="$3" elapsed="$4"
-  printf '%s\n\n---\n<!-- ai-metrics -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics -->\n' \
-    "$body" "$tokens" "$human" "$elapsed"
+  printf '%s\n\n---\n<details>\n<summary>🤖 AI Metrics · 📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min</summary>\n\n<!-- ai-metrics -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics -->\n\n</details>\n' \
+    "$body" "$tokens" "$human" "$elapsed" "$tokens" "$human" "$elapsed"
 }
 ```
 
 The leading `\n\n---\n` ensures the footer is visually separated from the
 preceding section even when the original body did not end with a newline.
+The `<details>` wrapper collapses the block on GitHub by default, keeping
+the PR/issue body readable while the metrics remain accessible on click.
 
 ## In-place replace (`--force` path)
 
 `perl -0777` for slurp-mode multiline regex. `python3` is the fallback if
-perl is unavailable (rare). Note the negated `:gh-add-ai-metrics` capture
-when re-emitting — we always emit the colonless form to stay 1:1 with
-`gh-issue-create`'s SSOT shape.
+perl is unavailable (rare). We always emit the new `<details>`-wrapped form
+regardless of which form was found — this upgrades old-format footers in place.
 
 ```bash
 replace_footer() {
   local body="$1" tokens="$2" human="$3" elapsed="$4"
   local new_block
-  new_block=$(printf '<!-- ai-metrics -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics -->' \
-    "$tokens" "$human" "$elapsed")
+  new_block=$(printf '<details>\n<summary>🤖 AI Metrics · 📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min</summary>\n\n<!-- ai-metrics -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics -->\n\n</details>' \
+    "$tokens" "$human" "$elapsed" "$tokens" "$human" "$elapsed")
   printf '%s' "$body" \
     | NEW="$new_block" perl -0777 -pe '
         BEGIN { $n = $ENV{NEW} }
-        s|<!-- ai-metrics(?::[A-Za-z0-9_-]+)? -->.*?<!-- /ai-metrics(?::[A-Za-z0-9_-]+)? -->|$n|s
+        s|(?:<details>\n<summary>[^\n]*</summary>\n\n)?<!-- ai-metrics(?::[A-Za-z0-9_-]+)? -->.*?<!-- /ai-metrics(?::[A-Za-z0-9_-]+)? -->(?:\n\n</details>)?|$n|s
       '
 }
 ```
 
 The `BEGIN`-block pattern reads `$NEW` from the env so newline-bearing
 replacements survive the perl substitution untouched (no `$1` collision).
+The outer `(?:<details>…)?` / `(?:…</details>)?` optionals match both the
+old bare form and the new wrapped form, enabling in-place upgrade.
 
 ## `--force` on a card without a footer
 
@@ -152,10 +158,10 @@ line — emitted to stdout, not posted as a comment.
 
 A retro-fit run is correct iff:
 
-1. Stripping the new `\n+---\n<!-- ai-metrics -->…<!-- /ai-metrics -->`
+1. Stripping the new `\n+---\n<details>…<!-- ai-metrics -->…<!-- /ai-metrics -->…</details>`
    block from the post-edit body yields the original (pre-edit) body
    byte-for-byte (regardless of whether append used `\n---\n` or
-   `\n\n---\n`).
+   `\n\n---\n`). Same must hold for the legacy bare form.
 2. Running the skill twice without `--force` produces zero edit API
    calls on the second run.
 3. Running once with `--force` and once without on the same card
@@ -164,3 +170,7 @@ A retro-fit run is correct iff:
    in inline code spans (e.g. `\`<!-- ai-metrics -->\`` inside docs).
    Issue #324 of this repo is the canonical positive example for this
    case after stripping.
+5. `has_footer` returns true for the new `<details>`-wrapped form
+   (issue #367) as well as for legacy bare `<!-- ai-metrics -->` blocks.
+6. `replace_footer` called on a legacy bare-form footer emits the new
+   `<details>`-wrapped form (in-place upgrade on `--force`).
