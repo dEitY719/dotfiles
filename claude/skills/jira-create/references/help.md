@@ -13,8 +13,19 @@ Create Jira tickets through the jiravis CLI.
 
 ```text
 /jira:create
+/jira:create help
+/jira:create -h
+/jira:create --help
 /jira:create project JIRAVIS summary "Build adapter" description "Details..."
 /jira-create JIRAVIS "Build adapter" "Details..."
+```
+
+Wrapper script help:
+
+```bash
+python claude/skills/jira-create/scripts/create_ticket.py help
+python claude/skills/jira-create/scripts/create_ticket.py -h
+python claude/skills/jira-create/scripts/create_ticket.py --help
 ```
 
 ## Required Inputs
