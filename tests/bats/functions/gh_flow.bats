@@ -223,6 +223,42 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
+# --user option (multi-account, issue #365)
+# ---------------------------------------------------------------------------
+
+@test "dispatcher: --user without value fails with clear message" {
+    run_in_bash "cd '$REPO_DIR' && gh_flow 13 --user 2>&1"
+    assert_failure
+    assert_output --partial "--user requires a value"
+}
+
+@test "dispatcher: --user <unknown> is rejected with available list" {
+    run_in_bash "cd '$REPO_DIR' && gh_flow 13 --user nope 2>&1"
+    assert_failure
+    assert_output --partial "Unknown account: nope"
+    assert_output --partial "Available:"
+}
+
+@test "dispatcher: --user with --ai codex is rejected (claude-only)" {
+    run_in_bash "cd '$REPO_DIR' && gh_flow 13 --user personal --ai codex 2>&1"
+    assert_failure
+    assert_output --partial "--user is only supported with --ai claude"
+}
+
+@test "dispatcher: --user personal parses (parser accepts known account)" {
+    run_in_bash "cd '$REPO_DIR' && gh_flow 13 --user personal 2>&1 || true"
+    refute_output --partial "Unknown account"
+    refute_output --partial "--user requires a value"
+    refute_output --partial "only supported with --ai claude"
+}
+
+@test "help: documents --user option" {
+    run_in_bash "gh_flow_help"
+    assert_success
+    assert_output --partial "--user"
+}
+
+# ---------------------------------------------------------------------------
 # post-condition helpers (the ones the worker uses between Step 2 sub-steps)
 # ---------------------------------------------------------------------------
 
