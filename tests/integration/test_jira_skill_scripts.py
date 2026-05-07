@@ -48,6 +48,18 @@ def test_create_ticket_dry_run_uses_description_file_placeholder(capsys) -> None
     assert "--components" in command
 
 
+def test_create_ticket_help_alias_prints_usage(capsys) -> None:
+    module = load_module("claude/skills/jira-create/scripts/create_ticket.py", "jira_create_ticket_help")
+
+    exit_code = module.main(["help"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "usage:" in output
+    assert "--project-key" in output
+    assert "--description-file" in output
+
+
 def test_create_ticket_dry_run_text_does_not_claim_created(capsys) -> None:
     module = load_module("claude/skills/jira-create/scripts/create_ticket.py", "jira_create_ticket_text")
 

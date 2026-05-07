@@ -16,7 +16,7 @@ ISSUE_TYPES = ("Task", "Bug", "Story")
 PRIORITIES = ("Critical", "High", "Medium", "Low")
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Create a Jira ticket through the jiravis CLI.")
     parser.add_argument("--project-key", required=True, help="Jira project key, for example JIRAVIS")
     parser.add_argument("--summary", required=True, help="Jira issue summary")
@@ -32,7 +32,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true", help="Print the planned jiravis command without running it")
     parser.add_argument("--raw", action="store_true", help="Print raw jiravis output")
     parser.add_argument("--text", action="store_true", help="Print a concise text summary instead of JSON")
-    return parser.parse_args(argv)
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def print_help() -> None:
+    build_parser().print_help()
 
 
 def _require_text(value: str, field: str) -> None:
@@ -213,6 +221,10 @@ def run(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv == ["help"]:
+        print_help()
+        return 0
     try:
         return run(parse_args(argv))
     except Exception as exc:
