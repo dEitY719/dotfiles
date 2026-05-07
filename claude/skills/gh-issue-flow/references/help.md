@@ -9,17 +9,19 @@
 
 ## Usage
 
-- `/gh-issue-flow 16` — chain: implement → commit → PR for issue #16 on `origin`.
+- `/gh-issue-flow 16` — chain: implement → commit → PR → schedule pr-reply → resolve conflicts, for issue #16 on `origin`.
 - `/gh-issue-flow 16 upstream` — same chain on `upstream` remote.
 - `/gh-issue-flow -h` / `--help` / `help` — print this help.
 
 ## What this skill chains
 
-This skill invokes **3 skills in sequence** (each step runs only if the previous succeeded):
+This skill invokes **5 skills in sequence** (each step runs only if the previous succeeded):
 
 1. **`gh:issue-implement <N> direct`** — reads the issue, edits files, runs tests. No human intervention.
 2. **`gh:commit`** — creates a commit for the changes with a message derived from the conversation (follows the repo's commit style).
 3. **`gh:pr`** — pushes the branch and opens a PR, auto-linking `Closes #<N>`.
+4. **`devx:schedule --time 10 "/gh-pr-reply <PR#>"`** — schedules a pr-reply run 10 minutes after PR creation, giving CI and reviewers time to post before the bot replies.
+5. **`gh:pr-resolve-conflict <PR#>`** — checks and resolves any merge conflicts in the new PR via rebase. Exits cleanly if the PR has no conflicts (expected for a freshly created branch).
 
 If any step fails, the chain stops immediately. No automatic retry.
 The final report shows which steps ran, which failed, and how to
