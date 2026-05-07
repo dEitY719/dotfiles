@@ -91,8 +91,10 @@ _gh_pr_reply_run_ai_prompt() {
 
 gh_pr_reply_help() {
     ux_header "gh-pr-reply - fire-and-forget GitHub PR review-reply runner"
-    ux_info "Usage: gh-pr-reply <pr-number>... [--ai <agent>] | -h|--help"
+    ux_info "Usage: gh-pr-reply <pr-number>... [--ai <agent>] [--user <account>] | -h|--help"
     ux_bullet_sub "agent: claude (default) | codex | gemini"
+    ux_bullet_sub "--user <account>: claude account (personal|work). Only with --ai claude."
+    ux_bullet_sub "                  Default: \$CLAUDE_DEFAULT_ACCOUNT (multi-account env)"
     ux_info ""
     ux_info "Spawns one background worker per PR. Each worker:"
     ux_bullet "gwt spawn → <ai> -p '/gh-pr-reply <N>' → gwt teardown"
@@ -107,6 +109,7 @@ gh_pr_reply_help() {
     ux_bullet "gh-pr-reply '#42'               # '#' prefix accepted"
     ux_bullet "gh-pr-reply 33 --ai codex       # run worker with codex CLI"
     ux_bullet "gh-pr-reply --ai gemini 44 55   # run workers with gemini CLI"
+    ux_bullet "gh-pr-reply 42 --user work      # multi-account: route worker to ~/.claude-work"
     ux_info ""
     ux_info "State directory: ~/.local/state/gh-pr-reply/<repo>/<pr>/"
     ux_bullet_sub "state         - current step"
@@ -153,8 +156,11 @@ gh_pr_reply() {
     # Parse optional args (PR numbers and --ai may interleave):
     #   --ai <claude|codex|gemini>
     #   --ai=<claude|codex|gemini>
-    # Last --ai wins on duplicates — same policy gh-flow chose for #208.
+    #   --user <account>          (claude multi-account, issue #365)
+    #   --user=<account>
+    # Last --ai/--user wins on duplicates — same policy gh-flow chose for #208.
     local _ai="claude"
+    local _account=""
     local _pr_args=""
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -169,9 +175,20 @@ gh_pr_reply() {
             --ai=*)
                 _ai="${1#--ai=}"
                 ;;
+            --user)
+                shift
+                if [ $# -eq 0 ]; then
+                    ux_error "--user requires a value (e.g., personal|work)"
+                    return 1
+                fi
+                _account="$1"
+                ;;
+            --user=*)
+                _account="${1#--user=}"
+                ;;
             -*)
                 ux_error "unknown option: '$1'"
-                ux_info "Usage: gh-pr-reply <pr-number>... [--ai <claude|codex|gemini>]"
+                ux_info "Usage: gh-pr-reply <pr-number>... [--ai <claude|codex|gemini>] [--user <account>]"
                 return 1
                 ;;
             *)
@@ -186,8 +203,26 @@ gh_pr_reply() {
     set -- $_pr_args
     if [ $# -eq 0 ]; then
         ux_error "no PR numbers provided"
-        ux_info "Usage: gh-pr-reply <pr-number>... [--ai <claude|codex|gemini>]"
+        ux_info "Usage: gh-pr-reply <pr-number>... [--ai <claude|codex|gemini>] [--user <account>]"
         return 1
+    fi
+
+    # Validate --user (issue #365): only meaningful with --ai claude.
+    # Mirrors gwt spawn's policy and reuses _claude_resolve_account SSOT.
+    if [ -n "$_account" ]; then
+        if [ "$_ai" != "claude" ]; then
+            ux_error "--user is only supported with --ai claude (got: --ai $_ai)"
+            return 1
+        fi
+        if ! command -v _claude_resolve_account >/dev/null 2>&1; then
+            ux_error "--user requires shell-common claude integration (claude.sh) to be loaded"
+            return 1
+        fi
+        if ! _claude_resolve_account "$_account" >/dev/null 2>&1; then
+            ux_error "Unknown account: $_account"
+            ux_info "Available: $(_claude_resolve_account --list 2>/dev/null | tr '\n' ' ')"
+            return 1
+        fi
     fi
 
     # Preconditions
@@ -237,9 +272,9 @@ gh_pr_reply() {
         _pr_clean_args="$_pr_clean_args $_pr_clean"
     done
 
-    ux_header "gh-pr-reply: spawning $# worker(s) (ai=$_ai)"
+    ux_header "gh-pr-reply: spawning $# worker(s) (ai=$_ai${_account:+ user=$_account})"
     for _pr in $_pr_clean_args; do
-        _gh_pr_reply_spawn_worker "$_pr" "$_ai"
+        _gh_pr_reply_spawn_worker "$_pr" "$_ai" "$_account"
     done
     ux_success "All workers detached. Your shell is free. Results appear on the PR."
 }
@@ -247,11 +282,27 @@ gh_pr_reply() {
 _gh_pr_reply_spawn_worker() {
     local _pr="$1"
     local _ai="${2:-claude}"
-    local _dir _log _state _pid
+    local _account="${3:-}"
+    local _dir _log _state _pid _cfg_dir _resolve_account
     _dir=$(_gh_pr_reply_pr_dir "$_pr")
     mkdir -p "$_dir"
     _log="$_dir/log"
     printf '%s\n' "$_ai" >"$_dir/ai"
+
+    # Resolve CLAUDE_CONFIG_DIR for the worker (issue #365). Without this,
+    # the bare `claude` binary inside the worker falls back to ~/.claude/
+    # which has no credentials in multi-account setups → "Not logged in".
+    # Priority: explicit --user > $CLAUDE_DEFAULT_ACCOUNT > none.
+    _cfg_dir=""
+    if [ "$_ai" = "claude" ]; then
+        _resolve_account="${_account:-${CLAUDE_DEFAULT_ACCOUNT:-}}"
+        if [ -n "$_resolve_account" ]; then
+            if command -v _claude_resolve_account >/dev/null 2>&1; then
+                _cfg_dir="$(_claude_resolve_account "$_resolve_account" 2>/dev/null || true)"
+            fi
+            [ -z "$_cfg_dir" ] && _cfg_dir="$HOME/.claude-$_resolve_account"
+        fi
+    fi
 
     # Idempotency check — mirrors gh-pr-approve / gh-flow semantics.
     _state=$(_gh_pr_reply_get_state "$_pr")
@@ -288,15 +339,17 @@ _gh_pr_reply_spawn_worker() {
     # Fork detached worker. DOTFILES_FORCE_INIT=1 forces full shell-common
     # loading in the non-interactive subshell so `gwt`, `ux_*`, and helpers
     # resolve. The subshell sources ~/.bashrc then calls _gh_pr_reply_worker.
-    # shellcheck disable=SC2016
-    nohup env DOTFILES_FORCE_INIT=1 bash -c '
+    # CLAUDE_CONFIG_DIR is injected only when an account was resolved
+    # (issue #365) — single-account setups stay on the legacy path.
+    # shellcheck disable=SC2016,SC2086
+    nohup env DOTFILES_FORCE_INIT=1 ${_cfg_dir:+CLAUDE_CONFIG_DIR="$_cfg_dir"} bash -c '
         . "$HOME/.bashrc" 2>/dev/null || true
         _gh_pr_reply_worker "$1" "$2"
     ' -- "$_pr" "$_ai" </dev/null >"$_log" 2>&1 &
     _pid=$!
     disown "$_pid" 2>/dev/null || true
     printf '%s\n' "$_pid" >"$_dir/pid"
-    ux_info "#$_pr → pid=$_pid  ai=$_ai  log=$_log"
+    ux_info "#$_pr → pid=$_pid  ai=$_ai${_cfg_dir:+ user=$_resolve_account}  log=$_log"
 }
 
 # ============================================================================

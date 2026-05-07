@@ -599,8 +599,10 @@ _gh_flow_prune() {
 gh_flow_help() {
     ux_header "gh-flow - fire-and-forget GitHub issue → PR automation"
     ux_info "Usage:"
-    ux_bullet "gh-flow <issue-number>... [--ai <agent>]  spawn N parallel workers"
+    ux_bullet "gh-flow <issue-number>... [--ai <agent>] [--user <account>]  spawn N parallel workers"
     ux_bullet_sub "agent: claude (default) | codex | gemini"
+    ux_bullet_sub "--user <account>: claude account (personal|work). Only with --ai claude."
+    ux_bullet_sub "                  Default: \$CLAUDE_DEFAULT_ACCOUNT (multi-account env)"
     ux_bullet "gh-flow status [<N>]            full table, or per-issue diagnostic"
     ux_bullet "gh-flow prune [--force] [<N>...] clean 'done' state, or scoped per-issue prune"
     ux_bullet "gh-flow -h|--help|help           this help"
@@ -615,6 +617,7 @@ gh_flow_help() {
     ux_bullet "gh-flow 13 42 88            # 3 issues in parallel"
     ux_bullet "gh-flow 33 --ai codex       # run workers with codex CLI"
     ux_bullet "gh-flow --ai gemini 44      # run workers with gemini CLI"
+    ux_bullet "gh-flow 13 --user work      # multi-account: route worker to ~/.claude-work"
     ux_bullet "gh-flow status              # full table — who's still running, who failed"
     ux_bullet "gh-flow status 153          # per-issue diagnostic (verdict + next action)"
     ux_bullet "gh-flow prune               # remove 'done' state dirs; print hints for failures"
@@ -672,7 +675,10 @@ gh_flow() {
     # Parse optional args:
     #   --ai <claude|codex|gemini>
     #   --ai=<claude|codex|gemini>
+    #   --user <account>          (claude multi-account, issue #365)
+    #   --user=<account>
     local _ai="claude"
+    local _account=""
     local _issue_args=""
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -687,9 +693,20 @@ gh_flow() {
         --ai=*)
             _ai="${1#--ai=}"
             ;;
+        --user)
+            shift
+            if [ $# -eq 0 ]; then
+                ux_error "--user requires a value (e.g., personal|work)"
+                return 1
+            fi
+            _account="$1"
+            ;;
+        --user=*)
+            _account="${1#--user=}"
+            ;;
         -*)
             ux_error "unknown option: '$1'"
-            ux_info "Usage: gh-flow <issue-number>... [--ai <claude|codex|gemini>]"
+            ux_info "Usage: gh-flow <issue-number>... [--ai <claude|codex|gemini>] [--user <account>]"
             return 1
             ;;
         *)
@@ -711,6 +728,24 @@ gh_flow() {
     if ! _gh_flow_known_ai "$_ai"; then
         ux_error "invalid --ai value: '$_ai' (allowed: claude, codex, gemini)"
         return 1
+    fi
+
+    # Validate --user (issue #365): only meaningful with --ai claude.
+    # Mirrors gwt spawn's policy and reuses _claude_resolve_account SSOT.
+    if [ -n "$_account" ]; then
+        if [ "$_ai" != "claude" ]; then
+            ux_error "--user is only supported with --ai claude (got: --ai $_ai)"
+            return 1
+        fi
+        if ! command -v _claude_resolve_account >/dev/null 2>&1; then
+            ux_error "--user requires shell-common claude integration (claude.sh) to be loaded"
+            return 1
+        fi
+        if ! _claude_resolve_account "$_account" >/dev/null 2>&1; then
+            ux_error "Unknown account: $_account"
+            ux_info "Available: $(_claude_resolve_account --list 2>/dev/null | tr '\n' ' ')"
+            return 1
+        fi
     fi
 
     # Preconditions
@@ -756,9 +791,9 @@ gh_flow() {
         esac
     done
 
-    ux_header "gh-flow: spawning $# worker(s) (ai=$_ai)"
+    ux_header "gh-flow: spawning $# worker(s) (ai=$_ai${_account:+ user=$_account})"
     for _issue in "$@"; do
-        _gh_flow_spawn_worker "$_issue" "$_ai"
+        _gh_flow_spawn_worker "$_issue" "$_ai" "$_account"
     done
     ux_success "All workers detached. Your shell is free. Results will appear on the kanban."
 }
@@ -766,11 +801,27 @@ gh_flow() {
 _gh_flow_spawn_worker() {
     local _issue="$1"
     local _ai="${2:-claude}"
-    local _dir _log _state _pid
+    local _account="${3:-}"
+    local _dir _log _state _pid _cfg_dir _resolve_account
     _dir=$(_gh_flow_issue_dir "$_issue")
     mkdir -p "$_dir"
     _log="$_dir/log"
     printf '%s\n' "$_ai" >"$_dir/ai"
+
+    # Resolve CLAUDE_CONFIG_DIR for the worker (issue #365). Without this,
+    # the bare `claude` binary inside the worker falls back to ~/.claude/
+    # which has no credentials in multi-account setups → "Not logged in".
+    # Priority: explicit --user > $CLAUDE_DEFAULT_ACCOUNT > none.
+    _cfg_dir=""
+    if [ "$_ai" = "claude" ]; then
+        _resolve_account="${_account:-${CLAUDE_DEFAULT_ACCOUNT:-}}"
+        if [ -n "$_resolve_account" ]; then
+            if command -v _claude_resolve_account >/dev/null 2>&1; then
+                _cfg_dir="$(_claude_resolve_account "$_resolve_account" 2>/dev/null || true)"
+            fi
+            [ -z "$_cfg_dir" ] && _cfg_dir="$HOME/.claude-$_resolve_account"
+        fi
+    fi
 
     # Idempotency check
     _state=$(_gh_flow_get_state "$_issue")
@@ -799,15 +850,17 @@ _gh_flow_spawn_worker() {
     # Fork detached worker. DOTFILES_FORCE_INIT=1 forces full shell-common
     # loading in the non-interactive subshell so `gwt`, `ux_*`, and helpers
     # resolve. The subshell sources ~/.bashrc then calls _gh_flow_worker.
-    # shellcheck disable=SC2016
-    nohup env DOTFILES_FORCE_INIT=1 bash -c '
+    # CLAUDE_CONFIG_DIR is injected only when an account was resolved
+    # (issue #365) — single-account setups stay on the legacy path.
+    # shellcheck disable=SC2016,SC2086
+    nohup env DOTFILES_FORCE_INIT=1 ${_cfg_dir:+CLAUDE_CONFIG_DIR="$_cfg_dir"} bash -c '
         . "$HOME/.bashrc" 2>/dev/null || true
         _gh_flow_worker "$1" "$2"
     ' -- "$_issue" "$_ai" </dev/null >"$_log" 2>&1 &
     _pid=$!
     disown "$_pid" 2>/dev/null || true
     printf '%s\n' "$_pid" >"$_dir/pid"
-    ux_info "#$_issue → pid=$_pid  ai=$_ai  log=$_log"
+    ux_info "#$_issue → pid=$_pid  ai=$_ai${_cfg_dir:+ user=$_resolve_account}  log=$_log"
 }
 
 # ============================================================================

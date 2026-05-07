@@ -103,10 +103,22 @@ _gh_pr_approve_check_ai_auth() {
         if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
             return 0
         fi
+        # Multi-account aware (issue #365): when --user is set or
+        # CLAUDE_DEFAULT_ACCOUNT routes the worker to ~/.claude-<account>/,
+        # the legacy paths below would false-positive. Check the resolved
+        # profile's credentials.json first.
+        _ccaa_account="${2:-${CLAUDE_DEFAULT_ACCOUNT:-}}"
+        _ccaa_dir=""
+        if [ -n "$_ccaa_account" ] && command -v _claude_resolve_account >/dev/null 2>&1; then
+            _ccaa_dir="$(_claude_resolve_account "$_ccaa_account" 2>/dev/null || true)"
+        fi
+        if [ -n "$_ccaa_dir" ] && [ -f "$_ccaa_dir/.credentials.json" ]; then
+            return 0
+        fi
         if [ -f "$HOME/.claude/.credentials.json" ] || [ -f "$HOME/.claude.json" ]; then
             return 0
         fi
-        ux_error "claude CLI not authenticated. Run 'claude /login' first."
+        ux_error "claude CLI not authenticated${_ccaa_account:+ for account [$_ccaa_account]}. Run 'claude /login' first."
         return 1
         ;;
     codex)
@@ -659,8 +671,10 @@ _gh_pr_approve_prune() {
 gh_pr_approve_help() {
     ux_header "gh-pr-approve - fire-and-forget GitHub PR approval runner"
     ux_info "Usage:"
-    ux_bullet "gh-pr-approve <pr-number>... [--ai <agent>] [--self-record|--admin-merge] [--squash|--rebase|--merge]"
+    ux_bullet "gh-pr-approve <pr-number>... [--ai <agent>] [--user <account>] [--self-record|--admin-merge] [--squash|--rebase|--merge]"
     ux_bullet_sub "agent: claude (default) | codex | gemini"
+    ux_bullet_sub "--user <account>: claude account (personal|work). Only with --ai claude."
+    ux_bullet_sub "                  Default: \$CLAUDE_DEFAULT_ACCOUNT (multi-account env)"
     ux_bullet_sub "--self-record: for self-authored PRs, leave a comment-only review record"
     ux_bullet_sub "--admin-merge: for self-authored PRs, review then merge with gh pr merge --admin"
     ux_bullet_sub "--squash|--rebase|--merge: optional merge strategy for --admin-merge"
@@ -676,6 +690,7 @@ gh_pr_approve_help() {
     ux_bullet "gh-pr-approve 12 34 56                      # 3 PRs in parallel"
     ux_bullet "gh-pr-approve 42 --ai codex                 # run worker with codex CLI"
     ux_bullet "gh-pr-approve --ai gemini '#56' '#78'       # gemini + #prefix"
+    ux_bullet "gh-pr-approve 42 --user work                # multi-account: route worker to ~/.claude-work"
     ux_bullet "gh-pr-approve 42 --self-record              # self-PR comment-only record"
     ux_bullet "gh-pr-approve 42 --admin-merge --squash     # self-PR admin merge"
     ux_bullet "gh-pr-approve status                        # full table — who's still running, who failed"
@@ -744,11 +759,14 @@ gh_pr_approve() {
     # Parse optional args:
     #   --ai <claude|codex|gemini>
     #   --ai=<claude|codex|gemini>
+    #   --user <account>          (claude multi-account, issue #365)
+    #   --user=<account>
     #   --self-record             (comment-only self-PR mode in skill)
     #   --admin-merge             (admin merge self-PR mode in skill)
     #   --squash|--rebase|--merge (optional admin merge strategy)
     # Position-agnostic: any flag may appear before, between, or after PR numbers.
     local _ai="claude"
+    local _account=""
     local _self_record=0
     local _admin_merge=0
     local _merge_strategy=""
@@ -766,6 +784,17 @@ gh_pr_approve() {
             ;;
         --ai=*)
             _ai="${1#--ai=}"
+            ;;
+        --user)
+            shift
+            if [ $# -eq 0 ]; then
+                ux_error "missing value for --user (expected: $(_claude_resolve_account --list 2>/dev/null | tr '\n' '|' | sed 's/|$//'))"
+                return 1
+            fi
+            _account="$1"
+            ;;
+        --user=*)
+            _account="${1#--user=}"
             ;;
         --self-ok)
             ux_error "--self-ok is not supported; GitHub blocks self-approval server-side"
@@ -787,7 +816,7 @@ gh_pr_approve() {
             ;;
         -*)
             ux_error "unknown option: '$1'"
-            ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>] [--self-record|--admin-merge]"
+            ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>] [--user <account>] [--self-record|--admin-merge]"
             return 1
             ;;
         *)
@@ -814,6 +843,24 @@ gh_pr_approve() {
     if ! _gh_pr_approve_known_ai "$_ai"; then
         ux_error "invalid --ai value: '$_ai' (expected: claude|codex|gemini)"
         return 1
+    fi
+
+    # Validate --user (issue #365): only meaningful with --ai claude.
+    # Mirrors gwt spawn's policy and reuses _claude_resolve_account SSOT.
+    if [ -n "$_account" ]; then
+        if [ "$_ai" != "claude" ]; then
+            ux_error "--user is only supported with --ai claude (got: --ai $_ai)"
+            return 1
+        fi
+        if ! command -v _claude_resolve_account >/dev/null 2>&1; then
+            ux_error "--user requires shell-common claude integration (claude.sh) to be loaded"
+            return 1
+        fi
+        if ! _claude_resolve_account "$_account" >/dev/null 2>&1; then
+            ux_error "Unknown account: $_account"
+            ux_info "Available: $(_claude_resolve_account --list 2>/dev/null | tr '\n' ' ')"
+            return 1
+        fi
     fi
 
     # Preconditions
@@ -866,7 +913,7 @@ gh_pr_approve() {
 
     if [ "$_pr_count" -eq 0 ]; then
         ux_error "no PR numbers provided"
-        ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>] [--self-record|--admin-merge]"
+        ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>] [--user <account>] [--self-record|--admin-merge]"
         return 1
     fi
 
@@ -875,13 +922,15 @@ gh_pr_approve() {
     # zombie worktree + 'failed:approving' state dir afterwards. Done here
     # — after PR-number / main-repo validation — so obvious user errors
     # still surface their natural message instead of an auth complaint.
-    if ! _gh_pr_approve_check_ai_auth "$_ai"; then
+    # Pass --user account (or default) so multi-account profiles are
+    # checked against the right .credentials.json (issue #365).
+    if ! _gh_pr_approve_check_ai_auth "$_ai" "$_account"; then
         return 1
     fi
 
-    ux_header "gh-pr-approve: spawning $_pr_count worker(s) (ai=$_ai${_self_args:+ flags=$_self_args})"
+    ux_header "gh-pr-approve: spawning $_pr_count worker(s) (ai=$_ai${_account:+ user=$_account}${_self_args:+ flags=$_self_args})"
     for _pr in $_pr_args; do
-        _gh_pr_approve_spawn_worker "$_pr" "$_ai" "$_self_args"
+        _gh_pr_approve_spawn_worker "$_pr" "$_ai" "$_self_args" "$_account"
     done
     ux_success "All workers detached. Your shell is free. Results appear on the PR."
 }
@@ -890,11 +939,28 @@ _gh_pr_approve_spawn_worker() {
     local _pr="$1"
     local _ai="${2:-claude}"
     local _self_args="${3:-}"
-    local _dir _log _state _pid
+    local _account="${4:-}"
+    local _dir _log _state _pid _cfg_dir _resolve_account
     _dir=$(_gh_pr_approve_pr_dir "$_pr")
     mkdir -p "$_dir"
     _log="$_dir/log"
     printf '%s\n' "$_ai" >"$_dir/ai"
+
+    # Resolve CLAUDE_CONFIG_DIR for the worker (issue #365). Without this,
+    # the bare `claude` binary inside the worker falls back to ~/.claude/
+    # which has no credentials in multi-account setups → "Not logged in".
+    # Priority: explicit --user > $CLAUDE_DEFAULT_ACCOUNT > none. Fallback
+    # path used when claude.sh integration is not loaded in the parent.
+    _cfg_dir=""
+    if [ "$_ai" = "claude" ]; then
+        _resolve_account="${_account:-${CLAUDE_DEFAULT_ACCOUNT:-}}"
+        if [ -n "$_resolve_account" ]; then
+            if command -v _claude_resolve_account >/dev/null 2>&1; then
+                _cfg_dir="$(_claude_resolve_account "$_resolve_account" 2>/dev/null || true)"
+            fi
+            [ -z "$_cfg_dir" ] && _cfg_dir="$HOME/.claude-$_resolve_account"
+        fi
+    fi
     # Record self-PR launch flags so `status <N>` can show them later.
     # Empty $_self_args → no file (status renders "(none)" then). Single
     # line, written even before the worker forks so a fail-fast spawn
@@ -932,15 +998,17 @@ _gh_pr_approve_spawn_worker() {
     # Fork detached worker. DOTFILES_FORCE_INIT=1 forces full shell-common
     # loading in the non-interactive subshell so `gwt`, `ux_*`, and helpers
     # resolve. The subshell sources ~/.bashrc then calls _gh_pr_approve_worker.
-    # shellcheck disable=SC2016
-    nohup env DOTFILES_FORCE_INIT=1 bash -c '
+    # CLAUDE_CONFIG_DIR is injected only when an account was resolved
+    # (issue #365) — single-account setups stay on the legacy path.
+    # shellcheck disable=SC2016,SC2086
+    nohup env DOTFILES_FORCE_INIT=1 ${_cfg_dir:+CLAUDE_CONFIG_DIR="$_cfg_dir"} bash -c '
         . "$HOME/.bashrc" 2>/dev/null || true
         _gh_pr_approve_worker "$@"
     ' -- "$_pr" "$_ai" "$_self_args" </dev/null >"$_log" 2>&1 &
     _pid=$!
     disown "$_pid" 2>/dev/null || true
     printf '%s\n' "$_pid" >"$_dir/pid"
-    ux_info "#$_pr -> pid=$_pid  ai=$_ai${_self_args:+ flags=$_self_args}  log=$_log"
+    ux_info "#$_pr -> pid=$_pid  ai=$_ai${_cfg_dir:+ user=$_resolve_account}${_self_args:+ flags=$_self_args}  log=$_log"
 }
 
 # ============================================================================

@@ -201,6 +201,50 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
+# --user option (multi-account, issue #365)
+# ---------------------------------------------------------------------------
+
+@test "bash: '--user' without value fails with clear message" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve 42 --user 2>&1"
+    assert_failure
+    assert_output --partial "missing value for --user"
+}
+
+@test "bash: '--user <unknown>' is rejected with available list" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve 42 --user nope 2>&1"
+    assert_failure
+    assert_output --partial "Unknown account: nope"
+    assert_output --partial "Available:"
+}
+
+@test "bash: '--user personal --ai codex' is rejected (claude-only)" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve 42 --user personal --ai codex 2>&1"
+    assert_failure
+    assert_output --partial "--user is only supported with --ai claude"
+}
+
+@test "bash: '--user personal' parses (parser accepts known account)" {
+    # Reaches a later precondition error (no claude CLI / no auth) — proving
+    # the parser/validator block didn't reject the flag itself.
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve 42 --user personal 2>&1 || true"
+    refute_output --partial "Unknown account"
+    refute_output --partial "missing value for --user"
+    refute_output --partial "only supported with --ai claude"
+}
+
+@test "bash: '--user=work' equals form is accepted" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve 42 --user=work 2>&1 || true"
+    refute_output --partial "Unknown account"
+    refute_output --partial "missing value for --user"
+}
+
+@test "help: documents --user option" {
+    run_in_bash "gh_pr_approve_help"
+    assert_success
+    assert_output --partial "--user"
+}
+
+# ---------------------------------------------------------------------------
 # self-PR options
 # ---------------------------------------------------------------------------
 
