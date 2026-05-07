@@ -57,27 +57,17 @@ Print one line so the user sees what you picked up:
 재개: <task subject> — 작은 단위로 쪼개서 진행합니다.
 ```
 
-Then mentally split the next concrete action into 1-tool-call increments:
-
-- One `Read` per file (no batch reads of 5 files).
-- One `Edit` per logical change (no multi-file `replace_all` sweeps).
-- One `Bash` per command (avoid long `&&` chains that re-run on retry).
-- One subagent per investigation (don't fan out 4 in parallel here — the
-  whole point is to reduce blast radius on the next flake).
+Read `references/chunking-rules.md` for 1-tool-call splitting rules and
+subagent delegation thresholds.
 
 Mark the task `in_progress` with `TaskUpdate` if it isn't already.
 
 ## Step 3: Delegate Large Outputs
 
-Anything that would dump > ~200 lines into the main context (broad `grep`,
-`find` over the whole repo, reading a 1k-line file you only need a slice of,
-multi-file conformance checks) MUST be delegated to a subagent:
-
-- Broad code search / cross-file consistency → `Agent(subagent_type=Explore)`.
-- Multi-step research or "go figure out X" → `Agent(subagent_type="general-purpose")`.
-
-Brief the agent with the resume target and ask for a < 200-word report.
-Keep the main context lean so the next API hiccup doesn't wipe progress.
+Per the thresholds in `references/chunking-rules.md`, large outputs
+(broad search, full-repo `find`, multi-file conformance checks) MUST go
+through a subagent. Brief it with the resume target and cap the response
+at ~200 words so the main context stays lean.
 
 ## Step 4: Execute, Then Hand Back
 
