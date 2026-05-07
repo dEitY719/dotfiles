@@ -10,6 +10,10 @@ description: >-
 
 # devx:schedule — Deferred Skill Executor
 
+> **Claude Code only** — requires the `CronCreate` tool, which is part of the
+> Claude Code harness. Other CLIs (Codex, Gemini, etc.) lack a comparable
+> session-spawn scheduler, so this skill cannot run there. See issue #362.
+
 ## Usage
 
 ```
