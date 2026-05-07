@@ -86,10 +86,18 @@ Priority order — first available wins:
 Append after a `---` horizontal rule at the end of the body:
 
     ---
+    <details>
+    <summary>🤖 AI Metrics · 📊 ~X tokens · 👤 ~M h · 🤖 ~L min</summary>
+
     <!-- ai-metrics -->
     📊 ~X tokens · 👤 ~M h · 🤖 ~L min
     <!-- /ai-metrics -->
 
+    </details>
+
 - `X` — estimated tokens (see Token Estimation above)
 - `M` — human hours from the lookup table (e.g. `4 h`, `8 h`, `~1 d`)
 - `L` — elapsed minutes from skill entry to issue/PR creation
+- The `<details>` wrapper collapses the block by default on GitHub,
+  keeping the body readable while making metrics accessible on click.
+  The HTML comment markers inside are hidden by GitHub's renderer.
