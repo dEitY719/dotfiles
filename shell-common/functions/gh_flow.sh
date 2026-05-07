@@ -205,7 +205,7 @@ _gh_flow_verdict() {
         ;;
     failed:precondition:gh-auth)
         _verdict="precondition failed — gh auth invalid"
-        _action="gh auth login -h github.com && gh-flow $_issue"
+        _action="gh auth login && gh-flow $_issue"
         ;;
     failed:*)
         if [ -n "$_wt" ] && [ -d "$_wt" ]; then
@@ -913,7 +913,7 @@ _gh_flow_worker() {
     if ! _gh_flow_check_gh_auth; then
         _gh_flow_set_state "$_dir" "failed:precondition:gh-auth"
         printf '[gh-flow-worker] precondition failed: gh auth invalid (gh api user failed)\n' >&2
-        printf '[gh-flow-worker] recover with: gh auth login -h github.com && gh-flow %s\n' "$_issue" >&2
+        printf '[gh-flow-worker] recover with: gh auth login && gh-flow %s\n' "$_issue" >&2
         return 1
     fi
 
