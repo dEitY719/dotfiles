@@ -3,13 +3,14 @@ name: devx:resume-after-limit
 description: >-
   [Claude Code Only] Companion to /devx:rate-limit-guard. Invoked by the
   scheduled cron when token-limit reset arrives — verifies the worktree/
-  branch context recorded by the guard, re-runs the original wrapped
-  command idempotently, and clears the state file on success. Use when the
-  user runs /devx:resume-after-limit, /devx-resume-after-limit, or when a
+  branch context recorded by the guard, pre-emptively re-arms the next cron
+  for multi-cycle runs (`--max-cycles N` > 1), re-runs the original wrapped
+  command idempotently, and clears state on success. Use when the user runs
+  /devx:resume-after-limit, /devx-resume-after-limit, or when a
   /devx:rate-limit-guard cron prompt fires. Accepts an optional <command>
   argument (cron path) or reads `.claude/.rate-limit-guard.json` (manual
   re-trigger). Accepts `-h`/`--help`/`help` to print usage.
-allowed-tools: Bash, Read
+allowed-tools: Bash, Read, Write, CronCreate, CronDelete
 ---
 
 # devx:resume-after-limit — Resume After Rate-Limit Reset
@@ -34,16 +35,14 @@ If arg #1 is `-h`/`--help`/`help`, print `references/help.md` verbatim and stop.
 test -f .claude/.rate-limit-guard.json && cat .claude/.rate-limit-guard.json
 ```
 
-If present, parse `command`, `worktree`, `branch`, `scheduled_for` (use
-`jq` or Python).
+Parse `command`, `worktree`, `branch`, `max_cycles`, `cycles_remaining`,
+`cycle_window_min` (jq or Python). Missing multi-cycle fields default to
+`max_cycles=1`, `cycles_remaining=1`, `cycle_window_min=305` (PR #369 compat).
 
 ### 2. Resolve the Command
 
-Precedence:
-
-1. State file's `command` (most reliable).
-2. The `<command>` argument (cron-prompt fallback path).
-3. If neither: print `재개할 명령을 알 수 없습니다 (state 파일·인자 모두 없음).` and stop.
+State file's `command` → `<command>` arg → stop with
+`재개할 명령을 알 수 없습니다 (state 파일·인자 모두 없음).`
 
 ### 3. Sanity Check Context
 
@@ -51,45 +50,50 @@ Precedence:
 PWD_NOW=$(pwd); BRANCH=$(git branch --show-current 2>/dev/null || echo unknown)
 ```
 
-- If state file present and `PWD_NOW != worktree`: STOP with
-  `❌ 워크트리 불일치 — 예상: <worktree>, 현재: <PWD_NOW>. 올바른 워크트리에서 재시도.`
-- If state file present and `BRANCH != branch`: warn but continue —
-  `⚠️ 브랜치가 <branch> → <BRANCH>로 이동했습니다 (그래도 진행).`
+- If `PWD_NOW != worktree`: STOP —
+  `❌ 워크트리 불일치 — 예상: <worktree>, 현재: <PWD_NOW>.`
+- If `BRANCH != branch`: warn `⚠️ 브랜치 이동` and continue.
 
-### 4. Announce
+### 4. Pre-emptive Re-arm
+
+If `cycles_remaining > 1`, register the next cycle's cron **before** running
+the wrapped command per `references/preemptive-rearm.md` (fire-time
+arithmetic, `CronCreate` args, state-file rewrite). Save `<NEXT_ID>` for
+Step 7. Otherwise skip.
+
+### 5. Announce
 
 ```
-🔄 [rate-limit-guard] 재개합니다: <command>
-  • 워크트리: <PWD_NOW>
-  • 브랜치: <BRANCH>
-  • 멱등 실행 — 이미 완료된 sub-step은 자동 스킵됩니다.
+🔄 [rate-limit-guard] 재개: <command>
+  • 워크트리: <PWD_NOW>  • 브랜치: <BRANCH>
+  • 사이클: <max_cycles - cycles_remaining + 1>/<max_cycles>
+  • 멱등 실행 — 이미 완료된 sub-step은 스킵.
 ```
 
-### 5. Execute the Command
+### 6. Execute the Command
 
-Hand off to the wrapped command. Claude executes it normally in this turn;
-the wrapped workflow's own idempotency handles already-done sub-steps.
+Hand off to the wrapped command. The wrapped workflow's own idempotency
+handles already-done sub-steps.
 
-### 6. Cleanup on Success
+### 7. Cleanup on Success
 
-In the same turn after the wrapped command finishes successfully:
+In the same turn after success:
 
 ```bash
+[ -n "$NEXT_ID" ] && CronDelete <NEXT_ID>   # only if Step 4 ran
 rm -f .claude/.rate-limit-guard.json
 ```
 
-Then print `✅ 재개 완료 — 안전망 상태 파일 정리됨`.
+Print `✅ 재개 완료 — 안전망 상태 파일 정리됨`.
 
-The cron job auto-deleted on fire (it was `recurring: false`), so no
-`CronDelete` is needed here.
+The just-fired cron auto-deleted (`recurring: false`); the next-cycle cron
+from Step 4 must be explicitly cancelled.
 
-If the wrapped command fails again (transient or otherwise), **leave the
-state file in place** — the user can re-invoke `/devx:resume-after-limit`
-manually after fixing the underlying issue.
+On failure (transient or otherwise), **leave state + next cron** in place —
+the next fire re-triggers this skill, or the user re-invokes manually.
 
 ## Constraints
 
 - Never proceed past Step 3 on worktree mismatch — wrong dir = wrong work.
-- Never re-schedule a new cron — that is `/devx:rate-limit-guard`'s job.
-- Never delete the state file before the wrapped command succeeds.
+- Never delete state or the next cron before the wrapped command succeeds.
 - Never invoke from inside another skill — cron- or user-triggered only.
