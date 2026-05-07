@@ -26,13 +26,11 @@ Save the returned ID as `<NEXT_ID>`.
 
 ## Update state file
 
-Overwrite `.claude/.rate-limit-guard.json`:
-
-```json
-{"cron_id":"<NEXT_ID>","command":"<command>","worktree":"<worktree>","branch":"<branch>","scheduled_for":"<new ISO>","max_cycles":<N>,"cycles_remaining":<cycles_remaining - 1>,"cycle_window_min":<M>}
-```
-
-`cycles_remaining` is decremented by 1; all other fields preserved.
+Overwrite `.claude/.rate-limit-guard.json` using the schema defined in
+`../../devx-rate-limit-guard/references/state-and-confirm.md` (SSOT).
+Set `cron_id = <NEXT_ID>`, `scheduled_for = <new ISO>`, decrement
+`cycles_remaining` by 1; preserve `command`, `worktree`, `branch`,
+`max_cycles`, `cycle_window_min` from the loaded state.
 
 ## Drift behavior
 
