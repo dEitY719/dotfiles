@@ -43,6 +43,17 @@ Also capture `TARGET_REPO` via `gh repo view --json nameWithOwner -q .nameWithOw
 Read `references/comment-fetching.md` for the three API endpoints, field
 extraction, and dedup rule. Fetch all three; filter out already-replied threads.
 
+## Step 2.5: Early Exit — No Unaddressed Comments
+
+If Step 2 yields **zero unaddressed threads** after deduplication:
+
+1. Print exactly one line:
+   ```
+   No unaddressed review comments — nothing to do.
+   ```
+2. **Stop immediately.** Do not run Steps 3–7. Do not post an ai-metrics
+   comment. Do not push anything.
+
 ## Step 3: Evaluate Each Comment
 
 For each unaddressed comment, read the referenced file (`path` at `line`)
