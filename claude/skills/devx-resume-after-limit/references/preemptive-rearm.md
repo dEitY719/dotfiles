@@ -1,0 +1,47 @@
+# Pre-emptive Re-arm — Step 4 Detail
+
+When the state file's `cycles_remaining > 1`, register the next cycle's
+cron **before** running the wrapped command. This guarantees a fresh
+safety net even if the wrapped command rate-limits or crashes mid-run.
+
+## Compute fire time
+
+```bash
+python3 -c "from datetime import datetime,timedelta as td; t=datetime.now()+td(minutes=$cycle_window_min); print(t.strftime('%M %H %d %m'),t.isoformat())"
+```
+
+Output: `<min> <hour> <dom> <month> <iso>` — first four = cron expression
+(no DoW), `<iso>` = state-file timestamp.
+
+## CronCreate parameters
+
+- `cron`: the four fields above followed by `*` (e.g. `"05 23 06 05 *"`)
+- `recurring`: `false`
+- `durable`: `true`
+- `prompt`: the template at
+  `../devx-rate-limit-guard/references/cron-prompt-template.md`,
+  substituting `<PWD_NOW>`, `<BRANCH>`, `<command>` from the loaded state
+
+Save the returned ID as `<NEXT_ID>`.
+
+## Update state file
+
+Overwrite `.claude/.rate-limit-guard.json`:
+
+```json
+{"cron_id":"<NEXT_ID>","command":"<command>","worktree":"<worktree>","branch":"<branch>","scheduled_for":"<new ISO>","max_cycles":<N>,"cycles_remaining":<cycles_remaining - 1>,"cycle_window_min":<M>}
+```
+
+`cycles_remaining` is decremented by 1; all other fields preserved.
+
+## Drift behavior
+
+The next fire is `now + cycle_window_min`, **not** `original_reset +
+cycles_so_far * cycle_window_min`. This naturally absorbs any drift from
+session-start delays — if cycle 1 fired 5 minutes late, cycle 2 will
+also be 5 minutes late, matching real session-window timing.
+
+Example (305-minute window, original reset 18:00, max-cycles 3):
+- Cycle 1 fires 18:05 (reset + 5min margin)
+- Cycle 2 fires `18:05 + 305min = 23:10`
+- Cycle 3 fires `23:10 + 305min = 04:15` next day

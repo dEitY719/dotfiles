@@ -7,8 +7,9 @@ description: >-
   completion. Use when the user runs /devx:rate-limit-guard,
   /devx-rate-limit-guard, or asks "rate limit 걸려도 자동 재개", "퇴근하면서
   작업 시키고 limit 풀리면 이어가게 해줘", "auto-resume after my token limit
-  resets". Requires the user to know their reset time (run /usage first).
-  Accepts `-h`/`--help`/`help` to print usage.
+  resets". Supports multi-cycle re-arming via `--max-cycles N`. Requires the
+  user to know their reset time (run /usage first). Accepts `-h`/`--help`/`help`
+  to print usage.
 allowed-tools: Bash, Read, Write, CronCreate, CronDelete
 ---
 
@@ -22,37 +23,36 @@ If arg #1 is `-h`/`--help`/`help`, print `references/help.md` verbatim and stop.
 ## Usage
 
 ```
-/devx:rate-limit-guard --reset HH:MM [--buffer M] <command>
+/devx:rate-limit-guard --reset HH:MM [--max-cycles N] [--cycle-window M] <command>
 ```
 
 - `--reset HH:MM` — local 24h reset time (REQUIRED, from `/usage`)
-- `--buffer M` — minutes after reset to fire (default: 5)
+- `--max-cycles N` — re-arm up to N cycles (default 1; PR #369 behavior)
+- `--cycle-window M` — minutes between fires for cycles 2..N (default 305)
+- `--buffer M` — **deprecated**: warn + ignore (5-min margin is constant now)
 - `<command>` — slash-command or natural-language task to wrap
 
 ## Steps
 
 ### 1. Parse Arguments
 
-Extract `--reset HH:MM` (required) and `--buffer M` (default 5). Everything
-after flags is the wrapped command (preserve quoting). If `--reset` is
-missing/malformed, print
+Extract `--reset HH:MM` (required), `--max-cycles` (positive int, default 1),
+`--cycle-window` (positive int, default 305). If `--buffer` is present, emit
+`⚠️ --buffer 폐지됨 (5분 마진 = 상수). 값 무시.` and continue. Remaining tokens
+are the wrapped command (preserve quoting). On missing/malformed `--reset`:
 `필수 인자 --reset HH:MM 누락. /usage로 리셋 시각 확인 후 재시도.` and stop.
 
-### 2. Compute Fire Time
+### 2. Compute First-Fire Time + Capture Context
 
 ```bash
-python3 claude/skills/devx-rate-limit-guard/references/compute-fire-time.py HH MM B
-```
-
-Output: `<min> <hour> <dom> <month> <iso>` — first four = cron expression, `<iso>` = state-file timestamp.
-
-### 3. Capture Worktree Context
-
-```bash
+python3 claude/skills/devx-rate-limit-guard/references/compute-fire-time.py HH MM 5
 PWD_NOW=$(pwd); BRANCH=$(git branch --show-current 2>/dev/null || echo unknown)
 ```
 
-### 4. Schedule via `CronCreate`
+`5` is the hardcoded margin (formerly `--buffer`). Output:
+`<min> <hour> <dom> <month> <iso>` (first four = cron expression).
+
+### 3. Schedule via `CronCreate`
 
 - `cron`: `"<min> <hour> <dom> <month> *"` (from step 2)
 - `prompt`: see `references/cron-prompt-template.md` — substitute
@@ -61,37 +61,39 @@ PWD_NOW=$(pwd); BRANCH=$(git branch --show-current 2>/dev/null || echo unknown)
 
 Save the returned job ID.
 
-### 5. Persist Cleanup State
+### 4. Persist Cleanup State
 
 Write `.claude/.rate-limit-guard.json` (worktree root):
 
 ```json
-{"cron_id":"<id>","command":"<command>","worktree":"<PWD_NOW>","branch":"<BRANCH>","scheduled_for":"<ISO>"}
+{"cron_id":"<id>","command":"<command>","worktree":"<PWD_NOW>","branch":"<BRANCH>","scheduled_for":"<ISO>","max_cycles":<N>,"cycles_remaining":<N>,"cycle_window_min":<M>}
 ```
 
-### 6. Confirm
+`cycles_remaining` starts at `max_cycles`; `/devx:resume-after-limit`
+decrements it as it re-arms subsequent cycles.
+
+### 5. Confirm
 
 ```
-🛡️ Rate-limit 안전망 등록
+🛡️ Rate-limit 안전망 등록 (사이클 1/<N>, 간격 <M>분)
   • 원본 명령: <command>
-  • 자동 재개 시각: <HH:MM + buffer> (job: <id>)
-  • 정상 완료 시 자동 해제됩니다.
+  • 자동 재개 시각: <HH:MM + 5min> (job: <id>)
 이제 원본 명령을 실행합니다 ↓
 ```
 
-### 7. Execute, then Cleanup on Success
+### 6. Execute, then Cleanup on Success
 
-Hand off to the wrapped command. After it finishes successfully, in the same turn:
+Hand off to the wrapped command. On success:
 `CronDelete(<id>)` → `rm -f .claude/.rate-limit-guard.json` →
-print `✅ 안전망 해제 — 정상 완료`.
+`✅ 안전망 해제 — 정상 완료`.
 
-On transient errors (rate limit, network, timeout), **leave the cron in
-place** — that is exactly when the safety net should fire. Only clean up
-on definitive success or explicit user request.
+On transient errors (rate limit / network / timeout), **leave the cron in
+place** — that is exactly when the safety net should fire.
 
 ## Constraints
 
 - Never schedule without explicit `--reset HH:MM`.
 - Never use `recurring: true` or `durable: false`.
-- Never auto-cleanup on rate-limit / network / timeout errors.
+- Never auto-cleanup on transient errors.
 - Never invoke from inside another skill — user-triggered only.
+- `--max-cycles 1` (default) preserves PR #369 behavior.
