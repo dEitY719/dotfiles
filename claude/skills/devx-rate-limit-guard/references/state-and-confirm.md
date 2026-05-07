@@ -2,7 +2,7 @@
 
 Single source of truth for `.claude/.rate-limit-guard.json` and the
 Step 5 user-facing confirm block. Both `devx:rate-limit-guard` (Steps
-4–5) and `devx:resume-after-limit` (`preemptive-rearm.md`) read from
+4–5) and `devx:resume-after-limit` (`../../devx-resume-after-limit/references/preemptive-rearm.md`) read from
 this file — change the schema here and only here.
 
 ## State file: `.claude/.rate-limit-guard.json`
