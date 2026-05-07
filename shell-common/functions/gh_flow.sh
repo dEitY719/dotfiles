@@ -103,6 +103,14 @@ _gh_flow_require_ai_cli() {
     esac
 }
 
+# Pre-flight health check for the gh CLI token. Returns 0 if `gh api user`
+# succeeds (token valid + network reachable), non-zero otherwise. Run by the
+# worker BEFORE `gwt spawn` so an expired token cannot waste an AI turn on
+# /gh-issue-implement (issue #378, #437 incident).
+_gh_flow_check_gh_auth() {
+    gh api user --jq .login >/dev/null 2>&1
+}
+
 # Run one non-interactive prompt with the selected ai runner.
 # Delegates to ai_usage.sh so each invocation appends a usage record
 # (tokens, cost, duration) to <state-dir>/usage.jsonl. A gh-flow worker
@@ -194,6 +202,10 @@ _gh_flow_verdict() {
             fi
             ;;
         esac
+        ;;
+    failed:precondition:gh-auth)
+        _verdict="precondition failed — gh auth invalid"
+        _action="gh auth login -h github.com && gh-flow $_issue"
         ;;
     failed:*)
         if [ -n "$_wt" ] && [ -d "$_wt" ]; then
@@ -637,8 +649,10 @@ gh_flow_help() {
     ux_info "Failure isolation:"
     ux_bullet "One worker failure does not affect others."
     ux_bullet "Failed worker leaves worktree intact; state shows 'failed:<step>'."
-    ux_bullet "Distinct failure states: failed:implementing, failed:committing,"
-    ux_bullet_sub "failed:opening-pr, failed:replying, failed:merging, failed:tearing-down."
+    ux_bullet "Distinct failure states: failed:precondition:gh-auth, failed:implementing,"
+    ux_bullet_sub "failed:committing, failed:opening-pr, failed:replying,"
+    ux_bullet_sub "failed:merging, failed:tearing-down."
+    ux_bullet "Re-auth recovery: failed:precondition:gh-auth → gh auth login + gh-flow <N>."
     ux_info ""
     ux_info "Preconditions:"
     ux_bullet "Run from main repo (not inside a worktree)"
@@ -890,6 +904,18 @@ _gh_flow_worker() {
     : >"$_usage_log"
 
     printf '[gh-flow-worker] issue=#%s ai=%s start=%s\n' "$_issue" "$_ai" "$(date -Iseconds 2>/dev/null || date)"
+
+    # ---- Step 0: pre-flight gh auth check (issue #378) ----
+    # Without this, an expired token lets the pipeline proceed: gwt spawn
+    # creates a worktree, project board flips to "In progress", then the AI
+    # burns one turn trying to fetch the issue with an invalid token. Catching
+    # it here costs 0 AI tokens and leaves no worktree behind.
+    if ! _gh_flow_check_gh_auth; then
+        _gh_flow_set_state "$_dir" "failed:precondition:gh-auth"
+        printf '[gh-flow-worker] precondition failed: gh auth invalid (gh api user failed)\n' >&2
+        printf '[gh-flow-worker] recover with: gh auth login -h github.com && gh-flow %s\n' "$_issue" >&2
+        return 1
+    fi
 
     # ---- Step 1: spawn worktree ----
     # Snapshot the worktree list before and after `gwt spawn` and diff them

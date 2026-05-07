@@ -61,6 +61,9 @@ teardown() {
     # New distinct failure states must be documented.
     assert_output --partial "failed:committing"
     assert_output --partial "failed:opening-pr"
+    # Pre-flight gh-auth state and its recovery hint (issue #378).
+    assert_output --partial "failed:precondition:gh-auth"
+    assert_output --partial "gh auth login"
 }
 
 # ---------------------------------------------------------------------------
@@ -490,6 +493,75 @@ STUB
     run_in_bash "cd '$REPO_DIR' && gh_flow status 504 505 2>&1"
     assert_failure
     assert_output --partial "only one issue number"
+}
+
+# ---------------------------------------------------------------------------
+# pre-flight gh auth check (issue #378)
+# ---------------------------------------------------------------------------
+
+# Install a `gh` stub on PATH that controls only the `gh api` exit code.
+# Other subcommands return 0 with no output so unrelated callers don't break.
+# $1 = "ok" (auth valid) or "fail" (auth invalid → exit 1).
+_install_gh_api_stub() {
+    local _mode="${1:-ok}"
+    mkdir -p "$TEST_TEMP_HOME/bin"
+    if [ "$_mode" = "ok" ]; then
+        cat >"$TEST_TEMP_HOME/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+if [ "$1" = "api" ]; then
+    printf 'mockuser\n'
+    exit 0
+fi
+exit 0
+STUB
+    else
+        cat >"$TEST_TEMP_HOME/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+if [ "$1" = "api" ]; then
+    printf 'gh api: token invalid\n' >&2
+    exit 1
+fi
+exit 0
+STUB
+    fi
+    chmod +x "$TEST_TEMP_HOME/bin/gh"
+    export PATH="$TEST_TEMP_HOME/bin:$PATH"
+}
+
+@test "pre-flight: _gh_flow_check_gh_auth returns 0 when gh api user succeeds" {
+    _install_gh_api_stub ok
+    run_in_bash "_gh_flow_check_gh_auth && echo OK || echo FAIL"
+    assert_success
+    assert_output --partial "OK"
+}
+
+@test "pre-flight: _gh_flow_check_gh_auth returns non-zero when gh api user fails" {
+    _install_gh_api_stub fail
+    run_in_bash "_gh_flow_check_gh_auth && echo OK || echo FAIL"
+    assert_success
+    assert_output --partial "FAIL"
+}
+
+@test "verdict: failed:precondition:gh-auth → re-auth Next action" {
+    _seed_state 601 "failed:precondition:gh-auth" "" ""
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 601"
+    assert_success
+    assert_line --index 0 "precondition failed — gh auth invalid"
+    assert_output --partial "gh auth login"
+    assert_output --partial "gh-flow 601"
+}
+
+@test "verdict: failed:precondition:gh-auth distinct from generic failed:* dead-failure verdict" {
+    # Same shape as 601 but a generic failed:implementing — must NOT collapse
+    # into the precondition branch. Guards the case-statement ordering
+    # (precondition entry must come before failed:* glob).
+    _seed_state 602 "failed:implementing" "" ""
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 602"
+    assert_success
+    assert_output --partial "dead failure"
+    refute_output --partial "precondition failed"
 }
 
 # Project-board sync helper tests live in
