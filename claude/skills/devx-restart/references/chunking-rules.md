@@ -24,7 +24,7 @@ delegated to a subagent. Triggers:
 
 Routing:
 
-- Broad code search / cross-file consistency → `Agent(subagent_type=Explore)`.
+- Broad code search / cross-file consistency → `Agent(subagent_type="Explore")`.
 - Multi-step research or "go figure out X" →
   `Agent(subagent_type="general-purpose")`.
 
