@@ -31,6 +31,17 @@ Positional args: `[pr-number] [remote]`. Both optional.
 - `remote` — default `origin`. Resolve `TARGET_REPO` via
   `git remote get-url <remote>`; missing → `git remote -v` and stop.
 
+**Mergeable preflight** — immediately after resolving `PR_NUMBER`:
+
+```bash
+MERGEABLE=$(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
+  --json mergeable --jq '.mergeable')
+```
+
+- `MERGEABLE == MERGEABLE` → print `✅ PR은 이미 충돌 없음 — skip.` and stop (success).
+- `MERGEABLE == UNKNOWN` → GitHub is still computing; continue the flow normally (do not skip).
+- Any other value (`CONFLICTING` etc.) → continue.
+
 **Hard preconditions** (parallel batch; any fail → stop):
 - inside a git repo
 - current branch ≠ repo default (refuse to rebase `main`)
@@ -81,13 +92,25 @@ pushed while you rebased), stop and surface the upstream per
 ## Step 5: Verify Mergeable + Report
 
 ```bash
-gh pr view <N> --repo "$TARGET_REPO" --json mergeable,mergeStateStatus,url
+gh pr view <N> --repo "$TARGET_REPO" --json mergeable,mergeStateStatus,url,labels
 ```
 
 If `mergeable == MERGEABLE` and `mergeStateStatus ∈ {CLEAN, UNSTABLE}`,
 the warning is cleared. Print the final report from
 `references/rebase-flow.md` → "Final report format". Still `CONFLICTING`
 / `BEHIND` → print the PR URL, name which side diverged, do not loop.
+
+**conflict 라벨 제거** (soft-fail — `mergeable == MERGEABLE` 인 경우에만):
+
+Check if `labels[].name` contains `"conflict"`. If so:
+
+```bash
+gh pr edit "$PR_NUMBER" --repo "$TARGET_REPO" --remove-label "conflict" \
+  && echo "✅ \`conflict\` 라벨 제거됨" \
+  || echo "⚠️  \`conflict\` 라벨 제거 실패 — 계속합니다."
+```
+
+If the label is absent, skip silently (idempotent).
 
 After the report, post a PR comment with ai-metrics (soft-fail — warn on
 error, never block). `CONFLICT_FILES` is the count of files that had
