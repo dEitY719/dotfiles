@@ -46,12 +46,12 @@ If M is not a positive integer, default to 5 and warn the user.
 Run Bash to get the target cron fields in local time:
 
 ```bash
-date -d "+M minutes" +"%M %H %d %m"
+python3 -c "from datetime import datetime, timedelta; print((datetime.now() + timedelta(minutes=M)).strftime('%M %H %d %m'))"
 ```
 
 Replace `M` with the parsed minute value. Output: `<min> <hour> <dom> <month>`.
 
-### 3. Schedule with CronCreate
+### 3. Schedule with `CronCreate`
 
 Call `CronCreate`:
 - `cron`: `"<min> <hour> <dom> <month> *"` (values from step 2)
