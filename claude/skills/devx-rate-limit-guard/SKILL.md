@@ -18,19 +18,7 @@ allowed-tools: Bash, Read, Write, CronCreate, CronDelete
 > **Claude Code only**. Requires this worktree's Claude Code session to stay
 > open (or be reopened in this worktree) so the durable cron can fire.
 
-If arg #1 is `-h`/`--help`/`help`, print `references/help.md` verbatim and stop.
-
-## Usage
-
-```
-/devx:rate-limit-guard --reset HH:MM [--max-cycles N] [--cycle-window M] <command>
-```
-
-- `--reset HH:MM` — local 24h reset time (REQUIRED, from `/usage`)
-- `--max-cycles N` — re-arm up to N cycles (default 1; PR #369 behavior)
-- `--cycle-window M` — minutes between fires for cycles 2..N (default 305)
-- `--buffer M` — **deprecated**: warn + ignore (5-min margin is constant now)
-- `<command>` — slash-command or natural-language task to wrap
+If arg #1 is `-h`/`--help`/`help`, or when you need usage/examples, read `references/help.md` verbatim and stop.
 
 ## Steps
 
