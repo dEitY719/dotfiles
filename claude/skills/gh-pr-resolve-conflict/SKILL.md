@@ -102,15 +102,20 @@ the warning is cleared. Print the final report from
 
 **conflict 라벨 제거** (soft-fail — `mergeable == MERGEABLE` 인 경우에만):
 
-Check if `labels[].name` contains `"conflict"`. If so:
+Check if `labels[].name` contains `"conflict"`. If so, remove via REST DELETE
+(not `gh pr edit --remove-label`) — the latter can silent-fail on repos with
+classic Projects attached due to GraphQL deprecation (#326 Bug B, same pattern
+as `_gh_pr_edit_safe_label` fallback). 404 = label already absent → ignore.
 
 ```bash
-gh pr edit "$PR_NUMBER" --repo "$TARGET_REPO" --remove-label "conflict" \
+gh api -X DELETE "repos/$TARGET_REPO/issues/$PR_NUMBER/labels/conflict" \
+    >/dev/null 2>&1 \
   && echo "✅ \`conflict\` 라벨 제거됨" \
-  || echo "⚠️  \`conflict\` 라벨 제거 실패 — 계속합니다."
+  || echo "⚠️  \`conflict\` 라벨 제거 실패 — GitHub Actions 가 cover."
 ```
 
-If the label is absent, skip silently (idempotent).
+If the label is absent, skip silently (idempotent — `gh api -X DELETE` returns
+404 which the `||` branch absorbs as a soft-fail warning).
 
 After the report, post a PR comment with ai-metrics (soft-fail — warn on
 error, never block). `CONFLICT_FILES` is the count of files that had
