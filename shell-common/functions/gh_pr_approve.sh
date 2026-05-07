@@ -109,8 +109,16 @@ _gh_pr_approve_check_ai_auth() {
         # profile's credentials.json first.
         _ccaa_account="${2:-${CLAUDE_DEFAULT_ACCOUNT:-}}"
         _ccaa_dir=""
-        if [ -n "$_ccaa_account" ] && command -v _claude_resolve_account >/dev/null 2>&1; then
-            _ccaa_dir="$(_claude_resolve_account "$_ccaa_account" 2>/dev/null || true)"
+        if [ -n "$_ccaa_account" ]; then
+            if command -v _claude_resolve_account >/dev/null 2>&1; then
+                _ccaa_dir="$(_claude_resolve_account "$_ccaa_account" 2>/dev/null || true)"
+            fi
+            # Direct-path fallback (PR #366 review) — keeps auth check in
+            # sync with _gh_pr_approve_spawn_worker. Without this, a setup
+            # where claude.sh integration isn't loaded but the user has a
+            # ~/.claude-<account>/ profile would false-negative here while
+            # the worker would still successfully use the directory.
+            [ -z "$_ccaa_dir" ] && _ccaa_dir="$HOME/.claude-$_ccaa_account"
         fi
         if [ -n "$_ccaa_dir" ] && [ -f "$_ccaa_dir/.credentials.json" ]; then
             return 0
@@ -1000,11 +1008,22 @@ _gh_pr_approve_spawn_worker() {
     # resolve. The subshell sources ~/.bashrc then calls _gh_pr_approve_worker.
     # CLAUDE_CONFIG_DIR is injected only when an account was resolved
     # (issue #365) — single-account setups stay on the legacy path.
-    # shellcheck disable=SC2016,SC2086
-    nohup env DOTFILES_FORCE_INIT=1 ${_cfg_dir:+CLAUDE_CONFIG_DIR="$_cfg_dir"} bash -c '
-        . "$HOME/.bashrc" 2>/dev/null || true
-        _gh_pr_approve_worker "$@"
-    ' -- "$_pr" "$_ai" "$_self_args" </dev/null >"$_log" 2>&1 &
+    # Branched explicitly (PR #366 review) instead of `${var:+VAR="$var"}`
+    # parameter expansion: the conditional form depends on POSIX word-split
+    # semantics that differ in zsh without `emulate -L sh`, and breaks if
+    # $HOME ever contains whitespace. The if/else version is shell-agnostic.
+    # shellcheck disable=SC2016
+    if [ -n "$_cfg_dir" ]; then
+        nohup env DOTFILES_FORCE_INIT=1 CLAUDE_CONFIG_DIR="$_cfg_dir" bash -c '
+            . "$HOME/.bashrc" 2>/dev/null || true
+            _gh_pr_approve_worker "$@"
+        ' -- "$_pr" "$_ai" "$_self_args" </dev/null >"$_log" 2>&1 &
+    else
+        nohup env DOTFILES_FORCE_INIT=1 bash -c '
+            . "$HOME/.bashrc" 2>/dev/null || true
+            _gh_pr_approve_worker "$@"
+        ' -- "$_pr" "$_ai" "$_self_args" </dev/null >"$_log" 2>&1 &
+    fi
     _pid=$!
     disown "$_pid" 2>/dev/null || true
     printf '%s\n' "$_pid" >"$_dir/pid"

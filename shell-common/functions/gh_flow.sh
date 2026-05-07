@@ -696,7 +696,7 @@ gh_flow() {
         --user)
             shift
             if [ $# -eq 0 ]; then
-                ux_error "--user requires a value (e.g., personal|work)"
+                ux_error "--user requires a value (expected: $(_claude_resolve_account --list 2>/dev/null | tr '\n' '|' | sed 's/|$//'))"
                 return 1
             fi
             _account="$1"
@@ -852,11 +852,22 @@ _gh_flow_spawn_worker() {
     # resolve. The subshell sources ~/.bashrc then calls _gh_flow_worker.
     # CLAUDE_CONFIG_DIR is injected only when an account was resolved
     # (issue #365) — single-account setups stay on the legacy path.
-    # shellcheck disable=SC2016,SC2086
-    nohup env DOTFILES_FORCE_INIT=1 ${_cfg_dir:+CLAUDE_CONFIG_DIR="$_cfg_dir"} bash -c '
-        . "$HOME/.bashrc" 2>/dev/null || true
-        _gh_flow_worker "$1" "$2"
-    ' -- "$_issue" "$_ai" </dev/null >"$_log" 2>&1 &
+    # Branched explicitly (PR #366 review) instead of `${var:+VAR="$var"}`
+    # parameter expansion: the conditional form depends on POSIX word-split
+    # semantics that differ in zsh without `emulate -L sh`, and breaks if
+    # $HOME ever contains whitespace. The if/else version is shell-agnostic.
+    # shellcheck disable=SC2016
+    if [ -n "$_cfg_dir" ]; then
+        nohup env DOTFILES_FORCE_INIT=1 CLAUDE_CONFIG_DIR="$_cfg_dir" bash -c '
+            . "$HOME/.bashrc" 2>/dev/null || true
+            _gh_flow_worker "$1" "$2"
+        ' -- "$_issue" "$_ai" </dev/null >"$_log" 2>&1 &
+    else
+        nohup env DOTFILES_FORCE_INIT=1 bash -c '
+            . "$HOME/.bashrc" 2>/dev/null || true
+            _gh_flow_worker "$1" "$2"
+        ' -- "$_issue" "$_ai" </dev/null >"$_log" 2>&1 &
+    fi
     _pid=$!
     disown "$_pid" 2>/dev/null || true
     printf '%s\n' "$_pid" >"$_dir/pid"
