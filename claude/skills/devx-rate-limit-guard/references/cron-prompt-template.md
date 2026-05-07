@@ -1,8 +1,9 @@
 # Cron Prompt Template
 
-Use this exact text for the `prompt:` argument of `CronCreate` in Step 4.
-Substitute `<PWD_NOW>`, `<BRANCH>`, and `<command>` with the values
-captured in Steps 1 and 3.
+Use this exact text for the `prompt:` argument of `CronCreate` in Step 3 of
+the rate-limit-guard SKILL.md, **and** for the next-cycle cron registered
+by `/devx:resume-after-limit` (Step 4). Substitute `<PWD_NOW>`, `<BRANCH>`,
+and `<command>` with the values captured at registration time.
 
 ```
 [Auto-resume by /devx:rate-limit-guard]
@@ -10,16 +11,25 @@ captured in Steps 1 and 3.
 브랜치: <BRANCH>
 원본 명령: <command>
 
-현재 워크트리·브랜치가 위와 같으면 원본 명령을 다시 실행. 명령은 멱등적으로
-설계되어 이미 완료된 sub-step은 스킵됨. 다르면 사용자에게 알리고 중단.
-/devx:resume-after-limit 스킬이 존재하면 우선 호출.
+현재 워크트리·브랜치가 위와 같으면 `/devx:resume-after-limit`을 호출하여
+재개. 그 스킬이 state 파일에서 multi-cycle 정보(`cycles_remaining`,
+`cycle_window_min`)를 읽어 다음 cycle을 자동 재무장한다. 워크트리/브랜치가
+다르면 사용자에게 알리고 중단.
+
+만약 `/devx:resume-after-limit` 스킬이 없는 환경이라면, fallback으로 원본
+명령을 직접 멱등 재실행 (단일 cycle 동작, PR #369 호환).
 ```
 
 ## Why self-contained
 
-The prompt must work even before the companion `/devx:resume-after-limit`
-skill is implemented. By embedding worktree/branch/command directly, the
-fired prompt gives Claude enough context to resume safely on its own.
+The prompt embeds worktree/branch/command directly so it can resume safely
+even if `/devx:resume-after-limit` is unavailable. When the companion skill
+exists (the normal case post-PR #370), it reads the state file's
+`cycles_remaining` to decide whether to pre-arm the next cycle.
 
-When the companion skill exists, the last line nudges Claude to delegate
-to it for the standardized sanity check + announce flow.
+## Why the same template for cycle 2..N
+
+`/devx:resume-after-limit` reuses this same template when registering the
+next-cycle cron (Step 4). The cycle bookkeeping lives in the state file —
+the prompt itself is cycle-agnostic, which keeps the cron payload uniform
+and the template a single source of truth.
