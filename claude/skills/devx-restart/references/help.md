@@ -23,6 +23,7 @@ subagents so the next failure costs less.
 - Your last turn died mid-action and the spinner stopped.
 - The model produced an `API Error` and ended the turn.
 - A long batch of edits got cut off and you don't want to re-explain it.
+- 작업 범위가 너무 커서 사용자가 ESC로 끊고 더 작게 다시 시작하고 싶을 때.
 
 Do NOT invoke for:
 
