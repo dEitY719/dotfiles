@@ -18,8 +18,10 @@ Output: `<min> <hour> <dom> <month> <iso>` — first four = cron expression
 - `cron`: the four fields above followed by `*` (e.g. `"05 23 06 05 *"`)
 - `recurring`: `false`
 - `durable`: `true`
-- `prompt`: the inline template below, substituting `<PWD_NOW>`,
-  `<BRANCH>`, `<command>` from the loaded state.
+- `prompt`: the inline template below, substituting `<PWD_NOW>` with
+  the state file's `worktree`, `<BRANCH>` with `branch`, and `<command>`
+  with `command`. Pass the substituted result to `CronCreate` verbatim —
+  do not paraphrase or wrap.
 
 Save the returned ID as `<NEXT_ID>`.
 
