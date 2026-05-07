@@ -61,25 +61,11 @@ PWD_NOW=$(pwd); BRANCH=$(git branch --show-current 2>/dev/null || echo unknown)
 
 Save the returned job ID.
 
-### 4. Persist Cleanup State
+### 4. Persist Cleanup State + 5. Confirm
 
-Write `.claude/.rate-limit-guard.json` (worktree root):
-
-```json
-{"cron_id":"<id>","command":"<command>","worktree":"<PWD_NOW>","branch":"<BRANCH>","scheduled_for":"<ISO>","max_cycles":<N>,"cycles_remaining":<N>,"cycle_window_min":<M>}
-```
-
-`cycles_remaining` starts at `max_cycles`; `/devx:resume-after-limit`
-decrements it as it re-arms subsequent cycles.
-
-### 5. Confirm
-
-```
-🛡️ Rate-limit 안전망 등록 (사이클 1/<N>, 간격 <M>분)
-  • 원본 명령: <command>
-  • 자동 재개 시각: <HH:MM + 5min> (job: <id>)
-이제 원본 명령을 실행합니다 ↓
-```
+Write `.claude/.rate-limit-guard.json` at the worktree root, then print
+the confirm block. Read `references/state-and-confirm.md` for the
+schema (with field descriptions) and the verbatim output template.
 
 ### 6. Execute, then Cleanup on Success
 
