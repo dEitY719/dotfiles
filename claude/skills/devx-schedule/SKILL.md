@@ -1,18 +1,21 @@
 ---
 name: devx:schedule
 description: >-
-  Schedule a skill or command to run after a specified delay (default: 5 min).
-  Use when the user says "N분 후에 /skill 실행해", "M분 뒤에 [skill] 수행해",
-  "/devx:schedule", "/devx-schedule", "schedule /skill in N minutes", or
-  "[command] N분 후에 해줘". Always invoke this skill whenever the user wants
-  to defer any slash-command or task to run after a time delay.
+  [Claude Code Only] Schedule a skill or command to run after a specified
+  delay (default: 5 min). Requires the `CronCreate` tool — does not work on
+  Codex / Gemini CLIs. Use when the user says "N분 후에 /skill 실행해",
+  "M분 뒤에 [skill] 수행해", "/devx:schedule", "/devx-schedule",
+  "schedule /skill in N minutes", or "[command] N분 후에 해줘". Always invoke
+  this skill whenever the user wants to defer any slash-command or task to
+  run after a time delay.
 ---
 
 # devx:schedule — Deferred Skill Executor
 
 > **Claude Code only** — requires the `CronCreate` tool, which is part of the
 > Claude Code harness. Other CLIs (Codex, Gemini, etc.) lack a comparable
-> session-spawn scheduler, so this skill cannot run there. See issue #362.
+> session-spawn scheduler, so this skill cannot run there.
+> See [issue #362](https://github.com/dEitY719/dotfiles/issues/362).
 
 ## Usage
 
