@@ -62,6 +62,28 @@ def _assistant_text(text: str) -> dict[str, Any]:
     }
 
 
+def _user_tool_result(text: str) -> dict[str, Any]:
+    """Build a user message carrying a single tool_result block.
+
+    Used to simulate Read/Bash tool output landing in the transcript — i.e.
+    file content that happens to mention "/gh-issue-flow" but is NOT a
+    user-typed command.
+    """
+    return {
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "toolu_test",
+                    "content": text,
+                }
+            ],
+        },
+    }
+
+
 def _assistant_skill(skill: str, args: str = "") -> dict[str, Any]:
     """Build an assistant tool_use message invoking Skill(<skill>)."""
     return {
@@ -301,6 +323,77 @@ def test_malformed_jsonl_lines_skipped(tmp_path: Path) -> None:
         f.write(json.dumps(_assistant_skill("gh-issue-implement")) + "\n")
         f.write("\n")  # blank line
     result = _run_hook(_hook_event(p))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+
+
+def test_tool_result_mentioning_command_not_treated_as_boundary(tmp_path: Path) -> None:
+    """File content read by the model that contains "/gh-issue-flow" must
+    NOT be treated as the user invoking the command (PR #386 review fix).
+
+    Regression for the boundary-detection false positive: previously,
+    `_find_flow_boundary` did `tok in text` across all blocks including
+    tool_result, so any session that read this skill's own SKILL.md (which
+    documents `/gh-issue-flow ...`) would be flagged as in-flow and stops
+    would be blocked.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("can you read the gh-issue-flow SKILL.md and explain it?"),
+            # Simulate a Read tool_result returning the SKILL.md content,
+            # which legitimately contains the command string.
+            _user_tool_result(
+                "# gh:issue-flow — Issue → PR composition\n\n"
+                "Use when the user runs /gh-issue-flow N or /gh:issue-flow N.\n"
+                "Step 2.1 invokes Skill(gh-issue-implement) ...\n"
+            ),
+            _assistant_text("Here's how the skill works: ..."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    # No real /gh-issue-flow boundary anywhere — must allow stop.
+    assert result.stdout.strip() == "", (
+        f"Hook treated tool_result file content as a flow boundary. stdout={result.stdout!r}"
+    )
+
+
+def test_command_only_at_start_of_user_text_counts(tmp_path: Path) -> None:
+    """User text that *mentions* /gh-issue-flow mid-sentence is NOT a
+    command; only text starting with the token counts as a boundary
+    (PR #386 review fix — preferred form per gemini suggestion).
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text(
+                "I was reading the docs about /gh-issue-flow and got confused — "
+                "could you summarize how Step 2.x chains together?"
+            ),
+            _assistant_text("Sure — here's a summary: ..."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"Hook treated mid-sentence mention of /gh-issue-flow as a command. stdout={result.stdout!r}"
+    )
+
+
+def test_command_with_leading_whitespace_still_counts(tmp_path: Path) -> None:
+    """Leading whitespace before /gh-issue-flow is tolerated (typo-friendly)
+    so users who paste with indent still get the chain protection.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("   /gh-issue-flow 42"),
+            _assistant_skill("gh-issue-implement"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
