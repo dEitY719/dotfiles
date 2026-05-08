@@ -227,6 +227,72 @@ _migrate_legacy_plugin_paths() {
     unset -f _migrate_one_plugin_json
 }
 
+# Auto-install gh-issue-flow Stop hook into existing settings.json (issue #383).
+#
+# A new mechanical guard (`claude/hooks/gh_issue_flow_stop_guard.py`) blocks the
+# model from ending its turn while a /gh-issue-flow chain is still mid-flight.
+# settings.template.json already declares this hook for new installs, but the
+# user-private claude/settings.json (gitignored) survives across template
+# updates and would otherwise miss it.
+#
+# This helper rewrites .hooks.Stop in place, only when the exact entry is
+# absent. Idempotent — present-with-same-command → no-op. Different command in
+# .hooks.Stop is left alone (user customisation respected) and a warning is
+# printed so the user can manually merge.
+_migrate_install_gh_issue_flow_stop_hook() {
+    local source_file="$CLAUDE_SETTINGS_SOURCE"
+    # shellcheck disable=SC2016
+    local hook_command='${HOME}/dotfiles/claude/hooks/gh_issue_flow_stop_guard.py'
+
+    [ -f "$source_file" ] || return 0
+    if ! command -v jq >/dev/null 2>&1; then
+        log_warning "jq 미설치 — gh-issue-flow Stop hook 자동 등록 건너뜀"
+        return 0
+    fi
+
+    local current_count
+    current_count=$(jq --arg cmd "$hook_command" \
+        '[.hooks?.Stop?[]?.hooks?[]? | select(.command == $cmd)] | length' \
+        "$source_file" 2>/dev/null) || current_count=0
+    [ "${current_count:-0}" -eq 0 ] || return 0
+
+    # If user already has *some* Stop hook entry, don't clobber — warn instead.
+    local existing_stop
+    existing_stop=$(jq '[.hooks?.Stop?[]?] | length' "$source_file" 2>/dev/null) || existing_stop=0
+    if [ "${existing_stop:-0}" -gt 0 ]; then
+        log_warning "settings.json 에 다른 Stop hook 이 이미 있습니다 — 자동 머지 생략."
+        log_warning "  수동 추가 필요: claude/hooks/gh_issue_flow_stop_guard.py"
+        log_warning "  참조: claude/skills/gh-issue-flow/references/stop-guard.md"
+        return 0
+    fi
+
+    local backup tmp
+    backup="${source_file}.pre-stop-hook-fix-$(date +%Y%m%d%H%M%S)"
+    if ! cp "$source_file" "$backup"; then
+        log_error "settings.json 백업 실패: $backup — 마이그레이션 중단"
+        return 1
+    fi
+    tmp=$(mktemp "${source_file}.XXXXXX") || {
+        log_error "임시 파일 생성 실패 — 마이그레이션 중단"
+        rm -f "$backup"
+        return 1
+    }
+
+    # jq 변수 ($cmd) 은 --arg 로 주입 — shell 변수 아님.
+    # shellcheck disable=SC2016
+    if jq --arg cmd "$hook_command" \
+            '.hooks = ((.hooks // {}) | .Stop = ((.Stop // []) + [{"hooks":[{"type":"command","command":$cmd}]}]))' \
+            "$source_file" > "$tmp" && mv "$tmp" "$source_file"; then
+        log_warning "settings.json 에 gh-issue-flow Stop hook 자동 등록 완료"
+        log_warning "  hook: $hook_command"
+        log_warning "  backup: $backup"
+    else
+        rm -f "$tmp"
+        log_error "settings.json 갱신 실패 — 백업 보존: $backup"
+        return 1
+    fi
+}
+
 # /sandbox 기능은 socat 을 요구하지만 sudo 가 필요한 install 이라
 # 자동 처리하지 않고 경고만 노출 (issue #340).
 _check_socat_for_sandbox() {
@@ -286,6 +352,10 @@ log_debug "\n--- Claude Code dotfiles setup 시작 ---"
 # downstream symlink uses it (issue #300, item A). Idempotent — only acts
 # on the exact PR #292 legacy literal, otherwise no-op.
 _migrate_legacy_statusline_command
+
+# Auto-install gh-issue-flow Stop hook (issue #383). Idempotent — only adds
+# the entry when it's missing AND no conflicting Stop hook is configured.
+_migrate_install_gh_issue_flow_stop_hook
 
 # 다중 계정 함수 source (env + integration)
 . "$DOTFILES_ROOT/shell-common/env/claude.sh"

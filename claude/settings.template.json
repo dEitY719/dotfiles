@@ -42,6 +42,18 @@
     "type": "command",
     "command": "${HOME}/dotfiles/claude/statusline-command.sh"
   },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/dotfiles/claude/hooks/gh_issue_flow_stop_guard.py"
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
     "document-skills@anthropic-agent-skills": true,
     "example-skills@anthropic-agent-skills": true
