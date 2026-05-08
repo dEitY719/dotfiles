@@ -14,7 +14,7 @@
 #
 # See SETUP_GUIDE.md for detailed information
 #
-# ⚠️  IMPORTANT: Do NOT delete bash/setup.sh, zsh/setup.sh, git/setup.sh, or claude/setup.sh
+# ⚠️  IMPORTANT: Do NOT delete bash/setup.sh, zsh/setup.sh, git/setup.sh, claude/setup.sh, or gh/setup.sh
 #     They perform special initialization beyond simple symlink creation
 
 set -e
@@ -29,6 +29,7 @@ set -e
 ./scripts/setup-skills-ssot.sh
 ./vscode-extensions/setup.sh
 ./ssh/setup.sh
+./gh/setup.sh
 
 
 
