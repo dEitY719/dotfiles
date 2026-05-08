@@ -18,22 +18,36 @@ allowed-tools: Bash, Read, Grep
 
 ## ⚠️ CRITICAL CONTRACT — read before editing
 
-**Recurring failure mode: early-stop after Step 2.1.** When `gh:issue-implement`
-emits its `Next: /gh-commit && /gh-pr <N>` success hint, the model treats it
-as a final answer and ends the turn — leaving the user to manually re-trigger
-`gh:commit` and `gh:pr`. Reported by users as "100번 실행하면 50번은 stop"
-(half of all runs stop early). See issue #333 for history.
+**Recurring failure mode: early-stop after Step 2.x.** When a sub-skill
+(`gh:issue-implement`, `gh:commit`, …) returns, the model treats its own
+self-authored success block as a turn-ending answer and stops mid-chain —
+leaving the user to manually re-trigger the rest. Reported by users as
+"100번 실행하면 50번은 stop" (half of all runs stop early). History:
+issue #333 (introduced `--no-next-hint`), issue #383 (re-occurred even
+with `--no-next-hint`).
 
-**The mechanical guard is `--no-next-hint`** on the Step 2.1 invocation
-(`gh:issue-implement` already supports the flag and suppresses its trailing
-`Next:` line when set). With the trip-wire gone, the model sees a plain
-success report and proceeds naturally to Step 2.2. **Do not drop this flag.**
-If you edit Step 2 in any way, re-verify `--no-next-hint` is still present.
+**Three guards are layered against this — do not remove any of them.**
 
-**Zero conversational text between the five `Skill()` calls in Step 2.**
-No recap, no "now committing", no markdown headers, no progress bullets —
-those tokens read as a turn-ending summary and re-introduce the early-stop.
-The only text allowed in Step 2 is the final Step 3 report.
+1. **`--no-next-hint` on Step 2.1** — suppresses `gh:issue-implement`'s
+   trailing `Next:` hint, the original trip-wire from #333. Load-bearing
+   even though insufficient on its own (see #383).
+2. **Zero conversational text between the five `Skill()` calls in Step 2** —
+   no recap, no "now committing", no markdown headers, no progress
+   bullets. Those tokens read as a turn-ending summary and re-introduce
+   the early-stop. The only prose allowed inside Step 2 is the final
+   Step 3 report.
+3. **Harness Stop hook (`claude/hooks/gh_issue_flow_stop_guard.py`)** —
+   when the model nonetheless tries to end its turn mid-flow, this hook
+   parses the transcript, detects that fewer than 5 sub-skills have run
+   without a Step 3 marker, and returns `{"decision":"block","reason":...}`
+   so Claude Code re-prompts the model to invoke the next sub-skill.
+   See `references/stop-guard.md` for the detection logic, safety rails,
+   and how to disable it temporarily for debugging.
+
+If you edit Step 2 in any way, re-verify all three guards are still in
+place. The harness guard is a backstop, not a license to weaken the
+prose rules — Claude can still emit verbose text BEFORE attempting to
+stop, which the hook cannot prevent.
 
 ## Help
 
