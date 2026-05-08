@@ -71,8 +71,17 @@ def _block(reason: str) -> int:
     return 0
 
 
-def _iter_text_blocks(message: dict[str, Any]) -> list[str]:
-    """Return all text-bearing chunks in a message's content array."""
+def _iter_text_blocks(message: dict[str, Any], include_tool_results: bool = True) -> list[str]:
+    """Return all text-bearing chunks in a message's content array.
+
+    `include_tool_results` gates whether tool_result blocks contribute their
+    text. Boundary detection (Step 1) sets it to False because a tool_result
+    can carry arbitrary file contents — if a file the model reads happens to
+    contain "/gh-issue-flow", the substring would otherwise falsely mark a
+    flow boundary in an unrelated session. Terminal-marker scanning
+    (Step 2) keeps it True so a sub-skill's stdout that prints the Step 3
+    "complete (#N)" line still counts.
+    """
     parts: list[str] = []
     content = message.get("content")
     if isinstance(content, str):
@@ -86,7 +95,7 @@ def _iter_text_blocks(message: dict[str, Any]) -> list[str]:
                 t = block.get("text")
                 if isinstance(t, str):
                     parts.append(t)
-            elif btype == "tool_result":
+            elif btype == "tool_result" and include_tool_results:
                 # tool_result.content can be a string or list of text blocks
                 rc = block.get("content")
                 if isinstance(rc, str):
@@ -151,19 +160,26 @@ def _message_payload(entry: dict[str, Any]) -> dict[str, Any]:
 def _find_flow_boundary(messages: list[dict[str, Any]]) -> int:
     """Return the index of the most recent gh-issue-flow START, or -1.
 
-    Boundary signals:
-      - any message text containing /gh-issue-flow or /gh:issue-flow, OR
-      - any assistant tool_use targeting Skill(gh-issue-flow|gh:issue-flow)
+    Boundary signals (role-restricted to avoid false positives from file
+    content read into tool_result blocks — see PR #386 review feedback):
+      - assistant message: tool_use of Skill(gh-issue-flow | gh:issue-flow)
+      - user message: text content begins with /gh-issue-flow or /gh:issue-flow
+        (tool_result blocks excluded so a file mentioning the command does
+        not trip the boundary)
     """
     for i in range(len(messages) - 1, -1, -1):
         msg = _message_payload(messages[i])
-        for skill in _iter_skill_uses(msg):
-            if skill in FLOW_SKILL_NAMES:
-                return i
-        for text in _iter_text_blocks(msg):
-            for tok in FLOW_START_TOKENS:
-                if tok in text:
+        role = msg.get("role")
+        if role == "assistant":
+            for skill in _iter_skill_uses(msg):
+                if skill in FLOW_SKILL_NAMES:
                     return i
+        elif role == "user":
+            for text in _iter_text_blocks(msg, include_tool_results=False):
+                stripped = text.lstrip()
+                for tok in FLOW_START_TOKENS:
+                    if stripped.startswith(tok):
+                        return i
     return -1
 
 
