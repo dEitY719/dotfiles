@@ -31,9 +31,10 @@ mkdir -p "$GH_CONFIG_DIR"
 if [ -L "$GH_CONFIG_TARGET" ]; then
     rm "$GH_CONFIG_TARGET"
 elif [ -f "$GH_CONFIG_TARGET" ]; then
-    ux_warning "기존 config.yml 백업: ${GH_CONFIG_TARGET}-$(date +%Y%m%d%H%M%S)-original"
-    cp "$GH_CONFIG_TARGET" "${GH_CONFIG_TARGET}-$(date +%Y%m%d%H%M%S)-original"
-    rm "$GH_CONFIG_TARGET"
+    BACKUP_DATE=$(date +%Y%m%d%H%M%S)
+    BACKUP_PATH="${GH_CONFIG_TARGET}-${BACKUP_DATE}-original"
+    ux_warning "기존 config.yml 백업: ${BACKUP_PATH}"
+    mv "$GH_CONFIG_TARGET" "$BACKUP_PATH"
 fi
 
 ln -s "$GH_CONFIG_SOURCE" "$GH_CONFIG_TARGET" || { ux_error "심볼릭 링크 생성 실패"; exit 1; }
