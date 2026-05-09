@@ -57,10 +57,19 @@ check_gh_api_type_mapping() {
     grep -q 'gh api graphql' "$abs_path" 2>/dev/null || return 0
 
     # Signal 1: -F with literal non-numeric value.
-    # Pattern: -F<space>name="<chars-with-letters-or-underscore>"
-    # Excludes $VAR references and pure digits.
-    local matches
-    matches=$(grep -nE '\-F[[:space:]]+[A-Za-z_][A-Za-z0-9_]*="[^"$]*[A-Za-z_][^"]*"' "$abs_path" 2>/dev/null || true)
+    # Two patterns — double- and single-quoted forms. Single-quoted
+    # added per PR #407 review (gemini): repos may use single quotes for
+    # literal IDs since `$VAR` is meaningless inside single quotes
+    # anyway. Both quote styles are flagged; unquoted forms are not —
+    # the shellcheck linter enforces quoting independently.
+    #
+    # Each grep is run separately and the results merged. Keeping the
+    # regexes split avoids the alternation-with-quote-escaping that
+    # makes a combined POSIX BRE/ERE pattern unreadable.
+    local matches sq dq sq2 dq2
+    dq=$(grep -nE '\-F[[:space:]]+[A-Za-z_][A-Za-z0-9_]*="[^"$]*[A-Za-z_][^"]*"' "$abs_path" 2>/dev/null || true)
+    sq=$(grep -nE "\-F[[:space:]]+[A-Za-z_][A-Za-z0-9_]*='[^']*[A-Za-z_][^']*'" "$abs_path" 2>/dev/null || true)
+    matches=$(printf '%s\n%s\n' "$dq" "$sq" | grep -v '^$' || true)
     if [ -n "$matches" ]; then
         while IFS= read -r line; do
             [ -z "$line" ] && continue
@@ -71,9 +80,10 @@ check_gh_api_type_mapping() {
     fi
 
     # Signal 2: -f with literal all-digit value.
-    # Pattern: -f<space>name="<digits>"
-    # Excludes $VAR references and quoted strings with letters.
-    matches=$(grep -nE '\-f[[:space:]]+[A-Za-z_][A-Za-z0-9_]*="[0-9]+"' "$abs_path" 2>/dev/null || true)
+    # Same dual-pattern approach as Signal 1.
+    dq2=$(grep -nE '\-f[[:space:]]+[A-Za-z_][A-Za-z0-9_]*="[0-9]+"' "$abs_path" 2>/dev/null || true)
+    sq2=$(grep -nE "\-f[[:space:]]+[A-Za-z_][A-Za-z0-9_]*='[0-9]+'" "$abs_path" 2>/dev/null || true)
+    matches=$(printf '%s\n%s\n' "$dq2" "$sq2" | grep -v '^$' || true)
     if [ -n "$matches" ]; then
         while IFS= read -r line; do
             [ -z "$line" ] && continue
