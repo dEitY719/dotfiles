@@ -27,8 +27,8 @@ teardown() {
 # Fixture-based tests: bad samples must fire, good samples must stay quiet
 # ─────────────────────────────────────────────────────────────────────────
 
-@test "signal 1: -F with literal non-numeric ID is flagged" {
-    local f="$BATS_TEST_TMPDIR/bad_F_id.sh"
+@test "signal 1: -F with double-quoted literal non-numeric ID is flagged" {
+    local f="$BATS_TEST_TMPDIR/bad_F_id_dq.sh"
     cat >"$f" <<'EOF'
 #!/bin/sh
 # Variables: $id ID!
@@ -41,14 +41,44 @@ EOF
     grep -q 'literal non-numeric value' "$WARN_FILE"
 }
 
-@test "signal 2: -f with literal all-digit value is flagged" {
-    local f="$BATS_TEST_TMPDIR/bad_f_int.sh"
+@test "signal 1: -F with single-quoted literal non-numeric ID is flagged" {
+    # PR #407 review: also flag single-quoted literals.
+    local f="$BATS_TEST_TMPDIR/bad_F_id_sq.sh"
+    cat >"$f" <<'EOF'
+#!/bin/sh
+# Variables: $id ID!
+gh api graphql \
+    -f query='mutation($id: ID!) { ... }' \
+    -F id='PVTI_lADO123abc'
+EOF
+    run check_gh_api_type_mapping "$f" "$WARN_FILE"
+    [ "$status" -eq 1 ]
+    grep -q 'literal non-numeric value' "$WARN_FILE"
+}
+
+@test "signal 2: -f with double-quoted literal all-digit value is flagged" {
+    local f="$BATS_TEST_TMPDIR/bad_f_int_dq.sh"
     cat >"$f" <<'EOF'
 #!/bin/sh
 # Variables: $num Int!
 gh api graphql \
     -f query='query($num: Int!) { ... }' \
     -f num="42"
+EOF
+    run check_gh_api_type_mapping "$f" "$WARN_FILE"
+    [ "$status" -eq 1 ]
+    grep -q 'literal numeric value' "$WARN_FILE"
+}
+
+@test "signal 2: -f with single-quoted literal all-digit value is flagged" {
+    # PR #407 review: also flag single-quoted literals.
+    local f="$BATS_TEST_TMPDIR/bad_f_int_sq.sh"
+    cat >"$f" <<'EOF'
+#!/bin/sh
+# Variables: $num Int!
+gh api graphql \
+    -f query='query($num: Int!) { ... }' \
+    -f num='42'
 EOF
     run check_gh_api_type_mapping "$f" "$WARN_FILE"
     [ "$status" -eq 1 ]
