@@ -1,4 +1,5 @@
 # TRD-to-Issues Plan
+
 Generated: 2026-05-09T00:00:00
 Source TRD: claude/skills/devx-trd-to-issues/references/samples/trd-fixture.md
 Source PRD: (none)
@@ -6,6 +7,7 @@ Target repo: dEitY719/dotfiles
 Mode: dry-run
 
 ## Milestone: M0a — Scaffold & Tooling
+
 Description: Project skeleton, lint, and test scaffolding for the
 example-cli package. First milestone — eligible for Ready promotion
 on `--apply` unless `--no-ready` is set.
@@ -25,6 +27,7 @@ on `--apply` unless `--no-ready` is set.
     - [ ] `tox -e shellcheck` passes on an empty bash/ dir.
 
 ## Milestone: M0b — Commands
+
 Description: User-facing `example-cli init` and `example-cli build`
 commands, including `--dry-run` support and unit tests.
 
@@ -38,4 +41,5 @@ commands, including `--dry-run` support and unit tests.
     - [ ] Unit tests cover both commands.
 
 ## Decomposition failures
+
 _no failures._
