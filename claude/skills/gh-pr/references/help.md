@@ -6,29 +6,77 @@
 |---|------|---------|-------------|
 | 1 | issue-number, or `-h`/`--help`/`help` | auto-detected | Link PR to this GitHub issue via `Closes #N` / `Refs #N` in the body |
 
+## Stacked-PR flags (mutually exclusive)
+
+| Flag | Effect |
+|---|---|
+| `--no-stack` | force base = repo default branch, skip auto-detect |
+| `--parent-pr <N>` | force stack on PR #N (base = #N's head ref, body adds `Depends on #N`) |
+| `--base <branch>` | force base = `<branch>` (any branch name) |
+
+Auto-detect (default) is a no-op on solo / non-stacked repos. See
+"Behavior" below for what triggers it.
+
 ## Usage
 
-- `/gh-pr` — push the current branch if needed, then open a PR against
-  the repo's default branch covering every commit in the range
-- `/gh-pr 123` — same, but force-link to issue `#123` regardless of chat/commits
-- `/gh-pr -h` / `--help` / `help` — print this help
+- `/gh-pr` — push the current branch if needed, then open a PR.
+  Resolves base via auto-detect (default branch on solo repos).
+- `/gh-pr 123` — same, force-link to issue `#123`.
+- `/gh-pr --no-stack` — auto-detect off, base = default branch.
+- `/gh-pr --parent-pr 201` — auto-detect off, stack on PR #201.
+- `/gh-pr --base release/v2.0` — auto-detect off, custom base branch.
+- `/gh-pr -h` / `--help` / `help` — print this help.
+
+## Behavior
+
+Auto-detect fires only when **both** conditions hold:
+
+1. The repo opts into stacked PRs (one of: workflow file
+   `.github/workflows/stacked-closes-rollup.yml`, the keywords
+   `claude-enter-issue` / `stacked PR` / `Depends on #` in
+   `CLAUDE.md` / `AGENTS.md` / `.claude/github-integration.md`, or an
+   `agent-toolbox/` directory).
+2. There is exactly one open PR whose head ref is an ancestor of HEAD
+   *and* yields a more recent merge-base than the default branch.
+
+Otherwise the base falls back to the repo default branch — solo /
+non-stacked repos (the dotfiles default) see no behavioural change.
+
+## Examples
+
+```
+# dotfiles solo (auto-detect inactive — no signals)
+$ /gh-pr                        →  base=main, no Depends footer
+
+# Working in a stacked-PR repo, parent unique
+$ /gh-pr                        →  "Stacking on PR #201 (auto-detected)"
+                                   base=feat/parent-branch
+                                   body has "Depends on #201"
+
+# Auto-detect was wrong — escape hatch
+$ /gh-pr --no-stack             →  base=main forced
+$ /gh-pr --parent-pr 205        →  base=PR #205 head
+$ /gh-pr --base release/v2.0    →  base=release/v2.0
+```
 
 ## What the skill does
 
-1. Resolves the base branch (`gh repo view --json defaultBranchRef`) and
-   checks the current branch is not the base. Fetches `origin` to make
-   sure the range is computed against up-to-date refs.
+1. Parses args (`--no-stack` / `--parent-pr` / `--base`), then resolves
+   the base branch via the stacked-PR auto-detect flow (see
+   `references/stacked-pr.md`). Fetches `origin` to make sure the range
+   is computed against up-to-date refs.
 2. Reads **all** commits in `<base>..HEAD` — the PR body must cover every
    commit, not only HEAD. Groups them by theme for the Summary.
 3. Resolves the linked issue using the same precedence as `gh:commit`:
    explicit arg → recent chat → commit footers → none.
 4. Drafts title + body per `references/pr-body-template.md`, matching the
    language dominant in existing commits (Korean commits → Korean PR).
+   When stacked on a parent PR, inserts `Depends on #N` in the body.
 5. Pushes the branch (`git push -u origin HEAD` if no upstream, `git push`
    if ahead). Diverged upstream → stops and asks; never force-pushes on
    its own.
-6. Creates the PR via `gh pr create --assignee @me` using a `mktemp` body
-   file. Always self-assigns.
+6. Creates the PR via `gh pr create --assignee @me --base "$BASE_BRANCH"`
+   using a `mktemp` body file. Always self-assigns.
 7. Applies labels derived from conventional-commit types (feat, fix, docs,
    etc.) plus scope labels — but only labels that **already exist** in the
    repo. Never creates new labels.
@@ -37,7 +85,12 @@
 ## What the skill will NOT do
 
 - Force-push without explicit user approval.
-- Target a base branch other than the repo's default branch unless told.
+- Run auto-stack detection on a repo without stacked-PR signals — solo
+  repos always default to the repo's default branch.
+- Combine `--no-stack` / `--parent-pr` / `--base` (mutually exclusive,
+  rc=2 abort).
+- Mutate parent PR bodies — cross-PR rollup is the downstream repo's
+  job (e.g. AgentToolbox `stacked-closes-rollup.yml`).
 - Include the `🤖 Generated with Claude Code` footer unless the repo
   already uses that convention in existing PRs.
 - Skip "minor" commits in the Summary — the range is the contract.
@@ -50,5 +103,10 @@
 - **Good**: Feature branch with 3 commits, `/gh-pr` — body covers all 3,
   links any `#N` in chat, returns the URL.
 - **Good**: `/gh-pr 42` after a hotfix — body includes `Closes #42`.
+- **Good**: AgentToolbox stacked work, `/gh-pr` — auto-detects parent
+  PR and inserts `Depends on #N`.
+- **Good**: Hotfix landing on a release branch, `/gh-pr --base release/v2.0`.
 - **Bad**: running on `main` — skill stops with "create a feature branch first".
 - **Bad**: running with an empty `<base>..HEAD` — skill stops with "nothing to PR".
+- **Bad**: `/gh-pr --no-stack --parent-pr 5` — flags are mutually
+  exclusive, skill aborts before push.

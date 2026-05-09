@@ -22,25 +22,51 @@ its content verbatim, then stop. No API calls.
 Bundle the current branch's commits into a GitHub PR with a well-structured
 body. Push the branch if needed. Return the PR URL.
 
-## Step 1: Determine Base Branch and State (parallel)
+## Step 1: Parse Args, Resolve Base Branch, Gather State
 
 Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 4.
 
-Run in a single message:
+### Step 1a: Parse args + resolve base via stacked-PR detection
+
+Read `references/stacked-pr.md` for the SSOT bash bound to
+`parse_stacked_args`, `is_stacked_pr_repo`, and
+`find_parent_pr_candidates`, plus the dispatch block ("How Step 1 of
+SKILL.md ties it together"). Paste the four functions and the dispatch
+block verbatim. They set:
+
+- `BASE_BRANCH` — final base branch for `gh pr create --base`
+- `PARENT_PR` — non-empty PR number when the PR is stacked on another
+  open PR; empty otherwise
+- `ISSUE_NUMBER` — first positional integer arg if any (legacy
+  `/gh-pr 123` form)
+
+Honour `parse_stacked_args`'s exit codes:
+
+- rc=2 — mutually-exclusive flags (`--no-stack` / `--parent-pr` /
+  `--base`); abort, do not push.
+- rc=3 — bad value for `--parent-pr` or `--base`; abort, do not push.
+
+`PARENT_PR` flows into the body template "Depends on #N" rule
+(`pr-body-template.md`). `BASE_BRANCH` flows into Step 5's
+`gh pr create --base "$BASE_BRANCH"`.
+
+### Step 1b: Gather range + push state (parallel)
+
+Run in a single message, using `$BASE_BRANCH` from Step 1a:
 
 - `git rev-parse --abbrev-ref HEAD` — current branch
-- `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` — base
 - `git status`
 - `git fetch origin`
-- `git log --oneline <base>..HEAD` — every commit in the range
-- `git diff <base>...HEAD` — full diff
+- `git log --oneline "$BASE_BRANCH"..HEAD` — every commit in the range
+- `git diff "$BASE_BRANCH"...HEAD` — full diff
 - `git rev-parse --symbolic-full-name @{u} 2>/dev/null` — upstream check
 
 **Stop conditions:**
 
-- If current branch equals base branch → tell the user to create a feature
-  branch first.
-- If `git log <base>..HEAD` is empty → tell the user there's nothing to PR.
+- If current branch equals `BASE_BRANCH` → tell the user to create a
+  feature branch first.
+- If `git log "$BASE_BRANCH"..HEAD` is empty → tell the user there's
+  nothing to PR.
 
 ## Step 2: Analyze ALL Commits in the Range
 
@@ -86,7 +112,8 @@ printf '\n---\n<details>\n<summary>🤖 AI Metrics · 📊 ~%s tokens · 👤 ~%
 ## Step 5: Push and Create
 
 Read `references/push-and-create.md` for the upstream-state push policy and
-the `gh pr create` command (uses `mktemp` body file, `--assignee @me`).
+the `gh pr create` command (uses `mktemp` body file, `--assignee @me`,
+`--base "$BASE_BRANCH"` from Step 1a).
 
 ## Step 6: Apply Labels
 
