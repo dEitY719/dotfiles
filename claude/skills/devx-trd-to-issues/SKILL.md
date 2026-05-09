@@ -35,8 +35,12 @@ the first miss, list the missing path and stop.
 
 Load each TRD (and optional PRD) via `Read`. Extract:
 
-- Milestones — TRD-named structure first; if absent, propose names and
-  ask the user to confirm before continuing.
+- Milestones — TRD-named structure first; if absent, write the
+  proposed names directly into the dry-run plan (under each
+  `## Milestone:` heading) so the user reviews them in the plan file
+  and edits or re-runs before `--apply`. Never block mid-flow on a
+  confirmation prompt — Claude Code is non-interactive and `read`
+  would hang.
 - Tasks — each must satisfy the criteria in
   `references/decomposition-rules.md` (≤ 3 ACs, unit-testable,
   independently committable). Items that fail the criteria are split

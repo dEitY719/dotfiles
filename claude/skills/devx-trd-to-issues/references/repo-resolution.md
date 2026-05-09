@@ -12,6 +12,14 @@ multiple skills can reuse the convention.
    - If the user passed `--remote <name>`, use that.
    - Otherwise default to `origin`.
 
+   The two cases below are NOT in conflict:
+   - `--remote` omitted → silently use `origin` (matches `gh-issue-create`
+     / `gh-pr` / `gh-pr-resolve-conflict` parity, the dotfiles
+     convention).
+   - `--remote <name>` passed but `<name>` does not exist → fail-fast.
+     The "no silent fallback" rule below applies **only** to this
+     second case.
+
 3. Validate the remote and resolve owner/repo:
 
    ```bash
@@ -26,12 +34,14 @@ multiple skills can reuse the convention.
    upstream  https://github.com/org/repo.git (fetch)
    ```
 
-4. Extract `owner/repo` from the URL:
+4. Extract `owner/repo` from the URL — host-agnostic patterns so
+   GitHub Enterprise / GHES / self-hosted forges work the same:
 
-   - `https://github.com/<owner>/<repo>.git` → `<owner>/<repo>`
-   - `git@github.com:<owner>/<repo>.git`     → `<owner>/<repo>`
+   - `<protocol>://<host>/<owner>/<repo>.git` → `<owner>/<repo>`
+   - `<user>@<host>:<owner>/<repo>.git`       → `<owner>/<repo>`
 
-   Stripped of any trailing `.git`.
+   Stripped of any trailing `.git`. The host is never hardcoded; the
+   `<host>` segment is whatever the remote URL points at.
 
 Store the resolved value as `TARGET_REPO` for use in Step 4 (`--apply`).
 
