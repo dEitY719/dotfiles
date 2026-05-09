@@ -28,7 +28,6 @@ Language: match the repo. Use Korean if existing commits are Korean.
 
 ## Related
 Closes #<N>
-Refs #<N>
 ```
 
 - When Step 3 resolved an issue number AND the PR fully addresses it,
@@ -37,8 +36,11 @@ Refs #<N>
   `Done` on merge (see `docs/standards/github-project-board.md`).
   Omitting it means the Issue stays open and the card never reaches
   `Done`.
-- Use `Refs #<N>` instead only when the PR does not fully resolve
-  the issue (partial work, follow-up required).
+- For bug-fix PRs, `Fixes #<N>` is also acceptable.
+- **금지 키워드**: `Refs`, `Resolves`, `See`, `References` — skill 은 절대
+  생성하지 않음. `Refs` / `See` / `References` 는 GitHub close 안 시키고,
+  `Resolves` 는 AgentToolbox 정책 위반. 부분 진행을 표현하려면 footer 를
+  생략하고 본문에 평문 `(part of #N)` 로 언급 (issue #392).
 - Omit the `## Related` section entirely only when no issue number
   is known.
 
