@@ -5,7 +5,7 @@ You cannot judge a diagram from JSON alone. After generating or editing the Exca
 ## How to Render
 
 ```bash
-cd .claude/skills/excalidraw-diagram/references && uv run python render_excalidraw.py <path-to-file.excalidraw>
+cd .claude/skills/devx-excalidraw-diagram/references && uv run python render_excalidraw.py <path-to-file.excalidraw>
 ```
 
 This outputs a PNG next to the `.excalidraw` file. Then use the **Read tool** on the PNG to actually view it.
@@ -63,7 +63,7 @@ The loop is done when:
 If the render script hasn't been set up yet:
 
 ```bash
-cd .claude/skills/excalidraw-diagram
+cd .claude/skills/devx-excalidraw-diagram
 uv sync
 cd references && uv run playwright install chromium
 ```
