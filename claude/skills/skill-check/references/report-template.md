@@ -26,8 +26,8 @@ References dir: <exists / missing>
 | 9 | Verdict Output               | FAIL   | output ends without [OK]/[FAIL]       |
 |10 | Next-action Hint             | PASS   | teardown shown in success report      |
 
-Score: 5/8 checks passed (2 warnings, 1 N/A)
-Verdict: NEEDS WORK — fix FAIL items before treating as production-ready
+Score: 5/9 checks passed (2 warnings, 2 fails, 1 N/A)
+Verdict: POOR — significant gaps, major rework needed
 
 ## Issues & Improvements
 
