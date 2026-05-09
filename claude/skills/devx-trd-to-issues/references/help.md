@@ -89,9 +89,8 @@
 
 ## Pairs with
 
-- `requirement-spec` / `requirement-draft` — author the TRD/PRD before
-  invoking this skill.
 - `gh:issue-implement` / `gh:issue-flow` — pick up Task issues this
   skill registered and implement them.
 - `gh:issue-create` — single-issue alternative when batch decomposition
-  is overkill.
+  is overkill (also absorbs the old `requirement-spec`/`requirement-draft`
+  responsibilities).

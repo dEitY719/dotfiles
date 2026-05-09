@@ -1,5 +1,5 @@
 ---
-name: write-rca-doc
+name: write:rca
 description: >-
   Auto-document incidents, bug fixes, and technical challenges as structured
   markdown with root cause analysis, prevention checklists, and learning
@@ -320,12 +320,12 @@ Defaults:
 ### Quick Invocation
 ```bash
 # During conversation, when issue is resolved:
-/write-rca-doc
+/write-rca
 
 # Or with options:
-/write-rca-doc --commit          # Auto-commit to git
-/write-rca-doc --audience blog   # Blog-first optimization
-/write-rca-doc --private         # For sensitive incidents
+/write-rca --commit          # Auto-commit to git
+/write-rca --audience blog   # Blog-first optimization
+/write-rca --private         # For sensitive incidents
 ```
 
 ### Generated Output
