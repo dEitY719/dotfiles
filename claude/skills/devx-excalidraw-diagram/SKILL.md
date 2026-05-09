@@ -1,6 +1,6 @@
 ---
-name: excalidraw-diagram
-description: Create Excalidraw diagram JSON files that make visual arguments. Use when the user wants to visualize workflows, architectures, or concepts.
+name: devx:excalidraw-diagram
+description: Create Excalidraw diagram JSON files that make visual arguments. Trigger on "/devx:excalidraw-diagram" or when the user wants to visualize workflows, architectures, or concepts.
 ---
 
 # Excalidraw Diagram Creator
@@ -63,7 +63,7 @@ Read `references/render-validate.md` for the full render-view-fix loop.
 
 Quick reference:
 ```bash
-cd .claude/skills/excalidraw-diagram/references && uv run python render_excalidraw.py <file.excalidraw>
+cd .claude/skills/devx-excalidraw-diagram/references && uv run python render_excalidraw.py <file.excalidraw>
 ```
 
 Render → Read PNG → audit against vision → fix → repeat (2-4 iterations typical).

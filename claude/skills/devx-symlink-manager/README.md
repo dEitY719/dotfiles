@@ -121,8 +121,8 @@ config.prod.json     # Production
 
 ## Related Files
 
-- Source: `~/dotfiles/claude/skills/symlink-manager.md` (original documentation)
-- Skill: `~/dotfiles/claude/skills/symlink-manager/SKILL.md` (this skill)
+- Source: `~/dotfiles/claude/skills/devx-symlink-manager.md` (original documentation)
+- Skill: `~/dotfiles/claude/skills/devx-symlink-manager/SKILL.md` (this skill)
 
 ## Author
 

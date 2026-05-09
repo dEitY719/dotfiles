@@ -17,7 +17,7 @@ Clone or download this repo, then copy it into your project's `.claude/skills/` 
 
 ```bash
 git clone https://github.com/coleam00/excalidraw-diagram-skill.git
-cp -r excalidraw-diagram-skill .claude/skills/excalidraw-diagram
+cp -r excalidraw-diagram-skill .claude/skills/devx-excalidraw-diagram
 ```
 
 ## Setup
@@ -31,7 +31,7 @@ Just tell your agent: *"Set up the Excalidraw diagram skill renderer by followin
 **Option B: Manual**
 
 ```bash
-cd .claude/skills/excalidraw-diagram
+cd .claude/skills/devx-excalidraw-diagram
 uv sync
 cd references && uv run playwright install chromium
 ```
@@ -51,7 +51,7 @@ Edit `references/color-palette.md` to match your brand. Everything else in the s
 ## File Structure
 
 ```
-excalidraw-diagram/
+devx-excalidraw-diagram/
   SKILL.md                          # Workflow control tower (pointers to references/)
   pyproject.toml                    # Python dependencies (playwright)
   references/
