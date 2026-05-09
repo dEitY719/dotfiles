@@ -384,3 +384,313 @@ _run_resolve_bash() {
     run cat "$FAKE_GH_COUNTER"
     [ "${#lines[@]}" -eq 2 ]
 }
+
+# ---------------------------------------------------------------------------
+# Verify pair + Approved fail-closed guard — issue #393
+# ---------------------------------------------------------------------------
+#
+# These cases drive the full `_gh_project_status_sync` path (auto-detect →
+# discovery query → mutate → verify) plus the Approved guard branch.
+#
+# The fake `gh` here multiplexes four call shapes by inspecting argv:
+#   1. `gh pr view <num> --json reviewDecision --jq ...` → echoes
+#      $FAKE_REVIEW_DECISION (default APPROVED). Exits 1 when
+#      $FAKE_REVIEW_FAIL=1 to model a network/permission failure.
+#   2. `gh repo view --json owner,name --jq ...` → echoes "owner reponame".
+#   3. `gh api graphql ... query: mutation(...)` → mutation. Outcome (ok/fail)
+#      driven by $FAKE_MUTATE_SEQUENCE (pipe-separated, defaults to all-ok).
+#   4. `gh api graphql ... query: query(...) options(names:` → discovery
+#      query; emits one synthetic record so the sync loop iterates once.
+#   5. `gh api graphql ... query: query(...) fieldValueByName` (no options)
+#      → verify-current query; emits the next entry of
+#      $FAKE_VERIFY_SEQUENCE (pipe-separated; missing entries → empty).
+#
+# All call shapes append a tag to $FAKE_GH_LOG for assertions.
+
+_setup_fake_gh_full() {
+    STUB_BIN="$TEST_TEMP_HOME/bin"
+    FAKE_GH_LOG="$TEST_TEMP_HOME/fake_gh_log"
+    FAKE_MUTATE_IDX="$TEST_TEMP_HOME/fake_mutate_idx"
+    FAKE_VERIFY_IDX="$TEST_TEMP_HOME/fake_verify_idx"
+    mkdir -p "$STUB_BIN"
+    : >"$FAKE_GH_LOG"
+    echo 0 >"$FAKE_MUTATE_IDX"
+    echo 0 >"$FAKE_VERIFY_IDX"
+    cat >"$STUB_BIN/gh" <<'GH'
+#!/usr/bin/env bash
+# Multiplexed fake gh — see _setup_fake_gh_full comment in bats file.
+LOG="${FAKE_GH_LOG:?FAKE_GH_LOG not set}"
+
+case "$1 $2" in
+    "pr view")
+        echo "pr-view" >>"$LOG"
+        if [ "${FAKE_REVIEW_FAIL:-0}" = "1" ]; then
+            exit 1
+        fi
+        # gh's --jq applies a default when reviewDecision is null. The helper
+        # uses `// "REVIEW_REQUIRED"`; we emit the raw decision here and let
+        # the helper's jq do the substitution.
+        echo "${FAKE_REVIEW_DECISION:-APPROVED}"
+        exit 0
+        ;;
+    "repo view")
+        echo "repo-view" >>"$LOG"
+        echo "owner reponame"
+        exit 0
+        ;;
+    "api graphql")
+        # Inspect the rest of argv to tell mutation / discovery / verify apart.
+        # The query body is passed as the value following `-f query=`.
+        all_args="$*"
+        if [[ "$all_args" == *"mutation("* ]]; then
+            echo "mutate" >>"$LOG"
+            idx=$(cat "$FAKE_MUTATE_IDX")
+            idx=$((idx + 1))
+            echo "$idx" >"$FAKE_MUTATE_IDX"
+            # Pipe-separated outcomes: ok|fail|ok ...; missing entries default ok.
+            IFS='|' read -ra out <<<"${FAKE_MUTATE_SEQUENCE:-ok}"
+            slot="${out[$((idx - 1))]:-ok}"
+            if [ "$slot" = "fail" ]; then
+                echo "graphql: mutation failed" >&2
+                exit 1
+            fi
+            exit 0
+        elif [[ "$all_args" == *"options(names:"* ]]; then
+            echo "discover" >>"$LOG"
+            # One synthetic project item with empty current Status. Fields are
+            # joined with `|` to match the helper's --jq output shape:
+            #   project.id | item.id | field.id | option.id | current_status
+            echo "proj1|item1|field1|opt1|"
+            exit 0
+        elif [[ "$all_args" == *"fieldValueByName"* ]]; then
+            echo "verify" >>"$LOG"
+            idx=$(cat "$FAKE_VERIFY_IDX")
+            idx=$((idx + 1))
+            echo "$idx" >"$FAKE_VERIFY_IDX"
+            IFS='|' read -ra seq <<<"${FAKE_VERIFY_SEQUENCE:-}"
+            val="${seq[$((idx - 1))]:-}"
+            [ -n "$val" ] && echo "$val"
+            exit 0
+        else
+            echo "graphql-other" >>"$LOG"
+            exit 0
+        fi
+        ;;
+esac
+exit 0
+GH
+    chmod +x "$STUB_BIN/gh"
+}
+
+# Run an arbitrary snippet in bash with the full fake gh on PATH.
+# All sleep knobs default to 0 so tests don't pause.
+_run_full_bash() {
+    local snippet="$1"
+    run bash --noprofile --norc -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        export SHELL_COMMON='${SHELL_COMMON}'
+        export DOTFILES_FORCE_INIT=1
+        export DOTFILES_TEST_MODE=1
+        export HOME='${HOME}'
+        export TERM=dumb
+        export PATH='${STUB_BIN}:${PATH}'
+        export FAKE_GH_LOG='${FAKE_GH_LOG}'
+        export FAKE_MUTATE_IDX='${FAKE_MUTATE_IDX}'
+        export FAKE_VERIFY_IDX='${FAKE_VERIFY_IDX}'
+        export FAKE_REVIEW_DECISION='${FAKE_REVIEW_DECISION:-APPROVED}'
+        export FAKE_REVIEW_FAIL='${FAKE_REVIEW_FAIL:-0}'
+        export FAKE_MUTATE_SEQUENCE='${FAKE_MUTATE_SEQUENCE:-}'
+        export FAKE_VERIFY_SEQUENCE='${FAKE_VERIFY_SEQUENCE:-}'
+        export _GH_PROJECT_STATUS_RETRY_SLEEP=0
+        export _GH_PROJECT_STATUS_VERIFY_SLEEP=0
+        export _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS='${_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS:-0}'
+        source '${DOTFILES_ROOT}/bash/main.bash'
+        ${snippet}
+    "
+}
+
+@test "bash: _gh_project_status_query_current helper exists" {
+    run_in_bash 'declare -f _gh_project_status_query_current >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "zsh: _gh_project_status_query_current helper exists" {
+    run_in_zsh 'typeset -f _gh_project_status_query_current >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "bash: _gh_project_status_set_and_verify helper exists" {
+    run_in_bash 'declare -f _gh_project_status_set_and_verify >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+# ------- verify pair -------------------------------------------------------
+
+@test "verify: happy path — single mutation, '(verified)' log" {
+    _setup_fake_gh_full
+    FAKE_VERIFY_SEQUENCE="In review" \
+        _run_full_bash '_gh_project_status_sync pr 42 "In review" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial '-> "In review" (verified)'
+    refute_output --partial "(after 1 retry)"
+    refute_output --partial "(verified after re-set)"
+    refute_output --partial "ERROR"
+    # Exactly one mutation, one verify call.
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 1 ]
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 1 ]
+}
+
+@test "verify: race revert — re-set + second verify, '(verified after re-set)'" {
+    # First verify reads the builtin's overwrite ("In progress"); re-set
+    # mutation lands; second verify reads the target. Two mutations total.
+    _setup_fake_gh_full
+    FAKE_VERIFY_SEQUENCE="In progress|In review" \
+        _run_full_bash '_gh_project_status_sync pr 42 "In review" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial 'reverted to "In progress", re-setting'
+    assert_output --partial '(verified after re-set)'
+    refute_output --partial "ERROR"
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 2 ]
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 2 ]
+}
+
+@test "verify: persistent revert — fail loud after 2 verifies, return 0" {
+    # Both verifies disagree with the target. Helper logs ERROR but still
+    # returns 0 — best-effort policy preserved.
+    _setup_fake_gh_full
+    FAKE_VERIFY_SEQUENCE="In progress|In progress" \
+        _run_full_bash '_gh_project_status_sync pr 42 "In review" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial 'reverted to "In progress", re-setting'
+    assert_output --partial 'ERROR: pr #42 verify failed twice'
+    assert_output --partial 'target="In review"'
+    assert_output --partial 'actual="In progress"'
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 2 ]
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 2 ]
+}
+
+@test "verify: mutation flake then recovery — '(verified after 1 retry)'" {
+    # First mutation 500s, retry succeeds, verify matches. Two mutations
+    # plus one verify call.
+    _setup_fake_gh_full
+    FAKE_MUTATE_SEQUENCE="fail|ok" \
+    FAKE_VERIFY_SEQUENCE="In review" \
+        _run_full_bash '_gh_project_status_sync pr 42 "In review" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial '(verified after 1 retry)'
+    refute_output --partial "ERROR"
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 2 ]
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 1 ]
+}
+
+@test "verify: VERIFY_SLEEP override is honored (no pause in tests)" {
+    # Sanity check: when _GH_PROJECT_STATUS_VERIFY_SLEEP=0 the helper still
+    # runs the verify call (otherwise the rest of the suite would be lying
+    # about coverage). Time the call — must finish well under 1 second.
+    _setup_fake_gh_full
+    FAKE_VERIFY_SEQUENCE="In review" \
+        _run_full_bash '
+            t0=$(date +%s)
+            _gh_project_status_sync pr 42 "In review" >/dev/null 2>&1
+            t1=$(date +%s)
+            echo "elapsed=$((t1 - t0))"
+        '
+    assert_success
+    assert_output --partial "elapsed=0"
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 1 ]
+}
+
+# ------- Approved fail-closed guard ----------------------------------------
+
+@test "guard: target=Approved + decision=APPROVED → mutation runs" {
+    _setup_fake_gh_full
+    FAKE_REVIEW_DECISION="APPROVED" \
+    FAKE_VERIFY_SEQUENCE="Approved" \
+        _run_full_bash '_gh_project_status_sync pr 42 "Approved" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial '-> "Approved" (verified)'
+    refute_output --partial "refusing"
+    [ "$(grep -c '^pr-view$' "$FAKE_GH_LOG")" -eq 1 ]
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 1 ]
+}
+
+@test "guard: target=Approved + decision=REVIEW_REQUIRED → exit 2, no mutation" {
+    _setup_fake_gh_full
+    FAKE_REVIEW_DECISION="REVIEW_REQUIRED" \
+        _run_full_bash '_gh_project_status_sync pr 42 "Approved" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=2"
+    assert_output --partial 'refusing PR #42 -> "Approved": reviewDecision=REVIEW_REQUIRED'
+    assert_output --partial "_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1"
+    [ "$(grep -c '^pr-view$' "$FAKE_GH_LOG")" -eq 1 ]
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 0 ]
+    [ "$(grep -c '^discover$' "$FAKE_GH_LOG")" -eq 0 ]
+}
+
+@test "guard: target=Approved + decision=CHANGES_REQUESTED → exit 2, no mutation" {
+    _setup_fake_gh_full
+    FAKE_REVIEW_DECISION="CHANGES_REQUESTED" \
+        _run_full_bash '_gh_project_status_sync pr 42 "Approved" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=2"
+    assert_output --partial 'reviewDecision=CHANGES_REQUESTED'
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 0 ]
+}
+
+@test "guard: target=Approved + gh pr view fails → UNKNOWN → exit 2" {
+    # Safe default: when gh can't tell us the decision, refuse rather than
+    # risk an incorrect mutation.
+    _setup_fake_gh_full
+    FAKE_REVIEW_FAIL=1 \
+        _run_full_bash '_gh_project_status_sync pr 42 "Approved" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=2"
+    assert_output --partial 'reviewDecision=UNKNOWN'
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 0 ]
+}
+
+@test "guard: target=Approved + bypass=1 → guard skipped, mutation runs" {
+    _setup_fake_gh_full
+    FAKE_REVIEW_DECISION="REVIEW_REQUIRED" \
+    FAKE_VERIFY_SEQUENCE="Approved" \
+    _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1 \
+        _run_full_bash '_gh_project_status_sync pr 42 "Approved" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial '-> "Approved" (verified)'
+    refute_output --partial "refusing"
+    # gh pr view must NOT have been called when bypass is on.
+    [ "$(grep -c '^pr-view$' "$FAKE_GH_LOG")" -eq 0 ]
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 1 ]
+}
+
+@test "guard: target=In review → guard does not fire (no pr-view call)" {
+    # The guard only inspects "Approved". Other targets must skip the
+    # gh pr view round-trip entirely.
+    _setup_fake_gh_full
+    FAKE_VERIFY_SEQUENCE="In review" \
+        _run_full_bash '_gh_project_status_sync pr 42 "In review" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    [ "$(grep -c '^pr-view$' "$FAKE_GH_LOG")" -eq 0 ]
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 1 ]
+}
+
+@test "guard: kind=issue + target=Approved → guard does not fire" {
+    # Guard is PR-only — issues never have a reviewDecision.
+    _setup_fake_gh_full
+    FAKE_VERIFY_SEQUENCE="Approved" \
+        _run_full_bash '_gh_project_status_sync issue 42 "Approved" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    [ "$(grep -c '^pr-view$' "$FAKE_GH_LOG")" -eq 0 ]
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 1 ]
+}
