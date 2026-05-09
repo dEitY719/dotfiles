@@ -61,6 +61,45 @@ Then detect whether the base branch has protection rules (uses
 - `mergeStateStatus ∈ {BEHIND, BLOCKED, DIRTY}`
 - Any required check FAILURE or pending
 
+## Step 2-B: Project Board Approval Gate (fail-closed)
+
+Read `references/board-policy.md` for the rule set and the cross-link
+to `gh-pr-approve`. This step runs **before** Step 3 and gates merges
+on the team's projectV2 board column.
+
+```bash
+# Reuse the SSOT query helper — never inline a fresh GraphQL block.
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
+
+# Operator escape hatch: GH_PR_MERGE_SKIP_BOARD_CHECK=1
+# Use for in-transition repos or one-shot ops (also leaves an audit signal:
+# any reviewer can re-run gh-pr-merge without the env var to verify).
+if [ "${GH_PR_MERGE_SKIP_BOARD_CHECK:-0}" != "1" ]; then
+    BOARD_STATUS=$(GH_REPO="$TARGET_REPO" \
+        _gh_project_status_query_current pr "$PR_NUMBER" 2>/dev/null)
+
+    # Empty result = no projectV2 attached OR no read access.
+    # Auto-skip in both cases — the merge gate is opt-in by board attachment.
+    if [ -n "$BOARD_STATUS" ] && [ "$BOARD_STATUS" != "Approved" ]; then
+        echo "Refusing to merge PR #$PR_NUMBER — board Status is \"$BOARD_STATUS\", required \"Approved\"."
+        echo "  Have a teammate move the card to Approved, or use /gh-pr-merge-emergency for admin bypass."
+        echo "  One-shot escape: GH_PR_MERGE_SKIP_BOARD_CHECK=1 /gh-pr-merge $PR_NUMBER"
+        exit 2
+    fi
+fi
+```
+
+Failure modes:
+
+- Board Status `!= Approved` (and non-empty) → exit 2, redirect to
+  `/gh-pr-merge-emergency`.
+- Empty Status (no projectV2 attached, or query failed) → silently
+  continue. Repos without a board run on the legacy `reviewDecision`
+  gate from Step 2 alone.
+- `GH_PR_MERGE_SKIP_BOARD_CHECK=1` → skip Step 2-B entirely. Document
+  the reason in the operator's commit message or Slack channel; this
+  flag is for repos in transition, not a quiet-the-warning button.
+
 ## Step 3: Merge (no confirmation)
 
 ```bash
