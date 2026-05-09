@@ -166,8 +166,8 @@ output behind `[ "${DEBUG:-0}" = "1" ]`.
 
 **Grep hints**
 ```sh
-grep -cE '^[[:space:]]*(ux_)' "$FILE"
-grep -cE '^[[:space:]]*(echo|printf|tput) ' "$FILE"
+grep -cE 'ux_' "$FILE"
+grep -cE '(echo|printf|tput) ' "$FILE"
 ```
 
 ### Check 8 — Input Validation
