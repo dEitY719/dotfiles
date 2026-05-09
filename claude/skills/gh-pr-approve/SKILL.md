@@ -58,10 +58,10 @@ concern must be verified as fixed, tracked, or acceptably declined.
 
 ## Step 2: Fetch Review Material
 
-Decide path by diff size: `gh pr view <N> --json additions,deletions`.
+Decide path by diff size: `gh pr view <N> --repo $TARGET_REPO --json additions,deletions`.
 When `additions + deletions` meets the threshold defined in
 `references/large-diff-delegation.md`, dispatch an Explore subagent
-per that file and skip loading the full diff into the main context;
+following that file and skip loading the full diff into the main context;
 use the returned BLOCKER/FOLLOW-UP/PRAISE summary as the input for
 Step 3. Below the threshold, fall back to the inline path.
 
