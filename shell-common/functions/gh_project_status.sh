@@ -102,7 +102,7 @@ _gh_project_status_sync() {
         && [ "${_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS-0}" != "1" ]; then
         local _decision
         _decision=$(gh pr view "$_num" --json reviewDecision \
-                    --jq '.reviewDecision // "REVIEW_REQUIRED"' 2>/dev/null) \
+                    --jq '.reviewDecision? // empty' 2>/dev/null) \
             || _decision="UNKNOWN"
         if [ -z "$_decision" ]; then
             _decision="UNKNOWN"
@@ -232,37 +232,41 @@ _gh_project_status_set_and_verify() {
         _retry_label=' after 1 retry'
     fi
 
-    sleep "${_GH_PROJECT_STATUS_VERIFY_SLEEP-1}"
-    _actual=$(_gh_project_status_query_current "$_kind" "$_num")
+    # Verify pair as a 2-attempt loop: sleep → query → compare. If attempt 1
+    # mismatches, log the race and re-mutate before attempt 2. A third
+    # attempt is intentionally not made — it would risk a write-loop with
+    # the builtin workflow. Always returns 0 (best-effort policy, #393).
+    local _attempt
+    for _attempt in 1 2; do
+        sleep "${_GH_PROJECT_STATUS_VERIFY_SLEEP-1}"
+        _actual=$(_gh_project_status_query_current "$_kind" "$_num")
 
-    if [ "$_actual" = "$_target" ]; then
-        printf '[gh-project-status] %s #%s -> "%s" (verified%s)\n' \
-            "$_kind" "$_num" "$_target" "$_retry_label"
-        return 0
-    fi
+        if [ "$_actual" = "$_target" ]; then
+            if [ "$_attempt" -eq 1 ]; then
+                printf '[gh-project-status] %s #%s -> "%s" (verified%s)\n' \
+                    "$_kind" "$_num" "$_target" "$_retry_label"
+            else
+                printf '[gh-project-status] %s #%s -> "%s" (verified after re-set)\n' \
+                    "$_kind" "$_num" "$_target"
+            fi
+            return 0
+        fi
 
-    # Race: a builtin workflow (or another actor) overwrote our mutation.
-    # Re-set once. Logging both transitions so the user can audit afterwards.
-    printf '[gh-project-status] %s #%s reverted to "%s", re-setting...\n' \
-        "$_kind" "$_num" "$_actual" >&2
-    if ! _gh_project_status_mutate "$_proj" "$_item" "$_field" "$_option"; then
-        printf '[gh-project-status] ERROR: re-set mutation failed for %s #%s\n' \
-            "$_kind" "$_num" >&2
-        return 0
-    fi
+        if [ "$_attempt" -eq 2 ]; then
+            printf '[gh-project-status] ERROR: %s #%s verify failed twice (target="%s", actual="%s"). Manual intervention may be needed.\n' \
+                "$_kind" "$_num" "$_target" "$_actual" >&2
+            return 0
+        fi
 
-    sleep "${_GH_PROJECT_STATUS_VERIFY_SLEEP-1}"
-    _actual=$(_gh_project_status_query_current "$_kind" "$_num")
-    if [ "$_actual" = "$_target" ]; then
-        printf '[gh-project-status] %s #%s -> "%s" (verified after re-set)\n' \
-            "$_kind" "$_num" "$_target"
-    else
-        # Fail loud — a third mutation would risk a write-loop with the
-        # builtin workflow. Surface the mismatch so the operator can decide.
-        printf '[gh-project-status] ERROR: %s #%s verify failed twice (target="%s", actual="%s"). Manual intervention may be needed.\n' \
-            "$_kind" "$_num" "$_target" "$_actual" >&2
-    fi
-    return 0
+        # Race observed — re-set once before the second verify attempt.
+        printf '[gh-project-status] %s #%s reverted to "%s", re-setting...\n' \
+            "$_kind" "$_num" "$_actual" >&2
+        if ! _gh_project_status_mutate "$_proj" "$_item" "$_field" "$_option"; then
+            printf '[gh-project-status] ERROR: re-set mutation failed for %s #%s\n' \
+                "$_kind" "$_num" >&2
+            return 0
+        fi
+    done
 }
 
 # Best-effort read of the current Status for an issue/PR. Returns the first
