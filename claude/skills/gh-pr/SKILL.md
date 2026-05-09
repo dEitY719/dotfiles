@@ -83,6 +83,24 @@ printf '\n---\n<details>\n<summary>🤖 AI Metrics · 📊 ~%s tokens · 👤 ~%
   "$TOKENS" "$HUMAN_H" "$ELAPSED" "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
 ```
 
+## Step 4.5: Lint Guard (pre-push)
+
+Read `references/lint-guard.md` for tool detection priority, scope, and
+the bypass policy. Source the helper and run it against `$BASE_BRANCH`
+**before** the push in Step 5:
+
+```bash
+. "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_pr_lint.sh"
+_gh_pr_lint_run "$BASE_BRANCH" || {
+    printf 'gh:pr stopped at Step 4.5 (lint guard).\n' >&2
+    exit 1
+}
+```
+
+Hard-fails when any detected tool reports lint errors. Auto-skips when
+no tools are detected, when the change set is empty, or when
+`GH_PR_LINT_BYPASS=1` is set.
+
 ## Step 5: Push and Create
 
 Read `references/push-and-create.md` for the upstream-state push policy and
