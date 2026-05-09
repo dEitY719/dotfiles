@@ -78,12 +78,12 @@ source "${SHELL_COMMON}/path/to/file.sh"
 
 **Interactive guard** — every file that produces output must start with:
 ```bash
-[[ $- == *i* ]] || return 0
+case $- in *i*) ;; *) return 0 ;; esac
 ```
 
 **No direct writes to `~/.bashrc`** — use symlinks via `setup.sh`.
 
-**After adding any new module**: update the parent `AGENTS.md` Context Map.
+**After adding a module**: update the `AGENTS.md` in the module root.
 
 **On lint/test failure**: fix the root cause — do not use `--no-verify` or skip hooks.
 
@@ -96,4 +96,4 @@ source "${SHELL_COMMON}/path/to/file.sh"
 - Git strategy: Semantic commits (`Type: Summary`)
 - Naming: `snake_case` for functions and filenames; dash-form for user-facing aliases
 - No emojis anywhere (token efficiency)
-- AGENTS.md files must stay under 100 lines each
+- For AGENTS.md files, aim to keep them under 100 lines each
