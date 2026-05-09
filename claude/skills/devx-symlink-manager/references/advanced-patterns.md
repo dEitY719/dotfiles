@@ -13,7 +13,7 @@ git add config.json.template
 echo "bash/<category>/config.json" >> .gitignore
 
 # Add template copy logic to init function
-if [[ ! -f "$source" ]] && [[ -f "$source.template" ]]; then
+if [ ! -f "$source" ] && [ -f "$source.template" ]; then
     cp "$source.template" "$source"
 fi
 ```
