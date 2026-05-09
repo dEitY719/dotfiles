@@ -161,6 +161,7 @@ gh_audit_builtin_workflows() {
     #
     # GraphQL variables ($owner, $repo) are bound via -f below — single-quoted
     # query string is intentional (would otherwise interpolate at shell level).
+    # Variables: $owner String!, $repo String!
     # shellcheck disable=SC2016
     local _records
     _records=$(gh api graphql \

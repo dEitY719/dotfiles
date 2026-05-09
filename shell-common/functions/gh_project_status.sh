@@ -134,6 +134,8 @@ _gh_project_status_sync() {
     # Single query: per projectV2 item, return
     #   project.id | item.id | field.id | target_option.id | current_status_name
     # The current_status_name is needed for --only-from gating.
+    #
+    # Variables: $owner String!, $repo String!, $number Int!, $target String!
     local _records
     _records=$(gh api graphql \
         -f query="
@@ -296,6 +298,7 @@ _gh_project_status_query_current() {
     _owner="${_resolved%% *}"
     _repo="${_resolved#* }"
 
+    # Variables: $owner String!, $repo String!, $number Int!
     gh api graphql \
         -f query="
           query(\$owner: String!, \$repo: String!, \$number: Int!) {
@@ -348,6 +351,7 @@ EOF
 _gh_project_status_mutate() {
     # GraphQL variables ($proj, $item, ...) are NOT shell vars — they
     # are bound via the -f flags below, so single quotes are intended.
+    # Variables: $proj ID!, $item ID!, $field ID!, $option String!
     # shellcheck disable=SC2016
     gh api graphql \
         -f query='
@@ -391,6 +395,7 @@ _gh_pr_closing_issue_numbers() {
 
     # GraphQL variables ($owner, $repo, $num) are bound via the -f/-F flags
     # below, so single quotes around the query are intentional.
+    # Variables: $owner String!, $repo String!, $num Int!
     # shellcheck disable=SC2016
     gh api graphql \
         -f owner="$_owner" -f repo="$_name" -F num="$_pr" \
