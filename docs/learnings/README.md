@@ -103,6 +103,15 @@ inline diff 코멘트는 `/pulls/{n}/comments/{id}/replies` (스레드 유지),
 git-crypt failed`로 막힌다. AI 에이전트의 `isolation: "worktree"` 병렬
 디스패치 실패 시 sequential 전환 또는 `--no-checkout` + 수동 unlock.
 
+### 5. `gh api graphql`의 `-f` vs `-F` 타입 캐스팅 함정
+
+**파일**: [`gh-api-type-casting.md`](./gh-api-type-casting.md)
+
+`-f` 는 raw String (`String!`/`ID!`), `-F` 는 type inference (`Int!`).
+숫자만 있는 ID 문자열을 `-F` 로 넘기면 자동 Int 캐스팅 → 422 silent fail.
+호출부에 `# Variables: $x Type!, ...` 주석으로 사람-가독 타입 계약 박기 +
+bats 휴리스틱 + pre-commit warning 으로 회귀 가드.
+
 ## 성장 전략
 
 - 3–10개: 플랫 구조 유지 (현재)
