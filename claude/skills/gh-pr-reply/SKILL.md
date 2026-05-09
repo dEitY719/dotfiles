@@ -108,6 +108,26 @@ fi
 
 On failure: `⚠️  ai-metrics comment failed — continuing.`
 
+## Step 8: Solo-Repo Auto-Approve (opt-in, soft-fail)
+
+After Step 7, optionally move the PR card from `In review` to `Approved`.
+**Off by default** — fires only when all four guards pass:
+
+| Guard | Pass condition |
+|---|---|
+| G1 | `GH_PR_REPLY_AUTO_APPROVE_REPOS` (`owner/repo` CSV) contains `$TARGET_REPO` (case-exact) |
+| G2 | Step 2.5 did NOT early-exit (`COMMENT_COUNT >= 1`) |
+| G3 | PR `state == OPEN` AND `isDraft == false` |
+| G4 | PR `reviewDecision` is empty/`null` or `APPROVED` (never `REVIEW_REQUIRED` / `CHANGES_REQUESTED`) |
+
+On all-pass: emit the audit-trace line and call
+`_gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "In review"`
+with `_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1` scoped to that single
+call (prefix form, never `env` — it is a shell function). Helper rc
+0/2 is soft-fail and never blocks the report. Full SSOT (4-guard
+algorithm, audit format, defense-in-depth, ties to #275/#231/#393/#397):
+`references/auto-approve.md`.
+
 ## Constraints
 
 - **Never skip a reply** — even "Declined: out of scope" counts. Bot comments included. This is the core contract of the skill.
