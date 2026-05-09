@@ -61,10 +61,10 @@ _parse_yaml_defaults_by_prefix() {
         /^default_labels:[[:space:]]*$/ { in_dl = 1; next }
         in_dl && /^[^[:space:]]/ { in_dl = 0; in_btp = 0 }
         in_dl && /^[[:space:]]+by_title_prefix:[[:space:]]*$/ { in_btp = 1; next }
-        in_btp && /^[[:space:]]+[A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*\[/ {
+        in_btp && /^[[:space:]]+[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*:[[:space:]]*\[/ {
             key = $0
             sub(/^[[:space:]]+/, "", key)
-            sub(/:.*/, "", key)
+            sub(/[[:space:]]*:.*/, "", key)
             if (key != want) next
             line = $0
             sub(/^[^\[]*\[/, "", line)
@@ -87,9 +87,9 @@ _parse_yaml_defaults_milestone() {
     [ -n "$_yml" ] && [ -r "$_yml" ] || return 1
     awk '
         /^[[:space:]]*#/ { next }
-        /^milestone:[[:space:]]*/ {
+        /^[[:space:]]*milestone:[[:space:]]*/ {
             v = $0
-            sub(/^milestone:[[:space:]]*/, "", v)
+            sub(/^[[:space:]]*milestone:[[:space:]]*/, "", v)
             sub(/[[:space:]]*#.*$/, "", v)
             sub(/[[:space:]]+$/, "", v)
             gsub(/^["'\'']|["'\'']$/, "", v)
