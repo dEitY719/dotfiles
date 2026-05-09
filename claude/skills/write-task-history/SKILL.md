@@ -1,5 +1,5 @@
 ---
-name: write-task-history
+name: write:task-history
 description: >-
   Write task history from current conversation to a daily task list file.
   Generates two copy-paste-ready formats: JIRA ticket (plain text with section

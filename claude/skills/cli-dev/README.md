@@ -35,5 +35,5 @@ User: "CLI에 survey schema 추가해"
 
 ## Related
 
-- `requirement-workflow` - Full 4-phase development
+- `gh:issue-flow` - Issue → implement → commit → PR pipeline
 - `tox-lint` - Code quality checks

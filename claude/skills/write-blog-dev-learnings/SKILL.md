@@ -10,7 +10,7 @@ description: >-
   정리", "동료한테 공유할 글", "오늘 삽질한 거 글로", or any request to turn a painful technical
   experience into a shareable narrative. Also trigger when the user recounts a
   debugging story and wants to preserve it. Do NOT trigger for formal RCA
-  documents (use write-rca-doc), API documentation, README files, or
+  documents (use write:rca), API documentation, README files, or
   non-narrative technical docs.
 ---
 
