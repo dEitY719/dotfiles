@@ -11,8 +11,11 @@ description: >-
   compress — the issue is reused for PR drafts and blog posts, so preserve
   reasoning, decisions, and concrete details.
   Accepts an optional remote name argument (e.g., `/gh-issue-create upstream`) to
-  target a different remote's repository instead of origin. Accepts
-  `-h`/`--help`/`help` to print usage.
+  target a different remote's repository instead of origin. When the
+  target repo ships a `.gh-issue-defaults.yml`, default labels and a
+  milestone are auto-applied per that file (Step 2.5); pass
+  `--no-auto-labels` to opt out or `--auto-label-debug` for the dispatch
+  trace. Accepts `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Grep
 ---
 
@@ -33,11 +36,19 @@ number + URL at the end.
 
 Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 3.5.
 
-Confirm we're in a git repo (`git rev-parse --show-toplevel`), pick the
-target remote (arg #1 if given, else `origin`), and resolve it to
-`TARGET_REPO=<owner>/<repo>`. If the remote does not exist, list
-`git remote -v` and stop — never silently fall back to `origin`. Full
-substeps in `references/repo-resolution.md`.
+Parse the positional remote argument and the optional flags before
+resolving the repo:
+
+- Remote name — first non-flag positional arg, default `origin`.
+- `--no-auto-labels` — skip Step 2.5 entirely; user `--label` flags
+  remain in effect. Default off.
+- `--auto-label-debug` — verbose stderr trace of Stage-1 detection and
+  the kept/dropped label sets. Default off.
+
+Confirm we're in a git repo (`git rev-parse --show-toplevel`) and resolve
+the remote to `TARGET_REPO=<owner>/<repo>`. If the remote does not
+exist, list `git remote -v` and stop — never silently fall back to
+`origin`. Full substeps in `references/repo-resolution.md`.
 
 ## Step 2: Classify the Conversation
 
@@ -57,6 +68,38 @@ Pick exactly one conventional-commit prefix as the dominant intent.
 모호하면 묻지 말고 가장 보수적인 `misc` 로 떨어진다. 대형 `feat`
 휴리스틱(영향 컴포넌트 ≥3 / NF 명시 / 결정 누적 — 둘 이상)은
 `references/templates/feat.md` "대형 feat 가이드" 를 따른다.
+
+## Step 2.5: Auto-labels + Milestone (opt-in via SSOT)
+
+If `--no-auto-labels` was passed in Step 1, skip this step entirely.
+
+Otherwise check `$TARGET_REPO` for the Stage-1 signals listed in
+`references/auto-labels.md` ("Stage 1 — Repo signal detection"). If no
+signal fires, skip and continue.
+
+When a signal fires:
+
+1. Source `${SHELL_COMMON}/functions/parse_yaml_defaults.sh` and load
+   `static_labels`, `prefix_labels` (using the prefix from Step 2), and
+   `milestone_value` from `.gh-issue-defaults.yml`.
+2. Compose the candidate label set as
+   `static_labels ∪ prefix_labels ∪ user_labels`. User-supplied
+   `--label` values are merged, never overridden.
+3. Validate every candidate against
+   `gh label list --repo "$TARGET_REPO" --json name --jq '.[].name'`.
+   Missing labels emit `auto-labels: label '<x>' not found in
+   $TARGET_REPO — skip` on stderr and are dropped. **Never** auto-create
+   labels.
+4. Resolve the milestone — `auto`, `none`, or an exact title — per
+   `references/auto-labels.md` ("Dispatch order"). Unknown names
+   warn-and-skip.
+5. Stash the kept labels and resolved milestone for Step 4 to thread
+   into `gh issue create`.
+
+If `--auto-label-debug` is set, print Stage-1 evaluation, loaded YAML
+values, and kept/dropped sets to stderr before Step 4 runs. The full
+schema, dispatch order, and compatibility matrix live in
+`references/auto-labels.md`.
 
 ## Step 3: Draft the Issue Body
 
@@ -95,11 +138,20 @@ BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
 # ... write body to "$BODY" ...
 printf '\n---\n<details>\n<summary>🤖 AI Metrics · 📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min</summary>\n\n<!-- ai-metrics -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics -->\n\n</details>\n' \
   "$TOKENS" "$HUMAN_H" "$ELAPSED" "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
-gh issue create --repo "$TARGET_REPO" --title "<title>" --body-file "$BODY"
+gh issue create --repo "$TARGET_REPO" --title "<title>" --body-file "$BODY" \
+    "${LABEL_ARGS[@]}" "${MILESTONE_ARGS[@]}"
 ```
 
-`--assignee` / `--label` / `--milestone` 은 사용자가 명시 요청하지
-않은 한 추가하지 않는다. 확인 질문하지 말고 즉시 실행.
+`LABEL_ARGS` / `MILESTONE_ARGS` are the arrays Step 2.5 prepared (one
+`--label <name>` per kept label; `--milestone <title>` if resolved).
+Both are empty when Step 2.5 was skipped — the `gh issue create`
+invocation degrades to its original form.
+
+`--assignee` is still only added when the user asks. User-supplied
+`--label` flags survive Step 2.5 (union with auto labels) unless
+`--no-auto-labels` was set, in which case Step 2.5 is bypassed and the
+user's labels pass straight through `LABEL_ARGS` from Step 1.
+확인 질문하지 말고 즉시 실행.
 
 ## Step 5: Report
 
@@ -111,7 +163,10 @@ Issue #123 created: https://github.com/owner/repo/issues/123
 
 ## Constraints
 
-- `--assignee @me` / 라벨은 사용자 요청이 있을 때만 추가.
+- `--assignee @me` 는 사용자 요청이 있을 때만 추가.
+- 라벨/마일스톤 은 (a) 사용자 명시 또는 (b) Step 2.5 의 SSOT 기반
+  자동 적용 일 때만 부착. 자동 적용 결과는 항상 `gh label list` 검증
+  통과한 라벨만 유지 — 미존재 라벨 자동 생성 금지.
 - 항상 `--repo "$TARGET_REPO"` — 암묵적 repo 감지 의존 금지.
 - 사용자 지정 remote 가 없으면 즉시 실패.
 - discussion log 를 2~3줄로 압축하지 말 것.

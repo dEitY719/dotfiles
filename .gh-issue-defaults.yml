@@ -1,0 +1,21 @@
+# Repo SSOT for gh:issue-create auto-labelling.
+#
+# Read by claude/skills/gh-issue-create (Step 2.5) when a repo signal is
+# detected — see references/auto-labels.md for the full dispatch order.
+# Schema:
+#   default_labels.static          - labels appended to every new issue
+#   default_labels.by_title_prefix - conventional-commit prefix -> labels
+#   milestone                      - "auto" | "none" | "<exact name>"
+
+default_labels:
+  static: []
+  by_title_prefix:
+    feat: [feat]
+    fix: [bug]
+    refactor: [refactor]
+    test: [test]
+    ci: [ci]
+    docs: [documentation]
+    chore: []
+
+milestone: none
