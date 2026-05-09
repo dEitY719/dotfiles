@@ -98,8 +98,11 @@ exist in the repo (`gh label list`) — never create new ones. See
 ## Step 7: Sync Project Board Status
 
 Read `references/project-board-sync.md` for the helper-source snippet that
-pushes the new PR's project-board card to `In review`. Auto-skips when no
-projectV2 board is attached.
+pushes the new PR's project-board card to `In review`. The reference also
+documents the PostToolUse hook auto-skip (issue #390): if a
+`post-gh-pr-create.sh` / `post-pr-create-status.sh` hook is installed, this
+step is delegated to the hook and the inline sync is skipped to avoid
+triple-syncing. Auto-skips when no projectV2 board is attached either way.
 
 ## Step 8: Report
 
