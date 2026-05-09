@@ -6,7 +6,7 @@ description: >-
   /gh-pr-approve, /gh:pr-approve, "approve PR 99", "#99 리뷰 승인", or
   "re-review requested". Self-authored PRs cannot be approved; they use
   analysis-only, comment-only, or admin-merge paths.
-allowed-tools: Bash, Read, Grep, Glob
+allowed-tools: Bash, Read, Grep, Glob, Agent
 ---
 
 # gh:pr-approve - Review, Approve, or Handle Self-PR
@@ -58,10 +58,17 @@ concern must be verified as fixed, tracked, or acceptably declined.
 
 ## Step 2: Fetch Review Material
 
-In parallel: `gh pr diff <N>`, commits JSON, and the three comment
-endpoints in `references/review-criteria.md`. Apply that checklist. In
-re-review mode, map each prior concern to a fixing commit, tracking issue,
-or acceptable author reply.
+Decide path by diff size: `gh pr view <N> --json additions,deletions`.
+When `additions + deletions` meets the threshold defined in
+`references/large-diff-delegation.md`, dispatch an Explore subagent
+per that file and skip loading the full diff into the main context;
+use the returned BLOCKER/FOLLOW-UP/PRAISE summary as the input for
+Step 3. Below the threshold, fall back to the inline path.
+
+Inline path — in parallel: `gh pr diff <N>`, commits JSON, and the
+three comment endpoints in `references/review-criteria.md`. Apply
+that checklist. In re-review mode, map each prior concern to a
+fixing commit, tracking issue, or acceptable author reply.
 
 ## Step 3: Classify Findings
 
@@ -96,10 +103,15 @@ if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
 else
     gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
       -X POST \
-      -f body="<!-- ai-metrics:gh-pr-approve tokens=${TOKENS:-5000} human_h=1 ai_min=$ELAPSED -->
-🤖 PR 리뷰: ~$ELAPSED min · 👤 ~1 h (estimate)"
+      -f body="<!-- ai-metrics:gh-pr-approve ai_min=$ELAPSED -->
+🤖 PR 리뷰: ~$ELAPSED min"
 fi
 ```
+
+The `tokens` and `human_h` fields are intentionally omitted: this skill
+has no real measurement source for either, and the prior `${TOKENS:-5000}`
+/ `human_h=1` placeholders would silently inject the same false numbers
+into every aggregator (issue #403). Only `ai_min` is reported.
 
 On failure: `⚠️  ai-metrics comment failed — continuing.`
 
