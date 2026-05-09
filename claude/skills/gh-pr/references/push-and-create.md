@@ -19,3 +19,9 @@ Detect upstream with `git rev-parse --symbolic-full-name @{u} 2>/dev/null`
 Once the push succeeds, create the PR with the command and flags documented
 in `references/pr-body-template.md` (mktemp body file, `--assignee @me`,
 labels applied after creation).
+
+The base branch passed to `gh pr create --base` is `$BASE_BRANCH` from
+Step 1a — that variable is set by the stacked-PR detection block (see
+`references/stacked-pr.md`) and may be either the repo default branch
+or the head ref of an auto-detected / explicitly-overridden parent PR.
+Always use the variable; never hard-code the default branch name here.

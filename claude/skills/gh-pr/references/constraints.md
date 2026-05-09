@@ -11,9 +11,20 @@ either "force push" or "rebase first" — do not pick for them.
 
 ## Base branch
 
-Never target a base other than the repo's default branch (resolved via
-`gh repo view --json defaultBranchRef`) unless the user explicitly asked
-for a different base on the slash-command invocation.
+The base branch is decided in Step 1a (`references/stacked-pr.md`):
+
+1. Default branch (`gh repo view --json defaultBranchRef`) when the
+   repo has no stacked-PR signals — solo / non-stacked workflow.
+2. Auto-detected parent PR's head ref when the repo opts into stacked
+   PRs *and* exactly one open PR is an ancestor of HEAD.
+3. The user-supplied target when one of `--no-stack` / `--parent-pr <N>`
+   / `--base <branch>` was passed (mutually exclusive — combining any
+   two aborts).
+
+Never target any base outside those three sources. In particular,
+never auto-stack on a repo that does not match `is_stacked_pr_repo`,
+and never silently downgrade to the default branch when the user
+explicitly passed `--parent-pr` or `--base`.
 
 ## AI footers
 
