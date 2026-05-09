@@ -2,6 +2,8 @@
 # shell-common/functions/category_help.sh
 # categoryHelp - shared between bash and zsh
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _category_help_ensure_loaded() {
     # Best-effort: if my-help isn't loaded yet, attempt to source it.
     if ! type my_help_impl >/dev/null 2>&1; then

@@ -6,6 +6,8 @@
 
 # NOTE: UX library is loaded by the loader before functions/ — no need to reload here
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _crt_help_summary() {
     ux_info "Usage: crt-help [section|--list|--all]"
     ux_bullet "sections"

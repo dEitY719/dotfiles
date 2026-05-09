@@ -17,6 +17,9 @@
 # Each helper exits 1 only on missing-file / empty-file argument errors.
 
 # Static labels under `default_labels.static: [a, b]` or block-list form.
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 _parse_yaml_defaults_static() {
     _yml="$1"
     [ -n "$_yml" ] && [ -r "$_yml" ] || return 1

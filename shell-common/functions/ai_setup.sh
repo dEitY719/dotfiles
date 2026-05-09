@@ -7,6 +7,8 @@
 #
 # Usage: ai-setup
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 ai_setup() {
     # zsh compatibility
     if [ -n "${ZSH_VERSION-}" ]; then

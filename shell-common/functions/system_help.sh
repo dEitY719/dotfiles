@@ -4,6 +4,8 @@
 
 # --- sys_help (from sys_help.sh) ---
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _sys_help_summary() {
     ux_info "Usage: sys-help [section|--list|--all]"
     ux_bullet "sections"

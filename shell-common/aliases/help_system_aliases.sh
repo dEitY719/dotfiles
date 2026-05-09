@@ -1,5 +1,8 @@
 #!/bin/sh
 # Help system aliases
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 alias category-help='category_help'
 alias register-help='register_help'
 alias ollama-help='ollama_help'

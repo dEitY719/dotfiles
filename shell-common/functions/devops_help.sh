@@ -4,6 +4,8 @@
 
 # --- docker_help (from docker_help.sh) ---
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _docker_help_summary() {
     ux_info "Usage: docker-help [section|--list|--all]"
     ux_bullet "sections"

@@ -2,6 +2,8 @@
 # shell-common/functions/install_ollama_helper.sh
 # Convenience wrapper for Ollama WSL installation
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 install_ollama() {
     # Try SHELL_COMMON first, then fallback to default location
     local script_path="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/custom/install-ollama.sh"

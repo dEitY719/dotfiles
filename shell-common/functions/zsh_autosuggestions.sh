@@ -8,6 +8,8 @@
 # Load UX Library (if not already loaded)
 # ═══════════════════════════════════════════════════════════════
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 if ! type ux_header &>/dev/null 2>&1; then
     SHELL_COMMON="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
     # shellcheck source=/dev/null

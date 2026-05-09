@@ -15,6 +15,9 @@
 # 전체 GPU 상태 진단 (5-part detailed diagnostic)
 # WSL2 환경에 최적화된 범용 GPU 진단 스크립트
 # 사용 예: gpustatus
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 gpustatus() {
     # dotfiles에서 gpu_status.sh 스크립트 경로
     local gpu_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/gpu_status.sh"

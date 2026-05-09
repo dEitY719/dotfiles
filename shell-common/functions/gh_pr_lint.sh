@@ -22,6 +22,8 @@
 #   1 — at least one tool failed; caller should block the push
 #   2 — usage error (missing base-branch argument)
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _gh_pr_lint__log() {
     printf '[lint guard] %s\n' "$*"
 }

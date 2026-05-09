@@ -2,6 +2,8 @@
 # shell-common/tools/external/gemini.sh
 # Gemini CLI helper - shared across bash and zsh
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 : <<'GEMINI_DOC'
 ==========================================================
 Gemini CLI Dotfiles Helper - Getting Started Guide

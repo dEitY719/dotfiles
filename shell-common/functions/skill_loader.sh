@@ -3,6 +3,8 @@
 # Cross-CLI skill loader for Claude Code, Codex, Gemini, etc.
 # Provides interactive and programmatic access to AI agent skills
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _skill_loader() {
     # Load UX library (unified library at shell-common/tools/ux_lib/)
     source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"

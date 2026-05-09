@@ -4,6 +4,9 @@
 # Provides unified interface for both WSL and Docker Ollama environments
 
 # Load UX library - use dynamic path detection with fallback
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 _ux_lib_path="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh"
 if [ -f "$_ux_lib_path" ]; then
     source "$_ux_lib_path" 2>/dev/null || {
