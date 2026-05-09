@@ -83,7 +83,8 @@ def render(
     except ImportError:
         print("ERROR: playwright not installed.", file=sys.stderr)
         print(
-            "Run: cd .claude/skills/devx-excalidraw-diagram/references && uv sync && uv run playwright install chromium",
+            "Run: cd .claude/skills/devx-excalidraw-diagram/references"
+            " && uv sync && uv run playwright install chromium",
             file=sys.stderr,
         )
         sys.exit(1)
