@@ -51,9 +51,11 @@ behavioural change.
    │   prints "Stacking on PR #<num> (auto-detected)"
    │   no prompt
    │
-   └─ 2+ candidates → ask the user once
-       "Multiple parent candidates: PR #N1, #N2. Stack on which? [N1/N2/main]"
-       (selection becomes BASE_BRANCH + PARENT_PR or default)
+   └─ 2+ candidates → dispatch returns rc=4 + candidate list on stderr
+       (bash is non-interactive in Claude Code — `read` would hang).
+       The AI executor asks the user via the platform's question
+       primitive, then re-invokes `gh:pr` with `--parent-pr <N>` /
+       `--base <branch>` / `--no-stack` based on the answer.
 ```
 
 ## Manual override (escape hatches)
@@ -83,7 +85,7 @@ is_stacked_pr_repo() {
     local _f
     for _f in CLAUDE.md AGENTS.md .claude/github-integration.md; do
         [ -f "$_repo_root/$_f" ] || continue
-        grep -qE 'claude-enter-issue|stacked.PR|Depends on #' \
+        grep -qE 'claude-enter-issue|stacked[[:space:]-]?PR|Depends on #' \
             "$_repo_root/$_f" 2>/dev/null && return 0
     done
 
@@ -123,6 +125,10 @@ parse_stacked_args() {
             --parent-pr)
                 _flags_seen=$((_flags_seen + 1))
                 STACK_MODE=parent-pr
+                if [ $# -lt 2 ]; then
+                    printf 'gh:pr: --parent-pr requires a PR number\n' >&2
+                    return 3
+                fi
                 STACK_PARENT="$2"
                 if ! printf '%s' "${STACK_PARENT-}" | grep -qE '^[1-9][0-9]*$'; then
                     printf 'gh:pr: --parent-pr requires a positive integer (got %s)\n' \
@@ -134,6 +140,10 @@ parse_stacked_args() {
             --base)
                 _flags_seen=$((_flags_seen + 1))
                 STACK_MODE=base
+                if [ $# -lt 2 ]; then
+                    printf 'gh:pr: --base requires a branch name\n' >&2
+                    return 3
+                fi
                 STACK_BASE="$2"
                 if [ -z "${STACK_BASE-}" ]; then
                     printf 'gh:pr: --base requires a branch name\n' >&2
@@ -258,16 +268,16 @@ case "$STACK_MODE" in
                     BASE_BRANCH="${CANDIDATES#*:}"
                     printf 'Stacking on PR #%s (auto-detected)\n' "$PARENT_PR" ;;
                 *)
-                    # 2+ candidates — ask the user once.
-                    printf 'Multiple parent candidates:\n%s\n' "$CANDIDATES"
-                    read -r CHOICE
-                    if [ "$CHOICE" = "$DEFAULT_BRANCH" ] || [ "$CHOICE" = "main" ]; then
-                        BASE_BRANCH="$DEFAULT_BRANCH" ; PARENT_PR=
-                    else
-                        PARENT_PR="$CHOICE"
-                        BASE_BRANCH=$(gh pr view "$PARENT_PR" \
-                            --json headRefName -q .headRefName)
-                    fi
+                    # 2+ candidates — bash cannot prompt safely (Claude Code is
+                    # non-interactive; `read` would hang the runtime). Print the
+                    # candidate set and exit the auto branch with both vars
+                    # unset; the AI executor handles the choice via the
+                    # platform's question primitive (e.g. AskUserQuestion in
+                    # Claude Code) and re-runs the case for `parent-pr` /
+                    # `base` / `no-stack` based on the user's reply.
+                    printf 'Multiple parent candidates:\n%s\n' "$CANDIDATES" >&2
+                    printf 'gh:pr: ambiguous parent — ask user, then re-invoke with --parent-pr / --base / --no-stack\n' >&2
+                    return 4
                     ;;
             esac
         else
@@ -280,6 +290,13 @@ esac
 `BASE_BRANCH` flows into Step 5 (`gh pr create --base "$BASE_BRANCH"`).
 `PARENT_PR`, when set, flows into the body-template "Depends on #N"
 insertion documented in `pr-body-template.md`.
+
+When the dispatch returns rc=4 (ambiguous parent), the AI executor — not
+the shell — must surface the candidate list to the user via the
+platform's question primitive (e.g. `AskUserQuestion` in Claude Code).
+Once the user picks one, re-invoke `gh:pr` with the matching escape
+hatch flag (`--parent-pr <N>`, `--base <branch>`, or `--no-stack`).
+This avoids hanging on `read` in non-interactive runtimes.
 
 ## Compatibility matrix (what the bats suite must keep covering)
 
