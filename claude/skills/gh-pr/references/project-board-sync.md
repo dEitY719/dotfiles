@@ -3,6 +3,40 @@
 After the PR is created, sync cards on the kanban so reviewers see the PR and
 the linked Issues are at the right column without a manual drag.
 
+## Hook auto-skip (issue #390)
+
+If a PostToolUse hook is going to do this work, the skill must NOT run the
+inline sync — triple-syncing (skill + hook + GitHub builtin) wastes tokens
+and widens the race window. Detect the hook by file presence and skip:
+
+```bash
+hook_skip=0
+for hook_path in \
+    "${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}/.claude/hooks/post-pr-create-status.sh" \
+    "$HOME/.claude/hooks/post-gh-pr-create.sh" \
+    "$HOME/dotfiles/claude/hooks/post-gh-pr-create.sh"
+do
+    if [ -x "$hook_path" ]; then
+        hook_skip=1
+        printf '[gh-pr] board sync delegated to PostToolUse hook (%s) — skipping inline.\n' "$hook_path" >&2
+        break
+    fi
+done
+
+if [ "$hook_skip" -eq 0 ]; then
+    # Run the snippet below.
+    :
+fi
+```
+
+The three paths cover (a) AgentToolbox-style in-repo hook, (b) a runtime
+copy at `~/.claude/hooks/`, and (c) the dotfiles SSOT location. When **any**
+exists, the inline snippet is skipped — the hook (or the AgentToolbox hook)
+will handle it. When none exist, the inline snippet runs as a fallback,
+preserving behavior for environments without hook support. Idempotence of
+`_gh_project_status_sync` (verify pair, issue #393) absorbs the case where
+both a dotfiles hook and an AgentToolbox hook fire.
+
 ## Why "In review" with no guard (PR card)
 
 The PR lifecycle is linear. `In review` is the canonical resting state from

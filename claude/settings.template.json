@@ -52,6 +52,17 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/dotfiles/claude/hooks/post-gh-pr-create.sh"
+          }
+        ]
+      }
     ]
   },
   "enabledPlugins": {
