@@ -1,9 +1,10 @@
 ---
-name: symlink-manager
+name: devx:symlink-manager
 description: >-
   Manage dotfiles configuration files via symbolic links following standard
-  patterns. Use when users request to manage config files with symbolic links,
-  organize dotfiles, or set up configuration management.
+  patterns. Trigger on "/devx:symlink-manager" or when users request to manage
+  config files with symbolic links, organize dotfiles, or set up configuration
+  management.
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
 ---
 

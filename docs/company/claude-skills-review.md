@@ -143,7 +143,7 @@ Anthropic의 플랫폼 진화를 따라가보면 의도가 명확합니다.
 
 **왜 최애냐면** — README, 회의 노트, 제품 아이디어가 들어오면 *5분 안에 공유 가능한 비주얼*이 나옵니다. 동료한테 "이거 봐봐" 링크 하나 던지면 설명 끝. 말보다 이미지가 빠르니까요.
 
-예시는 직접 보세요: `claude/skills/visualize/examples/` (carousel, cheatsheet, poster, dashboard, pitch-deck 등 18종)
+예시는 직접 보세요: `claude/skills/devx-visualize/examples/` (carousel, cheatsheet, poster, dashboard, pitch-deck 등 18종)
 
 ---
 
