@@ -6,10 +6,19 @@
 |---|------|---------|-------------|
 | 1 | remote-name, or `-h`/`--help`/`help` | `origin` | Git remote whose repo will own the new issue (e.g. `upstream`) |
 
+## Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--no-auto-labels` | off | Skip Step 2.5 — never auto-attach labels/milestones from `.gh-issue-defaults.yml`. User-supplied `--label` flags still apply. |
+| `--auto-label-debug` | off | Print Stage-1 detection trace plus kept/dropped label sets to stderr before issue creation. |
+
 ## Usage
 
 - `/gh-issue-create` — create issue on `origin`'s repo (the most common case)
 - `/gh-issue-create upstream` — create issue on the `upstream` remote's repo
+- `/gh-issue-create --no-auto-labels` — skip the SSOT auto-label step
+- `/gh-issue-create --auto-label-debug` — verbose label-dispatch trace
 - `/gh-issue-create -h` / `--help` / `help` — print this help
 
 ## What the skill does
@@ -37,9 +46,14 @@
 
 3. Drafts a structured issue body matching the template in the language
    the user was speaking (Korean chat → Korean issue).
-4. Creates the issue via `gh issue create --repo "$TARGET_REPO"` using a
+4. **Auto-labels (Step 2.5, opt-in)** — when `$TARGET_REPO` ships
+   `.gh-issue-defaults.yml`, attaches default labels and (optionally) a
+   milestone per that SSOT. Missing labels warn-and-skip; never auto-
+   created. Disabled by `--no-auto-labels`. See
+   `references/auto-labels.md`.
+5. Creates the issue via `gh issue create --repo "$TARGET_REPO"` using a
    temp file written by `mktemp` (avoids shell escaping bugs).
-5. Prints only `Issue #N created: <url>` — no preamble, no summary.
+6. Prints only `Issue #N created: <url>` — no preamble, no summary.
 
 ## Title format
 
@@ -60,7 +74,9 @@ A 200-line issue is fine if the conversation warranted it.
 
 ## What the skill will NOT do
 
-- Add `--assignee`, `--label`, or `--milestone` unless the user asked.
+- Add `--assignee` unless the user asked.
+- Auto-create labels that don't exist on the target repo (warn + skip).
+- Apply auto labels/milestones on repos without `.gh-issue-defaults.yml`.
 - Fall back to `origin` when the user-specified remote is missing.
 - Ask "should I create it?" — running the skill is the confirmation.
 - Rely on implicit repo detection — always passes `--repo "$TARGET_REPO"`.
