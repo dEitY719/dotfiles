@@ -45,6 +45,35 @@ Closes #<N>
 - Omit the `## Related` section entirely only when no issue number
   is known.
 
+### Stacked-PR `Depends on` insertion
+
+When Step 1a set `PARENT_PR` (auto-detected or `--parent-pr <N>` was
+passed), insert a `Depends on #<PARENT_PR>` line into the
+`## Related` section, alongside `Closes #<N>` / `Refs #<N>` if any:
+
+```markdown
+## Related
+Closes #42
+Depends on #201
+```
+
+Rules:
+
+- The line is added **only** when `PARENT_PR` is non-empty. `--no-stack`,
+  `--base <branch>`, and the no-signal solo path all leave it empty.
+- Order: any `Closes` / `Refs` line first, then `Depends on`. GitHub
+  rendering treats both as cross-references; the order is conventional.
+- Never mutate the parent PR's body to add a back-reference. Cross-PR
+  rollup is the downstream repo's job (e.g. AgentToolbox's
+  `stacked-closes-rollup.yml` workflow harvests `Depends on` lines).
+- If `## Related` would otherwise be omitted (no issue link), still add
+  the section with just the `Depends on` line:
+
+  ```markdown
+  ## Related
+  Depends on #201
+  ```
+
 ## Create Command
 
 Write the body to a unique temp file via `mktemp` (avoids concurrent-run
@@ -54,11 +83,15 @@ collisions), then run:
 BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
 # ... write the drafted body to "$BODY" ...
 gh pr create \
-  --base <base> \
+  --base "$BASE_BRANCH" \
   --title "<title>" \
   --body-file "$BODY" \
   --assignee @me
 ```
+
+`$BASE_BRANCH` is bound by Step 1a (`references/stacked-pr.md`); it is
+either the repo default branch or — when stacking — a parent PR's
+head ref / a user-supplied `--base` value.
 
 `--assignee @me` is always applied — the skill self-assigns every PR.
 
