@@ -17,16 +17,15 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 - **Why, not what** — the diff already shows what changed. The body explains motivation, trade-offs, and context.
 - **Match the repo's conventions** — if recent commits use `feat:` / `fix:` prefixes, follow suit; if they use plain sentences, follow that. Derive style from `git log --oneline -20`.
-- **Issue footer selection** — skill 이 생성 가능한 키워드는 두 개만:
-  - `Closes #N` — default. commit 이 이슈를 닫을 때.
-  - `Fixes #N` — bug fix 일 때 우선.
-- **금지 키워드**: `Refs`, `Resolves`, `See`, `References` — skill 은 절대 생성하지 않음.
-  - 사유: `Refs` / `See` / `References` 는 GitHub 가 close 안 시킴 (자동화 깨짐),
-    `Resolves` 는 GitHub 인식하지만 AgentToolbox 정책 위반.
-- 이슈 번호를 commit 에 footer 로 적지 않을 케이스:
-  - 진짜 이슈 없음 → footer 자체 생략. 가짜 이슈 번호 절대 만들지 않음.
-  - WIP / 부분 진행이라 close 시키고 싶지 않음 → footer 생략하고
-    commit 본문 내에 평문 `(part of #N)` 로 언급.
+- **Issue footer selection** — only two keywords are allowed for the skill:
+  - `Closes #N` — default; when the commit fully closes the issue.
+  - `Fixes #N` — preferred for bug fixes.
+- **Forbidden keywords**: `Refs`, `Resolves`, `See`, `References` — the skill must never generate these.
+  - Rationale: `Refs` / `See` / `References` do not trigger GitHub auto-close (breaking project-board automation), and `Resolves` violates the AgentToolbox stacked-closes-rollup policy.
+- Cases where no issue footer should be added:
+  - No actual issue → omit the footer. Never invent issue numbers.
+  - WIP / partial progress (don't want to auto-close) → omit the footer
+    and mention `(part of #N)` inline in the body instead.
 
 ## HEREDOC Commit Command
 

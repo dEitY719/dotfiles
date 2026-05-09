@@ -24,19 +24,20 @@
 # Args:
 #   $1 — path to commit message file
 #
-# Reads the file, scans every line for `^(Refs|Resolves|See|References)\s+#<num>`,
+# Reads the file, scans every line for `^(Refs|Resolves|See|References)\s+#<num>`
+# (case-insensitive — GitHub treats closing keywords as case-insensitive),
 # and prints all matches with line numbers when one or more are found.
-# Comment lines (`#...`) are skipped so that git's own commented hints
-# don't trip the check.
+# Lines starting with `#` (git commented hints) are inherently skipped because
+# the regex anchors at the start of the line and the keyword set never starts
+# with `#`. Running grep -niE directly on the file (no upstream `grep -v` filter)
+# preserves the original line numbers in the diagnostic.
 check_closing_keyword() {
     local msg_file="$1"
     [ -n "$msg_file" ] || return 0
     [ -f "$msg_file" ] || return 0
 
     local forbidden
-    forbidden=$(grep -vE '^[[:space:]]*#' "$msg_file" \
-        | grep -nE '^(Refs|Resolves|See|References)[[:space:]]+#[0-9]+' \
-        || true)
+    forbidden=$(grep -niE '^(Refs|Resolves|See|References)[[:space:]]+#[0-9]+' "$msg_file" || true)
 
     if [ -n "$forbidden" ]; then
         echo "✗ commit-msg: forbidden closing keyword detected" >&2

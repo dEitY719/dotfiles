@@ -57,7 +57,7 @@ Check in this order and use the first hit:
 ## Step 3: Draft the Commit Message
 
 Read `references/commit-message-format.md` for the message template, HEREDOC
-pattern, and `Closes` / `Fixes` rules (`Refs` / `Resolves` 금지). Match the repo's commit style
+pattern, and `Closes` / `Fixes` rules (`Refs` / `Resolves` forbidden). Match the repo's commit style
 derived from `git log`.
 
 **When there is no prior conversation context** (user ran `/gh-commit` on
