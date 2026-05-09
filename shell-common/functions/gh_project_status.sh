@@ -28,6 +28,28 @@
 # bounce an issue from "In review" back to "In progress" when a follow-up
 # fix commit lands. Status names with internal spaces are supported
 # ("Backlog,In progress"); do not pad with spaces around the comma.
+#
+# Verify pair (race absorption, issue #393):
+# After every successful mutation the helper sleeps
+# _GH_PROJECT_STATUS_VERIFY_SLEEP seconds (default 1) and re-queries the
+# current Status. If the value reverted (a builtin workflow such as
+# "Pull request linked to issue" overwrote our write asynchronously), the
+# mutation is re-issued once. A second mismatch fails loud on stderr but
+# still returns 0 to honor the helper's best-effort policy. Override
+# _GH_PROJECT_STATUS_VERIFY_SLEEP=0 in tests to skip the wait.
+#
+# Fail-closed guard (issue #393, defense-in-depth):
+# kind=pr + target="Approved" requires the PR's reviewDecision to equal
+# APPROVED (looked up via `gh pr view --json reviewDecision`). Any other
+# decision — REVIEW_REQUIRED, CHANGES_REQUESTED, or an unreachable gh —
+# rejects the transition with exit code 2. Set
+# _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1 for an emergency bypass.
+# Other targets (In review / Done / Backlog / etc.) and kind=issue are
+# never gated.
+#
+# Return codes:
+#   0 — success / no-op / best-effort skip (network flake, no project, etc.)
+#   2 — fail-closed policy rejection (Approved guard)
 
 _gh_project_status_sync() {
     local _kind="$1" _num="$2" _target="$3"
@@ -69,6 +91,29 @@ _gh_project_status_sync() {
             return 0
             ;;
     esac
+
+    # Fail-closed guard (issue #393): only an APPROVED PR may land in the
+    # "Approved" column. Other Statuses are unaffected. UNKNOWN (gh pr view
+    # failure) is treated as non-APPROVED — preferring a loud refusal over
+    # a possibly-incorrect mutation. Bypass via
+    # _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1 (explicit operator intent).
+    if [ "$_kind" = "pr" ] \
+        && [ "$_target" = "Approved" ] \
+        && [ "${_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS-0}" != "1" ]; then
+        local _decision
+        _decision=$(gh pr view "$_num" --json reviewDecision \
+                    --jq '.reviewDecision // "REVIEW_REQUIRED"' 2>/dev/null) \
+            || _decision="UNKNOWN"
+        if [ -z "$_decision" ]; then
+            _decision="UNKNOWN"
+        fi
+        if [ "$_decision" != "APPROVED" ]; then
+            printf '[gh-project-status] refusing PR #%s -> "Approved": reviewDecision=%s\n' \
+                "$_num" "$_decision" >&2
+            printf '[gh-project-status]   bypass: _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1\n' >&2
+            return 2
+        fi
+    fi
 
     # Resolve owner/repo via gh, with one 5s retry on transient failure
     # (e.g. graphql socket reset). Mirrors the mutation step's retry —
@@ -144,27 +189,130 @@ _gh_project_status_sync() {
             continue
         fi
 
-        # One retry on mutation flake (GraphQL connection reset etc.).
-        # 5s fixed backoff — long enough to ride out transient resets,
-        # short enough to keep callers responsive. Override
-        # _GH_PROJECT_STATUS_RETRY_SLEEP in tests to skip the wait,
-        # matching the auto-detect retry above.
-        if _gh_project_status_mutate "$_proj" "$_item" "$_field" "$_option"; then
-            printf '[gh-project-status] %s #%s -> "%s"\n' "$_kind" "$_num" "$_target"
-        else
-            sleep "${_GH_PROJECT_STATUS_RETRY_SLEEP-5}"
-            if _gh_project_status_mutate "$_proj" "$_item" "$_field" "$_option"; then
-                printf '[gh-project-status] %s #%s -> "%s" (after 1 retry)\n' \
-                    "$_kind" "$_num" "$_target"
-            else
-                printf '[gh-project-status] mutation failed for %s #%s (target=%s)\n' \
-                    "$_kind" "$_num" "$_target" >&2
-            fi
-        fi
+        # Mutate + verify pair (issue #393). Retry-on-flake (5s, _RETRY_SLEEP)
+        # and verify-then-re-set (1s, _VERIFY_SLEEP) live in the helper so
+        # this loop body stays focused on per-project gating.
+        _gh_project_status_set_and_verify \
+            "$_kind" "$_num" "$_proj" "$_item" "$_field" "$_option" "$_target"
     done <<EOF
 $_records
 EOF
 
+    return 0
+}
+
+# Run the projectV2 Status mutation, then verify the value stuck via a single
+# follow-up GraphQL read. If a builtin workflow ("Pull request linked to
+# issue", "Item closed", etc.) overwrote our write asynchronously, re-issue
+# the mutation once. A second mismatch fails loud on stderr but still
+# returns 0 — the helper's contract with callers is best-effort.
+#
+# Args: kind num proj item field option target
+# Returns: 0 (always — preserves the helper's best-effort policy).
+#
+# Sleep knobs:
+#   _GH_PROJECT_STATUS_RETRY_SLEEP — wait between mutation attempts on flake
+#                                    (default 5).
+#   _GH_PROJECT_STATUS_VERIFY_SLEEP — wait before each verify read so the
+#                                     builtin workflow has time to fire and
+#                                     be observed (default 1).
+# Both default to 0 in bats tests via env override.
+_gh_project_status_set_and_verify() {
+    local _kind="$1" _num="$2"
+    local _proj="$3" _item="$4" _field="$5" _option="$6" _target="$7"
+    local _actual _retry_label=''
+
+    if ! _gh_project_status_mutate "$_proj" "$_item" "$_field" "$_option"; then
+        sleep "${_GH_PROJECT_STATUS_RETRY_SLEEP-5}"
+        if ! _gh_project_status_mutate "$_proj" "$_item" "$_field" "$_option"; then
+            printf '[gh-project-status] mutation failed for %s #%s (target=%s)\n' \
+                "$_kind" "$_num" "$_target" >&2
+            return 0
+        fi
+        _retry_label=' after 1 retry'
+    fi
+
+    sleep "${_GH_PROJECT_STATUS_VERIFY_SLEEP-1}"
+    _actual=$(_gh_project_status_query_current "$_kind" "$_num")
+
+    if [ "$_actual" = "$_target" ]; then
+        printf '[gh-project-status] %s #%s -> "%s" (verified%s)\n' \
+            "$_kind" "$_num" "$_target" "$_retry_label"
+        return 0
+    fi
+
+    # Race: a builtin workflow (or another actor) overwrote our mutation.
+    # Re-set once. Logging both transitions so the user can audit afterwards.
+    printf '[gh-project-status] %s #%s reverted to "%s", re-setting...\n' \
+        "$_kind" "$_num" "$_actual" >&2
+    if ! _gh_project_status_mutate "$_proj" "$_item" "$_field" "$_option"; then
+        printf '[gh-project-status] ERROR: re-set mutation failed for %s #%s\n' \
+            "$_kind" "$_num" >&2
+        return 0
+    fi
+
+    sleep "${_GH_PROJECT_STATUS_VERIFY_SLEEP-1}"
+    _actual=$(_gh_project_status_query_current "$_kind" "$_num")
+    if [ "$_actual" = "$_target" ]; then
+        printf '[gh-project-status] %s #%s -> "%s" (verified after re-set)\n' \
+            "$_kind" "$_num" "$_target"
+    else
+        # Fail loud — a third mutation would risk a write-loop with the
+        # builtin workflow. Surface the mismatch so the operator can decide.
+        printf '[gh-project-status] ERROR: %s #%s verify failed twice (target="%s", actual="%s"). Manual intervention may be needed.\n' \
+            "$_kind" "$_num" "$_target" "$_actual" >&2
+    fi
+    return 0
+}
+
+# Best-effort read of the current Status for an issue/PR. Returns the first
+# non-empty Status value found across the item's project memberships — for
+# multi-board items the verify pair only checks one board's value, but every
+# board runs the same builtin workflows so observing one race surface is
+# sufficient for the recovery contract.
+#
+# Args: kind num
+# Output (stdout): current Status name or empty string when no project /
+#                  no Status / gh failure.
+# Returns: 0 always.
+_gh_project_status_query_current() {
+    local _kind="$1" _num="$2"
+    [ -z "$_kind" ] && return 0
+    [ -z "$_num" ] && return 0
+
+    local _q_field
+    case "$_kind" in
+        issue) _q_field='issue' ;;
+        pr) _q_field='pullRequest' ;;
+        *) return 0 ;;
+    esac
+
+    local _owner _repo _resolved
+    _resolved=$(_gh_project_status_resolve_owner_repo) || return 0
+    _owner="${_resolved%% *}"
+    _repo="${_resolved#* }"
+
+    gh api graphql \
+        -f query="
+          query(\$owner: String!, \$repo: String!, \$number: Int!) {
+            repository(owner: \$owner, name: \$repo) {
+              ${_q_field}(number: \$number) {
+                projectItems(first: 10) {
+                  nodes {
+                    fieldValueByName(name: \"Status\") {
+                      ... on ProjectV2ItemFieldSingleSelectValue { name }
+                    }
+                  }
+                }
+              }
+            }
+          }" \
+        -f owner="$_owner" -f repo="$_repo" -F number="$_num" \
+        --jq ".data.repository.${_q_field}.projectItems.nodes[]
+              | .fieldValueByName?.name?
+              | select(. != null and . != \"\")" \
+        2>/dev/null \
+        | head -n 1
     return 0
 }
 
