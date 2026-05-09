@@ -10,13 +10,13 @@ its prose.
 - A PR card must sit in `Approved` to merge via `/gh-pr-merge`.
 - Status `!= Approved` → `/gh-pr-merge` exits 2 and points at
   `/gh-pr-merge-emergency` for admin override + audit trail.
-- Repos without a projectV2 attachment auto-skip Step 4-B
+- Repos without a projectV2 attachment auto-skip Step 2-B
   (`gh-pr-merge` SKILL.md detects empty Status and continues).
 - Bypass for in-transition repos: `GH_PR_MERGE_SKIP_BOARD_CHECK=1`.
 
 ## Implementation
 
-Step 4-B of `gh:pr-merge/SKILL.md` runs immediately before Step 3 (the
+Step 2-B of `gh:pr-merge/SKILL.md` runs immediately before Step 3 (the
 merge call). It re-uses `_gh_project_status_query_current` from
 `shell-common/functions/gh_project_status.sh` so all helpers agree on
 which board / which Status is canonical (no inline GraphQL drift).

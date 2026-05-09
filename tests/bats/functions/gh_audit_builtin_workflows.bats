@@ -139,9 +139,12 @@ teardown() {
 _setup_fake_gh_audit() {
     STUB_BIN="$TEST_TEMP_HOME/bin"
     mkdir -p "$STUB_BIN"
+    # Tab-separated output mirrors the real --jq filter (PR #402 review:
+    # tab is safer than `|` for project titles containing that character).
     cat >"$STUB_BIN/gh" <<'GH'
 #!/usr/bin/env bash
 # Multiplexed: only `repo view --json nameWithOwner` and `api graphql` shapes.
+T=$'\t'
 case "$1 $2" in
     "repo view")
         echo "owner/reponame"
@@ -150,22 +153,16 @@ case "$1 $2" in
     "api graphql")
         case "${FAKE_AUDIT_MODE:-no-projects}" in
             compliant)
-                cat <<'OUT'
-https://github.com/orgs/owner/projects/1|Team Board|Pull request linked to issue|false
-https://github.com/orgs/owner/projects/1|Team Board|Item closed|true
-OUT
+                printf 'https://github.com/orgs/owner/projects/1%sTeam Board%sPull request linked to issue%sfalse\n' "$T" "$T" "$T"
+                printf 'https://github.com/orgs/owner/projects/1%sTeam Board%sItem closed%strue\n' "$T" "$T" "$T"
                 ;;
             violation)
-                cat <<'OUT'
-https://github.com/orgs/owner/projects/1|Team Board|Pull request linked to issue|true
-https://github.com/orgs/owner/projects/1|Team Board|Item closed|true
-OUT
+                printf 'https://github.com/orgs/owner/projects/1%sTeam Board%sPull request linked to issue%strue\n' "$T" "$T" "$T"
+                printf 'https://github.com/orgs/owner/projects/1%sTeam Board%sItem closed%strue\n' "$T" "$T" "$T"
                 ;;
             mixed)
-                cat <<'OUT'
-https://github.com/orgs/owner/projects/1|Team Board|Pull request linked to issue|false
-https://github.com/orgs/owner/projects/2|Side Board|Pull request linked to issue|true
-OUT
+                printf 'https://github.com/orgs/owner/projects/1%sTeam Board%sPull request linked to issue%sfalse\n' "$T" "$T" "$T"
+                printf 'https://github.com/orgs/owner/projects/2%sSide Board%sPull request linked to issue%strue\n' "$T" "$T" "$T"
                 ;;
             no-projects)
                 # repo has no projectV2 OR caller lacks workflow read perm.

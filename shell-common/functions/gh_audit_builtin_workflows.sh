@@ -99,27 +99,17 @@ _gh_audit_builtin_workflows_resolve_repo() {
 }
 
 # ---------------------------------------------------------------------------
-# Forbidden workflow names — single-source list, easy to extend later.
-# ---------------------------------------------------------------------------
-
-_gh_audit_builtin_workflows_forbidden() {
-    printf '%s\n' "Pull request linked to issue"
-}
-
-# ---------------------------------------------------------------------------
-# Membership test for forbidden list. Returns 0 when $1 matches a line in
-# _gh_audit_builtin_workflows_forbidden, 1 otherwise. Pure shell, no fork.
+# Forbidden workflow names — case statement (no fork, no command substitution).
+# Add new patterns above the catch-all `*)` line as new violations are
+# discovered. Reviewer note (PR #402): the prior heredoc-list pattern forked
+# a subshell on every check; case is O(1) and avoids the fork entirely.
 # ---------------------------------------------------------------------------
 
 _gh_audit_builtin_workflows_is_forbidden() {
-    local _name="$1" _line
-    [ -z "$_name" ] && return 1
-    while IFS= read -r _line; do
-        [ "$_line" = "$_name" ] && return 0
-    done <<EOF
-$(_gh_audit_builtin_workflows_forbidden)
-EOF
-    return 1
+    case "$1" in
+    "Pull request linked to issue") return 0 ;;
+    *) return 1 ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------
@@ -163,8 +153,11 @@ gh_audit_builtin_workflows() {
     # lacks access, GitHub returns a partial result with `null` workflows —
     # that's why we filter `.workflows?.nodes? // []` rather than failing.
     #
-    # Output shape: one record per workflow, joined by `|`:
-    #   project_url | project_title | workflow_name | enabled (true|false)
+    # Output shape: one record per workflow, tab-separated:
+    #   project_url \t project_title \t workflow_name \t enabled (true|false)
+    # Tab is safer than `|` because project titles may contain that character
+    # (PR #402 review). Null-safe `// empty` on `.repository?` keeps callers
+    # from blowing up if GitHub returns a malformed response.
     #
     # GraphQL variables ($owner, $repo) are bound via -f below — single-quoted
     # query string is intentional (would otherwise interpolate at shell level).
@@ -187,10 +180,11 @@ gh_audit_builtin_workflows() {
             }
           }' \
         -f owner="$_owner" -f repo="$_repo" \
-        --jq '.data.repository.projectsV2.nodes[]?
+        --jq '.data.repository? // empty
+              | .projectsV2?.nodes[]?
               | . as $p
               | (.workflows?.nodes? // [])[]?
-              | "\($p.url)|\($p.title)|\(.name)|\(.enabled)"' \
+              | "\($p.url)\t\($p.title)\t\(.name)\t\(.enabled)"' \
         2>/dev/null) || {
         printf '[gh-audit-builtin-workflows] graphql query failed for %s/%s\n' \
             "$_owner" "$_repo" >&2
@@ -211,7 +205,7 @@ gh_audit_builtin_workflows() {
     # pre-commit hook enforces this in this repo).
     local _violations=0
     local _url _title _name _enabled
-    while IFS='|' read -r _url _title _name _enabled; do
+    while IFS=$'\t' read -r _url _title _name _enabled; do
         [ -z "$_name" ] && continue
         if _gh_audit_builtin_workflows_is_forbidden "$_name" &&
             [ "$_enabled" = "true" ]; then

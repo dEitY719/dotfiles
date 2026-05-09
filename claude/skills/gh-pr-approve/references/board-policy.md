@@ -47,7 +47,7 @@ helper thinks it set).
 
 ### 2. Merge gate (read side)
 
-`gh:pr-merge` Step 4-B (added by #397) reads the current board Status
+`gh:pr-merge` Step 2-B (added by #397) reads the current board Status
 before merging. If Status `!= Approved`, the merge is refused and the
 operator is redirected to `gh:pr-merge-emergency`. Escape:
 `GH_PR_MERGE_SKIP_BOARD_CHECK=1` for repos in transition or for
@@ -78,6 +78,6 @@ guard.
 ## See also
 
 - `shell-common/functions/gh_project_status.sh` — write-side guard impl.
-- `claude/skills/gh-pr-merge/SKILL.md` Step 4-B — merge-gate impl.
+- `claude/skills/gh-pr-merge/SKILL.md` Step 2-B — merge-gate impl.
 - `claude/skills/gh-pr-merge/references/board-policy.md` — cross-link.
 - `docs/standards/github-project-board.md` — column semantics SSOT.
