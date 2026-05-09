@@ -46,12 +46,26 @@ Per `references/superpowers-detection.md`: plugin missing → force mode
 
 ## Step 3: Fetch + Claim Issue
 
-Read `references/fetch-issue.md` for the `gh issue view` command,
-error handling, and the CLOSED-issue refusal message.
+Five substeps in order. Full policy, env vars, and behavior matrix in
+`references/claim.md`.
 
-After a successful fetch, claim the issue so teammates see it's being
-worked. Read `references/claim-issue.md` for the command and soft-fail
-rules (warning on failure, never blocks the flow).
+3.1 **Fetch** — `references/fetch-issue.md` (CLOSED refusal handled there).
+3.2 **Block-label guard** — fail-closed abort (exit 2) if any label on
+    the issue matches `GH_ISSUE_BLOCK_LABELS`
+    (default `do-not-work,on-hold,보류,⏸️ Postpone`).
+3.3 **Self-assign** — `gh issue edit <N> --add-assignee @me` when not
+    already on the assignee list; warn (no override) when held by
+    another user. Skip via `GH_ISSUE_SKIP_SELF_ASSIGN=1`.
+3.4 **Board Status transition** — `_gh_project_status_sync issue <N>
+    "In progress" --only-from "Backlog,Ready"`. No-op on repos without
+    a board. Skip via `GH_ISSUE_SKIP_BOARD_TRANSITION=1`.
+3.5 **Depends-on guard** — soft-warn (continue) for each `Depends on
+    #M` line in the body whose `M` is still OPEN. Skip via
+    `GH_ISSUE_SKIP_DEPS_CHECK=1`.
+
+Only 3.1 fetch failures and 3.2 block-label hits abort the flow.
+3.3–3.5 are soft-fail (warn + continue) so a transient API blip never
+blocks the implement step.
 
 ## Step 4: Mode Dispatch
 
