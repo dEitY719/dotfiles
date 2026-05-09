@@ -1,7 +1,12 @@
+#!/bin/sh
+
 # system_aliases.bash
 # 시스템 관련 명령어에 대한 alias 정의
 
 # 프로세스 관리
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 alias psg='ps aux | grep' # 프로세스 검색
 alias kill9='kill -9'     # 강제 종료
 alias psa='ps aux'        # 모든 프로세스 표시

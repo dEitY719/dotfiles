@@ -51,6 +51,8 @@
 #   0 — success / no-op / best-effort skip (network flake, no project, etc.)
 #   2 — fail-closed policy rejection (Approved guard)
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _gh_project_status_sync() {
     local _kind="$1" _num="$2" _target="$3"
     [ "$#" -ge 3 ] && shift 3

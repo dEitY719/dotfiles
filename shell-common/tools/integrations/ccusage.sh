@@ -20,6 +20,8 @@
 # PATH Helper Function
 # ═══════════════════════════════════════════════════════════════
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 ccusage_path_hint() {
     case ":$PATH:" in
     *":$HOME/.npm-global/bin:"*) ;;

@@ -1,6 +1,8 @@
 #!/bin/sh
 # shell-common/functions/cc_help.sh
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _cc_help_summary() {
     ux_info "Usage: cc-help [section|--list|--all]"
     ux_bullet "sections"

@@ -8,6 +8,9 @@
 #   3. security.local.sh is automatically loaded (.gitignore excludes it)
 
 # SSH agent socket configuration
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
     # Prevent double slashes: ${var%/} removes trailing slash
     export SSH_AUTH_SOCK="${XDG_RUNTIME_DIR%/}/ssh-agent.socket"

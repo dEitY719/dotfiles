@@ -1,7 +1,12 @@
+#!/bin/sh
+
 # Claude Code Marketplace Plugins Aliases
 # Quick shortcuts for plugin management
 
 # Open marketplace plugins in VSCode
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 alias open-plugins='open_claude_plugins'
 
 # List all available plugins

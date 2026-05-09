@@ -5,6 +5,9 @@
 # -------------------------------
 # Configuration
 # -------------------------------
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 REDIS_DEFAULT_HOST="${REDIS_DEFAULT_HOST:-127.0.0.1}"
 REDIS_DEFAULT_PORT="${REDIS_DEFAULT_PORT:-6379}"
 # Authentication: set REDISCLI_AUTH env var for password-protected instances.

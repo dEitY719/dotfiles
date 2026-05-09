@@ -3,6 +3,8 @@
 # SSOT for setup-mode detection and proxy cleanup
 # Sourced by both bash/main.bash and zsh/main.zsh
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _apply_setup_mode_config() {
     local setup_mode_file="$HOME/.dotfiles-setup-mode"
 

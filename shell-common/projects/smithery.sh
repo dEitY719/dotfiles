@@ -8,6 +8,9 @@
 # ═══════════════════════════════════════════════════════════════
 
 # Development, Test, Production hosts
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 DEV_HOST="127.0.0.1"
 TEST_HOST="127.0.0.1"
 PROD_HOST="0.0.0.0"

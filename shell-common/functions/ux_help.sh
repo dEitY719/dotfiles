@@ -3,6 +3,9 @@
 # UX library help function
 
 # Alias target function to run the interactive UX demo
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 ux_demo() {
     bash "${SHELL_COMMON}/tools/custom/demo_ux.sh" "$@"
 }

@@ -4,6 +4,9 @@
 
 # Guard: This file contains bash-only features (export -f)
 # Skip loading if not in bash
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 [ -n "$BASH_VERSION" ] || return 0
 
 # bash/app/zsh.bash

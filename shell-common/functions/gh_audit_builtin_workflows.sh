@@ -35,6 +35,8 @@
 # Help text
 # ---------------------------------------------------------------------------
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 gh_audit_builtin_workflows_help() {
     if type ux_header >/dev/null 2>&1; then
         ux_header "gh-audit-builtin-workflows"

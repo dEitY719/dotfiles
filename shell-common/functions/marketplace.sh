@@ -9,6 +9,8 @@
 # Constants
 # =============================================================================
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 MARKETPLACE_BASE_DIR="${HOME}/.claude/plugins/marketplaces"
 MANIFEST_CACHE_PATH="${HOME}/.claude/plugins/marketplaces/.skills-manifest.json"
 MANIFEST_CACHE_MAX_AGE=86400  # 24 hours

@@ -9,6 +9,9 @@
 # ========================================
 # Load UX Library
 # ========================================
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 if ! type ux_header >/dev/null 2>&1; then
     _bun_dir="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
     . "${_bun_dir}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true

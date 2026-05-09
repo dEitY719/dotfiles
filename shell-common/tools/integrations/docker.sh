@@ -10,6 +10,9 @@
 # 구버전(V1: docker-compose) 사용 시 아래의 'docker compose'를 'docker-compose'로 변경하세요.
 
 # 🔹 Compose 기본 단축키 (요청하신 핵심 6개)
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 alias dc='docker compose'         # 기본 compose 명령
 alias dcu='docker compose up'     # foreground 실행 (옵션 추가 가능: dcu -d 등)
 alias dcud='docker compose up -d' # detached 모드 고정 실행

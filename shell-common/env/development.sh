@@ -3,6 +3,9 @@
 # 개발 관련 환경 변수 설정
 
 # Python
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 export PYTHONPATH="$HOME/.local/lib/python3.x/site-packages:$PYTHONPATH"
 export PYTHONDONTWRITEBYTECODE=1 # .pyc 파일 생성 방지
 

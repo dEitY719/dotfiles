@@ -3,6 +3,9 @@
 # Git worktree management functions (split from git.sh)
 
 # Override Oh My Zsh's gwt alias (zsh only)
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 unalias gwt 2>/dev/null || true
 
 # ============================================================================

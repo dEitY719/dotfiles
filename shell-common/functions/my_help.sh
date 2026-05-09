@@ -8,6 +8,8 @@
 # UX Library Loading (bash/zsh compatible)
 # ═══════════════════════════════════════════════════════════════
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 if ! type ux_header >/dev/null 2>&1; then
     # Try to load UX library if not already loaded
     if [ -z "$SHELL_COMMON" ]; then

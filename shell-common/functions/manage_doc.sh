@@ -31,6 +31,8 @@
 # UX Library Setup
 # ═══════════════════════════════════════════════════════════════
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _UX_LIB_PATH="${SHELL_COMMON:-${HOME}/.local/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh"
 
 if [ -f "$_UX_LIB_PATH" ]; then

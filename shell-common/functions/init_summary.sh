@@ -18,6 +18,9 @@
 #
 # Note: Uses UX library (ux_lib.sh) if available for consistent styling
 #
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 dotfiles_init_summary() {
     local file_count="${1:-0}"
     local message="Dotfiles configuration loaded successfully. (Total files sourced: ${file_count})"

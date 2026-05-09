@@ -2,6 +2,9 @@
 # shell-common/functions/dot_help.sh
 
 # Load UX library if not already loaded (POSIX portable)
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 if ! type ux_header >/dev/null 2>&1; then
     # Try multiple paths to find ux_lib.sh
     _ux_lib_paths="

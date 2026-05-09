@@ -2,6 +2,8 @@
 # shell-common/functions/ghostty.sh
 # Ghostty terminal configuration management
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 ghostty_init() {
     local source="${DOTFILES_ROOT:-$HOME/dotfiles}/ghostty/config"
     local target="$HOME/.config/ghostty/config"

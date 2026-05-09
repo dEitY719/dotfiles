@@ -9,6 +9,9 @@
 #   load_category "aliases" # Load all .sh in shell-common/aliases/
 
 # Direct-exec guard: This file should be sourced, not executed
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 if [ "${0##*/}" != "loader.sh" ] && [ -n "${BASH_SOURCE[0]}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     echo "Error: This file should be sourced, not executed directly" >&2
     exit 1

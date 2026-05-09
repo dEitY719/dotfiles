@@ -3,6 +3,9 @@
 # PATH 관련 환경 변수 설정
 
 # 로컬 바이너리 경로 추가
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 export PATH="$HOME/.local/bin:$PATH"
 
 # 개발 도구 경로 추가

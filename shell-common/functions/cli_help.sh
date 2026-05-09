@@ -1,6 +1,8 @@
 #!/bin/sh
 # shell-common/functions/cli_help.sh
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _cli_help_summary() {
     ux_info "Usage: cli-help [section|--list|--all]"
     ux_bullet "sections"

@@ -4,6 +4,9 @@
 
 # 환경 변수 리로드 (셸 독립적)
 # 현재 사용 중인 셸로 리로드 (bash 또는 zsh)
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 alias reload='exec ${SHELL##*/}'
 alias rs='reload'
 

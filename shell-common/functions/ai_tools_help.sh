@@ -9,6 +9,8 @@
 
 # --- claude_help (from claude_help.sh) ---
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _claude_help_summary() {
     ux_info "Usage: claude-help [section|--list|--all]"
     ux_bullet "sections"

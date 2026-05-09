@@ -3,6 +3,9 @@
 # Notion API integration for claude-code MCP (Model Context Protocol)
 
 # Load UX library if not already loaded
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 if ! declare -f ux_header >/dev/null 2>&1; then
     source "${BASH_SOURCE[0]%/*}/../ux_lib/ux_lib.sh" 2>/dev/null || true
 fi

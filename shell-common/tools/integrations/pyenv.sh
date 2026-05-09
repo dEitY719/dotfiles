@@ -3,6 +3,9 @@
 
 
 # pyenv의 루트 경로
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
 

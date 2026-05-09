@@ -3,6 +3,9 @@
 # Shared directory navigation aliases for bash and zsh
 
 # BASIC
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 alias cd-dot='cd "${DOTFILES_ROOT:-$HOME/dotfiles}"'
 alias cd-down='cd ~/downloads'
 alias cd-work='cd ~/workspace'

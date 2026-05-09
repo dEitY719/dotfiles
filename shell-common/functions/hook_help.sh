@@ -1,6 +1,8 @@
 #!/bin/sh
 # shell-common/functions/hook_help.sh
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _hook_help_summary() {
     ux_info "Usage: hook-help [section|--list|--all]"
     ux_bullet "sections"

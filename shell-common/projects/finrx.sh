@@ -7,6 +7,8 @@
 # Repository URL (for documentation & reference)
 # ═══════════════════════════════════════════════════════════════
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 REPO_FINRX_URL="https://github.com/dEitY719/FinRx.git"
 
 # ═══════════════════════════════════════════════════════════════

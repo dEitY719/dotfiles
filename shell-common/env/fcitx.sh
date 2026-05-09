@@ -3,6 +3,9 @@
 # Fcitx input method environment and optional autostart for Korean input
 
 # Opt-in: set ENABLE_FCITX=true to enable configuration
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 if command -v fcitx >/dev/null 2>&1 && [ "${ENABLE_FCITX:-false}" = "true" ]; then
     export QT_IM_MODULE=fcitx
     export GTK_IM_MODULE=fcitx

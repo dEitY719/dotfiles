@@ -4,6 +4,9 @@
 # Previously duplicated in zsh/app/zsh.zsh and tools/integrations/zsh.sh
 
 # Switch to zsh shell
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 zsh_switch() {
     if command -v zsh >/dev/null 2>&1; then
         ux_success "Switching to zsh..."

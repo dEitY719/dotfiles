@@ -4,6 +4,9 @@
 # Lists personal utility commands from shell-common/tools/custom/
 
 # Helper: Extract description from the script header comments
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 _extract_tool_description() {
     local script="$1"
     local tool_name="$2"

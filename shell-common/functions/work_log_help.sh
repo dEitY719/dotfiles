@@ -3,6 +3,9 @@
 # Provides integration with the my-help system
 
 # Try to find and source ux_lib if not already loaded
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 if ! type ux_header >/dev/null 2>&1; then
     if [ -z "$SHELL_COMMON" ]; then
         if [ -n "$ZSH_VERSION" ]; then

@@ -3,6 +3,9 @@
 # Convenience wrappers for Ollama launch and serve commands
 
 # Start Ollama server
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 ollama_serve() {
     local backend=$(ollama_backend_detect 2>/dev/null || echo "")
     

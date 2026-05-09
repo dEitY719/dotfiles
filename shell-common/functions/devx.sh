@@ -7,6 +7,8 @@
 # - Safe to source (no top-level side effects)
 # - Uses ux_lib output functions when available
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 devx__have() {
     command -v "$1" >/dev/null 2>&1
 }

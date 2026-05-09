@@ -4,6 +4,9 @@
 # Supports both bash and zsh
 
 # Work-help: Show work management commands help
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 alias work-help='work_help'
 
 # Work-log: CLI tool for logging work activities

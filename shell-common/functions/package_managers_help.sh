@@ -5,6 +5,9 @@
 # --- apt_check (from apt_help.sh) ---
 
 # APT Check Wrapper - calls the diagnostic script
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 apt_check() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/check_apt.sh" "$@"
 }
