@@ -131,13 +131,19 @@ Store results as `TOKENS`, `HUMAN_H`, `ELAPSED` for use in Step 4.
 
 ## Step 4: Create the Issue
 
-`mktemp` 으로 임시 파일에 본문을 쓰고 metrics 블록을 append 한 뒤 생성한다:
+`mktemp` 으로 임시 파일에 본문을 쓰고 metrics 블록을 append 한 뒤 생성한다.
+`GH_DISABLE_AI_METRICS=1` 이면 footer append 를 skip — 본문만 그대로
+생성된다 (issue #399).
 
 ```bash
 BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
 # ... write body to "$BODY" ...
-printf '\n---\n<details>\n<summary>🤖 AI Metrics · 📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min</summary>\n\n<!-- ai-metrics -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics -->\n\n</details>\n' \
-  "$TOKENS" "$HUMAN_H" "$ELAPSED" "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
+if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
+    : # ai-metrics footer skipped via GH_DISABLE_AI_METRICS
+else
+    printf '\n---\n<details>\n<summary>🤖 AI Metrics · 📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min</summary>\n\n<!-- ai-metrics -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics -->\n\n</details>\n' \
+      "$TOKENS" "$HUMAN_H" "$ELAPSED" "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
+fi
 gh issue create --repo "$TARGET_REPO" --title "<title>" --body-file "$BODY" \
     "${LABEL_ARGS[@]}" "${MILESTONE_ARGS[@]}"
 ```
