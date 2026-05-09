@@ -25,7 +25,7 @@ is_stacked_pr_repo() {
     local _f
     for _f in CLAUDE.md AGENTS.md .claude/github-integration.md; do
         [ -f "$_repo_root/$_f" ] || continue
-        grep -qE 'claude-enter-issue|stacked.PR|Depends on #' \
+        grep -qE 'claude-enter-issue|stacked[[:space:]-]?PR|Depends on #' \
             "$_repo_root/$_f" 2>/dev/null && return 0
     done
 
@@ -52,6 +52,10 @@ parse_stacked_args() {
             --parent-pr)
                 _flags_seen=$((_flags_seen + 1))
                 STACK_MODE=parent-pr
+                if [ $# -lt 2 ]; then
+                    printf 'gh:pr: --parent-pr requires a PR number\n' >&2
+                    return 3
+                fi
                 STACK_PARENT="$2"
                 if ! printf '%s' "${STACK_PARENT-}" | grep -qE '^[1-9][0-9]*$'; then
                     printf 'gh:pr: --parent-pr requires a positive integer (got %s)\n' \
@@ -63,6 +67,10 @@ parse_stacked_args() {
             --base)
                 _flags_seen=$((_flags_seen + 1))
                 STACK_MODE=base
+                if [ $# -lt 2 ]; then
+                    printf 'gh:pr: --base requires a branch name\n' >&2
+                    return 3
+                fi
                 STACK_BASE="$2"
                 if [ -z "${STACK_BASE-}" ]; then
                     printf 'gh:pr: --base requires a branch name\n' >&2
