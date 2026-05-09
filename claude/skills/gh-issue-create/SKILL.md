@@ -69,6 +69,17 @@ Pick exactly one conventional-commit prefix as the dominant intent.
 휴리스틱(영향 컴포넌트 ≥3 / NF 명시 / 결정 누적 — 둘 이상)은
 `references/templates/feat.md` "대형 feat 가이드" 를 따른다.
 
+## Step 2.1: Clarification & Scope Guard
+
+Step 2 분류 직후, 본문 작성 전에 `references/clarification.md` 의
+트리거 신호(동사 없는 명사 나열 / 컴포넌트 ≥3 혼재 / feature 범위
+미정의)를 확인한다. 매치되면 1~2줄 확인 또는 분리안을 사용자에게
+보낸다 — 응답을 받기 전에는 `gh issue create` 호출 금지. 매치되지
+않으면 no-op, 곧장 Step 2.5 로 진행.
+
+사용자가 "한 이슈로" 라고 답하면 분리하지 않고 그대로 생성한다 —
+이 가이드는 강제 분할이 아니라 안전망이다.
+
 ## Step 2.5: Auto-labels + Milestone (opt-in via SSOT)
 
 If `--no-auto-labels` was passed in Step 1, skip this step entirely.

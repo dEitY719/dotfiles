@@ -31,8 +31,8 @@ PR / commit / file:line). Also updates `docs/learnings/README.md` index.
 ## Related skills
 
 - `write-blog-dev-learnings` — narrative "삽질" blog posts in `~/para/archive/`
-- `write-rca-doc` — formal RCA / postmortem (Jekyll)
-- `write-task-history` — JIRA / PR description drafting from session work
+- `write:rca` — formal RCA / postmortem (Jekyll)
+- `write:task-history` — JIRA / PR description drafting from session work
 
 If your intent matches one of those, use that skill instead — write:insight
 is for short, repo-internal technical patterns aimed at human teammates.

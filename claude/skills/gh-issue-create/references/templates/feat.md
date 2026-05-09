@@ -43,8 +43,17 @@ feat[(<scope>)]: <한 줄 요약>
 ## 영향 범위 (Impact)
 <수정 대상 파일·인접 시스템·마이그레이션 영향>
 
+## Dependencies
+<선행 작업·외부 시스템·라이브러리·다른 이슈 (`Depends on #N`)>
+-
+
 ## 수용 기준 (Acceptance Criteria)
+<관찰 가능·검증 가능한 조건만. 구현 디테일 X>
 - [ ] ...
+
+## Error Cases
+<예상되는 실패 모드와 대응. `<조건> → <응답>` 형식 권장>
+- <조건> → <응답>
 
 ## Open Questions
 -
