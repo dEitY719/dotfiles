@@ -13,6 +13,17 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "${HOOK_DIR}/../lib/commit-msg-validator.sh" || exit 0
 
+# Closing-keyword policy (issue #392): hard-block Refs/Resolves/See/References.
+# This guard runs BEFORE the conventional-commits validator so the user sees
+# the more actionable "use Closes/Fixes" message first when both fire.
+if [ -f "${HOOK_DIR}/checks/closing_keyword_check.sh" ]; then
+    # shellcheck source=/dev/null
+    . "${HOOK_DIR}/checks/closing_keyword_check.sh"
+    if ! check_closing_keyword "${1:-}"; then
+        exit 1
+    fi
+fi
+
 # ============================================
 # MAIN HOOK LOGIC
 # ============================================

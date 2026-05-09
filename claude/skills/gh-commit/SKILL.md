@@ -24,8 +24,10 @@ output its content verbatim, then stop. No API calls.
 ## Role
 
 Stage the relevant changes and create a new git commit that follows the
-repository's existing commit style, with an optional `Refs #N` / `Closes #N`
-footer when a GitHub issue is known.
+repository's existing commit style, with `Closes #N` / `Fixes #N` footer
+when a GitHub issue is known. `Refs` / `Resolves` / `See` / `References`
+keywords are forbidden — they break GitHub auto-close and project-board
+automation (see issue #392).
 
 ## Step 1: Inspect State (parallel) — ALWAYS FIRST
 
@@ -55,7 +57,7 @@ Check in this order and use the first hit:
 ## Step 3: Draft the Commit Message
 
 Read `references/commit-message-format.md` for the message template, HEREDOC
-pattern, and `Closes` / `Refs` / `Fixes` rules. Match the repo's commit style
+pattern, and `Closes` / `Fixes` rules (`Refs` / `Resolves` 금지). Match the repo's commit style
 derived from `git log`.
 
 **When there is no prior conversation context** (user ran `/gh-commit` on
@@ -110,7 +112,7 @@ comment. On any API failure, print `⚠️  ai-metrics comment failed — contin
 and proceed.
 
 Then sync the project board: if the commit message contains
-`Closes|Fixes|Refs #N` (i.e. the issue number resolved in Step 2 was
+`Closes|Fixes #N` (i.e. the issue number resolved in Step 2 was
 actually written into the footer), push the linked Issue's project-board
 card to `In progress` — but only when its current Status is `Backlog`.
 The `--only-from Backlog` guard is mandatory: `/gh-commit` is invoked

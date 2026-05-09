@@ -4,7 +4,7 @@
 
 | # | Name | Default | Description |
 |---|------|---------|-------------|
-| 1 | issue-number, or `-h`/`--help`/`help` | auto-detected | Link PR to this GitHub issue via `Closes #N` / `Refs #N` in the body |
+| 1 | issue-number, or `-h`/`--help`/`help` | auto-detected | Link PR to this GitHub issue via `Closes #N` (or `Fixes #N` for bug fixes) in the body |
 
 ## Usage
 
