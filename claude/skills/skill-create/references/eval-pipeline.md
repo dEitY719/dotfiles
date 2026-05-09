@@ -76,7 +76,7 @@ Once all runs are done:
 4. **Launch the viewer** with both qualitative outputs and quantitative data:
 
     ```bash
-    nohup python <skill-creator-path>/eval-viewer/generate_review.py \
+    nohup python <skill-create-path>/eval-viewer/generate_review.py \
       <workspace>/iteration-N \
       --skill-name "my-skill" \
       --benchmark <workspace>/iteration-N/benchmark.json \
