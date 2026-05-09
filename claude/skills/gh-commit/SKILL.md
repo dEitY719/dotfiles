@@ -85,7 +85,9 @@ their own manual edits), derive intent from the diff itself:
 
 Before syncing the project board, record AI metrics (soft-fail — warn on
 error, never block). Compute elapsed time and post a comment on the linked
-issue (only when an issue number was resolved in Step 2):
+issue (only when an issue number was resolved in Step 2). When
+`GH_DISABLE_AI_METRICS=1`, skip the comment entirely — board sync below
+still runs (issue #399):
 
 ```bash
 ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
@@ -93,9 +95,12 @@ ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
 # See gh-issue-create/references/metrics-helper.md "Token Estimation" for the formula
 TOKENS=$(( ( ($(git diff HEAD~1 | wc -c) / 4 / 500) + 1 ) * 500 ))
 [ "$TOKENS" -lt 1000 ] && TOKENS=1000
-gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
-  -X POST \
-  -f body="### 🤖 AI Metrics — gh-commit
+if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
+    : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
+else
+    gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
+      -X POST \
+      -f body="### 🤖 AI Metrics — gh-commit
 
 | 항목 | 값 |
 |------|-----|
@@ -105,6 +110,7 @@ gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
 | 토큰 | ~$TOKENS |
 
 <!-- ai-metrics:gh-commit tokens=$TOKENS ai_min=$ELAPSED -->"
+fi
 ```
 
 If no issue number exists, print the metrics to stdout only and skip the

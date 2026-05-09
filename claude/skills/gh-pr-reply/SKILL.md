@@ -90,15 +90,20 @@ already-replied comments.
 
 After printing the report, post a PR comment with ai-metrics (soft-fail —
 warn on error, never block). `COMMENT_COUNT` is the number of comments
-addressed in Step 5 (including declined and bot comments):
+addressed in Step 5 (including declined and bot comments). When
+`GH_DISABLE_AI_METRICS=1`, skip the comment entirely (issue #399):
 
 ```bash
 ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
 HUMAN_H=$(echo "scale=2; $COMMENT_COUNT * 0.25" | bc)
-gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
-  -X POST \
-  -f body="<!-- ai-metrics:gh-pr-reply tokens=${TOKENS:-5000} human_h=$HUMAN_H ai_min=$ELAPSED -->
+if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
+    : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
+else
+    gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
+      -X POST \
+      -f body="<!-- ai-metrics:gh-pr-reply tokens=${TOKENS:-5000} human_h=$HUMAN_H ai_min=$ELAPSED -->
 🤖 리뷰 답변: ~$ELAPSED min · 👤 ~$HUMAN_H h ($COMMENT_COUNT comments × 0.25 h)"
+fi
 ```
 
 On failure: `⚠️  ai-metrics comment failed — continuing.`

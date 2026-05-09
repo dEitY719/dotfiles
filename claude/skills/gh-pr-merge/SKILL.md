@@ -142,14 +142,19 @@ Both helpers auto-detect repos without a projectV2 attachment and
 silently return. This step never blocks the report — failures are
 logged to stderr and ignored.
 
-After the board sync completes, post an ai-metrics PR comment (soft-fail):
+After the board sync completes, post an ai-metrics PR comment (soft-fail).
+When `GH_DISABLE_AI_METRICS=1`, skip the comment entirely (issue #399):
 
 ```bash
 ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
-gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
-  -X POST \
-  -f body="<!-- ai-metrics:gh-pr-merge tokens=${TOKENS:-2000} human_h=0.25 ai_min=$ELAPSED -->
+if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
+    : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
+else
+    gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
+      -X POST \
+      -f body="<!-- ai-metrics:gh-pr-merge tokens=${TOKENS:-2000} human_h=0.25 ai_min=$ELAPSED -->
 🤖 PR merge: ~$ELAPSED min"
+fi
 ```
 
 On failure: `⚠️  ai-metrics comment failed — continuing.`

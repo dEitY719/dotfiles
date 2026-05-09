@@ -143,12 +143,18 @@ if the previous completed successfully.
    d. Token estimate: character count of (issue body + implementation file reads) ÷ 4,
       rounded to nearest 500. Minimum 1 000.
    e. Post the aggregate comment on the linked issue (body template below).
+      Skip the post entirely when `GH_DISABLE_AI_METRICS=1` (issue #399);
+      the five sub-skills already honour the same env var, so a disabled
+      run leaves zero ai-metrics artifacts on the issue or PR.
    f. On failure: print `⚠️  ai-metrics comment failed (<reason>) — continuing.`
 
 ```bash
-gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
-  -X POST \
-  -f body="### ✅ gh-issue-flow 완료
+if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
+    : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
+else
+    gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
+      -X POST \
+      -f body="### ✅ gh-issue-flow 완료
 
 | 단계 | AI 소요 |
 |------|---------|
@@ -162,6 +168,7 @@ gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
 👤 예상 사람 시간: ~$HUMAN_H h · 📊 ~$TOKENS tokens
 
 <!-- ai-metrics:gh-issue-flow tokens=$TOKENS human_h=$HUMAN_H ai_min=$ELAPSED -->"
+fi
 ```
 
 ## Step 3: Report
