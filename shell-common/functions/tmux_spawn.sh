@@ -20,6 +20,8 @@
 #   | (ai-yolo)| right-bot|
 #   +----------+----------+
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _ts_known_agent() {
     case "$1" in
         claude|codex|gemini|opencode|cursor|copilot) return 0 ;;

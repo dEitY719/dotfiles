@@ -9,6 +9,8 @@
 # State helpers
 # ============================================================================
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _gh_pr_approve_state_root() {
     printf '%s' "${XDG_STATE_HOME:-$HOME/.local/state}/gh-pr-approve"
 }

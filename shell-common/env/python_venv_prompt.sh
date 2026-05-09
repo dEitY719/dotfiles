@@ -3,6 +3,9 @@
 # Keep shell prompt styling consistent by preventing venv scripts from rewriting PS1.
 
 # Standard venv/virtualenv prompt mutation disable flag.
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 export VIRTUAL_ENV_DISABLE_PROMPT=1
 
 # pyenv-virtualenv prompt mutation disable flag.

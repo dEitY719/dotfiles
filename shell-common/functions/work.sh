@@ -11,6 +11,8 @@
 # This module provides only the help function for the work management system
 # ═════════════════════════════════════════════════════════════════════════════
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _work_help_load_ux() {
     if ! type ux_header >/dev/null 2>&1; then
         if [ -n "$SHELL_COMMON" ] && [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then

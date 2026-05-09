@@ -4,6 +4,9 @@
 # (This file requires bash and should not be sourced in other shells)
 
 # Exit if not running in bash
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 [ -n "$BASH" ] || return 0
 
 # ============================================================

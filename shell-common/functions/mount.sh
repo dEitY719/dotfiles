@@ -4,6 +4,9 @@
 # Single Responsibility: addmnt() mounts, show_mnt() displays status
 
 # Load UX library if not already loaded (bash/zsh compatible)
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 if ! type ux_bullet >/dev/null 2>&1; then
     # Detect script directory in bash/zsh compatible way
     if [ -n "$ZSH_VERSION" ]; then

@@ -7,6 +7,8 @@
 # Repository URL (for documentation & reference)
 # ═══════════════════════════════════════════════════════════════
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 REPO_DMC_PG_URL="https://github.com/dEitY719/dmc-playground.git"
 
 # ═══════════════════════════════════════════════════════════════

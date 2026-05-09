@@ -4,6 +4,9 @@
 # Shared between bash and zsh
 
 # 하드웨어 정보 표시 함수
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 get_hw_info() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/get_hw_info.sh"
     if [ ! -f "$script" ]; then

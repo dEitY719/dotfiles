@@ -7,6 +7,8 @@
 # fzf Help and Documentation
 # ═══════════════════════════════════════════════════════════════
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _fzf_help_summary() {
     ux_info "Usage: fzf-help [section|--list|--all]"
     ux_bullet "sections"

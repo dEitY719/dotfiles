@@ -4,6 +4,9 @@
 # POSIX-compatible - sourced automatically by bash and zsh
 
 # Determine DOTFILES_ROOT (prefer the SSOT exported by loaders)
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 if [ -z "${DOTFILES_ROOT}" ] && [ -n "${SHELL_COMMON}" ]; then
     DOTFILES_ROOT="$(cd "${SHELL_COMMON}/.." 2>/dev/null && pwd)"
 fi

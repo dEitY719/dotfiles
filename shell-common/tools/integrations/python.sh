@@ -5,6 +5,9 @@
 
 # Python Virtual Environment
 # pyenv-virtualenv: deactivate must be dot-sourced ('. deactivate')
+
+case $- in *i*) ;; *) return 0 ;; esac
+
 alias create-venv='python -m venv .venv'
 alias act-venv='. .venv/bin/activate'
 alias echo-venv='echo "$VIRTUAL_ENV"'

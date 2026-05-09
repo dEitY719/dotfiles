@@ -8,6 +8,8 @@
 # State helpers
 # ============================================================================
 
+case $- in *i*) ;; *) return 0 ;; esac
+
 _gh_flow_state_root() {
     printf '%s' "${XDG_STATE_HOME:-$HOME/.local/state}/gh-flow"
 }
