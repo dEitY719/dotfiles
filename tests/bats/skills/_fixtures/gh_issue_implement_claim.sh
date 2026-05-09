@@ -26,13 +26,9 @@ gh_issue_block_label_guard() {
 
     [ -z "$_labels_csv" ] && return 0
 
-    local _saved_ifs="$IFS"
-    IFS=','
-    # shellcheck disable=SC2206
-    local _labels=($_labels_csv)
-    # shellcheck disable=SC2206
-    local _block=($_block_csv)
-    IFS="$_saved_ifs"
+    local _labels _block
+    IFS=',' read -r -a _labels <<< "$_labels_csv"
+    IFS=',' read -r -a _block <<< "$_block_csv"
 
     local _l _b
     for _l in "${_labels[@]}"; do
@@ -70,11 +66,8 @@ gh_issue_self_assign_decide() {
         return 0
     fi
 
-    local _saved_ifs="$IFS"
-    IFS=','
-    # shellcheck disable=SC2206
-    local _assignees=($_assignees_csv)
-    IFS="$_saved_ifs"
+    local _assignees
+    IFS=',' read -r -a _assignees <<< "$_assignees_csv"
 
     local _a
     for _a in "${_assignees[@]}"; do
@@ -150,11 +143,8 @@ _gh_issue_state_lookup() {
     local _map="${FAKE_DEPS_STATES-}"
     [ -z "$_map" ] && { printf 'OPEN'; return 0; }
 
-    local _saved_ifs="$IFS"
-    IFS=','
-    # shellcheck disable=SC2206
-    local _entries=($_map)
-    IFS="$_saved_ifs"
+    local _entries
+    IFS=',' read -r -a _entries <<< "$_map"
 
     local _e _k _v
     for _e in "${_entries[@]}"; do
