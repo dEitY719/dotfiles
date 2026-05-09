@@ -1,64 +1,39 @@
 ---
 name: skill:check
 description: >-
-  Audit a SKILL.md file for Progressive Disclosure compliance — checks if it
-  follows the under-100-lines rule and properly separates detail into references/.
-  Use when the user says "check my skill", "is my SKILL.md too long?", "audit
-  my skill structure", "does this skill follow progressive disclosure?",
-  "/skill:check". Reports PASS/WARN/FAIL per criterion with concrete fixes.
+  Audit a SKILL.md for structure and UX quality — checks line count,
+  progressive disclosure, frontmatter, references usage, output format,
+  help flag pattern, step structure, options docs, verdict output, and
+  next-action hints. Use when the user says "check my skill", "audit my
+  skill", "does this skill follow best practices?", "/skill:check".
+  Reports PASS/WARN/FAIL/N/A per criterion with concrete fixes.
   Do NOT use for AGENTS.md or CLAUDE.md files — use agents-md:check or
   claude-md-check instead.
 compatibility:
   tools: Read, Glob, Grep, Bash
 ---
 
-# SKILL.md Progressive Disclosure Auditor
+# SKILL.md Quality Auditor
 
 ## Help
 
 If the argument is `help`, read `references/help.md` and output its content verbatim, then stop.
-
-> **Pattern**: All skills should place help content (usage, arguments, examples) in
-> `references/help.md` and use a one-line pointer here. This keeps SKILL.md under
-> the 100-line limit while making help always reachable.
 
 ## Step 1: Locate the File
 
 If the user specifies a path, use it. Otherwise search for SKILL.md from the
 current directory.
 
-## Step 2: Run Five Checks
+## Step 2: Run Ten Checks
 
-Assign **PASS** / **WARN** / **FAIL** per check.
+Read `references/checks.md` for all 10 check definitions and PASS/WARN/FAIL/N/A criteria.
+Assign one result per check.
 
-**Check 1: Line Count**
-PASS ≤ 100 | WARN 101–150 | FAIL > 150
-Every line over 100 is a candidate for `references/` extraction.
+**Checks 1–5: Structure**
+Line Count · Progressive Disclosure · Frontmatter Validity · References Directory · Output Report
 
-**Check 2: Progressive Disclosure Structure**
-PASS — workflow phases only in SKILL.md; detail in `references/`
-WARN — mostly workflow but some templates/tables inline
-FAIL — large reference content embedded directly in SKILL.md
-
-**Check 3: Frontmatter Validity**
-Look for: `name` present, `description` present, only known attributes present.
-Known attributes: `name`, `description`, `allowed-tools`, `compatibility`,
-`metadata`, `user-invocable`, `argument-hint`, `disable-model-invocation`, `license`.
-**Naming**: read `references/naming-convention.md` — `category:action` colon
-form is the SSOT convention and reports as PASS, not WARN. Folder/name
-kebab-vs-colon mismatch is also PASS when folder is the kebab form of the
-colon name (e.g., `name: gh:pr` + folder `gh-pr/`).
-PASS — valid | WARN — minor issues | FAIL — missing fields or unknown attributes
-
-**Check 4: References Directory Usage**
-PASS — `references/` exists with focused files, each referenced from SKILL.md
-WARN — `references/` exists but not clearly triggered from SKILL.md body
-FAIL — SKILL.md > 100 lines AND no `references/` directory
-
-**Check 5: Output Report Defined**
-PASS — output format with example clearly defined
-WARN — output described but vague
-FAIL — no output format defined
+**Checks 6–10: UX Quality**
+Help Flag Pattern · Step Structure · Options Documentation · Verdict Output · Next-action Hint
 
 ## Step 3: Output the Report
 
