@@ -56,7 +56,7 @@ A plan written by this skill must be re-parseable by this skill, so:
 - Heading levels and ordering are stable (one `## Milestone:` per
   milestone, tasks as `- [ ] #new-N <title>` first-line).
 - Labels list is comma-separated, single line.
-- AC always nested under `  - AC:` exactly.
+- AC always nested under a `- AC:` bullet (two-space indent), exactly.
 - Decomposition failures live under one bottom-level `## Decomposition
   failures` heading; an empty list is rendered as a single line `_no
   failures._` to keep the section discoverable.
