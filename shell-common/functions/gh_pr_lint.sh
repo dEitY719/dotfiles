@@ -62,11 +62,17 @@ _gh_pr_lint__filter_changed() {
 }
 
 _gh_pr_lint__want_tool() {
-    # 0 if $GH_PR_LINT_TOOLS is unset/auto, or if $1 appears in the
+    # 0 if $GH_PR_LINT_TOOLS is unset or "auto", or if $1 appears in the
     # comma-separated list. 1 otherwise.
-    _tools="${GH_PR_LINT_TOOLS:-auto}"
+    #
+    # Note the `${VAR-default}` form (no `:`) — empty-string and unset are
+    # treated differently. Empty (`GH_PR_LINT_TOOLS=`) means "no tools
+    # match", which is the documented soft-disable knob in lint-guard.md.
+    # Unset falls through to "auto" → all detected tools run.
+    _tools="${GH_PR_LINT_TOOLS-auto}"
     case "$_tools" in
-        auto|"")  unset _tools; return 0 ;;
+        auto) unset _tools; return 0 ;;
+        "")   unset _tools; return 1 ;;
     esac
     case ",$_tools," in
         *",$1,"*) unset _tools; return 0 ;;
@@ -127,15 +133,22 @@ _gh_pr_lint_run() {
                 | _gh_pr_lint__filter_changed '*.sh')
             if [ -n "$_sh_files" ]; then
                 _gh_pr_lint__log "running shellcheck on $(printf '%s\n' "$_sh_files" | wc -l | tr -d ' ') file(s)"
-                # POSIX-safe: feed file list through xargs.
-                if printf '%s\n' "$_sh_files" \
-                    | xargs shellcheck -x -S warning; then
+                # POSIX-safe: build positional params one-by-one so paths
+                # with spaces survive (xargs would word-split).
+                set --
+                while IFS= read -r _f; do
+                    [ -n "$_f" ] && set -- "$@" "$_f"
+                done <<EOF
+$_sh_files
+EOF
+                if shellcheck -x -S warning "$@"; then
                     _gh_pr_lint__log "shellcheck passed"
                 else
                     _gh_pr_lint__log "shellcheck FAILED"
                     _failed=1
                 fi
                 _ran_any=1
+                unset _f
             fi
             unset _sh_files
         fi
@@ -147,13 +160,20 @@ _gh_pr_lint_run() {
                 | _gh_pr_lint__filter_changed '.github/workflows/*')
             if [ -n "$_wf_files" ]; then
                 _gh_pr_lint__log "running actionlint on $(printf '%s\n' "$_wf_files" | wc -l | tr -d ' ') file(s)"
-                if printf '%s\n' "$_wf_files" | xargs actionlint; then
+                set --
+                while IFS= read -r _f; do
+                    [ -n "$_f" ] && set -- "$@" "$_f"
+                done <<EOF
+$_wf_files
+EOF
+                if actionlint "$@"; then
                     _gh_pr_lint__log "actionlint passed"
                 else
                     _gh_pr_lint__log "actionlint FAILED"
                     _failed=1
                 fi
                 _ran_any=1
+                unset _f
             fi
             unset _wf_files
         fi
@@ -163,13 +183,20 @@ _gh_pr_lint_run() {
             && [ -f .pre-commit-config.yaml ] \
             && command -v pre-commit >/dev/null 2>&1; then
             _gh_pr_lint__log "running pre-commit on changed files"
-            if printf '%s\n' "$_changed" | xargs pre-commit run --files; then
+            set --
+            while IFS= read -r _f; do
+                [ -n "$_f" ] && set -- "$@" "$_f"
+            done <<EOF
+$_changed
+EOF
+            if pre-commit run --files "$@"; then
                 _gh_pr_lint__log "pre-commit passed"
             else
                 _gh_pr_lint__log "pre-commit FAILED"
                 _failed=1
             fi
             _ran_any=1
+            unset _f
         fi
     fi
 

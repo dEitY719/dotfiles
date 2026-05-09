@@ -98,11 +98,14 @@ _setup_stub_bin() {
 } >> '__LOG__'
 exit "${__RC_VAR__:-0}"
 STUB
-        sed -i \
+        # POSIX `sed > tmp && mv tmp` instead of `sed -i` so the test
+        # is portable to BSD sed (macOS) without the `-i ''` quirk.
+        sed \
             -e "s|__TOOL__|$tool|" \
             -e "s|__LOG__|$TOOL_LOG|" \
             -e "s|__RC_VAR__|$rc_var|" \
-            "$STUB_BIN/$tool"
+            "$STUB_BIN/$tool" > "$STUB_BIN/$tool.tmp" \
+            && mv "$STUB_BIN/$tool.tmp" "$STUB_BIN/$tool"
         chmod +x "$STUB_BIN/$tool"
     done
 }
@@ -118,6 +121,10 @@ _run_helper() {
     if [ "$mode" = "stubs" ]; then
         extra_path="${STUB_BIN}:"
     fi
+    # Pass GH_PR_LINT_BYPASS / GH_PR_LINT_TOOLS through ONLY when the
+    # parent test set them (non-empty). Empty `GH_PR_LINT_TOOLS=''` now
+    # has explicit "no tools match" semantics, so accidental empty
+    # exports would mask intended detection.
     run bash --noprofile --norc -c "
         export DOTFILES_ROOT='${DOTFILES_ROOT}'
         export SHELL_COMMON='${SHELL_COMMON}'
@@ -130,8 +137,8 @@ _run_helper() {
         export FAKE_SHELLCHECK_RC='${FAKE_SHELLCHECK_RC:-0}'
         export FAKE_ACTIONLINT_RC='${FAKE_ACTIONLINT_RC:-0}'
         export FAKE_PRE_COMMIT_RC='${FAKE_PRECOMMIT_RC:-0}'
-        export GH_PR_LINT_BYPASS='${GH_PR_LINT_BYPASS-}'
-        export GH_PR_LINT_TOOLS='${GH_PR_LINT_TOOLS-}'
+        ${GH_PR_LINT_BYPASS:+export GH_PR_LINT_BYPASS='${GH_PR_LINT_BYPASS}'}
+        ${GH_PR_LINT_TOOLS:+export GH_PR_LINT_TOOLS='${GH_PR_LINT_TOOLS}'}
         cd '${REPO_DIR}' || exit 99
         . '${DOTFILES_ROOT}/shell-common/functions/gh_pr_lint.sh'
         ${snippet}
@@ -248,6 +255,21 @@ TOX
     _run_helper stubs '_gh_pr_lint_run main 2>&1'
     assert_output --partial "rc=0"
     assert_output --partial "no changed files vs main — skip"
+    run wc -l <"$TOOL_LOG"
+    assert_output --partial "0"
+}
+
+# ---------------------------------------------------------------------------
+# Empty-string semantics for GH_PR_LINT_TOOLS — the soft-disable knob
+# documented in lint-guard.md. Distinguishes empty (no tools) from unset
+# (auto). Regression for PR #411 review.
+# ---------------------------------------------------------------------------
+
+@test "GH_PR_LINT_TOOLS='' → soft-disables all tools (no tool calls)" {
+    _stage_changes "foo.sh:echo hi"
+    GH_PR_LINT_TOOLS="" _run_helper stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "rc=0"
+    assert_output --partial "no lint tools detected — skip"
     run wc -l <"$TOOL_LOG"
     assert_output --partial "0"
 }
