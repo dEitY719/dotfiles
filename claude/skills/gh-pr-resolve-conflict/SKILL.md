@@ -127,15 +127,20 @@ warning (idempotent).
 
 After the report, post a PR comment with ai-metrics (soft-fail — warn on
 error, never block). `CONFLICT_FILES` is the count of files that had
-`UU`/`AA`/`DU` conflicts in Step 3:
+`UU`/`AA`/`DU` conflicts in Step 3. When `GH_DISABLE_AI_METRICS=1`,
+skip the comment entirely (issue #399):
 
 ```bash
 ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
 HUMAN_H=$(echo "scale=2; $CONFLICT_FILES * 0.5" | bc)
-gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
-  -X POST \
-  -f body="<!-- ai-metrics:gh-pr-resolve-conflict tokens=${TOKENS:-3000} human_h=$HUMAN_H ai_min=$ELAPSED -->
+if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
+    : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
+else
+    gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
+      -X POST \
+      -f body="<!-- ai-metrics:gh-pr-resolve-conflict tokens=${TOKENS:-3000} human_h=$HUMAN_H ai_min=$ELAPSED -->
 🤖 컨플릭트 해결: ~$ELAPSED min · 👤 ~$HUMAN_H h ($CONFLICT_FILES files × 0.5 h)"
+fi
 ```
 
 On failure: `⚠️  ai-metrics comment failed — continuing.`

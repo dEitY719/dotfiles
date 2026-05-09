@@ -86,14 +86,19 @@ Match the PR's dominant language.
   `--admin-merge` exactly as specified in `references/self-pr-handling.md`.
 
 After submitting the review (any path), post a separate PR comment with
-ai-metrics (soft-fail — warn on error, never block):
+ai-metrics (soft-fail — warn on error, never block). When
+`GH_DISABLE_AI_METRICS=1`, skip the comment entirely (issue #399):
 
 ```bash
 ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
-gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
-  -X POST \
-  -f body="<!-- ai-metrics:gh-pr-approve tokens=${TOKENS:-5000} human_h=1 ai_min=$ELAPSED -->
+if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
+    : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
+else
+    gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
+      -X POST \
+      -f body="<!-- ai-metrics:gh-pr-approve tokens=${TOKENS:-5000} human_h=1 ai_min=$ELAPSED -->
 🤖 PR 리뷰: ~$ELAPSED min · 👤 ~1 h (estimate)"
+fi
 ```
 
 On failure: `⚠️  ai-metrics comment failed — continuing.`

@@ -76,11 +76,20 @@ footer block (soft-fail — warn on error, never block):
    Counting `$BODY` (the PR-body temp file) is the regression that
    produced PR #325's `📊 ~1000 tokens` footer (issue #326).
 
+When `GH_DISABLE_AI_METRICS=1`, skip the footer entirely (issue #399).
+The PR body is otherwise identical, and the linked issue still gets
+its body — only the footer block is omitted.
+
 ```bash
 # After running the snippet from references/metrics-helper.md, $TOKENS is
-# bound to the correct estimate. Now append the footer to $BODY.
-printf '\n---\n<details>\n<summary>🤖 AI Metrics · 📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min</summary>\n\n<!-- ai-metrics:gh-pr -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics:gh-pr -->\n\n</details>\n' \
-  "$TOKENS" "$HUMAN_H" "$ELAPSED" "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
+# bound to the correct estimate. Now append the footer to $BODY — unless
+# the operator opted out via GH_DISABLE_AI_METRICS=1.
+if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
+    : # ai-metrics footer skipped via GH_DISABLE_AI_METRICS
+else
+    printf '\n---\n<details>\n<summary>🤖 AI Metrics · 📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min</summary>\n\n<!-- ai-metrics:gh-pr -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics:gh-pr -->\n\n</details>\n' \
+      "$TOKENS" "$HUMAN_H" "$ELAPSED" "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
+fi
 ```
 
 ## Step 5: Push and Create
