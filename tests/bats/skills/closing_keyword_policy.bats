@@ -130,6 +130,44 @@ EOF
     assert_success
 }
 
+@test "hook: lowercase 'refs #N' is rejected (GitHub keywords are case-insensitive)" {
+    cat >"$MSG_FILE" <<'EOF'
+feat(scope): subject
+
+refs #200
+EOF
+    run check_closing_keyword "$MSG_FILE"
+    [ "$status" -eq 1 ]
+    assert_output --partial "forbidden closing keyword"
+}
+
+@test "hook: mixed-case 'Resolves #N' / 'RESOLVES #N' both rejected" {
+    cat >"$MSG_FILE" <<'EOF'
+feat(scope): subject
+
+RESOLVES #300
+EOF
+    run check_closing_keyword "$MSG_FILE"
+    [ "$status" -eq 1 ]
+    assert_output --partial "forbidden closing keyword"
+}
+
+@test "hook: line numbers reported are relative to the original file" {
+    # Subject on line 1, blank line on 2, comment on 3, blank on 4, footer on 5.
+    # The diagnostic must report '5:' not '2:' (which is what the old
+    # `grep -v '^#' | grep -n` two-stage pipeline would produce).
+    cat >"$MSG_FILE" <<'EOF'
+feat(scope): subject
+
+# A commented hint line that mentions Closes #1 (just guidance).
+
+Refs #200
+EOF
+    run check_closing_keyword "$MSG_FILE"
+    [ "$status" -eq 1 ]
+    assert_output --partial "5:Refs #200"
+}
+
 # ─── Skill side: docs do not instruct skill to emit forbidden keywords ──
 
 @test "skill: gh-commit format doc has no 'Refs #' template/instruction" {

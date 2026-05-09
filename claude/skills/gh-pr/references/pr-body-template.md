@@ -37,10 +37,11 @@ Closes #<N>
   Omitting it means the Issue stays open and the card never reaches
   `Done`.
 - For bug-fix PRs, `Fixes #<N>` is also acceptable.
-- **금지 키워드**: `Refs`, `Resolves`, `See`, `References` — skill 은 절대
-  생성하지 않음. `Refs` / `See` / `References` 는 GitHub close 안 시키고,
-  `Resolves` 는 AgentToolbox 정책 위반. 부분 진행을 표현하려면 footer 를
-  생략하고 본문에 평문 `(part of #N)` 로 언급 (issue #392).
+- **Forbidden keywords**: `Refs`, `Resolves`, `See`, `References` — the skill
+  must never generate these. `Refs` / `See` / `References` do not trigger
+  GitHub auto-close, and `Resolves` violates the AgentToolbox policy. To
+  express partial progress, omit the footer and mention `(part of #N)`
+  inline in the body instead (issue #392).
 - Omit the `## Related` section entirely only when no issue number
   is known.
 
