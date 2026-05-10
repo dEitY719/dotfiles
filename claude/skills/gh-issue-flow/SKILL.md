@@ -154,7 +154,7 @@ if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
 else
     gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
       -X POST \
-      -f body="### ✅ gh-issue-flow 완료
+      -f body="### gh-issue-flow 완료
 
 | 단계 | AI 소요 |
 |------|---------|
@@ -165,7 +165,7 @@ else
 | gh-pr-resolve-conflict | ~${CONFLICT_MIN:-?} min |
 | **합계** | **~$ELAPSED min** |
 
-👤 예상 사람 시간: ~$HUMAN_H h · 📊 ~$TOKENS tokens
+예상 사람 시간: ~$HUMAN_H h · 토큰: ~$TOKENS
 
 <!-- ai-metrics:gh-issue-flow tokens=$TOKENS human_h=$HUMAN_H ai_min=$ELAPSED -->"
 fi

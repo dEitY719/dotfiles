@@ -102,7 +102,7 @@ else
     gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
       -X POST \
       -f body="<!-- ai-metrics:gh-pr-reply tokens=${TOKENS:-5000} human_h=$HUMAN_H ai_min=$ELAPSED -->
-🤖 리뷰 답변: ~$ELAPSED min · 👤 ~$HUMAN_H h ($COMMENT_COUNT comments × 0.25 h)"
+리뷰 답변: ~$ELAPSED min · 사람: ~$HUMAN_H h ($COMMENT_COUNT comments × 0.25 h)"
 fi
 ```
 
