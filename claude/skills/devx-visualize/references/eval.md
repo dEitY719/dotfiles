@@ -31,11 +31,11 @@ Condensed scoring guide. Full protocol in `eval/SKILL.md`.
 
 | Gate | Overall | Min per Dimension | Action |
 |------|---------|-------------------|--------|
-| 🚀 VIRAL | ≥ 9.5 | ≥ 9 | Ship + promote everywhere |
-| ✅ SHIP | ≥ 9.0 | ≥ 8 | Ready for release |
-| ⚠️ GOOD | ≥ 8.0 | ≥ 7 | Fix before featuring |
-| 🔧 NEEDS WORK | ≥ 7.0 | any < 7 | Fix + re-evaluate |
-| ❌ FAIL | < 7.0 | any < 5 | Major rework |
+| VIRAL | ≥ 9.5 | ≥ 9 | Ship + promote everywhere |
+| SHIP | ≥ 9.0 | ≥ 8 | Ready for release |
+| GOOD | ≥ 8.0 | ≥ 7 | Fix before featuring |
+| NEEDS WORK | ≥ 7.0 | any < 7 | Fix + re-evaluate |
+| FAIL | < 7.0 | any < 5 | Major rework |
 
 ## Target: SHIP (≥ 9.0) for all outputs. VIRAL (≥ 9.5) for showcase examples.
 

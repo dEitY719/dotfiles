@@ -123,13 +123,13 @@ fi
 ### stdout-only (read-only skills)
 
 ```
-[ai-metrics:<skill>] 🤖 ~{ELAPSED} min (read-only — not written to GitHub)
+[ai-metrics:<skill>] ~{ELAPSED} min (read-only — not written to GitHub)
 ```
 
 ### Context-only (intermediate skills)
 
 ```
-[ai-metrics:<skill>] 🤖 ~{ELAPSED} min — will be included in gh-commit metrics
+[ai-metrics:<skill>] ~{ELAPSED} min — will be included in gh-commit metrics
 ```
 
 ## Idempotency (strip before re-append)
@@ -152,5 +152,5 @@ Every ai-metrics step must soft-fail: on any error, print a single
 warning line and continue — never block the main flow.
 
 ```
-⚠️  ai-metrics append failed (<reason>) — continuing.
+[WARN] ai-metrics append failed (<reason>) — continuing.
 ```

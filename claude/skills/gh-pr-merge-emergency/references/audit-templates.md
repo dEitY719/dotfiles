@@ -16,7 +16,7 @@ Anchors the event on the PR timeline so it survives branch deletion.
 ### Body template (English)
 
 ```markdown
-🚨 **Emergency merge** by @<ME> at <NOW> UTC
+[EMERGENCY] **Emergency merge** by @<ME> at <NOW> UTC
 
 **Reason:** <reason>
 
@@ -26,7 +26,7 @@ after merge for retro within 72h.
 
 **Pre-merge state**
 - Base: `<baseRefName>` · Head: `<headRefName>`
-- Required CI: ✅ passing
+- Required CI: [OK] passing
 - Approving reviews: <count> (normal merge would need ≥1)
 - Merge status at decision time: `<mergeStateStatus>`
 
@@ -37,7 +37,7 @@ incident issue — the decision is auditable.
 ### Body template (Korean)
 
 ```markdown
-🚨 **긴급 머지** — @<ME>, <NOW> UTC
+[EMERGENCY] **긴급 머지** — @<ME>, <NOW> UTC
 
 **사유:** <reason>
 
@@ -47,7 +47,7 @@ incident issue — the decision is auditable.
 
 **머지 직전 상태**
 - Base: `<baseRefName>` · Head: `<headRefName>`
-- 필수 CI: ✅ 통과
+- 필수 CI: [OK] 통과
 - Approve 리뷰: <count>건 (정상 경로는 ≥1 필요)
 - Merge status: `<mergeStateStatus>`
 

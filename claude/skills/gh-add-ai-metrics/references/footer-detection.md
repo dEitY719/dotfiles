@@ -130,22 +130,22 @@ Glyph and field order are part of the user contract — keep them stable.
 
 | Branch | Format |
 |---|---|
-| New footer appended | `✓ added #N <title>` |
-| Existing footer replaced (`--force`) | `↻ replaced #N <title>` |
-| Existing footer left untouched | `→ skipped #N <title>` |
-| API or I/O failure | `✗ failed #N <reason>` |
+| New footer appended | `[OK] added #N <title>` |
+| Existing footer replaced (`--force`) | `[REPLACED] replaced #N <title>` |
+| Existing footer left untouched | `[SKIP] skipped #N <title>` |
+| API or I/O failure | `[FAIL] failed #N <reason>` |
 
 The `failed` branch must not abort the loop — catch the failure, print
 the line, and continue with the next card. The Step 4 summary counts
-each branch separately (`added=A ↻ replaced=R → skipped=S ✗ failed=F`).
+each branch separately (`added=A replaced=R skipped=S failed=F`).
 
 ## Final report output format
 
 After the per-card loop completes, print exactly two lines:
 
 ```
-Summary: ✓ added=A  ↻ replaced=R  → skipped=S  ✗ failed=F  (total T)
-[ai-metrics:gh-add-ai-metrics] 🤖 ~{ELAPSED} min · {T} cards processed
+Summary: added=A  replaced=R  skipped=S  failed=F  (total T)
+[ai-metrics:gh-add-ai-metrics] ~{ELAPSED} min · {T} cards processed
 ```
 
 The second line is **context-only**: this skill does mutate GitHub

@@ -35,7 +35,7 @@ git 히스토리를 분석해 **사용자 관점**의 릴리즈 노트를 생성
 `<anchor>..HEAD` 범위의 커밋을 수집하고 conventional commit prefix별로 분류:
 `feat`, `fix`, `refactor`, `docs`, `chore`, 그리고 **비관례 커밋**.
 
-⚠️ 비관례 커밋(`grep -vE`)을 반드시 확인 — 놓치기 쉬움.
+[WARN] 비관례 커밋(`grep -vE`)을 반드시 확인 — 놓치기 쉬움.
 
 명령 모음은 `references/git-commands.md` 참고.
 

@@ -157,7 +157,7 @@ else
 fi
 ```
 
-On failure: `⚠️  ai-metrics comment failed — continuing.`
+On failure: `[WARN] ai-metrics comment failed — continuing.`
 
 ## Step 5: Fetch Merge SHA + Report
 

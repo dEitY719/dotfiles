@@ -47,9 +47,9 @@ The title decides whether anyone clicks. It must:
 
 ### Title Anti-Patterns (AVOID)
 
-- ❌ "Docker Compose 환경변수 사용법" (교과서 느낌, 클릭 욕구 제로)
-- ❌ "SSO 구현 가이드" (건조하고 재미없음)
-- ❌ "테스트 모킹 시 주의사항" (누가 읽겠는가)
+- [BAD] "Docker Compose 환경변수 사용법" (교과서 느낌, 클릭 욕구 제로)
+- [BAD] "SSO 구현 가이드" (건조하고 재미없음)
+- [BAD] "테스트 모킹 시 주의사항" (누가 읽겠는가)
 
 ## Blog Structure
 

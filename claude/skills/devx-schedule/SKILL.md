@@ -70,5 +70,5 @@ Call `CronCreate`:
 Print one line after scheduling:
 
 ```
-⏰ [M]분 후에 실행됩니다: <command>  (job: <returned-id>)
+[SCHEDULED] [M]분 후에 실행됩니다: <command>  (job: <returned-id>)
 ```

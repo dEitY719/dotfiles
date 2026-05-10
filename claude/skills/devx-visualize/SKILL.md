@@ -27,11 +27,11 @@ Turn any idea, data, or content into a stunning single-file HTML visualization.
 1. **Auto-open:** `xdg-open <filename>.html` (Linux/WSL) · `open <filename>.html` (macOS). **Do NOT use `wslview`** — it frequently errors on HTML files; `xdg-open` works reliably on WSL.
 2. **Return URL:** Include `file://<absolute-path>` in response
 
-Example: `Created your visualization! 📄 file:///home/user/project/output.html`
+Example: `Created your visualization! file:///home/user/project/output.html`
 
 ## Critical Requirements (NON-NEGOTIABLE)
 
-⚠️ **EVALUATION FAILURE GUARANTEED WITHOUT THESE ELEMENTS.** Always start from [references/skeleton.md](references/skeleton.md).
+[WARN] **EVALUATION FAILURE GUARANTEED WITHOUT THESE ELEMENTS.** Always start from [references/skeleton.md](references/skeleton.md).
 
 1. **CSS Custom Properties:** Exact names required: `--bg, --surface, --surface-hover, --border, --text, --text-secondary, --accent, --accent-secondary, --positive, --negative, --warning`
 2. **Utility Menu (MANDATORY):** `.viz-menu` with `.viz-menu-toggle`, `.viz-menu-dropdown`, download PNG (`downloadImage()`), print (`window.print()`), and html-to-image CDN script. See [references/menu.md](references/menu.md) for full implementation.
@@ -43,7 +43,7 @@ Example: `Created your visualization! 📄 file:///home/user/project/output.html
 8. **Entrance Animations (MANDATORY):** `.animate` classes or `data-reveal` — evaluation detects and requires animation presence. See [references/animations.md](references/animations.md) for patterns.
 9. **JavaScript:** `cycleTheme()`, `toggleMenu()`, all top-level variables in the **generated HTML** use `var` (never `let`/`const` — avoids TDZ errors with CDN-loaded libraries).
 
-🔥 **Copy skeleton → Replace "YOUR CONTENT HERE" → Save file.**
+**Copy skeleton → Replace "YOUR CONTENT HERE" → Save file.**
 
 ## Core Principles
 

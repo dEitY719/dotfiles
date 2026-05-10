@@ -106,7 +106,7 @@ else
 fi
 ```
 
-On failure: `⚠️  ai-metrics comment failed — continuing.`
+On failure: `[WARN] ai-metrics comment failed — continuing.`
 
 ## Step 8: Solo-Repo Auto-Approve (opt-in, soft-fail)
 

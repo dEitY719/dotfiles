@@ -26,7 +26,7 @@ If arg #1 is `-h`/`--help`/`help`, or when you need usage/examples, print `refer
 
 Extract `--reset HH:MM` (required), `--max-cycles` (positive int, default 1),
 `--cycle-window` (positive int, default 305). If `--buffer` is present, emit
-`⚠️ --buffer 폐지됨 (5분 마진 = 상수). 값 무시.` and continue. Remaining tokens
+`[WARN] --buffer 폐지됨 (5분 마진 = 상수). 값 무시.` and continue. Remaining tokens
 are the wrapped command (preserve quoting). On missing/malformed `--reset`:
 `필수 인자 --reset HH:MM 누락. /usage로 리셋 시각 확인 후 재시도.` and stop.
 
@@ -59,7 +59,7 @@ schema (with field descriptions) and the verbatim output template.
 
 Hand off to the wrapped command. On success:
 `CronDelete(<id>)` → `rm -f .claude/.rate-limit-guard.json` →
-`✅ 안전망 해제 — 정상 완료`.
+`[OK] 안전망 해제 — 정상 완료`.
 
 On transient errors (rate limit / network / timeout), **leave the cron in
 place** — that is exactly when the safety net should fire.
