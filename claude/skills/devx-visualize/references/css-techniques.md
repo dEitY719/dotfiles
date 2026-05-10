@@ -1275,7 +1275,7 @@ body {
 ```css
 /* Use transform/opacity for animations — they don't trigger layout/paint */
 .good {
-  /* ✅ GPU-composited, no repaints */
+  /* [OK] GPU-composited, no repaints */
   transition: transform 0.3s, opacity 0.3s;
 }
 .good:hover {
@@ -1284,7 +1284,7 @@ body {
 }
 
 .bad {
-  /* ❌ Triggers layout recalc + repaint */
+  /* [FAIL] Triggers layout recalc + repaint */
   transition: top 0.3s, width 0.3s, margin 0.3s;
 }
 

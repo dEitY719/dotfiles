@@ -38,7 +38,7 @@ MERGEABLE=$(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
   --json mergeable --jq '.mergeable')
 ```
 
-- `MERGEABLE == MERGEABLE` → print `✅ PR은 이미 충돌 없음 — skip.` and stop (success).
+- `MERGEABLE == MERGEABLE` → print `[OK] PR은 이미 충돌 없음 — skip.` and stop (success).
 - `MERGEABLE == UNKNOWN` → GitHub is still computing; continue the flow normally (do not skip).
 - Any other value (`CONFLICTING` etc.) → continue.
 
@@ -112,8 +112,8 @@ as `_gh_pr_edit_safe_label` fallback). 404 = label already absent → the
 gh api -X DELETE "repos/{owner}/{repo}/issues/$PR_NUMBER/labels/conflict" \
     --repo "$TARGET_REPO" \
     >/dev/null 2>&1 \
-  && echo "✅ \`conflict\` 라벨 제거됨" \
-  || echo "⚠️  \`conflict\` 라벨 제거 실패 — GitHub Actions 가 cover."
+  && echo "[OK] \`conflict\` 라벨 제거됨" \
+  || echo "[WARN] \`conflict\` 라벨 제거 실패 — GitHub Actions 가 cover."
 ```
 
 `{owner}/{repo}` placeholder + `--repo "$TARGET_REPO"` 조합을 쓰는 이유:
@@ -143,7 +143,7 @@ else
 fi
 ```
 
-On failure: `⚠️  ai-metrics comment failed — continuing.`
+On failure: `[WARN] ai-metrics comment failed — continuing.`
 
 ## Constraints
 

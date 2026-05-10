@@ -113,7 +113,7 @@ has no real measurement source for either, and the prior `${TOKENS:-5000}`
 / `human_h=1` placeholders would silently inject the same false numbers
 into every aggregator (issue #403). Only `ai_min` is reported.
 
-On failure: `⚠️  ai-metrics comment failed — continuing.`
+On failure: `[WARN] ai-metrics comment failed — continuing.`
 
 ## Step 5: Verify and Report
 

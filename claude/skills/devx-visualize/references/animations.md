@@ -159,8 +159,8 @@ For everything else, CSS is simpler and more reliable.
 
 ## Anti-Patterns
 
-- ❌ `Motion.animate().finished.then()` — Promise chain breaks silently if Motion API changes
-- ❌ `Motion.inView()` with `opacity: 0` in CSS — content invisible if JS fails
-- ❌ `let` declarations for chart variables called before initialization — use `var` for variables referenced across function hoisting boundaries
-- ❌ Complex stagger calculations in JS — use CSS `nth-child` delays instead
-- ❌ Hiding content by default and revealing via JS — content must be visible without JS
+- [FAIL] `Motion.animate().finished.then()` — Promise chain breaks silently if Motion API changes
+- [FAIL] `Motion.inView()` with `opacity: 0` in CSS — content invisible if JS fails
+- [FAIL] `let` declarations for chart variables called before initialization — use `var` for variables referenced across function hoisting boundaries
+- [FAIL] Complex stagger calculations in JS — use CSS `nth-child` delays instead
+- [FAIL] Hiding content by default and revealing via JS — content must be visible without JS

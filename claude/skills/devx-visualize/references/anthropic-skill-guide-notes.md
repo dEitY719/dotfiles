@@ -4,9 +4,9 @@ Source: "The Complete Guide to Building Skills for Claude" (Anthropic, Jan 2026)
 
 ## Critical Rules We Must Follow
 
-1. **SKILL.md naming** — Must be exactly `SKILL.md` (case-sensitive) ✅ We have this
-2. **Folder naming** — kebab-case only ✅ `visualize/`
-3. **No README.md inside skill folder** — All docs in SKILL.md or references/ ⚠️ Need to check
+1. **SKILL.md naming** — Must be exactly `SKILL.md` (case-sensitive) [OK] We have this
+2. **Folder naming** — kebab-case only [OK] `visualize/`
+3. **No README.md inside skill folder** — All docs in SKILL.md or references/ [WARN] Need to check
 4. **YAML frontmatter** — Must have `---` delimiters, `name` and `description` required
 5. **No XML tags** (`<` or `>`) in frontmatter — security restriction
 6. **Description must include WHAT and WHEN** — trigger phrases are critical

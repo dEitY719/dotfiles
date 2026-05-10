@@ -25,7 +25,7 @@ When falling back:
 
 1. Print exactly one warning line (no stack of warnings):
    ```
-   ⚠️  superpowers plugin not installed — falling back to direct mode.
+   [WARN] superpowers plugin not installed — falling back to direct mode.
    ```
 2. Proceed to direct-mode implementation flow.
 3. Do NOT error out. The skill should still deliver value when the

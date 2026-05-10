@@ -58,12 +58,12 @@ Run /skill:check to verify the result.
 
 | Content type | SKILL.md | references/ |
 |-------------|----------|-------------|
-| Phase names and sequence | ✓ | |
-| Decision logic (if X → do Y) | ✓ | |
-| One-liner step descriptions | ✓ | |
-| Pointer to reference file | ✓ | |
-| Full output templates | | ✓ |
-| Configuration examples (>10 lines) | | ✓ |
-| Domain knowledge / checklists | | ✓ |
-| Examples with before/after | | ✓ |
-| Large reference tables | | ✓ |
+| Phase names and sequence | yes | |
+| Decision logic (if X → do Y) | yes | |
+| One-liner step descriptions | yes | |
+| Pointer to reference file | yes | |
+| Full output templates | | yes |
+| Configuration examples (>10 lines) | | yes |
+| Domain knowledge / checklists | | yes |
+| Examples with before/after | | yes |
+| Large reference tables | | yes |

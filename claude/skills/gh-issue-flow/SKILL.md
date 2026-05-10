@@ -16,7 +16,7 @@ allowed-tools: Bash, Read, Grep
 
 # gh:issue-flow — Issue → PR composition
 
-## ⚠️ CRITICAL CONTRACT — read before editing
+## CRITICAL CONTRACT — read before editing
 
 **Recurring failure mode: early-stop after Step 2.x.** When a sub-skill
 (`gh:issue-implement`, `gh:commit`, …) returns, the model treats its own
@@ -146,7 +146,7 @@ if the previous completed successfully.
       Skip the post entirely when `GH_DISABLE_AI_METRICS=1` (issue #399);
       the five sub-skills already honour the same env var, so a disabled
       run leaves zero ai-metrics artifacts on the issue or PR.
-   f. On failure: print `⚠️  ai-metrics comment failed (<reason>) — continuing.`
+   f. On failure: print `[WARN] ai-metrics comment failed (<reason>) — continuing.`
 
 ```bash
 if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
@@ -176,23 +176,23 @@ fi
 If all steps succeeded:
 ```
 gh:issue-flow complete (#<N>)
-  ✓ Step 1: gh:issue-implement       (<n files changed>, <n tests passed>)
-  ✓ Step 2: gh:commit                (<sha> "<subject>")
-  ✓ Step 3: gh:pr                    (PR #<M>)
-  ✓ Step 4: devx:schedule            (pr-reply in 10 min, job: <id>)
-  ✓ Step 5: gh:pr-resolve-conflict   (no conflicts / resolved)
-  ✓ Step 6: ai-metrics               (📊 ~X tokens · 👤 ~M h · 🤖 ~L min)
+  [OK] Step 1: gh:issue-implement       (<n files changed>, <n tests passed>)
+  [OK] Step 2: gh:commit                (<sha> "<subject>")
+  [OK] Step 3: gh:pr                    (PR #<M>)
+  [OK] Step 4: devx:schedule            (pr-reply in 10 min, job: <id>)
+  [OK] Step 5: gh:pr-resolve-conflict   (no conflicts / resolved)
+  [OK] Step 6: ai-metrics               (~X tokens · ~M h · ~L min)
   PR URL: <pr-url>
 ```
 
-If Step 2.6 soft-failed, show `⚠️ Step 6: ai-metrics  (skipped — <reason>)` instead.
+If Step 2.6 soft-failed, show `[WARN] Step 6: ai-metrics  (skipped — <reason>)` instead.
 
 If a step failed:
 ```
 gh:issue-flow stopped at step <i>/5 (<skill-name>)
-  ✓ Step 1: gh:issue-implement  (<summary>)
-  ✗ Step <i>: <skill-name>       (<failure reason>)
-  ⊘ Steps <i+1>..5               (not reached)
+  [OK] Step 1: gh:issue-implement  (<summary>)
+  [FAIL] Step <i>: <skill-name>       (<failure reason>)
+  [SKIP] Steps <i+1>..5               (not reached)
 
 Resume after fix:
   /<commands to finish>

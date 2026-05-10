@@ -216,7 +216,7 @@ Minimum height **400px** for slide charts — larger for presentation readabilit
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>Chart.defaults.animation = false;</script>
 ```
-⚠️ The `Chart.defaults.animation = false;` line MUST be immediately after the CDN script. Evaluation system checks for this.
+[WARN] The `Chart.defaults.animation = false;` line MUST be immediately after the CDN script. Evaluation system checks for this.
 
 **NEVER use import/export syntax with Chart.js CDN** — use standard `var` declarations only.
 
