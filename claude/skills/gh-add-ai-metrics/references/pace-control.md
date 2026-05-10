@@ -141,10 +141,10 @@ separable from real-run rows:
 
 | Branch                       | Real-run line          | Dry-run line                  |
 |------------------------------|------------------------|-------------------------------|
-| no footer                    | `✓ added #N <title>`   | `· will-write #N <title>`     |
-| footer + `--force`           | `↻ replaced #N <title>` | `· will-force-replace #N <title>` |
-| footer + no `--force`        | `→ skipped #N <title>` | `· will-skip #N <title>`      |
-| view failed                  | `✗ failed #N <reason>` | `· would-fail #N <reason>`    |
+| no footer                    | `[OK] added #N <title>`   | `· will-write #N <title>`     |
+| footer + `--force`           | `[REPLACED] replaced #N <title>` | `· will-force-replace #N <title>` |
+| footer + no `--force`        | `[SKIP] skipped #N <title>` | `· will-skip #N <title>`      |
+| view failed                  | `[FAIL] failed #N <reason>` | `· would-fail #N <reason>`    |
 
 Final dry-run summary line:
 

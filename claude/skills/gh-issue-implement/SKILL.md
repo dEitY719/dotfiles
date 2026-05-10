@@ -96,7 +96,7 @@ After the report, append the ai-metrics line (context only — no GitHub
 artifact exists yet at this stage):
 
 ```
-[ai-metrics:gh-issue-implement] 🤖 ~{ELAPSED} min — will be included in gh-commit metrics
+[ai-metrics:gh-issue-implement] ~{ELAPSED} min — will be included in gh-commit metrics
 ```
 
 Compute `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))` just before printing.

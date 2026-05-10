@@ -3,7 +3,7 @@
 Preferred CDN libraries and when to use them. Always use jsDelivr for consistent, fast loading.
 
 ## Table of Contents
-- [Motion](#motion) ⭐ (animations — included in skeleton)
+- [Motion](#motion) (animations — included in skeleton, recommended)
 - [Chart.js](#chartjs)
 - [D3.js](#d3js)
 - [Three.js](#threejs)

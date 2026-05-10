@@ -7,7 +7,7 @@ not the drafted PR body itself.
 
 ## Why a code-ified helper
 
-Issue #326 traced PR #325's `📊 ~1000 tokens` footer to a Step 4 execution
+Issue #326 traced PR #325's `~1000 tokens` footer to a Step 4 execution
 that counted `wc -m < "$BODY"` (the PR-body temp file) instead of the
 issue-body + commit-log pair. The natural-language spec ("character count
 of (issue body + commit log) ÷ 4") didn't bind tightly to a variable name

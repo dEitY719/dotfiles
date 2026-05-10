@@ -105,7 +105,7 @@ Emergency-merged PR #<N>
   Audit comment:   <url>
   Incident issue:  #<M> (<url>)
   Reason:          <reason>
-  ⚠️  Add retro notes to incident issue within 72h.
+  [WARN] Add retro notes to incident issue within 72h.
 ```
 
 ## Constraints

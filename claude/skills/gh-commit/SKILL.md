@@ -114,7 +114,7 @@ fi
 ```
 
 If no issue number exists, print the metrics to stdout only and skip the
-comment. On any API failure, print `⚠️  ai-metrics comment failed — continuing.`
+comment. On any API failure, print `[WARN] ai-metrics comment failed — continuing.`
 and proceed.
 
 Then sync the project board: if the commit message contains

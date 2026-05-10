@@ -199,7 +199,7 @@ Use SVG for the diagram. Position nodes with CSS Grid or absolute positioning wi
 ### Feature Matrix Pattern
 - Sticky header row
 - Alternating row backgrounds
-- ✓ / ✗ icons (SVG) instead of text
+- check / cross icons (SVG) instead of text
 - Highlight recommended option with accent border/badge
 
 ### Best Practices

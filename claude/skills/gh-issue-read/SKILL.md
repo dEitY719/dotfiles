@@ -71,7 +71,7 @@ After the formatted output, append the ai-metrics line (stdout only —
 this skill never mutates GitHub):
 
 ```
-[ai-metrics:gh-issue-read] 🤖 ~{ELAPSED} min (read-only — not written to GitHub)
+[ai-metrics:gh-issue-read] ~{ELAPSED} min (read-only — not written to GitHub)
 ```
 
 Compute `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))` just before printing.

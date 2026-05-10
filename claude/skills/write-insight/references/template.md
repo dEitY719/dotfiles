@@ -10,7 +10,7 @@ of what to put where, derived from that README.
 `<repo-root>/docs/learnings/<slug>.md`
 
 - `<slug>` is descriptive, lowercase, kebab-case
-- Specific over generic: `git-worktree-detection.md` ✓ — `git-tips.md` ✗
+- Specific over generic: `git-worktree-detection.md` [GOOD] — `git-tips.md` [BAD]
 - Verb-free nouns: name the **pattern**, not the action
 
 ## Frontmatter

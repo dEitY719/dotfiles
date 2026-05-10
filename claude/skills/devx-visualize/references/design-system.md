@@ -64,7 +64,7 @@ Use these cutting-edge CSS features where supported for better UX:
 
 **Popover API** (Chrome 114+) — Zero-JS tooltips, info panels, and modals:
 ```html
-<button popovertarget="info-panel">ℹ Details</button>
+<button popovertarget="info-panel">[i] Details</button>
 <div id="info-panel" popover>
   <h3>More Information</h3>
   <p>Details shown on click, no JS needed.</p>
@@ -330,11 +330,11 @@ Beyond library defaults — apply these to every chart:
 ```
 
 **Testing checklist:**
-- ✅ No horizontal scrolling at 768px viewport
-- ✅ No horizontal scrolling at 375px viewport  
-- ✅ All text remains readable (min 16px)
-- ✅ Touch targets are ≥44px
-- ✅ Charts resize appropriately
+- [OK] No horizontal scrolling at 768px viewport
+- [OK] No horizontal scrolling at 375px viewport  
+- [OK] All text remains readable (min 16px)
+- [OK] Touch targets are ≥44px
+- [OK] Charts resize appropriately
 
 ### Card Hover Microinteractions
 All cards should have subtle hover effects — shadow elevation ONLY, no transforms:
@@ -496,14 +496,14 @@ All CSS-only charts (bars, radar, donut) and Chart.js charts MUST expose data to
 Add `.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }` to every file.
 
 ### Visual Restraint Anti-Patterns (NEVER DO)
-- ❌ **Floating gradient orbs** — decorative blurred circles behind content look amateurish
-- ❌ **Rainbow/gradient borders** — colored top-borders or left-borders on cards scream "template"
-- ❌ **Gradient text** on headings — use solid colors. Gradient text is a 2020 trend that aged poorly
-- ❌ **Scale transforms on hover** — `scale(1.02)` on cards feels janky, not premium
-- ❌ **Glow effects** — `box-shadow: 0 0 20px rgba(blue)` never looks good
-- ❌ **Decorative animations** — spinning rings, floating particles, pulsing dots are noise
-- ❌ **Color-coded borders** — left/top colored borders on cards feel like Bootstrap components
-- ❌ **Stat numbers with gradient text** — use a solid accent color or var(--text) instead
+- [FAIL] **Floating gradient orbs** — decorative blurred circles behind content look amateurish
+- [FAIL] **Rainbow/gradient borders** — colored top-borders or left-borders on cards scream "template"
+- [FAIL] **Gradient text** on headings — use solid colors. Gradient text is a 2020 trend that aged poorly
+- [FAIL] **Scale transforms on hover** — `scale(1.02)` on cards feels janky, not premium
+- [FAIL] **Glow effects** — `box-shadow: 0 0 20px rgba(blue)` never looks good
+- [FAIL] **Decorative animations** — spinning rings, floating particles, pulsing dots are noise
+- [FAIL] **Color-coded borders** — left/top colored borders on cards feel like Bootstrap components
+- [FAIL] **Stat numbers with gradient text** — use a solid accent color or var(--text) instead
 
 ### Accessibility (Mandatory)
 

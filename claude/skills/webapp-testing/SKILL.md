@@ -80,8 +80,8 @@ with sync_playwright() as p:
 
 ## Common Pitfall
 
-❌ **Don't** inspect the DOM before waiting for `networkidle` on dynamic apps
-✅ **Do** wait for `page.wait_for_load_state('networkidle')` before inspection
+[BAD] **Don't** inspect the DOM before waiting for `networkidle` on dynamic apps
+[GOOD] **Do** wait for `page.wait_for_load_state('networkidle')` before inspection
 
 ## Best Practices
 

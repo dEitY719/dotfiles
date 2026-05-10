@@ -54,13 +54,13 @@ Run through every item before delivering the HTML file.
 
 ## Anti-Patterns to Avoid
 
-- ❌ Walls of text — if it reads like a document, it's not a visualization
-- ❌ Tiny fonts — minimum 1rem (16px) body, 20px+ for presentation headings
-- ❌ Rainbow colors — stick to 2-3 colors from the palette + neutrals
-- ❌ Placeholder content — never use "Lorem ipsum" or fake data when real context exists
-- ❌ Over-engineering — simplest approach that looks stunning
-- ❌ Cramped layouts — when in doubt, add more whitespace
-- ❌ Generic design — each visualization should feel intentional, not templated
-- ❌ Missing menu — every output needs the hamburger menu
-- ❌ Broken print — always include `@media print` styles
-- ❌ Static feeling — every file needs at least ONE meaningful interaction
+- [FAIL] Walls of text — if it reads like a document, it's not a visualization
+- [FAIL] Tiny fonts — minimum 1rem (16px) body, 20px+ for presentation headings
+- [FAIL] Rainbow colors — stick to 2-3 colors from the palette + neutrals
+- [FAIL] Placeholder content — never use "Lorem ipsum" or fake data when real context exists
+- [FAIL] Over-engineering — simplest approach that looks stunning
+- [FAIL] Cramped layouts — when in doubt, add more whitespace
+- [FAIL] Generic design — each visualization should feel intentional, not templated
+- [FAIL] Missing menu — every output needs the hamburger menu
+- [FAIL] Broken print — always include `@media print` styles
+- [FAIL] Static feeling — every file needs at least ONE meaningful interaction

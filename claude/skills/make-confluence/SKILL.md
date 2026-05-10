@@ -26,7 +26,7 @@ description: >-
 2. **Extracts metadata** (title, author, date, git info)
 3. **Analyzes content** (problem, cause, solution, results)
 4. **Generates TL;DR** (3-line executive summary)
-5. **Estimates difficulty** (⭐ to ⭐⭐⭐⭐⭐)
+5. **Estimates difficulty** (1 to 5)
 6. **Formats output** in Confluence markdown
 7. **Saves to** `rca-knowledge/docs/confluence-guides/{category}/YYYY-MM-DD-{title}.md`
 
@@ -36,7 +36,7 @@ description: >-
 # Parallel Testing with pytest-xdist
 
 **작성자**: Your Name | **일정**: 2026-01-27
-**카테고리**: testing | **난이도**: ⭐⭐⭐
+**카테고리**: testing | **난이도**: 3
 
 ## TL;DR (1분 요약)
 - pytest-xdist로 테스트 3-4배 속도 향상 (250s → 8s)
@@ -57,14 +57,14 @@ pip install pytest-xdist
 \`\`\`
 
 ## 성과 (Results)
-- ✅ 테스트 시간: 250s → 8s (31배 향상)
-- ✅ 안정성: 간헐적 실패 100% 제거
-- ✅ 영향: 모든 개발자의 피드백 시간 단축
+- [OK] 테스트 시간: 250s → 8s (31배 향상)
+- [OK] 안정성: 간헐적 실패 100% 제거
+- [OK] 영향: 모든 개발자의 피드백 시간 단축
 
 ## 적용 범위
-- ✓ Python 3.7+
-- ✓ pytest 5.0+
-- ✓ All test frameworks
+- [OK] Python 3.7+
+- [OK] pytest 5.0+
+- [OK] All test frameworks
 
 ## 참고 링크
 - [pytest-xdist 문서](https://pytest-xdist.readthedocs.io)
@@ -79,11 +79,11 @@ pip install pytest-xdist
 
 ## Success Criteria
 
-✓ Extracts problem statement accurately
-✓ Identifies root cause from context
-✓ Generates 3-line TL;DR (each ≤15 words)
-✓ Estimates difficulty (⭐ 1-5)
-✓ Produces valid Confluence markdown
-✓ Saves with proper filename (YYYY-MM-DD-title.md)
-✓ Organizes by category
-✓ Preserves code blocks and formatting
+[OK] Extracts problem statement accurately
+[OK] Identifies root cause from context
+[OK] Generates 3-line TL;DR (each ≤15 words)
+[OK] Estimates difficulty (1-5)
+[OK] Produces valid Confluence markdown
+[OK] Saves with proper filename (YYYY-MM-DD-title.md)
+[OK] Organizes by category
+[OK] Preserves code blocks and formatting

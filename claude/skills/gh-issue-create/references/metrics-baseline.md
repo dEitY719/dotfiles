@@ -61,11 +61,11 @@ with thresholds `< 1.5 → small`, `< 2.5 → medium`, `≥ 2.5 → large`.
 
 | PR  | files | diff  | components | 4-factor score | 4-factor tier | Strict-heuristic tier | Match |
 |-----|-------|-------|------------|----------------|---------------|-----------------------|-------|
-| 325 | 4     | 477   | 1          | 2.00           | medium        | medium                | ✓     |
-| 321 | 11    | 319   | 1          | 1.75           | medium        | medium                | ✓     |
-| 320 | 3     | 107   | 1          | 1.75           | medium        | medium                | ✓     |
-| 314 | 13    | 720   | 1          | 2.25           | medium        | medium                | ✓     |
-| 301 | 4     | 350   | 3          | 2.25           | medium        | medium (borderline)   | ✓     |
+| 325 | 4     | 477   | 1          | 2.00           | medium        | medium                | OK    |
+| 321 | 11    | 319   | 1          | 1.75           | medium        | medium                | OK    |
+| 320 | 3     | 107   | 1          | 1.75           | medium        | medium                | OK    |
+| 314 | 13    | 720   | 1          | 2.25           | medium        | medium                | OK    |
+| 301 | 4     | 350   | 3          | 2.25           | medium        | medium (borderline)   | OK    |
 
 Match rate **5/5 = 100 %**, well above the issue's 80 % KISS threshold.
 Therefore: **simple boundary clarification adopted, 4-factor scoring not

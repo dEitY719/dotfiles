@@ -35,7 +35,7 @@ Printed verbatim after Step 4 succeeds. The `<HH:MM + 5min>` shows the
 reset time plus the constant 5-minute margin.
 
 ```
-🛡️ Rate-limit 안전망 등록 (사이클 1/<N>, 간격 <M>분)
+[GUARD] Rate-limit 안전망 등록 (사이클 1/<N>, 간격 <M>분)
   • 원본 명령: <command>
   • 자동 재개 시각: <HH:MM + 5min> (job: <id>)
 이제 원본 명령을 실행합니다 ↓

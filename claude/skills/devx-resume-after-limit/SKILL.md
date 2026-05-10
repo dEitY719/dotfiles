@@ -51,8 +51,8 @@ PWD_NOW=$(pwd); BRANCH=$(git branch --show-current 2>/dev/null || echo unknown)
 ```
 
 - If `PWD_NOW != worktree`: STOP —
-  `❌ 워크트리 불일치 — 예상: <worktree>, 현재: <PWD_NOW>.`
-- If `BRANCH != branch`: warn `⚠️ 브랜치 이동` and continue.
+  `[FAIL] 워크트리 불일치 — 예상: <worktree>, 현재: <PWD_NOW>.`
+- If `BRANCH != branch`: warn `[WARN] 브랜치 이동` and continue.
 
 ### 4. Pre-emptive Re-arm
 
@@ -64,7 +64,7 @@ Step 7. Otherwise skip.
 ### 5. Announce
 
 ```
-🔄 [rate-limit-guard] 재개: <command>
+[RESUME] [rate-limit-guard] 재개: <command>
   • 워크트리: <PWD_NOW>  • 브랜치: <BRANCH>
   • 사이클: <max_cycles - cycles_remaining + 1>/<max_cycles>
   • 멱등 실행 — 이미 완료된 sub-step은 스킵.
@@ -84,7 +84,7 @@ In the same turn after success:
 rm -f .claude/.rate-limit-guard.json
 ```
 
-Print `✅ 재개 완료 — 안전망 상태 파일 정리됨`.
+Print `[OK] 재개 완료 — 안전망 상태 파일 정리됨`.
 
 The just-fired cron auto-deleted (`recurring: false`); the next-cycle cron
 from Step 4 must be explicitly cancelled.

@@ -86,7 +86,7 @@ if assignees == []:
     return 0    # soft-fail on API error: warn + continue
 
 # Someone else already holds it.
-print "⚠️  Issue #<N> is assigned to <other>; not overriding."
+print "[WARN] Issue #<N> is assigned to <other>; not overriding."
 print "    Coordinate via the issue thread, or rerun with"
 print "    GH_ISSUE_SKIP_SELF_ASSIGN=1 to suppress this warning."
 return 0
@@ -103,7 +103,7 @@ worse than a duplicated implement attempt. The warning gives the human
 a chance to coordinate; AgentToolbox `claude-enter-issue` takes the
 same posture.
 
-**Soft-fail rule**: any of these failures → single-line `⚠️ ` warning
+**Soft-fail rule**: any of these failures → single-line `[WARN]` warning
 + continue:
 - No write permission on repo (fork, readonly token).
 - Transient API / network error.
@@ -170,7 +170,7 @@ for M in deps:
     state = `gh issue view <M> --repo <repo> --json state -q .state`
     if state == "CLOSED":
         continue
-    print "⚠️  Issue #<N> depends on #<M> which is still <state>."
+    print "[WARN] Issue #<N> depends on #<M> which is still <state>."
     print "    The implement may be premature — review or close #<M> first."
 ```
 

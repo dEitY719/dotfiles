@@ -104,10 +104,10 @@ Before: <N> lines → After: <M> lines (↓ X%)
 ### Validation
 | Check          | Result |
 |----------------|--------|
-| Root < 400 ln  | ✅ / ❌ |
-| No emojis      | ✅ / ❌ |
-| Context Map    | ✅ / ❌ |
-| Nested < 500ln | ✅ / ❌ |
+| Root < 400 ln  | [OK] / [FAIL] |
+| No emojis      | [OK] / [FAIL] |
+| Context Map    | [OK] / [FAIL] |
+| Nested < 500ln | [OK] / [FAIL] |
 
 ### Remaining Issues (if any)
 <anything that still needs manual attention>

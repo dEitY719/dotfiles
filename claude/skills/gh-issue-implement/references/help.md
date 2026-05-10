@@ -41,7 +41,7 @@ If `~/.claude/plugins/cache/superpowers-dev/` does not exist, any
 `plan`/`brainstorming` mode falls back to `direct` with one warning line:
 
 ```
-⚠️  superpowers plugin not installed — falling back to direct mode.
+[WARN] superpowers plugin not installed — falling back to direct mode.
 ```
 
 ## What the skill will NOT do

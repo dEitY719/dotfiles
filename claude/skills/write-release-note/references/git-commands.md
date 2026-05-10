@@ -57,7 +57,7 @@ git log --oneline --reverse <anchor>..HEAD | grep -E "^[a-f0-9]+ refactor:"
 # 문서/잡무
 git log --oneline --reverse <anchor>..HEAD | grep -E "^[a-f0-9]+ (docs|chore):"
 
-# ⚠️ 비관례 커밋 (놓치지 말 것)
+# [WARN] 비관례 커밋 (놓치지 말 것)
 git log --oneline --reverse <anchor>..HEAD | grep -vE "^[a-f0-9]+ (feat|fix|refactor|docs|chore|test|build|ci|perf|style):"
 ```
 

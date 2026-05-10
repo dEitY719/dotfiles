@@ -60,8 +60,8 @@ excluded so adjacent ranges concatenate without overlap:
 
 # 2. Confidence check passed — start the real run
 /gh:add-ai-metrics --type PR --date 26-04 --pace 3m --budget 4h30m
-# → ✓ added #501 ...   (sleep 3m)
-# → ✓ added #502 ...   (sleep 3m)
+# → [OK] added #501 ...   (sleep 3m)
+# → [OK] added #502 ...   (sleep 3m)
 # → ...
 # → Stopped early: --budget (4h30m); 110 cards remaining. Re-run the
 #   same command to resume (skip-existing makes this idempotent).

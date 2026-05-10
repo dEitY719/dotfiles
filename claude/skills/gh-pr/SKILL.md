@@ -100,7 +100,7 @@ footer block (soft-fail — warn on error, never block):
    `compute_pr_tokens` snippet in full. The inputs are **(linked-issue
    body) + (commit log over `<base>..HEAD`)**, NOT the drafted PR body.
    Counting `$BODY` (the PR-body temp file) is the regression that
-   produced PR #325's `📊 ~1000 tokens` footer (issue #326).
+   produced PR #325's `~1000 tokens` footer (issue #326).
 
 When `GH_DISABLE_AI_METRICS=1`, skip the footer entirely (issue #399).
 The PR body is otherwise identical, and the linked issue still gets

@@ -1,7 +1,7 @@
 ---
 name: gh:add-ai-metrics
 description: >-
-  Backfill the ai-metrics footer (📊 tokens · 👤 human-h · 🤖 ai-min) into
+  Backfill the ai-metrics footer (tokens · human-h · ai-min) into
   pre-existing GitHub Issues and PRs that were created before issue #317 /
   PR #320 introduced automatic metric capture. Use when the user runs
   /gh:add-ai-metrics, /gh-add-ai-metrics, or asks "기존 이슈에 메트릭
