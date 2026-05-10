@@ -153,7 +153,7 @@ else
     gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
       -X POST \
       -f body="<!-- ai-metrics:gh-pr-merge tokens=${TOKENS:-2000} human_h=0.25 ai_min=$ELAPSED -->
-🤖 PR merge: ~$ELAPSED min"
+PR merge: ~$ELAPSED min"
 fi
 ```
 

@@ -139,7 +139,7 @@ else
     gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
       -X POST \
       -f body="<!-- ai-metrics:gh-pr-resolve-conflict tokens=${TOKENS:-3000} human_h=$HUMAN_H ai_min=$ELAPSED -->
-🤖 컨플릭트 해결: ~$ELAPSED min · 👤 ~$HUMAN_H h ($CONFLICT_FILES files × 0.5 h)"
+컨플릭트 해결: ~$ELAPSED min · 사람: ~$HUMAN_H h ($CONFLICT_FILES files × 0.5 h)"
 fi
 ```
 
