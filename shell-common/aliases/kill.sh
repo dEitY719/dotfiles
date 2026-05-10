@@ -13,7 +13,9 @@ kill_by_port() {
 
     if [ -n "$PID" ]; then
         ux_info "포트 $PORT 를 점유 중인 PID $PID 종료..."
-        kill -9 "$PID"
+        # lsof -t can return multiple newline-separated PIDs; intentional word-split.
+        # shellcheck disable=SC2086
+        kill -9 $PID
     else
         ux_warning "포트 $PORT 를 점유 중인 프로세스가 없습니다."
     fi
