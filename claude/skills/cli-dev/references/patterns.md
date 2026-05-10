@@ -52,7 +52,7 @@ if not self.context.session.token:
 try:
     response = await self.api_client.post(...)
 except Exception as e:
-    console.print(f"Error: {e}", style="red")
+    console.print(f"Error: {e}", style="red", markup=False)
     return False
 
 # WRONG - crashes CLI
