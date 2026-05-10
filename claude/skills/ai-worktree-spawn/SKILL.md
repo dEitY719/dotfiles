@@ -11,6 +11,10 @@ allowed-tools: Bash, Read, Grep, Glob
 
 # AI Worktree Spawn
 
+## Help
+
+If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
+
 Create an isolated git worktree so this AI agent can work without interfering
 with other agents running in the same repository.
 

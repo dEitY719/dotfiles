@@ -5,6 +5,10 @@ description: Create Excalidraw diagram JSON files that make visual arguments. Tr
 
 # Excalidraw Diagram Creator
 
+## Help
+
+If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
+
 Generate `.excalidraw` JSON files that **argue visually**, not just display information.
 
 **Setup:** See `README.md` for renderer setup and dependencies.

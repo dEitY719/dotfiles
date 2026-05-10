@@ -12,6 +12,10 @@ allowed-tools: Read, Glob, Grep, Bash
 
 # AGENTS.md Compliance Auditor
 
+## Help
+
+If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
+
 ## Role
 
 You are an AGENTS.md quality auditor. Read the target file completely, evaluate

@@ -12,6 +12,10 @@ description: >-
 
 # devx:schedule — Deferred Skill Executor
 
+## Help
+
+If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
+
 > **Claude Code only** — requires the `CronCreate` tool, which is part of the
 > Claude Code harness. Other CLIs (Codex, Gemini, etc.) lack a comparable
 > session-spawn scheduler, so this skill cannot run there.
