@@ -2,7 +2,7 @@
 # shell-common/functions/zz_help_standard_adapter.sh
 # Normalizes my-help topic functions to the command-guidelines interface.
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _help_std_is_function() {
     if [ -n "${ZSH_VERSION:-}" ]; then

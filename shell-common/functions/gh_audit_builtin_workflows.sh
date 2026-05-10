@@ -35,7 +35,7 @@
 # Help text
 # ---------------------------------------------------------------------------
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 gh_audit_builtin_workflows_help() {
     if type ux_header >/dev/null 2>&1; then

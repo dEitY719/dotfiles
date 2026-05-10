@@ -26,7 +26,7 @@
 
 # Format an integer with thousand separators, sh/awk only (locale-independent).
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _ai_usage_fmt_int() {
     awk -v n="${1:-0}" 'BEGIN {

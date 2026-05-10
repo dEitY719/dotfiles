@@ -3,7 +3,7 @@
 
 # Load UX library if not already loaded (POSIX portable)
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 if ! type ux_header >/dev/null 2>&1; then
     # Try multiple paths to find ux_lib.sh

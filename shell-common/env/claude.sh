@@ -9,7 +9,7 @@
 # claude_accounts_init. Disable legacy auto-mount when migrated state
 # is detected so we don't mount onto the guard dir.
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 if [ -d "$HOME/.claude-personal" ] || [ -d "$HOME/.claude-work" ]; then
     export CLAUDE_AUTO_MOUNT_SKILLS=0

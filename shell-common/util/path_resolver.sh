@@ -5,7 +5,7 @@
 
 # Direct-exec guard: This file should be sourced, not executed
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 if [ "${0##*/}" != "path_resolver.sh" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     echo "Error: This file should be sourced, not executed directly" >&2

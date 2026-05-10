@@ -4,7 +4,7 @@
 
 # Standard venv/virtualenv prompt mutation disable flag.
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 export VIRTUAL_ENV_DISABLE_PROMPT=1
 

@@ -4,7 +4,7 @@
 
 # Override Oh My Zsh's git aliases with our functions (zsh only)
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 unalias gl gd glum glog 2>/dev/null || true
 

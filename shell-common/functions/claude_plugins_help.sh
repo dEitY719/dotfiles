@@ -2,7 +2,7 @@
 # shell-common/functions/claude_plugins_help.sh
 # Help display for Claude plugins (split from claude_plugins.sh)
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _claude_plugins_help_summary() {
     ux_info "Usage: claude-plugins-help [section|--list|--all]"

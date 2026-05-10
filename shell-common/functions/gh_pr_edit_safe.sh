@@ -36,7 +36,7 @@
 #   auto-create a missing label silently — see project memory
 #   `feedback_gh_label_no_autocreate.md`.
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _gh_pr_edit_safe__deprecation_marker='Projects (classic) is being deprecated'
 

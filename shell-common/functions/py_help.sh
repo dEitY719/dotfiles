@@ -1,7 +1,7 @@
 #!/bin/sh
 # shell-common/functions/py_help.sh
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _py_help_summary() {
     ux_info "Usage: py-help [section|--list|--all]"

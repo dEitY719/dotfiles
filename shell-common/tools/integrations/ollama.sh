@@ -5,7 +5,7 @@
 
 # Load UX library - use dynamic path detection with fallback
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _ux_lib_path="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh"
 if [ -f "$_ux_lib_path" ]; then

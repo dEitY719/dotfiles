@@ -7,7 +7,7 @@
 # Powerlevel10k Help Function
 # ═══════════════════════════════════════════════════════════════
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _p10k_help_summary() {
     ux_info "Usage: p10k-help [section|--list|--all]"

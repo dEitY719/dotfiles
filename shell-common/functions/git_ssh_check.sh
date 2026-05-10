@@ -2,7 +2,7 @@
 # shell-common/functions/git_ssh_check.sh
 # Test GitHub SSH connection and provide diagnostics
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 git_ssh_check() {
     # Load UX library if available

@@ -5,7 +5,7 @@
 
 # 기본 에디터 설정
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 export EDITOR='vim'
 export VISUAL='vim'

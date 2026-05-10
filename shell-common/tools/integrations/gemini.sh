@@ -2,7 +2,7 @@
 # shell-common/tools/external/gemini.sh
 # Gemini CLI helper - shared across bash and zsh
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 : <<'GEMINI_DOC'
 ==========================================================

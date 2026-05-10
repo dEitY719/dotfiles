@@ -8,7 +8,7 @@
 # - Inside tmux: switches client to the first session
 # - No sessions: prints info and exits
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ta() {
     ux_require "tmux" || return 1

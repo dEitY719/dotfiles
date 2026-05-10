@@ -6,7 +6,7 @@
 # Initialize Plugin Documentation Structure
 # ═══════════════════════════════════════════════════════════════
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 init_plugins_docs() {
     local docs_base_dir="$HOME/.claude/docs"

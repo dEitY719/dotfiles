@@ -1,7 +1,7 @@
 #!/bin/sh
 # shell-common/functions/zsh_help.sh
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _zsh_help_summary() {
     ux_info "Usage: zsh-help [section|--list|--all]"

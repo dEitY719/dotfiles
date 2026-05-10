@@ -11,7 +11,7 @@
 
 # 🔹 Compose 기본 단축키 (요청하신 핵심 6개)
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 alias dc='docker compose'         # 기본 compose 명령
 alias dcu='docker compose up'     # foreground 실행 (옵션 추가 가능: dcu -d 등)

@@ -7,7 +7,7 @@
 # ripgrep Help and Documentation
 # ═══════════════════════════════════════════════════════════════
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _ripgrep_help_summary() {
     ux_info "Usage: ripgrep-help [section|--list|--all]"

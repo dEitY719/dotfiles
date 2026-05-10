@@ -9,7 +9,7 @@
 
 # Check if zsh is installed
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _zsh_check_installed() {
     if ! command -v zsh >/dev/null 2>&1; then

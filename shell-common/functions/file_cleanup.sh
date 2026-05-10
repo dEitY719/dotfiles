@@ -2,7 +2,7 @@
 # shell-common/functions/file_cleanup.sh
 # Interactive cleanup for backup/original files in the current directory
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _cleanup_set_default_patterns() {
     CLEANUP_DEFAULT_PATTERNS=(

@@ -4,7 +4,7 @@
 
 # BASIC
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 alias cd-dot='cd "${DOTFILES_ROOT:-$HOME/dotfiles}"'
 alias cd-down='cd ~/downloads'

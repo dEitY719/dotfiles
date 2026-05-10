@@ -1,7 +1,7 @@
 #!/bin/sh
 # shell-common/functions/tmux_help.sh
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _tmux_help_summary() {
     ux_info "Usage: tmux-help [section|--list|--all]"

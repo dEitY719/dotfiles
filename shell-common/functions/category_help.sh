@@ -2,7 +2,7 @@
 # shell-common/functions/category_help.sh
 # categoryHelp - shared between bash and zsh
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _category_help_ensure_loaded() {
     # Best-effort: if my-help isn't loaded yet, attempt to source it.

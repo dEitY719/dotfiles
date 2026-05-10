@@ -9,7 +9,7 @@
 # Default AI tool for documentation generation
 # Can be overridden by: CLAUDE_DOC_GENERATOR=gemini, CLAUDE_DOC_GENERATOR=codex, etc.
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 : "${CLAUDE_DOC_GENERATOR:=claude}"
 

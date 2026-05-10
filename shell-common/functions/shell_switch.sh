@@ -5,7 +5,7 @@
 
 # Switch to zsh shell
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 zsh_switch() {
     if command -v zsh >/dev/null 2>&1; then

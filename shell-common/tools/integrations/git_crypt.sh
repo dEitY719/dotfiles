@@ -2,7 +2,7 @@
 # shell-common/tools/integrations/git_crypt.sh
 # Git-crypt helper - shared across bash and zsh (sourced, not executed)
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 : <<'GIT_CRYPT_DOC'
 ==========================================================
