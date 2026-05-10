@@ -44,6 +44,8 @@ Read `references/refactoring-playbook.md` when executing this mode.
 6. Validate in both bash and zsh; run targeted help function checks.
 7. Report changes with file paths, key replacements, and validation results.
 
+Stop on first failure and report — do not proceed to the next step.
+
 ## Mode B: Bulk UX Compliance Review
 
 Read `references/bulk-review-workflow.md` when executing this mode.
@@ -56,6 +58,8 @@ Read `references/bulk-review-workflow.md` when executing this mode.
 5. Include concrete file/line evidence and suggested fixes.
 6. Do not commit unless explicitly requested.
 
+Stop on first failure and report — do not proceed to the next step.
+
 ## Output Requirements
 
 Always include:
@@ -63,4 +67,13 @@ Always include:
 1. Mode used (`individual` or `bulk`).
 2. Files inspected and files changed.
 3. Validation commands run and outcomes.
-4. Remaining risks or follow-up items, if any.
+4. Remaining risks or follow-up items — list with concrete next commands
+   (e.g. `tox -e shellcheck`, `./tests/test`).
+
+## Output
+
+```
+[OK] devx:ux-guidelines — mode=<a|b> files_changed=<n> validated=<true|false>
+
+Next: tox -e shellcheck && ./tests/test
+```

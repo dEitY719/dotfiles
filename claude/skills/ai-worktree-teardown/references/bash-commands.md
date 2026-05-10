@@ -1,5 +1,19 @@
 # Bash Commands — implementation details for each execution step
 
+## Step 0: Dry-run Gate
+
+If `--dry-run`, print the plan and stop (no destructive action).
+
+```bash
+if [[ "${DRY_RUN:-false}" == true ]]; then
+  echo "[DRY-RUN] Plan:"
+  echo "  Worktree: $WORKTREE_ARG"
+  echo "  Actions:  preflight -> worktree remove -> sync main -> branch delete"
+  echo "No changes made."
+  exit 0
+fi
+```
+
 ## Step 1: Validate — Must Be in Main Repo, NOT a Worktree
 
 ```bash
