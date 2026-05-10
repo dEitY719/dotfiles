@@ -56,9 +56,9 @@ commits. Detailed instructions for each step live in
 4. **Step 4 — Audience apply**: redact or enhance per `--audience`. See
    `references/audience-policies.md`.
 5. **Step 5 — Commit (conditional)**: if `--commit`,
-   `git -C $RCA_REPO_PATH add && commit`. Never pushes. Requires the path to
-   be a git working tree.
-6. **Step 6 — Report**: print the verdict block in `## Output` with concrete
+   `git -C "$RCA_REPO_PATH" add && commit`. Never pushes unless
+   `RCA_AUTO_PUBLISH=true`. Requires the path to be a git working tree.
+6. **Step 6 — Report**: read the verdict block in `## Output` with concrete
    next-action commands.
 
 ## Output
@@ -73,7 +73,7 @@ Success:
   audience: <all-four|blog|private|internal>
 
 Next: cat ${RCA_REPO_PATH}/docs/analysis/<year>-<mm>-<dd>-<slug>.md
-Then: git -C ${RCA_REPO_PATH} push  (if --commit was used)
+Then: git -C "${RCA_REPO_PATH}" push  (if --commit was used)
 ```
 
 Failure:
