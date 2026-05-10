@@ -267,9 +267,11 @@ def main() -> int:
         return _allow("no gh-issue-flow boundary in transcript")
 
     terminal, seen = _scan_after_boundary(messages, boundary)
-    _trace(
-        f"boundary={boundary} sub_skills_seen={len(seen)}/5 ({','.join(seen) if seen else 'none'}) terminal={terminal}"
-    )
+    if _TRACE_ENABLED:
+        _trace(
+            f"boundary={boundary} sub_skills_seen={len(seen)}/{len(EXPECTED_CHAIN)} "
+            f"({','.join(seen) if seen else 'none'}) terminal={terminal}"
+        )
     if terminal:
         return _allow("Step 3 terminal marker present — flow finished")
 
