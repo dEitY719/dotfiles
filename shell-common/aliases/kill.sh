@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/bin/sh
+
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 kill_by_port() {
     if [ -z "$1" ]; then
