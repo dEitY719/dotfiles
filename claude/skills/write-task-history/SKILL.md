@@ -13,6 +13,10 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 
 # write-task-history
 
+## Help
+
+If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
+
 Document completed work from the current conversation into a daily task history file,
 producing JIRA ticket and git PR formats that can be directly copy-pasted.
 

@@ -11,6 +11,10 @@ description: >-
 
 # Dissect Built-in Skill
 
+## Help
+
+If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
+
 Analyze a Claude Code built-in skill and produce structured documentation in Korean.
 
 ## Usage
