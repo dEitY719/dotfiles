@@ -78,7 +78,7 @@ source "${SHELL_COMMON}/path/to/file.sh"
 
 **Interactive guard** — every file that produces output must start with:
 ```bash
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 ```
 
 **No direct writes to `~/.bashrc`** — use symlinks via `setup.sh`.

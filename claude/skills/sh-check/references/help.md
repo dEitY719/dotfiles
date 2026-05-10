@@ -12,7 +12,7 @@ What it checks (10 criteria, modeled on git_worktree.sh):
 
   Structure (1–5)
     1. Shebang + POSIX Hygiene   — #!/bin/sh, [ ], >/dev/null 2>&1
-    2. Interactive Guard         — case $- in *i*) ;; *) return 0 ;; esac
+    2. Interactive Guard         — case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
     3. Section Anatomy           — # ====== headers + Usage: + Args:
     4. Naming Convention         — _prefix private, snake_case
     5. ZSH Compat Guard          — emulate -L sh in cross-shell functions
