@@ -15,7 +15,7 @@ with YAML frontmatter and 9 fixed sections. Optional media goes in `_assets/`.
 
 | Option                  | Description                                            | Default     |
 |-------------------------|--------------------------------------------------------|-------------|
-| `--commit`              | Run `git -C $RCA_REPO_PATH add && commit` after write  | off         |
+| `--commit`              | Run `git -C "$RCA_REPO_PATH" add && commit` after write | off         |
 | `--audience <name>`     | Audience preset: `blog`, `private`, `internal`         | (all four)  |
 | `--private`             | Shortcut for `--audience private` (sensitive incident) | off         |
 | `-h`, `--help`, `help`  | Print this help and stop                               | —           |

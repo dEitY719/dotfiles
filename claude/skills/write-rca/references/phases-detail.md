@@ -98,7 +98,7 @@ If `--commit` was passed:
 
 ```bash
 git -C "${RCA_REPO_PATH:-$HOME/para/archive/rca-knowledge}" add \
-    "docs/analysis/YYYY-MM-DD-{slug}.md" "_assets/{slug}-*"
+    "docs/analysis/YYYY-MM-DD-{slug}.md" "_assets/{slug}-"*
 git -C "${RCA_REPO_PATH:-$HOME/para/archive/rca-knowledge}" commit \
     -m "docs(rca): {slug}"
 ```
@@ -106,12 +106,13 @@ git -C "${RCA_REPO_PATH:-$HOME/para/archive/rca-knowledge}" commit \
 If the repo path is not a git working tree, stop with
 `[FAIL] write-rca — Step 5: $RCA_REPO_PATH is not a git repo`.
 
-Do NOT push. The user runs `git push` (or sets `RCA_AUTO_PUBLISH=true`
-in their shell profile).
+Do NOT push unless `RCA_AUTO_PUBLISH=true`. The user runs `git push` (or
+sets `RCA_AUTO_PUBLISH=true` in their shell profile to opt in to automatic
+publishing as part of Step 5).
 
 ## Step 6 — Report (always)
 
-Print the success verdict block defined in SKILL.md → `## Output`. Include:
+Read the success verdict block defined in `../SKILL.md` → `## Output`. Include:
 
 - Output file path.
 - Word count.
