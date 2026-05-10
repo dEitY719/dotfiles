@@ -9,7 +9,7 @@
 
 ## Placeholder resolution
 
-The author fields in `pyproject.toml` use git config — see Step 1 in `phases-detail.md`.
+The author fields in `pyproject.toml` use `git` config — see Step 1 in `references/phases-detail.md`.
 
 | Placeholder         | Source                  | Fallback                    |
 |---------------------|-------------------------|-----------------------------|
