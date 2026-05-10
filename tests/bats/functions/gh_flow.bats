@@ -308,20 +308,26 @@ teardown() {
 # verdict matrix (issue #252)
 # ---------------------------------------------------------------------------
 
-# Install a tiny `gh` stub on PATH so _gh_flow_pr_state has predictable input.
-# $1 = state token returned by `gh pr view <n> --json state --jq '.state'`.
+# Install a tiny `gh` stub on PATH so _gh_flow_pr_view has predictable input.
+# $1 = state token returned by `gh pr view <n> --json state[,reviewDecision]`.
+# $2 = optional reviewDecision (empty by default) — appended on the
+#      "--json state,reviewDecision" path used by _gh_flow_pr_view (issue #501).
 # Empty $1 → simulate gh failure (exit 1) so verdict treats it as UNREACHABLE.
 _install_gh_stub() {
     local _state="${1:-}"
+    local _decision="${2:-}"
     mkdir -p "$TEST_TEMP_HOME/bin"
     if [ -z "$_state" ]; then
         printf '#!/usr/bin/env bash\nexit 1\n' >"$TEST_TEMP_HOME/bin/gh"
     else
         cat >"$TEST_TEMP_HOME/bin/gh" <<STUB
 #!/usr/bin/env bash
-# minimal gh pr view stub
+# minimal gh pr view stub. The state,reviewDecision branch must come BEFORE
+# the bare --json state branch — both contain "--json state" as a substring,
+# so case-glob ordering matters.
 if [ "\$1" = "pr" ] && [ "\$2" = "view" ]; then
     case "\$*" in
+    *"--json state,reviewDecision"*) printf '%s\n%s' "$_state" "$_decision" ;;
     *"--json state"*) printf '%s' "$_state" ;;
     *"--json mergedAt"*) printf '%s' "2026-04-26" ;;
     *"--json closedAt"*) printf '%s' "2026-04-26" ;;
@@ -354,15 +360,76 @@ STUB
     assert_output --partial "gh-flow prune --force 201"
 }
 
-@test "verdict: polling + OPEN PR → active polling, leave alone" {
-    _install_gh_stub "OPEN"
+@test "verdict: polling + OPEN + no reply.done + no decision → awaiting first review" {
+    _install_gh_stub "OPEN" ""
     _seed_state 202 "polling" "" "$$"
     printf '888\n' >"$HOME/.local/state/gh-flow/repo/202/pr.number"
 
     run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 202"
     assert_success
-    assert_output --partial "active polling"
+    assert_output --partial "awaiting first review"
     assert_output --partial "still working"
+}
+
+# Issue #501 polling/OPEN matrix: (reply.done, reviewDecision) → verdict.
+
+@test "verdict: polling + OPEN + no reply.done + CHANGES_REQUESTED → comments arrived" {
+    _install_gh_stub "OPEN" "CHANGES_REQUESTED"
+    _seed_state 220 "polling" "" "$$"
+    printf '500\n' >"$HOME/.local/state/gh-flow/repo/220/pr.number"
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 220"
+    assert_success
+    assert_output --partial "comments arrived"
+    assert_output --partial "/gh-pr-reply"
+    assert_output --partial "still working"
+}
+
+@test "verdict: polling + OPEN + no reply.done + APPROVED → about to merge" {
+    _install_gh_stub "OPEN" "APPROVED"
+    _seed_state 221 "polling" "" "$$"
+    printf '501\n' >"$HOME/.local/state/gh-flow/repo/221/pr.number"
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 221"
+    assert_success
+    assert_output --partial "approved"
+    assert_output --partial "about to merge"
+}
+
+@test "verdict: polling + OPEN + reply.done + no decision → awaiting Approve (replied)" {
+    _install_gh_stub "OPEN" ""
+    _seed_state 222 "polling" "" "$$"
+    printf '502\n' >"$HOME/.local/state/gh-flow/repo/222/pr.number"
+    touch "$HOME/.local/state/gh-flow/repo/222/reply.done"
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 222"
+    assert_success
+    assert_output --partial "awaiting reviewer Approve"
+    assert_output --partial "already replied"
+    refute_output --partial "awaiting first review"
+}
+
+@test "verdict: polling + OPEN + reply.done + CHANGES_REQUESTED → additional changes after reply" {
+    _install_gh_stub "OPEN" "CHANGES_REQUESTED"
+    _seed_state 223 "polling" "" "$$"
+    printf '503\n' >"$HOME/.local/state/gh-flow/repo/223/pr.number"
+    touch "$HOME/.local/state/gh-flow/repo/223/reply.done"
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 223"
+    assert_success
+    assert_output --partial "additional changes requested after reply"
+}
+
+@test "verdict: polling + OPEN + reply.done + APPROVED → about to merge" {
+    _install_gh_stub "OPEN" "APPROVED"
+    _seed_state 224 "polling" "" "$$"
+    printf '504\n' >"$HOME/.local/state/gh-flow/repo/224/pr.number"
+    touch "$HOME/.local/state/gh-flow/repo/224/reply.done"
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 224"
+    assert_success
+    assert_output --partial "approved"
+    assert_output --partial "about to merge"
 }
 
 @test "verdict: polling + no pr.number → stuck pre-PR" {
@@ -493,6 +560,42 @@ STUB
     run_in_bash "cd '$REPO_DIR' && gh_flow status 504 505 2>&1"
     assert_failure
     assert_output --partial "only one issue number"
+}
+
+@test "status <N>: OPEN PR with no decision shows 'Review: pending' (issue #501)" {
+    _install_gh_stub "OPEN" ""
+    _seed_state 510 "polling" "" "$$"
+    printf '700\n' >"$HOME/.local/state/gh-flow/repo/510/pr.number"
+
+    run_in_bash "cd '$REPO_DIR' && gh_flow status 510"
+    assert_success
+    assert_output --partial "PR"
+    assert_output --partial "Review"
+    assert_output --partial "pending"
+}
+
+@test "status <N>: OPEN PR with APPROVED decision shows 'Review: APPROVED' (issue #501)" {
+    _install_gh_stub "OPEN" "APPROVED"
+    _seed_state 511 "polling" "" "$$"
+    printf '701\n' >"$HOME/.local/state/gh-flow/repo/511/pr.number"
+
+    run_in_bash "cd '$REPO_DIR' && gh_flow status 511"
+    assert_success
+    assert_output --partial "Review"
+    assert_output --partial "APPROVED"
+}
+
+@test "status <N>: MERGED PR omits the Review row (issue #501)" {
+    # Review decision is irrelevant once the PR is merged — the row should
+    # not appear so the status table stays terse for resolved PRs.
+    _install_gh_stub "MERGED" ""
+    _seed_state 512 "polling" "" "$$"
+    printf '702\n' >"$HOME/.local/state/gh-flow/repo/512/pr.number"
+
+    run_in_bash "cd '$REPO_DIR' && gh_flow status 512"
+    assert_success
+    assert_output --partial "MERGED"
+    refute_output --partial "Review"
 }
 
 # ---------------------------------------------------------------------------

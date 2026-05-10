@@ -127,28 +127,36 @@ _gh_flow_run_ai_prompt() {
 # Verdict helpers (shared between status and scoped prune)
 # ============================================================================
 
-# Echo one of: MERGED | CLOSED | OPEN | EMPTY | UNREACHABLE
-# - EMPTY: pr.number missing or empty (worker never opened a PR)
-# - UNREACHABLE: gh CLI failed (network/auth) — verdict layer must tolerate it
-_gh_flow_pr_state() {
+# Echo two lines for the given issue's PR:
+#   <state>
+#   <reviewDecision>
+# state ∈ MERGED | CLOSED | OPEN | EMPTY | UNREACHABLE
+#   - EMPTY: pr.number missing or empty (worker never opened a PR)
+#   - UNREACHABLE: gh CLI failed (network/auth) — verdict layer must tolerate it
+# reviewDecision ∈ "" (no decision yet) | APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED
+# Issue #501: reviewDecision distinguishes polling pre-reply ("") from
+# post-reply Approve-wait, so callers can render granular verdicts instead
+# of one ambiguous "active polling" message.
+_gh_flow_pr_view() {
     local _dir="$1"
-    local _pr_num _state _rc
+    local _pr_num _out _rc
     if [ ! -s "$_dir/pr.number" ]; then
-        printf 'EMPTY'
+        printf 'EMPTY\n\n'
         return 0
     fi
     _pr_num="$(cat "$_dir/pr.number" 2>/dev/null)"
     if [ -z "$_pr_num" ]; then
-        printf 'EMPTY'
+        printf 'EMPTY\n\n'
         return 0
     fi
-    _state="$(gh pr view "$_pr_num" --json state --jq '.state? // empty' 2>/dev/null)"
+    _out="$(gh pr view "$_pr_num" --json state,reviewDecision \
+        --jq '"\(.state // "EMPTY")\n\(.reviewDecision // "")"' 2>/dev/null)"
     _rc=$?
-    if [ "$_rc" -ne 0 ] || [ -z "$_state" ]; then
-        printf 'UNREACHABLE'
+    if [ "$_rc" -ne 0 ] || [ -z "$_out" ]; then
+        printf 'UNREACHABLE\n\n'
         return 0
     fi
-    printf '%s' "$_state"
+    printf '%s\n' "$_out"
 }
 
 # Print two lines for the given issue:
@@ -160,6 +168,7 @@ _gh_flow_pr_state() {
 _gh_flow_verdict() {
     local _issue="$1"
     local _dir _state _wt _pid _pid_alive _pr_state _verdict _action
+    local _pr_view _pr_decision
     _dir=$(_gh_flow_issue_dir "$_issue")
     if [ ! -d "$_dir" ]; then
         printf 'no state — issue not tracked\n(none)\n'
@@ -172,7 +181,13 @@ _gh_flow_verdict() {
     if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
         _pid_alive=1
     fi
-    _pr_state=$(_gh_flow_pr_state "$_dir")
+    _pr_view=$(_gh_flow_pr_view "$_dir")
+    {
+        IFS= read -r _pr_state || _pr_state=""
+        IFS= read -r _pr_decision || _pr_decision=""
+    } <<EOF
+$_pr_view
+EOF
 
     case "$_state" in
     done)
@@ -190,7 +205,30 @@ _gh_flow_verdict() {
             fi
             ;;
         OPEN)
-            _verdict="active polling — leave alone"
+            # Issue #501: split the single "active polling" message into a
+            # granular matrix over (reply.done, reviewDecision) so the user
+            # can tell pre-reply from post-Approve-wait without reading log.
+            if [ "$_pr_decision" = "APPROVED" ]; then
+                _verdict="approved — worker about to merge"
+            elif [ -f "$_dir/reply.done" ]; then
+                case "$_pr_decision" in
+                CHANGES_REQUESTED)
+                    _verdict="additional changes requested after reply"
+                    ;;
+                *)
+                    _verdict="awaiting reviewer Approve (already replied)"
+                    ;;
+                esac
+            else
+                case "$_pr_decision" in
+                CHANGES_REQUESTED)
+                    _verdict="comments arrived — worker about to run /gh-pr-reply"
+                    ;;
+                *)
+                    _verdict="awaiting first review"
+                    ;;
+                esac
+            fi
             _action="(none — still working)"
             ;;
         *)
@@ -247,6 +285,7 @@ _gh_flow_status_single() {
     local _issue _dir _state _pid _wt _pr_num _pid_state _wt_state
     local _pr_state _pr_date _pr_info _markers _log _log_mtime _etime
     local _verdict_out _verdict_text _action_text _name
+    local _pr_view _pr_decision _review_info
 
     _issue="${_arg#\#}"
     case "$_issue" in
@@ -288,9 +327,17 @@ _gh_flow_status_single() {
         _pid_state="-"
     fi
 
-    # PR detail: state from _gh_flow_pr_state, plus a date for MERGED/CLOSED.
+    # PR detail: state + reviewDecision from _gh_flow_pr_view (one round-trip),
+    # plus a date for MERGED/CLOSED. reviewDecision drives the new "Review" row
+    # rendered below; see issue #501.
     if [ -n "$_pr_num" ]; then
-        _pr_state=$(_gh_flow_pr_state "$_dir")
+        _pr_view=$(_gh_flow_pr_view "$_dir")
+        {
+            IFS= read -r _pr_state || _pr_state=""
+            IFS= read -r _pr_decision || _pr_decision=""
+        } <<EOF
+$_pr_view
+EOF
         case "$_pr_state" in
         MERGED)
             _pr_date="$(gh pr view "$_pr_num" --json mergedAt --jq '.mergedAt? | select(. != null) | split("T")[0]' 2>/dev/null)"
@@ -306,6 +353,8 @@ _gh_flow_status_single() {
         esac
     else
         _pr_info="(none — worker never opened one)"
+        _pr_state=""
+        _pr_decision=""
     fi
 
     # Worktree presence.
@@ -328,6 +377,15 @@ _gh_flow_status_single() {
     ux_table_row "State" "$_state"
     ux_table_row "Worker" "$_pid_state"
     ux_table_row "PR" "$_pr_info"
+    # Review row appears only for OPEN PRs — for MERGED/CLOSED/EMPTY the
+    # decision is irrelevant. Issue #501.
+    if [ "$_pr_state" = "OPEN" ]; then
+        case "$_pr_decision" in
+        "") _review_info="pending" ;;
+        *) _review_info="$_pr_decision" ;;
+        esac
+        ux_table_row "Review" "$_review_info"
+    fi
     ux_table_row "Worktree" "$_wt_state"
     ux_table_row "Markers" "$_markers"
 
