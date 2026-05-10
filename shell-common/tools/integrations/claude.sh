@@ -1103,13 +1103,15 @@ claude_accounts_migrate() {
             ux_warning "  as-is, but you may need to re-login on first use."
         fi
     else
-        # Issue #500, F-3: pre-migrate .claude.json 이 아예 부재한 경우
-        # sealed snapshot 도 만들 수 없어 _claude_restore_if_reset 의
-        # 자동 복원이 불가능하다. 사용자에게 그 사실을 명시해, 첫 로그인
-        # 후 재발생 시 수동 재로그인이 필요하다는 점을 미리 알린다.
-        ux_warning "Pre-migrate ~/.claude/.claude.json 부재 — sealed snapshot 미생성"
-        ux_warning "  첫 로그인 후 .claude.json reset 발생 시 자동 복원 불가"
-        ux_warning "  (수동 재로그인 필요: claude-yolo 재실행)"
+        # Issue #500, F-3: pre-migrate .claude.json missing means we cannot
+        # seal a snapshot, so _claude_restore_if_reset cannot auto-recover
+        # later. Surface that fact up front so the user knows a manual
+        # re-login may be required after the first claude-yolo run.
+        # English wording + ux_info for the explanatory follow-up matches
+        # the surrounding _cam_pre_size block (PR #503 review).
+        ux_warning "Pre-migrate ~/.claude/.claude.json missing — sealed snapshot not created"
+        ux_info    "  Automatic restoration will be unavailable if .claude.json is reset"
+        ux_info    "  (manual re-login required: re-run claude-yolo after first login)"
     fi
 
     ux_warning "Will move ~/.claude → ~/.claude-personal"
