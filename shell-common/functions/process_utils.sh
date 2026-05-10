@@ -2,7 +2,7 @@
 # shell-common/functions/process_utils.sh
 # Process management utilities
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 psgrep() {
     local pattern="$1"

@@ -2,7 +2,7 @@
 # shell-common/functions/register_help.sh
 # registerHelp - shared between bash and zsh
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _register_help_summary() {
     ux_info "Usage: register-help [section|--list|--all]"

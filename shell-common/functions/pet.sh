@@ -7,7 +7,7 @@
 # pet Help and Documentation
 # ═══════════════════════════════════════════════════════════════
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _pet_help_summary() {
     ux_info "Usage: pet-help [section|--list|--all]"

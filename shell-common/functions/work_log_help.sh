@@ -4,7 +4,7 @@
 
 # Try to find and source ux_lib if not already loaded
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 if ! type ux_header >/dev/null 2>&1; then
     if [ -z "$SHELL_COMMON" ]; then

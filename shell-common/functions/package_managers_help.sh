@@ -6,7 +6,7 @@
 
 # APT Check Wrapper - calls the diagnostic script
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 apt_check() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/check_apt.sh" "$@"

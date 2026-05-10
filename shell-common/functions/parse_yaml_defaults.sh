@@ -18,7 +18,7 @@
 
 # Static labels under `default_labels.static: [a, b]` or block-list form.
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _parse_yaml_defaults_static() {
     _yml="$1"

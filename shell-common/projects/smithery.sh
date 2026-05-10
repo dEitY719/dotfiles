@@ -9,7 +9,7 @@
 
 # Development, Test, Production hosts
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 DEV_HOST="127.0.0.1"
 TEST_HOST="127.0.0.1"

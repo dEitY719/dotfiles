@@ -6,7 +6,7 @@
 
 # MyTool 도움말 별칭
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 alias mthelp='mytool_help'
 

@@ -17,7 +17,7 @@
 #    설정 파일 또는 환경 변수로 인증 필요
 #    ~/.env 파일에 저장하거나, codex 명령어로 직접 인증
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # ═══════════════════════════════════════════════════════════════
 # Essential Command Aliases

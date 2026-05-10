@@ -15,7 +15,7 @@
 # Mount management functions (loaded from shell-common/functions/mount.sh)
 # ═══════════════════════════════════════════════════════════════
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # ═══════════════════════════════════════════════════════════════
 # Dependency Check: Ensure jq is installed

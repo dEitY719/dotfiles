@@ -5,7 +5,7 @@
 
 # Helper: Extract description from the script header comments
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _extract_tool_description() {
     local script="$1"

@@ -8,7 +8,7 @@
 #   bash: declare -gi SOURCED_FILES_COUNT=0
 #   zsh:  typeset -gi SOURCED_FILES_COUNT=0
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 safe_source() {
     local file_path="$1"

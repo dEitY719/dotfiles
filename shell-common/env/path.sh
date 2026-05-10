@@ -4,7 +4,7 @@
 
 # 로컬 바이너리 경로 추가
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 export PATH="$HOME/.local/bin:$PATH"
 

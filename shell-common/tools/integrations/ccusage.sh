@@ -20,7 +20,7 @@
 # PATH Helper Function
 # ═══════════════════════════════════════════════════════════════
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ccusage_path_hint() {
     case ":$PATH:" in

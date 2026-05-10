@@ -6,7 +6,7 @@
 # Python Virtual Environment
 # pyenv-virtualenv: deactivate must be dot-sourced ('. deactivate')
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 alias create-venv='python -m venv .venv'
 alias act-venv='. .venv/bin/activate'

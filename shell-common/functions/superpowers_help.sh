@@ -2,7 +2,7 @@
 # shell-common/functions/superpowers_help.sh
 # Help display for superpowers plugin skills
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 SUPERPOWERS_SKILLS_DIR="$HOME/.claude/plugins/cache/superpowers-dev/superpowers"
 

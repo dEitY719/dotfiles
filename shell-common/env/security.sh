@@ -9,7 +9,7 @@
 
 # SSH agent socket configuration
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
     # Prevent double slashes: ${var%/} removes trailing slash

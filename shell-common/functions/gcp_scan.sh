@@ -13,7 +13,7 @@
 #   '-' = already merged in base
 #
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _gcp_scan_is_empty_cherry_pick() {
     # True when cherry-pick is in progress, has no conflicts, and results in an empty commit
