@@ -26,7 +26,7 @@ class AuthActions:
 
         # 2. Call API
         try:
-            console.print(f"Logging in as '{username}'...", style="yellow")
+            console.print(f"Logging in as '{username}'...", style="yellow", markup=False)
             response = await self.api_client.post(
                 "/auth/login",
                 json={"username": username},
@@ -42,7 +42,7 @@ class AuthActions:
 
         except Exception as e:
             # 5. Handle error
-            console.print(f"Login failed: {e}", style="red")
+            console.print(f"Login failed: {e}", style="red", markup=False)
             return False
 ```
 
@@ -51,7 +51,7 @@ class AuthActions:
 - 도메인별 클래스 이름: `<Domain>Actions`
 - action 메서드는 `async def`, 반환값은 `bool` (성공/실패)
 - 진행 메시지: `style="yellow"` / 성공: `"green"` / 에러: `"red"`
-- 사용법 메시지: 반드시 `markup=False` (Rich 가 `[ARG]` 를 markup 으로 오인하지 않게)
+- 모든 동적 메시지(사용법·에러·사용자 입력 등): 반드시 `markup=False` (Rich 가 `[...]` 를 markup 으로 오인하지 않게)
 - 외부 호출은 try/except 로 감싸기 — CLI 가 크래시하지 않도록
 - 세션 state 갱신은 `self.context.session.<field>` 만 사용 (로컬 변수에 담지 말기)
 
