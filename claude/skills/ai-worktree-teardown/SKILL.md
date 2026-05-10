@@ -24,6 +24,11 @@ Read `references/options-and-errors.md` for CLI options and error handling.
 Run these steps in order. Stop immediately on any error.
 Read `references/bash-commands.md` for exact bash implementations per step.
 
+### Step 0: Dry-run Gate
+
+If `--dry-run`, print the plan (resolved worktree path, branch, intended
+actions) and stop. No destructive action.
+
 ### Step 1: Validate — Must Be in Main Repo, NOT a Worktree
 
 Check `git-dir == git-common-dir`. If INSIDE a worktree, print error and stop.
@@ -79,7 +84,15 @@ Append `TEARDOWN` entry to `ai-worktree-spawn.log` (same file as spawn).
   directories` errors from zsh/pyenv/p10k.
 ```
 
-Always include the `Note:` block — the skill cannot detect the outer
-shell's cwd, so the hint is unconditional. Substitute `<main-repo>`
-with the absolute path of the main repo this skill is running from
-(`git rev-parse --show-toplevel`).
+On failure, emit a structured failure verdict instead:
+
+```
+[FAIL] <reason>
+  Step:    <step name where failure occurred>
+  Detail:  <error message or exit code>
+```
+
+Always include the `Note:` block on the `[OK]` path — the skill cannot
+detect the outer shell's cwd, so the hint is unconditional. Substitute
+`<main-repo>` with the absolute path of the main repo this skill is
+running from (`git rev-parse --show-toplevel`).

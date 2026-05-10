@@ -41,6 +41,8 @@ descriptions safely, calls `jira create-ticket`, and parses JSON output.
 5. Report the resulting `ticket_id`, `ticket_url`, `summary`, `issue_type`,
    and `priority`. If the script fails, preserve the error code and message.
 
+Stop immediately on any step failure; do not proceed to the next step.
+
 ## Command Pattern
 
 ```bash
@@ -57,7 +59,7 @@ python claude/skills/jira-create/scripts/create_ticket.py \
 For success, respond in this shape:
 
 ```text
-Created Jira ticket: <ticket_id>
+[OK] Created Jira ticket: <ticket_id>
 URL: <ticket_url>
 Summary: <summary>
 Type: <issue_type>
@@ -66,6 +68,11 @@ Priority: <priority>
 
 For failures, state the failed command area, exit code when available, and the
 script error message. Do not expose tokens, config values, or secrets.
+
+```text
+[FAIL] create-ticket exit=<code>
+<error message>
+```
 
 ## Constraints
 
