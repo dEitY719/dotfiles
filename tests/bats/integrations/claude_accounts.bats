@@ -941,6 +941,76 @@ run_with_fake_ssot() {
     [ "$leaked" -eq 0 ]
 }
 
+# ---------- Issue #500: setup.sh / migrate 자동화 갭 보강 ----------
+
+@test "issue #500-F1: setup.sh auto-bootstraps settings.json from template when missing" {
+    _setup_sh_prereqs
+    rm -f "${DOTFILES_ROOT}/claude/settings.json"
+    ln -s "${DOTFILES_ROOT}" "$HOME/dotfiles"
+
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+    assert_output --partial "settings.json 자동 부트스트랩"
+    [ -f "${DOTFILES_ROOT}/claude/settings.json" ]
+}
+
+@test "issue #500-F1: setup.sh leaves existing settings.json untouched (idempotent)" {
+    _setup_sh_prereqs
+    # _setup_sh_prereqs 가 이미 template -> settings.json 복사를 해두었음.
+    sentinel='__issue_500_idempotent_marker__'
+    cp "${DOTFILES_ROOT}/claude/settings.json" "${DOTFILES_ROOT}/claude/settings.json.before"
+    # 사용자 편집 흔적을 남겨 두번째 실행 후에도 보존되는지 검증.
+    jq --arg s "$sentinel" '. + {marker: $s}' \
+        "${DOTFILES_ROOT}/claude/settings.json" > "${DOTFILES_ROOT}/claude/settings.json.tmp" \
+        && mv "${DOTFILES_ROOT}/claude/settings.json.tmp" "${DOTFILES_ROOT}/claude/settings.json"
+    ln -s "${DOTFILES_ROOT}" "$HOME/dotfiles"
+
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+    refute_output --partial "자동 부트스트랩"
+    grep -q "$sentinel" "${DOTFILES_ROOT}/claude/settings.json"
+}
+
+@test "issue #500-F2: claude_yolo restores missing .claude.json from snapshot" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-personal"
+    # 사용자가 .claude.json 을 삭제했거나 다른 사고로 사라진 상태.
+    printf '{"firstStartTime":"x","oauthAccount":{"e":"a@b"},"migrationVersion":5}' \
+        > "$HOME/.claude-personal/.claude.json.preserved-by-migrate"
+
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    assert_success
+    assert_output --partial "missing .claude.json"
+    assert_output --partial "Restored"
+    [ -f "$HOME/.claude-personal/.claude.json" ]
+    grep -q "oauthAccount" "$HOME/.claude-personal/.claude.json"
+    grep -q "migrationVersion" "$HOME/.claude-personal/.claude.json"
+}
+
+@test "issue #500-F2: claude_yolo silent on missing .claude.json with no snapshot" {
+    _setup_claude_mock
+    mkdir -p "$HOME/.claude-personal"
+    # snapshot 도 없는 fresh PC — 기존 동작 유지 (silent return).
+
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    assert_success
+    refute_output --partial "Restored"
+    refute_output --partial "missing .claude.json"
+}
+
+@test "issue #500-F3: claude_accounts_migrate warns on missing pre-migrate .claude.json" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "$HOME/.claude/projects"
+    # .claude.json 자체가 부재한 디렉토리 (Home-PC 일부 회복 시나리오).
+
+    run_in_bash 'export CLAUDE_SKIP_BIND_MOUNT=1; printf "y\n" | claude_accounts_migrate'
+    assert_success
+    assert_output --partial "Pre-migrate ~/.claude/.claude.json 부재"
+    assert_output --partial "sealed snapshot 미생성"
+    # 부재 시에는 sealed snapshot 도 만들어지지 않아야 함.
+    [ ! -f "$HOME/.claude-personal/.claude.json.preserved-by-migrate" ]
+}
+
 # ---------- Issue #344: backups outside the skill scanner ----------
 
 @test "issue #344: skills/ stays free of *-pre-sync-* / *-orphan-* siblings" {

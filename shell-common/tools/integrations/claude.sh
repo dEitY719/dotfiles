@@ -516,8 +516,24 @@ _claude_restore_if_reset() {
     _crir_live="$_crir_dir/.claude.json"
     _crir_snap="$_crir_dir/.claude.json.preserved-by-migrate"
 
-    [ -f "$_crir_live" ] || return 0
+    # Snapshot 부재 시에는 어느 쪽으로도 복원 불가 — silent return.
     [ -f "$_crir_snap" ] || return 0
+
+    # Missing-case branch (issue #500, F-2): live .claude.json 자체가
+    # 사라진 상태도 reset 의 한 변종으로 처리. Claude CLI 가 빈
+    # CLAUDE_CONFIG_DIR 진입 시 "configuration file not found" 프롬프트를
+    #띄우기 전에 sealed snapshot 으로 복원해 사용자 개입을 없앤다.
+    if [ ! -f "$_crir_live" ]; then
+        ux_warning "Detected missing .claude.json — restoring from sealed migrate snapshot"
+        ux_info    "  → snapshot: $_crir_snap"
+        if cp "$_crir_snap" "$_crir_live" 2>/dev/null; then
+            _crir_restored_size=$(wc -c < "$_crir_live" 2>/dev/null | tr -d ' ')
+            ux_success "  Restored $_crir_live (${_crir_restored_size:-?} bytes)"
+        else
+            ux_error "  Restore failed — proceeding anyway (claude may prompt for re-login)"
+        fi
+        return 0
+    fi
 
     _crir_size=$(wc -c < "$_crir_live" 2>/dev/null | tr -d ' ')
     [ -n "$_crir_size" ] || return 0
@@ -1086,6 +1102,14 @@ claude_accounts_migrate() {
             ux_warning "  first-start placeholder state. Migration will preserve it"
             ux_warning "  as-is, but you may need to re-login on first use."
         fi
+    else
+        # Issue #500, F-3: pre-migrate .claude.json 이 아예 부재한 경우
+        # sealed snapshot 도 만들 수 없어 _claude_restore_if_reset 의
+        # 자동 복원이 불가능하다. 사용자에게 그 사실을 명시해, 첫 로그인
+        # 후 재발생 시 수동 재로그인이 필요하다는 점을 미리 알린다.
+        ux_warning "Pre-migrate ~/.claude/.claude.json 부재 — sealed snapshot 미생성"
+        ux_warning "  첫 로그인 후 .claude.json reset 발생 시 자동 복원 불가"
+        ux_warning "  (수동 재로그인 필요: claude-yolo 재실행)"
     fi
 
     ux_warning "Will move ~/.claude → ~/.claude-personal"

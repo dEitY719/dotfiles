@@ -341,6 +341,21 @@ EOF
 
 log_debug "\n--- Claude Code dotfiles setup 시작 ---"
 
+# settings.json 자동 부트스트랩 (issue #500, F-1).
+# Fresh checkout (gitignored settings.json 부재) 에서도 hard-fail 없이
+# 진행되도록 settings.template.json → settings.json 1회 복사. 멱등 —
+# 이미 존재하면 no-op. 템플릿까지 부재한 비정상 상태는 아래 hard-fail
+# 가드가 그대로 잡는다.
+CLAUDE_SETTINGS_TEMPLATE="${CLAUDE_DOTFILES}/settings.template.json"
+if [ ! -f "$CLAUDE_SETTINGS_SOURCE" ] && [ -f "$CLAUDE_SETTINGS_TEMPLATE" ]; then
+    if cp "$CLAUDE_SETTINGS_TEMPLATE" "$CLAUDE_SETTINGS_SOURCE"; then
+        log_warning "settings.json 자동 부트스트랩: settings.template.json → settings.json"
+        log_warning "  필요 시 직접 편집하세요 (gitignored, PC-private)"
+    else
+        log_warning "settings.json 자동 부트스트랩 실패: cp 오류 — 수동 복사 필요"
+    fi
+fi
+
 # 필수 dotfiles source 검증
 [ -f "$CLAUDE_SETTINGS_SOURCE" ]      || log_error_and_exit "settings.json 없음: $CLAUDE_SETTINGS_SOURCE"
 [ -f "$CLAUDE_STATUSLINE_SOURCE" ]    || log_error_and_exit "statusline-command.sh 없음: $CLAUDE_STATUSLINE_SOURCE"
