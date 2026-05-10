@@ -1005,8 +1005,8 @@ run_with_fake_ssot() {
 
     run_in_bash 'export CLAUDE_SKIP_BIND_MOUNT=1; printf "y\n" | claude_accounts_migrate'
     assert_success
-    assert_output --partial "Pre-migrate ~/.claude/.claude.json 부재"
-    assert_output --partial "sealed snapshot 미생성"
+    assert_output --partial "Pre-migrate ~/.claude/.claude.json missing"
+    assert_output --partial "sealed snapshot not created"
     # 부재 시에는 sealed snapshot 도 만들어지지 않아야 함.
     [ ! -f "$HOME/.claude-personal/.claude.json.preserved-by-migrate" ]
 }
