@@ -2,7 +2,8 @@
 
 > 본 템플릿은 CLAUDE.md "POSIX compatibility" + "All output must use ux_lib"
 > 규칙을 따르도록 작성됨. `[[ ]]` 대신 POSIX `[ ]`, raw `echo` 대신
-> `ux_info` / `ux_success` / `ux_warning` 사용. 사용자는 그대로 복사해 사용.
+> `ux_info` / `ux_success` / `ux_warning` / `ux_error` 사용. 사용자는 그대로
+> 복사해 사용.
 
 ## Symbolic Link Initialization Function
 
