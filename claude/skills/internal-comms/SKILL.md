@@ -9,6 +9,8 @@ description: >-
 license: Complete terms in LICENSE.txt
 ---
 
+# Internal Communications
+
 ## Help
 
 If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
