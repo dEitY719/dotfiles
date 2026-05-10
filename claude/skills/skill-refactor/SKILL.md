@@ -79,7 +79,11 @@ Use the completion report template from `references/plan-and-report-templates.md
 Report MUST end with `[OK] refactor complete` or `[FAIL] <reason>` plus a
 key=value summary (`lines_before=<n> lines_after=<n> files_created=<n>`).
 
-Include a `Next:` line pointing to `/skill:check <path>` for verification.
+Append literally as the final report line:
+
+```
+Next: /skill:check <path>
+```
 
 ## Guiding Principle
 

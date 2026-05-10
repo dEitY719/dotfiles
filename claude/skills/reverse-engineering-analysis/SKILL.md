@@ -90,7 +90,7 @@ Required sections:
 
 End with `[OK] analysis written: <path>` or `[FAIL] <reason>`.
 
-`Next: review <output_dir>/analysis.md and paste the AI Implementation Prompt section into the target project's AI assistant.`
+`Next: read <output_dir>/analysis.md and paste the AI Implementation Prompt section into the target project's AI assistant.`
 
 ---
 
