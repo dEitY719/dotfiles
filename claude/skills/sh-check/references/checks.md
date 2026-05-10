@@ -37,7 +37,7 @@ or any file whose first few lines call `local`/`alias` without an `exec`
 context) must start with:
 
 ```sh
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 ```
 
 | Result | When |

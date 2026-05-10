@@ -31,7 +31,7 @@ Verdict: GOOD — production-ready, minor polish needed
 
 ### Next Actions
 1. [WARN #2] Add interactive guard at top of file:
-     case $- in *i*) ;; *) return 0 ;; esac
+     case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
    Run /sh:check again after fix to verify.
 ```
 
