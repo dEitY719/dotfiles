@@ -21,7 +21,7 @@ fi
 # ========================================
 # NVM Auto-Source (interactive shells only)
 # ========================================
-export NVM_DIR="$HOME/.nvm"
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"                   # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
 
@@ -32,9 +32,9 @@ export NVM_DIR="$HOME/.nvm"
 nvm_install() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_nvm.sh" || return $?
     if type ux_info >/dev/null 2>&1; then
-        ux_info "Open a new shell (or run 'source ~/.bashrc') to pick up nvm."
+        ux_info "Open a new shell (or source your shell config) to pick up nvm."
     else
-        echo "Open a new shell (or run 'source ~/.bashrc') to pick up nvm." >&2
+        echo "Open a new shell (or source your shell config) to pick up nvm."
     fi
 }
 alias nvm-install='nvm_install'
