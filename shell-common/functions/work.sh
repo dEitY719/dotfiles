@@ -11,7 +11,7 @@
 # This module provides only the help function for the work management system
 # ═════════════════════════════════════════════════════════════════════════════
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _work_help_load_ux() {
     if ! type ux_header >/dev/null 2>&1; then

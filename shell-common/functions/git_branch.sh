@@ -5,7 +5,7 @@
 
 # Override Oh My Zsh's `gbr` alias (zsh git plugin sets it to `git branch --remote`)
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 unalias gbr 2>/dev/null || true
 

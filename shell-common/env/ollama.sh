@@ -6,7 +6,7 @@
 # Runtime Configuration (recommended defaults)
 # These can be overridden by setting them before sourcing this file
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 : "${OLLAMA_NUM_CTX:=65536}"           # 64K context length
 : "${OLLAMA_NUM_GPU:=-1}"              # GPU auto-detect (-1 = all GPUs)

@@ -4,7 +4,7 @@
 
 # Start Ollama server
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ollama_serve() {
     local backend=$(ollama_backend_detect 2>/dev/null || echo "")

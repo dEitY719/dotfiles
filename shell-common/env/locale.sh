@@ -4,7 +4,7 @@
 
 # 기본 언어 설정
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 export LANG=en_US.UTF-8
 # export LANG=ko_KR.UTF-8

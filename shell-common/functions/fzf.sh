@@ -7,7 +7,7 @@
 # fzf Help and Documentation
 # ═══════════════════════════════════════════════════════════════
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _fzf_help_summary() {
     ux_info "Usage: fzf-help [section|--list|--all]"

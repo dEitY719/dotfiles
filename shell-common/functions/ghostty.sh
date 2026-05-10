@@ -2,7 +2,7 @@
 # shell-common/functions/ghostty.sh
 # Ghostty terminal configuration management
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ghostty_init() {
     local source="${DOTFILES_ROOT:-$HOME/dotfiles}/ghostty/config"

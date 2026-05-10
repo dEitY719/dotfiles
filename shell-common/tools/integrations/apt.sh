@@ -7,7 +7,7 @@
 # APT Basic Commands (Aliases)
 # ═══════════════════════════════════════════════════════════════
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 alias au='sudo apt-get update'        # Update package lists
 alias aug='sudo apt-get upgrade'      # Upgrade installed packages

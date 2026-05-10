@@ -3,7 +3,7 @@
 # Wrapper function for ensure_ollama_deps executable
 # Library function: no side effects, just delegates to external script
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ensure_ollama_deps() {
     # Try SHELL_COMMON first, then fallback to default location

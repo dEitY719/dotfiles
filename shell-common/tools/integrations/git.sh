@@ -5,7 +5,7 @@
 
 # Exit if not running in bash
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 [ -n "$BASH" ] || return 0
 

@@ -16,7 +16,7 @@
 
 # No Proxy - Local network exceptions (POSIX-compatible)
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 export no_proxy="localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,.local"
 export NO_PROXY="$no_proxy"

@@ -5,7 +5,7 @@
 
 # Open marketplace plugins in VSCode
 
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 alias open-plugins='open_claude_plugins'
 
