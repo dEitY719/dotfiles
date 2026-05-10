@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# editor.bash
+# shell-common/env/editor.sh
 # 에디터 관련 환경 변수 설정
 
 # 기본 에디터 설정

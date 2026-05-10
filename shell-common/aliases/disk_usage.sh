@@ -1,4 +1,10 @@
-#!/bin/bash
+#!/bin/sh
+
+# shell-common/aliases/disk_usage.sh
+# Disk-usage aliases (POSIX-compatible)
+# Shared between bash and zsh
+
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # 현재 디렉토리 전체 크기 요약
 alias dus='du -sh .'
