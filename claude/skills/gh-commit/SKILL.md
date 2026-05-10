@@ -100,7 +100,7 @@ if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
 else
     gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
       -X POST \
-      -f body="### 🤖 AI Metrics — gh-commit
+      -f body="### AI Metrics — gh-commit
 
 | 항목 | 값 |
 |------|-----|

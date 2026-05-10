@@ -104,7 +104,7 @@ else
     gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
       -X POST \
       -f body="<!-- ai-metrics:gh-pr-approve ai_min=$ELAPSED -->
-🤖 PR 리뷰: ~$ELAPSED min"
+PR 리뷰: ~$ELAPSED min"
 fi
 ```
 
