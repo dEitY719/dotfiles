@@ -46,6 +46,7 @@ python claude/skills/jira-read/scripts/read_ticket.py --ticket-id <PROJECT-123>
 For normal reads, respond in this shape:
 
 ```text
+[OK] jira:read
 Jira ticket: <ticket_id>
 URL: <ticket_url>
 Summary: <summary>
@@ -65,6 +66,14 @@ Updated: <updated_at>
 Subtasks:
 <subtask list or None>
 ```
+
+For failures, use:
+
+```text
+[FAIL] jira:read: <reason>
+```
+
+Next: review the ticket, then implement on a feature branch via /gh:issue-implement <KEY>
 
 ## Constraints
 

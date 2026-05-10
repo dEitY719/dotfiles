@@ -85,18 +85,16 @@ Run with --apply to register on GitHub.
    `claude-set-issue-status <real-N> "Ready"` per first-milestone issue.
 
 Mid-flow failure: report partial state (created milestones / issues so
-far) and stop — no automatic rollback.
+far), emit `[FAIL] devx:trd-to-issues <reason>`, and stop — no automatic
+rollback.
 
 ## Step 5: Report
 
 Print: `--plan-out` path, milestone count, task count, and (for
-`--apply`) the URL of the first created milestone for human verification.
+`--apply`) the URL of the first created milestone. End with the verdict:
 
-## Constraints
+```
+[OK] devx:trd-to-issues plan=<path> milestones=<n> tasks=<n> [url=<repo-url>]
+```
 
-- Default is `--dry-run`. `--apply` must be explicit.
-- Never auto-create labels — pre-validate, stop on miss.
-- Never silently fall back when `--remote <name>` is missing.
-- Never collapse the plan; the plan is the SSOT review surface.
-- Decomposition criteria are mandatory; failed items go into a
-  "decomposition failures" section, never silently dropped.
+Operational constraints: see `references/constraints.md`.

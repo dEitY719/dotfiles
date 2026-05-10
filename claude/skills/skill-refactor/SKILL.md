@@ -14,7 +14,11 @@ compatibility:
 
 ## Help
 
-If the argument is `help`, read `references/help.md` and output its content verbatim, then stop.
+If the argument is `-h`, `--help`, or `help`, read `references/help.md` and output its content verbatim, then stop.
+
+## Arguments
+
+Only `-h`/`--help`/`help` (prints help) plus an optional path to the target SKILL.md. No other flags.
 
 > **Pattern**: All skills should place help content (usage, arguments, examples) in
 > `references/help.md` and use a one-line pointer here. This keeps SKILL.md under
@@ -71,6 +75,11 @@ After confirmation:
 
 Use the completion report template from `references/plan-and-report-templates.md`
 (already loaded in Step 1).
+
+Report MUST end with `[OK] refactor complete` or `[FAIL] <reason>` plus a
+key=value summary (`lines_before=<n> lines_after=<n> files_created=<n>`).
+
+Include a `Next:` line pointing to `/skill:check <path>` for verification.
 
 ## Guiding Principle
 

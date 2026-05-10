@@ -27,7 +27,7 @@ current directory.
 ## Step 2: Run Ten Checks
 
 Read `references/checks.md` for all 10 check definitions and PASS/WARN/FAIL/N/A criteria.
-Assign one result per check.
+Assign one result per check. If any step fails, stop and report the error — do not continue.
 
 **Checks 1–5: Structure**
 Line Count · Progressive Disclosure · Frontmatter Validity · References Directory · Output Report

@@ -48,7 +48,14 @@ The final deliverable lets the user paste one prompt into any AI coding assistan
 
 ## Help
 
-If the argument is `help`, read `references/help.md` and output its content verbatim, then stop.
+If the argument is `-h`, `--help`, or `help`, read `references/help.md` and output its content verbatim, then stop.
+
+## Options
+
+| Argument | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `<feature or file path>` | yes | — | Feature description (keyword search) or explicit file path |
+| `[output directory]` | no | `docs/` | Directory where `analysis.md` is written |
 
 > **Pattern**: All skills should place help content (usage, arguments, examples) in
 > `references/help.md` and use a one-line pointer here. This keeps SKILL.md under
@@ -60,11 +67,13 @@ If the argument is `help`, read `references/help.md` and output its content verb
 
 See [`references/workflow.md`](references/workflow.md) for full step details.
 
-1. **Locate** — search by keyword or read file path directly
-2. **Deep Dive** — scan imports/exports first on large files; read body only if needed
-3. **Extract Libraries** — gather from imports; check package manifest once for versions
-4. **Explain Mechanism** — data flow, component handoffs, non-obvious design choices
-5. **Generate AI Prompt** — self-contained and paste-and-go (**most critical output**)
+Stop on error: if any step fails, abort and report the failed step.
+
+**Step 1: Locate** — search by keyword or read file path directly
+**Step 2: Deep Dive** — scan imports/exports first on large files; read body only if needed
+**Step 3: Extract Libraries** — gather from imports; check package manifest once for versions
+**Step 4: Explain Mechanism** — data flow, component handoffs, non-obvious design choices
+**Step 5: Generate AI Prompt** — self-contained and paste-and-go (**most critical output**)
 
 ---
 
@@ -78,6 +87,10 @@ Required sections:
 - **How It Works** — data flow and key abstractions
 - **File Map** — source files with roles
 - **AI Implementation Prompt** — copy-pasteable, no project-specific paths
+
+End with `[OK] analysis written: <path>` or `[FAIL] <reason>`.
+
+`Next: review <output_dir>/analysis.md and paste the AI Implementation Prompt section into the target project's AI assistant.`
 
 ---
 
