@@ -14,6 +14,10 @@ compatibility:
 
 # CLAUDE.md Orchestrator Creator
 
+## Help
+
+If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
+
 ## Workflow
 
 ### Phase 0: Discover (always run first)

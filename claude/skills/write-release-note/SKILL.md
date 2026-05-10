@@ -6,6 +6,10 @@ allowed-tools: Read, Bash, Grep, Glob, Write, Edit
 
 # Release Notes 작성
 
+## Help
+
+If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
+
 ## 목적
 
 git 히스토리를 분석해 **사용자 관점**의 릴리즈 노트를 생성한다.

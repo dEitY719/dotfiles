@@ -9,6 +9,10 @@ description: >-
 license: Complete terms in LICENSE.txt
 ---
 
+## Help
+
+If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
+
 ## When to use this skill
 To write internal communications, use this skill for:
 - 3P updates (Progress, Plans, Problems)

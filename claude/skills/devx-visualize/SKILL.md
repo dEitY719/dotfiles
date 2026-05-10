@@ -19,6 +19,10 @@ metadata:
 
 # Visualize
 
+## Help
+
+If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
+
 Turn any idea, data, or content into a stunning single-file HTML visualization.
 
 ## After Creating a File
