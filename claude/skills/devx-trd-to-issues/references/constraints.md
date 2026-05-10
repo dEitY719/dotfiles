@@ -9,7 +9,7 @@ plan as the single review surface for the human user.
 - Default is `--dry-run`. `--apply` must be explicit — never assume it.
 - Never auto-create labels. Pre-validate with `gh label list` and stop on
   the first missing label (memory:
-  `feedback_gh_label_no_autocreate.md`).
+  `memory/feedback_gh_label_no_autocreate.md`).
 - Never silently fall back when `--remote <name>` is missing. Print the
   remote list and stop.
 

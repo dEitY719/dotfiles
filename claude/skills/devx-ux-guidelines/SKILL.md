@@ -58,7 +58,8 @@ Read `references/bulk-review-workflow.md` when executing this mode.
 5. Include concrete file/line evidence and suggested fixes.
 6. Do not commit unless explicitly requested.
 
-Stop on first failure and report — do not proceed to the next step.
+Audit mode — scan the entire scope and report every finding. Do NOT stop on
+the first violation; Mode B is read-only and the report must be complete.
 
 ## Output Requirements
 

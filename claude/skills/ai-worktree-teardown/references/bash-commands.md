@@ -7,7 +7,7 @@ If `--dry-run`, print the plan and stop (no destructive action).
 ```bash
 if [[ "${DRY_RUN:-false}" == true ]]; then
   echo "[DRY-RUN] Plan:"
-  echo "  Worktree: $WORKTREE_ARG"
+  echo "  Worktree: $1"
   echo "  Actions:  preflight -> worktree remove -> sync main -> branch delete"
   echo "No changes made."
   exit 0
