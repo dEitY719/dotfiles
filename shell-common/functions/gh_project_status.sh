@@ -50,8 +50,13 @@
 # Return codes:
 #   0 — success / no-op / best-effort skip (network flake, no project, etc.)
 #   2 — fail-closed policy rejection (Approved guard)
-
-case $- in *i*) ;; *) return 0 ;; esac
+#
+# NOTE: This file intentionally has NO interactive guard. It is a pure
+# function-defining library (no top-level side effects) consumed by
+# .github/workflows/project-board-sync.yml in non-interactive bash
+# (`bash --noprofile --norc`). An interactive guard would `return 0`
+# before defining `_gh_project_status_sync`, breaking the workflow with
+# `command not found` (exit 127). See PR #497 / CI run 25601743398.
 
 _gh_project_status_sync() {
     local _kind="$1" _num="$2" _target="$3"
