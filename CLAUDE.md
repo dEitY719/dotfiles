@@ -95,5 +95,5 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 - GitHub Project board: `docs/standards/github-project-board.md`
 - Git strategy: Semantic commits (`Type: Summary`)
 - Naming: `snake_case` for functions and filenames; dash-form for user-facing aliases
-- No emojis anywhere (token efficiency) — **단 하나의 예외**: `<!-- ai-metrics -->` ~ `<!-- /ai-metrics -->` 블록 내부의 `📊 👤 🤖` 글리프. 이는 GitHub Issue/PR 카드 footer 의 의도된 시각 디자인이며 #317 F-2 요구사항 + PR #320 으로 SSOT 확정됨. 다른 어떤 위치에도 이모지 사용 금지.
+- No emojis anywhere (token efficiency) — **단 하나의 예외**: `ai-metrics` footer (`<details>` 래퍼 및 `<!-- ai-metrics -->` 블록) 내부의 `📊 👤 🤖` 글리프. 이는 GitHub Issue/PR 카드 footer 의 의도된 시각 디자인이며 #317 F-2 요구사항 + PR #320 으로 SSOT 확정됨 (#367 의 `<details><summary>🤖 AI Metrics</summary>` 래퍼 포함). 다른 어떤 위치에도 이모지 사용 금지.
 - For AGENTS.md files, aim to keep them under 100 lines each
