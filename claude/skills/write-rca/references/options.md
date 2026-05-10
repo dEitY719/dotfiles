@@ -4,7 +4,7 @@
 
 | Option                  | Description                                                                 | Default     |
 |-------------------------|-----------------------------------------------------------------------------|-------------|
-| `--commit`              | Run `git -C $RCA_REPO_PATH add && commit` after Step 4 succeeds.            | off         |
+| `--commit`              | Run `git -C "$RCA_REPO_PATH" add && commit` after Step 4 succeeds.          | off         |
 | `--audience <name>`     | One of `blog`, `private`, `internal`. Applies preset in Step 4.             | (all four)  |
 | `--private`             | Shortcut for `--audience private`. Strips secrets, sets postmortem-only.    | off         |
 | `-h`, `--help`, `help`  | Print `references/help.md` verbatim and stop.                               | —           |
