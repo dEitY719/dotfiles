@@ -26,14 +26,24 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 HOOK_PATH = REPO_ROOT / "claude" / "hooks" / "gh_issue_flow_stop_guard.py"
 
 
-def _run_hook(stdin_payload: str) -> subprocess.CompletedProcess[str]:
-    """Invoke the hook with the given stdin string."""
+def _run_hook(
+    stdin_payload: str,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Invoke the hook with the given stdin string and optional env overrides."""
+    import os as _os
+
+    final_env: dict[str, str] | None = None
+    if env is not None:
+        final_env = _os.environ.copy()
+        final_env.update(env)
     return subprocess.run(
         ["python3", str(HOOK_PATH)],
         input=stdin_payload,
         capture_output=True,
         text=True,
         timeout=10,
+        env=final_env,
     )
 
 
@@ -421,3 +431,88 @@ def test_hook_callable_two_ways(tmp_path: Path, exec_form: list[str]) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == ""
+
+
+# ---------------------------------------------------------------------------
+# Trace mode (issue #505, fix-plan C)
+# ---------------------------------------------------------------------------
+
+
+def test_trace_off_by_default_no_stderr(tmp_path: Path) -> None:
+    """Without GH_ISSUE_FLOW_STOP_GUARD_TRACE=1, stderr stays clean."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 42"),
+            _assistant_skill("gh-issue-implement"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    # Block decision on stdout; nothing on stderr.
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert result.stderr == ""
+
+
+def test_trace_on_emits_block_diagnostics(tmp_path: Path) -> None:
+    """With trace enabled, stderr describes the boundary + decision."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 42"),
+            _assistant_skill("gh-issue-implement"),
+        ],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_TRACE": "1"},
+    )
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    # Trace lines all share the [stop-guard] prefix.
+    assert "[stop-guard]" in result.stderr
+    # The boundary scan summary should report 1/5 sub-skills seen.
+    assert "sub_skills_seen=1/5" in result.stderr
+    assert "block:" in result.stderr
+
+
+def test_trace_on_emits_allow_reason_for_no_boundary(tmp_path: Path) -> None:
+    """Allow path should also report its reason when trace mode is on."""
+    transcript = _write_transcript(
+        tmp_path,
+        [_user_text("just a chat unrelated to gh-issue-flow")],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_TRACE": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+    assert "[stop-guard] allow:" in result.stderr
+    assert "no gh-issue-flow boundary" in result.stderr
+
+
+def test_trace_on_emits_allow_reason_for_terminal_marker(tmp_path: Path) -> None:
+    """Completed-flow allow path also reports its reason under trace."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 42"),
+            _assistant_skill("gh-issue-implement"),
+            _assistant_skill("gh-commit"),
+            _assistant_skill("gh-pr"),
+            _assistant_skill("devx-schedule"),
+            _assistant_skill("gh-pr-resolve-conflict"),
+            _assistant_text("gh:issue-flow complete (#42)"),
+        ],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_TRACE": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+    assert "Step 3 terminal marker" in result.stderr
+    assert "sub_skills_seen=5/5" in result.stderr

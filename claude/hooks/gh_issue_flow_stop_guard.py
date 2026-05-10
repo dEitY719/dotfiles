@@ -27,9 +27,25 @@ object `{"decision":"block","reason":"..."}` on stdout (block + nudge).
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
+
+# Opt-in stderr trace to diagnose "hook is registered but never blocks"
+# cases (issue #505, fix-plan C). Default off so production runs stay
+# silent. Enable with `GH_ISSUE_FLOW_STOP_GUARD_TRACE=1`.
+_TRACE_ENABLED: bool = os.environ.get("GH_ISSUE_FLOW_STOP_GUARD_TRACE") == "1"
+
+
+def _trace(message: str) -> None:
+    """Emit a `[stop-guard]` trace line on stderr when trace mode is on."""
+    if _TRACE_ENABLED:
+        try:
+            print(f"[stop-guard] {message}", file=sys.stderr, flush=True)
+        except OSError:
+            pass
+
 
 # Sub-skill names accepted in either hyphen or colon namespace form.
 # Order matters — it's the canonical 5-step gh-issue-flow chain.
@@ -60,14 +76,17 @@ FLOW_START_TOKENS: tuple[str, ...] = (
 FLOW_SKILL_NAMES: set[str] = {"gh-issue-flow", "gh:issue-flow"}
 
 
-def _allow() -> int:
+def _allow(trace_reason: str = "") -> int:
     """Allow the stop. Hook protocol: silent stdout + exit 0."""
+    if trace_reason:
+        _trace(f"allow: {trace_reason}")
     return 0
 
 
 def _block(reason: str) -> int:
     """Block the stop with a directive shown to the model."""
     json.dump({"decision": "block", "reason": reason}, sys.stdout)
+    _trace("block: gh-issue-flow incomplete — re-prompting model")
     return 0
 
 
@@ -221,35 +240,38 @@ def _next_step_label(seen: list[str]) -> str:
 def main() -> int:
     raw = sys.stdin.read()
     if not raw.strip():
-        return _allow()
+        return _allow("empty stdin")
     try:
         event = json.loads(raw)
     except json.JSONDecodeError:
-        return _allow()
+        return _allow("malformed stdin JSON")
     if not isinstance(event, dict):
-        return _allow()
+        return _allow("event is not a JSON object")
 
     if event.get("stop_hook_active"):
-        return _allow()
+        return _allow("stop_hook_active=True (already blocked once)")
 
     transcript_path = event.get("transcript_path")
     if not isinstance(transcript_path, str) or not transcript_path:
-        return _allow()
+        return _allow("missing transcript_path")
     p = Path(transcript_path)
     if not p.is_file():
-        return _allow()
+        return _allow(f"transcript file not found: {transcript_path}")
 
     messages = _load_transcript(p)
     if not messages:
-        return _allow()
+        return _allow("transcript empty / unreadable")
 
     boundary = _find_flow_boundary(messages)
     if boundary < 0:
-        return _allow()
+        return _allow("no gh-issue-flow boundary in transcript")
 
     terminal, seen = _scan_after_boundary(messages, boundary)
+    _trace(
+        f"boundary={boundary} sub_skills_seen={len(seen)}/5 ({','.join(seen) if seen else 'none'}) terminal={terminal}"
+    )
     if terminal:
-        return _allow()
+        return _allow("Step 3 terminal marker present — flow finished")
 
     next_label = _next_step_label(seen)
     reason = (
