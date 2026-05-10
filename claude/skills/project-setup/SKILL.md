@@ -38,14 +38,14 @@ override, `--force`, `--dry-run`, `-h`/`--help`/`help`.
 1. **Step 1 Discover** — read repo state, detect existing configs, extract
    git author info. See `references/phases-detail.md` → Step 1.
 2. **Step 2 Plan** — propose which templates apply, what gets backed up,
-   placeholder values. If `--dry-run`, stop here. See `phases-detail.md` → Step 2.
+   placeholder values. If `--dry-run`, stop here. See `references/phases-detail.md` → Step 2.
 3. **Step 3 Backup** — copy existing files to `.bak.<timestamp>`.
-   See `phases-detail.md` → Step 3.
+   See `references/phases-detail.md` → Step 3.
 4. **Step 4 Apply Templates** — write the three templates with placeholders
    resolved. Templates live in `references/templates.md` (single SSOT —
    no duplication).
 5. **Step 5 Validate** — verify JSON / INI / TOML parses and no `{{...}}`
-   placeholders remain. See `phases-detail.md` → Step 5.
+   placeholders remain. See `references/phases-detail.md` → Step 5.
 6. **Step 6 Report** — emit verdict + next-action hint.
 
 Error / degradation branches: see `references/error-handling.md`.

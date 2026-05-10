@@ -33,7 +33,7 @@ Default behavior (no `--force`):
 1. Create timestamped backups in Step 3 (`.bak.YYYYmmdd_HHMMSS`).
 2. Notify the user of backup locations.
 3. Overwrite with the new templates.
-4. Provide rollback instructions (`mv .markdownlint.json.backup.<ts> .markdownlint.json`).
+4. Provide rollback instructions (`mv .markdownlint.json.bak.<ts> .markdownlint.json`).
 
 With `--force`: same flow — backups are still created, but no prompt is issued.
 

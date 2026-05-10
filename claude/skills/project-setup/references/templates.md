@@ -1,7 +1,7 @@
 # project-setup — Templates (SSOT)
 
 Single source of truth for the three configuration files. The main `SKILL.md`
-and `phases-detail.md` reference this file — do not duplicate these blocks
+and `references/phases-detail.md` reference this file — do not duplicate these blocks
 elsewhere.
 
 ## 1. `.markdownlint.json`
@@ -121,7 +121,7 @@ commands = pytest
 ## 3. `pyproject.toml`
 
 **When to use:** every project. Replace `{{PROJECT_NAME}}`, `{{AUTHOR_NAME}}`,
-`{{AUTHOR_EMAIL}}` per Step 4 in `phases-detail.md`.
+`{{AUTHOR_EMAIL}}` per Step 4 in `references/phases-detail.md`.
 
 ```toml
 [build-system]

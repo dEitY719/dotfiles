@@ -26,7 +26,7 @@ Read repo state and detect existing configs. Execute BEFORE creating anything.
    git config user.email
    ```
 
-   If missing → see `error-handling.md` → Missing Git Configuration.
+   If missing → see `references/error-handling.md` → Missing `Git` Configuration.
 
 **Output:** project context, git config values, list of pre-existing files.
 
@@ -46,10 +46,10 @@ Propose changes before touching disk.
 Run ONLY if files already exist (otherwise skip silently).
 
 ```bash
-TS=$(date +%Y%m%d_%H%M%S)
-[ -f .markdownlint.json ] && cp .markdownlint.json ".markdownlint.json.backup.${TS}"
-[ -f tox.ini ]            && cp tox.ini "tox.ini.backup.${TS}"
-[ -f pyproject.toml ]     && cp pyproject.toml "pyproject.toml.backup.${TS}"
+TS=$(python3 -c 'import datetime; print(datetime.datetime.now().strftime("%Y%m%d%H%M%S"))')
+[ -f .markdownlint.json ] && cp .markdownlint.json ".markdownlint.json.bak.${TS}"
+[ -f tox.ini ]            && cp tox.ini "tox.ini.bak.${TS}"
+[ -f pyproject.toml ]     && cp pyproject.toml "pyproject.toml.bak.${TS}"
 ```
 
 If any `cp` fails → halt with `[FAIL]` before any template write.
@@ -65,7 +65,7 @@ Write the three templates from `templates.md` in order:
    - `{{AUTHOR_NAME}}` ← `git config user.name` or `Your Name`.
    - `{{AUTHOR_EMAIL}}` ← `git config user.email` or `your.email@example.com`.
 
-Templates live in `templates.md` — single SSOT, do not redeclare here.
+Templates live in `references/templates.md` — single SSOT, do not redeclare here.
 
 ## Step 5 — Validate
 
@@ -73,7 +73,11 @@ Verify each file before reporting success:
 
 - `.markdownlint.json` parses as JSON (e.g. `python -m json.tool < .markdownlint.json`).
 - `tox.ini` parses as INI (e.g. `python -c "import configparser; configparser.ConfigParser().read('tox.ini')"`).
-- `pyproject.toml` parses as TOML (e.g. `python -c "import tomllib; tomllib.load(open('pyproject.toml','rb'))"`).
+- `pyproject.toml` parses as TOML — use the project's installed parser
+  (Python 3.11+ ships `tomllib`; for 3.10 fall back to `tomli` via
+  `python -c "import tomli; tomli.load(open('pyproject.toml','rb'))"`).
+  This skill targets the project's declared minimum Python version, so do
+  not hardcode `tomllib`.
 - All `{{...}}` placeholders are gone from `pyproject.toml`.
 - Files are readable (`test -r`).
 
