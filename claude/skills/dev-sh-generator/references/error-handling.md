@@ -54,8 +54,15 @@ If existing file has emojis:
 2. **Notify user** of removal
 3. **Explain**: Token efficiency requirement from AGENTS.md
 
+예시 — 사용자가 작성한 원본 라인에 U+1F680 (ROCKET) 글리프가 있었다면:
+
 ```text
 NOTE: Removed emojis from output (AGENTS.md token efficiency rule).
-  Before: echo "Starting..."
+  Before: echo "<U+1F680> Starting..."
   After:  echo "Starting..."
 ```
+
+`<U+1F680>` 표기는 원본 글리프를 코드포인트 이름으로 가리키는 것이며,
+스킬 자체 문서는 CLAUDE.md "No emojis anywhere" 룰을 지키기 위해 리터럴
+이모지를 포함하지 않는다. 다른 모든 코드포인트 (U+1F600~U+1FAFF /
+U+2600~U+27BF) 도 동일한 방식으로 검출·제거한다.
