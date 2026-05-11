@@ -47,8 +47,9 @@ check_library_purity() {
             }
             # Skip alias definitions — `alias foo='pip install ...'` is NOT
             # a top-level installation; it only runs when the alias is invoked.
+            # Allow hyphens so dash-form aliases like `uv-install` match too.
             if (depth==0 && line ~ install_ere &&
-                line !~ /^[[:space:]]*alias[[:space:]]+[A-Za-z_][A-Za-z0-9_]*=/) {
+                line !~ /^[[:space:]]*alias[[:space:]]+[A-Za-z_][A-Za-z0-9_-]*=/) {
                 printf "INSTALL:%d:%s\n", NR, line
             }
         }
