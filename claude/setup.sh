@@ -109,8 +109,16 @@ _migrate_legacy_statusline_command() {
     current=$(jq -r '.statusLine?.command? // empty' "$source_file" 2>/dev/null)
     [ "$current" = "$legacy_literal" ] || return 0
 
+    # 백업은 dotfiles tree 밖에 둔다 (issue #554). 과거 ${source_file}.* 로
+    # 두면 settings.json 안의 평문 토큰(사내 ANTHROPIC_AUTH_TOKEN 등)이
+    # untracked 파일로 노출돼 `git add -A` 1번에 push 될 위험이 있다.
+    local backup_dir="${HOME}/.claude-backups"
+    if ! mkdir -p "$backup_dir"; then
+        log_error "백업 디렉토리 생성 실패: $backup_dir — 마이그레이션 중단"
+        return 1
+    fi
     local backup
-    backup="${source_file}.pre-statusline-fix-$(date +%Y%m%d%H%M%S)"
+    backup="${backup_dir}/settings.json.pre-statusline-fix-$(date +%Y%m%d%H%M%S)"
     if ! cp "$source_file" "$backup"; then
         log_error "settings.json 백업 실패: $backup — 마이그레이션 중단"
         return 1
@@ -372,9 +380,16 @@ _migrate_legacy_statusline_command
 # the entry when it's missing AND no conflicting Stop hook is configured.
 _migrate_install_gh_issue_flow_stop_hook
 
-# 다중 계정 함수 source (env + integration)
-. "$DOTFILES_ROOT/shell-common/env/claude.sh"
-. "$DOTFILES_ROOT/shell-common/tools/integrations/claude.sh"
+# 다중 계정 함수 source (env + integration).
+# 두 파일은 함수 정의 앞에 단순 interactive guard(`case $- in *i*) ;; *)
+# [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac`)를 가지므로,
+# ./setup.sh 가 비대화형으로 호출됐을 때 함수 정의가 스킵된다.
+# 결과적으로 _claude_has_unmigrated_data / _claude_resolve_account 가
+# 미정의로 떨어져 다중 계정 루프(line 404)가 silent skip 됨 (issue #554).
+# 가드 자체는 단순 형태를 유지해야 하므로(`bats/CI` 호환), source 직전
+# prefix 형태로 FORCE_INIT 신호를 한 줄만 켠다.
+DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/env/claude.sh"
+DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/tools/integrations/claude.sh"
 
 # 마이그레이션 미수행 가드는 mkdir 보다 먼저 — 그래야 stale ~/.claude 가
 # 가드 디렉토리 생성으로 가려지지 않는다. SSOT: _claude_has_unmigrated_data
