@@ -55,7 +55,7 @@ _gb_clean_remote() {
 
     # Capture branch list once, reuse for count and iteration
     local branches
-    branches=$(git branch -r | grep "^[[:space:]]*$remote/" | grep -v "^[[:space:]]*$remote/main" | sed 's/^[[:space:]]*//')
+    branches=$(git branch -r | grep "^[[:space:]]*$remote/" | grep -v "^[[:space:]]*$remote/main" | grep -v "^[[:space:]]*$remote/master" | grep -v "-> " | sed 's/^[[:space:]]*//')
 
     local branch_count
     branch_count=$(printf '%s\n' "$branches" | grep -c . 2>/dev/null || echo 0)
@@ -79,7 +79,7 @@ _gb_help() {
     ux_info "Usage: gb [-D local] [-D remote [<remote>]] [git-branch-flags...]"
     ux_bullet "sub-commands"
     ux_bullet_sub "gb -D local               delete local branches (keeps: main + current + keywords)"
-    ux_bullet_sub "gb -D remote [<remote>]   delete remote branches (default: origin, keeps: main)"
+    ux_bullet_sub "gb -D remote [<remote>]   delete remote-tracking branches (default: origin, keeps: main/master)"
     ux_bullet_sub "gb [flags]                passthrough to git --no-pager branch"
 }
 
@@ -144,7 +144,7 @@ _gb_clean_local() {
     while IFS= read -r branch; do
         [ -n "$branch" ] || continue
 
-        if [ "$branch" = "main" ] || [ "$branch" = "$current_branch" ]; then
+        if [ "$branch" = "main" ] || [ "$branch" = "master" ] || [ "$branch" = "$current_branch" ]; then
             continue
         fi
 
