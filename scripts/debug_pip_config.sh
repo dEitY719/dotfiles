@@ -1,119 +1,136 @@
 #!/bin/bash
 # scripts/debug_pip_config.sh
-# Comprehensive pip configuration diagnosis script
-# Usage: ./scripts/debug_pip_config.sh
+# Comprehensive pip configuration diagnosis script.
 
 set -e
 
-echo "════════════════════════════════════════════════════════════"
-echo "PIP CONFIGURATION DEBUG REPORT"
-echo "════════════════════════════════════════════════════════════"
-echo ""
+usage() {
+    cat <<'EOF'
+Diagnose pip's configuration: env vars, config file locations, symlinks,
+proxy state, and runtime version.
 
-echo "📋 1. PIP ENVIRONMENT VARIABLES"
-echo "─────────────────────────────────────────────────────────────"
-echo "PIP_CONFIG_FILE=${PIP_CONFIG_FILE:-<not set>}"
-echo ""
+Usage:
+  scripts/debug_pip_config.sh [-h|--help|help]
 
-echo "📂 2. PIP CONFIG FILES LOCATION & PRIORITY"
-echo "─────────────────────────────────────────────────────────────"
-echo "Checking pip config file locations (in priority order):"
-echo ""
+Options:
+  -h, --help    Show this help and exit.
 
-# Priority order for pip config files
+The script takes no positional arguments.
+EOF
+}
+
+# Reject unknown / positional args; `--help` shortcuts straight to usage.
+case "${1:-}" in
+    "") ;;
+    -h|--help|help) usage; exit 0 ;;
+    *) printf 'Error: unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+esac
+
+# Best-effort source of the project ux_lib so output is consistent with the
+# rest of dotfiles. Fall back to plain echo if ux_lib is not reachable
+# (e.g. running this script outside the repo).
+_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+_REPO_ROOT=$(cd "${_SCRIPT_DIR}/.." && pwd)
+_UX_LIB="${_REPO_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
+if [ -f "$_UX_LIB" ]; then
+    # shellcheck source=/dev/null
+    . "$_UX_LIB"
+else
+    ux_header() { echo "=== $* ==="; }
+    ux_section() { echo "-- $* --"; }
+    ux_info() { echo "$*"; }
+    ux_success() { echo "[OK] $*"; }
+    ux_warning() { echo "[WARN] $*"; }
+    ux_error() { echo "[ERROR] $*" >&2; }
+    ux_bullet() { echo "  - $*"; }
+fi
+unset _SCRIPT_DIR _REPO_ROOT _UX_LIB
+
+ux_header "PIP CONFIGURATION DEBUG REPORT"
+
+ux_section "1. PIP ENVIRONMENT VARIABLES"
+ux_bullet "PIP_CONFIG_FILE=${PIP_CONFIG_FILE:-<not set>}"
+
+ux_section "2. PIP CONFIG FILES LOCATION & PRIORITY"
+ux_info "Checking pip config file locations (in priority order):"
+
 config_paths=(
-    "$PIP_CONFIG_FILE"  # Environment variable override
-    "$HOME/.pip/pip.conf"  # Legacy location
-    "$HOME/.config/pip/pip.conf"  # XDG location (newer)
-    "/etc/pip/pip.conf"  # System location
-    "/usr/local/etc/pip/pip.conf"  # System location (alternative)
+    "$PIP_CONFIG_FILE"
+    "$HOME/.pip/pip.conf"
+    "$HOME/.config/pip/pip.conf"
+    "/etc/pip/pip.conf"
+    "/usr/local/etc/pip/pip.conf"
 )
 
 for i in "${!config_paths[@]}"; do
     path="${config_paths[$i]}"
     if [ -n "$path" ]; then
         if [ -f "$path" ]; then
-            echo "✓ [$((i+1))] EXISTS: $path"
+            ux_success "[$((i+1))] EXISTS: $path"
         else
-            echo "  [$((i+1))] missing: $path"
+            ux_bullet "[$((i+1))] missing: $path"
         fi
     fi
 done
-echo ""
 
-echo "📄 3. ACTUAL PIP CONFIG FILE CONTENTS"
-echo "─────────────────────────────────────────────────────────────"
+ux_section "3. ACTUAL PIP CONFIG FILE CONTENTS"
 
 if [ -f "$HOME/.pip/pip.conf" ]; then
-    echo "📌 ~/.pip/pip.conf (LEGACY - may override ~/.config/pip/pip.conf)"
-    echo "───"
+    # shellcheck disable=SC2088 # tilde is a display label, not a literal path
+    ux_info "~/.pip/pip.conf (LEGACY — may override ~/.config/pip/pip.conf)"
     cat "$HOME/.pip/pip.conf"
-    echo ""
 else
-    echo "✓ ~/.pip/pip.conf does NOT exist"
-    echo ""
+    # shellcheck disable=SC2088
+    ux_success "~/.pip/pip.conf does NOT exist"
 fi
 
 if [ -f "$HOME/.config/pip/pip.conf" ]; then
-    echo "📌 ~/.config/pip/pip.conf (XDG - newer standard)"
-    echo "───"
+    # shellcheck disable=SC2088
+    ux_info "~/.config/pip/pip.conf (XDG — newer standard)"
     cat "$HOME/.config/pip/pip.conf"
-    echo ""
 else
-    echo "❌ ~/.config/pip/pip.conf does NOT exist"
-    echo ""
+    # shellcheck disable=SC2088
+    ux_warning "~/.config/pip/pip.conf does NOT exist"
 fi
 
-echo "🔗 4. SYMLINK STATUS"
-echo "─────────────────────────────────────────────────────────────"
+ux_section "4. SYMLINK STATUS"
 if [ -L "$HOME/.config/pip/pip.conf" ]; then
     target=$(readlink "$HOME/.config/pip/pip.conf")
-    echo "✓ Symlink exists: $HOME/.config/pip/pip.conf"
-    echo "  Target: $target"
-    echo "  Target exists: $([ -f "$target" ] && echo 'YES' || echo 'NO')"
+    ux_success "Symlink exists: $HOME/.config/pip/pip.conf"
+    ux_bullet "Target: $target"
+    if [ -f "$target" ]; then
+        ux_bullet "Target exists: YES"
+    else
+        ux_bullet "Target exists: NO"
+    fi
 else
-    echo "❌ NOT a symlink: $HOME/.config/pip/pip.conf"
+    ux_warning "NOT a symlink: $HOME/.config/pip/pip.conf"
 fi
-echo ""
 
-echo "⚙️  5. PIP CONFIG LIST (what pip actually uses)"
-echo "─────────────────────────────────────────────────────────────"
-pip config list
-echo ""
+ux_section "5. PIP CONFIG LIST (what pip actually uses)"
+pip config list || ux_warning "pip config list failed"
 
-echo "🧪 6. PIP DEBUG MODE (see which config file pip loads)"
-echo "─────────────────────────────────────────────────────────────"
-echo "Running: pip config list --verbose"
-echo ""
-pip config list --verbose 2>&1 | head -20
-echo ""
+ux_section "6. PIP DEBUG MODE (see which config file pip loads)"
+ux_info "Running: pip config list --verbose"
+pip config list --verbose 2>&1 | head -20 || true
 
-echo "🔍 7. PIP SEARCH PATH TEST"
-echo "─────────────────────────────────────────────────────────────"
-echo "Testing if pip can find packages in configured repo:"
-pip search tox 2>&1 | head -20 || echo "⚠️  pip search command failed (may be expected)"
-echo ""
+ux_section "7. PIP SEARCH PATH TEST"
+ux_info "Testing if pip can find packages in configured repo:"
+pip search tox 2>&1 | head -20 || ux_warning "pip search command failed (may be expected)"
 
-echo "🌐 8. PROXY & NETWORK"
-echo "─────────────────────────────────────────────────────────────"
-echo "http_proxy=${http_proxy:-<not set>}"
-echo "https_proxy=${https_proxy:-<not set>}"
-echo "HTTP_PROXY=${HTTP_PROXY:-<not set>}"
-echo "HTTPS_PROXY=${HTTPS_PROXY:-<not set>}"
-echo ""
+ux_section "8. PROXY & NETWORK"
+ux_bullet "http_proxy=${http_proxy:-<not set>}"
+ux_bullet "https_proxy=${https_proxy:-<not set>}"
+ux_bullet "HTTP_PROXY=${HTTP_PROXY:-<not set>}"
+ux_bullet "HTTPS_PROXY=${HTTPS_PROXY:-<not set>}"
 
-echo "📝 9. PYTHON & PIP VERSION"
-echo "─────────────────────────────────────────────────────────────"
-python --version
-pip --version
-echo ""
+ux_section "9. PYTHON & PIP VERSION"
+python --version || ux_warning "python --version failed"
+pip --version || ux_warning "pip --version failed"
 
-echo "💾 10. PYENV STATUS"
-echo "─────────────────────────────────────────────────────────────"
-echo "PYENV_VERSION=${PYENV_VERSION:-<not set>}"
-pyenv version
-echo ""
+ux_section "10. PYENV STATUS"
+ux_bullet "PYENV_VERSION=${PYENV_VERSION:-<not set>}"
+pyenv version 2>/dev/null || ux_warning "pyenv not available"
 
-echo "════════════════════════════════════════════════════════════"
-echo "END OF DEBUG REPORT"
-echo "════════════════════════════════════════════════════════════"
+ux_header "END OF DEBUG REPORT"
+ux_info "Next: pip config edit  # to fix any config mismatch surfaced above"

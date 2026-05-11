@@ -1,12 +1,35 @@
 #!/bin/bash
+# shell-common/tools/custom/analyze_bash_scripts.sh
+# Scan a directory of bash files and emit a Markdown summary of all
+# aliases and functions defined within.
 
-# ==============================================================================
-# Bash Script Analyzer: alias 및 function 정의를 파싱하여 매뉴얼 생성
-# (LC_ALL=C 추가 및 파서 재수정)
-# ==============================================================================
+# zsh-compat: this script uses bash arrays + mapfile + ((...)); when sourced
+# from zsh, drop into strict POSIX-sh emulation to keep the syntax legal.
+[ -n "${ZSH_VERSION-}" ] && emulate -L sh
 
 # 일관된 정규식 및 정렬 동작을 위해 로케일을 C로 설정
 export LC_ALL=C
+
+usage() {
+    cat <<'EOF'
+Analyze a directory of bash files and print a Markdown summary of every
+alias and function defined within.
+
+Usage:
+  analyze_bash_scripts.sh [-h|--help|help] <directory>
+
+Arguments:
+  <directory>    Directory to scan recursively (skips */lib/* paths).
+
+Examples:
+  analyze_bash_scripts.sh ~/dotfiles/shell-common
+  analyze_bash_scripts.sh ./bash
+EOF
+}
+
+# Initialize common tools environment (ux_lib + have_command)
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/init.sh" || exit 1
 
 # 전역 변수 초기화
 declare -A ALL_ALIASES
@@ -14,21 +37,10 @@ declare -A ALL_FUNCTIONS
 TOTAL_ALIAS_COUNT=0
 TOTAL_FUNCTION_COUNT=0
 
-# ==============================================================================
-# 함수 정의
-# ==============================================================================
-
-usage() {
-    echo "사용법: $0 <bash_files_directory>"
-    echo "예시: $0 ~/my_bash_config"
-    return 1
-}
-
 # alias 정의를 파싱하고 전역 변수에 업데이트하는 함수
 parse_aliases() {
     local file_path="$1"
     local alias_names
-    # grep의 정규식을 수정하여 '..', '~' 같은 다양한 alias 이름을 올바르게 처리
     mapfile -t alias_names < <(grep -E '^\s*alias\s+.*=' "$file_path" | grep -v '^\s*#' | sed -E 's/^\s*alias\s+([^=]+)=.*/\1/')
 
     for alias_name in "${alias_names[@]}"; do
@@ -56,50 +68,46 @@ parse_functions() {
 
 # 결과 출력 함수
 print_results() {
-    echo "---"
-    echo "## Bash 매뉴얼 요약"
-    echo "---"
-    echo ""
-    echo "총 alias 개수: **$TOTAL_ALIAS_COUNT**"
-    echo "총 function 개수: **$TOTAL_FUNCTION_COUNT**"
-    echo ""
+    ux_header "Bash Script Inventory"
+    ux_bullet "Total aliases: $TOTAL_ALIAS_COUNT"
+    ux_bullet "Total functions: $TOTAL_FUNCTION_COUNT"
 
-    echo "### Alias 목록"
+    ux_section "Alias 목록"
     if [[ ${#ALL_ALIASES[@]} -eq 0 ]]; then
-        echo "  (발견된 alias 없음)"
+        ux_info "(발견된 alias 없음)"
     else
         printf "  - %s\n" "${!ALL_ALIASES[@]}" | sort
     fi
-    echo ""
 
-    echo "### Function 목록"
+    ux_section "Function 목록"
     if [[ ${#ALL_FUNCTIONS[@]} -eq 0 ]]; then
-        echo "  (발견된 function 없음)"
+        ux_info "(발견된 function 없음)"
     else
         printf "  - %s\n" "${!ALL_FUNCTIONS[@]}" | sort
     fi
-    echo ""
-    echo "---"
 }
 
-# ==============================================================================
-# 메인 로직
-# ==============================================================================
-
 main() {
-    if [[ -z "${1:-}" ]]; then
-        usage
-    fi
+    case "${1:-}" in
+        -h|--help|help) usage; exit 0 ;;
+        "") ux_error "Missing argument: <directory>"; usage >&2; exit 2 ;;
+    esac
 
     local TARGET_DIR="$1"
 
     if [[ ! -d "$TARGET_DIR" ]]; then
-        echo "오류: '$TARGET_DIR' 디렉토리를 찾을 수 없습니다."
-        usage
+        ux_error "Directory not found: $TARGET_DIR"
+        exit 1
     fi
 
     local sh_files
     mapfile -t sh_files < <(find "$TARGET_DIR" -type f -name "*.sh" -not -path '*/lib/*')
+
+    local files_scanned=${#sh_files[@]}
+    if [ "$files_scanned" -eq 0 ]; then
+        ux_warning "No .sh files found under: $TARGET_DIR"
+        exit 0
+    fi
 
     for sh_file in "${sh_files[@]}"; do
         parse_aliases "$sh_file"
@@ -107,8 +115,14 @@ main() {
     done
 
     print_results
+    ux_section "Summary"
+    ux_bullet "state: ok"
+    ux_bullet "files_scanned: $files_scanned"
+    ux_bullet "aliases: $TOTAL_ALIAS_COUNT"
+    ux_bullet "functions: $TOTAL_FUNCTION_COUNT"
+    ux_info "Next: pipe this output into a manual or diff against the previous run"
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
     main "$@"
 fi
