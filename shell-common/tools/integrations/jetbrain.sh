@@ -16,14 +16,21 @@ _jetbrain_resolve_pycharm() {
     fi
     _jb_home="${JETBRAIN_HOME:-$HOME/application}"
     # Pick the most recent pycharm-* directory if any exists.
+    # Globs expand alphabetically, so iterate and keep the LAST match —
+    # `pycharm-2025.2.0.1` beats `pycharm-2024.1` that way. First-match would
+    # pin us to the oldest version on disk (gemini PR #520 review).
+    _jb_found=""
     for _jb_dir in "$_jb_home"/pycharm-*; do
         if [ -x "$_jb_dir/bin/pycharm" ]; then
-            printf "%s" "$_jb_dir/bin/pycharm"
-            unset _jb_home _jb_dir
-            return 0
+            _jb_found="$_jb_dir/bin/pycharm"
         fi
     done
-    unset _jb_home _jb_dir
+    if [ -n "$_jb_found" ]; then
+        printf "%s" "$_jb_found"
+        unset _jb_home _jb_dir _jb_found
+        return 0
+    fi
+    unset _jb_home _jb_dir _jb_found
     printf "%s" "$HOME/application/pycharm-2025.2.0.1/bin/pycharm"
 }
 

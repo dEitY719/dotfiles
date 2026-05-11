@@ -15,15 +15,21 @@ _obsidian_resolve_bin() {
         return 0
     fi
     _ob_home="${OBSIDIAN_HOME:-$HOME/application}"
-    # Pick any Obsidian-*.AppImage in the home directory.
+    # Pick the latest Obsidian-*.AppImage. Globs expand alphabetically — keep
+    # the LAST executable match so `Obsidian-1.8.10` wins over `Obsidian-1.7.0`
+    # (gemini PR #520 review).
+    _ob_found=""
     for _ob_app in "$_ob_home"/Obsidian-*.AppImage; do
         if [ -x "$_ob_app" ]; then
-            printf "%s" "$_ob_app"
-            unset _ob_home _ob_app
-            return 0
+            _ob_found="$_ob_app"
         fi
     done
-    unset _ob_home _ob_app
+    if [ -n "$_ob_found" ]; then
+        printf "%s" "$_ob_found"
+        unset _ob_home _ob_app _ob_found
+        return 0
+    fi
+    unset _ob_home _ob_app _ob_found
     printf "%s" "$HOME/application/Obsidian-1.8.10.AppImage"
 }
 
