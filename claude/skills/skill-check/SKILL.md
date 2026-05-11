@@ -7,7 +7,7 @@ description: >-
   next-action hints. Use when the user says "check my skill", "audit my
   skill", "does this skill follow best practices?", "/skill:check".
   Reports PASS/WARN/FAIL/N/A per criterion with concrete fixes.
-  Do NOT use for AGENTS.md or CLAUDE.md files — use devx:ai-context check instead.
+  Do NOT use for AGENTS.md, CLAUDE.md, or GEMINI.md files — use devx:ai-context check instead.
 compatibility:
   tools: Read, Glob, Grep, Bash
 ---

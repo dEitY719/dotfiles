@@ -17,7 +17,7 @@ allowed-tools: Read, Glob, Grep, Write, Edit, Bash
 # devx:ai-context — Unified AI Context Doc Skill
 
 Replaces `agents-md:{check,create,refactor}` and `claude-md-{check,create}`.
-Legacy skills remain installed as thin shims for one minor release — see
+Legacy skills have been deleted (issue #560) — see
 `references/help.md` for the migration table.
 
 ## Help

@@ -94,7 +94,7 @@ Called automatically on shell startup. Uses `_is_mounted()` from `mount.sh` for 
 
 ```
 claude/skills/
-├── devx-ai-context/   # AGENTS.md / CLAUDE.md / GEMINI.md unified auditor & generator
+├── devx-ai-context/   # AGENTS.md / CLAUDE.md / GEMINI.md unified auditor, generator & refactor
 ├── cli-dev/           # CLI development workflow
 ├── req-define/        # Requirements definition
 └── ...                # Other skills
@@ -104,7 +104,7 @@ Each skill requires:
 - `SKILL.md` with frontmatter (`name`, `description`, `allowed-tools` or `compatibility.tools`)
 - Optional `README.md` for documentation
 
-Skill names use `{namespace}:{action}` colon notation (e.g. `agents-md:check`, `skill:refactor`).
+Skill names use `{namespace}:{action}` colon notation (e.g. `devx:ai-context`, `skill:check`).
 
 ## Sub-Agent Parallel Execution
 
