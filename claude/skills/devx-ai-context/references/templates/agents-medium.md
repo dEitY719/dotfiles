@@ -26,7 +26,7 @@ Target: root AGENTS.md (~250 lines) + 2–3 nested AGENTS.md files.
 # Golden Rules
 
 ## Immutable Constraints
-- 500-line limit per AGENTS.md file
+- Aim to keep AGENTS.md under 400 lines (max 500)
 - No emojis (token waste)
 - <project-specific constraint>
 - <project-specific constraint>

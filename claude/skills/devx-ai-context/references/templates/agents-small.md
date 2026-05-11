@@ -24,7 +24,7 @@ Target: root AGENTS.md only, under 200 lines.
 # Golden Rules
 
 ## Immutable Constraints
-- <constraint 1 — e.g., "500-line limit per AGENTS.md">
+- <constraint 1 — e.g., "aim to keep AGENTS.md under 400 lines">
 - <constraint 2 — e.g., "No secrets or credentials">
 - <constraint 3 — e.g., "Interactive guard required for bash files">
 
