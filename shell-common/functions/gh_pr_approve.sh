@@ -295,7 +295,7 @@ _gh_pr_approve_verdict() {
 # Input: <pr-num> with optional leading '#'.
 _gh_pr_approve_status_single() {
     local _arg="$1"
-    local _pr _dir _state _pid _wt _pid_state _wt_state _auto_prune _wt_removed_at
+    local _pr _dir _state _pid _wt _pid_state _wt_state _auto_prune _wt_removed_at _wt_absent
     local _pr_state_raw _pr_state _pr_decision _pr_date _pr_info
     local _flags _flags_state _log _log_mtime _etime
     local _verdict_out _verdict_text _action_text _name
@@ -365,6 +365,7 @@ _gh_pr_approve_status_single() {
 
     # Worktree presence.
     _wt_removed_at="$(cat "$_dir/worktree_removed_at" 2>/dev/null | tr -d '\n')"
+    _wt_absent=0
     if [ -n "$_wt" ]; then
         if [ -d "$_wt" ]; then
             _wt_state="$_wt (present)"
@@ -372,6 +373,7 @@ _gh_pr_approve_status_single() {
             _wt_state="$_wt (absent, removed $_wt_removed_at)"
         else
             _wt_state="$_wt (absent)"
+            _wt_absent=1
         fi
     else
         _wt_state="(none)"
@@ -394,6 +396,9 @@ _gh_pr_approve_status_single() {
     ux_table_row "Worker" "$_pid_state"
     ux_table_row "PR" "$_pr_info"
     ux_table_row "Worktree" "$_wt_state"
+    if [ "$_wt_absent" = "1" ]; then
+        printf '  %-20s   %s\n' "" "→ 디렉토리가 삭제되었습니다. cd 불필요."
+    fi
     ux_table_row "Flags" "$_flags_state"
 
     _log="$_dir/log"
