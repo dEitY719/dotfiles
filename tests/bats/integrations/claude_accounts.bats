@@ -137,6 +137,7 @@ LOCAL
     assert_success
 
     [ -L "$HOME/.claude-personal/settings.json" ]
+    [ -L "$HOME/.claude-personal/settings.local.json" ]
     [ -L "$HOME/.claude-personal/statusline-command.sh" ]
     [ -L "$HOME/.claude-personal/plugins" ]
     [ -L "$HOME/.claude-personal/projects/GLOBAL/memory" ]
