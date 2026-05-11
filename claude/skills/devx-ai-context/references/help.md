@@ -72,9 +72,7 @@ Auto-detection priority in cwd: `CLAUDE.md` → `AGENTS.md` → `GEMINI.md`.
 | `/claude-md-check [path]`      | `/devx:ai-context check [path]`            |
 | `/claude-md-create`            | `/devx:ai-context create --kind claude`    |
 
-Legacy triggers will keep working until the cleanup follow-up issue lands.
-Each legacy `SKILL.md` body now begins with a one-line migration banner
-pointing here.
+Legacy skill directories have been removed (issue #560) — use the commands above.
 
 ## Output
 
