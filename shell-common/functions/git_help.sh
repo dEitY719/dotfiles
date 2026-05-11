@@ -42,7 +42,8 @@ _git_help_rows_basic() {
     ux_table_row "gpl" "git pull" "Pull from remote"
     ux_table_row "gco" "git checkout" "Checkout branch/commit"
     ux_table_row "gd" "git diff" "Show changes"
-    ux_table_row "grs" "git restore" "Discard changes in file"
+    ux_table_row "grs <file>" "git restore <file>" "Discard working dir changes"
+    ux_table_row "grs --staged <file>" "git restore --staged <file>" "Unstage file (undo git add)"
     ux_table_row "gb" "git branch" "List branches"
     ux_table_row "grmc" "git rm --cached" "Unstage, keep file"
 }
