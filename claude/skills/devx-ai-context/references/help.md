@@ -19,8 +19,7 @@ Single entry point for AI context-injection files (`CLAUDE.md`, `AGENTS.md`,
 - `claude-md-check`
 - `claude-md-create`
 
-The legacy skills remain installed as thin shims for one minor release —
-each forwards to this skill with the appropriate `action` + `--kind`.
+The legacy skills have been deleted (follow-up to #539, see issue #560).
 
 ## Actions
 
