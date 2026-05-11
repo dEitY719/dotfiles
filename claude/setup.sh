@@ -385,7 +385,7 @@ _migrate_install_gh_issue_flow_stop_hook
 # [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac`)를 가지므로,
 # ./setup.sh 가 비대화형으로 호출됐을 때 함수 정의가 스킵된다.
 # 결과적으로 _claude_has_unmigrated_data / _claude_resolve_account 가
-# 미정의로 떨어져 다중 계정 루프(line 404)가 silent skip 됨 (issue #554).
+# 미정의로 떨어져 다중 계정 루프(line 419)가 silent skip 됨 (issue #554).
 # 가드 자체는 단순 형태를 유지해야 하므로(`bats/CI` 호환), source 직전
 # prefix 형태로 FORCE_INIT 신호를 한 줄만 켠다.
 DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/env/claude.sh"
