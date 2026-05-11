@@ -30,7 +30,7 @@ user's labels pass straight through `LABEL_ARGS` from Step 1.
 
 확인 질문하지 말고 즉시 실행.
 
-The four emoji glyphs in the printf above (`🤖 📊 👤`) are the
-ai-metrics footer exception defined in `CLAUDE.md` — the `<details>`
+The four emoji glyphs in the printf above (`<U+1F916> <U+1F4CA> <U+1F464>`) are
+the ai-metrics footer exception defined in `CLAUDE.md` — the `<details>`
 wrapper + `<!-- ai-metrics -->` block. The exception does not extend
 anywhere else in this skill.

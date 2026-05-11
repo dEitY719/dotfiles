@@ -39,7 +39,7 @@ appends the ai-metrics footer to the PR body temp file `$BODY`.
 
 ## Emoji exception scope
 
-The four emoji glyphs in the printf above (`🤖 📊 👤`) are the
-ai-metrics footer exception defined in `CLAUDE.md` — the `<details>`
+The four emoji glyphs in the printf above (`<U+1F916> <U+1F4CA> <U+1F464>`) are
+the ai-metrics footer exception defined in `CLAUDE.md` — the `<details>`
 wrapper + `<!-- ai-metrics:gh-pr -->` block. The exception does not
 extend anywhere else in this skill or its other references.

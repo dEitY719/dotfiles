@@ -80,7 +80,7 @@ Every agent needs guardrails on what it can do autonomously.
 **WARN** — some rules exist but external actions or thresholds are undefined
 **FAIL** — no permission or authorization rules at all
 
-See `example-permissions.md` for a complete permissions file structure.
+See `references/example-permissions.md` for a complete permissions file structure.
 
 ---
 
