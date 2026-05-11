@@ -519,8 +519,9 @@ MOCK
 # ---------- Task 11: claude/setup.sh integration ----------
 
 # Stage an isolated DOTFILES_ROOT under $TEST_TEMP_HOME so setup.sh's writes
-# (settings.json migration, *.pre-statusline-fix-* backup files) land in a
-# throwaway tree instead of the version-controlled checkout (issue #303).
+# (settings.json migration) land in a throwaway tree instead of the
+# version-controlled checkout (issue #303). Backup files now live under
+# $HOME/.claude-backups (issue #554) — also throwaway since $HOME is isolated.
 _setup_sh_prereqs() {
     setup_isolated_dotfiles_root
 }
@@ -591,8 +592,9 @@ _setup_sh_prereqs() {
 # These tests overwrite settings.json with a fixture that triggers (or
 # avoids triggering) the item-A migration. Since _setup_sh_prereqs now
 # stages an isolated DOTFILES_ROOT under $TEST_TEMP_HOME (issue #303),
-# fixture writes and any *.pre-statusline-fix-* backup files setup.sh
-# produces are torn down with $TEST_TEMP_HOME — no save/restore needed.
+# fixture writes are torn down with $TEST_TEMP_HOME — no save/restore needed.
+# Backup files since issue #554 land in $HOME/.claude-backups/, which is
+# also under the isolated $TEST_TEMP_HOME.
 _use_settings_fixture() {
     cat > "${DOTFILES_ROOT}/claude/settings.json" <<JSON
 {
@@ -615,8 +617,10 @@ JSON
 
     cmd=$(jq -r '.statusLine.command' "${DOTFILES_ROOT}/claude/settings.json")
     [ "$cmd" = '${HOME}/dotfiles/claude/statusline-command.sh' ]
-    # Backup file present alongside the source.
-    ls "${DOTFILES_ROOT}/claude/" | grep -qE 'settings\.json\.pre-statusline-fix-[0-9]{14}'
+    # Backup file lives in $HOME/.claude-backups, NOT in the dotfiles tree
+    # (issue #554). Asserting both rules keeps a regression visible.
+    ls "$HOME/.claude-backups/" | grep -qE 'settings\.json\.pre-statusline-fix-[0-9]{14}'
+    ! ls "${DOTFILES_ROOT}/claude/" 2>/dev/null | grep -qE 'settings\.json\.pre-statusline-fix-'
 }
 
 @test "issue #300-A: setup.sh leaves already-migrated statusLine.command alone" {
@@ -628,8 +632,10 @@ JSON
     assert_success
     refute_output --partial "자동 마이그레이션 완료"
 
-    # No backup spawned for a no-op run.
-    ! ls "${DOTFILES_ROOT}/claude/" | grep -qE 'settings\.json\.pre-statusline-fix-'
+    # No backup spawned for a no-op run — check both the legacy in-tree
+    # location and the new $HOME/.claude-backups location (issue #554).
+    ! ls "${DOTFILES_ROOT}/claude/" 2>/dev/null | grep -qE 'settings\.json\.pre-statusline-fix-'
+    ! ls "$HOME/.claude-backups/" 2>/dev/null | grep -qE 'settings\.json\.pre-statusline-fix-'
 }
 
 @test "issue #300-A: setup.sh preserves user-customised statusLine.command" {
@@ -643,6 +649,38 @@ JSON
 
     cmd=$(jq -r '.statusLine.command' "${DOTFILES_ROOT}/claude/settings.json")
     [ "$cmd" = "$HOME/bin/my-custom-statusline.sh" ]
+}
+
+# ---------- Regression: issue #554 ----------
+#
+# claude/setup.sh sources shell-common/{env,tools/integrations}/claude.sh
+# to load _claude_resolve_account / _claude_has_unmigrated_data. Both files
+# carry an interactive guard that early-returns under non-interactive
+# bash unless DOTFILES_FORCE_INIT is set. When ./setup.sh is invoked by an
+# end user (no env override), the guard skipped the function definitions,
+# producing "command not found" errors and a silently empty
+# ENABLED_ACCOUNTS — the entire multi-account install loop was skipped.
+#
+# run_in_bash always exports DOTFILES_FORCE_INIT=1, so this test
+# deliberately bypasses it to mimic the real-user invocation path.
+
+@test "regression #554: claude/setup.sh defines multi-account helpers without DOTFILES_FORCE_INIT" {
+    _setup_sh_prereqs
+
+    # No DOTFILES_FORCE_INIT, no DOTFILES_TEST_MODE — mirror the real
+    # ./setup.sh invocation as seen on a fresh PC.
+    run bash --noprofile --norc -c "
+        unset DOTFILES_FORCE_INIT
+        unset DOTFILES_TEST_MODE
+        export HOME='$HOME'
+        export TERM=dumb
+        CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 \
+            bash '${DOTFILES_ROOT}/claude/setup.sh'
+    "
+    assert_success
+    refute_output --partial "_claude_has_unmigrated_data: command not found"
+    refute_output --partial "_claude_resolve_account: command not found"
+    refute_output --partial "command not found"
 }
 
 # ---------- Issue #300, item C: claude_accounts_status shows oauth binding ----------

@@ -25,6 +25,9 @@ __pycache__/
 
 # Claude Code personal settings (user-specific, environment-dependent)
 claude/settings.json
+# Migration backups carry the same secrets as the source — keep them out of
+# the tree even when the migration helper happens to write here (issue #554).
+claude/settings.json.*
 .claude/
 
 # VS Code settings (bidirectional sync system, PC-specific)
