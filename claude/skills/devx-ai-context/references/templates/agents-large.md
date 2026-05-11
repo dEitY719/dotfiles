@@ -30,7 +30,7 @@ details out of the root entirely.
 # Golden Rules
 
 ## Universal Constraints (apply to ALL services)
-- 500-line limit per AGENTS.md
+- Aim to keep AGENTS.md under 400 lines (max 500)
 - No emojis
 - No secrets committed
 - <cross-cutting constraint>
