@@ -85,7 +85,7 @@ Output exactly two lines, no preamble, no recap — first line is the structured
 verdict, second line is the explicit `Next:` follow-up hint:
 
 ```
-[OK] file=docs/learnings/<slug>.md lines=<N> summary=<one-line summary — same hook used in README index>
+[OK] file=docs/learnings/<slug>.md lines=<N> summary="<one-line hook — same lead used in README index>"
 Next: review the file, then optionally /write:insight again for remaining candidates
 ```
 
