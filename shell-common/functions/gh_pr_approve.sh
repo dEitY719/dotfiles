@@ -295,11 +295,12 @@ _gh_pr_approve_verdict() {
 # Input: <pr-num> with optional leading '#'.
 _gh_pr_approve_status_single() {
     local _arg="$1"
-    local _pr _dir _state _pid _wt _pid_state _wt_state
+    local _pr _dir _state _pid _wt _pid_state _wt_state _auto_prune _wt_removed_at
     local _pr_state_raw _pr_state _pr_decision _pr_date _pr_info
     local _flags _flags_state _log _log_mtime _etime
     local _verdict_out _verdict_text _action_text _name
 
+    _auto_prune="${2:-0}"
     _pr="${_arg#\#}"
     case "$_pr" in
     '' | *[!0-9]*)
@@ -363,9 +364,12 @@ _gh_pr_approve_status_single() {
     fi
 
     # Worktree presence.
+    _wt_removed_at="$(cat "$_dir/worktree_removed_at" 2>/dev/null || printf '')"
     if [ -n "$_wt" ]; then
         if [ -d "$_wt" ]; then
             _wt_state="$_wt (present)"
+        elif [ -n "$_wt_removed_at" ]; then
+            _wt_state="$_wt (absent, removed $_wt_removed_at)"
         else
             _wt_state="$_wt (absent)"
         fi
@@ -442,18 +446,34 @@ EOF
     ux_info ""
     ux_table_row "Verdict" "$_verdict_text"
     ux_table_row "Next action" "$_action_text"
+
+    # Auto-prune: when --auto-prune passed and state=done + worktree absent.
+    if [ "$_auto_prune" = "1" ] && [ "$_state" = "done" ] && [ -n "$_wt" ] && [ ! -d "$_wt" ]; then
+        ux_info "State=done + worktree=absent — auto-pruning #$_pr..."
+        _gh_pr_approve_prune_scoped "$(dirname "$_dir")" 0 "$_name" "$_pr"
+    fi
 }
 
 # List all known gh-pr-approve entries for the current repo, OR diagnose a
 # single PR if exactly one positional arg is given. Multiple positional args
 # are rejected (single-PR diagnostic only).
 _gh_pr_approve_status() {
-    if [ $# -gt 1 ]; then
-        ux_error "gh-pr-approve status: only one PR number accepted (got $#)"
-        return 1
-    fi
-    if [ -n "${1:-}" ]; then
-        _gh_pr_approve_status_single "$1"
+    local _auto_prune=0 _pr_arg=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --auto-prune) _auto_prune=1 ;;
+        *)
+            if [ -n "$_pr_arg" ]; then
+                ux_error "gh-pr-approve status: only one PR number accepted"
+                return 1
+            fi
+            _pr_arg="$1"
+            ;;
+        esac
+        shift
+    done
+    if [ -n "$_pr_arg" ]; then
+        _gh_pr_approve_status_single "$_pr_arg" "$_auto_prune"
         return $?
     fi
 
@@ -1109,6 +1129,8 @@ _gh_pr_approve_worker() {
         _ai_usage_summary "$_usage_log" "Token Usage (PR #$_pr — teardown failed)"
         return 1
     fi
+    printf '%s\n' "$(date -Iseconds 2>/dev/null || date '+%Y-%m-%dT%H:%M:%S%z')" \
+        >"$_dir/worktree_removed_at"
 
     _gh_pr_approve_set_state "$_dir" "done"
     printf '[gh-pr-approve-worker] done pr=#%s end=%s\n' "$_pr" "$(date -Iseconds 2>/dev/null || date)"
