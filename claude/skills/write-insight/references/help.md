@@ -30,7 +30,7 @@ PR / commit / file:line). Also updates `docs/learnings/README.md` index.
 
 ## Related skills
 
-- `write-blog-dev-learnings` — narrative "삽질" blog posts in `~/para/archive/`
+- `write:blog-dev-learnings` — narrative "삽질" blog posts in `~/para/archive/`
 - `write:rca` — formal RCA / postmortem (Jekyll)
 - `write:task-history` — JIRA / PR description drafting from session work
 

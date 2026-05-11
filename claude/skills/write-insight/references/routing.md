@@ -26,7 +26,7 @@ write-insight to cover them.
 
 | Skill | Output target | Use it when |
 |---|---|---|
-| `write-blog-dev-learnings` | `~/para/archive/playbook/docs/dev-learnings/` | User wants a narrative "삽질" blog post in entertaining tone |
+| `write:blog-dev-learnings` | `~/para/archive/playbook/docs/dev-learnings/` | User wants a narrative "삽질" blog post in entertaining tone |
 | `write:rca` | `~/para/archive/rca-knowledge/` | User wants a formal RCA / postmortem with Jekyll frontmatter |
 | `write:task-history` | daily task list file | User wants JIRA ticket text or PR description draft from session work |
 

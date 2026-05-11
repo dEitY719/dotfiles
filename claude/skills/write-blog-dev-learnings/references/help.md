@@ -1,9 +1,9 @@
-# skill:write-blog-dev-learnings — Help
+# write:blog-dev-learnings — Help
 
 ## Synopsis
 
 ```
-/write-blog-dev-learnings "<topic-hint>"
+/write:blog-dev-learnings "<topic-hint>"
 ```
 
 ## Description
@@ -24,9 +24,9 @@ production incidents, and technical gotchas. Saves to
 ## Examples
 
 ```
-/write-blog-dev-learnings "지금까지 너와 작업한 내용"
-/write-blog-dev-learnings "오늘 redis sed injection 삽질"
-/write-blog-dev-learnings "WSL systemd 감지 문제"
+/write:blog-dev-learnings "지금까지 너와 작업한 내용"
+/write:blog-dev-learnings "오늘 redis sed injection 삽질"
+/write:blog-dev-learnings "WSL systemd 감지 문제"
 ```
 
 ## Stop conditions

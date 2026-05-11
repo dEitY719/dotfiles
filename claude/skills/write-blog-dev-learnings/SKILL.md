@@ -1,5 +1,5 @@
 ---
-name: write-blog-dev-learnings
+name: write:blog-dev-learnings
 description: >-
   Write entertaining Korean developer blog posts about debugging war stories,
   production incidents, and technical gotchas. Saves to
@@ -144,9 +144,9 @@ Step-by-step으로 구체적으로. 코드블록 필수.
 The user runs this skill from **any project directory** via Claude Code TUI:
 
 ```
-/write-blog-dev-learnings "지금까지 너와 작업한 내용"
-/write-blog-dev-learnings "오늘 redis sed injection 삽질"
-/write-blog-dev-learnings "WSL systemd 감지 문제"
+/write:blog-dev-learnings "지금까지 너와 작업한 내용"
+/write:blog-dev-learnings "오늘 redis sed injection 삽질"
+/write:blog-dev-learnings "WSL systemd 감지 문제"
 ```
 
 The quoted text is the **topic hint**. It can be:
