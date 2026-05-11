@@ -109,7 +109,15 @@ else
 | 커밋 시간 (gh-commit) | ~$ELAPSED min |
 | 토큰 | ~$TOKENS |
 
-<!-- ai-metrics:gh-commit tokens=$TOKENS ai_min=$ELAPSED -->"
+---
+<details>
+<summary>🤖 AI Metrics · 📊 ~$TOKENS tokens · 🤖 ~$ELAPSED min</summary>
+
+<!-- ai-metrics:gh-commit -->
+📊 ~$TOKENS tokens · 🤖 ~$ELAPSED min
+<!-- /ai-metrics:gh-commit -->
+
+</details>"
 fi
 ```
 

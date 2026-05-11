@@ -103,7 +103,15 @@ if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
 else
     gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
       -X POST \
-      -f body="<!-- ai-metrics:gh-pr-approve ai_min=$ELAPSED -->
+      -f body="---
+<details>
+<summary>🤖 AI Metrics · 🤖 ~$ELAPSED min</summary>
+
+<!-- ai-metrics:gh-pr-approve -->
+🤖 ~$ELAPSED min
+<!-- /ai-metrics:gh-pr-approve -->
+
+</details>
 PR 리뷰: ~$ELAPSED min"
 fi
 ```

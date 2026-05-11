@@ -167,7 +167,15 @@ else
 
 예상 사람 시간: ~$HUMAN_H h · 토큰: ~$TOKENS
 
-<!-- ai-metrics:gh-issue-flow tokens=$TOKENS human_h=$HUMAN_H ai_min=$ELAPSED -->"
+---
+<details>
+<summary>🤖 AI Metrics · 📊 ~$TOKENS tokens · 👤 ~$HUMAN_H h · 🤖 ~$ELAPSED min</summary>
+
+<!-- ai-metrics:gh-issue-flow -->
+📊 ~$TOKENS tokens · 👤 ~$HUMAN_H h · 🤖 ~$ELAPSED min
+<!-- /ai-metrics:gh-issue-flow -->
+
+</details>"
 fi
 ```
 

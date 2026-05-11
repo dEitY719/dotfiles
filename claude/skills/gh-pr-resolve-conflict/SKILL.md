@@ -138,7 +138,15 @@ if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
 else
     gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
       -X POST \
-      -f body="<!-- ai-metrics:gh-pr-resolve-conflict tokens=${TOKENS:-3000} human_h=$HUMAN_H ai_min=$ELAPSED -->
+      -f body="---
+<details>
+<summary>🤖 AI Metrics · 📊 ~${TOKENS:-3000} tokens · 👤 ~$HUMAN_H h · 🤖 ~$ELAPSED min</summary>
+
+<!-- ai-metrics:gh-pr-resolve-conflict -->
+📊 ~${TOKENS:-3000} tokens · 👤 ~$HUMAN_H h · 🤖 ~$ELAPSED min
+<!-- /ai-metrics:gh-pr-resolve-conflict -->
+
+</details>
 컨플릭트 해결: ~$ELAPSED min · 사람: ~$HUMAN_H h ($CONFLICT_FILES files × 0.5 h)"
 fi
 ```

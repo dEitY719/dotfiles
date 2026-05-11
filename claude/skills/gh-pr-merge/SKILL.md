@@ -152,7 +152,15 @@ if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
 else
     gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
       -X POST \
-      -f body="<!-- ai-metrics:gh-pr-merge tokens=${TOKENS:-2000} human_h=0.25 ai_min=$ELAPSED -->
+      -f body="---
+<details>
+<summary>🤖 AI Metrics · 📊 ~${TOKENS:-2000} tokens · 👤 ~0.25 h · 🤖 ~$ELAPSED min</summary>
+
+<!-- ai-metrics:gh-pr-merge -->
+📊 ~${TOKENS:-2000} tokens · 👤 ~0.25 h · 🤖 ~$ELAPSED min
+<!-- /ai-metrics:gh-pr-merge -->
+
+</details>
 PR merge: ~$ELAPSED min"
 fi
 ```

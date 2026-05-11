@@ -67,3 +67,28 @@ PASS — success report includes next steps, follow-up commands, or teardown
 WARN — partial guidance (mentions what comes next but no concrete commands)
 FAIL — output ends without any guidance on what to do next
 N/A — skill is terminal (no natural follow-up action exists)
+
+### Check 11: No Emojis
+PASS — no emoji glyphs in SKILL.md body or `references/*.md`
+FAIL — emoji present AND skill name NOT in `references/allowed-emoji-skills.txt`
+N/A — skill name IS in allowlist (`[N/A] allowlisted in references/allowed-emoji-skills.txt`)
+WARN — allowlist file missing (degrade rather than block; skill:check stays read-only)
+
+Rationale: CLAUDE.md "No emojis anywhere" policy with one exception — the
+`ai-metrics` footer's `📊 👤 🤖` glyphs inside `<details>` / `<!-- ai-metrics -->`
+blocks (#317 F-2, PR #320, #367 wrapper).
+
+Detection: grep for codepoints in the ranges `U+1F300-U+1FAFF` (pictographic
+extended) and `U+2600-U+27BF` (misc symbols & dingbats). Range is intentionally
+narrower than "all emoji" to avoid false positives on BMP symbols (✓ ✗ etc).
+
+Skill name resolution: take frontmatter `name:` colon form and convert to
+hyphen form (`gh:add-ai-metrics` → `gh-add-ai-metrics`), or fall back to the
+directory basename when frontmatter `name:` is absent.
+
+Allowlist: `claude/skills/skill-check/references/allowed-emoji-skills.txt` —
+one skill name per line, `#` comments allowed, blank lines ignored. Each
+entry must carry an inline rationale comment.
+
+FAIL output: list up to 5 matched files+lines and append the guidance
+`Remove emoji or add to references/allowed-emoji-skills.txt with rationale`.

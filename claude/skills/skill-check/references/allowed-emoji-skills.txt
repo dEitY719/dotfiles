@@ -1,0 +1,5 @@
+# Skills permitted to contain emojis (one per line).
+# Each entry must have a rationale comment.
+# Adding a new entry requires updating Check 11 rationale.
+
+gh-add-ai-metrics    # ai-metrics footer SSOT — CLAUDE.md exception (#317 F-2, PR #320, #367)

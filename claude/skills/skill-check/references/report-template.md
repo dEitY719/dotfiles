@@ -18,15 +18,16 @@ References dir: <exists / missing>
 | 5 | Output Report Defined        | PASS   | template in Step 3              |
 
 ### UX Quality Checks
-| # | Check                        | Result | Notes                                 |
-|---|------------------------------|--------|---------------------------------------|
-| 6 | Help Flag Pattern            | PASS   | -h/--help → references/help.md        |
-| 7 | Step Structure               | WARN   | steps present but no stop-on-error    |
-| 8 | Options Documentation        | N/A    | skill takes no arguments              |
-| 9 | Verdict Output               | FAIL   | output ends without [OK]/[FAIL]       |
-|10 | Next-action Hint             | PASS   | teardown shown in success report      |
+| #  | Check                        | Result | Notes                                 |
+|----|------------------------------|--------|---------------------------------------|
+| 6  | Help Flag Pattern            | PASS   | -h/--help → references/help.md        |
+| 7  | Step Structure               | WARN   | steps present but no stop-on-error    |
+| 8  | Options Documentation        | N/A    | skill takes no arguments              |
+| 9  | Verdict Output               | FAIL   | output ends without [OK]/[FAIL]       |
+| 10 | Next-action Hint             | PASS   | teardown shown in success report      |
+| 11 | No Emojis                    | PASS   | no emoji glyphs in body or references |
 
-Score: 5/9 checks passed (2 warnings, 2 fails, 1 N/A)
+Score: 6/10 checks passed (2 warnings, 2 fails, 1 N/A)
 Verdict: POOR — significant gaps, major rework needed
 
 ## Issues & Improvements
