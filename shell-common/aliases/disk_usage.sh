@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # shell-common/aliases/disk_usage.sh
-# Disk-usage aliases (POSIX-compatible)
+# Disk-usage aliases (POSIX-shell compatible)
 # Shared between bash and zsh
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
