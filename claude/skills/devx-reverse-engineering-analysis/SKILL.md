@@ -12,7 +12,7 @@ description: >-
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
 ---
 
-# Reverse Engineering: Feature Analysis
+# DevX: Reverse Engineering Analysis
 
 ## Purpose
 
