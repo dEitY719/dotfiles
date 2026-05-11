@@ -47,9 +47,14 @@ Settings are managed via symlinks and bind mount:
 
 ```bash
 ~/.claude/settings.json -> ~/dotfiles/claude/settings.json (symlink)
+~/.claude/settings.local.json -> ~/dotfiles/claude/settings.local.json (symlink)
 ~/.claude/statusline-command.sh -> ~/dotfiles/claude/statusline-command.sh (symlink)
 ~/.claude/skills <- ~/dotfiles/claude/skills (bind mount)
 ```
+
+`settings.local.json` carries the env block (e.g. `GH_PR_REPLY_AUTO_APPROVE_REPOS`)
+shared across all of the user's machines via the dotfiles SSOT — distinct
+from `settings.json` which is gitignored / per-machine.
 
 ## Setup Script (setup.sh)
 

@@ -7,10 +7,11 @@
 #
 # SPECIAL INITIALIZATION (why this file is REQUIRED):
 #   1. Creates ~/.claude/settings.json symlink (Claude Code settings)
-#   2. Creates ~/.claude/statusline-command.sh symlink (status line script)
-#   3. Creates ~/.claude/skills symlink (custom skills directory)
-#   4. Creates ~/.claude/projects/GLOBAL/memory symlink (global memory)
-#   5. Verifies ~/.claude directory structure
+#   2. Creates ~/.claude/settings.local.json symlink (env / per-user overrides)
+#   3. Creates ~/.claude/statusline-command.sh symlink (status line script)
+#   4. Creates ~/.claude/skills symlink (custom skills directory)
+#   5. Creates ~/.claude/projects/GLOBAL/memory symlink (global memory)
+#   6. Verifies ~/.claude directory structure
 #
 # These files/directories are version-controlled in dotfiles and should
 # be managed via symbolic links for consistency across machines.
@@ -440,7 +441,7 @@ done
 log_debug "\n--- 심볼릭 링크 확인 ---"
 for acct in $ENABLED_ACCOUNTS; do
     cdir=$(_claude_resolve_account "$acct")
-    for link in settings.json statusline-command.sh plugins projects/GLOBAL/memory; do
+    for link in settings.json settings.local.json statusline-command.sh plugins projects/GLOBAL/memory; do
         if [ -L "${cdir}/${link}" ]; then
             log_dim "✓ ${acct}/${link} 심볼릭 링크 확인됨"
         else

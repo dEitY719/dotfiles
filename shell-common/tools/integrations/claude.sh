@@ -911,6 +911,7 @@ _claude_account_setup_one() {
     mkdir -p "$_caso_cdir/projects/GLOBAL"
 
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/settings.json"          "$_caso_cdir/settings.json"
+    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/settings.local.json"    "$_caso_cdir/settings.local.json"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/statusline-command.sh"  "$_caso_cdir/statusline-command.sh"
     _claude_ensure_symlink "$HOME/.claude-shared/plugins"                   "$_caso_cdir/plugins"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/global-memory"          "$_caso_cdir/projects/GLOBAL/memory"
@@ -1005,7 +1006,7 @@ claude_accounts_status() {
             echo "                → Run: claude-yolo --user $_cas_acct"
         fi
 
-        for _cas_link in settings.json statusline-command.sh plugins projects/GLOBAL/memory; do
+        for _cas_link in settings.json settings.local.json statusline-command.sh plugins projects/GLOBAL/memory; do
             if [ -L "$_cas_cdir/$_cas_link" ]; then
                 echo "  $_cas_link: symlink ✓"
             else
