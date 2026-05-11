@@ -10,7 +10,7 @@ _git_help_summary() {
     ux_bullet_sub "sync: gf | gfu | gfa | gsw | gr"
     ux_bullet_sub "logs: gl | gl1 | gl2 | glref"
     ux_bullet_sub "upstream: gupa | gupdel | glum | glub"
-    ux_bullet_sub "branch: gset-main | gset-dev | gset | gprune | git-clean-local"
+    ux_bullet_sub "branch: gset-main | gset-dev | gset | gb -D local | gb -D remote"
     ux_bullet_sub "stash: git stash list | show -p | pop | apply | drop"
     ux_bullet_sub "pick: gcp | gcp_theirs | gcp_ours | gcp_author | gcp_scan"
     ux_bullet_sub "special: gpf_dev_server | gpfu"
@@ -74,8 +74,9 @@ _git_help_rows_branch() {
     ux_table_row "gset-main" "set-upstream main" "Track origin/main"
     ux_table_row "gset-dev" "set-upstream dev" "Track origin/dev"
     ux_table_row "gset" "gset [branch]" "Track origin/[branch]"
-    ux_table_row "gprune" "git-prune-remote <remote>" "Delete all branches except main"
-    ux_table_row "git-clean-local" "git_clean_local" "Delete local branches (keeps: main + current)"
+    ux_table_row "gb -D local" "git_branch -D local" "Delete local branches (keeps: main + current + keywords)"
+    ux_table_row "gb -D remote [<r>]" "git_branch -D remote" "Delete remote branches (default: origin, keeps: main)"
+    ux_table_row "gb -h" "git_branch --help" "Show gb sub-command help"
 }
 
 _git_help_rows_stash() {

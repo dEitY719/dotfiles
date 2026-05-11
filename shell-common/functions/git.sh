@@ -47,16 +47,11 @@ git_log_upstream() {
 }
 
 # ============================================================================
-# Prune remote branches (except main)
+# gb — unified branch management dispatcher
+# Usage: gb [-D local] [-D remote [<remote>]] [git-branch-flags...]
 # ============================================================================
-git_prune_remote() {
-    if [ -z "$1" ]; then
-        ux_error "Usage: gprune <remote-name>"
-        ux_error "Example: gprune origin"
-        return 1
-    fi
-
-    local remote="$1"
+_gb_clean_remote() {
+    local remote="${1:-origin}"
 
     # Capture branch list once, reuse for count and iteration
     local branches
@@ -80,6 +75,30 @@ git_prune_remote() {
     ux_success "Done!"
 }
 
+_gb_help() {
+    ux_info "Usage: gb [-D local] [-D remote [<remote>]] [git-branch-flags...]"
+    ux_bullet "sub-commands"
+    ux_bullet_sub "gb -D local               delete local branches (keeps: main + current + keywords)"
+    ux_bullet_sub "gb -D remote [<remote>]   delete remote branches (default: origin, keeps: main)"
+    ux_bullet_sub "gb [flags]                passthrough to git --no-pager branch"
+}
+
+git_branch() {
+    case "$1" in
+        -D)
+            case "$2" in
+                local)  shift 2; _gb_clean_local "$@" ;;
+                remote) shift 2; _gb_clean_remote "$@" ;;
+                *)      git --no-pager branch -D "$@" ;;
+            esac
+            ;;
+        -h|--help|help)
+            _gb_help ;;
+        *)
+            git --no-pager branch "$@" ;;
+    esac
+}
+
 # ============================================================================
 # Git configuration setup
 # ============================================================================
@@ -101,9 +120,9 @@ git_setup_auto_remote() {
 git_setup_auto_remote >/dev/null 2>&1 || true
 
 # ============================================================================
-# Clean all local branches except main and current branch
+# Private sub-function: clean local branches (called via gb -D local)
 # ============================================================================
-git_clean_local() {
+_gb_clean_local() {
     # zsh compatibility: emulate POSIX sh to ensure word splitting on unquoted vars
     if [ -n "${ZSH_VERSION-}" ]; then
         emulate -L sh
@@ -192,5 +211,8 @@ EOF
 alias git-log='git_log'
 alias gl='git-log'
 alias git-log-upstream='git_log_upstream'
-alias git-prune-remote='git_prune_remote'
-alias git-clean-local='git_clean_local'
+alias gb='git_branch'
+# Deprecated wrappers — prefer gb -D local / gb -D remote
+alias git-clean-local='gb -D local'
+alias gprune='gb -D remote'
+alias git-prune-remote='gb -D remote'
