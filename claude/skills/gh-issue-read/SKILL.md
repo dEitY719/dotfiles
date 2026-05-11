@@ -30,6 +30,11 @@ Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 4.
 
 Positional args: `<issue-number> [remote]`.
 
+| Arg | Description | Default | Required |
+|-----|-------------|---------|----------|
+| `<issue-number>` | GitHub issue number to fetch | — | Yes |
+| `[remote]` | Git remote name whose repo owns the issue | `origin` | No |
+
 - `issue-number` — required, positive integer. Missing/invalid → print
   usage pointer (`Run /gh-issue-read -h for usage.`) and stop.
 - `remote` — default `origin`. Resolve `TARGET_REPO=<owner>/<repo>` via
