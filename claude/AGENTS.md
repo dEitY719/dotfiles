@@ -43,13 +43,16 @@ Or configure in `settings.json` (line 174):
 
 ## Configuration Files
 
-Settings are managed via symlinks and bind mount:
+Settings are managed via symlinks (per-skill / per-doc symlinks for
+the skills/ and docs/ directories — issue #342 replaced the legacy
+bind-mount design):
 
 ```bash
-~/.claude/settings.json -> ~/dotfiles/claude/settings.json (symlink)
-~/.claude/settings.local.json -> ~/dotfiles/claude/settings.local.json (symlink)
-~/.claude/statusline-command.sh -> ~/dotfiles/claude/statusline-command.sh (symlink)
-~/.claude/skills <- ~/dotfiles/claude/skills (bind mount)
+~/.claude-personal/settings.json         -> ~/dotfiles/claude/settings.json
+~/.claude-personal/settings.local.json   -> ~/dotfiles/claude/settings.local.json
+~/.claude-personal/statusline-command.sh -> ~/dotfiles/claude/statusline-command.sh
+~/.claude-personal/skills/<name>         -> ~/dotfiles/claude/skills/<name>   (per-skill)
+~/.claude-personal/docs/<name>           -> ~/dotfiles/claude/docs/<name>     (per-doc)
 ```
 
 `settings.local.json` carries the env block (e.g. `GH_PR_REPLY_AUTO_APPROVE_REPOS`)

@@ -137,6 +137,52 @@ _migrate_legacy_statusline_command() {
     fi
 }
 
+# Auto-remove duplicate env block from settings.json (issue #555 follow-up,
+# PR #557 review C1). The env SSOT moved to settings.local.json; users who
+# previously hand-merged the env block into their per-machine settings.json
+# would otherwise end up with duplicate definitions, defeating the SSOT
+# intent. Idempotent — only mutates when both files carry an env block,
+# always backs up, and restores on failure.
+_migrate_remove_duplicate_env_from_settings() {
+    local source_file="$CLAUDE_SETTINGS_SOURCE"
+    local local_file="${CLAUDE_DOTFILES}/settings.local.json"
+
+    [ -f "$source_file" ] || return 0
+    [ -f "$local_file" ] || return 0
+    if ! command -v jq >/dev/null 2>&1; then
+        log_warning "jq 미설치 — settings.json env 자동 마이그레이션 건너뜀"
+        return 0
+    fi
+
+    # Skip when settings.json carries no env block.
+    jq -e '.env? | type == "object"' "$source_file" >/dev/null 2>&1 || return 0
+    # Skip when settings.local.json carries no env block (nothing to consolidate to).
+    jq -e '.env? | type == "object"' "$local_file"  >/dev/null 2>&1 || return 0
+
+    local backup
+    backup="${source_file}.pre-env-migration-$(date +%Y%m%d%H%M%S)"
+    if ! cp "$source_file" "$backup"; then
+        log_warning "settings.json env 마이그레이션: 백업 실패 → skip"
+        return 0
+    fi
+
+    local tmp
+    tmp=$(mktemp "${source_file}.XXXXXX") || {
+        log_warning "settings.json env 마이그레이션: 임시 파일 생성 실패 → skip"
+        rm -f "$backup"
+        return 0
+    }
+
+    if jq 'del(.env)' "$source_file" > "$tmp" && mv "$tmp" "$source_file"; then
+        log_warning "settings.json: env 블록 제거됨 (SSOT 가 settings.local.json 으로 이동)"
+        log_warning "  backup: $backup"
+    else
+        rm -f "$tmp"
+        log_warning "settings.json env 마이그레이션 실패 — 원본 복원: $backup"
+        mv "$backup" "$source_file"
+    fi
+}
+
 # Auto-migrate legacy Claude Code plugin paths (issue #340).
 #
 # Claude Code recently moved its plugin storage from
@@ -368,6 +414,11 @@ fi
 # downstream symlink uses it (issue #300, item A). Idempotent — only acts
 # on the exact PR #292 legacy literal, otherwise no-op.
 _migrate_legacy_statusline_command
+
+# Auto-remove duplicate env block from settings.json (issue #555 follow-up,
+# PR #557 review C1). Idempotent — only acts when both settings.json and
+# settings.local.json carry an env block, otherwise no-op.
+_migrate_remove_duplicate_env_from_settings
 
 # Auto-install gh-issue-flow Stop hook (issue #383). Idempotent — only adds
 # the entry when it's missing AND no conflicting Stop hook is configured.
