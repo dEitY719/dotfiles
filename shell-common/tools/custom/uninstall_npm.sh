@@ -18,7 +18,7 @@ Options:
                   and ~/.npmrc.
 
 Verification (after uninstall):
-  hash -r && command -v node && command -v npm
+  hash -r && command -v node && command -v npm  # expected: not found
 EOF
 }
 

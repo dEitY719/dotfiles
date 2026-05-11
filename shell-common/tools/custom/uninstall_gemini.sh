@@ -24,12 +24,14 @@ EOF
 source "$(dirname "$0")/init.sh" || exit 1
 
 DRY_RUN=0
-case "${1:-}" in
-    help|-h|--help) usage; exit 0 ;;
-    --dry-run) DRY_RUN=1 ;;
-    "") ;;
-    *) ux_error "Unknown argument: $1"; usage >&2; exit 2 ;;
-esac
+while [ $# -gt 0 ]; do
+    case "$1" in
+        help|-h|--help) usage; exit 0 ;;
+        --dry-run) DRY_RUN=1 ;;
+        *) ux_error "Unknown argument: $1"; usage >&2; exit 2 ;;
+    esac
+    shift
+done
 
 main() {
     clear
@@ -74,11 +76,21 @@ main() {
     # Completion
     # ========================================
     echo ""
+    local removal_failures=0
     ux_header "Gemini CLI Uninstallation Complete"
     if have_command gemini; then
-        ux_warning "The 'gemini' command still exists. You may need to check your PATH or restart your shell."
+        ux_warning "The 'gemini' command still exists."
+        ux_info "You may need to check your PATH or restart your shell."
+        removal_failures=$((removal_failures + 1))
     else
         ux_success "The 'gemini' command has been successfully removed."
+    fi
+
+    if [ "$removal_failures" -eq 0 ]; then
+        ux_success "All removal steps completed cleanly."
+    else
+        ux_warning "Completed with $removal_failures non-fatal warning(s)."
+        ux_info "See output above for details."
     fi
     echo ""
     ux_info "Next: npm list -g --depth=0"
