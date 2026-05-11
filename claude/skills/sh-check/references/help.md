@@ -40,4 +40,4 @@ Output:
 
 Companion skills:
   /skill:check         — audit a SKILL.md file (Progressive Disclosure)
-  /devx:ai-context check — audit an AGENTS.md or CLAUDE.md file
+  /devx:ai-context check — audit an AGENTS.md, CLAUDE.md, or GEMINI.md file
