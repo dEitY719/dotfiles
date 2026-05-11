@@ -4,11 +4,6 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-# zsh-compat: psgrep uses `local` (bash/zsh extension), `local` itself is fine
-# in zsh but mixed with `ps aux | grep` pipes the variable-assignment tracing
-# is noisier in zsh under `set -x`. Stay safe.
-[ -n "${ZSH_VERSION-}" ] && emulate -L sh 2>/dev/null
-
 _psgrep_help() {
     if type ux_usage >/dev/null 2>&1; then
         ux_usage "ps-grep" "<pattern>" "Find a running process by name"
@@ -20,6 +15,10 @@ _psgrep_help() {
 }
 
 psgrep() {
+    # zsh-compat: `emulate -L sh` is only valid inside a function. The earlier
+    # top-level invocation was silently a no-op (gemini #524 review).
+    [ -n "${ZSH_VERSION:-}" ] && emulate -L sh
+
     local pattern="${1:-}"
 
     case "$pattern" in
