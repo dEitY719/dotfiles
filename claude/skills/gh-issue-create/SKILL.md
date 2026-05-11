@@ -77,7 +77,7 @@ resolution). Stash kept labels + milestone for Step 4.
 ## Step 3: Draft the Issue Body
 
 `references/templates/<prefix>.md` 에 정의된 본문 골격을 그대로 사용한다.
-타이틀 포맷은 Step 2 의 prefix-table 참조. 본문은 사용자 대화 언어로
+타이틀 포맷은 Step 2 의 `references/prefix-table.md` 참조. 본문은 사용자 대화 언어로
 작성하고 (한국어 대화 → 한국어 이슈) **over-compress 금지** — 파일
 경로·명령 출력·결정·근거를 그대로 유지한다. 200 줄짜리 이슈도 정상.
 
