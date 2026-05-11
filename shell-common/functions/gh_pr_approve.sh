@@ -364,7 +364,7 @@ _gh_pr_approve_status_single() {
     fi
 
     # Worktree presence.
-    _wt_removed_at="$(cat "$_dir/worktree_removed_at" 2>/dev/null || printf '')"
+    _wt_removed_at="$(cat "$_dir/worktree_removed_at" 2>/dev/null | tr -d '\n')"
     if [ -n "$_wt" ]; then
         if [ -d "$_wt" ]; then
             _wt_state="$_wt (present)"
@@ -462,6 +462,10 @@ _gh_pr_approve_status() {
     while [ $# -gt 0 ]; do
         case "$1" in
         --auto-prune) _auto_prune=1 ;;
+        -*)
+            ux_error "gh-pr-approve status: unknown option '$1'"
+            return 1
+            ;;
         *)
             if [ -n "$_pr_arg" ]; then
                 ux_error "gh-pr-approve status: only one PR number accepted"
@@ -472,6 +476,10 @@ _gh_pr_approve_status() {
         esac
         shift
     done
+    if [ "$_auto_prune" = "1" ] && [ -z "$_pr_arg" ]; then
+        ux_error "gh-pr-approve status: --auto-prune requires a PR number"
+        return 1
+    fi
     if [ -n "$_pr_arg" ]; then
         _gh_pr_approve_status_single "$_pr_arg" "$_auto_prune"
         return $?
