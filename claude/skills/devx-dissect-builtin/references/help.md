@@ -1,9 +1,9 @@
-# devx:dissect-builtin-skill — Help
+# devx:dissect-builtin — Help
 
 ## Synopsis
 
 ```
-/devx:dissect-builtin-skill <skill-name>
+/devx:dissect-builtin <skill-name>
 ```
 
 ## Description
@@ -23,9 +23,9 @@ Loads the target skill's prompt via the Skill tool, then writes `README.md`
 ## Examples
 
 ```
-/devx:dissect-builtin-skill simplify
-/devx:dissect-builtin-skill loop
-/devx:dissect-builtin-skill -h
+/devx:dissect-builtin simplify
+/devx:dissect-builtin loop
+/devx:dissect-builtin -h
 ```
 
 ## Stop conditions
