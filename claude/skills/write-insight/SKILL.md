@@ -9,7 +9,7 @@ description: >-
   note from conversation evidence (PRs, commits, review threads, repro steps)
   instead of asking the user to restate context. Decline topics that belong in
   `docs/technic/`, `docs/standards/`, `docs/feature/`, or `claude/skills/`.
-  Do not use this for narrative "삽질" posts (`write-blog-dev-learnings`), formal
+  Do not use this for narrative "삽질" posts (`write:blog-dev-learnings`), formal
   postmortems (`write:rca`), or JIRA/PR draft summaries (`write:task-history`).
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 ---
