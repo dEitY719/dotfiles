@@ -1,8 +1,10 @@
-#!/bin/bash
-# shell-common/tools/external/uv.sh
-# Auto-generated from bash/app/uv.bash
+#!/bin/sh
+# shell-common/tools/integrations/uv.sh
+# uv (Python package manager) aliases (POSIX-compatible).
+# Help: `uv-help` (defined in shell-common/functions/package_managers_help.sh)
+# lists every uv* alias below.
 
-# bash/app/uv.bash  (정리판)
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # ── 기본 동사 규칙 ──────────────────────────────────────────────
 # uvi : install (툴 설치)
@@ -33,8 +35,11 @@ alias uvr='uv pip sync requirements.txt'
 alias uvcheck='uv pip check'
 
 # (6) uv-install 함수 (shell-common/tools/custom/install_uv.sh 호출)
-uv-install() {
+# POSIX requires function names match [a-zA-Z_][a-zA-Z0-9_]*; expose the dashed
+# form as an alias to keep the same user-facing command name.
+uv_install() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_uv.sh"
 }
+alias uv-install='uv_install'
 
-# (7) 도움말(프로젝트 관례 안내)
+# (7) 도움말: `uv-help` (registered in package_managers_help.sh)

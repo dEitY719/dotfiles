@@ -1,6 +1,9 @@
 #!/bin/sh
 # shell-common/tools/integrations/python.sh
-
+# Python venv aliases (POSIX-compatible).
+# Help: `py-help` (defined in shell-common/functions/py_help.sh) lists the
+# create/activate/deactivate venv shortcuts below.
+#
 # NOTE: $HOME/.local/bin PATH is managed by env/path.sh (SSOT)
 
 # Python Virtual Environment
