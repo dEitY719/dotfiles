@@ -22,51 +22,44 @@ its content verbatim, then stop. No API calls.
 Bundle the current branch's commits into a GitHub PR with a well-structured
 body. Push the branch if needed. Return the PR URL.
 
+## Options
+
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `[N]` (positional) | Legacy `/gh:pr 123` form — overrides issue auto-detection. | — |
+| `--no-stack` | Force a non-stacked PR even when stacked-PR signals fire. | off |
+| `--parent-pr <N>` | Explicit parent PR number; sets `BASE_BRANCH` to `<N>`'s head. | — |
+| `--base <branch>` | Explicit base branch; bypasses stacked-PR detection. | repo default |
+| `GH_DISABLE_AI_METRICS=1` (env) | Skip ai-metrics footer append in Step 4. | off |
+| `GH_PR_LINT_BYPASS=1` (env) | Skip Step 4.5 lint guard. | off |
+| `DOTFILES_ROOT` (env) | Root used to source `gh_pr_lint.sh`. | `$HOME/dotfiles` |
+| `-h`/`--help`/`help` | Print `references/help.md` verbatim and stop. | — |
+
+`--no-stack`, `--parent-pr`, and `--base` are mutually exclusive — see
+Step 1a exit codes.
+
 ## Step 1: Parse Args, Resolve Base Branch, Gather State
 
 Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 4.
 
 ### Step 1a: Parse args + resolve base via stacked-PR detection
 
-Read `references/stacked-pr.md` for the SSOT bash bound to
-`parse_stacked_args`, `is_stacked_pr_repo`, and
-`find_parent_pr_candidates`, plus the dispatch block ("How Step 1 of
-SKILL.md ties it together"). Paste the four functions and the dispatch
-block verbatim. They set:
-
-- `BASE_BRANCH` — final base branch for `gh pr create --base`
-- `PARENT_PR` — non-empty PR number when the PR is stacked on another
-  open PR; empty otherwise
-- `ISSUE_NUMBER` — first positional integer arg if any (legacy
-  `/gh-pr 123` form)
-
-Honour `parse_stacked_args`'s exit codes:
-
-- rc=2 — mutually-exclusive flags (`--no-stack` / `--parent-pr` /
-  `--base`); abort, do not push.
-- rc=3 — bad value for `--parent-pr` or `--base`; abort, do not push.
-
-`PARENT_PR` flows into the body template "Depends on #N" rule
-(`pr-body-template.md`). `BASE_BRANCH` flows into Step 5's
-`gh pr create --base "$BASE_BRANCH"`.
+Read `references/stacked-pr.md` and paste the SSOT functions
+(`parse_stacked_args`, `is_stacked_pr_repo`, `find_parent_pr_candidates`)
+and the dispatch block ("How Step 1 of SKILL.md ties it together")
+verbatim. They bind `BASE_BRANCH`, `PARENT_PR`, and `ISSUE_NUMBER`, and
+they exit on bad input — `rc=2` for mutually-exclusive flags, `rc=3`
+for bad `--parent-pr` / `--base` values. Abort without pushing on either.
 
 ### Step 1b: Gather range + push state (parallel)
 
 Run in a single message, using `$BASE_BRANCH` from Step 1a:
+`git rev-parse --abbrev-ref HEAD`, `git status`, `git fetch origin`,
+`git log --oneline "$BASE_BRANCH"..HEAD`, `git diff "$BASE_BRANCH"...HEAD`,
+and `git rev-parse --symbolic-full-name @{u} 2>/dev/null`.
 
-- `git rev-parse --abbrev-ref HEAD` — current branch
-- `git status`
-- `git fetch origin`
-- `git log --oneline "$BASE_BRANCH"..HEAD` — every commit in the range
-- `git diff "$BASE_BRANCH"...HEAD` — full diff
-- `git rev-parse --symbolic-full-name @{u} 2>/dev/null` — upstream check
-
-**Stop conditions:**
-
-- If current branch equals `BASE_BRANCH` → tell the user to create a
-  feature branch first.
-- If `git log "$BASE_BRANCH"..HEAD` is empty → tell the user there's
-  nothing to PR.
+Stop conditions: current branch equals `BASE_BRANCH` → ask for a
+feature branch; `git log "$BASE_BRANCH"..HEAD` empty → nothing to PR.
 
 ## Step 2: Analyze ALL Commits in the Range
 
@@ -76,65 +69,27 @@ mentions all 5 concerns.
 
 ## Step 3: Resolve the Issue Number
 
-Same precedence as `gh:commit`:
-
-1. Explicit argument on `/gh:pr` (e.g., `/gh:pr 123`)
-2. Scan recent conversation for `#N` or `Issue #N created`
-3. Scan commit messages in the range for `Refs #N` / `Closes #N` / `Fixes #N`
-4. None — omit the link
+Same precedence as `gh:commit`: (1) explicit `/gh:pr <N>` arg, (2)
+recent conversation `#N` / `Issue #N created`, (3) commit messages in
+the range (`Refs/Closes/Fixes #N`), (4) none → omit the link.
 
 ## Step 4: Draft Title and Body
 
-Read `references/pr-body-template.md` for title rules, body structure, and
-the body markdown. Match the language of existing commits (Korean if commits
-are Korean).
+Read `references/pr-body-template.md` for title rules, body structure,
+and the body markdown. Match the language of existing commits (Korean
+if commits are Korean).
 
-Before writing the body to the temp file, compute and append the ai-metrics
-footer block (soft-fail — warn on error, never block):
-
-1. `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))`
-2. Issue type: the conventional-commit prefix from the first commit subject.
-3. Human time: look up `gh-issue-create/references/metrics-baseline.md`.
-   For `feat`, infer size from the number of files changed.
-4. Token estimate: read `references/metrics-helper.md` and paste the
-   `compute_pr_tokens` snippet in full. The inputs are **(linked-issue
-   body) + (commit log over `<base>..HEAD`)**, NOT the drafted PR body.
-   Counting `$BODY` (the PR-body temp file) is the regression that
-   produced PR #325's `~1000 tokens` footer (issue #326).
-
-When `GH_DISABLE_AI_METRICS=1`, skip the footer entirely (issue #399).
-The PR body is otherwise identical, and the linked issue still gets
-its body — only the footer block is omitted.
-
-```bash
-# After running the snippet from references/metrics-helper.md, $TOKENS is
-# bound to the correct estimate. Now append the footer to $BODY — unless
-# the operator opted out via GH_DISABLE_AI_METRICS=1.
-if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
-    : # ai-metrics footer skipped via GH_DISABLE_AI_METRICS
-else
-    printf '\n---\n<details>\n<summary>🤖 AI Metrics · 📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min</summary>\n\n<!-- ai-metrics:gh-pr -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics:gh-pr -->\n\n</details>\n' \
-      "$TOKENS" "$HUMAN_H" "$ELAPSED" "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
-fi
-```
+Then read `references/ai-metrics-footer.md` and follow it verbatim to
+compute `TOKENS`, `HUMAN_H`, `ELAPSED` and append the footer to `$BODY`
+(soft-fail — warn on error, never block). Honours
+`GH_DISABLE_AI_METRICS=1` (issue #399).
 
 ## Step 4.5: Lint Guard (pre-push)
 
-Read `references/lint-guard.md` for tool detection priority, scope, and
-the bypass policy. Source the helper and run it against `$BASE_BRANCH`
-**before** the push in Step 5:
-
-```bash
-. "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_pr_lint.sh"
-_gh_pr_lint_run "$BASE_BRANCH" || {
-    printf 'gh:pr stopped at Step 4.5 (lint guard).\n' >&2
-    exit 1
-}
-```
-
-Hard-fails when any detected tool reports lint errors. Auto-skips when
-no tools are detected, when the change set is empty, or when
-`GH_PR_LINT_BYPASS=1` is set.
+Read `references/lint-guard.md` and paste its "Helper" source-and-run
+snippet verbatim. Runs against `$BASE_BRANCH` **before** the push in
+Step 5. Hard-fails on lint errors; auto-skips when no tools are
+detected, when the change set is empty, or when `GH_PR_LINT_BYPASS=1`.
 
 ## Step 5: Push and Create
 
@@ -151,22 +106,29 @@ exist in the repo (`gh label list`) — never create new ones. See
 
 ## Step 7: Sync Project Board Status
 
-Read `references/project-board-sync.md` for the helper-source snippet that
-pushes the new PR's project-board card to `In review`. The reference also
-documents the PostToolUse hook auto-skip (issue #390): if a
-`post-gh-pr-create.sh` / `post-pr-create-status.sh` hook is installed, this
-step is delegated to the hook and the inline sync is skipped to avoid
-triple-syncing. Auto-skips when no projectV2 board is attached either way.
+Read `references/project-board-sync.md` for the helper-source snippet
+that pushes the new PR's project-board card to `In review`. The
+reference also documents the PostToolUse hook auto-skip (issue #390)
+and the no-projectV2 fallback.
 
 ## Step 8: Report
 
-Output **only** the PR URL:
+성공 시:
 
 ```
-PR created: https://github.com/owner/repo/pull/<N>
+[OK] PR: https://github.com/owner/repo/pull/<N>
+Next: /gh:pr-reply (after CI green) — replies to review comments
 ```
 
-No preamble, no summary — the user opens GitHub directly.
+Step 1b empty-range / on-base-branch stops, Step 1a `rc=2`/`rc=3`, or
+Step 4.5 lint failure:
+
+```
+[FAIL] <one-line reason>
+Next: <recovery — e.g. switch branch, fix lint, drop conflicting flag>
+```
+
+No additional summary — the user opens GitHub directly from the URL.
 
 ## Constraints
 

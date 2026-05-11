@@ -24,6 +24,14 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Agent, TaskList, TaskUpdate
 If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output
 its content verbatim, then stop. No tool calls beyond that read.
 
+## Options
+
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `-h`/`--help`/`help` | Print usage and stop | — |
+
+No other arguments — this skill reads the TodoList in the current session.
+
 ## Role
 
 The user invokes this when their previous work was interrupted — typically by
@@ -51,10 +59,17 @@ conversation. Resume from the implementation/edit step those skills led to.
 
 ## Step 2: Announce + Plan Smaller Steps
 
-Print one line so the user sees what you picked up:
+Print the announce line so the user sees what you picked up (verdict
+format defined in "Output" below):
 
 ```
-재개: <task subject> — 작은 단위로 쪼개서 진행합니다.
+[OK] resumed: <task subject> — 작은 단위로 쪼개서 진행합니다.
+```
+
+When Step 1 cannot pick a target, emit instead and stop:
+
+```
+[FAIL] cannot resume: <reason>
 ```
 
 Read `references/chunking-rules.md` for 1-tool-call splitting rules and
@@ -76,9 +91,27 @@ Run the chunked steps. After each step:
 1. Update the TodoList (`TaskUpdate` → `completed` or new `in_progress`).
 2. Emit one short user-facing line about what just landed.
 
-When the originally-interrupted task is done, hand control back to whatever
-flow the user was in (e.g. continue `gh:issue-flow`'s next sub-step). Do
-NOT silently return to idle without saying which step is next.
+When the originally-interrupted task is done, hand control back to
+whatever flow the user was in. Always end with an explicit `Next:` line
+naming the next concrete command — never silently return to idle.
+
+## Output
+
+```
+[OK] resumed: <task subject> — 작은 단위로 쪼개서 진행합니다.
+step 1/N: <what just landed>
+step 2/N: <what just landed>
+...
+Next: <concrete command, e.g. /gh:issue-flow continue, /gh:pr-reply, /gh:pr>
+```
+
+On a hard stop (no resume target, refusing to re-invoke a process skill,
+user-correction needed):
+
+```
+[FAIL] cannot resume: <reason>
+Next: <one concrete recovery step>
+```
 
 ## Constraints
 
