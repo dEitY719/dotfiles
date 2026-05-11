@@ -52,7 +52,7 @@ Work Log
 
 - **Primary**: `~/work_log.txt` (work log entries with timestamps, Jira keys, hours)
 - **Secondary**: `git log` output (commit messages for context)
-- **Optional**: `.claude/skills/jira-report/templates/` (customization)
+- **Optional**: `templates/` (customization)
 
 ## Success Criteria
 
