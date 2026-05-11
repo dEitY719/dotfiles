@@ -128,7 +128,7 @@ Use the Agent tool to launch all agents concurrently in a single message.
 <what this agent does and writes>
 ```
 
-**Example — `devx:dissect-builtin-skill` skill:**
+**Example — `devx:dissect-builtin`:**
 
 | Agent | Task | Dependency |
 |-------|------|-----------|
