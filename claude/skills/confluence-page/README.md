@@ -1,18 +1,18 @@
-# make-confluence Skill
+# confluence:page Skill
 
 Transform markdown technical documentation into Confluence-formatted guides.
 
 ## Quick Start
 
 ```bash
-# Convert markdown file to Confluence guide
-/make-confluence docs/technic/parallel-testing-with-xdist.md
+# Convert markdown file to Confluence page
+/confluence:page docs/technic/parallel-testing-with-xdist.md
 
 # Specify category explicitly
-/make-confluence docs/analysis/docker-optimization.md --category infrastructure
+/confluence:page docs/analysis/docker-optimization.md --category infrastructure
 
 # Batch process directory
-/make-confluence docs/technic/ --category testing
+/confluence:page docs/technic/ --category testing
 ```
 
 ## How It Works
@@ -92,7 +92,7 @@ Output location:
 
 ## Next Steps
 
-- Integration with `/make-jira` for weekly reports
+- Integration with `/jira:report` for weekly reports
 - Automation of technical documentation pipeline
 - Confluence API publishing (Phase P3)
 - Metadata registry in `rca-knowledge/_index.json`

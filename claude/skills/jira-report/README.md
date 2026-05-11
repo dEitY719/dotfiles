@@ -1,4 +1,4 @@
-# make-jira Skill
+# jira:report Skill
 
 Generate comprehensive weekly Jira reports from work log entries.
 
@@ -6,13 +6,13 @@ Generate comprehensive weekly Jira reports from work log entries.
 
 ```bash
 # Generate current week's report
-/make-jira
+/jira:report
 
 # Generate specific week
-/make-jira --week 2026-W05
+/jira:report --week 2026-W05
 
 # Generate for specific Jira key
-/make-jira SWINNOTEAM-906
+/jira:report SWINNOTEAM-906
 ```
 
 ## How It Works
@@ -63,6 +63,6 @@ Generate comprehensive weekly Jira reports from work log entries.
 
 ## Next Steps
 
-- Integration with `/make-confluence` for technical documentation generation
+- Integration with `/confluence:page` for technical documentation generation
 - LLM-based summarization of achievements
 - Automated index updates in `rca-knowledge/_index.json`

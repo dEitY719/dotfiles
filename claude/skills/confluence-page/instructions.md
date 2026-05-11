@@ -1,4 +1,4 @@
-# make-confluence: Detailed Implementation Instructions
+# confluence:page: Detailed Implementation Instructions
 
 ## Overview
 

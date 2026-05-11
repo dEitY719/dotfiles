@@ -1,4 +1,4 @@
-# make-jira: Detailed Implementation Instructions
+# jira:report: Detailed Implementation Instructions
 
 ## Overview
 
