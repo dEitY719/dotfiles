@@ -28,7 +28,7 @@ References dir: <exists / missing>
 | 11 | No Emojis                    | PASS   | no emoji glyphs in body or references |
 
 Score: 6/10 checks passed (2 warnings, 2 fails, 1 N/A)
-Verdict: POOR — significant gaps, major rework needed
+Verdict: NEEDS WORK — fix FAIL items before shipping
 
 ## Issues & Improvements
 
