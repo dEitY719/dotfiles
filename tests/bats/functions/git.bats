@@ -26,14 +26,26 @@ teardown() {
     assert_output --partial "ok"
 }
 
-@test "bash: git_prune_remote function exists" {
-    run_in_bash 'declare -f git_prune_remote >/dev/null && echo ok'
+@test "bash: git_branch function exists" {
+    run_in_bash 'declare -f git_branch >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
-@test "bash: git_clean_local function exists" {
-    run_in_bash 'declare -f git_clean_local >/dev/null && echo ok'
+@test "bash: _gb_clean_local function exists" {
+    run_in_bash 'declare -f _gb_clean_local >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "bash: _gb_clean_remote function exists" {
+    run_in_bash 'declare -f _gb_clean_remote >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "bash: gb alias maps to git_branch" {
+    run_in_bash 'alias gb | grep -q git_branch && echo ok'
     assert_success
     assert_output --partial "ok"
 }

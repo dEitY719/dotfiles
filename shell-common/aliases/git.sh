@@ -29,7 +29,7 @@ alias gl2='git log --graph --decorate --date=short --abbrev-commit --pretty=onel
 alias glref='git log ref/main --oneline'         # ref 원격 main 브랜치 한줄 로그
 
 # Git branch/checkout
-alias gb='git --no-pager branch'                 # 브랜치 목록 (pager 비활성화)
+# gb is defined as git_branch() in functions/git.sh (gb -D local|remote dispatcher)
 alias gbv='git branch -vv'                       # 브랜치 상세 정보 (upstream 연결 상태 확인)
 alias gco='git checkout'                         # 체크아웃 (브랜치 이동 등)
 
