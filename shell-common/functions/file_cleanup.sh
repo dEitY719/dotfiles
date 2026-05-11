@@ -195,7 +195,7 @@ _del_file_help() {
 }
 
 del_file() {
-    [ -n "$ZSH_VERSION" ] && emulate -L sh
+    [ -n "${ZSH_VERSION:-}" ] && emulate -L sh
 
     case "${1:-}" in
         -h|--help|help) _del_file_help; return 0 ;;

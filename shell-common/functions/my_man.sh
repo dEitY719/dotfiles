@@ -30,19 +30,13 @@ _myman_help() {
 # myman 함수 정의
 # 이 함수는 analyze_bash_scripts.sh 스크립트가 생성한 정보를 활용합니다.
 myman() {
-    [ -n "$ZSH_VERSION" ] && emulate -L sh
+    [ -n "${ZSH_VERSION:-}" ] && emulate -L sh
 
     local type_to_show="${1:-}"
 
     case "$type_to_show" in
         -h|--help|help) _myman_help; return 0 ;;
     esac
-
-    local temp_output_file
-    temp_output_file=$(mktemp) # 안전한 임시 파일 생성
-
-    # 함수 종료 시 임시 파일 삭제 보장 (zsh 호환성: trap EXIT 사용)
-    trap "rm -f '$temp_output_file'" EXIT
 
     if [[ -z "$type_to_show" ]]; then
         _myman_help
@@ -58,9 +52,24 @@ myman() {
         return 1
     fi
 
+    local temp_output_file
+    temp_output_file=$(mktemp) # 안전한 임시 파일 생성
+
+    # NOTE: `trap ... EXIT` inside a function fires on shell exit (NOT on
+    # function return) in bash. Since this file is sourced into an interactive
+    # shell, the temp file would otherwise leak until the terminal closes
+    # (gemini #524 review). Use a local cleanup helper called before every
+    # return path instead, and detect both regular files and dangling symlinks.
+    _myman_cleanup() {
+        if [ -e "$temp_output_file" ] || [ -L "$temp_output_file" ]; then
+            rm -f "$temp_output_file"
+        fi
+    }
+
     # 스크립트를 실행하여 임시 파일에 결과를 저장 (에러 출력은 숨김)
     "$analyzer_script" "$sh_config_dir" >"$temp_output_file" 2>/dev/null
 
+    local rc=0
     if [[ "$type_to_show" == "alias" ]]; then
         (
             ux_header "Alias 목록"
@@ -80,8 +89,12 @@ myman() {
     else
         ux_error "유효하지 않은 옵션: '$type_to_show'"
         _myman_help
-        return 1
+        rc=1
     fi
+
+    _myman_cleanup
+    unset -f _myman_cleanup 2>/dev/null
+    return $rc
 }
 
 alias my-man='myman'
