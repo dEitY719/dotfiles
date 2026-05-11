@@ -18,6 +18,13 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 
 If the argument is `help`, read `references/help.md` and output it verbatim, then stop.
 
+## Arguments
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `<topic-hint>` | 후보 인사이트를 한정할 자유 텍스트 힌트 (예: `git-crypt worktree`) | 없음 — 후보 1–3개 제안 |
+| `-h` / `--help` / `help` | `references/help.md` 출력 후 종료 | — |
+
 ## Role
 
 Capture one reusable insight from the current chat as a short Korean note in
@@ -74,15 +81,17 @@ If the insight is cross-session reusable, ask: `memory/reference_learnings_<slug
 
 ## Step 8: Report
 
-Output exactly two lines, no preamble, no recap:
+Output exactly two lines, no preamble, no recap — first line is the structured
+verdict, second line is the explicit `Next:` follow-up hint:
 
 ```
-docs/learnings/<slug>.md (<N> lines)
-<one-line summary — the same hook used in README index>
+[OK] file=docs/learnings/<slug>.md lines=<N> summary=<one-line summary — same hook used in README index>
+Next: review the file, then optionally /write:insight again for remaining candidates
 ```
 
 ## Constraints
 
+- **Stop on any step failure** — Steps 1–8 are sequential; on the first error stop and report the failing step, do not proceed silently.
 - **Korean body, English headings** — note is for human teammates per README's language policy.
 - **No abstract generalities** — no PR/commit/file:line link → reject. Back to Step 4 or decline.
 - **Don't paraphrase the README** — re-read every run; if rules conflict, README wins.
