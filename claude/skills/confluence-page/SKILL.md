@@ -1,23 +1,23 @@
 ---
-name: make-confluence
+name: confluence:page
 description: >-
   Transform markdown technical documentation into Confluence-formatted guides
   with structured problem-solution-results format.
 ---
 
-# make-confluence
+# confluence:page
 
 ## Invocation
 
 ```bash
-# Generate Confluence guide from markdown file
-/make-confluence docs/technic/parallel-testing-with-xdist.md
+# Generate Confluence page from markdown file
+/confluence:page docs/technic/parallel-testing-with-xdist.md
 
 # Specify category
-/make-confluence docs/analysis/docker-optimization.md --category infrastructure
+/confluence:page docs/analysis/docker-optimization.md --category infrastructure
 
 # Generate for all docs in directory
-/make-confluence docs/technic/
+/confluence:page docs/technic/
 ```
 
 ## What It Does
