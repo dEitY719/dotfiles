@@ -1,6 +1,10 @@
-#!/bin/bash
-# shell-common/tools/external/pip.sh
-# Python package management utilities
+#!/bin/sh
+# shell-common/tools/integrations/pip.sh
+# Python package management utilities (POSIX-compatible alias module).
+# Help: `pp-help` (defined in shell-common/functions/pp_help.sh) lists all
+# pp_*/code_*/test_*/docs_* aliases below.
+
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # Python Package Management
 # alias pp_freeze: pyproject.toml에서 프로젝트 이름을 읽어와 pip freeze 목록에서 제외하고, -e .을 추가하여 requirements.txt를 생성하는 명령어입니다.
