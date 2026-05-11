@@ -397,7 +397,7 @@ _gh_pr_approve_status_single() {
     ux_table_row "PR" "$_pr_info"
     ux_table_row "Worktree" "$_wt_state"
     if [ "$_wt_absent" = "1" ]; then
-        printf '  %-20s   %s\n' "" "→ 디렉토리가 삭제되었습니다. cd 불필요."
+        ux_info "→ 디렉토리가 삭제되었습니다. cd 불필요."
     fi
     ux_table_row "Flags" "$_flags_state"
 
