@@ -1,9 +1,43 @@
-#!/bin/bash
+#!/bin/sh
+# shell-common/functions/my_man.sh
+# Project-level "manual" — pages through aliases/functions discovered by
+# analyze_bash_scripts.sh.
+#
+# NOTE: shebang is POSIX /bin/sh per the shell-common policy, but the body
+# below intentionally uses bash/zsh features (`[[ ]]`, heredocs with `<<EOF`).
+# That's safe because shell-common files are sourced by bash/zsh — never
+# executed under pure dash.
+
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
+
+# zsh-compat: this function uses [[ ]] and `local`. Drop into POSIX-sh
+# emulation when running under zsh so the bash-style syntax stays legal.
+_myman_help() {
+    if type ux_header >/dev/null 2>&1; then
+        ux_header "my-man"
+        ux_usage "my-man" "[alias | function]" "Show defined aliases or functions"
+        ux_bullet "alias     Show every alias discovered under \$SHELL_COMMON"
+        ux_bullet "function  Show every function discovered under \$SHELL_COMMON"
+        ux_bullet "          (data sourced from tools/custom/analyze_bash_scripts.sh)"
+        ux_info "Next: my-man alias | my-man function"
+    else
+        echo "Usage: my-man [alias | function]"
+        echo "  alias     Show every alias discovered under \$SHELL_COMMON"
+        echo "  function  Show every function discovered under \$SHELL_COMMON"
+    fi
+}
 
 # myman 함수 정의
 # 이 함수는 analyze_bash_scripts.sh 스크립트가 생성한 정보를 활용합니다.
 myman() {
-    local type_to_show="$1"
+    [ -n "$ZSH_VERSION" ] && emulate -L sh
+
+    local type_to_show="${1:-}"
+
+    case "$type_to_show" in
+        -h|--help|help) _myman_help; return 0 ;;
+    esac
+
     local temp_output_file
     temp_output_file=$(mktemp) # 안전한 임시 파일 생성
 
@@ -11,11 +45,7 @@ myman() {
     trap "rm -f '$temp_output_file'" EXIT
 
     if [[ -z "$type_to_show" ]]; then
-        ux_header "my-man"
-        ux_usage "my-man" "[alias | function]" "Show defined aliases or functions"
-        ux_bullet "alias: 정의된 모든 alias 목록을 보여줍니다."
-        ux_bullet "function: 정의된 모든 function 목록을 보여줍니다."
-
+        _myman_help
         return 1
     fi
 
@@ -49,7 +79,9 @@ myman() {
         ) | less
     else
         ux_error "유효하지 않은 옵션: '$type_to_show'"
-        ux_usage "my-man" "[alias | function]" "Show defined aliases or functions"
+        _myman_help
         return 1
     fi
 }
+
+alias my-man='myman'

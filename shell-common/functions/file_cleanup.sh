@@ -1,6 +1,13 @@
 #!/bin/sh
 # shell-common/functions/file_cleanup.sh
-# Interactive cleanup for backup/original files in the current directory
+# Interactive cleanup for backup/original files in the current directory.
+#
+# NOTE: shebang is POSIX /bin/sh per the shell-common policy, but the body
+# below uses bash/zsh array syntax (`find_args+=(...)`,
+# `CLEANUP_DEFAULT_PATTERNS=(...)`). That's safe because shell-common files
+# are sourced by bash/zsh — never executed under pure dash. The zsh-compat
+# `emulate -L sh` hook inside `del_file` keeps the syntax legal when sourced
+# from zsh.
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
@@ -174,7 +181,26 @@ _cleanup_select_mode() {
     done
 }
 
+_del_file_help() {
+    ux_header "del-file"
+    ux_usage "del-file" "[pattern...]" "Interactively delete backup/original files in the current directory"
+    ux_section "Default patterns"
+    ux_bullet ".*backup*"
+    ux_bullet ".*.bak*"
+    ux_bullet ".*-original"
+    ux_section "Examples"
+    ux_bullet "del-file                # use defaults"
+    ux_bullet "del-file '*.tmp'        # extend with one extra pattern"
+    ux_info "Next: del-file (interactive — preview, then choose 1/2/0)"
+}
+
 del_file() {
+    [ -n "$ZSH_VERSION" ] && emulate -L sh
+
+    case "${1:-}" in
+        -h|--help|help) _del_file_help; return 0 ;;
+    esac
+
     if [ ! -t 0 ] || [ ! -t 1 ]; then
         ux_error "del-file requires an interactive terminal"
         return 1

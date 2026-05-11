@@ -8,7 +8,30 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
+# Shared help summary for the three public entry points below.
+_claude_plugins_core_help() {
+    if type ux_header >/dev/null 2>&1; then
+        ux_header "claude_plugins_core"
+        ux_section "Public Functions"
+        ux_bullet "init_plugins_docs       Initialize ~/.claude/docs/marketplaces tree"
+        ux_bullet "list_plugins            List marketplaces, agents, commands, skills"
+        ux_bullet "sync_plugins_structure  Mirror plugin tree into docs/ for editing"
+        ux_bullet "view_plugin_info        Show description of a single plugin file"
+        ux_section "Flags"
+        ux_bullet "<fn> -h | --help | help    Print this summary"
+        ux_info "Next: list_plugins"
+    else
+        echo "claude-plugins helpers:"
+        echo "  init-plugins-docs / list-plugins / sync-plugins / view-plugin-info"
+        echo "  pass -h | --help | help to any of them for usage."
+    fi
+}
+
 init_plugins_docs() {
+    case "${1:-}" in
+        -h|--help|help) _claude_plugins_core_help; return 0 ;;
+    esac
+
     local docs_base_dir="$HOME/.claude/docs"
     local docs_dir="$docs_base_dir/marketplaces"
 
@@ -17,7 +40,7 @@ init_plugins_docs() {
 
 
     # Check if docs is mounted
-    if declare -f _is_mounted >/dev/null 2>&1; then
+    if type _is_mounted >/dev/null 2>&1; then
         _is_mounted "$docs_base_dir" && {
             ux_success "docs directory is mounted"
             ux_info "Source: ~/dotfiles/claude/docs"
@@ -50,6 +73,10 @@ init_plugins_docs() {
 # ═══════════════════════════════════════════════════════════════
 
 list_plugins() {
+    case "${1:-}" in
+        -h|--help|help) _claude_plugins_core_help; return 0 ;;
+    esac
+
     local plugins_dir="$HOME/.claude/plugins/marketplaces"
 
     if [ ! -d "$plugins_dir" ]; then
@@ -156,6 +183,10 @@ list_plugins() {
 # ═══════════════════════════════════════════════════════════════
 
 sync_plugins_structure() {
+    case "${1:-}" in
+        -h|--help|help) _claude_plugins_core_help; return 0 ;;
+    esac
+
     local plugins_dir="$HOME/.claude/plugins/marketplaces"
     local docs_base_dir="$HOME/.claude/docs"
     local docs_dir="$docs_base_dir/marketplaces"
@@ -216,6 +247,10 @@ sync_plugins_structure() {
 # ═══════════════════════════════════════════════════════════════
 
 view_plugin_info() {
+    case "${1:-}" in
+        -h|--help|help) _claude_plugins_core_help; return 0 ;;
+    esac
+
     local plugin_name="$1"
 
     if [ -z "$plugin_name" ]; then
@@ -261,15 +296,14 @@ view_plugin_info() {
     fi
 }
 
-# Extract brief description from plugin file (YAML or heading fallback)
-_get_plugin_description() {
-    local file="$1"
+# Pure-awk fallback YAML scalar extractor — top-level helper (was previously
+# defined inside _get_plugin_description, which made it less reusable and
+# tripped the sh:check W#4 "no nested function definitions" rule).
+_extract_yaml_field_fallback() {
+    local yaml_file="$1"
+    local field="$2"
 
-    _extract_yaml_field_fallback() {
-        local yaml_file="$1"
-        local field="$2"
-
-        awk -v field="$field" '
+    awk -v field="$field" '
 BEGIN { in_fm=0; capturing=0; value="" }
 NR==1 && $0=="---" { in_fm=1; next }
 in_fm && $0=="---" {
@@ -325,7 +359,11 @@ END {
     }
 }
 ' "$yaml_file" 2>/dev/null
-    }
+}
+
+# Extract brief description from plugin file (YAML or heading fallback).
+_get_plugin_description() {
+    local file="$1"
 
     # 1. Try to extract description from YAML frontmatter
     local yaml_desc=""
