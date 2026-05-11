@@ -1,22 +1,22 @@
 ---
-name: make-jira
+name: jira:report
 description: >-
   Generate comprehensive weekly Jira reports from work logs.
 ---
 
-# make-jira
+# jira:report
 
 ## Invocation
 
 ```bash
 # Generate current week's report
-/make-jira
+/jira:report
 
 # Generate specific week
-/make-jira --week 2026-W05
+/jira:report --week 2026-W05
 
 # Generate report for specific Jira key only
-/make-jira SWINNOTEAM-906
+/jira:report SWINNOTEAM-906
 ```
 
 ## What It Does
@@ -52,7 +52,7 @@ Work Log
 
 - **Primary**: `~/work_log.txt` (work log entries with timestamps, Jira keys, hours)
 - **Secondary**: `git log` output (commit messages for context)
-- **Optional**: `.claude/skills/make-jira/templates/` (customization)
+- **Optional**: `.claude/skills/jira-report/templates/` (customization)
 
 ## Success Criteria
 
