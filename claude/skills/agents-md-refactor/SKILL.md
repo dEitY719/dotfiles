@@ -12,6 +12,11 @@ allowed-tools: Read, Glob, Grep, Write, Edit, Bash
 
 # AGENTS.md Refactoring Specialist
 
+> **DEPRECATED** — superseded by `devx:ai-context`. Migrated equivalent:
+> `/devx:ai-context refactor --kind agents`. This shim remains functional
+> during the transition period; new work should use the unified entry
+> point. See `claude/skills/devx-ai-context/references/help.md`.
+
 ## Role
 
 You are an AGENTS.md refactoring specialist. Your job is to take an existing

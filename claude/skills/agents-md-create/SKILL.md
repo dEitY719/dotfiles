@@ -11,6 +11,11 @@ allowed-tools: Read, Glob, Grep, Write, Bash
 
 # AGENTS.md Creator
 
+> **DEPRECATED** — superseded by `devx:ai-context`. Migrated equivalent:
+> `/devx:ai-context create --kind agents`. This shim remains functional
+> during the transition period; new work should use the unified entry
+> point. See `claude/skills/devx-ai-context/references/help.md`.
+
 ## Help
 
 If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.

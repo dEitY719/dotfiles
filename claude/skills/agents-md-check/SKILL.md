@@ -12,6 +12,11 @@ allowed-tools: Read, Glob, Grep, Bash
 
 # AGENTS.md Compliance Auditor
 
+> **DEPRECATED** — superseded by `devx:ai-context`. Migrated equivalent:
+> `/devx:ai-context check [path]`. This shim remains functional during the
+> transition period; new work should use the unified entry point. See
+> `claude/skills/devx-ai-context/references/help.md`.
+
 ## Help
 
 If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
