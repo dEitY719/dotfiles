@@ -1,5 +1,5 @@
 ---
-name: reverse-engineering:analysis
+name: devx:reverse-engineering-analysis
 description: >-
   Analyzes a specific feature or component in the current codebase and generates
   a ready-to-reuse AI implementation prompt. Use this skill whenever the user wants
@@ -30,14 +30,14 @@ The final deliverable lets the user paste one prompt into any AI coding assistan
 ## Input
 
 ```
-/reverse-engineering:analysis "<feature or file path>" [output directory]
+/devx:reverse-engineering-analysis "<feature or file path>" [output directory]
 ```
 
 **Examples:**
 ```
-/reverse-engineering:analysis "frontend의 graph 기능" docs/feature/frontend-graph/
-/reverse-engineering:analysis "backend의 알람메일발송 기능" docs/feature/backend-email/
-/reverse-engineering:analysis .github/workflows/ci.yml docs/feature/workflows-ci/
+/devx:reverse-engineering-analysis "frontend의 graph 기능" docs/feature/frontend-graph/
+/devx:reverse-engineering-analysis "backend의 알람메일발송 기능" docs/feature/backend-email/
+/devx:reverse-engineering-analysis .github/workflows/ci.yml docs/feature/workflows-ci/
 ```
 
 - **Feature description** — search codebase with Grep/Glob to find relevant files
