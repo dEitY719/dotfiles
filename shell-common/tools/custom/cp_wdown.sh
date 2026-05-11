@@ -1,10 +1,9 @@
 #!/bin/bash
-# shell-common/tools/external/cp_wdown.sh
-# Copy files from Windows "Downloads" to WSL ~/downloads with robust path resolution
-# Bash-specific due to use of: local -a, (()), mapfile, compgen
-
-# Guard: only load in bash (tools/external is sourced in both bash and zsh)
-[ -n "$BASH_VERSION" ] || return 0
+# shell-common/tools/custom/cp_wdown.sh
+# Copy files from Windows "Downloads" to WSL ~/downloads with robust path resolution.
+# Bash-specific (uses local -a, (( )), mapfile, compgen). Lives in tools/custom/ so
+# it is NOT auto-sourced. The user-facing function comes from the wrapper in
+# shell-common/functions/cp_wdown.sh, which runs this script via bash.
 
 cp_wdown() {
     # ✅ getopts initialization: prevent OPTIND state from previous calls
@@ -178,6 +177,6 @@ EOF
 }
 
 # Only execute if run directly (not sourced)
-if [ "${0##*/}" = "cp_wdown.sh" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
     cp_wdown "$@"
 fi
