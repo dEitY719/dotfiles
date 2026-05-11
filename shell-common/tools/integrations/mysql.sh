@@ -1,8 +1,8 @@
-#!/bin/bash
-# shell-common/tools/external/mysql.sh
-# MySQL service bootstrap and helpers
+#!/bin/sh
+# shell-common/tools/integrations/mysql.sh
+# MySQL service bootstrap and helpers (bash/zsh compatible)
 
-# file: ~/dotfiles/shell-common/tools/external/mysql.sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 : <<'MYSQL_DOC'
 ==========================================================
@@ -11,8 +11,8 @@ MySQL Dotfiles Helper - Getting Started Guide
 
 1) 설치 (Ubuntu / WSL)
 ------------------------
-sudo apt update
-sudo apt install -y mysql-server mysql-client
+# sudo apt update
+# sudo apt install -y mysql-server mysql-client
 
 2) MySQL 서비스 관리
 ------------------------
@@ -104,11 +104,11 @@ sudo systemctl status mysql
 # 경고 사라지고 PC-A와 동일하게 깔끔한 로그 확인 가능
 
 # 4. Perl locale warning 제거 (선택 사항)
-sudo apt update
-sudo apt install locales -y
-sudo locale-gen en_US.UTF-8
-sudo update-locale LANG=en_US.UTF-8
-source /etc/default/locale
+# sudo apt update
+# sudo apt install locales -y
+# sudo locale-gen en_US.UTF-8
+# sudo update-locale LANG=en_US.UTF-8
+# source /etc/default/locale
 # Perl 경고 메시지 사라짐
 
 # 주의 사항
@@ -157,11 +157,11 @@ EOF
 }
 
 # -------------------------------
-# 1) Auto-run only in interactive mode (or if forced)
+# 1) Auto-run config refresh
+# (The file-level guard at the top already restricts loading to
+#  interactive shells or DOTFILES_FORCE_INIT=1 contexts.)
 # -------------------------------
-if [[ $- == *i* ]] || [[ -n "$DOTFILES_FORCE_INIT" ]]; then
-    mysql_update_config
-fi
+mysql_update_config
 
 # -------------------------------
 # 2) Service-specific MySQL functions
