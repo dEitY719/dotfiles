@@ -80,4 +80,4 @@ guard.
 - `shell-common/functions/gh_project_status.sh` — write-side guard impl.
 - `claude/skills/gh-pr-merge/SKILL.md` Step 2-B — merge-gate impl.
 - `claude/skills/gh-pr-merge/references/board-policy.md` — cross-link.
-- `docs/standards/github-project-board.md` — column semantics SSOT.
+- `docs/.ssot/github-project-board.md` — column semantics SSOT.

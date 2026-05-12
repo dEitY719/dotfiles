@@ -15,7 +15,7 @@
 2. No automated guard existed to reject legacy flat summary text (`sections: ...`) for `gwt-help`.
 
 ## Corrective Actions
-1. Added explicit summary-template rule to `docs/standards/command-guidelines.md`.
+1. Added explicit summary-template rule to `docs/.ssot/command-guidelines.md`.
 2. Added integration test `test_gwt_help_summary_uses_standard_template` to block regression.
 3. Refactored `gwt_help` to SSOT structure (`_gwt_help_rows_*`, `--list`, `--all`).
 

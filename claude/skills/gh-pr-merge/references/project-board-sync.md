@@ -60,7 +60,7 @@ The `--only-from` whitelist enforces three properties:
 - An Issue already at `Done` (builtin fired this round) is left alone —
   no churn, no duplicate update.
 - Issue cards never visit `Approved` per
-  `docs/standards/github-project-board.md`; if one shows up there, it
+  `docs/.ssot/github-project-board.md`; if one shows up there, it
   is a manual override worth investigating, so the helper skips rather
   than silently overwriting.
 - Empty current Status (card never mounted on the board) is also

@@ -1,169 +1,77 @@
 # Module Context
-- **Purpose**: Project documentation, guides, AI agent prompts, and code reviews
-- **Structure**: Master prompts, feature docs, review documents, todo tracking
-- **Key Files**:
-  - `AGENTS_md_Master_Prompt.md` - AGENTS.md generation protocol (source for agents-md skill)
-  - `standards/command-guidelines.md` - Command/help interface and output formatting SSOT
-  - `standards/github-project-board.md` - GitHub Project kanban board workflow SSOT
-  - `abc-review-C.md` - SOLID principle review (Claude Opus 4.5)
-  - `todo.txt` - Project task tracking
+
+- **Purpose**: Project documentation, AI agent prompts, learnings, playbooks, archived analyses
+- **SSOT 디렉토리**: `.ssot/`(정책), `playbooks/`(실행 절차), `learnings/`(재사용 패턴), `archive/`(과거 결정 분석)
+- **AGENTS.md 라우터 정책**: 정책 본문은 `.ssot/*.md`에 두고 AGENTS.md는 요약 + 링크만 유지
 
 # Operational Commands
-- **Review**: Open in Markdown previewer (VS Code, grip)
-- **Count Lines**: `wc -l docs/*.md` (enforce <500 for AGENTS.md files)
 
-# Documentation Standards
-
-## Markdown Formatting
-- **Headers**: Use ATX style (`#`, `##`, not underlines)
-- **Lists**: Consistent markers (`-` for unordered, `1.` for ordered)
-- **Code Blocks**: Always specify language (```bash, ```python, ```markdown)
-- **Line Length**: No hard limit, but prefer <120 chars for readability
-- **Links**: Use relative paths (`../bash/README.md`, not absolute)
-
-## AGENTS.md Protocol
-Based on `AGENTS_md_Master_Prompt.md` (in `docs/archive/`):
-- 500-line hard limit per file
-- No emojis (token efficiency)
-- No tables for Context Maps (use lists)
-- Action-based routing (intent, not implementation)
-- SOLID principles enforcement (SRP, OCP, LSP, ISP, DIP)
-- TDD mandate (test-first workflow)
-
-## Review Document Format
-Pattern: `abc-review-<Initial>.md`
-- `abc-review-C.md` - Claude review
-- `abc-review-CX.md` - ChatGPT review (placeholder)
-- `abc-review-G.md` - Gemini review (placeholder)
-
-Structure:
-1. Reviewer info (model, date, scope)
-2. Project structure summary
-3. SOLID principle evaluation (score /10 per principle)
-4. Issues categorized by severity (high, medium, low)
-5. Action items with priority
-6. Conclusion and total score
+- **Review**: open in markdown viewer (VS Code, grip)
+- **Line count**: `wc -l docs/**/*.md`
+- **Markdown lint**: 비활성화 — 자동 실행 금지
 
 # Golden Rules
 
 ## Documentation Maintenance
-- **DO**: Update docs when code changes (especially AGENTS.md Context Maps)
-- **DO**: Use consistent terminology across all docs
-- **DO**: Include concrete examples (code snippets, commands)
-- **DO**: Group feature-specific docs under `docs/feature/<feature-name>/`
-- **DON'T**: Leave TODO markers without tracking (move to todo.txt)
-- **DON'T**: Archive without documenting reason (use `archive/` with README)
 
-## Master Prompt Modifications
-- **Critical File**: `AGENTS_md_Master_Prompt.md` (archived at `docs/archive/AGENTS_md_Master_Prompt.md`) governs AGENTS.md generation
-- **Change Protocol**:
-  1. Backup existing version: `cp docs/archive/AGENTS_md_Master_Prompt.md docs/archive/AGENTS_md_Master_Prompt_v<date>.md`
-  2. Update master prompt in archive
-  3. Regenerate `~/.claude/skills/agents-md/SKILL.md` from updated master
-  4. Test on sample project before applying to dotfiles
-- **Version Suffix**: `_C` (Claude), `_CX` (ChatGPT), `_G` (Gemini)
-- **Note**: Master prompt is archived but still governs the skill and documentation protocol
+- **DO**: 코드 변경 시 관련 문서 갱신 (특히 AGENTS.md Context Map과 `.ssot/` SSOT)
+- **DO**: 일관된 용어 사용
+- **DO**: 구체적 예시(코드 스니펫·명령어) 포함
+- **DO**: 피처별 문서는 `feature/<feature-name>/`로 묶기
+- **DON'T**: TODO 마커를 추적 없이 남기기 (`todo.txt`로 이전)
+- **DON'T**: 이유 없이 archive 하지 않기 (이동 사유를 `archive/README` 또는 커밋 메시지에 남길 것)
 
-## Review Workflow
-After implementing changes from reviews:
-1. Mark items as completed in review doc (add checkboxes)
-2. Update root AGENTS.md if Golden Rules changed
-3. Commit with reference to review item (e.g., "Fix: Issue #3 from abc-review-C")
+## 디렉토리 역할 분담 (중복 금지, 링크로 연결)
 
-## Learnings vs Technic vs Memory (Boundary Rules)
-Four knowledge locations have distinct roles. Do not duplicate content — link instead.
-- **`docs/learnings/`**: Short reusable patterns/snippets (50–80 lines target) learned from actual PR/commit experience. Korean by default (for human teammates).
-- **`docs/technic/`**: Verified stack-centric technical docs (hundreds of lines). Full setup + tradeoffs.
-- **`docs/standards/`**: Project SSOTs and decision records.
-- **`memory/` (Claude-private)**: Cross-session context for AI. Entries should use pointers to `docs/learnings/` rather than duplicating content.
+- **`.ssot/`**: 프로젝트 정책 SSOT — 명령 UX, env vars, 보드 운영, 커밋/work-log 규칙. 인덱스: [`.ssot/README.md`](./.ssot/README.md).
+- **`technic/`**: 검증된 스택 중심 기술 문서 (수백 줄). 전체 셋업 + tradeoff.
+- **`learnings/`**: 실제 PR/커밋에서 추출한 짧은 재사용 패턴 (50–80줄). 한국어, 동료팀 공유 목적. 출처(PR/commit/issue/리뷰 URL) 표기 필수.
+- **`feature/<name>/`**: 피처별 설계·분석 번들 (다수 파일).
+- **`playbooks/`**: 실행 절차·셋업 순서·운영 체크리스트.
+- **`archive/`**: 더 이상 정책 SSOT가 아닌 과거 결정 분석·검토 대기 문서.
+- **`memory/` (Claude 비공개)**: 세션 간 컨텍스트. `learnings/`로 포인터를 두고 본문 중복 금지.
 
-## Learnings Reference-Linking Rule
-Every `docs/learnings/*.md` file SHOULD include traceability to its origin:
-- **PR number** (most stable, survives merges): `PR #130`
-- **Commit hash**: for pointing at a specific code example
-- **Issue number**: when related discussion/bug exists
-- **Review comment URL**: when the insight came from a bot/human review
+## Language Policy
 
-If no such reference is possible (local experiment, conversation-only discovery), omit the links but record the **situation** in the Context section concretely.
+- **사람-팀원 문서** (`learnings/`, `technic/` narrative, `archive/`): 한국어
+- **AI-instruction 문서** (`SKILL.md`, system prompt, machine-read template): 영어
+- **`.ssot/` 정책 문서**: 한국어 본문 + 영어 키워드 혼용 (현재 관행)
 
-## Language Policy for Docs
-- **Human-teammate docs** (learnings/, technic/ narrative, standards/): Korean
-- **AI-instruction docs** (SKILL.md, system prompts, machine-read templates): English
+## Learnings 출처 링크 규칙
 
-# File Descriptions
+`learnings/*.md`는 출처 링크를 포함한다:
 
-## AGENTS_md_Master_Prompt.md (15,511 bytes) [in docs/archive/]
-Master protocol for AGENTS.md system generation (archived):
-- 10 phases (Analysis, Root Gen, Nested Gen, Validation, etc.)
-- SOLID & TDD enforcement
-- Token efficiency rules (no emojis, lists not tables)
-- 500-line limit with auto-split logic
-- Error handling and rollback mechanisms
-- **Note**: This is the canonical reference; kept in archive/ for version control
+- **PR number**: `PR #130` (가장 안정적)
+- **Commit hash**: 코드 스니펫 출처
+- **Issue number**: 관련 논의/버그
+- **Review comment URL**: 봇/사람 리뷰 발화
 
-## abc-review-C.md (13,147 bytes)
-Claude Opus 4.5 SOLID review of dotfiles:
-- Overall score: 43/50 (Excellent)
-- 9 identified issues (severity: high=2, medium=5, low=2)
-- Implemented fixes: Problem 1, 2, 4, 5, 6, 7 (6/9 complete)
-- Pending: Problem 3 (already resolved), 8, 9
-
-## todo.txt (5,588 bytes)
-Project task tracking (plain text format):
-- Completed items
-- Pending improvements
-- Long-term refactoring ideas
-
-## docs/feature/<feature-name>/ (feature bundles)
-Feature-centric documentation bundles:
-- `README.md` - Feature index and reading order
-- `analysis/` - Discovery, legacy analysis, category breakdowns
-- `planning/` - Roadmaps, phase detail, progress tracking, quick start
-- `requirements/` - REQ and design specification documents
-
-## docs/learnings/ (reusable-pattern knowledge base)
-Short snippets (50–80 lines) of reusable patterns extracted from real PRs/commits.
-- `README.md` - Index + authoring rules + boundary vs technic/standards/memory
-- Per-topic files follow 5-section template: Context / Pattern / Code / When to use / Related
-- See "Learnings Reference-Linking Rule" and "Language Policy for Docs" in Golden Rules above
-
-# Testing Strategy
-
-## AGENTS.md Validation
-```bash
-# Check line counts (must be <500)
-wc -l **/AGENTS.md
-
-# Validate no emojis
-grep -r "[\u{1F300}-\u{1F9FF}]" **/AGENTS.md
-
-# Check relative paths
-grep -r "http://\|https://\|file://" **/AGENTS.md
-```
+출처가 없는 로컬 실험은 Context 섹션에 상황을 구체적으로 기록한다.
 
 # Maintenance
 
-## Adding New Documentation
-1. Create file in `docs/` with descriptive name
-2. If it is feature-specific, place it under `docs/feature/<feature-name>/`
-3. Add entry to this AGENTS.md under "File Descriptions"
-4. Update root AGENTS.md Context Map if major doc
+## 새 정책을 추가할 때
 
-## Updating Master Prompt
-See "Master Prompt Modifications" in Golden Rules above.
+1. `.ssot/<name>.md`에 본문 작성
+2. `.ssot/README.md` 인덱스 표에 행 추가
+3. 영향받는 AGENTS.md / CLAUDE.md / 스킬 reference 의 링크를 갱신
 
-## Archiving Outdated Docs
+## 새 문서를 추가할 때
+
+1. 디렉토리 역할에 맞는 곳에 둔다 (위 "디렉토리 역할 분담" 참조)
+2. 피처별이면 `feature/<feature-name>/` 하위
+3. 정책이라면 `.ssot/`, 실행 절차라면 `playbooks/`
+
+## 문서 archive 절차
+
 ```bash
-# Create archive directory
-mkdir -p docs/archive
-
-# Move with explanation
 mv docs/old-guide.md docs/archive/
-echo "Archived: Replaced by new-guide.md (2026-01-01)" >> docs/archive/README.md
+echo "Archived: replaced by new-guide.md ($(date -I))" >> docs/archive/README.md
 ```
 
 # Context Map
-- **[Parent Context](../AGENTS.md)** — Project root and TDD protocol
-- **[Bash Documentation](../bash/README.md)** — Detailed bash module docs
-- **[Shell Common](../shell-common/AGENTS.md)** — Shared utilities context
-- **[Learnings](./learnings/README.md)** — Reusable pattern snippets from actual PRs
+
+- **[Parent Context](../AGENTS.md)** — 프로젝트 root + 표준 링크
+- **[`.ssot/`](./.ssot/README.md)** — 정책 SSOT 인덱스
+- **[Learnings](./learnings/README.md)** — 실제 PR에서 추출한 재사용 패턴
+- **[Shell Common](../shell-common/AGENTS.md)** — POSIX 공유 유틸리티

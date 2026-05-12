@@ -33,7 +33,7 @@ Closes #<N>
 - When Step 3 resolved an issue number AND the PR fully addresses it,
   `Closes #<N>` is **mandatory** — not optional. The dotfiles
   Project board relies on this keyword to move the Issue card to
-  `Done` on merge (see `docs/standards/github-project-board.md`).
+  `Done` on merge (see `docs/.ssot/github-project-board.md`).
   Omitting it means the Issue stays open and the card never reaches
   `Done`.
 - For bug-fix PRs, `Fixes #<N>` is also acceptable.

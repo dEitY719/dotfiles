@@ -40,5 +40,5 @@ is for short, repo-internal technical patterns aimed at human teammates.
 ## Refuses to write
 
 See `references/routing.md`. Topics belonging in `docs/technic/`,
-`docs/standards/`, `docs/feature/<name>/`, `claude/skills/`, or `memory/`
+`docs/.ssot/`, `docs/feature/<name>/`, `claude/skills/`, or `memory/`
 are routed to the correct home instead of forced into `docs/learnings/`.

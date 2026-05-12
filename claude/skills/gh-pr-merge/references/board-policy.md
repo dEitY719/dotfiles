@@ -30,4 +30,4 @@ which board / which Status is canonical (no inline GraphQL drift).
 - `shell-common/functions/gh_audit_builtin_workflows.sh` — audits that
   the "Pull request linked to issue" builtin is OFF, so the guard isn't
   invalidated by an async overwrite.
-- `docs/standards/github-project-board.md` — column semantics SSOT.
+- `docs/.ssot/github-project-board.md` — column semantics SSOT.

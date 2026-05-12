@@ -107,7 +107,7 @@
 - [ ] 예외 케이스 정의 (예: 1줄 버그 수정)
 
 ### Phase 2: 표준화 (1주)
-- [ ] docs/standards/commit-message-standard.md 확정
+- [ ] docs/.ssot/commit-message-standard.md 확정
 - [ ] 팀원 온보딩 (15분)
 - [ ] 첫 3개 커밋으로 practice
 
@@ -188,7 +188,7 @@
 1. 이 문서를 팀과 공유
 2. 팀 discussion 진행 (1시간)
 3. 피드백 수집 및 수정
-4. docs/standards/commit-message-standard.md 최종 확정
+4. docs/.ssot/commit-message-standard.md 최종 확정
 5. P1 단계 시작
 
 ---

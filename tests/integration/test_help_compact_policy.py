@@ -1,7 +1,7 @@
 """
 Compact help policy tests.
 
-Validates help UX rules from docs/standards/command-guidelines.md:
+Validates help UX rules from docs/.ssot/command-guidelines.md:
 - canonical *-help entrypoints
 - default help outputs are compact (<= 15 lines)
 - standardized summary/list/all interface
