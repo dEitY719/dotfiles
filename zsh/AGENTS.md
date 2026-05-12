@@ -1,182 +1,99 @@
 # Module Context
+
 - **Purpose**: Zsh-specific configuration and application integrations
-- **Entry Point**: `main.zsh` (sources shell-common and zsh-specific modules)
-- **Structure**:
-  - `app/`: Zsh application modules (git, p10k, zsh utilities)
-  - `env/`: Zsh-specific environment variables (if any)
-  - `main.zsh`: Zsh loader orchestrating module loading
-- **Dependencies**: shell-common (shared utilities), Powerlevel10k (optional theme)
+- **Entry Point**: `main.zsh` — sources `shell-common` then zsh-specific modules
+- **Structure**: `app/`(zsh 앱: git, p10k, zsh utilities) · `env/`(zsh-only env) · `main.zsh`(loader)
+- **Dependencies**: `shell-common/` (공유 유틸리티), Powerlevel10k (옵션 테마)
 
 # Operational Commands
-- **Reload**: `source ~/.zshrc` or `exec zsh`
-- **Lint**: `tox -e shellcheck -- zsh/**/*.zsh` (if shellcheck supports zsh)
-- **Test**: `zsh -n <file>` (syntax check)
-- **Theme Config**: `p10k configure` (if Powerlevel10k installed)
 
-# Implementation Patterns
+- **Reload**: `source ~/.zshrc` 또는 `exec zsh`
+- **Lint**: `tox -e shellcheck -- zsh/**/*.zsh` (shellcheck 가 zsh 지원하는 경우)
+- **Syntax check**: `zsh -n <file>`
+- **Theme config**: `p10k configure`
 
-## Zsh-Specific Module Template
-```zsh
-#!/bin/zsh
-# zsh/app/myapp.zsh
-# Zsh-specific configuration for MyApp
+# Loading Order (`main.zsh`)
 
-# Zsh guard (optional but recommended)
-[ -n "$ZSH_VERSION" ] || return 0
-
-# Use zsh-specific features freely
-setopt HIST_IGNORE_DUPS
-setopt AUTO_CD
-
-# Zsh arrays (zero-indexed in some contexts, one-indexed in others)
-local -a my_array
-my_array=(item1 item2 item3)
-
-# Zsh parameter expansion
-local files=(${(@f)"$(ls)"})
-
-# Functions
-myapp_zsh_function() {
-    local var="value"
-    echo "Zsh-specific: $var"
-}
-```
-
-## Loading Order (main.zsh)
-1. Shell detection (exit if not zsh)
-2. Directory setup (DOTFILES_ROOT, SHELL_COMMON, ZSH_DOTFILES)
-3. Helper functions (safe_source)
-4. Common environment (shell-common/env/*.sh)
-5. Zsh-specific environment (zsh/env/*.sh if exists)
-6. UX Library (shell-common/tools/ux_lib/ux_lib.sh)
-7. Common aliases (shell-common/aliases/*.sh)
-8. Common functions (shell-common/functions/*.sh)
-9. External tools (shell-common/tools/external/*.sh)
-10. Projects (shell-common/projects/*.sh)
-11. Zsh utilities (zsh/util/*.zsh if exists)
-12. Zsh applications (zsh/app/*.zsh)
-
-## Safe Source Pattern
-```zsh
-safe_source() {
-    local file_path="$1"
-    local error_msg="${2:-Failed to source}"
-
-    if [ -f "$file_path" ]; then
-        if ! source "$file_path" 2>/dev/null; then
-            echo "Warning: $error_msg: $file_path" >&2
-        fi
-    fi
-}
-```
+1. Shell detection (zsh 아니면 exit)
+2. Directory setup (`DOTFILES_ROOT`, `SHELL_COMMON`, `ZSH_DOTFILES`)
+3. `safe_source` 헬퍼 정의
+4. Common env (`shell-common/env/*.sh`)
+5. Zsh-only env (`zsh/env/*.sh`)
+6. UX library (`shell-common/tools/ux_lib/ux_lib.sh`)
+7. Common aliases / functions / 외부 도구 / 프로젝트
+8. Zsh utilities (`zsh/util/*.zsh`)
+9. Zsh applications (`zsh/app/*.zsh`)
 
 # Golden Rules
 
 ## Zsh-Specific Features
-- **DO**: Use zsh arrays, associative arrays, parameter expansions
-- **DO**: Use `setopt` for shell options (e.g., `setopt AUTO_CD`)
-- **DO**: Use `local` in functions (zsh scoping)
-- **DON'T**: Use bash-specific syntax (e.g., `[[` without checks is OK in zsh)
-- **DON'T**: Assume bash compatibility - test in zsh
+
+- **DO**: zsh array / associative array / parameter expansion / `setopt` 자유 사용
+- **DO**: 함수 안에서는 `local`, 글로벌은 `typeset`
+- **DON'T**: `local`을 함수 밖에서 사용 (`main.zsh`는 `_load_zsh_apps()`로 래핑)
+- **DON'T**: bash 호환을 가정 — 항상 zsh 에서 실제 실행 검증
 
 ## Loading Discipline
-- **DO**: Respect main.zsh loading order
-- **DO**: Use `safe_source` for all file loading
-- **DON'T**: Bypass main.zsh by sourcing files directly in .zshrc
-- **DON'T**: Modify shell-common files for zsh-only features (create zsh/ equivalents)
+
+- **DO**: `main.zsh` 로딩 순서 존중
+- **DO**: 모든 파일 로드는 `safe_source` 사용
+- **DON'T**: `~/.zshrc` 에서 직접 파일 source — `main.zsh` 우회 금지
+- **DON'T**: zsh-only 기능을 위해 `shell-common/` 수정 — `zsh/` 에 새 파일을 만들 것
 
 ## Output Standards
-- **DO**: Use `ux_lib` functions (`ux_header`, `ux_success`, `ux_error`)
-- **DON'T**: Use raw `echo` unless in error conditions before ux_lib loaded
-- **Note**: ux_lib is shell-aware and handles zsh-specific features
+
+- **DO**: `ux_lib` 함수 사용 (`ux_header`, `ux_success`, `ux_error`)
+- **Exception**: ux_lib 로드 전 에러는 `echo ... >&2`
+- ux_lib 는 shell-aware — zsh 분기 자동 처리
 
 ## File Naming
-- Zsh-specific files: `snake_case.zsh`
-- Shared files: Already in `shell-common/` with `.sh` extension
-- Functions: `snake_case` or `tool_command` (consistent with bash)
+
+- Zsh-only 파일: `snake_case.zsh`
+- 공유 파일: `shell-common/` 에 `.sh` 확장자
+- 함수: `snake_case` 또는 `tool_command` (bash와 일관)
+
+## Cross-shell Sourcing
+
+`shell-common/` 에서 sourcing 할 때 `${BASH_SOURCE[0]}` 같은 bash-only 패턴 금지.
+공식 패턴: `source "${SHELL_COMMON}/path/to/file.sh"`.
+상세는 [`shell-common/AGENTS.md`](../shell-common/AGENTS.md) → "Bash/Zsh Sourcing Rules".
 
 # Testing Strategy
 
-## Syntax Validation
 ```bash
-# Check syntax
+# Syntax
 zsh -n zsh/app/myapp.zsh
 
-# Test sourcing
+# Source + 함수 확인
 zsh -c "source zsh/main.zsh && type myfunction"
-```
 
-## Interactive Testing
-```bash
-# Start clean zsh
+# 클린 zsh
 zsh -f
-
-# Source main.zsh
 source ~/dotfiles/zsh/main.zsh
-
-# Test functions
-git_help
-my_zsh_function
 ```
 
-## Compatibility Check
-- [ ] File uses zsh-specific features (arrays, parameter expansion)
-- [ ] No bash-only syntax (e.g., `${array[@]}` works, but test it)
-- [ ] Guard with `[ -n "$ZSH_VERSION" ]` if file might be sourced by bash
-- [ ] Functions work in both zsh and bash (if intended to be shared, move to shell-common)
+체크리스트: zsh 전용 기능 사용 / bash-only 문법 회피 / 의도 시 `[ -n "$ZSH_VERSION" ]` 가드 /
+공유 의도면 `shell-common/` 으로 이전.
 
-# Application Modules
+# When to Use `zsh/` vs `shell-common/`
 
-## zsh/app/git.zsh
-Git-specific zsh configuration:
-- Enhanced git aliases
-- Git prompt integration
-- Zsh completion for git
-
-## zsh/app/p10k.zsh
-Powerlevel10k theme configuration:
-- Theme settings and segments
-- Prompt customization
-- Generated by `p10k configure`
-
-## zsh/app/zsh.zsh
-Zsh utility functions:
-- Zsh management commands
-- Shell switching helpers
-- Zsh-specific aliases
+- **`zsh/`**: zsh-only 문법, zsh 플러그인, zsh-specific 동작 (예: p10k)
+- **`shell-common/`**: POSIX 호환, bash/zsh 공유 (예: git 헬퍼)
 
 # Maintenance
 
-## Adding New Zsh Modules
-1. Create `zsh/app/<module>.zsh`
-2. Add zsh-specific features freely
-3. Use `ux_lib` for output
-4. Test with `zsh -n` and manual sourcing
-5. Will be auto-loaded by main.zsh
+새 zsh 모듈 추가:
 
-## When to Use zsh/ vs shell-common/
-- **Use zsh/**: Zsh-only syntax, zsh plugins, zsh-specific behavior
-- **Use shell-common/**: POSIX-compatible, shared between bash/zsh
-- **Example**:
-  - `shell-common/functions/git.sh` - POSIX git helpers
-  - `zsh/app/git.zsh` - Zsh git completions and prompt
-
-# Known Issues & Workarounds
-
-## Issue: Zsh arrays behave differently than bash
-**Workaround**: Use zsh-specific array syntax (`${(@)array}` for elements)
-
-## Issue: `local` in zsh vs bash
-**Behavior**: Zsh `local` works differently in global scope
-**Fix**: Use `typeset` for global variables, `local` only in functions
-
-## Issue: main.zsh `local` error
-**Cause**: Using `local` outside function (fixed in current version)
-**Fix**: Use `typeset` or wrap in function `_load_zsh_apps()`
+1. `zsh/app/<module>.zsh` 생성
+2. zsh 전용 기능 자유 사용
+3. `ux_lib` 출력
+4. `zsh -n` + 수동 sourcing 검증
+5. `main.zsh` 가 자동 로드함
 
 # References
-- **[Shell Common](../shell-common/AGENTS.md)** — Shared utilities (env, aliases, functions)
-- **[Bash Module](../bash/AGENTS.md)** — Bash-specific (parallel structure)
-- **[UX Library](../shell-common/tools/ux_lib/AGENTS.md)** — Output styling
-- **[Root Context](../AGENTS.md)** — Project-wide standards and TDD protocol
-- **[Powerlevel10k](https://github.com/romkatv/powerlevel10k)** — Theme documentation
+
+- **[Shell Common](../shell-common/AGENTS.md)** — POSIX 공유 유틸리티
+- **[Bash Module](../bash/AGENTS.md)** — bash-specific (병렬 구조)
+- **[UX Library](../shell-common/tools/ux_lib/AGENTS.md)** — 출력 스타일
+- **[Root Context](../AGENTS.md)** — 프로젝트 표준
+- **[Powerlevel10k](https://github.com/romkatv/powerlevel10k)** — 테마 문서

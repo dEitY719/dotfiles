@@ -77,7 +77,7 @@ SKILLS_REQUIRING_GUARD=(
 }
 
 @test "doc-guard: env-vars.md catalog registers GH_DISABLE_AI_METRICS" {
-    local f="${_BATS_REAL_DOTFILES_ROOT}/docs/standards/env-vars.md"
+    local f="${_BATS_REAL_DOTFILES_ROOT}/docs/.ssot/env-vars.md"
     [ -f "$f" ] || {
         echo "missing catalog: $f"
         return 1
