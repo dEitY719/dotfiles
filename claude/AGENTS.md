@@ -53,17 +53,29 @@ Dependencies: Claude Code CLI, jq, sudo
 ## Configuration Files
 
 ```bash
+# 외부 PC (옵션 1, 3) — 멀티-계정
 ~/.claude-personal/settings.json         -> dotfiles/claude/settings.json
 ~/.claude-personal/settings.local.json   -> dotfiles/claude/settings.local.json
 ~/.claude-personal/statusline-command.sh -> dotfiles/claude/statusline-command.sh
 ~/.claude-personal/skills/<name>         -> dotfiles/claude/skills/<name>   (per-skill)
 ~/.claude-personal/docs/<name>           -> dotfiles/claude/docs/<name>     (per-doc)
+
+# 사내 PC (옵션 2) — 단일 계정 (issue #571)
+~/.claude/settings.json                  -> dotfiles/claude/settings.json
+~/.claude/settings.local.json            -> dotfiles/claude/settings.local.json
+~/.claude/statusline-command.sh          -> dotfiles/claude/statusline-command.sh
+~/.claude/skills                         -> dotfiles/claude/skills           (dir symlink)
+
+# 모든 환경 공통
 ~/.gemini/skills                         -> dotfiles/claude/skills           (dir symlink)
 ~/.codex/skills/<name>                   -> dotfiles/claude/skills/<name>/  (per-skill)
 ```
 
-`settings.local.json` — env 블록 SSOT (e.g. `GH_PR_REPLY_AUTO_APPROVE_REPOS`).  
 `settings.json` — gitignored, per-machine 설정.
+`settings.local.json` — **gitignored, untracked SSOT** (issue #571). PC-specific env
+(사번 헤더, 사내 `ANTHROPIC_BASE_URL` 등). `claude/setup.sh`가 `settings.local.example.json`에서 부트스트랩.
+
+`~/.dotfiles-setup-mode` 가 `internal` 이면 `claude_yolo` 가 멀티-계정 해석을 우회하고 `~/.claude/` 를 강제 사용 (F-2). 잘못 migrate된 사내 PC 복구: `claude-accounts rollback` (F-3). 자세한 내용은 `docs/setup/internal-pc.md`.
 
 ---
 
