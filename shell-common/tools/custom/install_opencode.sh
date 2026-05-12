@@ -31,18 +31,6 @@ if ! source "$_INIT_PATH" 2>/dev/null; then
     exit 1
 fi
 
-# Load environment variables from dotfiles/.env (SSOT - Single Source of Truth)
-# This ensures that environment-specific variables like SSAI_LLM_API_KEY are available
-# for expansion into configuration files (e.g., opencode.json)
-_dotfiles_env="${DOTFILES_ROOT:-$HOME/dotfiles}/.env"
-if [ -f "$_dotfiles_env" ]; then
-    # shellcheck source=/dev/null
-    set -a  # Export all variables
-    source "$_dotfiles_env"
-    set +a  # Stop exporting
-fi
-unset _dotfiles_env
-
 # ═══════════════════════════════════════════════════════════════
 # Helper Functions
 # ═══════════════════════════════════════════════════════════════
@@ -72,7 +60,8 @@ show_environment_info() {
             ux_bullet "Proxy enabled (required)"
             ux_bullet "SSL verification disabled"
             ux_bullet "CA certificate may be required"
-            ux_bullet "Available models: GLM-4.6, gpt-oss-120b, DeepSeek-V3.2"
+            ux_bullet "Gateway: a2g.samsungds.net (S/W혁신팀)"
+            ux_bullet "Available models: Qwen3.6-27B"
             ;;
     esac
     echo ""
@@ -140,42 +129,25 @@ EOF
     ux_success "External environment configured: $config_file"
 }
 
-# Generate opencode.json for internal environment
+# Generate opencode.json for internal environment by copying the SSOT template.
+# The template lives at opencode/opencode.json.internal in this repo and is the
+# single source of truth for the Samsung internal (a2g) gateway config.
+# Users hand-edit "your-knox-id" in the copied file to set their Samsung Knox ID.
 generate_internal_config() {
     local config_file="$HOME/.config/opencode/opencode.json"
+    local template="${DOTFILES_ROOT:-$HOME/dotfiles}/opencode/opencode.json.internal"
 
-    ux_info "Setting up internal environment with Samsung DS LiteLLM..."
+    ux_info "Setting up internal environment from SSOT template..."
 
-    # Use unquoted EOF to enable variable expansion (SSAI_LLM_API_KEY from .env)
-    # Note: This is safe because we control the content, not user input
-    cat > "$config_file" << EOF
-{
-  "\$schema": "https://opencode.ai/config.json",
-  "provider": {
-    "litellm": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "LiteLLM Provider",
-      "options": {
-        "baseURL": "http://ssai.samsungds.net:9090",
-        "apiKey": "${SSAI_LLM_API_KEY}"
-      },
-      "models": {
-        "GLM-4.6": {
-          "name": "GLM-4.6"
-        },
-        "gpt-oss-120b": {
-          "name": "gpt-oss-120b"
-        },
-        "DeepSeek-V3.2": {
-          "name": "DeepSeek-V3.2"
-        }
-      }
-    }
-  }
-}
-EOF
+    if [ ! -f "$template" ]; then
+        ux_error "Template not found: $template"
+        return 1
+    fi
+
+    cp "$template" "$config_file"
     chmod 600 "$config_file"
     ux_success "Internal environment configured: $config_file"
+    ux_warning "Edit $config_file and replace 'your-knox-id' with your Samsung Knox ID"
 }
 
 # ═══════════════════════════════════════════════════════════════

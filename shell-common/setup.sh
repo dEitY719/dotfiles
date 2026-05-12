@@ -236,9 +236,11 @@ setup_opencode_config() {
         internal)
             mkdir -p "$(dirname "$opencode_target")"
             _prepare_config_target "$opencode_target"
-            ln -s "${DOTFILES_ROOT}/opencode/opencode.json.internal" "$opencode_target"
-            ux_success "Created symlink: ~/.config/opencode/opencode.json → opencode/opencode.json.internal"
-            ux_info "Using: Samsung internal LiteLLM endpoint"
+            cp "${DOTFILES_ROOT}/opencode/opencode.json.internal" "$opencode_target"
+            chmod 600 "$opencode_target"
+            ux_success "Copied template: opencode/opencode.json.internal → ~/.config/opencode/opencode.json"
+            ux_info "Using: Samsung internal gateway (a2g.samsungds.net)"
+            ux_warning "Edit $opencode_target and replace 'your-knox-id' with your Samsung Knox ID"
             ;;
         external)
             mkdir -p "$(dirname "$opencode_target")"
@@ -626,7 +628,7 @@ main() {
             ux_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Nexus + proxy)"
             ux_info "  - Bun: ~/.bunfig.toml → bun/bunfig.toml.internal (Nexus registry)"
-            ux_info "  - OpenCode: ~/.config/opencode/opencode.json → opencode/opencode.json.internal"
+            ux_info "  - OpenCode: copied from opencode/opencode.json.internal (edit your-knox-id manually)"
             ux_info "  - Pip: Samsung internal repository configured"
             ux_info "  - uv: Samsung internal repository + proxy configured"
             ux_info "  - Cargo: ~/.cargo/config.toml (Nexus proxy for crates.io)"

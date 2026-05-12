@@ -104,12 +104,11 @@ _opencode_help_summary() {
     ux_bullet_sub "setup: install-opencode | opencode-verify | uninstall-opencode"
     ux_bullet_sub "utils: bunx oh-my-opencode install | install-bun | bun-help"
     ux_bullet_sub "env: home/public | external | internal"
-    ux_bullet_sub "profile: oc-profile dtgpt | oc-profile a2g"
     ux_bullet_sub "config: \$OPENCODE_CONFIG_FILE | opencode-edit"
-    ux_bullet_sub "models: Home | External | DTGPT | A2G"
+    ux_bullet_sub "models: Home | External | Internal"
     ux_bullet_sub "usage: opencode | opencode --help | opencode --version"
     ux_bullet_sub "trouble: install-opencode | opencode-verify | uninstall-opencode"
-    ux_bullet_sub "details: opencode-help <section>  (example: opencode-help profile)"
+    ux_bullet_sub "details: opencode-help <section>  (example: opencode-help models)"
 }
 
 _opencode_help_list_sections() {
@@ -117,7 +116,6 @@ _opencode_help_list_sections() {
     ux_bullet_sub "setup"
     ux_bullet_sub "utils"
     ux_bullet_sub "env"
-    ux_bullet_sub "profile"
     ux_bullet_sub "config"
     ux_bullet_sub "models"
     ux_bullet_sub "usage"
@@ -138,12 +136,7 @@ _opencode_help_rows_utils() {
 _opencode_help_rows_env() {
     ux_bullet "home/public             : OpenCode defaults (no symlink)"
     ux_bullet "external                : localhost:4444 LiteLLM proxy"
-    ux_bullet "internal                : Samsung DS LiteLLM endpoint"
-}
-
-_opencode_help_rows_profile() {
-    ux_bullet "${UX_PRIMARY}oc-profile dtgpt${UX_RESET}     : DTGPT  (cloud.dtgpt.samsungds.net)"
-    ux_bullet "${UX_PRIMARY}oc-profile a2g${UX_RESET}       : A2G    (a2g.samsungds.net) — Thinking models"
+    ux_bullet "internal                : Samsung internal gateway (a2g.samsungds.net)"
 }
 
 _opencode_help_rows_config() {
@@ -154,8 +147,7 @@ _opencode_help_rows_config() {
 _opencode_help_rows_models() {
     ux_bullet "Home       : OpenCode defaults"
     ux_bullet "External   : gpt-oss-20b"
-    ux_bullet "DTGPT      : GLM4.7, Kimi-K2.5, MiniMax-M2.1"
-    ux_bullet "A2G        : GLM-5-Thinking, Qwen3.5-Thinking, Kimi-K2.5-Thinking"
+    ux_bullet "Internal   : Qwen3.6-27B"
 }
 
 _opencode_help_rows_usage() {
@@ -180,7 +172,6 @@ _opencode_help_section_rows() {
         setup|install)             _opencode_help_rows_setup ;;
         utils|util|utilities)      _opencode_help_rows_utils ;;
         env|environments|environment) _opencode_help_rows_env ;;
-        profile|profiles)          _opencode_help_rows_profile ;;
         config|configuration)      _opencode_help_rows_config ;;
         models|model)              _opencode_help_rows_models ;;
         usage|commands|cmds)       _opencode_help_rows_usage ;;
@@ -198,7 +189,6 @@ _opencode_help_full() {
     _opencode_help_render_section "Installation & Setup" _opencode_help_rows_setup
     _opencode_help_render_section "필수 유틸리티" _opencode_help_rows_utils
     _opencode_help_render_section "Environments (managed by setup.sh)" _opencode_help_rows_env
-    _opencode_help_render_section "Profile Management (internal only)" _opencode_help_rows_profile
     _opencode_help_render_section "Configuration" _opencode_help_rows_config
     _opencode_help_render_section "Models (LiteLLM Integration)" _opencode_help_rows_models
     _opencode_help_render_section "Usage" _opencode_help_rows_usage
@@ -213,38 +203,6 @@ opencode_help() {
         *)                  _opencode_help_section_rows "$1" ;;
     esac
 }
-
-oc_profile() {
-    local profile="$1"
-    local dotfiles_root="${DOTFILES_ROOT:-$HOME/dotfiles}"
-
-    case "$profile" in
-        dtgpt)
-            local src="$dotfiles_root/opencode/opencode.json.internal"
-            ;;
-        a2g)
-            local src="$dotfiles_root/opencode/opencode.json.internal-a2g"
-            ;;
-        *)
-            ux_usage "oc-profile" "<dtgpt|a2g>" "Switch OpenCode internal profile"
-            ux_bullet "  dtgpt : DTGPT  (cloud.dtgpt.samsungds.net) — GLM4.7, Kimi-K2.5, MiniMax-M2.1"
-            ux_bullet "  a2g   : A2G    (a2g.samsungds.net)         — GLM-5-Thinking, Kimi-K2.5-Thinking"
-            return 1
-            ;;
-    esac
-
-    if [ ! -f "$src" ]; then
-        ux_error "Profile source not found: $src"
-        return 1
-    fi
-
-    mkdir -p "$(dirname "$OPENCODE_CONFIG_FILE")"
-    ln -sf "$src" "$OPENCODE_CONFIG_FILE"
-    ux_success "OpenCode profile: $profile"
-    ux_bullet "Config → $src"
-}
-
-alias oc-profile='oc_profile'
 
 opencode_edit() {
     local config_file="$OPENCODE_CONFIG_FILE"

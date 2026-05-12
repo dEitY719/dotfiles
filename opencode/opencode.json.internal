@@ -1,25 +1,25 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "provider": {
-    "S/W혁신팀": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Qwen3.6-27B",
-      "options": {
-        "baseURL": "http://a2g.samsungds.net:8090/v1",
-        "headers": {
-          "x-service-id": "coding-agent-model-service",
-          "x-user-id": "byoungwoo.yoon"
-        }
-      },
-      "models": {
-        "Qwen3.6-27B": {
-          "name": "Qwen3.6-27B",
-          "limit": {
-            "context": 200000,
-            "output": 65536
-          }
-        }
-      }
-    }
-  }
+    "$schema": "https://opencode.ai/config.json",
+    "provider": {
+        "S/W혁신팀": {
+            "npm": "@ai-sdk/openai-compatible",
+            "name": "Qwen3.6-27B",
+            "options": {
+                "baseURL": "http://a2g.samsungds.net:8090/v1",
+                "headers": {
+                    "x-service-id": "coding-agent-model-service",
+                    "x-user-id": "your-knox-id"
+                }
+            },
+            "models": {
+                "Qwen3.6-27B": {
+                    "name": "Qwen3.6-27B",
+                    "limit": {
+                        "context": 200000,
+                        "output": 65536
+                    }
+                }
+            }
+        }
+    }
 }
