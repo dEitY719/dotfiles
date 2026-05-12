@@ -1329,6 +1329,9 @@ claude_accounts_rollback() {
 
     ux_info "Active account:  $_car_active ($_car_src)"
     if [ "$(_dotfiles_setup_mode)" != "internal" ]; then
+        # SC2088: the tilde here is a literal `~` in a user-facing path,
+        # not a shell expansion — display form deliberately.
+        # shellcheck disable=SC2088
         ux_warning "~/.dotfiles-setup-mode is not 'internal' — rollback is intended for"
         ux_warning "  the internal-PC single-account flow. Continuing anyway."
     fi
