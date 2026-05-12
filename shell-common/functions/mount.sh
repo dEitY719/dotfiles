@@ -3,6 +3,51 @@
 # Mount management functions following SOLID principles
 # Single Responsibility: addmnt() mounts, show_mnt() displays status
 
+# Pure utility functions live ABOVE the interactive guard.
+# Rationale: the guard exists to suppress *output* on non-interactive
+# sourcers, but `_check_command` and `_is_mounted` produce no output
+# and have no side effects. Keeping them above the guard lets
+# non-interactive scripts (e.g., claude/setup.sh) call them without
+# setting DOTFILES_FORCE_INIT=1 — which would otherwise force every
+# alias / help function in this file to load unnecessarily.
+
+# Validate that required command exists
+# Single Responsibility: Check availability of a command
+_check_command() {
+    local cmd="$1"
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        return 1
+    fi
+    return 0
+}
+
+# Check if a path is mounted
+# Single Responsibility: Only check if path is mounted
+# Parameters:
+#   $1: mount path to check (required)
+# Returns: 0 if mounted, 1 if not mounted
+_is_mounted() {
+    local mount_path="$1"
+
+    # Validate input
+    if [ -z "$mount_path" ]; then
+        return 1
+    fi
+
+    # Expand home directory if present
+    mount_path="${mount_path/#\~/$HOME}"
+
+    # Use findmnt if available (faster, more reliable)
+    if _check_command findmnt; then
+        findmnt "$mount_path" >/dev/null 2>&1
+        return $?
+    fi
+
+    # Fallback to mount command
+    mount | grep -q "on ${mount_path} " 2>/dev/null
+    return $?
+}
+
 # Load UX library if not already loaded (bash/zsh compatible)
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
@@ -131,42 +176,7 @@ HELP
 
 alias mount-help='mount_help'
 
-# Validate that required command exists
-# Single Responsibility: Check availability of a command
-_check_command() {
-    local cmd="$1"
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-        return 1
-    fi
-    return 0
-}
-
-# Check if a path is mounted
-# Single Responsibility: Only check if path is mounted
-# Parameters:
-#   $1: mount path to check (required)
-# Returns: 0 if mounted, 1 if not mounted
-_is_mounted() {
-    local mount_path="$1"
-
-    # Validate input
-    if [ -z "$mount_path" ]; then
-        return 1
-    fi
-
-    # Expand home directory if present
-    mount_path="${mount_path/#\~/$HOME}"
-
-    # Use findmnt if available (faster, more reliable)
-    if _check_command findmnt; then
-        findmnt "$mount_path" >/dev/null 2>&1
-        return $?
-    fi
-
-    # Fallback to mount command
-    mount | grep -q "on ${mount_path} " 2>/dev/null
-    return $?
-}
+# (_check_command and _is_mounted are defined above the interactive guard.)
 
 # Internal: Show help for mount_add function (use _mount_add_help_ prefix for internal functions)
 _mount_add_help() {
