@@ -40,6 +40,21 @@ $EDITOR claude/settings.local.json
 
 `<EMPLOYEE_ID>` 자리에 본인 사번을 채운다.
 
+## env 블록은 어떻게 claude 프로세스에 도달하는가
+
+두 경로가 동시에 활성화돼 있다 — defense-in-depth:
+
+1. **Claude Code 본체**가 `~/.claude/settings.local.json` 의 `env` 블록을 읽어 자기
+   서브프로세스에 주입. 정상 동작 시 이 경로만으로 충분.
+2. **`claude_yolo`** (shell-common/tools/integrations/claude.sh) 가 같은 파일을
+   `jq` 로 파싱하여 셸 레벨에서 `export` 한 뒤 `command claude` 실행. Claude Code
+   특정 버전이 (1) 경로를 무시하더라도 `claude-yolo` 는 게이트웨이로 정상 연결된다.
+
+(2) 경로는 `_claude_yolo_export_settings_env` 헬퍼가 담당하며, jq 미설치 / 파일
+부재 / env 블록 부재 / JSON 파싱 실패 모두 silent no-op (회귀 0). 단위
+테스트는 `tests/bats/integrations/claude_accounts.bats` 의 "settings.local.json
+env block exports to shell process" 등.
+
 ## 보안 경고
 
 1. **`claude/settings.local.json`은 절대 커밋되지 않는다** — `.gitignore`로 untracked. 의심되면:
@@ -77,7 +92,12 @@ cat ~/.dotfiles-setup-mode    # internal
 ls -la ~/.claude/settings.local.json
 # → ~/.claude/settings.local.json -> /home/<user>/dotfiles/claude/settings.local.json
 
-# env 적용 확인 — claude-yolo 시작 직후 통신 차단되면 게이트웨이 설정이 안 들어간 것
+# env 적용 확인 — 정상이면 사내 게이트웨이로 바로 연결됨.
+# 만약 `Failed to connect to api.anthropic.com` 가 뜬다면:
+#   1) `jq .env ~/.claude/settings.local.json` 으로 env 블록 유효성 확인
+#   2) 새 셸 (`exec zsh`) 에서 `env | grep ANTHROPIC_` 출력 확인 —
+#      claude_yolo 가 셸 레벨로 export 했으면 6 줄이 보여야 함
+#   3) 둘 다 정상인데도 실패면 사내 게이트웨이/방화벽 이슈
 claude-yolo
 ```
 
