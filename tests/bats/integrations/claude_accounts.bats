@@ -146,6 +146,24 @@ LOCAL
     assert_output "$HOME/.claude-work1"
 }
 
+@test "bash: resolve --list does NOT infinite-recurse on flag-shaped ENABLED token (PR #569 review)" {
+    # Regression: an earlier draft of the --list branch called
+    # _claude_resolve_account recursively, which would loop forever if
+    # CLAUDE_ENABLED_ACCOUNTS happened to contain --list / --list-all.
+    # The inline-validation rewrite must drop such tokens silently.
+    run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="personal --list work" _claude_resolve_account --list | tr "\n" " "'
+    assert_success
+    assert_output "personal work "
+}
+
+@test "bash: resolve --list survives empty ENABLED under set -u (PR #569 review)" {
+    # Regression for the ${VAR:-} hardening — calling --list without
+    # CLAUDE_ENABLED_ACCOUNTS exported must not abort under set -u.
+    run_in_bash 'unset CLAUDE_ENABLED_ACCOUNTS; set -u; _claude_resolve_account --list'
+    assert_success
+    assert_output ""
+}
+
 # ---------- Task 4: ensure helpers (idempotency) ----------
 
 @test "bash: _claude_ensure_symlink creates new symlink" {
