@@ -525,8 +525,9 @@ _migrate_legacy_plugin_paths
 _check_socat_for_sandbox
 
 # Single-account symlink helper for internal-PC mode (issue #571, F-1).
-# Idempotent: correct target → no-op; wrong target → recreate; existing
-# regular file/dir → timestamped backup then symlink.
+# Idempotent: correct target → no-op; wrong target → recreate; legacy
+# bind-mount → unmount + symlink; existing regular file/dir → timestamped
+# backup then symlink.
 _single_account_ensure_link() {
     local src="$1" tgt="$2"
     if [ -L "$tgt" ]; then
@@ -536,6 +537,22 @@ _single_account_ensure_link() {
         fi
         rm -f "$tgt"
         log_warning "  symlink target mismatch — recreating: $tgt"
+    elif _is_mounted "$tgt"; then
+        # Legacy multi-account-era bind mount surviving on a single-account
+        # internal PC. `mv` would fail with EBUSY because the kernel refuses
+        # to rename a mount point. Unmount first, then fall through to the
+        # normal `ln -s` path below. The mount source typically already
+        # points at the same dotfiles SSOT, so the swap is content-neutral.
+        log_warning "  bind-mount detected at $tgt — unmounting (sudo may prompt)"
+        if ! sudo umount "$tgt"; then
+            log_error "  unmount 실패: $tgt"
+            log_error "  수동 복구: sudo umount '$tgt' && rmdir '$tgt' && ./setup.sh"
+            return 1
+        fi
+        log_dim "  ✓ unmounted: $tgt"
+        # The bind mask is gone; the empty underlying directory is back.
+        # Remove it so the symlink below can take its place.
+        rmdir "$tgt" 2>/dev/null || true
     elif [ -e "$tgt" ]; then
         local backup="${tgt}.backup.$(date +%Y%m%d%H%M%S)"
         mv "$tgt" "$backup" || {
