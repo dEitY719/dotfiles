@@ -1265,3 +1265,117 @@ run_with_fake_ssot() {
     nested=$(find "$HOME/.claude-personal/.sync-backup/" -name 'cli-dev-pre-sync-20260101000000' 2>/dev/null | wc -l)
     [ "$nested" -eq 1 ]
 }
+
+# ---------- _claude_yolo_export_settings_env: gateway env propagation ----------
+
+@test "bash: settings.local.json env block exports to shell process" {
+    mkdir -p "$HOME/.claude-test"
+    cat > "$HOME/.claude-test/settings.local.json" <<'JSON'
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://gw.example.local:8090",
+    "ANTHROPIC_AUTH_TOKEN": "",
+    "ANTHROPIC_MODEL": "TestModel-7B",
+    "NODE_TLS_REJECT_UNAUTHORIZED": 0,
+    "ANTHROPIC_CUSTOM_HEADERS": "x-foo: bar\nx-baz: qux",
+    "GH_PR_REPLY_AUTO_APPROVE_REPOS": "owner/repo"
+  }
+}
+JSON
+
+    run_in_bash '
+        unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_MODEL \
+              NODE_TLS_REJECT_UNAUTHORIZED ANTHROPIC_CUSTOM_HEADERS \
+              GH_PR_REPLY_AUTO_APPROVE_REPOS
+        _claude_yolo_export_settings_env "$HOME/.claude-test"
+        printf "BASE=[%s]\nTOKEN=[%s]\nMODEL=[%s]\nTLS=[%s]\nHEADERS=[%s]\nREPOS=[%s]\n" \
+            "${ANTHROPIC_BASE_URL}" "${ANTHROPIC_AUTH_TOKEN}" "${ANTHROPIC_MODEL}" \
+            "${NODE_TLS_REJECT_UNAUTHORIZED}" "${ANTHROPIC_CUSTOM_HEADERS}" \
+            "${GH_PR_REPLY_AUTO_APPROVE_REPOS}"
+    '
+    assert_success
+    assert_output --partial "BASE=[http://gw.example.local:8090]"
+    assert_output --partial "TOKEN=[]"
+    assert_output --partial "MODEL=[TestModel-7B]"
+    assert_output --partial "TLS=[0]"
+    # ANTHROPIC_CUSTOM_HEADERS has an embedded newline — assert both halves.
+    assert_output --partial "HEADERS=[x-foo: bar"
+    assert_output --partial "x-baz: qux]"
+    assert_output --partial "REPOS=[owner/repo]"
+}
+
+@test "bash: _claude_yolo_export_settings_env silent no-op when file missing" {
+    # No settings.local.json under the test dir.
+    mkdir -p "$HOME/.claude-empty"
+
+    run_in_bash '
+        unset ANTHROPIC_BASE_URL
+        _claude_yolo_export_settings_env "$HOME/.claude-empty"
+        echo "exit=$?"
+        echo "BASE=[${ANTHROPIC_BASE_URL-<unset>}]"
+    '
+    assert_success
+    assert_output --partial "exit=0"
+    assert_output --partial "BASE=[<unset>]"
+}
+
+@test "bash: _claude_yolo_export_settings_env silent no-op when env block absent" {
+    mkdir -p "$HOME/.claude-noenv"
+    echo '{"permissions": {"allow": []}}' > "$HOME/.claude-noenv/settings.local.json"
+
+    run_in_bash '
+        unset ANTHROPIC_BASE_URL
+        _claude_yolo_export_settings_env "$HOME/.claude-noenv"
+        echo "exit=$?"
+        echo "BASE=[${ANTHROPIC_BASE_URL-<unset>}]"
+    '
+    assert_success
+    assert_output --partial "exit=0"
+    assert_output --partial "BASE=[<unset>]"
+}
+
+@test "bash: _claude_yolo_export_settings_env in subshell does not leak to caller" {
+    # claude_yolo wraps the helper + `command claude` in (...) precisely
+    # so that NODE_TLS_REJECT_UNAUTHORIZED=0 (security-relaxing) and the
+    # gateway URL do not persist in the caller's interactive shell.
+    mkdir -p "$HOME/.claude-iso"
+    cat > "$HOME/.claude-iso/settings.local.json" <<'JSON'
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://iso.example.local:8090",
+    "NODE_TLS_REJECT_UNAUTHORIZED": 0
+  }
+}
+JSON
+
+    run_in_bash '
+        unset ANTHROPIC_BASE_URL NODE_TLS_REJECT_UNAUTHORIZED
+        (
+            _claude_yolo_export_settings_env "$HOME/.claude-iso"
+            echo "INSIDE_BASE=[${ANTHROPIC_BASE_URL}]"
+            echo "INSIDE_TLS=[${NODE_TLS_REJECT_UNAUTHORIZED}]"
+        )
+        echo "OUTSIDE_BASE=[${ANTHROPIC_BASE_URL-<unset>}]"
+        echo "OUTSIDE_TLS=[${NODE_TLS_REJECT_UNAUTHORIZED-<unset>}]"
+    '
+    assert_success
+    assert_output --partial "INSIDE_BASE=[http://iso.example.local:8090]"
+    assert_output --partial "INSIDE_TLS=[0]"
+    assert_output --partial "OUTSIDE_BASE=[<unset>]"
+    assert_output --partial "OUTSIDE_TLS=[<unset>]"
+}
+
+@test "bash: _claude_yolo_export_settings_env silent no-op on malformed JSON" {
+    mkdir -p "$HOME/.claude-bad"
+    echo '{invalid json' > "$HOME/.claude-bad/settings.local.json"
+
+    run_in_bash '
+        unset ANTHROPIC_BASE_URL
+        _claude_yolo_export_settings_env "$HOME/.claude-bad"
+        echo "exit=$?"
+        echo "BASE=[${ANTHROPIC_BASE_URL-<unset>}]"
+    '
+    assert_success
+    assert_output --partial "exit=0"
+    assert_output --partial "BASE=[<unset>]"
+}

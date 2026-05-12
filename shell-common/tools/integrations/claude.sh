@@ -402,6 +402,40 @@ clskip() {
 
 alias claude-skip='claude --dangerously-skip-permissions'
 
+# _claude_yolo_export_settings_env — propagate settings.local.json `env` block
+# to the shell process so `claude` inherits it via the normal env path. Some
+# Claude Code releases do not apply the settings.local.json env block to the
+# spawned child, so the gateway URL / auth headers configured there silently
+# never reach the request layer (symptom: `Failed to connect to
+# api.anthropic.com` on a Samsung-internal PC even with a fully-correct
+# settings.local.json). This helper is the belt-and-suspenders fix: jq-read
+# the env block and `export` each key. Idempotent, silent, no-op when jq or
+# the file is missing.
+#
+# Parameters:
+#   $1: Claude config dir (e.g. ~/.claude or ~/.claude-work)
+#
+# Why eval is safe here: settings.local.json is gitignored and user-owned;
+# its contents are already trusted by Claude Code itself. `@sh` quoting on
+# the value handles embedded newlines and shell metacharacters.
+_claude_yolo_export_settings_env() {
+    _cysee_dir="$1"
+    [ -n "$_cysee_dir" ] || return 0
+    _cysee_file="$_cysee_dir/settings.local.json"
+    [ -f "$_cysee_file" ] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+
+    _cysee_exports=$(jq -r '
+        .env // {}
+        | to_entries[]
+        | "export \(.key)=\(.value | tostring | @sh)"
+    ' "$_cysee_file" 2>/dev/null)
+
+    [ -n "$_cysee_exports" ] && eval "$_cysee_exports"
+
+    unset _cysee_dir _cysee_file _cysee_exports
+}
+
 # claude_yolo — 다중 계정 dispatcher (issue #287, Phase 1).
 #
 # Usage:
@@ -503,7 +537,15 @@ claude_yolo() {
         CLAUDE_SKILLS_SYNC_QUIET=1 claude_skills_sync || true
     fi
 
-    CLAUDE_CONFIG_DIR="$_cy_config_dir" command claude --dangerously-skip-permissions "$@"
+    # Apply settings.local.json env block at the shell level too — works
+    # around Claude Code releases where the env block isn't propagated to
+    # the spawned process. The subshell isolates exports so the caller's
+    # shell env (which may persist after `claude-yolo` exits) is not
+    # polluted with e.g. NODE_TLS_REJECT_UNAUTHORIZED=0.
+    (
+        _claude_yolo_export_settings_env "$_cy_config_dir"
+        CLAUDE_CONFIG_DIR="$_cy_config_dir" command claude --dangerously-skip-permissions "$@"
+    )
 }
 
 # _claude_restore_if_reset — auto-restore .claude.json from sealed snapshot
