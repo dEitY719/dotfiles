@@ -8,7 +8,7 @@ description: >-
   "refactor my context doc", "/devx:ai-context", "/devx-ai-context", or any
   request that touches a CLAUDE.md / AGENTS.md / GEMINI.md file. First
   positional arg is the action: check (default) | create | refactor | help.
-  Use --file PATH for a non-standard target and --kind KIND to force the
+  Use --file PATH for a non-standard target and --type TYPE to force the
   adapter (agents / claude / gemini). Do NOT use for SKILL.md (use skill:check)
   or for shell scripts (use sh:check).
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
@@ -34,7 +34,7 @@ Positional: `[action] [path]`. Recognised flags below.
 | `action`        | `check` / `create` / `refactor` / `help`          | `check`     |
 | `path`          | Explicit target file path                         | auto-detect |
 | `--file PATH`   | Same as positional `path`; takes precedence       | —           |
-| `--kind KIND`   | Force adapter: `agents` / `claude` / `gemini`     | from name   |
+| `--type TYPE`   | Force adapter: `agents` / `claude` / `gemini`     | from name   |
 | `-h` / `--help` | Print `references/help.md` verbatim and stop      | —           |
 
 Unknown action → print help and stop.
@@ -50,15 +50,15 @@ in cwd in priority `CLAUDE.md` → `AGENTS.md` → `GEMINI.md`.
 | Multiple files found  | audit highest-priority; rest as WARN           | print candidates and prompt; never auto |
 | No file found         | abort with hint: `devx:ai-context create`      | proceed (create) / abort (refactor)     |
 
-Map filename → `kind`: `CLAUDE.md`→claude, `AGENTS.md`→agents, `GEMINI.md`→gemini.
-`--kind` overrides this mapping for non-standard names.
+Map filename → `type`: `CLAUDE.md`→claude, `AGENTS.md`→agents, `GEMINI.md`→gemini.
+`--type` overrides this mapping for non-standard names.
 
 ## Step 3: Dispatch by Action
 
 ### action=check (read-only)
 
 Read `references/checks.md` and run **core + adapter** checks against the
-target. Core checks always run; adapter checks vary by `kind`. Quote line
+target. Core checks always run; adapter checks vary by `type`. Quote line
 ranges that drove each verdict. Never mutate the file.
 
 ### action=create (with confirmation)
@@ -91,7 +91,7 @@ line per the same file.
 - `check` is audit-only — never mutate the file.
 - Always confirm before overwriting in `create` / `refactor`.
 - Auto-overwrite is never allowed when multiple context files exist.
-- Honor `--file` and `--kind` overrides over auto-detection.
+- Honor `--file` and `--type` overrides over auto-detection.
 - Cite `references/industry-baseline.md` when stating rationale for adapter
   checks (Codex / Claude Code / Gemini CLI official docs).
 - Do NOT run on `SKILL.md` (route to `skill:check`) or `*.sh` (route to
