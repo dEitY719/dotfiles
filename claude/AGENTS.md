@@ -1,251 +1,86 @@
-# Module Context
+# claude/ Module — Agent Context
 
-- **Purpose**: Manage Claude Code CLI configuration, skills, and automation
-- **Dependencies**: Claude Code CLI (@anthropic-ai/claude-code), jq, sudo
-- **Ownership**: Personal dotfiles management
+## Purpose
 
-# Tech Stack & Constraints
+Claude Code CLI 설정, 스킬, 자동화 관리.  
+Dependencies: Claude Code CLI, jq, sudo
 
-- **Configuration**: JSON (settings.json), Bash (setup.sh, statusline-command.sh)
-- **Skills Management**: Bind mount (~/dotfiles/claude/skills -> ~/.claude/skills)
-- **Automation**: Shell function (claude_mount_skills) for auto-mounting
-- **Permissions**: Sudoers configuration for passwordless bind mount
+---
 
-# Permission Modes
+## Skills SSOT — 가장 자주 실수하는 부분
 
-Claude Code supports the following permission modes in `settings.json`:
+**`dotfiles/claude/skills/`** 가 Claude Code·Gemini·Codex 3개 도구 모두의 단일 SSOT다.
 
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| `default` | Request user approval on first tool use | Standard, security-focused |
-| `acceptEdits` | Auto-accept file edit permissions | Trusted environments |
-| `dontAsk` | Auto-deny except allow-listed tools | Minimal interruption |
-| `plan` | Analysis-only mode (no modifications) | Planning & exploration |
-| `bypassPermissions` | Skip all permission checks | CI/CD, sandboxed environments |
+### 도구별 연결 방식
 
-Set via CLI:
+| 도구 | 경로 | 연결 방식 | 신규 스킬 자동 반영 |
+|------|------|-----------|---------------------|
+| **Claude Code** (각 계정) | `~/.claude-personal/skills/<name>` → `dotfiles/claude/skills/<name>` | 개별 skill symlink | ❌ setup 재실행 필요 |
+| **Gemini CLI** | `~/.gemini/skills` → `dotfiles/claude/skills` | 디렉토리 symlink | ✅ 즉시 |
+| **Codex** | `~/.codex/skills/<name>` → `dotfiles/claude/skills/<name>/` | 개별 skill symlink | ❌ setup 재실행 필요 |
+
+### 관리 스크립트
+
+| 도구 | 담당 스크립트 / 함수 | 트리거 |
+|------|----------------------|--------|
+| Claude Code (각 계정) | `shell-common/tools/integrations/claude.sh` → `_claude_dir_sync_one()` | `./claude/setup.sh` |
+| Gemini CLI | `claude/setup.sh` → `_setup_gemini_skills_symlink()` | `./claude/setup.sh` |
+| Codex | `scripts/setup-skills-ssot.sh` → `link_skills_individual_codex()` | `./setup.sh` 또는 `./scripts/setup-skills-ssot.sh` |
+
+### 신규 스킬 추가 후 동기화
+
 ```bash
-claude --permission-mode bypassPermissions
+./claude/setup.sh          # Claude Code 계정 + Gemini 동기화
+./scripts/setup-skills-ssot.sh  # Codex 동기화
+# 또는 한번에:
+./setup.sh
 ```
 
-Or configure in `settings.json` (line 174):
-```json
-{
-  "permissions": {
-    "defaultMode": "bypassPermissions"
-  }
-}
-```
+### 연결 방식이 다른 이유
 
-⚠️ **Warning**: `bypassPermissions` disables all security checks. Use only in trusted, isolated environments.
+- **Gemini**: 커스텀 전용 디렉토리 → 디렉토리 symlink가 가장 단순
+- **Codex**: `.system/`(내장 5개) 보존 필요 → 개별 symlink로 내장/커스텀 분리
+- **Claude Code**: 다중 계정별 독립 디렉토리 → 개별 symlink (`_claude_dir_sync_one`)
 
-# Implementation Patterns
+### 절대 하지 말 것
+
+- `~/.claude-personal/skills/`, `~/.gemini/skills/`, `~/.codex/skills/` 직접 편집 금지
+- 스킬은 반드시 SSOT인 `dotfiles/claude/skills/`에만 생성/수정
+- Codex `.system/` 디렉토리 삭제 금지 (Codex 내장 스킬)
+
+---
 
 ## Configuration Files
 
-Settings are managed via symlinks (per-skill / per-doc symlinks for
-the skills/ and docs/ directories — issue #342 replaced the legacy
-bind-mount design):
-
 ```bash
-~/.claude-personal/settings.json         -> ~/dotfiles/claude/settings.json
-~/.claude-personal/settings.local.json   -> ~/dotfiles/claude/settings.local.json
-~/.claude-personal/statusline-command.sh -> ~/dotfiles/claude/statusline-command.sh
-~/.claude-personal/skills/<name>         -> ~/dotfiles/claude/skills/<name>   (per-skill)
-~/.claude-personal/docs/<name>           -> ~/dotfiles/claude/docs/<name>     (per-doc)
+~/.claude-personal/settings.json         -> dotfiles/claude/settings.json
+~/.claude-personal/settings.local.json   -> dotfiles/claude/settings.local.json
+~/.claude-personal/statusline-command.sh -> dotfiles/claude/statusline-command.sh
+~/.claude-personal/skills/<name>         -> dotfiles/claude/skills/<name>   (per-skill)
+~/.claude-personal/docs/<name>           -> dotfiles/claude/docs/<name>     (per-doc)
+~/.gemini/skills                         -> dotfiles/claude/skills           (dir symlink)
+~/.codex/skills/<name>                   -> dotfiles/claude/skills/<name>/  (per-skill)
 ```
 
-`settings.local.json` carries the env block (e.g. `GH_PR_REPLY_AUTO_APPROVE_REPOS`)
-shared across all of the user's machines via the dotfiles SSOT — distinct
-from `settings.json` which is gitignored / per-machine.
+`settings.local.json` — env 블록 SSOT (e.g. `GH_PR_REPLY_AUTO_APPROVE_REPOS`).  
+`settings.json` — gitignored, per-machine 설정.
 
-## Setup Script (setup.sh)
-
-Located at `claude/setup.sh`, creates symlinks and configures sudoers:
-
-```bash
-# Creates symlinks for settings and statusline
-create_symlink "$CLAUDE_SETTINGS_SOURCE" "$HOME_SETTINGS"
-create_symlink "$CLAUDE_STATUSLINE_SOURCE" "$HOME_STATUSLINE"
-
-# Sets up bind mount permissions
-setup_skills_mount
-```
-
-## Auto-Mount Function (claude.sh)
-
-Located at `shell-common/tools/external/claude.sh`:
-
-```bash
-claude_mount_skills() {
-    # Check if already mounted (using unified _is_mounted function)
-    if _is_mounted "$skills_target"; then
-        return 0
-    fi
-
-    # Perform bind mount
-    sudo mount --bind "$skills_source" "$skills_target" 2>/dev/null
-}
-```
-
-Called automatically on shell startup. Uses `_is_mounted()` from `mount.sh` for consistent mount checking across the system.
-
-## Skills Directory Structure
-
-```
-claude/skills/
-├── devx-ai-context/   # AGENTS.md / CLAUDE.md / GEMINI.md unified auditor, generator & refactor
-├── cli-dev/           # CLI development workflow
-├── req-define/        # Requirements definition
-└── ...                # Other skills
-```
-
-Each skill requires:
-- `SKILL.md` with frontmatter (`name`, `description`, `allowed-tools` or `compatibility.tools`)
-- Optional `README.md` for documentation
-
-Skill names use `{namespace}:{action}` colon notation (e.g. `devx:ai-context`, `skill:check`).
-
-## Sub-Agent Parallel Execution
-
-When a skill or workflow has independent tasks, use the Agent tool to run them concurrently in a single message. This reduces wall-clock time and matches how `/simplify` runs 3 review agents in parallel.
-
-**When to parallelize:**
-- Tasks have no data dependency between them (output of one is not input to another)
-- Each task produces a separate artifact (different files, different analysis)
-
-**When NOT to parallelize:**
-- Task B requires Task A's output (e.g., analysis must finish before writing summary)
-- Tasks modify the same file
-
-**Pattern — parallel agents in SKILL.md:**
-
-```markdown
-### Step N: Launch agents in parallel
-
-Use the Agent tool to launch all agents concurrently in a single message.
-
-#### Agent 1: <task description>
-<what this agent does and writes>
-
-#### Agent 2: <task description>
-<what this agent does and writes>
-```
-
-**Example — `devx:dissect-builtin`:**
-
-| Agent | Task | Dependency |
-|-------|------|-----------|
-| Agent 1 | Analyze prompt + write README.md | Needs loaded prompt (from Step 1) |
-| Agent 2 | Copy raw prompt to PROMPT.md | Needs loaded prompt (from Step 1) |
-
-Both depend on Step 1 (load prompt) but not on each other → parallel.
+---
 
 ## Known Pitfall: Agent isolation + git-crypt
 
-Claude Code's built-in `Agent({ isolation: "worktree" })` (used by `/batch` and
-similar) calls `git worktree add` without any git-crypt filter bypass. This
-dotfiles repo sets `filter.git-crypt.required=true` and maps `.env` plus
-`.secrets/**` through git-crypt in `.gitattributes`, so harness-spawned
-worktrees abort with `fatal: .env: smudge filter git-crypt failed`.
+`Agent({ isolation: "worktree" })` 사용 금지. `filter.git-crypt.required=true` 로 인해
+`fatal: .env: smudge filter git-crypt failed` 발생.
 
-**In this repo, do NOT pass `isolation: "worktree"` to the `Agent` tool.**
-Use one of:
+대신: sequential dispatch (isolation 없이) 또는 `ai-worktree:spawn` 스킬 사용.  
+참고: `docs/learnings/git-crypt-worktree-bootstrap.md`
 
-- **Sequential dispatch** — call `Agent` without `isolation` and let tasks
-  run in the main workspace serially.
-- **Manual worktree first** — invoke the `ai-worktree:spawn` skill (or run
-  `gwt`), which handles the git-crypt filter bypass automatically. Then
-  dispatch non-isolated agents into that path.
+---
 
-See `docs/learnings/git-crypt-worktree-bootstrap.md` for the failing log,
-the `--no-checkout` + manual unlock fallback, and tracking issue
-[#153](https://github.com/dEitY719/dotfiles/issues/153).
+## Skill 작성 규칙
 
-# Testing Strategy
-
-## Manual Verification
-
-After setup or changes:
-
-```bash
-# 1. Verify symlinks
-ls -la ~/.claude/settings.json
-ls -la ~/.claude/statusline-command.sh
-
-# 2. Verify bind mount
-show_mnt                    # Show all Claude mounts
-show_mnt ~/.claude/skills   # Show specific mount
-
-# 3. Verify skills loaded
-claude  # Start Claude Code
-/skills  # Check skills list
-```
-
-## Configuration Changes
-
-```bash
-# Edit settings
-vim ~/dotfiles/claude/settings.json
-
-# Restart Claude Code to apply
-# Changes to symlinked files take effect immediately
-```
-
-# Local Golden Rules
-
-## Skills Management
-
-- **DO**: Create skills in `~/dotfiles/claude/skills/` for version control
-- **DO**: Use SKILL.md frontmatter format (`name`, `description`, `allowed-tools` or `compatibility.tools`)
-- **DO**: Use `{namespace}:{action}` colon notation in skill `name` (e.g. `skill:check`, `agents-md:create`)
-- **DO**: Write `description:` as either a single line or YAML multi-line scalar (`>-`) — multi-line is supported by the YAML parser
-- **DO**: Keep SKILL.md under 100 lines — use `references/` and Progressive Disclosure to extract detail
-- **DON'T**: Manually create files in `~/.claude/skills/` (managed by bind mount)
-- **DON'T**: Use symlinks for skills directory (use bind mount instead)
-
-## Setup Requirements
-
-- **DO**: Run `./setup.sh` after cloning dotfiles to new machine
-- **DO**: Ensure sudoers configuration exists for passwordless mount
-- **DO**: Restart shell after setup to activate auto-mount
-- **DON'T**: Manually edit `/etc/sudoers.d/claude-skills-mount`
-- **DON'T**: Skip setup.sh and manually create symlinks
-
-## Configuration Best Practices
-
-- **DO**: Keep settings.json in version control
-- **DO**: Use variables in sudoers config (${USER}, ${CLAUDE_SKILLS_SOURCE})
-- **DO**: Test configuration changes in new shell before committing
-- **DON'T**: Hardcode paths in configuration files
-- **DON'T**: Commit API keys or sensitive data
-
-# Knowledge/References
-
-- Claude Code Documentation: https://code.claude.com/docs
-- Skills Guide: https://code.claude.com/docs/en/skills
-- Bind Mount: Linux filesystem feature for directory mounting
-- Sudoers: `/etc/sudoers.d/` for fine-grained sudo permissions
-
-# Operational Commands
-
-```bash
-# Setup (first time)
-./setup.sh
-
-# Edit settings
-vim ~/dotfiles/claude/settings.json
-
-# Edit statusline
-vim ~/dotfiles/claude/statusline-command.sh
-
-# Verify mount
-show_mnt                    # Show all Claude mounts
-show_mnt ~/.claude/skills   # Show specific mount
-
-# Unmount (if needed)
-sudo umount ~/.claude/skills
-
-# Re-mount manually
-addmnt ~/dotfiles/claude/skills ~/.claude/skills
-```
+- SSOT: `dotfiles/claude/skills/<name>/SKILL.md`
+- frontmatter: `name`, `description`, `allowed-tools` 필수
+- `name` 형식: `{namespace}:{action}` (e.g. `skill:check`, `gh:commit`)
+- SKILL.md ≤ 100줄; 상세 내용은 `references/`로 분리 (Progressive Disclosure)
+- `description:` — 단일행 또는 YAML `>-` 멀티라인 모두 허용
