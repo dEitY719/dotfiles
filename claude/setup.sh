@@ -492,18 +492,12 @@ if [ ! -f "$CLAUDE_LOCAL_TARGET" ] && [ -f "$CLAUDE_LOCAL_EXAMPLE" ]; then
     fi
 fi
 
-# Setup-mode SSOT read (issue #571). shell-common/setup.sh writes the
-# symbolic name; legacy numeric "1|2|3" files are still tolerated so
-# upgrading users don't hit a setup wedge.
-_setup_mode=""
-if [ -f "$HOME/.dotfiles-setup-mode" ]; then
-    _setup_mode=$(tr -d ' \t\n\r' < "$HOME/.dotfiles-setup-mode" 2>/dev/null)
-    case "$_setup_mode" in
-        1) _setup_mode="public" ;;
-        2) _setup_mode="internal" ;;
-        3) _setup_mode="external" ;;
-    esac
-fi
+# Setup-mode SSOT read (issue #571). Reuses the _dotfiles_setup_mode
+# helper sourced from shell-common/tools/integrations/claude.sh (line
+# 478 above) — single source of canonicalisation for both the symbolic
+# names emitted by shell-common/setup.sh and any legacy "1|2|3" files
+# from pre-#571 installs.
+_setup_mode=$(_dotfiles_setup_mode)
 
 # 마이그레이션 미수행 가드는 mkdir 보다 먼저 — 그래야 stale ~/.claude 가
 # 가드 디렉토리 생성으로 가려지지 않는다. SSOT: _claude_has_unmigrated_data
