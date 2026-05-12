@@ -765,6 +765,71 @@ JSON
     refute_output --partial "command not found"
 }
 
+@test "regression #571: internal setup defines mount helper without DOTFILES_FORCE_INIT" {
+    _setup_sh_prereqs
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+
+    # No DOTFILES_FORCE_INIT — mirror the failing internal-PC invocation path.
+    run bash --noprofile --norc -c "
+        unset DOTFILES_FORCE_INIT
+        unset DOTFILES_TEST_MODE
+        export HOME='$HOME'
+        export TERM=dumb
+        CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 \
+            bash '${DOTFILES_ROOT}/claude/setup.sh'
+    "
+    assert_success
+    refute_output --partial "_is_mounted: command not found"
+    refute_output --partial "command not found"
+    [ -L "$HOME/.claude/skills" ]
+    [ -L "$HOME/.claude/docs" ]
+}
+
+@test "regression #571: internal setup unmounts legacy skills/docs bind mounts" {
+    _setup_sh_prereqs
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/.claude/skills" "$HOME/.claude/docs"
+
+    fake_bin="$HOME/fake-bin"
+    mkdir -p "$fake_bin"
+
+    cat > "$fake_bin/findmnt" <<SH
+#!/usr/bin/env bash
+case "\$1" in
+    "$HOME/.claude/skills"|"$HOME/.claude/docs") exit 0 ;;
+    *) exit 1 ;;
+esac
+SH
+    chmod +x "$fake_bin/findmnt"
+
+    cat > "$fake_bin/sudo" <<'SH'
+#!/usr/bin/env bash
+if [ "$1" = "umount" ]; then
+    printf '%s\n' "$2" >> "$HOME/fake-umount.log"
+    exit 0
+fi
+exit 1
+SH
+    chmod +x "$fake_bin/sudo"
+
+    run bash --noprofile --norc -c "
+        unset DOTFILES_FORCE_INIT
+        unset DOTFILES_TEST_MODE
+        export HOME='$HOME'
+        export TERM=dumb
+        export PATH='$fake_bin':\$PATH
+        CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 \
+            bash '${DOTFILES_ROOT}/claude/setup.sh'
+    "
+    assert_success
+    assert_output --partial "bind-mount detected at $HOME/.claude/skills"
+    assert_output --partial "bind-mount detected at $HOME/.claude/docs"
+    [ "$(cat "$HOME/fake-umount.log")" = "$HOME/.claude/skills
+$HOME/.claude/docs" ]
+    [ -L "$HOME/.claude/skills" ]
+    [ -L "$HOME/.claude/docs" ]
+}
+
 # ---------- Issue #300, item C: claude_accounts_status shows oauth binding ----------
 
 @test "issue #300-C: claude_accounts_status prints email/org from .claude.json" {
