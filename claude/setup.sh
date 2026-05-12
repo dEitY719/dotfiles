@@ -10,8 +10,9 @@
 #   2. Creates ~/.claude/settings.local.json symlink (env / per-user overrides)
 #   3. Creates ~/.claude/statusline-command.sh symlink (status line script)
 #   4. Creates ~/.claude/skills symlink (custom skills directory)
-#   5. Creates ~/.claude/projects/GLOBAL/memory symlink (global memory)
-#   6. Verifies ~/.claude directory structure
+#   5. Creates ~/.claude/docs symlink (custom docs directory)
+#   6. Creates ~/.claude/projects/GLOBAL/memory symlink (global memory)
+#   7. Verifies ~/.claude directory structure
 #
 # These files/directories are version-controlled in dotfiles and should
 # be managed via symbolic links for consistency across machines.
@@ -49,19 +50,6 @@ else
     exit 1
 fi
 
-# Load mount utilities (provides _is_mounted).
-# mount.sh carries the standard interactive guard (`case $- in *i*) ...`), so
-# under non-interactive `./setup.sh` the file would `return 0` before defining
-# any functions. Force-init matches the same pattern already used below for
-# `shell-common/env/claude.sh` and `tools/integrations/claude.sh`.
-MOUNT_LIB="${DOTFILES_ROOT}/shell-common/functions/mount.sh"
-if [ -f "$MOUNT_LIB" ]; then
-    DOTFILES_FORCE_INIT=1 . "$MOUNT_LIB"
-else
-    echo "Error: Mount library not found at $MOUNT_LIB"
-    exit 1
-fi
-
 # --- Logging Compatibility Functions ---
 
 log_info() { ux_info "$1"; }
@@ -77,6 +65,23 @@ log_warning() { ux_warning "$1"; }
 log_error_and_exit() {
     log_critical "$1"
 }
+
+# Load mount utilities (provides _is_mounted).
+#
+# shell-common/functions/mount.sh has the standard interactive guard:
+#   case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
+# setup.sh is normally invoked non-interactively, so force the function
+# definitions to load here just like the claude env/integration sources below.
+MOUNT_LIB="${DOTFILES_ROOT}/shell-common/functions/mount.sh"
+if [ -f "$MOUNT_LIB" ]; then
+    DOTFILES_FORCE_INIT=1 . "$MOUNT_LIB"
+else
+    log_error_and_exit "Mount library not found at $MOUNT_LIB"
+fi
+
+if ! declare -f _is_mounted >/dev/null 2>&1; then
+    log_error_and_exit "Mount library did not define _is_mounted: $MOUNT_LIB"
+fi
 
 # --- Functions ---
 
@@ -558,7 +563,8 @@ _single_account_ensure_link() {
         # Remove it so the symlink below can take its place.
         rmdir "$tgt" 2>/dev/null || true
     elif [ -e "$tgt" ]; then
-        local backup="${tgt}.backup.$(date +%Y%m%d%H%M%S)"
+        local backup
+        backup="${tgt}.backup.$(date +%Y%m%d%H%M%S)"
         mv "$tgt" "$backup" || {
             log_error "backup failed: $tgt → $backup"
             return 1
@@ -590,11 +596,11 @@ if [ "$_setup_mode" = "internal" ]; then
 
     # --- Verify Links (single-account) ---
     log_debug "\n--- 심볼릭 링크 확인 (internal/single-account) ---"
-    for link in settings.json settings.local.json statusline-command.sh skills plugins projects/GLOBAL/memory; do
+    for link in settings.json settings.local.json statusline-command.sh skills docs plugins projects/GLOBAL/memory; do
         if [ -L "$HOME/.claude/$link" ]; then
             log_dim "✓ ~/.claude/$link 심볼릭 링크 확인됨"
         else
-            log_error_and_exit "~/.claude/$link 심볼릭 링크 생성 실패"
+            log_error_and_exit "$HOME/.claude/$link 심볼릭 링크 생성 실패"
         fi
     done
 
