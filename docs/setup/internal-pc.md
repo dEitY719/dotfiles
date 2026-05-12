@@ -95,8 +95,12 @@ ls -la ~/.claude/settings.local.json
 # env 적용 확인 — 정상이면 사내 게이트웨이로 바로 연결됨.
 # 만약 `Failed to connect to api.anthropic.com` 가 뜬다면:
 #   1) `jq .env ~/.claude/settings.local.json` 으로 env 블록 유효성 확인
-#   2) 새 셸 (`exec zsh`) 에서 `env | grep ANTHROPIC_` 출력 확인 —
-#      claude_yolo 가 셸 레벨로 export 했으면 6 줄이 보여야 함
+#   2) 헬퍼가 실제로 export 하는지 *subshell 내부* 에서 확인:
+#        ( _claude_yolo_export_settings_env ~/.claude && env | grep '^ANTHROPIC_' )
+#      6 줄이 보여야 정상. 0 줄이면 jq 미설치 또는 헬퍼 미로드 (`. shell-common/...`).
+#      subshell 밖 (`env | grep ANTHROPIC_`) 은 항상 0 줄이 정상 — claude_yolo 가
+#      `( ... )` 로 격리하여 사용자 셸을 오염시키지 않기 때문 (특히
+#      `NODE_TLS_REJECT_UNAUTHORIZED=0` 누수 방지).
 #   3) 둘 다 정상인데도 실패면 사내 게이트웨이/방화벽 이슈
 claude-yolo
 ```
