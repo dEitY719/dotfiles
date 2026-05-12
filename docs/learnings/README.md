@@ -11,7 +11,7 @@
 | 디렉토리 | 성격 | 분량 기준 | 예시 |
 |---|---|---|---|
 | `docs/technic/` | 검증된 스택 중심 기술 문서 | 수백 줄 | `parallel-testing-with-xdist.md` |
-| `docs/standards/` | 프로젝트 SSOT·의사결정 기록 | 중간 | `command-guidelines.md` |
+| `docs/.ssot/` | 프로젝트 정책 SSOT (얇은 정책 본문) | 짧음~중간 | `command-guidelines.md` |
 | `docs/feature/<name>/` | 피처별 설계·분석 번들 | 다수 파일 | `skill-ai-worktree-teardown/` |
 | **`docs/learnings/` (여기)** | **작업 중 얻은 재사용 패턴 스니펫** | **50–80줄 목표** | 아래 참조 |
 

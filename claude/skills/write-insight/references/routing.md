@@ -10,7 +10,7 @@ formal, or for a different audience, refuse and route.
 | Material | Belongs in | Why it's not a learning |
 |---|---|---|
 | Long-form tech doc, hundreds of lines | `docs/technic/` | learning is a 50–80 line snippet, not a manual |
-| Project SSOT / decision record / policy | `docs/standards/` | standards are normative ("we do X"), learnings are experiential ("we discovered X works") |
+| Project policy / SSOT | `docs/.ssot/` | SSOTs are normative ("we do X"), learnings are experiential ("we discovered X works") |
 | Feature design bundle (multi-file, diagrams) | `docs/feature/<name>/` | feature dirs hold many artifacts together; learnings are single files |
 | AI behavior instructions | `claude/skills/<name>/SKILL.md` (English) | learnings are for human teammates; SKILL files are for AI |
 | User preference / collaboration style | `memory/` (auto-memory) | memory is private to Claude sessions, learnings are public |

@@ -29,7 +29,7 @@ Scope:
 Backfill is the deliberate "fill in the missing footer" path; respecting
 the env there would defeat its purpose. Every other `gh:*` skill must
 short-circuit before the GitHub write when the var is `1`. Catalog
-entry: `docs/standards/env-vars.md`.
+entry: `docs/.ssot/env-vars.md`.
 
 ## START_TS Recording
 
