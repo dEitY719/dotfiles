@@ -15,6 +15,7 @@
 | 파일 | 정책 영역 |
 |------|-----------|
 | [`command-guidelines.md`](./command-guidelines.md) | 명령어 / help 인터페이스, 출력 정책, row 함수 SSOT 패턴 |
+| [`command-design-pattern.md`](./command-design-pattern.md) | dispatcher + private sub-function 구조, Type 2A/2B, passthrough 규칙, SOLID |
 | [`env-vars.md`](./env-vars.md) | cross-skill / cross-tool env var 카탈로그 |
 | [`github-project-board.md`](./github-project-board.md) | GitHub Project v2 보드 운영 규칙, closing keyword 정책 |
 | [`commit-message-standard.md`](./commit-message-standard.md) | 브랜치 명명·커밋 메시지·work_log 자동화 |
