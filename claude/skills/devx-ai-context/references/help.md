@@ -41,13 +41,16 @@ The legacy skills have been deleted (follow-up to #539, see issue #560).
 | `-h`/`--help`  | Print this help and stop                          | —             |
 
 Auto-detection priority in cwd: `CLAUDE.md` → `AGENTS.md` → `GEMINI.md`.
+When multiple files coexist (common case: both `CLAUDE.md` and `AGENTS.md`),
+only the highest-priority file is audited — pass the path explicitly to target another.
 
 ## Examples
 
 ```
-/devx:ai-context                               # check the auto-detected file
-/devx:ai-context check ./docs/AGENTS.md        # check a specific path
-/devx:ai-context check --file ./CLAUDE.md      # equivalent
+/devx:ai-context check AGENTS.md              # explicit target (when CLAUDE.md also exists)
+/devx:ai-context check CLAUDE.md              # explicit target
+/devx:ai-context                               # auto-detect (recommended only when one file exists)
+/devx:ai-context check --file ./docs/AGENTS.md  # check a non-root path
 /devx:ai-context create --kind agents          # walk through new-AGENTS.md flow
 /devx:ai-context create --kind claude          # walk through new-CLAUDE.md flow
 /devx:ai-context refactor                      # plan + execute split on confirm
