@@ -144,6 +144,14 @@ generate_internal_config() {
         return 1
     fi
 
+    # Back up an existing user-edited config (with the user's hand-edited Knox ID)
+    # before overwriting. Use mv for atomicity per repo convention.
+    if [ -f "$config_file" ]; then
+        local backup="${config_file}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$config_file" "$backup"
+        ux_info "Backed up existing config: $backup"
+    fi
+
     cp "$template" "$config_file"
     chmod 600 "$config_file"
     ux_success "Internal environment configured: $config_file"

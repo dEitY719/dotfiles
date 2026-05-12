@@ -48,27 +48,34 @@ opencode_verify() {
     if [ -f "$OPENCODE_CONFIG_FILE" ]; then
         echo ""
         if command -v jq >/dev/null 2>&1; then
-            ux_bullet "Provider: $(jq -r '.provider | keys[0]' "$OPENCODE_CONFIG_FILE" 2>/dev/null || echo 'unknown')"
+            # Resolve the first provider key dynamically — the internal SSOT uses
+            # a Korean provider name (S/W혁신팀), not "litellm", so hardcoding the
+            # path breaks parsing across environments.
+            local first_provider
+            first_provider=$(jq -r '.provider | keys[0]? // empty' "$OPENCODE_CONFIG_FILE" 2>/dev/null)
+            ux_bullet "Provider: ${first_provider:-unknown}"
 
-            local provider_name
-            provider_name=$(jq -r '.provider.litellm.name // "Unknown"' "$OPENCODE_CONFIG_FILE" 2>/dev/null)
-            if [ "$provider_name" != "Unknown" ]; then
-                ux_bullet "Name: $provider_name"
-            fi
+            if [ -n "$first_provider" ]; then
+                local provider_name
+                provider_name=$(jq -r --arg p "$first_provider" '.provider[$p].name // "Unknown"' "$OPENCODE_CONFIG_FILE" 2>/dev/null)
+                if [ "$provider_name" != "Unknown" ]; then
+                    ux_bullet "Name: $provider_name"
+                fi
 
-            local base_url
-            base_url=$(jq -r '.provider.litellm.options.baseURL // "default"' "$OPENCODE_CONFIG_FILE" 2>/dev/null)
-            if [ "$base_url" != "default" ]; then
-                ux_bullet "Base URL: $base_url"
-            fi
+                local base_url
+                base_url=$(jq -r --arg p "$first_provider" '.provider[$p].options.baseURL // "default"' "$OPENCODE_CONFIG_FILE" 2>/dev/null)
+                if [ "$base_url" != "default" ]; then
+                    ux_bullet "Base URL: $base_url"
+                fi
 
-            local model_count
-            model_count=$(jq '.provider.litellm.models | length' "$OPENCODE_CONFIG_FILE" 2>/dev/null)
-            if [ -n "$model_count" ] && [ "$model_count" -gt 0 ]; then
-                ux_bullet "Available Models: $model_count"
-                jq -r '.provider.litellm.models | keys[]' "$OPENCODE_CONFIG_FILE" 2>/dev/null | while read -r model; do
-                    echo "  - $model"
-                done
+                local model_count
+                model_count=$(jq --arg p "$first_provider" '.provider[$p].models | length' "$OPENCODE_CONFIG_FILE" 2>/dev/null)
+                if [ -n "$model_count" ] && [ "$model_count" -gt 0 ]; then
+                    ux_bullet "Available Models: $model_count"
+                    jq -r --arg p "$first_provider" '.provider[$p].models | keys[]' "$OPENCODE_CONFIG_FILE" 2>/dev/null | while read -r model; do
+                        echo "  - $model"
+                    done
+                fi
             fi
         else
             ux_warning "jq not installed - unable to parse configuration details"
