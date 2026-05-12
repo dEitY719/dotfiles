@@ -72,10 +72,10 @@ LOCAL
     refute_output --partial "/"
 }
 
-@test "bash: resolve --list-all returns 'personal work'" {
-    run_in_bash '_claude_resolve_account --list-all'
+@test "bash: resolve --list-all returns same as --list (deprecated alias, issue #568)" {
+    run_in_bash '_claude_resolve_account --list-all | tr "\n" " "'
     assert_success
-    assert_output "personal work"
+    assert_output "personal work "
 }
 
 @test "bash: resolve --list returns ENABLED accounts only (default)" {
@@ -94,6 +94,56 @@ LOCAL
     run_in_zsh '_claude_resolve_account --list | tr "\n" " "'
     assert_success
     assert_output "personal work "
+}
+
+# ---------- issue #568: convention-based dispatcher ----------
+
+@test "bash: resolve work1 returns ~/.claude-work1 when ENABLED contains work1" {
+    run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="personal work work1" _claude_resolve_account work1'
+    assert_success
+    assert_output "$HOME/.claude-work1"
+}
+
+@test "bash: resolve work1 fails when ENABLED omits it" {
+    run_in_bash '_claude_resolve_account work1'
+    assert_failure
+    refute_output --partial "/"
+}
+
+@test "bash: resolve --list includes work1 when ENABLED contains work1" {
+    run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="personal work work1" _claude_resolve_account --list | tr "\n" " "'
+    assert_success
+    assert_output "personal work work1 "
+}
+
+@test "bash: resolve rejects uppercase name (Work)" {
+    run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="Work" _claude_resolve_account Work'
+    assert_failure
+    refute_output --partial "/"
+}
+
+@test "bash: resolve rejects digit-leading name (1work)" {
+    run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="1work" _claude_resolve_account 1work'
+    assert_failure
+    refute_output --partial "/"
+}
+
+@test "bash: resolve rejects special-char name (foo\$bar)" {
+    run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="foo\$bar" _claude_resolve_account "foo\$bar"'
+    assert_failure
+    refute_output --partial "/"
+}
+
+@test "bash: resolve --list silently skips invalid tokens in ENABLED" {
+    run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="personal Work work" _claude_resolve_account --list | tr "\n" " "'
+    assert_success
+    assert_output "personal work "
+}
+
+@test "zsh: resolve work1 routes under zsh (POSIX parity)" {
+    run_in_zsh 'CLAUDE_ENABLED_ACCOUNTS="personal work work1" _claude_resolve_account work1'
+    assert_success
+    assert_output "$HOME/.claude-work1"
 }
 
 # ---------- Task 4: ensure helpers (idempotency) ----------
@@ -164,6 +214,19 @@ LOCAL
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
     assert_failure
     assert_output --partial "claude-accounts migrate"
+}
+
+@test "bash: claude_accounts_init treats ~/.claude-work1 as 'already migrated' when work1 is ENABLED (issue #568)" {
+    # Convention-based refactor: the migration guard must iterate
+    # CLAUDE_ENABLED_ACCOUNTS, not a hardcoded personal/work pair.
+    # Otherwise adding work1 to ENABLED would re-trigger the migrate
+    # prompt every shell startup.
+    mkdir -p "$HOME/.claude" "$HOME/.claude-work1"
+    echo '{"fake":"creds"}' > "$HOME/.claude/.credentials.json"
+
+    run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="personal work work1" CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
+    assert_success
+    refute_output --partial "claude-accounts migrate"
 }
 
 @test "bash: claude_accounts_init tolerates empty skills/docs leftovers" {

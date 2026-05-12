@@ -594,13 +594,24 @@ alias claude-yolo='claude_yolo'
 # Multi-account configuration (issue #287)
 # ═══════════════════════════════════════════════════════════════
 
-# _claude_resolve_account — 계정 매핑 SSOT (case dispatcher).
+# _claude_resolve_account — 계정 매핑 SSOT (convention-based, issue #568).
 # Usage:
-#   _claude_resolve_account <name>     → echo CONFIG_DIR (exit 0) or fail (exit 1)
-#   _claude_resolve_account --list     → echo enabled accounts (one per line)
-#   _claude_resolve_account --list-all → echo all defined accounts (debug)
+#   _claude_resolve_account <name>     → echo "$HOME/.claude-<name>" when
+#                                        <name> is in CLAUDE_ENABLED_ACCOUNTS
+#                                        and passes the safe-identifier
+#                                        regex. return 1 otherwise.
+#   _claude_resolve_account --list     → echo ENABLED accounts (one per line)
+#                                        that pass the safe-identifier regex.
+#   _claude_resolve_account --list-all → deprecated; same as --list. Kept
+#                                        for back-compat with external
+#                                        scripts that may still call it.
 #
-# 새 계정 추가 시 case 한 줄 + --list-all 한 단어만 추가.
+# 새 계정 추가 = claude.local.sh 의 CLAUDE_ENABLED_ACCOUNTS 에 단어 추가
+# 만으로 끝. 코드 수정 불필요. 디렉터리는 자동으로 ~/.claude-<name>.
+#
+# Safe-identifier regex: ^[a-z][a-z0-9_-]*$
+# - 첫 글자 소문자, 뒤로 소문자·숫자·하이픈·언더스코어.
+# - alias 명·env-var 접미사·디렉터리명 셋 다 안전하게 쓰일 식별자.
 _claude_resolve_account() {
     # zsh disables word-splitting by default; emulate sh inside this function
     # so `for x in $LIST` behaves identically to bash/dash. (See MEMORY.md
@@ -610,19 +621,36 @@ _claude_resolve_account() {
     fi
 
     case "$1" in
-        --list)
+        --list|--list-all)
+            # --list-all 은 issue #568 에서 --list 로 통합. 외부 사용자
+            # 보호용 호환 alias — 향후 메이저 버전에서 제거 가능.
             # shellcheck disable=SC2086  # intentional word-split for POSIX list iteration
             for _cra_acct in $CLAUDE_ENABLED_ACCOUNTS; do
                 _claude_resolve_account "$_cra_acct" >/dev/null 2>&1 && echo "$_cra_acct"
             done
+            return 0
             ;;
-        --list-all)
-            echo "personal work"
-            ;;
-        personal) echo "$HOME/.claude-personal" ;;
-        work)     echo "$HOME/.claude-work" ;;
-        *)        return 1 ;;
     esac
+
+    # name validation: must start with lowercase letter, rest [a-z0-9_-]
+    case "$1" in
+        [a-z]*) ;;
+        *) return 1 ;;
+    esac
+    case "$1" in
+        *[!a-z0-9_-]*) return 1 ;;
+    esac
+
+    # ENABLED whitelist check — unknown names fail even if regex-valid.
+    # Preserves the "Unknown account: xyz" path in claude_yolo for typos.
+    # shellcheck disable=SC2086  # intentional word-split for POSIX list iteration
+    for _cra_acct in $CLAUDE_ENABLED_ACCOUNTS; do
+        if [ "$_cra_acct" = "$1" ]; then
+            echo "$HOME/.claude-$1"
+            return 0
+        fi
+    done
+    return 1
 }
 
 # _claude_expected_email <account-name> — expected oauth email lookup.
@@ -1039,10 +1067,20 @@ claude_accounts_status() {
 # Returns 0 (true) if migration is needed, 1 (false) otherwise.
 # Tolerates empty bind-mount leftovers (skills/, docs/) — those are not
 # user data, just unmounted dirs from the legacy layout.
+#
+# Migration-done check iterates CLAUDE_ENABLED_ACCOUNTS (issue #568) so
+# adding work1 / work-eng / etc. via env doesn't need a code edit here.
 _claude_has_unmigrated_data() {
     [ -d "$HOME/.claude" ] || return 1
-    [ -d "$HOME/.claude-personal" ] && return 1
-    [ -d "$HOME/.claude-work" ] && return 1
+
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        emulate -L sh
+    fi
+    # shellcheck disable=SC2086  # intentional word-split for POSIX list iteration
+    for _chud_acct in $CLAUDE_ENABLED_ACCOUNTS; do
+        [ -d "$HOME/.claude-$_chud_acct" ] && return 1
+    done
+
     [ -e "$HOME/.claude/.credentials.json" ] && return 0
     [ -d "$HOME/.claude/projects" ] && return 0
     [ -d "$HOME/.claude/sessions" ] && return 0
