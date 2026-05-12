@@ -54,15 +54,18 @@
 - row 데이터 정의와 화면 조립 로직을 분리한다.
 - 섹션 추가 시 row 함수만 추가하고 renderer에 조립한다.
 
-## 네이밍 규칙
+## 네이밍 규칙 (help 함수)
 
 - 함수명: snake_case (`git_help`, `gwt_help`)
 - 내부 helper: `_` 접두사 (`_git_help_rows_stash`)
 - alias: dash-form (`git-help`, `gwt-help`)
 
-## 멀티 커맨드 함수형 CLI 규칙
+명령어 자체의 dispatcher / private sub-function 네이밍은 [`command-design-pattern.md`](./command-design-pattern.md) §1 참조.
 
-- `gwt` 같은 멀티 커맨드 함수도 help 표준은 동일하게 적용한다.
+## 멀티 커맨드 함수형 CLI
+
+`gwt` 같은 멀티 커맨드 함수의 dispatcher 구조 자체는 [`command-design-pattern.md`](./command-design-pattern.md) §4–§7가 정의한다. 이 문서는 그 위에서 help 출력 규칙만 다룬다:
+
 - 사용자 안내는 `gwt-help [section]`을 canonical로 사용한다.
 - 구형 help 진입점(예: `gwt help`, `gwt spawn help`) 유지 여부는 명시적으로 결정하고 테스트로 고정한다.
 
