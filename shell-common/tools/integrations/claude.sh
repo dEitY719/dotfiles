@@ -419,21 +419,29 @@ alias claude-skip='claude --dangerously-skip-permissions'
 # its contents are already trusted by Claude Code itself. `@sh` quoting on
 # the value handles embedded newlines and shell metacharacters.
 _claude_yolo_export_settings_env() {
-    _cysee_dir="$1"
+    local _cysee_dir="${1:-}"
     [ -n "$_cysee_dir" ] || return 0
-    _cysee_file="$_cysee_dir/settings.local.json"
+    local _cysee_file="$_cysee_dir/settings.local.json"
     [ -f "$_cysee_file" ] || return 0
     command -v jq >/dev/null 2>&1 || return 0
 
+    # Declare and assign separately to avoid SC2155 (local + command
+    # substitution masks the substitution's exit status). The colleague
+    # PR #576 fixed the same pattern elsewhere in setup.sh.
+    local _cysee_exports
     _cysee_exports=$(jq -r '
         .env // {}
         | to_entries[]
         | "export \(.key)=\(.value | tostring | @sh)"
     ' "$_cysee_file" 2>/dev/null)
 
-    [ -n "$_cysee_exports" ] && eval "$_cysee_exports"
-
-    unset _cysee_dir _cysee_file _cysee_exports
+    # Explicit `return 0` — without it, the final `[ -n "" ] && ...` short-
+    # circuits with exit 1 when the env block is absent / malformed, which
+    # would propagate to callers expecting silent no-op.
+    if [ -n "$_cysee_exports" ]; then
+        eval "$_cysee_exports"
+    fi
+    return 0
 }
 
 # claude_yolo — 다중 계정 dispatcher (issue #287, Phase 1).
