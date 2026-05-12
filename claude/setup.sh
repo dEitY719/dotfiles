@@ -356,6 +356,40 @@ _check_socat_for_sandbox() {
     fi
 }
 
+# Auto-link ~/.gemini/skills → claude/skills SSOT when Gemini CLI is installed
+# (issue #562). Idempotent — correct symlink → no-op; real directory →
+# timestamped backup + symlink; wrong-target symlink → replace.
+_setup_gemini_skills_symlink() {
+    local gemini_home="${HOME}/.gemini"
+    local target="${gemini_home}/skills"
+
+    [ -d "$gemini_home" ] || return 0
+
+    if [ -L "$target" ]; then
+        local current
+        current="$(readlink -f "$target" 2>/dev/null)"
+        if [ "$current" = "$(readlink -f "$CLAUDE_SKILLS_SOURCE")" ]; then
+            log_dim "✓ ${HOME}/.gemini/skills SSOT symlink 이미 연결됨"
+            return 0
+        fi
+        log_warning "${HOME}/.gemini/skills symlink 대상이 다름 — 교체"
+        rm -f "$target"
+    elif [ -d "$target" ]; then
+        local backup
+        backup="${target}-$(date +%Y%m%d%H%M%S)-backup"
+        log_warning "${HOME}/.gemini/skills 기존 디렉토리 백업: $backup"
+        mv "$target" "$backup" || {
+            log_error "${HOME}/.gemini/skills 백업 실패 — skip"
+            return 1
+        }
+    fi
+
+    log_info "${HOME}/.gemini/skills → $CLAUDE_SKILLS_SOURCE symlink 생성"
+    ln -s "$CLAUDE_SKILLS_SOURCE" "$target" \
+        || { log_error "${HOME}/.gemini/skills symlink 생성 실패"; return 1; }
+    log_dim "✓ ${HOME}/.gemini/skills SSOT 연결 완료"
+}
+
 _setup_bind_mount_sudoers() {
     local sudoers_file="$1"
     local description="$2"
@@ -500,6 +534,9 @@ for acct in $ENABLED_ACCOUNTS; do
         fi
     done
 done
+
+# Gemini CLI 설치 시 ~/.gemini/skills → claude/skills SSOT symlink 설정 (issue #562).
+_setup_gemini_skills_symlink
 
 # --- Completion Messages ---
 log_debug "--- Claude Code dotfiles setup 완료 ---"
