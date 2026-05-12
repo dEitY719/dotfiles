@@ -58,7 +58,7 @@ alias example-setup='example_setup'
 
 서브커맨드가 **동사 형태 positional arg**인 경우.
 
-### 구조 템플릿
+### 구조 템플릿 (Type 2A)
 
 ```sh
 # Private sub-functions
@@ -118,7 +118,7 @@ gwt() {
 
 기존 flag(`-D`, `-f` 등)에 서브타입을 **중첩**하는 형태. 기존 명령의 **passthrough를 보존**해야 할 때 사용한다.
 
-### 구조 템플릿
+### 구조 템플릿 (Type 2B)
 
 ```sh
 # Inline help (5줄 이내)
