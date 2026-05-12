@@ -448,12 +448,23 @@ claude_yolo() {
     done
     shift   # sentinel 제거
 
-    # 계정 → CONFIG_DIR (SSOT 호출)
-    _cy_config_dir=$(_claude_resolve_account "$_cy_account") || {
-        ux_error "Unknown account: $_cy_account"
-        ux_info  "Available: $(_claude_resolve_account --list | tr '\n' ' ')"
-        return 1
-    }
+    # Internal-PC single-account override (issue #571, F-2). When
+    # ~/.dotfiles-setup-mode == internal, the multi-account layout is
+    # intentionally disabled — Claude Code config lives at ~/.claude/ and
+    # `claude-accounts` is not in use. This branch runs BEFORE
+    # _claude_resolve_account so a sandbox PC with an unset/empty
+    # CLAUDE_ENABLED_ACCOUNTS can't trip the "Unknown account" path.
+    if [ "$(_dotfiles_setup_mode)" = "internal" ]; then
+        _cy_config_dir="$HOME/.claude"
+        _cy_account="internal"
+    else
+        # 계정 → CONFIG_DIR (SSOT 호출)
+        _cy_config_dir=$(_claude_resolve_account "$_cy_account") || {
+            ux_error "Unknown account: $_cy_account"
+            ux_info  "Available: $(_claude_resolve_account --list | tr '\n' ' ')"
+            return 1
+        }
+    fi
 
     [ -d "$_cy_config_dir" ] || {
         ux_error "Account directory missing: $_cy_config_dir"
@@ -593,6 +604,28 @@ alias claude-yolo='claude_yolo'
 # ═══════════════════════════════════════════════════════════════
 # Multi-account configuration (issue #287)
 # ═══════════════════════════════════════════════════════════════
+
+# _dotfiles_setup_mode — read ~/.dotfiles-setup-mode and canonicalise.
+#
+# Returns one of: public | internal | external | "" (file missing).
+# Legacy numeric values ("1|2|3") written by older shell-common/setup.sh
+# (pre-#571) are translated to their symbolic equivalents, so users
+# don't hit a wedge after upgrading. Empty when the file doesn't exist
+# (fresh install before setup.sh has run).
+#
+# Used by claude_yolo (F-2) to bypass multi-account resolution and by
+# claude_accounts_rollback (F-3) to confirm the rollback target.
+_dotfiles_setup_mode() {
+    _dsm_file="$HOME/.dotfiles-setup-mode"
+    [ -f "$_dsm_file" ] || { echo ""; return 0; }
+    _dsm_raw=$(tr -d ' \t\n\r' < "$_dsm_file" 2>/dev/null)
+    case "$_dsm_raw" in
+        1|public)   echo "public" ;;
+        2|internal) echo "internal" ;;
+        3|external) echo "external" ;;
+        *)          echo "$_dsm_raw" ;;
+    esac
+}
 
 # _claude_resolve_account — 계정 매핑 SSOT (convention-based, issue #568).
 # Usage:
@@ -1226,6 +1259,134 @@ claude_accounts_migrate() {
     ux_success "Migration complete. Personal data preserved at ~/.claude-personal/"
 }
 
+# claude_accounts_rollback — multi-account → single ~/.claude/ (issue #571).
+#
+# Reverse of `claude_accounts_migrate`. Promotes one account's directory
+# back to ~/.claude/ and timestamp-backs-up the rest. Idempotent — when
+# there are no ~/.claude-* dirs to roll back, it returns success without
+# touching anything.
+#
+# Usage:
+#   claude-accounts rollback             # auto-detect active account
+#   claude-accounts rollback personal    # force-promote a specific account
+#
+# Auto-detect order:
+#   1. The account whose .credentials.json exists (signals "logged in").
+#   2. First existing ~/.claude-<name> dir among ENABLED_ACCOUNTS.
+#
+# Side effects:
+#   - mv ~/.claude-<active>      → ~/.claude
+#   - mv ~/.claude-<other>       → ~/.claude-<other>-rollback-<TS>-original
+#   - mv ~/.claude (if non-empty)→ ~/.claude-pre-rollback-<TS>-original
+#
+# The Samsung internal PC use-case driving #571: a user ran
+# `claude-accounts migrate` by mistake on an internal box (where the
+# multi-account layout is structurally wrong), then `claude-yolo`
+# hard-failed on the missing ~/.claude-personal check. Rollback gives
+# them a one-shot recovery path without manual `mv`/`rm -rf`.
+claude_accounts_rollback() {
+    _car_active="${1:-}"
+
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        emulate -L sh
+    fi
+
+    # Auto-detect the active account when not passed explicitly.
+    if [ -z "$_car_active" ]; then
+        # First pass: prefer the account that's logged in.
+        # shellcheck disable=SC2086  # intentional word-split for POSIX list iteration
+        for _car_cand in ${CLAUDE_ENABLED_ACCOUNTS:-personal work}; do
+            if [ -f "$HOME/.claude-${_car_cand}/.credentials.json" ]; then
+                _car_active="$_car_cand"
+                break
+            fi
+        done
+        # Fallback: any existing ~/.claude-<name> dir.
+        if [ -z "$_car_active" ]; then
+            # shellcheck disable=SC2086  # intentional word-split for POSIX list iteration
+            for _car_cand in ${CLAUDE_ENABLED_ACCOUNTS:-personal work}; do
+                if [ -d "$HOME/.claude-${_car_cand}" ]; then
+                    _car_active="$_car_cand"
+                    break
+                fi
+            done
+        fi
+    fi
+
+    ux_header "claude-accounts rollback — multi-account → single ~/.claude/"
+
+    if [ -z "$_car_active" ]; then
+        ux_info "No ~/.claude-* dirs to roll back — nothing to do (idempotent)"
+        return 0
+    fi
+
+    _car_src="$HOME/.claude-${_car_active}"
+    if [ ! -d "$_car_src" ]; then
+        ux_error "Active account dir missing: $_car_src"
+        ux_info  "Available: $(ls -d "$HOME"/.claude-* 2>/dev/null | tr '\n' ' ')"
+        return 1
+    fi
+
+    ux_info "Active account:  $_car_active ($_car_src)"
+    if [ "$(_dotfiles_setup_mode)" != "internal" ]; then
+        ux_warning "~/.dotfiles-setup-mode is not 'internal' — rollback is intended for"
+        ux_warning "  the internal-PC single-account flow. Continuing anyway."
+    fi
+
+    _car_ts=$(date +%Y%m%d%H%M%S)
+
+    # Step 1: Move out any existing ~/.claude/ contents.
+    # Empty guard dirs (the kind setup.sh creates) → just rmdir, no backup.
+    # Non-empty real dirs → timestamped backup (no auto-delete — user owns).
+    # Symlinks → remove (they only point at SSOT, no data loss).
+    if [ -L "$HOME/.claude" ]; then
+        rm -f "$HOME/.claude"
+        ux_info "  removed legacy ~/.claude symlink"
+    elif [ -d "$HOME/.claude" ]; then
+        if [ -z "$(ls -A "$HOME/.claude" 2>/dev/null)" ]; then
+            rmdir "$HOME/.claude" 2>/dev/null && \
+                ux_info "  removed empty guard dir: ~/.claude"
+        else
+            _car_pre="$HOME/.claude-pre-rollback-${_car_ts}-original"
+            mv "$HOME/.claude" "$_car_pre" || {
+                ux_error "  backup failed: ~/.claude → $_car_pre — abort"
+                return 1
+            }
+            ux_warning "  backed up existing ~/.claude → $_car_pre"
+        fi
+    fi
+
+    # Step 2: Promote the active account's data to ~/.claude/.
+    mv "$_car_src" "$HOME/.claude" || {
+        ux_error "Move failed: $_car_src → ~/.claude"
+        return 1
+    }
+    ux_success "  ~/.claude-${_car_active} → ~/.claude"
+
+    # Step 3: Timestamp-backup every other ENABLED account that still has
+    # a dir. Plugins are *not* moved — they live in ~/.claude-shared and
+    # the active account already symlinks to that location.
+    # shellcheck disable=SC2086  # intentional word-split for POSIX list iteration
+    for _car_other in ${CLAUDE_ENABLED_ACCOUNTS:-personal work}; do
+        [ "$_car_other" = "$_car_active" ] && continue
+        _car_other_src="$HOME/.claude-${_car_other}"
+        if [ -d "$_car_other_src" ]; then
+            _car_other_bak="$HOME/.claude-${_car_other}-rollback-${_car_ts}-original"
+            if mv "$_car_other_src" "$_car_other_bak"; then
+                ux_info "  backed up: $_car_other_src → $_car_other_bak"
+            else
+                ux_warning "  backup failed for $_car_other_src — leaving in place"
+            fi
+        fi
+    done
+
+    ux_success "Rollback complete. ~/.claude/ is now the single config dir."
+    ux_info "Next steps:"
+    ux_info "  1. ./setup.sh   (re-select '2) Internal company PC' to wire single-account symlinks)"
+    ux_info "  2. exec zsh     (reload shell)"
+    ux_info "  3. claude-yolo  (no --user flag; multi-account dispatch is bypassed)"
+}
+
 _claude_accounts_help() {
     ux_header "claude-accounts — Claude Code multi-account management"
     ux_info "Usage: claude-accounts [<subcommand>]"
@@ -1236,6 +1397,7 @@ _claude_accounts_help() {
     ux_info "  setup         Idempotent setup (creates dirs + symlinks)"
     ux_info "  skills-sync   Re-sync skills/docs symlinks across all enabled accounts"
     ux_info "  migrate       One-time migration: ~/.claude → ~/.claude-personal (Home-PC)"
+    ux_info "  rollback [<acct>]  Reverse of migrate: ~/.claude-<acct> → ~/.claude (issue #571)"
     ux_info "  -h|--help     This help"
     ux_info ""
     ux_info "Env vars:"
@@ -1251,6 +1413,7 @@ claude_accounts() {
         setup)          claude_accounts_init ;;
         skills-sync)    claude_skills_sync ;;
         migrate)        claude_accounts_migrate ;;
+        rollback)       shift; claude_accounts_rollback "$@" ;;
         -h|--help|help) _claude_accounts_help ;;
         *)              ux_error "Unknown subcommand: $1"; _claude_accounts_help; return 1 ;;
     esac

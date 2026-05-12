@@ -477,10 +477,42 @@ _migrate_install_gh_issue_flow_stop_hook
 DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/env/claude.sh"
 DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/tools/integrations/claude.sh"
 
+# settings.local.json bootstrap (issue #571, F-4). Tracked example +
+# untracked SSOT — gitignored so sensitive env (사번 헤더, 사내 BASE_URL)
+# does not push out. On a fresh checkout the example is copied so the
+# downstream env-merge migration has a real file to read.
+CLAUDE_LOCAL_EXAMPLE="${CLAUDE_DOTFILES}/settings.local.example.json"
+CLAUDE_LOCAL_TARGET="${CLAUDE_DOTFILES}/settings.local.json"
+if [ ! -f "$CLAUDE_LOCAL_TARGET" ] && [ -f "$CLAUDE_LOCAL_EXAMPLE" ]; then
+    if cp "$CLAUDE_LOCAL_EXAMPLE" "$CLAUDE_LOCAL_TARGET"; then
+        log_warning "settings.local.json 자동 부트스트랩: settings.local.example.json → settings.local.json"
+        log_warning "  사내 env 블록은 이 파일에 추가하세요 (gitignored, PC-private)"
+    else
+        log_warning "settings.local.json 자동 부트스트랩 실패: cp 오류 — 수동 복사 필요"
+    fi
+fi
+
+# Setup-mode SSOT read (issue #571). shell-common/setup.sh writes the
+# symbolic name; legacy numeric "1|2|3" files are still tolerated so
+# upgrading users don't hit a setup wedge.
+_setup_mode=""
+if [ -f "$HOME/.dotfiles-setup-mode" ]; then
+    _setup_mode=$(tr -d ' \t\n\r' < "$HOME/.dotfiles-setup-mode" 2>/dev/null)
+    case "$_setup_mode" in
+        1) _setup_mode="public" ;;
+        2) _setup_mode="internal" ;;
+        3) _setup_mode="external" ;;
+    esac
+fi
+
 # 마이그레이션 미수행 가드는 mkdir 보다 먼저 — 그래야 stale ~/.claude 가
 # 가드 디렉토리 생성으로 가려지지 않는다. SSOT: _claude_has_unmigrated_data
 # (shell-common/tools/integrations/claude.sh)
-if _claude_has_unmigrated_data; then
+#
+# Internal mode bypasses this guard entirely — single-account layout uses
+# ~/.claude/ directly, so "unmigrated data" is the expected state, not an
+# error (issue #571, F-1).
+if [ "$_setup_mode" != "internal" ] && _claude_has_unmigrated_data; then
     log_warning "$HOME/.claude/ 에 기존 사용자 데이터가 있습니다."
     log_warning "쉘 재시작 후 다음 명령으로 마이그레이션하세요:"
     log_warning "  claude-accounts migrate"
@@ -497,6 +529,75 @@ _migrate_legacy_plugin_paths
 
 # /sandbox 의존성 점검 (issue #340).
 _check_socat_for_sandbox
+
+# Single-account symlink helper for internal-PC mode (issue #571, F-1).
+# Idempotent: correct target → no-op; wrong target → recreate; existing
+# regular file/dir → timestamped backup then symlink.
+_single_account_ensure_link() {
+    local src="$1" tgt="$2"
+    if [ -L "$tgt" ]; then
+        if [ "$(readlink "$tgt")" = "$src" ]; then
+            log_dim "  ✓ already linked: $tgt → $src"
+            return 0
+        fi
+        rm -f "$tgt"
+        log_warning "  symlink target mismatch — recreating: $tgt"
+    elif [ -e "$tgt" ]; then
+        local backup="${tgt}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$tgt" "$backup" || {
+            log_error "backup failed: $tgt → $backup"
+            return 1
+        }
+        log_warning "  backed up: $tgt → $backup"
+    fi
+    mkdir -p "$(dirname "$tgt")"
+    ln -s "$src" "$tgt" || {
+        log_error "symlink failed: $tgt → $src"
+        return 1
+    }
+    log_info "  symlink: $tgt → $src"
+}
+
+# Internal-PC single-account branch (issue #571, F-1). Direct-symlink the
+# dotfiles SSOT into ~/.claude/ — no claude-accounts, no ~/.claude-personal,
+# no ~/.claude-work. The Samsung gateway env block lives in the gitignored
+# settings.local.json (bootstrapped above from settings.local.example.json).
+if [ "$_setup_mode" = "internal" ]; then
+    log_info "Internal PC mode — single-account setup (skipping claude-accounts)"
+
+    _single_account_ensure_link "$CLAUDE_SETTINGS_SOURCE"               "$HOME_SETTINGS"
+    _single_account_ensure_link "$CLAUDE_LOCAL_TARGET"                  "$HOME/.claude/settings.local.json"
+    _single_account_ensure_link "$CLAUDE_STATUSLINE_SOURCE"             "$HOME_STATUSLINE"
+    _single_account_ensure_link "$CLAUDE_SKILLS_SOURCE"                 "$HOME_SKILLS"
+    _single_account_ensure_link "$CLAUDE_DOCS_SOURCE"                   "$HOME_DOCS"
+    _single_account_ensure_link "$CLAUDE_GLOBAL_MEMORY_SOURCE"          "$HOME_GLOBAL_MEMORY"
+    _single_account_ensure_link "$HOME/.claude-shared/plugins"          "$HOME/.claude/plugins"
+
+    # --- Verify Links (single-account) ---
+    log_debug "\n--- 심볼릭 링크 확인 (internal/single-account) ---"
+    for link in settings.json settings.local.json statusline-command.sh skills plugins projects/GLOBAL/memory; do
+        if [ -L "$HOME/.claude/$link" ]; then
+            log_dim "✓ ~/.claude/$link 심볼릭 링크 확인됨"
+        else
+            log_error_and_exit "~/.claude/$link 심볼릭 링크 생성 실패"
+        fi
+    done
+
+    _setup_gemini_skills_symlink
+
+    log_debug "--- Claude Code dotfiles setup 완료 (internal/single-account) ---"
+    echo ""
+    ux_success "Claude Code 단일 계정 설정 완료 (internal PC mode)"
+    ux_info "Config dir: $HOME/.claude"
+    echo ""
+    ux_section "다음 단계"
+    ux_bullet "쉘 재시작: ${UX_BOLD}exec zsh${UX_RESET} 또는 ${UX_BOLD}exec bash${UX_RESET}"
+    ux_bullet "사내 env 블록 추가: ${UX_BOLD}\$EDITOR claude/settings.local.json${UX_RESET} (gitignored)"
+    ux_bullet "실행: ${UX_BOLD}claude-yolo${UX_RESET} (멀티 계정 우회됨)"
+    echo ""
+
+    exit 0
+fi
 
 # 활성 계정 목록을 한 번만 조회하여 재사용 (PR #292 review 반영)
 ENABLED_ACCOUNTS=$(_claude_resolve_account --list)

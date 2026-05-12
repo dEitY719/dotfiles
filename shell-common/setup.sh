@@ -591,7 +591,12 @@ main() {
             setup_nuget_config "public"
             setup_rpm_repo "public"
             setup_apt_sources "public"
-            echo "$choice" > "$HOME/.dotfiles-setup-mode"
+            # Persist the symbolic mode (not the numeric choice). Downstream
+            # consumers — claude/setup.sh and claude_yolo (issue #571) —
+            # branch on `public|internal|external`. Legacy "1|2|3" files
+            # are auto-canonicalised by the readers, so the upgrade is
+            # backward-compatible.
+            echo "public" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for public PC (home environment)"
             ux_info "All environment-specific configuration removed"
@@ -611,7 +616,7 @@ main() {
             setup_nuget_config "internal"
             setup_rpm_repo "internal"
             setup_apt_sources "internal"
-            echo "$choice" > "$HOME/.dotfiles-setup-mode"
+            echo "internal" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for internal company PC"
             ux_info "Changes made:"
@@ -649,7 +654,7 @@ main() {
             setup_nuget_config "external"
             setup_rpm_repo "external"
             setup_apt_sources "external"
-            echo "$choice" > "$HOME/.dotfiles-setup-mode"
+            echo "external" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for external company PC"
             ux_info "Changes made:"

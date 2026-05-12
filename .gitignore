@@ -28,6 +28,12 @@ claude/settings.json
 # Migration backups carry the same secrets as the source — keep them out of
 # the tree even when the migration helper happens to write here (issue #554).
 claude/settings.json.*
+# settings.local.json carries PC-specific env (사내 ANTHROPIC_BASE_URL, 사번
+# 헤더 등). Tracked-by-mistake history: 0b36f07 committed it as an "SSOT
+# 통합", but that path leaks secrets the moment an internal-PC user pastes
+# the Samsung gateway env block in. Treat it like .env — gitignored,
+# bootstrapped from settings.local.example.json on first setup (issue #571).
+claude/settings.local.json
 .claude/
 
 # VS Code settings (bidirectional sync system, PC-specific)
