@@ -49,10 +49,14 @@ else
     exit 1
 fi
 
-# Load mount utilities (provides _is_mounted)
+# Load mount utilities (provides _is_mounted).
+# mount.sh carries the standard interactive guard (`case $- in *i*) ...`), so
+# under non-interactive `./setup.sh` the file would `return 0` before defining
+# any functions. Force-init matches the same pattern already used below for
+# `shell-common/env/claude.sh` and `tools/integrations/claude.sh`.
 MOUNT_LIB="${DOTFILES_ROOT}/shell-common/functions/mount.sh"
 if [ -f "$MOUNT_LIB" ]; then
-    source "$MOUNT_LIB"
+    DOTFILES_FORCE_INIT=1 . "$MOUNT_LIB"
 else
     echo "Error: Mount library not found at $MOUNT_LIB"
     exit 1
