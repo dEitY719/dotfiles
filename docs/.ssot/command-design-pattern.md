@@ -136,12 +136,12 @@ _<prefix>_<subtype2>() { :; }
 
 # Dispatcher
 <topic>() {
-    case "$1" in
+    case "${1:-}" in
         -FLAG)
-            case "$2" in
+            case "${2:-}" in
                 <subtype1>) shift 2; _<prefix>_<subtype1> "$@" ;;
                 <subtype2>) shift 2; _<prefix>_<subtype2> "$@" ;;
-                *)          <underlying-cmd> -FLAG "$@" ;;
+                *)          <underlying-cmd> "$@" ;;
             esac
             ;;
         -h|--help|help) _<prefix>_help ;;
@@ -151,6 +151,8 @@ _<prefix>_<subtype2>() { :; }
 
 alias <alias>='<topic>'
 ```
+
+`<underlying-cmd> "$@"` (not `<underlying-cmd> -FLAG "$@"`): when 알 수 없는 subtype 가 들어오면 `"$@"` 가 이미 원본 `-FLAG <subtype>` 을 갖고 있어 그대로 위임하면 된다. 중복 `-FLAG` 를 추가하지 않는다.
 
 ### 참조 구현: `gb`
 
@@ -166,12 +168,12 @@ _gb_help() {
 }
 
 git_branch() {
-    case "$1" in
+    case "${1:-}" in
         -D)
-            case "$2" in
+            case "${2:-}" in
                 local)  shift 2; _gb_clean_local "$@" ;;
                 remote) shift 2; _gb_clean_remote "$@" ;;
-                *)      git --no-pager branch -D "$@" ;;
+                *)      git --no-pager branch "$@" ;;
             esac
             ;;
         -h|--help|help) _gb_help ;;

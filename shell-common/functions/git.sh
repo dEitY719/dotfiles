@@ -84,12 +84,12 @@ _gb_help() {
 }
 
 git_branch() {
-    case "$1" in
+    case "${1:-}" in
         -D)
-            case "$2" in
+            case "${2:-}" in
                 local)  shift 2; _gb_clean_local "$@" ;;
                 remote) shift 2; _gb_clean_remote "$@" ;;
-                *)      git --no-pager branch -D "$@" ;;
+                *)      git --no-pager branch "$@" ;;
             esac
             ;;
         -h|--help|help)
