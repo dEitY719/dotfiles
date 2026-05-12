@@ -4,7 +4,7 @@
 
 ```
 /devx:ai-context [action] [path]
-/devx:ai-context [action] [--file PATH] [--kind KIND]
+/devx:ai-context [action] [--file PATH] [--type TYPE]
 /devx:ai-context -h | --help | help
 ```
 
@@ -37,7 +37,7 @@ The legacy skills have been deleted (follow-up to #539, see issue #560).
 | `action`       | `check` / `create` / `refactor` / `help`          | `check`       |
 | `path`         | Explicit target file path                         | auto-detect   |
 | `--file PATH`  | Same as positional `path`; takes precedence       | —             |
-| `--kind KIND`  | Force adapter: `agents` / `claude` / `gemini`     | from filename |
+| `--type TYPE`  | Force adapter: `agents` / `claude` / `gemini`     | from filename |
 | `-h`/`--help`  | Print this help and stop                          | —             |
 
 Auto-detection priority in cwd: `CLAUDE.md` → `AGENTS.md` → `GEMINI.md`.
@@ -51,8 +51,8 @@ only the highest-priority file is audited — pass the path explicitly to target
 /devx:ai-context check CLAUDE.md              # explicit target
 /devx:ai-context                               # auto-detect (recommended only when one file exists)
 /devx:ai-context check --file ./docs/AGENTS.md  # check a non-root path
-/devx:ai-context create --kind agents          # walk through new-AGENTS.md flow
-/devx:ai-context create --kind claude          # walk through new-CLAUDE.md flow
+/devx:ai-context create --type agents          # walk through new-AGENTS.md flow
+/devx:ai-context create --type claude          # walk through new-CLAUDE.md flow
 /devx:ai-context refactor                      # plan + execute split on confirm
 /devx:ai-context help                          # this page
 ```
@@ -70,10 +70,10 @@ only the highest-priority file is audited — pass the path explicitly to target
 | Legacy command                 | New command                                |
 |--------------------------------|--------------------------------------------|
 | `/agents-md:check [path]`      | `/devx:ai-context check [path]`            |
-| `/agents-md:create`            | `/devx:ai-context create --kind agents`    |
-| `/agents-md:refactor`          | `/devx:ai-context refactor --kind agents`  |
+| `/agents-md:create`            | `/devx:ai-context create --type agents`    |
+| `/agents-md:refactor`          | `/devx:ai-context refactor --type agents`  |
 | `/claude-md-check [path]`      | `/devx:ai-context check [path]`            |
-| `/claude-md-create`            | `/devx:ai-context create --kind claude`    |
+| `/claude-md-create`            | `/devx:ai-context create --type claude`    |
 
 Legacy skill directories have been removed (issue #560) — use the commands above.
 

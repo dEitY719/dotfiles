@@ -1,6 +1,6 @@
 # Templates — devx:ai-context create
 
-The `create` action picks one of these templates based on `--kind` and the
+The `create` action picks one of these templates based on `--type` and the
 size discovered during `Phase 0`.
 
 ## agents (AGENTS.md)
