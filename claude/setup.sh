@@ -374,10 +374,10 @@ _setup_gemini_skills_symlink() {
         fi
         log_warning "${HOME}/.gemini/skills symlink 대상이 다름 — 교체"
         rm -f "$target"
-    elif [ -d "$target" ]; then
+    elif [ -e "$target" ] || [ -L "$target" ]; then
         local backup
         backup="${target}-$(date +%Y%m%d%H%M%S)-backup"
-        log_warning "${HOME}/.gemini/skills 기존 디렉토리 백업: $backup"
+        log_warning "${HOME}/.gemini/skills 기존 항목 백업: $backup"
         mv "$target" "$backup" || {
             log_error "${HOME}/.gemini/skills 백업 실패 — skip"
             return 1
