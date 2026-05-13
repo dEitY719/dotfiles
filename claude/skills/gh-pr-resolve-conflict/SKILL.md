@@ -133,7 +133,7 @@ warning (idempotent).
 `--only-from` 가드가 막아 후퇴시키지 않는다. 자세한 lifecycle 근거는 issue #591.
 
 ```bash
-if [ "$mergeable" = "MERGEABLE" ]; then
+if [ "$MERGEABLE" = "MERGEABLE" ]; then
     . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null \
       && _gh_project_status_sync pr "$PR_NUMBER" "In review" \
             --only-from "In progress,Changes requested" \
