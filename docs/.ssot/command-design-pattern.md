@@ -76,7 +76,7 @@ _<prefix>_<verb2>() {
         <verb>)   shift; _<prefix>_<verb> "$@" ;;
         <verb2>)  shift; _<prefix>_<verb2> "$@" ;;
         -h|--help|help|"")
-            shift 2>/dev/null || true
+            [ $# -gt 0 ] && shift
             <topic>_help "$@"   # standalone help, also reachable via <alias>-help
             ;;
         *)
@@ -108,7 +108,7 @@ gwt() {
         spawn)    shift; git_worktree_spawn "$@" ;;
         teardown) shift; git_worktree_teardown "$@" ;;
         -h|--help|help|"")
-            shift 2>/dev/null || true
+            [ $# -gt 0 ] && shift
             gwt_help "$@" ;;
         *)
             ux_error "Unknown command: $1"

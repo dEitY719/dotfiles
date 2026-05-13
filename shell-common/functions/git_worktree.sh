@@ -167,7 +167,7 @@ gwt() {
         status)    shift; git_worktree_status "$@" ;;
         teardown)  shift; git_worktree_teardown "$@" ;;
         -h|--help|help|"")
-            shift 2>/dev/null || true
+            [ $# -gt 0 ] && shift
             gwt_help "$@"
             ;;
         *)
@@ -1130,6 +1130,14 @@ git_worktree_remove() {
             ux_info "Did you mean:"
             ux_bullet "gwt remove all $target          # apply '$target' to all worktrees"
             ux_bullet "gwt remove <path|name> $target  # apply '$target' to a specific one"
+            return 1
+            ;;
+        *[*?]*)
+            # Wildcards in `target` are confusing UX even when quoted-glob rules
+            # render them inert in the for-loop below — refuse explicitly and
+            # point the user at the canonical batch entry point.
+            ux_error "Wildcards ('*', '?') are not allowed in target: $target"
+            ux_info "Use 'gwt remove all' for batch removal."
             return 1
             ;;
     esac
