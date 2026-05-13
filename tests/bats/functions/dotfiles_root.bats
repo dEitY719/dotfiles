@@ -62,6 +62,23 @@ teardown() {
     assert_output ""
 }
 
+# Regression: a submodule checkout has --git-dir == --git-common-dir
+# (both point at <parent>/.git/modules/<sub>), so walking `dirname` would
+# falsely land on .git/modules — not a worktree. Helper must return the
+# submodule path unchanged. Caught by gemini-code-assist on PR #593.
+@test "_resolve_dotfiles_root_canonical: submodule checkout returns candidate (not .git/modules)" {
+    PARENT="$SCRATCH/parent"
+    mkdir -p "$PARENT"
+    (cd "$PARENT" && git init -q -b main && \
+        git -c user.email=t@t -c user.name=t commit --allow-empty -q -m init && \
+        git -c protocol.file.allow=always submodule add -q "$MAIN" sub)
+    SUB="$PARENT/sub"
+
+    run bash -c ". '$HELPER' && _resolve_dotfiles_root_canonical '$SUB'"
+    assert_success
+    assert_output "$SUB"
+}
+
 @test "_resolve_dotfiles_root_canonical: DOTFILES_ROOT_NO_CANONICALIZE=1 disables resolution" {
     run env DOTFILES_ROOT_NO_CANONICALIZE=1 bash -c \
         ". '$HELPER' && _resolve_dotfiles_root_canonical '$WT'"
