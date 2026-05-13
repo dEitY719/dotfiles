@@ -23,17 +23,20 @@ export CLAUDE_SKILLS_PATH="${DOTFILES_ROOT}/claude/skills"
 
 # Auto-detect setup mode (internal vs external) for account defaults.
 # Internal-PC (사내): work account only. External-PC: personal + work + work1.
+#
+# Unconditional assignment: setup-mode is the single source of truth, so
+# we overwrite any stale value inherited from a prior shell-init cycle.
+# Per-PC overrides happen below via claude.local.sh, which is sourced
+# AFTER this block and can freely reassign these vars.
 _claude_setup_mode="$(cat "$HOME/.dotfiles-setup-mode" 2>/dev/null)"
 case "$_claude_setup_mode" in
     internal|2)
-        # Internal-PC mode: work계정만 활성화
-        export CLAUDE_DEFAULT_ACCOUNT="${CLAUDE_DEFAULT_ACCOUNT:-work}"
-        export CLAUDE_ENABLED_ACCOUNTS="${CLAUDE_ENABLED_ACCOUNTS:-work}"
+        export CLAUDE_DEFAULT_ACCOUNT="work"
+        export CLAUDE_ENABLED_ACCOUNTS="work"
         ;;
     *)
-        # External-PC (personal, home, etc): 모든 계정 활성화
-        export CLAUDE_DEFAULT_ACCOUNT="${CLAUDE_DEFAULT_ACCOUNT:-personal}"
-        export CLAUDE_ENABLED_ACCOUNTS="${CLAUDE_ENABLED_ACCOUNTS:-personal work work1}"
+        export CLAUDE_DEFAULT_ACCOUNT="personal"
+        export CLAUDE_ENABLED_ACCOUNTS="personal work work1"
         ;;
 esac
 unset _claude_setup_mode
