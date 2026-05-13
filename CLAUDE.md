@@ -28,8 +28,6 @@ pytest tests/integration/test_help_topics.py -v  # Single pytest file
 shell-common/tools/custom/demo_ux.sh
 ```
 
-Markdown linting (`tox -e mdlint`) is **disabled** — do not run it.
-
 ## Architecture
 
 This repo is a modular dotfiles system. Shell config is split into three layers:
