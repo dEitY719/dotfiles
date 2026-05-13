@@ -629,7 +629,16 @@ _claude_ensure_symlink() {
             return 1
         fi
         ux_success "  ✓ unmounted: $_ces_tgt"
-        rmdir "$_ces_tgt" 2>/dev/null || true
+        # Three post-umount states: (a) dir already gone, (b) empty
+        # backing dir, (c) non-empty backing dir hiding user data.
+        # Try rmdir for (b), and if (c) reveals a populated directory,
+        # back it up so `ln -s` below has a clear slot (the next elif
+        # would be skipped because this branch already matched).
+        if [ -e "$_ces_tgt" ] && ! rmdir "$_ces_tgt" 2>/dev/null; then
+            _ces_backup="${_ces_tgt}-$(date +%Y%m%d%H%M%S)-original"
+            ux_warning "  backing up revealed directory: $_ces_tgt → $_ces_backup"
+            mv "$_ces_tgt" "$_ces_backup" || return 1
+        fi
     elif [ -e "$_ces_tgt" ]; then
         # Backup naming matches claude/setup.sh:100 legacy convention
         # so users with a mixed-version setup see one consistent format.
@@ -661,8 +670,9 @@ _claude_ensure_symlink() {
 # (#287) 는 모두 이 함수 하나로 대체됐고, 새 skill 은 setup 재실행 없이
 # 즉시 반영된다.
 _claude_account_setup_one() {
-    _caso_acct="$1"
-    _caso_cdir="$2"
+    # ${VAR:-} for set -u safety (gemini review on PR #590).
+    _caso_acct="${1:-}"
+    _caso_cdir="${2:-}"
     ux_section "Account: $_caso_acct ($_caso_cdir)"
 
     mkdir -p "$_caso_cdir"
@@ -764,6 +774,11 @@ claude_accounts_status() {
         for _cas_link in settings.json settings.local.json statusline-command.sh plugins projects/GLOBAL/memory skills docs; do
             if [ -L "$_cas_cdir/$_cas_link" ]; then
                 echo "  $_cas_link: symlink ✓"
+            elif [ "$_cas_link" = "settings.local.json" ] && [ -f "$_cas_cdir/$_cas_link" ]; then
+                # settings.local.json is a per-PC hand-created regular
+                # file (#584), never a symlink — report it as present
+                # rather than missing (gemini review on PR #590).
+                echo "  $_cas_link: regular file ✓"
             else
                 echo "  $_cas_link: ✗ missing"
             fi
