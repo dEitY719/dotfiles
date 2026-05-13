@@ -19,16 +19,12 @@ set -u
 _SCRIPT_PATH=$(cd "$(dirname "$0")" && pwd)
 DOTFILES_ROOT="$(cd "$_SCRIPT_PATH/.." && pwd)"
 UX_LIB="$DOTFILES_ROOT/shell-common/tools/ux_lib/ux_lib.sh"
-if [ -f "$UX_LIB" ]; then
-    # shellcheck source=/dev/null
-    . "$UX_LIB"
-else
-    ux_header()  { echo ""; echo "== $* =="; }
-    ux_info()    { echo "[info] $*"; }
-    ux_success() { echo "[ok]   $*"; }
-    ux_warning() { echo "[warn] $*"; }
-    ux_error()   { echo "[err]  $*" >&2; }
+if [ ! -f "$UX_LIB" ]; then
+    echo "CRITICAL ERROR: UX library not found at $UX_LIB. Exiting." >&2
+    exit 1
 fi
+# shellcheck source=/dev/null
+. "$UX_LIB"
 
 ux_header "Verify config files (#594)"
 
@@ -90,16 +86,15 @@ _parse_json() {
     return 0
 }
 
-# Iterate
-echo "$_FILES" | while IFS= read -r _row; do
-    [ -z "$_row" ] && continue
-    _kind=$(echo "$_row" | awk '{print $1}')
-    _path=$(echo "$_row" | awk '{print $2}')
+# Iterate. Here-doc (not pipe) so `_fail` assignments persist in this shell
+# — `while ... | read` would fork a subshell and lose state (#595 review).
+while read -r _kind _path; do
+    [ -z "$_kind" ] && continue
 
     if [ ! -f "$_path" ]; then
-        # Symlink target missing? Stat through symlink for clarity
         if [ -L "$_path" ]; then
             ux_warning "Dangling symlink: $_path → $(readlink "$_path")"
+            ux_info    "→ Re-run ./setup.sh or restore the symlink target."
             _fail=1
         fi
         continue
@@ -129,31 +124,6 @@ echo "$_FILES" | while IFS= read -r _row; do
     fi
 
     ux_success "OK: $_path"
-done
-
-# subshell pipe — propagate _fail via marker file
-# (POSIX `while | read` runs in subshell, _fail change is lost otherwise).
-# Re-run logic without pipe using here-doc.
-_fail=0
-while IFS= read -r _row; do
-    [ -z "$_row" ] && continue
-    _kind=$(echo "$_row" | awk '{print $1}')
-    _path=$(echo "$_row" | awk '{print $2}')
-
-    if [ ! -f "$_path" ]; then
-        if [ -L "$_path" ]; then
-            _fail=1
-        fi
-        continue
-    fi
-
-    case "$_kind" in
-        json|tokenchk)
-            _parse_json "$_path" || { _fail=1; continue; }
-            ;;
-    esac
-
-    _scan_bytes "$_path" >/dev/null 2>&1 || { _fail=1; continue; }
 done <<EOF
 $_FILES
 EOF
