@@ -120,6 +120,22 @@ teardown() {
     assert_output --partial "gwt remove <path|name> --force"
 }
 
+@test "remove: wildcard '*' in target is refused (defense-in-depth, gemini #606)" {
+    # Even though the for-loop uses quoted globbing that renders '*' inert
+    # in practice, accepting wildcards is confusing UX. Reject explicitly
+    # and direct the user at the canonical batch entry point.
+    run_in_bash "gwt remove '*' 2>&1"
+    assert_failure
+    assert_output --partial "Wildcards"
+    assert_output --partial "gwt remove all"
+}
+
+@test "remove: wildcard '?' in target is refused" {
+    run_in_bash "gwt remove 'a?b' 2>&1"
+    assert_failure
+    assert_output --partial "Wildcards"
+}
+
 # ---------------------------------------------------------------------------
 # Backward compatibility: gwt-help alias still defined
 #
