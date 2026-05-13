@@ -660,10 +660,9 @@ _gh_pr_approve_prune() {
     fi
 
     ux_header "gh-pr-approve prune - $_name"
-    if [ ! -d "$_repo_dir" ]; then
-        ux_info "nothing to prune"
-        return 0
-    fi
+    # No state dir is *not* an early exit: orphan worktrees can exist
+    # entirely outside the state tree (issue #601), so we still run the
+    # orphan scan below. The state-entry loop is a no-op in that case.
 
     local _removed=0 _failed=0 _torn_down=0
     for _entry in "$_repo_dir"/*/; do
@@ -699,11 +698,48 @@ _gh_pr_approve_prune() {
         esac
     done
 
+    # Orphan worktree scan (issue #601). A worktree whose branch matches
+    # `wt/pr-<N>/<idx>` but which no state entry's worktree.path claims is
+    # almost certainly a casualty of the concurrent-spawn race: the worker
+    # that *would* have owned this path instead recorded a sibling's path,
+    # leaving this one stranded after the sibling's teardown. The state
+    # dir + worktree.path mismatch is why per-PR `status` / `prune <N>`
+    # can't see these.
+    local _orphan_line _orphan_pr _orphan_path _orphans=0 _orphans_torn=0
+    while IFS=$(printf '\t') read -r _orphan_pr _orphan_path; do
+        [ -n "$_orphan_pr" ] || continue
+        [ -n "$_orphan_path" ] || continue
+        [ -d "$_orphan_path" ] || continue
+        _orphans=$((_orphans + 1))
+        if [ "$_force" = "1" ]; then
+            ux_warning "orphan #$_orphan_pr — tearing down $_orphan_path"
+            if (cd "$_orphan_path" && gwt teardown --force); then
+                _orphans_torn=$((_orphans_torn + 1))
+            else
+                ux_error "  gwt teardown failed for $_orphan_path; leaving worktree intact"
+            fi
+        else
+            ux_warning "orphan worktree #$_orphan_pr at $_orphan_path"
+            ux_bullet_sub "no state entry claims this path (likely issue #601 race)"
+            ux_bullet_sub "cleanup: cd $_orphan_path && gwt teardown --force"
+        fi
+    done <<EOF
+$(_gh_pr_approve_list_orphan_worktrees "$_repo_dir")
+EOF
+
     ux_info ""
+    if [ "$_removed" -eq 0 ] && [ "$_failed" -eq 0 ] && [ "$_orphans" -eq 0 ]; then
+        ux_info "nothing to prune"
+        return 0
+    fi
     if [ "$_force" = "1" ]; then
-        ux_success "pruned $_removed done entr(ies), torn down $_torn_down failed worktree(s); $((_failed - _torn_down)) failure(s) still need attention"
+        ux_success "pruned $_removed done entr(ies), torn down $_torn_down failed worktree(s) + $_orphans_torn orphan(s); $((_failed - _torn_down)) failure(s) still need attention"
     else
-        ux_success "pruned $_removed done entr(ies); $_failed failure(s) need attention (pass --force to gwt teardown them)"
+        local _orphans_hint=""
+        if [ "$_orphans" -gt 0 ]; then
+            _orphans_hint=" + $_orphans orphan(s) detected"
+        fi
+        ux_success "pruned $_removed done entr(ies); $_failed failure(s) need attention$_orphans_hint (pass --force to gwt teardown them)"
     fi
 }
 
@@ -738,8 +774,8 @@ gh_pr_approve_help() {
     ux_bullet "gh-pr-approve 42 --admin-merge --squash     # self-PR admin merge"
     ux_bullet "gh-pr-approve status                        # full table — who's still running, who failed"
     ux_bullet "gh-pr-approve status 42                     # per-PR diagnostic (verdict + next action)"
-    ux_bullet "gh-pr-approve prune                         # remove 'done' state dirs; print hints for failures"
-    ux_bullet "gh-pr-approve prune --force                 # also gwt teardown failed worktrees"
+    ux_bullet "gh-pr-approve prune                         # remove 'done' state dirs; report failures + orphan worktrees"
+    ux_bullet "gh-pr-approve prune --force                 # also gwt teardown failed + orphan worktrees"
     ux_bullet "gh-pr-approve prune 42 56                   # scoped — refuses if pid alive or worktree present"
     ux_bullet "gh-pr-approve prune --force 42              # scoped + kill alive pid (worktree still rejected)"
     ux_info ""
@@ -1066,6 +1102,166 @@ _gh_pr_approve_spawn_worker() {
 }
 
 # ============================================================================
+# Worktree identification helpers (issue #601)
+# ============================================================================
+# These are split out of `_gh_pr_approve_worker` so concurrent-spawn tests
+# can exercise the matching logic without launching a real worker.
+
+# Print the set of worktree paths currently registered with git, one per
+# line, sorted. Used as a "before" snapshot to intersect against the
+# post-spawn list inside _gh_pr_approve_locate_own_worktree.
+_gh_pr_approve_worktree_paths() {
+    git worktree list --porcelain 2>/dev/null |
+        sed -n 's/^worktree //p' |
+        LC_ALL=C sort -u
+}
+
+# Resolve the worktree this worker just created. Inputs:
+#   $1 = spawn name passed to `gwt spawn` (e.g. "pr-617")
+#   $2 = newline-separated list of worktree paths captured *before* spawn
+# The match is the intersection of two filters:
+#   1. branch == refs/heads/wt/<spawn-name>/<idx>          (PR-scoped)
+#   2. path was NOT present in the pre-spawn snapshot      (we created it)
+# Filter (1) makes the lookup deterministic among concurrent workers — a
+# sibling worker's worktree, even one spawned a millisecond earlier, has
+# a different `<spawn-name>` segment and is ignored. Filter (2) defends
+# against re-using a stale worktree that an earlier failed run left
+# behind (it would already be in `_wt_before`). Prefers the highest-index
+# match so a re-spawn (idx 2, 3, …) wins over a stale idx 1.
+# Prints the resolved path to stdout; prints nothing on no match.
+_gh_pr_approve_locate_own_worktree() {
+    local _spawn_name="$1" _wt_before="$2"
+    local _line _current_path _current_branch _branch_prefix
+    local _candidate_path _candidate_idx _best_path="" _best_idx=-1
+    _branch_prefix="refs/heads/wt/${_spawn_name}/"
+
+    # Walk the porcelain output as worktree/branch record pairs. A worktree
+    # block looks like:
+    #     worktree /abs/path
+    #     HEAD <sha>
+    #     branch refs/heads/wt/pr-617/1
+    # (terminated by a blank line). Pure POSIX sh — no associative arrays.
+    _current_path=""
+    _current_branch=""
+    while IFS= read -r _line; do
+        case "$_line" in
+        "worktree "*)
+            _current_path="${_line#worktree }"
+            _current_branch=""
+            ;;
+        "branch "*)
+            _current_branch="${_line#branch }"
+            ;;
+        "")
+            _candidate_path="$_current_path"
+            _candidate_idx="${_current_branch#"$_branch_prefix"}"
+            # Branch must start with the PR-scoped prefix; if the strip
+            # left the string unchanged, this is a non-matching branch.
+            if [ "$_candidate_idx" = "$_current_branch" ]; then
+                _current_path=""
+                _current_branch=""
+                continue
+            fi
+            _current_path=""
+            _current_branch=""
+            case "$_candidate_idx" in
+            '' | *[!0-9]*) continue ;;
+            esac
+            # Path must not have existed before this worker's spawn.
+            if printf '%s\n' "$_wt_before" |
+                LC_ALL=C grep -Fxq "$_candidate_path"; then
+                continue
+            fi
+            if [ "$_candidate_idx" -gt "$_best_idx" ]; then
+                _best_idx="$_candidate_idx"
+                _best_path="$_candidate_path"
+            fi
+            ;;
+        esac
+    done <<EOF
+$(git worktree list --porcelain 2>/dev/null)
+
+EOF
+    if [ -n "$_best_path" ]; then
+        printf '%s\n' "$_best_path"
+    fi
+    return 0
+}
+
+# List orphan PR worktrees — those whose branch matches
+# `refs/heads/wt/pr-<N>/<idx>` but whose path is NOT claimed by any
+# entry in $_repo_dir's worktree.path files. Used by full-scan prune to
+# recover worktrees stranded by the issue #601 race (worker recorded a
+# sibling's path under its state dir, then the sibling tore it down,
+# leaving the real worktree orphaned and invisible to per-PR status).
+# Args:
+#   $1 = repo state dir (e.g., ~/.local/state/gh-pr-approve/<repo>)
+# Output: one line per orphan as `<pr-number>\t<path>` (tab-separated).
+_gh_pr_approve_list_orphan_worktrees() {
+    local _repo_dir="$1"
+    local _line _current_path _current_branch _claimed _pr_num _idx
+    local _claim_file
+
+    # Collect every path recorded under <repo_dir>/*/worktree.path.
+    _claimed=""
+    if [ -d "$_repo_dir" ]; then
+        for _claim_file in "$_repo_dir"/*/worktree.path; do
+            [ -f "$_claim_file" ] || continue
+            _claimed="$_claimed$(cat "$_claim_file" 2>/dev/null)
+"
+        done
+    fi
+
+    _current_path=""
+    _current_branch=""
+    while IFS= read -r _line; do
+        case "$_line" in
+        "worktree "*)
+            _current_path="${_line#worktree }"
+            _current_branch=""
+            ;;
+        "branch "*)
+            _current_branch="${_line#branch }"
+            ;;
+        "")
+            # Branch shape must be refs/heads/wt/pr-<N>/<idx>.
+            case "$_current_branch" in
+            refs/heads/wt/pr-*/*) ;;
+            *)
+                _current_path=""
+                _current_branch=""
+                continue
+                ;;
+            esac
+            _pr_num="${_current_branch#refs/heads/wt/pr-}"
+            _idx="${_pr_num##*/}"
+            _pr_num="${_pr_num%%/*}"
+            case "$_pr_num" in
+            '' | *[!0-9]*) _current_path=""; _current_branch=""; continue ;;
+            esac
+            case "$_idx" in
+            '' | *[!0-9]*) _current_path=""; _current_branch=""; continue ;;
+            esac
+            # Skip if claimed by some state dir's worktree.path.
+            if [ -n "$_claimed" ] &&
+                printf '%s' "$_claimed" | LC_ALL=C grep -Fxq "$_current_path"; then
+                _current_path=""
+                _current_branch=""
+                continue
+            fi
+            printf '%s\t%s\n' "$_pr_num" "$_current_path"
+            _current_path=""
+            _current_branch=""
+            ;;
+        esac
+    done <<EOF
+$(git worktree list --porcelain 2>/dev/null)
+
+EOF
+    return 0
+}
+
+# ============================================================================
 # Worker (runs in a detached bash subshell)
 # ============================================================================
 
@@ -1084,27 +1280,26 @@ _gh_pr_approve_worker() {
     printf '[gh-pr-approve-worker] pr=#%s ai=%s%s start=%s\n' "$_pr" "$_ai" "${_self_args:+ flags=$_self_args}" "$(date -Iseconds 2>/dev/null || date)"
 
     # ---- Step 1: spawn worktree ----
-    # Snapshot the worktree list before and after `gwt spawn` and diff them
-    # to identify the new one. Same pattern as gh-flow — avoids coupling to
-    # gwt's internal branch-naming convention.
-    local _wt_before _wt_after
+    # Snapshot the worktree list before `gwt spawn`, then after spawn pick
+    # the *new* worktree whose branch matches `wt/$_spawn_name/<idx>`.
+    # Issue #601: the old "first new path, alphabetically" diff was a race
+    # under concurrent spawns — `comm -13 | head -n 1` happily returned a
+    # sibling worker's worktree, causing several workers to share one
+    # directory and tear each other down. PR-number-scoped matching is
+    # deterministic regardless of how many workers spawn at the same time.
+    local _wt_before
     _gh_pr_approve_set_state "$_dir" "spawning"
-    _wt_before=$(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
+    _wt_before=$(_gh_pr_approve_worktree_paths)
     if ! gwt spawn "$_spawn_name"; then
         _gh_pr_approve_set_state "$_dir" "failed:spawning"
         printf '[gh-pr-approve-worker] gwt spawn failed\n' >&2
         return 1
     fi
 
-    _wt_after=$(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
-    _worktree=$(comm -13 \
-        <(printf '%s\n' "$_wt_before" | sort) \
-        <(printf '%s\n' "$_wt_after" | sort) |
-        head -n 1)
-
+    _worktree=$(_gh_pr_approve_locate_own_worktree "$_spawn_name" "$_wt_before")
     if [ -z "$_worktree" ] || [ ! -d "$_worktree" ]; then
         _gh_pr_approve_set_state "$_dir" "failed:spawning"
-        printf '[gh-pr-approve-worker] could not locate newly-created worktree\n' >&2
+        printf '[gh-pr-approve-worker] could not locate newly-created worktree for %s\n' "$_spawn_name" >&2
         return 1
     fi
     printf '%s\n' "$_worktree" >"$_dir/worktree.path"
