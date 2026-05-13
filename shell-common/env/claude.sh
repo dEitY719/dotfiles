@@ -1,23 +1,12 @@
 #!/bin/sh
 # shell-common/env/claude.sh
 # Claude Code environment variables
-# Auto-mount configuration for Claude Code directories
 
-# Legacy auto-mount of ~/.claude/{skills,docs}. After multi-account
-# migration (issue #287), ~/.claude/ is the empty guard directory and
-# bind mounts go to ~/.claude-{personal,work}/{skills,docs} via
-# claude_accounts_init. Disable legacy auto-mount when migrated state
-# is detected so we don't mount onto the guard dir.
+# Skills/docs are exposed to each Claude Code account as a single
+# directory symlink (issue #575) — no bind-mount, no per-skill sync,
+# no auto-mount env vars. See claude/AGENTS.md for the layout.
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
-
-if [ -d "$HOME/.claude-personal" ] || [ -d "$HOME/.claude-work" ]; then
-    export CLAUDE_AUTO_MOUNT_SKILLS=0
-    export CLAUDE_AUTO_MOUNT_DOCS=0
-else
-    export CLAUDE_AUTO_MOUNT_SKILLS=1
-    export CLAUDE_AUTO_MOUNT_DOCS=1
-fi
 
 # AI tool for documentation generation
 # Options: claude (default), gemini, codex, or any CLI tool accepting -p/--prompt

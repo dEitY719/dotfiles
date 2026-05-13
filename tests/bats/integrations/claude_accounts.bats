@@ -196,19 +196,60 @@ LOCAL
 
 # ---------- Task 5: account setup ----------
 
-@test "bash: _claude_account_setup_one creates symlinks (skips bind mount)" {
-    # bind mount needs sudo; skip via env var
+@test "bash: _claude_account_setup_one creates directory-level symlinks (issue #575)" {
     mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude-shared/plugins"
 
-    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 _claude_account_setup_one personal '$HOME/.claude-personal'"
+    run_in_bash "_claude_account_setup_one personal '$HOME/.claude-personal'"
     assert_success
 
     [ -L "$HOME/.claude-personal/settings.json" ]
-    [ -L "$HOME/.claude-personal/settings.local.json" ]
     [ -L "$HOME/.claude-personal/statusline-command.sh" ]
     [ -L "$HOME/.claude-personal/plugins" ]
     [ -L "$HOME/.claude-personal/projects/GLOBAL/memory" ]
+    # Issue #575: skills/docs are single directory-level symlinks to the
+    # SSOT — no more per-skill entries, no more bind mount.
+    [ -L "$HOME/.claude-personal/skills" ]
+    [ -L "$HOME/.claude-personal/docs" ]
+    [ "$(readlink "$HOME/.claude-personal/skills")" = "${DOTFILES_ROOT}/claude/skills" ]
+    [ "$(readlink "$HOME/.claude-personal/docs")" = "${DOTFILES_ROOT}/claude/docs" ]
+    # settings.local.json is intentionally a per-PC hand-created regular
+    # file (#584) — never a dotfiles symlink.
+    [ ! -L "$HOME/.claude-personal/settings.local.json" ]
+}
+
+@test "bash: _claude_account_setup_one unmounts a legacy bind mount on skills (issue #575 migration)" {
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "$HOME/.claude-shared/plugins"
+    # Simulate a Home-PC that came up under the #287 bind-mount layout:
+    # ~/.claude-personal/skills/ exists as a real (would-be-mounted) dir.
+    mkdir -p "$HOME/.claude-personal/skills"
+
+    fake_bin="$HOME/fake-bin"
+    mkdir -p "$fake_bin"
+    cat > "$fake_bin/findmnt" <<SH
+#!/usr/bin/env bash
+[ "\$1" = "$HOME/.claude-personal/skills" ] && exit 0
+exit 1
+SH
+    chmod +x "$fake_bin/findmnt"
+    cat > "$fake_bin/sudo" <<'SH'
+#!/usr/bin/env bash
+if [ "$1" = "umount" ]; then
+    printf '%s\n' "$2" >> "$HOME/fake-umount.log"
+    rmdir -- "$2" 2>/dev/null || true
+    exit 0
+fi
+exit 1
+SH
+    chmod +x "$fake_bin/sudo"
+
+    run_in_bash "export PATH=\"$fake_bin:\$PATH\"; _claude_account_setup_one personal '$HOME/.claude-personal'"
+    assert_success
+    assert_output --partial "bind-mount detected at $HOME/.claude-personal/skills"
+    [ -L "$HOME/.claude-personal/skills" ]
+    [ "$(readlink "$HOME/.claude-personal/skills")" = "${DOTFILES_ROOT}/claude/skills" ]
+    grep -qF "$HOME/.claude-personal/skills" "$HOME/fake-umount.log"
 }
 
 @test "bash: claude_accounts_init creates only ENABLED account dirs" {
@@ -916,10 +957,13 @@ JSON
     refute_output --partial "Account mismatch"
 }
 
-# ---------- Issue #342: skills/docs sync via per-skill symlinks ----------
+# ---------- Issue #575: skills/docs via directory-level symlinks ----------
 #
-# Replaces the legacy bind mount with idempotent per-skill symlinks. Five
-# acceptance scenarios from the issue + status ratio + sub-command wiring.
+# Issue #575 replaced both the legacy bind mount (#287) and the interim
+# per-skill symlinks (#342/#344) with a single directory-level symlink
+# per account: `~/.claude*/skills` → `dotfiles/claude/skills`. New skills
+# appear instantly without re-running setup, no sudo needed, no drift to
+# track.
 
 # Stage a FAKE_DOTFILES_ROOT under $HOME with skills/<name>/SKILL.md fixtures.
 # bash/main.bash unconditionally re-derives DOTFILES_ROOT from its own path
@@ -943,187 +987,91 @@ run_with_fake_ssot() {
     run_in_bash "export DOTFILES_ROOT='$FAKE_DOTFILES_ROOT'; $1"
 }
 
-@test "issue #342: empty target → SSOT skills become symlinks" {
-    _seed_ssot_skills alpha beta gamma
-    mkdir -p "$HOME/.claude-personal"
-
-    run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal _claude_dir_sync_one "$HOME/.claude-personal" skills'
-    assert_success
-
-    for s in alpha beta gamma; do
-        [ -L "$HOME/.claude-personal/skills/$s" ]
-        [ "$(readlink "$HOME/.claude-personal/skills/$s")" = "$FAKE_DOTFILES_ROOT/claude/skills/$s" ]
-    done
-}
-
-@test "issue #342: real-dir collision is backed up to *-pre-sync-* and replaced" {
-    _seed_ssot_skills cli-dev
-    mkdir -p "$HOME/.claude-personal/skills/cli-dev"
-    echo "stale-content" > "$HOME/.claude-personal/skills/cli-dev/local-file.md"
-
-    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
-    assert_success
-
-    [ -L "$HOME/.claude-personal/skills/cli-dev" ]
-    # Backup directory present (under .sync-backup/, issue #344) with the
-    # user's local file preserved.
-    local_backup=$(ls -d "$HOME/.claude-personal/.sync-backup/skills/"cli-dev-pre-sync-* 2>/dev/null | head -1)
-    [ -n "$local_backup" ]
-    [ -f "$local_backup/local-file.md" ]
-    # Issue #344: backup must NOT live alongside the skill in skills/.
-    ! ls -d "$HOME/.claude-personal/skills/"cli-dev-pre-sync-* >/dev/null 2>&1
-}
-
-@test "issue #342: stale symlink (wrong target) is replaced with correct one" {
-    _seed_ssot_skills cli-dev
-    mkdir -p "$HOME/.claude-personal/skills" "$HOME/elsewhere/cli-dev"
-    ln -s "$HOME/elsewhere/cli-dev" "$HOME/.claude-personal/skills/cli-dev"
-
-    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
-    assert_success
-
-    [ -L "$HOME/.claude-personal/skills/cli-dev" ]
-    [ "$(readlink "$HOME/.claude-personal/skills/cli-dev")" = "$FAKE_DOTFILES_ROOT/claude/skills/cli-dev" ]
-}
-
-@test "issue #342: orphan symlink (no SSOT match) is auto-removed" {
-    _seed_ssot_skills alpha
-    mkdir -p "$HOME/.claude-personal/skills" "$HOME/leftover"
-    ln -s "$HOME/leftover" "$HOME/.claude-personal/skills/removed-skill"
-
-    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
-    assert_success
-
-    [ ! -e "$HOME/.claude-personal/skills/removed-skill" ]
-    [ ! -L "$HOME/.claude-personal/skills/removed-skill" ]
-}
-
-@test "issue #342: orphan REAL dir is backed up to *-orphan-*, never deleted" {
-    _seed_ssot_skills alpha
-    mkdir -p "$HOME/.claude-personal/skills/user-data-dont-touch"
-    echo "important" > "$HOME/.claude-personal/skills/user-data-dont-touch/keep.txt"
-
-    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
-    assert_success
-
-    [ ! -d "$HOME/.claude-personal/skills/user-data-dont-touch" ]
-    # Backup lives under .sync-backup/ (issue #344), not skills/.
-    orphan_backup=$(ls -d "$HOME/.claude-personal/.sync-backup/skills/"user-data-dont-touch-orphan-* 2>/dev/null | head -1)
-    [ -n "$orphan_backup" ]
-    [ -f "$orphan_backup/keep.txt" ]
-    grep -q "important" "$orphan_backup/keep.txt"
-    # Issue #344: orphan backup must NOT pollute the skill scanner directory.
-    ! ls -d "$HOME/.claude-personal/skills/"user-data-dont-touch-orphan-* >/dev/null 2>&1
-}
-
-@test "issue #342: second run is a no-op (idempotent — 0 changes)" {
+@test "issue #575: claude_accounts_init creates directory-level skills/docs symlinks" {
     _seed_ssot_skills alpha beta
-    mkdir -p "$HOME/.claude-personal"
+    mkdir -p "$HOME/.claude-shared/plugins"
 
-    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills; echo "FIRST_CHANGED=$_CLAUDE_DIR_SYNC_LAST_CHANGED"'
+    run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init'
     assert_success
-    assert_output --partial "FIRST_CHANGED=2"
 
-    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills; echo "SECOND_CHANGED=$_CLAUDE_DIR_SYNC_LAST_CHANGED"'
-    assert_success
-    assert_output --partial "SECOND_CHANGED=0"
+    [ -L "$HOME/.claude-personal/skills" ]
+    [ -L "$HOME/.claude-personal/docs" ]
+    [ "$(readlink "$HOME/.claude-personal/skills")" = "$FAKE_DOTFILES_ROOT/claude/skills" ]
+    [ "$(readlink "$HOME/.claude-personal/docs")" = "$FAKE_DOTFILES_ROOT/claude/docs" ]
+    # New skills appear via the symlink without a follow-up run.
+    [ -d "$HOME/.claude-personal/skills/alpha" ]
+    [ -f "$HOME/.claude-personal/skills/alpha/SKILL.md" ]
 }
 
-@test "issue #342: claude-skills-sync alias triggers sync across enabled accounts" {
+@test "issue #575: new skill added to SSOT is visible immediately (no setup re-run)" {
     _seed_ssot_skills alpha
-    mkdir -p "$HOME/.claude-personal" "$HOME/.claude-work"
+    mkdir -p "$HOME/.claude-shared/plugins"
 
-    run_with_fake_ssot 'shopt -s expand_aliases; eval "claude-skills-sync"'
+    run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init'
     assert_success
-    [ -L "$HOME/.claude-personal/skills/alpha" ]
-    [ -L "$HOME/.claude-work/skills/alpha" ]
+
+    # Drop a new skill into the SSOT after setup ran.
+    mkdir -p "$FAKE_DOTFILES_ROOT/claude/skills/just-added"
+    printf -- '---\nname: just-added\ndescription: post-setup skill\n---\n' \
+        > "$FAKE_DOTFILES_ROOT/claude/skills/just-added/SKILL.md"
+
+    [ -f "$HOME/.claude-personal/skills/just-added/SKILL.md" ]
 }
 
-@test "issue #342: claude-accounts skills-sync sub-command works" {
+@test "issue #575: real-dir collision at skills/ is backed up and replaced with symlink" {
     _seed_ssot_skills alpha
-    mkdir -p "$HOME/.claude-personal"
+    mkdir -p "$HOME/.claude-shared/plugins"
+    # Simulate a user with a pre-existing real skills directory (e.g.
+    # leftover from the #342 per-skill era full of stale symlinks).
+    mkdir -p "$HOME/.claude-personal/skills/leftover"
+    echo "user-data" > "$HOME/.claude-personal/skills/leftover/notes.md"
 
-    run_with_fake_ssot 'shopt -s expand_aliases; eval "claude-accounts skills-sync"'
+    run_with_fake_ssot '_claude_account_setup_one personal "$HOME/.claude-personal"'
     assert_success
-    [ -L "$HOME/.claude-personal/skills/alpha" ]
+
+    [ -L "$HOME/.claude-personal/skills" ]
+    [ "$(readlink "$HOME/.claude-personal/skills")" = "$FAKE_DOTFILES_ROOT/claude/skills" ]
+    # The previous real directory is preserved via the legacy
+    # `*-YYYYMMDDHHMMSS-original` backup convention so user-dropped data
+    # is never lost.
+    backup=$(ls -d "$HOME/.claude-personal/skills-"*-original 2>/dev/null | head -1)
+    [ -n "$backup" ]
+    grep -q "user-data" "$backup/leftover/notes.md"
 }
 
-@test "issue #342: second claude-skills-sync prints (no changes)" {
+@test "issue #575: second _claude_account_setup_one is idempotent for skills/docs" {
     _seed_ssot_skills alpha
-    mkdir -p "$HOME/.claude-personal" "$HOME/.claude-work"
+    mkdir -p "$HOME/.claude-shared/plugins"
 
-    run_with_fake_ssot 'claude_skills_sync >/dev/null; claude_skills_sync'
+    run_with_fake_ssot '_claude_account_setup_one personal "$HOME/.claude-personal"'
     assert_success
-    assert_output --partial "no changes"
+
+    run_with_fake_ssot '_claude_account_setup_one personal "$HOME/.claude-personal"'
+    assert_success
+    assert_output --partial "already linked"
+
+    [ -L "$HOME/.claude-personal/skills" ]
+    [ -L "$HOME/.claude-personal/docs" ]
+    # No backups created on the second run — symlinks were already correct.
+    [ -z "$(ls -d "$HOME/.claude-personal/skills-"*-original 2>/dev/null)" ]
+    [ -z "$(ls -d "$HOME/.claude-personal/docs-"*-original 2>/dev/null)" ]
 }
 
-@test "issue #342: claude_accounts_status shows skills sync ratio" {
-    _seed_ssot_skills alpha beta
-    run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init >/dev/null && CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
-    assert_success
-    assert_output --partial "skills: 2/2 ✓"
-}
-
-@test "issue #342: claude_accounts_status flags drift when symlinks missing" {
-    _seed_ssot_skills alpha beta gamma
-    # Set up only one of three symlinks → ratio shows 1/3 with drift marker.
-    mkdir -p "$HOME/.claude-personal/skills"
-    ln -s "$FAKE_DOTFILES_ROOT/claude/skills/alpha" "$HOME/.claude-personal/skills/alpha"
-
-    run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
-    assert_success
-    assert_output --partial "skills: 1/3"
-    assert_output --partial "claude-accounts skills-sync"
-}
-
-@test "issue #342: claude_yolo --no-sync skips auto-sync" {
-    _setup_claude_mock
-    _seed_ssot_skills alpha
-    mkdir -p "$HOME/.claude-personal"
-
-    run_with_fake_ssot "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --no-sync"
-    assert_success
-    [ ! -e "$HOME/.claude-personal/skills/alpha" ]
-}
-
-@test "issue #342: claude_yolo auto-syncs by default" {
-    _setup_claude_mock
-    _seed_ssot_skills alpha
-    mkdir -p "$HOME/.claude-personal"
-
-    run_with_fake_ssot "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
-    assert_success
-    [ -L "$HOME/.claude-personal/skills/alpha" ]
-}
-
-@test "issue #342: claude-accounts help mentions skills-sync sub-command" {
+@test "issue #575: claude-accounts no longer exposes the skills-sync subcommand" {
     run_in_bash 'shopt -s expand_aliases; eval "claude-accounts -h"'
     assert_success
-    assert_output --partial "skills-sync"
+    refute_output --partial "skills-sync"
 }
 
-@test "issue #342: re-running sync does NOT nest pre-sync backups" {
-    _seed_ssot_skills cli-dev
-    mkdir -p "$HOME/.claude-personal/skills/cli-dev"
-    echo "first-run-content" > "$HOME/.claude-personal/skills/cli-dev/x.md"
-
-    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
-    assert_success
-    # Sleep 1 to ensure a new TS would differ; then run again — Pass 2 must
-    # skip *-pre-sync-* entries so they don't get -orphan- nested.
-    sleep 1
-    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
-    assert_success
-
-    # Backups land under .sync-backup/ (issue #344). Exactly one backup,
-    # no nested -orphan- chain.
-    backups=$(ls -d "$HOME/.claude-personal/.sync-backup/skills/"cli-dev-pre-sync-* 2>/dev/null | wc -l)
-    [ "$backups" -eq 1 ]
-    nested=$(ls -d "$HOME/.claude-personal/.sync-backup/skills/"cli-dev-pre-sync-*-orphan-* 2>/dev/null | wc -l)
-    [ "$nested" -eq 0 ]
-    # And nothing leaks back into the scan dir.
-    leaked=$(ls -d "$HOME/.claude-personal/skills/"cli-dev-pre-sync-* 2>/dev/null | wc -l)
-    [ "$leaked" -eq 0 ]
+@test "issue #575: claude_skills_sync, _claude_dir_sync_one, claude-mount-* are gone" {
+    run_in_bash 'declare -F claude_skills_sync claude_mount_skills claude_mount_docs claude_mount_all _claude_dir_sync_one _claude_count_dir_sync _claude_ensure_bind_mount 2>&1 || true'
+    refute_output --partial "claude_skills_sync"
+    refute_output --partial "claude_mount_skills"
+    refute_output --partial "claude_mount_docs"
+    refute_output --partial "claude_mount_all"
+    refute_output --partial "_claude_dir_sync_one"
+    refute_output --partial "_claude_count_dir_sync"
+    refute_output --partial "_claude_ensure_bind_mount"
 }
 
 # ---------- Issue #500: setup.sh / migrate 자동화 갭 보강 ----------
@@ -1196,75 +1144,10 @@ run_with_fake_ssot() {
     [ ! -f "$HOME/.claude-personal/.claude.json.preserved-by-migrate" ]
 }
 
-# ---------- Issue #344: backups outside the skill scanner ----------
-
-@test "issue #344: skills/ stays free of *-pre-sync-* / *-orphan-* siblings" {
-    _seed_ssot_skills alpha
-    # Trigger BOTH backup branches: real-dir collision (Pass 1) and
-    # orphan real dir (Pass 2).
-    mkdir -p "$HOME/.claude-personal/skills/alpha"          # collision
-    echo "x" > "$HOME/.claude-personal/skills/alpha/x.md"
-    mkdir -p "$HOME/.claude-personal/skills/orphan-real"    # orphan
-    echo "y" > "$HOME/.claude-personal/skills/orphan-real/y.md"
-
-    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
-    assert_success
-
-    # The scan-visible directory contains only real SSOT-linked skills.
-    # Anything matching the backup naming convention is a regression of
-    # the issue #344 symptom (duplicate "<name>-pre-sync-<TS>" skills in
-    # available-skills).
-    leaked_pre=$(find "$HOME/.claude-personal/skills/" -maxdepth 1 -name '*-pre-sync-*' 2>/dev/null | wc -l)
-    leaked_orphan=$(find "$HOME/.claude-personal/skills/" -maxdepth 1 -name '*-orphan-*' 2>/dev/null | wc -l)
-    [ "$leaked_pre" -eq 0 ]
-    [ "$leaked_orphan" -eq 0 ]
-
-    # And both backup payloads are recoverable from .sync-backup/.
-    [ -d "$HOME/.claude-personal/.sync-backup/skills" ]
-    [ "$(find "$HOME/.claude-personal/.sync-backup/skills/" -maxdepth 1 -name '*-pre-sync-*' | wc -l)" -ge 1 ]
-    [ "$(find "$HOME/.claude-personal/.sync-backup/skills/" -maxdepth 1 -name '*-orphan-*' | wc -l)" -ge 1 ]
-}
-
-@test "issue #344: legacy backups in skills/ are migrated to .sync-backup/" {
-    _seed_ssot_skills alpha
-    # Simulate a user already on the buggy version: legacy backups sit
-    # inside the scan dir from a previous run.
-    mkdir -p "$HOME/.claude-personal/skills/cli-dev-pre-sync-20260101000000"
-    echo "legacy-pre" > "$HOME/.claude-personal/skills/cli-dev-pre-sync-20260101000000/SKILL.md"
-    mkdir -p "$HOME/.claude-personal/skills/agents-md-orphan-20260101000000"
-    echo "legacy-orphan" > "$HOME/.claude-personal/skills/agents-md-orphan-20260101000000/SKILL.md"
-
-    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills'
-    assert_success
-
-    # Legacy entries are gone from the scan dir.
-    [ ! -e "$HOME/.claude-personal/skills/cli-dev-pre-sync-20260101000000" ]
-    [ ! -e "$HOME/.claude-personal/skills/agents-md-orphan-20260101000000" ]
-
-    # And recoverable from .sync-backup/, content intact.
-    [ -d "$HOME/.claude-personal/.sync-backup/skills/cli-dev-pre-sync-20260101000000" ]
-    [ -d "$HOME/.claude-personal/.sync-backup/skills/agents-md-orphan-20260101000000" ]
-    grep -q "legacy-pre" "$HOME/.claude-personal/.sync-backup/skills/cli-dev-pre-sync-20260101000000/SKILL.md"
-    grep -q "legacy-orphan" "$HOME/.claude-personal/.sync-backup/skills/agents-md-orphan-20260101000000/SKILL.md"
-}
-
-@test "issue #344: legacy-backup migration is idempotent (second run is no-op)" {
-    _seed_ssot_skills alpha
-    mkdir -p "$HOME/.claude-personal/skills/cli-dev-pre-sync-20260101000000"
-    echo "x" > "$HOME/.claude-personal/skills/cli-dev-pre-sync-20260101000000/SKILL.md"
-
-    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills; echo "FIRST=$_CLAUDE_DIR_SYNC_LAST_CHANGED"'
-    assert_success
-    assert_output --partial "FIRST=2"   # 1 migration + 1 alpha link
-
-    run_with_fake_ssot '_claude_dir_sync_one "$HOME/.claude-personal" skills; echo "SECOND=$_CLAUDE_DIR_SYNC_LAST_CHANGED"'
-    assert_success
-    assert_output --partial "SECOND=0"
-
-    # Backup directory not double-nested by the second run.
-    nested=$(find "$HOME/.claude-personal/.sync-backup/" -name 'cli-dev-pre-sync-20260101000000' 2>/dev/null | wc -l)
-    [ "$nested" -eq 1 ]
-}
+# Issue #344 (per-skill backup scanner pollution) is no longer reachable
+# under #575 — skills/ is a single directory symlink with no per-entry
+# backups in scanner view. Tests that exercised the legacy path were
+# removed with `_claude_dir_sync_one`.
 
 # ---------- _claude_yolo_export_settings_env: gateway env propagation ----------
 

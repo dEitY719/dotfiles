@@ -66,8 +66,8 @@ fi
 _mount_help_summary() {
     ux_info "Usage: mount-help [section|--list|--all]"
     ux_bullet "sections"
-    ux_bullet_sub "description: manage bind mounts for Claude environment"
-    ux_bullet_sub "commands: addmnt | show-mnt | claude-mount-all"
+    ux_bullet_sub "description: generic bind mount helpers"
+    ux_bullet_sub "commands: addmnt | show-mnt"
     ux_bullet_sub "info: per-command --help references"
     ux_bullet_sub "notes: sudo & sudoers configuration"
     ux_bullet_sub "details: mount-help <section>  (example: mount-help commands)"
@@ -82,13 +82,12 @@ _mount_help_list_sections() {
 }
 
 _mount_help_rows_description() {
-    ux_info "Manage bind mounts for Claude environment (skills, agents, etc.)"
+    ux_info "Generic bind mount helpers (Claude skills/docs now use directory symlinks, #575)"
 }
 
 _mount_help_rows_commands() {
     ux_bullet "addmnt <source> <target>    Create bind mount"
     ux_bullet "show-mnt [path]             Display mount status"
-    ux_bullet "claude-mount-all            Mount all Claude directories (skills, agents, docs)"
 }
 
 _mount_help_rows_info() {
@@ -144,12 +143,11 @@ mount_help() {
 Mount Management Commands
 
 Description:
-  Manage bind mounts for Claude environment
+  Generic bind mount helpers (Claude skills/docs use directory symlinks, #575)
 
 Available Commands:
   addmnt <source> <target>       Create bind mount
   show-mnt [path]                Display mount status
-  claude-mount-all               Mount all Claude directories (skills, docs)
 
 Notes:
   - Requires sudo for mount operations

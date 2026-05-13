@@ -26,9 +26,8 @@ fi
 _dot_help_summary() {
     ux_info "Usage: dot-help [section|--list|--all]"
     ux_bullet "sections"
-    ux_bullet_sub "overview: project pillars (SOLID, cross-platform, mounts)"
+    ux_bullet_sub "overview: project pillars (SOLID, cross-platform, skills SSOT)"
     ux_bullet_sub "setup: setup.sh | maintenance | diagnostics"
-    ux_bullet_sub "mounts: claude bind mounts status"
     ux_bullet_sub "features: shell separation | UX | help | git | skills"
     ux_bullet_sub "commands: my-help | src | dot | ux-help"
     ux_bullet_sub "docs: SETUP_GUIDE | AGENTS | UX_GUIDELINES"
@@ -39,7 +38,6 @@ _dot_help_list_sections() {
     ux_bullet "sections"
     ux_bullet_sub "overview"
     ux_bullet_sub "setup"
-    ux_bullet_sub "mounts"
     ux_bullet_sub "features"
     ux_bullet_sub "commands"
     ux_bullet_sub "docs"
@@ -49,7 +47,7 @@ _dot_help_rows_overview() {
     ux_bullet "SOLID-based shell configuration separation (bash/zsh)"
     ux_bullet "Cross-platform support (Windows WSL, macOS, Linux)"
     ux_bullet "Environment-aware setup (Internal/External PC)"
-    ux_bullet "Automated Claude Code skills bind mounting"
+    ux_bullet "Claude Code skills SSOT via directory symlink (no sudo, #575)"
 }
 
 _dot_help_rows_setup() {
@@ -68,7 +66,7 @@ _dot_help_rows_features() {
     ux_numbered 2 "UX guidelines: Consistent color and formatting"
     ux_numbered 3 "Help system: Type help or [function]-help for info"
     ux_numbered 4 "Git attributes: Automatic CRLF/LF line ending management"
-    ux_numbered 5 "Skills integration: Claude Code tools auto-mounted"
+    ux_numbered 5 "Skills integration: SSOT exposed as directory symlinks (#575)"
 }
 
 _dot_help_rows_commands() {

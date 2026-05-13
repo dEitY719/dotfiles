@@ -354,40 +354,45 @@ _setup_gemini_skills_symlink() {
     log_dim "✓ ${HOME}/.gemini/skills SSOT 연결 완료"
 }
 
-_setup_bind_mount_sudoers() {
-    local sudoers_file="$1"
-    local description="$2"
-    local source="$3"
-    local target="$4"
+# _print_stale_bind_mount_sudoers_hint — surface stale /etc/sudoers.d/
+# files left over from the pre-#575 bind-mount design.
+#
+# Issue #575 removed _setup_bind_mount_sudoers and the entire bind-mount
+# integration in favour of directory-level symlinks. Existing PCs may
+# still carry sudoers entries from the prior layout — they no longer
+# match anything in the setup and only widen the sudoers surface, so
+# point the user at them. Cleanup is left manual on purpose because
+# rm under /etc/sudoers.d/ needs sudo and we don't want to prompt
+# from setup.sh.
+_print_stale_bind_mount_sudoers_hint() {
+    local sudoers_glob='/etc/sudoers.d/claude-skills-mount-* /etc/sudoers.d/claude-docs-mount-*'
+    local found=""
+    # shellcheck disable=SC2086  # glob intentionally unquoted
+    for _f in $sudoers_glob; do
+        [ -f "$_f" ] || continue
+        found="${found}  $_f
+"
+    done
 
-    [ -d "$source" ] || return 0
+    [ -n "$found" ] || return 0
 
-    log_info "$description 디렉토리 bind mount sudoers 설정"
-    if [ -f "$sudoers_file" ] && sudo grep -qF "$source" "$sudoers_file" 2>/dev/null; then
-        log_dim "✓ sudoers 설정이 이미 존재합니다"
-        return 0
-    fi
-    [ -f "$sudoers_file" ] && log_info "sudoers 경로가 변경되었습니다. 재생성합니다: $sudoers_file"
+    echo ""
+    ux_section "Stale bind-mount sudoers (issue #575)"
+    ux_info "Issue #575 retired bind-mount for Claude skills/docs in favour of"
+    ux_info "a single directory symlink. The sudoers files below were created"
+    ux_info "by an earlier dotfiles version and no longer have a matching"
+    ux_info "consumer — they only widen the sudoers surface. Remove them"
+    ux_info "manually when convenient (requires sudo):"
+    echo ""
+    printf '%s' "$found"
+    echo ""
+    ux_bullet "Quick command:"
+    cat <<'EOF'
 
-    if ! cat << EOF | sudo tee "$sudoers_file" > /dev/null
-# Allow passwordless bind mount for Claude Code $description directory
-# Created by dotfiles/claude/setup.sh
-${USER} ALL=(ALL) NOPASSWD: /bin/mount --bind ${source} ${target}
-${USER} ALL=(ALL) NOPASSWD: /usr/bin/mount --bind ${source} ${target}
-${USER} ALL=(ALL) NOPASSWD: /bin/umount ${target}
-${USER} ALL=(ALL) NOPASSWD: /usr/bin/umount ${target}
+    sudo rm -f /etc/sudoers.d/claude-skills-mount-* \
+               /etc/sudoers.d/claude-docs-mount-*
+
 EOF
-    then
-        log_error "$description sudoers 파일 생성 실패"
-        return 1
-    fi
-
-    if sudo chmod 440 "$sudoers_file"; then
-        log_dim "✓ $description sudoers 설정 완료"
-    else
-        log_error "$description sudoers 파일 권한 설정 실패"
-        return 1
-    fi
 }
 
 # _print_internal_local_env_guidance — Internal-PC one-time hand-edit guide.
@@ -619,30 +624,23 @@ if [ "$_setup_mode" = "internal" ]; then
 
     _print_internal_local_env_guidance
 
+    # Surface stale /etc/sudoers.d/claude-{skills,docs}-mount-* files left
+    # behind from any prior multi-account install on this box.
+    _print_stale_bind_mount_sudoers_hint
+
     exit 0
 fi
 
 # 활성 계정 목록을 한 번만 조회하여 재사용 (PR #292 review 반영)
 ENABLED_ACCOUNTS=$(_claude_resolve_account --list)
 
-# 활성화된 계정마다 sudoers 등록 + setup
+# 활성화된 계정마다 symlink 셋업 (#575: bind-mount sudoers 제거됨).
+# CLAUDE_SKIP_SUDOERS / CLAUDE_SKIP_BIND_MOUNT 환경 변수는 더 이상 어떤
+# 동작도 게이트하지 않지만, 기존 테스트 하니스가 셋팅한 채로 들어와도
+# 무해하다.
 for acct in $ENABLED_ACCOUNTS; do
     cdir=$(_claude_resolve_account "$acct")
     log_info "Account: $acct → $cdir"
-
-    if [ "${CLAUDE_SKIP_SUDOERS:-0}" != "1" ]; then
-        _setup_bind_mount_sudoers \
-            "/etc/sudoers.d/claude-skills-mount-${acct}" \
-            "Skills (${acct})" \
-            "$CLAUDE_SKILLS_SOURCE" \
-            "${cdir}/skills"
-        _setup_bind_mount_sudoers \
-            "/etc/sudoers.d/claude-docs-mount-${acct}" \
-            "Docs (${acct})" \
-            "$CLAUDE_DOCS_SOURCE" \
-            "${cdir}/docs"
-    fi
-
     _claude_account_setup_one "$acct" "$cdir"
 done
 
@@ -650,7 +648,7 @@ done
 log_debug "\n--- 심볼릭 링크 확인 ---"
 for acct in $ENABLED_ACCOUNTS; do
     cdir=$(_claude_resolve_account "$acct")
-    for link in settings.json statusline-command.sh plugins projects/GLOBAL/memory; do
+    for link in settings.json statusline-command.sh skills docs plugins projects/GLOBAL/memory; do
         if [ -L "${cdir}/${link}" ]; then
             log_dim "✓ ${acct}/${link} 심볼릭 링크 확인됨"
         else
@@ -673,6 +671,12 @@ ux_section "다음 단계"
 ux_bullet "쉘 재시작 후 진단: ${UX_BOLD}claude-accounts status${UX_RESET}"
 ux_bullet "처음 사용: ${UX_BOLD}claude-yolo${UX_RESET} (브라우저로 ${CLAUDE_DEFAULT_ACCOUNT} 로그인)"
 ux_bullet "다른 계정: ${UX_BOLD}claude-yolo --user <name>${UX_RESET} 또는 ${UX_BOLD}claude-yolo-<name>${UX_RESET}"
+
+# Surface stale /etc/sudoers.d/claude-{skills,docs}-mount-* files left
+# behind from the pre-#575 bind-mount layout. Cleanup is manual on
+# purpose so setup.sh never has to prompt for sudo.
+_print_stale_bind_mount_sudoers_hint
+
 echo ""
 
 exit 0
