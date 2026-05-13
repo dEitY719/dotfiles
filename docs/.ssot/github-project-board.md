@@ -10,6 +10,10 @@ SSOT이다.
 
 - 저장소: `dEitY719/dotfiles` (repo-level project)
 - 카드 종류: Issue와 PR 모두 (보드에서 함께 추적)
+- **GitHub Discussions 는 보드에 포함하지 않는다** — Discussion 은
+  to-do 가 아닌 forum 항목이므로 work-in-progress 추적 대상이 아니다
+  (정책 SSOT: [`discussions-policy.md`](./discussions-policy.md)). `Auto-add to project` 워크플로우 필터는 `is:issue,pr` 만
+  매칭하므로 Discussion 은 자동 추가되지 않는다.
 - 자동화 수단: GitHub Projects v2 빌트인 워크플로우 + dotfiles 스킬 보정
 - 관련 스킬: `gh:issue-create`, `gh:pr`, `gh:pr-merge`,
   `gh:pr-merge-emergency`, `gh:issue-flow`
