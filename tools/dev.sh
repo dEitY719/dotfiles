@@ -156,17 +156,6 @@ case "$cmd" in
     fi
     ;;
 
-  mdlint)
-    echo "Running markdown linter (tox -e mdlint)..."
-    if command -v tox >/dev/null 2>&1; then
-      tox -e mdlint "${@:2}"
-      EXIT_CODE=$?
-    else
-      echo "ERROR: tox not found. Install: uv pip install tox"
-      EXIT_CODE=1
-    fi
-    ;;
-
   lint-helpfunc)
     echo "Checking help function integrity (*help)..."
     echo ""
@@ -220,8 +209,7 @@ Usage: ./tools/dev.sh <command>
 Commands:
   test            Run test suite (tests/test)
   format          Format and lint Python code (tox -e ruff)
-  lint            Run linters (ruff, mypy, shellcheck) - excludes markdown
-  mdlint          Run markdown linter separately (tox -e mdlint)
+  lint            Run linters (ruff, mypy, shellcheck, shfmt)
   lint-helpfunc   Check help functions are registered in HELP_DESCRIPTIONS
   lint-deadcode   Check for unused internal functions (_*) in shell-common/functions
   setup           Run setup script (symlinks only)
@@ -234,7 +222,6 @@ Examples:
   ./tools/dev.sh test -k test_bash
   ./tools/dev.sh format
   ./tools/dev.sh lint
-  ./tools/dev.sh mdlint
   ./tools/dev.sh lint-helpfunc
   ./tools/dev.sh lint-deadcode
   ./tools/dev.sh setup

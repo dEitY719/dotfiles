@@ -10,7 +10,7 @@
 chore[(<scope>)]: <한 줄 요약>
 ```
 
-예) `chore(tox): mdlint envlist 비활성화`
+예) `chore(deps): pylint 3.3.x 핀 업데이트`
 
 ## 본문 골격
 

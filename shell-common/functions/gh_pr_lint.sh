@@ -31,15 +31,15 @@ _gh_pr_lint__log() {
 _gh_pr_lint__has_tox_envs() {
     # tox.ini exists AND declares at least one of the lint envs we recognise.
     [ -f tox.ini ] || return 1
-    grep -qE '^\[testenv:(ruff|mdlint|shellcheck|shfmt|actionlint)\]' tox.ini
+    grep -qE '^\[testenv:(ruff|shellcheck|shfmt|actionlint)\]' tox.ini
 }
 
 _gh_pr_lint__tox_env_list() {
     # Print a comma-separated list of declared lint envs in tox.ini, in
-    # priority order (ruff, mdlint, shellcheck, shfmt, actionlint).
+    # priority order (ruff, shellcheck, shfmt, actionlint).
     [ -f tox.ini ] || return 0
     _envs=""
-    for _e in ruff mdlint shellcheck shfmt actionlint; do
+    for _e in ruff shellcheck shfmt actionlint; do
         if grep -qE "^\[testenv:$_e\]" tox.ini; then
             _envs="${_envs:+$_envs,}$_e"
         fi

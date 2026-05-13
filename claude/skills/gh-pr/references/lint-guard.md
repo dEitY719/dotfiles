@@ -32,9 +32,9 @@ _gh_pr_lint_run "$BASE_BRANCH" || {
 The guard picks tools in this order, top-down:
 
 1. **tox** — `tox.ini` exists and declares at least one of these envs:
-   `[testenv:ruff]`, `[testenv:mdlint]`, `[testenv:shellcheck]`,
-   `[testenv:shfmt]`, `[testenv:actionlint]`. Runs `tox -e <list>` with
-   only the envs that are actually declared.
+   `[testenv:ruff]`, `[testenv:shellcheck]`, `[testenv:shfmt]`,
+   `[testenv:actionlint]`. Runs `tox -e <list>` with only the envs that
+   are actually declared.
 2. **shellcheck** — `command -v shellcheck` succeeds **and** the changed
    file set contains at least one `*.sh`. Runs
    `shellcheck -x -S warning <changed-sh-files>`.
