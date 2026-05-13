@@ -3,23 +3,29 @@
 #
 # 사용 방법:
 #   1. 이 파일을 claude.local.sh 로 복사
-#      cp claude.local.example claude.local.sh
+#      cp shell-common/env/claude.local.example shell-common/env/claude.local.sh
 #   2. PC 환경에 맞게 아래 값을 수정 (필요 시)
 #   3. claude.local.sh 는 자동으로 로드됨 (.gitignore 에 의해 제외됨)
 #
-# 기본값 (claude.sh):
-#   CLAUDE_DEFAULT_ACCOUNT=personal
-#   CLAUDE_ENABLED_ACCOUNTS="personal work"
+# 기본값 (claude.sh에서 자동 감지):
+#   Internal-PC (사내):   CLAUDE_DEFAULT_ACCOUNT=work
+#                        CLAUDE_ENABLED_ACCOUNTS="work"
+#   External-PC (외부):   CLAUDE_DEFAULT_ACCOUNT=personal
+#                        CLAUDE_ENABLED_ACCOUNTS="personal work work1"
+#
+# 자동 감지는 ~/.dotfiles-setup-mode 파일의 내용을 기반으로 합니다.
+# 기본값을 오버라이드하려면 아래 변수들을 수정해서 이 파일을 저장하세요.
 
 # ─── External-PC, Home-PC ───────────────────────────────────────
-# 두 계정 모두 사용 → 기본값 그대로. 이 파일 작성 불필요.
-
-# ─── Internal-PC (사내 PC, work 계정만) ─────────────────────────
-# 아래 두 줄의 주석을 해제하면 work 계정만 활성화되고
-# `claude-yolo` 가 work 로 실행됨.
+# Setup mode가 자동으로 "personal work work1" 설정 → 이 파일 불필요
+# Custom 계정을 추가하려면 아래를 해제하고 수정:
 #
-# export CLAUDE_DEFAULT_ACCOUNT="work"
-# export CLAUDE_ENABLED_ACCOUNTS="work"
+# export CLAUDE_ENABLED_ACCOUNTS="personal work work1 custom-account"
+
+# ─── Internal-PC (사내 PC) override ──────────────────────────────
+# Setup mode가 자동으로 "work"만 설정하지만, 필요시 오버라이드:
+#
+# export CLAUDE_ENABLED_ACCOUNTS="work work-alt"
 
 # ─── 계정 ↔ 이메일 expected 매핑 (issue #300, item B) ───────────
 # 정의하면 `claude-yolo --user <name>` 가 .claude.json 의 실제
