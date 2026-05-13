@@ -87,8 +87,6 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 **On lint/test failure**: fix the root cause — do not use `--no-verify` or skip hooks.
 
-**Agent isolation is blocked in this repo.** `Agent({ isolation: "worktree" })` triggers a `git-crypt` smudge filter failure. Use sequential dispatch (no `isolation` key) or the `ai-worktree-spawn` skill. See `claude/AGENTS.md` and `docs/learnings/git-crypt-worktree-bootstrap.md`.
-
 ## Standards & References
 
 - Command/help interface: `docs/.ssot/command-guidelines.md`

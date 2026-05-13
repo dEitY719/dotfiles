@@ -219,7 +219,6 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[litellm_help]="${HELP_DESCRIPTIONS[litellm_help]:-[AI/LLM] LiteLLM proxy and routing}"
     HELP_DESCRIPTIONS[gpu_help]="${HELP_DESCRIPTIONS[gpu_help]:-[DevOps] GPU monitoring (WSL)}"
     HELP_DESCRIPTIONS[ux_help]="${HELP_DESCRIPTIONS[ux_help]:-[Development] UX library usage}"
-    HELP_DESCRIPTIONS[gc_help]="${HELP_DESCRIPTIONS[gc_help]:-[CLI] git-crypt encryption}"
     HELP_DESCRIPTIONS[mytool_help]="${HELP_DESCRIPTIONS[mytool_help]:-[Development] Custom tools and scripts}"
     HELP_DESCRIPTIONS[mysql_help]="${HELP_DESCRIPTIONS[mysql_help]:-[DevOps] MySQL service management}"
     HELP_DESCRIPTIONS[redis_help]="${HELP_DESCRIPTIONS[redis_help]:-[DevOps] Redis service management}"
