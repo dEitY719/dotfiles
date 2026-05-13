@@ -86,8 +86,8 @@ _claude_plugins_help_rows_structure() {
 }
 
 _claude_plugins_help_rows_git() {
-    ux_info "All documentation is mounted and automatically git-tracked:"
-    ux_bullet "User location: ${UX_INFO}~/.claude/docs${UX_RESET} (via bind mount)"
+    ux_info "All documentation is symlinked to the SSOT and automatically git-tracked:"
+    ux_bullet "User location: ${UX_INFO}~/.claude/docs${UX_RESET} (directory symlink, #575)"
     ux_bullet "Git source: ${UX_INFO}~/dotfiles/claude/docs${UX_RESET}"
     ux_bullet "Changes are version-controlled and shareable across machines"
 }

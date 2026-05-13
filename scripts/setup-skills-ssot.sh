@@ -20,7 +20,7 @@
 #     발생하는 것을 막는 용도. 한 줄에 하나의 skill 디렉토리 이름, '#' 으로 시작하는
 #     주석과 빈 줄은 무시됨. 파일이 없거나 모두 비어 있으면 종전대로 전체 연결.
 #
-# ~/.claude/skills 는 claude/setup.sh (bind mount) 가 관리
+# ~/.claude*/skills 는 claude/setup.sh 가 디렉토리 symlink 로 관리 (#575)
 
 # --- Constants ---
 

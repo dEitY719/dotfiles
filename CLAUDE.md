@@ -58,7 +58,7 @@ All output must use `ux_lib` functions (`ux_header`, `ux_success`, `ux_error`, `
 
 ### Claude Code Integration
 
-`claude/settings.json` and `claude/statusline-command.sh` are symlinked into `~/.claude/`. The `claude/skills/` directory is bind-mounted to `~/.claude/skills/` (not symlinked).
+`claude/settings.json` and `claude/statusline-command.sh` are symlinked into `~/.claude/`. The `claude/skills/` and `claude/docs/` directories are also symlinked (directory-level) into each account's `~/.claude*/skills` and `~/.claude*/docs` — the same scheme in every setup mode (#575).
 
 ## Critical Rules
 
