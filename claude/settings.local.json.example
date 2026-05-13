@@ -1,0 +1,7 @@
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://cloud.dtgpt.samsungds.net/llm",
+    "ANTHROPIC_AUTH_TOKEN": "your-dt-api-key",
+    "ANTHROPIC_MODEL": "Qwen3.6-27B"
+  }
+}

@@ -50,6 +50,11 @@ else
     exit 1
 fi
 
+# Neutralize any leftover git-crypt smudge/clean config (#594). Idempotent
+# safety net — repo no longer encrypts files, but older PCs may still carry
+# `filter.git-crypt.required=true` in their per-repo git config.
+./scripts/disable-git-crypt-local.sh
+
 # Run setup scripts for shell-common, bash, zsh, git, claude, and vscode-extensions
 ./shell-common/setup.sh
 ./bash/setup.sh
@@ -65,7 +70,10 @@ fi
 ./ssh/setup.sh
 ./gh/setup.sh
 
-
+# Post-setup integrity check (#594): JSON parse + NBSP/BOM/NUL scan on
+# every config file setup.sh activated via symlink. Fails loud if any
+# target file is corrupted.
+./scripts/verify-config-files.sh
 
 # Run setup scripts for vim and tmux
 
