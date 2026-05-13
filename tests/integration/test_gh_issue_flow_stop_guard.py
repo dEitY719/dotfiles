@@ -516,3 +516,157 @@ def test_trace_on_emits_allow_reason_for_terminal_marker(tmp_path: Path) -> None
     assert result.stdout.strip() == ""
     assert "Step 3 terminal marker" in result.stderr
     assert "sub_skills_seen=5/5" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# Wrapped slash-command boundary (issues #607 / #609)
+#
+# When a user invokes `/gh-issue-flow N` interactively, Claude Code does not
+# place the raw command in the transcript. Instead it writes a multi-line
+# user message of the form:
+#
+#     <command-message>gh-issue-flow</command-message>
+#     <command-name>/gh-issue-flow</command-name>
+#     <command-args>N</command-args>
+#     Base directory for this skill: .../skills/gh-issue-flow
+#     # gh:issue-flow — Issue → PR composition
+#     ...(SKILL.md body)...
+#     ARGUMENTS: N
+#
+# The pre-#607 boundary detector used `lstrip().startswith("/gh-issue-flow")`,
+# which never matched this wrapped form — so every Stop event in a real
+# `/gh-issue-flow` session fell through to fail-open and the chain stopped
+# the moment the model emitted any prose between sub-skills. These fixtures
+# reproduce the actual transcript form and pin down the regression.
+# ---------------------------------------------------------------------------
+
+
+def _user_slash_command(skill_name: str, args: str) -> dict[str, Any]:
+    """Build a user message in the format Claude Code writes to transcripts.
+
+    Mirrors the `<command-message>/<command-name>/<command-args>` triple
+    plus the SKILL.md body that follows when the user invokes a slash
+    command interactively. The fixture reproduces enough of the real
+    transcript shape to drive boundary detection without bloating the
+    test payload with a full SKILL.md.
+    """
+    content = (
+        f"<command-message>{skill_name}</command-message>\n"
+        f"<command-name>/{skill_name}</command-name>\n"
+        f"<command-args>{args}</command-args>\n"
+        f"Base directory for this skill: /tmp/skills/{skill_name}\n"
+        f"# {skill_name}\n"
+        f"ARGUMENTS: {args}\n"
+    )
+    return {"type": "user", "message": {"role": "user", "content": content}}
+
+
+def test_wrapped_slash_command_recognized_as_flow_start(tmp_path: Path) -> None:
+    """`<command-name>/gh-issue-flow</command-name>` must mark a boundary."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_slash_command("gh-issue-flow", "457"),
+            _assistant_skill("gh-issue-implement", "457 direct origin --no-next-hint"),
+            _assistant_text("gh:issue-implement #457 complete\n  Tests: 12 passed"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        "Hook must recognize the <command-name>/gh-issue-flow</command-name> "
+        f"wrapped form as a flow boundary. stdout={result.stdout!r}"
+    )
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "gh-commit" in decision["reason"]
+    assert "Step 2.2" in decision["reason"]
+
+
+def test_wrapped_slash_command_colon_namespace_recognized(tmp_path: Path) -> None:
+    """The colon-namespace form `<command-name>/gh:issue-flow</command-name>`
+    must also be recognized — Claude Code occasionally emits either form
+    depending on how the skill is registered.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_slash_command("gh:issue-flow", "457"),
+            _assistant_skill("gh-issue-implement"),
+            _assistant_skill("gh-commit"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "gh-pr" in decision["reason"]
+    assert "Step 2.3" in decision["reason"]
+
+
+def test_wrapped_command_inside_tool_result_does_not_trigger(tmp_path: Path) -> None:
+    """A `<command-name>/gh-issue-flow</command-name>` substring landing in
+    a tool_result block (e.g. the model reads a doc that quotes Claude
+    Code's wrapping format) must NOT be treated as a real invocation —
+    the existing `include_tool_results=False` guard still applies to the
+    new regex matcher.
+    """
+    wrapped_inside_doc = (
+        "Example: when a user types /gh-issue-flow N, the transcript looks like\n"
+        "\n"
+        "    <command-name>/gh-issue-flow</command-name>\n"
+        "    <command-args>N</command-args>\n"
+        "\n"
+        "and the hook treats that as the flow start.\n"
+    )
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("can you read the docs about the gh-issue-flow stop hook?"),
+            _user_tool_result(wrapped_inside_doc),
+            _assistant_text("Sure — the hook ..."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        "Hook treated <command-name> string inside a tool_result as a real "
+        f"slash-command invocation. stdout={result.stdout!r}"
+    )
+
+
+def test_wrapped_command_full_session_blocks_with_step_2_2_reason(
+    tmp_path: Path,
+) -> None:
+    """End-to-end shape of the production regression in #607 / #609:
+
+    user invokes /gh-issue-flow → Claude Code wraps it in <command-name>
+    tags → assistant invokes Skill(gh-issue-implement) → assistant emits
+    a self-authored success summary and tries to stop. The hook must
+    block and route the model to Step 2.2.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_slash_command("gh-issue-flow", "457"),
+            _assistant_skill("gh-issue-implement", "457 direct origin --no-next-hint"),
+            _assistant_text(
+                "gh:issue-implement complete for #457.\n\n"
+                "Summary\n"
+                "  Issue:        #457 feat(db): index strategy\n"
+                "  Mode:         direct\n"
+                "  Files:        1 new\n"
+                "  Tests:        12 passed\n\n"
+                "[ai-metrics:gh-issue-implement] ~7 min — will be included "
+                "in gh-commit metrics\n"
+            ),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    reason = decision["reason"]
+    assert "Step 2.2" in reason
+    assert "gh-commit" in reason
+    assert "1/5" in reason
