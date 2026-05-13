@@ -1,5 +1,7 @@
 # git-crypt + worktree 부트스트랩 함정
 
+> **HISTORICAL — git-crypt 는 issue #594 (PR feat/594-disable-git-crypt) 에서 dotfiles repo 전체에서 제거되었습니다.** 본 문서는 당시 함정의 원인과 의사결정을 기록하기 위해 남겨둡니다. 현재 setup 흐름에는 적용되지 않습니다.
+
 ## Context
 
 - **출처**: [Issue #153](https://github.com/dEitY719/dotfiles/issues/153) — 한 세션에서 `Agent({ isolation: "worktree" })`로 두 작업(PR #154, PR #151 리뷰 응대)을 병렬 디스패치하려다 두 에이전트 모두 worktree 생성 단계에서 실패
