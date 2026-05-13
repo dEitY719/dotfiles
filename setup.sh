@@ -28,6 +28,9 @@ set -e
 ./gemini/setup.sh
 ./scripts/setup-skills-ssot.sh
 ./vscode-extensions/setup.sh
+# Propagate .vscode/base.json (SSOT) to the live VS Code User settings.json (#586).
+# Non-fatal: sync-push exits 1 when VS Code is absent on this host.
+./.vscode/sync-push.sh || echo "Warning: .vscode/sync-push.sh 건너뜀 (VS Code 미설치 또는 환경 미감지). 필요 시 수동 실행."
 ./ssh/setup.sh
 ./gh/setup.sh
 
