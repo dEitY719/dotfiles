@@ -21,7 +21,11 @@ build/
 __pycache__/
 *.egg-info/
 
-.secrets/*.asc
+# Secrets — never track. Originals must live outside the repo
+# (e.g., ~/.config/dotfiles-secrets/ or a password manager).
+.env
+.secrets/
+.git-crypt/
 
 # Claude Code settings.json is now the tracked SSOT (#584). Only timestamped
 # backups produced by setup.sh symlink-replacement remain ignored.
