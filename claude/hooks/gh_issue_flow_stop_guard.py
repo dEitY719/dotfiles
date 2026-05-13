@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -67,11 +68,31 @@ TERMINAL_PATTERNS: tuple[str, ...] = (
     "gh-issue-flow stopped at step",
 )
 
-# Tokens that mark the *start* of a gh-issue-flow chain. Either the user
-# typed `/gh-issue-flow ...` or the assistant invoked `Skill(gh-issue-flow)`.
-FLOW_START_TOKENS: tuple[str, ...] = (
-    "/gh-issue-flow",
-    "/gh:issue-flow",
+# Regex that marks the *start* of a gh-issue-flow chain in a user message.
+# Matches two real-world forms that user-typed slash commands take in Claude
+# Code transcripts (issues #607 / #609):
+#
+#   (a) Raw `/gh-issue-flow ...` (or colon form `/gh:issue-flow ...`) at the
+#       start of a line — historical fixture form, still valid for tests
+#       and for users who paste the command into a longer message.
+#   (b) The `<command-name>/gh-issue-flow</command-name>` (or colon form)
+#       wrapper that Claude Code emits when a user invokes the slash
+#       command interactively. The user message also contains
+#       `<command-message>` / `<command-args>` siblings, but matching the
+#       `<command-name>` tag alone is sufficient and the most stable
+#       anchor across CLI versions.
+#
+# The `(?m)^\s*` prefix on the raw branch restricts matching to line
+# starts so a mid-sentence mention like "I was reading about
+# /gh-issue-flow..." stays out — preserved from the prior
+# `lstrip().startswith()` behavior, now expressed per-line.
+# False-positive guards for `tool_result` payloads (e.g. SKILL.md being
+# read by the model) are layered separately in `_iter_text_blocks(...,
+# include_tool_results=False)`.
+_USER_BOUNDARY_RE: re.Pattern[str] = re.compile(
+    r"(?m)"
+    r"(?:^\s*/gh[-:]issue-flow\b"
+    r"|<command-name>\s*/gh[-:]issue-flow\s*</command-name>)"
 )
 FLOW_SKILL_NAMES: set[str] = {"gh-issue-flow", "gh:issue-flow"}
 
@@ -182,9 +203,12 @@ def _find_flow_boundary(messages: list[dict[str, Any]]) -> int:
     Boundary signals (role-restricted to avoid false positives from file
     content read into tool_result blocks — see PR #386 review feedback):
       - assistant message: tool_use of Skill(gh-issue-flow | gh:issue-flow)
-      - user message: text content begins with /gh-issue-flow or /gh:issue-flow
-        (tool_result blocks excluded so a file mentioning the command does
-        not trip the boundary)
+      - user message: text content matches `_USER_BOUNDARY_RE`, which
+        recognizes both the raw `/gh-issue-flow ...` form (line start) and
+        the `<command-name>/gh-issue-flow</command-name>` wrapper Claude
+        Code emits when the user invokes the slash command interactively
+        (issues #607 / #609). `tool_result` blocks are excluded so a file
+        mentioning the command does not trip the boundary.
     """
     for i in range(len(messages) - 1, -1, -1):
         msg = _message_payload(messages[i])
@@ -195,10 +219,8 @@ def _find_flow_boundary(messages: list[dict[str, Any]]) -> int:
                     return i
         elif role == "user":
             for text in _iter_text_blocks(msg, include_tool_results=False):
-                stripped = text.lstrip()
-                for tok in FLOW_START_TOKENS:
-                    if stripped.startswith(tok):
-                        return i
+                if _USER_BOUNDARY_RE.search(text):
+                    return i
     return -1
 
 
