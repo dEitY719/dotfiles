@@ -2,7 +2,6 @@
   "env": {
     "GH_PR_REPLY_AUTO_APPROVE_REPOS": "dEitY719/dotfiles"
   },
-  "model": "haiku",
   "statusLine": {
     "type": "command",
     "command": "${HOME}/dotfiles/claude/statusline-command.sh"
