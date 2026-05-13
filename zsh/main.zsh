@@ -35,6 +35,16 @@ if [ -z "$DOTFILES_ROOT" ]; then
     fi
 fi
 
+# Canonicalize to the main worktree (issue #589). Same rationale as
+# bash/main.bash — when sourced from a linked worktree, DOTFILES_ROOT
+# would otherwise leak that path into ~/.claude-*/ symlinks.
+_dotfiles_root_resolver="${DOTFILES_ROOT}/shell-common/functions/dotfiles_root.sh"
+if [ -r "$_dotfiles_root_resolver" ]; then
+    . "$_dotfiles_root_resolver"
+    _dotfiles_root_canonicalize
+fi
+unset _dotfiles_root_resolver
+
 # Set derived paths (unified with bash via consistent path resolution)
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"

@@ -21,6 +21,26 @@ set -e
 
 # Load UX library so user-facing messages stay consistent (mirrors install.sh).
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Canonicalize to the main worktree (issue #589). Running ./setup.sh from a
+# linked worktree would otherwise bake the worktree path into every
+# ~/.claude-*/{settings.json, statusline-command.sh, skills, docs, ...}
+# symlink. When the worktree is later removed those symlinks dangle and
+# Claude Code silently reverts to defaults (no statusline, no hooks).
+_DOTFILES_RESOLVER="${DOTFILES_DIR}/shell-common/functions/dotfiles_root.sh"
+if [ -r "$_DOTFILES_RESOLVER" ]; then
+    # shellcheck source=shell-common/functions/dotfiles_root.sh
+    source "$_DOTFILES_RESOLVER"
+    _CANONICAL=$(_resolve_dotfiles_root_canonical "$DOTFILES_DIR")
+    if [ -n "$_CANONICAL" ] && [ "$_CANONICAL" != "$DOTFILES_DIR" ]; then
+        echo "[setup.sh] 워크트리에서 실행됨 — 메인 워크트리로 전환: $_CANONICAL" >&2
+        cd "$_CANONICAL"
+        DOTFILES_DIR="$_CANONICAL"
+    fi
+    unset _CANONICAL
+fi
+unset _DOTFILES_RESOLVER
+
 UX_LIB_SCRIPT="${DOTFILES_DIR}/shell-common/tools/ux_lib/ux_lib.sh"
 if [ -f "${UX_LIB_SCRIPT}" ]; then
     # shellcheck source=/dev/null

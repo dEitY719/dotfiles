@@ -97,13 +97,20 @@ setup_isolated_dotfiles_root() {
     export SHELL_COMMON="$iso_root/shell-common"
 }
 
-# Run a command in bash subprocess with dotfiles loaded
+# Run a command in bash subprocess with dotfiles loaded.
+#
+# DOTFILES_ROOT_NO_CANONICALIZE=1 bypasses the worktree-canonicalization
+# helper (issue #589) that bash/main.bash and zsh/main.zsh would otherwise
+# use to rewrite ${DOTFILES_ROOT} from this worktree's path back to the
+# main repo. Tests need to exercise the worktree's code, not whatever
+# is installed at ~/dotfiles.
 run_in_bash() {
     run bash --noprofile --norc -c "
         export DOTFILES_ROOT='${DOTFILES_ROOT}'
         export SHELL_COMMON='${SHELL_COMMON}'
         export DOTFILES_FORCE_INIT=1
         export DOTFILES_TEST_MODE=1
+        export DOTFILES_ROOT_NO_CANONICALIZE=1
         export HOME='${HOME}'
         export TERM=dumb
         source '${DOTFILES_ROOT}/bash/main.bash'
@@ -118,6 +125,7 @@ run_in_zsh() {
         export SHELL_COMMON='${SHELL_COMMON}'
         export DOTFILES_FORCE_INIT=1
         export DOTFILES_TEST_MODE=1
+        export DOTFILES_ROOT_NO_CANONICALIZE=1
         export HOME='${HOME}'
         export ZDOTDIR='${HOME}'
         export TERM=dumb

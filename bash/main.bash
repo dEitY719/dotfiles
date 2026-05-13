@@ -57,6 +57,20 @@ fi
 _BASH_SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 _BASH_SCRIPT_DIR="$(dirname "$_BASH_SCRIPT_PATH")"
 DOTFILES_ROOT="${_BASH_SCRIPT_DIR%/bash}"
+
+# Canonicalize to the main worktree (issue #589). When the loader is sourced
+# inside a linked worktree, ${DOTFILES_ROOT} would otherwise point at the
+# worktree path and bleed into ~/.claude-*/ symlinks created by
+# claude_accounts_init. The helper is source-from-candidate-path safe — the
+# function does not depend on DOTFILES_ROOT already being canonical.
+_dotfiles_root_resolver="${DOTFILES_ROOT}/shell-common/functions/dotfiles_root.sh"
+if [ -r "$_dotfiles_root_resolver" ]; then
+    # shellcheck source=../shell-common/functions/dotfiles_root.sh
+    . "$_dotfiles_root_resolver"
+    _dotfiles_root_canonicalize
+fi
+unset _dotfiles_root_resolver
+
 export DOTFILES_ROOT
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 export SHELL_COMMON
