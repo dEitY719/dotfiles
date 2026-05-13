@@ -60,12 +60,24 @@ _resolve_dotfiles_root_canonical() {
         return 0
     fi
 
+    # Compare --git-dir with --git-common-dir to safely detect *linked
+    # worktrees only*. They differ only when the checkout is a linked
+    # worktree of either a main repo or a submodule. They are equal for:
+    #   - main worktree of a regular repo (.git == .git)
+    #   - main checkout of a submodule (.git/modules/<sub> == itself)
+    # In the equal case dirname walks to .git/modules (wrong target),
+    # so short-circuit and return the candidate untouched. Reported by
+    # gemini-code-assist on PR #593.
+    _rdrc_git_dir=$(git -C "$_rdrc_candidate" rev-parse --git-dir 2>/dev/null) || {
+        echo "$_rdrc_candidate"
+        return 0
+    }
     _rdrc_common=$(git -C "$_rdrc_candidate" rev-parse --git-common-dir 2>/dev/null) || {
         echo "$_rdrc_candidate"
         return 0
     }
 
-    if [ -z "$_rdrc_common" ]; then
+    if [ -z "$_rdrc_common" ] || [ "$_rdrc_git_dir" = "$_rdrc_common" ]; then
         echo "$_rdrc_candidate"
         return 0
     fi
