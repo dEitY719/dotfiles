@@ -13,7 +13,7 @@
 
 - 저장소: `dEitY719/dotfiles` (단일 repo)
 - 카테고리: 4종 (`Announcements`, `Ideas`, `Q&A`, `Lessons`)
-- 변환: GitHub UI 의 양방향 `Convert to issue` / `Create discussion`
+- 변환: GitHub UI 의 양방향 `Convert to issue` / `Convert to discussion`
 - 관련 정책: [`github-project-board.md`](./github-project-board.md) —
   Discussion 은 칸반 보드에 포함하지 않는다.
 
@@ -94,17 +94,21 @@ SSOT/정책 변경 공지인가?
 
 Ideas 카테고리에서 결정이 났을 때 사용한다.
 
-1. GitHub UI 의 `Convert to issue` 버튼 사용.
+1. GitHub UI 의 `Convert to issue` 버튼 사용. GitHub 은 변환 직후
+   원본 Discussion 을 자동으로 close 처리하고 "transferred to issue"
+   배너를 남긴다 — 별도 close 조작 불필요.
 2. 변환된 Issue 본문 첫 줄에 백링크 추가:
    ```
    Originated from discussion #<N>
    ```
-3. 원본 Discussion 은 **close 하지 않고** 다음 코멘트를 남긴다:
+3. (선택) 자동 close 된 원본 Discussion 에 다음 코멘트를 남겨 양방향
+   참조를 명확히 한다:
    ```
    Linked to issue #<M> -- decision tracked there.
    ```
-4. 원본 Discussion 을 `Lock conversation` (Resolved 사유) 으로 잠가
-   추가 토론을 새 Issue 로 유도한다. 토론 흔적은 forum 에 보존된다.
+4. (선택) 원본 Discussion 을 `Lock conversation` (Resolved 사유) 으로
+   잠가 추가 토론을 새 Issue 로 유도한다. 토론 흔적은 closed 상태로
+   forum 에 보존된다.
 
 ## Issue → Discussion 변환 규약 (역방향)
 
@@ -127,7 +131,10 @@ Ideas 카테고리에서 결정이 났을 때 사용한다.
 Discussion 은 댓글·반응 forum.
 
 - 신규 learnings 발행 시: `docs/learnings/<slug>.md` 작성 후 Lessons
-  카테고리에 동일 제목 Discussion 을 만들고 본문 첫 줄에 파일 링크.
+  카테고리에 동일 제목 Discussion 을 만들고 본문 첫 줄에 파일의 절대
+  URL 링크 (Discussion 본문은 상대 경로를 자동 링크화하지 않음).
+  permalink (commit SHA) 대신 기본 브랜치 경로를 사용한다 —
+  learnings 는 살아있는 문서이므로 최신 본을 가리키는 게 정합.
 - Discussion 본문 자체는 짧게 — 파일이 정본, Discussion 은 회고 통로.
 - 파일 갱신 시 Discussion 본문은 갱신하지 않는다 (mirror 정합성을
   엄격하게 강제하지 않음 — overhead 회피).
