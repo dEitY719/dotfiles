@@ -414,7 +414,7 @@ _print_stale_bind_mount_sudoers_hint() {
 EOF
 }
 
-# _print_internal_local_env_guidance — Internal-PC one-time hand-edit guide.
+# _print_internal_local_env_guidance — Internal-PC auto-create settings.local.json.
 #
 # Why this exists: the shared claude/settings.json SSOT (#584) cannot carry
 # the ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL env vars,
@@ -427,7 +427,7 @@ EOF
 # Idempotent: when the file already has a real ANTHROPIC_AUTH_TOKEN
 # (anything other than the literal placeholder), this function prints a
 # single success line and returns. Only an absent or placeholder-only
-# file triggers the full copy-paste block.
+# file triggers auto-creation.
 _print_internal_local_env_guidance() {
     local target="$HOME/.claude/settings.local.json"
     local placeholder="your-dt-api-key"
@@ -442,48 +442,33 @@ _print_internal_local_env_guidance() {
         return 0
     fi
 
-    echo ""
-    ux_section "Internal Claude env (one-time manual setup)"
-    ux_info "This Internal PC needs three ANTHROPIC_* env vars to reach the"
-    ux_info "Samsung internal gateway (cloud.dtgpt.samsungds.net). They are"
-    ux_info "intentionally NOT in the shared claude/settings.json SSOT because"
-    ux_info "they would break External/Home Claude Code on the same dotfiles."
-    ux_info "Create the file below ONCE. Claude Code automatically merges it"
-    ux_info "with settings.json on every launch. The file is gitignored, so"
-    ux_info "your token never reaches GitHub."
-    echo ""
-    ux_bullet "Path: ${UX_BOLD}$target${UX_RESET}"
-    ux_bullet "Content (paste verbatim, then edit the AUTH_TOKEN line):"
-    cat <<'EOF'
-
-    {
-      "env": {
-        "ANTHROPIC_BASE_URL": "http://cloud.dtgpt.samsungds.net/llm",
-        "ANTHROPIC_AUTH_TOKEN": "your-dt-api-key",
-        "ANTHROPIC_MODEL": "Qwen3.6-27B"
-      }
-    }
-
+    # Auto-create settings.local.json with placeholder
+    mkdir -p "$(dirname "$target")"
+    cat > "$target" <<'EOF'
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://cloud.dtgpt.samsungds.net/llm",
+    "ANTHROPIC_AUTH_TOKEN": "your-dt-api-key",
+    "ANTHROPIC_MODEL": "Qwen3.6-27B"
+  }
+}
 EOF
+
+    echo ""
+    ux_section "Internal Claude env (auto-created)"
+    ux_success "settings.local.json created: $target"
+    ux_info "Claude Code automatically merges it with settings.json on every"
+    ux_info "launch. The file is gitignored, so your token never reaches GitHub."
+    echo ""
     ux_warning "Replace \"$placeholder\" with the real token issued by the"
     ux_warning "internal LLM gateway team. Until you do, Claude Code on this PC"
     ux_warning "will get HTTP 401 from the gateway."
     echo ""
-    ux_bullet "Quick command (creates the file with the placeholder, ready to edit):"
-    cat <<'EOF'
-
-    mkdir -p ~/.claude && cat > ~/.claude/settings.local.json <<'JSON'
-    {
-      "env": {
-        "ANTHROPIC_BASE_URL": "http://cloud.dtgpt.samsungds.net/llm",
-        "ANTHROPIC_AUTH_TOKEN": "your-dt-api-key",
-        "ANTHROPIC_MODEL": "Qwen3.6-27B"
-      }
-    }
-    JSON
-
-EOF
-    ux_info "Verify after editing: ${UX_BOLD}jq -e .env.ANTHROPIC_AUTH_TOKEN ~/.claude/settings.local.json${UX_RESET}"
+    ux_bullet "Edit the file:"
+    ux_bullet "  ${UX_BOLD}vim $target${UX_RESET}"
+    echo ""
+    ux_bullet "Verify after editing:"
+    ux_bullet "  ${UX_BOLD}jq -e .env.ANTHROPIC_AUTH_TOKEN $target${UX_RESET}"
     echo ""
 }
 
