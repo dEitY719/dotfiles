@@ -8,57 +8,64 @@ This directory contains configuration files for [Claude Code](https://claude.com
 
 ### First Time Setup
 
-After cloning this repository, create your personal Claude Code settings:
+`claude/settings.json` is the **tracked SSOT** (#584) — the same file is used on
+Home, External, and Internal PCs. `./setup.sh` symlinks it to
+`~/.claude/settings.json` automatically; no bootstrap copy step is needed.
+
+### Internal PC — one-time env block
+
+The shared SSOT cannot carry the Samsung internal `ANTHROPIC_*` env vars
+because those values point at `cloud.dtgpt.samsungds.net` and would break
+Claude Code on External / Home. Internal-PC users create a separate
+per-machine override file (gitignored, out-of-repo) once:
 
 ```bash
-cp claude/settings.template.json claude/settings.json
+mkdir -p ~/.claude && cat > ~/.claude/settings.local.json <<'JSON'
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://cloud.dtgpt.samsungds.net/llm",
+    "ANTHROPIC_AUTH_TOKEN": "your-dt-api-key",
+    "ANTHROPIC_MODEL": "Qwen3.6-27B"
+  }
+}
+JSON
 ```
 
-### Customizing Your Settings
+Then replace `your-dt-api-key` with the real token issued by the internal LLM
+gateway team. Claude Code merges `~/.claude/settings.local.json` with
+`~/.claude/settings.json` on every launch.
 
-Edit `claude/settings.json` to match your personal environment:
+`claude/setup.sh` prints the same snippet at the end of Internal-mode setup
+so you don't have to come back to this README.
 
-**Key customizations:**
+Verify after editing:
 
-1. **Model selection** - Choose your preferred model (e.g., `haiku`, `sonnet`, `opus`)
-   ```json
-   "model": "haiku"
-   ```
+```bash
+jq -e .env.ANTHROPIC_AUTH_TOKEN ~/.claude/settings.local.json
+```
 
-2. **Permissions** - Add bash commands or tools you frequently use in the `allow` array
-   ```json
-   "permissions": {
-     "allow": [
-       "Bash(your-command:*)",
-       // ... more permissions
-     ]
-   }
-   ```
+### Customizing Shared Settings
 
-3. **Status Line** - Configure how Claude Code displays status information.
-   The dotfiles SSOT path works across all multi-account `CLAUDE_CONFIG_DIR`
-   targets (e.g. `~/.claude-personal`, `~/.claude-work`) without depending on
-   per-account symlinks. See issue #296.
-   ```json
-   "statusLine": {
-     "type": "command",
-     "command": "${HOME}/dotfiles/claude/statusline-command.sh"
-   }
-   ```
+Edit `claude/settings.json` to change behavior across all PCs:
 
-4. **Plugins** - Enable/disable Claude Skills
-   ```json
-   "enabledPlugins": {
-     "document-skills@anthropic-agent-skills": true,
-     "example-skills@anthropic-agent-skills": true
-   }
-   ```
+- **Model** — `"model": "haiku" | "sonnet" | "opus"`
+- **Status line** — `statusLine.command` points at the dotfiles SSOT script
+  (`${HOME}/dotfiles/claude/statusline-command.sh`); works across multi-account
+  `CLAUDE_CONFIG_DIR` targets without per-account symlinks (issue #296).
+- **Hooks** — `Stop` / `PostToolUse` entries already wired for `gh:issue-flow`
+  and `gh:pr` flows.
+- **Plugins** — `enabledPlugins` controls which Claude plugins load.
+- **Sandboxing / permissions** — add Claude Code permission rules here if you
+  want them shipped across all your PCs; per-PC overrides go in the local
+  override file.
 
 ## Important Notes
 
-- **`claude/settings.json` is NOT version controlled** - It contains personal, environment-specific settings
-- **`claude/settings.template.json`** - Shared template with basic, team-friendly defaults
-- Use relative paths (e.g., `./script.sh`) instead of absolute paths when possible for better team compatibility
+- `claude/settings.json` **IS** version controlled (this changed in #584).
+  Hand-edits land in git history — keep it free of PII / tokens.
+- Per-PC secrets (Knox ID, internal API tokens, machine-specific paths) go
+  in `~/.claude/settings.local.json` — a regular file outside the repo,
+  gitignored as defense-in-depth.
 
 ## SKILL.md Writing Rules
 
@@ -88,10 +95,14 @@ description: Create beautiful visualizations from any content or idea. Use for s
 
 ```
 claude/
-├── README.md                    # This file
-├── settings.template.json       # Team defaults (version controlled)
-├── settings.json               # Your personal settings (ignored by git)
+├── README.md                   # This file
+├── settings.json               # Tracked SSOT (#584) — symlinked to ~/.claude/
+├── setup.sh                    # Symlinks settings.json into ~/.claude/
+├── statusline-command.sh       # Status-line renderer
+├── hooks/                      # PreToolUse / PostToolUse / Stop hooks
 └── skills/                     # Claude Code custom skills
+
+~/.claude/settings.local.json   # Per-PC, gitignored, hand-created on Internal
 ```
 
 ## Resources

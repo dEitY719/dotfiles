@@ -23,16 +23,13 @@ __pycache__/
 
 .secrets/*.asc
 
-# Claude Code personal settings (user-specific, environment-dependent)
-claude/settings.json
-# Migration backups carry the same secrets as the source — keep them out of
-# the tree even when the migration helper happens to write here (issue #554).
-claude/settings.json.*
-# settings.local.json carries PC-specific env (사내 ANTHROPIC_BASE_URL, 사번
-# 헤더 등). Tracked-by-mistake history: 0b36f07 committed it as an "SSOT
-# 통합", but that path leaks secrets the moment an internal-PC user pastes
-# the Samsung gateway env block in. Treat it like .env — gitignored,
-# bootstrapped from settings.local.example.json on first setup (issue #571).
+# Claude Code settings.json is now the tracked SSOT (#584). Only timestamped
+# backups produced by setup.sh symlink-replacement remain ignored.
+claude/settings.json.backup.*
+# settings.local.json carries PC-specific env (사내 ANTHROPIC_BASE_URL,
+# ANTHROPIC_AUTH_TOKEN, 사번 헤더 등). Gitignored so secrets never reach
+# GitHub. Internal-PC users hand-create ~/.claude/settings.local.json once;
+# claude/setup.sh prints the exact heredoc on Internal mode (#584).
 claude/settings.local.json
 .claude/
 

@@ -1,0 +1,41 @@
+{
+  "env": {
+    "GH_PR_REPLY_AUTO_APPROVE_REPOS": "dEitY719/dotfiles"
+  },
+  "model": "haiku",
+  "statusLine": {
+    "type": "command",
+    "command": "${HOME}/dotfiles/claude/statusline-command.sh"
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/dotfiles/claude/hooks/gh_issue_flow_stop_guard.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/dotfiles/claude/hooks/post-gh-pr-create.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "ralph-loop@claude-plugins-official": true
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "telemetry": {
+    "enabled": false
+  }
+}

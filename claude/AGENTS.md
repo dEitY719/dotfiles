@@ -71,9 +71,8 @@ Dependencies: Claude Code CLI, jq, sudo
 ~/.codex/skills/<name>                   -> dotfiles/claude/skills/<name>/  (per-skill)
 ```
 
-`settings.json` — gitignored, per-machine 설정.
-`settings.local.json` — **gitignored, untracked SSOT** (issue #571). PC-specific env
-(사번 헤더, 사내 `ANTHROPIC_BASE_URL` 등). `claude/setup.sh`가 `settings.local.example.json`에서 부트스트랩.
+`settings.json` — **tracked SSOT** (#584). 동일한 파일이 Home/External/Internal 모두에서 `~/.claude/settings.json` 으로 심볼릭링크됨.
+`~/.claude/settings.local.json` — out-of-repo, gitignored, Internal PC 1회 손수 작성. 사번 헤더 / 사내 `ANTHROPIC_*` 가 들어가며 Claude Code 가 settings.json 과 native merge. `claude/setup.sh` 가 Internal 모드 종료 직전 copy-paste heredoc 안내 출력 (#584).
 
 `~/.dotfiles-setup-mode` 가 `internal` 이면 `claude_yolo` 가 멀티-계정 해석을 우회하고 `~/.claude/` 를 강제 사용 (F-2). 잘못 migrate된 사내 PC 복구: `claude-accounts rollback` (F-3). 자세한 내용은 `docs/setup/internal-pc.md`.
 

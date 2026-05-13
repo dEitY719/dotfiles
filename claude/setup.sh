@@ -6,13 +6,15 @@
 # WHEN TO RUN: Via ./setup.sh (do NOT run manually)
 #
 # SPECIAL INITIALIZATION (why this file is REQUIRED):
-#   1. Creates ~/.claude/settings.json symlink (Claude Code settings)
-#   2. Creates ~/.claude/settings.local.json symlink (env / per-user overrides)
-#   3. Creates ~/.claude/statusline-command.sh symlink (status line script)
-#   4. Creates ~/.claude/skills symlink (custom skills directory)
-#   5. Creates ~/.claude/docs symlink (custom docs directory)
-#   6. Creates ~/.claude/projects/GLOBAL/memory symlink (global memory)
-#   7. Verifies ~/.claude directory structure
+#   1. Creates ~/.claude/settings.json symlink (tracked SSOT, #584)
+#   2. Creates ~/.claude/statusline-command.sh symlink (status line script)
+#   3. Creates ~/.claude/skills symlink (custom skills directory)
+#   4. Creates ~/.claude/docs symlink (custom docs directory)
+#   5. Creates ~/.claude/projects/GLOBAL/memory symlink (global memory)
+#   6. Verifies ~/.claude directory structure
+#   7. On Internal mode: prints copy-paste guidance for hand-creating
+#      ~/.claude/settings.local.json with the Samsung gateway env block (#584).
+#      That file is gitignored / out-of-repo so secrets never reach GitHub.
 #
 # These files/directories are version-controlled in dotfiles and should
 # be managed via symbolic links for consistency across machines.
@@ -87,12 +89,12 @@ fi
 
 # Auto-migrate legacy statusLine.command (issue #300, item A).
 #
-# PR #297 updated settings.template.json to point at the dotfiles SSOT path
-# (${HOME}/dotfiles/claude/statusline-command.sh) but left the gitignored
-# claude/settings.json copy untouched. Users on the multi-account layout
-# whose live settings.json still hardcodes the legacy ${HOME}/.claude/...
-# path silently lose the statusline because that file no longer exists
-# under the empty guard directory.
+# Now that claude/settings.json is the tracked SSOT (#584), this migration
+# is a defense-in-depth no-op for the canonical install — the SSOT already
+# carries the correct ${HOME}/dotfiles/claude/statusline-command.sh path.
+# It is left in place for installs whose live ~/.claude/settings.json was
+# carried over from a pre-#584 multi-account layout and still hardcodes
+# the legacy ${HOME}/.claude/... path.
 #
 # This helper detects that exact legacy literal and rewrites it in place
 # (preserving any other field), with a timestamped backup. Any other
@@ -151,52 +153,6 @@ _migrate_legacy_statusline_command() {
         rm -f "$tmp"
         log_error "settings.json 갱신 실패 — 백업 보존: $backup"
         return 1
-    fi
-}
-
-# Auto-remove duplicate env block from settings.json (issue #555 follow-up,
-# PR #557 review C1). The env SSOT moved to settings.local.json; users who
-# previously hand-merged the env block into their per-machine settings.json
-# would otherwise end up with duplicate definitions, defeating the SSOT
-# intent. Idempotent — only mutates when both files carry an env block,
-# always backs up, and restores on failure.
-_migrate_remove_duplicate_env_from_settings() {
-    local source_file="$CLAUDE_SETTINGS_SOURCE"
-    local local_file="${CLAUDE_DOTFILES}/settings.local.json"
-
-    [ -f "$source_file" ] || return 0
-    [ -f "$local_file" ] || return 0
-    if ! command -v jq >/dev/null 2>&1; then
-        log_warning "jq 미설치 — settings.json env 자동 마이그레이션 건너뜀"
-        return 0
-    fi
-
-    # Skip when settings.json carries no env block.
-    jq -e '.env? | type == "object"' "$source_file" >/dev/null 2>&1 || return 0
-    # Skip when settings.local.json carries no env block (nothing to consolidate to).
-    jq -e '.env? | type == "object"' "$local_file"  >/dev/null 2>&1 || return 0
-
-    local backup
-    backup="${source_file}.pre-env-migration-$(date +%Y%m%d%H%M%S)"
-    if ! cp "$source_file" "$backup"; then
-        log_warning "settings.json env 마이그레이션: 백업 실패 → skip"
-        return 0
-    fi
-
-    local tmp
-    tmp=$(mktemp "${source_file}.XXXXXX") || {
-        log_warning "settings.json env 마이그레이션: 임시 파일 생성 실패 → skip"
-        rm -f "$backup"
-        return 0
-    }
-
-    if jq 'del(.env)' "$source_file" > "$tmp" && mv "$tmp" "$source_file"; then
-        log_warning "settings.json: env 블록 제거됨 (SSOT 가 settings.local.json 으로 이동)"
-        log_warning "  backup: $backup"
-    else
-        rm -f "$tmp"
-        log_warning "settings.json env 마이그레이션 실패 — 원본 복원: $backup"
-        mv "$backup" "$source_file"
     fi
 }
 
@@ -293,14 +249,13 @@ _migrate_legacy_plugin_paths() {
 
 # Auto-install gh-issue-flow Stop hook into existing settings.json (issue #383).
 #
-# A new mechanical guard (`claude/hooks/gh_issue_flow_stop_guard.py`) blocks the
-# model from ending its turn while a /gh-issue-flow chain is still mid-flight.
-# settings.template.json already declares this hook for new installs, but the
-# user-private claude/settings.json (gitignored) survives across template
-# updates and would otherwise miss it.
+# Now that claude/settings.json is the tracked SSOT (#584), this migration
+# is a defense-in-depth no-op for the canonical install — the SSOT already
+# declares the Stop hook. It still guards pre-#584 installs whose live
+# settings.json was carried over without the hook entry.
 #
-# This helper rewrites .hooks.Stop in place, only when the exact entry is
-# absent. Idempotent — present-with-same-command → no-op. Different command in
+# Rewrites .hooks.Stop in place only when the exact entry is absent.
+# Idempotent — present-with-same-command → no-op. Different command in
 # .hooks.Stop is left alone (user customisation respected) and a warning is
 # printed so the user can manually merge.
 _migrate_install_gh_issue_flow_stop_hook() {
@@ -435,26 +390,85 @@ EOF
     fi
 }
 
+# _print_internal_local_env_guidance — Internal-PC one-time hand-edit guide.
+#
+# Why this exists: the shared claude/settings.json SSOT (#584) cannot carry
+# the ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL env vars,
+# because those values point at cloud.dtgpt.samsungds.net which is
+# unreachable from External/Home and would break Claude Code on those PCs.
+# Instead the Internal-only env block lives in a per-PC, out-of-repo file
+# at ~/.claude/settings.local.json. Claude Code merges it with the shared
+# settings.json natively at launch time.
+#
+# Idempotent: when the file already has a real ANTHROPIC_AUTH_TOKEN
+# (anything other than the literal placeholder), this function prints a
+# single success line and returns. Only an absent or placeholder-only
+# file triggers the full copy-paste block.
+_print_internal_local_env_guidance() {
+    local target="$HOME/.claude/settings.local.json"
+    local placeholder="your-dt-api-key"
+    local current_token=""
+
+    if [ -f "$target" ] && command -v jq >/dev/null 2>&1; then
+        current_token=$(jq -r '.env.ANTHROPIC_AUTH_TOKEN // empty' "$target" 2>/dev/null)
+    fi
+
+    if [ -n "$current_token" ] && [ "$current_token" != "$placeholder" ]; then
+        ux_success "Internal env already configured: $target"
+        return 0
+    fi
+
+    echo ""
+    ux_section "Internal Claude env (one-time manual setup)"
+    ux_info "This Internal PC needs three ANTHROPIC_* env vars to reach the"
+    ux_info "Samsung internal gateway (cloud.dtgpt.samsungds.net). They are"
+    ux_info "intentionally NOT in the shared claude/settings.json SSOT because"
+    ux_info "they would break External/Home Claude Code on the same dotfiles."
+    ux_info "Create the file below ONCE. Claude Code automatically merges it"
+    ux_info "with settings.json on every launch. The file is gitignored, so"
+    ux_info "your token never reaches GitHub."
+    echo ""
+    ux_bullet "Path: ${UX_BOLD}$target${UX_RESET}"
+    ux_bullet "Content (paste verbatim, then edit the AUTH_TOKEN line):"
+    cat <<'EOF'
+
+    {
+      "env": {
+        "ANTHROPIC_BASE_URL": "http://cloud.dtgpt.samsungds.net/llm",
+        "ANTHROPIC_AUTH_TOKEN": "your-dt-api-key",
+        "ANTHROPIC_MODEL": "Qwen3.6-27B"
+      }
+    }
+
+EOF
+    ux_warning "Replace \"$placeholder\" with the real token issued by the"
+    ux_warning "internal LLM gateway team. Until you do, Claude Code on this PC"
+    ux_warning "will get HTTP 401 from the gateway."
+    echo ""
+    ux_bullet "Quick command (creates the file with the placeholder, ready to edit):"
+    cat <<'EOF'
+
+    mkdir -p ~/.claude && cat > ~/.claude/settings.local.json <<'JSON'
+    {
+      "env": {
+        "ANTHROPIC_BASE_URL": "http://cloud.dtgpt.samsungds.net/llm",
+        "ANTHROPIC_AUTH_TOKEN": "your-dt-api-key",
+        "ANTHROPIC_MODEL": "Qwen3.6-27B"
+      }
+    }
+    JSON
+
+EOF
+    ux_info "Verify after editing: ${UX_BOLD}jq -e .env.ANTHROPIC_AUTH_TOKEN ~/.claude/settings.local.json${UX_RESET}"
+    echo ""
+}
+
 # --- Main Script Logic (issue #287, Phase 1: multi-account) ---
 
 log_debug "\n--- Claude Code dotfiles setup 시작 ---"
 
-# settings.json 자동 부트스트랩 (issue #500, F-1).
-# Fresh checkout (gitignored settings.json 부재) 에서도 hard-fail 없이
-# 진행되도록 settings.template.json → settings.json 1회 복사. 멱등 —
-# 이미 존재하면 no-op. 템플릿까지 부재한 비정상 상태는 아래 hard-fail
-# 가드가 그대로 잡는다.
-CLAUDE_SETTINGS_TEMPLATE="${CLAUDE_DOTFILES}/settings.template.json"
-if [ ! -f "$CLAUDE_SETTINGS_SOURCE" ] && [ -f "$CLAUDE_SETTINGS_TEMPLATE" ]; then
-    if cp "$CLAUDE_SETTINGS_TEMPLATE" "$CLAUDE_SETTINGS_SOURCE"; then
-        log_warning "settings.json 자동 부트스트랩: settings.template.json → settings.json"
-        log_warning "  필요 시 직접 편집하세요 (gitignored, PC-private)"
-    else
-        log_warning "settings.json 자동 부트스트랩 실패: cp 오류 — 수동 복사 필요"
-    fi
-fi
-
 # 필수 dotfiles source 검증
+# settings.json 은 이제 tracked SSOT (#584) — 부트스트랩/템플릿 단계 불필요.
 [ -f "$CLAUDE_SETTINGS_SOURCE" ]      || log_error_and_exit "settings.json 없음: $CLAUDE_SETTINGS_SOURCE"
 [ -f "$CLAUDE_STATUSLINE_SOURCE" ]    || log_error_and_exit "statusline-command.sh 없음: $CLAUDE_STATUSLINE_SOURCE"
 [ -d "$CLAUDE_SKILLS_SOURCE" ]        || log_error_and_exit "skills 디렉토리 없음: $CLAUDE_SKILLS_SOURCE"
@@ -465,11 +479,6 @@ fi
 # downstream symlink uses it (issue #300, item A). Idempotent — only acts
 # on the exact PR #292 legacy literal, otherwise no-op.
 _migrate_legacy_statusline_command
-
-# Auto-remove duplicate env block from settings.json (issue #555 follow-up,
-# PR #557 review C1). Idempotent — only acts when both settings.json and
-# settings.local.json carry an env block, otherwise no-op.
-_migrate_remove_duplicate_env_from_settings
 
 # Auto-install gh-issue-flow Stop hook (issue #383). Idempotent — only adds
 # the entry when it's missing AND no conflicting Stop hook is configured.
@@ -486,20 +495,10 @@ _migrate_install_gh_issue_flow_stop_hook
 DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/env/claude.sh"
 DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/tools/integrations/claude.sh"
 
-# settings.local.json bootstrap (issue #571, F-4). Tracked example +
-# untracked SSOT — gitignored so sensitive env (사번 헤더, 사내 BASE_URL)
-# does not push out. On a fresh checkout the example is copied so the
-# downstream env-merge migration has a real file to read.
-CLAUDE_LOCAL_EXAMPLE="${CLAUDE_DOTFILES}/settings.local.example.json"
-CLAUDE_LOCAL_TARGET="${CLAUDE_DOTFILES}/settings.local.json"
-if [ ! -f "$CLAUDE_LOCAL_TARGET" ] && [ -f "$CLAUDE_LOCAL_EXAMPLE" ]; then
-    if cp "$CLAUDE_LOCAL_EXAMPLE" "$CLAUDE_LOCAL_TARGET"; then
-        log_warning "settings.local.json 자동 부트스트랩: settings.local.example.json → settings.local.json"
-        log_warning "  사내 env 블록은 이 파일에 추가하세요 (gitignored, PC-private)"
-    else
-        log_warning "settings.local.json 자동 부트스트랩 실패: cp 오류 — 수동 복사 필요"
-    fi
-fi
+# settings.local.json 은 더 이상 dotfiles 가 관리하지 않습니다 (#584).
+# Internal-PC 사용자는 ~/.claude/settings.local.json 을 한 번 손수 생성;
+# Claude Code 가 settings.json 과 자동 merge 합니다.
+# Internal 모드 종료 직전 _print_internal_local_env_guidance 가 안내 출력.
 
 # Setup-mode SSOT read (issue #571). Reuses the _dotfiles_setup_mode
 # helper sourced from shell-common/tools/integrations/claude.sh (line
@@ -579,15 +578,15 @@ _single_account_ensure_link() {
     log_info "  symlink: $tgt → $src"
 }
 
-# Internal-PC single-account branch (issue #571, F-1). Direct-symlink the
-# dotfiles SSOT into ~/.claude/ — no claude-accounts, no ~/.claude-personal,
-# no ~/.claude-work. The Samsung gateway env block lives in the gitignored
-# settings.local.json (bootstrapped above from settings.local.example.json).
+# Internal-PC single-account branch (issue #571, F-1; updated for #584).
+# Direct-symlink the dotfiles SSOT into ~/.claude/ — no claude-accounts,
+# no ~/.claude-personal, no ~/.claude-work. The Samsung gateway env block
+# lives in a hand-created ~/.claude/settings.local.json (out-of-repo);
+# _print_internal_local_env_guidance below walks the user through it.
 if [ "$_setup_mode" = "internal" ]; then
     log_info "Internal PC mode — single-account setup (skipping claude-accounts)"
 
     _single_account_ensure_link "$CLAUDE_SETTINGS_SOURCE"               "$HOME_SETTINGS"
-    _single_account_ensure_link "$CLAUDE_LOCAL_TARGET"                  "$HOME/.claude/settings.local.json"
     _single_account_ensure_link "$CLAUDE_STATUSLINE_SOURCE"             "$HOME_STATUSLINE"
     _single_account_ensure_link "$CLAUDE_SKILLS_SOURCE"                 "$HOME_SKILLS"
     _single_account_ensure_link "$CLAUDE_DOCS_SOURCE"                   "$HOME_DOCS"
@@ -595,8 +594,10 @@ if [ "$_setup_mode" = "internal" ]; then
     _single_account_ensure_link "$HOME/.claude-shared/plugins"          "$HOME/.claude/plugins"
 
     # --- Verify Links (single-account) ---
+    # settings.local.json is intentionally absent from this list — it is a
+    # regular file the user hand-creates (#584), not a dotfiles symlink.
     log_debug "\n--- 심볼릭 링크 확인 (internal/single-account) ---"
-    for link in settings.json settings.local.json statusline-command.sh skills docs plugins projects/GLOBAL/memory; do
+    for link in settings.json statusline-command.sh skills docs plugins projects/GLOBAL/memory; do
         if [ -L "$HOME/.claude/$link" ]; then
             log_dim "✓ ~/.claude/$link 심볼릭 링크 확인됨"
         else
@@ -613,9 +614,10 @@ if [ "$_setup_mode" = "internal" ]; then
     echo ""
     ux_section "다음 단계"
     ux_bullet "쉘 재시작: ${UX_BOLD}exec zsh${UX_RESET} 또는 ${UX_BOLD}exec bash${UX_RESET}"
-    ux_bullet "사내 env 블록 추가: ${UX_BOLD}\$EDITOR claude/settings.local.json${UX_RESET} (gitignored)"
     ux_bullet "실행: ${UX_BOLD}claude-yolo${UX_RESET} (멀티 계정 우회됨)"
     echo ""
+
+    _print_internal_local_env_guidance
 
     exit 0
 fi
@@ -648,7 +650,7 @@ done
 log_debug "\n--- 심볼릭 링크 확인 ---"
 for acct in $ENABLED_ACCOUNTS; do
     cdir=$(_claude_resolve_account "$acct")
-    for link in settings.json settings.local.json statusline-command.sh plugins projects/GLOBAL/memory; do
+    for link in settings.json statusline-command.sh plugins projects/GLOBAL/memory; do
         if [ -L "${cdir}/${link}" ]; then
             log_dim "✓ ${acct}/${link} 심볼릭 링크 확인됨"
         else
