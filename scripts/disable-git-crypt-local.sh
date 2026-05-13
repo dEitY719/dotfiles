@@ -13,19 +13,16 @@
 #
 # EXIT: 항상 0 — 실패해도 setup.sh 흐름을 막지 않는다. 결과는 ux 로그로 표면화.
 
-# UX lib
+# UX lib — fail-fast to stay consistent with install.sh / setup.sh.
 _SCRIPT_PATH=$(cd "$(dirname "$0")" && pwd)
 DOTFILES_ROOT="$(cd "$_SCRIPT_PATH/.." && pwd)"
 UX_LIB="$DOTFILES_ROOT/shell-common/tools/ux_lib/ux_lib.sh"
-if [ -f "$UX_LIB" ]; then
-    # shellcheck source=/dev/null
-    . "$UX_LIB"
-else
-    ux_header()  { echo ""; echo "== $* =="; }
-    ux_info()    { echo "[info] $*"; }
-    ux_success() { echo "[ok]   $*"; }
-    ux_warning() { echo "[warn] $*"; }
+if [ ! -f "$UX_LIB" ]; then
+    echo "CRITICAL ERROR: UX library not found at $UX_LIB. Exiting." >&2
+    exit 1
 fi
+# shellcheck source=/dev/null
+. "$UX_LIB"
 
 ux_header "Disable git-crypt smudge/clean (local)"
 
