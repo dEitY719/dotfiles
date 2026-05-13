@@ -90,13 +90,13 @@ LOCAL
 @test "bash: resolve --list-all returns same as --list (deprecated alias, issue #568)" {
     run_in_bash '_claude_resolve_account --list-all | tr "\n" " "'
     assert_success
-    assert_output "personal work "
+    assert_output "personal work work1 "
 }
 
 @test "bash: resolve --list returns ENABLED accounts only (default)" {
     run_in_bash '_claude_resolve_account --list | tr "\n" " "'
     assert_success
-    assert_output "personal work "
+    assert_output "personal work work1 "
 }
 
 @test "bash: resolve --list filters by CLAUDE_ENABLED_ACCOUNTS=work" {
@@ -108,7 +108,7 @@ LOCAL
 @test "zsh: resolve --list works under zsh (POSIX parity smoke test)" {
     run_in_zsh '_claude_resolve_account --list | tr "\n" " "'
     assert_success
-    assert_output "personal work "
+    assert_output "personal work work1 "
 }
 
 # ---------- issue #568: convention-based dispatcher ----------
@@ -532,7 +532,7 @@ JSON
 @test "bash: claude-accounts list shows enabled accounts" {
     run_in_bash 'shopt -s expand_aliases; eval "claude-accounts list" | tr "\n" " "'
     assert_success
-    assert_output "personal work "
+    assert_output "personal work work1 "
 }
 
 @test "bash: claude-accounts (no arg) defaults to status" {
