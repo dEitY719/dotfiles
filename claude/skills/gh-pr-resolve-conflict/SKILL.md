@@ -125,6 +125,28 @@ Step 1 의 `TARGET_REPO` 는 `git remote get-url` 결과(URL 형태)일 수
 If the label is absent, the `||` branch absorbs the 404 as a soft-fail
 warning (idempotent).
 
+**보드 status `In review` 복귀** (soft-fail — `mergeable == MERGEABLE` 인 경우에만):
+
+`changes-requested` → fix push → 카드가 `In progress` 또는 `Changes requested` 에
+머무는 흐름을 자동으로 끊어 리뷰어 큐 (`In review`) 로 되돌린다. 신규 PR
+단계의 conflict (카드가 이미 `In review` / `Approved` / `Done`) 는
+`--only-from` 가드가 막아 후퇴시키지 않는다. 자세한 lifecycle 근거는 issue #591.
+
+```bash
+if [ "$mergeable" = "MERGEABLE" ]; then
+    . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null \
+      && _gh_project_status_sync pr "$PR_NUMBER" "In review" \
+            --only-from "In progress,Changes requested" \
+      && echo "[OK] PR 카드 \`In review\` 로 복귀됨" \
+      || echo "[WARN] 보드 sync 실패 — 카드 수동 이동 필요할 수 있음"
+fi
+```
+
+`GH_PROJECT_STATUS_SYNC=0` opt-out 은 helper 자체가 흡수한다. projectV2
+보드가 없는 레포는 helper 가 silent 0 반환. `--only-from` 의 missing column
+은 helper 가 silently skip 하므로 `Changes requested` 컬럼 없는 보드와도
+호환된다.
+
 After the report, post a PR comment with ai-metrics (soft-fail — warn on
 error, never block). `CONFLICT_FILES` is the count of files that had
 `UU`/`AA`/`DU` conflicts in Step 3. When `GH_DISABLE_AI_METRICS=1`,
