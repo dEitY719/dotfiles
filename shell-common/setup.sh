@@ -113,6 +113,19 @@ copy_local_files() {
                 # Internal company PC: copy ALL .local.example files
                 cp "$example_file" "$local_file"
                 ux_success "Created: ${local_file#"$SHELL_COMMON_DIR"/}"
+
+                # Internal-specific: Auto-enable work1 and inject ANTHROPIC_* env vars into claude.local.sh
+                if [ "$basename_file" = "claude.local.example" ]; then
+                    cat >> "$local_file" <<'EOF'
+
+# ─── Internal PC: Auto-configured for Samsung gateway ──────────────────────
+export CLAUDE_ENABLED_ACCOUNTS="personal work"
+export ANTHROPIC_BASE_URL="http://cloud.dtgpt.samsungds.net/llm"
+export ANTHROPIC_AUTH_TOKEN="your-dt-api-key"
+export ANTHROPIC_MODEL="Qwen3.6-27B"
+EOF
+                    ux_info "  + Configured: ANTHROPIC_* env vars for Internal gateway"
+                fi
                 ;;
             external)
                 # External company PC (VPN): skip proxy.local.example
@@ -122,6 +135,16 @@ copy_local_files() {
                 else
                     cp "$example_file" "$local_file"
                     ux_success "Created: ${local_file#"$SHELL_COMMON_DIR"/}"
+
+                    # External-specific: Auto-enable work1 for multi-account setup
+                    if [ "$basename_file" = "claude.local.example" ]; then
+                        cat >> "$local_file" <<'EOF'
+
+# ─── External PC: Multi-account setup ────────────────────────────────────
+export CLAUDE_ENABLED_ACCOUNTS="personal work work1"
+EOF
+                        ux_info "  + Configured: work1 account for multi-account setup"
+                    fi
                 fi
                 ;;
         esac
