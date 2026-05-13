@@ -1072,6 +1072,131 @@ claude_accounts_rollback() {
     ux_info "  3. claude-yolo  (no --user flag; multi-account dispatch is bypassed)"
 }
 
+# claude_accounts_repair — one-shot cleanup for worktree-tainted symlinks
+# (issue #589, Option C).
+#
+# Walks every ~/.claude-* directory and ~/.claude/ and rebinds symlinks
+# whose target either (a) dangles or (b) lives outside the canonical
+# DOTFILES_ROOT/claude/ subtree, to the equivalent path under the
+# canonical root. Idempotent — clean PCs see "nothing to repair".
+#
+# Why this exists in addition to the loader/setup canonicalization: those
+# guards prevent FUTURE breakage. Pre-existing PCs that already ran
+# setup from a (now-deleted) worktree carry dangling symlinks today;
+# `claude_accounts_repair` is the explicit recovery command.
+#
+# Scope: only touches symlinks whose name matches the well-known set
+# created by `_claude_account_setup_one`:
+#   settings.json, statusline-command.sh, skills, docs,
+#   projects/GLOBAL/memory
+# `plugins` is intentionally excluded — it points at ~/.claude-shared/
+# (not DOTFILES_ROOT), so the worktree-bleed regression cannot reach it.
+#
+# Usage:
+#   claude-accounts repair          # actually fix
+#   claude-accounts repair --dry-run  # report only, no mutation
+claude_accounts_repair() {
+    _car_dry=0
+    if [ "${1:-}" = "--dry-run" ] || [ "${1:-}" = "-n" ]; then
+        _car_dry=1
+    fi
+
+    ux_header "claude-accounts repair — rebind worktree-tainted symlinks (issue #589)"
+
+    if [ -z "${DOTFILES_ROOT:-}" ]; then
+        ux_error "DOTFILES_ROOT unset — re-source ~/.bashrc / ~/.zshrc first"
+        return 1
+    fi
+
+    _car_root="$DOTFILES_ROOT"
+    _car_claude_src="${_car_root}/claude"
+    if [ ! -d "$_car_claude_src" ]; then
+        ux_error "Canonical claude dir missing: $_car_claude_src"
+        ux_info  "  Run ./setup.sh from the main worktree first."
+        return 1
+    fi
+
+    ux_info "Canonical DOTFILES_ROOT: $_car_root"
+    if [ "$_car_dry" = "1" ]; then
+        ux_info "Mode: dry-run (no files will be modified)"
+    fi
+
+    # Account dirs to scan: ~/.claude/ + every ~/.claude-* directory.
+    _car_repaired=0
+    _car_skipped=0
+
+    for _car_dir in "$HOME/.claude" "$HOME"/.claude-*; do
+        [ -d "$_car_dir" ] || continue
+        # Glob fallthrough on systems with no ~/.claude-* dirs at all
+        # (the literal pattern survives) — skip it.
+        case "$_car_dir" in
+            "$HOME/.claude-"\*) continue ;;
+        esac
+
+        # Each (relative_path, canonical_source) pair.
+        # POSIX sh has no arrays; use a here-doc-driven loop instead.
+        while IFS='|' read -r _car_rel _car_canon; do
+            [ -n "$_car_rel" ] || continue
+            _car_link="${_car_dir}/${_car_rel}"
+
+            # Only touch symlinks; regular files / dirs are user data.
+            [ -L "$_car_link" ] || continue
+
+            _car_target=$(readlink "$_car_link" 2>/dev/null || true)
+            _car_needs_fix=0
+
+            # Case 1: dangling — readlink target does not resolve.
+            if [ ! -e "$_car_link" ]; then
+                _car_needs_fix=1
+            fi
+            # Case 2: target points outside the canonical claude subtree.
+            #         (caught even when the worktree path happens to still
+            #         exist, e.g. user hasn't deleted it yet)
+            case "$_car_target" in
+                "$_car_canon") : ;;                          # already canonical
+                "${_car_root}/claude/"*) : ;;                # canonical subtree
+                *) _car_needs_fix=1 ;;
+            esac
+
+            if [ "$_car_needs_fix" = "0" ]; then
+                _car_skipped=$((_car_skipped + 1))
+                continue
+            fi
+
+            ux_warning "  rebind: $_car_link"
+            ux_info    "    from: $_car_target"
+            ux_info    "    to:   $_car_canon"
+            if [ "$_car_dry" = "0" ]; then
+                rm -f "$_car_link" || {
+                    ux_error "    rm failed — skipping"
+                    continue
+                }
+                mkdir -p "$(dirname "$_car_link")"
+                if ln -s "$_car_canon" "$_car_link"; then
+                    _car_repaired=$((_car_repaired + 1))
+                else
+                    ux_error "    ln -s failed — symlink missing now, manual recovery needed"
+                fi
+            else
+                _car_repaired=$((_car_repaired + 1))
+            fi
+        done <<EOF
+settings.json|${_car_claude_src}/settings.json
+statusline-command.sh|${_car_claude_src}/statusline-command.sh
+skills|${_car_claude_src}/skills
+docs|${_car_claude_src}/docs
+projects/GLOBAL/memory|${_car_claude_src}/global-memory
+EOF
+    done
+
+    if [ "$_car_dry" = "1" ]; then
+        ux_info "Dry-run summary: would repair $_car_repaired symlink(s); $_car_skipped already canonical."
+        ux_info "Run without --dry-run to apply."
+    else
+        ux_success "Repair complete: $_car_repaired rebound, $_car_skipped already canonical."
+    fi
+}
+
 _claude_accounts_help() {
     ux_header "claude-accounts — Claude Code multi-account management"
     ux_info "Usage: claude-accounts [<subcommand>]"
@@ -1082,11 +1207,13 @@ _claude_accounts_help() {
     ux_info "  setup         Idempotent setup (creates dirs + symlinks)"
     ux_info "  migrate       One-time migration: ~/.claude → ~/.claude-personal (Home-PC)"
     ux_info "  rollback [<acct>]  Reverse of migrate: ~/.claude-<acct> → ~/.claude (issue #571)"
+    ux_info "  repair [--dry-run] Rebind dangling/worktree-tainted symlinks (issue #589)"
     ux_info "  -h|--help     This help"
     ux_info ""
     ux_info "Env vars:"
     ux_info "  CLAUDE_DEFAULT_ACCOUNT     Default for \`claude-yolo\` (default: personal)"
     ux_info "  CLAUDE_ENABLED_ACCOUNTS    Whitelist (default: 'personal work')"
+    ux_info "  DOTFILES_ROOT_NO_CANONICALIZE=1  Skip worktree canonicalization (issue #589 escape hatch)"
     ux_info "  Override per-PC in shell-common/env/claude.local.sh"
 }
 
@@ -1097,6 +1224,7 @@ claude_accounts() {
         setup)          claude_accounts_init ;;
         migrate)        claude_accounts_migrate ;;
         rollback)       shift; claude_accounts_rollback "$@" ;;
+        repair)         shift; claude_accounts_repair "$@" ;;
         -h|--help|help) _claude_accounts_help ;;
         *)              ux_error "Unknown subcommand: $1"; _claude_accounts_help; return 1 ;;
     esac

@@ -26,6 +26,25 @@
 # Initialize DOTFILES_ROOT
 _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 DOTFILES_ROOT="$(cd "$(dirname "$_SCRIPT_PATH")/.." && pwd)"
+
+# Canonicalize to the main worktree (issue #589). When invoked from a
+# linked worktree, the script path resolves to <worktree>/claude/setup.sh
+# and DOTFILES_ROOT becomes the worktree — that path would then be baked
+# into every ~/.claude-*/ symlink we create below. Falling through to the
+# worktree path is acceptable if the helper is missing (no regression).
+_CLAUDE_DOTFILES_RESOLVER="${DOTFILES_ROOT}/shell-common/functions/dotfiles_root.sh"
+if [ -r "$_CLAUDE_DOTFILES_RESOLVER" ]; then
+    # shellcheck source=../shell-common/functions/dotfiles_root.sh
+    source "$_CLAUDE_DOTFILES_RESOLVER"
+    _CLAUDE_CANONICAL=$(_resolve_dotfiles_root_canonical "$DOTFILES_ROOT")
+    if [ -n "$_CLAUDE_CANONICAL" ] && [ "$_CLAUDE_CANONICAL" != "$DOTFILES_ROOT" ]; then
+        echo "[claude/setup.sh] 워크트리 감지 — 메인 워크트리로 전환: $_CLAUDE_CANONICAL" >&2
+        DOTFILES_ROOT="$_CLAUDE_CANONICAL"
+    fi
+    unset _CLAUDE_CANONICAL
+fi
+unset _CLAUDE_DOTFILES_RESOLVER
+
 CLAUDE_DOTFILES="${DOTFILES_ROOT}/claude"
 
 # Home directory locations
