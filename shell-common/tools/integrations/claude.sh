@@ -1033,7 +1033,9 @@ _claude_account_setup_one() {
     mkdir -p "$_caso_cdir/projects/GLOBAL"
 
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/settings.json"          "$_caso_cdir/settings.json"
-    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/settings.local.json"    "$_caso_cdir/settings.local.json"
+    # settings.local.json is intentionally NOT symlinked from dotfiles (#584) —
+    # it is a per-PC regular file the user hand-creates only when local env
+    # overrides are needed. Claude Code merges it with settings.json natively.
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/statusline-command.sh"  "$_caso_cdir/statusline-command.sh"
     _claude_ensure_symlink "$HOME/.claude-shared/plugins"                   "$_caso_cdir/plugins"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/global-memory"          "$_caso_cdir/projects/GLOBAL/memory"

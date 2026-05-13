@@ -63,7 +63,7 @@ env block exports to shell process" 등.
    # 출력 예: .gitignore:36:claude/settings.local.json    claude/settings.local.json
    ```
 2. **`NODE_TLS_REJECT_UNAUTHORIZED=0`은 사내 자체 서명 인증서 통과용** — 외부 PC에는 절대 활성화 금지 (MITM 노출).
-3. **사번 헤더는 PII** — `x-user-id` 가 외부로 새지 않도록 `claude/settings.local.example.json`에는 빈 placeholder만 둔다.
+3. **사번 헤더는 PII** — `x-user-id` 는 `~/.claude/settings.local.json` 에 직접 적는다 (out-of-repo, gitignored). 공유 SSOT `claude/settings.json` 에는 절대 넣지 않는다 (#584).
 
 ## 잘못 migrate된 사내 PC 복구
 

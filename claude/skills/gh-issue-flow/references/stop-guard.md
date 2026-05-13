@@ -30,9 +30,10 @@ cooperation; it intervenes after the model has already decided to stop.
 ## What it does
 
 `claude/hooks/gh_issue_flow_stop_guard.py` is registered as a `Stop`
-hook in `claude/settings.template.json` (and auto-installed into
-existing `claude/settings.json` by `claude/setup.sh` via
-`_migrate_install_gh_issue_flow_stop_hook`).
+hook in the tracked `claude/settings.json` SSOT (#584). The legacy
+`_migrate_install_gh_issue_flow_stop_hook` helper in `claude/setup.sh`
+is left in place as a defense-in-depth no-op for installs whose live
+file still lacks the entry.
 
 On every Stop event:
 
