@@ -1200,16 +1200,14 @@ EOF
 _gh_pr_approve_list_orphan_worktrees() {
     local _repo_dir="$1"
     local _line _current_path _current_branch _claimed _pr_num _idx
-    local _claim_file
 
-    # Collect every path recorded under <repo_dir>/*/worktree.path.
+    # Collect every path recorded under <repo_dir>/*/worktree.path in a
+    # single `cat` — one process instead of one per state entry.
+    # 2>/dev/null absorbs the "no matches" case where the glob stays
+    # literal (POSIX sh has no nullglob).
     _claimed=""
     if [ -d "$_repo_dir" ]; then
-        for _claim_file in "$_repo_dir"/*/worktree.path; do
-            [ -f "$_claim_file" ] || continue
-            _claimed="$_claimed$(cat "$_claim_file" 2>/dev/null)
-"
-        done
+        _claimed=$(cat "$_repo_dir"/*/worktree.path 2>/dev/null)
     fi
 
     _current_path=""
