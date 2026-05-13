@@ -26,12 +26,3 @@ jobs:
           else
             echo "shellcheck not available, skipping"
           fi
-
-      - name: Check markdown
-        run: |
-          if command -v markdownlint >/dev/null 2>&1; then
-            echo "Running markdownlint..."
-            markdownlint tests/README.md docs/abc-review-C.md || true
-          else
-            echo "markdownlint not available, skipping"
-          fi

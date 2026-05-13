@@ -28,7 +28,6 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 - **Linting (All)**: `tox` (Runs ruff, mypy, shellcheck, shfmt).
 - **Linting (Python)**: `tox -e ruff` (fixes), `tox -e mypy`.
 - **Linting (Bash)**: `tox -e shellcheck`, `tox -e shfmt` (formats).
-- **Note**: Markdown linting (mdlint) is DISABLED. Do NOT perform markdown lint checks automatically.
 - **Testing**: `./tests/test`, `pytest tests/`, manual validation via `shell-common/tools/custom/demo_ux.sh`.
 
 # Golden Rules
