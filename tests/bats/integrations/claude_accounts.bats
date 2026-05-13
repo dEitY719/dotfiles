@@ -20,10 +20,10 @@ teardown() {
     assert_output "personal"
 }
 
-@test "bash: CLAUDE_ENABLED_ACCOUNTS defaults to 'personal work'" {
+@test "bash: CLAUDE_ENABLED_ACCOUNTS defaults to 'personal work work1' (external mode)" {
     run_in_bash 'echo "$CLAUDE_ENABLED_ACCOUNTS"'
     assert_success
-    assert_output "personal work"
+    assert_output "personal work work1"
 }
 
 @test "zsh: CLAUDE_DEFAULT_ACCOUNT defaults to personal" {
@@ -32,10 +32,25 @@ teardown() {
     assert_output "personal"
 }
 
-@test "zsh: CLAUDE_ENABLED_ACCOUNTS defaults to 'personal work'" {
+@test "zsh: CLAUDE_ENABLED_ACCOUNTS defaults to 'personal work work1' (external mode)" {
     run_in_zsh 'echo "$CLAUDE_ENABLED_ACCOUNTS"'
     assert_success
-    assert_output "personal work"
+    assert_output "personal work work1"
+}
+
+@test "bash: internal setup-mode → CLAUDE_ENABLED_ACCOUNTS='work'" {
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    run_in_bash 'echo "$CLAUDE_DEFAULT_ACCOUNT|$CLAUDE_ENABLED_ACCOUNTS"'
+    assert_success
+    assert_output "work|work"
+}
+
+@test "bash: stale CLAUDE_ENABLED_ACCOUNTS is overwritten by setup-mode default" {
+    # Regression for the d36ac3a stale-env trap: ${VAR:-default} preserved
+    # a previously-exported value across shell re-init. Setup-mode must win.
+    run_in_bash 'export CLAUDE_ENABLED_ACCOUNTS="stale leftover"; source "${DOTFILES_ROOT}/shell-common/env/claude.sh"; echo "$CLAUDE_ENABLED_ACCOUNTS"'
+    assert_success
+    assert_output "personal work work1"
 }
 
 @test "bash: claude.local.sh exports win over claude.sh defaults" {
