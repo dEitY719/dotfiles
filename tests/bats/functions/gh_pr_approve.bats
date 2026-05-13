@@ -681,3 +681,120 @@ EOF
     assert_success
     refute_output --partial "invalid PR number"
 }
+
+# ---------------------------------------------------------------------------
+# Worktree self-identification (issue #601 — concurrent-spawn race fix)
+# ---------------------------------------------------------------------------
+
+# Stand up real git worktrees so _gh_pr_approve_locate_own_worktree can
+# walk `git worktree list --porcelain` against them. Each worktree mimics
+# what `gwt spawn pr-<N>` would produce — branch `wt/pr-<N>/<idx>` — but
+# uses a flat tmp path rather than gwt's `<project>-pr-<N>-<idx>` layout
+# (the helper matches on branch, not path basename, so the test is
+# stricter than reality).
+_make_pr_worktree() {
+    local _pr="$1" _idx="${2:-1}"
+    local _path="$TEST_TEMP_HOME/wt-pr-$_pr-$_idx"
+    (
+        cd "$FAKE_REPO"
+        git worktree add -q -b "wt/pr-$_pr/$_idx" "$_path" main 2>/dev/null
+    )
+    printf '%s\n' "$_path"
+}
+
+@test "locate: picks the matching PR's worktree among siblings" {
+    # Race scenario: three sibling worktrees exist simultaneously. The
+    # old `comm -13 | head -n 1` would have returned the alphabetically
+    # earliest one; the new helper must return the requested PR's path
+    # regardless of creation order.
+    local _wt617 _wt618 _wt619
+    _wt617="$(_make_pr_worktree 617)"
+    _wt618="$(_make_pr_worktree 618)"
+    _wt619="$(_make_pr_worktree 619)"
+
+    run_in_bash "cd '$FAKE_REPO' && _gh_pr_approve_locate_own_worktree pr-618 ''"
+    assert_success
+    assert_output "$_wt618"
+}
+
+@test "locate: skips worktrees already present in the before-snapshot" {
+    # A stale worktree from a previous failed run must not be claimed —
+    # only paths that appeared *after* the worker's spawn count as ours.
+    local _wt
+    _wt="$(_make_pr_worktree 700)"
+    local _before="$_wt"
+
+    run_in_bash "cd '$FAKE_REPO' && _gh_pr_approve_locate_own_worktree pr-700 '$_before'"
+    assert_success
+    assert_output ""
+}
+
+@test "locate: prefers the highest index when multiple new matches exist" {
+    # Re-spawn into the same PR slot — gwt produces idx=2, then idx=3.
+    # The helper should return idx=3 so a fresh worker doesn't adopt a
+    # stale-but-newly-discovered sibling. (Real-world: rare; defensive.)
+    _make_pr_worktree 801 1 >/dev/null
+    _make_pr_worktree 801 2 >/dev/null
+    local _wt801_3
+    _wt801_3="$(_make_pr_worktree 801 3)"
+
+    run_in_bash "cd '$FAKE_REPO' && _gh_pr_approve_locate_own_worktree pr-801 ''"
+    assert_success
+    assert_output "$_wt801_3"
+}
+
+@test "locate: returns empty (not failure) when no match exists" {
+    # Caller distinguishes 'no match' via empty output, not exit code —
+    # we don't want `set -e` callers to trip just because nothing matched.
+    run_in_bash "cd '$FAKE_REPO' && _gh_pr_approve_locate_own_worktree pr-999 ''"
+    assert_success
+    assert_output ""
+}
+
+# ---------------------------------------------------------------------------
+# Orphan worktree detection (issue #601 — prune cleanup)
+# ---------------------------------------------------------------------------
+
+@test "orphan: prune reports a wt/pr-N worktree not claimed by any state entry" {
+    # No state entry claims this path, so prune (no-force) must surface
+    # it as an orphan and print the suggested teardown command.
+    local _wt
+    _wt="$(_make_pr_worktree 901)"
+
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune"
+    assert_success
+    assert_output --partial "orphan"
+    assert_output --partial "#901"
+    assert_output --partial "$_wt"
+    assert_output --partial "gwt teardown --force"
+    # Worktree must still exist (no-force = report only).
+    [ -d "$_wt" ]
+}
+
+@test "orphan: a worktree claimed by a state entry is NOT reported as orphan" {
+    # If some state dir's worktree.path points at this path, it's owned
+    # — even if the state is failed:* and would otherwise show up as a
+    # leftover, the orphan scanner must not double-count it.
+    local _wt
+    _wt="$(_make_pr_worktree 902)"
+    _seed_pr_state 902 "approving" "$_wt" "$$"
+
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune"
+    assert_success
+    refute_output --partial "orphan"
+}
+
+@test "orphan: ignores worktrees with non-pr branches" {
+    # Only branches under refs/heads/wt/pr-* are PR-approval worktrees.
+    # A `wt/issue-12/1` worktree from some other workflow must be left
+    # alone — different feature, different cleanup story.
+    (
+        cd "$FAKE_REPO"
+        git worktree add -q -b "wt/issue-12/1" \
+            "$TEST_TEMP_HOME/wt-issue-12" main 2>/dev/null
+    )
+
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune"
+    assert_success
+    refute_output --partial "orphan"
+}
