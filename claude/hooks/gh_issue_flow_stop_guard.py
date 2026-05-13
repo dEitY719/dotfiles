@@ -90,9 +90,15 @@ TERMINAL_PATTERNS: tuple[str, ...] = (
 # read by the model) are layered separately in `_iter_text_blocks(...,
 # include_tool_results=False)`.
 _USER_BOUNDARY_RE: re.Pattern[str] = re.compile(
-    r"(?m)"
-    r"(?:^\s*/gh[-:]issue-flow\b"
-    r"|<command-name>\s*/gh[-:]issue-flow\s*</command-name>)"
+    r"""
+    (?m)                                                    # multiline: ^ matches each line start
+    (?:
+        ^\s*/gh[-:]issue-flow\b                             # raw slash command at line start
+        |
+        <command-name>\s*/gh[-:]issue-flow\s*</command-name>  # Claude Code wrapped form
+    )
+    """,
+    re.VERBOSE,
 )
 FLOW_SKILL_NAMES: set[str] = {"gh-issue-flow", "gh:issue-flow"}
 
