@@ -13,16 +13,16 @@ unalias gwt 2>/dev/null || true
 # Usage: gwt-help [section]
 # ============================================================================
 _gwt_help_summary() {
-    ux_info "Usage: gwt-help [section|--list|--all]"
+    ux_info "Usage: gwt help [section|--list|--all]"
     ux_bullet "sections"
-    ux_bullet_sub "add: gwt add <path> [branch] [start]"
-    ux_bullet_sub "list: gwt list | gwt ls [--quick|--remote]"
-    ux_bullet_sub "remove: gwt remove <path|agent|all> [--force]"
-    ux_bullet_sub "prune: gwt prune"
-    ux_bullet_sub "spawn: gwt spawn <name> [--task slug] [--base ref] [--tmux|--launch] [--user account]"
-    ux_bullet_sub "status: gwt status [<name>]"
-    ux_bullet_sub "teardown: gwt teardown [--force] [--keep-branch]"
-    ux_bullet_sub "details: gwt-help <section> (example: gwt-help spawn)"
+    ux_bullet_sub "add      gwt add <path> [branch] [start]              create worktree"
+    ux_bullet_sub "list     gwt list|ls [--quick|--remote]               list worktrees"
+    ux_bullet_sub "remove   gwt remove <path|name|all> [--force]         delete worktree dir + branch"
+    ux_bullet_sub "prune    gwt prune                                    clean stale .git/worktrees/ refs (no path)"
+    ux_bullet_sub "spawn    gwt spawn <name> [--task|--base|--tmux|...]  create named worktree (AI workflow)"
+    ux_bullet_sub "status   gwt status [<name>]                          per-worktree diagnostic"
+    ux_bullet_sub "teardown gwt teardown [--force] [--keep-branch]       cleanup current/all worktree(s)"
+    ux_bullet_sub "details  gwt help <section> (example: gwt help spawn)"
 }
 
 _gwt_help_list_sections() {
@@ -46,7 +46,7 @@ _gwt_help_rows_list() {
     ux_table_row "default" "PATH/BRANCH/STATE/AGE/NEXT columns" "Local signals (no network)"
     ux_table_row "--quick" "path/commit/branch only" "Legacy output"
     ux_table_row "--remote" "Adds PR state via batched gh CLI call" "One network call regardless of N"
-    ux_table_row "states" "dirty/ahead/pr-open/pr-merged/merged/..." "See 'gwt-help status' for full list"
+    ux_table_row "states" "dirty/ahead/pr-open/pr-merged/merged/..." "See 'gwt help status' for full list"
 }
 
 _gwt_help_rows_status() {
@@ -117,8 +117,8 @@ _gwt_help_section_rows() {
             _gwt_help_rows_teardown
             ;;
         *)
-            ux_error "Unknown gwt-help section: $1"
-            ux_info "Try: gwt-help --list"
+            ux_error "Unknown gwt help section: $1"
+            ux_info "Try: gwt help --list"
             return 1
             ;;
     esac
@@ -159,21 +159,20 @@ gwt_help() {
 # ============================================================================
 gwt() {
     case "${1:-}" in
-        add)      shift; git_worktree_add "$@" ;;
-        list|ls)  shift; git_worktree_list "$@" ;;
+        add)       shift; git_worktree_add "$@" ;;
+        list|ls)   shift; git_worktree_list "$@" ;;
         remove|rm) shift; git_worktree_remove "$@" ;;
-        prune)    shift; git_worktree_prune "$@" ;;
-        spawn)    shift; git_worktree_spawn "$@" ;;
-        status)   shift; git_worktree_status "$@" ;;
-        teardown) shift; git_worktree_teardown "$@" ;;
+        prune)     shift; git_worktree_prune "$@" ;;
+        spawn)     shift; git_worktree_spawn "$@" ;;
+        status)    shift; git_worktree_status "$@" ;;
+        teardown)  shift; git_worktree_teardown "$@" ;;
         -h|--help|help|"")
-            ux_error "Usage: gwt <command> [args...]"
-            ux_info "Run: gwt-help"
-            return 1
+            shift 2>/dev/null || true
+            gwt_help "$@"
             ;;
         *)
             ux_error "Unknown command: $1"
-            ux_info "Run: gwt-help"
+            ux_info "Run: gwt help"
             return 1
             ;;
     esac
@@ -1058,11 +1057,11 @@ git_worktree_prune() {
             -h|--help)
                 ux_header "gwt prune - remove stale worktree refs"
                 ux_info "Usage: gwt prune [-n|--dry-run] [-v|--verbose] [--expire <when>]"
-                ux_info "  Removes .git/worktrees/<name>/ entries whose path is missing."
-                ux_info "  Does NOT take a path argument."
-                ux_info "  Targeted removal:"
-                ux_bullet "gwt remove <path>      # remove a specific worktree"
-                ux_bullet "gwt teardown           # remove the worktree you're inside"
+                ux_info "  Touches .git/worktrees/ metadata ONLY (no path argument)."
+                ux_info "  Removes admin-dir entries whose worktree dir is already gone."
+                ux_info "  To delete an actual worktree dir + branch, use:"
+                ux_bullet "gwt remove <path|name>  # remove a specific worktree"
+                ux_bullet "gwt teardown            # remove the worktree you're inside"
                 return 0
                 ;;
             -n|--dry-run|-v|--verbose) ;;
@@ -1106,6 +1105,10 @@ git_worktree_remove() {
             ux_info "             removes ALL worktrees matching *-<name>-*"
             ux_info "  all        remove ALL non-main worktrees"
             ux_info "  --force    force remove + force delete unmerged branch"
+            ux_info ""
+            ux_info "  Deletes the actual worktree directory + branch."
+            ux_info "  To clean stale .git/worktrees/ registry entries (when the"
+            ux_info "  directory was already deleted), use: gwt prune"
             return 0
             ;;
         "")
@@ -1117,6 +1120,19 @@ git_worktree_remove() {
     local target="$1"
     local force=false
     [ "${2:-}" = "--force" ] && force=true
+
+    # First arg is a flag (e.g. `gwt remove --force`) — user forgot the path/name.
+    # Without this guard, `--force` would be misinterpreted as a worktree name
+    # and yield a confusing "No worktree found: --force" error.
+    case "$target" in
+        -*)
+            ux_error "Missing <path|name|all>. Got flag: $target"
+            ux_info "Did you mean:"
+            ux_bullet "gwt remove all $target          # apply '$target' to all worktrees"
+            ux_bullet "gwt remove <path|name> $target  # apply '$target' to a specific one"
+            return 1
+            ;;
+    esac
 
     # "all" — remove every non-main worktree
     if [ "$target" = "all" ]; then

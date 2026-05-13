@@ -76,13 +76,12 @@ _<prefix>_<verb2>() {
         <verb>)   shift; _<prefix>_<verb> "$@" ;;
         <verb2>)  shift; _<prefix>_<verb2> "$@" ;;
         -h|--help|help|"")
-            ux_error "Usage: <alias> <command> [args...]"
-            ux_info "Run: <alias>-help"
-            return 1
+            shift 2>/dev/null || true
+            <topic>_help "$@"   # standalone help, also reachable via <alias>-help
             ;;
         *)
             ux_error "Unknown command: $1"
-            ux_info "Run: <alias>-help"
+            ux_info "Run: <alias> help"
             return 1
             ;;
     esac
@@ -90,6 +89,12 @@ _<prefix>_<verb2>() {
 
 alias <alias>='<topic>'
 ```
+
+`-h|--help|help|""` invokes `<topic>_help` directly (no `return 1`) so users
+discover help through the natural entry point (`gwt`, `gwt -h`, `gwt help
+spawn`) instead of being told to learn a separate `<alias>-help` form. Passing
+`"$@"` forwards a section name (`<alias> help spawn` → `<topic>_help spawn`).
+The `<alias>-help` alias is preserved as a backward-compatible shortcut.
 
 ### 참조 구현: `gwt`
 
@@ -103,12 +108,11 @@ gwt() {
         spawn)    shift; git_worktree_spawn "$@" ;;
         teardown) shift; git_worktree_teardown "$@" ;;
         -h|--help|help|"")
-            ux_error "Usage: gwt <command> [args...]"
-            ux_info "Run: gwt-help"
-            return 1 ;;
+            shift 2>/dev/null || true
+            gwt_help "$@" ;;
         *)
             ux_error "Unknown command: $1"
-            ux_info "Run: gwt-help"
+            ux_info "Run: gwt help"
             return 1 ;;
     esac
 }
@@ -203,6 +207,8 @@ alias gb='git_branch'
 | Standalone help (`<topic>_help` + `<topic>-help`) | Type 2A, 또는 sub-command 수 4개 이상 | 별도 `*_help.sh` 파일 |
 
 [`command-guidelines.md`](./command-guidelines.md)의 help 표준(15줄 이내, `ux_bullet`/`ux_bullet_sub`, `--all`/`<section>` 분리)은 standalone help에 완전 적용된다.
+
+Type 2A 의 `-h|--help|help|""` 케이스는 `<topic>_help "$@"` 를 직접 호출한다. `<alias>-help` alias 는 backward-compat 단축형으로 동시 제공한다 (예: `gwt help spawn` ≡ `gwt-help spawn`).
 
 ## 8. Deprecated Alias 전략
 
