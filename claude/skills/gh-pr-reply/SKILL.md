@@ -90,6 +90,44 @@ reviewer's language.
 If any fixes were committed: `git push` (never force-push unless the user
 asked) and report new commit SHAs alongside the reply summary.
 
+Track the push outcome in `PUSHED_FIXES` (count of new commit SHAs that
+landed on the remote branch in this step). Step 6.5 reads this variable
+to decide whether to move the PR card. When no fixes were committed
+(all comments were DECLINE / QUESTION) or `git push` is skipped, set
+`PUSHED_FIXES=0` so Step 6.5 becomes a no-op.
+
+## Step 6.5: Sync Project Board (`In review` 복귀)
+
+If Step 6 actually pushed at least one fix commit (i.e. `PUSHED_FIXES > 0`,
+new SHAs created on the remote branch), push the PR card back to
+`In review` so reviewers see it in their queue. Mirrors the
+`/gh-pr-resolve-conflict` Step 5 pattern (issue #591) so both flows
+share one board-recovery surface.
+
+Skips when `PUSHED_FIXES == 0` (all comments DECLINE / QUESTION — no
+push happened, so the card lifecycle has not changed and there is
+nothing to recover). The `--only-from "In progress,Changes requested"`
+guard makes the call a no-op for cards already at `In review` /
+`Approved` / `Done`, so re-running on an already-recovered card never
+demotes status.
+
+Soft-fail — warn on any error, never block the Step 7 report.
+
+```bash
+if [ "${PUSHED_FIXES:-0}" -gt 0 ]; then
+    . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null \
+      && _gh_project_status_sync pr "$PR_NUMBER" "In review" \
+            --only-from "In progress,Changes requested" \
+      && echo "[OK] PR 카드 \`In review\` 로 복귀됨" \
+      || echo "[WARN] 보드 sync 실패 — 카드 수동 이동 필요할 수 있음"
+fi
+```
+
+`GH_PROJECT_STATUS_SYNC=0` opt-out is absorbed by the helper itself.
+projectV2 보드가 없는 레포는 helper 가 silent 0 반환. `--only-from`
+의 missing column 은 helper 가 silently skip 하므로 `Changes requested`
+컬럼 없는 보드와도 호환된다.
+
 ## Step 7: Report
 
 Print the summary table per `references/final-summary.md` showing
