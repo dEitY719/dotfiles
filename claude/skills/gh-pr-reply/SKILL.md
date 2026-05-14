@@ -41,7 +41,11 @@ Also capture `TARGET_REPO` via `gh repo view --json nameWithOwner -q .nameWithOw
 ## Step 2: Fetch All Review Comments
 
 Read `references/comment-fetching.md` for the three API endpoints, field
-extraction, and dedup rule. Fetch all three; filter out already-replied threads.
+extraction, and dedup rule. Fetch all three; filter out already-replied
+threads. Bot service notices (quota / rate-limit / outage) — whether
+posted as review summaries OR as conversation comments — follow the
+"Bot service notices" section in the same reference: classify as
+service-notice, single-line ack in Step 5, count separately in Step 7.
 
 ## Step 2.5: Early Exit — No Unaddressed Comments
 
@@ -74,8 +78,12 @@ like `fix(review): address X as suggested in PR #123 review`. Never
 including declined ones and bot comments.**
 
 Read `references/reply-templates.md` for POST command shapes (inline thread
-vs top-level) and the four body templates (Accepted / Accepted-with-modification
-/ Declined / Question). Reply in the reviewer's language.
+vs top-level), the four body templates (Accepted / Accepted-with-modification
+/ Declined / Question), the "Long-body fallback" pattern (review body
+> 500 chars → cite by review id instead of verbatim blockquote), and the
+"Consolidated table reply" template (single review body with N ≥ 3
+independent items → one table reply, not N separate ones). Reply in the
+reviewer's language.
 
 ## Step 6: Push the Fix Commits
 
@@ -86,7 +94,11 @@ asked) and report new commit SHAs alongside the reply summary.
 
 Print the summary table per `references/final-summary.md` showing
 Accepted / Declined / Answered counts, commit SHAs, and any skipped
-already-replied comments.
+already-replied comments. After the table, run the "Lingering
+`CHANGES_REQUESTED` nudge" check from the same reference: re-query
+`gh pr view --json reviewDecision`, and if still `CHANGES_REQUESTED`,
+emit the one-line nudge so the user knows replies + fixes alone do
+not clear the review block — the reviewer must re-review.
 
 After printing the report, post a PR comment with ai-metrics (soft-fail —
 warn on error, never block). `COMMENT_COUNT` is the number of comments
