@@ -140,14 +140,35 @@ $_candidates
 EOF
 }
 
-# ── Parent state pre-check (F-4) ───────────────────────────────────────
+# ── Parent state + stack pre-check (F-4 / F-6) ─────────────────────────
+# Single combined fetch of state + body. Tests inject state via
+# FAKE_PARENT_STATE (existing) and body via FAKE_PARENT_BODY (new).
+# The body is stashed in $_GH_PR_PARENT_BODY_CACHE so the stacked-body
+# guard below can reuse it without a second API call.
 _gh_pr_default_parent_state() {
-    local _pr="${1:-}"
+    local _pr="${1:-}" _meta _delim
     if [ -n "${FAKE_PARENT_STATE+set}" ]; then
         printf '%s\n' "$FAKE_PARENT_STATE"
         return 0
     fi
-    gh pr view "$_pr" --json state -q .state 2>/dev/null
+    _delim=$(printf '\001')
+    _meta=$(gh pr view "$_pr" --json state,body \
+        --jq '"\(.state)\(.body)"' 2>/dev/null)
+    _GH_PR_PARENT_BODY_CACHE="${_meta#*"$_delim"}"
+    printf '%s\n' "${_meta%%"$_delim"*}"
+}
+
+_gh_pr_default_parent_body() {
+    local _pr="${1:-}"
+    if [ -n "${_GH_PR_PARENT_BODY_CACHE+set}" ]; then
+        printf '%s' "$_GH_PR_PARENT_BODY_CACHE"
+        return 0
+    fi
+    if [ -n "${FAKE_PARENT_BODY+set}" ]; then
+        printf '%s' "$FAKE_PARENT_BODY"
+        return 0
+    fi
+    gh pr view "$_pr" --json body -q .body 2>/dev/null
 }
 
 assert_parent_pr_open() {
@@ -158,6 +179,18 @@ assert_parent_pr_open() {
             "$_pr" "${_state:-UNKNOWN}" >&2
         printf 'Next: reopen parent, or run with --no-stack.\n' >&2
         return 5
+    fi
+    return 0
+}
+
+assert_parent_pr_not_stacked() {
+    local _pr="${1:-}" _body
+    _body=$(_gh_pr_default_parent_body "$_pr")
+    if printf '%s' "$_body" | grep -qiE '^[[:space:]]*Depends[[:space:]]+on[[:space:]]+#[0-9]+'; then
+        printf 'gh:pr: parent PR #%s is already stacked — multi-stack not supported.\n' \
+            "$_pr" >&2
+        printf 'Next: merge/squash parent first, or use --no-stack / --base <branch>.\n' >&2
+        return 6
     fi
     return 0
 }

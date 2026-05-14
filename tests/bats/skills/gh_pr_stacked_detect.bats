@@ -4,7 +4,7 @@
 #   claude/skills/gh-pr/references/stacked-pr.md
 # Source-of-truth fixture: _fixtures/gh_pr_stacked_detect.sh.
 #
-# 9-case compatibility matrix (issue #614 re-added case 9 for parent state):
+# 10-case compatibility matrix (issue #616 added case 10 for multi-stack):
 #   1. dotfiles solo (no stacked signals)        → Stage 1 fail, base=default
 #   2. AgentToolbox parent unique                → Stage 1+2, 1 candidate
 #   3. AgentToolbox parent ambiguous             → Stage 1+2, 2+ candidates
@@ -14,6 +14,7 @@
 #   7. Mutually-exclusive flags (--no-stack + --base) → rc=2 abort
 #   8. --base (missing arg)                      → rc=3 abort
 #   9. Auto-detected parent state ≠ OPEN          → rc=5 abort + hint
+#  10. Auto-detected parent already stacked       → rc=6 abort + hint
 
 load '../test_helper'
 
@@ -27,6 +28,7 @@ setup() {
 teardown() {
     [ -n "$REPO_ROOT" ] && [ -d "$REPO_ROOT" ] && rm -rf "$REPO_ROOT"
     unset FAKE_OPEN_PRS FAKE_ANCESTOR_REFS FAKE_NONDEFAULT_REFS FAKE_PARENT_STATE
+    unset FAKE_PARENT_BODY _GH_PR_PARENT_BODY_CACHE
     unset STACK_MODE STACK_BASE ISSUE_NUMBER
     teardown_isolated_home
 }
@@ -180,6 +182,63 @@ teardown() {
     run assert_parent_pr_open 201
     [ "$status" -eq 5 ]
     assert_output --partial 'state=MERGED'
+}
+
+# ── Compatibility matrix #10: multi-stack guard (F-6, issue #616) ─────
+@test "matrix-10: parent body without Depends → assert_parent_pr_not_stacked succeeds" {
+    FAKE_PARENT_BODY='## Summary
+Normal single-stack PR body. No Depends trailer here.'
+    run assert_parent_pr_not_stacked 201
+    assert_success
+    [ -z "$output" ]
+}
+
+@test "matrix-10: parent body empty → assert_parent_pr_not_stacked succeeds" {
+    FAKE_PARENT_BODY=''
+    run assert_parent_pr_not_stacked 201
+    assert_success
+}
+
+@test "matrix-10: parent body with 'Depends on #100' → rc=6 with recovery hint" {
+    FAKE_PARENT_BODY='## Summary
+Adds widget X.
+
+## Related
+Depends on #100'
+    run assert_parent_pr_not_stacked 201
+    [ "$status" -eq 6 ]
+    assert_output --partial 'parent PR #201 is already stacked'
+    assert_output --partial 'multi-stack not supported'
+    assert_output --partial '--no-stack'
+    assert_output --partial '--base'
+}
+
+@test "matrix-10: parent body with lowercase 'depends on #N' → rc=6 (case-insensitive)" {
+    FAKE_PARENT_BODY='depends on #42'
+    run assert_parent_pr_not_stacked 201
+    [ "$status" -eq 6 ]
+}
+
+@test "matrix-10: parent body with leading whitespace before Depends → rc=6" {
+    FAKE_PARENT_BODY='   Depends on #77'
+    run assert_parent_pr_not_stacked 201
+    [ "$status" -eq 6 ]
+}
+
+@test "matrix-10: 'Depends on' as inline prose (not line-start) → rc=0 (no false positive)" {
+    FAKE_PARENT_BODY='This change Depends on #100 indirectly but is not stacked.'
+    run assert_parent_pr_not_stacked 201
+    assert_success
+}
+
+@test "matrix-10: body cache from assert_parent_pr_open reused (zero extra API)" {
+    # Simulate the dispatcher path: state-helper populates the cache, then
+    # the body-guard reads it without a second fetch. We assert this by
+    # leaving FAKE_PARENT_BODY unset — only the cache should carry it.
+    _GH_PR_PARENT_BODY_CACHE='Depends on #999'
+    run assert_parent_pr_not_stacked 201
+    [ "$status" -eq 6 ]
+    assert_output --partial '#201 is already stacked'
 }
 
 # ── Legacy positional issue arg still parsed ──────────────────────────
