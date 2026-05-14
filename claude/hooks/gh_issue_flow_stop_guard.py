@@ -110,7 +110,7 @@ _USER_BOUNDARY_RE: re.Pattern[str] = re.compile(
         |
         <command-name>\s*/gh[-:]issue-flow\s*</command-name>  # (b) Claude Code wrapped form
         |
-        ^Base\s+directory\s+for\s+this\s+skill:\s*\S*/gh-issue-flow\b  # (c) skill base dir
+        ^Base\s+directory\s+for\s+this\s+skill:\s+.*gh-issue-flow\b  # (c) skill base dir
         |
         ^\#\s+gh:issue-flow\s+—\s+Issue\s+→\s+PR\s+composition\s*$  # (d) SKILL.md H1
     )
@@ -134,18 +134,22 @@ def _block(reason: str, *, layer: str | None = None) -> int:
     return 0
 
 
-def _iter_text_blocks(message: dict[str, Any], include_tool_results: bool = True) -> list[str]:
+def _iter_text_blocks(message: dict[str, Any], include_tool_results: bool = False) -> list[str]:
     """Return all text-bearing chunks in a message's content array.
 
     `include_tool_results` gates whether tool_result blocks contribute their
-    text. Both boundary detection and terminal-marker scanning set it to
-    False — a tool_result can carry arbitrary file contents (e.g. SKILL.md
-    being read by the model), and substrings inside such payloads must not
-    influence flow detection. In particular, the SKILL.md Step 3 template
-    literally contains the lines `gh:issue-flow complete (#<N>)` and
-    `gh:issue-flow stopped at step <i>/5` as instructions; if those were
-    visible to the terminal scan via tool_result, every Read of SKILL.md
-    during a flow would falsely flag completion (issue #608, layer L1.5).
+    text. Default is `False` — a tool_result can carry arbitrary file
+    contents (e.g. SKILL.md being read by the model), and substrings
+    inside such payloads must not influence flow detection. Both
+    boundary detection and terminal-marker scanning rely on the default;
+    no caller in this module passes `True`. The parameter is kept (rather
+    than removed) so future callers needing inclusive scans can opt in
+    explicitly, but the safe default is now the default. In particular,
+    the SKILL.md Step 3 template literally contains the lines
+    `gh:issue-flow complete (#<N>)` and `gh:issue-flow stopped at step
+    <i>/5` as instructions; if those were visible to the terminal scan
+    via tool_result, every Read of SKILL.md during a flow would falsely
+    flag completion (issue #608, layer L1.5; PR #635 review tightening).
     """
     parts: list[str] = []
     content = message.get("content")
