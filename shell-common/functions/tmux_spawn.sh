@@ -29,7 +29,7 @@ _ts_known_agent() {
     esac
 }
 
-# _tmux_add_agent_window <session> <agent> <dir> [account]
+# _tmux_add_agent_window <session> <agent> <dir> [account] [bg_task]
 # Add a 3-pane window to a tmux session (creates session if needed).
 # Layout: LEFT (agent-yolo) | RIGHT-TOP / RIGHT-BOTTOM
 #
@@ -37,13 +37,28 @@ _ts_known_agent() {
 # left pane runs `claude-yolo --user <account>` instead of plain
 # `claude-yolo`. Other agents have no multi-account support so the value is
 # ignored — the caller is responsible for rejecting that combination.
+#
+# Optional 5th arg `bg_task` (issue #640): when non-null and agent=claude,
+# append `--bg "<bg_task>"` so Agent View picks up the dispatched session.
+# An empty bg_task is allowed — the caller's intent is "dispatch in
+# background, let claude itself emit a task-too-short error if needed".
+# Other agents lack a --bg flag and the caller must reject the combination.
 _tmux_add_agent_window() {
-    local session="$1" agent="$2" dir="$3" account="${4-}"
+    local session="$1" agent="$2" dir="$3" account="${4-}" bg_task="${5-}"
     local yolo win
     if [ "$agent" = "claude" ] && [ -n "$account" ]; then
         yolo="${agent}-yolo --user ${account}"
     else
         yolo="${agent}-yolo"
+    fi
+    # Background dispatch passthrough (#640). Single-quote-escape the task
+    # string so tmux send-keys passes it through verbatim. The "$#" check
+    # distinguishes "no 5th arg" (no --bg) from "5th arg present, empty"
+    # (--bg with empty task).
+    if [ "$agent" = "claude" ] && [ "$#" -ge 5 ]; then
+        local _ts_bg_esc
+        _ts_bg_esc=$(printf '%s' "$bg_task" | sed "s/'/'\\\\''/g")
+        yolo="${yolo} --bg '${_ts_bg_esc}'"
     fi
 
     if tmux has-session -t "=$session" 2>/dev/null; then
