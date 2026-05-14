@@ -39,17 +39,8 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-_gh_discussion__require_args() {
-    # _gh_discussion__require_args <expected-count> <fn-name> <usage-tail>
-    if [ "$1" -ne "$2" ]; then
-        printf '[gh-discussion] usage: %s %s\n' "$3" "$4" >&2
-        return 2
-    fi
-    return 0
-}
-
 _gh_discussion_repo_id() {
-    local _owner="$1" _repo="$2"
+    local _owner="${1:-}" _repo="${2:-}"
     if [ -z "$_owner" ] || [ -z "$_repo" ]; then
         printf '[gh-discussion] usage: _gh_discussion_repo_id <owner> <repo>\n' >&2
         return 2
@@ -86,7 +77,7 @@ _gh_discussion_repo_id() {
 }
 
 _gh_discussion_category_id() {
-    local _owner="$1" _repo="$2" _category="$3"
+    local _owner="${1:-}" _repo="${2:-}" _category="${3:-}"
     if [ -z "$_owner" ] || [ -z "$_repo" ] || [ -z "$_category" ]; then
         printf '[gh-discussion] usage: _gh_discussion_category_id <owner> <repo> <category>\n' >&2
         return 2
@@ -150,7 +141,7 @@ _gh_discussion_category_id() {
 }
 
 _gh_discussion_create() {
-    local _repo_id="$1" _category_id="$2" _title="$3" _body_file="$4"
+    local _repo_id="${1:-}" _category_id="${2:-}" _title="${3:-}" _body_file="${4:-}"
     if [ -z "$_repo_id" ] || [ -z "$_category_id" ] || [ -z "$_title" ] ||
         [ -z "$_body_file" ]; then
         printf '[gh-discussion] usage: _gh_discussion_create <repo-id> <category-id> <title> <body-file>\n' >&2
@@ -160,9 +151,6 @@ _gh_discussion_create() {
         printf '[gh-discussion] body-file not found: %s\n' "$_body_file" >&2
         return 2
     fi
-
-    local _body
-    _body=$(cat "$_body_file") || return 1
 
     local _err _url
     _err=$(mktemp) || return 1
@@ -187,7 +175,7 @@ _gh_discussion_create() {
         -f repoId="$_repo_id" \
         -f categoryId="$_category_id" \
         -f title="$_title" \
-        -f body="$_body" \
+        -f "body=@$_body_file" \
         --jq '.data.createDiscussion.discussion.url' 2>"$_err")
     local _rc=$?
 
