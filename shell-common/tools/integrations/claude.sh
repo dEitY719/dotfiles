@@ -305,7 +305,12 @@ _claude_yolo_export_settings_env() {
 # 동작:
 # 1. POSIX 안전 인자 재구성 (sentinel 패턴, eval 없음)
 # 2. 계정 → CLAUDE_CONFIG_DIR 해석 (SSOT: _claude_resolve_account)
-# 3. main/master 브랜치 가드 (기존 동작 유지) — bypass: CLAUDE_YOLO_STAY=1
+# 3. main/master 브랜치 가드 (기존 동작 유지)
+#    bypass:
+#      - CLAUDE_YOLO_STAY=1
+#      - Agent View read-only 서브커맨드 (#640):
+#        agents|attach|logs|stop|kill|respawn|rm — 파일 편집이 없는 명령이라
+#        scratch/* 브랜치를 만들면 worktree 노이즈만 발생.
 # 4. CLAUDE_CONFIG_DIR 환경 주입 + command claude --dangerously-skip-permissions
 claude_yolo() {
     _cy_account="${CLAUDE_DEFAULT_ACCOUNT:-personal}"
@@ -362,8 +367,19 @@ claude_yolo() {
         return 1
     }
 
+    # Agent View read-only 서브커맨드 화이트리스트 (#640).
+    # `claude agents/attach/logs/stop/kill/respawn/rm` 은 파일 편집을 하지
+    # 않으므로 main 위에서도 scratch/* 브랜치를 만들 필요가 없다. main-guard
+    # 가 발동하면 코드 변경 0줄짜리 명령에 worktree 만 더러워진다.
+    _cy_is_readonly_cmd=0
+    case "${1:-}" in
+        agents|attach|logs|stop|kill|respawn|rm)
+            _cy_is_readonly_cmd=1
+            ;;
+    esac
+
     # main/master 브랜치 가드 (기존 로직 보존)
-    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if [ "$_cy_is_readonly_cmd" -eq 0 ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         _cy_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
         case "$_cy_branch" in
             main|master)

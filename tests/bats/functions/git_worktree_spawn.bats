@@ -329,3 +329,139 @@ teardown() {
     assert_failure
     assert_output --partial "--user is only supported with --ai claude"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #640: --bg flag passes through to `claude --bg "<task>"`. Worktree
+# is created then the agent's yolo command is dispatched in background
+# mode so Agent View (`claude-yolo agents`) can see the session.
+# ---------------------------------------------------------------------------
+
+@test "bash: spawn --help mentions --bg flag" {
+    run_in_bash 'git_worktree_spawn --help'
+    assert_success
+    assert_output --partial "--bg"
+    assert_output --partial "Agent View"
+}
+
+@test "zsh: spawn --help mentions --bg flag" {
+    run_in_zsh 'git_worktree_spawn --help'
+    assert_success
+    assert_output --partial "--bg"
+}
+
+@test "bash: spawn rejects --bg without --launch or --tmux" {
+    # --bg only makes sense when something is being dispatched. Without
+    # --launch/--tmux the worktree is created but nothing runs, so flag
+    # the typo loudly.
+    run_in_bash "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-xyz --bg 2>&1
+    "
+    assert_failure
+    assert_output --partial "--bg requires --launch or --tmux"
+}
+
+@test "bash: spawn rejects --bg with --ai codex" {
+    # Multi-agent guard: only claude has Agent View / --bg today.
+    run_in_bash "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-xyz --launch --ai codex --bg 2>&1
+    "
+    assert_failure
+    assert_output --partial "--bg is only supported with --ai claude"
+}
+
+@test "zsh: spawn rejects --bg without --launch or --tmux" {
+    run_in_zsh "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-xyz --bg 2>&1
+    "
+    assert_failure
+    assert_output --partial "--bg requires --launch or --tmux"
+}
+
+@test "bash: spawn --launch --bg dispatches claude_yolo --bg with empty task" {
+    # End-to-end check via a fake claude_yolo shim. When --bg is given with
+    # no task arg, the wrapper passes an empty string and lets claude itself
+    # complain if needed. The marker uses '|' between args so word-splitting
+    # cannot collapse `--bg` + empty string into a single token.
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-bg-marker'
+        export MARKER
+        # Shadow claude_yolo with a recorder. _gwt_yolo_command returns the
+        # literal 'claude_yolo', so once we redefine the function, eval'd
+        # launch_cmd will dispatch into the recorder.
+        claude_yolo() {
+            local _cy_recorded=''
+            for _a in \"\$@\"; do _cy_recorded=\"\${_cy_recorded}|\$_a\"; done
+            printf '%s\n' \"\$_cy_recorded\" > \"\$MARKER\"
+        }
+        git_worktree_spawn issue-bgempty --launch --bg >/dev/null 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    # 2 args: '--bg' and '' (empty). Pipe delimiter preserves the empty arg.
+    assert_output "|--bg|"
+}
+
+@test "bash: spawn --launch --bg with task passes the task string through" {
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-bg-task-marker'
+        export MARKER
+        claude_yolo() {
+            local _cy_recorded=''
+            for _a in \"\$@\"; do _cy_recorded=\"\${_cy_recorded}|\$_a\"; done
+            printf '%s\n' \"\$_cy_recorded\" > \"\$MARKER\"
+        }
+        git_worktree_spawn issue-bgtask --launch --bg 'fix login flow' >/dev/null 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    # The task string survives shell quoting through eval — 2 args, second
+    # carries spaces verbatim.
+    assert_output "|--bg|fix login flow"
+}
+
+@test "bash: spawn --launch --user work --bg threads account through" {
+    # AC-6 path: --user work + --bg → claude_yolo --user work --bg ''.
+    # Stand up the work account dir so _claude_resolve_account succeeds.
+    run_in_bash "
+        mkdir -p '$HOME/.claude-work' '$HOME/.claude-personal'
+        # Space-separated whitelist (see claude.sh _claude_resolve_account).
+        export CLAUDE_ENABLED_ACCOUNTS='personal work'
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-bg-user-marker'
+        export MARKER
+        claude_yolo() {
+            local _cy_recorded=''
+            for _a in \"\$@\"; do _cy_recorded=\"\${_cy_recorded}|\$_a\"; done
+            printf '%s\n' \"\$_cy_recorded\" > \"\$MARKER\"
+        }
+        git_worktree_spawn issue-bgwork --launch --user work --bg >/dev/null 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    # 4 args: '--user', 'work', '--bg', ''
+    assert_output "|--user|work|--bg|"
+}
+
+@test "bash: spawn without --bg still dispatches plain claude_yolo" {
+    # Regression guard: default --launch path must NOT silently grow --bg.
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-no-bg-marker'
+        export MARKER
+        claude_yolo() {
+            local _cy_recorded=''
+            for _a in \"\$@\"; do _cy_recorded=\"\${_cy_recorded}|\$_a\"; done
+            printf '%s\n' \"[\$_cy_recorded]\" > \"\$MARKER\"
+        }
+        git_worktree_spawn issue-nobg --launch >/dev/null 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    # Empty arg list — claude_yolo invoked with zero extra args.
+    assert_output "[]"
+}

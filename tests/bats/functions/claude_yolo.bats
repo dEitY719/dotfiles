@@ -50,6 +50,9 @@ _setup_fake_repo_on_main() {
 }
 
 # Run claude_yolo in bash with the shim on PATH and CWD at a given path.
+# Extra positional args after $cwd are eval'd as setup lines (e.g.
+# `export CLAUDE_YOLO_STAY=1`). Optional yolo args are forwarded via
+# the YOLO_ARGS env var so call sites can pass `agents`, `attach <id>`, etc.
 _run_yolo_bash() {
     local cwd="$1"
     shift
@@ -58,6 +61,7 @@ _run_yolo_bash() {
         export SHELL_COMMON='${SHELL_COMMON}'
         export DOTFILES_FORCE_INIT=1
         export DOTFILES_TEST_MODE=1
+        export DOTFILES_ROOT_NO_CANONICALIZE=1
         export HOME='${HOME}'
         export TERM=dumb
         export PATH='${PATH}'
@@ -65,7 +69,7 @@ _run_yolo_bash() {
         $*
         source '${DOTFILES_ROOT}/bash/main.bash'
         cd '${cwd}'
-        claude_yolo
+        claude_yolo \${YOLO_ARGS:-}
     "
 }
 
@@ -126,4 +130,89 @@ _run_yolo_bash() {
     assert_success
     run cat "$MARKER"
     assert_output "no-branch"
+}
+
+# --- Agent View read-only bypass (#640) ---
+
+@test "bash: claude_yolo agents on main skips scratch auto-switch" {
+    # `claude agents` is a read-only Agent View command; the main-guard
+    # creating a scratch/* branch would just leave worktree noise.
+    _run_yolo_bash "$REPO" "export YOLO_ARGS=agents"
+    assert_success
+    run cat "$MARKER"
+    assert_output "main"
+}
+
+@test "bash: claude_yolo attach on main skips scratch auto-switch" {
+    _run_yolo_bash "$REPO" "export YOLO_ARGS='attach abc123'"
+    assert_success
+    run cat "$MARKER"
+    assert_output "main"
+}
+
+@test "bash: claude_yolo logs on main skips scratch auto-switch" {
+    _run_yolo_bash "$REPO" "export YOLO_ARGS='logs abc123'"
+    assert_success
+    run cat "$MARKER"
+    assert_output "main"
+}
+
+@test "bash: claude_yolo stop on main skips scratch auto-switch" {
+    _run_yolo_bash "$REPO" "export YOLO_ARGS='stop abc123'"
+    assert_success
+    run cat "$MARKER"
+    assert_output "main"
+}
+
+@test "bash: claude_yolo respawn on main skips scratch auto-switch" {
+    _run_yolo_bash "$REPO" "export YOLO_ARGS='respawn abc123'"
+    assert_success
+    run cat "$MARKER"
+    assert_output "main"
+}
+
+@test "bash: claude_yolo rm on main skips scratch auto-switch" {
+    _run_yolo_bash "$REPO" "export YOLO_ARGS='rm abc123'"
+    assert_success
+    run cat "$MARKER"
+    assert_output "main"
+}
+
+@test "bash: claude_yolo kill on main skips scratch auto-switch" {
+    _run_yolo_bash "$REPO" "export YOLO_ARGS='kill abc123'"
+    assert_success
+    run cat "$MARKER"
+    assert_output "main"
+}
+
+@test "bash: claude_yolo with non-readonly subcommand still auto-switches" {
+    # Regression guard: non-whitelisted args (e.g. `--bg "task"`) must NOT
+    # bypass the main-guard. Only the read-only set is special-cased.
+    _run_yolo_bash "$REPO" "export YOLO_ARGS='--bg something'"
+    assert_success
+    run cat "$MARKER"
+    assert_output --regexp '^scratch/[0-9]{4}-[0-9]{6}$'
+}
+
+@test "zsh: claude_yolo agents on main skips scratch auto-switch" {
+    # zsh path matters because emulate -L sh inside claude_yolo guarantees
+    # POSIX word-splitting; the bypass branch must work there too.
+    run zsh --no-rcs -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        export SHELL_COMMON='${SHELL_COMMON}'
+        export DOTFILES_FORCE_INIT=1
+        export DOTFILES_TEST_MODE=1
+        export DOTFILES_ROOT_NO_CANONICALIZE=1
+        export HOME='${HOME}'
+        export ZDOTDIR='${HOME}'
+        export TERM=dumb
+        export PATH='${PATH}'
+        export MARKER='${MARKER}'
+        source '${DOTFILES_ROOT}/zsh/main.zsh'
+        cd '${REPO}'
+        claude_yolo agents
+    "
+    assert_success
+    run cat "$MARKER"
+    assert_output "main"
 }
