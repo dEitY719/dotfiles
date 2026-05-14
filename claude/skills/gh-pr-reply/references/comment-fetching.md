@@ -80,11 +80,17 @@ through the normal Accept / Decline classification.
 
 **Handling.** Service notices still get a reply (the politeness contract
 is non-negotiable) but use a single-line ack — there is nothing to
-accept, decline, or answer. Suggested ack body:
+accept, decline, or answer. Suggested ack body (translate to the
+reviewer's language per the top-of-file rule in `reply-templates.md` —
+the example below is English):
 
 ```
 Acknowledged — service notice, no code-review content to address.
 ```
+
+Korean equivalent: `확인했습니다 — 서비스 알림, 코드 리뷰 내용 없음.`
+Match the reviewer's language exactly; this is a template, not a fixed
+string.
 
 Note these in the Step 7 report as `Acknowledged (bot service notice):`
 so the user can see the bot was not silently ignored. Do NOT skip

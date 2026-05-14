@@ -47,6 +47,8 @@ up to read the original, and the reply stays scannable:
 
 ```bash
 # Body length threshold: 500 chars. Above that, cite by id instead of quoting.
+# HEADER text below is English; translate to the reviewer's language
+# (e.g. Korean: "Re: 리뷰 #<review_id> — Blocker <N>건 + Suggestion <M>건").
 if [ "${#ORIGINAL_BODY}" -gt 500 ]; then
   HEADER="Re: review #<review_id> — <N> Blockers + <M> Suggestions"
   gh api "repos/<owner>/<repo>/issues/<N>/comments" \
@@ -68,7 +70,9 @@ fi
 `<review_id>` is the `id` field returned by `/pulls/<N>/reviews`. `<N>` /
 `<M>` counts come from the Step 3 classification (BLOCKER + Suggestion
 labels are an example taxonomy — match whatever vocabulary the reviewer
-used). Validated on PR `dev-team-404/AgentToolbox#655` review
+used). The `HEADER` literal is a translatable template, not a fixed
+English string — the top-of-file language rule overrides it. Validated
+on PR `dev-team-404/AgentToolbox#655` review
 `pullrequestreview-4286773211` (~3 000-char body, 7 BLOCKER + 3
 Suggestion) — reviewer approved on re-review and praised the format.
 
@@ -122,7 +126,9 @@ For N ≤ 2 items, or for inline comments anchored to specific lines,
 use the per-item templates above — do NOT force a table.
 
 **Body template** (replace `B`/`S` labels with the reviewer's
-taxonomy; match the reviewer's language):
+taxonomy; match the reviewer's language — the column headers, verdict
+keywords, and footer label below are Korean because the AgentToolbox#655
+validation reviewer was Korean-speaking; translate per top-of-file rule):
 
 ```
 Re: review #<review_id> — <N> Blockers + <M> Suggestions
@@ -136,6 +142,10 @@ Re: review #<review_id> — <N> Blockers + <M> Suggestions
 
 전체 fix commit: <short-sha>
 ```
+
+English column equivalents: `| # | Item | Verdict | Resolution |` with
+footer `Aggregate fix commit: <short-sha>`. Pick the language that
+matches the reviewer; do not mix.
 
 Every row must land in exactly one of: Accepted / Accepted-w-mod /
 Declined / Answered. The aggregate commit short-SHA on the trailing
