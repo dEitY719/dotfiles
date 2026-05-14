@@ -111,3 +111,25 @@ YAML
     [[ "$stderr" == *"auto-labels: label 'documentation' not found"* ]]
     [[ "$stderr" != *"label 'skill' not found"* ]]
 }
+
+# ── Row 8 (issue #619) ───────────────────────────────────────────────
+@test "auto-labels: DISCUSSION_MODE=1 skips Step 2.5 entirely" {
+    # --as-discussion routes to gh-discussion-create; Discussions do
+    # not carry labels, so the composer must short-circuit to empty
+    # even when user labels were passed and the SSOT defines feat→feat.
+    DISCUSSION_MODE=1 run gh_issue_create_compose_labels \
+        "$DOTFILES_YML" feat "skill" "$DOTFILES_EXISTING" 0
+    assert_success
+    assert_output ''
+}
+
+@test "auto-labels: DISCUSSION_MODE=0 leaves existing dispatch unchanged" {
+    # Regression guard for #619 — explicit DISCUSSION_MODE=0 must not
+    # alter the legacy behaviour. Same input as Row 3 (feat + 'skill').
+    DISCUSSION_MODE=0 run gh_issue_create_compose_labels \
+        "$DOTFILES_YML" feat "skill" "$DOTFILES_EXISTING" 0
+    assert_success
+    assert_line --index 0 'feat'
+    assert_line --index 1 'skill'
+    [ "${#lines[@]}" -eq 2 ]
+}

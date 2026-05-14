@@ -24,6 +24,11 @@
 #   $4 — comma-separated labels that exist on the target repo (mock)
 #   $5 — "1" if --no-auto-labels, "0" otherwise
 #
+#   Env: $DISCUSSION_MODE — "1" when --as-discussion was set in Step 1.1
+#                          (#619). Forces Step 2.5 to skip entirely and
+#                          drops any user labels with no warning here
+#                          (the SKILL warns once in Step 1.1).
+#
 # Stdout: final kept labels, one per line, in dispatch order
 #         (static first, then prefix-mapped, then user labels), de-duped.
 # Stderr: one `auto-labels: label '<x>' not found ...` line per dropped.
@@ -34,6 +39,16 @@ gh_issue_create_compose_labels() {
     _user_csv="$3"
     _existing_csv="$4"
     _no_auto="$5"
+
+    # --as-discussion (#619) skips Step 2.5 entirely AND drops user
+    # labels — Discussions do not carry labels. The SKILL emits the
+    # 1-line warning once in Step 1.1; the composer is silent here so
+    # callers can distinguish "label dropped due to missing repo label"
+    # from "label dropped due to Discussion mode" by checking
+    # $DISCUSSION_MODE in the caller.
+    if [ "${DISCUSSION_MODE:-0}" = "1" ]; then
+        return 0
+    fi
 
     # User labels are unconditional unless --no-auto-labels is set, in
     # which case Step 2.5 is skipped and only user labels remain.
