@@ -51,10 +51,41 @@ Handle each review summary as follows:
 - **Actionable content** (reviewer wrote a critical concern in the summary
   body itself, not just linking to inline comments): post a new top-level
   issue comment that blockquotes the review summary and addresses it, using
-  the top-level reply shape from `reply-templates.md`.
+  the top-level reply shape from `reply-templates.md`. For long bodies
+  (>500 chars) or N ≥ 3 bundled items, see the Long-body fallback and
+  Consolidated table reply templates in `reply-templates.md`.
 - **Meta content** (summary just recaps the inline comments, or is a service
   notice like "your repo doesn't have access to X"): no reply needed; note
   it in the Step 7 report as "skipped (meta summary)".
 
 Judgment: if deleting the summary would lose information not already
 captured in an inline comment, it is actionable.
+
+## Bot service notices
+
+Bots scatter "service" output across both `/pulls/<N>/reviews` and
+`/issues/<N>/comments`, so the meta-content rule above applies to BOTH
+endpoints — not just reviews. Examples seen in the wild:
+
+- gemini-code-assist quota-exhausted notice posted as a conversation
+  comment (`/issues/<N>/comments`, AgentToolbox#655 run).
+- sourcery-ai "rate limited" or "service unavailable" comment.
+- copilot trial-expired notice.
+
+**Classification.** A bot comment is a *service notice* when it carries no
+code-review content — it announces the bot's own availability (quota,
+rate-limit, outage, trial state, repo access) instead of evaluating the
+diff. Code-review nits from the same bot are NOT service notices and go
+through the normal Accept / Decline classification.
+
+**Handling.** Service notices still get a reply (the politeness contract
+is non-negotiable) but use a single-line ack — there is nothing to
+accept, decline, or answer. Suggested ack body:
+
+```
+Acknowledged — service notice, no code-review content to address.
+```
+
+Note these in the Step 7 report as `Acknowledged (bot service notice):`
+so the user can see the bot was not silently ignored. Do NOT skip
+silently and do NOT route them through the four-class rubric.
