@@ -30,21 +30,35 @@ DLOCKED=$(jq -r '.locked' "$DISC_JSON")
 # Step 3 — category guard (done by caller; this file assumes pass).
 
 # Step 4 — idempotency check.
+# `// empty` keeps EXISTING the empty string when the array is empty;
+# without it jq prints the literal "null" which [ -n ... ] treats as
+# non-empty, breaking first-run conversion (PR #628 gemini review).
 EXISTING=$(gh issue list --repo "$TARGET_REPO" --state all \
     --search "in:body \"Originated from discussion #${N}\"" \
-    --json number,url --limit 1 --jq '.[0].url')
-if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ]; then
+    --json number,url --limit 1 --jq '.[0].url // empty')
+if [ -n "$EXISTING" ]; then
     printf '[OK] Discussion #%s already converted to %s\n' "$N" "$EXISTING"
     exit 0
 fi
 
-# Step 5 — create the issue with the backlink prepended.
-ISSUE_BODY=$(mktemp) && trap 'rm -f "$ISSUE_BODY"' EXIT
+# Step 5 — create the issue with the backlink prepended. The trap
+# registered up front covers both ISSUE_BODY and the later CBODY (set
+# only when --no-comment is off) so neither temp file leaks if a
+# subsequent step exits early or the process is interrupted.
+ISSUE_BODY=$(mktemp)
+trap 'rm -f "$ISSUE_BODY" "${CBODY:-}"' EXIT
 printf 'Originated from discussion #%s\n\n' "$N" >"$ISSUE_BODY"
 jq -r '.body' "$DISC_JSON" >>"$ISSUE_BODY"
 
 ISSUE_URL=$(gh issue create --repo "$TARGET_REPO" \
     --title "$DTITLE" --body-file "$ISSUE_BODY")
+# Abort BEFORE Steps 6/7/8 if creation failed — mutating the Discussion
+# without an Issue to back-link to violates the SSOT chain documented in
+# error-cases.md and discussions-policy.md operating principle #4.
+if [ -z "$ISSUE_URL" ]; then
+    printf '[FAIL] Step 5: gh issue create failed -- aborting before mutating the Discussion.\n' >&2
+    exit 1
+fi
 ISSUE_NUMBER="${ISSUE_URL##*/}"
 
 # Step 6 — board sync (best-effort).
@@ -54,13 +68,13 @@ if [ "${OPT_NO_BOARD_SYNC:-0}" != "1" ]; then
 fi
 
 # Step 7 — backlink comment on the discussion (best-effort).
+# CBODY is cleaned up by the EXIT trap registered at Step 5.
 if [ "${OPT_NO_COMMENT:-0}" != "1" ]; then
     CBODY=$(mktemp)
     printf 'Linked to issue #%s -- decision tracked there.\n' \
         "$ISSUE_NUMBER" >"$CBODY"
     _gh_discussion_comment "$DISC_ID" "$CBODY" >/dev/null \
         || printf '[WARN] discussion comment failed -- continuing\n' >&2
-    rm -f "$CBODY"
 fi
 
 # Step 8 — close + lock (best-effort, conditional on current state).
