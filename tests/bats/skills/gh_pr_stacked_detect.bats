@@ -4,7 +4,7 @@
 #   claude/skills/gh-pr/references/stacked-pr.md
 # Source-of-truth fixture: _fixtures/gh_pr_stacked_detect.sh.
 #
-# 7-case compatibility matrix (issue #615 trimmed the prior 9-case set):
+# 8-case compatibility matrix (issue #615 trimmed the prior 9-case set):
 #   1. dotfiles solo (no stacked signals)        → Stage 1 fail, base=default
 #   2. AgentToolbox parent unique                → Stage 1+2, 1 candidate
 #   3. AgentToolbox parent ambiguous             → Stage 1+2, 2+ candidates
