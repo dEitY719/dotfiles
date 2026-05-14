@@ -687,6 +687,7 @@ _gh_pr_approve_prune() {
                         _torn_down=$((_torn_down + 1))
                     else
                         ux_error "  gwt teardown failed for $_wt; leaving state dir intact"
+                        ux_bullet_sub "manual fix: cd $_wt && gwt teardown --force && gh-pr-approve prune --force $_pr"
                     fi
                 else
                     # Ghost: worktree dir already gone (e.g. teardown crashed
