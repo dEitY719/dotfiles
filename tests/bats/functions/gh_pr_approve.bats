@@ -420,6 +420,44 @@ _seed_pr_state() {
     assert_output --partial "gwt teardown"
 }
 
+# Regression: prune --force on a "ghost" state — failed:tearing-down where the
+# worktree dir has already been deleted (e.g. teardown crashed after rm but
+# before state cleanup). Prior to #639 the --force branch's [ -d "$_wt" ]
+# guard rejected this case, leaving state dirs permanently stuck across runs.
+@test "prune --force: ghost failed:tearing-down (wt path missing) — state removed" {
+    _seed_pr_state 617 "failed:tearing-down" "$TEST_TEMP_HOME/pr-617-gone" "12345"
+    [ ! -d "$TEST_TEMP_HOME/pr-617-gone" ]
+
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune --force"
+    assert_success
+    assert_output --partial "#617"
+    assert_output --partial "worktree absent"
+    assert_output --partial "torn down 1"
+    [ ! -d "$HOME/.local/state/gh-pr-approve/fake-main/617" ]
+}
+
+@test "prune --force: ghost failed:* (empty worktree.path) — state removed" {
+    _seed_pr_state 618 "failed:spawning" "" "12345"
+
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune --force"
+    assert_success
+    assert_output --partial "#618"
+    assert_output --partial "worktree absent"
+    [ ! -d "$HOME/.local/state/gh-pr-approve/fake-main/618" ]
+}
+
+@test "prune (no --force): ghost failed:* prints the ghost hint, keeps state" {
+    _seed_pr_state 619 "failed:tearing-down" "$TEST_TEMP_HOME/pr-619-gone" "12345"
+    [ ! -d "$TEST_TEMP_HOME/pr-619-gone" ]
+
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune"
+    assert_success
+    assert_output --partial "#619"
+    assert_output --partial "ghost state"
+    assert_output --partial "--force"
+    [ -d "$HOME/.local/state/gh-pr-approve/fake-main/619" ]
+}
+
 @test "prune: empty state tree — 'nothing to prune' and exits 0" {
     run_in_bash "cd '$FAKE_REPO' && gh_pr_approve prune"
     assert_success
