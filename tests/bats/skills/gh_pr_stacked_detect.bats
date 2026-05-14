@@ -4,16 +4,15 @@
 #   claude/skills/gh-pr/references/stacked-pr.md
 # Source-of-truth fixture: _fixtures/gh_pr_stacked_detect.sh.
 #
-# 9-case compatibility matrix from issue #394:
+# 7-case compatibility matrix (issue #615 trimmed the prior 9-case set):
 #   1. dotfiles solo (no stacked signals)        → Stage 1 fail, base=default
 #   2. AgentToolbox parent unique                → Stage 1+2, 1 candidate
 #   3. AgentToolbox parent ambiguous             → Stage 1+2, 2+ candidates
 #   4. AgentToolbox no parent (root issue)       → Stage 1 pass, 0 candidates
 #   5. --no-stack override                       → mode=no-stack
-#   6. --parent-pr <N> override                  → mode=parent-pr
-#   7. --base <branch> override                  → mode=base
-#   8. Mutually-exclusive flags                  → rc=2 abort
-#   9. --parent-pr <bad>                         → rc=3 abort
+#   6. --base <branch> override                  → mode=base
+#   7. Mutually-exclusive flags (--no-stack + --base) → rc=2 abort
+#   8. --base (missing arg)                      → rc=3 abort
 
 load '../test_helper'
 
@@ -27,7 +26,7 @@ setup() {
 teardown() {
     [ -n "$REPO_ROOT" ] && [ -d "$REPO_ROOT" ] && rm -rf "$REPO_ROOT"
     unset FAKE_OPEN_PRS FAKE_ANCESTOR_REFS FAKE_NONDEFAULT_REFS
-    unset STACK_MODE STACK_PARENT STACK_BASE ISSUE_NUMBER
+    unset STACK_MODE STACK_BASE ISSUE_NUMBER
     teardown_isolated_home
 }
 
@@ -137,32 +136,25 @@ teardown() {
     [ "$STACK_MODE" = "no-stack" ]
 }
 
-# ── Compatibility matrix #6: --parent-pr <N> ──────────────────────────
-@test "matrix-6: --parent-pr 201 → STACK_MODE=parent-pr, STACK_PARENT=201" {
-    parse_stacked_args --parent-pr 201
-    [ "$STACK_MODE" = "parent-pr" ]
-    [ "$STACK_PARENT" = "201" ]
-}
-
-# ── Compatibility matrix #7: --base <branch> ──────────────────────────
-@test "matrix-7: --base release/v2.0 → STACK_MODE=base, STACK_BASE=release/v2.0" {
+# ── Compatibility matrix #6: --base <branch> ──────────────────────────
+@test "matrix-6: --base release/v2.0 → STACK_MODE=base, STACK_BASE=release/v2.0" {
     parse_stacked_args --base release/v2.0
     [ "$STACK_MODE" = "base" ]
     [ "$STACK_BASE" = "release/v2.0" ]
 }
 
-# ── Compatibility matrix #8: mutually-exclusive flags ─────────────────
-@test "matrix-8: --no-stack --parent-pr 5 → rc=2 with explanatory message" {
-    run parse_stacked_args --no-stack --parent-pr 5
+# ── Compatibility matrix #7: mutually-exclusive flags ─────────────────
+@test "matrix-7: --no-stack --base main → rc=2 with explanatory message" {
+    run parse_stacked_args --no-stack --base main
     [ "$status" -eq 2 ]
     assert_output --partial 'mutually exclusive'
 }
 
-# ── Compatibility matrix #9: bad --parent-pr value ────────────────────
-@test "matrix-9: --parent-pr abc → rc=3 with explanatory message" {
-    run parse_stacked_args --parent-pr abc
+# ── Compatibility matrix #8: --base missing branch arg ────────────────
+@test "matrix-8: --base (no arg) → rc=3 with explanatory message" {
+    run parse_stacked_args --base
     [ "$status" -eq 3 ]
-    assert_output --partial 'requires a positive integer'
+    assert_output --partial 'requires a branch name'
 }
 
 # ── Legacy positional issue arg still parsed ──────────────────────────

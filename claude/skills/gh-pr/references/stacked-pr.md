@@ -17,8 +17,7 @@ behavioural change.
 1. The user types `/gh-pr` once. Flags exist only as escape hatches.
 2. Backwards-compat is unconditional. No repo signal → auto-detect
    never fires. dotfiles solo workflow is unchanged.
-3. Auto-detect can be overridden when wrong (`--no-stack`, `--parent-pr`,
-   `--base`).
+3. Auto-detect can be overridden when wrong (`--no-stack`, `--base`).
 4. dotfiles never mutates the parent PR body. Cross-PR rollup is the
    downstream repo's concern (e.g. AgentToolbox's
    `stacked-closes-rollup.yml` workflow).
@@ -54,8 +53,8 @@ behavioural change.
    └─ 2+ candidates → dispatch returns rc=4 + candidate list on stderr
        (bash is non-interactive in Claude Code — `read` would hang).
        The AI executor asks the user via the platform's question
-       primitive, then re-invokes `gh:pr` with `--parent-pr <N>` /
-       `--base <branch>` / `--no-stack` based on the answer.
+       primitive, then re-invokes `gh:pr` with `--base <branch>` /
+       `--no-stack` based on the answer.
 ```
 
 ## Manual override (escape hatches)
@@ -63,11 +62,10 @@ behavioural change.
 | Flag | Semantics |
 |---|---|
 | `--no-stack` | skip auto-detect entirely, BASE_BRANCH=$DEFAULT_BRANCH |
-| `--parent-pr <N>` | skip auto-detect, BASE_BRANCH=head ref of PR #N, PARENT_PR=N |
 | `--base <branch>` | skip auto-detect, BASE_BRANCH=<branch>, PARENT_PR= |
 
-The three flags are mutually exclusive. Combining any two → rc=2 with
-an explanatory message; the skill aborts before any push.
+The two flags are mutually exclusive. Combining them → rc=2 with an
+explanatory message; the skill aborts before any push.
 
 ## Stage 1 — `is_stacked_pr_repo`
 
@@ -103,14 +101,12 @@ none of these is treated as solo / non-stacked.
 
 ```sh
 # Reads positional args + flags from $@. Sets globals:
-#   STACK_MODE     — auto | no-stack | parent-pr | base
-#   STACK_PARENT   — PR number when STACK_MODE=parent-pr
+#   STACK_MODE     — auto | no-stack | base
 #   STACK_BASE     — branch name when STACK_MODE=base
 #   ISSUE_NUMBER   — first positional integer (legacy "/gh-pr 123" link)
 # Returns 0 on success, 2 on mutually-exclusive violation, 3 on bad value.
 parse_stacked_args() {
     STACK_MODE=auto
-    STACK_PARENT=
     STACK_BASE=
     ISSUE_NUMBER=
     local _flags_seen=0
@@ -121,21 +117,6 @@ parse_stacked_args() {
                 _flags_seen=$((_flags_seen + 1))
                 STACK_MODE=no-stack
                 shift
-                ;;
-            --parent-pr)
-                _flags_seen=$((_flags_seen + 1))
-                STACK_MODE=parent-pr
-                if [ $# -lt 2 ]; then
-                    printf 'gh:pr: --parent-pr requires a PR number\n' >&2
-                    return 3
-                fi
-                STACK_PARENT="$2"
-                if ! printf '%s' "${STACK_PARENT-}" | grep -qE '^[1-9][0-9]*$'; then
-                    printf 'gh:pr: --parent-pr requires a positive integer (got %s)\n' \
-                        "${STACK_PARENT:-<empty>}" >&2
-                    return 3
-                fi
-                shift 2
                 ;;
             --base)
                 _flags_seen=$((_flags_seen + 1))
@@ -162,7 +143,7 @@ parse_stacked_args() {
     done
 
     if [ "$_flags_seen" -gt 1 ]; then
-        printf 'gh:pr: --no-stack / --parent-pr / --base are mutually exclusive\n' >&2
+        printf 'gh:pr: --no-stack / --base are mutually exclusive\n' >&2
         return 2
     fi
 
@@ -252,9 +233,6 @@ DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name)
 case "$STACK_MODE" in
     no-stack)
         BASE_BRANCH="$DEFAULT_BRANCH" ; PARENT_PR= ;;
-    parent-pr)
-        PARENT_PR="$STACK_PARENT"
-        BASE_BRANCH=$(gh pr view "$PARENT_PR" --json headRefName -q .headRefName) ;;
     base)
         BASE_BRANCH="$STACK_BASE" ; PARENT_PR= ;;
     auto)
@@ -273,10 +251,10 @@ case "$STACK_MODE" in
                     # candidate set and exit the auto branch with both vars
                     # unset; the AI executor handles the choice via the
                     # platform's question primitive (e.g. AskUserQuestion in
-                    # Claude Code) and re-runs the case for `parent-pr` /
-                    # `base` / `no-stack` based on the user's reply.
+                    # Claude Code) and re-runs the case for `base` /
+                    # `no-stack` based on the user's reply.
                     printf 'Multiple parent candidates:\n%s\n' "$CANDIDATES" >&2
-                    printf 'gh:pr: ambiguous parent — ask user, then re-invoke with --parent-pr / --base / --no-stack\n' >&2
+                    printf 'gh:pr: ambiguous parent — ask user, then re-invoke with --base / --no-stack\n' >&2
                     return 4
                     ;;
             esac
@@ -295,8 +273,8 @@ When the dispatch returns rc=4 (ambiguous parent), the AI executor — not
 the shell — must surface the candidate list to the user via the
 platform's question primitive (e.g. `AskUserQuestion` in Claude Code).
 Once the user picks one, re-invoke `gh:pr` with the matching escape
-hatch flag (`--parent-pr <N>`, `--base <branch>`, or `--no-stack`).
-This avoids hanging on `read` in non-interactive runtimes.
+hatch flag (`--base <branch>` or `--no-stack`). This avoids hanging on
+`read` in non-interactive runtimes.
 
 ## Compatibility matrix (what the bats suite must keep covering)
 
@@ -307,10 +285,9 @@ This avoids hanging on `read` in non-interactive runtimes.
 | AgentToolbox parent ambiguous | `/gh-pr` | Stage 1 pass + 2+ cand → 1× prompt |
 | AgentToolbox no parent | `/gh-pr` | Stage 1 pass + 0 cand → base=default |
 | `--no-stack` override | `/gh-pr --no-stack` | base=default forced, no Stage 2 |
-| `--parent-pr 99` | `/gh-pr --parent-pr 99` | base=PR #99 head forced |
 | `--base release/v2.0` | `/gh-pr --base release/v2.0` | arbitrary branch forced |
-| Mutually-exclusive flags | `/gh-pr --no-stack --parent-pr 5` | rc=2, abort |
-| Bad `--parent-pr` value | `/gh-pr --parent-pr abc` | rc=3, abort |
+| Mutually-exclusive flags | `/gh-pr --no-stack --base main` | rc=2, abort |
+| Bad `--base` value | `/gh-pr --base` (missing arg) | rc=3, abort |
 
-The 9 rows above are the regression contract — every change to the
+The 7 rows above are the regression contract — every change to the
 detection logic must keep them green.

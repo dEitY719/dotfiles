@@ -47,8 +47,8 @@ Closes #<N>
 
 ### Stacked-PR `Depends on` insertion
 
-When Step 1a set `PARENT_PR` (auto-detected or `--parent-pr <N>` was
-passed), insert a `Depends on #<PARENT_PR>` line into the
+When Step 1a set `PARENT_PR` (auto-detected from a single ancestor
+open PR), insert a `Depends on #<PARENT_PR>` line into the
 `## Related` section, alongside `Closes #<N>` / `Refs #<N>` if any:
 
 ```markdown
