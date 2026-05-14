@@ -284,12 +284,15 @@ _run_helper() {
     "
     assert_output --partial "rc=0"
     # All four named -f variables present in the recorded invocation.
+    # The body is passed as `-f body=@<file>` so gh reads the file at
+    # call time (no shell allocation), so the recorded arg shows the
+    # `@<path>` reference, not the file's contents (PR #624 review).
     run grep -c 'repoId=R_kgDO_TEST' "$GH_LOG"
     assert_output "1"
     run grep -c 'categoryId=DIC_kTEST' "$GH_LOG"
     assert_output "1"
     run grep -c 'title=Test\\ title' "$GH_LOG"
     assert_output "1"
-    run grep -c 'body=hello\\ world' "$GH_LOG"
+    run grep -cE 'body=@[^ ]+' "$GH_LOG"
     assert_output "1"
 }
