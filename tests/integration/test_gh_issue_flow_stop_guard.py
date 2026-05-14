@@ -670,3 +670,361 @@ def test_wrapped_command_full_session_blocks_with_step_2_2_reason(
     assert "Step 2.2" in reason
     assert "gh-commit" in reason
     assert "1/5" in reason
+
+
+# ---------------------------------------------------------------------------
+# Issue #608 — L1 boundary expansion (surfaces c, d) + L1.5 scan-scope fix
+#
+# Two motivations layered together:
+#
+# 1. **L1 (defense-in-depth boundary surfaces).** Add the `Base directory
+#    for this skill: …/gh-issue-flow` marker line and the SKILL.md H1
+#    `# gh:issue-flow — Issue → PR composition` as additional boundary
+#    anchors so the hook keeps working even if Claude Code ever changes
+#    the `<command-name>` wrapper format (preserves chain protection
+#    across CLI version drift).
+# 2. **L1.5 (terminal-scan scope).** The 5th regression on this issue's
+#    own ancestor (#383 → #607 → #608) was *not* a missing boundary —
+#    it was that `_scan_after_boundary` matched `TERMINAL_PATTERNS`
+#    against the SKILL.md body delivered as a `role=user` text block.
+#    The template literally contains the lines
+#        gh:issue-flow complete (#<N>)
+#        gh:issue-flow stopped at step <i>/5
+#    as Step 3 instructions, so the scan saw a terminal marker before
+#    any sub-skill ran and fail-opened every invocation. Restricting
+#    the scan to `role=assistant` text (excluding the boundary message
+#    itself) fixes the false-match. These tests pin the fix down.
+# ---------------------------------------------------------------------------
+
+
+# Two literal lines that the real SKILL.md prompt body contains as Step 3
+# template instructions. If the hook's terminal scan ever regresses back
+# to reading user-role text, either line will trip a false `terminal=True`.
+_SKILL_TEMPLATE_FALSE_POSITIVE = (
+    "## Step 3: Report\n"
+    "\n"
+    "If all steps succeeded:\n"
+    "```\n"
+    "gh:issue-flow complete (#<N>)\n"
+    "  [OK] Step 1: gh:issue-implement\n"
+    "```\n"
+    "If a step failed:\n"
+    "```\n"
+    "gh:issue-flow stopped at step <i>/5 (<skill-name>)\n"
+    "```\n"
+)
+
+
+def _user_skill_base_dir_marker(skill_name: str = "gh-issue-flow") -> dict[str, Any]:
+    """User message containing only the `Base directory for this skill:` line.
+
+    Mirrors the line Claude Code emits when expanding a slash command,
+    isolated so the test exercises surface (c) without depending on the
+    `<command-name>` wrapper also being present.
+    """
+    content = f"Base directory for this skill: /home/user/.claude/skills/{skill_name}\n"
+    return {"type": "user", "message": {"role": "user", "content": content}}
+
+
+def _user_skill_h1_marker() -> dict[str, Any]:
+    """User message containing only the SKILL.md H1 header line.
+
+    Exercises surface (d) — the H1 anchor — in isolation.
+    """
+    content = "# gh:issue-flow — Issue → PR composition\n"
+    return {"type": "user", "message": {"role": "user", "content": content}}
+
+
+def test_base_dir_marker_recognized_as_flow_start(tmp_path: Path) -> None:
+    """Surface (c): `Base directory for this skill: …/gh-issue-flow` marks the flow."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_skill_base_dir_marker(),
+            _assistant_skill("gh-issue-implement", "608 direct origin --no-next-hint"),
+            _assistant_text("gh:issue-implement #608 complete\n  Tests: 12 passed"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        "Hook must recognize 'Base directory for this skill: …/gh-issue-flow' "
+        f"as a flow boundary. stdout={result.stdout!r}"
+    )
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "Step 2.2" in decision["reason"]
+
+
+def test_base_dir_marker_does_not_match_unrelated_skill(tmp_path: Path) -> None:
+    """Surface (c) only matches when the path ends with gh-issue-flow.
+
+    False-positive guard: a base-directory line for some *other* skill
+    (e.g. `gh-issue-implement` or `gh-issue-flow-archive`) must not be
+    treated as a gh-issue-flow boundary.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            # Different skill — no boundary expected.
+            _user_skill_base_dir_marker(skill_name="gh-issue-implement"),
+            _assistant_text("ok, working on something else"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"Hook treated a non-gh-issue-flow skill base directory as a flow boundary. stdout={result.stdout!r}"
+    )
+
+
+def test_skill_h1_marker_recognized_as_flow_start(tmp_path: Path) -> None:
+    """Surface (d): the SKILL.md H1 line marks the flow boundary."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_skill_h1_marker(),
+            _assistant_skill("gh-issue-implement"),
+            _assistant_skill("gh-commit"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "Step 2.3" in decision["reason"]
+    assert "gh-pr" in decision["reason"]
+
+
+def test_skill_h1_mid_sentence_does_not_match(tmp_path: Path) -> None:
+    """Surface (d) requires the H1 to occupy its own line.
+
+    A mid-sentence quote like "the file starts with # gh:issue-flow — Issue
+    → PR composition and ..." must not trip the boundary.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text(
+                "I was reading the source — it has the line "
+                "# gh:issue-flow — Issue → PR composition embedded in a paragraph."
+            ),
+            _assistant_text("ok"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"Hook treated a mid-sentence H1 mention as a flow boundary. stdout={result.stdout!r}"
+    )
+
+
+def test_base_dir_marker_inside_tool_result_does_not_trigger(tmp_path: Path) -> None:
+    """False-positive guard: `Base directory for this skill: …` inside a
+    `tool_result` block (e.g. the model reads a doc that quotes the
+    line) must not be treated as a real invocation.
+    """
+    doc_excerpt = (
+        "Each skill invocation begins with a banner like\n"
+        "    Base directory for this skill: /home/user/.claude/skills/gh-issue-flow\n"
+        "which the hook detects as a boundary.\n"
+    )
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("can you read the stop-guard docs?"),
+            _user_tool_result(doc_excerpt),
+            _assistant_text("Sure — here's a summary."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"Hook treated a `Base directory` line inside tool_result as a flow boundary. stdout={result.stdout!r}"
+    )
+
+
+def test_skill_h1_inside_tool_result_does_not_trigger(tmp_path: Path) -> None:
+    """False-positive guard for surface (d) — H1 line inside a tool_result."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("explain the gh-issue-flow SKILL.md"),
+            _user_tool_result(
+                "# gh:issue-flow — Issue → PR composition\n\n(rest of SKILL.md body that the model just read)\n"
+            ),
+            _assistant_text("It chains 5 sub-skills..."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"Hook treated an H1 line inside tool_result as a flow boundary. stdout={result.stdout!r}"
+    )
+
+
+def test_skill_template_text_in_user_message_does_not_false_terminate(
+    tmp_path: Path,
+) -> None:
+    """L1.5 (issue #608 root cause): SKILL.md template lines literally
+    containing `gh:issue-flow complete (#<N>)` and `gh:issue-flow stopped
+    at step <i>/5` must NOT count as a terminal marker.
+
+    Reproduction of the 5th regression: when a user types
+    `/gh-issue-flow N`, Claude Code expands the SKILL.md body inline as
+    a `role=user` text block. The body contains the Step 3 template
+    *as instructions*. Before this fix, `_scan_after_boundary` saw the
+    template text, set `terminal=True`, and the hook fail-opened on
+    every real invocation. The fix restricts the terminal scan to
+    `role=assistant` text blocks. This fixture is the production-shape
+    transcript that must still produce a `block` decision.
+    """
+    # User message contains BOTH the wrapped slash command (boundary)
+    # AND the SKILL.md Step 3 template lines (would-be false-terminator).
+    boundary_with_template = (
+        "<command-message>gh-issue-flow</command-message>\n"
+        "<command-name>/gh-issue-flow</command-name>\n"
+        "<command-args>608</command-args>\n"
+        "Base directory for this skill: /home/user/.claude/skills/gh-issue-flow\n"
+        "\n"
+        "# gh:issue-flow — Issue → PR composition\n"
+        "\n" + _SKILL_TEMPLATE_FALSE_POSITIVE + "ARGUMENTS: 608\n"
+    )
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            {
+                "type": "user",
+                "message": {"role": "user", "content": boundary_with_template},
+            },
+            _assistant_skill("gh-issue-implement", "608 direct origin --no-next-hint"),
+            _assistant_text("gh:issue-implement #608 complete\n  Files: 2 changed\n  Tests: 32 passed"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        "Hook fail-opened on a real /gh-issue-flow invocation — the SKILL.md "
+        "template text in the user message false-matched TERMINAL_PATTERNS. "
+        f"stdout={result.stdout!r}"
+    )
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "Step 2.2" in decision["reason"]
+    assert "gh-commit" in decision["reason"]
+    assert "1/5" in decision["reason"]
+
+
+def test_skill_template_text_in_tool_result_does_not_false_terminate(
+    tmp_path: Path,
+) -> None:
+    """L1.5 variant: model reads the SKILL.md or hook source as a
+    tool_result during a real flow → must still block.
+
+    Defensive check: even if a `Read`/`Bash` tool surfaces the
+    TERMINAL_PATTERNS strings inside a `tool_result` block during an
+    active chain, the terminal scan must not be tricked into allowing
+    the stop. With the assistant-only scope, tool_result blocks (which
+    live inside `role=user` messages per the Anthropic content-block
+    model) are excluded automatically.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 608"),
+            _assistant_skill("gh-issue-implement"),
+            # Model reads the hook source while inside the flow.
+            _user_tool_result(
+                "TERMINAL_PATTERNS: tuple[str, ...] = (\n"
+                '    "gh:issue-flow complete (#",\n'
+                '    "gh:issue-flow stopped at step",\n'
+                "    ...\n"
+                ")\n"
+            ),
+            _assistant_text("Now committing...\n"),  # No real terminal marker.
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        "Hook fail-opened — tool_result containing the TERMINAL_PATTERNS "
+        f"source text was treated as a real terminal report. stdout={result.stdout!r}"
+    )
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "1/5" in decision["reason"]
+
+
+def test_real_terminal_marker_in_assistant_text_still_allows_stop(
+    tmp_path: Path,
+) -> None:
+    """L1.5 must not over-correct: a real assistant-authored Step 3
+    report MUST still terminate the scan and allow the stop.
+
+    Pairs with the false-positive tests above — guards against an
+    accidental "block everything forever" regression.
+    """
+    boundary_with_template = (
+        "<command-name>/gh-issue-flow</command-name>\n"
+        "Base directory for this skill: /home/user/.claude/skills/gh-issue-flow\n" + _SKILL_TEMPLATE_FALSE_POSITIVE
+    )
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            {
+                "type": "user",
+                "message": {"role": "user", "content": boundary_with_template},
+            },
+            _assistant_skill("gh-issue-implement"),
+            _assistant_skill("gh-commit"),
+            _assistant_skill("gh-pr"),
+            _assistant_skill("devx-schedule"),
+            _assistant_skill("gh-pr-resolve-conflict"),
+            # Real Step 3 success report — assistant role, real terminal marker.
+            _assistant_text("gh:issue-flow complete (#608)\n  PR URL: https://x/pull/9"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        "Hook blocked a properly-completed flow — assistant-authored Step 3 "
+        f"terminal marker was not recognized. stdout={result.stdout!r}"
+    )
+
+
+def test_trace_emits_layer_field_for_block(tmp_path: Path) -> None:
+    """Issue #608 acceptance criteria: trace lines carry a `layer=...`
+    field so multi-layer fix attribution is greppable."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 608"),
+            _assistant_skill("gh-issue-implement"),
+        ],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_TRACE": "1"},
+    )
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    # The summary line (boundary + sub-skill count) is layer L1.5.
+    assert "layer=L1.5" in result.stderr, f"Expected layer=L1.5 in trace output, got stderr={result.stderr!r}"
+
+
+def test_trace_emits_layer_field_for_no_boundary_allow(tmp_path: Path) -> None:
+    """Allow path on the L1 (boundary) side must also tag itself."""
+    transcript = _write_transcript(
+        tmp_path,
+        [_user_text("hello world, no flow here")],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_TRACE": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+    assert "layer=L1" in result.stderr, (
+        f"Expected layer=L1 on the no-boundary allow trace, got stderr={result.stderr!r}"
+    )
