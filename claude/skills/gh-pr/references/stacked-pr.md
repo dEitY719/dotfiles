@@ -289,5 +289,5 @@ hatch flag (`--base <branch>` or `--no-stack`). This avoids hanging on
 | Mutually-exclusive flags | `/gh-pr --no-stack --base main` | rc=2, abort |
 | Bad `--base` value | `/gh-pr --base` (missing arg) | rc=3, abort |
 
-The 7 rows above are the regression contract — every change to the
+The 8 rows above are the regression contract — every change to the
 detection logic must keep them green.
