@@ -152,8 +152,9 @@ _gh_pr_default_parent_state() {
         return 0
     fi
     _delim=$(printf '\001')
+    # shellcheck disable=SC2016  # $d is a jq variable (--arg d), not shell
     _meta=$(gh pr view "$_pr" --json state,body \
-        --jq '"\(.state)\(.body)"' 2>/dev/null)
+        --jq --arg d "$_delim" '.state + $d + .body' 2>/dev/null)
     _GH_PR_PARENT_BODY_CACHE="${_meta#*"$_delim"}"
     printf '%s\n' "${_meta%%"$_delim"*}"
 }

@@ -261,8 +261,9 @@ _gh_pr_default_parent_state() {
         return 0
     fi
     _delim=$(printf '\001')   # ASCII SOH — never appears in PR bodies
+    # shellcheck disable=SC2016  # $d is a jq variable (--arg d), not shell
     _meta=$(gh pr view "$_pr" --json state,body \
-        --jq '"\(.state)\(.body)"' 2>/dev/null)
+        --jq --arg d "$_delim" '.state + $d + .body' 2>/dev/null)
     _GH_PR_PARENT_BODY_CACHE="${_meta#*"$_delim"}"
     printf '%s\n' "${_meta%%"$_delim"*}"
 }
@@ -297,9 +298,12 @@ assert_parent_pr_open() {
 }
 
 # Returns 0 when the parent body has no "Depends on #N" line, 6 otherwise.
-# The regex matches both dotfiles "## Related — Depends on #N" PR bodies
-# and agent-toolbox "\n\nDepends on #N" trailers; case-insensitive so
-# variants from external tools are also caught.
+# The `^[[:space:]]*` anchor is intentional: it matches dotfiles `## Related`
+# section bodies (where "Depends on #N" sits on its own line under the
+# header) and agent-toolbox "\n\nDepends on #N" trailers, but deliberately
+# refuses inline prose like "This change Depends on #100 indirectly" —
+# matrix-10 case 6 pins that no-false-positive contract. Case-insensitive
+# so variants from external tools are also caught.
 assert_parent_pr_not_stacked() {
     local _pr="${1:-}" _body
     _body=$(_gh_pr_default_parent_body "$_pr")
