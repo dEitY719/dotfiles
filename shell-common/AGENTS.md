@@ -34,16 +34,6 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 - **DON'T**: raw `echo`/`printf`
 - **Exception**: ux_lib 미로드 시 단순 에러는 `echo ... >&2`
 
-## Module Organization
-
-- `env/` — `export` 만, 함수 금지
-- `aliases/` — `alias` 만, 복잡 로직 금지
-- `functions/` — 유틸 함수, help 시스템
-- `tools/integrations/` — 3rd-party 도구 자동 sourcing 래퍼
-- `tools/custom/` — 명시적 실행 스크립트 (자동 sourcing 안 됨)
-- `tools/ux_lib/` — UX 라이브러리 (loader 가 가장 먼저 source)
-- `projects/` — 프로젝트별 유틸 (finrx, dmc, smithery)
-
 ## Naming
 
 - 파일: `snake_case.sh` · 함수: `snake_case` 또는 `tool_command`
@@ -86,6 +76,15 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
    카테고리: `development`, `devops`, `ai`, `cli`, `config`, `docs`, `system`, `meta`
 
 참조 예시: `npm.sh` + `npm_help.sh` + `my_help.sh` 의 npm 항목
+
+# Agent View 와 Multi-account 통합 (#640)
+
+- **Supervisor 격리**: `claude` background supervisor 는 `CLAUDE_CONFIG_DIR` 단위.
+  multi-account 환경에서는 계정마다 별도 view — `claude-yolo --user work agents`.
+- **Read-only bypass**: `claude-yolo {agents|attach|logs|stop|kill|respawn|rm}` 은
+  main 위에서도 `scratch/*` 미생성. opt-in 아님, 자동 적용.
+- **Worktree dispatch**: `gwt spawn --launch --bg [task]` (claude 전용) 로
+  worktree 생성 → cd → `claude_yolo --bg "<task>"` 일괄 실행. `--user` 와 조합 가능.
 
 # Cheatsheet & Pitfalls
 

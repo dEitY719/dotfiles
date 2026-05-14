@@ -1396,7 +1396,7 @@ _gwt_yolo_command() {
 # ============================================================================
 _git_worktree_spawn_show_help() {
     ux_header "gwt spawn - create a named worktree"
-    ux_info "Usage: gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--ai <agent>] [--user <account>]"
+    ux_info "Usage: gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--ai <agent>] [--user <account>] [--bg [task]]"
     ux_info ""
     ux_info "Arguments:"
     ux_info "  <name>           Free-form worktree name (required)."
@@ -1414,6 +1414,11 @@ _git_worktree_spawn_show_help() {
     ux_info "  --user <account> Claude account for --tmux/--launch (issue #295)."
     ux_info "                   Only valid with --ai claude (others lack multi-account)."
     ux_info "                   Default: \$CLAUDE_DEFAULT_ACCOUNT (no --user appended)."
+    ux_info "  --bg [task]      Dispatch claude in background mode (Agent View, #640)."
+    ux_info "                   Requires --launch or --tmux. Only with --ai claude."
+    ux_info "                   Optional positional task string consumed if it does"
+    ux_info "                   not start with '-'; missing/empty defers to claude's"
+    ux_info "                   own \"task too short\" error."
     ux_info ""
     ux_info "Examples:"
     ux_info "  gwt spawn issue-11                           # ../<proj>-issue-11-1  wt/issue-11/1"
@@ -1424,6 +1429,8 @@ _git_worktree_spawn_show_help() {
     ux_info "  gwt spawn feat --launch --ai codex           # cd + codex-yolo"
     ux_info "  gwt spawn feat --launch --user work          # cd + claude-yolo --user work"
     ux_info "  gwt spawn feat --tmux   --user work          # tmux window runs 'claude-yolo --user work'"
+    ux_info "  gwt spawn issue-100 --launch --bg            # cd + claude-yolo --bg ''"
+    ux_info "  gwt spawn issue-200 --launch --user work --bg \"fix login\"  # bg task to work account"
 }
 
 git_worktree_spawn() {
@@ -1432,7 +1439,7 @@ git_worktree_spawn() {
         emulate -L sh
     fi
 
-    local task="" base="" name="" use_tmux=0 use_launch=0 agent="claude" account=""
+    local task="" base="" name="" use_tmux=0 use_launch=0 use_bg=0 bg_task="" agent="claude" account=""
 
     # Parse arguments
     while [ $# -gt 0 ]; do
@@ -1447,6 +1454,21 @@ git_worktree_spawn() {
             --user) account="$2"; shift 2 ;;
             --tmux) use_tmux=1; shift ;;
             --launch) use_launch=1; shift ;;
+            --bg)
+                # Agent View background dispatch (#640). Passes through to
+                # `claude --bg "<task>"`. The next positional arg, if it
+                # exists and is not another flag, is consumed as the task
+                # string; otherwise we pass an empty string and let claude
+                # itself emit the "task too short" error.
+                use_bg=1
+                shift
+                if [ $# -gt 0 ]; then
+                    case "$1" in
+                        -*|"") ;;
+                        *) bg_task="$1"; shift ;;
+                    esac
+                fi
+                ;;
             -*)
                 ux_error "Unknown option: $1"
                 echo ""
@@ -1488,6 +1510,21 @@ git_worktree_spawn() {
         ux_error "--tmux and --launch are mutually exclusive"
         echo ""
         _git_worktree_spawn_show_help
+        return 1
+    fi
+
+    # --bg dispatches the agent in background mode, so it needs --launch or
+    # --tmux to actually run something. Without either, the worktree is
+    # created but nothing is dispatched (#640).
+    if [ "$use_bg" = 1 ] && [ "$use_tmux" != 1 ] && [ "$use_launch" != 1 ]; then
+        ux_error "--bg requires --launch or --tmux"
+        return 1
+    fi
+
+    # --bg currently only wires through claude (the only agent with Agent
+    # View / background dispatch). Other agents have no equivalent flag.
+    if [ "$use_bg" = 1 ] && [ "$agent" != "claude" ]; then
+        ux_error "--bg is only supported with --ai claude (got: --ai $agent)"
         return 1
     fi
 
@@ -1605,8 +1642,13 @@ git_worktree_spawn() {
 
     # --- Optional tmux integration ---
     if [ "$use_tmux" = 1 ]; then
-        _tmux_add_agent_window "$project" "$agent" "$wt_path" "$account"
-        ux_info "  tmux:   session '$project', window '$agent' (runs ${agent}-yolo${account:+ --user $account})"
+        if [ "$use_bg" = 1 ]; then
+            _tmux_add_agent_window "$project" "$agent" "$wt_path" "$account" "$bg_task"
+            ux_info "  tmux:   session '$project', window '$agent' (runs ${agent}-yolo${account:+ --user $account} --bg)"
+        else
+            _tmux_add_agent_window "$project" "$agent" "$wt_path" "$account"
+            ux_info "  tmux:   session '$project', window '$agent' (runs ${agent}-yolo${account:+ --user $account})"
+        fi
         if [ -z "$TMUX" ]; then
             tmux attach -t "$project"
         else
@@ -1624,6 +1666,15 @@ git_worktree_spawn() {
             ux_error "No --launch yolo command for agent: $agent"
             ux_info "Supported with --launch: $(_gwt_yolo_command --list)"
             return 1
+        fi
+        if [ "$use_bg" = 1 ]; then
+            # `--bg "<task>"` is the Agent View background-dispatch flag.
+            # Pass via separate args so the task string's spaces/quotes
+            # survive `eval` intact (#640).
+            local bg_task_escaped
+            # Single-quote-safe escape: ' → '\''
+            bg_task_escaped=$(printf '%s' "$bg_task" | sed "s/'/'\\\\''/g")
+            launch_cmd="$launch_cmd --bg '$bg_task_escaped'"
         fi
         ux_info "  launch: cd \"$wt_path\" && $launch_cmd"
         cd "$wt_path" || { ux_error "Cannot cd to $wt_path"; return 1; }
