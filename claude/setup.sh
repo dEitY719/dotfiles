@@ -175,17 +175,44 @@ _migrate_legacy_statusline_command() {
     fi
 }
 
-# Auto-migrate legacy Claude Code plugin paths (issue #340).
+# Resolve the currently active Claude Code config directory used as the
+# canonical prefix for plugin state migration.
 #
-# Claude Code recently moved its plugin storage from
-# ${HOME}/.claude/plugins/... to ${HOME}/.claude-personal/plugins/... but
-# pre-existing JSON state files still hold the old prefix. Symptoms:
+# Detection order (issue: multi-account installLocation prefix mismatch):
+#   1. $CLAUDE_CONFIG_DIR if set (Claude Code's own override)
+#   2. $HOME/.claude if it is a real directory (single-account mode)
+#   3. $HOME/.claude-personal (multi-account default — backward compat
+#      with the original #340 migration target)
+#
+# Prints the absolute dir on stdout (no trailing slash). Never fails.
+_current_claude_config_dir() {
+    if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then
+        printf '%s' "${CLAUDE_CONFIG_DIR%/}"
+        return 0
+    fi
+    if [ -d "${HOME}/.claude" ] && [ ! -L "${HOME}/.claude" ]; then
+        printf '%s' "${HOME}/.claude"
+        return 0
+    fi
+    printf '%s' "${HOME}/.claude-personal"
+}
+
+# Auto-migrate stale Claude Code plugin paths (issue #340 + multi-account
+# follow-up).
+#
+# Claude Code persists absolute paths into two JSON state files. When the
+# user switches between accounts (.claude-personal / .claude-work /
+# .claude-work1 / ...) those paths can point at a different account dir
+# than the currently-active one, even though every account's plugins/
+# symlinks into ~/.claude-shared/plugins/ (so the underlying data is the
+# same). Symptoms:
 #   - /doctor: 다수의 "Plugin <name> not found in marketplace" 경고
 #   - /plugin: "Marketplace has corrupted installLocation ... expected a
-#     path inside .claude-personal/plugins/marketplaces" 갱신 실패
+#     path inside <current account>/plugins/marketplaces" 갱신 실패
 #
-# Fix: rewrite the prefix in two JSON state files in place. Idempotent —
-# only acts when an old-prefix entry is present, otherwise no-op.
+# Fix: rewrite ANY ${HOME}/.claude(-<suffix>)?/plugins/ prefix in two JSON
+# state files to the currently-active config dir's plugins/ prefix.
+# Idempotent — entries already at the canonical prefix are left alone.
 #
 # Targets:
 #   - ~/.claude-shared/plugins/known_marketplaces.json (top-level
@@ -194,8 +221,13 @@ _migrate_legacy_statusline_command() {
 #     (.plugins[<key>][<idx>].installPath)
 _migrate_legacy_plugin_paths() {
     local plugins_root="${HOME}/.claude-shared/plugins"
-    local old_prefix="${HOME}/.claude/plugins/"
-    local new_prefix="${HOME}/.claude-personal/plugins/"
+    local new_prefix
+    new_prefix="$(_current_claude_config_dir)/plugins/"
+    # Match any ${HOME}/.claude(-suffix)?/plugins/ — the legacy ${HOME}/.claude/
+    # form from #340 plus every per-account variant. $HOME is interpolated
+    # literally (not as a regex), so an unusual $HOME containing regex
+    # meta-chars would over-match; acceptable for our environment.
+    local old_regex="^${HOME}/\\.claude(-[A-Za-z0-9_]+)?/plugins/"
 
     [ -d "$plugins_root" ] || return 0
 
@@ -212,7 +244,8 @@ _migrate_legacy_plugin_paths() {
         [ -f "$file" ] || return 0
 
         local stale_count
-        stale_count=$(jq --arg old "$old_prefix" "$stale_filter" "$file" 2>/dev/null) || stale_count=0
+        stale_count=$(jq --arg re "$old_regex" --arg new "$new_prefix" \
+            "$stale_filter" "$file" 2>/dev/null) || stale_count=0
         [ "${stale_count:-0}" -gt 0 ] || return 0
 
         local backup tmp
@@ -227,9 +260,9 @@ _migrate_legacy_plugin_paths() {
             return 1
         }
 
-        if jq --arg old "$old_prefix" --arg new "$new_prefix" \
+        if jq --arg re "$old_regex" --arg new "$new_prefix" \
                 "$rewrite_filter" "$file" > "$tmp" && mv "$tmp" "$file"; then
-            log_warning "$(basename "$file") plugin 경로 마이그레이션: ${stale_count}건"
+            log_warning "$(basename "$file") plugin 경로 마이그레이션: ${stale_count}건 → ${new_prefix}"
             log_warning "  backup: $backup"
         else
             rm -f "$tmp"
@@ -238,27 +271,38 @@ _migrate_legacy_plugin_paths() {
         fi
     }
 
-    # jq 변수 ($old/$new) 은 --arg 로 주입 — shell 변수 아님.
+    # jq 변수 ($re/$new) 은 --arg 로 주입 — shell 변수 아님.
+    # "stale" = matches the legacy regex AND is not already at $new.
     # shellcheck disable=SC2016
     _migrate_one_plugin_json \
         "${plugins_root}/known_marketplaces.json" \
-        '[.[] | select(.installLocation? | type == "string" and startswith($old))] | length' \
+        '[.[] | select(
+            .installLocation? | type == "string"
+            and test($re)
+            and (startswith($new) | not)
+        )] | length' \
         'with_entries(
             if (.value.installLocation? | type) == "string"
-               and (.value.installLocation | startswith($old))
-            then .value.installLocation |= ($new + .[($old | length):])
+               and (.value.installLocation | test($re))
+               and ((.value.installLocation | startswith($new)) | not)
+            then .value.installLocation |= sub($re; $new)
             else . end
         )'
 
     # shellcheck disable=SC2016
     _migrate_one_plugin_json \
         "${plugins_root}/installed_plugins.json" \
-        '[.plugins // {} | to_entries[] | .value[]? | select(.installPath? | type == "string" and startswith($old))] | length' \
+        '[.plugins // {} | to_entries[] | .value[]? | select(
+            .installPath? | type == "string"
+            and test($re)
+            and (startswith($new) | not)
+        )] | length' \
         '.plugins |= with_entries(
             .value |= map(
                 if (.installPath? | type) == "string"
-                   and (.installPath | startswith($old))
-                then .installPath |= ($new + .[($old | length):])
+                   and (.installPath | test($re))
+                   and ((.installPath | startswith($new)) | not)
+                then .installPath |= sub($re; $new)
                 else . end
             )
         )'
