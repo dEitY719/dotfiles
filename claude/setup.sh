@@ -180,7 +180,12 @@ _migrate_legacy_statusline_command() {
 #
 # Detection order (issue: multi-account installLocation prefix mismatch):
 #   1. $CLAUDE_CONFIG_DIR if set (Claude Code's own override)
-#   2. $HOME/.claude if it is a real directory (single-account mode)
+#   2. $HOME/.claude — only when _dotfiles_setup_mode says we are in
+#      `internal` (single-account) mode. In multi-account mode the
+#      script later (~L578) creates ~/.claude as an empty guard dir, so
+#      a bare `[ -d ~/.claude ]` filesystem test would falsely succeed
+#      and the migration would normalize prefixes to the guard path.
+#      Gate by the SSOT mode helper instead.
 #   3. $HOME/.claude-personal (multi-account default — backward compat
 #      with the original #340 migration target)
 #
@@ -190,7 +195,8 @@ _current_claude_config_dir() {
         printf '%s' "${CLAUDE_CONFIG_DIR%/}"
         return 0
     fi
-    if [ -d "${HOME}/.claude" ] && [ ! -L "${HOME}/.claude" ]; then
+    if command -v _dotfiles_setup_mode >/dev/null 2>&1 \
+       && [ "$(_dotfiles_setup_mode)" = "internal" ]; then
         printf '%s' "${HOME}/.claude"
         return 0
     fi
