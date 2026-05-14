@@ -11,7 +11,6 @@
 | Flag | Effect |
 |---|---|
 | `--no-stack` | force base = repo default branch, skip auto-detect |
-| `--parent-pr <N>` | force stack on PR #N (base = #N's head ref, body adds `Depends on #N`) |
 | `--base <branch>` | force base = `<branch>` (any branch name) |
 
 Auto-detect (default) is a no-op on solo / non-stacked repos. See
@@ -23,7 +22,6 @@ Auto-detect (default) is a no-op on solo / non-stacked repos. See
   Resolves base via auto-detect (default branch on solo repos).
 - `/gh-pr 123` — same, force-link to issue `#123`.
 - `/gh-pr --no-stack` — auto-detect off, base = default branch.
-- `/gh-pr --parent-pr 201` — auto-detect off, stack on PR #201.
 - `/gh-pr --base release/v2.0` — auto-detect off, custom base branch.
 - `/gh-pr -h` / `--help` / `help` — print this help.
 
@@ -55,13 +53,12 @@ $ /gh-pr                        →  "Stacking on PR #201 (auto-detected)"
 
 # Auto-detect was wrong — escape hatch
 $ /gh-pr --no-stack             →  base=main forced
-$ /gh-pr --parent-pr 205        →  base=PR #205 head
 $ /gh-pr --base release/v2.0    →  base=release/v2.0
 ```
 
 ## What the skill does
 
-1. Parses args (`--no-stack` / `--parent-pr` / `--base`), then resolves
+1. Parses args (`--no-stack` / `--base`), then resolves
    the base branch via the stacked-PR auto-detect flow (see
    `references/stacked-pr.md`). Fetches `origin` to make sure the range
    is computed against up-to-date refs.
@@ -87,8 +84,7 @@ $ /gh-pr --base release/v2.0    →  base=release/v2.0
 - Force-push without explicit user approval.
 - Run auto-stack detection on a repo without stacked-PR signals — solo
   repos always default to the repo's default branch.
-- Combine `--no-stack` / `--parent-pr` / `--base` (mutually exclusive,
-  rc=2 abort).
+- Combine `--no-stack` / `--base` (mutually exclusive, rc=2 abort).
 - Mutate parent PR bodies — cross-PR rollup is the downstream repo's
   job (e.g. AgentToolbox `stacked-closes-rollup.yml`).
 - Include the `🤖 Generated with Claude Code` footer unless the repo
@@ -108,5 +104,5 @@ $ /gh-pr --base release/v2.0    →  base=release/v2.0
 - **Good**: Hotfix landing on a release branch, `/gh-pr --base release/v2.0`.
 - **Bad**: running on `main` — skill stops with "create a feature branch first".
 - **Bad**: running with an empty `<base>..HEAD` — skill stops with "nothing to PR".
-- **Bad**: `/gh-pr --no-stack --parent-pr 5` — flags are mutually
+- **Bad**: `/gh-pr --no-stack --base main` — flags are mutually
   exclusive, skill aborts before push.

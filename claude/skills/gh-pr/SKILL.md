@@ -28,15 +28,13 @@ body. Push the branch if needed. Return the PR URL.
 |----------|-------------|---------|
 | `[N]` (positional) | Legacy `/gh:pr 123` form — overrides issue auto-detection. | — |
 | `--no-stack` | Force a non-stacked PR even when stacked-PR signals fire. | off |
-| `--parent-pr <N>` | Explicit parent PR number; sets `BASE_BRANCH` to `<N>`'s head. | — |
 | `--base <branch>` | Explicit base branch; bypasses stacked-PR detection. | repo default |
 | `GH_DISABLE_AI_METRICS=1` (env) | Skip ai-metrics footer append in Step 4. | off |
 | `GH_PR_LINT_BYPASS=1` (env) | Skip Step 4.5 lint guard. | off |
 | `DOTFILES_ROOT` (env) | Root used to source `gh_pr_lint.sh`. | `$HOME/dotfiles` |
 | `-h`/`--help`/`help` | Print `references/help.md` verbatim and stop. | — |
 
-`--no-stack`, `--parent-pr`, and `--base` are mutually exclusive — see
-Step 1a exit codes.
+`--no-stack` and `--base` are mutually exclusive — see Step 1a exit codes.
 
 ## Step 1: Parse Args, Resolve Base Branch, Gather State
 
@@ -49,7 +47,7 @@ Read `references/stacked-pr.md` and paste the SSOT functions
 and the dispatch block ("How Step 1 of SKILL.md ties it together")
 verbatim. They bind `BASE_BRANCH`, `PARENT_PR`, and `ISSUE_NUMBER`, and
 they exit on bad input — `rc=2` for mutually-exclusive flags, `rc=3`
-for bad `--parent-pr` / `--base` values. Abort without pushing on either.
+for a bad `--base` value. Abort without pushing on either.
 
 ### Step 1b: Gather range + push state (parallel)
 

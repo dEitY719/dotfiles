@@ -37,7 +37,6 @@ is_stacked_pr_repo() {
 # ── Argument parsing ───────────────────────────────────────────────────
 parse_stacked_args() {
     STACK_MODE=auto
-    STACK_PARENT=
     STACK_BASE=
     ISSUE_NUMBER=
     local _flags_seen=0
@@ -48,21 +47,6 @@ parse_stacked_args() {
                 _flags_seen=$((_flags_seen + 1))
                 STACK_MODE=no-stack
                 shift
-                ;;
-            --parent-pr)
-                _flags_seen=$((_flags_seen + 1))
-                STACK_MODE=parent-pr
-                if [ $# -lt 2 ]; then
-                    printf 'gh:pr: --parent-pr requires a PR number\n' >&2
-                    return 3
-                fi
-                STACK_PARENT="$2"
-                if ! printf '%s' "${STACK_PARENT-}" | grep -qE '^[1-9][0-9]*$'; then
-                    printf 'gh:pr: --parent-pr requires a positive integer (got %s)\n' \
-                        "${STACK_PARENT:-<empty>}" >&2
-                    return 3
-                fi
-                shift 2
                 ;;
             --base)
                 _flags_seen=$((_flags_seen + 1))
@@ -89,7 +73,7 @@ parse_stacked_args() {
     done
 
     if [ "$_flags_seen" -gt 1 ]; then
-        printf 'gh:pr: --no-stack / --parent-pr / --base are mutually exclusive\n' >&2
+        printf 'gh:pr: --no-stack / --base are mutually exclusive\n' >&2
         return 2
     fi
 
