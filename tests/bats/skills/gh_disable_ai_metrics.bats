@@ -39,6 +39,7 @@ SKILLS_REQUIRING_GUARD=(
     "gh-commit"
     "gh-pr-reply"
     "gh-pr-approve"
+    "gh-pr-review"
     "gh-pr-merge"
     "gh-pr-merge-emergency"
     "gh-pr-resolve-conflict"
