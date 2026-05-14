@@ -39,11 +39,22 @@ from typing import Any
 _TRACE_ENABLED: bool = os.environ.get("GH_ISSUE_FLOW_STOP_GUARD_TRACE") == "1"
 
 
-def _trace(message: str) -> None:
-    """Emit a `[stop-guard]` trace line on stderr when trace mode is on."""
+def _trace(message: str, *, layer: str | None = None) -> None:
+    """Emit a `[stop-guard]` trace line on stderr when trace mode is on.
+
+    `layer` is the protection layer the trace belongs to (issue #608
+    Acceptance Criteria: standardize trace fields):
+      - `L1`   — boundary detection (`_find_flow_boundary`)
+      - `L1.5` — terminal-marker / sub-skill scan (`_scan_after_boundary`)
+      - `L2`   — state file (`.claude/.gh-issue-flow-state.json`, future)
+      - `L3`   — heartbeat cron (`CronCreate(durable=true)`, future)
+    The tag is appended (not prepended) so existing substring-based test
+    assertions like `"[stop-guard] allow:"` keep matching.
+    """
     if _TRACE_ENABLED:
         try:
-            print(f"[stop-guard] {message}", file=sys.stderr, flush=True)
+            tag = f" layer={layer}" if layer else ""
+            print(f"[stop-guard] {message}{tag}", file=sys.stderr, flush=True)
         except OSError:
             pass
 
@@ -69,23 +80,25 @@ TERMINAL_PATTERNS: tuple[str, ...] = (
 )
 
 # Regex that marks the *start* of a gh-issue-flow chain in a user message.
-# Matches two real-world forms that user-typed slash commands take in Claude
-# Code transcripts (issues #607 / #609):
+# Matches four real-world forms that user-typed slash commands take in Claude
+# Code transcripts (issues #607 / #609 / #608):
 #
 #   (a) Raw `/gh-issue-flow ...` (or colon form `/gh:issue-flow ...`) at the
 #       start of a line — historical fixture form, still valid for tests
 #       and for users who paste the command into a longer message.
 #   (b) The `<command-name>/gh-issue-flow</command-name>` (or colon form)
 #       wrapper that Claude Code emits when a user invokes the slash
-#       command interactively. The user message also contains
-#       `<command-message>` / `<command-args>` siblings, but matching the
-#       `<command-name>` tag alone is sufficient and the most stable
-#       anchor across CLI versions.
+#       command interactively.
+#   (c) The `Base directory for this skill: …/gh-issue-flow` marker line
+#       Claude Code emits when expanding a slash command into the
+#       SKILL.md prompt (issue #608 — defense in depth against future
+#       wrapper format drift; matches the resolved skill base path).
+#   (d) The SKILL.md H1 line `# gh:issue-flow — Issue → PR composition`
+#       (issue #608 — second wrapper-independent anchor, useful if the
+#       `<command-name>` / `Base directory` lines ever stop being emitted).
 #
-# The `(?m)^\s*` prefix on the raw branch restricts matching to line
-# starts so a mid-sentence mention like "I was reading about
-# /gh-issue-flow..." stays out — preserved from the prior
-# `lstrip().startswith()` behavior, now expressed per-line.
+# The `(?m)` prefix anchors `^` to per-line starts so a mid-sentence
+# mention like "I was reading about /gh-issue-flow..." stays out.
 # False-positive guards for `tool_result` payloads (e.g. SKILL.md being
 # read by the model) are layered separately in `_iter_text_blocks(...,
 # include_tool_results=False)`.
@@ -93,9 +106,13 @@ _USER_BOUNDARY_RE: re.Pattern[str] = re.compile(
     r"""
     (?m)                                                    # multiline: ^ matches each line start
     (?:
-        ^\s*/gh[-:]issue-flow\b                             # raw slash command at line start
+        ^\s*/gh[-:]issue-flow\b                             # (a) raw slash command
         |
-        <command-name>\s*/gh[-:]issue-flow\s*</command-name>  # Claude Code wrapped form
+        <command-name>\s*/gh[-:]issue-flow\s*</command-name>  # (b) Claude Code wrapped form
+        |
+        ^Base\s+directory\s+for\s+this\s+skill:\s*\S*/gh-issue-flow\b  # (c) skill base dir
+        |
+        ^\#\s+gh:issue-flow\s+—\s+Issue\s+→\s+PR\s+composition\s*$  # (d) SKILL.md H1
     )
     """,
     re.VERBOSE,
@@ -103,17 +120,17 @@ _USER_BOUNDARY_RE: re.Pattern[str] = re.compile(
 FLOW_SKILL_NAMES: set[str] = {"gh-issue-flow", "gh:issue-flow"}
 
 
-def _allow(trace_reason: str = "") -> int:
+def _allow(trace_reason: str = "", *, layer: str | None = None) -> int:
     """Allow the stop. Hook protocol: silent stdout + exit 0."""
     if trace_reason:
-        _trace(f"allow: {trace_reason}")
+        _trace(f"allow: {trace_reason}", layer=layer)
     return 0
 
 
-def _block(reason: str) -> int:
+def _block(reason: str, *, layer: str | None = None) -> int:
     """Block the stop with a directive shown to the model."""
     json.dump({"decision": "block", "reason": reason}, sys.stdout)
-    _trace("block: gh-issue-flow incomplete — re-prompting model")
+    _trace("block: gh-issue-flow incomplete — re-prompting model", layer=layer)
     return 0
 
 
@@ -121,12 +138,14 @@ def _iter_text_blocks(message: dict[str, Any], include_tool_results: bool = True
     """Return all text-bearing chunks in a message's content array.
 
     `include_tool_results` gates whether tool_result blocks contribute their
-    text. Boundary detection (Step 1) sets it to False because a tool_result
-    can carry arbitrary file contents — if a file the model reads happens to
-    contain "/gh-issue-flow", the substring would otherwise falsely mark a
-    flow boundary in an unrelated session. Terminal-marker scanning
-    (Step 2) keeps it True so a sub-skill's stdout that prints the Step 3
-    "complete (#N)" line still counts.
+    text. Both boundary detection and terminal-marker scanning set it to
+    False — a tool_result can carry arbitrary file contents (e.g. SKILL.md
+    being read by the model), and substrings inside such payloads must not
+    influence flow detection. In particular, the SKILL.md Step 3 template
+    literally contains the lines `gh:issue-flow complete (#<N>)` and
+    `gh:issue-flow stopped at step <i>/5` as instructions; if those were
+    visible to the terminal scan via tool_result, every Read of SKILL.md
+    during a flow would falsely flag completion (issue #608, layer L1.5).
     """
     parts: list[str] = []
     content = message.get("content")
@@ -235,14 +254,32 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
 
     Returns (terminal_seen, ordered_distinct_sub_skill_invocations).
     Sub-skill names are normalized to the hyphen form for comparison.
+
+    Issue #608 (layer L1.5) — terminal-marker scan is restricted to
+    `role=assistant` text blocks, with `include_tool_results=False`,
+    and the boundary message itself is skipped (`start + 1`). The
+    motivation: the SKILL.md body (delivered as a `role=user` text
+    block when Claude Code expands a slash command) literally contains
+    the lines
+        gh:issue-flow complete (#<N>)
+        gh:issue-flow stopped at step <i>/5
+    as Step 3 *instructions*. Without this restriction the scan would
+    false-match those template lines and fail-open on every real
+    `/gh-issue-flow` invocation, defeating the harness guard. Sub-skill
+    invocation tracking is already restricted to assistant `tool_use`
+    blocks (`_iter_skill_uses` only inspects that block type), so the
+    skill counter is unaffected — only the terminal-marker scan
+    narrows.
     """
     terminal = False
     seen: list[str] = []
-    for entry in messages[start:]:
+    for entry in messages[start + 1 :]:
         msg = _message_payload(entry)
-        for text in _iter_text_blocks(msg):
-            if any(pat in text for pat in TERMINAL_PATTERNS):
-                terminal = True
+        role = msg.get("role")
+        if role == "assistant":
+            for text in _iter_text_blocks(msg, include_tool_results=False):
+                if any(pat in text for pat in TERMINAL_PATTERNS):
+                    terminal = True
         for skill in _iter_skill_uses(msg):
             if skill not in SUB_SKILL_NAMES:
                 continue
@@ -292,16 +329,17 @@ def main() -> int:
 
     boundary = _find_flow_boundary(messages)
     if boundary < 0:
-        return _allow("no gh-issue-flow boundary in transcript")
+        return _allow("no gh-issue-flow boundary in transcript", layer="L1")
 
     terminal, seen = _scan_after_boundary(messages, boundary)
     if _TRACE_ENABLED:
         _trace(
             f"boundary={boundary} sub_skills_seen={len(seen)}/{len(EXPECTED_CHAIN)} "
-            f"({','.join(seen) if seen else 'none'}) terminal={terminal}"
+            f"({','.join(seen) if seen else 'none'}) terminal={terminal}",
+            layer="L1.5",
         )
     if terminal:
-        return _allow("Step 3 terminal marker present — flow finished")
+        return _allow("Step 3 terminal marker present — flow finished", layer="L1.5")
 
     next_label = _next_step_label(seen)
     reason = (
@@ -315,7 +353,7 @@ def main() -> int:
         f"5 sub-skills are already done, the Step 3 success/failure report "
         f"verbatim per the SKILL.md template)."
     )
-    return _block(reason)
+    return _block(reason, layer="L1.5")
 
 
 if __name__ == "__main__":

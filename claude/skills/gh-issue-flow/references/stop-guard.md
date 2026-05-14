@@ -43,20 +43,40 @@ On every Stop event:
    - stdin is empty / not JSON / not a dict
    - `stop_hook_active == true` (we already blocked once in this chain)
    - `transcript_path` missing or unreadable
-3. Walk the transcript JSONL backwards to find the most recent
-   gh-issue-flow boundary — either the user typed `/gh-issue-flow` or
-   the assistant invoked `Skill(gh-issue-flow)`.
-4. From that boundary forward, scan all assistant text for any
-   terminal Step 3 marker:
+3. **L1 — Boundary detection.** Walk the transcript JSONL backwards to
+   find the most recent gh-issue-flow start. Four boundary surfaces
+   are matched (defense in depth against Claude Code wrapper drift):
+   - assistant `Skill(gh-issue-flow)` tool_use
+   - user text starting with `/gh-issue-flow` (or `/gh:issue-flow`)
+     at a line start
+   - user text containing `<command-name>/gh-issue-flow</command-name>`
+     (or colon namespace form) — the wrapper Claude Code emits for
+     interactively-typed slash commands (#607)
+   - user text containing the SKILL prompt markers
+     `Base directory for this skill: …/gh-issue-flow` or the H1 line
+     `# gh:issue-flow — Issue → PR composition` (#608, defensive
+     anchors for future wrapper variants)
+4. **L1.5 — Terminal-marker scan.** From the message *after* the
+   boundary, scan only `role=assistant` text blocks (not `tool_result`,
+   not user-role text) for any Step 3 terminal marker:
    - `gh:issue-flow complete (#`
    - `gh:issue-flow stopped at step`
    - (and the hyphen variants)
+   This narrow scope is load-bearing. The SKILL.md body, delivered as
+   a `role=user` text block when a slash command expands, literally
+   contains those marker strings as Step 3 *instructions*. Scanning
+   user text would silently false-match every real invocation and
+   fail-open the hook (issue #608, 5th regression).
 5. If no terminal marker is present, count the distinct sub-skill
    `Skill()` invocations after the boundary and pick the *next* one
    in the canonical chain.
 6. Emit `{"decision":"block","reason":"…"}` on stdout. The `reason`
    tells the model exactly which Skill() call to make next, with the
    "no conversational text" rule restated.
+
+When `GH_ISSUE_FLOW_STOP_GUARD_TRACE=1`, each decision logs a
+`[stop-guard] … layer=L1|L1.5` line on stderr so the layer
+attribution is greppable in post-mortems.
 
 ## Safety rails
 
@@ -99,5 +119,13 @@ Re-install via `./setup.sh` to restore the default behaviour.
   with a reason naming the next sub-skill
 - complete transcript (terminal Step 3 marker present) → allow
 - `stop_hook_active == true` → allow regardless of mid-flow state
+- L1 boundary surfaces (#608): raw slash, `<command-name>` wrapper,
+  `Base directory for this skill: …/gh-issue-flow`, and the H1 line —
+  positive + false-positive (inside `tool_result`) variants for each
+- L1.5 (#608, root cause of 5th regression): a real `/gh-issue-flow`
+  invocation whose user message includes the SKILL prompt body
+  (which literally quotes the Step 3 template) must still **block**
+  the mid-chain stop. A defensive variant covers the case where the
+  model reads `gh_issue_flow_stop_guard.py` itself inside the flow.
 
 Run: `pytest tests/integration/test_gh_issue_flow_stop_guard.py -v`.
