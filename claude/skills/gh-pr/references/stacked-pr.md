@@ -236,7 +236,7 @@ agent-toolbox `github-workflow` driver — both drivers share the gate.
 # Helper — fetch the parent PR's state. Overridable in tests via
 # FAKE_PARENT_STATE so bats does not need a live `gh`.
 _gh_pr_default_parent_state() {
-    local _pr="$1"
+    local _pr="${1:-}"
     if [ -n "${FAKE_PARENT_STATE+set}" ]; then
         printf '%s\n' "$FAKE_PARENT_STATE"
         return 0
@@ -246,7 +246,7 @@ _gh_pr_default_parent_state() {
 
 # Returns 0 when state == OPEN, 5 otherwise (with recovery hint on stderr).
 assert_parent_pr_open() {
-    local _pr="$1" _state
+    local _pr="${1:-}" _state
     _state=$(_gh_pr_default_parent_state "$_pr")
     if [ "$_state" != "OPEN" ]; then
         printf 'gh:pr: parent PR #%s state=%s — stacking requires OPEN parent.\n' \
