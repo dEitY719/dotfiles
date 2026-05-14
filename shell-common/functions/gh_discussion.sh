@@ -6,13 +6,15 @@
 # in GraphQL — so this helper centralises the mutation + the lookup chain
 # (repository ID -> category ID) the mutation depends on.
 #
-# Background (issue #617):
+# Background (issue #617, #618):
 # `gh:discussion-create` and `gh:discussion-convert` both need the same
-# three primitives: resolve a repository node ID, resolve a Discussion
-# category node ID by name, and POST a `createDiscussion` mutation. Keeping
-# the GraphQL strings inside one helper lets the skill stay focused on
-# conversation routing while the contract with GitHub's API lives in one
-# auditable file.
+# three create-side primitives: resolve a repository node ID, resolve a
+# Discussion category node ID by name, and POST a `createDiscussion`
+# mutation. `gh:discussion-convert` additionally needs to fetch an
+# existing Discussion and to close / lock / comment on it. Keeping all
+# Discussion GraphQL strings in one helper lets the skills stay focused
+# on conversation routing while the contract with GitHub's API lives in
+# one auditable file.
 #
 # Usage:
 #   _gh_discussion_repo_id     <owner> <repo>
@@ -27,6 +29,24 @@
 #   _gh_discussion_create      <repo-id> <category-id> <title> <body-file>
 #       POST createDiscussion. Print the Discussion URL on stdout. Exit
 #       non-zero on mutation failure (auth, validation, network).
+#
+#   _gh_discussion_fetch       <owner> <repo> <number>
+#       Print a JSON object on stdout with keys: id, number, title, body,
+#       url, locked, closed, category (flattened from category.name).
+#       Exit 1 on lookup failure or when the discussion does not exist.
+#
+#   _gh_discussion_comment     <discussion-node-id> <body-file>
+#       POST addDiscussionComment. Print the comment URL on stdout.
+#       Exit non-zero on mutation failure.
+#
+#   _gh_discussion_close       <discussion-node-id> [reason]
+#       POST closeDiscussion. `reason` defaults to RESOLVED; allowed
+#       values: RESOLVED, OUTDATED, DUPLICATE. Print "closed" on success.
+#       Exit non-zero on mutation failure.
+#
+#   _gh_discussion_lock        <discussion-node-id>
+#       POST lockLockable (reason RESOLVED). Print "locked" on success.
+#       Exit non-zero on mutation failure.
 #
 # Repo node ID and category ID lookups are cheap enough to do per call —
 # do not introduce a disk cache (see references/cache-decision in the
@@ -190,4 +210,192 @@ _gh_discussion_create() {
 
     rm -f "$_err"
     printf '%s\n' "$_url"
+}
+
+_gh_discussion_fetch() {
+    local _owner="${1:-}" _repo="${2:-}" _num="${3:-}"
+    if [ -z "$_owner" ] || [ -z "$_repo" ] || [ -z "$_num" ]; then
+        printf '[gh-discussion] usage: _gh_discussion_fetch <owner> <repo> <number>\n' >&2
+        return 2
+    fi
+    case "$_num" in
+        '' | *[!0-9]*)
+            printf '[gh-discussion] discussion number must be a positive integer\n' >&2
+            return 2
+            ;;
+    esac
+
+    local _err _json
+    _err=$(mktemp) || return 1
+
+    # GraphQL variables ($owner, $repo, $num) are NOT shell vars — single
+    # quotes around the query are intended.
+    # Variables: $owner String!, $repo String!, $num Int!
+    # shellcheck disable=SC2016
+    _json=$(gh api graphql \
+        -f query='
+          query($owner: String!, $repo: String!, $num: Int!) {
+            repository(owner: $owner, name: $repo) {
+              discussion(number: $num) {
+                id
+                number
+                title
+                body
+                url
+                locked
+                closed
+                category { name }
+              }
+            }
+          }' \
+        -f owner="$_owner" -f repo="$_repo" -F "num=$_num" \
+        --jq '.data.repository.discussion' 2>"$_err")
+    local _rc=$?
+
+    if [ "$_rc" -ne 0 ] || [ -z "$_json" ] || [ "$_json" = "null" ]; then
+        printf '[gh-discussion] discussion #%s not found on %s/%s\n' \
+            "$_num" "$_owner" "$_repo" >&2
+        if [ -s "$_err" ]; then
+            sed 's/^/[gh-discussion] /' "$_err" >&2
+        fi
+        rm -f "$_err"
+        return 1
+    fi
+
+    rm -f "$_err"
+    # Flatten category.name -> category for ergonomic jq downstream.
+    printf '%s' "$_json" | jq -c '. + {category: .category.name}'
+}
+
+_gh_discussion_comment() {
+    local _disc_id="${1:-}" _body_file="${2:-}"
+    if [ -z "$_disc_id" ] || [ -z "$_body_file" ]; then
+        printf '[gh-discussion] usage: _gh_discussion_comment <discussion-id> <body-file>\n' >&2
+        return 2
+    fi
+    if [ ! -f "$_body_file" ]; then
+        printf '[gh-discussion] body-file not found: %s\n' "$_body_file" >&2
+        return 2
+    fi
+
+    local _err _url
+    _err=$(mktemp) || return 1
+
+    # Variables: $discId ID!, $body String!
+    # shellcheck disable=SC2016
+    _url=$(gh api graphql \
+        -f query='
+          mutation($discId: ID!, $body: String!) {
+            addDiscussionComment(input: {
+              discussionId: $discId,
+              body:         $body
+            }) {
+              comment { url }
+            }
+          }' \
+        -f discId="$_disc_id" \
+        -f "body=@$_body_file" \
+        --jq '.data.addDiscussionComment.comment.url' 2>"$_err")
+    local _rc=$?
+
+    if [ "$_rc" -ne 0 ] || [ -z "$_url" ] || [ "$_url" = "null" ]; then
+        printf '[gh-discussion] addDiscussionComment mutation failed\n' >&2
+        if [ -s "$_err" ]; then
+            sed 's/^/[gh-discussion] /' "$_err" >&2
+        fi
+        rm -f "$_err"
+        return 1
+    fi
+
+    rm -f "$_err"
+    printf '%s\n' "$_url"
+}
+
+_gh_discussion_close() {
+    local _disc_id="${1:-}" _reason="${2:-RESOLVED}"
+    if [ -z "$_disc_id" ]; then
+        printf '[gh-discussion] usage: _gh_discussion_close <discussion-id> [reason]\n' >&2
+        return 2
+    fi
+    case "$_reason" in
+        RESOLVED | OUTDATED | DUPLICATE) ;;
+        *)
+            printf '[gh-discussion] close reason must be RESOLVED, OUTDATED, or DUPLICATE (got: %s)\n' \
+                "$_reason" >&2
+            return 2
+            ;;
+    esac
+
+    local _err _state
+    _err=$(mktemp) || return 1
+
+    # Variables: $discId ID!, $reason DiscussionCloseReason!
+    # shellcheck disable=SC2016
+    _state=$(gh api graphql \
+        -f query='
+          mutation($discId: ID!, $reason: DiscussionCloseReason!) {
+            closeDiscussion(input: {
+              discussionId: $discId,
+              reason:       $reason
+            }) {
+              discussion { closed }
+            }
+          }' \
+        -f discId="$_disc_id" \
+        -f reason="$_reason" \
+        --jq '.data.closeDiscussion.discussion.closed' 2>"$_err")
+    local _rc=$?
+
+    if [ "$_rc" -ne 0 ] || [ "$_state" != "true" ]; then
+        printf '[gh-discussion] closeDiscussion mutation failed\n' >&2
+        if [ -s "$_err" ]; then
+            sed 's/^/[gh-discussion] /' "$_err" >&2
+        fi
+        rm -f "$_err"
+        return 1
+    fi
+
+    rm -f "$_err"
+    printf 'closed\n'
+}
+
+_gh_discussion_lock() {
+    local _disc_id="${1:-}"
+    if [ -z "$_disc_id" ]; then
+        printf '[gh-discussion] usage: _gh_discussion_lock <discussion-id>\n' >&2
+        return 2
+    fi
+
+    local _err _state
+    _err=$(mktemp) || return 1
+
+    # lockLockable accepts any Lockable (Issue, PR, Discussion). Reason
+    # RESOLVED matches the policy in docs/.ssot/discussions-policy.md.
+    # Variables: $id ID!
+    # shellcheck disable=SC2016
+    _state=$(gh api graphql \
+        -f query='
+          mutation($id: ID!) {
+            lockLockable(input: {
+              lockableId: $id,
+              lockReason: RESOLVED
+            }) {
+              lockedRecord { locked }
+            }
+          }' \
+        -f id="$_disc_id" \
+        --jq '.data.lockLockable.lockedRecord.locked' 2>"$_err")
+    local _rc=$?
+
+    if [ "$_rc" -ne 0 ] || [ "$_state" != "true" ]; then
+        printf '[gh-discussion] lockLockable mutation failed\n' >&2
+        if [ -s "$_err" ]; then
+            sed 's/^/[gh-discussion] /' "$_err" >&2
+        fi
+        rm -f "$_err"
+        return 1
+    fi
+
+    rm -f "$_err"
+    printf 'locked\n'
 }
