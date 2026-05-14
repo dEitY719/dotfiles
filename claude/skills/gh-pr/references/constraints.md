@@ -25,6 +25,16 @@ never auto-stack on a repo that does not match `is_stacked_pr_repo`,
 and never silently downgrade to the default branch when the user
 explicitly passed `--base`.
 
+## Parent PR state (stacked auto-detect)
+
+When Stage 2 of `references/stacked-pr.md` selects a parent PR for
+stacking, the parent's GitHub state **must** be `OPEN`. Re-check via
+`gh pr view <N> --json state` right before the base branch decision is
+committed (see `assert_parent_pr_open`). Closed or merged parents abort
+with rc=5 plus a one-line recovery hint — never silently fall back to
+the default branch, since that would change the PR's meaning without
+asking the user.
+
 ## AI footers
 
 Never include `🤖 Generated with` or any "Claude Code" footer in the PR

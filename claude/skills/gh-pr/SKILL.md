@@ -35,6 +35,7 @@ body. Push the branch if needed. Return the PR URL.
 | `-h`/`--help`/`help` | Print `references/help.md` verbatim and stop. | — |
 
 `--no-stack` and `--base` are mutually exclusive — see Step 1a exit codes.
+Auto-detected parent PR must be `OPEN` — refuses (rc=5) otherwise.
 
 ## Step 1: Parse Args, Resolve Base Branch, Gather State
 
@@ -43,11 +44,14 @@ Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 4.
 ### Step 1a: Parse args + resolve base via stacked-PR detection
 
 Read `references/stacked-pr.md` and paste the SSOT functions
-(`parse_stacked_args`, `is_stacked_pr_repo`, `find_parent_pr_candidates`)
-and the dispatch block ("How Step 1 of SKILL.md ties it together")
-verbatim. They bind `BASE_BRANCH`, `PARENT_PR`, and `ISSUE_NUMBER`, and
-they exit on bad input — `rc=2` for mutually-exclusive flags, `rc=3`
-for a bad `--base` value. Abort without pushing on either.
+(`parse_stacked_args`, `is_stacked_pr_repo`, `find_parent_pr_candidates`,
+`assert_parent_pr_open`) and the dispatch block ("How Step 1 of
+SKILL.md ties it together") verbatim. They bind `BASE_BRANCH`,
+`PARENT_PR`, and `ISSUE_NUMBER`, and they exit on bad input — `rc=2`
+for mutually-exclusive flags, `rc=3` for a bad `--base` value, `rc=5`
+when the auto-detected parent PR is no longer `OPEN` (stacking refuses
+on closed/merged parents — recovery hint: reopen the parent or rerun
+with `--no-stack`). Abort without pushing on any of them.
 
 ### Step 1b: Gather range + push state (parallel)
 

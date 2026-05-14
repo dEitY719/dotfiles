@@ -223,6 +223,45 @@ EOF
 }
 ```
 
+## Parent state pre-check — `assert_parent_pr_open`
+
+`find_parent_pr_candidates` already filters by `--state open`, but there
+is a TOCTOU window between Stage 2 and `gh pr create` (Step 5) where the
+parent can be merged or closed. The guard below re-reads the parent
+state right before the base branch decision is committed and aborts
+with **rc=5** when it is no longer `OPEN`. Same invariant as the
+agent-toolbox `github-workflow` driver — both drivers share the gate.
+
+```sh
+# Helper — fetch the parent PR's state. Overridable in tests via
+# FAKE_PARENT_STATE so bats does not need a live `gh`.
+_gh_pr_default_parent_state() {
+    local _pr="$1"
+    if [ -n "${FAKE_PARENT_STATE+set}" ]; then
+        printf '%s\n' "$FAKE_PARENT_STATE"
+        return 0
+    fi
+    gh pr view "$_pr" --json state -q .state 2>/dev/null
+}
+
+# Returns 0 when state == OPEN, 5 otherwise (with recovery hint on stderr).
+assert_parent_pr_open() {
+    local _pr="$1" _state
+    _state=$(_gh_pr_default_parent_state "$_pr")
+    if [ "$_state" != "OPEN" ]; then
+        printf 'gh:pr: parent PR #%s state=%s — stacking requires OPEN parent.\n' \
+            "$_pr" "${_state:-UNKNOWN}" >&2
+        printf 'Next: reopen parent, or run with --no-stack.\n' >&2
+        return 5
+    fi
+    return 0
+}
+```
+
+Single API call (`gh pr view --json state`) per stacked-PR invocation —
+0 overhead in the solo / non-stacked path because the helper only runs
+inside the 1-candidate branch of the Stage-2 dispatch.
+
 ## How Step 1 of `SKILL.md` ties it together
 
 ```sh
@@ -244,6 +283,7 @@ case "$STACK_MODE" in
                 1)
                     PARENT_PR="${CANDIDATES%%:*}"
                     BASE_BRANCH="${CANDIDATES#*:}"
+                    assert_parent_pr_open "$PARENT_PR" || return $?
                     printf 'Stacking on PR #%s (auto-detected)\n' "$PARENT_PR" ;;
                 *)
                     # 2+ candidates — bash cannot prompt safely (Claude Code is
@@ -288,6 +328,22 @@ hatch flag (`--base <branch>` or `--no-stack`). This avoids hanging on
 | `--base release/v2.0` | `/gh-pr --base release/v2.0` | arbitrary branch forced |
 | Mutually-exclusive flags | `/gh-pr --no-stack --base main` | rc=2, abort |
 | Bad `--base` value | `/gh-pr --base` (missing arg) | rc=3, abort |
+| Parent state ≠ OPEN | `/gh-pr` (auto-detected parent CLOSED/MERGED) | rc=5, abort with recovery hint |
 
-The 8 rows above are the regression contract — every change to the
+The 9 rows above are the regression contract — every change to the
 detection logic must keep them green.
+
+## Exit codes (Step 1a dispatch)
+
+| rc | Meaning |
+|---|---|
+| 0 | Base branch resolved; proceed to Step 1b. |
+| 2 | `--no-stack` and `--base` were both passed (mutually exclusive). |
+| 3 | `--base` was passed without a branch value. |
+| 4 | Stage 2 produced 2+ parent candidates — AI executor must ask the user. |
+| 5 | Auto-detected parent PR is not `OPEN` — stacking refused. |
+
+rc=4 (ambiguous parent) and rc=5 (parent-not-open) are semantically
+distinct — both block the dispatch but only rc=5 means "the parent is
+no longer a valid stacking target". Treat them separately when wiring
+recovery hints.
