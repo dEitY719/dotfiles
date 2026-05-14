@@ -679,19 +679,31 @@ _gh_pr_approve_prune() {
             ;;
         failed:*)
             _failed=$((_failed + 1))
-            if [ "$_force" = "1" ] && [ -n "$_wt" ] && [ -d "$_wt" ]; then
-                ux_warning "#$_pr $_state — tearing down $_wt"
-                if (cd "$_wt" && gwt teardown --force); then
+            if [ "$_force" = "1" ]; then
+                if [ -n "$_wt" ] && [ -d "$_wt" ]; then
+                    ux_warning "#$_pr $_state — tearing down $_wt"
+                    if (cd "$_wt" && gwt teardown --force); then
+                        rm -rf "$_entry"
+                        _torn_down=$((_torn_down + 1))
+                    else
+                        ux_error "  gwt teardown failed for $_wt; leaving state dir intact"
+                    fi
+                else
+                    # Ghost: worktree dir already gone (e.g. teardown crashed
+                    # after rm but before state cleanup, or spawn died before
+                    # ever creating one). Nothing on disk to tear down — the
+                    # safe cleanup is to drop the orphan state entry. See #639.
+                    ux_warning "#$_pr $_state — worktree absent, removing stale state"
                     rm -rf "$_entry"
                     _torn_down=$((_torn_down + 1))
-                else
-                    ux_error "  gwt teardown failed for $_wt; leaving state dir intact"
                 fi
             else
                 ux_warning "#$_pr $_state"
                 if [ -n "$_wt" ] && [ -d "$_wt" ]; then
                     ux_bullet_sub "worktree: $_wt"
                     ux_bullet_sub "cleanup: cd $_wt && gwt teardown --force"
+                else
+                    ux_bullet_sub "ghost state (worktree absent) — pass --force to remove"
                 fi
             fi
             ;;
