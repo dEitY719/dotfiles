@@ -12,6 +12,7 @@
 |------|---------|-------------|
 | `--no-auto-labels` | off | Skip Step 2.5 — never auto-attach labels/milestones from `.gh-issue-defaults.yml`. User-supplied `--label` flags still apply. |
 | `--auto-label-debug` | off | Print Stage-1 detection trace plus kept/dropped label sets to stderr before issue creation. |
+| `--as-discussion <category>` | off | Route to [[gh-discussion-create]] instead of creating an Issue. `<category>` is one of `Ideas` / `Q&A` / `Announcements` / `Lessons` (case-insensitive). Skips Step 2.5 entirely; `--label` / `--assignee` are ignored with a 1-line warning. Invalid category exits 3 without calling any API. |
 
 ## Usage
 
@@ -19,6 +20,8 @@
 - `/gh-issue-create upstream` — create issue on the `upstream` remote's repo
 - `/gh-issue-create --no-auto-labels` — skip the SSOT auto-label step
 - `/gh-issue-create --auto-label-debug` — verbose label-dispatch trace
+- `/gh-issue-create --as-discussion Ideas` — route the same conversation to [[gh-discussion-create]] (RFC body, Ideas category)
+- `/gh-issue-create upstream --as-discussion Q&A` — Q&A Discussion on the `upstream` remote's repo
 - `/gh-issue-create -h` / `--help` / `help` — print this help
 
 ## What the skill does
@@ -81,3 +84,18 @@ A 200-line issue is fine if the conversation warranted it.
 - Ask "should I create it?" — running the skill is the confirmation.
 - Rely on implicit repo detection — always passes `--repo "$TARGET_REPO"`.
 - Truncate or summarize the conversation log.
+- Auto-detect whether the chat is RFC-shaped and route to a Discussion
+  on its own. `--as-discussion` requires an explicit user request
+  (#619 Non-Goal: no AI auto-judgement).
+- Apply labels or assignees on the Discussion path — those are an
+  Issue-only concept. Mixing `--as-discussion` with `--label` /
+  `--assignee` drops the latter with a 1-line warning.
+
+## Error cases
+
+- `--as-discussion Foo` (not one of `Ideas` / `Q&A` / `Announcements` /
+  `Lessons`) → print the four allowed values and exit 3 without any
+  API call.
+- `--as-discussion <category>` when
+  `shell-common/functions/gh_discussion.sh` is missing → print
+  `Install gh-discussion-create skill first.` and exit 1.
