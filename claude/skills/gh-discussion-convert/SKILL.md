@@ -99,8 +99,15 @@ Search for an Issue whose body already contains the backlink marker:
 ```bash
 EXISTING=$(gh issue list --repo "$TARGET_REPO" --state all --search \
     "in:body \"Originated from discussion #${N}\"" \
-    --json number,url --limit 1 --jq '.[0]')
+    --json number,url --limit 1 --jq '.[0].url // empty')
 ```
+
+`// empty` is load-bearing: without it, `jq '.[0].url'` on an empty
+result array prints the literal string `null`, which `[ -n "$EXISTING" ]`
+treats as non-empty — the skill would then claim "already converted"
+on every first invocation. With `// empty`, `$EXISTING` is the empty
+string when no match exists, so the standard `[ -n ... ]` test in
+`convert-cmd.md` Step 4 works correctly.
 
 If `$EXISTING` is non-empty, print the existing issue URL and exit 0
 with `[OK] Discussion #<N> already converted to <issue-url>`. This
