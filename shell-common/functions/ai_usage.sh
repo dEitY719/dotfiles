@@ -154,11 +154,22 @@ _ai_usage_run() {
             # CLI exit code. Workers rely on a non-zero return to flip
             # state to failed:*, so propagate is_error as exit 1.
             _is_error=$(jq -r '.is_error // false' <"$_tmp" 2>/dev/null)
-            _result=$(jq -r '.result // ""' <"$_tmp" 2>/dev/null)
 
             # Echo just the human-readable result so the worker's log stays
             # legible. The full JSON lives in usage.jsonl for diagnostics.
-            printf '%s\n' "$_result"
+            # Only capture `_result` into a shell variable on the error
+            # path — that's where the transient classifier needs it.
+            # Successful responses can be very large (full assistant
+            # output); streaming them straight to stdout avoids buffering
+            # the whole payload into a shell variable and the ARG_MAX
+            # risk that would create if something later passed it on
+            # the command line. (gemini-code-assist review on PR #653.)
+            if [ "$_is_error" = "true" ]; then
+                _result=$(jq -r '.result // ""' <"$_tmp" 2>/dev/null)
+                printf '%s\n' "$_result"
+            else
+                jq -r '.result // ""' <"$_tmp" 2>/dev/null
+            fi
 
             # Append a compact, jq-friendly record. Keep usage/modelUsage
             # nested so per-model cost can be broken out later if needed.
