@@ -81,9 +81,10 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 
 - **Supervisor 격리**: `claude` background supervisor 는 `CLAUDE_CONFIG_DIR` 단위.
   multi-account 환경에서는 계정마다 별도 view — `claude-yolo --user work agents`.
-- **main/master 가드 제거 (#647)**: `claude-yolo` 는 main 위에서도 그대로 실행
-  된다. 격리가 필요하면 `gwt spawn --launch --ai claude <task>` 가 SSOT —
-  자동 `scratch/*` 분기 + read-only 화이트리스트 누적 복잡도가 같이 사라졌다.
+- **main/master 가드 제거 (#647)**: `claude-yolo` 는 main 위에서도 그대로 실행된다.
+  격리가 필요하면 `gwt spawn --launch --ai claude <task>` 가 SSOT — 자동
+  `scratch/*` 분기, `CLAUDE_YOLO_STAY` env, read-only 화이트리스트의 누적
+  복잡도가 같이 사라졌다.
 - **Worktree dispatch**: `gwt spawn --launch --bg [task]` (claude 전용) 로
   worktree 생성 → cd → `claude_yolo --bg "<task>"` 일괄 실행. `--user` 와 조합 가능.
 

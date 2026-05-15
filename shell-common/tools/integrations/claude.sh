@@ -307,8 +307,8 @@ _claude_yolo_export_settings_env() {
 # 2. 계정 → CLAUDE_CONFIG_DIR 해석 (SSOT: _claude_resolve_account)
 # 3. CLAUDE_CONFIG_DIR 환경 주입 + command claude --dangerously-skip-permissions
 #
-# main/master 자동 scratch/* 가드는 #647 에서 제거됨 — 격리 워크플로는
-# `gwt spawn --launch --ai claude <task>` 가 SSOT.
+# main/master 자동 scratch/* 가드 + CLAUDE_YOLO_STAY env 는 #647 에서 제거됨 —
+# 격리 워크플로는 `gwt spawn --launch --ai claude <task>` 가 SSOT.
 claude_yolo() {
     _cy_account="${CLAUDE_DEFAULT_ACCOUNT:-personal}"
 
