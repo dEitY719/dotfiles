@@ -468,7 +468,7 @@ JSON
     # Live file has been reset to first-start placeholder (50B-ish).
     printf '{"firstStartTime":"y"}' > "$HOME/.claude-personal/.claude.json"
 
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; claude_yolo"
     assert_success
     assert_output --partial "Restored"
     grep -q "oauthAccount" "$HOME/.claude-personal/.claude.json"
@@ -489,7 +489,7 @@ JSON
     printf '{"firstStartTime":"y","oauthAccount":{"e":"snapshot@b"},"migrationVersion":5}' \
         > "$HOME/.claude-personal/.claude.json.preserved-by-migrate"
 
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; claude_yolo"
     assert_success
     refute_output --partial "Restored"
     grep -q "live@b" "$HOME/.claude-personal/.claude.json"
@@ -501,7 +501,7 @@ JSON
     # First-start placeholder, but no migrate snapshot — fresh PC.
     printf '{"firstStartTime":"x"}' > "$HOME/.claude-personal/.claude.json"
 
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; claude_yolo"
     assert_success
     refute_output --partial "Restored"
     # Live file untouched.
@@ -516,7 +516,7 @@ JSON
     printf '{"oauthAccount":{"e":"OLD@b"},"migrationVersion":1}' \
         > "$HOME/.claude-personal/.claude.json.preserved-by-migrate"
 
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; claude_yolo"
     assert_success
     refute_output --partial "Restored"
     grep -q '"a@b"' "$HOME/.claude-personal/.claude.json"
@@ -571,7 +571,7 @@ MOCK
 @test "bash: claude_yolo defaults to personal account" {
     _setup_claude_mock
     mkdir -p "$HOME/.claude-personal"
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; claude_yolo"
     assert_success
     assert_output --partial "CLAUDE_CONFIG_DIR=$HOME/.claude-personal"
 }
@@ -579,7 +579,7 @@ MOCK
 @test "bash: claude_yolo --user work routes to work" {
     _setup_claude_mock
     mkdir -p "$HOME/.claude-work"
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --user work"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; claude_yolo --user work"
     assert_success
     assert_output --partial "CLAUDE_CONFIG_DIR=$HOME/.claude-work"
 }
@@ -587,7 +587,7 @@ MOCK
 @test "bash: claude_yolo --user=work syntax also works" {
     _setup_claude_mock
     mkdir -p "$HOME/.claude-work"
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --user=work"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; claude_yolo --user=work"
     assert_success
     assert_output --partial "CLAUDE_CONFIG_DIR=$HOME/.claude-work"
 }
@@ -595,14 +595,14 @@ MOCK
 @test "bash: claude_yolo passes extra args through to claude" {
     _setup_claude_mock
     mkdir -p "$HOME/.claude-work"
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --user work --resume foo"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; claude_yolo --user work --resume foo"
     assert_success
     assert_output --partial "ARGS=--dangerously-skip-permissions --resume foo"
 }
 
 @test "bash: claude_yolo --user xyz fails with available list" {
     _setup_claude_mock
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --user xyz"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; claude_yolo --user xyz"
     assert_failure
     assert_output --partial "Unknown account: xyz"
     assert_output --partial "Available"
@@ -611,7 +611,7 @@ MOCK
 @test "bash: claude_yolo errors when account dir missing" {
     _setup_claude_mock
     rm -rf "$HOME/.claude-work"
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --user work"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; claude_yolo --user work"
     assert_failure
     assert_output --partial "Account directory missing"
     assert_output --partial "claude-accounts setup"
@@ -620,7 +620,7 @@ MOCK
 @test "bash: claude_yolo respects CLAUDE_DEFAULT_ACCOUNT=work (Internal-PC)" {
     _setup_claude_mock
     mkdir -p "$HOME/.claude-work"
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_DEFAULT_ACCOUNT=work CLAUDE_YOLO_STAY=1 claude_yolo"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_DEFAULT_ACCOUNT=work claude_yolo"
     assert_success
     assert_output --partial "CLAUDE_CONFIG_DIR=$HOME/.claude-work"
 }
@@ -942,7 +942,7 @@ JSON
     printf '{"oauthAccount":{"emailAddress":"alice@example.com"}}' \
         > "$HOME/.claude-personal/.claude.json"
 
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 CLAUDE_ACCOUNT_EMAIL_personal=alice@example.com claude_yolo"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_ACCOUNT_EMAIL_personal=alice@example.com claude_yolo"
     assert_success
     refute_output --partial "Account mismatch"
 }
@@ -953,7 +953,7 @@ JSON
     printf '{"oauthAccount":{"emailAddress":"personal@gmail.com"}}' \
         > "$HOME/.claude-work/.claude.json"
 
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 CLAUDE_ACCOUNT_EMAIL_work=work@corp.com claude_yolo --user work"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_ACCOUNT_EMAIL_work=work@corp.com claude_yolo --user work"
     assert_success
     assert_output --partial "Account mismatch on 'work'"
     assert_output --partial "expected: work@corp.com"
@@ -967,7 +967,7 @@ JSON
     printf '{"oauthAccount":{"emailAddress":"anyone@anywhere.com"}}' \
         > "$HOME/.claude-work/.claude.json"
 
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo --user work"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; claude_yolo --user work"
     assert_success
     refute_output --partial "Account mismatch"
 }
@@ -1126,7 +1126,7 @@ run_with_fake_ssot() {
     printf '{"firstStartTime":"x","oauthAccount":{"e":"a@b"},"migrationVersion":5}' \
         > "$HOME/.claude-personal/.claude.json.preserved-by-migrate"
 
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; claude_yolo"
     assert_success
     assert_output --partial "missing .claude.json"
     assert_output --partial "Restored"
@@ -1140,7 +1140,7 @@ run_with_fake_ssot() {
     mkdir -p "$HOME/.claude-personal"
     # snapshot 도 없는 fresh PC — 기존 동작 유지 (silent return).
 
-    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; CLAUDE_YOLO_STAY=1 claude_yolo"
+    run_in_bash "export PATH=\"$HOME/bin:\$PATH\"; claude_yolo"
     assert_success
     refute_output --partial "Restored"
     refute_output --partial "missing .claude.json"
