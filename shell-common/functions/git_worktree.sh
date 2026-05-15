@@ -1484,19 +1484,23 @@ git_worktree_spawn() {
                 name="$2"; shift 2
                 ;;
             --base)
-                if [ $# -lt 2 ]; then
+                # `[ "${2#-}" != "$2" ]` rejects a next token that starts
+                # with `-` so a stray `--base --launch` does not silently
+                # absorb the following flag as the base value (PR #652
+                # gemini-code-assist review).
+                if [ $# -lt 2 ] || [ -z "${2-}" ] || [ "${2#-}" != "$2" ]; then
                     ux_error "--base requires a value"; return 1
                 fi
                 base="$2"; shift 2
                 ;;
             --ai)
-                if [ $# -lt 2 ]; then
+                if [ $# -lt 2 ] || [ -z "${2-}" ] || [ "${2#-}" != "$2" ]; then
                     ux_error "--ai requires a value"; return 1
                 fi
                 agent="$2"; shift 2
                 ;;
             --user)
-                if [ $# -lt 2 ]; then
+                if [ $# -lt 2 ] || [ -z "${2-}" ] || [ "${2#-}" != "$2" ]; then
                     ux_error "--user requires a value"; return 1
                 fi
                 account="$2"; shift 2
@@ -1543,7 +1547,7 @@ git_worktree_spawn() {
                 done
                 ux_error "Positional <name> is no longer supported."
                 ux_info  "Use --wt-name <slug>:"
-                ux_info  "  gwt spawn${_gwt_hint_flags} --wt-name ${_gwt_bad_name}"
+                ux_info  "  gwt spawn${_gwt_hint_flags} --wt-name '${_gwt_bad_name}'"
                 return 1
                 ;;
         esac
@@ -1730,14 +1734,17 @@ git_worktree_spawn() {
         # rest of the multi-account / Agent View story); other agents'
         # first-message conventions land in a follow-up (issue body
         # "Out of scope").
-        if [ "$use_bg" = 1 ]; then
-            # Single-quote-safe escape: ' -> '\''
-            local prompt_escaped
+        # Single-quote-safe escape: ' -> '\''. Computed once and
+        # reused so SC2155 (local + command-substitution) cannot mask
+        # the sed exit status (PR #652 gemini-code-assist review).
+        local prompt_escaped
+        prompt_escaped=""
+        if [ -n "$prompt" ]; then
             prompt_escaped=$(printf '%s' "$prompt" | sed "s/'/'\\\\''/g")
+        fi
+        if [ "$use_bg" = 1 ]; then
             launch_cmd="$launch_cmd --bg '$prompt_escaped'"
         elif [ -n "$prompt" ] && [ "$agent" = "claude" ]; then
-            local prompt_escaped
-            prompt_escaped=$(printf '%s' "$prompt" | sed "s/'/'\\\\''/g")
             launch_cmd="$launch_cmd '$prompt_escaped'"
         fi
         ux_info "  launch: cd \"$wt_path\" && $launch_cmd"

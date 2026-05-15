@@ -551,7 +551,9 @@ teardown() {
     "
     assert_failure
     assert_output --partial "Positional <name> is no longer supported."
-    assert_output --partial "--wt-name issue-11"
+    # The name in the fix-it hint is single-quoted (PR #652 review:
+    # copy-paste safe with paths/names that contain spaces).
+    assert_output --partial "--wt-name 'issue-11'"
     assert_output --partial "--launch"
 }
 

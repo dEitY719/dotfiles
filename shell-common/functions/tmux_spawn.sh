@@ -58,13 +58,16 @@ _tmux_add_agent_window() {
     fi
     # Single-quote-escape any prompt text so tmux send-keys passes it
     # through verbatim through the eventual `eval` inside the agent yolo.
-    if [ "$agent" = "claude" ] && [ "$use_bg" = 1 ]; then
-        local _ts_p_esc
+    # Computed once and reused so SC2155 (local + command-substitution)
+    # cannot mask the sed exit status (PR #652 gemini-code-assist review).
+    local _ts_p_esc
+    _ts_p_esc=""
+    if [ -n "$prompt" ]; then
         _ts_p_esc=$(printf '%s' "$prompt" | sed "s/'/'\\\\''/g")
+    fi
+    if [ "$agent" = "claude" ] && [ "$use_bg" = 1 ]; then
         yolo="${yolo} --bg '${_ts_p_esc}'"
     elif [ "$agent" = "claude" ] && [ -n "$prompt" ]; then
-        local _ts_p_esc
-        _ts_p_esc=$(printf '%s' "$prompt" | sed "s/'/'\\\\''/g")
         yolo="${yolo} '${_ts_p_esc}'"
     fi
 
