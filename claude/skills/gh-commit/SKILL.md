@@ -137,8 +137,12 @@ fix commit would bounce it back to `In progress`.
 Skip the board sync entirely when no issue footer was written.
 
 ```bash
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
-_gh_project_status_sync issue <ISSUE_NUMBER> "In progress" --only-from Backlog
+# helper-fallback NF-1 (#644): silent-skip when helper missing.
+_HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
+if [ -r "$_HELPER" ]; then
+    . "$_HELPER"
+    _gh_project_status_sync issue <ISSUE_NUMBER> "In progress" --only-from Backlog || true
+fi
 ```
 
 If the repo has no projectV2 board (auto-detected) the helper silently

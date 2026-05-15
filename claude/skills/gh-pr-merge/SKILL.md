@@ -69,24 +69,29 @@ on the team's projectV2 board column.
 
 ```bash
 # Reuse the SSOT query helper — never inline a fresh GraphQL block.
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
+# helper-fallback NF-1 (#644): silent-skip when helper missing; never hard-fail.
+_HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
+if [ -r "$_HELPER" ]; then
+    . "$_HELPER"
 
-# Operator escape hatch: GH_PR_MERGE_SKIP_BOARD_CHECK=1
-# Use for in-transition repos or one-shot ops (also leaves an audit signal:
-# any reviewer can re-run gh-pr-merge without the env var to verify).
-if [ "${GH_PR_MERGE_SKIP_BOARD_CHECK:-0}" != "1" ]; then
-    BOARD_STATUS=$(GH_REPO="$TARGET_REPO" \
-        _gh_project_status_query_current pr "$PR_NUMBER" 2>/dev/null)
+    # Operator escape hatch: GH_PR_MERGE_SKIP_BOARD_CHECK=1
+    # Use for in-transition repos or one-shot ops (also leaves an audit signal:
+    # any reviewer can re-run gh-pr-merge without the env var to verify).
+    if [ "${GH_PR_MERGE_SKIP_BOARD_CHECK:-0}" != "1" ]; then
+        BOARD_STATUS=$(GH_REPO="$TARGET_REPO" \
+            _gh_project_status_query_current pr "$PR_NUMBER" 2>/dev/null || true)
 
-    # Empty result = no projectV2 attached OR no read access.
-    # Auto-skip in both cases — the merge gate is opt-in by board attachment.
-    if [ -n "$BOARD_STATUS" ] && [ "$BOARD_STATUS" != "Approved" ]; then
-        echo "Refusing to merge PR #$PR_NUMBER — board Status is \"$BOARD_STATUS\", required \"Approved\"."
-        echo "  Have a teammate move the card to Approved, or use /gh-pr-merge-emergency for admin bypass."
-        echo "  One-shot escape: GH_PR_MERGE_SKIP_BOARD_CHECK=1 /gh-pr-merge $PR_NUMBER"
-        exit 2
+        # Empty result = no projectV2 attached OR no read access.
+        # Auto-skip in both cases — the merge gate is opt-in by board attachment.
+        if [ -n "$BOARD_STATUS" ] && [ "$BOARD_STATUS" != "Approved" ]; then
+            echo "Refusing to merge PR #$PR_NUMBER — board Status is \"$BOARD_STATUS\", required \"Approved\"."
+            echo "  Have a teammate move the card to Approved, or use /gh-pr-merge-emergency for admin bypass."
+            echo "  One-shot escape: GH_PR_MERGE_SKIP_BOARD_CHECK=1 /gh-pr-merge $PR_NUMBER"
+            exit 2
+        fi
     fi
 fi
+# helper missing → board approval gate is silently skipped (NF-1).
 ```
 
 Failure modes:
@@ -121,21 +126,23 @@ gating rationale. Two reconciliations run after a successful merge:
     card stayed at `Approved`):
 
 ```bash
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
-GH_REPO="$TARGET_REPO" _gh_project_status_sync pr "$PR_NUMBER" "Done"
-```
+# helper-fallback NF-1 (#644): silent-skip when helper missing.
+_HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
+if [ -r "$_HELPER" ]; then
+    . "$_HELPER"
+    GH_REPO="$TARGET_REPO" _gh_project_status_sync pr "$PR_NUMBER" "Done" || true
 
-(b) Linked Issue cards from `closingIssuesReferences` → `Done`
-    (boosts the best-effort `Item closed` builtin per #250). Use the
-    `_gh_pr_closing_issue_numbers` helper instead of
-    `gh pr view --json closingIssuesReferences` — older `gh` (≤ 2.45)
-    rejects that field with "Unknown JSON field" (#264):
-
-```bash
-for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$TARGET_REPO"); do
-    GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$_issue" "Done" \
-        --only-from "Backlog,In progress,In review"
-done
+    # (b) Linked Issue cards from `closingIssuesReferences` → `Done`
+    #     (boosts the best-effort `Item closed` builtin per #250). Use the
+    #     `_gh_pr_closing_issue_numbers` helper instead of
+    #     `gh pr view --json closingIssuesReferences` — older `gh` (≤ 2.45)
+    #     rejects that field with "Unknown JSON field" (#264):
+    for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$TARGET_REPO" 2>/dev/null || true); do
+        GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$_issue" "Done" \
+            --only-from "Backlog,In progress,In review" || true
+    done
+fi
+# helper missing → both reconciliations silently skipped (NF-1).
 ```
 
 Both helpers auto-detect repos without a projectV2 attachment and
