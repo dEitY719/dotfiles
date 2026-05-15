@@ -115,11 +115,18 @@ Soft-fail — warn on any error, never block the Step 7 report.
 
 ```bash
 if [ "${PUSHED_FIXES:-0}" -gt 0 ]; then
-    . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null \
-      && _gh_project_status_sync pr "$PR_NUMBER" "In review" \
-            --only-from "In progress,Changes requested" \
-      && echo "[OK] PR 카드 \`In review\` 로 복귀됨" \
-      || echo "[WARN] 보드 sync 실패 — 카드 수동 이동 필요할 수 있음"
+    # helper-fallback NF-1 (#644): silent-skip when helper missing.
+    _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
+    if [ -r "$_HELPER" ]; then
+        . "$_HELPER"
+        if _gh_project_status_sync pr "$PR_NUMBER" "In review" \
+                --only-from "In progress,Changes requested"; then
+            echo "[OK] PR 카드 \`In review\` 로 복귀됨"
+        else
+            echo "[WARN] 보드 sync 실패 — 카드 수동 이동 필요할 수 있음"
+        fi
+    fi
+    # helper missing → board sync silently skipped (NF-1).
 fi
 ```
 
