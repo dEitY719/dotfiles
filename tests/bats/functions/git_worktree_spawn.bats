@@ -57,7 +57,7 @@ teardown() {
     # The key assertion: an unknown agent must produce a helpful error.
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --tmux --ai notarealagent 2>&1
+        git_worktree_spawn --wt-name issue-xyz --tmux --ai notarealagent 2>&1
     "
     assert_failure
     assert_output --partial "Unknown agent: notarealagent"
@@ -85,7 +85,7 @@ teardown() {
 @test "bash: spawn rejects --tmux and --launch together" {
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --tmux --launch 2>&1
+        git_worktree_spawn --wt-name issue-xyz --tmux --launch 2>&1
     "
     assert_failure
     assert_output --partial "mutually exclusive"
@@ -94,7 +94,7 @@ teardown() {
 @test "zsh: spawn rejects --tmux and --launch together" {
     run_in_zsh "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --tmux --launch 2>&1
+        git_worktree_spawn --wt-name issue-xyz --tmux --launch 2>&1
     "
     assert_failure
     assert_output --partial "mutually exclusive"
@@ -103,7 +103,7 @@ teardown() {
 @test "bash: spawn rejects unknown agent when --launch is used" {
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --launch --ai notarealagent 2>&1
+        git_worktree_spawn --wt-name issue-xyz --launch --ai notarealagent 2>&1
     "
     assert_failure
     assert_output --partial "Unknown agent: notarealagent"
@@ -112,7 +112,7 @@ teardown() {
 @test "zsh: spawn rejects unknown agent when --launch is used" {
     run_in_zsh "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --launch --ai notarealagent 2>&1
+        git_worktree_spawn --wt-name issue-xyz --launch --ai notarealagent 2>&1
     "
     assert_failure
     assert_output --partial "Unknown agent: notarealagent"
@@ -128,7 +128,7 @@ teardown() {
     run_in_bash "
         cd '$FAKE_REPO' || exit 1
         git branch wt/feat/1
-        git_worktree_spawn feat 2>&1
+        git_worktree_spawn --wt-name feat 2>&1
         git show-ref --verify --quiet refs/heads/wt/feat/2 && echo BRANCH2_OK
         [ -d '$TEST_TEMP_HOME/fake-main-feat-2' ] && echo PATH2_OK
     "
@@ -276,7 +276,7 @@ teardown() {
 @test "bash: spawn rejects --user without --tmux or --launch" {
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --user work 2>&1
+        git_worktree_spawn --wt-name issue-xyz --user work 2>&1
     "
     assert_failure
     assert_output --partial "--user requires --tmux or --launch"
@@ -285,7 +285,7 @@ teardown() {
 @test "bash: spawn rejects --user with non-claude agent (--launch)" {
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --launch --ai codex --user work 2>&1
+        git_worktree_spawn --wt-name issue-xyz --launch --ai codex --user work 2>&1
     "
     assert_failure
     assert_output --partial "--user is only supported with --ai claude"
@@ -294,7 +294,7 @@ teardown() {
 @test "bash: spawn rejects --user with non-claude agent (--tmux)" {
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --tmux --ai gemini --user work 2>&1
+        git_worktree_spawn --wt-name issue-xyz --tmux --ai gemini --user work 2>&1
     "
     assert_failure
     assert_output --partial "--user is only supported with --ai claude"
@@ -305,7 +305,7 @@ teardown() {
     # same "Available: ..." hint as `claude_yolo --user xyz` would print.
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --launch --user nonexistent-account 2>&1
+        git_worktree_spawn --wt-name issue-xyz --launch --user nonexistent-account 2>&1
     "
     assert_failure
     assert_output --partial "Unknown account: nonexistent-account"
@@ -315,7 +315,7 @@ teardown() {
 @test "zsh: spawn rejects unknown account with helpful list" {
     run_in_zsh "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --launch --user nonexistent-account 2>&1
+        git_worktree_spawn --wt-name issue-xyz --launch --user nonexistent-account 2>&1
     "
     assert_failure
     assert_output --partial "Unknown account: nonexistent-account"
@@ -324,7 +324,7 @@ teardown() {
 @test "zsh: spawn rejects --user with non-claude agent" {
     run_in_zsh "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --launch --ai codex --user work 2>&1
+        git_worktree_spawn --wt-name issue-xyz --launch --ai codex --user work 2>&1
     "
     assert_failure
     assert_output --partial "--user is only supported with --ai claude"
@@ -355,7 +355,7 @@ teardown() {
     # the typo loudly.
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --bg 2>&1
+        git_worktree_spawn --wt-name issue-xyz --bg 2>&1
     "
     assert_failure
     assert_output --partial "--bg requires --launch or --tmux"
@@ -365,7 +365,7 @@ teardown() {
     # Multi-agent guard: only claude has Agent View / --bg today.
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --launch --ai codex --bg 2>&1
+        git_worktree_spawn --wt-name issue-xyz --launch --ai codex --bg 2>&1
     "
     assert_failure
     assert_output --partial "--bg is only supported with --ai claude"
@@ -374,7 +374,7 @@ teardown() {
 @test "zsh: spawn rejects --bg without --launch or --tmux" {
     run_in_zsh "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn issue-xyz --bg 2>&1
+        git_worktree_spawn --wt-name issue-xyz --bg 2>&1
     "
     assert_failure
     assert_output --partial "--bg requires --launch or --tmux"
@@ -397,7 +397,7 @@ teardown() {
             for _a in \"\$@\"; do _cy_recorded=\"\${_cy_recorded}|\$_a\"; done
             printf '%s\n' \"\$_cy_recorded\" > \"\$MARKER\"
         }
-        git_worktree_spawn issue-bgempty --launch --bg >/dev/null 2>&1
+        git_worktree_spawn --wt-name issue-bgempty --launch --bg >/dev/null 2>&1
         cat \"\$MARKER\"
     "
     assert_success
@@ -405,7 +405,7 @@ teardown() {
     assert_output "|--bg|"
 }
 
-@test "bash: spawn --launch --bg with task passes the task string through" {
+@test "bash: spawn --launch --bg --prompt passes the joined prompt through (#650)" {
     run_in_bash "
         cd '$FAKE_REPO' || exit 1
         MARKER='$TEST_TEMP_HOME/spawn-bg-task-marker'
@@ -415,12 +415,12 @@ teardown() {
             for _a in \"\$@\"; do _cy_recorded=\"\${_cy_recorded}|\$_a\"; done
             printf '%s\n' \"\$_cy_recorded\" > \"\$MARKER\"
         }
-        git_worktree_spawn issue-bgtask --launch --bg 'fix login flow' >/dev/null 2>&1
+        git_worktree_spawn --launch --bg --wt-name issue-bgtask --prompt fix login flow >/dev/null 2>&1
         cat \"\$MARKER\"
     "
     assert_success
-    # The task string survives shell quoting through eval — 2 args, second
-    # carries spaces verbatim.
+    # --prompt joins remaining tokens with single spaces — survives eval as
+    # a single argv element to claude_yolo.
     assert_output "|--bg|fix login flow"
 }
 
@@ -439,7 +439,7 @@ teardown() {
             for _a in \"\$@\"; do _cy_recorded=\"\${_cy_recorded}|\$_a\"; done
             printf '%s\n' \"\$_cy_recorded\" > \"\$MARKER\"
         }
-        git_worktree_spawn issue-bgwork --launch --user work --bg >/dev/null 2>&1
+        git_worktree_spawn --wt-name issue-bgwork --launch --user work --bg >/dev/null 2>&1
         cat \"\$MARKER\"
     "
     assert_success
@@ -458,10 +458,198 @@ teardown() {
             for _a in \"\$@\"; do _cy_recorded=\"\${_cy_recorded}|\$_a\"; done
             printf '%s\n' \"[\$_cy_recorded]\" > \"\$MARKER\"
         }
-        git_worktree_spawn issue-nobg --launch >/dev/null 2>&1
+        git_worktree_spawn --wt-name issue-nobg --launch >/dev/null 2>&1
         cat \"\$MARKER\"
     "
     assert_success
     # Empty arg list — claude_yolo invoked with zero extra args.
     assert_output "[]"
+}
+
+# ---------------------------------------------------------------------------
+# Issue #650: option-only grammar — --wt-name (required), --prompt (trailing),
+# hard-break removal of positional <name>, --task, and --bg's optional task.
+# Each test maps to one AC in the issue body.
+# ---------------------------------------------------------------------------
+
+@test "bash: AC-1 spawn --launch --wt-name issue-11 succeeds (option-only call)" {
+    # End-to-end smoke that the new grammar is recognized at all.
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-ac1-marker'
+        export MARKER
+        claude_yolo() { printf 'called\n' > \"\$MARKER\"; }
+        git_worktree_spawn --launch --wt-name issue-11 >/dev/null 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    assert_output --partial "called"
+}
+
+@test "bash: AC-2 spawn --launch --user --prompt joins trailing tokens (#650)" {
+    # AC-2 + AC-9 path together: --prompt joins all remaining tokens with
+    # single spaces, threads through --user, and lands on claude_yolo as a
+    # single argv element.
+    run_in_bash "
+        mkdir -p '$HOME/.claude-work1'
+        export CLAUDE_ENABLED_ACCOUNTS='personal work1'
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-ac2-marker'
+        export MARKER
+        claude_yolo() {
+            local _cy_recorded=''
+            for _a in \"\$@\"; do _cy_recorded=\"\${_cy_recorded}|\$_a\"; done
+            printf '%s\n' \"\$_cy_recorded\" > \"\$MARKER\"
+        }
+        git_worktree_spawn --launch --ai claude --user work1 --wt-name issue-717 \
+            --prompt 이슈 717 내용 읽고 요약해. >/dev/null 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    assert_output "|--user|work1|이슈 717 내용 읽고 요약해."
+}
+
+@test "bash: AC-3 spawn --launch --bg without --prompt sends empty payload" {
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-ac3-marker'
+        export MARKER
+        claude_yolo() {
+            local _cy_recorded=''
+            for _a in \"\$@\"; do _cy_recorded=\"\${_cy_recorded}|\$_a\"; done
+            printf '%s\n' \"\$_cy_recorded\" > \"\$MARKER\"
+        }
+        git_worktree_spawn --launch --bg --wt-name issue-718 >/dev/null 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    assert_output "|--bg|"
+}
+
+@test "bash: AC-4 spawn --launch --bg --prompt threads multi-token prompt to --bg" {
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-ac4-marker'
+        export MARKER
+        claude_yolo() {
+            local _cy_recorded=''
+            for _a in \"\$@\"; do _cy_recorded=\"\${_cy_recorded}|\$_a\"; done
+            printf '%s\n' \"\$_cy_recorded\" > \"\$MARKER\"
+        }
+        git_worktree_spawn --launch --bg --ai claude --wt-name issue-718 \
+            --prompt 오늘의 날씨 검색해 >/dev/null 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    assert_output "|--bg|오늘의 날씨 검색해"
+}
+
+@test "bash: AC-6 hard-break — positional <name> errors with --wt-name fix-it" {
+    run_in_bash "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-11 --launch 2>&1
+    "
+    assert_failure
+    assert_output --partial "Positional <name> is no longer supported."
+    assert_output --partial "--wt-name issue-11"
+    assert_output --partial "--launch"
+}
+
+@test "bash: AC-7 hard-break — --task errors with --prompt fix-it" {
+    run_in_bash "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn --wt-name foo --task auth 2>&1
+    "
+    assert_failure
+    assert_output --partial "--task flag has been removed"
+    assert_output --partial "--prompt"
+}
+
+@test "bash: AC-8 missing --wt-name errors cleanly" {
+    run_in_bash "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn --launch 2>&1
+    "
+    assert_failure
+    assert_output --partial "<name> is required"
+    assert_output --partial "--wt-name"
+}
+
+@test "bash: AC-10 token after --prompt that looks like a flag triggers warning" {
+    # `--launch` after `--prompt` is absorbed into prompt text. The warning
+    # is emitted ONCE on stderr; the spawn still succeeds.
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-ac10-marker'
+        export MARKER
+        claude_yolo() {
+            local _cy_recorded=''
+            for _a in \"\$@\"; do _cy_recorded=\"\${_cy_recorded}|\$_a\"; done
+            printf '%s\n' \"\$_cy_recorded\" > \"\$MARKER\"
+        }
+        # Provide --launch BEFORE --prompt so dispatch happens; the
+        # second --launch is the one that should be absorbed.
+        git_worktree_spawn --launch --wt-name issue-ac10 \
+            --prompt do thing --launch then more 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    assert_output --partial "consumed as prompt text"
+    assert_output --partial "|do thing --launch then more"
+}
+
+@test "bash: AC-11 --bg consumes no positional task — bare token errors as positional" {
+    # --bg is a pure boolean now; the next non-flag token (foo) hits the
+    # AC-6 positional guard rather than being silently swallowed.
+    run_in_bash "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn --launch --bg foo --wt-name issue-bg11 2>&1
+    "
+    assert_failure
+    assert_output --partial "Positional <name> is no longer supported."
+}
+
+@test "zsh: AC-6 hard-break — positional <name> errors under zsh" {
+    run_in_zsh "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn issue-11 --launch 2>&1
+    "
+    assert_failure
+    assert_output --partial "Positional <name> is no longer supported."
+}
+
+@test "zsh: AC-7 hard-break — --task errors under zsh" {
+    run_in_zsh "
+        cd '${DOTFILES_ROOT}' || exit 1
+        git_worktree_spawn --wt-name foo --task auth 2>&1
+    "
+    assert_failure
+    assert_output --partial "--task flag has been removed"
+}
+
+@test "bash: spawn --help mentions --wt-name and --prompt (#650)" {
+    run_in_bash 'git_worktree_spawn --help'
+    assert_success
+    assert_output --partial "--wt-name"
+    assert_output --partial "--prompt"
+    assert_output --partial "Removed (#650)"
+}
+
+@test "bash: spawn --launch --prompt without --bg passes prompt as TUI first message" {
+    # Behavior matrix: --prompt without --bg → claude_yolo 'X Y' (no --bg).
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-prompt-only-marker'
+        export MARKER
+        claude_yolo() {
+            local _cy_recorded=''
+            for _a in \"\$@\"; do _cy_recorded=\"\${_cy_recorded}|\$_a\"; done
+            printf '%s\n' \"\$_cy_recorded\" > \"\$MARKER\"
+        }
+        git_worktree_spawn --launch --wt-name issue-tui --prompt hello world >/dev/null 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    # Single positional arg, no --bg.
+    assert_output "|hello world"
 }
