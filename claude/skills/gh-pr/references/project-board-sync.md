@@ -61,12 +61,16 @@ still refusing to drag `Done` Issues backwards if a closed PR is re-opened (#309
 Source the shared helper, then call it with the new PR number:
 
 ```bash
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
-_gh_project_status_sync pr "$PR_NUMBER" "In review"
-for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO"); do
-    _gh_project_status_sync issue "$_issue" "In progress" \
-        --only-from "Backlog,Ready,In review"
-done
+# helper-fallback NF-1 (#644): silent-skip when helper missing.
+_HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
+if [ -r "$_HELPER" ]; then
+    . "$_HELPER"
+    _gh_project_status_sync pr "$PR_NUMBER" "In review" || true
+    for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO" 2>/dev/null || true); do
+        _gh_project_status_sync issue "$_issue" "In progress" \
+            --only-from "Backlog,Ready,In review" || true
+    done
+fi
 ```
 
 `GH_REPO` must be `owner/repo` (e.g. `dEitY719/dotfiles`). If unavailable,

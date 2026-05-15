@@ -15,8 +15,12 @@ the merge report — the helper logs to stderr and returns 0.
 ## (1) PR card → `Done`
 
 ```bash
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
-GH_REPO="$TARGET_REPO" _gh_project_status_sync pr "$PR_NUMBER" "Done"
+# helper-fallback NF-1 (#644): silent-skip when helper missing.
+_HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
+if [ -r "$_HELPER" ]; then
+    . "$_HELPER"
+    GH_REPO="$TARGET_REPO" _gh_project_status_sync pr "$PR_NUMBER" "Done" || true
+fi
 ```
 
 `Done` is the terminal PR state after merge, regardless of which
@@ -49,9 +53,12 @@ query, which is supported across all `gh` versions that ship the
 `api graphql` subcommand.
 
 ```bash
-for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$TARGET_REPO"); do
+# Wrap inside the same [ -r "$_HELPER" ] block from step (1) so the closing-issue
+# helper is only called after the source succeeded. With the helper missing the
+# entire reconciliation is silently skipped (NF-1).
+for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$TARGET_REPO" 2>/dev/null || true); do
     GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$_issue" "Done" \
-        --only-from "Backlog,In progress,In review"
+        --only-from "Backlog,In progress,In review" || true
 done
 ```
 

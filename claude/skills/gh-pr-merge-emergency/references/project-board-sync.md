@@ -15,8 +15,12 @@ to `Done`. Repeating the sync on an already-`Done` card is harmless.
 Source the shared helper, then call it with the merged PR number:
 
 ```bash
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh" 2>/dev/null
-_gh_project_status_sync pr <PR_NUMBER> "Done"
+# helper-fallback NF-1 (#644): silent-skip when helper missing.
+_HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
+if [ -r "$_HELPER" ]; then
+    . "$_HELPER"
+    _gh_project_status_sync pr <PR_NUMBER> "Done" || true
+fi
 ```
 
 ## Behavior
