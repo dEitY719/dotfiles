@@ -1392,45 +1392,48 @@ _gwt_yolo_command() {
 
 # ============================================================================
 # Worktree spawn — auto-index, auto-branch, log
-# Usage: git_worktree_spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--ai <agent>] [--user <account>]
+# Grammar (#650): option-only; --wt-name is required, --prompt is trailing.
+# Usage: git_worktree_spawn [OPTIONS] --wt-name <slug> [--prompt <text...>]
 # ============================================================================
 _git_worktree_spawn_show_help() {
     ux_header "gwt spawn - create a named worktree"
-    ux_info "Usage: gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch] [--ai <agent>] [--user <account>] [--bg [task]]"
+    ux_info "Usage: gwt spawn [OPTIONS] --wt-name <slug> [--prompt <text...>]"
     ux_info ""
-    ux_info "Arguments:"
-    ux_info "  <name>           Free-form worktree name (required)."
-    ux_info "                   Safe chars only: no '/', no spaces, no leading dash."
+    ux_info "Required:"
+    ux_info "  --wt-name <slug> Worktree name. Safe chars only:"
+    ux_info "                   no '/', no spaces, no leading dash."
     ux_info "                   Examples: issue-11, login-fix, feature-x"
-    ux_info "  --task <slug>    Add task slug to branch name"
+    ux_info ""
+    ux_info "Optional (order-independent):"
     ux_info "  --base <ref>     Base branch/commit (default: origin/main)"
     ux_info "  --tmux           Auto-create tmux session/window with 3-pane layout"
-    ux_info "  --launch         cd into the new worktree and run <agent>-yolo in the"
-    ux_info "                   current shell. Mutually exclusive with --tmux."
-    ux_info "  --ai <agent>     AI agent for --tmux pane or --launch (default: claude)"
-    ux_info "                   Known: claude, codex, gemini, opencode, cursor, copilot"
-    ux_info "                   Window name and 'yolo' command follow --ai,"
-    ux_info "                   so worktree <name> can be any free-form slug."
-    ux_info "  --user <account> Claude account for --tmux/--launch (issue #295)."
-    ux_info "                   Only valid with --ai claude (others lack multi-account)."
-    ux_info "                   Default: \$CLAUDE_DEFAULT_ACCOUNT (no --user appended)."
-    ux_info "  --bg [task]      Dispatch claude in background mode (Agent View, #640)."
+    ux_info "  --launch         cd into the new worktree and run the agent's yolo"
+    ux_info "                   command in the current shell."
+    ux_info "                   Mutually exclusive with --tmux."
+    ux_info "  --bg             Dispatch claude in background mode (Agent View, #640)."
     ux_info "                   Requires --launch or --tmux. Only with --ai claude."
-    ux_info "                   Optional positional task string consumed if it does"
-    ux_info "                   not start with '-'; missing/empty defers to claude's"
-    ux_info "                   own \"task too short\" error."
+    ux_info "  --ai <agent>     AI agent (default: claude)."
+    ux_info "                   Known: claude, codex, gemini, opencode, cursor, copilot"
+    ux_info "  --user <account> Claude account for --tmux/--launch (issue #295)."
+    ux_info "                   Only valid with --ai claude."
+    ux_info ""
+    ux_info "Trailing (must be LAST if used):"
+    ux_info "  --prompt <text...>"
+    ux_info "                   Initial task for the AI. All remaining tokens are"
+    ux_info "                   joined with single spaces. No quotes needed."
     ux_info ""
     ux_info "Examples:"
-    ux_info "  gwt spawn issue-11                           # ../<proj>-issue-11-1  wt/issue-11/1"
-    ux_info "  gwt spawn login-fix --task auth              # ../<proj>-login-fix-1 wt/login-fix/1-auth"
-    ux_info "  gwt spawn issue-11 --tmux                    # tmux window 'claude' runs 'claude-yolo'"
-    ux_info "  gwt spawn issue-11 --tmux --ai codex         # tmux window 'codex'  runs 'codex-yolo'"
-    ux_info "  gwt spawn feat --launch                      # cd into new worktree + claude-yolo"
-    ux_info "  gwt spawn feat --launch --ai codex           # cd + codex-yolo"
-    ux_info "  gwt spawn feat --launch --user work          # cd + claude-yolo --user work"
-    ux_info "  gwt spawn feat --tmux   --user work          # tmux window runs 'claude-yolo --user work'"
-    ux_info "  gwt spawn issue-100 --launch --bg            # cd + claude-yolo --bg ''"
-    ux_info "  gwt spawn issue-200 --launch --user work --bg \"fix login\"  # bg task to work account"
+    ux_info "  gwt spawn --wt-name issue-11"
+    ux_info "  gwt spawn --launch --wt-name issue-11"
+    ux_info "  gwt spawn --launch --ai claude --user work --wt-name issue-717 --prompt 이슈 717 요약해"
+    ux_info "  gwt spawn --launch --bg --wt-name issue-718"
+    ux_info "  gwt spawn --launch --bg --wt-name issue-718 --prompt 오늘의 날씨 검색해"
+    ux_info "  gwt spawn --tmux   --user work --wt-name feat-x"
+    ux_info ""
+    ux_info "Removed (#650):"
+    ux_info "  Positional <name>     -> use --wt-name <slug>"
+    ux_info "  --task <slug>         -> removed (branch-suffix dropped)"
+    ux_info "  --bg <task>           -> use --prompt <text...>"
 }
 
 git_worktree_spawn() {
@@ -1439,35 +1442,86 @@ git_worktree_spawn() {
         emulate -L sh
     fi
 
-    local task="" base="" name="" use_tmux=0 use_launch=0 use_bg=0 bg_task="" agent="claude" account=""
+    local base="" name="" use_tmux=0 use_launch=0 use_bg=0 \
+          agent="claude" account="" prompt="" prompt_set=0 prompt_warned=0
 
-    # Parse arguments
+    # Parse arguments. New grammar (#650): option-only; --wt-name is the
+    # required name, --prompt is the trailing AI initial-task flag that
+    # consumes every remaining token.
     while [ $# -gt 0 ]; do
+        # Once --prompt has fired, every subsequent token (including
+        # things that look like flags) becomes part of the prompt text
+        # (AC-9). AC-10: warn ONCE if a recognized flag is absorbed so
+        # the user knows their flag did not take effect.
+        if [ "$prompt_set" = 1 ]; then
+            case "$1" in
+                --launch|--tmux|--bg|--ai|--user|--base|--wt-name|--task|--prompt|-h|--help)
+                    if [ "$prompt_warned" = 0 ]; then
+                        ux_warning "Token '$1' after --prompt is consumed as prompt text (use quotes if intentional)" >&2
+                        prompt_warned=1
+                    fi
+                    ;;
+            esac
+            if [ -z "$prompt" ]; then
+                prompt="$1"
+            else
+                prompt="$prompt $1"
+            fi
+            shift
+            continue
+        fi
+
         case "$1" in
             -h|--help)
                 _git_worktree_spawn_show_help
                 return 0
                 ;;
-            --task) task="$2"; shift 2 ;;
-            --base) base="$2"; shift 2 ;;
-            --ai) agent="$2"; shift 2 ;;
-            --user) account="$2"; shift 2 ;;
+            --wt-name)
+                if [ $# -lt 2 ] || [ -z "${2-}" ]; then
+                    ux_error "--wt-name requires a value"
+                    return 1
+                fi
+                name="$2"; shift 2
+                ;;
+            --base)
+                if [ $# -lt 2 ]; then
+                    ux_error "--base requires a value"; return 1
+                fi
+                base="$2"; shift 2
+                ;;
+            --ai)
+                if [ $# -lt 2 ]; then
+                    ux_error "--ai requires a value"; return 1
+                fi
+                agent="$2"; shift 2
+                ;;
+            --user)
+                if [ $# -lt 2 ]; then
+                    ux_error "--user requires a value"; return 1
+                fi
+                account="$2"; shift 2
+                ;;
             --tmux) use_tmux=1; shift ;;
             --launch) use_launch=1; shift ;;
             --bg)
-                # Agent View background dispatch (#640). Passes through to
-                # `claude --bg "<task>"`. The next positional arg, if it
-                # exists and is not another flag, is consumed as the task
-                # string; otherwise we pass an empty string and let claude
-                # itself emit the "task too short" error.
+                # Boolean since #650 — the optional positional task was
+                # removed in favor of --prompt. AC-11.
                 use_bg=1
                 shift
-                if [ $# -gt 0 ]; then
-                    case "$1" in
-                        -*|"") ;;
-                        *) bg_task="$1"; shift ;;
-                    esac
-                fi
+                ;;
+            --prompt)
+                # All remaining tokens become the prompt text (AC-9).
+                prompt_set=1
+                shift
+                ;;
+            --task)
+                # Hard-break migration error (#650 / AC-7). The branch-
+                # suffix feature was removed; if the user wanted an AI
+                # initial prompt they want --prompt now.
+                ux_error "--task flag has been removed (branch-suffix feature dropped)."
+                ux_info  "For AI initial prompt use --prompt:"
+                ux_info  "  gwt spawn --wt-name <slug> --prompt <text...>"
+                return 1
                 ;;
             -*)
                 ux_error "Unknown option: $1"
@@ -1476,23 +1530,30 @@ git_worktree_spawn() {
                 return 1
                 ;;
             *)
-                if [ -n "$name" ]; then
-                    ux_error "Multiple names given: '$name', '$1' (only one allowed)"
-                    echo ""
-                    _git_worktree_spawn_show_help
-                    return 1
-                fi
-                name="$1"
+                # Hard-break migration error (#650 / AC-6). Build a
+                # corrected suggestion that carries any flags the user
+                # had already typed forward, with --wt-name appended at
+                # the end so it is unambiguous.
+                local _gwt_bad_name="$1"
                 shift
+                local _gwt_hint_flags=""
+                while [ $# -gt 0 ]; do
+                    _gwt_hint_flags="$_gwt_hint_flags $1"
+                    shift
+                done
+                ux_error "Positional <name> is no longer supported."
+                ux_info  "Use --wt-name <slug>:"
+                ux_info  "  gwt spawn${_gwt_hint_flags} --wt-name ${_gwt_bad_name}"
+                return 1
                 ;;
         esac
     done
 
-    # Name is required
+    # --wt-name is required
     if [ -z "$name" ]; then
         ux_error "<name> is required"
         echo ""
-        _git_worktree_spawn_show_help
+        ux_info "Hint: use --wt-name <slug>"
         return 1
     fi
 
@@ -1593,17 +1654,12 @@ git_worktree_spawn() {
 
     # Branch name + path must both be unique. A previous teardown may leave a
     # branch (e.g., --keep-branch), so don't rely on directory scan alone.
-    local wt_path branch slug=""
-    if [ -n "$task" ]; then
-        slug=$(printf '%s' "$task" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//' | cut -c1-30)
-    fi
+    # Branch suffix (--task) was removed in #650, so the branch is always
+    # `wt/<name>/<index>`.
+    local wt_path branch
     while :; do
         wt_path="${parent}/${project}-${name}-${next_index}"
-        if [ -n "$slug" ]; then
-            branch="wt/${name}/${next_index}-${slug}"
-        else
-            branch="wt/${name}/${next_index}"
-        fi
+        branch="wt/${name}/${next_index}"
 
         if [ -d "$wt_path" ]; then
             next_index=$((next_index + 1))
@@ -1642,13 +1698,11 @@ git_worktree_spawn() {
 
     # --- Optional tmux integration ---
     if [ "$use_tmux" = 1 ]; then
-        if [ "$use_bg" = 1 ]; then
-            _tmux_add_agent_window "$project" "$agent" "$wt_path" "$account" "$bg_task"
-            ux_info "  tmux:   session '$project', window '$agent' (runs ${agent}-yolo${account:+ --user $account} --bg)"
-        else
-            _tmux_add_agent_window "$project" "$agent" "$wt_path" "$account"
-            ux_info "  tmux:   session '$project', window '$agent' (runs ${agent}-yolo${account:+ --user $account})"
-        fi
+        # New 6-arg signature (#650): pass use_bg + prompt as a pair so the
+        # window can decide whether to wrap in --bg or pass the prompt as a
+        # plain TUI first-message.
+        _tmux_add_agent_window "$project" "$agent" "$wt_path" "$account" "$use_bg" "$prompt"
+        ux_info "  tmux:   session '$project', window '$agent' (runs ${agent}-yolo${account:+ --user $account}$([ "$use_bg" = 1 ] && printf ' --bg'))"
         if [ -z "$TMUX" ]; then
             tmux attach -t "$project"
         else
@@ -1667,14 +1721,24 @@ git_worktree_spawn() {
             ux_info "Supported with --launch: $(_gwt_yolo_command --list)"
             return 1
         fi
+        # Behavior matrix (#650):
+        #   --bg                -> claude_yolo --bg ''
+        #   --bg --prompt X Y   -> claude_yolo --bg 'X Y'
+        #   --prompt X Y        -> claude_yolo 'X Y'
+        #   (none)              -> claude_yolo
+        # The prompt-only path is currently scoped to claude (matches the
+        # rest of the multi-account / Agent View story); other agents'
+        # first-message conventions land in a follow-up (issue body
+        # "Out of scope").
         if [ "$use_bg" = 1 ]; then
-            # `--bg "<task>"` is the Agent View background-dispatch flag.
-            # Pass via separate args so the task string's spaces/quotes
-            # survive `eval` intact (#640).
-            local bg_task_escaped
-            # Single-quote-safe escape: ' → '\''
-            bg_task_escaped=$(printf '%s' "$bg_task" | sed "s/'/'\\\\''/g")
-            launch_cmd="$launch_cmd --bg '$bg_task_escaped'"
+            # Single-quote-safe escape: ' -> '\''
+            local prompt_escaped
+            prompt_escaped=$(printf '%s' "$prompt" | sed "s/'/'\\\\''/g")
+            launch_cmd="$launch_cmd --bg '$prompt_escaped'"
+        elif [ -n "$prompt" ] && [ "$agent" = "claude" ]; then
+            local prompt_escaped
+            prompt_escaped=$(printf '%s' "$prompt" | sed "s/'/'\\\\''/g")
+            launch_cmd="$launch_cmd '$prompt_escaped'"
         fi
         ux_info "  launch: cd \"$wt_path\" && $launch_cmd"
         cd "$wt_path" || { ux_error "Cannot cd to $wt_path"; return 1; }

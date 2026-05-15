@@ -29,7 +29,7 @@ _ts_known_agent() {
     esac
 }
 
-# _tmux_add_agent_window <session> <agent> <dir> [account] [bg_task]
+# _tmux_add_agent_window <session> <agent> <dir> [account] [use_bg] [prompt]
 # Add a 3-pane window to a tmux session (creates session if needed).
 # Layout: LEFT (agent-yolo) | RIGHT-TOP / RIGHT-BOTTOM
 #
@@ -38,27 +38,34 @@ _ts_known_agent() {
 # `claude-yolo`. Other agents have no multi-account support so the value is
 # ignored — the caller is responsible for rejecting that combination.
 #
-# Optional 5th arg `bg_task` (issue #640): when non-null and agent=claude,
-# append `--bg "<bg_task>"` so Agent View picks up the dispatched session.
-# An empty bg_task is allowed — the caller's intent is "dispatch in
-# background, let claude itself emit a task-too-short error if needed".
-# Other agents lack a --bg flag and the caller must reject the combination.
+# Optional 5th arg `use_bg` (issue #640, signature changed in #650):
+# when "1" and agent=claude, append `--bg "<prompt>"` so Agent View picks up
+# the dispatched session. Empty prompt yields `--bg ''` and lets claude itself
+# emit any task-too-short error. Other agents lack a --bg flag and the
+# caller must reject the combination.
+#
+# Optional 6th arg `prompt` (issue #650): the AI initial-task text. If
+# `use_bg` is 1, the prompt becomes the --bg payload. Otherwise (claude
+# only) it is appended as the first positional arg so claude TUI opens
+# with that text as the first message.
 _tmux_add_agent_window() {
-    local session="$1" agent="$2" dir="$3" account="${4-}" bg_task="${5-}"
+    local session="$1" agent="$2" dir="$3" account="${4-}" use_bg="${5-0}" prompt="${6-}"
     local yolo win
     if [ "$agent" = "claude" ] && [ -n "$account" ]; then
         yolo="${agent}-yolo --user ${account}"
     else
         yolo="${agent}-yolo"
     fi
-    # Background dispatch passthrough (#640). Single-quote-escape the task
-    # string so tmux send-keys passes it through verbatim. The "$#" check
-    # distinguishes "no 5th arg" (no --bg) from "5th arg present, empty"
-    # (--bg with empty task).
-    if [ "$agent" = "claude" ] && [ "$#" -ge 5 ]; then
-        local _ts_bg_esc
-        _ts_bg_esc=$(printf '%s' "$bg_task" | sed "s/'/'\\\\''/g")
-        yolo="${yolo} --bg '${_ts_bg_esc}'"
+    # Single-quote-escape any prompt text so tmux send-keys passes it
+    # through verbatim through the eventual `eval` inside the agent yolo.
+    if [ "$agent" = "claude" ] && [ "$use_bg" = 1 ]; then
+        local _ts_p_esc
+        _ts_p_esc=$(printf '%s' "$prompt" | sed "s/'/'\\\\''/g")
+        yolo="${yolo} --bg '${_ts_p_esc}'"
+    elif [ "$agent" = "claude" ] && [ -n "$prompt" ]; then
+        local _ts_p_esc
+        _ts_p_esc=$(printf '%s' "$prompt" | sed "s/'/'\\\\''/g")
+        yolo="${yolo} '${_ts_p_esc}'"
     fi
 
     if tmux has-session -t "=$session" 2>/dev/null; then
