@@ -49,6 +49,25 @@ _ai_usage_now() {
     date -Iseconds 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
 
+# Classify a claude `.result` string as a transient network error worth
+# retrying. Pattern set comes from issue #651 (PR #726 retrospective):
+# ECONNRESET / ETIMEDOUT / EHOSTUNREACH / EAI_AGAIN are libuv/Node socket
+# errors surfaced by the proxy stack; "fetch failed" is the upstream JS
+# fetch wrapper's terse error. All four are routinely seen on the
+# Samsung internal LLM gateway and clear on a 2-4 s backoff. Permanent
+# errors (auth, 4xx, model not found) do NOT match — the caller stays
+# fail-closed on those, matching pre-retry behaviour.
+_ai_usage_is_transient() {
+    case "$1" in
+    *ECONNRESET* | *ETIMEDOUT* | *EHOSTUNREACH* | *EAI_AGAIN* | *"fetch failed"*)
+        return 0
+        ;;
+    *)
+        return 1
+        ;;
+    esac
+}
+
 # ---------------------------------------------------------------------------
 # Public: run one AI prompt and append a usage record to <log>
 # ---------------------------------------------------------------------------
@@ -89,66 +108,92 @@ _ai_usage_run() {
 
     case "$_ai" in
     claude)
-        # Capture JSON to a tempfile so we can both (a) print the human
-        # result to the worker log and (b) parse usage. Stderr passes
-        # through untouched — claude prints diagnostic noise there and
-        # we want the worker log to still see it.
-        _tmp=$(mktemp -t ai_usage.XXXXXX) || {
-            printf '[ai-usage] mktemp failed; running without tracking\n' >&2
-            claude --dangerously-skip-permissions -p "$_prompt"
-            return $?
-        }
+        # Issue #651: when the assistant returns `is_error: true` with a
+        # transient network result (ECONNRESET etc.), retry up to
+        # AI_USAGE_RETRY_TRANSIENT_MAX (default 2) times with exponential
+        # backoff. Each attempt writes its own usage.jsonl record so
+        # cost tracking stays accurate. Set max=0 to restore the
+        # pre-#651 fail-closed-on-first-error behaviour.
+        local _attempt=0
+        local _max=${AI_USAGE_RETRY_TRANSIENT_MAX:-2}
+        local _base=${AI_USAGE_RETRY_SLEEP_BASE:-1}
+        local _result _sleep_secs
+        while :; do
+            # Capture JSON to a tempfile so we can both (a) print the human
+            # result to the worker log and (b) parse usage. Stderr passes
+            # through untouched — claude prints diagnostic noise there and
+            # we want the worker log to still see it.
+            _tmp=$(mktemp -t ai_usage.XXXXXX) || {
+                printf '[ai-usage] mktemp failed; running without tracking\n' >&2
+                claude --dangerously-skip-permissions -p "$_prompt"
+                return $?
+            }
 
-        claude --dangerously-skip-permissions -p "$_prompt" --output-format json >"$_tmp"
-        _ec=$?
+            # Per-attempt timestamp so retry records sort correctly.
+            _now=$(_ai_usage_now)
 
-        # If the CLI itself crashed (network, auth, etc.) we have no
-        # JSON to parse. Still record the failure so the summary's
-        # invocation count includes it, then echo whatever stdout
-        # produced (likely an error message).
-        if [ "$_ec" -ne 0 ] || ! [ -s "$_tmp" ]; then
-            printf '{"ai":"claude","ts":"%s","label":%s,"exit_code":%d,"tracking":"cli_failed"}\n' \
-                "$_now" \
-                "$(printf '%s' "$_label" | jq -Rsc . 2>/dev/null || printf '"%s"' "$_label")" \
-                "$_ec" >>"$_log"
-            cat "$_tmp" 2>/dev/null
+            claude --dangerously-skip-permissions -p "$_prompt" --output-format json >"$_tmp"
+            _ec=$?
+
+            # If the CLI itself crashed (network, auth, etc.) we have no
+            # JSON to parse. Still record the failure so the summary's
+            # invocation count includes it, then echo whatever stdout
+            # produced (likely an error message). Don't retry CLI-level
+            # crashes — they're usually auth/config, not transient.
+            if [ "$_ec" -ne 0 ] || ! [ -s "$_tmp" ]; then
+                printf '{"ai":"claude","ts":"%s","label":%s,"exit_code":%d,"tracking":"cli_failed"}\n' \
+                    "$_now" \
+                    "$(printf '%s' "$_label" | jq -Rsc . 2>/dev/null || printf '"%s"' "$_label")" \
+                    "$_ec" >>"$_log"
+                cat "$_tmp" 2>/dev/null
+                rm -f "$_tmp"
+                return $_ec
+            fi
+
+            # is_error reflects "the assistant failed", separate from the
+            # CLI exit code. Workers rely on a non-zero return to flip
+            # state to failed:*, so propagate is_error as exit 1.
+            _is_error=$(jq -r '.is_error // false' <"$_tmp" 2>/dev/null)
+            _result=$(jq -r '.result // ""' <"$_tmp" 2>/dev/null)
+
+            # Echo just the human-readable result so the worker's log stays
+            # legible. The full JSON lives in usage.jsonl for diagnostics.
+            printf '%s\n' "$_result"
+
+            # Append a compact, jq-friendly record. Keep usage/modelUsage
+            # nested so per-model cost can be broken out later if needed.
+            jq -c \
+                --arg ts "$_now" \
+                --arg label "$_label" \
+                '{
+                    ai: "claude",
+                    ts: $ts,
+                    label: $label,
+                    session_id: .session_id,
+                    is_error: (.is_error // false),
+                    num_turns: (.num_turns // 0),
+                    duration_ms: (.duration_ms // 0),
+                    duration_api_ms: (.duration_api_ms // 0),
+                    total_cost_usd: (.total_cost_usd // 0),
+                    usage: (.usage // {}),
+                    modelUsage: (.modelUsage // {})
+                }' <"$_tmp" >>"$_log" 2>/dev/null
+
             rm -f "$_tmp"
-            return $_ec
-        fi
 
-        # is_error reflects "the assistant failed", separate from the
-        # CLI exit code. Workers rely on a non-zero return to flip
-        # state to failed:*, so propagate is_error as exit 1.
-        _is_error=$(jq -r '.is_error // false' <"$_tmp" 2>/dev/null)
-
-        # Echo just the human-readable result so the worker's log stays
-        # legible. The full JSON lives in usage.jsonl for diagnostics.
-        jq -r '.result // ""' <"$_tmp" 2>/dev/null
-
-        # Append a compact, jq-friendly record. Keep usage/modelUsage
-        # nested so per-model cost can be broken out later if needed.
-        jq -c \
-            --arg ts "$_now" \
-            --arg label "$_label" \
-            '{
-                ai: "claude",
-                ts: $ts,
-                label: $label,
-                session_id: .session_id,
-                is_error: (.is_error // false),
-                num_turns: (.num_turns // 0),
-                duration_ms: (.duration_ms // 0),
-                duration_api_ms: (.duration_api_ms // 0),
-                total_cost_usd: (.total_cost_usd // 0),
-                usage: (.usage // {}),
-                modelUsage: (.modelUsage // {})
-            }' <"$_tmp" >>"$_log" 2>/dev/null
-
-        rm -f "$_tmp"
-        if [ "$_is_error" = "true" ]; then
-            return 1
-        fi
-        return 0
+            if [ "$_is_error" = "true" ]; then
+                if _ai_usage_is_transient "$_result" && [ "$_attempt" -lt "$_max" ]; then
+                    _attempt=$((_attempt + 1))
+                    _sleep_secs=$((_base * (1 << _attempt)))
+                    printf '[ai-usage] transient error (attempt %d/%d) — retrying in %ds: %s\n' \
+                        "$_attempt" "$_max" "$_sleep_secs" "$_result" >&2
+                    sleep "$_sleep_secs"
+                    continue
+                fi
+                return 1
+            fi
+            return 0
+        done
         ;;
     codex)
         _tmp=$(mktemp -t ai_usage_codex.XXXXXX) || {
