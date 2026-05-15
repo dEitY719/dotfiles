@@ -57,6 +57,24 @@ teardown() {
     assert_output --partial "ai=claude"
 }
 
+@test "ai: --ai at end of argv (no value) → exit 2 + 'missing value'" {
+    run gh_pr_review_parse --ai
+    assert_failure 2
+    assert_output --partial "missing value for --ai"
+}
+
+@test "review: --review at end of argv (no value) → exit 2" {
+    run gh_pr_review_parse --ai codex --review
+    assert_failure 2
+    assert_output --partial "missing value for --review"
+}
+
+@test "user: --user at end of argv (no value) → exit 2" {
+    run gh_pr_review_parse --ai claude --user
+    assert_failure 2
+    assert_output --partial "missing value for --user"
+}
+
 # ---- --review enum + KR alias ---------------------------------------------
 
 @test "review: default when omitted" {

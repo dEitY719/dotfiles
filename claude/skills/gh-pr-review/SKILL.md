@@ -59,7 +59,10 @@ Resolve:
   .number` on the current branch. Neither available → exit 1 with
   `No PR found for current branch; pass PR number explicitly`.
 
-Reject unknown flags eagerly so typos exit fast.
+Reject unknown flags eagerly so typos exit fast. Each value-taking
+flag (`--ai`, `--review`, `--user`) must check `[ $# -lt 2 ]` before
+the `shift 2`, exiting 2 with `missing value for <flag>` so a trailing
+flag without its value never reads past the end of argv.
 
 ## Step 2: Pre-flight
 
@@ -140,7 +143,7 @@ inline guard pattern, identical to `gh-pr-reply` Step 7:
 
 ```sh
 ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
-RAW_BYTES=$(stat -c%s "$PROMPT_FILE")
+RAW_BYTES=$(wc -c < "$PROMPT_FILE")
 TOKENS_RAW=$(( RAW_BYTES / 4 ))
 TOKENS=$(( (TOKENS_RAW + 250) / 500 * 500 ))
 [ "$TOKENS" -lt 1000 ] && TOKENS=1000

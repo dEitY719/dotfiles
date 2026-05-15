@@ -60,14 +60,14 @@ quote the first stderr line and exit 1.
 ## `--ai gemini`
 
 ```sh
-gemini -p "$(cat "$PROMPT_FILE")"
+gemini -p < "$PROMPT_FILE"
 ```
 
-Gemini's `-p` flag takes the prompt as a single argument; the PR diff
-in `$PROMPT_FILE` is therefore inlined. Model selection (`-m
-<model>`) intentionally falls back to the user's environment default;
-add a `--gemini-model` flag in a future iteration only if users
-report drift between defaults.
+`gemini -p` reads its prompt from stdin when no argv string follows,
+keeping the payload off argv entirely (no `ARG_MAX` exposure, no
+quoting hazard). Model selection (`-m <model>`) intentionally falls
+back to the user's environment default; add a `--gemini-model` flag
+in a future iteration only if users report drift between defaults.
 
 Stderr policy is identical to codex: non-zero exit → first stderr line
 to caller, exit 1.
@@ -75,12 +75,14 @@ to caller, exit 1.
 ## `--ai claude` (no `--user`)
 
 ```sh
-claude -p "$(cat "$PROMPT_FILE")"
+claude -p < "$PROMPT_FILE"
 ```
 
-The skill inherits whatever `CLAUDE_CONFIG_DIR` the calling shell has
-set. If the user is inside `claude-yolo --user work`, that `work`
-account is preserved automatically — no forced `personal` default.
+Same stdin pattern as the gemini invocation — `claude -p` reads from
+stdin when no argv prompt is supplied. The skill inherits whatever
+`CLAUDE_CONFIG_DIR` the calling shell has set. If the user is inside
+`claude-yolo --user work`, that `work` account is preserved
+automatically — no forced `personal` default.
 
 ## `--ai claude --user <name>`
 
@@ -99,7 +101,7 @@ CFG_DIR=$(_claude_resolve_account "$USER_ACCOUNT") || {
     exit 1
 }
 
-CLAUDE_CONFIG_DIR="$CFG_DIR" claude -p "$(cat "$PROMPT_FILE")"
+CLAUDE_CONFIG_DIR="$CFG_DIR" claude -p < "$PROMPT_FILE"
 ```
 
 - The whitelist comes from `CLAUDE_ENABLED_ACCOUNTS`; the helper

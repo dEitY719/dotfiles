@@ -29,6 +29,10 @@ gh_pr_review_parse() {
     while [ "$#" -gt 0 ]; do
         case "$1" in
         --ai)
+            if [ "$#" -lt 2 ]; then
+                echo "missing value for --ai" >&2
+                return 2
+            fi
             ai="$2"
             shift 2
             ;;
@@ -37,6 +41,10 @@ gh_pr_review_parse() {
             shift
             ;;
         --review)
+            if [ "$#" -lt 2 ]; then
+                echo "missing value for --review" >&2
+                return 2
+            fi
             review="$2"
             shift 2
             ;;
@@ -45,6 +53,10 @@ gh_pr_review_parse() {
             shift
             ;;
         --user)
+            if [ "$#" -lt 2 ]; then
+                echo "missing value for --user" >&2
+                return 2
+            fi
             user="$2"
             shift 2
             ;;
