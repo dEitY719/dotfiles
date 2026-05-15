@@ -51,7 +51,14 @@ response="$CLAUDE_RESPONSES_DIR/attempt${n}.json"
 if [ ! -f "$response" ]; then
     # Fall back to the highest-numbered response so "more retries than
     # staged JSON" reuses the last canned answer.
-    response=$(ls "$CLAUDE_RESPONSES_DIR"/attempt*.json 2>/dev/null | sort -V | tail -1)
+    #
+    # Plain `sort` (not `sort -V`) — `-V` is a GNU extension and the
+    # default `sort` on BSD/macOS does not ship it. Tests stage at most
+    # single-digit attempt indices (attempt1..attempt9), so plain
+    # lexicographic order is correct here. Parameter-expansion fallback
+    # protects against the glob expanding to nothing on a malformed run.
+    response=$(ls "$CLAUDE_RESPONSES_DIR"/attempt*.json 2>/dev/null | sort | tail -1)
+    response=${response:-""}
 fi
 cat "$response"
 exit 0
