@@ -123,7 +123,7 @@ are calibration starting points, not gospel — tighten when
 
 ```sh
 # Sum prompt template + diff bytes, divide by 4, round to nearest 500.
-RAW_BYTES=$(stat -c%s "$PROMPT_FILE")
+RAW_BYTES=$(wc -c < "$PROMPT_FILE")
 TOKENS_RAW=$(( RAW_BYTES / 4 ))
 TOKENS=$(( (TOKENS_RAW + 250) / 500 * 500 ))
 [ "$TOKENS" -lt 1000 ] && TOKENS=1000
