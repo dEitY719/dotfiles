@@ -31,38 +31,35 @@ output its content verbatim, then stop. No API calls.
 
 ## Step 1: Parse Flags + Resolve Target
 
-Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 7.
+Delegates to `gh_pr_review_parse` in
+`shell-common/functions/gh_pr_review.sh` (issue #664). That function is
+the **single source of truth** for the argument surface — the flat
+state machine, the closed `--review` enum, the KR-alias normalization,
+the `--user` cross-AI rejection, and the exit-code mapping (0 / 1 / 2)
+all live there. The bats fixture
+`tests/bats/skills/_fixtures/gh_pr_review_arg_parse.sh` is now a thin
+wrapper around the same function, so any drift between this section
+and the production parser is caught by
+`tests/bats/skills/gh_pr_review_arg_parse.bats`.
 
-Positional args (in this order): `<pr-number>` (optional — auto-detect
-from current branch when omitted) and `<remote>` (default `origin`).
-Flags may appear anywhere:
+Contract this skill depends on (do not duplicate the parser here; read
+`shell-common/functions/gh_pr_review.sh` for the authoritative shape):
 
-- `--ai <codex|gemini|claude>` — **required**. Unknown value → exit 2
-  with `Unknown --ai value: '<x>' (allowed: codex, gemini, claude)`.
-- `--review <preset>` — optional. Default `default`. Normalize KR
-  aliases per `references/review-presets.md` § "Normalization rules";
-  unknown values → exit 2 with the allowed-enum stderr message.
-- `--user <name>` — optional, `--ai claude` only. Combined with any
-  other `--ai` value → exit 2 with `--user is only valid with --ai
-  claude (codex/gemini have no multi-account routing)`. The account
-  name flows through `_claude_resolve_account` (see
-  `references/ai-cli-invocation.md` § `--ai claude --user <name>`);
-  unknown name → exit 1.
-- `--no-post-comment` — optional. Skips the PR comment in Step 6.
+- `--ai <codex|gemini|claude>` — required.
+- `--review <preset>` — closed enum; KR aliases normalize before
+  dispatch.
+- `--user <name>` — `--ai claude` only.
+- `--no-post-comment` — skips Step 6.
+- Positional `<pr-number>` (optional; auto-detect from current branch)
+  and `<remote>` (default `origin`).
 
-Resolve:
+Record `START_TS=$(date +%s)` immediately so Step 6 can compute
+`ELAPSED`.
 
-- `TARGET_REPO` from `git remote get-url <remote>` (or
-  `gh repo view --json nameWithOwner -q .nameWithOwner`). Missing
-  remote → list `git remote -v` and stop (exit 1).
-- `PR_NUMBER`: explicit arg, else `gh pr view --json number -q
-  .number` on the current branch. Neither available → exit 1 with
-  `No PR found for current branch; pass PR number explicitly`.
-
-Reject unknown flags eagerly so typos exit fast. Each value-taking
-flag (`--ai`, `--review`, `--user`) must check `[ $# -lt 2 ]` before
-the `shift 2`, exiting 2 with `missing value for <flag>` so a trailing
-flag without its value never reads past the end of argv.
+Resolve `TARGET_REPO` via
+`gh repo view --json nameWithOwner -q .nameWithOwner` and `PR_NUMBER`
+via the explicit arg or `gh pr view --json number -q .number`. Failing
+either → exit 1.
 
 ## Step 2: Pre-flight
 
@@ -119,49 +116,47 @@ CLI receives it on stdin so argv length and quoting are not concerns.
 
 ## Step 5: Dispatch to External CLI
 
-Run one of the three commands from `references/ai-cli-invocation.md`,
-selected by the resolved `--ai` value. For `--ai claude --user
-<name>`, source the helper and inject `CLAUDE_CONFIG_DIR` exactly as
-documented there. Stream stdout to the user's terminal verbatim — no
+Delegates to `_gh_pr_review_run_ai` in
+`shell-common/functions/gh_pr_review.sh`. The function pipes
+`PROMPT_FILE` into the chosen CLI with the exact invocation shape
+documented in `references/ai-cli-invocation.md` (`codex exec
+--color=never`, `gemini -p`, `claude -p`, plus the `CLAUDE_CONFIG_DIR`
+injection for `--user`). Stdout streams to the user verbatim — no
 reformatting, no summarization, no truncation.
 
-Non-zero exit from the external CLI → quote the first stderr line and
-exit 1. Do not post a PR comment in that case; partial output is
-discarded.
+On non-zero exit from the external CLI the helper writes
+`External AI CLI '<name>' failed: <first stderr line>` to stderr and
+returns the CLI's exit code. The skill propagates that as exit 1 and
+skips Step 6; partial output is discarded.
 
 ## Step 6: Post PR Comment (default ON)
 
-Skip when `--no-post-comment` is set OR when
-`GH_DISABLE_AI_METRICS=1` (issue #399). The opt-out skips the entire
-PR comment — not just the ai-metrics footer — because the AI-review
-body and the metrics footer ship together. The stdout output is
-unaffected by either skip path.
+Delegates body construction and posting to two helpers in
+`shell-common/functions/gh_pr_review.sh`:
 
-Build the comment body per `references/post-comment.md` (collapsed
-`<details>` wrapper + verbatim CLI stdout + ai-metrics footer). The
-inline guard pattern, identical to `gh-pr-reply` Step 7:
+- `_gh_pr_review_build_comment_body` — emits the SSOT body per
+  `references/post-comment.md` (collapsed `<details>` AI-review block
+  + `<!-- ai-review:<ai> -->` markers + ai-metrics footer with
+  `<!-- ai-metrics:gh-pr-review -->` markers).
+- `_gh_pr_review_post_comment` — wraps `gh pr comment --body-file`
+  and enforces three behaviors with a single decision tree:
+  1. `--no-post-comment` → print `skipped (--no-post-comment)` and
+     return 0.
+  2. `GH_DISABLE_AI_METRICS=1` → print
+     `skipped (GH_DISABLE_AI_METRICS=1)` and return 0. The opt-out
+     skips the **entire** PR comment (not just the metrics footer),
+     because the AI-review body and the metrics footer ship together
+     (issue #399).
+  3. `gh pr comment` non-zero exit → print `[WARN] PR comment post
+     failed — output retained on stdout` to stderr, emit
+     `[WARN] post failed` to stdout, and still return 0 — the user
+     already has the AI output on their terminal.
 
-```sh
-ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
-RAW_BYTES=$(wc -c < "$PROMPT_FILE")
-TOKENS_RAW=$(( RAW_BYTES / 4 ))
-TOKENS=$(( (TOKENS_RAW + 250) / 500 * 500 ))
-[ "$TOKENS" -lt 1000 ] && TOKENS=1000
-# HUMAN_H baseline per preset — see references/post-comment.md § "Human time baseline".
-
-if [ "$NO_POST_COMMENT" = "1" ]; then
-    : # PR comment skipped via --no-post-comment.
-elif [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
-    : # PR comment skipped via GH_DISABLE_AI_METRICS — stdout still shown.
-else
-    gh pr comment "$PR_NUMBER" --repo "$TARGET_REPO" --body-file "$BODY_FILE" \
-        || echo "[WARN] PR comment post failed — output retained on stdout"
-fi
-```
-
-Soft-fail: a non-zero exit from `gh pr comment` prints the `[WARN]`
-line and continues to Step 7 with exit 0. The user already has the AI
-output in their terminal.
+Token, human-h, and elapsed-minute inputs are computed by
+`_gh_pr_review_estimate_tokens` and `_gh_pr_review_human_h`
+(per-preset baseline from `references/post-comment.md`). The skill
+does not duplicate those formulas — read the shell function for the
+authoritative arithmetic.
 
 ## Step 7: Report
 
