@@ -69,7 +69,7 @@ TDD cycle: Analyze → Write test (`pytest` or `demo_ux.sh`) → Implement minim
 - **Command UX Standard**: See `docs/.ssot/command-guidelines.md` (SSOT for command/help interface and formatting).
 - **Git Strategy**: Semantic commits (`Type: Summary`).
 - **Project Board**: See `docs/.ssot/github-project-board.md` (SSOT for Issue kanban workflow and closing-keyword policy).
-- **Known Pitfalls**: `Agent({ isolation: "worktree" })` is blocked by git-crypt smudge filter in this repo — see `claude/AGENTS.md` ("Known Pitfall: Agent isolation + git-crypt") and `docs/learnings/git-crypt-worktree-bootstrap.md`.
+- **Known Pitfalls**: `Agent({ isolation: "worktree" })` is blocked by git-crypt smudge filter in this repo — see `claude/AGENTS.md` ("Known Pitfall: Agent isolation + git-crypt") and `docs/guide/learnings/git-crypt-worktree-bootstrap.md`.
 - **Maintenance**: Update AGENTS.md when adding new modules.
 
 # Context Map

@@ -66,7 +66,7 @@ _work_help_rows_commands() {
 
     ux_step "3. Transform Docs to Confluence Guides" "make-confluence"
     ux_bullet "Convert markdown technical docs to Confluence format"
-    echo "  ${UX_MUTED}make-confluence docs/technic/file.md${UX_RESET}                        # Auto-detect category"
+    echo "  ${UX_MUTED}make-confluence docs/guide/technic/file.md${UX_RESET}                        # Auto-detect category"
     echo "  ${UX_MUTED}make-confluence docs/analysis/file.md --category testing${UX_RESET}  # Explicit category"
     ux_bullet "Output: playbook/docs/confluence-guides/{category}/YYYY-MM-DD-{title}.md"
 }
@@ -88,7 +88,7 @@ _work_help_rows_dataflow() {
 Work Input
   ├─ Git commits (post-commit hook → work_log.txt)
   ├─ work-log add (manual → work_log.txt)
-  └─ Technical markdown (docs/technic/, playbook/docs/analysis/)
+  └─ Technical markdown (docs/guide/technic/, playbook/docs/analysis/)
 
 Processing
   ├─ make-jira: work_log.txt → Jira reports

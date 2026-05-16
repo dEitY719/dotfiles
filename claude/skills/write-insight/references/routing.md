@@ -1,6 +1,6 @@
 # Routing — When to decline and where to send the user instead
 
-`docs/learnings/` is one home among several for technical writing in this
+`docs/guide/learnings/` is one home among several for technical writing in this
 repo. A learning is the **smallest unit**: a 50–80 line snippet pulled
 from a single concrete experience. If the candidate is bigger, more
 formal, or for a different audience, refuse and route.
@@ -9,7 +9,7 @@ formal, or for a different audience, refuse and route.
 
 | Material | Belongs in | Why it's not a learning |
 |---|---|---|
-| Long-form tech doc, hundreds of lines | `docs/technic/` | learning is a 50–80 line snippet, not a manual |
+| Long-form tech doc, hundreds of lines | `docs/guide/technic/` | learning is a 50–80 line snippet, not a manual |
 | Project policy / SSOT | `docs/.ssot/` | SSOTs are normative ("we do X"), learnings are experiential ("we discovered X works") |
 | Feature design bundle (multi-file, diagrams) | `docs/feature/<name>/` | feature dirs hold many artifacts together; learnings are single files |
 | AI behavior instructions | `claude/skills/<name>/SKILL.md` (English) | learnings are for human teammates; SKILL files are for AI |
@@ -31,7 +31,7 @@ write-insight to cover them.
 | `write:task-history` | daily task list file | User wants JIRA ticket text or PR description draft from session work |
 
 The discriminator is **where the file lands**. write-insight always
-writes inside the **current repo's** `docs/learnings/`; the siblings
+writes inside the **current repo's** `docs/guide/learnings/`; the siblings
 write to `~/para/archive/` or task lists. If the user has any doubt,
 confirm the destination before drafting.
 
@@ -39,6 +39,6 @@ confirm the destination before drafting.
 
 When refusing, name the right home explicitly so the user can pivot:
 
-> 이 내용은 learnings (`docs/learnings/`) 보다는 **`<target>`** 에 더 맞을 것
+> 이 내용은 learnings (`docs/guide/learnings/`) 보다는 **`<target>`** 에 더 맞을 것
 > 같습니다 — 이유: `<one-line reason from the table above>`. 거기로 작성을
 > 진행할까요?

@@ -129,7 +129,7 @@
 
 ```bash
 # 1. 문서 읽기
-cat docs/technic/parallel-testing-with-xdist.md
+cat docs/guide/technic/parallel-testing-with-xdist.md
 
 # 2. AI 에이전트에 프롬프트 전달
 # (ai-agent-testing-prompts.md 참고)
@@ -208,7 +208,7 @@ gw2     → Worker 2
 
 ### 새 프로젝트 시작
 
-- [ ] `docs/technic/parallel-testing-with-xdist.md` 읽기
+- [ ] `docs/guide/technic/parallel-testing-with-xdist.md` 읽기
 - [ ] `pyproject.toml` 설정 추가
 - [ ] `conftest.py` 작성 (worker_id, temp_dir)
 - [ ] 첫 테스트 작성 (parametrize + fixture)
@@ -216,7 +216,7 @@ gw2     → Worker 2
 
 ### 기존 프로젝트 마이그레이션
 
-- [ ] `docs/technic/test-architecture-review.md` 읽기
+- [ ] `docs/guide/technic/test-architecture-review.md` 읽기
 - [ ] 기존 테스트 검토 (격리 문제 확인)
 - [ ] pytest-xdist 설치
 - [ ] conftest.py 추가/업데이트
@@ -225,7 +225,7 @@ gw2     → Worker 2
 
 ### AI 에이전트 활용
 
-- [ ] `docs/technic/ai-agent-testing-prompts.md` 읽기
+- [ ] `docs/guide/technic/ai-agent-testing-prompts.md` 읽기
 - [ ] 프롬프트 템플릿 선택
 - [ ] LLM에 요청
 - [ ] 생성 코드 검증 (체크리스트)
@@ -246,7 +246,7 @@ gw2     → Worker 2
 - ❌ 파일 충돌이 없는가?
 - ❌ 환경 변수 공유가 없는가?
 
-위 조건을 만족하면 `docs/technic/parallel-testing-with-xdist.md` 참고 적용 가능.
+위 조건을 만족하면 `docs/guide/technic/parallel-testing-with-xdist.md` 참고 적용 가능.
 
 ### Q3: 순차 실행이 필요한 경우는?
 
@@ -260,7 +260,7 @@ pytest tests/ -p no:xdist
 ### Q4: AI 에이전트로 테스트를 만들면 자동으로 병렬화되나?
 
 **A**: 아니오. 프롬프트에 명시해야 합니다.
-참고: `docs/technic/ai-agent-testing-prompts.md`
+참고: `docs/guide/technic/ai-agent-testing-prompts.md`
 
 ### Q5: 다른 프로젝트에도 같은 설정을 써도 되나?
 

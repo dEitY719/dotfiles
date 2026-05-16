@@ -51,7 +51,7 @@ check_init_auto_sourcing() {
         {
             echo "$repo_rel_path: [BLOCKING] tools/custom auto-sourcing detected in init file"
             echo "  Risk: Re-introduces auto-sourcing of executable utilities (hangs, infinite loops, blocked shell init)"
-            echo "  Reference: docs/postmortem/postmortem-auto-sourcing-utility-scripts.md"
+            echo "  Reference: docs/archive/postmortem/postmortem-auto-sourcing-utility-scripts.md"
             echo "  Matches:"
             echo "$matches" | sed 's/^/    /'
             echo ""

@@ -81,4 +81,4 @@ fi
 
 ## References
 
-- `docs/postmortem/postmortem-auto-sourcing-utility-scripts.md`
+- `docs/archive/postmortem/postmortem-auto-sourcing-utility-scripts.md`

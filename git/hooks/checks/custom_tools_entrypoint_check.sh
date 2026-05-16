@@ -38,7 +38,7 @@ check_auto_executable_in_custom() {
                     echo "$tail_calls" | sed 's/^/    /'
                     echo "  Fix (example):"
                     echo "    if [ \"\${BASH_SOURCE[0]}\" = \"\$0\" ]; then main \"\$@\"; fi"
-                    echo "  Reference: docs/postmortem/postmortem-auto-sourcing-utility-scripts.md"
+                    echo "  Reference: docs/archive/postmortem/postmortem-auto-sourcing-utility-scripts.md"
                     echo ""
                 } >>"$output_file"
                 rm -f "$tmp_file"

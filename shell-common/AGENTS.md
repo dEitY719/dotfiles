@@ -68,7 +68,7 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 새 외부 도구(예: bun, foo) 통합 시 항상 3개 파일이 필요:
 
 1. **`tools/integrations/<tool>.sh`** (자동 로드) — PATH export, alias, install/uninstall 함수.
-   ux_lib guard 패턴 포함. 상세: [`docs/playbooks/shell-common-cheatsheet.md`](../docs/playbooks/shell-common-cheatsheet.md) → "Tool Integration UX-lib Guard"
+   ux_lib guard 패턴 포함. 상세: [`docs/guide/playbooks/shell-common-cheatsheet.md`](../docs/guide/playbooks/shell-common-cheatsheet.md) → "Tool Integration UX-lib Guard"
 2. **`functions/<tool>_help.sh`** (자동 로드) — `<tool>_help()` + `alias <tool>-help='<tool>_help'`.
    `ux_table_row` / `ux_section` / `ux_bullet` 사용
 3. **`functions/my_help.sh` 수동 등록** (자동 안 됨!) —
@@ -95,11 +95,11 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 # Cheatsheet & Pitfalls
 
 자주 헷갈리는 패턴/실수 (file-structure 템플릿, shell detection 분기, 6대 mistake)
-는 분리되어 있다 — [`docs/playbooks/shell-common-cheatsheet.md`](../docs/playbooks/shell-common-cheatsheet.md) 참조.
+는 분리되어 있다 — [`docs/guide/playbooks/shell-common-cheatsheet.md`](../docs/guide/playbooks/shell-common-cheatsheet.md) 참조.
 
 # References
 
 - **[Bash Module](../bash/AGENTS.md)** · **[Zsh Module](../zsh/AGENTS.md)** · **[Root](../AGENTS.md)**
 - **[UX Guidelines](./tools/ux_lib/UX_GUIDELINES.md)** — 출력 스타일 표준
-- **[Cheatsheet](../docs/playbooks/shell-common-cheatsheet.md)** — 패턴 / 실수 예시
+- **[Cheatsheet](../docs/guide/playbooks/shell-common-cheatsheet.md)** — 패턴 / 실수 예시
 - **[Command UX SSOT](../docs/.ssot/command-guidelines.md)** — 명령/help 인터페이스 정책

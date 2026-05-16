@@ -8,7 +8,7 @@
 
 **Tech Stack:** Bash + `gh` CLI + Claude Code Skill tool. 추가 의존성 없음.
 
-**Spec reference:** `docs/superpowers/specs/2026-04-22-gh-skills-expansion-design.md`
+**Spec reference:** `docs/feature/superpowers-specs/2026-04-22-gh-skills-expansion-design.md`
 
 ---
 
@@ -728,7 +728,7 @@ When in `plan` mode (plugin present):
    context block to the main model:
    ```
    Context for writing-plans: implementing issue #<N> of <TARGET_REPO>.
-   Issue body follows below. Save plan to docs/superpowers/plans/.
+   Issue body follows below. Save plan to docs/feature/superpowers-plans/.
    ```
 2. Wait for the plan document to be committed.
 3. Then invoke `Skill(superpowers:executing-plans)` or proceed to

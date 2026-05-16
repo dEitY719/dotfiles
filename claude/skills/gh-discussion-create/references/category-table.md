@@ -10,7 +10,7 @@ Mirrors the SSOT in `docs/.ssot/discussions-policy.md` -> "카테고리
 | `Ideas` (default) | "할까말까", RFC, design exploration. The dominant case for this skill. | RFC template (TL;DR + Why + Goals/Non-Goals + Requirements + Design + Alternatives + Open Questions) |
 | `Q&A` | Self-referential "왜 X 를 Y 방식으로 했지?" or external questions. | Q (1-line) + Context + Best answer so far + Follow-up |
 | `Announcements` | SSOT/policy change broadcasts. Transient. | Announcement (1-2 lines) + Background + Effective date + Links |
-| `Lessons` | Reusable learnings (YouTube/문서/PR 회고). Discussion-first per SSOT — files in `docs/learnings/` are a later promotion. | Source link + Summary + Key takeaways + When to revisit |
+| `Lessons` | Reusable learnings (YouTube/문서/PR 회고). Discussion-first per SSOT — files in `docs/guide/learnings/` are a later promotion. | Source link + Summary + Key takeaways + When to revisit |
 
 The body skeleton variants live in
 [`rfc-template.md`](rfc-template.md) -> "Category variants".
