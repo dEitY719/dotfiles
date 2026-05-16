@@ -11,13 +11,13 @@ description: >-
 
 ```bash
 # Generate Confluence page from markdown file
-/confluence:page docs/technic/parallel-testing-with-xdist.md
+/confluence:page docs/guide/technic/parallel-testing-with-xdist.md
 
 # Specify category
 /confluence:page docs/analysis/docker-optimization.md --category infrastructure
 
 # Generate for all docs in directory
-/confluence:page docs/technic/
+/confluence:page docs/guide/technic/
 ```
 
 ## What It Does
@@ -73,7 +73,7 @@ pip install pytest-xdist
 
 ## Input Data
 
-- **Primary**: Markdown files from `docs/technic/` or `rca-knowledge/docs/analysis/`
+- **Primary**: Markdown files from `docs/guide/technic/` or `rca-knowledge/docs/analysis/`
 - **Secondary**: Git metadata (author, date, commit)
 - **Optional**: Content structure (Heading hierarchy, code blocks)
 

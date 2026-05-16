@@ -19,7 +19,7 @@ git-crypt 필터 우회 플래그를 주지 않으므로 모든 워커가
   만들고(git-crypt 필터 우회를 자동 처리), 그 안에서
   isolation 없는 `Agent`를 디스패치
 - 추적 이슈: [#153](https://github.com/dEitY719/dotfiles/issues/153)
-- 상세: `docs/learnings/git-crypt-worktree-bootstrap.md`
+- 상세: `docs/guide/learnings/git-crypt-worktree-bootstrap.md`
 
 ## 동작 요약
 

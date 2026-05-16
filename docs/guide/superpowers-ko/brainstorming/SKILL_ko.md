@@ -26,7 +26,7 @@ description: "You MUST use this before any creative work - creating features, bu
 3. **명확화 질문하기** — 한 번에 하나씩, 목적/제약/성공 기준 파악
 4. **2-3개 접근 방식 제안** — 트레이드오프와 추천안 포함
 5. **설계 제시** — 복잡도에 비례하여 섹션별로 나누고, 각 섹션 후 사용자 승인 받기
-6. **설계 문서 작성** — `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`에 저장하고 커밋
+6. **설계 문서 작성** — `docs/feature/superpowers-specs/YYYY-MM-DD-<topic>-design.md`에 저장하고 커밋
 7. **명세 셀프 리뷰** — 플레이스홀더, 모순, 모호함, 범위에 대한 간단한 인라인 점검 (아래 참조)
 8. **사용자 명세 리뷰** — 진행 전에 사용자에게 명세 파일 리뷰 요청
 9. **구현으로 전환** — writing-plans 스킬을 호출하여 구현 계획 생성
@@ -108,7 +108,7 @@ digraph brainstorming {
 
 **문서화:**
 
-- 검증된 설계(명세)를 `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`에 작성합니다
+- 검증된 설계(명세)를 `docs/feature/superpowers-specs/YYYY-MM-DD-<topic>-design.md`에 작성합니다
   - (명세 위치에 대한 사용자 환경설정이 이 기본값을 재정의합니다)
 - 사용 가능한 경우 elements-of-style:writing-clearly-and-concisely 스킬을 활용합니다
 - 설계 문서를 git에 커밋합니다

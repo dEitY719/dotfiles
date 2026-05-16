@@ -457,4 +457,4 @@ claude-accounts status               # 모든 항목 ✓
 | `shell-common/tools/integrations/claude.sh` | `_claude_resolve_account`, `claude_yolo` 재작성, alias 자동 파생, `claude_accounts*` 함수군 추가. 기존 `claude_yolo` 의 main/master 가드 로직 보존 |
 | `claude/setup.sh` | 단일 `~/.claude/` → 계정 N개 순회로 일반화 |
 | `.gitignore` | `shell-common/env/claude.local.sh` 추가 (이미 `*.local.sh` 패턴이 있다면 무수정) |
-| `docs/superpowers/specs/2026-05-04-claude-multi-account-design.md` | 신규 (이 문서) |
+| `docs/feature/superpowers-specs/2026-05-04-claude-multi-account-design.md` | 신규 (이 문서) |

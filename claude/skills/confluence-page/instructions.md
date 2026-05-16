@@ -8,7 +8,7 @@ Transform markdown technical documentation into Confluence-formatted guides with
 
 ### Primary: Markdown Files
 
-**Location**: `docs/technic/` or `rca-knowledge/docs/analysis/{category}/`
+**Location**: `docs/guide/technic/` or `rca-knowledge/docs/analysis/{category}/`
 
 **Format**: Standard markdown with headings, code blocks, lists
 
@@ -173,7 +173,7 @@ Template:
 
 1. **Extract category** from:
    - Frontmatter `category:` field, OR
-   - First parent directory name (`docs/technic/testing/` → "testing"), OR
+   - First parent directory name (`docs/guide/technic/testing/` → "testing"), OR
    - User --category flag, OR
    - Default to "other"
 
@@ -267,7 +267,7 @@ Action: Use file modification time and system user
 
 ### Test 1: Parse Sample Markdown
 ```bash
-# Input: docs/technic/parallel-testing-with-xdist.md
+# Input: docs/guide/technic/parallel-testing-with-xdist.md
 # Verify sections extracted correctly
 # Check TL;DR word counts
 ```
@@ -280,7 +280,7 @@ Action: Use file modification time and system user
 
 ### Test 3: Category Detection
 ```bash
-# Test: docs/technic/testing/file.md → category: testing
+# Test: docs/guide/technic/testing/file.md → category: testing
 # Test: --category flag override
 # Test: frontmatter parsing
 ```

@@ -2,19 +2,19 @@
 name: write:insight
 description: >-
   Archive one reusable insight from the current conversation into
-  `docs/learnings/<slug>.md` as a short Korean note that follows the repo
+  `docs/guide/learnings/<slug>.md` as a short Korean note that follows the repo
   README rules (5 sections, 50-80 lines, and source links to PR/commit/file:line).
   Use when the user runs `/write:insight` or asks to capture a concrete
   pattern, debugging path, or review-driven discovery from this chat. Build the
   note from conversation evidence (PRs, commits, review threads, repro steps)
   instead of asking the user to restate context. Decline topics that belong in
-  `docs/technic/`, `docs/.ssot/`, `docs/feature/`, or `claude/skills/`.
+  `docs/guide/technic/`, `docs/.ssot/`, `docs/feature/`, or `claude/skills/`.
   Do not use this for narrative "삽질" posts (`write:blog-dev-learnings`), formal
   postmortems (`write:rca`), or JIRA/PR draft summaries (`write:task-history`).
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 ---
 
-# write:insight — Conversation → docs/learnings/ note
+# write:insight — Conversation → docs/guide/learnings/ note
 
 If the argument is `help`, read `references/help.md` and output it verbatim, then stop.
 
@@ -28,14 +28,14 @@ If the argument is `help`, read `references/help.md` and output it verbatim, the
 ## Role
 
 Capture one reusable insight from the current chat as a short Korean note in
-`<repo-root>/docs/learnings/`. Source comes from the conversation — don't make
+`<repo-root>/docs/guide/learnings/`. Source comes from the conversation — don't make
 the user retype what they already lived through. Output one file path + one-line
 summary at the end, nothing else.
 
 ## Step 1: Resolve repo + read the rulebook
 
-In parallel: `git rev-parse --show-toplevel`, read `<repo-root>/docs/learnings/README.md`,
-list existing notes. If `docs/learnings/` is missing, stop — this skill is repo-specific.
+In parallel: `git rev-parse --show-toplevel`, read `<repo-root>/docs/guide/learnings/README.md`,
+list existing notes. If `docs/guide/learnings/` is missing, stop — this skill is repo-specific.
 The README is SSOT for template/length/language; re-read it every run.
 
 ## Step 2: Identify the candidate
@@ -44,12 +44,12 @@ With a hint (`/write:insight <hint>`): anchor on it. Without: propose 1–3 cand
 from recent turns with one-line previews and let the user pick. Don't draft speculatively.
 
 Read `references/routing.md` to check whether the candidate actually belongs in
-`docs/learnings/`. If it fits a neighbor directory or sibling write-* skill, decline
+`docs/guide/learnings/`. If it fits a neighbor directory or sibling write-* skill, decline
 using the phrasing template there.
 
 ## Step 3: Check for overlap
 
-`grep -li '<keywords>' docs/learnings/*.md` — if a real overlap exists, recommend
+`grep -li '<keywords>' docs/guide/learnings/*.md` — if a real overlap exists, recommend
 updating the existing file instead. Same check against `~/.claude/projects/*/memory/MEMORY.md`
 when accessible: learnings holds the body, memory keeps a one-line pointer.
 
@@ -65,11 +65,11 @@ state the concrete situation ("발견 상황: …"), not vague claims.
 Read `references/template.md` for section structure, length policy, filename rules,
 and bonus-section criteria. Read `references/examples.md` for tone anchors from the
 three notes already in repo. Filename names the **pattern**, not the action.
-Target 50–80 lines; past 150 → recommend `docs/technic/` instead.
+Target 50–80 lines; past 150 → recommend `docs/guide/technic/` instead.
 
 ## Step 6: Write the file + update README index
 
-Write `docs/learnings/<slug>.md`. Edit `docs/learnings/README.md` "현재 문서 목록"
+Write `docs/guide/learnings/<slug>.md`. Edit `docs/guide/learnings/README.md` "현재 문서 목록"
 section: append a numbered entry matching the existing 3-line format (heading link
 + 2–3 line summary).
 
@@ -85,7 +85,7 @@ Output exactly two lines, no preamble, no recap — first line is the structured
 verdict, second line is the explicit `Next:` follow-up hint:
 
 ```
-[OK] file=docs/learnings/<slug>.md lines=<N> summary="<one-line hook — same lead used in README index>"
+[OK] file=docs/guide/learnings/<slug>.md lines=<N> summary="<one-line hook — same lead used in README index>"
 Next: review the file, then optionally /write:insight again for remaining candidates
 ```
 
