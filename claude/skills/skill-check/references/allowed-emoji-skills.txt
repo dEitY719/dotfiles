@@ -2,4 +2,5 @@
 # Each entry must have a rationale comment.
 # Adding a new entry requires updating Check 11 rationale.
 
-gh-add-ai-metrics    # ai-metrics footer SSOT — CLAUDE.md exception (#317 F-2, PR #320, #367)
+gh-add-ai-metrics                    # ai-metrics footer SSOT — CLAUDE.md exception (#317 F-2, PR #320, #367)
+devx-exception-merge-checklist       # ai-metrics footer in references/metrics-footer.md per #317 F-2 SSOT (issue #658)
