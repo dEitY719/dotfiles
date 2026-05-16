@@ -983,14 +983,14 @@ _gh_flow_worker() {
     # branch-naming convention (previously: parsing `wt/<name>/<idx>`).
     local _wt_before _wt_after
     _gh_flow_set_state "$_dir" "spawning"
-    _wt_before=$(git worktree list --porcelain 2>/dev/null | awk '$1=="worktree"{print $2}')
+    _wt_before=$(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
     if ! gwt spawn --wt-name "$_spawn_name"; then
         _gh_flow_set_state "$_dir" "failed:spawning"
         printf '[gh-flow-worker] gwt spawn failed\n' >&2
         return 1
     fi
 
-    _wt_after=$(git worktree list --porcelain 2>/dev/null | awk '$1=="worktree"{print $2}')
+    _wt_after=$(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
     _worktree=$(comm -13 \
         <(printf '%s\n' "$_wt_before" | sort) \
         <(printf '%s\n' "$_wt_after" | sort) |
