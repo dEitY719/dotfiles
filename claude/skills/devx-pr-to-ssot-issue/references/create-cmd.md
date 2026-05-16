@@ -32,8 +32,12 @@ No GitHub mutation, no `Next:` hint (the issue doesn't exist yet —
 ## 5.3 — Label pre-validation
 
 ```
-gh label list --repo "$TARGET_REPO" --json name --jq '.[].name'
+gh label list --repo "$TARGET_REPO" --limit 1000 --json name --jq '.[].name'
 ```
+
+`--limit 1000` is required because `gh label list` defaults to 30 — without
+it, repos with > 30 labels silently mask their tail labels and the
+pre-validation would incorrectly flag a present label as missing.
 
 Compare against the labels passed via `--label` (default
 `documentation`, `priority:medium`). Any miss → stop with:
@@ -51,8 +55,15 @@ Compare against the labels passed via `--label` (default
 If `--milestone <name>` is set:
 
 ```
-gh api repos/$TARGET_REPO/milestones --jq '.[].title'
+gh api --paginate "repos/{owner}/{repo}/milestones" --repo "$TARGET_REPO" --jq '.[].title'
 ```
+
+`--paginate` covers repos with > 30 milestones (the default page size).
+The `{owner}/{repo}` placeholder + `--repo "$TARGET_REPO"` combination is
+the same pattern used in `gh:pr-resolve-conflict` Step 5 — `gh api`'s
+`--repo` flag safely parses both URL and `owner/repo` forms, so this stays
+robust whether `TARGET_REPO` came from `git remote get-url` (URL form) or
+`gh repo view --json nameWithOwner` (`owner/repo` form).
 
 Missing → stop with `reason=missing-milestone`. Inherited milestone
 from parent / PR is OK to skip the validation step entirely (the
@@ -74,7 +85,7 @@ success). Extract the number for the report:
 
 ```
 NEW_ISSUE_URL=$(...)
-NEW_ISSUE_NUM=$(printf '%s\n' "$NEW_ISSUE_URL" | sed 's|.*/issues/||')
+NEW_ISSUE_NUM=${NEW_ISSUE_URL##*/}
 ```
 
 `gh issue create` failure → stop with `reason=gh-create-failed` and
@@ -82,11 +93,13 @@ the stderr passed through to the report's `Detail:` line.
 
 ## 5.6 — Parent backlink comment (optional)
 
-When `--parent <issue#>` is set **and** `GH_DISABLE_AI_METRICS != 1`:
+When `--parent <issue#>` is set **and** `GH_DISABLE_AI_METRICS != 1`
+(let `PR_NUM` be the source PR number passed to the skill as its first
+positional arg):
 
 ```
-gh issue comment <parent-issue#> --repo "$TARGET_REPO" --body \
-    "> 역공학 SSOT 이슈가 등록됐습니다 — #${NEW_ISSUE_NUM}. 원본 PR: #<PR#>."
+gh issue comment "$PARENT_NUM" --repo "$TARGET_REPO" --body \
+    "> 역공학 SSOT 이슈가 등록됐습니다 — #${NEW_ISSUE_NUM}. 원본 PR: #${PR_NUM}."
 ```
 
 This is the only secondary mutation. Failure here is **soft-fail** —
