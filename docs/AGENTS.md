@@ -19,7 +19,7 @@
 - **DO**: 구체적 예시(코드 스니펫·명령어) 포함
 - **DO**: 피처별 문서는 `feature/<feature-name>/` 로 묶기
 - **DO**: 사람-팀원 가이드는 `guide/` 하위에 두기 (`guide/learnings/`, `guide/playbooks/`, `guide/technic/`, `guide/superpowers-ko/`)
-- **DON'T**: TODO 마커를 추적 없이 남기기 (`archive/todo-ollama.md` 처럼 별도 파일로 분리)
+- **DON'T**: TODO 마커를 추적 없이 남기기 (`archive/todo-<topic>.md` 처럼 별도 파일로 분리)
 - **DON'T**: 이유 없이 archive 하지 않기 (이동 사유를 `archive/README.md` 또는 커밋 메시지에 남길 것)
 - **DON'T**: `docs/` 루트에 산문 파일 새로 만들지 않기 — 항상 5 개 디렉토리 중 하나로 분류 (AGENTS.md 제외)
 
@@ -75,7 +75,7 @@
 
 ```bash
 mv docs/old-guide.md docs/archive/
-echo "- $(date -I): old-guide.md — <이동 사유> (#<issue>)" >> docs/archive/README.md
+echo "- $(date -I) (#<issue>): old-guide.md — <이동 사유>" >> docs/archive/README.md
 ```
 
 # Context Map
