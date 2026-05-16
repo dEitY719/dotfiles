@@ -2,10 +2,6 @@
   "env": {
     "GH_PR_REPLY_AUTO_APPROVE_REPOS": "dEitY719/dotfiles"
   },
-  "statusLine": {
-    "type": "command",
-    "command": "${HOME}/dotfiles/claude/statusline-command.sh"
-  },
   "hooks": {
     "Stop": [
       {
@@ -28,6 +24,10 @@
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "${HOME}/dotfiles/claude/statusline-command.sh"
   },
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true,
