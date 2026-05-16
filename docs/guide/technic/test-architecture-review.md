@@ -405,4 +405,4 @@ def resource(worker_id):
 3. **테스트 작성**: parametrize + fixture 사용
 4. **격리 보장**: 절대 전역 상태 수정 금지
 
-자세한 내용은 `docs/technic/parallel-testing-with-xdist.md` 참고.
+자세한 내용은 `docs/guide/technic/parallel-testing-with-xdist.md` 참고.

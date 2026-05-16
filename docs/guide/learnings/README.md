@@ -10,14 +10,14 @@
 
 | 디렉토리 | 성격 | 분량 기준 | 예시 |
 |---|---|---|---|
-| `docs/technic/` | 검증된 스택 중심 기술 문서 | 수백 줄 | `parallel-testing-with-xdist.md` |
+| `docs/guide/technic/` | 검증된 스택 중심 기술 문서 | 수백 줄 | `parallel-testing-with-xdist.md` |
 | `docs/.ssot/` | 프로젝트 정책 SSOT (얇은 정책 본문) | 짧음~중간 | `command-guidelines.md` |
 | `docs/feature/<name>/` | 피처별 설계·분석 번들 | 다수 파일 | `skill-ai-worktree-teardown/` |
-| **`docs/learnings/` (여기)** | **작업 중 얻은 재사용 패턴 스니펫** | **50–80줄 목표** | 아래 참조 |
+| **`docs/guide/learnings/` (여기)** | **작업 중 얻은 재사용 패턴 스니펫** | **50–80줄 목표** | 아래 참조 |
 
 `memory/`(Claude 비공개 작업 메모리)와는 다음 규칙으로 역할 분담:
 
-- **`docs/learnings/`**: 공개·버전 관리되는 지식 — 개발자 동료도 읽는 곳
+- **`docs/guide/learnings/`**: 공개·버전 관리되는 지식 — 개발자 동료도 읽는 곳
 - **`memory/`**: Claude 세션 간 컨텍스트 — 사용자·AI 협업 선호도·피드백 중심
 - 같은 내용을 양쪽에 중복 작성하지 않고, `memory/` 엔트리는 이 폴더의
   파일을 **포인터로 참조**

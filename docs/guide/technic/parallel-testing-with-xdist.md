@@ -477,7 +477,7 @@ def test_with_mock(mocker, worker_id):
 
 ```
 # ✅ 권장
-"테스트를 작성해줄 때, docs/technic/parallel-testing-with-xdist.md
+"테스트를 작성해줄 때, docs/guide/technic/parallel-testing-with-xdist.md
 기술을 따라서 pytest-xdist를 사용한 병렬 실행을 지원하도록
 해줘. 각 테스트가 격리된 환경에서 실행되도록."
 

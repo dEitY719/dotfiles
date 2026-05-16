@@ -15,7 +15,7 @@ description: Use when you have a spec or requirements for a multi-step task, bef
 
 **맥락:** 이 작업은 전용 워크트리(brainstorming 스킬로 생성된)에서 실행되어야 한다.
 
-**계획 저장 위치:** `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
+**계획 저장 위치:** `docs/feature/superpowers-plans/YYYY-MM-DD-<feature-name>.md`
 - (사용자가 계획 위치를 지정한 경우 해당 설정이 이 기본값을 대체함)
 
 ## 범위 확인
@@ -135,7 +135,7 @@ git commit -m "feat: add specific feature"
 
 계획 저장 후, 실행 방식을 선택하도록 제안한다:
 
-**"계획이 완료되어 `docs/superpowers/plans/<filename>.md`에 저장되었습니다. 두 가지 실행 옵션이 있습니다:**
+**"계획이 완료되어 `docs/feature/superpowers-plans/<filename>.md`에 저장되었습니다. 두 가지 실행 옵션이 있습니다:**
 
 **1. 서브에이전트 기반 (권장)** - 작업마다 새로운 서브에이전트를 파견하고, 작업 사이에 리뷰하며, 빠른 반복
 

@@ -332,7 +332,7 @@ if [ $blocking_violations -eq 0 ]; then
         echo -e "${YELLOW}⚠ [WARNING] gh api graphql -f/-F type-mapping heuristics ($gh_api_type_violations file(s)):${NC}"
         head -n 5 "$GH_API_TYPE_FILE" | sed 's/^/  /'
         [ $(wc -l <"$GH_API_TYPE_FILE") -gt 5 ] && echo "  ... and more"
-        echo "  See: docs/learnings/gh-api-type-casting.md (issue #395)"
+        echo "  See: docs/guide/learnings/gh-api-type-casting.md (issue #395)"
         echo ""
         has_warnings=1
     fi

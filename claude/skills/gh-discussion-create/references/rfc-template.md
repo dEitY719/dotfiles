@@ -119,7 +119,7 @@ Lessons 는 Discussion-first 다. 짧은 단편 노트는 파일 없이 Discussi
 <자유 형식. 코드 스니펫·인용·자기 메모 모두 OK.>
 
 ## 후속 (Optional)
-<docs/learnings/ 로 승격할 임계치에 도달했나? — 본문/댓글 ≥ 300 줄,
+<docs/guide/learnings/ 로 승격할 임계치에 도달했나? — 본문/댓글 ≥ 300 줄,
 3 회 이상 외부 참조, 또는 cheat sheet 형태로 재방문 빈도 高.>
 ```
 

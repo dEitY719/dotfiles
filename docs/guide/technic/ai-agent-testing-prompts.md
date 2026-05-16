@@ -15,7 +15,7 @@ LLM(Claude, Coding Agent 등)에게 테스트를 작성하도록 요청할 때, 
 지원하도록 해줘. 각 테스트가 독립적으로 실행될 수 있도록
 격리된 환경에서 작동해야 해.
 
-참고: docs/technic/parallel-testing-with-xdist.md
+참고: docs/guide/technic/parallel-testing-with-xdist.md
 ```
 
 ### 2단계: 중간 프롬프트 (권장)
@@ -39,8 +39,8 @@ LLM(Claude, Coding Agent 등)에게 테스트를 작성하도록 요청할 때, 
    - fixture 사용 (전역 상태 금지)
    - 각 Worker마다 고유한 이름/경로 사용
 
-참고: docs/technic/parallel-testing-with-xdist.md
-참고: docs/technic/test-architecture-review.md
+참고: docs/guide/technic/parallel-testing-with-xdist.md
+참고: docs/guide/technic/test-architecture-review.md
 ```
 
 ### 3단계: 상세 프롬프트 (최적)
@@ -107,8 +107,8 @@ def temp_dir(worker_id):
    - 하드코드된 포트/파일 ❌
 
 참고:
-- docs/technic/parallel-testing-with-xdist.md (구현 가이드)
-- docs/technic/test-architecture-review.md (아키텍처)
+- docs/guide/technic/parallel-testing-with-xdist.md (구현 가이드)
+- docs/guide/technic/test-architecture-review.md (아키텍처)
 ```
 
 ## 프롬프트 템플릿 예시
@@ -130,7 +130,7 @@ def temp_dir(worker_id):
 - conftest.py: worker_id, temp_dir fixture
 - tests/test_*.py: parametrized, isolated tests
 
-참고: docs/technic/parallel-testing-with-xdist.md
+참고: docs/guide/technic/parallel-testing-with-xdist.md
 ```
 
 ### 예시 2: 기존 프로젝트 테스트 개선용 프롬프트
@@ -154,7 +154,7 @@ def temp_dir(worker_id):
 - 환경 변수 직접 수정
 - 테이터베이스 공유 상태
 
-참고 기술: docs/technic/parallel-testing-with-xdist.md
+참고 기술: docs/guide/technic/parallel-testing-with-xdist.md
 ```
 
 ### 예시 3: 특정 테스트 타입용 프롬프트
@@ -180,7 +180,7 @@ def run_command(cmd, shell, env):
     # shell_runner: 격리된 환경에서 명령 실행
     # 각 Worker마다 고유한 HOME
 
-참고: docs/technic/test-architecture-review.md
+참고: docs/guide/technic/test-architecture-review.md
 ```
 
 ## LLM별 프롬프트 최적화
@@ -191,7 +191,7 @@ def run_command(cmd, shell, env):
 # @병렬-테스트-xdist
 
 I want you to write pytest tests with parallel execution support.
-Follow the patterns in docs/technic/parallel-testing-with-xdist.md.
+Follow the patterns in docs/guide/technic/parallel-testing-with-xdist.md.
 
 Requirements:
 ✓ Use pytest-xdist (-n auto)
@@ -210,8 +210,8 @@ Files to update:
 
 ```
 Write test code following the architecture in:
-- docs/technic/parallel-testing-with-xdist.md
-- docs/technic/test-architecture-review.md
+- docs/guide/technic/parallel-testing-with-xdist.md
+- docs/guide/technic/test-architecture-review.md
 
 Key patterns to follow:
 
@@ -321,7 +321,7 @@ def generate_parallel_test_prompt(
 4. Parametrize와 fixture 사용
 5. 금지: 전역 상태, 고정 경로, 환경변수 수정
 
-참고: docs/technic/parallel-testing-with-xdist.md
+참고: docs/guide/technic/parallel-testing-with-xdist.md
     """
 
     if special_requirements:
@@ -354,7 +354,7 @@ pytest-xdist를 사용한 병렬화를 해줄래?
 - conftest.py에 worker_id, temp_dir fixture
 - 기존 테스트 업데이트로 격리 강화
 
-참고: docs/technic/parallel-testing-with-xdist.md
+참고: docs/guide/technic/parallel-testing-with-xdist.md
 ```
 
 ❌ 나쁜 프롬프트:
@@ -378,7 +378,7 @@ pytest-xdist 격리를 적용해줄래:
 2. 격리된 임시 디렉토리 (temp_dir fixture)
 3. conftest.py 업데이트
 
-참고: docs/technic/parallel-testing-with-xdist.md
+참고: docs/guide/technic/parallel-testing-with-xdist.md
 ```
 
 ❌ 나쁜 프롬프트:
@@ -397,7 +397,7 @@ pytest-xdist 격리를 적용해줄래:
 
 ### [새 프로젝트]
 tests/write-parallel-tests:
-  "pytest-xdist 사용 + docs/technic/parallel-testing-with-xdist.md 따르기"
+  "pytest-xdist 사용 + docs/guide/technic/parallel-testing-with-xdist.md 따르기"
 
 ### [기존 프로젝트]
 tests/parallelize-tests:
@@ -416,7 +416,7 @@ tests/add-cross-platform:
 
 ### 효과적인 프롬프트 3원칙
 
-1. **명확성**: docs 파일 명시 (docs/technic/...)
+1. **명확성**: docs 파일 명시 (docs/guide/technic/...)
 2. **구체성**: 설정값 제시 (addopts = "-n auto --dist load")
 3. **검증성**: 체크리스트 제공 (금지 패턴, 필수 요소)
 

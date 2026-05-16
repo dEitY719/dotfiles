@@ -16,9 +16,9 @@
 ## What it does
 
 Archives one reusable insight from the current conversation as a short
-Korean note in `<repo-root>/docs/learnings/<slug>.md`, following the
+Korean note in `<repo-root>/docs/guide/learnings/<slug>.md`, following the
 repo's README-defined template (5 sections, 50–80 lines, source links to
-PR / commit / file:line). Also updates `docs/learnings/README.md` index.
+PR / commit / file:line). Also updates `docs/guide/learnings/README.md` index.
 
 ## Examples
 
@@ -39,6 +39,6 @@ is for short, repo-internal technical patterns aimed at human teammates.
 
 ## Refuses to write
 
-See `references/routing.md`. Topics belonging in `docs/technic/`,
+See `references/routing.md`. Topics belonging in `docs/guide/technic/`,
 `docs/.ssot/`, `docs/feature/<name>/`, `claude/skills/`, or `memory/`
-are routed to the correct home instead of forced into `docs/learnings/`.
+are routed to the correct home instead of forced into `docs/guide/learnings/`.

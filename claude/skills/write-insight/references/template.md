@@ -1,13 +1,13 @@
 # Template — Section structure, length policy, filename rules
 
 This is the schema for a learning note. The repo's
-`docs/learnings/README.md` is the upstream authoritative source — re-read
+`docs/guide/learnings/README.md` is the upstream authoritative source — re-read
 it at the start of every run (Step 1). This file is a fast-path summary
 of what to put where, derived from that README.
 
 ## Filename
 
-`<repo-root>/docs/learnings/<slug>.md`
+`<repo-root>/docs/guide/learnings/<slug>.md`
 
 - `<slug>` is descriptive, lowercase, kebab-case
 - Specific over generic: `git-worktree-detection.md` [GOOD] — `git-tips.md` [BAD]
@@ -29,7 +29,7 @@ convention; body is Korean.
 2. **`## Pattern`** — the core principle in 1–3 sentences or a short
    numbered list. Explains *why* the code is shaped this way, not *what*
    the code does. If this section grows past one paragraph, the insight
-   is a tutorial — route to `docs/technic/`.
+   is a tutorial — route to `docs/guide/technic/`.
 3. **`## Code`** — the smallest copy-pastable example, language tag
    included (` ```sh `, ` ```python `, …). No fictional helpers, no `...`
    ellipses inside the snippet.
@@ -59,7 +59,7 @@ content had better justify the length.
 |---|---|
 | 50–80 lines | Target. Existing notes hit 60–90 incl. blanks. |
 | 80–150 lines | OK if content earns it. Resist padding to look thorough. |
-| 150+ lines | Stop. Recommend `docs/technic/` instead. The repo's README growth-strategy section says so. |
+| 150+ lines | Stop. Recommend `docs/guide/technic/` instead. The repo's README growth-strategy section says so. |
 
 ## Tone anchors
 

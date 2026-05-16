@@ -128,7 +128,7 @@ digraph process {
 ```
 You: 이 계획을 실행하기 위해 서브에이전트 기반 개발을 사용하겠습니다.
 
-[계획 파일을 한 번 읽음: docs/superpowers/plans/feature-plan.md]
+[계획 파일을 한 번 읽음: docs/feature/superpowers-plans/feature-plan.md]
 [5개 태스크 전체를 전문 및 컨텍스트와 함께 추출]
 [모든 태스크로 TodoWrite 생성]
 

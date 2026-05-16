@@ -6,13 +6,13 @@ Transform markdown technical documentation into Confluence-formatted guides.
 
 ```bash
 # Convert markdown file to Confluence page
-/confluence:page docs/technic/parallel-testing-with-xdist.md
+/confluence:page docs/guide/technic/parallel-testing-with-xdist.md
 
 # Specify category explicitly
 /confluence:page docs/analysis/docker-optimization.md --category infrastructure
 
 # Batch process directory
-/confluence:page docs/technic/ --category testing
+/confluence:page docs/guide/technic/ --category testing
 ```
 
 ## How It Works
@@ -83,7 +83,7 @@ make_confluence.sh <input_file> [--category {category}]
 ## Integration
 
 Works with:
-- `docs/technic/` markdown files
+- `docs/guide/technic/` markdown files
 - `rca-knowledge/docs/analysis/` markdown files
 - Any markdown with Problem/Solution structure
 

@@ -45,7 +45,7 @@ exec bash  # or exec zsh
 
 ### For Initial Setup
 
-→ See **[Setup Guide](docs/SETUP_GUIDE.md)** for detailed installation instructions
+→ See **[Setup Guide](docs/guide/setup.md)** for detailed installation instructions
 
 ### Detailed Documentation
 
@@ -238,7 +238,7 @@ cd ~/dotfiles && ./setup.sh
 exec bash  # or exec zsh
 ```
 
-For more help, see [Setup Guide](docs/SETUP_GUIDE.md).
+For more help, see [Setup Guide](docs/guide/setup.md).
 
 ## 📋 Project Details
 
@@ -251,6 +251,6 @@ For more help, see [Setup Guide](docs/SETUP_GUIDE.md).
 
 ## 📖 Additional Resources
 
-- [Setup Guide](docs/SETUP_GUIDE.md) - Detailed setup and configuration
+- [Setup Guide](docs/guide/setup.md) - Detailed setup and configuration
 - [Shell-Common Documentation](shell-common/README.md) - Shared code overview
 - Configuration files in `pyproject.toml` and `tox.ini`

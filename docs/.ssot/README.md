@@ -8,7 +8,7 @@
 - 한 정책당 한 파일. 다른 곳에서 같은 규칙을 다시 쓰지 않고 여기로 링크한다.
 - AGENTS.md (root + nested)는 **얇은 라우터**다. 정책 요약 1–2줄 + `.ssot` 링크만 둔다.
 - 결정 분석·검토 대기 문서는 SSOT가 아니다. `docs/archive/`로 이동한다.
-- 실행 절차·셋업 순서는 SSOT가 아니다. `docs/playbooks/`에 둔다.
+- 실행 절차·셋업 순서는 SSOT가 아니다. `docs/guide/playbooks/`에 둔다.
 
 ## 인덱스
 
@@ -29,7 +29,7 @@
 
 ## 관련 위치
 
-- `docs/playbooks/` — 정책 적용을 위한 실행 절차 (예: 칸반 보드 초기 셋업)
+- `docs/guide/playbooks/` — 정책 적용을 위한 실행 절차 (예: 칸반 보드 초기 셋업)
 - `docs/archive/` — 더 이상 정책 SSOT가 아닌 결정 분석·검토 문서
-- `docs/learnings/` — PR/커밋에서 추출한 재사용 가능한 패턴 노트
+- `docs/guide/learnings/` — PR/커밋에서 추출한 재사용 가능한 패턴 노트
 - `claude/skills/` — 스킬 SKILL.md / references (실행 가능한 워크플로우 SSOT)

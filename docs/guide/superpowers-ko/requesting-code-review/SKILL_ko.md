@@ -58,7 +58,7 @@ HEAD_SHA=$(git rev-parse HEAD)
 
 [superpowers:code-reviewer 서브에이전트 디스패치]
   WHAT_WAS_IMPLEMENTED: 대화 인덱스의 검증 및 복구 함수
-  PLAN_OR_REQUIREMENTS: docs/superpowers/plans/deployment-plan.md의 Task 2
+  PLAN_OR_REQUIREMENTS: docs/feature/superpowers-plans/deployment-plan.md의 Task 2
   BASE_SHA: a7981ec
   HEAD_SHA: 3df7661
   DESCRIPTION: 4가지 이슈 유형을 처리하는 verifyIndex()와 repairIndex() 추가

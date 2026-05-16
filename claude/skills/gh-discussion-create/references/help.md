@@ -54,7 +54,7 @@ phrased as the question itself. `Announcements` titles start with
 
 Same contract as `gh:issue-create`: do NOT over-compress. The
 Discussion is reused later by `gh:discussion-convert` to seed an
-issue body, by future-self search, and by `docs/learnings/` promotion
+issue body, by future-self search, and by `docs/guide/learnings/` promotion
 (Lessons category). Preserve:
 
 - concrete file paths and line references

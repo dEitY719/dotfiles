@@ -93,7 +93,7 @@ check_library_purity() {
     if [ $violation_count -ne 0 ]; then
         {
             echo "  Fix: Move executable/interactive logic to 'shell-common/tools/custom/' and invoke explicitly"
-            echo "  Reference: docs/postmortem/postmortem-auto-sourcing-utility-scripts.md"
+            echo "  Reference: docs/archive/postmortem/postmortem-auto-sourcing-utility-scripts.md"
             echo ""
         } >>"$output_file"
         rm -f "$tmp_file"

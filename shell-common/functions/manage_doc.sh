@@ -64,7 +64,7 @@ clear_doc() {
     if [ $# -eq 0 ]; then
         ux_error "Usage: clear-doc <file|pattern>"
         ux_section "Examples"
-        ux_bullet "clear-doc docs/review/abc-review-G.md           # Clear single file"
+        ux_bullet "clear-doc docs/archive/review-2026/abc-review-G.md           # Clear single file"
         ux_bullet "clear-doc 'docs/abc-review*'             # Clear matching files"
         return 1
     fi
@@ -73,8 +73,8 @@ clear_doc() {
 
     # Process each argument - supports both quoted patterns and direct globs
     # Examples:
-    #   clear-doc 'docs/review/abc-review*'      (quoted pattern)
-    #   clear-doc docs/review/abc-review*        (unquoted glob - shell expands first)
+    #   clear-doc 'docs/archive/review-2026/abc-review*'      (quoted pattern)
+    #   clear-doc docs/archive/review-2026/abc-review*        (unquoted glob - shell expands first)
     #   clear-doc docs/file1.md docs/file2.md  (multiple explicit files)
     for arg in "$@"; do
         # Try glob expansion on each argument
@@ -279,9 +279,9 @@ _show_doc_help_rows_clear() {
     ux_bullet "Clear content of documentation files"
     ux_info "Usage: clear-doc <file|pattern>"
     ux_info "Examples:"
-    ux_bullet "clear-doc docs/review/abc-review-G.md       // Clear single file"
-    ux_bullet "clear-doc docs/review/abc-review*           // Unquoted glob (both work!)"
-    ux_bullet "clear-doc 'docs/review/abc-review*'         // Quoted pattern"
+    ux_bullet "clear-doc docs/archive/review-2026/abc-review-G.md       // Clear single file"
+    ux_bullet "clear-doc docs/archive/review-2026/abc-review*           // Unquoted glob (both work!)"
+    ux_bullet "clear-doc 'docs/archive/review-2026/abc-review*'         // Quoted pattern"
     ux_bullet "clear-doc docs/file1.md docs/file2.md       // Multiple files"
     ux_bullet "clear-doc 'docs/*.md' notes.txt             // Mixed patterns + files"
 }
@@ -290,9 +290,9 @@ _show_doc_help_rows_delete() {
     ux_bullet "Permanently delete documentation files"
     ux_info "Usage: del-doc <file|pattern>"
     ux_info "Examples:"
-    ux_bullet "del-doc docs/review/abc-review-G.md         // Delete single file"
-    ux_bullet "del-doc docs/review/abc-plan*               // Unquoted glob"
-    ux_bullet "del-doc 'docs/review/abc-review*2.md'       // Quoted pattern (deletes *2.md files)"
+    ux_bullet "del-doc docs/archive/review-2026/abc-review-G.md         // Delete single file"
+    ux_bullet "del-doc docs/archive/review-2026/abc-plan*               // Unquoted glob"
+    ux_bullet "del-doc 'docs/archive/review-2026/abc-review*2.md'       // Quoted pattern (deletes *2.md files)"
     ux_bullet "del-doc docs/file1.md docs/file2.md         // Multiple files"
     ux_bullet "del-doc 'docs/abc-*' notes.txt              // Mixed patterns + files"
 }
