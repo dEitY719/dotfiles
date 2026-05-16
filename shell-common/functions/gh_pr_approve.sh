@@ -1301,7 +1301,7 @@ _gh_pr_approve_worker() {
     local _wt_before
     _gh_pr_approve_set_state "$_dir" "spawning"
     _wt_before=$(_gh_pr_approve_worktree_paths)
-    if ! gwt spawn "$_spawn_name"; then
+    if ! gwt spawn --wt-name "$_spawn_name"; then
         _gh_pr_approve_set_state "$_dir" "failed:spawning"
         printf '[gh-pr-approve-worker] gwt spawn failed\n' >&2
         return 1

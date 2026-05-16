@@ -984,7 +984,7 @@ _gh_flow_worker() {
     local _wt_before _wt_after
     _gh_flow_set_state "$_dir" "spawning"
     _wt_before=$(git worktree list --porcelain 2>/dev/null | awk '$1=="worktree"{print $2}')
-    if ! gwt spawn "$_spawn_name"; then
+    if ! gwt spawn --wt-name "$_spawn_name"; then
         _gh_flow_set_state "$_dir" "failed:spawning"
         printf '[gh-flow-worker] gwt spawn failed\n' >&2
         return 1
