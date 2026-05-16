@@ -704,6 +704,56 @@ EOF
     refute_output --partial "Failure"
 }
 
+@test "status <N>: failed:approving falls back to log when usage.jsonl lacks .result (issue #666)" {
+    # claude-cli mid-run crashes (e.g. ECONNRESET) leave usage.jsonl with
+    # only metadata — no .result/.error. The actual error message lives
+    # in the raw CLI log's final is_error:true JSON dump. status must
+    # surface that fallback instead of silently skipping the Failure row.
+    _seed_pr_state 603 "failed:approving" "" "9999999"
+    local _state_dir="$HOME/.local/state/gh-pr-approve/fake-main/603"
+    local _usage="$_state_dir/usage.jsonl"
+    local _log="$_state_dir/log"
+    cat >"$_usage" <<'EOF'
+{"ai":"claude","ts":"2026-05-15T21:16:01+09:00","label":"/gh-pr-approve 603","exit_code":1,"tracking":"cli_failed"}
+EOF
+    cat >"$_log" <<'EOF'
+some streaming preamble line
+{"type":"result","is_error":true,"api_error_status":null,"duration_ms":601039,"result":"API Error: Unable to connect to API (ECONNRESET)"}
+EOF
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status 603"
+    assert_success
+    assert_output --partial "Failure"
+    assert_output --partial "API Error: Unable to connect to API (ECONNRESET)"
+}
+
+@test "status <N>: failed:approving — usage.jsonl .result wins over log fallback (issue #666)" {
+    # Regression guard for codex/gemini adapters that DO populate
+    # usage.jsonl with .result — the log fallback must not override it.
+    # Pad the log so the is_error JSON dump is NOT in the last 5 lines;
+    # otherwise the `tail -5 log` block in status would echo the sentinel
+    # into output and confuse a naive refute_output check.
+    _seed_pr_state 604 "failed:approving" "" "9999999"
+    local _state_dir="$HOME/.local/state/gh-pr-approve/fake-main/604"
+    local _usage="$_state_dir/usage.jsonl"
+    local _log="$_state_dir/log"
+    cat >"$_usage" <<'EOF'
+{"ai":"codex","ts":"2026-05-15T21:16:01+09:00","label":"/gh-pr-approve 604","is_error":true,"result":"Primary failure from usage.jsonl"}
+EOF
+    cat >"$_log" <<'EOF'
+{"type":"result","is_error":true,"result":"sentinel-log-fallback-666"}
+pad-line-1
+pad-line-2
+pad-line-3
+pad-line-4
+pad-line-5
+pad-line-6
+EOF
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve status 604"
+    assert_success
+    assert_output --partial "Primary failure from usage.jsonl"
+    refute_output --partial "sentinel-log-fallback-666"
+}
+
 # ---------------------------------------------------------------------------
 # dispatcher: 'status' / 'prune' must not be parsed as a PR number
 # ---------------------------------------------------------------------------

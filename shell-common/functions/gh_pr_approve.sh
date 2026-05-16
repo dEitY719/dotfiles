@@ -423,17 +423,30 @@ _gh_pr_approve_status_single() {
     # one glance away instead of one tail|grep away.
     case "$_state" in
     failed:approving)
-        local _usage _failure
+        local _usage _failure _log_fallback
         _usage="$_dir/usage.jsonl"
+        _failure=""
         if [ -f "$_usage" ] && [ -s "$_usage" ] && command -v jq >/dev/null 2>&1; then
             _failure="$(jq -rs '
                 map(select((.is_error? // false) or ((.tracking? // "") == "cli_failed")))
                 | last
                 | (.result? // .error? // empty)
             ' "$_usage" 2>/dev/null)"
-            if [ -n "$_failure" ]; then
-                ux_table_row "Failure" "$_failure"
+        fi
+        # Fallback: usage.jsonl may omit .result/.error for adapters that
+        # only record lightweight metadata (claude-cli cli_failed case).
+        # The raw CLI dump in <pr-dir>/log carries the actual error in
+        # its final {"type":"result","is_error":true,"result":"…"} line.
+        if [ -z "$_failure" ] && [ -f "$_log" ] && command -v jq >/dev/null 2>&1; then
+            _log_fallback="$(grep '"is_error":true' "$_log" 2>/dev/null \
+                | tail -1 \
+                | jq -r '.result // .error // empty' 2>/dev/null)"
+            if [ -n "$_log_fallback" ]; then
+                _failure="$_log_fallback"
             fi
+        fi
+        if [ -n "$_failure" ]; then
+            ux_table_row "Failure" "$_failure"
         fi
         ;;
     esac
