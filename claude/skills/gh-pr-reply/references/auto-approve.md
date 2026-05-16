@@ -35,19 +35,32 @@ load the env var.
 
 ## Algorithm (4 guards, all-must-pass)
 
+Every branch binds `STEP8_OUTCOME` before returning. The Step 7
+report consumes that variable to render a `Step 8:` row — leaving it
+unset means the gate was skipped without evaluation, which the Step 7
+report renderer treats as an incomplete (regression) report (#662).
+
 ```sh
 # Inputs (already resolved by SKILL.md Steps 1-7):
 #   PR_NUMBER, TARGET_REPO, COMMENT_COUNT,
 #   PR_STATE, PR_IS_DRAFT, PR_REVIEW_DECISION
+# Output:
+#   STEP8_OUTCOME — exported for the Step 7 report renderer.
 
 # G2: Step 2.5 early-exit safety net (defensive — SKILL.md normally
 #     stops at Step 2.5 before reaching Step 8; this catches a stray
 #     refactor that forgets to short-circuit).
-[ "${COMMENT_COUNT:-0}" -lt 1 ] && return 0
+if [ "${COMMENT_COUNT:-0}" -lt 1 ]; then
+    STEP8_OUTCOME="SKIP:comment_count=0"
+    return 0
+fi
 
 # G1a: env var must be set + non-empty.
 _allow="${GH_PR_REPLY_AUTO_APPROVE_REPOS-}"
-[ -z "$_allow" ] && return 0
+if [ -z "$_allow" ]; then
+    STEP8_OUTCOME="SKIP:allowlist_miss"
+    return 0
+fi
 
 # G1b: current repo must appear in the CSV (case-exact, no whitespace
 #      padding around commas — Status names with internal spaces ride
@@ -57,6 +70,7 @@ case ",${_allow}," in
     *)
         printf '[gh-pr-reply] auto-approve: %s not in allowlist (GH_PR_REPLY_AUTO_APPROVE_REPOS=%s) — skip.\n' \
             "$TARGET_REPO" "$_allow" >&2
+        STEP8_OUTCOME="SKIP:allowlist_miss"
         return 0
         ;;
 esac
@@ -65,10 +79,12 @@ esac
 if [ "$PR_STATE" != "OPEN" ]; then
     printf '[gh-pr-reply] auto-approve: PR #%s state=%s — skip (need OPEN).\n' \
         "$PR_NUMBER" "$PR_STATE" >&2
+    STEP8_OUTCOME="SKIP:state=$PR_STATE"
     return 0
 fi
 if [ "$PR_IS_DRAFT" = "true" ]; then
     printf '[gh-pr-reply] auto-approve: PR #%s is a draft — skip.\n' "$PR_NUMBER" >&2
+    STEP8_OUTCOME="SKIP:draft"
     return 0
 fi
 
@@ -79,6 +95,7 @@ case "${PR_REVIEW_DECISION-}" in
     *)
         printf '[gh-pr-reply] auto-approve: PR #%s reviewDecision=%s — skip (need null|APPROVED).\n' \
             "$PR_NUMBER" "$PR_REVIEW_DECISION" >&2
+        STEP8_OUTCOME="SKIP:reviewDecision=$PR_REVIEW_DECISION"
         return 0
         ;;
 esac
@@ -87,14 +104,42 @@ esac
 printf '[gh-pr-reply] auto-approve: solo-repo allowlist match → bypassing #393 fail-closed guard for PR #%s\n' \
     "$PR_NUMBER" >&2
 
+# `|| _rc=$?` keeps the helper call errexit-safe so STEP8_OUTCOME
+# is reliably bound to WARN:rc=<N> on non-zero helper return. A bare
+# `_gh_project_status_sync …; _rc=$?` would let `set -e` abort the
+# gate before the binding, regressing the issue #662 contract.
+_rc=0
 _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1 \
-    _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "In review"
-_rc=$?
+    _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "In review" \
+    || _rc=$?
 if [ "$_rc" -ne 0 ]; then
     printf '[gh-pr-reply] auto-approve: helper rc=%s — continuing (soft-fail).\n' "$_rc" >&2
+    STEP8_OUTCOME="WARN:rc=$_rc"
+else
+    STEP8_OUTCOME="OK:fired"
 fi
 return 0
 ```
+
+### Outcome matrix
+
+`STEP8_OUTCOME` is bound on every branch — the Step 7 report row
+template (`references/final-summary.md`) maps the value to the
+user-visible line:
+
+| 4-guard result | `STEP8_OUTCOME` | Report row |
+|---|---|---|
+| All PASS + helper rc=0 | `OK:fired` | `[OK]   Step 8: auto-approve fired (helper rc=0)` |
+| G1 SKIP (allowlist miss or env unset) | `SKIP:allowlist_miss` | `[SKIP] Step 8: allowlist miss` |
+| G2 SKIP (comment_count=0, defensive) | `SKIP:comment_count=0` | `[SKIP] Step 8: comment_count=0` |
+| G3 SKIP (state ≠ OPEN) | `SKIP:state=<X>` | `[SKIP] Step 8: state=<X>` |
+| G3 SKIP (draft) | `SKIP:draft` | `[SKIP] Step 8: draft` |
+| G4 SKIP (reviewDecision) | `SKIP:reviewDecision=<X>` | `[SKIP] Step 8: reviewDecision=<X>` |
+| All PASS + helper rc ≠ 0 | `WARN:rc=<N>` | `[WARN] Step 8: helper rc=<N> — continuing` |
+
+`STEP8_OUTCOME` unset after the gate function returns means the gate
+never ran. The Step 7 renderer treats that as a regression signal
+(see `references/final-summary.md` contract section).
 
 ### Why prefix form, not `env`
 
@@ -157,17 +202,19 @@ the user-visible answer summary.
 ## Test matrix
 
 `tests/bats/skills/gh_pr_reply_auto_approve.bats` covers exactly the
-issue #410 acceptance criteria:
+issue #410 acceptance criteria, plus the issue #662 `STEP8_OUTCOME`
+binding contract:
 
-| # | Setup | Expected outcome |
-|---|-------|------------------|
-| 1 | allowlist=`dEitY719/dotfiles`, repo=same, OPEN, not draft, reviewDecision=`APPROVED`, comments=3 | helper called with bypass=1, audit-trace line on stderr, rc=0 |
-| 2 | allowlist=`dEitY719/dotfiles`, repo=`AgentToolbox/foo` | helper NOT called, "not in allowlist" info, rc=0 |
-| 3 | env unset | helper NOT called, no output, rc=0 |
-| 4 | allowlist match, `isDraft=true` | helper NOT called, "is a draft" info, rc=0 |
-| 5 | allowlist match, `reviewDecision=CHANGES_REQUESTED` | helper NOT called, "reviewDecision=…" info, rc=0 |
-| 6 | comments=0 (Step 2.5 early-exit guard) | helper NOT called, no output, rc=0 |
-| 7 | helper stub returns 2 | audit-trace + "helper rc=2" warn, rc=0 (soft-fail) |
+| # | Setup | Expected outcome | `STEP8_OUTCOME` |
+|---|-------|------------------|-----------------|
+| 1 | allowlist=`dEitY719/dotfiles`, repo=same, OPEN, not draft, reviewDecision=`APPROVED`, comments=3 | helper called with bypass=1, audit-trace line on stderr, rc=0 | `OK:fired` |
+| 2 | allowlist=`dEitY719/dotfiles`, repo=`AgentToolbox/foo` | helper NOT called, "not in allowlist" info, rc=0 | `SKIP:allowlist_miss` |
+| 3 | env unset | helper NOT called, no output, rc=0 | `SKIP:allowlist_miss` |
+| 4 | allowlist match, `isDraft=true` | helper NOT called, "is a draft" info, rc=0 | `SKIP:draft` |
+| 5 | allowlist match, `reviewDecision=CHANGES_REQUESTED` | helper NOT called, "reviewDecision=…" info, rc=0 | `SKIP:reviewDecision=CHANGES_REQUESTED` |
+| 6 | comments=0 (Step 2.5 early-exit guard) | helper NOT called, no output, rc=0 | `SKIP:comment_count=0` |
+| 7 | helper stub returns 2 | audit-trace + "helper rc=2" warn, rc=0 (soft-fail) | `WARN:rc=2` |
+| 8 | issue #662 regression — allowlist HIT + 4 guards PASS but `STEP8_OUTCOME` unset after call | FAIL (renderer would drop the Step 8 row) | non-empty (asserts contract holds) |
 
 ## What this is NOT
 
