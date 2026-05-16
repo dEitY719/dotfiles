@@ -389,7 +389,7 @@ _gh_pr_reply_worker() {
     local _wt_before _wt_after
     _gh_pr_reply_set_state "$_dir" "spawning"
     _wt_before=$(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
-    if ! gwt spawn "$_spawn_name"; then
+    if ! gwt spawn --wt-name "$_spawn_name"; then
         _gh_pr_reply_set_state "$_dir" "failed:spawning"
         printf '[gh-pr-reply-worker] gwt spawn failed\n' >&2
         return 1
