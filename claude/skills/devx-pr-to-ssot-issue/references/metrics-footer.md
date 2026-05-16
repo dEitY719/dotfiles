@@ -34,7 +34,7 @@ when the new issue later flows through `/gh-issue-flow`.
 
 | Field | Source | Notes |
 |-------|--------|-------|
-| `X` (tokens) | `len(PR body) + len(rendered issue body draft) + len(subagent gap report)` ÷ 4, rounded to nearest 500. Minimum 1 000. | Caps an outlier at 50 000. |
+| `X` (tokens) | `(len(PR body) + len(rendered issue body draft) + len(subagent gap report)) ÷ 4`, rounded to nearest 500. Minimum 1 000. | Caps an outlier at 50 000. |
 | `M` (human time) | Look up the **issue type** in `gh-issue-create`'s `references/metrics-baseline.md` table. For SSOT recovery, the type is `docs` (1 h) when only Section E (Cross-refs) is non-empty; otherwise `feat (small)` (4 h). | The skill writes `docs(ssot):` titles but the recovery effort is closer to a small `feat` for table-lookup purposes when multiple SSOT sections are affected. |
 | `L` (AI minutes) | Computed at Step 6 as `(NOW - START_TS) / 60`, rounded to the nearest minute. Minimum 1. | Wall-clock from skill entry, not just the `gh issue create` call. |
 
