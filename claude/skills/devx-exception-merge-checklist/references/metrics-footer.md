@@ -52,10 +52,21 @@ Skip the comment entirely (no warning, no log) when either of:
 
 ## Post mechanics
 
+Write the rendered body to a temp file, then POST via `gh api`
+with the `{owner}/{repo}` placeholder + explicit `--repo` flag
+(safe parsing when `TARGET_REPO` was originally a URL) and
+`-F body=@FILE` (capital `F` reads the file directly — the
+lowercase `-f` form leaks the literal path into the body; see
+dotfiles MEMORY "gh:discussion-create body-file 회귀"):
+
 ```sh
-gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
+BODY_FILE=$(mktemp) && trap 'rm -f "$BODY_FILE"' EXIT
+printf '%s' "$BODY" > "$BODY_FILE"
+
+gh api "/repos/{owner}/{repo}/issues/$PR_NUMBER/comments" \
+  --repo "$TARGET_REPO" \
   -X POST \
-  -f body="$(printf '%s' "$BODY")" \
+  -F body=@"$BODY_FILE" \
   >/dev/null 2>&1 \
   && echo "[OK] ai-metrics comment posted" \
   || echo "[WARN] ai-metrics comment failed — continuing."

@@ -181,14 +181,17 @@ or a `*.openapi.yaml` glob.
 **Command**
 
 ```sh
-# Find a free port to avoid colliding with the user's dev server:
-PORT=$(comm -23 <(seq 4010 4099) \
-                <(ss -tan | awk 'NR>1 {split($4,a,":"); print a[length(a)]}' | sort -u) \
-        | head -n 1)
-timeout 30 bunx @stoplight/prism-cli mock openapi.yaml --port "$PORT" \
+# Find a free port (portable: lsof works on Linux + macOS + BSD;
+# ss / netstat / `timeout` are GNU-only and unsafe across systems).
+for p in $(seq 4010 4099); do
+  lsof -nP -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1 || { PORT=$p; break; }
+done
+: "${PORT:=4010}"   # last-resort fallback when the range is fully occupied
+# Background-launch Prism; the poll-loop below is the 30 s timeout
+# (intentionally replacing GNU `timeout` for macOS/BSD portability).
+bunx @stoplight/prism-cli mock openapi.yaml --port "$PORT" \
   >.audit-prism.log 2>&1 &
 PID=$!
-# Wait for "listening" or timeout:
 for _ in $(seq 1 30); do
   grep -q 'listening' .audit-prism.log && break
   sleep 1
@@ -271,16 +274,19 @@ match, expect a corresponding `vi.mock('next/headers'`,
 ```sh
 BASE=$(gh pr view "$PR" --repo "$TARGET_REPO" --json baseRefName --jq .baseRefName)
 git fetch origin "$BASE"
-# Prod-side new calls:
-PROD=$(git diff "origin/$BASE..HEAD" -- \
+# Pipe-stream both diffs to avoid capturing potentially-large
+# output into shell variables (ARG_MAX / memory concerns).
+# C10 passes when either no prod-side new framework call was
+# introduced, OR a matching mock was also added in the same PR.
+if git diff "origin/$BASE..HEAD" -- \
         'apps/**/*.ts' 'apps/**/*.tsx' \
         ':!**/*.test.*' ':!**/*.spec.*' \
-        | grep -E '^\+.*(cookies\(\)|headers\(\)|new NextRequest\()')
-# Test-side mocks added in same PR:
-TEST=$(git diff "origin/$BASE..HEAD" -- \
-        '**/*.test.ts' '**/*.test.tsx' '**/*.spec.ts' '**/*.spec.tsx' \
-        | grep -E "^\+.*(vi\.mock\('next/headers'|vi\.mocked\((cookies|headers)\)|new NextRequest\()")
-[ -z "$PROD" ] || [ -n "$TEST" ]
+   | grep -qE '^\+.*(cookies\(\)|headers\(\)|new NextRequest\()'; then
+    git diff "origin/$BASE..HEAD" -- \
+            '**/*.test.ts' '**/*.test.tsx' '**/*.spec.ts' '**/*.spec.tsx' \
+       | grep -qE "^\+.*(vi\.mock\('next/headers'|vi\.mocked\((cookies|headers)\)|new NextRequest\()" \
+       || exit 1
+fi
 ```
 
 **Recovery hint** — list the prod-side files whose new call has no
