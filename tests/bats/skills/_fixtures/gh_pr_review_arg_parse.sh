@@ -1,142 +1,23 @@
 #!/usr/bin/env bash
 # tests/bats/skills/_fixtures/gh_pr_review_arg_parse.sh
-# Source-of-truth mirror for the Step 1 arg-parsing + Step 3 preset-
-# normalization logic documented in claude/skills/gh-pr-review/SKILL.md
-# and claude/skills/gh-pr-review/references/review-presets.md.
-#
-# The skill body itself runs inside a Claude session, but its argument
-# contract is a flat POSIX-style state machine that can be tested in
-# isolation. Keep this file in sync with the SKILL — if either the SKILL
-# or references/review-presets.md changes, mirror the change here so the
-# bats suite catches drift.
+# Thin wrapper around the production SSOT for `gh_pr_review_parse`.
+# The arg-parse and KR-alias-normalization logic used to live here
+# (~142 lines) because the SKILL had no production shell function.
+# Issue #664 introduced `shell-common/functions/gh_pr_review.sh` as
+# the SSOT; this fixture now exists solely to expose the parser to
+# `tests/bats/skills/gh_pr_review_arg_parse.bats` under its historical
+# load path so neither the test suite nor downstream callers need to
+# change.
 
-# gh_pr_review_parse — parses the same arg surface as the skill.
-# Echoes one key=value per line on success; writes errors to stderr.
-# Exit codes mirror the skill:
-#   0 — parsed ok
-#   1 — runtime failure (unknown --user account; not produced here —
-#       account whitelist resolution is left to the live helper)
-#   2 — argument error (missing --ai, unknown --ai, unknown --review,
-#       --user with non-claude --ai)
-gh_pr_review_parse() {
-    local ai=""
-    local review="default"
-    local user=""
-    local post_comment=1
-    local pr=""
-    local remote="origin"
+# Force-load the production function regardless of interactive mode —
+# its file uses the standard interactive guard.
+DOTFILES_FORCE_INIT=1
+export DOTFILES_FORCE_INIT
 
-    while [ "$#" -gt 0 ]; do
-        case "$1" in
-        --ai)
-            if [ "$#" -lt 2 ]; then
-                echo "missing value for --ai" >&2
-                return 2
-            fi
-            ai="$2"
-            shift 2
-            ;;
-        --ai=*)
-            ai="${1#--ai=}"
-            shift
-            ;;
-        --review)
-            if [ "$#" -lt 2 ]; then
-                echo "missing value for --review" >&2
-                return 2
-            fi
-            review="$2"
-            shift 2
-            ;;
-        --review=*)
-            review="${1#--review=}"
-            shift
-            ;;
-        --user)
-            if [ "$#" -lt 2 ]; then
-                echo "missing value for --user" >&2
-                return 2
-            fi
-            user="$2"
-            shift 2
-            ;;
-        --user=*)
-            user="${1#--user=}"
-            shift
-            ;;
-        --no-post-comment)
-            post_comment=0
-            shift
-            ;;
-        -h | --help | help)
-            echo "help_requested=1"
-            return 0
-            ;;
-        --*)
-            echo "Unknown flag: $1" >&2
-            return 2
-            ;;
-        *)
-            if [ -z "$pr" ]; then
-                pr="$1"
-            elif [ "$remote" = "origin" ]; then
-                remote="$1"
-            else
-                echo "Unexpected positional arg: $1" >&2
-                return 2
-            fi
-            shift
-            ;;
-        esac
-    done
+# Resolve the dotfiles root. The test harness exports
+# _BATS_REAL_DOTFILES_ROOT before sourcing this fixture; outside the
+# harness, the relative path from this file works as a fallback.
+_GH_PR_REVIEW_FIXTURE_ROOT="${_BATS_REAL_DOTFILES_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)}"
 
-    # --ai is required.
-    if [ -z "$ai" ]; then
-        echo "missing required flag: --ai <codex|gemini|claude>" >&2
-        return 2
-    fi
-
-    # --ai must be one of the three allowed values.
-    case "$ai" in
-    codex | gemini | claude) ;;
-    *)
-        echo "Unknown --ai value: '$ai' (allowed: codex, gemini, claude)" >&2
-        return 2
-        ;;
-    esac
-
-    # --user is claude-only.
-    if [ -n "$user" ] && [ "$ai" != "claude" ]; then
-        echo "--user is only valid with --ai claude (codex/gemini have no multi-account routing)" >&2
-        return 2
-    fi
-
-    # Normalize --review (KR aliases → English enum).
-    case "$review" in
-    보통) review="default" ;;
-    간단) review="quick" ;;
-    꼼꼼 | 꼼꼼하게) review="thorough" ;;
-    보안) review="security" ;;
-    성능) review="performance" ;;
-    esac
-
-    case "$review" in
-    default | quick | thorough | security | performance) ;;
-    *)
-        cat >&2 <<EOF
-Unknown --review value: '$review'
-Allowed: default | quick | thorough | security | performance
-Korean aliases: 보통 | 간단 | 꼼꼼 (꼼꼼하게) | 보안 | 성능
-EOF
-        return 2
-        ;;
-    esac
-
-    echo "ai=$ai"
-    echo "review=$review"
-    echo "user=$user"
-    echo "post_comment=$post_comment"
-    echo "pr=$pr"
-    echo "remote=$remote"
-    return 0
-}
+# shellcheck disable=SC1091
+. "${_GH_PR_REVIEW_FIXTURE_ROOT}/shell-common/functions/gh_pr_review.sh"
