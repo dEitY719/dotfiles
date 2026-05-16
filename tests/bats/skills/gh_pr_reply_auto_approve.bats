@@ -29,7 +29,8 @@ teardown() {
     [ -n "$FAKE_HELPER_LOG" ] && rm -f "$FAKE_HELPER_LOG"
     unset FAKE_HELPER_LOG FAKE_HELPER_RC \
           GH_PR_REPLY_AUTO_APPROVE_REPOS \
-          _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS
+          _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS \
+          STEP8_OUTCOME
 }
 
 @test "auto-approve: allowlist match + all guards pass → helper called with bypass=1" {
@@ -195,4 +196,145 @@ teardown() {
     assert_output --partial 'deity719/dotfiles not in allowlist'
     run cat "$FAKE_HELPER_LOG"
     refute_output --partial 'helper called'
+}
+
+# ---------------------------------------------------------------------------
+# Issue #662: Step 8 outcome must be bound to STEP8_OUTCOME on every branch
+# and surfaced as a user-visible row in the Step 7 report. The gate must
+# always evaluate — silent skip is the documented regression (PR #659).
+# ---------------------------------------------------------------------------
+
+@test "step8_outcome: all guards pass → STEP8_OUTCOME=OK:fired" {
+    GH_PR_REPLY_AUTO_APPROVE_REPOS="dEitY719/dotfiles"
+    STEP8_OUTCOME=""
+    gh_pr_reply_auto_approve_step8 \
+        42 "dEitY719/dotfiles" 3 "OPEN" "false" "APPROVED" >/dev/null 2>&1
+    [ "$STEP8_OUTCOME" = "OK:fired" ]
+}
+
+@test "step8_outcome: env unset → STEP8_OUTCOME=SKIP:allowlist_miss" {
+    unset GH_PR_REPLY_AUTO_APPROVE_REPOS
+    STEP8_OUTCOME=""
+    gh_pr_reply_auto_approve_step8 \
+        42 "dEitY719/dotfiles" 3 "OPEN" "false" "APPROVED" >/dev/null 2>&1
+    [ "$STEP8_OUTCOME" = "SKIP:allowlist_miss" ]
+}
+
+@test "step8_outcome: repo not in allowlist → STEP8_OUTCOME=SKIP:allowlist_miss" {
+    GH_PR_REPLY_AUTO_APPROVE_REPOS="dEitY719/dotfiles"
+    STEP8_OUTCOME=""
+    gh_pr_reply_auto_approve_step8 \
+        42 "Anthropic/AgentToolbox" 3 "OPEN" "false" "APPROVED" >/dev/null 2>&1
+    [ "$STEP8_OUTCOME" = "SKIP:allowlist_miss" ]
+}
+
+@test "step8_outcome: comment_count=0 → STEP8_OUTCOME=SKIP:comment_count=0" {
+    GH_PR_REPLY_AUTO_APPROVE_REPOS="dEitY719/dotfiles"
+    STEP8_OUTCOME=""
+    gh_pr_reply_auto_approve_step8 \
+        42 "dEitY719/dotfiles" 0 "OPEN" "false" "APPROVED" >/dev/null 2>&1
+    [ "$STEP8_OUTCOME" = "SKIP:comment_count=0" ]
+}
+
+@test "step8_outcome: state=MERGED → STEP8_OUTCOME=SKIP:state=MERGED" {
+    GH_PR_REPLY_AUTO_APPROVE_REPOS="dEitY719/dotfiles"
+    STEP8_OUTCOME=""
+    gh_pr_reply_auto_approve_step8 \
+        42 "dEitY719/dotfiles" 3 "MERGED" "false" "APPROVED" >/dev/null 2>&1
+    [ "$STEP8_OUTCOME" = "SKIP:state=MERGED" ]
+}
+
+@test "step8_outcome: isDraft=true → STEP8_OUTCOME=SKIP:draft" {
+    GH_PR_REPLY_AUTO_APPROVE_REPOS="dEitY719/dotfiles"
+    STEP8_OUTCOME=""
+    gh_pr_reply_auto_approve_step8 \
+        42 "dEitY719/dotfiles" 3 "OPEN" "true" "APPROVED" >/dev/null 2>&1
+    [ "$STEP8_OUTCOME" = "SKIP:draft" ]
+}
+
+@test "step8_outcome: reviewDecision=CHANGES_REQUESTED → SKIP:reviewDecision=…" {
+    GH_PR_REPLY_AUTO_APPROVE_REPOS="dEitY719/dotfiles"
+    STEP8_OUTCOME=""
+    gh_pr_reply_auto_approve_step8 \
+        42 "dEitY719/dotfiles" 3 "OPEN" "false" "CHANGES_REQUESTED" >/dev/null 2>&1
+    [ "$STEP8_OUTCOME" = "SKIP:reviewDecision=CHANGES_REQUESTED" ]
+}
+
+@test "step8_outcome: helper rc=2 → STEP8_OUTCOME=WARN:rc=2" {
+    GH_PR_REPLY_AUTO_APPROVE_REPOS="dEitY719/dotfiles"
+    FAKE_HELPER_RC=2
+    STEP8_OUTCOME=""
+    gh_pr_reply_auto_approve_step8 \
+        42 "dEitY719/dotfiles" 3 "OPEN" "false" "APPROVED" >/dev/null 2>&1
+    [ "$STEP8_OUTCOME" = "WARN:rc=2" ]
+}
+
+# ---------------------------------------------------------------------------
+# Issue #662 NF-2 regression: allowlist HIT + 4 guards PASS but the Step 7
+# report renderer somehow drops the "Step 8:" line. The bats layer cannot
+# run the executor's prose-rendered report, but it can enforce the
+# variable-binding contract that the renderer consumes — leaving
+# STEP8_OUTCOME unset means the gate was skipped (the PR #659 failure
+# mode) and the rendered row would be missing.
+# ---------------------------------------------------------------------------
+
+@test "issue#662 regression: allowlist HIT + 4 guards PASS must bind STEP8_OUTCOME" {
+    GH_PR_REPLY_AUTO_APPROVE_REPOS="dEitY719/dotfiles"
+    STEP8_OUTCOME=""
+    gh_pr_reply_auto_approve_step8 \
+        42 "dEitY719/dotfiles" 3 "OPEN" "false" "APPROVED" >/dev/null 2>&1
+    # Empty STEP8_OUTCOME = gate skipped = report row would be missing.
+    # This is the exact PR #659 / 2026-05-16 regression.
+    [ -n "$STEP8_OUTCOME" ]
+}
+
+@test "issue#662 regression: render row from STEP8_OUTCOME=OK:fired" {
+    STEP8_OUTCOME="OK:fired"
+    run gh_pr_reply_render_step8_row
+    assert_success
+    assert_output '[OK]   Step 8: auto-approve fired (helper rc=0)'
+}
+
+@test "issue#662 regression: render row from STEP8_OUTCOME=SKIP:allowlist_miss" {
+    STEP8_OUTCOME="SKIP:allowlist_miss"
+    run gh_pr_reply_render_step8_row
+    assert_success
+    assert_output '[SKIP] Step 8: allowlist miss'
+}
+
+@test "issue#662 regression: render row from STEP8_OUTCOME=SKIP:draft" {
+    STEP8_OUTCOME="SKIP:draft"
+    run gh_pr_reply_render_step8_row
+    assert_success
+    assert_output '[SKIP] Step 8: draft'
+}
+
+@test "issue#662 regression: render row from STEP8_OUTCOME=SKIP:state=MERGED" {
+    STEP8_OUTCOME="SKIP:state=MERGED"
+    run gh_pr_reply_render_step8_row
+    assert_success
+    assert_output '[SKIP] Step 8: state=MERGED'
+}
+
+@test "issue#662 regression: render row from STEP8_OUTCOME=SKIP:reviewDecision=CHANGES_REQUESTED" {
+    STEP8_OUTCOME="SKIP:reviewDecision=CHANGES_REQUESTED"
+    run gh_pr_reply_render_step8_row
+    assert_success
+    assert_output '[SKIP] Step 8: reviewDecision=CHANGES_REQUESTED'
+}
+
+@test "issue#662 regression: render row from STEP8_OUTCOME=WARN:rc=2" {
+    STEP8_OUTCOME="WARN:rc=2"
+    run gh_pr_reply_render_step8_row
+    assert_success
+    assert_output '[WARN] Step 8: helper rc=2 — continuing'
+}
+
+@test "issue#662 regression: unset STEP8_OUTCOME renders as [FAIL] regression row" {
+    unset STEP8_OUTCOME
+    run gh_pr_reply_render_step8_row
+    assert_success
+    assert_output --partial '[FAIL] Step 8: gate never evaluated'
+    assert_output --partial 'STEP8_OUTCOME unset'
+    assert_output --partial 'issue #662'
 }

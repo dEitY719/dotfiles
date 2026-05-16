@@ -138,12 +138,18 @@ projectV2 보드가 없는 레포는 helper 가 silent 0 반환. `--only-from`
 ## Step 7: Report
 
 Print the summary table per `references/final-summary.md` showing
-Accepted / Declined / Answered counts, commit SHAs, and any skipped
-already-replied comments. After the table, run the "Lingering
-`CHANGES_REQUESTED` nudge" check from the same reference: re-query
-`gh pr view --json reviewDecision`, and if still `CHANGES_REQUESTED`,
-emit the one-line nudge so the user knows replies + fixes alone do
-not clear the review block — the reviewer must re-review.
+Accepted / Declined / Answered counts, commit SHAs, any skipped
+already-replied comments, **and the Step 8 outcome row** (always one
+of `[OK] Step 8: …`, `[SKIP] Step 8: …`, or `[WARN] Step 8: …` — see
+`references/final-summary.md` for the full row template). The Step 8
+row consumes the `STEP8_OUTCOME` variable bound by the auto-approve
+gate; if `STEP8_OUTCOME` is empty the gate never ran and the report
+is **incomplete** (a regression signal — see issue #662). After the
+table, run the "Lingering `CHANGES_REQUESTED` nudge" check from the
+same reference: re-query `gh pr view --json reviewDecision`, and if
+still `CHANGES_REQUESTED`, emit the one-line nudge so the user knows
+replies + fixes alone do not clear the review block — the reviewer
+must re-review.
 
 After printing the report, post a PR comment with ai-metrics (soft-fail —
 warn on error, never block). `COMMENT_COUNT` is the number of comments
@@ -176,7 +182,13 @@ On failure: `[WARN] ai-metrics comment failed — continuing.`
 ## Step 8: Solo-Repo Auto-Approve (opt-in, soft-fail)
 
 After Step 7, optionally move the PR card from `In review` to `Approved`.
-**Off by default** — fires only when all four guards pass:
+**Always evaluate the 4 guards (skip is itself a logged outcome)** —
+the move fires only when all four guards pass, but the gate runs on
+every invocation so the outcome (fire / skip / warn) is bound to
+`STEP8_OUTCOME` and surfaced as a row in the Step 7 report. Never
+short-circuit the evaluation based on a prior assumption about env
+configuration; the four-guard algorithm is the single source of
+truth (issue #662). Guards:
 
 | Guard | Pass condition |
 |---|---|
@@ -189,8 +201,12 @@ On all-pass: emit the audit-trace line and call
 `_gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "In review"`
 with `_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1` scoped to that single
 call (prefix form, never `env` — it is a shell function). Helper rc
-0/2 is soft-fail and never blocks the report. Full SSOT (4-guard
-algorithm, audit format, defense-in-depth, ties to #275/#231/#393/#397):
+0/2 is soft-fail and never blocks the report. Bind `STEP8_OUTCOME`
+on every branch (`OK:fired` / `SKIP:<reason>` / `WARN:rc=<N>`) so the
+Step 7 report row reflects the actual evaluation result — full
+outcome matrix and rendering rules: `references/auto-approve.md`
+and `references/final-summary.md`. Full SSOT (4-guard algorithm,
+audit format, defense-in-depth, ties to #275/#231/#393/#397):
 `references/auto-approve.md`.
 
 ## Constraints
