@@ -11,7 +11,7 @@ match wins.
 
 | Bucket | Match patterns (top-to-bottom precedence) | Gap hypothesis (one line) |
 |--------|------------------------------------------|---------------------------|
-| **schema** | `migrations/**`, `*.sql`, `schema*.sql`, `openapi*.{yaml,yml,json}`, `*.proto`, `graphql/**`, `**/schema.{ts,py,graphql}`, dataclass / Pydantic / SQLAlchemy model files exported as DB or API contracts | PRD/TRD 의 **Data Models / API 계약** 섹션이 변경 후의 shape 와 일치하는지 확인 필요. |
+| **schema** | `migrations/**`, `*.sql`, `schema*.sql`, `openapi*.{yaml,yml,json}`, `*.proto`, `graphql/**`, `**/schema.{ts,py,graphql}` | PRD/TRD 의 **Data Models / API 계약** 섹션이 변경 후의 shape 와 일치하는지 확인 필요. |
 | **infra** | `.github/workflows/**`, `Dockerfile*`, `docker-compose*.yml`, `Makefile`, `terraform/**`, `helm/**`, `ansible/**`, `.env*` templates, `infra/**`, `deploy/**` | TRD **Deployment / Operations** 섹션의 가정 (env vars, runtime, secrets) 이 변경됐는지 확인 필요. |
 | **docs** | `*.md`, `*.rst`, `docs/**`, `README*`, comment-only diffs in code files (no executable change) | 기존 SSOT 문서를 **부분 갱신**했을 가능성 — PRD/TRD 본문이 fragmented 되지 않았는지 cross-ref 확인 필요. |
 | **code** | (default — anything not matched above; .py/.ts/.tsx/.go/.rs/.sh/.bash/.zsh/.lua/.js 등 runtime source) | PRD 의 **Goals / Requirements** 와 TRD 의 **Architecture / Components** 가 신규 runtime 동작을 반영하는지 확인 필요. |
@@ -26,6 +26,11 @@ match wins.
   when paired with a non-doc file in the same PR is the docs change
   treated as a cross-ref hint, not a schema change.
 - An `.env.example` template → **infra**, not schema.
+- Dataclass / Pydantic / SQLAlchemy model files (e.g. `models/user.py`)
+  that are exported as DB or API contracts → **schema**, even when their
+  extension matches `code` (`.py` / `.ts` / `.go` …). The first
+  `schema` vs `code` tie-break above already lists this case; the bucket
+  table only enumerates glob patterns so the row stays parseable.
 
 ## Output shape (Step 2)
 
