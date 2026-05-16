@@ -522,24 +522,37 @@ _gh_pr_review_resolve_pr_number() {
     printf '%s\n' "$pr"
 }
 
+# _gh_pr_review_fetch_meta — one-shot fetch of every PR field the main
+# entrypoint needs (state, isDraft, baseRefName, headRefName). One
+# network round-trip beats four. The raw JSON is echoed verbatim so the
+# caller can extract whichever subset it cares about; on fetch failure
+# (network blip, no permission, deleted PR) it returns 1 with the raw
+# `gh` stderr suppressed — the caller surfaces the user-facing error.
+_gh_pr_review_fetch_meta() {
+    local pr="$1" repo="$2"
+    gh pr view "$pr" --repo "$repo" \
+        --json state,isDraft,baseRefName,headRefName 2>/dev/null
+}
+
+# _gh_pr_review_preflight_pr_state — pure-shell gate on pre-fetched
+# metadata. Decoupled from the `gh` call so the consolidation in
+# `_gh_pr_review_fetch_meta` stays a single round-trip. CI status is
+# intentionally NOT checked (opinion collection works on red CI too).
+#
+# Args: $1 = pr_number, $2 = state, $3 = isDraft ("true"/"false"/empty).
 _gh_pr_review_preflight_pr_state() {
-    # Args: $1 = pr_number, $2 = target_repo. Fails (exit 1) on
-    # CLOSED/MERGED/draft. CI status is intentionally NOT checked.
-    local pr="$1"
-    local repo="$2"
-    local state draft
-    if ! state=$(gh pr view "$pr" --repo "$repo" --json state -q .state 2>/dev/null); then
-        echo "PR #$pr could not be fetched from $repo" >&2
-        return 1
-    fi
+    local pr="$1" state="$2" draft="$3"
     case "$state" in
     OPEN) ;;
+    "")
+        echo "PR #$pr could not be fetched (empty state)" >&2
+        return 1
+        ;;
     *)
         echo "PR #$pr is $state; aborting" >&2
         return 1
         ;;
     esac
-    draft=$(gh pr view "$pr" --repo "$repo" --json isDraft -q .isDraft 2>/dev/null)
     if [ "$draft" = "true" ]; then
         echo "PR #$pr is DRAFT; aborting" >&2
         return 1
@@ -626,10 +639,25 @@ gh_pr_review() {
     fi
 
     local ai="" review="" user="" post_comment="" pr="" remote=""
-    # The parser emits one `key=value` per line for a fixed key set
-    # (ai/review/user/post_comment/pr/remote). Re-evaluate them inside
-    # the function so each assignment lands in the local scope.
-    eval "$_parsed"
+    # Read each `key=value` line into the matching local. The keys are
+    # a fixed allow-list (ai/review/user/post_comment/pr/remote); any
+    # other key is silently ignored. `eval "$_parsed"` would be shorter
+    # but would let a shell metacharacter inside a user-supplied value
+    # (e.g. `--review "$(rm -rf …)"`) execute — the `while read` loop
+    # treats each value as data, not code.
+    local _k _v
+    while IFS='=' read -r _k _v; do
+        case "$_k" in
+        ai) ai="$_v" ;;
+        review) review="$_v" ;;
+        user) user="$_v" ;;
+        post_comment) post_comment="$_v" ;;
+        pr) pr="$_v" ;;
+        remote) remote="$_v" ;;
+        esac
+    done <<EOF
+$_parsed
+EOF
 
     # ---- Step 2: pre-flight ----
     if ! command -v gh >/dev/null 2>&1; then
@@ -667,7 +695,22 @@ gh_pr_review() {
         return 1
     fi
 
-    if ! _gh_pr_review_preflight_pr_state "$PR_NUMBER" "$TARGET_REPO"; then
+    # One consolidated `gh pr view` fetches state + isDraft + base/head
+    # refs in a single round-trip; the preflight gate and the diff
+    # header below both consume this single JSON blob (Rule 19 — fewer
+    # process forks, fewer network calls).
+    local _meta state isDraft base head
+    _meta=$(_gh_pr_review_fetch_meta "$PR_NUMBER" "$TARGET_REPO")
+    if [ -z "$_meta" ]; then
+        echo "PR #$PR_NUMBER could not be fetched from $TARGET_REPO" >&2
+        return 1
+    fi
+    state=$(printf '%s' "$_meta" | sed -n 's/.*"state":"\([^"]*\)".*/\1/p')
+    isDraft=$(printf '%s' "$_meta" | sed -n 's/.*"isDraft":\(true\|false\).*/\1/p')
+    base=$(printf '%s' "$_meta" | sed -n 's/.*"baseRefName":"\([^"]*\)".*/\1/p')
+    head=$(printf '%s' "$_meta" | sed -n 's/.*"headRefName":"\([^"]*\)".*/\1/p')
+
+    if ! _gh_pr_review_preflight_pr_state "$PR_NUMBER" "$state" "$isDraft"; then
         return 1
     fi
 
@@ -686,14 +729,6 @@ gh_pr_review() {
     AI_OUT=$(mktemp 2>/dev/null) || AI_OUT="/tmp/gh-pr-review-out.$$"
     BODY_FILE=$(mktemp 2>/dev/null) || BODY_FILE="/tmp/gh-pr-review-body.$$"
 
-    # Fetch base/head refs for the diff header; tolerate API blips by
-    # falling back to '?' placeholders rather than aborting.
-    local _meta base head
-    _meta=$(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
-        --json baseRefName,headRefName 2>/dev/null || echo "{}")
-    base=$(printf '%s' "$_meta" | sed -n 's/.*"baseRefName":"\([^"]*\)".*/\1/p')
-    head=$(printf '%s' "$_meta" | sed -n 's/.*"headRefName":"\([^"]*\)".*/\1/p')
-
     if ! _gh_pr_review_build_prompt "$review" "$PROMPT_FILE" \
         "$PR_NUMBER" "$TARGET_REPO" "${base:-?}" "${head:-?}"; then
         rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
@@ -702,8 +737,14 @@ gh_pr_review() {
 
     # ---- Step 5: dispatch external AI CLI ----
     # Tee CLI stdout: stream to the user's terminal verbatim AND capture
-    # it for the PR comment body.
-    if ! _gh_pr_review_run_ai "$ai" "$PROMPT_FILE" "$CFG_DIR" | tee "$AI_OUT"; then
+    # it for the PR comment body. `set -o pipefail` is scoped to this
+    # subshell so a non-zero exit from `_gh_pr_review_run_ai` propagates
+    # past the trailing `tee`; without it the pipeline always inherits
+    # tee's (usually 0) exit code and the failure branch never runs.
+    if ! (
+        set -o pipefail
+        _gh_pr_review_run_ai "$ai" "$PROMPT_FILE" "$CFG_DIR" | tee "$AI_OUT"
+    ); then
         local _rc=$?
         rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
         return "$_rc"
