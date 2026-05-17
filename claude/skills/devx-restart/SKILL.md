@@ -24,23 +24,15 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Agent, TaskList, TaskUpdate
 If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output
 its content verbatim, then stop. No tool calls beyond that read.
 
-## Options
+## Arguments
 
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `-h`/`--help`/`help` | Print usage and stop | — |
-
-No other arguments — this skill reads the TodoList in the current session.
+Only `-h`/`--help`/`help`; full usage in `references/help.md`. No other args —
+this skill reads the TodoList in the current session.
 
 ## Role
 
-The user invokes this when their previous work was interrupted — typically by
-an `API Error: socket connection was closed unexpectedly` or similar
-service-side flake, or by the user pressing ESC because the turn was running
-too long (e.g. a 15+ minute action that grew larger than expected). Pick up
-where the prior turn left off, but do it in smaller chunks so the next
-failure costs less. Stay in the current session; don't ask the user to
-start over.
+Stay in the current session; resume the prior task in smaller chunks so the
+next failure costs less. Don't ask the user to start over.
 
 ## Step 1: Identify the Resume Target
 
@@ -59,18 +51,9 @@ conversation. Resume from the implementation/edit step those skills led to.
 
 ## Step 2: Announce + Plan Smaller Steps
 
-Print the announce line so the user sees what you picked up (verdict
-format defined in "Output" below):
-
-```
-[OK] resumed: <task subject> — 작은 단위로 쪼개서 진행합니다.
-```
-
-When Step 1 cannot pick a target, emit instead and stop:
-
-```
-[FAIL] cannot resume: <reason>
-```
+Print the announce line first (success template in
+`references/output-format.md`). When Step 1 cannot pick a target, emit the
+hard-stop template from the same file instead and stop.
 
 Read `references/chunking-rules.md` for 1-tool-call splitting rules and
 subagent delegation thresholds.
@@ -89,29 +72,18 @@ at ~200 words so the main context stays lean.
 Run the chunked steps. After each step:
 
 1. Update the TodoList (`TaskUpdate` → `completed` or new `in_progress`).
-2. Emit one short user-facing line about what just landed.
+2. Emit one short user-facing line about what just landed (format in
+   `references/output-format.md`).
 
-When the originally-interrupted task is done, hand control back to
-whatever flow the user was in. Always end with an explicit `Next:` line
-naming the next concrete command — never silently return to idle.
+When the originally-interrupted task is done, hand control back to whatever
+flow the user was in. Always end with an explicit `Next:` line naming the
+next concrete command — never silently return to idle.
 
 ## Output
 
-```
-[OK] resumed: <task subject> — 작은 단위로 쪼개서 진행합니다.
-step 1/N: <what just landed>
-step 2/N: <what just landed>
-...
-Next: <concrete command, e.g. /gh:issue-flow continue, /gh:pr-reply, /gh:pr>
-```
-
-On a hard stop (no resume target, refusing to re-invoke a process skill,
-user-correction needed):
-
-```
-[FAIL] cannot resume: <reason>
-Next: <one concrete recovery step>
-```
+Read `references/output-format.md` for the success and hard-stop templates,
+and for the per-step / `Next:` line rules. Both Step 2 (announce) and Step 4
+(progress + handoff) render from that file.
 
 ## Constraints
 
