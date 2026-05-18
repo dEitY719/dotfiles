@@ -40,15 +40,30 @@ keep YAGNI until a real ask appears.
 
 ## Step 3 — Log triage
 
-For each failing workflow from Step 2:
+`HEAD_REF` is already bound in SKILL.md Step 1 (from the initial
+`gh pr view --json number,state,headRefName` call) — reuse it,
+do not re-fetch.
+
+Fetch the recent run list **once** for the branch, then jq-filter
+per failing workflow inside the loop:
 
 ```bash
-HEAD_REF=$(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" --json headRefName --jq '.headRefName')
-RUN_ID=$(gh run list --repo "$TARGET_REPO" --branch "$HEAD_REF" \
-    --workflow "<workflow-name>" --limit 1 \
-    --json databaseId --jq '.[0].databaseId')
-gh run view "$RUN_ID" --repo "$TARGET_REPO" --log-failed
+# Pre-fetch once: most recent run for each workflow on this branch.
+RUNS_JSON=$(gh run list --branch "$HEAD_REF" --limit 50 \
+    --json databaseId,workflowName,headSha)
+
+# In the per-failing-workflow loop:
+for WF_NAME in $FAILING_WORKFLOWS; do
+    RUN_ID=$(printf '%s' "$RUNS_JSON" \
+        | jq -r --arg n "$WF_NAME" \
+            '[.[] | select(.workflowName==$n)] | .[0].databaseId')
+    gh run view "$RUN_ID" --log-failed
+done
 ```
+
+One `gh run list` call instead of N. Cuts network/process overhead
+when several workflows fail at once. `gh run view` does not accept
+`--repo`; rely on cwd-based repo detection.
 
 ### Common failure patterns
 
