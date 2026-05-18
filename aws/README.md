@@ -9,6 +9,7 @@
 aws sso login                              # Step 3
 ./aws/install-otel-managed-settings.sh     # Step 4
 claude                                     # Step 5
+./aws/diagnose.sh                          # (선택) read-only 점검
 ```
 
 Step 2 (`aws/aws.local.sh` 편집) 는 보통 건너뜁니다.
@@ -73,6 +74,14 @@ claude
 
 `/model` 명령으로 `sonnet`, `haiku`, `claude-opus-4-7`, `claude-opus-4-6` 가 노출되면 성공.
 
+## (선택) 진단 — `./aws/diagnose.sh`
+
+```sh
+./aws/diagnose.sh
+```
+
+Read-only. 위 1~5 단계가 빠짐없이 적용됐는지 PASS/FAIL/WARN 으로 보고합니다. 어떤 파일도 수정하지 않습니다. FAIL 이 있으면 보고서 하단의 `Next:` 가이드를 따라 재시도하세요.
+
 ## 어느 파일에 무엇을 붙이나
 
 | 파일 | 누가 생성 | 사용자 편집? |
@@ -94,6 +103,24 @@ claude
 - **OTel collector 주소 변경** → `aws/install-otel-managed-settings.sh` 의 `OTEL_ENDPOINT_HOST` 수정 후 재실행
 - **사내 게이트웨이(a2g) 와 병행** → 불가. 둘 중 하나만 활성 (#677 O-1)
 
+## 사내 공식 진단(`diagnose_linux.sh`) 결과 해석
+
+`curl ... diagnose_linux.sh | bash` 로 실행하는 **사내 공식** 진단은 dotfiles 의 파일 배치 (aws.local.sh / settings.local.json) 를 모르기 때문에 다음 항목들이 항상 FAIL/WARN 으로 보고된다. **모두 정상이고 무시해도 된다**.
+
+| 항목 | 사내 진단 메시지 | 실제 상태 | 이유 |
+|---|---|---|---|
+| 1-1) NODE_EXTRA_CA_CERTS bashrc 미등록 | `[FAIL] ~/.bashrc에 NODE_EXTRA_CA_CERTS 미등록` | OK — 환경변수 자체는 PASS | dotfiles 는 `shell-common/env/security.local.sh` 가 export. bashrc 자체에는 export 라인이 없다. |
+| 2-3) AWS_CA_BUNDLE / CLAUDE_CODE_USE_BEDROCK / ANTHROPIC_BEDROCK_BASE_URL bashrc 미등록 | `[FAIL] ~/.bashrc에 ... 미등록 → 영구 설정 안 됨` | OK — 모두 런타임 PASS | dotfiles 는 `aws/aws.local.sh` (`*.local.sh` 글로벌 패턴으로 gitignored) 가 export. bashrc 가 dotfiles 로더를 source 하므로 새 쉘에서도 그대로 살아난다. |
+| 2-6) settings.json model / env / availableModels / modelOverrides / awsAuthRefresh 미설정 | 다수 FAIL/WARN | OK — `~/.claude/settings.local.json` 에 있음 | `claude/settings.json` 은 외부 PC 와 공유하는 **커밋 SSOT**. Bedrock 모델 매핑은 PC-specific 이므로 의도적으로 `settings.local.json` (gitignored) 에 둔다. Claude Code 가 런타임에 두 파일을 머지한다. |
+
+정확한 진단을 원하면 dotfiles-aware 인 로컬 진단을 쓰면 된다:
+
+```sh
+./aws/diagnose.sh
+```
+
+(`aws/aws.local.sh`, `shell-common/env/security.local.sh`, `~/.claude/settings.local.json` 까지 모두 인지한다.)
+
 ## 트러블슈팅
 
 | 증상 | 원인 | 해결 |
@@ -104,7 +131,8 @@ claude
 | `cat ~/.dotfiles-setup-mode` 가 `internal` 인데도 skip | 파일에 공백/개행 섞임 | `echo internal > ~/.dotfiles-setup-mode` |
 | `availableModels` 에 opus 가 안 보임 | settings.local.json 머지 실패 | `~/.claude/settings.local.json` 확인, 필요시 백업 (`*.bedrock-merge-backup.*`) 복원 후 재실행 |
 | OTel collector 도달 실패 | `10.172.25.203:80` 비도달 (VPN/방화벽) | 사내망 연결 확인. installer 자체는 성공 — 런타임 별 문제. |
-| Samsung a2g 경고 후 머지 skip | settings.local.json 에 a2g 게이트웨이 env 잔존 | 하나만 남기고 정리 — 양립 불가 |
+| Claude Code 가 "not login" 으로 떨어짐 | settings.local.json 에 레거시 사내 게이트웨이 env (`ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_MODEL`/`ANTHROPIC_CUSTOM_HEADERS`/`NODE_TLS_REJECT_UNAUTHORIZED`) 잔존 — Bedrock 와 양립 불가 (#677 O-1) | `./aws/setup.sh` 재실행. 위 5 개 키는 머지 중 자동 제거되고 원본은 `*.bedrock-merge-backup.<timestamp>` 로 보존됨. 사전 점검은 `./aws/diagnose.sh` 의 `2-6)` 항목 |
+| `[FAIL] AWS_CA_BUNDLE 파일 없음: /usr/local/share/ca-certificates/samsungsemi-prx.com.crt` | 옛 템플릿이 가리키던 경로에 cert 가 없음 (Ubuntu 가 `update-ca-certificates` 로 `/etc/ssl/certs/ca-certificates.crt` 에만 머지한 경우) | 한 줄로 교체: `sed -i 's\|^export AWS_CA_BUNDLE=.*\|export AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt\|' aws/aws.local.sh` 후 새 쉘. `./aws/setup.sh` 가 재실행 시 동일 경고를 띄운다. |
 
 ## 참고
 
