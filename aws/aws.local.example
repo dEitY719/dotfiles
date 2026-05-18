@@ -12,8 +12,13 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-# 사내 SSL CA bundle (samsungsemi 사설 인증서 체인)
-export AWS_CA_BUNDLE=/usr/local/share/ca-certificates/samsungsemi-prx.com.crt
+# 사내 SSL CA bundle. Ubuntu 의 update-ca-certificates 가
+# /usr/local/share/ca-certificates/samsungsemi-prx.com.crt 등 사내 사설 CA 를
+# /etc/ssl/certs/ca-certificates.crt 에 자동 머지하므로 시스템 번들을 가리키면
+# 충분하고 더 포터블하다. 호스트가 samsungsemi 인증서를 다른 경로에 두는 경우
+# 그 경로로 교체하면 된다. 이 값은 NODE_EXTRA_CA_CERTS 와 같은 파일을 가리키는
+# 것이 가장 안전하다.
+export AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 # AWS Bedrock 라우팅 — Claude Code 가 Anthropic 직통 대신 Bedrock 으로 감
 export CLAUDE_CODE_USE_BEDROCK=1

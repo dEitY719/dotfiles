@@ -12,6 +12,7 @@
 | `aws-config.example` | `~/.aws/config` 템플릿 (dspublic SSO + role + region) |
 | `setup.sh` | internal 모드일 때만 위 두 파일에서 `aws.local.sh` / `~/.aws/config` / `~/.claude/settings.local.json` 시드 |
 | `install-otel-managed-settings.sh` | `aws sso login` 선행 후 사용자가 명시 실행. `/etc/claude-code/managed-settings.json` 생성 (sudo) |
+| `diagnose.sh` | Read-only 진단. 5 단계 부트스트랩이 빠짐없이 적용됐는지 PASS/FAIL/WARN 으로 보고. 파일 수정 없음 |
 | `README.md` | 사람-운영자용 5단계 워크스루 (≤150 줄) |
 | `AGENTS.md` | 이 파일 — AI/리뷰어용 SSOT (≤100 줄) |
 
@@ -36,7 +37,20 @@
 사용자 수동 실행:
   aws sso login                  (브라우저 OAuth)
   ./aws/install-otel-managed-settings.sh   (sudo 1회, OTel)
+  ./aws/diagnose.sh              (선택, read-only 점검)
 ```
+
+## settings.local.json 머지 정책 (#677 O-1 broadened)
+
+`_merge_claude_settings_local` 는 Bedrock 와 양립 불가한 레거시 사내-게이트웨이 env 키를 머지 중 **자동 제거**한다. 대상 키:
+
+- `env.ANTHROPIC_BASE_URL`
+- `env.ANTHROPIC_AUTH_TOKEN`
+- `env.ANTHROPIC_MODEL`
+- `env.ANTHROPIC_CUSTOM_HEADERS`
+- `env.NODE_TLS_REJECT_UNAUTHORIZED`
+
+URL 패턴 (`a2g.samsungds.net`) 매칭은 호스트 리브랜드 (`cloud.dtgpt.samsungds.net`) 에 깨졌으므로 **키 이름**을 기준으로 한다. 사용자가 의도적으로 게이트웨이 모드를 쓰려면 `aws/setup.sh` 자체를 호출하지 말아야 한다 (= external 모드). 원본은 타임스탬프 백업 (`*.bedrock-merge-backup.*`) 에 보존된다.
 
 ## 외부 PC 안전망
 

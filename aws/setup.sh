@@ -105,20 +105,28 @@ _merge_claude_settings_local() {
         return 0
     fi
 
-    # Detect Samsung a2g gateway block — mutually exclusive with Bedrock.
-    _has_a2g=$(jq -r '.env.ANTHROPIC_BASE_URL // ""' "$_tgt" 2>/dev/null \
-        | grep -c "a2g\.samsungds\.net" 2>/dev/null || true)
-    if [ "${_has_a2g:-0}" != "0" ]; then
-        ux_warning "Detected Samsung a2g gateway env in $_tgt"
-        ux_warning "Bedrock 경로와 a2g 게이트웨이 경로는 양립 불가합니다 (#677 O-1)."
-        ux_warning "자동 머지를 건너뜁니다. 한 경로만 남기고 수동 정리하세요."
-        ux_bullet "Bedrock 으로 단일화하려면 settings.local.json 의 env.ANTHROPIC_*"
-        ux_bullet "키들을 제거한 뒤 ./aws/setup.sh 를 재실행하세요."
-        return 0
+    # Detect leftover Samsung internal-gateway env keys. The earlier narrow
+    # `a2g.samsungds.net` URL check missed the `cloud.dtgpt.samsungds.net`
+    # rebrand and produced a half-merged broken state ("not login"). These
+    # keys are mutually exclusive with Bedrock (#677 O-1) and have no
+    # purpose under CLAUDE_CODE_USE_BEDROCK=1, so the merge strips them.
+    # The backup below preserves the user's previous content verbatim.
+    _gateway_keys=$(jq -r '
+        .env // {}
+        | keys_unsorted[]
+        | select(test("^(ANTHROPIC_BASE_URL|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_MODEL|ANTHROPIC_CUSTOM_HEADERS|NODE_TLS_REJECT_UNAUTHORIZED)$"))
+    ' "$_tgt" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')
+
+    if [ -n "$_gateway_keys" ]; then
+        ux_warning "Legacy gateway env keys detected — Bedrock 와 양립 불가 (#677 O-1):"
+        ux_bullet "  $_gateway_keys"
+        ux_bullet "머지 중 위 키들을 제거합니다. 원본은 백업 파일에 보존됩니다."
     fi
 
-    # Merge: target wins on conflicts (preserve user edits). Template keys
-    # only fill gaps. _comment is dropped during the merge.
+    # Merge: target wins on conflicts (preserve user edits), but the
+    # mutually-exclusive gateway keys are stripped from the target side
+    # first. Template keys only fill gaps. _comment is dropped during the
+    # merge.
     #
     # Atomicity: render to a temp file, compare with the live target via
     # cmp -s, and only when contents differ do we mv the live file aside
@@ -127,8 +135,19 @@ _merge_claude_settings_local() {
     # final mv is atomic on POSIX (same-filesystem rename).
     _tmp_merged=$(mktemp)
     if jq -s '
+        def _strip_gateway:
+            if .env then
+                .env |= del(
+                    .ANTHROPIC_BASE_URL,
+                    .ANTHROPIC_AUTH_TOKEN,
+                    .ANTHROPIC_MODEL,
+                    .ANTHROPIC_CUSTOM_HEADERS,
+                    .NODE_TLS_REJECT_UNAUTHORIZED
+                )
+            else .
+            end;
         (.[0] | del(._comment?)) as $tpl
-        | (.[1]) as $cur
+        | (.[1] | _strip_gateway) as $cur
         | $tpl * $cur
     ' "$_tpl" "$_tgt" > "$_tmp_merged"; then
         if cmp -s "$_tgt" "$_tmp_merged"; then
@@ -156,6 +175,22 @@ _seed_file \
     "${DOTFILES_DIR}/aws/aws.local.example" \
     "${DOTFILES_DIR}/aws/aws.local.sh" \
     0600
+
+# Sanity: AWS_CA_BUNDLE 가 가리키는 파일이 실제로 존재하는지. 기존 사용자가
+# 옛 템플릿 경로(/usr/local/share/ca-certificates/samsungsemi-prx.com.crt)를
+# 그대로 들고 있고 호스트엔 그 파일이 없는 경우, aws CLI TLS 자체가 실패한다.
+# _seed_file 는 사용자 편집을 보존하므로 자동 교체 대신 경고만 띄운다.
+_aws_local="${DOTFILES_DIR}/aws/aws.local.sh"
+if [ -f "$_aws_local" ]; then
+    _ca_path=$(awk -F= '/^export AWS_CA_BUNDLE=/ {print $2; exit}' "$_aws_local" \
+        | tr -d '"' | tr -d "'")
+    if [ -n "$_ca_path" ] && [ ! -f "$_ca_path" ]; then
+        ux_warning "AWS_CA_BUNDLE 가 가리키는 파일이 존재하지 않음: $_ca_path"
+        ux_bullet "NODE_EXTRA_CA_CERTS (보통 /etc/ssl/certs/ca-certificates.crt)"
+        ux_bullet "와 동일 경로로 교체 권장:"
+        ux_bullet "  sed -i 's|^export AWS_CA_BUNDLE=.*|export AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt|' aws/aws.local.sh"
+    fi
+fi
 
 # ---------------------------------------------------------------------------
 # F-6: ~/.aws/config — prefer aws-config.local override when present
