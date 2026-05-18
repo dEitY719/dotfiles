@@ -1,0 +1,23 @@
+#!/bin/sh
+# aws/aws.local.example — Internal PC AWS Bedrock 쉘 env (template)
+#
+# 사용 방법
+#   1. ./setup.sh 를 internal 모드로 실행하면 aws/setup.sh 가 이 파일을
+#      aws/aws.local.sh 로 복사합니다 (없을 때만, 멱등).
+#   2. 호스트별 VPC endpoint 가 다르면 aws.local.sh 만 수정하세요.
+#   3. aws.local.sh 는 *.local.sh 글로벌 패턴으로 자동 gitignore.
+#
+# 본 파일은 placeholder 가 아닌 실제 값을 담고 있어 그대로 쓸 수 있습니다.
+# 사번·STS UserId 같은 식별 정보는 들어 있지 않으므로 커밋되어도 안전.
+
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
+
+# 사내 SSL CA bundle (samsungsemi 사설 인증서 체인)
+export AWS_CA_BUNDLE=/usr/local/share/ca-certificates/samsungsemi-prx.com.crt
+
+# AWS Bedrock 라우팅 — Claude Code 가 Anthropic 직통 대신 Bedrock 으로 감
+export CLAUDE_CODE_USE_BEDROCK=1
+export AWS_REGION=ap-northeast-2
+
+# Bedrock VPC endpoint (사내망 전용)
+export ANTHROPIC_BEDROCK_BASE_URL=https://vpce-0dd86dfd31388ddeb-tgk37vc6.bedrock-runtime.ap-northeast-2.vpce.amazonaws.com

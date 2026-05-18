@@ -62,6 +62,7 @@ fi
 ./git/setup.sh
 ./claude/setup.sh
 ./gemini/setup.sh
+./aws/setup.sh                 # Internal-PC AWS Bedrock bootstrap (#677). No-op on external/public PCs.
 ./scripts/setup-skills-ssot.sh
 ./vscode-extensions/setup.sh
 # Propagate .vscode/base.json (SSOT) to the live VS Code User settings.json (#586).
