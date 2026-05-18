@@ -469,9 +469,13 @@ EOF
 # Note: 이전에 있던 `_print_internal_local_env_guidance` 는 #683 F-2 에서 제거.
 # 사내 PC 의 settings.local.json 은 `aws/setup.sh` 가 Bedrock 템플릿
 # (claude/settings.local.bedrock.example) 으로 jq-머지한다 (#677 F-7).
-# 게이트웨이 path (`cloud.dtgpt.samsungds.net` + `Qwen3.6-27B`) 는 Bedrock 과
-# 양립 불가하며 (#677 O-1), 같은 ./setup.sh 안에서 aws/setup.sh 가 즉시 strip
-# 하는 자기상충 흐름이었음.
+#
+# 함께 deprecate 된 env 키 (게이트웨이 path 전용, Bedrock 와 양립 불가 — #677 O-1):
+#   - ANTHROPIC_BASE_URL  (was: http://cloud.dtgpt.samsungds.net/llm)
+#   - ANTHROPIC_AUTH_TOKEN (was: placeholder "your-dt-api-key")
+#   - ANTHROPIC_MODEL      (was: "Qwen3.6-27B")
+# 위 3 키는 더 이상 settings.local.json 으로 주입되지 않는다. 같은 ./setup.sh 안
+# 에서 aws/setup.sh 가 즉시 strip 하던 자기상충 흐름도 같이 정리됨.
 
 # --- Main Script Logic (issue #287, Phase 1: multi-account) ---
 
@@ -628,8 +632,9 @@ if [ "$_setup_mode" = "internal" ]; then
 
     # settings.local.json 의 Bedrock 모델 매핑은 aws/setup.sh 가 책임진다 (#677 F-7).
     # 이전의 _print_internal_local_env_guidance 호출은 #683 F-2 에서 제거됨 —
-    # 같은 ./setup.sh 안에서 게이트웨이 블록을 만들고 곧바로 aws/setup.sh 가
-    # strip 하던 자기상충 흐름을 정리.
+    # 같은 ./setup.sh 안에서 게이트웨이 블록 (env: ANTHROPIC_BASE_URL /
+    # ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL) 을 만들고 곧바로 aws/setup.sh
+    # 가 strip 하던 자기상충 흐름을 정리. 위 3 env 키는 모두 deprecate.
 
     # Surface stale /etc/sudoers.d/claude-{skills,docs}-mount-* files left
     # behind from any prior multi-account install on this box.
