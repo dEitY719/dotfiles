@@ -182,8 +182,16 @@ _seed_file \
 # _seed_file 는 사용자 편집을 보존하므로 자동 교체 대신 경고만 띄운다.
 _aws_local="${DOTFILES_DIR}/aws/aws.local.sh"
 if [ -f "$_aws_local" ]; then
-    _ca_path=$(awk -F= '/^export AWS_CA_BUNDLE=/ {print $2; exit}' "$_aws_local" \
-        | tr -d '"' | tr -d "'")
+    # sub() over -F= to handle paths containing '=' or trailing comments;
+    # the -n guard below stays so an empty parse never false-fires.
+    _ca_path=$(awk '
+        /^export AWS_CA_BUNDLE=/ {
+            sub(/^export AWS_CA_BUNDLE=/, "")
+            sub(/[[:space:]]*#.*/, "")
+            print
+            exit
+        }
+    ' "$_aws_local" | tr -d '"' | tr -d "'")
     if [ -n "$_ca_path" ] && [ ! -f "$_ca_path" ]; then
         ux_warning "AWS_CA_BUNDLE 가 가리키는 파일이 존재하지 않음: $_ca_path"
         ux_bullet "NODE_EXTRA_CA_CERTS (보통 /etc/ssl/certs/ca-certificates.crt)"

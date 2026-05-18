@@ -92,7 +92,8 @@ SECURITY_LOCAL_SH="${DOTFILES_DIR}/shell-common/env/security.local.sh"
 # 주어진 env var 가 ~/.bashrc 또는 dotfiles env 파일에 export 되었는지 확인.
 # 첫 매치된 파일 경로를 stdout 으로 돌려준다 (없으면 빈 문자열, exit 1).
 _env_registered() {
-    _var="$1"
+    local _var="$1"
+    local _f
     for _f in "$HOME/.bashrc" "$AWS_LOCAL_SH" "$SECURITY_LOCAL_SH"; do
         [ -f "$_f" ] || continue
         if grep -q "export ${_var}=" "$_f" 2>/dev/null; then
@@ -150,38 +151,38 @@ else
 fi
 
 # 인증서 파일 내용 점검 (NODE_EXTRA_CA_CERTS가 가리키는 파일 또는 기본 경로)
+# 파일이 클 수 있으므로 변수에 캡처하지 않고 grep 을 직접 파일에 수행한다.
 CHECK_CERT="${CERT_FILE:-$EXPECTED_CERT_PATH}"
 if [ -f "$CHECK_CERT" ]; then
-  CERT_CONTENT=$(cat "$CHECK_CERT")
-
-  # BEGIN CERTIFICATE 첫 줄 깨짐 여부 확인 (vim 붙여넣기 버그)
+  # BEGIN CERTIFICATE 첫 줄 깨짐 여부 확인 (vim 붙여넣기 버그). PEM 파일 끝에
+  # 우연히 공백이 붙는 경우도 허용하도록 [[:space:]]*$ 로 lenient 매칭.
   FIRST_BEGIN=$(grep -n "BEGIN CERTIFICATE" "$CHECK_CERT" | head -1)
-  if echo "$FIRST_BEGIN" | grep -q "^[0-9]*:-----BEGIN CERTIFICATE-----$"; then
+  if echo "$FIRST_BEGIN" | grep -qE "^[0-9]*:-----BEGIN CERTIFICATE-----[[:space:]]*$"; then
     pass "인증서 첫 줄 형식 정상 (vim 붙여넣기 깨짐 없음)"
   else
     fail "인증서 첫 줄이 깨져 있을 수 있음 → -----BEGIN CERTIFICATE----- 형식인지 확인 필요"
   fi
 
-  # 각 인증서 포함 여부
-  if echo "$CERT_CONTENT" | grep -q "$EXPECTED_PROXY_CERT_FINGERPRINT"; then
+  # 각 인증서 포함 여부 — 파일 직접 grep (스트리밍)
+  if grep -q "$EXPECTED_PROXY_CERT_FINGERPRINT" "$CHECK_CERT"; then
     pass "반도체 프록시 인증서 (samsungsemi-prx.com) 포함됨"
   else
     fail "반도체 프록시 인증서 (samsungsemi-prx.com) 미포함"
   fi
 
-  if echo "$CERT_CONTENT" | grep -q "$EXPECTED_SECDS_ROOT_FINGERPRINT"; then
+  if grep -q "$EXPECTED_SECDS_ROOT_FINGERPRINT" "$CHECK_CERT"; then
     pass "DS 1 Tier 루트인증서 (SECDS_ROOT_CA) 포함됨"
   else
     warn "DS 1 Tier 루트인증서 (SECDS_ROOT_CA) 미포함 (Case 2에서만 필요)"
   fi
 
-  if echo "$CERT_CONTENT" | grep -q "$EXPECTED_SECDS_T2ROOT_FINGERPRINT"; then
+  if grep -q "$EXPECTED_SECDS_T2ROOT_FINGERPRINT" "$CHECK_CERT"; then
     pass "DS 2 Tier 루트인증서 (SECDS-T2ROOTCA) 포함됨"
   else
     warn "DS 2 Tier 루트인증서 (SECDS-T2ROOTCA) 미포함 (Case 2에서만 필요)"
   fi
 
-  if echo "$CERT_CONTENT" | grep -q "$EXPECTED_SECDS_T2ISSUING_FINGERPRINT"; then
+  if grep -q "$EXPECTED_SECDS_T2ISSUING_FINGERPRINT" "$CHECK_CERT"; then
     pass "DS 2 Tier 중간기관 인증서 (SECDS-T2IssuingCA) 포함됨"
   else
     warn "DS 2 Tier 중간기관 인증서 (SECDS-T2IssuingCA) 미포함 (Case 2에서만 필요)"
@@ -314,20 +315,19 @@ AWS_CONFIG="$HOME/.aws/config"
 if [ -f "$AWS_CONFIG" ]; then
   pass "~/.aws/config 파일 존재"
 
-  CONFIG_CONTENT=$(cat "$AWS_CONFIG")
-
+  # 파일 직접 grep — CONFIG_CONTENT 변수 캡처 회피.
   # [default] 프로필 확인
-  if echo "$CONFIG_CONTENT" | grep -q '^\[default\]'; then
+  if grep -q '^\[default\]' "$AWS_CONFIG"; then
     pass "[default] 프로필 존재"
   else
     fail "[default] 프로필 미존재 → [default] 섹션 추가 필요"
   fi
 
   # sso_start_url
-  if echo "$CONFIG_CONTENT" | grep -q "sso_start_url.*=.*${EXPECTED_SSO_START_URL}"; then
+  if grep -q "sso_start_url.*=.*${EXPECTED_SSO_START_URL}" "$AWS_CONFIG"; then
     pass "sso_start_url 올바름"
   else
-    ACTUAL=$(echo "$CONFIG_CONTENT" | grep 'sso_start_url' | head -1 | awk -F= '{print $2}' | xargs)
+    ACTUAL=$(grep 'sso_start_url' "$AWS_CONFIG" | head -1 | awk -F= '{print $2}' | xargs)
     if [ -n "$ACTUAL" ]; then
       fail "sso_start_url 값이 다름 (현재: ${ACTUAL}, 기대: ${EXPECTED_SSO_START_URL})"
     else
@@ -336,21 +336,21 @@ if [ -f "$AWS_CONFIG" ]; then
   fi
 
   # sso_region
-  if echo "$CONFIG_CONTENT" | grep -q "sso_region.*=.*${EXPECTED_SSO_REGION}"; then
+  if grep -q "sso_region.*=.*${EXPECTED_SSO_REGION}" "$AWS_CONFIG"; then
     pass "sso_region 올바름"
   else
     fail "sso_region 미설정 또는 값이 다름 (기대: ${EXPECTED_SSO_REGION})"
   fi
 
   # sso_account_id
-  if echo "$CONFIG_CONTENT" | grep -q "sso_account_id.*=.*${EXPECTED_SSO_ACCOUNT_ID}"; then
+  if grep -q "sso_account_id.*=.*${EXPECTED_SSO_ACCOUNT_ID}" "$AWS_CONFIG"; then
     pass "sso_account_id 올바름"
   else
     fail "sso_account_id 미설정 또는 값이 다름 (기대: ${EXPECTED_SSO_ACCOUNT_ID})"
   fi
 
   # sso_role_name
-  SSO_ROLE=$(echo "$CONFIG_CONTENT" | grep 'sso_role_name' | head -1 | awk -F= '{print $2}' | xargs)
+  SSO_ROLE=$(grep 'sso_role_name' "$AWS_CONFIG" | head -1 | awk -F= '{print $2}' | xargs)
   if [ -n "$SSO_ROLE" ]; then
     if [ "$SSO_ROLE" = "여기에 안내 받은 값을 붙여넣으세요 (대소문자도 구분 필수)" ]; then
       fail "sso_role_name이 가이드 예시 그대로임 → AICM 메일로 안내 받은 실제 role name으로 변경 필요"
@@ -362,7 +362,7 @@ if [ -f "$AWS_CONFIG" ]; then
   fi
 
   # region
-  if echo "$CONFIG_CONTENT" | grep -q "^region.*=.*${EXPECTED_REGION}"; then
+  if grep -q "^region.*=.*${EXPECTED_REGION}" "$AWS_CONFIG"; then
     pass "region 올바름"
   else
     fail "region 미설정 또는 값이 다름 (기대: ${EXPECTED_REGION})"
