@@ -164,6 +164,35 @@ _usage_record_count() {
     assert_output --partial "transient"
 }
 
+# Issue #678 (PR #829 retrospective): the Anthropic CLI surfaces a
+# mid-stream proxy disconnect as the exact phrase below. Both halves
+# ("Stream idle timeout" and "partial response received") must match
+# independently so a future format tweak on either side still retries.
+
+@test "classifier: 'Stream idle timeout - partial response received' is transient (#678)" {
+    run bash -c ". '${DOTFILES_ROOT}/shell-common/functions/ai_usage.sh' && \
+                 _ai_usage_is_transient 'API Error: Stream idle timeout - partial response received' && \
+                 echo transient"
+    assert_success
+    assert_output --partial "transient"
+}
+
+@test "classifier: 'Stream idle timeout' alone is transient (#678)" {
+    run bash -c ". '${DOTFILES_ROOT}/shell-common/functions/ai_usage.sh' && \
+                 _ai_usage_is_transient 'API Error: Stream idle timeout' && \
+                 echo transient"
+    assert_success
+    assert_output --partial "transient"
+}
+
+@test "classifier: 'partial response received' alone is transient (#678)" {
+    run bash -c ". '${DOTFILES_ROOT}/shell-common/functions/ai_usage.sh' && \
+                 _ai_usage_is_transient 'upstream error: partial response received' && \
+                 echo transient"
+    assert_success
+    assert_output --partial "transient"
+}
+
 @test "classifier: auth error is NOT transient" {
     run bash -c ". '${DOTFILES_ROOT}/shell-common/functions/ai_usage.sh' && \
                  if _ai_usage_is_transient 'Authentication failed: invalid API key'; \
