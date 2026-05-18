@@ -22,8 +22,7 @@ Rules:
 - One `step N/M:` line per chunk completed. No batched summaries.
 - `Next:` MUST name a concrete command. Never silently return to idle.
 
-## Hard stop (no resume target, refusing to re-invoke a process skill,
-user-correction needed)
+## Hard stop (no resume target, no re-invoke, user-correction needed)
 
 ```
 [FAIL] cannot resume: <reason>
