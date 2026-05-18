@@ -119,22 +119,34 @@ _merge_claude_settings_local() {
 
     # Merge: target wins on conflicts (preserve user edits). Template keys
     # only fill gaps. _comment is dropped during the merge.
-    _backup="${_tgt}.bedrock-merge-backup.$(date +%Y%m%d%H%M%S)"
-    cp "$_tgt" "$_backup"
-
-    _merged=$(jq -s '
-        (.[0] | del(._comment)) as $tpl
+    #
+    # Atomicity: render to a temp file, compare with the live target via
+    # cmp -s, and only when contents differ do we mv the live file aside
+    # as a timestamped backup and mv the new file into place. This avoids
+    # accumulating identical backups on every idempotent re-run, and the
+    # final mv is atomic on POSIX (same-filesystem rename).
+    _tmp_merged=$(mktemp)
+    if jq -s '
+        (.[0] | del(._comment?)) as $tpl
         | (.[1]) as $cur
         | $tpl * $cur
-    ' "$_tpl" "$_tgt") || {
-        ux_error "jq merge failed — restore from backup: $_backup"
+    ' "$_tpl" "$_tgt" > "$_tmp_merged"; then
+        if cmp -s "$_tgt" "$_tmp_merged"; then
+            rm -f "$_tmp_merged"
+            ux_success "Preserved (already up to date): $_tgt"
+        else
+            _backup="${_tgt}.bedrock-merge-backup.$(date +%Y%m%d%H%M%S)"
+            mv "$_tgt" "$_backup"
+            mv "$_tmp_merged" "$_tgt"
+            chmod 0600 "$_tgt"
+            ux_success "Merged Bedrock keys into: $_tgt"
+            ux_bullet "Backup: $_backup"
+        fi
+    else
+        ux_error "jq merge failed — check syntax in $_tgt"
+        rm -f "$_tmp_merged"
         return 1
-    }
-
-    printf '%s\n' "$_merged" > "$_tgt"
-    chmod 0600 "$_tgt"
-    ux_success "Merged Bedrock keys into: $_tgt"
-    ux_bullet "Backup: $_backup"
+    fi
 }
 
 # ---------------------------------------------------------------------------
