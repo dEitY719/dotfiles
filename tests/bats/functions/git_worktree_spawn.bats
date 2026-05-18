@@ -681,9 +681,10 @@ teardown() {
     assert_output "|--persist|(claude) pr-719"
 }
 
-@test "bash: #675 spawn --launch without --ai drops the '(<agent>)' prefix" {
-    # Edge case from issue body: --ai unspecified ⇒ label is just <wt-name>,
-    # even though `agent` itself defaults to claude internally.
+@test "bash: #675 spawn --launch without --ai still includes '(claude)' prefix (default)" {
+    # PR #676 review correction: --ai unspecified ⇒ program actually runs
+    # claude (the default), so the label must reflect that real behavior.
+    # Earlier draft dropped the prefix in this case; user feedback fixed it.
     run_in_bash "
         cd '$FAKE_REPO' || exit 1
         MARKER='$TEST_TEMP_HOME/spawn-trn-noai-marker'
@@ -698,7 +699,7 @@ teardown() {
         cat \"\$MARKER\"
     "
     assert_success
-    assert_output "|--persist|pr-720"
+    assert_output "|--persist|(claude) pr-720"
 }
 
 @test "bash: #675 spawn --launch --ai gemini emits '(gemini) <wt-name>'" {
