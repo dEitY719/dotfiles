@@ -18,6 +18,11 @@ _term_rename_persist() {
 }
 
 _term_rename_install_hook() {
+    # Hook is APPENDED, not prepended. Reason: oh-my-zsh's
+    # omz_termsupport_precmd (and similar prompt-side title emitters in p10k
+    # / starship / vte) sit inside precmd_functions and emit OSC 0/2 with
+    # `user@host:cwd` on every prompt. Whichever hook fires LAST wins the
+    # tab label, so our re-emit must run last.
     # Inject the hook name via ${_hook} so the literal snake_case identifier
     # never appears inside a quoted string — silences the repo's naming check
     # (git/hooks/checks/naming_check.sh) that flags snake_case in user-facing
@@ -32,7 +37,7 @@ _term_rename_install_hook() {
             *"${_hook}"*) return 0 ;;
         esac
         if [ -n "${PROMPT_COMMAND-}" ]; then
-            PROMPT_COMMAND="${_hook}; ${PROMPT_COMMAND}"
+            PROMPT_COMMAND="${PROMPT_COMMAND}; ${_hook}"
         else
             PROMPT_COMMAND="${_hook}"
         fi
@@ -46,7 +51,7 @@ _term_rename_install_hook() {
             typeset -ga precmd_functions
             case " ${precmd_functions[*]-} " in
                 *" ${_hook} "*) : ;;
-                *) precmd_functions=("${_hook}" "${precmd_functions[@]}") ;;
+                *) precmd_functions=("${precmd_functions[@]}" "${_hook}") ;;
             esac
         '
         return 0
