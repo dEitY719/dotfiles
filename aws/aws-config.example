@@ -1,0 +1,17 @@
+# aws/aws-config.example — ~/.aws/config (Internal PC, AD SSO)
+#
+# 사용 방법
+#   1. ./setup.sh 가 internal 모드에서 이 파일을 ~/.aws/config 로 복사합니다
+#      (없을 때만, 멱등).
+#   2. 다른 SSO account/role 을 쓰려면 aws/aws-config.local 을 만들어 두면
+#      setup.sh 가 example 대신 .local 을 source 로 사용합니다.
+#   3. 복사 후 `aws sso login` 으로 브라우저 OAuth 1회.
+#
+# 본 파일은 사내 SSO 진입점만 담고 있어 외부 침투 가치가 낮아 커밋 안전.
+
+[default]
+sso_start_url = https://dspublic.awsapps.com/start
+sso_region = ap-northeast-2
+sso_account_id = 518692946118
+sso_role_name = AWSPS-AICoding-SLSI
+region = ap-northeast-2
