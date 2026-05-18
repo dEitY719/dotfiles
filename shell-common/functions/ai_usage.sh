@@ -50,16 +50,22 @@ _ai_usage_now() {
 }
 
 # Classify a claude `.result` string as a transient network error worth
-# retrying. Pattern set comes from issue #651 (PR #726 retrospective):
+# retrying. Pattern set comes from issue #651 (PR #726 retrospective)
+# and issue #678 (PR #829 retrospective):
 # ECONNRESET / ETIMEDOUT / EHOSTUNREACH / EAI_AGAIN are libuv/Node socket
 # errors surfaced by the proxy stack; "fetch failed" is the upstream JS
-# fetch wrapper's terse error. All four are routinely seen on the
-# Samsung internal LLM gateway and clear on a 2-4 s backoff. Permanent
-# errors (auth, 4xx, model not found) do NOT match — the caller stays
-# fail-closed on those, matching pre-retry behaviour.
+# fetch wrapper's terse error. "Stream idle timeout" / "partial response
+# received" arrive together when the proxy-gateway SSE keepalive drops
+# mid-stream — same transient class, different signature. Both halves of
+# that message are listed so a future format tweak on either side still
+# matches. All are routinely seen on the Samsung internal LLM gateway
+# and clear on a 2-4 s backoff. Permanent errors (auth, 4xx, model not
+# found) do NOT match — the caller stays fail-closed on those, matching
+# pre-retry behaviour.
 _ai_usage_is_transient() {
     case "$1" in
-    *ECONNRESET* | *ETIMEDOUT* | *EHOSTUNREACH* | *EAI_AGAIN* | *"fetch failed"*)
+    *ECONNRESET* | *ETIMEDOUT* | *EHOSTUNREACH* | *EAI_AGAIN* \
+        | *"fetch failed"* | *"Stream idle timeout"* | *"partial response received"*)
         return 0
         ;;
     *)
