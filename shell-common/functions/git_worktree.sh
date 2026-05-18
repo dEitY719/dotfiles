@@ -1443,7 +1443,7 @@ git_worktree_spawn() {
     fi
 
     local base="" name="" use_tmux=0 use_launch=0 use_bg=0 \
-          agent="claude" account="" prompt="" prompt_set=0 prompt_warned=0
+          agent="claude" ai_set=0 account="" prompt="" prompt_set=0 prompt_warned=0
 
     # Parse arguments. New grammar (#650): option-only; --wt-name is the
     # required name, --prompt is the trailing AI initial-task flag that
@@ -1497,7 +1497,7 @@ git_worktree_spawn() {
                 if [ $# -lt 2 ] || [ -z "${2-}" ] || [ "${2#-}" != "$2" ]; then
                     ux_error "--ai requires a value"; return 1
                 fi
-                agent="$2"; shift 2
+                agent="$2"; ai_set=1; shift 2
                 ;;
             --user)
                 if [ $# -lt 2 ] || [ -z "${2-}" ] || [ "${2#-}" != "$2" ]; then
@@ -1749,6 +1749,26 @@ git_worktree_spawn() {
         fi
         ux_info "  launch: cd \"$wt_path\" && $launch_cmd"
         cd "$wt_path" || { ux_error "Cannot cd to $wt_path"; return 1; }
+        # Label the VSCode tab with "(<agent>) <wt-name>" so multiple
+        # spawned worktrees are distinguishable at a glance (issue #675).
+        # --persist installs a precmd hook in the caller's shell that
+        # re-emits OSC 0 before every prompt — so after the agent exits
+        # and the user is left at the worktree's shell, the label sticks
+        # (term_rename.sh design from #672). When --ai was not typed by
+        # the user, the "(<agent>) " prefix is dropped per the issue's
+        # edge-case spec — even though `agent` itself always defaults to
+        # `claude`, the prefix is treated as a "user-explicitly-asked-
+        # to-disambiguate" signal. Guarded by command -v so the spawn
+        # still works if term_rename.sh somehow isn't loaded.
+        if command -v term_rename >/dev/null 2>&1; then
+            local _gwt_label
+            if [ "$ai_set" = 1 ]; then
+                _gwt_label="(${agent}) ${name}"
+            else
+                _gwt_label="$name"
+            fi
+            term_rename --persist "$_gwt_label"
+        fi
         eval "$launch_cmd"
     else
         ux_info ""

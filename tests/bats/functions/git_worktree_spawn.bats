@@ -655,3 +655,105 @@ teardown() {
     # Single positional arg, no --bg.
     assert_output "|hello world"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #675: --launch auto-emits term-rename --persist so the VSCode tab
+# shows "(<agent>) <wt-name>" while the spawned worktree's shell is active.
+# Shadow term_rename with a recorder; the real implementation's OSC printf
+# is harmless under `>/dev/null` redirection inside run_in_bash.
+# ---------------------------------------------------------------------------
+
+@test "bash: #675 spawn --launch --ai claude emits term-rename '(claude) <wt-name>'" {
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-trn-claude-marker'
+        export MARKER
+        claude_yolo() { :; }
+        term_rename() {
+            local _trn=''
+            for _a in \"\$@\"; do _trn=\"\${_trn}|\$_a\"; done
+            printf '%s\n' \"\$_trn\" > \"\$MARKER\"
+        }
+        git_worktree_spawn --launch --ai claude --wt-name pr-719 >/dev/null 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    assert_output "|--persist|(claude) pr-719"
+}
+
+@test "bash: #675 spawn --launch without --ai drops the '(<agent>)' prefix" {
+    # Edge case from issue body: --ai unspecified ⇒ label is just <wt-name>,
+    # even though `agent` itself defaults to claude internally.
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-trn-noai-marker'
+        export MARKER
+        claude_yolo() { :; }
+        term_rename() {
+            local _trn=''
+            for _a in \"\$@\"; do _trn=\"\${_trn}|\$_a\"; done
+            printf '%s\n' \"\$_trn\" > \"\$MARKER\"
+        }
+        git_worktree_spawn --launch --wt-name pr-720 >/dev/null 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    assert_output "|--persist|pr-720"
+}
+
+@test "bash: #675 spawn --launch --ai gemini emits '(gemini) <wt-name>'" {
+    # Non-claude agent — confirms the prefix uses whatever the user typed,
+    # not the default.
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-trn-gemini-marker'
+        export MARKER
+        gemini_yolo() { :; }
+        term_rename() {
+            local _trn=''
+            for _a in \"\$@\"; do _trn=\"\${_trn}|\$_a\"; done
+            printf '%s\n' \"\$_trn\" > \"\$MARKER\"
+        }
+        git_worktree_spawn --launch --ai gemini --wt-name pr-721 >/dev/null 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    assert_output "|--persist|(gemini) pr-721"
+}
+
+@test "bash: #675 spawn without --launch does NOT emit term-rename" {
+    # Worktree-only path: no agent dispatch, no label emit. The marker file
+    # must remain untouched (absent).
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-trn-no-launch-marker'
+        export MARKER
+        term_rename() {
+            local _trn=''
+            for _a in \"\$@\"; do _trn=\"\${_trn}|\$_a\"; done
+            printf '%s\n' \"\$_trn\" > \"\$MARKER\"
+        }
+        git_worktree_spawn --wt-name pr-722 >/dev/null 2>&1
+        if [ -e \"\$MARKER\" ]; then echo MARKER_PRESENT; else echo NO_MARKER; fi
+    "
+    assert_success
+    assert_output "NO_MARKER"
+}
+
+@test "zsh: #675 spawn --launch --ai claude emits term-rename under zsh" {
+    run_in_zsh "
+        cd '$FAKE_REPO' || exit 1
+        MARKER='$TEST_TEMP_HOME/spawn-trn-zsh-marker'
+        export MARKER
+        claude_yolo() { :; }
+        term_rename() {
+            local _trn=''
+            for _a in \"\$@\"; do _trn=\"\${_trn}|\$_a\"; done
+            printf '%s\n' \"\$_trn\" > \"\$MARKER\"
+        }
+        git_worktree_spawn --launch --ai claude --wt-name pr-723 >/dev/null 2>&1
+        cat \"\$MARKER\"
+    "
+    assert_success
+    assert_output "|--persist|(claude) pr-723"
+}
