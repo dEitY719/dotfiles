@@ -101,15 +101,15 @@ documented in `gh-pr-resolve-conflict` (#326 Bug B).
 
 ```bash
 gh api -X DELETE "repos/{owner}/{repo}/issues/$PR_NUMBER/labels/CI%20fail" \
-    --repo "$TARGET_REPO" \
     >/dev/null 2>&1 \
   && echo "[OK] \`CI fail\` 라벨 제거됨 — 동료 재-Approve 흐름 해제" \
   || echo "[WARN] \`CI fail\` 라벨 제거 실패 (이미 없거나 권한 없음 — 수동 제거 필요할 수 있음)"
 ```
 
-`{owner}/{repo}` literal with `--repo "$TARGET_REPO"` lets `gh api`
-handle both URL and `owner/repo` forms safely. URL-encode any space
-or special char in the label name (e.g. `CI%20fail`).
+`{owner}/{repo}` placeholders are auto-resolved by `gh api` from the
+current working directory's git remote (or `GH_REPO` if set), so no
+`--repo` flag is needed — `gh api` does not accept `--repo` (#658).
+URL-encode any space or special char in the label name (e.g. `CI%20fail`).
 
 ### ai-metrics PR comment (soft-fail)
 
@@ -118,7 +118,7 @@ ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
 if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
     : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
 else
-    gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" -X POST \
+    gh api "repos/{owner}/{repo}/issues/$PR_NUMBER/comments" -X POST \
       -f body="---
 <details>
 <summary>🤖 AI Metrics · 📊 ~${TOKENS:-3000} tokens · 👤 ~2 h · 🤖 ~$ELAPSED min</summary>
