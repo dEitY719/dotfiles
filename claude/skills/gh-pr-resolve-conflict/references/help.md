@@ -72,6 +72,9 @@
 
 ## Related skills
 
+- `gh:pr-resolve-ci-fail` — sister skill, resolves a `CI fail` label
+  by reading failing check logs and pushing a fix. Different verb
+  (read-logs-and-edit vs rebase) for the same PR-lifecycle slot.
 - `gh:pr-merge` — merge an already-clean PR (rebase/squash/merge).
 - `gh:pr-merge-emergency` — admin-bypass merge with audit trail.
 - `gh:pr` — create a PR from the current branch.
