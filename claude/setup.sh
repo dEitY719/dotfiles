@@ -12,9 +12,11 @@
 #   4. Creates ~/.claude/docs symlink (custom docs directory)
 #   5. Creates ~/.claude/projects/GLOBAL/memory symlink (global memory)
 #   6. Verifies ~/.claude directory structure
-#   7. On Internal mode: prints copy-paste guidance for hand-creating
-#      ~/.claude/settings.local.json with the Samsung gateway env block (#584).
-#      That file is gitignored / out-of-repo so secrets never reach GitHub.
+#
+# Internal mode 에서 ~/.claude/settings.local.json 은 aws/setup.sh 가
+# claude/settings.local.bedrock.example 을 기반으로 jq 머지한다 (#677 F-7).
+# 본 스크립트는 그 파일을 직접 생성하지 않는다 (#683 F-2 에서 자동
+# 생성 분기 제거 — 게이트웨이 경로 폐기와 자기상충 흐름 정리).
 #
 # These files/directories are version-controlled in dotfiles and should
 # be managed via symbolic links for consistency across machines.
@@ -464,63 +466,12 @@ _print_stale_bind_mount_sudoers_hint() {
 EOF
 }
 
-# _print_internal_local_env_guidance — Internal-PC auto-create settings.local.json.
-#
-# Why this exists: the shared claude/settings.json SSOT (#584) cannot carry
-# the ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL env vars,
-# because those values point at cloud.dtgpt.samsungds.net which is
-# unreachable from External/Home and would break Claude Code on those PCs.
-# Instead the Internal-only env block lives in a per-PC, out-of-repo file
-# at ~/.claude/settings.local.json. Claude Code merges it with the shared
-# settings.json natively at launch time.
-#
-# Idempotent: when the file already has a real ANTHROPIC_AUTH_TOKEN
-# (anything other than the literal placeholder), this function prints a
-# single success line and returns. Only an absent or placeholder-only
-# file triggers auto-creation.
-_print_internal_local_env_guidance() {
-    local target="$HOME/.claude/settings.local.json"
-    local placeholder="your-dt-api-key"
-    local current_token=""
-
-    if [ -f "$target" ] && command -v jq >/dev/null 2>&1; then
-        current_token=$(jq -r '.env.ANTHROPIC_AUTH_TOKEN // empty' "$target" 2>/dev/null)
-    fi
-
-    if [ -n "$current_token" ] && [ "$current_token" != "$placeholder" ]; then
-        ux_success "Internal env already configured: $target"
-        return 0
-    fi
-
-    # Auto-create settings.local.json with placeholder
-    mkdir -p "$(dirname "$target")"
-    cat > "$target" <<'EOF'
-{
-  "env": {
-    "ANTHROPIC_BASE_URL": "http://cloud.dtgpt.samsungds.net/llm",
-    "ANTHROPIC_AUTH_TOKEN": "your-dt-api-key",
-    "ANTHROPIC_MODEL": "Qwen3.6-27B"
-  }
-}
-EOF
-
-    echo ""
-    ux_section "Internal Claude env (auto-created)"
-    ux_success "settings.local.json created: $target"
-    ux_info "Claude Code automatically merges it with settings.json on every"
-    ux_info "launch. The file is gitignored, so your token never reaches GitHub."
-    echo ""
-    ux_warning "Replace \"$placeholder\" with the real token issued by the"
-    ux_warning "internal LLM gateway team. Until you do, Claude Code on this PC"
-    ux_warning "will get HTTP 401 from the gateway."
-    echo ""
-    ux_bullet "Edit the file:"
-    ux_bullet "  ${UX_BOLD}vim $target${UX_RESET}"
-    echo ""
-    ux_bullet "Verify after editing:"
-    ux_bullet "  ${UX_BOLD}jq -e .env.ANTHROPIC_AUTH_TOKEN $target${UX_RESET}"
-    echo ""
-}
+# Note: 이전에 있던 `_print_internal_local_env_guidance` 는 #683 F-2 에서 제거.
+# 사내 PC 의 settings.local.json 은 `aws/setup.sh` 가 Bedrock 템플릿
+# (claude/settings.local.bedrock.example) 으로 jq-머지한다 (#677 F-7).
+# 게이트웨이 path (`cloud.dtgpt.samsungds.net` + `Qwen3.6-27B`) 는 Bedrock 과
+# 양립 불가하며 (#677 O-1), 같은 ./setup.sh 안에서 aws/setup.sh 가 즉시 strip
+# 하는 자기상충 흐름이었음.
 
 # --- Main Script Logic (issue #287, Phase 1: multi-account) ---
 
@@ -554,10 +505,9 @@ _migrate_install_gh_issue_flow_stop_hook
 DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/env/claude.sh"
 DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/tools/integrations/claude.sh"
 
-# settings.local.json 은 더 이상 dotfiles 가 관리하지 않습니다 (#584).
-# Internal-PC 사용자는 ~/.claude/settings.local.json 을 한 번 손수 생성;
-# Claude Code 가 settings.json 과 자동 merge 합니다.
-# Internal 모드 종료 직전 _print_internal_local_env_guidance 가 안내 출력.
+# settings.local.json 은 dotfiles 가 직접 관리하지 않는다 (#584).
+# Internal-PC 의 Bedrock 모델 매핑은 aws/setup.sh 가 Bedrock 템플릿으로
+# jq-머지한다 (#677 F-7). 이전 게이트웨이 자동 생성 분기는 #683 F-2 에서 제거.
 
 # Setup-mode SSOT read (issue #571). Reuses the _dotfiles_setup_mode
 # helper sourced from shell-common/tools/integrations/claude.sh (line
@@ -637,11 +587,11 @@ _single_account_ensure_link() {
     log_info "  symlink: $tgt → $src"
 }
 
-# Internal-PC single-account branch (issue #571, F-1; updated for #584).
+# Internal-PC single-account branch (issue #571, F-1; updated for #584, #683).
 # Direct-symlink the dotfiles SSOT into ~/.claude/ — no claude-accounts,
-# no ~/.claude-personal, no ~/.claude-work. The Samsung gateway env block
-# lives in a hand-created ~/.claude/settings.local.json (out-of-repo);
-# _print_internal_local_env_guidance below walks the user through it.
+# no ~/.claude-personal, no ~/.claude-work. ~/.claude/settings.local.json
+# 은 aws/setup.sh 가 Bedrock 템플릿으로 jq-머지한다 (#677 F-7) — 본 분기는
+# 더 이상 그 파일을 만들지 않는다 (#683 F-2).
 if [ "$_setup_mode" = "internal" ]; then
     log_info "Internal PC mode — single-account setup (skipping claude-accounts)"
 
@@ -676,7 +626,10 @@ if [ "$_setup_mode" = "internal" ]; then
     ux_bullet "실행: ${UX_BOLD}claude-yolo${UX_RESET} (멀티 계정 우회됨)"
     echo ""
 
-    _print_internal_local_env_guidance
+    # settings.local.json 의 Bedrock 모델 매핑은 aws/setup.sh 가 책임진다 (#677 F-7).
+    # 이전의 _print_internal_local_env_guidance 호출은 #683 F-2 에서 제거됨 —
+    # 같은 ./setup.sh 안에서 게이트웨이 블록을 만들고 곧바로 aws/setup.sh 가
+    # strip 하던 자기상충 흐름을 정리.
 
     # Surface stale /etc/sudoers.d/claude-{skills,docs}-mount-* files left
     # behind from any prior multi-account install on this box.

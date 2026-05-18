@@ -110,22 +110,14 @@ copy_local_files() {
         # Environment-specific handling
         case "$environment" in
             internal)
-                # Internal company PC: copy ALL .local.example files
+                # Internal company PC: copy ALL .local.example files.
+                # Bedrock 으로 통일된 #677 이후, claude.local.sh 에 사내 게이트웨이
+                # ANTHROPIC_BASE_URL/AUTH_TOKEN/MODEL 을 inject 하지 않는다 (#683 F-1).
+                # CLAUDE_ENABLED_ACCOUNTS 도 shell-common/env/claude.sh 가 setup-mode
+                # 기준으로 "work" (single-account) 를 SSOT 로 export 하므로 여기서
+                # 덮어쓰지 않는다.
                 cp "$example_file" "$local_file"
                 ux_success "Created: ${local_file#"$SHELL_COMMON_DIR"/}"
-
-                # Internal-specific: Auto-enable work1 and inject ANTHROPIC_* env vars into claude.local.sh
-                if [ "$basename_file" = "claude.local.example" ]; then
-                    cat >> "$local_file" <<'EOF'
-
-# ─── Internal PC: Auto-configured for Samsung gateway ──────────────────────
-export CLAUDE_ENABLED_ACCOUNTS="personal work"
-export ANTHROPIC_BASE_URL="http://cloud.dtgpt.samsungds.net/llm"
-export ANTHROPIC_AUTH_TOKEN="your-dt-api-key"
-export ANTHROPIC_MODEL="Qwen3.6-27B"
-EOF
-                    ux_info "  + Configured: ANTHROPIC_* env vars for Internal gateway"
-                fi
                 ;;
             external)
                 # External company PC (VPN): skip proxy.local.example
