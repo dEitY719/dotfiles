@@ -32,10 +32,14 @@ _term_rename_install_hook() {
     # inside quoted strings. Same pattern as cp_wdown.sh:`local _name=cp_wdown`.
     local _hook
     _hook=_term_rename_persist
+    # Strip any existing occurrence first so install is idempotent AND
+    # always lands the hook at the tail. A plain dedup-and-skip would leave
+    # a previously-prepended hook stuck at the front (the exact failure
+    # mode in shell sessions that loaded the pre-#672 buggy version),
+    # making `--persist` look fixed in fresh sessions but inert in
+    # existing ones (gemini-code-assist on PR #672).
+    _term_rename_remove_hook
     if [ -n "${BASH_VERSION-}" ]; then
-        case "${PROMPT_COMMAND-}" in
-            *"${_hook}"*) return 0 ;;
-        esac
         if [ -n "${PROMPT_COMMAND-}" ]; then
             PROMPT_COMMAND="${PROMPT_COMMAND}; ${_hook}"
         else
@@ -45,14 +49,11 @@ _term_rename_install_hook() {
     fi
     if [ -n "${ZSH_VERSION-}" ]; then
         # zsh array syntax wrapped in eval so bash never tries to parse it.
-        # typeset -ga is a no-op when precmd_functions already exists; it
-        # only matters when sourced before zsh's add-zsh-hook plumbing.
+        # typeset -ga guarantees precmd_functions exists as a global array
+        # even when sourced before zsh's add-zsh-hook plumbing.
         eval '
             typeset -ga precmd_functions
-            case " ${precmd_functions[*]-} " in
-                *" ${_hook} "*) : ;;
-                *) precmd_functions=("${precmd_functions[@]}" "${_hook}") ;;
-            esac
+            precmd_functions=("${precmd_functions[@]}" "${_hook}")
         '
         return 0
     fi
