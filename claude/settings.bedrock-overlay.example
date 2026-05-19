@@ -1,5 +1,5 @@
 {
-  "_comment": "Bedrock model mapping template. aws/setup.sh merges only the keys that are missing from ~/.claude/settings.local.json — your existing keys are preserved. CLAUDE_CODE_USE_BEDROCK and AWS_REGION are deliberately NOT here (single SSOT = aws/aws.local.sh shell env). See #677 F-7.3.",
+  "_comment": "Bedrock overlay for ~/.claude/settings.json (internal-PC mode only). aws/setup.sh deep-merges (base * overlay * existing) into ~/.claude/settings.json as a REAL file (NOT symlink) — see #687. The split between this overlay and dotfiles claude/settings.json keeps external-PC SSOT untouched. CLAUDE_CODE_USE_BEDROCK and AWS_REGION are deliberately NOT here (single SSOT = aws/aws.local.sh shell env, #677 F-7.3).",
   "env": {
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "global.anthropic.claude-sonnet-4-6",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "global.anthropic.claude-haiku-4-5-20251001-v1:0"

@@ -372,22 +372,30 @@ else
 fi
 
 # ============================================================
-header "2-6) 모델 정보 (~/.claude/settings.json / settings.local.json)"
+header "2-6) 모델 정보 (~/.claude/settings.json) — #687"
 # ============================================================
 
-# 사용자는 settings.local.json 에 모델 매핑을 머지한다 (#677 F-7).
-# settings.json 은 SSOT 로 커밋되어 있어 모델 매핑이 비어 있을 수 있다.
-CLAUDE_SETTINGS_LOCAL="$HOME/.claude/settings.local.json"
+# #687: settings.local.json 의 deep-merge 가 사용자 환경에서 신뢰 불가하므로
+# 모든 Bedrock 키는 ~/.claude/settings.json 으로 통합됐다. aws/setup.sh 가
+# dotfiles SSOT (claude/settings.json) + Bedrock 오버레이를
+# (claude/settings.bedrock-overlay.example) jq deep-merge 한 실파일로 시드한다.
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+CLAUDE_SETTINGS_LOCAL="$HOME/.claude/settings.local.json"
 SETTINGS_FILE=""
-if [ -f "$CLAUDE_SETTINGS_LOCAL" ]; then
-  SETTINGS_FILE="$CLAUDE_SETTINGS_LOCAL"
-  pass "~/.claude/settings.local.json 파일 존재"
-elif [ -f "$CLAUDE_SETTINGS" ]; then
+if [ -f "$CLAUDE_SETTINGS" ]; then
+  if [ -L "$CLAUDE_SETTINGS" ]; then
+    fail "~/.claude/settings.json 이 symlink 입니다 (#687 마이그레이션 미완료) → ./aws/setup.sh 재실행"
+  else
+    pass "~/.claude/settings.json 실파일 존재 (#687)"
+  fi
   SETTINGS_FILE="$CLAUDE_SETTINGS"
-  warn "settings.local.json 없음 — settings.json 으로 폴백 (Bedrock 매핑은 보통 .local 에 있음)"
 else
-  fail "~/.claude/settings*.json 파일 없음 → ./aws/setup.sh 미수행"
+  fail "~/.claude/settings.json 파일 없음 → ./setup.sh 와 ./aws/setup.sh 미수행"
+fi
+
+if [ -f "$CLAUDE_SETTINGS_LOCAL" ]; then
+  warn "~/.claude/settings.local.json 잔존 — #687 부터 deprecated. 백업 후 삭제 권장:"
+  warn "  mv \"$CLAUDE_SETTINGS_LOCAL\" \"${CLAUDE_SETTINGS_LOCAL}.deprecated-687.\$(date +%Y%m%d%H%M%S)\""
 fi
 
 if [ -n "$SETTINGS_FILE" ]; then
@@ -408,6 +416,23 @@ if [ -n "$SETTINGS_FILE" ]; then
     fi
 
     SETTINGS_JSON=$(jq '.' "$SETTINGS_FILE" 2>/dev/null || echo "{}")
+
+    # #687: Bedrock 모델 매핑 env 키가 settings.json 에 실제로 들어있는지
+    # 검증. settings.local.json 시절에는 deep-merge 시점에 누락되는 사례가
+    # 있었지만 이제는 settings.json 한 곳에서 직접 확인 가능.
+    SONNET=$(echo "$SETTINGS_JSON" | jq -r '.env.ANTHROPIC_DEFAULT_SONNET_MODEL // empty' 2>/dev/null)
+    if [ -n "$SONNET" ]; then
+      pass "env.ANTHROPIC_DEFAULT_SONNET_MODEL 설정됨: ${SONNET}"
+    else
+      fail "env.ANTHROPIC_DEFAULT_SONNET_MODEL 미설정 → 사내 PC에서 400 invalid model 위험 (#687)"
+    fi
+
+    HAIKU=$(echo "$SETTINGS_JSON" | jq -r '.env.ANTHROPIC_DEFAULT_HAIKU_MODEL // empty' 2>/dev/null)
+    if [ -n "$HAIKU" ]; then
+      pass "env.ANTHROPIC_DEFAULT_HAIKU_MODEL 설정됨: ${HAIKU}"
+    else
+      warn "env.ANTHROPIC_DEFAULT_HAIKU_MODEL 미설정"
+    fi
 
     # Bedrock 모드는 CLAUDE_CODE_USE_BEDROCK 를 쉘 env 한 곳에서만 SSOT 로
     # 가진다 (#677 F-7.3). settings.json 에 중복 명시되어 있다면 정보로만 보고.

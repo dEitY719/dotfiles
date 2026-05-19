@@ -35,7 +35,7 @@ Step 2 (`aws/aws.local.sh` 편집) 는 보통 건너뜁니다.
 |---|---|
 | `aws/aws.local.sh` | 쉘 env (`AWS_CA_BUNDLE`, `AWS_REGION`, `CLAUDE_CODE_USE_BEDROCK`, `ANTHROPIC_BEDROCK_BASE_URL`) |
 | `~/.aws/config` | AWS SSO 진입점 (account 518692946118, role AWSPS-AICoding-SLSI) |
-| `~/.claude/settings.local.json` | Claude Code 모델 매핑 (sonnet/haiku/opus → Bedrock IDs) |
+| `~/.claude/settings.json` (실파일, #687) | Claude Code 모델 매핑 (sonnet/haiku/opus → Bedrock IDs) — dotfiles SSOT + Bedrock 오버레이의 jq deep-merge 결과 |
 
 이 단계에서 사용자가 직접 copy-paste 할 내용은 **없습니다**.
 
@@ -91,27 +91,28 @@ Read-only. 위 1~5 단계가 빠짐없이 적용됐는지 PASS/FAIL/WARN 으로 
 | `aws/aws-config.example` | (커밋됨) | **절대 X** — 다른 SSO 가 필요하면 `aws-config.local` 작성 |
 | `aws/aws-config.local` | (사용자) | 다른 SSO account/role 쓸 때만 (옵션) |
 | `~/.aws/config` | `./setup.sh` 자동 | 직접 편집보다 `aws-config.local` 권장 |
-| `claude/settings.local.bedrock.example` | (커밋됨) | **절대 X** — 템플릿입니다. |
-| `~/.claude/settings.local.json` | `./setup.sh` jq 머지 | 추가 키만 직접 추가 (기존 키 보존됨) |
+| `claude/settings.json` | (커밋됨, 모든 PC 공유 SSOT) | **절대 X** — 외부 PC 는 symlink, 사내 PC 는 머지 base |
+| `claude/settings.bedrock-overlay.example` | (커밋됨, 사내 모드 한정) | **절대 X** — 템플릿입니다 (#687) |
+| `~/.claude/settings.json` (#687) | 외부 PC: dotfiles symlink / 사내 PC: `./setup.sh` jq 머지 결과 실파일 | 사내 PC: 추가 키만 직접 추가 (기존 키 보존, gateway 키는 strip) |
 | `/etc/claude-code/managed-settings.json` | OTel installer 자동 | **절대 직접 편집 X** — installer 재실행 |
 
 ## 역인덱스 — "X 를 하고 싶다"
 
 - **Bedrock region 변경** → `aws/aws.local.sh` 의 `AWS_REGION` (그리고 endpoint 도 같이 바꿔야 함)
 - **다른 SSO account 사용** → `aws/aws-config.local` 작성 (gitignored)
-- **모델 추가 등록** → `~/.claude/settings.local.json` 의 `availableModels` + `modelOverrides`
+- **모델 추가 등록** → `claude/settings.bedrock-overlay.example` 의 `availableModels` + `modelOverrides` 수정 후 사내 PC 에서 `./aws/setup.sh` 재실행. 단발성 사용자 변경이면 `~/.claude/settings.json` 직접 편집해도 머지에서 보존됨 (existing 우선)
 - **OTel collector 주소 변경** → `aws/install-otel-managed-settings.sh` 의 `OTEL_ENDPOINT_HOST` 수정 후 재실행
 - **사내 게이트웨이(a2g) 와 병행** → 불가. 둘 중 하나만 활성 (#677 O-1)
 
 ## 사내 공식 진단(`diagnose_linux.sh`) 결과 해석
 
-`curl ... diagnose_linux.sh | bash` 로 실행하는 **사내 공식** 진단은 dotfiles 의 파일 배치 (aws.local.sh / settings.local.json) 를 모르기 때문에 다음 항목들이 항상 FAIL/WARN 으로 보고된다. **모두 정상이고 무시해도 된다**.
+`curl ... diagnose_linux.sh | bash` 로 실행하는 **사내 공식** 진단은 dotfiles 의 파일 배치를 모르기 때문에 다음 항목들이 항상 FAIL/WARN 으로 보고된다. **모두 정상이고 무시해도 된다**.
 
 | 항목 | 사내 진단 메시지 | 실제 상태 | 이유 |
 |---|---|---|---|
 | 1-1) NODE_EXTRA_CA_CERTS bashrc 미등록 | `[FAIL] ~/.bashrc에 NODE_EXTRA_CA_CERTS 미등록` | OK — 환경변수 자체는 PASS | dotfiles 는 `shell-common/env/security.local.sh` 가 export. bashrc 자체에는 export 라인이 없다. |
 | 2-3) AWS_CA_BUNDLE / CLAUDE_CODE_USE_BEDROCK / ANTHROPIC_BEDROCK_BASE_URL bashrc 미등록 | `[FAIL] ~/.bashrc에 ... 미등록 → 영구 설정 안 됨` | OK — 모두 런타임 PASS | dotfiles 는 `aws/aws.local.sh` (`*.local.sh` 글로벌 패턴으로 gitignored) 가 export. bashrc 가 dotfiles 로더를 source 하므로 새 쉘에서도 그대로 살아난다. |
-| 2-6) settings.json model / env / availableModels / modelOverrides / awsAuthRefresh 미설정 | 다수 FAIL/WARN | OK — `~/.claude/settings.local.json` 에 있음 | `claude/settings.json` 은 외부 PC 와 공유하는 **커밋 SSOT**. Bedrock 모델 매핑은 PC-specific 이므로 의도적으로 `settings.local.json` (gitignored) 에 둔다. Claude Code 가 런타임에 두 파일을 머지한다. |
+| 2-6) settings.json model / env / availableModels / modelOverrides / awsAuthRefresh — 사내 진단이 #687 이전 분리 디자인을 가정해 (`settings.local.json` 우선) 보고했음 | (구버전) 다수 FAIL/WARN | OK — #687 이후 모두 `~/.claude/settings.json` (실파일) 한 곳에 있음 | Bedrock 모델 매핑이 settings.local.json 의 deep-merge 에 의존하던 시절(#677) 의 미스매치는 해소됨. 이제 사내 진단의 settings.json 검사 자체가 통과한다. |
 
 정확한 진단을 원하면 dotfiles-aware 인 로컬 진단을 쓰면 된다:
 
@@ -119,7 +120,7 @@ Read-only. 위 1~5 단계가 빠짐없이 적용됐는지 PASS/FAIL/WARN 으로 
 ./aws/diagnose.sh
 ```
 
-(`aws/aws.local.sh`, `shell-common/env/security.local.sh`, `~/.claude/settings.local.json` 까지 모두 인지한다.)
+(`aws/aws.local.sh`, `shell-common/env/security.local.sh`, `~/.claude/settings.json` 까지 모두 인지한다. settings.local.json 잔존 시 deprecation 안내, #687.)
 
 ## 트러블슈팅
 
@@ -129,9 +130,10 @@ Read-only. 위 1~5 단계가 빠짐없이 적용됐는지 PASS/FAIL/WARN 으로 
 | `./aws/install-otel-managed-settings.sh: aws sts get-caller-identity failed` | 위와 동일 | `aws sso login` 먼저 |
 | 외부 PC 에서 `./aws/setup.sh` 가 아무 것도 안 함 | 의도된 동작 — `_dotfiles_setup_mode != internal` | 정상 |
 | `cat ~/.dotfiles-setup-mode` 가 `internal` 인데도 skip | 파일에 공백/개행 섞임 | `echo internal > ~/.dotfiles-setup-mode` |
-| `availableModels` 에 opus 가 안 보임 | settings.local.json 머지 실패 | `~/.claude/settings.local.json` 확인, 필요시 백업 (`*.bedrock-merge-backup.*`) 복원 후 재실행 |
+| `availableModels` 에 opus 가 안 보임 | settings.json 머지 실패 (#687) | `~/.claude/settings.json` 확인, 필요시 백업 (`*.bedrock-merge-backup.*`) 복원 후 `./aws/setup.sh` 재실행 |
+| `400 The provided model identifier is invalid` (`apac.anthropic.claude-sonnet-4-5-*`) | settings.json 의 `env.ANTHROPIC_DEFAULT_SONNET_MODEL` 미적용 — 옛 settings.local.json 분리 디자인의 deep-merge 가 사용자 환경에서 안 통한 사례 (#687) | `./aws/setup.sh` 재실행. ~/.claude/settings.json 이 dotfiles base + Bedrock 오버레이 머지 결과 실파일로 작성된다 (symlink 자동 해제). `./aws/diagnose.sh` 의 `2-6) env.ANTHROPIC_DEFAULT_SONNET_MODEL` PASS 확인. |
 | OTel collector 도달 실패 | `10.172.25.203:80` 비도달 (VPN/방화벽) | 사내망 연결 확인. installer 자체는 성공 — 런타임 별 문제. |
-| Claude Code 가 "not login" 으로 떨어짐 | settings.local.json 에 레거시 사내 게이트웨이 env (`ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_MODEL`/`ANTHROPIC_CUSTOM_HEADERS`/`NODE_TLS_REJECT_UNAUTHORIZED`) 잔존 — Bedrock 와 양립 불가 (#677 O-1) | `./aws/setup.sh` 재실행. 위 5 개 키는 머지 중 자동 제거되고 원본은 `*.bedrock-merge-backup.<timestamp>` 로 보존됨. 사전 점검은 `./aws/diagnose.sh` 의 `2-6)` 항목 |
+| Claude Code 가 "not login" 으로 떨어짐 | settings.json 에 레거시 사내 게이트웨이 env (`ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_MODEL`/`ANTHROPIC_CUSTOM_HEADERS`/`NODE_TLS_REJECT_UNAUTHORIZED`) 잔존 — Bedrock 와 양립 불가 (#677 O-1) | `./aws/setup.sh` 재실행. 위 5 개 키는 머지 중 자동 제거되고 원본은 `*.bedrock-merge-backup.<timestamp>` 로 보존됨. 사전 점검은 `./aws/diagnose.sh` 의 `2-6)` 항목 |
 | `[FAIL] AWS_CA_BUNDLE 파일 없음: /usr/local/share/ca-certificates/samsungsemi-prx.com.crt` | 옛 템플릿이 가리키던 경로에 cert 가 없음 (Ubuntu 가 `update-ca-certificates` 로 `/etc/ssl/certs/ca-certificates.crt` 에만 머지한 경우) | 한 줄로 교체: `sed -i 's\|^export AWS_CA_BUNDLE=.*\|export AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt\|' aws/aws.local.sh` 후 새 쉘. `./aws/setup.sh` 가 재실행 시 동일 경고를 띄운다. |
 
 ## 참고

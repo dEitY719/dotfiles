@@ -10,7 +10,7 @@
 |---|---|
 | `aws.local.example` | 쉘 env 템플릿 (`AWS_CA_BUNDLE`, `AWS_REGION`, `CLAUDE_CODE_USE_BEDROCK`, `ANTHROPIC_BEDROCK_BASE_URL`) |
 | `aws-config.example` | `~/.aws/config` 템플릿 (dspublic SSO + role + region) |
-| `setup.sh` | internal 모드일 때만 위 두 파일에서 `aws.local.sh` / `~/.aws/config` / `~/.claude/settings.local.json` 시드 |
+| `setup.sh` | internal 모드일 때만: `aws.local.sh` / `~/.aws/config` 시드 + `~/.claude/settings.json` 을 dotfiles SSOT + Bedrock 오버레이 jq 머지 결과 **실파일**로 작성 (#687) |
 | `install-otel-managed-settings.sh` | `aws sso login` 선행 후 사용자가 명시 실행. `/etc/claude-code/managed-settings.json` 생성 (sudo) |
 | `diagnose.sh` | Read-only 진단. 5 단계 부트스트랩이 빠짐없이 적용됐는지 PASS/FAIL/WARN 으로 보고. 파일 수정 없음 |
 | `README.md` | 사람-운영자용 5단계 워크스루 (≤150 줄) |
@@ -20,7 +20,9 @@
 
 - AWS Bedrock 쉘 env 의 **유일한 source**: `aws/aws.local.sh` (gitignored, `*.local.sh` 글로벌 패턴).
 - AWS SSO config 의 **유일한 source**: `~/.aws/config`. 호스트별 오버라이드가 필요하면 `aws/aws-config.local` (gitignored).
-- Claude Code 모델 매핑의 **유일한 source**: `~/.claude/settings.local.json`. Repo 내 SSOT 템플릿은 `claude/settings.local.bedrock.example`.
+- Claude Code 사내-모드 settings 의 **유일한 source** (#687): `~/.claude/settings.json` (실파일, symlink 아님). Repo 내 SSOT 는 두 파일 합성:
+  - `claude/settings.json` — 모든 PC 공용 베이스 (hooks/statusLine/enabledPlugins/...)
+  - `claude/settings.bedrock-overlay.example` — 사내 모드 한정 Bedrock 모델 매핑 (env/model/availableModels/modelOverrides/awsAuthRefresh)
 - OTel managed-settings 의 **유일한 source**: `/etc/claude-code/managed-settings.json` (시스템 경로). 동적 값(`user.id`) 은 STS 콜러에서 채움.
 
 `bash/main.bash` / `zsh/main.zsh` 는 **수정하지 않는다**. 두 로더는 이미 `shell-common/env/*.sh` 를 자동 source 하므로 `shell-common/env/aws.sh` 가 자동 픽업된다.
@@ -29,10 +31,15 @@
 
 ```
 ./setup.sh                       (루트 오케스트레이터)
+  ├─ ./claude/setup.sh           (모든 모드 — internal 분기는 settings.json symlink skip, #687)
   └─ ./aws/setup.sh              (internal 모드일 때만 동작)
         ├─ aws.local.sh          시드 (없을 때만)
         ├─ ~/.aws/config         시드 (없을 때만)
-        └─ ~/.claude/settings.local.json  jq 머지 (모델 매핑만)
+        ├─ ~/.claude/settings.json  jq deep-merge → 실파일 (#687)
+        │    base    = claude/settings.json (커밋된 SSOT)
+        │    overlay = claude/settings.bedrock-overlay.example
+        │    existing = 사용자 편집이 있으면 보존 (gateway 키는 strip)
+        └─ ~/.claude/settings.local.json → deprecated (#687) — 잔존 시 안내만
 
 사용자 수동 실행:
   aws sso login                  (브라우저 OAuth)
@@ -40,9 +47,9 @@
   ./aws/diagnose.sh              (선택, read-only 점검)
 ```
 
-## settings.local.json 머지 정책 (#677 O-1 broadened)
+## settings.json 머지 정책 (#687, #677 O-1 계승)
 
-`_merge_claude_settings_local` 는 Bedrock 와 양립 불가한 레거시 사내-게이트웨이 env 키를 머지 중 **자동 제거**한다. 대상 키:
+`_merge_claude_settings_json` 는 `base * overlay * existing` 순서로 jq deep-merge 하며, **existing (사용자 편집) 이 최우선**이다. 머지 직전에 Bedrock 와 양립 불가한 레거시 사내-게이트웨이 env 키를 existing 측에서 자동 strip:
 
 - `env.ANTHROPIC_BASE_URL`
 - `env.ANTHROPIC_AUTH_TOKEN`
@@ -51,6 +58,12 @@
 - `env.NODE_TLS_REJECT_UNAUTHORIZED`
 
 URL 패턴 (`a2g.samsungds.net`) 매칭은 호스트 리브랜드 (`cloud.dtgpt.samsungds.net`) 에 깨졌으므로 **키 이름**을 기준으로 한다. 사용자가 의도적으로 게이트웨이 모드를 쓰려면 `aws/setup.sh` 자체를 호출하지 말아야 한다 (= external 모드). 원본은 타임스탬프 백업 (`*.bedrock-merge-backup.*`) 에 보존된다.
+
+기존 설치(`~/.claude/settings.json` symlink) 에서 #687 로 마이그레이션하는 경우 `_merge_claude_settings_json` 가 symlink 를 자동 해제하고 실파일로 전환한다. claude/setup.sh 의 internal 분기는 settings.json symlink 를 더 이상 생성하지 않아 (#687) 새 설치 흐름에서도 충돌 없음.
+
+## 왜 settings.local.json 디자인을 폐기했나 (#687)
+
+Claude Code 공식 docs 는 `settings.json` + `settings.local.json` 의 `env` 객체가 deep-merge 된다고 명시한다. 그러나 사용자 환경 (사내 PC) 에서 실제로는 `settings.local.json.env.ANTHROPIC_DEFAULT_SONNET_MODEL` 이 런타임에 적용되지 않아 Claude Code 가 기본 매핑 (`apac.anthropic.claude-sonnet-4-5-*`) 으로 폴백 → 400 invalid model 에러가 났다. 원인은 추적 중이지만, 동료의 단일 `settings.json` 형태 (모든 키가 한 파일) 에서는 동작 확인. 그래서 dotfiles 의 SSOT 디자인 자체를 단일 파일 머지 결과로 바꾼 것 — 외부 PC 의 symlink 디자인은 그대로.
 
 ## 외부 PC 안전망
 
