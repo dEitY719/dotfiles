@@ -27,9 +27,10 @@ Turn any idea, data, or content into a stunning single-file HTML visualization.
 
 ## After Creating a File
 
-**Always do BOTH after writing the HTML file:**
+**Always do ALL THREE after writing the HTML file:**
 1. **Auto-open:** `xdg-open <filename>.html` (Linux/WSL) · `open <filename>.html` (macOS). **Do NOT use `wslview`** — it frequently errors on HTML files; `xdg-open` works reliably on WSL.
-2. **Return URL:** Include `file://<absolute-path>` in response
+2. **Return URL:** Include `file://<absolute-path>` in response.
+3. **Do NOT echo the generated HTML body into chat.** Summary + URL + open command only — no `<head>` preview, no inline excerpt, no rendered code block. The user opens the file via the URL. See [references/bedrock-safe-write.md](references/bedrock-safe-write.md) for the failure mode this prevents (AWS Bedrock `Truncated event message received`).
 
 Example: `Created your visualization! file:///home/user/project/output.html`
 
@@ -46,6 +47,7 @@ Example: `Created your visualization! file:///home/user/project/output.html`
 7. **Print & Accessibility:** `@media print`, `@media (prefers-reduced-motion: reduce)`, aria-labels on all interactive elements and charts.
 8. **Entrance Animations (MANDATORY):** `.animate` classes or `data-reveal` — evaluation detects and requires animation presence. See [references/animations.md](references/animations.md) for patterns.
 9. **JavaScript:** `cycleTheme()`, `toggleMenu()`, all top-level variables in the **generated HTML** use `var` (never `let`/`const` — avoids TDZ errors with CDN-loaded libraries).
+10. **Bedrock-Safe Output (NON-NEGOTIABLE):** The generated HTML must be delivered via a single `Write` call. **Never echo the HTML body — full or partial — into the chat response.** Reply with summary + `file://` URL + open command only, no inline code block of the markup. This avoids the AWS Bedrock `API Error: Truncated event message received` failure (issue #690) and is harmless on the Anthropic-direct path. Full rules and size thresholds in [references/bedrock-safe-write.md](references/bedrock-safe-write.md).
 
 **Copy skeleton → Replace "YOUR CONTENT HERE" → Save file.**
 
@@ -94,4 +96,4 @@ This skill runs mid-conversation. Use all available context: conversation histor
 4. **Build** — add content, charts, styles. All colors as CSS vars.
 5. **Verify** — run [references/checklist.md](references/checklist.md) before outputting.
 
-Chart.js patterns → [references/chartjs-patterns.md](references/chartjs-patterns.md) | Debugging → [references/debugging.md](references/debugging.md)
+Chart.js patterns → [references/chartjs-patterns.md](references/chartjs-patterns.md) | Debugging → [references/debugging.md](references/debugging.md) | Bedrock-safe delivery → [references/bedrock-safe-write.md](references/bedrock-safe-write.md)

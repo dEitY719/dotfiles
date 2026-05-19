@@ -50,6 +50,12 @@ Run through every item before delivering the HTML file.
 - [ ] `<main>`, `<section>`, `<header>`, `<article>` used correctly?
 - [ ] Skip-to-content link or landmark roles present?
 
+## Output Delivery (Bedrock-safe)
+
+- [ ] HTML written in a single `Write` call (no `Write`-then-`Write` to the same path)?
+- [ ] Assistant reply contains **zero** lines of the generated HTML — no `<head>` excerpt, no `<style>` preview, no code block of the markup? (See [bedrock-safe-write.md](bedrock-safe-write.md) — prevents `Truncated event message received` on AWS Bedrock, issue #690.)
+- [ ] Final reply is summary + `file://` URL + open-command line only?
+
 ---
 
 ## Anti-Patterns to Avoid
