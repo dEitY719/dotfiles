@@ -235,24 +235,34 @@ _gh_pr_review_run_ai() {
     local ai="$1"
     local prompt_file="$2"
     local cfg_dir="${3:-}"
-    # Predictable path so the user can re-read it after a failure.
-    local _stderr_file="/tmp/gh-pr-review-stderr.$$.$ai.log"
-    : >"$_stderr_file"
+    # mktemp template — the `XXXXXX` suffix prevents the predictable-PID
+    # symlink-attack class on shared `/tmp` filesystems (gemini-code-assist
+    # review on PR #695). The `$ai` discriminator stays in the name so the
+    # user can grep for "the gemini run" vs "the codex run" when several
+    # invocations linger after failures.
+    local _stderr_file
+    if ! _stderr_file=$(mktemp "/tmp/gh-pr-review-stderr.$ai.XXXXXX" 2>/dev/null); then
+        echo "Could not create stderr temp file under /tmp" >&2
+        return 1
+    fi
     local _rc=0
     case "$ai" in
     codex)
         codex exec --color=never <"$prompt_file" 2>"$_stderr_file" || _rc=$?
         ;;
     gemini)
-        # `gemini -p` is non-interactive headless mode and REQUIRES a
-        # string argument (yargs) — `gemini -p <file` raises "Not enough
-        # arguments following: p". Slurp the prompt and pass it on argv.
-        # The inline path keeps prompts well under ARG_MAX (~128 KB on
-        # Linux); large diffs (≥ 800 additions+deletions) go through the
-        # subagent delegation path before reaching this function.
-        local _gemini_prompt
-        _gemini_prompt=$(cat "$prompt_file")
-        gemini -p "$_gemini_prompt" 2>"$_stderr_file" || _rc=$?
+        # `gemini -p` is non-interactive headless mode and the yargs
+        # parser REQUIRES a token after `-p` — `gemini -p <file` raises
+        # "Not enough arguments following: p" (issue #694 Bug A).
+        # However, `gemini --help` says: "Run in non-interactive
+        # (headless) mode with the given prompt. Appended to input on
+        # stdin (if any)." → providing any non-empty `-p` value
+        # satisfies yargs, AND the actual prompt can still flow on
+        # stdin. That sidesteps the ARG_MAX / shell-quoting concern of
+        # `gemini -p "$(cat "$file")"` (gemini-code-assist review on
+        # PR #695). A single-space marker keeps the prompt suffix
+        # effectively empty.
+        gemini -p ' ' <"$prompt_file" 2>"$_stderr_file" || _rc=$?
         ;;
     claude)
         if [ -n "$cfg_dir" ]; then

@@ -60,23 +60,28 @@ quote the first stderr line and exit 1.
 ## `--ai gemini`
 
 ```sh
-gemini -p "$(cat "$PROMPT_FILE")"
+gemini -p ' ' < "$PROMPT_FILE"
 ```
 
-`gemini -p` is yargs-backed and **requires a string argument**. The
-earlier `gemini -p < "$PROMPT_FILE"` shape produced `Not enough
-arguments following: p` because yargs sees `-p` with no follow-up
-token (issue #694 Bug A). The fix slurps the prompt into a variable
-and passes it on argv. ARG_MAX (~128 KB on modern Linux) is non-issue
-for inline diffs — anything ≥ 800 additions+deletions already routes
-through the subagent delegation path before reaching this function.
+`gemini -p` is yargs-backed and **requires a token after `-p`**. The
+original `gemini -p < "$PROMPT_FILE"` shape produced `Not enough
+arguments following: p` because yargs sees no follow-up token (issue
+#694 Bug A). However, `gemini --help` documents that the `-p` value
+is "Appended to input on stdin (if any)" — so a single-space marker
+satisfies the parser while the actual prompt still flows on stdin.
+This sidesteps the ARG_MAX / shell-quoting hazard of the earlier
+`gemini -p "$(cat "$PROMPT_FILE")"` shape (gemini-code-assist review
+on PR #695).
 
 Model selection (`-m <model>`) intentionally falls back to the user's
 environment default; add a `--gemini-model` flag in a future iteration
 only if users report drift between defaults.
 
 Stderr policy is identical to codex: non-zero exit → noise-filtered
-summary + full stderr tail + persistent stderr log on disk.
+summary + full stderr tail + persistent stderr log on disk. The stderr
+file is created via `mktemp "/tmp/gh-pr-review-stderr.<ai>.XXXXXX"`
+to avoid the predictable-PID symlink-attack class (also raised in the
+gemini-code-assist review on PR #695).
 
 ## `--ai claude` (no `--user`)
 
