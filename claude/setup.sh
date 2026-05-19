@@ -13,10 +13,13 @@
 #   5. Creates ~/.claude/projects/GLOBAL/memory symlink (global memory)
 #   6. Verifies ~/.claude directory structure
 #
-# Internal mode 에서 ~/.claude/settings.local.json 은 aws/setup.sh 가
-# claude/settings.local.bedrock.example 을 기반으로 jq 머지한다 (#677 F-7).
-# 본 스크립트는 그 파일을 직접 생성하지 않는다 (#683 F-2 에서 자동
-# 생성 분기 제거 — 게이트웨이 경로 폐기와 자기상충 흐름 정리).
+# Internal mode 에서 ~/.claude/settings.json 은 aws/setup.sh 가 dotfiles
+# SSOT (claude/settings.json) + Bedrock 오버레이
+# (claude/settings.bedrock-overlay.example) 를 jq deep-merge 한 결과
+# 실파일로 시드한다 (#687, 이전 #677 F-7 의 settings.local.json 분리 디자인
+# 폐기). 본 스크립트는 internal 분기에서 settings.json symlink 를
+# 만들지 않는다. ~/.claude/settings.local.json 은 #683 F-2 이후 본 스크립트가
+# 생성하지 않으며, #687 이후엔 aws/setup.sh 도 만들지 않고 잔존 시 안내만 한다.
 #
 # These files/directories are version-controlled in dotfiles and should
 # be managed via symbolic links for consistency across machines.
@@ -467,15 +470,17 @@ EOF
 }
 
 # Note: 이전에 있던 `_print_internal_local_env_guidance` 는 #683 F-2 에서 제거.
-# 사내 PC 의 settings.local.json 은 `aws/setup.sh` 가 Bedrock 템플릿
-# (claude/settings.local.bedrock.example) 으로 jq-머지한다 (#677 F-7).
+# 사내 PC 의 settings 는 `aws/setup.sh` 가 dotfiles SSOT (claude/settings.json)
+# + Bedrock 오버레이 (claude/settings.bedrock-overlay.example) 를 jq deep-merge
+# 해 ~/.claude/settings.json 실파일로 작성한다 (#687, 이전 #677 F-7 의
+# settings.local.json 분리 디자인 폐기).
 #
 # 함께 deprecate 된 env 키 (게이트웨이 path 전용, Bedrock 와 양립 불가 — #677 O-1):
 #   - ANTHROPIC_BASE_URL  (was: http://cloud.dtgpt.samsungds.net/llm)
 #   - ANTHROPIC_AUTH_TOKEN (was: placeholder "your-dt-api-key")
 #   - ANTHROPIC_MODEL      (was: "Qwen3.6-27B")
-# 위 3 키는 더 이상 settings.local.json 으로 주입되지 않는다. 같은 ./setup.sh 안
-# 에서 aws/setup.sh 가 즉시 strip 하던 자기상충 흐름도 같이 정리됨.
+# 위 3 키는 더 이상 주입되지 않으며, ~/.claude/settings.json 에 잔존해도
+# aws/setup.sh 가 머지 중 자동 strip 한다.
 
 # --- Main Script Logic (issue #287, Phase 1: multi-account) ---
 
@@ -591,15 +596,23 @@ _single_account_ensure_link() {
     log_info "  symlink: $tgt → $src"
 }
 
-# Internal-PC single-account branch (issue #571, F-1; updated for #584, #683).
+# Internal-PC single-account branch (issue #571, F-1; updated for #584, #683, #687).
 # Direct-symlink the dotfiles SSOT into ~/.claude/ — no claude-accounts,
-# no ~/.claude-personal, no ~/.claude-work. ~/.claude/settings.local.json
-# 은 aws/setup.sh 가 Bedrock 템플릿으로 jq-머지한다 (#677 F-7) — 본 분기는
-# 더 이상 그 파일을 만들지 않는다 (#683 F-2).
+# no ~/.claude-personal, no ~/.claude-work.
+#
+# #687: settings.json 은 더 이상 symlink 가 아니다. aws/setup.sh 가
+# dotfiles SSOT (claude/settings.json) + Bedrock 오버레이를 jq deep-merge
+# 한 결과를 ~/.claude/settings.json 에 실파일로 작성한다. Claude Code 의
+# settings.local.json deep-merge 가 사용자 환경에서 신뢰 불가하기 때문
+# (실측 사례: ANTHROPIC_DEFAULT_SONNET_MODEL 미반영 → 400 invalid model).
+# 그래서 본 분기에서는 settings.json 처리를 aws/setup.sh 에 위임한다.
+# settings.local.json 은 #683 F-2 부터 본 분기가 만들지 않으며, #687 부터는
+# aws/setup.sh 도 만들지 않고 기존 파일이 있으면 deprecation 안내만 한다.
 if [ "$_setup_mode" = "internal" ]; then
     log_info "Internal PC mode — single-account setup (skipping claude-accounts)"
 
-    _single_account_ensure_link "$CLAUDE_SETTINGS_SOURCE"               "$HOME_SETTINGS"
+    # settings.json 처리는 aws/setup.sh 가 책임진다 (#687). 본 분기는 이
+    # 파일에 손대지 않아 aws/setup.sh 가 작성한 실파일이 보존된다.
     _single_account_ensure_link "$CLAUDE_STATUSLINE_SOURCE"             "$HOME_STATUSLINE"
     _single_account_ensure_link "$CLAUDE_SKILLS_SOURCE"                 "$HOME_SKILLS"
     _single_account_ensure_link "$CLAUDE_DOCS_SOURCE"                   "$HOME_DOCS"
@@ -607,10 +620,11 @@ if [ "$_setup_mode" = "internal" ]; then
     _single_account_ensure_link "$HOME/.claude-shared/plugins"          "$HOME/.claude/plugins"
 
     # --- Verify Links (single-account) ---
-    # settings.local.json is intentionally absent from this list — it is a
-    # regular file the user hand-creates (#584), not a dotfiles symlink.
+    # settings.json is intentionally absent from this list — aws/setup.sh
+    # writes it as a regular file (#687). settings.local.json is also
+    # absent — deprecated (#687) and never a dotfiles symlink (#584).
     log_debug "\n--- 심볼릭 링크 확인 (internal/single-account) ---"
-    for link in settings.json statusline-command.sh skills docs plugins projects/GLOBAL/memory; do
+    for link in statusline-command.sh skills docs plugins projects/GLOBAL/memory; do
         if [ -L "$HOME/.claude/$link" ]; then
             log_dim "✓ ~/.claude/$link 심볼릭 링크 확인됨"
         else

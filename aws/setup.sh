@@ -1,8 +1,16 @@
 #!/bin/bash
-# aws/setup.sh — Internal-PC AWS Bedrock + Claude bootstrap (issue #677).
+# aws/setup.sh — Internal-PC AWS Bedrock + Claude bootstrap (issue #677, #687).
 #
 # Idempotent: re-runs preserve user edits to aws.local.sh / ~/.aws/config
-# / ~/.claude/settings.local.json.
+# / ~/.claude/settings.json (real file, NOT symlink in internal mode).
+#
+# #687 fix: Claude Code 의 settings.json ↔ settings.local.json 사이에서
+# .env 객체 deep-merge 가 사용자 환경에서 실제로 적용되지 않는 사례가 확인
+# 됐다 (ANTHROPIC_DEFAULT_SONNET_MODEL 미반영 → 400 invalid model). 그래서
+# 사내 모드 한정으로 ~/.claude/settings.json 자체를 dotfiles SSOT
+# (claude/settings.json) + Bedrock 오버레이 (claude/settings.bedrock-overlay.example)
+# 를 jq deep-merge 한 실파일로 시드한다. 외부 PC 는 영향 없음 — symlink
+# 그대로 유지 (claude/setup.sh 외부 분기).
 #
 # External/public PCs: this script is a no-op (mode gate at top).
 #
@@ -73,44 +81,79 @@ _seed_file() {
     ux_success "Created: $_dst (mode $_mode)"
 }
 
-# _merge_claude_settings_local <template> <target>
-# Idempotent jq merge: adds template keys missing from target, preserves
-# existing user values. Detects the Samsung a2g gateway block and warns
-# instead of merging (Bedrock + a2g are mutually exclusive — issue #677 O-1).
-_merge_claude_settings_local() {
-    _tpl="$1"
-    _tgt="$2"
+# _merge_claude_settings_json <base> <overlay> <target>
+# Internal-mode 한정: ~/.claude/settings.json 을 dotfiles SSOT (base) +
+# Bedrock 오버레이 (overlay) 의 jq deep-merge 결과 실파일로 시드한다.
+# 외부 PC 의 symlink 디자인은 claude/setup.sh 외부 분기에서 유지된다.
+#
+# 머지 우선순위 (낮음 → 높음): base < overlay < existing_real
+#   - base: dotfiles 가 commit 한 모든 PC 공용 키 (hooks/statusLine/...)
+#   - overlay: 사내 모드 한정 Bedrock 모델 매핑 (model/availableModels/...)
+#   - existing_real: 사용자가 ~/.claude/settings.json 을 직접 편집한 경우
+#     해당 변경을 보존 (overlay 보다 우선). 단 legacy gateway env 키는
+#     머지 전 strip 된다 (Bedrock 와 양립 불가, #677 O-1).
+#
+# Symlink 처리 (#687): target 이 dotfiles base 를 가리키는 symlink 면 풀고
+# 실파일로 전환한다. 이는 claude/setup.sh 의 external 분기 호환을 위해
+# 일단 symlink 가 생성된 뒤 사내 분기에서 다시 풀어내는 흐름이 아니라,
+# claude/setup.sh 의 internal 분기 자체가 settings.json 처리를 위임한
+# 결과다 — claude/setup.sh:internal 은 settings.json symlink 를 만들지 않는다.
+# 그래도 과거 설치(symlink) 에서 #687 로 마이그레이션하는 사용자를 위한
+# fallback 으로 symlink 자동 변환을 남겨둔다.
+_merge_claude_settings_json() {
+    _base="$1"
+    _overlay="$2"
+    _tgt="$3"
 
-    if [ ! -f "$_tpl" ]; then
-        ux_error "Template missing: $_tpl"
+    if [ ! -f "$_base" ]; then
+        ux_error "Base settings missing: $_base"
+        return 1
+    fi
+    if [ ! -f "$_overlay" ]; then
+        ux_error "Overlay template missing: $_overlay"
         return 1
     fi
 
     if ! command -v jq >/dev/null 2>&1; then
-        ux_warning "jq 미설치 — settings.local.json 자동 머지 건너뜀."
-        ux_bullet "수동으로 다음 파일 내용을 ~/.claude/settings.local.json 에 머지하세요:"
-        ux_bullet "  $_tpl"
+        ux_warning "jq 미설치 — settings.json 자동 머지 건너뜀."
+        ux_bullet "다음 두 파일을 수동으로 머지해 ~/.claude/settings.json 에 작성하세요:"
+        ux_bullet "  base   : $_base"
+        ux_bullet "  overlay: $_overlay"
         return 0
     fi
 
     _tgt_dir="$(dirname "$_tgt")"
     [ -d "$_tgt_dir" ] || mkdir -p "$_tgt_dir"
 
-    if [ ! -f "$_tgt" ]; then
-        # First-time create — drop the _comment scaffolding field so the
-        # live file stays clean.
-        jq 'del(._comment)' "$_tpl" > "$_tgt"
+    # symlink → 실파일 전환 (#687 마이그레이션 fallback). symlink 가 가리키는
+    # 내용은 보존되어야 하므로 cp -L 로 실파일 복사 후 symlink 자체를 제거한다.
+    if [ -L "$_tgt" ]; then
+        _link_dst=$(readlink "$_tgt")
+        ux_warning "기존 ~/.claude/settings.json 이 symlink (→ $_link_dst). 실파일로 전환합니다 (#687)."
+        _tmp_resolved=$(mktemp)
+        cp -L "$_tgt" "$_tmp_resolved"
+        rm -f "$_tgt"
+        mv "$_tmp_resolved" "$_tgt"
         chmod 0600 "$_tgt"
-        ux_success "Created: $_tgt"
+    fi
+
+    if [ ! -f "$_tgt" ]; then
+        # First-time create — base * overlay (existing 없음). _comment 제거.
+        _tmp_new=$(mktemp)
+        if jq -s '(.[0]) * (.[1] | del(._comment?))' "$_base" "$_overlay" > "$_tmp_new"; then
+            mv "$_tmp_new" "$_tgt"
+            chmod 0600 "$_tgt"
+            ux_success "Created: $_tgt (base + overlay)"
+        else
+            ux_error "jq merge failed — check JSON in $_base / $_overlay"
+            rm -f "$_tmp_new"
+            return 1
+        fi
         return 0
     fi
 
-    # Detect leftover Samsung internal-gateway env keys. The earlier narrow
-    # `a2g.samsungds.net` URL check missed the `cloud.dtgpt.samsungds.net`
-    # rebrand and produced a half-merged broken state ("not login"). These
-    # keys are mutually exclusive with Bedrock (#677 O-1) and have no
-    # purpose under CLAUDE_CODE_USE_BEDROCK=1, so the merge strips them.
-    # The backup below preserves the user's previous content verbatim.
+    # Legacy 사내 게이트웨이 env 키 검출 (Bedrock 와 양립 불가, #677 O-1).
+    # 키 이름 기반이라 host rebrand (a2g → cloud.dtgpt) 에 강건.
     _gateway_keys=$(jq -r '
         .env // {}
         | keys_unsorted[]
@@ -123,16 +166,9 @@ _merge_claude_settings_local() {
         ux_bullet "머지 중 위 키들을 제거합니다. 원본은 백업 파일에 보존됩니다."
     fi
 
-    # Merge: target wins on conflicts (preserve user edits), but the
-    # mutually-exclusive gateway keys are stripped from the target side
-    # first. Template keys only fill gaps. _comment is dropped during the
-    # merge.
-    #
-    # Atomicity: render to a temp file, compare with the live target via
-    # cmp -s, and only when contents differ do we mv the live file aside
-    # as a timestamped backup and mv the new file into place. This avoids
-    # accumulating identical backups on every idempotent re-run, and the
-    # final mv is atomic on POSIX (same-filesystem rename).
+    # Deep merge: base * overlay * (existing - legacy gateway keys).
+    # 사용자 편집이 가장 우선 — 사내 PC 에서 ~/.claude/settings.json 을 직접
+    # 손대지 않는 게 정상이지만, 손댄 경우 보존된다. _comment 는 머지에서 항상 제거.
     _tmp_merged=$(mktemp)
     if jq -s '
         def _strip_gateway:
@@ -146,10 +182,11 @@ _merge_claude_settings_local() {
                 )
             else .
             end;
-        (.[0] | del(._comment?)) as $tpl
-        | (.[1] | _strip_gateway) as $cur
-        | $tpl * $cur
-    ' "$_tpl" "$_tgt" > "$_tmp_merged"; then
+        (.[0])                          as $base
+        | (.[1] | del(._comment?))      as $overlay
+        | (.[2] | _strip_gateway)       as $existing
+        | $base * $overlay * $existing
+    ' "$_base" "$_overlay" "$_tgt" > "$_tmp_merged"; then
         if cmp -s "$_tgt" "$_tmp_merged"; then
             rm -f "$_tmp_merged"
             ux_success "Preserved (already up to date): $_tgt"
@@ -162,10 +199,23 @@ _merge_claude_settings_local() {
             ux_bullet "Backup: $_backup"
         fi
     else
-        ux_error "jq merge failed — check syntax in $_tgt"
+        ux_error "jq merge failed — check JSON in $_base / $_overlay / $_tgt"
         rm -f "$_tmp_merged"
         return 1
     fi
+}
+
+# Deprecation 안내 (#687): 옛 머지 결과인 ~/.claude/settings.local.json 은
+# 이제 사용되지 않는다. Claude Code 의 settings.local.json deep-merge 가
+# 사용자 환경에서 신뢰 불가하므로 모든 키는 settings.json 으로 통합됐다.
+_warn_legacy_settings_local() {
+    _legacy="$HOME/.claude/settings.local.json"
+    [ -f "$_legacy" ] || return 0
+    ux_warning "$_legacy 는 #687 이후 deprecated 입니다."
+    ux_bullet "Claude Code 가 settings.json + .local 을 deep-merge 한다고 문서화돼 있지만,"
+    ux_bullet "실제 사용자 환경에서 env 객체가 정상 머지되지 않는 사례가 확인됐습니다."
+    ux_bullet "이 파일을 백업 후 삭제 권장:"
+    ux_bullet "  mv \"$_legacy\" \"${_legacy}.deprecated-687.\$(date +%Y%m%d%H%M%S)\""
 }
 
 # ---------------------------------------------------------------------------
@@ -217,11 +267,14 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# F-7: ~/.claude/settings.local.json — model mapping merge
+# F-7: ~/.claude/settings.json — base + Bedrock overlay deep-merge (#687)
 # ---------------------------------------------------------------------------
-_merge_claude_settings_local \
-    "${DOTFILES_DIR}/claude/settings.local.bedrock.example" \
-    "$HOME/.claude/settings.local.json"
+_merge_claude_settings_json \
+    "${DOTFILES_DIR}/claude/settings.json" \
+    "${DOTFILES_DIR}/claude/settings.bedrock-overlay.example" \
+    "$HOME/.claude/settings.json"
+
+_warn_legacy_settings_local
 
 # ---------------------------------------------------------------------------
 # F-8: OTel installer guidance (do NOT auto-run — needs sudo + sso login)
