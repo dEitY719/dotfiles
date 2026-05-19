@@ -200,27 +200,59 @@ _gh_pr_review_resolve_claude_account() {
     return 0
 }
 
+# _gh_pr_review_stderr_is_noise — returns 0 (true) when a stderr line is
+# known informational/startup output from one of the supported CLIs, not
+# an actual failure cause. Keeps the noise list explicit so future CLI
+# updates can extend it without rewriting the dispatcher.
+_gh_pr_review_stderr_is_noise() {
+    case "$1" in
+    "Reading prompt from stdin"*) return 0 ;; # codex exec startup banner
+    "Loaded prompt"*) return 0 ;;             # codex exec follow-up banner
+    "") return 0 ;;                           # blank line
+    esac
+    return 1
+}
+
 # _gh_pr_review_run_ai — pipes PROMPT_FILE into the chosen AI CLI per
-# references/ai-cli-invocation.md. Returns the CLI's exit code; on
-# non-zero, the first stderr line is echoed back to the caller so they
-# can quote it in the user-facing failure message.
+# references/ai-cli-invocation.md. Returns the CLI's exit code. On
+# non-zero exit, prints the full captured stderr (indented) to the
+# caller's stderr AND keeps the temp stderr file at a predictable path
+# so the user can re-inspect it. On zero exit, the stderr file is
+# cleaned up automatically.
+#
+# Issue #694:
+#   - Bug A — `gemini -p` requires a string argument (yargs). Read the
+#     prompt into a variable so the CLI sees a valid positional value.
+#   - Bug B — `head -n 1` of stderr surfaced informational banners
+#     (e.g. codex's "Reading prompt from stdin...") as the failure
+#     reason. The dispatcher now skips known-noise prefixes when
+#     building the one-line summary AND emits the full stderr below it.
 #
 # Args: $1 = ai (codex|gemini|claude), $2 = PROMPT_FILE, $3 = optional
 # CLAUDE_CONFIG_DIR (claude --user routing). Stdout of the CLI streams to
-# the caller's stdout; stderr is captured for the failure first-line.
+# the caller's stdout; stderr is captured for the failure summary.
 _gh_pr_review_run_ai() {
     local ai="$1"
     local prompt_file="$2"
     local cfg_dir="${3:-}"
-    local _stderr_file
-    _stderr_file=$(mktemp 2>/dev/null) || _stderr_file="/tmp/gh-pr-review-stderr.$$"
+    # Predictable path so the user can re-read it after a failure.
+    local _stderr_file="/tmp/gh-pr-review-stderr.$$.$ai.log"
+    : >"$_stderr_file"
     local _rc=0
     case "$ai" in
     codex)
         codex exec --color=never <"$prompt_file" 2>"$_stderr_file" || _rc=$?
         ;;
     gemini)
-        gemini -p <"$prompt_file" 2>"$_stderr_file" || _rc=$?
+        # `gemini -p` is non-interactive headless mode and REQUIRES a
+        # string argument (yargs) — `gemini -p <file` raises "Not enough
+        # arguments following: p". Slurp the prompt and pass it on argv.
+        # The inline path keeps prompts well under ARG_MAX (~128 KB on
+        # Linux); large diffs (≥ 800 additions+deletions) go through the
+        # subagent delegation path before reaching this function.
+        local _gemini_prompt
+        _gemini_prompt=$(cat "$prompt_file")
+        gemini -p "$_gemini_prompt" 2>"$_stderr_file" || _rc=$?
         ;;
     claude)
         if [ -n "$cfg_dir" ]; then
@@ -236,12 +268,29 @@ _gh_pr_review_run_ai() {
         ;;
     esac
     if [ "$_rc" -ne 0 ]; then
-        local _first
-        _first=$(head -n 1 "$_stderr_file" 2>/dev/null)
-        echo "External AI CLI '$ai' failed: ${_first:-<no stderr>}" >&2
+        # Find the first stderr line that is NOT a known informational
+        # banner. Falls back to the literal first line so an unknown
+        # CLI startup message still produces something.
+        local _summary="" _line
+        while IFS= read -r _line; do
+            if ! _gh_pr_review_stderr_is_noise "$_line"; then
+                _summary="$_line"
+                break
+            fi
+        done <"$_stderr_file"
+        if [ -z "$_summary" ]; then
+            _summary=$(head -n 1 "$_stderr_file" 2>/dev/null)
+        fi
+        echo "External AI CLI '$ai' failed (exit $_rc): ${_summary:-<no stderr>}" >&2
+        echo "  full stderr saved to: $_stderr_file" >&2
+        echo "  --- stderr (last 20 lines) ---" >&2
+        tail -n 20 "$_stderr_file" 2>/dev/null | sed 's/^/  /' >&2
+        echo "  --- end stderr ---" >&2
+        # Intentionally do NOT rm — leave the file for the user.
+        return "$_rc"
     fi
     rm -f "$_stderr_file"
-    return "$_rc"
+    return 0
 }
 
 # ============================================================================
@@ -503,6 +552,74 @@ _gh_pr_review_post_comment() {
 # Section 5 — PR resolution + pre-flight
 # ============================================================================
 
+# _gh_pr_review_parse_remote_url — extracts `owner/repo` from a github
+# remote URL. Accepts both forms produced by `git remote get-url`:
+#
+#   https://github.com/owner/repo.git
+#   git@github.com:owner/repo.git
+#   ssh://git@github.com/owner/repo.git
+#   git+https://github.com/owner/repo
+#
+# Prints `owner/repo` to stdout and returns 0 on success. Returns 1 with
+# an error message on stderr when the URL is not a github remote or the
+# extracted value does not match the `owner/repo` shape.
+#
+# Issue #694 Bug C — the previous code called `gh repo view` without
+# `-R <url>`, so the user-supplied `<remote>` argument was silently
+# ignored and the real `gh` error was swallowed by `2>/dev/null`.
+# Splitting URL parsing into a pure-shell helper makes the contract
+# bats-testable and removes the network dependency from the resolution
+# step entirely.
+_gh_pr_review_parse_remote_url() {
+    local _url="${1:-}"
+    if [ -z "$_url" ]; then
+        echo "empty remote URL" >&2
+        return 1
+    fi
+    case "$_url" in
+    *github.com*) ;;
+    *)
+        echo "remote URL is not a github.com remote: $_url" >&2
+        return 1
+        ;;
+    esac
+    local _slug
+    # Strip everything up to and including `github.com[:/]`, then drop a
+    # trailing `.git`. Works for https://, git@host:, ssh:// and the
+    # rarer git+https:// prefix because they all converge on github.com.
+    _slug=$(printf '%s' "$_url" | sed -E 's#^.*github\.com[:/]+##; s#\.git/?$##; s#/$##')
+    if ! printf '%s' "$_slug" | grep -qE '^[^/[:space:]]+/[^/[:space:]]+$'; then
+        echo "Could not parse owner/repo from remote URL: $_url" >&2
+        return 1
+    fi
+    printf '%s\n' "$_slug"
+    return 0
+}
+
+# _gh_pr_review_resolve_target_repo — given a remote name in the current
+# git repo, returns `owner/repo` by consulting `git remote get-url` and
+# parsing the URL. On failure prints the actionable cause to stderr
+# (which remote was tried, the URL value if any) and returns 1. Network
+# round-trips are avoided entirely; gh's auth state and default-repo
+# cache no longer affect this step (Bug C from issue #694).
+_gh_pr_review_resolve_target_repo() {
+    local _remote="${1:-origin}"
+    local _url
+    if ! _url=$(git remote get-url "$_remote" 2>&1); then
+        echo "Remote '$_remote' not found in this repo:" >&2
+        echo "  git remote get-url '$_remote' → $_url" >&2
+        git remote -v >&2
+        return 1
+    fi
+    local _slug
+    if ! _slug=$(_gh_pr_review_parse_remote_url "$_url"); then
+        echo "  remote='$_remote' url='$_url'" >&2
+        return 1
+    fi
+    printf '%s\n' "$_slug"
+    return 0
+}
+
 _gh_pr_review_resolve_pr_number() {
     # Echoes the PR number; non-zero exit if neither arg nor branch resolves.
     local explicit="${1:-}"
@@ -676,16 +793,14 @@ EOF
         return 1
     fi
 
-    # Resolve target repo from the remote (falls back to current
-    # repository's nameWithOwner if the remote URL parser fails).
+    # Resolve target repo by parsing the user-supplied remote's URL
+    # directly. Bypasses `gh repo view`'s default-repo auto-detection —
+    # the user-supplied `$remote` arg now actually controls the lookup
+    # (issue #694 Bug C). Helper writes the actionable failure (which
+    # remote, which URL) to stderr on its own; no `2>/dev/null` to
+    # swallow the real cause.
     local TARGET_REPO
-    if ! TARGET_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null); then
-        echo "could not resolve target repo from remote '$remote'" >&2
-        git remote -v >&2
-        return 1
-    fi
-    if [ -z "$TARGET_REPO" ]; then
-        echo "empty target repo; run inside a gh-authenticated repo" >&2
+    if ! TARGET_REPO=$(_gh_pr_review_resolve_target_repo "$remote"); then
         return 1
     fi
 
