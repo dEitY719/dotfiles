@@ -11,6 +11,13 @@
 # This test pre-declares the conflicting alias before sourcing dotfiles, then
 # verifies `type gwt` reports a function — proving the unalias guard removes
 # the shadowing alias regardless of plugin load order.
+#
+# Note on `eval 'gwt help'` in the dispatch tests below: in `bash -c` / `zsh -c`
+# the whole script string is parsed before any runtime `alias` command takes
+# effect, so a plain `gwt help` is never alias-expanded — the test would pass
+# even with a broken unalias guard (false positive, PR #693 review). `eval`
+# forces a runtime re-parse at the point where the alias *is* registered, so
+# only a working guard prevents the alias from expanding to `git worktree`.
 
 load '../test_helper'
 
@@ -72,7 +79,7 @@ teardown() {
         shopt -s expand_aliases
         alias gwt='git worktree'
         source '${DOTFILES_ROOT}/bash/main.bash'
-        gwt help
+        eval 'gwt help'
     "
     assert_success
     assert_output --partial "Usage: gwt help"
@@ -90,7 +97,7 @@ teardown() {
         export TERM=dumb
         alias gwt='git worktree'
         source '${DOTFILES_ROOT}/zsh/main.zsh'
-        gwt help
+        eval 'gwt help'
     "
     assert_success
     assert_output --partial "Usage: gwt help"
