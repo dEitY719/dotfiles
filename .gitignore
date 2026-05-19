@@ -10,6 +10,7 @@ uv.lock
 git/.git-credentials
 **/.git-credentials
 
+.temp/
 # Local machine-specific configurations
 *.local.sh
 ssh/*.local
