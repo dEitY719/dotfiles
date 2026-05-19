@@ -60,17 +60,23 @@ quote the first stderr line and exit 1.
 ## `--ai gemini`
 
 ```sh
-gemini -p < "$PROMPT_FILE"
+gemini -p "$(cat "$PROMPT_FILE")"
 ```
 
-`gemini -p` reads its prompt from stdin when no argv string follows,
-keeping the payload off argv entirely (no `ARG_MAX` exposure, no
-quoting hazard). Model selection (`-m <model>`) intentionally falls
-back to the user's environment default; add a `--gemini-model` flag
-in a future iteration only if users report drift between defaults.
+`gemini -p` is yargs-backed and **requires a string argument**. The
+earlier `gemini -p < "$PROMPT_FILE"` shape produced `Not enough
+arguments following: p` because yargs sees `-p` with no follow-up
+token (issue #694 Bug A). The fix slurps the prompt into a variable
+and passes it on argv. ARG_MAX (~128 KB on modern Linux) is non-issue
+for inline diffs — anything ≥ 800 additions+deletions already routes
+through the subagent delegation path before reaching this function.
 
-Stderr policy is identical to codex: non-zero exit → first stderr line
-to caller, exit 1.
+Model selection (`-m <model>`) intentionally falls back to the user's
+environment default; add a `--gemini-model` flag in a future iteration
+only if users report drift between defaults.
+
+Stderr policy is identical to codex: non-zero exit → noise-filtered
+summary + full stderr tail + persistent stderr log on disk.
 
 ## `--ai claude` (no `--user`)
 
@@ -142,6 +148,6 @@ omit `--user` and let the current shell's `CLAUDE_CONFIG_DIR` win.
 | `--user` with codex/gemini | 2 | `--user is only valid with --ai claude (codex/gemini have no multi-account routing)` |
 | `--user <bogus>` with claude | 1 | `Unknown claude account: '<bogus>' (allowed: ...)` |
 | AI CLI not on PATH | 1 | `Required CLI '<name>' not found in PATH` |
-| AI CLI non-zero exit | 1 | first line of CLI's stderr, quoted |
+| AI CLI non-zero exit | 1 | `External AI CLI '<name>' failed (exit <rc>): <noise-filtered first line>` + full tail + `/tmp/gh-pr-review-stderr.<pid>.<ai>.log` (issue #694 Bug B — no longer surfaces codex's "Reading prompt from stdin…" banner as the failure cause) |
 | PR closed / merged / draft | 1 | `PR #<N> is <state>; aborting` |
 | `gh pr comment` post failed | 0 | `[WARN] PR comment post failed — output retained on stdout` (soft fail) |
