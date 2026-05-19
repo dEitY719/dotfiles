@@ -39,6 +39,20 @@ not to shrink the visualization.
 | ≥ 400 lines / ≥ 24 KB | Single `Write`, no inline echo, **mandatory**. The truncation risk dominates at this size on Bedrock. |
 | ≥ 1 000 lines | Single `Write` for the skeleton + content shell, then one or more `Edit` calls to fill in long inline data (chart configs, large SVGs). Never a second `Write` to the same path. |
 
+For the ≥ 1 000-line row, seed the skeleton with unique anchor placeholders
+that `Edit` can target without ambiguity:
+
+```html
+<!-- DATA:hero-chart -->
+<!-- DATA:command-reference-table -->
+<!-- DATA:directory-tree -->
+```
+
+Each `Edit` call then matches the placeholder verbatim as its `old_string`
+and replaces it with the final inline block. Plain `<!-- TODO -->` is not
+specific enough — it usually appears multiple times in a draft and breaks
+`Edit`'s uniqueness check.
+
 The thresholds are conservative — Bedrock has truncated turns well below
 24 KB in practice. When unsure, treat the file as "large" and follow the
 ≥ 400-line row.
@@ -84,8 +98,10 @@ When you see `Truncated event message received` in this skill:
 1. Do not retry the same command. The next streamed turn truncates at the
    same point.
 2. Send the user a one-line acknowledgement that the previous turn aborted.
-3. Call `Write` immediately with the full file body — no inline preview,
-   no per-section dump, no "before I write this, here's what it'll look
+3. Apply the Size-Aware Strategy above to deliver the file body — a
+   single `Write` for < 1 000-line outputs, or `Write` + targeted
+   `Edit` calls for the ≥ 1 000-line row. Never an inline preview,
+   per-section dump, or "before I write this, here's what it'll look
    like".
 4. Confirm completion with summary + `file://` URL + `xdg-open` line only.
 
