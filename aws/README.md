@@ -120,7 +120,7 @@ Read-only. 위 1~5 단계가 빠짐없이 적용됐는지 PASS/FAIL/WARN 으로 
 ./aws/diagnose.sh
 ```
 
-(`aws/aws.local.sh`, `shell-common/env/security.local.sh`, `~/.claude/settings.json` 까지 모두 인지한다. settings.local.json 잔존 시 deprecation 안내, #687.)
+(`aws/aws.local.sh`, `shell-common/env/security.local.sh`, `~/.claude/settings.json` 까지 모두 인지한다. `~/.claude/settings.local.json` 은 `aws/setup.sh` 가 자동 archive 처리, #687.)
 
 ## 트러블슈팅
 
