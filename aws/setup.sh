@@ -126,15 +126,23 @@ _merge_claude_settings_json() {
     [ -d "$_tgt_dir" ] || mkdir -p "$_tgt_dir"
 
     # symlink → 실파일 전환 (#687 마이그레이션 fallback). symlink 가 가리키는
-    # 내용은 보존되어야 하므로 cp -L 로 실파일 복사 후 symlink 자체를 제거한다.
+    # 내용은 보존되어야 하므로 cp -L 로 실파일 복사 후 atomic mv 로 교체한다.
+    # broken (dangling) symlink 인 경우 cp -L 가 실패하므로, 사전 분기로 단순
+    # 제거 후 아래 first-time create 분기로 떨어진다 (#689 review — gemini Rule 1+2,
+    # codex P2 #4: broken symlink 복구 경로). atomicity: 정상 symlink 분기는
+    # mv -f 한 번으로 끝내 cp+rm+mv 3단계 중 rm 을 제거.
     if [ -L "$_tgt" ]; then
         _link_dst=$(readlink "$_tgt")
-        ux_warning "기존 ~/.claude/settings.json 이 symlink (→ $_link_dst). 실파일로 전환합니다 (#687)."
-        _tmp_resolved=$(mktemp)
-        cp -L "$_tgt" "$_tmp_resolved"
-        rm -f "$_tgt"
-        mv "$_tmp_resolved" "$_tgt"
-        chmod 0600 "$_tgt"
+        if [ -e "$_tgt" ]; then
+            ux_warning "기존 ~/.claude/settings.json 이 symlink (→ $_link_dst). 실파일로 전환합니다 (#687)."
+            _tmp_resolved=$(mktemp)
+            cp -L "$_tgt" "$_tmp_resolved"
+            mv -f "$_tmp_resolved" "$_tgt"
+            chmod 0600 "$_tgt"
+        else
+            ux_warning "기존 ~/.claude/settings.json 이 깨진 symlink (→ $_link_dst, 대상 부재). 제거 후 새로 시드합니다 (#687/#689)."
+            rm -f "$_tgt"
+        fi
     fi
 
     if [ ! -f "$_tgt" ]; then
