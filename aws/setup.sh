@@ -205,17 +205,24 @@ _merge_claude_settings_json() {
     fi
 }
 
-# Deprecation 안내 (#687): 옛 머지 결과인 ~/.claude/settings.local.json 은
+# 자동 archive (#687, 보강): 옛 머지 결과인 ~/.claude/settings.local.json 은
 # 이제 사용되지 않는다. Claude Code 의 settings.local.json deep-merge 가
 # 사용자 환경에서 신뢰 불가하므로 모든 키는 settings.json 으로 통합됐다.
-_warn_legacy_settings_local() {
+# 사용자가 잊어도 회귀하지 않도록 mv 로 timestamp suffix 백업까지 자동 수행
+# (#688 codex / #686 Opus-personal 권고). 백업 파일은 보존되므로 복구 가능.
+_archive_legacy_settings_local() {
     _legacy="$HOME/.claude/settings.local.json"
     [ -f "$_legacy" ] || return 0
-    ux_warning "$_legacy 는 #687 이후 deprecated 입니다."
-    ux_bullet "Claude Code 가 settings.json + .local 을 deep-merge 한다고 문서화돼 있지만,"
-    ux_bullet "실제 사용자 환경에서 env 객체가 정상 머지되지 않는 사례가 확인됐습니다."
-    ux_bullet "이 파일을 백업 후 삭제 권장:"
-    ux_bullet "  mv \"$_legacy\" \"${_legacy}.deprecated-687.\$(date +%Y%m%d%H%M%S)\""
+    _legacy_bak="${_legacy}.deprecated-687.$(date +%Y%m%d%H%M%S)"
+    if mv "$_legacy" "$_legacy_bak"; then
+        ux_success "Archived legacy settings.local.json (#687):"
+        ux_bullet "  $_legacy"
+        ux_bullet "  → $_legacy_bak"
+        ux_bullet "Claude Code 의 deep-merge 가 사용자 환경에서 신뢰 불가하므로 본 파일은 더 이상 사용되지 않습니다."
+    else
+        ux_warning "settings.local.json archive 실패: $_legacy"
+        ux_bullet "수동 처리: mv \"$_legacy\" \"$_legacy_bak\""
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -274,7 +281,7 @@ _merge_claude_settings_json \
     "${DOTFILES_DIR}/claude/settings.bedrock-overlay.example" \
     "$HOME/.claude/settings.json"
 
-_warn_legacy_settings_local
+_archive_legacy_settings_local
 
 # ---------------------------------------------------------------------------
 # F-8: OTel installer guidance (do NOT auto-run — needs sudo + sso login)

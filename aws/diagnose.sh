@@ -394,8 +394,11 @@ else
 fi
 
 if [ -f "$CLAUDE_SETTINGS_LOCAL" ]; then
-  warn "~/.claude/settings.local.json 잔존 — #687 부터 deprecated. 백업 후 삭제 권장:"
-  warn "  mv \"$CLAUDE_SETTINGS_LOCAL\" \"${CLAUDE_SETTINGS_LOCAL}.deprecated-687.\$(date +%Y%m%d%H%M%S)\""
+  fail "~/.claude/settings.local.json 잔존 — #687 부터 deprecated → ./aws/setup.sh 재실행 시 자동 archive 됨 (mv → *.deprecated-687.<ts>)"
+fi
+# Archive 흔적 (deprecated backup) 이 있으면 정상 마이그레이션 완료를 알린다.
+if ls "${CLAUDE_SETTINGS_LOCAL}".deprecated-687.* >/dev/null 2>&1; then
+  pass "settings.local.json 마이그레이션 완료 (#687 deprecated archive 존재)"
 fi
 
 if [ -n "$SETTINGS_FILE" ]; then
@@ -434,11 +437,23 @@ if [ -n "$SETTINGS_FILE" ]; then
       warn "env.ANTHROPIC_DEFAULT_HAIKU_MODEL 미설정"
     fi
 
-    # Bedrock 모드는 CLAUDE_CODE_USE_BEDROCK 를 쉘 env 한 곳에서만 SSOT 로
-    # 가진다 (#677 F-7.3). settings.json 에 중복 명시되어 있다면 정보로만 보고.
+    # #685 / #687 보강: settings.json env 에 CLAUDE_CODE_USE_BEDROCK + AWS_REGION
+    # 직접 명시 (사내 가이드 2-6 요구). aws/aws.local.sh 의 shell env 와 중복이지만
+    # Claude Code 가 자체 env 적용 경로로 두 키를 읽는 사례가 있어 양쪽에 둔다.
     USE_BR=$(echo "$SETTINGS_JSON" | jq -r '.env.CLAUDE_CODE_USE_BEDROCK // empty' 2>/dev/null)
     if [ "$USE_BR" = "1" ]; then
-      pass "settings 의 env.CLAUDE_CODE_USE_BEDROCK=1 (쉘 env 와 중복이지만 안전)"
+      pass "settings 의 env.CLAUDE_CODE_USE_BEDROCK=1 (가이드 2-6 충족)"
+    else
+      fail "settings 의 env.CLAUDE_CODE_USE_BEDROCK 누락 → 가이드 2-6 미충족 (#685)"
+    fi
+
+    AWS_REG=$(echo "$SETTINGS_JSON" | jq -r '.env.AWS_REGION // empty' 2>/dev/null)
+    if [ "$AWS_REG" = "ap-northeast-2" ]; then
+      pass "settings 의 env.AWS_REGION=ap-northeast-2 (가이드 2-6 충족)"
+    elif [ -n "$AWS_REG" ]; then
+      warn "settings 의 env.AWS_REGION 값이 가이드 기본값(ap-northeast-2)과 다름: ${AWS_REG}"
+    else
+      fail "settings 의 env.AWS_REGION 누락 → 가이드 2-6 미충족 (#685)"
     fi
 
     # model 확인
