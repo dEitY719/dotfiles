@@ -607,7 +607,8 @@ _single_account_ensure_link() {
 # (실측 사례: ANTHROPIC_DEFAULT_SONNET_MODEL 미반영 → 400 invalid model).
 # 그래서 본 분기에서는 settings.json 처리를 aws/setup.sh 에 위임한다.
 # settings.local.json 은 #683 F-2 부터 본 분기가 만들지 않으며, #687 부터는
-# aws/setup.sh 도 만들지 않고 기존 파일이 있으면 deprecation 안내만 한다.
+# aws/setup.sh 도 만들지 않고 기존 파일이 있으면 timestamp suffix 백업으로
+# 자동 archive 한다 (mv → *.deprecated-687.<ts>).
 if [ "$_setup_mode" = "internal" ]; then
     log_info "Internal PC mode — single-account setup (skipping claude-accounts)"
 

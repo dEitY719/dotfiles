@@ -1,8 +1,10 @@
 {
-  "_comment": "Bedrock overlay for ~/.claude/settings.json (internal-PC mode only). aws/setup.sh deep-merges (base * overlay * existing) into ~/.claude/settings.json as a REAL file (NOT symlink) — see #687. The split between this overlay and dotfiles claude/settings.json keeps external-PC SSOT untouched. CLAUDE_CODE_USE_BEDROCK and AWS_REGION are deliberately NOT here (single SSOT = aws/aws.local.sh shell env, #677 F-7.3).",
+  "_comment": "Bedrock overlay for ~/.claude/settings.json (internal-PC mode only). aws/setup.sh deep-merges (base * overlay * existing) into ~/.claude/settings.json as a REAL file (NOT symlink) — see #687. The split between this overlay and dotfiles claude/settings.json keeps external-PC SSOT untouched. CLAUDE_CODE_USE_BEDROCK and AWS_REGION are duplicated here (in addition to aws/aws.local.sh shell env) because the internal company guide section 2-6 requires them in settings.json env — #685 acceptance. The shell env in aws.local.sh stays as the OS-level SSOT for shells that source it before Claude Code starts. model is pinned to the direct Bedrock ID (not the 'sonnet' alias) to avoid the v2.1.144 alias fallback to apac.anthropic.claude-sonnet-4-5-* — see #686/#688 hypothesis B.",
   "env": {
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "global.anthropic.claude-sonnet-4-6",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "CLAUDE_CODE_USE_BEDROCK": "1",
+    "AWS_REGION": "ap-northeast-2"
   },
   "availableModels": [
     "sonnet",
@@ -10,7 +12,7 @@
     "claude-opus-4-7",
     "claude-opus-4-6"
   ],
-  "model": "sonnet",
+  "model": "global.anthropic.claude-opus-4-7",
   "modelOverrides": {
     "claude-opus-4-7": "global.anthropic.claude-opus-4-7",
     "claude-opus-4-6": "global.anthropic.claude-opus-4-6-v1"
