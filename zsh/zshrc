@@ -3,9 +3,17 @@ if [[ "${DOTFILES_KEEP_NOUNSET:-0}" != "1" ]]; then
   unsetopt nounset
 fi
 
-# Suppress dotfiles init message to avoid Powerlevel10k instant prompt warnings
-# (Console output after instant prompt causes prompt jump)
+# Suppress `dotfiles_init_summary` (defined in zsh/main.zsh) — keep the
+# interactive shell quiet on every startup. Originally introduced to
+# silence Powerlevel10k instant-prompt warnings; instant prompt itself
+# is now off (PR #696, see zsh/app/p10k.zsh INSTANT_PROMPT=off) but the
+# suppression is retained as a general preference.
 export DOTFILES_SUPPRESS_MESSAGE=1
+
+# Instant prompt is intentionally disabled — the standard
+# `source ~/.cache/p10k-instant-prompt-*.zsh` block was removed in
+# PR #696 (worktree shell prompt freeze). Do NOT re-add it without
+# first fixing the race documented at zsh/app/p10k.zsh INSTANT_PROMPT=off.
 
 # If you come from bash you might have to change your $PATH.
 # export PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH
