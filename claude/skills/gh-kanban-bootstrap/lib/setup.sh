@@ -84,6 +84,7 @@ PROJECT_ID=""
 PROJECT_NUMBER=""
 PROJECT_URL=""
 WORKFLOWS_URL=""
+HOST="github.com"
 
 PR_TEMPLATE_PATH=".github/pull_request_template.md"
 PR_TEMPLATE_COMMIT_MESSAGE="Chore: add pull request template for kanban board setup"
@@ -101,7 +102,7 @@ die() {
 
 print_help() {
     ux_header "Kanban Board Setup"
-    ux_usage "./scripts/setup-kanban-board.sh" "[--owner <login>] [--repo <name>] [options]" \
+    ux_usage "bash claude/skills/gh-kanban-bootstrap/lib/setup.sh" "[--owner <login>] [--repo <name>] [options]" \
         "Create a GitHub Projects v2 board, link the repo, sync the Status field, and print the remaining UI checklist."
 
     ux_section "Options"
@@ -199,6 +200,21 @@ detect_repo_defaults() {
     if [ -z "$REPO" ] && [ -n "${detected_repo-}" ]; then
         REPO="$detected_repo"
     fi
+}
+
+# Detect current GitHub host (github.com or GHE) from origin remote.
+# Falls back to github.com when remote parsing fails. Sets HOST.
+detect_host() {
+    local remote_url host=""
+    remote_url="$(git remote get-url origin 2>/dev/null || true)"
+    if [ -n "$remote_url" ]; then
+        case "$remote_url" in
+            git@*) host="${remote_url#git@}"; host="${host%%:*}" ;;
+            https://*) host="${remote_url#https://}"; host="${host%%/*}" ;;
+            ssh://*) host="${remote_url#ssh://}"; host="${host%%/*}"; host="${host#*@}" ;;
+        esac
+    fi
+    HOST="${host:-github.com}"
 }
 
 auth_scopes_csv() {
@@ -562,7 +578,7 @@ project_url_from_owner_type() {
     if [ "$OWNER_TYPE" = "Organization" ]; then
         prefix="orgs"
     fi
-    printf "https://github.com/%s/%s/projects/%s" "$prefix" "$OWNER" "$PROJECT_NUMBER"
+    printf "https://%s/%s/%s/projects/%s" "$HOST" "$prefix" "$OWNER" "$PROJECT_NUMBER"
 }
 
 workflows_url_from_owner_type() {
@@ -570,7 +586,7 @@ workflows_url_from_owner_type() {
     if [ "$OWNER_TYPE" = "Organization" ]; then
         prefix="orgs"
     fi
-    printf "https://github.com/%s/%s/projects/%s/workflows" "$prefix" "$OWNER" "$PROJECT_NUMBER"
+    printf "https://%s/%s/%s/projects/%s/workflows" "$HOST" "$prefix" "$OWNER" "$PROJECT_NUMBER"
 }
 
 workflow_deep_link() {
@@ -613,7 +629,7 @@ print_final_report() {
     ux_bullet_sub "Link: $(workflow_deep_link "auto-add")"
     ux_bullet "Item added to project: set Status to ${y}'Backlog'${r} so every new card starts in the intake column."
     ux_bullet_sub "Link: $(workflow_deep_link "item-added")"
-    ux_bullet "Pull request linked to issue: set Status to ${y}'In review'${r} so linked issue cards move into review automatically."
+    ux_bullet "Pull request linked to issue: ${y}DISABLE this workflow${r} per SSOT decision #289. Issues do not visit 'In review' — the column is PR-only. Leaving this enabled wrongly moves Issue cards into review when a PR links them."
     ux_bullet_sub "Link: $(workflow_deep_link "pr-linked")"
     ux_bullet "Code review approved: set Status to ${y}'Approved'${r} so PR cards reflect the pre-merge state."
     ux_bullet_sub "Link: $(workflow_deep_link "review-approved")"
@@ -644,6 +660,7 @@ main() {
     require_command gh "Install GitHub CLI: https://cli.github.com/"
     require_command jq "Install jq to parse GitHub API responses."
     require_project_scope
+    detect_host
 
     ux_header "Kanban Board Setup"
     log_step 1 "Validating repository access"

@@ -1,10 +1,11 @@
 #!/usr/bin/env bats
-# tests/bats/tools/setup_kanban_board.bats
-# Offline coverage for scripts/setup-kanban-board.sh.
+# tests/bats/skills/gh_kanban_bootstrap_setup.bats
+# Offline coverage for claude/skills/gh-kanban-bootstrap/lib/setup.sh
+# (relocated from the former scripts/ location in issue #699).
 
 load '../test_helper'
 
-SETUP_KANBAN_SCRIPT="${DOTFILES_ROOT}/scripts/setup-kanban-board.sh"
+SETUP_KANBAN_SCRIPT="${DOTFILES_ROOT}/claude/skills/gh-kanban-bootstrap/lib/setup.sh"
 
 setup() {
     setup_isolated_home
@@ -124,7 +125,10 @@ EOF
 }
 
 run_setup_kanban() {
-    run bash "$SETUP_KANBAN_SCRIPT" "$@"
+    # Run from TEST_TEMP_HOME so git remote detection misses and HOST
+    # defaults to github.com — keeps assertions deterministic
+    # regardless of where the bats suite is invoked from (#699).
+    run bash -c "cd '$TEST_TEMP_HOME' && bash '$SETUP_KANBAN_SCRIPT' $(printf '%q ' "$@")"
 }
 
 @test "dry-run accepts read-only project scope and prints org workflow checklist" {
@@ -317,4 +321,102 @@ EOF
     assert_failure
     assert_output --partial "gh api user could not read token scopes"
     grep -q '^api user -i$' "$MOCK_LOG"
+}
+
+# ---------------------------------------------------------------------------
+# Issue #699 regression: workflow #3 disable instruction and host-aware URL
+# ---------------------------------------------------------------------------
+
+@test "issue #699: workflow #3 emits DISABLE instruction per SSOT decision #289" {
+    export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
+    export MOCK_GH_REPO_CONTEXT_JSON="${TEST_TEMP_HOME}/repo.json"
+    export MOCK_GH_EXISTING_PROJECTS_JSON="${TEST_TEMP_HOME}/projects.json"
+    export MOCK_GH_CREATE_PROJECT_JSON="${TEST_TEMP_HOME}/create.json"
+    export MOCK_GH_STATUS_FIELD_JSON="${TEST_TEMP_HOME}/status.json"
+    export MOCK_GH_TEMPLATE_JSON="${TEST_TEMP_HOME}/template.json"
+
+    write_auth_headers "$MOCK_GH_AUTH_HEADERS" "repo, read:project"
+    write_json_fixture "$MOCK_GH_REPO_CONTEXT_JSON" \
+        '{"data":{"repository":{"id":"R_user","name":"dotfiles","url":"https://github.com/deity/dotfiles","owner":{"__typename":"User","login":"deity","id":"U_1"},"defaultBranchRef":{"name":"main"}}}}'
+    write_json_fixture "$MOCK_GH_EXISTING_PROJECTS_JSON" \
+        '{"data":{"repositoryOwner":{"__typename":"User","projectsV2":{"nodes":[]}}}}'
+    write_json_fixture "$MOCK_GH_CREATE_PROJECT_JSON" \
+        '{"data":{"createProjectV2":{"projectV2":{"id":"PVT_new","number":42,"title":"dotfiles","url":"https://github.com/users/deity/projects/42"}}}}'
+    write_json_fixture "$MOCK_GH_STATUS_FIELD_JSON" \
+        '{"data":{"node":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status"}]}}}}'
+    write_json_fixture "$MOCK_GH_TEMPLATE_JSON" \
+        '{"data":{"repository":{"object":null}}}'
+
+    run_setup_kanban --owner deity --repo dotfiles --dry-run
+    assert_success
+    assert_output --partial "DISABLE this workflow"
+    assert_output --partial "#289"
+    # The old "set Status to 'In review'" instruction must not return
+    refute_output --partial "set Status to 'In review' so linked issue"
+}
+
+@test "issue #699: lib/setup.sh exists at the absorbed skill path" {
+    [ -f "$SETUP_KANBAN_SCRIPT" ]
+    [ -x "$SETUP_KANBAN_SCRIPT" ] || head -1 "$SETUP_KANBAN_SCRIPT" | grep -q '^#!'
+}
+
+@test "issue #699: detect_host falls back to github.com outside a git repo" {
+    export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
+    export MOCK_GH_REPO_CONTEXT_JSON="${TEST_TEMP_HOME}/repo.json"
+    export MOCK_GH_EXISTING_PROJECTS_JSON="${TEST_TEMP_HOME}/projects.json"
+    export MOCK_GH_CREATE_PROJECT_JSON="${TEST_TEMP_HOME}/create.json"
+    export MOCK_GH_STATUS_FIELD_JSON="${TEST_TEMP_HOME}/status.json"
+    export MOCK_GH_TEMPLATE_JSON="${TEST_TEMP_HOME}/template.json"
+
+    write_auth_headers "$MOCK_GH_AUTH_HEADERS" "repo, read:project"
+    write_json_fixture "$MOCK_GH_REPO_CONTEXT_JSON" \
+        '{"data":{"repository":{"id":"R_user","name":"x","url":"https://github.com/deity/x","owner":{"__typename":"User","login":"deity","id":"U_1"},"defaultBranchRef":{"name":"main"}}}}'
+    write_json_fixture "$MOCK_GH_EXISTING_PROJECTS_JSON" \
+        '{"data":{"repositoryOwner":{"__typename":"User","projectsV2":{"nodes":[]}}}}'
+    write_json_fixture "$MOCK_GH_CREATE_PROJECT_JSON" \
+        '{"data":{"createProjectV2":{"projectV2":{"id":"PVT_new","number":11,"title":"x","url":"https://github.com/users/deity/projects/11"}}}}'
+    write_json_fixture "$MOCK_GH_STATUS_FIELD_JSON" \
+        '{"data":{"node":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status"}]}}}}'
+    write_json_fixture "$MOCK_GH_TEMPLATE_JSON" \
+        '{"data":{"repository":{"object":null}}}'
+
+    run_setup_kanban --owner deity --repo x --dry-run
+    assert_success
+    # HOST defaults to github.com when not inside a git repo
+    assert_output --partial "https://github.com/users/deity/projects/"
+}
+
+@test "issue #699: detect_host derives GHE host from git remote" {
+    # Set up a fake git repo in TEST_TEMP_HOME with a GHE origin so
+    # detect_host() picks up github.samsungds.net instead of github.com.
+    pushd "$TEST_TEMP_HOME" >/dev/null
+    git init -q
+    git remote add origin "git@github.samsungds.net:byoungwoo-yoon/dotfiles.git"
+    popd >/dev/null
+
+    export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
+    export MOCK_GH_REPO_CONTEXT_JSON="${TEST_TEMP_HOME}/repo.json"
+    export MOCK_GH_EXISTING_PROJECTS_JSON="${TEST_TEMP_HOME}/projects.json"
+    export MOCK_GH_CREATE_PROJECT_JSON="${TEST_TEMP_HOME}/create.json"
+    export MOCK_GH_STATUS_FIELD_JSON="${TEST_TEMP_HOME}/status.json"
+    export MOCK_GH_TEMPLATE_JSON="${TEST_TEMP_HOME}/template.json"
+
+    write_auth_headers "$MOCK_GH_AUTH_HEADERS" "repo, read:project"
+    write_json_fixture "$MOCK_GH_REPO_CONTEXT_JSON" \
+        '{"data":{"repository":{"id":"R_user","name":"dotfiles","url":"https://github.samsungds.net/byoungwoo-yoon/dotfiles","owner":{"__typename":"User","login":"byoungwoo-yoon","id":"U_1"},"defaultBranchRef":{"name":"main"}}}}'
+    write_json_fixture "$MOCK_GH_EXISTING_PROJECTS_JSON" \
+        '{"data":{"repositoryOwner":{"__typename":"User","projectsV2":{"nodes":[]}}}}'
+    write_json_fixture "$MOCK_GH_CREATE_PROJECT_JSON" \
+        '{"data":{"createProjectV2":{"projectV2":{"id":"PVT_new","number":7,"title":"dotfiles","url":"https://github.samsungds.net/users/byoungwoo-yoon/projects/7"}}}}'
+    write_json_fixture "$MOCK_GH_STATUS_FIELD_JSON" \
+        '{"data":{"node":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status"}]}}}}'
+    write_json_fixture "$MOCK_GH_TEMPLATE_JSON" \
+        '{"data":{"repository":{"object":null}}}'
+
+    run_setup_kanban --owner byoungwoo-yoon --repo dotfiles --dry-run
+    assert_success
+    # Host-aware: GHE URLs in the workflow checklist
+    assert_output --partial "https://github.samsungds.net/users/byoungwoo-yoon/projects/"
+    # No hardcoded github.com leaks
+    refute_output --partial "https://github.com/users/byoungwoo-yoon/projects/"
 }
