@@ -21,8 +21,14 @@
 #
 # When a future GHE domain appears, edit this file only — no other
 # script should grow a second copy of the mapping.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
+#
+# PR #704 review (gemini-code-assist) — no interactive guard.
+# CLAUDE.md only mandates the guard for files that produce output at
+# file scope; this file defines functions and exits, so the guard
+# would have blocked non-interactive callers (`. gh_host.sh` inside
+# hooks / one-shot scripts) from seeing the functions at all. Keeping
+# the body pure-definitions makes the file safe to source from any
+# context — interactive, non-interactive, or `bash -c`.
 
 # _gh_resolve_host — print the active GitHub host on stdout.
 #

@@ -129,3 +129,26 @@ teardown() {
     assert_success
     assert_output "owner/repo"
 }
+
+# ---------------------------------------------------------------------------
+# PR #704 review (gemini-code-assist, critical) — non-interactive sourcing.
+# The original gh_host.sh shipped with an interactive guard that returned 0
+# before defining the helpers when the file was sourced from a non-interactive
+# shell without DOTFILES_FORCE_INIT. Hooks and one-shot scripts hit this and
+# saw `_gh_resolve_host: command not found`. The guard was removed because
+# gh_host.sh has no file-scope side effects (CLAUDE.md only mandates the
+# guard for files that produce output). This test pins the contract — the
+# functions MUST be defined after a bare `. gh_host.sh` in `bash -c`.
+# ---------------------------------------------------------------------------
+
+@test "non-interactive bash -c without DOTFILES_FORCE_INIT defines the helpers" {
+    run bash -c "
+        unset DOTFILES_FORCE_INIT
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh'
+        command -v _gh_resolve_host >/dev/null && echo resolve_ok
+        command -v _gh_parse_owner_repo_url >/dev/null && echo parse_ok
+    "
+    assert_success
+    assert_output --partial "resolve_ok"
+    assert_output --partial "parse_ok"
+}
