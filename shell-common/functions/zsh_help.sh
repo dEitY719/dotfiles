@@ -15,7 +15,7 @@ _zsh_help_summary() {
     ux_bullet_sub "plugins-list: git | autosuggestions | syntax-highlighting"
     ux_bullet_sub "coexist: bash & zsh coexistence tips"
     ux_bullet_sub "tips: configuration & snippet tips"
-    ux_bullet_sub "troubleshoot: zsh-fix-vscode | p10k issues"
+    ux_bullet_sub "troubleshoot: zsh-fix-vscode | zsh-clear-p10k-caches | p10k issues"
     ux_bullet_sub "status: zsh-version | zsh-info"
     ux_bullet_sub "details: zsh-help <section>  (example: zsh-help theme)"
 }
@@ -106,6 +106,9 @@ _zsh_help_rows_troubleshoot() {
     ux_bullet "${UX_BOLD}VS Code 터미널에서 기본 프롬프트(HOSTNAME%)만 표시될 때:${UX_RESET}"
     ux_bullet "  원인: VS Code 업데이트 후 셸 통합 캐시 불일치"
     ux_bullet "  해결: ${UX_BOLD}zsh-fix-vscode${UX_RESET}"
+    ux_bullet "${UX_BOLD}gwt spawn 직후 prompt 가 이전 디렉터리/브랜치에 frozen 일 때:${UX_RESET}"
+    ux_bullet "  진단: ${UX_BOLD}print -lr -- \$precmd_functions${UX_RESET} 에 ${UX_BOLD}_p9k_precmd${UX_RESET} 가 있는지 확인"
+    ux_bullet "  해결: ${UX_BOLD}zsh-clear-p10k-caches${UX_RESET} 후 ${UX_BOLD}exec zsh${UX_RESET}"
     ux_bullet "${UX_BOLD}p10k 프롬프트가 깨지거나 느릴 때:${UX_RESET}"
     ux_bullet "  해결: ${UX_BOLD}p10k configure${UX_RESET} 로 재설정"
 }
