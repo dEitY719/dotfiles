@@ -19,6 +19,13 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
+# Override Oh My Zsh's gcp alias (zsh only) — mirrors git_worktree.sh:9.
+# Without this, OMZ's `alias gcp='git cherry-pick'` is still active when
+# this file is sourced, and zsh expands aliases at parse time, turning
+# `gcp() {` into `git cherry-pick () {` → "parse error near '()'".
+# Issue #700 (c36db10 회귀).
+unalias gcp 2>/dev/null || true
+
 # ----------------------------------------------------------------------------
 # Heuristic: $1 is a resolvable commit-ish. Used by the bare-form
 # `gcp <committish>` bridge so muscle-memory keeps working with a deprecation
