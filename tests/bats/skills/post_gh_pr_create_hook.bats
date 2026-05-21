@@ -85,3 +85,75 @@ teardown() {
     assert_success
     grep -q '^sync pr 7 In review$' "$CALL_LOG"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #703 — GHE host support
+# ---------------------------------------------------------------------------
+
+@test "T9 (#703): Bash + gh pr create + GHE URL → pr_num extracted, sync called" {
+    # Regression for issue #703 — the original hook had a hard-coded
+    # `https://github.com/...` regex, so PR #8 on the `internal` PC
+    # (`github.samsungds.net`) silently failed to sync. The fallback
+    # regex inside the hook must match the GHE host even when the
+    # SSOT helper (gh_host.sh) is absent from this fake shell-common.
+    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.samsungds.net/byoungwoo-yoon/dotfiles/pull/8"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    assert_output --partial 'PR #8 → "In review"'
+    grep -q '^sync pr 8 In review$' "$CALL_LOG"
+}
+
+@test "T10 (#703): Bash + gh pr create + github.com URL still works (no regression)" {
+    # The github.com case must continue to extract pr_num the same way
+    # it did before the host-agnostic refactor. Functionally a duplicate
+    # of the earlier `pr/123` test, but explicit here for issue #703's
+    # acceptance-criteria checklist.
+    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/dEitY719/dotfiles/pull/9001"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    grep -q '^sync pr 9001 In review$' "$CALL_LOG"
+}
+
+@test "T11 (#703): Bash + gh pr create + no PR URL on either host → silent exit 0" {
+    # When the gh-cli output contains neither host's PR URL, the hook
+    # must bow out silently — the alternative is a stray `pr_num=`
+    # invocation that errors deep inside _gh_project_status_sync.
+    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://gitlab.com/owner/repo/-/merge_requests/1"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    [ ! -s "$CALL_LOG" ]
+}
+
+@test "T12 (#703): real gh_host.sh in SHELL_COMMON + internal mode → GHE URL extracted" {
+    # End-to-end proof that the dynamic regex path works when the SSOT
+    # helper is available AND `_dotfiles_setup_mode` returns `internal`
+    # (the GHE PC case). Stages a hybrid shell-common with the real
+    # gh_host.sh, a stub `_dotfiles_setup_mode` returning `internal`,
+    # and the project-status stub from the parent setup().
+    HYBRID_SHELL_COMMON="$TEST_TEMP_HOME/hybrid-shell-common"
+    mkdir -p "$HYBRID_SHELL_COMMON/functions"
+    cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh" \
+        "$HYBRID_SHELL_COMMON/functions/gh_host.sh"
+    # Stub the integrations-layer helper that gh_host.sh consults.
+    # File order matters: gh_host.sh sources nothing at file scope, but
+    # `_gh_resolve_host` calls `_dotfiles_setup_mode` at runtime — so as
+    # long as the stub is in scope when the hook calls `_gh_resolve_host`
+    # it wins. We put it in a "ZZ-prefixed" file in functions/ but the
+    # hook only sources gh_host.sh, not the whole functions/ dir, so we
+    # instead pre-source the stub via a wrapper.
+    cat > "$HYBRID_SHELL_COMMON/functions/_setup_mode_stub.sh" <<'EOF'
+_dotfiles_setup_mode() { echo "internal"; }
+EOF
+    cat > "$HYBRID_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+_gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
+_gh_pr_closing_issue_numbers() { return 0; }
+EOF
+    # Drive the hook through a wrapper that pre-sources the
+    # `_dotfiles_setup_mode` stub into the hook's shell environment.
+    # `BASH_ENV` is honoured by `bash` when started non-interactively.
+    BASH_ENV="$HYBRID_SHELL_COMMON/functions/_setup_mode_stub.sh" \
+    DOTFILES_FORCE_INIT=1 \
+    SHELL_COMMON="$HYBRID_SHELL_COMMON" \
+        bash -c "printf '%s' '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"gh pr create\"},\"tool_response\":{\"output\":\"https://github.samsungds.net/byoungwoo-yoon/dotfiles/pull/8\"}}' | '$HOOK'"
+    grep -q '^sync pr 8 In review$' "$CALL_LOG"
+}

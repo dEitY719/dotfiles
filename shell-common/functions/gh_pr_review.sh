@@ -581,29 +581,14 @@ _gh_pr_review_post_comment() {
 # bats-testable and removes the network dependency from the resolution
 # step entirely.
 _gh_pr_review_parse_remote_url() {
-    local _url="${1:-}"
-    if [ -z "$_url" ]; then
-        echo "empty remote URL" >&2
-        return 1
-    fi
-    case "$_url" in
-    *github.com*) ;;
-    *)
-        echo "remote URL is not a github.com remote: $_url" >&2
-        return 1
-        ;;
-    esac
-    local _slug
-    # Strip everything up to and including `github.com[:/]`, then drop a
-    # trailing `.git`. Works for https://, git@host:, ssh:// and the
-    # rarer git+https:// prefix because they all converge on github.com.
-    _slug=$(printf '%s' "$_url" | sed -E 's#^.*github\.com[:/]+##; s#\.git/?$##; s#/$##')
-    if ! printf '%s' "$_slug" | grep -qE '^[^/[:space:]]+/[^/[:space:]]+$'; then
-        echo "Could not parse owner/repo from remote URL: $_url" >&2
-        return 1
-    fi
-    printf '%s\n' "$_slug"
-    return 0
+    # Issue #703 — the parser used to be `github.com`-only, which made
+    # /gh-pr-reply, /gh-pr-approve and /gh-pr-review reject GHE remotes
+    # on the `internal` PC. Delegating to the SSOT helper in
+    # shell-common/functions/gh_host.sh keeps both hosts working while
+    # leaving this function's call sites untouched.
+    # shellcheck disable=SC1091
+    . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_host.sh"
+    _gh_parse_owner_repo_url "$@"
 }
 
 # _gh_pr_review_resolve_target_repo — given a remote name in the current
