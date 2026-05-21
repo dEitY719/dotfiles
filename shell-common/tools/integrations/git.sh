@@ -172,79 +172,10 @@ gupdel() {
     fi
 }
 
-# Internal: cherry-pick with optional strategy (-X theirs / -X ours)
-_git_cherry_pick() {
-    local strategy="$1"
-    shift
-
-    if [ $# -eq 0 ]; then
-        local cmd_name="gcp"
-        local desc="Cherry-pick one or more commits"
-        local flag_info=""
-        if [ -n "$strategy" ]; then
-            cmd_name="gcp_${strategy}"
-            desc="Cherry-pick with '${strategy}' conflict strategy"
-            flag_info=" -X ${strategy}"
-        fi
-        ux_usage "$cmd_name" "<commit-id> [commit-id2] ..." "$desc"
-        ux_bullet "$cmd_name abc1234"
-        [ -n "$strategy" ] && ux_warning "Conflicts will use ${strategy} changes"
-        return 1
-    fi
-
-    local failed=0
-    for commit in "$@"; do
-        if [ -n "$strategy" ]; then
-            if git cherry-pick -X "$strategy" "$commit"; then
-                ux_success "Cherry-pick${flag_info:-} succeeded: $commit"
-            else
-                ux_error "Cherry-pick${flag_info:-} failed: $commit"
-                failed=1
-                break
-            fi
-        else
-            if git cherry-pick "$commit"; then
-                ux_success "Cherry-pick succeeded: $commit"
-            else
-                ux_error "Cherry-pick failed: $commit"
-                failed=1
-                break
-            fi
-        fi
-    done
-
-    return $failed
-}
-
-gcp() { _git_cherry_pick "" "$@"; }
-gcp_theirs() { _git_cherry_pick "theirs" "$@"; }
-gcp_ours() { _git_cherry_pick "ours" "$@"; }
-
-gcp_author() {
-    local commit_range="$1"
-    local author="${2:-dEitY719}"
-
-    if [ -z "$commit_range" ]; then
-        ux_usage "gcp_author" "<commit-range> [author-name]" "Cherry-pick commits by specific author"
-        ux_bullet "gcp_author 751e304..7ffcbd4"
-        ux_bullet "gcp_author 751e304..7ffcbd4 dEitY719"
-        ux_warning "Format: <start>..<end> or <start>^..<end>"
-        return 1
-    fi
-
-    local commits
-    commits=$(git log --author="$author" --no-merges --reverse --pretty=format:"%h" "$commit_range" 2>/dev/null)
-
-    if [ -z "$commits" ]; then
-        ux_error "No commits found by '$author' in range $commit_range"
-        return 1
-    fi
-
-    ux_info "Cherry-picking commits by '$author' in range $commit_range:"
-    echo "$commits"
-    echo ""
-    echo "$commits" | xargs git cherry-pick
-}
+# Cherry-pick family (gcp / gcp_theirs / gcp_ours / gcp_author) moved to
+# shell-common/functions/gcp.sh under the Type 2A dispatcher. See
+# docs/.ssot/command-design-pattern.md §4 and issue #697. Loading these here
+# would shadow the dispatcher (integrations/ is sourced after functions/).
 
 glub() {
     local branch="${1:-main}"

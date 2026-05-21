@@ -12,7 +12,7 @@ _git_help_summary() {
     ux_bullet_sub "upstream: gupa | gupdel | glum | glub"
     ux_bullet_sub "branch: gset-main | gset-dev | gset | gb -D local | gb -D remote"
     ux_bullet_sub "stash: git stash list | show -p | pop | apply | drop"
-    ux_bullet_sub "pick: gcp | gcp_theirs | gcp_ours | gcp_author | gcp_scan"
+    ux_bullet_sub "pick: gcp scan | gcp theirs | gcp ours | gcp author | gcp pick"
     ux_bullet_sub "special: gpf_dev_server | gpfu"
     ux_bullet_sub "lfs: git_lfs_install | glfs"
     ux_bullet_sub "ssh: git_ssh_check | git_ssh_setup"
@@ -88,11 +88,12 @@ _git_help_rows_stash() {
 }
 
 _git_help_rows_pick() {
-    ux_table_row "gcp" "gcp <commit>..." "Cherry-pick commits"
-    ux_table_row "gcp_theirs" "gcp_theirs <commit>..." "Cherry-pick with -X theirs (incoming)"
-    ux_table_row "gcp_ours" "gcp_ours <commit>..." "Cherry-pick with -X ours (current)"
-    ux_table_row "gcp_author" "gcp_author <range> [author]" "Cherry-pick by author"
-    ux_table_row "gcp_scan" "gcp_scan [base] [src] [--author=<name|all>]" "Compare & pick missing (default: main <- upstream/main, author=dEitY719)"
+    ux_table_row "gcp pick" "gcp pick <commit>..." "Cherry-pick commits"
+    ux_table_row "gcp theirs" "gcp theirs <commit>..." "Cherry-pick with -X theirs (incoming)"
+    ux_table_row "gcp ours" "gcp ours <commit>..." "Cherry-pick with -X ours (current)"
+    ux_table_row "gcp author" "gcp author <range> [author]" "Cherry-pick by author"
+    ux_table_row "gcp scan" "gcp scan [base] [src] [--author=<name|all>]" "Compare & pick missing (default: main <- upstream/main, author=dEitY719)"
+    ux_table_row "gcp -h" "gcp help [section]" "Show gcp sub-command help"
 }
 
 _git_help_rows_special() {
@@ -111,8 +112,8 @@ _git_help_rows_ssh() {
 }
 
 _git_help_notes_pick_strategy() {
-    ux_bullet "gcp_theirs: ${UX_ERROR}Conflict${UX_RESET} 발생시 ${UX_WARNING}incoming(cherry-pick되는 커밋의 변경)${UX_RESET} 선택"
-    ux_bullet "gcp_ours: ${UX_ERROR}Conflict${UX_RESET} 발생시 ${UX_SUCCESS}current branch(현재 브랜치의 변경)${UX_RESET} 선택"
+    ux_bullet "gcp theirs: ${UX_ERROR}Conflict${UX_RESET} 발생시 ${UX_WARNING}incoming(cherry-pick되는 커밋의 변경)${UX_RESET} 선택"
+    ux_bullet "gcp ours: ${UX_ERROR}Conflict${UX_RESET} 발생시 ${UX_SUCCESS}current branch(현재 브랜치의 변경)${UX_RESET} 선택"
 }
 
 _git_help_render_section() {
