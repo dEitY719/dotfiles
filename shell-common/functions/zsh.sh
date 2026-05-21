@@ -273,15 +273,16 @@ _zsh_clear_p10k_caches() {
     local removed=0
     local target
 
-    # File patterns: instant-prompt + dump, both .zsh and .zwc variants
+    # File patterns: instant-prompt + dump, both .zsh and .zwc variants.
+    # Only count artifacts that actually got removed — `rm -f` returns 1 on
+    # permission-denied even though it suppresses ENOENT (PR #706 review).
     for target in \
         "${cache_dir}/p10k-instant-prompt-${USER}.zsh" \
         "${cache_dir}/p10k-instant-prompt-${USER}.zsh.zwc" \
         "${cache_dir}/p10k-dump-${USER}.zsh" \
         "${cache_dir}/p10k-dump-${USER}.zsh.zwc"; do
         if [ -e "$target" ] || [ -L "$target" ]; then
-            rm -f "$target"
-            removed=$((removed + 1))
+            rm -f "$target" && removed=$((removed + 1))
         fi
     done
 
@@ -289,8 +290,7 @@ _zsh_clear_p10k_caches() {
     # on first prompt and may stash transient state there.
     local p10k_user_dir="${cache_dir}/p10k-${USER}"
     if [ -d "$p10k_user_dir" ]; then
-        rm -rf "$p10k_user_dir"
-        removed=$((removed + 1))
+        rm -rf "$p10k_user_dir" && removed=$((removed + 1))
     fi
 
     printf '%d\n' "$removed"
@@ -301,7 +301,10 @@ _zsh_clear_p10k_caches() {
 zsh_clear_p10k_caches() {
     local removed
     removed="$(_zsh_clear_p10k_caches)"
-    if [ "$removed" -eq 0 ]; then
+    # ${var:-0} guard: subshell could in theory yield an empty string under
+    # exotic failure modes, which would make `[ "$removed" -eq 0 ]` fail
+    # with `unary operator expected` (PR #706 review).
+    if [ "${removed:-0}" -eq 0 ]; then
         ux_info "No p10k caches found."
         return 0
     fi
@@ -323,9 +326,10 @@ zsh_fix_vscode() {
     fi
 
     # Delegate p10k cache cleanup to the SSOT helper (issue #705).
+    # ${var:-0} guard mirrors zsh_clear_p10k_caches (PR #706 review).
     local removed
     removed="$(_zsh_clear_p10k_caches)"
-    if [ "$removed" -gt 0 ]; then
+    if [ "${removed:-0}" -gt 0 ]; then
         ux_success "Cleared p10k caches (${removed} artifact(s))."
         fixed=1
     fi
