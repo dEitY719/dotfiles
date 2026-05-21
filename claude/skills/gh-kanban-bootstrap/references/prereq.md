@@ -17,16 +17,19 @@ command -v jq >/dev/null 2>&1 || {
 
 ```sh
 _kanban_host() {
-    local _u
+    local _u _h
     _u=$(git remote get-url origin 2>/dev/null) || return 1
     case "$_u" in
-        git@*) printf '%s' "${_u#git@}" | cut -d: -f1 ;;
-        https://*) printf '%s' "${_u#https://}" | cut -d/ -f1 ;;
-        ssh://*) printf '%s' "${_u#ssh://}" | cut -d/ -f1 | cut -d@ -f2 ;;
+        git@*)     _h="${_u#git@}";     printf '%s' "${_h%%:*}" ;;
+        https://*) _h="${_u#https://}"; printf '%s' "${_h%%/*}" ;;
+        ssh://*)   _h="${_u#ssh://}"; _h="${_h%%/*}"; _h="${_h#*@}"; printf '%s' "${_h%%:*}" ;;
         *) return 1 ;;
     esac
 }
 ```
+
+Uses shell parameter expansion instead of `cut` (no subprocess fork),
+and strips the optional port from `ssh://user@host:2222/...` URLs.
 
 ## Token scope check
 
@@ -36,7 +39,7 @@ HOST=$(_kanban_host) || {
     return 1
 }
 
-scopes=$(gh api -h "$HOST" -i user 2>/dev/null \
+scopes=$(gh api --hostname "$HOST" -i user 2>/dev/null \
     | awk 'tolower($1) == "x-oauth-scopes:" { sub(/^[^:]*:[ \t]*/, ""); print; exit }')
 
 case ",${scopes// /}," in

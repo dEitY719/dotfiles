@@ -211,16 +211,22 @@ detect_host() {
         case "$remote_url" in
             git@*) host="${remote_url#git@}"; host="${host%%:*}" ;;
             https://*) host="${remote_url#https://}"; host="${host%%/*}" ;;
-            ssh://*) host="${remote_url#ssh://}"; host="${host%%/*}"; host="${host#*@}" ;;
+            ssh://*) host="${remote_url#ssh://}"; host="${host%%/*}"; host="${host#*@}"; host="${host%%:*}" ;;
         esac
     fi
     HOST="${host:-github.com}"
 }
 
 auth_scopes_csv() {
-    local scopes
+    local scopes host_args=()
 
-    scopes="$(gh api user -i 2>/dev/null | awk '
+    # Use --hostname when HOST is non-default so GHE tokens are checked
+    # against the actual instance (PR #702 review feedback).
+    if [ -n "${HOST:-}" ] && [ "$HOST" != "github.com" ]; then
+        host_args=(--hostname "$HOST")
+    fi
+
+    scopes="$(gh api "${host_args[@]}" user -i 2>/dev/null | awk '
         {
             line = $0
             sub(/\r$/, "", line)
@@ -659,8 +665,10 @@ main() {
     parse_args "$@"
     require_command gh "Install GitHub CLI: https://cli.github.com/"
     require_command jq "Install jq to parse GitHub API responses."
-    require_project_scope
+    # detect_host MUST precede require_project_scope so GHE token scopes
+    # are validated against the correct host (PR #702 review feedback).
     detect_host
+    require_project_scope
 
     ux_header "Kanban Board Setup"
     log_step 1 "Validating repository access"

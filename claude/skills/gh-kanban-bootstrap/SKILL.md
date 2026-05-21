@@ -35,9 +35,11 @@ Locate `SKILL_DIR` (this file's directory). The script lives at
 Follow `references/prereq.md`:
 - `command -v gh && command -v jq` — abort with install hint on miss.
 - Detect host from `git remote get-url origin`.
-- `gh api -h <host> -i user` → check `X-Oauth-Scopes` header includes
-  `project`. On miss: print `gh auth refresh -h <host> -s project` and
-  abort (rc=1).
+- `gh api --hostname <host> -i user` → check `X-Oauth-Scopes` header
+  includes `project`. On miss: print `gh auth refresh -h <host> -s project`
+  and abort (rc=1). NOTE: `gh api` uses `--hostname` (not `-h`, which is
+  the help flag) — `gh auth refresh` keeps `-h` as its hostname short
+  flag. The two CLIs are inconsistent; both correct as written.
 
 ## Step 3: Target Repo
 
