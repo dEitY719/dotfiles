@@ -258,6 +258,57 @@ zsh_snippets() {
     fi
 }
 
+# SSOT cleaner for p10k caches. Removes every variant the user may carry
+# across reboots — instant-prompt cache, compiled dump, and the per-user
+# scratch directory. Returns the number of artifacts removed via stdout
+# so callers can decide whether to print a "nothing to do" hint.
+#
+# Issue #705: the prior cleaner only matched `p10k-instant-prompt-${USER}.zsh`,
+# missing the `.zwc` byte-compiled dump and the `p10k-dump-${USER}*` files
+# that zsh auto-loads ahead of the source. A worktree-spawn race could then
+# replay a stale precmd snapshot, producing a frozen prompt that only
+# `exec zsh` recovered from.
+_zsh_clear_p10k_caches() {
+    local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}"
+    local removed=0
+    local target
+
+    # File patterns: instant-prompt + dump, both .zsh and .zwc variants
+    for target in \
+        "${cache_dir}/p10k-instant-prompt-${USER}.zsh" \
+        "${cache_dir}/p10k-instant-prompt-${USER}.zsh.zwc" \
+        "${cache_dir}/p10k-dump-${USER}.zsh" \
+        "${cache_dir}/p10k-dump-${USER}.zsh.zwc"; do
+        if [ -e "$target" ] || [ -L "$target" ]; then
+            rm -f "$target"
+            removed=$((removed + 1))
+        fi
+    done
+
+    # Per-user scratch dir (e.g. ~/.cache/p10k-bwyoon/) — p10k creates it
+    # on first prompt and may stash transient state there.
+    local p10k_user_dir="${cache_dir}/p10k-${USER}"
+    if [ -d "$p10k_user_dir" ]; then
+        rm -rf "$p10k_user_dir"
+        removed=$((removed + 1))
+    fi
+
+    printf '%d\n' "$removed"
+}
+
+# User-facing wrapper: clears every p10k cache variant and reports what
+# happened. Reload zsh (`exec zsh`) or open a new terminal to verify.
+zsh_clear_p10k_caches() {
+    local removed
+    removed="$(_zsh_clear_p10k_caches)"
+    if [ "$removed" -eq 0 ]; then
+        ux_info "No p10k caches found."
+        return 0
+    fi
+    ux_success "Cleared p10k caches (${removed} artifact(s))."
+    ux_info "Reload to verify: ${UX_BOLD}exec zsh${UX_RESET}"
+}
+
 # Fix VS Code terminal prompt after VS Code update
 # Clears stale caches that cause default prompt (HOSTNAME%) instead of p10k
 zsh_fix_vscode() {
@@ -271,11 +322,11 @@ zsh_fix_vscode() {
         fixed=1
     fi
 
-    # Remove p10k instant prompt cache
-    local p10k_cache="${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${USER}.zsh"
-    if [ -e "$p10k_cache" ] || [ -L "$p10k_cache" ]; then
-        rm -f "$p10k_cache"
-        ux_success "Cleared p10k instant prompt cache"
+    # Delegate p10k cache cleanup to the SSOT helper (issue #705).
+    local removed
+    removed="$(_zsh_clear_p10k_caches)"
+    if [ "$removed" -gt 0 ]; then
+        ux_success "Cleared p10k caches (${removed} artifact(s))."
         fixed=1
     fi
 
@@ -303,3 +354,4 @@ alias zsh-edit='zsh_edit'
 alias zsh-snippet='zsh_snippet'
 alias zsh-snippets='zsh_snippets'
 alias zsh-fix-vscode='zsh_fix_vscode'
+alias zsh-clear-p10k-caches='zsh_clear_p10k_caches'
