@@ -51,10 +51,24 @@ output=$(printf '%s' "$input" |
 
 # `gh pr create` prints the new PR URL on success. Pull the trailing PR
 # number out of the first such URL we see.
+#
+# Issue #703 — host must be derived from `_dotfiles_setup_mode` so the
+# `internal` PC (where the real target is `github.samsungds.net`) is
+# matched correctly. Source the SSOT helper; on failure fall back to
+# matching either host so a stale install can still extract the PR
+# number for the common `github.com` case.
+# shellcheck disable=SC1091
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_host.sh" 2>/dev/null
+if command -v _gh_resolve_host >/dev/null 2>&1; then
+    _gh_host_regex=$(_gh_resolve_host | sed 's#\.#\\.#g')
+else
+    _gh_host_regex='(github\.com|github\.samsungds\.net)'
+fi
 pr_num=$(printf '%s' "$output" |
-    grep -oE 'https://github\.com/[^/]+/[^/]+/pull/[0-9]+' |
+    grep -oE "https://${_gh_host_regex}/[^/]+/[^/]+/pull/[0-9]+" |
     head -1 |
     grep -oE '[0-9]+$')
+unset _gh_host_regex
 [ -n "$pr_num" ] || exit 0
 
 # Source the shared board-sync helper. Failure to source → silent no-op.
