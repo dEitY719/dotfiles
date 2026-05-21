@@ -31,6 +31,24 @@ _gcp_committish_p() {
 }
 
 # ----------------------------------------------------------------------------
+# Family-shared pre-flight: refuse to start a new cherry-pick while one is
+# already in progress, and tell the user how to recover. SSOT for the check
+# `_gcp_scan` introduced inline (gcp_scan.sh) — other verbs reuse the same
+# helper so the warning + recovery hint are identical across the family.
+# Returns 1 (and emits the recovery hint) when a cherry-pick is in progress;
+# 0 otherwise. PR #698 review feedback (gemini-code-assist).
+# ----------------------------------------------------------------------------
+_gcp_assert_no_cherry_pick() {
+    git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 || return 0
+    ux_error "Cherry-pick currently in progress!"
+    ux_info  "Resolve first with one of:"
+    ux_bullet "git cherry-pick --continue   # after fixing conflicts"
+    ux_bullet "git cherry-pick --skip       # to drop the current commit"
+    ux_bullet "git cherry-pick --abort      # to cancel"
+    return 1
+}
+
+# ----------------------------------------------------------------------------
 # Internal: cherry-pick with optional -X <strategy>. SSOT for theirs/ours so
 # the two wrappers stay one-liners (Type 2A §9 SRP).
 # Args: <strategy:""|theirs|ours> <commit>...
@@ -55,6 +73,8 @@ _gcp_strategy_pick() {
         return 1
     fi
 
+    _gcp_assert_no_cherry_pick || return 1
+
     local commit failed=0
     for commit in "$@"; do
         if [ -n "$strategy" ]; then
@@ -62,6 +82,7 @@ _gcp_strategy_pick() {
                 ux_success "Cherry-pick (-X $strategy) succeeded: $commit"
             else
                 ux_error "Cherry-pick (-X $strategy) failed: $commit"
+                ux_info  "Resolve with: git cherry-pick --continue | --skip | --abort"
                 failed=1
                 break
             fi
@@ -70,6 +91,7 @@ _gcp_strategy_pick() {
                 ux_success "Cherry-pick succeeded: $commit"
             else
                 ux_error "Cherry-pick failed: $commit"
+                ux_info  "Resolve with: git cherry-pick --continue | --skip | --abort"
                 failed=1
                 break
             fi
@@ -101,6 +123,8 @@ _gcp_author() {
         return 1
     fi
 
+    _gcp_assert_no_cherry_pick || return 1
+
     local commits
     commits=$(git log --author="$author" --no-merges --reverse --pretty=format:"%h" "$commit_range" 2>/dev/null)
 
@@ -112,7 +136,11 @@ _gcp_author() {
     ux_info "Cherry-picking commits by '$author' in range $commit_range:"
     echo "$commits"
     echo ""
-    echo "$commits" | xargs git cherry-pick
+    # Word-splitting on $commits is intentional — newline-separated SHAs
+    # become separate args to _gcp_pick, which then drives the per-commit
+    # success/failure UX + recovery hint loop (PR #698 review).
+    # shellcheck disable=SC2086
+    _gcp_pick $commits
 }
 
 # ----------------------------------------------------------------------------
