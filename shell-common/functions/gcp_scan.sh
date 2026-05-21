@@ -2,11 +2,15 @@
 # shell-common/functions/gcp_scan.sh
 #
 # Portable cherry-pick scanner - works in bash, zsh, and other POSIX shells
-# Intelligently identifies and cherry-picks missing commits
+# Intelligently identifies and cherry-picks missing commits.
 #
-# Usage:
-#   gcp_scan [--author=<name|all>]         # defaults: main <- upstream/main, author=dEitY719
-#   gcp_scan develop origin --author=all   # custom branches + show all commits
+# Exposed via the gcp dispatcher (Type 2A — see gcp.sh and
+# docs/.ssot/command-design-pattern.md §4):
+#
+#   gcp scan [base] [src] [--author=<name|all>]
+#
+# The deprecated 'gcp_scan' / 'gcp-scan' forms remain available as aliases
+# (defined in gcp.sh) for backward compatibility — issue #697.
 #
 # Note: git cherry marks commits as:
 #   '+' = present in source, missing in base (will be cherry-picked)
@@ -25,7 +29,7 @@ _gcp_scan_is_empty_cherry_pick() {
     return 0
 }
 
-gcp_scan() {
+_gcp_scan() {
     # zsh compatibility: emulate POSIX sh to ensure consistent behavior
     if [ -n "${ZSH_VERSION-}" ]; then
         emulate -L sh
@@ -385,5 +389,5 @@ EOF
     fi
 }
 
-# Quick shorthand for gcp_scan
-alias gcp-scan='gcp_scan'
+# Note: 'gcp_scan' / 'gcp-scan' aliases live in gcp.sh and route through
+# the dispatcher (issue #697). Do not add them here.
