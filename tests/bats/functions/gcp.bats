@@ -314,3 +314,25 @@ teardown() {
         "${DOTFILES_ROOT}/shell-common/tools/integrations/git.sh"
     assert_failure
 }
+
+# ---------------------------------------------------------------------------
+# Issue #700 regression — OMZ alias shadowing.
+#
+# Without `unalias gcp` at the top of gcp.sh, zsh expands the OMZ git-plugin
+# alias (`alias gcp='git cherry-pick'`) at parse time, turning the function
+# definition `gcp() {` into `git cherry-pick () {` and producing a parse
+# error. The function is then absent and the dispatcher silently degrades to
+# the OMZ alias. This case simulates the OMZ-loaded state by pre-setting the
+# alias before sourcing the file.
+# ---------------------------------------------------------------------------
+
+@test "zsh: gcp.sh defines dispatcher even when 'gcp' alias is pre-set (#700)" {
+    run zsh -fc "
+        export DOTFILES_FORCE_INIT=1
+        alias gcp='git cherry-pick'
+        . '${DOTFILES_ROOT}/shell-common/functions/gcp.sh'
+        typeset -f gcp >/dev/null && echo OK
+    "
+    assert_success
+    assert_output --partial "OK"
+}
