@@ -316,23 +316,59 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
-# Issue #700 regression — OMZ alias shadowing.
+# Issue #700 regression — OMZ alias shadowing (mirrors #692 pattern in
+# tests/bats/functions/git_worktree_alias_shadow.bats).
 #
-# Without `unalias gcp` at the top of gcp.sh, zsh expands the OMZ git-plugin
-# alias (`alias gcp='git cherry-pick'`) at parse time, turning the function
-# definition `gcp() {` into `git cherry-pick () {` and producing a parse
-# error. The function is then absent and the dispatcher silently degrades to
-# the OMZ alias. This case simulates the OMZ-loaded state by pre-setting the
-# alias before sourcing the file.
+# Without `unalias gcp` at the top of gcp.sh, OMZ git plugin's
+# `alias gcp='git cherry-pick'` is still active when zsh/main.zsh sources
+# gcp.sh — zsh expands aliases at parse time, turning `gcp() {` into
+# `git cherry-pick () {` and producing a parse error. The dispatcher is
+# never defined and bare `gcp` silently degrades to the OMZ alias.
+#
+# These tests pre-declare the conflicting alias, source dotfiles' zsh
+# loader, then assert (a) `whence -w gcp` reports a function (existence)
+# and (b) `eval 'gcp -h'` invokes the dispatcher rather than the
+# shadowed `git cherry-pick` (dispatch). `eval` in (b) is load-bearing —
+# in `zsh -fc "..."` the whole script string is parsed before runtime
+# `alias` commands take effect, so a plain `gcp -h` is never
+# alias-expanded (false positive). `eval` forces a runtime re-parse at
+# the point where the alias *is* registered, exactly mirroring #692
+# (PR #693 review).
 # ---------------------------------------------------------------------------
 
-@test "zsh: gcp.sh defines dispatcher even when 'gcp' alias is pre-set (#700)" {
-    run zsh -fc "
+@test "alias-shadow: pre-existing 'alias gcp=git cherry-pick' removed when dotfiles loads (zsh) (#700)" {
+    run zsh -f -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        export SHELL_COMMON='${SHELL_COMMON}'
         export DOTFILES_FORCE_INIT=1
+        export DOTFILES_TEST_MODE=1
+        export DOTFILES_ROOT_NO_CANONICALIZE=1
+        export HOME='${HOME}'
+        export ZDOTDIR='${HOME}'
+        export TERM=dumb
         alias gcp='git cherry-pick'
-        . '${DOTFILES_ROOT}/shell-common/functions/gcp.sh'
-        typeset -f gcp >/dev/null && echo OK
+        source '${DOTFILES_ROOT}/zsh/main.zsh'
+        whence -w gcp
     "
     assert_success
-    assert_output --partial "OK"
+    assert_output --partial "gcp: function"
+    refute_output --partial "gcp: alias"
+}
+
+@test "alias-shadow: 'gcp -h' invokes dispatcher (not shadowed git cherry-pick) in zsh (#700)" {
+    run zsh -f -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        export SHELL_COMMON='${SHELL_COMMON}'
+        export DOTFILES_FORCE_INIT=1
+        export DOTFILES_TEST_MODE=1
+        export DOTFILES_ROOT_NO_CANONICALIZE=1
+        export HOME='${HOME}'
+        export ZDOTDIR='${HOME}'
+        export TERM=dumb
+        alias gcp='git cherry-pick'
+        source '${DOTFILES_ROOT}/zsh/main.zsh'
+        eval 'gcp -h'
+    "
+    assert_success
+    assert_output --partial "Usage: gcp help"
 }
