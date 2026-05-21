@@ -91,5 +91,5 @@ exec zsh
 - **race origin**: `gwt spawn --launch` 의 `cd → term_rename --persist →
   eval claude_yolo + emulate -L sh + subshell` 시퀀스 —
   `shell-common/functions/git_worktree.sh` 의 `emulate -L sh` 블록 다수
-- **Trouble­shoot 진입**: `zsh-help troubleshoot` 가 본 문서의 1줄 진단을
+- **Troubleshoot 진입**: `zsh-help troubleshoot` 가 본 문서의 1줄 진단을
   안내함
