@@ -213,6 +213,84 @@ teardown() {
     assert_output --partial "Use: gcp pick"
 }
 
+@test "preflight: _gcp_assert_no_cherry_pick aborts when CHERRY_PICK_HEAD exists (PR #698)" {
+    # Stub git so rev-parse --verify CHERRY_PICK_HEAD returns 0 (i.e. a
+    # cherry-pick is in progress). The helper must emit the recovery hint
+    # AND return 1 — used by _gcp_strategy_pick / _gcp_author / _gcp_pick.
+    run_in_bash '
+        cd "$DOTFILES_ROOT"
+        git() {
+            case " $* " in
+                *" CHERRY_PICK_HEAD "*) return 0 ;;
+            esac
+            command git "$@"
+        }
+        _gcp_assert_no_cherry_pick
+        echo "rc=$?"
+    '
+    assert_output --partial "Cherry-pick currently in progress"
+    assert_output --partial "git cherry-pick --continue"
+    assert_output --partial "git cherry-pick --abort"
+    assert_output --partial "rc=1"
+}
+
+@test "preflight: _gcp_strategy_pick refuses to start when cherry-pick in progress (PR #698)" {
+    run_in_bash '
+        cd "$DOTFILES_ROOT"
+        git() {
+            case " $* " in
+                *" CHERRY_PICK_HEAD "*) return 0 ;;
+            esac
+            command git "$@"
+        }
+        _gcp_strategy_pick "" abc1234
+        echo "rc=$?"
+    '
+    assert_output --partial "Cherry-pick currently in progress"
+    assert_output --partial "rc=1"
+}
+
+@test "preflight: _gcp_author refuses to start when cherry-pick in progress (PR #698)" {
+    run_in_bash '
+        cd "$DOTFILES_ROOT"
+        git() {
+            case " $* " in
+                *" CHERRY_PICK_HEAD "*) return 0 ;;
+            esac
+            command git "$@"
+        }
+        _gcp_author "abc..def" someone
+        echo "rc=$?"
+    '
+    assert_output --partial "Cherry-pick currently in progress"
+    assert_output --partial "rc=1"
+}
+
+@test "preflight: _gcp_strategy_pick emits recovery hint on conflict (PR #698)" {
+    # Stub git so cherry-pick returns 1 (conflict). rev-parse must still
+    # pass through (the helper uses it for the pre-flight check, which
+    # should NOT trip for the stubbed CHERRY_PICK_HEAD case).
+    run_in_bash '
+        cd "$DOTFILES_ROOT"
+        git() {
+            case "$1" in
+                cherry-pick) return 1 ;;
+                rev-parse)
+                    case " $* " in
+                        *" CHERRY_PICK_HEAD "*) return 1 ;;
+                    esac
+                    command git "$@" ;;
+                *) command git "$@" ;;
+            esac
+        }
+        _gcp_pick abc1234
+        echo "rc=$?"
+    '
+    assert_output --partial "Cherry-pick failed"
+    assert_output --partial "Resolve with: git cherry-pick --continue"
+    assert_output --partial "rc=1"
+}
+
 @test "dispatch: non-committish unknown arg does NOT bridge to pick" {
     run_in_bash 'cd "$DOTFILES_ROOT" && gcp not-a-real-commit-or-verb'
     assert_failure
