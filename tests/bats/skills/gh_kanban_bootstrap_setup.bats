@@ -34,9 +34,19 @@ if [[ "$1" == "repo" && "$2" == "view" ]]; then
     exit 1
 fi
 
-if [[ "$1" == "api" && "$2" == "user" && "${3-}" == "-i" ]]; then
-    cat "${MOCK_GH_AUTH_HEADERS}"
-    exit 0
+if [[ "$1" == "api" ]]; then
+    # Match `gh api user -i` and `gh api --hostname HOST user -i`
+    # (PR #702 review: auth_scopes_csv injects --hostname for non-default).
+    shift
+    if [[ "$1" == "--hostname" && -n "${2-}" ]]; then
+        shift 2
+    fi
+    if [[ "$1" == "user" && "${2-}" == "-i" ]]; then
+        cat "${MOCK_GH_AUTH_HEADERS}"
+        exit 0
+    fi
+    # Restore positional args for the graphql branch below.
+    set -- api "$@"
 fi
 
 if [[ "$1" == "api" && "$2" == "graphql" ]]; then
