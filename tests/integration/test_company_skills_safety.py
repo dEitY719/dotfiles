@@ -57,10 +57,7 @@ def test_no_company_skills_content_in_git_history() -> None:
     """
     added = _git_added_paths_matching("*company-skills*")
     leaks = [p for p in added if not p.startswith(ALLOWED_PATH_PREFIXES)]
-    assert not leaks, (
-        "Forbidden company-skills paths in git history (NF-1 violation): "
-        f"{leaks}"
-    )
+    assert not leaks, f"Forbidden company-skills paths in git history (NF-1 violation): {leaks}"
 
 
 def test_gitignore_blocks_company_skills_at_repo_root() -> None:
@@ -69,9 +66,7 @@ def test_gitignore_blocks_company_skills_at_repo_root() -> None:
     is shielded.
     """
     gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
-    assert "/company-skills/" in gitignore, (
-        ".gitignore must declare `/company-skills/` (issue #707 F-7)"
-    )
+    assert "/company-skills/" in gitignore, ".gitignore must declare `/company-skills/` (issue #707 F-7)"
 
 
 def test_gitignore_actually_ignores_a_company_skills_path() -> None:
@@ -83,7 +78,4 @@ def test_gitignore_actually_ignores_a_company_skills_path() -> None:
         cwd=REPO_ROOT,
         check=False,
     ).returncode
-    assert rc == 0, (
-        f"git check-ignore did not ignore {probe!r} — .gitignore rule "
-        "missing or shadowed (issue #707 F-7)"
-    )
+    assert rc == 0, f"git check-ignore did not ignore {probe!r} — .gitignore rule missing or shadowed (issue #707 F-7)"
