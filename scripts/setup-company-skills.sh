@@ -94,6 +94,15 @@ _overlay_one_target() {
                 continue
                 ;;
         esac
+
+        # Claude Code skill convention: a directory is a skill only if
+        # it contains SKILL.md. Skip metadata directories that may live
+        # alongside real skills in a marketplace-shaped overlay repo —
+        # e.g. .claude-plugin/, plugins/, tests/, docs/ (issue #715).
+        if [ ! -f "${entry}SKILL.md" ]; then
+            continue
+        fi
+
         link="${target_dir}/${name}"
         want="${COMPANY_SKILLS_HOME}/${name}"
 
@@ -142,7 +151,10 @@ _overlay_one_target() {
         target_path="$(readlink "$existing")"
         case "$target_path" in
             "${COMPANY_SKILLS_HOME}"/*)
-                if [ ! -d "$target_path" ]; then
+                # Stale if the source dir vanished OR its SKILL.md is
+                # gone — the overlay guard above no longer accepts it
+                # either way, so keep both sides consistent (#715).
+                if [ ! -d "$target_path" ] || [ ! -f "${target_path}/SKILL.md" ]; then
                     log_info "  removing stale overlay entry: $existing"
                     rm -f "$existing"
                     pruned=$((pruned + 1))

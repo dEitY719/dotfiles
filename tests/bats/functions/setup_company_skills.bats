@@ -109,3 +109,44 @@ run_overlay() {
     assert_success
     assert_output --partial "no ~/.claude"
 }
+
+@test "skips meta directories without SKILL.md (issue #715)" {
+    # A marketplace-shaped overlay repo carries metadata dirs alongside
+    # real skills. The SKILL.md guard must skip metadata so they do
+    # not leak into ~/.claude/skills/.
+    mkdir -p "$SKILLS_DIR" \
+        "$HOME/company-skills/real-skill" \
+        "$HOME/company-skills/.claude-plugin" \
+        "$HOME/company-skills/plugins" \
+        "$HOME/company-skills/tests" \
+        "$HOME/company-skills/docs"
+    : > "$HOME/company-skills/real-skill/SKILL.md"
+
+    run_overlay "$HOME/company-skills"
+    assert_success
+
+    [ -L "$SKILLS_DIR/real-skill" ]
+    [ "$(readlink "$SKILLS_DIR/real-skill")" = "$HOME/company-skills/real-skill" ]
+    [ ! -e "$SKILLS_DIR/.claude-plugin" ]
+    [ ! -e "$SKILLS_DIR/plugins" ]
+    [ ! -e "$SKILLS_DIR/tests" ]
+    [ ! -e "$SKILLS_DIR/docs" ]
+}
+
+@test "dual layout — only root-level skill linked, plugins/ ignored (#715)" {
+    # Root-level skill alongside a plugins/<plugin>/skills/<skill>
+    # nested layout. The overlay must link only the root skill; the
+    # plugins/ dir has no SKILL.md and must be skipped.
+    mkdir -p "$SKILLS_DIR" \
+        "$HOME/company-skills/root-skill" \
+        "$HOME/company-skills/plugins/example-suite/skills/nested-skill"
+    : > "$HOME/company-skills/root-skill/SKILL.md"
+    : > "$HOME/company-skills/plugins/example-suite/skills/nested-skill/SKILL.md"
+
+    run_overlay "$HOME/company-skills"
+    assert_success
+
+    [ -L "$SKILLS_DIR/root-skill" ]
+    [ "$(readlink "$SKILLS_DIR/root-skill")" = "$HOME/company-skills/root-skill" ]
+    [ ! -e "$SKILLS_DIR/plugins" ]
+}
