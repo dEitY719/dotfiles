@@ -789,7 +789,7 @@ teardown() {
     assert_output --partial "label:  (claude) pr-709v"
     assert_output --partial "VSCode needs settings.json"
     assert_output --partial "terminal.integrated.tabs.title"
-    assert_output --partial "term help vscode"
+    assert_output --partial "term-help vscode"
 }
 
 @test "bash: #709 spawn --launch without TERM_PROGRAM omits VSCode setting hint" {
@@ -802,7 +802,7 @@ teardown() {
     "
     assert_success
     refute_output --partial "VSCode needs settings.json"
-    refute_output --partial "term help vscode"
+    refute_output --partial "term-help vscode"
 }
 
 @test "bash: #709 spawn without --launch does NOT print 'label:' line" {
@@ -828,4 +828,5 @@ teardown() {
     assert_success
     assert_output --partial "label:  (claude) pr-709z"
     assert_output --partial "VSCode needs settings.json"
+    assert_output --partial "term-help vscode"
 }
