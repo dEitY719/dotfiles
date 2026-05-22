@@ -164,6 +164,13 @@ if [ ! -d "$COMPANY_SKILLS_HOME" ]; then
     exit 0
 fi
 
+# Canonicalise to an absolute path so the readlink-prefix match in
+# _overlay_one_target stays correct even when the caller passed a
+# relative path or one with trailing slashes. POSIX-only (`cd && pwd`,
+# no `realpath` dependency) to keep the script portable across the
+# OS-X / Linux / busybox set of hosts dotfiles supports.
+COMPANY_SKILLS_HOME="$(cd "$COMPANY_SKILLS_HOME" && pwd)"
+
 # Empty private repo: no entries to layer. Not an error.
 _has_entries=0
 for _e in "$COMPANY_SKILLS_HOME"/*/; do
@@ -182,11 +189,20 @@ if [ -z "$_target_dirs" ]; then
     exit 0
 fi
 
+_failed_count=0
 while IFS= read -r _tgt; do
     [ -n "$_tgt" ] || continue
-    _overlay_one_target "$_tgt"
+    if ! _overlay_one_target "$_tgt"; then
+        _failed_count=$((_failed_count + 1))
+    fi
 done <<EOF
 $_target_dirs
 EOF
+
+if [ "$_failed_count" -gt 0 ]; then
+    log_warning "overlay failed for $_failed_count target(s) — see log above"
+    log_info "rerun ./setup.sh once the cause is fixed; overlay is idempotent"
+    exit 1
+fi
 
 ux_success "company-skills overlay applied"
