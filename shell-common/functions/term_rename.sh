@@ -83,8 +83,14 @@ _term_rename_remove_hook() {
         # See _term_rename_install_hook for the emulate-L-zsh rationale. The
         # `${(@)arr:#PATTERN}` filter flag is zsh-only and collapses the array
         # to its first element under sh emulation — same frozen-prompt
-        # truncation (#907).
-        eval 'emulate -L zsh; precmd_functions=("${(@)precmd_functions:#'"${_hook}"'}")'
+        # truncation (#907). Multi-line + late-binding (eval expands ${_hook}
+        # in the function's local scope) mirrors _term_rename_install_hook
+        # style for consistency (PR #712 gemini-code-assist review).
+        eval '
+            emulate -L zsh
+            typeset -ga precmd_functions
+            precmd_functions=("${(@)precmd_functions:#${_hook}}")
+        '
         return 0
     fi
 }
@@ -97,8 +103,12 @@ _term_rename_set_persist_name() {
         # emulate -L zsh: same caller-emulation defence as the precmd
         # mutators above. Belt-and-braces — typeset -g would still resolve to
         # zsh's builtin under sh emulation, but parameter expansion of "$1"
-        # follows whichever emulation is active.
-        eval 'emulate -L zsh; typeset -g _TERM_RENAME_PERSIST_NAME="$1"'
+        # follows whichever emulation is active. Multi-line for stylistic
+        # consistency with install/remove (PR #712 gemini-code-assist review).
+        eval '
+            emulate -L zsh
+            typeset -g _TERM_RENAME_PERSIST_NAME="$1"
+        '
         return 0
     fi
     _TERM_RENAME_PERSIST_NAME="$1"
