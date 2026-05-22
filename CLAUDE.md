@@ -54,6 +54,8 @@ All output must use `ux_lib` functions (`ux_header`, `ux_success`, `ux_error`, `
 
 `git/` manages a 2-tier hook system. Config SSOT is `git/config/hook-config.sh`. Debug with `GIT_HOOKS_DEBUG=1 git commit -m "msg"`. Test with `bash git/tests/test_hooks.sh`.
 
+`git/hooks/pre-push` runs a protected-branch check plus an upstream leak guard (SSOT: `git/config/pre-push-rules.sh`). The leak guard is inert until you export `UPSTREAM_REMOTES_ERE` and `LEAK_PATTERNS_ERE`; see `git/AGENTS.md` for the activation snippet and escape hatches.
+
 ### Claude Code Integration
 
 `claude/settings.json` and `claude/statusline-command.sh` are symlinked into `~/.claude/`. The `claude/skills/` and `claude/docs/` directories are also symlinked (directory-level) into each account's `~/.claude*/skills` and `~/.claude*/docs` — the same scheme in every setup mode (#575).

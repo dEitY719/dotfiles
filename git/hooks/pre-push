@@ -1,9 +1,20 @@
 #!/bin/bash
-# Git pre-push hook: Prevent direct pushes to protected branches
-# Installed: git config core.hooksPath git/hooks
-# Enforces: PR-based workflow (no direct pushes to main/release)
+# Git pre-push hook
 #
-# Skip this hook: SKIP_PRE_PUSH=1 git push origin main
+# Two layers, evaluated per ref:
+#   1. Protected-branch block (PROTECTED_BRANCHES from pre-push-rules.sh).
+#   2. Upstream leak guard — when the push target's URL matches
+#      UPSTREAM_REMOTES_ERE, scan commit messages + added/modified file
+#      contents in the push range against LEAK_PATTERNS_ERE.
+#
+# Skip flags (each is one off-switch — usable independently):
+#   SKIP_PRE_PUSH=1     bypass the entire hook (both layers)
+#   SKIP_LEAK_GUARD=1   bypass only layer #2 (PROTECTED_BRANCHES still runs)
+#
+# Hook protocol (git push pre-push):
+#   $1 = remote name (e.g. "origin")
+#   $2 = remote URL  (e.g. "https://github.com/owner/repo.git")
+#   stdin lines: "<local_ref> <local_sha> <remote_ref> <remote_sha>"
 
 set -o errexit
 set -o pipefail
@@ -13,37 +24,157 @@ if [ "${SKIP_PRE_PUSH:-0}" = "1" ]; then
     exit 0
 fi
 
+# git push hook protocol — capture remote identity for leak guard
+REMOTE_NAME="${1:-}"
+REMOTE_URL="${2:-}"
+
 # Get hook directory and import rules
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=/dev/null
 source "${HOOK_DIR}/../config/pre-push-rules.sh" || exit 0
 
+ZERO_SHA="0000000000000000000000000000000000000000"
+
 # ============================================
-# MAIN HOOK LOGIC
+# Leak guard activation decision (F-1)
+# ============================================
+# Active only when ALL of these are true:
+#   - SKIP_LEAK_GUARD is not set to 1.
+#   - UPSTREAM_REMOTES_ERE is non-empty (someone has declared an upstream).
+#   - LEAK_PATTERNS_ERE is non-empty   (someone has declared what is sensitive).
+#   - The push target URL matches UPSTREAM_REMOTES_ERE.
+# If any is false, the guard is inert — no scanning, no overhead. This is
+# the "Error Cases" behaviour spelt out in the issue: empty pattern or no
+# matching URL silently disables the guard.
+LEAK_GUARD_ACTIVE=0
+if [ "${SKIP_LEAK_GUARD:-0}" != "1" ] \
+    && [ -n "${UPSTREAM_REMOTES_ERE}" ] \
+    && [ -n "${LEAK_PATTERNS_ERE}" ] \
+    && [ -n "${REMOTE_URL}" ]; then
+    if printf '%s' "${REMOTE_URL}" | grep -qE "${UPSTREAM_REMOTES_ERE}"; then
+        LEAK_GUARD_ACTIVE=1
+    fi
+fi
+
+# ============================================
+# Helpers
 # ============================================
 
-# Pre-push receives refs from stdin
-# Format: <local ref> <local sha> <remote ref> <remote sha>
-# Example: refs/heads/main abc123... refs/heads/main def456...
+# Resolve the commit range to scan for a single ref entry.
+# When pushing a fresh branch (remote_sha = ZERO_SHA) we fall back to the
+# merge-base against <remote>/main (then master). This is Open Question Q3
+# resolved as (b): bounded, fast, and accurate against what is actually
+# new on this side of the upstream.
+_resolve_scan_range() {
+    local local_sha="$1"
+    local remote_sha="$2"
+    local base branch
+
+    if [ "${remote_sha}" != "${ZERO_SHA}" ]; then
+        printf '%s' "${remote_sha}..${local_sha}"
+        return 0
+    fi
+
+    for branch in main master; do
+        if base=$(git merge-base "${REMOTE_NAME}/${branch}" "${local_sha}" 2>/dev/null); then
+            if [ -n "${base}" ]; then
+                printf '%s' "${base}..${local_sha}"
+                return 0
+            fi
+        fi
+    done
+
+    # No tracking branch available — scan just the tip commit so we still
+    # catch obvious leaks instead of walking the full history.
+    # `<sha>^!` is git shorthand for "just this commit, exclude parents".
+    printf '%s' "${local_sha}^!"
+}
+
+# Scan a commit range for leak patterns. Returns 0 if clean, 1 if a match
+# was reported. Failures of git plumbing are treated fail-open (with stderr
+# warning) so a guard bug never blocks a legitimate push.
+_leak_scan_range() {
+    local range="$1"
+    local commits commit_count violated=0
+    local commit_hash msg_match file files file_match
+
+    commit_count=$(git log --pretty=oneline "${range}" 2>/dev/null | wc -l | tr -d ' \n')
+    if [ "${commit_count:-0}" -gt 100 ] 2>/dev/null; then
+        # NF-1 Q4 (a): proceed but warn — KISS over hard cutoff.
+        echo "[leak-guard] WARN: scanning ${commit_count} commits — hook may exceed 200ms budget" >&2
+    fi
+
+    if ! commits=$(git log --format='%H' "${range}" 2>/dev/null); then
+        echo "[leak-guard] WARN: git log failed for range '${range}' — skipping scan (fail-open)" >&2
+        return 0
+    fi
+
+    while IFS= read -r commit_hash; do
+        [ -z "${commit_hash}" ] && continue
+
+        # Commit message scan
+        msg_match=$(git log -1 --format='%B' "${commit_hash}" 2>/dev/null \
+            | grep -nE "${LEAK_PATTERNS_ERE}" || true)
+        if [ -n "${msg_match}" ]; then
+            echo "${MSG_LEAK_BLOCKED}"
+            echo "  commit: ${commit_hash}"
+            echo "  source: <commit message>"
+            printf '%s\n' "${msg_match}" | while IFS= read -r line; do
+                echo "    ${line}"
+            done
+            violated=1
+        fi
+
+        # Added/Modified/Copied/Renamed files — scan content at this commit.
+        if ! files=$(git diff-tree --no-commit-id --name-only --diff-filter=ACMRT -r "${commit_hash}" 2>/dev/null); then
+            files=""
+        fi
+        while IFS= read -r file; do
+            [ -z "${file}" ] && continue
+            file_match=$(git show "${commit_hash}:${file}" 2>/dev/null \
+                | grep -nE --binary-files=without-match "${LEAK_PATTERNS_ERE}" \
+                || true)
+            if [ -n "${file_match}" ]; then
+                echo "${MSG_LEAK_BLOCKED}"
+                echo "  commit: ${commit_hash}"
+                echo "  source: ${file}"
+                printf '%s\n' "${file_match}" | while IFS= read -r line; do
+                    echo "    ${line}"
+                done
+                violated=1
+            fi
+        done <<<"${files}"
+    done <<<"${commits}"
+
+    if [ ${violated} -eq 1 ]; then
+        echo "${MSG_LEAK_HINT}"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================
+# Main loop — per-ref evaluation
+# ============================================
+
+exit_code=0
 
 while read -r local_ref local_sha remote_ref remote_sha; do
-    # Extract branch name from local_ref (refs/heads/main → main)
+    # Extract branch name from local_ref (refs/heads/main -> main)
     local_branch="${local_ref#refs/heads/}"
 
-    # Check if branch is protected
+    # ----- Layer 1: PROTECTED_BRANCHES (unchanged) -----
     is_protected=0
     for protected in "${PROTECTED_BRANCHES[@]}"; do
         # Handle wildcard patterns (e.g., release/*)
         if [[ "$protected" == *"*" ]]; then
-            # Convert glob to regex: release/* → release/.*
             pattern="${protected//\*/.*}"
             if [[ "$local_branch" =~ ^${pattern}$ ]]; then
                 is_protected=1
                 break
             fi
         else
-            # Exact match
             if [ "$local_branch" = "$protected" ]; then
                 is_protected=1
                 break
@@ -51,7 +182,6 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         fi
     done
 
-    # If protected, reject the push
     if [ $is_protected -eq 1 ]; then
         echo ""
         echo "🚫 $MSG_PROTECTED_BRANCH: '$local_branch'"
@@ -60,6 +190,23 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         echo "$MSG_HINT_FIX"
         exit 1
     fi
+
+    # ----- Layer 2: upstream leak guard (new) -----
+    if [ ${LEAK_GUARD_ACTIVE} -eq 1 ]; then
+        # Branch delete: nothing on the local side to scan.
+        if [ "${local_sha}" = "${ZERO_SHA}" ]; then
+            continue
+        fi
+        # No-op push: already-pushed sha, no new commits to scan.
+        if [ "${local_sha}" = "${remote_sha}" ]; then
+            continue
+        fi
+
+        range=$(_resolve_scan_range "${local_sha}" "${remote_sha}")
+        if ! _leak_scan_range "${range}"; then
+            exit_code=1
+        fi
+    fi
 done
 
-exit 0
+exit ${exit_code}
