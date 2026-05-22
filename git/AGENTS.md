@@ -22,11 +22,34 @@
 - Prefer `bash git/tests/test_hooks.sh` for integration-level verification of the 2-tier hook system.
 - If a change targets repository-wide policy (naming, shebang, UX rules), also run `tox -e shellcheck`.
 
+# Upstream Push Leak Guard
+
+`hooks/pre-push` runs a second layer after the protected-branch check: when
+the push target URL matches `UPSTREAM_REMOTES_ERE`, it scans the push range
+(commit messages + added/modified file contents) against `LEAK_PATTERNS_ERE`
+and blocks the push on any match.
+
+Both variables default to the empty string, so the mechanism is inert until
+the user opts in. Activate by exporting in your shell rc or a gitignored
+local file:
+
+```sh
+export UPSTREAM_REMOTES_ERE='github\.com[:/]<owner>/<repo>(\.git)?$'
+export LEAK_PATTERNS_ERE='<your-private-host>\.example\.com|/your-private-overlay/'
+```
+
+Escape hatches: `SKIP_PRE_PUSH=1` (whole hook), `SKIP_LEAK_GUARD=1` (this
+layer only — protected-branch check still runs). SSOT lives in
+`config/pre-push-rules.sh`; regression tests in `test/test-pre-push.sh`
+(T-1..T-7).
+
 # Context Map
 
 - **[Hook Setup Script](./setup.sh)** — Symlinks and hook installation logic (called by root `./setup.sh`)
 - **[Global Hook](./global-hooks/pre-commit)** — User-level hook wrapper (`core.hooksPath`)
 - **[Project Hook](./hooks/pre-commit)** — Project-level runner that delegates to checks
+- **[Pre-push Hook](./hooks/pre-push)** — Protected-branch + upstream leak-guard layers
 - **[Hook Checks](./hooks/checks)** — Modular checks executed by the project hook
 - **[Hook Configuration](./config/hook-config.sh)** — Regex patterns, thresholds, and shared constants
+- **[Pre-push Rules](./config/pre-push-rules.sh)** — Protected branches + leak-guard SSOT
 - **[Git Docs](./doc/README.md)** — Hook workflow and SSH setup guides
