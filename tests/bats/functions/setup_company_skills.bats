@@ -133,6 +133,21 @@ run_overlay() {
     [ ! -e "$SKILLS_DIR/docs" ]
 }
 
+@test "meta-only repo treated as empty by _has_entries (PR #717 review)" {
+    # Consistency with the overlay loop's SKILL.md guard: if the repo
+    # carries ONLY metadata dirs, the early-exit should classify it as
+    # empty instead of falling through to the main loop and printing
+    # the "overlay applied" success line with all-zero counters.
+    mkdir -p "$SKILLS_DIR" \
+        "$HOME/company-skills/.claude-plugin" \
+        "$HOME/company-skills/plugins" \
+        "$HOME/company-skills/tests"
+
+    run_overlay "$HOME/company-skills"
+    assert_success
+    assert_output --partial "is empty"
+}
+
 @test "dual layout — only root-level skill linked, plugins/ ignored (#715)" {
     # Root-level skill alongside a plugins/<plugin>/skills/<skill>
     # nested layout. The overlay must link only the root skill; the
