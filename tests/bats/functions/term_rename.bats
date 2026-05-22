@@ -163,3 +163,91 @@ teardown() {
     assert_success
     assert_output --partial "hook=cleared"
 }
+
+# ---------------------------------------------------------------------------
+# #907 regression: caller under `emulate -L sh` must not truncate
+# precmd_functions. Without the in-eval `emulate -L zsh` guard, the
+# `${(@)arr:#PAT}` filter and `${arr[@]}` expansion collapse to the array's
+# first element under sh emulation, dropping `_p9k_precmd` and freezing the
+# prompt. Root cause for #907 (`gwt spawn --launch` race re-classified as a
+# term_rename array-mutation bug, not a p10k init race).
+# ---------------------------------------------------------------------------
+
+@test "zsh: --persist under emulate -L sh keeps other precmd hooks" {
+    run_in_zsh '
+        # Seed a realistic multi-hook array, then mimic git_worktree_spawn:
+        # call term_rename --persist from a function with `emulate -L sh`.
+        precmd_functions=(_p9k_do_nothing _omz_async_request omz_termsupport_precmd _p9k_precmd)
+        before_count=${#precmd_functions[@]}
+        simulated_gwt() {
+            emulate -L sh
+            term_rename --persist xx >/dev/null
+        }
+        simulated_gwt
+        after_count=${#precmd_functions[@]}
+        # Original 4 hooks must survive + _term_rename_persist appended = 5.
+        print "before=${before_count}"
+        print "after=${after_count}"
+        if [[ ${precmd_functions[(I)_p9k_precmd]} -ne 0 ]]; then
+            print "p9k_precmd=present"
+        else
+            print "p9k_precmd=MISSING"
+        fi
+        if [[ ${precmd_functions[(I)_term_rename_persist]} -ne 0 ]]; then
+            print "term_hook=present"
+        else
+            print "term_hook=MISSING"
+        fi
+    '
+    assert_success
+    assert_output --partial "before=4"
+    assert_output --partial "after=5"
+    assert_output --partial "p9k_precmd=present"
+    assert_output --partial "term_hook=present"
+}
+
+@test "zsh: --clear under emulate -L sh keeps other precmd hooks" {
+    run_in_zsh '
+        precmd_functions=(_p9k_do_nothing _omz_async_request _p9k_precmd)
+        term_rename --persist yy >/dev/null   # append _term_rename_persist
+        simulated_gwt() {
+            emulate -L sh
+            term_rename --clear >/dev/null
+        }
+        simulated_gwt
+        after_count=${#precmd_functions[@]}
+        print "after=${after_count}"
+        if [[ ${precmd_functions[(I)_p9k_precmd]} -ne 0 ]]; then
+            print "p9k_precmd=present"
+        else
+            print "p9k_precmd=MISSING"
+        fi
+        if [[ ${precmd_functions[(I)_term_rename_persist]} -ne 0 ]]; then
+            print "term_hook=stuck"
+        else
+            print "term_hook=cleared"
+        fi
+    '
+    assert_success
+    assert_output --partial "after=3"
+    assert_output --partial "p9k_precmd=present"
+    assert_output --partial "term_hook=cleared"
+}
+
+@test "zsh: --persist under emulate -L sh stores name globally" {
+    # _term_rename_set_persist_name also goes through an eval under the
+    # caller's emulation; verify the assignment lands in the global scope
+    # and survives function return.
+    run_in_zsh '
+        precmd_functions=()
+        unset _TERM_RENAME_PERSIST_NAME
+        simulated_gwt() {
+            emulate -L sh
+            term_rename --persist abc >/dev/null
+        }
+        simulated_gwt
+        print "name=${_TERM_RENAME_PERSIST_NAME-MISSING}"
+    '
+    assert_success
+    assert_output --partial "name=abc"
+}

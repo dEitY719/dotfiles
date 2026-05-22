@@ -51,7 +51,13 @@ _term_rename_install_hook() {
         # zsh array syntax wrapped in eval so bash never tries to parse it.
         # typeset -ga guarantees precmd_functions exists as a global array
         # even when sourced before zsh's add-zsh-hook plumbing.
+        # emulate -L zsh: the caller may be running under `emulate -L sh`
+        # (e.g. git_worktree_spawn during `gwt spawn --launch`). Without this,
+        # `${precmd_functions[@]}` resolves to only the first array element
+        # under sh emulation, silently truncating the array and dropping
+        # `_p9k_precmd` — causing the frozen-prompt regression (#907).
         eval '
+            emulate -L zsh
             typeset -ga precmd_functions
             precmd_functions=("${precmd_functions[@]}" "${_hook}")
         '
@@ -74,7 +80,11 @@ _term_rename_remove_hook() {
         return 0
     fi
     if [ -n "${ZSH_VERSION-}" ]; then
-        eval 'precmd_functions=("${(@)precmd_functions:#'"${_hook}"'}")'
+        # See _term_rename_install_hook for the emulate-L-zsh rationale. The
+        # `${(@)arr:#PATTERN}` filter flag is zsh-only and collapses the array
+        # to its first element under sh emulation — same frozen-prompt
+        # truncation (#907).
+        eval 'emulate -L zsh; precmd_functions=("${(@)precmd_functions:#'"${_hook}"'}")'
         return 0
     fi
 }
@@ -84,7 +94,11 @@ _term_rename_set_persist_name() {
     # global with typeset -g. bash assignments at function scope are already
     # global without a `local` declaration.
     if [ -n "${ZSH_VERSION-}" ]; then
-        eval 'typeset -g _TERM_RENAME_PERSIST_NAME="$1"'
+        # emulate -L zsh: same caller-emulation defence as the precmd
+        # mutators above. Belt-and-braces — typeset -g would still resolve to
+        # zsh's builtin under sh emulation, but parameter expansion of "$1"
+        # follows whichever emulation is active.
+        eval 'emulate -L zsh; typeset -g _TERM_RENAME_PERSIST_NAME="$1"'
         return 0
     fi
     _TERM_RENAME_PERSIST_NAME="$1"
