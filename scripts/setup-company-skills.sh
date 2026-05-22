@@ -184,9 +184,15 @@ fi
 COMPANY_SKILLS_HOME="$(cd "$COMPANY_SKILLS_HOME" && pwd)"
 
 # Empty private repo: no entries to layer. Not an error.
+# Apply the same SKILL.md guard as _overlay_one_target so a repo that
+# only carries metadata dirs (.claude-plugin/, plugins/, tests/, …) is
+# treated as empty here too — otherwise the main loop runs to completion
+# with all-zero counters and prints a misleading "overlay applied"
+# success line. Suggested by gemini-code-assist on PR #717.
 _has_entries=0
 for _e in "$COMPANY_SKILLS_HOME"/*/; do
     [ -d "$_e" ] || continue
+    [ -f "${_e}SKILL.md" ] || continue
     _has_entries=1
     break
 done
