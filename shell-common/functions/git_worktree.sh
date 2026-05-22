@@ -1772,7 +1772,7 @@ git_worktree_spawn() {
             # only when we can detect we're running there.
             if [ "${TERM_PROGRAM-}" = "vscode" ]; then
                 ux_info "          VSCode needs settings.json: \"terminal.integrated.tabs.title\": \"\${sequence}\""
-                ux_info "          (see \`term help vscode\`)"
+                ux_info "          (see \`term-help vscode\`)"
             fi
             term_rename --persist "(${agent}) ${name}"
         fi
