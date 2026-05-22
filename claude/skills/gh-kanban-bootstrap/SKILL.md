@@ -32,14 +32,10 @@ Locate `SKILL_DIR` (this file's directory). The script lives at
 
 ## Step 2: Prereq Check
 
-Follow `references/prereq.md`:
-- `command -v gh && command -v jq` — abort with install hint on miss.
-- Detect host from `git remote get-url origin`.
-- `gh api --hostname <host> -i user` → check `X-Oauth-Scopes` header
-  includes `project`. On miss: print `gh auth refresh -h <host> -s project`
-  and abort (rc=1). NOTE: `gh api` uses `--hostname` (not `-h`, which is
-  the help flag) — `gh auth refresh` keeps `-h` as its hostname short
-  flag. The two CLIs are inconsistent; both correct as written.
+Follow `references/prereq.md` for tool / host / token-scope checks
+(including the `gh api --hostname` vs `gh auth refresh -h` flag-naming
+inconsistency). On any miss the helper prints the install or
+`gh auth refresh -h <host> -s project` hint and aborts (rc=1).
 
 ## Step 3: Target Repo
 
@@ -58,18 +54,12 @@ Parse `--no-bootstrap-labels` (skip Step 5 entirely) and
 
 ## Step 5: Label Bootstrap
 
-Per `references/labels.md` (the SSOT table). For each label:
-- Already exists + `--force-label-sync` unset → print
-  `label '<x>' already exists — skip`, no API call.
-- Already exists + `--force-label-sync` set → `PATCH
-  /repos/$REPO/labels/$NAME` with SSOT color/description.
-- Missing → `POST /repos/$REPO/labels`.
-
-If `--no-bootstrap-labels`: print one line
-`label bootstrap skipped (--no-bootstrap-labels)` and skip the step.
-
-Permission errors on a single label → stderr 1-line warn, continue.
-Label absence does not block board setup.
+Apply the 8 SSOT labels per `references/labels.md` — the "Apply
+decision matrix" section there resolves skip / PATCH (on
+`--force-label-sync`) / POST per label. `--no-bootstrap-labels` skips
+the whole step with a one-line notice. Per-label permission errors
+warn on stderr and continue — label absence does not block board
+setup.
 
 ## Step 6: Dry-run Dispatch
 
@@ -106,6 +96,4 @@ output. Append:
 - Never auto-execute smoke test without explicit `--with-smoke-test`.
 - Never echo token / collaborator / project ID to stdout (NF-3).
 - Never silently fall back to a different remote — `origin` only.
-- The script `lib/setup.sh` is the SOLE entry point for kanban setup in
-  this repo. Do not reintroduce the old scripts/ location — that path
-  was removed in issue #699.
+- `lib/setup.sh` is the sole entry point — do not reintroduce the old `scripts/` location (removed in #699).
