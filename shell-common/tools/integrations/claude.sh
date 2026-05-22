@@ -690,7 +690,18 @@ _claude_compose_skills_dir() {
             ux_error "  unmount failed: $_ccsd_tgt"
             return 1
         fi
-        rmdir "$_ccsd_tgt" 2>/dev/null || true
+        # Post-umount the underlying directory is revealed. If empty,
+        # rmdir clears it and `mkdir -p` below creates a fresh slot. If
+        # populated (stale skill data from before the bind-mount era),
+        # back it up so the entry-composition loop does not mingle
+        # symlinks with the user's data. Mirrors _claude_ensure_symlink's
+        # post-umount backup (line 625) so a mixed-version install sees
+        # one consistent naming convention.
+        if [ -e "$_ccsd_tgt" ] && ! rmdir "$_ccsd_tgt" 2>/dev/null; then
+            _ccsd_backup="${_ccsd_tgt}-$(date +%Y%m%d%H%M%S)-original"
+            ux_warning "  backing up revealed directory: $_ccsd_tgt → $_ccsd_backup"
+            mv "$_ccsd_tgt" "$_ccsd_backup" || return 1
+        fi
     elif [ -e "$_ccsd_tgt" ] && [ ! -d "$_ccsd_tgt" ]; then
         _ccsd_backup="${_ccsd_tgt}-$(date +%Y%m%d%H%M%S)-original"
         ux_warning "  unexpected file at $_ccsd_tgt — backing up: $_ccsd_backup"
