@@ -615,7 +615,11 @@ if [ "$_setup_mode" = "internal" ]; then
     # settings.json 처리는 aws/setup.sh 가 책임진다 (#687). 본 분기는 이
     # 파일에 손대지 않아 aws/setup.sh 가 작성한 실파일이 보존된다.
     _single_account_ensure_link "$CLAUDE_STATUSLINE_SOURCE"             "$HOME_STATUSLINE"
-    _single_account_ensure_link "$CLAUDE_SKILLS_SOURCE"                 "$HOME_SKILLS"
+    # skills/ uses entry-level composition (issue #707, F-8) so a private
+    # company-skills overlay can be layered into the same target dir
+    # without touching the dotfiles git tree. See
+    # _claude_compose_skills_dir in shell-common/tools/integrations/claude.sh.
+    _claude_compose_skills_dir "$CLAUDE_SKILLS_SOURCE"                  "$HOME_SKILLS"
     _single_account_ensure_link "$CLAUDE_DOCS_SOURCE"                   "$HOME_DOCS"
     _single_account_ensure_link "$CLAUDE_GLOBAL_MEMORY_SOURCE"          "$HOME_GLOBAL_MEMORY"
     _single_account_ensure_link "$HOME/.claude-shared/plugins"          "$HOME/.claude/plugins"
@@ -624,14 +628,21 @@ if [ "$_setup_mode" = "internal" ]; then
     # settings.json is intentionally absent from this list — aws/setup.sh
     # writes it as a regular file (#687). settings.local.json is also
     # absent — deprecated (#687) and never a dotfiles symlink (#584).
+    # skills/ is a real directory of entry-level symlinks (#707, F-8), so
+    # it is checked as `-d` (and `! -L`) rather than `-L`.
     log_debug "\n--- 심볼릭 링크 확인 (internal/single-account) ---"
-    for link in statusline-command.sh skills docs plugins projects/GLOBAL/memory; do
+    for link in statusline-command.sh docs plugins projects/GLOBAL/memory; do
         if [ -L "$HOME/.claude/$link" ]; then
             log_dim "✓ ~/.claude/$link 심볼릭 링크 확인됨"
         else
             log_error_and_exit "$HOME/.claude/$link 심볼릭 링크 생성 실패"
         fi
     done
+    if [ -d "$HOME/.claude/skills" ] && [ ! -L "$HOME/.claude/skills" ]; then
+        log_dim "✓ ~/.claude/skills entry-level 합성 디렉토리 확인됨"
+    else
+        log_error_and_exit "$HOME/.claude/skills entry-level 합성 실패 (디렉토리 아님)"
+    fi
 
     _setup_gemini_skills_symlink
 
@@ -672,16 +683,23 @@ for acct in $ENABLED_ACCOUNTS; do
 done
 
 # --- Verify Links (모든 활성 계정) ---
+# skills/ is a real directory of entry-level symlinks (#707, F-8), so it
+# is checked as `-d` (and `! -L`) rather than `-L`.
 log_debug "\n--- 심볼릭 링크 확인 ---"
 for acct in $ENABLED_ACCOUNTS; do
     cdir=$(_claude_resolve_account "$acct")
-    for link in settings.json statusline-command.sh skills docs plugins projects/GLOBAL/memory; do
+    for link in settings.json statusline-command.sh docs plugins projects/GLOBAL/memory; do
         if [ -L "${cdir}/${link}" ]; then
             log_dim "✓ ${acct}/${link} 심볼릭 링크 확인됨"
         else
             log_error_and_exit "${acct}/${link} 심볼릭 링크 생성 실패"
         fi
     done
+    if [ -d "${cdir}/skills" ] && [ ! -L "${cdir}/skills" ]; then
+        log_dim "✓ ${acct}/skills entry-level 합성 디렉토리 확인됨"
+    else
+        log_error_and_exit "${acct}/skills entry-level 합성 실패 (디렉토리 아님)"
+    fi
 done
 
 # Gemini CLI 설치 시 ~/.gemini/skills → claude/skills SSOT symlink 설정 (issue #562).

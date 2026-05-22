@@ -651,6 +651,99 @@ _claude_ensure_symlink() {
 # `claude-skills-sync` alias and `claude-accounts skills-sync`
 # sub-command went away with them.
 
+# _claude_compose_skills_dir <src_skills_dir> <target_skills_dir>
+#
+# F-8 (issue #707): replace the directory-level symlink "<tgt> -> <src>"
+# (the #575 design) with a real directory at <tgt> that contains an
+# entry-level symlink for every skill subdirectory of <src>. This is
+# what lets a follow-up overlay step (scripts/setup-company-skills.sh)
+# layer additional skills from a private user-supplied directory into
+# the same <tgt> without those skills ever entering the dotfiles git
+# tree.
+#
+# Idempotent — converges on the same state on repeat calls. Also
+# performs three migrations in place:
+#   1. If <tgt> is a legacy directory-symlink (#575), remove it and
+#      replace with a real directory.
+#   2. If <tgt> is a legacy bind-mount (#287/#342 era), unmount it.
+#   3. Stale entries — symlinks under <tgt> that point into <src> but
+#      whose target no longer exists — are removed. Symlinks pointing
+#      outside <src> (e.g. company-skills overlays) are left alone.
+_claude_compose_skills_dir() {
+    _ccsd_src="${1:-}"
+    _ccsd_tgt="${2:-}"
+    if [ -z "$_ccsd_src" ] || [ -z "$_ccsd_tgt" ]; then
+        ux_error "_claude_compose_skills_dir: src and tgt required"
+        return 1
+    fi
+    if [ ! -d "$_ccsd_src" ]; then
+        ux_error "_claude_compose_skills_dir: source missing: $_ccsd_src"
+        return 1
+    fi
+
+    if [ -L "$_ccsd_tgt" ]; then
+        ux_info "  legacy dir-symlink at $_ccsd_tgt — converting to entry composition"
+        rm -f "$_ccsd_tgt"
+    elif _is_mounted "$_ccsd_tgt" 2>/dev/null; then
+        ux_warning "  bind-mount detected at $_ccsd_tgt — unmounting (sudo may prompt)"
+        if ! sudo umount "$_ccsd_tgt"; then
+            ux_error "  unmount failed: $_ccsd_tgt"
+            return 1
+        fi
+        rmdir "$_ccsd_tgt" 2>/dev/null || true
+    elif [ -e "$_ccsd_tgt" ] && [ ! -d "$_ccsd_tgt" ]; then
+        _ccsd_backup="${_ccsd_tgt}-$(date +%Y%m%d%H%M%S)-original"
+        ux_warning "  unexpected file at $_ccsd_tgt — backing up: $_ccsd_backup"
+        mv "$_ccsd_tgt" "$_ccsd_backup" || return 1
+    fi
+    mkdir -p "$_ccsd_tgt"
+
+    _ccsd_added=0
+    _ccsd_refreshed=0
+    for _ccsd_dir in "$_ccsd_src"/*/; do
+        [ -d "$_ccsd_dir" ] || continue
+        _ccsd_name="${_ccsd_dir%/}"
+        _ccsd_name="${_ccsd_name##*/}"
+        _ccsd_link="${_ccsd_tgt}/${_ccsd_name}"
+        _ccsd_want="${_ccsd_src}/${_ccsd_name}"
+
+        if [ -L "$_ccsd_link" ]; then
+            if [ "$(readlink "$_ccsd_link")" = "$_ccsd_want" ]; then
+                continue
+            fi
+            rm -f "$_ccsd_link"
+            _ccsd_refreshed=$((_ccsd_refreshed + 1))
+        elif [ -e "$_ccsd_link" ]; then
+            ux_warning "  skill entry blocked by non-symlink — skipped: $_ccsd_link"
+            continue
+        else
+            _ccsd_added=$((_ccsd_added + 1))
+        fi
+        ln -s "$_ccsd_want" "$_ccsd_link" || {
+            ux_error "  symlink failed: $_ccsd_link -> $_ccsd_want"
+            return 1
+        }
+    done
+
+    # Drop stale dotfiles-sourced links whose source entry was removed.
+    # Only touch symlinks that point into <src> so private overlay
+    # links (company-skills, user-managed entries) survive.
+    for _ccsd_existing in "$_ccsd_tgt"/*; do
+        [ -L "$_ccsd_existing" ] || continue
+        _ccsd_target_path=$(readlink "$_ccsd_existing")
+        case "$_ccsd_target_path" in
+            "$_ccsd_src"/*)
+                if [ ! -d "$_ccsd_target_path" ]; then
+                    ux_info "  removing stale dotfiles skill entry: $_ccsd_existing"
+                    rm -f "$_ccsd_existing"
+                fi
+                ;;
+        esac
+    done
+
+    ux_success "  composed skills dir: $_ccsd_tgt (added=$_ccsd_added refreshed=$_ccsd_refreshed)"
+}
+
 # _claude_account_setup_one — 단일 계정의 link 멱등 셋업.
 #
 # skills/ 와 docs/ 는 SSOT 디렉토리 자체로의 단일 symlink 다 (issue #575).
@@ -673,7 +766,10 @@ _claude_account_setup_one() {
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/statusline-command.sh"  "$_caso_cdir/statusline-command.sh"
     _claude_ensure_symlink "$HOME/.claude-shared/plugins"                   "$_caso_cdir/plugins"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/global-memory"          "$_caso_cdir/projects/GLOBAL/memory"
-    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/skills"                 "$_caso_cdir/skills"
+    # skills/ uses entry-level composition (issue #707, F-8) so a private
+    # company-skills overlay can be layered into the same target dir
+    # without touching the dotfiles git tree.
+    _claude_compose_skills_dir "${DOTFILES_ROOT}/claude/skills"             "$_caso_cdir/skills"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/docs"                   "$_caso_cdir/docs"
 }
 
