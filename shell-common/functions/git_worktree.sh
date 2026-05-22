@@ -1761,6 +1761,19 @@ git_worktree_spawn() {
         # review). Guarded by command -v so the spawn still works if
         # term_rename.sh somehow isn't loaded.
         if command -v term_rename >/dev/null 2>&1; then
+            # Always print the label that will be set so users have a
+            # debugging surface when the tab doesn't visibly update
+            # (#709). Silent-emit was the original reason that case
+            # turned into a "did it run?" guessing game.
+            ux_info "  label:  (${agent}) ${name}"
+            # VSCode integrated terminal needs `terminal.integrated.tabs.title`
+            # set to ${sequence} for shell-emitted OSC titles to honor
+            # (#709). The default ${process} silently discards them, so warn
+            # only when we can detect we're running there.
+            if [ "${TERM_PROGRAM-}" = "vscode" ]; then
+                ux_info "          VSCode needs settings.json: \"terminal.integrated.tabs.title\": \"\${sequence}\""
+                ux_info "          (see \`term help vscode\`)"
+            fi
             term_rename --persist "(${agent}) ${name}"
         fi
         eval "$launch_cmd"

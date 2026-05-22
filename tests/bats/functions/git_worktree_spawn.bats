@@ -758,3 +758,74 @@ teardown() {
     assert_success
     assert_output "|--persist|(claude) pr-723"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #709: --launch makes the term-rename label visible in spawn summary
+# and warns when running inside VSCode integrated terminal where the OSC
+# title is silently dropped unless the user opts into `${sequence}`.
+# ---------------------------------------------------------------------------
+
+@test "bash: #709 spawn --launch prints 'label:' line so emit is observable" {
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        unset TERM_PROGRAM
+        claude_yolo() { :; }
+        term_rename() { :; }
+        git_worktree_spawn --launch --ai claude --wt-name pr-709 2>/dev/null
+    "
+    assert_success
+    assert_output --partial "label:  (claude) pr-709"
+}
+
+@test "bash: #709 spawn --launch under TERM_PROGRAM=vscode prints VSCode setting hint" {
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        export TERM_PROGRAM=vscode
+        claude_yolo() { :; }
+        term_rename() { :; }
+        git_worktree_spawn --launch --ai claude --wt-name pr-709v 2>/dev/null
+    "
+    assert_success
+    assert_output --partial "label:  (claude) pr-709v"
+    assert_output --partial "VSCode needs settings.json"
+    assert_output --partial "terminal.integrated.tabs.title"
+    assert_output --partial "term help vscode"
+}
+
+@test "bash: #709 spawn --launch without TERM_PROGRAM omits VSCode setting hint" {
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        unset TERM_PROGRAM
+        claude_yolo() { :; }
+        term_rename() { :; }
+        git_worktree_spawn --launch --ai claude --wt-name pr-709n 2>/dev/null
+    "
+    assert_success
+    refute_output --partial "VSCode needs settings.json"
+    refute_output --partial "term help vscode"
+}
+
+@test "bash: #709 spawn without --launch does NOT print 'label:' line" {
+    # No --launch path = no agent, no label emit. Tab hint must also stay out.
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        export TERM_PROGRAM=vscode
+        git_worktree_spawn --wt-name pr-709noLaunch 2>/dev/null
+    "
+    assert_success
+    refute_output --partial "label:  (claude)"
+    refute_output --partial "VSCode needs settings.json"
+}
+
+@test "zsh: #709 spawn --launch under TERM_PROGRAM=vscode prints VSCode setting hint" {
+    run_in_zsh "
+        cd '$FAKE_REPO' || exit 1
+        export TERM_PROGRAM=vscode
+        claude_yolo() { :; }
+        term_rename() { :; }
+        git_worktree_spawn --launch --ai claude --wt-name pr-709z 2>/dev/null
+    "
+    assert_success
+    assert_output --partial "label:  (claude) pr-709z"
+    assert_output --partial "VSCode needs settings.json"
+}
