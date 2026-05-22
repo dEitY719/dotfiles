@@ -152,3 +152,52 @@ teardown() {
     assert_output --partial "resolve_ok"
     assert_output --partial "parse_ok"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #718 — disk fallback when `_dotfiles_setup_mode` function is absent.
+#
+# Reproduces the hook context: `claude/hooks/post-gh-pr-create.sh` sources
+# only `gh_host.sh` (NOT the integrations layer that defines
+# `_dotfiles_setup_mode`). Before #718 this path always returned
+# `github.com`, masking `internal` PCs' GHE host and breaking the post-PR
+# board-sync regex. The fix adds a `~/.dotfiles-setup-mode` file fallback,
+# tested here with a clean `env -i` bash so neither the function nor any
+# parent-shell env can leak in.
+# ---------------------------------------------------------------------------
+
+@test "#718: function present -> function result wins over disk (no regression)" {
+    echo "external" > "$HOME/.dotfiles-setup-mode"
+    # When _dotfiles_setup_mode is in scope and returns 'internal', the
+    # function MUST win — even if the disk file disagrees. This pins
+    # the "function-first" precedence.
+    run bash --noprofile --norc -c "
+        export HOME='$HOME'
+        _dotfiles_setup_mode() { echo internal; }
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh'
+        _gh_resolve_host
+    "
+    assert_success
+    assert_output "github.samsungds.net"
+}
+
+@test "#718: function absent + setup-mode=internal on disk -> GHE (hook context)" {
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    # env -i strips the parent shell so _dotfiles_setup_mode cannot leak in.
+    # PATH must be preserved or `bash`/`tr` won't resolve.
+    run env -i "HOME=$HOME" "PATH=$PATH" bash --noprofile --norc -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh'
+        _gh_resolve_host
+    "
+    assert_success
+    assert_output "github.samsungds.net"
+}
+
+@test "#718: function absent + setup-mode file absent -> github.com" {
+    rm -f "$HOME/.dotfiles-setup-mode"
+    run env -i "HOME=$HOME" "PATH=$PATH" bash --noprofile --norc -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh'
+        _gh_resolve_host
+    "
+    assert_success
+    assert_output "github.com"
+}

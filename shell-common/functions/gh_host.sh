@@ -34,11 +34,32 @@
 #
 # Reads `_dotfiles_setup_mode` (defined in
 # shell-common/tools/integrations/claude.sh). When that function isn't
-# in scope (sourcing order glitch or a non-interactive caller that
-# hasn't loaded the integrations layer), fall back to `github.com` —
-# external/public PCs stay on the public cloud regardless.
+# in scope, fall back to reading `~/.dotfiles-setup-mode` directly so
+# non-interactive callers (hooks, one-shot scripts) that source
+# gh_host.sh without the integrations layer still resolve `internal`
+# correctly. Before issue #718 this branch unconditionally returned
+# `github.com`, which silently broke `claude/hooks/post-gh-pr-create.sh`
+# on internal PCs (host regex never matched the GHE PR URL → board
+# sync skipped). The disk fallback mirrors the same canonicalisation
+# that `_dotfiles_setup_mode` performs (legacy numeric values 1/2/3
+# from pre-#571 setup.sh) so the two code paths agree.
 _gh_resolve_host() {
-    _grh_mode=$(_dotfiles_setup_mode 2>/dev/null || echo "")
+    if command -v _dotfiles_setup_mode >/dev/null 2>&1; then
+        _grh_mode=$(_dotfiles_setup_mode 2>/dev/null || echo "")
+    else
+        _grh_file="$HOME/.dotfiles-setup-mode"
+        if [ -f "$_grh_file" ]; then
+            _grh_mode=$(tr -d ' \t\n\r' < "$_grh_file" 2>/dev/null)
+            case "$_grh_mode" in
+                1) _grh_mode="public" ;;
+                2) _grh_mode="internal" ;;
+                3) _grh_mode="external" ;;
+            esac
+        else
+            _grh_mode=""
+        fi
+        unset _grh_file
+    fi
     case "$_grh_mode" in
         internal)           echo "github.samsungds.net" ;;
         external|public|"") echo "github.com" ;;
