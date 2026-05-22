@@ -99,15 +99,16 @@ _leak_scan_range() {
     local commits commit_count violated=0
     local commit_hash msg_match file files file_match
 
-    commit_count=$(git log --pretty=oneline "${range}" 2>/dev/null | wc -l | tr -d ' \n')
-    if [ "${commit_count:-0}" -gt 100 ] 2>/dev/null; then
-        # NF-1 Q4 (a): proceed but warn — KISS over hard cutoff.
-        echo "[leak-guard] WARN: scanning ${commit_count} commits — hook may exceed 200ms budget" >&2
-    fi
-
+    # Single `git log` call — fetch the SHA list and derive the count from it
+    # (review #710 nit: avoid the second `git log | wc -l` fork).
     if ! commits=$(git log --format='%H' "${range}" 2>/dev/null); then
         echo "[leak-guard] WARN: git log failed for range '${range}' — skipping scan (fail-open)" >&2
         return 0
+    fi
+    commit_count=$(printf '%s' "${commits}" | grep -c '^' || true)
+    if [ "${commit_count:-0}" -gt 100 ] 2>/dev/null; then
+        # NF-1 Q4 (a): proceed but warn — KISS over hard cutoff.
+        echo "[leak-guard] WARN: scanning ${commit_count} commits — hook may exceed 200ms budget" >&2
     fi
 
     while IFS= read -r commit_hash; do
@@ -132,9 +133,12 @@ _leak_scan_range() {
         fi
         while IFS= read -r file; do
             [ -z "${file}" ] && continue
-            file_match=$(git show "${commit_hash}:${file}" 2>/dev/null \
-                | grep -nE --binary-files=without-match "${LEAK_PATTERNS_ERE}" \
-                || true)
+            # `git grep -h -I` performs the search in-process and strips both
+            # the tree prefix and the path prefix from the output, leaving
+            # the same `<line>:<content>` shape grep -n produced. `-I` skips
+            # binary blobs (replaces the prior `--binary-files=without-match`).
+            file_match=$(git grep -h -nE -I "${LEAK_PATTERNS_ERE}" \
+                "${commit_hash}" -- "${file}" 2>/dev/null || true)
             if [ -n "${file_match}" ]; then
                 echo "${MSG_LEAK_BLOCKED}"
                 echo "  commit: ${commit_hash}"
