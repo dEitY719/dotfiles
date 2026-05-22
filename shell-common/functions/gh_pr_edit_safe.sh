@@ -35,8 +35,14 @@
 #   hitting the REST endpoint. Without this guard, POST /labels would
 #   auto-create a missing label silently — see project memory
 #   `feedback_gh_label_no_autocreate.md`.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
+#
+# NOTE: This file intentionally has NO interactive guard. It is a pure
+# function-defining library (no top-level side effects) consumed by the
+# `gh:pr` skill in non-interactive bash (Claude Code's Bash tool runs
+# `bash --noprofile --norc`). An interactive guard would `return 0`
+# before defining `_gh_pr_edit_safe_label` / `_gh_pr_edit_safe_body`,
+# breaking PR body / label edits with `command not found`. Mirrors the
+# same NOTE in gh_project_status.sh (PR #497). See issue #720.
 
 _gh_pr_edit_safe__deprecation_marker='Projects (classic) is being deprecated'
 
