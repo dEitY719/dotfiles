@@ -51,6 +51,13 @@ case ",${scopes// /}," in
 esac
 ```
 
+## Flag naming inconsistency (`gh api` vs `gh auth refresh`)
+
+`gh api` uses `--hostname` for the target host — `-h` is reserved as
+its help flag. `gh auth refresh`, however, keeps `-h` as its hostname
+short flag. The two CLIs are intentionally inconsistent; both forms
+above are correct as written. Do not "fix" one to match the other.
+
 ## rc matrix
 
 | condition | rc | message |

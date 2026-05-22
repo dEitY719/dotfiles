@@ -35,6 +35,25 @@ build|0e8a16|빌드 시스템
 skill|5319e7|claude/skills/** 변경
 ```
 
+## Apply decision matrix
+
+For each label in the SSOT feed below, the skill resolves one of three
+actions based on the existing label set and the `--force-label-sync`
+flag:
+
+| existing | `--force-label-sync` | action | notes |
+|----------|----------------------|--------|-------|
+| yes | unset | **skip** | print `label '<x>' already exists — skip`, no API call |
+| yes | set | **PATCH** | `PATCH /repos/$REPO/labels/$NAME` with SSOT color + description |
+| no | (either) | **POST** | `POST /repos/$REPO/labels` with SSOT color + description |
+
+When `--no-bootstrap-labels` is passed the skill skips this step
+entirely and prints `label bootstrap skipped (--no-bootstrap-labels)`.
+
+Per-label permission errors (e.g. fork without `repo:write`) print a
+one-line warning on stderr and continue — label absence does not block
+the board setup that follows in Step 6/7.
+
 ## Idempotent apply helper
 
 ```sh
