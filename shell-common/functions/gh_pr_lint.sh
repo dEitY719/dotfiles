@@ -21,8 +21,14 @@
 #   0 — all detected tools passed, or skipped (no tools / bypass / no changes)
 #   1 — at least one tool failed; caller should block the push
 #   2 — usage error (missing base-branch argument)
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
+#
+# NOTE: This file intentionally has NO interactive guard. It is a pure
+# function-defining library (no top-level side effects) consumed by the
+# `gh:pr` skill in non-interactive bash (Claude Code's Bash tool runs
+# `bash --noprofile --norc`). An interactive guard would `return 0`
+# before defining `_gh_pr_lint_run`, breaking the skill's Step 4.5 lint
+# guard with `command not found`. Mirrors the same NOTE in
+# gh_project_status.sh (PR #497). See issue #720.
 
 _gh_pr_lint__log() {
     printf '[lint guard] %s\n' "$*"

@@ -56,8 +56,15 @@
 # line to stderr and returns a non-zero exit code so the caller can
 # present the user with an actionable message. Helpers never call
 # `exit` — they `return` so a sourced caller stays in the same shell.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
+#
+# NOTE: This file intentionally has NO interactive guard. It is a pure
+# function-defining library (no top-level side effects) consumed by the
+# `gh:discussion-create`, `gh:discussion-convert`, and `gh:issue-create`
+# skills in non-interactive bash (Claude Code's Bash tool runs
+# `bash --noprofile --norc`). An interactive guard would `return 0`
+# before defining the helpers, breaking the skills with
+# `command not found`. Mirrors the same NOTE in gh_project_status.sh
+# (PR #497). See issue #720.
 
 _gh_discussion_repo_id() {
     local _owner="${1:-}" _repo="${2:-}"
