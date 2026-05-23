@@ -16,7 +16,6 @@ opt-in per-file so the broader pytest suite's behavior is unchanged.
 
 import pytest
 
-
 ENTRY_POINTS = [
     "devx",
     "devx -h",
@@ -35,9 +34,7 @@ def devx_runner(shell_runner):
     the main install in `~/dotfiles` happens to have."""
 
     def runner(shell, cmd):
-        return shell_runner(
-            shell, cmd, env_overrides={"DOTFILES_ROOT_NO_CANONICALIZE": "1"}
-        )
+        return shell_runner(shell, cmd, env_overrides={"DOTFILES_ROOT_NO_CANONICALIZE": "1"})
 
     return runner
 
@@ -91,9 +88,7 @@ class TestDevxHelpAliasAbsent:
         result = devx_runner(shell, "type devx-help 2>&1; echo rc=$?")
         # `type devx-help` should fail (no alias, no function, no binary).
         # The `rc=` suffix is our success-detect marker regardless of shell.
-        assert "rc=0" not in result.stdout, (
-            f"{shell}: devx-help unexpectedly resolved — §7.6.1 regression."
-        )
+        assert "rc=0" not in result.stdout, f"{shell}: devx-help unexpectedly resolved — §7.6.1 regression."
 
 
 class TestDevxSsotRowConsistency:
@@ -114,9 +109,7 @@ class TestDevxSsotRowConsistency:
         for line in section_result.stdout.splitlines():
             if not line.strip():
                 continue
-            assert line in all_result.stdout, (
-                f"{shell}: row missing from --all view for section '{section}': {line!r}"
-            )
+            assert line in all_result.stdout, f"{shell}: row missing from --all view for section '{section}': {line!r}"
 
 
 class TestDevxHelpFormatPolicy:
@@ -128,9 +121,7 @@ class TestDevxHelpFormatPolicy:
         assert result.exit_code == 0
         # ≤ 15 lines per command-guidelines.md §출력 정책 / §2.
         lines = result.stdout.splitlines()
-        assert len(lines) <= 15, (
-            f"{shell}: devx help summary is {len(lines)} lines (>15):\n{result.stdout}"
-        )
+        assert len(lines) <= 15, f"{shell}: devx help summary is {len(lines)} lines (>15):\n{result.stdout}"
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_default_summary_uses_template(self, devx_runner, shell):
@@ -145,9 +136,7 @@ class TestDevxHelpFormatPolicy:
         result = devx_runner(shell, "devx help")
         assert result.exit_code == 0
         for section in SECTIONS:
-            assert section in result.stdout, (
-                f"{shell}: section '{section}' missing from summary"
-            )
+            assert section in result.stdout, f"{shell}: section '{section}' missing from summary"
 
 
 class TestDevxHelpRegistration:
