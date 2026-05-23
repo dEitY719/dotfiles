@@ -199,3 +199,15 @@ _gh_pr_edit_safe_body() {
     rm -f "$_err"
     return 1
 }
+
+# Self-check (issue #724): catch silent breakage where this file sources
+# cleanly but its public wrappers never get defined — interactive-guard
+# regression, syntax error mid-file, future rename. Without these wrappers
+# label / body edits fall back to plain `gh pr edit`, which silently exits 1
+# on repos with classic Projects attached (the original #326 bug this helper
+# was written to absorb). rc stays 0 — best-effort contract preserved.
+if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1 \
+    || ! command -v _gh_pr_edit_safe_body >/dev/null 2>&1; then
+    printf '[gh_pr_edit_safe] BUG: _gh_pr_edit_safe_{label,body} undefined after source — PR edit safe-fallback will silently no-op. See dotfiles #724.\n' >&2
+fi
+:

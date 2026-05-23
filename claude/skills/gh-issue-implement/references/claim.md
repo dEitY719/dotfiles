@@ -123,7 +123,18 @@ on every projectV2 it belongs to.
 if "GH_ISSUE_SKIP_BOARD_TRANSITION" set:
     return 0
 
-_gh_project_status_sync issue <N> "In progress" --only-from "Backlog,Ready"
+_HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
+if [ -r "$_HELPER" ]; then
+    . "$_HELPER"
+    if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
+        # Defense-in-depth (#724): sourceable but undefined → silent no-op
+        # without this guard. One-line stderr warning, never blocks.
+        printf '[gh-issue-implement] %s sourced but _gh_project_status_sync undefined — board transition skipped (#724).\n' \
+            "$_HELPER" >&2
+    else
+        _gh_project_status_sync issue <N> "In progress" --only-from "Backlog,Ready"
+    fi
+fi
 ```
 
 The helper (`shell-common/functions/gh_project_status.sh`) handles:
