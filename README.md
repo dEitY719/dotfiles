@@ -217,8 +217,9 @@ mise run test     # bats + pytest + golden rules
 mise run fix      # ruff --fix + ruff format + shfmt -w  (mutating)
 ```
 
-A higher-level wrapper command (`devx <verb>`) lands in PR 2 of #722
-and consolidates `./tools/dev.sh`. Until then, call `mise run` directly.
+A higher-level wrapper command (`devx <verb>`) routes lint/fix/test through
+`mise run` and exposes repo helpers (`devx stat`, `devx lint-helpfunc`,
+`devx lint-deadcode`). Run `devx help` for the full sub-command list.
 
 #### Legacy — tox (deprecated, kept until PR 5 of #722)
 
