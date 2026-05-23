@@ -227,8 +227,9 @@ _devx_lint_deadcode() {
             [ -n "${_devx_func}" ] || continue
             _devx_checked=$((_devx_checked + 1))
 
-            _devx_count=$(grep -rw "${_devx_func}" "${_devx_root}" \
-                --include="*.sh" --include="*.zsh" --include="*.bash" 2>/dev/null \
+            _devx_count=$(find "${_devx_root}" \
+                \( -name "*.sh" -o -name "*.zsh" -o -name "*.bash" \) \
+                -exec grep -Fw "${_devx_func}" {} + 2>/dev/null \
                 | wc -l)
 
             if [ "${_devx_count}" -eq 1 ]; then
