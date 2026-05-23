@@ -20,7 +20,7 @@
 [tools]
 shellcheck = "0.10.0"
 shfmt      = "3.8.0"
-uv         = "latest"
+uv         = "0.10.12"
 # ruff version is pinned in pyproject.toml's dev group; mise here is a
 # fallback for environments that need the binary outside `uv run`.
 
@@ -43,7 +43,7 @@ run = [
 [tasks.lint-sh]
 description = "Shell lint (shellcheck + shfmt diff)"
 run = [
-    'find bash -type f \( -name "*.sh" -o -name "*.bash" \) -print0 | xargs -0 shellcheck -x -e SC1090,SC1091',
+    'find bash -type f \( -name "*.sh" -o -name "*.bash" \) -exec shellcheck -x -e SC1090,SC1091 {} +',
     "shfmt -d -i 4 bash/",
 ]
 
