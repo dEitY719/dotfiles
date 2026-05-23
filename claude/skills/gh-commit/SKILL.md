@@ -138,10 +138,20 @@ Skip the board sync entirely when no issue footer was written.
 
 ```bash
 # helper-fallback NF-1 (#644): silent-skip when helper missing.
+# Defense-in-depth (#724): also detect "[ -r ] passes but function never
+# defined" (interactive-guard regression, partial sourcing, future rename).
+# Without this gate `_gh_project_status_sync` would expand to nothing,
+# `command not found` (rc 127) gets absorbed by `|| true`, and the board
+# sync silently no-ops — exactly the failure surfaced in #724.
 _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
 if [ -r "$_HELPER" ]; then
     . "$_HELPER"
-    _gh_project_status_sync issue <ISSUE_NUMBER> "In progress" --only-from Backlog || true
+    if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
+        printf '[gh-commit] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
+            "$_HELPER" >&2
+    else
+        _gh_project_status_sync issue <ISSUE_NUMBER> "In progress" --only-from Backlog || true
+    fi
 fi
 ```
 

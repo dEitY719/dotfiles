@@ -62,14 +62,23 @@ Source the shared helper, then call it with the new PR number:
 
 ```bash
 # helper-fallback NF-1 (#644): silent-skip when helper missing.
+# Defense-in-depth (#724): also detect "[ -r ] passes but function never
+# defined" (interactive-guard regression, partial sourcing, future rename).
+# `|| true` would otherwise absorb `command not found` (rc 127) and the
+# entire reconciliation would silently no-op — the failure mode from #724.
 _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
 if [ -r "$_HELPER" ]; then
     . "$_HELPER"
-    _gh_project_status_sync pr "$PR_NUMBER" "In review" || true
-    for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO" 2>/dev/null || true); do
-        _gh_project_status_sync issue "$_issue" "In progress" \
-            --only-from "Backlog,Ready,In review" || true
-    done
+    if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
+        printf '[gh-pr] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
+            "$_HELPER" >&2
+    else
+        _gh_project_status_sync pr "$PR_NUMBER" "In review" || true
+        for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO" 2>/dev/null || true); do
+            _gh_project_status_sync issue "$_issue" "In progress" \
+                --only-from "Backlog,Ready,In review" || true
+        done
+    fi
 fi
 ```
 

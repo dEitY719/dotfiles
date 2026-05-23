@@ -16,10 +16,16 @@ the merge report — the helper logs to stderr and returns 0.
 
 ```bash
 # helper-fallback NF-1 (#644): silent-skip when helper missing.
+# Defense-in-depth (#724): also detect "sourced but function undefined".
 _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
 if [ -r "$_HELPER" ]; then
     . "$_HELPER"
-    GH_REPO="$TARGET_REPO" _gh_project_status_sync pr "$PR_NUMBER" "Done" || true
+    if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
+        printf '[gh-pr-merge] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
+            "$_HELPER" >&2
+    else
+        GH_REPO="$TARGET_REPO" _gh_project_status_sync pr "$PR_NUMBER" "Done" || true
+    fi
 fi
 ```
 
@@ -54,8 +60,9 @@ query, which is supported across all `gh` versions that ship the
 
 ```bash
 # Wrap inside the same [ -r "$_HELPER" ] block from step (1) so the closing-issue
-# helper is only called after the source succeeded. With the helper missing the
-# entire reconciliation is silently skipped (NF-1).
+# helper is only called after the source succeeded. With the helper missing
+# (NF-1, #644) OR sourced-but-function-undefined (#724) the entire
+# reconciliation is silently skipped — both gates live in step (1).
 for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$TARGET_REPO" 2>/dev/null || true); do
     GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$_issue" "Done" \
         --only-from "Backlog,In progress,In review" || true

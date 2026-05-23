@@ -16,10 +16,16 @@ Source the shared helper, then call it with the merged PR number:
 
 ```bash
 # helper-fallback NF-1 (#644): silent-skip when helper missing.
+# Defense-in-depth (#724): also detect "sourced but function undefined".
 _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
 if [ -r "$_HELPER" ]; then
     . "$_HELPER"
-    _gh_project_status_sync pr <PR_NUMBER> "Done" || true
+    if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
+        printf '[gh-pr-merge-emergency] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
+            "$_HELPER" >&2
+    else
+        _gh_project_status_sync pr <PR_NUMBER> "Done" || true
+    fi
 fi
 ```
 

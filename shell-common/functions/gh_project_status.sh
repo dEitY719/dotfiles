@@ -429,3 +429,17 @@ _gh_project_status_in_list() {
     esac
     return 1
 }
+
+# Self-check (issue #724): catch silent breakage where this file is sourceable
+# but the canonical entry point never gets defined — interactive-guard
+# regression, syntax error inside a function block, future rename without
+# updating callers, partial sourcing in a foreign env. Callers like
+# /gh-commit and /gh-pr source the file then invoke the function with
+# `|| true`, which absorbs `command not found` (rc 127) into a silent no-op
+# and hides the breakage from the operator. Prints one stderr line; rc
+# stays 0 so the helper's best-effort contract with `|| true` callers is
+# preserved.
+if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
+    printf '[gh_project_status] BUG: _gh_project_status_sync undefined after source — board sync will silently no-op. See dotfiles #724.\n' >&2
+fi
+:

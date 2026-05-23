@@ -116,10 +116,14 @@ Soft-fail — warn on any error, never block the Step 7 report.
 ```bash
 if [ "${PUSHED_FIXES:-0}" -gt 0 ]; then
     # helper-fallback NF-1 (#644): silent-skip when helper missing.
+    # Defense-in-depth (#724): also detect "sourced but function undefined".
     _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
     if [ -r "$_HELPER" ]; then
         . "$_HELPER"
-        if _gh_project_status_sync pr "$PR_NUMBER" "In review" \
+        if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
+            printf '[gh-pr-reply] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
+                "$_HELPER" >&2
+        elif _gh_project_status_sync pr "$PR_NUMBER" "In review" \
                 --only-from "In progress,Changes requested"; then
             echo "[OK] PR 카드 \`In review\` 로 복귀됨"
         else
