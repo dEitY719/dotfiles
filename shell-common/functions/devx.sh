@@ -1,66 +1,28 @@
 #!/bin/sh
 # shell-common/functions/devx.sh
-# Development helper - routes `devx <command>` to a repo-local `./tools/dev.sh`.
+# Dev helper — Type 2A positional dispatcher (issue #726 / #722 PR 2).
 #
-# Design goals:
-# - POSIX-compatible (safe for bash/zsh)
-# - Safe to source (no top-level side effects)
-# - Uses ux_lib output functions when available
+# Routes sub-commands to `mise run <task>` for lint/fix and to in-process
+# helpers for repo-internal checks (lint-helpfunc / lint-deadcode / stat).
+# Replaces tools/dev.sh, absorbing its full sub-command surface. Unknown
+# sub-commands fail fast (no passthrough) per command-design-pattern.md §6.
+#
+# Help lives in devx_help.sh (no `devx-help` alias — see §7.6.1 deviation
+# documented in devx_help.sh and PR body for #726).
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-devx__have() {
+# ============================================================================
+# Internal helpers
+# ============================================================================
+
+_devx_have() {
     command -v "$1" >/dev/null 2>&1
 }
 
-devx__is_digits() {
-    case "${1-}" in
-        ""|*[!0-9]*) return 1 ;;
-        *) return 0 ;;
-    esac
-}
-
-devx__log_info() {
-    if devx__have ux_info; then
-        ux_info "$*"
-        return 0
-    fi
-    printf '%s\n' "$*"
-}
-
-devx__log_run() {
-    if devx__have ux_info; then
-        ux_info "$*"
-        return 0
-    fi
-    printf '%s\n' "$*"
-}
-
-devx__log_ok() {
-    if devx__have ux_success; then
-        ux_success "$*"
-        return 0
-    fi
-    printf '%s\n' "$*"
-}
-
-devx__log_warn() {
-    if devx__have ux_warning; then
-        ux_warning "$*"
-        return 0
-    fi
-    printf '%s\n' "$*" >&2
-}
-
-devx__log_err() {
-    if devx__have ux_error; then
-        ux_error "$*"
-        return 0
-    fi
-    printf '%s\n' "$*" >&2
-}
-
-devx__dotfiles_root() {
+# Resolve the dotfiles repo root. Preference: DOTFILES_ROOT env, then
+# SHELL_COMMON parent, then walking up from PWD looking for mise.toml.
+_devx_dotfiles_root() {
     if [ -n "${DOTFILES_ROOT-}" ] && [ -d "${DOTFILES_ROOT}" ]; then
         printf '%s' "${DOTFILES_ROOT}"
         return 0
@@ -69,160 +31,256 @@ devx__dotfiles_root() {
     if [ -n "${SHELL_COMMON-}" ]; then
         case "${SHELL_COMMON}" in
             */shell-common)
-                devx__tmp_root=${SHELL_COMMON%/shell-common}
-                if [ -n "${devx__tmp_root}" ] && [ -d "${devx__tmp_root}" ]; then
-                    printf '%s' "${devx__tmp_root}"
-                    unset devx__tmp_root
+                _devx_tmp_root=${SHELL_COMMON%/shell-common}
+                if [ -d "${_devx_tmp_root}" ]; then
+                    printf '%s' "${_devx_tmp_root}"
+                    unset _devx_tmp_root
                     return 0
                 fi
                 ;;
         esac
     fi
 
-    unset devx__tmp_root
-    return 1
-}
-
-devx__find_root() {
-    devx__dir=$PWD
-    while [ "${devx__dir}" != "/" ]; do
-        if [ -f "${devx__dir}/tools/dev.sh" ]; then
-            printf '%s' "${devx__dir}"
-            unset devx__dir
+    _devx_dir=$PWD
+    while [ "${_devx_dir}" != "/" ]; do
+        if [ -f "${_devx_dir}/mise.toml" ]; then
+            printf '%s' "${_devx_dir}"
+            unset _devx_dir _devx_tmp_root
             return 0
         fi
-        devx__dir=$(dirname "${devx__dir}")
+        _devx_dir=$(dirname "${_devx_dir}")
     done
-    unset devx__dir
+
+    unset _devx_dir _devx_tmp_root
     return 1
 }
 
-devx__usage() {
-    if devx__have ux_section && devx__have ux_bullet; then
-        ux_section "devx"
-        devx__log_info "Usage: devx <command>"
+_devx_require_mise() {
+    if ! _devx_have mise; then
+        ux_error "mise not found — install: curl https://mise.run | sh"
+        ux_info "Then run: mise install"
+        return 1
+    fi
+}
 
-        ux_section "Commands"
-        ux_bullet "stat        - Show dotfiles repo statistics"
-        ux_bullet "<command>    - Delegated to ./tools/dev.sh in project root"
+# Run a mise task from the dotfiles repo root. Args: <task> [extra-args...]
+_devx_run_mise() {
+    _devx_require_mise || return 1
+    _devx_root=$(_devx_dotfiles_root 2>/dev/null) || {
+        ux_error "Cannot locate dotfiles repo (set DOTFILES_ROOT or run inside the repo)"
+        unset _devx_root
+        return 1
+    }
+    (cd "${_devx_root}" && mise run "$@")
+    _devx_rc=$?
+    unset _devx_root
+    return "${_devx_rc}"
+}
 
-        ux_section "Notes"
-        ux_bullet "Project root is discovered by walking up to find tools/dev.sh"
-        ux_bullet "SSOT: out of scope for this command"
+# ============================================================================
+# Sub-command implementations
+# ============================================================================
+
+_devx_lint() {
+    _devx_run_mise lint "$@"
+}
+
+_devx_fix() {
+    _devx_run_mise fix "$@"
+}
+
+# `devx fmt` / `devx format` — routed to fix with a one-time deprecation
+# warning per issue #726 AC.
+_devx_fmt_deprecated() {
+    ux_warning "'devx fmt' / 'devx format' is deprecated — use 'devx fix' (mise run fix)."
+    _devx_fix "$@"
+}
+
+_devx_stat() {
+    _devx_root=$(_devx_dotfiles_root 2>/dev/null) || {
+        ux_error "DOTFILES_ROOT/SHELL_COMMON not set; cannot locate dotfiles repo"
+        unset _devx_root
+        return 1
+    }
+    _devx_tool="${_devx_root}/shell-common/tools/custom/repo_stats.sh"
+    if [ ! -f "${_devx_tool}" ]; then
+        ux_error "Missing: ${_devx_tool}"
+        unset _devx_root _devx_tool
+        return 1
+    fi
+    if ! _devx_have bash; then
+        ux_error "bash is required to run ${_devx_tool}"
+        unset _devx_root _devx_tool
+        return 1
+    fi
+
+    bash "${_devx_tool}" "$@"
+    _devx_rc=$?
+    unset _devx_root _devx_tool
+    return "${_devx_rc}"
+}
+
+# Audit shell-common/functions/*.sh for public *help functions that are
+# missing from HELP_DESCRIPTIONS in my_help.sh. Mirrors the legacy
+# _check_help_integrity from the deleted tools/dev.sh, ported to POSIX.
+_devx_lint_helpfunc() {
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
+
+    _devx_root=$(_devx_dotfiles_root 2>/dev/null) || {
+        ux_error "DOTFILES_ROOT/SHELL_COMMON not set; cannot locate dotfiles repo"
+        unset _devx_root
+        return 1
+    }
+    _devx_my_help="${_devx_root}/shell-common/functions/my_help.sh"
+    if [ ! -f "${_devx_my_help}" ]; then
+        ux_error "Missing: ${_devx_my_help}"
+        unset _devx_root _devx_my_help
+        return 1
+    fi
+
+    _devx_files=$(find "${_devx_root}/shell-common/functions" -name "*.sh" -type f 2>/dev/null)
+    _devx_found=0
+    _devx_checked=0
+    _devx_violations=""
+
+    while IFS= read -r _devx_file; do
+        [ -n "${_devx_file}" ] || continue
+        # Public *help function names — ending in "help", not starting with `_`.
+        _devx_funcs=$(grep -E '^[[:space:]]*(function[[:space:]]+)?[a-zA-Z][a-zA-Z0-9_-]*help[[:space:]]*(\(\))?[[:space:]]*\{' "${_devx_file}" 2>/dev/null \
+            | sed -E 's/^[[:space:]]*(function[[:space:]]+)?//; s/[[:space:]]*(\(\))?[[:space:]]*\{.*//' \
+            | grep -v '^_')
+
+        while IFS= read -r _devx_func; do
+            [ -n "${_devx_func}" ] || continue
+            _devx_checked=$((_devx_checked + 1))
+
+            _devx_dash=$(printf '%s' "${_devx_func}" | tr '_' '-')
+            _devx_underscore=$(printf '%s' "${_devx_func}" | tr '-' '_')
+
+            if ! grep -Eq "HELP_DESCRIPTIONS\[\"?(${_devx_func}|${_devx_dash}|${_devx_underscore})\"?\]" "${_devx_my_help}" 2>/dev/null; then
+                _devx_rel="${_devx_file#"${_devx_root}/"}"
+                _devx_violations="${_devx_violations}  - ${_devx_rel}: '${_devx_func}' not registered in HELP_DESCRIPTIONS
+"
+                _devx_found=$((_devx_found + 1))
+            fi
+        done <<EOF
+${_devx_funcs}
+EOF
+    done <<EOF
+${_devx_files}
+EOF
+
+    if [ "${_devx_checked}" -eq 0 ]; then
+        ux_info "No public *help functions found in shell-common/functions/."
+        unset _devx_root _devx_my_help _devx_files _devx_file _devx_funcs _devx_func _devx_dash _devx_underscore _devx_rel _devx_violations _devx_found _devx_checked
         return 0
     fi
 
-    printf '%s\n' "Usage: devx <command>"
-    printf '%s\n' ""
-    printf '%s\n' "Commands:"
-    printf '%s\n' "  stat        Show dotfiles repo statistics"
-    printf '%s\n' "  <command>   Delegated to ./tools/dev.sh in project root"
+    if [ "${_devx_found}" -eq 0 ]; then
+        ux_success "All ${_devx_checked} public help functions are registered in HELP_DESCRIPTIONS."
+        unset _devx_root _devx_my_help _devx_files _devx_file _devx_funcs _devx_func _devx_dash _devx_underscore _devx_rel _devx_violations _devx_found _devx_checked
+        return 0
+    fi
+
+    ux_warning "Found ${_devx_found} unregistered help function(s) out of ${_devx_checked} checked:"
+    printf '%s' "${_devx_violations}"
+    unset _devx_root _devx_my_help _devx_files _devx_file _devx_funcs _devx_func _devx_dash _devx_underscore _devx_rel _devx_violations _devx_found _devx_checked
+    return 1
 }
 
-devx__run_repo_stats() {
-    devx__repo_root=$(devx__dotfiles_root 2>/dev/null || printf '')
-    if [ -z "${devx__repo_root}" ]; then
-        devx__log_err "DOTFILES_ROOT/SHELL_COMMON not set; cannot locate dotfiles repo"
-        unset devx__repo_root
+# Flag _internal functions in shell-common/functions/*.sh that are
+# referenced only once (their own definition) across the repo — candidates
+# for removal. Ported from the legacy _check_deadcode in tools/dev.sh.
+_devx_lint_deadcode() {
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
+
+    _devx_root=$(_devx_dotfiles_root 2>/dev/null) || {
+        ux_error "DOTFILES_ROOT/SHELL_COMMON not set; cannot locate dotfiles repo"
+        unset _devx_root
+        return 1
+    }
+    _devx_fnsdir="${_devx_root}/shell-common/functions"
+    if [ ! -d "${_devx_fnsdir}" ]; then
+        ux_error "Missing: ${_devx_fnsdir}"
+        unset _devx_root _devx_fnsdir
         return 1
     fi
 
-    devx__tool_path="${devx__repo_root}/shell-common/tools/custom/repo_stats.sh"
-    if [ ! -f "${devx__tool_path}" ]; then
-        devx__log_err "Could not find repo_stats.sh at ${devx__tool_path}"
-        unset devx__repo_root devx__tool_path
-        return 1
+    _devx_files=$(find "${_devx_fnsdir}" -name "*.sh" -type f 2>/dev/null)
+    _devx_found=0
+    _devx_checked=0
+    _devx_report=""
+
+    while IFS= read -r _devx_file; do
+        [ -n "${_devx_file}" ] || continue
+        _devx_hits=$(grep -n "^[[:space:]]*_[a-z_][a-z0-9_]*()[[:space:]]*{" "${_devx_file}" 2>/dev/null)
+
+        while IFS= read -r _devx_line; do
+            [ -n "${_devx_line}" ] || continue
+            _devx_lineno="${_devx_line%%:*}"
+            _devx_text="${_devx_line#*:}"
+            _devx_func=$(printf '%s' "${_devx_text}" | sed -E 's/^[[:space:]]*(_[a-z_][a-z0-9_]*)\(\).*/\1/')
+            [ -n "${_devx_func}" ] || continue
+            _devx_checked=$((_devx_checked + 1))
+
+            _devx_count=$(grep -rw "${_devx_func}" "${_devx_root}" \
+                --include="*.sh" --include="*.zsh" --include="*.bash" 2>/dev/null \
+                | wc -l)
+
+            if [ "${_devx_count}" -eq 1 ]; then
+                _devx_rel="${_devx_file#"${_devx_root}/"}"
+                _devx_report="${_devx_report}  - ${_devx_rel}:${_devx_lineno} potentially unused: ${_devx_func}()
+"
+                _devx_found=$((_devx_found + 1))
+            fi
+        done <<EOF
+${_devx_hits}
+EOF
+    done <<EOF
+${_devx_files}
+EOF
+
+    if [ "${_devx_checked}" -eq 0 ]; then
+        ux_info "No _internal functions found in shell-common/functions/."
+        unset _devx_root _devx_fnsdir _devx_files _devx_file _devx_hits _devx_line _devx_lineno _devx_text _devx_func _devx_count _devx_rel _devx_report _devx_found _devx_checked
+        return 0
     fi
 
-    if ! devx__have bash; then
-        devx__log_err "bash is required to run ${devx__tool_path}"
-        unset devx__repo_root devx__tool_path
-        return 1
+    if [ "${_devx_found}" -eq 0 ]; then
+        ux_success "All ${_devx_checked} internal functions are in use."
+        unset _devx_root _devx_fnsdir _devx_files _devx_file _devx_hits _devx_line _devx_lineno _devx_text _devx_func _devx_count _devx_rel _devx_report _devx_found _devx_checked
+        return 0
     fi
 
-    bash "${devx__tool_path}" "$@"
-    devx__rc=$?
-    unset devx__repo_root devx__tool_path
-    return "${devx__rc}"
+    ux_warning "Found ${_devx_found} potentially unused internal function(s) out of ${_devx_checked} checked:"
+    printf '%s' "${_devx_report}"
+    unset _devx_root _devx_fnsdir _devx_files _devx_file _devx_hits _devx_line _devx_lineno _devx_text _devx_func _devx_count _devx_rel _devx_report _devx_found _devx_checked
+    return 1
 }
 
-devx__main_impl() {
-    if [ $# -eq 0 ]; then
-        devx__usage
-        return 2
-    fi
-
-    case "$1" in
-        -h|--help|help)
-            devx__usage
-            return 0
+# ============================================================================
+# devx — Type 2A dispatcher
+# ============================================================================
+devx() {
+    case "${1:-}" in
+        lint)          shift; _devx_lint "$@" ;;
+        fix)           shift; _devx_fix "$@" ;;
+        fmt|format)    shift; _devx_fmt_deprecated "$@" ;;
+        lint-helpfunc) shift; _devx_lint_helpfunc "$@" ;;
+        lint-deadcode) shift; _devx_lint_deadcode "$@" ;;
+        stat)          shift; _devx_stat "$@" ;;
+        -h|--help|help|"")
+            [ $# -gt 0 ] && shift
+            devx_help "$@"
             ;;
-        stat)
-            shift
-            devx__run_repo_stats "$@"
-            return $?
+        *)
+            ux_error "Unknown command: $1"
+            ux_info "Run: devx help"
+            return 1
             ;;
     esac
-
-    if ! devx__have bash; then
-        devx__log_err "bash is required to run tools/dev.sh"
-        return 1
-    fi
-
-    devx__cwd=$PWD
-    devx__root=$(devx__find_root 2>/dev/null) || devx__root=""
-    if [ -z "${devx__root}" ]; then
-        devx__log_err "Could not find tools/dev.sh from ${devx__cwd}"
-        unset devx__cwd devx__root
-        return 1
-    fi
-
-    devx__use_ns=0
-    devx__t_start_ns=$(date +%s%N 2>/dev/null || printf '')
-    if devx__is_digits "${devx__t_start_ns}"; then
-        devx__use_ns=1
-    else
-        devx__t_start_s=$(date +%s 2>/dev/null || printf '0')
-    fi
-
-    devx__cmd_str=$*
-    devx__log_info "from='${devx__cwd}' -> root='${devx__root}' cmd='${devx__cmd_str}'"
-    devx__log_run "${devx__root}/tools/dev.sh ${devx__cmd_str}"
-
-    (cd "${devx__root}" && bash "tools/dev.sh" "$@")
-    devx__rc=$?
-
-    devx__dur_ms=""
-    if [ "${devx__use_ns}" = "1" ]; then
-        devx__t_end_ns=$(date +%s%N 2>/dev/null || printf '')
-        if devx__is_digits "${devx__t_end_ns}"; then
-            devx__dur_ms=$(((devx__t_end_ns - devx__t_start_ns) / 1000000))
-        fi
-    else
-        devx__t_end_s=$(date +%s 2>/dev/null || printf '0')
-        if devx__is_digits "${devx__t_start_s}" && devx__is_digits "${devx__t_end_s}"; then
-            devx__dur_ms=$(((devx__t_end_s - devx__t_start_s) * 1000))
-        fi
-    fi
-
-    if [ -n "${devx__dur_ms}" ]; then
-        devx__dur_str="${devx__dur_ms}ms"
-    else
-        devx__dur_str="(duration unavailable)"
-    fi
-
-    if [ "${devx__rc}" -eq 0 ]; then
-        devx__log_ok "exit_code=0 duration=${devx__dur_str}"
-    else
-        devx__log_err "exit_code=${devx__rc} duration=${devx__dur_str}"
-    fi
-
-    unset devx__cwd devx__root devx__use_ns devx__t_start_ns devx__t_start_s devx__t_end_ns devx__t_end_s
-    unset devx__cmd_str devx__dur_ms devx__dur_str
-
-    return "${devx__rc}"
-}
-
-devx() {
-    devx__main_impl "$@"
 }

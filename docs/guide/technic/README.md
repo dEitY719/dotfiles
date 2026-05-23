@@ -113,7 +113,7 @@
 
 ```bash
 # 1. 테스트 실행 (기본: 병렬)
-./tools/dev.sh test
+mise run test
 # 결과: 8-9초 (275개 테스트)
 
 # 2. 상세 실행

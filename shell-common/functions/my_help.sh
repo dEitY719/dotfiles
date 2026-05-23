@@ -159,7 +159,7 @@ _register_default_help_categories() {
     HELP_CATEGORIES[terminal]="${HELP_CATEGORIES[terminal]:-Terminal utilities (tab rename, VSCode integration)}"
 
     # Category membership (space-separated topic keys)
-    HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git gwt gbr uv py nvm npm bun pp cli ux du psql mytool}"
+    HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git gwt gbr devx uv py nvm npm bun pp cli ux du psql mytool}"
     HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql redis gpu network}"
     HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc gemini codex litellm ollama claude_plugins claude_skills_marketplace superpowers}"
     HELP_CATEGORY_MEMBERS[cli]="${HELP_CATEGORY_MEMBERS[cli]:-fzf fd fasd ripgrep pet bat zsh zsh_autosuggestions gc tmux}"
@@ -200,6 +200,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[git_help]="${HELP_DESCRIPTIONS[git_help]:-[Development] Git version control shortcuts}"
     HELP_DESCRIPTIONS[gwt_help]="${HELP_DESCRIPTIONS[gwt_help]:-[Development] Git worktree command guide}"
     HELP_DESCRIPTIONS[gbr_help]="${HELP_DESCRIPTIONS[gbr_help]:-[Development] Git feature-branch teardown guide}"
+    HELP_DESCRIPTIONS[devx_help]="${HELP_DESCRIPTIONS[devx_help]:-[Development] Dev helper — mise wrapper + repo checks}"
     HELP_DESCRIPTIONS[py_help]="${HELP_DESCRIPTIONS[py_help]:-[Development] Python environments and tooling}"
     HELP_DESCRIPTIONS[dir_help]="${HELP_DESCRIPTIONS[dir_help]:-[System] Directory navigation shortcuts}"
     HELP_DESCRIPTIONS[sys_help]="${HELP_DESCRIPTIONS[sys_help]:-[DevOps] System management helpers}"
@@ -254,6 +255,19 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[work_log_help]="${HELP_DESCRIPTIONS[work_log_help]:-[Docs] Work log tracking}"
     HELP_DESCRIPTIONS[work_help]="${HELP_DESCRIPTIONS[work_help]:-[Docs] Work management}"
     HELP_DESCRIPTIONS[term_help]="${HELP_DESCRIPTIONS[term_help]:-[Terminal] VSCode tab rename + terminal utilities}"
+
+    # Registrations to keep `devx lint-helpfunc` clean (#726 AC). Each entry
+    # mirrors an existing public `<topic>_help` function in shell-common/functions/
+    # that previously slipped through the registry.
+    HELP_DESCRIPTIONS[gh_flow_help]="${HELP_DESCRIPTIONS[gh_flow_help]:-[Development] gh-flow issue/PR worker pipeline}"
+    HELP_DESCRIPTIONS[gh_pr_review_help]="${HELP_DESCRIPTIONS[gh_pr_review_help]:-[Development] gh-pr-review external-AI review delegation}"
+    HELP_DESCRIPTIONS[gh_pr_reply_help]="${HELP_DESCRIPTIONS[gh_pr_reply_help]:-[Development] gh-pr-reply review-comment handler}"
+    HELP_DESCRIPTIONS[gh_pr_approve_help]="${HELP_DESCRIPTIONS[gh_pr_approve_help]:-[Development] gh-pr-approve PR approval workflow}"
+    HELP_DESCRIPTIONS[gh_audit_builtin_workflows_help]="${HELP_DESCRIPTIONS[gh_audit_builtin_workflows_help]:-[Development] gh audit-builtin-workflows scan}"
+    HELP_DESCRIPTIONS[hook_help]="${HELP_DESCRIPTIONS[hook_help]:-[Development] Git hook management}"
+    HELP_DESCRIPTIONS[gcp_help]="${HELP_DESCRIPTIONS[gcp_help]:-[DevOps] gcloud / GCP helpers}"
+    HELP_DESCRIPTIONS[setup_mode_help]="${HELP_DESCRIPTIONS[setup_mode_help]:-[Meta] setup.sh mode flags}"
+    HELP_DESCRIPTIONS[zsh_autosuggestions_install_help]="${HELP_DESCRIPTIONS[zsh_autosuggestions_install_help]:-[CLI] zsh-autosuggestions installer}"
 }
 
 # ═══════════════════════════════════════════════════════════════
