@@ -285,3 +285,45 @@ TOX
     assert_output --partial "shellcheck FAILED"
     assert_output --partial "GH_PR_LINT_BYPASS=1"
 }
+
+# ---------------------------------------------------------------------------
+# Self-check (#724) — "helper present but function undefined" canary.
+# Codex review on PR #725 flagged the gap: gh_pr_lint.sh grew the same
+# trailing self-check as gh_project_status.sh, but there were no Bats
+# cases proving (a) the warning stays silent on a healthy source and
+# (b) it fires when `_gh_pr_lint_run` is undefined post-source.
+# ---------------------------------------------------------------------------
+
+@test "self-check (#724): healthy gh_pr_lint source emits no BUG warning" {
+    # Sanity: sourcing the real helper defines `_gh_pr_lint_run`.
+    # The tail self-check should see `command -v` succeed and stay
+    # silent — guards against a false-positive warning on the happy
+    # path.
+    run bash --noprofile --norc -c \
+        ". \"${SHELL_COMMON}/functions/gh_pr_lint.sh\" 2>&1; echo \"rc=\$?\""
+    assert_success
+    assert_output --partial "rc=0"
+    refute_output --partial "BUG: _gh_pr_lint_run undefined"
+}
+
+@test "self-check (#724): regressed gh_pr_lint helper triggers stderr warning" {
+    # Synthesize the failure mode #724 targets: future regression (typo,
+    # rename, interactive-guard early-return) leaves the file sourceable
+    # but `_gh_pr_lint_run` undefined. The tail self-check MUST print a
+    # stderr warning while keeping rc 0 so caller's `||` chains stay
+    # intact.
+    cat >"$BATS_TEST_TMPDIR/regressed_lint.sh" <<'STUB'
+#!/bin/sh
+# Simulate: future regression — _gh_pr_lint_run never gets defined.
+# Trailing self-check (copied verbatim from gh_pr_lint.sh tail):
+if ! command -v _gh_pr_lint_run >/dev/null 2>&1; then
+    printf '[gh_pr_lint] BUG: _gh_pr_lint_run undefined after source — pre-push lint will silently no-op. See dotfiles #724.\n' >&2
+fi
+:
+STUB
+    run bash --noprofile --norc -c \
+        ". \"$BATS_TEST_TMPDIR/regressed_lint.sh\" 2>&1; echo \"rc=\$?\""
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "BUG: _gh_pr_lint_run undefined after source"
+}

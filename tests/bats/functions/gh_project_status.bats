@@ -700,30 +700,35 @@ _run_full_bash() {
 # ---------------------------------------------------------------------------
 
 @test "self-check (#724): healthy source emits no BUG warning to stderr" {
-    # Sanity: the real helper defines `_gh_project_status_sync`. The
-    # tail-of-file self-check should see `command -v` succeed and stay
-    # silent. Catches future regressions where the warning fires on
-    # the happy path (false positive).
+    # Sanity: the real helper defines all three public entry points.
+    # The tail-of-file self-check should see `command -v` succeed for
+    # each and stay silent. Catches future regressions where the
+    # warning fires on the happy path (false positive).
     run bash --noprofile --norc -c \
         ". \"${SHELL_COMMON}/functions/gh_project_status.sh\" 2>&1; echo \"rc=\$?\""
     assert_success
     assert_output --partial "rc=0"
-    refute_output --partial "BUG: _gh_project_status_sync undefined"
+    refute_output --partial "BUG: public functions undefined"
 }
 
 @test "self-check (#724): typo'd/missing function still triggers stderr warning" {
     # Synthesize the failure mode that #724 documents: a helper file
     # whose top-level guards / typos / partial sourcing prevent the
-    # canonical function from ever getting defined. The self-check
+    # canonical functions from ever getting defined. The self-check
     # snippet (mirroring the trailer in gh_project_status.sh) MUST
     # print a stderr warning and the file MUST still return rc 0 so
-    # callers' `|| true` chains stay intact.
+    # callers' `|| true` chains stay intact. Per gemini-code-assist
+    # review on PR #725 the canary covers three public entry points
+    # (sync / query_current / closing_issue_numbers); the bare stub
+    # below leaves all three undefined.
     cat >"$BATS_TEST_TMPDIR/regressed_helper.sh" <<'STUB'
 #!/bin/sh
-# Simulate: future regression — function definition removed/renamed.
+# Simulate: future regression — every public function removed/renamed.
 # Trailing self-check (copied verbatim from gh_project_status.sh tail):
-if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
-    printf '[gh_project_status] BUG: _gh_project_status_sync undefined after source — board sync will silently no-op. See dotfiles #724.\n' >&2
+if ! command -v _gh_project_status_sync >/dev/null 2>&1 \
+    || ! command -v _gh_project_status_query_current >/dev/null 2>&1 \
+    || ! command -v _gh_pr_closing_issue_numbers >/dev/null 2>&1; then
+    printf '[gh_project_status] BUG: public functions undefined after source — board sync / closing-issue link will silently no-op. See dotfiles #724.\n' >&2
 fi
 :
 STUB
@@ -732,5 +737,5 @@ STUB
     assert_success
     assert_output --partial "rc=0"
     assert_output --partial \
-        "BUG: _gh_project_status_sync undefined after source"
+        "BUG: public functions undefined after source"
 }
