@@ -431,7 +431,7 @@ _gh_project_status_in_list() {
 }
 
 # Self-check (issue #724): catch silent breakage where this file is sourceable
-# but the canonical entry point never gets defined — interactive-guard
+# but a canonical entry point never gets defined — interactive-guard
 # regression, syntax error inside a function block, future rename without
 # updating callers, partial sourcing in a foreign env. Callers like
 # /gh-commit and /gh-pr source the file then invoke the function with
@@ -439,7 +439,17 @@ _gh_project_status_in_list() {
 # and hides the breakage from the operator. Prints one stderr line; rc
 # stays 0 so the helper's best-effort contract with `|| true` callers is
 # preserved.
-if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
-    printf '[gh_project_status] BUG: _gh_project_status_sync undefined after source — board sync will silently no-op. See dotfiles #724.\n' >&2
+#
+# Three public entry points are checked (matches the multi-function pattern
+# in gh_pr_edit_safe.sh):
+#   - _gh_project_status_sync          (write API; used by every gh-* skill)
+#   - _gh_project_status_query_current (read API; gh-pr-merge Step 2-B gate)
+#   - _gh_pr_closing_issue_numbers     (PR→issue link; gh-pr, gh-pr-merge)
+# If any one is missing the helper is broken as a whole — fail loudly.
+# Per gemini-code-assist review on PR #725.
+if ! command -v _gh_project_status_sync >/dev/null 2>&1 \
+    || ! command -v _gh_project_status_query_current >/dev/null 2>&1 \
+    || ! command -v _gh_pr_closing_issue_numbers >/dev/null 2>&1; then
+    printf '[gh_project_status] BUG: public functions undefined after source — board sync / closing-issue link will silently no-op. See dotfiles #724.\n' >&2
 fi
 :

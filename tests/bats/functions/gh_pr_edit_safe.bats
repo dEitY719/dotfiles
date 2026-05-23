@@ -269,3 +269,71 @@ _run_helper() {
     assert_output --partial "rc=1"
     assert_output --partial "REST POST failed"
 }
+
+# ---------------------------------------------------------------------------
+# Self-check (#724) — "helper present but wrappers undefined" canary.
+# Codex review on PR #725 flagged the gap: gh_pr_edit_safe.sh grew a
+# multi-function self-check (verifies BOTH `_gh_pr_edit_safe_label` and
+# `_gh_pr_edit_safe_body`) but there were no Bats cases proving (a) the
+# warning stays silent on a healthy source and (b) it fires when either
+# wrapper is undefined post-source.
+# ---------------------------------------------------------------------------
+
+@test "self-check (#724): healthy gh_pr_edit_safe source emits no BUG warning" {
+    # Sanity: sourcing the real helper defines both wrappers; the tail
+    # self-check should see both `command -v` checks succeed and stay
+    # silent. Catches a future regression where the warning fires on
+    # the happy path (false positive).
+    run bash --noprofile --norc -c \
+        ". \"${SHELL_COMMON}/functions/gh_pr_edit_safe.sh\" 2>&1; echo \"rc=\$?\""
+    assert_success
+    assert_output --partial "rc=0"
+    refute_output --partial "BUG: _gh_pr_edit_safe_"
+}
+
+@test "self-check (#724): regressed gh_pr_edit_safe (no wrappers) prints warning" {
+    # Synthesize the failure mode #724 targets: future regression leaves
+    # the file sourceable but neither wrapper gets defined. The tail
+    # self-check MUST print a stderr warning while keeping rc 0 so
+    # caller's `||` chains stay intact.
+    cat >"$BATS_TEST_TMPDIR/regressed_edit_safe.sh" <<'STUB'
+#!/bin/sh
+# Simulate: future regression — both wrappers never get defined.
+# Trailing self-check (copied verbatim from gh_pr_edit_safe.sh tail):
+if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1 \
+    || ! command -v _gh_pr_edit_safe_body >/dev/null 2>&1; then
+    printf '[gh_pr_edit_safe] BUG: _gh_pr_edit_safe_{label,body} undefined after source — PR edit safe-fallback will silently no-op. See dotfiles #724.\n' >&2
+fi
+:
+STUB
+    run bash --noprofile --norc -c \
+        ". \"$BATS_TEST_TMPDIR/regressed_edit_safe.sh\" 2>&1; echo \"rc=\$?\""
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial \
+        "BUG: _gh_pr_edit_safe_{label,body} undefined after source"
+}
+
+@test "self-check (#724): partial wrappers (label only) still triggers warning" {
+    # Multi-function check must catch the case where ONE wrapper is
+    # defined but the other isn't (typo / partial sourcing). Defines
+    # only `_gh_pr_edit_safe_label`; the `||` between the two
+    # `command -v` clauses MUST fire on the missing `_body`.
+    cat >"$BATS_TEST_TMPDIR/partial_edit_safe.sh" <<'STUB'
+#!/bin/sh
+# Define label wrapper only — body wrapper is missing.
+_gh_pr_edit_safe_label() { return 0; }
+# Trailing self-check (copied verbatim from gh_pr_edit_safe.sh tail):
+if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1 \
+    || ! command -v _gh_pr_edit_safe_body >/dev/null 2>&1; then
+    printf '[gh_pr_edit_safe] BUG: _gh_pr_edit_safe_{label,body} undefined after source — PR edit safe-fallback will silently no-op. See dotfiles #724.\n' >&2
+fi
+:
+STUB
+    run bash --noprofile --norc -c \
+        ". \"$BATS_TEST_TMPDIR/partial_edit_safe.sh\" 2>&1; echo \"rc=\$?\""
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial \
+        "BUG: _gh_pr_edit_safe_{label,body} undefined after source"
+}
