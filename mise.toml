@@ -1,0 +1,69 @@
+# mise.toml — Tool versions + task SSOT (issue #722, PR 1: dual-spec)
+#
+# Coexists with tox.ini during the migration window. Both runners
+# produce equivalent results for the same target; tox.ini is removed
+# in PR 5.
+#
+# Bootstrap (one-time, per machine):
+#   curl https://mise.run | sh        # or `brew install mise`
+#   mise install                       # installs pinned tool versions
+#
+# Daily use:
+#   mise run lint   # ruff + mypy + shellcheck + shfmt -d   (read-only)
+#   mise run test   # ./tests/test (bats + pytest + golden rules)
+#   mise run fix    # ruff --fix + ruff format + shfmt -w   (mutating)
+#
+# References:
+#   https://mise.jdx.dev/
+#   docs/.ssot/command-design-pattern.md  — devx wrapper SSOT (PR 2)
+
+[tools]
+shellcheck = "0.10.0"
+shfmt      = "3.8.0"
+uv         = "latest"
+# ruff version is pinned in pyproject.toml's dev group; mise here is a
+# fallback for environments that need the binary outside `uv run`.
+
+[env]
+DOTFILES_ROOT = "{{ config_root }}"
+
+# ─── Lint gates (read-only) ──────────────────────────────────────────
+[tasks.lint]
+description = "전체 lint (Python + Shell)"
+depends     = ["lint-py", "lint-sh"]
+
+[tasks.lint-py]
+description = "Python lint (ruff check + format check + mypy)"
+run = [
+    "uv run ruff check .",
+    "uv run ruff format --check .",
+    "uv run mypy .",
+]
+
+[tasks.lint-sh]
+description = "Shell lint (shellcheck + shfmt diff)"
+run = [
+    'find bash -type f \( -name "*.sh" -o -name "*.bash" \) -print0 | xargs -0 shellcheck -x -e SC1090,SC1091',
+    "shfmt -d -i 4 bash/",
+]
+
+# ─── Test gate ───────────────────────────────────────────────────────
+[tasks.test]
+description = "전체 테스트 (bats + pytest + golden rules)"
+run = "./tests/test"
+
+# ─── Auto-fix (mutating) ─────────────────────────────────────────────
+[tasks.fix]
+description = "전체 auto-fix (ruff + shfmt)"
+depends     = ["fix-py", "fix-sh"]
+
+[tasks.fix-py]
+description = "Python auto-fix (ruff check --fix + ruff format)"
+run = [
+    "uv run ruff check --fix .",
+    "uv run ruff format .",
+]
+
+[tasks.fix-sh]
+description = "Shell auto-format (shfmt -w)"
+run = "shfmt -w -i 4 bash/"

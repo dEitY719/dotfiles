@@ -194,18 +194,39 @@ gcrestore
 
 ### Code Quality
 
+This repo is migrating from `tox` to **mise** for task orchestration
+(issue [#722](https://github.com/dEitY719/dotfiles/issues/722)). Both
+runners work during the migration window and produce equivalent results.
+
+#### Preferred — mise (new)
+
+One-time bootstrap:
+
 ```bash
-# Check shell scripts
-tox -e shellcheck
+curl https://mise.run | sh   # or: brew install mise
+mise install                  # installs pinned shellcheck / shfmt / uv
+```
 
-# Format shell scripts
-tox -e shfmt
+Daily use:
 
-# Check Python code
-tox -e ruff
+```bash
+mise run lint     # ruff + mypy + shellcheck + shfmt -d  (read-only)
+mise run lint-py  # Python only
+mise run lint-sh  # Shell only
+mise run test     # bats + pytest + golden rules
+mise run fix      # ruff --fix + ruff format + shfmt -w  (mutating)
+```
 
-# All checks
-tox
+A higher-level wrapper command (`devx <verb>`) lands in PR 2 of #722
+and consolidates `./tools/dev.sh`. Until then, call `mise run` directly.
+
+#### Legacy — tox (deprecated, kept until PR 5 of #722)
+
+```bash
+tox -e shellcheck   # equivalent to: mise run lint-sh
+tox -e shfmt        # equivalent to: mise run fix-sh
+tox -e ruff         # equivalent to: mise run fix-py
+tox                 # equivalent to: mise run lint
 ```
 
 ## 💡 Key Commands
@@ -253,4 +274,4 @@ For more help, see [Setup Guide](docs/guide/setup.md).
 
 - [Setup Guide](docs/guide/setup.md) - Detailed setup and configuration
 - [Shell-Common Documentation](shell-common/README.md) - Shared code overview
-- Configuration files in `pyproject.toml` and `tox.ini`
+- Configuration files in `pyproject.toml`, `mise.toml`, and `tox.ini` (legacy — see #722)
