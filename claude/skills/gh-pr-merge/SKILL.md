@@ -70,14 +70,21 @@ on the team's projectV2 board column.
 ```bash
 # Reuse the SSOT query helper — never inline a fresh GraphQL block.
 # helper-fallback NF-1 (#644): silent-skip when helper missing; never hard-fail.
+# Defense-in-depth (#724): a sourced-but-undefined function would let
+# `_gh_project_status_query_current` expand to nothing, BOARD_STATUS would
+# be empty, and the empty-status branch would silently let merges through
+# — bypassing the board approval gate. Detect that case explicitly.
 _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
 if [ -r "$_HELPER" ]; then
     . "$_HELPER"
 
+    if ! command -v _gh_project_status_query_current >/dev/null 2>&1; then
+        printf '[gh-pr-merge] %s sourced but _gh_project_status_query_current undefined — board approval gate skipped (#724).\n' \
+            "$_HELPER" >&2
     # Operator escape hatch: GH_PR_MERGE_SKIP_BOARD_CHECK=1
     # Use for in-transition repos or one-shot ops (also leaves an audit signal:
     # any reviewer can re-run gh-pr-merge without the env var to verify).
-    if [ "${GH_PR_MERGE_SKIP_BOARD_CHECK:-0}" != "1" ]; then
+    elif [ "${GH_PR_MERGE_SKIP_BOARD_CHECK:-0}" != "1" ]; then
         BOARD_STATUS=$(GH_REPO="$TARGET_REPO" \
             _gh_project_status_query_current pr "$PR_NUMBER" 2>/dev/null || true)
 
@@ -127,20 +134,26 @@ gating rationale. Two reconciliations run after a successful merge:
 
 ```bash
 # helper-fallback NF-1 (#644): silent-skip when helper missing.
+# Defense-in-depth (#724): also detect "sourced but function undefined".
 _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
 if [ -r "$_HELPER" ]; then
     . "$_HELPER"
-    GH_REPO="$TARGET_REPO" _gh_project_status_sync pr "$PR_NUMBER" "Done" || true
+    if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
+        printf '[gh-pr-merge] %s sourced but _gh_project_status_sync undefined — Done reconciliations skipped (#724).\n' \
+            "$_HELPER" >&2
+    else
+        GH_REPO="$TARGET_REPO" _gh_project_status_sync pr "$PR_NUMBER" "Done" || true
 
-    # (b) Linked Issue cards from `closingIssuesReferences` → `Done`
-    #     (boosts the best-effort `Item closed` builtin per #250). Use the
-    #     `_gh_pr_closing_issue_numbers` helper instead of
-    #     `gh pr view --json closingIssuesReferences` — older `gh` (≤ 2.45)
-    #     rejects that field with "Unknown JSON field" (#264):
-    for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$TARGET_REPO" 2>/dev/null || true); do
-        GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$_issue" "Done" \
-            --only-from "Backlog,In progress,In review" || true
-    done
+        # (b) Linked Issue cards from `closingIssuesReferences` → `Done`
+        #     (boosts the best-effort `Item closed` builtin per #250). Use the
+        #     `_gh_pr_closing_issue_numbers` helper instead of
+        #     `gh pr view --json closingIssuesReferences` — older `gh` (≤ 2.45)
+        #     rejects that field with "Unknown JSON field" (#264):
+        for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$TARGET_REPO" 2>/dev/null || true); do
+            GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$_issue" "Done" \
+                --only-from "Backlog,In progress,In review" || true
+        done
+    fi
 fi
 # helper missing → both reconciliations silently skipped (NF-1).
 ```

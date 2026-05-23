@@ -224,3 +224,14 @@ EOF
     unset _base _changed _ran_any _failed
     return 0
 }
+
+# Self-check (issue #724): catch silent breakage where this file is sourceable
+# but `_gh_pr_lint_run` never gets defined — interactive-guard regression,
+# syntax error inside a function block, future rename. Mirrors the guard in
+# gh_project_status.sh so the same "[ -r ] passes but the function vanishes"
+# failure mode does not slip through the /gh-pr pre-push lint gate. rc stays
+# 0 — the lint gate's best-effort contract is preserved.
+if ! command -v _gh_pr_lint_run >/dev/null 2>&1; then
+    printf '[gh_pr_lint] BUG: _gh_pr_lint_run undefined after source — pre-push lint will silently no-op. See dotfiles #724.\n' >&2
+fi
+:
