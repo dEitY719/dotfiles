@@ -222,11 +222,20 @@ and consolidates `./tools/dev.sh`. Until then, call `mise run` directly.
 
 #### Legacy — tox (deprecated, kept until PR 5 of #722)
 
+`tox -e <env>` 와 `mise run <task>` 의 동치 매핑. 단, `tox` (인자 없음)
+은 envlist 가 `ruff, mypy, shellcheck, shfmt` 라 ruff/shfmt 단계에서
+파일을 **수정**하고 (각 testenv 가 `ruff format` / `shfmt -w` 호출)
+나머지는 read-only 인 mixed 동작이다. `mise run lint` 는 순수 read-only
+이므로 두 명령은 의미가 다르며, 정확한 mise 대체는 `mise run fix &&
+mise run lint` 다.
+
 ```bash
-tox -e shellcheck   # equivalent to: mise run lint-sh
-tox -e shfmt        # equivalent to: mise run fix-sh
-tox -e ruff         # equivalent to: mise run fix-py
-tox                 # equivalent to: mise run lint
+tox -e shellcheck   # equivalent to: mise run lint-sh   (둘 다 read-only)
+tox -e shfmt        # equivalent to: mise run fix-sh    (둘 다 -w)
+tox -e ruff         # equivalent to: mise run fix-py    (둘 다 --fix + format)
+tox                 # rough equivalent: mise run fix && mise run lint
+                    #   (tox 가 ruff/shfmt 를 -w 모드로 실행하므로
+                    #    read-only `mise run lint` 와 동치가 아님)
 ```
 
 ## 💡 Key Commands
