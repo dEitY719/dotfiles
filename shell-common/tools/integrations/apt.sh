@@ -18,7 +18,7 @@ alias aac='sudo apt-get autoclean'    # Remove old .deb files from cache
 alias ac='sudo apt-get clean'         # Remove all .deb files from cache
 
 # All-in-one cleanup (update → upgrade → autoremove → autoclean), non-interactive
-alias auug='sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get -y autoremove && sudo apt-get -y autoclean'
+alias auug='sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get -y autoremove && sudo apt-get autoclean'
 
 # Migration guard: previous versions of this file defined `ai` as an alias.
 # In interactive zsh, an active alias causes `ai() { ... }` to fail parsing
@@ -200,7 +200,7 @@ _apt_help_rows_update() {
     ux_table_row "aug" "apt-get upgrade" "Safe upgrade"
     ux_table_row "afa" "apt-get full-upgrade" "Aggressive upgrade"
     ux_table_row "adu" "apt-get dist-upgrade" "Dist upgrade"
-    ux_table_row "auug" "update+upgrade+clean -y" "Full cleanup (auto-yes)"
+    ux_table_row "auug" "update+upgrade+cleanup" "Full cleanup (auto-yes)"
 }
 
 _apt_help_rows_cleanup() {
