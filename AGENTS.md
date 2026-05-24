@@ -26,7 +26,7 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 
 - **Setup**: `./setup.sh` (Symlinks), `./install.sh` (Full install).
 - **Linting (All)**: `mise run lint` (runs ruff + mypy + shellcheck + shfmt diff).
-- **Linting (Python)**: `mise run fix-py` (ruff format + --fix), `uv run mypy .`.
+- **Linting (Python)**: `mise run lint-py` (ruff + mypy, read-only), `mise run fix-py` (ruff format + --fix, mutating).
 - **Linting (Bash)**: `mise run lint-sh` (shellcheck + shfmt diff), `mise run fix-sh` (shfmt -w).
 - **Testing**: `mise run test` (= `./tests/test`), `pytest tests/`, manual validation via `shell-common/tools/custom/demo_ux.sh`.
 
