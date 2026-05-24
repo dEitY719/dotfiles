@@ -35,6 +35,7 @@
     "codex@openai-codex": true
   },
   "skipDangerousModePermissionPrompt": true,
+  "theme": "dark",
   "telemetry": {
     "enabled": false
   }
