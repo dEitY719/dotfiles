@@ -1,28 +1,35 @@
 name: Test Suite
 
+# Shell lint via mise (replaces ad-hoc shellcheck block).
+# Issue #722 PR 3 (#727): single SSOT for tool versions + tasks lives
+# in mise.toml. The previous inline shellcheck loop had `|| true`,
+# silently swallowing failures; `mise run lint-sh` is a real gate.
+
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
-    name: Lint Check
+    name: Shell Lint (mise)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check shell scripts
-        run: |
-          if command -v shellcheck >/dev/null 2>&1; then
-            echo "Running shellcheck..."
-            find . -name "*.sh" -type f \
-              -not -path "./.git/*" \
-              -not -path "./.*" \
-              | xargs shellcheck --severity=warning || true
-          else
-            echo "shellcheck not available, skipping"
-          fi
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Run mise lint-sh
+        run: mise run lint-sh
