@@ -102,6 +102,31 @@ fi
 # ~/.zshrc 를 심볼릭 링크로 생성
 create_symlink "$ZSH_ZSHRC_SOURCE" "$HOME_ZSHRC"
 
+# Seed ~/.zshrc.local (untracked, PC-specific overrides). Issue #737 —
+# installer side-effects (bun, nvm, …) must NOT land in the tracked
+# dotfile. We create the file once if it does not exist, and migrate
+# any known bun init block if the host already runs bun (idempotent).
+HOME_ZSHRC_LOCAL="${HOME}/.zshrc.local"
+if [ ! -f "$HOME_ZSHRC_LOCAL" ]; then
+    log_info "~/.zshrc.local 생성 (PC-specific overrides 용)"
+    cat >"$HOME_ZSHRC_LOCAL" <<'EOF'
+# ~/.zshrc.local — PC-specific overrides, NOT tracked in dotfiles.
+# Installer-mutable lines (bun, nvm, pyenv, …) belong here so the
+# tracked zsh/zshrc stays portable across machines. See issue #737.
+EOF
+fi
+
+if [ -d "$HOME/.bun" ] && ! grep -q 'BUN_INSTALL' "$HOME_ZSHRC_LOCAL" 2>/dev/null; then
+    log_info "기존 bun 설치 감지 — ~/.zshrc.local 에 bun init 블록 이관"
+    cat >>"$HOME_ZSHRC_LOCAL" <<'EOF'
+
+# bun (migrated from zsh/zshrc per issue #737)
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+EOF
+fi
+
 # --- Setup Powerlevel10k Configuration ---
 
 # Powerlevel10k 설정 파일 symlink 생성

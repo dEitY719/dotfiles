@@ -217,6 +217,50 @@ EOF
   rm -rf "$repo_dir"
 }
 
+test_blocks_hardcoded_home_path_in_zshrc() {
+  local repo_dir
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_repo "$repo_dir"
+
+  # Simulate the bun installer re-appending a resolved /home/<user> path.
+  cat >>"$repo_dir/zsh/main.zsh" <<'EOF'
+[ -s "/home/deity719/.bun/_bun" ] && source "/home/deity719/.bun/_bun"
+EOF
+  git -C "$repo_dir" add zsh/main.zsh
+  assert_failure "git -C \"$repo_dir\" commit -m \"hardcoded bun path\""
+
+  rm -rf "$repo_dir"
+}
+
+test_allows_hardcoded_home_path_with_marker() {
+  local repo_dir
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_repo "$repo_dir"
+
+  cat >>"$repo_dir/zsh/main.zsh" <<'EOF'
+# allow-abs-home — example only, this PC's owner asked for a fixed path
+[ -s "/home/deity719/.bun/_bun" ] && source "/home/deity719/.bun/_bun" # allow-abs-home
+EOF
+  git -C "$repo_dir" add zsh/main.zsh
+  assert_success "git -C \"$repo_dir\" commit -m \"allow-listed path\""
+
+  rm -rf "$repo_dir"
+}
+
+test_allows_home_var_reference() {
+  local repo_dir
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_repo "$repo_dir"
+
+  cat >>"$repo_dir/zsh/main.zsh" <<'EOF'
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
+EOF
+  git -C "$repo_dir" add zsh/main.zsh
+  assert_success "git -C \"$repo_dir\" commit -m \"portable path\""
+
+  rm -rf "$repo_dir"
+}
+
 main() {
   ux_header "Hook integration tests"
   test_allows_spaces_in_filename
@@ -227,6 +271,9 @@ main() {
   test_blocks_library_purity_top_level_read
   test_blocks_library_purity_top_level_install
   test_allows_library_purity_commented_install
+  test_blocks_hardcoded_home_path_in_zshrc
+  test_allows_hardcoded_home_path_with_marker
+  test_allows_home_var_reference
   ux_success "All hook tests passed"
 }
 

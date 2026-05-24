@@ -61,8 +61,9 @@ HELP_INTEGRITY_VIOLATIONS_FILE=$(mktemp "$TMPDIR/help_integrity_violations_XXXXX
 DIRECT_EXEC_GUARD_FILE=$(mktemp "$TMPDIR/direct_exec_guard_XXXXXX.txt")
 SHELLCHECK_VIOLATIONS_FILE=$(mktemp "$TMPDIR/shellcheck_violations_XXXXXX.txt")
 GH_API_TYPE_FILE=$(mktemp "$TMPDIR/gh_api_type_XXXXXX.txt")
+ABS_HOME_VIOLATIONS_FILE=$(mktemp "$TMPDIR/abs_home_XXXXXX.txt")
 
-trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$PIPE_LOOP_VIOLATIONS_FILE" "$ZSH_EMULATION_FILE" "$ALIAS_CONFLICT_FILE" "$ALIAS_LOCATION_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$AUTO_EXEC_SOURCED_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE" "$HELP_INTEGRITY_VIOLATIONS_FILE" "$DIRECT_EXEC_GUARD_FILE" "$SHELLCHECK_VIOLATIONS_FILE" "$GH_API_TYPE_FILE"' EXIT
+trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$PIPE_LOOP_VIOLATIONS_FILE" "$ZSH_EMULATION_FILE" "$ALIAS_CONFLICT_FILE" "$ALIAS_LOCATION_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$AUTO_EXEC_SOURCED_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE" "$HELP_INTEGRITY_VIOLATIONS_FILE" "$DIRECT_EXEC_GUARD_FILE" "$SHELLCHECK_VIOLATIONS_FILE" "$GH_API_TYPE_FILE" "$ABS_HOME_VIOLATIONS_FILE"' EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Load check modules
@@ -96,6 +97,7 @@ source_check_or_exit "${CHECKS_DIR}/auto_execution_check.sh"
 source_check_or_exit "${CHECKS_DIR}/direct_exec_guard_check.sh"
 source_check_or_exit "${CHECKS_DIR}/shellcheck_check.sh"
 source_check_or_exit "${CHECKS_DIR}/gh_api_type_check.sh"
+source_check_or_exit "${CHECKS_DIR}/hardcoded_home_path_check.sh"
 source_check_or_exit "${CHECKS_DIR}/main_branch_guard.sh"
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -147,6 +149,7 @@ help_integrity_violations=0
 direct_exec_guard_violations=0
 shellcheck_violations=0
 gh_api_type_violations=0
+abs_home_violations=0
 
 # 1) Shebang consistency for staged .sh files under shell-common/bash/zsh
 while IFS= read -r file; do
@@ -272,6 +275,13 @@ while IFS= read -r file; do
     fi
 done <<<"$STAGED_FILES"
 
+# 9) Hardcoded absolute home path guard (issue #737)
+while IFS= read -r file; do
+    if ! check_hardcoded_home_path "$REPO_ROOT" "$TMPDIR" "$file" "$ABS_HOME_VIOLATIONS_FILE" 2>/dev/null; then
+        ((abs_home_violations++))
+    fi
+done <<<"$STAGED_FILES"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Reporting and exit logic
 # ═══════════════════════════════════════════════════════════════════════════
@@ -280,7 +290,7 @@ echo ""
 echo -e "${BLUE}Pre-commit validation (staged files only)${NC}"
 echo ""
 
-blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + alias_location_violations + custom_tools_sourcing_violations + auto_exec_custom_violations + auto_exec_sourced_violations + library_purity_violations + help_integrity_violations + direct_exec_guard_violations + pipe_loop_violations + shellcheck_violations))
+blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + alias_location_violations + custom_tools_sourcing_violations + auto_exec_custom_violations + auto_exec_sourced_violations + library_purity_violations + help_integrity_violations + direct_exec_guard_violations + pipe_loop_violations + shellcheck_violations + abs_home_violations))
 warning_count=$((subshell_violations + wrapper_violations + ux_violations + backup_files_found + gh_api_type_violations))
 
 if [ $blocking_violations -eq 0 ]; then
@@ -428,6 +438,13 @@ if [ $pipe_loop_violations -gt 0 ] && [ -s "$PIPE_LOOP_VIOLATIONS_FILE" ]; then
     echo -e "${RED}[BLOCKING] Pipe-based loop anti-pattern ($pipe_loop_violations):${NC}"
     head -n 5 "$PIPE_LOOP_VIOLATIONS_FILE" | sed 's/^/  /'
     [ $(wc -l <"$PIPE_LOOP_VIOLATIONS_FILE") -gt 5 ] && echo "  ... and more"
+    echo ""
+fi
+
+if [ $abs_home_violations -gt 0 ] && [ -s "$ABS_HOME_VIOLATIONS_FILE" ]; then
+    echo -e "${RED}[BLOCKING] Hardcoded absolute home path ($abs_home_violations file(s)):${NC}"
+    head -n 10 "$ABS_HOME_VIOLATIONS_FILE" | sed 's/^/  /'
+    [ $(wc -l <"$ABS_HOME_VIOLATIONS_FILE") -gt 10 ] && echo "  ... and more"
     echo ""
 fi
 

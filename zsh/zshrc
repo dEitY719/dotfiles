@@ -135,9 +135,9 @@ if command -v fasd &>/dev/null; then
     eval "$(fasd --init auto)"
 fi
 
-# bun completions
-[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
-
-# bun
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
+# Local PC-specific overrides — installer-mutable lines (bun, nvm, pyenv, …)
+# live here so the tracked dotfile stays clean. Issue #737 / PR #736 — the
+# bun installer keeps re-appending a resolved /home/<user>/.bun/_bun path
+# to ~/.zshrc; routing those through ~/.zshrc.local (untracked) plus the
+# pre-commit hardcoded-home-path guard prevents the drift from landing here.
+[ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
