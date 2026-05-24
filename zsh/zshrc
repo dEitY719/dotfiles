@@ -134,3 +134,10 @@ fi
 if command -v fasd &>/dev/null; then
     eval "$(fasd --init auto)"
 fi
+
+# bun completions
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
