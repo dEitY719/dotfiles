@@ -58,6 +58,20 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # tests/bats/lib/{bats-core,bats-assert,bats-support} are git
+          # submodules — without `submodules: recursive` the bats binary
+          # is missing and tests/test silently soft-skips that layer.
+          submodules: recursive
+
+      - name: Install zsh
+        # tests/integration/* parametrize on both bash and zsh shells via
+        # pexpect. zsh is not preinstalled on ubuntu-latest runners, so
+        # without this step every `[zsh]` parametrized test fails with
+        # exit code 127 (command not found).
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh
 
       - name: Setup mise
         uses: jdx/mise-action@v2
