@@ -11,8 +11,8 @@
     - `shell-common/projects/`: Project-specific utilities (finrx, dmc, smithery)
 
 # Operational Commands
-- **Lint**: `tox -e shellcheck` (Validate syntax).
-- **Format**: `tox -e shfmt` (Standardize style).
+- **Lint**: `mise run lint-sh` (shellcheck + shfmt diff for `bash/`).
+- **Format**: `mise run fix-sh` (Standardize style, `shfmt -w`).
 - **Reload**: `source ~/.bashrc` (Apply changes).
 
 # Implementation Patterns
@@ -50,8 +50,8 @@ done
 - **POSIX Compatibility**: Shared files must use POSIX syntax (`>/dev/null 2>&1`, not `&>/dev/null`).
 
 # Testing Strategy
-- **Syntax**: `shellcheck` via `tox`.
-- **Format**: `shfmt` via `tox`.
+- **Syntax**: `shellcheck` via `mise run lint-sh`.
+- **Format**: `shfmt` via `mise run fix-sh`.
 - **Manual**: Use `source bash/main.bash` in a clean shell to verify loading.
 
 # Context Map

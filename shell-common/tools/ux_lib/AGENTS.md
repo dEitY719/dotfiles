@@ -8,7 +8,7 @@
 
 - **Demo**: `shell-common/tools/custom/demo_ux.sh` (Visual verification).
 - **Consistency Check**: `shell-common/tools/custom/check_ux_consistency.sh`.
-- **Lint**: `tox -e shellcheck` (validates shell code quality).
+- **Lint**: `mise run lint-sh` (validates shell code quality).
 
 # Implementation Patterns
 
