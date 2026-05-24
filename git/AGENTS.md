@@ -20,7 +20,7 @@
 # Testing Strategy
 
 - Prefer `bash git/tests/test_hooks.sh` for integration-level verification of the 2-tier hook system.
-- If a change targets repository-wide policy (naming, shebang, UX rules), also run `tox -e shellcheck`.
+- If a change targets repository-wide policy (naming, shebang, UX rules), also run `mise run lint-sh`.
 
 # Upstream Push Leak Guard
 

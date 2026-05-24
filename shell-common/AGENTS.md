@@ -7,7 +7,7 @@
 
 # Operational Commands
 
-- **Lint**: `tox -e shellcheck -- shell-common/**/*.sh`
+- **Lint**: `mise run lint-sh` (shellcheck + shfmt diff for `bash/`); for `shell-common/` files only, run `shellcheck -x -e SC1090,SC1091 shell-common/**/*.sh` directly.
 - **Format**: `shfmt -w -i 4 shell-common/`
 - **Reload**: `source ~/.bashrc` (bash) 또는 `source ~/.zshrc` (zsh)
 - **Syntax**: `bash -n <file>` / `zsh -n <file>`

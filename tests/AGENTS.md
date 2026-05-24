@@ -11,7 +11,7 @@
 - **Run Pytest Only**: `pytest tests/integration/`
 - **Single Pytest File**: `pytest tests/integration/test_help_topics.py -v`
 - **Run Golden Rules**: `bash tests/golden_rules/test_golden_rules.sh`
-- **Full Lint Gate**: `tox` (runs ruff, mypy, shellcheck, shfmt)
+- **Full Lint Gate**: `mise run lint` (runs ruff, mypy, shellcheck, shfmt diff)
 
 # Test Structure
 

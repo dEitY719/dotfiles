@@ -1,7 +1,7 @@
 # Project Context
 
 - **Objective**: Opinionated Bash dotfiles for reproducible terminal environments (WSL, Linux, macOS).
-- **Stack**: Bash 5.x+, Python 3.10+, Tox, Ruff, Mypy.
+- **Stack**: Bash 5.x+, Python 3.10+, mise, Ruff, Mypy.
 - **Structure**: Modular Bash (`bash/`), Zsh (`zsh/`), shared shell (`shell-common/`), Tests (`tests/`), Docs (`docs/`), Git hooks (`git/`), Claude Code (`claude/`).
 
 # Package Manager Configuration
@@ -25,10 +25,10 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 # Operational Commands
 
 - **Setup**: `./setup.sh` (Symlinks), `./install.sh` (Full install).
-- **Linting (All)**: `tox` (Runs ruff, mypy, shellcheck, shfmt).
-- **Linting (Python)**: `tox -e ruff` (fixes), `tox -e mypy`.
-- **Linting (Bash)**: `tox -e shellcheck`, `tox -e shfmt` (formats).
-- **Testing**: `./tests/test`, `pytest tests/`, manual validation via `shell-common/tools/custom/demo_ux.sh`.
+- **Linting (All)**: `mise run lint` (runs ruff + mypy + shellcheck + shfmt diff).
+- **Linting (Python)**: `mise run fix-py` (ruff format + --fix), `uv run mypy .`.
+- **Linting (Bash)**: `mise run lint-sh` (shellcheck + shfmt diff), `mise run fix-sh` (shfmt -w).
+- **Testing**: `mise run test` (= `./tests/test`), `pytest tests/`, manual validation via `shell-common/tools/custom/demo_ux.sh`.
 
 # Golden Rules
 
@@ -44,7 +44,7 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 
 - **DO**: Use `ux_lib` functions (`ux_header`, `ux_success`) for ALL output.
 - **DO**: Use snake_case for all Bash functions and filenames.
-- **DO**: Run `tox` before committing.
+- **DO**: Run `mise run lint && mise run test` before committing.
 - **DO**: Use environment variables (e.g., `$SHELL_COMMON`) for sourcing files across shell contexts.
 - **DO**: Test scripts in both bash and zsh for cross-shell compatibility.
 - **DO**: Follow directory placement rules — see **[Shell Common](./shell-common/AGENTS.md)**.
@@ -61,11 +61,11 @@ Direct-Exec Guard pattern, Bash/Zsh compatibility rules, and diagnostic design s
 SRP/OCP/LSP/ISP apply per-file. DRY: move shared logic to `bash/util/` or `shell-common/tools/ux_lib/`.
 Depend on `ux_lib` abstractions (not raw colors). See `shell-common/tools/ux_lib/UX_GUIDELINES.md`.
 
-TDD cycle: Analyze → Write test (`pytest` or `demo_ux.sh`) → Implement minimal code → Refactor → `tox`.
+TDD cycle: Analyze → Write test (`pytest` or `demo_ux.sh`) → Implement minimal code → Refactor → `mise run lint && mise run test`.
 
 # Standards & References
 
-- **Coding Style**: See `shell-common/tools/ux_lib/UX_GUIDELINES.md` and `tox.ini`.
+- **Coding Style**: See `shell-common/tools/ux_lib/UX_GUIDELINES.md`, `pyproject.toml`, and `mise.toml`.
 - **Command UX Standard**: See `docs/.ssot/command-guidelines.md` (SSOT for command/help interface and formatting).
 - **Git Strategy**: Semantic commits (`Type: Summary`).
 - **Project Board**: See `docs/.ssot/github-project-board.md` (SSOT for Issue kanban workflow and closing-keyword policy).
