@@ -19,7 +19,7 @@ dependencies = [
 
 # --- 개발 및 테스트 환경 의존성 ---
 [dependency-groups] # 비표준으로 uv 에서는 인식, 그러나 pip 인식못함
-dev = ["ruff", "mypy", "pylint-exit", "pytest", "pytest-mock", "pytest-xdist", "pexpect", "tox>=4.26.0"]
+dev = ["ruff", "mypy", "pytest", "pytest-mock", "pytest-xdist", "pexpect"]
 
 
 # --- Python 프로젝트 의존성 및 extras ---
@@ -31,10 +31,9 @@ dev = [
     "pytest-xdist>=3.0",  # For parallel test execution
     "pexpect>=4.8",  # For interactive shell testing
     # Linting and formatting
-    "ruff>=0.1.0",
-    "black>=23.0",
+    "ruff>=0.6.0",
     # Type checking
-    "mypy>=1.0",
+    "mypy>=1.10",
     "types-toml",
     "types-requests",
     "types-PyYAML",
@@ -64,27 +63,6 @@ markers = [
     "bash: marks tests that run in bash shell",
     "zsh: marks tests that run in zsh shell",
 ]
-
-
-[tool.black]
-line-length = 120
-target-version = ['py310', 'py311', "py312", "py313"]
-skip-string-normalization = false
-exclude = '\.git|\.mypy_cache|\.tox|\.nox|\.venv|build|dist'
-
-
-[tool.isort]
-profile = "black"
-
-
-[tool.pylint]
-max-line-length = 120
-ignore = [".venv", ".tox", ".vscode", ".git", "build"]
-# R, C 비활성화는 신중하게 접근해야 합니다.
-# 초기에는 비활성화하되, 점진적으로 활성화하여 코드 개선을 유도하는 것이 좋습니다.
-# 만약 활성화 시 너무 많은 경고가 발생한다면, 특정 규칙만 disable 하세요.
-disable = ["R", "C", "W1203"]
-# disable = ["W1203"] # f-string 경고만 비활성화
 
 
 [tool.mypy]
