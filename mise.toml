@@ -50,7 +50,10 @@ run = [
 # ─── Test gate ───────────────────────────────────────────────────────
 [tasks.test]
 description = "전체 테스트 (bats + pytest + golden rules)"
-run = "./tests/test"
+# `uv run` keeps tests/test inside the project venv so pytest + xdist
+# + pexpect resolve without a separate activation step (CI parity —
+# see #727 / .github/workflows/ci.yml).
+run = "uv run ./tests/test"
 
 # ─── Auto-fix (mutating) ─────────────────────────────────────────────
 [tasks.fix]
