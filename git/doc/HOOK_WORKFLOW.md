@@ -607,9 +607,8 @@ unset GIT_HOOKS_SKIP_GLOBAL
 git commit --no-verify -m "CI auto-commit"
 
 # 대신 CI pipeline에서 검사 실행
-# - tox -e lint
-# - pytest
-# - shellcheck
+# - mise run lint
+# - mise run test
 # - 등등
 ```
 

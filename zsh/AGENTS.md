@@ -8,7 +8,7 @@
 # Operational Commands
 
 - **Reload**: `source ~/.zshrc` 또는 `exec zsh`
-- **Lint**: `tox -e shellcheck -- zsh/**/*.zsh` (shellcheck 가 zsh 지원하는 경우)
+- **Lint**: `mise run lint-sh` (`bash/` 자동 커버) — `zsh/` 만 직접 검사는 `shellcheck -x -e SC1090,SC1091 zsh/**/*.zsh` (shellcheck 가 zsh 지원하는 경우)
 - **Syntax check**: `zsh -n <file>`
 - **Theme config**: `p10k configure`
 

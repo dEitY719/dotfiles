@@ -186,12 +186,19 @@ def test_my_feature(self, shell_runner, shell):
     assert result.exit_code == 0
 ```
 
-## tox 통합
+## mise 통합
 
 ```bash
-tox -e bats        # bats 쉘 유닛 테스트만
-tox -e py313       # pytest 통합 테스트만 (Python 3.13)
-tox                # 전체 lint + 포매팅
+mise run test      # 전체 테스트 (bats + pytest + golden rules)
+mise run lint      # 전체 lint (ruff + mypy + shellcheck + shfmt -d)
+mise run fix       # 전체 auto-fix (ruff --fix + ruff format + shfmt -w)
+```
+
+특정 러너만 호출:
+
+```bash
+./tests/bats/lib/bats-core/bin/bats tests/bats/...  # bats only
+pytest tests/integration/                            # pytest only
 ```
 
 ## 골든 룰 (테스트 작성 시)

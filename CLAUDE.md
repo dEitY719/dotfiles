@@ -10,16 +10,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./install.sh        # Full install
 
 # Lint (all)
-tox                 # ruff, mypy, shellcheck, shfmt
+mise run lint       # ruff + mypy + shellcheck + shfmt -d (read-only)
+mise run fix        # ruff --fix + ruff format + shfmt -w (mutating)
 
 # Lint (targeted)
-tox -e shellcheck   # Shell script validation
-tox -e shfmt        # Shell script formatting (bash/ only)
-tox -e ruff         # Python format + fix
-tox -e mypy         # Python type check
+mise run lint-sh    # Shell lint (shellcheck + shfmt diff)
+mise run fix-sh     # Shell format (shfmt -w bash/)
+mise run fix-py     # Python format + fix (ruff)
+uv run mypy .       # Python type check
 
 # Tests
-./tests/test        # All tests (bats + pytest + golden rules)
+mise run test       # All tests (bats + pytest + golden rules)
+./tests/test        # Same runner invoked directly
 ./tests/test -v     # Verbose
 pytest tests/integration/test_help_topics.py -v  # Single pytest file
 ./tests/bats/lib/bats-core/bin/bats tests/bats/functions  # Bats only

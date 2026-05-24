@@ -69,12 +69,12 @@ Always include:
 2. Files inspected and files changed.
 3. Validation commands run and outcomes.
 4. Remaining risks or follow-up items — list with concrete next commands
-   (e.g. `tox -e shellcheck`, `./tests/test`).
+   (e.g. `mise run lint-sh`, `./tests/test`).
 
 ## Output
 
 ```
 [OK] devx:ux-guidelines — mode=<a|b> files_changed=<n> validated=<true|false>
 
-Next: tox -e shellcheck && ./tests/test
+Next: mise run lint-sh && ./tests/test
 ```

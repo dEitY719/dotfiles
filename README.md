@@ -194,11 +194,10 @@ gcrestore
 
 ### Code Quality
 
-This repo is migrating from `tox` to **mise** for task orchestration
-(issue [#722](https://github.com/dEitY719/dotfiles/issues/722)). Both
-runners work during the migration window and produce equivalent results.
-
-#### Preferred — mise (new)
+Task orchestration uses **mise** as the single source of truth
+(issue [#722](https://github.com/dEitY719/dotfiles/issues/722)).
+`mise.toml` at the repo root pins shellcheck / shfmt / uv versions and
+defines all lint / test / fix tasks.
 
 One-time bootstrap:
 
@@ -207,7 +206,7 @@ curl https://mise.run | sh   # or: brew install mise
 mise install                  # installs pinned shellcheck / shfmt / uv
 ```
 
-Daily use:
+Daily use — `mise run <task>` (raw runner):
 
 ```bash
 mise run lint     # ruff + mypy + shellcheck + shfmt -d  (read-only)
@@ -217,27 +216,17 @@ mise run test     # bats + pytest + golden rules
 mise run fix      # ruff --fix + ruff format + shfmt -w  (mutating)
 ```
 
-A higher-level wrapper command (`devx <verb>`) routes lint/fix/test through
-`mise run` and exposes repo helpers (`devx stat`, `devx lint-helpfunc`,
-`devx lint-deadcode`). Run `devx help` for the full sub-command list.
-
-#### Legacy — tox (deprecated, kept until PR 5 of #722)
-
-`tox -e <env>` 와 `mise run <task>` 의 동치 매핑. 단, `tox` (인자 없음)
-은 envlist 가 `ruff, mypy, shellcheck, shfmt` 라 ruff/shfmt 단계에서
-파일을 **수정**하고 (각 testenv 가 `ruff format` / `shfmt -w` 호출)
-나머지는 read-only 인 mixed 동작이다. `mise run lint` 는 순수 read-only
-이므로 두 명령은 의미가 다르며, 정확한 mise 대체는 `mise run fix &&
-mise run lint` 다.
+Or the higher-level wrapper — `devx <verb>` (user interface):
 
 ```bash
-tox -e shellcheck   # equivalent to: mise run lint-sh   (둘 다 read-only)
-tox -e shfmt        # equivalent to: mise run fix-sh    (둘 다 -w)
-tox -e ruff         # equivalent to: mise run fix-py    (둘 다 --fix + format)
-tox                 # rough equivalent: mise run fix && mise run lint
-                    #   (tox 가 ruff/shfmt 를 -w 모드로 실행하므로
-                    #    read-only `mise run lint` 와 동치가 아님)
+devx lint         # routes to mise run lint
+devx fix          # routes to mise run fix
+devx test         # routes to mise run test
+devx help         # full sub-command list (devx stat, devx lint-helpfunc, ...)
 ```
+
+Run `mise run lint && mise run test` (or `devx lint && devx test`)
+before committing.
 
 ## 💡 Key Commands
 
@@ -284,4 +273,4 @@ For more help, see [Setup Guide](docs/guide/setup.md).
 
 - [Setup Guide](docs/guide/setup.md) - Detailed setup and configuration
 - [Shell-Common Documentation](shell-common/README.md) - Shared code overview
-- Configuration files in `pyproject.toml`, `mise.toml`, and `tox.ini` (legacy — see #722)
+- Configuration files in `pyproject.toml` and `mise.toml` (task SSOT — see #722)
