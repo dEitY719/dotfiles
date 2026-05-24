@@ -43,11 +43,14 @@ check_hardcoded_home_path() {
         return 0
     }
 
-    # Pattern: `/home/<segment>/` or `/Users/<segment>/`. <segment> excludes
-    # `$` (placeholder) and `{` (already-quoted ${HOME}) so we never flag a
-    # template, only resolved values.
+    # Pattern: `/home/<segment>` or `/Users/<segment>`. <segment> is one or
+    # more name chars; the trailing `/` is intentionally NOT required so
+    # `export MY_HOME=/home/user` (no slash, no following path) is also
+    # caught (gemini-code-assist review on PR #738). `awk -v pfx=...`
+    # embeds the file name directly into the printf so a downstream sed
+    # rewrite is unnecessary and whitespace in $0 stays safe.
     local hits
-    hits=$(awk '
+    hits=$(awk -v pfx="$repo_rel_path" '
         {
             line = $0
             # Skip pure comment lines (first non-blank char is #)
@@ -55,9 +58,9 @@ check_hardcoded_home_path() {
             # Skip explicit allowlist
             if (line ~ /# allow-abs-home/) next
             # Match resolved home paths
-            if (line ~ /\/home\/[A-Za-z0-9._-]+\// ||
-                line ~ /\/Users\/[A-Za-z0-9._-]+\//) {
-                printf "%d:%s\n", NR, line
+            if (line ~ /\/home\/[A-Za-z0-9._-]+/ ||
+                line ~ /\/Users\/[A-Za-z0-9._-]+/) {
+                printf "    %s:%d:%s\n", pfx, NR, line
             }
         }
     ' "$tmp_file" 2>/dev/null || true)
@@ -73,7 +76,7 @@ check_hardcoded_home_path() {
         echo "  Use \$HOME or ~ instead. If the path is intentional, add"
         echo "  '# allow-abs-home' on the same line."
         echo "  Matches:"
-        echo "$hits" | sed "s|^|    $repo_rel_path:|"
+        echo "$hits"
         echo ""
     } >>"$output_file"
 
