@@ -53,7 +53,12 @@ jobs:
   test:
     name: Test (mise)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 1062 통합 테스트가 bash + zsh parametrize 로 pexpect interactive
+    # shell 을 매 케이스 마다 spawn 한다. 4코어 러너에서 첫 측정치는
+    # ~35분 — 15분은 50% 지점에서 cancel 됐다 (#727 CI run 26353146112).
+    # 45분 으로 헤드룸 확보. 후속 최적화 (shell shard 분리 / pexpect
+    # 비용 축소) 는 별도 이슈로 분리.
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
