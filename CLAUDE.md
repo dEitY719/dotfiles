@@ -16,8 +16,8 @@ mise run fix        # ruff --fix + ruff format + shfmt -w (mutating)
 # Lint (targeted)
 mise run lint-sh    # Shell lint (shellcheck + shfmt diff)
 mise run fix-sh     # Shell format (shfmt -w bash/)
-mise run fix-py     # Python format + fix (ruff)
-uv run mypy .       # Python type check
+mise run lint-py    # Python lint (ruff + mypy, read-only)
+mise run fix-py     # Python format + fix (ruff, mutating)
 
 # Tests
 mise run test       # All tests (bats + pytest + golden rules)
