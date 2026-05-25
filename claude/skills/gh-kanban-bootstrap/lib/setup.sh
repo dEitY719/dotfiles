@@ -74,6 +74,10 @@ AUTO_ARCHIVE_WINDOW="2d"
 HIDE_COLUMNS=false
 DRY_RUN=false
 SKIP_PR_TEMPLATE=false
+NO_AUTO_APPROVE_ENV=false
+
+# Override target file (test seam). Default: ${HOME}/.zshrc.local
+ZSHRC_LOCAL_PATH="${ZSHRC_LOCAL_PATH:-}"
 
 OWNER_TYPE=""
 OWNER_ID=""
@@ -113,6 +117,7 @@ print_help() {
     ux_bullet "--hide-columns               Add solo-repo hide guidance for Approved and Ready"
     ux_bullet "--dry-run                    Print the plan without mutations"
     ux_bullet "--skip-pr-template           Skip remote PR template creation/check"
+    ux_bullet "--no-auto-approve-env        Skip wiring GH_PR_REPLY_AUTO_APPROVE_REPOS into ~/.zshrc.local"
     ux_bullet "-h, --help                   Show this help"
 }
 
@@ -149,6 +154,10 @@ parse_args() {
             ;;
         --skip-pr-template)
             SKIP_PR_TEMPLATE=true
+            shift
+            ;;
+        --no-auto-approve-env)
+            NO_AUTO_APPROVE_ENV=true
             shift
             ;;
         -h | --help)
@@ -579,6 +588,105 @@ ensure_pr_template() {
     log_success "Created ${PR_TEMPLATE_PATH} on ${DEFAULT_BRANCH}"
 }
 
+wire_auto_approve_env() {
+    # Issue #743: register OWNER/REPO into the user's
+    # GH_PR_REPLY_AUTO_APPROVE_REPOS CSV (~/.zshrc.local) so the
+    # gh:pr-reply Step 8 solo-repo auto-approve guard G1 (repo
+    # allowlist) passes on the next session. Idempotent.
+    local target_file display_path repo_full existing_line existing_value tmpfile
+
+    if $NO_AUTO_APPROVE_ENV; then
+        printf '[SKIP] auto-approve env wiring (--no-auto-approve-env)\n'
+        return 0
+    fi
+
+    target_file="${ZSHRC_LOCAL_PATH:-${HOME}/.zshrc.local}"
+    repo_full="${OWNER}/${REPO}"
+
+    display_path="$target_file"
+    case "$target_file" in
+        "$HOME"/*) display_path="~${target_file#"$HOME"}" ;;
+    esac
+
+    if $DRY_RUN; then
+        printf '[dry-run] would add export GH_PR_REPLY_AUTO_APPROVE_REPOS="%s" to %s\n' \
+            "$repo_full" "$display_path"
+        return 0
+    fi
+
+    # Case 1: file does not exist — create with a header comment.
+    if [ ! -f "$target_file" ]; then
+        cat >"$target_file" <<EOF
+# ~/.zshrc.local — untracked local zsh overrides (not version-controlled).
+# Managed entries below are appended by tooling; safe to edit manually.
+export GH_PR_REPLY_AUTO_APPROVE_REPOS="${repo_full}"
+EOF
+        printf '[OK] auto-approve env updated: %s appended to %s\n' \
+            "$repo_full" "$display_path"
+        return 0
+    fi
+
+    # Case 2: file exists, variable line absent — append.
+    if ! grep -qE '^[[:space:]]*export[[:space:]]+GH_PR_REPLY_AUTO_APPROVE_REPOS=' "$target_file"; then
+        printf '\nexport GH_PR_REPLY_AUTO_APPROVE_REPOS="%s"\n' "$repo_full" >>"$target_file"
+        printf '[OK] auto-approve env updated: %s appended to %s\n' \
+            "$repo_full" "$display_path"
+        return 0
+    fi
+
+    # Case 3: variable line present — parse the CSV value.
+    existing_line="$(grep -E '^[[:space:]]*export[[:space:]]+GH_PR_REPLY_AUTO_APPROVE_REPOS=' "$target_file" | tail -n1)"
+    existing_value="${existing_line#*=}"
+    # Strip surrounding quotes (both single and double) idempotently.
+    existing_value="${existing_value#\"}"
+    existing_value="${existing_value%\"}"
+    existing_value="${existing_value#\'}"
+    existing_value="${existing_value%\'}"
+
+    # Already present in CSV → idempotent no-op.
+    case ",${existing_value}," in
+        *",${repo_full},"*)
+            printf '[OK] auto-approve env already configured for %s\n' "$repo_full"
+            return 0
+            ;;
+    esac
+
+    # Append repo to the existing CSV via portable awk+tmpfile (BSD/GNU sed parity).
+    tmpfile="$(mktemp)"
+    awk -v repo="$repo_full" '
+        BEGIN { done_flag = 0 }
+        /^[[:space:]]*export[[:space:]]+GH_PR_REPLY_AUTO_APPROVE_REPOS=/ && done_flag == 0 {
+            line = $0
+            if (match(line, /"[^"]*"/)) {
+                val = substr(line, RSTART + 1, RLENGTH - 2)
+                if (val == "") {
+                    val = repo
+                } else {
+                    val = val "," repo
+                }
+                print "export GH_PR_REPLY_AUTO_APPROVE_REPOS=\"" val "\""
+                done_flag = 1
+                next
+            }
+            if (match(line, /=[^[:space:]#]*/)) {
+                val = substr(line, RSTART + 1, RLENGTH - 1)
+                if (val == "") {
+                    val = repo
+                } else {
+                    val = val "," repo
+                }
+                print "export GH_PR_REPLY_AUTO_APPROVE_REPOS=\"" val "\""
+                done_flag = 1
+                next
+            }
+        }
+        { print }
+    ' "$target_file" >"$tmpfile" && mv "$tmpfile" "$target_file"
+
+    printf '[OK] auto-approve env updated: %s appended to %s\n' \
+        "$repo_full" "$display_path"
+}
+
 project_url_from_owner_type() {
     local prefix="users"
     if [ "$OWNER_TYPE" = "Organization" ]; then
@@ -655,6 +763,11 @@ print_final_report() {
     ux_section "Smoke Test"
     ux_bullet "gh issue create --repo ${OWNER}/${REPO} --title \"[Test] kanban smoke\" --body \"ignore\""
 
+    if ! $NO_AUTO_APPROVE_ENV; then
+        ux_section "Next Step"
+        ux_bullet "Apply the env update to your current shell: source ~/.zshrc.local"
+    fi
+
     if $DRY_RUN; then
         ux_section "Mode"
         ux_bullet "Dry-run only: no project, link, field, or file mutations were sent."
@@ -682,6 +795,9 @@ main() {
         ux_section "Existing Project"
         ux_bullet "Board: ${PROJECT_URL}"
         ux_bullet "Workflows: $(workflows_url_from_owner_type)"
+        # Idempotent env wiring even on the re-run path — solo-repo intent
+        # still holds, and the helper itself short-circuits if already set.
+        wire_auto_approve_env
         exit 0
     fi
 
@@ -704,7 +820,10 @@ main() {
     log_step 6 "Ensuring the pull request template"
     ensure_pr_template
 
-    log_step 7 "Printing the remaining UI checklist"
+    log_step 7 "Wiring auto-approve env (~/.zshrc.local)"
+    wire_auto_approve_env
+
+    log_step 8 "Printing the remaining UI checklist"
     print_final_report
 }
 
