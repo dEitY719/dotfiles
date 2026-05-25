@@ -474,6 +474,24 @@ EOF
     grep -q '^export GH_PR_REPLY_AUTO_APPROVE_REPOS="other/repo,another/one,acme/widget"$' "${TEST_TEMP_HOME}/.zshrc.local"
 }
 
+@test "issue #743: PR #744 review — single-quoted CSV value is rewritten to double-quoted with repo appended" {
+    setup_basic_mocks
+    cat >"${TEST_TEMP_HOME}/.zshrc.local" <<'EOF'
+# user-managed
+export GH_PR_REPLY_AUTO_APPROVE_REPOS='other/repo'
+EOF
+    run_setup_kanban --owner acme --repo widget
+    assert_success
+    assert_output --partial "[OK] auto-approve env updated: acme/widget appended to ~/.zshrc.local"
+    # Single-quoted value must NOT corrupt the line (regression: pre-fix
+    # the unquoted fallback matched `'other/repo'` and produced
+    # `="'other/repo',acme/widget"`).
+    grep -q "^export GH_PR_REPLY_AUTO_APPROVE_REPOS=\"other/repo,acme/widget\"\$" \
+        "${TEST_TEMP_HOME}/.zshrc.local"
+    # No stray single quotes inside the rewritten value.
+    ! grep -qE "GH_PR_REPLY_AUTO_APPROVE_REPOS=.*'.*'" "${TEST_TEMP_HOME}/.zshrc.local"
+}
+
 @test "issue #743: existing-project re-run also wires env (idempotent)" {
     export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
     export MOCK_GH_REPO_CONTEXT_JSON="${TEST_TEMP_HOME}/repo.json"
