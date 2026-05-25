@@ -652,12 +652,25 @@ EOF
     esac
 
     # Append repo to the existing CSV via portable awk+tmpfile (BSD/GNU sed parity).
-    tmpfile="$(mktemp)"
+    # mktemp template (PR #744 review): BSD/GNU portable + random suffix
+    # mitigates symlink/TOCTOU on shared /tmp.
+    tmpfile="$(mktemp "${TMPDIR:-/tmp}/kanban_bootstrap.XXXXXX")"
     awk -v repo="$repo_full" '
         BEGIN { done_flag = 0 }
         /^[[:space:]]*export[[:space:]]+GH_PR_REPLY_AUTO_APPROVE_REPOS=/ && done_flag == 0 {
             line = $0
             if (match(line, /"[^"]*"/)) {
+                val = substr(line, RSTART + 1, RLENGTH - 2)
+                if (val == "") {
+                    val = repo
+                } else {
+                    val = val "," repo
+                }
+                print "export GH_PR_REPLY_AUTO_APPROVE_REPOS=\"" val "\""
+                done_flag = 1
+                next
+            }
+            if (match(line, /'\''[^'\'']*'\''/)) {
                 val = substr(line, RSTART + 1, RLENGTH - 2)
                 if (val == "") {
                     val = repo
