@@ -120,7 +120,11 @@ LOCAL
 }
 
 @test "bash: resolve work1 fails when ENABLED omits it" {
-    run_in_bash '_claude_resolve_account work1'
+    # Issue #568 added work1 to the default ENABLED list, so a bare
+    # `_claude_resolve_account work1` succeeds. Override ENABLED to
+    # restore the original test premise: dispatcher must reject any
+    # name not present in the active list.
+    run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="personal work" _claude_resolve_account work1'
     assert_failure
     refute_output --partial "/"
 }
@@ -211,7 +215,7 @@ LOCAL
 
 # ---------- Task 5: account setup ----------
 
-@test "bash: _claude_account_setup_one creates directory-level symlinks (issue #575)" {
+@test "bash: _claude_account_setup_one creates directory-level symlinks (issue #575 → #707)" {
     mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude-shared/plugins"
 
@@ -222,11 +226,11 @@ LOCAL
     [ -L "$HOME/.claude-personal/statusline-command.sh" ]
     [ -L "$HOME/.claude-personal/plugins" ]
     [ -L "$HOME/.claude-personal/projects/GLOBAL/memory" ]
-    # Issue #575: skills/docs are single directory-level symlinks to the
-    # SSOT — no more per-skill entries, no more bind mount.
-    [ -L "$HOME/.claude-personal/skills" ]
+    # docs/ is still a single directory-level symlink (#575). skills/ was
+    # promoted to a real directory of per-entry symlinks by #707, F-8 so
+    # a private overlay can be layered into the same target dir.
+    [ -d "$HOME/.claude-personal/skills" ] && [ ! -L "$HOME/.claude-personal/skills" ]
     [ -L "$HOME/.claude-personal/docs" ]
-    [ "$(readlink "$HOME/.claude-personal/skills")" = "${DOTFILES_ROOT}/claude/skills" ]
     [ "$(readlink "$HOME/.claude-personal/docs")" = "${DOTFILES_ROOT}/claude/docs" ]
     # settings.local.json is intentionally a per-PC hand-created regular
     # file (#584) — never a dotfiles symlink.
@@ -262,8 +266,10 @@ SH
     run_in_bash "export PATH=\"$fake_bin:\$PATH\"; _claude_account_setup_one personal '$HOME/.claude-personal'"
     assert_success
     assert_output --partial "bind-mount detected at $HOME/.claude-personal/skills"
-    [ -L "$HOME/.claude-personal/skills" ]
-    [ "$(readlink "$HOME/.claude-personal/skills")" = "${DOTFILES_ROOT}/claude/skills" ]
+    # #707, F-8: post-unmount the slot is a real directory of per-entry
+    # symlinks, not a single dir-symlink. The umount log still records
+    # the legacy bind-mount path that was unmounted.
+    [ -d "$HOME/.claude-personal/skills" ] && [ ! -L "$HOME/.claude-personal/skills" ]
     grep -qF "$HOME/.claude-personal/skills" "$HOME/fake-umount.log"
 }
 
@@ -674,15 +680,22 @@ _setup_sh_prereqs() {
     [ -L "$HOME/.claude-personal/projects/GLOBAL/memory" ]
 }
 
-@test "bash: claude/setup.sh respects CLAUDE_ENABLED_ACCOUNTS=work (Internal-PC)" {
+@test "bash: claude/setup.sh respects Internal-PC mode via .dotfiles-setup-mode" {
+    # Issue #571 (F-1) made Internal-PC mode key off the .dotfiles-setup-mode
+    # SSOT (single source of truth, set by shell-common/setup.sh) instead of
+    # an inline CLAUDE_ENABLED_ACCOUNTS env var — the latter is unconditionally
+    # overwritten by shell-common/env/claude.sh (the d36ac3a stale-env fix).
+    # Internal-PC now uses ~/.claude/ directly with no per-account dirs.
     _setup_sh_prereqs
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
 
-    run_in_bash "CLAUDE_ENABLED_ACCOUNTS=work CLAUDE_DEFAULT_ACCOUNT=work CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
     assert_success
 
     [ ! -d "$HOME/.claude-personal" ]
-    [ -d "$HOME/.claude-work" ]
-    [ -L "$HOME/.claude-work/settings.json" ]
+    [ ! -d "$HOME/.claude-work" ]
+    [ -d "$HOME/.claude" ]
+    [ -L "$HOME/.claude/statusline-command.sh" ]
 }
 
 @test "bash: claude/setup.sh is idempotent (second run)" {
@@ -837,7 +850,8 @@ JSON
     assert_success
     refute_output --partial "_is_mounted: command not found"
     refute_output --partial "command not found"
-    [ -L "$HOME/.claude/skills" ]
+    # #707, F-8: skills/ is a real composed directory; docs/ stays a symlink.
+    [ -d "$HOME/.claude/skills" ] && [ ! -L "$HOME/.claude/skills" ]
     [ -L "$HOME/.claude/docs" ]
 }
 
@@ -882,7 +896,8 @@ SH
     assert_output --partial "bind-mount detected at $HOME/.claude/docs"
     [ "$(cat "$HOME/fake-umount.log")" = "$HOME/.claude/skills
 $HOME/.claude/docs" ]
-    [ -L "$HOME/.claude/skills" ]
+    # #707, F-8: skills/ converges to a real composed directory; docs/ stays a symlink.
+    [ -d "$HOME/.claude/skills" ] && [ ! -L "$HOME/.claude/skills" ]
     [ -L "$HOME/.claude/docs" ]
 }
 
@@ -972,13 +987,13 @@ JSON
     refute_output --partial "Account mismatch"
 }
 
-# ---------- Issue #575: skills/docs via directory-level symlinks ----------
+# ---------- Issue #575 → #707: skills/ entry composition, docs/ dir-symlink ----------
 #
-# Issue #575 replaced both the legacy bind mount (#287) and the interim
-# per-skill symlinks (#342/#344) with a single directory-level symlink
-# per account: `~/.claude*/skills` → `dotfiles/claude/skills`. New skills
-# appear instantly without re-running setup, no sudo needed, no drift to
-# track.
+# Issue #575 collapsed the bind-mount (#287) + per-skill symlinks
+# (#342/#344) into a single directory-level symlink. Issue #707, F-8
+# then promoted skills/ to a real directory of per-entry symlinks so a
+# private overlay (~/company-skills) can layer into the same target.
+# docs/ retained the #575 single directory-symlink design.
 
 # Stage a FAKE_DOTFILES_ROOT under $HOME with skills/<name>/SKILL.md fixtures.
 # bash/main.bash unconditionally re-derives DOTFILES_ROOT from its own path
@@ -1002,59 +1017,73 @@ run_with_fake_ssot() {
     run_in_bash "export DOTFILES_ROOT='$FAKE_DOTFILES_ROOT'; $1"
 }
 
-@test "issue #575: claude_accounts_init creates directory-level skills/docs symlinks" {
+@test "issue #575 → #707: claude_accounts_init composes skills/ entries and dir-symlinks docs/" {
     _seed_ssot_skills alpha beta
     mkdir -p "$HOME/.claude-shared/plugins"
 
     run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init'
     assert_success
 
-    [ -L "$HOME/.claude-personal/skills" ]
+    # docs/ remains a single directory-level symlink (#575).
     [ -L "$HOME/.claude-personal/docs" ]
-    [ "$(readlink "$HOME/.claude-personal/skills")" = "$FAKE_DOTFILES_ROOT/claude/skills" ]
     [ "$(readlink "$HOME/.claude-personal/docs")" = "$FAKE_DOTFILES_ROOT/claude/docs" ]
-    # New skills appear via the symlink without a follow-up run.
-    [ -d "$HOME/.claude-personal/skills/alpha" ]
+    # skills/ is a real composed directory of per-entry symlinks (#707, F-8).
+    [ -d "$HOME/.claude-personal/skills" ] && [ ! -L "$HOME/.claude-personal/skills" ]
+    [ -L "$HOME/.claude-personal/skills/alpha" ]
+    [ "$(readlink "$HOME/.claude-personal/skills/alpha")" = "$FAKE_DOTFILES_ROOT/claude/skills/alpha" ]
+    [ -L "$HOME/.claude-personal/skills/beta" ]
     [ -f "$HOME/.claude-personal/skills/alpha/SKILL.md" ]
 }
 
-@test "issue #575: new skill added to SSOT is visible immediately (no setup re-run)" {
+@test "issue #707, F-8: re-running setup picks up newly added SSOT skill entries" {
+    # #575's instant-visibility property (a new SSOT entry visible without
+    # re-running setup) was intentionally traded by #707, F-8 for overlay
+    # support: skills/ is now a real directory of per-entry symlinks, so a
+    # new entry is wired in only on the next compose call. This test pins
+    # the new contract — visible after re-run, not before.
     _seed_ssot_skills alpha
     mkdir -p "$HOME/.claude-shared/plugins"
 
     run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init'
     assert_success
 
-    # Drop a new skill into the SSOT after setup ran.
     mkdir -p "$FAKE_DOTFILES_ROOT/claude/skills/just-added"
     printf -- '---\nname: just-added\ndescription: post-setup skill\n---\n' \
         > "$FAKE_DOTFILES_ROOT/claude/skills/just-added/SKILL.md"
 
+    # Pre-rerun: the new SSOT entry is NOT yet wired into the composed dir.
+    [ ! -e "$HOME/.claude-personal/skills/just-added" ]
+
+    # Re-run is idempotent for existing entries and wires the new one in.
+    run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init'
+    assert_success
+    [ -L "$HOME/.claude-personal/skills/just-added" ]
     [ -f "$HOME/.claude-personal/skills/just-added/SKILL.md" ]
 }
 
-@test "issue #575: real-dir collision at skills/ is backed up and replaced with symlink" {
+@test "issue #707, F-8: user data in skills/ coexists with dotfiles per-entry symlinks" {
+    # #575 backed up the entire skills/ directory on real-dir collision.
+    # #707, F-8 dropped that path: the composed-directory model treats a
+    # pre-existing real skills/ as the target itself, lays per-entry
+    # symlinks alongside user data, and refuses to overwrite non-symlink
+    # children (logs `skill entry blocked by non-symlink — skipped`).
     _seed_ssot_skills alpha
     mkdir -p "$HOME/.claude-shared/plugins"
-    # Simulate a user with a pre-existing real skills directory (e.g.
-    # leftover from the #342 per-skill era full of stale symlinks).
     mkdir -p "$HOME/.claude-personal/skills/leftover"
     echo "user-data" > "$HOME/.claude-personal/skills/leftover/notes.md"
 
     run_with_fake_ssot '_claude_account_setup_one personal "$HOME/.claude-personal"'
     assert_success
 
-    [ -L "$HOME/.claude-personal/skills" ]
-    [ "$(readlink "$HOME/.claude-personal/skills")" = "$FAKE_DOTFILES_ROOT/claude/skills" ]
-    # The previous real directory is preserved via the legacy
-    # `*-YYYYMMDDHHMMSS-original` backup convention so user-dropped data
-    # is never lost.
-    backup=$(ls -d "$HOME/.claude-personal/skills-"*-original 2>/dev/null | head -1)
-    [ -n "$backup" ]
-    grep -q "user-data" "$backup/leftover/notes.md"
+    # skills/ stays a real composed directory — no top-level backup of user data.
+    [ -d "$HOME/.claude-personal/skills" ] && [ ! -L "$HOME/.claude-personal/skills" ]
+    [ -z "$(ls -d "$HOME/.claude-personal/skills-"*-original 2>/dev/null)" ]
+    # User data preserved in place; dotfiles entry wired alongside.
+    grep -q "user-data" "$HOME/.claude-personal/skills/leftover/notes.md"
+    [ -L "$HOME/.claude-personal/skills/alpha" ]
 }
 
-@test "issue #575: second _claude_account_setup_one is idempotent for skills/docs" {
+@test "issue #575 → #707: second _claude_account_setup_one is idempotent for skills/docs" {
     _seed_ssot_skills alpha
     mkdir -p "$HOME/.claude-shared/plugins"
 
@@ -1065,9 +1094,11 @@ run_with_fake_ssot() {
     assert_success
     assert_output --partial "already linked"
 
-    [ -L "$HOME/.claude-personal/skills" ]
+    # docs/ remains a symlink; skills/ remains a composed real directory.
     [ -L "$HOME/.claude-personal/docs" ]
-    # No backups created on the second run — symlinks were already correct.
+    [ -d "$HOME/.claude-personal/skills" ] && [ ! -L "$HOME/.claude-personal/skills" ]
+    [ -L "$HOME/.claude-personal/skills/alpha" ]
+    # No backups created on the second run — state was already correct.
     [ -z "$(ls -d "$HOME/.claude-personal/skills-"*-original 2>/dev/null)" ]
     [ -z "$(ls -d "$HOME/.claude-personal/docs-"*-original 2>/dev/null)" ]
 }
@@ -1091,15 +1122,21 @@ run_with_fake_ssot() {
 
 # ---------- Issue #500: setup.sh / migrate 자동화 갭 보강 ----------
 
-@test "issue #500-F1: setup.sh auto-bootstraps settings.json from template when missing" {
+@test "issue #500-F1 → #584: setup.sh fails fast when tracked settings.json is missing" {
+    # Issue #584 promoted claude/settings.json to a tracked SSOT, so the
+    # #500-F1 auto-bootstrap-from-template path was retired — the SSOT is
+    # always expected to be present in any healthy checkout. setup.sh
+    # now refuses to run rather than silently fabricating one. This test
+    # pins that refusal so a future re-introduction of an auto-bootstrap
+    # cannot silently re-land.
     _setup_sh_prereqs
     rm -f "${DOTFILES_ROOT}/claude/settings.json"
     ln -s "${DOTFILES_ROOT}" "$HOME/dotfiles"
 
     run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
-    assert_success
-    assert_output --partial "settings.json 자동 부트스트랩"
-    [ -f "${DOTFILES_ROOT}/claude/settings.json" ]
+    assert_failure
+    assert_output --partial "settings.json 없음"
+    [ ! -f "${DOTFILES_ROOT}/claude/settings.json" ]
 }
 
 @test "issue #500-F1: setup.sh leaves existing settings.json untouched (idempotent)" {
