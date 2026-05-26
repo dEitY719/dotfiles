@@ -198,6 +198,7 @@ _register_default_help_descriptions() {
     # This approach works in both bash and zsh
     HELP_DESCRIPTIONS[uv_help]="${HELP_DESCRIPTIONS[uv_help]:-[Development] UV packages and environments}"
     HELP_DESCRIPTIONS[git_help]="${HELP_DESCRIPTIONS[git_help]:-[Development] Git version control shortcuts}"
+    HELP_DESCRIPTIONS[gc_help]="${HELP_DESCRIPTIONS[gc_help]:-[CLI] Git commit shortcuts (gc, gca)}"
     HELP_DESCRIPTIONS[gwt_help]="${HELP_DESCRIPTIONS[gwt_help]:-[Development] Git worktree command guide}"
     HELP_DESCRIPTIONS[gbr_help]="${HELP_DESCRIPTIONS[gbr_help]:-[Development] Git feature-branch teardown guide}"
     HELP_DESCRIPTIONS[devx_help]="${HELP_DESCRIPTIONS[devx_help]:-[Development] Dev helper — mise wrapper + repo checks}"
