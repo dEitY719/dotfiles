@@ -10,8 +10,9 @@ description: >-
   the former scripts/ location per issue #699). Accepts the
   same flags as the script (`--owner`, `--repo`, `--title`,
   `--auto-archive-window`, `--hide-columns`, `--dry-run`,
-  `--skip-pr-template`) plus `--no-bootstrap-labels`,
-  `--force-label-sync`, `--with-smoke-test`. Accepts `-h`/`--help`/`help`.
+  `--skip-pr-template`, `--no-auto-approve-env`) plus
+  `--no-bootstrap-labels`, `--force-label-sync`,
+  `--with-smoke-test`. Accepts `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Grep
 ---
 
@@ -79,6 +80,13 @@ bash "${SKILL_DIR}/lib/setup.sh" <user-flags>
 Parse stdout for `Project board setup finished` (success) or
 `A project titled '<TITLE>' already exists` (idempotent re-run). Extract
 the Project URL and number.
+
+After board creation the script also performs **Step 7 (env wiring)**:
+idempotently appends `OWNER/REPO` into the
+`GH_PR_REPLY_AUTO_APPROVE_REPOS` CSV in `~/.zshrc.local` so the next
+session passes the `gh:pr-reply` Step 8 solo-repo auto-approve G1
+(repo allowlist) guard without manual edits. Suppress with
+`--no-auto-approve-env` (e.g. org/collab repos).
 
 ## Step 8: UI Checklist + Report
 

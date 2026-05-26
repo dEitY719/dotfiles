@@ -396,6 +396,126 @@ EOF
     assert_output --partial "https://github.com/users/deity/projects/"
 }
 
+setup_basic_mocks() {
+    export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
+    export MOCK_GH_REPO_CONTEXT_JSON="${TEST_TEMP_HOME}/repo.json"
+    export MOCK_GH_EXISTING_PROJECTS_JSON="${TEST_TEMP_HOME}/projects.json"
+    export MOCK_GH_CREATE_PROJECT_JSON="${TEST_TEMP_HOME}/create.json"
+    export MOCK_GH_STATUS_FIELD_JSON="${TEST_TEMP_HOME}/status.json"
+    export MOCK_GH_TEMPLATE_JSON="${TEST_TEMP_HOME}/template.json"
+
+    write_auth_headers "$MOCK_GH_AUTH_HEADERS" "repo, project"
+    write_json_fixture "$MOCK_GH_REPO_CONTEXT_JSON" \
+        '{"data":{"repository":{"id":"R_user","name":"widget","url":"https://github.com/acme/widget","owner":{"__typename":"User","login":"acme","id":"U_1"},"defaultBranchRef":{"name":"main"}}}}'
+    write_json_fixture "$MOCK_GH_EXISTING_PROJECTS_JSON" \
+        '{"data":{"repositoryOwner":{"__typename":"User","projectsV2":{"nodes":[]}}}}'
+    write_json_fixture "$MOCK_GH_CREATE_PROJECT_JSON" \
+        '{"data":{"createProjectV2":{"projectV2":{"id":"PVT_new","number":17,"title":"widget","url":"https://github.com/users/acme/projects/17"}}}}'
+    write_json_fixture "$MOCK_GH_STATUS_FIELD_JSON" \
+        '{"data":{"node":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status"}]}}}}'
+    write_json_fixture "$MOCK_GH_TEMPLATE_JSON" \
+        '{"data":{"repository":{"object":null}}}'
+}
+
+# ---------------------------------------------------------------------------
+# Issue #743: GH_PR_REPLY_AUTO_APPROVE_REPOS env wiring in ~/.zshrc.local
+# ---------------------------------------------------------------------------
+
+@test "issue #743: --no-auto-approve-env emits SKIP and leaves ~/.zshrc.local alone" {
+    setup_basic_mocks
+    run_setup_kanban --owner acme --repo widget --no-auto-approve-env
+    assert_success
+    assert_output --partial "[SKIP] auto-approve env wiring (--no-auto-approve-env)"
+    [ ! -e "${TEST_TEMP_HOME}/.zshrc.local" ]
+}
+
+@test "issue #743: --dry-run shows 'would add' and writes nothing" {
+    setup_basic_mocks
+    run_setup_kanban --owner acme --repo widget --dry-run
+    assert_success
+    assert_output --partial '[dry-run] would add export GH_PR_REPLY_AUTO_APPROVE_REPOS="acme/widget" to ~/.zshrc.local'
+    [ ! -e "${TEST_TEMP_HOME}/.zshrc.local" ]
+}
+
+@test "issue #743: creates ~/.zshrc.local with header + variable when file is missing" {
+    setup_basic_mocks
+    run_setup_kanban --owner acme --repo widget
+    assert_success
+    assert_output --partial "[OK] auto-approve env updated: acme/widget appended to ~/.zshrc.local"
+    [ -f "${TEST_TEMP_HOME}/.zshrc.local" ]
+    grep -q '^# ~/.zshrc.local' "${TEST_TEMP_HOME}/.zshrc.local"
+    grep -q '^export GH_PR_REPLY_AUTO_APPROVE_REPOS="acme/widget"$' "${TEST_TEMP_HOME}/.zshrc.local"
+}
+
+@test "issue #743: idempotent — same repo twice does not duplicate the CSV entry" {
+    setup_basic_mocks
+    cat >"${TEST_TEMP_HOME}/.zshrc.local" <<'EOF'
+# user-managed
+export GH_PR_REPLY_AUTO_APPROVE_REPOS="acme/widget"
+EOF
+    run_setup_kanban --owner acme --repo widget
+    assert_success
+    assert_output --partial "[OK] auto-approve env already configured for acme/widget"
+    # Variable line must still appear exactly once and unchanged
+    occurrences="$(grep -c '^export GH_PR_REPLY_AUTO_APPROVE_REPOS=' "${TEST_TEMP_HOME}/.zshrc.local")"
+    [ "$occurrences" = "1" ]
+    grep -q '^export GH_PR_REPLY_AUTO_APPROVE_REPOS="acme/widget"$' "${TEST_TEMP_HOME}/.zshrc.local"
+}
+
+@test "issue #743: appends to existing CSV when repo not present" {
+    setup_basic_mocks
+    cat >"${TEST_TEMP_HOME}/.zshrc.local" <<'EOF'
+# user-managed
+export GH_PR_REPLY_AUTO_APPROVE_REPOS="other/repo,another/one"
+EOF
+    run_setup_kanban --owner acme --repo widget
+    assert_success
+    assert_output --partial "[OK] auto-approve env updated: acme/widget appended to ~/.zshrc.local"
+    grep -q '^export GH_PR_REPLY_AUTO_APPROVE_REPOS="other/repo,another/one,acme/widget"$' "${TEST_TEMP_HOME}/.zshrc.local"
+}
+
+@test "issue #743: PR #744 review — single-quoted CSV value is rewritten to double-quoted with repo appended" {
+    setup_basic_mocks
+    cat >"${TEST_TEMP_HOME}/.zshrc.local" <<'EOF'
+# user-managed
+export GH_PR_REPLY_AUTO_APPROVE_REPOS='other/repo'
+EOF
+    run_setup_kanban --owner acme --repo widget
+    assert_success
+    assert_output --partial "[OK] auto-approve env updated: acme/widget appended to ~/.zshrc.local"
+    # Single-quoted value must NOT corrupt the line (regression: pre-fix
+    # the unquoted fallback matched `'other/repo'` and produced
+    # `="'other/repo',acme/widget"`).
+    grep -q "^export GH_PR_REPLY_AUTO_APPROVE_REPOS=\"other/repo,acme/widget\"\$" \
+        "${TEST_TEMP_HOME}/.zshrc.local"
+    # No stray single quotes inside the rewritten value.
+    ! grep -qE "GH_PR_REPLY_AUTO_APPROVE_REPOS=.*'.*'" "${TEST_TEMP_HOME}/.zshrc.local"
+}
+
+@test "issue #743: existing-project re-run also wires env (idempotent)" {
+    export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
+    export MOCK_GH_REPO_CONTEXT_JSON="${TEST_TEMP_HOME}/repo.json"
+    export MOCK_GH_EXISTING_PROJECTS_JSON="${TEST_TEMP_HOME}/projects.json"
+    export MOCK_GH_CREATE_PROJECT_JSON="${TEST_TEMP_HOME}/create.json"
+    export MOCK_GH_STATUS_FIELD_JSON="${TEST_TEMP_HOME}/status.json"
+    export MOCK_GH_TEMPLATE_JSON="${TEST_TEMP_HOME}/template.json"
+
+    write_auth_headers "$MOCK_GH_AUTH_HEADERS" "repo, project"
+    write_json_fixture "$MOCK_GH_REPO_CONTEXT_JSON" \
+        '{"data":{"repository":{"id":"R_user","name":"dotfiles","url":"https://github.com/deity/dotfiles","owner":{"__typename":"User","login":"deity","id":"U_1"},"defaultBranchRef":{"name":"main"}}}}'
+    write_json_fixture "$MOCK_GH_EXISTING_PROJECTS_JSON" \
+        '{"data":{"repositoryOwner":{"__typename":"User","projectsV2":{"nodes":[{"id":"PVT_existing","number":12,"title":"dotfiles","url":"https://github.com/users/deity/projects/12"}]}}}}'
+    write_json_fixture "$MOCK_GH_CREATE_PROJECT_JSON" '{}'
+    write_json_fixture "$MOCK_GH_STATUS_FIELD_JSON" '{}'
+    write_json_fixture "$MOCK_GH_TEMPLATE_JSON" '{}'
+
+    run_setup_kanban --owner deity --repo dotfiles
+    assert_success
+    assert_output --partial "already exists (#12)"
+    assert_output --partial "[OK] auto-approve env updated: deity/dotfiles appended to ~/.zshrc.local"
+    grep -q '^export GH_PR_REPLY_AUTO_APPROVE_REPOS="deity/dotfiles"$' "${TEST_TEMP_HOME}/.zshrc.local"
+}
+
 @test "issue #699: detect_host derives GHE host from git remote" {
     # Set up a fake git repo in TEST_TEMP_HOME with a GHE origin so
     # detect_host() picks up github.samsungds.net instead of github.com.
