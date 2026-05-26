@@ -77,8 +77,7 @@ echo ""
 #   - file writes / pipes: echo ... > file, echo ... | cmd
 #   - lines already using UX_* variables (ux_lib colors)
 echo "Rule 3: Use ux_lib for output (no raw echo)"
-raw_echo_files=0
-raw_echo_list=""
+raw_echo_files=()
 for file in shell-common/functions/*.sh; do
     [ -f "$file" ] || continue
     # Skip help content files — they display structured text by design
@@ -88,17 +87,18 @@ for file in shell-common/functions/*.sh; do
         | grep -v -e '> *\$' -e '> *"' -e '| ' \
         | grep -v 'UX_' \
         | grep -vq 'echo "  '; then
-        raw_echo_files=$((raw_echo_files + 1))
-        raw_echo_list="${raw_echo_list}  $file\n"
+        raw_echo_files+=("$file")
     fi
 done
 
-if [ "$raw_echo_files" -eq 0 ]; then
+if [ "${#raw_echo_files[@]}" -eq 0 ]; then
     test_case "No raw echo in functions/" 0
 else
-    test_case "No raw echo in functions/ ($raw_echo_files files)" 1
-    printf "%b" "$raw_echo_list" | head -5
-    remaining=$((raw_echo_files - 5))
+    test_case "No raw echo in functions/ (${#raw_echo_files[@]} files)" 1
+    for file in "${raw_echo_files[@]:0:5}"; do
+        echo "  $file"
+    done
+    remaining=$((${#raw_echo_files[@]} - 5))
     [ "$remaining" -gt 0 ] && echo "  ... and $remaining more"
 fi
 echo ""
