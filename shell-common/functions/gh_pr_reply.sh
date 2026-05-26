@@ -209,6 +209,18 @@ gh_pr_reply() {
         return 1
     fi
 
+    # Validate --ai value at the parser level (issue #757). Value
+    # validation must fail-fast regardless of whether the named CLI is on
+    # PATH; CLI presence is checked later in _gh_pr_reply_spawn_worker so
+    # the failed:* short-circuit can still trip when the CLI is missing.
+    case "$_ai" in
+        claude|codex|gemini) ;;
+        *)
+            ux_error "invalid --ai value: '$_ai' (expected: claude|codex|gemini)"
+            return 1
+            ;;
+    esac
+
     # Validate --user (issue #365): only meaningful with --ai claude.
     # Mirrors gwt spawn's policy and reuses _claude_resolve_account SSOT.
     if [ -n "$_account" ]; then
@@ -236,13 +248,16 @@ gh_pr_reply() {
         ux_error "gh CLI not found"
         return 1
     fi
-    if ! _gh_pr_reply_require_ai_cli "$_ai"; then
-        return 1
-    fi
     if ! command -v gwt >/dev/null 2>&1; then
         ux_error "gwt function not loaded (source shell-common first)"
         return 1
     fi
+    # AI CLI presence check is deferred to _gh_pr_reply_spawn_worker (issue
+    # #757). Doing it here would short-circuit the failed-run guard inside
+    # spawn_worker and the dispatcher-level PR-number / main-repo
+    # validation when the CLI is missing — CI runners without claude
+    # installed were tripping the presence check first and never reached
+    # the validation / failed:* state branches the tests assert on.
 
     # Must be in main repo (not a worktree)
     local _git_dir _git_common
@@ -287,26 +302,11 @@ _gh_pr_reply_spawn_worker() {
     local _account="${3:-}"
     local _dir _log _state _pid _cfg_dir _resolve_account
     _dir=$(_gh_pr_reply_pr_dir "$_pr")
-    mkdir -p "$_dir"
-    _log="$_dir/log"
-    printf '%s\n' "$_ai" >"$_dir/ai"
-
-    # Resolve CLAUDE_CONFIG_DIR for the worker (issue #365). Without this,
-    # the bare `claude` binary inside the worker falls back to ~/.claude/
-    # which has no credentials in multi-account setups → "Not logged in".
-    # Priority: explicit --user > $CLAUDE_DEFAULT_ACCOUNT > none.
-    _cfg_dir=""
-    if [ "$_ai" = "claude" ]; then
-        _resolve_account="${_account:-${CLAUDE_DEFAULT_ACCOUNT:-}}"
-        if [ -n "$_resolve_account" ]; then
-            if command -v _claude_resolve_account >/dev/null 2>&1; then
-                _cfg_dir="$(_claude_resolve_account "$_resolve_account" 2>/dev/null || true)"
-            fi
-            [ -z "$_cfg_dir" ] && _cfg_dir="$HOME/.claude-$_resolve_account"
-        fi
-    fi
 
     # Idempotency check — mirrors gh-pr-approve / gh-flow semantics.
+    # Done FIRST (before mkdir, AI CLI presence check, log rotation) so
+    # done / alive / failed:* short-circuits don't require the AI CLI on
+    # PATH and don't leak a state dir (issue #757 — tests 374/375).
     _state=$(_gh_pr_reply_get_state "$_pr")
     case "$_state" in
         done)
@@ -332,6 +332,31 @@ _gh_pr_reply_spawn_worker() {
             return 0
             ;;
     esac
+
+    # AI CLI presence check — deferred here from the dispatcher (issue
+    # #757) so the failed:* / done / alive branches above can short-
+    # circuit without requiring the CLI on PATH. Done before mkdir so
+    # missing-CLI runs leak no state dir.
+    _gh_pr_reply_require_ai_cli "$_ai" || return 1
+
+    mkdir -p "$_dir"
+    _log="$_dir/log"
+    printf '%s\n' "$_ai" >"$_dir/ai"
+
+    # Resolve CLAUDE_CONFIG_DIR for the worker (issue #365). Without this,
+    # the bare `claude` binary inside the worker falls back to ~/.claude/
+    # which has no credentials in multi-account setups → "Not logged in".
+    # Priority: explicit --user > $CLAUDE_DEFAULT_ACCOUNT > none.
+    _cfg_dir=""
+    if [ "$_ai" = "claude" ]; then
+        _resolve_account="${_account:-${CLAUDE_DEFAULT_ACCOUNT:-}}"
+        if [ -n "$_resolve_account" ]; then
+            if command -v _claude_resolve_account >/dev/null 2>&1; then
+                _cfg_dir="$(_claude_resolve_account "$_resolve_account" 2>/dev/null || true)"
+            fi
+            [ -z "$_cfg_dir" ] && _cfg_dir="$HOME/.claude-$_resolve_account"
+        fi
+    fi
 
     # Rotate previous log (keep one .prev for debugging)
     if [ -f "$_log" ]; then
