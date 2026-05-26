@@ -1,6 +1,6 @@
 {
   "env": {
-    "GH_PR_REPLY_AUTO_APPROVE_REPOS": "dEitY719/dotfiles"
+    "GH_PR_REPLY_AUTO_APPROVE_REPOS": "dEitY719/dotfiles,dEitY719/quantfolio"
   },
   "hooks": {
     "Stop": [
