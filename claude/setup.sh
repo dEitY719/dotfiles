@@ -428,24 +428,31 @@ _setup_gemini_skills_symlink() {
     log_dim "✓ ${HOME}/.gemini/skills SSOT 연결 완료"
 }
 
-# _print_stale_bind_mount_sudoers_hint — surface stale /etc/sudoers.d/
-# files left over from the pre-#575 bind-mount design.
+# _print_stale_bind_mount_sudoers_hint — surface (and optionally clean
+# up) stale /etc/sudoers.d/ files left over from the pre-#575 bind-mount
+# design.
 #
 # Issue #575 removed _setup_bind_mount_sudoers and the entire bind-mount
 # integration in favour of directory-level symlinks. Existing PCs may
 # still carry sudoers entries from the prior layout — they no longer
 # match anything in the setup and only widen the sudoers surface, so
-# point the user at them. Cleanup is left manual on purpose because
-# rm under /etc/sudoers.d/ needs sudo and we don't want to prompt
-# from setup.sh.
+# point the user at them.
+#
+# Issue #762: when stdin/stdout are a TTY and the caller did not opt out
+# via DOTFILES_NONINTERACTIVE=1, ask once whether to delete the files
+# via `sudo rm`. On any other condition (non-interactive run, declined
+# prompt, sudo failure) fall back to the original manual-command hint
+# so the user still has a copy-paste path.
 _print_stale_bind_mount_sudoers_hint() {
     local sudoers_glob='/etc/sudoers.d/claude-skills-mount-* /etc/sudoers.d/claude-docs-mount-*'
     local found=""
+    local count=0
     # shellcheck disable=SC2086  # glob intentionally unquoted
     for _f in $sudoers_glob; do
         [ -f "$_f" ] || continue
         found="${found}  $_f
 "
+        count=$((count + 1))
     done
 
     [ -n "$found" ] || return 0
@@ -455,11 +462,22 @@ _print_stale_bind_mount_sudoers_hint() {
     ux_info "Issue #575 retired bind-mount for Claude skills/docs in favour of"
     ux_info "a single directory symlink. The sudoers files below were created"
     ux_info "by an earlier dotfiles version and no longer have a matching"
-    ux_info "consumer — they only widen the sudoers surface. Remove them"
-    ux_info "manually when convenient (requires sudo):"
+    ux_info "consumer — they only widen the sudoers surface."
     echo ""
     printf '%s' "$found"
     echo ""
+
+    if [ -t 0 ] && [ -t 1 ] && [ "${DOTFILES_NONINTERACTIVE:-0}" != "1" ]; then
+        if ux_confirm "Stale sudoers files detected (${count}). 자동 정리하시겠습니까?" "n"; then
+            # shellcheck disable=SC2086  # glob intentionally unquoted
+            if sudo rm -f $sudoers_glob; then
+                ux_success "Stale sudoers files 정리 완료."
+                return 0
+            fi
+            ux_warning "Stale sudoers files 정리 실패 — 아래 명령을 수동으로 실행하세요:"
+        fi
+    fi
+
     ux_bullet "Quick command:"
     cat <<'EOF'
 
