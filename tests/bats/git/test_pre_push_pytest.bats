@@ -18,7 +18,7 @@ load '../test_helper'
 
 setup() {
     HOOK="${_BATS_REAL_DOTFILES_ROOT}/git/hooks/pre-push"
-    STUB_DIR="$(mktemp -d -t pre-push-pytest-bats.XXXXXX)"
+    STUB_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pre-push-pytest-bats.XXXXXX")"
     STUB_SENTINEL="${STUB_DIR}/.invoked"
 }
 
