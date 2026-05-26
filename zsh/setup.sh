@@ -36,6 +36,10 @@ ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"
 ZSH_ZSHRC_SOURCE="${ZSH_DOTFILES}/zshrc"
 HOME_ZSHRC="${HOME}/.zshrc"
 
+# Tracks the backup path created when ~/.zshrc was replaced from a
+# regular file to a symlink (issue #761). Empty when no backup was made.
+ZSHRC_BACKUP_NOTICE_PATH=""
+
 # Load UX library (unified library at shell-common/tools/ux_lib/)
 UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 if [ -f "$UX_LIB" ]; then
@@ -82,8 +86,12 @@ create_symlink() {
         rm "$link_name" || log_error_and_exit "기존 심볼릭 링크 제거 실패: $link_name"
     elif [ -f "$link_name" ]; then
         log_warning "경고: $link_name 가 심볼릭 링크가 아닌 일반 파일입니다. 백업 후 제거합니다."
-        backup_file "$link_name" "${link_name}-$(date +%Y%m%d%H%M%S)-original"
+        local backup_path="${link_name}-$(date +%Y%m%d%H%M%S)-original"
+        backup_file "$link_name" "$backup_path"
         rm "$link_name" || log_error_and_exit "기존 파일 제거 실패: $link_name"
+        if [ "$link_name" = "$HOME_ZSHRC" ]; then
+            ZSHRC_BACKUP_NOTICE_PATH="$backup_path"
+        fi
     fi
 
     log_info "심볼릭 링크 생성: $link_name -> $target"
@@ -155,5 +163,23 @@ ux_bullet "Zsh 관리 명령어: ${UX_BOLD}zsh-help${UX_RESET}"
 ux_bullet "테마 변경: ${UX_BOLD}zsh-themes${UX_RESET}, ${UX_BOLD}zsh-theme <name>${UX_RESET}"
 ux_bullet "플러그인 확인: ${UX_BOLD}zsh-plugins${UX_RESET}"
 echo ""
+
+# Issue #761 — when ~/.zshrc was replaced from a regular file to a
+# symlink, the backup is easy for users to forget. Surface it explicitly
+# with a diff guide so external-installer lines (bun/nvm/pyenv init,
+# etc.) can be migrated into ~/.zshrc.local before the backup is lost.
+if [ -n "$ZSHRC_BACKUP_NOTICE_PATH" ]; then
+    ux_section "~/.zshrc 백업 검토 필요"
+    ux_info "설치 중 ~/.zshrc 일반 파일이 심볼릭 링크로 교체되었습니다."
+    ux_bullet "백업: ${UX_BOLD}${ZSHRC_BACKUP_NOTICE_PATH}${UX_RESET}"
+    echo ""
+    ux_info "dotfiles 외부 도구가 추가한 줄이 있는지 확인:"
+    ux_bullet "${UX_BOLD}diff ${ZSHRC_BACKUP_NOTICE_PATH} ${ZSH_ZSHRC_SOURCE}${UX_RESET}"
+    echo ""
+    ux_info "추가 설정은 다음 위치에 보관 권장:"
+    ux_bullet "${UX_BOLD}~/.zshrc.local${UX_RESET} (PC-specific overrides)"
+    ux_bullet "${UX_BOLD}shell-common/env/development.local.sh${UX_RESET}"
+    echo ""
+fi
 
 exit 0
