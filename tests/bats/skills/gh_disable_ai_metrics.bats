@@ -51,7 +51,8 @@ SKILLS_REQUIRING_GUARD=(
         local dir="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/${skill}"
         # Progressive disclosure: the guard may live inline in SKILL.md or in
         # any references/*.md file the SKILL.md delegates to. Either is fine.
-        run grep -RF 'GH_DISABLE_AI_METRICS:-0' "$dir"
+        # POSIX-compliant recursive grep via find -exec (no GNU/BSD grep -R).
+        run find "$dir" -type f -exec grep -F 'GH_DISABLE_AI_METRICS:-0' {} +
         [ "$status" -eq 0 ] || {
             echo "missing GH_DISABLE_AI_METRICS guard in $dir (SKILL.md + references/)"
             return 1
