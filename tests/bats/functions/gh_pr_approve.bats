@@ -626,7 +626,11 @@ EOF
     _install_fake_ai_cli claude
     mkdir -p "$HOME/.claude"
     printf '{"access_token":"fake"}\n' >"$HOME/.claude/.credentials.json"
-    run_in_bash "PATH='$TEST_TEMP_HOME/bin:'\$PATH cd '$FAKE_REPO' && gh_pr_approve 42 2>&1"
+    # `export PATH` (not the prefix form) — same reason as the logged-out
+    # tests above. Without it, in CI the missing system `claude` binary
+    # would short-circuit at "CLI not found" before the auth check ran,
+    # producing a false positive against `refute_output` (PR #765 review).
+    run_in_bash "export PATH='$TEST_TEMP_HOME/bin:'\$PATH; cd '$FAKE_REPO' && gh_pr_approve 42 2>&1"
     refute_output --partial "claude CLI not authenticated"
 }
 
@@ -655,7 +659,9 @@ EOF
     _install_fake_ai_cli codex
     mkdir -p "$HOME/.codex"
     printf '{"token":"fake"}\n' >"$HOME/.codex/auth.json"
-    run_in_bash "PATH='$TEST_TEMP_HOME/bin:'\$PATH cd '$FAKE_REPO' && gh_pr_approve 42 --ai codex 2>&1"
+    # See claude credentials test above for why `export PATH` is required
+    # (PR #765 review).
+    run_in_bash "export PATH='$TEST_TEMP_HOME/bin:'\$PATH; cd '$FAKE_REPO' && gh_pr_approve 42 --ai codex 2>&1"
     refute_output --partial "codex CLI not authenticated"
 }
 
@@ -672,7 +678,9 @@ EOF
     _install_fake_ai_cli gemini
     mkdir -p "$HOME/.gemini"
     printf '{"refresh_token":"fake"}\n' >"$HOME/.gemini/oauth_creds.json"
-    run_in_bash "PATH='$TEST_TEMP_HOME/bin:'\$PATH cd '$FAKE_REPO' && gh_pr_approve 42 --ai gemini 2>&1"
+    # See claude credentials test above for why `export PATH` is required
+    # (PR #765 review).
+    run_in_bash "export PATH='$TEST_TEMP_HOME/bin:'\$PATH; cd '$FAKE_REPO' && gh_pr_approve 42 --ai gemini 2>&1"
     refute_output --partial "gemini CLI not authenticated"
 }
 
