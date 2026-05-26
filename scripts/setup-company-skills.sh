@@ -4,8 +4,8 @@
 # every active Claude Code config dir.
 #
 # PURPOSE: take entries from a user-supplied private skills repo
-#   ($COMPANY_SKILLS_HOME, default ${HOME}/company-skills) and add them
-#   as entry-level symlinks inside ~/.claude*/skills/, which
+#   ($COMPANY_SKILLS_HOME, default /home/bwyoon/para/project/company-skills)
+#   and add them as entry-level symlinks inside ~/.claude*/skills/, which
 #   claude/setup.sh has just materialised as real directories of
 #   entry-level symlinks (issue #707, F-8).
 #
@@ -31,7 +31,7 @@
 _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 DOTFILES_ROOT="$(cd "$(dirname "$_SCRIPT_PATH")/.." && pwd)"
 
-COMPANY_SKILLS_HOME="${COMPANY_SKILLS_HOME:-${HOME}/company-skills}"
+COMPANY_SKILLS_HOME="${COMPANY_SKILLS_HOME:-/home/bwyoon/para/project/company-skills}"
 
 # Load UX library
 UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
