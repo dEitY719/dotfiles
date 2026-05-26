@@ -13,7 +13,7 @@ unalias gwt 2>/dev/null || true
 # Usage: gwt-help [section]
 # ============================================================================
 _gwt_help_summary() {
-    ux_info "Usage: gwt help [section|--list|--all]"
+    ux_info "Usage: gwt-help [section|--list|--all]"
     ux_bullet "sections"
     ux_bullet_sub "add      gwt add <path> [branch] [start]              create worktree"
     ux_bullet_sub "list     gwt list|ls [--quick|--remote]               list worktrees"
@@ -22,7 +22,7 @@ _gwt_help_summary() {
     ux_bullet_sub "spawn    gwt spawn <name> [--task|--base|--tmux|...]  create named worktree (AI workflow)"
     ux_bullet_sub "status   gwt status [<name>]                          per-worktree diagnostic"
     ux_bullet_sub "teardown gwt teardown [--force] [--keep-branch]       cleanup current/all worktree(s)"
-    ux_bullet_sub "details  gwt help <section> (example: gwt help spawn)"
+    ux_bullet_sub "details: gwt-help <section>  (example: gwt-help spawn)"
 }
 
 _gwt_help_list_sections() {
@@ -46,7 +46,7 @@ _gwt_help_rows_list() {
     ux_table_row "default" "PATH/BRANCH/STATE/AGE/NEXT columns" "Local signals (no network)"
     ux_table_row "--quick" "path/commit/branch only" "Legacy output"
     ux_table_row "--remote" "Adds PR state via batched gh CLI call" "One network call regardless of N"
-    ux_table_row "states" "dirty/ahead/pr-open/pr-merged/merged/..." "See 'gwt help status' for full list"
+    ux_table_row "states" "dirty/ahead/pr-open/pr-merged/merged/..." "See 'gwt-help status' for full list"
 }
 
 _gwt_help_rows_status() {
@@ -117,8 +117,8 @@ _gwt_help_section_rows() {
             _gwt_help_rows_teardown
             ;;
         *)
-            ux_error "Unknown gwt help section: $1"
-            ux_info "Try: gwt help --list"
+            ux_error "Unknown gwt-help section: $1"
+            ux_info "Try: gwt-help --list"
             return 1
             ;;
     esac
@@ -166,13 +166,18 @@ gwt() {
         spawn)     shift; git_worktree_spawn "$@" ;;
         status)    shift; git_worktree_status "$@" ;;
         teardown)  shift; git_worktree_teardown "$@" ;;
-        -h|--help|help|"")
+        help)
+            ux_error "Use canonical entrypoint: gwt-help (not 'gwt help')"
+            ux_info "Try: gwt-help"
+            return 1
+            ;;
+        -h|--help|"")
             [ $# -gt 0 ] && shift
             gwt_help "$@"
             ;;
         *)
             ux_error "Unknown command: $1"
-            ux_info "Run: gwt help"
+            ux_info "Run: gwt-help"
             return 1
             ;;
     esac

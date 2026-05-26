@@ -18,6 +18,12 @@
 # even with a broken unalias guard (false positive, PR #693 review). `eval`
 # forces a runtime re-parse at the point where the alias *is* registered, so
 # only a working guard prevents the alias from expanding to `git worktree`.
+#
+# Post-#746: `gwt help` (legacy 공백 형식) 은 dotfiles 함수가 명시적으로
+# 거부 (`exit 1` + canonical-entrypoint 안내). 함수 호출이 실제로 일어났는지
+# (alias shadow 가 무효화됐는지) 검증할 때, 거부 메시지 그 자체가 dotfiles
+# 함수만이 생성하는 고유 시그니처이므로 git native (`git worktree help` →
+# git 자체 도움말) 와 명확히 구분된다.
 
 load '../test_helper'
 
@@ -79,10 +85,13 @@ teardown() {
         shopt -s expand_aliases
         alias gwt='git worktree'
         source '${DOTFILES_ROOT}/bash/main.bash'
-        eval 'gwt help'
+        eval 'gwt help' 2>&1
     "
-    assert_success
-    assert_output --partial "Usage: gwt help"
+    # Post-#746: dotfiles 함수는 'gwt help' 를 거부 (exit 1) + canonical
+    # entrypoint 안내. git native ('git worktree help') 가 호출됐다면
+    # 이 시그니처가 절대 나오지 않으므로 alias-shadow 가 무효화됐음을 증명.
+    assert_failure
+    assert_output --partial "canonical entrypoint: gwt-help"
 }
 
 @test "alias-shadow: 'gwt help' invokes dotfiles function (not the shadowed git native) in zsh" {
@@ -97,8 +106,8 @@ teardown() {
         export TERM=dumb
         alias gwt='git worktree'
         source '${DOTFILES_ROOT}/zsh/main.zsh'
-        eval 'gwt help'
+        eval 'gwt help' 2>&1
     "
-    assert_success
-    assert_output --partial "Usage: gwt help"
+    assert_failure
+    assert_output --partial "canonical entrypoint: gwt-help"
 }
