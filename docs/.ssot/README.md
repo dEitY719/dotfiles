@@ -20,6 +20,7 @@
 | [`github-project-board.md`](./github-project-board.md) | GitHub Project v2 보드 운영 규칙, closing keyword 정책 |
 | [`discussions-policy.md`](./discussions-policy.md) | GitHub Discussions 카테고리·라우팅·변환 규약 |
 | [`commit-message-standard.md`](./commit-message-standard.md) | 브랜치 명명·커밋 메시지·work_log 자동화 |
+| [`local-test-policy.md`](./local-test-policy.md) | 테스트 실행 위치 정책 — CI = lint only, 로컬 pre-push = `mise run test` (이슈 #754) |
 
 ## 변경 절차
 

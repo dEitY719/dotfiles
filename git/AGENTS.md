@@ -22,10 +22,25 @@
 - Prefer `bash git/tests/test_hooks.sh` for integration-level verification of the 2-tier hook system.
 - If a change targets repository-wide policy (naming, shebang, UX rules), also run `mise run lint-sh`.
 
+# Local Pytest (issue #754)
+
+`hooks/pre-push` runs `mise run test` once per push (Layer 0, before the
+per-ref loop). This replaces the GitHub Actions `Test (mise)` job — CI now
+runs lint only. SSOT: `docs/.ssot/local-test-policy.md`.
+
+Skip mechanisms:
+- `SKIP_LOCAL_PYTEST=1` — explicit opt-out (logged, exit 0).
+- `mise` not on `PATH` — silent skip with one stderr note (external
+  contributor / CI fallback).
+- `SKIP_PRE_PUSH=1` — bypasses this layer along with the rest.
+
+Regression: `tests/bats/git/test_pre_push_pytest.bats` (4 cases — skip,
+missing, success, failure).
+
 # Upstream Push Leak Guard
 
-`hooks/pre-push` runs a second layer after the protected-branch check: when
-the push target URL matches `UPSTREAM_REMOTES_ERE`, it scans the push range
+`hooks/pre-push` Layer 2 runs after the protected-branch check: when the
+push target URL matches `UPSTREAM_REMOTES_ERE`, it scans the push range
 (commit messages + added/modified file contents) against `LEAK_PATTERNS_ERE`
 and blocks the push on any match.
 

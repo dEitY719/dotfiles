@@ -1,15 +1,21 @@
 #!/bin/bash
 # Git pre-push hook
 #
-# Two layers, evaluated per ref:
+# Three layers, evaluated in order:
+#   0. Local pytest (issue #754) — `mise run test` once per push. Replaces
+#      the GitHub Actions `Test (mise)` job; SSOT in
+#      `docs/.ssot/local-test-policy.md`.
 #   1. Protected-branch block (PROTECTED_BRANCHES from pre-push-rules.sh).
 #   2. Upstream leak guard — when the push target's URL matches
 #      UPSTREAM_REMOTES_ERE, scan commit messages + added/modified file
 #      contents in the push range against LEAK_PATTERNS_ERE.
 #
+# Layer 0 runs once before the per-ref loop; layers 1 and 2 run per ref.
+#
 # Skip flags (each is one off-switch — usable independently):
-#   SKIP_PRE_PUSH=1     bypass the entire hook (both layers)
-#   SKIP_LEAK_GUARD=1   bypass only layer #2 (PROTECTED_BRANCHES still runs)
+#   SKIP_PRE_PUSH=1       bypass the entire hook (all three layers)
+#   SKIP_LOCAL_PYTEST=1   bypass only layer #0 (WIP push opt-out)
+#   SKIP_LEAK_GUARD=1     bypass only layer #2 (PROTECTED_BRANCHES still runs)
 #
 # Hook protocol (git push pre-push):
 #   $1 = remote name (e.g. "origin")
@@ -35,6 +41,40 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HOOK_DIR}/../config/pre-push-rules.sh" || exit 0
 
 ZERO_SHA="0000000000000000000000000000000000000000"
+
+# ============================================
+# Layer 0: local pytest (issue #754)
+# ============================================
+# Replaces the GitHub Actions `Test (mise)` job. Runs the full mise
+# test target once per push (not per ref) so regressions are caught
+# locally before the push lands. CI now runs lint only.
+#
+# Three escape paths, all logged:
+#   SKIP_LOCAL_PYTEST=1   opt-out for WIP / intentional-failure pushes.
+#   mise missing          silent skip with one stderr note for external
+#                         contributors and bare-metal environments.
+#   SKIP_PRE_PUSH=1       handled at the top of the script and bypasses
+#                         this layer too.
+#
+# stdin is redirected from /dev/null so a test command that touches
+# stdin cannot consume the ref list the per-ref loop below reads.
+# SSOT: docs/.ssot/local-test-policy.md.
+case "${SKIP_LOCAL_PYTEST:-0}" in
+1)
+    printf '[pre-push] SKIP_LOCAL_PYTEST=1 — skip mise run test\n' >&2
+    ;;
+*)
+    if command -v mise >/dev/null 2>&1; then
+        printf '[pre-push] mise run test (set SKIP_LOCAL_PYTEST=1 to bypass)\n' >&2
+        if ! mise run test </dev/null; then
+            printf '[pre-push] mise run test FAIL — push aborted\n' >&2
+            exit 1
+        fi
+    else
+        printf '[pre-push] mise unavailable — skip mise run test (CI fallback / external contributor)\n' >&2
+    fi
+    ;;
+esac
 
 # ============================================
 # Leak guard activation decision (F-1)

@@ -1,10 +1,19 @@
 name: CI
 
-# Dotfiles-wide CI: lint + test via mise.
+# Dotfiles-wide CI: lint only via mise.
 # Replaces the previous tox-driven flow (issue #722, PR 3 = #727).
 # Tool versions are pinned in mise.toml at the repo root — same SSOT
 # as local `mise run lint` / `mise run test`, so CI and developer
 # laptops cannot drift.
+#
+# Note on the `test` job removal (#754, 2026-05-27):
+#   The previous `Test (mise)` job was removed because each PR push was
+#   costing 10~15 min of runner time while the same 933-item pytest
+#   matrix completes in ~3 min on a local 8+ core dev machine via
+#   `mise run test`. Pytest now runs in the local `pre-push` git hook
+#   (see `git/hooks/pre-push` and `docs/.ssot/local-test-policy.md`).
+#   Roll back: `git revert` this commit and re-add the job. Branch
+#   protection's required-check list must drop `Test (mise)` to match.
 #
 # The previous packages/my-cli Node.js pipeline moved to
 # .github/workflows/cli-package.yml unchanged.
@@ -49,47 +58,3 @@ jobs:
 
       - name: Run mise lint
         run: mise run lint
-
-  test:
-    name: Test (mise)
-    runs-on: ubuntu-latest
-    # 1062 통합 테스트가 bash + zsh parametrize 로 pexpect interactive
-    # shell 을 매 케이스 마다 spawn 한다. 4코어 러너에서 첫 측정치는
-    # ~35분 — 15분은 50% 지점에서 cancel 됐다 (#727 CI run 26353146112).
-    # 45분 으로 헤드룸 확보. 후속 최적화 (shell shard 분리 / pexpect
-    # 비용 축소) 는 별도 이슈로 분리.
-    timeout-minutes: 45
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          # tests/bats/lib/{bats-core,bats-assert,bats-support} are git
-          # submodules — without `submodules: recursive` the bats binary
-          # is missing and tests/test silently soft-skips that layer.
-          submodules: recursive
-
-      - name: Install zsh
-        # tests/integration/* parametrize on both bash and zsh shells via
-        # pexpect. zsh is not preinstalled on ubuntu-latest runners, so
-        # without this step every `[zsh]` parametrized test fails with
-        # exit code 127 (command not found).
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y zsh
-
-      - name: Setup mise
-        uses: jdx/mise-action@v2
-        with:
-          install: true
-          cache: true
-
-      - name: Install Python deps (uv sync)
-        # tests/test calls `python3 -m pytest` directly, so the project
-        # venv must exist with pytest + pytest-xdist + pexpect on path.
-        run: uv sync --group dev
-
-      - name: Run mise test
-        # mise.toml's `test` task runs `./tests/test` under `uv run` so
-        # the project venv (pytest, pexpect, xdist) is in scope.
-        run: mise run test
