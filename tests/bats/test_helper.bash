@@ -58,8 +58,8 @@ teardown_isolated_home() {
 #     setup.sh               → cp of real (NOT symlink — setup.sh resolves
 #                              DOTFILES_ROOT via realpath of its own path,
 #                              so a symlink would escape isolation)
-#     statusline-command.sh, settings.template.json → symlinks (read-only)
-#     settings.json          → cp of template (gitignored convention)
+#     statusline-command.sh  → symlink (read-only)
+#     settings.json          → cp of real tracked SSOT (mutable copy; see #584)
 #     skills/, docs/, global-memory/ → empty dirs (satisfy setup.sh's
 #                              `[ -d ]` source-existence guards)
 #
@@ -83,12 +83,11 @@ setup_isolated_dotfiles_root() {
 
     cp "$real_root/claude/setup.sh" "$iso_root/claude/setup.sh"
     ln -s "$real_root/claude/statusline-command.sh"  "$iso_root/claude/statusline-command.sh"
-    ln -s "$real_root/claude/settings.template.json" "$iso_root/claude/settings.template.json"
 
     mkdir -p "$iso_root/claude/skills" "$iso_root/claude/docs" "$iso_root/claude/global-memory"
 
-    if [ -f "$iso_root/claude/settings.template.json" ]; then
-        cp "$iso_root/claude/settings.template.json" "$iso_root/claude/settings.json"
+    if [ -f "$real_root/claude/settings.json" ]; then
+        cp "$real_root/claude/settings.json" "$iso_root/claude/settings.json"
     else
         echo '{}' > "$iso_root/claude/settings.json"
     fi

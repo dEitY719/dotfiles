@@ -65,7 +65,7 @@ teardown() {
 @test "remote-url: non-github host → fail with not-github message" {
     run _gh_pr_review_parse_remote_url "https://gitlab.com/owner/repo.git"
     assert_failure
-    assert_output --partial "not a github.com remote"
+    assert_output --partial "not a github remote"
 }
 
 @test "remote-url: malformed (no owner/repo path) → fail" {
