@@ -977,9 +977,6 @@ gh_pr_approve() {
         ux_error "gh CLI not found"
         return 1
     fi
-    if ! _gh_pr_approve_require_ai_cli "$_ai"; then
-        return 1
-    fi
     if ! command -v gwt >/dev/null 2>&1; then
         ux_error "gwt function not loaded (source shell-common first)"
         return 1
@@ -1022,13 +1019,19 @@ gh_pr_approve() {
         return 1
     fi
 
-    # Auth pre-flight (issue #327): bail before any worktree/state I/O when
-    # the selected ai CLI is logged out, so users don't have to clean up a
-    # zombie worktree + 'failed:approving' state dir afterwards. Done here
-    # — after PR-number / main-repo validation — so obvious user errors
-    # still surface their natural message instead of an auth complaint.
+    # AI CLI presence + auth pre-flight (issue #327, #757): bail before any
+    # worktree/state I/O when the selected ai CLI is missing or logged out,
+    # so users don't have to clean up a zombie worktree + 'failed:approving'
+    # state dir afterwards. Done here — after PR-number / main-repo
+    # validation — so obvious user errors surface their natural message
+    # instead of a "claude CLI not found" / "not authenticated" complaint
+    # (issue #757: CI without claude installed was tripping the presence
+    # check before validation could run).
     # Pass --user account (or default) so multi-account profiles are
     # checked against the right .credentials.json (issue #365).
+    if ! _gh_pr_approve_require_ai_cli "$_ai"; then
+        return 1
+    fi
     if ! _gh_pr_approve_check_ai_auth "$_ai" "$_account"; then
         return 1
     fi
