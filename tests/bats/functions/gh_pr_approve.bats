@@ -607,7 +607,12 @@ EOF
     # message and NOT create a state dir under
     # ~/.local/state/gh-pr-approve/<repo>/<pr>/.
     _install_fake_ai_cli claude
-    run_in_bash "PATH='$TEST_TEMP_HOME/bin:'\$PATH unset ANTHROPIC_API_KEY 2>/dev/null; cd '$FAKE_REPO' && gh_pr_approve 42 2>&1"
+    # PATH must be exported, not prefix-set on `unset` — the prefix form
+    # only applies to that single command, so PATH would revert after the
+    # `;` and `_have claude` would then fall through to the system PATH.
+    # In CI the system has no `claude` binary → "claude CLI not found"
+    # would fire before the auth check (issue #758).
+    run_in_bash "export PATH='$TEST_TEMP_HOME/bin:'\$PATH; unset ANTHROPIC_API_KEY; cd '$FAKE_REPO' && gh_pr_approve 42 2>&1"
     assert_failure
     assert_output --partial "claude CLI not authenticated"
     assert_output --partial "claude /login"
@@ -636,7 +641,11 @@ EOF
 
 @test "auth: codex logged out — refuses spawn" {
     _install_fake_ai_cli codex
-    run_in_bash "PATH='$TEST_TEMP_HOME/bin:'\$PATH unset OPENAI_API_KEY 2>/dev/null; cd '$FAKE_REPO' && gh_pr_approve 42 --ai codex 2>&1"
+    # See claude test above for why `export PATH` is required (issue #758).
+    # codex would pass either way (`codex()` is a function defined in
+    # shell-common/tools/integrations/codex.sh, so `_have codex` returns
+    # true even without the stub), but keep the pattern consistent.
+    run_in_bash "export PATH='$TEST_TEMP_HOME/bin:'\$PATH; unset OPENAI_API_KEY; cd '$FAKE_REPO' && gh_pr_approve 42 --ai codex 2>&1"
     assert_failure
     assert_output --partial "codex CLI not authenticated"
     [ ! -d "$HOME/.local/state/gh-pr-approve/fake-main/42" ]
@@ -652,7 +661,8 @@ EOF
 
 @test "auth: gemini logged out — refuses spawn" {
     _install_fake_ai_cli gemini
-    run_in_bash "PATH='$TEST_TEMP_HOME/bin:'\$PATH unset GEMINI_API_KEY GOOGLE_API_KEY 2>/dev/null; cd '$FAKE_REPO' && gh_pr_approve 42 --ai gemini 2>&1"
+    # See claude test above for why `export PATH` is required (issue #758).
+    run_in_bash "export PATH='$TEST_TEMP_HOME/bin:'\$PATH; unset GEMINI_API_KEY GOOGLE_API_KEY; cd '$FAKE_REPO' && gh_pr_approve 42 --ai gemini 2>&1"
     assert_failure
     assert_output --partial "gemini CLI not authenticated"
     [ ! -d "$HOME/.local/state/gh-pr-approve/fake-main/42" ]
