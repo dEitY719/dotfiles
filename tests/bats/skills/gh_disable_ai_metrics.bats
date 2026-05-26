@@ -48,10 +48,12 @@ SKILLS_REQUIRING_GUARD=(
 
 @test "doc-guard: every gh:* SKILL.md that writes ai-metrics has GH_DISABLE_AI_METRICS branch" {
     for skill in "${SKILLS_REQUIRING_GUARD[@]}"; do
-        local f="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/${skill}/SKILL.md"
-        run grep -F 'GH_DISABLE_AI_METRICS:-0' "$f"
+        local dir="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/${skill}"
+        # Progressive disclosure: the guard may live inline in SKILL.md or in
+        # any references/*.md file the SKILL.md delegates to. Either is fine.
+        run grep -RF 'GH_DISABLE_AI_METRICS:-0' "$dir"
         [ "$status" -eq 0 ] || {
-            echo "missing GH_DISABLE_AI_METRICS guard in $f"
+            echo "missing GH_DISABLE_AI_METRICS guard in $dir (SKILL.md + references/)"
             return 1
         }
     done

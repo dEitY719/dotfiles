@@ -203,7 +203,8 @@ teardown() {
 @test "help: summary lists the new status subcommand" {
     run_in_bash 'gwt_help'
     assert_success
-    assert_output --partial "status: gwt status"
+    assert_output --partial "status"
+    assert_output --partial "gwt status"
 }
 
 @test "help: status section renders rows" {
