@@ -141,7 +141,7 @@ teardown() {
     run_in_bash "cd '$CLONE' && gwt prune --help 2>&1"
     assert_success
     assert_output --partial "gwt prune"
-    assert_output --partial "Does NOT take a path argument"
+    assert_output --partial "no path argument"
 }
 
 @test "prune: rejects unknown flag with hint to --help" {
