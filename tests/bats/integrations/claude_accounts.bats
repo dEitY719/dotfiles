@@ -229,7 +229,8 @@ LOCAL
     # docs/ is still a single directory-level symlink (#575). skills/ was
     # promoted to a real directory of per-entry symlinks by #707, F-8 so
     # a private overlay can be layered into the same target dir.
-    [ -d "$HOME/.claude-personal/skills" ] && [ ! -L "$HOME/.claude-personal/skills" ]
+    [ -d "$HOME/.claude-personal/skills" ]
+    [ ! -L "$HOME/.claude-personal/skills" ]
     [ -L "$HOME/.claude-personal/docs" ]
     [ "$(readlink "$HOME/.claude-personal/docs")" = "${DOTFILES_ROOT}/claude/docs" ]
     # settings.local.json is intentionally a per-PC hand-created regular
@@ -269,7 +270,8 @@ SH
     # #707, F-8: post-unmount the slot is a real directory of per-entry
     # symlinks, not a single dir-symlink. The umount log still records
     # the legacy bind-mount path that was unmounted.
-    [ -d "$HOME/.claude-personal/skills" ] && [ ! -L "$HOME/.claude-personal/skills" ]
+    [ -d "$HOME/.claude-personal/skills" ]
+    [ ! -L "$HOME/.claude-personal/skills" ]
     grep -qF "$HOME/.claude-personal/skills" "$HOME/fake-umount.log"
 }
 
@@ -851,7 +853,8 @@ JSON
     refute_output --partial "_is_mounted: command not found"
     refute_output --partial "command not found"
     # #707, F-8: skills/ is a real composed directory; docs/ stays a symlink.
-    [ -d "$HOME/.claude/skills" ] && [ ! -L "$HOME/.claude/skills" ]
+    [ -d "$HOME/.claude/skills" ]
+    [ ! -L "$HOME/.claude/skills" ]
     [ -L "$HOME/.claude/docs" ]
 }
 
@@ -897,7 +900,8 @@ SH
     [ "$(cat "$HOME/fake-umount.log")" = "$HOME/.claude/skills
 $HOME/.claude/docs" ]
     # #707, F-8: skills/ converges to a real composed directory; docs/ stays a symlink.
-    [ -d "$HOME/.claude/skills" ] && [ ! -L "$HOME/.claude/skills" ]
+    [ -d "$HOME/.claude/skills" ]
+    [ ! -L "$HOME/.claude/skills" ]
     [ -L "$HOME/.claude/docs" ]
 }
 
@@ -1028,7 +1032,8 @@ run_with_fake_ssot() {
     [ -L "$HOME/.claude-personal/docs" ]
     [ "$(readlink "$HOME/.claude-personal/docs")" = "$FAKE_DOTFILES_ROOT/claude/docs" ]
     # skills/ is a real composed directory of per-entry symlinks (#707, F-8).
-    [ -d "$HOME/.claude-personal/skills" ] && [ ! -L "$HOME/.claude-personal/skills" ]
+    [ -d "$HOME/.claude-personal/skills" ]
+    [ ! -L "$HOME/.claude-personal/skills" ]
     [ -L "$HOME/.claude-personal/skills/alpha" ]
     [ "$(readlink "$HOME/.claude-personal/skills/alpha")" = "$FAKE_DOTFILES_ROOT/claude/skills/alpha" ]
     [ -L "$HOME/.claude-personal/skills/beta" ]
@@ -1076,7 +1081,8 @@ run_with_fake_ssot() {
     assert_success
 
     # skills/ stays a real composed directory — no top-level backup of user data.
-    [ -d "$HOME/.claude-personal/skills" ] && [ ! -L "$HOME/.claude-personal/skills" ]
+    [ -d "$HOME/.claude-personal/skills" ]
+    [ ! -L "$HOME/.claude-personal/skills" ]
     [ -z "$(ls -d "$HOME/.claude-personal/skills-"*-original 2>/dev/null)" ]
     # User data preserved in place; dotfiles entry wired alongside.
     grep -q "user-data" "$HOME/.claude-personal/skills/leftover/notes.md"
@@ -1096,7 +1102,8 @@ run_with_fake_ssot() {
 
     # docs/ remains a symlink; skills/ remains a composed real directory.
     [ -L "$HOME/.claude-personal/docs" ]
-    [ -d "$HOME/.claude-personal/skills" ] && [ ! -L "$HOME/.claude-personal/skills" ]
+    [ -d "$HOME/.claude-personal/skills" ]
+    [ ! -L "$HOME/.claude-personal/skills" ]
     [ -L "$HOME/.claude-personal/skills/alpha" ]
     # No backups created on the second run — state was already correct.
     [ -z "$(ls -d "$HOME/.claude-personal/skills-"*-original 2>/dev/null)" ]
