@@ -16,7 +16,8 @@ plan's Components table before writing.
 
 > **상태**: Draft v1 ({{iso-date}})
 > **책임 PRD 항목**: {{responsible-prd-items}} ([PRD](../{{prd-basename}}))
-> **인용 NF**: {{cited-nf-items}}
+> *(F-# + D-# 는 필수, NF-# primary 는 0 또는 1 개 — 없으면 슬롯 생략)*
+> **인용 NF**: {{cited-nf-items}}  *(없으면 `(none)`)*
 > **소유자**: @{{owner-placeholder}}
 > **인접 TRD**: {{adjacent-trd-slugs}}
 

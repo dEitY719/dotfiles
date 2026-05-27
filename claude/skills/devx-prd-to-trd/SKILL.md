@@ -25,15 +25,16 @@ mutation.**
 
 ## Step 1: Parse Args + Validate PRD
 
-Required positional: one or more `<prd-path>`. Flags: `--dry-run`
+Required positional: exactly one `<prd-path>`. Flags: `--dry-run`
 (default), `--apply`, `--plan-out <path>`
 (default `.claude/.prd-to-trd.plan.md`), `--force`. See
 `references/help.md` for the full table.
 
-Every `<prd-path>` must exist as a regular file. On the first miss,
-print `[FAIL] devx:prd-to-trd: PRD not found: <path>` and stop with
-exit 1. v1 supports a single PRD only — if more than one path is
-supplied, stop with `[FAIL] multi-PRD input not supported in v1`.
+The `<prd-path>` must exist as a regular file — on a miss, print
+`[FAIL] devx:prd-to-trd: PRD not found: <path>` and stop with exit 1.
+v1 supports a single PRD only; if more than one positional argument
+is supplied, stop with `[FAIL] multi-PRD input not supported in v1`
+(multi-PRD batching is OQ-4 for a follow-up).
 
 ## Step 2: Read PRD + Propose Decomposition
 
