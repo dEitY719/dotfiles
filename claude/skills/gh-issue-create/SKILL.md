@@ -1,24 +1,21 @@
 ---
 name: gh:issue-create
 description: >-
-  Save the current conversation as a GitHub issue in the current repository.
-  Use when the user runs /gh:issue-create, /gh-issue-create, or asks to "이 대화 이슈로 등록",
-  "chat을 깃허브 이슈로 남겨", "기록용 이슈 만들어". Summarizes the conversation so
-  far into a structured issue body keyed by conventional-commit prefix
-  (feat / fix / refactor / perf / docs / test / chore / misc),
-  creates it via `gh issue create` on the target remote's repo without asking
-  for confirmation, and prints only the issue number and URL. Do NOT over-
-  compress — the issue is reused for PR drafts and blog posts, so preserve
-  reasoning, decisions, and concrete details.
-  Accepts an optional remote name argument (e.g., `/gh-issue-create upstream`) to
-  target a different remote's repository instead of origin. When the
-  target repo ships a `.gh-issue-defaults.yml`, default labels and a
-  milestone are auto-applied per that file (Step 2.5); pass
-  `--no-auto-labels` to opt out or `--auto-label-debug` for the dispatch
-  trace. Pass `--as-discussion <category>` (`Ideas` / `Q&A` /
-  `Announcements` / `Lessons`) to route the same conversation to
-  [[gh-discussion-create]] without re-running a different skill (#619).
-  Accepts `-h`/`--help`/`help` to print usage.
+  Save the current conversation as a GitHub issue. Use when the user runs
+  /gh:issue-create, /gh-issue-create, or asks "이 대화 이슈로 등록",
+  "chat을 깃허브 이슈로 남겨", "기록용 이슈 만들어". Summarizes the chat
+  into a body keyed by conventional-commit prefix
+  (feat / fix / refactor / perf / docs / test / chore / misc) and creates
+  the issue via `gh issue create` on the target remote's repo without
+  confirmation, printing only the issue number and URL. Preserves
+  reasoning, decisions, and concrete details — the issue is reused for
+  PR drafts and blog posts. Accepts an optional remote name positional
+  arg (e.g. `/gh-issue-create upstream`) to target a non-`origin` remote.
+  Flags `--no-auto-labels`, `--auto-label-debug`, and
+  `--as-discussion <category>` (`Ideas` / `Q&A` / `Announcements` /
+  `Lessons`, #619) are documented in references/help.md, alongside the
+  `.gh-issue-defaults.yml` auto-label behavior. Accepts
+  `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Grep
 ---
 

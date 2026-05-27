@@ -29,13 +29,14 @@ Dotfiles 유지보수를 위한 1회성/주기적 도구 모음
   - 더 읽기 쉬운 출력 형식
 
 ### check_codex_skills_budget.py
-- **목적**: Codex skill description 컨텍스트 예산 (~5440자) 초과 감지 (issue #216)
-- **사용**: `python3 check_codex_skills_budget.py [--budget N] [--top N] [--all] [--quiet]`
+- **목적**: Codex skill description 컨텍스트 예산 (~5440자) 초과 감지 (issue #216) + 개별 skill description 의 로더 하드 리밋 (1024자) 초과 감지 (issue #785)
+- **사용**: `python3 check_codex_skills_budget.py [--budget N] [--top N] [--all] [--quiet] [--per-skill-max N]`
 - **요구사항**: Python stdlib 만 (외부 의존성 없음)
 - **기능**:
   - `claude/skills/*/SKILL.md` frontmatter 의 `description` 길이 합산
   - 가장 긴 설명 Top N 노출 (기본 10개)
-  - 예산 초과 시 종료 코드 1, 트리밍 또는 `.codex-allowlist` 사용 안내
+  - 개별 skill 이 `--per-skill-max` (기본 1024자) 초과 시 종료 코드 1 — 로더가 해당 skill 을 silently drop 하기 전에 사전 차단
+  - 총합 예산 초과 시 종료 코드 1, 트리밍 또는 `.codex-allowlist` 사용 안내
 
 ## 💡 사용 시나리오
 

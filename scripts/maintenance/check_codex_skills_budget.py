@@ -10,10 +10,14 @@ trigger accuracy. Run this to detect when the SSOT is approaching that limit.
 Usage:
     python3 check_codex_skills_budget.py [--budget N] [--top N] [--all]
                                           [--quiet] [--skills-dir PATH]
+                                          [--per-skill-max N]
 
 Exit codes:
-    0  total description length is within budget
-    1  total description length exceeds budget
+    0  total description length is within budget AND every individual
+       description is within the per-skill hard limit
+    1  total description length exceeds budget, OR at least one
+       description exceeds the per-skill hard limit (default 1024 — the
+       skill loader will silently refuse to load skills above this cap)
     2  error (skills directory missing, parse failure)
 """
 
@@ -35,6 +39,7 @@ class Colors:
 
 
 DEFAULT_BUDGET_CHARS = 5440  # observed Codex skill metadata budget
+DEFAULT_PER_SKILL_HARD_LIMIT = 1024  # loader hard limit per single description
 DEFAULT_TOP_N = 10
 LONG_WARN = 400  # per-skill chars that strongly suggest trimming
 LONG_HINT = 250  # per-skill chars that hint at being on the long side
@@ -155,6 +160,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="skills directory (default: <dotfiles>/claude/skills)",
     )
+    parser.add_argument(
+        "--per-skill-max",
+        type=int,
+        default=DEFAULT_PER_SKILL_HARD_LIMIT,
+        help=(
+            "hard per-skill description ceiling in chars "
+            f"(default: {DEFAULT_PER_SKILL_HARD_LIMIT}). "
+            "Any skill above this fails the check even if the total is under budget."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -179,13 +194,15 @@ def main(argv: list[str] | None = None) -> int:
     skill_count = len(rows)
     avg = total_chars / skill_count if skill_count else 0
     over_budget = total_chars > args.budget
+    over_limit = [(name, length, path) for name, length, path in rows if length > args.per_skill_max]
 
     if not args.quiet:
         print(f"{Colors.BLUE}=== Codex Skill Description Budget ==={Colors.RESET}")
-        print(f"  Source dir: {skills_dir}")
-        print(f"  Skills:     {skill_count}")
-        print(f"  Total:      {total_chars} chars  (avg {avg:.0f}/skill)")
-        print(f"  Budget:     {args.budget} chars")
+        print(f"  Source dir:     {skills_dir}")
+        print(f"  Skills:         {skill_count}")
+        print(f"  Total:          {total_chars} chars  (avg {avg:.0f}/skill)")
+        print(f"  Budget:         {args.budget} chars")
+        print(f"  Per-skill cap:  {args.per_skill_max} chars (loader hard limit)")
         print()
 
         rows_sorted = sorted(rows, key=lambda r: -r[1])
@@ -195,6 +212,19 @@ def main(argv: list[str] | None = None) -> int:
         for name, length, _path in view:
             print(f"  {length:5d}  {name}{format_marker(length)}")
 
+    if over_limit:
+        print()
+        print(
+            f"{Colors.RED}! {len(over_limit)} skill(s) exceed the "
+            f"per-skill description hard limit ({args.per_skill_max} chars).{Colors.RESET}"
+        )
+        for name, length, path in over_limit:
+            print(f"{Colors.RED}    {length:5d}  {name}  ({path}/SKILL.md){Colors.RESET}")
+        print(
+            f"{Colors.YELLOW}  The skill loader will refuse to load these skills. "
+            f"Trim each description and move detail into references/help.md.{Colors.RESET}"
+        )
+
     if over_budget:
         print()
         print(f"{Colors.RED}! Total description chars ({total_chars}) exceed budget ({args.budget}).{Colors.RESET}")
@@ -203,6 +233,8 @@ def main(argv: list[str] | None = None) -> int:
             f"150-250 chars, or pin Codex to a subset via "
             f"claude/skills/.codex-allowlist.{Colors.RESET}"
         )
+
+    if over_limit or over_budget:
         return 1
 
     if not args.quiet:
