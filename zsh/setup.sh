@@ -59,7 +59,11 @@ log_critical() {
     exit 1
 }
 log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
-log_debug() { echo -e "${UX_MUTED}[DEBUG] $1${UX_RESET}"; }
+# [DEBUG] 접두 출력은 명시적으로 DOTFILES_DEBUG=1 일 때만 노출 (#793 F-3).
+log_debug() {
+    [ "${DOTFILES_DEBUG:-0}" = "1" ] || return 0
+    echo -e "${UX_MUTED}[DEBUG] $1${UX_RESET}"
+}
 log_warning() { ux_warning "$1"; }
 
 # --- Functions ---
@@ -100,7 +104,7 @@ create_symlink() {
 
 # --- Main Script Logic ---
 
-log_debug "\n--- zsh dotfiles setup 시작 ---"
+ux_section "zsh dotfiles setup"
 
 # zshrc 파일 존재 여부 확인
 if [ ! -f "$ZSH_ZSHRC_SOURCE" ]; then
@@ -149,7 +153,7 @@ fi
 
 # --- Completion Messages ---
 
-log_debug "--- zsh dotfiles setup 완료 ---"
+ux_success "zsh dotfiles setup 완료"
 echo ""
 
 ux_success "Zsh 설정이 완료되었습니다!"

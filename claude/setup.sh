@@ -85,7 +85,12 @@ log_critical() {
     exit 1
 }
 log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
-log_debug() { echo "${UX_MUTED}[DEBUG] $1${UX_RESET}"; }
+# [DEBUG] 접두 출력은 명시적으로 DOTFILES_DEBUG=1 일 때만 노출 (#793 F-3).
+# shellcheck disable=SC2317  # 본 파일은 호출처가 없지만 향후 디버깅 보조용으로 정의 보존
+log_debug() {
+    [ "${DOTFILES_DEBUG:-0}" = "1" ] || return 0
+    echo "${UX_MUTED}[DEBUG] $1${UX_RESET}"
+}
 log_warning() { ux_warning "$1"; }
 
 log_error_and_exit() {
@@ -502,7 +507,7 @@ EOF
 
 # --- Main Script Logic (issue #287, Phase 1: multi-account) ---
 
-log_debug "\n--- Claude Code dotfiles setup 시작 ---"
+ux_section "Claude Code dotfiles setup"
 
 # 필수 dotfiles source 검증
 # settings.json 은 이제 tracked SSOT (#584) — 부트스트랩/템플릿 단계 불필요.
@@ -648,7 +653,7 @@ if [ "$_setup_mode" = "internal" ]; then
     # absent — deprecated (#687) and never a dotfiles symlink (#584).
     # skills/ is a real directory of entry-level symlinks (#707, F-8), so
     # it is checked as `-d` (and `! -L`) rather than `-L`.
-    log_debug "\n--- 심볼릭 링크 확인 (internal/single-account) ---"
+    ux_section "심볼릭 링크 확인 (internal/single-account)"
     for link in statusline-command.sh docs plugins projects/GLOBAL/memory; do
         if [ -L "$HOME/.claude/$link" ]; then
             log_dim "✓ ~/.claude/$link 심볼릭 링크 확인됨"
@@ -664,7 +669,7 @@ if [ "$_setup_mode" = "internal" ]; then
 
     _setup_gemini_skills_symlink
 
-    log_debug "--- Claude Code dotfiles setup 완료 (internal/single-account) ---"
+    ux_success "Claude Code dotfiles setup 완료 (internal/single-account)"
     echo ""
     ux_success "Claude Code 단일 계정 설정 완료 (internal PC mode)"
     ux_info "Config dir: $HOME/.claude"
@@ -703,7 +708,7 @@ done
 # --- Verify Links (모든 활성 계정) ---
 # skills/ is a real directory of entry-level symlinks (#707, F-8), so it
 # is checked as `-d` (and `! -L`) rather than `-L`.
-log_debug "\n--- 심볼릭 링크 확인 ---"
+ux_section "심볼릭 링크 확인"
 for acct in $ENABLED_ACCOUNTS; do
     cdir=$(_claude_resolve_account "$acct")
     for link in settings.json statusline-command.sh docs plugins projects/GLOBAL/memory; do
@@ -724,7 +729,7 @@ done
 _setup_gemini_skills_symlink
 
 # --- Completion Messages ---
-log_debug "--- Claude Code dotfiles setup 완료 ---"
+ux_success "Claude Code dotfiles setup 완료"
 echo ""
 ux_success "Claude Code 다중 계정 설정 완료!"
 ux_info "활성 계정: $(echo "$ENABLED_ACCOUNTS" | tr '\n' ' ')"
