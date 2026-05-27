@@ -89,6 +89,9 @@
 
 ## Pairs with
 
+- [[devx-prd-to-trd]] — the **previous** step. Scaffolds the
+  per-component TRDs this skill consumes (PRD → TRD scaffolds → human
+  fills body → this skill → Milestones + Issues).
 - `gh:issue-implement` / `gh:issue-flow` — pick up Task issues this
   skill registered and implement them.
 - `gh:issue-create` — single-issue alternative when batch decomposition
