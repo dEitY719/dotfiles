@@ -68,8 +68,11 @@ count_backups() {
     run_setup_opencode
     assert_success
 
-    # User replaces the placeholder with a real Knox ID.
-    sed -i 's/your-knox-id/abc123knox/' "$TARGET"
+    # User replaces the placeholder with a real Knox ID. Use a temp-file
+    # rewrite (not `sed -i`) — GNU sed and BSD sed disagree on the `-i`
+    # argument syntax, so the in-place form breaks on macOS dev machines.
+    sed 's/your-knox-id/abc123knox/' "$TARGET" > "${TARGET}.tmp" \
+        && mv "${TARGET}.tmp" "$TARGET"
     customised_content="$(cat "$TARGET")"
 
     run_setup_opencode
@@ -89,6 +92,7 @@ count_backups() {
     run_setup_opencode
     assert_success
 
-    [ -f "$TARGET" ] && [ ! -L "$TARGET" ]
+    [ -f "$TARGET" ]
+    [ ! -L "$TARGET" ]
     grep -q 'your-knox-id' "$TARGET"
 }
