@@ -88,8 +88,11 @@ exec zsh
   특히 "issue #705 core regression" 케이스 두 개가 dump cache 누락을 막음
 - **이전 fix**: [PR #696](https://github.com/dEitY719/dotfiles/pull/696)
   (`e047b16`) — instant prompt placeholder 제거 (race 1차 layer)
-- **race origin**: `gwt spawn --launch` 의 `cd → term_rename --persist →
-  eval claude_yolo + emulate -L sh + subshell` 시퀀스 —
-  `shell-common/functions/git_worktree.sh` 의 `emulate -L sh` 블록 다수
+- **race origin (historical)**: `gwt spawn --launch` 의 과거 `cd → term_rename
+  --persist → eval claude_yolo + emulate -L sh + subshell` 시퀀스 —
+  `shell-common/functions/git_worktree.sh` 의 `emulate -L sh` 블록 다수.
+  `term_rename` 통합은 #798 에서 abandonment 로 제거됨 (탭 타이틀 고정이
+  VSCode AI-detect override 와의 race 로 안정화 불가). 현재 spawn --launch
+  는 `cd && eval launch_cmd` 만 한다.
 - **Troubleshoot 진입**: `zsh-help troubleshoot` 가 본 문서의 1줄 진단을
   안내함
