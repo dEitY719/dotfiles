@@ -30,6 +30,30 @@ log_warning() {
     echo -e "${YELLOW}⚠${NC}  $1"
 }
 
+# 동일하면 skip, 다르면 backup→copy. target 없으면 backup 없이 copy.
+copy_if_changed() {
+    local src="$1" dst="$2" name
+    name=$(basename "$dst")
+
+    if [[ ! -f "$dst" ]]; then
+        cp "$src" "$dst"
+        log_success "${name} 복사 완료 (신규)"
+        return 0
+    fi
+
+    if cmp -s "$src" "$dst" 2>/dev/null || diff -q "$src" "$dst" >/dev/null 2>&1; then
+        log_info "${name} 변경 없음 — skip"
+        return 0
+    fi
+
+    local backup
+    backup="${dst}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$dst" "$backup"
+    log_info "기존 ${name} 백업: $backup"
+    cp "$src" "$dst"
+    log_success "${name} 복사 완료"
+}
+
 # WSL 환경 감지 함수
 is_wsl() {
     if [[ -f /proc/version ]] && grep -qi "microsoft\|wsl" /proc/version 2>/dev/null; then
@@ -78,16 +102,8 @@ fi
 # VS Code 설정 파일들의 경로 결정
 VSCODE_KEYBINDINGS_PATH="${VSCODE_SETTINGS_PATH%/*}/keybindings.json"
 
-# base.json 백업 생성
-BACKUP_FILE="${BASE_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
-if [[ -f "$BASE_FILE" ]]; then
-    cp "$BASE_FILE" "$BACKUP_FILE"
-    log_info "기존 base.json 백업: $BACKUP_FILE"
-fi
-
-# VS Code 설정을 base.json에 복사
-cp "$VSCODE_SETTINGS_PATH" "$BASE_FILE"
-log_success "settings.json 복사 완료"
+# settings.json: diff 가드 후 backup → copy
+copy_if_changed "$VSCODE_SETTINGS_PATH" "$BASE_FILE"
 
 echo ""
 log_info "Settings 파일:"
@@ -95,31 +111,25 @@ cat "$BASE_FILE" | python3 -m json.tool --indent 2 2>/dev/null || cat "$BASE_FIL
 
 # keybindings.json 복사 (존재하는 경우)
 if [[ -f "$VSCODE_KEYBINDINGS_PATH" ]]; then
-    KEYBINDINGS_BACKUP_FILE="${KEYBINDINGS_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
-    if [[ -f "$KEYBINDINGS_FILE" ]]; then
-        cp "$KEYBINDINGS_FILE" "$KEYBINDINGS_BACKUP_FILE"
-        log_info "기존 keybindings.json 백업: $KEYBINDINGS_BACKUP_FILE"
-    fi
+    # VS Code의 JSON 주석을 제거하고 정렬된 형식으로 임시 파일에 작성
+    KEYBINDINGS_TMP=$(mktemp)
+    trap 'rm -f "$KEYBINDINGS_TMP"' EXIT
 
-    # VS Code의 JSON 주석을 제거하고 정렬된 형식으로 저장
-    python3 << EOF
+    if ! python3 - "$VSCODE_KEYBINDINGS_PATH" "$KEYBINDINGS_TMP" <<'EOF'; then
 import json
 import re
+import sys
 
-vscode_file = "$VSCODE_KEYBINDINGS_PATH"
-target_file = "$KEYBINDINGS_FILE"
+vscode_file = sys.argv[1]
+target_file = sys.argv[2]
 
 try:
     with open(vscode_file, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # JSON 주석 제거 (// 로 시작하는 라인)
     content = re.sub(r'//.*$', '', content, flags=re.MULTILINE)
-
-    # JSON 파싱
     data = json.loads(content)
 
-    # 정렬된 JSON으로 저장
     with open(target_file, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.write('\n')
@@ -127,19 +137,18 @@ try:
     print("OK")
 except Exception as e:
     print(f"ERROR: {e}")
-    exit(1)
+    sys.exit(1)
 EOF
-
-    if [[ $? -eq 0 ]]; then
-        log_success "keybindings.json 복사 완료"
-
-        echo ""
-        log_info "Keybindings 파일:"
-        cat "$KEYBINDINGS_FILE" | python3 -m json.tool --indent 2 2>/dev/null || cat "$KEYBINDINGS_FILE"
-    else
         log_error "keybindings.json 처리 중 오류가 발생했습니다"
         exit 1
     fi
+
+    # 정규화된 임시 파일과 현재 KEYBINDINGS_FILE 을 비교 후 backup → copy
+    copy_if_changed "$KEYBINDINGS_TMP" "$KEYBINDINGS_FILE"
+
+    echo ""
+    log_info "Keybindings 파일:"
+    python3 -m json.tool --indent 2 "$KEYBINDINGS_FILE" 2>/dev/null || cat "$KEYBINDINGS_FILE"
 else
     log_warning "keybindings.json 파일을 찾을 수 없습니다: $VSCODE_KEYBINDINGS_PATH"
 fi

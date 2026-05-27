@@ -26,6 +26,30 @@ log_error() {
     echo -e "${RED}✗${NC}  $1" >&2
 }
 
+# 동일하면 skip, 다르면 backup→copy. target 없으면 backup 없이 copy.
+copy_if_changed() {
+    local src="$1" dst="$2" name
+    name=$(basename "$dst")
+
+    if [[ ! -f "$dst" ]]; then
+        cp "$src" "$dst"
+        log_success "${name} 복사 완료 (신규)"
+        return 0
+    fi
+
+    if cmp -s "$src" "$dst" 2>/dev/null || diff -q "$src" "$dst" >/dev/null 2>&1; then
+        log_info "${name} 변경 없음 — skip"
+        return 0
+    fi
+
+    local backup
+    backup="${dst}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$dst" "$backup"
+    log_info "기존 ${name} 백업: $backup"
+    cp "$src" "$dst"
+    log_success "${name} 복사 완료"
+}
+
 # base.json 파일 확인
 if [[ ! -f "$BASE_FILE" ]]; then
     log_error "base.json 파일을 찾을 수 없습니다: $BASE_FILE"
@@ -86,27 +110,11 @@ fi
 # VS Code 설정 파일들의 경로 결정
 VSCODE_KEYBINDINGS_PATH="${VSCODE_SETTINGS_PATH%/*}/keybindings.json"
 
-# settings.json 백업 생성
-BACKUP_FILE="${VSCODE_SETTINGS_PATH}.backup.$(date +%Y%m%d_%H%M%S)"
-if [[ -f "$VSCODE_SETTINGS_PATH" ]]; then
-    cp "$VSCODE_SETTINGS_PATH" "$BACKUP_FILE"
-    log_info "기존 settings.json 백업: $BACKUP_FILE"
-fi
+# settings.json: diff 가드 후 backup → copy
+copy_if_changed "$BASE_FILE" "$VSCODE_SETTINGS_PATH"
 
-# base.json을 VS Code settings.json에 복사
-cp "$BASE_FILE" "$VSCODE_SETTINGS_PATH"
-log_success "settings.json 복사 완료"
-
-# keybindings.json 백업 생성
-KEYBINDINGS_BACKUP_FILE="${VSCODE_KEYBINDINGS_PATH}.backup.$(date +%Y%m%d_%H%M%S)"
-if [[ -f "$VSCODE_KEYBINDINGS_PATH" ]]; then
-    cp "$VSCODE_KEYBINDINGS_PATH" "$KEYBINDINGS_BACKUP_FILE"
-    log_info "기존 keybindings.json 백업: $KEYBINDINGS_BACKUP_FILE"
-fi
-
-# keybindings.json을 VS Code에 복사
-cp "$KEYBINDINGS_FILE" "$VSCODE_KEYBINDINGS_PATH"
-log_success "keybindings.json 복사 완료"
+# keybindings.json: diff 가드 후 backup → copy
+copy_if_changed "$KEYBINDINGS_FILE" "$VSCODE_KEYBINDINGS_PATH"
 
 echo ""
 log_info "VS Code를 재시작하여 변경 사항을 적용하세요"
