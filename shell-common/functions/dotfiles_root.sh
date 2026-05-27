@@ -41,22 +41,22 @@ _resolve_dotfiles_root_canonical() {
     _rdrc_candidate="${1:-}"
 
     if [ -z "$_rdrc_candidate" ]; then
-        echo ""
+        printf '%s\n' ""
         return 0
     fi
 
     if [ ! -d "$_rdrc_candidate" ]; then
-        echo "$_rdrc_candidate"
+        printf '%s\n' "$_rdrc_candidate"
         return 0
     fi
 
     if [ "${DOTFILES_ROOT_NO_CANONICALIZE:-0}" = "1" ]; then
-        echo "$_rdrc_candidate"
+        printf '%s\n' "$_rdrc_candidate"
         return 0
     fi
 
     if ! command -v git >/dev/null 2>&1; then
-        echo "$_rdrc_candidate"
+        printf '%s\n' "$_rdrc_candidate"
         return 0
     fi
 
@@ -69,16 +69,16 @@ _resolve_dotfiles_root_canonical() {
     # so short-circuit and return the candidate untouched. Reported by
     # gemini-code-assist on PR #593.
     _rdrc_git_dir=$(git -C "$_rdrc_candidate" rev-parse --git-dir 2>/dev/null) || {
-        echo "$_rdrc_candidate"
+        printf '%s\n' "$_rdrc_candidate"
         return 0
     }
     _rdrc_common=$(git -C "$_rdrc_candidate" rev-parse --git-common-dir 2>/dev/null) || {
-        echo "$_rdrc_candidate"
+        printf '%s\n' "$_rdrc_candidate"
         return 0
     }
 
     if [ -z "$_rdrc_common" ] || [ "$_rdrc_git_dir" = "$_rdrc_common" ]; then
-        echo "$_rdrc_candidate"
+        printf '%s\n' "$_rdrc_candidate"
         return 0
     fi
 
@@ -89,16 +89,16 @@ _resolve_dotfiles_root_canonical() {
 
     _rdrc_main=$(dirname "$_rdrc_common" 2>/dev/null)
     if [ -z "$_rdrc_main" ] || [ ! -d "$_rdrc_main" ]; then
-        echo "$_rdrc_candidate"
+        printf '%s\n' "$_rdrc_candidate"
         return 0
     fi
 
     _rdrc_main=$(cd "$_rdrc_main" 2>/dev/null && pwd) || {
-        echo "$_rdrc_candidate"
+        printf '%s\n' "$_rdrc_candidate"
         return 0
     }
 
-    echo "$_rdrc_main"
+    printf '%s\n' "$_rdrc_main"
 }
 
 # _dotfiles_root_canonicalize

@@ -141,7 +141,10 @@ _gcp_author() {
     fi
 
     ux_info "Cherry-picking commits by '$author' in range $commit_range:"
-    echo "$commits"
+    # Display per-SHA via ux_bullet so the list matches the rest of the UI.
+    printf '%s\n' "$commits" | while IFS= read -r _gcp_sha; do
+        [ -n "$_gcp_sha" ] && ux_bullet "$_gcp_sha"
+    done
     echo ""
     # Word-splitting on $commits is intentional — newline-separated SHAs
     # become separate args to _gcp_pick, which then drives the per-commit

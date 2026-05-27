@@ -140,12 +140,13 @@ EOF
         ;;
     esac
 
-    echo "ai=$ai"
-    echo "review=$review"
-    echo "user=$user"
-    echo "post_comment=$post_comment"
-    echo "pr=$pr"
-    echo "remote=$remote"
+    printf '%s\n' \
+        "ai=$ai" \
+        "review=$review" \
+        "user=$user" \
+        "post_comment=$post_comment" \
+        "pr=$pr" \
+        "remote=$remote"
     return 0
 }
 
@@ -490,7 +491,7 @@ _gh_pr_review_estimate_tokens() {
     tokens=$((raw / 4))
     tokens=$(((tokens + 250) / 500 * 500))
     [ "$tokens" -lt 1000 ] && tokens=1000
-    echo "$tokens"
+    printf '%s\n' "$tokens"
 }
 
 # Builds the PR comment body to the given output file. Args: $1 = output
@@ -553,8 +554,8 @@ _gh_pr_review_post_comment() {
         printf '%s\n' "$_url"
         return 0
     fi
-    echo "[WARN] PR comment post failed — output retained on stdout" >&2
-    echo "[WARN] post failed"
+    printf '%s\n' "[WARN] PR comment post failed — output retained on stdout" >&2
+    printf '%s\n' "[WARN] post failed"
     return 0
 }
 
