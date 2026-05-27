@@ -76,13 +76,15 @@ teardown() {
     assert_success
 
     # Spot-check that each updated SKILL.md/reference also carries the guard.
+    # NOTE: gh-pr's canonical executable snippet moved from
+    # references/project-board-sync.md → SKILL.md Step 7 in issue #747.
     local f
     for f in \
         "claude/skills/gh-pr-merge/SKILL.md" \
         "claude/skills/gh-pr-merge/references/project-board-sync.md" \
         "claude/skills/gh-commit/SKILL.md" \
         "claude/skills/gh-pr-reply/SKILL.md" \
-        "claude/skills/gh-pr/references/project-board-sync.md" \
+        "claude/skills/gh-pr/SKILL.md" \
         "claude/skills/gh-pr-merge-emergency/references/project-board-sync.md"; do
         run grep -F 'if [ -r "$_HELPER" ]; then' "${_BATS_REAL_DOTFILES_ROOT}/$f"
         assert_success

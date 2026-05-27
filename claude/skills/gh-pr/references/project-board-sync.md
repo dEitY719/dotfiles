@@ -1,41 +1,36 @@
-# Project Board Sync — push the new PR's card to "In review" + linked Issues to "In progress"
+# Project Board Sync — narrative + rationale
+
+> **Canonical executable snippet lives in `SKILL.md` Step 7.** This file is
+> the narrative companion — rationale, edge cases, and pointers — not a
+> source of code. If you find yourself copying bash out of here into the
+> skill, you've found a regression of issue #747.
 
 After the PR is created, sync cards on the kanban so reviewers see the PR and
-the linked Issues are at the right column without a manual drag.
+the linked Issues are at the right column without a manual drag. Two cards
+need to move:
+
+- The new **PR card** → `In review`.
+- Each linked **Issue card** (anything matched by `Closes #N` in the PR
+  body) → `In progress`, correcting the GitHub builtin's mis-move to
+  `In review`.
 
 ## Hook auto-skip (issue #390)
 
 If a PostToolUse hook is going to do this work, the skill must NOT run the
 inline sync — triple-syncing (skill + hook + GitHub builtin) wastes tokens
-and widens the race window. Detect the hook by file presence and skip:
+and widens the race window. The skill detects the hook by file presence
+across three paths:
 
-```bash
-hook_skip=0
-for hook_path in \
-    "${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}/.claude/hooks/post-pr-create-status.sh" \
-    "$HOME/.claude/hooks/post-gh-pr-create.sh" \
-    "$HOME/dotfiles/claude/hooks/post-gh-pr-create.sh"
-do
-    if [ -x "$hook_path" ]; then
-        hook_skip=1
-        printf '[gh-pr] board sync delegated to PostToolUse hook (%s) — skipping inline.\n' "$hook_path" >&2
-        break
-    fi
-done
+1. `${REPO_ROOT}/.claude/hooks/post-pr-create-status.sh` —
+   AgentToolbox-style in-repo hook.
+2. `$HOME/.claude/hooks/post-gh-pr-create.sh` — runtime copy.
+3. `$HOME/dotfiles/claude/hooks/post-gh-pr-create.sh` — dotfiles SSOT.
 
-if [ "$hook_skip" -eq 0 ]; then
-    # Run the snippet below.
-    :
-fi
-```
-
-The three paths cover (a) AgentToolbox-style in-repo hook, (b) a runtime
-copy at `~/.claude/hooks/`, and (c) the dotfiles SSOT location. When **any**
-exists, the inline snippet is skipped — the hook (or the AgentToolbox hook)
-will handle it. When none exist, the inline snippet runs as a fallback,
-preserving behavior for environments without hook support. Idempotence of
-`_gh_project_status_sync` (verify pair, issue #393) absorbs the case where
-both a dotfiles hook and an AgentToolbox hook fire.
+When **any** path exists, the inline snippet is skipped and the hook (or
+AgentToolbox hook) handles it. When none exist, the inline snippet runs
+as a fallback, preserving behavior for environments without hook support.
+Idempotence of `_gh_project_status_sync` (verify pair, issue #393) absorbs
+the case where both a dotfiles hook and an AgentToolbox hook fire.
 
 ## Why "In review" with no guard (PR card)
 
@@ -56,36 +51,15 @@ PR is created corrects the builtin's transition. The
 so we can undo the builtin's mis-move even when it fires before our sync, while
 still refusing to drag `Done` Issues backwards if a closed PR is re-opened (#309).
 
-## Snippet
+## `GH_REPO` requirement
 
-Source the shared helper, then call it with the new PR number:
+The closing-issues helper (`_gh_pr_closing_issue_numbers`) needs the repo
+slug as `owner/repo` (e.g. `dEitY719/dotfiles`). If `GH_REPO` is unset at
+the point Step 7 runs, resolve it via
+`gh repo view --json nameWithOwner --jq .nameWithOwner`. This is a thin
+wrapper — no auth state changes, no API mutation.
 
-```bash
-# helper-fallback NF-1 (#644): silent-skip when helper missing.
-# Defense-in-depth (#724): also detect "[ -r ] passes but function never
-# defined" (interactive-guard regression, partial sourcing, future rename).
-# `|| true` would otherwise absorb `command not found` (rc 127) and the
-# entire reconciliation would silently no-op — the failure mode from #724.
-_HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
-if [ -r "$_HELPER" ]; then
-    . "$_HELPER"
-    if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
-        printf '[gh-pr] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
-            "$_HELPER" >&2
-    else
-        _gh_project_status_sync pr "$PR_NUMBER" "In review" || true
-        for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO" 2>/dev/null || true); do
-            _gh_project_status_sync issue "$_issue" "In progress" \
-                --only-from "Backlog,Ready,In review" || true
-        done
-    fi
-fi
-```
-
-`GH_REPO` must be `owner/repo` (e.g. `dEitY719/dotfiles`). If unavailable,
-resolve it via `gh repo view --json nameWithOwner --jq .nameWithOwner`.
-
-## Behavior
+## Behavior summary
 
 - **No projectV2 board attached** — the helper auto-detects zero project items
   and silently returns 0. Nothing happens, no error.
@@ -93,9 +67,17 @@ resolve it via `gh repo view --json nameWithOwner --jq .nameWithOwner`.
   nothing; the for-loop body never runs. PR sync still proceeds.
 - **Opt-out per invocation** — set `GH_PROJECT_STATUS_SYNC=0` in the
   environment to skip both syncs entirely.
+- **Helper unavailable** — when `_HELPER` is unreadable, the inline block
+  silently skips (NF-1 fallback, #644). When the file sources but the
+  function is undefined (interactive-guard regression, partial sourcing,
+  future rename), an explicit `#724` warning is printed and the sync is
+  skipped — preventing the silent `rc 127` swallow.
 
 ## Where the helper lives
 
 `shell-common/functions/gh_project_status.sh` — shared between `gh:pr`,
-`gh:pr-reply`, and other PR/issue lifecycle skills. Do not inline-copy the
-snippet; always source the file so a single fix propagates everywhere.
+`gh:pr-reply`, and other PR/issue lifecycle skills. The skill **sources**
+this file; do not duplicate the helper's implementation. The bash that
+*calls* the helper, however, is intentionally inlined in `SKILL.md`
+Step 7 (issue #747) so the model reads it linearly during execution
+without a reference-load indirection.
