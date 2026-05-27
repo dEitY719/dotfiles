@@ -118,9 +118,133 @@ _docker_help_full() {
     _docker_help_render_section "Utilities" _docker_help_rows_utilities
 }
 
+# --- docker_help recommend (#777) ---
+#
+# PWD-aware Docker Compose project recommendation. Scans the current
+# directory (NOT parent directories — by design, to avoid catching an
+# unintended compose file) and prints a single ready-to-copy command.
+
+_docker_help_compose_bases_in_pwd() {
+    for f in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
+        [ -f "$f" ] && printf '%s\n' "$f"
+    done
+}
+
+# Use `find -maxdepth 1` instead of POSIX shell globs because zsh
+# defaults to `nomatch` errors on unmatched globs (zsh-side regression
+# during early dev: `for f in compose.*.yml` aborted the function).
+# `find` is shell-agnostic and ignores empty matches naturally.
+_docker_help_compose_variants_in_pwd() {
+    find . -maxdepth 1 -type f \( \
+        -name 'docker-compose.*.yml' -o \
+        -name 'docker-compose.*.yaml' -o \
+        -name 'compose.*.yml' -o \
+        -name 'compose.*.yaml' \
+        \) 2>/dev/null | sed 's|^\./||' | sort
+}
+
+_docker_help_has_compose_in_pwd() {
+    # Assign-without-outer-quotes form so the pre-commit naming check
+    # (`git/hooks/checks/naming_check.sh`) does not mis-flag these as
+    # snake_case user-facing text inside quoted strings.
+    local _bases _variants
+    _bases=$(_docker_help_compose_bases_in_pwd)
+    [ -n "$_bases" ] && return 0
+    _variants=$(_docker_help_compose_variants_in_pwd)
+    [ -n "$_variants" ] && return 0
+    return 1
+}
+
+_docker_help_recommend_print() {
+    # $1 = command, $2 = base, $3 = variant (may be empty), $4 = mode
+    ux_section "Recommended command"
+    # Bare monospace line for copy-paste (no icon / bullet). ux_lib has
+    # no plain-text helper for code lines and the AC requires the user
+    # to be able to paste this verbatim — see #777 Step 3.
+    printf '  %s\n' "$1"
+    ux_info ""
+    ux_section "Why"
+    [ -n "$2" ] && ux_bullet "base:    $2"
+    [ -n "$3" ] && ux_bullet "variant: $3"
+    [ -n "$4" ] && ux_bullet "mode:    $4"
+}
+
+_docker_help_recommend() {
+    local bases variants base variant fake_variant variant_count
+
+    bases=$(_docker_help_compose_bases_in_pwd)
+    variants=$(_docker_help_compose_variants_in_pwd)
+
+    if [ -z "$bases" ] && [ -z "$variants" ]; then
+        ux_info "No Docker Compose files in current directory."
+        ux_info "Run \`docker-help --all\` for the full alias catalog."
+        return 1
+    fi
+
+    ux_info "Detected Docker Compose project."
+
+    base="$(printf '%s\n' "$bases" | head -n1)"
+    if [ -n "$variants" ]; then
+        variant_count="$(printf '%s\n' "$variants" | grep -c .)"
+    else
+        variant_count=0
+    fi
+    fake_variant="$(printf '%s\n' "$variants" | grep -E '\.fake\.(yml|yaml)$' | head -n1)"
+
+    if [ -n "$base" ] && [ -n "$fake_variant" ]; then
+        _docker_help_recommend_print \
+            "docker compose -f $base -f $fake_variant up -d --build" \
+            "$base" "$fake_variant" "detached + rebuild"
+    elif [ -n "$base" ] && [ "$variant_count" -eq 1 ]; then
+        variant="$(printf '%s\n' "$variants" | head -n1)"
+        _docker_help_recommend_print \
+            "docker compose -f $base -f $variant up -d --build" \
+            "$base" "$variant" "detached + rebuild"
+    elif [ -n "$base" ] && [ "$variant_count" -ge 2 ]; then
+        ux_info "Multiple compose variants detected — no single recommendation."
+        ux_section "Candidate compose files"
+        ux_bullet "$base (base)"
+        printf '%s\n' "$variants" | while IFS= read -r f; do
+            [ -n "$f" ] && ux_bullet "$f (variant)"
+        done
+        ux_info ""
+        ux_info "Hint: check the project's helper scripts first — e.g.,"
+        ux_info "  bun run 2>&1 | grep docker"
+        ux_info "  jq -r '.scripts | keys[]' package.json 2>/dev/null | grep docker"
+        ux_info "  grep -E '^[a-z_-]+:' Makefile 2>/dev/null"
+    elif [ -n "$base" ]; then
+        _docker_help_recommend_print \
+            "docker compose up -d --build" \
+            "$base" "" "detached + rebuild"
+    else
+        ux_info "Compose variant(s) found but no base file — no recommendation."
+        ux_section "Candidate compose files"
+        printf '%s\n' "$variants" | while IFS= read -r f; do
+            [ -n "$f" ] && ux_bullet "$f (variant)"
+        done
+    fi
+
+    ux_info ""
+    ux_section "More"
+    ux_bullet "docker-help compose"
+    ux_bullet "docker-help --all"
+}
+
 docker_help() {
     case "${1:-}" in
-        ""|-h|--help|help)
+        "")
+            # PWD compose project → recommend; otherwise fall back to
+            # the canonical summary so non-compose dirs see no regression.
+            if _docker_help_has_compose_in_pwd; then
+                _docker_help_recommend
+            else
+                _docker_help_summary
+            fi
+            ;;
+        here)
+            _docker_help_recommend
+            ;;
+        -h|--help|help)
             _docker_help_summary
             ;;
         --list|list|section|sections)
