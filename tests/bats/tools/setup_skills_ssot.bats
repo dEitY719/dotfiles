@@ -39,6 +39,17 @@ EOF
     export FIXTURE_DOTFILES FIXTURE_HOME
 }
 
+# Provision the opencode + gemini config dirs so the script's CLI-presence
+# guards (`[ -d ~/.config/opencode ]` / `[ -d ~/.gemini ]`) light up. Each
+# test that exercises the entry-level synthesis calls this helper to set
+# the initial layout (real-dir, dir-symlink, or absent skills/ subdir).
+seed_opencode_home() {
+    mkdir -p "${FIXTURE_HOME}/.config/opencode"
+}
+seed_gemini_home() {
+    mkdir -p "${FIXTURE_HOME}/.gemini"
+}
+
 teardown() {
     teardown_isolated_home
 }
@@ -128,4 +139,145 @@ EOF
     [ "$status" -eq 1 ]
     assert_output --partial "exceed budget"
     assert_output --partial ".codex-allowlist"
+}
+
+# ---------------------------------------------------------------------
+# issue #791 — OpenCode / Gemini entry-level 합성
+# 이전 디렉토리-단위 symlink 를 entry-level 합성 디렉토리로 변환.
+# ---------------------------------------------------------------------
+
+@test "opencode: fresh install creates entry-level synthesis directory (#791)" {
+    seed_opencode_home
+
+    run_setup
+    assert_success
+
+    local oc_dir="${FIXTURE_HOME}/.config/opencode/skills"
+    [ -d "$oc_dir" ] && [ ! -L "$oc_dir" ]
+    for s in alpha beta gamma; do
+        [ -L "${oc_dir}/${s}" ]
+        [ "$(readlink -f "${oc_dir}/${s}")" = "$(readlink -f "${FIXTURE_DOTFILES}/claude/skills/${s}")" ]
+    done
+}
+
+@test "gemini: fresh install creates entry-level synthesis directory (#791)" {
+    seed_gemini_home
+
+    run_setup
+    assert_success
+
+    local g_dir="${FIXTURE_HOME}/.gemini/skills"
+    [ -d "$g_dir" ] && [ ! -L "$g_dir" ]
+    for s in alpha beta gamma; do
+        [ -L "${g_dir}/${s}" ]
+        [ "$(readlink -f "${g_dir}/${s}")" = "$(readlink -f "${FIXTURE_DOTFILES}/claude/skills/${s}")" ]
+    done
+}
+
+@test "opencode: legacy dir-symlink migrates to entry-level synthesis (#791)" {
+    seed_opencode_home
+    # Pre-state: legacy directory symlink → SSOT.
+    ln -s "${FIXTURE_DOTFILES}/claude/skills" \
+        "${FIXTURE_HOME}/.config/opencode/skills"
+    [ -L "${FIXTURE_HOME}/.config/opencode/skills" ]
+
+    run_setup
+    assert_success
+    assert_output --partial "[opencode] legacy dir-symlink"
+
+    local oc_dir="${FIXTURE_HOME}/.config/opencode/skills"
+    [ ! -L "$oc_dir" ]
+    [ -d "$oc_dir" ]
+    for s in alpha beta gamma; do
+        [ -L "${oc_dir}/${s}" ]
+    done
+}
+
+@test "gemini: legacy dir-symlink migrates to entry-level synthesis (#791)" {
+    seed_gemini_home
+    ln -s "${FIXTURE_DOTFILES}/claude/skills" "${FIXTURE_HOME}/.gemini/skills"
+    [ -L "${FIXTURE_HOME}/.gemini/skills" ]
+
+    run_setup
+    assert_success
+    assert_output --partial "[gemini] legacy dir-symlink"
+
+    local g_dir="${FIXTURE_HOME}/.gemini/skills"
+    [ ! -L "$g_dir" ]
+    [ -d "$g_dir" ]
+    for s in alpha beta gamma; do
+        [ -L "${g_dir}/${s}" ]
+    done
+}
+
+@test "opencode: synthesis is idempotent on re-run (#791)" {
+    seed_opencode_home
+
+    run_setup
+    assert_success
+    local before
+    before="$(ls -la "${FIXTURE_HOME}/.config/opencode/skills")"
+
+    run_setup
+    assert_success
+    local after
+    after="$(ls -la "${FIXTURE_HOME}/.config/opencode/skills")"
+
+    [ "$before" = "$after" ]
+}
+
+@test "gemini: user symlink to non-SSOT location is preserved + warned (#791)" {
+    seed_gemini_home
+    # User-managed symlink pointing somewhere other than the SSOT.
+    mkdir -p "${TEST_TEMP_HOME}/elsewhere/skills"
+    ln -s "${TEST_TEMP_HOME}/elsewhere/skills" "${FIXTURE_HOME}/.gemini/skills"
+
+    run_setup
+    assert_success
+    assert_output --partial "[gemini] 사용자 symlink"
+
+    # The user's symlink must NOT have been clobbered.
+    [ -L "${FIXTURE_HOME}/.gemini/skills" ]
+    [ "$(readlink "${FIXTURE_HOME}/.gemini/skills")" = "${TEST_TEMP_HOME}/elsewhere/skills" ]
+}
+
+@test "opencode: stale entry whose source vanished gets pruned (#791)" {
+    seed_opencode_home
+
+    run_setup
+    assert_success
+    [ -L "${FIXTURE_HOME}/.config/opencode/skills/beta" ]
+
+    # Remove `beta` from the SSOT, then re-run. The stale entry under
+    # opencode must be cleaned up.
+    rm -rf "${FIXTURE_DOTFILES}/claude/skills/beta"
+
+    run_setup
+    assert_success
+    [ ! -e "${FIXTURE_HOME}/.config/opencode/skills/beta" ]
+    # Other skills still present.
+    [ -L "${FIXTURE_HOME}/.config/opencode/skills/alpha" ]
+    [ -L "${FIXTURE_HOME}/.config/opencode/skills/gamma" ]
+}
+
+@test "opencode: private overlay entry (outside SSOT) survives pruning (#791)" {
+    seed_opencode_home
+
+    run_setup
+    assert_success
+
+    # Simulate a private overlay entry that lives outside the SSOT.
+    mkdir -p "${TEST_TEMP_HOME}/company-skills/private-one"
+    : > "${TEST_TEMP_HOME}/company-skills/private-one/SKILL.md"
+    ln -s "${TEST_TEMP_HOME}/company-skills/private-one" \
+        "${FIXTURE_HOME}/.config/opencode/skills/private-one"
+
+    run_setup
+    assert_success
+
+    # The overlay link survives — pruning only touches SSOT-pointing
+    # symlinks whose source vanished.
+    [ -L "${FIXTURE_HOME}/.config/opencode/skills/private-one" ]
+    [ "$(readlink "${FIXTURE_HOME}/.config/opencode/skills/private-one")" \
+        = "${TEST_TEMP_HOME}/company-skills/private-one" ]
 }

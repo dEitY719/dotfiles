@@ -5,12 +5,11 @@
 # PURPOSE: claude/skills/를 SSOT로 삼아 OpenCode·Codex·Gemini에 연결
 # WHEN TO RUN: Via ./setup.sh (do NOT run manually)
 #
-# 연결 전략:
-#   - 전체 디렉토리 symlink: tools skills dir가 없거나 빈 경우
-#     ~/.config/opencode/skills/ → ~/dotfiles/claude/skills/
-#     ~/.gemini/skills/          → ~/dotfiles/claude/skills/
-#   - Codex 전용 개별 연결: skill 디렉토리는 실제 폴더로 만들고
-#     .system 디렉토리는 로컬 보존, 나머지 custom skill 디렉토리는 symlink
+# 연결 전략 (issue #791 — 4 CLI 모두 entry-level 합성):
+#   - entry-level 합성 디렉토리 (4 CLI 공통, #707 / #791):
+#     ~/.config/opencode/skills/<skill>     → ~/dotfiles/claude/skills/<skill>
+#     ~/.gemini/skills/<skill>              → ~/dotfiles/claude/skills/<skill>
+#   - Codex 전용 합성: .system 디렉토리는 로컬 보존
 #     ~/.codex/skills/.system                          ← local (codex managed)
 #     ~/.codex/skills/<custom-skill>                   → ~/dotfiles/claude/skills/<custom-skill>
 #
@@ -20,7 +19,13 @@
 #     발생하는 것을 막는 용도. 한 줄에 하나의 skill 디렉토리 이름, '#' 으로 시작하는
 #     주석과 빈 줄은 무시됨. 파일이 없거나 모두 비어 있으면 종전대로 전체 연결.
 #
-# ~/.claude*/skills 는 claude/setup.sh 가 디렉토리 symlink 로 관리 (#575)
+#   - 마이그레이션 (#791): 기존 opencode/gemini 의 디렉토리-단위 symlink 는
+#     entry-level 합성으로 변환된다. 사용자가 직접 만든 symlink (target 이
+#     SSOT 가 아닌 경우) 는 보존 + warn.
+#
+# ~/.claude*/skills 는 claude/setup.sh 가 entry-level 합성 디렉토리로 관리 (#707, F-8).
+# 4 CLI 모두 동일 layout 이므로 setup-company-skills.sh 의 private overlay 도
+# 4 곳 전부에 적용된다.
 
 # --- Constants ---
 
@@ -116,31 +121,100 @@ collect_codex_homes() {
     done
 }
 
-# 전체 디렉토리를 SSOT로 symlink
-# Usage: link_skills_dir <tool_name> <target_path>
-link_skills_dir() {
+# Entry-level 합성 + 레거시 dir-symlink 마이그레이션 (issue #791).
+# OpenCode / Gemini 가 #707 의 Claude Code entry-composition layout 과
+# 동일하게 동작하도록 한다. 호출 후 <target_dir> 은 실제 디렉토리이며 그
+# child entry 들이 SSOT 의 각 skill 으로 가는 symlink. private overlay
+# (setup-company-skills.sh) 가 이후 같은 디렉토리에 추가 entry 를 layer.
+#
+# 마이그레이션 정책:
+#   - target 이 SSOT 로 향하는 dir-symlink → 해제 후 합성으로 전환.
+#   - target 이 사용자 symlink (다른 위치) → 보존 + warn (skip, 무손실).
+#   - target 이 일반 파일 → 보존 + warn (사용자 데이터 가능성, skip).
+#   - target 이 일반 디렉토리 → 합성 시도 (기존 entry 보존).
+# Usage: link_skills_compose <tool_name> <target_dir>
+link_skills_compose() {
     local tool="$1"
     local target="$2"
+    local source_root
+    source_root="$(readlink -f "$SKILLS_SOURCE")"
 
-    # 이미 SSOT를 가리키는 symlink면 skip
+    # 1. Migrate legacy directory-symlink → real directory.
     if [ -L "$target" ]; then
         local current_target
         current_target="$(readlink -f "$target" 2>/dev/null)"
-        if [ "$current_target" = "$(readlink -f "$SKILLS_SOURCE")" ]; then
-            log_dim "✓ [$tool] skills symlink 이미 연결됨: $target"
+        if [ "$current_target" = "$source_root" ]; then
+            log_info "[$tool] legacy dir-symlink 감지 — entry-level 합성으로 마이그레이션"
+            rm -f "$target"
+        else
+            log_warning "[$tool] 사용자 symlink 감지 — 합성 마이그레이션 건너뜀: $target"
             return 0
         fi
-        log_dim "[$tool] 기존 symlink 교체: $target"
-        rm "$target"
-    elif [ -d "$target" ]; then
-        # 디렉토리가 존재하면 백업 후 제거
-        local backup="${target}-$(date +%Y%m%d%H%M%S)-backup"
-        log_warning "[$tool] 기존 디렉토리 백업: $target -> $backup"
-        mv "$target" "$backup"
+    elif [ -e "$target" ] && [ ! -d "$target" ]; then
+        log_warning "[$tool] 비-디렉토리 항목 감지 — 합성 마이그레이션 건너뜀: $target"
+        return 0
     fi
 
-    log_info "[$tool] skills symlink 생성: $target -> $SKILLS_SOURCE"
-    ln -s "$SKILLS_SOURCE" "$target" || log_critical "[$tool] symlink 생성 실패: $target"
+    mkdir -p "$target" || log_critical "[$tool] target 디렉토리 생성 실패: $target"
+
+    local linked=0 refreshed=0 skipped=0 pruned=0
+    local skill_path skill_name link_target source_realpath current_link existing_target_path
+
+    for skill_path in "$SKILLS_SOURCE"/*/; do
+        [ -d "$skill_path" ] || continue
+        skill_name="$(basename "$skill_path")"
+        link_target="${target}/${skill_name}"
+        source_realpath="$(readlink -f "$skill_path")"
+
+        if [ -L "$link_target" ]; then
+            current_link="$(readlink "$link_target")"
+            if [ "$current_link" = "$skill_path" ] \
+                || [ "$(readlink -f "$link_target" 2>/dev/null)" = "$source_realpath" ]; then
+                continue
+            fi
+            case "$current_link" in
+                "$SKILLS_SOURCE"/*)
+                    rm -f "$link_target"
+                    refreshed=$((refreshed + 1))
+                    ;;
+                *)
+                    log_dim "[$tool] 사용자 symlink 보존: $link_target"
+                    skipped=$((skipped + 1))
+                    continue
+                    ;;
+            esac
+        elif [ -e "$link_target" ]; then
+            log_dim "[$tool] 비-symlink 엔트리 보존: $link_target"
+            skipped=$((skipped + 1))
+            continue
+        else
+            linked=$((linked + 1))
+        fi
+
+        ln -s "$skill_path" "$link_target" || {
+            log_error "[$tool] skill symlink 생성 실패: $link_target"
+            continue
+        }
+    done
+
+    # Stale cleanup: SSOT 로 향하던 symlink 의 원본이 사라진 경우만 정리.
+    # SSOT 밖을 가리키는 entry (private overlay 등) 는 보존.
+    local existing
+    for existing in "$target"/*; do
+        [ -L "$existing" ] || continue
+        existing_target_path="$(readlink "$existing")"
+        case "$existing_target_path" in
+            "$SKILLS_SOURCE"/*)
+                if [ ! -d "$existing_target_path" ]; then
+                    log_info "[$tool] stale entry 정리: $existing"
+                    rm -f "$existing"
+                    pruned=$((pruned + 1))
+                fi
+                ;;
+        esac
+    done
+
+    log_info "[$tool] skill 합성 완료: ${linked}개 신규, ${refreshed}개 갱신, ${skipped}개 보존, ${pruned}개 정리"
 }
 
 # 개별 skill을 SSOT에서 symlink (기존 디렉토리 보존)
@@ -359,12 +433,12 @@ if [ ! -d "$SKILLS_SOURCE" ]; then
     log_critical "SSOT 디렉토리가 없습니다: $SKILLS_SOURCE"
 fi
 
-# 1. OpenCode: 전체 디렉토리 symlink
+# 1. OpenCode: entry-level 합성 (issue #791 — 4 CLI 공통 layout)
 OPENCODE_SKILLS="${HOME}/.config/opencode/skills"
 if [ ! -d "${HOME}/.config/opencode" ]; then
     log_warning "OpenCode 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.config/opencode"
 else
-    link_skills_dir "opencode" "$OPENCODE_SKILLS"
+    link_skills_compose "opencode" "$OPENCODE_SKILLS"
 fi
 
 # 2. Codex: .system 보존 + custom skill 디렉토리 symlink (선택적 allowlist 적용)
@@ -404,12 +478,12 @@ else
     done <<< "$CODEX_HOME_LIST"
 fi
 
-# 3. Gemini: 전체 디렉토리 symlink
+# 3. Gemini: entry-level 합성 (issue #791 — 4 CLI 공통 layout)
 GEMINI_SKILLS="${HOME}/.gemini/skills"
 if [ ! -d "${HOME}/.gemini" ]; then
     log_warning "Gemini 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.gemini"
 else
-    link_skills_dir "gemini" "$GEMINI_SKILLS"
+    link_skills_compose "gemini" "$GEMINI_SKILLS"
 fi
 
 # --- Verify ---
@@ -419,18 +493,17 @@ ux_section "Skills SSOT 연결 확인"
 verify_link() {
     local tool="$1"
     local path="$2"
-    local mode="$3"   # "dir" or "individual" or "codex"
+    local mode="$3"   # "compose" or "codex"
 
-    if [ "$mode" = "dir" ]; then
-        if [ -L "$path" ]; then
-            log_dim "✓ [$tool] $path -> $(readlink "$path")"
-        else
-            log_warning "[$tool] symlink 확인 실패: $path"
-        fi
-    elif [ "$mode" = "individual" ]; then
+    if [ "$mode" = "compose" ]; then
+        # Entry-level 합성: 실제 디렉토리 + child symlink 카운트.
         local count
-        count=$(find "$path" -maxdepth 1 -type l 2>/dev/null | wc -l)
-        log_dim "✓ [$tool] $path (개별 symlink: ${count}개)"
+        if [ -d "$path" ] && [ ! -L "$path" ]; then
+            count=$(find "$path" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l)
+            log_dim "✓ [$tool] $path (entry symlink: ${count}개)"
+        else
+            log_warning "[$tool] entry-level 합성 디렉토리 확인 실패: $path"
+        fi
     else
         local link_count
         local system_state
@@ -444,13 +517,13 @@ verify_link() {
     fi
 }
 
-[ -d "${HOME}/.config/opencode" ] && verify_link "opencode" "$OPENCODE_SKILLS" "dir"
+[ -d "${HOME}/.config/opencode" ] && verify_link "opencode" "$OPENCODE_SKILLS" "compose"
 if [ -n "${CODEX_HOME_LIST:-}" ]; then
     while IFS= read -r codex_home; do
         [ -n "$codex_home" ] || continue
         verify_link "codex" "${codex_home}/skills" "codex"
     done <<< "$CODEX_HOME_LIST"
 fi
-[ -d "${HOME}/.gemini" ] && verify_link "gemini" "$GEMINI_SKILLS" "dir"
+[ -d "${HOME}/.gemini" ] && verify_link "gemini" "$GEMINI_SKILLS" "compose"
 
 ux_success "Skills SSOT 연결 완료"
