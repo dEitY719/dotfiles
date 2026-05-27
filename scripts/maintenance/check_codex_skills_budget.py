@@ -219,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
             f"per-skill description hard limit ({args.per_skill_max} chars).{Colors.RESET}"
         )
         for name, length, path in over_limit:
-            print(f"{Colors.RED}    {length:5d}  {name}  ({path}/SKILL.md){Colors.RESET}")
+            print(f"{Colors.RED}    {length:5d}  {name}  ({path / 'SKILL.md'}){Colors.RESET}")
         print(
             f"{Colors.YELLOW}  The skill loader will refuse to load these skills. "
             f"Trim each description and move detail into references/help.md.{Colors.RESET}"
