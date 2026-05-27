@@ -55,7 +55,7 @@ log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
 # [DEBUG] 접두 출력은 명시적으로 DOTFILES_DEBUG=1 일 때만 노출 (#793 F-3).
 log_debug() {
     [ "${DOTFILES_DEBUG:-0}" = "1" ] || return 0
-    echo -e "${UX_MUTED}[DEBUG] $1${UX_RESET}"
+    printf "%s[DEBUG] %s%s\n" "${UX_MUTED}" "$1" "${UX_RESET}"
 }
 log_warning() { ux_warning "$1"; }
 
