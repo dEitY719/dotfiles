@@ -43,7 +43,7 @@ State `OPEN` required. Hard preconditions in `references/safety.md` →
 본격 분석 전에 main 의 동일 workflow 가 inherited red 인지 1초 확인:
 
 ```bash
-gh run list --repo "$TARGET_REPO" --branch main --workflow <workflow> --limit 3
+gh run list --repo "$TARGET_REPO" --branch main --workflow "$WORKFLOW_NAME" --limit 3
 ```
 
 세 run 중 2개 이상 failure 이고 PR run 과 동일 step 에서 fail 한다면
