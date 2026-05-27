@@ -54,10 +54,16 @@ still refusing to drag `Done` Issues backwards if a closed PR is re-opened (#309
 ## `GH_REPO` requirement
 
 The closing-issues helper (`_gh_pr_closing_issue_numbers`) needs the repo
-slug as `owner/repo` (e.g. `dEitY719/dotfiles`). If `GH_REPO` is unset at
-the point Step 7 runs, resolve it via
-`gh repo view --json nameWithOwner --jq .nameWithOwner`. This is a thin
-wrapper — no auth state changes, no API mutation.
+slug as `owner/repo` (e.g. `dEitY719/dotfiles`). The Step 7 snippet
+auto-resolves `GH_REPO` inline when it is unset/empty via
+`gh repo view --json nameWithOwner --jq .nameWithOwner` — added in
+response to the PR #780 review: an unset `GH_REPO` would otherwise pass
+an empty string to `_gh_pr_closing_issue_numbers`, the helper would
+return immediately, and the linked-issues sync loop would silently
+no-op. The fallback is a thin wrapper — no auth state changes, no API
+mutation — and matches the existing convention in
+`shell-common/functions/gh_pr_edit_safe.sh` /
+`gh_audit_builtin_workflows.sh`.
 
 ## Behavior summary
 
