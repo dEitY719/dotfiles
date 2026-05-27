@@ -352,7 +352,7 @@ link_skills_individual_codex() {
 
 # --- Main ---
 
-log_dim "\n--- Skills SSOT 연결 시작 ---"
+ux_section "Skills SSOT 연결"
 
 # SSOT 존재 확인
 if [ ! -d "$SKILLS_SOURCE" ]; then
@@ -414,7 +414,7 @@ fi
 
 # --- Verify ---
 
-log_dim "\n--- Skills SSOT 연결 확인 ---"
+ux_section "Skills SSOT 연결 확인"
 
 verify_link() {
     local tool="$1"
@@ -453,4 +453,4 @@ if [ -n "${CODEX_HOME_LIST:-}" ]; then
 fi
 [ -d "${HOME}/.gemini" ] && verify_link "gemini" "$GEMINI_SKILLS" "dir"
 
-log_dim "--- Skills SSOT 연결 완료 ---\n"
+ux_success "Skills SSOT 연결 완료"
