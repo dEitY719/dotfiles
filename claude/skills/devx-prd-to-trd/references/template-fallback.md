@@ -16,8 +16,7 @@ plan's Components table before writing.
 
 > **상태**: Draft v1 ({{iso-date}})
 > **책임 PRD 항목**: {{responsible-prd-items}} ([PRD](../{{prd-basename}}))
-> *(F-# + D-# 는 필수, NF-# primary 는 0 또는 1 개 — 없으면 슬롯 생략)*
-> **인용 NF**: {{cited-nf-items}}  *(없으면 `(none)`)*
+> **인용 NF**: {{cited-nf-items}}
 > **소유자**: @{{owner-placeholder}}
 > **인접 TRD**: {{adjacent-trd-slugs}}
 
@@ -79,6 +78,24 @@ plan's Components table before writing.
 > 결정 못 한 항목. 본 TRD 가 머지 / 구현 시작 전 해결 필요.
 > 형태: "OQ-1: <질문>; 차단되는 의사결정: <…>; 제안된 해결: <…>"
 ```
+
+## Frontmatter field rules (outside the verbatim block)
+
+The 5 frontmatter slots above (`상태` / `책임 PRD 항목` / `인용 NF`
+/ `소유자` / `인접 TRD`) follow the same line-stability invariants as
+`plan-format.md` → "Plan field rules":
+
+- `책임 PRD 항목` carries `F-#` + `D-#` (both required) plus an
+  optional `NF-#` primary (0 or 1 — never synthesize one to fill the
+  slot; collides with `decomposition-rules.md` → "Never invent PRD
+  items"). When omitted, only `F-#, D-#` appears.
+- `인용 NF` is rendered as `(none)` when empty — never blank — so the
+  round-trip parser distinguishes "no cites" from "missing slot".
+- `인접 TRD` is rendered as `(none)` when no adjacent slug exists.
+
+These notes live **outside** the verbatim template block on purpose:
+the block must be copy-pasteable into a real TRD with no manual
+cleanup of inline annotations (#778 review).
 
 ## Why this template is built-in
 
