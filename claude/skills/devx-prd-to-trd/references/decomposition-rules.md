@@ -14,7 +14,11 @@ matching the agent-toolbox convention (mega-TRD forbidden).
    Model / Pipeline / UI / Security / Deployment / Observability /
    ...). Each group becomes one TRD slug.
 3. **PRD §5 `NF-#` (Non-functional)** — assign each `NF-#` to its
-   highest-impact TRD as the primary. Cross-citation on adjacent TRDs
+   highest-impact TRD as the primary, **at most one per TRD**. When
+   the PRD has fewer `NF-#` items than TRDs, the leftover TRDs land
+   with `(none)` in the `NF-# (primary)` column — never duplicate or
+   synthesize an NF item to fill a slot (collides with
+   "Never invent PRD items" below). Cross-citation on adjacent TRDs
    is allowed; redefinition is not (NF-# is PRD-owned).
 4. **Adjacent-TRD pairs** — slugs that share an explicit contract
    (data schema, API surface, event topic) get a bidirectional
@@ -45,7 +49,7 @@ matching the agent-toolbox convention (mega-TRD forbidden).
 ```
 | Slug | 책임 F-# | 책임 D-# | NF-# (primary) | NF-# (cited) | 인접 TRD |
 |------|----------|----------|----------------|--------------|----------|
-| auth-session | F-1, F-2 | D-3 | NF-1 | NF-2, NF-4 | submission-pipeline |
+| auth-session | F-1,F-2 | D-3 | NF-1 | NF-2,NF-4 | submission-pipeline |
 ```
 
 This table is the round-trip surface — `--apply` reads it back from

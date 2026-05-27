@@ -23,8 +23,9 @@ Template: <_template.md path | references/template-fallback.md>
 
 | Slug | 책임 F-# | 책임 D-# | NF-# (primary) | NF-# (cited) | 인접 TRD |
 |------|----------|----------|----------------|--------------|----------|
-| <slug-1> | F-1, F-2 | D-3 | NF-1 | NF-2 | <slug-2> |
+| <slug-1> | F-1,F-2 | D-3 | NF-1 | NF-2 | <slug-2> |
 | <slug-2> | F-3 | D-3 | NF-3 | NF-1 | <slug-1> |
+| <slug-3> | F-4 | (none) | (none) | NF-1 | (none) |
 
 ## Suggested splits
 <empty list, OR>
@@ -39,10 +40,17 @@ Template: <_template.md path | references/template-fallback.md>
 
 - **Slug column** — kebab-case, unique per plan.
 - **책임 F-# / D-#** — comma-separated, no spaces around commas.
-- **NF-# (primary)** — exactly one NF item owned by this TRD.
-- **NF-# (cited)** — comma-separated, may be empty.
+  Empty cells are rendered as `(none)` — never blank — so the
+  round-trip parser can distinguish "no items" from "missing column".
+- **NF-# (primary)** — at most one NF item owned by this TRD (0 or 1).
+  When the PRD has fewer `NF-#` items than TRDs, or none apply to this
+  component, the cell is rendered as `(none)`. Never synthesize an NF
+  item to fill the slot (collides with `decomposition-rules.md` →
+  "Never invent PRD items").
+- **NF-# (cited)** — comma-separated, may be empty (rendered `(none)`).
 - **인접 TRD** — comma-separated slugs that share a contract. May be
-  empty. References must point at slugs in the same plan.
+  empty (rendered `(none)`). References must point at slugs in the
+  same plan.
 - **Suggested splits** — rendered as `_no suggestions._` when empty.
 - **Manual review** — rendered as `_none._` when empty.
 
@@ -68,7 +76,7 @@ never AI-drafted content.
 # TRD: <Component Title> — <Project>
 
 > **상태**: Draft v1 (<YYYY-MM-DD>)
-> **책임 PRD 항목**: <F-#>, <D-#>, <NF-# primary> ([PRD](../<prd-basename>))
+> **책임 PRD 항목**: <F-#>, <D-#>[, <NF-# primary>] ([PRD](../<prd-basename>))
 > **인용 NF**: <NF-# cited or "(none)">
 > **소유자**: @<github-handle-placeholder>
 > **인접 TRD**: <slug-A>, <slug-B> | (none)
