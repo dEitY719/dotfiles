@@ -72,8 +72,9 @@ the plan to fill each TRD's frontmatter.
 - **Never invent PRD items.** If `F-#`/`D-#`/`NF-#` are not present
   in the source PRD, do not synthesize them.
 - **Never merge unrelated `F-#` into a single TRD** just to hit the
-  6-slug lower bound. If the PRD is too small, refuse and tell the
-  user to enrich the PRD.
+  6-slug target. If the PRD is too small, refuse and tell the
+  user to enrich the PRD. (Hard lower bound stays at 2 per
+  "Target counts" above; 6 is the recommended target, not a floor.)
 - **PRD is read-only.** This skill never writes back to the PRD path.
 
 ## Pairs with
