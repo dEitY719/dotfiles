@@ -52,7 +52,11 @@ log_critical() {
     exit 1
 }
 log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
-log_debug() { echo -e "${UX_MUTED}[DEBUG] $1${UX_RESET}"; }
+# [DEBUG] 접두 출력은 명시적으로 DOTFILES_DEBUG=1 일 때만 노출 (#793 F-3).
+log_debug() {
+    [ "${DOTFILES_DEBUG:-0}" = "1" ] || return 0
+    echo -e "${UX_MUTED}[DEBUG] $1${UX_RESET}"
+}
 log_warning() { ux_warning "$1"; }
 
 # --- Functions ---
@@ -104,7 +108,7 @@ create_symlink() {
 
 # --- Main Script Logic ---
 
-log_debug "\n--- dotfiles setup 시작 ---"
+ux_section "dotfiles setup"
 
 # main.bash 파일 존재 여부 확인
 
@@ -281,7 +285,7 @@ CLEANUP_CODE
 # Add auto-cleanup to zshrc
 _add_zshrc_auto_cleanup
 
-log_debug "--- dotfiles setup 완료 ---"
+ux_success "dotfiles setup 완료"
 
 log_dim "변경 사항을 적용하려면 'source ~/.bashrc' 또는 셸을 재시작하십시오."
 
