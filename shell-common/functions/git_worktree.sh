@@ -1780,6 +1780,17 @@ git_worktree_spawn() {
                 ux_info "          (see \`term-help vscode\`)"
             fi
             term_rename --persist "(${agent}) ${name}"
+            # VSCode 의 AI-agent foreground detect (ptyHostMain.js 의
+            # claude-code/codex/copilot/gemini-cli regex) 가 agent 기동
+            # 직후 ${sequence} 를 자체 title 로 일시 override 한다. 그
+            # detect 가 settle 된 뒤에 OSC 0 을 한 번 더 발사하면 이후엔
+            # sticky 하게 우리 라벨이 유지됨 — 경험적으로 #781 에서 확인.
+            # alt-screen TUI 는 OSC bytes 를 무시하므로 claude 렌더링과
+            # 충돌하지 않는다. 3s 는 claude 기동 + detect settle 의
+            # 헤드룸; 느린 머신이면 키워야 할 수 있음.
+            if [ "${TERM_PROGRAM-}" = "vscode" ]; then
+                (sleep 3; printf '\033]0;(%s) %s\007' "$agent" "$name") &
+            fi
         fi
         eval "$launch_cmd"
     else
