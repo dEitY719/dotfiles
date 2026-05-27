@@ -99,12 +99,21 @@ Read `references/push-and-create.md` for the upstream-state push policy and
 the `gh pr create` command (uses `mktemp` body file, `--assignee @me`,
 `--base "$BASE_BRANCH"` from Step 1a).
 
+After `gh pr create` returns the PR URL, emit the step-completion marker
+so the harness step-skip guard (`skill_completion_guard.py`, issue #753)
+can verify this step ran:
+`printf '[step:gh-pr/push-and-create] OK\n'`.
+
 ## Step 6: Apply Labels
 
 Derive labels from conventional-commit types in `git log <base>..HEAD` and
 PR scope (e.g. `skill` for `claude/skills/` changes). Apply only labels that
 exist in the repo (`gh label list`) — never create new ones. See
 `references/pr-body-template.md` for the full mapping and safe-apply loop.
+
+After the label loop returns (including the no-op case where every
+candidate label was missing from the repo), emit:
+`printf '[step:gh-pr/labels] OK\n'`.
 
 ## Step 7: Sync Project Board Status
 
@@ -174,6 +183,11 @@ Track the outcome for Step 8's report row:
 - helper ran, no projectV2 board → `[SKIP]: no projectV2`
 - helper ran with at least one card moved → `[OK]: PR card -> "In review"`
 
+Regardless of which branch ran (hook delegate, helper missing, no
+projectV2, real sync), emit the step-completion marker so the
+step-skip guard recognizes Step 7 was visited:
+`printf '[step:gh-pr/board-sync] OK\n'`.
+
 ## Step 8: Report
 
 성공 시:
@@ -187,6 +201,10 @@ Next: /gh:pr-reply (after CI green) — replies to review comments
 The `Board sync:` row is a defense-in-depth visual checklist (issue
 #747) — its absence in conversation transcripts is a regression signal
 that Step 7 was silently skipped.
+
+After printing the report block, emit the report step-completion
+marker so the step-skip guard recognizes the skill finished:
+`printf '[step:gh-pr/report] OK\n'`.
 
 Step 1b empty-range / on-base-branch stops, Step 1a `rc=2`/`rc=3`, or
 Step 4.5 lint failure:

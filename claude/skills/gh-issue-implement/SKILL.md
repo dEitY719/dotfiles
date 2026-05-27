@@ -50,15 +50,23 @@ Five substeps in order. Full policy, env vars, and behavior matrix in
 `references/claim.md`.
 
 3.1 **Fetch** — `references/fetch-issue.md` (CLOSED refusal handled there).
+    After `gh issue view` succeeds, emit the step-completion marker so
+    the harness step-skip guard (`skill_completion_guard.py`, issue #753)
+    can verify this step ran:
+    `printf '[step:gh-issue-implement/fetch-issue] OK\n'`.
 3.2 **Block-label guard** — fail-closed abort (exit 2) if any label on
     the issue matches `GH_ISSUE_BLOCK_LABELS`
     (default `do-not-work,on-hold,보류,⏸️ Postpone`).
 3.3 **Self-assign** — `gh issue edit <N> --add-assignee @me` when not
     already on the assignee list; warn (no override) when held by
-    another user. Skip via `GH_ISSUE_SKIP_SELF_ASSIGN=1`.
+    another user. Skip via `GH_ISSUE_SKIP_SELF_ASSIGN=1`. After the
+    assignee edit (or the warn path) finishes, emit:
+    `printf '[step:gh-issue-implement/self-assign] OK\n'`.
 3.4 **Board Status transition** — `_gh_project_status_sync issue <N>
     "In progress" --only-from "Backlog,Ready"`. No-op on repos without
-    a board. Skip via `GH_ISSUE_SKIP_BOARD_TRANSITION=1`.
+    a board. Skip via `GH_ISSUE_SKIP_BOARD_TRANSITION=1`. After the
+    helper returns (success, no-op, or skipped via env), emit:
+    `printf '[step:gh-issue-implement/board-transition] OK\n'`.
 3.5 **Depends-on guard** — soft-warn (continue) for each `Depends on
     #M` line in the body whose `M` is still OPEN. Skip via
     `GH_ISSUE_SKIP_DEPS_CHECK=1`.
@@ -85,6 +93,12 @@ Follow the direct-mode flow in `references/implementation-flow.md` →
 run tests, on failure run the test-failure loop with max 3 iterations
 per the same file).
 
+After implementation + tests pass (or are skipped because no test
+runner was detected), emit the step-completion marker before printing
+the Step 6 report — the harness step-skip guard
+(`skill_completion_guard.py`, issue #753) requires this marker:
+`printf '[step:gh-issue-implement/implement] OK\n'`.
+
 ## Step 6: Report
 
 Print the success or failure report per
@@ -100,6 +114,10 @@ artifact exists yet at this stage):
 ```
 
 Compute `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))` just before printing.
+
+Finally, emit the report step-completion marker so the step-skip guard
+recognizes the skill finished:
+`printf '[step:gh-issue-implement/report] OK\n'`.
 
 ## Constraints
 
