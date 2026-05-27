@@ -177,6 +177,13 @@ ux_warning() {
 # Display an info message with info icon
 # Usage: ux_info "For your information"
 ux_info() {
+    # Empty arg = caller wanted a blank-line separator (the convention in
+    # 60+ call sites). Without this branch the icon prints alone, which
+    # looks like a half-rendered bullet between blocks.
+    if [ -z "$1" ]; then
+        printf '\n'
+        return 0
+    fi
     printf "%s%sℹ️%s  %s\n" "${UX_BOLD}" "${UX_INFO}" "${UX_RESET}" "$1"
 }
 

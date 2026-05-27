@@ -519,7 +519,10 @@ _gh_pr_approve_status() {
     fi
 
     local _found=0
-    ux_table_header "PR" "STATE" "PID / WORKTREE"
+    # Row spans three columns (PR | STATE | PID/WORKTREE). The 3rd column
+    # crams two values into one cell — we add a `→` separator so they read
+    # as distinct fields instead of two strings joined by accidental spaces.
+    ux_table_header "PR" "STATE" "PID  →  WORKTREE"
     for _entry in "$_repo_dir"/*/; do
         [ -d "$_entry" ] || continue
         _pr="$(basename "$_entry")"
@@ -536,7 +539,7 @@ _gh_pr_approve_status() {
         fi
 
         if [ -n "$_wt" ]; then
-            ux_table_row "#$_pr" "$_state" "$_pid_state  $_wt"
+            ux_table_row "#$_pr" "$_state" "$_pid_state  →  $_wt"
         else
             ux_table_row "#$_pr" "$_state" "$_pid_state"
         fi
@@ -695,12 +698,19 @@ _gh_pr_approve_prune() {
             if [ "$_force" = "1" ]; then
                 if [ -n "$_wt" ] && [ -d "$_wt" ]; then
                     ux_warning "#$_pr $_state — tearing down $_wt"
-                    if (cd "$_wt" && gwt teardown --force); then
+                    # Call git_worktree_teardown directly to bypass the
+                    # `gwt` dispatcher: in shells that did not source
+                    # git_worktree.sh, `gwt` is still the bare alias for
+                    # `git worktree`, which has no `teardown` subcommand
+                    # and reports a confusing "unknown subcommand" error
+                    # that masks the real cause.
+                    if (cd "$_wt" && git_worktree_teardown --force); then
                         rm -rf "$_entry"
                         _torn_down=$((_torn_down + 1))
                     else
-                        ux_error "  gwt teardown failed for $_wt; leaving state dir intact"
-                        ux_bullet_sub "manual fix: cd $_wt && gwt teardown --force && gh-pr-approve prune --force $_pr"
+                        ux_error "  worktree teardown failed for $_wt; leaving state dir intact"
+                        ux_bullet_sub "inspect: cd $_wt && git_worktree_teardown --force   # check stderr for the actual cause"
+                        ux_bullet_sub "then:    gh-pr-approve prune --force $_pr           # remove the orphaned state dir"
                     fi
                 else
                     # Ghost: worktree dir already gone (e.g. teardown crashed
@@ -739,10 +749,11 @@ _gh_pr_approve_prune() {
         _orphans=$((_orphans + 1))
         if [ "$_force" = "1" ]; then
             ux_warning "orphan #$_orphan_pr — tearing down $_orphan_path"
-            if (cd "$_orphan_path" && gwt teardown --force); then
+            # Direct function call — see prune-failed branch above for why.
+            if (cd "$_orphan_path" && git_worktree_teardown --force); then
                 _orphans_torn=$((_orphans_torn + 1))
             else
-                ux_error "  gwt teardown failed for $_orphan_path; leaving worktree intact"
+                ux_error "  worktree teardown failed for $_orphan_path; leaving worktree intact"
             fi
         else
             ux_warning "orphan worktree #$_orphan_pr at $_orphan_path"
@@ -759,13 +770,31 @@ EOF
         return 0
     fi
     if [ "$_force" = "1" ]; then
-        ux_success "pruned $_removed done entr(ies), torn down $_torn_down failed worktree(s) + $_orphans_torn orphan(s); $((_failed - _torn_down)) failure(s) still need attention"
+        local _remaining=$((_failed - _torn_down))
+        local _orphans_remaining=$((_orphans - _orphans_torn))
+        local _verdict_msg="pruned $_removed done entr(ies), torn down $_torn_down failed worktree(s) + $_orphans_torn orphan(s); $_remaining failure(s) still need attention"
+        if [ "$_remaining" -gt 0 ] || [ "$_orphans_remaining" -gt 0 ]; then
+            # --force was supposed to clean these — survivors mean something
+            # actually broke (worktree busy, branch admin error, etc.). The
+            # green ✅ would mislead the user into thinking the run was clean.
+            ux_warning "$_verdict_msg"
+            return 1
+        fi
+        ux_success "$_verdict_msg"
     else
         local _orphans_hint=""
         if [ "$_orphans" -gt 0 ]; then
             _orphans_hint=" + $_orphans orphan(s) detected"
         fi
-        ux_success "pruned $_removed done entr(ies); $_failed failure(s) need attention$_orphans_hint (pass --force to gwt teardown them)"
+        local _verdict_msg="pruned $_removed done entr(ies); $_failed failure(s) need attention$_orphans_hint (pass --force to gwt teardown them)"
+        # Without --force, failures/orphans are *reported* not *attempted* —
+        # so they don't make the run itself a failure. But surface them with
+        # the warning glyph so the line reads as "action needed", not "done".
+        if [ "$_failed" -gt 0 ] || [ "$_orphans" -gt 0 ]; then
+            ux_warning "$_verdict_msg"
+        else
+            ux_success "$_verdict_msg"
+        fi
     fi
 }
 
@@ -1358,9 +1387,12 @@ _gh_pr_approve_worker() {
     # The skill is read-only (no file edits); worktree has nothing to push
     # and can be torn down immediately after the review is submitted.
     _gh_pr_approve_set_state "$_dir" "tearing-down"
-    if ! gwt teardown --force; then
+    # Direct function call (not `gwt teardown`) so a misloaded shell can
+    # never bubble up git's "unknown subcommand" message — see prune
+    # branch above for the full rationale.
+    if ! git_worktree_teardown --force; then
         _gh_pr_approve_set_state "$_dir" "failed:tearing-down"
-        printf '[gh-pr-approve-worker] gwt teardown failed\n' >&2
+        printf '[gh-pr-approve-worker] worktree teardown failed\n' >&2
         _ai_usage_summary "$_usage_log" "Token Usage (PR #$_pr — teardown failed)"
         return 1
     fi
