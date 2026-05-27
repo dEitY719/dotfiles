@@ -95,7 +95,9 @@ _docker_help_rows_intent() {
     ux_table_row "list all" "dpsa" "docker ps -a"
     ux_table_row "disk usage" "ddf" "docker system df"
     ux_table_row "clean dangling" "dprune" "docker system prune -f"
-    ux_info "Hint: 'docker-help here' inspects the current directory for compose files (#777)."
+    # 'docker-help here' is owned by #777 — keep the issue ref in code only,
+    # not in the user-facing hint (gemini-code-assist review on PR #803).
+    ux_info "Hint: 'docker-help here' inspects the current directory for compose files."
 }
 
 _docker_help_rows_map() {
