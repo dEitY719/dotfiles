@@ -144,6 +144,14 @@ if [ "$hook_skip" -eq 0 ]; then
                 "$_HELPER" >&2
         else
             _gh_project_status_sync pr "$PR_NUMBER" "In review" || true
+            # Auto-resolve GH_REPO when unset/empty so the linked-issues
+            # sync isn't silently no-op'd by an empty repo arg (PR #780
+            # review). Matches the existing convention in
+            # shell-common/functions/gh_pr_edit_safe.sh and
+            # gh_audit_builtin_workflows.sh.
+            if [ -z "${GH_REPO:-}" ]; then
+                GH_REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
+            fi
             for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO" 2>/dev/null || true); do
                 _gh_project_status_sync issue "$_issue" "In progress" \
                     --only-from "Backlog,Ready,In review" || true
@@ -153,10 +161,12 @@ if [ "$hook_skip" -eq 0 ]; then
 fi
 ```
 
-`GH_REPO` must be `owner/repo` (e.g. `dEitY719/dotfiles`). If unavailable,
-resolve it via `gh repo view --json nameWithOwner --jq .nameWithOwner`.
-Opt-out per invocation: `GH_PROJECT_STATUS_SYNC=0`. Repos without a
-projectV2 board auto-skip silently (helper returns 0).
+`GH_REPO` should be `owner/repo` (e.g. `dEitY719/dotfiles`). The block
+auto-resolves it via `gh repo view --json nameWithOwner --jq
+.nameWithOwner` when unset/empty so the linked-issues loop never
+silently no-ops on a missing env var. Opt-out per invocation:
+`GH_PROJECT_STATUS_SYNC=0`. Repos without a projectV2 board auto-skip
+silently (helper returns 0).
 
 Track the outcome for Step 8's report row:
 - `hook_skip=1` → `[SKIP]: hook auto-skip`
