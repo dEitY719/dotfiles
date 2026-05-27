@@ -108,10 +108,61 @@ exist in the repo (`gh label list`) — never create new ones. See
 
 ## Step 7: Sync Project Board Status
 
-Read `references/project-board-sync.md` for the helper-source snippet
-that pushes the new PR's project-board card to `In review`. The
-reference also documents the PostToolUse hook auto-skip (issue #390)
-and the no-projectV2 fallback.
+Push the new PR card to `In review` and correct any linked Issue cards
+the GitHub builtin mis-moved to `In review` (Issues belong in
+`In progress` — see `references/project-board-sync.md` for the
+rationale, hook auto-skip narrative, and `GH_REPO` requirement).
+
+First, detect a PostToolUse hook that already handles this sync — when
+present, skip the inline call to avoid triple-syncing (issue #390):
+
+```bash
+hook_skip=0
+for hook_path in \
+    "${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}/.claude/hooks/post-pr-create-status.sh" \
+    "$HOME/.claude/hooks/post-gh-pr-create.sh" \
+    "$HOME/dotfiles/claude/hooks/post-gh-pr-create.sh"
+do
+    if [ -x "$hook_path" ]; then
+        hook_skip=1
+        printf '[gh-pr] board sync delegated to PostToolUse hook (%s) — skipping inline.\n' "$hook_path" >&2
+        break
+    fi
+done
+
+if [ "$hook_skip" -eq 0 ]; then
+    # helper-fallback NF-1 (#644): silent-skip when helper missing.
+    # Defense-in-depth (#724): also detect "[ -r ] passes but function never
+    # defined" (interactive-guard regression, partial sourcing, future rename).
+    # `|| true` would otherwise absorb `command not found` (rc 127) and the
+    # entire reconciliation would silently no-op — the failure mode from #724.
+    _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
+    if [ -r "$_HELPER" ]; then
+        . "$_HELPER"
+        if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
+            printf '[gh-pr] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
+                "$_HELPER" >&2
+        else
+            _gh_project_status_sync pr "$PR_NUMBER" "In review" || true
+            for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO" 2>/dev/null || true); do
+                _gh_project_status_sync issue "$_issue" "In progress" \
+                    --only-from "Backlog,Ready,In review" || true
+            done
+        fi
+    fi
+fi
+```
+
+`GH_REPO` must be `owner/repo` (e.g. `dEitY719/dotfiles`). If unavailable,
+resolve it via `gh repo view --json nameWithOwner --jq .nameWithOwner`.
+Opt-out per invocation: `GH_PROJECT_STATUS_SYNC=0`. Repos without a
+projectV2 board auto-skip silently (helper returns 0).
+
+Track the outcome for Step 8's report row:
+- `hook_skip=1` → `[SKIP]: hook auto-skip`
+- helper missing or function undefined → `[SKIP]: helper unavailable`
+- helper ran, no projectV2 board → `[SKIP]: no projectV2`
+- helper ran with at least one card moved → `[OK]: PR card -> "In review"`
 
 ## Step 8: Report
 
@@ -119,8 +170,13 @@ and the no-projectV2 fallback.
 
 ```
 [OK] PR: https://github.com/owner/repo/pull/<N>
+[OK] Board sync: PR card -> "In review" (or [SKIP]: hook auto-skip / no projectV2 / helper unavailable)
 Next: /gh:pr-reply (after CI green) — replies to review comments
 ```
+
+The `Board sync:` row is a defense-in-depth visual checklist (issue
+#747) — its absence in conversation transcripts is a regression signal
+that Step 7 was silently skipped.
 
 Step 1b empty-range / on-base-branch stops, Step 1a `rc=2`/`rc=3`, or
 Step 4.5 lint failure:
