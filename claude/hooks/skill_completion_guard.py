@@ -165,13 +165,13 @@ def _build_boundary_regex(catalog: dict[str, dict[str, Any]]) -> re.Pattern[str]
         rf"""
         (?m)                                                    # multiline: ^ matches each line start
         (?:
-            ^\s*/(?:{union})\b                                  # (a) raw slash command
+            ^\s*/({union})\b                                    # (a) raw slash command
             |
-            <command-name>\s*/(?:{union})\s*</command-name>     # (b) wrapped form
+            <command-name>\s*/({union})\s*</command-name>       # (b) wrapped form
             |
-            ^Base\s+directory\s+for\s+this\s+skill:\s+.*?/(?:{union})\s*$  # (c) skill base dir
+            ^Base\s+directory\s+for\s+this\s+skill:\s+.*?/({union})\s*$  # (c) skill base dir
             |
-            ^\#\s+(?:{union})\s+—\s+                            # (d) SKILL.md H1 line
+            ^\#\s+({union})\s+—\s+                              # (d) SKILL.md H1 line
         )
         """,
         re.VERBOSE,
@@ -292,20 +292,13 @@ def _find_latest_catalog_boundary(
                 match = boundary_re.search(text)
                 if not match:
                     continue
-                # Recover the skill name from the matched substring. The
-                # regex's surface variants all embed `/<skill>` (a–c) or
-                # `# <skill> ` (d). Re-scan with simpler patterns to pick
-                # which catalog key fired.
-                matched_text = match.group(0)
-                for skill_name in catalog:
-                    colon = skill_name.replace("-", ":")
-                    if (
-                        f"/{skill_name}" in matched_text
-                        or f"/{colon}" in matched_text
-                        or f"# {skill_name} " in matched_text
-                        or f"# {colon} " in matched_text
-                    ):
-                        return (i, skill_name)
+                # `_build_boundary_regex` wraps each of the 4 surfaces
+                # (a/b/c/d) in a capturing group, so exactly one of
+                # `match.groups()` is non-None and holds the matched
+                # skill name (hyphen or colon form). `_normalize_skill`
+                # collapses the form to the catalog key.
+                matched_skill = next(g for g in match.groups() if g is not None)
+                return (i, _normalize_skill(matched_skill))
     return None
 
 
