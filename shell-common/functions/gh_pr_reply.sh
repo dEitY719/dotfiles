@@ -289,11 +289,21 @@ gh_pr_reply() {
         _pr_clean_args="$_pr_clean_args $_pr_clean"
     done
 
+    # Propagate per-worker spawn failures to the dispatcher exit code so
+    # missing-CLI / fork-failed runs don't print "All workers detached"
+    # and silently exit 0 (PR #773 review — gemini-code-assist). Skipped
+    # workers (state=done / failed:* / alive) return 0 and don't count.
+    local _failed=0
     ux_header "gh-pr-reply: spawning $# worker(s) (ai=$_ai${_account:+ user=$_account})"
     for _pr in $_pr_clean_args; do
-        _gh_pr_reply_spawn_worker "$_pr" "$_ai" "$_account"
+        _gh_pr_reply_spawn_worker "$_pr" "$_ai" "$_account" || _failed=$((_failed + 1))
     done
-    ux_success "All workers detached. Your shell is free. Results appear on the PR."
+    if [ "$_failed" -eq 0 ]; then
+        ux_success "All workers detached. Your shell is free. Results appear on the PR."
+        return 0
+    fi
+    ux_error "$_failed of $# worker(s) failed to spawn."
+    return 1
 }
 
 _gh_pr_reply_spawn_worker() {
