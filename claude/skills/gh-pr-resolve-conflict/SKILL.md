@@ -7,9 +7,9 @@ description: >-
   /gh-pr-resolve-conflict, or asks "PR conflict 해결", "base 변경됐는데 rebase
   해줘", "리베이스로 컨플릭트 풀어". Refuses to run on the default branch,
   refuses plain `--force`, and never auto-guesses conflict content — the
-  user drives each resolution. Sister skill of [[gh-pr-resolve-ci-fail]] —
-  different verb (rebase-resolve vs read-logs-and-edit) for the same
-  PR-lifecycle slot. Accepts `[pr-number] [remote]`; defaults to the PR
+  user drives each resolution. Sister skill of [[gh-pr-resolve-ci-fail]]
+  and [[gh-pr-resolve-outdated]] — same PR-lifecycle slot, different
+  verb (rebase-resolve vs read-logs-and-edit vs clean-rebase-no-conflicts). Accepts `[pr-number] [remote]`; defaults to the PR
   attached to the current branch. Accepts `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 ---
