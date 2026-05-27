@@ -112,7 +112,7 @@ cat "$BASE_FILE" | python3 -m json.tool --indent 2 2>/dev/null || cat "$BASE_FIL
 # keybindings.json 복사 (존재하는 경우)
 if [[ -f "$VSCODE_KEYBINDINGS_PATH" ]]; then
     # VS Code의 JSON 주석을 제거하고 정렬된 형식으로 임시 파일에 작성
-    KEYBINDINGS_TMP=$(mktemp)
+    KEYBINDINGS_TMP=$(mktemp "${TMPDIR:-/tmp}/keybindings.XXXXXX")
     trap 'rm -f "$KEYBINDINGS_TMP"' EXIT
 
     if ! python3 - "$VSCODE_KEYBINDINGS_PATH" "$KEYBINDINGS_TMP" <<'EOF'; then
