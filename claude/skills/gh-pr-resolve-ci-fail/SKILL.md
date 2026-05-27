@@ -8,8 +8,8 @@ description: >-
   "PR CI fail 해결", "CI fail 라벨 떼줘", "PR CI 빨간 거 고쳐". Refuses on the
   default branch, refuses `--force` / `--force-with-lease`, refuses to push
   when local lint/test is red (CI infinite-loop guard). Sister skill of
-  [[gh-pr-resolve-conflict]] — different verb and risk profile, same
-  PR-lifecycle slot. Accepts `[pr-number] [remote] [--wait <seconds>]
+  [[gh-pr-resolve-conflict]] and [[gh-pr-resolve-outdated]] — same
+  PR-lifecycle slot, different verb and risk profile. Accepts `[pr-number] [remote] [--wait <seconds>]
   [--label-variant <input>]`; defaults to the PR attached to the current
   branch. Accepts `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
