@@ -91,8 +91,8 @@ exec zsh
 - **race origin (historical)**: `gwt spawn --launch` 의 과거 `cd → term_rename
   --persist → eval claude_yolo + emulate -L sh + subshell` 시퀀스 —
   `shell-common/functions/git_worktree.sh` 의 `emulate -L sh` 블록 다수.
-  `term_rename` 통합은 #798 에서 abandonment 로 제거됨 (탭 타이틀 고정이
-  VSCode AI-detect override 와의 race 로 안정화 불가). 현재 spawn --launch
-  는 `cd && eval launch_cmd` 만 한다.
+  `term_rename` 통합은 #798 에서 기능 폐기(abandonment)로 인해 제거됨
+  (탭 타이틀 고정이 VSCode AI-detect override 와의 race 로 안정화 불가).
+  현재 spawn --launch는 `cd && eval launch_cmd` 만 한다.
 - **Troubleshoot 진입**: `zsh-help troubleshoot` 가 본 문서의 1줄 진단을
   안내함
