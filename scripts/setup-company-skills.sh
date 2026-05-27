@@ -1,17 +1,23 @@
 #!/bin/bash
 
 # scripts/setup-company-skills.sh: layer a private skills overlay into
-# every active Claude Code config dir.
+# every entry-level skills directory the dotfiles tree manages.
 #
 # PURPOSE: take entries from a user-supplied private skills repo
 #   ($COMPANY_SKILLS_HOME, default /home/bwyoon/para/project/company-skills)
-#   and add them as entry-level symlinks inside ~/.claude*/skills/, which
-#   claude/setup.sh has just materialised as real directories of
-#   entry-level symlinks (issue #707, F-8).
+#   and add them as entry-level symlinks inside every entry-level skills
+#   directory dotfiles owns. After issue #791 this is all four CLI homes:
+#     - ~/.claude*/skills/       (Claude Code, #707, F-8)
+#     - ~/.codex/skills/         (Codex, #707)
+#     - ~/.config/opencode/skills/ (OpenCode, #791)
+#     - ~/.gemini/skills/        (Gemini, #791)
+#   claude/setup.sh + scripts/setup-skills-ssot.sh have just materialised
+#   these targets as real directories of entry-level symlinks.
 #
-# WHEN TO RUN: via ./setup.sh, after claude/setup.sh. Safe to run on
-#   hosts that do not have a private skills repo — when the source
-#   directory is missing the script prints one info line and exits 0.
+# WHEN TO RUN: via ./setup.sh, after claude/setup.sh and
+#   scripts/setup-skills-ssot.sh. Safe to run on hosts that do not have a
+#   private skills repo — when the source directory is missing the script
+#   prints one info line and exits 0.
 #
 # DESIGN NOTES (issue #707):
 #   - The dotfiles tree must never carry private skill content. The
@@ -50,12 +56,20 @@ log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
 
 # --- Functions ---
 
-# Emit one absolute path per ~/.claude*/skills/ directory that already
-# exists as a real (non-symlink) directory. claude/setup.sh has just
-# converted these from the legacy directory-symlink layout (#575) to the
-# entry-composition layout (#707, F-8). If we can't find any real-dir
-# targets, this is either a fresh install where setup.sh has not run
-# yet or a host where the user opted out — either way, no-op.
+# Emit one absolute path per entry-level skills directory the dotfiles
+# tree owns AND that already exists as a real (non-symlink) directory.
+# claude/setup.sh + scripts/setup-skills-ssot.sh have just materialised
+# these from the legacy directory-symlink layout (#575) to the
+# entry-composition layout (Claude Code: #707, F-8 — Codex / OpenCode /
+# Gemini: #791). If we can't find any real-dir targets, this is either a
+# fresh install where setup.sh has not run yet or a host where the user
+# opted out — either way, no-op.
+#
+# The `! -L` guard is also the safety net that keeps the overlay from
+# being applied to a target whose migration to entry-composition has not
+# happened yet (e.g. an older Gemini/OpenCode layout still on the
+# directory-symlink form). The overlay simply skips those targets until
+# the migration runs.
 _enumerate_target_skills_dirs() {
     # Single-account internal-PC layout.
     if [ -d "${HOME}/.claude/skills" ] && [ ! -L "${HOME}/.claude/skills" ]; then
@@ -63,6 +77,17 @@ _enumerate_target_skills_dirs() {
     fi
     # Multi-account layouts (#287 / #571). Globs may not match — guard.
     for _esd in "${HOME}/.claude-"*/skills; do
+        [ -d "$_esd" ] || continue
+        [ -L "$_esd" ] && continue
+        printf '%s\n' "$_esd"
+    done
+    # Codex / OpenCode / Gemini — entry-level 합성 (#791). 각각 별도
+    # CLI 가 설치돼 있을 때만 dotfiles 가 그 skills 디렉토리를 합성으로
+    # 만든다. dir-symlink (마이그레이션 전) 는 `-L` 가드로 건너뛴다.
+    for _esd in \
+        "${HOME}/.codex/skills" \
+        "${HOME}/.config/opencode/skills" \
+        "${HOME}/.gemini/skills"; do
         [ -d "$_esd" ] || continue
         [ -L "$_esd" ] && continue
         printf '%s\n' "$_esd"

@@ -165,3 +165,98 @@ run_overlay() {
     [ "$(readlink "$SKILLS_DIR/root-skill")" = "$HOME/company-skills/root-skill" ]
     [ ! -e "$SKILLS_DIR/plugins" ]
 }
+
+# ---------------------------------------------------------------------
+# issue #791 — 4 CLI 합성 디렉토리 매트릭스
+# Claude / Codex / OpenCode / Gemini 모두 entry-level 합성 디렉토리이면
+# private overlay 가 4 곳 전부에 동일하게 적용돼야 한다.
+# ---------------------------------------------------------------------
+
+@test "links overlay into ~/.codex/skills when present (#791)" {
+    CODEX_DIR="$HOME/.codex/skills"
+    mkdir -p "$CODEX_DIR" "$HOME/company-skills/foo"
+    : > "$HOME/company-skills/foo/SKILL.md"
+
+    run_overlay "$HOME/company-skills"
+    assert_success
+
+    [ -L "$CODEX_DIR/foo" ]
+    [ "$(readlink "$CODEX_DIR/foo")" = "$HOME/company-skills/foo" ]
+}
+
+@test "links overlay into ~/.config/opencode/skills when present (#791)" {
+    OC_DIR="$HOME/.config/opencode/skills"
+    mkdir -p "$OC_DIR" "$HOME/company-skills/bar"
+    : > "$HOME/company-skills/bar/SKILL.md"
+
+    run_overlay "$HOME/company-skills"
+    assert_success
+
+    [ -L "$OC_DIR/bar" ]
+    [ "$(readlink "$OC_DIR/bar")" = "$HOME/company-skills/bar" ]
+}
+
+@test "links overlay into ~/.gemini/skills when present (#791)" {
+    G_DIR="$HOME/.gemini/skills"
+    mkdir -p "$G_DIR" "$HOME/company-skills/baz"
+    : > "$HOME/company-skills/baz/SKILL.md"
+
+    run_overlay "$HOME/company-skills"
+    assert_success
+
+    [ -L "$G_DIR/baz" ]
+    [ "$(readlink "$G_DIR/baz")" = "$HOME/company-skills/baz" ]
+}
+
+@test "skips ~/.gemini/skills when it is still a legacy directory-symlink (#791)" {
+    # Pre-migration layout: ~/.gemini/skills is a dir-symlink. The
+    # overlay must skip it (-L guard) so setup-skills-ssot.sh has a
+    # chance to migrate first. After migration the next overlay run
+    # will pick it up — verified separately by the entry-level test.
+    mkdir -p "$HOME/.gemini" "$HOME/some-dotfiles-tree/claude/skills"
+    ln -s "$HOME/some-dotfiles-tree/claude/skills" "$HOME/.gemini/skills"
+    # Sanity: the link must really exist before the run.
+    [ -L "$HOME/.gemini/skills" ]
+
+    # No claude target either, so the script should exit informing the
+    # user that no target was found.
+    mkdir -p "$HOME/company-skills/foo"
+    : > "$HOME/company-skills/foo/SKILL.md"
+
+    run_overlay "$HOME/company-skills"
+    assert_success
+    # The dir-symlink itself must NOT be touched.
+    [ -L "$HOME/.gemini/skills" ]
+    # No entry symlink under it (since the script skipped it). The
+    # dir-symlink would happily resolve `foo` against the target dir,
+    # so check the entry via the symlink path NOT through it.
+    [ ! -L "$HOME/.gemini/skills/foo" ]
+}
+
+@test "applies overlay to all 4 CLI targets simultaneously (#791)" {
+    mkdir -p \
+        "$SKILLS_DIR" \
+        "$HOME/.codex/skills" \
+        "$HOME/.config/opencode/skills" \
+        "$HOME/.gemini/skills" \
+        "$HOME/company-skills/quad"
+    : > "$HOME/company-skills/quad/SKILL.md"
+
+    run_overlay "$HOME/company-skills"
+    assert_success
+
+    for tgt in \
+        "$SKILLS_DIR/quad" \
+        "$HOME/.codex/skills/quad" \
+        "$HOME/.config/opencode/skills/quad" \
+        "$HOME/.gemini/skills/quad"; do
+        [ -L "$tgt" ] || {
+            echo "missing overlay entry: $tgt" >&2
+            false
+        }
+        [ "$(readlink "$tgt")" = "$HOME/company-skills/quad" ] || {
+            echo "wrong readlink: $tgt -> $(readlink "$tgt")" >&2
+            false
+        }
+    done
+}

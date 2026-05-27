@@ -399,39 +399,16 @@ _check_socat_for_sandbox() {
     fi
 }
 
-# Auto-link ~/.gemini/skills → claude/skills SSOT when Gemini CLI is installed
-# (issue #562). Idempotent — correct symlink → no-op; real directory →
-# timestamped backup + symlink; wrong-target symlink → replace.
-_setup_gemini_skills_symlink() {
-    local gemini_home="${HOME}/.gemini"
-    local target="${gemini_home}/skills"
-
-    [ -d "$gemini_home" ] || return 0
-
-    if [ -L "$target" ]; then
-        local current
-        current="$(readlink -f "$target" 2>/dev/null)"
-        if [ "$current" = "$(readlink -f "$CLAUDE_SKILLS_SOURCE")" ]; then
-            log_dim "✓ ${HOME}/.gemini/skills SSOT symlink 이미 연결됨"
-            return 0
-        fi
-        log_warning "${HOME}/.gemini/skills symlink 대상이 다름 — 교체"
-        rm -f "$target"
-    elif [ -e "$target" ] || [ -L "$target" ]; then
-        local backup
-        backup="${target}-$(date +%Y%m%d%H%M%S)-backup"
-        log_warning "${HOME}/.gemini/skills 기존 항목 백업: $backup"
-        mv "$target" "$backup" || {
-            log_error "${HOME}/.gemini/skills 백업 실패 — skip"
-            return 1
-        }
-    fi
-
-    log_info "${HOME}/.gemini/skills → $CLAUDE_SKILLS_SOURCE symlink 생성"
-    ln -s "$CLAUDE_SKILLS_SOURCE" "$target" \
-        || { log_error "${HOME}/.gemini/skills symlink 생성 실패"; return 1; }
-    log_dim "✓ ${HOME}/.gemini/skills SSOT 연결 완료"
-}
+# NOTE (issue #791): the previous `_setup_gemini_skills_symlink` helper
+# was retired. It created ~/.gemini/skills as a directory symlink to the
+# SSOT — but #791 converged Gemini / OpenCode / Codex onto the same
+# entry-level synthesis layout Claude Code uses (#707, F-8), so
+# `scripts/setup-skills-ssot.sh` (which runs after claude/setup.sh in
+# ./setup.sh) is now the single owner of ~/.gemini/skills and performs
+# both the migration (legacy dir-symlink → real dir) and the entry-level
+# synthesis. Leaving the old helper in place would re-create the legacy
+# dir-symlink one step before setup-skills-ssot.sh tears it back down —
+# correct in the end but noisy and confusing.
 
 # _print_stale_bind_mount_sudoers_hint — surface (and optionally clean
 # up) stale /etc/sudoers.d/ files left over from the pre-#575 bind-mount
@@ -667,7 +644,7 @@ if [ "$_setup_mode" = "internal" ]; then
         log_error_and_exit "$HOME/.claude/skills entry-level 합성 실패 (디렉토리 아님)"
     fi
 
-    _setup_gemini_skills_symlink
+    # Gemini / OpenCode entry-level 합성은 scripts/setup-skills-ssot.sh 가 책임짐 (#791).
 
     ux_success "Claude Code dotfiles setup 완료 (internal/single-account)"
     echo ""
@@ -725,8 +702,9 @@ for acct in $ENABLED_ACCOUNTS; do
     fi
 done
 
-# Gemini CLI 설치 시 ~/.gemini/skills → claude/skills SSOT symlink 설정 (issue #562).
-_setup_gemini_skills_symlink
+# Gemini / OpenCode entry-level 합성은 scripts/setup-skills-ssot.sh 가 책임짐 (#791).
+# 이전엔 본 분기에서 _setup_gemini_skills_symlink 를 호출했지만, #791 에서
+# 4 CLI 모두 entry-level 합성으로 통일했고 SSOT 는 setup-skills-ssot.sh 로 이전됨.
 
 # --- Completion Messages ---
 ux_success "Claude Code dotfiles setup 완료"
