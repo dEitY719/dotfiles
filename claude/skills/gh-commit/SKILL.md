@@ -81,6 +81,11 @@ their own manual edits), derive intent from the diff itself:
   fix the underlying issue, re-stage, and create a **new** commit.
 - See `references/commit-message-format.md` for the exact HEREDOC command.
 
+After `git commit` succeeds, emit the step-completion marker so the
+harness step-skip guard (`skill_completion_guard.py`, issue #753) can
+verify this step ran:
+`printf '[step:gh-commit/stage-commit] OK\n'`.
+
 ## Step 5: AI Metrics + Sync Project Board Status
 
 Before syncing the project board, record AI metrics (soft-fail — warn on
@@ -158,6 +163,12 @@ fi
 If the repo has no projectV2 board (auto-detected) the helper silently
 returns 0. Opt out with `GH_PROJECT_STATUS_SYNC=0`.
 
+Regardless of whether the metrics post happened, was skipped via
+`GH_DISABLE_AI_METRICS=1`, or the board sync ran or no-op'd, emit the
+step-completion marker so the step-skip guard recognizes Step 5 was
+visited:
+`printf '[step:gh-commit/metrics-board-sync] OK\n'`.
+
 ## Step 6: Verify
 
 After commit succeeds, run `git status` and report:
@@ -167,6 +178,10 @@ Committed <short-hash>: <subject line>
 ```
 
 If an issue was linked, mention the issue number on a second line.
+
+After printing the verify line, emit the report step-completion marker
+so the step-skip guard recognizes the skill finished:
+`printf '[step:gh-commit/report] OK\n'`.
 
 ## Constraints
 

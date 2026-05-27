@@ -1,0 +1,70 @@
+# claude/hooks/skill_step_catalog.yml — SSOT for skill_completion_guard.py (issue #753).
+#
+# Lists which standalone multi-step SKILL.md files have mechanical step-skip
+# protection and what step IDs they must emit before the model is allowed to
+# end its turn. Sister catalog of the inline EXPECTED_CHAIN list in
+# gh_issue_flow_stop_guard.py — that one guards the OUTER chain of 5 sub-skills,
+# this one guards INNER steps of each individually-invoked skill.
+#
+# Schema (per skill):
+#   <skill-name>:                    # hyphen form, matches the skill base
+#                                    # directory name. Colon form is auto-
+#                                    # accepted at match time.
+#     enforce: <bool>                # default false. When false, the guard
+#                                    # only logs (trace mode) and never blocks.
+#                                    # New skills are off by default so a typo
+#                                    # in `required` never traps the user.
+#     description: <str>             # one-line human label, surfaced in the
+#                                    # block reason so the model knows what
+#                                    # skill it's failing.
+#     required: [<step-id>, ...]     # hyphen-form step IDs that MUST appear
+#                                    # in transcript content after the
+#                                    # boundary. The guard searches for the
+#                                    # literal pattern `[step:<skill>/<id>] OK`
+#                                    # in assistant text AND tool_result
+#                                    # blocks (the SKILL.md printf output
+#                                    # lands in tool_result).
+#
+# Behavior:
+#   - Required step IDs must be emitted with the exact literal:
+#       [step:<skill-name>/<step-id>] OK
+#     The hook uses a strict regex so a partial match like `[step:foo]` or
+#     `[step:foo/bar]` (missing OK) won't satisfy the requirement.
+#   - When `enforce: true` AND any required ID is missing from the section
+#     between this skill's boundary and the next catalog skill boundary
+#     (or end of transcript), the hook emits a `block` decision listing the
+#     missing IDs.
+#   - Bypass any check globally with `GH_SKILL_GUARD_BYPASS=1`.
+#   - Trace what the hook is doing with `GH_SKILL_GUARD_TRACE=1` (stderr).
+#
+# Coexistence with gh_issue_flow_stop_guard.py:
+#   Stop hooks chain in `claude/settings.json` and run independently. Both
+#   may emit a `block` — Claude Code re-prompts on either, the union of
+#   their reasons reaches the model.
+
+gh-issue-implement:
+  enforce: true
+  description: "Issue → Code implementation (no commit, no PR)"
+  required:
+    - fetch-issue
+    - self-assign
+    - board-transition
+    - implement
+    - report
+
+gh-pr:
+  enforce: true
+  description: "Create Pull Request from current branch"
+  required:
+    - push-and-create
+    - labels
+    - board-sync
+    - report
+
+gh-commit:
+  enforce: true
+  description: "Git commit with issue linking"
+  required:
+    - stage-commit
+    - metrics-board-sync
+    - report
