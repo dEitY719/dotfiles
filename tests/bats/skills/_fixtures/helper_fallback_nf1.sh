@@ -5,7 +5,7 @@
 #   claude/skills/gh-pr-merge/SKILL.md           (Step 2-B, Step 4)
 #   claude/skills/gh-commit/SKILL.md             (Step 5)
 #   claude/skills/gh-pr-reply/SKILL.md           (Step 6.5)
-#   claude/skills/gh-pr/references/project-board-sync.md
+#   claude/skills/gh-pr/SKILL.md                 (Step 7 — inlined in #747)
 #   claude/skills/gh-pr-merge/references/project-board-sync.md
 #   claude/skills/gh-pr-merge-emergency/references/project-board-sync.md
 #
