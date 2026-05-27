@@ -250,6 +250,15 @@ setup_opencode_config() {
     case "$environment" in
         internal)
             mkdir -p "$(dirname "$opencode_target")"
+            # Preserve user-customised config: once `your-knox-id` has been
+            # replaced with the real Knox ID, never overwrite + never back up
+            # (issue #792). Symlinks are skipped — a leftover external-mode
+            # symlink must still be replaced by the template copy.
+            if [ ! -L "$opencode_target" ] && [ -f "$opencode_target" ] \
+                && ! grep -q 'your-knox-id' "$opencode_target"; then
+                ux_info "Preserved customised OpenCode config: $opencode_target"
+                return 0
+            fi
             _prepare_config_target "$opencode_target"
             cp "${DOTFILES_ROOT}/opencode/opencode.json.internal" "$opencode_target"
             chmod 600 "$opencode_target"
@@ -699,4 +708,10 @@ main() {
     esac
 }
 
-main "$@"
+# Direct-exec guard: only invoke main() when executed directly. When this
+# script is sourced (e.g. by bats tests), `$0` reflects the parent shell
+# instead of `setup.sh`, so the pattern below won't match and main() is
+# skipped — letting tests call individual setup_* functions in isolation.
+case "$0" in
+    *setup.sh) main "$@" ;;
+esac

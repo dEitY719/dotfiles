@@ -144,9 +144,18 @@ generate_internal_config() {
         return 1
     fi
 
-    # Back up an existing user-edited config (with the user's hand-edited Knox ID)
-    # before overwriting. Use mv for atomicity per repo convention.
-    if [ -f "$config_file" ]; then
+    # Preserve user-customised config: once `your-knox-id` has been replaced
+    # with the real Knox ID, never overwrite + never back up (issue #792).
+    if [ ! -L "$config_file" ] && [ -f "$config_file" ] \
+        && ! grep -q 'your-knox-id' "$config_file"; then
+        ux_info "Preserved customised OpenCode config: $config_file"
+        return 0
+    fi
+
+    # Back up an existing placeholder-state config or stray symlink before
+    # overwriting. The customised-file guard above already returned for the
+    # case we actually need to protect.
+    if [ -f "$config_file" ] || [ -L "$config_file" ]; then
         local backup="${config_file}.backup.$(date +%Y%m%d%H%M%S)"
         mv "$config_file" "$backup"
         ux_info "Backed up existing config: $backup"
