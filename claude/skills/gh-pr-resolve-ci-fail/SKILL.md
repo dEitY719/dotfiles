@@ -38,6 +38,30 @@ State `OPEN` required. Hard preconditions in `references/safety.md` →
 
 ## Step 2: Fetch Failing Checks
 
+### Pre-check — is `main` itself red?
+
+본격 분석 전에 main 의 동일 workflow 가 inherited red 인지 1초 확인:
+
+```bash
+gh run list --repo "$TARGET_REPO" --branch main --workflow <workflow> --limit 3
+```
+
+세 run 중 2개 이상 failure 이고 PR run 과 동일 step 에서 fail 한다면
+PR 회귀가 아닐 가능성이 높다 (#755 의 28건 bats fail 이 그 사례).
+다음과 같이 stop — 라벨은 건드리지 않고 그대로 종료:
+
+```
+[STOP] main 자체가 적색입니다 (latest 3 runs: failure / failure / success).
+       PR 회귀가 아니라 inherited red — main 먼저 회복하세요.
+       Next: /gh-issue-create  # umbrella 또는 sub-issue 등록
+```
+
+False-positive: main 의 transient red (1회 fail, 직후 green) 은 무시하고
+통상 절차 진행. 판정 기준·예시·예외 케이스 전체는
+`references/ci-log-analysis.md` → "Step 2 — pre-check (is main red?)".
+
+### Failing-check fetch
+
 `gh pr checks <N> --required --json name,state,workflow,link`, filter
 `state == FAILURE`. All green → `[OK] no failing checks — nothing to
 resolve.` and stop. Filter rubric + in-progress carveout in
