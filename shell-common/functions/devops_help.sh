@@ -14,6 +14,8 @@ _docker_help_summary() {
     ux_bullet_sub "basics: dps | dpsa | di | dstats | dstop | drm | drmi | dlogs | dinspect"
     ux_bullet_sub "resources: ddf | dprune | dprune_full | dvols | dvol_rm | dnetwork_prune | dbuild_prune"
     ux_bullet_sub "utilities: dbash | denv | dinspect_env | dstopall | drmall | dexport | dinstall | dproxy_setup"
+    ux_bullet_sub "i-want: goal-based lookup  (example: docker-help i-want)"
+    ux_bullet_sub "--map: intent -> alias -> raw command table"
     ux_bullet_sub "details: docker-help <section>  (example: docker-help compose)"
 }
 
@@ -24,6 +26,8 @@ _docker_help_list_sections() {
     ux_bullet_sub "basics"
     ux_bullet_sub "resources"
     ux_bullet_sub "utilities"
+    ux_bullet_sub "i-want"
+    ux_bullet_sub "map"
 }
 
 _docker_help_rows_compose() {
@@ -78,6 +82,27 @@ _docker_help_rows_utilities() {
     ux_info "Note: 'docker compose' (V2) is used by default."
 }
 
+_docker_help_rows_intent() {
+    ux_table_row "start a stack" "dcud" "docker compose up -d"
+    ux_table_row "start with overlay" "(raw)" "docker compose -f a.yml -f b.yml up -d --build"
+    ux_table_row "stop a stack" "dcd" "docker compose down"
+    ux_table_row "wipe data too" "dcdv" "docker compose down -v"
+    ux_table_row "rebuild a service" "dcb <svc>" "docker compose build <svc>"
+    ux_table_row "restart a service" "dcr <svc>" "docker compose restart <svc>"
+    ux_table_row "follow logs" "dcl <svc>" "docker compose logs -f <svc>"
+    ux_table_row "shell into container" "dbash <name>" "docker exec -it <name> bash"
+    ux_table_row "list running" "dps" "docker ps"
+    ux_table_row "list all" "dpsa" "docker ps -a"
+    ux_table_row "disk usage" "ddf" "docker system df"
+    ux_table_row "clean dangling" "dprune" "docker system prune -f"
+    ux_info "Hint: 'docker-help here' inspects the current directory for compose files (#777)."
+}
+
+_docker_help_rows_map() {
+    ux_table_header "Intent" "Alias" "Raw command"
+    _docker_help_rows_intent
+}
+
 _docker_help_render_section() {
     ux_section "$1"
     "$2"
@@ -100,6 +125,12 @@ _docker_help_section_rows() {
         utilities|util|utils)
             _docker_help_rows_utilities
             ;;
+        i-want|iwant|intent|want|goals|goal)
+            _docker_help_rows_intent
+            ;;
+        map)
+            _docker_help_rows_map
+            ;;
         *)
             ux_error "Unknown docker-help section: $1"
             ux_info "Try: docker-help --list"
@@ -116,6 +147,7 @@ _docker_help_full() {
     _docker_help_render_section "Docker Basics" _docker_help_rows_basics
     _docker_help_render_section "Resource Management" _docker_help_rows_resources
     _docker_help_render_section "Utilities" _docker_help_rows_utilities
+    _docker_help_render_section "Intent -> Alias -> Raw" _docker_help_rows_map
 }
 
 # --- docker_help recommend (#777) ---
@@ -252,6 +284,9 @@ docker_help() {
             ;;
         --all|all)
             _docker_help_full
+            ;;
+        --map)
+            _docker_help_rows_map
             ;;
         *)
             _docker_help_section_rows "$1"
