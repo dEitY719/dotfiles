@@ -1739,10 +1739,10 @@
   #              zsh initialization. Choose this if you've never tried instant prompt, haven't
   #              seen the warning, or if you are unsure what this all means.
   # Forced to `off` (PR #696): instant prompt's placeholder precmd raced
-  # with `gwt spawn --launch` (`cd → term_rename --persist → claude_yolo`),
-  # leaving `_p9k_do_nothing` as the only precmd hook and freezing the
-  # prompt at the spawn-time directory. Do NOT flip back to `verbose`
-  # without addressing the worktree-shell init race first.
+  # with `gwt spawn --launch` (`cd → claude_yolo`), leaving `_p9k_do_nothing`
+  # as the only precmd hook and freezing the prompt at the spawn-time
+  # directory. Do NOT flip back to `verbose` without addressing the
+  # worktree-shell init race first.
   typeset -g POWERLEVEL9K_INSTANT_PROMPT=off
 
   # Hot reload allows you to change POWERLEVEL9K options after Powerlevel10k has been initialized.

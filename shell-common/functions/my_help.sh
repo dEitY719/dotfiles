@@ -156,7 +156,6 @@ _register_default_help_categories() {
     HELP_CATEGORIES[docs]="${HELP_CATEGORIES[docs]:-Documentation and knowledge (dotfiles docs, notes, work logs)}"
     HELP_CATEGORIES[meta]="${HELP_CATEGORIES[meta]:-Help system utilities (category browsing, registration)}"
     HELP_CATEGORIES[system]="${HELP_CATEGORIES[system]:-System tools (directory navigation, opencode)}"
-    HELP_CATEGORIES[terminal]="${HELP_CATEGORIES[terminal]:-Terminal utilities (tab rename, VSCode integration)}"
 
     # Category membership (space-separated topic keys)
     HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git gwt gbr devx uv py nvm npm bun pp cli ux du psql mytool}"
@@ -166,7 +165,6 @@ _register_default_help_categories() {
     HELP_CATEGORY_MEMBERS[config]="${HELP_CATEGORY_MEMBERS[config]:-p10k crt apt pip ghostty}"
     HELP_CATEGORY_MEMBERS[docs]="${HELP_CATEGORY_MEMBERS[docs]:-dot show_doc notion work_log work}"
     HELP_CATEGORY_MEMBERS[system]="${HELP_CATEGORY_MEMBERS[system]:-dir opencode}"
-    HELP_CATEGORY_MEMBERS[terminal]="${HELP_CATEGORY_MEMBERS[terminal]:-term}"
     HELP_CATEGORY_MEMBERS[meta]="${HELP_CATEGORY_MEMBERS[meta]:-category register}"
 
     # Reverse lookup map: topic -> category
@@ -255,7 +253,6 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[register_help]="${HELP_DESCRIPTIONS[register_help]:-[Meta] Register help descriptions}"
     HELP_DESCRIPTIONS[work_log_help]="${HELP_DESCRIPTIONS[work_log_help]:-[Docs] Work log tracking}"
     HELP_DESCRIPTIONS[work_help]="${HELP_DESCRIPTIONS[work_help]:-[Docs] Work management}"
-    HELP_DESCRIPTIONS[term_help]="${HELP_DESCRIPTIONS[term_help]:-[Terminal] VSCode tab rename + terminal utilities}"
 
     # Registrations to keep `devx lint-helpfunc` clean (#726 AC). Each entry
     # mirrors an existing public `<topic>_help` function in shell-common/functions/

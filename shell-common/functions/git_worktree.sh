@@ -1754,44 +1754,6 @@ git_worktree_spawn() {
         fi
         ux_info "  launch: cd \"$wt_path\" && $launch_cmd"
         cd "$wt_path" || { ux_error "Cannot cd to $wt_path"; return 1; }
-        # Label the VSCode tab with "(<agent>) <wt-name>" so multiple
-        # spawned worktrees are distinguishable at a glance (issue #675).
-        # --persist installs a precmd hook in the caller's shell that
-        # re-emits OSC 0 before every prompt — so after the agent exits
-        # and the user is left at the worktree's shell, the label sticks
-        # (term_rename.sh design from #672). The "(<agent>)" prefix is
-        # always included — even when the user did not type --ai — because
-        # the program actually runs the default agent (claude) in that
-        # case, so the label must match the actual behavior (PR #676
-        # review). Guarded by command -v so the spawn still works if
-        # term_rename.sh somehow isn't loaded.
-        if command -v term_rename >/dev/null 2>&1; then
-            # Always print the label that will be set so users have a
-            # debugging surface when the tab doesn't visibly update
-            # (#709). Silent-emit was the original reason that case
-            # turned into a "did it run?" guessing game.
-            ux_info "  label:  (${agent}) ${name}"
-            # VSCode integrated terminal needs `terminal.integrated.tabs.title`
-            # set to ${sequence} for shell-emitted OSC titles to honor
-            # (#709). The default ${process} silently discards them, so warn
-            # only when we can detect we're running there.
-            if [ "${TERM_PROGRAM-}" = "vscode" ]; then
-                ux_info "          VSCode needs settings.json: \"terminal.integrated.tabs.title\": \"\${sequence}\""
-                ux_info "          (see \`term-help vscode\`)"
-            fi
-            term_rename --persist "(${agent}) ${name}"
-            # VSCode 의 AI-agent foreground detect (ptyHostMain.js 의
-            # claude-code/codex/copilot/gemini-cli regex) 가 agent 기동
-            # 직후 ${sequence} 를 자체 title 로 일시 override 한다. 그
-            # detect 가 settle 된 뒤에 OSC 0 을 한 번 더 발사하면 이후엔
-            # sticky 하게 우리 라벨이 유지됨 — 경험적으로 #781 에서 확인.
-            # alt-screen TUI 는 OSC bytes 를 무시하므로 claude 렌더링과
-            # 충돌하지 않는다. 3s 는 claude 기동 + detect settle 의
-            # 헤드룸; 느린 머신이면 키워야 할 수 있음.
-            if [ "${TERM_PROGRAM-}" = "vscode" ]; then
-                (sleep 3; printf '\033]0;(%s) %s\007' "$agent" "$name") &
-            fi
-        fi
         eval "$launch_cmd"
     else
         ux_info ""
