@@ -44,9 +44,7 @@ class TestDockerHelpIntent:
         result = shell_runner(shell, "docker_help i-want")
         assert result.exit_code == 0
         plain = _plain(result.stdout)
-        assert "-f" in plain and "overlay" in plain.lower(), (
-            f"{shell}: overlay guidance missing from i-want output"
-        )
+        assert "-f" in plain and "overlay" in plain.lower(), f"{shell}: overlay guidance missing from i-want output"
 
 
 class TestDockerHelpMap:
