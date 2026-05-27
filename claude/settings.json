@@ -9,6 +9,10 @@
           {
             "type": "command",
             "command": "${HOME}/dotfiles/claude/hooks/gh_issue_flow_stop_guard.py"
+          },
+          {
+            "type": "command",
+            "command": "${HOME}/dotfiles/claude/hooks/skill_completion_guard.py"
           }
         ]
       }
