@@ -7,7 +7,7 @@ load '../test_helper'
 
 setup() {
     setup_isolated_home
-    TEST_PWD="$(mktemp -d)"
+    TEST_PWD="$(mktemp -d "${TMPDIR:-/tmp}/docker_help_test.XXXXXX")"
 }
 
 teardown() {
