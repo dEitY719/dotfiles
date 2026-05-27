@@ -51,7 +51,7 @@ bypass 정당화 (이슈 본문 인용):
    필요했다.
 
 3. **Admin bypass 의 audit trail 은 paired incident issue 로 강제되어야 한다.** 이번
-   인시던트는 #752 가 생성되어 추적되었다. `gh-pr-merge-emergency` 스킬이 이를
+   인시던트는 #752 가 생성되어 추적되었다. `gh:pr-merge-emergency` 스킬이 이를
    자동화하고 있어 정책이 작동 중임을 확인.
 
 ## Prevention (실제 적용된 변경)
