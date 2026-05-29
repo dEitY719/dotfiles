@@ -5,7 +5,9 @@ description: >-
   summary without modifying it. Use when the user runs /gh:issue-read,
   /gh-issue-read, or asks "이슈 #N 읽고 정리해줘", "issue 42 뭐하는 거야",
   "#16 요약", "이 이슈 내용 파악". Preserves body and comments verbatim
-  so the output can be reused as context for implementation work. Accepts
+  so the output can be reused as context for implementation work — by
+  [[gh:issue-implement]] (code-change issues) or [[gh:issue-proceed]]
+  (directive issues that embed an executable protocol). Accepts
   `<issue-number> [remote]`; defaults remote to `origin`. Accepts
   `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Grep
