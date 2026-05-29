@@ -119,7 +119,9 @@ _post_gh_pr_create_repo_has_board() {
     local _o="${GH_REPO%/*}" _n="${GH_REPO#*/}" _cnt
     [ -n "$_o" ] && [ -n "$_n" ] || return 1
     # GraphQL variables ($o, $n) are bound via the -f flags below, so the
-    # single-quoted query intentionally does not shell-expand.
+    # single-quoted query intentionally does not shell-expand. Both are
+    # String! → -f (raw string) is the correct flag, never -F (issue #395).
+    # Variables: $o String!, $n String!
     # shellcheck disable=SC2016
     _cnt=$(gh api graphql \
         -f query='query($o:String!,$n:String!){repository(owner:$o,name:$n){projectsV2(first:1){totalCount}}}' \
