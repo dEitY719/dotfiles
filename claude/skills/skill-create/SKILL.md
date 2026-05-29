@@ -1,13 +1,22 @@
 ---
 name: skill:create
 description: Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy.
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "new skill generation with interactive interview, draft, eval loop, and description optimization"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # Skill Creator
 
-A skill for creating new skills and iteratively improving them. Figure out where
-the user is in the process and help them progress. Be flexible — if the user says
-"just vibe with me", skip the formal eval loop.
+## Help
+
+If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
+
+A skill for creating new skills and iteratively improving them. Figure out where the user is in
+the process and help them progress. Be flexible — if user says "just vibe with me", skip the eval loop.
 
 ## Core Loop
 
@@ -21,6 +30,9 @@ the user is in the process and help them progress. Be flexible — if the user s
 8. Package the final skill
 9. Run `/skill-check` → if FAIL/WARN, run `/skill-refactor` (quality gate)
 
+Each phase produces an artifact (intent, draft, eval results). On a clear blocker (e.g.,
+test prompts unwriteable, `package_skill` fails), stop and report — do not advance silently.
+
 ## Phase 1: Capture Intent
 
 Extract answers from conversation history first if the user says "turn this into a skill".
@@ -32,9 +44,8 @@ Extract answers from conversation history first if the user says "turn this into
 
 ## Phase 2: Interview and Research
 
-Proactively ask about edge cases, input/output formats, example files, success criteria,
-and dependencies. Check available MCPs for research. Wait to write test prompts until
-this is ironed out.
+Proactively ask about edge cases, input/output formats, example files, success criteria, and
+dependencies. Check available MCPs for research. Wait to write test prompts until ironed out.
 
 ## Phase 3: Write the SKILL.md
 
@@ -43,11 +54,11 @@ patterns, frontmatter fields, communication style, and test case format.
 
 ## Phase 4: Run and Evaluate Test Cases
 
-Read `references/eval-pipeline.md` for the full pipeline: spawning runs, drafting
-assertions, capturing timing, grading, aggregating benchmarks, and launching the viewer.
+Read `references/eval-pipeline.md` for the full pipeline: spawning runs, drafting assertions,
+capturing timing, grading, aggregating benchmarks, and launching the viewer.
 
-IMPORTANT: Always generate the eval viewer using `eval-viewer/generate_review.py`
-BEFORE evaluating outputs yourself — get results in front of the human ASAP.
+IMPORTANT: Always generate the eval viewer using `eval-viewer/generate_review.py` BEFORE
+evaluating outputs yourself — get results in front of the human ASAP.
 
 ## Phase 5: Improve the Skill
 
@@ -56,24 +67,28 @@ keeping prompts lean, explaining the why, and detecting repeated work across tes
 
 ## Phase 6: Description Optimization
 
-Read `references/description-optimization.md` for the trigger eval query generation,
-HTML review flow, optimization loop script, and triggering mechanics.
+Read `references/description-optimization.md` for the trigger eval query generation, HTML
+review flow, optimization loop script, and triggering mechanics.
 
 ## Phase 7: Package and Present
 
-If `present_files` tool is available:
-
-```bash
-python -m scripts.package_skill <path/to/skill-folder>
-```
-
-Direct the user to the resulting `.skill` file path so they can install it.
+If `present_files` is available, run `python -m scripts.package_skill <path>`, then point the
+user to the resulting `.skill` file path so they can install it.
 
 ## Phase 8: Post-Creation Quality Gate
 
-Run `/skill-check` on the new SKILL.md. If any check returns FAIL or WARN,
-immediately run `/skill-refactor` to bring it under 100 lines with proper
-Progressive Disclosure structure. Report before/after line counts to the user.
+Run `/skill-check` on the new SKILL.md. If any check returns FAIL or WARN, immediately run
+`/skill-refactor` to bring it under 100 lines with proper Progressive Disclosure structure.
+Report before/after line counts to the user.
+
+## Final Output
+
+```
+[OK] skill:create — <name> packaged
+  path=<folder>  package=<name>.skill  lines=<n>  refs=<n>
+  quality_gate: PASS | needs /skill:refactor
+Next: install via Claude.ai (Settings → Skills → Upload) or commit folder
+```
 
 ## Platform-Specific Instructions
 
@@ -81,12 +96,5 @@ Read `references/platform-instructions.md` when running in Claude.ai or Cowork.
 
 ## Reference Files
 
-- `agents/grader.md` — How to evaluate assertions against outputs
-- `agents/comparator.md` — How to do blind A/B comparison between two outputs
-- `agents/analyzer.md` — How to analyze why one version beat another
-- `references/schemas.md` — JSON structures for evals.json, grading.json, etc.
-- `references/skill-writing-guide.md` — Anatomy, patterns, style, test case format
-- `references/eval-pipeline.md` — Running, grading, and reviewing test cases
-- `references/improvement-philosophy.md` — How to iterate on a skill
-- `references/description-optimization.md` — Trigger eval and optimization loop
-- `references/platform-instructions.md` — Claude.ai and Cowork adaptations
+Phases cite each `references/*.md` inline. Also: `references/schemas.md` (JSON for evals.json/
+grading.json) and `agents/{grader,comparator,analyzer}.md` (assertion eval, blind A/B, why-one-won).
