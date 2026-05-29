@@ -41,7 +41,14 @@ dotfiles_backup_copy() {
     [ -e "$_dbc_target" ] || return 0
     # Assignment RHS does not word-split, so outer quotes are unneeded here.
     _dbc_dest=$(dotfiles_backup_path "$_dbc_target" "$_dbc_suffix")
-    cp -f "$_dbc_target" "$_dbc_dest" || return 1
+    if [ -d "$_dbc_target" ]; then
+        # Clear any prior backup first so the recursive copy does not nest
+        # the source inside an existing destination directory.
+        rm -rf "$_dbc_dest"
+        cp -Rf "$_dbc_target" "$_dbc_dest" || return 1
+    else
+        cp -f "$_dbc_target" "$_dbc_dest" || return 1
+    fi
     printf '%s\n' "$_dbc_dest"
 }
 
