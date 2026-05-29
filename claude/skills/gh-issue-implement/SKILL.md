@@ -9,7 +9,9 @@ description: >-
   modes invoke the matching superpowers skills when the plugin is
   installed (falls back to direct with a warning if not). Precondition:
   user is already inside a dedicated git worktree on a feature branch.
-  Accepts `<issue-number> [direct|plan|brainstorming] [remote]`,
+  Sibling of [[gh:issue-proceed]] — this skill edits files to satisfy a
+  code-change issue; that one executes the protocol a directive issue
+  embeds. Accepts `<issue-number> [direct|plan|brainstorming] [remote]`,
   optional `--no-next-hint` (suppress final `Next:` hint), and
   `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write
