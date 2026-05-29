@@ -4,6 +4,7 @@
 
 ```
 /ai-worktree:teardown <worktree-path> [--force] [--keep-branch] [--dry-run]
+/ai-worktree:teardown [-h | --help | help]
 ```
 
 Run from the **main repo** (not from inside a worktree).
