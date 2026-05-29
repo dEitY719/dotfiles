@@ -8,6 +8,12 @@ description: >-
   "schedule /skill in N minutes", or "[command] N분 후에 해줘". Always invoke
   this skill whenever the user wants to defer any slash-command or task to
   run after a time delay.
+metadata:
+  model_recommendation:
+    tier: haiku
+    reason: "simple cron registration"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # devx:schedule — Deferred Skill Executor
