@@ -183,3 +183,97 @@ EOF
         bash -c "printf '%s' '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"gh pr create\"},\"tool_response\":{\"output\":\"https://github.example.com/owner/repo/pull/42\"}}' | '$HOOK'"
     grep -q '^sync pr 42 In review$' "$CALL_LOG"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #813 — projectV2 "Auto-add to project" race (poll-until-In-review)
+#
+# The hook now probes for a board up front (_post_gh_pr_create_repo_has_board
+# via `gh api graphql`) and, when a board exists, re-syncs in a bounded loop
+# until _gh_project_status_query_current reports "In review" — absorbing the
+# window where GitHub's builtin auto-add lands the PR card *after* our first
+# look. Boardless repos keep the single-call silent no-op contract.
+#
+# These three cases stage a fake `gh` on PATH (board count) plus a
+# query_current stub (when the card flips to "In review").
+# ---------------------------------------------------------------------------
+
+@test "T14 (#813): no projectV2 board → single sync, retry loop skipped" {
+    # has-board probe returns 0 → the hook must take the else branch: exactly
+    # one sync and zero query_current calls (the loop is never entered, so a
+    # boardless repo does not burn the retry budget spinning on a no-op).
+    mkdir -p "$TEST_TEMP_HOME/bin"
+    cat > "$TEST_TEMP_HOME/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+# Fake gh: report ZERO projectV2 boards for the has-board probe.
+[ "$1 $2" = "api graphql" ] && { echo 0; exit 0; }
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_HOME/bin/gh"
+    # query_current logs every call so its ABSENCE proves the loop was skipped.
+    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+_gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
+_gh_project_status_query_current() { printf 'query %s\n' "\$*" >> "$CALL_LOG"; echo "Backlog"; }
+_gh_pr_closing_issue_numbers() { return 0; }
+EOF
+    export PATH="$TEST_TEMP_HOME/bin:$PATH"
+    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/55"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    [ "$(grep -c '^sync pr 55 In review$' "$CALL_LOG")" -eq 1 ]
+    ! grep -q '^query ' "$CALL_LOG"
+}
+
+@test "T15 (#813): board present, card lands late → poll until In review, no warning" {
+    # has-board probe returns 1; query_current reports Backlog on the 1st probe
+    # and In review on the 2nd — emulating auto-add landing the card between
+    # attempts. The loop must re-sync once, then break (exactly 2 sync calls)
+    # without emitting the budget-exhausted warning.
+    mkdir -p "$TEST_TEMP_HOME/bin"
+    cat > "$TEST_TEMP_HOME/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+[ "$1 $2" = "api graphql" ] && { echo 1; exit 0; }
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_HOME/bin/gh"
+    QC_COUNT="$TEST_TEMP_HOME/qc.count"; : > "$QC_COUNT"
+    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+_gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
+_gh_project_status_query_current() {
+    n=\$(cat "$QC_COUNT" 2>/dev/null || echo 0); n=\$((n + 1)); echo "\$n" > "$QC_COUNT"
+    if [ "\$n" -ge 2 ]; then echo "In review"; else echo "Backlog"; fi
+}
+_gh_pr_closing_issue_numbers() { return 0; }
+EOF
+    export PATH="$TEST_TEMP_HOME/bin:$PATH"
+    export POST_GH_PR_CREATE_SYNC_SLEEP=0
+    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/77"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    [ "$(grep -c '^sync pr 77 In review$' "$CALL_LOG")" -eq 2 ]
+    ! echo "$output" | grep -q 'still not'
+}
+
+@test "T16 (#813): board present, never reaches In review → warning + exit 0" {
+    # query_current is stuck on Backlog. With attempts=2 the loop must sync
+    # twice, then warn (best-effort: still exit 0 so the user flow is never
+    # blocked).
+    mkdir -p "$TEST_TEMP_HOME/bin"
+    cat > "$TEST_TEMP_HOME/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+[ "$1 $2" = "api graphql" ] && { echo 1; exit 0; }
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_HOME/bin/gh"
+    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+_gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
+_gh_project_status_query_current() { echo "Backlog"; }
+_gh_pr_closing_issue_numbers() { return 0; }
+EOF
+    export PATH="$TEST_TEMP_HOME/bin:$PATH"
+    export POST_GH_PR_CREATE_SYNC_SLEEP=0 POST_GH_PR_CREATE_SYNC_ATTEMPTS=2
+    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/88"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    [ "$(grep -c '^sync pr 88 In review$' "$CALL_LOG")" -eq 2 ]
+    assert_output --partial 'still not "In review" after 2 attempts'
+}
