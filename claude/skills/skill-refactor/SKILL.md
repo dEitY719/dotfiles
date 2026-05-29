@@ -8,6 +8,12 @@ description: >-
   or after /skill:check reports FAIL/WARN. Distinct from skill:check (audit only).
 compatibility:
   tools: Read, Glob, Grep, Write, Edit, Bash
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "skill refactoring: extracts references, compresses to <=100 lines, auto-generates metadata blocks per rubric SSOT"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # SKILL.md Progressive Disclosure Refactoring Specialist

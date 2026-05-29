@@ -2,6 +2,12 @@
 name: write:release-note
 description: Use when generating structured release notes from git history between two releases — finding anchor commits, categorizing by conventional-commit prefix, grouping into user-facing themes, and formatting in Korean
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "release note generation: commit categorization, user-perspective theme grouping, project convention detection"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # Release Notes 작성
@@ -16,13 +22,9 @@ git 히스토리를 분석해 **사용자 관점**의 릴리즈 노트를 생성
 
 **핵심 원칙**: 커밋은 *무엇이* 바뀌었는지 말해주고, 릴리즈 노트는 그것이 *사용자에게 어떤 의미인지* 말해준다.
 
-## 사용 시점
-
-- 새 버전 릴리즈 노트를 만들 때
-- 이전 릴리즈 이후 변경사항을 요약할 때
-- 마일스톤/태그 릴리즈를 준비할 때
-
 ## 워크플로
+
+> 단계 1–5 는 순차 — anchor 를 찾을 수 없거나 저장 경로 쓰기 실패 시 즉시 보고하고 다음 단계로 진행하지 않는다.
 
 ### 1. 앵커 커밋 찾기
 
@@ -72,6 +74,16 @@ git add "<release-notes-path>"
 git commit -m "docs: add <version> release notes"
 ```
 
+저장/커밋 후 결과를 한 줄 verdict 로 보고:
+
+```
+[OK] write:release-note — <version> notes written
+  path: <release-notes-path>
+  themes: <n>  commits_grouped: <n>  non_conventional_checked: yes
+
+Next: review <release-notes-path>, then git push origin <branch>
+```
+
 ## 빠른 레퍼런스
 
 | 단계 | 핵심 |
@@ -82,18 +94,4 @@ git commit -m "docs: add <version> release notes"
 | 그룹핑 | 사용자 관점 테마로 묶기 (구현 용어 금지) |
 | 작성 | 프로젝트 관례 먼저, 없으면 템플릿 |
 
-## 흔한 실수
-
-| 실수 | 수정 |
-|------|------|
-| 커밋 1:1 나열 | 관련 커밋을 테마로 그룹화 |
-| 구현 용어로 섹션 제목 | 사용자 기능명으로 교체 |
-| 비관례 커밋 누락 | `grep -vE` 반드시 확인 |
-| 기능 관련 버그를 "버그 수정"에 배치 | 해당 기능 테마 섹션으로 이동 |
-| 개요를 커밋 나열로 작성 | 릴리즈 성격을 1-2문장 요약으로 |
-
-## 참고 파일
-
-- `references/git-commands.md` — 앵커 찾기, 커밋 수집, prefix별 필터 명령어
-- `references/grouping-heuristics.md` — 테마 그룹핑 규칙과 네이밍 가이드
-- `references/template.md` — 마크다운 템플릿과 작성 팁
+흔한 실수 체크리스트는 `references/grouping-heuristics.md` 의 "흔한 실수" 절 참고.
