@@ -58,6 +58,24 @@
 # before defining `_gh_project_status_sync`, breaking the workflow with
 # `command not found` (exit 127). See PR #497 / CI run 25601743398.
 
+# Ensure GH_HOST is set before any `gh` call so requests route to the
+# correct host. On the internal PC (GHE = github.samsungds.net) a caller
+# that does not export GH_HOST would otherwise let `gh` default to
+# github.com, silently failing every ProjectV2 lookup and skipping the
+# board sync (issue #804). We source the gh_host.sh SSOT and resolve the
+# host via `_gh_resolve_host`, which maps `_dotfiles_setup_mode` to the
+# right domain. A caller that already exported GH_HOST (an explicit host
+# override) is left untouched -> regression-zero for github.com users.
+_gh_project_status_ensure_host() {
+    [ -n "${GH_HOST-}" ] && return 0
+    # shellcheck disable=SC1091
+    . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_host.sh" 2>/dev/null || return 0
+    if command -v _gh_resolve_host >/dev/null 2>&1; then
+        GH_HOST=$(_gh_resolve_host)
+        export GH_HOST
+    fi
+}
+
 _gh_project_status_sync() {
     local _kind="$1" _num="$2" _target="$3"
     [ "$#" -ge 3 ] && shift 3
@@ -88,6 +106,10 @@ _gh_project_status_sync() {
     if [ -z "$_kind" ] || [ -z "$_num" ] || [ -z "$_target" ]; then
         return 0
     fi
+
+    # Route every downstream `gh` call (repo view, pr view, graphql) to the
+    # correct host before the first one fires (issue #804).
+    _gh_project_status_ensure_host
 
     local _q_field
     case "$_kind" in
@@ -292,6 +314,10 @@ _gh_project_status_query_current() {
     local _kind="$1" _num="$2"
     [ -z "$_kind" ] && return 0
     [ -z "$_num" ] && return 0
+
+    # Public entry point (gh-pr-merge Step 2-B gate) — also route to the
+    # correct host when invoked directly without GH_HOST (issue #804).
+    _gh_project_status_ensure_host
 
     local _q_field
     case "$_kind" in
