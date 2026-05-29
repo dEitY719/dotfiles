@@ -38,7 +38,7 @@ teardown() {
 @test "helper: backup_copy is idempotent (no accumulation)" {
     run bash -c '
         . "'"$BACKUP_HELPER"'"
-        d="$(mktemp -d)"
+        d=$(mktemp -d "${TMPDIR:-/tmp}/backup_test.XXXXXX")
         printf one > "$d/target"
         dotfiles_backup_copy "$d/target" >/dev/null
         printf two > "$d/target"
@@ -58,7 +58,7 @@ teardown() {
 @test "helper: backup_move overwrites prior backup" {
     run bash -c '
         . "'"$BACKUP_HELPER"'"
-        d="$(mktemp -d)"
+        d=$(mktemp -d "${TMPDIR:-/tmp}/backup_test.XXXXXX")
         printf first > "$d/t.backup"   # stale prior backup
         printf live  > "$d/t"
         dotfiles_backup_move "$d/t" >/dev/null
