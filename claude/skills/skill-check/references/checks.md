@@ -107,8 +107,8 @@ Detect `metadata.model_recommendation` in the SKILL.md frontmatter:
 | Result | Criteria |
 |---|---|
 | PASS | valid `tier` (haiku/sonnet/opus) + `reason` + compatibility (`claude` and `non_claude`) all present |
-| WARN | `tier` present but `reason` or compatibility missing — OR metadata absent while migration gate is open (`MIGRATION_COMPLETE = false`) |
-| FAIL | disallowed `tier` value — OR metadata absent after migration completes (`MIGRATION_COMPLETE = true`) |
+| WARN | `tier` present but `reason` or compatibility missing — OR metadata absent while the migration gate is open (gate state = `MIGRATION_COMPLETE` in `references/model-recommendation.md`) |
+| FAIL | disallowed `tier` value — OR metadata absent after the migration gate closes (gate state = `MIGRATION_COMPLETE` in `references/model-recommendation.md`) |
 | N/A | skill explicitly disables model invocation (`disable-model-invocation: true`) |
 
 On WARN-for-absence, suggest the migration command from
