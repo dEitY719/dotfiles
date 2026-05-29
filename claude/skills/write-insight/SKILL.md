@@ -12,6 +12,12 @@ description: >-
   Do not use this for narrative "삽질" posts (`write:blog-dev-learnings`), formal
   postmortems (`write:rca`), or JIRA/PR draft summaries (`write:task-history`).
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "short note generation with conversation mining, routing check, README rule re-read, overlap scan, index update"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # write:insight — Conversation → docs/guide/learnings/ note
@@ -28,9 +34,7 @@ If the argument is `help`, read `references/help.md` and output it verbatim, the
 ## Role
 
 Capture one reusable insight from the current chat as a short Korean note in
-`<repo-root>/docs/guide/learnings/`. Source comes from the conversation — don't make
-the user retype what they already lived through. Output one file path + one-line
-summary at the end, nothing else.
+`<repo-root>/docs/guide/learnings/`, sourced from the conversation (don't make the user retype what they lived through). Output one file path + one-line summary at the end, nothing else.
 
 ## Step 1: Resolve repo + read the rulebook
 
@@ -76,8 +80,7 @@ section: append a numbered entry matching the existing 3-line format (heading li
 ## Step 7: Suggest a memory pointer (don't auto-create)
 
 If the insight is cross-session reusable, ask: `memory/reference_learnings_<slug>.md`
-포인터 추가할까요? (한 줄짜리, 본문은 learnings, memory 는 경로만). Wait for yes —
-`MEMORY.md` is loaded into every session, churn there is expensive.
+포인터 추가할까요? (한 줄짜리, 본문은 learnings, memory 는 경로만). Wait for yes — `MEMORY.md` is loaded into every session, churn there is expensive.
 
 ## Step 8: Report
 
@@ -92,9 +95,6 @@ Next: review the file, then optionally /write:insight again for remaining candid
 ## Constraints
 
 - **Stop on any step failure** — Steps 1–8 are sequential; on the first error stop and report the failing step, do not proceed silently.
-- **Korean body, English headings** — note is for human teammates per README's language policy.
-- **No abstract generalities** — no PR/commit/file:line link → reject. Back to Step 4 or decline.
-- **Don't paraphrase the README** — re-read every run; if rules conflict, README wins.
-- **One file per invocation** — multiple insights → pick one, offer the rest as a follow-up run.
-- **Never auto-write to `memory/`** — suggest, wait for confirmation.
-- **Never overwrite silently** — existing slug → surface diff, ask update vs. new slug.
+- **Korean body, English headings** — for human teammates per README's language policy. **Don't paraphrase the README** — re-read every run; if rules conflict, README wins.
+- **No abstract generalities** — no PR/commit/file:line link → reject (back to Step 4 or decline). **One file per invocation** — multiple insights → pick one, offer the rest as a follow-up run.
+- **Never auto-write to `memory/`** — suggest, wait for confirmation. **Never overwrite silently** — existing slug → surface diff, ask update vs. new slug.

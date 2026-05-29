@@ -8,6 +8,12 @@ description: >-
   tool training, and junior engineer onboarding. Saves to
   ${RCA_REPO_PATH:-~/para/archive/rca-knowledge} with centralized media in _assets/.
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash, AskUserQuestion
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "structured 9-section RCA generation with 4-audience policy branching, validation, and conditional commit"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # write:rca
@@ -90,9 +96,5 @@ shell profile to override; every reference here resolves through it.
 
 ## References
 
-- `references/help.md` — verbatim usage block printed on `-h` / `--help` / `help`.
-- `references/document-template.md` — 9-section RCA spec + YAML frontmatter.
-- `references/phases-detail.md` — Step 1..6 detailed instructions.
-- `references/options.md` — flag matrix + `RCA_REPO_PATH` env-var SSOT.
-- `references/audience-policies.md` — blog / private / internal redaction rules.
-- `references/examples.md` — small / medium / large RCA sizing.
+- `references/help.md` (verbatim usage) · `references/document-template.md` (9-section spec + frontmatter) · `references/phases-detail.md` (Step 1..6 detail).
+- `references/options.md` (flag matrix + `RCA_REPO_PATH` env-var SSOT) · `references/audience-policies.md` (blog/private/internal redaction) · `references/examples.md` (small/medium/large sizing).
