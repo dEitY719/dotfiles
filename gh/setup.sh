@@ -31,8 +31,10 @@ mkdir -p "$GH_CONFIG_DIR"
 if [ -L "$GH_CONFIG_TARGET" ]; then
     rm "$GH_CONFIG_TARGET"
 elif [ -f "$GH_CONFIG_TARGET" ]; then
-    BACKUP_DATE=$(date +%Y%m%d%H%M%S)
-    BACKUP_PATH="${GH_CONFIG_TARGET}-${BACKUP_DATE}-original"
+    # Latest-only fixed suffix (issue #806) — overwrite one backup instead of
+    # accumulating. SSOT: shell-common/functions/dotfiles_backup.sh
+    BACKUP_PATH="${GH_CONFIG_TARGET}.original"
+    rm -f "$BACKUP_PATH"
     ux_warning "기존 config.yml 백업: ${BACKUP_PATH}"
     mv "$GH_CONFIG_TARGET" "$BACKUP_PATH"
 fi

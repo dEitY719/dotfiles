@@ -20,6 +20,15 @@ else
     ux_error() { echo "✗ $1" >&2; }
 fi
 
+# Latest-only backup policy (issue #806). SSOT for the fixed suffixes;
+# fallback defaults guard against a missing helper (an empty suffix would
+# overwrite the live target).
+if [ -f "${SHELL_COMMON_DIR}/functions/dotfiles_backup.sh" ]; then
+    . "${SHELL_COMMON_DIR}/functions/dotfiles_backup.sh"
+fi
+: "${DOTFILES_BACKUP_SUFFIX:=.backup}"
+: "${DOTFILES_ORIGINAL_SUFFIX:=.original}"
+
 # ============================================================================
 # Configuration Values (SSOT - Single Source of Truth)
 # ============================================================================
@@ -51,11 +60,13 @@ _prepare_config_target() {
         rm -f "$_target"
         ux_info "Removed existing symlink: $_target"
     elif [ -d "$_target" ]; then
-        _backup="${_target}.backup.$(date +%Y%m%d%H%M%S)"
+        _backup="${_target}${DOTFILES_BACKUP_SUFFIX}"
+        rm -rf "$_backup"
         mv "$_target" "$_backup"
         ux_warning "Backed up existing directory: $_backup"
     elif [ -f "$_target" ]; then
-        _backup="${_target}.backup.$(date +%Y%m%d%H%M%S)"
+        _backup="${_target}${DOTFILES_BACKUP_SUFFIX}"
+        rm -f "$_backup"
         mv "$_target" "$_backup"
         ux_info "Backed up existing file: $_backup"
     fi
@@ -67,7 +78,13 @@ _restore_config_from_backup() {
     _target="$1"
     if [ -L "$_target" ]; then
         rm -f "$_target"
-        _latest="$(ls -t "${_target}".backup.* 2>/dev/null | head -1)"
+        # Prefer the new fixed-suffix backup (issue #806); fall back to the
+        # newest legacy timestamped backup so existing machines still migrate.
+        if [ -e "${_target}${DOTFILES_BACKUP_SUFFIX}" ]; then
+            _latest="${_target}${DOTFILES_BACKUP_SUFFIX}"
+        else
+            _latest="$(ls -t "${_target}".backup.* 2>/dev/null | head -1)"
+        fi
         if [ -n "$_latest" ]; then
             mv "$_latest" "$_target"
             ux_success "Restored: $(basename "$_latest") → $_target"
@@ -278,7 +295,11 @@ setup_opencode_config() {
                 _restore_config_from_backup "$opencode_target"
             elif [ -f "$opencode_target" ]; then
                 rm -f "$opencode_target"
-                _latest="$(ls -t "${opencode_target}.backup."* 2>/dev/null | head -1)"
+                if [ -e "${opencode_target}${DOTFILES_BACKUP_SUFFIX}" ]; then
+                    _latest="${opencode_target}${DOTFILES_BACKUP_SUFFIX}"
+                else
+                    _latest="$(ls -t "${opencode_target}.backup."* 2>/dev/null | head -1)"
+                fi
                 if [ -n "$_latest" ]; then
                     mv "$_latest" "$opencode_target"
                     ux_success "Restored: $(basename "$_latest") → $opencode_target"

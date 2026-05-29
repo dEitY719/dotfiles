@@ -82,7 +82,11 @@ create_symlink() {
         rm "$link_name" || log_error_and_exit "기존 심볼릭 링크 제거 실패: $link_name"
     elif [ -f "$link_name" ] || [ -d "$link_name" ]; then
         log_warning "경고: $link_name 가 심볼릭 링크가 아닙니다. 백업 후 제거합니다."
-        backup_file "$link_name" "${link_name}-$(date +%Y%m%d%H%M%S)-original"
+        # Latest-only fixed suffix (issue #806) — overwrite a single backup
+        # instead of accumulating. Clear any prior backup first so a directory
+        # backup does not nest. SSOT: shell-common/functions/dotfiles_backup.sh
+        rm -rf "${link_name}.original"
+        backup_file "$link_name" "${link_name}.original"
         rm -rf "$link_name" || log_error_and_exit "기존 파일/디렉토리 제거 실패: $link_name"
     fi
 
