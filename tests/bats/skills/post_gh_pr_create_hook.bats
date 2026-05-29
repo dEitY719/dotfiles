@@ -157,3 +157,29 @@ EOF
         bash -c "printf '%s' '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"gh pr create\"},\"tool_response\":{\"output\":\"https://github.samsungds.net/byoungwoo-yoon/dotfiles/pull/8\"}}' | '$HOOK'"
     grep -q '^sync pr 8 In review$' "$CALL_LOG"
 }
+
+@test "T13 (#804): explicit GH_HOST override → regex honors it, PR URL still matched" {
+    # PR #805 gemini-code-assist (HIGH): when the caller exports GH_HOST,
+    # `gh pr create` emits a URL on THAT host. The regex must be built from
+    # the override, not the resolved default — otherwise pr_num is empty and
+    # the hook silently exits. We point _dotfiles_setup_mode at `external`
+    # (resolves to github.com) but export GH_HOST=github.example.com and feed
+    # a URL on github.example.com; the sync must still fire.
+    HYBRID_SHELL_COMMON="$TEST_TEMP_HOME/hybrid-override"
+    mkdir -p "$HYBRID_SHELL_COMMON/functions"
+    cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh" \
+        "$HYBRID_SHELL_COMMON/functions/gh_host.sh"
+    cat > "$HYBRID_SHELL_COMMON/functions/_setup_mode_stub.sh" <<'EOF'
+_dotfiles_setup_mode() { echo "external"; }
+EOF
+    cat > "$HYBRID_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+_gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
+_gh_pr_closing_issue_numbers() { return 0; }
+EOF
+    BASH_ENV="$HYBRID_SHELL_COMMON/functions/_setup_mode_stub.sh" \
+    DOTFILES_FORCE_INIT=1 \
+    GH_HOST="github.example.com" \
+    SHELL_COMMON="$HYBRID_SHELL_COMMON" \
+        bash -c "printf '%s' '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"gh pr create\"},\"tool_response\":{\"output\":\"https://github.example.com/owner/repo/pull/42\"}}' | '$HOOK'"
+    grep -q '^sync pr 42 In review$' "$CALL_LOG"
+}
