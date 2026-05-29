@@ -42,5 +42,6 @@
   "theme": "dark",
   "telemetry": {
     "enabled": false
-  }
+  },
+  "autoUpdatesChannel": "latest"
 }
