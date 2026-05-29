@@ -6,6 +6,12 @@ description: >-
   commands, or ensuring consistent formatting with semantic UX functions
   (ux_header, ux_section, ux_bullet, etc).
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "convention-driven refactoring"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # UX Guidelines Skill

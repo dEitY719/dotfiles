@@ -11,6 +11,12 @@ description: >-
   argument (cron path) or reads `.claude/.rate-limit-guard.json` (manual
   re-trigger). Accepts `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Write, CronCreate, CronDelete
+metadata:
+  model_recommendation:
+    tier: haiku
+    reason: "cron-driven re-run wrapper, low reasoning"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # devx:resume-after-limit — Resume After Rate-Limit Reset
@@ -36,8 +42,7 @@ test -f .claude/.rate-limit-guard.json && cat .claude/.rate-limit-guard.json
 ```
 
 Parse `command`, `worktree`, `branch`, `max_cycles`, `cycles_remaining`,
-`cycle_window_min` (jq or Python). Missing multi-cycle fields default to
-`max_cycles=1`, `cycles_remaining=1`, `cycle_window_min=305` (PR #369 compat).
+`cycle_window_min` (jq/Python). Missing multi-cycle fields default to `max_cycles=1`, `cycles_remaining=1`, `cycle_window_min=305` (PR #369 compat).
 
 ### 2. Resolve the Command
 
@@ -57,9 +62,8 @@ PWD_NOW=$(pwd); BRANCH=$(git branch --show-current 2>/dev/null || echo unknown)
 ### 4. Pre-emptive Re-arm
 
 If `cycles_remaining > 1`, register the next cycle's cron **before** running
-the wrapped command per `references/preemptive-rearm.md` (fire-time
-arithmetic, `CronCreate` args, state-file rewrite). Save `<NEXT_ID>` for
-Step 7. Otherwise skip.
+the wrapped command per `references/preemptive-rearm.md` (fire-time arithmetic,
+`CronCreate` args, state-file rewrite). Save `<NEXT_ID>` for Step 7. Else skip.
 
 ### 5. Announce
 
@@ -72,8 +76,7 @@ Step 7. Otherwise skip.
 
 ### 6. Execute the Command
 
-Hand off to the wrapped command. The wrapped workflow's own idempotency
-handles already-done sub-steps.
+Hand off to the wrapped command. The wrapped workflow's own idempotency handles already-done sub-steps.
 
 ### 7. Cleanup on Success
 
@@ -85,12 +88,10 @@ rm -f .claude/.rate-limit-guard.json
 ```
 
 Print `[OK] 재개 완료 — 안전망 상태 파일 정리됨`.
-
-The just-fired cron auto-deleted (`recurring: false`); the next-cycle cron
-from Step 4 must be explicitly cancelled.
-
-On failure (transient or otherwise), **leave state + next cron** in place —
-the next fire re-triggers this skill, or the user re-invokes manually.
+The just-fired cron auto-deleted (`recurring: false`); the Step 4 next-cycle
+cron must be explicitly cancelled. On failure (transient or otherwise), **leave
+state + next cron** in place — the next fire re-triggers this skill, or the user
+re-invokes manually.
 
 ## Constraints
 

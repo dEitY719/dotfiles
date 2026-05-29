@@ -62,3 +62,9 @@ Please implement this step by step, starting with [entry point].
 ## Notes
 [Any caveats, version-specific behaviors, or gotchas discovered during analysis]
 ```
+
+## Quality Checklist (verify before writing the output file)
+
+- [ ] No internal file paths leaked into the AI prompt
+- [ ] Library install commands correct for the ecosystem
+- [ ] Output written to `<output_dir>/analysis.md`

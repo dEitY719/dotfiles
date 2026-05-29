@@ -14,6 +14,12 @@ description: >-
   `[<PR#>] [--skip-bisect] [--auto-fix] [--build-cmd <cmd>]` and
   `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Grep, Glob, Edit
+metadata:
+  model_recommendation:
+    tier: haiku
+    reason: "checklist generation with low reasoning; 10 read-only checks aggregated"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # devx:exception-merge-checklist — Pre-merge 10-point sanity check
@@ -85,16 +91,8 @@ by other skills. `GH_DISABLE_AI_METRICS=1` skips this step entirely
 
 ## Constraints
 
-- **Read-only default.** Never merge, approve, push, or edit PR
-  body / labels. Only `--auto-fix` mutates, and only as far as
-  `git add`.
-- **No fail-fast.** All 10 checks run. Aggregating in one pass is
-  the whole point of the skill.
-- **C6 opt-out via `--skip-bisect` only.** C7–C10 are not
-  opt-outable — that would re-open the regression gap.
-- **Exit codes**: `0` (all PASS or only WARN) / `1` (≥ 1 FAIL) /
-  `2` (bad args, missing remote) / `3` (no PR detected).
-- **Never silently switch the build command.** If `--build-cmd` is
-  not given and `bun run build` does not exist in the repo, mark
-  C6 `N/A` with the reason — do NOT guess `npm test`.
-- **Never auto-commit.** `--auto-fix` stages only.
+- **Read-only default.** Never merge, approve, push, or edit PR body/labels. Only `--auto-fix` mutates, and only as far as `git add` (never `git commit`).
+- **No fail-fast.** All 10 checks run — aggregating in one pass is the whole point.
+- **C6 opt-out via `--skip-bisect` only.** C7–C10 are not opt-outable — that would re-open the regression gap.
+- **Exit codes**: `0` (all PASS or only WARN) / `1` (≥ 1 FAIL) / `2` (bad args, missing remote) / `3` (no PR detected).
+- **Never silently switch the build command.** If `--build-cmd` is absent and `bun run build` does not exist, mark C6 `N/A` with the reason — do NOT guess `npm test`.
