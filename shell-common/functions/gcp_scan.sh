@@ -32,8 +32,18 @@ _gcp_scan_is_empty_cherry_pick() {
 _gcp_scan_dup_base_sha() {
     # Look up the base-branch SHA that a duplicate source SHA matches.
     # $1 = candidate source SHA; $2 = duplicate map ("SRC_SHA BASE_SHA" lines).
-    # Prints the matching base SHA (or nothing) — issue #811 F-3.
-    printf '%s\n' "$2" | awk -v s="$1" '$1 == s { print $2; exit }'
+    # Prints the matching base SHA (or nothing) — issue #811 F-3. Pure shell
+    # (here-doc `while read`, no awk fork) per PR #812 review.
+    local target="$1"
+    local src_sha base_sha
+    while read -r src_sha base_sha; do
+        if [ "$src_sha" = "$target" ]; then
+            printf '%s\n' "$base_sha"
+            return 0
+        fi
+    done <<EOF
+$2
+EOF
 }
 
 _gcp_scan() {
@@ -191,23 +201,31 @@ EOF
     local duplicate_map=""
     local duplicate_count=0
 
+    # Cache the base branch's recent subjects ONCE (PR #812 review): running
+    # `git log` per source commit was an O(N) process-fork bottleneck. The
+    # per-commit lookup below is then a pure-shell here-doc `while read`
+    # (no git/awk fork, no pipe subshell).
+    local base_log tab
+    base_log=$(git log "$base" -n 200 --format='%H%x09%s' 2>/dev/null)
+    tab=$(printf '\t')
+
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
         local subject
         subject=$(git show -s --format='%s' "$sha")
 
-        # Check if base branch has a commit with same subject (search recent
-        # 200 commits). Capture the matching base SHA so the individual
-        # cherry-pick loop can report what each dup was already applied as
-        # (issue #811 F-1/F-3). Exact subject match preserved via tab split.
-        local match_base_sha
-        match_base_sha=$(git log "$base" -n 200 --format='%H%x09%s' 2>/dev/null \
-            | while IFS="$(printf '\t')" read -r _b_sha _b_subj; do
-                if [ "$_b_subj" = "$subject" ]; then
-                    printf '%s\n' "$_b_sha"
-                    break
-                fi
-            done)
+        # Find a base commit with the same subject and capture its SHA so the
+        # individual cherry-pick loop can report what each dup was already
+        # applied as (issue #811 F-1/F-3). Exact subject match via tab split.
+        local match_base_sha="" _b_sha _b_subj
+        while IFS="$tab" read -r _b_sha _b_subj; do
+            if [ "$_b_subj" = "$subject" ]; then
+                match_base_sha="$_b_sha"
+                break
+            fi
+        done <<EOF
+$base_log
+EOF
         if [ -n "$match_base_sha" ]; then
             duplicate_list="${duplicate_list}${sha}"$'\n'
             duplicate_map="${duplicate_map}${sha} ${match_base_sha}"$'\n'
