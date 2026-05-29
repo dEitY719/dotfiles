@@ -13,6 +13,12 @@ description: >-
   optional `--no-next-hint` (suppress final `Next:` hint), and
   `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write
+metadata:
+  model_recommendation:
+    tier: opus
+    reason: "deep implementation — repo-context reasoning, multi-file edits, test-failure loop, high-risk writes"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # gh:issue-implement — Issue → Code
@@ -22,22 +28,23 @@ allowed-tools: Bash, Read, Grep, Glob, Edit, Write
 If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
 output its content verbatim, then stop. No API calls.
 
+**Stop-on-error policy** — HARD-abort: Step 1 preconditions, 3.1 fetch,
+3.2 block-label guard. Everything else (3.3–3.5 claim writes, Step 5 test
+loop) soft-fails or bounded-retries — a transient blip never blocks.
+
 ## Step 1: Parse Args + Resolve Repo + Preconditions
 
-Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 6.
-
-Positional args: `<issue-number> [mode] [remote]`. Optional flag: `--no-next-hint`.
+Record `START_TS=$(date +%s)` immediately for Step 6 elapsed tracking.
+Positional args: `<issue-number> [mode] [remote]`; flag `--no-next-hint`.
 
 - `issue-number` — required, positive integer.
-- `mode` — default `direct`. Must be `direct`, `plan`, or `brainstorming`.
+- `mode` — default `direct`; one of `direct` / `plan` / `brainstorming`.
 - `remote` — default `origin`. Resolve `TARGET_REPO=<owner>/<repo>` per
-  `references/repo-resolution.md`. Missing remote → list `git remote -v`
-  and stop (no silent fallback).
-- `--no-next-hint` — when present, omit the final `Next:` line in Step 6.
+  `references/repo-resolution.md`; missing → `git remote -v` + stop.
+- `--no-next-hint` — omit the final `Next:` line in Step 6.
 
 Check preconditions in parallel per `references/implementation-flow.md`
-→ "Preconditions" (in a `git` repo, not on default branch, clean tree).
-Fail-fast with the reasons from that file.
+→ "Preconditions" (git repo, not default branch, clean tree); fail-fast.
 
 ## Step 2: superpowers Plugin Detection
 
@@ -46,82 +53,48 @@ Per `references/superpowers-detection.md`: plugin missing → force mode
 
 ## Step 3: Fetch + Claim Issue
 
-Five substeps in order. Full policy, env vars, and behavior matrix in
-`references/claim.md`.
+Five substeps in order — full policy, env vars, and behavior matrix in
+`references/claim.md`. Emit each step-completion marker so the harness
+step-skip guard (`skill_completion_guard.py`, #753) can verify the run.
 
-3.1 **Fetch** — `references/fetch-issue.md` (CLOSED refusal handled there).
-    After `gh issue view` succeeds, emit the step-completion marker so
-    the harness step-skip guard (`skill_completion_guard.py`, issue #753)
-    can verify this step ran:
-    `printf '[step:gh-issue-implement/fetch-issue] OK\n'`.
-3.2 **Block-label guard** — fail-closed abort (exit 2) if any label on
-    the issue matches `GH_ISSUE_BLOCK_LABELS`
-    (default `do-not-work,on-hold,보류,⏸️ Postpone`).
-3.3 **Self-assign** — `gh issue edit <N> --add-assignee @me` when not
-    already on the assignee list; warn (no override) when held by
-    another user. Skip via `GH_ISSUE_SKIP_SELF_ASSIGN=1`. After the
-    assignee edit (or the warn path) finishes, emit:
+3.1 **Fetch** — `references/fetch-issue.md` (CLOSED refusal there). On
+    success: `printf '[step:gh-issue-implement/fetch-issue] OK\n'`.
+3.2 **Block-label guard** — fail-closed abort (exit 2) if any label
+    matches `GH_ISSUE_BLOCK_LABELS`.
+3.3 **Self-assign** — `--add-assignee @me` unless already assigned (warn,
+    no override, if held by another). After it (or the warn path):
     `printf '[step:gh-issue-implement/self-assign] OK\n'`.
-3.4 **Board Status transition** — `_gh_project_status_sync issue <N>
-    "In progress" --only-from "Backlog,Ready"`. No-op on repos without
-    a board. Skip via `GH_ISSUE_SKIP_BOARD_TRANSITION=1`. After the
-    helper returns (success, no-op, or skipped via env), emit:
-    `printf '[step:gh-issue-implement/board-transition] OK\n'`.
-3.5 **Depends-on guard** — soft-warn (continue) for each `Depends on
-    #M` line in the body whose `M` is still OPEN. Skip via
-    `GH_ISSUE_SKIP_DEPS_CHECK=1`.
+3.4 **Board transition** — `_gh_project_status_sync issue <N> "In
+    progress" --only-from "Backlog,Ready"`; no-op without a board. After
+    it: `printf '[step:gh-issue-implement/board-transition] OK\n'`.
+3.5 **Depends-on guard** — soft-warn per OPEN `Depends on #M` line.
 
-Only 3.1 fetch failures and 3.2 block-label hits abort the flow.
-3.3–3.5 are soft-fail (warn + continue) so a transient API blip never
-blocks the implement step.
+Skip 3.3 / 3.4 / 3.5 via their `GH_ISSUE_SKIP_*` env vars.
 
 ## Step 4: Mode Dispatch
 
-- **`direct`** → go to Step 5.
-- **`plan`** → check ambiguity signals in
-  `references/superpowers-detection.md`. If any → switch to
-  `brainstorming`. Else invoke `Skill(superpowers:writing-plans)`.
-  After plan is approved, proceed to Step 5 guided by the plan.
-- **`brainstorming`** → invoke `Skill(superpowers:brainstorming)`.
-  Its terminal state invokes `writing-plans`. After plan is approved,
-  proceed to Step 5 guided by the plan.
+- **`direct`** → Step 5.
+- **`plan`** → if ambiguity signals (`references/superpowers-detection.md`)
+  appear, switch to `brainstorming`; else `Skill(superpowers:writing-plans)`.
+- **`brainstorming`** → `Skill(superpowers:brainstorming)` (terminal state
+  invokes `writing-plans`). After plan approval, proceed to Step 5.
 
 ## Step 5: Implement + Test
 
 Follow the direct-mode flow in `references/implementation-flow.md` →
-"Direct-mode flow" (detect `$TEST_CMD`, scan repo context, edit files,
-run tests, on failure run the test-failure loop with max 3 iterations
-per the same file).
-
-After implementation + tests pass (or are skipped because no test
-runner was detected), emit the step-completion marker before printing
-the Step 6 report — the harness step-skip guard
-(`skill_completion_guard.py`, issue #753) requires this marker:
+"Direct-mode flow" (detect `$TEST_CMD`, scan, edit, run tests, failure
+loop max 3×). After tests pass (or skip — no runner), emit before Step 6:
 `printf '[step:gh-issue-implement/implement] OK\n'`.
 
 ## Step 6: Report
 
-Print the success or failure report per
-`references/implementation-flow.md` → "Final report format". Always
-include the `Next:` hint pointing to `gh:commit` / `gh:pr` /
-`gh:issue-flow`, unless `--no-next-hint` is set.
-
-After the report, append the ai-metrics line (context only — no GitHub
-artifact exists yet at this stage):
-
-```
-[ai-metrics:gh-issue-implement] ~{ELAPSED} min — will be included in gh-commit metrics
-```
-
-Compute `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))` just before printing.
-
-Finally, emit the report step-completion marker so the step-skip guard
-recognizes the skill finished:
-`printf '[step:gh-issue-implement/report] OK\n'`.
+Print the success/failure report per `references/implementation-flow.md`
+→ "Final report format" + its "ai-metrics line" (ELAPSED). Include the
+`Next:` hint (`gh:commit` / `gh:pr` / `gh:issue-flow`) unless
+`--no-next-hint`; then `printf '[step:gh-issue-implement/report] OK\n'`.
 
 ## Constraints
 
-Read `references/constraints.md` before relaxing any of these: never
-commit/PR, never create a worktree, never run on the default branch,
-never fix pre-existing test failures, never retry the test loop more
-than 3 times, never hard-require superpowers.
+Read `references/constraints.md` first: never commit/PR, create a
+worktree, run on the default branch, fix pre-existing test failures,
+exceed 3 test-loop retries, or hard-require superpowers.

@@ -7,6 +7,7 @@
 | 1 | `<issue-number>` or `-h`/`--help`/`help` | — | GitHub issue number |
 | 2 | mode | `direct` | One of `direct`, `plan`, `brainstorming` |
 | 3 | remote-name | `origin` | Git remote whose repo owns the issue |
+| flag | `--no-next-hint` | off | Suppress the final `Next:` hint in the Step 6 report |
 
 ## Usage
 
