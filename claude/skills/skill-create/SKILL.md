@@ -28,7 +28,7 @@ the process and help them progress. Be flexible — if user says "just vibe with
 6. Repeat until satisfied
 7. Optimize description for triggering accuracy
 8. Package the final skill
-9. Run `/skill-check` → if FAIL/WARN, run `/skill-refactor` (quality gate)
+9. Run `/skill:check` → if FAIL/WARN, run `/skill:refactor` (quality gate)
 
 Each phase produces an artifact (intent, draft, eval results). On a clear blocker (e.g.,
 test prompts unwriteable, `package_skill` fails), stop and report — do not advance silently.
@@ -77,8 +77,8 @@ user to the resulting `.skill` file path so they can install it.
 
 ## Phase 8: Post-Creation Quality Gate
 
-Run `/skill-check` on the new SKILL.md. If any check returns FAIL or WARN, immediately run
-`/skill-refactor` to bring it under 100 lines with proper Progressive Disclosure structure.
+Run `/skill:check` on the new SKILL.md. If any check returns FAIL or WARN, immediately run
+`/skill:refactor` to bring it under 100 lines with proper Progressive Disclosure structure.
 Report before/after line counts to the user.
 
 ## Final Output
