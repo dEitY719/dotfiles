@@ -19,6 +19,45 @@ _cleanup_set_default_patterns() {
     )
 }
 
+# Home-directory whitelist (issue #806). Narrower than the generic defaults
+# so `clean-home` only targets the known dotfiles backup-accumulation
+# patterns plus the post-migration fixed-suffix files.
+_cleanup_set_home_patterns() {
+    CLEANUP_HOME_PATTERNS=(
+        '.zshrc.original'
+        '.zshrc-*-original'
+        '.zshrc.backup'
+        '.zshrc.backup.*'
+        '.npmrc.backup'
+        '.npmrc.backup.*'
+        '.npmrc.bak.*'
+        '*.backup'
+        '*.backup.*'
+        '*-original'
+    )
+}
+
+# In home mode, offer to remove the legacy ~/dotfiles-backup/ directory.
+# Interactive (confirm); a decline or a missing directory is a no-op.
+_cleanup_offer_dotfiles_backup_dir() {
+    local home_dir="$1"
+    local backup_dir="${home_dir}/dotfiles-backup"
+
+    [ -d "$backup_dir" ] || return 0
+
+    ux_section "dotfiles-backup/ Directory"
+    ux_bullet "$backup_dir"
+    if ux_confirm "Remove the entire ${backup_dir} directory?" "n"; then
+        if rm -rf -- "$backup_dir"; then
+            ux_success "Removed: $backup_dir"
+        else
+            ux_error "Failed to remove: $backup_dir"
+        fi
+    else
+        ux_info "Skipped: $backup_dir"
+    fi
+}
+
 _cleanup_collect_matches() {
     local search_dir="$1"
     shift
@@ -183,22 +222,28 @@ _cleanup_select_mode() {
 
 _del_file_help() {
     ux_header "del-file"
-    ux_usage "del-file" "[pattern...]" "Interactively delete backup/original files in the current directory"
-    ux_section "Default patterns"
+    ux_usage "del-file" "[--home] [pattern...]" "Interactively delete backup/original files"
+    ux_section "Default patterns (current directory)"
     ux_bullet ".*backup*"
     ux_bullet ".*.bak*"
     ux_bullet ".*-original"
+    ux_section "--home  (alias: clean-home)"
+    ux_bullet "Targets \$HOME with a dotfiles backup whitelist (.backup / -original / .bak)"
+    ux_bullet "Also offers to remove the legacy ~/dotfiles-backup/ directory"
     ux_section "Examples"
-    ux_bullet "del-file                # use defaults"
+    ux_bullet "del-file                # current dir, use defaults"
     ux_bullet "del-file '*.tmp'        # extend with one extra pattern"
+    ux_bullet "clean-home              # clean accumulated ~/ backups (issue #806)"
     ux_info "Next: del-file (interactive — preview, then choose 1/2/0)"
 }
 
 del_file() {
     [ -n "${ZSH_VERSION:-}" ] && emulate -L sh
 
+    local home_mode=0
     case "${1:-}" in
         -h|--help|help) _del_file_help; return 0 ;;
+        --home) home_mode=1; shift ;;
     esac
 
     if [ ! -t 0 ] || [ ! -t 1 ]; then
@@ -206,24 +251,42 @@ del_file() {
         return 1
     fi
 
-    local search_dir="${PWD}"
+    local search_dir=""
     local patterns=()
     local extra_pattern=""
     local default_pattern=""
     local selection=""
 
-    _cleanup_set_default_patterns
-    for default_pattern in "${CLEANUP_DEFAULT_PATTERNS[@]}"; do
-        [ -n "$default_pattern" ] || continue
-        patterns+=("$default_pattern")
-    done
+    if [ "$home_mode" -eq 1 ]; then
+        search_dir="${HOME}"
+        _cleanup_set_home_patterns
+        for default_pattern in "${CLEANUP_HOME_PATTERNS[@]}"; do
+            [ -n "$default_pattern" ] || continue
+            patterns+=("$default_pattern")
+        done
+    else
+        search_dir="${PWD}"
+        _cleanup_set_default_patterns
+        for default_pattern in "${CLEANUP_DEFAULT_PATTERNS[@]}"; do
+            [ -n "$default_pattern" ] || continue
+            patterns+=("$default_pattern")
+        done
+    fi
 
     for extra_pattern in "$@"; do
         [ -n "$extra_pattern" ] || continue
         patterns+=("$extra_pattern")
     done
 
+    # Home mode also cleans the legacy ~/dotfiles-backup/ directory.
+    if [ "$home_mode" -eq 1 ]; then
+        _cleanup_offer_dotfiles_backup_dir "$search_dir"
+    fi
+
     if ! _cleanup_preview "$search_dir" "${patterns[@]}"; then
+        # In home mode the directory cleanup above may already have done useful
+        # work, so a "no matching files" result is not an error.
+        [ "$home_mode" -eq 1 ] && return 0
         return 1
     fi
 
@@ -250,3 +313,5 @@ del_file() {
 }
 
 alias del-file='del_file'
+# Home-directory backup cleanup (issue #806).
+alias clean-home='del_file --home'

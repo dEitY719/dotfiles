@@ -49,6 +49,15 @@ else
     exit 1
 fi
 
+# Latest-only backup policy (issue #806). SSOT for the fixed suffixes;
+# fallback defaults guard against a missing helper (an empty suffix would
+# overwrite the live target).
+if [ -f "${DOTFILES_ROOT}/shell-common/functions/dotfiles_backup.sh" ]; then
+    source "${DOTFILES_ROOT}/shell-common/functions/dotfiles_backup.sh"
+fi
+: "${DOTFILES_BACKUP_SUFFIX:=.backup}"
+: "${DOTFILES_ORIGINAL_SUFFIX:=.original}"
+
 # --- Logging Compatibility Functions ---
 
 # Legacy logging functions for consistency with bash/setup.sh
@@ -90,7 +99,7 @@ create_symlink() {
         rm "$link_name" || log_error_and_exit "기존 심볼릭 링크 제거 실패: $link_name"
     elif [ -f "$link_name" ]; then
         log_warning "경고: $link_name 가 심볼릭 링크가 아닌 일반 파일입니다. 백업 후 제거합니다."
-        local backup_path="${link_name}-$(date +%Y%m%d%H%M%S)-original"
+        local backup_path="${link_name}${DOTFILES_ORIGINAL_SUFFIX}"
         backup_file "$link_name" "$backup_path"
         rm "$link_name" || log_error_and_exit "기존 파일 제거 실패: $link_name"
         if [ "$link_name" = "$HOME_ZSHRC" ]; then

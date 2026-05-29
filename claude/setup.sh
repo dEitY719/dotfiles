@@ -581,7 +581,10 @@ _single_account_ensure_link() {
         rmdir "$tgt" 2>/dev/null || true
     elif [ -e "$tgt" ]; then
         local backup
-        backup="${tgt}.backup.$(date +%Y%m%d%H%M%S)"
+        # Latest-only fixed suffix (issue #806) — overwrite one backup instead
+        # of accumulating. SSOT: shell-common/functions/dotfiles_backup.sh
+        backup="${tgt}.backup"
+        rm -rf "$backup"
         mv "$tgt" "$backup" || {
             log_error "backup failed: $tgt → $backup"
             return 1
