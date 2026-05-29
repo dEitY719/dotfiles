@@ -370,7 +370,7 @@ teardown() {
 _gcp811_make_repo() {
     # Emits shell that builds the dup fixture in a fresh temp repo and cds in.
     cat <<'FIXTURE'
-        repo="$(mktemp -d)"
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
         cd "$repo" || exit 1
         export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
                GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
@@ -420,7 +420,7 @@ FIXTURE
 
 @test "scan #811: contiguous no-dup path is unchanged (NF-1) — clean range pick" {
     run_in_bash '
-        repo="$(mktemp -d)"
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
         cd "$repo" || exit 1
         export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
                GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
