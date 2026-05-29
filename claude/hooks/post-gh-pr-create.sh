@@ -60,15 +60,21 @@ output=$(printf '%s' "$input" |
 # shellcheck disable=SC1091
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_host.sh" 2>/dev/null
 if command -v _gh_resolve_host >/dev/null 2>&1; then
-    _gh_host=$(_gh_resolve_host)
-    _gh_host_regex=$(printf '%s' "$_gh_host" | sed 's#\.#\\.#g')
+    _gh_resolved=$(_gh_resolve_host)
+    # Build the URL-match regex from the host `gh` will actually use: when
+    # the caller exported GH_HOST, `gh pr create` emits a URL on that host,
+    # so the regex must honor the override. Matching the resolved default
+    # instead would miss the URL and silently drop the sync. Native bash
+    # parameter expansion escapes the dots (no printf|sed subshell).
+    _gh_host="${GH_HOST:-$_gh_resolved}"
+    _gh_host_regex="${_gh_host//./\\.}"
     # Export GH_HOST so the later `gh repo view` and `_gh_project_status_sync`
     # calls route to the same host (issue #804). The helper now self-heals
     # too, but exporting here keeps the hook correct on a stale install and
-    # is defense-in-depth. Skip when already set (explicit caller override).
-    : "${GH_HOST:=$_gh_host}"
+    # is defense-in-depth. Default to the resolved host only when unset.
+    : "${GH_HOST:=$_gh_resolved}"
     export GH_HOST
-    unset _gh_host
+    unset _gh_resolved _gh_host
 else
     _gh_host_regex='(github\.com|github\.samsungds\.net)'
 fi
