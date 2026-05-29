@@ -12,13 +12,17 @@ description: >-
   adapter (agents / claude / gemini). Do NOT use for SKILL.md (use skill:check)
   or for shell scripts (use sh:check).
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "dispatcher with bounded mutation (create/refactor write under confirmation); moderate analysis, not deep implementation"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # devx:ai-context — Unified AI Context Doc Skill
 
-Replaces `agents-md:{check,create,refactor}` and `claude-md-{check,create}`.
-Legacy skills have been deleted (issue #560) — see
-`references/help.md` for the migration table.
+Replaces `agents-md:{check,create,refactor}` / `claude-md-{check,create}` (deleted in #560 — see `references/help.md` migration table).
 
 ## Help
 
@@ -82,17 +86,15 @@ extract sections and slim the root.
 
 ## Step 4: Report
 
-Use the template in `references/report-template.md` for every action.
-Verdict is `[OK]` if no FAIL, else `[FAIL]`. Always end with a `Next:`
-line per the same file.
+Use `references/report-template.md` for every action. Verdict `[OK]` if no
+FAIL, else `[FAIL]`. Always end with a `Next:` line per the same file.
 
 ## Constraints
 
+- If any Step 1–3 precondition fails, report it via `references/report-template.md` with Verdict=`[FAIL]` and stop — do not advance to the next step.
 - `check` is audit-only — never mutate the file.
 - Always confirm before overwriting in `create` / `refactor`.
 - Auto-overwrite is never allowed when multiple context files exist.
 - Honor `--file` and `--type` overrides over auto-detection.
-- Cite `references/industry-baseline.md` when stating rationale for adapter
-  checks (Codex / Claude Code / Gemini CLI official docs).
-- Do NOT run on `SKILL.md` (route to `skill:check`) or `*.sh` (route to
-  `sh:check`).
+- Cite `references/industry-baseline.md` for adapter-check rationale (Codex / Claude Code / Gemini CLI docs).
+- Do NOT run on `SKILL.md` (route to `skill:check`) or `*.sh` (route to `sh:check`).
