@@ -10,6 +10,12 @@ description: >-
   and reproduce a codebase feature elsewhere. Always produces a markdown document
   in the specified output directory.
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
+metadata:
+  model_recommendation:
+    tier: opus
+    reason: "deep code analysis, large reasoning surface"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # DevX: Reverse Engineering Analysis
@@ -88,15 +94,7 @@ Required sections:
 - **File Map** — source files with roles
 - **AI Implementation Prompt** — copy-pasteable, no project-specific paths
 
-End with `[OK] analysis written: <path>` or `[FAIL] <reason>`.
+End with `[OK] analysis written: <path>` or `[FAIL] <reason>`. A pre-write
+quality checklist is in `references/output-template.md`.
 
 `Next: read <output_dir>/analysis.md and paste the AI Implementation Prompt section into the target project's AI assistant.`
-
----
-
-## Quality Checklist
-
-Before writing the output file:
-- [ ] No internal file paths leaked into the AI prompt
-- [ ] Library install commands correct for the ecosystem
-- [ ] Output written to `<output_dir>/analysis.md`

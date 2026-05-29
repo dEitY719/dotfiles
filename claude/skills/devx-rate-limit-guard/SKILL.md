@@ -11,6 +11,12 @@ description: >-
   user to know their reset time (run /usage first). Accepts `-h`/`--help`/`help`
   to print usage.
 allowed-tools: Bash, Read, Write, CronCreate, CronDelete
+metadata:
+  model_recommendation:
+    tier: haiku
+    reason: "scheduling wrapper (CronCreate); low reasoning; deterministic cron spec generation"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # devx:rate-limit-guard — Rate-Limit Resume Safety Net

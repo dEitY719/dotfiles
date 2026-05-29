@@ -15,6 +15,12 @@ description: >-
   in the conversation — it resumes from the implementation step they led
   to. Accepts `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Edit, Write, Grep, Agent, TaskList, TaskUpdate
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "interrupt recovery orchestration; TodoList interpretation + 1-tool-call chunking + subagent delegation"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # devx:restart — Resume After API Error
@@ -87,13 +93,8 @@ and for the per-step / `Next:` line rules. Both Step 2 (announce) and Step 4
 
 ## Constraints
 
-- Never re-run a process skill that already produced output earlier in the
-  conversation — read its result from context instead.
-- Never batch tool calls "to be efficient" inside this skill; the whole
-  premise is that the previous batch died mid-way.
-- Never modify TodoList task subjects — only status. The user wrote the
-  subjects; rewriting them loses intent.
-- Never silently skip the announce line in Step 2 — the user needs to see
-  what you picked up so they can correct it cheaply if it's wrong.
-- Never invoke this skill from inside another skill. It is user-triggered
-  recovery, not a programmable building block.
+- Never re-run a process skill that already produced output earlier — read its result from context.
+- Never batch tool calls "to be efficient"; the premise is that the previous batch died mid-way.
+- Never modify TodoList task subjects — only status (rewriting them loses the user's intent).
+- Never silently skip the Step 2 announce line — the user must see what you picked up to correct it cheaply.
+- Never invoke this skill from inside another skill — it is user-triggered recovery, not a building block.

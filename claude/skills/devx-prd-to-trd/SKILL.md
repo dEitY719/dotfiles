@@ -13,6 +13,12 @@ description: >-
   upstream slot in the PRD → TRD → Milestones+Issues pipeline. Accepts
   `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Edit, Write, Grep
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "PRD → multi-TRD decomposition; 8-section standard mapping; structured reasoning"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # devx:prd-to-trd — PRD → per-component TRD scaffolds
@@ -89,7 +95,6 @@ Print the verdict:
 [OK] devx:prd-to-trd plan=<path> components=<n> [scaffolds=<n> skipped=<n>]
 ```
 
-`scaffolds=` and `skipped=` appear only on `--apply`. For dry-run,
-append `Next: review <plan-out>, then re-run with --apply`.
-
-Operational constraints: see `references/constraints.md`.
+`scaffolds=` and `skipped=` appear only on `--apply`. For dry-run, append
+`Next: review <plan-out>, then re-run with --apply`. Operational
+constraints: see `references/constraints.md`.
