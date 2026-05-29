@@ -1,6 +1,12 @@
 ---
 name: devx:excalidraw-diagram
 description: Create Excalidraw diagram JSON files that make visual arguments. Trigger on "/devx:excalidraw-diagram" or when the user wants to visualize workflows, architectures, or concepts.
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "generative diagram JSON with bounded creativity; visual pattern mapping + 27-item quality check"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # Excalidraw Diagram Creator
@@ -9,15 +15,11 @@ description: Create Excalidraw diagram JSON files that make visual arguments. Tr
 
 If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
 
-Generate `.excalidraw` JSON files that **argue visually**, not just display information.
-
-**Setup:** See `README.md` for renderer setup and dependencies.
+Generate `.excalidraw` JSON files that **argue visually**, not just display information. **Setup:** see `README.md` for renderer setup and dependencies.
 
 ## Customization
 
 Read `references/color-palette.md` before generating any diagram — single source of truth for all colors and brand styles. Edit it to change your brand.
-
----
 
 ## Core Philosophy
 
@@ -26,9 +28,9 @@ Read `references/color-palette.md` before generating any diagram — single sour
 - **Isomorphism Test**: Remove all text — does the structure alone communicate the concept?
 - **Education Test**: Could someone learn something concrete, or does it just label boxes?
 
----
-
 ## Design Process
+
+Run these steps in order. Stop immediately on any error (topic-too-vague refusal, renderer unavailable, quality-item failure) and emit a `[FAIL]` verdict.
 
 ### Step 0: Assess Depth
 
@@ -61,6 +63,8 @@ Read `references/design-rules.md` for container discipline, color rules, aesthet
 
 For large/comprehensive diagrams → read `references/large-diagram-strategy.md` (build one section at a time, never generate entire diagram in one pass).
 
+Read `references/output-format.md` for output path rules, filename convention, and artifact structure.
+
 ### Step 5: Render & Validate (MANDATORY)
 
 Read `references/render-validate.md` for the full render-view-fix loop.
@@ -74,4 +78,22 @@ Render → Read PNG → audit against vision → fix → repeat (2-4 iterations 
 
 ### Step 6: Final Quality Check
 
-Read `references/quality-checklist.md` and verify all 27 items before delivering.
+Read `references/quality-checklist.md` and verify all 27 items, then emit a deterministic verdict:
+
+```
+[OK] devx:excalidraw-diagram
+  Topic:      <topic-or-spec>
+  File:       <path/to/diagram.excalidraw>
+  PNG:        <path/to/diagram.png>
+  Quality:    27/27 items passed
+  Iterations: <render-fix loops>
+  Next:       open <png-path> 또는 share <excalidraw-path>
+```
+
+실패 시:
+
+```
+[FAIL] devx:excalidraw-diagram
+  Step:    <Step 0~6 where it failed>
+  Detail:  <topic too vague | renderer missing | quality items failed>
+```
