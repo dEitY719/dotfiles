@@ -17,5 +17,6 @@ Phases:
 
 Final Output:
   [OK] skill:create — <name> packaged
-    path: <skill-folder>   package: <name>.skill
-    lines: <n>   refs: <n>   quality_gate: PASS | needs /skill:refactor
+    path=<folder>  package=<name>.skill  lines=<n>  refs=<n>
+    quality_gate: PASS | needs /skill:refactor
+  Next: install via Claude.ai (Settings → Skills → Upload) or commit folder
