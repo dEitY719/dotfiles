@@ -7,6 +7,12 @@ description: >-
   "start new task", "spawn a worktree", or any request to begin isolated work
   in a multi-agent setup.
 allowed-tools: Bash, Read, Grep, Glob
+metadata:
+  model_recommendation:
+    tier: haiku
+    reason: "structured git-worktree CLI orchestration; deterministic bash sequence, low reasoning"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # AI Worktree Spawn
@@ -57,22 +63,17 @@ Priority: `--base` arg > `origin/main` > `main`/`master` > current HEAD.
 
 ### Step 6: Create Worktree
 
-git-crypt detection happens in Step 1.5. When active, resolve a key file via priority:
-`$GIT_CRYPT_KEY_FILE` > `~/.config/git-crypt/<project>.key` > `~/.config/git-crypt/default.key`.
+git-crypt detection happens in Step 1.5. The full key-resolution priority and
+unlock sequence live in `references/bash-commands.md` (Step 1.5 / Step 6). Two paths:
 
-- **Key found (auto-unlock path)**: 4-step sequence — bypass-checkout (clean
-  ciphertext), worktree-local temp bypass, `git-crypt unlock <key>`, then
-  restore filter to git-crypt. Encrypted files (`.env`, `.secrets/`) decrypt
-  normally. **Caveat**: `git status` may show git-crypt files as `M` after
-  unlock (raw byte vs. textconv mismatch) — use explicit `git add <path>`,
-  never `-A` / `.` in auto-unlocked worktrees.
-- **Key not found (bypass path, backward-compatible)**: pass `-c filter.git-crypt.smudge=cat
-  -c filter.git-crypt.clean=cat` to `git worktree add`, set worktree-local config
-  to disable filters permanently. Encrypted files stay binary. Print hint:
-  run `gc-export-key` from main repo so next spawn can auto-unlock.
+- **Key found (auto-unlock)**: decrypt `.env` / `.secrets/` normally. Caveat:
+  use explicit `git add <path>`, never `-A` / `.`, in auto-unlocked worktrees
+  (git-crypt files may show as `M` from a raw-byte vs. textconv mismatch).
+- **Key not found (bypass, backward-compatible)**: filters disabled, encrypted
+  files stay binary; print the `gc-export-key` hint for the next spawn.
 
-If branch exists: `git worktree add <path> <branch>` (no `-b`).
-If new branch: `git worktree add -b <branch> <path> <base_ref>`.
+Branch exists: `git worktree add <path> <branch>`. New branch:
+`git worktree add -b <branch> <path> <base_ref>`.
 
 ### Step 7: Log the Creation
 
@@ -88,16 +89,12 @@ Print result, then `cd` into the new worktree:
   Branch: wt/claude/1
   Base:   origin/main
   git-crypt: unlocked via ~/.config/git-crypt/my-app.key
-
-  Teardown after work is done:
-    git push -u origin wt/claude/1
-    git worktree remove ../my-app-claude-1
-    git branch -d wt/claude/1
+  Teardown: git push -u origin <branch> && git worktree remove <path> && git branch -d <branch>
 ```
 
-The `git-crypt` line only appears when the repo uses git-crypt. It shows either
-`unlocked via <key path>` (auto-unlock path) or `disabled (no key file)` (bypass
-path). When bypassed, the report also prints the `git-crypt export-key` hint.
+The `git-crypt` line only appears when the repo uses git-crypt — `unlocked via
+<key path>` (auto-unlock) or `disabled (no key file)` (bypass, also prints the
+`git-crypt export-key` hint).
 
 The script cannot change the caller's cwd. Print the `cd` command as guidance,
 then execute it yourself as the AI agent.
