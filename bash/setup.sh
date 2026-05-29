@@ -44,6 +44,15 @@ HOME_BASH_PROFILE="${HOME}/.bash_profile"
 # Load UX library (unified library at shell-common/tools/ux_lib/)
 source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 
+# Latest-only backup policy (issue #806). SSOT for the fixed suffixes.
+# Fallback defaults guard against a missing helper so the suffix is never
+# empty (an empty suffix would overwrite the live target).
+if [ -f "${SHELL_COMMON}/functions/dotfiles_backup.sh" ]; then
+    source "${SHELL_COMMON}/functions/dotfiles_backup.sh"
+fi
+: "${DOTFILES_BACKUP_SUFFIX:=.backup}"
+: "${DOTFILES_ORIGINAL_SUFFIX:=.original}"
+
 # Define legacy mapping functions for backward compatibility
 log_info() { ux_info "$1"; }
 log_error() { ux_error "$1"; }
@@ -94,7 +103,7 @@ create_symlink() {
 
         log_warning "경고: $link_name 가 심볼릭 링크가 아닌 일반 파일입니다. 백업 후 제거합니다."
 
-        backup_file "$link_name" "${link_name}-$(date +%Y%m%d%H%M%S)-original"
+        backup_file "$link_name" "${link_name}${DOTFILES_ORIGINAL_SUFFIX}"
 
         rm "$link_name" || log_error_and_exit "기존 파일 제거 실패: $link_name"
 
@@ -159,7 +168,7 @@ if [ -f "$WORK_LOG_SRC" ]; then
         fi
     elif [ -f "$WORK_LOG_LINK" ]; then
         # Regular file exists, backup and create symlink
-        backup_file="${WORK_LOG_LINK}.backup.$(date +%s)"
+        backup_file="${WORK_LOG_LINK}${DOTFILES_BACKUP_SUFFIX}"
         log_error "경고: ~/work_log.txt가 일반 파일입니다"
         log_dim "백업: $backup_file로 이동"
         mv "$WORK_LOG_LINK" "$backup_file"
@@ -197,9 +206,10 @@ _cleanup_broken_zsh_plugins() {
         return 0
     fi
 
-    # Create backup
+    # Create backup (latest-only fixed suffix — issue #806; no timestamp so
+    # repeated runs overwrite a single backup instead of accumulating).
     local backup_file
-    backup_file="${zshrc}.backup.$(date +%s)"
+    backup_file="${zshrc}${DOTFILES_BACKUP_SUFFIX}"
     cp "$zshrc" "$backup_file" || return 1
 
     log_debug "정리: ~/.zshrc에서 설치되지 않은 플러그인 제거: $broken_plugins"
@@ -218,6 +228,8 @@ _cleanup_broken_zsh_plugins() {
     if grep -q "plugins=(" "$temp_zshrc" 2>/dev/null; then
         mv "$temp_zshrc" "$zshrc"
         rm -f "${zshrc}.bak" 2>/dev/null
+        # Cleanup succeeded — drop the safety backup so it does not linger.
+        rm -f "$backup_file" 2>/dev/null
         log_dim "✓ ~/.zshrc에서 미설치 플러그인 제거 완료"
         log_dim "  이제 zsh 시작 시 'plugin not found' 에러가 나타나지 않습니다"
     else
@@ -231,59 +243,12 @@ _cleanup_broken_zsh_plugins() {
 # Run cleanup if zshrc exists
 _cleanup_broken_zsh_plugins
 
-# Add auto-cleanup code to ~/.zshrc (if not already there)
-_add_zshrc_auto_cleanup() {
-    local zshrc="${HOME}/.zshrc"
-    local marker="# DOTFILES AUTO-CLEANUP: Remove broken plugin references"
-
-    if [ ! -f "$zshrc" ]; then
-        return 0
-    fi
-
-    # Check if auto-cleanup code is already added
-    if grep -q "$marker" "$zshrc" 2>/dev/null; then
-        return 0
-    fi
-
-    # Add auto-cleanup code at the beginning of ~/.zshrc
-    # This runs every time zsh starts to ensure no broken plugins
-    if cat >"${zshrc}.cleanup_insert" <<'CLEANUP_CODE'; then
-
-# ═══════════════════════════════════════════════════════════════
-# DOTFILES AUTO-CLEANUP: Remove broken plugin references
-# ═══════════════════════════════════════════════════════════════
-# This code runs automatically when zsh starts to ensure no
-# "plugin not found" errors occur. Plugins are only loaded if
-# they are actually installed in ~/.oh-my-zsh/custom/plugins/
-
-_dotfiles_auto_cleanup_plugins() {
-    local omz_custom="${ZSH_CUSTOM:-${HOME}/.oh-my-zsh/custom}"
-    local modified=0
-
-    # Check for broken plugin references in plugins array
-    for plugin_name in zsh-autosuggestions zsh-syntax-highlighting zsh-history-substring-search; do
-        if [[ "$plugins" == *"$plugin_name"* ]] && [ ! -d "$omz_custom/plugins/$plugin_name" ]; then
-            # Remove broken plugin reference
-            plugins=("${(@)plugins[@]//$plugin_name}")
-            modified=1
-        fi
-    done
-}
-
-_dotfiles_auto_cleanup_plugins
-unfunction _dotfiles_auto_cleanup_plugins 2>/dev/null || true
-
-CLEANUP_CODE
-        # Prepend cleanup code to zshrc
-        cat "${zshrc}.cleanup_insert" "$zshrc" >"${zshrc}.new"
-        mv "${zshrc}.new" "$zshrc"
-        rm -f "${zshrc}.cleanup_insert"
-        log_debug "✓ ~/.zshrc에 자동 정리 코드 추가됨 (매번 zsh 시작 시 자동 실행)"
-    fi
-}
-
-# Add auto-cleanup to zshrc
-_add_zshrc_auto_cleanup
+# NOTE (issue #806): the former `_add_zshrc_auto_cleanup` runtime hook was
+# removed. It prepended cleanup code via `cat ... > .new && mv .new ~/.zshrc`,
+# which converted the dotfiles-managed ~/.zshrc symlink into a regular file.
+# The next ./setup.sh run then re-backed-up and re-linked it, accumulating one
+# backup per run. The hook was redundant anyway — `_cleanup_broken_zsh_plugins`
+# above already strips missing-plugin references at build time.
 
 ux_success "dotfiles setup 완료"
 

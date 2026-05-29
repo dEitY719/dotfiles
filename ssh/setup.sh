@@ -34,7 +34,10 @@ if [ -L "${SSH_CONFIG_LINK}" ]; then
     ux_info "Updating symlink (was: ${current_target})"
     rm "${SSH_CONFIG_LINK}"
 elif [ -f "${SSH_CONFIG_LINK}" ]; then
-    backup="${SSH_CONFIG_LINK}.backup.$(date +%Y%m%d%H%M%S)"
+    # Latest-only fixed suffix (issue #806) — overwrite one backup instead of
+    # accumulating. SSOT: shell-common/functions/dotfiles_backup.sh
+    backup="${SSH_CONFIG_LINK}.backup"
+    rm -f "${backup}"
     ux_info "Backing up existing file: ${backup}"
     mv "${SSH_CONFIG_LINK}" "${backup}"
 fi

@@ -70,7 +70,9 @@ create_symlink() {
         rm "$link_name" || log_error_and_exit "기존 심볼릭 링크 제거 실패: $link_name"
     elif [ -f "$link_name" ]; then
         ux_warning "경고: $link_name 가 심볼릭 링크가 아닌 일반 파일입니다. 백업 후 제거합니다."
-        backup_file "$link_name" "${link_name}-$(date +%Y%m%d%H%M%S)-original"
+        # Latest-only fixed suffix (issue #806) — repeated runs overwrite one
+        # backup instead of accumulating. SSOT: shell-common/functions/dotfiles_backup.sh
+        backup_file "$link_name" "${link_name}.original"
         rm "$link_name" || log_error_and_exit "기존 파일 제거 실패: $link_name"
     fi
 
