@@ -1,0 +1,21 @@
+/skill:create — Create new skills, modify and improve existing skills.
+
+Usage:
+  /skill:create               # interactive — capture intent, draft, evaluate
+  /skill:create "<idea>"      # seed with a short idea/topic
+  /skill:create -h | --help | help
+
+Phases:
+  1. Capture Intent       — 4 questions about scope/triggers/output
+  2. Interview & Research — edge cases, MCPs, dependencies
+  3. Write SKILL.md       — references/skill-writing-guide.md
+  4. Run & Evaluate       — references/eval-pipeline.md
+  5. Improve              — references/improvement-philosophy.md
+  6. Description Optimize — references/description-optimization.md
+  7. Package              — python -m scripts.package_skill <path>
+  8. Quality Gate         — /skill:check → /skill:refactor if FAIL/WARN
+
+Final Output:
+  [OK] skill:create — <name> packaged
+    path: <skill-folder>   package: <name>.skill
+    lines: <n>   refs: <n>   quality_gate: PASS | needs /skill:refactor
