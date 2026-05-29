@@ -29,6 +29,13 @@ _gcp_scan_is_empty_cherry_pick() {
     return 0
 }
 
+_gcp_scan_dup_base_sha() {
+    # Look up the base-branch SHA that a duplicate source SHA matches.
+    # $1 = candidate source SHA; $2 = duplicate map ("SRC_SHA BASE_SHA" lines).
+    # Prints the matching base SHA (or nothing) — issue #811 F-3.
+    printf '%s\n' "$2" | awk -v s="$1" '$1 == s { print $2; exit }'
+}
+
 _gcp_scan() {
     # zsh compatibility: emulate POSIX sh to ensure consistent behavior
     if [ -n "${ZSH_VERSION-}" ]; then
@@ -181,6 +188,7 @@ EOF
     # Check for duplicate commits (same subject already in base branch)
     local final_selected_list=""
     local duplicate_list=""
+    local duplicate_map=""
     local duplicate_count=0
 
     while IFS= read -r sha; do
@@ -188,9 +196,21 @@ EOF
         local subject
         subject=$(git show -s --format='%s' "$sha")
 
-        # Check if base branch has a commit with same subject (search recent 200 commits)
-        if git log "$base" -n 200 --format='%s' 2>/dev/null | grep -Fqx "$subject"; then
+        # Check if base branch has a commit with same subject (search recent
+        # 200 commits). Capture the matching base SHA so the individual
+        # cherry-pick loop can report what each dup was already applied as
+        # (issue #811 F-1/F-3). Exact subject match preserved via tab split.
+        local match_base_sha
+        match_base_sha=$(git log "$base" -n 200 --format='%H%x09%s' 2>/dev/null \
+            | while IFS="$(printf '\t')" read -r _b_sha _b_subj; do
+                if [ "$_b_subj" = "$subject" ]; then
+                    printf '%s\n' "$_b_sha"
+                    break
+                fi
+            done)
+        if [ -n "$match_base_sha" ]; then
             duplicate_list="${duplicate_list}${sha}"$'\n'
+            duplicate_map="${duplicate_map}${sha} ${match_base_sha}"$'\n'
             duplicate_count=$((duplicate_count + 1))
         else
             if [ -z "$final_selected_list" ]; then
@@ -336,14 +356,32 @@ EOF
                     return 1
                 fi
             else
-                # Non-contiguous: cherry-pick individually for better control
+                # Non-contiguous: cherry-pick individually for better control.
+                # Iterate the full author-filtered list (selected_list) — not
+                # the dup-pruned final_selected_list — so dup commits detected
+                # in Stage-1 are explicitly skipped *with a log line* instead
+                # of being silently dropped (issue #811 F-1/F-2).
                 if type ux_warning >/dev/null 2>&1; then
                     ux_warning "Non-contiguous range detected. Cherry-picking individually..."
                 fi
                 local picked=0
-                local skipped=0
+                local empty_skipped=0
+                local dup_skipped=0
                 while IFS= read -r sha; do
                     [ -z "$sha" ] && continue
+                    # F-2/F-3: a Stage-1 duplicate is skipped without a
+                    # cherry-pick attempt, naming the base SHA it matches.
+                    local dup_base_sha
+                    dup_base_sha=$(_gcp_scan_dup_base_sha "$sha" "$duplicate_map")
+                    if [ -n "$dup_base_sha" ]; then
+                        if type ux_info >/dev/null 2>&1; then
+                            ux_info "Skipping ${sha} — already applied as ${dup_base_sha} (duplicate subject)"
+                        else
+                            echo "ℹ Skipping ${sha} — already applied as ${dup_base_sha} (duplicate subject)"
+                        fi
+                        dup_skipped=$((dup_skipped + 1))
+                        continue
+                    fi
                     if type ux_info >/dev/null 2>&1; then
                         ux_info "Cherry-picking $sha..."
                     fi
@@ -355,7 +393,7 @@ EOF
                                 ux_warning "Empty commit at $sha; skipping..."
                             fi
                             if git cherry-pick --skip; then
-                                skipped=$((skipped + 1))
+                                empty_skipped=$((empty_skipped + 1))
                                 break
                             fi
                             break
@@ -370,10 +408,20 @@ EOF
                         return 1
                     fi
                 done <<EOF
-$final_selected_list
+$selected_list
 EOF
+                # F-4: reaching here means no unresolved conflict (a real
+                # conflict returns 1 above), so report 0 conflicts.
                 if type ux_success >/dev/null 2>&1; then
-                    ux_success "Cherry-picked $picked/$count commits successfully! (Skipped $skipped empty)"
+                    ux_success "$picked applied, $dup_skipped skipped (dup), 0 conflicts"
+                    if [ "$empty_skipped" -gt 0 ]; then
+                        ux_info "($empty_skipped empty commit(s) also skipped)"
+                    fi
+                else
+                    echo "✓ $picked applied, $dup_skipped skipped (dup), 0 conflicts"
+                    if [ "$empty_skipped" -gt 0 ]; then
+                        echo "  ($empty_skipped empty commit(s) also skipped)"
+                    fi
                 fi
             fi
         else

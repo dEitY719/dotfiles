@@ -355,6 +355,93 @@ teardown() {
     refute_output --partial "gcp: alias"
 }
 
+# ---------------------------------------------------------------------------
+# Issue #811 — individual (non-contiguous) cherry-pick auto-skips Stage-1
+# duplicates with a log line, instead of attempting them and conflicting.
+#
+# Fixture commit tree (author = all, so author filter is a no-op):
+#   main:   C0 "init"  ->  M1 "shared dup subject"
+#   source: C0 "init"  ->  S1 "feat one" -> S2 "shared dup subject" -> S3 "feat three"
+# S2 shares M1's subject (dup) but a different patch, so `git cherry` still
+# lists it as missing. final_selected_list = {S1,S3} (count 2) but the range
+# S1^..S3 spans 3 commits -> non-contiguous -> individual cherry-pick path.
+# ---------------------------------------------------------------------------
+
+_gcp811_make_repo() {
+    # Emits shell that builds the dup fixture in a fresh temp repo and cds in.
+    cat <<'FIXTURE'
+        repo="$(mktemp -d)"
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo init > a.txt && git add a.txt && git commit -qm "init"
+        git checkout -q -b source
+        echo one > f1.txt && git add f1.txt && git commit -qm "feat one"
+        echo dupsrc > f2.txt && git add f2.txt && git commit -qm "shared dup subject"
+        echo three > f3.txt && git add f3.txt && git commit -qm "feat three"
+        git checkout -q main
+        echo dupbase > onbase.txt && git add onbase.txt && git commit -qm "shared dup subject"
+FIXTURE
+}
+
+@test "scan #811: non-contiguous dup is skipped (not cherry-picked) with base SHA logged" {
+    run_in_bash "
+        $(_gcp811_make_repo)
+        base_dup_sha=\$(git rev-parse --short main)
+        printf 'y\n' | _gcp_scan main source --author=all
+    "
+    assert_success
+    # F-3: skip log naming the matching base SHA.
+    assert_output --partial "Skipping"
+    assert_output --partial "already applied as"
+    assert_output --partial "(duplicate subject)"
+    # F-4: summary reports 1 dup skipped, 0 conflicts.
+    assert_output --partial "skipped (dup), 0 conflicts"
+    # The dup commit's own file must NOT have been applied to main.
+    refute_output --partial "CONFLICT"
+}
+
+@test "scan #811: dup commit's payload is absent, non-dup commits are applied" {
+    run_in_bash "
+        $(_gcp811_make_repo)
+        printf 'y\n' | _gcp_scan main source --author=all >/dev/null 2>&1
+        # Non-dup commits applied:
+        git cat-file -e HEAD:f1.txt && echo HAS_F1
+        git cat-file -e HEAD:f3.txt && echo HAS_F3
+        # Dup commit (f2.txt) skipped -> absent on main:
+        git cat-file -e HEAD:f2.txt 2>/dev/null && echo HAS_F2 || echo NO_F2
+    "
+    assert_success
+    assert_output --partial "HAS_F1"
+    assert_output --partial "HAS_F3"
+    assert_output --partial "NO_F2"
+}
+
+@test "scan #811: contiguous no-dup path is unchanged (NF-1) — clean range pick" {
+    run_in_bash '
+        repo="$(mktemp -d)"
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo init > a.txt && git add a.txt && git commit -qm "init"
+        git checkout -q -b source
+        echo one > f1.txt && git add f1.txt && git commit -qm "feat one"
+        echo two > f2.txt && git add f2.txt && git commit -qm "feat two"
+        git checkout -q main
+        printf "y\n" | _gcp_scan main source --author=all
+        git cat-file -e HEAD:f1.txt && echo HAS_F1
+        git cat-file -e HEAD:f2.txt && echo HAS_F2
+    '
+    assert_success
+    assert_output --partial "Range is contiguous"
+    assert_output --partial "Cherry-pick complete"
+    assert_output --partial "HAS_F1"
+    assert_output --partial "HAS_F2"
+    refute_output --partial "skipped (dup)"
+}
+
 @test "alias-shadow: 'gcp -h' invokes dispatcher (not shadowed git cherry-pick) in zsh (#700)" {
     run zsh -f -c "
         export DOTFILES_ROOT='${DOTFILES_ROOT}'
