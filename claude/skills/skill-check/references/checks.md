@@ -1,6 +1,6 @@
 # Skill Quality Checks
 
-Ten checks, each rated PASS / WARN / FAIL / N/A.
+Twelve checks, each rated PASS / WARN / FAIL / N/A.
 
 ---
 
@@ -37,7 +37,7 @@ FAIL — no output format defined
 
 ---
 
-## UX Quality Checks (6–10)
+## UX Quality Checks (6–11)
 
 ### Check 6: Help Flag Pattern
 PASS — `-h`/`--help`/`help` arg → reads `references/help.md` verbatim, then stops. No API calls.
@@ -92,3 +92,36 @@ entry must carry an inline rationale comment.
 
 FAIL output: list up to 5 matched files+lines and append the guidance
 `Remove emoji or add to references/allowed-emoji-skills.txt with rationale`.
+
+---
+
+## Model Recommendation Check (12)
+
+### Check 12: Model Recommendation Metadata
+Read `references/model-recommendation.md` (rubric SSOT) for the full schema,
+tier rubric, migration gate, and compatibility policy. This check is
+**read-only — it recommends a tier, never switches models or writes files** (#809).
+
+Detect `metadata.model_recommendation` in the SKILL.md frontmatter:
+
+| Result | Criteria |
+|---|---|
+| PASS | valid `tier` (haiku/sonnet/opus) + `reason` + compatibility (`claude` and `non_claude`) all present |
+| WARN | `tier` present but `reason` or compatibility missing — OR metadata absent while migration gate is open (`MIGRATION_COMPLETE = false`) |
+| FAIL | disallowed `tier` value — OR metadata absent after migration completes (`MIGRATION_COMPLETE = true`) |
+| N/A | skill explicitly disables model invocation (`disable-model-invocation: true`) |
+
+On WARN-for-absence, suggest the migration command from
+`references/model-recommendation.md` Section 3. On FAIL-for-tier, print the
+allowed values `haiku | sonnet | opus`.
+
+**Recommended tier (always reported, even when metadata exists):** apply the
+Section 2 rubric to the audited skill and report the recommended tier with a
+one-line rationale. When metadata is present, note agreement or mismatch with
+the declared `tier`.
+
+**Composite skills (F-5 / F-6):** when the SKILL.md body invokes other skills
+(`/gh-*`, `gh:*`, `Skill(<name> ...)` patterns), build a 1-depth Sub-skill Model
+Plan — read each sub-skill's declared `tier`, mark missing ones `unknown` (WARN),
+and report it **separately from this skill's own tier** (see report-template.md).
+Recursion is 1-depth by default; `--recursive` opts into deeper traversal.
