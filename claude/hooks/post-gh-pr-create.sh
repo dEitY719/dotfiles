@@ -97,8 +97,58 @@ _helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_statu
 GH_REPO="${GH_REPO:-$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)}"
 export GH_REPO
 
+# Absorb the projectV2 "Auto-add to project" race: when this
+# hook fires, GitHub's builtin auto-add workflow may not have placed the
+# brand-new PR on the board yet. `_gh_project_status_sync` then finds zero
+# project items and quietly no-ops (its empty-`_records` early return),
+# while GitHub auto-adds the card moments later in the default "Backlog"
+# column — leaving the PR stuck. (Issues never hit this: they are board
+# members from creation, long before any sync.) The helper's verify pair
+# only re-fights a builtin that *overwrites* our write, not one that adds
+# the item *after* we looked. So poll: re-sync until the card exists and
+# reaches "In review", bounded so boardless repos exit immediately.
+#
+# Tunables (env): POST_GH_PR_CREATE_SYNC_ATTEMPTS (default 6),
+#                 POST_GH_PR_CREATE_SYNC_SLEEP    (default 2 seconds).
+
+# True (rc 0) when GH_REPO has >=1 projectV2 board. Used once, up front, so a
+# repo with no board skips the retry budget entirely (the sync would no-op
+# forever otherwise).
+_post_gh_pr_create_repo_has_board() {
+    [ -n "$GH_REPO" ] || return 1
+    local _o="${GH_REPO%/*}" _n="${GH_REPO#*/}" _cnt
+    [ -n "$_o" ] && [ -n "$_n" ] || return 1
+    # GraphQL variables ($o, $n) are bound via the -f flags below, so the
+    # single-quoted query intentionally does not shell-expand.
+    # shellcheck disable=SC2016
+    _cnt=$(gh api graphql \
+        -f query='query($o:String!,$n:String!){repository(owner:$o,name:$n){projectsV2(first:1){totalCount}}}' \
+        -f o="$_o" -f n="$_n" --jq '.data.repository.projectsV2.totalCount' 2>/dev/null) || return 1
+    [ "${_cnt:-0}" -gt 0 ] 2>/dev/null
+}
+
 printf '[post-gh-pr-create] PR #%s → "In review"\n' "$pr_num" >&2
-_gh_project_status_sync pr "$pr_num" "In review"
+if _post_gh_pr_create_repo_has_board; then
+    _attempts="${POST_GH_PR_CREATE_SYNC_ATTEMPTS:-6}"
+    _i=1
+    while [ "$_i" -le "$_attempts" ]; do
+        _gh_project_status_sync pr "$pr_num" "In review"
+        if [ "$(_gh_project_status_query_current pr "$pr_num")" = "In review" ]; then
+            break
+        fi
+        if [ "$_i" -lt "$_attempts" ]; then
+            sleep "${POST_GH_PR_CREATE_SYNC_SLEEP:-2}"
+        fi
+        _i=$((_i + 1))
+    done
+    if [ "$_i" -gt "$_attempts" ]; then
+        printf '[post-gh-pr-create] PR #%s still not "In review" after %s attempts — GitHub auto-add may have landed late; verify the board.\n' \
+            "$pr_num" "$_attempts" >&2
+    fi
+else
+    # No board attached → single call keeps the helper's silent no-op contract.
+    _gh_project_status_sync pr "$pr_num" "In review"
+fi
 
 if [ -n "$GH_REPO" ]; then
     for _issue in $(_gh_pr_closing_issue_numbers "$pr_num" "$GH_REPO" 2>/dev/null); do
