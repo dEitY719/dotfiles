@@ -6,13 +6,19 @@ description: >-
   config files with symbolic links, organize dotfiles, or set up configuration
   management.
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
+metadata:
+  model_recommendation:
+    tier: haiku
+    reason: "symlink operations, structured"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # Dotfiles Symbolic Link Management Skill
 
 ## Help
 
-If the argument is `help`, read `references/help.md` and output its content verbatim, then stop.
+If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output its content verbatim, then stop. No file changes.
 
 ## Role
 
@@ -32,6 +38,8 @@ Target:  ~/<target_dir>/<filename> -> Source
 **Strategy**: Move original → auto-backup (.backup) → create symlink → verify
 
 ## Execution Workflow
+
+**Stop on first failure**: any phase failure → abort, report `[FAIL]`, do not proceed to next phase. Phase 1 파일 이동 실패는 자동 롤백 (.backup 복원).
 
 ### Phase 0: Analysis (ALWAYS)
 
@@ -72,17 +80,16 @@ read `references/example-claude-settings.md`.
 
 ## Report
 
-After completion, summarize:
-- Files created/modified
-- Symbolic links established
-- Functions added
-- Git commit status
-- Validation results
+작업 종료 시 결과를 키-값 verdict 로 보고한다 (files/links/functions/commit/validation 요약):
+
+```
+[OK]   devx:symlink-manager target=<file> category=<dir> links=<n> commit=<sha>
+[FAIL] devx:symlink-manager phase=<n> reason=<one-line>
+```
+
+Next: source ~/.bashrc && <app>help  # 새 심볼릭 링크 검증, 또는 rollback 시 ./setup.sh
 
 ## Command
 
-**When invoked, IMMEDIATELY analyze the target file, determine the appropriate
-category, and EXECUTE the symbolic link management workflow following all
-phases above.**
-
-Start with Phase 0 analysis and announce plan before making any changes.
+When invoked, IMMEDIATELY analyze the target file, determine the category, and
+EXECUTE the workflow. Start with Phase 0 and announce the plan before any change.
