@@ -13,14 +13,20 @@
 
 ## Claude (authoritative)
 
-| Tier | Model ID | 비고 |
+아래는 **2026-05 기준 현행 Claude 4.x 패밀리의 안정적 별칭(alias) ID** 다 —
+placeholder 가 아니라 실제 사용 중인 모델 식별자다. alias 는 그 패밀리의 최신
+스냅샷으로 해석된다 (예: haiku 의 dated 형은 `claude-haiku-4-5-20251001`).
+
+| Tier | Model ID (alias) | 비고 |
 |---|---|---|
 | `haiku` | `claude-haiku-4-5` | 경량·저비용, 정형 작업 |
 | `sonnet` | `claude-sonnet-4-6` | 범용 기본 |
 | `opus` | `claude-opus-4-8` | 깊은 추론·고위험 작업 |
 
 Claude 환경에서 `tier` 는 authoritative — 실행 계층이 이 매핑으로 모델을
-선택할 수 있다 (F-7). 모델 패밀리가 갱신되면 위 ID 만 교체한다.
+선택할 수 있다 (F-7). 모델 패밀리가 갱신되면 위 ID 만 교체한다 (rubric 불변).
+dated/pinned ID 가 필요한 실행 계층(후속 이슈)은 alias 를 그 시점의 dated 형으로
+해석하면 된다.
 
 ## Non-Claude CLI (advisory-only / skip)
 
