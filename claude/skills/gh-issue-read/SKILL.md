@@ -9,6 +9,12 @@ description: >-
   `<issue-number> [remote]`; defaults remote to `origin`. Accepts
   `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Grep
+metadata:
+  model_recommendation:
+    tier: haiku
+    reason: "read-only issue summary; verbatim body/comments preservation, no mutation"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # gh:issue-read — Issue Summary

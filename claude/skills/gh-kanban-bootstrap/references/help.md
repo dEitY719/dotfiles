@@ -12,30 +12,24 @@ label bootstrap, and host-aware UI checklist.
 
 ## Options (skill-layer)
 
-- `--no-bootstrap-labels`  Skip the label registration step (use when
-                           the target repo follows a different label
-                           policy).
-- `--force-label-sync`     PATCH existing labels whose color/description
-                           differ from the SSOT (`references/labels.md`).
-                           Default is preserve — colors are not changed
-                           unless this flag is set.
-- `--with-smoke-test`      Execute the smoke test commands instead of
-                           only printing them. Default: print-only.
+| Option | Description | Default |
+|---|---|---|
+| `--no-bootstrap-labels` | Skip the label registration step (target repo follows a different label policy) | labels bootstrapped |
+| `--force-label-sync` | PATCH existing labels whose color/description differ from the SSOT (`references/labels.md`) | preserve (no color change) |
+| `--with-smoke-test` | Execute the smoke test commands instead of only printing them | print-only |
 
 ## Options (passed through to `lib/setup.sh`)
 
-- `--owner <login>`              GitHub user or org (default: auto from
-                                 `gh repo view`).
-- `--repo <name>`                Repository name (default: auto).
-- `--title <board-title>`        Project title (default: repo name).
-- `--auto-archive-window <dur>`  Done auto-archive filter (default: `2d`).
-- `--hide-columns`               Add solo-repo hide guidance for
-                                 `Approved` and `Ready`.
-- `--dry-run`                    Print the plan without mutations.
-- `--skip-pr-template`           Skip remote PR template creation/check.
-- `--no-auto-approve-env`        Skip wiring `GH_PR_REPLY_AUTO_APPROVE_REPOS`
-                                 into `~/.zshrc.local` (use for non-solo
-                                 / org / collab repos).
+| Option | Description | Default |
+|---|---|---|
+| `--owner <login>` | GitHub user or org | auto from `gh repo view` |
+| `--repo <name>` | Repository name | auto |
+| `--title <board-title>` | Project title | repo name |
+| `--auto-archive-window <dur>` | Done auto-archive filter | `2d` |
+| `--hide-columns` | Add solo-repo hide guidance for `Approved` and `Ready` | off |
+| `--dry-run` | Print the plan without mutations | off |
+| `--skip-pr-template` | Skip remote PR template creation/check | off |
+| `--no-auto-approve-env` | Skip wiring `GH_PR_REPLY_AUTO_APPROVE_REPOS` into `~/.zshrc.local` (non-solo / org / collab repos) | env wired |
 
 ## Prerequisites
 

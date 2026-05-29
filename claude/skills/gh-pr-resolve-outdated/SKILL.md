@@ -14,6 +14,12 @@ description: >-
   up-to-date PR is a no-op. Accepts `[pr-number] [remote]`; defaults to
   the PR attached to the current branch. Accepts `-h`/`--help`/`help`.
 allowed-tools: Bash, Read
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "clean rebase + --force-with-lease push with rejected-push and conflict handoff; not pure read-only, but no deep reasoning"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # gh:pr-resolve-outdated — Clean Rebase for Out-of-Date PR
@@ -27,22 +33,15 @@ No API calls.
 
 Record `START_TS=$(date +%s)` immediately for Step 5.
 
-Positional: `[pr-number] [remote]`. Both optional.
+| Arg | Description | Default |
+|---|---|---|
+| `[pr-number]` | PR to resolve; auto-detect from branch if omitted | branch PR |
+| `[remote]` | Remote owning the PR's repo | `origin` |
 
-- `pr-number` — if omitted, auto-detect via `gh pr view --json
-  number,headRefName,baseRefName,url,mergeable,mergeStateStatus` on
-  the current branch. No PR → `[FAIL] no PR for current branch — pass
-  PR# explicitly` + exit 2.
-- `remote` — default `origin`. Resolve `TARGET_REPO` via
-  `git remote get-url <remote>`; missing → `git remote -v` + exit 2.
-- `gh` not authenticated → `[FAIL] gh CLI not authenticated — run gh
-  auth login` + exit 5.
-
-**Hard preconditions** (any fail → stop): inside a git repo · current
-branch ≠ repo default (`[FAIL] cannot run on default branch` + exit 2)
-· clean working tree (no auto-stash) · no in-progress rebase/merge/
-cherry-pick. Capture `BACKUP_SHA=$(git rev-parse HEAD)` and print it
-for `git reset --hard <sha>` recovery.
+Resolve `TARGET_REPO`, check `gh` auth, and enforce the hard
+preconditions (git repo · not default branch · clean tree · no
+in-progress rebase) per `references/preflight.md` — full exit codes and
+error templates there. Capture `BACKUP_SHA=$(git rev-parse HEAD)`.
 
 ## Step 2: Mergeable Triage
 
@@ -51,14 +50,10 @@ gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
   --json mergeable,mergeStateStatus,baseRefName,headRefName,url
 ```
 
-| `mergeable` | `mergeStateStatus` | Action |
-|---|---|---|
-| `MERGEABLE` | `CLEAN`/`UNSTABLE` | `[OK] PR은 이미 up-to-date — nothing to do.` exit 0 (NF-1) |
-| `MERGEABLE` | `BEHIND` | proceed to Step 3 (the case this skill handles) |
-| `CONFLICTING` | — | `[FAIL] PR has merge conflicts — use /gh:pr-resolve-conflict` + exit 3 |
-| `UNKNOWN` | — | GitHub still computing; print hint + exit 0 (retry later) |
-
-`BLOCKED` alone (CI/approval pending) is not an out-of-date case — not handled here.
+Resolve the result via the action matrix in
+`references/mergeable-triage.md` — only `MERGEABLE`/`BEHIND` proceeds to
+Step 3; `CONFLICTING` delegates to `gh:pr-resolve-conflict` (exit 3),
+already-clean is a no-op (exit 0).
 
 ## Step 3: Fetch + Clean Rebase
 
@@ -69,9 +64,7 @@ git rebase "$REMOTE/$BASE"
 
 Rebase exits non-zero with conflicts → `git rebase --abort` immediately,
 print `[FAIL] rebase produced conflicts — use /gh-pr-resolve-conflict
-<PR_NUMBER>` + exit 4. The skill's premise is the no-conflict case;
-the moment conflicts appear, hand off (never auto-guess — same policy
-as the sister skill).
+<PR_NUMBER>` + exit 4. Never auto-guess — hand off to the sister skill.
 
 ## Step 4: Push with `--force-with-lease`
 
@@ -82,20 +75,13 @@ git push --force-with-lease "$REMOTE" HEAD
 ```
 
 Never plain `--force`. Rejected (remote advanced while rebasing) →
-`[FAIL] remote advanced — re-fetch and retry` + exit 6. **Never**
-silently re-fetch and re-rebase — surface divergence so the user
-decides (lost-update risk).
+`[FAIL] remote advanced — re-fetch and retry` + exit 6. Never silently
+re-fetch — surface divergence so the user decides (lost-update risk).
 
 ## Step 5: Verify + Report
 
-```bash
-gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
-  --json mergeable,mergeStateStatus,url
-```
-
-`mergeStateStatus ∈ {CLEAN, UNSTABLE, BLOCKED}` → banner cleared
-(`BLOCKED` here = CI/approval pending, normal). Still `BEHIND` → push
-didn't land; print PR URL, do not loop.
+Re-read `--json mergeable,mergeStateStatus,url` and interpret per
+`references/mergeable-triage.md` → "Step 5 verification".
 
 ```
 [OK] PR #<N> out-of-date 해소됨 · <new-sha> push 됨.
@@ -110,7 +96,5 @@ ai-metrics footer follows the sister-skill pattern; skip when
 - Rebase-only. Never a merge commit.
 - `--force-with-lease` only — never plain `--force`.
 - Never run on the repo's default branch.
-- Never auto-resolve conflicts — delegate to `gh:pr-resolve-conflict`
-  and exit 4 the moment rebase produces them.
-- Never retry a rejected `--force-with-lease` automatically.
-- Never auto-stash. Clean tree required.
+- Never auto-resolve conflicts — delegate to `gh:pr-resolve-conflict` (exit 4).
+- Never retry a rejected `--force-with-lease`; never auto-stash (clean tree required).

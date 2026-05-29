@@ -107,3 +107,14 @@ gh:issue-implement #<N> stopped after 3 test-fix attempts
     <file:line>
   Resolution: review the edits above, fix manually, re-run tests.
 ```
+
+## ai-metrics line
+
+After the report, append the ai-metrics line (context only — no GitHub
+artifact exists yet at this stage):
+
+```
+[ai-metrics:gh-issue-implement] ~{ELAPSED} min — will be included in gh-commit metrics
+```
+
+Compute `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))` just before printing.

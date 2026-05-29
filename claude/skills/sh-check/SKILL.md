@@ -12,6 +12,12 @@ description: >-
   (use `agents-md:check`).
 compatibility:
   tools: Read, Glob, Grep, Bash
+metadata:
+  model_recommendation:
+    tier: haiku
+    reason: "audit-only shell script linter; read-only pattern matching against git_worktree.sh canonical reference; bounded output"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # Shell Script Quality Auditor
