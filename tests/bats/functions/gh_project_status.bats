@@ -108,6 +108,48 @@ _run_closing_issues_bash() {
 }
 
 # ---------------------------------------------------------------------------
+# Host routing (issue #804): _gh_project_status_ensure_host
+#
+# Callers that don't export GH_HOST must still reach the right host. On the
+# internal PC (GHE) the helper resolves GH_HOST via _gh_resolve_host so the
+# ProjectV2 graphql calls don't silent-fall-back to github.com. An explicit
+# GH_HOST from the caller must never be overwritten (regression-zero).
+# ---------------------------------------------------------------------------
+
+@test "bash: _gh_project_status_ensure_host helper exists" {
+    run_in_bash 'declare -f _gh_project_status_ensure_host >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "zsh: _gh_project_status_ensure_host helper exists" {
+    run_in_zsh 'typeset -f _gh_project_status_ensure_host >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "host: GH_HOST unset + internal mode -> resolves to GHE host" {
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    run_in_bash 'unset GH_HOST; _gh_project_status_ensure_host; echo "GH_HOST=$GH_HOST"'
+    assert_success
+    assert_output --partial "GH_HOST=github.samsungds.net"
+}
+
+@test "host: GH_HOST unset + external mode -> resolves to github.com" {
+    echo "external" > "$HOME/.dotfiles-setup-mode"
+    run_in_bash 'unset GH_HOST; _gh_project_status_ensure_host; echo "GH_HOST=$GH_HOST"'
+    assert_success
+    assert_output --partial "GH_HOST=github.com"
+}
+
+@test "host: explicit GH_HOST is preserved (no overwrite)" {
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    run_in_bash 'GH_HOST=github.example.com; _gh_project_status_ensure_host; echo "GH_HOST=$GH_HOST"'
+    assert_success
+    assert_output --partial "GH_HOST=github.example.com"
+}
+
+# ---------------------------------------------------------------------------
 # Opt-out guards
 # ---------------------------------------------------------------------------
 
