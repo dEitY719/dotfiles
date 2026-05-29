@@ -67,7 +67,13 @@
 # right domain. A caller that already exported GH_HOST (an explicit host
 # override) is left untouched -> regression-zero for github.com users.
 _gh_project_status_ensure_host() {
-    [ -n "${GH_HOST-}" ] && return 0
+    # Already set: still export it. A caller may have assigned GH_HOST as a
+    # plain (non-exported) shell variable, in which case downstream `gh`
+    # subprocesses would not inherit it without this export.
+    if [ -n "${GH_HOST-}" ]; then
+        export GH_HOST
+        return 0
+    fi
     # shellcheck disable=SC1091
     . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_host.sh" 2>/dev/null || return 0
     if command -v _gh_resolve_host >/dev/null 2>&1; then
