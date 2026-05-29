@@ -91,7 +91,7 @@ FAIL, else `[FAIL]`. Always end with a `Next:` line per the same file.
 
 ## Constraints
 
-- If any Step 1–3 precondition fails, report it via `references/report-template.md` with Verdict=`[FAIL]` and stop — do not advance to the next step.
+- If any Step 1–3 step fails for a genuine reason (NOT a help print or a `skill:check` / `sh:check` routing stop — those are intentional early exits), report it via `references/report-template.md` with Verdict=`[FAIL]` and stop. The stop-on-error policy and `[FAIL]` report still apply to all other Step 1–3 failures.
 - `check` is audit-only — never mutate the file.
 - Always confirm before overwriting in `create` / `refactor`.
 - Auto-overwrite is never allowed when multiple context files exist.
