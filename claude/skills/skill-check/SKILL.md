@@ -23,9 +23,9 @@ If the argument is `help`, read `references/help.md` and output its content verb
 If the user specifies a path, use it. Otherwise search for SKILL.md from the
 current directory.
 
-## Step 2: Run Eleven Checks
+## Step 2: Run Twelve Checks
 
-Read `references/checks.md` for all 11 check definitions and PASS/WARN/FAIL/N/A criteria.
+Read `references/checks.md` for all 12 check definitions and PASS/WARN/FAIL/N/A criteria.
 Assign one result per check. Audit-only — never stop on failure; report every check (`skill:check` is read-only and must produce a full report).
 
 **Checks 1–5: Structure**
@@ -33,6 +33,14 @@ Line Count · Progressive Disclosure · Frontmatter Validity · References Direc
 
 **Checks 6–11: UX Quality**
 Help Flag Pattern · Step Structure · Options Documentation · Verdict Output · Next-action Hint · No Emojis
+
+**Check 12: Model Recommendation Metadata**
+Detects/validates `metadata.model_recommendation` (tier haiku/sonnet/opus +
+reason + compatibility) and reports a recommended tier per the rubric SSOT
+`references/model-recommendation.md`. **Read-only — recommends a tier, never
+switches models or writes files** (#809). For composite skills (body invokes
+`/gh-*`, `gh:*`, `Skill(...)`), build a 1-depth Sub-skill Model Plan separate
+from this skill's own tier; `--recursive` opts into deeper traversal.
 
 Check 11 (No Emojis) consults `references/allowed-emoji-skills.txt` —
 audited skill names that appear in that file resolve to `[N/A] allowlisted`.
