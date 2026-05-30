@@ -8,7 +8,7 @@ comment entirely (issue #399).
 
 ```bash
 ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
-HUMAN_H=$(echo "scale=2; $COMMENT_COUNT * 0.25" | bc)
+HUMAN_H=$(awk -v cc="$COMMENT_COUNT" 'BEGIN { printf "%.2f", cc * 0.25 }')
 if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
     : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
 else
