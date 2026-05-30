@@ -7,7 +7,7 @@ skip the comment entirely (issue #399):
 
 ```bash
 ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
-HUMAN_H=$(echo "scale=2; $CONFLICT_FILES * 0.5" | bc)
+HUMAN_H=$(awk -v cf="$CONFLICT_FILES" 'BEGIN { printf "%.2f", cf * 0.5 }')
 if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
     : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
 else
