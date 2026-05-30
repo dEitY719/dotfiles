@@ -81,6 +81,12 @@ teardown() {
     assert_output 'ok'
 }
 
+@test "safety: quoted-flag bypass 'git push \"-f\" origin main' → blocked force_push_default (PR #876)" {
+    run gh_proceed_check_absolute_block 'git push "-f" origin main'
+    [ "$status" -eq 2 ]
+    assert_output --partial 'blocked: force_push_default'
+}
+
 # ---------- rm -rf outside pwd ----------
 
 @test "safety: 'rm -rf /etc/app' → blocked rm_rf_outside_pwd" {
@@ -93,6 +99,12 @@ teardown() {
     run gh_proceed_check_absolute_block "rm -rf ./build"
     assert_success
     assert_output 'ok'
+}
+
+@test "safety: quoted-path bypass 'rm -rf \"/etc/app\"' → blocked rm_rf_outside_pwd (PR #876)" {
+    run gh_proceed_check_absolute_block 'rm -rf "/etc/app"'
+    [ "$status" -eq 2 ]
+    assert_output --partial 'blocked: rm_rf_outside_pwd'
 }
 
 # ---------- destructive db ----------
@@ -109,6 +121,12 @@ teardown() {
     assert_output 'ok'
 }
 
+@test "safety: lowercase bypass 'drop table users' → blocked destructive_db (PR #876)" {
+    run gh_proceed_check_absolute_block 'psql -c "drop table users"'
+    [ "$status" -eq 2 ]
+    assert_output --partial 'blocked: destructive_db'
+}
+
 # ---------- secret in output ----------
 
 @test "safety: 'AWS_SECRET=abc123' → blocked secret_in_output" {
@@ -121,6 +139,12 @@ teardown() {
     run gh_proceed_check_absolute_block "echo hello world"
     assert_success
     assert_output 'ok'
+}
+
+@test "safety: lowercase bypass 'api_key=secret' → blocked secret_in_output (PR #876)" {
+    run gh_proceed_check_absolute_block "echo api_key=secret"
+    [ "$status" -eq 2 ]
+    assert_output --partial 'blocked: secret_in_output'
 }
 
 # ---------- cross-worktree mutation ----------
