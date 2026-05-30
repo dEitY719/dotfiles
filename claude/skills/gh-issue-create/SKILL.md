@@ -22,9 +22,8 @@ metadata:
 
 # gh:issue-create — Conversation → GitHub Issue
 
-Convert the current chat into a well-structured issue on the target repo,
-execute immediately without confirmation, and print only the issue number
-+ URL. 본문은 사용자 대화 언어로 작성.
+Convert the current chat into a well-structured issue on the target repo
+(본문은 대화 언어로), execute immediately, and print only the issue number + URL.
 
 ## Help
 
