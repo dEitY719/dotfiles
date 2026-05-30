@@ -61,7 +61,10 @@ hyphen directory form. Mismatch → WARN (same rule as `devx:ai-context`
 ## N/A rule
 
 When the subject of a check does not exist, the check is **N/A**, not FAIL.
-Example: a plugin with 0 skills → R1/R2 are N/A for that plugin.
+Examples: a plugin with 0 skills → R1/R2 are N/A for that plugin; with no
+plugins at all M3 is N/A and with no skills anywhere M4 is N/A — M2 still
+carries the single "no plugins" FAIL, so the absent subject is never
+double-counted as a second FAIL.
 
 ## Summary verdict
 

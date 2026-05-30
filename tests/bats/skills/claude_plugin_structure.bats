@@ -167,3 +167,53 @@ build_perfect() {
     _seed_mandatory_json "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
     run cps_check_R4 "$REPO"; assert_output PASS
 }
+
+@test "R4 tolerates a quoted name: value (PR #894 gemini review)" {
+    mkdir -p "$REPO/plugins/demo/skills/structure-check"
+    printf 'name: "structure:check"\ndescription: x\n' \
+        > "$REPO/plugins/demo/skills/structure-check/SKILL.md"
+    _seed_mandatory_json "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    run cps_check_R4 "$REPO"; assert_output PASS
+}
+
+# ---- N/A for absent subject on mandatory checks (PR #894 gemini review) --
+
+@test "no plugins -> M3 is N/A (M2 owns the FAIL), verdict still FAIL" {
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [] }\n' > "$REPO/.claude-plugin/marketplace.json"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    run cps_check_M2 "$REPO"; assert_output FAIL
+    run cps_check_M3 "$REPO"; assert_output "N/A"
+    run cps_verdict "$REPO"; assert_output FAIL
+}
+
+@test "plugin with 0 skills -> M4 is N/A, not FAIL" {
+    mkdir -p "$REPO/plugins/demo/skills"
+    _seed_mandatory_json "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    run cps_check_M4 "$REPO"; assert_output "N/A"
+}
+
+# ---- multi-plugin / multi-skill JSON skeletons (PR #894 gemini review) --
+
+@test "mandatory apply lists ALL plugins in marketplace.json" {
+    mkdir -p "$REPO/plugins/alpha/skills/s1" "$REPO/plugins/beta/skills/s2"
+    printf 'name: s1\ndescription: x\n' > "$REPO/plugins/alpha/skills/s1/SKILL.md"
+    printf 'name: s2\ndescription: x\n' > "$REPO/plugins/beta/skills/s2/SKILL.md"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    cps_refactor "$REPO" mp apply
+    run jq -r '.plugins | length' "$REPO/.claude-plugin/marketplace.json"
+    assert_output 2
+    run jq -e '.plugins | index("./plugins/alpha") and index("./plugins/beta")' \
+        "$REPO/.claude-plugin/marketplace.json"
+    assert_success
+}
+
+@test "mandatory apply lists ALL skills in plugin.json" {
+    mkdir -p "$REPO/plugins/demo/skills/s1" "$REPO/plugins/demo/skills/s2"
+    printf 'name: s1\ndescription: x\n' > "$REPO/plugins/demo/skills/s1/SKILL.md"
+    printf 'name: s2\ndescription: x\n' > "$REPO/plugins/demo/skills/s2/SKILL.md"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    cps_refactor "$REPO" mp apply
+    run jq -r '.skills | length' "$REPO/plugins/demo/.claude-plugin/plugin.json"
+    assert_output 2
+}
