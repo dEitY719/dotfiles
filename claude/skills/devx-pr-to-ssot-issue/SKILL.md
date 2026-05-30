@@ -11,6 +11,12 @@ description: >-
   when `--reason` is empty or shorter than 10 characters — the exception
   audit trail is mandatory. Accepts `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Edit, Write, Grep, Agent
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "PR reverse-engineering + 8-section SSOT issue body; subagent gap detection; structured reasoning"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # devx:pr-to-ssot-issue — Exception PR → SSOT-recovery Issue

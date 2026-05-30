@@ -14,6 +14,11 @@ metadata:
   author: careerhackeralex
   version: 0.3.2
   category: document-creation
+  model_recommendation:
+    tier: sonnet
+    reason: "HTML generation, bounded creativity"
+    claude: prefer
+    non_claude: advisory-only
   tags: [visualization, html, slides, dashboard, infographic]
 ---
 
