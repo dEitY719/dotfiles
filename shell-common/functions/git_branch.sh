@@ -224,7 +224,9 @@ git_branch_teardown() {
             return 1
         fi
     elif ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-        if [ "$force" = true ] || [ "$discard_changes" = true ]; then
+        if [ "$discard_changes" = true ]; then
+            ux_warning "Uncommitted changes present (--discard-changes)"
+        elif [ "$force" = true ]; then
             ux_warning "Uncommitted changes present (--force)"
         else
             ux_error "Uncommitted changes. Commit, stash, or use --force."
