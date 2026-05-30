@@ -54,7 +54,7 @@ Read `references/prefix-table.md` and pick exactly one conventional-commit
 prefix as the dominant intent (covers disambiguation, `misc` default,
 large-`feat` heuristic, and title formatting). `verify` 는 코드 변경이
 아닌 라이브 검증 추적용 — 산출물이 issue + 코멘트 누적이면 `verify`,
-테스트 코드 파일이면 `test` (`templates/verify.md`).
+테스트 코드 파일이면 `test` (`references/templates/verify.md`).
 
 ## Step 2.1: Clarification & Scope Guard
 
