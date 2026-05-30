@@ -38,6 +38,7 @@ default_labels:
     fix:      [bug]
     refactor: [refactor]
     test:     [test]
+    verify:   [verify]               # live verification-tracking issue
     ci:       [ci]
     docs:     [documentation]
     chore:    []                     # explicit empty = "no label"
