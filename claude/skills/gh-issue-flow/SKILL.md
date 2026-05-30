@@ -2,7 +2,7 @@
 name: gh:issue-flow
 description: >-
   Composition skill that chains gh:issue-implement → gh:commit → gh:pr
-  → devx:schedule (pr-reply, 10 min) → gh:pr-resolve-conflict for a
+  → devx:schedule (pr-reply, 5 min) → gh:pr-resolve-conflict for a
   single issue number. Use when the user runs /gh:issue-flow,
   /gh-issue-flow, or asks "issue #16 처음부터 PR까지 자동으로",
   "이슈 구현하고 커밋하고 PR까지 한방에", "full flow on #42". Uses
@@ -102,9 +102,9 @@ if the previous completed successfully.
 
 4. **Step 2.4 — devx:schedule** (only if 2.3 succeeded)
    ```
-   Skill(devx:schedule, "--time 10 \"/gh-pr-reply <PR_NUM>\"")
+   Skill(devx:schedule, "--time 5 \"/gh-pr-reply <PR_NUM>\"")
    ```
-   Schedules `/gh-pr-reply <PR_NUM>` to run 10 minutes after PR creation,
+   Schedules `/gh-pr-reply <PR_NUM>` to run 5 minutes after PR creation,
    giving CI checks and reviewers time to post before the bot replies.
    **Now invoke Step 2.5 — no recap, no summary, no header.**
 
@@ -187,7 +187,7 @@ gh:issue-flow complete (#<N>)
   [OK] Step 1: gh:issue-implement       (<n files changed>, <n tests passed>)
   [OK] Step 2: gh:commit                (<sha> "<subject>")
   [OK] Step 3: gh:pr                    (PR #<M>)
-  [OK] Step 4: devx:schedule            (pr-reply in 10 min, job: <id>)
+  [OK] Step 4: devx:schedule            (pr-reply in 5 min, job: <id>)
   [OK] Step 5: gh:pr-resolve-conflict   (no conflicts / resolved)
   [OK] Step 6: ai-metrics               (~X tokens · ~M h · ~L min)
   PR URL: <pr-url>
@@ -210,7 +210,7 @@ Resume hint logic:
 - Failed at step 1 → `/gh-issue-implement <N>` (user decides retry).
 - Failed at step 2 → `/gh-commit && /gh-pr <N>`.
 - Failed at step 3 → `/gh-pr <N>`.
-- Failed at step 4 → `/devx:schedule --time 10 "/gh-pr-reply <PR_NUM>"`.
+- Failed at step 4 → `/devx:schedule --time 5 "/gh-pr-reply <PR_NUM>"`.
 - Failed at step 5 → `/gh-pr-resolve-conflict <PR_NUM>`.
 
 ## Constraints
