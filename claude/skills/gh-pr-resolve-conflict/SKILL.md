@@ -12,6 +12,12 @@ description: >-
   verb (rebase-resolve vs read-logs-and-edit vs clean-rebase-no-conflicts). Accepts `[pr-number] [remote]`; defaults to the PR
   attached to the current branch. Accepts `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+metadata:
+  model_recommendation:
+    tier: opus
+    reason: "rebase + conflict resolution with user-intent reasoning; high-risk --force-with-lease push, deep context tracking required"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # gh:pr-resolve-conflict — Rebase-based PR Conflict Resolution
@@ -33,16 +39,9 @@ Positional args: `[pr-number] [remote]`. Both optional.
 - `remote` — default `origin`. Resolve `TARGET_REPO` via
   `git remote get-url <remote>`; missing → `git remote -v` and stop.
 
-**Mergeable preflight** — immediately after resolving `PR_NUMBER`:
-
-```bash
-MERGEABLE=$(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
-  --json mergeable --jq '.mergeable')
-```
-
-- `MERGEABLE == MERGEABLE` → print `[OK] PR은 이미 충돌 없음 — skip.` and stop (success).
-- `MERGEABLE == UNKNOWN` → GitHub is still computing; continue the flow normally (do not skip).
-- Any other value (`CONFLICTING` etc.) → continue.
+**Mergeable preflight** — immediately after resolving `PR_NUMBER`, run the
+`gh pr view --json mergeable` short-circuit per `references/rebase-flow.md`
+→ "Mergeable preflight" (`MERGEABLE` → already-clean skip; `UNKNOWN`/other → continue).
 
 **Hard preconditions** (parallel batch; any fail → stop):
 - inside a git repo
@@ -56,36 +55,23 @@ Capture `BACKUP_SHA=$(git rev-parse HEAD)` and print it so the user can
 
 ## Step 2: Fetch + Rebase
 
-```bash
-git fetch "$REMOTE" "$BASE"
-git rebase "$REMOTE/$BASE"
-```
-
-Full rebase mechanics, stash handling, and abort instructions live in
+Run `git fetch "$REMOTE" "$BASE"` then `git rebase "$REMOTE/$BASE"`. Full
+rebase mechanics, stash handling, and abort instructions live in
 `references/rebase-flow.md`.
 
 ## Step 3: Conflict Resolution Loop
 
-If `git rebase` exits non-zero with conflicts:
-
-1. `git status --short` to list `UU` / `AA` / `DU` paths.
-2. Print the rebase context — `git log --oneline "$REMOTE/$BASE"..HEAD`
-   plus the applying commit (`git log -1 --format='%h %s' REBASE_HEAD`).
-3. Open each file, resolve with the user's intent. **Never auto-guess**
-   when the commit message doesn't make the choice obvious — ask.
-4. `git add <file>` once the user confirms each resolution.
-5. `git rebase --continue`. If more commits conflict, loop to step 1.
-
-Full rubric (abort guidance, squash suggestions for repeated conflicts)
-in `references/conflict-handling.md`.
+If `git rebase` exits non-zero with conflicts, run the per-commit loop in
+`references/conflict-handling.md`: list `UU`/`AA`/`DU` paths, print the rebase
+context, resolve each file with the user's intent (**never auto-guess** an
+ambiguous conflict — ask), `git add`, then `git rebase --continue` and repeat.
+That file also carries the abort guidance and squash suggestions for repeated
+conflicts.
 
 ## Step 4: Push with `--force-with-lease`
 
-Only after `git rebase` exits 0 and the working tree is clean:
-
-```bash
-git push --force-with-lease "$REMOTE" HEAD
-```
+Only after `git rebase` exits 0 and the working tree is clean, run
+`git push --force-with-lease "$REMOTE" HEAD`.
 
 Never plain `--force`. If `--force-with-lease` is rejected (someone
 pushed while you rebased), stop and surface the upstream per
@@ -93,103 +79,16 @@ pushed while you rebased), stop and surface the upstream per
 
 ## Step 5: Verify Mergeable + Report
 
-```bash
-gh pr view <N> --repo "$TARGET_REPO" --json mergeable,mergeStateStatus,url,labels
-```
-
+Run `gh pr view <N> --repo "$TARGET_REPO" --json mergeable,mergeStateStatus,url,labels`.
 If `mergeable == MERGEABLE` and `mergeStateStatus ∈ {CLEAN, UNSTABLE}`,
 the warning is cleared. Print the final report from
 `references/rebase-flow.md` → "Final report format". Still `CONFLICTING`
 / `BEHIND` → print the PR URL, name which side diverged, do not loop.
 
-**conflict 라벨 제거** (soft-fail — `mergeable == MERGEABLE` 인 경우에만):
-
-Check if `labels[].name` contains `"conflict"`. If so, remove via REST DELETE
-(not `gh pr edit --remove-label`) — the latter can silent-fail on repos with
-classic Projects attached due to GraphQL deprecation (#326 Bug B, same pattern
-as `_gh_pr_edit_safe_label` fallback). 404 = label already absent → the
-`||` branch surfaces a soft-fail warning, idempotent for the caller.
-
-```bash
-gh api -X DELETE "repos/{owner}/{repo}/issues/$PR_NUMBER/labels/conflict" \
-    --repo "$TARGET_REPO" \
-    >/dev/null 2>&1 \
-  && echo "[OK] \`conflict\` 라벨 제거됨" \
-  || echo "[WARN] \`conflict\` 라벨 제거 실패 — GitHub Actions 가 cover."
-```
-
-`{owner}/{repo}` placeholder + `--repo "$TARGET_REPO"` 조합을 쓰는 이유:
-Step 1 의 `TARGET_REPO` 는 `git remote get-url` 결과(URL 형태)일 수
-있어 `repos/$TARGET_REPO/...` 직접 보간 시 경로가 깨질 수 있다. `gh api`
-의 `--repo` 플래그는 URL 과 `owner/repo` 양쪽 입력을 모두 안전하게
-파싱한다.
-
-If the label is absent, the `||` branch absorbs the 404 as a soft-fail
-warning (idempotent).
-
-**보드 status `In review` 복귀** (soft-fail — `mergeable == MERGEABLE` 인 경우에만):
-
-`changes-requested` → fix push → 카드가 `In progress` 또는 `Changes requested` 에
-머무는 흐름을 자동으로 끊어 리뷰어 큐 (`In review`) 로 되돌린다. 신규 PR
-단계의 conflict (카드가 이미 `In review` / `Approved` / `Done`) 는
-`--only-from` 가드가 막아 후퇴시키지 않는다. 자세한 lifecycle 근거는 issue #591.
-
-```bash
-if [ "$MERGEABLE" = "MERGEABLE" ]; then
-    # Defense-in-depth (#724): the chained-`&&` form below silently no-ops
-    # when the helper sources but never defines `_gh_project_status_sync`
-    # (interactive-guard regression, partial source). Split into an
-    # explicit guard so the failure prints a stderr warning instead of
-    # collapsing into the `|| echo [WARN]` branch (which falsely suggests
-    # a board sync was attempted).
-    _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
-    if [ -r "$_HELPER" ]; then
-        . "$_HELPER"
-        if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
-            printf '[gh-pr-resolve-conflict] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
-                "$_HELPER" >&2
-        elif _gh_project_status_sync pr "$PR_NUMBER" "In review" \
-                --only-from "In progress,Changes requested"; then
-            echo "[OK] PR 카드 \`In review\` 로 복귀됨"
-        else
-            echo "[WARN] 보드 sync 실패 — 카드 수동 이동 필요할 수 있음"
-        fi
-    fi
-fi
-```
-
-`GH_PROJECT_STATUS_SYNC=0` opt-out 은 helper 자체가 흡수한다. projectV2
-보드가 없는 레포는 helper 가 silent 0 반환. `--only-from` 의 missing column
-은 helper 가 silently skip 하므로 `Changes requested` 컬럼 없는 보드와도
-호환된다.
-
-After the report, post a PR comment with ai-metrics (soft-fail — warn on
-error, never block). `CONFLICT_FILES` is the count of files that had
-`UU`/`AA`/`DU` conflicts in Step 3. When `GH_DISABLE_AI_METRICS=1`,
-skip the comment entirely (issue #399):
-
-```bash
-ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
-HUMAN_H=$(echo "scale=2; $CONFLICT_FILES * 0.5" | bc)
-if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
-    : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
-else
-    gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
-      -X POST \
-      -f body="---
-<details>
-<summary>🤖 AI Metrics · 📊 ~${TOKENS:-3000} tokens · 👤 ~$HUMAN_H h · 🤖 ~$ELAPSED min</summary>
-
-<!-- ai-metrics:gh-pr-resolve-conflict -->
-📊 ~${TOKENS:-3000} tokens · 👤 ~$HUMAN_H h · 🤖 ~$ELAPSED min
-<!-- /ai-metrics:gh-pr-resolve-conflict -->
-
-</details>
-컨플릭트 해결: ~$ELAPSED min · 사람: ~$HUMAN_H h ($CONFLICT_FILES files × 0.5 h)"
-fi
-```
-
-On failure: `[WARN] ai-metrics comment failed — continuing.`
+Helper policy (each soft-fail, applies only when `mergeable == MERGEABLE`):
+- Remove the `conflict` label per `references/label-removal.sh.md`.
+- Return the board status to `In review` per `references/board-sync-in-review.sh.md`.
+- Post the ai-metrics PR comment per `references/ai-metrics-comment.sh.md` (soft-fail; skip when `GH_DISABLE_AI_METRICS=1`).
 
 ## Constraints
 
@@ -197,6 +96,5 @@ On failure: `[WARN] ai-metrics comment failed — continuing.`
 - Never use plain `git push --force`. `--force-with-lease` or stop.
 - Never rebase onto the default branch from the default branch.
 - Never auto-resolve ambiguous conflicts. Ask the user.
-- Never retry a rejected `--force-with-lease` by fetching and
-  re-rebasing on the user's behalf. Surface divergence and stop.
+- Never retry a rejected `--force-with-lease` by fetching and re-rebasing on the user's behalf. Surface divergence and stop.
 - Never skip Step 5. The whole point is clearing the PR warning.

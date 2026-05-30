@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # tests/bats/skills/_fixtures/helper_fallback_nf1.sh
 # Source-of-truth mirror for the canonical F-2 helper-fallback pattern
-# documented in issue #644 and applied across:
-#   claude/skills/gh-pr-merge/SKILL.md           (Step 2-B, Step 4)
-#   claude/skills/gh-commit/SKILL.md             (Step 5)
-#   claude/skills/gh-pr-reply/SKILL.md           (Step 6.5)
-#   claude/skills/gh-pr/SKILL.md                 (Step 7 — inlined in #747)
-#   claude/skills/gh-pr-merge/references/project-board-sync.md
+# documented in issue #644 and applied across (canonical pattern relocated
+# from SKILL.md bodies into references/ by #862 PR-NW-4 for progressive
+# disclosure; the owning SKILL.md Step points at the reference verbatim):
+#   claude/skills/gh-pr-merge/references/board-approval-gate.sh.md  (Step 2-B)
+#   claude/skills/gh-pr-merge/references/project-board-sync.md      (Step 4)
+#   claude/skills/gh-commit/SKILL.md                                (Step 5)
+#   claude/skills/gh-pr-reply/references/board-sync-in-review.sh.md (Step 6.5)
+#   claude/skills/gh-pr/references/project-board-sync.md            (Step 7)
 #   claude/skills/gh-pr-merge-emergency/references/project-board-sync.md
 #
 # Tests inject SHELL_COMMON pointing at a real fixture dir (helper present)
