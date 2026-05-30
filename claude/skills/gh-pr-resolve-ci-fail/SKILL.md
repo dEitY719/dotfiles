@@ -47,13 +47,13 @@ State `OPEN` required. Hard preconditions in `references/safety.md` →
 Pre-check — main 의 동일 workflow 가 inherited red 인지 먼저 확인한다. 최신 3 run
 중 2개 이상이 PR 과 동일 step 에서 fail 하면 inherited red — 라벨을 건드리지 않고
 `[STOP]` 종료 (#755 사례). transient red(1회 fail 후 green)은 무시하고 진행.
-명령·예제·판정 기준·예외: `references/ci-log-analysis.md` → "Step 2 — pre-check".
+명령·예제·판정 기준·예외: `references/ci-log-analysis.md` → "Pre-check (is main red?)".
 
 ### Failing-check fetch
 
 `gh pr checks <N> --required --json name,state,workflow,link`, filter `state ==
 FAILURE`. All green → `[OK] no failing checks — nothing to resolve.` and stop.
-Filter rubric + in-progress carveout: `references/ci-log-analysis.md` → "Step 2".
+Filter rubric + in-progress carveout: `references/ci-log-analysis.md` → "Step 2 — Fetch failing checks".
 
 ## Step 3: Fetch + Analyze Logs
 
@@ -82,7 +82,7 @@ yet removed**. Exact commands + divergence message: `references/safety.md` →
 `--wait <seconds>` passed → poll `gh pr checks --required` every 30 s until green
 or timeout. Timeout → `[WARN] CI still pending after <N>s — proceeding to label
 removal.` Without flag, skip. Polling loop: `references/ci-log-analysis.md` →
-"Step 6 wait".
+"Step 6 — --wait polling loop".
 
 ## Step 7: Remove `CI fail` Label + Report
 

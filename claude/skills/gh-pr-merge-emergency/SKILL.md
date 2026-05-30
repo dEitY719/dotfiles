@@ -63,10 +63,10 @@ Never auto-proceed.
 
 Order matters — comment first so the audit survives branch deletion. (1) Post
 the "PR audit comment" from `references/audit-templates.md`, capturing its URL
-for Step 7. (2) `gh pr merge <N> --admin --squash --delete-branch` (flag
-rationale in the same file); "Must have admin rights" → **stop**, never fall
-back to `--merge`/`--rebase`. (3) Capture the merge SHA via
-`gh pr view <N> --json mergeCommit -q .mergeCommit.oid`.
+for Step 7. (2) `gh pr merge <N> --repo "$TARGET_REPO" --admin --squash
+--delete-branch`; "Must have admin rights" → **stop**, never fall back to
+`--merge`/`--rebase`. (3) `gh pr view <N> --repo "$TARGET_REPO" --json
+mergeCommit -q .mergeCommit.oid` for the merge SHA (flag rationale: same file).
 
 ## Step 5: Create Post-Merge Incident Issue
 
