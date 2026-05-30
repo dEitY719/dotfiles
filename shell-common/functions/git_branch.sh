@@ -16,7 +16,7 @@ unalias gbr 2>/dev/null || true
 _gbr_help_summary() {
     ux_info "Usage: gbr-help [section|--list|--all]"
     ux_bullet "sections"
-    ux_bullet_sub "teardown: gbr teardown [--force] [--keep-branch]"
+    ux_bullet_sub "teardown: gbr teardown [--force] [--keep-branch] [--discard-changes]"
     ux_bullet_sub "details: gbr-help <section> (example: gbr-help teardown)"
 }
 
@@ -26,10 +26,10 @@ _gbr_help_list_sections() {
 }
 
 _gbr_help_rows_teardown() {
-    ux_table_row "syntax" "gbr teardown [--force] [--keep-branch]" "Cleanup merged feature branch"
+    ux_table_row "syntax" "gbr teardown [--force] [--keep-branch] [--discard-changes]" "Cleanup merged feature branch"
     ux_table_row "context" "Run from the feature branch (not main, not worktree)" "Switches to main, pulls, deletes current branch"
     ux_table_row "signal" "Detects '[gone]' upstream as PR-merged" "Blocks otherwise; use --force to override"
-    ux_table_row "flags" "--force / --keep-branch" "Skip safety checks / sync main only"
+    ux_table_row "flags" "--force / --keep-branch / --discard-changes" "Skip merge-status checks (non-destructive) / sync main only / DESTRUCTIVE overwrite of local changes"
 }
 
 _gbr_help_render_section() {
@@ -106,20 +106,22 @@ git_branch_teardown() {
         emulate -L sh
     fi
 
-    local force=false keep_branch=false
+    local force=false keep_branch=false discard_changes=false
 
     while [ $# -gt 0 ]; do
         case "$1" in
             -h|--help|help)
                 ux_header "gbr teardown - feature branch cleanup after PR merge"
-                ux_info "Usage: gbr teardown [--force] [--keep-branch]"
+                ux_info "Usage: gbr teardown [--force] [--keep-branch] [--discard-changes]"
                 ux_info ""
                 ux_info "Concept: SELF-CLEANUP on the CURRENT branch."
                 ux_info "  Stand on the branch, run teardown, land on main."
                 ux_info ""
                 ux_info "Options:"
-                ux_info "  --force        delete branch even if upstream still exists or not fully merged"
-                ux_info "  --keep-branch  sync main only, keep the current branch"
+                ux_info "  --force            proceed despite upstream-still-exists / not-fully-merged / dirty tree"
+                ux_info "                     (NON-destructive: never overwrites local file contents)"
+                ux_info "  --keep-branch      sync main only, keep the current branch"
+                ux_info "  --discard-changes  DESTRUCTIVE: discard uncommitted/conflicted changes to force the switch"
                 ux_info ""
                 ux_info "Typical flow (single branch):"
                 ux_bullet "gbr teardown                           # current branch, after PR merge"
@@ -133,6 +135,7 @@ git_branch_teardown() {
                 ;;
             --force) force=true; shift ;;
             --keep-branch) keep_branch=true; shift ;;
+            --discard-changes) discard_changes=true; shift ;;
             -*)
                 ux_error "Unknown option: $1. Use --help for usage."
                 return 1
@@ -189,9 +192,39 @@ git_branch_teardown() {
         return 1
     fi
 
-    # Pre-flight: uncommitted changes
-    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-        if [ "$force" = true ]; then
+    # Detect a merge-in-progress / unmerged index up front. A plain `git checkout`
+    # later (Step "Switch to main") would refuse this with a split, opaque error —
+    # the helpful header goes to stderr ("error: you need to resolve your current
+    # index first") while only the cryptic "<file>: needs merge" reaches stdout.
+    # Surface it here with actionable guidance instead. `--force` alone must NOT
+    # bypass this: forcing the switch would silently destroy the conflicted files.
+    local has_conflict=false
+    if git rev-parse --verify --quiet MERGE_HEAD >/dev/null 2>&1 \
+        || [ -n "$(git ls-files --unmerged 2>/dev/null)" ]; then
+        has_conflict=true
+    fi
+
+    # Pre-flight: merge conflict / uncommitted changes
+    if [ "$has_conflict" = true ]; then
+        if [ "$discard_changes" = true ]; then
+            ux_warning "Merge in progress / unmerged paths present (--discard-changes will overwrite them)"
+        else
+            ux_error "Merge in progress / unmerged paths — resolve before teardown."
+            echo ""
+            ux_info "The working tree has an unmerged index; a branch switch is blocked"
+            ux_info "(git: 'you need to resolve your current index first')."
+            echo ""
+            ux_info "Pick one:"
+            ux_bullet "git merge --abort                        # discard the in-progress merge"
+            ux_bullet "resolve conflicts, then git add/commit   # keep the merge result"
+            ux_bullet "git stash --include-untracked            # shelve for later"
+            echo ""
+            ux_warning "Plain --force does NOT bypass this (it would destroy your files)."
+            ux_info "To intentionally discard local changes: gbr teardown --discard-changes"
+            return 1
+        fi
+    elif ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+        if [ "$force" = true ] || [ "$discard_changes" = true ]; then
             ux_warning "Uncommitted changes present (--force)"
         else
             ux_error "Uncommitted changes. Commit, stash, or use --force."
@@ -266,10 +299,26 @@ git_branch_teardown() {
         esac
     fi
 
-    # Switch to main
-    if ! git checkout "$main_branch" 2>/dev/null; then
-        ux_error "Failed to checkout $main_branch."
-        return 1
+    # Switch to main.
+    #
+    # With --discard-changes we explicitly force-overwrite the working tree
+    # (`checkout -f`). Otherwise we use a plain checkout and SURFACE its stderr —
+    # previously swallowed by `2>/dev/null` — so the real failure reason (e.g.
+    # "you need to resolve your current index first") reaches the user instead of
+    # a bare "Failed to checkout main."
+    if [ "$discard_changes" = true ]; then
+        if ! git checkout -f "$main_branch"; then
+            ux_error "Failed to checkout $main_branch (even with --discard-changes)."
+            return 1
+        fi
+        ux_warning "Discarded local changes to switch to $main_branch (--discard-changes)."
+    else
+        local checkout_err
+        if ! checkout_err="$(git checkout "$main_branch" 2>&1 1>/dev/null)"; then
+            ux_error "Failed to checkout $main_branch."
+            [ -n "$checkout_err" ] && ux_info "git: $checkout_err"
+            return 1
+        fi
     fi
 
     # Pull main (fast-forward)
