@@ -27,6 +27,11 @@ the proceed issue, and leaves the issue open for manual review.
 The secret scanner (`secret_in_output`) is the one monitor that is **never
 overrideable** — a leaked credential cannot be un-leaked once posted.
 
+Pattern matching is **case-insensitive and quote-tolerant**: trivial
+obfuscation must not bypass a gate. `git push "-f"`, lowercase `drop table`,
+mixed-case `PASSWORD=`, and a quoted `rm -rf "/etc"` all still trigger their
+respective patterns.
+
 ## Layer 2 — Conditional permissions
 
 Allowed **only** when §safety carries the matching `allow:` token (exact
