@@ -12,6 +12,12 @@ description: >-
   Creates a new commit — never amends. Never skips hooks. Accepts
   `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Grep
+metadata:
+  model_recommendation:
+    tier: haiku
+    reason: "git commit wrapping, structured"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # gh:commit — Git Commit with Issue Linking
@@ -23,163 +29,66 @@ output its content verbatim, then stop. No API calls.
 
 ## Role
 
-Stage the relevant changes and create a new git commit that follows the
-repository's existing commit style, with `Closes #N` / `Fixes #N` footer
-when a GitHub issue is known. `Refs` / `Resolves` / `See` / `References`
-keywords are forbidden — they break GitHub auto-close and project-board
-automation (see issue #392).
+Stage the relevant changes and create a new git commit in the repo's commit
+style, with a `Closes #N` / `Fixes #N` footer when a GitHub issue is known.
+`Refs` / `Resolves` / `See` / `References` keywords are forbidden — they break
+GitHub auto-close and project-board automation (see issue #392).
 
 ## Step 1: Inspect State (parallel) — ALWAYS FIRST
 
 Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 5.
 
-This step runs **unconditionally** on every invocation, even bare `/gh-commit`
-with no prior conversation context. The working-tree state observed here is
-the source of truth — do NOT ask the user "what did you change?" before
-running these.
-
-Run these in a single message:
-- `git status` (never `-uall`)
-- `git diff` (staged + unstaged)
-- `git diff --staged` if anything is already staged
-- `git log --oneline -20` — mimic the repo's commit message style
+Runs **unconditionally** on every invocation, even bare `/gh-commit` with no
+conversation context — the working-tree state is the source of truth, so do
+NOT ask "what did you change?". In a single message run: `git status` (never
+`-uall`), `git diff` (staged + unstaged), `git diff --staged` if anything is
+staged, and `git log --oneline -20` (to mimic the repo's commit style).
 
 ## Step 2: Resolve the Issue Number
 
-Check in this order and use the first hit:
-
-1. **Explicit argument** — if the user said `/gh:commit 123` or mentioned
-   "이슈 123번 연결" in their latest message.
-2. **Recent conversation** — scan the last ~10 messages for `#N` or
-   "Issue #N created" (gh:issue-create's output format). If found, use it.
-3. **None** — skip the footer. Do NOT invent an issue number.
+First hit wins: (1) explicit argument (`/gh:commit 123` or "이슈 123번 연결"
+in the latest message); (2) recent conversation — scan the last ~10 messages
+for `#N` or "Issue #N created" (gh:issue-create's output); (3) none → skip
+the footer, do NOT invent an issue number.
 
 ## Step 3: Draft the Commit Message
 
 Read `references/commit-message-format.md` for the message template, HEREDOC
-pattern, and `Closes` / `Fixes` rules (`Refs` / `Resolves` forbidden). Match the repo's commit style
-derived from `git log`.
-
-**When there is no prior conversation context** (user ran `/gh-commit` on
-their own manual edits), derive intent from the diff itself:
-- File paths and function/alias names tell you *what* area changed.
-- Small additions (one new alias, one new config line) get a short subject
-  like `chore(aliases): add <name> shortcut` — explanation body can be omitted
-  (but mandatory footers like `Co-Authored-By` still apply per
-  `references/commit-message-format.md`).
-- Do NOT ask the user "what was the intent?" for obviously self-describing
-  changes. Only ask if the diff is ambiguous or spans unrelated areas.
+pattern, and `Closes`/`Fixes` rules (`Refs`/`Resolves` forbidden); match the
+`git log` style. With no conversation context (manual edits), derive intent
+from the diff — paths and names tell you *what* changed; small additions get
+a short subject like `chore(aliases): add <name> shortcut` (body optional,
+mandatory footers still apply). Only ask the user when the diff is ambiguous
+or spans unrelated areas.
 
 ## Step 4: Stage and Commit
 
-- Stage only files relevant to this commit. Prefer listing files by name over
-  `git add -A` / `git add .` to avoid sweeping in secrets or unrelated changes.
-- **Never stage files that look like secrets** (`.env`, `credentials.json`,
-  keys). If the diff touches such files, stop and warn the user.
-- **NEVER** use `--amend` unless the user explicitly asked.
-- **NEVER** use `--no-verify` / `--no-gpg-sign`. If a pre-commit hook fails,
-  fix the underlying issue, re-stage, and create a **new** commit.
+- Stage only relevant files by name — avoid `git add -A`/`.` to keep secrets
+  and unrelated changes out. **Never stage secret-looking files** (`.env`,
+  `credentials.json`, keys); if the diff touches such files, stop and warn.
+- **NEVER** `--amend` unless explicitly asked. **NEVER** `--no-verify` /
+  `--no-gpg-sign`: if a hook fails, fix the cause, re-stage, new commit.
 - See `references/commit-message-format.md` for the exact HEREDOC command.
 
-After `git commit` succeeds, emit the step-completion marker so the
-harness step-skip guard (`skill_completion_guard.py`, issue #753) can
-verify this step ran:
+After `git commit` succeeds, emit the step-completion marker so the step-skip
+guard (`skill_completion_guard.py`, issue #753) can verify this step ran:
 `printf '[step:gh-commit/stage-commit] OK\n'`.
 
 ## Step 5: AI Metrics + Sync Project Board Status
 
-Before syncing the project board, record AI metrics (soft-fail — warn on
-error, never block). Compute elapsed time and post a comment on the linked
-issue (only when an issue number was resolved in Step 2). When
-`GH_DISABLE_AI_METRICS=1`, skip the comment entirely — board sync below
-still runs (issue #399):
-
-```bash
-ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
-# Token estimate: (char count of commit diff + message) / 4, rounded to nearest 500, min 1000
-# See gh-issue-create/references/metrics-helper.md "Token Estimation" for the formula
-TOKENS=$(( ( ($(git diff HEAD~1 | wc -c) / 4 / 500) + 1 ) * 500 ))
-[ "$TOKENS" -lt 1000 ] && TOKENS=1000
-if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
-    : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
-else
-    gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
-      -X POST \
-      -f body="### AI Metrics — gh-commit
-
-| 항목 | 값 |
-|------|-----|
-| 커밋 | $COMMIT_SHA |
-| 구현 시간 (gh-issue-implement) | ~${IMPL_MIN:-?} min |
-| 커밋 시간 (gh-commit) | ~$ELAPSED min |
-| 토큰 | ~$TOKENS |
-
----
-<details>
-<summary>🤖 AI Metrics · 📊 ~$TOKENS tokens · 🤖 ~$ELAPSED min</summary>
-
-<!-- ai-metrics:gh-commit -->
-📊 ~$TOKENS tokens · 🤖 ~$ELAPSED min
-<!-- /ai-metrics:gh-commit -->
-
-</details>"
-fi
-```
-
-If no issue number exists, print the metrics to stdout only and skip the
-comment. On any API failure, print `[WARN] ai-metrics comment failed — continuing.`
-and proceed.
-
-Then sync the project board: if the commit message contains
-`Closes|Fixes #N` (i.e. the issue number resolved in Step 2 was
-actually written into the footer), push the linked Issue's project-board
-card to `In progress` — but only when its current Status is `Backlog`.
-The `--only-from Backlog` guard is mandatory: `/gh-commit` is invoked
-many times per branch (initial commit + follow-up fix commits), and after
-a PR opens the issue moves to `In review`; without the guard a follow-up
-fix commit would bounce it back to `In progress`.
-
-Skip the board sync entirely when no issue footer was written.
-
-```bash
-# helper-fallback NF-1 (#644): silent-skip when helper missing.
-# Defense-in-depth (#724): also detect "[ -r ] passes but function never
-# defined" (interactive-guard regression, partial sourcing, future rename).
-# Without this gate `_gh_project_status_sync` would expand to nothing,
-# `command not found` (rc 127) gets absorbed by `|| true`, and the board
-# sync silently no-ops — exactly the failure surfaced in #724.
-_HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
-if [ -r "$_HELPER" ]; then
-    . "$_HELPER"
-    if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
-        printf '[gh-commit] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
-            "$_HELPER" >&2
-    else
-        _gh_project_status_sync issue <ISSUE_NUMBER> "In progress" --only-from Backlog || true
-    fi
-fi
-```
-
-If the repo has no projectV2 board (auto-detected) the helper silently
-returns 0. Opt out with `GH_PROJECT_STATUS_SYNC=0`.
-
-Regardless of whether the metrics post happened, was skipped via
-`GH_DISABLE_AI_METRICS=1`, or the board sync ran or no-op'd, emit the
-step-completion marker so the step-skip guard recognizes Step 5 was
-visited:
+The ai-metrics comment POST (`GH_DISABLE_AI_METRICS` branch, token formula,
+soft-fail) follows
+[`references/ai-metrics-comment.md`](references/ai-metrics-comment.md). The
+project-board sync (`--only-from Backlog` guard, helper-fallback NF-1/#724
+defense) follows [`references/board-sync.md`](references/board-sync.md) —
+skip it entirely when no issue footer was written. After both blocks, emit
 `printf '[step:gh-commit/metrics-board-sync] OK\n'`.
 
 ## Step 6: Verify
 
-After commit succeeds, run `git status` and report:
-
-```
-Committed <short-hash>: <subject line>
-```
-
-If an issue was linked, mention the issue number on a second line.
-
-After printing the verify line, emit the report step-completion marker
+After commit succeeds, run `git status` and report
+`Committed <short-hash>: <subject line>` (mention the issue number on a
+second line if one was linked). Then emit the report step-completion marker
 so the step-skip guard recognizes the skill finished:
 `printf '[step:gh-commit/report] OK\n'`.
 
@@ -187,6 +96,4 @@ so the step-skip guard recognizes the skill finished:
 
 - One commit per invocation by default. If the diff is clearly two unrelated
   changes, ask the user whether to split before staging.
-- Never push. `/gh:pr` handles pushing.
-- Never create empty commits.
-- Never edit git config.
+- Never push (`/gh:pr` handles pushing), create empty commits, or edit git config.

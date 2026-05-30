@@ -16,6 +16,12 @@ description: >-
   (recompute, not blind overwrite). Never modifies issue/PR body content
   other than the footer. Accepts `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Grep
+metadata:
+  model_recommendation:
+    tier: haiku
+    reason: "metadata backfill via gh CLI"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # gh:add-ai-metrics — Retrofit ai-metrics footer onto past Issues/PRs
@@ -33,22 +39,11 @@ Parse args per the table in `references/help.md` — positional `issue#N` /
 `pr#M` (case-insensitive), flags `--type`, `--date`, `--force`, `--remote`,
 plus the pacing flags `--pace`, `--limit`, `--budget`, `--dry-run`.
 
-`--date` accepts four shapes — single day, whole month, or half-open range —
-parsed by `parse_date_arg` in `references/date-parsing.md`:
-
-| Length / shape          | Form                | Meaning                          |
-|-------------------------|---------------------|----------------------------------|
-| 5 chars `YY-MM`         | month               | whole month, 1st through last day |
-| 7 chars `YYYY-MM`       | month               | same                             |
-| 8 chars `YY-MM-DD`      | single              | one day (existing)               |
-| 10 chars `YYYY-MM-DD`   | single              | one day (existing)               |
-| contains `..` or `~`    | range `[start, end)` | end-day excluded; `~` normalized to `..` |
-
-Other inputs → format error and stop.
-
-`--pace`, `--budget` accept duration strings (`30s` / `5m` / `1h` / `1h30m`)
-parsed by `parse_duration` in `references/pace-control.md`. `--limit` takes
-a positive integer. `--dry-run` is a boolean flag.
+`--date` accepts single day / whole month / half-open range (`..` / `~`)
+per `parse_date_arg` in `references/date-parsing.md` (SSOT).
+`--pace`/`--budget` accept durations (`30s`/`5m`/`1h30m`) via
+`parse_duration` in `references/pace-control.md`; `--limit` a positive
+integer; `--dry-run` a boolean.
 
 Resolve `TARGET_REPO` via the shared flow in
 `gh-issue-create/references/repo-resolution.md`. Missing remote → list
@@ -60,100 +55,46 @@ cards is a hard error: print
 
 First match wins:
 
-1. `--date` present → **date-filter mode**.
-   Feed the value through `parse_date_arg` → three-token output
-   (`single|month|range <a> [<b>]`) → `build_search_clause` → the
-   `created:...` fragment for the GitHub query. Then run `gh issue list`
-   and/or `gh pr list` (filtered by `--type` if given) with
-   `--search "<clause>" --state all --limit 200 --json number,title`.
-   The `--limit 200` cap stays — for month/range queries that would exceed
-   it the user must narrow the date or split into sub-ranges.
-2. Positional cards present → **explicit-list mode**. Parse, validate
-   each `N` as a positive integer, dedupe, preserve order.
-3. Otherwise → **conversation-infer mode**. Scan recent chat turns for
-   `#NNN` mentions paired with `issue` / `PR` / `pr` cues — bare numbers
-   without `#` are ignored to avoid false positives. No candidates →
-   print `Error: no issue/PR references in conversation; pass them explicitly.`
-   and stop.
+1. `--date` → **date-filter mode**: `parse_date_arg` →
+   `build_search_clause` → `created:...` fragment, then `gh issue/pr list`
+   (filtered by `--type`) `--search "<clause>" --state all --limit 200
+   --json number,title`. The 200 cap stays — wider ranges split by user.
+2. Positional cards → **explicit-list mode**: validate each `N` positive,
+   dedupe, preserve order.
+3. Otherwise → **conversation-infer mode**: scan recent turns for `#NNN`
+   paired with `issue`/`PR`/`pr` cues (bare numbers ignored); none →
+   `Error: no issue/PR references in conversation; pass them explicitly.`
 
-If `|targets| > 100`, print the count and prompt
-`Continue with N cards? [y/N]:`. Default no → stop. `--limit <N>` does
-**not** suppress this prompt — the prompt protects against accidentally
-huge target lists (e.g. a typo'd month range), independent of how many
-the loop will actually modify.
+If `|targets| > 100`, prompt `Continue with N cards? [y/N]:` (default no).
+`--limit` does not suppress it — it guards against huge target lists.
 
 ## Step 3: Per-Card Loop
 
-If `--dry-run` was passed, take the dry-run branch in
-`references/pace-control.md` → "`--dry-run` branch" — same per-card view
-fetch, but emits `· will-write` / `· will-skip` / `· will-force-replace`
-classification rows and the dry-run summary line, **never calling
-`gh edit`**. Then stop.
+`--dry-run` → take the dry-run branch in `references/pace-control.md`
+(per-card view fetch, `· will-write`/`· will-skip`/`· will-force-replace`
+rows, dry-run summary, **never `gh edit`**), then stop.
 
-Otherwise, for each `(type, N)` follow `references/footer-detection.md`:
-
-1. **Stop check (top of iteration)** — before fetching this card.
-   Compute `elapsed_secs=$(( $(date +%s) - START_TS ))` here (seconds,
-   matching `check_budget`'s contract — Step 4's `ELAPSED` is a separate
-   minutes-rounded display value, do not reuse it):
-   - `check_budget "$elapsed_secs" "$BUDGET_SECS"` true → break with
-     `stop_reason="--budget"`. (Skipped when `--budget` not set.)
-   - `--limit` set and `modified_count >= LIMIT` → break with
-     `stop_reason="--limit"`.
-   See `references/pace-control.md` → "Stop-reason composition".
-2. `gh {issue,pr} view N --repo "$TARGET_REPO" --json title,body` → fetch.
-3. Detect `<!-- ai-metrics -->` (also matches `<!-- ai-metrics:<skill> -->`).
-4. Branch:
-   - **No footer** → compute metrics → append (after a `---` separator).
-   - **Footer + no `--force`** → print `→ skipped #N <title>` and continue
-     **without sleeping**. Do NOT call `gh edit` (saves API quota).
-   - **Footer + `--force`** → recompute fresh metrics → in-place replace
-     (single regex pass, no append).
-5. On modification only: write the new body to `mktemp`, call
-   `gh {issue,pr} edit N --repo "$TARGET_REPO" --body-file <tmp>`,
-   increment `modified_count`, then `sleep_pace "$PACE_SECS"` (no-op when
-   `--pace` not set, skipped on the last card so no trailing wait).
-6. Print the one-line status string per the "Per-card status output
-   format" section in `references/footer-detection.md`. Continue on
-   failure — never abort the loop.
-
-Metric values follow `references/post-hoc-metrics.md` (TOKENS / HUMAN_H /
-ELAPSED formulas, SSOT lookup table, post-hoc estimation rules).
+Otherwise iterate per `references/footer-detection.md` (SSOT — not
+restated here): top-of-iteration stop check (`--budget`/`--limit` via
+`check_budget`, see `references/pace-control.md` → "Stop-reason
+composition"), fetch, detect `<!-- ai-metrics -->`, branch
+no-footer→append / footer→skip / footer+`--force`→in-place replace,
+`gh edit` + `sleep_pace` on modify only, one-line status, continue on
+failure. Metric values follow `references/post-hoc-metrics.md`.
 
 ## Step 4: Final Report
 
-After the loop, print the summary line + context-only ai-metrics line per
-the "Final report output format" section in `references/footer-detection.md`.
-Compute `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))` just before printing.
-
-When the loop exited early via `--limit` or `--budget`, append a third line
-naming the trigger and the count remaining in the original target list:
-
-```
-Stopped early: <stop_reason>; <X> cards remaining. Re-run the same command to resume (skip-existing makes this idempotent).
-```
-
-For `--dry-run`, the final report is the dry-run summary block from
-`references/pace-control.md` instead — no per-card metrics line, no
-edit-counters.
+Print the summary line + context-only ai-metrics line per the "Final
+report output format" section in `references/footer-detection.md`, after
+computing `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))`. On early exit
+via `--limit`/`--budget`, append a `Stopped early: <stop_reason>; <X>
+cards remaining. Re-run to resume (idempotent).` line. For `--dry-run`,
+the report is the dry-run summary block from `references/pace-control.md`
+instead — no per-card metrics, no counters.
 
 ## Constraints
 
-- Always pass `--repo "$TARGET_REPO"` — no implicit repo detection.
-- Body byte-identical outside the footer: stripping the new footer must
-  yield the original body verbatim. No rewrap, no language change.
-- `--force` is **recompute → replace**, never blind overwrite or
-  duplicate-append. If no footer exists, `--force` degrades to plain append.
-- Continue-on-error: a single card failure never stops the loop.
-- Skip path is API-silent — no `gh edit` call, no body diff, **no sleep**.
-- Conversation-infer mode rejects bare numbers (`123` without `#`).
-- > 100 hits require explicit `y` confirmation; no `--yes` flag.
-- `--pace` sleeps **after** each successful modify, **never before**, and
-  **never after the last card** — no trailing wait.
-- `--dry-run` makes zero `gh edit` calls. `gh view` is still allowed
-  (needed to classify will-write vs will-skip vs will-force-replace).
-- `--limit` counts only cards that took the modify path (skipped cards
-  do not advance the counter — this makes "process N new backfills"
-  deterministic across re-runs).
-- `--limit` and `--budget` compose with **OR semantics** — whichever
-  fires first stops the loop. Stop reason is reported in the summary.
+Operating invariants (always `--repo`, body byte-identical outside the
+footer, `--force` recompute-not-overwrite, continue-on-error, pacing,
+`--limit`/`--budget` OR-semantics) live in
+[`references/constraints.md`](references/constraints.md).
