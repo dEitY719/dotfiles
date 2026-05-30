@@ -12,6 +12,12 @@ description: >-
   `-h`/`--help`/`help` to print usage. Project-agnostic; works in any repo
   where the caller has admin/merge permission.
 allowed-tools: Bash, Read, Grep, Glob
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "admin bypass + audit trail (PR comment + incident issue); requires user confirmation & substantive reason validation"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # gh:pr-merge-emergency — Admin-Bypass Merge with Audit Trail
@@ -27,75 +33,56 @@ Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 5.
 
 Positional args: `<PR> <reason> [remote]`.
 
-- `PR` — number (required). If omitted, try `gh pr view --json number` on
-  current branch; else stop with a usage pointer.
-- `reason` — **required**, ≥10 chars, must reference an incident/ticket
-  ID or concrete user impact. Vague reasons (`"urgent"`, `"fix"`) → refuse.
-  Examples in `references/help.md`.
-- `remote` — default `origin`. Resolve `TARGET_REPO` via
-  `git remote get-url`; missing → `git remote -v` and stop.
+- `PR` — number (required). Omitted → `gh pr view --json number` on current
+  branch; else stop with a usage pointer.
+- `reason` — **required**, ≥10 chars, referencing an incident/ticket ID or
+  concrete user impact. Vague reasons (`"urgent"`, `"fix"`) → refuse. Examples
+  in `references/help.md`.
+- `remote` — default `origin`. Resolve `TARGET_REPO` via `git remote get-url`;
+  missing → `git remote -v` and stop.
 
 Capture `ME=$(gh api user -q .login)`, `NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)`.
 
 ## Step 2: Pre-flight Safety Gate (parallel)
 
-Fetch in parallel; evaluate stops **before** touching merge:
-
-- PR JSON: `number,title,author,state,isDraft,mergeable,mergeStateStatus,baseRefName,headRefName`
-- `gh pr checks <N> --repo $TARGET_REPO --required`
+Fetch in parallel, evaluate stops **before** touching merge: PR JSON
+(`number,title,author,state,isDraft,mergeable,mergeStateStatus,baseRefName,headRefName`)
+and `gh pr checks <N> --repo $TARGET_REPO --required`.
 
 **Hard stops**: `state != OPEN`, draft, conflicts, or failing/pending required
-checks. Emergency bypasses **approval**, not **CI**.
-
-**Soft warnings**: base `BEHIND`; no approving review.
+checks — emergency bypasses **approval**, not **CI**. **Soft warnings**: base
+`BEHIND`; no approving review.
 
 ## Step 3: Confirm with the User
 
-Print the planned action (repo, PR, author, base/head, CI summary, reason)
-followed by `Proceed? (yes/ok/진행/머지)`. Exact prompt template:
-`references/audit-templates.md`. Never auto-proceed.
+Print the planned action (repo, PR, author, base/head, CI summary, reason) then
+`Proceed? (yes/ok/진행/머지)`. Exact prompt: `references/audit-templates.md`.
+Never auto-proceed.
 
 ## Step 4: Audit Comment + Admin Merge
 
-Order matters — comment first so the audit survives branch deletion.
-
-1. `gh pr comment <N> --repo "$TARGET_REPO"` with the "PR audit comment"
-   body from `references/audit-templates.md`; capture the comment URL for
-   Step 7.
-2. `gh pr merge <N> --repo "$TARGET_REPO" --admin --squash --delete-branch`
-   (flag rationale in the same reference file). If it fails with "Must
-   have admin rights", **stop** and report — do NOT fall back to
-   `--merge`/`--rebase`.
-3. Capture the merge SHA:
-   `gh pr view <N> --repo "$TARGET_REPO" --json mergeCommit -q .mergeCommit.oid`.
+Order matters — comment first so the audit survives branch deletion. (1) Post
+the "PR audit comment" from `references/audit-templates.md`, capturing its URL
+for Step 7. (2) `gh pr merge <N> --admin --squash --delete-branch` (flag
+rationale in the same file); "Must have admin rights" → **stop**, never fall
+back to `--merge`/`--rebase`. (3) Capture the merge SHA via
+`gh pr view <N> --json mergeCommit -q .mergeCommit.oid`.
 
 ## Step 5: Create Post-Merge Incident Issue
 
-Non-negotiable audit tail. File `incident: emergency merge of PR #<N> —
-<reason first line>` with the body + retro checklist from
-`references/audit-templates.md`. Attach an `incident` label **only if**
-`gh label list --repo "$TARGET_REPO"` confirms it exists.
+Non-negotiable audit tail. File `incident: emergency merge of PR #<N> — <reason
+first line>` with the body + retro checklist from `references/audit-templates.md`.
+Attach an `incident` label **only if** `gh label list --repo "$TARGET_REPO"`
+confirms it exists.
 
-Include the ai-metrics block in the incident issue body (append before
-creating — no soft-fail here since the incident issue is a required
-artifact). When `GH_DISABLE_AI_METRICS=1`, skip the footer; the
-incident issue itself is still created (issue #399):
-
-```bash
-ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
-# Append to the issue body temp file before gh issue create:
-if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
-    : # ai-metrics footer skipped via GH_DISABLE_AI_METRICS
-else
-    printf '\n---\n<!-- ai-metrics:gh-pr-merge-emergency -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics:gh-pr-merge-emergency -->\n' \
-      "${TOKENS:-3000}" "${HUMAN_H:-1}" "$ELAPSED" >> "$INCIDENT_BODY"
-fi
-```
+Append the ai-metrics footer to the incident issue body before creating it
+(required artifact — no soft-fail; honors `GH_DISABLE_AI_METRICS=1` per issue
+#399). Exact block: `references/audit-templates.md` -> "ai-metrics footer".
 
 ## Step 6: Sync Project Board Status
 
-Read `references/project-board-sync.md` and push the merged PR card to
-`Done`. Sync failure never blocks the audit report.
+Read `references/project-board-sync.md` and push the merged PR card to `Done`.
+Sync failure never blocks the audit report.
 
 ## Step 7: Report
 
@@ -110,8 +97,7 @@ Emergency-merged PR #<N>
 
 ## Constraints
 
-- Never bypass CI. Approval bypass only.
-- Never skip the incident issue — the audit tail is the whole point.
-- Never run without an affirmative user confirmation.
-- Never use `--merge`/`--rebase` to dodge a failing admin merge.
-- Reason must be substantive; refuse `"urgent"`/`"fix"`/`"merge now"`.
+Never: bypass CI (approval bypass only); skip the incident issue (the audit tail
+is the whole point); run without affirmative confirmation; use `--merge`/`--rebase`
+to dodge a failing admin merge. Reason must be substantive — refuse
+`"urgent"`/`"fix"`/`"merge now"`.

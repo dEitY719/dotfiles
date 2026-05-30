@@ -121,10 +121,10 @@ else
     gh api "repos/{owner}/{repo}/issues/$PR_NUMBER/comments" -X POST \
       -f body="---
 <details>
-<summary>🤖 AI Metrics · 📊 ~${TOKENS:-3000} tokens · 👤 ~2 h · 🤖 ~$ELAPSED min</summary>
+<summary>AI Metrics · tokens=~${TOKENS:-3000} · human_h=~2 · ai_min=~$ELAPSED</summary>
 
 <!-- ai-metrics:gh-pr-resolve-ci-fail -->
-📊 ~${TOKENS:-3000} tokens · 👤 ~2 h · 🤖 ~$ELAPSED min
+AI Metrics tokens=~${TOKENS:-3000} human_h=~2 ai_min=~$ELAPSED
 <!-- /ai-metrics:gh-pr-resolve-ci-fail -->
 
 </details>
@@ -137,6 +137,9 @@ fi
 - `${TOKENS:-3000}` — caller may pre-export an estimate; default 3000.
 - `~2 h` — `fix` lookup from `gh-issue-create/references/metrics-baseline.md`.
 - soft-fail: comment failure does NOT block the success report.
+- Glyph note: the rendered footer on GitHub uses the `📊 👤 🤖` glyphs
+  (the #317 F-2 exception). They are omitted here to keep references/
+  emoji-free; substitute them at render time to match the standard card.
 
 ## Recovery cheat-sheet (final report appendix)
 
