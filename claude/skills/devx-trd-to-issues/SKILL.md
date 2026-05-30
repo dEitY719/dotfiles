@@ -10,6 +10,12 @@ description: >-
   GitHub. Refuses to auto-create missing labels and refuses an unknown remote.
   Accepts `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Edit, Write, Grep
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "TRD decomposition + bulk issue creation"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # devx:trd-to-issues — TRD → Milestones + Issues
