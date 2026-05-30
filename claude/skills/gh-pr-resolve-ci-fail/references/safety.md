@@ -137,9 +137,10 @@ fi
 - `${TOKENS:-3000}` — caller may pre-export an estimate; default 3000.
 - `~2 h` — `fix` lookup from `gh-issue-create/references/metrics-baseline.md`.
 - soft-fail: comment failure does NOT block the success report.
-- Glyph note: the rendered footer on GitHub uses the `📊 👤 🤖` glyphs
-  (the #317 F-2 exception). They are omitted here to keep references/
-  emoji-free; substitute them at render time to match the standard card.
+- Glyph note: the rendered footer on GitHub uses the standard ai-metrics
+  glyphs (the #317 F-2 exception — see `gh-add-ai-metrics`, the footer SSOT).
+  They are omitted here to keep references/ emoji-free; substitute them at
+  render time to match the standard card.
 
 ## Recovery cheat-sheet (final report appendix)
 
