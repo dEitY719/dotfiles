@@ -11,7 +11,8 @@ intent. Each prefix has a body template under
 | `refactor` | 동작 보존하며 구조 정리 |
 | `perf` | 느림 / 자원 사용 과다 |
 | `docs` | 문서 자체 변경 |
-| `test` | 테스트 갭 / 추가 / 변경 |
+| `test` | 테스트 코드 갭 / 추가 / 변경 |
+| `verify` | 라이브 검증 추적 — 코드 변경이 아닌 시도·차단·재개·재현가능성 자체를 issue 로 SSOT 화 |
 | `chore` | 빌드·CI·도구·deps·스타일 (`build`/`ci`/`style`/`revert` 흡수) |
 | `misc` | 위 어디에도 안 들어감 (fallback) |
 
@@ -20,6 +21,8 @@ intent. Each prefix has a body template under
 - 모호하면 묻지 말고 가장 보수적인 `misc` 로 떨어진다.
 - 대형 `feat` 휴리스틱 (영향 컴포넌트 ≥3 / NF 명시 / 결정 누적 — 둘
   이상 해당) 은 `templates/feat.md` "대형 feat 가이드" 를 따른다.
+- 검증 산출물이 **issue + 코멘트 누적** 이면 `verify`, **테스트 코드
+  파일** 이면 `test`. 둘 다 해당하면 `test` 를 우선 (코드가 SSOT 로 더 강함).
 
 ## Title formatting
 
