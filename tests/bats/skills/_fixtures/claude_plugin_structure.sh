@@ -59,7 +59,8 @@ cps_check_M3() {
     done <<EOF
 $(_cps_plugins "$1")
 EOF
-    [ "$_any" -eq 1 ] && echo PASS || echo FAIL
+    # No plugins → subject absent → N/A (M2 already owns the "0 plugins" FAIL).
+    [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
 
 cps_check_M4() {
@@ -85,7 +86,8 @@ EOF
     done <<EOF
 $(_cps_plugins "$1")
 EOF
-    [ "$_any" -eq 1 ] && echo PASS || echo FAIL
+    # No skills anywhere → subject absent → N/A, not FAIL (N/A rule).
+    [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
 
 cps_check_M5() {
@@ -156,7 +158,8 @@ cps_check_R4() {
             _sm="$1/plugins/$_p/skills/$_s/SKILL.md"
             [ -f "$_sm" ] || continue
             _any=1
-            _name="$(grep -m1 '^name:' "$_sm" | sed 's/^name:[[:space:]]*//')"
+            # strip leading `name:` + surrounding spaces/quotes (single & double)
+            _name="$(grep -m1 '^name:' "$_sm" | sed 's/^name:[[:space:]'\''" ]*//;s/[[:space:]'\''" ]*$//')"
             _expect="$(printf '%s' "$_name" | tr ':' '-')"
             [ "$_expect" = "$_s" ] || {
                 echo WARN
@@ -204,24 +207,37 @@ cps_refactor() {
     mkdir -p "$_repo/docs/skill-guides" "$_repo/docs/skill-output"
     mkdir -p "$_repo/.claude-plugin"
 
-    # M1 marketplace.json skeleton (only if missing/invalid)
+    # M1 marketplace.json skeleton (only if missing/invalid) — list ALL plugins
     if ! _cps_json_ok "$_repo/.claude-plugin/marketplace.json"; then
-        local _first_p
-        _first_p="$(_cps_plugins "$_repo" | head -n1)"
-        printf '{ "name": "%s", "plugins": ["./plugins/%s"] }\n' \
-            "$(basename "$_repo")" "${_first_p:-plugin}" \
+        local _p _plugins_json=""
+        while IFS= read -r _p; do
+            [ -n "$_p" ] || continue
+            [ -n "$_plugins_json" ] && _plugins_json="${_plugins_json}, "
+            _plugins_json="${_plugins_json}\"./plugins/${_p}\""
+        done <<EOF
+$(_cps_plugins "$_repo")
+EOF
+        printf '{ "name": "%s", "plugins": [%s] }\n' \
+            "$(basename "$_repo")" "${_plugins_json:-\"./plugins/plugin\"}" \
             >"$_repo/.claude-plugin/marketplace.json"
     fi
 
-    # M3 per-plugin plugin.json skeleton
-    local _p _s
+    # M3 per-plugin plugin.json skeleton — list ALL skills of each plugin
+    local _p _s _skills_json
     while IFS= read -r _p; do
         [ -n "$_p" ] || continue
         mkdir -p "$_repo/plugins/$_p/.claude-plugin"
         if ! _cps_json_ok "$_repo/plugins/$_p/.claude-plugin/plugin.json"; then
-            _s="$(_cps_skills "$_repo" "$_p" | head -n1)"
-            printf '{ "name": "%s", "version": "0.0.0", "skills": ["./skills/%s"] }\n' \
-                "$_p" "${_s:-skill}" \
+            _skills_json=""
+            while IFS= read -r _s; do
+                [ -n "$_s" ] || continue
+                [ -n "$_skills_json" ] && _skills_json="${_skills_json}, "
+                _skills_json="${_skills_json}\"./skills/${_s}\""
+            done <<EOF
+$(_cps_skills "$_repo" "$_p")
+EOF
+            printf '{ "name": "%s", "version": "0.0.0", "skills": [%s] }\n' \
+                "$_p" "${_skills_json:-\"./skills/skill\"}" \
                 >"$_repo/plugins/$_p/.claude-plugin/plugin.json"
         fi
     done <<EOF
