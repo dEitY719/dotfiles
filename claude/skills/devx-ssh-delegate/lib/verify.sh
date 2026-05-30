@@ -17,6 +17,11 @@ ssh_verify_alias() {
     ssh_bin="${DEVX_SSH_BIN:-ssh}"
     timeout="${DEVX_SSH_CONNECT_TIMEOUT:-5}"
 
+    if ! manifest_has "$al"; then
+        ux_error "alias '$al' not found in manifest"
+        return 1
+    fi
+
     if [ "$(manifest_get "$al" revoked)" = "true" ]; then
         ux_warning "alias '$al' is revoked — skipping verify"
         return 1

@@ -62,3 +62,10 @@ teardown() { teardown_isolated_home; }
     FAKE_SSH_RC=0 run ssh_verify_alias gpu1-bwyoon
     assert_failure
 }
+
+@test "unknown alias is rejected before any ssh call (#896 review)" {
+    FAKE_SSH_RC=0 run ssh_verify_alias nope-not-here
+    assert_failure
+    assert_output --partial 'not found in manifest'
+    assert [ ! -f "${TEST_TEMP_HOME}/ssh_argv" ]
+}

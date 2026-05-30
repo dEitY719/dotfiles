@@ -174,10 +174,17 @@ manifest_upsert() {
     no="$4"
     ex="$5"
     if manifest_has "$al"; then
-        manifest_set_field "$al" user "$us"
-        manifest_set_field "$al" host "$ho"
-        [ -n "$no" ] && manifest_set_field "$al" note "$no"
-        [ -n "$ex" ] && manifest_set_field "$al" expires "$ex"
+        # Single awk pass + one atomic write (was 4 read-write cycles).
+        manifest_to_tsv |
+            awk -F'\t' -v OFS='\t' -v a="$al" -v us="$us" -v ho="$ho" -v no="$no" -v ex="$ex" '
+                $1==a {
+                    $2=us
+                    $3=ho
+                    if (no != "") $6=no
+                    if (ex != "") $7=ex
+                }
+                { print }' |
+            manifest_save_tsv
         return 0
     fi
     {

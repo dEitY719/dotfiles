@@ -20,8 +20,11 @@ ssh_install_capture_fingerprint() {
     keyscan="${DEVX_SSH_KEYSCAN_BIN:-ssh-keyscan}"
     keygen="${DEVX_SSH_KEYGEN_BIN:-ssh-keygen}"
     command -v "$keyscan" >/dev/null 2>&1 || return 1
+    # ssh-keyscan returns each host-key type in network-dependent order; sort
+    # first so the same fingerprint is picked every run (else spurious MISMATCH).
     "$keyscan" -p "$port" "$host" 2>/dev/null |
         "$keygen" -lf - 2>/dev/null |
+        sort |
         awk '/SHA256:/ {for(i=1;i<=NF;i++) if($i ~ /^SHA256:/){print $i; exit}}'
 }
 

@@ -68,7 +68,9 @@ cmd_add() {
     fi
     user="${target%@*}"
     host="${target#*@}"
-    if [ -z "$user" ] || [ -z "$host" ] || [ "$user" = "$host" ]; then
+    # No user==host rejection: `ubuntu@ubuntu` is valid; the `*@*` parse above
+    # already guaranteed a literal @, so empty user/host is the only error.
+    if [ -z "$user" ] || [ -z "$host" ]; then
         ux_error "malformed target '$target' — expected <user>@<host>"
         return 2
     fi
@@ -222,8 +224,10 @@ cmd_revoke() {
     if [ -f "$pub" ]; then
         keytext="$(awk '{print $1" "$2}' "$pub")"
         ux_info "removing key from remote authorized_keys for '$al'"
+        # Portable mktemp (template + TMPDIR fallback) and a non-empty $t guard
+        # so a mktemp failure can never truncate the remote authorized_keys.
         "$ssh_bin" -o BatchMode=yes "$al" \
-            "f=\$HOME/.ssh/authorized_keys; [ -f \"\$f\" ] && { t=\$(mktemp); grep -vF '$keytext' \"\$f\" >\"\$t\" || true; cat \"\$t\" >\"\$f\"; rm -f \"\$t\"; }" \
+            "f=\$HOME/.ssh/authorized_keys; [ -f \"\$f\" ] && { t=\$(mktemp \"\${TMPDIR:-/tmp}/ssh-delegate.XXXXXX\") && [ -n \"\$t\" ] && { grep -vF '$keytext' \"\$f\" >\"\$t\" || true; } && cat \"\$t\" >\"\$f\" && rm -f \"\$t\"; }" \
             >/dev/null 2>&1 || ux_warning "could not reach remote — marking revoked locally anyway"
     fi
     manifest_set_field "$al" revoked true

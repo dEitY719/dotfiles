@@ -93,6 +93,20 @@ teardown() { teardown_isolated_home; }
     assert_equal "$count" 1
 }
 
+@test "manifest_upsert updates host/note of an existing alias in one pass (#896)" {
+    manifest_upsert gpu1-bwyoon bwyoon 10.9.9.9 'moved box' ''
+    run manifest_get gpu1-bwyoon host
+    assert_output '10.9.9.9'
+    run manifest_get gpu1-bwyoon note
+    assert_output 'moved box'
+    # unrelated entry untouched
+    run manifest_get gpu1-ssai revoked
+    assert_output 'true'
+    # still a single row
+    count="$(manifest_aliases | grep -c '^gpu1-bwyoon$')"
+    assert_equal "$count" 1
+}
+
 @test "manifest_upsert appends a brand-new entry" {
     manifest_upsert box2-deity deity 10.0.0.9 'lab box' 2026-12-31
     run manifest_has box2-deity
