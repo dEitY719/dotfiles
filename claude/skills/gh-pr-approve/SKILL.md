@@ -7,6 +7,12 @@ description: >-
   "re-review requested". Self-authored PRs cannot be approved; they use
   analysis-only, comment-only, or admin-merge paths.
 allowed-tools: Bash, Read, Grep, Glob, Agent
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "PR review judgment — diff analysis, BLOCKER/FOLLOW-UP/PRAISE classification, follow-up issue filing"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # gh:pr-approve - Review, Approve, or Handle Self-PR
