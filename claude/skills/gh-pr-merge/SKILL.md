@@ -9,14 +9,19 @@ description: >-
   draft PRs, or PRs with conflicts. Accepts
   `<pr-number> [rebase|squash|merge] [remote]`. Accepts `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Grep
+metadata:
+  model_recommendation:
+    tier: haiku
+    reason: "gh pr merge wrap with policy/preflight gate; bounded mutation, no deep reasoning"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # gh:pr-merge — Merge Approved PR (3 strategies)
 
 ## Help
 
-If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
-output its content verbatim, then stop. No API calls.
+If arg #1 is `-h`/`--help`/`help`, output `references/help.md` verbatim and stop. No API calls.
 
 ## Step 1: Parse Args + Resolve Repo
 
@@ -24,93 +29,38 @@ Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 4.
 
 Positional args: `<pr-number> [strategy] [remote]`.
 
-- `pr-number` — required, positive integer. Missing/invalid → print
-  usage pointer and stop.
-- `strategy` — default `rebase`. Must be `rebase`, `squash`, or `merge`.
-  Any other value → print allowed values and stop.
-- `remote` — default `origin`. Resolve `TARGET_REPO=<owner>/<repo>`
-  via `git remote get-url <remote>` (parse `https://github.com/<o>/<r>.git`
-  or `git@github.com:<o>/<r>.git`). Missing remote → list `git remote -v`
-  and stop (no silent fallback).
+- `pr-number` — required, positive integer. Missing/invalid → usage pointer, stop.
+- `strategy` — default `rebase`; one of `rebase`/`squash`/`merge`. Other → print allowed values, stop.
+- `remote` — default `origin`. Resolve `TARGET_REPO=<owner>/<repo>` from
+  `git remote get-url <remote>` (parse `https://github.com/<o>/<r>.git` or
+  `git@github.com:<o>/<r>.git`). Missing remote → list `git remote -v`, stop (no silent fallback).
 
 ## Step 2: Pre-flight (parallel)
 
-Run in one message:
-- `gh pr view <N> --repo $TARGET_REPO --json number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefName,url`
-- `gh pr checks <N> --repo $TARGET_REPO --required`
+Run in one message: `gh pr view <N> --repo $TARGET_REPO --json number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefName,url`
+and `gh pr checks <N> --repo $TARGET_REPO --required`.
 
-Then detect whether the base branch has protection rules (uses
-`baseRefName` from the previous call):
+Then detect base-branch protection via
+`gh api "repos/$TARGET_REPO/branches/<baseRefName>/protection"`
+(exit 0 → present; 403/404 → absent). The exact protection-vs-
+`reviewDecision` behavior table is in `references/strategy-selection.md`
+→ "Branch protection detection".
 
-- `gh api "repos/$TARGET_REPO/branches/<baseRefName>/protection"`
-  - HTTP 200 → protection **present**; strict rules apply.
-  - HTTP 403 (Free plan locks the feature) or 404 (not configured)
-    → protection **absent**; empty `reviewDecision` is accepted
-    (solo / personal repos where no one can approve your own PR).
-
-**Hard stops** (see `references/strategy-selection.md` for exact table):
-- `state != OPEN`
-- `isDraft == true`
-- `mergeable == CONFLICTING`
-- `reviewDecision != APPROVED` → suggest `/gh-pr-merge-emergency` for admin bypass
-  - Exception: protection **absent** (403/404) **AND** `reviewDecision == ""`
-    → accept and print an informational line:
-    `INFO: No branch protection on <baseRefName> — accepting empty reviewDecision.`
-    A non-empty non-APPROVED value (`REVIEW_REQUIRED`,
-    `CHANGES_REQUESTED`) still stops regardless of protection.
-- `mergeStateStatus ∈ {BEHIND, BLOCKED, DIRTY}`
-- Any required check FAILURE or pending
+**Hard stops** (full table in `references/strategy-selection.md` →
+"Hard-stop decisions"): `state != OPEN`; `isDraft`; `mergeable ==
+CONFLICTING`; `mergeStateStatus ∈ {BEHIND, BLOCKED, DIRTY}`; any required
+check FAILURE/pending; `reviewDecision != APPROVED` → suggest
+`/gh-pr-merge-emergency`. Conditional exception: protection **absent**
+**AND** `reviewDecision == ""` → accept and print
+`INFO: No branch protection on <baseRefName> — accepting empty reviewDecision.`
+(a non-empty non-APPROVED value still stops).
 
 ## Step 2-B: Project Board Approval Gate (fail-closed)
 
-Read `references/board-policy.md` for the rule set and the cross-link
-to `gh-pr-approve`. This step runs **before** Step 3 and gates merges
-on the team's projectV2 board column.
-
-```bash
-# Reuse the SSOT query helper — never inline a fresh GraphQL block.
-# helper-fallback NF-1 (#644): silent-skip when helper missing; never hard-fail.
-# Defense-in-depth (#724): a sourced-but-undefined function would let
-# `_gh_project_status_query_current` expand to nothing, BOARD_STATUS would
-# be empty, and the empty-status branch would silently let merges through
-# — bypassing the board approval gate. Detect that case explicitly.
-_HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
-if [ -r "$_HELPER" ]; then
-    . "$_HELPER"
-
-    if ! command -v _gh_project_status_query_current >/dev/null 2>&1; then
-        printf '[gh-pr-merge] %s sourced but _gh_project_status_query_current undefined — board approval gate skipped (#724).\n' \
-            "$_HELPER" >&2
-    # Operator escape hatch: GH_PR_MERGE_SKIP_BOARD_CHECK=1
-    # Use for in-transition repos or one-shot ops (also leaves an audit signal:
-    # any reviewer can re-run gh-pr-merge without the env var to verify).
-    elif [ "${GH_PR_MERGE_SKIP_BOARD_CHECK:-0}" != "1" ]; then
-        BOARD_STATUS=$(GH_REPO="$TARGET_REPO" \
-            _gh_project_status_query_current pr "$PR_NUMBER" 2>/dev/null || true)
-
-        # Empty result = no projectV2 attached OR no read access.
-        # Auto-skip in both cases — the merge gate is opt-in by board attachment.
-        if [ -n "$BOARD_STATUS" ] && [ "$BOARD_STATUS" != "Approved" ]; then
-            echo "Refusing to merge PR #$PR_NUMBER — board Status is \"$BOARD_STATUS\", required \"Approved\"."
-            echo "  Have a teammate move the card to Approved, or use /gh-pr-merge-emergency for admin bypass."
-            echo "  One-shot escape: GH_PR_MERGE_SKIP_BOARD_CHECK=1 /gh-pr-merge $PR_NUMBER"
-            exit 2
-        fi
-    fi
-fi
-# helper missing → board approval gate is silently skipped (NF-1).
-```
-
-Failure modes:
-
-- Board Status `!= Approved` (and non-empty) → exit 2, redirect to
-  `/gh-pr-merge-emergency`.
-- Empty Status (no projectV2 attached, or query failed) → silently
-  continue. Repos without a board run on the legacy `reviewDecision`
-  gate from Step 2 alone.
-- `GH_PR_MERGE_SKIP_BOARD_CHECK=1` → skip Step 2-B entirely. Document
-  the reason in the operator's commit message or Slack channel; this
-  flag is for repos in transition, not a quiet-the-warning button.
+Rule set + `gh-pr-approve` cross-link in `references/board-policy.md`.
+Run the board approval gate per `references/board-approval-gate.sh.md`
+(fail-closed; helper-missing → silent-skip; `GH_PR_MERGE_SKIP_BOARD_CHECK=1`
+to bypass). Runs **before** Step 3; gates on the projectV2 board column.
 
 ## Step 3: Merge (no confirmation)
 
@@ -118,74 +68,22 @@ Failure modes:
 gh pr merge <N> --repo "$TARGET_REPO" --<strategy> --delete-branch
 ```
 
-Flag mapping in `references/strategy-selection.md`.
-
-If `gh` returns "merge method is not allowed", print the repo-settings
-guidance from `references/strategy-selection.md` and stop. **Never**
-silently switch strategies.
+Flag mapping in `references/strategy-selection.md`. If `gh` returns
+"merge method is not allowed", print the repo-settings guidance from
+`references/strategy-selection.md` and stop. **Never** silently switch
+strategies.
 
 ## Step 4: Sync Project Board Status
 
-Read `references/project-board-sync.md` for the failure modes and
-gating rationale. Two reconciliations run after a successful merge:
+Run the two post-merge board reconciliations (PR card → Done; linked
+Issue cards → Done) per `references/project-board-sync.md` — paste the
+snippets verbatim (that file also holds the failure modes and gating
+rationale). Both helpers auto-detect repos without a projectV2
+attachment and silently return; failures hit stderr, never block the report.
 
-(a) PR card → `Done` (closes the gap from #248 where the merged PR
-    card stayed at `Approved`):
-
-```bash
-# helper-fallback NF-1 (#644): silent-skip when helper missing.
-# Defense-in-depth (#724): also detect "sourced but function undefined".
-_HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
-if [ -r "$_HELPER" ]; then
-    . "$_HELPER"
-    if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
-        printf '[gh-pr-merge] %s sourced but _gh_project_status_sync undefined — Done reconciliations skipped (#724).\n' \
-            "$_HELPER" >&2
-    else
-        GH_REPO="$TARGET_REPO" _gh_project_status_sync pr "$PR_NUMBER" "Done" || true
-
-        # (b) Linked Issue cards from `closingIssuesReferences` → `Done`
-        #     (boosts the best-effort `Item closed` builtin per #250). Use the
-        #     `_gh_pr_closing_issue_numbers` helper instead of
-        #     `gh pr view --json closingIssuesReferences` — older `gh` (≤ 2.45)
-        #     rejects that field with "Unknown JSON field" (#264):
-        for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$TARGET_REPO" 2>/dev/null || true); do
-            GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$_issue" "Done" \
-                --only-from "Backlog,In progress,In review" || true
-        done
-    fi
-fi
-# helper missing → both reconciliations silently skipped (NF-1).
-```
-
-Both helpers auto-detect repos without a projectV2 attachment and
-silently return. This step never blocks the report — failures are
-logged to stderr and ignored.
-
-After the board sync completes, post an ai-metrics PR comment (soft-fail).
-When `GH_DISABLE_AI_METRICS=1`, skip the comment entirely (issue #399):
-
-```bash
-ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
-if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
-    : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
-else
-    gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
-      -X POST \
-      -f body="---
-<details>
-<summary>🤖 AI Metrics · 📊 ~${TOKENS:-2000} tokens · 👤 ~0.25 h · 🤖 ~$ELAPSED min</summary>
-
-<!-- ai-metrics:gh-pr-merge -->
-📊 ~${TOKENS:-2000} tokens · 👤 ~0.25 h · 🤖 ~$ELAPSED min
-<!-- /ai-metrics:gh-pr-merge -->
-
-</details>
-PR merge: ~$ELAPSED min"
-fi
-```
-
-On failure: `[WARN] ai-metrics comment failed — continuing.`
+After the board sync completes, post the ai-metrics PR comment per
+`references/ai-metrics-comment.sh.md` (soft-fail; skip entirely when
+`GH_DISABLE_AI_METRICS=1`).
 
 ## Step 5: Fetch Merge SHA + Report
 
@@ -193,13 +91,10 @@ On failure: `[WARN] ai-metrics comment failed — continuing.`
 gh pr view <N> --repo "$TARGET_REPO" --json mergeCommit -q .mergeCommit.oid
 ```
 
-Print **only** the compact report (format in
-`references/strategy-selection.md` → "Final report format").
+Print **only** the compact report (format in `references/strategy-selection.md` → "Final report format").
 
 ## Constraints
 
 - Never ask for confirmation — running the skill is the confirmation.
-- Never merge an un-approved PR. Redirect to `gh:pr-merge-emergency`.
-- Never swap to a different strategy if the chosen one fails.
-- Always `--delete-branch` — head branches accumulate fast.
-- Never bypass CI. Required checks must pass.
+- Never merge an un-approved PR; redirect to `gh:pr-merge-emergency`. Never bypass CI.
+- Never swap strategy if the chosen one fails. Always `--delete-branch`.

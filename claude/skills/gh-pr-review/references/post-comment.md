@@ -45,12 +45,40 @@ introduces a sibling marker `<!-- ai-review:<ai> -->` that mirrors the
 same `<details>` + glyph pattern. Treat the new marker as a **scoped
 extension** of the existing exception:
 
-- 🤖 in `<summary>` line — allowed (same role as the existing
-  ai-metrics summary glyph).
+- 🤖 in `<summary>` line — allowed per `claude/skills/skill-check/references/allowed-emoji-skills.txt` (gh-pr-review registered; ai-metrics/AI-review footer SSOT, CLAUDE.md #317 F-2).
 - All other emoji — still forbidden everywhere.
 
 If the CLAUDE.md SSOT needs updating, do it in the same PR that lands
 this skill so the rule and the artifact ship together.
+
+## Step 6 delegation + 3-branch decision tree
+
+Step 6 of the skill delegates body construction and posting to two
+helpers in `shell-common/functions/gh_pr_review.sh`:
+
+- `_gh_pr_review_build_comment_body` — emits the SSOT body per this
+  file's "Body template" (collapsed `<details>` AI-review block +
+  `<!-- ai-review:<ai> -->` markers + ai-metrics footer with
+  `<!-- ai-metrics:gh-pr-review -->` markers).
+- `_gh_pr_review_post_comment` — wraps `gh pr comment --body-file`
+  and enforces three behaviors with a single decision tree:
+  1. `--no-post-comment` → print `skipped (--no-post-comment)` and
+     return 0.
+  2. `GH_DISABLE_AI_METRICS=1` → print
+     `skipped (GH_DISABLE_AI_METRICS=1)` and return 0. The opt-out
+     skips the **entire** PR comment (not just the metrics footer),
+     because the AI-review body and the metrics footer ship together
+     (issue #399).
+  3. `gh pr comment` non-zero exit → print `[WARN] PR comment post
+     failed — output retained on stdout` to stderr, emit
+     `[WARN] post failed` to stdout, and still return 0 — the user
+     already has the AI output on their terminal.
+
+Token, human-h, and elapsed-minute inputs are computed by
+`_gh_pr_review_estimate_tokens` and `_gh_pr_review_human_h` (per-preset
+baseline from "Human time baseline" / "Token estimation" below). The
+skill does not duplicate those formulas — read the shell function for
+the authoritative arithmetic.
 
 ## Posting via `gh pr comment`
 
