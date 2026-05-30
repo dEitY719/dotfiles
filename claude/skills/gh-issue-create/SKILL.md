@@ -3,175 +3,99 @@ name: gh:issue-create
 description: >-
   Save the current conversation as a GitHub issue. Use when the user runs
   /gh:issue-create, /gh-issue-create, or asks "이 대화 이슈로 등록",
-  "chat을 깃허브 이슈로 남겨", "기록용 이슈 만들어". Summarizes the chat
-  into a body keyed by conventional-commit prefix
-  (feat / fix / refactor / perf / docs / test / chore / misc) and creates
-  the issue via `gh issue create` on the target remote's repo without
-  confirmation, printing only the issue number and URL. Preserves
-  reasoning, decisions, and concrete details — the issue is reused for
-  PR drafts and blog posts. Accepts an optional remote name positional
-  arg (e.g. `/gh-issue-create upstream`) to target a non-`origin` remote.
-  Flags `--no-auto-labels`, `--auto-label-debug`, and
-  `--as-discussion <category>` (`Ideas` / `Q&A` / `Announcements` /
-  `Lessons`, #619) are documented in references/help.md, alongside the
-  `.gh-issue-defaults.yml` auto-label behavior. Accepts
-  `-h`/`--help`/`help` to print usage.
+  "chat을 깃허브 이슈로 남겨", "기록용 이슈 만들어". Summarizes the chat into
+  a body keyed by conventional-commit prefix (feat / fix / refactor / perf /
+  docs / test / chore / misc) and creates the issue via `gh issue create` on
+  the target remote's repo without confirmation, printing only the issue
+  number and URL. Preserves reasoning and concrete details — the issue is
+  reused for PR drafts and blog posts. Optional remote positional arg; flags
+  `--no-auto-labels`, `--auto-label-debug`, `--as-discussion <category>`
+  (#619) and `-h`/`--help`/`help` are documented in references/help.md.
 allowed-tools: Bash, Read, Grep
+metadata:
+  model_recommendation:
+    tier: sonnet
+    reason: "chat→issue summarization with classification + auto-labels + clarification guard"
+    claude: prefer
+    non_claude: advisory-only
 ---
 
 # gh:issue-create — Conversation → GitHub Issue
 
+Convert the current chat into a well-structured issue on the target repo,
+execute immediately without confirmation, and print only the issue number
++ URL. 본문은 사용자 대화 언어로 작성.
+
 ## Help
 
-If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
-output its content verbatim, then stop. No API calls.
-
-## Role
-
-Convert the current chat into a well-structured GitHub issue on the target
-repo. Execute immediately without confirmation. Print only the issue
-number + URL at the end.
+If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output
+its content verbatim, then stop. No API calls.
 
 ## Options
 
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `[remote]` (positional) | Target remote name. Resolved to `TARGET_REPO=<owner>/<repo>`. Fails fast if missing. | `origin` |
-| `--no-auto-labels` | Skip Step 2.5 entirely; user `--label` flags remain in effect. | off |
-| `--auto-label-debug` | Verbose stderr trace of Stage-1 detection and the kept/dropped label sets. | off |
-| `--label <name>` | User label, union with Step 2.5 auto-labels. Repeatable. | — |
-| `--assignee @me` | Only added when the user explicitly asks. | off |
-| `--as-discussion <category>` | Route to [[gh-discussion-create]] instead of creating an Issue. Category is one of `Ideas` / `Q&A` / `Announcements` / `Lessons` (case-insensitive). Skips Step 2.5 (auto-labels) and Step 4's `gh issue create` — Discussions do not carry labels/milestones. `--label` / `--assignee` flags, if also passed, are ignored with a 1-line warning. | off |
-| `GH_DISABLE_AI_METRICS=1` (env) | Skip ai-metrics footer append in Step 4. | off |
-| `-h`/`--help`/`help` | Print `references/help.md` verbatim and stop. | — |
+All arguments, flags, and env vars are in `references/options.md`
+(Option | Description | Default). Key: `[remote]` positional (default
+`origin`), `--no-auto-labels`, `--auto-label-debug`, `--label`,
+`--assignee @me`, `--as-discussion <category>`, `GH_DISABLE_AI_METRICS=1`.
 
 ## Step 1: Detect Repo Context
 
-Record `START_TS=$(date +%s)` immediately for Step 3.5. Parse the
-positional remote arg and the flags above. Confirm we're in a git repo
-(`git rev-parse --show-toplevel`) and resolve `TARGET_REPO=<owner>/<repo>`
-via the remote — full substeps in `references/repo-resolution.md`.
-Never silently fall back to `origin` when the user-supplied remote is
-missing.
-
-### Step 1.1: `--as-discussion` parse
-
-If `--as-discussion <category>` is present, bind `DISCUSSION_MODE=1` and
-`CATEGORY=<value>`. Validate `<value>` against the allow-list
-`Ideas` / `Q&A` / `Announcements` / `Lessons` (case-insensitive); on
-mismatch, print the four allowed values and **exit 3** without calling
-any API. When `DISCUSSION_MODE=1` and the user also supplied `--label`
-or `--assignee`, emit a 1-line warning to stderr and drop those flags
-(Discussions do not carry labels/assignees):
-
-```
-[gh-issue-create] --as-discussion: dropping --label/--assignee (Discussions do not carry these)
-```
-
-When `DISCUSSION_MODE` is unset the legacy issue path is unchanged.
+Record `START_TS=$(date +%s)` for Step 3.5. Parse the positional remote arg
++ flags. Confirm a git repo (`git rev-parse --show-toplevel`) and resolve
+`TARGET_REPO=<owner>/<repo>` via the remote (substeps in
+`references/repo-resolution.md`). Never silently fall back to `origin` when
+the user-supplied remote is missing. When `--as-discussion <category>` is
+present, follow `references/discussion-mode.md` to bind `DISCUSSION_MODE` /
+`CATEGORY` and validate the category (exit 3 on mismatch).
 
 ## Step 2: Classify the Conversation
 
 Read `references/prefix-table.md` and pick exactly one conventional-commit
-prefix as the dominant intent. The reference also covers the disambiguation
-rules (default to `misc`; large-`feat` heuristic) and title formatting.
+prefix as the dominant intent (covers disambiguation, `misc` default,
+large-`feat` heuristic, and title formatting).
 
 ## Step 2.1: Clarification & Scope Guard
 
 Apply `references/clarification.md` trigger signals (동사 없는 명사 나열 /
 컴포넌트 ≥3 혼재 / feature 범위 미정의). 매치되면 1~2줄 확인 또는 분리안을
-사용자에게 보내고 응답 전에는 `gh issue create` 호출 금지. 사용자가
-"한 이슈로" 라고 답하면 그대로 생성 — 강제 분할 아닌 안전망.
+보내고 응답 전 `gh issue create` 호출 금지. "한 이슈로" 답하면 그대로 생성.
 
 ## Step 2.5: Auto-labels + Milestone (opt-in via SSOT)
 
-Skip entirely when `--no-auto-labels` **or** `DISCUSSION_MODE=1` is set.
-Discussions do not carry labels or milestones (#619 F-3) — running the
-auto-label dispatch and then discarding the result would be wasteful
-and noisy. Otherwise read `references/auto-labels.md` and follow
-verbatim (Stage-1 signal → SSOT load → label union → `gh label list`
-validation → milestone resolution). Stash kept labels + milestone for
-Step 4. `--auto-label-debug` emits the Stage-1 trace per the same
-reference.
+Skip entirely when `--no-auto-labels` **or** `DISCUSSION_MODE=1` is set
+(#619 F-3). Otherwise read `references/auto-labels.md` and follow verbatim
+(Stage-1 signal → SSOT load → label union → `gh label list` validation →
+milestone resolution). Stash kept labels + milestone for Step 4.
+`--auto-label-debug` emits the Stage-1 trace.
 
 ## Step 3: Draft the Issue Body
 
-`references/templates/<prefix>.md` 에 정의된 본문 골격을 그대로 사용한다.
-타이틀 포맷은 Step 2 의 `references/prefix-table.md` 참조. 본문은 사용자 대화 언어로
-작성하고 (한국어 대화 → 한국어 이슈) **over-compress 금지** — 파일
-경로·명령 출력·결정·근거를 그대로 유지한다. 200 줄짜리 이슈도 정상.
-
-When `DISCUSSION_MODE=1`, swap the Acceptance Criteria section for an
-**Open Questions** section and use the matching skeleton from
-[[gh-discussion-create]]'s `references/rfc-template.md`
-(Ideas/Q&A/Announcements/Lessons variants). All other detail-preservation
-rules remain identical — Discussions are not a license to compress.
+Use the `references/templates/<prefix>.md` skeleton; title format per
+`references/prefix-table.md`. **Over-compress 금지** — 파일 경로·명령 출력·
+결정·근거 유지 (200줄 이슈도 정상). `DISCUSSION_MODE=1` 일 때는 Acceptance
+Criteria 대신 Open Questions 섹션 + [[gh-discussion-create]] 의
+`references/rfc-template.md` 스켈레톤 사용 (압축 금지 동일).
 
 ## Step 3.5: Compute AI Metrics
 
 Read `references/metrics-baseline.md` and bind `TOKENS`, `HUMAN_H`,
-`ELAPSED` for Step 4. Inputs: `START_TS` from Step 1, the prefix from
-Step 2, the drafted title + body. For `feat`, infer size (small /
-medium / large) from the conversation scope.
+`ELAPSED` for Step 4 (inputs: `START_TS`, the prefix, drafted title+body;
+for `feat` infer small/medium/large from scope).
 
 ## Step 4: Create the Issue (or Discussion)
 
-Read `references/create-cmd.md` and paste the matching bash block
-verbatim:
-
-- **Issue path** (default, `DISCUSSION_MODE` unset) — `mktemp` body
-  file, `GH_DISABLE_AI_METRICS=1` short-circuit (issue #399),
-  ai-metrics footer printf, and `gh issue create` with `LABEL_ARGS` /
-  `MILESTONE_ARGS` from Step 2.5.
-- **Discussion path** (`DISCUSSION_MODE=1`) — same body file +
-  ai-metrics footer, then source
-  `shell-common/functions/gh_discussion.sh` and run the three lookups
-  (`_gh_discussion_repo_id`, `_gh_discussion_category_id`,
-  `_gh_discussion_create`). Print the Discussion URL instead of an
-  issue URL. If the helper is missing, fail with
-  `[FAIL] gh-discussion helper not found at $DOTFILES_ROOT/shell-common/functions/gh_discussion.sh`
-  and exit 1.
-
-확인 질문하지 말고 즉시 실행.
+Follow `references/discussion-dispatch.md`: read `references/create-cmd.md`
+and paste the matching bash block verbatim — Issue path (default) or
+Discussion path (`DISCUSSION_MODE=1`). 확인 질문 없이 즉시 실행.
 
 ## Step 5: Report
 
-Issue 경로 성공 시:
-
-```
-[OK] Issue: #123, URL: https://github.com/owner/repo/issues/123
-Next: /gh:issue-implement 123
-```
-
-Discussion 경로 (`DISCUSSION_MODE=1`) 성공 시 — Discussion URL 만 출력:
-
-```
-[OK] Discussion (<category>): https://github.com/owner/repo/discussions/45
-Next: /gh-discussion-convert 45   # when decision lands
-```
-
-실패 시 (gh stderr 또는 helper stderr 첫 줄을 인용):
-
-```
-[FAIL] <stderr first line>
-Next: <recovery step — e.g. `gh auth login`, fix `.gh-issue-defaults.yml`, enable Discussions in repo settings>
-```
+Output format (Issue / Discussion / failure) is in
+`references/report-template.md`. Always end with an `[OK]`/`[FAIL]` verdict
+line + a `Next:` hint.
 
 ## Constraints
 
-- `--assignee @me` 는 사용자 요청이 있을 때만 추가.
-- 라벨/마일스톤 은 (a) 사용자 명시 또는 (b) Step 2.5 의 SSOT 기반
-  자동 적용 일 때만 부착. 자동 적용 결과는 항상 `gh label list` 검증
-  통과한 라벨만 유지 — 미존재 라벨 자동 생성 금지.
-- 항상 `--repo "$TARGET_REPO"` — 암묵적 repo 감지 의존 금지.
-- 사용자 지정 remote 가 없으면 즉시 실패.
-- discussion log 를 2~3줄로 압축하지 말 것. `DISCUSSION_MODE=1`
-  경로에서도 동일하게 적용된다 — Discussion 본문은 future-self 검색의
-  SSOT 다.
-- `--as-discussion` 는 명시적 사용자 의도 전용. AI 가 "이건 Discussion
-  같음" 자동 판정해서 분기하지 말 것 (#619 Non-Goal). 잘못된 분기 =
-  SSOT 분산.
-- `--as-discussion` + `--label` / `--assignee` 동시 사용 시 후자를
-  버리고 경고 1줄. `DISCUSSION_MODE=1` 일 때 Step 2.5 와 `gh issue
-  create` 둘 다 우회.
-- "should I create it?" 같은 확인 질문 금지.
+See `references/constraints.md` (assignee/label rules, always
+`--repo "$TARGET_REPO"`, fail-fast on missing remote, no over-compression,
+`--as-discussion` explicit-intent only, no confirmation prompts).
