@@ -40,7 +40,7 @@ gh_proceed_check_absolute_block() {
     if printf '%s' "$_cmd" | grep -iqE 'git +push'; then
         if printf '%s' "$_cmd" | grep -iqE -- '--force-with-lease'; then
             : # allowed at Layer 1
-        elif printf '%s' "$_cmd" | grep -iqE -- '(--force|[[:space:]]-f([[:space:]]|$))'; then
+        elif printf '%s' "$_cmd" | grep -iqE -- '(--force|[[:space:]"'\'']-f([[:space:]"'\'']|$))'; then
             if printf '%s' "$_cmd" | grep -iqE -- "(\\b${_default}\\b|\\bmain\\b|\\bmaster\\b)"; then
                 _gp_block force_push_default
                 return 2
@@ -52,20 +52,21 @@ gh_proceed_check_absolute_block() {
 
     # rm -rf with a path outside $PWD (absolute, home, or parent-relative).
     if printf '%s' "$_cmd" | grep -iqE 'rm +-[a-z]*r[a-z]*f|rm +-[a-z]*f[a-z]*r'; then
-        if printf '%s' "$_cmd" | grep -qE 'rm +-[A-Za-z]+ +(/|~|[^ ]*\.\.)'; then
+        if printf '%s' "$_cmd" | grep -qE 'rm +-[A-Za-z]+ +["'\'']?(/|~|[^ ]*\.\.)'; then
             _gp_block rm_rf_outside_pwd
             return 2
         fi
     fi
 
-    # Destructive DB ops.
-    if printf '%s' "$_cmd" | grep -qE '\b(DROP|TRUNCATE)\b|admin +reset|DELETE +FROM'; then
+    # Destructive DB ops. Case-insensitive: lowercase `drop table` must not bypass.
+    if printf '%s' "$_cmd" | grep -iqE '\b(DROP|TRUNCATE)\b|admin +reset|DELETE +FROM'; then
         _gp_block destructive_db
         return 2
     fi
 
-    # Secret-shaped token in the command/output.
-    if printf '%s' "$_cmd" | grep -qE '[A-Za-z0-9_]*(_KEY|_TOKEN|_SECRET)[A-Za-z0-9_]*=|password=|Bearer +|eyJ[A-Za-z0-9_-]+\.'; then
+    # Secret-shaped token in the command/output. Case-insensitive: lowercase
+    # `api_key=` / mixed-case `PASSWORD=` must not bypass the scanner.
+    if printf '%s' "$_cmd" | grep -iqE '[A-Za-z0-9_]*(_KEY|_TOKEN|_SECRET)[A-Za-z0-9_]*=|password=|Bearer +|eyJ[A-Za-z0-9_-]+\.'; then
         _gp_block secret_in_output
         return 2
     fi
