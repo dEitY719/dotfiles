@@ -51,10 +51,11 @@ metadata:
 메타데이터 누락의 결과는 **마이그레이션 단계 플래그**로 제어한다 — 43개 스킬을
 day-one red wall 로 막지 않기 위함이다 (Open Question 1 결정).
 
-- **`MIGRATION_COMPLETE = false`** (현재): 메타데이터 누락 → **WARN** +
-  아래 마이그레이션 명령 제안.
-- 전체 스킬에 메타데이터가 채워지면 이 줄을 `true` 로 바꾼다: 그 시점부터
-  누락 → **FAIL**.
+- **`MIGRATION_COMPLETE = true`** (현재): 메타데이터 누락 → **FAIL**.
+  전 스킬 `model_recommendation` 전수 마이그레이션 완료 (#815 #855 #860 #862
+  모두 close) 후 별도 PR (#861) 로 전환됨.
+- 이전 상태 `MIGRATION_COMPLETE = false`: 누락 → **WARN** + 아래 마이그레이션
+  명령 제안 (마이그레이션 유예 기간 — 종료됨).
 
 마이그레이션 명령 (제안 문구):
 `Run /skill:refactor <path> to add a metadata.model_recommendation block (rubric: references/model-recommendation.md).`
