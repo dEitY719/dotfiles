@@ -1,9 +1,79 @@
-# Project Board Sync — narrative + rationale
+# Project Board Sync — snippet + narrative
 
-> **Canonical executable snippet lives in `SKILL.md` Step 7.** This file is
-> the narrative companion — rationale, edge cases, and pointers — not a
-> source of code. If you find yourself copying bash out of here into the
-> skill, you've found a regression of issue #747.
+> **Canonical executable snippet lives in this file** (below). `SKILL.md`
+> Step 7 points here and the model pastes the snippet verbatim. This file
+> is both the source of the bash and its narrative companion — rationale,
+> edge cases, and pointers. (Relocated from inline Step 7 for progressive
+> disclosure; the issue #747 visual-checklist guarantees are preserved by
+> the Step 8 report row, not by inlining the bash.)
+
+## Executable snippet (paste verbatim into Step 7)
+
+First, detect a PostToolUse hook that already handles this sync — when
+present, skip the inline call to avoid triple-syncing (issue #390):
+
+```bash
+hook_skip=0
+for hook_path in \
+    "${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}/.claude/hooks/post-pr-create-status.sh" \
+    "$HOME/.claude/hooks/post-gh-pr-create.sh" \
+    "$HOME/dotfiles/claude/hooks/post-gh-pr-create.sh"
+do
+    if [ -x "$hook_path" ]; then
+        hook_skip=1
+        printf '[gh-pr] board sync delegated to PostToolUse hook (%s) — skipping inline.\n' "$hook_path" >&2
+        break
+    fi
+done
+
+if [ "$hook_skip" -eq 0 ]; then
+    # helper-fallback NF-1 (#644): silent-skip when helper missing.
+    # Defense-in-depth (#724): also detect "[ -r ] passes but function never
+    # defined" (interactive-guard regression, partial sourcing, future rename).
+    # `|| true` would otherwise absorb `command not found` (rc 127) and the
+    # entire reconciliation would silently no-op — the failure mode from #724.
+    _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
+    if [ -r "$_HELPER" ]; then
+        . "$_HELPER"
+        if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
+            printf '[gh-pr] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
+                "$_HELPER" >&2
+        else
+            _gh_project_status_sync pr "$PR_NUMBER" "In review" || true
+            # Auto-resolve GH_REPO when unset/empty so the linked-issues
+            # sync isn't silently no-op'd by an empty repo arg (PR #780
+            # review). Matches the existing convention in
+            # shell-common/functions/gh_pr_edit_safe.sh and
+            # gh_audit_builtin_workflows.sh.
+            if [ -z "${GH_REPO:-}" ]; then
+                GH_REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
+            fi
+            for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO" 2>/dev/null || true); do
+                _gh_project_status_sync issue "$_issue" "In progress" \
+                    --only-from "Backlog,Ready,In review" || true
+            done
+        fi
+    fi
+fi
+```
+
+`GH_REPO` should be `owner/repo` (e.g. `dEitY719/dotfiles`). The block
+auto-resolves it via `gh repo view --json nameWithOwner --jq
+.nameWithOwner` when unset/empty so the linked-issues loop never
+silently no-ops on a missing env var. Opt-out per invocation:
+`GH_PROJECT_STATUS_SYNC=0`. Repos without a projectV2 board auto-skip
+silently (helper returns 0).
+
+Track the outcome for Step 8's report row:
+- `hook_skip=1` → `[SKIP]: hook auto-skip`
+- helper missing or function undefined → `[SKIP]: helper unavailable`
+- helper ran, no projectV2 board → `[SKIP]: no projectV2`
+- helper ran with at least one card moved → `[OK]: PR card -> "In review"`
+
+Regardless of which branch ran (hook delegate, helper missing, no
+projectV2, real sync), emit the step-completion marker so the
+step-skip guard recognizes Step 7 was visited:
+`printf '[step:gh-pr/board-sync] OK\n'`.
 
 After the PR is created, sync cards on the kanban so reviewers see the PR and
 the linked Issues are at the right column without a manual drag. Two cards
@@ -84,6 +154,5 @@ mutation — and matches the existing convention in
 `shell-common/functions/gh_project_status.sh` — shared between `gh:pr`,
 `gh:pr-reply`, and other PR/issue lifecycle skills. The skill **sources**
 this file; do not duplicate the helper's implementation. The bash that
-*calls* the helper, however, is intentionally inlined in `SKILL.md`
-Step 7 (issue #747) so the model reads it linearly during execution
-without a reference-load indirection.
+*calls* the helper lives in the "Executable snippet" section above; Step 7
+of `SKILL.md` points here and the model pastes it verbatim.

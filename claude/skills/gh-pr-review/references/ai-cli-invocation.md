@@ -144,6 +144,20 @@ branch — internal PCs typically have an empty
 rejects any `--user <name>`. The cleanest user experience there is to
 omit `--user` and let the current shell's `CLAUDE_CONFIG_DIR` win.
 
+## Step 5 dispatch procedure (`_gh_pr_review_run_ai`)
+
+Step 5 of the skill delegates to `_gh_pr_review_run_ai` in
+`shell-common/functions/gh_pr_review.sh`. The function pipes
+`PROMPT_FILE` into the chosen CLI with the exact invocation shape
+documented above (`codex exec --color=never`, `gemini -p`, `claude -p`,
+plus the `CLAUDE_CONFIG_DIR` injection for `--user`). Stdout streams to
+the user verbatim — no reformatting, no summarization, no truncation.
+
+On non-zero exit from the external CLI the helper writes
+`External AI CLI '<name>' failed: <first stderr line>` to stderr and
+returns the CLI's exit code. The skill propagates that as exit 1 and
+skips Step 6; partial output is discarded.
+
 ## Common error mapping
 
 | Condition | Exit | stderr |

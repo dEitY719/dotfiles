@@ -102,9 +102,16 @@ report and include the PR URL so the user can resolve manually.
 
 ## Final report format
 
+Lead with an explicit verdict line, then the structured key-values:
+
 ```
-PR #<N> merged (<strategy>)
+[OK] PR #<N> merged (<strategy>)
   Merge SHA:  <sha>
   Branch:     <headRefName> → <baseRefName> (deleted)
   URL:        <pr-url>
 ```
+
+A hard stop before the merge (un-approved, conflicting, failing checks,
+board gate) instead prints a `[FAIL] PR #<N> not merged — <reason>` line
+and the redirect (e.g. `/gh-pr-merge-emergency`). The Merge SHA renders as
+`(pending)` when GitHub has not yet computed `mergeCommit.oid`.

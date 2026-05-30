@@ -75,16 +75,20 @@ teardown() {
     run grep -F 'if [ -r "$_HELPER" ]; then' "$fixture"
     assert_success
 
-    # Spot-check that each updated SKILL.md/reference also carries the guard.
-    # NOTE: gh-pr's canonical executable snippet moved from
-    # references/project-board-sync.md → SKILL.md Step 7 in issue #747.
+    # Spot-check that each skill's canonical helper-fallback guard carries
+    # through. NOTE: #862 PR-NW-4 relocated these bash blocks out of the
+    # SKILL.md bodies into references/ for progressive disclosure (Check 1
+    # line-count ≤100). Each owning SKILL.md Step now points at the reference
+    # and the model pastes it verbatim, so the guard still executes — the
+    # drift check just follows it to its new home. (This reverses the #747
+    # inlining for gh-pr.)
     local f
     for f in \
-        "claude/skills/gh-pr-merge/SKILL.md" \
+        "claude/skills/gh-pr-merge/references/board-approval-gate.sh.md" \
         "claude/skills/gh-pr-merge/references/project-board-sync.md" \
         "claude/skills/gh-commit/SKILL.md" \
-        "claude/skills/gh-pr-reply/SKILL.md" \
-        "claude/skills/gh-pr/SKILL.md" \
+        "claude/skills/gh-pr-reply/references/board-sync-in-review.sh.md" \
+        "claude/skills/gh-pr/references/project-board-sync.md" \
         "claude/skills/gh-pr-merge-emergency/references/project-board-sync.md"; do
         run grep -F 'if [ -r "$_HELPER" ]; then' "${_BATS_REAL_DOTFILES_ROOT}/$f"
         assert_success

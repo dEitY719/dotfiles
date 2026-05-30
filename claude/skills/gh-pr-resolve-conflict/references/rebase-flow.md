@@ -114,3 +114,17 @@ gh:pr-resolve-conflict stopped at <step>
   Backup SHA:   <sha>
   Resume:       <command the user should run>
 ```
+
+## Mergeable preflight (Step 1)
+
+Immediately after resolving `PR_NUMBER`, short-circuit when there is
+nothing to resolve:
+
+```bash
+MERGEABLE=$(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
+  --json mergeable --jq '.mergeable')
+```
+
+- `MERGEABLE == MERGEABLE` → print `[OK] PR은 이미 충돌 없음 — skip.` and stop (success).
+- `MERGEABLE == UNKNOWN` → GitHub is still computing; continue the flow normally (do not skip).
+- Any other value (`CONFLICTING` etc.) → continue.

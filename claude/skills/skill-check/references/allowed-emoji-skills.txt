@@ -15,6 +15,11 @@ gh-pr                                # ai-metrics footer (#856)
 gh-pr-approve                        # ai-metrics footer (#857)
 gh-pr-merge                          # ai-metrics footer (#818)
 devx-pr-to-ssot-issue                # ai-metrics footer in references/metrics-footer.md SSOT 참조 (#841)
+
+# --- #862 PR-NW-4: PR-NW-1 누락분 — gh-pr-* ai-metrics footer 보강 (Check 11) ---
+gh-pr-reply                          # ai-metrics footer (#822)
+gh-pr-resolve-conflict               # ai-metrics footer (#825)
+gh-pr-review                         # ai-metrics footer + AI review summary in references/post-comment.md (#829)
 # 문서적/데모용 글리프 — 정책 설명·스타일·UI 아이콘 용도
 skill-check                          # references/checks.md 의 정책 설명용 데모 글리프 (📊 👤 🤖 ✓ ✗) (#840)
 write-blog-dev-learnings             # 의도적 블로그 스타일 글리프 (#850)
