@@ -5,7 +5,8 @@ description: >-
   /gh:issue-create, /gh-issue-create, or asks "이 대화 이슈로 등록",
   "chat을 깃허브 이슈로 남겨", "기록용 이슈 만들어". Summarizes the chat into
   a body keyed by conventional-commit prefix (feat / fix / refactor / perf /
-  docs / test / chore / misc) and creates the issue via `gh issue create` on
+  docs / test / verify / chore / misc) and creates the issue via
+  `gh issue create` on
   the target remote's repo without confirmation, printing only the issue
   number and URL. Preserves reasoning and concrete details — the issue is
   reused for PR drafts and blog posts. Optional remote positional arg; flags
@@ -51,7 +52,9 @@ present, follow `references/discussion-mode.md` to bind `DISCUSSION_MODE` /
 
 Read `references/prefix-table.md` and pick exactly one conventional-commit
 prefix as the dominant intent (covers disambiguation, `misc` default,
-large-`feat` heuristic, and title formatting).
+large-`feat` heuristic, and title formatting). `verify` 는 코드 변경이
+아닌 라이브 검증 추적용 — 산출물이 issue + 코멘트 누적이면 `verify`,
+테스트 코드 파일이면 `test` (`templates/verify.md`).
 
 ## Step 2.1: Clarification & Scope Guard
 
