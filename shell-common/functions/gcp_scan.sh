@@ -408,6 +408,7 @@ EOF
                 fi
                 local picked=0
                 local empty_skipped=0
+                local content_skipped=0
                 local dup_skipped=0
                 while IFS= read -r sha; do
                     [ -z "$sha" ] && continue
@@ -434,7 +435,9 @@ EOF
                         else
                             echo "ℹ Skipping ${sha} — changes already in HEAD (pre-flight)"
                         fi
-                        empty_skipped=$((empty_skipped + 1))
+                        # A content-dup is "already applied via another path", not
+                        # a git-empty commit — keep the counts distinct (issue #903).
+                        content_skipped=$((content_skipped + 1))
                         continue
                     fi
                     if type ux_info >/dev/null 2>&1; then
@@ -469,11 +472,17 @@ EOF
                 # conflict returns 1 above), so report 0 conflicts.
                 if type ux_success >/dev/null 2>&1; then
                     ux_success "$picked applied, $dup_skipped skipped (dup), 0 conflicts"
+                    if [ "$content_skipped" -gt 0 ]; then
+                        ux_info "($content_skipped commit(s) skipped — content already in HEAD)"
+                    fi
                     if [ "$empty_skipped" -gt 0 ]; then
                         ux_info "($empty_skipped empty commit(s) also skipped)"
                     fi
                 else
                     echo "✓ $picked applied, $dup_skipped skipped (dup), 0 conflicts"
+                    if [ "$content_skipped" -gt 0 ]; then
+                        echo "  ($content_skipped commit(s) skipped — content already in HEAD)"
+                    fi
                     if [ "$empty_skipped" -gt 0 ]; then
                         echo "  ($empty_skipped empty commit(s) also skipped)"
                     fi

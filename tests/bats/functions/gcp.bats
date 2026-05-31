@@ -450,6 +450,21 @@ FIXTURE
 # loop. `_gcp_scan_already_in_head` catches it before the cherry-pick attempt.
 # ---------------------------------------------------------------------------
 
+_gcp903_make_repo() {
+    # Emits shell that builds a fresh temp repo (main @ a.txt=v1) and cds in,
+    # with EXIT cleanup. Mirrors _gcp811_make_repo; shared by the #903 unit
+    # tests below so the mktemp/trap/git-init boilerplate lives in one place.
+    cat <<'FIXTURE'
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo v1 > a.txt && git add a.txt && git commit -qm "init"
+FIXTURE
+}
+
 @test "bash: _gcp_scan_already_in_head private function exists" {
     run_in_bash 'declare -f _gcp_scan_already_in_head >/dev/null && echo ok'
     assert_success
@@ -457,64 +472,45 @@ FIXTURE
 }
 
 @test "preflight #903: empty commit (no file changes) -> already in HEAD (0)" {
-    run_in_bash '
-        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
-        trap "rm -rf $repo" EXIT
-        cd "$repo" || exit 1
-        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
-               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
-        git init -q -b main
-        echo v1 > a.txt && git add a.txt && git commit -qm "init"
-        git commit -q --allow-empty -m "empty"
-        empty_sha=$(git rev-parse HEAD)
-        _gcp_scan_already_in_head "$empty_sha"
-        echo "rc=$?"
-    '
+    run_in_bash "
+        $(_gcp903_make_repo)
+        git commit -q --allow-empty -m empty
+        empty_sha=\$(git rev-parse HEAD)
+        _gcp_scan_already_in_head \"\$empty_sha\"
+        echo \"rc=\$?\"
+    "
     assert_success
     assert_output --partial "rc=0"
 }
 
 @test "preflight #903: all touched files identical to HEAD -> already in HEAD (0)" {
-    run_in_bash '
-        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
-        trap "rm -rf $repo" EXIT
-        cd "$repo" || exit 1
-        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
-               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
-        git init -q -b main
-        echo v1 > a.txt && git add a.txt && git commit -qm "init"
+    run_in_bash "
+        $(_gcp903_make_repo)
         git checkout -q -b side
-        echo v2 > a.txt && git add a.txt && git commit -qm "side: bump to v2"
-        side_sha=$(git rev-parse HEAD)
+        echo v2 > a.txt && git add a.txt && git commit -qm 'side: bump to v2'
+        side_sha=\$(git rev-parse HEAD)
         git checkout -q main
         # HEAD reaches the SAME content for a.txt via a different commit.
-        echo v2 > a.txt && git add a.txt && git commit -qm "main: bump to v2 (other path)"
-        _gcp_scan_already_in_head "$side_sha"
-        echo "rc=$?"
-    '
+        echo v2 > a.txt && git add a.txt && git commit -qm 'main: bump to v2 (other path)'
+        _gcp_scan_already_in_head \"\$side_sha\"
+        echo \"rc=\$?\"
+    "
     assert_success
     assert_output --partial "rc=0"
 }
 
 @test "preflight #903: some touched files differ from HEAD -> NOT in HEAD (1)" {
-    run_in_bash '
-        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
-        trap "rm -rf $repo" EXIT
-        cd "$repo" || exit 1
-        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
-               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
-        git init -q -b main
-        echo v1 > a.txt && git add a.txt && git commit -qm "init"
+    run_in_bash "
+        $(_gcp903_make_repo)
         git checkout -q -b side
-        echo only-on-side > b.txt && echo shared > c.txt && git add b.txt c.txt \
-            && git commit -qm "side: add b and c"
-        side_sha=$(git rev-parse HEAD)
+        echo only-on-side > b.txt && echo shared > c.txt && git add b.txt c.txt && git commit -qm 'side: add b and c'
+        side_sha=\$(git rev-parse HEAD)
         git checkout -q main
         # HEAD matches c.txt but never gets b.txt -> real work remains.
-        echo shared > c.txt && git add c.txt && git commit -qm "main: add c only"
-        _gcp_scan_already_in_head "$side_sha"
-        echo "rc=$?"
-    '
+        echo shared > c.txt && git add c.txt && git commit -qm 'main: add c only'
+        _gcp_scan_already_in_head \"\$side_sha\"
+        echo \"rc=\$?\"
+    "
     assert_success
     assert_output --partial "rc=1"
 }
