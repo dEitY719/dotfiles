@@ -56,6 +56,33 @@ _wsl_check_disk_pct() {
     command df -P / 2>/dev/null | awk 'NR==2 { gsub(/%/, "", $5); print $5 }'
 }
 
+# WSL root-fs used space in whole GB — the "real" occupancy inside the vhdx,
+# compared against the host vhdx file size to estimate compaction headroom.
+_wsl_check_disk_used_gb() {
+    command df -P -k / 2>/dev/null | awk 'NR==2 { printf "%d", $3 / 1048576 }'
+}
+
+# Host-side ext4.vhdx path — the WSL virtual disk grows but never auto-shrinks.
+# Single-distro assumption (#900): first ext4.vhdx under any user's Store-WSL
+# package. Empty when /mnt/c is unmounted or no vhdx exists (non-WSL host).
+_wsl_check_vhdx_path() {
+    _wsl_check_is_mounted /mnt/c || return 0
+    for _vh in /mnt/c/Users/*/AppData/Local/Packages/*/LocalState/ext4.vhdx; do
+        [ -f "$_vh" ] && {
+            printf '%s\n' "$_vh"
+            return 0
+        }
+    done
+}
+
+# Size of the host vhdx file in whole GB. `ls -l` reads only the directory
+# entry; `wc -c` / `find -printf` would stream or GNU-lock. Empty on failure.
+_wsl_check_vhdx_size_gb() { # $1 = vhdx path
+    [ -f "$1" ] || return 0
+    # shellcheck disable=SC2012  # ls -l reads the inode size without opening
+    command ls -l "$1" 2>/dev/null | awk '{ printf "%d", $5 / 1073741824 }'
+}
+
 _wsl_check_mem_pct() {
     awk '/^MemTotal:/ { t=$2 } /^MemAvailable:/ { a=$2 } \
          END { if (t > 0) printf "%d", (t - a) * 100 / t }' /proc/meminfo 2>/dev/null
@@ -169,12 +196,34 @@ _wsl_check_df_section() { # $1=title $2=mountpoint
     ux_table_row "Use%" "${4:-?}"
 }
 
+# vhdx compaction advisory: the host C: drive only reclaims space when the
+# vhdx is compacted from the Windows host (see `wsl-check -h`) — pruning inside
+# WSL frees the fs but leaves the vhdx file just as large. Silently skipped on
+# a non-WSL host or when no vhdx is found (graceful, no warning row).
+_wsl_check_vhdx_report() {
+    vpath=$(_wsl_check_vhdx_path)
+    [ -n "$vpath" ] || return 0
+    vsize=$(_wsl_check_vhdx_size_gb "$vpath")
+    [ -n "$vsize" ] || return 0
+    vused=$(_wsl_check_disk_used_gb)
+
+    ux_section "[2b] WSL vhdx Compaction"
+    ux_table_row "vhdx file (host)" "${vsize}G allocated"
+    if [ -n "$vused" ] && [ "$vsize" -gt "$vused" ]; then
+        ux_table_row "Reclaimable" "~$((vsize - vused))G by compaction"
+        ux_info "Compact from the Windows host — see 'wsl-check -h'."
+    else
+        ux_table_row "Reclaimable" "compaction unnecessary"
+    fi
+}
+
 _wsl_check_full() {
     _wsl_check_thresholds
     ux_header "WSL & Docker Environment Health"
 
     _wsl_check_df_section "[1] Windows C: Drive (host)" /mnt/c
     _wsl_check_df_section "[2] WSL Virtual Disk (/)" /
+    _wsl_check_vhdx_report
 
     ux_section "[3] Memory & Swap"
     # shellcheck disable=SC2046
