@@ -29,6 +29,30 @@ _gcp_scan_is_empty_cherry_pick() {
     return 0
 }
 
+_gcp_scan_already_in_head() {
+    # True (0) when every file that commit $1 touches already has identical
+    # content in HEAD — i.e. cherry-picking it would produce no net change.
+    # Catches the "same content, different path" case that Stage-1's
+    # subject-based dup detection misses (issue #903): a commit whose subject
+    # is unique but whose payload arrived in HEAD via merge/squash/edit. Such
+    # a commit otherwise conflicts, resolves to empty, and forces --skip.
+    local sha="$1"
+    local changed_files
+    changed_files=$(git diff-tree --no-commit-id -r --name-only "$sha" 2>/dev/null)
+    # No file changes (e.g. an already-empty commit) -> nothing to apply.
+    [ -z "$changed_files" ] && return 0
+    local f
+    while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        # Any file whose HEAD content differs from $sha's means real work
+        # remains -> not already in HEAD.
+        git diff --quiet HEAD "$sha" -- "$f" 2>/dev/null || return 1
+    done <<EOF
+$changed_files
+EOF
+    return 0
+}
+
 _gcp_scan_dup_base_sha() {
     # Look up the base-branch SHA that a duplicate source SHA matches.
     # $1 = candidate source SHA; $2 = duplicate map ("SRC_SHA BASE_SHA" lines).
@@ -398,6 +422,19 @@ EOF
                             echo "ℹ Skipping ${sha} — already applied as ${dup_base_sha} (duplicate subject)"
                         fi
                         dup_skipped=$((dup_skipped + 1))
+                        continue
+                    fi
+                    # Pre-flight (issue #903): subject is unique but the payload
+                    # may already be in HEAD via a different path. Cherry-picking
+                    # it would conflict then resolve to empty, forcing an endless
+                    # conflict -> --skip loop. Detect content-equality up front.
+                    if _gcp_scan_already_in_head "$sha"; then
+                        if type ux_info >/dev/null 2>&1; then
+                            ux_info "Skipping ${sha} — changes already in HEAD (pre-flight)"
+                        else
+                            echo "ℹ Skipping ${sha} — changes already in HEAD (pre-flight)"
+                        fi
+                        empty_skipped=$((empty_skipped + 1))
                         continue
                     fi
                     if type ux_info >/dev/null 2>&1; then

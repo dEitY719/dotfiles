@@ -442,6 +442,117 @@ FIXTURE
     refute_output --partial "skipped (dup)"
 }
 
+# ---------------------------------------------------------------------------
+# Issue #903 — content-based pre-flight skip. Stage-1 (subject-based) dup
+# detection misses a commit whose subject is unique but whose payload already
+# landed in HEAD via a different path (merge / squash / edit). Cherry-picking
+# it conflicts, resolves to empty, and forces an endless conflict -> --skip
+# loop. `_gcp_scan_already_in_head` catches it before the cherry-pick attempt.
+# ---------------------------------------------------------------------------
+
+@test "bash: _gcp_scan_already_in_head private function exists" {
+    run_in_bash 'declare -f _gcp_scan_already_in_head >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "preflight #903: empty commit (no file changes) -> already in HEAD (0)" {
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo v1 > a.txt && git add a.txt && git commit -qm "init"
+        git commit -q --allow-empty -m "empty"
+        empty_sha=$(git rev-parse HEAD)
+        _gcp_scan_already_in_head "$empty_sha"
+        echo "rc=$?"
+    '
+    assert_success
+    assert_output --partial "rc=0"
+}
+
+@test "preflight #903: all touched files identical to HEAD -> already in HEAD (0)" {
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo v1 > a.txt && git add a.txt && git commit -qm "init"
+        git checkout -q -b side
+        echo v2 > a.txt && git add a.txt && git commit -qm "side: bump to v2"
+        side_sha=$(git rev-parse HEAD)
+        git checkout -q main
+        # HEAD reaches the SAME content for a.txt via a different commit.
+        echo v2 > a.txt && git add a.txt && git commit -qm "main: bump to v2 (other path)"
+        _gcp_scan_already_in_head "$side_sha"
+        echo "rc=$?"
+    '
+    assert_success
+    assert_output --partial "rc=0"
+}
+
+@test "preflight #903: some touched files differ from HEAD -> NOT in HEAD (1)" {
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo v1 > a.txt && git add a.txt && git commit -qm "init"
+        git checkout -q -b side
+        echo only-on-side > b.txt && echo shared > c.txt && git add b.txt c.txt \
+            && git commit -qm "side: add b and c"
+        side_sha=$(git rev-parse HEAD)
+        git checkout -q main
+        # HEAD matches c.txt but never gets b.txt -> real work remains.
+        echo shared > c.txt && git add c.txt && git commit -qm "main: add c only"
+        _gcp_scan_already_in_head "$side_sha"
+        echo "rc=$?"
+    '
+    assert_success
+    assert_output --partial "rc=1"
+}
+
+@test "scan #903: content-dup commit (unique subject, different patch-id) skipped via pre-flight, no conflict" {
+    # The content-dup commit must reach the individual loop, so its patch-id
+    # has to DIFFER from how HEAD acquired the same final content (else
+    # `git cherry` filters it out up front). HEAD reaches shared.txt=TARGET via
+    # MIDDLE (two-step), source reaches it in one step from a different parent
+    # -> distinct patch-ids, unique subject. A separate subject-dup commit
+    # creates the gap that forces the non-contiguous (individual) path.
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo init > a.txt && git add a.txt && git commit -qm "init"
+        git checkout -q -b source
+        echo one > f1.txt && git add f1.txt && git commit -qm "feat one"
+        echo dupsrc > f2.txt && git add f2.txt && git commit -qm "shared dup subject"
+        # Unique subject; creates shared.txt=TARGET in one step.
+        echo TARGET > shared.txt && git add shared.txt && git commit -qm "feat: bring shared payload"
+        echo four > f4.txt && git add f4.txt && git commit -qm "feat four"
+        git checkout -q main
+        echo dupbase > onbase.txt && git add onbase.txt && git commit -qm "shared dup subject"
+        # HEAD reaches shared.txt=TARGET via a DIFFERENT path (MIDDLE -> TARGET)
+        # so the patch-id differs from source -> git cherry still lists it.
+        echo MIDDLE > shared.txt && git add shared.txt && git commit -qm "wip shared"
+        echo TARGET > shared.txt && git add shared.txt && git commit -qm "finalize shared"
+        printf "y\n" | _gcp_scan main source --author=all
+    '
+    assert_success
+    # Subject-dup still handled by Stage-1.
+    assert_output --partial "already applied as"
+    # Content-dup caught by the new pre-flight.
+    assert_output --partial "changes already in HEAD (pre-flight)"
+    refute_output --partial "CONFLICT"
+    refute_output --partial "Resolve and run"
+}
+
 @test "alias-shadow: 'gcp -h' invokes dispatcher (not shadowed git cherry-pick) in zsh (#700)" {
     run zsh -f -c "
         export DOTFILES_ROOT='${DOTFILES_ROOT}'
