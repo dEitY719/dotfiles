@@ -28,17 +28,28 @@ _wsl_check_timeout() {
     fi
 }
 
+# True only when $1 is a real mountpoint. `/mnt/c` can exist as a bare
+# directory without being mounted (automount off, or a non-WSL host), in
+# which case `df /mnt/c` silently reports the root fs — the trailing-space
+# match avoids substring false positives (e.g. /mnt/cd).
+_wsl_check_is_mounted() { # $1 = mountpoint
+    mount 2>/dev/null | grep -q " on $1 "
+}
+
 # --- metric gatherers (each prints digits-only, or empty on failure) ---------
 # `command df/free` bypasses the `df -h` / `free -h` aliases defined in
-# aliases/core.sh, so -P/-BG output stays machine-parseable.
+# aliases/core.sh, so -P output stays machine-parseable.
 _wsl_check_cdrive_pct() {
-    [ -d /mnt/c ] || return 0
+    _wsl_check_is_mounted /mnt/c || return 0
     command df -P /mnt/c 2>/dev/null | awk 'NR==2 { gsub(/%/, "", $5); print $5 }'
 }
 
 _wsl_check_cdrive_avail_gb() {
-    [ -d /mnt/c ] || return 0
-    command df -P -BG /mnt/c 2>/dev/null | awk 'NR==2 { gsub(/G/, "", $4); print $4 }'
+    _wsl_check_is_mounted /mnt/c || return 0
+    # -P -k = POSIX-portable 1024-byte blocks (avoids the GNU-only -BG); the
+    # explicit -k removes the 512-vs-1024 block ambiguity of bare -P, so the
+    # /1048576 (1024^2) byte->GB conversion is correct everywhere.
+    command df -P -k /mnt/c 2>/dev/null | awk 'NR==2 { printf "%d", $4 / 1048576 }'
 }
 
 _wsl_check_disk_pct() {
@@ -59,7 +70,7 @@ _wsl_check_cpu_pct() {
 _wsl_check_docker_img_pct() {
     command -v docker >/dev/null 2>&1 || return 0
     _wsl_check_timeout 1 docker system df 2>/dev/null |
-        awk '/^Images/ { v=$NF; gsub(/[()%]/, "", v); if (v ~ /^[0-9]+$/) print v }'
+        awk '/^Images/ { v=$NF; gsub(/[^0-9]/, "", v); if (v ~ /^[0-9]+$/) print v }'
 }
 
 # Total docker reclaimable space in whole GB (best-effort sum across types).
@@ -141,6 +152,14 @@ _wsl_check_df_section() { # $1=title $2=mountpoint
     if [ ! -d "$2" ]; then
         ux_warning "$2 not mounted (non-WSL host?)"
         return 0
+    fi
+    # `/` is always a mountpoint; any other target must be really mounted,
+    # else df silently reports the root fs and C: mirrors the WSL disk.
+    if [ "$2" != "/" ]; then
+        _wsl_check_is_mounted "$2" || {
+            ux_warning "$2 not mounted (non-WSL host?)"
+            return 0
+        }
     fi
     # shellcheck disable=SC2046  # intentional word-split of the df row
     set -- $(command df -h -P "$2" 2>/dev/null | awk 'NR==2 { print $2, $3, $4, $5 }')
