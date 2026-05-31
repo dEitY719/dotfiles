@@ -44,6 +44,14 @@ src() {
     else
         echo "src: reloaded from $_canon"
     fi
+
+    # One-line health hint (issue #897). This only fires on a manual `src`:
+    # a new terminal sources the rc files directly and never calls src(), so
+    # the hint stays out of shell startup. Non-fatal — a failing health probe
+    # must never break the reload.
+    if command -v _wsl_check_oneline >/dev/null 2>&1; then
+        _wsl_check_oneline 2>/dev/null || true
+    fi
 }
 
 # 파일 시스템 탐색
