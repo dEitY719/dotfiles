@@ -16,6 +16,8 @@ _docker_help_summary() {
     ux_bullet_sub "utilities: dbash | denv | dinspect_env | dstopall | drmall | dexport | dinstall | dproxy_setup"
     ux_bullet_sub "i-want: goal-based lookup  (example: docker-help i-want)"
     ux_bullet_sub "--map: intent -> alias -> raw command table"
+    ux_bullet_sub "raw: copy-paste-ready full commands  (example: docker-help raw resources)"
+    ux_bullet_sub "lookup: alias -> raw command  (example: docker-help dprune)"
     ux_bullet_sub "details: docker-help <section>  (example: docker-help compose)"
 }
 
@@ -62,8 +64,8 @@ _docker_help_rows_basics() {
 
 _docker_help_rows_resources() {
     ux_table_row "ddf" "system df" "Disk usage"
-    ux_table_row "dprune" "system prune -f" "Basic cleanup"
-    ux_table_row "dprune_full" "full prune" "Deep cleanup (interactive)"
+    ux_table_row "dprune" "system prune -f" "Basic cleanup (-f only; keeps images & volumes)"
+    ux_table_row "dprune_full" "system prune -a --volumes" "Deep cleanup (interactive; removes images+volumes)"
     ux_table_row "dvols" "volume ls -f dangling" "Dangling volumes"
     ux_table_row "dvol_rm" "volume rm" "Remove volume"
     ux_table_row "dnetwork_prune" "network prune" "Cleanup networks"
@@ -95,6 +97,7 @@ _docker_help_rows_intent() {
     ux_table_row "list all" "dpsa" "docker ps -a"
     ux_table_row "disk usage" "ddf" "docker system df"
     ux_table_row "clean dangling" "dprune" "docker system prune -f"
+    ux_table_row "reclaim everything" "dprune_full" "docker system prune -a --volumes"
     # 'docker-help here' is owned by #777 — keep the issue ref in code only,
     # not in the user-facing hint (gemini-code-assist review on PR #803).
     ux_info "Hint: 'docker-help here' inspects the current directory for compose files."
@@ -264,6 +267,131 @@ _docker_help_recommend() {
     ux_bullet "docker-help --all"
 }
 
+# --- raw-command catalog + learning surfaces (#899) ---
+#
+# SSOT for the (alias -> full raw command -> description) relationship,
+# tagged by section. The cryptic aliases (dprune etc.) live only in THIS
+# environment; this catalog is the teaching surface that surfaces the
+# portable, copy-paste-ready `docker ...` command behind each one so the
+# raw command — not the alias — is what gets learned. Both the raw-first
+# renderer and the reverse-lookup consume this single source.
+#
+# Format per line: alias|full raw command|description|section
+_docker_help_catalog() {
+    printf '%s\n' \
+        'dc|docker compose|Base command|compose' \
+        'dcu|docker compose up|Foreground start|compose' \
+        'dcud|docker compose up -d|Detached start|compose' \
+        'dcd|docker compose down|Stop & remove|compose' \
+        'dcl|docker compose logs -f <svc>|Smart logs (service/container)|compose' \
+        'dce|docker compose exec <svc> <cmd>|Execute command|compose' \
+        'dcps|docker compose ps|Status|compose-extra' \
+        'dcb|docker compose build|Build services|compose-extra' \
+        'dcr|docker compose restart <svc>|Restart services|compose-extra' \
+        'dcdv|docker compose down -v|Stop & remove volumes|compose-extra' \
+        'dcstop|docker compose stop|Stop containers|compose-extra' \
+        'dcstart|docker compose start|Start containers|compose-extra' \
+        'dps|docker ps|Running containers|basics' \
+        'dpsa|docker ps -a|All containers|basics' \
+        'di|docker images|List images|basics' \
+        'dim|docker images|List images (alias of di)|basics' \
+        'dstats|docker stats|Resource usage|basics' \
+        'dstop|docker stop <name>|Stop container|basics' \
+        'drm|docker rm <name>|Remove container|basics' \
+        'drmi|docker rmi <image>|Remove image|basics' \
+        'dlogs|docker logs -f <name>|Follow logs|basics' \
+        'dinspect|docker inspect <object>|Inspect object|basics' \
+        'ddf|docker system df|Disk usage|resources' \
+        'dprune|docker system prune -f|Basic cleanup (-f only; keeps images & volumes)|resources' \
+        'dprune_full|docker system prune -a --volumes|Deep cleanup (removes images+volumes)|resources' \
+        'dvols|docker volume ls -f dangling=true|Dangling volumes|resources' \
+        'dvol_rm|docker volume rm <name>|Remove volume|resources' \
+        'dnetwork_prune|docker network prune -f|Cleanup networks|resources' \
+        'dbuild_prune|docker builder prune -f|Cleanup build cache|resources' \
+        'dbash|docker exec -it <name> bash|Shell access (bash/sh)|utilities' \
+        'denv|docker exec <name> env|Show env vars|utilities'
+}
+
+# Normalize a user-supplied section token to a canonical catalog section.
+# Mirrors the synonym set in _docker_help_section_rows so `raw <section>`
+# accepts the same aliases (e.g. prune -> resources).
+_docker_help_normalize_section() {
+    case "$1" in
+        compose) printf 'compose\n' ;;
+        compose-extra | extra) printf 'compose-extra\n' ;;
+        basics | basic) printf 'basics\n' ;;
+        resources | resource | prune) printf 'resources\n' ;;
+        utilities | util | utils) printf 'utilities\n' ;;
+        *) printf '%s\n' "$1" ;;
+    esac
+}
+
+_docker_help_is_alias() {
+    _docker_help_catalog | cut -d'|' -f1 | grep -qx "$1"
+}
+
+# Reverse lookup: alias -> raw command. Teaches what an alias actually runs
+# so the portable command can be verified and learned (#899 F-2).
+_docker_help_reverse() {
+    local row raw desc
+    row=$(_docker_help_catalog | awk -F'|' -v a="$1" '$1 == a { print; exit }')
+    if [ -z "$row" ]; then
+        ux_error "Unknown docker alias: $1"
+        ux_info "Try: docker-help --list  or  docker-help raw"
+        return 1
+    fi
+    raw=$(printf '%s\n' "$row" | cut -d'|' -f2)
+    desc=$(printf '%s\n' "$row" | cut -d'|' -f3)
+    ux_section "Alias -> raw command"
+    # Bare monospace line so the raw command is copy-paste ready (no icon /
+    # bullet) — same rationale as _docker_help_recommend_print (#777).
+    printf '  %s  ->  %s\n' "$1" "$raw"
+    ux_info "  $desc"
+    ux_info ""
+    ux_info "Tip: run the raw command anywhere — it works without these aliases."
+}
+
+# Raw-first rendering: full canonical commands as the primary, copy-paste
+# ready surface, alias demoted to an annotation (#899 F-1). Optional
+# section filter reuses the catalog's section tags.
+_docker_help_raw() {
+    local want_section printed
+    # Split guard onto its own lines: a one-line `[ -n "..." ] && x=$(fn "$1")`
+    # form flanks the private-function call with quotes, which the pre-commit
+    # naming_check mis-reads as snake_case user-facing text.
+    want_section=""
+    if [ -n "${1:-}" ]; then
+        want_section=$(_docker_help_normalize_section "$1")
+    fi
+
+    if [ -n "$want_section" ]; then
+        ux_section "Raw commands — $want_section (copy-paste ready)"
+    else
+        ux_section "Raw commands (copy-paste ready)"
+    fi
+
+    printed=0
+    # Read into a temp stream so the loop body can set `printed` in the
+    # current shell (a piped `while` would run in a subshell and lose it).
+    while IFS='|' read -r al raw desc sec; do
+        [ -z "$al" ] && continue
+        if [ -n "$want_section" ] && [ "$sec" != "$want_section" ]; then
+            continue
+        fi
+        printf '  %s\n' "$raw"
+        ux_info "    alias: $al   -- $desc"
+        printed=1
+    done <<EOF
+$(_docker_help_catalog)
+EOF
+
+    if [ "$printed" -eq 0 ]; then
+        ux_error "No raw commands for section: ${1:-}"
+        ux_info "Try: docker-help --list  (sections), or docker-help raw (all)"
+        return 1
+    fi
+}
+
 docker_help() {
     case "${1:-}" in
         "")
@@ -290,8 +418,19 @@ docker_help() {
         --map)
             _docker_help_rows_map
             ;;
+        raw | --raw)
+            _docker_help_raw "${2:-}"
+            ;;
         *)
-            _docker_help_section_rows "$1"
+            # A known alias (dprune, dcud, ...) -> reverse lookup to its raw
+            # command; otherwise treat the token as a section name. Section
+            # keywords and alias names do not overlap, so order is safe and
+            # the unknown-section error path is preserved (#899 F-2).
+            if _docker_help_is_alias "$1"; then
+                _docker_help_reverse "$1"
+            else
+                _docker_help_section_rows "$1"
+            fi
             ;;
     esac
 }
