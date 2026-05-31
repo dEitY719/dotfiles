@@ -459,6 +459,7 @@ FIXTURE
 @test "preflight #903: empty commit (no file changes) -> already in HEAD (0)" {
     run_in_bash '
         repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
         cd "$repo" || exit 1
         export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
                GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
@@ -476,6 +477,7 @@ FIXTURE
 @test "preflight #903: all touched files identical to HEAD -> already in HEAD (0)" {
     run_in_bash '
         repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
         cd "$repo" || exit 1
         export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
                GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
@@ -497,6 +499,7 @@ FIXTURE
 @test "preflight #903: some touched files differ from HEAD -> NOT in HEAD (1)" {
     run_in_bash '
         repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
         cd "$repo" || exit 1
         export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
                GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
@@ -525,6 +528,7 @@ FIXTURE
     # creates the gap that forces the non-contiguous (individual) path.
     run_in_bash '
         repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
         cd "$repo" || exit 1
         export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
                GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
