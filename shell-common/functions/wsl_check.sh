@@ -73,14 +73,17 @@ _wsl_check_vhdx_path() {
             return 0
         }
     done
+    # No match: the loop's last command is a failed `[ -f ]` (exit 1); without
+    # this the function would return 1 and trip a caller's `set -e` (#900).
+    return 0
 }
 
-# Size of the host vhdx file in whole GB. `ls -l` reads only the directory
-# entry; `wc -c` / `find -printf` would stream or GNU-lock. Empty on failure.
+# Size of the host vhdx file in whole GB. `wc -c < file` fstat's a regular
+# file on GNU/BSD (no full read) and is portable, unlike `ls -l` column
+# parsing (locale / owner-name width can shift fields). Empty on failure.
 _wsl_check_vhdx_size_gb() { # $1 = vhdx path
     [ -f "$1" ] || return 0
-    # shellcheck disable=SC2012  # ls -l reads the inode size without opening
-    command ls -l "$1" 2>/dev/null | awk '{ printf "%d", $5 / 1073741824 }'
+    wc -c <"$1" 2>/dev/null | awk '{ printf "%d", $1 / 1073741824 }'
 }
 
 _wsl_check_mem_pct() {
