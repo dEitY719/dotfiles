@@ -20,6 +20,18 @@ _wsl_check_help_summary() {
     ux_table_row "WSL_CHECK_DOCKER_RECLAIM_GB" "auto-prune trigger GB (default 5)"
     ux_table_row "WSL_CHECK_AUTO_PRUNE" "1 = auto-prune on --all when over threshold"
 
+    ux_section "vhdx Compaction (host-only)"
+    ux_bullet "The WSL ext4.vhdx grows but never auto-shrinks: pruning inside"
+    ux_bullet_sub "WSL frees the fs but not the host C: drive. '--all' shows the"
+    ux_bullet_sub "reclaimable estimate; compact the vhdx to return it to Windows."
+    ux_bullet "Run from the Windows host (PowerShell as admin) — NOT inside WSL,"
+    ux_bullet_sub "since 'wsl --shutdown' terminates this very session:"
+    ux_bullet_sub "wsl --shutdown"
+    ux_bullet_sub "diskpart -> select vdisk file=\"...\\LocalState\\ext4.vhdx\""
+    ux_bullet_sub "  attach vdisk readonly; compact vdisk; detach vdisk"
+    ux_bullet "Or (newer builds): wsl --manage <distro> --set-sparse true"
+    ux_bullet_sub "for auto-shrinking sparse mode."
+
     ux_section "Notes"
     ux_bullet "C: drive is shown first: a full WSL crash (SIGBUS) was caused by"
     ux_bullet_sub "the Windows host C: drive filling up, not the WSL disk (#897)."
