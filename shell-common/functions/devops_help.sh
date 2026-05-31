@@ -333,15 +333,24 @@ _docker_help_is_alias() {
 # Reverse lookup: alias -> raw command. Teaches what an alias actually runs
 # so the portable command can be verified and learned (#899 F-2).
 _docker_help_reverse() {
-    local row raw desc
-    row=$(_docker_help_catalog | awk -F'|' -v a="$1" '$1 == a { print; exit }')
-    if [ -z "$row" ]; then
+    local al raw desc sec found
+    # Pure POSIX while-read over a here-doc (no awk/cut subprocesses, and no
+    # `awk -v` backslash-escape interpretation of the input) — gemini PR #901.
+    found=0
+    while IFS='|' read -r al raw desc sec; do
+        if [ "$al" = "$1" ]; then
+            found=1
+            break
+        fi
+    done <<EOF
+$(_docker_help_catalog)
+EOF
+
+    if [ "$found" -eq 0 ]; then
         ux_error "Unknown docker alias: $1"
         ux_info "Try: docker-help --list  or  docker-help raw"
         return 1
     fi
-    raw=$(printf '%s\n' "$row" | cut -d'|' -f2)
-    desc=$(printf '%s\n' "$row" | cut -d'|' -f3)
     ux_section "Alias -> raw command"
     # Bare monospace line so the raw command is copy-paste ready (no icon /
     # bullet) — same rationale as _docker_help_recommend_print (#777).
@@ -355,7 +364,7 @@ _docker_help_reverse() {
 # ready surface, alias demoted to an annotation (#899 F-1). Optional
 # section filter reuses the catalog's section tags.
 _docker_help_raw() {
-    local want_section printed
+    local want_section printed al raw desc sec
     # Split guard onto its own lines: a one-line `[ -n "..." ] && x=$(fn "$1")`
     # form flanks the private-function call with quotes, which the pre-commit
     # naming_check mis-reads as snake_case user-facing text.
