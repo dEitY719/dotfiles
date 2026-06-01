@@ -12,8 +12,8 @@ Flags:
   --apply              Execute the plan. Without it, the skill is DRY-RUN
                        (prints the plan, writes nothing).
   --mandatory | --mp   Scope = mandatory items M1-M6 only. (default scope)
-  --recommended | --op Scope = M1-M6 + recommended R1-R4 (placeholder stubs
-                       + naming correction).
+  --recommended | --op Scope = M1-M6 + recommended R1-R5 (placeholder stubs
+                       + naming correction + README link backfill).
   --mp and --op together → error.
 
 Behavior:
@@ -28,8 +28,9 @@ Behavior:
                            falls back to `mv` outside a git repo)
                          - write minimal marketplace.json / plugin.json
                            skeletons from discovered plugin/skill names
-                         - (--op only) create empty R1/R2 placeholder stubs
-                           and correct R4 naming mismatches
+                         - (--op only) create empty R1/R2 placeholder stubs,
+                           correct R4 naming mismatches, and backfill missing
+                           R5 README guide+usage links (stub level)
 
 Placeholder stub boundary (--op):
   Stubs are empty files with a TODO header only. This skill never calls

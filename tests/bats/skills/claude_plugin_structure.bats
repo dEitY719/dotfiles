@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # tests/bats/skills/claude_plugin_structure.bats
 # Verify the structure spec shared by
-#   claude/skills/claude-plugin-structure-check/   (M1-M6 / R1-R4 evaluation)
+#   claude/skills/claude-plugin-structure-check/   (M1-M6 / R1-R5 evaluation)
 #   claude/skills/claude-plugin-structure-refactor/ (dry-run / --apply / --op)
 # Source-of-truth fixture: _fixtures/claude_plugin_structure.sh
 #
@@ -51,9 +51,16 @@ _seed_recommended_files() {
     printf '<!-- usage -->\n' > "$1/docs/skill-output/visualize-usage.md"
 }
 
+_seed_readme_links() {
+    # $1=repo $2=skill : append a per-skill guide+usage link line (R5)
+    printf -- '- `%s`: [guide](docs/skill-guides/%s.html) [usage](docs/skill-output/%s-usage.md)\n' \
+        "$2" "$2" "$2" >> "$1/README.md"
+}
+
 build_perfect() {
     _seed_skill "$1"; _seed_mandatory_json "$1"; _seed_docs_dirs "$1"
     _seed_readme "$1"; _seed_recommended_files "$1"
+    _seed_readme_links "$1" visualize
 }
 
 # ---- Scenario 1: perfect -------------------------------------------------
@@ -88,6 +95,7 @@ build_perfect() {
 @test "mandatory missing -> refactor --apply (mp) -> recheck PASS" {
     _seed_skill "$REPO"; _seed_docs_dirs "$REPO"
     _seed_readme "$REPO"; _seed_recommended_files "$REPO"
+    _seed_readme_links "$REPO" visualize    # recommended satisfied; only mandatory missing
     cps_refactor "$REPO" mp apply
     run cps_check_M1 "$REPO"; assert_output PASS
     run cps_check_M3 "$REPO"; assert_output PASS
@@ -174,6 +182,62 @@ build_perfect() {
         > "$REPO/plugins/demo/skills/structure-check/SKILL.md"
     _seed_mandatory_json "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
     run cps_check_R4 "$REPO"; assert_output PASS
+}
+
+# ---- R5 per-skill README links (#905) -----------------------------------
+
+@test "R5 PASS when README links both guide and usage for each skill" {
+    build_perfect "$REPO"
+    run cps_check_R5 "$REPO"; assert_output PASS
+}
+
+@test "R5 WARN when README links the guide but not the usage" {
+    _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"; _seed_recommended_files "$REPO"
+    printf -- '- [guide](docs/skill-guides/visualize.html)\n' >> "$REPO/README.md"
+    run cps_check_R5 "$REPO"; assert_output WARN
+    run cps_verdict "$REPO"; assert_output WARN
+}
+
+@test "R5 WARN when README has a docs/ link but no per-skill links (R3 PASS gap)" {
+    _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"; _seed_recommended_files "$REPO"
+    run cps_check_R3 "$REPO"; assert_output PASS
+    run cps_check_R5 "$REPO"; assert_output WARN
+}
+
+@test "R5 WARN when one of two skills is missing its links" {
+    mkdir -p "$REPO/plugins/demo/skills/visualize" "$REPO/plugins/demo/skills/excalidraw"
+    printf 'name: visualize\ndescription: x\n' > "$REPO/plugins/demo/skills/visualize/SKILL.md"
+    printf 'name: excalidraw\ndescription: x\n' > "$REPO/plugins/demo/skills/excalidraw/SKILL.md"
+    _seed_mandatory_json "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    _seed_readme_links "$REPO" visualize    # excalidraw links intentionally absent
+    run cps_check_R5 "$REPO"; assert_output WARN
+}
+
+@test "R5 is N/A when the plugin has 0 skills" {
+    mkdir -p "$REPO/plugins/demo/skills"
+    _seed_mandatory_json "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    run cps_check_R5 "$REPO"; assert_output "N/A"
+}
+
+@test "R5 missing -> refactor --apply --op backfills links -> recheck PASS" {
+    _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    run cps_check_R5 "$REPO"; assert_output WARN
+    cps_refactor "$REPO" op apply
+    run cps_check_R5 "$REPO"; assert_output PASS
+    run cps_verdict "$REPO"; assert_output PASS
+}
+
+@test "R5 backfill is idempotent (no duplicate link lines on second apply)" {
+    _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    cps_refactor "$REPO" op apply
+    first="$(grep -c 'skill-guides/visualize.html' "$REPO/README.md")"
+    cps_refactor "$REPO" op apply
+    second="$(grep -c 'skill-guides/visualize.html' "$REPO/README.md")"
+    [ "$first" = "$second" ]
 }
 
 # ---- N/A for absent subject on mandatory checks (PR #894 gemini review) --
