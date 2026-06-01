@@ -8,7 +8,8 @@ github.com / 사내 GHES 양쪽 모두 동작한다.
 ## 합의된 네이밍 컨벤션
 
 - 새 레포 이름 형식: `claude-plugin-<domain>` (예: `xxx-yyy-zzz` →
-  `claude-plugin-visuals`).
+  `claude-plugin-visuals`). `<domain>` 은 GitHub 레포 네이밍 규칙에 따라
+  반드시 소문자와 하이픈(-)만 사용 (대문자/언더스코어 금지).
 - 이유:
   - `plugin-` 이 `skills-` 보다 상위/범용 개념 — plugin 은 skills·commands·
     agents·hooks 를 모두 번들하며 `.claude-plugin/` 디렉터리 구조와 일치한다.
@@ -25,6 +26,9 @@ github.com / 사내 GHES 양쪽 모두 동작한다.
 ### 0단계 — 환경/호스트 확인
 
 - 지금 디렉터리가 대상 레포의 클론인지 확인: `git remote -v`.
+- `owner/repo` 는 `gh` 대신 `git remote get-url <remote>` 출력을 호스트
+  독립적 패턴(`<protocol>://<host>/<owner>/<repo>.git`)으로 파싱해서 얻는다
+  — github.com 하드코딩 금지(GHES/self-hosted 지원).
 - remote 호스트가 github.com 인지 사내 GHES(예: github.our-company.com)인지 식별.
 - gh CLI 가 그 호스트로 인증돼 있는지 확인: `gh auth status`.
   - 대상 호스트가 안 보이면 `gh auth login --hostname <호스트>` 를 사용자가
