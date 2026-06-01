@@ -240,6 +240,24 @@ build_perfect() {
     [ "$first" = "$second" ]
 }
 
+@test "R5 PASS when guide linked via github.com Pages URL (#911)" {
+    # github.com Pages pattern: https://<owner>.github.io/<repo>/skill-guides/<s>.html
+    _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"; _seed_recommended_files "$REPO"
+    printf -- '- `visualize` ([visual guide](https://acme.github.io/repo/skill-guides/visualize.html))\n' >> "$REPO/README.md"
+    printf -- '- [usage](docs/skill-output/visualize-usage.md)\n' >> "$REPO/README.md"
+    run cps_check_R5 "$REPO"; assert_output PASS
+}
+
+@test "R5 PASS when guide linked via GHE Pages URL (#911)" {
+    # GHE Pages pattern: https://<host>/pages/<owner>/<repo>/skill-guides/<s>.html
+    _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"; _seed_recommended_files "$REPO"
+    printf -- '- `visualize` ([visual guide](https://github.samsungds.net/pages/owner/repo/skill-guides/visualize.html))\n' >> "$REPO/README.md"
+    printf -- '- [usage](docs/skill-output/visualize-usage.md)\n' >> "$REPO/README.md"
+    run cps_check_R5 "$REPO"; assert_output PASS
+}
+
 @test "R5 backfill appends ONLY the missing link (no duplicate of present one)" {
     # gemini #906 review: guide already linked, only usage missing.
     _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
