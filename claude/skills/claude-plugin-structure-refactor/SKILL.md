@@ -9,9 +9,10 @@ description: >-
   placeholder stubs + naming correction + README link backfill). Idempotent.
   Use when the user
   says "fix my claude-plugin repo structure", "make this marketplace repo
-  standard", "/claude-plugin:structure-refactor". Sister skill of
-  `claude-plugin:structure-check` (which finds what this fixes). Does NOT
-  generate real guide/usage content — stubs only.
+  standard", "/claude-plugin:structure-refactor". Sister skills:
+  `claude-plugin:structure-check` (finds what this fixes),
+  `claude-plugin:rename-repo` (renames the repo to the team convention).
+  Does NOT generate real guide/usage content — stubs only.
 compatibility:
   tools: Read, Glob, Grep, Write, Edit, Bash
 metadata:
