@@ -5,7 +5,7 @@ description: >-
   against the standard directory layout and report PASS/WARN/FAIL/N/A.
   Read-only — never edits. Discovers plugins/skills dynamically by directory
   scan, then evaluates mandatory items M1-M6 (FAIL) and recommended items
-  R1-R4 (WARN). Use when the user says "check my claude-plugin repo
+  R1-R5 (WARN). Use when the user says "check my claude-plugin repo
   structure", "is this marketplace repo standard?", "audit plugin layout",
   "/claude-plugin:structure-check". Sister skill of
   `claude-plugin:structure-refactor` (which fixes what this finds). Do NOT
@@ -46,28 +46,31 @@ embedded SSOT). Discover dynamically — never hard-code names:
 2. `plugins/<p>/skills/*/` → each directory is a skill of that plugin.
 
 Record the plugin and skill lists for the report header and for the
-per-skill recommended checks (R1/R2).
+per-skill recommended checks (R1/R2/R5).
 
-## Step 3: Evaluate M1-M6 and R1-R4
+## Step 3: Evaluate M1-M6 and R1-R5
 
 For each item in `references/structure-spec.md`, assign exactly one of:
 
 - **PASS** — present and valid.
-- **WARN** — recommended item missing/violated (R1-R4 only).
+- **WARN** — recommended item missing/violated (R1-R5 only).
 - **FAIL** — mandatory item missing/invalid (M1-M6 only).
 - **N/A** — the subject does not exist (e.g. a plugin with 0 skills → its
   R1/R2 are N/A, not FAIL).
 
 JSON validity (M1, M3): parse with `python3 -m json.tool` (or `jq`); a
 parse error is FAIL, not WARN. Frontmatter validity (M4): the SKILL.md must
-have both `name:` and `description:` keys. R3/R4 use the heuristics defined
-in the spec.
+have both `name:` and `description:` keys. R3/R4/R5 use the heuristics
+defined in the spec. R5: for each discovered skill `<s>`, grep `README.md`
+for both a `skill-guides/<s>.html` and a `skill-output/<s>-usage.{html,md}`
+path string (relative or Pages-absolute) — missing either → WARN; no skills
+→ N/A.
 
 ## Step 4: Output the Report
 
 Read `references/report-template.md` for the exact format. The report has a
 header line (path + discovered plugins/skills), a `[필수]` block (M1-M6) and
-a `[권장]` block (R1-R4), then the summary verdict:
+a `[권장]` block (R1-R5), then the summary verdict:
 
 - any FAIL → **FAIL**
 - no FAIL but ≥1 WARN → **WARN**
