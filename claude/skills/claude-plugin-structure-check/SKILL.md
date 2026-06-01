@@ -7,10 +7,11 @@ description: >-
   scan, then evaluates mandatory items M1-M6 (FAIL) and recommended items
   R1-R5 (WARN). Use when the user says "check my claude-plugin repo
   structure", "is this marketplace repo standard?", "audit plugin layout",
-  "/claude-plugin:structure-check". Sister skill of
-  `claude-plugin:structure-refactor` (which fixes what this finds). Do NOT
-  use for SKILL.md content quality (use `skill:check`) or shell scripts
-  (use `sh:check`).
+  "/claude-plugin:structure-check". Sister skills:
+  `claude-plugin:structure-refactor` (fixes what this finds),
+  `claude-plugin:rename-repo` (renames the repo to the team convention).
+  Do NOT use for SKILL.md content quality (use `skill:check`) or shell
+  scripts (use `sh:check`).
 compatibility:
   tools: Read, Glob, Grep, Bash
 metadata:
