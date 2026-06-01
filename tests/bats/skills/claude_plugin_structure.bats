@@ -350,6 +350,15 @@ build_single_perfect() {
     assert_output mono
 }
 
+@test "mode auto-detects mono from a bare 'plugins/..' source (no leading ./)" {
+    # gemini #917 review: hand-written marketplace may omit the leading ./
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [{ "source": "plugins/demo" }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run _cps_detect_mode "$REPO"
+    assert_output mono
+}
+
 @test "mode auto-detects single from root plugin.json (no marketplace source)" {
     # filesystem fallback: no plugins/, root manifest present
     mkdir -p "$REPO/.claude-plugin"

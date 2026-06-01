@@ -57,8 +57,9 @@ plugin-root set is computed" differs between modes (Approach C, #914).
 ## Mode detection (priority order — first match wins)
 
 1. **`--single` / `--mono` flag** → forced override (highest authority).
-2. **`marketplace.json` `plugins[].source`** → `"./"` ⇒ single,
-   `"./plugins/.."` ⇒ mono (most authoritative *signal* when unflagged).
+2. **`marketplace.json` `plugins[].source`** → `"./"` (or `"."`) ⇒ single,
+   `"./plugins/.."` (or bare `"plugins/.."`) ⇒ mono — the leading `./` is
+   optional, matched leniently (most authoritative *signal* when unflagged).
 3. **Filesystem fallback** → `plugins/*/` exists ⇒ mono; root
    `.claude-plugin/plugin.json` exists ⇒ single.
 4. **Still ambiguous** → default `mono`, header notes `(mode: mono, 추정)`.
