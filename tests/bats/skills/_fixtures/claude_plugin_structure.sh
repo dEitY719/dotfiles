@@ -39,39 +39,107 @@ _cps_skills() {
     done
 }
 
+# ---- mode detection + plugin-root abstraction (#914) ---------------------
+# A "plugin root" is the dir holding .claude-plugin/plugin.json and skills/.
+#   mono   -> each plugins/<p>/   single -> the repo root "." (exactly one).
+# Defining M3/M4/R1/R2/R4/R5 over the plugin-root set makes them mode-agnostic
+# (Approach C in structure-spec.md): only HOW the root set is computed differs.
+
+_cps_detect_mode() {
+    # $1=repo [$2=forced: single|mono] -> echo single|mono (priority order).
+    local _repo="$1" _forced="${2:-}" _mf _src
+    case "$_forced" in
+    single | mono)
+        echo "$_forced"
+        return
+        ;;
+    esac
+    # marketplace.json plugins[].source — most authoritative unflagged signal.
+    _mf="$_repo/.claude-plugin/marketplace.json"
+    if _cps_json_ok "$_mf"; then
+        _src="$(jq -r '.plugins[]? | if type=="object" then .source else . end' "$_mf" 2>/dev/null | head -n1)"
+        case "$_src" in
+        ./ | .) echo single && return ;;
+        ./plugins/*) echo mono && return ;;
+        esac
+    fi
+    # filesystem fallback.
+    if [ -d "$_repo/plugins" ] && [ -n "$(_cps_plugins "$_repo")" ]; then
+        echo mono
+        return
+    fi
+    [ -f "$_repo/.claude-plugin/plugin.json" ] && {
+        echo single
+        return
+    }
+    echo mono # still ambiguous -> default (header marks "추정")
+}
+
+_cps_plugin_roots() {
+    # $1=repo $2=mode -> plugin-root paths RELATIVE to repo, one per line.
+    #   single: "." iff the root manifest exists (so a missing manifest yields
+    #           0 roots -> M3/M4 N/A, with M2 owning the single FAIL, mirroring
+    #           the mono "0 plugins" rule). mono: plugins/<p> per dir.
+    local _repo="$1" _mode="$2" _p
+    if [ "$_mode" = single ]; then
+        [ -f "$_repo/.claude-plugin/plugin.json" ] && echo "."
+        return
+    fi
+    [ -d "$_repo/plugins" ] || return 0
+    for _p in "$_repo"/plugins/*/; do
+        [ -d "$_p" ] || continue
+        echo "plugins/$(basename "$_p")"
+    done
+}
+
+_cps_skills_in_root() {
+    # $1=repo $2=root(relative) -> skill basenames under <root>/skills/.
+    local _sd="$1/$2/skills"
+    [ -d "$_sd" ] || return 0
+    for _s in "$_sd"/*/; do
+        [ -d "$_s" ] || continue
+        basename "$_s"
+    done
+}
+
 # ---- mandatory checks (M1-M6) -- echo PASS|FAIL -------------------------
 cps_check_M1() { _cps_json_ok "$1/.claude-plugin/marketplace.json" && echo PASS || echo FAIL; }
 
 cps_check_M2() {
-    [ "$(_cps_plugins "$1" | grep -c .)" -ge 1 ] && echo PASS || echo FAIL
+    # ≥1 plugin root. mono: plugins/<p>/ dirs; single: root manifest exists.
+    local _mode
+    _mode="$(_cps_detect_mode "$1" "${2:-}")"
+    [ "$(_cps_plugin_roots "$1" "$_mode" | grep -c .)" -ge 1 ] && echo PASS || echo FAIL
 }
 
 cps_check_M3() {
-    # every plugin must carry a valid plugin.json
-    local _p _any=0
-    while IFS= read -r _p; do
-        [ -n "$_p" ] || continue
+    # every plugin root must carry a valid plugin.json
+    local _mode _root _any=0
+    _mode="$(_cps_detect_mode "$1" "${2:-}")"
+    while IFS= read -r _root; do
+        [ -n "$_root" ] || continue
         _any=1
-        _cps_json_ok "$1/plugins/$_p/.claude-plugin/plugin.json" || {
+        _cps_json_ok "$1/$_root/.claude-plugin/plugin.json" || {
             echo FAIL
             return
         }
     done <<EOF
-$(_cps_plugins "$1")
+$(_cps_plugin_roots "$1" "$_mode")
 EOF
-    # No plugins → subject absent → N/A (M2 already owns the "0 plugins" FAIL).
+    # No plugin roots → subject absent → N/A (M2 already owns the FAIL).
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
 
 cps_check_M4() {
     # every skill must have a SKILL.md with name: and description:
-    local _p _s _any=0 _sm
-    while IFS= read -r _p; do
-        [ -n "$_p" ] || continue
+    local _mode _root _s _any=0 _sm
+    _mode="$(_cps_detect_mode "$1" "${2:-}")"
+    while IFS= read -r _root; do
+        [ -n "$_root" ] || continue
         while IFS= read -r _s; do
             [ -n "$_s" ] || continue
             _any=1
-            _sm="$1/plugins/$_p/skills/$_s/SKILL.md"
+            _sm="$1/$_root/skills/$_s/SKILL.md"
             [ -f "$_sm" ] || {
                 echo FAIL
                 return
@@ -81,10 +149,10 @@ cps_check_M4() {
                 return
             fi
         done <<EOF
-$(_cps_skills "$1" "$_p")
+$(_cps_skills_in_root "$1" "$_root")
 EOF
     done <<EOF
-$(_cps_plugins "$1")
+$(_cps_plugin_roots "$1" "$_mode")
 EOF
     # No skills anywhere → subject absent → N/A, not FAIL (N/A rule).
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
@@ -98,10 +166,12 @@ cps_check_M6() { [ -f "$1/README.md" ] && echo PASS || echo FAIL; }
 
 # ---- recommended checks (R1-R5) -- echo PASS|WARN|N/A -------------------
 cps_check_R1() {
-    # per-skill docs/skill-guides/<skill>.html ; N/A if no skills
-    local _p _s _any=0
-    while IFS= read -r _p; do
-        [ -n "$_p" ] || continue
+    # per-skill docs/skill-guides/<skill>.html ; N/A if no skills. Docs paths
+    # are repo-level (mode-independent); only skill discovery is plugin-root.
+    local _mode _root _s _any=0
+    _mode="$(_cps_detect_mode "$1" "${2:-}")"
+    while IFS= read -r _root; do
+        [ -n "$_root" ] || continue
         while IFS= read -r _s; do
             [ -n "$_s" ] || continue
             _any=1
@@ -110,18 +180,19 @@ cps_check_R1() {
                 return
             }
         done <<EOF
-$(_cps_skills "$1" "$_p")
+$(_cps_skills_in_root "$1" "$_root")
 EOF
     done <<EOF
-$(_cps_plugins "$1")
+$(_cps_plugin_roots "$1" "$_mode")
 EOF
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
 
 cps_check_R2() {
-    local _p _s _any=0
-    while IFS= read -r _p; do
-        [ -n "$_p" ] || continue
+    local _mode _root _s _any=0
+    _mode="$(_cps_detect_mode "$1" "${2:-}")"
+    while IFS= read -r _root; do
+        [ -n "$_root" ] || continue
         while IFS= read -r _s; do
             [ -n "$_s" ] || continue
             _any=1
@@ -131,10 +202,10 @@ cps_check_R2() {
                 return
             }
         done <<EOF
-$(_cps_skills "$1" "$_p")
+$(_cps_skills_in_root "$1" "$_root")
 EOF
     done <<EOF
-$(_cps_plugins "$1")
+$(_cps_plugin_roots "$1" "$_mode")
 EOF
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
@@ -150,12 +221,13 @@ cps_check_R3() {
 
 cps_check_R4() {
     # naming: SKILL.md name: colon-namespace ↔ skill directory hyphen form.
-    local _p _s _any=0 _sm _name _expect
-    while IFS= read -r _p; do
-        [ -n "$_p" ] || continue
+    local _mode _root _s _any=0 _sm _name _expect
+    _mode="$(_cps_detect_mode "$1" "${2:-}")"
+    while IFS= read -r _root; do
+        [ -n "$_root" ] || continue
         while IFS= read -r _s; do
             [ -n "$_s" ] || continue
-            _sm="$1/plugins/$_p/skills/$_s/SKILL.md"
+            _sm="$1/$_root/skills/$_s/SKILL.md"
             [ -f "$_sm" ] || continue
             _any=1
             # strip leading `name:` + surrounding spaces/quotes (single & double)
@@ -166,10 +238,10 @@ cps_check_R4() {
                 return
             }
         done <<EOF
-$(_cps_skills "$1" "$_p")
+$(_cps_skills_in_root "$1" "$_root")
 EOF
     done <<EOF
-$(_cps_plugins "$1")
+$(_cps_plugin_roots "$1" "$_mode")
 EOF
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
@@ -183,9 +255,10 @@ cps_check_R5() {
         echo "N/A"
         return
     }
-    local _p _s _any=0
-    while IFS= read -r _p; do
-        [ -n "$_p" ] || continue
+    local _mode _root _s _any=0
+    _mode="$(_cps_detect_mode "$1" "${2:-}")"
+    while IFS= read -r _root; do
+        [ -n "$_root" ] || continue
         while IFS= read -r _s; do
             [ -n "$_s" ] || continue
             _any=1
@@ -199,27 +272,28 @@ cps_check_R5() {
                 return
             }
         done <<EOF
-$(_cps_skills "$1" "$_p")
+$(_cps_skills_in_root "$1" "$_root")
 EOF
     done <<EOF
-$(_cps_plugins "$1")
+$(_cps_plugin_roots "$1" "$_mode")
 EOF
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
 
 # ---- aggregate verdict ---------------------------------------------------
 cps_verdict() {
-    # echo FAIL | WARN | PASS for repo $1
-    local _r
+    # echo FAIL | WARN | PASS for repo $1 ; optional $2 forces single|mono.
+    # M5/M6/R3 are mode-independent so the extra arg is harmless for them.
+    local _r _mode="${2:-}"
     for _c in M1 M2 M3 M4 M5 M6; do
-        _r="$(cps_check_$_c "$1")"
+        _r="$(cps_check_$_c "$1" "$_mode")"
         [ "$_r" = FAIL ] && {
             echo FAIL
             return
         }
     done
     for _c in R1 R2 R3 R4 R5; do
-        _r="$(cps_check_$_c "$1")"
+        _r="$(cps_check_$_c "$1" "$_mode")"
         [ "$_r" = WARN ] && {
             echo WARN
             return

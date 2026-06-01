@@ -11,12 +11,29 @@ edits a repo toward it (dry-run / `--apply`). Plugins and skills are
 discovered **dynamically** by directory scan — the spec is abstract, never
 repo-specific.
 
-## Golden layout
+## Layout modes
+
+The official plugin spec allows two valid layouts. **`single` is the more
+common one** in the wild (Superpowers, most OSS/personal plugins); `mono` is
+the team standard (`anthropics/claude-code` bundles 13 plugins this way).
+
+| | `mono` | `single` |
+|---|---|---|
+| marketplace `source` | `"./plugins/<name>"` | `"./"` |
+| plugin roots | each `plugins/<p>/` | repo root `./` (exactly 1) |
+| skill path | `plugins/<p>/skills/<s>/` | `skills/<s>/` |
+
+A **plugin root** is the directory holding the plugin manifest
+(`.claude-plugin/plugin.json`) and `skills/`. Defining M3/M4/R1/R2/R4/R5
+over the *plugin-root set* makes them mode-agnostic — only "how the
+plugin-root set is computed" differs between modes (Approach C, #914).
+
+### Golden layout — mono
 
 ```
 .
 ├── .claude-plugin/marketplace.json      # exists + valid JSON       (M1)
-├── plugins/<plugin>/
+├── plugins/<plugin>/                     # plugin root
 │   ├── .claude-plugin/plugin.json       # exists + valid JSON       (M3)
 │   └── skills/<skill>/SKILL.md          # exists + name/description (M4)
 ├── docs/skill-guides/                   # directory exists          (M5)
@@ -24,20 +41,49 @@ repo-specific.
 └── README.md                            # exists                    (M6)
 ```
 
-Dynamic discovery order:
-1. `plugins/*/` → each is a plugin.
-2. `plugins/*/skills/*/` → each is a skill of that plugin.
+### Golden layout — single
 
-## Mandatory items (FAIL when missing)
+```
+.                                         # repo root IS the plugin root
+├── .claude-plugin/
+│   ├── marketplace.json                 # exists + valid JSON, source "./" (M1)
+│   └── plugin.json                      # exists + valid JSON       (M3)
+├── skills/<skill>/SKILL.md              # exists + name/description (M4)
+├── docs/skill-guides/                   # directory exists          (M5)
+├── docs/skill-output/                   # directory exists          (M5)
+└── README.md                            # exists                    (M6)
+```
 
-| ID | Item | FAIL condition |
-|----|------|----------------|
-| M1 | `.claude-plugin/marketplace.json` | missing or invalid JSON |
-| M2 | `plugins/` dir with ≥1 plugin | missing or 0 plugins |
-| M3 | each `plugins/<p>/.claude-plugin/plugin.json` | missing or invalid JSON |
-| M4 | each `plugins/<p>/skills/<s>/SKILL.md` | missing or frontmatter lacks `name`/`description` |
-| M5 | `docs/skill-guides/` AND `docs/skill-output/` | either directory missing |
-| M6 | `README.md` | missing |
+## Mode detection (priority order — first match wins)
+
+1. **`--single` / `--mono` flag** → forced override (highest authority).
+2. **`marketplace.json` `plugins[].source`** → `"./"` ⇒ single,
+   `"./plugins/.."` ⇒ mono (most authoritative *signal* when unflagged).
+3. **Filesystem fallback** → `plugins/*/` exists ⇒ mono; root
+   `.claude-plugin/plugin.json` exists ⇒ single.
+4. **Still ambiguous** → default `mono`, header notes `(mode: mono, 추정)`.
+
+A forced override is honored even when wrong — it means "score *as* this
+mode". An invalid combo (e.g. `--mono` with no `plugins/`) then yields a
+normal M2 FAIL, never a silent skip.
+
+## Mandatory items by mode (FAIL when missing)
+
+IDs, counts, and validation logic are identical across modes — only the
+checked **path** changes (M5/M6 are mode-independent).
+
+| ID | Item | mono path | single path |
+|----|------|-----------|-------------|
+| M1 | marketplace.json valid | `.claude-plugin/marketplace.json` | **same** |
+| M2 | ≥1 plugin root | `plugins/` has ≥1 plugin | root `.claude-plugin/plugin.json` exists (=1 root) |
+| M3 | each plugin.json valid | `plugins/<p>/.claude-plugin/plugin.json` | root `.claude-plugin/plugin.json` |
+| M4 | each SKILL.md valid | `plugins/<p>/skills/<s>/SKILL.md` | `skills/<s>/SKILL.md` |
+| M5 | docs dirs exist | `docs/skill-guides/` AND `docs/skill-output/` | **same** |
+| M6 | README.md | `README.md` | **same** |
+
+FAIL conditions: M1/M3 → missing or invalid JSON; M2 → 0 plugin roots;
+M4 → missing or frontmatter lacks `name`/`description`; M5 → either dir
+missing; M6 → missing.
 
 ## Recommended items (WARN when missing)
 
@@ -77,10 +123,13 @@ anywhere, so it cannot catch a per-skill link gap — R5 does.
 
 When the subject of a check does not exist, the check is **N/A**, not FAIL.
 Examples: a plugin with 0 skills → R1/R2/R5 are N/A for that plugin; with no
-plugins at all M3 is N/A and with no skills anywhere M4 **and R5** are N/A —
-M2 still carries the single "no plugins" FAIL, so the absent subject is never
-double-counted as a second FAIL. R5 is per-skill: with no skills there is no
-link to require, so it is N/A (never FAIL).
+**plugin roots** M3 is N/A and with no skills anywhere M4 **and R5** are N/A —
+M2 still carries the single "no plugin root" FAIL, so the absent subject is
+never double-counted as a second FAIL. This holds per mode: in `single` a
+missing root `.claude-plugin/plugin.json` means 0 plugin roots, so M2 FAILs
+and M3/M4 are N/A — exactly mirroring mono's "0 plugins" case. R5 is
+per-skill: with no skills there is no link to require, so it is N/A (never
+FAIL).
 
 ## Summary verdict
 
