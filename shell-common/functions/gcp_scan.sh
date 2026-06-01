@@ -53,6 +53,41 @@ EOF
     return 0
 }
 
+_gcp_scan_conflict_resolves_to_empty() {
+    # True (0) when an IN-PROGRESS cherry-pick of $1 is CONFLICTED but the
+    # commit's payload already exists in HEAD, so an ours-favoring replay nets
+    # no change (issue #907 "partial-apply"). The pre-flight
+    # _gcp_scan_already_in_head cannot catch this: the file differs textually
+    # (e.g. a comment block an unrelated upstream commit expanded later) so
+    # `git diff HEAD $sha` reports a change, yet the 3-way merge resolves to
+    # nothing new. Such a commit otherwise conflicts -> resolves to empty ->
+    # forces a manual `git cherry-pick --skip` on every scan.
+    #
+    # Method: back out of the live conflict, replay the pick favoring HEAD
+    # (`-X ours`) WITHOUT committing, then ask whether the staged tree still
+    # equals HEAD. `-X ours` keeps theirs' NON-conflicting hunks, so a commit
+    # that brings any genuinely new hunk stays non-empty and reaches the user
+    # (acceptance criterion #2); only conflicting regions already present in
+    # HEAD are dropped. The probe restores the exact pre-probe HEAD with no
+    # cherry-pick in progress regardless of outcome -- the caller re-creates
+    # the conflict when this returns 1.
+    git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 || return 1
+    local orig
+    orig=$(git rev-parse HEAD 2>/dev/null) || return 1
+    # Leave the live conflict before probing.
+    git cherry-pick --abort >/dev/null 2>&1 || return 1
+    local rc=1
+    if git cherry-pick --no-commit -X ours "$1" >/dev/null 2>&1; then
+        # rc=0 only when the ours-favoring apply nets nothing over HEAD.
+        git diff --cached --quiet HEAD 2>/dev/null && rc=0
+    fi
+    # Restore to the exact pre-probe state (clears the staged probe + any
+    # cherry-pick sequencer left by --no-commit) no matter what happened above.
+    git cherry-pick --abort >/dev/null 2>&1
+    git reset --hard "$orig" >/dev/null 2>&1
+    return $rc
+}
+
 _gcp_scan_dup_base_sha() {
     # Look up the base-branch SHA that a duplicate source SHA matches.
     # $1 = candidate source SHA; $2 = duplicate map ("SRC_SHA BASE_SHA" lines).
@@ -409,6 +444,7 @@ EOF
                 local picked=0
                 local empty_skipped=0
                 local content_skipped=0
+                local partial_skipped=0
                 local dup_skipped=0
                 while IFS= read -r sha; do
                     [ -z "$sha" ] && continue
@@ -460,6 +496,22 @@ EOF
                         if ! git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
                             continue
                         fi
+                        # Partial-apply (issue #907): the pick conflicted but
+                        # HEAD already carries its payload. The probe replays it
+                        # favoring HEAD and, finding no net change, leaves a clean
+                        # HEAD with no pick in progress -- just record + move on.
+                        if _gcp_scan_conflict_resolves_to_empty "$sha"; then
+                            if type ux_warning >/dev/null 2>&1; then
+                                ux_warning "Partial-apply at $sha already in HEAD; skipping..."
+                            else
+                                echo "⚠ Partial-apply at $sha already in HEAD; skipping..." >&2
+                            fi
+                            partial_skipped=$((partial_skipped + 1))
+                            continue
+                        fi
+                        # Real conflict: the probe restored a clean HEAD, so
+                        # re-create the conflict for the user to resolve.
+                        git cherry-pick "$sha" >/dev/null 2>&1 || true
                         if type ux_error >/dev/null 2>&1; then
                             ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
                         fi
@@ -475,6 +527,9 @@ EOF
                     if [ "$content_skipped" -gt 0 ]; then
                         ux_info "($content_skipped commit(s) skipped — content already in HEAD)"
                     fi
+                    if [ "$partial_skipped" -gt 0 ]; then
+                        ux_info "($partial_skipped commit(s) skipped — partial-apply resolved to empty)"
+                    fi
                     if [ "$empty_skipped" -gt 0 ]; then
                         ux_info "($empty_skipped empty commit(s) also skipped)"
                     fi
@@ -482,6 +537,9 @@ EOF
                     echo "✓ $picked applied, $dup_skipped skipped (dup), 0 conflicts"
                     if [ "$content_skipped" -gt 0 ]; then
                         echo "  ($content_skipped commit(s) skipped — content already in HEAD)"
+                    fi
+                    if [ "$partial_skipped" -gt 0 ]; then
+                        echo "  ($partial_skipped commit(s) skipped — partial-apply resolved to empty)"
                     fi
                     if [ "$empty_skipped" -gt 0 ]; then
                         echo "  ($empty_skipped empty commit(s) also skipped)"

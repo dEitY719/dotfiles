@@ -570,3 +570,145 @@ FIXTURE
     assert_success
     assert_output --partial "Usage: gcp help"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #907 — partial-apply pre-flight miss. A commit whose subject is unique
+# AND whose file content differs textually from HEAD (so the #903 pre-flight
+# _gcp_scan_already_in_head passes it through) can still cherry-pick to a
+# CONFLICT that resolves to empty, because HEAD already carries an equivalent
+# /superset payload (e.g. a comment block an unrelated upstream commit expanded
+# later). _gcp_scan_conflict_resolves_to_empty detects this AFTER the conflict
+# by replaying the pick favoring HEAD (-X ours) and checking the net staged
+# tree, so the scan auto-skips it instead of forcing a manual
+# `git cherry-pick --skip` (acceptance criteria #1/#2/#3).
+# ---------------------------------------------------------------------------
+
+@test "bash: _gcp_scan_conflict_resolves_to_empty private function exists" {
+    run_in_bash 'declare -f _gcp_scan_conflict_resolves_to_empty >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "preflight #907: conflict whose payload is already in HEAD -> resolves to empty (0), HEAD restored" {
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo init > a.txt && git add a.txt && git commit -qm "init"
+        git checkout -q -b source
+        # source ADDs conf.txt carrying just the payload line.
+        printf "CONFIG=new\n" > conf.txt && git add conf.txt && git commit -qm "feat: bring config"
+        src=$(git rev-parse HEAD)
+        git checkout -q main
+        # HEAD independently ADDs conf.txt as a SUPERSET (payload + extra), so
+        # the add/add cherry-pick conflicts but carries nothing new.
+        printf "CONFIG=new\n# extra in head\n" > conf.txt && git add conf.txt && git commit -qm "main: config superset"
+        orig=$(git rev-parse HEAD)
+        git cherry-pick "$src" >/dev/null 2>&1 || true
+        _gcp_scan_conflict_resolves_to_empty "$src"; echo "rc=$?"
+        # Helper must leave a clean HEAD with no pick in progress.
+        git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
+        [ "$(git rev-parse HEAD)" = "$orig" ] && echo HEAD_RESTORED || echo HEAD_MOVED
+    '
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "PICK_CLEAR"
+    assert_output --partial "HEAD_RESTORED"
+}
+
+@test "preflight #907: conflict bringing genuinely new (non-conflicting) content -> NOT empty (1)" {
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        printf "base\n" > conf.txt && git add conf.txt && git commit -qm "init"
+        git checkout -q -b source
+        # source conflicts on conf.txt AND adds a brand-new file -> real work
+        # that -X ours keeps -> staged tree differs from HEAD.
+        printf "theirs change\n" > conf.txt && printf "brand new\n" > new.txt \
+            && git add conf.txt new.txt && git commit -qm "feat: change + new file"
+        src=$(git rev-parse HEAD)
+        git checkout -q main
+        printf "ours change\n" > conf.txt && git add conf.txt && git commit -qm "main: change conf"
+        orig=$(git rev-parse HEAD)
+        git cherry-pick "$src" >/dev/null 2>&1 || true
+        _gcp_scan_conflict_resolves_to_empty "$src"; echo "rc=$?"
+        git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
+        [ "$(git rev-parse HEAD)" = "$orig" ] && echo HEAD_RESTORED || echo HEAD_MOVED
+    '
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "PICK_CLEAR"
+    assert_output --partial "HEAD_RESTORED"
+}
+
+@test "scan #907: partial-apply conflict commit auto-skipped (no manual intervention)" {
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo init > a.txt && git add a.txt && git commit -qm "init"
+        git checkout -q -b source
+        echo one > f1.txt && git add f1.txt && git commit -qm "feat one"
+        echo dupsrc > f2.txt && git add f2.txt && git commit -qm "shared dup subject"
+        # Partial-apply: unique subject, adds conf.txt with just the payload.
+        printf "CONFIG=new\n" > conf.txt && git add conf.txt && git commit -qm "feat: bring config"
+        echo four > f4.txt && git add f4.txt && git commit -qm "feat four"
+        git checkout -q main
+        echo dupbase > onbase.txt && git add onbase.txt && git commit -qm "shared dup subject"
+        # HEAD carries a SUPERSET of conf.txt via a different commit (differs
+        # textually -> bypasses the pre-flight; add/add conflict on cherry-pick).
+        printf "CONFIG=new\n# extra in head\n" > conf.txt && git add conf.txt && git commit -qm "main: config superset"
+        printf "y\n" | _gcp_scan main source --author=all
+    '
+    assert_success
+    # The partial-apply commit is auto-skipped, not handed back to the user.
+    # A transient git "CONFLICT (add/add)" message is expected here — unlike
+    # the #903 pre-flight case, #907 is only detectable AFTER the conflict —
+    # so the meaningful guarantee is that no manual resolution is requested.
+    assert_output --partial "Partial-apply"
+    assert_output --partial "partial-apply resolved to empty"
+    assert_output --partial "0 conflicts"
+    refute_output --partial "Resolve and run"
+}
+
+@test "scan #907: partial-apply skipped while real commits still applied; HEAD superset intact" {
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo init > a.txt && git add a.txt && git commit -qm "init"
+        git checkout -q -b source
+        echo one > f1.txt && git add f1.txt && git commit -qm "feat one"
+        echo dupsrc > f2.txt && git add f2.txt && git commit -qm "shared dup subject"
+        printf "CONFIG=new\n" > conf.txt && git add conf.txt && git commit -qm "feat: bring config"
+        echo four > f4.txt && git add f4.txt && git commit -qm "feat four"
+        git checkout -q main
+        echo dupbase > onbase.txt && git add onbase.txt && git commit -qm "shared dup subject"
+        printf "CONFIG=new\n# extra in head\n" > conf.txt && git add conf.txt && git commit -qm "main: config superset"
+        printf "y\n" | _gcp_scan main source --author=all >/dev/null 2>&1
+        git cat-file -e HEAD:f1.txt && echo HAS_F1
+        git cat-file -e HEAD:f4.txt && echo HAS_F4
+        # conf.txt retains HEADs superset (partial-apply did not overwrite it).
+        git show HEAD:conf.txt
+        # No stray cherry-pick left behind.
+        git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
+    '
+    assert_success
+    assert_output --partial "HAS_F1"
+    assert_output --partial "HAS_F4"
+    assert_output --partial "# extra in head"
+    assert_output --partial "PICK_CLEAR"
+}
