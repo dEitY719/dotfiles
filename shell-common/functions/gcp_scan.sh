@@ -51,20 +51,38 @@ _gcp_scan_preflight_is_noop() {
     # The probe is NON-DESTRUCTIVE: a dirty working tree is stashed first and
     # popped at the end, and the index/tree are restored with `git reset --hard`
     # (a `cherry-pick -n` never records sequencer state, so no --abort needed).
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo "Error: Not in a git repository" >&2
+        return 1
+    fi
     local sha="$1" result=1 had_stash=0 conflicted f
     if ! git diff --quiet || ! git diff --cached --quiet; then
         git stash push -q --include-untracked -m "gcp_preflight_probe" && had_stash=1
+        # Data-loss guard (PR #916 review): a failed stash leaves the tree
+        # dirty, and the `git reset --hard HEAD` below would then wipe the
+        # uncommitted work. Bail out (treat as "not a no-op") instead.
+        if [ "$had_stash" -ne 1 ]; then
+            return 1
+        fi
     fi
     if git cherry-pick -n "$sha" >/dev/null 2>&1; then
         git diff --cached --quiet && result=0
     else
         conflicted=$(git diff --name-only --diff-filter=U)
-        echo "$conflicted" | while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            git checkout HEAD -- "$f"
-        done
-        git add -A
-        git diff --cached --quiet && result=0
+        # Only a real merge conflict is eligible for the context-drift no-op
+        # verdict. An EMPTY list means `cherry-pick -n` failed fatally (bad
+        # SHA, index lock, …) on a clean index — leaving result=1 so the
+        # commit is never silently skipped (PR #916 review). `git checkout
+        # HEAD -- <f>` already stages each resolved file, so no extra
+        # `git add` is needed (and `git add -A` would wrongly stage untracked
+        # files, breaking the empty-diff check).
+        if [ -n "$conflicted" ]; then
+            echo "$conflicted" | while IFS= read -r f; do
+                [ -z "$f" ] && continue
+                git checkout HEAD -- "$f"
+            done
+            git diff --cached --quiet && result=0
+        fi
     fi
     git reset --hard HEAD >/dev/null 2>&1
     [ "$had_stash" -eq 1 ] && git stash pop -q >/dev/null 2>&1

@@ -548,6 +548,41 @@ FIXTURE
     assert_output --partial "PICK_CLEAR"
 }
 
+@test "preflight #913/#916: fatal cherry-pick error (bad SHA) is NOT a no-op (1)" {
+    # PR #916 review: a fatal `cherry-pick -n` error (invalid object, lock)
+    # leaves an empty conflict list on a clean index — it must NOT be mistaken
+    # for an absorbed commit and silently skipped.
+    run_in_bash "
+        $(_gcp903_make_repo)
+        _gcp_scan_preflight_is_noop deadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+        echo \"rc=\$?\"
+    "
+    assert_success
+    assert_output --partial "rc=1"
+}
+
+@test "preflight #913/#916: untracked-only dirty tree does not break the no-op verdict" {
+    # PR #916 review: `git add -A` used to stage untracked files (which the
+    # initial `git diff` dirty-check never stashed), wrongly flipping a real
+    # no-op to rc=1. The untracked file must survive AND the verdict stay 0.
+    run_in_bash "
+        $(_gcp903_make_repo)
+        git checkout -q -b side
+        echo v2 > a.txt && git add a.txt && git commit -qm 'side: bump to v2'
+        side_sha=\$(git rev-parse HEAD)
+        git checkout -q main
+        echo v2 > a.txt && git add a.txt && git commit -qm 'main: bump to v2 (other path)'
+        # Only an untracked file is dirty — git diff does not see it, so it is
+        # never stashed; the probe must still report the commit as a no-op.
+        echo scratch > untracked.txt
+        _gcp_scan_preflight_is_noop \"\$side_sha\"; echo \"rc=\$?\"
+        [ -f untracked.txt ] && echo UNTRACKED_KEPT || echo UNTRACKED_LOST
+    "
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "UNTRACKED_KEPT"
+}
+
 @test "scan #913: content-dup commit (unique subject, different patch-id) skipped via no-op pre-flight, no conflict" {
     # The content-dup commit must reach the individual loop, so its patch-id
     # has to DIFFER from how HEAD acquired the same final content (else
