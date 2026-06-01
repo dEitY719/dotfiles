@@ -5,7 +5,7 @@
 #   claude/skills/claude-plugin-structure-refactor/references/plan-and-report-templates.md
 #
 # The two skills are AI-interpreted markdown with no shell entry point;
-# these functions are the executable form of their M1-M6 / R1-R4 evaluation
+# these functions are the executable form of their M1-M6 / R1-R5 evaluation
 # and the refactor apply logic, so bats can pin the behavior against real
 # fixture repos. Keep them in sync with structure-spec.md whenever the spec
 # changes.
@@ -96,7 +96,7 @@ cps_check_M5() {
 
 cps_check_M6() { [ -f "$1/README.md" ] && echo PASS || echo FAIL; }
 
-# ---- recommended checks (R1-R4) -- echo PASS|WARN|N/A -------------------
+# ---- recommended checks (R1-R5) -- echo PASS|WARN|N/A -------------------
 cps_check_R1() {
     # per-skill docs/skill-guides/<skill>.html ; N/A if no skills
     local _p _s _any=0
@@ -174,6 +174,39 @@ EOF
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
 
+cps_check_R5() {
+    # per-skill README links: README must reference BOTH skill-guides/<s>.html
+    # AND skill-output/<s>-usage.{html,md} for every skill. Matching is by
+    # path-string presence (relative or Pages-absolute both count). N/A when
+    # README absent (M6 owns that) or no skills exist.
+    [ -f "$1/README.md" ] || {
+        echo "N/A"
+        return
+    }
+    local _p _s _any=0
+    while IFS= read -r _p; do
+        [ -n "$_p" ] || continue
+        while IFS= read -r _s; do
+            [ -n "$_s" ] || continue
+            _any=1
+            grep -qF "skill-guides/$_s.html" "$1/README.md" || {
+                echo WARN
+                return
+            }
+            { grep -qF "skill-output/$_s-usage.html" "$1/README.md" ||
+                grep -qF "skill-output/$_s-usage.md" "$1/README.md"; } || {
+                echo WARN
+                return
+            }
+        done <<EOF
+$(_cps_skills "$1" "$_p")
+EOF
+    done <<EOF
+$(_cps_plugins "$1")
+EOF
+    [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
+}
+
 # ---- aggregate verdict ---------------------------------------------------
 cps_verdict() {
     # echo FAIL | WARN | PASS for repo $1
@@ -185,7 +218,7 @@ cps_verdict() {
             return
         }
     done
-    for _c in R1 R2 R3 R4; do
+    for _c in R1 R2 R3 R4 R5; do
         _r="$(cps_check_$_c "$1")"
         [ "$_r" = WARN ] && {
             echo WARN
@@ -262,6 +295,26 @@ EOF
                 [ -f "$_repo/docs/skill-output/$_s-usage.md" ]; } || printf \
                 '<!-- TODO: %s usage sample — fill with /devx:visualize -->\n' \
                 "$_s" >"$_repo/docs/skill-output/$_s-usage.md"
+        done <<EOF
+$(_cps_skills "$_repo" "$_p")
+EOF
+    done <<EOF
+$(_cps_plugins "$_repo")
+EOF
+
+    # --op: R5 README link backfill — append a per-skill guide+usage link line
+    # for any skill missing either link. Idempotent: skip when both present.
+    while IFS= read -r _p; do
+        [ -n "$_p" ] || continue
+        while IFS= read -r _s; do
+            [ -n "$_s" ] || continue
+            if grep -qF "skill-guides/$_s.html" "$_repo/README.md" &&
+                { grep -qF "skill-output/$_s-usage.html" "$_repo/README.md" ||
+                    grep -qF "skill-output/$_s-usage.md" "$_repo/README.md"; }; then
+                continue
+            fi
+            printf -- '- `%s`: [guide](docs/skill-guides/%s.html) · [usage](docs/skill-output/%s-usage.md)\n' \
+                "$_s" "$_s" "$_s" >>"$_repo/README.md"
         done <<EOF
 $(_cps_skills "$_repo" "$_p")
 EOF

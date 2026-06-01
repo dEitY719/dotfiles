@@ -19,8 +19,9 @@ claude-plugin structure check — <repo-path>
  N/A   R2 (스킬 없음 — 평가 대상 없음)
  PASS  R3 README.md 가 docs/ 로 링크 (Simple)
  PASS  R4 명명 일관성 (claude-plugin:structure-check ↔ 디렉터리)
+ WARN  R5 README 에 excalidraw-diagram usage 링크 누락
 
-요약: FAIL (필수 2, 권장 1, N/A 1)
+요약: FAIL (필수 2, 권장 2, N/A 1)
 → Fix: /claude-plugin:structure-refactor <repo-path>  (먼저 dry-run, 이후 --apply)
 ```
 
@@ -29,7 +30,10 @@ claude-plugin structure check — <repo-path>
 - One line per item: `<RESULT>  <ID> <subject> <note>`.
 - `<RESULT>` is one of `PASS` / `WARN` / `FAIL` / `N/A` (uppercase),
   left-padded so the IDs align.
-- `[필수]` block lists M1-M6 in order; `[권장]` block lists R1-R4 in order.
+- `[필수]` block lists M1-M6 in order; `[권장]` block lists R1-R5 in order.
+- R5 is per-skill: when more than one skill misses a link, emit one R5 line
+  naming the first offender (or summarize `<n>개 스킬`); a clean repo → PASS,
+  no skills → N/A.
 - Header line names the discovered plugins and total skill count — proof
   the scan was dynamic, not hard-coded.
 

@@ -18,14 +18,15 @@ What it checks (read-only — never edits):
     M5  docs/skill-guides/ + docs/skill-output/ both directories exist
     M6  README.md                              exists
 
-  Recommended (R1-R4 — missing → WARN)
+  Recommended (R1-R5 — missing → WARN)
     R1  docs/skill-guides/<skill>.html         per-skill guide
     R2  docs/skill-output/<skill>-usage.{html,md}  per-skill usage sample
     R3  README is "Simple"                     links into docs/, not too long
     R4  naming consistency                     name: colon ↔ directory hyphen
+    R5  per-skill README guide+usage links     README links both for each skill
 
 Each item reports PASS / WARN / FAIL / N/A. N/A means the subject does not
-exist (e.g. a plugin with 0 skills → R1/R2 are N/A).
+exist (e.g. a plugin with 0 skills → R1/R2/R5 are N/A).
 
 Verdict:
   any FAIL → FAIL ; no FAIL but >=1 WARN → WARN ; all PASS/N/A → PASS

@@ -5,8 +5,9 @@ description: >-
   standard layout. Dry-run by default (plan only, no writes); `--apply`
   performs changes. Scope `--mp`/`--mandatory` fixes mandatory items M1-M6
   only (create dirs, `git mv`, minimal marketplace.json/plugin.json
-  skeletons); `--op`/`--recommended` adds recommended R1-R4 fixes (empty
-  placeholder stubs + naming correction). Idempotent. Use when the user
+  skeletons); `--op`/`--recommended` adds recommended R1-R5 fixes (empty
+  placeholder stubs + naming correction + README link backfill). Idempotent.
+  Use when the user
   says "fix my claude-plugin repo structure", "make this marketplace repo
   standard", "/claude-plugin:structure-refactor". Sister skill of
   `claude-plugin:structure-check` (which finds what this fixes). Does NOT
@@ -34,7 +35,7 @@ Positional `[repo-path]` (default = current dir). Flags:
 
 - `--apply` — execute changes. Absent → dry-run (plan only, no writes).
 - `--mandatory` / `--mp` — scope = M1-M6 only (default scope).
-- `--recommended` / `--op` — scope = M1-M6 + R1-R4.
+- `--recommended` / `--op` — scope = M1-M6 + R1-R5.
 - `--mp` and `--op` together → error + usage, stop.
 
 Confirm the path exists. `test -d <path>/.git`: not a git repo → warn (moves
@@ -44,14 +45,14 @@ explicit `--apply` before writing (never auto-apply on a dirty tree).
 ## Step 2: Evaluate Current ↔ Target
 
 Read `references/structure-spec.md` (embedded SSOT — identical copy to
-structure-check's). Run the same M1-M6 / R1-R4 evaluation as
+structure-check's). Run the same M1-M6 / R1-R5 evaluation as
 `claude-plugin:structure-check` to compute the current → target diff.
 Discover plugins/skills dynamically (`plugins/*/`, `plugins/*/skills/*/`).
 
 ## Step 3: Build the Plan
 
 Read `references/plan-and-report-templates.md`. Produce an ordered change
-list, each tagged with its driving check ID (M1-M6, and R1-R4 only when
+list, each tagged with its driving check ID (M1-M6, and R1-R5 only when
 scope is `--op`). Already-correct items produce no action (idempotent).
 
 ## Step 4: Dry-run or Apply
@@ -65,7 +66,9 @@ scope is `--op`). Already-correct items produce no action (idempotent).
   - write minimal skeletons for a missing `marketplace.json` / `plugin.json`
     (filled with discovered plugin/skill names);
   - **`--op` only**: create empty R1/R2 placeholder stubs (TODO header +
-    "fill with /devx:visualize" comment) and correct R4 naming mismatches.
+    "fill with /devx:visualize" comment), correct R4 naming mismatches, and
+    backfill missing R5 README links (append a per-skill `Docs:` line with
+    the guide+usage links under the skill's README section — stub level).
 
 ## Step 5: Report
 

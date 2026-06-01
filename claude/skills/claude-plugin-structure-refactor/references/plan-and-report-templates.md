@@ -13,16 +13,18 @@ claude-plugin structure refactor — <repo-path>   (scope: mandatory|recommended
   [M5] mkdir   docs/skill-guides/, docs/skill-output/
   [R1] stub    docs/skill-guides/visualize.html        (--op only)
   [R4] rename  name: 교정 → claude-plugin:visualize     (--op only)
+  [R5] link    README.md ← excalidraw-diagram guide+usage 링크 추가 (--op only)
 
 총 <n> 변경  (필수 <m>, 권장 <r>)
 ```
 
 - One line per change: `[<ID>] <verb>  <path / detail>`.
 - Verbs: `create` (new file), `mkdir` (new dir), `git mv` / `mv` (move),
-  `stub` (empty placeholder), `rename` (frontmatter/dir naming fix).
+  `stub` (empty placeholder), `rename` (frontmatter/dir naming fix),
+  `link` (append a per-skill guide+usage link into README — R5).
 - Items already correct produce **no line** (idempotent — proof there is
   nothing to do is an empty plan + `총 0 변경`).
-- R1-R4 lines appear only when scope is `--op` / `--recommended`.
+- R1-R5 lines appear only when scope is `--op` / `--recommended`.
 
 ## Apply rules
 
@@ -57,9 +59,19 @@ Execute the plan in this order so later steps see earlier results:
    directory hyphen form disagree, correct the directory name (prefer
    `git mv`) so it matches the `name:`; never silently rewrite a correct
    `name:`.
+6. **`--op` only — R5 README links**: for each skill `<s>` whose README is
+   missing the guide or usage link, append a stub-level `Docs:` line into
+   the README naming both relative paths:
+   ```markdown
+   - `<s>`: [guide](docs/skill-guides/<s>.html) · [usage](docs/skill-output/<s>-usage.md)
+   ```
+   Append only the link(s) actually missing; never rewrite or reorder
+   existing README content, and never duplicate a link already present
+   (idempotent). Stub level — does not author guide/usage *content* (R1/R2
+   own the file stubs).
 
-Skeleton/stub writes never touch a file that already exists — the skill is
-idempotent.
+Skeleton/stub writes never touch a file that already exists, and link
+backfill never duplicates an existing link — the skill is idempotent.
 
 ## Completion report template
 
@@ -74,7 +86,7 @@ Planned: <n>   Applied: <n>   Skipped (already correct): <n>
 <the plan block above, with applied lines marked ✓>
 
 [OK] refactor complete   |   [FAIL] <reason>
-applied=<n> moved=<n> created=<n> stubbed=<n> mode=<dry-run|apply> scope=<mp|op>
+applied=<n> moved=<n> created=<n> stubbed=<n> linked=<n> mode=<dry-run|apply> scope=<mp|op>
 ```
 
 End with the next-action hint:
