@@ -54,37 +54,55 @@ EOF
 }
 
 _gcp_scan_conflict_resolves_to_empty() {
-    # True (0) when an IN-PROGRESS cherry-pick of $1 is CONFLICTED but the
-    # commit's payload already exists in HEAD, so an ours-favoring replay nets
-    # no change (issue #907 "partial-apply"). The pre-flight
-    # _gcp_scan_already_in_head cannot catch this: the file differs textually
-    # (e.g. a comment block an unrelated upstream commit expanded later) so
-    # `git diff HEAD $sha` reports a change, yet the 3-way merge resolves to
-    # nothing new. Such a commit otherwise conflicts -> resolves to empty ->
-    # forces a manual `git cherry-pick --skip` on every scan.
+    # True (0) when an IN-PROGRESS cherry-pick of $1 is CONFLICTED yet the
+    # commit's OWN patch (diff $1^..$1) is already present in HEAD -- a pure
+    # context-drift conflict (issue #907 "partial-apply"; e.g. a comment block
+    # an unrelated upstream commit expanded later). The pre-flight
+    # _gcp_scan_already_in_head misses it because the file differs textually
+    # (`git diff HEAD $sha` reports a change), so without this the commit
+    # conflicts -> resolves to empty -> forces a manual `--skip` every scan.
     #
-    # Method: back out of the live conflict, replay the pick favoring HEAD
-    # (`-X ours`) WITHOUT committing, then ask whether the staged tree still
-    # equals HEAD. `-X ours` keeps theirs' NON-conflicting hunks, so a commit
-    # that brings any genuinely new hunk stays non-empty and reaches the user
-    # (acceptance criterion #2); only conflicting regions already present in
-    # HEAD are dropped. The probe restores the exact pre-probe HEAD with no
-    # cherry-pick in progress regardless of outcome -- the caller re-creates
-    # the conflict when this returns 1.
+    # Detection is PATCH-level and NON-DESTRUCTIVE: snapshot HEAD's version of
+    # every file the commit touches into a scratch dir and reverse-apply the
+    # commit's patch there with `patch -R`. Fuzz (-F) absorbs drifted CONTEXT
+    # lines but NEVER the changed lines themselves -- so a commit whose real
+    # change lives inside a conflicting hunk and is NOT in HEAD fails to
+    # reverse-apply and is left for the user (PR #908 review P1). This is why
+    # an `-X ours` replay was rejected: it masks such genuine changes and would
+    # silently drop them. The probe touches only the scratch dir, never the
+    # working tree, so it cannot clobber unrelated local edits (review P1).
+    #
+    # rc=0 -> already applied; caller should `git cherry-pick --skip`.
+    # rc=1 -> not provably redundant (incl. no `patch` available); keep conflict.
     git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 || return 1
-    local orig
+    command -v patch >/dev/null 2>&1 || return 1
+    local orig changed scratch f rc
     orig=$(git rev-parse HEAD 2>/dev/null) || return 1
-    # Leave the live conflict before probing.
-    git cherry-pick --abort >/dev/null 2>&1 || return 1
-    local rc=1
-    if git cherry-pick --no-commit -X ours "$1" >/dev/null 2>&1; then
-        # rc=0 only when the ours-favoring apply nets nothing over HEAD.
-        git diff --cached --quiet HEAD 2>/dev/null && rc=0
-    fi
-    # Restore to the exact pre-probe state (clears the staged probe + any
-    # cherry-pick sequencer left by --no-commit) no matter what happened above.
-    git cherry-pick --abort >/dev/null 2>&1
-    git reset --hard "$orig" >/dev/null 2>&1
+    changed=$(git diff-tree --no-commit-id -r --name-only "$1" 2>/dev/null)
+    [ -z "$changed" ] && return 1
+    scratch=$(mktemp -d "${TMPDIR:-/tmp}/gcp_probe.XXXXXX") || return 1
+    # Snapshot HEAD's current content of every path the commit touches.
+    while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        # A path absent from HEAD cannot already carry the commit's change.
+        git cat-file -e "$orig:$f" 2>/dev/null || {
+            rm -rf "$scratch"
+            return 1
+        }
+        mkdir -p "$scratch/$(dirname "$f")" 2>/dev/null
+        git cat-file -p "$orig:$f" >"$scratch/$f" 2>/dev/null || {
+            rm -rf "$scratch"
+            return 1
+        }
+    done <<EOF
+$changed
+EOF
+    # Reverse-apply the commit's own patch onto the snapshot. Success means the
+    # commit's changes are already in HEAD -> the conflict is context-only.
+    git diff "$1^" "$1" 2>/dev/null |
+        (cd "$scratch" && patch -R -p1 -f -s -F3 >/dev/null 2>&1)
+    rc=$?
+    rm -rf "$scratch"
     return $rc
 }
 
@@ -497,21 +515,23 @@ EOF
                             continue
                         fi
                         # Partial-apply (issue #907): the pick conflicted but
-                        # HEAD already carries its payload. The probe replays it
-                        # favoring HEAD and, finding no net change, leaves a clean
-                        # HEAD with no pick in progress -- just record + move on.
+                        # HEAD already carries the commit's patch (context-only
+                        # drift). The probe confirms this non-destructively (it
+                        # leaves the live conflict untouched); on a match, skip
+                        # the redundant commit and move on.
                         if _gcp_scan_conflict_resolves_to_empty "$sha"; then
                             if type ux_warning >/dev/null 2>&1; then
                                 ux_warning "Partial-apply at $sha already in HEAD; skipping..."
                             else
                                 echo "⚠ Partial-apply at $sha already in HEAD; skipping..." >&2
                             fi
-                            partial_skipped=$((partial_skipped + 1))
-                            continue
+                            if git cherry-pick --skip; then
+                                partial_skipped=$((partial_skipped + 1))
+                                continue
+                            fi
                         fi
-                        # Real conflict: the probe restored a clean HEAD, so
-                        # re-create the conflict for the user to resolve.
-                        git cherry-pick "$sha" >/dev/null 2>&1 || true
+                        # Real conflict: leave it in place (with git's own
+                        # conflict output already shown) for the user to resolve.
                         if type ux_error >/dev/null 2>&1; then
                             ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
                         fi
