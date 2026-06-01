@@ -302,19 +302,23 @@ EOF
 $(_cps_plugins "$_repo")
 EOF
 
-    # --op: R5 README link backfill — append a per-skill guide+usage link line
-    # for any skill missing either link. Idempotent: skip when both present.
+    # --op: R5 README link backfill — append ONLY the missing link(s) per skill
+    # so an already-present link is never duplicated (idempotent, per spec).
+    local _has_guide _has_usage
     while IFS= read -r _p; do
         [ -n "$_p" ] || continue
         while IFS= read -r _s; do
             [ -n "$_s" ] || continue
-            if grep -qF "skill-guides/$_s.html" "$_repo/README.md" &&
-                { grep -qF "skill-output/$_s-usage.html" "$_repo/README.md" ||
-                    grep -qF "skill-output/$_s-usage.md" "$_repo/README.md"; }; then
-                continue
-            fi
-            printf -- '- `%s`: [guide](docs/skill-guides/%s.html) · [usage](docs/skill-output/%s-usage.md)\n' \
-                "$_s" "$_s" "$_s" >>"$_repo/README.md"
+            _has_guide=0
+            _has_usage=0
+            grep -qF "skill-guides/$_s.html" "$_repo/README.md" && _has_guide=1
+            { grep -qF "skill-output/$_s-usage.html" "$_repo/README.md" ||
+                grep -qF "skill-output/$_s-usage.md" "$_repo/README.md"; } && _has_usage=1
+            [ "$_has_guide" -eq 1 ] && [ "$_has_usage" -eq 1 ] && continue
+            [ "$_has_guide" -eq 0 ] && printf -- '- `%s` guide: [guide](docs/skill-guides/%s.html)\n' \
+                "$_s" "$_s" >>"$_repo/README.md"
+            [ "$_has_usage" -eq 0 ] && printf -- '- `%s` usage: [usage](docs/skill-output/%s-usage.md)\n' \
+                "$_s" "$_s" >>"$_repo/README.md"
         done <<EOF
 $(_cps_skills "$_repo" "$_p")
 EOF

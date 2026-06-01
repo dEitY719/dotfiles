@@ -240,6 +240,19 @@ build_perfect() {
     [ "$first" = "$second" ]
 }
 
+@test "R5 backfill appends ONLY the missing link (no duplicate of present one)" {
+    # gemini #906 review: guide already linked, only usage missing.
+    _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    printf -- '- [guide](docs/skill-guides/visualize.html)\n' >> "$REPO/README.md"
+    run cps_check_R5 "$REPO"; assert_output WARN          # usage missing
+    cps_refactor "$REPO" op apply
+    # guide link still appears exactly once (not re-appended), usage now present
+    [ "$(grep -c 'skill-guides/visualize.html' "$REPO/README.md")" = "1" ]
+    [ "$(grep -c 'skill-output/visualize-usage.md' "$REPO/README.md")" = "1" ]
+    run cps_check_R5 "$REPO"; assert_output PASS
+}
+
 # ---- N/A for absent subject on mandatory checks (PR #894 gemini review) --
 
 @test "no plugins -> M3 is N/A (M2 owns the FAIL), verdict still FAIL" {
