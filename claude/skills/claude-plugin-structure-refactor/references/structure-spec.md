@@ -86,7 +86,7 @@ links it uses the GitHub Pages absolute URL, derived host-independently from
 Pages absolute URL as a satisfied link — it never requires a specific form;
 the Pages-URL form is the shape `--op` writes. Full apply rule and GitHub
 Pages activation step: `references/plan-and-report-templates.md` → "Apply
-rules" + "Pages host & URL derivation".
+rules" + "Pages host & URL derivation (`--op`)".
 
 ## N/A rule
 
