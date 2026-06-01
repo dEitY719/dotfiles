@@ -66,15 +66,17 @@ Execute the plan in this order so later steps see earlier results:
    ```markdown
    <!-- TODO: <s> usage sample — fill with /devx:visualize -->
    ```
-6. **`--op` only — GitHub Pages activation**: derive `<host>/<owner>/<repo>`
-   per "Pages host & URL derivation" below. Query the current state:
+6. **`--op` only — GitHub Pages activation**: derive `$HOST` / `$OWNER` /
+   `$REPO` per "Pages host & URL derivation (`--op`)" below. Query the
+   current state:
    ```bash
-   gh api --hostname <host> repos/<owner>/<repo>/pages
+   gh api --hostname "$HOST" "repos/$OWNER/$REPO/pages"
    ```
-   If it 404s (Pages inactive), activate it:
+   If it 404s (Pages inactive), activate it (pipe the JSON in via stdin — no
+   bash-only here-string, so the snippet is `/bin/sh`-safe):
    ```bash
-   gh api --hostname <host> repos/<owner>/<repo>/pages -X POST \
-     --input - <<< '{"source":{"branch":"main","path":"/docs"}}'
+   echo '{"source":{"branch":"main","path":"/docs"}}' \
+     | gh api --hostname "$HOST" "repos/$OWNER/$REPO/pages" -X POST --input -
    ```
    Skip when Pages already responds 200 (idempotent). Soft-fail: a missing
    token scope or unreachable host warns and continues.
@@ -86,7 +88,7 @@ Execute the plan in this order so later steps see earlier results:
    missing the guide or usage link, append into the README under that
    skill's section — **each missing link only** (check guide and usage
    independently, same as before). The **guide** link now uses the
-   Pages-URL format from "Pages host & URL derivation" below; the usage
+   Pages-URL format from "Pages host & URL derivation (`--op`)" below; the usage
    link stays a relative path (usage is stub level):
    ```markdown
    - `<s>` ([visual guide ↗](<pages-base>/skill-guides/<s>.html))

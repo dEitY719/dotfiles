@@ -74,7 +74,7 @@ scope is `--op`). Already-correct items produce no action (idempotent).
     activate GitHub Pages when inactive (github.com + GHE), correct R4
     naming mismatches, and backfill missing R5 README links using the
     Pages-URL format — see `references/plan-and-report-templates.md` →
-    "Apply rules" and "Pages host & URL derivation".
+    "Apply rules" and "Pages host & URL derivation (`--op`)".
 
 ## Step 5: Report
 

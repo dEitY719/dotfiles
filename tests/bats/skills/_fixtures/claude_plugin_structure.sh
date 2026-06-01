@@ -321,7 +321,7 @@ EOF
             { grep -qF "skill-output/$_s-usage.html" "$_repo/README.md" ||
                 grep -qF "skill-output/$_s-usage.md" "$_repo/README.md"; } && _has_usage=1
             [ "$_has_guide" -eq 1 ] && [ "$_has_usage" -eq 1 ] && continue
-            [ "$_has_guide" -eq 0 ] && printf -- '- `%s` guide: [guide](docs/skill-guides/%s.html)\n' \
+            [ "$_has_guide" -eq 0 ] && printf -- '- `%s` ([visual guide ↗](docs/skill-guides/%s.html))\n' \
                 "$_s" "$_s" >>"$_repo/README.md"
             [ "$_has_usage" -eq 0 ] && printf -- '- `%s` usage: [usage](docs/skill-output/%s-usage.md)\n' \
                 "$_s" "$_s" >>"$_repo/README.md"
