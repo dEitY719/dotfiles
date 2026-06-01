@@ -60,7 +60,7 @@ _cps_detect_mode() {
         _src="$(jq -r '.plugins[]? | if type=="object" then .source else . end' "$_mf" 2>/dev/null | head -n1)"
         case "$_src" in
         ./ | .) echo single && return ;;
-        ./plugins/*) echo mono && return ;;
+        plugins/* | ./plugins/*) echo mono && return ;;
         esac
     fi
     # filesystem fallback.
