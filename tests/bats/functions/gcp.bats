@@ -418,7 +418,9 @@ FIXTURE
     assert_output --partial "NO_F2"
 }
 
-@test "scan #811: contiguous no-dup path is unchanged (NF-1) — clean range pick" {
+@test "scan #811/#913: no-dup path applies every commit (individual iteration)" {
+    # The contiguous range shortcut was removed in #913 — commits are always
+    # iterated individually so the no-op pre-flight can never be bypassed.
     run_in_bash '
         repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
         cd "$repo" || exit 1
@@ -435,19 +437,22 @@ FIXTURE
         git cat-file -e HEAD:f2.txt && echo HAS_F2
     '
     assert_success
-    assert_output --partial "Range is contiguous"
-    assert_output --partial "Cherry-pick complete"
+    assert_output --partial "2 applied, 0 skipped (dup), 0 conflicts"
     assert_output --partial "HAS_F1"
     assert_output --partial "HAS_F2"
-    refute_output --partial "skipped (dup)"
+    refute_output --partial "no-op pre-flight"
 }
 
 # ---------------------------------------------------------------------------
-# Issue #903 — content-based pre-flight skip. Stage-1 (subject-based) dup
-# detection misses a commit whose subject is unique but whose payload already
-# landed in HEAD via a different path (merge / squash / edit). Cherry-picking
-# it conflicts, resolves to empty, and forces an endless conflict -> --skip
-# loop. `_gcp_scan_already_in_head` catches it before the cherry-pick attempt.
+# Issue #913 — merge-probe no-op pre-flight (supersedes #903/#907/#908/#910).
+# `_gcp_scan_preflight_is_noop` runs `git cherry-pick -n` on a candidate and
+# decides, from git's own merge result, whether the commit would add anything
+# to HEAD. A clean apply with empty staged diff, or a conflict that resolves
+# to HEAD with empty staged diff, is a no-op (skip). Anything leaving a
+# non-empty staged diff is real work (keep). It absorbs the cases the earlier
+# subject-based / file-compare / reverse-patch heuristics each missed, because
+# it reuses the very engine the real cherry-pick would use. Reuses the #903
+# bare-repo emitter `_gcp903_make_repo` for the shared git-init preamble.
 # ---------------------------------------------------------------------------
 
 _gcp903_make_repo() {
@@ -465,25 +470,27 @@ _gcp903_make_repo() {
 FIXTURE
 }
 
-@test "bash: _gcp_scan_already_in_head private function exists" {
-    run_in_bash 'declare -f _gcp_scan_already_in_head >/dev/null && echo ok'
+@test "bash: _gcp_scan_preflight_is_noop private function exists" {
+    run_in_bash 'declare -f _gcp_scan_preflight_is_noop >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
-@test "preflight #903: empty commit (no file changes) -> already in HEAD (0)" {
+@test "preflight #913: empty commit (no file changes) -> no-op (0)" {
     run_in_bash "
         $(_gcp903_make_repo)
+        git checkout -q -b side
         git commit -q --allow-empty -m empty
         empty_sha=\$(git rev-parse HEAD)
-        _gcp_scan_already_in_head \"\$empty_sha\"
+        git checkout -q main
+        _gcp_scan_preflight_is_noop \"\$empty_sha\"
         echo \"rc=\$?\"
     "
     assert_success
     assert_output --partial "rc=0"
 }
 
-@test "preflight #903: all touched files identical to HEAD -> already in HEAD (0)" {
+@test "preflight #913: content already in HEAD via another path -> no-op (0)" {
     run_in_bash "
         $(_gcp903_make_repo)
         git checkout -q -b side
@@ -492,14 +499,14 @@ FIXTURE
         git checkout -q main
         # HEAD reaches the SAME content for a.txt via a different commit.
         echo v2 > a.txt && git add a.txt && git commit -qm 'main: bump to v2 (other path)'
-        _gcp_scan_already_in_head \"\$side_sha\"
+        _gcp_scan_preflight_is_noop \"\$side_sha\"
         echo \"rc=\$?\"
     "
     assert_success
     assert_output --partial "rc=0"
 }
 
-@test "preflight #903: some touched files differ from HEAD -> NOT in HEAD (1)" {
+@test "preflight #913: commit bringing a genuinely new file -> real work (1)" {
     run_in_bash "
         $(_gcp903_make_repo)
         git checkout -q -b side
@@ -508,14 +515,40 @@ FIXTURE
         git checkout -q main
         # HEAD matches c.txt but never gets b.txt -> real work remains.
         echo shared > c.txt && git add c.txt && git commit -qm 'main: add c only'
-        _gcp_scan_already_in_head \"\$side_sha\"
+        _gcp_scan_preflight_is_noop \"\$side_sha\"
         echo \"rc=\$?\"
     "
     assert_success
     assert_output --partial "rc=1"
 }
 
-@test "scan #903: content-dup commit (unique subject, different patch-id) skipped via pre-flight, no conflict" {
+@test "preflight #913: probe is non-destructive — dirty working tree survives" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        git checkout -q -b side
+        echo v2 > a.txt && git add a.txt && git commit -qm 'side: bump to v2'
+        side_sha=\$(git rev-parse HEAD)
+        git checkout -q main
+        echo v2 > a.txt && git add a.txt && git commit -qm 'main: bump to v2 (other path)'
+        orig=\$(git rev-parse HEAD)
+        # Uncommitted edits (tracked + untracked) MUST survive the probe.
+        echo localedit >> a.txt
+        echo scratch > untracked.txt
+        _gcp_scan_preflight_is_noop \"\$side_sha\"; echo \"rc=\$?\"
+        grep -q localedit a.txt && echo EDIT_KEPT || echo EDIT_LOST
+        [ -f untracked.txt ] && echo UNTRACKED_KEPT || echo UNTRACKED_LOST
+        [ \"\$(git rev-parse HEAD)\" = \"\$orig\" ] && echo HEAD_SAME || echo HEAD_MOVED
+        git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
+    "
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "EDIT_KEPT"
+    assert_output --partial "UNTRACKED_KEPT"
+    assert_output --partial "HEAD_SAME"
+    assert_output --partial "PICK_CLEAR"
+}
+
+@test "scan #913: content-dup commit (unique subject, different patch-id) skipped via no-op pre-flight, no conflict" {
     # The content-dup commit must reach the individual loop, so its patch-id
     # has to DIFFER from how HEAD acquired the same final content (else
     # `git cherry` filters it out up front). HEAD reaches shared.txt=TARGET via
@@ -547,8 +580,8 @@ FIXTURE
     assert_success
     # Subject-dup still handled by Stage-1.
     assert_output --partial "already applied as"
-    # Content-dup caught by the new pre-flight.
-    assert_output --partial "changes already in HEAD (pre-flight)"
+    # Content-dup caught by the no-op pre-flight.
+    assert_output --partial "already in HEAD (no-op pre-flight)"
     refute_output --partial "CONFLICT"
     refute_output --partial "Resolve and run"
 }
@@ -572,21 +605,18 @@ FIXTURE
 }
 
 # ---------------------------------------------------------------------------
-# Issue #907 — partial-apply pre-flight miss. A commit whose subject is unique
-# AND whose file content differs textually from HEAD (so the #903 pre-flight
-# _gcp_scan_already_in_head passes it through) can still cherry-pick to a
-# CONFLICT that resolves to empty, because the commit's OWN patch is already in
-# HEAD and the conflict is pure context drift (e.g. a comment block an
-# unrelated upstream commit expanded later). _gcp_scan_conflict_resolves_to_empty
-# detects this NON-DESTRUCTIVELY: it reverse-applies the commit's patch onto a
-# scratch snapshot of HEAD with fuzz, so a commit whose real change is NOT in
-# HEAD (PR #908 review P1) fails to reverse-apply and is handed to the user,
-# and the live working tree is never touched (no -X ours masking, no reset).
+# Issue #913 (context-drift case, formerly #907) — a commit whose file content
+# differs textually from HEAD so it cherry-picks to a CONFLICT, yet the
+# conflict is pure context drift (e.g. a comment block an unrelated upstream
+# commit expanded later) and resolves to HEAD with nothing added. The merge
+# probe `_gcp_scan_preflight_is_noop` catches this BEFORE any real cherry-pick:
+# the conflicted file is reset to HEAD and the empty staged diff marks it a
+# no-op. A commit carrying genuinely new content (a non-conflicting added file)
+# leaves a non-empty staged diff and is always kept.
 #
-# The unit tests reuse the #903 bare-repo emitter `_gcp903_make_repo` for the
-# shared mktemp/trap/git-init preamble; the two scan tests share the full
-# partial-apply fixture via `_gcp907_make_partial_repo` (mirrors the
-# `_gcp811`/`_gcp903` emitter convention) instead of re-inlining it.
+# The two scan tests share the full partial-apply fixture via
+# `_gcp907_make_partial_repo` (mirrors the `_gcp811`/`_gcp903` emitter
+# convention) instead of re-inlining it.
 # ---------------------------------------------------------------------------
 
 _gcp907_make_partial_repo() {
@@ -621,31 +651,23 @@ _gcp907_make_partial_repo() {
 FIXTURE
 }
 
-@test "bash: _gcp_scan_conflict_resolves_to_empty private function exists" {
-    run_in_bash 'declare -f _gcp_scan_conflict_resolves_to_empty >/dev/null && echo ok'
-    assert_success
-    assert_output --partial "ok"
-}
-
-@test "preflight #907: conflict whose patch is already in HEAD -> redundant (0); probe leaves worktree + conflict untouched" {
+@test "preflight #913: context-drift conflict that resolves to HEAD -> no-op (0), non-destructive" {
     run_in_bash "
         $(_gcp903_make_repo)
         printf '# comment v1\nCONFIG=old\n' > conf.txt && git add conf.txt && git commit -qm 'add conf'
-        git checkout -q -b source
+        git checkout -q -b side
         # commit changes ONLY the CONFIG line (comment stays v1).
         printf '# comment v1\nCONFIG=new\n' > conf.txt && git add conf.txt && git commit -qm 'feat: set CONFIG=new'
         src=\$(git rev-parse HEAD)
         git checkout -q main
-        # HEAD already has CONFIG=new plus an unrelated comment expansion.
+        # HEAD already has CONFIG=new plus an unrelated comment expansion -> the
+        # cherry-pick conflicts on adjacent lines, but resolves to HEAD empty.
         printf '# comment v2 expanded much longer\nCONFIG=new\n' > conf.txt && git add conf.txt && git commit -qm 'main: config + comment drift'
         orig=\$(git rev-parse HEAD)
-        git cherry-pick \"\$src\" >/dev/null 2>&1 || true
-        # An unrelated uncommitted edit MUST survive the non-destructive probe
-        # (PR #908 review P1: the old reset --hard would have discarded it).
-        echo localedit > a.txt
-        _gcp_scan_conflict_resolves_to_empty \"\$src\"; echo \"rc=\$?\"
+        # An unrelated uncommitted edit MUST survive the non-destructive probe.
+        echo localedit >> a.txt
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
         grep -q localedit a.txt && echo EDIT_KEPT || echo EDIT_LOST
-        # Probe is read-only: HEAD unchanged, live conflict left in place.
         [ \"\$(git rev-parse HEAD)\" = \"\$orig\" ] && echo HEAD_SAME || echo HEAD_MOVED
         git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
     "
@@ -653,42 +675,40 @@ FIXTURE
     assert_output --partial "rc=0"
     assert_output --partial "EDIT_KEPT"
     assert_output --partial "HEAD_SAME"
-    assert_output --partial "PICK_ACTIVE"
+    assert_output --partial "PICK_CLEAR"
 }
 
-@test "preflight #907: conflict bringing a change NOT in HEAD -> not redundant (1), conflict kept" {
+@test "preflight #913: conflicting commit that ALSO adds new content -> real work (1)" {
     run_in_bash "
         $(_gcp903_make_repo)
         printf '# comment v1\nCONFIG=old\n' > conf.txt && git add conf.txt && git commit -qm 'add conf'
-        git checkout -q -b source
-        # The commit's real change (its CONFIG value) is NOT present in HEAD;
-        # an -X ours replay would silently drop it -> patch reverse-apply fails.
-        printf '# comment v1\nCONFIG=theirsNEW\n' > conf.txt && git add conf.txt && git commit -qm 'feat: theirs value'
+        git checkout -q -b side
+        # Conflicts on conf.txt (context drift) AND brings a genuinely new file.
+        printf '# comment v1\nCONFIG=new\n' > conf.txt && echo brandnew > g.txt
+        git add conf.txt g.txt && git commit -qm 'feat: config + new file'
         src=\$(git rev-parse HEAD)
         git checkout -q main
-        printf '# comment v2 expanded much longer\nCONFIG=oursNEW\n' > conf.txt && git add conf.txt && git commit -qm 'main: ours value'
-        git cherry-pick \"\$src\" >/dev/null 2>&1 || true
-        _gcp_scan_conflict_resolves_to_empty \"\$src\"; echo \"rc=\$?\"
+        printf '# comment v2 expanded much longer\nCONFIG=new\n' > conf.txt && git add conf.txt && git commit -qm 'main: config + comment drift'
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
         git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
     "
     assert_success
+    # g.txt is genuinely new -> non-empty staged diff -> never auto-skipped.
     assert_output --partial "rc=1"
-    assert_output --partial "PICK_ACTIVE"
+    assert_output --partial "PICK_CLEAR"
 }
 
-@test "scan #907: partial-apply conflict commit auto-skipped (no manual intervention)" {
+@test "scan #913: context-drift commit auto-skipped by pre-flight (no conflict surfaced)" {
     run_in_bash "
         $(_gcp907_make_partial_repo)
         printf 'y\n' | _gcp_scan main source --author=all
     "
     assert_success
-    # The partial-apply commit is auto-skipped, not handed back to the user.
-    # A transient git "CONFLICT" message is expected here — unlike the #903
-    # pre-flight case, #907 is only detectable AFTER the conflict — so the
-    # meaningful guarantee is that no manual resolution is requested.
-    assert_output --partial "Partial-apply"
-    assert_output --partial "partial-apply resolved to empty"
+    # The context-drift commit is caught by the no-op pre-flight BEFORE any real
+    # cherry-pick, so no conflict is ever surfaced and no manual step is asked.
+    assert_output --partial "already in HEAD (no-op pre-flight)"
     assert_output --partial "0 conflicts"
+    refute_output --partial "CONFLICT"
     refute_output --partial "Resolve and run"
 }
 
