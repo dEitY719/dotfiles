@@ -304,6 +304,12 @@ EOF
 
     # --op: R5 README link backfill — append ONLY the missing link(s) per skill
     # so an already-present link is never duplicated (idempotent, per spec).
+    # The real skill writes the GUIDE link as a GitHub Pages absolute URL
+    # derived from `git remote` (github.com → https://<owner>.github.io/<repo>,
+    # GHE → https://<host>/pages/<owner>/<repo>; see plan-and-report-templates.md
+    # → "Pages host & URL derivation"). This hermetic fixture has no remote, so
+    # it writes the relative fallback form — both satisfy cps_check_R5, which
+    # matches by the `skill-guides/<s>.html` substring common to both forms.
     local _has_guide _has_usage
     while IFS= read -r _p; do
         [ -n "$_p" ] || continue

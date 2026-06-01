@@ -73,6 +73,21 @@ README — completing the "standard" the developer relies on (see
 so no extra scan. R3's "Simple" heuristic only requires *one* `docs/` link
 anywhere, so it cannot catch a per-skill link gap — R5 does.
 
+**Pages URL patterns** — when `structure-refactor --op` backfills R5 guide
+links it uses the GitHub Pages absolute URL, derived host-independently from
+`git remote get-url origin`:
+
+| Host | Pages base | Full guide URL |
+|------|------------|----------------|
+| `github.com` | `https://<owner>.github.io/<repo>` | `…/skill-guides/<s>.html` |
+| GHE (e.g. `github.samsungds.net`) | `https://<host>/pages/<owner>/<repo>` | `…/skill-guides/<s>.html` |
+
+`structure-check` (read-only) still accepts either the relative path or the
+Pages absolute URL as a satisfied link — it never requires a specific form;
+the Pages-URL form is the shape `--op` writes. Full apply rule and GitHub
+Pages activation step: `references/plan-and-report-templates.md` → "Apply
+rules" + "Pages host & URL derivation".
+
 ## N/A rule
 
 When the subject of a check does not exist, the check is **N/A**, not FAIL.
