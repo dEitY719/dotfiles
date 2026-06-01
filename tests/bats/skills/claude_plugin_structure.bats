@@ -312,3 +312,111 @@ build_perfect() {
     run jq -r '.skills | length' "$REPO/plugins/demo/.claude-plugin/plugin.json"
     assert_output 2
 }
+
+# ---- single layout mode (#914) ------------------------------------------
+# single = the repo itself is one plugin: marketplace source "./", plugin
+# manifest at the repo root, skills at root skills/<s>/ (no plugins/ dir).
+
+_seed_single_skill() {
+    # $1=repo  builds root-level skills/visualize/SKILL.md (name matches dir)
+    mkdir -p "$1/skills/visualize"
+    printf 'name: visualize\ndescription: demo skill\n' \
+        > "$1/skills/visualize/SKILL.md"
+}
+
+_seed_single_mandatory_json() {
+    # marketplace source "./" (single signal) + root plugin.json manifest
+    mkdir -p "$1/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [{ "source": "./" }] }\n' \
+        > "$1/.claude-plugin/marketplace.json"
+    printf '{ "name": "repo", "version": "0.0.0", "skills": ["./skills/visualize"] }\n' \
+        > "$1/.claude-plugin/plugin.json"
+}
+
+build_single_perfect() {
+    _seed_single_skill "$1"; _seed_single_mandatory_json "$1"; _seed_docs_dirs "$1"
+    _seed_readme "$1"; _seed_recommended_files "$1"; _seed_readme_links "$1" visualize
+}
+
+@test "mode auto-detects single from marketplace source \"./\"" {
+    build_single_perfect "$REPO"
+    run _cps_detect_mode "$REPO"
+    assert_output single
+}
+
+@test "mode auto-detects mono from a plugins/ layout" {
+    build_perfect "$REPO"
+    run _cps_detect_mode "$REPO"
+    assert_output mono
+}
+
+@test "mode auto-detects single from root plugin.json (no marketplace source)" {
+    # filesystem fallback: no plugins/, root manifest present
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "version": "0.0.0" }\n' > "$REPO/.claude-plugin/plugin.json"
+    run _cps_detect_mode "$REPO"
+    assert_output single
+}
+
+@test "mode defaults to mono when ambiguous (no signals)" {
+    mkdir -p "$REPO"; _seed_readme "$REPO"
+    run _cps_detect_mode "$REPO"
+    assert_output mono
+}
+
+@test "single perfect repo -> verdict PASS (no false M2/M3/M4 FAIL)" {
+    build_single_perfect "$REPO"
+    run cps_verdict "$REPO"
+    assert_success
+    assert_output PASS
+}
+
+@test "single repo scores M2/M3/M4 at the ROOT (#914 false-FAIL fix)" {
+    # The core regression: before mode support, a single repo (no plugins/)
+    # falsely FAILed M2/M3/M4. With auto-detect they pass at the root.
+    build_single_perfect "$REPO"
+    run cps_check_M2 "$REPO"; assert_output PASS
+    run cps_check_M3 "$REPO"; assert_output PASS
+    run cps_check_M4 "$REPO"; assert_output PASS
+}
+
+@test "single repo: M5/R1/R2/R5 apply mode-independently" {
+    build_single_perfect "$REPO"
+    run cps_check_M5 "$REPO"; assert_output PASS
+    run cps_check_R1 "$REPO"; assert_output PASS
+    run cps_check_R2 "$REPO"; assert_output PASS
+    run cps_check_R5 "$REPO"; assert_output PASS
+}
+
+@test "single repo missing root manifest -> M2 FAIL, M3 N/A (not double FAIL)" {
+    _seed_single_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [{ "source": "./" }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"   # marketplace only, no plugin.json
+    run cps_check_M2 "$REPO"; assert_output FAIL
+    run cps_check_M3 "$REPO"; assert_output "N/A"
+    run cps_verdict "$REPO"; assert_output FAIL
+}
+
+# ---- forced override (--single / --mono) --------------------------------
+
+@test "forced --mono on a single repo -> M2 FAIL (override scores as mono)" {
+    # override means 'score by THIS mode' — a wrong override surfaces as a
+    # normal M2 FAIL (no plugins/ dir), never a silent skip.
+    build_single_perfect "$REPO"
+    run cps_check_M2 "$REPO" mono; assert_output FAIL
+}
+
+@test "forced --single on a mono repo -> M2 FAIL (no root manifest)" {
+    build_perfect "$REPO"   # mono: manifest under plugins/demo, not root
+    run cps_check_M2 "$REPO" single; assert_output FAIL
+}
+
+@test "forced --single honored even when marketplace says mono" {
+    build_single_perfect "$REPO"
+    # corrupt the signal: claim mono in marketplace, but force single
+    printf '{ "name": "repo", "plugins": [{ "source": "./plugins/x" }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run _cps_detect_mode "$REPO" single; assert_output single
+    run cps_verdict "$REPO" single; assert_output PASS
+}

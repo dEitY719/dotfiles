@@ -2,9 +2,11 @@
 
 Use this exact format when outputting the audit report.
 
+### Example — mono (multi-plugin bundle)
+
 ```
 claude-plugin structure check — <repo-path>
-  plugins: <p1> / <p2>   skills: <count>   (git: yes|no)
+  mode: mono (source "./plugins/..")   plugins: <p1> / <p2>   skills: <count>   (git: yes|no)
 
 [필수]
  PASS  M1 .claude-plugin/marketplace.json (유효)
@@ -25,6 +27,33 @@ claude-plugin structure check — <repo-path>
 → Fix: /claude-plugin:structure-refactor <repo-path>  (먼저 dry-run, 이후 --apply)
 ```
 
+### Example — single (repo is one plugin)
+
+```
+claude-plugin structure check — <repo-path>
+  mode: single (source "./")   plugins: . (root)   skills: 4   (git: yes)
+
+[필수]
+ PASS  M1 .claude-plugin/marketplace.json (유효, source "./")
+ PASS  M2 root .claude-plugin/plugin.json (plugin root 1개)
+ PASS  M3 .claude-plugin/plugin.json (유효)
+ PASS  M4 skills/<s>/SKILL.md (4개 모두 name/description 보유)
+ PASS  M5 docs/skill-guides/, docs/skill-output/
+ PASS  M6 README.md
+
+[권장]
+ PASS  R1 docs/skill-guides/<s>.html (4개 모두 존재)
+ PASS  R2 docs/skill-output/<s>-usage.{html,md}
+ PASS  R3 README.md 가 docs/ 로 링크 (Simple)
+ PASS  R4 명명 일관성
+ PASS  R5 README 가 스킬별 guide+usage 링크 보유
+
+요약: PASS — 표준 구조 준수
+```
+
+When the mode was inferred by the ambiguous fallback, append `, 추정` —
+`mode: mono (추정)`.
+
 ## Layout rules
 
 - One line per item: `<RESULT>  <ID> <subject> <note>`.
@@ -34,8 +63,10 @@ claude-plugin structure check — <repo-path>
 - R5 is per-skill: when more than one skill misses a link, emit one R5 line
   naming the first offender (or summarize `<n>개 스킬`); a clean repo → PASS,
   no skills → N/A.
-- Header line names the discovered plugins and total skill count — proof
-  the scan was dynamic, not hard-coded.
+- Header line names the **detected mode** (with the deciding signal:
+  `source "./"`, `source "./plugins/.."`, or `추정`), the discovered
+  plugins, and total skill count — proof the scan + mode detection were
+  dynamic, not hard-coded. In `single` mode the plugins field is `. (root)`.
 
 ## Summary line
 
