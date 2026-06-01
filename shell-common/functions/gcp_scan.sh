@@ -16,6 +16,14 @@
 #   '+' = present in source, missing in base (will be cherry-picked)
 #   '-' = already merged in base
 #
+# Redundant-commit handling (issue #913, supersedes #903/#907/#908/#910):
+# every candidate is run through `_gcp_scan_preflight_is_noop` BEFORE any real
+# cherry-pick. The probe uses git's own merge engine (`cherry-pick -n`) so it
+# is immune to the context-drift failures (comment rewrites, refactors) that
+# broke the earlier file-compare / reverse-patch heuristics. The contiguous
+# "range cherry-pick" shortcut is gone — every commit is iterated individually
+# so the pre-flight is never bypassed.
+#
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
@@ -29,81 +37,38 @@ _gcp_scan_is_empty_cherry_pick() {
     return 0
 }
 
-_gcp_scan_already_in_head() {
-    # True (0) when every file that commit $1 touches already has identical
-    # content in HEAD — i.e. cherry-picking it would produce no net change.
-    # Catches the "same content, different path" case that Stage-1's
-    # subject-based dup detection misses (issue #903): a commit whose subject
-    # is unique but whose payload arrived in HEAD via merge/squash/edit. Such
-    # a commit otherwise conflicts, resolves to empty, and forces --skip.
-    local sha="$1"
-    local changed_files
-    changed_files=$(git diff-tree --no-commit-id -r --name-only "$sha" 2>/dev/null)
-    # No file changes (e.g. an already-empty commit) -> nothing to apply.
-    [ -z "$changed_files" ] && return 0
-    local f
-    while IFS= read -r f; do
-        [ -z "$f" ] && continue
-        # Any file whose HEAD content differs from $sha's means real work
-        # remains -> not already in HEAD.
-        git diff --quiet HEAD "$sha" -- "$f" 2>/dev/null || return 1
-    done <<EOF
-$changed_files
-EOF
-    return 0
-}
-
-_gcp_scan_conflict_resolves_to_empty() {
-    # True (0) when an IN-PROGRESS cherry-pick of $1 is CONFLICTED yet the
-    # commit's OWN patch (diff $1^..$1) is already present in HEAD -- a pure
-    # context-drift conflict (issue #907 "partial-apply"; e.g. a comment block
-    # an unrelated upstream commit expanded later). The pre-flight
-    # _gcp_scan_already_in_head misses it because the file differs textually
-    # (`git diff HEAD $sha` reports a change), so without this the commit
-    # conflicts -> resolves to empty -> forces a manual `--skip` every scan.
+_gcp_scan_preflight_is_noop() {
+    # True (0) when cherry-picking commit $1 onto HEAD would add nothing — the
+    # commit is already absorbed in HEAD (issue #913). Probes with git's own
+    # merge engine instead of textual heuristics, so it survives context drift:
     #
-    # Detection is PATCH-level and NON-DESTRUCTIVE: snapshot HEAD's version of
-    # every file the commit touches into a scratch dir and reverse-apply the
-    # commit's patch there with `patch -R`. Fuzz (-F) absorbs drifted CONTEXT
-    # lines but NEVER the changed lines themselves -- so a commit whose real
-    # change lives inside a conflicting hunk and is NOT in HEAD fails to
-    # reverse-apply and is left for the user (PR #908 review P1). This is why
-    # an `-X ours` replay was rejected: it masks such genuine changes and would
-    # silently drop them. The probe touches only the scratch dir, never the
-    # working tree, so it cannot clobber unrelated local edits (review P1).
+    #   * Clean apply, empty staged diff  -> already in HEAD            -> noop.
+    #   * Conflict that, once every conflicted file is reset to HEAD,
+    #     leaves an empty staged diff     -> only context drifted       -> noop.
+    #   * Anything that leaves a non-empty staged diff (a clean change, or a
+    #     conflict carrying genuinely new content) -> real work         -> keep.
     #
-    # rc=0 -> already applied; caller should `git cherry-pick --skip`.
-    # rc=1 -> not provably redundant (incl. no `patch` available); keep conflict.
-    git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 || return 1
-    command -v patch >/dev/null 2>&1 || return 1
-    local orig changed scratch f rc
-    orig=$(git rev-parse HEAD 2>/dev/null) || return 1
-    changed=$(git diff-tree --no-commit-id -r --name-only "$1" 2>/dev/null)
-    [ -z "$changed" ] && return 1
-    scratch=$(mktemp -d "${TMPDIR:-/tmp}/gcp_probe.XXXXXX") || return 1
-    # Snapshot HEAD's current content of every path the commit touches.
-    while IFS= read -r f; do
-        [ -z "$f" ] && continue
-        # A path absent from HEAD cannot already carry the commit's change.
-        git cat-file -e "$orig:$f" 2>/dev/null || {
-            rm -rf "$scratch"
-            return 1
-        }
-        mkdir -p "$scratch/$(dirname "$f")" 2>/dev/null
-        git cat-file -p "$orig:$f" >"$scratch/$f" 2>/dev/null || {
-            rm -rf "$scratch"
-            return 1
-        }
-    done <<EOF
-$changed
-EOF
-    # Reverse-apply the commit's own patch onto the snapshot. Success means the
-    # commit's changes are already in HEAD -> the conflict is context-only.
-    git diff "$1^" "$1" 2>/dev/null |
-        (cd "$scratch" && patch -R -p1 -f -s -F3 >/dev/null 2>&1)
-    rc=$?
-    rm -rf "$scratch"
-    return $rc
+    # The probe is NON-DESTRUCTIVE: a dirty working tree is stashed first and
+    # popped at the end, and the index/tree are restored with `git reset --hard`
+    # (a `cherry-pick -n` never records sequencer state, so no --abort needed).
+    local sha="$1" result=1 had_stash=0 conflicted f
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        git stash push -q --include-untracked -m "gcp_preflight_probe" && had_stash=1
+    fi
+    if git cherry-pick -n "$sha" >/dev/null 2>&1; then
+        git diff --cached --quiet && result=0
+    else
+        conflicted=$(git diff --name-only --diff-filter=U)
+        echo "$conflicted" | while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            git checkout HEAD -- "$f"
+        done
+        git add -A
+        git diff --cached --quiet && result=0
+    fi
+    git reset --hard HEAD >/dev/null 2>&1
+    [ "$had_stash" -eq 1 ] && git stash pop -q >/dev/null 2>&1
+    return $result
 }
 
 _gcp_scan_dup_base_sha() {
@@ -131,7 +96,7 @@ _gcp_scan() {
 
     # zsh/bash compatibility: disable debug tracing
     local _xtrace_set=0
-    case $- in *x*) _xtrace_set=1; esac
+    case $- in *x*) _xtrace_set=1 ;; esac
     set +x 2>/dev/null
 
     local base="main"
@@ -272,7 +237,7 @@ EOF
     local count
     count=$(echo "$selected_list" | wc -l)
 
-    # Check for duplicate commits (same subject already in base branch)
+    # Stage-1: subject-based duplicate detection (same subject already in base).
     local final_selected_list=""
     local duplicate_list=""
     local duplicate_map=""
@@ -344,20 +309,12 @@ EOF
         return 0
     fi
 
-    # Calculate range (Oldest..Newest) from non-duplicate commits only
+    # Calculate the (informational) range from non-duplicate commits only.
     local first_sha
     first_sha=$(echo "$final_selected_list" | head -n 1)
     local last_sha
     last_sha=$(echo "$final_selected_list" | tail -n 1)
     local range_str="${first_sha}^..${last_sha}"
-
-    # Verify contiguity
-    local range_count
-    range_count=$(git rev-list --count "$range_str")
-    local is_contiguous=0
-    if [ "$range_count" -eq "$count" ]; then
-        is_contiguous=1
-    fi
 
     # Display Summary
     if type ux_section >/dev/null 2>&1; then
@@ -368,29 +325,17 @@ EOF
             ux_bullet "Duplicates (already applied): $duplicate_count"
         fi
         ux_bullet "Suggested Range: $range_str"
-        if [ $is_contiguous -eq 1 ]; then
-            ux_success "Range is contiguous (clean cherry-pick)."
-        else
-            ux_warning "Range is NOT contiguous (contains $((range_count - count)) other commits in between)."
-        fi
     else
-
         echo "=== Analysis Result ==="
-        ux_bullet "Missing (all authors): $total_count"
-        ux_bullet "Author filter: $author -> $count commit(s)"
+        echo "  Missing (all authors): $total_count"
+        echo "  Author filter: $author -> $count commit(s)"
         if [ $duplicate_count -gt 0 ]; then
-            ux_bullet "Duplicates (already applied): $duplicate_count"
+            echo "  Duplicates (already applied): $duplicate_count"
         fi
-        ux_bullet "Suggested Range: $range_str"
-        if [ $is_contiguous -eq 1 ]; then
-            echo "✓ Range is contiguous (clean cherry-pick)."
-        else
-            echo "⚠ Range is NOT contiguous (contains $((range_count - count)) other commits in between)."
-        fi
+        echo "  Suggested Range: $range_str"
     fi
 
     # Display Commits
-
     if type ux_section >/dev/null 2>&1; then
         ux_section "Commit List"
     else
@@ -416,160 +361,109 @@ $final_selected_list
 EOF
 
     # Interactive Confirmation
-    if type ux_confirm >/dev/null 2>&1; then
-        if ux_confirm "Do you want to cherry-pick these $count commits?" "n"; then
+    if ! type ux_confirm >/dev/null 2>&1; then
+        return 0
+    fi
+    if ! ux_confirm "Do you want to cherry-pick these $count commits?" "n"; then
+        if type ux_info >/dev/null 2>&1; then
+            ux_info "Cancelled. You can use the range above manually: git cherry-pick $range_str"
+        fi
+        # Restore tracing if it was enabled
+        if [ $_xtrace_set -eq 1 ]; then
+            set -x
+        fi
+        return 0
+    fi
 
-            if [ $is_contiguous -eq 1 ]; then
-                if type ux_info >/dev/null 2>&1; then
-                    ux_info "Executing: git cherry-pick $range_str"
-                fi
-                if git cherry-pick "$range_str"; then
-                    if type ux_success >/dev/null 2>&1; then
-                        ux_success "Cherry-pick complete!"
-                    fi
-                else
-                    # Some environments treat an empty pick as an error (exit 1) and require --skip.
-                    # Auto-skip empty commits when there are no conflicts.
-                    while _gcp_scan_is_empty_cherry_pick; do
-                        if type ux_warning >/dev/null 2>&1; then
-                            ux_warning "Empty commit encountered during cherry-pick sequence; skipping..."
-                        fi
-                        if ! git cherry-pick --skip; then
-                            break
-                        fi
-                    done
-                    if ! git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
-                        if type ux_success >/dev/null 2>&1; then
-                            ux_success "Cherry-pick complete! (Skipped empty commit(s))"
-                        fi
-                        return 0
-                    fi
-                    if type ux_error >/dev/null 2>&1; then
-                        ux_error "Cherry-pick encountered conflicts. Resolve manually and run:"
-                        ux_error "  git cherry-pick --continue"
-                    fi
-                    return 1
-                fi
+    # Always iterate individually (issue #913): the contiguous range shortcut
+    # is gone so the no-op pre-flight below can NEVER be bypassed. Iterate the
+    # full author-filtered list (selected_list) — not the dup-pruned
+    # final_selected_list — so Stage-1 dups are skipped *with a log line*
+    # instead of being silently dropped (issue #811 F-1/F-2).
+    local picked=0
+    local empty_skipped=0
+    local noop_skipped=0
+    local dup_skipped=0
+    while IFS= read -r sha; do
+        [ -z "$sha" ] && continue
+
+        # Stage-1 subject duplicate: skip without a cherry-pick attempt,
+        # naming the base SHA it matches (issue #811 F-2/F-3).
+        local dup_base_sha
+        dup_base_sha=$(_gcp_scan_dup_base_sha "$sha" "$duplicate_map")
+        if [ -n "$dup_base_sha" ]; then
+            if type ux_info >/dev/null 2>&1; then
+                ux_info "Skipping ${sha} — already applied as ${dup_base_sha} (duplicate subject)"
             else
-                # Non-contiguous: cherry-pick individually for better control.
-                # Iterate the full author-filtered list (selected_list) — not
-                # the dup-pruned final_selected_list — so dup commits detected
-                # in Stage-1 are explicitly skipped *with a log line* instead
-                # of being silently dropped (issue #811 F-1/F-2).
+                echo "ℹ Skipping ${sha} — already applied as ${dup_base_sha} (duplicate subject)"
+            fi
+            dup_skipped=$((dup_skipped + 1))
+            continue
+        fi
+
+        # No-op pre-flight (issue #913): merge-probe the commit onto HEAD. If it
+        # adds nothing — already in HEAD, or a pure context-drift conflict that
+        # resolves to HEAD — skip it. Catches the recurring 092d0512 case the
+        # subject-based Stage-1 misses, BEFORE any real cherry-pick conflicts.
+        if _gcp_scan_preflight_is_noop "$sha"; then
+            if type ux_info >/dev/null 2>&1; then
+                ux_info "Skipping ${sha} — already in HEAD (no-op pre-flight)"
+            else
+                echo "ℹ Skipping ${sha} — already in HEAD (no-op pre-flight)"
+            fi
+            noop_skipped=$((noop_skipped + 1))
+            continue
+        fi
+
+        if type ux_info >/dev/null 2>&1; then
+            ux_info "Cherry-picking $sha..."
+        fi
+        if git cherry-pick "$sha"; then
+            picked=$((picked + 1))
+        else
+            # Defensive: a commit that becomes empty against HEAD (no conflict)
+            # still needs an explicit --skip in some git versions.
+            while _gcp_scan_is_empty_cherry_pick; do
                 if type ux_warning >/dev/null 2>&1; then
-                    ux_warning "Non-contiguous range detected. Cherry-picking individually..."
+                    ux_warning "Empty commit at $sha; skipping..."
                 fi
-                local picked=0
-                local empty_skipped=0
-                local content_skipped=0
-                local partial_skipped=0
-                local dup_skipped=0
-                while IFS= read -r sha; do
-                    [ -z "$sha" ] && continue
-                    # F-2/F-3: a Stage-1 duplicate is skipped without a
-                    # cherry-pick attempt, naming the base SHA it matches.
-                    local dup_base_sha
-                    dup_base_sha=$(_gcp_scan_dup_base_sha "$sha" "$duplicate_map")
-                    if [ -n "$dup_base_sha" ]; then
-                        if type ux_info >/dev/null 2>&1; then
-                            ux_info "Skipping ${sha} — already applied as ${dup_base_sha} (duplicate subject)"
-                        else
-                            echo "ℹ Skipping ${sha} — already applied as ${dup_base_sha} (duplicate subject)"
-                        fi
-                        dup_skipped=$((dup_skipped + 1))
-                        continue
-                    fi
-                    # Pre-flight (issue #903): subject is unique but the payload
-                    # may already be in HEAD via a different path. Cherry-picking
-                    # it would conflict then resolve to empty, forcing an endless
-                    # conflict -> --skip loop. Detect content-equality up front.
-                    if _gcp_scan_already_in_head "$sha"; then
-                        if type ux_info >/dev/null 2>&1; then
-                            ux_info "Skipping ${sha} — changes already in HEAD (pre-flight)"
-                        else
-                            echo "ℹ Skipping ${sha} — changes already in HEAD (pre-flight)"
-                        fi
-                        # A content-dup is "already applied via another path", not
-                        # a git-empty commit — keep the counts distinct (issue #903).
-                        content_skipped=$((content_skipped + 1))
-                        continue
-                    fi
-                    if type ux_info >/dev/null 2>&1; then
-                        ux_info "Cherry-picking $sha..."
-                    fi
-                    if git cherry-pick "$sha"; then
-                        picked=$((picked + 1))
-                    else
-                        while _gcp_scan_is_empty_cherry_pick; do
-                            if type ux_warning >/dev/null 2>&1; then
-                                ux_warning "Empty commit at $sha; skipping..."
-                            fi
-                            if git cherry-pick --skip; then
-                                empty_skipped=$((empty_skipped + 1))
-                                break
-                            fi
-                            break
-                        done
-                        # If we successfully skipped, move on.
-                        if ! git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
-                            continue
-                        fi
-                        # Partial-apply (issue #907): the pick conflicted but
-                        # HEAD already carries the commit's patch (context-only
-                        # drift). The probe confirms this non-destructively (it
-                        # leaves the live conflict untouched); on a match, skip
-                        # the redundant commit and move on.
-                        if _gcp_scan_conflict_resolves_to_empty "$sha"; then
-                            if type ux_warning >/dev/null 2>&1; then
-                                ux_warning "Partial-apply at $sha already in HEAD; skipping..."
-                            else
-                                echo "⚠ Partial-apply at $sha already in HEAD; skipping..." >&2
-                            fi
-                            if git cherry-pick --skip; then
-                                partial_skipped=$((partial_skipped + 1))
-                                continue
-                            fi
-                        fi
-                        # Real conflict: leave it in place (with git's own
-                        # conflict output already shown) for the user to resolve.
-                        if type ux_error >/dev/null 2>&1; then
-                            ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
-                        fi
-                        return 1
-                    fi
-                done <<EOF
+                if git cherry-pick --skip; then
+                    empty_skipped=$((empty_skipped + 1))
+                    break
+                fi
+                break
+            done
+            if ! git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
+                continue
+            fi
+            # Genuine conflict (the pre-flight already excluded redundant ones):
+            # leave it in place with git's own conflict output for the user.
+            if type ux_error >/dev/null 2>&1; then
+                ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
+            fi
+            return 1
+        fi
+    done <<EOF
 $selected_list
 EOF
-                # F-4: reaching here means no unresolved conflict (a real
-                # conflict returns 1 above), so report 0 conflicts.
-                if type ux_success >/dev/null 2>&1; then
-                    ux_success "$picked applied, $dup_skipped skipped (dup), 0 conflicts"
-                    if [ "$content_skipped" -gt 0 ]; then
-                        ux_info "($content_skipped commit(s) skipped — content already in HEAD)"
-                    fi
-                    if [ "$partial_skipped" -gt 0 ]; then
-                        ux_info "($partial_skipped commit(s) skipped — partial-apply resolved to empty)"
-                    fi
-                    if [ "$empty_skipped" -gt 0 ]; then
-                        ux_info "($empty_skipped empty commit(s) also skipped)"
-                    fi
-                else
-                    echo "✓ $picked applied, $dup_skipped skipped (dup), 0 conflicts"
-                    if [ "$content_skipped" -gt 0 ]; then
-                        echo "  ($content_skipped commit(s) skipped — content already in HEAD)"
-                    fi
-                    if [ "$partial_skipped" -gt 0 ]; then
-                        echo "  ($partial_skipped commit(s) skipped — partial-apply resolved to empty)"
-                    fi
-                    if [ "$empty_skipped" -gt 0 ]; then
-                        echo "  ($empty_skipped empty commit(s) also skipped)"
-                    fi
-                fi
-            fi
-        else
-            if type ux_info >/dev/null 2>&1; then
-                ux_info "Cancelled. You can use the range above manually: git cherry-pick $range_str"
-            fi
+
+    # Reaching here means no unresolved conflict (a real conflict returns 1
+    # above), so report 0 conflicts.
+    if type ux_success >/dev/null 2>&1; then
+        ux_success "$picked applied, $dup_skipped skipped (dup), 0 conflicts"
+        if [ "$noop_skipped" -gt 0 ]; then
+            ux_info "($noop_skipped commit(s) skipped — already in HEAD, no-op pre-flight)"
+        fi
+        if [ "$empty_skipped" -gt 0 ]; then
+            ux_info "($empty_skipped empty commit(s) also skipped)"
+        fi
+    else
+        echo "✓ $picked applied, $dup_skipped skipped (dup), 0 conflicts"
+        if [ "$noop_skipped" -gt 0 ]; then
+            echo "  ($noop_skipped commit(s) skipped — already in HEAD, no-op pre-flight)"
+        fi
+        if [ "$empty_skipped" -gt 0 ]; then
+            echo "  ($empty_skipped empty commit(s) also skipped)"
         fi
     fi
 
