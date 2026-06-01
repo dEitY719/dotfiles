@@ -60,15 +60,17 @@ Execute the plan in this order so later steps see earlier results:
    `git mv`) so it matches the `name:`; never silently rewrite a correct
    `name:`.
 6. **`--op` only — R5 README links**: for each skill `<s>` whose README is
-   missing the guide or usage link, append a stub-level `Docs:` line into
-   the README naming both relative paths:
+   missing the guide or usage link, append a stub-level line into the README
+   for **each missing link only** (check guide and usage independently):
    ```markdown
-   - `<s>`: [guide](docs/skill-guides/<s>.html) · [usage](docs/skill-output/<s>-usage.md)
+   - `<s>` guide: [guide](docs/skill-guides/<s>.html)
+   - `<s>` usage: [usage](docs/skill-output/<s>-usage.md)
    ```
-   Append only the link(s) actually missing; never rewrite or reorder
-   existing README content, and never duplicate a link already present
-   (idempotent). Stub level — does not author guide/usage *content* (R1/R2
-   own the file stubs).
+   Append only the link(s) actually missing — if the guide is already linked
+   and only the usage is absent, append the usage line alone. Never rewrite
+   or reorder existing README content, and never duplicate a link already
+   present (idempotent). Stub level — does not author guide/usage *content*
+   (R1/R2 own the file stubs).
 
 Skeleton/stub writes never touch a file that already exists, and link
 backfill never duplicates an existing link — the skill is idempotent.
