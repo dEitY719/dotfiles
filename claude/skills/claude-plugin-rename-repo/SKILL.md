@@ -33,6 +33,10 @@ its content verbatim, then stop. No git/gh calls.
 ## Step 0: Environment + Host Check
 
 - Confirm the current directory is a clone of the target repo: `git remote -v`.
+- Resolve `owner/repo` by parsing `git remote get-url <remote>` with a
+  host-agnostic pattern (`<protocol>://<host>/<owner>/<repo>.git`) rather
+  than depending on `gh` — never hardcode `github.com`, so GHES/self-hosted
+  remotes work too.
 - Identify whether the remote host is `github.com` or an internal GHES
   host (e.g. `github.our-company.com`) from the remote URL.
 - Confirm `gh` is authenticated for that host: `gh auth status`. If the
@@ -43,7 +47,9 @@ its content verbatim, then stop. No git/gh calls.
 ## Step 1: Decide the New Name
 
 - If `<new-name>` was passed as an argument, use it verbatim. It must
-  include the `claude-plugin-` prefix.
+  include the `claude-plugin-` prefix and follow GitHub repo naming rules
+  (lowercase + hyphens only, e.g. `claude-plugin-visuals`) — uppercase or
+  underscores can break `gh repo rename` or violate the convention.
 - If no argument, inspect the plugin composition
   (`.claude-plugin/marketplace.json` `plugins[]` + `plugins/` dirs) and
   propose 1-2 `claude-plugin-<domain>` names. The user picks the final

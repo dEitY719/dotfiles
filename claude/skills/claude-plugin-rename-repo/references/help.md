@@ -6,9 +6,10 @@ Usage:
   /claude-plugin:rename-repo help         Print this usage
 
 Arguments:
-  <new-name>   Full new repo name, including the claude-plugin- prefix
-               (e.g. claude-plugin-visuals). Optional — when omitted, the
-               skill inspects the plugin composition and proposes 1-2 names.
+  <new-name>   Full new repo name in lowercase with hyphens, including the
+               claude-plugin- prefix (e.g. claude-plugin-visuals). Optional —
+               when omitted, the skill inspects the plugin composition and
+               proposes 1-2 names.
 
 Behavior (per-step):
   0  Env/host check     git remote -v + gh auth status; identify github.com
