@@ -122,6 +122,15 @@ bats 휴리스틱 + pre-commit warning 으로 회귀 가드.
 디렉터리 모두 cover) + `exec zsh`. 단일 cache 파일만 지우는 cleanup 은
 회귀 원인.
 
+### 7. gcp-scan phantom 커밋 자기참조 루프
+
+**파일**: [`gcp-scan-phantom-commits.md`](./gcp-scan-phantom-commits.md)
+
+cherry-pick 동기화 도구가 자기 자신의 fix 커밋을 배포할 때, phantom 커밋이
+fix 앞에 있으면 무한 충돌 루프에 빠진다. `git diff --quiet HEAD` 로
+net-zero(빈 커밋) 판별 후 `--skip`, 수동 우회 절차, `git cherry-pick -n`
+preflight probe 패턴. Discussion #927 기반.
+
 ## 성장 전략
 
 - 3–10개: 플랫 구조 유지 (현재)
