@@ -54,8 +54,9 @@ _count_hook_entries() {
     assert_output --partial "자동 등록"
     [ "$(_count_hook_entries "$SETTINGS")" = "1" ]
 
-    # Backup file with the documented prefix must exist.
-    ls "${SETTINGS}".pre-stop-hook-fix-* >/dev/null 2>&1
+    # Backup file with the documented fixed suffix must exist (issue #919:
+    # latest-only `.bak`, was a timestamped `-<ts>` suffix).
+    [ -f "${SETTINGS}.pre-stop-hook-fix.bak" ]
 }
 
 @test "no-op when hook is already present (silent fast path)" {
@@ -71,8 +72,8 @@ _count_hook_entries() {
     [ -z "$output" ]
     [ "$(_count_hook_entries "$SETTINGS")" = "1" ]
 
-    # No backup created on no-op path.
-    ! ls "${SETTINGS}".pre-stop-hook-fix-* >/dev/null 2>&1
+    # No backup created on no-op path (issue #919: fixed `.bak` suffix).
+    [ ! -f "${SETTINGS}.pre-stop-hook-fix.bak" ]
 }
 
 @test "preserves user-installed Stop hook (no clobber)" {
