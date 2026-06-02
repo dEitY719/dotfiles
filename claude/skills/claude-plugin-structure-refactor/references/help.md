@@ -1,7 +1,7 @@
 /claude-plugin:structure-refactor — Fix a claude-plugin marketplace repo's structure
 
 Usage:
-  /claude-plugin:structure-refactor [repo-path] [--apply] [--mp|--op]
+  /claude-plugin:structure-refactor [repo-path] [--apply] [--mp|--op] [--single|--mono]
   /claude-plugin:structure-refactor help
 
 Arguments:
@@ -14,7 +14,33 @@ Flags:
   --mandatory | --mp   Scope = mandatory items M1-M6 only. (default scope)
   --recommended | --op Scope = M1-M6 + recommended R1-R5 (placeholder stubs
                        + naming correction + README link backfill).
+  --single             Force the SINGLE target layout (repo itself is one
+                       plugin; marketplace source "./", skills at root
+                       skills/<s>/ — no plugins/ directory is created).
+  --mono               Force the MONO target layout (repo bundles many
+                       plugins; source "./plugins/<name>", skills at
+                       plugins/<p>/skills/<s>/). --single / --mono override
+                       auto-detection (last one wins).
   --mp and --op together → error.
+
+Layout modes & auto-detection:
+  Without a flag the CURRENT layout is detected (same priority as
+  /claude-plugin:structure-check):
+    1. --single / --mono flag (forces the TARGET mode)
+    2. marketplace.json plugins[].source  ("./" => single, "./plugins/.." => mono)
+    3. filesystem fallback  (plugins/*/ => mono ; root plugin.json => single)
+    4. still ambiguous => defaults to mono, header marks "(추정)"
+  Refactor fixes toward the detected mode's golden layout and prints the
+  mode in the plan/report header.
+
+Layout conversion is NOT supported (safety guard):
+  When --single/--mono names a TARGET mode different from the detected
+  CURRENT layout, that is a single<->mono conversion (relocate the whole
+  plugin + rewrite the manifest). Refactor does NOT perform it — the plan
+  shows a "[convert] ... 현재 미지원" line and --apply stops without writing.
+  Conversion is deferred to a follow-up (structure-convert). This guard
+  stops refactor from force-restructuring a valid single repo (e.g.
+  Superpowers) into mono and breaking upstream compatibility.
 
 Behavior:
 
@@ -47,6 +73,8 @@ Examples:
   /claude-plugin:structure-refactor --apply          # apply mandatory (= --mp)
   /claude-plugin:structure-refactor --apply --op     # apply mandatory + recommended
   /claude-plugin:structure-refactor --op             # dry-run, recommended scope
+  /claude-plugin:structure-refactor ../superpowers --single  # fix toward single layout
+  /claude-plugin:structure-refactor . --mono --apply # fix toward mono layout
   /claude-plugin:structure-refactor ../repo --apply
   /claude-plugin:structure-refactor help
 
