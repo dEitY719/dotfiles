@@ -7,6 +7,10 @@ description: >-
   only (create dirs, `git mv`, minimal marketplace.json/plugin.json
   skeletons); `--op`/`--recommended` adds recommended R1-R5 fixes (empty
   placeholder stubs + naming correction + README link backfill). Idempotent.
+  Supports both `mono` (`plugins/<p>/skills/`) and `single` (repo-root
+  `skills/`) layouts — auto-detected, or forced with `--single` / `--mono`;
+  it fixes toward the detected mode's golden layout and never converts
+  single↔mono (that is an out-of-scope, guarded no-op).
   Use when the user
   says "fix my claude-plugin repo structure", "make this marketplace repo
   standard", "/claude-plugin:structure-refactor". Sister skills:
@@ -39,32 +43,61 @@ Positional `[repo-path]` (default = current dir). Flags:
 - `--apply` — execute changes. Absent → dry-run (plan only, no writes).
 - `--mandatory` / `--mp` — scope = M1-M6 only (default scope).
 - `--recommended` / `--op` — scope = M1-M6 + R1-R5.
+- `--single` / `--mono` — force the **target** layout mode, overriding
+  auto-detection (Step 2). Mutually exclusive; if both given, last wins.
 - `--mp` and `--op` together → error + usage, stop.
 
 Confirm the path exists. `test -d <path>/.git`: not a git repo → warn (moves
 fall back to `mv`). Dirty tree → show the dry-run plan and require an
 explicit `--apply` before writing (never auto-apply on a dirty tree).
 
-## Step 2: Evaluate Current ↔ Target
+## Step 2: Detect Mode + Compute Plugin Roots + Evaluate Current ↔ Target
 
 Read `references/structure-spec.md` (embedded SSOT — identical copy to
-structure-check's). Run the same M1-M6 / R1-R5 evaluation as
-`claude-plugin:structure-check` to compute the current → target diff.
-Discover plugins/skills dynamically (`plugins/*/`, `plugins/*/skills/*/`).
+structure-check's) — see "Layout modes", "Mode detection", "Mode override =
+layout conversion", and "Mandatory items by mode".
+
+1. **Detect the current mode** from the *signals* only (independent of any
+   flag): `marketplace.json` `plugins[].source` (`"./"`⇒single,
+   `"./plugins/.."`⇒mono) → filesystem fallback → ambiguous defaults to
+   `mono` (header notes `(추정)`). A `--single`/`--mono` flag sets the
+   **target** mode (priority 1 in the spec) but does not change what the
+   current layout *is*.
+2. **Conversion guard** — if a forced `--single`/`--mono` names a mode that
+   **differs from the detected current layout**, that is a single↔mono
+   *conversion* (relocate the whole plugin + rewrite the manifest), which is
+   **out of scope**. Emit the `[convert]` warning line in the plan and, under
+   `--apply`, **stop without writing** (fail-safe). Do not proceed to a
+   partial move. See the spec's "Mode override = layout conversion".
+3. **Compute the plugin-root set** for the chosen mode: `mono` → each
+   `plugins/*/`; `single` → repo root `./` (exactly one).
+4. **Discover skills** (both modes, dynamic — never hard-code names):
+   `<root>/skills/*/`. Run the same M1-M6 / R1-R5 evaluation as
+   `claude-plugin:structure-check` over the plugin-root set to compute the
+   current → target diff. Record the detected/forced mode for the plan and
+   report header.
 
 ## Step 3: Build the Plan
 
 Read `references/plan-and-report-templates.md`. Produce an ordered change
 list, each tagged with its driving check ID (M1-M6, and R1-R5 only when
-scope is `--op`). Already-correct items produce no action (idempotent).
+scope is `--op`). Action **paths are plugin-root relative** — single targets
+root `./` (no `plugins/` dir is ever created); mono targets `plugins/<p>/`.
+Already-correct items produce no action (idempotent). The plan header states
+the detected/forced mode; a needed-but-unsupported conversion produces only
+the `[convert]` warning line.
 
 ## Step 4: Dry-run or Apply
 
 - **Dry-run (default)**: print the plan only. Touch nothing.
+- **Conversion required (forced mode ≠ detected)**: print the `[convert]`
+  warning and stop — even under `--apply`, write nothing.
 - **`--apply`**: execute the plan in order, per
   `references/plan-and-report-templates.md` → "Apply rules":
   - create missing dirs: `.claude-plugin/`, `docs/skill-guides/`,
-    `docs/skill-output/`, `plugins/<p>/skills/`;
+    `docs/skill-output/`, and the per-plugin-root `skills/` — for `mono`
+    that is `plugins/<p>/skills/`, for `single` it is root `skills/` (no
+    `plugins/` directory is created);
   - move misplaced files with `git mv` when possible (else `mv`);
   - write minimal skeletons for a missing `marketplace.json` / `plugin.json`
     (filled with discovered plugin/skill names);
@@ -98,4 +131,9 @@ a key=value summary, then the next-action hint:
   token scope or an unreachable host warns and continues — it never aborts
   the run.
 - Prefer `git mv` to preserve history; fall back to `mv` outside a git repo.
+- Mode-aware: fix toward the **detected** layout's golden form — `single`
+  never creates a `plugins/` directory; `mono` keeps the `plugins/<p>/…`
+  paths. A `--single`/`--mono` that differs from the detected current layout
+  is a single↔mono conversion: **out of scope** — warn and write nothing
+  (never a partial move), even under `--apply`.
 - Repo-agnostic: discover plugins/skills by scan; the spec is embedded.

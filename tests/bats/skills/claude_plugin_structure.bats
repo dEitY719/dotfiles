@@ -429,3 +429,103 @@ build_single_perfect() {
     run _cps_detect_mode "$REPO" single; assert_output single
     run cps_verdict "$REPO" single; assert_output PASS
 }
+
+# ---- single layout REFACTOR (#915) --------------------------------------
+# refactor fixes a single repo toward the ROOT golden layout and NEVER
+# creates a plugins/ directory (the core danger #915 guards against).
+
+@test "single perfect repo -> refactor op apply is a no-op (no plugins/ dir)" {
+    build_single_perfect "$REPO"
+    before="$(find "$REPO" -type f | sort)"
+    cps_refactor "$REPO" op apply
+    after="$(find "$REPO" -type f | sort)"
+    [ "$before" = "$after" ]
+    [ ! -d "$REPO/plugins" ]
+    run cps_verdict "$REPO"; assert_output PASS
+}
+
+@test "single repo missing root plugin.json -> refactor mp -> PASS, no plugins/ dir" {
+    _seed_single_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    _seed_recommended_files "$REPO"; _seed_readme_links "$REPO" visualize
+    mkdir -p "$REPO/.claude-plugin"   # single signal, root plugin.json missing
+    printf '{ "name": "repo", "plugins": [{ "source": "./" }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M2 "$REPO"; assert_output FAIL     # 0 plugin roots yet
+    run cps_verdict "$REPO"; assert_output FAIL
+    cps_refactor "$REPO" mp apply
+    [ ! -d "$REPO/plugins" ]                          # single fix never makes plugins/
+    run cps_check_M3 "$REPO"; assert_output PASS
+    run cps_verdict "$REPO"; assert_output PASS
+}
+
+@test "single mandatory apply writes VALID root JSON with source ./" {
+    _seed_single_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [{ "source": "./" }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    cps_refactor "$REPO" mp apply
+    run jq empty "$REPO/.claude-plugin/plugin.json"; assert_success
+    run jq -r '.plugins[0].source' "$REPO/.claude-plugin/marketplace.json"
+    assert_output "./"
+    run jq -e '.skills | index("./skills/visualize")' "$REPO/.claude-plugin/plugin.json"
+    assert_success
+    [ ! -d "$REPO/plugins" ]
+}
+
+@test "single missing recommended -> refactor op -> recheck PASS (root stubs+links)" {
+    _seed_single_skill "$REPO"; _seed_single_mandatory_json "$REPO"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    run cps_check_R1 "$REPO"; assert_output WARN
+    cps_refactor "$REPO" op apply
+    [ ! -d "$REPO/plugins" ]
+    run cps_check_R1 "$REPO"; assert_output PASS
+    run cps_check_R2 "$REPO"; assert_output PASS
+    run cps_check_R5 "$REPO"; assert_output PASS
+    run cps_verdict "$REPO"; assert_output PASS
+}
+
+# ---- layout-conversion guard (#915) -------------------------------------
+# A forced TARGET mode that differs from the detected CURRENT layout is a
+# single<->mono conversion — OUT OF SCOPE: write nothing, return 3.
+
+@test "forced --mono on a detected-single repo -> conversion guard no-op (rc=3)" {
+    build_single_perfect "$REPO"
+    rm -f "$REPO/docs/skill-guides/visualize.html"   # a same-mode op WOULD rewrite this
+    before="$(find "$REPO" -type f | sort)"
+    run cps_refactor "$REPO" op apply mono
+    [ "$status" -eq 3 ]
+    after="$(find "$REPO" -type f | sort)"
+    [ "$before" = "$after" ]
+    [ ! -d "$REPO/plugins" ]
+}
+
+@test "forced --single on a detected-mono repo -> conversion guard no-op (rc=3)" {
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"  # mono, mandatory missing
+    before="$(find "$REPO" -type f | sort)"
+    run cps_refactor "$REPO" mp apply single
+    [ "$status" -eq 3 ]
+    after="$(find "$REPO" -type f | sort)"
+    [ "$before" = "$after" ]
+    [ ! -f "$REPO/.claude-plugin/marketplace.json" ]   # nothing written
+}
+
+@test "forced --single on a detected-single repo proceeds (target == current)" {
+    _seed_single_skill "$REPO"; _seed_single_mandatory_json "$REPO"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    run cps_refactor "$REPO" op apply single
+    [ "$status" -eq 0 ]
+    run cps_check_R5 "$REPO"; assert_output PASS
+    run cps_verdict "$REPO"; assert_output PASS
+}
+
+@test "forced --mono on a detected-mono repo proceeds (mono regression intact)" {
+    # mirrors test "mandatory missing -> refactor --apply (mp)" but with an
+    # explicit --mono target == the detected layout: identical mono behavior.
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    _seed_recommended_files "$REPO"; _seed_readme_links "$REPO" visualize
+    run cps_refactor "$REPO" mp apply mono
+    [ "$status" -eq 0 ]
+    run cps_check_M1 "$REPO"; assert_output PASS
+    run cps_check_M3 "$REPO"; assert_output PASS
+    run cps_verdict "$REPO"; assert_output PASS
+}

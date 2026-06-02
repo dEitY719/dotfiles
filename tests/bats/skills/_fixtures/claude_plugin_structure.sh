@@ -303,16 +303,43 @@ cps_verdict() {
 }
 
 # ---- refactor apply ------------------------------------------------------
-# cps_refactor <repo> <scope:mp|op> <mode:dry-run|apply>
-# Dry-run is a no-op on disk. Apply creates missing mandatory items, and
-# (op scope) recommended placeholder stubs. Idempotent.
+# cps_refactor <repo> <scope:mp|op> <run:dry-run|apply> [forced:single|mono]
+# Dry-run is a no-op on disk. Apply fixes the repo toward the golden layout
+# of its DETECTED mode (or the forced target when it equals the detected
+# layout); single targets the repo root (no plugins/ dir), mono targets
+# plugins/<p>/. Idempotent.
+#
+# Conversion guard (#915): when the forced target mode differs from the
+# detected current layout, that is a single<->mono CONVERSION (relocate the
+# whole plugin + rewrite the manifest) — OUT OF SCOPE. The function writes
+# NOTHING and returns 3 (a safe no-op, never a partial move).
 cps_refactor() {
-    local _repo="$1" _scope="${2:-mp}" _mode="${3:-dry-run}"
-    [ "$_mode" = "apply" ] || return 0 # dry-run: touch nothing
+    local _repo="$1" _scope="${2:-mp}" _run="${3:-dry-run}" _forced="${4:-}"
+    [ "$_run" = "apply" ] || return 0 # dry-run: touch nothing
 
-    # M5 dirs
-    mkdir -p "$_repo/docs/skill-guides" "$_repo/docs/skill-output"
-    mkdir -p "$_repo/.claude-plugin"
+    # Conversion guard — forced target ≠ detected current layout → refuse.
+    local _current _target
+    _current="$(_cps_detect_mode "$_repo")" # signal-based current layout
+    if [ -n "$_forced" ] && [ "$_forced" != "$_current" ]; then
+        return 3 # layout conversion required — not performed (safe no-op)
+    fi
+    _target="${_forced:-$_current}"
+
+    # M5 docs dirs + .claude-plugin (mode-independent).
+    mkdir -p "$_repo/docs/skill-guides" "$_repo/docs/skill-output" \
+        "$_repo/.claude-plugin"
+
+    if [ "$_target" = single ]; then
+        _cps_refactor_single "$_repo" "$_scope"
+    else
+        _cps_refactor_mono "$_repo" "$_scope"
+    fi
+    return 0 # success (0); the conversion-guard early return above is 3
+}
+
+# mono apply: marketplace + per-plugin plugin.json + plugins/<p>/ stubs/links.
+_cps_refactor_mono() {
+    local _repo="$1" _scope="$2"
 
     # M1 marketplace.json skeleton (only if missing/invalid) — list ALL plugins
     if ! _cps_json_ok "$_repo/.claude-plugin/marketplace.json"; then
@@ -362,13 +389,7 @@ EOF
         [ -n "$_p" ] || continue
         while IFS= read -r _s; do
             [ -n "$_s" ] || continue
-            [ -f "$_repo/docs/skill-guides/$_s.html" ] || printf \
-                '<!-- TODO: claude-plugin guide for %s — fill with /devx:visualize -->\n' \
-                "$_s" >"$_repo/docs/skill-guides/$_s.html"
-            { [ -f "$_repo/docs/skill-output/$_s-usage.html" ] ||
-                [ -f "$_repo/docs/skill-output/$_s-usage.md" ]; } || printf \
-                '<!-- TODO: %s usage sample — fill with /devx:visualize -->\n' \
-                "$_s" >"$_repo/docs/skill-output/$_s-usage.md"
+            _cps_stub_recommended "$_repo" "$_s"
         done <<EOF
 $(_cps_skills "$_repo" "$_p")
 EOF
@@ -384,25 +405,83 @@ EOF
     # → "Pages host & URL derivation"). This hermetic fixture has no remote, so
     # it writes the relative fallback form — both satisfy cps_check_R5, which
     # matches by the `skill-guides/<s>.html` substring common to both forms.
-    local _has_guide _has_usage
     while IFS= read -r _p; do
         [ -n "$_p" ] || continue
         while IFS= read -r _s; do
             [ -n "$_s" ] || continue
-            _has_guide=0
-            _has_usage=0
-            grep -qF "skill-guides/$_s.html" "$_repo/README.md" && _has_guide=1
-            { grep -qF "skill-output/$_s-usage.html" "$_repo/README.md" ||
-                grep -qF "skill-output/$_s-usage.md" "$_repo/README.md"; } && _has_usage=1
-            [ "$_has_guide" -eq 1 ] && [ "$_has_usage" -eq 1 ] && continue
-            [ "$_has_guide" -eq 0 ] && printf -- '- `%s` ([visual guide ↗](docs/skill-guides/%s.html))\n' \
-                "$_s" "$_s" >>"$_repo/README.md"
-            [ "$_has_usage" -eq 0 ] && printf -- '- `%s` usage: [usage](docs/skill-output/%s-usage.md)\n' \
-                "$_s" "$_s" >>"$_repo/README.md"
+            _cps_backfill_links "$_repo" "$_s"
         done <<EOF
 $(_cps_skills "$_repo" "$_p")
 EOF
     done <<EOF
 $(_cps_plugins "$_repo")
 EOF
+}
+
+# single apply: the repo root IS the one plugin root — marketplace source
+# "./", a ROOT plugin.json, root skills/<s>/. NEVER creates a plugins/ dir.
+_cps_refactor_single() {
+    local _repo="$1" _scope="$2" _s _skills_json=""
+
+    # M1 marketplace.json skeleton with the single source "./".
+    if ! _cps_json_ok "$_repo/.claude-plugin/marketplace.json"; then
+        printf '{ "name": "%s", "plugins": [{ "source": "./" }] }\n' \
+            "$(basename "$_repo")" >"$_repo/.claude-plugin/marketplace.json"
+    fi
+
+    # M3 ROOT plugin.json skeleton — list ALL root skills.
+    if ! _cps_json_ok "$_repo/.claude-plugin/plugin.json"; then
+        while IFS= read -r _s; do
+            [ -n "$_s" ] || continue
+            [ -n "$_skills_json" ] && _skills_json="${_skills_json}, "
+            _skills_json="${_skills_json}\"./skills/${_s}\""
+        done <<EOF
+$(_cps_skills_in_root "$_repo" ".")
+EOF
+        printf '{ "name": "%s", "version": "0.0.0", "skills": [%s] }\n' \
+            "$(basename "$_repo")" "${_skills_json:-\"./skills/skill\"}" \
+            >"$_repo/.claude-plugin/plugin.json"
+    fi
+
+    # M6 README skeleton (with a docs/ link so R3 also passes).
+    [ -f "$_repo/README.md" ] || printf '# %s\n\nSee [docs/](./docs/).\n' \
+        "$(basename "$_repo")" >"$_repo/README.md"
+
+    [ "$_scope" = "op" ] || return 0
+
+    # --op: R1/R2 stubs + R5 link backfill over ROOT skills (paths identical
+    # to mono — only the skill-discovery root differs).
+    while IFS= read -r _s; do
+        [ -n "$_s" ] || continue
+        _cps_stub_recommended "$_repo" "$_s"
+        _cps_backfill_links "$_repo" "$_s"
+    done <<EOF
+$(_cps_skills_in_root "$_repo" ".")
+EOF
+}
+
+# ---- shared --op write helpers (mode-independent — docs paths are repo-level)
+_cps_stub_recommended() {
+    # $1=repo $2=skill : create R1 guide + R2 usage placeholder stubs if absent.
+    local _repo="$1" _s="$2"
+    [ -f "$_repo/docs/skill-guides/$_s.html" ] || printf \
+        '<!-- TODO: claude-plugin guide for %s — fill with /devx:visualize -->\n' \
+        "$_s" >"$_repo/docs/skill-guides/$_s.html"
+    { [ -f "$_repo/docs/skill-output/$_s-usage.html" ] ||
+        [ -f "$_repo/docs/skill-output/$_s-usage.md" ]; } || printf \
+        '<!-- TODO: %s usage sample — fill with /devx:visualize -->\n' \
+        "$_s" >"$_repo/docs/skill-output/$_s-usage.md"
+}
+
+_cps_backfill_links() {
+    # $1=repo $2=skill : append ONLY the missing README link(s) (idempotent).
+    local _repo="$1" _s="$2" _has_guide=0 _has_usage=0
+    grep -qF "skill-guides/$_s.html" "$_repo/README.md" && _has_guide=1
+    { grep -qF "skill-output/$_s-usage.html" "$_repo/README.md" ||
+        grep -qF "skill-output/$_s-usage.md" "$_repo/README.md"; } && _has_usage=1
+    [ "$_has_guide" -eq 1 ] && [ "$_has_usage" -eq 1 ] && return 0
+    [ "$_has_guide" -eq 0 ] && printf -- '- `%s` ([visual guide ↗](docs/skill-guides/%s.html))\n' \
+        "$_s" "$_s" >>"$_repo/README.md"
+    [ "$_has_usage" -eq 0 ] && printf -- '- `%s` usage: [usage](docs/skill-output/%s-usage.md)\n' \
+        "$_s" "$_s" >>"$_repo/README.md"
 }
