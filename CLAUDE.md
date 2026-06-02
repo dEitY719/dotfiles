@@ -102,6 +102,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ## Standards & References
 
+- 운영 교훈 지식 베이스: `docs/guide/learnings/` (반복 실수 예방용 패턴 모음)
 - Command/help interface: `docs/.ssot/command-guidelines.md`
 - GitHub Project board: `docs/.ssot/github-project-board.md`
 - GitHub Discussions 운영: `docs/.ssot/discussions-policy.md`
