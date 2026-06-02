@@ -38,10 +38,10 @@
     "ralph-loop@claude-plugins-official": true,
     "codex@openai-codex": true
   },
+  "autoUpdatesChannel": "latest",
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark",
   "telemetry": {
     "enabled": false
-  },
-  "autoUpdatesChannel": "latest"
+  }
 }
