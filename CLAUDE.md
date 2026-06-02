@@ -62,7 +62,10 @@ All output must use `ux_lib` functions (`ux_header`, `ux_success`, `ux_error`, `
 
 `claude/settings.json` and `claude/statusline-command.sh` are symlinked into `~/.claude/`. The `claude/skills/` and `claude/docs/` directories are also symlinked (directory-level) into each account's `~/.claude*/skills` and `~/.claude*/docs` — the same scheme in every setup mode (#575).
 
-**Personal overrides (model, env vars)** — `claude/settings.local.json` is gitignored (#924). Create `~/.claude/settings.local.json` directly for machine-specific settings:
+**Personal overrides (model, env vars)** — `claude/settings.local.json` is gitignored (#924). Create `settings.local.json` in your active Claude config directory for machine-specific settings:
+
+- Single-account: `~/.claude/settings.local.json`
+- Multi-account: `~/.claude-personal/settings.local.json` (or whichever `$CLAUDE_CONFIG_DIR` is active)
 
 ```json
 { "model": "sonnet" }
