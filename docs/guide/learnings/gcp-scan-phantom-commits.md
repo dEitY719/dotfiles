@@ -59,9 +59,10 @@ git push origin main
 
 ```bash
 # staged diff가 비어있으면 no-op (이미 HEAD에 있는 내용)
+# (충돌 발생 시 실제 구현은 충돌 파일을 HEAD로 되돌려 context-drift 여부도 판정)
 git cherry-pick -n <sha> 2>/dev/null
 git diff --quiet --cached && echo "NO-OP → skip" || echo "REAL WORK → keep"
-git cherry-pick --abort 2>/dev/null; git reset --hard HEAD
+git reset --hard HEAD
 ```
 
 ### 4. Cheat sheet
