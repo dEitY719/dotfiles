@@ -55,8 +55,8 @@ _count_hook_entries() {
     [ "$(_count_hook_entries "$SETTINGS")" = "1" ]
 
     # Backup file with the documented fixed suffix must exist (issue #919:
-    # latest-only `.bak`, was a timestamped `-<ts>` suffix).
-    [ -f "${SETTINGS}.pre-stop-hook-fix.bak" ]
+    # latest-only `.backup`, was a timestamped `-<ts>` suffix).
+    [ -f "${SETTINGS}.pre-stop-hook-fix.backup" ]
 }
 
 @test "no-op when hook is already present (silent fast path)" {
@@ -72,8 +72,8 @@ _count_hook_entries() {
     [ -z "$output" ]
     [ "$(_count_hook_entries "$SETTINGS")" = "1" ]
 
-    # No backup created on no-op path (issue #919: fixed `.bak` suffix).
-    [ ! -f "${SETTINGS}.pre-stop-hook-fix.bak" ]
+    # No backup created on no-op path (issue #919: fixed `.backup` suffix).
+    [ ! -f "${SETTINGS}.pre-stop-hook-fix.backup" ]
 }
 
 @test "preserves user-installed Stop hook (no clobber)" {
