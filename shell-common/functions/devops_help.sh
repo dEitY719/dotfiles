@@ -90,7 +90,7 @@ _docker_help_rows_intent() {
     ux_table_row "stop a stack" "dcd" "docker compose down"
     ux_table_row "wipe data too" "dcdv" "docker compose down -v"
     ux_table_row "rebuild a service" "dcb <svc>" "docker compose build <svc>"
-    ux_table_row "reset stack with volumes + rebuild" "(raw)" "docker compose -f <file> down -v && docker compose -f <file> up -d --build"
+    ux_table_row "reset stack with volumes + rebuild" "(raw)" "docker compose down -v && docker compose up -d --build"
     ux_table_row "restart a service" "dcr <svc>" "docker compose restart <svc>"
     ux_table_row "follow logs" "dcl <svc>" "docker compose logs -f <svc>"
     ux_table_row "shell into container" "dbash <name>" "docker exec -it <name> bash"
