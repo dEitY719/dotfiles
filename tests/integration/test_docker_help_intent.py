@@ -19,6 +19,23 @@ def _plain(text: str) -> str:
     return ANSI_ESCAPE_RE.sub("", text)
 
 
+@pytest.fixture
+def shell_runner(shell_runner):
+    """Force DOTFILES_ROOT_NO_CANONICALIZE=1 so the worktree's own
+    `shell-common/functions/devops_help.sh` is sourced — not whatever the
+    main install in `~/dotfiles` happens to have (issue #589 worktree
+    canonicalization). Mirrors test_docker_help_raw.py."""
+    base = shell_runner
+
+    def runner(shell, cmd, env_overrides=None):
+        merged = {"DOTFILES_ROOT_NO_CANONICALIZE": "1"}
+        if env_overrides:
+            merged.update(env_overrides)
+        return base(shell, cmd, env_overrides=merged)
+
+    return runner
+
+
 class TestDockerHelpIntent:
     """`docker-help i-want` exposes intent -> alias -> raw command rows."""
 
@@ -45,6 +62,15 @@ class TestDockerHelpIntent:
         assert result.exit_code == 0
         plain = _plain(result.stdout)
         assert "-f" in plain and "overlay" in plain.lower(), f"{shell}: overlay guidance missing from i-want output"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_intent_includes_full_stack_reset(self, shell_runner, shell):
+        result = shell_runner(shell, "docker_help i-want")
+        assert result.exit_code == 0
+        plain = _plain(result.stdout)
+        assert "reset stack with volumes" in plain, f"{shell}: full stack reset row missing from i-want output"
+        assert "down -v" in plain, f"{shell}: 'down -v' step missing from stack reset row"
+        assert "up -d --build" in plain, f"{shell}: 'up -d --build' step missing from stack reset row"
 
 
 class TestDockerHelpMap:
