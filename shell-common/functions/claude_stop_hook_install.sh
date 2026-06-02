@@ -59,7 +59,11 @@ _claude_install_gh_issue_flow_stop_hook() {
     # interactive bash) so the migration never blocks on a confirmation
     # prompt at shell startup. The auto-fire path runs in interactive
     # bash where alias expansion is enabled.
-    _csh_backup="${_csh_source_file}.pre-stop-hook-fix-$(date +%Y%m%d%H%M%S)"
+    # Latest-only backup (issue #919): fixed suffix + legacy sweep so the
+    # auto-fire install path does not accumulate one backup per shell start.
+    # SSOT policy: shell-common/functions/dotfiles_backup.sh (#806).
+    _csh_backup="${_csh_source_file}.pre-stop-hook-fix.bak"
+    command rm -f "${_csh_source_file}".pre-stop-hook-fix-*
     if ! command cp "$_csh_source_file" "$_csh_backup"; then
         unset _csh_dotfiles _csh_source_file _csh_hook_command _csh_count _csh_existing _csh_backup
         return 1
