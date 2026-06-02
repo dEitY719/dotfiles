@@ -3,8 +3,8 @@
 ## Plan template (dry-run AND the pre-amble of --apply)
 
 ```
-claude-plugin structure refactor — <repo-path>   (scope: mandatory|recommended)
-  plugins: <p1> / <p2>   skills: <count>   (git: yes|no, tree: clean|dirty)
+claude-plugin structure refactor — <repo-path>   (mode: mono|single[, 추정]  scope: mandatory|recommended)
+  plugin roots: <p1> / <p2>   skills: <count>   (git: yes|no, tree: clean|dirty)
 
 계획 (현재 → 목표):
   [M1] create  .claude-plugin/marketplace.json   (skeleton, 1 plugin)
@@ -20,6 +20,11 @@ claude-plugin structure refactor — <repo-path>   (scope: mandatory|recommended
 총 <n> 변경  (필수 <m>, 권장 <r>)
 ```
 
+- The header `mode:` is the detected (or forced) layout — `mono` /
+  `single`, with `, 추정` appended when detection was ambiguous (spec
+  priority 4). For `single` the action paths are root-relative (`skills/<s>/`,
+  root `.claude-plugin/plugin.json`) and **no `plugins/` directory is
+  created**; for `mono` they are `plugins/<p>/…` as shown above.
 - One line per change: `[<ID>] <verb>  <path / detail>`.
 - Verbs: `create` (new file), `mkdir` (new dir), `git mv` / `mv` (move),
   `visualize` (generate an R1 guide by delegating to `/devx:visualize`),
@@ -29,6 +34,24 @@ claude-plugin structure refactor — <repo-path>   (scope: mandatory|recommended
 - Items already correct produce **no line** (idempotent — proof there is
   nothing to do is an empty plan + `총 0 변경`).
 - R1-R5 lines appear only when scope is `--op` / `--recommended`.
+
+### Layout-conversion warning (forced mode ≠ detected mode)
+
+When `--single`/`--mono` forces a **target** mode that differs from the
+detected **current** layout, refactor does **not** convert (single↔mono is a
+whole-plugin relocation + manifest rewrite — out of scope). The plan shows a
+single warning line **in place of** any fix lines, and `--apply` stops
+without writing:
+
+```
+claude-plugin structure refactor — <repo-path>   (mode: single→mono  scope: mandatory)
+  plugin roots: . (single)   skills: <count>   (git: yes, tree: clean)
+
+  [convert] 레이아웃 변환 필요 (single → mono) — 현재 미지원, 변경 없음.
+            single↔mono 변환은 후속 작업(structure-convert)으로 분리됨.
+
+총 0 변경  (변환 미수행)
+```
 
 ## Apply rules
 
@@ -127,6 +150,7 @@ The full R5 guide URL is therefore
 ```
 ## claude-plugin:structure-refactor Report
 Repo: <repo-path>
+Layout: mono | single  (detected | forced[, 추정])
 Mode: dry-run | apply
 Scope: mandatory | recommended
 
@@ -135,8 +159,13 @@ Planned: <n>   Applied: <n>   Skipped (already correct): <n>
 <the plan block above, with applied lines marked ✓>
 
 [OK] refactor complete   |   [FAIL] <reason>
-applied=<n> moved=<n> created=<n> visualized=<n> stubbed=<n> pages=<activated|active|skip|n/a> linked=<n> mode=<dry-run|apply> scope=<mp|op>
+applied=<n> moved=<n> created=<n> visualized=<n> stubbed=<n> pages=<activated|active|skip|n/a> linked=<n> layout=<mono|single> mode=<dry-run|apply> scope=<mp|op>
 ```
+
+For a guarded layout-conversion (forced mode ≠ detected) the report is
+`[OK] no conversion (out of scope)` with `applied=0 layout=<from>→<to>` and
+the verify hint — never `[FAIL]` (refusing an out-of-scope move is a
+safe no-op, not an error).
 
 End with the next-action hint:
 
