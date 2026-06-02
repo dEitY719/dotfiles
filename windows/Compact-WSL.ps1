@@ -158,11 +158,18 @@ exit
 
     # diskpart 가 로그를 쓰는 중에도 읽을 수 있도록 공유 모드로 연다
     function Get-SharedText([string]$path) {
+        $fs = $null
+        $sr = $null
         try {
             $fs = [System.IO.File]::Open($path, 'Open', 'Read', 'ReadWrite')
             $sr = New-Object System.IO.StreamReader($fs)
-            $t  = $sr.ReadToEnd(); $sr.Close(); $fs.Close(); return $t
-        } catch { return '' }
+            return $sr.ReadToEnd()
+        } catch {
+            return ''
+        } finally {
+            if ($null -ne $sr) { $sr.Close() }
+            if ($null -ne $fs) { $fs.Close() }
+        }
     }
     function Format-Bar([int]$pct, [int]$width = 28) {
         if ($pct -lt 0)   { $pct = 0 }
@@ -222,7 +229,7 @@ if (-not $SkipWindowsClean) {
 
     # 5-1. TEMP 정리
     Write-Host "    - TEMP 정리"
-    Get-ChildItem $env:TEMP -Recurse -Force -ErrorAction SilentlyContinue |
+    Get-ChildItem $env:TEMP -Force -ErrorAction SilentlyContinue |
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
     # 5-2. Windows Update 캐시 (SoftwareDistribution\Download)
@@ -231,7 +238,7 @@ if (-not $SkipWindowsClean) {
         Stop-Service wuauserv -Force -ErrorAction SilentlyContinue
         $wuCache = "$env:SystemRoot\SoftwareDistribution\Download"
         if (Test-Path $wuCache) {
-            Get-ChildItem $wuCache -Recurse -Force -ErrorAction SilentlyContinue |
+            Get-ChildItem $wuCache -Force -ErrorAction SilentlyContinue |
                 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         }
         Start-Service wuauserv -ErrorAction SilentlyContinue
@@ -246,7 +253,7 @@ if (-not $SkipWindowsClean) {
             Write-Host "    - Chrome 실행 중 -> 캐시 정리 건너뜀 (브라우저 닫고 재실행)" -ForegroundColor DarkYellow
         } else {
             Write-Host "    - Chrome 캐시 정리 (Default 프로필)"
-            Get-ChildItem $chromeCache -Recurse -Force -ErrorAction SilentlyContinue |
+            Get-ChildItem $chromeCache -Force -ErrorAction SilentlyContinue |
                 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
