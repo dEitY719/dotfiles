@@ -158,8 +158,13 @@ _migrate_legacy_statusline_command() {
         log_error "백업 디렉토리 생성 실패: $backup_dir — 마이그레이션 중단"
         return 1
     fi
+    # Latest-only backup (issue #919): a fixed suffix overwrites the prior
+    # backup instead of stamping a new timestamped file each run, and the
+    # glob sweeps any legacy timestamped backups left by pre-#919 runs.
+    # SSOT policy: shell-common/functions/dotfiles_backup.sh (#806).
     local backup
-    backup="${backup_dir}/settings.json.pre-statusline-fix-$(date +%Y%m%d%H%M%S)"
+    backup="${backup_dir}/settings.json.pre-statusline-fix.bak"
+    rm -f "${backup_dir}/settings.json.pre-statusline-fix-"*
     if ! cp "$source_file" "$backup"; then
         log_error "settings.json 백업 실패: $backup — 마이그레이션 중단"
         return 1
@@ -265,7 +270,11 @@ _migrate_legacy_plugin_paths() {
         [ "${stale_count:-0}" -gt 0 ] || return 0
 
         local backup tmp
-        backup="${file}.pre-plugin-path-fix-$(date +%Y%m%d%H%M%S)"
+        # Latest-only backup (issue #919): fixed suffix + legacy sweep so
+        # repeat multi-account runs do not accumulate one backup per run.
+        # SSOT policy: shell-common/functions/dotfiles_backup.sh (#806).
+        backup="${file}.pre-plugin-path-fix.bak"
+        rm -f "${file}".pre-plugin-path-fix-*
         if ! cp "$file" "$backup"; then
             log_error "$(basename "$file") 백업 실패: $backup — 마이그레이션 중단"
             return 1
@@ -365,7 +374,10 @@ _migrate_install_gh_issue_flow_stop_hook() {
     fi
 
     local backup tmp
-    backup="${source_file}.pre-stop-hook-fix-$(date +%Y%m%d%H%M%S)"
+    # Latest-only backup (issue #919): fixed suffix + legacy sweep.
+    # SSOT policy: shell-common/functions/dotfiles_backup.sh (#806).
+    backup="${source_file}.pre-stop-hook-fix.bak"
+    rm -f "${source_file}".pre-stop-hook-fix-*
     if ! cp "$source_file" "$backup"; then
         log_error "settings.json 백업 실패: $backup — 마이그레이션 중단"
         return 1

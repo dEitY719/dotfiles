@@ -109,3 +109,16 @@ teardown() {
     run grep -nE '\-\$\(date' "${DOTFILES_ROOT}/vscode-extensions/setup.sh"
     assert_failure
 }
+
+@test "claude/setup.sh: JSON-migration backups use fixed suffix (issue #919)" {
+    # The three migration helpers (statusline / plugin-path / stop-hook) must
+    # not stamp a timestamped backup per run — latest-only fixed `.bak`.
+    run grep -nE 'pre-[a-z-]+-fix-\$\(date' "${DOTFILES_ROOT}/claude/setup.sh"
+    assert_failure
+}
+
+@test "claude_stop_hook_install.sh: fixed .bak suffix (issue #919)" {
+    run grep -nE 'pre-stop-hook-fix-\$\(date' \
+        "${DOTFILES_ROOT}/shell-common/functions/claude_stop_hook_install.sh"
+    assert_failure
+}
