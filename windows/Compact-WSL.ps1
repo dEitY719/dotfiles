@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     WSL2 ext4.vhdx 압축 + (선택) Windows 디스크 정리 스크립트
 
