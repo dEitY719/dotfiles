@@ -107,6 +107,9 @@ ghes_mirror() {
 
     # Owner is parsed directly from the GHES URL — no gh api query needed.
     local _origin_url="https://${_ghes_host}/${_ghes_owner}/${_repo_name}"
+    # gh repo create may have registered an SSH URL (following gh's git_protocol
+    # setting); force HTTPS so origin is always protocol-agnostic.
+    git remote set-url origin "${_origin_url}"
     ux_info "upstream -> ${_upstream}"
     ux_info "origin   -> ${_origin_url}"
 
