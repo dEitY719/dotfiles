@@ -60,17 +60,19 @@ _setup_fake_repo() {
 }
 
 _write_mock_gh() {
-    # Writes a stub `gh` that returns NOT_FOUND for pages GET calls.
-    # Place it early in PATH so it overrides the real gh.
+    # Writes a stub `gh` that simulates an inactive Pages site: the GET
+    # returns 404 (non-zero exit, empty stdout) like the real `gh api`, and
+    # the POST succeeds. Matches the #955 logic where an empty `_pages_status`
+    # is the "not active" signal. Place it early in PATH to override real gh.
     local bin_dir="${_WORK_DIR}/bin"
     mkdir -p "${bin_dir}"
     cat >"${bin_dir}/gh" <<'EOF'
 #!/bin/bash
-# Stub: pages GET -> NOT_FOUND; pages POST -> success
+# Stub: pages GET -> 404 (inactive); pages POST -> success
 if [[ "$*" == *"/pages"* ]]; then
     case "$*" in
         *"--method POST"*) exit 0 ;;
-        *) printf 'NOT_FOUND'; exit 0 ;;
+        *) exit 1 ;;
     esac
 fi
 exit 0
@@ -241,10 +243,11 @@ EOF
     mkdir -p "${bin_dir}"
     cat >"${bin_dir}/gh" <<'EOF'
 #!/bin/bash
+# GET pages -> 404 (inactive); POST -> success (#955)
 if [[ "$*" == *"--method POST"* ]]; then
     exit 0
 fi
-printf 'NOT_FOUND'; exit 0
+exit 1
 EOF
     chmod +x "${bin_dir}/gh"
     _setup_fake_repo \
