@@ -55,6 +55,8 @@ ghes_mirror() {
         ux_error "Clone failed. Check upstream URL and network access."
         return 1
     fi
+    local _orig_dir
+    _orig_dir=$(pwd)
     cd "${_repo_name}" || {
         ux_error "Cannot enter directory: ${_repo_name}"
         return 1
@@ -65,6 +67,7 @@ ghes_mirror() {
     # Use --private instead of --internal if your GHES plan does not support internal repos.
     if ! gh repo create "${_repo_name}" --internal --source=. --hostname="${_ghes_host}"; then
         ux_error "GHES repo creation failed. Check: gh auth status --hostname ${_ghes_host}"
+        cd "${_orig_dir}" || return 1
         return 1
     fi
 
@@ -74,11 +77,11 @@ ghes_mirror() {
 
     local _ghes_user
     _ghes_user=$(gh api user --hostname="${_ghes_host}" --jq '.login' 2>/dev/null)
-    if [ -z "${_ghes_user}" ]; then
+    while [ -z "${_ghes_user}" ]; do
         ux_warning "Could not detect GHES username automatically."
         printf "%sGHES username%s: " "${UX_PRIMARY}" "${UX_RESET}"
         read -r _ghes_user
-    fi
+    done
 
     local _origin_url="https://${_ghes_host}/${_ghes_user}/${_repo_name}"
     git remote add origin "${_origin_url}"
@@ -89,8 +92,14 @@ ghes_mirror() {
     ux_step 4 "Pushing to GHES..."
     local _branch
     _branch=$(git branch --show-current)
+    if [ -z "${_branch}" ]; then
+        ux_error "Could not detect current branch name (detached HEAD?)."
+        cd "${_orig_dir}" || return 1
+        return 1
+    fi
     if ! git push -u origin "${_branch}"; then
         ux_error "Push failed. Verify GHES authentication and repo permissions."
+        cd "${_orig_dir}" || return 1
         return 1
     fi
 
