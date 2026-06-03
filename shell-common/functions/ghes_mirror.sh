@@ -109,7 +109,11 @@ ghes_mirror() {
     local _origin_url="https://${_ghes_host}/${_ghes_owner}/${_repo_name}"
     # gh repo create may have registered an SSH URL (following gh's git_protocol
     # setting); force HTTPS so origin is always protocol-agnostic.
-    git remote set-url origin "${_origin_url}"
+    if ! git remote set-url origin "${_origin_url}"; then
+        ux_error "Failed to set origin URL to ${_origin_url}."
+        cd "${_orig_dir}" || return 1
+        return 1
+    fi
     ux_info "upstream -> ${_upstream}"
     ux_info "origin   -> ${_origin_url}"
 
