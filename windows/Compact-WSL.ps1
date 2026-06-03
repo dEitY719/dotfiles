@@ -108,7 +108,7 @@ if (-not $basePath) {
     Write-Host "[X] '$DistroName' 배포판을 찾지 못했습니다." -ForegroundColor Red
     Write-Host "    아래 목록에서 정확한 이름을 확인하고 -DistroName 으로 다시 실행하세요:" -ForegroundColor Red
     wsl -l -v
-    return
+    throw "배포판을 찾지 못했습니다."
 }
 
 # BasePath 의 \\?\ 접두사 제거
@@ -123,7 +123,7 @@ if (-not (Test-Path $vhdxPath)) {
     } else {
         Write-Host "[X] vhdx 파일을 찾지 못했습니다." -ForegroundColor Red
         Write-Host "    BasePath (레지스트리 원본): $basePath" -ForegroundColor Red
-        return
+        throw "vhdx 파일을 찾지 못했습니다."
     }
 }
 
