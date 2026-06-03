@@ -85,7 +85,8 @@ ghes_mirror() {
     fi
     ux_step 2 "Creating GHES repository (${_visibility_flag})..."
     # GH_HOST env var is required; gh repo create does not support --hostname flag.
-    if ! GH_HOST="${_ghes_host}" gh repo create "${_ghes_owner}/${_repo_name}" "${_visibility_flag}" --source=.; then
+    # --remote=_ghes_tmp avoids collision with clone's existing "origin" remote (#941).
+    if ! GH_HOST="${_ghes_host}" gh repo create "${_ghes_owner}/${_repo_name}" "${_visibility_flag}" --source=. --remote=_ghes_tmp; then
         ux_error "GHES repo creation failed. Check: GH_HOST=${_ghes_host} gh auth status"
         cd "${_orig_dir}" || return 1
         return 1
@@ -94,10 +95,10 @@ ghes_mirror() {
     # --- Step 3: Configure remotes ---
     ux_step 3 "Configuring remotes..."
     git remote rename origin upstream
+    git remote rename _ghes_tmp origin
 
     # Owner is parsed directly from the GHES URL — no gh api query needed.
     local _origin_url="https://${_ghes_host}/${_ghes_owner}/${_repo_name}"
-    git remote add origin "${_origin_url}"
     ux_info "upstream -> ${_upstream}"
     ux_info "origin   -> ${_origin_url}"
 
