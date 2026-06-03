@@ -107,8 +107,8 @@ claude_allow_clean() {
 		return 1
 	}
 
-	_cac_filter=$(mktemp /tmp/cac_filter.XXXXXX)
-	_cac_out=$(mktemp /tmp/cac_out.XXXXXX)
+	_cac_filter=$(mktemp "${TMPDIR:-/tmp}/cac_filter.XXXXXX")
+	_cac_out=$(mktemp "${TMPDIR:-/tmp}/cac_out.XXXXXX")
 	_claude_allow_clean_write_filter "$_cac_filter"
 
 	if ! jq -f "$_cac_filter" "$_cac_target" >"$_cac_out" 2>/dev/null; then
@@ -131,8 +131,8 @@ claude_allow_clean() {
 	if [ "$_cac_dry_run" -eq 1 ]; then
 		ux_header "Dry-run: $(basename "$(dirname "$_cac_target")")/$(basename "$_cac_target")"
 		ux_info "Before: $_cac_before  After: $_cac_after  Remove: $_cac_removed"
-		_cac_tmp_b=$(mktemp /tmp/cac_b.XXXXXX)
-		_cac_tmp_a=$(mktemp /tmp/cac_a.XXXXXX)
+		_cac_tmp_b=$(mktemp "${TMPDIR:-/tmp}/cac_b.XXXXXX")
+		_cac_tmp_a=$(mktemp "${TMPDIR:-/tmp}/cac_a.XXXXXX")
 		jq -r '.permissions.allow[]' "$_cac_target" | sort >"$_cac_tmp_b"
 		jq -r '.permissions.allow[]' "$_cac_out" | sort >"$_cac_tmp_a"
 		ux_section "Entries to remove:"
