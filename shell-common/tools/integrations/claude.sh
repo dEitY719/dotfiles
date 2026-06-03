@@ -675,8 +675,13 @@ _claude_ensure_settings_copy() {
                     chmod 600 "$_cesc_local"
                     ux_info "  migrated model '$_cesc_model' → $_cesc_local"
                 elif [ -z "$(jq -r '.model // empty' "$_cesc_local" 2>/dev/null)" ]; then
-                    _cesc_tmp=$(mktemp)
-                    if jq --arg m "$_cesc_model" '.model = $m' "$_cesc_local" > "$_cesc_tmp"; then
+                    # mktemp: 명시 템플릿 + TMPDIR 폴백 — BSD/macOS 이식성과
+                    # 공유 /tmp 의 예측 가능한 이름 회피 (PR #943 리뷰).
+                    # 실패 시 soft-fail — sourced 함수이므로 exit 금지.
+                    _cesc_tmp=$(mktemp "${TMPDIR:-/tmp}/claude_settings.XXXXXX") || _cesc_tmp=
+                    if [ -z "$_cesc_tmp" ]; then
+                        ux_warning "  mktemp failed — model migration skipped, keeping $_cesc_local as-is"
+                    elif jq --arg m "$_cesc_model" '.model = $m' "$_cesc_local" > "$_cesc_tmp"; then
                         mv "$_cesc_tmp" "$_cesc_local"
                         ux_info "  migrated model '$_cesc_model' → $_cesc_local"
                     else
