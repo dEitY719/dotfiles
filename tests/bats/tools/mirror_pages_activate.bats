@@ -258,3 +258,26 @@ EOF
     assert_output --partial "main"
     assert_output --partial "/docs"
 }
+
+@test "mirror-pages-activate: surfaces API response when POST fails (#957)" {
+    local bin_dir="${_WORK_DIR}/bin"
+    mkdir -p "${bin_dir}"
+    cat >"${bin_dir}/gh" <<'EOF'
+#!/bin/bash
+# GET pages -> 404 (inactive); POST -> failure with an API error message on
+# stderr, mirroring a real GHE rejection (#957).
+if [[ "$*" == *"--method POST"* ]]; then
+    printf 'HTTP 422: Unprocessable Entity\n' >&2
+    exit 1
+fi
+exit 1
+EOF
+    chmod +x "${bin_dir}/gh"
+    _setup_fake_repo \
+        "https://ghe.example.com/user/repo" \
+        "https://github.com/owner/repo"
+    run bash -c "cd '${_WORK_DIR}' && PATH='${bin_dir}:${PATH}' bash '${SCRIPT}'"
+    assert_failure
+    assert_output --partial "Pages activation failed"
+    assert_output --partial "API response: HTTP 422: Unprocessable Entity"
+}
