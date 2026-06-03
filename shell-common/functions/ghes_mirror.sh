@@ -23,21 +23,24 @@ ghes_mirror() {
     read -r _upstream
     _upstream="${_upstream:-${_default_upstream}}"
 
-    local _default_host="github.samsungds.net"
-    printf "%s2. GHES host%s [%s]: " "${UX_PRIMARY}" "${UX_RESET}" "${_default_host}"
-    read -r _ghes_host
-    _ghes_host="${_ghes_host:-${_default_host}}"
+    # Derive GHES URL default from upstream (swap github.com with GHES host)
+    local _default_ghes_host="github.samsungds.net"
+    local _upstream_path="${_upstream#https://github.com/}"
+    local _default_ghes_url="https://${_default_ghes_host}/${_upstream_path}"
+    printf "%s2. GHES repo URL%s [%s]: " "${UX_PRIMARY}" "${UX_RESET}" "${_default_ghes_url}"
+    read -r _ghes_full_url
+    _ghes_full_url="${_ghes_full_url:-${_default_ghes_url}}"
 
-    local _suggested_name="${_upstream##*/}"
-    _suggested_name="${_suggested_name%.git}"
-    printf "%s3. GHES repository name%s [%s]: " "${UX_PRIMARY}" "${UX_RESET}" "${_suggested_name}"
-    read -r _repo_name
-    _repo_name="${_repo_name:-${_suggested_name}}"
+    # Parse host / owner / repo from GHES URL
+    local _ghes_url_path="${_ghes_full_url#https://}"  # host/owner/repo
+    local _ghes_host="${_ghes_url_path%%/*}"            # host
+    local _ghes_owner_repo="${_ghes_url_path#*/}"       # owner/repo
+    local _ghes_owner="${_ghes_owner_repo%%/*}"         # owner
+    local _repo_name="${_ghes_owner_repo##*/}"          # repo
 
     echo ""
     ux_info "Upstream : ${_upstream}"
-    ux_info "GHES host: ${_ghes_host}"
-    ux_info "Repo name: ${_repo_name}"
+    ux_info "GHES URL : ${_ghes_full_url}"
     echo ""
     printf "%sConfirm? [Y/n]%s " "${UX_WARNING}" "${UX_RESET}"
     read -r _confirm
@@ -65,8 +68,9 @@ ghes_mirror() {
     # --- Step 2: Create GHES repo ---
     ux_step 2 "Creating GHES repository (--internal)..."
     # Use --private instead of --internal if your GHES plan does not support internal repos.
-    if ! gh repo create "${_repo_name}" --internal --source=. --hostname="${_ghes_host}"; then
-        ux_error "GHES repo creation failed. Check: gh auth status --hostname ${_ghes_host}"
+    # GH_HOST env var is required; gh repo create does not support --hostname flag.
+    if ! GH_HOST="${_ghes_host}" gh repo create "${_ghes_owner}/${_repo_name}" --internal --source=.; then
+        ux_error "GHES repo creation failed. Check: GH_HOST=${_ghes_host} gh auth status"
         cd "${_orig_dir}" || return 1
         return 1
     fi
@@ -75,15 +79,8 @@ ghes_mirror() {
     ux_step 3 "Configuring remotes..."
     git remote rename origin upstream
 
-    local _ghes_user
-    _ghes_user=$(gh api user --hostname="${_ghes_host}" --jq '.login' 2>/dev/null)
-    while [ -z "${_ghes_user}" ]; do
-        ux_warning "Could not detect GHES username automatically."
-        printf "%sGHES username%s: " "${UX_PRIMARY}" "${UX_RESET}"
-        read -r _ghes_user
-    done
-
-    local _origin_url="https://${_ghes_host}/${_ghes_user}/${_repo_name}"
+    # Owner is parsed directly from the GHES URL — no gh api query needed.
+    local _origin_url="https://${_ghes_host}/${_ghes_owner}/${_repo_name}"
     git remote add origin "${_origin_url}"
     ux_info "upstream -> ${_upstream}"
     ux_info "origin   -> ${_origin_url}"
