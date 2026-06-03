@@ -31,8 +31,8 @@ ghes_mirror_help() {
 
     ux_section "Notes"
     ux_bullet "The wizard changes your working directory to the cloned repo."
-    ux_bullet "GHES repo visibility defaults to --internal."
-    ux_bullet "Change to --private in ghes_mirror.sh if your plan requires it."
+    ux_bullet "GHES repo visibility is auto-selected: --internal for org owners,"
+    ux_bullet "--private for personal accounts (internal is org-only)."
     echo ""
 }
 
