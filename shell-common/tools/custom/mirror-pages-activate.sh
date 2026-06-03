@@ -95,8 +95,11 @@ main() {
 	fi
 
 	# --- Derive Pages URL components ---
-	local _upstream_pages_base _origin_pages_base _origin_pages_url
-	_upstream_pages_base="${_upstream_owner}.github.io/${_repo_name}"
+	# GitHub Pages hostnames are always lowercase, so normalize the upstream
+	# owner before building the github.io base (#955 — dEitY719 vs deity719).
+	local _upstream_pages_base _origin_pages_base _origin_pages_url _upstream_owner_lc
+	_upstream_owner_lc=$(printf '%s' "${_upstream_owner}" | tr '[:upper:]' '[:lower:]')
+	_upstream_pages_base="${_upstream_owner_lc}.github.io/${_repo_name}"
 	_origin_pages_base="${_ghe_host}/pages/${_origin_owner}/${_repo_name}"
 	_origin_pages_url="https://${_origin_pages_base}"
 
@@ -113,12 +116,15 @@ main() {
 	# --- Step 1: Activate GitHub Pages ---
 	ux_step 1 "GitHub Pages activation"
 
+	# When Pages is inactive the API returns 404 and `gh` exits non-zero, so
+	# stdout is empty. Don't substitute a sentinel — an empty string is the
+	# unambiguous "not active" signal (#955).
 	local _pages_status
 	_pages_status=$(gh api --hostname "${_ghe_host}" \
 		"repos/${_origin_owner}/${_repo_name}/pages" \
-		--jq '.status' 2>/dev/null || printf 'NOT_FOUND')
+		--jq '.status' 2>/dev/null) || _pages_status=""
 
-	if [ "${_pages_status}" != "NOT_FOUND" ] && [ -n "${_pages_status}" ]; then
+	if [ -n "${_pages_status}" ]; then
 		ux_info "Pages already active (status: ${_pages_status}) — skip"
 	else
 		if [ "${_DRY_RUN}" -eq 1 ]; then
