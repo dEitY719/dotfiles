@@ -94,8 +94,16 @@ ghes_mirror() {
 
     # --- Step 3: Configure remotes ---
     ux_step 3 "Configuring remotes..."
-    git remote rename origin upstream
-    git remote rename _ghes_tmp origin
+    if ! git remote rename origin upstream; then
+        ux_error "Failed to rename origin to upstream."
+        cd "${_orig_dir}" || return 1
+        return 1
+    fi
+    if ! git remote rename _ghes_tmp origin; then
+        ux_error "Failed to rename _ghes_tmp to origin."
+        cd "${_orig_dir}" || return 1
+        return 1
+    fi
 
     # Owner is parsed directly from the GHES URL — no gh api query needed.
     local _origin_url="https://${_ghes_host}/${_ghes_owner}/${_repo_name}"
