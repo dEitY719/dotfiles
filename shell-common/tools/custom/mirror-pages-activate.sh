@@ -135,12 +135,12 @@ main() {
 			# form-urlencoded payload produced by `gh api -F`, so send JSON
 			# via --input. Capture stdout+stderr instead of discarding them
 			# so a real API rejection is surfaced rather than swallowed (#957).
-			local _pages_err _pages_rc
+			local _pages_err _pages_rc=0
 			_pages_err=$(printf '{"source":{"branch":"main","path":"/docs"}}' |
 				gh api --hostname "${_ghe_host}" \
 					"repos/${_origin_owner}/${_repo_name}/pages" \
 					--method POST \
-					--input - 2>&1) && _pages_rc=0 || _pages_rc=$?
+					--input - 2>&1) || _pages_rc=$?
 
 			if [ "${_pages_rc}" -eq 0 ]; then
 				ux_success "Pages activated (branch=main, path=/docs)"
