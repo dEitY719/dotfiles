@@ -131,15 +131,23 @@ main() {
 			ux_info "[dry-run] Would POST repos/${_origin_owner}/${_repo_name}/pages"
 			ux_info "[dry-run]   source[branch]=main  source[path]=/docs"
 		else
-			if gh api --hostname "${_ghe_host}" \
-				"repos/${_origin_owner}/${_repo_name}/pages" \
-				--method POST \
-				-F "source[branch]=main" \
-				-F "source[path]=/docs" \
-				>/dev/null 2>&1; then
+			# GHE 3.17's Pages API requires a JSON body and rejects the
+			# form-urlencoded payload produced by `gh api -F`, so send JSON
+			# via --input. Capture stdout+stderr instead of discarding them
+			# so a real API rejection is surfaced rather than swallowed (#957).
+			local _pages_err _pages_rc
+			_pages_err=$(printf '{"source":{"branch":"main","path":"/docs"}}' |
+				gh api --hostname "${_ghe_host}" \
+					"repos/${_origin_owner}/${_repo_name}/pages" \
+					--method POST \
+					--input - 2>&1) && _pages_rc=0 || _pages_rc=$?
+
+			if [ "${_pages_rc}" -eq 0 ]; then
 				ux_success "Pages activated (branch=main, path=/docs)"
 			else
-				ux_error "Pages activation failed. Verify: gh auth status --hostname ${_ghe_host}"
+				ux_error "Pages activation failed (exit ${_pages_rc})."
+				[ -n "${_pages_err}" ] && ux_info "API response: ${_pages_err}"
+				ux_info "Verify: gh auth status --hostname ${_ghe_host}"
 				exit 1
 			fi
 		fi
