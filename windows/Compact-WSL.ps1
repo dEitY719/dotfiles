@@ -51,21 +51,21 @@ $isAdmin = ([Security.Principal.WindowsPrincipal] `
 if (-not $isAdmin) {
     Write-Host "[!] 관리자 권한이 필요합니다. 권한 상승 후 재실행합니다..." -ForegroundColor Yellow
 
+    $extraArgs = @()
+    if ($UseSparse)        { $extraArgs += "-UseSparse" }
+    if ($SkipWindowsClean) { $extraArgs += "-SkipWindowsClean" }
+
     if ($PSCommandPath) {
         # 파일 실행 경로: 파일 경로 + 파라미터로 재실행
         $argList = @(
             "-NoProfile", "-ExecutionPolicy", "Bypass",
             "-File", "`"$PSCommandPath`"",
             "-DistroName", "`"$DistroName`""
-        )
-        if ($UseSparse)        { $argList += "-UseSparse" }
-        if ($SkipWindowsClean) { $argList += "-SkipWindowsClean" }
+        ) + $extraArgs
         Start-Process powershell.exe -ArgumentList $argList -Verb RunAs
     } else {
         # iex 실행 경로: irm 으로 재다운로드 후 관리자 셸에서 실행
-        $params = "-DistroName `"$DistroName`""
-        if ($UseSparse)        { $params += " -UseSparse" }
-        if ($SkipWindowsClean) { $params += " -SkipWindowsClean" }
+        $params = (@("-DistroName `"$DistroName`"") + $extraArgs) -join " "
         $cmd = "& ([scriptblock]::Create((irm '$SCRIPT_RAW_URL'))) $params"
         Start-Process powershell.exe -ArgumentList @(
             "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $cmd
@@ -80,6 +80,11 @@ function Get-VhdxSizeGB {
         return [math]::Round((Get-Item $Path).Length / 1GB, 2)
     }
     return $null
+}
+
+function Clear-Dir([string]$Path) {
+    Get-ChildItem $Path -Force -ErrorAction SilentlyContinue |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host "`n=== WSL vhdx 압축 스크립트 ===" -ForegroundColor Cyan
@@ -108,11 +113,18 @@ if (-not $basePath) {
 
 # BasePath 의 \\?\ 접두사 제거
 $basePath = $basePath -replace '^\\\\\?\\', ''
-$vhdxPath = Join-Path $basePath "ext4.vhdx"
 
+# vhdx 파일 탐색: ext4.vhdx 우선, 없으면 *.vhdx 단일 파일로 폴백
+$vhdxPath = Join-Path $basePath "ext4.vhdx"
 if (-not (Test-Path $vhdxPath)) {
-    Write-Host "[X] vhdx 파일이 없습니다: $vhdxPath" -ForegroundColor Red
-    exit 1
+    $found = @(Get-ChildItem $basePath -Filter "*.vhdx" -ErrorAction SilentlyContinue)
+    if ($found.Count -eq 1) {
+        $vhdxPath = $found[0].FullName
+    } else {
+        Write-Host "[X] vhdx 파일을 찾지 못했습니다." -ForegroundColor Red
+        Write-Host "    BasePath (레지스트리 원본): $basePath" -ForegroundColor Red
+        exit 1
+    }
 }
 
 $sizeBefore = Get-VhdxSizeGB $vhdxPath
@@ -178,29 +190,24 @@ exit
         return ('#' * $fill) + ('.' * ($width - $fill))
     }
 
-    $spin = '|', '/', '-', '\'
+    $spin   = '|', '/', '-', '\'
+    $pctRe  = [regex]::new('(\d+)\s*(?:%|퍼센트|percent)', [System.Text.RegularExpressions.RegexOptions]::Compiled)
     $i = 0
+    $cur = '?'
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     Write-Host ""   # 진행 바를 그릴 빈 줄 확보
 
     while (-not $proc.HasExited) {
         $raw = Get-SharedText $logOut
-        $m   = [regex]::Matches($raw, '(\d+)\s*(?:퍼센트|percent)')
+        $m   = $pctRe.Matches($raw)
         $pct = if ($m.Count) { [int]$m[$m.Count - 1].Groups[1].Value } else { -1 }
 
-        $cur = '?'
-        try {
-            if (Test-Path $vhdxPath) {
-                $cur = [math]::Round((Get-Item $vhdxPath).Length / 1GB, 2)
-            }
-        } catch {}
+        if ($i % 17 -eq 0) { $v = Get-VhdxSizeGB $vhdxPath; if ($null -ne $v) { $cur = $v } }
         $el = [int]$sw.Elapsed.TotalSeconds
 
-        if ($pct -ge 0) {
-            $line = "  [{0}] {1,3}%  | 경과 {2}s | 현재 {3} GB" -f (Format-Bar $pct), $pct, $el, $cur
-        } else {
-            $line = "  {0} 압축 준비 중...  | 경과 {1}s | 현재 {2} GB" -f $spin[$i % 4], $el, $cur
-        }
+        $lead = if ($pct -ge 0) { "  [{0}] {1,3}%" -f (Format-Bar $pct), $pct }
+                else             { "  {0} 압축 준비 중..." -f $spin[$i % $spin.Count] }
+        $line = "{0}  | 경과 {1}s | 현재 {2} GB" -f $lead, $el, $cur
         Write-Host ("`r" + $line.PadRight(70)) -NoNewline -ForegroundColor Cyan
         $i++
         Start-Sleep -Milliseconds 300
@@ -229,18 +236,14 @@ if (-not $SkipWindowsClean) {
 
     # 5-1. TEMP 정리
     Write-Host "    - TEMP 정리"
-    Get-ChildItem $env:TEMP -Force -ErrorAction SilentlyContinue |
-        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    Clear-Dir $env:TEMP
 
     # 5-2. Windows Update 캐시 (SoftwareDistribution\Download)
     Write-Host "    - Windows Update 캐시 정리"
     try {
         Stop-Service wuauserv -Force -ErrorAction SilentlyContinue
         $wuCache = "$env:SystemRoot\SoftwareDistribution\Download"
-        if (Test-Path $wuCache) {
-            Get-ChildItem $wuCache -Force -ErrorAction SilentlyContinue |
-                Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-        }
+        if (Test-Path $wuCache) { Clear-Dir $wuCache }
         Start-Service wuauserv -ErrorAction SilentlyContinue
     } catch {
         Write-Host "      (Update 캐시 정리 일부 실패 — 무시)" -ForegroundColor DarkYellow
@@ -253,8 +256,7 @@ if (-not $SkipWindowsClean) {
             Write-Host "    - Chrome 실행 중 -> 캐시 정리 건너뜀 (브라우저 닫고 재실행)" -ForegroundColor DarkYellow
         } else {
             Write-Host "    - Chrome 캐시 정리 (Default 프로필)"
-            Get-ChildItem $chromeCache -Force -ErrorAction SilentlyContinue |
-                Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            Clear-Dir $chromeCache
         }
     }
 
