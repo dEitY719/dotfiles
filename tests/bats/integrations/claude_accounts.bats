@@ -222,7 +222,11 @@ LOCAL
     run_in_bash "_claude_account_setup_one personal '$HOME/.claude-personal'"
     assert_success
 
-    [ -L "$HOME/.claude-personal/settings.json" ]
+    # settings.json is a real-file copy of the SSOT since #940 — a symlink
+    # would let /model write through into the tracked dotfiles file (#924).
+    [ -f "$HOME/.claude-personal/settings.json" ]
+    [ ! -L "$HOME/.claude-personal/settings.json" ]
+    cmp -s "${DOTFILES_ROOT}/claude/settings.json" "$HOME/.claude-personal/settings.json"
     [ -L "$HOME/.claude-personal/statusline-command.sh" ]
     [ -L "$HOME/.claude-personal/plugins" ]
     [ -L "$HOME/.claude-personal/projects/GLOBAL/memory" ]
@@ -236,6 +240,55 @@ LOCAL
     # settings.local.json is intentionally a per-PC hand-created regular
     # file (#584) — never a dotfiles symlink.
     [ ! -L "$HOME/.claude-personal/settings.local.json" ]
+}
+
+@test "bash: _claude_ensure_settings_copy converts a legacy settings.json symlink to a real file (#940)" {
+    mkdir -p "$HOME/.claude-personal"
+    ln -s "${DOTFILES_ROOT}/claude/settings.json" "$HOME/.claude-personal/settings.json"
+
+    run_in_bash "_claude_ensure_settings_copy '${DOTFILES_ROOT}/claude/settings.json' '$HOME/.claude-personal/settings.json'"
+    assert_success
+
+    [ -f "$HOME/.claude-personal/settings.json" ]
+    [ ! -L "$HOME/.claude-personal/settings.json" ]
+    cmp -s "${DOTFILES_ROOT}/claude/settings.json" "$HOME/.claude-personal/settings.json"
+}
+
+@test "bash: _claude_ensure_settings_copy migrates a /model-written model key into settings.local.json (#940)" {
+    mkdir -p "$HOME/.claude-personal"
+    # Simulate the post-/model state: real file = SSOT + personal model key.
+    jq '.model = "opus"' "${DOTFILES_ROOT}/claude/settings.json" \
+        > "$HOME/.claude-personal/settings.json"
+
+    run_in_bash "_claude_ensure_settings_copy '${DOTFILES_ROOT}/claude/settings.json' '$HOME/.claude-personal/settings.json'"
+    assert_success
+
+    # SSOT wins in settings.json; the model preference survives in local.
+    cmp -s "${DOTFILES_ROOT}/claude/settings.json" "$HOME/.claude-personal/settings.json"
+    [ "$(jq -r '.model' "$HOME/.claude-personal/settings.local.json")" = "opus" ]
+}
+
+@test "bash: _claude_ensure_settings_copy removes a dangling settings.local.json symlink (#940)" {
+    mkdir -p "$HOME/.claude-personal"
+    ln -s "/tmp/torn-down-worktree-DOES-NOT-EXIST/claude/settings.local.json" \
+        "$HOME/.claude-personal/settings.local.json"
+
+    run_in_bash "_claude_ensure_settings_copy '${DOTFILES_ROOT}/claude/settings.json' '$HOME/.claude-personal/settings.json'"
+    assert_success
+
+    [ ! -L "$HOME/.claude-personal/settings.local.json" ]
+    [ ! -e "$HOME/.claude-personal/settings.local.json" ]
+}
+
+@test "bash: _claude_ensure_settings_copy is idempotent (second run reports up to date)" {
+    mkdir -p "$HOME/.claude-personal"
+
+    run_in_bash "
+        _claude_ensure_settings_copy '${DOTFILES_ROOT}/claude/settings.json' '$HOME/.claude-personal/settings.json' >/dev/null 2>&1
+        _claude_ensure_settings_copy '${DOTFILES_ROOT}/claude/settings.json' '$HOME/.claude-personal/settings.json'
+    "
+    assert_success
+    assert_output --partial "up to date"
 }
 
 @test "bash: _claude_account_setup_one unmounts a legacy bind mount on skills (issue #575 migration)" {
@@ -678,7 +731,9 @@ _setup_sh_prereqs() {
     run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
     assert_success
 
-    [ -L "$HOME/.claude-personal/settings.json" ]
+    # settings.json is a real-file copy since #940 — not a symlink.
+    [ -f "$HOME/.claude-personal/settings.json" ]
+    [ ! -L "$HOME/.claude-personal/settings.json" ]
     [ -L "$HOME/.claude-personal/projects/GLOBAL/memory" ]
 }
 

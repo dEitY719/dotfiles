@@ -60,7 +60,7 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 
 ```bash
 # 외부 PC (옵션 1, 3) — 멀티-계정
-~/.claude-personal/settings.json         -> dotfiles/claude/settings.json
+~/.claude-personal/settings.json         = dotfiles/claude/settings.json 의 실파일 복사 (#940, symlink 아님)
 ~/.claude-personal/statusline-command.sh -> dotfiles/claude/statusline-command.sh
 ~/.claude-personal/skills/<name>         -> dotfiles/claude/skills/<name>   (entry symlink, #707)
 ~/.claude-personal/docs                  -> dotfiles/claude/docs            (dir symlink, #575)
@@ -68,7 +68,7 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 ~/.claude-personal/projects/GLOBAL/memory -> dotfiles/claude/global-memory
 
 # 사내 PC (옵션 2) — 단일 계정 (issue #571)
-~/.claude/settings.json                  -> dotfiles/claude/settings.json
+~/.claude/settings.json                  = aws/setup.sh 가 SSOT + Bedrock 오버레이를 merge 한 실파일 (#687)
 ~/.claude/statusline-command.sh          -> dotfiles/claude/statusline-command.sh
 ~/.claude/skills/<name>                  -> dotfiles/claude/skills/<name>   (entry symlink, #707)
 ~/.claude/docs                           -> dotfiles/claude/docs            (dir symlink)
@@ -83,7 +83,7 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 
 기존 PC 에 남아 있는 `/etc/sudoers.d/claude-{skills,docs}-mount-*` 파일은 #575 이후로 사용처가 없다. `claude/setup.sh` 실행 시 잔존 파일이 감지되면 수동 삭제 명령을 안내한다.
 
-`settings.json` — **tracked SSOT** (#584). 동일한 파일이 Home/External/Internal 모두에서 `~/.claude/settings.json` 으로 심볼릭링크됨.
+`settings.json` — **tracked SSOT** (#584). 모든 모드에서 config dir 의 `settings.json` 은 SSOT 의 **실파일 복사**다 — 멀티 계정은 `_claude_ensure_settings_copy` (#940), Internal 은 `aws/setup.sh` merge (#687). symlink 였던 구 레이아웃은 Claude Code `/model` 이 tracked SSOT 를 write-through 로 오염시켰음 (#924 → #940). 기존 실파일의 개인 `model` 키는 setup 재실행 시 `settings.local.json` 으로 자동 이주.
 `~/.claude/settings.local.json` — out-of-repo, gitignored, Internal PC 1회 손수 작성. 사번 헤더 / 사내 `ANTHROPIC_*` 가 들어가며 Claude Code 가 settings.json 과 native merge. `claude/setup.sh` 가 Internal 모드 종료 직전 copy-paste heredoc 안내 출력 (#584).
 
 `~/.dotfiles-setup-mode` 가 `internal` 이면 `claude_yolo` 가 멀티-계정 해석을 우회하고 `~/.claude/` 를 강제 사용 (F-2). 잘못 migrate된 사내 PC 복구: `claude-accounts rollback` (F-3). 자세한 내용은 `docs/guide/internal-pc.md`.
