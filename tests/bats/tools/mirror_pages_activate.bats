@@ -8,7 +8,7 @@ SCRIPT="${DOTFILES_ROOT}/shell-common/tools/custom/mirror-pages-activate.sh"
 
 setup() {
     setup_isolated_home
-    _WORK_DIR="$(mktemp -d)"
+    _WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mirror-pages-test.XXXXXX")"
 }
 
 teardown() {
@@ -241,9 +241,7 @@ EOF
     mkdir -p "${bin_dir}"
     cat >"${bin_dir}/gh" <<'EOF'
 #!/bin/bash
-# Capture POST body to verify source params
 if [[ "$*" == *"--method POST"* ]]; then
-    printf '%s\n' "$*" >>/tmp/gh_calls_$$.log
     exit 0
 fi
 printf 'NOT_FOUND'; exit 0
@@ -256,5 +254,4 @@ EOF
     assert_success
     assert_output --partial "main"
     assert_output --partial "/docs"
-    rm -f "/tmp/gh_calls_$$.log"
 }
