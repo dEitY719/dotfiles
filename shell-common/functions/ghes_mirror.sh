@@ -74,15 +74,9 @@ ghes_mirror() {
     }
 
     # --- Step 2: Create GHES repo ---
-    # --internal is only allowed on organization-owned repos (#938);
-    # personal accounts fall back to --private automatically.
-    local _account_type _visibility_flag
-    _account_type=$(gh api --hostname "${_ghes_host}" "users/${_ghes_owner}" --jq '.type' 2>/dev/null)
-    if [ "${_account_type}" = "Organization" ]; then
-        _visibility_flag="--internal"
-    else
-        _visibility_flag="--private"
-    fi
+    # upstream is always a public repo, so mirror as --public.
+    # --internal is GHEC-only (not supported on GHES); account-type detection is unnecessary.
+    local _visibility_flag="--public"
     ux_step 2 "Creating GHES repository (${_visibility_flag})..."
     # GH_HOST env var is required; gh repo create does not support --hostname flag.
     # --remote=_ghes_tmp avoids collision with clone's existing "origin" remote (#941).
