@@ -158,7 +158,7 @@ main() {
 			done
 		else
 			local _tmp
-			_tmp=$(mktemp)
+			_tmp=$(mktemp "${TMPDIR:-/tmp}/mirror-pages.XXXXXX")
 			sed "s|${_upstream_pages_base}|${_origin_pages_base}|g" README.md >"${_tmp}"
 			mv "${_tmp}" README.md
 			ux_success "Replaced ${_count} occurrence(s) in README.md"
