@@ -23,20 +23,28 @@ ghes_mirror() {
     read -r _upstream
     _upstream="${_upstream:-${_default_upstream}}"
 
-    # Derive GHES URL default from upstream (swap github.com with GHES host)
+    # Derive GHES URL default — query GHES for authenticated owner namespace
     local _default_ghes_host="github.samsungds.net"
     local _upstream_path="${_upstream#https://github.com/}"
-    local _default_ghes_url="https://${_default_ghes_host}/${_upstream_path}"
+    local _upstream_owner="${_upstream_path%%/*}"
+    local _upstream_repo="${_upstream_path##*/}"
+    _upstream_repo="${_upstream_repo%.git}"
+    local _default_ghes_user
+    _default_ghes_user=$(gh api --hostname "${_default_ghes_host}" user --jq '.login' 2>/dev/null \
+        || echo "${_upstream_owner}")
+    local _default_ghes_url="https://${_default_ghes_host}/${_default_ghes_user}/${_upstream_repo}"
     printf "%s2. GHES repo URL%s [%s]: " "${UX_PRIMARY}" "${UX_RESET}" "${_default_ghes_url}"
     read -r _ghes_full_url
     _ghes_full_url="${_ghes_full_url:-${_default_ghes_url}}"
 
     # Parse host / owner / repo from GHES URL
-    local _ghes_url_path="${_ghes_full_url#https://}"  # host/owner/repo
-    local _ghes_host="${_ghes_url_path%%/*}"            # host
-    local _ghes_owner_repo="${_ghes_url_path#*/}"       # owner/repo
-    local _ghes_owner="${_ghes_owner_repo%%/*}"         # owner
-    local _repo_name="${_ghes_owner_repo##*/}"          # repo
+    local _ghes_url_path="${_ghes_full_url#*://}"       # host/owner/repo (strip any protocol)
+    local _ghes_host="${_ghes_url_path%%/*}"             # host
+    _ghes_host="${_ghes_host%%:*}"                       # strip port if present
+    local _ghes_owner_repo="${_ghes_url_path#*/}"        # owner/repo
+    local _ghes_owner="${_ghes_owner_repo%%/*}"          # owner
+    local _repo_name="${_ghes_owner_repo##*/}"           # repo
+    _repo_name="${_repo_name%.git}"                      # strip .git suffix
 
     echo ""
     ux_info "Upstream : ${_upstream}"
