@@ -42,10 +42,14 @@ teardown() {
 # repair (apply) — dangling symlinks rebound to canonical DOTFILES_ROOT
 # ---------------------------------------------------------------------------
 
-@test "claude_accounts_repair: rebinds dangling settings.json to canonical root" {
-    run_in_bash 'claude_accounts_repair >/dev/null 2>&1; readlink "$HOME/.claude-personal/settings.json"'
+@test "claude_accounts_repair: converts dangling settings.json symlink to a real-file copy (#940)" {
+    run_in_bash 'claude_accounts_repair >/dev/null 2>&1'
     assert_success
-    assert_output "$DOTFILES_ROOT/claude/settings.json"
+    # settings.json must be a real file since #940 — a symlink (even a
+    # canonical one) lets /model write through into the tracked SSOT (#924).
+    [ -f "$HOME/.claude-personal/settings.json" ]
+    [ ! -L "$HOME/.claude-personal/settings.json" ]
+    cmp -s "$DOTFILES_ROOT/claude/settings.json" "$HOME/.claude-personal/settings.json"
 }
 
 @test "claude_accounts_repair: rebinds dangling skills (directory symlink) too" {
@@ -60,13 +64,20 @@ teardown() {
     assert_output "$DOTFILES_ROOT/claude/global-memory"
 }
 
-@test "claude_accounts_repair: leaves an already-canonical symlink alone" {
-    run_in_bash 'claude_accounts_repair >/dev/null 2>&1; readlink "$HOME/.claude-work/settings.json"'
+@test "claude_accounts_repair: converts even a canonical settings.json symlink (#940 legacy layout)" {
+    # Pre-#940 the canonical symlink was left alone; it is now the legacy
+    # write-through layout and must become a real-file copy.
+    run_in_bash 'claude_accounts_repair >/dev/null 2>&1'
     assert_success
-    assert_output "$DOTFILES_ROOT/claude/settings.json"
+    [ -f "$HOME/.claude-work/settings.json" ]
+    [ ! -L "$HOME/.claude-work/settings.json" ]
+    cmp -s "$DOTFILES_ROOT/claude/settings.json" "$HOME/.claude-work/settings.json"
 }
 
 @test "claude_accounts_repair: reports skipped count for canonical entries" {
+    # Stage a canonical non-settings symlink so the skip path is exercised
+    # (settings.json no longer counts as canonical-skippable since #940).
+    ln -s "$DOTFILES_ROOT/claude/docs" "$HOME/.claude-work/docs"
     run_in_bash 'claude_accounts_repair 2>&1'
     assert_success
     assert_output --partial "already canonical"

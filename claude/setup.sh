@@ -700,10 +700,17 @@ done
 # --- Verify Links (모든 활성 계정) ---
 # skills/ is a real directory of entry-level symlinks (#707, F-8), so it
 # is checked as `-d` (and `! -L`) rather than `-L`.
+# settings.json is a real-file copy since #940 (not a symlink) — the
+# write-through symlink let /model pollute the tracked SSOT (#924).
 ux_section "심볼릭 링크 확인"
 for acct in $ENABLED_ACCOUNTS; do
     cdir=$(_claude_resolve_account "$acct")
-    for link in settings.json statusline-command.sh docs plugins projects/GLOBAL/memory; do
+    if [ -f "${cdir}/settings.json" ] && [ ! -L "${cdir}/settings.json" ]; then
+        log_dim "✓ ${acct}/settings.json 실파일 확인됨"
+    else
+        log_error_and_exit "${acct}/settings.json 실파일 생성 실패"
+    fi
+    for link in statusline-command.sh docs plugins projects/GLOBAL/memory; do
         if [ -L "${cdir}/${link}" ]; then
             log_dim "✓ ${acct}/${link} 심볼릭 링크 확인됨"
         else
