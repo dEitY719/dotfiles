@@ -639,6 +639,69 @@ _claude_ensure_symlink() {
     ux_success "  created symlink: $_ces_tgt → $_ces_src"
 }
 
+# _claude_ensure_settings_copy — settings.json 멱등 실파일 설치 (#940).
+#
+# Claude Code 의 /model 은 active config dir 의 settings.json 에 직접
+# persist 한다. 이 파일이 dotfiles SSOT 로의 symlink 면 write-through 로
+# tracked 파일이 오염된다 (#924 의 재발 경로). internal 모드가 #687 에서
+# 실파일로 전환한 것과 같은 원리를 다중 계정 모드에도 적용:
+#   - 기존 symlink (canonical / worktree-tainted 불문) 는 제거 후 SSOT 복사
+#   - 기존 실파일의 개인 `model` 키는 settings.local.json 으로 1회 이주
+#     (jq 없으면 경고 후 SSOT 가 덮어씀)
+#   - dangling settings.local.json symlink (teardown 된 worktree 잔재) 제거
+_claude_ensure_settings_copy() {
+    _cesc_src="$1"
+    _cesc_tgt="$2"
+    _cesc_local="$(dirname "$_cesc_tgt")/settings.local.json"
+
+    # dangling settings.local.json 정리가 model 이주보다 먼저 — 깨진 링크를
+    # 통해 쓰면 소멸한 worktree 경로로 write 가 향해 실패한다 (#940).
+    if [ -L "$_cesc_local" ] && [ ! -e "$_cesc_local" ]; then
+        rm -f "$_cesc_local"
+        ux_warning "  removed dangling settings.local.json symlink: $_cesc_local"
+    fi
+
+    if [ -L "$_cesc_tgt" ]; then
+        rm "$_cesc_tgt"
+        ux_warning "  legacy settings.json symlink → real file (#940): $_cesc_tgt"
+    elif [ -f "$_cesc_tgt" ] && ! cmp -s "$_cesc_src" "$_cesc_tgt"; then
+        # /model 이 남긴 개인 model 키 보존 — SSOT 복사로 사라지기 전에
+        # settings.local.json 으로 이주. local 에 이미 model 이 있으면 그대로.
+        if command -v jq >/dev/null 2>&1; then
+            _cesc_model=$(jq -r '.model // empty' "$_cesc_tgt" 2>/dev/null)
+            if [ -n "$_cesc_model" ]; then
+                if [ ! -f "$_cesc_local" ]; then
+                    printf '{ "model": "%s" }\n' "$_cesc_model" > "$_cesc_local"
+                    chmod 600 "$_cesc_local"
+                    ux_info "  migrated model '$_cesc_model' → $_cesc_local"
+                elif [ -z "$(jq -r '.model // empty' "$_cesc_local" 2>/dev/null)" ]; then
+                    _cesc_tmp=$(mktemp)
+                    if jq --arg m "$_cesc_model" '.model = $m' "$_cesc_local" > "$_cesc_tmp"; then
+                        mv "$_cesc_tmp" "$_cesc_local"
+                        ux_info "  migrated model '$_cesc_model' → $_cesc_local"
+                    else
+                        rm -f "$_cesc_tmp"
+                        ux_warning "  model migration failed — keeping $_cesc_local as-is"
+                    fi
+                fi
+            fi
+        else
+            ux_warning "  jq 없음 — $_cesc_tgt 의 로컬 변경(model 등)은 SSOT 로 덮어씀"
+        fi
+    fi
+
+    if [ -f "$_cesc_tgt" ] && cmp -s "$_cesc_src" "$_cesc_tgt"; then
+        ux_info "  ✓ settings.json up to date (real file): $_cesc_tgt"
+        return 0
+    fi
+    if ! cp "$_cesc_src" "$_cesc_tgt"; then
+        ux_error "  settings.json copy failed: $_cesc_src → $_cesc_tgt"
+        return 1
+    fi
+    chmod 600 "$_cesc_tgt"
+    ux_success "  installed settings.json (real file): $_cesc_tgt"
+}
+
 # _claude_dir_sync_one / _claude_count_dir_sync / claude_skills_sync —
 # REMOVED (issue #575).
 #
@@ -770,7 +833,10 @@ _claude_account_setup_one() {
     mkdir -p "$_caso_cdir"
     mkdir -p "$_caso_cdir/projects/GLOBAL"
 
-    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/settings.json"          "$_caso_cdir/settings.json"
+    # settings.json is a real-file copy, NOT a symlink (#940) — Claude Code's
+    # /model persists into this file, and a symlink would write through into
+    # the tracked dotfiles SSOT (the #924 recurrence path).
+    _claude_ensure_settings_copy "${DOTFILES_ROOT}/claude/settings.json"    "$_caso_cdir/settings.json"
     # settings.local.json is intentionally NOT symlinked from dotfiles (#584) —
     # it is a per-PC regular file the user hand-creates only when local env
     # overrides are needed. Claude Code merges it with settings.json natively.
@@ -867,7 +933,23 @@ claude_accounts_status() {
         fi
 
         for _cas_link in settings.json settings.local.json statusline-command.sh plugins projects/GLOBAL/memory skills docs; do
-            if [ -L "$_cas_cdir/$_cas_link" ]; then
+            if [ "$_cas_link" = "settings.json" ]; then
+                # settings.json is a real-file copy since #940 (was a
+                # symlink) — a symlink here is the legacy write-through
+                # layout that lets /model pollute the tracked SSOT (#924).
+                if [ -L "$_cas_cdir/$_cas_link" ]; then
+                    echo "  $_cas_link: symlink ✗ legacy layout (#940) — run: claude-accounts repair"
+                elif [ -f "$_cas_cdir/$_cas_link" ]; then
+                    echo "  $_cas_link: regular file ✓"
+                else
+                    echo "  $_cas_link: ✗ missing"
+                fi
+            elif [ -L "$_cas_cdir/$_cas_link" ] && [ ! -e "$_cas_cdir/$_cas_link" ]; then
+                # Dangling symlink — e.g. settings.local.json left pointing
+                # into a torn-down worktree (#940). Reporting it as
+                # "symlink ✓" hid the breakage at diagnosis time.
+                echo "  $_cas_link: broken symlink ✗ — target missing"
+            elif [ -L "$_cas_cdir/$_cas_link" ]; then
                 echo "  $_cas_link: symlink ✓"
             elif [ "$_cas_link" = "settings.local.json" ] && [ -f "$_cas_cdir/$_cas_link" ]; then
                 # settings.local.json is a per-PC hand-created regular
@@ -1238,6 +1320,28 @@ claude_accounts_repair() {
             [ -L "$_car_link" ] || continue
 
             _car_target=$(readlink "$_car_link" 2>/dev/null || true)
+
+            # settings.json must be a real-file copy since #940 — ANY
+            # symlink here (canonical or tainted) is the legacy
+            # write-through layout that lets /model pollute the tracked
+            # SSOT (#924). Convert instead of rebinding.
+            if [ "$_car_rel" = "settings.json" ]; then
+                ux_warning "  convert to real file (#940): $_car_link"
+                ux_info    "    from symlink: $_car_target"
+                ux_info    "    copy of:      $_car_canon"
+                if [ "$_car_dry" = "0" ]; then
+                    if rm -f "$_car_link" && cp "$_car_canon" "$_car_link"; then
+                        chmod 600 "$_car_link"
+                        _car_repaired=$((_car_repaired + 1))
+                    else
+                        ux_error "    convert failed — manual recovery needed"
+                    fi
+                else
+                    _car_repaired=$((_car_repaired + 1))
+                fi
+                continue
+            fi
+
             _car_needs_fix=0
 
             # Case 1: dangling — readlink target does not resolve.
