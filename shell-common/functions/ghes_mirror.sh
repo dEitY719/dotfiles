@@ -74,10 +74,18 @@ ghes_mirror() {
     }
 
     # --- Step 2: Create GHES repo ---
-    ux_step 2 "Creating GHES repository (--internal)..."
-    # Use --private instead of --internal if your GHES plan does not support internal repos.
+    # --internal is only allowed on organization-owned repos (#938);
+    # personal accounts fall back to --private automatically.
+    local _account_type _visibility_flag
+    _account_type=$(gh api --hostname "${_ghes_host}" "users/${_ghes_owner}" --jq '.type' 2>/dev/null)
+    if [ "${_account_type}" = "Organization" ]; then
+        _visibility_flag="--internal"
+    else
+        _visibility_flag="--private"
+    fi
+    ux_step 2 "Creating GHES repository (${_visibility_flag})..."
     # GH_HOST env var is required; gh repo create does not support --hostname flag.
-    if ! GH_HOST="${_ghes_host}" gh repo create "${_ghes_owner}/${_repo_name}" --internal --source=.; then
+    if ! GH_HOST="${_ghes_host}" gh repo create "${_ghes_owner}/${_repo_name}" "${_visibility_flag}" --source=.; then
         ux_error "GHES repo creation failed. Check: GH_HOST=${_ghes_host} gh auth status"
         cd "${_orig_dir}" || return 1
         return 1
