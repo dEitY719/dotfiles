@@ -116,13 +116,29 @@ _wsl_check_docker_reclaim_gb() {
 # --- one-line summary (manual printf: a single line with per-field coloring
 #     is not expressible via ux_bullet/ux_table_*; same sanctioned exception
 #     gpu_status.sh uses for its custom layout) ----------------------------
-_wsl_check_seg() { # $1=label $2=value $3=severity(ok|warn|crit)
+
+# 256-color orange (setaf 214) with yellow fallback; empty when tput unavailable
+_WSL_CHECK_ORANGE=$(tput setaf 214 2>/dev/null || tput setaf 3 2>/dev/null || echo "")
+
+_wsl_check_seg() { # $1=label $2=value $3=severity(ok|mid|hi|warn|crit)
     color="$UX_MUTED"
     case "$3" in
+    mid)  color="" ;;
+    hi)   color="$_WSL_CHECK_ORANGE" ;;
     warn) color="$UX_WARNING" ;;
     crit) color="$UX_ERROR" ;;
     esac
     printf '%s%s:%s%s' "$color" "$1" "$2" "$UX_RESET"
+}
+
+# Maps a % to severity for _wsl_check_seg: <40=ok(dim) 40=mid(white) 60=hi(orange) 80=crit(red)
+_wsl_check_pct_sev() { # $1 = pct (empty → ok)
+    [ -z "$1" ] && { echo ok; return 0; }
+    if [ "$1" -ge 80 ]; then echo crit
+    elif [ "$1" -ge 60 ]; then echo hi
+    elif [ "$1" -ge 40 ]; then echo mid
+    else echo ok
+    fi
 }
 
 _wsl_check_oneline() {
@@ -139,34 +155,37 @@ _wsl_check_oneline() {
         seg_cd=$(_wsl_check_seg c-drive "n/a" ok)
     else
         cd_av=$(_wsl_check_cdrive_avail_gb)
-        sev=ok
-        [ "$cd_pct" -ge "$WSL_CHECK_DISK_WARN" ] && sev=crit
+        sev=$(_wsl_check_pct_sev "$cd_pct")
         [ -n "$cd_av" ] && [ "$cd_av" -lt "$WSL_CHECK_CDRIVE_MIN_GB" ] && sev=crit
         seg_cd=$(_wsl_check_seg c-drive "${cd_pct}%" "$sev")
     fi
 
     # WSL root disk
     d_pct=$(_wsl_check_disk_pct)
-    sev=ok
-    [ -n "$d_pct" ] && [ "$d_pct" -ge "$WSL_CHECK_DISK_WARN" ] && sev=crit
+    sev=$(_wsl_check_pct_sev "$d_pct")
     seg_disk=$(_wsl_check_seg disk "${d_pct:-?}%" "$sev")
 
     # CPU (1-min loadavg vs cores — instant, non-blocking)
     c_pct=$(_wsl_check_cpu_pct)
-    sev=ok
-    [ -n "$c_pct" ] && [ "$c_pct" -ge "$WSL_CHECK_DISK_WARN" ] && sev=warn
+    sev=$(_wsl_check_pct_sev "$c_pct")
     seg_cpu=$(_wsl_check_seg cpu "${c_pct:-?}%" "$sev")
 
     # Memory
     m_pct=$(_wsl_check_mem_pct)
-    sev=ok
-    [ -n "$m_pct" ] && [ "$m_pct" -ge "$WSL_CHECK_DISK_WARN" ] && sev=warn
+    sev=$(_wsl_check_pct_sev "$m_pct")
     seg_mem=$(_wsl_check_seg mem "${m_pct:-?}%" "$sev")
 
-    # Docker images reclaimable %
-    dk=$(_wsl_check_docker_img_pct)
+    # Docker images reclaimable % — hint shown when value is unavailable
+    dk=""
+    dk_hint=""
+    if ! command -v docker >/dev/null 2>&1; then
+        dk_hint="no docker"
+    else
+        dk=$(_wsl_check_docker_img_pct)
+        [ -z "$dk" ] && dk_hint="daemon off"
+    fi
     if [ -z "$dk" ]; then
-        seg_docker=$(_wsl_check_seg docker "?" ok)
+        seg_docker=$(_wsl_check_seg docker "?(${dk_hint})" ok)
     else
         sev=ok
         [ "$dk" -ge 50 ] && sev=warn
