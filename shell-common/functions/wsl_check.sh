@@ -117,8 +117,11 @@ _wsl_check_docker_reclaim_gb() {
 #     is not expressible via ux_bullet/ux_table_*; same sanctioned exception
 #     gpu_status.sh uses for its custom layout) ----------------------------
 
-# 256-color orange (setaf 214) with yellow fallback; empty when tput unavailable
-_WSL_CHECK_ORANGE=$(tput setaf 214 2>/dev/null || tput setaf 3 2>/dev/null || echo "")
+# 256-color orange (setaf 214) with yellow fallback; empty when ANSI disabled
+_WSL_CHECK_ORANGE=""
+if [ -n "$UX_RESET" ]; then
+    _WSL_CHECK_ORANGE=$(tput setaf 214 2>/dev/null || tput setaf 3 2>/dev/null || echo "")
+fi
 
 _wsl_check_seg() { # $1=label $2=value $3=severity(ok|mid|hi|warn|crit)
     color="$UX_MUTED"
@@ -132,11 +135,14 @@ _wsl_check_seg() { # $1=label $2=value $3=severity(ok|mid|hi|warn|crit)
 }
 
 # Maps a % to severity for _wsl_check_seg: <40=ok(dim) 40=mid(white) 60=hi(orange) 80=crit(red)
-_wsl_check_pct_sev() { # $1 = pct (empty → ok)
-    [ -z "$1" ] && { echo ok; return 0; }
-    if [ "$1" -ge 80 ]; then echo crit
-    elif [ "$1" -ge 60 ]; then echo hi
-    elif [ "$1" -ge 40 ]; then echo mid
+_wsl_check_pct_sev() { # $1 = pct (empty or non-numeric → ok)
+    [ -z "${1:-}" ] && { echo ok; return 0; }
+    case "${1:-}" in
+        *[!0-9]*) echo ok; return 0 ;;
+    esac
+    if [ "${1:-0}" -ge 80 ]; then echo crit
+    elif [ "${1:-0}" -ge 60 ]; then echo hi
+    elif [ "${1:-0}" -ge 40 ]; then echo mid
     else echo ok
     fi
 }
