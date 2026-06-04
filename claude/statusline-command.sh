@@ -176,11 +176,65 @@ if [ -n "$ctx_segment" ]; then
     ctx_info="${BLUE}🧮 ${ctx_segment}${RESET}"
 fi
 
+# Bedrock cost display (internal only)
+SETUP_MODE=""
+[ -f "$HOME/.dotfiles-setup-mode" ] && SETUP_MODE=$(cat "$HOME/.dotfiles-setup-mode")
+
+cost_info=""
+if [ "$SETUP_MODE" = "internal" ]; then
+    _KNOX_ID="byoungwoo.yoon"
+    _BUDGET=175
+    _CACHE_FILE="/tmp/.claude_bedrock_cost_cache"
+    _CACHE_TTL=300
+    _API_URL="https://claude-usage-api-dscloud-mchat-bot-swe.svc01.stg.dss.samsungds.net/?id=${_KNOX_ID}"
+    _now=$(date +%s)
+    _cost=""
+
+    if [ -f "$_CACHE_FILE" ]; then
+        _cache_ts=$(sed -n '1p' "$_CACHE_FILE" 2>/dev/null)
+        _cost=$(sed -n '2p' "$_CACHE_FILE" 2>/dev/null)
+        if [ -n "$_cache_ts" ]; then
+            _age=$((_now - _cache_ts))
+            if [ "$_age" -ge "$_CACHE_TTL" ]; then
+                (
+                    _new=$(curl -sf --max-time 5 "$_API_URL" 2>/dev/null | jq -r '.cost // empty' 2>/dev/null)
+                    [ -n "$_new" ] && printf '%s\n%s\n' "$(date +%s)" "$_new" >"$_CACHE_FILE"
+                ) >/dev/null 2>&1 &
+            fi
+        fi
+    else
+        _cost=$(curl -sf --max-time 5 "$_API_URL" 2>/dev/null | jq -r '.cost // empty' 2>/dev/null)
+        [ -n "$_cost" ] && printf '%s\n%s\n' "$_now" "$_cost" >"$_CACHE_FILE"
+    fi
+
+    if [ -n "$_cost" ]; then
+        _current_day=$(date +%-d)
+        _days_in_month=$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%d 2>/dev/null ||
+            cal "$(date +%m)" "$(date +%Y)" | awk 'NF{f=$NF}END{print f}')
+        _ratio=$(awk -v c="$_cost" -v dim="$_days_in_month" -v cd="$_current_day" -v b="$_BUDGET" \
+            'BEGIN{ printf "%.4f", c * dim / cd / b }')
+        _cost_disp=$(awk -v c="$_cost" -v b="$_BUDGET" 'BEGIN{ printf "$%.1f / $%d", c, b }')
+
+        if awk -v r="$_ratio" 'BEGIN{exit !(r+0 <= 0.5)}'; then
+            cost_info="${CYAN}💪 ${_cost_disp}${RESET}"
+        elif awk -v r="$_ratio" 'BEGIN{exit !(r+0 <= 1.0)}'; then
+            cost_info="${GREEN}🟢 ${_cost_disp}${RESET}"
+        elif awk -v r="$_ratio" 'BEGIN{exit !(r+0 <= 1.2)}'; then
+            cost_info="${ORANGE}🔥 ${_cost_disp}${RESET}"
+        else
+            cost_info="${RED}🚨 ${_cost_disp}${RESET}"
+        fi
+    fi
+fi
+
 # Output format with colors and emojis
-# Time: Cyan, Model: Orange, Project+Branch: Magenta, Context: Blue, Git status: Red/Orange/Green
+# Time: Cyan, Model: Orange, Project+Branch: Magenta, Context: Blue, Cost: varies, Git status: Red/Orange/Green
 out="${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET}"
 if [[ -n "$ctx_info" ]]; then
     out="${out} | ${ctx_info}"
+fi
+if [[ -n "$cost_info" ]]; then
+    out="${out} | ${cost_info}"
 fi
 if [[ -n "$git_status_info" ]]; then
     out="${out} | ${git_status_info}"
