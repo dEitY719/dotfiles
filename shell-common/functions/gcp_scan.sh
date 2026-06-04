@@ -315,13 +315,15 @@ EOF
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
         if _gcp_scan_preflight_is_noop "$sha"; then
-            noop_list="${noop_list}${sha}"$'\n'
+            noop_list="${noop_list}${sha}
+"
             noop_count=$((noop_count + 1))
         else
             if [ -z "$real_final_list" ]; then
                 real_final_list="$sha"
             else
-                real_final_list="${real_final_list}"$'\n'"${sha}"
+                real_final_list="${real_final_list}
+${sha}"
             fi
         fi
     done <<EOF
@@ -457,12 +459,14 @@ EOF
 
         # No-op check (issue #961): Stage-2 pre-flight already probed each commit
         # in the Analysis phase; reuse that result to avoid a double-probe.
-        local _in_noop=0 _noop_sha
-        while IFS= read -r _noop_sha; do
-            [ "$_noop_sha" = "$sha" ] && _in_noop=1 && break
-        done <<EOF
-$noop_list
-EOF
+        # POSIX case-pattern match avoids O(N*M) nested loop overhead.
+        local _in_noop=0
+        case "
+$noop_list" in
+            *"
+$sha
+"*) _in_noop=1 ;;
+        esac
         if [ "$_in_noop" -eq 1 ]; then
             noop_skipped=$((noop_skipped + 1))
             continue
