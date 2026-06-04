@@ -203,12 +203,16 @@ if [ "$SETUP_MODE" = "internal" ]; then
             fi
         fi
     else
-        _cost=$(curl -sf --max-time 5 "$_API_URL" 2>/dev/null | jq -r '.cost // empty' 2>/dev/null)
-        [ -n "$_cost" ] && printf '%s\n%s\n' "$_now" "$_cost" >"$_CACHE_FILE"
+        printf '%s\n\n' "$_now" >"$_CACHE_FILE"
+        (
+            _new=$(curl -sf --max-time 5 "$_API_URL" 2>/dev/null | jq -r '.cost // empty' 2>/dev/null)
+            [ -n "$_new" ] && printf '%s\n%s\n' "$(date +%s)" "$_new" >"$_CACHE_FILE"
+        ) >/dev/null 2>&1 &
     fi
 
     if [ -n "$_cost" ]; then
-        _current_day=$(date +%-d)
+        _current_day=$(date +%d)
+        _current_day=${_current_day#0}
         _days_in_month=$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%d 2>/dev/null ||
             cal "$(date +%m)" "$(date +%Y)" | awk 'NF{f=$NF}END{print f}')
         _ratio=$(awk -v c="$_cost" -v dim="$_days_in_month" -v cd="$_current_day" -v b="$_BUDGET" \
