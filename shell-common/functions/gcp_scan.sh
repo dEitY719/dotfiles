@@ -16,13 +16,15 @@
 #   '+' = present in source, missing in base (will be cherry-picked)
 #   '-' = already merged in base
 #
-# Redundant-commit handling (issue #913, supersedes #903/#907/#908/#910):
-# every candidate is run through `_gcp_scan_preflight_is_noop` BEFORE any real
-# cherry-pick. The probe uses git's own merge engine (`cherry-pick -n`) so it
-# is immune to the context-drift failures (comment rewrites, refactors) that
-# broke the earlier file-compare / reverse-patch heuristics. The contiguous
-# "range cherry-pick" shortcut is gone — every commit is iterated individually
-# so the pre-flight is never bypassed.
+# Redundant-commit handling (issue #913, supersedes #903/#907/#908/#910;
+# UX improved by issue #961): each candidate is probed with
+# `_gcp_scan_preflight_is_noop` (Stage-2) during the Analysis phase, BEFORE
+# displaying the commit list. Noop commits are excluded from the display and
+# the cherry-pick count so users never see a commit that will immediately be
+# skipped. The execution loop reuses the Stage-2 result (noop_list) to avoid
+# a double-probe. The probe uses git's own merge engine (`cherry-pick -n`) so
+# it is immune to context-drift failures (comment rewrites, refactors) that
+# broke earlier file-compare / reverse-patch heuristics.
 #
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
@@ -306,6 +308,28 @@ EOF
         count=$((count - duplicate_count))
     fi
 
+    # Stage-2: no-op pre-flight in Analysis phase — filters phantom commits
+    # before display so users never see commits that will immediately be skipped
+    # (issue #961). Runs on final_selected_list (Stage-1 dups already removed).
+    local noop_list="" noop_count=0 real_final_list=""
+    while IFS= read -r sha; do
+        [ -z "$sha" ] && continue
+        if _gcp_scan_preflight_is_noop "$sha"; then
+            noop_list="${noop_list}${sha}"$'\n'
+            noop_count=$((noop_count + 1))
+        else
+            if [ -z "$real_final_list" ]; then
+                real_final_list="$sha"
+            else
+                real_final_list="${real_final_list}"$'\n'"${sha}"
+            fi
+        fi
+    done <<EOF
+$final_selected_list
+EOF
+    final_selected_list="$real_final_list"
+    count=$((count - noop_count))
+
     # Early return: all commits are duplicates (already applied)
     if [ $count -eq 0 ]; then
         if type ux_section >/dev/null 2>&1; then
@@ -313,11 +337,17 @@ EOF
             ux_bullet "Missing (all authors): $total_count"
             ux_bullet "Author filter: $author -> 0 new commit(s)"
             ux_bullet "Duplicates (already applied): $duplicate_count"
+            if [ "$noop_count" -gt 0 ]; then
+                printf "%s  ◆ Already in HEAD (no-op): %d%s\n" "${UX_MUTED-}" "$noop_count" "${UX_RESET-}"
+            fi
         else
             echo "=== Analysis Result ==="
             echo "  Missing (all authors): $total_count"
             echo "  Author filter: $author -> 0 new commit(s)"
             echo "  Duplicates (already applied): $duplicate_count"
+            if [ "$noop_count" -gt 0 ]; then
+                echo "  Already in HEAD (no-op): $noop_count"
+            fi
         fi
         if type ux_success >/dev/null 2>&1; then
             ux_success "All matching commits are already applied to '$base'. Nothing to do."
@@ -342,6 +372,9 @@ EOF
         if [ $duplicate_count -gt 0 ]; then
             ux_bullet "Duplicates (already applied): $duplicate_count"
         fi
+        if [ "$noop_count" -gt 0 ]; then
+            printf "%s  ◆ Already in HEAD (no-op): %d%s\n" "${UX_MUTED-}" "$noop_count" "${UX_RESET-}"
+        fi
         ux_bullet "Suggested Range: $range_str"
     else
         echo "=== Analysis Result ==="
@@ -349,6 +382,9 @@ EOF
         echo "  Author filter: $author -> $count commit(s)"
         if [ $duplicate_count -gt 0 ]; then
             echo "  Duplicates (already applied): $duplicate_count"
+        fi
+        if [ "$noop_count" -gt 0 ]; then
+            echo "  Already in HEAD (no-op): $noop_count"
         fi
         echo "  Suggested Range: $range_str"
     fi
@@ -419,16 +455,15 @@ EOF
             continue
         fi
 
-        # No-op pre-flight (issue #913): merge-probe the commit onto HEAD. If it
-        # adds nothing — already in HEAD, or a pure context-drift conflict that
-        # resolves to HEAD — skip it. Catches the recurring 092d0512 case the
-        # subject-based Stage-1 misses, BEFORE any real cherry-pick conflicts.
-        if _gcp_scan_preflight_is_noop "$sha"; then
-            if type ux_info >/dev/null 2>&1; then
-                ux_info "Skipping ${sha} — already in HEAD (no-op pre-flight)"
-            else
-                echo "ℹ Skipping ${sha} — already in HEAD (no-op pre-flight)"
-            fi
+        # No-op check (issue #961): Stage-2 pre-flight already probed each commit
+        # in the Analysis phase; reuse that result to avoid a double-probe.
+        local _in_noop=0 _noop_sha
+        while IFS= read -r _noop_sha; do
+            [ "$_noop_sha" = "$sha" ] && _in_noop=1 && break
+        done <<EOF
+$noop_list
+EOF
+        if [ "$_in_noop" -eq 1 ]; then
             noop_skipped=$((noop_skipped + 1))
             continue
         fi

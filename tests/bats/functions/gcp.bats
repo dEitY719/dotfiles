@@ -615,8 +615,8 @@ FIXTURE
     assert_success
     # Subject-dup still handled by Stage-1.
     assert_output --partial "already applied as"
-    # Content-dup caught by the no-op pre-flight.
-    assert_output --partial "already in HEAD (no-op pre-flight)"
+    # Content-dup caught by Stage-2 pre-flight; shown in Analysis Result, not execution loop.
+    assert_output --partial "Already in HEAD (no-op):"
     refute_output --partial "CONFLICT"
     refute_output --partial "Resolve and run"
 }
@@ -739,12 +739,71 @@ FIXTURE
         printf 'y\n' | _gcp_scan main source --author=all
     "
     assert_success
-    # The context-drift commit is caught by the no-op pre-flight BEFORE any real
-    # cherry-pick, so no conflict is ever surfaced and no manual step is asked.
-    assert_output --partial "already in HEAD (no-op pre-flight)"
+    # Stage-2 pre-flight catches the context-drift commit in Analysis phase;
+    # shown as "Already in HEAD (no-op)" there, no conflict ever surfaced.
+    assert_output --partial "Already in HEAD (no-op):"
     assert_output --partial "0 conflicts"
     refute_output --partial "CONFLICT"
     refute_output --partial "Resolve and run"
+}
+
+@test "scan #961: noop commit absent from Commit List display (phantom removed in Analysis phase)" {
+    # Source has a real commit AND a context-drift noop (unique subject, content
+    # already in main via a different two-step path). Stage-2 pre-flight must
+    # remove the noop from the Commit List BEFORE the user sees it.
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo init > a.txt && git add a.txt && git commit -qm "init"
+        echo shared > b.txt && git add b.txt && git commit -qm "base: add b.txt"
+        git checkout -q -b source
+        echo real > real.txt && git add real.txt && git commit -qm "feat: real work"
+        # Unique subject; patches b.txt from shared to target in one step.
+        echo target > b.txt && git add b.txt && git commit -qm "feat: phantom noop"
+        git checkout -q main
+        # Main reaches b.txt=target via two-step path -> different patch-id,
+        # so git cherry lists the source commit as "+" even though the final
+        # state is identical. The context-drift conflict resolves to HEAD empty.
+        echo middle > b.txt && git add b.txt && git commit -qm "main: b.txt middle"
+        echo target > b.txt && git add b.txt && git commit -qm "main: b.txt target"
+        printf "n\n" | _gcp_scan main source --author=all
+    '
+    assert_success
+    # Noop commit must NOT appear in Commit List (phantom removed in Stage-2).
+    refute_output --partial "feat: phantom noop"
+    # Analysis Result must show the noop count.
+    assert_output --partial "Already in HEAD (no-op):"
+    # Real commit must still appear.
+    assert_output --partial "feat: real work"
+}
+
+@test "scan #961: all-noop scan exits cleanly without prompt (nothing to do)" {
+    # Source has only a context-drift noop; Stage-2 eliminates it so count=0
+    # triggers the early-return path with "Nothing to do" — no cherry-pick prompt.
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo init > a.txt && git add a.txt && git commit -qm "init"
+        echo shared > b.txt && git add b.txt && git commit -qm "base: add b.txt"
+        git checkout -q -b source
+        echo target > b.txt && git add b.txt && git commit -qm "feat: all noop"
+        git checkout -q main
+        echo middle > b.txt && git add b.txt && git commit -qm "main: b.txt middle"
+        echo target > b.txt && git add b.txt && git commit -qm "main: b.txt target"
+        _gcp_scan main source --author=all
+    '
+    assert_success
+    assert_output --partial "Already in HEAD (no-op):"
+    assert_output --partial "Nothing to do"
+    refute_output --partial "Do you want to cherry-pick"
 }
 
 @test "scan #907: partial-apply skipped while real commits still applied; HEAD drift intact" {
