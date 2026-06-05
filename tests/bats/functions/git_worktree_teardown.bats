@@ -743,3 +743,44 @@ GH_EOF
     assert_output --partial "upstream: (none)"
     refute_output --partial "upstream: @{u}"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #968: auto-restore repositoryformatversion after last worktree gone
+# ---------------------------------------------------------------------------
+
+@test "teardown: last worktree removal restores repositoryformatversion to 0" {
+    # Simulate the broken state: git worktree add writes version=1 +
+    # extensions.worktreeConfig. After teardown of the only linked worktree
+    # these must be restored so gitstatusd v1.5.4 re-recognises the repo.
+    git -C "$CLONE" config core.repositoryformatversion 1
+    git -C "$CLONE" config extensions.worktreeConfig true
+
+    _advance_origin_main
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown --force 2>&1"
+    assert_success
+
+    [ "$(git -C "$CLONE" config core.repositoryformatversion)" = "0" ]
+    run git -C "$CLONE" config extensions.worktreeConfig
+    assert_failure
+}
+
+@test "teardown: non-last worktree removal leaves repositoryformatversion=1" {
+    # If another linked worktree still exists after this teardown, the
+    # format must stay at 1 (the remaining worktree still needs it).
+    git -C "$CLONE" config core.repositoryformatversion 1
+    git -C "$CLONE" config extensions.worktreeConfig true
+
+    local extra="$TEST_TEMP_HOME/clone-extra-968"
+    git -C "$CLONE" worktree add -q -b wt/extra/968 "$extra" origin/main
+
+    _advance_origin_main
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown --force 2>&1"
+    assert_success
+
+    [ "$(git -C "$CLONE" config core.repositoryformatversion)" = "1" ]
+
+    git -C "$CLONE" worktree remove --force "$extra" 2>/dev/null || true
+    git -C "$CLONE" branch -D wt/extra/968 2>/dev/null || true
+}
