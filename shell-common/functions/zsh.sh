@@ -365,8 +365,12 @@ zsh_git_fix() {
     fi
 
     git config --unset extensions.worktreeConfig 2>/dev/null || true
-    git config core.repositoryformatversion 0
-    ux_success "Fixed: repositoryformatversion=0, worktreeConfig removed."
+    if ! git config --name-only --get-regexp '^extensions\.' >/dev/null 2>&1; then
+        git config core.repositoryformatversion 0
+        ux_success "Fixed: repositoryformatversion=0, worktreeConfig removed."
+    else
+        ux_success "Fixed: worktreeConfig removed (kept repositoryformatversion=1 due to other active extensions)."
+    fi
     ux_info "Verify: ${UX_BOLD}exec zsh${UX_RESET}"
 }
 
