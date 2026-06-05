@@ -2269,7 +2269,9 @@ EOF
     if [ "${_gwt_remaining:-2}" -le 1 ] \
        && [ "$(git config core.repositoryformatversion 2>/dev/null)" = "1" ]; then
         git config --unset extensions.worktreeConfig 2>/dev/null || true
-        git config core.repositoryformatversion 0
+        if ! git config --name-only --get-regexp '^extensions\.' >/dev/null 2>&1; then
+            git config core.repositoryformatversion 0
+        fi
     fi
 
     # Sync main BEFORE branch delete.

@@ -784,3 +784,23 @@ GH_EOF
     git -C "$CLONE" worktree remove --force "$extra" 2>/dev/null || true
     git -C "$CLONE" branch -D wt/extra/968 2>/dev/null || true
 }
+
+@test "teardown: other active extensions — keeps repositoryformatversion=1 after last worktree" {
+    # If the repo uses another extension (e.g. objectFormat=sha256),
+    # version must stay at 1 even after the last linked worktree is gone.
+    git -C "$CLONE" config core.repositoryformatversion 1
+    git -C "$CLONE" config extensions.worktreeConfig true
+    git -C "$CLONE" config extensions.objectFormat sha256
+
+    _advance_origin_main
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown --force 2>&1"
+    assert_success
+
+    # worktreeConfig removed, but version stays 1 due to objectFormat.
+    run git -C "$CLONE" config extensions.worktreeConfig
+    assert_failure
+    [ "$(git -C "$CLONE" config core.repositoryformatversion)" = "1" ]
+
+    git -C "$CLONE" config --unset extensions.objectFormat 2>/dev/null || true
+}

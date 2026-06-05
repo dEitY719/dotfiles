@@ -154,3 +154,21 @@ teardown() {
     assert_success
     [ "$(git -C "$TESTREPO" config core.repositoryformatversion)" = "0" ]
 }
+
+# ---------------------------------------------------------------------------
+# Other-active-extensions guard (issue #969 review — gemini-code-assist)
+# ---------------------------------------------------------------------------
+
+@test "bash: zsh-git-fix keeps repositoryformatversion=1 when other extensions remain" {
+    _set_worktree_format
+    # Add another extension to simulate SHA256 or reftable usage.
+    git -C "$TESTREPO" config extensions.objectFormat sha256
+
+    run_in_bash "cd '$TESTREPO' && zsh_git_fix 2>&1"
+    assert_success
+    # worktreeConfig removed but version must stay at 1 (other extension present).
+    run git -C "$TESTREPO" config extensions.worktreeConfig
+    assert_failure
+    [ "$(git -C "$TESTREPO" config core.repositoryformatversion)" = "1" ]
+    assert_output --partial "kept repositoryformatversion=1"
+}
