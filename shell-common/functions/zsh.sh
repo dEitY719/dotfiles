@@ -341,6 +341,35 @@ zsh_fix_vscode() {
     fi
 }
 
+# Restore .git/config after all worktrees removed (issue #968).
+# gitstatusd v1.5.4 treats repositoryformatversion=1 as "not a git repo",
+# breaking p10k's branch display. Run after `gwt teardown --all`.
+zsh_git_fix() {
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        ux_error "Not a git repository."
+        return 1
+    fi
+
+    local rfv
+    rfv="$(git config core.repositoryformatversion 2>/dev/null)"
+    if [ "${rfv:-0}" = "0" ]; then
+        ux_info "Already OK: repositoryformatversion=0"
+        return 0
+    fi
+
+    local wt_count
+    wt_count="$(git worktree list --porcelain | grep -c "^worktree ")"
+    if [ "${wt_count:-1}" -gt 1 ]; then
+        ux_warning "Active worktrees present (${wt_count}). Run ${UX_BOLD}gwt teardown --all${UX_RESET} first."
+        return 1
+    fi
+
+    git config --unset extensions.worktreeConfig 2>/dev/null || true
+    git config core.repositoryformatversion 0
+    ux_success "Fixed: repositoryformatversion=0, worktreeConfig removed."
+    ux_info "Verify: ${UX_BOLD}exec zsh${UX_RESET}"
+}
+
 # ═══════════════════════════════════════════════════════════════
 # Naming Convention: Function uses underscore, alias provides dash format
 # ═══════════════════════════════════════════════════════════════
@@ -359,3 +388,4 @@ alias zsh-snippet='zsh_snippet'
 alias zsh-snippets='zsh_snippets'
 alias zsh-fix-vscode='zsh_fix_vscode'
 alias zsh-clear-p10k-caches='zsh_clear_p10k_caches'
+alias zsh-git-fix='zsh_git_fix'
