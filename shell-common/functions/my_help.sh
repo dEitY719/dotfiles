@@ -159,7 +159,7 @@ _register_default_help_categories() {
 
     # Category membership (space-separated topic keys)
     HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git gwt gbr devx uv py nvm npm bun pp cli ux du psql mytool ghes_mirror mirror_pages_activate}"
-    HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql redis gpu network wsl_check}"
+    HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql redis gpu network wsl_check sync_to_deploy}"
     HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc gemini codex litellm ollama claude_plugins claude_skills_marketplace superpowers}"
     HELP_CATEGORY_MEMBERS[cli]="${HELP_CATEGORY_MEMBERS[cli]:-fzf fd fasd ripgrep pet bat zsh zsh_autosuggestions gc tmux}"
     HELP_CATEGORY_MEMBERS[config]="${HELP_CATEGORY_MEMBERS[config]:-p10k crt apt pip ghostty}"
@@ -269,6 +269,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[gcp_help]="${HELP_DESCRIPTIONS[gcp_help]:-[DevOps] gcloud / GCP helpers}"
     HELP_DESCRIPTIONS[setup_mode_help]="${HELP_DESCRIPTIONS[setup_mode_help]:-[Meta] setup.sh mode flags}"
     HELP_DESCRIPTIONS[zsh_autosuggestions_install_help]="${HELP_DESCRIPTIONS[zsh_autosuggestions_install_help]:-[CLI] zsh-autosuggestions installer}"
+    HELP_DESCRIPTIONS[sync_to_deploy_help]="${HELP_DESCRIPTIONS[sync_to_deploy_help]:-[DevOps] Merge internal/external main branches and push a deploy branch}"
 }
 
 # ═══════════════════════════════════════════════════════════════
