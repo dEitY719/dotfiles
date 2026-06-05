@@ -2259,6 +2259,19 @@ EOF
     rm -f "$_gwt_rm_err_file"
     git worktree prune
 
+    # Restore repo format when this was the last linked worktree.
+    # git worktree add writes repositoryformatversion=1 + extensions.worktreeConfig
+    # into .git/config. When all worktrees are gone these linger and cause
+    # gitstatusd v1.5.4 to treat the repo as "not a git repo" (result=0),
+    # breaking p10k's branch display (issue #968).
+    local _gwt_remaining
+    _gwt_remaining="$(git worktree list --porcelain | grep -c "^worktree ")"
+    if [ "${_gwt_remaining:-2}" -le 1 ] \
+       && [ "$(git config core.repositoryformatversion 2>/dev/null)" = "1" ]; then
+        git config --unset extensions.worktreeConfig 2>/dev/null || true
+        git config core.repositoryformatversion 0
+    fi
+
     # Sync main BEFORE branch delete.
     local main_branch="main"
     if ! git rev-parse --verify --quiet "main" >/dev/null 2>&1; then
