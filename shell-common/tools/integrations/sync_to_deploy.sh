@@ -135,13 +135,16 @@ sync_to_deploy() (
     fi
 
     ux_step 5 "Push deploy branch"
-    _sync_to_deploy_lease="--force-with-lease=${_sync_to_deploy_deploy_branch}"
+    # refresh tracking ref so --force-with-lease compares against the current remote tip, not a stale one
+    git fetch "$_sync_to_deploy_internal_remote" "refs/heads/${_sync_to_deploy_deploy_branch}:refs/remotes/${_sync_to_deploy_internal_remote}/${_sync_to_deploy_deploy_branch}" >/dev/null 2>&1 || true
+
+    _sync_to_deploy_lease=""
     if _sync_to_deploy_ref_exists "refs/remotes/${_sync_to_deploy_internal_remote}/${_sync_to_deploy_deploy_branch}"; then
         _sync_to_deploy_lease="--force-with-lease=${_sync_to_deploy_deploy_branch}:refs/remotes/${_sync_to_deploy_internal_remote}/${_sync_to_deploy_deploy_branch}"
     fi
 
-    if ! git push "$_sync_to_deploy_internal_remote" "${_sync_to_deploy_tmp_branch}:${_sync_to_deploy_deploy_branch}" "$_sync_to_deploy_lease"; then
-        ux_error "Push failed. ${_sync_to_deploy_deploy_branch} may have changed since fetch."
+    if ! git push "$_sync_to_deploy_internal_remote" "${_sync_to_deploy_tmp_branch}:${_sync_to_deploy_deploy_branch}" ${_sync_to_deploy_lease:+"$_sync_to_deploy_lease"}; then
+        ux_error "Push failed. ${_sync_to_deploy_internal_remote}/${_sync_to_deploy_deploy_branch} may have changed since fetch."
         return 1
     fi
 
