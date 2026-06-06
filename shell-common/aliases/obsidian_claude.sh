@@ -8,3 +8,4 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 alias obsidian-claude='obsidian_claude'
+alias obsidian-clone='obsidian_clone'
