@@ -205,14 +205,15 @@ if [ "$SETUP_MODE" = "internal" ]; then
         printf '%s\n\n' "$_now" >"$_CACHE_FILE"
         (
             _new=$(curl -sf --max-time 5 "$_API_URL" 2>/dev/null | jq -r '.latest_cost // .cost // empty' 2>/dev/null)
-            [ -n "$_new" ] && printf '%s\n%s\n' "$(date +%s)" "$_new" >"$_CACHE_FILE"
+            [[ "$_new" =~ ^[0-9]*\.?[0-9]+$ ]] && printf '%s\n%s\n' "$(date +%s)" "$_new" >"$_CACHE_FILE"
         ) >/dev/null 2>&1 &
     else
         _age=$((_now - _cache_ts))
         if [ "$_age" -ge "$_CACHE_TTL" ]; then
+            printf '%s\n%s\n' "$_now" "$_cost" >"$_CACHE_FILE"
             (
                 _new=$(curl -sf --max-time 5 "$_API_URL" 2>/dev/null | jq -r '.latest_cost // .cost // empty' 2>/dev/null)
-                [ -n "$_new" ] && printf '%s\n%s\n' "$(date +%s)" "$_new" >"$_CACHE_FILE"
+                [[ "$_new" =~ ^[0-9]*\.?[0-9]+$ ]] && printf '%s\n%s\n' "$(date +%s)" "$_new" >"$_CACHE_FILE"
             ) >/dev/null 2>&1 &
         fi
     fi
