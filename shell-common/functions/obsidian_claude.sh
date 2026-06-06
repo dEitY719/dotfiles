@@ -117,6 +117,11 @@ obsidian_claude() {
 #   url  vault git remote (default: GitHub til-note.git; pass a GHES URL
 #        on an internal PC to override).
 obsidian_clone() {
+	# zsh compatibility
+	if [ -n "${ZSH_VERSION-}" ]; then
+		emulate -L sh
+	fi
+
 	local url target
 
 	case "${1-}" in
