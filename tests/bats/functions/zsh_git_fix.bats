@@ -59,7 +59,7 @@ teardown() {
 }
 
 @test "zsh: zsh_git_fix function exists" {
-    run_in_zsh 'functions[zsh_git_fix] >/dev/null 2>&1 || declare -f zsh_git_fix >/dev/null; echo ok'
+    run_in_zsh '(( ${+functions[zsh_git_fix]} )) && echo ok'
     assert_success
     assert_output --partial "ok"
 }
@@ -166,9 +166,9 @@ teardown() {
 
     run_in_bash "cd '$TESTREPO' && zsh_git_fix 2>&1"
     assert_success
-    # worktreeConfig removed but version must stay at 1 (other extension present).
+    assert_output --partial "kept repositoryformatversion=1"
+
     run git -C "$TESTREPO" config extensions.worktreeConfig
     assert_failure
     [ "$(git -C "$TESTREPO" config core.repositoryformatversion)" = "1" ]
-    assert_output --partial "kept repositoryformatversion=1"
 }
