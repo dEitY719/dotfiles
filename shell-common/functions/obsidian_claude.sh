@@ -108,3 +108,47 @@ obsidian_claude() {
 	cd "$vault" || return 1
 	claude_yolo "$@"
 }
+
+# Bootstrap-clone the TilNote vault into its Windows path from inside WSL.
+# Reuses _obsidian_vault_dir() (#975) so the target path is derived per-PC
+# without hardcoding the Windows username.
+#
+# Usage: obsidian-clone [url]
+#   url  vault git remote (default: GitHub til-note.git; pass a GHES URL
+#        on an internal PC to override).
+obsidian_clone() {
+	local url target
+
+	case "${1-}" in
+	-h | --help | help)
+		ux_header "obsidian-clone - bootstrap-clone the TilNote vault"
+		ux_info "Usage: obsidian-clone [url]"
+		ux_info ""
+		ux_info "Clones the vault into the per-PC Windows path derived by"
+		ux_info "_obsidian_vault_dir (e.g. /mnt/c/Users/<user>/Documents/"
+		ux_info "ObsidianVault-TilNote), then sets core.fileMode false to"
+		ux_info "avoid /mnt/c permission churn."
+		ux_info ""
+		ux_info "  url  vault git remote (default: GitHub til-note.git)"
+		ux_info "       pass a GHES URL to override on an internal PC."
+		return 0
+		;;
+	esac
+
+	url="${1:-https://github.com/dEitY719/til-note.git}"
+	target=$(_obsidian_vault_dir) || {
+		ux_error "vault 경로 결정 실패 (OBSIDIAN_VAULT_DIR 설정 또는 cmd.exe/wslpath 확인)"
+		return 1
+	}
+
+	# Clobber guard: refuse when target exists and is non-empty.
+	if [ -e "$target" ] && [ -n "$(ls -A "$target" 2>/dev/null)" ]; then
+		ux_error "이미 존재하고 비어있지 않음: $target"
+		return 1
+	fi
+
+	mkdir -p "$(dirname "$target")" || return 1
+	git clone "$url" "$target" || return 1
+	git -C "$target" config core.fileMode false # /mnt/c 모드 churn 방지
+	ux_info "Cloned → $target"
+}
