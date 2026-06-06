@@ -28,7 +28,8 @@ _obsidian_vault_dir() {
 	}
 	# 2) Windows %USERPROFILE% universal derivation (works across PCs with different usernames)
 	if command -v cmd.exe >/dev/null 2>&1 && command -v wslpath >/dev/null 2>&1; then
-		win=$(cd /mnt/c 2>/dev/null && cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r\n')
+		local win prof
+		win=$(cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r\n')
 		if [ -n "$win" ]; then
 			prof=$(wslpath -u "$win" 2>/dev/null)
 			[ -n "$prof" ] && {
