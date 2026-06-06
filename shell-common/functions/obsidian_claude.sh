@@ -13,7 +13,7 @@
 # Internal function:   obsidian_claude() (snake_case)
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Usage: obsidian-claude [yolo|work|work1] [extra claude args...]
+# Usage: obsidian-claude [personal|work|work1] [extra claude args...]
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
@@ -38,18 +38,18 @@ obsidian_claude() {
     case "$account" in
         -h|--help|help)
             ux_header "obsidian-claude - launch Claude in the Obsidian vault"
-            ux_info "Usage: obsidian-claude [yolo|work|work1] [extra claude args...]"
+            ux_info "Usage: obsidian-claude [personal|work|work1] [extra claude args...]"
             ux_info ""
             ux_info "Enters the TilNote vault, then runs claude-yolo for the"
             ux_info "chosen account (default: work)."
             ux_info ""
             ux_info "Accounts:"
-            ux_info "  yolo    personal default account (claude-yolo)"
-            ux_info "  work    work account (default)"
-            ux_info "  work1   secondary work account"
+            ux_info "  personal  personal default account (claude-yolo)"
+            ux_info "  work      work account (default)"
+            ux_info "  work1     secondary work account"
             return 0
             ;;
-        yolo)  ;;                          # personal default: no --user
+        personal)  ;;                      # personal default: no --user
         work)
             # Prepend --user work unless the caller already passed --user.
             case " $* " in
@@ -65,7 +65,7 @@ obsidian_claude() {
             ;;
         *)
             ux_error "Unknown account: $account"
-            ux_info "Available: yolo, work, work1"
+            ux_info "Available: personal, work, work1"
             return 1
             ;;
     esac
