@@ -188,26 +188,33 @@ if [ "$SETUP_MODE" = "internal" ]; then
     _CACHE_TTL=300
     _API_URL="https://claude-usage-api-dscloud-mchat-bot-swe.svc01.stg.dss.samsungds.net/?id=${_KNOX_ID}"
     _now=$(date +%s)
+    _cache_ts=""
     _cost=""
-
     if [ -f "$_CACHE_FILE" ]; then
-        _cache_ts=$(sed -n '1p' "$_CACHE_FILE" 2>/dev/null)
-        _cost=$(sed -n '2p' "$_CACHE_FILE" 2>/dev/null)
-        if [ -n "$_cache_ts" ]; then
-            _age=$((_now - _cache_ts))
-            if [ "$_age" -ge "$_CACHE_TTL" ]; then
-                (
-                    _new=$(curl -sf --max-time 5 "$_API_URL" 2>/dev/null | jq -r '.cost // empty' 2>/dev/null)
-                    [ -n "$_new" ] && printf '%s\n%s\n' "$(date +%s)" "$_new" >"$_CACHE_FILE"
-                ) >/dev/null 2>&1 &
-            fi
-        fi
-    else
+        _line1=$(sed -n '1p' "$_CACHE_FILE" 2>/dev/null)
+        case "$_line1" in
+        '' | *[!0-9]*) ;; # not a pure-integer timestamp → ignore corrupt cache
+        *)
+            _cache_ts="$_line1"
+            _cost=$(sed -n '2p' "$_CACHE_FILE" 2>/dev/null)
+            ;;
+        esac
+    fi
+
+    if [ -z "$_cache_ts" ]; then
         printf '%s\n\n' "$_now" >"$_CACHE_FILE"
         (
-            _new=$(curl -sf --max-time 5 "$_API_URL" 2>/dev/null | jq -r '.cost // empty' 2>/dev/null)
+            _new=$(curl -sf --max-time 5 "$_API_URL" 2>/dev/null | jq -r '.latest_cost // .cost // empty' 2>/dev/null)
             [ -n "$_new" ] && printf '%s\n%s\n' "$(date +%s)" "$_new" >"$_CACHE_FILE"
         ) >/dev/null 2>&1 &
+    else
+        _age=$((_now - _cache_ts))
+        if [ "$_age" -ge "$_CACHE_TTL" ]; then
+            (
+                _new=$(curl -sf --max-time 5 "$_API_URL" 2>/dev/null | jq -r '.latest_cost // .cost // empty' 2>/dev/null)
+                [ -n "$_new" ] && printf '%s\n%s\n' "$(date +%s)" "$_new" >"$_CACHE_FILE"
+            ) >/dev/null 2>&1 &
+        fi
     fi
 
     if [ -n "$_cost" ]; then
