@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/obsidian_claude.sh
 # Launch Claude Code inside the Obsidian vault with a chosen account.
 #
@@ -12,12 +13,14 @@
 # Internal function:   obsidian_claude() (snake_case)
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Usage: obsidian-claude [yolo|work|work1]
+# Usage: obsidian-claude [yolo|work|work1] [extra claude args...]
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-# Windows-side Obsidian vault, mounted under WSL. Intentionally absolute.
-OBSIDIAN_VAULT_DIR="/mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote"  # allow-abs-home
+# Windows-side Obsidian vault, mounted under WSL. Absolute by design (it is a
+# Windows mount, not under the WSL $HOME); override OBSIDIAN_VAULT_DIR to use a
+# different vault.
+OBSIDIAN_VAULT_DIR="${OBSIDIAN_VAULT_DIR:-/mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote}"  # allow-abs-home
 
 obsidian_claude() {
     # zsh compatibility
@@ -25,10 +28,17 @@ obsidian_claude() {
         emulate -L sh
     fi
 
-    case "${1:-work}" in
+    local account
+
+    # Capture the account selector, keep any remaining args to pass through to
+    # claude_yolo (e.g. `obsidian-claude work --resume foo`).
+    account="${1:-work}"
+    [ $# -gt 0 ] && shift
+
+    case "$account" in
         -h|--help|help)
             ux_header "obsidian-claude - launch Claude in the Obsidian vault"
-            ux_info "Usage: obsidian-claude [yolo|work|work1]"
+            ux_info "Usage: obsidian-claude [yolo|work|work1] [extra claude args...]"
             ux_info ""
             ux_info "Enters the TilNote vault, then runs claude-yolo for the"
             ux_info "chosen account (default: work)."
@@ -39,11 +49,22 @@ obsidian_claude() {
             ux_info "  work1   secondary work account"
             return 0
             ;;
-        yolo)  set -- ;;
-        work)  set -- --user work ;;
-        work1) set -- --user work1 ;;
+        yolo)  ;;                          # personal default: no --user
+        work)
+            # Prepend --user work unless the caller already passed --user.
+            case " $* " in
+                *" --user "*) ;;
+                *) set -- --user work "$@" ;;
+            esac
+            ;;
+        work1)
+            case " $* " in
+                *" --user "*) ;;
+                *) set -- --user work1 "$@" ;;
+            esac
+            ;;
         *)
-            ux_error "Unknown account: $1"
+            ux_error "Unknown account: $account"
             ux_info "Available: yolo, work, work1"
             return 1
             ;;
@@ -51,6 +72,11 @@ obsidian_claude() {
 
     if [ ! -d "$OBSIDIAN_VAULT_DIR" ]; then
         ux_error "Vault not found: $OBSIDIAN_VAULT_DIR"
+        return 1
+    fi
+
+    if ! command -v claude_yolo >/dev/null 2>&1; then
+        ux_error "claude_yolo not found (is the dotfiles claude integration loaded?)"
         return 1
     fi
 
