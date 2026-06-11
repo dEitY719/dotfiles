@@ -1,12 +1,14 @@
 ---
 name: write:rca
 description: >-
-  Auto-document incidents, bug fixes, and technical challenges as structured
-  markdown with root cause analysis, prevention checklists, and learning
-  resources. Produces Jekyll-compatible publication-ready markdown (YAML
-  frontmatter + single .md files) for postmortem review, technical blogging, AI
-  tool training, and junior engineer onboarding. Saves to
-  ${RCA_REPO_PATH:-~/para/archive/rca-knowledge} with centralized media in _assets/.
+  장애, 버그, 반복 실수에 대한 Root Cause Analysis 보고서 작성. Auto-document
+  incidents, bug fixes, and technical challenges as structured markdown with
+  root cause analysis, prevention checklists, and learning resources. Produces
+  Jekyll-compatible publication-ready markdown (YAML frontmatter + single .md
+  files) for postmortem review, technical blogging, AI tool training, and
+  junior engineer onboarding. Saves to
+  ${RCA_REPO_PATH:-~/para/archive/rca-knowledge} with centralized media in
+  _assets/. (재사용 패턴 문서화는 write:insight, 작업 로그는 write:task-history)
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash, AskUserQuestion
 metadata:
   model_recommendation:

@@ -57,25 +57,15 @@ Read `references/structure-spec.md` (embedded SSOT — identical copy to
 structure-check's) — see "Layout modes", "Mode detection", "Mode override =
 layout conversion", and "Mandatory items by mode".
 
-1. **Detect the current mode** from the *signals* only (independent of any
-   flag): `marketplace.json` `plugins[].source` (`"./"`⇒single,
-   `"./plugins/.."`⇒mono) → filesystem fallback → ambiguous defaults to
-   `mono` (header notes `(추정)`). A `--single`/`--mono` flag sets the
-   **target** mode (priority 1 in the spec) but does not change what the
-   current layout *is*.
-2. **Conversion guard** — if a forced `--single`/`--mono` names a mode that
-   **differs from the detected current layout**, that is a single↔mono
-   *conversion* (relocate the whole plugin + rewrite the manifest), which is
-   **out of scope**. Emit the `[convert]` warning line in the plan and, under
-   `--apply`, **stop without writing** (fail-safe). Do not proceed to a
-   partial move. See the spec's "Mode override = layout conversion".
-3. **Compute the plugin-root set** for the chosen mode: `mono` → each
-   `plugins/*/`; `single` → repo root `./` (exactly one).
-4. **Discover skills** (both modes, dynamic — never hard-code names):
-   `<root>/skills/*/`. Run the same M1-M6 / R1-R5 evaluation as
-   `claude-plugin:structure-check` over the plugin-root set to compute the
-   current → target diff. Record the detected/forced mode for the plan and
-   report header.
+1. **Detect the current mode** from signals (priority order: flag → manifest
+   `plugins[].source` → filesystem → default `mono`).
+2. **Conversion guard** — forced mode ≠ detected current layout → out of
+   scope. Detailed rules: see [references/structure-spec.md](references/structure-spec.md)
+   → "Mode override = layout conversion".
+3. **Compute the plugin-root set**: `mono` → each `plugins/*/`; `single` →
+   repo root `./` (exactly one).
+4. **Discover skills** and run M1-M6 / R1-R5 evaluation over the plugin-root
+   set to compute the current → target diff.
 
 ## Step 3: Build the Plan
 
@@ -101,13 +91,9 @@ the `[convert]` warning line.
   - move misplaced files with `git mv` when possible (else `mv`);
   - write minimal skeletons for a missing `marketplace.json` / `plugin.json`
     (filled with discovered plugin/skill names);
-  - **`--op` only**: generate per-skill R1 guides by delegating to
-    `/devx:visualize <SKILL.md>` → `docs/skill-guides/<skill>.html` (skip
-    when the file already exists), create R2 usage placeholder stubs,
-    activate GitHub Pages when inactive (github.com + GHE), correct R4
-    naming mismatches, and backfill missing R5 README links using the
-    Pages-URL format — see `references/plan-and-report-templates.md` →
-    "Apply rules" and "Pages host & URL derivation (`--op`)".
+  - **`--op` only**: apply R1-R5 fixes (guide generation, usage stubs,
+    Pages activation, naming correction, README link backfill). Detailed
+    rules: see [references/op-rules.md](references/op-rules.md).
 
 ## Step 5: Report
 
@@ -120,20 +106,6 @@ a key=value summary, then the next-action hint:
 
 ## Constraints
 
-- Dry-run is the default — only `--apply` writes. Never auto-apply on a
-  dirty tree.
-- Idempotent: an already-standard repo (within scope) is a no-op.
-- R1 guides under `--op` are real content — delegate to `/devx:visualize`
-  (skip if the guide already exists; idempotent). R2 usage samples stay
-  placeholder stubs (TODO pointing at `/devx:visualize`). Never call
-  `/devx:excalidraw-diagram` here.
-- GitHub Pages activation and R5 link backfill are soft-fail: a missing
-  token scope or an unreachable host warns and continues — it never aborts
-  the run.
-- Prefer `git mv` to preserve history; fall back to `mv` outside a git repo.
-- Mode-aware: fix toward the **detected** layout's golden form — `single`
-  never creates a `plugins/` directory; `mono` keeps the `plugins/<p>/…`
-  paths. A `--single`/`--mono` that differs from the detected current layout
-  is a single↔mono conversion: **out of scope** — warn and write nothing
-  (never a partial move), even under `--apply`.
-- Repo-agnostic: discover plugins/skills by scan; the spec is embedded.
+See [references/constraints.md](references/constraints.md) for the full
+Never/Always rule set (dry-run default, idempotency, git mv preference,
+mode-conversion guard, soft-fail behaviors).

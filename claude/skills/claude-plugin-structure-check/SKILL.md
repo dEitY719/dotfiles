@@ -45,44 +45,17 @@ its content verbatim, then stop. No filesystem scan.
 ## Step 2: Detect Mode + Discover Plugin Roots + Skills
 
 Read `references/structure-spec.md` for the full standard (embedded SSOT) —
-see "Layout modes", "Mode detection", and "Mandatory items by mode". A
-**plugin root** is the directory holding `.claude-plugin/plugin.json` and
-`skills/`.
+see "Layout modes", "Mode detection", and "Mandatory items by mode".
 
-1. **Detect mode** by the spec's priority order: `--single`/`--mono` flag →
-   `marketplace.json` `plugins[].source` (`"./"`⇒single, `"./plugins/.."`⇒
-   mono) → filesystem fallback → ambiguous defaults to `mono` (header
-   notes `(추정)`).
-2. **Plugin roots**: `mono` → each `plugins/*/`; `single` → repo root `./`
-   (exactly one).
-3. **Skills** (both modes, dynamic — never hard-code names): `<root>/skills/*/`
-   → each directory is a skill of that plugin root.
+For detailed evaluation rules and mode/type classification logic: see [references/evaluation-rules.md](references/evaluation-rules.md)
 
 Record the detected mode, plugin-root list, and skill list for the report
 header and the per-skill recommended checks (R1/R2/R5).
 
 ## Step 3: Evaluate M1-M6 and R1-R5
 
-For each item in `references/structure-spec.md`, assign exactly one of:
-
-- **PASS** — present and valid.
-- **WARN** — recommended item missing/violated (R1-R5 only).
-- **FAIL** — mandatory item missing/invalid (M1-M6 only).
-- **N/A** — the subject does not exist (e.g. a plugin with 0 skills → its
-  R1/R2 are N/A, not FAIL).
-
-M2/M3/M4 check **paths** are mode-dependent (see the spec's per-mode
-M-grid); IDs, counts, and validation logic are identical across modes.
-M5/M6 and R1/R2/R5 are mode-independent — only the skill-discovery path is
-plugin-root relative.
-
-JSON validity (M1, M3): parse with `python3 -m json.tool` (or `jq`); a
-parse error is FAIL, not WARN. Frontmatter validity (M4): the SKILL.md must
-have both `name:` and `description:` keys. R3/R4/R5 use the heuristics
-defined in the spec. R5: for each discovered skill `<s>`, grep `README.md`
-for both a `skill-guides/<s>.html` and a `skill-output/<s>-usage.{html,md}`
-path string (relative or Pages-absolute) — missing either → WARN; no skills
-→ N/A.
+Apply PASS/WARN/FAIL/N/A to each item per the scoring rules in
+[references/evaluation-rules.md](references/evaluation-rules.md).
 
 ## Step 4: Output the Report
 

@@ -44,10 +44,8 @@ State `OPEN` required. Hard preconditions in `references/safety.md` →
 
 ## Step 2: Fetch Failing Checks
 
-Pre-check — main 의 동일 workflow 가 inherited red 인지 먼저 확인한다. 최신 3 run
-중 2개 이상이 PR 과 동일 step 에서 fail 하면 inherited red — 라벨을 건드리지 않고
-`[STOP]` 종료 (#755 사례). transient red(1회 fail 후 green)은 무시하고 진행.
-명령·예제·판정 기준·예외: `references/ci-log-analysis.md` → "Pre-check (is main red?)".
+Pre-check — main 의 동일 workflow 가 inherited red 인지 먼저 확인한다.
+Commands, judgment criteria, and transient-red exceptions: `references/ci-log-analysis.md` → "Pre-check (is main red?)".
 
 ### Failing-check fetch
 
@@ -97,7 +95,4 @@ Report: `[OK] PR #<N> CI 복구 완료 · 라벨 제거됨 · <sha> push 됨.` f
 
 ## Constraints
 
-Never: `--force`/`--force-with-lease` (fast-forward only); run on the default
-branch; push when local lint/test is red; remove the label before push
-succeeds; auto-create labels (missing → soft-fail); auto-stash (clean tree
-required); delegate to `gh:commit` (re-prompt inside composition).
+Full constraint list: [references/constraints.md](references/constraints.md)

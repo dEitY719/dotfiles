@@ -7,7 +7,9 @@ description: >-
   "M분 뒤에 [skill] 수행해", "/devx:schedule", "/devx-schedule",
   "schedule /skill in N minutes", or "[command] N분 후에 해줘". Always invoke
   this skill whenever the user wants to defer any slash-command or task to
-  run after a time delay.
+  run after a time delay. gh:issue-flow 내 세션 로컬 지연 단계용; 클라우드
+  에이전트 정기 스케줄은 내장 /schedule 스킬 사용.
+allowed-tools: [CronCreate]
 metadata:
   model_recommendation:
     tier: haiku

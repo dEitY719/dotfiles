@@ -57,13 +57,9 @@
 - `env.ANTHROPIC_CUSTOM_HEADERS`
 - `env.NODE_TLS_REJECT_UNAUTHORIZED`
 
-URL 패턴 (`a2g.samsungds.net`) 매칭은 호스트 리브랜드 (`cloud.dtgpt.samsungds.net`) 에 깨졌으므로 **키 이름**을 기준으로 한다. 사용자가 의도적으로 게이트웨이 모드를 쓰려면 `aws/setup.sh` 자체를 호출하지 말아야 한다 (= external 모드). 원본은 타임스탬프 백업 (`*.bedrock-merge-backup.*`) 에 보존된다.
+strip 기준은 **키 이름**이다. 사용자가 의도적으로 게이트웨이 모드를 쓰려면 `aws/setup.sh` 자체를 호출하지 말아야 한다 (= external 모드). 원본은 타임스탬프 백업 (`*.bedrock-merge-backup.*`) 에 보존된다.
 
 기존 설치(`~/.claude/settings.json` symlink) 에서 #687 로 마이그레이션하는 경우 `_merge_claude_settings_json` 가 symlink 를 자동 해제하고 실파일로 전환한다. claude/setup.sh 의 internal 분기는 settings.json symlink 를 더 이상 생성하지 않아 (#687) 새 설치 흐름에서도 충돌 없음.
-
-## 왜 settings.local.json 디자인을 폐기했나 (#687)
-
-Claude Code 공식 docs 는 `settings.json` + `settings.local.json` 의 `env` 객체가 deep-merge 된다고 명시한다. 그러나 사용자 환경 (사내 PC) 에서 실제로는 `settings.local.json.env.ANTHROPIC_DEFAULT_SONNET_MODEL` 이 런타임에 적용되지 않아 Claude Code 가 기본 매핑 (`apac.anthropic.claude-sonnet-4-5-*`) 으로 폴백 → 400 invalid model 에러가 났다. 원인은 추적 중이지만, 동료의 단일 `settings.json` 형태 (모든 키가 한 파일) 에서는 동작 확인. 그래서 dotfiles 의 SSOT 디자인 자체를 단일 파일 머지 결과로 바꾼 것 — 외부 PC 의 symlink 디자인은 그대로.
 
 ## 외부 PC 안전망
 

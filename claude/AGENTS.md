@@ -44,8 +44,6 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 
 ### 연결 방식이 통일된 이유 (issue #791)
 
-- **이전**: Claude/Codex 는 entry-level 합성, OpenCode/Gemini 는 디렉토리-단위 symlink. private overlay 가 Claude/Codex 에만 노출되고 OpenCode/Gemini 에서는 보이지 않는 비대칭.
-- **현재**: 4 CLI 모두 entry-level 합성. private overlay 가 4 곳 전부에 동일하게 layer 됨.
 - **Codex 특수**: `.system/` (내장 skill) 디렉토리는 로컬 보존하므로 `link_skills_individual_codex` 가 따로 존재. OpenCode/Gemini 는 내장 디렉토리가 없으므로 단순한 `link_skills_compose` 로 충분.
 
 ### 절대 하지 말 것

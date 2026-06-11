@@ -22,14 +22,6 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 - **System-level** (rpm/apt): sudo copy with 3-gate safety (tool exists, OS match, privilege), `MANAGED_BY_DOTFILES` marker.
 - **Adding new manager**: create `{dir}/{config}.internal`, add `setup_{name}()`, wire into `main()` 3 menu cases.
 
-# Operational Commands
-
-- **Setup**: `./setup.sh` (Symlinks), `./install.sh` (Full install).
-- **Linting (All)**: `mise run lint` (runs ruff + mypy + shellcheck + shfmt diff).
-- **Linting (Python)**: `mise run lint-py` (ruff + mypy, read-only), `mise run fix-py` (ruff format + --fix, mutating).
-- **Linting (Bash)**: `mise run lint-sh` (shellcheck + shfmt diff), `mise run fix-sh` (shfmt -w).
-- **Testing**: `mise run test` (= `./tests/test`), `pytest tests/`, manual validation via `shell-common/tools/custom/demo_ux.sh`.
-
 # Golden Rules
 
 ## Immutable Constraints
@@ -56,19 +48,10 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 See **[Shell Common](./shell-common/AGENTS.md)** for directory placement guide (aliases/ vs functions/ vs tools/),
 Direct-Exec Guard pattern, Bash/Zsh compatibility rules, and diagnostic design standards.
 
-# Design Principles
-
-SRP/OCP/LSP/ISP apply per-file. DRY: move shared logic to `bash/util/` or `shell-common/tools/ux_lib/`.
-Depend on `ux_lib` abstractions (not raw colors). See `shell-common/tools/ux_lib/UX_GUIDELINES.md`.
-
-TDD cycle: Analyze → Write test (`pytest` or `demo_ux.sh`) → Implement minimal code → Refactor → `mise run lint && mise run test`.
-
 # Standards & References
 
 - **Coding Style**: See `shell-common/tools/ux_lib/UX_GUIDELINES.md`, `pyproject.toml`, and `mise.toml`.
-- **Command UX Standard**: See `docs/.ssot/command-guidelines.md` (SSOT for command/help interface and formatting).
 - **Git Strategy**: Semantic commits (`Type: Summary`).
-- **Project Board**: See `docs/.ssot/github-project-board.md` (SSOT for Issue kanban workflow and closing-keyword policy).
 - **Known Pitfalls**: `Agent({ isolation: "worktree" })` is blocked by git-crypt smudge filter in this repo — see `claude/AGENTS.md` ("Known Pitfall: Agent isolation + git-crypt") and `docs/guide/learnings/git-crypt-worktree-bootstrap.md`.
 - **Maintenance**: Update AGENTS.md when adding new modules.
 
@@ -83,10 +66,3 @@ TDD cycle: Analyze → Write test (`pytest` or `demo_ux.sh`) → Implement minim
 - **[Documentation](./docs/AGENTS.md)** — Project docs, AGENTS.md master prompt, SOLID reviews
 
 See **[Claude Code](./claude/AGENTS.md)** for skills management, multi-CLI registry, and commands.
-
-# Naming Rules
-
-- **Bash file names**: snake_case with `.sh` (e.g., `git_help.sh`, `install_docker.sh`).
-- **Bash function names**: snake_case (e.g., `git_help`, `install_docker`).
-- **Aliases**: dash-form for user commands, mapped from snake_case functions.
-- **Markdown files**: dash-form (e.g., `setup-guide.md`, `ux-library-notes.md`).

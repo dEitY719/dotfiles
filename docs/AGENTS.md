@@ -73,11 +73,6 @@
 
 ## 문서 archive 절차
 
-```bash
-mv docs/old-guide.md docs/archive/
-echo "- $(date -I) (#<issue>): old-guide.md — <이동 사유>" >> docs/archive/README.md
-```
-
 # Context Map
 
 - **[Parent Context](../AGENTS.md)** — 프로젝트 root + 표준 링크
