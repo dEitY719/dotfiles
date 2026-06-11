@@ -853,6 +853,7 @@ _claude_account_setup_one() {
     # without touching the dotfiles git tree.
     _claude_compose_skills_dir "${DOTFILES_ROOT}/claude/skills"             "$_caso_cdir/skills"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/docs"                   "$_caso_cdir/docs"
+    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/workflows"               "$_caso_cdir/workflows"
 }
 
 # _claude_status_show_oauth — append OAuth binding (email/org) to the
