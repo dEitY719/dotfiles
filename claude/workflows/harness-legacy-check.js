@@ -382,7 +382,17 @@ Produce the final report with EXACTLY these sections in order:
 리포트 품질 기준: 구체적이어야 한다. "줄이세요" 대신 "47-89번 줄을 삭제하세요". 모호한 조언 금지.
 `, { label: 'final-report', phase: 'Final Report' })
 
-log('harness-legacy-check complete.')
+// ─── Save Report ─────────────────────────────────────────────────────────
+await agent(`
+Create the directory .claude/reports/ if it does not exist, then write the following content exactly as-is to the file .claude/reports/harness-legacy-check.md (overwrite if it exists):
+
+${finalReport}
+
+Use Bash to run: mkdir -p .claude/reports
+Then use the Write tool to write the file.
+`, { label: 'save-report', phase: 'Final Report' })
+
+log('harness-legacy-check complete. Report saved to .claude/reports/harness-legacy-check.md')
 
 return {
   inventory_summary: inventory.slice(0, 500),

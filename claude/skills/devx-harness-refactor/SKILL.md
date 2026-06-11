@@ -29,10 +29,11 @@ harness-legacy-check 감사 리포트를 읽고 low-risk 항목만 골라
 
 ## Step 1: 감사 리포트 확인
 
-현재 세션에서 harness-legacy-check 출력을 찾는다.
+다음 순서로 리포트를 찾는다:
 
-- 없으면: "harness-legacy-check 결과가 없습니다. 먼저 /harness-legacy-check 를 실행해 주세요." 출력 후 중단.
-- 있으면: Step 2 진행.
+1. `.claude/reports/harness-legacy-check.md` 파일이 있으면 읽어서 사용.
+2. 없으면 현재 세션에서 harness-legacy-check 출력을 찾는다.
+3. 둘 다 없으면: "harness-legacy-check 결과가 없습니다. 먼저 /harness-legacy-check 를 실행해 주세요." 출력 후 중단.
 
 ## Step 2: Low-risk 항목 분류
 
