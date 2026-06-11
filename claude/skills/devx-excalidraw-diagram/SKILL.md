@@ -1,6 +1,6 @@
 ---
 name: devx:excalidraw-diagram
-description: Create Excalidraw diagram JSON files that make visual arguments. Trigger on "/devx:excalidraw-diagram" or when the user wants to visualize workflows, architectures, or concepts.
+description: Create Excalidraw diagram JSON files that make visual arguments. Trigger on "/devx:excalidraw-diagram" or when the user wants to visualize workflows, architectures, or concepts. (인터랙티브 HTML 슬라이드/대시보드는 devx:visualize 사용)
 metadata:
   model_recommendation:
     tier: sonnet

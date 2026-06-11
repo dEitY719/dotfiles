@@ -42,26 +42,13 @@ Preconditions (fail-fast, parallel): (1) `<PR#>` is a positive integer;
 ## Step 2: PR Diff Fetch + 4-Bucket Classification
 
 Fetch PR meta + file list via `gh pr view --json …` and `gh pr diff
---name-only`. Classify every changed file into exactly one of **code /
-schema / infra / docs** per `references/gap-detection.md` "Bucket
-rules". One-line gap hypothesis per bucket; empty buckets stay in the
-table with `0` and `(none)`.
-
-**Overlap guard.** If any `Closes #N` / `Fixes #N` linked issue body
-contains a PRD or TRD section (`## PRD`, `## TRD`, `### Goals`,
-`### Requirements`) → exit 3 unless `--force-overlap` is set.
+--name-only`. Classify files and apply overlap guard per
+[references/gap-detection.md](references/gap-detection.md) "Bucket rules".
 
 ## Step 3: Subagent Gap Analysis
 
-Invoke one foreground subagent (prefer `Explore`; fall back to
-`general-purpose`). Pass the verbatim prompt from
-`references/gap-detection.md` → "Subagent prompt" plus the classified
-bucket table and PR meta. Cap output at ~300 lines.
-
-Agent returns five blocks: A. Glossary, B. API 계약, C. Data Models,
-D. Deployment, E. Cross-refs. Empty blocks stay as `(none)`.
-
-**Empty-gap refuse.** Every block exactly `(none)` → exit 4.
+Invoke subagent per [references/gap-detection.md](references/gap-detection.md)
+"Subagent prompt". Apply empty-gap refusal if all five blocks are `(none)` → exit 4.
 
 ## Step 4: Render Issue Body
 
@@ -98,6 +85,6 @@ See `references/constraints.md` for the full list. Highlights:
 
 ## Sister skill
 
-`/devx:exception-merge-checklist` (TODO, 별도 이슈) — entry-side
+`/devx:exception-merge-checklist` — entry-side
 recovery (this skill) + exit-side gate (sister skill) together form
 the exception-PR roundtrip.

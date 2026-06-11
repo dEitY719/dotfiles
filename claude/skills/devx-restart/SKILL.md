@@ -1,6 +1,7 @@
 ---
 name: devx:restart
 description: >-
+  API 소켓 에러, OOM, 또는 ESC 키로 현재 세션이 중단된 후 재개할 때 —
   [Claude Code Only] Resume the previous in-progress task after an interruption
   — either an API error (socket disconnect, service flake, OOM, etc.) or the
   user pressing ESC because the turn was running too long — without losing
@@ -14,6 +15,7 @@ description: >-
   (brainstorming / TDD / debugging) that already produced output earlier
   in the conversation — it resumes from the implementation step they led
   to. Accepts `-h`/`--help`/`help` to print usage.
+  (토큰 한계 리셋 후 크론 자동 재개는 devx:resume-after-limit 사용)
 allowed-tools: Bash, Read, Edit, Write, Grep, Agent, TaskList, TaskUpdate
 metadata:
   model_recommendation:

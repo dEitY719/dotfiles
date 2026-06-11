@@ -1,6 +1,7 @@
 ---
 name: write:insight
 description: >-
+  현재 대화에서 재사용 가능한 패턴/교훈을 docs/guide/learnings/에 영구 문서화.
   Archive one reusable insight from the current conversation into
   `docs/guide/learnings/<slug>.md` as a short Korean note that follows the repo
   README rules (5 sections, 50-80 lines, and source links to PR/commit/file:line).
@@ -11,6 +12,7 @@ description: >-
   `docs/guide/technic/`, `docs/.ssot/`, `docs/feature/`, or `claude/skills/`.
   Do not use this for narrative "삽질" posts (`write:blog-dev-learnings`), formal
   postmortems (`write:rca`), or JIRA/PR draft summaries (`write:task-history`).
+  (작업 로그는 write:task-history, 장애 분석은 write:rca)
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 metadata:
   model_recommendation:

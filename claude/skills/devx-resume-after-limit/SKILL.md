@@ -1,6 +1,7 @@
 ---
 name: devx:resume-after-limit
 description: >-
+  토큰 한계(rate limit) 리셋 후 크론 잡 자동 재개 — devx:rate-limit-guard와 쌍으로 동작 —
   [Claude Code Only] Companion to /devx:rate-limit-guard. Invoked by the
   scheduled cron when token-limit reset arrives — verifies the worktree/
   branch context recorded by the guard, pre-emptively re-arms the next cron
@@ -10,6 +11,7 @@ description: >-
   /devx:rate-limit-guard cron prompt fires. Accepts an optional <command>
   argument (cron path) or reads `.claude/.rate-limit-guard.json` (manual
   re-trigger). Accepts `-h`/`--help`/`help` to print usage.
+  (API 에러/ESC 중단 후 현재 세션 재개는 devx:restart 사용)
 allowed-tools: Bash, Read, Write, CronCreate, CronDelete
 metadata:
   model_recommendation:
