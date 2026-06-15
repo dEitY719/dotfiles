@@ -72,9 +72,11 @@ empty `plugins/<plugin>/skills/`, `docs/skill-guides/`, `docs/skill-output/`,
 
 ## Step 4: Copy Skills (source is read-only)
 
-`cp -r <src>/<skill> <dest>/<plugin-name>/plugins/<plugin>/skills/<skill>` per
-skill; re-confirm every source dir is still present and unchanged afterward.
-**Never edit, move, delete, or symlink the source.**
+`cp -r <src>/<skill> <dest>/<plugin-name>/plugins/<plugin>/skills/` per skill
+(copy **into** the existing parent `skills/` dir — never name the target
+`skills/<skill>`, which nests to `skills/<skill>/<skill>/` if it already
+exists); re-confirm every source dir is still present and unchanged
+afterward. **Never edit, move, delete, or symlink the source.**
 
 ## Step 5: Write Manifests, README, LICENSE, .gitignore
 
@@ -84,7 +86,9 @@ discovered plugin/skill names.
 
 ## Step 6: git init & Branch
 
-`git init <dest>/<plugin-name>`, then `git -C <dest>/<plugin-name> checkout -b main`.
+`git init <dest>/<plugin-name>`, then `git -C <dest>/<plugin-name> checkout -B main`
+(`-B`, not `-b` — modern Git may already default the branch to `main`, and
+`-b` would fail with "branch named 'main' already exists").
 
 ## Step 7: Create the Remote Repo (outward-facing — confirm first)
 
