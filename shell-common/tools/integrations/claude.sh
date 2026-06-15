@@ -792,11 +792,13 @@ _claude_compose_skills_dir() {
             fi
             rm -f "$_ccsd_link"
             _ccsd_refreshed=$((_ccsd_refreshed + 1))
+            ux_info "  refreshed skill: $_ccsd_name"
         elif [ -e "$_ccsd_link" ]; then
             ux_warning "  skill entry blocked by non-symlink — skipped: $_ccsd_link"
             continue
         else
             _ccsd_added=$((_ccsd_added + 1))
+            ux_info "  new skill: $_ccsd_name"
         fi
         ln -s "$_ccsd_want" "$_ccsd_link" || {
             ux_error "  symlink failed: $_ccsd_link -> $_ccsd_want"
@@ -813,7 +815,8 @@ _claude_compose_skills_dir() {
         case "$_ccsd_target_path" in
             "$_ccsd_src"/*)
                 if [ ! -d "$_ccsd_target_path" ]; then
-                    ux_info "  removing stale dotfiles skill entry: $_ccsd_existing"
+                    _ccsd_stale_name="${_ccsd_existing##*/}"
+                    ux_info "  removed stale skill: $_ccsd_stale_name"
                     rm -f "$_ccsd_existing"
                 fi
                 ;;
