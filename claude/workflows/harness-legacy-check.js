@@ -83,7 +83,7 @@ After all findings, output a SUMMARY section with:
 `, { label: 'global-context-tax', phase: 'Parallel Analysis' }),
 
   () => agent(`
-You are the SKILL QUALITY AGENT. Your job: audit every skill file for quality, necessity, and scope.
+You are the SKILL QUALITY AGENT. Your job: audit every skill file for quality, necessity, scope, AND structural quality.
 
 Read all skill files from:
 - ${HOME}/.claude/skills/ (use find + read each file)
@@ -97,16 +97,38 @@ For each skill, evaluate:
 5. FRESHNESS: Are there references to specific versions, dates, deprecated APIs, or workflows that no longer exist?
 6. INVOCATION PATTERN: Is this skill "rigid" (must be followed exactly) or "flexible" (principles)? Is the type appropriate?
 
+STRUCTURAL QUALITY SIGNALS (skill:check Check 1/2/3/6/12 — these directly drive
+the "should this skill be refactored?" decision). Evaluate each as PASS or FAIL
+using the SSOT definitions in
+${HOME}/dotfiles/claude/skills/skill-check/references/checks.md.
+Do NOT redefine these checks — apply them as written. Evaluate ONLY these five
+(Check 4/5/7/8/9/10/11 are out of scope for this harness — they remain /skill:check-only):
+
+- Check 1 — Line Count: SKILL.md body ≤ 100 lines → PASS, else FAIL.
+- Check 2 — Progressive Disclosure: workflow phases in SKILL.md with detail
+  extracted to references/ → PASS; large reference content embedded inline → FAIL.
+- Check 3 — Frontmatter Validity: frontmatter has BOTH \`name\` and \`description\`
+  (and no unknown attributes) → PASS, else FAIL.
+- Check 6 — Help Flag Pattern: skill handles \`-h\`/\`--help\`/\`help\` → PASS, else FAIL.
+- Check 12 — Model Recommendation Metadata: \`metadata.model_recommendation\`
+  present in frontmatter → PASS, else FAIL.
+
+A FAIL on any of these five RAISES the skill's refactor priority. The more
+structural FAILs, the higher the refactor priority.
+
 For each skill file, output:
 ---SKILL---
 NAME: <skill name>
 PATH: <file path>
 LINE_COUNT: <approximate>
 CURRENT_PURPOSE: <one sentence>
+STRUCTURAL_QUALITY: Check1:PASS|FAIL Check2:PASS|FAIL Check3:PASS|FAIL Check6:PASS|FAIL Check12:PASS|FAIL
+STRUCTURAL_FAIL_COUNT: <number of the five checks that FAILed>
 PROBLEMS:
   - <problem 1>
   - <problem 2>
 RECOMMENDATION: KEEP | SHRINK | SPLIT | CONVERT | DELETE
+REFACTOR_PRIORITY: high | medium | low  (raise when STRUCTURAL_FAIL_COUNT is high)
 RISK_IF_CHANGED: low | medium | high
 CONFIDENCE: low | medium | high
 AUTO_PROCESSABLE: yes | no
@@ -114,6 +136,7 @@ AUTO_PROCESSABLE: yes | no
 
 After all skills, output:
 - TOP 5 skills with the highest "shrink" or "delete" potential
+- Skills with the most structural FAILs (highest refactor priority)
 - Any skills that could be converted to reference.md or examples.md docs instead
 - Skills with overlapping triggers that should be merged
 `, { label: 'skill-quality', phase: 'Parallel Analysis' }),
@@ -237,11 +260,18 @@ RECOMMENDED_ACTION: <specific action to take>
 MOVE_TARGET: <if MOVE, where should it go?>
 SPLIT_INTO: <if SPLIT, what are the two parts?>
 CONVERT_TO: <if CONVERT, what type of artifact?>
+STRUCTURAL_SIGNALS: <for skill findings, copy the STRUCTURAL_QUALITY line from the
+  Skill Quality findings, e.g. "Check1:FAIL Check2:FAIL Check3:PASS Check6:PASS Check12:FAIL"; "n/a" for non-skill findings>
 RISK: low | medium | high
 CONFIDENCE: low | medium | high
 HARNESS_DIET_ELIGIBLE: yes | no  (yes = safe to automate, no = needs human review)
 PRIORITY: P1 (do first) | P2 (do soon) | P3 (nice to have)
 ---END---
+
+PRIORITY rule for skill findings: a skill with structural FAILs is a concrete,
+high-signal refactor candidate. Raise its PRIORITY accordingly — 3+ structural
+FAILs → P1, 1-2 structural FAILs → at least P2. Structural PASS across all five
+does NOT by itself force a low priority (necessity/scope/overlap still apply).
 
 After all items, produce these sections:
 
@@ -355,6 +385,16 @@ Produce the final report with EXACTLY these sections in order:
 
 ## 5. Skill에서 reference.md / examples.md로 분리할 항목 (SPLIT / CONVERT)
 각 항목: 현재 Skill | 분리할 내용 | 남길 내용
+
+### 5-1. Skill 구조 품질 신호 (skill:check Check 1/2/3/6/12)
+모든 감사 대상 스킬에 대해 아래 표를 출력한다. 「구조 품질 신호」 열에는
+Skill Quality 에이전트가 산출한 STRUCTURAL_QUALITY 값을 그대로 옮긴다.
+우선순위는 구조 FAIL 개수가 많을수록 상향한다 (3개 이상 high, 1-2개 medium).
+Check 4/5/7/8/9/10/11 은 이 표에 포함하지 않는다 (/skill:check 전용).
+
+| 스킬 | 필요성 | 범위 | 구조 품질 신호 | 우선순위 |
+|------|--------|------|---------------|---------|
+| <skill name> | 필요/불필요 | 적절/과대 | Check1:PASS Check2:PASS Check3:PASS Check6:PASS Check12:FAIL | high/medium/low |
 
 ## 6. 삭제 후보 (DELETE)
 각 항목: 경로/섹션 | 삭제 이유 | 위험도 | Adversarial 검토 결과
