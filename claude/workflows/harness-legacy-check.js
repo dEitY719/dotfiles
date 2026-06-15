@@ -98,20 +98,28 @@ For each skill, evaluate:
 6. INVOCATION PATTERN: Is this skill "rigid" (must be followed exactly) or "flexible" (principles)? Is the type appropriate?
 
 STRUCTURAL QUALITY SIGNALS (skill:check Check 1/2/3/6/12 — these directly drive
-the "should this skill be refactored?" decision). Evaluate each as PASS or FAIL
-using the SSOT definitions in
-${HOME}/dotfiles/claude/skills/skill-check/references/checks.md.
-Do NOT redefine these checks — apply them as written. Evaluate ONLY these five
-(Check 4/5/7/8/9/10/11 are out of scope for this harness — they remain /skill:check-only):
+the "should this skill be refactored?" decision). The SSOT in
+${HOME}/dotfiles/claude/skills/skill-check/references/checks.md defines each
+check on a PASS/WARN/FAIL scale; this harness collapses that to a binary signal.
+MAPPING RULE: apply the SSOT criteria as written, then report any SSOT WARN OR
+FAIL as FAIL here (only a clean SSOT PASS maps to PASS). Do NOT invent new
+criteria — only the WARN→FAIL collapse is the harness-specific simplification.
+Evaluate ONLY these five (Check 4/5/7/8/9/10/11 are out of scope for this
+harness — they remain /skill:check-only):
 
-- Check 1 — Line Count: SKILL.md body ≤ 100 lines → PASS, else FAIL.
-- Check 2 — Progressive Disclosure: workflow phases in SKILL.md with detail
-  extracted to references/ → PASS; large reference content embedded inline → FAIL.
-- Check 3 — Frontmatter Validity: frontmatter has BOTH \`name\` and \`description\`
-  (and no unknown attributes) → PASS, else FAIL.
-- Check 6 — Help Flag Pattern: skill handles \`-h\`/\`--help\`/\`help\` → PASS, else FAIL.
-- Check 12 — Model Recommendation Metadata: \`metadata.model_recommendation\`
-  present in frontmatter → PASS, else FAIL.
+- Check 1 — Line Count: SSOT PASS (≤ 100 lines) → PASS; SSOT WARN (101–150) or FAIL (> 150) → FAIL.
+- Check 2 — Progressive Disclosure: SSOT PASS (workflow phases in SKILL.md, detail
+  in references/) → PASS; SSOT WARN (some inline templates/tables) or FAIL (large
+  reference content embedded inline) → FAIL.
+- Check 3 — Frontmatter Validity: SSOT PASS (valid; BOTH \`name\` and \`description\`,
+  only known attributes) → PASS; SSOT WARN (minor issues) or FAIL (missing fields /
+  unknown attributes) → FAIL.
+- Check 6 — Help Flag Pattern: SSOT PASS (\`-h\`/\`--help\`/\`help\` → reads
+  references/help.md verbatim, no API calls) → PASS; SSOT WARN (inline/non-verbatim
+  help) or FAIL (no help support) → FAIL.
+- Check 12 — Model Recommendation Metadata: SSOT PASS (valid \`tier\` + \`reason\` +
+  compatibility) → PASS; SSOT WARN/FAIL (missing fields, disallowed tier, or absent)
+  → FAIL; SSOT N/A (\`disable-model-invocation: true\`) → PASS (no metadata required).
 
 A FAIL on any of these five RAISES the skill's refactor priority. The more
 structural FAILs, the higher the refactor priority.
