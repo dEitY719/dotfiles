@@ -816,8 +816,7 @@ _claude_compose_skills_dir() {
             "$_ccsd_src"/*)
                 if [ ! -d "$_ccsd_target_path" ]; then
                     _ccsd_stale_name="${_ccsd_existing##*/}"
-                    ux_info "  removed stale skill: $_ccsd_stale_name"
-                    rm -f "$_ccsd_existing"
+                    rm -f "$_ccsd_existing" && ux_info "  removed stale skill: $_ccsd_stale_name"
                 fi
                 ;;
         esac
