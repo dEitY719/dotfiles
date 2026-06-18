@@ -665,8 +665,13 @@ _claude_ensure_settings_copy() {
 
     if [ -L "$_cesc_tgt" ]; then
         # Intended idempotent migration (#940) — info severity, not ⚠️ (#995).
-        rm "$_cesc_tgt" \
-            && ux_info "  legacy settings.json symlink → real file (#940): $_cesc_tgt"
+        if rm "$_cesc_tgt"; then
+            ux_info "  legacy settings.json symlink → real file (#940): $_cesc_tgt"
+            # 백업 불필요 사유를 한 줄 보강 (#997): symlink 제거이므로 잃을
+            # 데이터가 없다(실체는 dotfiles SSOT 에 보존). /model 이 남긴 개인
+            # 키는 아래 elif 실파일 분기에서 settings.local.json 으로 이주된다.
+            ux_info "    (symlink 였으므로 백업 불필요 — SSOT 보존)"
+        fi
     elif [ -f "$_cesc_tgt" ] && ! cmp -s "$_cesc_src" "$_cesc_tgt"; then
         # /model 이 남긴 개인 model 키 보존 — SSOT 복사로 사라지기 전에
         # settings.local.json 으로 이주. local 에 이미 model 이 있으면 그대로.
