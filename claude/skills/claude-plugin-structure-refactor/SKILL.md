@@ -45,61 +45,50 @@ Positional `[repo-path]` (default = current dir). Flags:
 - `--recommended` / `--op` — scope = M1-M6 + R1-R5.
 - `--single` / `--mono` — force the **target** layout mode, overriding
   auto-detection (Step 2). Mutually exclusive; if both given, last wins.
-- `--mp` and `--op` together → error + usage, stop.
+  `--mp` and `--op` together → error + usage, stop.
 
 Confirm the path exists. `test -d <path>/.git`: not a git repo → warn (moves
-fall back to `mv`). Dirty tree → show the dry-run plan and require an
-explicit `--apply` before writing (never auto-apply on a dirty tree).
+fall back to `mv`). Dirty tree → show the dry-run plan and require an explicit
+`--apply` before writing (never auto-apply on a dirty tree).
 
 ## Step 2: Detect Mode + Compute Plugin Roots + Evaluate Current ↔ Target
 
-Read `references/structure-spec.md` (embedded SSOT — identical copy to
-structure-check's) — see "Layout modes", "Mode detection", "Mode override =
-layout conversion", and "Mandatory items by mode".
+Read `references/structure-spec.md` (embedded SSOT) for layout modes, mode detection/override, and mandatory items by mode.
 
-1. **Detect the current mode** from signals (priority order: flag → manifest
-   `plugins[].source` → filesystem → default `mono`).
+1. **Detect the current mode** (priority: flag → manifest `plugins[].source`
+   → filesystem → default `mono`).
 2. **Conversion guard** — forced mode ≠ detected current layout → out of
-   scope. Detailed rules: see [references/structure-spec.md](references/structure-spec.md)
-   → "Mode override = layout conversion".
+   scope (rules in spec → "Mode override = layout conversion").
 3. **Compute the plugin-root set**: `mono` → each `plugins/*/`; `single` →
    repo root `./` (exactly one).
-4. **Discover skills** and run M1-M6 / R1-R5 evaluation over the plugin-root
-   set to compute the current → target diff.
+4. **Discover skills** and run M1-M6 / R1-R5 evaluation over the roots to
+   compute the current → target diff.
 
 ## Step 3: Build the Plan
 
 Read `references/plan-and-report-templates.md`. Produce an ordered change
 list, each tagged with its driving check ID (M1-M6, and R1-R5 only when
-scope is `--op`). Action **paths are plugin-root relative** — single targets
-root `./` (no `plugins/` dir is ever created); mono targets `plugins/<p>/`.
+scope is `--op`). **Paths are plugin-root relative** — single targets root
+`./` (no `plugins/` dir ever created); mono targets `plugins/<p>/`.
 Already-correct items produce no action (idempotent). The plan header states
-the detected/forced mode; a needed-but-unsupported conversion produces only
-the `[convert]` warning line.
+the detected/forced mode; an unsupported conversion produces only the
+`[convert]` warning line.
 
 ## Step 4: Dry-run or Apply
 
 - **Dry-run (default)**: print the plan only. Touch nothing.
 - **Conversion required (forced mode ≠ detected)**: print the `[convert]`
   warning and stop — even under `--apply`, write nothing.
-- **`--apply`**: execute the plan in order, per
-  `references/plan-and-report-templates.md` → "Apply rules":
-  - create missing dirs: `.claude-plugin/`, `docs/skill-guides/`,
-    `docs/skill-output/`, and the per-plugin-root `skills/` — for `mono`
-    that is `plugins/<p>/skills/`, for `single` it is root `skills/` (no
-    `plugins/` directory is created);
-  - move misplaced files with `git mv` when possible (else `mv`);
-  - write minimal skeletons for a missing `marketplace.json` / `plugin.json`
-    (filled with discovered plugin/skill names);
-  - **`--op` only**: apply R1-R5 fixes (guide generation, usage stubs,
-    Pages activation, naming correction, README link backfill). Detailed
-    rules: see [references/op-rules.md](references/op-rules.md).
+- **`--apply`**: execute the plan in order per the "Apply rules" in
+  `references/plan-and-report-templates.md` (mkdir dirs incl. per-plugin-root
+  `skills/`, `git mv`/`mv` moves, minimal `marketplace.json`/`plugin.json`
+  skeletons). `--op` adds R1-R5 — see [references/op-rules.md](references/op-rules.md).
 
 ## Step 5: Report
 
 Use the completion report template in
-`references/plan-and-report-templates.md`. End with `[OK]` or `[FAIL]` plus
-a key=value summary, then the next-action hint:
+`references/plan-and-report-templates.md` — end with `[OK]`/`[FAIL]` + a
+key=value summary, then the next-action hint:
 
 - after a dry-run: `Next: /claude-plugin:structure-refactor <path> --apply [--op]`
 - after `--apply`: `Next: /claude-plugin:structure-check <path>` (re-verify)

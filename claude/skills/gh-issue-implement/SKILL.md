@@ -56,19 +56,14 @@ Per `references/superpowers-detection.md`: plugin missing → force mode
 ## Step 3: Fetch + Claim Issue
 
 Five substeps in order — full policy, env vars, and behavior matrix in
-`references/claim.md`. Emit each step-completion marker so the harness
-step-skip guard (`skill_completion_guard.py`, #753) can verify the run.
+`references/claim.md`. After 3.1/3.3/3.4 emit `printf '[step:gh-issue-implement/<marker>] OK\n'`
+(markers `fetch-issue`, `self-assign`, `board-transition`) so the harness step-skip
+guard (`skill_completion_guard.py`, #753) can verify the run.
 
-3.1 **Fetch** — `references/fetch-issue.md` (CLOSED refusal there). On
-    success: `printf '[step:gh-issue-implement/fetch-issue] OK\n'`.
-3.2 **Block-label guard** — fail-closed abort (exit 2) if any label
-    matches `GH_ISSUE_BLOCK_LABELS`.
-3.3 **Self-assign** — `--add-assignee @me` unless already assigned (warn,
-    no override, if held by another). After it (or the warn path):
-    `printf '[step:gh-issue-implement/self-assign] OK\n'`.
-3.4 **Board transition** — `_gh_project_status_sync issue <N> "In
-    progress" --only-from "Backlog,Ready"`; no-op without a board. After
-    it: `printf '[step:gh-issue-implement/board-transition] OK\n'`.
+3.1 **Fetch** — `references/fetch-issue.md` (CLOSED refusal there).
+3.2 **Block-label guard** — fail-closed abort (exit 2) if any label matches `GH_ISSUE_BLOCK_LABELS`.
+3.3 **Self-assign** — `--add-assignee @me` unless already assigned (warn, no override, if held by another).
+3.4 **Board transition** — `_gh_project_status_sync issue <N> "In progress" --only-from "Backlog,Ready"`; no-op without a board.
 3.5 **Depends-on guard** — soft-warn per OPEN `Depends on #M` line.
 
 Skip 3.3 / 3.4 / 3.5 via their `GH_ISSUE_SKIP_*` env vars.

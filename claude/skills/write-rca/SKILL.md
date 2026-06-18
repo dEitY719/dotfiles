@@ -92,9 +92,7 @@ Failure:
 
 ## SSOT — repository path
 
-`$RCA_REPO_PATH` (default: `~/para/archive/rca-knowledge`) is the single
-source of truth for every output path in this skill. Set it once in your
-shell profile to override; every reference here resolves through it.
+`$RCA_REPO_PATH` (default: `~/para/archive/rca-knowledge`) is the SSOT for every output path; set it once in your shell profile to override.
 
 ## References
 

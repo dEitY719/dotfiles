@@ -27,40 +27,13 @@ output it verbatim, then stop. Help is detected only at arg #1, so
 
 Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 4.
 
-Parse args first. Positional: `<pr-number>` and `<remote>` (default
-`origin`). Flags may appear anywhere:
-
-- `--self-record` - self-authored PR only; submit a comment-only record.
-- `--admin-merge` - self-authored PR only; after a blocker-free review,
-  run `gh pr merge --admin`.
-- `--squash`, `--rebase`, `--merge` - optional strategy for
-  `--admin-merge`; reject if used without it.
-
-Reject unknown flags, `--self-record` with `--admin-merge`, and legacy
-`--self-ok` with:
-`--self-ok is not supported; GitHub blocks self-approval server-side.`
-
-Fetch in parallel before reading the diff:
-
-- `TARGET_REPO` from `git remote get-url <remote>`. Missing remote:
-  list `git remote -v` and stop.
-- PR number: explicit arg or `gh pr view --json number` on current
-  branch; if neither exists, stop and ask.
-- `ME=$(gh api user -q .login)`.
-- PR JSON: `number,title,author,state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,files`
-- `REBASEABLE=$(gh api repos/$OWNER/$REPO/pulls/<N> --jq .rebaseable)` —
-  the `rebaseable` field is REST-only; `gh pr view --json rebaseable`
-  fails with `Unknown JSON field` because GraphQL has no such field.
-- Prior reviews/comments on this PR by `ME`.
-- `gh pr checks <N> --repo $TARGET_REPO`.
-
-Stop on `state != OPEN`, draft, or required-check failure. Warn (but
-do not stop) on `mergeable: CONFLICTING` or `rebaseable: false` —
-prepend a visible conflict warning block to the review body and include
-it in the Step 5 report.
-If `author.login == ME`, follow `references/self-pr-handling.md`.
-If prior `ME` comments/reviews exist, use re-review mode: every prior
-concern must be verified as fixed, tracked, or acceptably declined.
+Parse args first, then fetch PR metadata in parallel before reading the
+diff. Read `references/arg-parsing.md` for the full flag table,
+rejection rules, the parallel fetch list (incl. the REST-only
+`rebaseable` field), and gate decisions (stop vs. warn). Self-PR
+(`author.login == ME`) follows `references/self-pr-handling.md`; prior
+`ME` comments trigger re-review mode (verify every prior concern fixed,
+tracked, or acceptably declined).
 
 ## Step 2: Fetch Review Material
 
@@ -99,35 +72,8 @@ Match the PR's dominant language.
   `--admin-merge` exactly as specified in `references/self-pr-handling.md`.
 
 After submitting the review (any path), post a separate PR comment with
-ai-metrics (soft-fail — warn on error, never block). When
-`GH_DISABLE_AI_METRICS=1`, skip the comment entirely (issue #399):
-
-```bash
-ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
-if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
-    : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
-else
-    gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
-      -X POST \
-      -f body="---
-<details>
-<summary>🤖 AI Metrics · 🤖 ~$ELAPSED min</summary>
-
-<!-- ai-metrics:gh-pr-approve -->
-🤖 ~$ELAPSED min
-<!-- /ai-metrics:gh-pr-approve -->
-
-</details>
-PR 리뷰: ~$ELAPSED min"
-fi
-```
-
-The `tokens` and `human_h` fields are intentionally omitted: this skill
-has no real measurement source for either, and the prior `${TOKENS:-5000}`
-/ `human_h=1` placeholders would silently inject the same false numbers
-into every aggregator (issue #403). Only `ai_min` is reported.
-
-On failure: `[WARN] ai-metrics comment failed — continuing.`
+ai-metrics. Read `references/ai-metrics.md` for the exact command,
+footer template, and the `GH_DISABLE_AI_METRICS=1` skip path (#399/#403).
 
 ## Step 5: Verify and Report
 

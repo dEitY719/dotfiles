@@ -43,8 +43,7 @@ If arg #1 is `-h`/`--help`/`help`, print `references/help.md` verbatim and stop.
 test -f .claude/.rate-limit-guard.json && cat .claude/.rate-limit-guard.json
 ```
 
-Parse `command`, `worktree`, `branch`, `max_cycles`, `cycles_remaining`,
-`cycle_window_min` (jq/Python). Missing multi-cycle fields default to `max_cycles=1`, `cycles_remaining=1`, `cycle_window_min=305` (PR #369 compat).
+Parse `command`, `worktree`, `branch`, `max_cycles`, `cycles_remaining`, `cycle_window_min` (jq/Python). Missing multi-cycle fields default to `max_cycles=1`, `cycles_remaining=1`, `cycle_window_min=305` (PR #369 compat).
 
 ### 2. Resolve the Command
 
@@ -89,11 +88,10 @@ In the same turn after success:
 rm -f .claude/.rate-limit-guard.json
 ```
 
-Print `[OK] 재개 완료 — 안전망 상태 파일 정리됨`.
-The just-fired cron auto-deleted (`recurring: false`); the Step 4 next-cycle
-cron must be explicitly cancelled. On failure (transient or otherwise), **leave
-state + next cron** in place — the next fire re-triggers this skill, or the user
-re-invokes manually.
+Print `[OK] 재개 완료 — 안전망 상태 파일 정리됨`. The just-fired cron auto-deleted
+(`recurring: false`); the Step 4 next-cycle cron must be explicitly cancelled.
+On failure (transient or otherwise), **leave state + next cron** in place — the
+next fire re-triggers this skill, or the user re-invokes manually.
 
 ## Constraints
 

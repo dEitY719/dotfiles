@@ -23,8 +23,7 @@ metadata:
 
 # gh:issue-create — Conversation → GitHub Issue
 
-Convert the current chat into a well-structured issue on the target repo
-(본문은 대화 언어로), execute immediately, and print only the issue number + URL.
+Convert the current chat into a well-structured issue on the target repo (본문은 대화 언어로), execute immediately, and print only the issue number + URL.
 
 ## Help
 
@@ -50,11 +49,7 @@ present, follow `references/discussion-mode.md` to bind `DISCUSSION_MODE` /
 
 ## Step 2: Classify the Conversation
 
-Read `references/prefix-table.md` and pick exactly one conventional-commit
-prefix as the dominant intent (covers disambiguation, `misc` default,
-large-`feat` heuristic, and title formatting). `verify` 는 코드 변경이
-아닌 라이브 검증 추적용 — 산출물이 issue + 코멘트 누적이면 `verify`,
-테스트 코드 파일이면 `test` (`references/templates/verify.md`).
+Read `references/prefix-table.md` and pick exactly one conventional-commit prefix as dominant intent (covers disambiguation, `misc` default, large-`feat` heuristic, title formatting). `verify` = 라이브 검증 추적용 (산출물 issue+코멘트 누적); 테스트 코드 파일이면 `test` (`references/templates/verify.md`).
 
 ## Step 2.1: Clarification & Scope Guard
 
@@ -64,11 +59,7 @@ Apply `references/clarification.md` trigger signals (동사 없는 명사 나열
 
 ## Step 2.5: Auto-labels + Milestone (opt-in via SSOT)
 
-Skip entirely when `--no-auto-labels` **or** `DISCUSSION_MODE=1` is set
-(#619 F-3). Otherwise read `references/auto-labels.md` and follow verbatim
-(Stage-1 signal → SSOT load → label union → `gh label list` validation →
-milestone resolution). Stash kept labels + milestone for Step 4.
-`--auto-label-debug` emits the Stage-1 trace.
+Skip entirely when `--no-auto-labels` **or** `DISCUSSION_MODE=1` is set (#619 F-3). Otherwise read `references/auto-labels.md` and follow verbatim (Stage-1 signal → SSOT load → label union → `gh label list` validation → milestone resolution). Stash kept labels + milestone for Step 4. `--auto-label-debug` emits the Stage-1 trace.
 
 ## Step 3: Draft the Issue Body
 

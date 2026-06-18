@@ -77,15 +77,13 @@ at ~200 words so the main context stays lean.
 
 ## Step 4: Execute, Then Hand Back
 
-Run the chunked steps. After each step:
+Run the chunked steps. After each: (1) update the TodoList (`TaskUpdate` →
+`completed` or new `in_progress`); (2) emit one short user-facing line about
+what just landed (format in `references/output-format.md`).
 
-1. Update the TodoList (`TaskUpdate` → `completed` or new `in_progress`).
-2. Emit one short user-facing line about what just landed (format in
-   `references/output-format.md`).
-
-When the originally-interrupted task is done, hand control back to whatever
-flow the user was in. Always end with an explicit `Next:` line naming the
-next concrete command — never silently return to idle.
+When the originally-interrupted task is done, hand control back to the user's
+prior flow. Always end with an explicit `Next:` line naming the next concrete
+command — never silently return to idle.
 
 ## Output
 
