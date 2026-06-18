@@ -185,6 +185,7 @@ _migrate_legacy_statusline_command() {
         log_warning "  before: $legacy_literal"
         log_warning "  after:  $new_literal"
         log_warning "  backup: $backup"
+        SETUP_MIGRATIONS=$((SETUP_MIGRATIONS + 1))  # 변경 요약 집계 (#997)
     else
         rm -f "$tmp"
         log_error "settings.json 갱신 실패 — 백업 보존: $backup"
@@ -293,6 +294,7 @@ _migrate_legacy_plugin_paths() {
             # reserved for items needing user action (issue #995).
             log_info "$(basename "$file") plugin 경로 마이그레이션: ${stale_count}건 → ${new_prefix}"
             log_info "  backup: $backup"
+            SETUP_MIGRATIONS=$((SETUP_MIGRATIONS + 1))  # 변경 요약 집계 (#997)
         else
             rm -f "$tmp"
             log_error "$(basename "$file") 갱신 실패 — 백업 보존: $backup"
@@ -400,6 +402,7 @@ _migrate_install_gh_issue_flow_stop_hook() {
         log_warning "settings.json 에 gh-issue-flow Stop hook 자동 등록 완료"
         log_warning "  hook: $hook_command"
         log_warning "  backup: $backup"
+        SETUP_MIGRATIONS=$((SETUP_MIGRATIONS + 1))  # 변경 요약 집계 (#997)
     else
         rm -f "$tmp"
         log_error "settings.json 갱신 실패 — 백업 보존: $backup"
@@ -501,6 +504,22 @@ EOF
 # --- Main Script Logic (issue #287, Phase 1: multi-account) ---
 
 ux_section "Claude Code dotfiles setup"
+
+# 이번 실행에서 실제로 수행된 마이그레이션 건수 누적 (#997). 완료 직전
+# _print_change_summary 가 이 값을 변경 요약 라인에 집계한다. 마이그레이션
+# 함수들(statusLine / Stop hook / plugin 경로)은 모두 본 스크립트의 최상위
+# 셸에서 호출돼 서브셸 없이 값이 전파된다.
+SETUP_MIGRATIONS=0
+
+# _print_change_summary — 완료 메시지 직전 "이번 실행에서 바뀐 것" 한 줄
+# 롤업 (#997). 사용자가 로그 전체를 훑지 않고도 변경 규모를 파악하게 한다.
+# 최소 집계 원칙(#997 비범위): 마이그레이션 건수 + SSOT 가 관리하는 스킬 수.
+# 인자 $1 이 있으면 뒤에 추가(예: 다중 계정 분기의 활성 계정 수).
+_print_change_summary() {
+    local skills
+    skills=$(find "$CLAUDE_SKILLS_SOURCE" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+    ux_info "요약: 마이그레이션 ${SETUP_MIGRATIONS}건 · 관리 스킬 ${skills}개${1:+ · $1}"
+}
 
 # 필수 dotfiles source 검증
 # settings.json 은 이제 tracked SSOT (#584) — 부트스트랩/템플릿 단계 불필요.
@@ -667,6 +686,7 @@ if [ "$_setup_mode" = "internal" ]; then
 
     # Gemini / OpenCode entry-level 합성은 scripts/setup-skills-ssot.sh 가 책임짐 (#791).
 
+    _print_change_summary  # 변경 요약 한 줄 (#997)
     ux_success "Claude Code dotfiles setup 완료 (internal/single-account)"
     echo ""
     ux_success "Claude Code 단일 계정 설정 완료 (internal PC mode)"
@@ -735,6 +755,7 @@ done
 # 4 CLI 모두 entry-level 합성으로 통일했고 SSOT 는 setup-skills-ssot.sh 로 이전됨.
 
 # --- Completion Messages ---
+_print_change_summary "활성 계정 $(echo "$ENABLED_ACCOUNTS" | wc -w | tr -d ' ')개"  # 변경 요약 한 줄 (#997)
 ux_success "Claude Code dotfiles setup 완료"
 echo ""
 ux_success "Claude Code 다중 계정 설정 완료!"
