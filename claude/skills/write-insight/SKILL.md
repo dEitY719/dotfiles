@@ -41,8 +41,7 @@ Capture one reusable insight from the current chat as a short Korean note in
 ## Step 1: Resolve repo + read the rulebook
 
 In parallel: `git rev-parse --show-toplevel`, read `<repo-root>/docs/guide/learnings/README.md`,
-list existing notes. If `docs/guide/learnings/` is missing, stop — this skill is repo-specific.
-The README is SSOT for template/length/language; re-read it every run.
+list existing notes. Missing `docs/guide/learnings/` → stop (repo-specific). README is SSOT for template/length/language; re-read every run.
 
 ## Step 2: Identify the candidate
 
@@ -61,10 +60,9 @@ when accessible: learnings holds the body, memory keeps a one-line pointer.
 
 ## Step 4: Mine the conversation for sources
 
-Extract from chat: PR numbers, commit SHAs, issue numbers, review URLs
-(`discussion_r...`), file paths with line ranges. A learning without provenance
-is forgettable trivia — if extraction yields nothing, the Context section must
-state the concrete situation ("발견 상황: …"), not vague claims.
+Extract from chat: PR numbers, commit SHAs, issue numbers, review URLs (`discussion_r...`),
+file paths with line ranges. Provenance-less learning is forgettable trivia — if extraction
+yields nothing, the Context section must state the concrete situation ("발견 상황: …"), not vague claims.
 
 ## Step 5: Draft the note
 
@@ -81,8 +79,7 @@ section: append a numbered entry matching the existing 3-line format (heading li
 
 ## Step 7: Suggest a memory pointer (don't auto-create)
 
-If the insight is cross-session reusable, ask: `memory/reference_learnings_<slug>.md`
-포인터 추가할까요? (한 줄짜리, 본문은 learnings, memory 는 경로만). Wait for yes — `MEMORY.md` is loaded into every session, churn there is expensive.
+If cross-session reusable, ask: `memory/reference_learnings_<slug>.md` 포인터 추가할까요? (한 줄짜리, 본문은 learnings, memory 는 경로만). Wait for yes — `MEMORY.md` loads every session; churn is expensive.
 
 ## Step 8: Report
 

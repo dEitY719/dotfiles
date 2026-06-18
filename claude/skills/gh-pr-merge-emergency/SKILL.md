@@ -29,17 +29,11 @@ output it verbatim, then stop. No API calls.
 
 ## Step 1: Parse Args + Resolve Target
 
-Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 5.
+Record `START_TS=$(date +%s)` for Step 5 elapsed time. Positional: `<PR> <reason> [remote]`.
 
-Positional args: `<PR> <reason> [remote]`.
-
-- `PR` — number (required). Omitted → `gh pr view --json number` on current
-  branch; else stop with a usage pointer.
-- `reason` — **required**, ≥10 chars, referencing an incident/ticket ID or
-  concrete user impact. Vague reasons (`"urgent"`, `"fix"`) → refuse. Examples
-  in `references/help.md`.
-- `remote` — default `origin`. Resolve `TARGET_REPO` via `git remote get-url`;
-  missing → `git remote -v` and stop.
+- `PR` — required; omitted → `gh pr view --json number` on current branch, else stop with usage pointer.
+- `reason` — **required**, ≥10 chars, citing an incident/ticket ID or concrete user impact; vague (`"urgent"`, `"fix"`) → refuse. Examples: `references/help.md`.
+- `remote` — default `origin`; resolve `TARGET_REPO` via `git remote get-url`, missing → `git remote -v` and stop.
 
 Capture `ME=$(gh api user -q .login)`, `NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)`.
 
