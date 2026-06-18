@@ -32,9 +32,15 @@ References dir: <exists / missing>
 |----|------------------------------|--------|---------------------------------------|
 | 12 | Model Recommendation Metadata| WARN   | metadata absent (migration period)    |
 
+### Security & Policy Alignment Checks
+| #  | Check                          | Result | Notes                                      |
+|----|--------------------------------|--------|--------------------------------------------|
+| 13 | License Declaration            | WARN   | no license; repo LICENSE exists → add MIT  |
+| 14 | Capability Declaration Consistency | WARN | scripts import requests; network undeclared |
+
 Recommended tier: haiku — read-only audit, bounded output (declared: none yet)
 
-Score: 6/11 checks passed (3 warnings, 2 fails, 1 N/A)
+Score: 7/14 checks passed (5 warnings, 2 fails, 0 N/A)
 Verdict: NEEDS WORK — fix FAIL items before shipping
 
 ## Sub-skill Model Plan
@@ -68,7 +74,7 @@ Run /skill:check again after fixes to verify.
 Rules:
 - Only include WARN and FAIL items in Issues & Improvements section
 - Quote actual lines from the file when describing problems
-- Score denominator excludes N/A checks (12 checks total, minus any N/A)
+- Score denominator excludes N/A checks (14 checks total, minus any N/A)
 - The "Model Recommendation Check" table row + "Recommended tier" line are
   always shown; the "Sub-skill Model Plan" section appears only for composite
   skills (omit it entirely for leaf skills)

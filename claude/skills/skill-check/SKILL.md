@@ -3,8 +3,9 @@ name: skill:check
 description: >-
   Audit a SKILL.md for structure and UX quality — checks line count,
   progressive disclosure, frontmatter, references usage, output format,
-  help flag pattern, step structure, options docs, verdict output, and
-  next-action hints. Use when the user says "check my skill", "audit my
+  help flag pattern, step structure, options docs, verdict output,
+  next-action hints, plus security/policy alignment (license declaration
+  and network capability declaration consistency). Use when the user says "check my skill", "audit my
   skill", "does this skill follow best practices?", "/skill:check".
   Reports PASS/WARN/FAIL/N/A per criterion with concrete fixes.
   Do NOT use for AGENTS.md, CLAUDE.md, or GEMINI.md files — use devx:ai-context check instead.
@@ -23,9 +24,9 @@ If the argument is `help`, read `references/help.md` and output its content verb
 If the user specifies a path, use it. Otherwise search for SKILL.md from the
 current directory.
 
-## Step 2: Run Twelve Checks
+## Step 2: Run Fourteen Checks
 
-Read `references/checks.md` for all 12 check definitions and PASS/WARN/FAIL/N/A criteria.
+Read `references/checks.md` for all 14 check definitions and PASS/WARN/FAIL/N/A criteria.
 Assign one result per check. Audit-only — never stop on failure; report every check (`skill:check` is read-only and must produce a full report).
 
 **Checks 1–5: Structure**
@@ -44,6 +45,15 @@ from this skill's own tier; `--recursive` opts into deeper traversal.
 
 Check 11 (No Emojis) consults `references/allowed-emoji-skills.txt` —
 audited skill names that appear in that file resolve to `[N/A] allowlisted`.
+
+**Checks 13–14: Security & Policy Alignment**
+License Declaration · Capability Declaration Consistency
+
+Check 13 cross-checks frontmatter `license` against a repo-root `LICENSE`
+(pre-empts scanner `MANIFEST_MISSING_LICENSE`). Check 14 scans shipped scripts
+for network signals and compares against `compatibility.network` (pre-empts
+`TOOL_ABUSE_UNDECLARED_NETWORK`). Both are **read-only** — they flag a policy
+gap, never edit files.
 
 ## Step 3: Output the Report
 
