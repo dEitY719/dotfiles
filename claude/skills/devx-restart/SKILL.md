@@ -70,16 +70,15 @@ Mark the task `in_progress` with `TaskUpdate` if it isn't already.
 
 ## Step 3: Delegate Large Outputs
 
-Per the thresholds in `references/chunking-rules.md`, large outputs
-(broad search, full-repo `find`, multi-file conformance checks) MUST go
-through a subagent. Brief it with the resume target and cap the response
-at ~200 words so the main context stays lean.
+Per the thresholds in `references/chunking-rules.md`, large outputs (broad search, full-repo `find`, multi-file conformance checks) MUST go through a subagent.
+Brief it with the resume target and cap the response at ~200 words so the main context stays lean.
 
 ## Step 4: Execute, Then Hand Back
 
-Run the chunked steps. After each: (1) update the TodoList (`TaskUpdate` →
-`completed` or new `in_progress`); (2) emit one short user-facing line about
-what just landed (format in `references/output-format.md`).
+Run the chunked steps. After each step:
+
+1. Update the TodoList (`TaskUpdate` → `completed` or new `in_progress`).
+2. Emit one short user-facing line about what just landed (format in `references/output-format.md`).
 
 When the originally-interrupted task is done, hand control back to the user's
 prior flow. Always end with an explicit `Next:` line naming the next concrete

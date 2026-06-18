@@ -79,10 +79,10 @@ the detected/forced mode; an unsupported conversion produces only the
 - **Dry-run (default)**: print the plan only. Touch nothing.
 - **Conversion required (forced mode ≠ detected)**: print the `[convert]`
   warning and stop — even under `--apply`, write nothing.
-- **`--apply`**: execute the plan in order per the "Apply rules" in
-  `references/plan-and-report-templates.md` (mkdir dirs incl. per-plugin-root
-  `skills/`, `git mv`/`mv` moves, minimal `marketplace.json`/`plugin.json`
-  skeletons). `--op` adds R1-R5 — see [references/op-rules.md](references/op-rules.md).
+- **`--apply`**: execute the plan in order following the **Apply rules**
+  (mkdir → move → skeleton, fully listed in
+  `references/plan-and-report-templates.md`); `--op` adds R1-R5 — see
+  `references/op-rules.md`.
 
 ## Step 5: Report
 
