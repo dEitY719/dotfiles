@@ -755,7 +755,10 @@ done
 # 4 CLI 모두 entry-level 합성으로 통일했고 SSOT 는 setup-skills-ssot.sh 로 이전됨.
 
 # --- Completion Messages ---
-_print_change_summary "활성 계정 $(echo "$ENABLED_ACCOUNTS" | wc -w | tr -d ' ')개"  # 변경 요약 한 줄 (#997)
+# 활성 계정 수는 네이티브 배열로 집계 — 외부 wc/tr 포크 회피 (PR #998 리뷰).
+# shellcheck disable=SC2206  # 공백/개행 구분 목록의 의도된 word-splitting.
+_caccts=($ENABLED_ACCOUNTS)
+_print_change_summary "활성 계정 ${#_caccts[@]}개"  # 변경 요약 한 줄 (#997)
 ux_success "Claude Code dotfiles setup 완료"
 echo ""
 ux_success "Claude Code 다중 계정 설정 완료!"
