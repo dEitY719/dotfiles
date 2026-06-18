@@ -39,8 +39,7 @@ Env: `TASK_HISTORY_DIR` (default `~/para/archive/playbook/docs/task-history/`)
 
 ## Step-by-step workflow
 
-Steps 1–8 are sequential — if Step 1 cannot resolve a writable directory, or Step 7
-commit fails, stop and report rather than producing a partial entry.
+Steps 1–8 are sequential — if Step 1 cannot resolve a writable directory or Step 7 commit fails, stop and report rather than producing a partial entry.
 
 ### Step 1: Determine output file path
 
@@ -55,9 +54,7 @@ Run `mkdir -p` on the directory if it does not exist.
 
 ### Step 2: Analyze the current conversation
 
-Extract **what was done** (concrete actions/changes), **why** (background, trigger),
-and **what resulted** (outcomes, files, PRs, issues). Use any description argument as
-extra context, but still analyze the conversation for completeness.
+Extract **what was done** (concrete actions/changes), **why** (background, trigger), and **what resulted** (outcomes, files, PRs, issues). Use any description argument as extra context, but still analyze the conversation for completeness.
 
 ### Step 3: Gather git information (if in a git repo)
 
