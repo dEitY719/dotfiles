@@ -1,6 +1,6 @@
 # Skill Quality Checks
 
-Twelve checks, each rated PASS / WARN / FAIL / N/A.
+Fourteen checks, each rated PASS / WARN / FAIL / N/A.
 
 ---
 
@@ -125,3 +125,48 @@ the declared `tier`.
 Plan — read each sub-skill's declared `tier`, mark missing ones `unknown` (WARN),
 and report it **separately from this skill's own tier** (see report-template.md).
 Recursion is 1-depth by default; `--recursive` opts into deeper traversal.
+
+---
+
+## Security & Policy Alignment Checks (13–14)
+
+These two checks pre-empt findings that external security scanners (e.g. an
+org's AgentToolbox scanner) raise against published skills. Both are
+**read-only — they flag a policy gap, never edit files** (audit-only invariant).
+
+### Check 13: License Declaration
+Cross-check frontmatter `license` against the repo-root `LICENSE` file.
+
+| Result | Criteria |
+|---|---|
+| PASS | frontmatter declares a `license` field |
+| WARN | no `license` in frontmatter BUT a `LICENSE` file exists at the repo root → suggest "add `license: <SPDX>` to frontmatter" (pre-empts scanner `MANIFEST_MISSING_LICENSE`) |
+| N/A | repo has no `LICENSE` file (private/experimental skill — nothing to align with) |
+
+Repo root: walk up from the SKILL.md until a `LICENSE`/`LICENSE.md`/`LICENSE.txt`
+or a `.git` directory is found; the LICENSE check is relative to that root.
+On WARN, recommend a concrete SPDX identifier when the LICENSE is recognizable
+(e.g. `license: MIT`), else `license: <SPDX>`.
+
+### Check 14: Capability Declaration Consistency
+Scan the skill's executable scripts (primarily `scripts/`, plus any
+`*.sh`/`*.py` shipped beside the SKILL.md) for network-capability signals and
+compare against the `compatibility.network` declaration. 1st-scope is **network
+only** — the capability the external scanner actually flags
+(`TOOL_ABUSE_UNDECLARED_NETWORK`).
+
+Network signals: imports of `requests` / `httpx` / `urllib` / `http.client` /
+`socket` / `aiohttp`, or explicit MCP/HTTP call patterns (e.g. `curl`, `wget`,
+`fetch(`, `http(s)://` request construction).
+
+| Result | Criteria |
+|---|---|
+| PASS | no network signal found, OR network is used AND `compatibility.network` is declared |
+| WARN | network signal present BUT no `compatibility.network` declaration → suggest "scripts use the network — declare `compatibility.network: required`" |
+| N/A | skill ships no executable scripts (pure-prompt skill — nothing to scan) |
+
+Extension note: filesystem-write and subprocess capabilities follow the same
+detect-vs-declare pattern; 1st scope is intentionally network-only because that
+is what the scanner flags today. `CROSS_SKILL_SHARED_URL` (multiple skills
+sharing one external domain) is **out of scope** — it requires cross-file
+analysis, while `skill:check` audits a single SKILL.md.
