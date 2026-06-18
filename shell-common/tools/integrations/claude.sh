@@ -657,16 +657,16 @@ _claude_ensure_settings_copy() {
     # dangling settings.local.json 정리가 model 이주보다 먼저 — 깨진 링크를
     # 통해 쓰면 소멸한 worktree 경로로 write 가 향해 실패한다 (#940).
     if [ -L "$_cesc_local" ] && [ ! -e "$_cesc_local" ]; then
-        rm -f "$_cesc_local"
         # Routine one-time cleanup, not a problem needing user action — info
         # severity keeps ⚠️ reserved for genuine warnings (issue #995).
-        ux_info "  removed dangling settings.local.json symlink: $_cesc_local"
+        rm -f "$_cesc_local" \
+            && ux_info "  removed dangling settings.local.json symlink: $_cesc_local"
     fi
 
     if [ -L "$_cesc_tgt" ]; then
-        rm "$_cesc_tgt"
         # Intended idempotent migration (#940) — info severity, not ⚠️ (#995).
-        ux_info "  legacy settings.json symlink → real file (#940): $_cesc_tgt"
+        rm "$_cesc_tgt" \
+            && ux_info "  legacy settings.json symlink → real file (#940): $_cesc_tgt"
     elif [ -f "$_cesc_tgt" ] && ! cmp -s "$_cesc_src" "$_cesc_tgt"; then
         # /model 이 남긴 개인 model 키 보존 — SSOT 복사로 사라지기 전에
         # settings.local.json 으로 이주. local 에 이미 model 이 있으면 그대로.
