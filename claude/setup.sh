@@ -289,8 +289,10 @@ _migrate_legacy_plugin_paths() {
 
         if jq --arg re "$old_regex" --arg new "$new_prefix" \
                 "$rewrite_filter" "$file" > "$tmp" && mv "$tmp" "$file"; then
-            log_warning "$(basename "$file") plugin 경로 마이그레이션: ${stale_count}건 → ${new_prefix}"
-            log_warning "  backup: $backup"
+            # Successful idempotent migration — info severity so ⚠️ stays
+            # reserved for items needing user action (issue #995).
+            log_info "$(basename "$file") plugin 경로 마이그레이션: ${stale_count}건 → ${new_prefix}"
+            log_info "  backup: $backup"
         else
             rm -f "$tmp"
             log_error "$(basename "$file") 갱신 실패 — 백업 보존: $backup"
