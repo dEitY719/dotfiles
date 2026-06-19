@@ -5,9 +5,12 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-_skill_loader() {
-    # Load UX library (unified library at shell-common/tools/ux_lib/)
-    source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
+skill_loader() {
+    # Load UX library (unified library at shell-common/tools/ux_lib/) only if
+    # it is not already available — avoid re-sourcing on every invocation.
+    if ! type ux_header >/dev/null 2>&1; then
+        source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
+    fi
 
     # Get skills directory
     local skills_dir="${CLAUDE_SKILLS_PATH:-${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills}"
@@ -51,9 +54,9 @@ _skill_loader() {
         return 0
     fi
 
-    # Handle --help flag
-    if [ "$1" = "--help" ]; then
-        _skill_loader  # Call with no args to show help
+    # Handle help flags
+    if [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
+        skill_loader  # Call with no args to show help
         return 0
     fi
 
@@ -109,4 +112,4 @@ _skill_loader() {
 }
 
 # Alias for skill-loader format (using dash instead of underscore)
-alias skill-loader='_skill_loader'
+alias skill-loader='skill_loader'

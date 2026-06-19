@@ -340,8 +340,8 @@ HELP
 mount_show() {
     local mount_path="${1}"
 
-    # Show help if requested with -h or --help
-    if [ "$mount_path" = "-h" ] || [ "$mount_path" = "--help" ]; then
+    # Show help if requested with -h, --help, or help
+    if [ "$mount_path" = "-h" ] || [ "$mount_path" = "--help" ] || [ "$mount_path" = "help" ]; then
         _mount_show_help
         return 0
     fi
