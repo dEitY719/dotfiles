@@ -19,6 +19,7 @@ HELP_TOPICS = [
     "cli_help",
     "codex_help",
     "crt_help",
+    "del_file_help",
     "dir_help",
     "docker_help",
     "dot_help",
