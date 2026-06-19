@@ -7,9 +7,17 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ollama_serve() {
-    local backend=$(ollama_backend_detect 2>/dev/null || echo "")
-    
-    if [[ -z "$backend" ]] || [[ "$backend" == "unavailable" ]]; then
+    case "${1:-}" in
+        -h|--help|help)
+            ux_usage "ollama-serve" "" "Start the WSL Ollama API server (127.0.0.1:11434)"
+            return 0
+            ;;
+    esac
+
+    local backend
+    backend=$(ollama_backend_detect 2>/dev/null || echo "")
+
+    if [ -z "$backend" ] || [ "$backend" = "unavailable" ]; then
         ux_error "No Ollama backend available"
         ux_info "Install WSL Ollama: install-ollama"
         ux_info "Or ensure Docker Ollama is running"
@@ -35,10 +43,18 @@ ollama_serve() {
 
 # Launch Claude Code or other tools with Ollama
 ollama_launch() {
+    case "${1:-}" in
+        -h|--help|help)
+            ux_usage "ollama-launch" "[tool]" "Launch a tool (default: claude) wired to Ollama"
+            return 0
+            ;;
+    esac
+
     local tool="${1:-claude}"
-    
-    local backend=$(ollama_backend_detect 2>/dev/null || echo "")
-    if [[ -z "$backend" ]] || [[ "$backend" == "unavailable" ]]; then
+
+    local backend
+    backend=$(ollama_backend_detect 2>/dev/null || echo "")
+    if [ -z "$backend" ] || [ "$backend" = "unavailable" ]; then
         ux_error "Ollama is not available"
         ux_info "Make sure Ollama server is running first:"
         ux_info "  ollama-serve &"
