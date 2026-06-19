@@ -10,7 +10,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 get_hw_info() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/get_hw_info.sh"
     if [ ! -f "$script" ]; then
-        echo "Error: Hardware info script not found: $script" >&2
+        ux_error "Hardware info script not found: $script"
         return 2
     fi
     bash "$script" "$@"
@@ -20,7 +20,7 @@ get_hw_info() {
 srcpack() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/srcpack.py"
     if [ ! -f "$script" ]; then
-        echo "not found: $script" >&2
+        ux_error "srcpack script not found: $script"
         return 2
     fi
     python "$script" "$@"
@@ -30,7 +30,7 @@ srcpack() {
 agents_init() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/run_agents_md_master_prompt.sh"
     if [ ! -f "$script" ]; then
-        echo "Error: AGENTS.md generation script not found: $script" >&2
+        ux_error "AGENTS.md generation script not found: $script"
         return 2
     fi
     bash "$script" "$@"
@@ -40,7 +40,7 @@ agents_init() {
 install_p10k() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_p10k.sh"
     if [ ! -f "$script" ]; then
-        echo "Error: install-p10k script not found: $script" >&2
+        ux_error "install-p10k script not found: $script"
         return 2
     fi
     bash "$script" "$@"
@@ -50,7 +50,7 @@ install_p10k() {
 install_fzf() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_fzf.sh"
     if [ ! -f "$script" ]; then
-        echo "Error: install-fzf script not found: $script" >&2
+        ux_error "install-fzf script not found: $script"
         return 2
     fi
     bash "$script" "$@"
@@ -60,7 +60,7 @@ install_fzf() {
 install_fasd() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_fasd.sh"
     if [ ! -f "$script" ]; then
-        echo "Error: install-fasd script not found: $script" >&2
+        ux_error "install-fasd script not found: $script"
         return 2
     fi
     bash "$script" "$@"
@@ -70,7 +70,7 @@ install_fasd() {
 install_ripgrep() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_ripgrep.sh"
     if [ ! -f "$script" ]; then
-        echo "Error: install-ripgrep script not found: $script" >&2
+        ux_error "install-ripgrep script not found: $script"
         return 2
     fi
     bash "$script" "$@"
@@ -80,7 +80,7 @@ install_ripgrep() {
 install_fd() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_fd.sh"
     if [ ! -f "$script" ]; then
-        echo "Error: install-fd script not found: $script" >&2
+        ux_error "install-fd script not found: $script"
         return 2
     fi
     bash "$script" "$@"
@@ -90,7 +90,7 @@ install_fd() {
 install_bat() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_bat.sh"
     if [ ! -f "$script" ]; then
-        echo "Error: install-bat script not found: $script" >&2
+        ux_error "install-bat script not found: $script"
         return 2
     fi
     bash "$script" "$@"
@@ -100,7 +100,7 @@ install_bat() {
 install_pet() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_pet.sh"
     if [ ! -f "$script" ]; then
-        echo "Error: install-pet script not found: $script" >&2
+        ux_error "install-pet script not found: $script"
         return 2
     fi
     bash "$script" "$@"
@@ -110,10 +110,21 @@ install_pet() {
 install_zsh_autosuggestions() {
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_zsh_autosuggestions.sh"
     if [ ! -f "$script" ]; then
-        echo "Error: install-zsh-autosuggestions script not found: $script" >&2
+        ux_error "install-zsh-autosuggestions script not found: $script"
         return 2
     fi
     bash "$script" "$@"
 }
 
+# Dash-form aliases (command-design-pattern.md R1: user-facing = dash-form).
+# `srcpack` has no underscore, so it is already the dash-form entry point.
+alias get-hw-info='get_hw_info'
+alias agents-init='agents_init'
+alias install-p10k='install_p10k'
+alias install-fzf='install_fzf'
+alias install-fasd='install_fasd'
+alias install-ripgrep='install_ripgrep'
+alias install-fd='install_fd'
+alias install-bat='install_bat'
+alias install-pet='install_pet'
 alias install-zsh-autosuggestions='install_zsh_autosuggestions'
