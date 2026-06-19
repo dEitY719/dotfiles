@@ -220,7 +220,9 @@ _cleanup_select_mode() {
     done
 }
 
-_del_file_help() {
+# Public help topic for my-help integration. Registered in
+# shell-common/functions/my_help.sh (HELP_DESCRIPTIONS + HELP_CATEGORY_MEMBERS[cli]).
+del_file_help() {
     ux_header "del-file"
     ux_usage "del-file" "[--home] [pattern...]" "Interactively delete backup/original files"
     ux_section "Default patterns (current directory)"
@@ -242,7 +244,7 @@ del_file() {
 
     local home_mode=0
     case "${1:-}" in
-        -h|--help|help) _del_file_help; return 0 ;;
+        -h|--help|help) del_file_help; return 0 ;;
         --home) home_mode=1; shift ;;
     esac
 
