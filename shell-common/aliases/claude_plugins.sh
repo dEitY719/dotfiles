@@ -17,10 +17,16 @@ alias init-plugins-docs='init_plugins_docs'
 
 # Sync plugins structure to documentation directory
 alias sync-plugins='sync_plugins_structure'
+alias sync-plugins-structure='sync_plugins_structure'
+
+# Inspect a single plugin
+alias view-plugin-info='view_plugin_info'
 
 # Generate Korean documentation for plugins (both files and directories)
 alias gen-plugin-ko='generate_plugin_doc_ko'
+alias generate-plugin-doc-ko='generate_plugin_doc_ko'
 alias create-plugin-ko='create_plugin_structure_ko'
+alias create-plugin-structure-ko='create_plugin_structure_ko'
 
 # Process plugin directory recursively
 alias process-plugin-ko='process_plugin_directory_ko'
