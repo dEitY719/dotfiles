@@ -140,6 +140,22 @@ else
 fi
 echo ""
 
+# Rule 6: tracked claude/settings.json (SSOT) must not carry a `model` key.
+# Claude Code's /model persists into the active config dir's settings.json.
+# If that file is ever a write-through symlink to this SSOT (e.g. a stale
+# pre-#940 link surviving a deploy-lag window), the personal model choice
+# leaks into the tracked file (#924). #598 removed model from the SSOT;
+# this rule keeps it out so a leak can never be committed.
+# Recovery: git checkout claude/settings.json
+echo "Rule 6: No model key in tracked claude/settings.json SSOT (#924)"
+if [ -f claude/settings.json ] \
+    && grep -qE '^[[:space:]]*"model"[[:space:]]*:' claude/settings.json; then
+    test_case "claude/settings.json has no model key" 1
+else
+    test_case "claude/settings.json has no model key" 0
+fi
+echo ""
+
 echo "════════════════════════════════════════════════════════════"
 if [ "$failed" -eq 0 ]; then
     echo -e "${GREEN}All golden rules validated ✓${NC}"
