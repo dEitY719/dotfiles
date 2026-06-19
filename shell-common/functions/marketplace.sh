@@ -183,11 +183,12 @@ _ensure_manifest_fresh() {
 }
 
 # =============================================================================
-# User-Facing Functions (snake_case, suffixed with _marketplace)
+# Private sub-commands (reached via the `claude_skills_marketplace` dispatcher /
+# `csm <verb>`; not user-facing entry points — see command-design-pattern.md R1)
 # =============================================================================
 
 # List all marketplace skills grouped by plugin (default) or all skills by marketplace (--all)
-claude_skills_marketplace_list() {
+_claude_skills_marketplace_list() {
     local show_all=false
     local marketplace_filter=""
 
@@ -268,12 +269,12 @@ claude_skills_marketplace_list() {
         fi
     else
         # Default: show plugin groups (headers only)
-        claude_skills_marketplace_group
+        _claude_skills_marketplace_group
     fi
 }
 
 # Group skills by category/plugin (show headers only, or detailed list if filter provided)
-claude_skills_marketplace_group() {
+_claude_skills_marketplace_group() {
     local category_filter="${1:-}"
 
     _ensure_manifest_fresh || {
@@ -372,7 +373,7 @@ claude_skills_marketplace_group() {
 }
 
 # Show marketplace statistics
-claude_skills_marketplace_stats() {
+_claude_skills_marketplace_stats() {
     _ensure_manifest_fresh || {
         ux_error "Failed to generate marketplace manifest"
         return 1
@@ -405,7 +406,7 @@ claude_skills_marketplace_stats() {
 }
 
 # Search marketplace skills
-claude_skills_marketplace_search() {
+_claude_skills_marketplace_search() {
     local query="$1"
 
     [ -z "$query" ] && {
@@ -453,7 +454,7 @@ claude_skills_marketplace_search() {
 }
 
 # Display detailed skill information
-claude_skills_marketplace_info() {
+_claude_skills_marketplace_info() {
     local skill_name="$1"
 
     [ -z "$skill_name" ] && {
@@ -497,7 +498,7 @@ claude_skills_marketplace_info() {
 }
 
 # Force rebuild of manifest cache
-claude_skills_marketplace_refresh() {
+_claude_skills_marketplace_refresh() {
     ux_section "Rebuilding Skill Manifest"
 
     rm -f "$MANIFEST_CACHE_PATH"
@@ -633,29 +634,29 @@ claude_skills_marketplace() {
 
     case "$command" in
         list)
-            claude_skills_marketplace_list "$@"
+            _claude_skills_marketplace_list "$@"
             ;;
         group)
-            claude_skills_marketplace_group "$@"
+            _claude_skills_marketplace_group "$@"
             ;;
         stats)
-            claude_skills_marketplace_stats "$@"
+            _claude_skills_marketplace_stats "$@"
             ;;
         search)
-            claude_skills_marketplace_search "$@"
+            _claude_skills_marketplace_search "$@"
             ;;
         info)
-            claude_skills_marketplace_info "$@"
+            _claude_skills_marketplace_info "$@"
             ;;
         refresh)
-            claude_skills_marketplace_refresh "$@"
+            _claude_skills_marketplace_refresh "$@"
             ;;
         help)
             claude_skills_marketplace_help "$@"
             ;;
         *)
             ux_error "Unknown command: $command"
-            ux_info "Try: claude-skills-marketplace help"
+            ux_info "Run: claude-skills-marketplace help"
             return 1
             ;;
     esac
@@ -665,3 +666,5 @@ claude_skills_marketplace() {
 # This is safe as a function alias (no naming conflicts with my_help.sh pattern)
 alias claude-skills-marketplace='claude_skills_marketplace'
 alias claude-skills-marketplace-help='claude_skills_marketplace_help'
+# Short alias documented throughout the help/output (csm list, csm search, ...)
+alias csm='claude_skills_marketplace'
