@@ -11,6 +11,13 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ta() {
+    case "${1:-}" in
+        -h|--help|help)
+            ux_usage "ta" "" "Attach (or switch) to the first tmux session"
+            return 0
+            ;;
+    esac
+
     ux_require "tmux" || return 1
 
     local _ta_session

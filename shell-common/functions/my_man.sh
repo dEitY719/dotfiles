@@ -34,14 +34,17 @@ myman() {
 
     local type_to_show="${1:-}"
 
+    # R3: reject unknown verbs up-front, before any side effect (mktemp).
     case "$type_to_show" in
         -h|--help|help) _myman_help; return 0 ;;
+        "") _myman_help; return 1 ;;
+        alias|function) ;;
+        *)
+            ux_error "Unknown command: $type_to_show"
+            ux_info "Run: my-man help"
+            return 1
+            ;;
     esac
-
-    if [[ -z "$type_to_show" ]]; then
-        _myman_help
-        return 1
-    fi
 
     local analyzer_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/analyze_bash_scripts.sh"
     local sh_config_dir="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"

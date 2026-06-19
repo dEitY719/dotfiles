@@ -79,10 +79,14 @@ gbr_help() {
 gbr() {
     case "${1:-}" in
         teardown) shift; git_branch_teardown "$@" ;;
-        -h|--help|help|"")
-            ux_error "Usage: gbr <command> [args...]"
-            ux_info "Run: gbr-help"
+        help)
+            ux_error "Use canonical entrypoint: gbr-help (not 'gbr help')"
+            ux_info "Try: gbr-help"
             return 1
+            ;;
+        -h|--help|"")
+            [ $# -gt 0 ] && shift
+            gbr_help "$@"
             ;;
         *)
             ux_error "Unknown command: $1"
