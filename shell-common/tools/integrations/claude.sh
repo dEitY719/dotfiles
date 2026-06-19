@@ -653,6 +653,26 @@ _claude_ensure_settings_copy() {
     _cesc_src="$1"
     _cesc_tgt="$2"
     _cesc_local="$(dirname "$_cesc_tgt")/settings.local.json"
+    _cesc_srctmp=
+
+    # 방어: SSOT (claude/settings.json) 에 model 키가 새어들면 — 배포 지연 틈에
+    # 남은 pre-#940 write-through symlink 로 /model 이 추적 파일을 오염시킨
+    # 경우 — 모든 계정 복사본이 그 키를 물려받고, live 복사본이 SSOT 와 바이트
+    # 동일해져 아래 cmp 게이트의 model 이주가 영구 skip 된다(자가치유 불능).
+    # 복사 source 를 sanitize 해 오염 전파를 끊고 추적 파일 청소를 안내한다.
+    # 추적 SSOT 자체는 건드리지 않는다 — setup 이 tracked 파일에 쓰는 것이 바로
+    # #924 안티패턴. 영구 커밋 가드는 golden rule 6 이 담당.
+    if command -v jq >/dev/null 2>&1 \
+        && [ -n "$(jq -r '.model // empty' "$_cesc_src" 2>/dev/null)" ]; then
+        ux_warning "  SSOT 에 model 키 오염: $_cesc_src — 복구: git checkout claude/settings.json"
+        _cesc_srctmp=$(mktemp "${TMPDIR:-/tmp}/claude_ssot.XXXXXX" 2>/dev/null) || _cesc_srctmp=
+        if [ -n "$_cesc_srctmp" ] && jq 'del(.model)' "$_cesc_src" > "$_cesc_srctmp" 2>/dev/null; then
+            _cesc_src="$_cesc_srctmp"
+        else
+            [ -n "$_cesc_srctmp" ] && rm -f "$_cesc_srctmp"
+            _cesc_srctmp=
+        fi
+    fi
 
     # dangling settings.local.json 정리가 model 이주보다 먼저 — 깨진 링크를
     # 통해 쓰면 소멸한 worktree 경로로 write 가 향해 실패한다 (#940).
@@ -705,13 +725,16 @@ _claude_ensure_settings_copy() {
 
     if [ -f "$_cesc_tgt" ] && cmp -s "$_cesc_src" "$_cesc_tgt"; then
         ux_info "  ✓ settings.json up to date (real file): $_cesc_tgt"
+        [ -n "$_cesc_srctmp" ] && rm -f "$_cesc_srctmp"
         return 0
     fi
     if ! cp "$_cesc_src" "$_cesc_tgt"; then
         ux_error "  settings.json copy failed: $_cesc_src → $_cesc_tgt"
+        [ -n "$_cesc_srctmp" ] && rm -f "$_cesc_srctmp"
         return 1
     fi
     chmod 600 "$_cesc_tgt"
+    [ -n "$_cesc_srctmp" ] && rm -f "$_cesc_srctmp"
     ux_success "  installed settings.json (real file): $_cesc_tgt"
 }
 
