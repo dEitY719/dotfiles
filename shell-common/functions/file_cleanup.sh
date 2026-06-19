@@ -242,11 +242,18 @@ del_file_help() {
 del_file() {
     [ -n "${ZSH_VERSION:-}" ] && emulate -L sh
 
+    # Parse options in a loop so help works regardless of flag order
+    # (e.g. `clean-home --help` == `del_file --home --help`), and unknown
+    # flags are rejected instead of being treated as cleanup patterns.
     local home_mode=0
-    case "${1:-}" in
-        -h|--help|help) del_file_help; return 0 ;;
-        --home) home_mode=1; shift ;;
-    esac
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -h|--help|help) del_file_help; return 0 ;;
+            --home) home_mode=1; shift ;;
+            -*) ux_error "del-file: unknown option $1"; return 1 ;;
+            *) break ;;
+        esac
+    done
 
     if [ ! -t 0 ] || [ ! -t 1 ]; then
         ux_error "del-file requires an interactive terminal"

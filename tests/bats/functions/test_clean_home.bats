@@ -54,6 +54,21 @@ teardown() {
     assert_output --partial "clean-home"
 }
 
+@test "bash: del_file --home --help shows help regardless of flag order" {
+    # `clean-home --help` == `del_file --home --help`. Help must win over
+    # --home instead of --help being treated as a cleanup pattern (PR #1001 review).
+    run_in_bash 'del_file --home --help'
+    assert_success
+    assert_output --partial "--home"
+    assert_output --partial "clean-home"
+}
+
+@test "bash: del_file rejects unknown options" {
+    run_in_bash 'del_file --bogus; echo "rc=$?"'
+    assert_output --partial "unknown option --bogus"
+    assert_output --partial "rc=1"
+}
+
 @test "bash: del_file --home refuses without an interactive terminal" {
     # The test harness pipes stdin (non-tty), so --home must bail out cleanly
     # rather than scan/delete anything.
