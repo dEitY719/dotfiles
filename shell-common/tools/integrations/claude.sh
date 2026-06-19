@@ -723,19 +723,21 @@ _claude_ensure_settings_copy() {
         fi
     fi
 
+    # 단일 cleanup/return — sanitize 임시파일 정리를 세 경로에 중복하지 않고
+    # 함수 말미에서 한 번만 수행 (PR #1000 gemini-code-assist 제안).
+    _cesc_ret=0
     if [ -f "$_cesc_tgt" ] && cmp -s "$_cesc_src" "$_cesc_tgt"; then
         ux_info "  ✓ settings.json up to date (real file): $_cesc_tgt"
-        [ -n "$_cesc_srctmp" ] && rm -f "$_cesc_srctmp"
-        return 0
-    fi
-    if ! cp "$_cesc_src" "$_cesc_tgt"; then
+    elif ! cp "$_cesc_src" "$_cesc_tgt"; then
         ux_error "  settings.json copy failed: $_cesc_src → $_cesc_tgt"
-        [ -n "$_cesc_srctmp" ] && rm -f "$_cesc_srctmp"
-        return 1
+        _cesc_ret=1
+    else
+        chmod 600 "$_cesc_tgt"
+        ux_success "  installed settings.json (real file): $_cesc_tgt"
     fi
-    chmod 600 "$_cesc_tgt"
+
     [ -n "$_cesc_srctmp" ] && rm -f "$_cesc_srctmp"
-    ux_success "  installed settings.json (real file): $_cesc_tgt"
+    return $_cesc_ret
 }
 
 # _claude_dir_sync_one / _claude_count_dir_sync / claude_skills_sync —
