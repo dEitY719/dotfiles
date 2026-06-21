@@ -10,7 +10,7 @@ _docker_help_summary() {
     ux_info "Usage: docker-help [section|--list|--all]"
     ux_bullet "sections"
     ux_bullet_sub "compose: dc | dcu | dcud | dcd | dcl | dce"
-    ux_bullet_sub "compose-extra: dcps | dcb | dcr | dcdv | dcstop | dcstart"
+    ux_bullet_sub "compose-extra: dcps | dcb | dcr | dcdv | dcdo | dcstop | dcstart"
     ux_bullet_sub "basics: dps | dpsa | di | dstats | dstop | drm | drmi | dlogs | dinspect"
     ux_bullet_sub "resources: ddf | dprune | dprune_full | dvols | dvol_rm | dnetwork_prune | dbuild_prune"
     ux_bullet_sub "utilities: dbash | denv | dinspect_env | dstopall | drmall | dexport | dinstall | dproxy_setup"
@@ -46,6 +46,7 @@ _docker_help_rows_compose_extra() {
     ux_table_row "dcb" "docker compose build" "Build services"
     ux_table_row "dcr" "docker compose restart" "Restart services"
     ux_table_row "dcdv" "down -v" "Stop & remove volumes"
+    ux_table_row "dcdo" "down --remove-orphans" "Stop & remove orphan containers (fixes net 'still in use')"
     ux_table_row "dcstop" "stop" "Stop containers"
     ux_table_row "dcstart" "start" "Start containers"
 }
@@ -89,6 +90,7 @@ _docker_help_rows_intent() {
     ux_table_row "start with overlay" "(raw)" "docker compose -f a.yml -f b.yml up -d --build"
     ux_table_row "stop a stack" "dcd" "docker compose down"
     ux_table_row "wipe data too" "dcdv" "docker compose down -v"
+    ux_table_row "stop + clear orphans" "dcdo" "docker compose down --remove-orphans"
     ux_table_row "rebuild a service" "dcb <svc>" "docker compose build <svc>"
     ux_table_row "reset stack with volumes + rebuild" "(raw)" "docker compose down -v && docker compose up -d --build"
     ux_table_row "restart a service" "dcr <svc>" "docker compose restart <svc>"
@@ -290,6 +292,7 @@ _docker_help_catalog() {
         'dcb|docker compose build|Build services|compose-extra' \
         'dcr|docker compose restart <svc>|Restart services|compose-extra' \
         'dcdv|docker compose down -v|Stop & remove volumes|compose-extra' \
+        'dcdo|docker compose down --remove-orphans|Stop & remove orphan containers (fixes net "still in use")|compose-extra' \
         'dcstop|docker compose stop|Stop containers|compose-extra' \
         'dcstart|docker compose start|Start containers|compose-extra' \
         'dps|docker ps|Running containers|basics' \
