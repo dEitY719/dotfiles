@@ -66,6 +66,27 @@ Remove the now-empty `[project.optional-dependencies]` table if `dev`
 was its only key. If other extras exist, keep the table and only lift
 the `dev` key out.
 
+### Silent regression — warn loudly
+
+Moving `dev` out of `optional-dependencies` is a **breaking change for
+any pip-based install path**. `pip install -e ".[dev]"` no longer finds a
+`dev` extra and *skips the dev deps with exit 0* — no error. Bootstrap /
+CI scripts that called it keep passing while pytest, ruff, etc. are never
+installed.
+
+So whenever a `dev` extra is lifted, the plan **and** the `--apply`
+report must carry this warning verbatim:
+
+```
+[WARN] dev deps moved to PEP 735 [dependency-groups] — any
+       `pip install -e ".[dev]"` in scripts/CI will now silently skip
+       dev deps. Use `uv sync` instead.
+```
+
+The `--update-docs` flag (see `stale-scan.md`) rewrites the in-repo
+callers; external CI still needs a manual look, so the warning fires even
+when `--update-docs` is set.
+
 ## Left untouched
 
 `[project]` name/version/description/`requires-python`, runtime

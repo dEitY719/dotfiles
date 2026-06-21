@@ -1,0 +1,58 @@
+# Stale legacy-reference scan (read-only) + `--update-docs`
+
+After a migration the config files are correct, but README / docs /
+bootstrap scripts still describe the **old** `venv + pip` workflow.
+Worst case is a *silent regression*: a script that calls
+`pip install -e ".[dev]"` keeps running with **exit 0** but now skips the
+dev deps, because the `dev` extra was lifted to PEP 735
+`[dependency-groups]` (see `pyproject-rewrite.md` §3). CI passes with
+pytest never installed.
+
+This scan surfaces those references. It is **always read-only** in the
+plan; rewriting them is opt-in via `--update-docs`.
+
+## Scan (always, both dry-run and `--apply`)
+
+`Grep` the target `<path>` (recursively) for the legacy-workflow ERE:
+
+```
+python -m venv|python3 -m venv|pip install|\.venv/bin/activate|\.\[dev\]|setuptools
+```
+
+Report each hit as `file:line` under a **Stale references** heading in
+the plan. The `pip install -e ".[dev]"` and `.[dev]` hits are the
+high-severity ones (silent regression) — flag them with `[WARN]`.
+
+### Exclusions (history, not live instructions)
+
+Skip paths that document the *past* rather than instruct the *present* —
+they are expected to mention the old flow:
+
+- `**/archive/**`, `**/_archive/**`
+- design/spec/plan docs: `**/*plan*.md`, `**/*spec*.md`, `**/*design*.md`,
+  `CHANGELOG*`, `docs/**/decisions/**`
+- the generated `mise.toml` / `uv.lock` / `.venv/**` themselves
+
+List how many hits were excluded so the suppression is never silent:
+`[INFO] N stale-reference hits in history/archive paths (not shown)`.
+
+## `--update-docs` (opt-in, only with `--apply`)
+
+Off by default. When set, after the config rewrite + `uv sync` succeed,
+rewrite the **non-excluded** hits with the canonical replacements below,
+then re-print the touched files. Never edit excluded/history paths.
+
+| Legacy | Replacement |
+|---|---|
+| `python -m venv .venv` / `python3 -m venv .venv` | `uv sync` (creates the venv) |
+| `source .venv/bin/activate` | (drop; prefix commands with `uv run`) |
+| `pip install -e ".[dev]"` / `pip install -e .` | `uv sync` |
+| `pip install <pkg>` | `uv add <pkg>` |
+
+Code blocks that show a *full* sequence (`venv` → `activate` →
+`pip install`) collapse to a single `uv sync`. When a line's intent is
+ambiguous, leave it and report it as a manual-review hit rather than
+guess — this skill never improvises source/doc edits (`constraints.md`).
+
+`--update-docs` without `--apply` is a no-op with a note:
+`[INFO] --update-docs requires --apply; scan is read-only in dry-run`.

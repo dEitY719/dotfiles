@@ -76,10 +76,31 @@ remove: .venv/
 remove: karakeep_sync.egg-info/
 ```
 
+## Stale references (read-only scan)
+
+The migration is correct, but the repo still documents the old flow:
+
+```
+[WARN] scripts/bootstrap.sh:12   pip install -e ".[dev]"   (silent regression — now skips dev deps)
+[WARN] README.md:40              source .venv/bin/activate
+       README.md:38              python -m venv .venv
+       docs/todo.md:21           pip install -e ".[dev]"
+       docs/pc-environment.md:9  python -m venv .venv
+[INFO] 2 stale-reference hits in docs/archive/ (history — not shown)
+```
+
+`--update-docs` would rewrite the five live hits to `uv sync` / `uv run`
+and leave the archived ones alone. `scripts/bootstrap.sh` is the real
+victim of the PEP 735 move — without the rewrite it keeps exiting 0 while
+pytest never installs.
+
 ## Verdict
 
 ```
+[WARN] dev deps moved to PEP 735 [dependency-groups] — any
+       `pip install -e ".[dev]"` in scripts/CI will now silently skip
+       dev deps. Use `uv sync` instead.
 [OK] devx:mise-migrate path=~/para/project/karakeep/sync backend=hatchling py=3.13 tasks=2
-     synced=yes cleaned=.venv,egg-info
+     synced=yes cleaned=.venv,egg-info docs=rewrote-5
 Next: mise run test
 ```
