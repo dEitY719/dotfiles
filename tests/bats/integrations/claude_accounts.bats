@@ -395,6 +395,28 @@ SH
     assert_output --partial "Account: work"
 }
 
+@test "bash: claude_accounts_status reports skills as composed dir, not missing (#707 regression)" {
+    # skills/ became a real composed directory in #707 (F-8). The status
+    # loop only knew symlink / real-file shapes, so the real dir fell to
+    # the else arm and printed "skills: ✗ missing" even though setup.sh's
+    # own verify confirmed the dir — a false negative the diagnostic showed.
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs" "${DOTFILES_ROOT}/claude/workflows"
+    run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init && CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
+    assert_success
+    assert_output --partial "skills: composed dir ✓"
+    refute_output --partial "skills: ✗ missing"
+}
+
+@test "bash: claude_accounts_status reports workflows symlink (#707 regression)" {
+    # The status loop omitted workflows entirely, so a broken workflows
+    # link would never surface at diagnosis time even though setup.sh
+    # creates and verifies it.
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs" "${DOTFILES_ROOT}/claude/workflows"
+    run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init && CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
+    assert_success
+    assert_output --partial "workflows: symlink ✓"
+}
+
 @test "bash: claude_accounts_status reports NOT logged in when no .credentials.json" {
     mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init && claude_accounts_status'

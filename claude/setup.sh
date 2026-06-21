@@ -193,34 +193,6 @@ _migrate_legacy_statusline_command() {
     fi
 }
 
-# Resolve the currently active Claude Code config directory used as the
-# canonical prefix for plugin state migration.
-#
-# Detection order (issue: multi-account installLocation prefix mismatch):
-#   1. $CLAUDE_CONFIG_DIR if set (Claude Code's own override)
-#   2. $HOME/.claude — only when _dotfiles_setup_mode says we are in
-#      `internal` (single-account) mode. In multi-account mode the
-#      script later (~L578) creates ~/.claude as an empty guard dir, so
-#      a bare `[ -d ~/.claude ]` filesystem test would falsely succeed
-#      and the migration would normalize prefixes to the guard path.
-#      Gate by the SSOT mode helper instead.
-#   3. $HOME/.claude-personal (multi-account default — backward compat
-#      with the original #340 migration target)
-#
-# Prints the absolute dir on stdout (no trailing slash). Never fails.
-_current_claude_config_dir() {
-    if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then
-        printf '%s' "${CLAUDE_CONFIG_DIR%/}"
-        return 0
-    fi
-    if command -v _dotfiles_setup_mode >/dev/null 2>&1 \
-       && [ "$(_dotfiles_setup_mode)" = "internal" ]; then
-        printf '%s' "${HOME}/.claude"
-        return 0
-    fi
-    printf '%s' "${HOME}/.claude-personal"
-}
-
 # Auto-migrate stale Claude Code plugin paths (issue #340 + multi-account
 # follow-up).
 #
@@ -245,12 +217,26 @@ _current_claude_config_dir() {
 #     (.plugins[<key>][<idx>].installPath)
 _migrate_legacy_plugin_paths() {
     local plugins_root="${HOME}/.claude-shared/plugins"
-    local new_prefix
-    new_prefix="$(_current_claude_config_dir)/plugins/"
+    # Normalize to the *shared* physical plugin dir, NOT the active account's
+    # dir. Every per-account ~/.claude-<acct>/plugins is a symlink INTO
+    # ~/.claude-shared/plugins (wired by _claude_ensure_symlink in
+    # _claude_account_setup_one), and installed_plugins.json itself lives in
+    # the shared dir and is read by *all* accounts. The previous code aimed
+    # at the active account's dir (~/.claude-<active>/plugins/), which made
+    # the recorded prefix volatile: switching the active account and re-running
+    # setup
+    # rewrote every path to the new account (2건씩 재마이그레이션 + backup
+    # 덮어쓰기) even though nothing physically moved — all prefixes resolve
+    # through the symlink to the same shared files anyway. The shared dir is
+    # a stable fixed point, so the migration converges and later runs are
+    # 0건 regardless of which account is active when setup runs.
+    local new_prefix="${plugins_root}/"
     # Match any ${HOME}/.claude(-suffix)?/plugins/ — the legacy ${HOME}/.claude/
-    # form from #340 plus every per-account variant. $HOME is interpolated
-    # literally (not as a regex), so an unusual $HOME containing regex
-    # meta-chars would over-match; acceptable for our environment.
+    # form from #340 plus every per-account variant (.claude-shared itself
+    # matches too, so already-normalized entries skip via the startswith($new)
+    # guard in the jq filters). $HOME is interpolated literally (not as a
+    # regex), so an unusual $HOME containing regex meta-chars would
+    # over-match; acceptable for our environment.
     local old_regex="^${HOME}/\\.claude(-[A-Za-z0-9_]+)?/plugins/"
 
     [ -d "$plugins_root" ] || return 0

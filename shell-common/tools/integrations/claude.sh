@@ -973,7 +973,7 @@ claude_accounts_status() {
             echo "                → Run: claude-yolo --user $_cas_acct"
         fi
 
-        for _cas_link in settings.json settings.local.json statusline-command.sh plugins projects/GLOBAL/memory skills docs; do
+        for _cas_link in settings.json settings.local.json statusline-command.sh plugins projects/GLOBAL/memory skills docs workflows; do
             if [ "$_cas_link" = "settings.json" ]; then
                 # settings.json is a real-file copy since #940 (was a
                 # symlink) — a symlink here is the legacy write-through
@@ -997,6 +997,15 @@ claude_accounts_status() {
                 # file (#584), never a symlink — report it as present
                 # rather than missing (gemini review on PR #590).
                 echo "  $_cas_link: regular file ✓"
+            elif [ "$_cas_link" = "skills" ] && [ -d "$_cas_cdir/$_cas_link" ]; then
+                # skills/ is an entry-level *composed directory* since #707
+                # (F-8), not a symlink — _claude_compose_skills_dir fills it
+                # with per-skill links so a private company-skills overlay
+                # can layer in. Without this branch the diagnostic fell to
+                # the else arm and wrongly reported "✗ missing" even though
+                # setup.sh's own verify confirmed the dir (this loop never
+                # learned the #707 layout change).
+                echo "  $_cas_link: composed dir ✓"
             else
                 echo "  $_cas_link: ✗ missing"
             fi
