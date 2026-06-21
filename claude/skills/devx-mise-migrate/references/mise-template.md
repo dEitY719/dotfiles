@@ -32,10 +32,11 @@ depends     = ["lint-py"]
 [tasks.lint-py]
 description = "Python lint (ruff check + format check[ + mypy])"
 run = [
-    "uv run ruff check .",
-    "uv run ruff format --check .",
-    # "uv run mypy .",   # only if mypy detected
+    "uv run ruff check .",          # only if ruff detected
+    "uv run ruff format --check .", # only if ruff detected
+    # "uv run mypy .",              # only if mypy detected
 ]
+# mypy-only project (no ruff) → run = ["uv run mypy ."] and no fix-py.
 
 # ─── Test gate ───────────────────────────────────────────────────────
 [tasks.test]
@@ -47,7 +48,7 @@ run = "uv run pytest"
 description = "전체 auto-fix"
 depends     = ["fix-py"]
 
-[tasks.fix-py]
+[tasks.fix-py]   # emit only if ruff detected (mypy has no auto-fix)
 description = "Python auto-fix (ruff check --fix + format)"
 run = [
     "uv run ruff check --fix .",
@@ -69,8 +70,17 @@ run = "uv run {{ script_name }}"
   lines only when those tools are detected. They are a `uv run`
   fallback, mirroring the repo comment "fallback for environments that
   need the binary outside `uv run`".
-- **lint / fix tasks** — emit the whole `lint*`/`fix*` group only when a
-  linter is detected. Comment the `mypy` line in only when mypy is found.
+- **lint / fix tasks** — emit the `lint*`/`fix*` group only when *some*
+  linter is detected, and build each `run` array per-tool — never emit a
+  command for a tool that is absent (it would fail on `mise run`):
+  - ruff detected → include the `ruff check` / `ruff format` lines
+    (lint) and `ruff check --fix` / `ruff format` lines (fix).
+  - mypy detected → append `uv run mypy .` to `lint-py` (mypy has no
+    auto-fix, so it adds nothing to `fix-py`).
+  - **mypy only (no ruff)** → `lint-py` runs *just* `uv run mypy .`;
+    drop every ruff line and omit `fix`/`fix-py` entirely.
+  - neither → omit `lint`/`fix` (logged per `extraction.md`).
+  Adjust each `description` to match the lines actually emitted.
 - **`[tasks.run]`** — only when `[project.scripts]` has at least one
   entry; `{{ script_name }}` is the first script name.
 - **`test`** — always emitted; default `uv run pytest`.
