@@ -48,9 +48,9 @@ Detect a legacy Python project, else refuse early (exit 1):
 - No `pyproject.toml` / `setup.py` / `requirements*.txt` at `<path>` →
   **nested fallback**: if `<path>` has none but exactly one direct child
   dir (depth 1) does, retarget to it and note
-  `[INFO] retargeting to nested project: <child>` (≥2 candidates →
-  list them and stop). Still none → `[FAIL] devx:mise-migrate: not a
-  Python project: <path>`.
+  `[INFO] retargeting to nested project: <child>` (≥2 candidates → list
+  them and fail with exit 1). Still none → `[FAIL] devx:mise-migrate: not
+  a Python project: <path>` (exit 1).
 - A `mise.toml` already exists → `[INFO] devx:mise-migrate: already
   migrated` (exit 0, idempotent).
 
