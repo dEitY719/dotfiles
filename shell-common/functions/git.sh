@@ -79,26 +79,41 @@ _gb_clean_remote() {
     # Sync tracking refs with the server so the deletion list is accurate
     git fetch --prune "$remote" >/dev/null 2>&1 || true
 
-    # Deletable branches: remote-tracking refs minus the HEAD pointer and main/master.
-    # Emit short names (no "<remote>/" prefix) — that is what `git push --delete` wants.
-    # NOTE: `grep -v -- '->'` (the `--` terminator) is required; a bare `'-> '`
-    #       pattern starts with '-' and grep parses it as an option (#bug).
-    local branches
-    branches=$(git branch -r \
-        | sed 's/^[[:space:]]*//' \
-        | grep "^$remote/" \
-        | grep -v -- '->' \
-        | grep -v "^$remote/main$" \
-        | grep -v "^$remote/master$" \
-        | sed "s#^$remote/##")
+    # Build the deletable-branch list with a pure-shell loop: no per-line
+    # subprocess forks, and `case "$ref" in "$remote"/*)` matches the remote
+    # name *literally* — a remote whose name contains a regex metachar (e.g.
+    # '.') would mis-match under `grep "^$remote/"`. Emit short names (no
+    # "<remote>/" prefix) — that is what `git push --delete` wants. Branch
+    # names carry no whitespace, so `read`'s IFS-trimming of the "  origin/foo"
+    # indentation is safe, and the HEAD pointer line is skipped via " -> ".
+    local branches="" branch_count=0 ref b
+    while read -r ref; do
+        [ -n "$ref" ] || continue
+        case "$ref" in
+            *" -> "*) continue ;;
+        esac
+        case "$ref" in
+            "$remote"/*)
+                b="${ref#"$remote"/}"
+                [ "$b" = "main" ] && continue
+                [ "$b" = "master" ] && continue
+                branch_count=$((branch_count + 1))
+                if [ -z "$branches" ]; then
+                    branches="$b"
+                else
+                    branches="${branches}
+${b}"
+                fi
+                ;;
+        esac
+    done <<EOF
+$(git branch -r)
+EOF
 
-    if [ -z "$branches" ]; then
+    if [ "$branch_count" -eq 0 ]; then
         ux_info "No branches to delete on '$remote' (keeping main/master)"
         return 0
     fi
-
-    local branch_count
-    branch_count=$(printf '%s\n' "$branches" | grep -c .)
 
     ux_warning "About to PERMANENTLY DELETE $branch_count branch(es) on remote '$remote':"
     while IFS= read -r branch; do
