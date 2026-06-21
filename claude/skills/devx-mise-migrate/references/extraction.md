@@ -14,7 +14,16 @@ Priority order:
 3. `.python-version` (pyenv) if present.
 
 Emit a single concrete pin for `[tools] python` (e.g. `"3.13"`). When
-only a `>=` floor is known, pin the floor and note it in the plan.
+only a `>=` floor is known (no `pyvenv.cfg`), pin the floor and note in
+the plan that the pin is the **floor**, not what `uv` will actually
+resolve — `uv sync` picks the newest interpreter on the box that
+satisfies it (e.g. floor `3.11` but uv grabs the system `3.13.5`):
+
+```
+[INFO] python pin = requires-python floor (3.11); no pyvenv.cfg found.
+       `uv sync` may resolve a newer interpreter (e.g. 3.13). Pin
+       [tools] python to an exact version if you need it reproducible.
+```
 
 ## Dependencies
 
