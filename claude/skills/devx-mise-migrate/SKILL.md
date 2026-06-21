@@ -33,29 +33,17 @@ metadata:
 ## Help
 
 If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
-output its content verbatim, then stop. **No detection, no file
-mutation.**
+output its content verbatim, then stop. **No detection, no file mutation.**
 
 ## Step 1: Parse Args + Detect a Legacy Python Project
 
 Positional `[path]` defaults to `.`. Flags: `--dry-run` (default),
 `--apply`, `--backend hatchling|uv_build` (default `hatchling`),
-`--keep-venv` (skip cleanup), `--update-docs` (opt-in stale-doc rewrite,
-`references/stale-scan.md`). Full table in `references/help.md`.
+`--keep-venv`, `--update-docs`. Full table in `references/help.md`.
 
-Detect a legacy Python project, else refuse early (exit 1):
-
-- No `pyproject.toml` / `setup.py` / `requirements*.txt` at `<path>` →
-  **nested fallback**: if `<path>` has none but exactly one direct child
-  dir (depth 1) does, retarget to it and note
-  `[INFO] retargeting to nested project: <child>` (≥2 candidates → list
-  them and fail with exit 1). Still none → `[FAIL] devx:mise-migrate: not
-  a Python project: <path>` (exit 1).
-- A `mise.toml` already exists → `[INFO] devx:mise-migrate: already
-  migrated` (exit 0, idempotent).
-
-A pyenv `.venv/` / `pyvenv.cfg` is the signal worth migrating, but its
-absence is not fatal — a pip/requirements project still qualifies.
+Detect a legacy Python project (pyproject / setup.py / `requirements*.txt`),
+applying the nested-fallback retarget, the already-migrated short-circuit,
+and the refusal exit codes in `references/detection.md`.
 
 ## Step 2: Extract Migration Facts (read-only)
 
@@ -79,21 +67,16 @@ full before→after walkthrough):
 3. **Cleanup list** — stale `.venv/` + `*.egg-info/` (skipped by
    `--keep-venv`).
 4. **Stale references** — read-only grep of `<path>` for the legacy
-   `venv`/`pip`/`.[dev]` workflow, reported as `file:line` with
-   history/archive paths excluded. Full ERE, exclusions, and the opt-in
-   `--update-docs` rewrite: `references/stale-scan.md`.
+   `venv`/`pip`/`.[dev]` workflow, reported as `file:line` (history /
+   archive excluded). Full ERE + opt-in `--update-docs` rewrite:
+   `references/stale-scan.md`.
 
-When a `dev` extra is lifted to `[dependency-groups]`, also surface the
-PEP 735 silent-regression `[WARN]` (`references/pyproject-rewrite.md`),
-and when the Python pin came from a `requires-python` floor (no
-`pyvenv.cfg`), the floor-vs-resolved `[INFO]` (`references/extraction.md`).
+Surface the PEP 735 silent-regression `[WARN]` when a `dev` extra is
+lifted (`references/pyproject-rewrite.md`), and the floor-vs-resolved
+`[INFO]` when the pin came from `requires-python` (`references/extraction.md`).
 
-In `--dry-run` (default), **print all four and stop**:
-
-```
-Plan ready: <path> (backend=<backend>, py=<ver>, tasks=<n>, stale=<s>)
-Run with --apply to write mise.toml, rewrite pyproject, and uv sync.
-```
+In `--dry-run` (default), print all four and stop using the plan block in
+`references/output-format.md`.
 
 ## Step 4: Apply (only if `--apply`)
 
@@ -111,13 +94,6 @@ In order, stopping on first failure with `[FAIL] devx:mise-migrate
 
 ## Step 5: Report
 
-```
-[OK] devx:mise-migrate path=<path> backend=<backend> py=<ver> tasks=<n>
-```
-
-On `--apply` append `synced=yes cleaned=<.venv,egg-info|kept>
-docs=<rewrote-N|scan-only>`. Always re-print any `[WARN]`/`[INFO]`
-notes (PEP 735 regression, stale references, pin-is-floor) so they
-survive into the final surface. On dry-run append `Next: review the
-plan, then re-run with --apply`. After a successful apply, hint
-`Next: mise run test`.
+Emit the success line, the `--apply` append fields, the dry-run `Next:`
+hint, and the carried-over `[WARN]`/`[INFO]` notes per
+`references/output-format.md`.
