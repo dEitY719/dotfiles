@@ -15,29 +15,26 @@ Run with --apply to write mise.toml, rewrite pyproject, and uv sync.
 
 ## Final report (Step 5)
 
-Always emit the success line:
+Emit a **single** structured success line. The `--apply` fields append to
+that same line (one key=value verdict line — never a second line); the
+`Next:` hint then prints on its own separate line.
+
+Base success line (always):
 
 ```
 [OK] devx:mise-migrate path=<path> backend=<backend> py=<ver> tasks=<n>
 ```
 
-### On `--apply`, append the apply fields
+On `--apply`, append the apply fields to that **same** line:
 
 ```
-synced=yes cleaned=<.venv,egg-info|kept> docs=<rewrote-N|scan-only>
+[OK] devx:mise-migrate path=<path> backend=<backend> py=<ver> tasks=<n> synced=yes cleaned=<.venv,egg-info|kept> docs=<rewrote-N|scan-only>
 ```
 
-After a successful apply, hint:
+Then print the next-step hint on its **own** line:
 
-```
-Next: mise run test
-```
-
-### On `--dry-run`, append the next-step hint
-
-```
-Next: review the plan, then re-run with --apply
-```
+- `--dry-run` → `Next: review the plan, then re-run with --apply`
+- successful `--apply` → `Next: mise run test`
 
 ## Carried-over notes (both modes)
 
