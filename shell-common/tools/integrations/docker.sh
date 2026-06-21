@@ -24,6 +24,7 @@ alias dce='docker compose exec' # 서비스 내 명령 실행 (dce app bash 등)
 alias dcps='docker compose ps'       # compose 서비스 상태
 alias dcb='docker compose build'     # 서비스 이미지 빌드
 alias dcdv='docker compose down -v'  # 볼륨까지 삭제 (데이터 초기화)
+alias dcdo='docker compose down --remove-orphans' # compose 밖 orphan 컨테이너까지 정리 (네트워크 "still in use" 해결)
 alias dcstop='docker compose stop'   # 컨테이너만 정지
 alias dcstart='docker compose start' # 정지된 컨테이너 시작
 
