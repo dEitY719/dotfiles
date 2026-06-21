@@ -55,9 +55,13 @@ then re-print the touched files. Never edit excluded/history paths.
 | `pip install <pkg>` | `uv add <pkg>` |
 
 Code blocks that show a *full* sequence (`venv` → `activate` →
-`pip install`) collapse to a single `uv sync`. When a line's intent is
-ambiguous, leave it and report it as a manual-review hit rather than
-guess — this skill never improvises source/doc edits (`constraints.md`).
+`pip install`) collapse to a single `uv sync`. The remaining ERE
+alternatives have **no mechanical rewrite** — a bare `setuptools` mention
+or a prose `requirements.txt` reference depends on surrounding context
+(build-backend prose, a stale install doc, a historical note). Report
+these as manual-review hits and leave them untouched. When any line's
+intent is ambiguous, do the same rather than guess — this skill never
+improvises source/doc edits (`constraints.md`).
 
 `--update-docs` without `--apply` is a no-op with a note:
 `[INFO] --update-docs requires --apply; scan is read-only in dry-run`.
