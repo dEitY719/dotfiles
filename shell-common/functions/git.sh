@@ -51,36 +51,99 @@ git_log_upstream() {
 # Usage: gb [-D local] [-D remote [<remote>]] [git-branch-flags...]
 # ============================================================================
 _gb_clean_remote() {
-    local remote="${1:-origin}"
+    # zsh compatibility: emulate POSIX sh to ensure word splitting on unquoted vars
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
 
-    # Capture branch list once, reuse for count and iteration
+    local assume_yes=0 remote=""
+
+    # Parse optional flags and an optional remote name (order-independent)
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -y | --yes) assume_yes=1 ;;
+            -h | --help) _gb_help; return 0 ;;
+            -*) ux_error "Unknown option: $1"; return 1 ;;
+            *) remote="$1" ;;
+        esac
+        shift
+    done
+    remote="${remote:-origin}"
+
+    # Fail fast if the remote is unknown
+    if ! git remote get-url "$remote" >/dev/null 2>&1; then
+        ux_error "Remote '$remote' not found"
+        return 1
+    fi
+
+    # Sync tracking refs with the server so the deletion list is accurate
+    git fetch --prune "$remote" >/dev/null 2>&1 || true
+
+    # Deletable branches: remote-tracking refs minus the HEAD pointer and main/master.
+    # Emit short names (no "<remote>/" prefix) — that is what `git push --delete` wants.
+    # NOTE: `grep -v -- '->'` (the `--` terminator) is required; a bare `'-> '`
+    #       pattern starts with '-' and grep parses it as an option (#bug).
     local branches
-    branches=$(git branch -r | grep "^[[:space:]]*$remote/" | grep -v "^[[:space:]]*$remote/main" | grep -v "^[[:space:]]*$remote/master" | grep -v "-> " | sed 's/^[[:space:]]*//')
+    branches=$(git branch -r \
+        | sed 's/^[[:space:]]*//' \
+        | grep "^$remote/" \
+        | grep -v -- '->' \
+        | grep -v "^$remote/main$" \
+        | grep -v "^$remote/master$" \
+        | sed "s#^$remote/##")
 
-    local branch_count
-    branch_count=$(printf '%s\n' "$branches" | grep -c . 2>/dev/null || echo 0)
-
-    if [ "$branch_count" -eq 0 ]; then
-        ux_info "No branches to delete (keeping $remote/main)"
+    if [ -z "$branches" ]; then
+        ux_info "No branches to delete on '$remote' (keeping main/master)"
         return 0
     fi
 
-    ux_header "Deleting $branch_count branch(es) from '$remote':"
-    printf '%s\n' "$branches" | while IFS= read -r branch; do
-        [ -n "$branch" ] || continue
-        ux_info "Deleting: $branch"
-        git branch -dr "$branch" >/dev/null 2>&1
-    done
+    local branch_count
+    branch_count=$(printf '%s\n' "$branches" | grep -c .)
 
-    ux_success "Done!"
+    ux_warning "About to PERMANENTLY DELETE $branch_count branch(es) on remote '$remote':"
+    while IFS= read -r branch; do
+        [ -n "$branch" ] && ux_bullet_sub "$remote/$branch"
+    done <<EOF
+$branches
+EOF
+
+    if [ "$assume_yes" -ne 1 ]; then
+        if ! ux_confirm "Permanently delete these remote branches?"; then
+            ux_info "Aborted. No branches deleted."
+            return 0
+        fi
+    fi
+
+    ux_header "Deleting $branch_count branch(es) from '$remote':"
+    local deleted=0 failed=0
+    while IFS= read -r branch; do
+        [ -n "$branch" ] || continue
+        if git push "$remote" --delete "$branch" >/dev/null 2>&1; then
+            ux_info "Deleted: $remote/$branch"
+            deleted=$((deleted + 1))
+        else
+            ux_error "Failed: $remote/$branch"
+            failed=$((failed + 1))
+        fi
+    done <<EOF
+$branches
+EOF
+
+    if [ "$failed" -gt 0 ]; then
+        ux_warning "Done with errors. Deleted $deleted, failed $failed."
+        return 1
+    fi
+    ux_success "Done! Deleted $deleted branch(es) from '$remote'."
 }
 
 _gb_help() {
-    ux_info "Usage: gb [-D local] [-D remote [<remote>]] [git-branch-flags...]"
+    ux_info "Usage: gb [-D local] [-D remote [-y] [<remote>]] [git-branch-flags...]"
     ux_bullet "sub-commands"
-    ux_bullet_sub "gb -D local               delete local branches (keeps: main + current + keywords)"
-    ux_bullet_sub "gb -D remote [<remote>]   delete remote-tracking branches (default: origin, keeps: main/master)"
-    ux_bullet_sub "gb [flags]                passthrough to git --no-pager branch"
+    ux_bullet_sub "gb -D local                  delete local branches (keeps: main + current + keywords)"
+    ux_bullet_sub "gb -D remote [-y] [<remote>] delete branches on the remote SERVER (default: origin, keeps: main/master)"
+    ux_bullet_sub "gb [flags]                   passthrough to git --no-pager branch"
+    ux_bullet "options"
+    ux_bullet_sub "-y, --yes                 skip the confirmation prompt (remote deletion is permanent)"
 }
 
 git_branch() {

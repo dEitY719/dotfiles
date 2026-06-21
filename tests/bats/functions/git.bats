@@ -56,6 +56,47 @@ teardown() {
     assert_output --partial "git-log"
 }
 
+# --- gb -D remote behavior (server-side deletion against a local bare remote) ---
+
+@test "bash: gb -D remote deletes non-main branches on the remote server" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        git push -q origin HEAD:docs/some-spec
+        git push -q origin HEAD:wt/issue-318/1
+        _gb_clean_remote -y origin >/dev/null 2>&1
+        printf "REMAINING: "
+        git ls-remote --heads "$tmp/remote.git" | sed "s#.*refs/heads/##" | sort | tr "\n" " "
+        echo
+        rm -rf "$tmp"
+    '
+    assert_success
+    assert_output --partial "REMAINING: main"
+    refute_output --partial "docs/some-spec"
+    refute_output --partial "wt/issue-318/1"
+}
+
+@test "bash: gb -D remote keeps main and reports nothing to delete when only main exists" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        _gb_clean_remote -y origin
+        rm -rf "$tmp"
+    '
+    assert_success
+    assert_output --partial "No branches to delete"
+}
+
 # --- git worktree functions ---
 
 @test "bash: gwt function exists" {
