@@ -29,10 +29,12 @@ on:
       - develop
   workflow_dispatch:
 
-# Cancel superseded runs on the same ref to save runner minutes.
+# Do not cancel in-progress runs: GitHub marks pre-start cancelled jobs as
+# "failure" (not "cancelled") in the API, which pollutes check history.
+# Lint takes ~1-2 min on the runner — the extra runner minutes are acceptable.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   lint:
