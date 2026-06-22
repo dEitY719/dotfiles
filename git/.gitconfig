@@ -3,7 +3,6 @@
 	name = dEitY719
 [credential]
 	helper = store
-	useHttpPath = true
 [core]
 	editor = code --wait
 	hooksPath = ~/.config/git/hooks
@@ -24,6 +23,8 @@
 [credential "https://github.com"]
 	helper =
 	helper = !gh auth git-credential
+	useHttpPath = true
 [credential "https://gist.github.com"]
 	helper =
 	helper = !gh auth git-credential
+	useHttpPath = true
