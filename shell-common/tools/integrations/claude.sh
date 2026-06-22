@@ -1434,6 +1434,7 @@ settings.json|${_car_claude_src}/settings.json
 statusline-command.sh|${_car_claude_src}/statusline-command.sh
 skills|${_car_claude_src}/skills
 docs|${_car_claude_src}/docs
+workflows|${_car_claude_src}/workflows
 projects/GLOBAL/memory|${_car_claude_src}/global-memory
 EOF
     done
