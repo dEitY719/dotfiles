@@ -32,6 +32,10 @@ if [ ! -d "$TRANSFER_DIR" ] || [ -z "$(git ls-files "$TRANSFER_DIR")" ]; then
 fi
 
 BRANCH="$(git branch --show-current)"
+if [ -z "$BRANCH" ]; then
+    echo "✗ 현재 detached HEAD 상태이거나 브랜치 이름을 가져올 수 없습니다." >&2
+    exit 1
+fi
 echo "▶ 브랜치 '$BRANCH' 에서 $TRANSFER_DIR/ 전달물을 비웁니다:"
 git ls-files "$TRANSFER_DIR" | sed 's/^/    - /'
 
@@ -39,7 +43,7 @@ git ls-files "$TRANSFER_DIR" | sed 's/^/    - /'
 git rm -r --quiet "$TRANSFER_DIR"
 
 # 2) 커밋
-git commit -m "chore(transfer): $TRANSFER_DIR/ 전달물 비우기 (참고 완료)"
+git commit -m "chore(transfer): $TRANSFER_DIR/ 전달물 비우기 (참고 완료)" -- "$TRANSFER_DIR"
 
 # 3) push (현재 브랜치 upstream)
 echo "▶ push: origin/$BRANCH"
