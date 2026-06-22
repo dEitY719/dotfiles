@@ -25,6 +25,9 @@
     # 일반 PowerShell에서 (자동 권한 상승 포함):
     powershell -ExecutionPolicy Bypass -Command "iex (irm 'https://raw.githubusercontent.com/dEitY719/dotfiles/main/windows/Compact-WSL.ps1')"
 
+    # 원격 실행 + 파라미터 전달 (iex 는 인자를 못 받으므로 scriptblock 사용):
+    & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/dEitY719/dotfiles/main/windows/Compact-WSL.ps1'))) -DistroName "Ubuntu"
+
     # 파일로 저장 후 실행:
     .\Compact-WSL.ps1
     .\Compact-WSL.ps1 -UseSparse
@@ -96,12 +99,25 @@ Write-Host "[1/5] vhdx 경로 탐색 중..." -ForegroundColor Green
 $lxssRoot = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss"
 $basePath = $null
 
+# 등록된 WSL2 배포판 전체 수집 (vhdx 기반 = Version 2 만 압축 대상)
+$distros = @()
 foreach ($key in (Get-ChildItem $lxssRoot -ErrorAction SilentlyContinue)) {
     $props = Get-ItemProperty $key.PSPath
-    if ($props.DistributionName -eq $DistroName) {
-        $basePath = $props.BasePath
-        break
-    }
+    if ($props.Version -ne 2) { continue }
+    $distros += [pscustomobject]@{ Name = $props.DistributionName; BasePath = $props.BasePath }
+}
+
+# 1) 이름 정확 일치
+$match = $distros | Where-Object { $_.Name -eq $DistroName } | Select-Object -First 1
+if ($match) {
+    $basePath = $match.BasePath
+}
+# 2) 일치 없음 + 배포판이 하나뿐이면 자동 선택 (이름 몰라도 동작)
+elseif ($distros.Count -eq 1) {
+    Write-Host "[!] '$DistroName' 을(를) 찾지 못했지만 등록된 WSL2 배포판이 하나뿐이라 자동 선택합니다." -ForegroundColor Yellow
+    $DistroName = $distros[0].Name
+    $basePath   = $distros[0].BasePath
+    Write-Host "    대상 배포판: $DistroName`n" -ForegroundColor Yellow
 }
 
 if (-not $basePath) {
