@@ -102,8 +102,9 @@ $basePath = $null
 # 등록된 WSL2 배포판 전체 수집 (vhdx 기반 = Version 2 만 압축 대상)
 $distros = @()
 foreach ($key in (Get-ChildItem $lxssRoot -ErrorAction SilentlyContinue)) {
-    $props = Get-ItemProperty $key.PSPath
-    if ($props.Version -ne 2) { continue }
+    $props = Get-ItemProperty $key.PSPath -ErrorAction SilentlyContinue
+    # 손상/비정상 키 방어: 조회 실패 또는 필수 속성 누락 시 건너뜀
+    if (-not $props -or $props.Version -ne 2 -or -not $props.DistributionName -or -not $props.BasePath) { continue }
     $distros += [pscustomobject]@{ Name = $props.DistributionName; BasePath = $props.BasePath }
 }
 
