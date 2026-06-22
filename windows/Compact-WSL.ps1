@@ -185,13 +185,18 @@ exit
     $proc = Start-Process diskpart.exe -ArgumentList "/s `"$tmp`"" `
         -PassThru -NoNewWindow -RedirectStandardOutput $logOut
 
+    # diskpart 는 콘솔 OEM 코드페이지(한국어 Windows=CP949)로 로그를 쓴다.
+    # StreamReader 기본값(UTF-8)으로 읽으면 한글이 깨지므로 OEM 인코딩으로 디코딩한다.
+    $oemEncoding = [System.Text.Encoding]::GetEncoding(
+        [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage)
+
     # diskpart 가 로그를 쓰는 중에도 읽을 수 있도록 공유 모드로 연다
-    function Get-SharedText([string]$path) {
+    function Get-SharedText([string]$path, [System.Text.Encoding]$encoding) {
         $fs = $null
         $sr = $null
         try {
             $fs = [System.IO.File]::Open($path, 'Open', 'Read', 'ReadWrite')
-            $sr = New-Object System.IO.StreamReader($fs)
+            $sr = New-Object System.IO.StreamReader($fs, $encoding)
             return $sr.ReadToEnd()
         } catch {
             return ''
@@ -215,7 +220,7 @@ exit
     Write-Host ""   # 진행 바를 그릴 빈 줄 확보
 
     while (-not $proc.HasExited) {
-        $raw = Get-SharedText $logOut
+        $raw = Get-SharedText $logOut $oemEncoding
         $m   = $pctRe.Matches($raw)
         $pct = if ($m.Count) { [int]$m[$m.Count - 1].Groups[1].Value } else { -1 }
 
@@ -236,7 +241,7 @@ exit
 
     if ($proc.ExitCode -ne 0) {
         Write-Host "  [!] diskpart 종료 코드 $($proc.ExitCode) — 로그 확인:" -ForegroundColor Yellow
-        Get-SharedText $logOut | Write-Host
+        Get-SharedText $logOut $oemEncoding | Write-Host
     }
     Remove-Item $tmp, $logOut -ErrorAction SilentlyContinue
 
