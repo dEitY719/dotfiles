@@ -67,9 +67,29 @@ _gcp_scan_preflight_is_noop() {
             return 1
         fi
     fi
+    # Self-protection against a config-poisoning probe (issue #1016). When the
+    # probed commit edits `git/.gitconfig` (symlinked from ~/.gitconfig) and the
+    # `cherry-pick -n` below conflicts, git writes conflict markers straight into
+    # the symlink target. From that instant EVERY subsequent git invocation —
+    # including the `git reset --hard HEAD` recovery — dies with
+    # `fatal: bad config line N`, so the markers can never be cleared. Snapshot
+    # the real config file first with a plain `cp` (no git needed) so we can
+    # restore it the moment the probe fails, before touching git again.
+    local _gcfg_real="" _gcfg_bak=""
+    _gcfg_real=$(readlink -f "${HOME}/.gitconfig" 2>/dev/null)
+    if [ -n "$_gcfg_real" ] && [ -f "$_gcfg_real" ]; then
+        _gcfg_bak=$(mktemp 2>/dev/null) && cp "$_gcfg_real" "$_gcfg_bak" 2>/dev/null ||
+            _gcfg_bak=""
+    fi
     if git cherry-pick -n "$sha" >/dev/null 2>&1; then
         git diff --cached --quiet && result=0
     else
+        # Restore the (possibly marker-poisoned) gitconfig with `cp` BEFORE any
+        # further git call, otherwise `git diff`/`git reset` below fail fatally
+        # and the markers leak into the live ~/.gitconfig (issue #1016).
+        if [ -n "$_gcfg_bak" ] && [ -f "$_gcfg_bak" ]; then
+            cp "$_gcfg_bak" "$_gcfg_real" 2>/dev/null
+        fi
         conflicted=$(git diff --name-only --diff-filter=U)
         # Only a real merge conflict is eligible for the context-drift no-op
         # verdict. An EMPTY list means `cherry-pick -n` failed fatally (bad
@@ -86,6 +106,7 @@ _gcp_scan_preflight_is_noop() {
             git diff --cached --quiet && result=0
         fi
     fi
+    [ -n "$_gcfg_bak" ] && rm -f "$_gcfg_bak"
     git reset --hard HEAD >/dev/null 2>&1
     [ "$had_stash" -eq 1 ] && git stash pop -q >/dev/null 2>&1
     return $result
