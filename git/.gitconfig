@@ -3,6 +3,7 @@
 	name = dEitY719
 [credential]
 	helper = store
+	useHttpPath = true
 [core]
 	editor = code --wait
 	hooksPath = ~/.config/git/hooks
@@ -20,3 +21,9 @@
 	autoSetupRemote = true
 [fetch]
 	prune = true
+[credential "https://github.com"]
+	helper =
+	helper = !gh auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !gh auth git-credential
