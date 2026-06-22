@@ -159,7 +159,7 @@ _register_default_help_categories() {
 
     # Category membership (space-separated topic keys)
     HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git gwt gbr devx uv py nvm npm bun pp cli ux du psql mytool ghes_mirror mirror_pages_activate}"
-    HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql redis gpu network wsl_check sync_to_deploy}"
+    HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql redis gpu network wsl_check window sync_to_deploy}"
     HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc gemini codex litellm ollama claude_plugins claude_skills_marketplace superpowers}"
     HELP_CATEGORY_MEMBERS[cli]="${HELP_CATEGORY_MEMBERS[cli]:-fzf fd fasd ripgrep pet bat zsh zsh_autosuggestions gc tmux del_file}"
     HELP_CATEGORY_MEMBERS[config]="${HELP_CATEGORY_MEMBERS[config]:-p10k crt apt pip ghostty}"
@@ -221,6 +221,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[litellm_help]="${HELP_DESCRIPTIONS[litellm_help]:-[AI/LLM] LiteLLM proxy and routing}"
     HELP_DESCRIPTIONS[gpu_help]="${HELP_DESCRIPTIONS[gpu_help]:-[DevOps] GPU monitoring (WSL)}"
     HELP_DESCRIPTIONS[wsl_check_help]="${HELP_DESCRIPTIONS[wsl_check_help]:-[DevOps] WSL & Docker environment health (disk/mem/docker)}"
+    HELP_DESCRIPTIONS[window_help]="${HELP_DESCRIPTIONS[window_help]:-[DevOps] Windows host PowerShell one-liners (Compact-WSL vhdx)}"
     HELP_DESCRIPTIONS[ux_help]="${HELP_DESCRIPTIONS[ux_help]:-[Development] UX library usage}"
     HELP_DESCRIPTIONS[mytool_help]="${HELP_DESCRIPTIONS[mytool_help]:-[Development] Custom tools and scripts}"
     HELP_DESCRIPTIONS[mysql_help]="${HELP_DESCRIPTIONS[mysql_help]:-[DevOps] MySQL service management}"
