@@ -68,28 +68,49 @@ _gcp_scan_preflight_is_noop() {
         fi
     fi
     # Self-protection against a config-poisoning probe (issue #1016). When the
-    # probed commit edits `git/.gitconfig` (symlinked from ~/.gitconfig) and the
-    # `cherry-pick -n` below conflicts, git writes conflict markers straight into
-    # the symlink target. From that instant EVERY subsequent git invocation —
-    # including the `git reset --hard HEAD` recovery — dies with
-    # `fatal: bad config line N`, so the markers can never be cleared. Snapshot
-    # the real config file first with a plain `cp` (no git needed) so we can
-    # restore it the moment the probe fails, before touching git again.
-    local _gcfg_real="" _gcfg_bak=""
+    # probed commit edits `git/.gitconfig` (symlinked from ~/.gitconfig), the
+    # `cherry-pick -n` below can leave the symlink target unreadable by git:
+    # a conflict writes `<<<<<<<` markers into it, and even a clean apply may
+    # stage a syntactically broken .gitconfig carried by the commit itself.
+    # From that instant EVERY subsequent git invocation — including the
+    # `git reset --hard HEAD` recovery — dies with `fatal: bad config line N`,
+    # so the breakage can never be cleared. Snapshot the real config file first
+    # with a plain `cp` (no git needed) so we can restore it before git reads it.
+    local _gcfg_real="" _gcfg_bak="" _gcp_cp_rc=0
+    # Resolve the file behind ~/.gitconfig portably: prefer GNU `readlink -f`,
+    # fall back to plain `readlink` + manual absolutisation for BSD/macOS (where
+    # `-f` is unsupported, PR #1018 review), then to the path itself when it is a
+    # regular (non-symlink) file.
     _gcfg_real=$(readlink -f "${HOME}/.gitconfig" 2>/dev/null)
-    if [ -n "$_gcfg_real" ] && [ -f "$_gcfg_real" ]; then
-        _gcfg_bak=$(mktemp 2>/dev/null) && cp "$_gcfg_real" "$_gcfg_bak" 2>/dev/null ||
-            _gcfg_bak=""
+    if [ -z "$_gcfg_real" ]; then
+        _gcfg_real=$(readlink "${HOME}/.gitconfig" 2>/dev/null)
+        if [ -n "$_gcfg_real" ]; then
+            case "$_gcfg_real" in
+                /*) ;;
+                *) _gcfg_real="${HOME}/${_gcfg_real}" ;;
+            esac
+        else
+            _gcfg_real="${HOME}/.gitconfig"
+        fi
     fi
-    if git cherry-pick -n "$sha" >/dev/null 2>&1; then
+    if [ -n "$_gcfg_real" ] && [ -f "$_gcfg_real" ]; then
+        # Explicit template + fallback dir keeps mktemp portable to BSD/macOS,
+        # where a bare `mktemp` errors out (PR #1018 review).
+        _gcfg_bak=$(mktemp "${TMPDIR:-/tmp}/gcfg_bak.XXXXXX" 2>/dev/null) &&
+            cp "$_gcfg_real" "$_gcfg_bak" 2>/dev/null || _gcfg_bak=""
+    fi
+    git cherry-pick -n "$sha" >/dev/null 2>&1 || _gcp_cp_rc=$?
+    # Restore the working-tree gitconfig UNCONDITIONALLY and immediately, before
+    # any further git command reads it — covers both the conflict path and the
+    # clean-apply-of-broken-config path (PR #1018 review). `cp` touches only the
+    # worktree, never the index, so the staged-diff no-op verdict below is
+    # unaffected.
+    if [ -n "$_gcfg_bak" ] && [ -f "$_gcfg_bak" ]; then
+        cp "$_gcfg_bak" "$_gcfg_real" 2>/dev/null
+    fi
+    if [ "$_gcp_cp_rc" -eq 0 ]; then
         git diff --cached --quiet && result=0
     else
-        # Restore the (possibly marker-poisoned) gitconfig with `cp` BEFORE any
-        # further git call, otherwise `git diff`/`git reset` below fail fatally
-        # and the markers leak into the live ~/.gitconfig (issue #1016).
-        if [ -n "$_gcfg_bak" ] && [ -f "$_gcfg_bak" ]; then
-            cp "$_gcfg_bak" "$_gcfg_real" 2>/dev/null
-        fi
         conflicted=$(git diff --name-only --diff-filter=U)
         # Only a real merge conflict is eligible for the context-drift no-op
         # verdict. An EMPTY list means `cherry-pick -n` failed fatally (bad
