@@ -187,11 +187,19 @@ exit
 
     # diskpart 는 콘솔 OEM 코드페이지(한국어 Windows=CP949)로 로그를 쓴다.
     # StreamReader 기본값(UTF-8)으로 읽으면 한글이 깨지므로 OEM 인코딩으로 디코딩한다.
-    $oemEncoding = [System.Text.Encoding]::GetEncoding(
-        [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage)
+    # GetEncoding 은 비정상 코드페이지에서 ArgumentException 을 던질 수 있고
+    # $ErrorActionPreference="Stop" 이라 전체 중단될 수 있으므로 콘솔 출력
+    # 인코딩으로 폴백한다.
+    $oemEncoding = try {
+        [System.Text.Encoding]::GetEncoding(
+            [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage)
+    } catch {
+        [System.Console]::OutputEncoding
+    }
 
     # diskpart 가 로그를 쓰는 중에도 읽을 수 있도록 공유 모드로 연다
-    function Get-SharedText([string]$path, [System.Text.Encoding]$encoding) {
+    function Get-SharedText([string]$path, [System.Text.Encoding]$encoding = [System.Text.Encoding]::UTF8) {
+        if ($null -eq $encoding) { $encoding = [System.Text.Encoding]::UTF8 }
         $fs = $null
         $sr = $null
         try {
