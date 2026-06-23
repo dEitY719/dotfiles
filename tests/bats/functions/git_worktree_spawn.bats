@@ -157,6 +157,39 @@ teardown() {
     assert_output --partial "git commit --allow-empty -m"
 }
 
+@test "bash: spawn with an invalid --base fails with a friendly error (not raw git)" {
+    # gemini-code-assist review (PR #1020): an invalid user-supplied --base
+    # must be caught up front, not surface as a cryptic `git worktree add`
+    # raw error later.
+    run_in_bash "
+        cd '$FAKE_REPO' || exit 1
+        git_worktree_spawn --wt-name feat --base no-such-ref 2>&1
+    "
+    assert_failure
+    assert_output --partial "base ref 'no-such-ref' is invalid"
+    refute_output --partial "invalid reference"
+    refute_output --partial "no commits yet"
+}
+
+@test "bash: spawn succeeds with unborn HEAD when origin/main exists (no false positive)" {
+    # gemini-code-assist review (PR #1020): a repo that has fetched a remote
+    # but never checked out (unborn HEAD + valid origin/main) must still be
+    # able to spawn — the guard checks the resolved base, not HEAD directly.
+    run_in_bash "
+        UNBORN='$TEST_TEMP_HOME/unborn-with-origin'
+        git init -q --initial-branch=main \"\$UNBORN\"
+        cd \"\$UNBORN\" || exit 1
+        git remote add origin '$FAKE_REPO'
+        git fetch -q origin
+        # HEAD is still unborn here, but origin/main resolves.
+        git_worktree_spawn --wt-name feat 2>&1
+        git show-ref --verify --quiet refs/heads/wt/feat/1 && echo BRANCH_OK
+    "
+    assert_success
+    assert_output --partial "Base:   origin/main"
+    assert_output --partial "BRANCH_OK"
+}
+
 @test "bash: spawn auto-increments when branch exists without worktree" {
     run_in_bash "
         cd '$FAKE_REPO' || exit 1
