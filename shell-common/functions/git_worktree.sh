@@ -1643,15 +1643,34 @@ git_worktree_spawn() {
         return 1
     fi
 
-    # Repo must have at least one commit. A freshly `git init`-ed repo has an
-    # unborn HEAD, so the base ref falls back to "HEAD" (below) and
-    # `git worktree add` dies with the cryptic "fatal: invalid reference: HEAD".
-    # Surface a friendly error + copy-pasteable fix instead.
-    if ! git rev-parse --verify --quiet HEAD >/dev/null 2>&1; then
-        ux_error "Cannot spawn a worktree: this repository has no commits yet."
-        ux_info "A git worktree needs at least one commit to branch from."
-        ux_info "Create an initial commit first, then re-run gwt spawn:"
-        ux_info '  git commit --allow-empty -m "chore: initial commit to allow empty repository"'
+    # Resolve the base ref early so we can verify it before doing any work.
+    # Verifying the resolved $base (rather than HEAD directly) avoids a false
+    # positive when HEAD is unborn but a valid ref like origin/main exists
+    # (e.g. a fresh clone that fetched but never checked out), and it also
+    # catches an invalid user-supplied --base here instead of letting
+    # `git worktree add` die with a cryptic raw error later
+    # (gemini-code-assist review, PR #1020).
+    if [ -z "$base" ]; then
+        if git rev-parse --verify --quiet "origin/main" >/dev/null 2>&1; then
+            base="origin/main"
+        elif git rev-parse --verify --quiet "main" >/dev/null 2>&1; then
+            base="main"
+        else
+            base="HEAD"
+        fi
+    fi
+
+    if ! git rev-parse --verify --quiet "$base" >/dev/null 2>&1; then
+        if [ "$base" = "HEAD" ]; then
+            # Unborn HEAD with no other base — a freshly `git init`-ed repo.
+            ux_error "Cannot spawn a worktree: this repository has no commits yet."
+            ux_info "A git worktree needs at least one commit to branch from."
+            ux_info "Create an initial commit first, then re-run gwt spawn:"
+            ux_info '  git commit --allow-empty -m "chore: initial commit to allow empty repository"'
+        else
+            ux_error "Cannot spawn a worktree: base ref '$base' is invalid."
+            ux_info "Pass an existing branch/commit via --base, or omit it to use origin/main."
+        fi
         return 1
     fi
 
@@ -1692,17 +1711,6 @@ git_worktree_spawn() {
         fi
         break
     done
-
-    # Base ref
-    if [ -z "$base" ]; then
-        if git rev-parse --verify --quiet "origin/main" >/dev/null 2>&1; then
-            base="origin/main"
-        elif git rev-parse --verify --quiet "main" >/dev/null 2>&1; then
-            base="main"
-        else
-            base="HEAD"
-        fi
-    fi
 
     # Create worktree (reuse git_worktree_add for git-crypt safety)
     git_worktree_add "$wt_path" "$branch" "$base" || return 1
