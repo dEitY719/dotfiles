@@ -77,7 +77,9 @@ fi
 # Tag = uppercase first letter + trailing digits:
 #   personal → P   work → W   work1 → W1
 account_info=""
-account_dir=$(basename "${CLAUDE_CONFIG_DIR:-$HOME/.claude}")
+account_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+account_dir="${account_dir%/}"    # tolerate a trailing slash
+account_dir="${account_dir##*/}"  # basename via param expansion (no fork)
 case "$account_dir" in
 .claude-*)
     account="${account_dir#.claude-}"
