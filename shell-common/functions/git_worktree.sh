@@ -1643,6 +1643,18 @@ git_worktree_spawn() {
         return 1
     fi
 
+    # Repo must have at least one commit. A freshly `git init`-ed repo has an
+    # unborn HEAD, so the base ref falls back to "HEAD" (below) and
+    # `git worktree add` dies with the cryptic "fatal: invalid reference: HEAD".
+    # Surface a friendly error + copy-pasteable fix instead.
+    if ! git rev-parse --verify --quiet HEAD >/dev/null 2>&1; then
+        ux_error "Cannot spawn a worktree: this repository has no commits yet."
+        ux_info "A git worktree needs at least one commit to branch from."
+        ux_info "Create an initial commit first, then re-run gwt spawn:"
+        ux_info '  git commit --allow-empty -m "chore: initial commit to allow empty repository"'
+        return 1
+    fi
+
     # Compute project, parent, next index
     local project parent next_index=1
     project="$(basename "$(git rev-parse --show-toplevel)")"

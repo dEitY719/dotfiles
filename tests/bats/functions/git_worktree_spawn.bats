@@ -124,6 +124,39 @@ teardown() {
     assert_output --partial "--launch"
 }
 
+# ---------------------------------------------------------------------------
+# Empty-repo guard: a freshly `git init`-ed repo has no commits, so the base
+# ref falls back to the unborn HEAD and `git worktree add` dies with the raw
+# `fatal: invalid reference: HEAD`. Surface a friendly error + copy-pasteable
+# fix instead.
+# ---------------------------------------------------------------------------
+
+@test "bash: spawn in an empty repo fails with a friendly error + fix-it command" {
+    run_in_bash "
+        EMPTY_REPO='$TEST_TEMP_HOME/empty-repo'
+        git init -q --initial-branch=main \"\$EMPTY_REPO\"
+        cd \"\$EMPTY_REPO\" || exit 1
+        git_worktree_spawn --wt-name feat 2>&1
+    "
+    assert_failure
+    assert_output --partial "no commits yet"
+    assert_output --partial "git commit --allow-empty -m"
+    # Must NOT leak the raw git error.
+    refute_output --partial "invalid reference: HEAD"
+}
+
+@test "zsh: spawn in an empty repo fails with a friendly error + fix-it command" {
+    run_in_zsh "
+        EMPTY_REPO='$TEST_TEMP_HOME/empty-repo-zsh'
+        git init -q --initial-branch=main \"\$EMPTY_REPO\"
+        cd \"\$EMPTY_REPO\" || exit 1
+        git_worktree_spawn --wt-name feat 2>&1
+    "
+    assert_failure
+    assert_output --partial "no commits yet"
+    assert_output --partial "git commit --allow-empty -m"
+}
+
 @test "bash: spawn auto-increments when branch exists without worktree" {
     run_in_bash "
         cd '$FAKE_REPO' || exit 1
