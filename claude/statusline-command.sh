@@ -10,6 +10,7 @@ GREEN='\033[32m'
 RED='\033[31m'
 MAGENTA='\033[35m'
 BLUE='\033[34m'
+BOLD='\033[1m'
 RESET='\033[0m'
 
 # Read JSON input from stdin
@@ -70,6 +71,23 @@ elif [[ "$model_name" == *"Opus"* ]]; then
 else
     model_emoji="🧠" # Default - brain
 fi
+
+# Active account tag from CLAUDE_CONFIG_DIR (set by `claude-yolo --user <name>`).
+# Convention: ~/.claude-<name> → <name>; bare ~/.claude → single-account (no tag).
+# Tag = uppercase first letter + trailing digits:
+#   personal → P   work → W   work1 → W1
+account_info=""
+account_dir=$(basename "${CLAUDE_CONFIG_DIR:-$HOME/.claude}")
+case "$account_dir" in
+.claude-*)
+    account="${account_dir#.claude-}"
+    acct_first="${account:0:1}"
+    acct_first="${acct_first^^}"      # bash uppercase
+    acct_digits="${account##*[!0-9]}" # trailing run of digits (empty if none)
+    user_tag="${acct_first}${acct_digits}"
+    account_info="${BOLD}👤 ${user_tag}${RESET}"
+    ;;
+esac
 
 # Extract last folder name from current directory
 project_name=""
@@ -242,6 +260,9 @@ fi
 # Output format with colors and emojis
 # Time: Cyan, Model: Orange, Project+Branch: Magenta, Context: Blue, Cost: varies, Git status: Red/Orange/Green
 out="${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET}"
+if [[ -n "$account_info" ]]; then
+    out="${account_info} | ${out}"
+fi
 if [[ -n "$ctx_info" ]]; then
     out="${out} | ${ctx_info}"
 fi
