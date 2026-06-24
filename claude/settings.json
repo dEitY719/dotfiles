@@ -38,6 +38,7 @@
     "ralph-loop@claude-plugins-official": true,
     "codex@openai-codex": true
   },
+  "tui": "fullscreen",
   "autoUpdatesChannel": "latest",
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark",
