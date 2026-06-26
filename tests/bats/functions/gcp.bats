@@ -934,3 +934,155 @@ FIXTURE
     assert_output --partial "del.txt"
     refute_output --partial "CONFLICT"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #1037 — Stage-1.6 content-conflict pre-check. Extends Stage-1.5: when a
+# candidate and HEAD both change the same region of a file present on BOTH
+# sides, a real cherry-pick hits a 3-way *content* conflict (Stage-1.5 only
+# covers modify/delete of a file absent from base). Stage-1.6 probes each
+# survivor with `git merge-tree` (non-destructive dry-run, cherry-pick merge
+# base = candidate's parent), skips the ones predicted to conflict, and reports
+# "Content-conflict (skipped): N". Under --author=all an earlier pick_list
+# commit touching the same file means the conflict is an unapplied-precedent
+# artifact, so the check must NOT false-positive.
+#
+# Fixture: author "Me" edits foo.txt (same line main later edits -> conflict)
+# and independently adds bar.txt (clean, different file). main diverges on the
+# same foo.txt line.
+# ---------------------------------------------------------------------------
+
+_gcp1037_make_repo() {
+    cat <<'FIXTURE'
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Me" GIT_AUTHOR_EMAIL="me@me" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        printf 'orig\n' > foo.txt && echo init > a.txt \
+            && git add foo.txt a.txt && git commit -qm "init"
+        git checkout -q -b source
+        # Author edits foo.txt -> will collide with main's edit to the same line.
+        printf 'upstream\n' > foo.txt && git add foo.txt && git commit -qm "edit foo"
+        # Author adds an independent file -> clean, conflict-free candidate.
+        echo standalone > bar.txt && git add bar.txt && git commit -qm "add bar.txt"
+        git checkout -q main
+        # main diverges on the SAME line of foo.txt.
+        printf 'mainline\n' > foo.txt && git add foo.txt && git commit -qm "main edits foo"
+FIXTURE
+}
+
+@test "bash: _gcp_scan_predict_content_conflict private function exists" {
+    run_in_bash 'declare -f _gcp_scan_predict_content_conflict >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "scan #1037: same-line edit on both sides predicted, candidate skipped (no conflict surfaced)" {
+    run_in_bash "
+        $(_gcp1037_make_repo)
+        printf 'y\n' | _gcp_scan main source --author=Me
+    "
+    assert_success
+    # Warning naming the conflicting file.
+    assert_output --partial "Skipping"
+    assert_output --partial "foo.txt"
+    assert_output --partial "content conflict"
+    # Analysis Result counter.
+    assert_output --partial "Content-conflict (skipped): 1"
+    # The independent commit still applied; no real conflict ever surfaced.
+    assert_output --partial "0 conflicts"
+    refute_output --partial "CONFLICT"
+    refute_output --partial "Resolve and run"
+}
+
+@test "scan #1037: conflicting commit skipped, independent commit applied, foo untouched" {
+    run_in_bash "
+        $(_gcp1037_make_repo)
+        printf 'y\n' | _gcp_scan main source --author=Me >/dev/null 2>&1
+        git cat-file -e HEAD:bar.txt && echo HAS_BAR
+        git show HEAD:foo.txt
+        git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
+    "
+    assert_success
+    assert_output --partial "HAS_BAR"
+    # foo.txt keeps main's content — the conflicting edit was never applied.
+    assert_output --partial "mainline"
+    refute_output --partial "upstream"
+    assert_output --partial "PICK_CLEAR"
+}
+
+@test "scan #1037: non-conflicting candidate (different file) is NOT flagged" {
+    run_in_bash "
+        $(_gcp1037_make_repo)
+        printf 'y\n' | _gcp_scan main source --author=Me
+    "
+    assert_success
+    # Only foo.txt's edit conflicts; bar.txt is applied, never counted.
+    assert_output --partial "Content-conflict (skipped): 1"
+    refute_output --partial "Content-conflict (skipped): 2"
+}
+
+@test "scan #1037: --author=all defers to precedent, no false-positive" {
+    # When the precedent that the dependent edit builds on is itself in the pick
+    # set (--author=all), Stage-1.6 must NOT flag the dependent as a content
+    # conflict — the real loop applies the precedent first. (The dependent is
+    # then absorbed by the pre-existing Stage-2 no-op pre-flight, which probes
+    # against bare main; that is out of Stage-1.6's scope. The point under test
+    # is solely the absence of a false content-conflict skip / surfaced conflict.)
+    run_in_bash "
+        repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp_test.XXXXXX\")\"
+        trap \"rm -rf \$repo\" EXIT
+        cd \"\$repo\" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME=\"Me\" GIT_AUTHOR_EMAIL=\"me@me\" \
+               GIT_COMMITTER_NAME=\"Test\" GIT_COMMITTER_EMAIL=\"t@t\"
+        git init -q -b main
+        printf 'orig\n' > foo.txt && git add foo.txt && git commit -qm 'init'
+        git checkout -q -b source
+        # Non-author appends a line; author then modifies that same appended line
+        # -> a static probe of the author commit alone (vs main, which lacks the
+        # appended line) predicts a conflict, but the precedent is in the pick set.
+        printf 'orig\nlineC1\n' > foo.txt && git add foo.txt \
+            && git commit -q --author='Upstream Bot <bot@up>' -m 'append lineC1'
+        printf 'orig\nlineC1-modified\n' > foo.txt && git add foo.txt \
+            && git commit -qm 'modify lineC1'
+        git checkout -q main
+        printf 'y\n' | _gcp_scan main source --author=all
+    "
+    assert_success
+    # Precedent is in the pick set -> conflict prediction deferred, not skipped.
+    refute_output --partial "Content-conflict (skipped)"
+    refute_output --partial "CONFLICT"
+    refute_output --partial "Resolve and run"
+}
+
+@test "scan #1037: guard flips verdict on pick_list membership (unit)" {
+    # Directly exercise _gcp_scan_predict_content_conflict: the SAME commit that
+    # is flagged a conflict with an empty pick_list must be DEFERRED once a
+    # precedent touching the conflicting file is present in the pick_list.
+    run_in_bash "
+        repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp_test.XXXXXX\")\"
+        trap \"rm -rf \$repo\" EXIT
+        cd \"\$repo\" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME=\"Me\" GIT_AUTHOR_EMAIL=\"me@me\" \
+               GIT_COMMITTER_NAME=\"Test\" GIT_COMMITTER_EMAIL=\"t@t\"
+        git init -q -b main
+        printf 'A\nB\nC\n' > foo.txt && git add foo.txt && git commit -qm 'init'
+        git checkout -q -b source
+        printf 'A\nB1\nC\n' > foo.txt && git add foo.txt \
+            && git commit -q --author='Upstream Bot <bot@up>' -m 'B->B1'
+        c1=\$(git rev-parse HEAD)
+        printf 'A\nB2\nC\n' > foo.txt && git add foo.txt && git commit -qm 'B1->B2'
+        c2=\$(git rev-parse HEAD)
+        git checkout -q main
+        # No precedent in pick_list -> conflict predicted (return 1, prints file).
+        if _gcp_scan_predict_content_conflict \"\$c2\" \"\$c2\"; then echo NO_FLAG; else echo FLAGGED; fi
+        # Precedent c1 present in pick_list -> deferred (return 0, prints nothing).
+        if _gcp_scan_predict_content_conflict \"\$c2\" \"\$c1
+\$c2\"; then echo DEFERRED; else echo STILL_FLAGGED; fi
+    "
+    assert_success
+    assert_output --partial "FLAGGED"
+    assert_output --partial "DEFERRED"
+    refute_output --partial "STILL_FLAGGED"
+}
