@@ -430,10 +430,15 @@ ${sha}"
             dep_missing_list="${dep_missing_list}${sha}
 "
             dep_missing_count=$((dep_missing_count + 1))
-            local _dep_first _dep_file _dep_sha _c_short
-            _dep_first=$(printf '%s\n' "$_dep_out" | head -n 1)
-            _dep_file=$(printf '%s\n' "$_dep_first" | cut -f1)
-            _dep_sha=$(printf '%s\n' "$_dep_first" | cut -f2)
+            local _dep_file="" _dep_sha="" _c_short
+            # Parse only the first "F<TAB>sha" line of _dep_out with a pure
+            # here-doc read (no printf/head/cut forks) — mirrors the file's
+            # established no-fork style (PR #812); gemini PR #1034 review.
+            while IFS="$tab" read -r _dep_file _dep_sha; do
+                break
+            done <<EOF
+$_dep_out
+EOF
             _c_short=$(git rev-parse --short "$sha" 2>/dev/null)
             if type ux_warning >/dev/null 2>&1; then
                 ux_warning "Skipping ${_c_short} — depends on ${_dep_sha} (creates/deletes ${_dep_file}) not yet in ${base}."
