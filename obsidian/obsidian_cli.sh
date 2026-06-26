@@ -108,7 +108,10 @@ obsidian() {
 
 	if _obsidian_is_wsl; then
 		_ob_bin=$(_obsidian_resolve_cli_bin)
-		if [ ! -x "$_ob_bin" ]; then
+		# DrvFs (/mnt/c) may drop the Linux -x bit depending on mount options,
+		# yet WSL interop still runs the Windows binary — so test existence (-f),
+		# not executability, to avoid a false negative (PR #1024 review).
+		if [ ! -f "$_ob_bin" ]; then
 			_obsidian_err "CLI redirector not found at $_ob_bin"
 			_obsidian_hint "Obsidian 1.12.7+ 인스톨러 실행 후 설정 -> General -> \"Command line interface\" 토글 ON 필요"
 			_obsidian_hint "경로가 다르면 OBSIDIAN_CLI_BIN 으로 오버라이드"
