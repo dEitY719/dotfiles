@@ -1,0 +1,95 @@
+#!/bin/sh
+# obsidian/bin/obsidian
+# Unified `obsidian` command — standalone executable on PATH (POSIX).
+#
+# A real executable (not a shell function) so it resolves in BOTH interactive
+# shells AND non-interactive `bash -c "obsidian ..."` calls made by AI coding
+# agents — PATH is an exported env inherited by child processes, whereas shell
+# functions are not. This is the SSOT for the `obsidian` command (issue #1023).
+#
+# Routed by environment:
+#   - WSL:          Windows desktop CLI redirector (Obsidian.com)
+#                   forwards subcommands: search / read / create / property:set / ...
+#   - native Linux: latest Obsidian-*.AppImage (GUI launcher)
+#
+# Path overrides:
+#   OBSIDIAN_CLI_BIN  WSL redirector  (default: /mnt/c/Program Files/Obsidian/Obsidian.com)
+#   OBSIDIAN_BIN      explicit AppImage path (native Linux)
+#   OBSIDIAN_HOME     dir scanned for Obsidian-*.AppImage (default: ~/application)
+#
+# Usage:
+#   obsidian search query="PARA" limit=5
+#   obsidian read file="My Note"
+#   obsidian create name="New Note" path="folder/New Note.md" content="# Hello" silent
+#   obsidian                          # no args -> launch the app / GUI
+
+# True when running under WSL.
+_ob_is_wsl() {
+	[ -n "${WSL_DISTRO_NAME-}" ] && return 0
+	[ -n "${WSL_INTEROP-}" ] && return 0
+	[ -r /proc/version ] && grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null
+}
+
+# Resolve the WSL CLI redirector path.
+_ob_cli_bin() {
+	printf '%s' "${OBSIDIAN_CLI_BIN:-/mnt/c/Program Files/Obsidian/Obsidian.com}"
+}
+
+# Resolve the native-Linux AppImage. Globs expand alphabetically — keep the
+# LAST executable match so Obsidian-1.8.10 wins over Obsidian-1.7.0 (PR #520).
+_ob_appimage_bin() {
+	if [ -n "${OBSIDIAN_BIN-}" ]; then
+		printf '%s' "$OBSIDIAN_BIN"
+		return 0
+	fi
+	_ob_home="${OBSIDIAN_HOME:-$HOME/application}"
+	_ob_found=""
+	for _ob_app in "$_ob_home"/Obsidian-*.AppImage; do
+		[ -x "$_ob_app" ] && _ob_found="$_ob_app"
+	done
+	if [ -n "$_ob_found" ]; then
+		printf '%s' "$_ob_found"
+		return 0
+	fi
+	printf '%s' "$HOME/application/Obsidian-1.8.10.AppImage"
+}
+
+_ob_usage() {
+	cat <<'USAGE'
+obsidian - launch Obsidian / forward CLI commands
+Usage: obsidian [cli-subcommand args...]
+  WSL:   forwards to Obsidian.com (search/read/create/property:set/backlinks/...)
+  Linux: launches the latest Obsidian-*.AppImage
+  (no args) launches / focuses the app
+Overrides: OBSIDIAN_CLI_BIN (WSL), OBSIDIAN_BIN / OBSIDIAN_HOME (Linux)
+USAGE
+}
+
+case "${1:-}" in
+-h | --help | help)
+	_ob_usage
+	exit 0
+	;;
+esac
+
+if _ob_is_wsl; then
+	_ob_bin=$(_ob_cli_bin)
+	# DrvFs (/mnt/c) may drop the Linux -x bit depending on mount options, yet
+	# WSL interop still runs the Windows binary — test existence (-f), not
+	# executability, to avoid a false negative (PR #1024 review).
+	if [ ! -f "$_ob_bin" ]; then
+		printf 'obsidian: CLI redirector not found at %s\n' "$_ob_bin" >&2
+		printf '  -> Obsidian 1.12.7+ 인스톨러 실행 후 설정 -> General -> "Command line interface" 토글 ON 필요\n' >&2
+		printf '  -> 경로가 다르면 OBSIDIAN_CLI_BIN 으로 오버라이드\n' >&2
+		exit 127
+	fi
+else
+	_ob_bin=$(_ob_appimage_bin)
+	if [ ! -x "$_ob_bin" ]; then
+		printf 'obsidian: binary not found at %s\n' "$_ob_bin" >&2
+		printf '  -> Set OBSIDIAN_BIN or place an AppImage under OBSIDIAN_HOME (default ~/application).\n' >&2
+		exit 1
+	fi
+fi
+
+exec "$_ob_bin" "$@"
