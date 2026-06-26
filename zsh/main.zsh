@@ -146,8 +146,7 @@ fi
 # Not under shell-common/, so it is sourced explicitly (SSOT for `obsidian`).
 # ═══════════════════════════════════════════════════════════════
 
-[ -f "${DOTFILES_ROOT}/obsidian/obsidian_cli.sh" ] \
-    && safe_source "${DOTFILES_ROOT}/obsidian/obsidian_cli.sh" "Failed to load obsidian command" || true
+safe_source "${DOTFILES_ROOT}/obsidian/obsidian_cli.sh" "Failed to load obsidian command"
 
 # Normalize help interfaces after all help providers are sourced
 # (functions + integrations).
