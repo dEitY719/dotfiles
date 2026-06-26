@@ -60,6 +60,7 @@ fi
 ./bash/setup.sh
 ./zsh/setup.sh
 ./git/setup.sh
+./obsidian/setup.sh            # Obsidian CLI wrapper → ~/.local/bin/obsidian (#1023)
 ./claude/setup.sh
 ./gemini/setup.sh
 ./aws/setup.sh                 # Internal-PC AWS Bedrock bootstrap (#677). No-op on external/public PCs.

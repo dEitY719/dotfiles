@@ -141,13 +141,6 @@ if [ -d "${SHELL_COMMON}/tools/integrations" ]; then
     done
 fi
 
-# ═══════════════════════════════════════════════════════════════
-# Phase 6.5: Load top-level obsidian/ command (issue #1023)
-# Not under shell-common/, so it is sourced explicitly (SSOT for `obsidian`).
-# ═══════════════════════════════════════════════════════════════
-
-safe_source "${DOTFILES_ROOT}/obsidian/obsidian_cli.sh" "Failed to load obsidian command"
-
 # Normalize help interfaces after all help providers are sourced
 # (functions + integrations).
 typeset -f apply_help_standard_adapter >/dev/null 2>&1 && apply_help_standard_adapter
