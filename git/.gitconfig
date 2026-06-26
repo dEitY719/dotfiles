@@ -21,10 +21,10 @@
 [fetch]
 	prune = true
 [credential "https://github.com"]
-	helper = 
+	helper =
 	useHttpPath = true
-	helper = !/usr/bin/gh auth git-credential
+	helper = !${DOTFILES_ROOT:-$HOME/dotfiles}/git/scripts/gh-credential-helper.sh
 [credential "https://gist.github.com"]
-	helper = 
+	helper =
 	useHttpPath = true
-	helper = !/usr/bin/gh auth git-credential
+	helper = !${DOTFILES_ROOT:-$HOME/dotfiles}/git/scripts/gh-credential-helper.sh
