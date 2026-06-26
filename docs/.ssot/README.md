@@ -14,6 +14,7 @@
 
 | 파일 | 정책 영역 |
 |------|-----------|
+| [`command-delivery-model.md`](./command-delivery-model.md) | 명령 전달 방식 (함수 vs PATH 실행파일) 결정 — step 0 가이드, 결정 트리 |
 | [`command-guidelines.md`](./command-guidelines.md) | 명령어 / help 인터페이스, 출력 정책, row 함수 SSOT 패턴 |
 | [`command-design-pattern.md`](./command-design-pattern.md) | dispatcher + private sub-function 구조, Type 2A/2B, passthrough 규칙, SOLID |
 | [`env-vars.md`](./env-vars.md) | cross-skill / cross-tool env var 카탈로그 |
