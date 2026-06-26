@@ -823,3 +823,114 @@ FIXTURE
     assert_output --partial "comment v2 expanded much longer"
     assert_output --partial "PICK_CLEAR"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #1033 — Stage-1.5 file-dependency pre-check. When the author filter
+# drops the upstream commit that CREATES a file, a later author commit that
+# MODIFIES (or DELETES) that file would hit a modify/delete conflict because
+# the file is absent from base. Stage-1.5 detects this before any cherry-pick,
+# skips the dependent commit with a warning, and reports it as
+# "Dep-missing (skipped): N". Under --author=all the creating commit is in the
+# pick set, so the check must NOT false-positive.
+#
+# Fixture authors: a NON-author "Upstream Bot" creates dep.txt; the author
+# "Me" modifies dep.txt (the dependent candidate) and independently adds
+# other.txt (a clean, dependency-free candidate).
+# ---------------------------------------------------------------------------
+
+_gcp1033_make_repo() {
+    cat <<'FIXTURE'
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Me" GIT_AUTHOR_EMAIL="me@me" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo init > a.txt && git add a.txt && git commit -qm "init"
+        git checkout -q -b source
+        # Non-author creates dep.txt (this is the commit the author filter drops).
+        echo created > dep.txt && git add dep.txt \
+            && git commit -q --author="Upstream Bot <bot@up>" -m "create dep.txt"
+        # Author modifies dep.txt -> depends on the create above.
+        echo modified > dep.txt && git add dep.txt && git commit -qm "modify dep.txt"
+        # Author adds an independent file -> no dependency.
+        echo standalone > other.txt && git add other.txt && git commit -qm "add other.txt"
+        git checkout -q main
+FIXTURE
+}
+
+@test "bash: _gcp_scan_check_file_deps private function exists" {
+    run_in_bash 'declare -f _gcp_scan_check_file_deps >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "scan #1033: create-then-modify dependency detected, dependent commit skipped (no conflict)" {
+    run_in_bash "
+        $(_gcp1033_make_repo)
+        printf 'y\n' | _gcp_scan main source --author=Me
+    "
+    assert_success
+    # Warning naming the dependent file + the absent precedent.
+    assert_output --partial "Skipping"
+    assert_output --partial "dep.txt"
+    assert_output --partial "--author=all"
+    # Analysis Result counter.
+    assert_output --partial "Dep-missing (skipped): 1"
+    # The independent commit still applied; no conflict ever surfaced.
+    assert_output --partial "0 conflicts"
+    refute_output --partial "CONFLICT"
+    refute_output --partial "Resolve and run"
+}
+
+@test "scan #1033: dependent commit's file is absent, independent commit applied" {
+    run_in_bash "
+        $(_gcp1033_make_repo)
+        printf 'y\n' | _gcp_scan main source --author=Me >/dev/null 2>&1
+        git cat-file -e HEAD:other.txt && echo HAS_OTHER
+        git cat-file -e HEAD:dep.txt 2>/dev/null && echo HAS_DEP || echo NO_DEP
+        git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
+    "
+    assert_success
+    assert_output --partial "HAS_OTHER"
+    assert_output --partial "NO_DEP"
+    assert_output --partial "PICK_CLEAR"
+}
+
+@test "scan #1033: --author=all includes the creator -> no false-positive, dep applied cleanly" {
+    run_in_bash "
+        $(_gcp1033_make_repo)
+        printf 'y\n' | _gcp_scan main source --author=all
+        git show HEAD:dep.txt 2>/dev/null
+    "
+    assert_success
+    # Creator is in the pick set, so the modify is NOT flagged as dep-missing.
+    refute_output --partial "Dep-missing (skipped)"
+    refute_output --partial "CONFLICT"
+    # dep.txt ends at the modified content (create + modify both applied).
+    assert_output --partial "modified"
+}
+
+@test "scan #1033: delete of a file whose creator was filtered out is detected" {
+    run_in_bash "
+        repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp_test.XXXXXX\")\"
+        trap \"rm -rf \$repo\" EXIT
+        cd \"\$repo\" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME=\"Me\" GIT_AUTHOR_EMAIL=\"me@me\" \
+               GIT_COMMITTER_NAME=\"Test\" GIT_COMMITTER_EMAIL=\"t@t\"
+        git init -q -b main
+        echo init > a.txt && git add a.txt && git commit -qm 'init'
+        git checkout -q -b source
+        # Non-author creates del.txt; author later deletes it -> delete depends
+        # on a create absent from main.
+        echo gone > del.txt && git add del.txt \
+            && git commit -q --author='Upstream Bot <bot@up>' -m 'create del.txt'
+        git rm -q del.txt && git commit -qm 'delete del.txt'
+        git checkout -q main
+        printf 'y\n' | _gcp_scan main source --author=Me
+    "
+    assert_success
+    assert_output --partial "Dep-missing (skipped): 1"
+    assert_output --partial "del.txt"
+    refute_output --partial "CONFLICT"
+}
