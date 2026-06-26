@@ -17,7 +17,11 @@ teardown() {
 }
 
 run_scaffold() {
-    run bash -c "cd '$WORK' && NO_COLOR=1 bash '$SCAFFOLD' $(printf '%q ' "$@")"
+    # Pass args as real positional parameters (not interpolated into the -c
+    # string) so a zero-arg call stays zero-arg — `printf '%q ' "$@"` would
+    # emit one empty token, making scaffold.sh target "/docs" (gemini PR
+    # #1030 review).
+    run bash -c 'cd "$1"; shift; NO_COLOR=1 bash "$@"' bash "$WORK" "$SCAFFOLD" "$@"
 }
 
 LEAVES="adr product design architecture/system architecture/features testing guides public"
@@ -40,7 +44,23 @@ LEAVES="adr product design architecture/system architecture/features testing gui
     assert_success
     assert_output --partial "[dry-run]"
     assert_output --partial "create"
+    # Zero-arg call must keep TARGET="." (→ ./docs under $WORK), NOT collapse
+    # to "" which would target the system-root /docs (gemini PR #1030 review).
+    assert_output --partial "Plan for ./docs/"
+    refute_output --partial "Plan for /docs/"
     [ ! -d "${WORK}/docs" ]
+}
+
+@test "rejects an empty target path" {
+    run bash -c 'NO_COLOR=1 bash "$1" "" --apply' bash "$SCAFFOLD"
+    assert_failure
+    assert_output --partial "Target path cannot be empty"
+}
+
+@test "rejects multiple target paths" {
+    run_scaffold "${TEST_TEMP_HOME}/a" "${TEST_TEMP_HOME}/b" --apply
+    assert_failure
+    assert_output --partial "Multiple target paths"
 }
 
 @test "--apply creates all 8 leaf dirs with .gitkeep and a README" {
