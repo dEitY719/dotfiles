@@ -168,6 +168,10 @@ if [ -d "${SHELL_COMMON}/tools/integrations" ]; then
     done
 fi
 
+# --- Load top-level obsidian/ command (issue #1023) ---
+# Not under shell-common/, so it is sourced explicitly (SSOT for `obsidian`).
+safe_source "${DOTFILES_ROOT}/obsidian/obsidian_cli.sh" "Obsidian command not found"
+
 # Normalize help interfaces after all help providers are sourced
 # (functions + integrations).
 type -t apply_help_standard_adapter &>/dev/null && apply_help_standard_adapter
