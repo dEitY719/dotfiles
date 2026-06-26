@@ -82,7 +82,7 @@ EOF
 }
 
 parse_args() {
-    local saw_help=false saw_check=false saw_apply=false
+    local saw_help=false saw_check=false saw_apply=false saw_target=false
     while [ "$#" -gt 0 ]; do
         case "$1" in
         -h | --help | help)
@@ -108,7 +108,15 @@ parse_args() {
             die "Unknown option: $1 (try --help)"
             ;;
         *)
+            # Reject empty / duplicate target paths — an empty TARGET would
+            # resolve docs_root() to "/docs" (system root) and risk writing
+            # there (gemini PR #1030 review).
+            if $saw_target; then
+                die "Multiple target paths given: '$TARGET' and '$1' (only one allowed)"
+            fi
+            [ -n "$1" ] || die "Target path cannot be empty"
             TARGET="$1"
+            saw_target=true
             shift
             ;;
         esac
