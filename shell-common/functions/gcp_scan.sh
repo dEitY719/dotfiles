@@ -208,6 +208,85 @@ EOF
     return $rc
 }
 
+_gcp_scan_predict_content_conflict() {
+    # Content-conflict pre-check (issue #1037, extends Stage-1.5 #1033). Returns
+    # 1 when cherry-picking commit $1 onto HEAD is predicted to hit a 3-way
+    # *content* conflict — HEAD and the commit change the same region of a file
+    # that exists on both sides. This is the case Stage-1.5 does NOT cover
+    # (modify/delete of a file absent from base); here both sides edited the
+    # same lines. Returns 0 when the merge is predicted clean OR when the
+    # verdict is deferred (see the --author=all guard below).
+    #
+    # Probe: `git merge-tree --write-tree --merge-base=<sha>^ HEAD <sha>`. This
+    # drives git's REAL merge engine as a non-destructive dry-run (no checkout,
+    # no index/worktree mutation) using the cherry-pick's own merge base — the
+    # candidate's parent — so the exit status mirrors exactly what
+    # `git cherry-pick <sha>` would hit. rc 0 = clean, rc 1 = conflict; rc > 1 =
+    # usage/unsupported (git < 2.38 lacks --write-tree, < 2.40 lacks
+    # --merge-base) -> treated as "clean" so pre-#1037 behavior is preserved on
+    # older git. The legacy `git merge-tree <base> <a> <b>` form is deliberately
+    # NOT used: it is a trivial merge that prints conflict markers for
+    # adjacent-but-cleanly-mergeable hunks, producing false positives (#1037
+    # investigation).
+    #
+    # --author=all guard ($2 = pick_list): a predicted conflict is a FALSE
+    # positive when an earlier, not-yet-applied pick_list commit also touches
+    # the conflicting file — the execution loop applies that precedent first,
+    # after which the merge is clean. When any conflicting file is modified by
+    # ANOTHER commit in the pick set, defer (return 0) and let the real
+    # cherry-pick decide. Mirrors Stage-1.5's pick_list membership guard, so
+    # --author=all stays false-positive-free.
+    #
+    # Prints the first conflicting file path to stdout on the conflict path.
+    local sha="$1" pick_list="$2"
+    local parent merge_out conflicted f other_files p rc first
+    # Root commit (no parent) or merge commit (2+ parents): the cherry-pick
+    # merge base is undefined/ambiguous -> out of scope, defer to the real
+    # cherry-pick rather than probe with the wrong base.
+    parent=$(git rev-parse -q --verify "${sha}^1" 2>/dev/null) || return 0
+    if git rev-parse -q --verify "${sha}^2" >/dev/null 2>&1; then
+        return 0
+    fi
+    # Single invocation with --name-only: rc carries the conflict verdict, and
+    # stdout is the merged tree OID on line 1 followed by one conflicted path
+    # per line. On older git the unknown flags exit > 1 and we bail to "clean".
+    merge_out=$(git merge-tree --write-tree --name-only --merge-base="$parent" HEAD "$sha" 2>/dev/null)
+    rc=$?
+    [ "$rc" -eq 1 ] || return 0
+    conflicted=$(printf '%s\n' "$merge_out" | tail -n +2)
+    [ -z "$conflicted" ] && return 0
+    # Build the set of paths touched by every OTHER pick_list commit, for the
+    # --author=all false-positive guard.
+    other_files=""
+    while IFS= read -r p; do
+        [ -z "$p" ] && continue
+        [ "$p" = "$sha" ] && continue
+        other_files="${other_files}$(git diff-tree --no-commit-id -r --name-only "$p" 2>/dev/null)
+"
+    done <<EOF
+$pick_list
+EOF
+    first=""
+    while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        # Deferral guard: the conflicting file is also touched by another pick
+        # commit -> the conflict is an artifact of an unapplied precedent.
+        # Newline-wrapped match avoids prefix collisions (Stage-1.5 pattern).
+        case "
+$other_files" in
+            *"
+$f
+"*) return 0 ;;
+        esac
+        [ -z "$first" ] && first="$f"
+    done <<EOF
+$conflicted
+EOF
+    [ -z "$first" ] && return 0
+    printf '%s\n' "$first"
+    return 1
+}
+
 _gcp_scan() {
     # zsh compatibility: emulate POSIX sh to ensure consistent behavior
     if [ -n "${ZSH_VERSION-}" ]; then
@@ -456,6 +535,48 @@ EOF
         count=$((count - dep_missing_count))
     fi
 
+    # Stage-1.6: content-conflict pre-check (issue #1037, extends Stage-1.5). A
+    # candidate whose change overlaps the same region HEAD already changed in a
+    # file present on both sides would hit a 3-way *content* conflict — the case
+    # Stage-1.5 (modify/delete of an absent file) does not cover. Probe each
+    # Stage-1.5 survivor with `git merge-tree` (a non-destructive dry-run of the
+    # cherry-pick merge) and skip the ones predicted to conflict, mirroring the
+    # Stage-1.5 warning + counter pattern. Runs BEFORE the Stage-2 noop
+    # pre-flight so we never surface a conflict on a commit that is genuinely
+    # redundant.
+    local conflict_list="" conflict_count=0 conflict_survivor_list=""
+    while IFS= read -r sha; do
+        [ -z "$sha" ] && continue
+        local _cf_out=""
+        if _cf_out=$(_gcp_scan_predict_content_conflict "$sha" "$selected_list"); then
+            if [ -z "$conflict_survivor_list" ]; then
+                conflict_survivor_list="$sha"
+            else
+                conflict_survivor_list="${conflict_survivor_list}
+${sha}"
+            fi
+        else
+            conflict_list="${conflict_list}${sha}
+"
+            conflict_count=$((conflict_count + 1))
+            local _cf_short
+            _cf_short=$(git rev-parse --short "$sha" 2>/dev/null)
+            if type ux_warning >/dev/null 2>&1; then
+                ux_warning "Skipping ${_cf_short} — predicted content conflict in ${_cf_out} (same region changed in ${base})."
+                ux_info "Cherry-pick it manually and resolve, or rebase the change onto the latest ${base}."
+            else
+                echo "⚠ Skipping ${_cf_short} — predicted content conflict in ${_cf_out} (same region changed in ${base})." >&2
+                echo "ℹ Cherry-pick it manually and resolve, or rebase the change onto the latest ${base}." >&2
+            fi
+        fi
+    done <<EOF
+$final_selected_list
+EOF
+    final_selected_list="$conflict_survivor_list"
+    if [ "$conflict_count" -gt 0 ]; then
+        count=$((count - conflict_count))
+    fi
+
     # Stage-2: no-op pre-flight in Analysis phase — filters phantom commits
     # before display so users never see commits that will immediately be skipped
     # (issue #961). Runs on final_selected_list (Stage-1 dups already removed).
@@ -490,6 +611,9 @@ EOF
             if [ "$dep_missing_count" -gt 0 ]; then
                 printf "%s  ◆ Dep-missing (skipped): %d%s\n" "${UX_MUTED-}" "$dep_missing_count" "${UX_RESET-}"
             fi
+            if [ "$conflict_count" -gt 0 ]; then
+                printf "%s  ◆ Content-conflict (skipped): %d%s\n" "${UX_MUTED-}" "$conflict_count" "${UX_RESET-}"
+            fi
             if [ "$noop_count" -gt 0 ]; then
                 printf "%s  ◆ Already in HEAD (no-op): %d%s\n" "${UX_MUTED-}" "$noop_count" "${UX_RESET-}"
             fi
@@ -500,6 +624,9 @@ EOF
             echo "  Duplicates (already applied): $duplicate_count"
             if [ "$dep_missing_count" -gt 0 ]; then
                 echo "  Dep-missing (skipped): $dep_missing_count"
+            fi
+            if [ "$conflict_count" -gt 0 ]; then
+                echo "  Content-conflict (skipped): $conflict_count"
             fi
             if [ "$noop_count" -gt 0 ]; then
                 echo "  Already in HEAD (no-op): $noop_count"
@@ -531,6 +658,9 @@ EOF
         if [ "$dep_missing_count" -gt 0 ]; then
             printf "%s  ◆ Dep-missing (skipped): %d%s\n" "${UX_MUTED-}" "$dep_missing_count" "${UX_RESET-}"
         fi
+        if [ "$conflict_count" -gt 0 ]; then
+            printf "%s  ◆ Content-conflict (skipped): %d%s\n" "${UX_MUTED-}" "$conflict_count" "${UX_RESET-}"
+        fi
         if [ "$noop_count" -gt 0 ]; then
             printf "%s  ◆ Already in HEAD (no-op): %d%s\n" "${UX_MUTED-}" "$noop_count" "${UX_RESET-}"
         fi
@@ -544,6 +674,9 @@ EOF
         fi
         if [ "$dep_missing_count" -gt 0 ]; then
             echo "  Dep-missing (skipped): $dep_missing_count"
+        fi
+        if [ "$conflict_count" -gt 0 ]; then
+            echo "  Content-conflict (skipped): $conflict_count"
         fi
         if [ "$noop_count" -gt 0 ]; then
             echo "  Already in HEAD (no-op): $noop_count"
@@ -601,6 +734,7 @@ EOF
     local noop_skipped=0
     local dup_skipped=0
     local dep_skipped=0
+    local conflict_skipped=0
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
 
@@ -617,6 +751,21 @@ $sha
         esac
         if [ "$_in_dep" -eq 1 ]; then
             dep_skipped=$((dep_skipped + 1))
+            continue
+        fi
+
+        # Stage-1.6 content-conflict (issue #1037): skip with a log line so the
+        # commit is never attempted — it would hit a 3-way content conflict on a
+        # file both sides changed. Membership match mirrors the dep_missing test.
+        local _in_conflict=0
+        case "
+$conflict_list" in
+            *"
+$sha
+"*) _in_conflict=1 ;;
+        esac
+        if [ "$_in_conflict" -eq 1 ]; then
+            conflict_skipped=$((conflict_skipped + 1))
             continue
         fi
 
@@ -688,6 +837,9 @@ EOF
         if [ "$dep_skipped" -gt 0 ]; then
             ux_info "($dep_skipped commit(s) skipped — file dependency missing in $base)"
         fi
+        if [ "$conflict_skipped" -gt 0 ]; then
+            ux_info "($conflict_skipped commit(s) skipped — predicted content conflict with $base)"
+        fi
         if [ "$noop_skipped" -gt 0 ]; then
             ux_info "($noop_skipped commit(s) skipped — already in HEAD, no-op pre-flight)"
         fi
@@ -698,6 +850,9 @@ EOF
         echo "✓ $picked applied, $dup_skipped skipped (dup), 0 conflicts"
         if [ "$dep_skipped" -gt 0 ]; then
             echo "  ($dep_skipped commit(s) skipped — file dependency missing in $base)"
+        fi
+        if [ "$conflict_skipped" -gt 0 ]; then
+            echo "  ($conflict_skipped commit(s) skipped — predicted content conflict with $base)"
         fi
         if [ "$noop_skipped" -gt 0 ]; then
             echo "  ($noop_skipped commit(s) skipped — already in HEAD, no-op pre-flight)"
