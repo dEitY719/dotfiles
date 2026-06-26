@@ -232,14 +232,18 @@ _gcp_scan_predict_content_conflict() {
     # --author=all guard ($2 = pick_list): a predicted conflict is a FALSE
     # positive when an earlier, not-yet-applied pick_list commit also touches
     # the conflicting file — the execution loop applies that precedent first,
-    # after which the merge is clean. When any conflicting file is modified by
-    # ANOTHER commit in the pick set, defer (return 0) and let the real
-    # cherry-pick decide. Mirrors Stage-1.5's pick_list membership guard, so
+    # after which the merge is clean. The verdict is evaluated PER conflicting
+    # file: a file ALSO modified by another pick commit may be a precedent
+    # artifact (skip it), but a conflicting file touched by NO other pick
+    # commit is guaranteed to still conflict (no precedent changes HEAD's
+    # copy) — so the commit is flagged as soon as one such file is found.
+    # Only when EVERY conflicting file is covered by a precedent is the verdict
+    # deferred (return 0). Mirrors Stage-1.5's pick_list membership guard, so
     # --author=all stays false-positive-free.
     #
-    # Prints the first conflicting file path to stdout on the conflict path.
+    # Prints the first guaranteed-conflict file path to stdout when it flags.
     local sha="$1" pick_list="$2"
-    local parent merge_out conflicted f other_files p rc first
+    local parent merge_out conflicted f other_files p rc
     # Root commit (no parent) or merge commit (2+ parents): the cherry-pick
     # merge base is undefined/ambiguous -> out of scope, defer to the real
     # cherry-pick rather than probe with the wrong base.
@@ -248,12 +252,17 @@ _gcp_scan_predict_content_conflict() {
         return 0
     fi
     # Single invocation with --name-only: rc carries the conflict verdict, and
-    # stdout is the merged tree OID on line 1 followed by one conflicted path
-    # per line. On older git the unknown flags exit > 1 and we bail to "clean".
+    # stdout is the merged tree OID on line 1, then the conflicted paths (one
+    # per line), then a blank line and an "Informational messages" block
+    # (Auto-merging / CONFLICT lines). On older git the unknown flags exit > 1
+    # and we bail to "clean".
     merge_out=$(git merge-tree --write-tree --name-only --merge-base="$parent" HEAD "$sha" 2>/dev/null)
     rc=$?
     [ "$rc" -eq 1 ] || return 0
-    conflicted=$(printf '%s\n' "$merge_out" | tail -n +2)
+    # Keep ONLY the path list: drop the OID (line 1) and stop at the blank line
+    # before the informational block — otherwise "Auto-merging <f>" / "CONFLICT"
+    # lines would be misread as conflicting file paths.
+    conflicted=$(printf '%s\n' "$merge_out" | awk 'NR>1 { if ($0=="") exit; print }')
     [ -z "$conflicted" ] && return 0
     # Build the set of paths touched by every OTHER pick_list commit, for the
     # --author=all false-positive guard.
@@ -266,25 +275,31 @@ _gcp_scan_predict_content_conflict() {
     done <<EOF
 $pick_list
 EOF
-    first=""
     while IFS= read -r f; do
         [ -z "$f" ] && continue
-        # Deferral guard: the conflicting file is also touched by another pick
-        # commit -> the conflict is an artifact of an unapplied precedent.
+        # Deferral guard, per-file: a conflicting file ALSO touched by another
+        # pick commit may be an artifact of an unapplied precedent -> skip it.
+        # But a conflicting file touched by NO other pick commit is guaranteed
+        # to still conflict at the real cherry-pick (no precedent can change
+        # HEAD's copy), so flag the commit immediately on the first such file
+        # rather than deferring the whole commit (gemini PR #1038 review).
         # Newline-wrapped match avoids prefix collisions (Stage-1.5 pattern).
         case "
 $other_files" in
             *"
 $f
-"*) return 0 ;;
+"*) ;;
+            *)
+                printf '%s\n' "$f"
+                return 1
+                ;;
         esac
-        [ -z "$first" ] && first="$f"
     done <<EOF
 $conflicted
 EOF
-    [ -z "$first" ] && return 0
-    printf '%s\n' "$first"
-    return 1
+    # Every conflicting file is covered by an earlier pick_list commit -> defer
+    # the whole verdict to the real cherry-pick (it applies precedents first).
+    return 0
 }
 
 _gcp_scan() {
