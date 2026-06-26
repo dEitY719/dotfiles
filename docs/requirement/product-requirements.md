@@ -1,3 +1,7 @@
+---
+status: approved
+---
+
 # dotfiles 제품 요구사항 (Entry SSOT)
 
 > **버전**: v1 (2026-05-16) — Initial draft, issue #660 docs/ 재정렬과 함께 entry 파일 신설
