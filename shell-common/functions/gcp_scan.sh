@@ -150,6 +150,64 @@ $2
 EOF
 }
 
+_gcp_scan_check_file_deps() {
+    # File-dependency pre-check (issue #1033). Returns 1 when cherry-picking
+    # commit $1 would hit a modify/delete conflict because a file it
+    # modifies/deletes is ABSENT from $2 (base) and the upstream commit in $3
+    # (source) that creates that file is NOT itself among the commits we are
+    # about to pick ($4, the author-filtered candidate list). Returns 0 when no
+    # such missing dependency exists.
+    #
+    # Why $4 (pick_list) is load-bearing: with --author=all the creating commit
+    # IS in the candidate list and gets cherry-picked first, so the file is no
+    # longer "missing" — checking base existence alone would false-positive
+    # there. Membership in pick_list is the guard that keeps --author=all clean.
+    #
+    # For every missing dependency it prints one "F<TAB>short_creator_sha" line
+    # to stdout so the caller can name the offending file + precedent commit.
+    local sha="$1" base="$2" source="$3" pick_list="$4"
+    local changes st f up_add rc=0 tab
+    tab=$(printf '\t')
+    # name-status of the candidate (single-parent diff -> one status letter).
+    changes=$(git diff-tree --no-commit-id -r --name-status "$sha" 2>/dev/null)
+    while IFS="$tab" read -r st f; do
+        [ -z "$st" ] && continue
+        [ -z "$f" ] && continue
+        # Only modify (M) / delete (D) require the file to pre-exist in base.
+        # Adds (A) create the file themselves; renames/copies (R/C) carry two
+        # path fields and are out of scope for this heuristic.
+        case "$st" in
+            M* | D*) ;;
+            *) continue ;;
+        esac
+        # File already present in base -> modify/delete can proceed (content
+        # conflicts, if any, are Stage-2 / real-cherry-pick territory).
+        if git cat-file -e "${base}:${f}" >/dev/null 2>&1; then
+            continue
+        fi
+        # File absent in base. Find the upstream commit that creates it.
+        up_add=$(git log "$source" --diff-filter=A --format='%H' -- "$f" 2>/dev/null | head -n 1)
+        # No known creator in source -> not a recognizable dependency; leave it
+        # for Stage-2 / the real cherry-pick rather than guess.
+        [ -z "$up_add" ] && continue
+        # Creator is among the commits we will pick first -> not missing
+        # (the --author=all path). Newline-wrapped match avoids prefix
+        # collisions, mirroring the Stage-2 noop_list membership test.
+        case "
+$pick_list
+" in
+            *"
+$up_add
+"*) continue ;;
+        esac
+        printf '%s\t%s\n' "$f" "$(git rev-parse --short "$up_add" 2>/dev/null)"
+        rc=1
+    done <<EOF
+$changes
+EOF
+    return $rc
+}
+
 _gcp_scan() {
     # zsh compatibility: emulate POSIX sh to ensure consistent behavior
     if [ -n "${ZSH_VERSION-}" ]; then
@@ -350,6 +408,49 @@ EOF
         count=$((count - duplicate_count))
     fi
 
+    # Stage-1.5: file-dependency pre-check (issue #1033). A candidate that
+    # modifies/deletes a file absent from base — because the upstream commit
+    # that creates it was filtered out (e.g. a non-author commit) and is not
+    # itself in the pick set — would hit a modify/delete conflict. Detect and
+    # skip such commits up front with a clear message. Runs on
+    # final_selected_list (Stage-1 dups already pruned), BEFORE the Stage-2
+    # noop pre-flight so we never waste a probe (or surface a conflict) on them.
+    local dep_missing_list="" dep_missing_count=0 dep_survivor_list=""
+    while IFS= read -r sha; do
+        [ -z "$sha" ] && continue
+        local _dep_out=""
+        if _dep_out=$(_gcp_scan_check_file_deps "$sha" "$base" "$source" "$selected_list"); then
+            if [ -z "$dep_survivor_list" ]; then
+                dep_survivor_list="$sha"
+            else
+                dep_survivor_list="${dep_survivor_list}
+${sha}"
+            fi
+        else
+            dep_missing_list="${dep_missing_list}${sha}
+"
+            dep_missing_count=$((dep_missing_count + 1))
+            local _dep_first _dep_file _dep_sha _c_short
+            _dep_first=$(printf '%s\n' "$_dep_out" | head -n 1)
+            _dep_file=$(printf '%s\n' "$_dep_first" | cut -f1)
+            _dep_sha=$(printf '%s\n' "$_dep_first" | cut -f2)
+            _c_short=$(git rev-parse --short "$sha" 2>/dev/null)
+            if type ux_warning >/dev/null 2>&1; then
+                ux_warning "Skipping ${_c_short} — depends on ${_dep_sha} (creates/deletes ${_dep_file}) not yet in ${base}."
+                ux_info "Cherry-pick that commit first, or re-run with --author=all to include the dependency."
+            else
+                echo "⚠ Skipping ${_c_short} — depends on ${_dep_sha} (creates/deletes ${_dep_file}) not yet in ${base}." >&2
+                echo "ℹ Cherry-pick that commit first, or re-run with --author=all to include the dependency." >&2
+            fi
+        fi
+    done <<EOF
+$final_selected_list
+EOF
+    final_selected_list="$dep_survivor_list"
+    if [ "$dep_missing_count" -gt 0 ]; then
+        count=$((count - dep_missing_count))
+    fi
+
     # Stage-2: no-op pre-flight in Analysis phase — filters phantom commits
     # before display so users never see commits that will immediately be skipped
     # (issue #961). Runs on final_selected_list (Stage-1 dups already removed).
@@ -381,6 +482,9 @@ EOF
             ux_bullet "Missing (all authors): $total_count"
             ux_bullet "Author filter: $author -> 0 new commit(s)"
             ux_bullet "Duplicates (already applied): $duplicate_count"
+            if [ "$dep_missing_count" -gt 0 ]; then
+                printf "%s  ◆ Dep-missing (skipped): %d%s\n" "${UX_MUTED-}" "$dep_missing_count" "${UX_RESET-}"
+            fi
             if [ "$noop_count" -gt 0 ]; then
                 printf "%s  ◆ Already in HEAD (no-op): %d%s\n" "${UX_MUTED-}" "$noop_count" "${UX_RESET-}"
             fi
@@ -389,6 +493,9 @@ EOF
             echo "  Missing (all authors): $total_count"
             echo "  Author filter: $author -> 0 new commit(s)"
             echo "  Duplicates (already applied): $duplicate_count"
+            if [ "$dep_missing_count" -gt 0 ]; then
+                echo "  Dep-missing (skipped): $dep_missing_count"
+            fi
             if [ "$noop_count" -gt 0 ]; then
                 echo "  Already in HEAD (no-op): $noop_count"
             fi
@@ -416,6 +523,9 @@ EOF
         if [ $duplicate_count -gt 0 ]; then
             ux_bullet "Duplicates (already applied): $duplicate_count"
         fi
+        if [ "$dep_missing_count" -gt 0 ]; then
+            printf "%s  ◆ Dep-missing (skipped): %d%s\n" "${UX_MUTED-}" "$dep_missing_count" "${UX_RESET-}"
+        fi
         if [ "$noop_count" -gt 0 ]; then
             printf "%s  ◆ Already in HEAD (no-op): %d%s\n" "${UX_MUTED-}" "$noop_count" "${UX_RESET-}"
         fi
@@ -426,6 +536,9 @@ EOF
         echo "  Author filter: $author -> $count commit(s)"
         if [ $duplicate_count -gt 0 ]; then
             echo "  Duplicates (already applied): $duplicate_count"
+        fi
+        if [ "$dep_missing_count" -gt 0 ]; then
+            echo "  Dep-missing (skipped): $dep_missing_count"
         fi
         if [ "$noop_count" -gt 0 ]; then
             echo "  Already in HEAD (no-op): $noop_count"
@@ -482,8 +595,25 @@ EOF
     local empty_skipped=0
     local noop_skipped=0
     local dup_skipped=0
+    local dep_skipped=0
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
+
+        # Stage-1.5 dependency-missing (issue #1033): skip with a log line so
+        # the commit is never attempted — it would conflict on a modify/delete
+        # of a file absent from base. Newline-wrapped membership match mirrors
+        # the Stage-2 noop_list test below.
+        local _in_dep=0
+        case "
+$dep_missing_list" in
+            *"
+$sha
+"*) _in_dep=1 ;;
+        esac
+        if [ "$_in_dep" -eq 1 ]; then
+            dep_skipped=$((dep_skipped + 1))
+            continue
+        fi
 
         # Stage-1 subject duplicate: skip without a cherry-pick attempt,
         # naming the base SHA it matches (issue #811 F-2/F-3).
@@ -550,6 +680,9 @@ EOF
     # above), so report 0 conflicts.
     if type ux_success >/dev/null 2>&1; then
         ux_success "$picked applied, $dup_skipped skipped (dup), 0 conflicts"
+        if [ "$dep_skipped" -gt 0 ]; then
+            ux_info "($dep_skipped commit(s) skipped — file dependency missing in $base)"
+        fi
         if [ "$noop_skipped" -gt 0 ]; then
             ux_info "($noop_skipped commit(s) skipped — already in HEAD, no-op pre-flight)"
         fi
@@ -558,6 +691,9 @@ EOF
         fi
     else
         echo "✓ $picked applied, $dup_skipped skipped (dup), 0 conflicts"
+        if [ "$dep_skipped" -gt 0 ]; then
+            echo "  ($dep_skipped commit(s) skipped — file dependency missing in $base)"
+        fi
         if [ "$noop_skipped" -gt 0 ]; then
             echo "  ($noop_skipped commit(s) skipped — already in HEAD, no-op pre-flight)"
         fi
