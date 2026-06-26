@@ -44,6 +44,23 @@ obsidian            # no args -> launch / focus the app
 obsidian -h         # wrapper help
 ```
 
+## 비-인터랙티브 / AI 에이전트 사용
+
+`obsidian` 은 **셸 함수**라서 인터랙티브 셸에서만 로드된다 (로더의
+`should_skip_init` + 파일 상단 interactive 가드). 함수는 자식 프로세스로
+상속되지 않으므로, AI 코딩 에이전트가 `bash -c "obsidian ..."` 처럼
+**비-인터랙티브** 셸로 호출하면 함수가 잡히지 않는다.
+
+비-인터랙티브 컨텍스트에서는 풀 경로 또는 `OBSIDIAN_CLI_BIN` 을 직접 쓴다:
+
+```bash
+"${OBSIDIAN_CLI_BIN:-/mnt/c/Program Files/Obsidian/Obsidian.com}" search query="PARA"
+```
+
+> 함수를 비-인터랙티브에서도 쓰게 하려면 PATH 위의 실행파일로 전환해야 한다
+> (PATH 는 export env 라 자식 프로세스로 상속됨). 이는 #1023 범위 밖 —
+> 필요 시 별도 이슈로 다룬다.
+
 ## WSL prerequisites
 
 1. **Obsidian "installer" 1.12.7+** — the `Obsidian.com` redirector is created
