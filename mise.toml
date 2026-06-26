@@ -29,8 +29,8 @@ DOTFILES_ROOT = "{{ config_root }}"
 
 # ─── Lint gates (read-only) ──────────────────────────────────────────
 [tasks.lint]
-description = "전체 lint (Python + Shell)"
-depends     = ["lint-py", "lint-sh"]
+description = "전체 lint (Python + Shell + Docs)"
+depends     = ["lint-py", "lint-sh", "lint-docs"]
 
 [tasks.lint-py]
 description = "Python lint (ruff check + format check + mypy)"
@@ -46,6 +46,12 @@ run = [
     'find bash -type f \( -name "*.sh" -o -name "*.bash" \) -exec shellcheck -x -e SC1090,SC1091 {} +',
     "shfmt -d -i 4 bash/",
 ]
+
+[tasks.lint-docs]
+description = "Docs 파일명 kebab-case 린터 (issue #1027)"
+# adr/ + requirement/ 는 강제(FAIL), 나머지 docs/ 는 warn-only.
+# 레거시 위반 일괄 정리는 별도 이슈로 분리한다.
+run = "sh scripts/lint_docs_filenames.sh"
 
 # ─── Test gate ───────────────────────────────────────────────────────
 [tasks.test]
