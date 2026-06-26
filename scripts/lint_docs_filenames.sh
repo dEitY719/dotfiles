@@ -46,9 +46,15 @@ is_enforced() {
     return 1
 }
 
-# kebab-case 검사: 소문자/숫자 + 단일 하이픈 구분
+# kebab-case 검사: 소문자/숫자 + 단일 하이픈 구분.
+# grep 포크를 피해 POSIX case 내장 패턴으로 검사 (PR #1029 리뷰 반영).
 is_kebab() {
-    printf '%s' "$1" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*$'
+    case "$1" in
+    "" | -* | *-) return 1 ;; # 빈 문자열 / 선행·후행 하이픈
+    *--*) return 1 ;;         # 연속 하이픈
+    *[!a-z0-9-]*) return 1 ;; # 허용 문자 외
+    *) return 0 ;;
+    esac
 }
 
 while IFS= read -r file; do
