@@ -4,7 +4,7 @@
 
 `shell-common/functions/*.sh`의 함수형 명령어를 일관된 **dispatcher + private sub-function** 구조로 작성하기 위한 내부 아키텍처 SSOT다.
 
-> **먼저 전달 방식부터 결정하라.** 이 문서는 명령을 **함수로 주기로 정한 뒤**의 내부 구조다. 함수 vs PATH 실행파일 결정은 한 단계 위 축 — [`command-delivery-model.md`](./command-delivery-model.md) 참조.
+> **먼저 전달 방식부터 결정하라.** 이 문서는 명령을 **함수로 제공하기로 정한 뒤**의 내부 구조다. 함수 vs PATH 실행파일 결정은 한 단계 위 축 — [`command-delivery-model.md`](./command-delivery-model.md) 참조.
 
 사용자 표면(`*-help` 출력 형식·15줄 정책·`ux_bullet` 계층 등)은 [`command-guidelines.md`](./command-guidelines.md)가 정의한다. 이 문서는 그 아래 layer — 명령어의 **내부 구조**를 다룬다.
 
