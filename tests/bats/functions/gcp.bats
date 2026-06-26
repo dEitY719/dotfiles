@@ -1086,3 +1086,42 @@ FIXTURE
     assert_output --partial "DEFERRED"
     refute_output --partial "STILL_FLAGGED"
 }
+
+@test "scan #1037: one uncovered conflicting file flags the commit despite a covered one (unit)" {
+    # gemini PR #1038 review: the guard is per-file. A commit that conflicts in
+    # TWO files — one also touched by a precedent (covered), one touched by no
+    # other pick commit (uncovered) — is still GUARANTEED to conflict on the
+    # uncovered file, so it must be FLAGGED (return 1) naming that file, NOT
+    # deferred just because the other file is covered.
+    run_in_bash "
+        repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp_test.XXXXXX\")\"
+        trap \"rm -rf \$repo\" EXIT
+        cd \"\$repo\" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME=\"Me\" GIT_AUTHOR_EMAIL=\"me@me\" \
+               GIT_COMMITTER_NAME=\"Test\" GIT_COMMITTER_EMAIL=\"t@t\"
+        git init -q -b main
+        printf 'Foo0\n' > foo.txt && printf 'Bar0\n' > bar.txt \
+            && git add foo.txt bar.txt && git commit -qm 'init'
+        git checkout -q -b source
+        # Precedent touches bar.txt only.
+        printf 'Bar1\n' > bar.txt && git add bar.txt \
+            && git commit -q --author='Upstream Bot <bot@up>' -m 'bar->Bar1'
+        c1=\$(git rev-parse HEAD)
+        # Candidate touches BOTH foo.txt (uncovered) and bar.txt (covered by c1).
+        printf 'Foo2\n' > foo.txt && printf 'Bar2\n' > bar.txt \
+            && git add foo.txt bar.txt && git commit -qm 'foo+bar'
+        c2=\$(git rev-parse HEAD)
+        git checkout -q main
+        # main diverges on BOTH files so each conflicts in the 3-way merge.
+        printf 'FooMain\n' > foo.txt && printf 'BarMain\n' > bar.txt \
+            && git add foo.txt bar.txt && git commit -qm 'main diverges'
+        out=\$(_gcp_scan_predict_content_conflict \"\$c2\" \"\$c1
+\$c2\"); rc=\$?
+        echo \"rc=\$rc out=\$out\"
+    "
+    assert_success
+    # Flagged (rc=1) despite bar.txt being covered, naming the uncovered foo.txt.
+    assert_output --partial "rc=1"
+    assert_output --partial "foo.txt"
+    refute_output --partial "rc=0"
+}
