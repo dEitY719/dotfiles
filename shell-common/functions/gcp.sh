@@ -182,6 +182,8 @@ _gcp_help_rows_scan() {
     ux_table_row "--author=all" "show all authors" "Bypass filter"
     ux_table_row "behavior" "detects duplicates (same subject in base)" "Skips already-applied commits"
     ux_table_row "behavior" "contiguous range -> bulk cherry-pick" "Non-contiguous -> individual"
+    ux_table_row "--show-skip-list" "print known-resolved SHAs" "git/config/gcp-scan-skip.conf (issue #1039)"
+    ux_table_row "skip list" "registered SHAs skipped silently" "ignored under --author=all"
 }
 
 _gcp_help_rows_theirs() {

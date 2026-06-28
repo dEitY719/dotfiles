@@ -1125,3 +1125,133 @@ FIXTURE
     assert_output --partial "foo.txt"
     refute_output --partial "rc=0"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #1039 — Stage-1.4 known-resolved skip list. A commit a human has
+# already reconciled into HEAD (manual conflict resolution) or that depends on
+# an unmergeable precedent is detected correctly by Stage-1.5/1.6 every run,
+# producing repeated warning noise. Registering its SHA in the skip-list file
+# (git/config/gcp-scan-skip.conf, override GCP_SCAN_SKIP_FILE) drops it
+# SILENTLY before Stage-1.5/1.6, counted under "Known-resolved (skipped)". The
+# list is IGNORED under --author=all (full detection stays as a safety net).
+# Reuses _gcp1037_make_repo (foo.txt content-conflict fixture); the conflicting
+# "edit foo" commit is source~1.
+# ---------------------------------------------------------------------------
+
+@test "bash: _gcp_scan_load_skip_list private function exists" {
+    run_in_bash 'declare -f _gcp_scan_load_skip_list >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "bash: _gcp_scan_in_skip_list private function exists" {
+    run_in_bash 'declare -f _gcp_scan_in_skip_list >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "scan #1039: --show-skip-list prints registered SHAs, strips comments/blanks" {
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        skipf="$repo/skip.conf"
+        printf "deadbeef  # inline reason\n# whole-line comment\n\ncafebabe\n" > "$skipf"
+        export GCP_SCAN_SKIP_FILE="$skipf"
+        _gcp_scan main upstream/main --show-skip-list
+    '
+    assert_success
+    assert_output --partial "Known-resolved skip list"
+    assert_output --partial "deadbeef"
+    assert_output --partial "cafebabe"
+    # Reasons / full-comment lines must not be emitted as SHA tokens.
+    refute_output --partial "whole-line comment"
+    refute_output --partial "inline reason"
+}
+
+@test "scan #1039: --show-skip-list reports empty when no file registered" {
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        git init -q -b main
+        export GCP_SCAN_SKIP_FILE="$repo/does-not-exist.conf"
+        _gcp_scan main upstream/main --show-skip-list
+    '
+    assert_success
+    assert_output --partial "Known-resolved skip list"
+    assert_output --partial "no skip-list file"
+}
+
+@test "scan #1039: registered SHA skipped silently as known-resolved (no conflict warning)" {
+    run_in_bash "
+        $(_gcp1037_make_repo)
+        conflict_sha=\$(git rev-parse source~1)
+        skipf=\"\$repo/skip.conf\"
+        printf '%s  # manually resolved, already in HEAD\n' \"\$conflict_sha\" > \"\$skipf\"
+        export GCP_SCAN_SKIP_FILE=\"\$skipf\"
+        printf 'y\n' | _gcp_scan main source --author=Me
+    "
+    assert_success
+    # Counted as known-resolved in the Analysis Result.
+    assert_output --partial "Known-resolved (skipped): 1"
+    # The Stage-1.6 content-conflict warning must NOT fire for the listed SHA.
+    refute_output --partial "predicted content conflict"
+    refute_output --partial "Content-conflict (skipped)"
+    # Final report carries the known-resolved skip line; no real conflict.
+    assert_output --partial "known-resolved"
+    refute_output --partial "CONFLICT"
+    refute_output --partial "Resolve and run"
+}
+
+@test "scan #1039: known-resolved commit not applied; independent commit still applied" {
+    run_in_bash "
+        $(_gcp1037_make_repo)
+        conflict_sha=\$(git rev-parse source~1)
+        skipf=\"\$repo/skip.conf\"
+        printf '%s\n' \"\$conflict_sha\" > \"\$skipf\"
+        export GCP_SCAN_SKIP_FILE=\"\$skipf\"
+        printf 'y\n' | _gcp_scan main source --author=Me >/dev/null 2>&1
+        git cat-file -e HEAD:bar.txt && echo HAS_BAR
+        git show HEAD:foo.txt
+        git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
+    "
+    assert_success
+    assert_output --partial "HAS_BAR"
+    # foo.txt keeps main's content — the known-resolved edit was never applied.
+    assert_output --partial "mainline"
+    refute_output --partial "upstream"
+    assert_output --partial "PICK_CLEAR"
+}
+
+@test "scan #1039: --author=all ignores the skip list (safety net)" {
+    run_in_bash "
+        $(_gcp1037_make_repo)
+        conflict_sha=\$(git rev-parse source~1)
+        skipf=\"\$repo/skip.conf\"
+        printf '%s\n' \"\$conflict_sha\" > \"\$skipf\"
+        export GCP_SCAN_SKIP_FILE=\"\$skipf\"
+        printf 'y\n' | _gcp_scan main source --author=all
+    "
+    assert_success
+    # Under --author=all the list is bypassed -> Stage-1.6 still detects it.
+    assert_output --partial "Content-conflict (skipped): 1"
+    refute_output --partial "Known-resolved (skipped)"
+}
+
+@test "scan #1039: abbreviated SHA token matches by prefix" {
+    run_in_bash "
+        $(_gcp1037_make_repo)
+        conflict_short=\$(git rev-parse --short=8 source~1)
+        skipf=\"\$repo/skip.conf\"
+        printf '%s  # short form\n' \"\$conflict_short\" > \"\$skipf\"
+        export GCP_SCAN_SKIP_FILE=\"\$skipf\"
+        printf 'y\n' | _gcp_scan main source --author=Me
+    "
+    assert_success
+    assert_output --partial "Known-resolved (skipped): 1"
+    refute_output --partial "Content-conflict (skipped)"
+}
