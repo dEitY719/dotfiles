@@ -1255,3 +1255,40 @@ FIXTURE
     assert_output --partial "Known-resolved (skipped): 1"
     refute_output --partial "Content-conflict (skipped)"
 }
+
+@test "scan #1040: glob/short tokens rejected at load (no all-commit silent skip)" {
+    # gemini PR #1040 review: tokens are used unescaped as a `case` glob, so a
+    # stray `*`/`?` or an over-short prefix must be rejected at load time — else
+    # every commit would be silently skipped. The conflicting commit must still
+    # be detected by Stage-1.6 (i.e. the wildcard did NOT silence it).
+    run_in_bash "
+        $(_gcp1037_make_repo)
+        skipf=\"\$repo/skip.conf\"
+        printf '%s\n' '*' '?' '0' 'zz12' '012' > \"\$skipf\"
+        export GCP_SCAN_SKIP_FILE=\"\$skipf\"
+        printf 'y\n' | _gcp_scan main source --author=Me
+    "
+    assert_success
+    # No token survived validation -> nothing skipped as known-resolved.
+    refute_output --partial "Known-resolved (skipped)"
+    # The real content conflict is still detected (wildcard did not silence it).
+    assert_output --partial "Content-conflict (skipped): 1"
+}
+
+@test "scan #1040: --show-skip-list omits invalid tokens, keeps valid hex SHAs" {
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        git init -q -b main
+        skipf="$repo/skip.conf"
+        printf "%s\n" "*" "0" "deadbeef" "ab12  # ok" > "$skipf"
+        export GCP_SCAN_SKIP_FILE="$skipf"
+        _gcp_scan main upstream/main --show-skip-list
+    '
+    assert_success
+    assert_output --partial "deadbeef"
+    assert_output --partial "ab12"
+    # Wildcard and too-short token must not appear as registered SHAs.
+    refute_output --partial " *"
+}

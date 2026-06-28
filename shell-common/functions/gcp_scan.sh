@@ -331,6 +331,18 @@ _gcp_scan_load_skip_list() {
         token=${token%"${token##*[![:space:]]}"}       # trim trailing space
         token=${token#"${token%%[![:space:]]*}"}       # trim leading space
         [ -z "$token" ] && continue
+        # Hardening (gemini PR #1040 review): the token is later used UNESCAPED
+        # as a `case` glob in _gcp_scan_in_skip_list ("$tok"*), so a stray `*`,
+        # `?`, or `[` would match every candidate SHA and silently skip ALL
+        # commits. Accept only hex (a valid abbreviated SHA) and require >=4
+        # chars so an over-short prefix can't over-match. Reject otherwise.
+        case "$token" in
+            *[!0-9a-fA-F]*) continue ;;
+        esac
+        case "$token" in
+            ????*) ;;
+            *) continue ;;
+        esac
         printf '%s\n' "$token"
     done <"$file"
 }
