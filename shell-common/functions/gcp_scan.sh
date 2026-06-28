@@ -302,6 +302,94 @@ EOF
     return 0
 }
 
+_gcp_scan_skip_file() {
+    # Resolve the known-resolved skip-list file path (issue #1039). Honors the
+    # GCP_SCAN_SKIP_FILE override (absolute or cwd-relative); otherwise defaults
+    # to <repo-toplevel>/git/config/gcp-scan-skip.conf so the list is a tracked
+    # SSOT alongside the other git/config/*.conf rule files. Prints the path
+    # (it may not exist yet — callers must -f check).
+    if [ -n "${GCP_SCAN_SKIP_FILE-}" ]; then
+        printf '%s\n' "$GCP_SCAN_SKIP_FILE"
+        return 0
+    fi
+    local top
+    top=$(git rev-parse --show-toplevel 2>/dev/null) || top="."
+    printf '%s/git/config/gcp-scan-skip.conf\n' "$top"
+}
+
+_gcp_scan_load_skip_list() {
+    # Parse the known-resolved skip-list file (issue #1039) into one cleaned
+    # SHA token per line. Each line is `<sha> [# free-text reason]`; inline
+    # comments, full-comment lines, and blank lines are stripped. Pure
+    # parameter-expansion parsing (no awk/sed fork), matching this file's style.
+    local file line token
+    file=$(_gcp_scan_skip_file)
+    [ -f "$file" ] || return 0
+    # `|| [ -n "$line" ]` flushes a final newline-less line (POSIX read idiom).
+    while IFS= read -r line || [ -n "$line" ]; do
+        token=${line%%#*}                              # drop inline comment
+        token=${token%"${token##*[![:space:]]}"}       # trim trailing space
+        token=${token#"${token%%[![:space:]]*}"}       # trim leading space
+        [ -z "$token" ] && continue
+        printf '%s\n' "$token"
+    done <"$file"
+}
+
+_gcp_scan_in_skip_list() {
+    # True (0) when candidate full SHA $1 is covered by the skip tokens in $2.
+    # Tokens may be abbreviated, so a prefix match handles short SHAs while a
+    # full token still matches exactly. Mirrors the no-fork here-doc read style.
+    local cand="$1" tok
+    while IFS= read -r tok; do
+        [ -z "$tok" ] && continue
+        case "$cand" in
+            "$tok"*) return 0 ;;
+        esac
+    done <<EOF
+$2
+EOF
+    return 1
+}
+
+_gcp_scan_show_skip_list() {
+    # Render the current known-resolved skip list for `gcp scan --show-skip-list`
+    # (issue #1039): the resolved file path plus every registered SHA token.
+    local file entries
+    file=$(_gcp_scan_skip_file)
+    entries=$(_gcp_scan_load_skip_list)
+    if type ux_section >/dev/null 2>&1; then
+        ux_section "Known-resolved skip list"
+        ux_bullet "File: $file"
+    else
+        echo "=== Known-resolved skip list ==="
+        echo "  File: $file"
+    fi
+    if [ ! -f "$file" ]; then
+        if type ux_info >/dev/null 2>&1; then
+            ux_info "(no skip-list file — nothing registered)"
+        else
+            echo "  (no skip-list file — nothing registered)"
+        fi
+        return 0
+    fi
+    if [ -z "$entries" ]; then
+        if type ux_info >/dev/null 2>&1; then
+            ux_info "(file present but no SHAs registered)"
+        else
+            echo "  (file present but no SHAs registered)"
+        fi
+        return 0
+    fi
+    printf '%s\n' "$entries" | while IFS= read -r tok; do
+        [ -z "$tok" ] && continue
+        if type ux_bullet >/dev/null 2>&1; then
+            ux_bullet "$tok"
+        else
+            echo "  $tok"
+        fi
+    done
+}
+
 _gcp_scan() {
     # zsh compatibility: emulate POSIX sh to ensure consistent behavior
     if [ -n "${ZSH_VERSION-}" ]; then
@@ -317,6 +405,7 @@ _gcp_scan() {
     local source="upstream/main"
     local author="dEitY719"
     local arg1="" arg2=""
+    local show_skip_list=0
 
     # Check for incomplete cherry-pick
     if git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
@@ -353,6 +442,9 @@ _gcp_scan() {
                 return 1
             fi
             ;;
+        --show-skip-list)
+            show_skip_list=1
+            ;;
         *)
             # Store positional arguments without array syntax
             if [ -z "$arg1" ]; then
@@ -371,6 +463,17 @@ _gcp_scan() {
     fi
     if [ -n "$arg2" ]; then
         source="$arg2"
+    fi
+
+    # --show-skip-list (issue #1039): print the known-resolved skip list and
+    # return without scanning. Handled before the header so it stays a clean,
+    # standalone query that works outside a configured base/source.
+    if [ "$show_skip_list" -eq 1 ]; then
+        _gcp_scan_show_skip_list
+        if [ $_xtrace_set -eq 1 ]; then
+            set -x
+        fi
+        return 0
     fi
 
     # Use ux_header if available
@@ -502,6 +605,41 @@ EOF
         count=$((count - duplicate_count))
     fi
 
+    # Stage-1.4: known-resolved skip list (issue #1039). SHAs registered in
+    # git/config/gcp-scan-skip.conf (override: GCP_SCAN_SKIP_FILE) are commits a
+    # human already reconciled into HEAD (manual conflict resolution) or that
+    # depend on an unmergeable precedent — Stage-1.5/1.6 detect them correctly
+    # every run, but re-warning about an already-known skip is pure UX noise.
+    # Drop them here, BEFORE Stage-1.5/1.6, so no warning is emitted, and count
+    # them under a dedicated "Known-resolved" line. The list is IGNORED under
+    # --author=all so the full detection (safety net) is never silenced there.
+    local known_resolved_list="" known_resolved_count=0 kr_survivor_list=""
+    local skip_list=""
+    if [ "$author_lc" != "all" ]; then
+        skip_list=$(_gcp_scan_load_skip_list)
+    fi
+    if [ -n "$skip_list" ]; then
+        while IFS= read -r sha; do
+            [ -z "$sha" ] && continue
+            if _gcp_scan_in_skip_list "$sha" "$skip_list"; then
+                known_resolved_list="${known_resolved_list}${sha}
+"
+                known_resolved_count=$((known_resolved_count + 1))
+            else
+                if [ -z "$kr_survivor_list" ]; then
+                    kr_survivor_list="$sha"
+                else
+                    kr_survivor_list="${kr_survivor_list}
+${sha}"
+                fi
+            fi
+        done <<EOF
+$final_selected_list
+EOF
+        final_selected_list="$kr_survivor_list"
+        count=$((count - known_resolved_count))
+    fi
+
     # Stage-1.5: file-dependency pre-check (issue #1033). A candidate that
     # modifies/deletes a file absent from base — because the upstream commit
     # that creates it was filtered out (e.g. a non-author commit) and is not
@@ -623,6 +761,9 @@ EOF
             ux_bullet "Missing (all authors): $total_count"
             ux_bullet "Author filter: $author -> 0 new commit(s)"
             ux_bullet "Duplicates (already applied): $duplicate_count"
+            if [ "$known_resolved_count" -gt 0 ]; then
+                printf "%s  ◆ Known-resolved (skipped): %d%s\n" "${UX_MUTED-}" "$known_resolved_count" "${UX_RESET-}"
+            fi
             if [ "$dep_missing_count" -gt 0 ]; then
                 printf "%s  ◆ Dep-missing (skipped): %d%s\n" "${UX_MUTED-}" "$dep_missing_count" "${UX_RESET-}"
             fi
@@ -637,6 +778,9 @@ EOF
             echo "  Missing (all authors): $total_count"
             echo "  Author filter: $author -> 0 new commit(s)"
             echo "  Duplicates (already applied): $duplicate_count"
+            if [ "$known_resolved_count" -gt 0 ]; then
+                echo "  Known-resolved (skipped): $known_resolved_count"
+            fi
             if [ "$dep_missing_count" -gt 0 ]; then
                 echo "  Dep-missing (skipped): $dep_missing_count"
             fi
@@ -670,6 +814,9 @@ EOF
         if [ $duplicate_count -gt 0 ]; then
             ux_bullet "Duplicates (already applied): $duplicate_count"
         fi
+        if [ "$known_resolved_count" -gt 0 ]; then
+            printf "%s  ◆ Known-resolved (skipped): %d%s\n" "${UX_MUTED-}" "$known_resolved_count" "${UX_RESET-}"
+        fi
         if [ "$dep_missing_count" -gt 0 ]; then
             printf "%s  ◆ Dep-missing (skipped): %d%s\n" "${UX_MUTED-}" "$dep_missing_count" "${UX_RESET-}"
         fi
@@ -686,6 +833,9 @@ EOF
         echo "  Author filter: $author -> $count commit(s)"
         if [ $duplicate_count -gt 0 ]; then
             echo "  Duplicates (already applied): $duplicate_count"
+        fi
+        if [ "$known_resolved_count" -gt 0 ]; then
+            echo "  Known-resolved (skipped): $known_resolved_count"
         fi
         if [ "$dep_missing_count" -gt 0 ]; then
             echo "  Dep-missing (skipped): $dep_missing_count"
@@ -750,8 +900,25 @@ EOF
     local dup_skipped=0
     local dep_skipped=0
     local conflict_skipped=0
+    local kr_skipped=0
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
+
+        # Stage-1.4 known-resolved (issue #1039): silently skip — the Analysis
+        # phase already counted it and the user registered it precisely to stop
+        # seeing a warning. No log line here (that is the whole point); the
+        # summary's "(N skipped — known-resolved)" line is the only trace.
+        local _in_kr=0
+        case "
+$known_resolved_list" in
+            *"
+$sha
+"*) _in_kr=1 ;;
+        esac
+        if [ "$_in_kr" -eq 1 ]; then
+            kr_skipped=$((kr_skipped + 1))
+            continue
+        fi
 
         # Stage-1.5 dependency-missing (issue #1033): skip with a log line so
         # the commit is never attempted — it would conflict on a modify/delete
@@ -849,6 +1016,9 @@ EOF
     # above), so report 0 conflicts.
     if type ux_success >/dev/null 2>&1; then
         ux_success "$picked applied, $dup_skipped skipped (dup), 0 conflicts"
+        if [ "$kr_skipped" -gt 0 ]; then
+            ux_info "($kr_skipped commit(s) skipped — known-resolved)"
+        fi
         if [ "$dep_skipped" -gt 0 ]; then
             ux_info "($dep_skipped commit(s) skipped — file dependency missing in $base)"
         fi
@@ -863,6 +1033,9 @@ EOF
         fi
     else
         echo "✓ $picked applied, $dup_skipped skipped (dup), 0 conflicts"
+        if [ "$kr_skipped" -gt 0 ]; then
+            echo "  ($kr_skipped commit(s) skipped — known-resolved)"
+        fi
         if [ "$dep_skipped" -gt 0 ]; then
             echo "  ($dep_skipped commit(s) skipped — file dependency missing in $base)"
         fi

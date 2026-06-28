@@ -67,4 +67,5 @@ layer only — protected-branch check still runs). SSOT lives in
 - **[Hook Checks](./hooks/checks)** — Modular checks executed by the project hook
 - **[Hook Configuration](./config/hook-config.sh)** — Regex patterns, thresholds, and shared constants
 - **[Pre-push Rules](./config/pre-push-rules.sh)** — Protected branches + leak-guard SSOT
+- **[gcp-scan Skip List](./config/gcp-scan-skip.conf)** — Known-resolved SHAs `gcp scan` skips silently (issue #1039; `gcp scan --show-skip-list`, override `GCP_SCAN_SKIP_FILE`)
 - **[Git Docs](./doc/README.md)** — Hook workflow and SSH setup guides
