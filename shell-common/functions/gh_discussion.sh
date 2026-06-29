@@ -202,7 +202,7 @@ _gh_discussion_create() {
         -f repoId="$_repo_id" \
         -f categoryId="$_category_id" \
         -f title="$_title" \
-        -f "body=@$_body_file" \
+        -F "body=@$_body_file" \
         --jq '.data.createDiscussion.discussion.url' 2>"$_err")
     local _rc=$?
 
@@ -301,7 +301,7 @@ _gh_discussion_comment() {
             }
           }' \
         -f discId="$_disc_id" \
-        -f "body=@$_body_file" \
+        -F "body=@$_body_file" \
         --jq '.data.addDiscussionComment.comment.url' 2>"$_err")
     local _rc=$?
 
