@@ -32,7 +32,7 @@ Host github.com
 # ==========================================
 # SSAI 프로젝트 공통 설정 (IdentityFile 통합 관리)
 Host ssai-* server-ssai-*
-    IdentityFile C:/Users/byoungwoo.yoon/.ssh/id_rsa_ssai_bwyoon
+    IdentityFile ~/.ssh/id_rsa_ssai_bwyoon
     IdentitiesOnly yes
 
 # SSAI 개발 서버
