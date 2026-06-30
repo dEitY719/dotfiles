@@ -28,3 +28,7 @@
 	helper =
 	useHttpPath = true
 	helper = !${DOTFILES_ROOT:-$HOME/dotfiles}/git/scripts/gh-credential-helper.sh
+[credential "https://github.samsungds.net"]
+	helper =
+	useHttpPath = true
+	helper = !${DOTFILES_ROOT:-$HOME/dotfiles}/git/scripts/gh-credential-helper.sh
