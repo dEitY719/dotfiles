@@ -9,7 +9,7 @@ List-create or attach method, so REST is the correct (and verified) path.
 Load from the working directory's `.env` (do not hardcode):
 
 ```bash
-set -a; . ./.env 2>/dev/null; set +a
+set -a; [ -f ./.env ] && . ./.env; set +a   # guard: sourcing a missing file aborts a POSIX shell
 : "${NEXTAUTH_URL:?NEXTAUTH_URL not set — refusing to guess base URL}"
 : "${KARAKEEP_API_KEY:?KARAKEEP_API_KEY not set — cannot authenticate}"
 BASE="${NEXTAUTH_URL%/}"
@@ -28,23 +28,28 @@ start at the root and walk one segment at a time, carrying `parentId`.
 
 ```bash
 # List all lists once, then match by name + parentId locally.
-curl -fsS -H "$AUTH" "$BASE/api/v1/lists" | jq -c '.lists[]'
+# `.lists[]?` (not `.lists[]`) — null-safe if the field is missing/null.
+curl -fsS -H "$AUTH" "$BASE/api/v1/lists" | jq -c '.lists[]?'
 ```
 
-For each segment:
-- Match an existing list where `name == <segment>` and `parentId` equals the
+For each segment (bound to shell vars `SEGMENT`, `EMOJI`, `PARENT_ID` — not
+`<...>` placeholders, which a shell would read as redirection):
+- Match an existing list where `name == $SEGMENT` and `parentId` equals the
   running parent (`null` at the root). Found → reuse `.id`.
-- Not found → create it:
+- Not found → create it. Build the JSON with `jq -n` so values are always
+  escaped (a raw `-d '{"name":"'"$SEGMENT"'"...}'` breaks or injects when a
+  value contains `"` or `\`):
 
 ```bash
+payload=$(jq -n --arg name "$SEGMENT" --arg icon "$EMOJI" --arg parentId "$PARENT_ID" \
+  '{name: $name, icon: $icon, parentId: (if $parentId == "" then null else $parentId end)}')
 curl -fsS -X POST -H "$AUTH" -H 'Content-Type: application/json' \
-  "$BASE/api/v1/lists" \
-  -d '{"name":"<segment>","icon":"<emoji>","parentId":<parentId-or-omit>}' | jq -r '.id'
+  "$BASE/api/v1/lists" -d "$payload" | jq -r '.id'
 ```
 
-`icon` is **required** by the API and must be a single emoji — substitute a
-sensible one for `<emoji>` (a folder glyph as default, or a topic-fitting
-one). Omit `parentId` (or send `null`) for a root list.
+`icon` is **required** by the API and must be a single emoji — set `EMOJI` to
+a sensible one (a folder glyph as default, or a topic-fitting one). Leave
+`PARENT_ID` empty for a root list (the `jq` expression emits `null`).
 Creating parents first preserves full-path membership. Idempotent: a second
 run finds every segment and creates nothing.
 
@@ -60,24 +65,27 @@ Search existing bookmarks for one whose URL (also stripped) equals `KEY`;
 reuse its id. None → create:
 
 ```bash
+payload=$(jq -n --arg url "$URL" --arg title "$TITLE" \
+  '{type:"link", url:$url, title:$title}')
 curl -fsS -X POST -H "$AUTH" -H 'Content-Type: application/json' \
-  "$BASE/api/v1/bookmarks" \
-  -d '{"type":"link","url":"<url>","title":"<title>"}' | jq -r '.id'
+  "$BASE/api/v1/bookmarks" -d "$payload" | jq -r '.id'
 ```
 
-`title` may be the URL itself when no better title is known; Karakeep
-backfills metadata asynchronously.
+`TITLE` may be the URL itself when no better title is known; Karakeep
+backfills metadata asynchronously. As above, `jq -n` keeps the payload valid
+even when the URL or title contains quotes or backslashes.
 
 ## Attach + verify
 
 ```bash
-# Idempotent; success returns an empty body / 2xx.
+# Idempotent; success returns an empty body / 2xx. (LIST_ID / BOOKMARK_ID are
+# shell vars, not `<...>` placeholders.)
 curl -fsS -X PUT -H "$AUTH" \
-  "$BASE/api/v1/lists/<list_id>/bookmarks/<bookmark_id>"
+  "$BASE/api/v1/lists/$LIST_ID/bookmarks/$BOOKMARK_ID"
 
-# Verify membership.
-curl -fsS -H "$AUTH" "$BASE/api/v1/lists/<list_id>/bookmarks" \
-  | jq -e --arg id "<bookmark_id>" '.bookmarks[] | select(.id==$id)' >/dev/null \
+# Verify membership. `.bookmarks[]?` is null-safe.
+curl -fsS -H "$AUTH" "$BASE/api/v1/lists/$LIST_ID/bookmarks" \
+  | jq -e --arg id "$BOOKMARK_ID" '.bookmarks[]? | select(.id==$id)' >/dev/null \
   && echo verified || echo NOT-verified
 ```
 

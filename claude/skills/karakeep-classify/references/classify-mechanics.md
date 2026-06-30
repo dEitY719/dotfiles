@@ -8,7 +8,7 @@ This skill is read + judge only. The single write path lives in
 Load from the working directory's `.env` (no hardcoded base URL):
 
 ```bash
-set -a; . ./.env 2>/dev/null; set +a
+set -a; [ -f ./.env ] && . ./.env; set +a   # guard: sourcing a missing file aborts a POSIX shell
 : "${NEXTAUTH_URL:?NEXTAUTH_URL not set — refusing to guess base URL}"
 : "${KARAKEEP_API_KEY:?KARAKEEP_API_KEY not set — cannot authenticate}"
 BASE="${NEXTAUTH_URL%/}"
@@ -20,7 +20,7 @@ Base URL is `NEXTAUTH_URL` (tailscale-reachable), **not** the `config.yaml`
 
 ```bash
 curl -fsS -H "$AUTH" "$BASE/api/v1/lists" \
-  | jq -r '.lists[] | "\(.id)\t\(.parentId // "")\t\(.name)"'
+  | jq -r '.lists[]? | "\(.id)\t\(.parentId // "")\t\(.name)"'
 # Then join child -> parent on id to print full "부모/자식" paths.
 ```
 
@@ -34,8 +34,11 @@ db = sqlite3.connect("data/db.db")
 rows = {r[0]: (r[1], r[2]) for r in
         db.execute("SELECT id, parentId, name FROM bookmarkLists")}
 def path(i):
-    name, parent = rows[i][1], rows[i][0]
-    return (path(parent) + "/" if parent else "") + name
+    if i not in rows:          # dangling parentId → stop, don't KeyError
+        return ""
+    parent, name = rows[i]     # row is (parentId, name)
+    p = path(parent) if parent else ""
+    return f"{p}/{name}" if p else name
 for i in rows:
     print(path(i))
 PY
