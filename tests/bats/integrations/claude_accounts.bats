@@ -1072,8 +1072,8 @@ JSON
 #
 # Issue #575 collapsed the bind-mount (#287) + per-skill symlinks
 # (#342/#344) into a single directory-level symlink. Issue #707, F-8
-# then promoted skills/ to a real directory of per-entry symlinks so a
-# private overlay (~/company-skills) can layer into the same target.
+# then promoted skills/ to a real directory of per-entry symlinks so
+# externally added symlinks can layer into the same target.
 # docs/ retained the #575 single directory-symlink design.
 
 # Stage a FAKE_DOTFILES_ROOT under $HOME with skills/<name>/SKILL.md fixtures.

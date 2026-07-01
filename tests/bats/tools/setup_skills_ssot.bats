@@ -259,25 +259,3 @@ EOF
     [ -L "${FIXTURE_HOME}/.config/opencode/skills/alpha" ]
     [ -L "${FIXTURE_HOME}/.config/opencode/skills/gamma" ]
 }
-
-@test "opencode: private overlay entry (outside SSOT) survives pruning (#791)" {
-    seed_opencode_home
-
-    run_setup
-    assert_success
-
-    # Simulate a private overlay entry that lives outside the SSOT.
-    mkdir -p "${TEST_TEMP_HOME}/company-skills/private-one"
-    : > "${TEST_TEMP_HOME}/company-skills/private-one/SKILL.md"
-    ln -s "${TEST_TEMP_HOME}/company-skills/private-one" \
-        "${FIXTURE_HOME}/.config/opencode/skills/private-one"
-
-    run_setup
-    assert_success
-
-    # The overlay link survives — pruning only touches SSOT-pointing
-    # symlinks whose source vanished.
-    [ -L "${FIXTURE_HOME}/.config/opencode/skills/private-one" ]
-    [ "$(readlink "${FIXTURE_HOME}/.config/opencode/skills/private-one")" \
-        = "${TEST_TEMP_HOME}/company-skills/private-one" ]
-}

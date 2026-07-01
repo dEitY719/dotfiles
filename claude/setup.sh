@@ -640,10 +640,10 @@ if [ "$_setup_mode" = "internal" ]; then
     # settings.json 처리는 aws/setup.sh 가 책임진다 (#687). 본 분기는 이
     # 파일에 손대지 않아 aws/setup.sh 가 작성한 실파일이 보존된다.
     _single_account_ensure_link "$CLAUDE_STATUSLINE_SOURCE"             "$HOME_STATUSLINE"
-    # skills/ uses entry-level composition (issue #707, F-8) so a private
-    # company-skills overlay can be layered into the same target dir
-    # without touching the dotfiles git tree. See
-    # _claude_compose_skills_dir in shell-common/tools/integrations/claude.sh.
+    # skills/ uses entry-level composition (issue #707, F-8) so externally
+    # added symlinks can be layered into the same target dir without
+    # touching the dotfiles git tree. See _claude_compose_skills_dir in
+    # shell-common/tools/integrations/claude.sh.
     _claude_compose_skills_dir "$CLAUDE_SKILLS_SOURCE"                  "$HOME_SKILLS"
     _single_account_ensure_link "$CLAUDE_DOCS_SOURCE"                   "$HOME_DOCS"
     _single_account_ensure_link "$CLAUDE_GLOBAL_MEMORY_SOURCE"          "$HOME_GLOBAL_MEMORY"

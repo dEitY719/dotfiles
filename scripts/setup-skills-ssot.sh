@@ -24,8 +24,7 @@
 #     SSOT 가 아닌 경우) 는 보존 + warn.
 #
 # ~/.claude*/skills 는 claude/setup.sh 가 entry-level 합성 디렉토리로 관리 (#707, F-8).
-# 4 CLI 모두 동일 layout 이므로 setup-company-skills.sh 의 private overlay 도
-# 4 곳 전부에 적용된다.
+# 4 CLI 모두 동일 layout 이므로 외부에서 추가된 symlink 도 4 곳 전부에 동일하게 적용된다.
 
 # --- Constants ---
 
@@ -124,8 +123,8 @@ collect_codex_homes() {
 # Entry-level 합성 + 레거시 dir-symlink 마이그레이션 (issue #791).
 # OpenCode / Gemini 가 #707 의 Claude Code entry-composition layout 과
 # 동일하게 동작하도록 한다. 호출 후 <target_dir> 은 실제 디렉토리이며 그
-# child entry 들이 SSOT 의 각 skill 으로 가는 symlink. private overlay
-# (setup-company-skills.sh) 가 이후 같은 디렉토리에 추가 entry 를 layer.
+# child entry 들이 SSOT 의 각 skill 으로 가는 symlink. 외부에서 추가된
+# symlink 가 이후 같은 디렉토리에 추가 entry 를 layer할 수 있다.
 #
 # 마이그레이션 정책:
 #   - target 이 SSOT 로 향하는 dir-symlink → 해제 후 합성으로 전환.
