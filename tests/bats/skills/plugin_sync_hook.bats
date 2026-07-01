@@ -33,6 +33,24 @@ _known_marketplaces() {
 JSON
 }
 
+# Simulate git/hooks/checks/main_branch_guard.sh: refuse direct commits on
+# main/master unless the ALLOW_MAIN_COMMIT=1 escape hatch is set. Lets the
+# isolated test repo reproduce the protected-branch condition (#1072) that
+# the real CI repos never hit.
+_install_protected_branch_guard() {
+    mkdir -p "$1/.git/hooks"
+    cat > "$1/.git/hooks/pre-commit" <<'HOOK'
+#!/usr/bin/env bash
+[ "${ALLOW_MAIN_COMMIT:-0}" = "1" ] && exit 0
+branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
+case "$branch" in
+    main | master) echo "BLOCKING: direct commit on protected branch" >&2; exit 1 ;;
+esac
+exit 0
+HOOK
+    chmod +x "$1/.git/hooks/pre-commit"
+}
+
 _installed_plugins() {
     cat > "$SRC/installed_plugins.json" <<'JSON'
 {
@@ -183,6 +201,24 @@ JSON
     run jq -e '.plugins == ["ralph-loop@claude-plugins-official"]' \
         "$MAIN_ROOT/claude/plugin/plugins.json"
     assert_success
+}
+
+@test "install → commit lands even on protected 'main' branch (#1072 escape hatch)" {
+    _known_marketplaces
+    _installed_plugins
+    git -C "$MAIN_ROOT" symbolic-ref HEAD refs/heads/main
+    _install_protected_branch_guard "$MAIN_ROOT"
+
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install ralph-loop@claude-plugins-official"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+
+    # The manifest is actually committed — not silently blocked and left
+    # unstaged as it was before the ALLOW_MAIN_COMMIT=1 fix.
+    run git -C "$MAIN_ROOT" log -1 --format=%s
+    assert_output "chore(claude-plugin): sync manifest"
+    run git -C "$MAIN_ROOT" status --porcelain
+    assert_output ""
 }
 
 @test "no-op re-run does not create an empty commit" {
