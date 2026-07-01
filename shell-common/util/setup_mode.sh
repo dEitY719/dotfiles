@@ -21,7 +21,7 @@ _apply_setup_mode_config() {
             # These modes should NOT have corporate proxy settings
             # Auto-clean proxy variables to prevent inherited settings
             # (common in WSL2 where Windows proxy is auto-inherited)
-            unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY no_proxy
+            unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY no_proxy all_proxy ALL_PROXY
             ;;
         2|internal)
             # Internal PC (legacy 2) - proxy configured via proxy.local.sh
