@@ -97,11 +97,16 @@ _commit_if_changed() {
 	# pile up unstaged and never land (#1072).
 	if ! ALLOW_MAIN_COMMIT=1 git -C "$repo_dir" commit -m "$msg" --quiet 2>/dev/null; then
 		# Unstage on commit failure so a failed auto-commit never leaks staged
-		# changes into the user's next manual commit. Warn to stderr (visible
-		# in the session transcript) instead of failing fully silent.
-		printf 'plugin-sync: manifest commit failed in %s; changes left unstaged\n' \
-			"$repo_dir" >&2
-		git -C "$repo_dir" reset -q -- "$@" 2>/dev/null || true
+		# changes into the user's next manual commit. Run reset first, then warn
+		# to stderr with the *actual* outcome — a preemptive "left unstaged"
+		# message would be wrong if the reset itself failed.
+		if git -C "$repo_dir" reset -q -- "$@" 2>/dev/null; then
+			printf 'plugin-sync: manifest commit failed in %s; changes left unstaged\n' \
+				"$repo_dir" >&2
+		else
+			printf 'plugin-sync: manifest commit failed in %s; failed to unstage changes\n' \
+				"$repo_dir" >&2
+		fi
 	fi
 }
 
