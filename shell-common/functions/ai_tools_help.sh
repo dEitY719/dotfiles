@@ -21,6 +21,7 @@ _claude_help_summary() {
     ux_bullet_sub "config: settings.json | autoAllow | block paths | block cmds"
     ux_bullet_sub "statusline: time | model | project | context | cost"
     ux_bullet_sub "skills: claude-skills"
+    ux_bullet_sub "plugin: claude plugin sync + restore.sh"
     ux_bullet_sub "details: claude-help <section>  (example: claude-help mcp)"
 }
 
@@ -33,6 +34,7 @@ _claude_help_list_sections() {
     ux_bullet_sub "config"
     ux_bullet_sub "statusline"
     ux_bullet_sub "skills"
+    ux_bullet_sub "plugin"
 }
 
 _claude_help_rows_mcp() {
@@ -84,6 +86,12 @@ _claude_help_rows_skills() {
     ux_info "Skills location: ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills/"
 }
 
+_claude_help_rows_plugin() {
+    ux_table_row "claude plugin marketplace add/remove, install/uninstall" "자동으로 claude/plugin/*.json에 동기화됨 (hook)" ""
+    ux_table_row "./claude/plugin/restore.sh" "신규 PC에서 manifest 기반 일괄 재설치" ""
+    ux_table_row "./claude/plugin/restore.sh --dry-run" "실행 없이 계획만 출력" ""
+}
+
 _claude_help_render_section() {
     ux_section "$1"
     "$2"
@@ -112,6 +120,9 @@ _claude_help_section_rows() {
         skills)
             _claude_help_rows_skills
             ;;
+        plugin|plugins)
+            _claude_help_rows_plugin
+            ;;
         *)
             ux_error "Unknown claude-help section: $1"
             ux_info "Try: claude-help --list"
@@ -130,6 +141,7 @@ _claude_help_full() {
     _claude_help_render_section "Configuration" _claude_help_rows_config
     _claude_help_render_section "Statusline Display" _claude_help_rows_statusline
     _claude_help_render_section "Skills Management" _claude_help_rows_skills
+    _claude_help_render_section "Plugin Manifest Sync" _claude_help_rows_plugin
 }
 
 claude_help() {

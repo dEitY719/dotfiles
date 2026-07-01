@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# claude/hooks/plugin-sync.sh
+#
+# Claude Code PostToolUse hook for `claude plugin ...` commands. Keeps
+# claude/plugin/{marketplaces,plugins}.json (public, github-sourced,
+# scope:user) and claude/plugin/company/{marketplaces,plugins}.json
+# (private nested repo, non-github sourced) merged with the ground truth
+# in ~/.claude-shared/plugins/ so claude/plugin/restore.sh can rebuild a
+# fresh PC's plugin set.
+#
+# See docs/feature/superpowers-specs/2026-07-01-claude-plugin-manifest-design.md
+#
+# Always exits 0 — best-effort, never blocks the session.
+set -u
+
+input=$(cat 2>/dev/null) || exit 0
+[ -n "$input" ] || exit 0
+command -v jq >/dev/null 2>&1 || exit 0
+
+tool_name=$(printf '%s' "$input" | jq -r '.tool_name // ""') || exit 0
+[ "$tool_name" = "Bash" ] || exit 0
+
+cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // ""') || exit 0
+
+# Target extraction extracts the first non-flag argument after the
+# subcommand, so flags placed between the subcommand and the target
+# (e.g. `claude plugin uninstall --yes ralph-loop`) don't get mistaken
+# for the target.
+action=""
+target=""
+if printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+marketplace[[:space:]]+add'; then
+	action="add"
+elif printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+marketplace[[:space:]]+(remove|rm)'; then
+	action="marketplace_remove"
+	target=$(printf '%s' "$cmd" | awk '{
+        found=0
+        for(i=1; i<=NF; i++) {
+            if(found && $i !~ /^-/) {
+                print $i
+                exit
+            }
+            if($i == "remove" || $i == "rm") {
+                found=1
+            }
+        }
+    }')
+elif printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+install'; then
+	action="add"
+elif printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+(uninstall|remove)'; then
+	action="uninstall"
+	target=$(printf '%s' "$cmd" | awk '{
+        found=0
+        for(i=1; i<=NF; i++) {
+            if(found && $i !~ /^-/) {
+                print $i
+                exit
+            }
+            if($i == "uninstall" || $i == "remove") {
+                found=1
+            }
+        }
+    }')
+else
+	exit 0
+fi
+
+MAIN_ROOT="$HOME/dotfiles"
+[ -d "$MAIN_ROOT/.git" ] || exit 0
+
+SRC="$HOME/.claude-shared/plugins"
+MP_SRC="$SRC/known_marketplaces.json"
+PL_SRC="$SRC/installed_plugins.json"
+
+PUB_DIR="$MAIN_ROOT/claude/plugin"
+PRIV_DIR="$PUB_DIR/company"
+
+# Stage + commit only if there is an actual diff (works for brand-new
+# untracked files too, since `git diff --cached` compares the *staged*
+# tree against HEAD — plain `git diff` would miss never-added files).
+_commit_if_changed() {
+	local repo_dir="$1" msg="$2"
+	shift 2
+	git -C "$repo_dir" add "$@" 2>/dev/null || return 0
+	git -C "$repo_dir" diff --cached --quiet -- "$@" 2>/dev/null && return 0
+	git -C "$repo_dir" commit -m "$msg" --quiet 2>/dev/null || true
+}
+
+if [ "$action" = "add" ]; then
+	[ -f "$MP_SRC" ] && [ -f "$PL_SRC" ] || exit 0
+
+	mp_common=$(jq -c '
+        [to_entries[] | select(.value.source.source == "github")]
+        | map({(.key): .value.source.repo}) | add // {}
+    ' "$MP_SRC") || exit 0
+	mp_internal=$(jq -c '
+        [to_entries[] | select(.value.source.source != "github" and .value.source.source != "directory")]
+        | map({(.key): (.value.source.repo // .value.source.url // .value.source.path)}) | add // {}
+    ' "$MP_SRC") || exit 0
+
+	plugins_common=$(jq -c --argjson mp "$mp_common" '
+        [(.plugins // {}) | to_entries[]
+            | select(any(.value[]?; .scope == "user"))
+            | .key
+            | select($mp[(. | split("@") | last)] != null)
+        ] | unique
+    ' "$PL_SRC") || exit 0
+	plugins_internal=$(jq -c --argjson mp "$mp_internal" '
+        [(.plugins // {}) | to_entries[]
+            | select(any(.value[]?; .scope == "user"))
+            | .key
+            | select($mp[(. | split("@") | last)] != null)
+        ] | unique
+    ' "$PL_SRC") || exit 0
+
+	mkdir -p "$PUB_DIR"
+	jq -n --argjson old "$(cat "$PUB_DIR/marketplaces.json" 2>/dev/null || echo '{}')" \
+		--argjson new "$mp_common" '$old * $new' \
+		>"$PUB_DIR/marketplaces.json.tmp" &&
+		mv "$PUB_DIR/marketplaces.json.tmp" "$PUB_DIR/marketplaces.json"
+	jq -n --argjson old "$(cat "$PUB_DIR/plugins.json" 2>/dev/null || echo '{"plugins":[]}')" \
+		--argjson new "$plugins_common" \
+		'{plugins: (($old.plugins // []) + $new | unique | sort)}' \
+		>"$PUB_DIR/plugins.json.tmp" &&
+		mv "$PUB_DIR/plugins.json.tmp" "$PUB_DIR/plugins.json"
+	_commit_if_changed "$MAIN_ROOT" "chore(claude-plugin): sync manifest" \
+		claude/plugin/marketplaces.json claude/plugin/plugins.json
+
+	if [ -d "$PRIV_DIR/.git" ] && [ "$mp_internal" != "{}" ]; then
+		jq -n --argjson old "$(cat "$PRIV_DIR/marketplaces.json" 2>/dev/null || echo '{}')" \
+			--argjson new "$mp_internal" '$old * $new' \
+			>"$PRIV_DIR/marketplaces.json.tmp" &&
+			mv "$PRIV_DIR/marketplaces.json.tmp" "$PRIV_DIR/marketplaces.json"
+		jq -n --argjson old "$(cat "$PRIV_DIR/plugins.json" 2>/dev/null || echo '{"plugins":[]}')" \
+			--argjson new "$plugins_internal" \
+			'{plugins: (($old.plugins // []) + $new | unique | sort)}' \
+			>"$PRIV_DIR/plugins.json.tmp" &&
+			mv "$PRIV_DIR/plugins.json.tmp" "$PRIV_DIR/plugins.json"
+		_commit_if_changed "$PRIV_DIR" "chore(claude-plugin): sync manifest" \
+			marketplaces.json plugins.json
+	fi
+fi
+
+if [ "$action" = "uninstall" ] || [ "$action" = "marketplace_remove" ]; then
+	[ -n "$target" ] || exit 0
+	for dir in "$PUB_DIR" "$PRIV_DIR"; do
+		[ -f "$dir/marketplaces.json" ] || [ -f "$dir/plugins.json" ] || continue
+
+		if [ "$action" = "marketplace_remove" ]; then
+			if [ -f "$dir/marketplaces.json" ]; then
+				jq --arg t "$target" 'del(.[$t])' "$dir/marketplaces.json" \
+					>"$dir/marketplaces.json.tmp" 2>/dev/null &&
+					mv "$dir/marketplaces.json.tmp" "$dir/marketplaces.json"
+			fi
+			if [ -f "$dir/plugins.json" ]; then
+				jq --arg t "$target" \
+					'{plugins: [.plugins[] | select((. | split("@") | last) != $t)]}' \
+					"$dir/plugins.json" >"$dir/plugins.json.tmp" 2>/dev/null &&
+					mv "$dir/plugins.json.tmp" "$dir/plugins.json"
+			fi
+		else
+			if [ -f "$dir/plugins.json" ]; then
+				jq --arg t "$target" \
+					'{plugins: [.plugins[] | select(. != $t and (startswith($t + "@") | not))]}' \
+					"$dir/plugins.json" >"$dir/plugins.json.tmp" 2>/dev/null &&
+					mv "$dir/plugins.json.tmp" "$dir/plugins.json"
+			fi
+		fi
+	done
+
+	_commit_if_changed "$MAIN_ROOT" "chore(claude-plugin): sync manifest" \
+		claude/plugin/marketplaces.json claude/plugin/plugins.json
+	if [ -d "$PRIV_DIR/.git" ]; then
+		_commit_if_changed "$PRIV_DIR" "chore(claude-plugin): sync manifest" \
+			marketplaces.json plugins.json
+	fi
+fi
+
+exit 0
