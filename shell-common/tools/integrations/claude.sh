@@ -654,6 +654,7 @@ _claude_ensure_settings_copy() {
     _cesc_tgt="$2"
     _cesc_local="$(dirname "$_cesc_tgt")/settings.local.json"
     _cesc_srctmp=
+    _cesc_merged=
 
     # 방어: SSOT (claude/settings.json) 에 model 키가 새어들면 — 배포 지연 틈에
     # 남은 pre-#940 write-through symlink 로 /model 이 추적 파일을 오염시킨
@@ -723,6 +724,34 @@ _claude_ensure_settings_copy() {
         fi
     fi
 
+    # 로컬 전용 enabledPlugins 보존 (#1070) — `claude plugin install/enable`
+    # 은 활성 계정 실파일의 enabledPlugins 에 직접 기록한다. SSOT 를 그대로
+    # 복사하면 SSOT 에 커밋되지 않은 로컬 전용 항목이 매 setup 재실행마다
+    # 조용히 disabled 로 리셋된다. 병합으로 해결: SSOT 값이 충돌 키에서 우선
+    # 하되(오른쪽 우선인 jq `+`), 로컬 전용 키는 보존한다. jq 없거나 로컬 전용
+    # 항목이 없으면 무동작 — 흔한 경우의 완전 멱등성(아래 cmp 게이트)을 유지.
+    if command -v jq >/dev/null 2>&1 && [ -f "$_cesc_tgt" ]; then
+        _cesc_extra=$(jq -n \
+            --slurpfile ssot "$_cesc_src" \
+            --slurpfile cur "$_cesc_tgt" \
+            '(($cur[0].enabledPlugins // {}) | keys) - (($ssot[0].enabledPlugins // {}) | keys) | length' \
+            2>/dev/null)
+        if [ -n "$_cesc_extra" ] && [ "$_cesc_extra" -gt 0 ] 2>/dev/null; then
+            _cesc_merged=$(mktemp "${TMPDIR:-/tmp}/claude_ep_merge.XXXXXX" 2>/dev/null) || _cesc_merged=
+            if [ -n "$_cesc_merged" ] && jq -n \
+                --slurpfile ssot "$_cesc_src" \
+                --slurpfile cur "$_cesc_tgt" \
+                '$ssot[0] | .enabledPlugins = (($cur[0].enabledPlugins // {}) + ($ssot[0].enabledPlugins // {}))' \
+                > "$_cesc_merged" 2>/dev/null; then
+                _cesc_src="$_cesc_merged"
+                ux_info "  preserved $_cesc_extra local-only enabledPlugins entry/entries (#1070)"
+            else
+                [ -n "$_cesc_merged" ] && rm -f "$_cesc_merged"
+                _cesc_merged=
+            fi
+        fi
+    fi
+
     # 단일 cleanup/return — sanitize 임시파일 정리를 세 경로에 중복하지 않고
     # 함수 말미에서 한 번만 수행 (PR #1000 gemini-code-assist 제안).
     _cesc_ret=0
@@ -737,6 +766,7 @@ _claude_ensure_settings_copy() {
     fi
 
     [ -n "$_cesc_srctmp" ] && rm -f "$_cesc_srctmp"
+    [ -n "$_cesc_merged" ] && rm -f "$_cesc_merged"
     return $_cesc_ret
 }
 

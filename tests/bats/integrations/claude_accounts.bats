@@ -291,6 +291,51 @@ LOCAL
     assert_output --partial "up to date"
 }
 
+@test "bash: _claude_ensure_settings_copy preserves local-only enabledPlugins across a re-copy (#1070)" {
+    mkdir -p "$HOME/.claude-personal"
+    # Simulate the CLI having written a local-only plugin enable into the
+    # account real file: SSOT's 3 entries + one extra not committed to SSOT.
+    jq '.enabledPlugins["understand-anything@understand-anything"] = true' \
+        "${DOTFILES_ROOT}/claude/settings.json" \
+        > "$HOME/.claude-personal/settings.json"
+
+    run_in_bash "_claude_ensure_settings_copy '${DOTFILES_ROOT}/claude/settings.json' '$HOME/.claude-personal/settings.json'"
+    assert_success
+
+    # The local-only entry survives the SSOT re-copy...
+    [ "$(jq -r '.enabledPlugins["understand-anything@understand-anything"]' \
+        "$HOME/.claude-personal/settings.json")" = "true" ]
+    # ...and the SSOT-committed entries are still present (no regression).
+    [ "$(jq -r '.enabledPlugins["superpowers@claude-plugins-official"]' \
+        "$HOME/.claude-personal/settings.json")" = "true" ]
+}
+
+@test "bash: _claude_ensure_settings_copy lets SSOT win on conflicting enabledPlugins keys (#1070)" {
+    mkdir -p "$HOME/.claude-personal"
+    # Local file disables a plugin that the SSOT enables → SSOT must win.
+    jq '.enabledPlugins["superpowers@claude-plugins-official"] = false' \
+        "${DOTFILES_ROOT}/claude/settings.json" \
+        > "$HOME/.claude-personal/settings.json"
+
+    run_in_bash "_claude_ensure_settings_copy '${DOTFILES_ROOT}/claude/settings.json' '$HOME/.claude-personal/settings.json'"
+    assert_success
+
+    [ "$(jq -r '.enabledPlugins["superpowers@claude-plugins-official"]' \
+        "$HOME/.claude-personal/settings.json")" = "true" ]
+}
+
+@test "bash: _claude_ensure_settings_copy stays byte-identical to SSOT when no local-only plugins (#1070)" {
+    mkdir -p "$HOME/.claude-personal"
+    # No extra entries → the merge is a no-op and the copy is exact (keeps
+    # the cmp idempotency gate working for the common case).
+    cp "${DOTFILES_ROOT}/claude/settings.json" "$HOME/.claude-personal/settings.json"
+
+    run_in_bash "_claude_ensure_settings_copy '${DOTFILES_ROOT}/claude/settings.json' '$HOME/.claude-personal/settings.json'"
+    assert_success
+
+    cmp -s "${DOTFILES_ROOT}/claude/settings.json" "$HOME/.claude-personal/settings.json"
+}
+
 @test "bash: _claude_account_setup_one unmounts a legacy bind mount on skills (issue #575 migration)" {
     mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude-shared/plugins"
