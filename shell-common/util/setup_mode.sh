@@ -16,15 +16,15 @@ _apply_setup_mode_config() {
     mode=$(cat "$setup_mode_file" 2>/dev/null)
 
     case "$mode" in
-        1|3)
-            # Mode 1 (Public PC/Home) or Mode 3 (External PC/VPN)
+        1|3|external|public)
+            # Public PC/Home (legacy 1) or External PC/VPN (legacy 3)
             # These modes should NOT have corporate proxy settings
             # Auto-clean proxy variables to prevent inherited settings
             # (common in WSL2 where Windows proxy is auto-inherited)
             unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY no_proxy
             ;;
-        2)
-            # Mode 2 (Internal PC) - proxy configured via proxy.local.sh
+        2|internal)
+            # Internal PC (legacy 2) - proxy configured via proxy.local.sh
             # Do nothing here, let proxy.local.sh handle it
             ;;
     esac
