@@ -24,14 +24,13 @@ metadata:
 
 ## Role
 
-Gather a second-opinion code review on a GitHub PR from one external AI
-CLI (`codex` / `gemini` / `claude`). Stream the output, post it as a PR
-comment by default, and **stop there** — no decision (approve /
-request-changes), no per-comment replies; those are `gh:pr-approve` and
-`gh:pr-reply`. Every preset's prompt always demands a critical stance —
-at least one questionable-assumption critique plus a closing verdict
-tag (`references/review-presets.md` § "Why critical review is always
-on") — with no flag to turn it off.
+Gather a second-opinion review on a GitHub PR from one external AI CLI
+(`codex`/`gemini`/`claude`), stream its output, and post it as a PR
+comment by default — then stop. No decision (approve/request-changes —
+`gh:pr-approve`'s job) and no per-comment replies (`gh:pr-reply`'s
+job). Every preset's prompt demands a critical stance
+(`references/review-presets.md` § "Why critical review is always on")
+with no flag to disable it.
 
 ## Help
 
@@ -40,10 +39,9 @@ output it verbatim, then stop. No API calls.
 
 ## Step 1: Parse Flags + Resolve Target
 
-Step 1 — Delegate to `gh_pr_review_parse`
-(`shell-common/functions/gh_pr_review.sh`). Argument shape + KR aliases
-+ exit codes: `references/parser-contract.md` (also covers `START_TS`
-and resolving `TARGET_REPO` / `PR_NUMBER`).
+Delegate to `gh_pr_review_parse` (`shell-common/functions/gh_pr_review.sh`).
+Argument shape + KR aliases + exit codes: `references/parser-contract.md`
+(also covers `START_TS` and resolving `TARGET_REPO` / `PR_NUMBER`).
 
 ## Step 2: Pre-flight
 
@@ -53,9 +51,9 @@ Run these checks in parallel before any expensive work:
 - `command -v <ai-bin>` for the chosen `--ai` → else exit 1 `Required CLI '<name>' not found in PATH`.
 - `gh auth status` returns 0 → else exit 1 with the gh error line.
 
-**CI status is intentionally NOT a gate** (a failing CI is often the
-reason a second opinion is wanted); self-authored PRs are allowed (no
-decision submitted, so the self-approve block is irrelevant).
+CI status is intentionally not a gate (a failing CI is often the reason
+a second opinion is wanted); self-authored PRs are allowed (no
+decision is submitted, so the self-approve block doesn't apply).
 
 ## Step 3: Load Review Preset
 
@@ -74,10 +72,9 @@ inline `gh pr diff`. Append the diff per `references/ai-cli-invocation.md`
 
 ## Step 5: Dispatch to External CLI
 
-Delegate to `_gh_pr_review_run_ai`
-(`shell-common/functions/gh_pr_review.sh`). Invocation shapes, stdout
-streaming, non-zero-exit handling: `references/ai-cli-invocation.md`
-§ "Step 5 dispatch procedure".
+Delegate to `_gh_pr_review_run_ai` (`shell-common/functions/gh_pr_review.sh`).
+Invocation shapes, stdout streaming, non-zero-exit handling:
+`references/ai-cli-invocation.md` § "Step 5 dispatch procedure".
 
 ## Step 6: Post PR Comment (default ON)
 
