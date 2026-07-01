@@ -10,7 +10,7 @@ description: >-
   /devx:restart, /devx-restart, or asks "다시 작업해",
   "이어서 해줘", "끊긴 데서 재개", "API 에러 복구",
   "15분 이상 걸려서 ESC 눌렀어", "작업이 너무 커서 중단했어",
-  "oversized turn interrupted by user ESC". Identifies the in_progress
+  "다시 로그인했어", "oversized turn interrupted by user ESC". Identifies the in_progress
   TodoList item, breaks the next step into single-tool-call chunks, and
   delegates large reads/searches to subagents (Explore / general-purpose)
   so the main context stays small. Does NOT re-invoke a process skill
