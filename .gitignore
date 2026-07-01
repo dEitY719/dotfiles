@@ -49,13 +49,6 @@ claude/settings.local.json
 # AGENTS.md generator backups
 **/AGENTS.md.backup.*
 
-# Private skills overlay (issue #707). Lives outside the dotfiles tree
-# at $COMPANY_SKILLS_HOME (default ~/company-skills); ignored here as a
-# defensive safety net in case it is ever accidentally cloned into the
-# repo root. NF-1 acceptance criterion asserts this path never enters
-# the git history.
-/company-skills/
-
 # Oh-My-Zsh plugin installations (managed by install scripts)
 # Users run install-* commands which clone plugins to ~/.oh-my-zsh/custom/plugins/
 # These should NOT be tracked in dotfiles repo (environment-specific)

@@ -757,10 +757,9 @@ _claude_ensure_settings_copy() {
 # F-8 (issue #707): replace the directory-level symlink "<tgt> -> <src>"
 # (the #575 design) with a real directory at <tgt> that contains an
 # entry-level symlink for every skill subdirectory of <src>. This is
-# what lets a follow-up overlay step (scripts/setup-company-skills.sh)
-# layer additional skills from a private user-supplied directory into
-# the same <tgt> without those skills ever entering the dotfiles git
-# tree.
+# what lets externally added symlinks (e.g. marketplace `npx skills add`
+# results, manually linked skills) layer additional entries into the
+# same <tgt> without those skills ever entering the dotfiles git tree.
 #
 # Idempotent — converges on the same state on repeat calls. Also
 # performs three migrations in place:
@@ -769,7 +768,7 @@ _claude_ensure_settings_copy() {
 #   2. If <tgt> is a legacy bind-mount (#287/#342 era), unmount it.
 #   3. Stale entries — symlinks under <tgt> that point into <src> but
 #      whose target no longer exists — are removed. Symlinks pointing
-#      outside <src> (e.g. company-skills overlays) are left alone.
+#      outside <src> (e.g. externally added entries) are left alone.
 _claude_compose_skills_dir() {
     _ccsd_src="${1:-}"
     _ccsd_tgt="${2:-}"
@@ -840,8 +839,8 @@ _claude_compose_skills_dir() {
     done
 
     # Drop stale dotfiles-sourced links whose source entry was removed.
-    # Only touch symlinks that point into <src> so private overlay
-    # links (company-skills, user-managed entries) survive.
+    # Only touch symlinks that point into <src> so externally added
+    # links (marketplace overlays, user-managed entries) survive.
     for _ccsd_existing in "$_ccsd_tgt"/*; do
         [ -L "$_ccsd_existing" ] || continue
         _ccsd_target_path=$(readlink "$_ccsd_existing")
@@ -883,9 +882,9 @@ _claude_account_setup_one() {
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/statusline-command.sh"  "$_caso_cdir/statusline-command.sh"
     _claude_ensure_symlink "$HOME/.claude-shared/plugins"                   "$_caso_cdir/plugins"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/global-memory"          "$_caso_cdir/projects/GLOBAL/memory"
-    # skills/ uses entry-level composition (issue #707, F-8) so a private
-    # company-skills overlay can be layered into the same target dir
-    # without touching the dotfiles git tree.
+    # skills/ uses entry-level composition (issue #707, F-8) so externally
+    # added symlinks can be layered into the same target dir without
+    # touching the dotfiles git tree.
     _claude_compose_skills_dir "${DOTFILES_ROOT}/claude/skills"             "$_caso_cdir/skills"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/docs"                   "$_caso_cdir/docs"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/workflows"               "$_caso_cdir/workflows"
@@ -1000,8 +999,8 @@ claude_accounts_status() {
             elif [ "$_cas_link" = "skills" ] && [ -d "$_cas_cdir/$_cas_link" ]; then
                 # skills/ is an entry-level *composed directory* since #707
                 # (F-8), not a symlink — _claude_compose_skills_dir fills it
-                # with per-skill links so a private company-skills overlay
-                # can layer in. Without this branch the diagnostic fell to
+                # with per-skill links so externally added symlinks can
+                # layer in. Without this branch the diagnostic fell to
                 # the else arm and wrongly reported "✗ missing" even though
                 # setup.sh's own verify confirmed the dir (this loop never
                 # learned the #707 layout change).
