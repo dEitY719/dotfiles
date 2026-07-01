@@ -3,6 +3,16 @@
     "GH_PR_REPLY_AUTO_APPROVE_REPOS": "dEitY719/dotfiles,dEitY719/quantfolio"
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/dotfiles/claude/hooks/session-start-pc-context.sh"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
