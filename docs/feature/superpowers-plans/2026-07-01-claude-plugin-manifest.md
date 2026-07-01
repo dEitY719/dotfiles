@@ -532,25 +532,44 @@ tool_name=$(printf '%s' "$input" | jq -r '.tool_name // ""') || exit 0
 
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // ""') || exit 0
 
-# Target extraction assumes the plugin/marketplace name is the token
-# immediately following the subcommand (the common case: no flags before
-# the positional arg). Flags placed before the target are not handled.
+# Target extraction extracts the first non-flag argument after the
+# subcommand, so flags placed between the subcommand and the target
+# (e.g. `claude plugin uninstall --yes ralph-loop`) don't get mistaken
+# for the target.
 action=""
 target=""
 if printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+marketplace[[:space:]]+add'; then
     action="add"
 elif printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+marketplace[[:space:]]+(remove|rm)'; then
     action="marketplace_remove"
-    target=$(printf '%s' "$cmd" |
-        grep -oE 'marketplace[[:space:]]+(remove|rm)[[:space:]]+[^[:space:]]+' |
-        awk '{print $NF}')
+    target=$(printf '%s' "$cmd" | awk '{
+        found=0
+        for(i=1; i<=NF; i++) {
+            if(found && $i !~ /^-/) {
+                print $i
+                exit
+            }
+            if($i == "remove" || $i == "rm") {
+                found=1
+            }
+        }
+    }')
 elif printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+install'; then
     action="add"
 elif printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+(uninstall|remove)'; then
     action="uninstall"
-    target=$(printf '%s' "$cmd" |
-        grep -oE '(uninstall|remove)[[:space:]]+[^[:space:]]+' |
-        awk '{print $NF}')
+    target=$(printf '%s' "$cmd" | awk '{
+        found=0
+        for(i=1; i<=NF; i++) {
+            if(found && $i !~ /^-/) {
+                print $i
+                exit
+            }
+            if($i == "uninstall" || $i == "remove") {
+                found=1
+            }
+        }
+    }')
 else
     exit 0
 fi
@@ -590,14 +609,14 @@ if [ "$action" = "add" ]; then
 
     plugins_common=$(jq -c --argjson mp "$mp_common" '
         [(.plugins // {}) | to_entries[]
-            | select(.value[]?.scope == "user")
+            | select(any(.value[]?; .scope == "user"))
             | .key
             | select($mp[(. | split("@") | last)] != null)
         ] | unique
     ' "$PL_SRC") || exit 0
     plugins_internal=$(jq -c --argjson mp "$mp_internal" '
         [(.plugins // {}) | to_entries[]
-            | select(.value[]?.scope == "user")
+            | select(any(.value[]?; .scope == "user"))
             | .key
             | select($mp[(. | split("@") | last)] != null)
         ] | unique
