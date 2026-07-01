@@ -75,7 +75,9 @@ Claude Code merges this with `settings.json` natively (local wins). Running `/mo
 
 ## Critical Rules
 
-**POSIX compatibility & cross-shell sourcing** — see `shell-common/AGENTS.md` → "Golden Rules" (POSIX Compatibility, Bash/Zsh Sourcing Rules) for the full Do/Don't list and the forbidden `${BASH_SOURCE[0]%/*}` pattern.
+**POSIX compatibility & cross-shell sourcing** — see `shell-common/AGENTS.md` → "Golden Rules" for full detail.
+- Use `>/dev/null 2>&1` (not `&>/dev/null`) and `[ ]` (not `[[ ]]`) unless inside a shell-detection branch.
+- Forbidden: `source "${BASH_SOURCE[0]%/*}/file.sh"` (bash-only, breaks in zsh). Use `source "${SHELL_COMMON}/path/to/file.sh"`.
 
 **Interactive guard** — every file that produces output must start with:
 ```bash
