@@ -60,7 +60,7 @@ All output must use `ux_lib` functions (`ux_header`, `ux_success`, `ux_error`, `
 
 ### Claude Code Integration
 
-`claude/statusline-command.sh` is symlinked into `~/.claude/`. The `claude/skills/` and `claude/docs/` directories are also symlinked (directory-level) into each account's `~/.claude*/skills` and `~/.claude*/docs` — the same scheme in every setup mode (#575). `claude/settings.json` is **copied as a real file** (not symlinked) into each config dir (#940 multi-account, #687 internal) — Claude Code's `/model` persists into that file, and a symlink would write through into the tracked SSOT (#924).
+`claude/statusline-command.sh`, `claude/skills/`, and `claude/docs/` are symlinked into each account's Claude config dir; `claude/settings.json` is copied as a real file (not symlinked) so `/model` writes don't dirty the tracked SSOT. Full symlink-vs-copy scheme and rationale: `claude/AGENTS.md` → "Configuration Files".
 
 **Personal overrides (model, env vars)** — `claude/settings.local.json` is gitignored (#924). Create `settings.local.json` in your active Claude config directory for machine-specific settings:
 
@@ -71,23 +71,11 @@ All output must use `ux_lib` functions (`ux_header`, `ux_success`, `ux_error`, `
 { "model": "sonnet" }
 ```
 
-Claude Code merges this with `settings.json` natively (local wins). Running `/model` writes into the per-account **real-file** `settings.json` copy — since #940 this no longer dirties the repo. Re-running `claude/setup.sh` refreshes the copy from the SSOT and auto-migrates any `/model`-written `model` key into `settings.local.json`.
+Claude Code merges this with `settings.json` natively (local wins). Running `/model` writes into the per-account **real-file** `settings.json` copy — since #940 this no longer dirties the repo. Re-running `claude/setup.sh` refreshes the copy from the SSOT and auto-migrates any `/model`-written `model` key into `settings.local.json`. See `claude/AGENTS.md` → "Configuration Files" for the full merge/migration behavior.
 
 ## Critical Rules
 
-**POSIX compatibility in shell-common/**
-- Use `>/dev/null 2>&1` (not `&>/dev/null`)
-- Use `[ ]` (not `[[ ]]`) unless inside a shell-detection branch
-- Use `#!/bin/sh` shebang
-
-**Sourcing across shells** — forbidden pattern:
-```bash
-# WRONG — bash-only, breaks in zsh
-source "${BASH_SOURCE[0]%/*}/file.sh"
-
-# CORRECT
-source "${SHELL_COMMON}/path/to/file.sh"
-```
+**POSIX compatibility & cross-shell sourcing** — see `shell-common/AGENTS.md` → "Golden Rules" (POSIX Compatibility, Bash/Zsh Sourcing Rules) for the full Do/Don't list and the forbidden `${BASH_SOURCE[0]%/*}` pattern.
 
 **Interactive guard** — every file that produces output must start with:
 ```bash
