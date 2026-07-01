@@ -13,6 +13,9 @@
 # Always exits 0 — best-effort, never blocks the session.
 set -u
 
+# A PostToolUse hook always receives JSON on stdin. If stdin is a terminal
+# the script was launched by hand — bail before `cat` blocks forever.
+[ -t 0 ] && exit 0
 input=$(cat 2>/dev/null) || exit 0
 [ -n "$input" ] || exit 0
 command -v jq >/dev/null 2>&1 || exit 0
@@ -75,11 +78,31 @@ PRIV_DIR="$PUB_DIR/company"
 # untracked files too, since `git diff --cached` compares the *staged*
 # tree against HEAD — plain `git diff` would miss never-added files).
 _commit_if_changed() {
-	local repo_dir="$1" msg="$2"
+	local repo_dir="$1" msg="$2" f
 	shift 2
-	git -C "$repo_dir" add "$@" 2>/dev/null || return 0
+	# Keep only paths that exist so one missing file can't abort `git add`
+	# (exit 128) and strand the others uncommitted. Rebuild the positional
+	# params the POSIX-safe way (survives paths with spaces).
+	for f in "$@"; do
+		[ -f "$repo_dir/$f" ] && set -- "$@" "$f"
+		shift
+	done
+	[ "$#" -gt 0 ] || return 0
+	git -C "$repo_dir" add -- "$@" 2>/dev/null || return 0
 	git -C "$repo_dir" diff --cached --quiet -- "$@" 2>/dev/null && return 0
-	git -C "$repo_dir" commit -m "$msg" --quiet 2>/dev/null || true
+	# Unstage on commit failure so a failed auto-commit never leaks staged
+	# changes into the user's next manual commit.
+	git -C "$repo_dir" commit -m "$msg" --quiet 2>/dev/null ||
+		git -C "$repo_dir" reset -q -- "$@" 2>/dev/null || true
+}
+
+# Emit the compact JSON in file $1, or the default $2 when the file is
+# missing, empty (0-byte — `jq .` exits 0 with no output there, so a plain
+# `jq . || echo` fallback would not fire), or invalid JSON.
+_read_json_or() {
+	local out
+	out=$(jq -c '.' "$1" 2>/dev/null)
+	[ -n "$out" ] && printf '%s' "$out" || printf '%s' "$2"
 }
 
 # scope:user plugins from $PL_SRC whose marketplace (the part after `@`) is a
@@ -111,26 +134,26 @@ if [ "$action" = "add" ]; then
 	plugins_internal=$(_extract_plugins_for_mp "$mp_internal") || exit 0
 
 	mkdir -p "$PUB_DIR"
-	jq -n --argjson old "$(cat "$PUB_DIR/marketplaces.json" 2>/dev/null || echo '{}')" \
+	jq -n --argjson old "$(_read_json_or "$PUB_DIR/marketplaces.json" '{}')" \
 		--argjson new "$mp_common" '$old * $new' \
 		>"$PUB_DIR/marketplaces.json.tmp" &&
 		mv "$PUB_DIR/marketplaces.json.tmp" "$PUB_DIR/marketplaces.json"
-	jq -n --argjson old "$(cat "$PUB_DIR/plugins.json" 2>/dev/null || echo '{"plugins":[]}')" \
+	jq -n --argjson old "$(_read_json_or "$PUB_DIR/plugins.json" '{"plugins":[]}')" \
 		--argjson new "$plugins_common" \
-		'{plugins: (($old.plugins // []) + $new | unique | sort)}' \
+		'{plugins: (($old.plugins? // []) + $new | unique | sort)}' \
 		>"$PUB_DIR/plugins.json.tmp" &&
 		mv "$PUB_DIR/plugins.json.tmp" "$PUB_DIR/plugins.json"
 	_commit_if_changed "$MAIN_ROOT" "$SYNC_MSG" \
 		claude/plugin/marketplaces.json claude/plugin/plugins.json
 
 	if [ -d "$PRIV_DIR/.git" ] && [ "$mp_internal" != "{}" ]; then
-		jq -n --argjson old "$(cat "$PRIV_DIR/marketplaces.json" 2>/dev/null || echo '{}')" \
+		jq -n --argjson old "$(_read_json_or "$PRIV_DIR/marketplaces.json" '{}')" \
 			--argjson new "$mp_internal" '$old * $new' \
 			>"$PRIV_DIR/marketplaces.json.tmp" &&
 			mv "$PRIV_DIR/marketplaces.json.tmp" "$PRIV_DIR/marketplaces.json"
-		jq -n --argjson old "$(cat "$PRIV_DIR/plugins.json" 2>/dev/null || echo '{"plugins":[]}')" \
+		jq -n --argjson old "$(_read_json_or "$PRIV_DIR/plugins.json" '{"plugins":[]}')" \
 			--argjson new "$plugins_internal" \
-			'{plugins: (($old.plugins // []) + $new | unique | sort)}' \
+			'{plugins: (($old.plugins? // []) + $new | unique | sort)}' \
 			>"$PRIV_DIR/plugins.json.tmp" &&
 			mv "$PRIV_DIR/plugins.json.tmp" "$PRIV_DIR/plugins.json"
 		_commit_if_changed "$PRIV_DIR" "$SYNC_MSG" \

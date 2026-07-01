@@ -166,6 +166,25 @@ JSON
     assert_success
 }
 
+@test "install → pre-existing 0-byte manifest does not break the merge (empty-file guard)" {
+    _known_marketplaces
+    _installed_plugins
+    mkdir -p "$MAIN_ROOT/claude/plugin"
+    : > "$MAIN_ROOT/claude/plugin/marketplaces.json"   # 0-byte, valid-JSON-less
+    : > "$MAIN_ROOT/claude/plugin/plugins.json"
+
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install ralph-loop@claude-plugins-official"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+
+    run jq -e '.["claude-plugins-official"] == "anthropics/claude-plugins-official"' \
+        "$MAIN_ROOT/claude/plugin/marketplaces.json"
+    assert_success
+    run jq -e '.plugins == ["ralph-loop@claude-plugins-official"]' \
+        "$MAIN_ROOT/claude/plugin/plugins.json"
+    assert_success
+}
+
 @test "no-op re-run does not create an empty commit" {
     _known_marketplaces
     _installed_plugins

@@ -29,17 +29,19 @@ if [ "$DRY_RUN" -eq 0 ]; then
 fi
 
 _restore_from() {
-	local mp_json="$1" pl_json="$2" label="$3"
+	local mp_json="$1" pl_json="$2" label="$3" name repo plugin
 	if [ ! -f "$mp_json" ] || [ ! -f "$pl_json" ]; then
 		echo "  (${label} manifest 없음 — 건너뜀)"
 		return 0
 	fi
 	echo "== ${label} marketplaces =="
+	# `</dev/null` on the CLI calls: without it, `claude` reading stdin would
+	# drain the `jq | while read` pipe and cut the loop short.
 	jq -r 'to_entries[] | "\(.key)\t\(.value)"' "$mp_json" |
 		while IFS=$'\t' read -r name repo; do
 			echo "  add: ${name} (${repo})"
 			if [ "$DRY_RUN" -eq 0 ]; then
-				claude plugin marketplace add "$repo" || echo "    실패 — 계속 진행" >&2
+				claude plugin marketplace add "$repo" </dev/null || echo "    실패 — 계속 진행" >&2
 			fi
 		done
 	echo "== ${label} plugins =="
@@ -47,7 +49,7 @@ _restore_from() {
 		while read -r plugin; do
 			echo "  install: ${plugin}"
 			if [ "$DRY_RUN" -eq 0 ]; then
-				claude plugin install "$plugin" || echo "    실패 — 계속 진행" >&2
+				claude plugin install "$plugin" </dev/null || echo "    실패 — 계속 진행" >&2
 			fi
 		done
 }
