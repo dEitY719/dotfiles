@@ -26,8 +26,11 @@ request-changes) is submitted** — see `gh-pr-approve` for that.
 Closed enum — free-text values are rejected. Korean aliases normalize to
 the English enum before dispatch. Every preset, `quick` included,
 always adds a mandatory "at least one questionable assumption"
-critique and an overall `판정`/`Verdict: [LGTM|CONCERNS|BLOCKING]`
-line — there is no flag to turn this off.
+critique and an overall translatable verdict line — e.g.
+`Verdict: [LGTM|CONCERNS|BLOCKING]` for an English-dominant diff, or
+`판정: [LGTM|우려있음|블로킹]` for a Korean-dominant diff — matching the
+diff's dominant language without mixing the two. There is no flag to
+turn this off.
 
 | enum | KR alias | Lens |
 |------|----------|------|
