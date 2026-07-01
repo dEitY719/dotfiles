@@ -28,7 +28,10 @@ Gather a second-opinion code review on a GitHub PR from one external AI
 CLI (`codex` / `gemini` / `claude`). Stream the output, post it as a PR
 comment by default, and **stop there** — no decision (approve /
 request-changes), no per-comment replies; those are `gh:pr-approve` and
-`gh:pr-reply`.
+`gh:pr-reply`. Every preset's prompt always demands a critical stance —
+at least one questionable-assumption critique plus a closing verdict
+tag (`references/review-presets.md` § "Why critical review is always
+on") — with no flag to turn it off.
 
 ## Help
 
