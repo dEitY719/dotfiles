@@ -90,10 +90,19 @@ _commit_if_changed() {
 	[ "$#" -gt 0 ] || return 0
 	git -C "$repo_dir" add -- "$@" 2>/dev/null || return 0
 	git -C "$repo_dir" diff --cached --quiet -- "$@" 2>/dev/null && return 0
-	# Unstage on commit failure so a failed auto-commit never leaks staged
-	# changes into the user's next manual commit.
-	git -C "$repo_dir" commit -m "$msg" --quiet 2>/dev/null ||
+	# ALLOW_MAIN_COMMIT=1: an automated manifest sync is exactly the escape
+	# hatch the protected-branch guard exists for (git/hooks/checks/
+	# main_branch_guard.sh). Without it, users who stay on `main` in dotfiles
+	# get the commit silently blocked and reset — the manifest updates then
+	# pile up unstaged and never land (#1072).
+	if ! ALLOW_MAIN_COMMIT=1 git -C "$repo_dir" commit -m "$msg" --quiet 2>/dev/null; then
+		# Unstage on commit failure so a failed auto-commit never leaks staged
+		# changes into the user's next manual commit. Warn to stderr (visible
+		# in the session transcript) instead of failing fully silent.
+		printf 'plugin-sync: manifest commit failed in %s; changes left unstaged\n' \
+			"$repo_dir" >&2
 		git -C "$repo_dir" reset -q -- "$@" 2>/dev/null || true
+	fi
 }
 
 # Emit the compact JSON in file $1, or the default $2 when the file is
