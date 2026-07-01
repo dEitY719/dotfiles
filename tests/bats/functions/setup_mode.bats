@@ -15,6 +15,8 @@ setup() {
     setup_isolated_home
     export http_proxy="http://127.0.0.1:8080"
     export https_proxy="http://127.0.0.1:8080"
+    export all_proxy="http://127.0.0.1:8080"
+    export ALL_PROXY="http://127.0.0.1:8080"
 }
 
 teardown() {
@@ -23,16 +25,16 @@ teardown() {
 
 @test "mode=external clears proxy vars" {
     echo "external" > "$HOME/.dotfiles-setup-mode"
-    run_in_bash '_apply_setup_mode_config; echo "[${http_proxy}]"'
+    run_in_bash '_apply_setup_mode_config; echo "[${http_proxy}][${all_proxy}][${ALL_PROXY}]"'
     assert_success
-    assert_output "[]"
+    assert_output "[][][]"
 }
 
 @test "mode=public clears proxy vars" {
     echo "public" > "$HOME/.dotfiles-setup-mode"
-    run_in_bash '_apply_setup_mode_config; echo "[${http_proxy}]"'
+    run_in_bash '_apply_setup_mode_config; echo "[${http_proxy}][${all_proxy}][${ALL_PROXY}]"'
     assert_success
-    assert_output "[]"
+    assert_output "[][][]"
 }
 
 @test "mode=internal leaves proxy vars untouched" {
@@ -71,6 +73,9 @@ teardown() {
 }
 
 @test "zsh: mode=external clears proxy vars" {
+    if ! command -v zsh >/dev/null 2>&1; then
+        skip "zsh is not installed"
+    fi
     echo "external" > "$HOME/.dotfiles-setup-mode"
     run_in_zsh '_apply_setup_mode_config; echo "[${http_proxy}]"'
     assert_success
