@@ -24,7 +24,10 @@ request-changes) is submitted** — see `gh-pr-approve` for that.
 ## `--review` enum
 
 Closed enum — free-text values are rejected. Korean aliases normalize to
-the English enum before dispatch.
+the English enum before dispatch. Every preset, `quick` included,
+always adds a mandatory "at least one questionable assumption"
+critique and an overall `판정`/`Verdict: [LGTM|CONCERNS|BLOCKING]`
+line — there is no flag to turn this off.
 
 | enum | KR alias | Lens |
 |------|----------|------|
@@ -70,7 +73,8 @@ claude -p ...`.
 2. Pre-flight: refuse closed/merged/draft PRs. CI status is **not** a
    gate — opinion collection works regardless of CI.
 3. Load the `--review` preset's prompt template from
-   `references/review-presets.md`.
+   `references/review-presets.md` — the shared prefix always requires a
+   questionable-assumption critique and a closing verdict tag.
 4. Fetch `gh pr diff <N>` + PR metadata. Large diffs reuse
    `gh-pr-approve`'s subagent delegation pattern.
 5. Dispatch to the chosen external CLI per
