@@ -22,44 +22,41 @@ tool_name=$(printf '%s' "$input" | jq -r '.tool_name // ""') || exit 0
 
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // ""') || exit 0
 
-# Target extraction extracts the first non-flag argument after the
-# subcommand, so flags placed between the subcommand and the target
-# (e.g. `claude plugin uninstall --yes ralph-loop`) don't get mistaken
+# All manifest commits share one subject — kept in a single variable so the
+# message style has exactly one edit site.
+SYNC_MSG="chore(claude-plugin): sync manifest"
+
+# Print the first non-flag argument in $1 that follows a token matching the
+# `$2` keyword alternation, so flags placed between the subcommand and the
+# target (e.g. `claude plugin uninstall --yes ralph-loop`) aren't mistaken
 # for the target.
+_extract_target() {
+	printf '%s' "$1" | awk -v kw="$2" '{
+        found = 0
+        for (i = 1; i <= NF; i++) {
+            if (found && $i !~ /^-/) {
+                print $i
+                exit
+            }
+            if ($i ~ "^(" kw ")$") {
+                found = 1
+            }
+        }
+    }'
+}
+
 action=""
 target=""
 if printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+marketplace[[:space:]]+add'; then
 	action="add"
 elif printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+marketplace[[:space:]]+(remove|rm)'; then
 	action="marketplace_remove"
-	target=$(printf '%s' "$cmd" | awk '{
-        found=0
-        for(i=1; i<=NF; i++) {
-            if(found && $i !~ /^-/) {
-                print $i
-                exit
-            }
-            if($i == "remove" || $i == "rm") {
-                found=1
-            }
-        }
-    }')
+	target=$(_extract_target "$cmd" "remove|rm")
 elif printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+install'; then
 	action="add"
 elif printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+(uninstall|remove)'; then
 	action="uninstall"
-	target=$(printf '%s' "$cmd" | awk '{
-        found=0
-        for(i=1; i<=NF; i++) {
-            if(found && $i !~ /^-/) {
-                print $i
-                exit
-            }
-            if($i == "uninstall" || $i == "remove") {
-                found=1
-            }
-        }
-    }')
+	target=$(_extract_target "$cmd" "uninstall|remove")
 else
 	exit 0
 fi
@@ -85,6 +82,19 @@ _commit_if_changed() {
 	git -C "$repo_dir" commit -m "$msg" --quiet 2>/dev/null || true
 }
 
+# scope:user plugins from $PL_SRC whose marketplace (the part after `@`) is a
+# key of the marketplace map passed as $1 (mp_common → public, mp_internal →
+# private). Same filter for both sides; only the map differs.
+_extract_plugins_for_mp() {
+	jq -c --argjson mp "$1" '
+        [(.plugins // {}) | to_entries[]
+            | select(any(.value[]?; .scope == "user"))
+            | .key
+            | select($mp[(. | split("@") | last)] != null)
+        ] | unique
+    ' "$PL_SRC"
+}
+
 if [ "$action" = "add" ]; then
 	[ -f "$MP_SRC" ] && [ -f "$PL_SRC" ] || exit 0
 
@@ -97,20 +107,8 @@ if [ "$action" = "add" ]; then
         | map({(.key): (.value.source.repo // .value.source.url // .value.source.path)}) | add // {}
     ' "$MP_SRC") || exit 0
 
-	plugins_common=$(jq -c --argjson mp "$mp_common" '
-        [(.plugins // {}) | to_entries[]
-            | select(any(.value[]?; .scope == "user"))
-            | .key
-            | select($mp[(. | split("@") | last)] != null)
-        ] | unique
-    ' "$PL_SRC") || exit 0
-	plugins_internal=$(jq -c --argjson mp "$mp_internal" '
-        [(.plugins // {}) | to_entries[]
-            | select(any(.value[]?; .scope == "user"))
-            | .key
-            | select($mp[(. | split("@") | last)] != null)
-        ] | unique
-    ' "$PL_SRC") || exit 0
+	plugins_common=$(_extract_plugins_for_mp "$mp_common") || exit 0
+	plugins_internal=$(_extract_plugins_for_mp "$mp_internal") || exit 0
 
 	mkdir -p "$PUB_DIR"
 	jq -n --argjson old "$(cat "$PUB_DIR/marketplaces.json" 2>/dev/null || echo '{}')" \
@@ -122,7 +120,7 @@ if [ "$action" = "add" ]; then
 		'{plugins: (($old.plugins // []) + $new | unique | sort)}' \
 		>"$PUB_DIR/plugins.json.tmp" &&
 		mv "$PUB_DIR/plugins.json.tmp" "$PUB_DIR/plugins.json"
-	_commit_if_changed "$MAIN_ROOT" "chore(claude-plugin): sync manifest" \
+	_commit_if_changed "$MAIN_ROOT" "$SYNC_MSG" \
 		claude/plugin/marketplaces.json claude/plugin/plugins.json
 
 	if [ -d "$PRIV_DIR/.git" ] && [ "$mp_internal" != "{}" ]; then
@@ -135,7 +133,7 @@ if [ "$action" = "add" ]; then
 			'{plugins: (($old.plugins // []) + $new | unique | sort)}' \
 			>"$PRIV_DIR/plugins.json.tmp" &&
 			mv "$PRIV_DIR/plugins.json.tmp" "$PRIV_DIR/plugins.json"
-		_commit_if_changed "$PRIV_DIR" "chore(claude-plugin): sync manifest" \
+		_commit_if_changed "$PRIV_DIR" "$SYNC_MSG" \
 			marketplaces.json plugins.json
 	fi
 fi
@@ -167,10 +165,10 @@ if [ "$action" = "uninstall" ] || [ "$action" = "marketplace_remove" ]; then
 		fi
 	done
 
-	_commit_if_changed "$MAIN_ROOT" "chore(claude-plugin): sync manifest" \
+	_commit_if_changed "$MAIN_ROOT" "$SYNC_MSG" \
 		claude/plugin/marketplaces.json claude/plugin/plugins.json
 	if [ -d "$PRIV_DIR/.git" ]; then
-		_commit_if_changed "$PRIV_DIR" "chore(claude-plugin): sync manifest" \
+		_commit_if_changed "$PRIV_DIR" "$SYNC_MSG" \
 			marketplaces.json plugins.json
 	fi
 fi
