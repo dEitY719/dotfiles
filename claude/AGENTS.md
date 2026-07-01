@@ -20,7 +20,7 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 | **OpenCode** | `~/.config/opencode/skills/<name>` → `dotfiles/claude/skills/<name>` | entry-level symlink (#791) | ❌ setup 재실행 필요 |
 | **Gemini CLI** | `~/.gemini/skills/<name>` → `dotfiles/claude/skills/<name>` | entry-level symlink (#791) | ❌ setup 재실행 필요 |
 
-`~/.claude*/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/`, `~/.gemini/skills/` 는 모두 **실제 디렉토리** 이며 child entry 만 `dotfiles/claude/skills/<name>` 로 가는 symlink. 이 4-way 일관성이 private overlay (`scripts/setup-company-skills.sh`, #707 / #791) 를 모든 CLI 의 같은 디렉토리에 추가 entry 로 layer 할 여지를 만든다. SSOT 위치 자체는 변하지 않음.
+`~/.claude*/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/`, `~/.gemini/skills/` 는 모두 **실제 디렉토리** 이며 child entry 만 `dotfiles/claude/skills/<name>` 로 가는 symlink. 이 4-way 일관성이 외부에서 추가된 symlink (마켓플레이스 `npx skills add`, 수동 링크 등) 를 모든 CLI 의 같은 디렉토리에 추가 entry 로 layer 할 여지를 만든다. SSOT 위치 자체는 변하지 않음.
 
 ### 관리 스크립트
 
@@ -29,7 +29,6 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 | Claude Code (각 계정) | `shell-common/tools/integrations/claude.sh` → `_claude_account_setup_one()` + `_claude_compose_skills_dir()` (#707, F-8) | `./claude/setup.sh` |
 | OpenCode / Gemini | `scripts/setup-skills-ssot.sh` → `link_skills_compose()` (#791) | `./setup.sh` 또는 `./scripts/setup-skills-ssot.sh` |
 | Codex | `scripts/setup-skills-ssot.sh` → `link_skills_individual_codex()` | `./setup.sh` 또는 `./scripts/setup-skills-ssot.sh` |
-| Private overlay (#707 / #791) | `scripts/setup-company-skills.sh` — 4 CLI 모두 적용 | `./setup.sh` (no-op when `$COMPANY_SKILLS_HOME` missing) |
 
 ### 신규 스킬 추가 후 동기화
 
