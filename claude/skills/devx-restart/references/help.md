@@ -13,7 +13,8 @@
 ## What it does
 
 Recovers from an interrupted turn — usually a Claude API flake
-(`socket connection was closed unexpectedly`, gateway timeout, OOM, etc.) —
+(`socket connection was closed unexpectedly`, gateway timeout, OOM,
+`Not logged in · Please run /login`, etc.) —
 without losing context. Picks up the previous in_progress TodoList item and
 resumes it in single-tool-call chunks, with large outputs delegated to
 subagents so the next failure costs less.
@@ -24,6 +25,8 @@ subagents so the next failure costs less.
 - The model produced an `API Error` and ended the turn.
 - A long batch of edits got cut off and you don't want to re-explain it.
 - The task was too large and you interrupted it with ESC to restart in smaller chunks.
+- Your session was interrupted by an auth/login expiry
+  (`Not logged in · Please run /login`) and you already re-authenticated.
 
 Do NOT invoke for:
 

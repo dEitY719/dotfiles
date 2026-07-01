@@ -1,11 +1,13 @@
 ---
 name: devx:restart
 description: >-
-  API 소켓 에러, OOM, 또는 ESC 키로 현재 세션이 중단된 후 재개할 때 —
+  API 소켓 에러, OOM, 인증 만료(Not logged in), 또는 ESC 키로 현재 세션이
+  중단된 후 재개할 때 —
   [Claude Code Only] Resume the previous in-progress task after an interruption
-  — either an API error (socket disconnect, service flake, OOM, etc.) or the
-  user pressing ESC because the turn was running too long — without losing
-  context. Use when the user runs /devx:restart, /devx-restart, or asks "다시 작업해",
+  — an API error (socket disconnect, service flake, OOM, etc.), an auth
+  expiry (`Not logged in`), or the user pressing ESC because the turn was
+  running too long — without losing context. Use when the user runs
+  /devx:restart, /devx-restart, or asks "다시 작업해",
   "이어서 해줘", "끊긴 데서 재개", "API 에러 복구",
   "15분 이상 걸려서 ESC 눌렀어", "작업이 너무 커서 중단했어",
   "oversized turn interrupted by user ESC". Identifies the in_progress
