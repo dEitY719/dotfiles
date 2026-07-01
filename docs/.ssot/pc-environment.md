@@ -34,5 +34,5 @@
 |------|------|------|
 | Claude 계정 활성화 | `shell-common/env/claude.sh` | `internal` → work 계정만; 그 외 → personal/work/work1 |
 | Git host 라우팅 | `shell-common/functions/gh_host.sh` | `internal` → GHES, 그 외 → github.com |
-| 프록시 자동 정리 | `shell-common/util/setup_mode.sh` | WSL2 프록시 상속 방지 (레거시 숫자값만 매칭 — issue 필요) |
-| Bedrock 비용 위젯 | `claude/statusline-command.sh` | `internal` 에서만 표시 |
+| 프록시 자동 정리 | `shell-common/util/setup_mode.sh` | WSL2 프록시 상속 방지 (레거시 숫자값만 매칭, 문자열 값 미지원 — issue #1051) |
+| Bedrock 비용 위젯 | `claude/statusline-command.sh` | `internal` 에서만 표시 (레거시 숫자값 `2`는 미지원 — 별도 확인 필요) |
