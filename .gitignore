@@ -42,6 +42,11 @@ claude/settings.json.backup.*
 claude/settings.local.json
 .claude/
 
+# Claude Code plugin manifest — 사내 전용 분류는 별도 private nested repo로
+# 관리한다 (docs/feature/superpowers-specs/2026-07-01-claude-plugin-manifest-design.md).
+# public 레포는 이 경로의 존재 자체를 추적하지 않는다.
+/claude/plugin/company/
+
 # VS Code settings (bidirectional sync system, PC-specific)
 .vscode/settings.json
 .vscode/base.json.backup.*

@@ -89,6 +89,22 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 
 ---
 
+## Plugin Manifest (claude/plugin/)
+
+`claude plugin install/uninstall`, `claude plugin marketplace add/remove`는
+`claude/hooks/plugin-sync.sh` (PostToolUse hook)가 자동 감지해
+`claude/plugin/{marketplaces,plugins}.json`(공용, scope:user +
+source:github만)에 병합 반영하고 로컬 커밋한다. 사내 전용
+(non-github source) 항목은 `claude/plugin/company/`(dotfiles 트리 안이지만
+자체 `.git`을 가진 별도 private GHES 레포, `.gitignore`로 public 레포
+추적 제외)로 간다 — internal PC에서 최초 1회 `git clone <url>
+claude/plugin/company` 필요.
+
+신규 PC: `./claude/plugin/restore.sh` (mode-aware, `--dry-run` 지원).
+자세한 설계: `docs/feature/superpowers-specs/2026-07-01-claude-plugin-manifest-design.md`.
+
+---
+
 ## Skill 작성 규칙
 
 - SSOT: `dotfiles/claude/skills/<name>/SKILL.md`
