@@ -103,6 +103,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 ## Standards & References
 
 - 운영 교훈 지식 베이스: `docs/guide/learnings/` (반복 실수 예방용 패턴 모음)
+- PC 환경 SSOT (5개 PC, `~/.dotfiles-setup-mode` 모드): `docs/.ssot/pc-environment.md` — 환경에 따라 동작이 달라지는 작업(계정 전환, git host, 프록시)을 다룰 때는 먼저 `cat ~/.dotfiles-setup-mode` 로 현재 모드를 확인한다.
 - Command/help interface: `docs/.ssot/command-guidelines.md`
 - GitHub Project board: `docs/.ssot/github-project-board.md`
 - GitHub Discussions 운영: `docs/.ssot/discussions-policy.md`
