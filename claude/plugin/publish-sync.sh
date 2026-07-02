@@ -113,6 +113,62 @@ _publish_branch() {
 	printf '%s\n' "$branch"
 }
 
+# _open_and_merge_pr <repo_dir> <branch>
+#
+# Open a PR from branch onto main, wait for status checks to report, then
+# merge with --admin. Self-authored PRs can never be approved by their
+# own author (GitHub blocks self-approval server-side) — see
+# claude/skills/gh-pr-approve/references/self-pr-handling.md for the same
+# `gh pr merge --admin` pattern this reproduces in plain shell. Never
+# merges on a failing or timed-out check.
+_open_and_merge_pr() {
+	local repo_dir="$1" branch="$2" target pr_url pr_number
+	local interval="${PUBLISH_SYNC_CHECK_INTERVAL:-15}"
+	local max_tries="${PUBLISH_SYNC_CHECK_MAX_TRIES:-20}"
+	local tries=0 state="pending"
+
+	target=$(_repo_target "$repo_dir") || {
+		echo "publish-sync: origin remote를 해석하지 못함 ($repo_dir)" >&2
+		return 1
+	}
+
+	pr_url=$(gh pr create --repo "$target" --head "$branch" --base main \
+		--title "$SYNC_MSG" \
+		--body "plugin-sync.sh가 로컬에 쌓아둔 매니페스트 변경을 게시합니다. 자동 생성됨." \
+		2>&1) || {
+		echo "publish-sync: PR 생성 실패 — $pr_url" >&2
+		return 1
+	}
+	pr_number="${pr_url##*/}"
+	echo "publish-sync: PR 생성됨 — $pr_url"
+
+	while [ "$tries" -lt "$max_tries" ]; do
+		state=$(gh pr checks "$pr_number" --repo "$target" \
+			--json bucket \
+			--jq '[.[].bucket] | if any(.=="fail" or .=="cancel") then "failed" elif any(.=="pending") then "pending" else "success" end' \
+			2>/dev/null) || state="pending"
+		[ "$state" = "success" ] && break
+		[ "$state" = "failed" ] && break
+		tries=$((tries + 1))
+		sleep "$interval"
+	done
+
+	if [ "$state" = "failed" ]; then
+		echo "publish-sync: status check 실패 — $pr_url 를 직접 확인하세요" >&2
+		return 1
+	fi
+	if [ "$state" != "success" ]; then
+		echo "publish-sync: status check 대기 타임아웃 — $pr_url 를 직접 확인하세요" >&2
+		return 1
+	fi
+
+	gh pr merge "$pr_number" --repo "$target" --admin --rebase 2>&1 || {
+		echo "publish-sync: admin merge 실패 — $pr_url 를 직접 확인하세요" >&2
+		return 1
+	}
+	echo "publish-sync: 병합 완료 — $pr_url"
+}
+
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	echo "publish-sync.sh: not yet wired to a main entrypoint (Task 8)" >&2
 	exit 1
