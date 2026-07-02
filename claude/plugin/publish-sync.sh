@@ -208,7 +208,12 @@ _publish_manifest_diff() {
 	}
 	_open_and_merge_pr "$repo_dir" "$branch" || return 1
 
-	_cleanup_local_main_if_pure_sync "$repo_dir" "$before_origin" "$@"
+	# Local-main cleanup is best-effort AFTER the irreversible publish — its
+	# own stderr already explains any skip/failure; never let it flip the
+	# orchestrator's result, or Task 8's loop would misread a successful
+	# publish as needing a retry.
+	_cleanup_local_main_if_pure_sync "$repo_dir" "$before_origin" "$@" || true
+	return 0
 }
 
 # _cleanup_local_main_if_pure_sync <repo_dir> <before_origin_sha> <file...>
@@ -220,7 +225,7 @@ _publish_manifest_diff() {
 _cleanup_local_main_if_pure_sync() {
 	local repo_dir="$1" before_origin="$2"
 	shift 2
-	local sha msg f changed pure=1 match cur_branch
+	local sha msg f changed pure=1 match want cur_branch
 
 	git -C "$repo_dir" fetch origin --quiet 2>/dev/null || {
 		echo "publish-sync: 정리 단계 fetch 실패 — 로컬 main은 그대로 둡니다" >&2
