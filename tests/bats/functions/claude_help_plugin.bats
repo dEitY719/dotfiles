@@ -38,6 +38,7 @@ _run_claude_help() {
     assert_success
     assert_output --partial 'claude/plugin/restore.sh'
     assert_output --partial 'claude plugin marketplace add/remove'
+    assert_output --partial 'claude/plugin/publish-sync.sh'
 }
 
 @test "claude-help --all renders the plugin section" {

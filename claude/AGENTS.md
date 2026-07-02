@@ -101,7 +101,12 @@ source:github만)에 병합 반영하고 로컬 커밋한다. 사내 전용
 claude/plugin/company` 필요.
 
 신규 PC: `./claude/plugin/restore.sh` (mode-aware, `--dry-run` 지원).
-자세한 설계: `docs/feature/superpowers-specs/2026-07-01-claude-plugin-manifest-design.md`.
+
+두 레포 모두 "PR을 통해서만 변경 가능" 규칙이 걸려 있어 hook의 로컬 커밋이
+origin에 직접 push되지 않는다 — `./claude/plugin/publish-sync.sh`
+(`--dry-run` 지원)를 수동 실행하면 쌓인 변경분을 브랜치+PR+admin-merge로
+게시한다. 자세한 설계: `docs/feature/superpowers-specs/2026-07-01-claude-plugin-manifest-design.md`,
+`docs/feature/superpowers-specs/2026-07-02-plugin-manifest-batch-publish-design.md`.
 
 ---
 
