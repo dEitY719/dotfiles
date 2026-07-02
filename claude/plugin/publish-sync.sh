@@ -42,6 +42,16 @@ _repo_target() {
 	esac
 }
 
+# _manifest_diff_exists <repo_dir> <file...>
+#
+# Assumes `origin` has already been fetched by the caller. Returns 0 if
+# any of the given paths' current content differs from origin/main.
+_manifest_diff_exists() {
+	local repo_dir="$1"
+	shift
+	! git -C "$repo_dir" diff --quiet origin/main -- "$@" 2>/dev/null
+}
+
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	echo "publish-sync.sh: not yet wired to a main entrypoint (Task 8)" >&2
 	exit 1
