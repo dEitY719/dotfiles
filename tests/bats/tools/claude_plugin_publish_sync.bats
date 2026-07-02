@@ -188,8 +188,9 @@ _route_origin_offline() {
 # Installs a fake `gh` at the front of PATH. Every invocation is appended
 # to $GH_STUB_LOG as one line (argv joined by spaces). Behavior is
 # controlled by files under $GH_STUB_DIR:
-#   checks_result   - "success" | "failed" | "pending" | "empty" | "nochecks"
-#                     | "state-success" | "state-failed" (default: success)
+#   checks_result   - "success" | "failed" | "pending" | "empty"
+#                     | "empty-then-success" | "state-success" | "state-failed"
+#                     (default: success)
 #   merge_result    - "success" | "failed" (default: success)
 #
 # The script polls via `gh pr view --json statusCheckRollup --jq ...`
@@ -202,13 +203,18 @@ _route_origin_offline() {
 #   pending -> CheckRun status=IN_PROGRESS, conclusion=null
 #   state-success / state-failed -> StatusContext shape (state=SUCCESS /
 #               state=FAILURE, no conclusion) to exercise that jq branch
-# Two more sentinels exercise the fail-closed edges FIX 1 addresses:
-#   empty    -> {"statusCheckRollup":[]} (checks not yet registered — must
-#               stay "pending" until tries>=2, never premature-"success")
-#   nochecks -> {"statusCheckRollup":[]} too — relies on the same
-#               empty-after-retries -> "nochecks" path as "empty" (a
-#               genuinely checkless repo looks identical to a not-yet-
-#               registered one from `gh pr view`'s point of view)
+# Two more sentinels exercise the fail-closed edges FIX 1/2 address:
+#   empty              -> {"statusCheckRollup":[]} on every poll (a
+#                          genuinely checkless repo — the script has no "no
+#                          checks reported" signal to short-circuit on, so
+#                          this must poll the FULL window before declaring
+#                          the repo checkless)
+#   empty-then-success -> empty on the first 2 polls (checks not yet
+#                          registered), then a real SUCCESS CheckRun from
+#                          the 3rd poll onward — proves the script does NOT
+#                          give up early on an empty rollup and still
+#                          merges once checks appear. Poll count is tracked
+#                          via $GH_STUB_DIR/pr_view_count.
 _install_gh_stub() {
     GH_STUB_DIR="$TEST_TEMP_HOME/gh-stub"
     mkdir -p "$GH_STUB_DIR/bin"
@@ -228,6 +234,11 @@ case "\$1 \$2" in
     ;;
 "pr view")
     RESULT=\$(cat "$GH_STUB_DIR/checks_result")
+    # Poll counter, used only by empty-then-success to flip its answer
+    # partway through the window.
+    COUNT_FILE="$GH_STUB_DIR/pr_view_count"
+    COUNT=\$(( \$(cat "\$COUNT_FILE" 2>/dev/null || echo 0) + 1 ))
+    echo "\$COUNT" >"\$COUNT_FILE"
     case "\$RESULT" in
     success) ROLLUP='[{"name":"CI","status":"COMPLETED","conclusion":"SUCCESS","state":null}]' ;;
     failed) ROLLUP='[{"name":"CI","status":"COMPLETED","conclusion":"FAILURE","state":null}]' ;;
@@ -235,7 +246,13 @@ case "\$1 \$2" in
     state-success) ROLLUP='[{"name":"ci/legacy","conclusion":null,"state":"SUCCESS"}]' ;;
     state-failed) ROLLUP='[{"name":"ci/legacy","conclusion":null,"state":"FAILURE"}]' ;;
     empty) ROLLUP='[]' ;;
-    nochecks) ROLLUP='[]' ;;
+    empty-then-success)
+        if [ "\$COUNT" -le 2 ]; then
+            ROLLUP='[]'
+        else
+            ROLLUP='[{"name":"CI","status":"COMPLETED","conclusion":"SUCCESS","state":null}]'
+        fi
+        ;;
     *) ROLLUP="\$RESULT" ;;
     esac
     JSON="{\\"statusCheckRollup\\":\$ROLLUP}"
@@ -360,45 +377,48 @@ STUB
     assert_output "0"
 }
 
-@test "_open_and_merge_pr never premature-merges when checks report an empty rollup array" {
-    # FIX 1 (blocker): an empty `statusCheckRollup: []` (checks not yet
-    # registered right after PR creation) must map to "pending" on the
-    # first couple of polls, NOT fall through the jq's `else "success"`
-    # branch into a premature --admin merge. With PUBLISH_SYNC_CHECK_MAX_TRIES=3
-    # the empty result keeps polling as "pending" until tries>=2, at which
-    # point it becomes the same terminal "nochecks" state a genuinely
-    # checkless repo would hit (indistinguishable from `gh pr view`'s point
-    # of view) — never a premature merge either way.
+@test "_open_and_merge_pr hits the terminal checkless state and does not merge when the rollup stays empty for the full window" {
+    # FIX 2 (codex BLOCKER): `gh pr view --json statusCheckRollup` has no
+    # "no checks reported" signal to short-circuit on — a genuinely
+    # checkless repo just returns an empty rollup on every single poll.
+    # The script must poll the FULL max_tries window (never give up early
+    # on an empty rollup) and only THEN, having never observed a real
+    # check, report the repo as checkless. Never a merge either way.
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
     _install_gh_stub
     echo "empty" >"$GH_STUB_DIR/checks_result"
+    PUBLISH_SYNC_CHECK_INTERVAL=0
+    PUBLISH_SYNC_CHECK_MAX_TRIES=3
+    export PUBLISH_SYNC_CHECK_INTERVAL PUBLISH_SYNC_CHECK_MAX_TRIES
 
     run _open_and_merge_pr "$REPO" "chore/plugin-sync-publish-public-20260702-000000"
     assert_failure
     assert_output --partial "status check가 구성되지 않은 리포"
+    run grep -c "^pr view" "$GH_STUB_LOG"
+    assert_output "3"
     run grep -c "^pr merge" "$GH_STUB_LOG"
     assert_output "0"
 }
 
-@test "_open_and_merge_pr hits the terminal no-checks state and does not merge on a checkless repo" {
-    # FIX 1 (blocker): `gh pr checks` exiting non-zero with "no checks
-    # reported" on every poll (a repo with no status checks configured at
-    # all) must become a terminal "nochecks" state after a couple of
-    # retries, not loop silently to the generic 5-minute timeout, and must
-    # never merge.
+@test "_open_and_merge_pr does not give up early on an empty rollup and merges once checks appear" {
+    # FIX 2 (codex BLOCKER) proof: the rollup is empty on the first two
+    # polls (checks not yet registered) and only becomes a real SUCCESS
+    # CheckRun from the third poll onward. The old logic declared
+    # "nochecks" as soon as tries>=2 and would have given up here without
+    # ever seeing the SUCCESS — this asserts the script instead keeps
+    # polling through the empty window and merges once checks land.
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
     _install_gh_stub
-    echo "nochecks" >"$GH_STUB_DIR/checks_result"
+    echo "empty-then-success" >"$GH_STUB_DIR/checks_result"
 
     run _open_and_merge_pr "$REPO" "chore/plugin-sync-publish-public-20260702-000000"
-    assert_failure
-    assert_output --partial "status check가 구성되지 않은 리포"
-    run grep -c "^pr merge" "$GH_STUB_LOG"
-    assert_output "0"
+    assert_success
+    run grep -c "^pr merge.*--admin" "$GH_STUB_LOG"
+    assert_output "1"
 }
 
 @test "_publish_manifest_diff no-ops when there is nothing to publish" {
