@@ -138,6 +138,30 @@ JSON
     assert_success
 }
 
+# --- plugin-only SSOT (no known_marketplaces.json) still detects removals -----
+
+@test "only installed_plugins.json present → plugin removal still propagates" {
+    # No known_marketplaces.json at all — the Stop guard must not early-exit.
+    cat > "$SRC/installed_plugins.json" <<'JSON'
+{"plugins": {"plug-a@mp-a": [{"scope": "user"}]}}
+JSON
+    cat > "$MAIN_ROOT/claude/plugin/plugins.json" <<'JSON'
+{"plugins": ["plug-a@mp-a"]}
+JSON
+    git -C "$MAIN_ROOT" add claude/plugin
+    git -C "$MAIN_ROOT" commit -q -m "seed"
+
+    _session_start
+    assert_success
+    # /plugin uninstall plug-a → installed_plugins.json empties out.
+    echo '{"plugins": {}}' > "$SRC/installed_plugins.json"
+    _stop
+    assert_success
+
+    run jq -e '.plugins | any(. == "plug-a@mp-a")' "$MAIN_ROOT/claude/plugin/plugins.json"
+    assert_failure
+}
+
 # --- guards ------------------------------------------------------------------
 
 @test "no session_id → no-op" {
