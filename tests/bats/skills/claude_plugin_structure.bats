@@ -619,6 +619,23 @@ build_single_perfect() {
     run cps_check_M8 "$REPO"; assert_output PASS
 }
 
+@test "M8 FAIL: explicit null source is not skipped (#1085 gemini review)" {
+    # M7 passes (the "source" key exists) but the value is null → M8 must FAIL,
+    # not silently skip it as a missing-source (M7) case.
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [{ "name": "demo", "source": null }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M7 "$REPO"; assert_output PASS
+    run cps_check_M8 "$REPO"; assert_output FAIL
+}
+
+@test "M8 FAIL: a null plugin element is collected, not skipped (#1085)" {
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [null] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M8 "$REPO"; assert_output FAIL
+}
+
 # ---- M9 pluginRoot ↔ on-disk consistency (mono only, #1084) --------------
 
 @test "M9 FAIL: mono marketplace declares a plugin dir that is absent" {
@@ -684,6 +701,16 @@ build_single_perfect() {
     _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
     run cps_check_R7 "$REPO"; assert_output PASS
+}
+
+@test "R7 WARN when metadata is a non-string type (no jq crash → false PASS) (#1085)" {
+    # boolean/number description or homepage must not crash jq and slip through
+    # the `|| echo 0` fallback as a PASS — the type guard makes them WARN.
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "$schema": "s", "name": "repo", "description": true, "plugins": [{ "source": "./plugins/demo", "homepage": 42 }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_R7 "$REPO"; assert_output WARN
 }
 
 @test "R8 N/A when README has no /plugin marketplace add example" {
