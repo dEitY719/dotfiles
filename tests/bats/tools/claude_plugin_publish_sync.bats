@@ -47,3 +47,44 @@ teardown() {
     run _repo_target "$REPO"
     assert_failure
 }
+
+_seed_repo_with_origin() {
+    # $1 = repo dir to create. Sets up repo_dir with an `origin` remote
+    # pointing at a local bare repo, one commit on main in both, so tests
+    # can freely diverge repo_dir from origin/main.
+    local repo_dir="$1"
+    local bare="$TEST_TEMP_HOME/origin.git"
+    git init -q --bare "$bare"
+
+    mkdir -p "$repo_dir/claude/plugin"
+    git -C "$repo_dir" init -q -b main
+    git -C "$repo_dir" config user.email "test@example.com"
+    git -C "$repo_dir" config user.name "test"
+    echo '{}' >"$repo_dir/claude/plugin/marketplaces.json"
+    echo '{"plugins": []}' >"$repo_dir/claude/plugin/plugins.json"
+    git -C "$repo_dir" add claude/plugin
+    git -C "$repo_dir" commit -q -m "seed"
+    git -C "$repo_dir" remote add origin "$bare"
+    git -C "$repo_dir" push -q origin main
+}
+
+@test "_manifest_diff_exists returns false when files match origin/main" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    git -C "$REPO" fetch origin --quiet
+
+    run _manifest_diff_exists "$REPO" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_failure
+}
+
+@test "_manifest_diff_exists returns true when local file changed" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
+    git -C "$REPO" add claude/plugin/marketplaces.json
+    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    git -C "$REPO" fetch origin --quiet
+
+    run _manifest_diff_exists "$REPO" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+}
