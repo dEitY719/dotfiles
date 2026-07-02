@@ -22,19 +22,24 @@ SYNC_MSG="chore(claude-plugin): sync manifest"
 
 # _repo_target <repo_dir>
 #
-# Print "<owner>/<repo>" parsed from that repo's `origin` remote URL —
-# works for github.com or any GHES host, https or git@ SSH form.
+# Print "<host>/<owner>/<repo>" parsed from that repo's `origin` remote
+# URL — works for github.com or any GHES host, https or git@ SSH form.
+# The host must travel with owner/repo: `gh --repo owner/repo` silently
+# defaults to github.com, which would target the wrong host for a GHES
+# remote (e.g. the internal company/ repo). `gh` accepts the
+# HOST/OWNER/REPO form for --repo, and github.com/owner/repo works fine
+# too.
 _repo_target() {
-	local url tmp
+	local url host_path
 	url=$(git -C "$1" config --get remote.origin.url 2>/dev/null) || return 1
 	url="${url%.git}"
 	case "$url" in
 	git@*:*)
-		printf '%s\n' "${url#*:}"
+		host_path="${url#git@}"
+		printf '%s\n' "${host_path%%:*}/${host_path#*:}"
 		;;
 	https://* | http://*)
-		tmp="${url#*//}"
-		printf '%s\n' "${tmp#*/}"
+		printf '%s\n' "${url#*//}"
 		;;
 	*)
 		return 1
@@ -102,11 +107,13 @@ _build_publish_commit() {
 
 # _publish_branch <repo_dir> <label> <commit_sha>
 #
-# Create refs/heads/chore/plugin-sync-publish-<label>-<timestamp> pointing
-# at commit_sha, push it to origin, print the branch name.
+# Create refs/heads/chore/plugin-sync-publish-<label>-<timestamp>-<pid>
+# pointing at commit_sha, push it to origin, print the branch name. The
+# pid suffix avoids a same-second collision when two runs land in the
+# same wall-clock second.
 _publish_branch() {
 	local repo_dir="$1" label="$2" commit="$3" branch
-	branch="chore/plugin-sync-publish-${label}-$(date +%Y%m%d-%H%M%S)"
+	branch="chore/plugin-sync-publish-${label}-$(date +%Y%m%d-%H%M%S)-$$"
 	git -C "$repo_dir" update-ref "refs/heads/$branch" "$commit" || return 1
 	git -C "$repo_dir" push --quiet origin \
 		"refs/heads/$branch:refs/heads/$branch" || return 1
@@ -162,7 +169,7 @@ _open_and_merge_pr() {
 		return 1
 	fi
 
-	gh pr merge "$pr_number" --repo "$target" --admin --rebase 2>&1 || {
+	gh pr merge "$pr_number" --repo "$target" --admin --rebase --delete-branch 2>&1 || {
 		echo "publish-sync: admin merge 실패 — $pr_url 를 직접 확인하세요" >&2
 		return 1
 	}
@@ -258,7 +265,10 @@ _cleanup_local_main_if_pure_sync() {
 
 	cur_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null || echo "")
 	if [ "$cur_branch" = "main" ]; then
-		git -C "$repo_dir" merge --ff-only origin/main --quiet || return 1
+		if ! git -C "$repo_dir" merge --ff-only origin/main --quiet; then
+			echo "publish-sync: 로컬 main이 origin/main 과 갈라져 fast-forward 불가 — publish 는 성공했으니 필요하면 'git pull' 로 직접 정리하세요" >&2
+			return 1
+		fi
 	else
 		git -C "$repo_dir" update-ref refs/heads/main origin/main || return 1
 	fi

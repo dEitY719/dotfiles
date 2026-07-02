@@ -25,7 +25,7 @@ teardown() {
 
     run _repo_target "$REPO"
     assert_success
-    assert_output "dEitY719/dotfiles"
+    assert_output "github.com/dEitY719/dotfiles"
 }
 
 @test "_repo_target parses https form on a GHES host" {
@@ -36,7 +36,7 @@ teardown() {
 
     run _repo_target "$REPO"
     assert_success
-    assert_output "byoungwoo-yoon/claude-plugin-jira"
+    assert_output "github.samsungds.net/byoungwoo-yoon/claude-plugin-jira"
 }
 
 @test "_repo_target fails when origin remote is missing" {
@@ -149,7 +149,7 @@ _seed_repo_with_origin() {
     BRANCH="$output"
 
     run echo "$BRANCH"
-    assert_output --regexp '^chore/plugin-sync-publish-public-[0-9]{8}-[0-9]{6}$'
+    assert_output --regexp '^chore/plugin-sync-publish-public-[0-9]{8}-[0-9]{6}-[0-9]+$'
 
     # the branch exists on the bare "origin" with the right commit
     run git -C "$TEST_TEMP_HOME/origin.git" rev-parse "refs/heads/$BRANCH"
@@ -329,8 +329,13 @@ STUB
     DRY_RUN=0
     run _publish_manifest_diff "$REPO" "public" claude/plugin/marketplaces.json claude/plugin/plugins.json
     assert_success
-    # cleanup also ran and succeeded
-    assert_output --partial "정리했습니다"
+    # Local-main cleanup afterward is best-effort and its ff-only outcome is
+    # not asserted here: the published commit is built independently via
+    # plumbing (_build_publish_commit), so it is generally a SIBLING of
+    # local main sharing before_origin as parent (fast-forward fails, loud
+    # stderr — see the dedicated _cleanup_local_main_if_pure_sync tests),
+    # not an ancestor. The publish pipeline's own success must not depend
+    # on that outcome (`_cleanup... || true` at the call site).
 
     # full pipeline ran: PR created + admin-merged (assert via the gh stub log)
     run grep -c "^pr create" "$GH_STUB_LOG"
@@ -343,33 +348,81 @@ STUB
     assert_output "1"
 }
 
-@test "_cleanup_local_main_if_pure_sync fast-forwards when every ahead commit is a pure sync commit" {
+@test "_cleanup_local_main_if_pure_sync moves local main via update-ref when a different branch is checked out" {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     BEFORE_ORIGIN=$(git -C "$REPO" rev-parse origin/main)
 
+    # local main advances by a pure sync commit — this is the commit
+    # plugin-sync.sh's hook left locally; it can never be pushed directly
+    # because of branch protection.
     echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
     git -C "$REPO" add claude/plugin/marketplaces.json
     git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
 
-    # simulate the publish having landed on origin already
-    git -C "$REPO" push -q origin HEAD:refs/heads/main
+    # move off main WITHOUT touching the main ref, mirroring a repo that is
+    # not currently checked out on main when cleanup runs
+    git -C "$REPO" checkout -q -b other
 
-    # Move local main back BEHIND origin/main so the fast-forward below is
-    # real (not a no-op "Already up to date"): the ahead-delta this walks
-    # (before_origin..main) is now empty, which the pure-sync gate treats
-    # as vacuously safe, and the ff-only merge must do actual work to catch
-    # local main up to origin/main.
-    git -C "$REPO" reset --hard "$BEFORE_ORIGIN"
-    git -C "$REPO" fetch origin --quiet
+    # simulate the real publish pipeline landing a DIFFERENT sibling commit
+    # (built independently on top of before_origin, as
+    # _build_publish_commit does) on origin/main — this is the published
+    # snapshot, never an ancestor/descendant of local main
+    git -C "$REPO" checkout -q "$BEFORE_ORIGIN"
+    echo '{"anthropic-agent-skills": "anthropics/skills-published"}' >"$REPO/claude/plugin/marketplaces.json"
+    git -C "$REPO" add claude/plugin/marketplaces.json
+    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    PUBLISHED=$(git -C "$REPO" rev-parse HEAD)
+    git -C "$REPO" push -q origin "${PUBLISHED}:refs/heads/main"
+    git -C "$REPO" checkout -q other
+
+    LOCAL_MAIN_BEFORE=$(git -C "$REPO" rev-parse main)
+    assert_not_equal "$LOCAL_MAIN_BEFORE" "$PUBLISHED"
 
     run _cleanup_local_main_if_pure_sync "$REPO" "$BEFORE_ORIGIN" claude/plugin/marketplaces.json claude/plugin/plugins.json
     assert_success
     assert_output --partial "정리했습니다"
+    # a genuine move via update-ref, not a no-op and not a merge
     MAIN_SHA=$(git -C "$REPO" rev-parse main)
-    assert_equal "$MAIN_SHA" "$(git -C "$REPO" rev-parse origin/main)"
-    # prove this was a genuine fast-forward, not a vacuous no-op
-    assert_not_equal "$MAIN_SHA" "$BEFORE_ORIGIN"
+    assert_equal "$MAIN_SHA" "$PUBLISHED"
+    assert_not_equal "$MAIN_SHA" "$LOCAL_MAIN_BEFORE"
+}
+
+@test "_cleanup_local_main_if_pure_sync leaves checked-out main untouched and fails loudly when it has diverged from origin/main" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    BEFORE_ORIGIN=$(git -C "$REPO" rev-parse origin/main)
+
+    # local main is checked out and ahead of before_origin by a pure sync
+    # commit — the real post-publish state: plugin-sync.sh's hook
+    # committed locally but could never push.
+    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
+    git -C "$REPO" add claude/plugin/marketplaces.json
+    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    LOCAL_MAIN=$(git -C "$REPO" rev-parse main)
+
+    # origin/main advances to a DIFFERENT sibling commit sharing
+    # before_origin as parent — the actual publish pipeline builds this
+    # independently via plumbing (_build_publish_commit), so it is never
+    # an ancestor/descendant of local main: a real fast-forward is
+    # impossible.
+    git -C "$REPO" checkout -q "$BEFORE_ORIGIN"
+    echo '{"anthropic-agent-skills": "anthropics/skills-published"}' >"$REPO/claude/plugin/marketplaces.json"
+    git -C "$REPO" add claude/plugin/marketplaces.json
+    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    PUBLISHED=$(git -C "$REPO" rev-parse HEAD)
+    git -C "$REPO" push -q origin "${PUBLISHED}:refs/heads/main"
+
+    # back to main, checked out, still sitting at the pre-publish local commit
+    git -C "$REPO" checkout -q main
+    assert_equal "$(git -C "$REPO" rev-parse HEAD)" "$LOCAL_MAIN"
+
+    run _cleanup_local_main_if_pure_sync "$REPO" "$BEFORE_ORIGIN" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_failure
+    assert_output --partial "갈라져 fast-forward 불가"
+
+    # local main must be left completely untouched — no reset, no rebase
+    assert_equal "$(git -C "$REPO" rev-parse main)" "$LOCAL_MAIN"
 }
 
 @test "_cleanup_local_main_if_pure_sync skips when an unrelated commit is mixed in" {
