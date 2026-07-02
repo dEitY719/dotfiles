@@ -271,6 +271,12 @@ _publish_manifest_diff() {
 	}
 	_open_and_merge_pr "$repo_dir" "$branch" || return 1
 
+	# Publish landed. `gh pr merge --delete-branch` removed the REMOTE branch,
+	# but the local ref we created in $repo_dir via update-ref survives — drop
+	# it so successful runs don't accumulate orphaned chore/plugin-sync-publish-*
+	# refs (mirrors the push-failure cleanup in _publish_branch).
+	git -C "$repo_dir" update-ref -d "refs/heads/$branch" 2>/dev/null || true
+
 	# Local-main cleanup is best-effort AFTER the irreversible publish — its
 	# own stderr already explains any skip/failure; never let it flip the
 	# orchestrator's result, or Task 8's loop would misread a successful
@@ -349,8 +355,15 @@ _cleanup_local_main_if_pure_sync() {
 # mode falls through to "allowed" (github.com), matching gh_host.sh's
 # regression-zero fail-safe.
 _public_publish_allowed() {
-	local mode
-	mode=$(tr -d ' \t\n\r' <"$HOME/.dotfiles-setup-mode" 2>/dev/null || echo "")
+	local mode=""
+	# Guard the read with `[ -f ]` (like gh_host.sh): a bare `<missing-file`
+	# redirection leaks "bash: …: No such file or directory" to the real
+	# stderr even with `2>/dev/null` on the command, since the redirection
+	# failure is reported by the shell, not `tr`. A missing file means "no
+	# mode set" → github.com default (allowed).
+	if [ -f "$HOME/.dotfiles-setup-mode" ]; then
+		mode=$(tr -d ' \t\n\r' <"$HOME/.dotfiles-setup-mode" 2>/dev/null || echo "")
+	fi
 	case "$mode" in
 	1) mode="public" ;;
 	2) mode="internal" ;;
