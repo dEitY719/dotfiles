@@ -193,8 +193,10 @@ cps_check_M8() {
     # Shape validity of each resolvable source (mono/single common):
     #   local path : "." | "./" | "plugins/*" | "./plugins/*"
     #   git URL    : object { "source":"url", "url":"<non-empty>" }
-    # Elements with no resolvable source are M7's concern → skipped here (never
-    # double-FAIL). N/A when marketplace unreadable or 0 plugins.
+    # Only an object *missing* the source key is skipped (M7 owns that) — an
+    # explicit null source, or a null plugin element, is collected and FAILs
+    # here (a malformed source is not a free pass; PR #1085 gemini review).
+    # N/A when marketplace unreadable or 0 plugins.
     local _mf="$1/.claude-plugin/marketplace.json" _n _bad
     _cps_json_ok "$_mf" || {
         echo "N/A"
@@ -209,7 +211,7 @@ cps_check_M8() {
       [ (.plugins // [])[]
         | ( if type=="object" then . else { "source": . } end ) as $e
         | ($e.source) as $s
-        | select($s != null)
+        | select( if type=="object" then has("source") else true end )
         | select(
             ( ($s|type=="string") and
               ( $s=="." or $s=="./" or ($s|startswith("plugins/")) or ($s|startswith("./plugins/")) ) )
@@ -391,11 +393,14 @@ cps_check_R7() {
         echo "N/A"
         return
     }
-    [ "$(jq -r '(has("description") and ((.description // "")|length>0))' "$_mf" 2>/dev/null)" = "true" ] || {
+    # Guard the type before length so a non-string description/homepage (bool,
+    # number) can't crash jq and slip through the `|| echo 0` fallback as a
+    # false PASS (PR #1085 gemini review).
+    [ "$(jq -r '(has("description") and (.description|type=="string") and (.description|length>0))' "$_mf" 2>/dev/null)" = "true" ] || {
         echo WARN
         return
     }
-    _missing="$(jq '[(.plugins // [])[] | select(type=="object") | select((has("homepage")|not) or ((.homepage // "")|length==0))] | length' "$_mf" 2>/dev/null || echo 0)"
+    _missing="$(jq '[(.plugins // [])[] | select(type=="object") | select((has("homepage")|not) or (.homepage|type!="string") or (.homepage|length==0))] | length' "$_mf" 2>/dev/null || echo 0)"
     [ "${_missing:-0}" -eq 0 ] && echo PASS || echo WARN
 }
 
@@ -489,7 +494,7 @@ cps_refactor() {
 # (mono → ./plugins/<name>, single → ./). Idempotent: a no-op when every plugin
 # already carries a source, or when the marketplace is missing/invalid.
 _cps_repair_m7() {
-    local _repo="$1" _mode="$2" _mf="$1/.claude-plugin/marketplace.json" _need _tmp
+    local _repo="$1" _mode="$2" _mf="$1/.claude-plugin/marketplace.json" _need _tmp _status=0
     _cps_json_ok "$_mf" || return 0
     _need="$(jq '[(.plugins // [])[] | select(type=="object") | select(has("source")|not)] | length' "$_mf" 2>/dev/null || echo 0)"
     [ "${_need:-0}" -gt 0 ] || return 0
@@ -497,7 +502,7 @@ _cps_repair_m7() {
     if [ "$_mode" = single ]; then
         jq '.plugins |= map(if type=="object" and (has("source")|not)
               then . + {"source":"./"} else . end)' \
-            "$_mf" >"$_tmp" && mv "$_tmp" "$_mf"
+            "$_mf" >"$_tmp" && mv -f "$_tmp" "$_mf" || _status=$?
     else
         jq '.plugins |= map(if type=="object" and (has("source")|not)
               then ((.homepage // .repository // "") as $u
@@ -505,8 +510,12 @@ _cps_repair_m7() {
                       then . + {"source":"url","url":$u}
                       else . + {"source":("./plugins/" + (.name // "plugin"))} end)
               else . end)' \
-            "$_mf" >"$_tmp" && mv "$_tmp" "$_mf"
+            "$_mf" >"$_tmp" && mv -f "$_tmp" "$_mf" || _status=$?
     fi
+    # Single cleanup point: drop any orphaned temp file on failure (jq/mv),
+    # then surface the real status (PR #1085 gemini review).
+    rm -f "$_tmp"
+    return "$_status"
 }
 
 # mono apply: marketplace + per-plugin plugin.json + plugins/<p>/ stubs/links.
