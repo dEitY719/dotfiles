@@ -11,7 +11,8 @@ description: >-
   /devx:rate-limit-guard cron prompt fires. Accepts an optional <command>
   argument (cron path) or reads `.claude/.rate-limit-guard.json` (manual
   re-trigger). Accepts `-h`/`--help`/`help` to print usage.
-  (API 에러/ESC 중단 후 현재 세션 재개는 devx:restart 사용)
+  (API 에러/ESC 중단 후 현재 세션 재개는 devx:restart 사용;
+  세션을 넘기기 전 handoff 코멘트 작성은 devx:session-handoff 사용)
 allowed-tools: Bash, Read, Write, CronCreate, CronDelete
 metadata:
   model_recommendation:
