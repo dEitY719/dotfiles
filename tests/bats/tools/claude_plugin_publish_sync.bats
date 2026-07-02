@@ -188,8 +188,20 @@ _route_origin_offline() {
 # Installs a fake `gh` at the front of PATH. Every invocation is appended
 # to $GH_STUB_LOG as one line (argv joined by spaces). Behavior is
 # controlled by files under $GH_STUB_DIR:
-#   checks_result   - "success" | "failed" | "pending" (default: success)
+#   checks_result   - "success" | "failed" | "pending" | "empty" | "nochecks"
+#                     (default: success)
 #   merge_result    - "success" | "failed" (default: success)
+#
+# For the legacy literal words (success/failed/pending), the stub emits
+# REAL `bucket` JSON so the script's actual `--jq` expression runs and is
+# exercised (rather than a pre-aggregated string), while still driving the
+# loop to the same state the test names imply:
+#   success -> [{"bucket":"pass"}]      failed  -> [{"bucket":"fail"}]
+#   pending -> [{"bucket":"pending"}]
+# Two new sentinels exercise the fail-closed edges FIX 1 addresses:
+#   empty    -> [] (checks not yet registered — must stay "pending", never
+#               premature-"success")
+#   nochecks -> exit 1 with "no checks reported" on stderr (checkless repo)
 _install_gh_stub() {
     GH_STUB_DIR="$TEST_TEMP_HOME/gh-stub"
     mkdir -p "$GH_STUB_DIR/bin"
@@ -208,7 +220,35 @@ case "\$1 \$2" in
     exit 0
     ;;
 "pr checks")
-    cat "$GH_STUB_DIR/checks_result"
+    RESULT=\$(cat "$GH_STUB_DIR/checks_result")
+    if [ "\$RESULT" = "nochecks" ]; then
+        printf 'no checks reported\n' >&2
+        exit 1
+    fi
+    case "\$RESULT" in
+    success) BUCKETS='[{"bucket":"pass"}]' ;;
+    failed) BUCKETS='[{"bucket":"fail"}]' ;;
+    pending) BUCKETS='[{"bucket":"pending"}]' ;;
+    empty) BUCKETS='[]' ;;
+    *) BUCKETS="\$RESULT" ;;
+    esac
+    # Pull out the --jq filter the caller passed and run it for real via
+    # the system jq, so the script's actual bucket-mapping expression is
+    # exercised end-to-end instead of re-implemented here.
+    JQ_FILTER=""
+    PREV=""
+    for ARG in "\$@"; do
+        if [ "\$PREV" = "--jq" ]; then
+            JQ_FILTER="\$ARG"
+            break
+        fi
+        PREV="\$ARG"
+    done
+    if [ -n "\$JQ_FILTER" ]; then
+        echo "\$BUCKETS" | jq -r "\$JQ_FILTER"
+    else
+        echo "\$BUCKETS"
+    fi
     exit 0
     ;;
 "pr merge")
@@ -280,6 +320,42 @@ STUB
 
     run _open_and_merge_pr "$REPO" "chore/plugin-sync-publish-public-20260702-000000"
     assert_failure
+    run grep -c "^pr merge" "$GH_STUB_LOG"
+    assert_output "0"
+}
+
+@test "_open_and_merge_pr never premature-merges when checks report an empty bucket array" {
+    # FIX 1 (blocker): an empty `[]` bucket array (checks not yet registered
+    # right after PR creation) must map to "pending", NOT fall through the
+    # jq's `else "success"` branch into a premature --admin merge.
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    _install_gh_stub
+    echo "empty" >"$GH_STUB_DIR/checks_result"
+
+    run _open_and_merge_pr "$REPO" "chore/plugin-sync-publish-public-20260702-000000"
+    assert_failure
+    assert_output --partial "대기 타임아웃"
+    run grep -c "^pr merge" "$GH_STUB_LOG"
+    assert_output "0"
+}
+
+@test "_open_and_merge_pr hits the terminal no-checks state and does not merge on a checkless repo" {
+    # FIX 1 (blocker): `gh pr checks` exiting non-zero with "no checks
+    # reported" on every poll (a repo with no status checks configured at
+    # all) must become a terminal "nochecks" state after a couple of
+    # retries, not loop silently to the generic 5-minute timeout, and must
+    # never merge.
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    _install_gh_stub
+    echo "nochecks" >"$GH_STUB_DIR/checks_result"
+
+    run _open_and_merge_pr "$REPO" "chore/plugin-sync-publish-public-20260702-000000"
+    assert_failure
+    assert_output --partial "status check가 구성되지 않은 리포"
     run grep -c "^pr merge" "$GH_STUB_LOG"
     assert_output "0"
 }
@@ -502,4 +578,34 @@ STUB
     assert_success
     assert_output --partial "[public] 변경 감지됨"
     assert_output --partial "[company] 변경 감지됨"
+}
+
+@test "running the script with -h/--help prints usage and exits 0 without requiring gh" {
+    # -h/--help must work even without `gh` on PATH — arg parsing happens
+    # before the `command -v gh` gate.
+    run env PATH="/usr/bin:/bin" bash "$PUBLISH_SYNC" --help
+    assert_success
+    assert_output --partial "usage: publish-sync.sh"
+
+    run env PATH="/usr/bin:/bin" bash "$PUBLISH_SYNC" -h
+    assert_success
+    assert_output --partial "usage: publish-sync.sh"
+}
+
+@test "running the script with an unrecognized argument exits 2 and does not publish" {
+    # A typo'd flag (e.g. --dry_run instead of --dry-run) must be rejected
+    # loudly rather than silently falling through to a real, irreversible
+    # publish (FIX 3).
+    mkdir -p "$TEST_TEMP_HOME/dotfiles"
+    _seed_repo_with_origin "$TEST_TEMP_HOME/dotfiles"
+    _commit_pure_sync_change "$TEST_TEMP_HOME/dotfiles" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
+    _install_gh_stub
+
+    run bash "$PUBLISH_SYNC" --dry_run
+    assert_failure
+    assert_equal "$status" 2
+    assert_output --partial "알 수 없는 인자"
+    refute_output --partial "[public]"
+    run grep -c "^pr create" "$GH_STUB_LOG"
+    assert_output "0"
 }

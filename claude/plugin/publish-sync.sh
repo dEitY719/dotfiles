@@ -75,7 +75,8 @@ _build_publish_commit() {
 	local base tmp_dir tmp_index new_tree new_commit f blob rc=0
 
 	base=$(git -C "$repo_dir" rev-parse origin/main) || return 1
-	tmp_dir=$(mktemp -d) || return 1 # atomically-created private dir avoids the symlink race
+	# Explicit template (not bare `mktemp -d`): BSD/macOS mktemp requires one.
+	tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/publish-sync.XXXXXX") || return 1 # atomically-created private dir avoids the symlink race
 	tmp_index="$tmp_dir/index"
 	# Explicit cleanup at each exit site rather than a `trap ... RETURN`: a
 	# RETURN trap is not cleared when this function returns, so under `set -u`
@@ -142,7 +143,7 @@ _open_and_merge_pr() {
 	local repo_dir="$1" branch="$2" target pr_url pr_number
 	local interval="${PUBLISH_SYNC_CHECK_INTERVAL:-15}"
 	local max_tries="${PUBLISH_SYNC_CHECK_MAX_TRIES:-20}"
-	local tries=0 state="pending"
+	local tries=0 state="pending" tmp_err
 
 	target=$(_repo_target "$repo_dir") || {
 		echo "publish-sync: origin remote를 해석하지 못함 ($repo_dir)" >&2
@@ -159,25 +160,48 @@ _open_and_merge_pr() {
 	pr_number="${pr_url##*/}"
 	echo "publish-sync: PR 생성됨 — $pr_url"
 
+	# Explicit template (not bare `mktemp`): BSD/macOS mktemp requires one.
+	tmp_err=$(mktemp "${TMPDIR:-/tmp}/publish-sync-checks.XXXXXX") || return 1
+
 	while [ "$tries" -lt "$max_tries" ]; do
 		state=$(gh pr checks "$pr_number" --repo "$target" \
 			--json bucket \
-			--jq '[.[].bucket] | if any(.=="fail" or .=="cancel") then "failed" elif any(.=="pending") then "pending" else "success" end' \
-			2>/dev/null) || state="pending"
+			--jq '[.[].bucket] | if length == 0 then "pending" elif any(.=="fail" or .=="cancel") then "failed" elif any(.=="pending") then "pending" else "success" end' \
+			2>"$tmp_err") || {
+			# gh exits non-zero when a PR has no checks at all. Treat that as a
+			# terminal "no checks" state only after a couple of retries (so a
+			# transient not-yet-registered window on a repo that DOES require
+			# checks isn't mistaken for checkless); any other gh failure
+			# (auth/network) stays "pending" and retries.
+			if grep -q "no checks reported" "$tmp_err" && [ "$tries" -ge 2 ]; then
+				state="nochecks"
+			else
+				state="pending"
+			fi
+		}
 		[ "$state" = "success" ] && break
 		[ "$state" = "failed" ] && break
+		[ "$state" = "nochecks" ] && break
 		tries=$((tries + 1))
 		sleep "$interval"
 	done
+	rm -f "$tmp_err"
 
-	if [ "$state" = "failed" ]; then
+	case "$state" in
+	success) ;;
+	failed)
 		echo "publish-sync: status check 실패 — $pr_url 를 직접 확인하세요" >&2
 		return 1
-	fi
-	if [ "$state" != "success" ]; then
+		;;
+	nochecks)
+		echo "publish-sync: status check가 구성되지 않은 리포 — 자동 병합하지 않습니다. $pr_url 를 직접 검토/병합하세요" >&2
+		return 1
+		;;
+	*)
 		echo "publish-sync: status check 대기 타임아웃 — $pr_url 를 직접 확인하세요" >&2
 		return 1
-	fi
+		;;
+	esac
 
 	gh pr merge "$pr_number" --repo "$target" --admin --rebase --delete-branch 2>&1 || {
 		echo "publish-sync: admin merge 실패 — $pr_url 를 직접 확인하세요" >&2
@@ -284,18 +308,36 @@ _cleanup_local_main_if_pure_sync() {
 			return 1
 		fi
 	else
-		git -C "$repo_dir" update-ref refs/heads/main origin/main || return 1
+		# `branch -f` (not `update-ref`) refuses to move main if it's checked
+		# out in another linked worktree, avoiding a phantom diff there.
+		git -C "$repo_dir" branch -f main origin/main || return 1
 	fi
 	echo "publish-sync: 로컬 main을 origin/main으로 정리했습니다"
 }
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+	DRY_RUN=0
+	case "${1:-}" in
+	"") ;;
+	--dry-run) DRY_RUN=1 ;;
+	-h | --help | help)
+		echo "usage: publish-sync.sh [--dry-run]"
+		echo "  Publishes claude/plugin manifest changes to origin (and the"
+		echo "  internal company/ repo when present) via branch + PR + admin-merge."
+		echo "  --dry-run  show the diff that would be published; no push/PR/merge."
+		exit 0
+		;;
+	*)
+		echo "publish-sync.sh: 알 수 없는 인자: $1" >&2
+		echo "usage: publish-sync.sh [--dry-run]  (-h 로 도움말)" >&2
+		exit 2
+		;;
+	esac
+
 	command -v gh >/dev/null 2>&1 || {
 		echo "gh CLI가 필요합니다." >&2
 		exit 1
 	}
-	DRY_RUN=0
-	[ "${1:-}" = "--dry-run" ] && DRY_RUN=1
 
 	MAIN_ROOT="$HOME/dotfiles"
 	PRIV_DIR="$MAIN_ROOT/claude/plugin/company"
