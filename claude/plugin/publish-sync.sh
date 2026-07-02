@@ -143,7 +143,7 @@ _open_and_merge_pr() {
 	local repo_dir="$1" branch="$2" target pr_url pr_number
 	local interval="${PUBLISH_SYNC_CHECK_INTERVAL:-15}"
 	local max_tries="${PUBLISH_SYNC_CHECK_MAX_TRIES:-20}"
-	local tries=0 state="pending" tmp_err
+	local tries=0 state="pending" saw_checks=0
 
 	target=$(_repo_target "$repo_dir") || {
 		echo "publish-sync: origin remote를 해석하지 못함 ($repo_dir)" >&2
@@ -160,9 +160,6 @@ _open_and_merge_pr() {
 	pr_number="${pr_url##*/}"
 	echo "publish-sync: PR 생성됨 — $pr_url"
 
-	# Explicit template (not bare `mktemp`): BSD/macOS mktemp requires one.
-	tmp_err=$(mktemp "${TMPDIR:-/tmp}/publish-sync-checks.XXXXXX") || return 1
-
 	# The `--json bucket` flag on the `pr checks` subcommand does not exist
 	# on gh <2.46ish (unknown flag: --json) — verified on gh 2.45.0, which
 	# every poll would error on, always falling to "pending" and eventually
@@ -170,44 +167,33 @@ _open_and_merge_pr() {
 	# statusCheckRollup` works on 2.45.0 and returns each check as either a
 	# CheckRun (`status` + `conclusion`) or a StatusContext (`state`, no
 	# `conclusion`); the jq below normalizes both shapes to one aggregate
-	# word, fail-closed on any unrecognized shape.
+	# word, fail-closed on any unrecognized shape. Unlike the old `gh pr
+	# checks` subcommand, `gh pr view --json statusCheckRollup` has no "no
+	# checks reported" signal — a genuinely checkless repo just exits 0
+	# with an empty `statusCheckRollup: []`, indistinguishable from checks
+	# that simply haven't registered yet. So an empty rollup polls as
+	# "pending" for the FULL window below (never a premature give-up);
+	# "checkless" is only declared at timeout if checks were never once
+	# observed (see saw_checks below).
 	while [ "$tries" -lt "$max_tries" ]; do
 		# shellcheck disable=SC2016 # `$v` below is jq's `as $v` binding, not a shell variable — single-quoted on purpose.
 		state=$(gh pr view "$pr_number" --repo "$target" \
 			--json statusCheckRollup \
-			--jq '[ .statusCheckRollup[]? | if (.conclusion != null) then (if (.conclusion|IN("FAILURE","CANCELLED","TIMED_OUT","ACTION_REQUIRED","STARTUP_FAILURE")) then "fail" elif (.conclusion|IN("SUCCESS","NEUTRAL","SKIPPED")) then "pass" else "pending" end) elif (.status != null and .status != "COMPLETED") then "pending" elif (.state != null) then (if (.state|IN("FAILURE","ERROR")) then "fail" elif (.state=="SUCCESS") then "pass" else "pending" end) else "pending" end ] as $v | if ($v|length)==0 then "empty" elif ($v|any(.=="fail")) then "failed" elif ($v|any(.=="pending")) then "pending" else "success" end' \
-			2>"$tmp_err") || {
-			# gh exits non-zero on auth/network errors (and possibly a "no
-			# checks reported"-style message on some versions). Treat that as
-			# a terminal "no checks" state only after a couple of retries (so
-			# a transient not-yet-registered window on a repo that DOES
-			# require checks isn't mistaken for checkless); any other gh
-			# failure stays "pending" and retries.
-			if grep -q "no checks reported" "$tmp_err" && [ "$tries" -ge 2 ]; then
-				state="nochecks"
-			else
-				state="pending"
-			fi
+			--jq '[ .statusCheckRollup[]? | if (.conclusion != null) then (if (.conclusion == "FAILURE" or .conclusion == "CANCELLED" or .conclusion == "TIMED_OUT" or .conclusion == "ACTION_REQUIRED" or .conclusion == "STARTUP_FAILURE") then "fail" elif (.conclusion == "SUCCESS" or .conclusion == "NEUTRAL" or .conclusion == "SKIPPED") then "pass" else "pending" end) elif (.status != null and .status != "COMPLETED") then "pending" elif (.state != null) then (if (.state == "FAILURE" or .state == "ERROR") then "fail" elif (.state == "SUCCESS") then "pass" else "pending" end) else "pending" end ] as $v | if ($v|length)==0 then "empty" elif ($v|any(.=="fail")) then "failed" elif ($v|any(.=="pending")) then "pending" else "success" end' \
+			2>/dev/null) || {
+			# gh exits non-zero on auth/network errors — stay "pending" and
+			# retry; a transient error message must not abort the poll loop.
+			state="pending"
 		}
-		if [ "$state" = "empty" ]; then
-			# Zero checks reported. Right after PR creation this is normal
-			# (checks not yet registered) — keep polling as "pending". Only
-			# after a couple of retries do we treat it as a genuinely
-			# checkless repo and stop, same terminal "nochecks" semantics as
-			# the gh-failure path above.
-			if [ "$tries" -ge 2 ]; then
-				state="nochecks"
-			else
-				state="pending"
-			fi
-		fi
+		# Record whether we've ever seen a non-empty rollup BEFORE folding
+		# "empty" into "pending" for the loop's own break/continue logic.
+		[ "$state" != "empty" ] && saw_checks=1
+		[ "$state" = "empty" ] && state="pending"
 		[ "$state" = "success" ] && break
 		[ "$state" = "failed" ] && break
-		[ "$state" = "nochecks" ] && break
 		tries=$((tries + 1))
 		sleep "$interval"
 	done
-	rm -f "$tmp_err"
 
 	case "$state" in
 	success) ;;
@@ -215,12 +201,16 @@ _open_and_merge_pr() {
 		echo "publish-sync: status check 실패 — $pr_url 를 직접 확인하세요" >&2
 		return 1
 		;;
-	nochecks)
-		echo "publish-sync: status check가 구성되지 않은 리포 — 자동 병합하지 않습니다. $pr_url 를 직접 검토/병합하세요" >&2
-		return 1
-		;;
 	*)
-		echo "publish-sync: status check 대기 타임아웃 — $pr_url 를 직접 확인하세요" >&2
+		# Loop exhausted without success/failed. If checks were NEVER
+		# observed (rollup was empty on every single poll), treat this as a
+		# genuinely checkless repo; otherwise checks appeared but stayed
+		# pending the whole window.
+		if [ "$saw_checks" -eq 0 ]; then
+			echo "publish-sync: status check가 구성되지 않은 리포 — 자동 병합하지 않습니다. $pr_url 를 직접 검토/병합하세요" >&2
+		else
+			echo "publish-sync: status check 대기 타임아웃 — $pr_url 를 직접 확인하세요" >&2
+		fi
 		return 1
 		;;
 	esac
