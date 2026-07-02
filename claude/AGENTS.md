@@ -87,6 +87,8 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 
 `claude/hooks/session-start-pc-context.sh` — `SessionStart` hook, `settings.json`에 등록됨. `~/.dotfiles-setup-mode` + hostname을 매 세션 시작마다 `additionalContext`로 주입해 5대 PC 혼동을 방지한다(#1052). 모드 파일이 없으면 조용히 빈 컨텍스트를 반환하고 세션 시작을 막지 않는다.
 
+`claude/hooks/session-start-settings-drift.sh` — `SessionStart` hook, `settings.json`에 등록됨. 모든 모드에서 live `settings.json`은 SSOT의 **실파일**이라 SSOT에 훅을 추가/변경한 커밋 이후 `./setup.sh`(internal: `./aws/setup.sh`) 재실행 전까지 새 훅이 발화하지 않는다(#1086). 이 훅은 SSOT(`claude/settings.json`, 스크립트 경로 기준 상대 해석)와 live(`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json`)의 `.hooks` 필드만 jq로 비교해 drift 감지 시 stderr + `additionalContext`로 재시드를 안내한다. Bedrock 오버레이는 `.hooks`를 건드리지 않아 오탐이 없다. 자기 자신의 최초 미설치는 감지 못하지만(체크인 후 1회 재시드 필요) 이후 추가되는 모든 훅은 커버한다. best-effort, 항상 exit 0.
+
 ---
 
 ## Plugin Manifest (claude/plugin/)
