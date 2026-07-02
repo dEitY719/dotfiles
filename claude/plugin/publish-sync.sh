@@ -62,13 +62,14 @@ _manifest_diff_exists() {
 _build_publish_commit() {
 	local repo_dir="$1"
 	shift
-	local base tmp_index new_tree new_commit f blob rc=0
+	local base tmp_dir tmp_index new_tree new_commit f blob rc=0
 
 	base=$(git -C "$repo_dir" rev-parse origin/main) || return 1
-	tmp_index=$(mktemp -u) # read-tree wants a fresh/absent path
+	tmp_dir=$(mktemp -d) || return 1 # atomically-created private dir avoids the symlink race
+	tmp_index="$tmp_dir/index"
 
 	GIT_INDEX_FILE="$tmp_index" git -C "$repo_dir" read-tree origin/main || {
-		rm -f "$tmp_index"
+		rm -rf "$tmp_dir"
 		return 1
 	}
 	for f in "$@"; do
@@ -84,15 +85,15 @@ _build_publish_commit() {
 		}
 	done
 	if [ "$rc" -ne 0 ]; then
-		rm -f "$tmp_index"
+		rm -rf "$tmp_dir"
 		return 1
 	fi
 
 	new_tree=$(GIT_INDEX_FILE="$tmp_index" git -C "$repo_dir" write-tree) || {
-		rm -f "$tmp_index"
+		rm -rf "$tmp_dir"
 		return 1
 	}
-	rm -f "$tmp_index"
+	rm -rf "$tmp_dir"
 
 	new_commit=$(git -C "$repo_dir" commit-tree "$new_tree" -p "$base" \
 		-m "$SYNC_MSG") || return 1
