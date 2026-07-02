@@ -17,7 +17,8 @@ description: >-
   (brainstorming / TDD / debugging) that already produced output earlier
   in the conversation — it resumes from the implementation step they led
   to. Accepts `-h`/`--help`/`help` to print usage.
-  (토큰 한계 리셋 후 크론 자동 재개는 devx:resume-after-limit 사용)
+  (토큰 한계 리셋 후 크론 자동 재개는 devx:resume-after-limit 사용;
+  세션을 넘기기 전 handoff 코멘트 작성은 devx:session-handoff 사용)
 allowed-tools: Bash, Read, Edit, Write, Grep, Agent, TaskList, TaskUpdate
 metadata:
   model_recommendation:
