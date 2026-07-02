@@ -391,3 +391,69 @@ STUB
     run git -C "$REPO" rev-parse main
     assert_output "$LOCAL_HEAD"
 }
+
+@test "running the script end-to-end publishes only the public repo when company/ has no .git" {
+    mkdir -p "$TEST_TEMP_HOME/dotfiles"
+    _seed_repo_with_origin "$TEST_TEMP_HOME/dotfiles"
+    BARE=$(git -C "$TEST_TEMP_HOME/dotfiles" remote get-url origin)
+
+    # Pass the bare repo path to the stub so it can actually perform the merge
+    GH_STUB_BARE_REPO="$BARE"
+    export GH_STUB_BARE_REPO
+
+    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$TEST_TEMP_HOME/dotfiles/claude/plugin/marketplaces.json"
+    git -C "$TEST_TEMP_HOME/dotfiles" add claude/plugin/marketplaces.json
+    git -C "$TEST_TEMP_HOME/dotfiles" commit -q -m "chore(claude-plugin): sync manifest"
+    _install_gh_stub
+
+    # Re-point origin's stored URL to a parseable GitHub URL, and redirect the
+    # actual transport back to the local bare repo via insteadOf so fetch/push
+    # stay offline.
+    git -C "$TEST_TEMP_HOME/dotfiles" remote set-url origin "https://github.com/dEitY719/dotfiles.git"
+    git -C "$TEST_TEMP_HOME/dotfiles" config "url.${BARE}.insteadOf" "https://github.com/dEitY719/dotfiles.git"
+
+    run bash "$PUBLISH_SYNC"
+    assert_success
+    assert_output --partial "[public] 변경 감지됨"
+    refute_output --partial "[company]"
+}
+
+@test "running the script end-to-end also publishes company/ when it has its own .git" {
+    mkdir -p "$TEST_TEMP_HOME/dotfiles"
+    _seed_repo_with_origin "$TEST_TEMP_HOME/dotfiles"
+    BARE=$(git -C "$TEST_TEMP_HOME/dotfiles" remote get-url origin)
+
+    # Pass the bare repo path to the stub so it can actually perform the merge
+    GH_STUB_BARE_REPO="$BARE"
+    export GH_STUB_BARE_REPO
+
+    # Create changes in the public repo
+    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$TEST_TEMP_HOME/dotfiles/claude/plugin/marketplaces.json"
+    git -C "$TEST_TEMP_HOME/dotfiles" add claude/plugin/marketplaces.json
+    git -C "$TEST_TEMP_HOME/dotfiles" commit -q -m "chore(claude-plugin): sync manifest"
+
+    _seed_repo_with_origin "$TEST_TEMP_HOME/dotfiles/claude/plugin/company"
+    COMPANY_BARE=$(git -C "$TEST_TEMP_HOME/dotfiles/claude/plugin/company" remote get-url origin)
+
+    # Create changes in the company repo
+    echo '{"internal-tools": "git@ghes.example.com:team/internal-tools.git"}' \
+        >"$TEST_TEMP_HOME/dotfiles/claude/plugin/company/marketplaces.json"
+    echo '{"plugins": []}' >"$TEST_TEMP_HOME/dotfiles/claude/plugin/company/plugins.json"
+    git -C "$TEST_TEMP_HOME/dotfiles/claude/plugin/company" add marketplaces.json plugins.json
+    git -C "$TEST_TEMP_HOME/dotfiles/claude/plugin/company" commit -q -m "chore(claude-plugin): sync manifest"
+    _install_gh_stub
+
+    # Re-point both origins' stored URLs to parseable GitHub URLs, and redirect the
+    # actual transport back to the local bare repos via insteadOf so fetch/push
+    # stay offline.
+    git -C "$TEST_TEMP_HOME/dotfiles" remote set-url origin "https://github.com/dEitY719/dotfiles.git"
+    git -C "$TEST_TEMP_HOME/dotfiles" config "url.${BARE}.insteadOf" "https://github.com/dEitY719/dotfiles.git"
+
+    git -C "$TEST_TEMP_HOME/dotfiles/claude/plugin/company" remote set-url origin "https://github.com/dEitY719/company-plugins.git"
+    git -C "$TEST_TEMP_HOME/dotfiles/claude/plugin/company" config "url.${COMPANY_BARE}.insteadOf" "https://github.com/dEitY719/company-plugins.git"
+
+    run bash "$PUBLISH_SYNC"
+    assert_success
+    assert_output --partial "[public] 변경 감지됨"
+    assert_output --partial "[company] 변경 감지됨"
+}

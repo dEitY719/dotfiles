@@ -266,6 +266,24 @@ _cleanup_local_main_if_pure_sync() {
 }
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-	echo "publish-sync.sh: not yet wired to a main entrypoint (Task 8)" >&2
-	exit 1
+	command -v gh >/dev/null 2>&1 || {
+		echo "gh CLI가 필요합니다." >&2
+		exit 1
+	}
+	DRY_RUN=0
+	[ "${1:-}" = "--dry-run" ] && DRY_RUN=1
+
+	MAIN_ROOT="$HOME/dotfiles"
+	PRIV_DIR="$MAIN_ROOT/claude/plugin/company"
+	RC=0
+
+	_publish_manifest_diff "$MAIN_ROOT" "public" \
+		claude/plugin/marketplaces.json claude/plugin/plugins.json || RC=1
+
+	if [ -d "$PRIV_DIR/.git" ]; then
+		_publish_manifest_diff "$PRIV_DIR" "company" \
+			marketplaces.json plugins.json || RC=1
+	fi
+
+	exit $RC
 fi

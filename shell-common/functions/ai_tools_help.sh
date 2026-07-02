@@ -90,6 +90,8 @@ _claude_help_rows_plugin() {
     ux_table_row "claude plugin marketplace add/remove, install/uninstall" "자동으로 claude/plugin/*.json에 동기화됨 (hook)" ""
     ux_table_row "./claude/plugin/restore.sh" "신규 PC에서 manifest 기반 일괄 재설치" ""
     ux_table_row "./claude/plugin/restore.sh --dry-run" "실행 없이 계획만 출력" ""
+    ux_table_row "./claude/plugin/publish-sync.sh" "로컬에 쌓인 manifest sync 커밋을 PR로 origin에 게시" ""
+    ux_table_row "./claude/plugin/publish-sync.sh --dry-run" "게시할 diff만 출력, 변경 없음" ""
 }
 
 _claude_help_render_section() {
