@@ -116,3 +116,24 @@ _seed_repo_with_origin() {
     assert_equal "$(git -C "$REPO" rev-parse HEAD)" "$BEFORE_HEAD"
     assert_equal "$(git -C "$REPO" status --porcelain)" "$BEFORE_STATUS"
 }
+
+@test "_build_publish_commit skips a path that does not exist on disk" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
+    git -C "$REPO" add claude/plugin/marketplaces.json
+    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    git -C "$REPO" fetch origin --quiet
+
+    run _build_publish_commit "$REPO" claude/plugin/marketplaces.json claude/plugin/nonexistent.json
+    assert_success
+    NEW_COMMIT="$output"
+
+    # tree carries the edited real file's content
+    run git -C "$REPO" show "${NEW_COMMIT}:claude/plugin/marketplaces.json"
+    assert_output '{"anthropic-agent-skills": "anthropics/skills"}'
+
+    # the nonexistent path was never added to the tree
+    run git -C "$REPO" ls-tree -r --name-only "$NEW_COMMIT"
+    refute_output --partial "claude/plugin/nonexistent.json"
+}
