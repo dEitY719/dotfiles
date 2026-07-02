@@ -53,8 +53,17 @@ baseline="$state_dir/plugin-sync-baseline.$session_id.json"
 # yields an empty hash and an empty key list, so a later add/remove of that
 # file is still detected as a change.
 _snapshot() {
-	mp_hash=$(sha256sum "$MP_SRC" 2>/dev/null | awk '{print $1}')
-	pl_hash=$(sha256sum "$PL_SRC" 2>/dev/null | awk '{print $1}')
+	local mp_hash pl_hash mp_keys pl_keys
+	# macOS ships `shasum` but not `sha256sum`; without this fallback both
+	# hashes would be empty on macOS and always compare equal, silently
+	# disabling change detection.
+	if command -v sha256sum >/dev/null 2>&1; then
+		mp_hash=$(sha256sum "$MP_SRC" 2>/dev/null | awk '{print $1}')
+		pl_hash=$(sha256sum "$PL_SRC" 2>/dev/null | awk '{print $1}')
+	else
+		mp_hash=$(shasum -a 256 "$MP_SRC" 2>/dev/null | awk '{print $1}')
+		pl_hash=$(shasum -a 256 "$PL_SRC" 2>/dev/null | awk '{print $1}')
+	fi
 	mp_keys=$(jq -c 'keys' "$MP_SRC" 2>/dev/null) || mp_keys="[]"
 	pl_keys=$(jq -c '(.plugins // {}) | keys' "$PL_SRC" 2>/dev/null) || pl_keys="[]"
 	jq -n --arg mp "$mp_hash" --arg pl "$pl_hash" \
@@ -82,7 +91,11 @@ fi
 
 # --- Stop (or any non-SessionStart event registered here) ---
 
-[ -f "$MP_SRC" ] || exit 0
+# Either SSOT file being present is enough: a plugin-only install/uninstall
+# (default marketplace, no custom known_marketplaces.json) still needs removal
+# detection, and plugin-sync.sh's uninstall branch reads neither SSOT file. The
+# add branch degrades to a safe no-op when known_marketplaces.json is absent.
+[ -f "$MP_SRC" ] || [ -f "$PL_SRC" ] || exit 0
 SYNC_HOOK="$HOME/dotfiles/claude/hooks/plugin-sync.sh"
 [ -x "$SYNC_HOOK" ] || exit 0
 
