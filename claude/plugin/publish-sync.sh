@@ -163,22 +163,44 @@ _open_and_merge_pr() {
 	# Explicit template (not bare `mktemp`): BSD/macOS mktemp requires one.
 	tmp_err=$(mktemp "${TMPDIR:-/tmp}/publish-sync-checks.XXXXXX") || return 1
 
+	# The `--json bucket` flag on the `pr checks` subcommand does not exist
+	# on gh <2.46ish (unknown flag: --json) — verified on gh 2.45.0, which
+	# every poll would error on, always falling to "pending" and eventually
+	# timing out even when checks are green. `gh pr view --json
+	# statusCheckRollup` works on 2.45.0 and returns each check as either a
+	# CheckRun (`status` + `conclusion`) or a StatusContext (`state`, no
+	# `conclusion`); the jq below normalizes both shapes to one aggregate
+	# word, fail-closed on any unrecognized shape.
 	while [ "$tries" -lt "$max_tries" ]; do
-		state=$(gh pr checks "$pr_number" --repo "$target" \
-			--json bucket \
-			--jq '[.[].bucket] | if length == 0 then "pending" elif any(.=="fail" or .=="cancel") then "failed" elif any(.=="pending") then "pending" else "success" end' \
+		# shellcheck disable=SC2016 # `$v` below is jq's `as $v` binding, not a shell variable — single-quoted on purpose.
+		state=$(gh pr view "$pr_number" --repo "$target" \
+			--json statusCheckRollup \
+			--jq '[ .statusCheckRollup[]? | if (.conclusion != null) then (if (.conclusion|IN("FAILURE","CANCELLED","TIMED_OUT","ACTION_REQUIRED","STARTUP_FAILURE")) then "fail" elif (.conclusion|IN("SUCCESS","NEUTRAL","SKIPPED")) then "pass" else "pending" end) elif (.status != null and .status != "COMPLETED") then "pending" elif (.state != null) then (if (.state|IN("FAILURE","ERROR")) then "fail" elif (.state=="SUCCESS") then "pass" else "pending" end) else "pending" end ] as $v | if ($v|length)==0 then "empty" elif ($v|any(.=="fail")) then "failed" elif ($v|any(.=="pending")) then "pending" else "success" end' \
 			2>"$tmp_err") || {
-			# gh exits non-zero when a PR has no checks at all. Treat that as a
-			# terminal "no checks" state only after a couple of retries (so a
-			# transient not-yet-registered window on a repo that DOES require
-			# checks isn't mistaken for checkless); any other gh failure
-			# (auth/network) stays "pending" and retries.
+			# gh exits non-zero on auth/network errors (and possibly a "no
+			# checks reported"-style message on some versions). Treat that as
+			# a terminal "no checks" state only after a couple of retries (so
+			# a transient not-yet-registered window on a repo that DOES
+			# require checks isn't mistaken for checkless); any other gh
+			# failure stays "pending" and retries.
 			if grep -q "no checks reported" "$tmp_err" && [ "$tries" -ge 2 ]; then
 				state="nochecks"
 			else
 				state="pending"
 			fi
 		}
+		if [ "$state" = "empty" ]; then
+			# Zero checks reported. Right after PR creation this is normal
+			# (checks not yet registered) — keep polling as "pending". Only
+			# after a couple of retries do we treat it as a genuinely
+			# checkless repo and stop, same terminal "nochecks" semantics as
+			# the gh-failure path above.
+			if [ "$tries" -ge 2 ]; then
+				state="nochecks"
+			else
+				state="pending"
+			fi
+		fi
 		[ "$state" = "success" ] && break
 		[ "$state" = "failed" ] && break
 		[ "$state" = "nochecks" ] && break
