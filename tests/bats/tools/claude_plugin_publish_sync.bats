@@ -88,3 +88,31 @@ _seed_repo_with_origin() {
     run _manifest_diff_exists "$REPO" claude/plugin/marketplaces.json claude/plugin/plugins.json
     assert_success
 }
+
+@test "_build_publish_commit snapshots current file content onto origin/main without touching the real index" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
+    git -C "$REPO" add claude/plugin/marketplaces.json
+    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    git -C "$REPO" fetch origin --quiet
+
+    BEFORE_HEAD=$(git -C "$REPO" rev-parse HEAD)
+    BEFORE_STATUS=$(git -C "$REPO" status --porcelain)
+
+    run _build_publish_commit "$REPO" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    NEW_COMMIT="$output"
+
+    # parent is origin/main, not the diverged local HEAD
+    run git -C "$REPO" rev-parse "${NEW_COMMIT}^"
+    assert_output "$(git -C "$REPO" rev-parse origin/main)"
+
+    # tree carries the current (edited) marketplaces.json content
+    run git -C "$REPO" show "${NEW_COMMIT}:claude/plugin/marketplaces.json"
+    assert_output '{"anthropic-agent-skills": "anthropics/skills"}'
+
+    # real HEAD/index/working tree untouched
+    assert_equal "$(git -C "$REPO" rev-parse HEAD)" "$BEFORE_HEAD"
+    assert_equal "$(git -C "$REPO" status --porcelain)" "$BEFORE_STATUS"
+}

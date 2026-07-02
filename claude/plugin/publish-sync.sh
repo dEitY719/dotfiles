@@ -52,6 +52,53 @@ _manifest_diff_exists() {
 	! git -C "$repo_dir" diff --quiet origin/main -- "$@" 2>/dev/null
 }
 
+# _build_publish_commit <repo_dir> <file...>
+#
+# Build (but do not reference, push, or check out) a commit on top of
+# origin/main whose tree is origin/main's tree with the given paths
+# replaced by their CURRENT on-disk content in repo_dir. Uses a scratch
+# index file so repo_dir's real index/HEAD/working tree are never
+# touched. Prints the new commit SHA.
+_build_publish_commit() {
+	local repo_dir="$1"
+	shift
+	local base tmp_index new_tree new_commit f blob rc=0
+
+	base=$(git -C "$repo_dir" rev-parse origin/main) || return 1
+	tmp_index=$(mktemp -u) # read-tree wants a fresh/absent path
+
+	GIT_INDEX_FILE="$tmp_index" git -C "$repo_dir" read-tree origin/main || {
+		rm -f "$tmp_index"
+		return 1
+	}
+	for f in "$@"; do
+		[ -f "$repo_dir/$f" ] || continue
+		blob=$(git -C "$repo_dir" hash-object -w "$repo_dir/$f") || {
+			rc=1
+			break
+		}
+		GIT_INDEX_FILE="$tmp_index" git -C "$repo_dir" update-index \
+			--add --cacheinfo "100644,${blob},${f}" || {
+			rc=1
+			break
+		}
+	done
+	if [ "$rc" -ne 0 ]; then
+		rm -f "$tmp_index"
+		return 1
+	fi
+
+	new_tree=$(GIT_INDEX_FILE="$tmp_index" git -C "$repo_dir" write-tree) || {
+		rm -f "$tmp_index"
+		return 1
+	}
+	rm -f "$tmp_index"
+
+	new_commit=$(git -C "$repo_dir" commit-tree "$new_tree" -p "$base" \
+		-m "$SYNC_MSG") || return 1
+	printf '%s\n' "$new_commit"
+}
+
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	echo "publish-sync.sh: not yet wired to a main entrypoint (Task 8)" >&2
 	exit 1
