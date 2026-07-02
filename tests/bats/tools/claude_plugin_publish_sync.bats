@@ -183,6 +183,7 @@ _install_gh_stub() {
     echo "success" >"$GH_STUB_DIR/checks_result"
     echo "success" >"$GH_STUB_DIR/merge_result"
 
+    # Generate stub; use double quotes to expand paths, escape runtime vars
     cat >"$GH_STUB_DIR/bin/gh" <<STUB
 #!/usr/bin/env bash
 echo "\$*" >> "$GH_STUB_LOG"
@@ -197,6 +198,15 @@ case "\$1 \$2" in
     ;;
 "pr merge")
     if [ "\$(cat "$GH_STUB_DIR/merge_result")" = "success" ]; then
+        # Simulate the merge by updating the bare repo's main to the latest
+        # chore/plugin-sync-publish-* branch commit (the one just pushed).
+        if [ -n "\${GH_STUB_BARE_REPO:-}" ]; then
+            BRANCH=\$(git -C "\$GH_STUB_BARE_REPO" for-each-ref --format='%(refname:short)' 'refs/heads/chore/plugin-sync-publish-*' --sort=-creatordate | head -1)
+            if [ -n "\$BRANCH" ]; then
+                COMMIT=\$(git -C "\$GH_STUB_BARE_REPO" rev-parse "\$BRANCH")
+                git -C "\$GH_STUB_BARE_REPO" update-ref refs/heads/main "\$COMMIT"
+            fi
+        fi
         exit 0
     fi
     echo "merge blocked" >&2
@@ -211,7 +221,8 @@ STUB
     PATH="$GH_STUB_DIR/bin:$PATH"
     PUBLISH_SYNC_CHECK_INTERVAL=0
     PUBLISH_SYNC_CHECK_MAX_TRIES=3
-    export PATH PUBLISH_SYNC_CHECK_INTERVAL PUBLISH_SYNC_CHECK_MAX_TRIES
+    GH_STUB_BARE_REPO="${GH_STUB_BARE_REPO:-}"
+    export PATH PUBLISH_SYNC_CHECK_INTERVAL PUBLISH_SYNC_CHECK_MAX_TRIES GH_STUB_BARE_REPO
 }
 
 @test "_open_and_merge_pr creates a PR, waits for checks, and admin-merges on success" {
@@ -291,12 +302,18 @@ STUB
 @test "_publish_manifest_diff publishes end-to-end when there is a diff" {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
+    BARE=$(git -C "$REPO" remote get-url origin)
+
+    # Pass the bare repo path to the stub so it can actually perform the merge
+    GH_STUB_BARE_REPO="$BARE"
+    GH_STUB_WORK_REPO="$REPO"
+    export GH_STUB_BARE_REPO GH_STUB_WORK_REPO
+
     _install_gh_stub
 
     # Re-point origin's stored URL to a parseable GitHub URL, and redirect the
     # actual transport back to the local bare repo via insteadOf so fetch/push
     # stay offline. _repo_target sees owner/repo; git I/O hits the bare repo.
-    BARE=$(git -C "$REPO" remote get-url origin)
     git -C "$REPO" remote set-url origin "https://github.com/dEitY719/dotfiles.git"
     git -C "$REPO" config "url.${BARE}.insteadOf" "https://github.com/dEitY719/dotfiles.git"
 
@@ -313,6 +330,8 @@ STUB
     DRY_RUN=0
     run _publish_manifest_diff "$REPO" "public" claude/plugin/marketplaces.json claude/plugin/plugins.json
     assert_success
+    # cleanup also ran and succeeded
+    assert_output --partial "정리했습니다"
 
     # full pipeline ran: PR created + admin-merged (assert via the gh stub log)
     run grep -c "^pr create" "$GH_STUB_LOG"
@@ -323,4 +342,43 @@ STUB
     # the branch really landed on the (offline) bare origin
     run bash -c "git -C '$BARE' for-each-ref --format='%(refname)' 'refs/heads/chore/plugin-sync-publish-public-*' | wc -l"
     assert_output "1"
+}
+
+@test "_cleanup_local_main_if_pure_sync fast-forwards when every ahead commit is a pure sync commit" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    BEFORE_ORIGIN=$(git -C "$REPO" rev-parse origin/main)
+
+    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
+    git -C "$REPO" add claude/plugin/marketplaces.json
+    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+
+    # simulate the publish having landed on origin already
+    git -C "$REPO" push -q origin HEAD:refs/heads/main
+
+    run _cleanup_local_main_if_pure_sync "$REPO" "$BEFORE_ORIGIN" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    assert_output --partial "정리했습니다"
+    run git -C "$REPO" rev-parse main
+    assert_output "$(git -C "$REPO" rev-parse origin/main)"
+}
+
+@test "_cleanup_local_main_if_pure_sync skips when an unrelated commit is mixed in" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    BEFORE_ORIGIN=$(git -C "$REPO" rev-parse origin/main)
+
+    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
+    git -C "$REPO" add claude/plugin/marketplaces.json
+    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    echo "unrelated change" >"$REPO/README.md"
+    git -C "$REPO" add README.md
+    git -C "$REPO" commit -q -m "docs: unrelated"
+    LOCAL_HEAD=$(git -C "$REPO" rev-parse HEAD)
+
+    run _cleanup_local_main_if_pure_sync "$REPO" "$BEFORE_ORIGIN" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    assert_output --partial "정리를 건너뜁니다"
+    run git -C "$REPO" rev-parse main
+    assert_output "$LOCAL_HEAD"
 }

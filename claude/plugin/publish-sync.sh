@@ -178,11 +178,13 @@ _open_and_merge_pr() {
 _publish_manifest_diff() {
 	local repo_dir="$1" label="$2"
 	shift 2
+	local before_origin
 
 	git -C "$repo_dir" fetch origin --quiet 2>/dev/null || {
 		echo "[$label] origin fetch 실패 — 건너뜀" >&2
 		return 1
 	}
+	before_origin=$(git -C "$repo_dir" rev-parse origin/main) || return 1
 
 	if ! _manifest_diff_exists "$repo_dir" "$@"; then
 		echo "[$label] 변경 없음 — 할 일 없음"
@@ -204,7 +206,58 @@ _publish_manifest_diff() {
 		echo "[$label] 브랜치 push 실패" >&2
 		return 1
 	}
-	_open_and_merge_pr "$repo_dir" "$branch"
+	_open_and_merge_pr "$repo_dir" "$branch" || return 1
+
+	_cleanup_local_main_if_pure_sync "$repo_dir" "$before_origin" "$@"
+}
+
+# _cleanup_local_main_if_pure_sync <repo_dir> <before_origin_sha> <file...>
+#
+# After a successful publish, fast-forward local main to the new
+# origin/main IF every commit main was ahead of before_origin_sha by is a
+# pure SYNC_MSG commit touching only the given files. Otherwise leaves
+# main untouched. Never rebases or force-resets.
+_cleanup_local_main_if_pure_sync() {
+	local repo_dir="$1" before_origin="$2"
+	shift 2
+	local sha msg f changed pure=1 match cur_branch
+
+	git -C "$repo_dir" fetch origin --quiet 2>/dev/null || {
+		echo "publish-sync: 정리 단계 fetch 실패 — 로컬 main은 그대로 둡니다" >&2
+		return 1
+	}
+
+	for sha in $(git -C "$repo_dir" rev-list "${before_origin}..main" 2>/dev/null); do
+		msg=$(git -C "$repo_dir" log -1 --format=%s "$sha")
+		if [ "$msg" != "$SYNC_MSG" ]; then
+			pure=0
+			break
+		fi
+		changed=$(git -C "$repo_dir" show --format= --name-only "$sha")
+		for f in $changed; do
+			match=0
+			for want in "$@"; do
+				[ "$f" = "$want" ] && match=1 && break
+			done
+			[ "$match" -eq 1 ] || {
+				pure=0
+				break 2
+			}
+		done
+	done
+
+	if [ "$pure" -ne 1 ]; then
+		echo "publish-sync: 로컬 main에 sync 외 다른 커밋이 섞여 있어 정리를 건너뜁니다 — 직접 확인하세요" >&2
+		return 0
+	fi
+
+	cur_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null || echo "")
+	if [ "$cur_branch" = "main" ]; then
+		git -C "$repo_dir" merge --ff-only origin/main --quiet || return 1
+	else
+		git -C "$repo_dir" update-ref refs/heads/main origin/main || return 1
+	fi
+	echo "publish-sync: 로컬 main을 origin/main으로 정리했습니다"
 }
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
