@@ -18,6 +18,11 @@
 # See docs/feature/superpowers-specs/2026-07-02-plugin-manifest-batch-publish-design.md
 set -uo pipefail
 
+# MUST stay byte-identical to SYNC_MSG in claude/hooks/plugin-sync.sh:30 —
+# _cleanup_local_main_if_pure_sync matches local commits against this string
+# to decide which are safe to fast-forward past. If the two drift, cleanup
+# silently stops recognizing the hook's real sync commits (no error, just a
+# skipped tidy-up). Shared-constant extraction tracked as a follow-up.
 SYNC_MSG="chore(claude-plugin): sync manifest"
 
 # _repo_target <repo_dir>
@@ -72,6 +77,11 @@ _build_publish_commit() {
 	base=$(git -C "$repo_dir" rev-parse origin/main) || return 1
 	tmp_dir=$(mktemp -d) || return 1 # atomically-created private dir avoids the symlink race
 	tmp_index="$tmp_dir/index"
+	# Explicit cleanup at each exit site rather than a `trap ... RETURN`: a
+	# RETURN trap is not cleared when this function returns, so under `set -u`
+	# it would keep firing on later (bats/`run`) function returns where the
+	# local `tmp_dir` is out of scope — an "unbound variable" abort. The
+	# per-return `rm -rf` avoids that footgun.
 
 	GIT_INDEX_FILE="$tmp_index" git -C "$repo_dir" read-tree origin/main || {
 		rm -rf "$tmp_dir"
@@ -191,7 +201,6 @@ _publish_manifest_diff() {
 		echo "[$label] origin fetch 실패 — 건너뜀" >&2
 		return 1
 	}
-	before_origin=$(git -C "$repo_dir" rev-parse origin/main) || return 1
 
 	if ! _manifest_diff_exists "$repo_dir" "$@"; then
 		echo "[$label] 변경 없음 — 할 일 없음"
@@ -203,6 +212,11 @@ _publish_manifest_diff() {
 		git -C "$repo_dir" diff origin/main -- "$@"
 		return 0
 	fi
+
+	# Captured only on the real publish path (after the no-op / dry-run
+	# early returns) since it is consumed solely by the post-merge cleanup —
+	# saves a git fork on the common "nothing to publish" and dry-run runs.
+	before_origin=$(git -C "$repo_dir" rev-parse origin/main) || return 1
 
 	local commit branch
 	commit=$(_build_publish_commit "$repo_dir" "$@") || {
