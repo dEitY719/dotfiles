@@ -306,8 +306,7 @@ STUB
 
     # Pass the bare repo path to the stub so it can actually perform the merge
     GH_STUB_BARE_REPO="$BARE"
-    GH_STUB_WORK_REPO="$REPO"
-    export GH_STUB_BARE_REPO GH_STUB_WORK_REPO
+    export GH_STUB_BARE_REPO
 
     _install_gh_stub
 
@@ -356,11 +355,21 @@ STUB
     # simulate the publish having landed on origin already
     git -C "$REPO" push -q origin HEAD:refs/heads/main
 
+    # Move local main back BEHIND origin/main so the fast-forward below is
+    # real (not a no-op "Already up to date"): the ahead-delta this walks
+    # (before_origin..main) is now empty, which the pure-sync gate treats
+    # as vacuously safe, and the ff-only merge must do actual work to catch
+    # local main up to origin/main.
+    git -C "$REPO" reset --hard "$BEFORE_ORIGIN"
+    git -C "$REPO" fetch origin --quiet
+
     run _cleanup_local_main_if_pure_sync "$REPO" "$BEFORE_ORIGIN" claude/plugin/marketplaces.json claude/plugin/plugins.json
     assert_success
     assert_output --partial "정리했습니다"
-    run git -C "$REPO" rev-parse main
-    assert_output "$(git -C "$REPO" rev-parse origin/main)"
+    MAIN_SHA=$(git -C "$REPO" rev-parse main)
+    assert_equal "$MAIN_SHA" "$(git -C "$REPO" rev-parse origin/main)"
+    # prove this was a genuine fast-forward, not a vacuous no-op
+    assert_not_equal "$MAIN_SHA" "$BEFORE_ORIGIN"
 }
 
 @test "_cleanup_local_main_if_pure_sync skips when an unrelated commit is mixed in" {
