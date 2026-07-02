@@ -726,3 +726,33 @@ STUB
     run grep -c "^pr create" "$GH_STUB_LOG"
     assert_output "0"
 }
+
+# --- #1081 review (gemini-code-assist) follow-ups ---
+
+@test "_public_publish_allowed emits nothing on stderr when the mode file is missing" {
+    rm -f "$HOME/.dotfiles-setup-mode"
+    stderr_file="$TEST_TEMP_HOME/ppa_stderr"
+    _public_publish_allowed 2>"$stderr_file" || true
+    run cat "$stderr_file"
+    assert_output ""
+}
+
+@test "a successful publish leaves no orphaned local chore/plugin-sync-publish-* ref" {
+    mkdir -p "$TEST_TEMP_HOME/dotfiles"
+    _seed_repo_with_origin "$TEST_TEMP_HOME/dotfiles"
+    BARE=$(git -C "$TEST_TEMP_HOME/dotfiles" remote get-url origin)
+    GH_STUB_BARE_REPO="$BARE"
+    export GH_STUB_BARE_REPO
+
+    _commit_pure_sync_change "$TEST_TEMP_HOME/dotfiles" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
+    _install_gh_stub
+    _route_origin_offline "$TEST_TEMP_HOME/dotfiles" "https://github.com/dEitY719/dotfiles.git" "${BARE}"
+
+    run bash "$PUBLISH_SYNC"
+    assert_success
+    assert_output --partial "[public] 변경 감지됨"
+    # The local publish branch ref must be gone after a successful merge
+    # (gh --delete-branch only removes the remote branch).
+    run git -C "$TEST_TEMP_HOME/dotfiles" for-each-ref --format='%(refname)' 'refs/heads/chore/plugin-sync-publish-*'
+    assert_output ""
+}
