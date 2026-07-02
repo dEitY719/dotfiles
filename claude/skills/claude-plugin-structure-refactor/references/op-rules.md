@@ -1,6 +1,8 @@
 # Structure Refactor: --op Flag Rules
 
-Under `--op` (`--recommended`), R1-R5 fixes are applied in addition to M1-M6.
+Under `--op` (`--recommended`), R1-R5 fixes are applied in addition to M1-M9
+(R6-R8 are audit-only WARN items — the refactor adds `$schema`/`description`/
+`homepage`/README-URL fixes are **not** auto-applied; a developer fills those).
 Specific behaviors when `--apply --op` is active:
 
 ## R1 — per-skill guide generation
