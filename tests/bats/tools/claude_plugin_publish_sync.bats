@@ -257,3 +257,66 @@ STUB
     run grep -c "^pr merge" "$GH_STUB_LOG"
     assert_output "0"
 }
+
+@test "_publish_manifest_diff no-ops when there is nothing to publish" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    DRY_RUN=0
+
+    run _publish_manifest_diff "$REPO" "public" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    assert_output --partial "변경 없음"
+}
+
+@test "_publish_manifest_diff --dry-run prints the diff without pushing or opening a PR" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
+    git -C "$REPO" add claude/plugin/marketplaces.json
+    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    _install_gh_stub
+    DRY_RUN=1
+
+    run _publish_manifest_diff "$REPO" "public" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    assert_output --partial "anthropic-agent-skills"
+    run grep -c "^pr create" "$GH_STUB_LOG"
+    assert_output "0"
+}
+
+@test "_publish_manifest_diff publishes end-to-end when there is a diff" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    _install_gh_stub
+
+    # Re-point origin's stored URL to a parseable GitHub URL, and redirect the
+    # actual transport back to the local bare repo via insteadOf so fetch/push
+    # stay offline. _repo_target sees owner/repo; git I/O hits the bare repo.
+    BARE=$(git -C "$REPO" remote get-url origin)
+    git -C "$REPO" remote set-url origin "https://github.com/dEitY719/dotfiles.git"
+    git -C "$REPO" config "url.${BARE}.insteadOf" "https://github.com/dEitY719/dotfiles.git"
+
+    # sanity: config --get returns the raw parseable URL (insteadOf never
+    # applied to config --get, unlike `remote get-url` which rewrites it).
+    run git -C "$REPO" config --get remote.origin.url
+    assert_output "https://github.com/dEitY719/dotfiles.git"
+
+    # create a manifest diff vs origin/main
+    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
+    git -C "$REPO" add claude/plugin/marketplaces.json
+    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+
+    DRY_RUN=0
+    run _publish_manifest_diff "$REPO" "public" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+
+    # full pipeline ran: PR created + admin-merged (assert via the gh stub log)
+    run grep -c "^pr create" "$GH_STUB_LOG"
+    assert_output "1"
+    run grep -c "^pr merge.*--admin" "$GH_STUB_LOG"
+    assert_output "1"
+
+    # the branch really landed on the (offline) bare origin
+    run bash -c "git -C '$BARE' for-each-ref --format='%(refname)' 'refs/heads/chore/plugin-sync-publish-public-*' | wc -l"
+    assert_output "1"
+}

@@ -26,7 +26,7 @@ SYNC_MSG="chore(claude-plugin): sync manifest"
 # works for github.com or any GHES host, https or git@ SSH form.
 _repo_target() {
 	local url tmp
-	url=$(git -C "$1" remote get-url origin 2>/dev/null) || return 1
+	url=$(git -C "$1" config --get remote.origin.url 2>/dev/null) || return 1
 	url="${url%.git}"
 	case "$url" in
 	git@*:*)
@@ -167,6 +167,44 @@ _open_and_merge_pr() {
 		return 1
 	}
 	echo "publish-sync: 병합 완료 — $pr_url"
+}
+
+# _publish_manifest_diff <repo_dir> <label> <file...>
+#
+# Fetch origin; no-op if the given paths already match origin/main;
+# otherwise build+push a single snapshot commit and open+merge a PR for
+# it. Honors the global DRY_RUN (0/1), which stops after printing the
+# diff. Returns nonzero on any failure of the publish pipeline.
+_publish_manifest_diff() {
+	local repo_dir="$1" label="$2"
+	shift 2
+
+	git -C "$repo_dir" fetch origin --quiet 2>/dev/null || {
+		echo "[$label] origin fetch 실패 — 건너뜀" >&2
+		return 1
+	}
+
+	if ! _manifest_diff_exists "$repo_dir" "$@"; then
+		echo "[$label] 변경 없음 — 할 일 없음"
+		return 0
+	fi
+	echo "[$label] 변경 감지됨"
+
+	if [ "${DRY_RUN:-0}" -eq 1 ]; then
+		git -C "$repo_dir" diff origin/main -- "$@"
+		return 0
+	fi
+
+	local commit branch
+	commit=$(_build_publish_commit "$repo_dir" "$@") || {
+		echo "[$label] publish 커밋 생성 실패" >&2
+		return 1
+	}
+	branch=$(_publish_branch "$repo_dir" "$label" "$commit") || {
+		echo "[$label] 브랜치 push 실패" >&2
+		return 1
+	}
+	_open_and_merge_pr "$repo_dir" "$branch"
 }
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
