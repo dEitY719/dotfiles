@@ -31,3 +31,27 @@ SETTINGS="${_BATS_REAL_DOTFILES_ROOT}/claude/settings.json"
     ' "$SETTINGS"
     assert_success
 }
+
+@test "SessionStart includes plugin-sync-session.sh (#1082)" {
+    run jq -e '
+        .hooks.SessionStart[].hooks[]
+        | select(.command | endswith("claude/hooks/plugin-sync-session.sh"))
+    ' "$SETTINGS"
+    assert_success
+}
+
+@test "Stop includes plugin-sync-session.sh (#1082)" {
+    run jq -e '
+        .hooks.Stop[].hooks[]
+        | select(.command | endswith("claude/hooks/plugin-sync-session.sh"))
+    ' "$SETTINGS"
+    assert_success
+}
+
+@test "SessionStart still includes session-start-pc-context.sh" {
+    run jq -e '
+        .hooks.SessionStart[].hooks[]
+        | select(.command | endswith("claude/hooks/session-start-pc-context.sh"))
+    ' "$SETTINGS"
+    assert_success
+}

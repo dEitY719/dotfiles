@@ -91,9 +91,21 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 
 ## Plugin Manifest (claude/plugin/)
 
-`claude plugin install/uninstall`, `claude plugin marketplace add/remove`는
-`claude/hooks/plugin-sync.sh` (PostToolUse hook)가 자동 감지해
-`claude/plugin/{marketplaces,plugins}.json`(공용, scope:user +
+플러그인 변경은 **두 진입 경로** 모두에서 동기화된다:
+
+1. **Shell CLI** (`claude plugin install/uninstall`, `claude plugin
+   marketplace add/remove`) — `claude/hooks/plugin-sync.sh` (PostToolUse+Bash
+   hook)가 명령어 문자열을 정규식으로 감지.
+2. **내장 slash command** (`/plugin install|uninstall`, `/plugin marketplace
+   add|remove`) — Claude Code UI 파이프라인을 통과해 Bash tool call 을 만들지
+   않으므로 PostToolUse hook 이 안 잡힌다. `claude/hooks/plugin-sync-session.sh`
+   (SessionStart+Stop hook)가 SSOT (`~/.claude-shared/plugins/{known_marketplaces,
+   installed_plugins}.json`) 해시를 세션 시작 시 stash 하고, 매 Stop 마다 diff 해
+   변화가 있으면 `plugin-sync.sh` 의 add/uninstall 분기를 재실행한다 — 진입 경로
+   무관 (add + remove 대칭 처리, #1082). Claude Code 2.1.x 는 slash command 전용
+   hook event 를 노출하지 않아 이 SSOT-diff 방식을 택했다.
+
+두 경로 모두 `claude/plugin/{marketplaces,plugins}.json`(공용, scope:user +
 source:github만)에 병합 반영하고 로컬 커밋한다. 사내 전용
 (non-github source) 항목은 `claude/plugin/company/`(dotfiles 트리 안이지만
 자체 `.git`을 가진 별도 private GHES 레포, `.gitignore`로 public 레포
