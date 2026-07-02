@@ -11,8 +11,8 @@ Arguments:
 Flags:
   --apply              Execute the plan. Without it, the skill is DRY-RUN
                        (prints the plan, writes nothing).
-  --mandatory | --mp   Scope = mandatory items M1-M6 only. (default scope)
-  --recommended | --op Scope = M1-M6 + recommended R1-R5 (placeholder stubs
+  --mandatory | --mp   Scope = mandatory items M1-M9 only. (default scope)
+  --recommended | --op Scope = M1-M9 + recommended R1-R8 (placeholder stubs
                        + naming correction + README link backfill).
   --single             Force the SINGLE target layout (repo itself is one
                        plugin; marketplace source "./", skills at root
@@ -54,6 +54,9 @@ Behavior:
                            falls back to `mv` outside a git repo)
                          - write minimal marketplace.json / plugin.json
                            skeletons from discovered plugin/skill names
+                         - inject a missing plugins[].source into an existing
+                           marketplace (M7, #1084 install-fail fix): git URL
+                           from homepage/repository, else the mode's local path
                          - (--op only) create empty R1/R2 placeholder stubs,
                            correct R4 naming mismatches, and backfill missing
                            R5 README guide+usage links (stub level)

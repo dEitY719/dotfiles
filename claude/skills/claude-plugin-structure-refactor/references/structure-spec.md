@@ -110,10 +110,42 @@ for each item targets the same path.
 | M4 | each SKILL.md valid | `plugins/<p>/skills/<s>/SKILL.md` | `skills/<s>/SKILL.md` |
 | M5 | docs dirs exist | `docs/skill-guides/` AND `docs/skill-output/` | **same** |
 | M6 | README.md | `README.md` | **same** |
+| M7 | each `plugins[]` element resolves to a source | `.claude-plugin/marketplace.json` | **same** |
+| M8 | each source has a valid shape | `.claude-plugin/marketplace.json` | **same** |
+| M9 | declared mono plugin dirs exist on disk | `plugins/<name>/` per source | N/A (single) |
 
 FAIL conditions: M1/M3 → missing or invalid JSON; M2 → 0 plugin roots;
 M4 → missing or frontmatter lacks `name`/`description`; M5 → either dir
-missing; M6 → missing.
+missing; M6 → missing; M7-M9 → see "marketplace source integrity" below.
+
+## marketplace `plugins[].source` integrity (M7-M9, #1084)
+
+Claude Code (observed on 2.1.198) does **not** inherit a marketplace top-level
+`source` into a plugin at install time — each `plugins[]` element must carry
+its own source, or `/plugin install` fails with *"This plugin uses a source
+type your Claude Code version does not support"* (claude-plugin-jira#61). A
+structure audit that stopped at M6 passed such a repo, which then misled the
+diagnosis (claude-plugin-jira#63). M7-M9 close that gap. They evaluate only
+when M1 passes (marketplace parses) and ≥1 plugin is listed; otherwise **N/A**
+(M1/M2 own those FAILs — never double-count).
+
+**M7 — each `plugins[]` element resolves to a source.** A bare **string**
+element (`"./plugins/foo"`, `"./"`) **is** the source; an **object** element
+MUST carry its own `source` key (missing it is the #61 shape → **FAIL**).
+Refactor's `--apply` repairs an M7 FAIL by injecting a `source` (see
+`references/plan-and-report-templates.md` → "Apply rules" M7 step).
+
+**M8 — each resolved source has a valid shape** (mono/single common). Valid:
+local path string (`"."` / `"./"` / `"plugins/<name>"` / `"./plugins/<name>"`)
+or git-URL object (`{ "source": "url", "url": "<non-empty ….git>" }`). Any
+other shape → **FAIL**. Elements with no resolvable source are M7's concern
+(skipped here). The mode-shape combination itself is never a FAIL — a mono repo
+may legitimately use remote URL sources (#63 guard).
+
+**M9 — mono only: each declared local plugin dir exists.** For every source of
+the form `./plugins/<name>`, `plugins/<name>/` must exist. Absent → **FAIL**.
+Remote (url-type) sources are skipped; a mono repo whose sources are all remote
+→ **N/A**. In `single` mode M9 is **N/A**.
 
 ## Recommended items (WARN when missing)
 
@@ -124,6 +156,9 @@ missing; M6 → missing.
 | R3 | README is "Simple" | heuristic violated (below) |
 | R4 | naming consistency | SKILL.md `name:` colon-namespace ↔ directory hyphen mismatch |
 | R5 | per-skill README guide+usage links | README missing the guide OR the usage link for a skill |
+| R6 | marketplace `$schema` declared | `marketplace.json` lacks a top-level `$schema` |
+| R7 | listing metadata | no top-level `description`, OR an object plugin lacks `homepage` |
+| R8 | README add-URL hint | a `/plugin marketplace add` example uses a `.git` clone URL |
 
 **R3 README "Simple" heuristic** — PASS only if all hold; any miss → WARN:
 - at least one link into a `docs/` sub-document (evidence of progressive split);
@@ -148,6 +183,20 @@ README — completing the "standard" the developer relies on (see
 `claude-plugin-visuals/README.md`). Reuses the Step 2 dynamic skill list,
 so no extra scan. R3's "Simple" heuristic only requires *one* `docs/` link
 anywhere, so it cannot catch a per-skill link gap — R5 does.
+
+**R6 `$schema` rule** — `marketplace.json` should declare a top-level
+`"$schema"` so editors/LSP can validate it. Missing → **WARN** (no runtime
+impact). **N/A** when the marketplace is unreadable (M1 owns that).
+
+**R7 listing-metadata rule** — a top-level `description` plus a `homepage` on
+each **object** plugin improve marketplace-UI listing. Missing description, or
+any object plugin lacking a non-empty `homepage`, → **WARN**. String-form
+plugins are exempt (no field to carry `homepage`).
+
+**R8 add-URL hint** — when `README.md` shows a `/plugin marketplace add <URL>`
+example, prefer the raw `.claude-plugin/marketplace.json` URL over a `.git`
+clone (raw avoids a local clone — the #61 success pattern). A `.git` example
+→ **WARN**; raw/other URL → **PASS**; no example or no README → **N/A**.
 
 **Pages URL patterns** — when `structure-refactor --op` backfills R5 guide
 links it uses the GitHub Pages absolute URL, derived host-independently from

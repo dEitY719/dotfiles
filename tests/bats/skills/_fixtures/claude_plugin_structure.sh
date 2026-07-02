@@ -5,7 +5,7 @@
 #   claude/skills/claude-plugin-structure-refactor/references/plan-and-report-templates.md
 #
 # The two skills are AI-interpreted markdown with no shell entry point;
-# these functions are the executable form of their M1-M6 / R1-R5 evaluation
+# these functions are the executable form of their M1-M9 / R1-R8 evaluation
 # and the refactor apply logic, so bats can pin the behavior against real
 # fixture repos. Keep them in sync with structure-spec.md whenever the spec
 # changes.
@@ -102,7 +102,7 @@ _cps_skills_in_root() {
     done
 }
 
-# ---- mandatory checks (M1-M6) -- echo PASS|FAIL -------------------------
+# ---- mandatory checks (M1-M9) -- echo PASS|FAIL|N/A ---------------------
 cps_check_M1() { _cps_json_ok "$1/.claude-plugin/marketplace.json" && echo PASS || echo FAIL; }
 
 cps_check_M2() {
@@ -164,7 +164,97 @@ cps_check_M5() {
 
 cps_check_M6() { [ -f "$1/README.md" ] && echo PASS || echo FAIL; }
 
+# ---- M7-M9: marketplace.json plugins[].source integrity (#1084) ----------
+# Root cause (claude-plugin-jira#61): Claude Code 2.1.198 does NOT inherit a
+# marketplace top-level `source` at install time — each plugins[] element must
+# carry its own source, or /plugin install fails. structure-check PASS up to
+# M6 did not catch this, which misled diagnosis (#63). M7-M9 close that gap.
+
+cps_check_M7() {
+    # Each plugins[] element must resolve to a source. A bare STRING element IS
+    # the source (shorthand); an OBJECT element MUST have its own .source key.
+    # FAIL when any object element lacks source (the #61 shape). N/A when the
+    # marketplace is unreadable (M1 owns that) or lists 0 plugins (M2 owns it).
+    local _mf="$1/.claude-plugin/marketplace.json" _n _bad
+    _cps_json_ok "$_mf" || {
+        echo "N/A"
+        return
+    }
+    _n="$(jq '(.plugins // []) | length' "$_mf" 2>/dev/null || echo 0)"
+    [ "${_n:-0}" -ge 1 ] || {
+        echo "N/A"
+        return
+    }
+    _bad="$(jq '[(.plugins // [])[] | select(type=="object") | select(has("source")|not)] | length' "$_mf" 2>/dev/null || echo 1)"
+    [ "${_bad:-1}" -eq 0 ] && echo PASS || echo FAIL
+}
+
+cps_check_M8() {
+    # Shape validity of each resolvable source (mono/single common):
+    #   local path : "." | "./" | "plugins/*" | "./plugins/*"
+    #   git URL    : object { "source":"url", "url":"<non-empty>" }
+    # Elements with no resolvable source are M7's concern → skipped here (never
+    # double-FAIL). N/A when marketplace unreadable or 0 plugins.
+    local _mf="$1/.claude-plugin/marketplace.json" _n _bad
+    _cps_json_ok "$_mf" || {
+        echo "N/A"
+        return
+    }
+    _n="$(jq '(.plugins // []) | length' "$_mf" 2>/dev/null || echo 0)"
+    [ "${_n:-0}" -ge 1 ] || {
+        echo "N/A"
+        return
+    }
+    _bad="$(jq '
+      [ (.plugins // [])[]
+        | ( if type=="object" then . else { "source": . } end ) as $e
+        | ($e.source) as $s
+        | select($s != null)
+        | select(
+            ( ($s|type=="string") and
+              ( $s=="." or $s=="./" or ($s|startswith("plugins/")) or ($s|startswith("./plugins/")) ) )
+            or
+            ( $s=="url" and (($e.url // "")|type=="string") and (($e.url // "")|length>0) )
+          | not )
+      ] | length' "$_mf" 2>/dev/null || echo 1)"
+    [ "${_bad:-1}" -eq 0 ] && echo PASS || echo FAIL
+}
+
+cps_check_M9() {
+    # mono only: each declared LOCAL mono plugin path must exist on disk
+    #   ./plugins/<name> (or plugins/<name>) → <repo>/plugins/<name>/ present.
+    # single mode → N/A (no plugins/ layout). Remote (url-type) sources are
+    # skipped — nothing local to verify (avoids the #63-style false FAIL). N/A
+    # when the marketplace is unreadable or declares no local mono path.
+    local _repo="$1" _mode _mf="$1/.claude-plugin/marketplace.json" _paths _p _any=0
+    _mode="$(_cps_detect_mode "$1" "${2:-}")"
+    [ "$_mode" = mono ] || {
+        echo "N/A"
+        return
+    }
+    _cps_json_ok "$_mf" || {
+        echo "N/A"
+        return
+    }
+    _paths="$(jq -r '(.plugins // [])[]
+        | ( if type=="object" then .source else . end )
+        | select(type=="string")
+        | select(test("^\\.?/?plugins/"))' "$_mf" 2>/dev/null)"
+    while IFS= read -r _p; do
+        [ -n "$_p" ] || continue
+        _any=1
+        [ -d "$_repo/plugins/$(basename "$_p")" ] || {
+            echo FAIL
+            return
+        }
+    done <<EOF
+$_paths
+EOF
+    [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
+}
+
 # ---- recommended checks (R1-R5) -- echo PASS|WARN|N/A -------------------
+# (R6-R8 added below the R1-R5 block, same contract.)
 cps_check_R1() {
     # per-skill docs/skill-guides/<skill>.html ; N/A if no skills. Docs paths
     # are repo-level (mode-independent); only skill discovery is plugin-root.
@@ -280,19 +370,70 @@ EOF
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
 
+# ---- R6-R8: marketplace UI / registration quality (#1084) -- WARN|PASS|N/A
+cps_check_R6() {
+    # top-level "$schema" declaration in marketplace.json (LSP/IDE validation).
+    local _mf="$1/.claude-plugin/marketplace.json"
+    _cps_json_ok "$_mf" || {
+        echo "N/A"
+        return
+    }
+    [ "$(jq -r 'has("$schema")' "$_mf" 2>/dev/null)" = "true" ] && echo PASS || echo WARN
+}
+
+cps_check_R7() {
+    # marketplace listing quality: top-level "description" + each OBJECT
+    # plugin's "homepage". String-form plugins have nowhere for homepage → only
+    # object plugins are checked. WARN when description missing or any object
+    # plugin lacks a non-empty homepage.
+    local _mf="$1/.claude-plugin/marketplace.json" _missing
+    _cps_json_ok "$_mf" || {
+        echo "N/A"
+        return
+    }
+    [ "$(jq -r '(has("description") and ((.description // "")|length>0))' "$_mf" 2>/dev/null)" = "true" ] || {
+        echo WARN
+        return
+    }
+    _missing="$(jq '[(.plugins // [])[] | select(type=="object") | select((has("homepage")|not) or ((.homepage // "")|length==0))] | length' "$_mf" 2>/dev/null || echo 0)"
+    [ "${_missing:-0}" -eq 0 ] && echo PASS || echo WARN
+}
+
+cps_check_R8() {
+    # README /plugin marketplace add hint: prefer the raw marketplace.json URL
+    # over a .git clone (raw avoids a local clone — the #61 success pattern).
+    # Both are valid, so a .git example only WARNs. N/A when README absent or
+    # carries no marketplace-add example (no subject).
+    local _rm="$1/README.md" _line
+    [ -f "$_rm" ] || {
+        echo "N/A"
+        return
+    }
+    grep -q 'plugin marketplace add' "$_rm" || {
+        echo "N/A"
+        return
+    }
+    _line="$(grep -m1 'plugin marketplace add' "$_rm")"
+    case "$_line" in
+    *marketplace.json*) echo PASS ;;
+    *.git*) echo WARN ;;
+    *) echo PASS ;;
+    esac
+}
+
 # ---- aggregate verdict ---------------------------------------------------
 cps_verdict() {
     # echo FAIL | WARN | PASS for repo $1 ; optional $2 forces single|mono.
     # M5/M6/R3 are mode-independent so the extra arg is harmless for them.
     local _r _mode="${2:-}"
-    for _c in M1 M2 M3 M4 M5 M6; do
+    for _c in M1 M2 M3 M4 M5 M6 M7 M8 M9; do
         _r="$(cps_check_$_c "$1" "$_mode")"
         [ "$_r" = FAIL ] && {
             echo FAIL
             return
         }
     done
-    for _c in R1 R2 R3 R4 R5; do
+    for _c in R1 R2 R3 R4 R5 R6 R7 R8; do
         _r="$(cps_check_$_c "$1" "$_mode")"
         [ "$_r" = WARN ] && {
             echo WARN
@@ -334,7 +475,38 @@ cps_refactor() {
     else
         _cps_refactor_mono "$_repo" "$_scope"
     fi
+    # M7 repair (mandatory, both scopes): inject a source into any existing
+    # object plugin that lacks one (the #61 shape). The skeleton path above
+    # already writes source-bearing plugins, so this only rewrites a
+    # pre-existing marketplace.json.
+    _cps_repair_m7 "$_repo" "$_target"
     return 0 # success (0); the conversion-guard early return above is 3
+}
+
+# M7 fix: for each object plugin missing .source, inject one. Prefer a git URL
+# derived from the plugin's own homepage/repository (…​.git) → { source:"url",
+# url:<git> }; otherwise fall back to the local path of the detected mode
+# (mono → ./plugins/<name>, single → ./). Idempotent: a no-op when every plugin
+# already carries a source, or when the marketplace is missing/invalid.
+_cps_repair_m7() {
+    local _repo="$1" _mode="$2" _mf="$1/.claude-plugin/marketplace.json" _need _tmp
+    _cps_json_ok "$_mf" || return 0
+    _need="$(jq '[(.plugins // [])[] | select(type=="object") | select(has("source")|not)] | length' "$_mf" 2>/dev/null || echo 0)"
+    [ "${_need:-0}" -gt 0 ] || return 0
+    _tmp="$_mf.tmp"
+    if [ "$_mode" = single ]; then
+        jq '.plugins |= map(if type=="object" and (has("source")|not)
+              then . + {"source":"./"} else . end)' \
+            "$_mf" >"$_tmp" && mv "$_tmp" "$_mf"
+    else
+        jq '.plugins |= map(if type=="object" and (has("source")|not)
+              then ((.homepage // .repository // "") as $u
+                    | if ($u|type=="string") and ($u|endswith(".git"))
+                      then . + {"source":"url","url":$u}
+                      else . + {"source":("./plugins/" + (.name // "plugin"))} end)
+              else . end)' \
+            "$_mf" >"$_tmp" && mv "$_tmp" "$_mf"
+    fi
 }
 
 # mono apply: marketplace + per-plugin plugin.json + plugins/<p>/ stubs/links.
@@ -351,8 +523,8 @@ _cps_refactor_mono() {
         done <<EOF
 $(_cps_plugins "$_repo")
 EOF
-        printf '{ "name": "%s", "plugins": [%s] }\n' \
-            "$(basename "$_repo")" "${_plugins_json:-\"./plugins/plugin\"}" \
+        printf '{ "$schema": "https://anthropic.com/claude-code/marketplace.schema.json", "name": "%s", "description": "%s plugin marketplace", "plugins": [%s] }\n' \
+            "$(basename "$_repo")" "$(basename "$_repo")" "${_plugins_json:-\"./plugins/plugin\"}" \
             >"$_repo/.claude-plugin/marketplace.json"
     fi
 
@@ -425,8 +597,8 @@ _cps_refactor_single() {
 
     # M1 marketplace.json skeleton with the single source "./".
     if ! _cps_json_ok "$_repo/.claude-plugin/marketplace.json"; then
-        printf '{ "name": "%s", "plugins": [{ "source": "./" }] }\n' \
-            "$(basename "$_repo")" >"$_repo/.claude-plugin/marketplace.json"
+        printf '{ "$schema": "https://anthropic.com/claude-code/marketplace.schema.json", "name": "%s", "description": "%s plugin marketplace", "plugins": [{ "source": "./" }] }\n' \
+            "$(basename "$_repo")" "$(basename "$_repo")" >"$_repo/.claude-plugin/marketplace.json"
     fi
 
     # M3 ROOT plugin.json skeleton — list ALL root skills.
