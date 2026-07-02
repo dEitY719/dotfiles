@@ -189,19 +189,26 @@ _route_origin_offline() {
 # to $GH_STUB_LOG as one line (argv joined by spaces). Behavior is
 # controlled by files under $GH_STUB_DIR:
 #   checks_result   - "success" | "failed" | "pending" | "empty" | "nochecks"
-#                     (default: success)
+#                     | "state-success" | "state-failed" (default: success)
 #   merge_result    - "success" | "failed" (default: success)
 #
-# For the legacy literal words (success/failed/pending), the stub emits
-# REAL `bucket` JSON so the script's actual `--jq` expression runs and is
-# exercised (rather than a pre-aggregated string), while still driving the
-# loop to the same state the test names imply:
-#   success -> [{"bucket":"pass"}]      failed  -> [{"bucket":"fail"}]
-#   pending -> [{"bucket":"pending"}]
-# Two new sentinels exercise the fail-closed edges FIX 1 addresses:
-#   empty    -> [] (checks not yet registered — must stay "pending", never
-#               premature-"success")
-#   nochecks -> exit 1 with "no checks reported" on stderr (checkless repo)
+# The script polls via `gh pr view --json statusCheckRollup --jq ...`
+# (real gh 2.45.0 has no `--json` on `gh pr checks` at all — verified
+# live, see publish-sync.sh comment). The stub's `pr view` branch emits
+# REAL `statusCheckRollup`-shaped JSON so the script's actual `--jq`
+# aggregation expression runs and is exercised end-to-end (rather than a
+# pre-aggregated string):
+#   success -> CheckRun conclusion=SUCCESS   failed -> conclusion=FAILURE
+#   pending -> CheckRun status=IN_PROGRESS, conclusion=null
+#   state-success / state-failed -> StatusContext shape (state=SUCCESS /
+#               state=FAILURE, no conclusion) to exercise that jq branch
+# Two more sentinels exercise the fail-closed edges FIX 1 addresses:
+#   empty    -> {"statusCheckRollup":[]} (checks not yet registered — must
+#               stay "pending" until tries>=2, never premature-"success")
+#   nochecks -> {"statusCheckRollup":[]} too — relies on the same
+#               empty-after-retries -> "nochecks" path as "empty" (a
+#               genuinely checkless repo looks identical to a not-yet-
+#               registered one from `gh pr view`'s point of view)
 _install_gh_stub() {
     GH_STUB_DIR="$TEST_TEMP_HOME/gh-stub"
     mkdir -p "$GH_STUB_DIR/bin"
@@ -219,21 +226,21 @@ case "\$1 \$2" in
     echo "https://example.com/owner/repo/pull/42"
     exit 0
     ;;
-"pr checks")
+"pr view")
     RESULT=\$(cat "$GH_STUB_DIR/checks_result")
-    if [ "\$RESULT" = "nochecks" ]; then
-        printf 'no checks reported\n' >&2
-        exit 1
-    fi
     case "\$RESULT" in
-    success) BUCKETS='[{"bucket":"pass"}]' ;;
-    failed) BUCKETS='[{"bucket":"fail"}]' ;;
-    pending) BUCKETS='[{"bucket":"pending"}]' ;;
-    empty) BUCKETS='[]' ;;
-    *) BUCKETS="\$RESULT" ;;
+    success) ROLLUP='[{"name":"CI","status":"COMPLETED","conclusion":"SUCCESS","state":null}]' ;;
+    failed) ROLLUP='[{"name":"CI","status":"COMPLETED","conclusion":"FAILURE","state":null}]' ;;
+    pending) ROLLUP='[{"name":"CI","status":"IN_PROGRESS","conclusion":null,"state":null}]' ;;
+    state-success) ROLLUP='[{"name":"ci/legacy","conclusion":null,"state":"SUCCESS"}]' ;;
+    state-failed) ROLLUP='[{"name":"ci/legacy","conclusion":null,"state":"FAILURE"}]' ;;
+    empty) ROLLUP='[]' ;;
+    nochecks) ROLLUP='[]' ;;
+    *) ROLLUP="\$RESULT" ;;
     esac
+    JSON="{\\"statusCheckRollup\\":\$ROLLUP}"
     # Pull out the --jq filter the caller passed and run it for real via
-    # the system jq, so the script's actual bucket-mapping expression is
+    # the system jq, so the script's actual aggregation expression is
     # exercised end-to-end instead of re-implemented here.
     JQ_FILTER=""
     PREV=""
@@ -245,9 +252,9 @@ case "\$1 \$2" in
         PREV="\$ARG"
     done
     if [ -n "\$JQ_FILTER" ]; then
-        echo "\$BUCKETS" | jq -r "\$JQ_FILTER"
+        echo "\$JSON" | jq -r "\$JQ_FILTER"
     else
-        echo "\$BUCKETS"
+        echo "\$JSON"
     fi
     exit 0
     ;;
@@ -296,6 +303,35 @@ STUB
     assert_output "1"
 }
 
+@test "_open_and_merge_pr admin-merges when checks report a StatusContext state=SUCCESS (no conclusion field)" {
+    # Exercises the jq's StatusContext branch (`.state`, no `.conclusion`) —
+    # e.g. legacy commit statuses, distinct from the CheckRun
+    # status/conclusion branch covered by the "success" sentinel above.
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    _install_gh_stub
+    echo "state-success" >"$GH_STUB_DIR/checks_result"
+
+    run _open_and_merge_pr "$REPO" "chore/plugin-sync-publish-public-20260702-000000"
+    assert_success
+    run grep -c "^pr merge.*--admin" "$GH_STUB_LOG"
+    assert_output "1"
+}
+
+@test "_open_and_merge_pr does not merge when a StatusContext reports state=FAILURE" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    _install_gh_stub
+    echo "state-failed" >"$GH_STUB_DIR/checks_result"
+
+    run _open_and_merge_pr "$REPO" "chore/plugin-sync-publish-public-20260702-000000"
+    assert_failure
+    run grep -c "^pr merge" "$GH_STUB_LOG"
+    assert_output "0"
+}
+
 @test "_open_and_merge_pr does not merge when checks fail" {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
@@ -324,10 +360,15 @@ STUB
     assert_output "0"
 }
 
-@test "_open_and_merge_pr never premature-merges when checks report an empty bucket array" {
-    # FIX 1 (blocker): an empty `[]` bucket array (checks not yet registered
-    # right after PR creation) must map to "pending", NOT fall through the
-    # jq's `else "success"` branch into a premature --admin merge.
+@test "_open_and_merge_pr never premature-merges when checks report an empty rollup array" {
+    # FIX 1 (blocker): an empty `statusCheckRollup: []` (checks not yet
+    # registered right after PR creation) must map to "pending" on the
+    # first couple of polls, NOT fall through the jq's `else "success"`
+    # branch into a premature --admin merge. With PUBLISH_SYNC_CHECK_MAX_TRIES=3
+    # the empty result keeps polling as "pending" until tries>=2, at which
+    # point it becomes the same terminal "nochecks" state a genuinely
+    # checkless repo would hit (indistinguishable from `gh pr view`'s point
+    # of view) — never a premature merge either way.
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
@@ -336,7 +377,7 @@ STUB
 
     run _open_and_merge_pr "$REPO" "chore/plugin-sync-publish-public-20260702-000000"
     assert_failure
-    assert_output --partial "대기 타임아웃"
+    assert_output --partial "status check가 구성되지 않은 리포"
     run grep -c "^pr merge" "$GH_STUB_LOG"
     assert_output "0"
 }
