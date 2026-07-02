@@ -42,18 +42,20 @@ No issue found anywhere. Decide by the nature of the session's work:
 
 ## Duplicate-handoff guard
 
-Before posting, inspect the most recent comments:
+Before posting, inspect the most recent comments via REST — it returns the
+numeric comment `id` the PATCH below needs (`gh issue view --json comments`
+only exposes GraphQL node ids, which the REST endpoint rejects):
 
 ```bash
-gh issue view <N> --repo "$TARGET_REPO" --json comments \
-  -q '.comments[-3:][] | {author: .author.login, body: .body[0:120], url: .url}'
+gh api "repos/$TARGET_REPO/issues/<N>/comments" \
+  -q '.[-3:][] | {id, author: .user.login, body: .body[0:120], url: .html_url}'
 ```
 
 If a comment authored by `@me` in THIS session already carries the handoff
 marker (`<!-- session-handoff -->`, embedded by the template), update that
-comment (`gh api --method PATCH` on the comment id with the new body)
-instead of appending a second one. Two handoffs from one session force the
-next reader to diff them.
+comment (`gh api "repos/$TARGET_REPO/issues/comments/<id>" --method PATCH
+--field body=@<artifact>`) instead of appending a second one. Two handoffs
+from one session force the next reader to diff them.
 
 ## Failure modes
 
