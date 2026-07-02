@@ -36,7 +36,7 @@ input=$(cat 2>/dev/null) || exit 0
 [ -n "$input" ] || exit 0
 command -v jq >/dev/null 2>&1 || exit 0
 
-event=$(printf '%s' "$input" | jq -r '.hook_event_name // ""') || exit 0
+event=$(printf '%s' "$input" | jq -r '.hook_event_name // ""' 2>/dev/null) || exit 0
 [ "$event" = "SessionStart" ] || exit 0
 
 # SSOT resolves relative to this script (…/claude/hooks/x.sh → …/claude), so a
