@@ -126,8 +126,14 @@ _publish_branch() {
 	local repo_dir="$1" label="$2" commit="$3" branch
 	branch="chore/plugin-sync-publish-${label}-$(date +%Y%m%d-%H%M%S)-$$"
 	git -C "$repo_dir" update-ref "refs/heads/$branch" "$commit" || return 1
-	git -C "$repo_dir" push --quiet origin \
-		"refs/heads/$branch:refs/heads/$branch" || return 1
+	if ! git -C "$repo_dir" push --quiet origin \
+		"refs/heads/$branch:refs/heads/$branch"; then
+		# Push failed (network/auth/policy) — drop the local ref we just
+		# created so repeated failed runs don't litter the repo with orphaned
+		# chore/plugin-sync-publish-* branches.
+		git -C "$repo_dir" update-ref -d "refs/heads/$branch" 2>/dev/null || true
+		return 1
+	fi
 	printf '%s\n' "$branch"
 }
 
@@ -327,6 +333,32 @@ _cleanup_local_main_if_pure_sync() {
 	echo "publish-sync: 로컬 main을 origin/main으로 정리했습니다"
 }
 
+# _public_publish_allowed
+#
+# Return 0 if the public (github.com) dotfiles repo may be published from
+# this PC, 1 if it must not. `internal` PCs are github.com **pull-only**
+# (docs/.ssot/pc-environment.md §3) — pushing there is a policy violation,
+# so publish-sync must not even attempt the branch/PR/merge on the public
+# repo from an internal PC (#1080). The company/ GHES repo is unaffected
+# (its own `[ -d "$PRIV_DIR/.git" ]` gate already scopes it to internal).
+#
+# Reads ~/.dotfiles-setup-mode directly (like restore.sh — this is a
+# stand-alone script, not sourced with the shell-common integration layer),
+# canonicalizing the legacy numeric values 1/2/3 exactly as
+# shell-common/functions/gh_host.sh does so the two agree. A missing/unknown
+# mode falls through to "allowed" (github.com), matching gh_host.sh's
+# regression-zero fail-safe.
+_public_publish_allowed() {
+	local mode
+	mode=$(tr -d ' \t\n\r' <"$HOME/.dotfiles-setup-mode" 2>/dev/null || echo "")
+	case "$mode" in
+	1) mode="public" ;;
+	2) mode="internal" ;;
+	3) mode="external" ;;
+	esac
+	[ "$mode" != "internal" ]
+}
+
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	DRY_RUN=0
 	case "${1:-}" in
@@ -355,8 +387,12 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	PRIV_DIR="$MAIN_ROOT/claude/plugin/company"
 	RC=0
 
-	_publish_manifest_diff "$MAIN_ROOT" "public" \
-		claude/plugin/marketplaces.json claude/plugin/plugins.json || RC=1
+	if _public_publish_allowed; then
+		_publish_manifest_diff "$MAIN_ROOT" "public" \
+			claude/plugin/marketplaces.json claude/plugin/plugins.json || RC=1
+	else
+		echo "[public] internal 모드 — github.com은 pull-only 정책이라 public manifest publish를 건너뜁니다 (사내→사외 push 금지)"
+	fi
 
 	if [ -d "$PRIV_DIR/.git" ]; then
 		_publish_manifest_diff "$PRIV_DIR" "company" \

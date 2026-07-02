@@ -670,3 +670,59 @@ STUB
     run grep -c "^pr create" "$GH_STUB_LOG"
     assert_output "0"
 }
+
+# --- #1080: internal PC must never publish the public (github.com) repo ---
+
+@test "_public_publish_allowed forbids publish in internal mode" {
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    run _public_publish_allowed
+    assert_failure
+}
+
+@test "_public_publish_allowed allows publish in external mode" {
+    printf 'external\n' >"$HOME/.dotfiles-setup-mode"
+    run _public_publish_allowed
+    assert_success
+}
+
+@test "_public_publish_allowed allows publish in public mode" {
+    printf 'public\n' >"$HOME/.dotfiles-setup-mode"
+    run _public_publish_allowed
+    assert_success
+}
+
+@test "_public_publish_allowed allows publish when the mode file is missing (github.com fail-safe)" {
+    rm -f "$HOME/.dotfiles-setup-mode"
+    run _public_publish_allowed
+    assert_success
+}
+
+@test "_public_publish_allowed normalizes the legacy numeric '2' to internal" {
+    printf '2\n' >"$HOME/.dotfiles-setup-mode"
+    run _public_publish_allowed
+    assert_failure
+}
+
+@test "running the script in internal mode skips the public step without pushing or opening a PR (#1080)" {
+    mkdir -p "$TEST_TEMP_HOME/dotfiles"
+    _seed_repo_with_origin "$TEST_TEMP_HOME/dotfiles"
+    BARE=$(git -C "$TEST_TEMP_HOME/dotfiles" remote get-url origin)
+    GH_STUB_BARE_REPO="$BARE"
+    export GH_STUB_BARE_REPO
+
+    # A pending public-manifest diff that WOULD be published on external/public.
+    _commit_pure_sync_change "$TEST_TEMP_HOME/dotfiles" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
+    _install_gh_stub
+    _route_origin_offline "$TEST_TEMP_HOME/dotfiles" "https://github.com/dEitY719/dotfiles.git" "${BARE}"
+
+    # internal PC: github.com is pull-only.
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+
+    run bash "$PUBLISH_SYNC"
+    assert_success
+    assert_output --partial "internal 모드"
+    refute_output --partial "[public] 변경 감지됨"
+    # No PR ever created against the public github.com repo.
+    run grep -c "^pr create" "$GH_STUB_LOG"
+    assert_output "0"
+}

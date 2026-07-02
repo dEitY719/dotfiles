@@ -172,6 +172,16 @@ if [ "$action" = "add" ]; then
 			mv "$PRIV_DIR/plugins.json.tmp" "$PRIV_DIR/plugins.json"
 		_commit_if_changed "$PRIV_DIR" "$SYNC_MSG" \
 			marketplaces.json plugins.json
+	elif [ "$mp_internal" != "{}" ] && [ ! -d "$PRIV_DIR/.git" ]; then
+		# 사내(non-github) 마켓플레이스가 감지됐지만 이 PC 에는 company/ 레포가
+		# clone 돼 있지 않다 — external/public PC 에서 사내 GHES 마켓플레이스가
+		# 우연히 설치된 경우다. 저장하지 않는 건 사내→사외 격리 정책이자 의도된
+		# 동작이지만, 예전엔 조용히 skip 해 사용자가 "왜 매니페스트에 아무 것도
+		# 안 남지?" 라고 헷갈렸다 (#1080). 저장은 여전히 하지 않고, 다음 액션을
+		# 알 수 있도록 stderr 힌트만 남긴다 (exit 0 원칙은 그대로).
+		printf 'plugin-sync: 사내 GHES 마켓플레이스 감지 — 이 PC 에는 company/ 레포가 없습니다 (external/public PC 로 판단)\n' >&2
+		printf 'plugin-sync:   → 격리 정책상 %s 에 저장하지 않습니다 (사내 URL 이 공개 레포로 유출되지 않도록)\n' "$PRIV_DIR" >&2
+		printf 'plugin-sync:   → internal PC 에서 관리하세요. 이 PC 에서도 관리하려면 먼저: git clone <GHES private repo url> "%s"\n' "$PRIV_DIR" >&2
 	fi
 fi
 
