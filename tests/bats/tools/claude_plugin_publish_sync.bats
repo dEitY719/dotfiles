@@ -68,6 +68,27 @@ _seed_repo_with_origin() {
     git -C "$repo_dir" push -q origin main
 }
 
+_commit_pure_sync_change() {
+    # Write <content> to <repo_dir>/<rel_path>, stage it, and commit with the
+    # canonical sync-manifest subject. Collapses the echo+add+commit trio that
+    # nearly every test repeats.
+    local repo_dir="$1" rel_path="$2" content="$3"
+    printf '%s\n' "$content" >"$repo_dir/$rel_path"
+    git -C "$repo_dir" add "$rel_path"
+    git -C "$repo_dir" commit -q -m "chore(claude-plugin): sync manifest"
+}
+
+_route_origin_offline() {
+    # Point <repo_dir>'s origin at a parseable GitHub URL (so _repo_target and
+    # `gh` see a real host/owner/repo) while redirecting actual git transport to
+    # the local bare repo via insteadOf — keeps the end-to-end tests fully
+    # offline. `git config --get remote.origin.url` still returns the raw fake
+    # URL (insteadOf is applied only at transport, not by config --get).
+    local repo_dir="$1" fake_url="$2" bare_path="$3"
+    git -C "$repo_dir" remote set-url origin "$fake_url"
+    git -C "$repo_dir" config "url.${bare_path}.insteadOf" "$fake_url"
+}
+
 @test "_manifest_diff_exists returns false when files match origin/main" {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
@@ -80,9 +101,7 @@ _seed_repo_with_origin() {
 @test "_manifest_diff_exists returns true when local file changed" {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
-    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
-    git -C "$REPO" add claude/plugin/marketplaces.json
-    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
     git -C "$REPO" fetch origin --quiet
 
     run _manifest_diff_exists "$REPO" claude/plugin/marketplaces.json claude/plugin/plugins.json
@@ -92,9 +111,7 @@ _seed_repo_with_origin() {
 @test "_build_publish_commit snapshots current file content onto origin/main without touching the real index" {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
-    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
-    git -C "$REPO" add claude/plugin/marketplaces.json
-    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
     git -C "$REPO" fetch origin --quiet
 
     BEFORE_HEAD=$(git -C "$REPO" rev-parse HEAD)
@@ -120,9 +137,7 @@ _seed_repo_with_origin() {
 @test "_build_publish_commit skips a path that does not exist on disk" {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
-    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
-    git -C "$REPO" add claude/plugin/marketplaces.json
-    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
     git -C "$REPO" fetch origin --quiet
 
     run _build_publish_commit "$REPO" claude/plugin/marketplaces.json claude/plugin/nonexistent.json
@@ -282,9 +297,7 @@ STUB
 @test "_publish_manifest_diff --dry-run prints the diff without pushing or opening a PR" {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
-    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
-    git -C "$REPO" add claude/plugin/marketplaces.json
-    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
     _install_gh_stub
     DRY_RUN=1
 
@@ -313,8 +326,7 @@ STUB
     # Re-point origin's stored URL to a parseable GitHub URL, and redirect the
     # actual transport back to the local bare repo via insteadOf so fetch/push
     # stay offline. _repo_target sees owner/repo; git I/O hits the bare repo.
-    git -C "$REPO" remote set-url origin "https://github.com/dEitY719/dotfiles.git"
-    git -C "$REPO" config "url.${BARE}.insteadOf" "https://github.com/dEitY719/dotfiles.git"
+    _route_origin_offline "$REPO" "https://github.com/dEitY719/dotfiles.git" "${BARE}"
 
     # sanity: config --get returns the raw parseable URL (insteadOf never
     # applied to config --get, unlike `remote get-url` which rewrites it).
@@ -322,9 +334,7 @@ STUB
     assert_output "https://github.com/dEitY719/dotfiles.git"
 
     # create a manifest diff vs origin/main
-    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
-    git -C "$REPO" add claude/plugin/marketplaces.json
-    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
 
     DRY_RUN=0
     run _publish_manifest_diff "$REPO" "public" claude/plugin/marketplaces.json claude/plugin/plugins.json
@@ -356,9 +366,7 @@ STUB
     # local main advances by a pure sync commit — this is the commit
     # plugin-sync.sh's hook left locally; it can never be pushed directly
     # because of branch protection.
-    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
-    git -C "$REPO" add claude/plugin/marketplaces.json
-    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
 
     # move off main WITHOUT touching the main ref, mirroring a repo that is
     # not currently checked out on main when cleanup runs
@@ -369,9 +377,7 @@ STUB
     # _build_publish_commit does) on origin/main — this is the published
     # snapshot, never an ancestor/descendant of local main
     git -C "$REPO" checkout -q "$BEFORE_ORIGIN"
-    echo '{"anthropic-agent-skills": "anthropics/skills-published"}' >"$REPO/claude/plugin/marketplaces.json"
-    git -C "$REPO" add claude/plugin/marketplaces.json
-    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills-published"}'
     PUBLISHED=$(git -C "$REPO" rev-parse HEAD)
     git -C "$REPO" push -q origin "${PUBLISHED}:refs/heads/main"
     git -C "$REPO" checkout -q other
@@ -396,9 +402,7 @@ STUB
     # local main is checked out and ahead of before_origin by a pure sync
     # commit — the real post-publish state: plugin-sync.sh's hook
     # committed locally but could never push.
-    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
-    git -C "$REPO" add claude/plugin/marketplaces.json
-    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
     LOCAL_MAIN=$(git -C "$REPO" rev-parse main)
 
     # origin/main advances to a DIFFERENT sibling commit sharing
@@ -407,9 +411,7 @@ STUB
     # an ancestor/descendant of local main: a real fast-forward is
     # impossible.
     git -C "$REPO" checkout -q "$BEFORE_ORIGIN"
-    echo '{"anthropic-agent-skills": "anthropics/skills-published"}' >"$REPO/claude/plugin/marketplaces.json"
-    git -C "$REPO" add claude/plugin/marketplaces.json
-    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills-published"}'
     PUBLISHED=$(git -C "$REPO" rev-parse HEAD)
     git -C "$REPO" push -q origin "${PUBLISHED}:refs/heads/main"
 
@@ -430,9 +432,7 @@ STUB
     _seed_repo_with_origin "$REPO"
     BEFORE_ORIGIN=$(git -C "$REPO" rev-parse origin/main)
 
-    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$REPO/claude/plugin/marketplaces.json"
-    git -C "$REPO" add claude/plugin/marketplaces.json
-    git -C "$REPO" commit -q -m "chore(claude-plugin): sync manifest"
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
     echo "unrelated change" >"$REPO/README.md"
     git -C "$REPO" add README.md
     git -C "$REPO" commit -q -m "docs: unrelated"
@@ -454,16 +454,13 @@ STUB
     GH_STUB_BARE_REPO="$BARE"
     export GH_STUB_BARE_REPO
 
-    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$TEST_TEMP_HOME/dotfiles/claude/plugin/marketplaces.json"
-    git -C "$TEST_TEMP_HOME/dotfiles" add claude/plugin/marketplaces.json
-    git -C "$TEST_TEMP_HOME/dotfiles" commit -q -m "chore(claude-plugin): sync manifest"
+    _commit_pure_sync_change "$TEST_TEMP_HOME/dotfiles" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
     _install_gh_stub
 
     # Re-point origin's stored URL to a parseable GitHub URL, and redirect the
     # actual transport back to the local bare repo via insteadOf so fetch/push
     # stay offline.
-    git -C "$TEST_TEMP_HOME/dotfiles" remote set-url origin "https://github.com/dEitY719/dotfiles.git"
-    git -C "$TEST_TEMP_HOME/dotfiles" config "url.${BARE}.insteadOf" "https://github.com/dEitY719/dotfiles.git"
+    _route_origin_offline "$TEST_TEMP_HOME/dotfiles" "https://github.com/dEitY719/dotfiles.git" "${BARE}"
 
     run bash "$PUBLISH_SYNC"
     assert_success
@@ -481,9 +478,7 @@ STUB
     export GH_STUB_BARE_REPO
 
     # Create changes in the public repo
-    echo '{"anthropic-agent-skills": "anthropics/skills"}' >"$TEST_TEMP_HOME/dotfiles/claude/plugin/marketplaces.json"
-    git -C "$TEST_TEMP_HOME/dotfiles" add claude/plugin/marketplaces.json
-    git -C "$TEST_TEMP_HOME/dotfiles" commit -q -m "chore(claude-plugin): sync manifest"
+    _commit_pure_sync_change "$TEST_TEMP_HOME/dotfiles" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
 
     _seed_repo_with_origin "$TEST_TEMP_HOME/dotfiles/claude/plugin/company"
     COMPANY_BARE=$(git -C "$TEST_TEMP_HOME/dotfiles/claude/plugin/company" remote get-url origin)
@@ -499,11 +494,9 @@ STUB
     # Re-point both origins' stored URLs to parseable GitHub URLs, and redirect the
     # actual transport back to the local bare repos via insteadOf so fetch/push
     # stay offline.
-    git -C "$TEST_TEMP_HOME/dotfiles" remote set-url origin "https://github.com/dEitY719/dotfiles.git"
-    git -C "$TEST_TEMP_HOME/dotfiles" config "url.${BARE}.insteadOf" "https://github.com/dEitY719/dotfiles.git"
+    _route_origin_offline "$TEST_TEMP_HOME/dotfiles" "https://github.com/dEitY719/dotfiles.git" "${BARE}"
 
-    git -C "$TEST_TEMP_HOME/dotfiles/claude/plugin/company" remote set-url origin "https://github.com/dEitY719/company-plugins.git"
-    git -C "$TEST_TEMP_HOME/dotfiles/claude/plugin/company" config "url.${COMPANY_BARE}.insteadOf" "https://github.com/dEitY719/company-plugins.git"
+    _route_origin_offline "$TEST_TEMP_HOME/dotfiles/claude/plugin/company" "https://github.com/dEitY719/company-plugins.git" "${COMPANY_BARE}"
 
     run bash "$PUBLISH_SYNC"
     assert_success
