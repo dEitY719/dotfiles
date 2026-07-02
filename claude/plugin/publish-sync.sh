@@ -100,6 +100,19 @@ _build_publish_commit() {
 	printf '%s\n' "$new_commit"
 }
 
+# _publish_branch <repo_dir> <label> <commit_sha>
+#
+# Create refs/heads/chore/plugin-sync-publish-<label>-<timestamp> pointing
+# at commit_sha, push it to origin, print the branch name.
+_publish_branch() {
+	local repo_dir="$1" label="$2" commit="$3" branch
+	branch="chore/plugin-sync-publish-${label}-$(date +%Y%m%d-%H%M%S)"
+	git -C "$repo_dir" update-ref "refs/heads/$branch" "$commit" || return 1
+	git -C "$repo_dir" push --quiet origin \
+		"refs/heads/$branch:refs/heads/$branch" 2>/dev/null || return 1
+	printf '%s\n' "$branch"
+}
+
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	echo "publish-sync.sh: not yet wired to a main entrypoint (Task 8)" >&2
 	exit 1

@@ -137,3 +137,19 @@ _seed_repo_with_origin() {
     run git -C "$REPO" ls-tree -r --name-only "$NEW_COMMIT"
     refute_output --partial "claude/plugin/nonexistent.json"
 }
+
+@test "_publish_branch creates a timestamped branch and pushes it to origin" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    git -C "$REPO" fetch origin --quiet
+    COMMIT=$(_build_publish_commit "$REPO" claude/plugin/marketplaces.json claude/plugin/plugins.json)
+
+    run _publish_branch "$REPO" "public" "$COMMIT"
+    assert_success
+    BRANCH="$output"
+    [[ "$BRANCH" == chore/plugin-sync-publish-public-* ]]
+
+    # the branch exists on the bare "origin" with the right commit
+    run git -C "$TEST_TEMP_HOME/origin.git" rev-parse "refs/heads/$BRANCH"
+    assert_output "$COMMIT"
+}
