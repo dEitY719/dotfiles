@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # tests/bats/skills/claude_plugin_structure.bats
 # Verify the structure spec shared by
-#   claude/skills/claude-plugin-structure-check/   (M1-M6 / R1-R5 evaluation)
+#   claude/skills/claude-plugin-structure-check/   (M1-M9 / R1-R8 evaluation)
 #   claude/skills/claude-plugin-structure-refactor/ (dry-run / --apply / --op)
 # Source-of-truth fixture: _fixtures/claude_plugin_structure.sh
 #
@@ -35,8 +35,10 @@ _seed_skill() {
 }
 
 _seed_mandatory_json() {
+    # $schema + description satisfy R6/R7 (#1084); string-form plugins satisfy
+    # M7 (source shorthand) / M8 (valid mono path) / M9 (plugins/demo exists).
     mkdir -p "$1/.claude-plugin" "$1/plugins/demo/.claude-plugin"
-    printf '{ "name": "repo", "plugins": ["./plugins/demo"] }\n' \
+    printf '{ "$schema": "https://anthropic.com/claude-code/marketplace.schema.json", "name": "repo", "description": "demo marketplace", "plugins": ["./plugins/demo"] }\n' \
         > "$1/.claude-plugin/marketplace.json"
     printf '{ "name": "demo", "version": "0.0.0", "skills": ["./skills/visualize"] }\n' \
         > "$1/plugins/demo/.claude-plugin/plugin.json"
@@ -325,9 +327,11 @@ _seed_single_skill() {
 }
 
 _seed_single_mandatory_json() {
-    # marketplace source "./" (single signal) + root plugin.json manifest
+    # marketplace source "./" (single signal) + root plugin.json manifest.
+    # $schema + description + the object plugin's homepage satisfy R6/R7 (#1084)
+    # so a fully-standard single repo scores PASS.
     mkdir -p "$1/.claude-plugin"
-    printf '{ "name": "repo", "plugins": [{ "source": "./" }] }\n' \
+    printf '{ "$schema": "https://anthropic.com/claude-code/marketplace.schema.json", "name": "repo", "description": "demo marketplace", "plugins": [{ "source": "./", "homepage": "https://example.com/repo" }] }\n' \
         > "$1/.claude-plugin/marketplace.json"
     printf '{ "name": "repo", "version": "0.0.0", "skills": ["./skills/visualize"] }\n' \
         > "$1/.claude-plugin/plugin.json"
@@ -423,8 +427,9 @@ build_single_perfect() {
 
 @test "forced --single honored even when marketplace says mono" {
     build_single_perfect "$REPO"
-    # corrupt the signal: claim mono in marketplace, but force single
-    printf '{ "name": "repo", "plugins": [{ "source": "./plugins/x" }] }\n' \
+    # corrupt the signal: claim mono in marketplace, but force single ($schema/
+    # description/homepage kept so R6/R7 stay PASS — this test isolates mode).
+    printf '{ "$schema": "https://anthropic.com/claude-code/marketplace.schema.json", "name": "repo", "description": "demo", "plugins": [{ "source": "./plugins/x", "homepage": "https://example.com/x" }] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
     run _cps_detect_mode "$REPO" single; assert_output single
     run cps_verdict "$REPO" single; assert_output PASS
@@ -448,7 +453,7 @@ build_single_perfect() {
     _seed_single_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
     _seed_recommended_files "$REPO"; _seed_readme_links "$REPO" visualize
     mkdir -p "$REPO/.claude-plugin"   # single signal, root plugin.json missing
-    printf '{ "name": "repo", "plugins": [{ "source": "./" }] }\n' \
+    printf '{ "$schema": "https://anthropic.com/claude-code/marketplace.schema.json", "name": "repo", "description": "demo", "plugins": [{ "source": "./", "homepage": "https://example.com/repo" }] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
     run cps_check_M2 "$REPO"; assert_output FAIL     # 0 plugin roots yet
     run cps_verdict "$REPO"; assert_output FAIL
@@ -527,5 +532,202 @@ build_single_perfect() {
     [ "$status" -eq 0 ]
     run cps_check_M1 "$REPO"; assert_output PASS
     run cps_check_M3 "$REPO"; assert_output PASS
+    run cps_verdict "$REPO"; assert_output PASS
+}
+
+# ---- M7 plugins[].source presence (#1084 / claude-plugin-jira#61) --------
+
+@test "M7 FAIL: plugin object lacks its own source (#61 install-fail shape)" {
+    # #61 root cause: plugins[] object relied on the inherited top-level source,
+    # which Claude Code 2.1.198 does not honor at install time.
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "source": { "source": "url", "url": "https://x/y.git" }, "plugins": [{ "name": "demo" }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M7 "$REPO"; assert_output FAIL
+    run cps_verdict "$REPO"; assert_output FAIL
+}
+
+@test "M7 PASS: string-form plugin element is the source (shorthand)" {
+    _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    run cps_check_M7 "$REPO"; assert_output PASS
+}
+
+@test "M7 PASS: object plugin with its own git-URL source (#61 post-fix / #63)" {
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [{ "name": "demo", "source": "url", "url": "https://x/y.git" }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M7 "$REPO"; assert_output PASS
+    run cps_check_M8 "$REPO"; assert_output PASS
+}
+
+@test "M7 N/A when marketplace lists 0 plugins (M2 owns the FAIL)" {
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [] }\n' > "$REPO/.claude-plugin/marketplace.json"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    run cps_check_M7 "$REPO"; assert_output "N/A"
+    run cps_check_M8 "$REPO"; assert_output "N/A"
+}
+
+@test "M7 FAIL -> refactor mp apply injects source -> M7 PASS (auto-fix)" {
+    # AC: structure-refactor --apply fixes M7 FAIL by inserting a source field.
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    _seed_recommended_files "$REPO"; _seed_readme_links "$REPO" visualize
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "description": "d", "$schema": "s", "plugins": [{ "name": "demo" }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M7 "$REPO"; assert_output FAIL
+    cps_refactor "$REPO" mp apply
+    run cps_check_M7 "$REPO"; assert_output PASS
+    run cps_check_M8 "$REPO"; assert_output PASS    # injected ./plugins/demo is a valid shape
+    run cps_check_M9 "$REPO"; assert_output PASS    # plugins/demo/ exists on disk
+    run jq -e '.plugins[0].source' "$REPO/.claude-plugin/marketplace.json"; assert_success
+}
+
+@test "M7 auto-fix derives git-URL source from plugin homepage (…​.git)" {
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [{ "name": "demo", "homepage": "https://x/y.git" }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    cps_refactor "$REPO" mp apply
+    run jq -r '.plugins[0].source' "$REPO/.claude-plugin/marketplace.json"; assert_output "url"
+    run jq -r '.plugins[0].url' "$REPO/.claude-plugin/marketplace.json"; assert_output "https://x/y.git"
+    run cps_check_M7 "$REPO"; assert_output PASS
+    run cps_check_M8 "$REPO"; assert_output PASS
+}
+
+# ---- M8 plugins[].source shape validity (#1084) --------------------------
+
+@test "M8 FAIL: object source is a raw URL without the url-type shape" {
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin"
+    # .source is a raw https URL string — neither a local path nor the
+    # { source:"url", url:... } shape → invalid.
+    printf '{ "name": "repo", "plugins": [{ "source": "https://x/y.git" }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M7 "$REPO"; assert_output PASS     # source key present
+    run cps_check_M8 "$REPO"; assert_output FAIL     # but shape invalid
+    run cps_verdict "$REPO"; assert_output FAIL
+}
+
+@test "M8 PASS: bare './' single source and bare './plugins/x' mono source" {
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": ["./plugins/demo"] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M8 "$REPO"; assert_output PASS
+}
+
+@test "M8 FAIL: explicit null source is not skipped (#1085 gemini review)" {
+    # M7 passes (the "source" key exists) but the value is null → M8 must FAIL,
+    # not silently skip it as a missing-source (M7) case.
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [{ "name": "demo", "source": null }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M7 "$REPO"; assert_output PASS
+    run cps_check_M8 "$REPO"; assert_output FAIL
+}
+
+@test "M8 FAIL: a null plugin element is collected, not skipped (#1085)" {
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [null] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M8 "$REPO"; assert_output FAIL
+}
+
+# ---- M9 pluginRoot ↔ on-disk consistency (mono only, #1084) --------------
+
+@test "M9 FAIL: mono marketplace declares a plugin dir that is absent" {
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin" "$REPO/plugins/demo"   # 'ghost' declared, not present
+    printf '{ "name": "repo", "plugins": ["./plugins/demo", "./plugins/ghost"] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M9 "$REPO"; assert_output FAIL
+    run cps_verdict "$REPO"; assert_output FAIL
+}
+
+@test "M9 PASS: every declared mono plugin dir exists on disk" {
+    build_perfect "$REPO"
+    run cps_check_M9 "$REPO"; assert_output PASS
+}
+
+@test "M9 N/A in single mode (no plugins/ layout)" {
+    build_single_perfect "$REPO"
+    run cps_check_M9 "$REPO"; assert_output "N/A"
+}
+
+@test "M9 N/A for a mono repo whose sources are all remote git URLs (#63)" {
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [{ "name": "demo", "source": "url", "url": "https://x/y.git" }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M9 "$REPO"; assert_output "N/A"    # nothing local to verify
+}
+
+# ---- R6 $schema / R7 description+homepage / R8 add-URL hint (#1084) -------
+
+@test "R6 WARN when marketplace omits top-level \$schema" {
+    build_perfect "$REPO"                      # everything else clean
+    printf '{ "name": "repo", "description": "d", "plugins": ["./plugins/demo"] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"   # drop $schema only
+    run cps_check_R6 "$REPO"; assert_output WARN
+    run cps_verdict "$REPO"; assert_output WARN
+}
+
+@test "R6 PASS when \$schema is declared" {
+    _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    run cps_check_R6 "$REPO"; assert_output PASS
+}
+
+@test "R7 WARN when top-level description is missing" {
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "$schema": "s", "name": "repo", "plugins": ["./plugins/demo"] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_R7 "$REPO"; assert_output WARN
+}
+
+@test "R7 WARN when an object plugin lacks homepage" {
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "$schema": "s", "name": "repo", "description": "d", "plugins": [{ "source": "./plugins/demo" }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_R7 "$REPO"; assert_output WARN
+}
+
+@test "R7 PASS with description and (string plugins have no homepage req)" {
+    _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    run cps_check_R7 "$REPO"; assert_output PASS
+}
+
+@test "R7 WARN when metadata is a non-string type (no jq crash → false PASS) (#1085)" {
+    # boolean/number description or homepage must not crash jq and slip through
+    # the `|| echo 0` fallback as a PASS — the type guard makes them WARN.
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "$schema": "s", "name": "repo", "description": true, "plugins": [{ "source": "./plugins/demo", "homepage": 42 }] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_R7 "$REPO"; assert_output WARN
+}
+
+@test "R8 N/A when README has no /plugin marketplace add example" {
+    build_perfect "$REPO"
+    run cps_check_R8 "$REPO"; assert_output "N/A"
+}
+
+@test "R8 WARN when the add example uses a .git clone URL" {
+    build_perfect "$REPO"
+    printf '\n`/plugin marketplace add https://github.com/o/repo.git`\n' >> "$REPO/README.md"
+    run cps_check_R8 "$REPO"; assert_output WARN
+    run cps_verdict "$REPO"; assert_output WARN
+}
+
+@test "R8 PASS when the add example uses the raw marketplace.json URL" {
+    build_perfect "$REPO"
+    printf '\n`/plugin marketplace add https://raw.githubusercontent.com/o/repo/main/.claude-plugin/marketplace.json`\n' >> "$REPO/README.md"
+    run cps_check_R8 "$REPO"; assert_output PASS
     run cps_verdict "$REPO"; assert_output PASS
 }
