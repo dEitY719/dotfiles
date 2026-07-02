@@ -3,9 +3,10 @@ name: claude-plugin:structure-refactor
 description: >-
   Fix a claude-plugin marketplace repo's directory structure toward the
   standard layout. Dry-run by default (plan only, no writes); `--apply`
-  performs changes. Scope `--mp`/`--mandatory` fixes mandatory items M1-M6
+  performs changes. Scope `--mp`/`--mandatory` fixes mandatory items M1-M9
   only (create dirs, `git mv`, minimal marketplace.json/plugin.json
-  skeletons); `--op`/`--recommended` adds recommended R1-R5 fixes (empty
+  skeletons, and inject a missing `plugins[].source` — the #1084 install-fail
+  fix); `--op`/`--recommended` adds recommended R1-R8 fixes (empty
   placeholder stubs + naming correction + README link backfill). Idempotent.
   Supports both `mono` (`plugins/<p>/skills/`) and `single` (repo-root
   `skills/`) layouts — auto-detected, or forced with `--single` / `--mono`;
@@ -41,8 +42,8 @@ its content verbatim, then stop. No filesystem changes.
 Positional `[repo-path]` (default = current dir). Flags:
 
 - `--apply` — execute changes. Absent → dry-run (plan only, no writes).
-- `--mandatory` / `--mp` — scope = M1-M6 only (default scope).
-- `--recommended` / `--op` — scope = M1-M6 + R1-R5.
+- `--mandatory` / `--mp` — scope = M1-M9 only (default scope).
+- `--recommended` / `--op` — scope = M1-M9 + R1-R8.
 - `--single` / `--mono` — force the **target** layout mode, overriding
   auto-detection (Step 2). Mutually exclusive; if both given, last wins.
   `--mp` and `--op` together → error + usage, stop.
@@ -61,13 +62,13 @@ Read `references/structure-spec.md` (embedded SSOT) for layout modes, mode detec
    scope (rules in spec → "Mode override = layout conversion").
 3. **Compute the plugin-root set**: `mono` → each `plugins/*/`; `single` →
    repo root `./` (exactly one).
-4. **Discover skills** and run M1-M6 / R1-R5 evaluation over the roots to
+4. **Discover skills** and run M1-M9 / R1-R8 evaluation over the roots to
    compute the current → target diff.
 
 ## Step 3: Build the Plan
 
 Read `references/plan-and-report-templates.md`. Produce an ordered change
-list, each tagged with its driving check ID (M1-M6, and R1-R5 only when
+list, each tagged with its driving check ID (M1-M9, and R1-R8 only when
 scope is `--op`). **Paths are plugin-root relative** — single targets root
 `./` (no `plugins/` dir ever created); mono targets `plugins/<p>/`.
 Already-correct items produce no action (idempotent). The plan header states
@@ -81,7 +82,7 @@ the detected/forced mode; an unsupported conversion produces only the
   warning and stop — even under `--apply`, write nothing.
 - **`--apply`**: execute the plan in order following the **Apply rules**
   (mkdir → move → skeleton, fully listed in
-  `references/plan-and-report-templates.md`); `--op` adds R1-R5 — see
+  `references/plan-and-report-templates.md`); `--op` adds R1-R8 — see
   `references/op-rules.md`.
 
 ## Step 5: Report

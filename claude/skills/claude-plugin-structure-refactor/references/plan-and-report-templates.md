@@ -8,6 +8,7 @@ claude-plugin structure refactor — <repo-path>   (mode: mono|single[, 추정] 
 
 계획 (현재 → 목표):
   [M1] create  .claude-plugin/marketplace.json   (skeleton, 1 plugin)
+  [M7] source  plugins[].source 주입 (visuals ← ./plugins/visuals | git URL)
   [M3] create  plugins/visuals/.claude-plugin/plugin.json (skeleton)
   [M4] git mv  visualize/SKILL.md → plugins/visuals/skills/visualize/SKILL.md
   [M5] mkdir   docs/skill-guides/, docs/skill-output/
@@ -27,13 +28,14 @@ claude-plugin structure refactor — <repo-path>   (mode: mono|single[, 추정] 
   created**; for `mono` they are `plugins/<p>/…` as shown above.
 - One line per change: `[<ID>] <verb>  <path / detail>`.
 - Verbs: `create` (new file), `mkdir` (new dir), `git mv` / `mv` (move),
+  `source` (inject a missing `plugins[].source` into an existing marketplace — M7),
   `visualize` (generate an R1 guide by delegating to `/devx:visualize`),
   `stub` (empty placeholder), `pages` (activate GitHub Pages),
   `rename` (frontmatter/dir naming fix),
   `link` (append a per-skill Pages-URL guide link into README — R5).
 - Items already correct produce **no line** (idempotent — proof there is
   nothing to do is an empty plan + `총 0 변경`).
-- R1-R5 lines appear only when scope is `--op` / `--recommended`.
+- R1-R8 lines appear only when scope is `--op` / `--recommended`.
 
 ### Layout-conversion warning (forced mode ≠ detected mode)
 
@@ -72,6 +74,21 @@ Execute the plan in this order so later steps see earlier results:
      ```
    Fill arrays from the dynamically discovered plugin/skill names. Do not
    clobber a JSON that already parses — only create when missing.
+
+   New skeletons are written source-clean: the `marketplace.json` above uses
+   `"plugins": ["./plugins/<p>"]` (string = source shorthand) for mono and
+   `[{ "source": "./" }]` for single, so a freshly-created skeleton already
+   satisfies M7/M8.
+3b. **M7 source injection (mandatory — runs under both `--mp` and `--op`)**:
+   when a marketplace.json **already exists** and a `plugins[]` **object**
+   element lacks its own `source`, inject one (the claude-plugin-jira#61
+   install-fail shape). Derivation order per element:
+   - if the element has a `homepage`/`repository` ending in `.git` →
+     `{ "source": "url", "url": "<that>" }` (remote fetch);
+   - else the local path of the detected mode — mono `./plugins/<name>`
+     (from the element's `name`), single `"./"`.
+   Idempotent: a no-op when every element already carries a source, and never
+   touches string-form elements (they are already a source).
 4. **`--op` only — R1 guide (delegate to `/devx:visualize`)**: for each
    discovered skill `<s>`, if `docs/skill-guides/<s>.html` is **missing**,
    invoke `/devx:visualize <path-to-SKILL.md>` to generate the guide at
@@ -159,7 +176,7 @@ Planned: <n>   Applied: <n>   Skipped (already correct): <n>
 <the plan block above, with applied lines marked ✓>
 
 [OK] refactor complete   |   [FAIL] <reason>
-applied=<n> moved=<n> created=<n> visualized=<n> stubbed=<n> pages=<activated|active|skip|n/a> linked=<n> layout=<mono|single> mode=<dry-run|apply> scope=<mp|op>
+applied=<n> moved=<n> created=<n> sourced=<n> visualized=<n> stubbed=<n> pages=<activated|active|skip|n/a> linked=<n> layout=<mono|single> mode=<dry-run|apply> scope=<mp|op>
 ```
 
 For a guarded layout-conversion (forced mode ≠ detected) the report is
