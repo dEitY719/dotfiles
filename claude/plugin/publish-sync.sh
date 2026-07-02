@@ -190,7 +190,7 @@ _publish_manifest_diff() {
 	fi
 	echo "[$label] 변경 감지됨"
 
-	if [ "${DRY_RUN:-0}" -eq 1 ]; then
+	if [ "${DRY_RUN:-0}" = "1" ]; then
 		git -C "$repo_dir" diff origin/main -- "$@"
 		return 0
 	fi
