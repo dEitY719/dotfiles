@@ -147,9 +147,25 @@ _seed_repo_with_origin() {
     run _publish_branch "$REPO" "public" "$COMMIT"
     assert_success
     BRANCH="$output"
-    [[ "$BRANCH" == chore/plugin-sync-publish-public-* ]]
+
+    run echo "$BRANCH"
+    assert_output --regexp '^chore/plugin-sync-publish-public-[0-9]{8}-[0-9]{6}$'
 
     # the branch exists on the bare "origin" with the right commit
     run git -C "$TEST_TEMP_HOME/origin.git" rev-parse "refs/heads/$BRANCH"
     assert_output "$COMMIT"
+}
+
+@test "_publish_branch fails when the push to origin fails" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    git -C "$REPO" fetch origin --quiet
+    COMMIT=$(_build_publish_commit "$REPO" claude/plugin/marketplaces.json claude/plugin/plugins.json)
+
+    # break origin: point it at a local path that is not a git repo at all,
+    # so the push fails fast without touching the network.
+    git -C "$REPO" remote set-url origin "$TEST_TEMP_HOME/does-not-exist.git"
+
+    run _publish_branch "$REPO" "public" "$COMMIT"
+    assert_failure
 }

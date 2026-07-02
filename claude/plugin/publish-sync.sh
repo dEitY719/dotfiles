@@ -109,7 +109,7 @@ _publish_branch() {
 	branch="chore/plugin-sync-publish-${label}-$(date +%Y%m%d-%H%M%S)"
 	git -C "$repo_dir" update-ref "refs/heads/$branch" "$commit" || return 1
 	git -C "$repo_dir" push --quiet origin \
-		"refs/heads/$branch:refs/heads/$branch" 2>/dev/null || return 1
+		"refs/heads/$branch:refs/heads/$branch" || return 1
 	printf '%s\n' "$branch"
 }
 
