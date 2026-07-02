@@ -100,12 +100,17 @@ source:github만)에 병합 반영하고 로컬 커밋한다. 사내 전용
 추적 제외)로 간다 — internal PC에서 최초 1회 `git clone <url>
 claude/plugin/company` 필요.
 
+external/public PC에서 사내 GHES 마켓플레이스가 우연히 감지되면(company/
+레포 미clone) hook은 격리 정책상 저장하지 않고 stderr 힌트만 남긴다 — 조용한
+skip이 아니다 (#1080).
+
 신규 PC: `./claude/plugin/restore.sh` (mode-aware, `--dry-run` 지원).
 
 두 레포 모두 "PR을 통해서만 변경 가능" 규칙이 걸려 있어 hook의 로컬 커밋이
 origin에 직접 push되지 않는다 — `./claude/plugin/publish-sync.sh`
 (`--dry-run` 지원)를 수동 실행하면 쌓인 변경분을 브랜치+PR+admin-merge로
-게시한다. 자세한 설계: `docs/feature/superpowers-specs/2026-07-01-claude-plugin-manifest-design.md`,
+게시한다. internal PC는 github.com이 pull-only라 public 단계를 자동으로
+건너뛴다 (company/ GHES 단계만 게시, #1080). 자세한 설계: `docs/feature/superpowers-specs/2026-07-01-claude-plugin-manifest-design.md`,
 `docs/feature/superpowers-specs/2026-07-02-plugin-manifest-batch-publish-design.md`.
 
 ---

@@ -173,6 +173,22 @@ JSON
     [ ! -d "$MAIN_ROOT/claude/plugin/company" ]
 }
 
+@test "install → GHES marketplace on a PC without company/ prints a stderr hint (not a silent skip, #1080)" {
+    _known_marketplaces
+    _installed_plugins
+    # No company/.git → simulates an external/public PC. The internal entry
+    # must NOT be stored (isolation), but the user gets a stderr hint instead
+    # of the old silent skip.
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install secret@internal-tools"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    assert_output --partial "사내 GHES 마켓플레이스 감지"
+    # Still no company/ manifest written, and no leak into the public manifest.
+    [ ! -d "$MAIN_ROOT/claude/plugin/company" ]
+    run jq -e 'has("internal-tools")' "$MAIN_ROOT/claude/plugin/marketplaces.json"
+    assert_failure
+}
+
 @test "marketplace add → treated the same as install (re-sync)" {
     _known_marketplaces
     _installed_plugins
