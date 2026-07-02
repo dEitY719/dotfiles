@@ -282,6 +282,10 @@ STUB
     assert_output --partial "anthropic-agent-skills"
     run grep -c "^pr create" "$GH_STUB_LOG"
     assert_output "0"
+
+    # dry-run must not push any branch to origin
+    run bash -c "git -C '$TEST_TEMP_HOME/origin.git' for-each-ref --format='%(refname)' 'refs/heads/chore/plugin-sync-publish-*' | wc -l"
+    assert_output "0"
 }
 
 @test "_publish_manifest_diff publishes end-to-end when there is a diff" {
