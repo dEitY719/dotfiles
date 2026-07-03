@@ -12,8 +12,9 @@ Flags:
   --apply              Execute the plan. Without it, the skill is DRY-RUN
                        (prints the plan, writes nothing).
   --mandatory | --mp   Scope = mandatory items M1-M10 only. (default scope)
-  --recommended | --op Scope = M1-M10 + recommended R1-R8 (placeholder stubs
-                       + naming correction + README link backfill).
+  --recommended | --op Scope = M1-M10 + recommended R1-R5 fixes (placeholder stubs
+                       + naming correction + README link backfill). R6-R8 are
+                       audit-only WARNs (check surfaces them; refactor skips).
   --single             Force the SINGLE target layout (repo itself is one
                        plugin; marketplace source "./", skills at root
                        skills/<s>/ — no plugins/ directory is created).
