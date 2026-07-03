@@ -6,9 +6,10 @@ description: >-
   Supports both `mono` (`plugins/<p>/skills/`) and `single`
   (repo-root `skills/`) layouts — auto-detected, or forced with
   `--single` / `--mono`. Read-only — never edits. Discovers plugins/skills
-  dynamically by directory scan, then evaluates mandatory items M1-M9 (FAIL,
-  incl. M7-M9 marketplace `plugins[].source` install-integrity) and recommended
-  items R1-R8 (WARN). Use when the user says "check my
+  dynamically by directory scan, then evaluates mandatory items M1-M10 (FAIL,
+  incl. M7-M9 marketplace `plugins[].source` install-integrity and M10
+  plugin.json known-field schema) and recommended items R1-R8 (WARN). Use when
+  the user says "check my
   claude-plugin repo structure", "is this marketplace repo standard?",
   "audit plugin layout", "/claude-plugin:structure-check". Sister skills:
   `claude-plugin:structure-refactor` (fixes what this finds),
@@ -53,7 +54,7 @@ For detailed evaluation rules and mode/type classification logic: see [reference
 Record the detected mode, plugin-root list, and skill list for the report
 header and the per-skill recommended checks (R1/R2/R5).
 
-## Step 3: Evaluate M1-M9 and R1-R8
+## Step 3: Evaluate M1-M10 and R1-R8
 
 Apply PASS/WARN/FAIL/N/A to each item per the scoring rules in
 [references/evaluation-rules.md](references/evaluation-rules.md).
@@ -62,7 +63,7 @@ Apply PASS/WARN/FAIL/N/A to each item per the scoring rules in
 
 Read `references/report-template.md` for the exact format. The report has a
 header line (path + detected mode + discovered plugins/skills), a `[필수]`
-block (M1-M9) and a `[권장]` block (R1-R8), then the summary verdict:
+block (M1-M10) and a `[권장]` block (R1-R8), then the summary verdict:
 
 - any FAIL → **FAIL**
 - no FAIL but ≥1 WARN → **WARN**
