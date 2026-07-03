@@ -26,7 +26,9 @@ setup() {
     # it, and stub the ux_* helpers it calls. This tests the SHIPPED jq program,
     # not a copy — any drift in the merge logic breaks this test.
     local fn_file="$TEST_TEMP_HOME/merge_fn.sh"
-    awk '/^_merge_claude_settings_json\(\) \{/{grab=1} grab{print} /^}/{if(grab)exit}' \
+    # Spacing-tolerant so a shfmt reformat of the `func() {` line can't
+    # silently break extraction (PR #1089 review — gemini).
+    awk '/^_merge_claude_settings_json[[:space:]]*\([[:space:]]*\)[[:space:]]*\{/{grab=1} grab{print} /^}/{if(grab)exit}' \
         "${_BATS_REAL_DOTFILES_ROOT}/aws/setup.sh" >"$fn_file"
     # shellcheck disable=SC1090
     ux_success() { :; }
