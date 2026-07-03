@@ -34,13 +34,13 @@ For each item in `references/structure-spec.md`, assign exactly one of:
 
 - **PASS** — present and valid.
 - **WARN** — recommended item missing/violated (R1-R8 only).
-- **FAIL** — mandatory item missing/invalid (M1-M9 only).
+- **FAIL** — mandatory item missing/invalid (M1-M10 only).
 - **N/A** — the subject does not exist (e.g. a plugin with 0 skills → its
   R1/R2 are N/A, not FAIL).
 
 ## Per-Item Evaluation Details
 
-### M1-M9 (Mandatory — FAIL if violated)
+### M1-M10 (Mandatory — FAIL if violated)
 
 M2/M3/M4 check **paths** are mode-dependent (see the spec's per-mode M-grid);
 IDs, counts, and validation logic are identical across modes. M5/M6 and
@@ -69,6 +69,15 @@ own those FAILs.
   must exist on disk (declared-but-absent → FAIL). Remote url-type sources are
   skipped; `single` mode and all-remote mono repos → N/A. This never re-flags a
   valid remote setup (the #63 misdiagnosis guard).
+
+**plugin.json known-field whitelist (M10):** for each plugin root's
+`plugin.json`, compare its top-level `keys` against the known-field set
+(`jq --argjson k '<set>' '[keys[]|select(. as $x|$k|index($x)|not)]|length'`).
+Any key outside the set → FAIL (the claude-plugin-jira#65 `skills`-array case:
+installs but the manifest fails validation at load). Known fields (2.1.x):
+`name`, `version`, `description`, `author`, `homepage`, `repository`,
+`license`, `keywords`. Missing/invalid manifest → M3 owns it (skipped); no
+valid manifest → N/A. SSOT: `_CPS_PLUGIN_JSON_KNOWN_FIELDS` in the bats fixture.
 
 ### R1-R8 (Recommended — WARN if violated)
 

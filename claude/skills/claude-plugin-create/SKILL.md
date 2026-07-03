@@ -87,9 +87,9 @@ add origin git@<host>:<owner>/<plugin-name>.git`. On GHES `gh` failure, point to
 
 ## Step 9: Verify & Report
 
-Run `claude-plugin:structure-check <dest>/<plugin-name>`, confirm M1-M9 PASS,
+Run `claude-plugin:structure-check <dest>/<plugin-name>`, confirm M1-M10 PASS,
 emit the `[OK]` report per `references/help.md` → "Completion report" (repo
-URL, skills copied, M1-M9 verdict) plus the next-action hint.
+URL, skills copied, M1-M10 verdict) plus the next-action hint.
 
 ## Constraints
 

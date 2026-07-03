@@ -5,7 +5,7 @@
 #   claude/skills/claude-plugin-structure-refactor/references/plan-and-report-templates.md
 #
 # The two skills are AI-interpreted markdown with no shell entry point;
-# these functions are the executable form of their M1-M9 / R1-R8 evaluation
+# these functions are the executable form of their M1-M10 / R1-R8 evaluation
 # and the refactor apply logic, so bats can pin the behavior against real
 # fixture repos. Keep them in sync with structure-spec.md whenever the spec
 # changes.
@@ -102,7 +102,7 @@ _cps_skills_in_root() {
     done
 }
 
-# ---- mandatory checks (M1-M9) -- echo PASS|FAIL|N/A ---------------------
+# ---- mandatory checks (M1-M10) -- echo PASS|FAIL|N/A ---------------------
 cps_check_M1() { _cps_json_ok "$1/.claude-plugin/marketplace.json" && echo PASS || echo FAIL; }
 
 cps_check_M2() {
@@ -251,6 +251,39 @@ cps_check_M9() {
         }
     done <<EOF
 $_paths
+EOF
+    [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
+}
+
+# Known top-level plugin.json fields per the Claude Code manifest schema
+# (2.1.x). SSOT mirror of structure-spec.md → "plugin.json known fields (M10)".
+# `skills` is intentionally NOT here — the runtime auto-scans skills/, and a
+# skills field makes the manifest fail validation → plugin loads not at all
+# (claude-plugin-jira#65, #1084 comment 2026-07-02). Update on CC releases.
+_CPS_PLUGIN_JSON_KNOWN_FIELDS='["name","version","description","author","homepage","repository","license","keywords"]'
+
+cps_check_M10() {
+    # Every plugin.json top-level key must be in the known-field whitelist.
+    # An unknown field (e.g. skills) → FAIL — install succeeds but Claude Code
+    # rejects the manifest at load ("Validation errors: skills: Invalid input").
+    # Evaluated per plugin root; a missing/invalid plugin.json is M3's concern
+    # (skipped here). No plugin root with a valid manifest → N/A.
+    local _mode _root _pj _unknown _any=0
+    _mode="$(_cps_detect_mode "$1" "${2:-}")"
+    while IFS= read -r _root; do
+        [ -n "$_root" ] || continue
+        _pj="$1/$_root/.claude-plugin/plugin.json"
+        _cps_json_ok "$_pj" || continue
+        _any=1
+        _unknown="$(jq --argjson k "$_CPS_PLUGIN_JSON_KNOWN_FIELDS" \
+            '[keys[] | select(. as $x | $k | index($x) | not)] | length' \
+            "$_pj" 2>/dev/null || echo 1)"
+        [ "${_unknown:-1}" -eq 0 ] || {
+            echo FAIL
+            return
+        }
+    done <<EOF
+$(_cps_plugin_roots "$1" "$_mode")
 EOF
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
@@ -431,7 +464,7 @@ cps_verdict() {
     # echo FAIL | WARN | PASS for repo $1 ; optional $2 forces single|mono.
     # M5/M6/R3 are mode-independent so the extra arg is harmless for them.
     local _r _mode="${2:-}"
-    for _c in M1 M2 M3 M4 M5 M6 M7 M8 M9; do
+    for _c in M1 M2 M3 M4 M5 M6 M7 M8 M9 M10; do
         _r="$(cps_check_$_c "$1" "$_mode")"
         [ "$_r" = FAIL ] && {
             echo FAIL
@@ -485,7 +518,38 @@ cps_refactor() {
     # already writes source-bearing plugins, so this only rewrites a
     # pre-existing marketplace.json.
     _cps_repair_m7 "$_repo" "$_target"
+    # M10 repair (mandatory, both scopes): strip unknown fields from every
+    # plugin.json (e.g. a schema-violating skills array), keeping a .bak.
+    _cps_repair_m10 "$_repo" "$_target"
     return 0 # success (0); the conversion-guard early return above is 3
+}
+
+# M10 fix: strip any top-level plugin.json key outside the known-field
+# whitelist (the #1084 comment case: a skills array that fails manifest
+# validation). A timestamp-free `.bak` copy is left beside each rewritten
+# plugin.json so the removal is recoverable. Idempotent: a no-op when every
+# manifest is already clean, or when it is missing/invalid (M3 owns that).
+_cps_repair_m10() {
+    local _repo="$1" _mode="$2" _root _pj _unknown _tmp _status=0
+    _mode="$(_cps_detect_mode "$_repo")"
+    while IFS= read -r _root; do
+        [ -n "$_root" ] || continue
+        _pj="$_repo/$_root/.claude-plugin/plugin.json"
+        _cps_json_ok "$_pj" || continue
+        _unknown="$(jq --argjson k "$_CPS_PLUGIN_JSON_KNOWN_FIELDS" \
+            '[keys[] | select(. as $x | $k | index($x) | not)] | length' \
+            "$_pj" 2>/dev/null || echo 0)"
+        [ "${_unknown:-0}" -gt 0 ] || continue
+        cp "$_pj" "$_pj.bak"
+        _tmp="$_pj.tmp"
+        jq --argjson k "$_CPS_PLUGIN_JSON_KNOWN_FIELDS" \
+            'with_entries(select(.key as $x | $k | index($x)))' \
+            "$_pj" >"$_tmp" && mv -f "$_tmp" "$_pj" || _status=$?
+        rm -f "$_tmp"
+    done <<EOF
+$(_cps_plugin_roots "$_repo" "$_mode")
+EOF
+    return "$_status"
 }
 
 # M7 fix: for each object plugin missing .source, inject one. Prefer a git URL
@@ -538,22 +602,16 @@ EOF
     fi
 
     # M3 per-plugin plugin.json skeleton — list ALL skills of each plugin
-    local _p _s _skills_json
+    # plugin.json carries ONLY known manifest fields — no skills array (M10,
+    # #1084): the runtime auto-scans skills/, and a skills field fails manifest
+    # validation → plugin never loads. Skills are discovered by dir scan.
+    local _p
     while IFS= read -r _p; do
         [ -n "$_p" ] || continue
         mkdir -p "$_repo/plugins/$_p/.claude-plugin"
         if ! _cps_json_ok "$_repo/plugins/$_p/.claude-plugin/plugin.json"; then
-            _skills_json=""
-            while IFS= read -r _s; do
-                [ -n "$_s" ] || continue
-                [ -n "$_skills_json" ] && _skills_json="${_skills_json}, "
-                _skills_json="${_skills_json}\"./skills/${_s}\""
-            done <<EOF
-$(_cps_skills "$_repo" "$_p")
-EOF
-            printf '{ "name": "%s", "version": "0.0.0", "skills": [%s] }\n' \
-                "$_p" "${_skills_json:-\"./skills/skill\"}" \
-                >"$_repo/plugins/$_p/.claude-plugin/plugin.json"
+            printf '{ "name": "%s", "version": "0.0.0" }\n' \
+                "$_p" >"$_repo/plugins/$_p/.claude-plugin/plugin.json"
         fi
     done <<EOF
 $(_cps_plugins "$_repo")
@@ -602,7 +660,7 @@ EOF
 # single apply: the repo root IS the one plugin root — marketplace source
 # "./", a ROOT plugin.json, root skills/<s>/. NEVER creates a plugins/ dir.
 _cps_refactor_single() {
-    local _repo="$1" _scope="$2" _s _skills_json=""
+    local _repo="$1" _scope="$2" _s
 
     # M1 marketplace.json skeleton with the single source "./".
     if ! _cps_json_ok "$_repo/.claude-plugin/marketplace.json"; then
@@ -610,18 +668,12 @@ _cps_refactor_single() {
             "$(basename "$_repo")" "$(basename "$_repo")" >"$_repo/.claude-plugin/marketplace.json"
     fi
 
-    # M3 ROOT plugin.json skeleton — list ALL root skills.
+    # M3 ROOT plugin.json skeleton — known manifest fields only, no skills
+    # array (M10, #1084): skills are auto-scanned; a skills field fails
+    # manifest validation and blocks the plugin from loading.
     if ! _cps_json_ok "$_repo/.claude-plugin/plugin.json"; then
-        while IFS= read -r _s; do
-            [ -n "$_s" ] || continue
-            [ -n "$_skills_json" ] && _skills_json="${_skills_json}, "
-            _skills_json="${_skills_json}\"./skills/${_s}\""
-        done <<EOF
-$(_cps_skills_in_root "$_repo" ".")
-EOF
-        printf '{ "name": "%s", "version": "0.0.0", "skills": [%s] }\n' \
-            "$(basename "$_repo")" "${_skills_json:-\"./skills/skill\"}" \
-            >"$_repo/.claude-plugin/plugin.json"
+        printf '{ "name": "%s", "version": "0.0.0" }\n' \
+            "$(basename "$_repo")" >"$_repo/.claude-plugin/plugin.json"
     fi
 
     # M6 README skeleton (with a docs/ link so R3 also passes).

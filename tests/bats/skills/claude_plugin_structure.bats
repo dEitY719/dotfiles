@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # tests/bats/skills/claude_plugin_structure.bats
 # Verify the structure spec shared by
-#   claude/skills/claude-plugin-structure-check/   (M1-M9 / R1-R8 evaluation)
+#   claude/skills/claude-plugin-structure-check/   (M1-M10 / R1-R8 evaluation)
 #   claude/skills/claude-plugin-structure-refactor/ (dry-run / --apply / --op)
 # Source-of-truth fixture: _fixtures/claude_plugin_structure.sh
 #
@@ -40,7 +40,7 @@ _seed_mandatory_json() {
     mkdir -p "$1/.claude-plugin" "$1/plugins/demo/.claude-plugin"
     printf '{ "$schema": "https://anthropic.com/claude-code/marketplace.schema.json", "name": "repo", "description": "demo marketplace", "plugins": ["./plugins/demo"] }\n' \
         > "$1/.claude-plugin/marketplace.json"
-    printf '{ "name": "demo", "version": "0.0.0", "skills": ["./skills/visualize"] }\n' \
+    printf '{ "name": "demo", "version": "0.0.0" }\n' \
         > "$1/plugins/demo/.claude-plugin/plugin.json"
 }
 
@@ -305,14 +305,17 @@ build_perfect() {
     assert_success
 }
 
-@test "mandatory apply lists ALL skills in plugin.json" {
+@test "mandatory apply writes a plugin.json WITHOUT a skills field (M10, #1084)" {
+    # skills are auto-scanned; a skills field fails manifest validation. The
+    # skeleton must never write one (superseding the old "lists ALL skills").
     mkdir -p "$REPO/plugins/demo/skills/s1" "$REPO/plugins/demo/skills/s2"
     printf 'name: s1\ndescription: x\n' > "$REPO/plugins/demo/skills/s1/SKILL.md"
     printf 'name: s2\ndescription: x\n' > "$REPO/plugins/demo/skills/s2/SKILL.md"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
     cps_refactor "$REPO" mp apply
-    run jq -r '.skills | length' "$REPO/plugins/demo/.claude-plugin/plugin.json"
-    assert_output 2
+    run jq -e 'has("skills")' "$REPO/plugins/demo/.claude-plugin/plugin.json"
+    assert_output false
+    run cps_check_M10 "$REPO"; assert_output PASS
 }
 
 # ---- single layout mode (#914) ------------------------------------------
@@ -333,7 +336,7 @@ _seed_single_mandatory_json() {
     mkdir -p "$1/.claude-plugin"
     printf '{ "$schema": "https://anthropic.com/claude-code/marketplace.schema.json", "name": "repo", "description": "demo marketplace", "plugins": [{ "source": "./", "homepage": "https://example.com/repo" }] }\n' \
         > "$1/.claude-plugin/marketplace.json"
-    printf '{ "name": "repo", "version": "0.0.0", "skills": ["./skills/visualize"] }\n' \
+    printf '{ "name": "repo", "version": "0.0.0" }\n' \
         > "$1/.claude-plugin/plugin.json"
 }
 
@@ -472,8 +475,9 @@ build_single_perfect() {
     run jq empty "$REPO/.claude-plugin/plugin.json"; assert_success
     run jq -r '.plugins[0].source' "$REPO/.claude-plugin/marketplace.json"
     assert_output "./"
-    run jq -e '.skills | index("./skills/visualize")' "$REPO/.claude-plugin/plugin.json"
-    assert_success
+    run jq -e 'has("skills")' "$REPO/.claude-plugin/plugin.json"   # no skills field (M10)
+    assert_output false
+    run cps_check_M10 "$REPO"; assert_output PASS
     [ ! -d "$REPO/plugins" ]
 }
 
@@ -663,6 +667,73 @@ build_single_perfect() {
     printf '{ "name": "repo", "plugins": [{ "name": "demo", "source": "url", "url": "https://x/y.git" }] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
     run cps_check_M9 "$REPO"; assert_output "N/A"    # nothing local to verify
+}
+
+# ---- M10 plugin.json known-field whitelist (#1084 / claude-plugin-jira#65) --
+
+_seed_plugin_json() {
+    # $1=repo $2=raw-json : overwrite plugins/demo/.claude-plugin/plugin.json
+    mkdir -p "$1/plugins/demo/.claude-plugin"
+    printf '%s\n' "$2" > "$1/plugins/demo/.claude-plugin/plugin.json"
+}
+
+@test "M10 FAIL: plugin.json carries a schema-violating skills field (jira@0.2.0)" {
+    # claude-plugin-jira#65 repro: install succeeds but the manifest fails
+    # validation at load ("skills: Invalid input") → 0 skills load.
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": ["./plugins/demo"] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    _seed_plugin_json "$REPO" '{ "name": "jira", "version": "0.2.0", "skills": ["skills/jira-core"] }'
+    run cps_check_M10 "$REPO"; assert_output FAIL
+    run cps_check_M3 "$REPO"; assert_output PASS      # JSON is valid — M3 doesn't catch it
+    run cps_verdict "$REPO"; assert_output FAIL
+}
+
+@test "M10 PASS: plugin.json with only known manifest fields" {
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": ["./plugins/demo"] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    _seed_plugin_json "$REPO" '{ "name": "demo", "version": "0.2.0", "description": "d", "homepage": "https://x", "keywords": ["a"] }'
+    run cps_check_M10 "$REPO"; assert_output PASS
+}
+
+@test "M10 PASS on the perfect fixture (skeleton is schema-clean)" {
+    build_perfect "$REPO"
+    run cps_check_M10 "$REPO"; assert_output PASS
+    run cps_verdict "$REPO"; assert_output PASS
+}
+
+@test "M10 N/A when no plugin root has a valid manifest (M3 owns it)" {
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": [] }\n' > "$REPO/.claude-plugin/marketplace.json"
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    run cps_check_M10 "$REPO"; assert_output "N/A"
+}
+
+@test "M10 FAIL -> refactor mp apply strips unknown field + leaves .bak -> M10 PASS" {
+    # AC: structure-refactor --apply fixes M10 (remove unknown field, keep backup).
+    _seed_skill "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    _seed_recommended_files "$REPO"; _seed_readme_links "$REPO" visualize
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "$schema": "s", "name": "repo", "description": "d", "plugins": ["./plugins/demo"] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    _seed_plugin_json "$REPO" '{ "name": "demo", "version": "0.2.0", "skills": ["skills/x"] }'
+    run cps_check_M10 "$REPO"; assert_output FAIL
+    cps_refactor "$REPO" mp apply
+    run cps_check_M10 "$REPO"; assert_output PASS
+    run jq -e 'has("skills")' "$REPO/plugins/demo/.claude-plugin/plugin.json"; assert_output false
+    run jq -r '.name' "$REPO/plugins/demo/.claude-plugin/plugin.json"; assert_output demo
+    [ -f "$REPO/plugins/demo/.claude-plugin/plugin.json.bak" ]        # backup kept
+    run jq -e 'has("skills")' "$REPO/plugins/demo/.claude-plugin/plugin.json.bak"; assert_output true
+    run cps_verdict "$REPO"; assert_output PASS
+}
+
+@test "M10 refactor is a no-op on a clean manifest (no .bak spam)" {
+    build_perfect "$REPO"
+    cps_refactor "$REPO" mp apply
+    [ ! -f "$REPO/plugins/demo/.claude-plugin/plugin.json.bak" ]
 }
 
 # ---- R6 $schema / R7 description+homepage / R8 add-URL hint (#1084) -------

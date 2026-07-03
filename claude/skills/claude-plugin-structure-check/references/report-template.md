@@ -18,6 +18,7 @@ claude-plugin structure check — <repo-path>
  FAIL  M7 plugins[].source 누락 (visuals — 상위 source 상속 불가, install 실패)
  PASS  M8 source shape 유효
  PASS  M9 plugins/visuals/ 실재
+ N/A   M10 (plugin.json 없음 — M3 소관)
 
 [권장]
  WARN  R1 docs/skill-guides/visualize.html 없음
@@ -29,12 +30,15 @@ claude-plugin structure check — <repo-path>
  PASS  R7 description + plugins[].homepage
  N/A   R8 (README 에 marketplace add 예시 없음)
 
-요약: FAIL (필수 3, 권장 3, N/A 2)
+요약: FAIL (필수 3, 권장 3, N/A 3)
 → Fix: /claude-plugin:structure-refactor <repo-path>  (먼저 dry-run, 이후 --apply)
 
 ※ 이 감사는 "구조" 만 검사한다. /plugin install 이 실패하거나 세션에
    스킬이 안 뜨는 경우, marketplace source 필드 (#61 스타일) 나 SKILL.md
    frontmatter 를 별도 확인하라. structure-check PASS ≠ install/runtime 성공.
+※ plugin.json 은 최상위 필드도 스키마 검증 대상이다. skills 처럼 런타임이
+   자동 스캔하는 폴더명과 이름이 같은 커스텀 필드를 넣으면 validation error
+   로 플러그인 자체가 로드 실패한다 (M10 — #65 스타일).
 ```
 
 ### Example — single (repo is one plugin)
@@ -53,6 +57,7 @@ claude-plugin structure check — <repo-path>
  PASS  M7 plugins[].source 존재 (source "./")
  PASS  M8 source shape 유효
  N/A   M9 (single — plugins/ 레이아웃 아님)
+ PASS  M10 plugin.json 필드 스키마 준수 (미지원 필드 없음)
 
 [권장]
  PASS  R1 docs/skill-guides/<s>.html (4개 모두 존재)
@@ -75,7 +80,7 @@ When the mode was inferred by the ambiguous fallback, append `, 추정` —
 - One line per item: `<RESULT>  <ID> <subject> <note>`.
 - `<RESULT>` is one of `PASS` / `WARN` / `FAIL` / `N/A` (uppercase),
   left-padded so the IDs align.
-- `[필수]` block lists M1-M9 in order; `[권장]` block lists R1-R8 in order.
+- `[필수]` block lists M1-M10 in order; `[권장]` block lists R1-R8 in order.
 - R5 is per-skill: when more than one skill misses a link, emit one R5 line
   naming the first offender (or summarize `<n>개 스킬`); a clean repo → PASS,
   no skills → N/A.
@@ -114,4 +119,7 @@ already misled a real diagnosis (claude-plugin-jira#63):
 ※ 이 감사는 "구조" 만 검사한다. /plugin install 이 실패하거나 세션에
    스킬이 안 뜨는 경우, marketplace source 필드 (#61 스타일) 나 SKILL.md
    frontmatter 를 별도 확인하라. structure-check PASS ≠ install/runtime 성공.
+※ plugin.json 은 최상위 필드도 스키마 검증 대상이다. skills 처럼 런타임이
+   자동 스캔하는 폴더명과 이름이 같은 커스텀 필드를 넣으면 validation error
+   로 플러그인 자체가 로드 실패한다 (M10 — #65 스타일).
 ```

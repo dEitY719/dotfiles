@@ -10,6 +10,7 @@ claude-plugin structure refactor — <repo-path>   (mode: mono|single[, 추정] 
   [M1] create  .claude-plugin/marketplace.json   (skeleton, 1 plugin)
   [M7] source  plugins[].source 주입 (visuals ← ./plugins/visuals | git URL)
   [M3] create  plugins/visuals/.claude-plugin/plugin.json (skeleton)
+  [M10] prune  plugins/visuals/.claude-plugin/plugin.json ← 미지원 필드(skills) 제거 (.bak 백업)
   [M4] git mv  visualize/SKILL.md → plugins/visuals/skills/visualize/SKILL.md
   [M5] mkdir   docs/skill-guides/, docs/skill-output/
   [R1] visualize docs/skill-guides/visualize.html   (→ /devx:visualize, --op only)
@@ -29,6 +30,7 @@ claude-plugin structure refactor — <repo-path>   (mode: mono|single[, 추정] 
 - One line per change: `[<ID>] <verb>  <path / detail>`.
 - Verbs: `create` (new file), `mkdir` (new dir), `git mv` / `mv` (move),
   `source` (inject a missing `plugins[].source` into an existing marketplace — M7),
+  `prune` (strip unknown top-level fields from an existing `plugin.json`, `.bak` kept — M10),
   `visualize` (generate an R1 guide by delegating to `/devx:visualize`),
   `stub` (empty placeholder), `pages` (activate GitHub Pages),
   `rename` (frontmatter/dir naming fix),
@@ -70,10 +72,13 @@ Execute the plan in this order so later steps see earlier results:
      ```
    - `plugins/<p>/.claude-plugin/plugin.json`:
      ```json
-     { "name": "<p>", "version": "0.0.0", "skills": ["./skills/<s>"] }
+     { "name": "<p>", "version": "0.0.0" }
      ```
-   Fill arrays from the dynamically discovered plugin/skill names. Do not
-   clobber a JSON that already parses — only create when missing.
+   Fill `marketplace.json`'s plugins array from the dynamically discovered
+   plugin names. Do not clobber a JSON that already parses — only create when
+   missing. **plugin.json carries no `skills` array** — the runtime auto-scans
+   `skills/`, and a `skills` field fails manifest validation (M10, #1084); the
+   skeleton stays schema-clean so it satisfies M10 on creation.
 
    New skeletons are written source-clean: the `marketplace.json` above uses
    `"plugins": ["./plugins/<p>"]` (string = source shorthand) for mono and
@@ -89,6 +94,14 @@ Execute the plan in this order so later steps see earlier results:
      (from the element's `name`), single `"./"`.
    Idempotent: a no-op when every element already carries a source, and never
    touches string-form elements (they are already a source).
+3c. **M10 unknown-field prune (mandatory — runs under both `--mp` and `--op`)**:
+   for each existing, valid `plugin.json`, drop every top-level key outside the
+   known-field whitelist (`name`, `version`, `description`, `author`,
+   `homepage`, `repository`, `license`, `keywords`) — the claude-plugin-jira#65
+   `skills`-array case that fails manifest validation at load. Copy the file to
+   `plugin.json.bak` first (recoverable removal), then rewrite with
+   `jq 'with_entries(select(.key as $x | $known | index($x)))'`. Idempotent: a
+   no-op (and no `.bak`) when the manifest already has only known fields.
 4. **`--op` only — R1 guide (delegate to `/devx:visualize`)**: for each
    discovered skill `<s>`, if `docs/skill-guides/<s>.html` is **missing**,
    invoke `/devx:visualize <path-to-SKILL.md>` to generate the guide at
@@ -176,7 +189,7 @@ Planned: <n>   Applied: <n>   Skipped (already correct): <n>
 <the plan block above, with applied lines marked ✓>
 
 [OK] refactor complete   |   [FAIL] <reason>
-applied=<n> moved=<n> created=<n> sourced=<n> visualized=<n> stubbed=<n> pages=<activated|active|skip|n/a> linked=<n> layout=<mono|single> mode=<dry-run|apply> scope=<mp|op>
+applied=<n> moved=<n> created=<n> sourced=<n> pruned=<n> visualized=<n> stubbed=<n> pages=<activated|active|skip|n/a> linked=<n> layout=<mono|single> mode=<dry-run|apply> scope=<mp|op>
 ```
 
 For a guarded layout-conversion (forced mode ≠ detected) the report is

@@ -84,10 +84,12 @@ checked **path** changes (M5/M6 are mode-independent).
 | M7 | each `plugins[]` element resolves to a source | `.claude-plugin/marketplace.json` | **same** |
 | M8 | each source has a valid shape | `.claude-plugin/marketplace.json` | **same** |
 | M9 | declared mono plugin dirs exist on disk | `plugins/<name>/` per source | N/A (single) |
+| M10 | plugin.json has only known top-level fields | `plugins/<p>/.claude-plugin/plugin.json` | root `.claude-plugin/plugin.json` |
 
 FAIL conditions: M1/M3 → missing or invalid JSON; M2 → 0 plugin roots;
 M4 → missing or frontmatter lacks `name`/`description`; M5 → either dir
-missing; M6 → missing; M7-M9 → see "marketplace source integrity" below.
+missing; M6 → missing; M7-M9 → see "marketplace source integrity" below;
+M10 → see "plugin.json known fields" below.
 
 ## marketplace `plugins[].source` integrity (M7-M9, #1084)
 
@@ -122,6 +124,33 @@ on disk. A declared-but-absent directory (typo/misconfig) → **FAIL**. Remote
 (url-type) sources have nothing local to verify and are skipped; a mono repo
 whose sources are all remote → **N/A**. In `single` mode M9 is **N/A** (no
 `plugins/` layout).
+
+## plugin.json known fields (M10, #1084)
+
+M7-M9 catch marketplace-level source problems; **M10 catches the plugin.json
+level.** A third real case (claude-plugin-jira#65) installed cleanly but Claude
+Code rejected the manifest at **load** — `/plugin` Errors tab showed
+*"Plugin … has an invalid manifest … Validation errors: skills: Invalid
+input"* — so none of the plugin's skills loaded despite `enabledPlugins` being
+true. Cause: a custom `skills` array in `plugin.json`. The runtime auto-scans
+`skills/`, so the field is unnecessary **and** schema-invalid; lenient plugins
+(`aws-login`, `ds-skills`) omit it entirely.
+
+**M10 — every plugin.json top-level key is in the known-field whitelist.**
+Known fields (Claude Code manifest schema, **2.1.x**):
+
+```
+name (required), version (required), description, author,
+homepage, repository, license, keywords
+```
+
+Any key outside this set → **FAIL** (e.g. the `skills` array above). `skills`
+is the classic trap: it looks supported because it matches the auto-scanned
+folder name, so authors add it by hand. Evaluated per plugin root over the same
+root set as M3; a missing/invalid plugin.json is M3's concern (skipped here),
+and no plugin root with a valid manifest → **N/A**. The whitelist is the SSOT
+`_CPS_PLUGIN_JSON_KNOWN_FIELDS` in the bats fixture — bump it (with a version
+note) on each Claude Code manifest-schema release.
 
 ## Recommended items (WARN when missing)
 

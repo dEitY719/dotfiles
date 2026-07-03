@@ -46,13 +46,13 @@ Behavior (mono golden layout):
   6. git init + checkout -b main.
   7. gh repo create (after gh auth status + user confirmation).
   8. git add + commit "feat: init <plugin-name>" + push (after confirmation).
-  9. claude-plugin:structure-check → confirm M1-M9 PASS.
+  9. claude-plugin:structure-check → confirm M1-M10 PASS.
 
 Completion report (Step 9):
   [OK] claude-plugin:create
     Repo  : https://<host>/<owner>/<plugin-name>
     Skills: N copied
-    Check : M1-M9 PASS
+    Check : M1-M10 PASS
     Next  : /claude-plugin:structure-check <dest>/<plugin-name>  (re-verify)
             docs/skill-guides/ 시각 가이드 추가 → /devx:visualize
 

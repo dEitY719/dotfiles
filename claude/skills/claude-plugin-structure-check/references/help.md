@@ -25,7 +25,7 @@ Layout modes & auto-detection:
 
 What it checks (read-only — never edits; paths shown for mono | single):
 
-  Mandatory (M1-M9 — missing → FAIL)
+  Mandatory (M1-M10 — missing → FAIL)
     M1  .claude-plugin/marketplace.json        exists + valid JSON
     M2  >=1 plugin root                         plugins/<p>/ | root plugin.json
     M3  plugin.json valid                       plugins/<p>/.claude-plugin/ | root .claude-plugin/
@@ -35,6 +35,7 @@ What it checks (read-only — never edits; paths shown for mono | single):
     M7  plugins[].source present                each element carries a source (#61)
     M8  plugins[].source shape valid            local path | { source:url, url:… }
     M9  mono plugin dirs exist                  ./plugins/<name>/ present (mono only)
+    M10 plugin.json known fields only            no unsupported key e.g. skills (#65)
 
   Recommended (R1-R8 — missing → WARN)
     R1  docs/skill-guides/<skill>.html         per-skill guide
@@ -46,10 +47,14 @@ What it checks (read-only — never edits; paths shown for mono | single):
     R7  listing metadata                       description + object plugin homepage
     R8  README add-URL hint                    prefer raw marketplace.json over .git
 
-M5/M6, M7/M8 and R1-R8 are mode-independent — only the M2/M3/M4/M9 check paths
-and skill discovery differ between modes. Each item reports PASS / WARN / FAIL /
-N/A. N/A means the subject does not exist (e.g. a plugin with 0 skills →
-R1/R2/R5 are N/A; M9 → N/A in single mode).
+M5/M6, M7/M8 and R1-R8 are mode-independent — only the M2/M3/M4/M9/M10 check
+paths and skill discovery differ between modes. Each item reports PASS / WARN /
+FAIL / N/A. N/A means the subject does not exist (e.g. a plugin with 0 skills →
+R1/R2/R5 are N/A; M9 → N/A in single mode; M10 → N/A when no valid plugin.json).
+
+Note: structure-check PASS != install/runtime success — install can still
+succeed while a schema-violating plugin.json (M10, e.g. a skills field) blocks
+the plugin from loading; a marketplace source problem (M7-M9) can block install.
 
 Verdict:
   any FAIL → FAIL ; no FAIL but >=1 WARN → WARN ; all PASS/N/A → PASS
