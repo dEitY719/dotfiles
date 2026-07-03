@@ -177,6 +177,14 @@ _merge_claude_settings_json() {
     # Deep merge: base * overlay * (existing - legacy gateway keys).
     # 사용자 편집이 가장 우선 — 사내 PC 에서 ~/.claude/settings.json 을 직접
     # 손대지 않는 게 정상이지만, 손댄 경우 보존된다. _comment 는 머지에서 항상 제거.
+    #
+    # SSOT-우선 필드 (#1088): jq 의 `*` 는 오브젝트만 재귀 병합하고 배열은 RHS
+    # 로 대체한다. hooks.SessionStart 등은 배열이므로 existing (구값) 이 base
+    # (신값) 를 영구히 덮어써 SSOT 갱신이 절대 반영되지 않았다. hooks /
+    # statusLine (base 소유) 와 availableModels / modelOverrides (overlay 소유)
+    # 는 "SSOT 가 진실" 인 필드이므로 existing 에서 제거한 뒤 base/overlay 값이
+    # 그대로 살아나게 한다. model 등 사용자가 /model 로 바꾸는 필드는 화이트
+    # 리스트에 없으므로 그대로 existing 이 보존된다.
     _tmp_merged=$(mktemp)
     if jq -s '
         def _strip_gateway:
@@ -193,7 +201,8 @@ _merge_claude_settings_json() {
         (.[0])                          as $base
         | (.[1] | del(._comment?))      as $overlay
         | (.[2] | _strip_gateway)       as $existing
-        | $base * $overlay * $existing
+        | $base * $overlay
+            * ($existing | del(.hooks, .statusLine, .availableModels, .modelOverrides))
     ' "$_base" "$_overlay" "$_tgt" > "$_tmp_merged"; then
         if cmp -s "$_tgt" "$_tmp_merged"; then
             rm -f "$_tmp_merged"
