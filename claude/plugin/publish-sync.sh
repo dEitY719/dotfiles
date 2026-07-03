@@ -52,6 +52,33 @@ _repo_target() {
 	esac
 }
 
+# _fetch_origin <repo_dir>
+#
+# Fetch origin with a few retries. The SSH-over-443 handshake to GitHub
+# intermittently times out ("Connection timed out during banner exchange")
+# — a transient network fault that a single-shot fetch would turn into a
+# hard "publish skipped" for the whole run. Retries PUBLISH_SYNC_FETCH_TRIES
+# times (default 3) with a PUBLISH_SYNC_FETCH_DELAY-second backoff (default
+# 3); on the final failure it prints git's REAL stderr (banner-exchange
+# timeout, auth error, …) rather than the old bare "fetch 실패" that hid the
+# cause. Prints nothing on success; returns the last fetch's exit status.
+_fetch_origin() {
+	local repo_dir="$1"
+	local tries="${PUBLISH_SYNC_FETCH_TRIES:-3}"
+	local delay="${PUBLISH_SYNC_FETCH_DELAY:-3}"
+	local i=1 err rc=0
+	while :; do
+		err=$(git -C "$repo_dir" fetch origin --quiet 2>&1)
+		rc=$?
+		[ "$rc" -eq 0 ] && return 0
+		[ "$i" -ge "$tries" ] && break
+		i=$((i + 1))
+		sleep "$delay"
+	done
+	[ -n "$err" ] && printf '%s\n' "$err" >&2
+	return "$rc"
+}
+
 # _manifest_diff_exists <repo_dir> <file...>
 #
 # Assumes `origin` has already been fetched by the caller. Returns 0 if
@@ -239,8 +266,8 @@ _publish_manifest_diff() {
 	shift 2
 	local before_origin
 
-	git -C "$repo_dir" fetch origin --quiet 2>/dev/null || {
-		echo "[$label] origin fetch 실패 — 건너뜀" >&2
+	_fetch_origin "$repo_dir" || {
+		echo "[$label] origin fetch 실패 (재시도 후) — 건너뜀" >&2
 		return 1
 	}
 
@@ -296,8 +323,8 @@ _cleanup_local_main_if_pure_sync() {
 	shift 2
 	local sha msg f changed pure=1 match want cur_branch
 
-	git -C "$repo_dir" fetch origin --quiet 2>/dev/null || {
-		echo "publish-sync: 정리 단계 fetch 실패 — 로컬 main은 그대로 둡니다" >&2
+	_fetch_origin "$repo_dir" || {
+		echo "publish-sync: 정리 단계 fetch 실패 (재시도 후) — 로컬 main은 그대로 둡니다" >&2
 		return 1
 	}
 

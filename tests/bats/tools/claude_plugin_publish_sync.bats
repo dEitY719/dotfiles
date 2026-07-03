@@ -89,6 +89,79 @@ _route_origin_offline() {
     git -C "$repo_dir" config "url.${bare_path}.insteadOf" "$fake_url"
 }
 
+# Installs a fake `git` at the front of PATH that intercepts ONLY the
+# `fetch` subcommand (delegating every other git invocation to the real
+# git via exec). Each fetch increments $GIT_STUB_DIR/fetch_count; a fetch
+# whose count is <= the number in $GIT_STUB_DIR/fail_until fails with a
+# realistic transient handshake error on stderr and exit 128 (the exact
+# shape the live "Connection timed out during banner exchange" flake
+# produced). Lets tests drive _fetch_origin's retry/error-surfacing paths
+# fully offline.
+_install_git_fetch_stub() {
+    GIT_STUB_DIR="$TEST_TEMP_HOME/git-stub"
+    mkdir -p "$GIT_STUB_DIR/bin"
+    echo 0 >"$GIT_STUB_DIR/fetch_count"
+    echo "${1:-0}" >"$GIT_STUB_DIR/fail_until"
+    local real_git
+    real_git=$(command -v git)
+
+    cat >"$GIT_STUB_DIR/bin/git" <<STUB
+#!/usr/bin/env bash
+for a in "\$@"; do
+    if [ "\$a" = "fetch" ]; then
+        cf="$GIT_STUB_DIR/fetch_count"
+        n=\$(( \$(cat "\$cf") + 1 ))
+        echo "\$n" >"\$cf"
+        fail_until=\$(cat "$GIT_STUB_DIR/fail_until" 2>/dev/null || echo 0)
+        if [ "\$n" -le "\$fail_until" ]; then
+            echo "Connection timed out during banner exchange" >&2
+            echo "fatal: Could not read from remote repository." >&2
+            exit 128
+        fi
+        exit 0
+    fi
+done
+exec "$real_git" "\$@"
+STUB
+    chmod +x "$GIT_STUB_DIR/bin/git"
+    PATH="$GIT_STUB_DIR/bin:$PATH"
+    # Zero the backoff so retry tests don't actually sleep.
+    PUBLISH_SYNC_FETCH_DELAY=0
+    export PATH PUBLISH_SYNC_FETCH_DELAY
+}
+
+@test "_fetch_origin retries a transient fetch failure and then succeeds" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    # Fail the first two fetches, succeed on the third; allow up to 3 tries.
+    _install_git_fetch_stub 2
+    PUBLISH_SYNC_FETCH_TRIES=3
+    export PUBLISH_SYNC_FETCH_TRIES
+
+    run _fetch_origin "$REPO"
+    assert_success
+    # Proves it actually retried rather than giving up on the first failure.
+    run cat "$GIT_STUB_DIR/fetch_count"
+    assert_output "3"
+}
+
+@test "_fetch_origin surfaces the real git error after exhausting retries" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    # Fail every attempt.
+    _install_git_fetch_stub 99
+    PUBLISH_SYNC_FETCH_TRIES=3
+    export PUBLISH_SYNC_FETCH_TRIES
+
+    run _fetch_origin "$REPO"
+    assert_failure
+    # The real transient cause must reach stderr, not be swallowed by 2>/dev/null.
+    assert_output --partial "banner exchange"
+    # Exactly PUBLISH_SYNC_FETCH_TRIES attempts, no more.
+    run cat "$GIT_STUB_DIR/fetch_count"
+    assert_output "3"
+}
+
 @test "_manifest_diff_exists returns false when files match origin/main" {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
