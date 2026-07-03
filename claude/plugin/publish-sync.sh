@@ -472,16 +472,26 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	# Serialize concurrent publishing runs — the plugin-sync hook can fire
 	# while a manual `publish-sync.sh` is mid-flight, and both would otherwise
 	# open a PR for the same manifest diff (the second lands as a no-op, but
-	# still churns a branch + PR). Per-repo, non-blocking lock kept in .git
-	# (untracked, so it never dirties the tree); a second run exits cleanly
-	# rather than piling up. Skipped for --dry-run (read-only) and when flock
-	# (util-linux) or the lock path is unavailable — then we simply proceed.
-	if [ "$DRY_RUN" = "0" ] && command -v flock >/dev/null 2>&1 &&
-		[ -d "$MAIN_ROOT/.git" ] &&
-		exec 9>"$MAIN_ROOT/.git/publish-sync.lock"; then
-		if ! flock -n 9; then
-			echo "publish-sync: 다른 인스턴스가 실행 중 — 이번 실행은 건너뜁니다"
-			exit 0
+	# still churns a branch + PR). Per-repo, non-blocking lock kept in the git
+	# dir (untracked, so it never dirties the tree); a second run exits cleanly
+	# rather than piling up. The git dir is resolved via `git rev-parse
+	# --git-dir` rather than a bare `[ -d "$MAIN_ROOT/.git" ]`: in a worktree
+	# `.git` is a FILE ("gitdir: …"), not a directory, so the -d test would
+	# silently skip locking there (#1096 review). Skipped for --dry-run
+	# (read-only) and when flock (util-linux) or the git dir is unavailable —
+	# then we simply proceed. Top-level scope, so no `local`.
+	if [ "$DRY_RUN" = "0" ] && command -v flock >/dev/null 2>&1; then
+		GIT_DIR_PATH=$(git -C "$MAIN_ROOT" rev-parse --git-dir 2>/dev/null || echo "")
+		case "$GIT_DIR_PATH" in
+		"") ;;                                        # not a git repo — proceed unlocked
+		/*) ;;                                        # already absolute
+		*) GIT_DIR_PATH="$MAIN_ROOT/$GIT_DIR_PATH" ;; # relative → anchor to MAIN_ROOT
+		esac
+		if [ -n "$GIT_DIR_PATH" ] && exec 9>"$GIT_DIR_PATH/publish-sync.lock"; then
+			if ! flock -n 9; then
+				echo "publish-sync: 다른 인스턴스가 실행 중 — 이번 실행은 건너뜁니다"
+				exit 0
+			fi
 		fi
 	fi
 
