@@ -91,12 +91,15 @@ _route_origin_offline() {
 
 # Installs a fake `git` at the front of PATH that intercepts ONLY the
 # `fetch` subcommand (delegating every other git invocation to the real
-# git via exec). Each fetch increments $GIT_STUB_DIR/fetch_count; a fetch
-# whose count is <= the number in $GIT_STUB_DIR/fail_until fails with a
-# realistic transient handshake error on stderr and exit 128 (the exact
-# shape the live "Connection timed out during banner exchange" flake
-# produced). Lets tests drive _fetch_origin's retry/error-surfacing paths
-# fully offline.
+# git via exec). The match is precise — `$1 == fetch`, or `git -C <path>
+# fetch` ($1 == -C, $3 == fetch), the exact form _fetch_origin uses — so a
+# stray "fetch" inside a commit message / branch name / path never gets
+# mis-intercepted (PR #1091 review). Each fetch increments
+# $GIT_STUB_DIR/fetch_count; a fetch whose count is <= the number in
+# $GIT_STUB_DIR/fail_until fails with a realistic transient handshake error
+# on stderr and exit 128 (the exact shape the live "Connection timed out
+# during banner exchange" flake produced). Lets tests drive _fetch_origin's
+# retry/error-surfacing paths fully offline.
 _install_git_fetch_stub() {
     GIT_STUB_DIR="$TEST_TEMP_HOME/git-stub"
     mkdir -p "$GIT_STUB_DIR/bin"
@@ -107,20 +110,24 @@ _install_git_fetch_stub() {
 
     cat >"$GIT_STUB_DIR/bin/git" <<STUB
 #!/usr/bin/env bash
-for a in "\$@"; do
-    if [ "\$a" = "fetch" ]; then
-        cf="$GIT_STUB_DIR/fetch_count"
-        n=\$(( \$(cat "\$cf") + 1 ))
-        echo "\$n" >"\$cf"
-        fail_until=\$(cat "$GIT_STUB_DIR/fail_until" 2>/dev/null || echo 0)
-        if [ "\$n" -le "\$fail_until" ]; then
-            echo "Connection timed out during banner exchange" >&2
-            echo "fatal: Could not read from remote repository." >&2
-            exit 128
-        fi
-        exit 0
+is_fetch=0
+if [ "\$1" = "fetch" ]; then
+    is_fetch=1
+elif [ "\$1" = "-C" ] && [ "\$3" = "fetch" ]; then
+    is_fetch=1
+fi
+if [ "\$is_fetch" -eq 1 ]; then
+    cf="$GIT_STUB_DIR/fetch_count"
+    n=\$(( \$(cat "\$cf") + 1 ))
+    echo "\$n" >"\$cf"
+    fail_until=\$(cat "$GIT_STUB_DIR/fail_until" 2>/dev/null || echo 0)
+    if [ "\$n" -le "\$fail_until" ]; then
+        echo "Connection timed out during banner exchange" >&2
+        echo "fatal: Could not read from remote repository." >&2
+        exit 128
     fi
-done
+    exit 0
+fi
 exec "$real_git" "\$@"
 STUB
     chmod +x "$GIT_STUB_DIR/bin/git"
