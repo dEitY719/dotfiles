@@ -78,6 +78,20 @@ _commit_pure_sync_change() {
     git -C "$repo_dir" commit -q -m "chore(claude-plugin): sync manifest"
 }
 
+_commit_pure_sync_change_dated() {
+    # Like _commit_pure_sync_change but pins author+committer dates so the
+    # commit is patch-identical to a same-content sibling yet carries a
+    # DISTINCT SHA — mirrors the real divergence (the hook's local sync commit
+    # and the gh-rebase-merged one share content but not SHA). Without this,
+    # two same-content commits made in the same wall-clock second collide to
+    # one SHA and the test never actually diverges.
+    local repo_dir="$1" rel_path="$2" content="$3" when="$4"
+    printf '%s\n' "$content" >"$repo_dir/$rel_path"
+    git -C "$repo_dir" add "$rel_path"
+    GIT_AUTHOR_DATE="$when" GIT_COMMITTER_DATE="$when" \
+        git -C "$repo_dir" commit -q -m "chore(claude-plugin): sync manifest"
+}
+
 _route_origin_offline() {
     # Point <repo_dir>'s origin at a parseable GitHub URL (so _repo_target and
     # `gh` see a real host/owner/repo) while redirecting actual git transport to
@@ -309,6 +323,12 @@ _install_gh_stub() {
 echo "\$*" >> "$GH_STUB_LOG"
 case "\$1 \$2" in
 "pr create")
+    # When pr_create_noise is set, emit a warning to stderr (which the script
+    # folds into its capture via 2>&1) to prove PR-number parsing survives
+    # non-URL noise instead of naively taking the last "/"-token of the blob.
+    if [ -f "$GH_STUB_DIR/pr_create_noise" ]; then
+        echo "Warning: 3 uncommitted changes in this repository" >&2
+    fi
     echo "https://example.com/owner/repo/pull/42"
     exit 0
     ;;
@@ -397,6 +417,24 @@ STUB
     run grep -c "^pr create" "$GH_STUB_LOG"
     assert_output "1"
     run grep -c "^pr merge.*--admin" "$GH_STUB_LOG"
+    assert_output "1"
+}
+
+@test "_open_and_merge_pr parses the PR number even when gh prints a warning to stderr" {
+    # Regression: pr_url used to be `${blob##*/}` over a stdout+stderr capture,
+    # so a stderr warning line could corrupt the PR number and misroute the
+    # merge. The URL is now extracted by pattern; the merge must target 42.
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    _install_gh_stub
+    echo "success" >"$GH_STUB_DIR/checks_result"
+    : >"$GH_STUB_DIR/pr_create_noise"
+
+    run _open_and_merge_pr "$REPO" "chore/plugin-sync-publish-public-20260702-000000"
+    assert_success
+    # merge invoked with the correct PR number, not a warning-corrupted token
+    run grep -c "^pr merge 42 .*--admin" "$GH_STUB_LOG"
     assert_output "1"
 }
 
@@ -611,37 +649,93 @@ STUB
     assert_not_equal "$MAIN_SHA" "$LOCAL_MAIN_BEFORE"
 }
 
-@test "_cleanup_local_main_if_pure_sync leaves checked-out main untouched and fails loudly when it has diverged from origin/main" {
+@test "_cleanup_local_main_if_pure_sync rebases a diverged checked-out main onto origin/main when the published commit shares its content" {
+    # The real post-publish state: the hook's local sync commit and the
+    # PR-merged one carry IDENTICAL content but different SHAs (gh pr merge
+    # --rebase re-commits), so main diverges and `--ff-only` can never
+    # succeed. With the working tree clean and purity proven, cleanup rebases
+    # onto origin/main — git's patch-id detection drops the now-redundant
+    # local commit — landing main exactly on origin/main (issue #1095).
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     BEFORE_ORIGIN=$(git -C "$REPO" rev-parse origin/main)
 
-    # local main is checked out and ahead of before_origin by a pure sync
-    # commit — the real post-publish state: plugin-sync.sh's hook
-    # committed locally but could never push.
+    # local main (checked out) ahead by the hook's pure sync commit
     _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
     LOCAL_MAIN=$(git -C "$REPO" rev-parse main)
 
-    # origin/main advances to a DIFFERENT sibling commit sharing
-    # before_origin as parent — the actual publish pipeline builds this
-    # independently via plumbing (_build_publish_commit), so it is never
-    # an ancestor/descendant of local main: a real fast-forward is
-    # impossible.
+    # origin/main advances to a sibling with the SAME content but a distinct
+    # SHA (pinned date) — as _build_publish_commit + gh rebase-merge produce.
+    # A fast-forward is impossible, but the patch is identical.
+    git -C "$REPO" checkout -q "$BEFORE_ORIGIN"
+    _commit_pure_sync_change_dated "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}' "2020-01-01T00:00:00 +0000"
+    PUBLISHED=$(git -C "$REPO" rev-parse HEAD)
+    git -C "$REPO" push -q origin "${PUBLISHED}:refs/heads/main"
+    git -C "$REPO" checkout -q main
+    assert_equal "$(git -C "$REPO" rev-parse HEAD)" "$LOCAL_MAIN"
+    assert_not_equal "$LOCAL_MAIN" "$PUBLISHED"
+
+    run _cleanup_local_main_if_pure_sync "$REPO" "$BEFORE_ORIGIN" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    assert_output --partial "정리했습니다"
+    # main now sits exactly on the published origin/main; the redundant local
+    # commit was dropped by the rebase.
+    assert_equal "$(git -C "$REPO" rev-parse main)" "$PUBLISHED"
+}
+
+@test "_cleanup_local_main_if_pure_sync leaves a diverged checked-out main untouched when the working tree is dirty" {
+    # The rebase auto-cleanup only runs on a clean tree — a dirty working
+    # tree falls back to the safe no-op + guidance, never risking user work.
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    BEFORE_ORIGIN=$(git -C "$REPO" rev-parse origin/main)
+
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
+    LOCAL_MAIN=$(git -C "$REPO" rev-parse main)
+
+    git -C "$REPO" checkout -q "$BEFORE_ORIGIN"
+    _commit_pure_sync_change_dated "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}' "2020-01-01T00:00:00 +0000"
+    PUBLISHED=$(git -C "$REPO" rev-parse HEAD)
+    git -C "$REPO" push -q origin "${PUBLISHED}:refs/heads/main"
+    git -C "$REPO" checkout -q main
+
+    # make the working tree dirty
+    echo "uncommitted work" >"$REPO/claude/plugin/plugins.json"
+
+    run _cleanup_local_main_if_pure_sync "$REPO" "$BEFORE_ORIGIN" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_failure
+    assert_output --partial "미커밋 변경"
+    # main untouched
+    assert_equal "$(git -C "$REPO" rev-parse main)" "$LOCAL_MAIN"
+}
+
+@test "_cleanup_local_main_if_pure_sync aborts the rebase and leaves main untouched when replaying the local commit conflicts" {
+    # Defensive edge: if a pure-sync local commit's content was never actually
+    # published (it differs from origin's), rebase replays it and may conflict.
+    # The cleanup must `rebase --abort` and leave main exactly where it was.
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    BEFORE_ORIGIN=$(git -C "$REPO" rev-parse origin/main)
+
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
+    LOCAL_MAIN=$(git -C "$REPO" rev-parse main)
+
+    # origin/main advances to a DIFFERENT content on the same file — the patch
+    # won't match, so rebase replays local and conflicts.
     git -C "$REPO" checkout -q "$BEFORE_ORIGIN"
     _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills-published"}'
     PUBLISHED=$(git -C "$REPO" rev-parse HEAD)
     git -C "$REPO" push -q origin "${PUBLISHED}:refs/heads/main"
-
-    # back to main, checked out, still sitting at the pre-publish local commit
     git -C "$REPO" checkout -q main
     assert_equal "$(git -C "$REPO" rev-parse HEAD)" "$LOCAL_MAIN"
 
     run _cleanup_local_main_if_pure_sync "$REPO" "$BEFORE_ORIGIN" claude/plugin/marketplaces.json claude/plugin/plugins.json
     assert_failure
-    assert_output --partial "갈라져 fast-forward 불가"
-
-    # local main must be left completely untouched — no reset, no rebase
+    assert_output --partial "rebase 중 충돌"
+    # main untouched, and no rebase left in progress
     assert_equal "$(git -C "$REPO" rev-parse main)" "$LOCAL_MAIN"
+    run git -C "$REPO" rev-parse --verify --quiet REBASE_HEAD
+    assert_failure
 }
 
 @test "_cleanup_local_main_if_pure_sync skips when an unrelated commit is mixed in" {
@@ -719,6 +813,34 @@ STUB
     assert_success
     assert_output --partial "[public] 변경 감지됨"
     assert_output --partial "[company] 변경 감지됨"
+}
+
+@test "running the script skips cleanly when another instance holds the lock" {
+    command -v flock >/dev/null 2>&1 || skip "flock not available"
+    mkdir -p "$TEST_TEMP_HOME/dotfiles"
+    _seed_repo_with_origin "$TEST_TEMP_HOME/dotfiles"
+    BARE=$(git -C "$TEST_TEMP_HOME/dotfiles" remote get-url origin)
+    GH_STUB_BARE_REPO="$BARE"
+    export GH_STUB_BARE_REPO
+
+    _commit_pure_sync_change "$TEST_TEMP_HOME/dotfiles" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
+    _install_gh_stub
+    _route_origin_offline "$TEST_TEMP_HOME/dotfiles" "https://github.com/dEitY719/dotfiles.git" "${BARE}"
+
+    # Hold the per-repo lock from THIS shell (inherited by the `run` child),
+    # so the script's own flock -n loses and it must skip without publishing.
+    LOCK="$TEST_TEMP_HOME/dotfiles/.git/publish-sync.lock"
+    exec 8>"$LOCK"
+    flock -n 8
+
+    run bash "$PUBLISH_SYNC"
+    assert_success
+    assert_output --partial "다른 인스턴스가 실행 중"
+    refute_output --partial "[public] 변경 감지됨"
+    run grep -c "^pr create" "$GH_STUB_LOG"
+    assert_output "0"
+
+    exec 8>&-
 }
 
 @test "running the script with -h/--help prints usage and exits 0 without requiring gh" {
