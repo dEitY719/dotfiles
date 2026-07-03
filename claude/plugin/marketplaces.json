@@ -3,7 +3,6 @@
   "superpowers-dev": "obra/superpowers",
   "openai-codex": "openai/codex-plugin-cc",
   "claude-plugins-official": "anthropics/claude-plugins-official",
-  "claude-plugin-visuals": "dEitY719/claude-plugin-visuals",
   "obsidian-skills": "kepano/obsidian-skills",
   "understand-anything": "Egonex-AI/Understand-Anything"
 }
