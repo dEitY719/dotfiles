@@ -7,13 +7,18 @@
 # both repos require changes to land via PR (branch protection / GHES
 # ruleset), so a direct `git push` always fails.
 #
-# Never checks out a branch, touches the real index, or moves HEAD in the
-# target repo: the publish commit is built with plumbing commands
-# (hash-object, read-tree into a scratch index, write-tree, commit-tree)
-# against origin/main, landed as a new ref, then pushed. Local `main` is
-# only ever fast-forwarded afterward, and only when every commit it was
-# ahead by is a pure "chore(claude-plugin): sync manifest" commit (see
-# _cleanup_local_main_if_pure_sync).
+# Never checks out a branch, touches the real index, or moves HEAD to build
+# the publish commit: it is built with plumbing commands (hash-object,
+# read-tree into a scratch index, write-tree, commit-tree) against
+# origin/main, landed as a new ref, then pushed. Afterward local `main` is
+# advanced to the published origin/main — fast-forwarded when it is a strict
+# ancestor, or (the usual case, since the hook's local sync commit and the
+# PR-merged one share content but not SHA and therefore diverge) rebased onto
+# it — but ONLY when every commit main was ahead by is a pure
+# "chore(claude-plugin): sync manifest" commit AND the working tree is clean.
+# git's patch-id detection drops the now-redundant published commit while
+# replaying any pure-sync commit whose content never actually landed, so
+# nothing is lost (see _cleanup_local_main_if_pure_sync).
 #
 # See docs/feature/superpowers-specs/2026-07-02-plugin-manifest-batch-publish-design.md
 set -uo pipefail
@@ -183,14 +188,24 @@ _open_and_merge_pr() {
 		return 1
 	}
 
-	pr_url=$(gh pr create --repo "$target" --head "$branch" --base main \
+	local pr_out
+	pr_out=$(gh pr create --repo "$target" --head "$branch" --base main \
 		--title "$SYNC_MSG" \
 		--body "plugin-sync.sh가 로컬에 쌓아둔 매니페스트 변경을 게시합니다. 자동 생성됨." \
 		2>&1) || {
-		echo "publish-sync: PR 생성 실패 — $pr_url" >&2
+		echo "publish-sync: PR 생성 실패 — $pr_out" >&2
 		return 1
 	}
+	# gh can fold warnings/deprecation notices into stdout via the 2>&1 above;
+	# pull the real PR URL out by pattern rather than trusting the whole blob,
+	# so a stray line can't corrupt `${pr_url##*/}` and silently target the
+	# wrong PR (or an empty number) at merge time. Take the last match.
+	pr_url=$(printf '%s\n' "$pr_out" | grep -oE 'https?://[^[:space:]]+/pull/[0-9]+' | tail -n1)
 	pr_number="${pr_url##*/}"
+	if [ -z "$pr_number" ]; then
+		echo "publish-sync: PR URL 파싱 실패 — gh 출력: $pr_out" >&2
+		return 1
+	fi
 	echo "publish-sync: PR 생성됨 — $pr_url"
 
 	# The `--json bucket` flag on the `pr checks` subcommand does not exist
@@ -314,14 +329,20 @@ _publish_manifest_diff() {
 
 # _cleanup_local_main_if_pure_sync <repo_dir> <before_origin_sha> <file...>
 #
-# After a successful publish, fast-forward local main to the new
-# origin/main IF every commit main was ahead of before_origin_sha by is a
-# pure SYNC_MSG commit touching only the given files. Otherwise leaves
-# main untouched. Never rebases or force-resets.
+# After a successful publish, advance local main to the new origin/main IF
+# every commit main was ahead of before_origin_sha by is a pure SYNC_MSG
+# commit touching only the given files. Fast-forwards when local main is a
+# strict ancestor; otherwise (main diverged because the PR-merged sync
+# commit landed with a different SHA than the hook's local one — the usual
+# case) rebases onto origin/main, but only when the working tree is clean —
+# git's patch-id detection drops the redundant published commit while
+# replaying any pure-sync commit whose content never landed, so nothing is
+# lost. Leaves main untouched with an explanatory message when the tree is
+# dirty, the rebase conflicts, or purity fails. Never force-resets.
 _cleanup_local_main_if_pure_sync() {
 	local repo_dir="$1" before_origin="$2"
 	shift 2
-	local sha msg f changed pure=1 match want cur_branch
+	local sha msg f pure=1 match want cur_branch
 
 	_fetch_origin "$repo_dir" || {
 		echo "publish-sync: 정리 단계 fetch 실패 (재시도 후) — 로컬 main은 그대로 둡니다" >&2
@@ -334,8 +355,12 @@ _cleanup_local_main_if_pure_sync() {
 			pure=0
 			break
 		fi
-		changed=$(git -C "$repo_dir" show --format= --name-only "$sha")
-		for f in $changed; do
+		# `git show --name-only` is newline-delimited; read line-by-line via
+		# process substitution (keeps the loop in this shell so `break 2` still
+		# escapes the outer rev-list loop) so a path containing spaces isn't
+		# word-split into false mismatches.
+		while IFS= read -r f; do
+			[ -n "$f" ] || continue
 			match=0
 			for want in "$@"; do
 				[ "$f" = "$want" ] && match=1 && break
@@ -344,7 +369,7 @@ _cleanup_local_main_if_pure_sync() {
 				pure=0
 				break 2
 			}
-		done
+		done < <(git -C "$repo_dir" show --format= --name-only "$sha")
 	done
 
 	if [ "$pure" -ne 1 ]; then
@@ -354,8 +379,25 @@ _cleanup_local_main_if_pure_sync() {
 
 	cur_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null || echo "")
 	if [ "$cur_branch" = "main" ]; then
-		if ! git -C "$repo_dir" merge --ff-only origin/main --quiet; then
-			echo "publish-sync: 로컬 main이 origin/main 과 갈라져 fast-forward 불가 — publish 는 성공했으니 필요하면 'git pull' 로 직접 정리하세요" >&2
+		if git -C "$repo_dir" merge --ff-only origin/main --quiet 2>/dev/null; then
+			: # local main was a strict ancestor — a plain fast-forward sufficed
+		elif git -C "$repo_dir" diff --quiet && git -C "$repo_dir" diff --cached --quiet; then
+			# Diverged, but purity is already proven (pure=1) and the working
+			# tree is clean. Rebase onto the new origin/main: git's patch-id
+			# detection drops the now-redundant published sync commit (the manual
+			# `git rebase origin/main` a user would otherwise run every publish),
+			# while REPLAYING any pure-sync commit whose content never actually
+			# landed — so nothing is lost. `--ff-only` can never succeed here
+			# because `gh pr merge --rebase` re-commits the snapshot under a new
+			# SHA, which is why the old code fell through to a manual-cleanup
+			# message on every real publish.
+			if ! git -C "$repo_dir" rebase origin/main >/dev/null 2>&1; then
+				git -C "$repo_dir" rebase --abort >/dev/null 2>&1 || true
+				echo "publish-sync: 로컬 main rebase 중 충돌 — publish 는 성공했으니 'git rebase origin/main' 으로 직접 정리하세요" >&2
+				return 1
+			fi
+		else
+			echo "publish-sync: 로컬 main 워킹트리에 미커밋 변경이 있어 정리를 건너뜁니다 — publish 는 성공했으니 필요하면 'git pull' 로 직접 정리하세요" >&2
 			return 1
 		fi
 	else
@@ -426,6 +468,22 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	MAIN_ROOT="$HOME/dotfiles"
 	PRIV_DIR="$MAIN_ROOT/claude/plugin/company"
 	RC=0
+
+	# Serialize concurrent publishing runs — the plugin-sync hook can fire
+	# while a manual `publish-sync.sh` is mid-flight, and both would otherwise
+	# open a PR for the same manifest diff (the second lands as a no-op, but
+	# still churns a branch + PR). Per-repo, non-blocking lock kept in .git
+	# (untracked, so it never dirties the tree); a second run exits cleanly
+	# rather than piling up. Skipped for --dry-run (read-only) and when flock
+	# (util-linux) or the lock path is unavailable — then we simply proceed.
+	if [ "$DRY_RUN" = "0" ] && command -v flock >/dev/null 2>&1 &&
+		[ -d "$MAIN_ROOT/.git" ] &&
+		exec 9>"$MAIN_ROOT/.git/publish-sync.lock"; then
+		if ! flock -n 9; then
+			echo "publish-sync: 다른 인스턴스가 실행 중 — 이번 실행은 건너뜁니다"
+			exit 0
+		fi
+	fi
 
 	if _public_publish_allowed; then
 		_publish_manifest_diff "$MAIN_ROOT" "public" \
