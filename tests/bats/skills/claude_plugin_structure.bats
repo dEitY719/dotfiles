@@ -640,6 +640,22 @@ build_single_perfect() {
     run cps_check_M8 "$REPO"; assert_output FAIL
 }
 
+@test "M8 FAIL: nested mono path ./plugins/foo/bar is not a valid source (codex review)" {
+    # mono sources are plugins/<name> — exactly one segment. A nested path must
+    # not pass the prefix check.
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": ["./plugins/foo/bar"] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M8 "$REPO"; assert_output FAIL
+}
+
+@test "M8 PASS: trailing-slash single-segment mono path ./plugins/demo/" {
+    mkdir -p "$REPO/.claude-plugin"
+    printf '{ "name": "repo", "plugins": ["./plugins/demo/"] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
+    run cps_check_M8 "$REPO"; assert_output PASS
+}
+
 # ---- M9 pluginRoot ↔ on-disk consistency (mono only, #1084) --------------
 
 @test "M9 FAIL: mono marketplace declares a plugin dir that is absent" {
@@ -653,6 +669,16 @@ build_single_perfect() {
 
 @test "M9 PASS: every declared mono plugin dir exists on disk" {
     build_perfect "$REPO"
+    run cps_check_M9 "$REPO"; assert_output PASS
+}
+
+@test "M9 checks the EXACT declared path, not basename (codex review)" {
+    # A bare 'plugins/demo' (no leading ./) must be checked at plugins/demo,
+    # not mis-derived. Present → PASS.
+    _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
+    mkdir -p "$REPO/.claude-plugin" "$REPO/plugins/demo"
+    printf '{ "name": "repo", "plugins": ["plugins/demo"] }\n' \
+        > "$REPO/.claude-plugin/marketplace.json"
     run cps_check_M9 "$REPO"; assert_output PASS
 }
 
