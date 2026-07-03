@@ -843,6 +843,38 @@ STUB
     exec 8>&-
 }
 
+@test "running the script locks correctly when MAIN_ROOT is a git worktree (.git is a file)" {
+    # #1096 review: in a worktree `.git` is a FILE, so the old `[ -d .git ]`
+    # test silently skipped locking. The git dir is now resolved via
+    # `git rev-parse --git-dir`, so the lock must still engage here.
+    command -v flock >/dev/null 2>&1 || skip "flock not available"
+
+    # canonical clone lives elsewhere; MAIN_ROOT ($HOME/dotfiles) is a worktree
+    CANON="$TEST_TEMP_HOME/canon"
+    _seed_repo_with_origin "$CANON"
+    git -C "$CANON" worktree add -q -b wt "$TEST_TEMP_HOME/dotfiles"
+    # sanity: .git is a FILE in the worktree, not a directory
+    [ -f "$TEST_TEMP_HOME/dotfiles/.git" ]
+    [ ! -d "$TEST_TEMP_HOME/dotfiles/.git" ]
+
+    _install_gh_stub
+
+    # resolve the worktree's real git dir (as the script does) and hold the
+    # lock there, so the script's own flock -n must lose and it skips.
+    GD=$(git -C "$TEST_TEMP_HOME/dotfiles" rev-parse --git-dir)
+    case "$GD" in /*) ;; *) GD="$TEST_TEMP_HOME/dotfiles/$GD" ;; esac
+    exec 8>"$GD/publish-sync.lock"
+    flock -n 8
+
+    run bash "$PUBLISH_SYNC"
+    assert_success
+    assert_output --partial "다른 인스턴스가 실행 중"
+    run grep -c "^pr create" "$GH_STUB_LOG"
+    assert_output "0"
+
+    exec 8>&-
+}
+
 @test "running the script with -h/--help prints usage and exits 0 without requiring gh" {
     # -h/--help must work even without `gh` on PATH — arg parsing happens
     # before the `command -v gh` gate.
