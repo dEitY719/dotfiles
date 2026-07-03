@@ -99,7 +99,9 @@ PRIV="$SCRIPT_DIR/company"
 # cloned repo on an internal PC. On external/public PCs it's out of scope and
 # its entries are protected only by the directory-source rule / whitelist.
 COMPANY_ACTIVE=0
-[ "$MODE" = "internal" ] && [ -d "$PRIV/.git" ] && COMPANY_ACTIVE=1
+if [ "$MODE" = "internal" ] && [ -d "$PRIV/.git" ]; then
+	COMPANY_ACTIVE=1
+fi
 
 _restore_from "$SCRIPT_DIR/marketplaces.json" "$SCRIPT_DIR/plugins.json" "공용"
 
@@ -127,13 +129,15 @@ WHITELIST="$SCRIPT_DIR/.local-marketplaces.json"
 # for surplus — the design's chosen resolution.
 _keep_marketplaces() {
 	jq -r 'keys[]' "$SCRIPT_DIR/marketplaces.json" 2>/dev/null
-	[ "$COMPANY_ACTIVE" -eq 1 ] && jq -r 'keys[]' "$PRIV/marketplaces.json" 2>/dev/null
+	[ "$COMPANY_ACTIVE" -eq 1 ] && [ -f "$PRIV/marketplaces.json" ] &&
+		jq -r 'keys[]' "$PRIV/marketplaces.json" 2>/dev/null
 	[ -f "$WHITELIST" ] && jq -r '(.marketplaces // [])[]' "$WHITELIST" 2>/dev/null
 	return 0
 }
 _keep_plugins() {
 	jq -r '(.plugins // [])[]' "$SCRIPT_DIR/plugins.json" 2>/dev/null
-	[ "$COMPANY_ACTIVE" -eq 1 ] && jq -r '(.plugins // [])[]' "$PRIV/plugins.json" 2>/dev/null
+	[ "$COMPANY_ACTIVE" -eq 1 ] && [ -f "$PRIV/plugins.json" ] &&
+		jq -r '(.plugins // [])[]' "$PRIV/plugins.json" 2>/dev/null
 	[ -f "$WHITELIST" ] && jq -r '(.plugins // [])[]' "$WHITELIST" 2>/dev/null
 	return 0
 }
@@ -159,7 +163,7 @@ _local_plugins() {
         (.plugins // {}) | to_entries[]
         | select(any(.value[]?; .scope == "user"))
         | .key
-        | select(($m[(. | split("@") | last)].source.source // "") != "directory")
+        | select(($m[(. | split("@") | last)] | .source?.source? // "") != "directory")
     ' "$PL_LOCAL" 2>/dev/null
 	return 0
 }

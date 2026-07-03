@@ -165,6 +165,24 @@ JSON
     assert_output --partial '제거할 잉여 항목 없음'
 }
 
+@test "restore.sh --sync survives a plugin whose marketplace is not in known_marketplaces.json" {
+    # Regression: a plugin key whose @marketplace has no entry makes
+    # $m[key] null; indexing null with .source used to abort jq mid-stream.
+    export CLAUDE_SHARED_PLUGINS_DIR="$TEST_TEMP_HOME/shared"
+    mkdir -p "$CLAUDE_SHARED_PLUGINS_DIR"
+    cat > "$CLAUDE_SHARED_PLUGINS_DIR/known_marketplaces.json" <<'JSON'
+{"understand-anything": {"source": {"source": "github", "repo": "Egonex-AI/Understand-Anything"}}}
+JSON
+    cat > "$CLAUDE_SHARED_PLUGINS_DIR/installed_plugins.json" <<'JSON'
+{"plugins": {"orphan@ghostmp": [{"scope": "user"}]}}
+JSON
+    run "$PLUGDIR/restore.sh" --sync --dry-run
+    assert_success
+    # ghostmp is unknown locally and not in SSOT → the plugin is still surplus,
+    # and jq must not have crashed enumerating it.
+    assert_output --partial 'uninstall: orphan@ghostmp'
+}
+
 @test "restore.sh --sync keeps company plugins on internal mode with company/.git" {
     echo "internal" > "$TEST_TEMP_HOME/.dotfiles-setup-mode"
     mkdir -p "$PLUGDIR/company"
