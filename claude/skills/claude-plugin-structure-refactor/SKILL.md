@@ -7,8 +7,10 @@ description: >-
   only (create dirs, `git mv`, minimal marketplace.json/plugin.json
   skeletons, inject a missing `plugins[].source`, and strip unknown
   `plugin.json` fields with a backup — the #1084 install/load-fail fixes);
-  `--op`/`--recommended` adds recommended R1-R8 fixes (empty
-  placeholder stubs + naming correction + README link backfill). Idempotent.
+  `--op`/`--recommended` adds recommended R1-R5 fixes (empty
+  placeholder stubs + naming correction + README link backfill); R6-R8 are
+  audit-only WARNs the check surfaces but refactor does not auto-apply.
+  Idempotent.
   Supports both `mono` (`plugins/<p>/skills/`) and `single` (repo-root
   `skills/`) layouts — auto-detected, or forced with `--single` / `--mono`;
   it fixes toward the detected mode's golden layout and never converts
@@ -44,7 +46,8 @@ Positional `[repo-path]` (default = current dir). Flags:
 
 - `--apply` — execute changes. Absent → dry-run (plan only, no writes).
 - `--mandatory` / `--mp` — scope = M1-M10 only (default scope).
-- `--recommended` / `--op` — scope = M1-M10 + R1-R8.
+- `--recommended` / `--op` — scope = M1-M10 + R1-R5 fixes (R6-R8 are
+  audit-only WARNs, not auto-applied).
 - `--single` / `--mono` — force the **target** layout mode, overriding
   auto-detection (Step 2). Mutually exclusive; if both given, last wins.
   `--mp` and `--op` together → error + usage, stop.
@@ -69,8 +72,8 @@ Read `references/structure-spec.md` (embedded SSOT) for layout modes, mode detec
 ## Step 3: Build the Plan
 
 Read `references/plan-and-report-templates.md`. Produce an ordered change
-list, each tagged with its driving check ID (M1-M10, and R1-R8 only when
-scope is `--op`). **Paths are plugin-root relative** — single targets root
+list, each tagged with its driving check ID (M1-M10, and R1-R5 only when
+scope is `--op`; R6-R8 are audit-only and never produce a plan line). **Paths are plugin-root relative** — single targets root
 `./` (no `plugins/` dir ever created); mono targets `plugins/<p>/`.
 Already-correct items produce no action (idempotent). The plan header states
 the detected/forced mode; an unsupported conversion produces only the
@@ -83,7 +86,7 @@ the detected/forced mode; an unsupported conversion produces only the
   warning and stop — even under `--apply`, write nothing.
 - **`--apply`**: execute the plan in order following the **Apply rules**
   (mkdir → move → skeleton, fully listed in
-  `references/plan-and-report-templates.md`); `--op` adds R1-R8 — see
+  `references/plan-and-report-templates.md`); `--op` adds R1-R5 — see
   `references/op-rules.md`.
 
 ## Step 5: Report

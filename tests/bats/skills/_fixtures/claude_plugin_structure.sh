@@ -191,7 +191,9 @@ cps_check_M7() {
 
 cps_check_M8() {
     # Shape validity of each resolvable source (mono/single common):
-    #   local path : "." | "./" | "plugins/*" | "./plugins/*"
+    #   local path : "." | "./" (single) | "[./]plugins/<name>" — exactly ONE
+    #                segment after plugins/ (nested "./plugins/a/b" → FAIL, per
+    #                codex review: mono sources are plugins/<name> only)
     #   git URL    : object { "source":"url", "url":"<non-empty>" }
     # Only an object *missing* the source key is skipped (M7 owns that) — an
     # explicit null source, or a null plugin element, is collected and FAILs
@@ -214,7 +216,7 @@ cps_check_M8() {
         | select( if type=="object" then has("source") else true end )
         | select(
             ( ($s|type=="string") and
-              ( $s=="." or $s=="./" or ($s|startswith("plugins/")) or ($s|startswith("./plugins/")) ) )
+              ( $s=="." or $s=="./" or ($s|test("^(\\./)?plugins/[^/]+/?$")) ) )
             or
             ( $s=="url" and (($e.url // "")|type=="string") and (($e.url // "")|length>0) )
           | not )
@@ -238,14 +240,21 @@ cps_check_M9() {
         echo "N/A"
         return
     }
+    # Only well-formed single-segment mono paths (same shape M8 accepts); a
+    # nested/malformed path is M8's FAIL, not M9's concern. Check the EXACT
+    # declared relative path (strip a leading ./ and any trailing /), never
+    # basename — basename would probe the wrong dir for any multi-segment path
+    # (codex review).
     _paths="$(jq -r '(.plugins // [])[]
         | ( if type=="object" then .source else . end )
         | select(type=="string")
-        | select(test("^\\.?/?plugins/"))' "$_mf" 2>/dev/null)"
+        | select(test("^(\\./)?plugins/[^/]+/?$"))' "$_mf" 2>/dev/null)"
     while IFS= read -r _p; do
         [ -n "$_p" ] || continue
         _any=1
-        [ -d "$_repo/plugins/$(basename "$_p")" ] || {
+        _p="${_p#./}"
+        _p="${_p%/}"
+        [ -d "$_repo/$_p" ] || {
             echo FAIL
             return
         }

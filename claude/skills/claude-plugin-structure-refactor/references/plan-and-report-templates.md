@@ -37,7 +37,9 @@ claude-plugin structure refactor — <repo-path>   (mode: mono|single[, 추정] 
   `link` (append a per-skill Pages-URL guide link into README — R5).
 - Items already correct produce **no line** (idempotent — proof there is
   nothing to do is an empty plan + `총 0 변경`).
-- R1-R8 lines appear only when scope is `--op` / `--recommended`.
+- R1-R5 lines appear only when scope is `--op` / `--recommended`. R6-R8 are
+  audit-only WARNs (surfaced by structure-check) — refactor never emits a plan
+  line or applies a fix for them.
 
 ### Layout-conversion warning (forced mode ≠ detected mode)
 
