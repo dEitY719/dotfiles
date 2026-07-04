@@ -93,6 +93,9 @@ _claude_help_rows_plugin() {
     ux_table_row "./claude/plugin/restore.sh --dry-run" "실행 없이 계획만 출력 (--sync와 조합 가능)" ""
     ux_table_row "./claude/plugin/publish-sync.sh" "로컬에 쌓인 manifest sync 커밋을 PR로 origin에 게시" ""
     ux_table_row "./claude/plugin/publish-sync.sh --dry-run" "게시할 diff만 출력, 변경 없음" ""
+    ux_table_row "./claude/plugin/reconcile.sh --check" "SSOT(installed_plugins) 대비 manifest drift 감지 (유령 엔트리 포함)" ""
+    ux_table_row "./claude/plugin/reconcile.sh --apply" "manifest를 SSOT 기준으로 재빌드 + 커밋 (drift 복구)" ""
+    ux_table_row "claude-plugin-list" "설치된 플러그인을 마켓플레이스별로 요약 출력" ""
 }
 
 _claude_help_render_section() {
