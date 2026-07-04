@@ -12,9 +12,18 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
+# Inline help (`_<prefix>_help`) — Type 1 simple function, 0 sub-commands, so
+# help lives beside the dispatcher per command-design-pattern.md §7.
+_cpl_help() {
+    ux_info "Usage: claude-plugin-list"
+    ux_bullet "설치된 플러그인을 마켓플레이스별로 그룹핑해 출력"
+    ux_bullet_sub "SSOT: ~/.claude-shared/plugins/installed_plugins.json"
+    ux_bullet_sub "override: CLAUDE_SHARED_PLUGINS_DIR / CLAUDE_CONFIG_DIR"
+}
+
 # Resolve the plugins state dir: explicit override → default shared dir →
 # CLAUDE_CONFIG_DIR-derived. First one that actually holds the SSOT wins.
-_claude_plugin_list_dir() {
+_cpl_resolve_dir() {
     local cand
     for cand in \
         "${CLAUDE_SHARED_PLUGINS_DIR:-}" \
@@ -33,10 +42,7 @@ claude_plugin_list() {
 
     case "${1:-}" in
     -h | --help | help)
-        ux_info "Usage: claude-plugin-list"
-        ux_bullet "설치된 플러그인을 마켓플레이스별로 그룹핑해 출력"
-        ux_bullet_sub "SSOT: ~/.claude-shared/plugins/installed_plugins.json"
-        ux_bullet_sub "override: CLAUDE_SHARED_PLUGINS_DIR / CLAUDE_CONFIG_DIR"
+        _cpl_help
         return 0
         ;;
     esac
@@ -46,7 +52,7 @@ claude_plugin_list() {
         return 1
     fi
 
-    if ! shared_dir=$(_claude_plugin_list_dir); then
+    if ! shared_dir=$(_cpl_resolve_dir); then
         ux_error "installed_plugins.json 을 찾을 수 없습니다."
         ux_info "확인 경로: \${CLAUDE_SHARED_PLUGINS_DIR}, ~/.claude-shared/plugins, \${CLAUDE_CONFIG_DIR}/plugins"
         return 1
