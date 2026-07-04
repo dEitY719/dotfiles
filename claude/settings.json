@@ -8,6 +8,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": "${HOME}/dotfiles/claude/hooks/session-start-plugin-path-normalize.sh"
+          },
+          {
+            "type": "command",
             "command": "${HOME}/dotfiles/claude/hooks/session-start-pc-context.sh"
           },
           {

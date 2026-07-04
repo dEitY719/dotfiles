@@ -89,6 +89,8 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 
 `claude/hooks/session-start-settings-drift.sh` — `SessionStart` hook, `settings.json`에 등록됨. 모든 모드에서 live `settings.json`은 SSOT의 **실파일**이라 SSOT에 훅을 추가/변경한 커밋 이후 `./setup.sh`(internal: `./aws/setup.sh`) 재실행 전까지 새 훅이 발화하지 않는다(#1086). 이 훅은 SSOT(`claude/settings.json`, 스크립트 경로 기준 상대 해석)와 live(`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json`)의 `.hooks` 필드만 jq로 비교해 drift 감지 시 stderr + `additionalContext`로 재시드를 안내한다. Bedrock 오버레이는 `.hooks`를 건드리지 않아 오탐이 없다. 자기 자신의 최초 미설치는 감지 못하지만(체크인 후 1회 재시드 필요) 이후 추가되는 모든 훅은 커버한다. best-effort, 항상 exit 0.
 
+`claude/hooks/session-start-plugin-path-normalize.sh` — `SessionStart` hook, `plugin-sync-session.sh`보다 **먼저** 등록됨(#1098). 모든 계정 `plugins` 디렉터리가 `~/.claude-shared/plugins` 한 곳으로 symlink되어 SSOT를 공유하는데, Claude Code 2.1.199+는 marketplace `installLocation`을 `$CLAUDE_CONFIG_DIR/plugins/marketplaces` 기준 **문자열 prefix로만**(symlink 미해석) 검증한다. 공유 파일에 담긴 단일 표기는 다른 계정에서 "corrupted installLocation"으로 거부되므로, 이 훅이 시작 중인 계정의 `$CLAUDE_CONFIG_DIR` 표기로 `known_marketplaces.json`의 `installLocation`과 `installed_plugins.json`의 `installPath`(예방 차원)를 재작성한다(`~/.claude*/plugins/` prefix만 대상, 그 외 경로는 불변). 경로 **값**만 바꾸고 marketplace/plugin **키셋**은 건드리지 않아 `plugin-sync.sh`의 union-merge/삭제 감지에 영향을 주지 않는다. 의미 변화가 있을 때만 1회 백업 후 재작성하는 멱등 동작이라 매 세션 mtime이 안정적이다. best-effort, 항상 exit 0.
+
 ---
 
 ## Plugin Manifest (claude/plugin/)

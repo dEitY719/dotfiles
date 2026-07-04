@@ -55,3 +55,22 @@ SETTINGS="${_BATS_REAL_DOTFILES_ROOT}/claude/settings.json"
     ' "$SETTINGS"
     assert_success
 }
+
+@test "SessionStart includes session-start-plugin-path-normalize.sh (#1098)" {
+    run jq -e '
+        .hooks.SessionStart[].hooks[]
+        | select(.command | endswith("claude/hooks/session-start-plugin-path-normalize.sh"))
+    ' "$SETTINGS"
+    assert_success
+}
+
+@test "path-normalize runs BEFORE plugin-sync-session in SessionStart (#1098)" {
+    # The normalizer must re-stamp installLocation before plugin-sync-session
+    # snapshots its baseline, else the baseline captures stale spellings.
+    run jq -e '
+        .hooks.SessionStart[].hooks
+        | (map(.command | endswith("session-start-plugin-path-normalize.sh")) | index(true))
+          < (map(.command | endswith("plugin-sync-session.sh")) | index(true))
+    ' "$SETTINGS"
+    assert_success
+}
