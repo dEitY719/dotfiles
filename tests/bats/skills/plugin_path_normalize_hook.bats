@@ -71,11 +71,29 @@ JSON
     [ "$before" = "$after" ]
 }
 
-@test "a single backup is written only when a change is made" {
+@test "a single fixed .backup is written when a change is made (repo SSOT suffix)" {
     _seed_shared_spelling
     _session_start
     assert_success
+    # Repo convention is a single .backup file (DOTFILES_BACKUP_SUFFIX), never a
+    # timestamped .bak.* — so repeated account switches cannot accumulate backups.
+    [ -f "$TEST_TEMP_HOME/.claude-shared/plugins/known_marketplaces.json.backup" ]
     run bash -c "ls '$TEST_TEMP_HOME/.claude-shared/plugins/'known_marketplaces.json.bak.* 2>/dev/null | wc -l"
+    assert_output "0"
+}
+
+@test "backups stay bounded: a second change overwrites the single .backup" {
+    _seed_shared_spelling
+    _session_start
+    assert_success
+    # Simulate switching back to the shared spelling, then re-normalizing again.
+    cat > "$MP" <<JSON
+{"mp-a": {"source": {"source": "github", "repo": "org/a"},
+          "installLocation": "$TEST_TEMP_HOME/.claude-shared/plugins/marketplaces/mp-a"}}
+JSON
+    _session_start
+    assert_success
+    run bash -c "ls '$TEST_TEMP_HOME/.claude-shared/plugins/'known_marketplaces.json.backup* 2>/dev/null | wc -l"
     assert_output "1"
 }
 
