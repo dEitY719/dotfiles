@@ -52,45 +52,59 @@ CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 PLUGINS_DIR="$CONFIG_DIR/plugins"
 [ -d "$PLUGINS_DIR" ] || exit 0
 
-# Regex-escape $HOME so its dots/metachars are literal, then match any
-# ~/.claude<suffix>/plugins/ prefix and re-point it at the active config dir.
-# shellcheck disable=SC2016 # single quotes intentional — $ and & are sed syntax
-HOME_RE=$(printf '%s' "$HOME" | sed 's/[.[\*^$(){}+?|/]/\\&/g')
-PATTERN="^${HOME_RE}/\\.claude[^/]*/plugins/"
+# The active config dir's plugins/ — the spelling every path is re-pointed to.
 REPL="$PLUGINS_DIR/"
 
+# renorm(): the jq path-rewrite, shared by both files below. $HOME is passed as
+# a plain string and matched with startswith (no regex escaping — this is why we
+# no longer build a regex from $HOME via sed, which mishandled ] / - and differed
+# across sed implementations). Only the portion AFTER $HOME is regex-matched, and
+# that regex is a CONSTANT (^/.claude<suffix>/plugins/), so it needs no escaping.
+# A value not under ~/.claude*/plugins/ is returned unchanged.
+# shellcheck disable=SC2016 # single quotes intentional — $home/$repl are jq vars
+JQ_RENORM='
+def renorm($home; $repl):
+	if type == "string" and startswith($home) then
+		(.[($home | length):]) as $tail
+		| ($tail | sub("^/\\.claude[^/]*/plugins/"; "")) as $rest
+		| if $rest == $tail then . else $repl + $rest end
+	else . end;
+'
+
 # Rewrite one JSON file in place with the given jq program, touching it (with a
-# single timestamped backup) ONLY when the normalization changes semantic
+# single overwrite-in-place backup) ONLY when the normalization changes semantic
 # content. Change detection compares the normalized output against the ORIGINAL
 # reserialized through jq too, so jq's own reformatting is neutralized on both
 # sides — an already-correct file (whatever its byte formatting) is left as-is.
 # That idempotence keeps mtimes stable and avoids churning plugin-sync-session's
-# baseline hash on every startup.
+# baseline hash on every startup. The backup is a single fixed .backup file (repo
+# SSOT DOTFILES_BACKUP_SUFFIX, not a timestamped .bak) so frequent account
+# switching cannot accumulate backups without bound.
 _normalize_file() {
 	file="$1"
 	prog="$2"
 	[ -f "$file" ] || return 0
 	base=$(jq '.' "$file" 2>/dev/null) || return 0
 	[ -n "$base" ] || return 0
-	new=$(jq --arg pat "$PATTERN" --arg repl "$REPL" "$prog" "$file" 2>/dev/null) || return 0
+	new=$(jq --arg home "$HOME" --arg repl "$REPL" "$JQ_RENORM$prog" "$file" 2>/dev/null) || return 0
 	[ -n "$new" ] || return 0
 	[ "$new" = "$base" ] && return 0
-	cp "$file" "$file.bak.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || return 0
+	cp "$file" "$file.backup" 2>/dev/null || return 0
 	tmp="$file.tmp.$$"
 	printf '%s\n' "$new" >"$tmp" 2>/dev/null || return 0
 	mv "$tmp" "$file" 2>/dev/null || rm -f "$tmp"
 }
 
-# shellcheck disable=SC2016 # single quotes intentional — $pat/$repl are jq vars
+# shellcheck disable=SC2016 # single quotes intentional — $home/$repl are jq vars
 _normalize_file "$PLUGINS_DIR/known_marketplaces.json" '
 	with_entries(
 		if (.value.installLocation | type) == "string"
-		then .value.installLocation |= sub($pat; $repl)
+		then .value.installLocation |= renorm($home; $repl)
 		else . end
 	)
 '
 
-# shellcheck disable=SC2016 # single quotes intentional — $pat/$repl are jq vars
+# shellcheck disable=SC2016 # single quotes intentional — $home/$repl are jq vars
 _normalize_file "$PLUGINS_DIR/installed_plugins.json" '
 	if (.plugins | type) == "object" then
 		.plugins |= with_entries(
@@ -98,7 +112,7 @@ _normalize_file "$PLUGINS_DIR/installed_plugins.json" '
 				if type == "array" then
 					map(
 						if (.installPath | type) == "string"
-						then .installPath |= sub($pat; $repl)
+						then .installPath |= renorm($home; $repl)
 						else . end
 					)
 				else . end
