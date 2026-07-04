@@ -40,6 +40,34 @@ JSON
 JSON
 }
 
+# --- command-design-pattern.md §10 structural checks ------------------------
+
+_run_probe() {
+    bash --noprofile --norc -c "
+        export DOTFILES_FORCE_INIT=1
+        source '${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh'
+        source '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/claude_plugin_list.sh'
+        $1
+    "
+}
+
+@test "claude_plugin_list: public function exists" {
+    run _run_probe 'type claude_plugin_list'
+    assert_success
+    assert_output --partial 'function'
+}
+
+@test "claude_plugin_list: private sub-functions exist (_cpl_help, _cpl_resolve_dir)" {
+    run _run_probe 'type _cpl_help && type _cpl_resolve_dir'
+    assert_success
+}
+
+@test "claude_plugin_list: alias claude-plugin-list maps to the function" {
+    run _run_probe 'alias claude-plugin-list'
+    assert_success
+    assert_output --partial 'claude_plugin_list'
+}
+
 @test "claude-plugin-list --help prints usage without needing the SSOT" {
     run _run_list --help
     assert_success
