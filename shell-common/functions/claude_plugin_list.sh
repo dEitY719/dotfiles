@@ -15,20 +15,22 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # Resolve the plugins state dir: explicit override → default shared dir →
 # CLAUDE_CONFIG_DIR-derived. First one that actually holds the SSOT wins.
 _claude_plugin_list_dir() {
+    local cand
     for cand in \
         "${CLAUDE_SHARED_PLUGINS_DIR:-}" \
         "$HOME/.claude-shared/plugins" \
         "${CLAUDE_CONFIG_DIR:+$CLAUDE_CONFIG_DIR/plugins}"; do
-        [ -n "$cand" ] || continue
-        [ -f "$cand/installed_plugins.json" ] && {
+        if [ -n "$cand" ] && [ -f "$cand/installed_plugins.json" ]; then
             printf '%s' "$cand"
             return 0
-        }
+        fi
     done
     return 1
 }
 
 claude_plugin_list() {
+    local shared_dir pl_src mp_src mp_json count
+
     case "${1:-}" in
     -h | --help | help)
         ux_info "Usage: claude-plugin-list"
@@ -39,25 +41,28 @@ claude_plugin_list() {
         ;;
     esac
 
-    command -v jq >/dev/null 2>&1 || {
+    if ! command -v jq >/dev/null 2>&1; then
         ux_error "jq가 필요합니다."
         return 1
-    }
+    fi
 
-    shared_dir=$(_claude_plugin_list_dir) || {
+    if ! shared_dir=$(_claude_plugin_list_dir); then
         ux_error "installed_plugins.json 을 찾을 수 없습니다."
         ux_info "확인 경로: \${CLAUDE_SHARED_PLUGINS_DIR}, ~/.claude-shared/plugins, \${CLAUDE_CONFIG_DIR}/plugins"
         return 1
-    }
+    fi
     pl_src="$shared_dir/installed_plugins.json"
     mp_src="$shared_dir/known_marketplaces.json"
 
-    # marketplace → repo|url|path map (empty object if the file is absent).
-    mp_json=$(jq -c '
-        [to_entries[] | {(.key): (.value.source.repo // .value.source.url // .value.source.path // "")}]
-        | add // {}
-    ' "$mp_src" 2>/dev/null)
-    [ -n "$mp_json" ] || mp_json='{}'
+    # marketplace → repo|url|path map (empty object when the file is absent).
+    mp_json='{}'
+    if [ -f "$mp_src" ]; then
+        mp_json=$(jq -c '
+            [to_entries[] | {(.key): (.value.source.repo // .value.source.url // .value.source.path // "")}]
+            | add // {}
+        ' "$mp_src" 2>/dev/null)
+        [ -n "$mp_json" ] || mp_json='{}'
+    fi
 
     ux_header "Installed Claude Code Plugins"
 

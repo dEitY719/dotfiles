@@ -85,9 +85,14 @@ PL_SRC="$SHARED_DIR/installed_plugins.json"
 SYNC_MSG="chore(claude-plugin): sync manifest"
 
 # internal PC + cloned company/ repo → the private manifest is in scope.
-MODE=$(cat "$HOME/.dotfiles-setup-mode" 2>/dev/null || echo "")
+# `.git` is a *file* in a worktree, so probe with `git rev-parse --git-dir`
+# rather than `[ -d .git ]` (worktree-safe, matches the repo convention).
+MODE=""
+if [ -f "$HOME/.dotfiles-setup-mode" ]; then
+	MODE=$(cat "$HOME/.dotfiles-setup-mode")
+fi
 COMPANY_ACTIVE=0
-if [ "$MODE" = "internal" ] && [ -d "$PRIV_DIR/.git" ]; then
+if [ "$MODE" = "internal" ] && git -C "$PRIV_DIR" rev-parse --git-dir >/dev/null 2>&1; then
 	COMPANY_ACTIVE=1
 fi
 
@@ -127,9 +132,15 @@ plugins_private=$(_target_plugins_for_mp "$target_private") || exit 1
 
 # Compact JSON of file $1, or default $2 when missing/empty/invalid.
 _read_json_or() {
-	local out
-	out=$(jq -c '.' "$1" 2>/dev/null)
-	[ -n "$out" ] && printf '%s' "$out" || printf '%s' "$2"
+	local out=""
+	if [ -f "$1" ]; then
+		out=$(jq -c '.' "$1" 2>/dev/null)
+	fi
+	if [ -n "$out" ]; then
+		printf '%s' "$out"
+	else
+		printf '%s' "$2"
+	fi
 }
 
 # --- diff helpers ---------------------------------------------------------
@@ -170,12 +181,12 @@ _run_check() {
 	local drift=0 out
 
 	echo "== 공용(github) 매니페스트 =="
-	if out=$(_diff_marketplaces "$PUB_DIR/marketplaces.json" "$target_common"); then :; else
+	if ! out=$(_diff_marketplaces "$PUB_DIR/marketplaces.json" "$target_common"); then
 		drift=1
 		echo "marketplaces.json:"
 		printf '%s\n' "$out"
 	fi
-	if out=$(_diff_plugins "$PUB_DIR/plugins.json" "$plugins_common"); then :; else
+	if ! out=$(_diff_plugins "$PUB_DIR/plugins.json" "$plugins_common"); then
 		drift=1
 		echo "plugins.json:"
 		printf '%s\n' "$out"
@@ -183,12 +194,12 @@ _run_check() {
 
 	if [ "$COMPANY_ACTIVE" -eq 1 ]; then
 		echo "== 사내(company) 매니페스트 =="
-		if out=$(_diff_marketplaces "$PRIV_DIR/marketplaces.json" "$target_private"); then :; else
+		if ! out=$(_diff_marketplaces "$PRIV_DIR/marketplaces.json" "$target_private"); then
 			drift=1
 			echo "company/marketplaces.json:"
 			printf '%s\n' "$out"
 		fi
-		if out=$(_diff_plugins "$PRIV_DIR/plugins.json" "$plugins_private"); then :; else
+		if ! out=$(_diff_plugins "$PRIV_DIR/plugins.json" "$plugins_private"); then
 			drift=1
 			echo "company/plugins.json:"
 			printf '%s\n' "$out"
@@ -227,10 +238,14 @@ _commit_if_changed() {
 	local repo_dir="$1" msg="$2" f
 	shift 2
 	for f in "$@"; do
-		[ -f "$f" ] && set -- "$@" "$f"
+		if [ -f "$f" ]; then
+			set -- "$@" "$f"
+		fi
 		shift
 	done
-	[ "$#" -gt 0 ] || return 0
+	if [ "$#" -eq 0 ]; then
+		return 0
+	fi
 	git -C "$repo_dir" add -- "$@" 2>/dev/null || return 0
 	git -C "$repo_dir" diff --cached --quiet -- "$@" 2>/dev/null && return 0
 	if ! ALLOW_MAIN_COMMIT=1 git -C "$repo_dir" commit -m "$msg" --quiet 2>/dev/null; then
