@@ -41,6 +41,14 @@ _run_claude_help() {
     assert_output --partial 'claude/plugin/publish-sync.sh'
 }
 
+@test "claude-help plugin lists reconcile.sh and claude-plugin-list" {
+    run _run_claude_help plugin
+    assert_success
+    assert_output --partial 'claude/plugin/reconcile.sh --check'
+    assert_output --partial 'claude/plugin/reconcile.sh --apply'
+    assert_output --partial 'claude-plugin-list'
+}
+
 @test "claude-help --all renders the plugin section" {
     run _run_claude_help --all
     assert_success
