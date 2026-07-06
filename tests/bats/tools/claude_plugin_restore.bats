@@ -183,6 +183,51 @@ JSON
     assert_output --partial 'uninstall: orphan@ghostmp'
 }
 
+# --- #1103: target config dir routing -------------------------------------
+
+@test "restore.sh (public mode) targets ~/.claude-<default account>" {
+    echo "public" > "$TEST_TEMP_HOME/.dotfiles-setup-mode"
+    export CLAUDE_DEFAULT_ACCOUNT="personal"
+    export CLAUDE_ENABLED_ACCOUNTS="personal work"
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    assert_output --partial "대상 config dir: $TEST_TEMP_HOME/.claude-personal"
+    refute_output --partial "대상 config dir: $TEST_TEMP_HOME/.claude ="
+}
+
+@test "restore.sh --user <account> targets that account's config dir" {
+    echo "public" > "$TEST_TEMP_HOME/.dotfiles-setup-mode"
+    export CLAUDE_DEFAULT_ACCOUNT="personal"
+    export CLAUDE_ENABLED_ACCOUNTS="personal work"
+    run "$PLUGDIR/restore.sh" --user work --dry-run
+    assert_success
+    assert_output --partial "대상 config dir: $TEST_TEMP_HOME/.claude-work"
+}
+
+@test "restore.sh internal mode targets single-account ~/.claude" {
+    echo "internal" > "$TEST_TEMP_HOME/.dotfiles-setup-mode"
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    assert_output --partial "대상 config dir: $TEST_TEMP_HOME/.claude ="
+    refute_output --partial ".claude-"
+}
+
+@test "restore.sh --all-accounts fans out over every enabled account" {
+    echo "public" > "$TEST_TEMP_HOME/.dotfiles-setup-mode"
+    export CLAUDE_ENABLED_ACCOUNTS="personal work work1"
+    run "$PLUGDIR/restore.sh" --all-accounts --dry-run
+    assert_success
+    assert_output --partial "대상 config dir: $TEST_TEMP_HOME/.claude-personal"
+    assert_output --partial "대상 config dir: $TEST_TEMP_HOME/.claude-work"
+    assert_output --partial "대상 config dir: $TEST_TEMP_HOME/.claude-work1"
+}
+
+@test "restore.sh --user without a value fails with exit 2" {
+    run "$PLUGDIR/restore.sh" --user
+    assert_failure 2
+    assert_output --partial '--user 다음에 계정 이름이 필요합니다'
+}
+
 @test "restore.sh --sync keeps company plugins on internal mode with company/.git" {
     echo "internal" > "$TEST_TEMP_HOME/.dotfiles-setup-mode"
     mkdir -p "$PLUGDIR/company"
