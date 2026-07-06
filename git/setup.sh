@@ -6,7 +6,13 @@
 # WHEN TO RUN: Via ./setup.sh (do NOT run manually)
 #
 # SPECIAL FEATURES (why this file is REQUIRED):
-#   1. Creates ~/.gitconfig symlink to git/.gitconfig
+#   1. Creates ~/.gitconfig as a REAL machine-local file that [include]s the
+#      tracked SSOT (git/.gitconfig) — NOT a symlink. This mirrors the
+#      settings.json "real file, not symlink" rule in CLAUDE.md: tools that
+#      run `git config --global` (e.g. `gh auth setup-git`) write THROUGH a
+#      symlink and dirty the tracked SSOT with machine-specific absolute
+#      paths. With the include model those writes land in the local file and
+#      the SSOT stays clean. See git/AGENTS.md → "~/.gitconfig include model".
 #   2. Provides user feedback using UX library
 #   3. Ensures proper git configuration initialization
 #
@@ -78,6 +84,51 @@ create_symlink() {
 
     echo "${UX_MUTED}심볼릭 링크 생성: $link_name -> $target${UX_RESET}"
     ln -s "$target" "$link_name" || log_error_and_exit "심볼릭 링크 생성 실패: $link_name -> $target"
+}
+
+
+# ~/.gitconfig 를 "실파일 + [include] SSOT" 모델로 보장합니다 (symlink 금지).
+#
+# WHY: ~/.gitconfig 를 추적 SSOT 로 symlink 하면 `git config --global` 을 쓰는
+# 도구(대표적으로 `gh auth setup-git`)가 symlink 를 관통해 SSOT 를 머신별
+# 절대경로로 덮어써 이식성이 깨진다. include 모델에서는 그런 쓰기가 로컬
+# 실파일에만 쌓이고 SSOT 는 항상 clean 하게 유지된다. (CLAUDE.md 의
+# settings.json "실파일, symlink 아님" 규칙과 동일 원리)
+#
+# 멱등: 이미 include 가 있는 실파일이면 로컬 커스터마이즈를 보존하고 아무것도
+# 하지 않는다. 레거시 symlink 이면 제거 후 실파일로 전환한다.
+ensure_gitconfig_include() {
+    local ssot="$1"
+    local target="$2"
+
+    # 레거시 symlink 제거 (SSOT 는 repo 에 안전하게 있으므로 백업 불필요)
+    if [ -L "$target" ]; then
+        echo "${UX_MUTED}레거시 symlink 제거 (include 모델로 전환): $target${UX_RESET}"
+        rm "$target" || log_error_and_exit "기존 symlink 제거 실패: $target"
+    fi
+
+    if [ -f "$target" ]; then
+        # 이미 SSOT include 가 있으면 멱등 종료 (로컬 설정 보존)
+        if git config --file "$target" --get-all include.path 2>/dev/null | grep -qxF "$ssot"; then
+            ux_info ".gitconfig include 이미 설정됨 — 로컬 커스터마이즈 보존"
+            return 0
+        fi
+        # 실파일은 있는데 include 만 없음 → include 추가 (기존 내용 보존)
+        ux_info ".gitconfig 실파일에 SSOT include 추가"
+        git config --file "$target" --add include.path "$ssot" ||
+            log_error_and_exit "include.path 추가 실패: $target"
+        return 0
+    fi
+
+    # 신규 생성: include 를 최상단에 두어 이후 도구 쓰기가 로컬에 쌓이게 한다
+    ux_info ".gitconfig 실파일 생성 (SSOT include 모델)"
+    {
+        printf '# ~/.gitconfig — machine-local, NOT tracked.\n'
+        printf '# Tool writes (gh, git config --global) land HERE, never the tracked SSOT.\n'
+        printf '# Portable tracked config is included below. See git/AGENTS.md.\n'
+        printf '[include]\n'
+        printf '\tpath = %s\n' "$ssot"
+    } >"$target" || log_error_and_exit ".gitconfig 실파일 생성 실패: $target"
 }
 
 
@@ -215,11 +266,11 @@ setup_ssh_auto || ux_warning "SSH 설정 중 일부 작업이 실패했습니다
 echo ""
 
 
-# .gitconfig 심볼릭 링크 생성
+# .gitconfig: 실파일 + [include] SSOT 모델 (symlink 아님 — 함수 주석 참고)
 if [ -f "$GIT_CONFIG_SOURCE" ]; then
-    create_symlink "$GIT_CONFIG_SOURCE" "$HOME_GITCONFIG"
+    ensure_gitconfig_include "$GIT_CONFIG_SOURCE" "$HOME_GITCONFIG"
 else
-    ux_warning "경고: .gitconfig 파일이 '${GIT_CONFIG_SOURCE}' 경로에 없습니다. 심볼릭 링크를 생성하지 않습니다."
+    ux_warning "경고: .gitconfig SSOT 가 '${GIT_CONFIG_SOURCE}' 경로에 없습니다. include 설정을 건너뜁니다."
 fi
 
 
