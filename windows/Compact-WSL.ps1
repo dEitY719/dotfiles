@@ -28,6 +28,9 @@
     # 원격 실행 + 파라미터 전달 (iex 는 인자를 못 받으므로 scriptblock 사용):
     & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/dEitY719/dotfiles/main/windows/Compact-WSL.ps1'))) -DistroName "Ubuntu"
 
+    # 원격 실행 + sparse 모드 전환 (이후 자동 축소; iex 대신 scriptblock 필수):
+    & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/dEitY719/dotfiles/main/windows/Compact-WSL.ps1'))) -UseSparse
+
     # 파일로 저장 후 실행:
     .\Compact-WSL.ps1
     .\Compact-WSL.ps1 -UseSparse
