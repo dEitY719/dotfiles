@@ -1010,7 +1010,7 @@ claude_accounts_status() {
             echo "                → Run: claude-yolo --user $_cas_acct"
         fi
 
-        for _cas_link in settings.json settings.local.json statusline-command.sh plugins projects/GLOBAL/memory skills docs workflows; do
+        for _cas_link in settings.json settings.local.json statusline-command.sh plugins projects/GLOBAL/memory skills docs workflows CLAUDE.md; do
             if [ "$_cas_link" = "settings.json" ]; then
                 # settings.json is a real-file copy since #940 (was a
                 # symlink) — a symlink here is the legacy write-through
@@ -1351,8 +1351,8 @@ claude_accounts_rollback() {
 #
 # Scope: only touches symlinks whose name matches the well-known set
 # created by `_claude_account_setup_one`:
-#   settings.json, statusline-command.sh, skills, docs,
-#   projects/GLOBAL/memory
+#   settings.json, statusline-command.sh, skills, docs, workflows,
+#   projects/GLOBAL/memory, CLAUDE.md
 # `plugins` is intentionally excluded — it points at ~/.claude-shared/
 # (not DOTFILES_ROOT), so the worktree-bleed regression cannot reach it.
 #
@@ -1473,6 +1473,7 @@ skills|${_car_claude_src}/skills
 docs|${_car_claude_src}/docs
 workflows|${_car_claude_src}/workflows
 projects/GLOBAL/memory|${_car_claude_src}/global-memory
+CLAUDE.md|${_car_claude_src}/CLAUDE.md
 EOF
     done
 
