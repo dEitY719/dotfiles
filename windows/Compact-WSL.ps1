@@ -202,7 +202,16 @@ if ($UseSparse) {
     if ($AllowUnsafe) { $sparseArgs += '--allow-unsafe' }
 
     # 출력을 캡처해 성공/실패를 $LASTEXITCODE + 메시지로 판정한다.
-    $sparseOut = (wsl @sparseArgs 2>&1 | Out-String)
+    # wsl.exe 는 UTF-16LE 로 출력하므로, 콘솔 출력 인코딩을 Unicode 로 잠시
+    # 바꿔 캡처해야 한글 메시지와 E_INVALIDARG 문자열이 깨지지 않는다.
+    # (안 그러면 CP949 로 오독되어 mojibake + E_INVALIDARG 매칭 실패)
+    $prevOutEnc = [Console]::OutputEncoding
+    try {
+        [Console]::OutputEncoding = [System.Text.Encoding]::Unicode
+        $sparseOut = (wsl @sparseArgs 2>&1 | Out-String)
+    } finally {
+        [Console]::OutputEncoding = $prevOutEnc
+    }
     $sparseOut.TrimEnd() | Write-Host
 
     if ($LASTEXITCODE -eq 0 -and $sparseOut -notmatch 'E_INVALIDARG') {
