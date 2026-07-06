@@ -205,12 +205,21 @@ if ($UseSparse) {
     # wsl.exe 는 UTF-16LE 로 출력하므로, 콘솔 출력 인코딩을 Unicode 로 잠시
     # 바꿔 캡처해야 한글 메시지와 E_INVALIDARG 문자열이 깨지지 않는다.
     # (안 그러면 CP949 로 오독되어 mojibake + E_INVALIDARG 매칭 실패)
-    $prevOutEnc = [Console]::OutputEncoding
+    # 단, 콘솔 핸들이 없는 비대화형 환경(CI/러너, 백그라운드, 원격 세션 등)에서는
+    # [Console]::OutputEncoding 읽기/쓰기가 IOException("handle is invalid")을
+    # 던질 수 있고 $ErrorActionPreference="Stop" 이라 전체가 중단되므로,
+    # get/set 을 각각 try/catch 로 감싸 인코딩 전환 실패 시에도 계속 진행한다.
+    $prevOutEnc = $null
     try {
+        $prevOutEnc = [Console]::OutputEncoding
         [Console]::OutputEncoding = [System.Text.Encoding]::Unicode
+    } catch {}
+    try {
         $sparseOut = (wsl @sparseArgs 2>&1 | Out-String)
     } finally {
-        [Console]::OutputEncoding = $prevOutEnc
+        if ($null -ne $prevOutEnc) {
+            try { [Console]::OutputEncoding = $prevOutEnc } catch {}
+        }
     }
     $sparseOut.TrimEnd() | Write-Host
 
