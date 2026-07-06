@@ -11,7 +11,8 @@
 #   3. Creates ~/.claude/skills symlink (custom skills directory)
 #   4. Creates ~/.claude/docs symlink (custom docs directory)
 #   5. Creates ~/.claude/projects/GLOBAL/memory symlink (global memory)
-#   6. Verifies ~/.claude directory structure
+#   6. Creates ~/.claude/CLAUDE.md symlink (global instructions, #1115)
+#   7. Verifies ~/.claude directory structure
 #
 # Internal mode 에서 ~/.claude/settings.json 은 aws/setup.sh 가 dotfiles
 # SSOT (claude/settings.json) + Bedrock 오버레이
@@ -60,6 +61,7 @@ HOME_SKILLS="${HOME_CLAUDE}/skills"
 HOME_DOCS="${HOME_CLAUDE}/docs"
 HOME_GLOBAL_MEMORY="${HOME_CLAUDE}/projects/GLOBAL/memory"
 HOME_WORKFLOWS="${HOME_CLAUDE}/workflows"
+HOME_CLAUDE_MD="${HOME_CLAUDE}/CLAUDE.md"
 
 # Dotfiles source locations
 CLAUDE_SETTINGS_SOURCE="${CLAUDE_DOTFILES}/settings.json"
@@ -68,6 +70,7 @@ CLAUDE_SKILLS_SOURCE="${CLAUDE_DOTFILES}/skills"
 CLAUDE_DOCS_SOURCE="${CLAUDE_DOTFILES}/docs"
 CLAUDE_GLOBAL_MEMORY_SOURCE="${CLAUDE_DOTFILES}/global-memory"
 CLAUDE_WORKFLOWS_SOURCE="${CLAUDE_DOTFILES}/workflows"
+CLAUDE_MD_SOURCE="${CLAUDE_DOTFILES}/CLAUDE.md"
 
 # Load UX library (unified library at shell-common/tools/ux_lib/)
 UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
@@ -517,6 +520,7 @@ _print_change_summary() {
 [ -d "$CLAUDE_DOCS_SOURCE" ]          || log_error_and_exit "docs 디렉토리 없음: $CLAUDE_DOCS_SOURCE"
 [ -d "$CLAUDE_GLOBAL_MEMORY_SOURCE" ] || log_error_and_exit "global-memory 없음: $CLAUDE_GLOBAL_MEMORY_SOURCE"
 [ -d "$CLAUDE_WORKFLOWS_SOURCE" ]    || log_error_and_exit "workflows 디렉토리 없음: $CLAUDE_WORKFLOWS_SOURCE"
+[ -f "$CLAUDE_MD_SOURCE" ]            || log_error_and_exit "CLAUDE.md 없음: $CLAUDE_MD_SOURCE"
 
 # Auto-migrate legacy statusLine.command in claude/settings.json before any
 # downstream symlink uses it (issue #300, item A). Idempotent — only acts
@@ -651,6 +655,7 @@ if [ "$_setup_mode" = "internal" ]; then
     _single_account_ensure_link "$CLAUDE_GLOBAL_MEMORY_SOURCE"          "$HOME_GLOBAL_MEMORY"
     _single_account_ensure_link "$HOME/.claude-shared/plugins"          "$HOME/.claude/plugins"
     _single_account_ensure_link "$CLAUDE_WORKFLOWS_SOURCE"              "$HOME_WORKFLOWS"
+    _single_account_ensure_link "$CLAUDE_MD_SOURCE"                     "$HOME_CLAUDE_MD"
 
     # --- Verify Links (single-account) ---
     # settings.json is intentionally absent from this list — aws/setup.sh
@@ -659,7 +664,7 @@ if [ "$_setup_mode" = "internal" ]; then
     # skills/ is a real directory of entry-level symlinks (#707, F-8), so
     # it is checked as `-d` (and `! -L`) rather than `-L`.
     ux_section "심볼릭 링크 확인 (internal/single-account)"
-    for link in statusline-command.sh docs plugins projects/GLOBAL/memory workflows; do
+    for link in statusline-command.sh docs plugins projects/GLOBAL/memory workflows CLAUDE.md; do
         if [ -L "$HOME/.claude/$link" ]; then
             log_dim "✓ ~/.claude/$link 심볼릭 링크 확인됨"
         else
@@ -724,7 +729,7 @@ for acct in $ENABLED_ACCOUNTS; do
     else
         log_error_and_exit "${acct}/settings.json 실파일 생성 실패"
     fi
-    for link in statusline-command.sh docs plugins projects/GLOBAL/memory workflows; do
+    for link in statusline-command.sh docs plugins projects/GLOBAL/memory workflows CLAUDE.md; do
         if [ -L "${cdir}/${link}" ]; then
             log_dim "✓ ${acct}/${link} 심볼릭 링크 확인됨"
         else
