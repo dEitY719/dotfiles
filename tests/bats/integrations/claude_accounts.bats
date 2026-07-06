@@ -815,6 +815,7 @@ _setup_sh_prereqs() {
     [ -f "$HOME/.claude-personal/settings.json" ]
     [ ! -L "$HOME/.claude-personal/settings.json" ]
     [ -L "$HOME/.claude-personal/projects/GLOBAL/memory" ]
+    [ -L "$HOME/.claude-personal/CLAUDE.md" ]
 }
 
 @test "bash: claude/setup.sh respects Internal-PC mode via .dotfiles-setup-mode" {
@@ -833,6 +834,7 @@ _setup_sh_prereqs() {
     [ ! -d "$HOME/.claude-work" ]
     [ -d "$HOME/.claude" ]
     [ -L "$HOME/.claude/statusline-command.sh" ]
+    [ -L "$HOME/.claude/CLAUDE.md" ]
 }
 
 @test "bash: claude/setup.sh is idempotent (second run)" {
