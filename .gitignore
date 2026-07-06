@@ -69,3 +69,4 @@ claude/settings.local.json
 .understand-anything/tmp/
 .understand-anything/fingerprints.json
 .understand-anything/.trash-*/
+.understand-anything/*.log

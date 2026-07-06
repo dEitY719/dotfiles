@@ -33,6 +33,13 @@ dotfiles.egg-info/
 uv.lock
 *.pyc
 
+# --- Virtualenv / IDE metadata (external packages + tool state, not our code) ---
+.venv/
+.idea/
+# NOTE: .vscode/ is intentionally NOT excluded — this repo tracks real dotfiles
+# scripts there (sync-pull.sh, sync-push.sh, base.json, keybindings.json, README.md).
+# (Its PC-specific settings.json / *.backup.* are already gitignored at repo root.)
+
 # --- Binary assets (not code) ---
 font/
 *.ttf
