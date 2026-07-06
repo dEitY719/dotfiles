@@ -3,5 +3,6 @@
   "openai-codex": "openai/codex-plugin-cc",
   "claude-plugins-official": "anthropics/claude-plugins-official",
   "obsidian-skills": "kepano/obsidian-skills",
-  "understand-anything": "Egonex-AI/Understand-Anything"
+  "understand-anything": "Egonex-AI/Understand-Anything",
+  "superpowers-dev": "obra/superpowers"
 }
