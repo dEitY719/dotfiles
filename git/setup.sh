@@ -113,11 +113,22 @@ ensure_gitconfig_include() {
             ux_info ".gitconfig include 이미 설정됨 — 로컬 커스터마이즈 보존"
             return 0
         fi
-        # 실파일은 있는데 include 만 없음 → include 추가 (기존 내용 보존)
-        ux_info ".gitconfig 실파일에 SSOT include 추가"
-        git config --file "$target" --add include.path "$ssot" ||
-            log_error_and_exit "include.path 추가 실패: $target"
-        return 0
+        # 실파일은 있는데 include 만 없음 → include 를 "최상단"에 추가.
+        # 맨 아래에 추가하면 SSOT 설정이 기존 로컬 설정을 덮어써 우선순위가
+        # 역전됨 (git 은 위→아래 순차 평가, 뒤 값이 이김). PR #1105 gemini 리뷰.
+        ux_info ".gitconfig 실파일 최상단에 SSOT include 추가 (기존 로컬 설정 보존)"
+        local temp_file
+        temp_file=$(mktemp "${TMPDIR:-/tmp}/gitconfig_XXXXXX") ||
+            log_error_and_exit "임시 파일 생성 실패"
+        if {
+            printf '[include]\n\tpath = %s\n' "$ssot"
+            cat "$target"
+        } >"$temp_file" && mv "$temp_file" "$target"; then
+            return 0
+        else
+            rm -f "$temp_file"
+            log_error_and_exit "include.path 최상단 추가 실패: $target"
+        fi
     fi
 
     # 신규 생성: include 를 최상단에 두어 이후 도구 쓰기가 로컬에 쌓이게 한다
