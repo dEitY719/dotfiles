@@ -494,7 +494,9 @@ ux_section "Claude Code dotfiles setup"
 # 이번 실행에서 실제로 수행된 마이그레이션 건수 누적 (#997). 완료 직전
 # _print_change_summary 가 이 값을 변경 요약 라인에 집계한다. 마이그레이션
 # 함수들(statusLine / Stop hook / plugin 경로)은 모두 본 스크립트의 최상위
-# 셸에서 호출돼 서브셸 없이 값이 전파된다.
+# 셸에서 호출돼 서브셸 없이 값이 전파된다. model 이주(#940)는 sourced
+# claude.sh 의 _claude_ensure_settings_copy 에서 수행되지만 그 함수 역시
+# 계정 루프의 최상위 셸에서 직접 호출되므로 동일하게 이 값에 집계된다 (#1101).
 SETUP_MIGRATIONS=0
 
 # _print_change_summary — 완료 메시지 직전 "이번 실행에서 바뀐 것" 한 줄
