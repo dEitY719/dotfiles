@@ -63,6 +63,7 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 ~/.claude-personal/docs                  -> dotfiles/claude/docs            (dir symlink, #575)
 ~/.claude-personal/plugins               -> ~/.claude-shared/plugins
 ~/.claude-personal/projects/GLOBAL/memory -> dotfiles/claude/global-memory
+~/.claude-personal/CLAUDE.md             -> dotfiles/claude/CLAUDE.md       (글로벌 지침, #1115)
 
 # 사내 PC (옵션 2) — 단일 계정 (issue #571)
 ~/.claude/settings.json                  = aws/setup.sh 가 SSOT + Bedrock 오버레이를 merge 한 실파일 (#687)
@@ -71,6 +72,7 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 ~/.claude/docs                           -> dotfiles/claude/docs            (dir symlink)
 ~/.claude/plugins                        -> ~/.claude-shared/plugins
 ~/.claude/projects/GLOBAL/memory         -> dotfiles/claude/global-memory
+~/.claude/CLAUDE.md                      -> dotfiles/claude/CLAUDE.md       (글로벌 지침, #1115)
 
 # 모든 환경 공통 (issue #791 — 4 CLI 모두 entry-level 합성)
 ~/.codex/skills/<name>                   -> dotfiles/claude/skills/<name>   (entry symlink, #707 → #791)
