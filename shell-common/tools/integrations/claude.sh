@@ -703,6 +703,10 @@ _claude_ensure_settings_copy() {
                     printf '{ "model": "%s" }\n' "$_cesc_model" > "$_cesc_local"
                     chmod 600 "$_cesc_local"
                     ux_info "  migrated model '$_cesc_model' → $_cesc_local"
+                    # 변경 요약 집계 (#1101). setup.sh 최상위 셸에서 sourced 되어
+                    # SETUP_MIGRATIONS 를 공유하지만, interactive 소싱 등 변수가
+                    # 미정의인 컨텍스트도 있으므로 ${VAR:-0} 로 set -u 안전 처리.
+                    SETUP_MIGRATIONS=$((${SETUP_MIGRATIONS:-0} + 1))
                 elif [ -z "$(jq -r '.model // empty' "$_cesc_local" 2>/dev/null)" ]; then
                     # mktemp: 명시 템플릿 + TMPDIR 폴백 — BSD/macOS 이식성과
                     # 공유 /tmp 의 예측 가능한 이름 회피 (PR #943 리뷰).
@@ -713,6 +717,8 @@ _claude_ensure_settings_copy() {
                     elif jq --arg m "$_cesc_model" '.model = $m' "$_cesc_local" > "$_cesc_tmp"; then
                         mv "$_cesc_tmp" "$_cesc_local"
                         ux_info "  migrated model '$_cesc_model' → $_cesc_local"
+                        # 변경 요약 집계 (#1101) — set -u 안전. 위 분기와 동일.
+                        SETUP_MIGRATIONS=$((${SETUP_MIGRATIONS:-0} + 1))
                     else
                         rm -f "$_cesc_tmp"
                         ux_warning "  model migration failed — keeping $_cesc_local as-is"
