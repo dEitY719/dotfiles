@@ -9,6 +9,7 @@
     "ralph-loop@claude-plugins-official",
     "session-report@claude-plugins-official",
     "superpowers@claude-plugins-official",
+    "superpowers@superpowers-dev",
     "understand-anything@understand-anything"
   ]
 }
