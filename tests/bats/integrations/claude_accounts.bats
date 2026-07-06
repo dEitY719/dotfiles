@@ -465,6 +465,16 @@ SH
     assert_output --partial "workflows: symlink ✓"
 }
 
+@test "bash: claude_accounts_status reports CLAUDE.md symlink (#1115)" {
+    # The status loop enumerates the well-known link set by hand; a new
+    # link name must be added here or breakage never surfaces at
+    # diagnosis time (same failure mode as the #707 workflows omission).
+    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs" "${DOTFILES_ROOT}/claude/workflows"
+    run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init && CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
+    assert_success
+    assert_output --partial "CLAUDE.md: symlink ✓"
+}
+
 @test "bash: claude_accounts_status reports NOT logged in when no .credentials.json" {
     mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init && claude_accounts_status'
