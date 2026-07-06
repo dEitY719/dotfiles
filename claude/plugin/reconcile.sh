@@ -30,11 +30,13 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Load UX library for semantic log colors (#1114). Cosmetic only — falls
-# back to plain output when the lib is missing. ux_lib.sh itself handles
-# NO_COLOR / TERM=dumb / DOTFILES_TEST_MODE by leaving these vars empty.
+# Load UX library for semantic log colors (#1114). Cosmetic only — colors
+# are emitted only to an interactive TTY, so piped/redirected/automation
+# runs stay byte-plain for grep/snapshot consumers (#1116); a missing lib
+# also falls back to plain. ux_lib.sh self-disables on
+# NO_COLOR / TERM=dumb / DOTFILES_TEST_MODE as well.
 UX_LIB="$SCRIPT_DIR/../../shell-common/tools/ux_lib/ux_lib.sh"
-if [ -r "$UX_LIB" ]; then
+if [ -t 1 ] && [ -r "$UX_LIB" ]; then
 	# shellcheck source=../../shell-common/tools/ux_lib/ux_lib.sh
 	source "$UX_LIB"
 else
@@ -207,12 +209,12 @@ _run_check() {
 	if ! out=$(_diff_marketplaces "$PUB_DIR/marketplaces.json" "$target_common"); then
 		drift=1
 		echo "${UX_MUTED}marketplaces.json:${UX_RESET}"
-		printf '%s\n' "$out" | while IFS= read -r _line; do _color_diff_line "$_line"; done
+		while IFS= read -r _line; do _color_diff_line "$_line"; done <<<"$out"
 	fi
 	if ! out=$(_diff_plugins "$PUB_DIR/plugins.json" "$plugins_common"); then
 		drift=1
 		echo "${UX_MUTED}plugins.json:${UX_RESET}"
-		printf '%s\n' "$out" | while IFS= read -r _line; do _color_diff_line "$_line"; done
+		while IFS= read -r _line; do _color_diff_line "$_line"; done <<<"$out"
 	fi
 
 	if [ "$COMPANY_ACTIVE" -eq 1 ]; then
@@ -220,12 +222,12 @@ _run_check() {
 		if ! out=$(_diff_marketplaces "$PRIV_DIR/marketplaces.json" "$target_private"); then
 			drift=1
 			echo "${UX_MUTED}company/marketplaces.json:${UX_RESET}"
-			printf '%s\n' "$out" | while IFS= read -r _line; do _color_diff_line "$_line"; done
+			while IFS= read -r _line; do _color_diff_line "$_line"; done <<<"$out"
 		fi
 		if ! out=$(_diff_plugins "$PRIV_DIR/plugins.json" "$plugins_private"); then
 			drift=1
 			echo "${UX_MUTED}company/plugins.json:${UX_RESET}"
-			printf '%s\n' "$out" | while IFS= read -r _line; do _color_diff_line "$_line"; done
+			while IFS= read -r _line; do _color_diff_line "$_line"; done <<<"$out"
 		fi
 	else
 		echo "${UX_MUTED}(company/ 건너뜀 — 모드: ${MODE:-미설정})${UX_RESET}"
