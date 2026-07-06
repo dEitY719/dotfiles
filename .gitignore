@@ -61,3 +61,11 @@ claude/settings.local.json
 # These should NOT be tracked in dotfiles repo (environment-specific)
 ~/.oh-my-zsh/
 .oh-my-zsh/
+
+# understand-anything: 큐레이션 config + 지식 그래프는 추적, 작업 스크래치만 무시 (#1118)
+# 추적: config.json, .understandignore, knowledge-graph.json, meta.json
+# 무시: 재생성 가능한 중간 산출물 + auto-update 스테일니스 베이스라인(autoUpdate=false 이므로 불필요)
+.understand-anything/intermediate/
+.understand-anything/tmp/
+.understand-anything/fingerprints.json
+.understand-anything/.trash-*/

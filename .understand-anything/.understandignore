@@ -1,0 +1,41 @@
+# .understandignore — patterns for files/dirs to exclude from analysis
+# Syntax: same as .gitignore (globs, # comments, ! negation, trailing / for dirs)
+#
+# Scope: "Core dotfiles only" (chosen 2026-07-06)
+# Excludes vendored skill definitions, the nested example CLI, and cache/build dirs
+# so the graph reflects the actual dotfiles system (shell-common/, bash/, zsh/,
+# git/, scripts/, tests/, docs/, setup scripts).
+
+# --- Vendored / third-party content (dominates the graph, not "our" architecture) ---
+claude/skills/
+claude/built-in-skills/
+packages/
+
+# --- Secrets & environment-local files ---
+.git-credentials
+**/.git-credentials
+*.local.sh
+ssh/*.local
+aws/aws-config.local
+.env
+.secrets/
+.git-crypt/
+claude/settings.json.backup.*
+claude/settings.local.json
+
+# --- Caches, build artifacts, lockfiles ---
+*.egg-info/
+dotfiles.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.temp/
+uv.lock
+*.pyc
+
+# --- Binary assets (not code) ---
+font/
+*.ttf
+
+# --- The graph's own output dir ---
+.understand-anything/
