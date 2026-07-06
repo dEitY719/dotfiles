@@ -23,6 +23,19 @@
 # See docs/feature/superpowers-specs/2026-07-02-plugin-manifest-batch-publish-design.md
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Load UX library for semantic log colors (#1114). Cosmetic only — falls
+# back to plain output when the lib is missing. ux_lib.sh itself handles
+# NO_COLOR / TERM=dumb / DOTFILES_TEST_MODE by leaving these vars empty.
+UX_LIB="$SCRIPT_DIR/../../shell-common/tools/ux_lib/ux_lib.sh"
+if [ -r "$UX_LIB" ]; then
+	# shellcheck source=../../shell-common/tools/ux_lib/ux_lib.sh
+	source "$UX_LIB"
+else
+	UX_SUCCESS="" UX_ERROR="" UX_WARNING="" UX_MUTED="" UX_RESET=""
+fi
+
 # MUST stay byte-identical to SYNC_MSG in claude/hooks/plugin-sync.sh:30 —
 # _cleanup_local_main_if_pure_sync matches local commits against this string
 # to decide which are safe to fast-forward past. If the two drift, cleanup
@@ -184,7 +197,7 @@ _open_and_merge_pr() {
 	local tries=0 state="pending" saw_checks=0
 
 	target=$(_repo_target "$repo_dir") || {
-		echo "publish-sync: origin remote를 해석하지 못함 ($repo_dir)" >&2
+		echo "${UX_ERROR}publish-sync: origin remote를 해석하지 못함 ($repo_dir)${UX_RESET}" >&2
 		return 1
 	}
 
@@ -193,7 +206,7 @@ _open_and_merge_pr() {
 		--title "$SYNC_MSG" \
 		--body "plugin-sync.sh가 로컬에 쌓아둔 매니페스트 변경을 게시합니다. 자동 생성됨." \
 		2>&1) || {
-		echo "publish-sync: PR 생성 실패 — $pr_out" >&2
+		echo "${UX_ERROR}publish-sync: PR 생성 실패 — $pr_out${UX_RESET}" >&2
 		return 1
 	}
 	# gh can fold warnings/deprecation notices into stdout via the 2>&1 above;
@@ -203,10 +216,10 @@ _open_and_merge_pr() {
 	pr_url=$(printf '%s\n' "$pr_out" | grep -oE 'https?://[^[:space:]]+/pull/[0-9]+' | tail -n1)
 	pr_number="${pr_url##*/}"
 	if [ -z "$pr_number" ]; then
-		echo "publish-sync: PR URL 파싱 실패 — gh 출력: $pr_out" >&2
+		echo "${UX_ERROR}publish-sync: PR URL 파싱 실패 — gh 출력: $pr_out${UX_RESET}" >&2
 		return 1
 	fi
-	echo "publish-sync: PR 생성됨 — $pr_url"
+	echo "${UX_SUCCESS}publish-sync: PR 생성됨 — $pr_url${UX_RESET}"
 
 	# The `--json bucket` flag on the `pr checks` subcommand does not exist
 	# on gh <2.46ish (unknown flag: --json) — verified on gh 2.45.0, which
@@ -246,7 +259,7 @@ _open_and_merge_pr() {
 	case "$state" in
 	success) ;;
 	failed)
-		echo "publish-sync: status check 실패 — $pr_url 를 직접 확인하세요" >&2
+		echo "${UX_ERROR}publish-sync: status check 실패 — $pr_url 를 직접 확인하세요${UX_RESET}" >&2
 		return 1
 		;;
 	*)
@@ -255,19 +268,19 @@ _open_and_merge_pr() {
 		# genuinely checkless repo; otherwise checks appeared but stayed
 		# pending the whole window.
 		if [ "$saw_checks" -eq 0 ]; then
-			echo "publish-sync: status check가 구성되지 않은 리포 — 자동 병합하지 않습니다. $pr_url 를 직접 검토/병합하세요" >&2
+			echo "${UX_WARNING}publish-sync: status check가 구성되지 않은 리포 — 자동 병합하지 않습니다. $pr_url 를 직접 검토/병합하세요${UX_RESET}" >&2
 		else
-			echo "publish-sync: status check 대기 타임아웃 — $pr_url 를 직접 확인하세요" >&2
+			echo "${UX_ERROR}publish-sync: status check 대기 타임아웃 — $pr_url 를 직접 확인하세요${UX_RESET}" >&2
 		fi
 		return 1
 		;;
 	esac
 
 	gh pr merge "$pr_number" --repo "$target" --admin --rebase --delete-branch 2>&1 || {
-		echo "publish-sync: admin merge 실패 — $pr_url 를 직접 확인하세요" >&2
+		echo "${UX_ERROR}publish-sync: admin merge 실패 — $pr_url 를 직접 확인하세요${UX_RESET}" >&2
 		return 1
 	}
-	echo "publish-sync: 병합 완료 — $pr_url"
+	echo "${UX_SUCCESS}publish-sync: 병합 완료 — $pr_url${UX_RESET}"
 }
 
 # _publish_manifest_diff <repo_dir> <label> <file...>
@@ -282,15 +295,15 @@ _publish_manifest_diff() {
 	local before_origin
 
 	_fetch_origin "$repo_dir" || {
-		echo "[$label] origin fetch 실패 (재시도 후) — 건너뜀" >&2
+		echo "${UX_ERROR}[$label] origin fetch 실패 (재시도 후) — 건너뜀${UX_RESET}" >&2
 		return 1
 	}
 
 	if ! _manifest_diff_exists "$repo_dir" "$@"; then
-		echo "[$label] 변경 없음 — 할 일 없음"
+		echo "${UX_MUTED}[$label] 변경 없음 — 할 일 없음${UX_RESET}"
 		return 0
 	fi
-	echo "[$label] 변경 감지됨"
+	echo "${UX_MUTED}[$label] 변경 감지됨${UX_RESET}"
 
 	if [ "${DRY_RUN:-0}" = "1" ]; then
 		git -C "$repo_dir" diff origin/main -- "$@"
@@ -304,11 +317,11 @@ _publish_manifest_diff() {
 
 	local commit branch
 	commit=$(_build_publish_commit "$repo_dir" "$@") || {
-		echo "[$label] publish 커밋 생성 실패" >&2
+		echo "${UX_ERROR}[$label] publish 커밋 생성 실패${UX_RESET}" >&2
 		return 1
 	}
 	branch=$(_publish_branch "$repo_dir" "$label" "$commit") || {
-		echo "[$label] 브랜치 push 실패" >&2
+		echo "${UX_ERROR}[$label] 브랜치 push 실패${UX_RESET}" >&2
 		return 1
 	}
 	_open_and_merge_pr "$repo_dir" "$branch" || return 1
@@ -345,7 +358,7 @@ _cleanup_local_main_if_pure_sync() {
 	local sha msg f pure=1 match want cur_branch
 
 	_fetch_origin "$repo_dir" || {
-		echo "publish-sync: 정리 단계 fetch 실패 (재시도 후) — 로컬 main은 그대로 둡니다" >&2
+		echo "${UX_ERROR}publish-sync: 정리 단계 fetch 실패 (재시도 후) — 로컬 main은 그대로 둡니다${UX_RESET}" >&2
 		return 1
 	}
 
@@ -373,7 +386,7 @@ _cleanup_local_main_if_pure_sync() {
 	done
 
 	if [ "$pure" -ne 1 ]; then
-		echo "publish-sync: 로컬 main에 sync 외 다른 커밋이 섞여 있어 정리를 건너뜁니다 — 직접 확인하세요" >&2
+		echo "${UX_WARNING}publish-sync: 로컬 main에 sync 외 다른 커밋이 섞여 있어 정리를 건너뜁니다 — 직접 확인하세요${UX_RESET}" >&2
 		return 0
 	fi
 
@@ -393,11 +406,11 @@ _cleanup_local_main_if_pure_sync() {
 			# message on every real publish.
 			if ! git -C "$repo_dir" rebase origin/main >/dev/null 2>&1; then
 				git -C "$repo_dir" rebase --abort >/dev/null 2>&1 || true
-				echo "publish-sync: 로컬 main rebase 중 충돌 — publish 는 성공했으니 'git rebase origin/main' 으로 직접 정리하세요" >&2
+				echo "${UX_ERROR}publish-sync: 로컬 main rebase 중 충돌 — publish 는 성공했으니 'git rebase origin/main' 으로 직접 정리하세요${UX_RESET}" >&2
 				return 1
 			fi
 		else
-			echo "publish-sync: 로컬 main 워킹트리에 미커밋 변경이 있어 정리를 건너뜁니다 — publish 는 성공했으니 필요하면 'git pull' 로 직접 정리하세요" >&2
+			echo "${UX_WARNING}publish-sync: 로컬 main 워킹트리에 미커밋 변경이 있어 정리를 건너뜁니다 — publish 는 성공했으니 필요하면 'git pull' 로 직접 정리하세요${UX_RESET}" >&2
 			return 1
 		fi
 	else
@@ -405,7 +418,7 @@ _cleanup_local_main_if_pure_sync() {
 		# out in another linked worktree, avoiding a phantom diff there.
 		git -C "$repo_dir" branch -f main origin/main || return 1
 	fi
-	echo "publish-sync: 로컬 main을 origin/main으로 정리했습니다"
+	echo "${UX_SUCCESS}publish-sync: 로컬 main을 origin/main으로 정리했습니다${UX_RESET}"
 }
 
 # _public_publish_allowed
@@ -454,14 +467,14 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 		exit 0
 		;;
 	*)
-		echo "publish-sync.sh: 알 수 없는 인자: $1" >&2
+		echo "${UX_ERROR}publish-sync.sh: 알 수 없는 인자: $1${UX_RESET}" >&2
 		echo "usage: publish-sync.sh [--dry-run]  (-h 로 도움말)" >&2
 		exit 2
 		;;
 	esac
 
 	command -v gh >/dev/null 2>&1 || {
-		echo "gh CLI가 필요합니다." >&2
+		echo "${UX_ERROR}gh CLI가 필요합니다.${UX_RESET}" >&2
 		exit 1
 	}
 
@@ -489,7 +502,7 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 		esac
 		if [ -n "$GIT_DIR_PATH" ] && exec 9>"$GIT_DIR_PATH/publish-sync.lock"; then
 			if ! flock -n 9; then
-				echo "publish-sync: 다른 인스턴스가 실행 중 — 이번 실행은 건너뜁니다"
+				echo "${UX_WARNING}publish-sync: 다른 인스턴스가 실행 중 — 이번 실행은 건너뜁니다${UX_RESET}"
 				exit 0
 			fi
 		fi
@@ -499,7 +512,7 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 		_publish_manifest_diff "$MAIN_ROOT" "public" \
 			claude/plugin/marketplaces.json claude/plugin/plugins.json || RC=1
 	else
-		echo "[public] internal 모드 — github.com은 pull-only 정책이라 public manifest publish를 건너뜁니다 (사내→사외 push 금지)"
+		echo "${UX_MUTED}[public] internal 모드 — github.com은 pull-only 정책이라 public manifest publish를 건너뜁니다 (사내→사외 push 금지)${UX_RESET}"
 	fi
 
 	if [ -d "$PRIV_DIR/.git" ]; then

@@ -28,6 +28,30 @@
 # See docs/feature/superpowers-specs/2026-07-01-claude-plugin-manifest-design.md
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Load UX library for semantic log colors (#1114). Cosmetic only — falls
+# back to plain output when the lib is missing. ux_lib.sh itself handles
+# NO_COLOR / TERM=dumb / DOTFILES_TEST_MODE by leaving these vars empty.
+UX_LIB="$SCRIPT_DIR/../../shell-common/tools/ux_lib/ux_lib.sh"
+if [ -r "$UX_LIB" ]; then
+	# shellcheck source=../../shell-common/tools/ux_lib/ux_lib.sh
+	source "$UX_LIB"
+else
+	UX_SUCCESS="" UX_ERROR="" UX_WARNING="" UX_MUTED="" UX_RESET=""
+fi
+
+# Color one `_diff_marketplaces`/`_diff_plugins` output line by its leading
+# `+`/`-`/`~` marker (add/remove/change) — text itself is never altered.
+_color_diff_line() {
+	case "$1" in
+	"  +"*) printf '%s%s%s\n' "$UX_SUCCESS" "$1" "$UX_RESET" ;;
+	"  -"*) printf '%s%s%s\n' "$UX_ERROR" "$1" "$UX_RESET" ;;
+	"  ~"*) printf '%s%s%s\n' "$UX_WARNING" "$1" "$UX_RESET" ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
 MODE_ACTION="check"
 
 _usage() {
@@ -57,7 +81,7 @@ for arg in "$@"; do
 		exit 0
 		;;
 	*)
-		echo "알 수 없는 인자: $arg" >&2
+		echo "${UX_ERROR}알 수 없는 인자: $arg${UX_RESET}" >&2
 		_usage >&2
 		exit 2
 		;;
@@ -65,11 +89,10 @@ for arg in "$@"; do
 done
 
 command -v jq >/dev/null 2>&1 || {
-	echo "jq가 필요합니다." >&2
+	echo "${UX_ERROR}jq가 필요합니다.${UX_RESET}" >&2
 	exit 1
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PUB_DIR="$SCRIPT_DIR"
 PRIV_DIR="$SCRIPT_DIR/company"
 
@@ -98,8 +121,8 @@ fi
 
 for f in "$MP_SRC" "$PL_SRC"; do
 	if [ ! -f "$f" ]; then
-		echo "SSOT 파일이 없습니다: $f" >&2
-		echo "  → ~/.claude-shared/plugins 를 확인하거나 CLAUDE_SHARED_PLUGINS_DIR 를 설정하세요." >&2
+		echo "${UX_ERROR}SSOT 파일이 없습니다: $f${UX_RESET}" >&2
+		echo "${UX_ERROR}  → ~/.claude-shared/plugins 를 확인하거나 CLAUDE_SHARED_PLUGINS_DIR 를 설정하세요.${UX_RESET}" >&2
 		exit 1
 	fi
 done
@@ -180,39 +203,39 @@ _diff_plugins() {
 _run_check() {
 	local drift=0 out
 
-	echo "== 공용(github) 매니페스트 =="
+	echo "${UX_MUTED}== 공용(github) 매니페스트 ==${UX_RESET}"
 	if ! out=$(_diff_marketplaces "$PUB_DIR/marketplaces.json" "$target_common"); then
 		drift=1
-		echo "marketplaces.json:"
-		printf '%s\n' "$out"
+		echo "${UX_MUTED}marketplaces.json:${UX_RESET}"
+		printf '%s\n' "$out" | while IFS= read -r _line; do _color_diff_line "$_line"; done
 	fi
 	if ! out=$(_diff_plugins "$PUB_DIR/plugins.json" "$plugins_common"); then
 		drift=1
-		echo "plugins.json:"
-		printf '%s\n' "$out"
+		echo "${UX_MUTED}plugins.json:${UX_RESET}"
+		printf '%s\n' "$out" | while IFS= read -r _line; do _color_diff_line "$_line"; done
 	fi
 
 	if [ "$COMPANY_ACTIVE" -eq 1 ]; then
-		echo "== 사내(company) 매니페스트 =="
+		echo "${UX_MUTED}== 사내(company) 매니페스트 ==${UX_RESET}"
 		if ! out=$(_diff_marketplaces "$PRIV_DIR/marketplaces.json" "$target_private"); then
 			drift=1
-			echo "company/marketplaces.json:"
-			printf '%s\n' "$out"
+			echo "${UX_MUTED}company/marketplaces.json:${UX_RESET}"
+			printf '%s\n' "$out" | while IFS= read -r _line; do _color_diff_line "$_line"; done
 		fi
 		if ! out=$(_diff_plugins "$PRIV_DIR/plugins.json" "$plugins_private"); then
 			drift=1
-			echo "company/plugins.json:"
-			printf '%s\n' "$out"
+			echo "${UX_MUTED}company/plugins.json:${UX_RESET}"
+			printf '%s\n' "$out" | while IFS= read -r _line; do _color_diff_line "$_line"; done
 		fi
 	else
-		echo "(company/ 건너뜀 — 모드: ${MODE:-미설정})"
+		echo "${UX_MUTED}(company/ 건너뜀 — 모드: ${MODE:-미설정})${UX_RESET}"
 	fi
 
 	if [ "$drift" -eq 0 ]; then
-		echo "no drift — SSOT 와 매니페스트가 일치합니다."
+		echo "${UX_SUCCESS}no drift — SSOT 와 매니페스트가 일치합니다.${UX_RESET}"
 		return 0
 	fi
-	echo "drift 감지 — 복구하려면: reconcile.sh --apply"
+	echo "${UX_ERROR}drift 감지 — 복구하려면: reconcile.sh --apply${UX_RESET}"
 	return 1
 }
 
@@ -250,16 +273,16 @@ _commit_if_changed() {
 	git -C "$repo_dir" diff --cached --quiet -- "$@" 2>/dev/null && return 0
 	if ! ALLOW_MAIN_COMMIT=1 git -C "$repo_dir" commit -m "$msg" --quiet 2>/dev/null; then
 		if git -C "$repo_dir" reset -q -- "$@" 2>/dev/null; then
-			echo "reconcile: manifest commit failed in $repo_dir; changes left unstaged" >&2
+			echo "${UX_ERROR}reconcile: manifest commit failed in $repo_dir; changes left unstaged${UX_RESET}" >&2
 		else
-			echo "reconcile: manifest commit failed in $repo_dir; failed to unstage changes" >&2
+			echo "${UX_ERROR}reconcile: manifest commit failed in $repo_dir; failed to unstage changes${UX_RESET}" >&2
 		fi
 	fi
 }
 
 _run_apply() {
 	if [ -z "$MAIN_ROOT" ]; then
-		echo "git 저장소를 찾을 수 없습니다 ($SCRIPT_DIR). dotfiles 안에서 실행하세요." >&2
+		echo "${UX_ERROR}git 저장소를 찾을 수 없습니다 ($SCRIPT_DIR). dotfiles 안에서 실행하세요.${UX_RESET}" >&2
 		exit 1
 	fi
 
@@ -280,7 +303,7 @@ _run_apply() {
 			"$PRIV_DIR/marketplaces.json" "$PRIV_DIR/plugins.json"
 	fi
 
-	echo "apply 완료. 확인: reconcile.sh --check"
+	echo "${UX_SUCCESS}apply 완료. 확인: reconcile.sh --check${UX_RESET}"
 }
 
 case "$MODE_ACTION" in
