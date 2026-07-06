@@ -25,11 +25,13 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Load UX library for semantic log colors (#1114). Cosmetic only — falls
-# back to plain output when the lib is missing. ux_lib.sh itself handles
-# NO_COLOR / TERM=dumb / DOTFILES_TEST_MODE by leaving these vars empty.
+# Load UX library for semantic log colors (#1114). Cosmetic only — colors
+# are emitted only to an interactive TTY, so piped/redirected/automation
+# runs stay byte-plain for grep/snapshot consumers (#1116); a missing lib
+# also falls back to plain. ux_lib.sh self-disables on
+# NO_COLOR / TERM=dumb / DOTFILES_TEST_MODE as well.
 UX_LIB="$SCRIPT_DIR/../../shell-common/tools/ux_lib/ux_lib.sh"
-if [ -r "$UX_LIB" ]; then
+if [ -t 1 ] && [ -r "$UX_LIB" ]; then
 	# shellcheck source=../../shell-common/tools/ux_lib/ux_lib.sh
 	source "$UX_LIB"
 else
