@@ -909,7 +909,7 @@ JSON
     [ "$cmd" = '${HOME}/dotfiles/claude/statusline-command.sh' ]
     # Backup file lives in $HOME/.claude-backups, NOT in the dotfiles tree
     # (issue #554). Asserting both rules keeps a regression visible.
-    ls "$HOME/.claude-backups/" | grep -qE 'settings\.json\.pre-statusline-fix-[0-9]{14}'
+    ls "$HOME/.claude-backups/" | grep -qE 'settings\.json\.pre-statusline-fix\.backup'
     ! ls "${DOTFILES_ROOT}/claude/" 2>/dev/null | grep -qE 'settings\.json\.pre-statusline-fix-'
 }
 
