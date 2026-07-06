@@ -16,6 +16,7 @@
 - **SSOT Config**: Treat `git/config/hook-config.sh` as the single source of truth for patterns and thresholds.
 - **No Surprises**: Hook changes must be fast, deterministic, and explain failures clearly.
 - **Test First**: Add a failing case to `git/tests/test_hooks.sh` before tightening checks.
+- **~/.gitconfig include model (NOT a symlink)**: `git/setup.sh` creates `~/.gitconfig` as a **real machine-local file** whose first section is `[include] path = <repo>/git/.gitconfig`. Never symlink `~/.gitconfig` to the tracked SSOT. Reason: tools that run `git config --global` — chiefly `gh auth setup-git` (triggered by `gh auth login`/`refresh`) — write **through** a symlink and rewrite the SSOT's portable credential-helper line (`git/scripts/gh-credential-helper.sh`, which probes multiple `gh` install paths across PCs) into a machine-specific absolute path, breaking portability. With the include model those writes land in the local file and the SSOT stays clean. Same principle as CLAUDE.md's settings.json "real file, not symlink" rule. Defense in depth: `gh/config.yml` sets `git_protocol: ssh` so `gh` stops managing HTTPS credential helpers at all.
 
 # Testing Strategy
 
