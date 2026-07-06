@@ -47,6 +47,72 @@ _setup_conflicted_clone() {
     )
 }
 
+# Create: $ORIGIN2 (bare) <- $CLONE2 with a fully-MERGED branch whose upstream is
+# the BASE branch (origin/main) rather than its own remote head. This mirrors the
+# real #1108 case: a branch created off main (worktree / review branch) whose PR
+# was pushed under a DIFFERENT remote name. Its commits already live in
+# origin/main, so it is safe to delete — but `[gone]` can NEVER fire because
+# origin/main is not gone. Old teardown wrongly reported "PR not merged yet".
+_setup_merged_tracking_main() {
+    ORIGIN2="$TEST_TEMP_HOME/origin2.git"
+    CLONE2="$TEST_TEMP_HOME/clone2"
+
+    export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@test \
+           GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@test
+
+    git init --bare --initial-branch=main "$ORIGIN2" >/dev/null
+    git clone -q "$ORIGIN2" "$CLONE2"
+    (
+        cd "$CLONE2"
+        echo base > base.txt
+        git add base.txt && git commit -q -m base
+        git push -q origin main
+
+        # Feature branch off main; its work then lands in main (server-side merge).
+        git checkout -q -b feat/merged
+        echo work > work.txt
+        git add work.txt && git commit -q -m "feat: work"
+        git push -q origin feat/merged:main   # simulate the PR merge landing in main
+
+        # Advance main two more commits so feat/merged is strictly behind & ff-able.
+        git checkout -q main && git pull -q origin main
+        echo m1 > m1.txt && git add m1.txt && git commit -q -m m1
+        echo m2 > m2.txt && git add m2.txt && git commit -q -m m2
+        git push -q origin main
+
+        # The crux: feat/merged tracks the BASE branch, not its own remote head.
+        git branch --set-upstream-to=origin/main feat/merged >/dev/null
+        git checkout -q feat/merged
+        git fetch -q --prune origin
+    )
+}
+
+# Same shape, but the branch has a unique commit that is NOT in origin/main.
+# Safety must be preserved: teardown stays blocked without --force.
+_setup_unmerged_tracking_main() {
+    ORIGIN2="$TEST_TEMP_HOME/origin3.git"
+    CLONE2="$TEST_TEMP_HOME/clone3"
+
+    export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@test \
+           GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@test
+
+    git init --bare --initial-branch=main "$ORIGIN2" >/dev/null
+    git clone -q "$ORIGIN2" "$CLONE2"
+    (
+        cd "$CLONE2"
+        echo base > base.txt
+        git add base.txt && git commit -q -m base
+        git push -q origin main
+
+        git checkout -q -b feat/wip
+        echo wip > wip.txt
+        git add wip.txt && git commit -q -m "feat: wip (unmerged)"
+
+        git branch --set-upstream-to=origin/main feat/wip >/dev/null
+        git fetch -q --prune origin
+    )
+}
+
 setup() {
     setup_isolated_home
     _setup_conflicted_clone
@@ -102,6 +168,28 @@ teardown() {
     assert_failure
     run git -C "$CLONE" ls-files --unmerged
     assert_output ""
+}
+
+@test "teardown: fully-merged branch tracking base (origin/main) tears down without --force (#1108)" {
+    _setup_merged_tracking_main
+    run_in_bash "cd '$CLONE2' && gbr teardown 2>&1"
+    assert_success
+    assert_output --partial "Teardown complete"
+    [ "$(git -C "$CLONE2" symbolic-ref --short HEAD)" = "main" ]
+    # Branch is gone.
+    run git -C "$CLONE2" rev-parse --verify --quiet feat/merged
+    assert_failure
+}
+
+@test "teardown: UNMERGED branch tracking base (origin/main) is still blocked (safety)" {
+    _setup_unmerged_tracking_main
+    run_in_bash "cd '$CLONE2' && gbr teardown 2>&1"
+    assert_failure
+    assert_output --partial "not merged yet"
+    # Branch untouched, still checked out.
+    [ "$(git -C "$CLONE2" symbolic-ref --short HEAD)" = "feat/wip" ]
+    run git -C "$CLONE2" rev-parse --verify --quiet feat/wip
+    assert_success
 }
 
 @test "teardown --help documents --discard-changes" {

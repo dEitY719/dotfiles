@@ -256,53 +256,72 @@ git_branch_teardown() {
             || ux_warning "Fetch from '$fetch_remote' failed (offline?) — proceeding with stale refs."
     fi
 
-    # Upstream check — `[gone]` means remote branch was deleted (PR merge signal).
-    # Use `%(upstream:short)` (not `@{u}`) to detect "was ever pushed",
-    # because `@{u}` fails to resolve once the remote-tracking ref is pruned.
-    # `%(upstream:short)` also yields the actual upstream ref (e.g. origin/feature/x)
-    # even when local and remote branch names differ.
+    # Merge-safety gate — refuse to delete a branch whose work is NOT yet in
+    # main, UNLESS --force. "Merged" is confirmed by ANY of three independent
+    # signals; any one is enough:
+    #
+    #   S1  upstream is [gone]   — remote PR head was deleted (squash/rebase merge).
+    #   S2  contained in main    — the branch tip is an ancestor of origin/main
+    #                              (merge-commit or fast-forward merge). This is the
+    #                              signal that saves branches whose upstream is the
+    #                              BASE branch itself (e.g. a review/worktree branch
+    #                              created off main and pushed under a DIFFERENT
+    #                              remote name, #1108) — there [gone] can NEVER fire.
+    #   S3  gh reports MERGED    — authoritative fallback when the branch name still
+    #                              matches its own PR head ref.
+    #
+    # Use `%(upstream:short)` (not `@{u}`) to detect "was ever pushed", because
+    # `@{u}` fails to resolve once the remote-tracking ref is pruned.
+    local pr_merged=false contained=false
     if [ "$force" != true ]; then
         local upstream_ref upstream_track
         upstream_ref="$(git for-each-ref --format='%(upstream:short)' "refs/heads/$branch" 2>/dev/null)"
         upstream_track="$(git for-each-ref --format='%(upstream:track)' "refs/heads/$branch" 2>/dev/null)"
 
-        if [ -z "$upstream_ref" ]; then
-            ux_error "Branch '$branch' has no upstream — never pushed?"
-            ux_info "Push and open a PR first, or use --force to delete anyway."
-            return 1
+        # S1
+        case "$upstream_track" in *gone*) upstream_gone=true ;; esac
+
+        # S2 — prefer the remote-tracking main (freshest post-merge); fall back
+        # to local main. Ancestry is reflexive, so an equal tip also counts.
+        local main_ref=""
+        if git rev-parse --verify --quiet "origin/$main_branch" >/dev/null 2>&1; then
+            main_ref="origin/$main_branch"
+        elif git rev-parse --verify --quiet "$main_branch" >/dev/null 2>&1; then
+            main_ref="$main_branch"
+        fi
+        if [ -n "$main_ref" ] \
+            && git merge-base --is-ancestor "$branch" "$main_ref" 2>/dev/null; then
+            contained=true
         fi
 
-        case "$upstream_track" in
-            *gone*)
-                upstream_gone=true
-                ;;
-            *)
-                # Best-effort PR lookup — surfaces "#151 OPEN" so the blocker is obvious
-                # at a glance. Silent on gh missing/unauthed; table row is just skipped.
-                # Use `.[]` (not `.[0]`) so an empty array yields empty output instead
-                # of stringifying null fields into "#null null  null".
-                local pr_info=""
-                if command -v gh >/dev/null 2>&1; then
-                    pr_info="$(gh pr list --head "$branch" --state all --limit 1 \
-                        --json number,state,url \
-                        --jq '.[] | "#\(.number) \(.state)  \(.url)"' 2>/dev/null)"
-                fi
+        # S3 — best-effort PR lookup; also surfaces "#151 OPEN" in the blocked
+        # message below. Silent on gh missing/unauthed. Use `.[]` (not `.[0]`) so
+        # an empty array yields empty output, not "#null null  null".
+        local pr_info=""
+        if [ "$upstream_gone" != true ] && [ "$contained" != true ] \
+            && command -v gh >/dev/null 2>&1; then
+            pr_info="$(gh pr list --head "$branch" --state all --limit 1 \
+                --json number,state,url \
+                --jq '.[] | "#\(.number) \(.state)  \(.url)"' 2>/dev/null)"
+            case "$pr_info" in *' MERGED '*) pr_merged=true ;; esac
+        fi
 
-                ux_error "Cannot tear down — PR not merged yet"
-                echo ""
-                ux_table_row "Branch" "$branch"
-                ux_table_row "Upstream" "$upstream_ref  (still on remote)"
-                ux_table_row "Track status" "${upstream_track:-up-to-date}"
-                if [ -n "$pr_info" ]; then
-                    ux_table_row "Pull request" "$pr_info"
-                fi
-                echo ""
-                ux_info "What to do next:"
-                ux_bullet "Merge the PR on GitHub, then re-run: gbr teardown"
-                ux_bullet "Or override the safety check: gbr teardown --force"
-                return 1
-                ;;
-        esac
+        if [ "$upstream_gone" != true ] && [ "$contained" != true ] \
+            && [ "$pr_merged" != true ]; then
+            ux_error "Cannot tear down — PR not merged yet"
+            echo ""
+            ux_table_row "Branch" "$branch"
+            ux_table_row "Upstream" "${upstream_ref:-<none — never pushed>}"
+            ux_table_row "Track status" "${upstream_track:-up-to-date}"
+            if [ -n "$pr_info" ]; then
+                ux_table_row "Pull request" "$pr_info"
+            fi
+            echo ""
+            ux_info "What to do next:"
+            ux_bullet "Merge the PR on GitHub, then re-run: gbr teardown"
+            ux_bullet "Or override the safety check: gbr teardown --force"
+            return 1
+        fi
     fi
 
     # Switch to main.
@@ -342,13 +361,13 @@ git_branch_teardown() {
         ux_info "Branch kept: $branch (--keep-branch)"
     elif git branch -d "$branch" 2>/dev/null; then
         : # safe-deleted (merge-commit merge)
-    elif [ "$force" = true ] || [ "$upstream_gone" = true ]; then
+    elif [ "$force" = true ] || [ "$upstream_gone" = true ] || [ "$pr_merged" = true ]; then
         git branch -D "$branch" 2>/dev/null || {
             ux_error "Failed to force-delete branch '$branch'."
             return 1
         }
-        if [ "$upstream_gone" = true ] && [ "$force" != true ]; then
-            ux_info "Force-deleted (squash/rebase merge detected via [gone] upstream)."
+        if [ "$force" != true ] && { [ "$upstream_gone" = true ] || [ "$pr_merged" = true ]; }; then
+            ux_info "Force-deleted (squash/rebase merge detected via merged PR)."
         fi
     else
         ux_warning "Branch '$branch' not fully merged into $main_branch. Use --force or --keep-branch."
