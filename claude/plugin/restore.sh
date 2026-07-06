@@ -102,8 +102,13 @@ PRIV="$SCRIPT_DIR/company"
 # manifest counts as SSOT (so its entries aren't pruned) only when it's a real,
 # cloned repo on an internal PC. On external/public PCs it's out of scope and
 # its entries are protected only by the directory-source rule / whitelist.
+# `-e` (not `-d`) is worktree-safe: a linked worktree records `.git` as a FILE,
+# not a dir. We intentionally do NOT use `git -C "$PRIV" rev-parse --git-dir`
+# here — that walks UP into the parent dotfiles repo when company/ is an empty
+# (not-yet-cloned) dir and would false-positive; `-e "$PRIV/.git"` verifies
+# company is its OWN clone (dir or gitfile) without the walk-up.
 COMPANY_ACTIVE=0
-if [ "$MODE" = "internal" ] && [ -d "$PRIV/.git" ]; then
+if [ "$MODE" = "internal" ] && [ -e "$PRIV/.git" ]; then
 	COMPANY_ACTIVE=1
 fi
 
