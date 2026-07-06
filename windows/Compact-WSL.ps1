@@ -13,7 +13,14 @@
 
 .PARAMETER UseSparse
     일회성 compact 대신, 앞으로 자동으로 줄어드는 sparse 모드로 전환.
-    (최신 WSL 빌드 필요)
+    (최신 WSL 빌드 필요) 최신 WSL 은 데이터 손상 위험으로 sparse 를 기본
+    비활성화했으므로, 단독으로는 Wsl/Service/E_INVALIDARG 로 실패한다.
+    강제하려면 -AllowUnsafe 를 함께 지정해야 한다.
+
+.PARAMETER AllowUnsafe
+    -UseSparse 와 함께 쓸 때만 유효. sparse 전환에 --allow-unsafe 를 붙여
+    최신 WSL 의 기본 차단을 우회한다. 데이터 손상 위험을 감수하는 경우에만
+    사용한다. 미지정 시 sparse 전환은 안전하게 실패로 보고된다.
 
 .PARAMETER SkipWindowsClean
     Windows 쪽 정리 단계를 건너뜀.
@@ -28,12 +35,12 @@
     # 원격 실행 + 파라미터 전달 (iex 는 인자를 못 받으므로 scriptblock 사용):
     & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/dEitY719/dotfiles/main/windows/Compact-WSL.ps1'))) -DistroName "Ubuntu"
 
-    # 원격 실행 + sparse 모드 전환 (이후 자동 축소; iex 대신 scriptblock 필수):
-    & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/dEitY719/dotfiles/main/windows/Compact-WSL.ps1'))) -UseSparse
+    # 원격 실행 + sparse 모드 전환 (최신 WSL 은 -AllowUnsafe 없이는 실패):
+    & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/dEitY719/dotfiles/main/windows/Compact-WSL.ps1'))) -UseSparse -AllowUnsafe
 
     # 파일로 저장 후 실행:
     .\Compact-WSL.ps1
-    .\Compact-WSL.ps1 -UseSparse
+    .\Compact-WSL.ps1 -UseSparse -AllowUnsafe   # sparse 강제 (데이터 손상 위험 감수)
     .\Compact-WSL.ps1 -DistroName "Ubuntu-24.04" -SkipWindowsClean
 #>
 
@@ -41,6 +48,7 @@
 param(
     [string]$DistroName = "Ubuntu-24.04",
     [switch]$UseSparse,
+    [switch]$AllowUnsafe,
     [switch]$SkipWindowsClean
 )
 
@@ -59,6 +67,7 @@ if (-not $isAdmin) {
 
     $extraArgs = @()
     if ($UseSparse)        { $extraArgs += "-UseSparse" }
+    if ($AllowUnsafe)      { $extraArgs += "-AllowUnsafe" }
     if ($SkipWindowsClean) { $extraArgs += "-SkipWindowsClean" }
 
     if ($PSCommandPath) {
@@ -162,13 +171,52 @@ try {
 # ── 3. WSL 종료 ───────────────────────────────────────────────────────
 Write-Host "`n[3/5] wsl --shutdown ..." -ForegroundColor Green
 wsl --shutdown
-Start-Sleep -Seconds 15   # vhdx 핸들이 완전히 풀릴 때까지 대기 (느린 시스템 대비)
+
+# vhdx 핸들 해제 대기: 고정 sleep 대신 'wsl --list --running' 이 빌 때까지 폴링.
+# Docker Desktop 등 WSL 백엔드가 vhdx 를 잡고 있으면 여기서 detach 안 됨 → diskpart 락.
+Write-Host "    WSL 종료 대기 중 (실행 중인 배포판이 없어질 때까지)..." -ForegroundColor Gray
+$waited = 0
+$maxWait = 60
+while ($waited -lt $maxWait) {
+    # --list --running 은 실행 중 배포판이 없으면 안내 문구만 출력한다.
+    # wsl.exe 는 UTF-16LE 로 출력해 캡처 시 널 바이트가 섞일 수 있으므로 제거한다.
+    $running = (((wsl --list --running 2>$null) -join "`n") -replace "`0", '')
+    if ($running -notmatch [regex]::Escape($DistroName)) { break }
+    Start-Sleep -Seconds 2
+    $waited += 2
+}
+Start-Sleep -Seconds 3   # detach 직후 커널 핸들이 완전히 풀릴 여유
+if ($waited -ge $maxWait) {
+    Write-Host "    [!] $maxWait 초 내 '$DistroName' 이 종료되지 않았습니다." -ForegroundColor Yellow
+    Write-Host "        Docker Desktop / 다른 WSL 터미널을 닫고 다시 실행하세요." -ForegroundColor Yellow
+}
 
 # ── 4. 압축 또는 sparse 전환 ─────────────────────────────────────────
 if ($UseSparse) {
     Write-Host "`n[4/5] sparse 모드로 전환 중..." -ForegroundColor Green
-    wsl --manage $DistroName --set-sparse true
-    Write-Host "    이후 자동으로 디스크가 줄어듭니다." -ForegroundColor Gray
+
+    # 최신 WSL 은 데이터 손상 위험으로 sparse VHD 를 기본 비활성화했고
+    # --allow-unsafe 를 요구한다(오류 코드 Wsl/Service/E_INVALIDARG). 기본은
+    # 안전하게 끄고, -AllowUnsafe 스위치를 준 경우에만 강제한다.
+    $sparseArgs = @('--manage', $DistroName, '--set-sparse', 'true')
+    if ($AllowUnsafe) { $sparseArgs += '--allow-unsafe' }
+
+    # 출력을 캡처해 성공/실패를 $LASTEXITCODE + 메시지로 판정한다.
+    $sparseOut = (wsl @sparseArgs 2>&1 | Out-String)
+    $sparseOut.TrimEnd() | Write-Host
+
+    if ($LASTEXITCODE -eq 0 -and $sparseOut -notmatch 'E_INVALIDARG') {
+        Write-Host "    [OK] sparse 모드 전환 완료 — 이후 자동으로 디스크가 줄어듭니다." -ForegroundColor Cyan
+    } else {
+        Write-Host "    [X] sparse 전환 실패 (종료 코드 $LASTEXITCODE)." -ForegroundColor Red
+        if (-not $AllowUnsafe) {
+            Write-Host "        최신 WSL 은 데이터 손상 위험으로 sparse 를 기본 비활성화했습니다." -ForegroundColor Yellow
+            Write-Host "        위험을 감수하고 강제하려면 -AllowUnsafe 스위치로 다시 실행하세요." -ForegroundColor Yellow
+            Write-Host "        (일회성 축소만 원하면 -UseSparse 없이 실행 → diskpart compact)" -ForegroundColor Yellow
+        } else {
+            Write-Host "        --allow-unsafe 를 붙였는데도 실패했습니다. WSL 빌드/배포판 상태를 확인하세요." -ForegroundColor Yellow
+        }
+    }
 }
 else {
     Write-Host "`n[4/5] diskpart compact vdisk 실행 중..." -ForegroundColor Green
@@ -250,9 +298,24 @@ exit
     $done = "  [{0}] 100%  | 완료 ({1}s)" -f (Format-Bar 100), [int]$sw.Elapsed.TotalSeconds
     Write-Host ("`r" + $done.PadRight(70)) -ForegroundColor Cyan
 
-    if ($proc.ExitCode -ne 0) {
-        Write-Host "  [!] diskpart 종료 코드 $($proc.ExitCode) — 로그 확인:" -ForegroundColor Yellow
-        Get-SharedText $logOut $oemEncoding | Write-Host
+    # diskpart 는 오류가 나도 exit 0 을 흔히 반환하고, Start-Process -PassThru 의
+    # ExitCode 가 $null 로 잡히기도 한다(종료 코드 빈칸 문제). 따라서 종료 코드에만
+    # 의존하지 않고 로그의 오류 문자열로 실패를 판정한다.
+    $proc.WaitForExit()
+    $log = Get-SharedText $logOut $oemEncoding
+    # 한국어/영어 diskpart + 파일 락(다른 프로세스 사용 중 / access denied) 오류 커버
+    $errRe = '오류|error|액세스 할 수 없|사용 중|access is denied|in use by another'
+    # ExitCode 가 $null 이면 -gt 0 은 $false → 로그 오류 문자열이 실패의 주 신호가 된다.
+    $diskpartFailed = ($proc.ExitCode -gt 0) -or ($log -match $errRe)
+
+    if ($diskpartFailed) {
+        $code = if ($null -ne $proc.ExitCode) { $proc.ExitCode } else { 'N/A' }
+        Write-Host "  [X] diskpart compact 실패 (종료 코드 $code) — 로그:" -ForegroundColor Red
+        $log | Write-Host
+        if ($log -match '사용 중|in use by another|access is denied|액세스 할 수 없') {
+            Write-Host "  [!] vhdx 가 다른 프로세스에 잠겨 있어 compact 가 동작하지 않았습니다." -ForegroundColor Yellow
+            Write-Host "      Docker Desktop / 다른 WSL 터미널을 모두 닫고 다시 실행하세요." -ForegroundColor Yellow
+        }
     }
     Remove-Item $tmp, $logOut -ErrorAction SilentlyContinue
 
@@ -261,6 +324,9 @@ exit
     Write-Host "`n    압축 전: $sizeBefore GB" -ForegroundColor Gray
     Write-Host "    압축 후: $sizeAfter GB"  -ForegroundColor Gray
     Write-Host "    회수량 : $saved GB"       -ForegroundColor Cyan
+    if (-not $diskpartFailed -and $saved -lt 0.1) {
+        Write-Host "    [!] 회수량이 거의 없습니다 — 이미 최적화되었거나 fstrim 대상이 적습니다." -ForegroundColor DarkYellow
+    }
 }
 
 # ── 5. Windows 쪽 정리 (선택) ────────────────────────────────────────
