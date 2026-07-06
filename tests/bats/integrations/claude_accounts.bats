@@ -230,6 +230,9 @@ LOCAL
     [ -L "$HOME/.claude-personal/statusline-command.sh" ]
     [ -L "$HOME/.claude-personal/plugins" ]
     [ -L "$HOME/.claude-personal/projects/GLOBAL/memory" ]
+    # CLAUDE.md is a directory-entry symlink to the global-instructions SSOT (#1115).
+    [ -L "$HOME/.claude-personal/CLAUDE.md" ]
+    [ "$(readlink "$HOME/.claude-personal/CLAUDE.md")" = "${DOTFILES_ROOT}/claude/CLAUDE.md" ]
     # docs/ is still a single directory-level symlink (#575). skills/ was
     # promoted to a real directory of per-entry symlinks by #707, F-8 so
     # a private overlay can be layered into the same target dir.
