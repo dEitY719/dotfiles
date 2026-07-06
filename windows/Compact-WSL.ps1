@@ -209,12 +209,16 @@ if ($UseSparse) {
         Write-Host "    [OK] sparse 모드 전환 완료 — 이후 자동으로 디스크가 줄어듭니다." -ForegroundColor Cyan
     } else {
         Write-Host "    [X] sparse 전환 실패 (종료 코드 $LASTEXITCODE)." -ForegroundColor Red
-        if (-not $AllowUnsafe) {
+        if (-not $AllowUnsafe -and $sparseOut -match 'E_INVALIDARG') {
+            # E_INVALIDARG = 최신 WSL 의 sparse 기본 차단. 이 경우에만 -AllowUnsafe 안내.
             Write-Host "        최신 WSL 은 데이터 손상 위험으로 sparse 를 기본 비활성화했습니다." -ForegroundColor Yellow
             Write-Host "        위험을 감수하고 강제하려면 -AllowUnsafe 스위치로 다시 실행하세요." -ForegroundColor Yellow
             Write-Host "        (일회성 축소만 원하면 -UseSparse 없이 실행 → diskpart compact)" -ForegroundColor Yellow
-        } else {
+        } elseif ($AllowUnsafe) {
             Write-Host "        --allow-unsafe 를 붙였는데도 실패했습니다. WSL 빌드/배포판 상태를 확인하세요." -ForegroundColor Yellow
+        } else {
+            # E_INVALIDARG 이외의 실패(WSL 서비스 미실행/권한 등) — 오해 방지용 일반 안내.
+            Write-Host "        WSL 서비스 상태·권한·배포판 이름 및 위 출력을 확인하세요." -ForegroundColor Yellow
         }
     }
 }
@@ -305,8 +309,9 @@ exit
     $log = Get-SharedText $logOut $oemEncoding
     # 한국어/영어 diskpart + 파일 락(다른 프로세스 사용 중 / access denied) 오류 커버
     $errRe = '오류|error|액세스 할 수 없|사용 중|access is denied|in use by another'
-    # ExitCode 가 $null 이면 -gt 0 은 $false → 로그 오류 문자열이 실패의 주 신호가 된다.
-    $diskpartFailed = ($proc.ExitCode -gt 0) -or ($log -match $errRe)
+    # $null 은 정상으로 취급(오탐 방지)하되, 음수 HRESULT 를 포함한 0 이 아닌 모든
+    # 종료 코드를 실패로 잡는다. 로그 오류 문자열도 독립적인 실패 신호.
+    $diskpartFailed = ($null -ne $proc.ExitCode -and $proc.ExitCode -ne 0) -or ($log -match $errRe)
 
     if ($diskpartFailed) {
         $code = if ($null -ne $proc.ExitCode) { $proc.ExitCode } else { 'N/A' }
