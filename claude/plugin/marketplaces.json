@@ -1,6 +1,5 @@
 {
   "anthropic-agent-skills": "anthropics/skills",
-  "superpowers-dev": "obra/superpowers",
   "openai-codex": "openai/codex-plugin-cc",
   "claude-plugins-official": "anthropics/claude-plugins-official",
   "obsidian-skills": "kepano/obsidian-skills",

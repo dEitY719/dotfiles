@@ -5,10 +5,10 @@
     "document-skills@anthropic-agent-skills",
     "example-skills@anthropic-agent-skills",
     "hookify@claude-plugins-official",
+    "playwright@claude-plugins-official",
     "ralph-loop@claude-plugins-official",
     "session-report@claude-plugins-official",
     "superpowers@claude-plugins-official",
-    "superpowers@superpowers-dev",
     "understand-anything@understand-anything"
   ]
 }
