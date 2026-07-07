@@ -107,6 +107,32 @@ _commit_if_changed() {
 			printf 'plugin-sync: manifest commit failed in %s; failed to unstage changes\n' \
 				"$repo_dir" >&2
 		fi
+		return 0
+	fi
+	# The commit succeeded — push it if it landed on a protected branch (#1125).
+	_push_if_protected "$repo_dir"
+}
+
+# Push the just-committed branch when it is a protected branch (main/master).
+# ALLOW_MAIN_COMMIT lets the manifest commit land directly on main (#1072), but
+# an unpushed commit on main diverges the moment origin/main advances via a
+# merged PR — which then makes `gwt teardown`'s ff-only main-sync refuse (#1125).
+# Pushing right away keeps local main == origin/main so no local-only commit
+# lingers. Best-effort: no upstream / offline / branch-protection rejection just
+# leaves today's local-only commit plus a stderr hint — the hook still exits 0.
+_push_if_protected() {
+	local repo_dir="$1" branch upstream
+	branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null) || return 0
+	case "$branch" in
+	main | master) ;;
+	*) return 0 ;;
+	esac
+	# Never guess a remote — only push when the branch has a configured upstream.
+	upstream=$(git -C "$repo_dir" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null) || return 0
+	[ -n "$upstream" ] || return 0
+	if ! git -C "$repo_dir" push --quiet 2>/dev/null; then
+		printf 'plugin-sync: manifest committed on protected %s in %s but push to %s failed; commit is local-only (rebase/push before it diverges from origin)\n' \
+			"$branch" "$repo_dir" "$upstream" >&2
 	fi
 }
 

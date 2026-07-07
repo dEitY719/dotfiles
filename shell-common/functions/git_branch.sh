@@ -346,9 +346,23 @@ git_branch_teardown() {
         fi
     fi
 
-    # Pull main (fast-forward)
-    if ! git pull origin "$main_branch"; then
-        ux_warning "Pull failed (network?). Branch delete may misjudge merge status."
+    # Sync main to origin — fetch + `git merge --ff-only`, matching
+    # `gwt teardown` (git_worktree.sh:2308). `git pull` was wrong here: under
+    # pull.rebase=false a diverged local main would silently gain an unwanted
+    # merge commit, and under pull.rebase=true it rebases — neither is the
+    # intended "catch up only if we cleanly can". Fast-forward only; a diverged
+    # local main is reported with ahead/behind counts, never rewritten (#1125).
+    if git fetch --quiet origin "$main_branch" 2>/dev/null; then
+        if git rev-parse --verify --quiet "origin/$main_branch" >/dev/null 2>&1 \
+            && ! git merge --ff-only "origin/$main_branch" >/dev/null 2>&1; then
+            local _sync_ahead _sync_behind
+            _sync_ahead="$(git rev-list --count "origin/$main_branch..$main_branch" 2>/dev/null || printf '?')"
+            _sync_behind="$(git rev-list --count "$main_branch..origin/$main_branch" 2>/dev/null || printf '?')"
+            ux_warning "Main sync skipped — local '$main_branch' diverged from origin/$main_branch (${_sync_ahead} ahead, ${_sync_behind} behind)."
+            ux_info "  Resolve manually (rebase / reset). Branch delete may misjudge merge status."
+        fi
+    else
+        ux_warning "Fetch failed (network?). Branch delete may misjudge merge status."
     fi
 
     # Delete branch

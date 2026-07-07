@@ -237,6 +237,63 @@ JSON
     assert_output ""
 }
 
+@test "install → commit on protected 'main' with upstream is pushed, not left local-only (#1125)" {
+    _known_marketplaces
+    _installed_plugins
+
+    # Rebuild MAIN_ROOT as a clone of a bare origin so `main` tracks origin/main.
+    # A local-only manifest commit on main would diverge once origin/main moves;
+    # the hook must push it right away.
+    local origin="$TEST_TEMP_HOME/origin.git"
+    rm -rf "$MAIN_ROOT"
+    git init --bare --initial-branch=main "$origin" >/dev/null
+    git clone -q "$origin" "$MAIN_ROOT"
+    git -C "$MAIN_ROOT" config user.email "hook-test@example.com"
+    git -C "$MAIN_ROOT" config user.name "hook-test"
+    mkdir -p "$MAIN_ROOT/claude/plugin"
+    ( cd "$MAIN_ROOT" && echo seed > seed.txt && git add seed.txt \
+        && git commit -q -m seed && git push -q origin main )
+
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install ralph-loop@claude-plugins-official"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+
+    # Commit landed AND was pushed: local main == origin/main, so no local-only
+    # commit lingers to later diverge.
+    run git -C "$MAIN_ROOT" log -1 --format=%s
+    assert_output "chore(claude-plugin): sync manifest"
+    [ "$(git -C "$MAIN_ROOT" rev-parse main)" = "$(git -C "$MAIN_ROOT" rev-parse origin/main)" ]
+    run git -C "$MAIN_ROOT" status --porcelain
+    assert_output ""
+}
+
+@test "install → commit on a feature branch is NOT auto-pushed (#1125 scope guard)" {
+    _known_marketplaces
+    _installed_plugins
+
+    local origin="$TEST_TEMP_HOME/origin-feat.git"
+    rm -rf "$MAIN_ROOT"
+    git init --bare --initial-branch=main "$origin" >/dev/null
+    git clone -q "$origin" "$MAIN_ROOT"
+    git -C "$MAIN_ROOT" config user.email "hook-test@example.com"
+    git -C "$MAIN_ROOT" config user.name "hook-test"
+    mkdir -p "$MAIN_ROOT/claude/plugin"
+    ( cd "$MAIN_ROOT" && echo seed > seed.txt && git add seed.txt \
+        && git commit -q -m seed && git push -q origin main \
+        && git checkout -q -b feat/x )
+
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install ralph-loop@claude-plugins-official"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+
+    # Committed locally on the feature branch, but push is main/master-only, so
+    # feat/x was never pushed (no origin/feat/x ref exists).
+    run git -C "$MAIN_ROOT" log -1 --format=%s
+    assert_output "chore(claude-plugin): sync manifest"
+    run git -C "$MAIN_ROOT" rev-parse --verify --quiet origin/feat/x
+    assert_failure
+}
+
 @test "no-op re-run does not create an empty commit" {
     _known_marketplaces
     _installed_plugins
