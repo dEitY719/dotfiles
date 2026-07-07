@@ -113,6 +113,43 @@ _setup_unmerged_tracking_main() {
     )
 }
 
+# Create: $ORIGIN4 (bare) <- $CLONE4 on feat/y where LOCAL main has diverged
+# from origin/main (each side has a unique commit) — the exact shape that made
+# `git pull origin main` create a silent merge commit under pull.rebase=false
+# (#1125). pull.rebase is pinned false so the test asserts the ff-only behavior,
+# not the caller's global git config.
+_setup_diverged_main_clone() {
+    ORIGIN4="$TEST_TEMP_HOME/origin4.git"
+    CLONE4="$TEST_TEMP_HOME/clone4"
+
+    export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@test \
+           GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@test
+
+    git init --bare --initial-branch=main "$ORIGIN4" >/dev/null
+    git clone -q "$ORIGIN4" "$CLONE4"
+    (
+        cd "$CLONE4"
+        git config pull.rebase false
+        echo base > base.txt && git add base.txt && git commit -q -m base
+        git push -q origin main
+
+        # Feature branch (force-deletable via --force, not merged).
+        git checkout -q -b feat/y
+        echo work > work.txt && git add work.txt && git commit -q -m "feat: work"
+
+        # origin/main advances (simulate a merged PR from elsewhere).
+        local helper="$TEST_TEMP_HOME/diverge-helper"
+        git clone -q "$ORIGIN4" "$helper"
+        ( cd "$helper" && echo adv > adv.txt && git add adv.txt && git commit -q -m advance && git push -q origin main )
+        rm -rf "$helper"
+
+        # Local main gains a local-only commit → genuine divergence.
+        git checkout -q main
+        echo localonly > localonly.txt && git add localonly.txt && git commit -q -m "local-only"
+        git checkout -q feat/y
+    )
+}
+
 setup() {
     setup_isolated_home
     _setup_conflicted_clone
@@ -190,6 +227,31 @@ teardown() {
     [ "$(git -C "$CLONE2" symbolic-ref --short HEAD)" = "feat/wip" ]
     run git -C "$CLONE2" rev-parse --verify --quiet feat/wip
     assert_success
+}
+
+@test "teardown: diverged local main is NOT silently merged — ff-only refuses (#1125)" {
+    _setup_diverged_main_clone
+    local before_main
+    before_main="$(git -C "$CLONE4" rev-parse main)"
+
+    run_in_bash "cd '$CLONE4' && gbr teardown --force 2>&1"
+    assert_success
+    assert_output --partial "Teardown complete"
+    # Divergence is reported with counts (1 local-only ahead, 1 advance behind),
+    # not collapsed into a bare "network?".
+    assert_output --partial "diverged from origin/main"
+    assert_output --partial "1 ahead, 1 behind"
+    refute_output --partial "network?"
+
+    # The crux of #1125: NO merge commit was fabricated on main under
+    # pull.rebase=false. Local main tip is unchanged and has a single parent.
+    [ "$(git -C "$CLONE4" rev-parse main)" = "$before_main" ]
+    run git -C "$CLONE4" rev-list --merges main
+    assert_output ""
+
+    # Feature branch still torn down (--force).
+    run git -C "$CLONE4" rev-parse --verify --quiet feat/y
+    assert_failure
 }
 
 @test "teardown --help documents --discard-changes" {

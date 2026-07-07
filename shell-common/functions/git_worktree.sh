@@ -2318,7 +2318,12 @@ EOF
             if [ -s "$_gwt_ff_err_file" ]; then
                 sed 's/^/    /' "$_gwt_ff_err_file" >&2
             fi
-            ux_info "  Local '$main_branch' has diverged from origin/$main_branch."
+            # Reuse the status view's ahead/behind pattern (~l.986) so the
+            # message says HOW FAR local main diverged, not just that it did.
+            local _gwt_main_ahead _gwt_main_behind
+            _gwt_main_ahead="$(git rev-list --count "origin/$main_branch..$main_branch" 2>/dev/null || printf '?')"
+            _gwt_main_behind="$(git rev-list --count "$main_branch..origin/$main_branch" 2>/dev/null || printf '?')"
+            ux_info "  Local '$main_branch' has diverged from origin/$main_branch (${_gwt_main_ahead} ahead, ${_gwt_main_behind} behind)."
             ux_info "  Resolve manually (rebase / reset) before spawning new worktrees from local '$main_branch'."
         fi
     else

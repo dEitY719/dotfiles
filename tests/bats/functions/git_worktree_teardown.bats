@@ -108,6 +108,18 @@ teardown() {
     refute_output --partial "network?"
 }
 
+@test "teardown: diverged local main — diagnostic shows ahead/behind counts (#1125)" {
+    # 1 local-only commit ahead, 1 origin/main commit behind → the failure
+    # message must quantify the divergence, not just say it happened.
+    _diverge_local_main
+    _advance_origin_main
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown --force 2>&1"
+    assert_failure
+    assert_output --partial "1 ahead, 1 behind"
+    assert_output --partial "diverged from origin/main"
+}
+
 @test "teardown: fetch failure surfaces real stderr (A), not 'network?'" {
     # Point origin at a non-existent path so `git fetch origin` fails at step 1.
     git -C "$CLONE" remote set-url origin "$TEST_TEMP_HOME/does-not-exist.git"
