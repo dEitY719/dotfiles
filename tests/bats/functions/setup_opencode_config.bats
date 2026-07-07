@@ -96,3 +96,69 @@ count_backups() {
     [ ! -L "$TARGET" ]
     grep -q 'your-knox-id' "$TARGET"
 }
+
+# --- Knox ID SSOT auto-fill (issue #1121) -----------------------------------
+# The four scenarios below mirror the issue's acceptance criteria: fill from
+# each SSOT, suppress the warning, and stay idempotent across re-runs.
+
+# Same as run_setup_opencode but with DOTFILES_KNOX_ID exported into the child.
+run_setup_opencode_env() {
+    run bash --noprofile --norc -c "
+        set -e
+        export DOTFILES_KNOX_ID='$1'
+        cd '$FIXTURE_DOTFILES/shell-common'
+        . './setup.sh'
+        setup_opencode_config internal
+    "
+}
+
+@test "env SSOT: DOTFILES_KNOX_ID substitutes placeholder, no warning" {
+    run_setup_opencode_env "envknox42"
+    assert_success
+    [ -f "$TARGET" ]
+    grep -q 'envknox42' "$TARGET"
+    ! grep -q 'your-knox-id' "$TARGET"
+    refute_output --partial "replace 'your-knox-id'"
+}
+
+@test "file SSOT: ~/.dotfiles-knox-id substitutes placeholder, no warning" {
+    printf 'fileknox99\n' >"$HOME/.dotfiles-knox-id"
+
+    run_setup_opencode
+    assert_success
+    grep -q 'fileknox99' "$TARGET"
+    ! grep -q 'your-knox-id' "$TARGET"
+    refute_output --partial "replace 'your-knox-id'"
+}
+
+@test "env SSOT takes precedence over file SSOT" {
+    printf 'fileknox99\n' >"$HOME/.dotfiles-knox-id"
+
+    run_setup_opencode_env "envknox42"
+    assert_success
+    grep -q 'envknox42' "$TARGET"
+    ! grep -q 'fileknox99' "$TARGET"
+}
+
+@test "file SSOT: re-run is idempotent (preserve, no warning, no backup)" {
+    printf 'fileknox99\n' >"$HOME/.dotfiles-knox-id"
+
+    run_setup_opencode
+    assert_success
+    filled_content="$(cat "$TARGET")"
+
+    # Second run: placeholder is gone, so the #792 preserve guard fires.
+    run_setup_opencode
+    assert_success
+    assert_output --partial "Preserved customised OpenCode config"
+    [ "$(cat "$TARGET")" = "$filled_content" ]
+    [ "$(count_backups)" -eq 0 ]
+}
+
+@test "no SSOT + non-interactive: keeps placeholder and warns (fallback)" {
+    # No env var, no file, no tty (bash -c) — must degrade gracefully.
+    run_setup_opencode
+    assert_success
+    grep -q 'your-knox-id' "$TARGET"
+    assert_output --partial "replace 'your-knox-id'"
+}
