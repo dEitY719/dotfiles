@@ -333,9 +333,14 @@ setup_opencode_config() {
             _knox_id="$(_resolve_knox_id)" || _knox_id=""
             if [ -n "$_knox_id" ]; then
                 # Escape sed replacement metacharacters (\ / &) so unusual IDs
-                # cannot corrupt the substitution.
-                _knox_esc="$(printf '%s' "$_knox_id" | sed -e 's/[\/&]/\\&/g')"
-                sed -i "s/your-knox-id/${_knox_esc}/g" "$opencode_target"
+                # cannot corrupt the substitution. Use the portable temp-file
+                # rewrite instead of `sed -i` — GNU and BSD (macOS) disagree on
+                # the -i argument syntax (PR #1123 review). `mv` drops the 600
+                # perms, so re-apply chmod afterwards.
+                _knox_esc="$(printf '%s' "$_knox_id" | sed -e 's/[\\/&]/\\&/g')"
+                sed "s/your-knox-id/${_knox_esc}/g" "$opencode_target" >"${opencode_target}.tmp"
+                mv "${opencode_target}.tmp" "$opencode_target"
+                chmod 600 "$opencode_target"
                 ux_success "Applied Knox ID to OpenCode config (SSOT: \$DOTFILES_KNOX_ID or ~/.dotfiles-knox-id)"
             else
                 ux_warning "Edit $opencode_target and replace 'your-knox-id' with your Samsung Knox ID"
