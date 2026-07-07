@@ -258,6 +258,51 @@ setup_bun_config() {
     esac
 }
 
+# Resolve the Samsung Knox ID for OpenCode's internal-mode config (issue #1121).
+# Lookup order (first non-empty wins):
+#   1. $DOTFILES_KNOX_ID env var  — reuse the shell-sourced SSOT
+#      (see shell-common/env/development.local.example).
+#   2. ~/.dotfiles-knox-id file   — persistent file SSOT, mirrors the
+#      ~/.dotfiles-setup-mode convention.
+#   3. one-time interactive prompt (tty only) — the entered value is saved to
+#      ~/.dotfiles-knox-id so later runs are non-interactive and idempotent.
+# Prints the resolved Knox ID on stdout; returns 1 (no output) when nothing is
+# available and stdin is not a tty — keeping non-interactive setup / CI safe.
+_resolve_knox_id() {
+    _knox_file="$HOME/.dotfiles-knox-id"
+
+    # 1. Environment variable SSOT.
+    if [ -n "${DOTFILES_KNOX_ID:-}" ]; then
+        printf '%s\n' "$DOTFILES_KNOX_ID"
+        return 0
+    fi
+
+    # 2. File SSOT.
+    if [ -f "$_knox_file" ]; then
+        _knox_val="$(head -n 1 "$_knox_file" | tr -d '[:space:]')"
+        if [ -n "$_knox_val" ]; then
+            printf '%s\n' "$_knox_val"
+            return 0
+        fi
+    fi
+
+    # 3. One-time prompt (interactive shells only). Persist to the file SSOT so
+    #    subsequent runs resolve via step 2 without prompting again.
+    if [ -t 0 ]; then
+        printf 'Enter your Samsung Knox ID (saved to %s): ' "$_knox_file" >&2
+        read -r _knox_val || _knox_val=""
+        _knox_val="$(printf '%s' "$_knox_val" | tr -d '[:space:]')"
+        if [ -n "$_knox_val" ]; then
+            printf '%s\n' "$_knox_val" >"$_knox_file"
+            chmod 600 "$_knox_file" 2>/dev/null || true
+            printf '%s\n' "$_knox_val"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 setup_opencode_config() {
     environment="$1"
     opencode_target="$HOME/.config/opencode/opencode.json"
@@ -281,7 +326,21 @@ setup_opencode_config() {
             chmod 600 "$opencode_target"
             ux_success "Copied template: opencode/opencode.json.internal → ~/.config/opencode/opencode.json"
             ux_info "Using: Samsung internal gateway (a2g.samsungds.net)"
-            ux_warning "Edit $opencode_target and replace 'your-knox-id' with your Samsung Knox ID"
+            # Fill in the Knox ID from the SSOT (env → ~/.dotfiles-knox-id →
+            # one-time prompt) so the placeholder warning no longer recurs on
+            # every setup (issue #1121). Falls back to the manual-edit warning
+            # only when nothing is available and setup is non-interactive.
+            _knox_id="$(_resolve_knox_id)" || _knox_id=""
+            if [ -n "$_knox_id" ]; then
+                # Escape sed replacement metacharacters (\ / &) so unusual IDs
+                # cannot corrupt the substitution.
+                _knox_esc="$(printf '%s' "$_knox_id" | sed -e 's/[\/&]/\\&/g')"
+                sed -i "s/your-knox-id/${_knox_esc}/g" "$opencode_target"
+                ux_success "Applied Knox ID to OpenCode config (SSOT: \$DOTFILES_KNOX_ID or ~/.dotfiles-knox-id)"
+            else
+                ux_warning "Edit $opencode_target and replace 'your-knox-id' with your Samsung Knox ID"
+                ux_info "Tip: save it once to ~/.dotfiles-knox-id (or export DOTFILES_KNOX_ID) to auto-fill next time"
+            fi
             ;;
         external)
             mkdir -p "$(dirname "$opencode_target")"
@@ -673,7 +732,7 @@ main() {
             ux_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Nexus + proxy)"
             ux_info "  - Bun: ~/.bunfig.toml → bun/bunfig.toml.internal (Nexus registry)"
-            ux_info "  - OpenCode: copied from opencode/opencode.json.internal (edit your-knox-id manually)"
+            ux_info "  - OpenCode: opencode/opencode.json.internal with Knox ID from SSOT (\$DOTFILES_KNOX_ID / ~/.dotfiles-knox-id, else 1-time prompt)"
             ux_info "  - Pip: Samsung internal repository configured"
             ux_info "  - uv: Samsung internal repository + proxy configured"
             ux_info "  - Cargo: ~/.cargo/config.toml (Nexus proxy for crates.io)"
