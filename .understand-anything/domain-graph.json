@@ -1,0 +1,887 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "dotfiles-gwt",
+    "languages": ["POSIX shell (sh/bash/zsh)"],
+    "frameworks": ["shell-common ux_lib output layer"],
+    "description": "The gwt subsystem is a developer-tooling domain that isolates parallel AI coding-agent sessions (Claude/Codex/Gemini/Opencode) into separate git worktrees so they don't collide. It tracks each worktree's lifecycle state (dirty/ahead/pr-open/merged/stale/locked), safely tears worktrees down without losing unpushed work, and exposes a low-level git-worktree CRUD layer plus a unified CLI dispatch/help surface, all implemented in a single file: shell-common/functions/git_worktree.sh.",
+    "analyzedAt": "2026-07-07T00:00:00Z",
+    "gitCommitHash": "61890ed2248a6f6616461cd855f46ba7e998b29a"
+  },
+  "nodes": [
+    {
+      "id": "domain:worktree-lifecycle-management",
+      "type": "domain",
+      "name": "AI Worktree Lifecycle Management",
+      "summary": "The primary value-delivering domain: spawning an isolated, auto-indexed git worktree with an AI coding agent attached, and safely tearing it down again once the work is done. Owns the risk-sensitive pre-flight checks (uncommitted/untracked/unpushed work, active agent locks) that guard against silent data loss.",
+      "tags": ["ai-agent-workflow", "git-worktree", "lifecycle", "automation"],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": ["worktree", "branch (wt/<name>/<index>)", "AI agent (claude/codex/gemini/opencode)", "spawn log (ai-worktree-spawn.log)", "Claude agent lock file"],
+        "businessRules": [
+          "spawn must run from the main repo, never from inside an existing worktree",
+          "teardown refuses to discard uncommitted, untracked, or unpushed work unless --force is passed",
+          "an active (non-stale) Claude agent lock blocks teardown unless --force is passed",
+          "branch deletion prefers a safe fast-forward delete, falling back to rebase/squash-merge detection before allowing a force-delete",
+          "main is fast-forward synced from origin before the worktree's branch is deleted"
+        ],
+        "crossDomainInteractions": [
+          "spawn delegates actual worktree creation to git_worktree_add in the CRUD domain for git-crypt-safe sparse checkout",
+          "teardown's merge-safety checks reuse the same verdict/merge-detection primitives (_gwt_branch_merged, gh PR lookup) that the Observability domain uses to compute list/status verdicts",
+          "teardown's lock detection (_gwt_claude_lock_pid) is the same signal the Observability domain surfaces as the 'locked' state"
+        ]
+      }
+    },
+    {
+      "id": "domain:worktree-observability",
+      "type": "domain",
+      "name": "Worktree Observability",
+      "summary": "Read-only visibility into the fleet of active worktrees: a fleet-wide list view with a computed STATE/AGE/NEXT column, and a deep per-worktree status diagnostic. Both share a single verdict state machine so every worktree gets one consistent answer to 'what is this doing and what should I do next.'",
+      "tags": ["observability", "diagnostics", "git-worktree", "reporting"],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": ["verdict/state (dirty/ahead/pr-open/pr-merged/merged/stale/locked/prunable/clean)", "PR state table (batched gh pr list)", "orphaned worktree ref"],
+        "businessRules": [
+          "verdict priority order is fixed: prunable > locked > dirty > pr-state > merged > ahead > stale > clean",
+          "remote PR lookups are batched into a single gh CLI call regardless of worktree count, never N calls",
+          "the main worktree never receives a lifecycle state marker — it isn't a thing to tear down",
+          "orphan/broken worktree refs (missing dir, foreign or deleted admin-dir pointer) are always surfaced as warnings, in both list modes"
+        ],
+        "crossDomainInteractions": [
+          "consumes the same `git worktree list --porcelain` registry that the CRUD domain's add/remove/prune operations mutate",
+          "its verdict computation (_gwt_compute_status) is the shared brain also read by the Lifecycle domain's teardown pre-flight logic",
+          "status's next-action hints point users at Lifecycle domain commands (gwt teardown) and CRUD domain commands (gwt prune)"
+        ]
+      }
+    },
+    {
+      "id": "domain:worktree-crud",
+      "type": "domain",
+      "name": "Worktree CRUD Primitives",
+      "summary": "The lower-level git-worktree operations that the Lifecycle and Observability domains build on top of: creating a git-crypt-safe sparse-checkout worktree, removing a worktree plus its branch (by path, name-glob, or 'all'), and pruning stale registry entries.",
+      "tags": ["git-worktree", "crud", "git-crypt", "sparse-checkout"],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entities": ["sparse-checkout exclude list", ".gitattributes filter=git-crypt patterns", "worktree registry (.git/worktrees/)"],
+        "businessRules": [
+          "any path tagged filter=git-crypt in .gitattributes is dynamically excluded from the new worktree's sparse-checkout so encrypted content never lands unencrypted on disk",
+          "remove refuses bare wildcard targets and routes users to the explicit 'all' keyword instead",
+          "remove never deletes the main or master branch even when it matches a name pattern",
+          "prune only touches .git/worktrees/ registry metadata — it never accepts a path argument, and points users at remove/teardown for actual deletions"
+        ],
+        "crossDomainInteractions": [
+          "git_worktree_add is called directly by the Lifecycle domain's spawn flow to get git-crypt-safe checkout for free",
+          "remove's orphan-cleanup fallback and prune both feed the same 'registered but missing on disk' condition the Observability domain warns about in list output"
+        ]
+      }
+    },
+    {
+      "id": "domain:cli-interface",
+      "type": "domain",
+      "name": "CLI Dispatch and Help",
+      "summary": "The single entry point (`gwt <subcommand>`) that routes to every other domain, plus a compact, section-based help system (`gwt-help`) that documents each subcommand without requiring users to read the source.",
+      "tags": ["cli", "dispatcher", "help", "ux"],
+      "complexity": "simple",
+      "domainMeta": {
+        "entities": ["subcommand table (add/list/remove/prune/spawn/status/teardown)", "help section registry"],
+        "businessRules": [
+          "'gwt help' is explicitly rejected in favor of the canonical 'gwt-help' entrypoint, to keep a single documented help surface",
+          "unknown subcommands and unknown help sections fail loudly with a pointer to gwt-help rather than falling through silently"
+        ],
+        "crossDomainInteractions": [
+          "routes every user invocation into the Lifecycle, Observability, or CRUD domain's corresponding function",
+          "help content is the SSOT users are pointed to from error messages raised in every other domain"
+        ]
+      }
+    },
+    {
+      "id": "flow:spawn-worktree",
+      "type": "flow",
+      "name": "Spawn AI Worktree",
+      "summary": "Creates a new auto-indexed, auto-branched worktree off a base ref and optionally launches an AI coding agent into it, either in a new tmux pane or inline in the current shell, with an optional initial prompt and multi-account support.",
+      "tags": ["spawn", "ai-agent", "tmux", "git-worktree"],
+      "complexity": "complex",
+      "domainMeta": {
+        "entryPoint": "gwt spawn --wt-name <slug> [--base <ref>] [--tmux|--launch] [--ai <agent>] [--user <account>] [--prompt <text>]",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "flow:teardown-single-worktree",
+      "type": "flow",
+      "name": "Teardown Current Worktree",
+      "summary": "Removes the worktree containing $PWD after verifying it is safe to discard: no active agent lock, no uncommitted/untracked/unpushed work — then ff-syncs main from origin and deletes the branch.",
+      "tags": ["teardown", "cleanup", "git-worktree", "safety-check"],
+      "complexity": "complex",
+      "domainMeta": {
+        "entryPoint": "gwt teardown [--force] [--keep-branch]",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "flow:teardown-all-worktrees",
+      "type": "flow",
+      "name": "Teardown All Worktrees",
+      "summary": "Batch variant of teardown: enumerates every non-main worktree, confirms with the user, and runs the single-worktree teardown pipeline against each one, reporting a pass/fail summary.",
+      "tags": ["teardown", "batch", "cleanup"],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "gwt teardown --all",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "flow:list-worktrees",
+      "type": "flow",
+      "name": "List Worktrees",
+      "summary": "Enumerates every linked worktree and renders a column-aligned table with a computed STATE/AGE/NEXT-action per row, optionally layering in PR state via one batched remote call.",
+      "tags": ["list", "observability", "reporting"],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "gwt list [--quick|--remote]",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "flow:status-worktree",
+      "type": "flow",
+      "name": "Diagnose Worktree Status",
+      "summary": "Produces a detailed diagnostic for one worktree (by name or the one containing $PWD): HEAD, upstream, working-tree state, PR state, agent-lock state, ahead/behind counts, and the same computed verdict as the list view.",
+      "tags": ["status", "observability", "diagnostics"],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "gwt status [<name>]",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "flow:add-worktree",
+      "type": "flow",
+      "name": "Add Git-Crypt-Safe Worktree",
+      "summary": "Creates a raw git worktree with sparse-checkout dynamically configured to exclude any path tagged filter=git-crypt in .gitattributes, so encrypted content is never checked out unencrypted.",
+      "tags": ["add", "git-crypt", "sparse-checkout"],
+      "complexity": "simple",
+      "domainMeta": {
+        "entryPoint": "gwt add <path> [<branch> [<start-point>]]",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "flow:remove-worktree",
+      "type": "flow",
+      "name": "Remove Worktree and Branch",
+      "summary": "Deletes a worktree directory plus its associated branch, by exact path, by *-<name>-* glob match, or in bulk via 'all', with an orphan-cleanup fallback when the directory is already gone but git still has it registered.",
+      "tags": ["remove", "cleanup", "git-worktree"],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entryPoint": "gwt remove <path|name|all> [--force]",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "flow:prune-worktree",
+      "type": "flow",
+      "name": "Prune Stale Worktree Refs",
+      "summary": "A thin, guarded wrapper over `git worktree prune` that rejects path arguments and steers users toward remove/teardown when they actually want to delete something.",
+      "tags": ["prune", "maintenance"],
+      "complexity": "simple",
+      "domainMeta": {
+        "entryPoint": "gwt prune [-n|--dry-run] [-v|--verbose] [--expire <when>]",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "flow:command-dispatch",
+      "type": "flow",
+      "name": "Dispatch Subcommand",
+      "summary": "The gwt() entry function that routes a subcommand (add/list/remove/prune/spawn/status/teardown) to its implementing function, or falls back to help / an unknown-command error.",
+      "tags": ["dispatcher", "cli"],
+      "complexity": "simple",
+      "domainMeta": {
+        "entryPoint": "gwt <subcommand> [args...]",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "flow:contextual-help",
+      "type": "flow",
+      "name": "Render Contextual Help",
+      "summary": "Compact, section-based CLI help: a one-screen summary by default, a section list, per-section detail tables on request, or the full multi-section reference.",
+      "tags": ["help", "cli", "ux"],
+      "complexity": "simple",
+      "domainMeta": {
+        "entryPoint": "gwt-help [section|--list|--all]",
+        "entryType": "cli"
+      }
+    },
+    {
+      "id": "step:spawn-worktree:parse-options",
+      "type": "step",
+      "name": "Parse spawn options",
+      "summary": "Parses the option-only grammar (--wt-name, --base, --ai, --user, --tmux, --launch, --bg, --prompt), absorbing every token after --prompt as trailing prompt text.",
+      "tags": ["arg-parsing"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1456, 1559]
+    },
+    {
+      "id": "step:spawn-worktree:validate-flags",
+      "type": "step",
+      "name": "Validate name and flag combinations",
+      "summary": "Validates the worktree name (no slashes/spaces/leading dash) and enforces flag constraints: --tmux/--launch mutually exclusive, --bg requires --launch or --tmux and only works with claude, --user only valid with claude.",
+      "tags": ["validation"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1561, 1632]
+    },
+    {
+      "id": "step:spawn-worktree:verify-main-repo",
+      "type": "step",
+      "name": "Verify invocation from main repo",
+      "summary": "Confirms the command is running from the main repository, not from inside an existing worktree, since spawning worktrees-of-worktrees is unsupported.",
+      "tags": ["guard"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1634, 1644]
+    },
+    {
+      "id": "step:spawn-worktree:resolve-base-ref",
+      "type": "step",
+      "name": "Resolve and validate base ref",
+      "summary": "Defaults --base to origin/main (falling back to main, then HEAD), then verifies the resolved ref actually exists before doing any further work.",
+      "tags": ["git-ref"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1646, 1675]
+    },
+    {
+      "id": "step:spawn-worktree:compute-index-and-branch",
+      "type": "step",
+      "name": "Compute next index and branch name",
+      "summary": "Scans existing sibling directories to find the next free auto-index, then derives a unique worktree path and branch name (wt/<name>/<index>).",
+      "tags": ["naming"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1677, 1713]
+    },
+    {
+      "id": "step:spawn-worktree:create-worktree",
+      "type": "step",
+      "name": "Create the worktree",
+      "summary": "Delegates to git_worktree_add to physically create the worktree with git-crypt-safe sparse checkout.",
+      "tags": ["delegation"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1715, 1716]
+    },
+    {
+      "id": "step:spawn-worktree:log-event",
+      "type": "step",
+      "name": "Log spawn event",
+      "summary": "Appends a timestamped SPAWN record (name, index, path, branch, base) to ai-worktree-spawn.log and prints a confirmation summary.",
+      "tags": ["logging"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1718, 1726]
+    },
+    {
+      "id": "step:spawn-worktree:launch-agent",
+      "type": "step",
+      "name": "Launch AI agent (tmux or inline)",
+      "summary": "Optionally launches the chosen AI agent's yolo command into a new tmux pane/session (--tmux) or inline in the current shell after cd'ing in (--launch), forwarding --bg / --prompt / --user as applicable.",
+      "tags": ["ai-agent", "tmux"],
+      "complexity": "complex",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1728, 1781]
+    },
+    {
+      "id": "step:teardown-single-worktree:resolve-and-lock-check",
+      "type": "step",
+      "name": "Resolve worktree and check agent lock",
+      "summary": "Confirms $PWD is inside a worktree, collects its path/branch, and checks for an active or stale Claude-agent lock file — an active lock blocks teardown unless --force.",
+      "tags": ["guard", "locking"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [2094, 2139]
+    },
+    {
+      "id": "step:teardown-single-worktree:check-uncommitted",
+      "type": "step",
+      "name": "Pre-flight: uncommitted changes",
+      "summary": "Refuses to proceed if there are uncommitted or staged changes, unless --force is passed (in which case they are discarded).",
+      "tags": ["pre-flight", "safety-check"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [2141, 2149]
+    },
+    {
+      "id": "step:teardown-single-worktree:check-untracked",
+      "type": "step",
+      "name": "Pre-flight: untracked files",
+      "summary": "Refuses to proceed if untracked files exist (git worktree remove would otherwise fail), unless --force is passed.",
+      "tags": ["pre-flight", "safety-check"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [2151, 2165]
+    },
+    {
+      "id": "step:teardown-single-worktree:check-unpushed",
+      "type": "step",
+      "name": "Pre-flight: unpushed commits safety",
+      "summary": "Fetches origin, then runs the multi-signal _gwt_commits_safe check (upstream match, ancestor-of-main, squash tree-diff, patch-id rebase-merge, PR-merged API fallback) before allowing discard of local commits.",
+      "tags": ["pre-flight", "merge-detection"],
+      "complexity": "complex",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [2167, 2188]
+    },
+    {
+      "id": "step:teardown-single-worktree:remove-directory",
+      "type": "step",
+      "name": "Remove worktree directory",
+      "summary": "Runs `git worktree remove`, auto-retrying with --force when the only blocker is populated submodules (which are disposable in this workflow), and surfaces a detailed diagnostic on genuine failure.",
+      "tags": ["removal"],
+      "complexity": "complex",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [2190, 2278]
+    },
+    {
+      "id": "step:teardown-single-worktree:restore-repo-format",
+      "type": "step",
+      "name": "Restore repo format and prune",
+      "summary": "Runs git worktree prune, then unsets extensions.worktreeConfig/repositoryformatversion when the last linked worktree was just removed, avoiding a p10k/gitstatusd regression.",
+      "tags": ["maintenance"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [2279, 2295]
+    },
+    {
+      "id": "step:teardown-single-worktree:sync-main",
+      "type": "step",
+      "name": "Ff-sync main from origin",
+      "summary": "Checks out main/master in the main repo and fast-forward-merges origin/main, reporting a clear divergence error instead of silently leaving main stale.",
+      "tags": ["git-sync"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [2297, 2328]
+    },
+    {
+      "id": "step:teardown-single-worktree:delete-branch-and-log",
+      "type": "step",
+      "name": "Delete branch and log teardown",
+      "summary": "Deletes the branch (fast delete, or force-delete after rebase/squash-merge detection), appends a TEARDOWN record to ai-worktree-spawn.log, and reports success or a partial-sync warning.",
+      "tags": ["cleanup", "logging"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [2330, 2371]
+    },
+    {
+      "id": "step:teardown-all-worktrees:verify-repo",
+      "type": "step",
+      "name": "Verify inside a git repo",
+      "summary": "Confirms the batch teardown is invoked from somewhere inside the repo (main or any worktree) before doing anything else.",
+      "tags": ["guard"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [2378, 2391]
+    },
+    {
+      "id": "step:teardown-all-worktrees:collect-worktrees",
+      "type": "step",
+      "name": "Collect non-main worktrees",
+      "summary": "Takes a single `git worktree list --porcelain` snapshot and extracts every worktree other than the main one.",
+      "tags": ["enumeration"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [2393, 2416]
+    },
+    {
+      "id": "step:teardown-all-worktrees:confirm",
+      "type": "step",
+      "name": "Confirm destructive batch action",
+      "summary": "Warns the user how many worktrees will be torn down and prompts for confirmation unless --force is passed.",
+      "tags": ["confirmation"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [2418, 2436]
+    },
+    {
+      "id": "step:teardown-all-worktrees:iterate-teardown",
+      "type": "step",
+      "name": "Iterate single-worktree teardown",
+      "summary": "Parks in the main repo, then for each collected worktree cd's in and re-runs the single-worktree teardown pipeline, tracking per-worktree success/failure.",
+      "tags": ["batch", "reuse"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [2438, 2468]
+    },
+    {
+      "id": "step:teardown-all-worktrees:report-summary",
+      "type": "step",
+      "name": "Report teardown summary",
+      "summary": "Prints succeeded/failed counts and lists any worktrees that failed to tear down, returning non-zero if any failed.",
+      "tags": ["reporting"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [2470, 2484]
+    },
+    {
+      "id": "step:list-worktrees:parse-flags",
+      "type": "step",
+      "name": "Parse list mode flags",
+      "summary": "Parses --quick/-q (legacy output) and --remote/-r (adds batched PR state) into a mode, defaulting to the local-signal status table.",
+      "tags": ["arg-parsing"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [460, 493]
+    },
+    {
+      "id": "step:list-worktrees:snapshot-porcelain",
+      "type": "step",
+      "name": "Snapshot worktree registry",
+      "summary": "Takes one `git worktree list --porcelain` snapshot as the single source of truth for the rest of the render, reporting an orphan-aware error if not in a git repo.",
+      "tags": ["git-query"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [586, 593]
+    },
+    {
+      "id": "step:list-worktrees:batch-fetch-pr-state",
+      "type": "step",
+      "name": "Batch-fetch PR state",
+      "summary": "In --remote mode, makes exactly one `gh pr list` call to fetch open/closed/merged PR states for every branch, instead of one call per worktree.",
+      "tags": ["gh-cli", "batching"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [595, 600]
+    },
+    {
+      "id": "step:list-worktrees:stream-parse-records",
+      "type": "step",
+      "name": "Stream-parse porcelain records",
+      "summary": "Walks the porcelain output line by line, accumulating path/branch/prunable/locked fields per blank-line-delimited record.",
+      "tags": ["parsing"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [629, 667]
+    },
+    {
+      "id": "step:list-worktrees:compute-row-verdict",
+      "type": "step",
+      "name": "Compute per-row verdict",
+      "summary": "For each worktree record, looks up its PR state and calls the shared _gwt_compute_status verdict machine to get state/age/next-action, applying prunable/locked overrides from the porcelain flags first.",
+      "tags": ["verdict"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [690, 737]
+    },
+    {
+      "id": "step:list-worktrees:render-table",
+      "type": "step",
+      "name": "Render aligned table",
+      "summary": "Buffers all rows into a temp file and pipes the whole thing through `column -t` once, avoiding a subshell pipe-loop that would drop UX color codes.",
+      "tags": ["rendering"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [610, 670]
+    },
+    {
+      "id": "step:list-worktrees:surface-orphan-warnings",
+      "type": "step",
+      "name": "Surface orphan/broken worktree warnings",
+      "summary": "Probes every registered worktree for a missing path or a broken/foreign .git pointer and prints a dedicated warning block, since the STATE column alone cannot express these.",
+      "tags": ["diagnostics"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [495, 553]
+    },
+    {
+      "id": "step:status-worktree:parse-arg",
+      "type": "step",
+      "name": "Parse status target argument",
+      "summary": "Handles the optional <name> argument or shows inline help; no argument means 'status for the worktree containing $PWD'.",
+      "tags": ["arg-parsing"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [748, 763]
+    },
+    {
+      "id": "step:status-worktree:resolve-target",
+      "type": "step",
+      "name": "Resolve target worktree path",
+      "summary": "Resolves the target either to $PWD's toplevel or via the same *-<name>-* glob matching used by `gwt remove`, anchored on the main repo so it works from inside any worktree; fails loudly on zero or multiple matches.",
+      "tags": ["resolution"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [776, 836]
+    },
+    {
+      "id": "step:status-worktree:gather-head-info",
+      "type": "step",
+      "name": "Gather HEAD and upstream info",
+      "summary": "Collects branch name, short HEAD hash/subject/age, and the upstream tracking branch for the target worktree.",
+      "tags": ["git-query"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [887, 902]
+    },
+    {
+      "id": "step:status-worktree:compute-working-tree-state",
+      "type": "step",
+      "name": "Compute uncommitted/untracked counts",
+      "summary": "Parses `git status --porcelain` output to count uncommitted-vs-untracked files separately for display.",
+      "tags": ["git-query"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [905, 926]
+    },
+    {
+      "id": "step:status-worktree:lookup-pr-state",
+      "type": "step",
+      "name": "Look up PR state",
+      "summary": "Makes one `gh pr list --head <branch>` call to determine OPEN/MERGED/CLOSED state and formats the associated date, gracefully degrading when gh is unavailable or HEAD is detached.",
+      "tags": ["gh-cli"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [928, 966]
+    },
+    {
+      "id": "step:status-worktree:check-lock-state",
+      "type": "step",
+      "name": "Check agent/git lock state",
+      "summary": "Detects a Claude-agent lock (reporting alive vs stale by pid) or a plain git worktree lock, falling back to '(none)'.",
+      "tags": ["locking"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [968, 981]
+    },
+    {
+      "id": "step:status-worktree:compute-ahead-behind",
+      "type": "step",
+      "name": "Compute ahead/behind counts",
+      "summary": "Computes commit counts ahead of and behind the resolved main ref for the target branch.",
+      "tags": ["git-query"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [983, 992]
+    },
+    {
+      "id": "step:status-worktree:render-diagnostic",
+      "type": "step",
+      "name": "Compute verdict and render diagnostic",
+      "summary": "Calls the shared _gwt_compute_status verdict machine and renders the full Path/Branch/HEAD/Upstream/Uncommitted/PR/Lock/Ahead-Behind/Verdict table with a context-appropriate next-action hint.",
+      "tags": ["verdict", "rendering"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [994, 1030]
+    },
+    {
+      "id": "step:add-worktree:validate-args",
+      "type": "step",
+      "name": "Validate path/branch/start-point args",
+      "summary": "Validates the required <path> argument and optional [<branch> [<start-point>]] positionals, or shows help.",
+      "tags": ["arg-parsing"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1302, 1319]
+    },
+    {
+      "id": "step:add-worktree:create-no-checkout",
+      "type": "step",
+      "name": "Create worktree without checkout",
+      "summary": "Runs `git worktree add --no-checkout` with the appropriate branch/start-point combination so files aren't populated before sparse-checkout is configured.",
+      "tags": ["git-worktree"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1320, 1327]
+    },
+    {
+      "id": "step:add-worktree:parse-gitattributes",
+      "type": "step",
+      "name": "Parse git-crypt exclude patterns",
+      "summary": "Scans .gitattributes for any pattern tagged filter=git-crypt and builds the corresponding sparse-checkout exclude list.",
+      "tags": ["git-crypt", "parsing"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1329, 1344]
+    },
+    {
+      "id": "step:add-worktree:configure-sparse-checkout",
+      "type": "step",
+      "name": "Configure sparse-checkout excludes",
+      "summary": "Initializes non-cone sparse-checkout and feeds it '/*' plus the git-crypt exclude patterns so encrypted paths are never checked out.",
+      "tags": ["sparse-checkout"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1346, 1347]
+    },
+    {
+      "id": "step:add-worktree:checkout-files",
+      "type": "step",
+      "name": "Checkout files into worktree",
+      "summary": "Runs the actual checkout against the configured sparse-checkout set, failing loudly if it errors.",
+      "tags": ["git-worktree"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1349, 1352]
+    },
+    {
+      "id": "step:add-worktree:report-success",
+      "type": "step",
+      "name": "Report success and exclusions",
+      "summary": "Confirms the worktree is ready and lists which git-crypt-tagged paths were excluded, if any.",
+      "tags": ["reporting"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1354, 1357]
+    },
+    {
+      "id": "step:remove-worktree:parse-target",
+      "type": "step",
+      "name": "Parse target and --force flag",
+      "summary": "Parses <path|name|all> plus --force, rejecting a bare flag mistaken for a target and rejecting glob wildcards in favor of the explicit 'all' keyword.",
+      "tags": ["arg-parsing"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1097, 1148]
+    },
+    {
+      "id": "step:remove-worktree:handle-all-mode",
+      "type": "step",
+      "name": "Handle 'all' batch mode",
+      "summary": "Collects every non-main worktree, warns the user, prompts for confirmation unless --force, then removes each one.",
+      "tags": ["batch"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1150, 1202]
+    },
+    {
+      "id": "step:remove-worktree:resolve-name-matches",
+      "type": "step",
+      "name": "Resolve name to worktree matches",
+      "summary": "When the target isn't an existing path, matches it against sibling directories using the *-<name>-* glob convention.",
+      "tags": ["resolution"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1204, 1223]
+    },
+    {
+      "id": "step:remove-worktree:orphan-fallback",
+      "type": "step",
+      "name": "Orphan cleanup fallback",
+      "summary": "When no live directory matches, checks the git registry for a stale entry, prunes it, and cleans up any dangling wt/<name>/* branches.",
+      "tags": ["orphan-cleanup"],
+      "complexity": "moderate",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1225, 1254]
+    },
+    {
+      "id": "step:remove-worktree:remove-directory",
+      "type": "step",
+      "name": "Remove worktree directory",
+      "summary": "Runs `git worktree remove`, falling back to --force when requested, then prunes the registry.",
+      "tags": ["removal"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1266, 1287]
+    },
+    {
+      "id": "step:remove-worktree:delete-branch",
+      "type": "step",
+      "name": "Delete associated branch",
+      "summary": "Deletes the worktree's branch unless it is main/master, force-deleting only when --force was passed and a normal delete is refused.",
+      "tags": ["cleanup"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1289, 1299]
+    },
+    {
+      "id": "step:prune-worktree:parse-and-reject-path",
+      "type": "step",
+      "name": "Parse flags and reject path args",
+      "summary": "Accepts only git-worktree-prune-native flags (-n/-v/--expire) and explicitly rejects a positional path, pointing the user at gwt remove/teardown instead.",
+      "tags": ["arg-parsing", "guard"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1050, 1088]
+    },
+    {
+      "id": "step:prune-worktree:run-prune",
+      "type": "step",
+      "name": "Run git worktree prune",
+      "summary": "Delegates the validated flags straight through to `git worktree prune`.",
+      "tags": ["delegation"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1090, 1090]
+    },
+    {
+      "id": "step:prune-worktree:guide-to-deletion-commands",
+      "type": "step",
+      "name": "Guide user to deletion commands",
+      "summary": "Help text steers users who actually want to delete a worktree toward `gwt remove` (specific) or `gwt teardown` (current worktree), since prune only clears stale metadata.",
+      "tags": ["ux", "help"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [1062, 1070]
+    },
+    {
+      "id": "step:command-dispatch:parse-subcommand",
+      "type": "step",
+      "name": "Parse subcommand argument",
+      "summary": "Reads the first positional argument to gwt() as the subcommand selector.",
+      "tags": ["arg-parsing"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [160, 161]
+    },
+    {
+      "id": "step:command-dispatch:route-to-handler",
+      "type": "step",
+      "name": "Route to subcommand handler",
+      "summary": "Dispatches to git_worktree_add/list/remove/prune/spawn/status/teardown based on the parsed subcommand, shifting off the subcommand token.",
+      "tags": ["routing"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [162, 168]
+    },
+    {
+      "id": "step:command-dispatch:handle-fallback",
+      "type": "step",
+      "name": "Handle help and unknown command",
+      "summary": "Rejects the legacy 'gwt help' form in favor of 'gwt-help', shows help on -h/--help/no-args, and errors on any unrecognized subcommand.",
+      "tags": ["fallback", "error-handling"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [169, 183]
+    },
+    {
+      "id": "step:contextual-help:show-summary",
+      "type": "step",
+      "name": "Show compact summary",
+      "summary": "Default gwt-help output: one line per subcommand with syntax and a one-line purpose.",
+      "tags": ["help"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [15, 26]
+    },
+    {
+      "id": "step:contextual-help:list-sections",
+      "type": "step",
+      "name": "List available sections",
+      "summary": "Prints just the section names (add/list/remove/prune/spawn/status/teardown) for `gwt-help --list`.",
+      "tags": ["help"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [28, 37]
+    },
+    {
+      "id": "step:contextual-help:render-section-detail",
+      "type": "step",
+      "name": "Render single-section detail",
+      "summary": "Looks up and renders the detail table rows for one named section, erroring on an unrecognized section name.",
+      "tags": ["help"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [96, 125]
+    },
+    {
+      "id": "step:contextual-help:render-full-help",
+      "type": "step",
+      "name": "Render full multi-section help",
+      "summary": "Renders every section's detail table in sequence for `gwt-help --all`.",
+      "tags": ["help"],
+      "complexity": "simple",
+      "filePath": "shell-common/functions/git_worktree.sh",
+      "lineRange": [127, 137]
+    }
+  ],
+  "edges": [
+    { "source": "domain:worktree-lifecycle-management", "target": "flow:spawn-worktree", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:worktree-lifecycle-management", "target": "flow:teardown-single-worktree", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:worktree-lifecycle-management", "target": "flow:teardown-all-worktrees", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:worktree-observability", "target": "flow:list-worktrees", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:worktree-observability", "target": "flow:status-worktree", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:worktree-crud", "target": "flow:add-worktree", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:worktree-crud", "target": "flow:remove-worktree", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:worktree-crud", "target": "flow:prune-worktree", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:cli-interface", "target": "flow:command-dispatch", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:cli-interface", "target": "flow:contextual-help", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+
+    { "source": "flow:spawn-worktree", "target": "step:spawn-worktree:parse-options", "type": "flow_step", "direction": "forward", "weight": 0.1 },
+    { "source": "flow:spawn-worktree", "target": "step:spawn-worktree:validate-flags", "type": "flow_step", "direction": "forward", "weight": 0.2 },
+    { "source": "flow:spawn-worktree", "target": "step:spawn-worktree:verify-main-repo", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:spawn-worktree", "target": "step:spawn-worktree:resolve-base-ref", "type": "flow_step", "direction": "forward", "weight": 0.4 },
+    { "source": "flow:spawn-worktree", "target": "step:spawn-worktree:compute-index-and-branch", "type": "flow_step", "direction": "forward", "weight": 0.5 },
+    { "source": "flow:spawn-worktree", "target": "step:spawn-worktree:create-worktree", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:spawn-worktree", "target": "step:spawn-worktree:log-event", "type": "flow_step", "direction": "forward", "weight": 0.7 },
+    { "source": "flow:spawn-worktree", "target": "step:spawn-worktree:launch-agent", "type": "flow_step", "direction": "forward", "weight": 0.8 },
+
+    { "source": "flow:teardown-single-worktree", "target": "step:teardown-single-worktree:resolve-and-lock-check", "type": "flow_step", "direction": "forward", "weight": 0.1 },
+    { "source": "flow:teardown-single-worktree", "target": "step:teardown-single-worktree:check-uncommitted", "type": "flow_step", "direction": "forward", "weight": 0.2 },
+    { "source": "flow:teardown-single-worktree", "target": "step:teardown-single-worktree:check-untracked", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:teardown-single-worktree", "target": "step:teardown-single-worktree:check-unpushed", "type": "flow_step", "direction": "forward", "weight": 0.4 },
+    { "source": "flow:teardown-single-worktree", "target": "step:teardown-single-worktree:remove-directory", "type": "flow_step", "direction": "forward", "weight": 0.5 },
+    { "source": "flow:teardown-single-worktree", "target": "step:teardown-single-worktree:restore-repo-format", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:teardown-single-worktree", "target": "step:teardown-single-worktree:sync-main", "type": "flow_step", "direction": "forward", "weight": 0.7 },
+    { "source": "flow:teardown-single-worktree", "target": "step:teardown-single-worktree:delete-branch-and-log", "type": "flow_step", "direction": "forward", "weight": 0.8 },
+
+    { "source": "flow:teardown-all-worktrees", "target": "step:teardown-all-worktrees:verify-repo", "type": "flow_step", "direction": "forward", "weight": 0.2 },
+    { "source": "flow:teardown-all-worktrees", "target": "step:teardown-all-worktrees:collect-worktrees", "type": "flow_step", "direction": "forward", "weight": 0.4 },
+    { "source": "flow:teardown-all-worktrees", "target": "step:teardown-all-worktrees:confirm", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:teardown-all-worktrees", "target": "step:teardown-all-worktrees:iterate-teardown", "type": "flow_step", "direction": "forward", "weight": 0.8 },
+    { "source": "flow:teardown-all-worktrees", "target": "step:teardown-all-worktrees:report-summary", "type": "flow_step", "direction": "forward", "weight": 1.0 },
+
+    { "source": "flow:list-worktrees", "target": "step:list-worktrees:parse-flags", "type": "flow_step", "direction": "forward", "weight": 0.1 },
+    { "source": "flow:list-worktrees", "target": "step:list-worktrees:snapshot-porcelain", "type": "flow_step", "direction": "forward", "weight": 0.2 },
+    { "source": "flow:list-worktrees", "target": "step:list-worktrees:batch-fetch-pr-state", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:list-worktrees", "target": "step:list-worktrees:stream-parse-records", "type": "flow_step", "direction": "forward", "weight": 0.4 },
+    { "source": "flow:list-worktrees", "target": "step:list-worktrees:compute-row-verdict", "type": "flow_step", "direction": "forward", "weight": 0.5 },
+    { "source": "flow:list-worktrees", "target": "step:list-worktrees:render-table", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:list-worktrees", "target": "step:list-worktrees:surface-orphan-warnings", "type": "flow_step", "direction": "forward", "weight": 0.7 },
+
+    { "source": "flow:status-worktree", "target": "step:status-worktree:parse-arg", "type": "flow_step", "direction": "forward", "weight": 0.1 },
+    { "source": "flow:status-worktree", "target": "step:status-worktree:resolve-target", "type": "flow_step", "direction": "forward", "weight": 0.2 },
+    { "source": "flow:status-worktree", "target": "step:status-worktree:gather-head-info", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:status-worktree", "target": "step:status-worktree:compute-working-tree-state", "type": "flow_step", "direction": "forward", "weight": 0.4 },
+    { "source": "flow:status-worktree", "target": "step:status-worktree:lookup-pr-state", "type": "flow_step", "direction": "forward", "weight": 0.5 },
+    { "source": "flow:status-worktree", "target": "step:status-worktree:check-lock-state", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:status-worktree", "target": "step:status-worktree:compute-ahead-behind", "type": "flow_step", "direction": "forward", "weight": 0.7 },
+    { "source": "flow:status-worktree", "target": "step:status-worktree:render-diagnostic", "type": "flow_step", "direction": "forward", "weight": 0.8 },
+
+    { "source": "flow:add-worktree", "target": "step:add-worktree:validate-args", "type": "flow_step", "direction": "forward", "weight": 0.2 },
+    { "source": "flow:add-worktree", "target": "step:add-worktree:create-no-checkout", "type": "flow_step", "direction": "forward", "weight": 0.4 },
+    { "source": "flow:add-worktree", "target": "step:add-worktree:parse-gitattributes", "type": "flow_step", "direction": "forward", "weight": 0.5 },
+    { "source": "flow:add-worktree", "target": "step:add-worktree:configure-sparse-checkout", "type": "flow_step", "direction": "forward", "weight": 0.7 },
+    { "source": "flow:add-worktree", "target": "step:add-worktree:checkout-files", "type": "flow_step", "direction": "forward", "weight": 0.8 },
+    { "source": "flow:add-worktree", "target": "step:add-worktree:report-success", "type": "flow_step", "direction": "forward", "weight": 1.0 },
+
+    { "source": "flow:remove-worktree", "target": "step:remove-worktree:parse-target", "type": "flow_step", "direction": "forward", "weight": 0.1 },
+    { "source": "flow:remove-worktree", "target": "step:remove-worktree:handle-all-mode", "type": "flow_step", "direction": "forward", "weight": 0.2 },
+    { "source": "flow:remove-worktree", "target": "step:remove-worktree:resolve-name-matches", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:remove-worktree", "target": "step:remove-worktree:orphan-fallback", "type": "flow_step", "direction": "forward", "weight": 0.4 },
+    { "source": "flow:remove-worktree", "target": "step:remove-worktree:remove-directory", "type": "flow_step", "direction": "forward", "weight": 0.5 },
+    { "source": "flow:remove-worktree", "target": "step:remove-worktree:delete-branch", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+
+    { "source": "flow:prune-worktree", "target": "step:prune-worktree:parse-and-reject-path", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:prune-worktree", "target": "step:prune-worktree:run-prune", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:prune-worktree", "target": "step:prune-worktree:guide-to-deletion-commands", "type": "flow_step", "direction": "forward", "weight": 1.0 },
+
+    { "source": "flow:command-dispatch", "target": "step:command-dispatch:parse-subcommand", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:command-dispatch", "target": "step:command-dispatch:route-to-handler", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:command-dispatch", "target": "step:command-dispatch:handle-fallback", "type": "flow_step", "direction": "forward", "weight": 1.0 },
+
+    { "source": "flow:contextual-help", "target": "step:contextual-help:show-summary", "type": "flow_step", "direction": "forward", "weight": 0.2 },
+    { "source": "flow:contextual-help", "target": "step:contextual-help:list-sections", "type": "flow_step", "direction": "forward", "weight": 0.4 },
+    { "source": "flow:contextual-help", "target": "step:contextual-help:render-section-detail", "type": "flow_step", "direction": "forward", "weight": 0.7 },
+    { "source": "flow:contextual-help", "target": "step:contextual-help:render-full-help", "type": "flow_step", "direction": "forward", "weight": 1.0 },
+
+    { "source": "domain:cli-interface", "target": "domain:worktree-lifecycle-management", "type": "cross_domain", "direction": "forward", "description": "gwt() dispatches 'spawn' and 'teardown' subcommands directly into the Lifecycle domain's entry functions.", "weight": 0.8 },
+    { "source": "domain:cli-interface", "target": "domain:worktree-observability", "type": "cross_domain", "direction": "forward", "description": "gwt() dispatches 'list' and 'status' subcommands into the Observability domain's entry functions.", "weight": 0.8 },
+    { "source": "domain:cli-interface", "target": "domain:worktree-crud", "type": "cross_domain", "direction": "forward", "description": "gwt() dispatches 'add', 'remove', and 'prune' subcommands into the CRUD domain's entry functions.", "weight": 0.8 },
+    { "source": "domain:worktree-lifecycle-management", "target": "domain:worktree-crud", "type": "cross_domain", "direction": "forward", "description": "Spawn reuses git_worktree_add for git-crypt-safe worktree creation; teardown's removal step mirrors the same git-worktree-remove primitives as the CRUD domain's remove flow.", "weight": 0.7 },
+    { "source": "domain:worktree-lifecycle-management", "target": "domain:worktree-observability", "type": "cross_domain", "direction": "forward", "description": "Teardown's unpushed-commit and merge-safety pre-flight checks reuse the same verdict/merge-detection primitives (_gwt_branch_merged, PR-merged lookup) and Claude-lock detector that the Observability domain surfaces as list/status state.", "weight": 0.6 },
+    { "source": "domain:worktree-observability", "target": "domain:worktree-crud", "type": "cross_domain", "direction": "forward", "description": "List and status read the same `git worktree list --porcelain` registry that add/remove/prune mutate, and surface orphan states created by manual deletions that prune would clean up.", "weight": 0.5 }
+  ],
+  "layers": [],
+  "tour": []
+}
