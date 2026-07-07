@@ -353,13 +353,22 @@ git_branch_teardown() {
     # intended "catch up only if we cleanly can". Fast-forward only; a diverged
     # local main is reported with ahead/behind counts, never rewritten (#1125).
     if git fetch --quiet origin "$main_branch" 2>/dev/null; then
-        if git rev-parse --verify --quiet "origin/$main_branch" >/dev/null 2>&1 \
-            && ! git merge --ff-only "origin/$main_branch" >/dev/null 2>&1; then
-            local _sync_ahead _sync_behind
-            _sync_ahead="$(git rev-list --count "origin/$main_branch..$main_branch" 2>/dev/null || printf '?')"
-            _sync_behind="$(git rev-list --count "$main_branch..origin/$main_branch" 2>/dev/null || printf '?')"
-            ux_warning "Main sync skipped — local '$main_branch' diverged from origin/$main_branch (${_sync_ahead} ahead, ${_sync_behind} behind)."
-            ux_info "  Resolve manually (rebase / reset). Branch delete may misjudge merge status."
+        if git rev-parse --verify --quiet "origin/$main_branch" >/dev/null 2>&1; then
+            # Capture ff-only stderr (same as gwt teardown, git_worktree.sh:2312)
+            # so a failure from uncommitted changes / an index lock surfaces its
+            # real cause instead of being mislabeled as pure divergence.
+            local _sync_err_file="${TMPDIR:-/tmp}/gbr-sync.$$.err"
+            if ! git merge --ff-only "origin/$main_branch" 2>"$_sync_err_file" >/dev/null; then
+                local _sync_ahead _sync_behind
+                _sync_ahead="$(git rev-list --count "origin/$main_branch..$main_branch" 2>/dev/null || printf '?')"
+                _sync_behind="$(git rev-list --count "$main_branch..origin/$main_branch" 2>/dev/null || printf '?')"
+                ux_warning "Main sync skipped — local '$main_branch' diverged from origin/$main_branch (${_sync_ahead} ahead, ${_sync_behind} behind)."
+                if [ -s "$_sync_err_file" ]; then
+                    sed 's/^/    /' "$_sync_err_file" >&2
+                fi
+                ux_info "  Resolve manually (rebase / reset). Branch delete may misjudge merge status."
+            fi
+            rm -f "$_sync_err_file"
         fi
     else
         ux_warning "Fetch failed (network?). Branch delete may misjudge merge status."

@@ -280,18 +280,19 @@ JSON
     mkdir -p "$MAIN_ROOT/claude/plugin"
     ( cd "$MAIN_ROOT" && echo seed > seed.txt && git add seed.txt \
         && git commit -q -m seed && git push -q origin main \
-        && git checkout -q -b feat/x )
+        && git checkout -q -b feat/x && git push -q -u origin feat/x )
 
     payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install ralph-loop@claude-plugins-official"}}'
     run bash -c "printf '%s' '$payload' | '$HOOK'"
     assert_success
 
-    # Committed locally on the feature branch, but push is main/master-only, so
-    # feat/x was never pushed (no origin/feat/x ref exists).
+    # Committed locally on the feature branch. feat/x HAS an upstream, so the
+    # early @{u} return cannot mask a broken branch filter — the only reason
+    # origin/feat/x stays at seed is the main/master-only scope guard.
     run git -C "$MAIN_ROOT" log -1 --format=%s
     assert_output "chore(claude-plugin): sync manifest"
-    run git -C "$MAIN_ROOT" rev-parse --verify --quiet origin/feat/x
-    assert_failure
+    run git -C "$MAIN_ROOT" log -1 --format=%s origin/feat/x
+    assert_output "seed"
 }
 
 @test "no-op re-run does not create an empty commit" {
