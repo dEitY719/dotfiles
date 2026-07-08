@@ -156,6 +156,13 @@ def shell_runner(temp_home):
             "DOTFILES_TEST_MODE": "1",  # Signal test mode to tools
             "DOTFILES_ROOT": str(REPO_ROOT),
             "SHELL_COMMON": str(SHELL_COMMON),
+            # Validate the checkout under test, not the canonicalized main
+            # worktree. main.bash's #589 DOTFILES_ROOT canonicalization walks
+            # a linked worktree back to the main worktree, so without this the
+            # suite would load shell-common from main and silently ignore a
+            # feature branch's changes. No-op in CI / main checkout (already
+            # canonical); required for TDD inside linked (AI) worktrees.
+            "DOTFILES_ROOT_NO_CANONICALIZE": "1",
             "HOME": temp_home,  # Temporary home
             "ZDOTDIR": temp_home,  # Prevent zsh user rc loading
             "XDG_CONFIG_HOME": temp_home,  # Further isolation
