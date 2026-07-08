@@ -218,3 +218,39 @@ class TestHelpTopicsEnvironmentIntegrity:
         assert result.exit_code == 0
         count = result.stdout.strip()
         assert count.isdigit() and int(count) > 0, f"{shell}: Invalid SOURCED_FILES_COUNT"
+
+
+class TestGitDeployHelpSections:
+    """git-help deploy/release workflow sections (issue #1128)."""
+
+    GIT_DEPLOY_SECTIONS = [
+        "deploy",
+        "release",
+        "release-artifacts",
+        "rollback",
+        "pitfalls",
+        "principles",
+    ]
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    @pytest.mark.parametrize("section", GIT_DEPLOY_SECTIONS)
+    def test_section_callable(self, shell_runner, shell, section):
+        """Each new git-help section exits 0 with non-empty output."""
+        result = shell_runner(shell, f"git_help {section}")
+        assert result.exit_code == 0, f"{shell}: git_help {section} failed"
+        assert result.stdout.strip(), f"{shell}: git_help {section} produced no output"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_deploy_uses_workflow_run(self, shell_runner, shell):
+        result = shell_runner(shell, "git_help deploy")
+        assert "gh workflow run" in result.stdout, f"{shell}: deploy missing 'gh workflow run'"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_release_has_annotated_tag_step(self, shell_runner, shell):
+        result = shell_runner(shell, "git_help release")
+        assert "git tag -a" in result.stdout, f"{shell}: release missing annotated tag step"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_principles_mentions_merge(self, shell_runner, shell):
+        result = shell_runner(shell, "git_help principles")
+        assert "merge" in result.stdout.lower(), f"{shell}: principles missing merge rule"
