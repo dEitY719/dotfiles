@@ -161,6 +161,7 @@ _git_help_rows_deploy() {
 _git_help_rows_release() {
     ux_section "치환값 (placeholder)"
     ux_table_row "<PROD_WORKFLOW>" "예: prod-deploy.yml" "prod 배포 workflow 파일"
+    ux_table_row "<REPO_COORD>" "예: github.example.net/org/repo" "gh --repo 좌표"
     ux_table_row "<TAG>" "예: v2.1.0" "릴리스 태그"
     ux_table_row "<DEPLOY_STRATEGY>" "rolling | recreate" "prod 배포 전략"
     ux_table_row "<TEST_CMD>" "예: uv run pytest -q" "릴리스 게이트 테스트"
