@@ -247,9 +247,7 @@ class TestGitDeployHelpSections:
         result = shell_runner(shell, f"git_help {section}")
         assert result.exit_code == 0, f"{shell}: git_help {section} failed"
         assert result.stdout.strip(), f"{shell}: git_help {section} produced no output"
-        assert "docs/guide/deploy-workflow.md" in result.stdout, (
-            f"{shell}: git_help {section} missing doc pointer"
-        )
+        assert "docs/guide/deploy-workflow.md" in result.stdout, f"{shell}: git_help {section} missing doc pointer"
         expected = self.GIT_DEPLOY_SECTION_CONTENT[section]
         if expected is not None:
             assert expected in result.stdout, f"{shell}: git_help {section} missing '{expected}'"
