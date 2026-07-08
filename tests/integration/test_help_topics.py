@@ -254,3 +254,12 @@ class TestGitDeployHelpSections:
     def test_principles_mentions_merge(self, shell_runner, shell):
         result = shell_runner(shell, "git_help principles")
         assert "merge" in result.stdout.lower(), f"{shell}: principles missing merge rule"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    @pytest.mark.parametrize("section", GIT_DEPLOY_SECTIONS)
+    def test_section_footer_points_to_doc(self, shell_runner, shell, section):
+        """Every deploy section footers to the rationale doc (drift guard)."""
+        result = shell_runner(shell, f"git_help {section}")
+        assert "docs/guide/deploy-workflow.md" in result.stdout, (
+            f"{shell}: git_help {section} missing doc pointer"
+        )
