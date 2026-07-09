@@ -59,6 +59,30 @@ ssh_config_regen() {
     mv "$tmp" "$dropin"
 }
 
+# Detect a pre-existing IdentityFile that would shadow the key `add` intends to
+# install for <alias> (issue #1132 defect A). `ssh -G <alias>` prints every
+# identity ssh would actually try; an explicit `Host` block suppresses the
+# built-in defaults, so if our intended key ($2, tilde-expanded absolute) is
+# NOT among them a hand-written block is winning. In that case echo the identity
+# ssh WOULD use (its first `identityfile`, in the original ~-form) and return 0.
+# Return 1 silently when there is no conflict, no output, or ssh is unavailable.
+ssh_config_conflicting_identity() {
+    _cci_al="$1"
+    _cci_want="$2"
+    _cci_ssh="${DEVX_SSH_BIN:-ssh}"
+    command -v "$_cci_ssh" >/dev/null 2>&1 || return 1
+    _cci_ids="$("$_cci_ssh" -G "$_cci_al" 2>/dev/null | awk 'tolower($1)=="identityfile"{print $2}')"
+    [ -n "$_cci_ids" ] || return 1
+    _cci_first=""
+    for _cci_id in $_cci_ids; do
+        [ -n "$_cci_first" ] || _cci_first="$_cci_id"
+        # Our intended key is offered → ssh will try it → no shadowing.
+        [ "$(ssh_config_expand_tilde "$_cci_id")" = "$_cci_want" ] && return 1
+    done
+    printf '%s\n' "$_cci_first"
+    return 0
+}
+
 # Ensure ~/.ssh/config includes the drop-in exactly once.
 ssh_config_ensure_include() {
     main="$(ssh_config_main_path)"

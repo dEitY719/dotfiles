@@ -41,7 +41,7 @@ First positional arg selects the action:
 | Sub-command | Args | Effect |
 |---|---|---|
 | `sync` | — | Reconcile manifest ↔ reality (regen config, pin/verify). |
-| `add` | `<user>@<host> [alias] [--dry-run]` | Add + install + verify one entry. |
+| `add` | `<user>@<host> [alias] [--dry-run] [--key-only]` | Add + install + verify one entry. |
 | `list` | `[--json]` | Print the delegation table / JSON. |
 | `test` | `[<alias>\|--all]` | BatchMode reachability check. |
 | `revoke` | `<alias>` | Remove remote key + mark `revoked: true`. |
@@ -59,10 +59,17 @@ skill's directory):
 ```
 
 - `add` runs `ssh-copy-id` interactively — the user enters the remote password
-  **once**. Tell them to expect that single prompt; do not try to supply it.
+  **once**. Tell them to expect that single prompt; do not try to supply it. In
+  a non-interactive shell (a Claude `!` session) `add` fails fast with the exact
+  command to run in a real terminal — relay it verbatim (issue #1132).
+- If the alias already has a hand-written `Host` block with a different
+  `IdentityFile`, `add` adopts that key (via `ssh -G`) so the installed key is
+  the one ssh actually offers — surface the adoption warning it prints.
 - `add --dry-run` prints the planned actions (manifest upsert, `ssh-copy-id`
   command, config regen, verify) without touching the remote — use it first
   when the user is unsure.
+- `add --key-only` installs the key without regenerating the ssh config drop-in
+  — for a host that already has a working hand-written alias (issue #1132).
 - Never bypass a fingerprint MISMATCH from `sync`. Surface the ALERT and stop;
   re-trust is a human decision (see `references/safety-model.md`).
 
