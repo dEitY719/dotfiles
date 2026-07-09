@@ -107,7 +107,7 @@ cmd_add() {
         [ -n "$detected" ] &&
             ux_warning "existing ssh config resolves IdentityFile '$detected' for '$alias_' — add would adopt it (drop-in default '$default_idf' would be shadowed)"
         ux_info "manifest upsert: alias=$alias_ user=$user host=$host identity_file=$eff_idf"
-        ux_info "would run: $copyid -i ${eff_idf}.pub -p $port ${user}@${host}"
+        ux_info "would run: $copyid -i \"${eff_idf}.pub\" -p $port ${user}@${host}"
         if [ -n "$key_only" ]; then
             ux_info "--key-only: would NOT regenerate $(ssh_config_dropin_path)"
         else
@@ -122,7 +122,7 @@ cmd_add() {
     if ! ssh_install_can_prompt; then
         ux_error "add needs an interactive terminal for the ssh-copy-id password prompt"
         ux_info "no TTY detected (Claude '!' / CI session). Run this in a normal terminal:"
-        ux_info "  $copyid -i ${eff_idf}.pub -p $port ${user}@${host}"
+        ux_info "  $copyid -i \"${eff_idf}.pub\" -p $port ${user}@${host}"
         ux_info "then re-run 'add' to record it — or set SSH_ASKPASS + SSH_ASKPASS_REQUIRE=force to supply the password non-interactively."
         return 3
     fi

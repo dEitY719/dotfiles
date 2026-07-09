@@ -78,6 +78,22 @@ teardown() { teardown_isolated_home; }
     assert_output '~/.ssh/id_rsa_ssai_bwyoon'
 }
 
+@test "A: an IdentityFile path with spaces is preserved (PR #1133 review)" {
+    # Bespoke ssh mock: `-G` prints a single identityfile whose path has a
+    # space — FAKE_SSH_G word-splits, so this test uses its own stub.
+    cat >"${STUB_BIN}/ssh" <<'SSH'
+#!/usr/bin/env bash
+for a in "$@"; do
+    [ "$a" = "-G" ] && { printf 'identityfile /Users/John Doe/.ssh/id_rsa\n'; exit 0; }
+done
+exit 0
+SSH
+    chmod +x "${STUB_BIN}/ssh"
+    run ssh_config_conflicting_identity somealias "${TEST_TEMP_HOME}/.ssh/id_ed25519"
+    assert_success
+    assert_output '/Users/John Doe/.ssh/id_rsa'
+}
+
 @test "A: add adopts a pre-existing IdentityFile (installed key == connect key)" {
     export DEVX_SSH_ASSUME_TTY=1
     export FAKE_SSH_G='~/.ssh/id_rsa_ssai_bwyoon'
