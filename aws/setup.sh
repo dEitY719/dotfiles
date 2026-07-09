@@ -204,7 +204,12 @@ _merge_claude_settings_json() {
         | $base * $overlay
             * ($existing | del(.hooks, .statusLine, .availableModels, .modelOverrides))
     ' "$_base" "$_overlay" "$_tgt" > "$_tmp_merged"; then
-        if cmp -s "$_tgt" "$_tmp_merged"; then
+        # 순서 무관(semantic) 비교 (#1130): jq `*` 는 overlay/기타 키를 좌변 뒤로
+        # 이어 붙여 값이 동일해도 키 순서가 매 실행 달라진다. byte 비교(cmp -s)는
+        # 이 순서 churn 을 "변경" 으로 오판해 매번 백업+재작성했다. 양변을 canonical
+        # key order(jq -S)로 정규화해 비교하면 값 드리프트 0 일 때 아래 Preserved
+        # 분기로 정확히 떨어진다. 디스크 표현(파일 순서)은 건드리지 않는다.
+        if jq -S . "$_tgt" 2>/dev/null | cmp -s - <(jq -S . "$_tmp_merged" 2>/dev/null); then
             rm -f "$_tmp_merged"
             ux_success "Preserved (already up to date): $_tgt"
         else
