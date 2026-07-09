@@ -137,3 +137,55 @@ JSON
     run jq -r '.theme' "$TGT"
     [ "$output" = "light" ]
 }
+
+@test "merge #1130: values equal but key order differs → Preserved, no backup churn" {
+    # Seed TGT via one real merge so it becomes the merge fixed point.
+    cat >"$TGT" <<'JSON'
+{
+  "model": "user-picked-model",
+  "theme": "light",
+  "myCustomKey": "keep-me"
+}
+JSON
+    run _merge_claude_settings_json "$BASE" "$OVERLAY" "$TGT"
+    [ "$status" -eq 0 ]
+
+    # Rewrite TGT with IDENTICAL values but a different (sorted) key order —
+    # this is the real-world churn trigger. jq `*` re-orders keys, so a byte
+    # comparison (cmp -s) always saw a "change" and re-wrote + backed up on
+    # every re-run even though nothing drifted (issue #1130).
+    jq -S . "$TGT" >"$TGT.sorted"
+    mv "$TGT.sorted" "$TGT"
+    # Drop the backup produced by the seeding merge above — we only want to
+    # observe whether the SECOND (idempotent) run creates one.
+    rm -f "$TEST_TEMP_HOME"/settings.json.bedrock-merge-backup.*
+
+    # Capture which branch the idempotent re-run takes.
+    ux_success() { echo "SUCCESS: $*"; }
+    run _merge_claude_settings_json "$BASE" "$OVERLAY" "$TGT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Preserved (already up to date)"* ]]
+    [[ "$output" != *"Merged Bedrock keys into"* ]]
+
+    # No new backup file created on the idempotent run.
+    run bash -c 'ls "$1"/settings.json.bedrock-merge-backup.* 2>/dev/null | wc -l' _ "$TEST_TEMP_HOME"
+    [ "$output" -eq 0 ]
+}
+
+@test "merge #1130: real value drift still Merges + creates one backup" {
+    # existing lacks the SSOT-owned fields → a genuine merge is required.
+    cat >"$TGT" <<'JSON'
+{
+  "model": "user-picked-model",
+  "theme": "light"
+}
+JSON
+    ux_success() { echo "SUCCESS: $*"; }
+    run _merge_claude_settings_json "$BASE" "$OVERLAY" "$TGT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Merged Bedrock keys into"* ]]
+    [[ "$output" != *"Preserved (already up to date)"* ]]
+
+    run bash -c 'ls "$1"/settings.json.bedrock-merge-backup.* 2>/dev/null | wc -l' _ "$TEST_TEMP_HOME"
+    [ "$output" -eq 1 ]
+}
