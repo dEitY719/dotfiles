@@ -1292,3 +1292,77 @@ FIXTURE
     # Wildcard and too-short token must not appear as registered SHAs.
     refute_output --partial " *"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #1134 — phantom commit: two independent defects.
+#
+# Bug A: the Stage-1 subject-dup cache used a fixed `git log -n 200` window, so
+#   a twin whose subject sat beyond commit 200 was never matched — its
+#   still-missing-by-patch-id counterpart flowed past Stage-1 as a phantom.
+#   The fix caches the FULL base history.
+#
+# Bug B: the Analysis-phase `while read … <<EOF` loops call git-forking helpers
+#   without a `</dev/null` guard, so a helper whose git subprocess reads stdin
+#   swallows the loop's remaining here-doc input and terminates the loop after
+#   one iteration — dropping later commits from the analysis. The fix redirects
+#   every in-loop subprocess from /dev/null.
+# ---------------------------------------------------------------------------
+
+@test "scan #1134 (Bug A): twin beyond the old 200-commit window is still detected as duplicate" {
+    # main history places the same-subject twin ~205 commits below HEAD (past
+    # the old -n 200 window). Its source counterpart has a DIFFERENT patch (so
+    # `git cherry` still lists it as missing) but the SAME subject, so only the
+    # full-history subject-dup scan can catch it. With the old window it slipped
+    # through as a phantom "1 commit"; with the fix it is a recognised dup.
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo init > a.txt && git add a.txt && git commit -qm "init"
+        git checkout -q -b source
+        echo dupsrc > f2.txt && git add f2.txt && git commit -qm "shared old subject"
+        git checkout -q main
+        echo dupbase > onbase.txt && git add onbase.txt && git commit -qm "shared old subject"
+        # Push the twin beyond the retired 200-commit window.
+        i=0; while [ $i -lt 205 ]; do git commit -q --allow-empty -m "pad $i"; i=$((i + 1)); done
+        printf "y\n" | _gcp_scan main source --author=all
+        git cat-file -e HEAD:f2.txt 2>/dev/null && echo HAS_F2 || echo NO_F2
+    '
+    assert_success
+    # The twin is recognised as a duplicate — not offered as a phantom commit.
+    assert_output --partial "Duplicates (already applied): 1"
+    assert_output --partial "Nothing to do"
+    # Its payload must never reach main.
+    assert_output --partial "NO_F2"
+}
+
+@test "scan #1134 (Bug B): Analysis loop survives a helper whose subprocess drains stdin" {
+    # Simulate the TTY/environment-dependent failure: the Stage-2 helper reads
+    # its stdin (as a git plumbing call can). Without the `</dev/null` guard the
+    # first call swallows the loop's here-doc and the loop exits after one
+    # iteration, so only 1 of 2 survivors is counted. With the guard both are
+    # processed -> both no-op -> count 0 -> "Nothing to do".
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo init > a.txt && git add a.txt && git commit -qm "init"
+        git checkout -q -b source
+        echo one > f1.txt && git add f1.txt && git commit -qm "feat one"
+        echo two > f2.txt && git add f2.txt && git commit -qm "feat two"
+        git checkout -q main
+        # Override the Stage-2 helper: drain stdin like a stdin-reading git
+        # subprocess, then report no-op so BOTH survivors must be counted.
+        _gcp_scan_preflight_is_noop() { cat >/dev/null 2>&1; return 0; }
+        _gcp_scan main source --author=all
+    '
+    assert_success
+    assert_output --partial "Already in HEAD (no-op): 2"
+    assert_output --partial "Nothing to do"
+}

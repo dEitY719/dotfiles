@@ -572,18 +572,31 @@ EOF
     local duplicate_map=""
     local duplicate_count=0
 
-    # Cache the base branch's recent subjects ONCE (PR #812 review): running
+    # Cache the base branch's subjects ONCE (PR #812 review): running
     # `git log` per source commit was an O(N) process-fork bottleneck. The
     # per-commit lookup below is then a pure-shell here-doc `while read`
     # (no git/awk fork, no pipe subshell).
+    #
+    # Cache the FULL base history, not a fixed `-n 200` window (issue #1134). A
+    # twin whose subject sat beyond commit 200 (e.g. main's 218th commit) was
+    # never matched, so its counterpart — still "missing" by patch-id — slipped
+    # past Stage-1 as a phantom commit that showed up as "1 commit" yet had an
+    # empty range/list and immediately became an empty cherry-pick. Full history
+    # is one `git log` (~0.02s on this repo), so it closes the window entirely.
     local base_log tab
-    base_log=$(git log "$base" -n 200 --format='%H%x09%s' 2>/dev/null)
+    base_log=$(git log "$base" --format='%H%x09%s' 2>/dev/null)
     tab=$(printf '\t')
 
+    # stdin guard (issue #1134): every git/helper call inside these analysis
+    # `while read … <<EOF` loops redirects `</dev/null`. Without it a git
+    # subprocess that reads stdin (TTY/environment-dependent) would swallow the
+    # loop's remaining here-doc input and terminate the loop after one
+    # iteration — silently dropping later commits from the analysis and
+    # producing the count-vs-list mismatch users saw as a phantom commit.
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
         local subject
-        subject=$(git show -s --format='%s' "$sha")
+        subject=$(git show -s --format='%s' "$sha" </dev/null)
 
         # Find a base commit with the same subject and capture its SHA so the
         # individual cherry-pick loop can report what each dup was already
@@ -663,7 +676,7 @@ EOF
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
         local _dep_out=""
-        if _dep_out=$(_gcp_scan_check_file_deps "$sha" "$base" "$source" "$selected_list"); then
+        if _dep_out=$(_gcp_scan_check_file_deps "$sha" "$base" "$source" "$selected_list" </dev/null); then
             if [ -z "$dep_survivor_list" ]; then
                 dep_survivor_list="$sha"
             else
@@ -713,7 +726,7 @@ EOF
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
         local _cf_out=""
-        if _cf_out=$(_gcp_scan_predict_content_conflict "$sha" "$selected_list"); then
+        if _cf_out=$(_gcp_scan_predict_content_conflict "$sha" "$selected_list" </dev/null); then
             if [ -z "$conflict_survivor_list" ]; then
                 conflict_survivor_list="$sha"
             else
@@ -748,7 +761,7 @@ EOF
     local noop_list="" noop_count=0 real_final_list=""
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
-        if _gcp_scan_preflight_is_noop "$sha"; then
+        if _gcp_scan_preflight_is_noop "$sha" </dev/null; then
             noop_list="${noop_list}${sha}
 "
             noop_count=$((noop_count + 1))
