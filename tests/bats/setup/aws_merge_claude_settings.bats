@@ -156,6 +156,9 @@ JSON
     # every re-run even though nothing drifted (issue #1130).
     jq -S . "$TGT" >"$TGT.sorted"
     mv "$TGT.sorted" "$TGT"
+    # umask can reset perms on a temp-file rewrite; restore 0600 to mirror the
+    # real ~/.claude/settings.json (matches the chmod-after-mv idiom in setup.sh).
+    chmod 0600 "$TGT"
     # Drop the backup produced by the seeding merge above — we only want to
     # observe whether the SECOND (idempotent) run creates one.
     rm -f "$TEST_TEMP_HOME"/settings.json.bedrock-merge-backup.*
