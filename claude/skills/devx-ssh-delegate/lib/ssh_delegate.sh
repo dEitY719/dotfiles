@@ -36,7 +36,8 @@ devx:ssh-delegate — manifest-based SSH key delegation + audit log
 
 Usage:
   ssh_delegate.sh sync                       Reconcile manifest with reality
-  ssh_delegate.sh add <user>@<host> [alias]  Add + install + verify one entry
+  ssh_delegate.sh add <user>@<host> [alias] [--key-only]
+                                             Add + install + verify one entry
   ssh_delegate.sh list [--json]              Show entries + last-verified table
   ssh_delegate.sh test [<alias>|--all]       BatchMode reachability check
   ssh_delegate.sh revoke <alias>             Remove remote key + mark revoked
@@ -46,6 +47,8 @@ Usage:
 Manifest: ${DEVX_SSH_MANIFEST:-~/.ssh/delegations.yml}  (mode 0600)
 Audit log: ${DEVX_SSH_AUDIT_LOG:-~/.local/state/devx/ssh-delegations.log}
 Add --dry-run to `add` to print actions without touching the remote.
+Add --key-only to `add` to install the key without regenerating ssh config
+(for hosts that already have a working hand-written alias).
 EOF
 }
 
@@ -55,9 +58,11 @@ cmd_add() {
     target=""
     alias_=""
     dry=""
+    key_only=""
     for a in "$@"; do
         case "$a" in
         --dry-run) dry="--dry-run" ;;
+        --key-only) key_only="--key-only" ;;
         *@*) target="$a" ;;
         *) [ -z "$alias_" ] && alias_="$a" ;;
         esac
@@ -78,17 +83,57 @@ cmd_add() {
         alias_="${user}-$(printf '%s' "$host" | tr '.:' '--')"
     fi
 
+    # Identity `add` would install absent any override (manifest default).
+    default_idf="$(manifest_default identity_file 2>/dev/null)"
+    # shellcheck disable=SC2088  # literal ~; expanded by ssh_config_expand_tilde
+    [ -n "$default_idf" ] || default_idf='~/.ssh/id_ed25519'
+    want_idf="$(ssh_config_expand_tilde "$default_idf")"
+
+    # Defect A (#1132): a hand-written `Host` block may pin a different
+    # IdentityFile that shadows our drop-in, so the key we install is never the
+    # key ssh offers — a silent mismatch. Detect it via `ssh -G` and adopt the
+    # resolved key so install target == connect key. `detected` stays in ~-form.
+    detected="$(ssh_config_conflicting_identity "$alias_" "$want_idf" 2>/dev/null || true)"
+    eff_idf="$want_idf"
+    [ -n "$detected" ] && eff_idf="$(ssh_config_expand_tilde "$detected")"
+
+    port="$(manifest_eff "$alias_" port port)"
+    [ -n "$port" ] || port=22
+    copyid="${DEVX_SSH_COPY_ID_BIN:-ssh-copy-id}"
+
     if [ "$dry" = "--dry-run" ]; then
         # Dry-run mutates nothing — no manifest, no remote, no config.
         ux_header "add (dry-run): $alias_ -> ${user}@${host}"
-        ux_info "manifest upsert: alias=$alias_ user=$user host=$host"
-        ux_info "would run: $(ssh_install_copy_id_dry "$alias_" "$user" "$host")"
-        ux_info "would regenerate $(ssh_config_dropin_path) and verify '$alias_'"
+        [ -n "$detected" ] &&
+            ux_warning "existing ssh config resolves IdentityFile '$detected' for '$alias_' — add would adopt it (drop-in default '$default_idf' would be shadowed)"
+        ux_info "manifest upsert: alias=$alias_ user=$user host=$host identity_file=$eff_idf"
+        ux_info "would run: $copyid -i ${eff_idf}.pub -p $port ${user}@${host}"
+        if [ -n "$key_only" ]; then
+            ux_info "--key-only: would NOT regenerate $(ssh_config_dropin_path)"
+        else
+            ux_info "would regenerate $(ssh_config_dropin_path) and verify '$alias_'"
+        fi
         return 0
+    fi
+
+    # Defect C (#1132): fail fast — before mutating anything — when ssh-copy-id
+    # has no way to read the remote password here. A misleading `Permission
+    # denied` in a non-interactive shell is worse than a clear up-front error.
+    if ! ssh_install_can_prompt; then
+        ux_error "add needs an interactive terminal for the ssh-copy-id password prompt"
+        ux_info "no TTY detected (Claude '!' / CI session). Run this in a normal terminal:"
+        ux_info "  $copyid -i ${eff_idf}.pub -p $port ${user}@${host}"
+        ux_info "then re-run 'add' to record it — or set SSH_ASKPASS + SSH_ASKPASS_REQUIRE=force to supply the password non-interactively."
+        return 3
     fi
 
     manifest_ensure
     manifest_upsert "$alias_" "$user" "$host" "" ""
+    if [ -n "$detected" ]; then
+        manifest_set_field "$alias_" identity_file "$detected"
+        audit_log_event identity-adopt "$alias_" "$detected"
+        ux_warning "adopted existing IdentityFile '$detected' for '$alias_' (manifest default '$default_idf' would have been shadowed)"
+    fi
     audit_log_event add "$alias_" "${user}@${host}"
     ux_header "add: $alias_ -> ${user}@${host}"
     if ! ssh_install_copy_id "$alias_"; then
@@ -96,8 +141,14 @@ cmd_add() {
         return 1
     fi
     audit_log_event install-ok "$alias_" ""
-    ssh_config_regen
-    ssh_config_ensure_include
+    if [ -n "$key_only" ]; then
+        # Defect B (#1132): the host already has a working hand-written alias —
+        # install the key but leave the user's ssh config untouched (no regen).
+        ux_info "--key-only: leaving ssh config untouched (no drop-in regen)"
+    else
+        ssh_config_regen
+        ssh_config_ensure_include
+    fi
     if ssh_verify_alias "$alias_"; then
         audit_log_event verify-ok "$alias_" ""
         ux_success "ssh $alias_ now works passwordless"
@@ -105,20 +156,6 @@ cmd_add() {
         audit_log_event verify-fail "$alias_" ""
         ux_warning "key installed but BatchMode verify failed for '$alias_'"
     fi
-}
-
-# Helper so dry-run can show the command without an installed pubkey check.
-ssh_install_copy_id_dry() {
-    al="$1"
-    user="$2"
-    host="$3"
-    port="$(manifest_eff "$al" port port)"
-    [ -n "$port" ] || port=22
-    idf="$(manifest_eff "$al" identity_file identity_file)"
-    # shellcheck disable=SC2088  # literal ~; expanded by ssh_config_expand_tilde
-    [ -n "$idf" ] || idf='~/.ssh/id_ed25519'
-    printf '%s -i %s.pub -p %s %s@%s\n' "${DEVX_SSH_COPY_ID_BIN:-ssh-copy-id}" \
-        "$(ssh_config_expand_tilde "$idf")" "$port" "$user" "$host"
 }
 
 cmd_list() {
