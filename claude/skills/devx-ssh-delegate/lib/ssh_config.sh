@@ -71,14 +71,22 @@ ssh_config_conflicting_identity() {
     _cci_want="$2"
     _cci_ssh="${DEVX_SSH_BIN:-ssh}"
     command -v "$_cci_ssh" >/dev/null 2>&1 || return 1
-    _cci_ids="$("$_cci_ssh" -G "$_cci_al" 2>/dev/null | awk 'tolower($1)=="identityfile"{print $2}')"
-    [ -n "$_cci_ids" ] || return 1
     _cci_first=""
-    for _cci_id in $_cci_ids; do
+    # `ssh -G` prints one `identityfile <path>` per line. awk strips only the
+    # first field + its trailing whitespace, keeping the rest of the line
+    # verbatim, and `read` (with a nulled IFS) preserves internal spaces — so a
+    # path like macOS `/Users/John Doe/.ssh/id_rsa` survives intact. The loop
+    # runs in the current shell (here-doc, not a pipe) so `_cci_first` and the
+    # early `return` below take effect.
+    while IFS= read -r _cci_id; do
+        [ -n "$_cci_id" ] || continue
         [ -n "$_cci_first" ] || _cci_first="$_cci_id"
         # Our intended key is offered → ssh will try it → no shadowing.
         [ "$(ssh_config_expand_tilde "$_cci_id")" = "$_cci_want" ] && return 1
-    done
+    done <<EOF
+$("$_cci_ssh" -G "$_cci_al" 2>/dev/null | awk 'tolower($1)=="identityfile"{sub(/^[^ \t]+[ \t]+/, ""); print}')
+EOF
+    [ -n "$_cci_first" ] || return 1
     printf '%s\n' "$_cci_first"
     return 0
 }
