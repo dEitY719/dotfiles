@@ -25,12 +25,25 @@ lib/ssh_delegate.sh add bwyoon@12.81.221.129 gpu1-bwyoon
 ssh gpu1-bwyoon            # passwordless after one password prompt
 ```
 
+`add` notes:
+
+- **Interactive only.** `ssh-copy-id` prompts for the remote password once, so
+  `add` needs a real TTY. In a non-interactive shell (a Claude `!` session, CI)
+  it fails fast with the exact command to run in a terminal instead of dying as
+  a misleading `Permission denied`. To supply the password without a TTY, set
+  `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force`.
+- **Adopts an existing IdentityFile.** If a hand-written `Host <alias>` block
+  already pins a different key, `add` detects it via `ssh -G` and installs
+  *that* key (with a warning) so the installed key matches the one ssh offers.
+- **`--key-only`** installs the key but skips ssh-config regeneration — use it
+  when the host already has a working hand-written alias you don't want rewritten.
+
 ## Sub-commands
 
 | Command | What it does |
 |---|---|
 | `sync` | Regenerates the ssh config drop-in, pins first-seen fingerprints, verifies every active alias. Aborts on a fingerprint MISMATCH. |
-| `add <user>@<host> [alias]` | Upserts a manifest entry, runs `ssh-copy-id`, pins the fingerprint, regenerates config, verifies. `--dry-run` prints actions only. |
+| `add <user>@<host> [alias]` | Upserts a manifest entry, runs `ssh-copy-id`, pins the fingerprint, regenerates config, verifies. `--dry-run` prints actions only; `--key-only` installs the key but leaves ssh config untouched (host already has a working hand-written alias). |
 | `list [--json]` | Prints the entry table (alias / user / host / last-verified / state) or JSON. |
 | `test [<alias>\|--all]` | `ssh -o BatchMode=yes <alias> true` — no password fallback. |
 | `revoke <alias>` | Removes the key line from the remote `authorized_keys`, sets `revoked: true`, regenerates config. |

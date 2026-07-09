@@ -28,6 +28,27 @@ ssh_install_capture_fingerprint() {
         awk '/SHA256:/ {for(i=1;i<=NF;i++) if($i ~ /^SHA256:/){print $i; exit}}'
 }
 
+# Can ssh-copy-id obtain the remote password in this environment? (issue #1132
+# defect C.) `ssh-copy-id` needs a TTY for its single password prompt; a
+# non-interactive shell (a Claude `!` session, CI) without a usable SSH_ASKPASS
+# makes it die as `ssh_askpass: No such file or directory` -> `Permission
+# denied`, which reads as a wrong password. Returns 0 when a prompt is possible.
+# The TTY check is overridable via $DEVX_SSH_ASSUME_TTY (1=yes, 0=no) so tests
+# can exercise both branches deterministically.
+ssh_install_can_prompt() {
+    case "${DEVX_SSH_ASSUME_TTY:-}" in
+    1) return 0 ;;
+    0) : ;; # forced non-interactive — still allow a force-enabled askpass below
+    *) [ -t 0 ] && return 0 ;;
+    esac
+    # No TTY: OpenSSH only consults SSH_ASKPASS without a TTY when REQUIRE=force.
+    if [ -n "${SSH_ASKPASS:-}" ] && [ -x "${SSH_ASKPASS}" ] &&
+        [ "${SSH_ASKPASS_REQUIRE:-}" = "force" ]; then
+        return 0
+    fi
+    return 1
+}
+
 # ssh_install_copy_id <alias> [--dry-run]
 # Resolves the entry, copies the identity's .pub to the remote (one password
 # prompt), then pins installed_at + fingerprint. Returns the command line on
