@@ -577,14 +577,24 @@ EOF
     # per-commit lookup below is then a pure-shell here-doc `while read`
     # (no git/awk fork, no pipe subshell).
     #
-    # Cache the FULL base history, not a fixed `-n 200` window (issue #1134). A
-    # twin whose subject sat beyond commit 200 (e.g. main's 218th commit) was
-    # never matched, so its counterpart — still "missing" by patch-id — slipped
-    # past Stage-1 as a phantom commit that showed up as "1 commit" yet had an
-    # empty range/list and immediately became an empty cherry-pick. Full history
-    # is one `git log` (~0.02s on this repo), so it closes the window entirely.
+    # Cache base subjects over the DIVERGED range `$source..$base`, not a fixed
+    # `-n 200` window (issue #1134). A twin whose subject sat beyond commit 200
+    # (e.g. main's 218th commit) was never matched, so its counterpart — still
+    # "missing" by patch-id — slipped past Stage-1 as a phantom commit that
+    # showed up as "1 commit" yet had an empty range/list and immediately became
+    # an empty cherry-pick.
+    #
+    # `$source..$base` (not the full base history — PR #1135 gemini review) is
+    # both the complete AND the minimal set to match against: a source candidate
+    # can only be a "already applied under a different SHA" dup of a base commit
+    # that diverged after the merge-base; base commits before the merge-base are
+    # in source's own history too, so matching them would wrongly flag a
+    # genuinely new source commit that merely reuses an old subject. On this
+    # scan (`main <- upstream/main`) the reported twin is a base-local
+    # cherry-pick absent from upstream, so it stays inside the range and is
+    # still caught — while large-repo performance/memory stays bounded.
     local base_log tab
-    base_log=$(git log "$base" --format='%H%x09%s' 2>/dev/null)
+    base_log=$(git log "$source..$base" --format='%H%x09%s' 2>/dev/null)
     tab=$(printf '\t')
 
     # stdin guard (issue #1134): every git/helper call inside these analysis
