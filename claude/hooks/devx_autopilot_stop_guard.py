@@ -348,7 +348,9 @@ def main() -> int:
         )
         return _block(reason, layer="L1.5")
 
-    seen_count = len([s for s in REQUIRED_STEPS if s in steps])
+    # `steps` only ever contains REQUIRED_STEPS members (filtered at
+    # collection time in _scan_after_boundary), so its size is the seen count.
+    seen_count = len(steps)
     label = _STEP_LABELS.get(missing, missing)
     reason = (
         f"devx-autopilot incomplete: {seen_count}/{len(REQUIRED_STEPS)} Stage-B "
