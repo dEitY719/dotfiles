@@ -626,13 +626,16 @@ EOF
             [ "$_b_subj" = "$subject" ] || continue
             # Subject collides — compute the source patch-id once (lazily, so the
             # common no-collision path forks nothing) and require content parity.
+            # `--no-color --no-ext-diff` shield the diff from user git config
+            # (color.ui=always, diff.external) that would otherwise corrupt the
+            # patch-id; stderr is silenced so a warning can't leak into the pipe.
             if [ "$_src_pid_done" -eq 0 ]; then
-                src_pid=$(git show "$sha" </dev/null | git patch-id --stable 2>/dev/null)
+                src_pid=$(git show --no-color --no-ext-diff "$sha" 2>/dev/null </dev/null | git patch-id --stable 2>/dev/null)
                 src_pid=${src_pid%% *}
                 _src_pid_done=1
             fi
             local _base_pid=""
-            _base_pid=$(git show "$_b_sha" </dev/null | git patch-id --stable 2>/dev/null)
+            _base_pid=$(git show --no-color --no-ext-diff "$_b_sha" 2>/dev/null </dev/null | git patch-id --stable 2>/dev/null)
             _base_pid=${_base_pid%% *}
             # An empty src_pid (e.g. a merge commit) never equals a non-empty
             # base patch-id, so such a commit is kept, never silently skipped.
