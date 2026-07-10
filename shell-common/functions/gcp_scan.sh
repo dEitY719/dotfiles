@@ -608,12 +608,35 @@ EOF
         local subject
         subject=$(git show -s --format='%s' "$sha" </dev/null)
 
-        # Find a base commit with the same subject and capture its SHA so the
-        # individual cherry-pick loop can report what each dup was already
-        # applied as (issue #811 F-1/F-3). Exact subject match via tab split.
-        local match_base_sha="" _b_sha _b_subj
+        # Find a base commit that is a TRUE duplicate of this source candidate
+        # and capture its SHA so the individual cherry-pick loop can report what
+        # it was already applied as (issue #811 F-1/F-3).
+        #
+        # Subject equality is only a first-pass CANDIDATE filter — it must never
+        # confirm a skip on its own (issue #1136). Repos that reuse a subject
+        # ("chore: sync manifest", "bump", auto-generated commits) otherwise map
+        # several DISTINCT upstream commits onto one base commit and silently
+        # drop the ones carrying real, different content — a data-loss bug. So a
+        # subject match is confirmed only when the patches are actually identical
+        # by `git patch-id --stable`, the same equivalence test cherry-pick uses.
+        # This also rules out the 1:many mis-mapping: two different source
+        # commits can never share a patch-id, so at most one binds to a base SHA.
+        local match_base_sha="" _b_sha _b_subj src_pid="" _src_pid_done=0
         while IFS="$tab" read -r _b_sha _b_subj; do
-            if [ "$_b_subj" = "$subject" ]; then
+            [ "$_b_subj" = "$subject" ] || continue
+            # Subject collides — compute the source patch-id once (lazily, so the
+            # common no-collision path forks nothing) and require content parity.
+            if [ "$_src_pid_done" -eq 0 ]; then
+                src_pid=$(git show "$sha" </dev/null | git patch-id --stable 2>/dev/null)
+                src_pid=${src_pid%% *}
+                _src_pid_done=1
+            fi
+            local _base_pid=""
+            _base_pid=$(git show "$_b_sha" </dev/null | git patch-id --stable 2>/dev/null)
+            _base_pid=${_base_pid%% *}
+            # An empty src_pid (e.g. a merge commit) never equals a non-empty
+            # base patch-id, so such a commit is kept, never silently skipped.
+            if [ -n "$src_pid" ] && [ "$_base_pid" = "$src_pid" ]; then
                 match_base_sha="$_b_sha"
                 break
             fi
