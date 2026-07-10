@@ -356,15 +356,17 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
-# Issue #811 — individual (non-contiguous) cherry-pick auto-skips Stage-1
-# duplicates with a log line, instead of attempting them and conflicting.
+# Issue #811 / #1136 — Stage-1 subject matching is a CANDIDATE filter only; a
+# skip is confirmed by patch-id (content), never by subject alone.
 #
 # Fixture commit tree (author = all, so author filter is a no-op):
 #   main:   C0 "init"  ->  M1 "shared dup subject"
 #   source: C0 "init"  ->  S1 "feat one" -> S2 "shared dup subject" -> S3 "feat three"
-# S2 shares M1's subject (dup) but a different patch, so `git cherry` still
-# lists it as missing. final_selected_list = {S1,S3} (count 2) but the range
-# S1^..S3 spans 3 commits -> non-contiguous -> individual cherry-pick path.
+# S2 shares M1's subject but carries a DIFFERENT patch (dupsrc/f2.txt vs
+# dupbase/onbase.txt), so `git cherry` lists it as missing. Under #811 this was
+# wrongly skipped as a "duplicate subject"; issue #1136 proved that silently
+# dropped S2's content (data loss). With the patch-id gate S2 is a genuinely new
+# commit — final_selected_list = {S1,S2,S3} and all three are applied.
 # ---------------------------------------------------------------------------
 
 _gcp811_make_repo() {
@@ -385,37 +387,67 @@ _gcp811_make_repo() {
 FIXTURE
 }
 
-@test "scan #811: non-contiguous dup is skipped (not cherry-picked) with base SHA logged" {
+@test "scan #1136: same-subject different-content commit is NOT skipped as a dup" {
     run_in_bash "
         $(_gcp811_make_repo)
-        base_dup_sha=\$(git rev-parse --short main)
         printf 'y\n' | _gcp_scan main source --author=all
     "
     assert_success
-    # F-3: skip log naming the matching base SHA.
-    assert_output --partial "Skipping"
-    assert_output --partial "already applied as"
-    assert_output --partial "(duplicate subject)"
-    # F-4: summary reports 1 dup skipped, 0 conflicts.
-    assert_output --partial "skipped (dup), 0 conflicts"
-    # The dup commit's own file must NOT have been applied to main.
+    # #1136: subject alone must not confirm a skip — S2 carries a distinct patch
+    # so it is a real commit, never reported as a "duplicate subject".
+    refute_output --partial "(duplicate subject)"
+    # All three source commits are applied; nothing skipped as a dup.
+    assert_output --partial "3 applied, 0 skipped (dup), 0 conflicts"
     refute_output --partial "CONFLICT"
 }
 
-@test "scan #811: dup commit's payload is absent, non-dup commits are applied" {
+@test "scan #1136: same-subject different-content commit's payload IS applied" {
     run_in_bash "
         $(_gcp811_make_repo)
         printf 'y\n' | _gcp_scan main source --author=all >/dev/null 2>&1
-        # Non-dup commits applied:
         git cat-file -e HEAD:f1.txt && echo HAS_F1
         git cat-file -e HEAD:f3.txt && echo HAS_F3
-        # Dup commit (f2.txt) skipped -> absent on main:
+        # The same-subject commit (f2.txt) must NOT be dropped -> present on main.
         git cat-file -e HEAD:f2.txt 2>/dev/null && echo HAS_F2 || echo NO_F2
     "
     assert_success
     assert_output --partial "HAS_F1"
     assert_output --partial "HAS_F3"
-    assert_output --partial "NO_F2"
+    assert_output --partial "HAS_F2"
+}
+
+# ---------------------------------------------------------------------------
+# Issue #1136 — 1:many subject collision. Two DISTINCT source commits share the
+# same subject as a single base commit ("sync manifest"). The old subject-only
+# match bound both to that one base SHA and silently skipped both, dropping
+# their (different) content. With the patch-id gate neither is a dup and both
+# are applied.
+#   main:   C0 "init" -> M1 "sync manifest" (onbase.txt)
+#   source: C0 "init" -> S1 "sync manifest" (fa.txt) -> S2 "sync manifest" (fb.txt)
+# ---------------------------------------------------------------------------
+@test "scan #1136: two distinct commits sharing one base subject are both applied" {
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        echo init > a.txt && git add a.txt && git commit -qm "init"
+        git checkout -q -b source
+        echo a > fa.txt && git add fa.txt && git commit -qm "sync manifest"
+        echo b > fb.txt && git add fb.txt && git commit -qm "sync manifest"
+        git checkout -q main
+        echo x > onbase.txt && git add onbase.txt && git commit -qm "sync manifest"
+        printf "y\n" | _gcp_scan main source --author=all
+        git cat-file -e HEAD:fa.txt && echo HAS_FA
+        git cat-file -e HEAD:fb.txt && echo HAS_FB
+    '
+    assert_success
+    refute_output --partial "(duplicate subject)"
+    assert_output --partial "2 applied, 0 skipped (dup), 0 conflicts"
+    assert_output --partial "HAS_FA"
+    assert_output --partial "HAS_FB"
 }
 
 @test "scan #811/#913: no-dup path applies every commit (individual iteration)" {
@@ -611,10 +643,13 @@ FIXTURE
         echo MIDDLE > shared.txt && git add shared.txt && git commit -qm "wip shared"
         echo TARGET > shared.txt && git add shared.txt && git commit -qm "finalize shared"
         printf "y\n" | _gcp_scan main source --author=all
+        git cat-file -e HEAD:f2.txt 2>/dev/null && echo HAS_F2 || echo NO_F2
     '
     assert_success
-    # Subject-dup still handled by Stage-1.
-    assert_output --partial "already applied as"
+    # The same-subject/different-content commit (f2.txt) is a real commit, so it
+    # is applied — NOT skipped as a "duplicate subject" (issue #1136).
+    refute_output --partial "(duplicate subject)"
+    assert_output --partial "HAS_F2"
     # Content-dup caught by Stage-2 pre-flight; shown in Analysis Result, not execution loop.
     assert_output --partial "Already in HEAD (no-op):"
     refute_output --partial "CONFLICT"
@@ -1297,9 +1332,11 @@ FIXTURE
 # Issue #1134 — phantom commit: two independent defects.
 #
 # Bug A: the Stage-1 subject-dup cache used a fixed `git log -n 200` window, so
-#   a twin whose subject sat beyond commit 200 was never matched — its
-#   still-missing-by-patch-id counterpart flowed past Stage-1 as a phantom.
-#   The fix caches the FULL base history.
+#   a twin whose subject sat beyond commit 200 was never matched. Since issue
+#   #1136 the subject match is a candidate filter gated by patch-id, so a twin
+#   with the SAME subject but DIFFERENT content is (correctly) a real commit and
+#   is applied — never a phantom and never silently dropped, regardless of how
+#   deep its same-subject counterpart sits in base history.
 #
 # Bug B: the Analysis-phase `while read … <<EOF` loops call git-forking helpers
 #   without a `</dev/null` guard, so a helper whose git subprocess reads stdin
@@ -1308,12 +1345,12 @@ FIXTURE
 #   every in-loop subprocess from /dev/null.
 # ---------------------------------------------------------------------------
 
-@test "scan #1134 (Bug A): twin beyond the old 200-commit window is still detected as duplicate" {
-    # main history places the same-subject twin ~205 commits below HEAD (past
-    # the old -n 200 window). Its source counterpart has a DIFFERENT patch (so
-    # `git cherry` still lists it as missing) but the SAME subject, so only the
-    # full-history subject-dup scan can catch it. With the old window it slipped
-    # through as a phantom "1 commit"; with the fix it is a recognised dup.
+@test "scan #1134/#1136 (Bug A): same-subject different-content twin deep in base history is applied, not dropped" {
+    # main history places a same-subject twin ~205 commits below HEAD (past the
+    # retired -n 200 window). Its source counterpart has a DIFFERENT patch (so
+    # `git cherry` still lists it as missing) but the SAME subject. Subject alone
+    # must not confirm a skip (issue #1136), so the commit is applied as real
+    # content — no phantom, no silent data loss — no matter how deep the twin is.
     run_in_bash '
         repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
         trap "rm -rf $repo" EXIT
@@ -1332,11 +1369,11 @@ FIXTURE
         git cat-file -e HEAD:f2.txt 2>/dev/null && echo HAS_F2 || echo NO_F2
     '
     assert_success
-    # The twin is recognised as a duplicate — not offered as a phantom commit.
-    assert_output --partial "Duplicates (already applied): 1"
-    assert_output --partial "Nothing to do"
-    # Its payload must never reach main.
-    assert_output --partial "NO_F2"
+    # The twin carries distinct content -> applied, never skipped as a dup.
+    refute_output --partial "(duplicate subject)"
+    assert_output --partial "1 applied, 0 skipped (dup), 0 conflicts"
+    # Its payload must reach main — dropping it would be the #1136 data loss.
+    assert_output --partial "HAS_F2"
 }
 
 @test "scan #1134 (Bug B): Analysis loop survives a helper whose subprocess drains stdin" {
