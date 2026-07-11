@@ -19,13 +19,14 @@ dotfiles() {
     cd "${DOTFILES_ROOT:-$HOME/dotfiles}"
 }
 
-# Windows directory paths (WSL)
-alias cd-wdocu='cd /mnt/c/Users/bwyoon/Documents'
-alias cd-wobsidian='cd /mnt/c/Users/bwyoon/Documents/.obsidian'
-alias cd-wdown='cd /mnt/c/Users/bwyoon/Downloads'
-alias cd-wpicture='cd /mnt/c/Users/bwyoon/Pictures'
-alias cd-tilnote='cd /mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote'
-alias cd-obsidian='cd /mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote'
+# Windows directory paths (WSL) — /mnt/c/Users/... are Windows-side mounts
+# with no $HOME equivalent, so the abs-home guard is explicitly allowed here.
+alias cd-wdocu='cd /mnt/c/Users/bwyoon/Documents'                          # allow-abs-home
+alias cd-wobsidian='cd /mnt/c/Users/bwyoon/Documents/.obsidian'            # allow-abs-home
+alias cd-wdown='cd /mnt/c/Users/bwyoon/Downloads'                          # allow-abs-home
+alias cd-wpicture='cd /mnt/c/Users/bwyoon/Pictures'                        # allow-abs-home
+alias cd-tilnote='cd /mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote'  # allow-abs-home
+alias cd-obsidian='cd /mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote' # allow-abs-home
 
 # PARA structure
 alias mk-para='mkdir -p para/{archive,area,project,resource}'
@@ -42,8 +43,9 @@ alias cd-archive='cd ~/para/archive'
 alias cd-ss='cd ~/para/project/slea-ssem'
 alias cd-ll='cd ~/para/project/litellm'
 alias cd-jv='cd ~/para/project/jiravis'
-alias cd-at='cd ~/para/project/agent-toolbox'
+alias cd-at='cd ~/para/project/agent-toolbox' cd-af='cd-at'
 alias cd-qf='cd ~/para/project/quantfolio'
+alias cd-kk='cd ~/para/project/karakeep'
 alias cd-jmcp='cd ~/para/project/jira-mcp'
 alias cd-jmcp-as='cd ~/para/project/jira-mcp/mcp-atlassian'
 alias cd-jmcp-as-ds='cd ~/para/project/jira-mcp/mcp-atlassian-ds'
