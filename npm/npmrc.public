@@ -1,0 +1,17 @@
+# npmrc.public
+# Public / home PC configuration (direct internet, no proxy)
+#
+# Usage:
+#   This file is symlinked to ~/.npmrc by shell-common/setup.sh
+#   Selected automatically in "public" setup mode.
+#
+# Why this exists (issue: npm auto-update permission failure):
+#   System node installs default the global prefix to /usr (root-owned),
+#   so `claude` auto-update — which writes to $prefix/lib/node_modules —
+#   fails with "no write permission to npm prefix". Pinning prefix to a
+#   user-owned dir fixes it permanently. npm expands ${HOME} in .npmrc.
+#
+# Note: public registry (registry.npmjs.org) is npm's default, so no
+#       registry/proxy/cafile lines are needed here — only the prefix.
+
+prefix=${HOME}/.npm-global
