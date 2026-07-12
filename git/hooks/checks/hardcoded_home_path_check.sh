@@ -53,7 +53,7 @@ check_hardcoded_home_path() {
     # embeds the file name directly into the printf so a downstream sed
     # rewrite is unnecessary and whitespace in the line stays safe.
     local hits
-    hits=$(git -C "$repo_root" diff --cached -U0 -- "$repo_rel_path" 2>/dev/null |
+    hits=$(git -C "$repo_root" diff --cached --no-color --no-ext-diff -U0 -- "$repo_rel_path" 2>/dev/null |
         awk -v pfx="$repo_rel_path" '
             # Hunk header: capture the new-file start line (the `+c` field).
             /^@@/ {
