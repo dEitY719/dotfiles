@@ -115,14 +115,18 @@ _gcp_scan_preflight_is_noop() {
         _gcfg2=""
     fi
     # Explicit template + fallback dir keeps mktemp portable to BSD/macOS, where
-    # a bare `mktemp` errors out (PR #1018 review).
+    # a bare `mktemp` errors out (PR #1018 review). On a `cp` failure after a
+    # successful mktemp, remove the now-orphan temp before clearing the var so a
+    # failed snapshot leaks no file (gemini PR #1150 review).
     if [ -n "$_gcfg1" ] && [ -f "$_gcfg1" ]; then
-        _gcfg1_bak=$(mktemp "${TMPDIR:-/tmp}/gcfg_bak.XXXXXX" 2>/dev/null) &&
-            cp "$_gcfg1" "$_gcfg1_bak" 2>/dev/null || _gcfg1_bak=""
+        if _gcfg1_bak=$(mktemp "${TMPDIR:-/tmp}/gcfg_bak.XXXXXX" 2>/dev/null); then
+            cp "$_gcfg1" "$_gcfg1_bak" 2>/dev/null || { rm -f "$_gcfg1_bak"; _gcfg1_bak=""; }
+        fi
     fi
     if [ -n "$_gcfg2" ] && [ -f "$_gcfg2" ]; then
-        _gcfg2_bak=$(mktemp "${TMPDIR:-/tmp}/gcfg_bak.XXXXXX" 2>/dev/null) &&
-            cp "$_gcfg2" "$_gcfg2_bak" 2>/dev/null || _gcfg2_bak=""
+        if _gcfg2_bak=$(mktemp "${TMPDIR:-/tmp}/gcfg_bak.XXXXXX" 2>/dev/null); then
+            cp "$_gcfg2" "$_gcfg2_bak" 2>/dev/null || { rm -f "$_gcfg2_bak"; _gcfg2_bak=""; }
+        fi
     fi
     git cherry-pick -n "$sha" >/dev/null 2>&1 || _gcp_cp_rc=$?
     # Restore BOTH snapshots UNCONDITIONALLY and immediately, before any further
