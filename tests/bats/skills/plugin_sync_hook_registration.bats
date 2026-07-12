@@ -12,22 +12,26 @@ SETTINGS="${_BATS_REAL_DOTFILES_ROOT}/claude/settings.json"
     assert_success
 }
 
-@test "PostToolUse/Bash includes plugin-sync.sh" {
+@test "PostToolUse/Bash registers exactly the dispatcher (#1144)" {
+    # #1144: the two independent handlers are no longer registered directly —
+    # a single thin dispatcher fronts them, halving the common-path spawn.
     run jq -e '
-        .hooks.PostToolUse[]
-        | select(.matcher == "Bash")
-        | .hooks[]
-        | select(.command | endswith("claude/hooks/plugin-sync.sh"))
+        [.hooks.PostToolUse[] | select(.matcher == "Bash") | .hooks[]] as $h
+        | ($h | length) == 1
+          and ($h[0].command | endswith("claude/hooks/post-bash-dispatch.sh"))
     ' "$SETTINGS"
     assert_success
 }
 
-@test "PostToolUse/Bash still includes post-gh-pr-create.sh" {
+@test "PostToolUse/Bash no longer registers the handlers directly (#1144)" {
+    # The handlers stay standalone on disk but are reached via the dispatcher,
+    # not via their own PostToolUse:Bash registration.
     run jq -e '
-        .hooks.PostToolUse[]
-        | select(.matcher == "Bash")
-        | .hooks[]
-        | select(.command | endswith("claude/hooks/post-gh-pr-create.sh"))
+        [.hooks.PostToolUse[]
+            | select(.matcher == "Bash")
+            | .hooks[].command
+            | select(endswith("post-gh-pr-create.sh") or endswith("plugin-sync.sh"))]
+        | length == 0
     ' "$SETTINGS"
     assert_success
 }
