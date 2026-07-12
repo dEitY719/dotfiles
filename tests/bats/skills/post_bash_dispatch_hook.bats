@@ -85,3 +85,13 @@ teardown() {
     assert_success
     grep -qF "pr-create:$payload" "$ROUTE_LOG"
 }
+
+@test "dispatch: non-executable handler → silent no-op, exit 0 (PR #1145 gemini)" {
+    # Defensive: a missing/non-executable handler must be a silent no-op, not
+    # stderr noise + a non-zero pipeline. Strip +x so the -x guard skips it.
+    chmod -x "$STUB_DIR/post-gh-pr-create.sh"
+    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    [ ! -s "$ROUTE_LOG" ]
+}
