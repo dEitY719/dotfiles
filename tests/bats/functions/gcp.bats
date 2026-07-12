@@ -615,6 +615,80 @@ FIXTURE
     assert_output --partial "UNTRACKED_KEPT"
 }
 
+# ---------------------------------------------------------------------------
+# Config-poisoning self-protection (issues #1016 / #1018 / #1149)
+#
+# A probed commit that edits the tracked `git/.gitconfig` makes `cherry-pick -n`
+# write `<<<<<<<` markers into the active git config, after which EVERY
+# subsequent git command — including the probe's own `git reset --hard HEAD`
+# recovery — dies with `fatal: bad config line N`, leaving the markers stuck.
+# #1016/#1018 defended the SYMLINK topology (~/.gitconfig -> git/.gitconfig);
+# #1149 is the [include] topology (~/.gitconfig is a regular file that pulls in
+# git/.gitconfig) where the old fix backed up the wrong file. Both must survive
+# the probe with config intact.
+# ---------------------------------------------------------------------------
+
+_gcp1149_make_repo() {
+    # Emits shell building a repo whose tracked git/.gitconfig conflicts between
+    # main and a side branch, so `cherry-pick -n side` writes conflict markers
+    # into git/.gitconfig. Leaves $repo + $side_sha set, cd'd into the repo on
+    # main. Identity comes from GIT_* env so the (deliberately mutated) config
+    # user.name never blocks commits.
+    cat <<'FIXTURE'
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp1149.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        mkdir -p git
+        printf '[user]\n\tname = base\n' > git/.gitconfig
+        git add git/.gitconfig && git commit -qm "init: tracked gitconfig"
+        git checkout -q -b side
+        printf '[user]\n\tname = sidevalue\n' > git/.gitconfig
+        git add git/.gitconfig && git commit -qm "side: gitconfig name=sidevalue"
+        side_sha=$(git rev-parse HEAD)
+        git checkout -q main
+        printf '[user]\n\tname = mainvalue\n' > git/.gitconfig
+        git add git/.gitconfig && git commit -qm "main: gitconfig name=mainvalue"
+FIXTURE
+}
+
+@test "preflight #1149: symlink topology — probe leaves ~/.gitconfig -> git/.gitconfig uncorrupted (#1016/#1018 regression guard)" {
+    run_in_bash "
+        $(_gcp1149_make_repo)
+        rm -f \"\$HOME/.gitconfig\"
+        ln -s \"\$repo/git/.gitconfig\" \"\$HOME/.gitconfig\"
+        _gcp_scan_preflight_is_noop \"\$side_sha\"; echo \"rc=\$?\"
+        git rev-parse HEAD >/dev/null 2>&1 && echo GIT_OK || echo GIT_BROKEN
+        grep -q '<<<<<<<' git/.gitconfig && echo MARKERS || echo NO_MARKERS
+        [ \"\$(git config --get user.name)\" = mainvalue ] && echo NAME_OK || echo NAME_BAD
+    "
+    assert_success
+    assert_output --partial "GIT_OK"
+    assert_output --partial "NO_MARKERS"
+    assert_output --partial "NAME_OK"
+}
+
+@test "preflight #1149: [include] topology — probe leaves the tracked git/.gitconfig uncorrupted" {
+    run_in_bash "
+        $(_gcp1149_make_repo)
+        rm -f \"\$HOME/.gitconfig\"
+        printf '[include]\n\tpath = %s/git/.gitconfig\n' \"\$repo\" > \"\$HOME/.gitconfig\"
+        # Sanity: the [include] is live before the probe.
+        [ \"\$(git config --get user.name)\" = mainvalue ] && echo PRE_OK || echo PRE_BAD
+        _gcp_scan_preflight_is_noop \"\$side_sha\"; echo \"rc=\$?\"
+        git rev-parse HEAD >/dev/null 2>&1 && echo GIT_OK || echo GIT_BROKEN
+        grep -q '<<<<<<<' git/.gitconfig && echo MARKERS || echo NO_MARKERS
+        [ \"\$(git config --get user.name)\" = mainvalue ] && echo NAME_OK || echo NAME_BAD
+    "
+    assert_success
+    assert_output --partial "PRE_OK"
+    assert_output --partial "GIT_OK"
+    assert_output --partial "NO_MARKERS"
+    assert_output --partial "NAME_OK"
+}
+
 @test "scan #913: content-dup commit (unique subject, different patch-id) skipped via no-op pre-flight, no conflict" {
     # The content-dup commit must reach the individual loop, so its patch-id
     # has to DIFFER from how HEAD acquired the same final content (else
