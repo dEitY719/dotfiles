@@ -65,6 +65,19 @@ _grs_repo_setup() {
     assert_output --partial "RC=1"
 }
 
+# --- accident: untracked broken symlink (not a typo) ---
+
+@test "bash: grs on an untracked broken symlink diagnoses untracked, not typo" {
+    run_in_bash "$(_grs_repo_setup)"'
+        ln -s /nonexistent/target dangling.link
+        grs dangling.link; echo "RC=$?"
+        rm -rf "$tmp"
+    '
+    assert_output --partial "untracked"
+    refute_output --partial "오타"
+    assert_output --partial "RC=1"
+}
+
 # --- accident: missing path (typo) ---
 
 @test "bash: grs on missing path diagnoses a typo" {

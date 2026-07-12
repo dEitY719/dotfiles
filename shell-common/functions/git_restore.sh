@@ -84,7 +84,7 @@ grs() {
         --)
             _grs_after_ddash=1
             ;;
-        --staged | -S | --worktree | -W | --source | -s | --source=* | --patch | -p)
+        --staged | -S | --worktree | -W | --source | -s | --source=* | --patch | -p | --pathspec-from-file | --pathspec-from-file=*)
             _grs_advanced=1
             ;;
         -*)
@@ -127,16 +127,17 @@ grs() {
 
         if git ls-files --error-unmatch -- "$_grs_p" >/dev/null 2>&1; then
             # Tracked path.
-            if ! git diff --quiet -- "$_grs_p" >/dev/null 2>&1; then
+            if ! git diff --no-color --no-ext-diff --quiet -- "$_grs_p" >/dev/null 2>&1; then
                 _grs_normal=$((_grs_normal + 1)) # worktree diff present
-            elif ! git diff --cached --quiet -- "$_grs_p" >/dev/null 2>&1; then
+            elif ! git diff --no-color --no-ext-diff --cached --quiet -- "$_grs_p" >/dev/null 2>&1; then
                 _grs_staged="${_grs_staged}${_grs_p}${_grs_nl}" # staged only
             else
                 _grs_noop=$((_grs_noop + 1)) # nothing to restore
             fi
         else
-            # Not tracked.
-            if [ -e "$_grs_p" ]; then
+            # Not tracked. `-L` catches broken (dangling) symlinks that `-e`
+            # reports absent — they're present-but-untracked (rm target), not typos.
+            if [ -e "$_grs_p" ] || [ -L "$_grs_p" ]; then
                 _grs_untracked="${_grs_untracked}${_grs_p}${_grs_nl}"
             else
                 _grs_missing="${_grs_missing}${_grs_p}${_grs_nl}"
