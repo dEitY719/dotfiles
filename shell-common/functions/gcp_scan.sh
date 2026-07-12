@@ -67,46 +67,74 @@ _gcp_scan_preflight_is_noop() {
             return 1
         fi
     fi
-    # Self-protection against a config-poisoning probe (issue #1016). When the
-    # probed commit edits `git/.gitconfig` (symlinked from ~/.gitconfig), the
-    # `cherry-pick -n` below can leave the symlink target unreadable by git:
-    # a conflict writes `<<<<<<<` markers into it, and even a clean apply may
-    # stage a syntactically broken .gitconfig carried by the commit itself.
-    # From that instant EVERY subsequent git invocation — including the
-    # `git reset --hard HEAD` recovery — dies with `fatal: bad config line N`,
-    # so the breakage can never be cleared. Snapshot the real config file first
-    # with a plain `cp` (no git needed) so we can restore it before git reads it.
-    local _gcfg_real="" _gcfg_bak="" _gcp_cp_rc=0
-    # Resolve the file behind ~/.gitconfig portably: prefer GNU `readlink -f`,
-    # fall back to plain `readlink` + manual absolutisation for BSD/macOS (where
-    # `-f` is unsupported, PR #1018 review), then to the path itself when it is a
-    # regular (non-symlink) file.
-    _gcfg_real=$(readlink -f "${HOME}/.gitconfig" 2>/dev/null)
-    if [ -z "$_gcfg_real" ]; then
-        _gcfg_real=$(readlink "${HOME}/.gitconfig" 2>/dev/null)
-        if [ -n "$_gcfg_real" ]; then
-            case "$_gcfg_real" in
+    # Self-protection against a config-poisoning probe (issues #1016, #1149).
+    # When the probed commit edits `git/.gitconfig`, the `cherry-pick -n` below
+    # can leave the active git config unreadable: a conflict writes `<<<<<<<`
+    # markers into the worktree file, and even a clean apply may stage a
+    # syntactically broken .gitconfig carried by the commit itself. From that
+    # instant EVERY subsequent git invocation — including the `git reset --hard
+    # HEAD` recovery — dies with `fatal: bad config line N`, so the breakage can
+    # never be cleared. Snapshot the file(s) first with a plain `cp` (no git
+    # needed) so we can restore them before git reads config again.
+    #
+    # Two topologies poison DIFFERENT files, so snapshot BOTH candidate targets
+    # (#1016/#1018 covered only the symlink case, hence the #1149 regression):
+    #   * symlink:  ~/.gitconfig -> git/.gitconfig. `readlink -f` resolves to the
+    #     tracked file, which is both the active global config AND the cherry-pick
+    #     target — one file, caught by slot 1.
+    #   * [include]: ~/.gitconfig is a REGULAR file whose `[include] path =` pulls
+    #     in the tracked git/.gitconfig (documented setup-mode `internal`, see
+    #     git/AGENTS.md). `readlink -f` returns ~/.gitconfig itself — the wrong
+    #     file — so slot 1 misses the real target. Slot 2 snapshots the tracked
+    #     git/.gitconfig in the worktree, which is what the cherry-pick corrupts
+    #     regardless of topology.
+    local _gcfg1="" _gcfg1_bak="" _gcfg2="" _gcfg2_bak="" _gcp_cp_rc=0 _top=""
+    # Slot 1 — the file behind ~/.gitconfig. Prefer GNU `readlink -f`, fall back
+    # to plain `readlink` + manual absolutisation for BSD/macOS (where `-f` is
+    # unsupported, PR #1018 review), then to the path itself when it is a regular
+    # (non-symlink) file.
+    _gcfg1=$(readlink -f "${HOME}/.gitconfig" 2>/dev/null)
+    if [ -z "$_gcfg1" ]; then
+        _gcfg1=$(readlink "${HOME}/.gitconfig" 2>/dev/null)
+        if [ -n "$_gcfg1" ]; then
+            case "$_gcfg1" in
                 /*) ;;
-                *) _gcfg_real="${HOME}/${_gcfg_real}" ;;
+                *) _gcfg1="${HOME}/${_gcfg1}" ;;
             esac
         else
-            _gcfg_real="${HOME}/.gitconfig"
+            _gcfg1="${HOME}/.gitconfig"
         fi
     fi
-    if [ -n "$_gcfg_real" ] && [ -f "$_gcfg_real" ]; then
-        # Explicit template + fallback dir keeps mktemp portable to BSD/macOS,
-        # where a bare `mktemp` errors out (PR #1018 review).
-        _gcfg_bak=$(mktemp "${TMPDIR:-/tmp}/gcfg_bak.XXXXXX" 2>/dev/null) &&
-            cp "$_gcfg_real" "$_gcfg_bak" 2>/dev/null || _gcfg_bak=""
+    # Slot 2 — the tracked git/.gitconfig in this worktree (the real [include]
+    # target). Resolve the toplevel NOW, before `cherry-pick -n` corrupts config:
+    # `git rev-parse` reads config, so once the file carries markers this lookup
+    # would itself die with `fatal: bad config line`. Deduped against slot 1 so
+    # the symlink topology snapshots the shared file only once.
+    _top=$(git rev-parse --show-toplevel 2>/dev/null) && _gcfg2="${_top}/git/.gitconfig"
+    if [ -n "$_gcfg2" ] && [ "$_gcfg2" = "$_gcfg1" ]; then
+        _gcfg2=""
+    fi
+    # Explicit template + fallback dir keeps mktemp portable to BSD/macOS, where
+    # a bare `mktemp` errors out (PR #1018 review).
+    if [ -n "$_gcfg1" ] && [ -f "$_gcfg1" ]; then
+        _gcfg1_bak=$(mktemp "${TMPDIR:-/tmp}/gcfg_bak.XXXXXX" 2>/dev/null) &&
+            cp "$_gcfg1" "$_gcfg1_bak" 2>/dev/null || _gcfg1_bak=""
+    fi
+    if [ -n "$_gcfg2" ] && [ -f "$_gcfg2" ]; then
+        _gcfg2_bak=$(mktemp "${TMPDIR:-/tmp}/gcfg_bak.XXXXXX" 2>/dev/null) &&
+            cp "$_gcfg2" "$_gcfg2_bak" 2>/dev/null || _gcfg2_bak=""
     fi
     git cherry-pick -n "$sha" >/dev/null 2>&1 || _gcp_cp_rc=$?
-    # Restore the working-tree gitconfig UNCONDITIONALLY and immediately, before
-    # any further git command reads it — covers both the conflict path and the
+    # Restore BOTH snapshots UNCONDITIONALLY and immediately, before any further
+    # git command reads config — covers both the conflict path and the
     # clean-apply-of-broken-config path (PR #1018 review). `cp` touches only the
     # worktree, never the index, so the staged-diff no-op verdict below is
     # unaffected.
-    if [ -n "$_gcfg_bak" ] && [ -f "$_gcfg_bak" ]; then
-        cp "$_gcfg_bak" "$_gcfg_real" 2>/dev/null
+    if [ -n "$_gcfg1_bak" ] && [ -f "$_gcfg1_bak" ]; then
+        cp "$_gcfg1_bak" "$_gcfg1" 2>/dev/null
+    fi
+    if [ -n "$_gcfg2_bak" ] && [ -f "$_gcfg2_bak" ]; then
+        cp "$_gcfg2_bak" "$_gcfg2" 2>/dev/null
     fi
     if [ "$_gcp_cp_rc" -eq 0 ]; then
         git diff --cached --quiet && result=0
@@ -127,7 +155,8 @@ _gcp_scan_preflight_is_noop() {
             git diff --cached --quiet && result=0
         fi
     fi
-    [ -n "$_gcfg_bak" ] && rm -f "$_gcfg_bak"
+    [ -n "$_gcfg1_bak" ] && rm -f "$_gcfg1_bak"
+    [ -n "$_gcfg2_bak" ] && rm -f "$_gcfg2_bak"
     git reset --hard HEAD >/dev/null 2>&1
     [ "$had_stash" -eq 1 ] && git stash pop -q >/dev/null 2>&1
     return $result
