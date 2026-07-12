@@ -261,6 +261,33 @@ EOF
   rm -rf "$repo_dir"
 }
 
+# Issue #1142: a file that already carries a pre-existing absolute home path
+# (debt predating the #737 guard) must NOT block an unrelated one-line edit —
+# only added diff lines are scanned, so the untouched legacy line is ignored.
+test_allows_preexisting_abs_home_on_unrelated_edit() {
+  local repo_dir
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_repo "$repo_dir"
+
+  # Seed legacy debt: commit an abs-home line while bypassing the guard,
+  # simulating a path that landed before the guard existed.
+  cat >"$repo_dir/zsh/legacy.zsh" <<'EOF'
+#!/bin/zsh
+[ -s "/home/deity719/.bun/_bun" ] && source "/home/deity719/.bun/_bun"
+EOF
+  git -C "$repo_dir" add zsh/legacy.zsh
+  git -C "$repo_dir" commit -q --no-verify -m "legacy debt (pre-guard)"
+
+  # Unrelated edit that does NOT touch the legacy line — must pass.
+  cat >>"$repo_dir/zsh/legacy.zsh" <<'EOF'
+export EDITOR=vim
+EOF
+  git -C "$repo_dir" add zsh/legacy.zsh
+  assert_success "git -C \"$repo_dir\" commit -m \"unrelated edit of legacy file\""
+
+  rm -rf "$repo_dir"
+}
+
 main() {
   ux_header "Hook integration tests"
   test_allows_spaces_in_filename
@@ -274,6 +301,7 @@ main() {
   test_blocks_hardcoded_home_path_in_zshrc
   test_allows_hardcoded_home_path_with_marker
   test_allows_home_var_reference
+  test_allows_preexisting_abs_home_on_unrelated_edit
   ux_success "All hook tests passed"
 }
 
