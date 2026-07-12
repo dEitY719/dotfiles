@@ -41,13 +41,20 @@ DISPATCH_DIR="${POST_BASH_DISPATCH_DIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && 
 
 # Route on a cheap, deliberately-loose command match; the handler's own filter
 # makes the final call. Anchor on a word boundary so an env-var/`command`
-# prefix (`FOO=bar gh pr create`) still routes (#390). `gh pr create` and
+# prefix (`FOO=bar gh pr create`) still routes (#390); both regexes use the
+# same `(^|[[:space:]])…([[:space:]]|$)` shape for symmetry. `gh pr create` and
 # `claude plugin ...` never co-occur in one command, so exclusive routing is
-# sufficient — and forwards the untouched stdin JSON the handler expects.
+# sufficient — and forwards the untouched stdin JSON the handler expects. Guard
+# each handler with `-x` so a missing/non-executable script is a silent no-op
+# (best-effort contract) rather than stderr noise + a non-zero pipeline.
 if printf '%s' "$cmd" | grep -qE '(^|[[:space:]])gh[[:space:]]+pr[[:space:]]+create([[:space:]]|$)'; then
-	printf '%s' "$input" | "$DISPATCH_DIR/post-gh-pr-create.sh"
-elif printf '%s' "$cmd" | grep -qE '(^|[[:space:]])claude[[:space:]]+plugin[[:space:]]'; then
-	printf '%s' "$input" | "$DISPATCH_DIR/plugin-sync.sh"
+	if [ -x "$DISPATCH_DIR/post-gh-pr-create.sh" ]; then
+		printf '%s' "$input" | "$DISPATCH_DIR/post-gh-pr-create.sh"
+	fi
+elif printf '%s' "$cmd" | grep -qE '(^|[[:space:]])claude[[:space:]]+plugin([[:space:]]|$)'; then
+	if [ -x "$DISPATCH_DIR/plugin-sync.sh" ]; then
+		printf '%s' "$input" | "$DISPATCH_DIR/plugin-sync.sh"
+	fi
 fi
 
 exit 0
