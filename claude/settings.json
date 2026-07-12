@@ -53,11 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/dotfiles/claude/hooks/post-gh-pr-create.sh"
-          },
-          {
-            "type": "command",
-            "command": "${HOME}/dotfiles/claude/hooks/plugin-sync.sh"
+            "command": "${HOME}/dotfiles/claude/hooks/post-bash-dispatch.sh"
           }
         ]
       }
