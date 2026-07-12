@@ -226,8 +226,11 @@ setup_npm_symlink() {
             ux_info "Using: Public npmjs registry (no proxy)"
             ;;
         public)
-            # Public PC: no .npmrc needed (defaults)
-            ux_info "No .npmrc needed (using npm defaults)"
+            # Public PC: pin npm prefix to a user-owned dir so `claude`
+            # auto-update does not fail against the root-owned /usr default.
+            ln -s "${DOTFILES_ROOT}/npm/npmrc.public" "$npmrc_target"
+            ux_success "Created symlink: ~/.npmrc → npm/npmrc.public"
+            ux_info "Using: Public npmjs registry (prefix pinned to ~/.npm-global)"
             ;;
     esac
 }
@@ -711,6 +714,7 @@ main() {
             echo ""
             ux_success "Setup complete for public PC (home environment)"
             ux_info "All environment-specific configuration removed"
+            ux_info "  - NPM: ~/.npmrc → npm/npmrc.public (prefix pinned to ~/.npm-global)"
             ux_info "Setup mode saved to: ~/.dotfiles-setup-mode"
             echo ""
             ;;
