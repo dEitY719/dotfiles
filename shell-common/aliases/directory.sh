@@ -40,10 +40,11 @@ alias cd-resource='cd ~/para/resource'
 alias cd-archive='cd ~/para/archive'
 
 # PROJECT directories
-alias cd-ss='cd ~/para/project/slea-ssem'
+alias cd-ss='cd ~/para/project/stock-steward'
 alias cd-ll='cd ~/para/project/litellm'
 alias cd-jv='cd ~/para/project/jiravis'
-alias cd-at='cd ~/para/project/agent-toolbox' cd-af='cd-at'
+alias cd-at='cd ~/para/project/agent-toolbox'
+alias cd-af='cd-at'
 alias cd-qf='cd ~/para/project/quantfolio'
 alias cd-kk='cd ~/para/project/karakeep'
 alias cd-jmcp='cd ~/para/project/jira-mcp'
