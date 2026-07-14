@@ -18,6 +18,15 @@ set -eu
 PORTS_FILE="${PORTS_FILE:-PORTS.md}"
 BASE_PORT=9200
 
+# 기본값(PORTS.md)이 현재 디렉터리에 없으면 repo 루트에서 찾아 하위
+# 디렉터리 실행을 지원한다. 명시적 PORTS_FILE 은 건드리지 않는다.
+if [ "$PORTS_FILE" = "PORTS.md" ] && [ ! -f "$PORTS_FILE" ]; then
+    _repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+    if [ -n "$_repo_root" ] && [ -f "$_repo_root/PORTS.md" ]; then
+        PORTS_FILE="$_repo_root/PORTS.md"
+    fi
+fi
+
 if [ ! -f "$PORTS_FILE" ]; then
     echo "check-ports: '$PORTS_FILE' 파일을 찾을 수 없습니다." >&2
     exit 2
@@ -34,20 +43,14 @@ is_int() {
     esac
 }
 
-# 셀 앞뒤 공백 제거
+# 셀 앞뒤 공백 제거 (POSIX 매개변수 확장 — 루프 없이 한 번에)
 trim() {
-    _s="$1"
-    while :; do
-        case "$_s" in
-        " "*) _s="${_s# }" ;;
-        *" ") _s="${_s% }" ;;
-        *) break ;;
-        esac
-    done
+    _s="${1#"${1%%[! ]*}"}"   # 선행 공백 제거
+    _s="${_s%"${_s##*[! ]}"}" # 후행 공백 제거
     printf '%s' "$_s"
 }
 
-while IFS= read -r line; do
+while IFS= read -r line || [ -n "$line" ]; do
     # 표 행만 처리 ('|' 로 시작)
     case "$line" in
     \|*) ;;
@@ -105,5 +108,11 @@ while IFS= read -r line; do
 done <"$PORTS_FILE"
 
 echo "check-ports: rows=${rows} errors=${errors} (file: ${PORTS_FILE})"
+
+# 유효 행이 하나도 없으면 표 형식이 깨졌다는 신호 — 성공 오탐 방지.
+if [ "$rows" -eq 0 ]; then
+    echo "FAIL  유효한 포트 배정 행을 찾지 못했습니다. 표 형식을 확인하세요." >&2
+    exit 1
+fi
 
 [ "$errors" -eq 0 ] || exit 1
