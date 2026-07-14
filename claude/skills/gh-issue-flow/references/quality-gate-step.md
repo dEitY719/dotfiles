@@ -34,7 +34,11 @@ Skill() calls — only prose is forbidden.
 After both subagents return:
 
 - If `/simplify` produced working-tree changes (`git status --porcelain`
-  non-empty) → `git commit` the changes and `git push`.
+  non-empty) → commit with an explicit `-m` message in the repo's
+  conventional-commit style (e.g.
+  `git commit -m "refactor(<scope>): simplify per /simplify"`) and
+  `git push`. Never run a bare `git commit` — in a non-interactive AI
+  environment it opens an editor and hangs; always pass `-m`.
 - If the tree is clean → skip (simplify found nothing to change).
 
 **Ordering is load-bearing: 2.3.3 MUST run before the rebase steps 2.5 /
