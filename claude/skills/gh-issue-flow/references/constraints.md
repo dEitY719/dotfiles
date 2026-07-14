@@ -2,9 +2,20 @@
 
 - Never invoke implementation modes other than `direct`.
 - Never retry a failed step. Human decides retry or fix.
-- Never skip a step. All 5 or stop.
+- Never skip a step. All 6 or stop.
+- **Quality-gate soft-fail exception.** Steps 2.3.1/2.3.2/2.3.3 are
+  additive polish, not gating: codex absent → 2.3.1 skip (not a
+  failure); `/simplify` produced no change → 2.3.3 skip; any error in
+  review/simplify/commit → `[WARN]` and continue. The gate never stops
+  the flow.
+- **Simplify commit before rebase.** Step 2.3.3 (commit + push simplify
+  changes) MUST run before the rebase steps 2.5 / 2.5.1 — a dirty
+  working tree breaks `git rebase`.
+- Step 2.5.1 (gh:pr-resolve-outdated) does a clean rebase-sync when the
+  base moved forward with no conflicts; it is a no-op when the PR is
+  already up to date.
 - Never mutate state between steps beyond what the sub-skills do.
-  Exception: Step 2.6 may post a comment after Step 2.5 — this is
+  Exception: Step 2.6 may post a comment after Step 2.5.1 — this is
   intentional and must soft-fail (never block the flow). If a future
   variant of Step 2.6 needs to mutate PR labels or body, route through
   `_gh_pr_edit_safe_label` / `_gh_pr_edit_safe_body`
@@ -26,9 +37,11 @@
   recap ("Step 2.1 complete, now committing..."), no progress
   markdown headers, no per-step bullet summaries. Such text reads as
   a turn-ending answer and re-introduces the early-stop. The only
-  prose allowed inside Step 2 is the final Step 3 report.
+  prose allowed inside Step 2 is the final Step 3 report. Tool calls
+  are not prose — the quality-gate Agent dispatch (2.3.1/2.3.2) and the
+  Bash commit+push (2.3.3) between Skill() calls are permitted.
 - **Do NOT stop after any sub-skill completes.** Each step (2.1 through
-  2.5) is a waypoint, not a final answer. Continue to the next step
-  immediately. The only valid stopping points are: a step failure
-  (output the failure report), or the Step 3 success report after all
-  5 steps complete.
+  2.5.1, including the 2.3.x quality gate) is a waypoint, not a final
+  answer. Continue to the next step immediately. The only valid stopping
+  points are: a step failure (output the failure report), or the Step 3
+  success report after all 6 steps complete.

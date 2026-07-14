@@ -194,7 +194,7 @@ def test_stop_hook_active_short_circuits(tmp_path: Path) -> None:
 
 
 def test_completed_flow_allows_stop(tmp_path: Path) -> None:
-    """All 5 sub-skills + Step 3 marker present → allow stop."""
+    """All 6 sub-skills + Step 3 marker present → allow stop."""
     transcript = _write_transcript(
         tmp_path,
         [
@@ -204,6 +204,7 @@ def test_completed_flow_allows_stop(tmp_path: Path) -> None:
             _assistant_skill("gh-pr"),
             _assistant_skill("devx-schedule"),
             _assistant_skill("gh-pr-resolve-conflict"),
+            _assistant_skill("gh-pr-resolve-outdated"),
             _assistant_text("gh:issue-flow complete (#42)\n  PR URL: https://github.com/example/repo/pull/99"),
         ],
     )
@@ -246,7 +247,7 @@ def test_mid_flow_after_step_2_1_blocks_with_next_hint(tmp_path: Path) -> None:
     reason = decision.get("reason", "")
     assert "gh-commit" in reason
     assert "Step 2.2" in reason
-    assert "1/5" in reason
+    assert "1/6" in reason
 
 
 def test_mid_flow_skill_call_with_colon_namespace_counted(tmp_path: Path) -> None:
@@ -265,11 +266,11 @@ def test_mid_flow_skill_call_with_colon_namespace_counted(tmp_path: Path) -> Non
     assert decision["decision"] == "block"
     assert "gh-pr" in decision["reason"]
     assert "Step 2.3" in decision["reason"]
-    assert "2/5" in decision["reason"]
+    assert "2/6" in decision["reason"]
 
 
-def test_mid_flow_after_all_5_blocks_for_step_3_report(tmp_path: Path) -> None:
-    """All 5 sub-skills run but no terminal marker → block, ask for Step 3."""
+def test_mid_flow_after_all_6_blocks_for_step_3_report(tmp_path: Path) -> None:
+    """All 6 sub-skills run but no terminal marker → block, ask for Step 3."""
     transcript = _write_transcript(
         tmp_path,
         [
@@ -279,6 +280,7 @@ def test_mid_flow_after_all_5_blocks_for_step_3_report(tmp_path: Path) -> None:
             _assistant_skill("gh-pr"),
             _assistant_skill("devx-schedule"),
             _assistant_skill("gh-pr-resolve-conflict"),
+            _assistant_skill("gh-pr-resolve-outdated"),
             # No Step 3 report yet.
         ],
     )
@@ -287,7 +289,58 @@ def test_mid_flow_after_all_5_blocks_for_step_3_report(tmp_path: Path) -> None:
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
     assert "Step 3" in decision["reason"]
-    assert "5/5" in decision["reason"]
+    assert "6/6" in decision["reason"]
+
+
+def test_mid_flow_after_resolve_conflict_blocks_for_resolve_outdated(tmp_path: Path) -> None:
+    """5 sub-skills through gh-pr-resolve-conflict, no terminal → block,
+    naming gh-pr-resolve-outdated (Step 2.5.1) as the next step."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 42"),
+            _assistant_skill("gh-issue-implement"),
+            _assistant_skill("gh-commit"),
+            _assistant_skill("gh-pr"),
+            _assistant_skill("devx-schedule"),
+            _assistant_skill("gh-pr-resolve-conflict"),
+            # No Step 3 report yet — resolve-outdated still pending.
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    reason = decision["reason"]
+    assert "gh-pr-resolve-outdated" in reason
+    assert "Step 2.5.1" in reason
+    assert "5/6" in reason
+
+
+def test_quality_gate_reminder_after_gh_pr(tmp_path: Path) -> None:
+    """After gh-pr (3 seen), the next-step hint routes to Step 2.4 but must
+    also remind the model to run the parallel quality gate first."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 42"),
+            _assistant_skill("gh-issue-implement"),
+            _assistant_skill("gh-commit"),
+            _assistant_skill("gh-pr"),
+            # No Step 3 report yet.
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    reason = decision["reason"]
+    assert "Step 2.4" in reason
+    assert "devx-schedule" in reason
+    assert "3/6" in reason
+    # Quality-gate reminder substrings.
+    assert "simplify" in reason
+    assert "pr-review" in reason
 
 
 def test_skill_invocation_via_assistant_works_as_boundary(tmp_path: Path) -> None:
@@ -321,7 +374,7 @@ def test_unrelated_skill_after_boundary_not_counted(tmp_path: Path) -> None:
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
     # Still only 1/5 — the unrelated skills must not bump the counter.
-    assert "1/5" in decision["reason"]
+    assert "1/6" in decision["reason"]
 
 
 def test_malformed_jsonl_lines_skipped(tmp_path: Path) -> None:
@@ -474,7 +527,7 @@ def test_trace_on_emits_block_diagnostics(tmp_path: Path) -> None:
     # Trace lines all share the [stop-guard] prefix.
     assert "[stop-guard]" in result.stderr
     # The boundary scan summary should report 1/5 sub-skills seen.
-    assert "sub_skills_seen=1/5" in result.stderr
+    assert "sub_skills_seen=1/6" in result.stderr
     assert "block:" in result.stderr
 
 
@@ -505,6 +558,7 @@ def test_trace_on_emits_allow_reason_for_terminal_marker(tmp_path: Path) -> None
             _assistant_skill("gh-pr"),
             _assistant_skill("devx-schedule"),
             _assistant_skill("gh-pr-resolve-conflict"),
+            _assistant_skill("gh-pr-resolve-outdated"),
             _assistant_text("gh:issue-flow complete (#42)"),
         ],
     )
@@ -515,7 +569,7 @@ def test_trace_on_emits_allow_reason_for_terminal_marker(tmp_path: Path) -> None
     assert result.returncode == 0
     assert result.stdout.strip() == ""
     assert "Step 3 terminal marker" in result.stderr
-    assert "sub_skills_seen=5/5" in result.stderr
+    assert "sub_skills_seen=6/6" in result.stderr
 
 
 # ---------------------------------------------------------------------------
@@ -669,7 +723,7 @@ def test_wrapped_command_full_session_blocks_with_step_2_2_reason(
     reason = decision["reason"]
     assert "Step 2.2" in reason
     assert "gh-commit" in reason
-    assert "1/5" in reason
+    assert "1/6" in reason
 
 
 # ---------------------------------------------------------------------------
@@ -912,7 +966,7 @@ def test_skill_template_text_in_user_message_does_not_false_terminate(
     assert decision["decision"] == "block"
     assert "Step 2.2" in decision["reason"]
     assert "gh-commit" in decision["reason"]
-    assert "1/5" in decision["reason"]
+    assert "1/6" in decision["reason"]
 
 
 def test_skill_template_text_in_tool_result_does_not_false_terminate(
@@ -952,7 +1006,7 @@ def test_skill_template_text_in_tool_result_does_not_false_terminate(
     )
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
-    assert "1/5" in decision["reason"]
+    assert "1/6" in decision["reason"]
 
 
 def test_real_terminal_marker_in_assistant_text_still_allows_stop(
@@ -980,6 +1034,7 @@ def test_real_terminal_marker_in_assistant_text_still_allows_stop(
             _assistant_skill("gh-pr"),
             _assistant_skill("devx-schedule"),
             _assistant_skill("gh-pr-resolve-conflict"),
+            _assistant_skill("gh-pr-resolve-outdated"),
             # Real Step 3 success report — assistant role, real terminal marker.
             _assistant_text("gh:issue-flow complete (#608)\n  PR URL: https://x/pull/9"),
         ],

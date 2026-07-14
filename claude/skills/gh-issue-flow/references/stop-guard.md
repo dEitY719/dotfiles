@@ -2,12 +2,21 @@
 
 ## Why this exists
 
-`gh:issue-flow` chains 5 sub-skills (`gh:issue-implement` → `gh:commit` →
-`gh:pr` → `devx:schedule` → `gh:pr-resolve-conflict`) plus a final Step 3
-report. Across multiple revisions of this skill (issue #333, issue #383)
-the model has repeatedly invented a "I'm done now" markdown block between
-Skill() calls and ended its turn early — leaving the user to manually
-finish the chain.
+`gh:issue-flow` chains 6 sub-skills (`gh:issue-implement` → `gh:commit` →
+`gh:pr` → `devx:schedule` → `gh:pr-resolve-conflict` →
+`gh:pr-resolve-outdated`) plus a parallel post-PR quality gate (2.3.1
+codex review ∥ 2.3.2 `/simplify` → 2.3.3 commit+push) and a final Step 3
+report. `gh-pr-resolve-outdated` is now the 6th entry of the hook's
+`EXPECTED_CHAIN`. Across multiple revisions of this skill (issue #333,
+issue #383) the model has repeatedly invented a "I'm done now" markdown
+block between Skill() calls and ended its turn early — leaving the user to
+manually finish the chain.
+
+The quality gate's Agent dispatch (2.3.1/2.3.2) and the Bash commit+push
+(2.3.3) are tool calls, not `Skill()` calls, and are permitted between the
+chain skills. They need no Agent-detection logic in the hook: the
+terminal-marker gating (L1.5 below) blocks turn-end until a Step 3 marker
+appears, which transitively covers these tool steps too.
 
 Two earlier mitigations help but are not sufficient:
 
