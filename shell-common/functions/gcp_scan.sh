@@ -241,6 +241,57 @@ EOF
     return $rc
 }
 
+_gcp_scan_conflict_adds_new_content() {
+    # Context-drift discriminator (issue #913 regression, #1151). Returns 0
+    # (true) when cherry-picking commit $1 introduces content to file $2 that
+    # HEAD does NOT already contain — a GENUINE content conflict. Returns 1
+    # (false) when every line the commit adds (relative to its parent, the
+    # cherry-pick merge base) is already present in HEAD: the textual conflict
+    # is pure context drift (an unrelated adjacent region moved), so the commit
+    # is effectively a no-op that Stage-2's merge probe will absorb as "already
+    # in HEAD" rather than a conflict a human must resolve.
+    #
+    # Why this exists: `git merge-tree` flags BOTH a real same-line divergence
+    # (HEAD and the commit set the line to different values) AND a spurious
+    # adjacency conflict (the commit's real change already matches HEAD, but an
+    # unrelated neighbouring line drifted) as the same rc=1 conflict. Stage-2's
+    # reset-conflicted-to-HEAD probe cannot tell them apart either — it reports
+    # both as no-ops. The line-level "did theirs add anything HEAD lacks?" test
+    # below is what distinguishes the two, letting Stage-1.6 defer the drift
+    # case to Stage-2 (no-op) while still flagging the real one. Non-destructive:
+    # reads blobs only (no checkout / cherry-pick).
+    local sha="$1" f="$2" parent td
+    parent=$(git rev-parse -q --verify "${sha}^1" 2>/dev/null) || return 0
+    td=$(mktemp -d "${TMPDIR:-/tmp}/gcp_drift.XXXXXX" 2>/dev/null) || return 0
+    # base = the file in the commit's parent (the cherry-pick merge base);
+    # ours = HEAD; theirs = the commit. A missing base blob (the commit ADDS the
+    # file) leaves an empty base so every theirs line counts as added.
+    git cat-file -p "${parent}:${f}" >"${td}/base" 2>/dev/null || : >"${td}/base"
+    git cat-file -p "HEAD:${f}" >"${td}/ours" 2>/dev/null || : >"${td}/ours"
+    if ! git cat-file -p "${sha}:${f}" >"${td}/theirs" 2>/dev/null; then
+        # The commit has no such file (a delete) — it adds no content. Treat as
+        # drift (return 1); the delete, if it matters, surfaces at cherry-pick.
+        rm -rf "$td"
+        return 1
+    fi
+    # A theirs line that is absent from BOTH base (so the commit added it) AND
+    # ours (so HEAD lacks it) is genuinely new content -> real conflict (rc 0).
+    # Set membership over whole lines; no sort needed (order-independent).
+    # NOTE: a bare `exit` (not `exit 0`) is required on a hit — `exit 0` would
+    # still run END, whose `exit 1` would override it back to "drift".
+    if awk '
+        FILENAME == B { base[$0] = 1; next }
+        FILENAME == O { ours[$0] = 1; next }
+        { if (!($0 in base) && !($0 in ours)) { found = 1; exit } }
+        END { exit(found ? 0 : 1) }
+    ' B="${td}/base" O="${td}/ours" "${td}/base" "${td}/ours" "${td}/theirs"; then
+        rm -rf "$td"
+        return 0
+    fi
+    rm -rf "$td"
+    return 1
+}
+
 _gcp_scan_predict_content_conflict() {
     # Content-conflict pre-check (issue #1037, extends Stage-1.5 #1033). Returns
     # 1 when cherry-picking commit $1 onto HEAD is predicted to hit a 3-way
@@ -248,7 +299,8 @@ _gcp_scan_predict_content_conflict() {
     # that exists on both sides. This is the case Stage-1.5 does NOT cover
     # (modify/delete of a file absent from base); here both sides edited the
     # same lines. Returns 0 when the merge is predicted clean OR when the
-    # verdict is deferred (see the --author=all guard below).
+    # verdict is deferred (see the --author=all guard AND the context-drift
+    # guard below).
     #
     # Probe: `git merge-tree --write-tree --merge-base=<sha>^ HEAD <sha>`. This
     # drives git's REAL merge engine as a non-destructive dry-run (no checkout,
@@ -273,6 +325,15 @@ _gcp_scan_predict_content_conflict() {
     # Only when EVERY conflicting file is covered by a precedent is the verdict
     # deferred (return 0). Mirrors Stage-1.5's pick_list membership guard, so
     # --author=all stays false-positive-free.
+    #
+    # Context-drift guard (issue #913 regression, #1151): a conflicting file
+    # whose divergence is pure context drift — the commit's real change already
+    # matches HEAD and only an unrelated adjacent region moved — is NOT a
+    # content conflict. `_gcp_scan_conflict_adds_new_content` detects it (theirs
+    # adds no line HEAD lacks) so the commit is left for Stage-2, which absorbs
+    # it as a no-op ("already in HEAD"), instead of surfacing a phantom conflict
+    # the user is told to resolve by hand. Only a file where the commit brings
+    # content HEAD lacks flags the commit.
     #
     # Prints the first guaranteed-conflict file path to stdout when it flags.
     local sha="$1" pick_list="$2"
@@ -323,8 +384,14 @@ $other_files" in
 $f
 "*) ;;
             *)
-                printf '%s\n' "$f"
-                return 1
+                # Uncovered by any precedent — but flag ONLY if the commit
+                # brings content HEAD lacks. A pure context-drift conflict
+                # (issue #913/#1151) adds nothing new and is left for Stage-2's
+                # merge probe to absorb as a no-op, not surfaced as a conflict.
+                if _gcp_scan_conflict_adds_new_content "$sha" "$f"; then
+                    printf '%s\n' "$f"
+                    return 1
+                fi
                 ;;
         esac
     done <<EOF
@@ -790,7 +857,10 @@ EOF
     # cherry-pick merge) and skip the ones predicted to conflict, mirroring the
     # Stage-1.5 warning + counter pattern. Runs BEFORE the Stage-2 noop
     # pre-flight so we never surface a conflict on a commit that is genuinely
-    # redundant.
+    # redundant. A predicted conflict that is pure context drift (the commit's
+    # real change already matches HEAD, issue #913/#1151) is deliberately NOT
+    # flagged here — it falls through as a survivor and Stage-2 absorbs it as a
+    # no-op, so a commit already in HEAD is never mislabelled a content conflict.
     local conflict_list="" conflict_count=0 conflict_survivor_list=""
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
