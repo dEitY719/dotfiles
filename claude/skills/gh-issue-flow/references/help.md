@@ -9,19 +9,21 @@
 
 ## Usage
 
-- `/gh-issue-flow 16` — chain: implement → commit → PR → schedule pr-reply → resolve conflicts, for issue #16 on `origin`.
+- `/gh-issue-flow 16` — chain: implement → commit → PR → quality gate (codex review ∥ /simplify) → schedule pr-reply → resolve conflicts → resolve out-of-date, for issue #16 on `origin`.
 - `/gh-issue-flow 16 upstream` — same chain on `upstream` remote.
 - `/gh-issue-flow -h` / `--help` / `help` — print this help.
 
 ## What this skill chains
 
-This skill invokes **5 skills in sequence** (each step runs only if the previous succeeded):
+This skill invokes **6 skills in sequence** (each step runs only if the previous succeeded), plus a parallel post-PR quality gate:
 
 1. **`gh:issue-implement <N> direct`** — reads the issue, edits files, runs tests. No human intervention.
 2. **`gh:commit`** — creates a commit for the changes with a message derived from the conversation (follows the repo's commit style).
 3. **`gh:pr`** — pushes the branch and opens a PR, auto-linking `Closes #<N>`.
+   - **Post-PR quality gate (soft-fail, parallel).** Two Agent subagents run in one turn: codex second-opinion review (`gh:pr-review --ai codex`, skipped if `codex` is not installed) ∥ built-in `/simplify` on the branch diff. Any resulting simplify changes are committed + pushed before the rebase steps. Failures warn and continue — they never stop the chain.
 4. **`devx:schedule` `--time 5 "/gh-pr-reply <PR_NUM>"`** — schedules a pr-reply run 5 minutes after PR creation, giving CI and reviewers time to post before the bot replies.
 5. **`gh:pr-resolve-conflict` `<PR_NUM>`** — checks and resolves any merge conflicts in the new PR via rebase. Exits cleanly if the PR has no conflicts (expected for a freshly created branch).
+6. **`gh:pr-resolve-outdated` `<PR_NUM>`** — clean rebase-sync when the base branch has moved forward with no conflicts. No-op if the PR is already up to date.
 
 If any step fails, the chain stops immediately. No automatic retry.
 The final report shows which steps ran, which failed, and how to

@@ -1,11 +1,11 @@
 # gh:issue-flow — Step 2.6: Post AI Metrics to Issue (soft-fail)
 
-Runs only if Step 2.5 succeeded. Post a flow-level aggregate metrics
+Runs only if Step 2.5.1 succeeded. Post a flow-level aggregate metrics
 comment on the **linked GitHub Issue**. The PR body already carries the
 per-step `<!-- ai-metrics:gh-pr -->` block written by `gh:pr`; this step
-adds the total across all five sub-skills to the Issue so the Issue thread
-is the single place to review full AI effort. This step soft-fails — warn
-on any error but never block the flow.
+adds the total across all six sub-skills (plus the quality gate) to the
+Issue so the Issue thread is the single place to review full AI effort.
+This step soft-fails — warn on any error but never block the flow.
 
 a. Compute: `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))`
    Track per-step timing by recording `STEP_TS=$(date +%s)` at the
@@ -13,8 +13,10 @@ a. Compute: `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))`
    - `IMPL_MIN` — elapsed for Step 2.1 (gh:issue-implement)
    - `COMMIT_MIN` — elapsed for Step 2.2 (gh:commit)
    - `PR_MIN` — elapsed for Step 2.3 (gh:pr)
+   - `GATE_MIN` — elapsed for Steps 2.3.1–2.3.3 (quality gate)
    - `SCHEDULE_MIN` — elapsed for Step 2.4 (devx:schedule)
    - `CONFLICT_MIN` — elapsed for Step 2.5 (gh:pr-resolve-conflict)
+   - `OUTDATED_MIN` — elapsed for Step 2.5.1 (gh:pr-resolve-outdated)
    Any variable not yet computed defaults to `?` in the template.
 b. Issue type: parse the conventional-commit prefix from the issue title
    fetched in Step 2.1 (e.g. `feat`, `fix`, `refactor`).
@@ -42,8 +44,10 @@ else
 | gh-issue-implement | ~${IMPL_MIN:-?} min |
 | gh-commit | ~${COMMIT_MIN:-?} min |
 | gh-pr | ~${PR_MIN:-?} min |
+| quality gate (review + simplify) | ~${GATE_MIN:-?} min |
 | devx:schedule (pr-reply) | ~${SCHEDULE_MIN:-?} min |
 | gh-pr-resolve-conflict | ~${CONFLICT_MIN:-?} min |
+| gh-pr-resolve-outdated | ~${OUTDATED_MIN:-?} min |
 | **합계** | **~$ELAPSED min** |
 
 예상 사람 시간: ~$HUMAN_H h · 토큰: ~$TOKENS
