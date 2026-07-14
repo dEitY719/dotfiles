@@ -13,14 +13,18 @@ with `--no-next-hint`).
 1. **`--no-next-hint` on Step 2.1** — suppresses `gh:issue-implement`'s
    trailing `Next:` hint, the original trip-wire from #333. Load-bearing
    even though insufficient on its own (see #383).
-2. **Zero conversational text between the five `Skill()` calls in Step 2** —
+2. **Zero conversational text between the six `Skill()` calls in Step 2** —
    no recap, no "now committing", no markdown headers, no progress
    bullets. Those tokens read as a turn-ending summary and re-introduce
    the early-stop. The only prose allowed inside Step 2 is the final
-   Step 3 report.
+   Step 3 report. **Tool calls are not prose and are permitted** — the
+   Agent dispatch for the 2.3.1/2.3.2 quality gate and the Bash
+   commit+push of 2.3.3 may run between Skill() calls. Only conversational
+   prose is forbidden; the terminal-marker gating (see guard 3) covers
+   those tool steps automatically, so no Agent-detection logic is needed.
 3. **Harness Stop hook (`claude/hooks/gh_issue_flow_stop_guard.py`)** —
    when the model nonetheless tries to end its turn mid-flow, this hook
-   parses the transcript, detects that fewer than 5 sub-skills have run
+   parses the transcript, detects that fewer than 6 sub-skills have run
    without a Step 3 marker, and returns `{"decision":"block","reason":...}`
    so Claude Code re-prompts the model to invoke the next sub-skill.
    See `references/stop-guard.md` for the detection logic, safety rails,

@@ -3,7 +3,7 @@
 
 Reads a Stop event JSON from stdin, parses the conversation transcript, and
 emits a `block` decision when the model tries to end its turn while a
-gh-issue-flow chain is still in progress (5 sub-skills + Step 3 report).
+gh-issue-flow chain is still in progress (6 sub-skills + Step 3 report).
 
 Failure mode being mitigated: the model self-authors a markdown success
 report between Skill() calls in Step 2 of gh-issue-flow and treats that
@@ -60,15 +60,29 @@ def _trace(message: str, *, layer: str | None = None) -> None:
 
 
 # Sub-skill names accepted in either hyphen or colon namespace form.
-# Order matters — it's the canonical 5-step gh-issue-flow chain.
+# Order matters — it's the canonical 6-step gh-issue-flow chain.
 EXPECTED_CHAIN: list[tuple[str, str]] = [
     ("gh-issue-implement", "gh:issue-implement"),
     ("gh-commit", "gh:commit"),
     ("gh-pr", "gh:pr"),
     ("devx-schedule", "devx:schedule"),
     ("gh-pr-resolve-conflict", "gh:pr-resolve-conflict"),
+    ("gh-pr-resolve-outdated", "gh:pr-resolve-outdated"),
 ]
 SUB_SKILL_NAMES: set[str] = {n for pair in EXPECTED_CHAIN for n in pair}
+
+# Human-facing SKILL.md step labels, parallel to EXPECTED_CHAIN. These are
+# NOT derived arithmetically because gh-pr-resolve-outdated is labeled
+# "Step 2.5.1" in SKILL.md (it runs after the "Step 2.5" resolve-conflict
+# step), not "Step 2.6". Keep this list in lockstep with EXPECTED_CHAIN.
+STEP_LABELS: list[str] = [
+    "Step 2.1",
+    "Step 2.2",
+    "Step 2.3",
+    "Step 2.4",
+    "Step 2.5",
+    "Step 2.5.1",
+]
 
 # Terminal Step 3 markers — presence in any assistant text after the
 # gh-issue-flow boundary means the flow has finished and the model may stop.
@@ -302,8 +316,19 @@ def _next_step_label(seen: list[str]) -> str:
             next_idx = i + 1
     if next_idx >= len(canonical):
         return "Step 3 — emit the final 'gh:issue-flow complete (#N)' report"
-    step_num = next_idx + 1  # 1-based for human display
-    return f"Step 2.{step_num} — Skill({canonical[next_idx]})"
+    if canonical[next_idx] == "devx-schedule":
+        # gh-pr just completed. Before the rebase steps the model must run
+        # the parallel Agent-based quality gate (2.3.1 gh:pr-review --ai codex
+        # ∥ 2.3.2 /simplify), then commit+push any simplify changes. That gate
+        # is dispatched via Agent/git tools, not Skill() calls, so it is not
+        # tracked in EXPECTED_CHAIN — remind the model here.
+        return (
+            "the quality gate first if not already done (2.3.1 gh:pr-review "
+            "--ai codex ∥ 2.3.2 /simplify via 2 parallel Agent subagents, "
+            "then 2.3.3 commit+push any simplify changes BEFORE the rebase "
+            f"steps), then {STEP_LABELS[next_idx]} — Skill({canonical[next_idx]})"
+        )
+    return f"{STEP_LABELS[next_idx]} — Skill({canonical[next_idx]})"
 
 
 def main() -> int:
@@ -347,14 +372,14 @@ def main() -> int:
 
     next_label = _next_step_label(seen)
     reason = (
-        f"gh-issue-flow incomplete: {len(seen)}/5 sub-skills invoked since the "
+        f"gh-issue-flow incomplete: {len(seen)}/{len(EXPECTED_CHAIN)} sub-skills invoked since the "
         f"flow started, and no terminal Step 3 report ('gh:issue-flow complete' "
         f"or 'gh:issue-flow stopped at step') has been emitted yet. Per the "
         f"CRITICAL CONTRACT in claude/skills/gh-issue-flow/SKILL.md, you MUST "
         f"continue immediately. Next action: {next_label}. Output ZERO "
         f"conversational text — no recap, no markdown summary, no per-step "
         f"bullets, no progress headers — just the next Skill() call (or, if all "
-        f"5 sub-skills are already done, the Step 3 success/failure report "
+        f"{len(EXPECTED_CHAIN)} sub-skills are already done, the Step 3 success/failure report "
         f"verbatim per the SKILL.md template)."
     )
     return _block(reason, layer="L1.5")
