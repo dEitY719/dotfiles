@@ -274,16 +274,31 @@ _gcp_scan_conflict_adds_new_content() {
         rm -rf "$td"
         return 1
     fi
-    # A theirs line that is absent from BOTH base (so the commit added it) AND
-    # ours (so HEAD lacks it) is genuinely new content -> real conflict (rc 0).
+    # The commit brings content HEAD lacks (rc 0, real) in EITHER direction:
+    #   * an ADD  — a theirs line absent from both base (the commit added it)
+    #     and ours (HEAD lacks it); or
+    #   * a DELETE — a base line absent from theirs (the commit removed it) yet
+    #     still present in ours (HEAD has not removed it).
+    # Checking adds alone would misclassify a delete-only commit as drift and
+    # let Stage-2 silently skip it — silent data loss (gemini PR #1157 review).
     # Set membership over whole lines; no sort needed (order-independent).
     # NOTE: a bare `exit` (not `exit 0`) is required on a hit — `exit 0` would
     # still run END, whose `exit 1` would override it back to "drift".
     if awk '
         FILENAME == B { base[$0] = 1; next }
         FILENAME == O { ours[$0] = 1; next }
-        { if (!($0 in base) && !($0 in ours)) { found = 1; exit } }
-        END { exit(found ? 0 : 1) }
+        {
+            theirs[$0] = 1
+            if (!($0 in base) && !($0 in ours)) { found = 1; exit }
+        }
+        END {
+            if (!found) {
+                for (l in base) {
+                    if (!(l in theirs) && (l in ours)) { found = 1; break }
+                }
+            }
+            exit(found ? 0 : 1)
+        }
     ' B="${td}/base" O="${td}/ours" "${td}/base" "${td}/ours" "${td}/theirs"; then
         rm -rf "$td"
         return 0
