@@ -44,8 +44,9 @@ request-changes) — that is `gh:pr-approve`.
    Each lane is soft-fail.
 4. Commit + push any `/simplify` changes (only if the working tree changed),
    always with an explicit `-m` message.
-5. Reply — inline `gh:pr-reply` (default), or deferred via `devx:schedule`
-   (`--defer-reply M`), or skipped (`--no-reply`).
+5. Reply — inline `gh:pr-reply <pr> <remote>` (default), or deferred via
+   `devx:schedule` (`--defer-reply M`), or skipped (`--no-reply`). The
+   `<remote>` is threaded so the reply pass resolves the same target repo.
 6. Print one `[OK]`/`[SKIP]`/`[WARN]` report line.
 
 ## What the skill will NOT do
