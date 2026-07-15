@@ -65,7 +65,7 @@ EXPECTED_CHAIN: list[tuple[str, str]] = [
     ("gh-issue-implement", "gh:issue-implement"),
     ("gh-commit", "gh:commit"),
     ("gh-pr", "gh:pr"),
-    ("devx-schedule", "devx:schedule"),
+    ("devx-pr-review-all", "devx:pr-review-all"),
     ("gh-pr-resolve-conflict", "gh:pr-resolve-conflict"),
     ("gh-pr-resolve-outdated", "gh:pr-resolve-outdated"),
 ]
@@ -316,17 +316,19 @@ def _next_step_label(seen: list[str]) -> str:
             next_idx = i + 1
     if next_idx >= len(canonical):
         return "Step 3 — emit the final 'gh:issue-flow complete (#N)' report"
-    if canonical[next_idx] == "devx-schedule":
-        # gh-pr just completed. Before the rebase steps the model must run
-        # the parallel Agent-based quality gate (2.3.1 gh:pr-review --ai codex
-        # ∥ 2.3.2 /simplify), then commit+push any simplify changes. That gate
-        # is dispatched via Agent/git tools, not Skill() calls, so it is not
-        # tracked in EXPECTED_CHAIN — remind the model here.
+    if canonical[next_idx] == "devx-pr-review-all":
+        # gh-pr just completed. The next step is the delegated
+        # devx:pr-review-all skill, which itself runs the post-PR quality
+        # gate (gemini ∥ codex ∥ /simplify, committing + pushing any
+        # simplify changes synchronously before the rebase steps) and
+        # schedules the deferred /gh-pr-reply. gh-issue-flow no longer
+        # dispatches the gate inline via Agent/git tools, so there is no
+        # separate reminder to run it first — it is folded into this call.
         return (
-            "the quality gate first if not already done (2.3.1 gh:pr-review "
-            "--ai codex ∥ 2.3.2 /simplify via 2 parallel Agent subagents, "
-            "then 2.3.3 commit+push any simplify changes BEFORE the rebase "
-            f"steps), then {STEP_LABELS[next_idx]} — Skill({canonical[next_idx]})"
+            f'{STEP_LABELS[next_idx]} — Skill(devx:pr-review-all, "<PR_NUM> '
+            '<remote> --defer-reply 8"), which itself runs the '
+            "gemini ∥ codex ∥ /simplify quality gate (committing + pushing "
+            "any simplify changes) and schedules the deferred pr-reply"
         )
     return f"{STEP_LABELS[next_idx]} — Skill({canonical[next_idx]})"
 
