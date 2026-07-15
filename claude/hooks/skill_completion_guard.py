@@ -165,7 +165,7 @@ def _build_boundary_regex(catalog: dict[str, dict[str, Any]]) -> re.Pattern[str]
         rf"""
         (?m)                                                    # multiline: ^ matches each line start
         (?:
-            ^\s*/({union})\b                                    # (a) raw slash command
+            ^\s*/({union})(?![\w-])                             # (a) raw slash command (hyphenated siblings excluded)
             |
             <command-name>\s*/({union})\s*</command-name>       # (b) wrapped form
             |
