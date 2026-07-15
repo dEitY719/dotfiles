@@ -66,6 +66,21 @@ setup() {
     assert_output --partial "remote=origin"
 }
 
+@test "PR '0' -> exit 2 (zero is not a positive integer)" {
+    run devx_pr_review_all_parse 0
+    assert_failure 2
+}
+
+@test "PR '00' -> exit 2 (all-zero rejected)" {
+    run devx_pr_review_all_parse 00
+    assert_failure 2
+}
+
+@test "--defer-reply 0 -> exit 2 (zero delay rejected)" {
+    run devx_pr_review_all_parse 123 --defer-reply 0
+    assert_failure 2
+}
+
 @test "help flag -> help_requested" {
     run devx_pr_review_all_parse --help
     assert_success

@@ -66,13 +66,23 @@ devx_pr_review_all_parse() {
         echo "PR# must be a positive integer: '$pr'" >&2
         return 2
         ;;
+    *[!0]*) ;;
+    *)
+        echo "PR# must be a positive integer: '$pr'" >&2
+        return 2
+        ;;
     esac
 
-    if [ "$_no_reply" -eq 1 ]; then
+    if [ "${_no_reply:-0}" -eq 1 ]; then
         reply_mode="none"
     elif [ "$reply_mode" = "defer" ]; then
         case "$reply_delay" in
         "" | *[!0-9]*)
+            echo "--defer-reply value must be a positive integer" >&2
+            return 2
+            ;;
+        *[!0]*) ;;
+        *)
             echo "--defer-reply value must be a positive integer" >&2
             return 2
             ;;
