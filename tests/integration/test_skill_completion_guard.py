@@ -344,21 +344,21 @@ def test_hyphenated_sibling_command_not_matched_as_gh_pr(tmp_path: Path, sibling
     assert result.stdout.strip() == "", f"{sibling} should not be a gh-pr boundary"
 
 
-def test_bare_gh_pr_command_still_matched(tmp_path: Path) -> None:
+@pytest.mark.parametrize("cmd", ["/gh-pr", "/gh-pr 123"])
+def test_bare_gh_pr_command_still_matched(tmp_path: Path, cmd: str) -> None:
     """The real `/gh-pr` (bare, or with args) must still be detected (issue #1164)."""
-    for cmd in ("/gh-pr", "/gh-pr 123"):
-        transcript = _write_transcript(
-            tmp_path,
-            [
-                _user_text(cmd),
-                _assistant_text("running"),
-            ],
-        )
-        result = _run_hook(_hook_event(transcript))
-        assert result.returncode == 0
-        decision = json.loads(result.stdout)
-        assert decision["decision"] == "block", f"{cmd!r} should be a gh-pr boundary"
-        assert "gh-pr" in decision["reason"]
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text(cmd),
+            _assistant_text("running"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block", f"{cmd!r} should be a gh-pr boundary"
+    assert "gh-pr" in decision["reason"]
 
 
 def test_tool_result_command_mention_not_boundary(tmp_path: Path) -> None:
