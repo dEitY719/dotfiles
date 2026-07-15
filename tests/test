@@ -81,8 +81,9 @@ EXAMPLES:
     ./tests/test --verbose --serial # Verbose + sequential
 
 PERFORMANCE:
-    Default: Parallel execution using all CPU cores (~60-80s)
-    Serial:  Sequential execution (~250s)
+    Default: bats + pytest both run parallel across all CPU cores (~4-5 min)
+    Serial:  Sequential execution, single bats process (~15+ min)
+    Tune:    BATS_JOBS=N overrides bats job count (default: nproc)
 
 REQUIREMENTS:
     - Python 3.10+
@@ -139,6 +140,14 @@ check_requirements() {
 
 
 # Run bats tests
+#
+# bats-core's own `--jobs` needs GNU parallel (or shenwei356/rush), which we
+# do not want as a hard test dependency. Instead we run one bats process per
+# .bats file bounded by CPU count via `xargs -P` — dependency-free and
+# portable to bash 3.2 (macOS) + Linux. This is safe because every bats test
+# isolates its own $HOME via mktemp (see tests/bats/test_helper.bash
+# setup_isolated_home), so file-level parallelism has no shared mutable state.
+# Serial mode (-s) keeps the single-process path for deterministic output.
 run_bats() {
     local bats_bin="${SCRIPT_DIR}/bats/lib/bats-core/bin/bats"
     if [ ! -x "$bats_bin" ]; then
@@ -148,17 +157,76 @@ run_bats() {
     fi
 
     print_header "Running Bats Shell Unit Tests"
-    # Auto-discover bats test directories, excluding lib/ (submodules)
-    local bats_dirs=()
-    while IFS= read -r d; do
-        bats_dirs+=("$d")
-    done < <(find "${SCRIPT_DIR}/bats" -type f -name '*.bats' -not -path '*/lib/*' -exec dirname {} \; | sort -u)
-    if [ ${#bats_dirs[@]} -eq 0 ]; then
-        print_warning "No bats test directories found"
+
+    # Discover .bats files (exclude lib/ submodules), ordered by @test count
+    # descending (Longest-Processing-Time scheduling) so the long-pole file
+    # starts first and the parallel makespan approaches its floor.
+    local bats_files=()
+    while IFS= read -r f; do
+        bats_files+=("$f")
+    done < <(
+        find "${SCRIPT_DIR}/bats" -type f -name '*.bats' -not -path '*/lib/*' \
+            -exec sh -c 'printf "%s\t%s\n" "$(grep -c "^@test" "$1")" "$1"' _ {} \; \
+            | sort -rn | cut -f2-
+    )
+    if [ ${#bats_files[@]} -eq 0 ]; then
+        print_warning "No bats test files found"
         return 0
     fi
-    "$bats_bin" "${bats_dirs[@]}"
-    return $?
+
+    # Serial: single bats invocation over all files (deterministic order).
+    if [ "$SERIAL" = "1" ]; then
+        "$bats_bin" "${bats_files[@]}"
+        return $?
+    fi
+
+    # Parallel: one bats process per file, bounded by CPU count.
+    local jobs="${BATS_JOBS:-$(nproc 2>/dev/null || echo 4)}"
+    local outdir
+    outdir="$(mktemp -d)"
+    print_info "Parallel: ${#bats_files[@]} files across ${jobs} jobs (override with BATS_JOBS=N, or -s for serial)"
+
+    printf '%s\n' "${bats_files[@]}" \
+        | xargs -P "$jobs" -I {} bash -c '
+            f="$1"; bats="$2"; out="$3"
+            base=$(printf "%s" "$f" | tr "/" "_")
+            if "$bats" "$f" >"$out/$base.log" 2>&1; then
+                printf "0" >"$out/$base.status"
+            else
+                printf "1" >"$out/$base.status"
+            fi
+          ' _ {} "$bats_bin" "$outdir"
+
+    # Aggregate: count tests, print per-file failures with their full log.
+    local rc=0 total_tests=0 failed_files=0
+    local f base status_val log_file
+    for f in "${bats_files[@]}"; do
+        base=$(printf "%s" "$f" | tr '/' '_')
+        log_file="$outdir/$base.log"
+        status_val=$(cat "$outdir/$base.status" 2>/dev/null || echo 1)
+        if [ -f "$log_file" ]; then
+            local n
+            n=$(grep -cE '^(ok|not ok)' "$log_file" 2>/dev/null || echo 0)
+            total_tests=$((total_tests + n))
+        fi
+        if [ "$status_val" != "0" ]; then
+            failed_files=$((failed_files + 1))
+            rc=1
+            print_error "FAILED: ${f#"${SCRIPT_DIR}/"}"
+            [ -f "$log_file" ] && cat "$log_file"
+        elif [ "$VERBOSE" = "1" ] && [ -f "$log_file" ]; then
+            cat "$log_file"
+        fi
+    done
+
+    rm -rf "$outdir"
+
+    if [ "$rc" -eq 0 ]; then
+        print_success "bats: ${total_tests} tests in ${#bats_files[@]} files passed"
+    else
+        print_error "bats: ${failed_files} of ${#bats_files[@]} files failed (${total_tests} tests total)"
+    fi
+    return $rc
 }
 
 # Run golden rules
