@@ -48,6 +48,10 @@ asymmetric-network setup is `origin` = internal (isolated GHE),
 
    Store as `DEST_REPO`.
 
+Downstream steps (2-6) refer to the resolved destination as `$REMOTE` — the
+remote name on the name path, or the `relay-tmp` name added on the raw-URL
+path.
+
 ## The default-`upstream` hard-error rule
 
 If `--remote` was **omitted** and no remote named `upstream` exists, stop
