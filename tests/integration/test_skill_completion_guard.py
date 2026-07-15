@@ -321,6 +321,46 @@ def test_mid_sentence_command_does_not_match(tmp_path: Path) -> None:
     assert result.stdout.strip() == ""
 
 
+@pytest.mark.parametrize(
+    "sibling",
+    ["/gh-pr-review --ai gemini 123", "/gh-pr-reply 123", "/gh-pr-resolve-conflict 123"],
+)
+def test_hyphenated_sibling_command_not_matched_as_gh_pr(tmp_path: Path, sibling: str) -> None:
+    """Line-start `/gh-pr-review` etc. must NOT be read as a `gh-pr` boundary (issue #1164).
+
+    `-` is a non-word char, so the old `\\b` after `gh-pr` in surface (a)
+    let `/gh-pr-review` false-match the `gh-pr` catalog entry, wedging the
+    Stop hook into a permanent block. Surface (a) now uses `(?![\\w-])`.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text(sibling),
+            _assistant_text("running"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"{sibling} should not be a gh-pr boundary"
+
+
+def test_bare_gh_pr_command_still_matched(tmp_path: Path) -> None:
+    """The real `/gh-pr` (bare, or with args) must still be detected (issue #1164)."""
+    for cmd in ("/gh-pr", "/gh-pr 123"):
+        transcript = _write_transcript(
+            tmp_path,
+            [
+                _user_text(cmd),
+                _assistant_text("running"),
+            ],
+        )
+        result = _run_hook(_hook_event(transcript))
+        assert result.returncode == 0
+        decision = json.loads(result.stdout)
+        assert decision["decision"] == "block", f"{cmd!r} should be a gh-pr boundary"
+        assert "gh-pr" in decision["reason"]
+
+
 def test_tool_result_command_mention_not_boundary(tmp_path: Path) -> None:
     """A `/gh-pr` substring in a tool_result block is documentation, not a real boundary."""
     transcript = _write_transcript(
