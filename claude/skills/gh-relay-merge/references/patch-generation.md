@@ -41,7 +41,7 @@ silently shipping patches that fail on the far side.
 ## Generate patches (Step 4)
 
 ```bash
-tmpdir=$(mktemp -d)
+# Reuse the $tmpdir initialized in Step 2's push-probe — do not re-create it.
 git format-patch "$BASE_SHA".."$HEAD_SHA" -o "$tmpdir"
 ```
 

@@ -14,11 +14,16 @@ never a protected/default branch name — and `--dry-run` so nothing is
 actually written:
 
 ```bash
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
 LOCAL=<PR head SHA or local branch>
 PROBE_REF="refs/heads/relay-probe-$(date -u +%s)"
 git push --dry-run "$REMOTE" "$LOCAL:$PROBE_REF" 2>&1 | tee "$tmpdir/probe.out"
 PROBE_RC=${PIPESTATUS[0]}
 ```
+
+`$tmpdir` is created here — the earliest point it's needed — and reused
+by every later step (patch generation, gist upload); no step re-creates it.
 
 `--dry-run` still performs the network negotiation with the remote, so a
 proxy block page surfaces here exactly as it would on a real push, without
