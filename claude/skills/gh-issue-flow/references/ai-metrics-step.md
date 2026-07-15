@@ -3,8 +3,10 @@
 Runs only if Step 2.5.1 succeeded. Post a flow-level aggregate metrics
 comment on the **linked GitHub Issue**. The PR body already carries the
 per-step `<!-- ai-metrics:gh-pr -->` block written by `gh:pr`; this step
-adds the total across all six sub-skills (plus the quality gate) to the
-Issue so the Issue thread is the single place to review full AI effort.
+adds the total across all six sub-skills to the Issue so the Issue thread
+is the single place to review full AI effort. (The post-PR quality gate
+and deferred pr-reply are folded into Step 2.4 `devx:pr-review-all`, so its
+row already covers that effort — there is no separate gate/schedule row.)
 This step soft-fails — warn on any error but never block the flow.
 
 a. Compute: `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))`
@@ -13,8 +15,8 @@ a. Compute: `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))`
    - `IMPL_MIN` — elapsed for Step 2.1 (gh:issue-implement)
    - `COMMIT_MIN` — elapsed for Step 2.2 (gh:commit)
    - `PR_MIN` — elapsed for Step 2.3 (gh:pr)
-   - `GATE_MIN` — elapsed for Steps 2.3.1–2.3.3 (quality gate)
-   - `SCHEDULE_MIN` — elapsed for Step 2.4 (devx:schedule)
+   - `REVIEW_MIN` — elapsed for Step 2.4 (devx:pr-review-all — the quality
+     gate + deferred pr-reply scheduling)
    - `CONFLICT_MIN` — elapsed for Step 2.5 (gh:pr-resolve-conflict)
    - `OUTDATED_MIN` — elapsed for Step 2.5.1 (gh:pr-resolve-outdated)
    Any variable not yet computed defaults to `?` in the template.
@@ -44,8 +46,7 @@ else
 | gh-issue-implement | ~${IMPL_MIN:-?} min |
 | gh-commit | ~${COMMIT_MIN:-?} min |
 | gh-pr | ~${PR_MIN:-?} min |
-| quality gate (review + simplify) | ~${GATE_MIN:-?} min |
-| devx:schedule (pr-reply) | ~${SCHEDULE_MIN:-?} min |
+| devx-pr-review-all (gate + pr-reply) | ~${REVIEW_MIN:-?} min |
 | gh-pr-resolve-conflict | ~${CONFLICT_MIN:-?} min |
 | gh-pr-resolve-outdated | ~${OUTDATED_MIN:-?} min |
 | **합계** | **~$ELAPSED min** |
