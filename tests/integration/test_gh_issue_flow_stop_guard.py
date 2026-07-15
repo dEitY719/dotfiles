@@ -317,42 +317,6 @@ def test_mid_flow_after_resolve_conflict_blocks_for_resolve_outdated(tmp_path: P
     assert "5/6" in reason
 
 
-def test_pr_review_all_next_step_after_gh_pr(tmp_path: Path) -> None:
-    """After gh-pr (3 seen), the next-step hint routes to Step 2.4 —
-    Skill(devx:pr-review-all) — which itself runs the gemini ∥ codex ∥
-    /simplify quality gate (with commit+push) and schedules the deferred
-    pr-reply. gh-issue-flow no longer dispatches the gate inline, so the
-    reminder must NOT reference the old inline 2.3.1/2.3.2/2.3.3 gate or
-    devx:schedule."""
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/gh-issue-flow 42"),
-            _assistant_skill("gh-issue-implement"),
-            _assistant_skill("gh-commit"),
-            _assistant_skill("gh-pr"),
-            # No Step 3 report yet.
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    decision = json.loads(result.stdout)
-    assert decision["decision"] == "block"
-    reason = decision["reason"]
-    assert "Step 2.4" in reason
-    assert "devx:pr-review-all" in reason
-    assert "3/6" in reason
-    # New next-step content: the delegated skill runs the quality gate.
-    assert "simplify" in reason
-    assert "pr-review" in reason
-    # Old inline-gate / devx:schedule content must be gone.
-    assert "devx-schedule" not in reason
-    assert "devx:schedule" not in reason
-    assert "2.3.1" not in reason
-    assert "2.3.2" not in reason
-    assert "2.3.3" not in reason
-
-
 def test_missing_pr_review_all_blocks_naming_step_2_4(tmp_path: Path) -> None:
     """A run that reaches gh-pr but has not yet invoked devx:pr-review-all
     (Step 2.4) → block, and the reason names that step as the next action."""
@@ -372,7 +336,7 @@ def test_missing_pr_review_all_blocks_naming_step_2_4(tmp_path: Path) -> None:
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
     reason = decision["reason"]
-    assert "devx:pr-review-all" in reason
+    assert "devx-pr-review-all" in reason
     assert "Step 2.4" in reason
     assert "3/6" in reason
 

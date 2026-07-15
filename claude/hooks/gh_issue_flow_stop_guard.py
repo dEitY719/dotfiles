@@ -316,20 +316,6 @@ def _next_step_label(seen: list[str]) -> str:
             next_idx = i + 1
     if next_idx >= len(canonical):
         return "Step 3 — emit the final 'gh:issue-flow complete (#N)' report"
-    if canonical[next_idx] == "devx-pr-review-all":
-        # gh-pr just completed. The next step is the delegated
-        # devx:pr-review-all skill, which itself runs the post-PR quality
-        # gate (gemini ∥ codex ∥ /simplify, committing + pushing any
-        # simplify changes synchronously before the rebase steps) and
-        # schedules the deferred /gh-pr-reply. gh-issue-flow no longer
-        # dispatches the gate inline via Agent/git tools, so there is no
-        # separate reminder to run it first — it is folded into this call.
-        return (
-            f'{STEP_LABELS[next_idx]} — Skill(devx:pr-review-all, "<PR_NUM> '
-            '<remote> --defer-reply 8"), which itself runs the '
-            "gemini ∥ codex ∥ /simplify quality gate (committing + pushing "
-            "any simplify changes) and schedules the deferred pr-reply"
-        )
     return f"{STEP_LABELS[next_idx]} — Skill({canonical[next_idx]})"
 
 
