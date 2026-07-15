@@ -323,14 +323,25 @@ def test_mid_sentence_command_does_not_match(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "sibling",
-    ["/gh-pr-review --ai gemini 123", "/gh-pr-reply 123", "/gh-pr-resolve-conflict 123"],
+    [
+        # hyphen-form siblings
+        "/gh-pr-review --ai gemini 123",
+        "/gh-pr-reply 123",
+        "/gh-pr-resolve-conflict 123",
+        # colon-form siblings — `:` is also not a word char, so the lookahead
+        # must exclude it too (PR #1169 gemini review).
+        "/gh:pr:review --ai gemini 123",
+        "/gh:pr:reply 123",
+        "/gh:pr:resolve-conflict 123",
+    ],
 )
 def test_hyphenated_sibling_command_not_matched_as_gh_pr(tmp_path: Path, sibling: str) -> None:
     """Line-start `/gh-pr-review` etc. must NOT be read as a `gh-pr` boundary (issue #1164).
 
-    `-` is a non-word char, so the old `\\b` after `gh-pr` in surface (a)
-    let `/gh-pr-review` false-match the `gh-pr` catalog entry, wedging the
-    Stop hook into a permanent block. Surface (a) now uses `(?![\\w-])`.
+    Both `-` and `:` are non-word chars, so the old `\\b` after `gh-pr` in
+    surface (a) let `/gh-pr-review` (and, after the first fix, the colon
+    form `/gh:pr:review`) false-match the `gh-pr` catalog entry, wedging the
+    Stop hook into a permanent block. Surface (a) now uses `(?![\\w:-])`.
     """
     transcript = _write_transcript(
         tmp_path,
@@ -344,9 +355,11 @@ def test_hyphenated_sibling_command_not_matched_as_gh_pr(tmp_path: Path, sibling
     assert result.stdout.strip() == "", f"{sibling} should not be a gh-pr boundary"
 
 
-@pytest.mark.parametrize("cmd", ["/gh-pr", "/gh-pr 123"])
+@pytest.mark.parametrize("cmd", ["/gh-pr", "/gh-pr 123", "/gh:pr", "/gh:pr 123"])
 def test_bare_gh_pr_command_still_matched(tmp_path: Path, cmd: str) -> None:
-    """The real `/gh-pr` (bare, or with args) must still be detected (issue #1164)."""
+    """The real `/gh-pr` (hyphen or colon form, bare or with args) must still
+    be detected (issue #1164 / PR #1169). Whitespace or EOL after the name
+    passes the `(?![\\w:-])` lookahead."""
     transcript = _write_transcript(
         tmp_path,
         [
