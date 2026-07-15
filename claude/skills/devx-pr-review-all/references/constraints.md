@@ -42,3 +42,16 @@ The SKILL.md body lists these as terse rules; the full rationale lives here.
   the later rebase steps — a dirty working tree breaks `git rebase`.
 
 - No emojis anywhere. POSIX-compatible shell snippets (`[ ]`, `>/dev/null 2>&1`).
+
+- **`gh:pr-reply` has no remote positional at all** — its Step 1 resolves
+  `TARGET_REPO` via `gh repo view --json nameWithOwner` (no `-R`), which
+  reads the repo of whatever is checked out in the working tree, not the
+  `<remote>` arg this skill parsed. In practice this is a non-issue on the
+  supported path: Step 2 already ran `gh pr checkout <pr> -R <TARGET_REPO>`,
+  so by Step 5 the working tree *is* the PR's head branch/repo and
+  `gh repo view` resolves correctly without a flag. The residual gap is
+  local multi-remote ambiguity (e.g. both `origin` and `upstream` point at
+  GitHub) where gh's own default-repo heuristic, not this skill's `<remote>`
+  arg, decides the match. Do not invent a `--remote`/`-R` flag for
+  `gh:pr-reply` — it does not exist; fix belongs upstream in that skill if
+  ever needed.

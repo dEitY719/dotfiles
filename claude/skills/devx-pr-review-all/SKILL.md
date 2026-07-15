@@ -44,12 +44,17 @@ print the stderr line and stop. Capture `pr`, `remote`, `reply_mode`
 
 ## Step 2: Pre-flight
 
-- PR state must be `OPEN` and not draft → else exit 1 `PR #<pr> is <state>; aborting`.
+- Resolve `TARGET_REPO` for `<remote>`: `gh repo view "$(git remote get-url
+  <remote>)" --json nameWithOwner -q .nameWithOwner`; failure → exit 1 `Cannot
+  resolve remote '<remote>' to a repo`. Pass `-R <TARGET_REPO>` on every `gh
+  pr`/`gh repo` call below so a non-origin `<remote>` is honored.
+- PR state must be `OPEN` and not draft (`gh pr view <pr> -R <TARGET_REPO>`)
+  → else exit 1 `PR #<pr> is <state>; aborting`.
 - `gh auth status` returns 0 → else exit 1 with the gh error line.
 - **simplify branch context**: if the current branch is not the PR head
-  branch, run `gh pr checkout <pr>`; if already on it (e.g. the issue-flow
-  worktree path), skip. `/simplify` ignores PR# and acts on the working tree,
-  so this checkout is load-bearing (`references/constraints.md`).
+  branch, run `gh pr checkout <pr> -R <TARGET_REPO>`; if already on it (e.g.
+  the issue-flow worktree path), skip. `/simplify` ignores PR# and acts on
+  the working tree, so this checkout is load-bearing (`references/constraints.md`).
 
 ## Step 3: Parallel review gate (dispatch all lanes in ONE turn)
 
@@ -58,9 +63,9 @@ turn**. Each lane is soft-fail — a failure marks that lane `[SKIP]`/`[WARN]`
 and the others continue. Detail: `references/constraints.md`.
 
 - **gemini** — if `command -v gemini`, an Agent runs
-  `Skill(gh:pr-review, "--ai gemini <pr>")`; absent or non-zero exit → SKIP/WARN.
+  `Skill(gh:pr-review, "--ai gemini <pr> <remote>")`; absent or non-zero exit → SKIP/WARN.
 - **codex** — if `command -v codex`, an Agent runs
-  `Skill(gh:pr-review, "--ai codex <pr>")`; absent or non-zero exit → SKIP/WARN.
+  `Skill(gh:pr-review, "--ai codex <pr> <remote>")`; absent or non-zero exit → SKIP/WARN.
 - **/simplify** — an Agent runs the built-in `/simplify` on the working-tree
   diff (PR# is ignored — hence the Step 2 checkout).
 
@@ -77,7 +82,8 @@ Await all three Agents, then:
 
 - `inline` (default) → run `Skill(gh:pr-reply, "<pr>")` immediately. Step 3
   was awaited, so gemini/codex comments are already posted — reply order is
-  deterministic, no delay needed (`references/constraints.md`).
+  deterministic, no delay needed. `gh:pr-reply` takes no remote arg; it
+  targets the checked-out working tree's repo (`references/constraints.md`).
 - `defer` → `Skill(devx:schedule, "--time <reply_delay> \"/gh-pr-reply <pr>\"")`.
 - `none` → skip.
 
