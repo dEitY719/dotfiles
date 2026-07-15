@@ -18,7 +18,7 @@ request-changes) — that is `gh:pr-approve`.
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--defer-reply M` | off (inline) | Schedule `/gh-pr-reply` M **minutes** later via `devx:schedule` instead of replying inline. |
+| `--defer-reply M` / `--defer-reply=M` | off (inline) | Schedule `/gh-pr-reply` M **minutes** later via `devx:schedule` instead of replying inline. |
 | `--no-reply` | off | Skip the reply step entirely. |
 | `-h` / `--help` / `help` | — | Print this help and stop. |
 
