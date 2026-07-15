@@ -80,11 +80,12 @@ Await all three Agents, then:
 
 ## Step 5: pr-reply (per reply_mode)
 
-- `inline` (default) → run `Skill(gh:pr-reply, "<pr>")` immediately. Step 3
-  was awaited, so gemini/codex comments are already posted — reply order is
-  deterministic, no delay needed. `gh:pr-reply` takes no remote arg; it
-  targets the checked-out working tree's repo (`references/constraints.md`).
-- `defer` → `Skill(devx:schedule, "--time <reply_delay> \"/gh-pr-reply <pr>\"")`.
+- `inline` (default) → run `Skill(gh:pr-reply, "<pr> <remote>")` immediately.
+  Step 3 was awaited, so gemini/codex comments are already posted — reply
+  order is deterministic, no delay needed. The `<remote>` is threaded so
+  `gh:pr-reply` resolves the same target repo this skill did, not gh's
+  default-repo heuristic (`references/constraints.md`).
+- `defer` → `Skill(devx:schedule, "--time <reply_delay> \"/gh-pr-reply <pr> <remote>\"")`.
 - `none` → skip.
 
 ## Step 6: Report

@@ -5,17 +5,21 @@
 | # | Name | Default | Description |
 |---|------|---------|-------------|
 | 1 | PR number, or `-h`/`--help`/`help` | current-branch PR | Target PR, e.g. `123` |
+| 2 | remote name | `origin` | Git remote used to resolve the target repo (`owner/repo`) — pins the repo when multiple remotes share one GitHub host |
 
 ## Usage
 
 - `/gh-pr-reply` — process review comments on the PR for the current branch
 - `/gh-pr-reply 123` — process review comments on PR #123 explicitly
+- `/gh-pr-reply 123 upstream` — target PR #123 on the `upstream` remote's repo
 - `/gh-pr-reply -h` / `--help` / `help` — print this help
 
 ## What the skill does
 
 1. Resolves the target PR (explicit arg first, else the current branch's
-   PR via `gh pr view --json`). Never guesses "the latest PR".
+   PR via `gh pr view --json`). Never guesses "the latest PR". Resolves
+   the target repo (`owner/repo`) by parsing the `[remote]` arg's URL
+   (default `origin`), so multi-remote repos reply to the intended host.
 2. Fetches all review comments from the three GitHub endpoints (inline
    thread, issue comment, review summary) per
    `references/comment-fetching.md`, deduped and filtered to threads you
@@ -50,6 +54,8 @@
 - **Good**: after pushing commits, `/gh-pr-reply` — processes every new
   review comment on your branch's PR.
 - **Good**: `/gh-pr-reply 99` — force target PR #99 even from a different branch.
+- **Good**: `/gh-pr-reply 99 upstream` — target PR #99 on the `upstream`
+  remote's repo when `origin` and `upstream` both point at GitHub.
 - **Bad**: running from a branch with no PR — skill stops and asks you to
   open one first.
 - **Bad**: expecting the skill to fix unrelated files — it refuses scope creep.

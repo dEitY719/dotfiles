@@ -1,7 +1,7 @@
 ---
 name: gh:pr-reply
 description: >-
-  Fetch code review comments on a GitHub PR, evaluate each one, apply valid fixes, and leave an individual reply on every comment (Accepted with what changed, or Declined with reasoning). Use when the user runs /gh:pr-reply, /gh-pr-reply, or asks "PR 리뷰 코멘트 확인하고 수정", "리뷰 답변 달아", "PR 123 코멘트 처리해". Defaults to the PR for the current branch; accepts an explicit PR number as an argument. Every comment MUST get a reply — bot comments (gemini, sourcery, copilot) included. Accepts `-h`/`--help`/`help` to print usage.
+  Fetch code review comments on a GitHub PR, evaluate each one, apply valid fixes, and leave an individual reply on every comment (Accepted with what changed, or Declined with reasoning). Use when the user runs /gh:pr-reply, /gh-pr-reply, or asks "PR 리뷰 코멘트 확인하고 수정", "리뷰 답변 달아", "PR 123 코멘트 처리해". Defaults to the PR for the current branch; accepts an explicit PR number and an optional `[remote]` positional (the remote pins the target repo when several remotes share one GitHub host). Every comment MUST get a reply — bot comments (gemini, sourcery, copilot) included. Accepts `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 metadata:
   model_recommendation:
@@ -25,14 +25,33 @@ reply to each with the outcome. **Politeness rule** — reviewers (humans and
 bots alike) must see an explicit response on every thread. Silent fixes are
 not acceptable; silent declines are worse.
 
-## Step 1: Resolve Target PR
+## Step 1: Resolve Target PR + Repo
 
 Record `START_TS=$(date +%s)` immediately (elapsed tracking in Step 7).
-Precedence: (1) **explicit arg** — `/gh:pr-reply 123` → PR #123; (2)
-**current branch** — `gh pr view --json number,url,headRefName,baseRefName`,
-stop if no PR; (3) never guess, never pick "the latest PR". Also capture
-`TARGET_REPO` via `gh repo view --json nameWithOwner -q .nameWithOwner` and
-use it in all subsequent API calls.
+Positional args: `<pr-number> [remote]` (`remote` defaults to `origin`).
+
+**PR number** precedence: (1) **explicit arg** — `/gh:pr-reply 123` → PR
+#123; (2) **current branch** — `gh pr view --json
+number,url,headRefName,baseRefName`, stop if no PR; (3) never guess, never
+pick "the latest PR".
+
+**TARGET_REPO** — resolve from `<remote>`, not from `gh`'s default-repo
+heuristic, so a repo with two remotes on the same host (e.g. `origin` +
+`upstream`) replies to the intended one. Source the SSOT helper and parse
+the remote's URL (network-free):
+
+```sh
+# DOTFILES_FORCE_INIT=1 is load-bearing: the file's interactive guard
+# otherwise returns early in a non-interactive shell and the helper is
+# never defined.
+export DOTFILES_FORCE_INIT=1
+. "${SHELL_COMMON}/functions/gh_pr_review.sh"
+TARGET_REPO=$(_gh_pr_review_resolve_target_repo "<remote>") || {
+  echo "Cannot resolve remote '<remote>' to a repo" >&2; exit 1; }
+```
+
+Pass `TARGET_REPO` (`--repo "$TARGET_REPO"` / `-R`, or as the
+`repos/$TARGET_REPO/...` path) on **every** subsequent `gh` API call.
 
 ## Step 2: Fetch All Review Comments
 
