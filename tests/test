@@ -181,9 +181,20 @@ run_bats() {
     fi
 
     # Parallel: one bats process per file, bounded by CPU count.
-    local jobs="${BATS_JOBS:-$(nproc 2>/dev/null || echo 4)}"
+    # CPU count: nproc (Linux) → getconf (macOS/BSD) → 4. BATS_JOBS overrides.
+    local jobs="${BATS_JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
+    # Guard a non-positive-integer BATS_JOBS override (gemini review).
+    case "$jobs" in
+        '' | *[!0-9]*) jobs=4 ;;
+    esac
+    [ "$jobs" -lt 1 ] && jobs=1
     local outdir
     outdir="$(mktemp -d)"
+    # Clean the temp dir on normal exit and on interrupt so an aborted run
+    # never leaks it; the signal handler also exits so Ctrl+C stops the
+    # runner instead of continuing on a deleted outdir (gemini review).
+    trap 'rm -rf "$outdir"' EXIT
+    trap 'rm -rf "$outdir"; trap - EXIT; exit 130' INT TERM HUP
     print_info "Parallel: ${#bats_files[@]} files across ${jobs} jobs (override with BATS_JOBS=N, or -s for serial)"
 
     # Emit "index\npath" pairs; -n 2 hands each (idx, path) to one worker.
@@ -227,6 +238,7 @@ run_bats() {
     done
 
     rm -rf "$outdir"
+    trap - EXIT INT TERM HUP
 
     if [ "$rc" -eq 0 ]; then
         print_success "bats: ${total_tests} tests in ${#bats_files[@]} files passed"
