@@ -822,6 +822,10 @@ GH_EOF
     run git -C "$CLONE" config extensions.worktreeConfig
     assert_failure
     [ "$(git -C "$CLONE" config core.repositoryformatversion)" = "1" ]
+    # Pin the *cause*, not just the effect: the other extension must survive
+    # teardown — otherwise a bug that drops preciousObjects while leaving
+    # version=1 would slip through (codex review, PR #1172).
+    [ "$(git -C "$CLONE" config extensions.preciousObjects)" = "true" ]
 
     git -C "$CLONE" config --unset extensions.preciousObjects 2>/dev/null || true
 }
