@@ -29,7 +29,7 @@ d. Token estimate: character count of (issue body + implementation file
    reads) ÷ 4, rounded to nearest 500. Minimum 1 000.
 e. Post the aggregate comment on the linked issue (body template below).
    Skip the post entirely when `GH_DISABLE_AI_METRICS=1` (issue #399);
-   the five sub-skills already honour the same env var, so a disabled
+   the six sub-skills already honour the same env var, so a disabled
    run leaves zero ai-metrics artifacts on the issue or PR.
 f. On failure: print `[WARN] ai-metrics comment failed (<reason>) — continuing.`
 

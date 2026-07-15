@@ -407,7 +407,7 @@ def test_unrelated_skill_after_boundary_not_counted(tmp_path: Path) -> None:
     assert result.returncode == 0
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
-    # Still only 1/5 — the unrelated skills must not bump the counter.
+    # Still only 1/6 — the unrelated skills must not bump the counter.
     assert "1/6" in decision["reason"]
 
 
@@ -560,7 +560,7 @@ def test_trace_on_emits_block_diagnostics(tmp_path: Path) -> None:
     assert decision["decision"] == "block"
     # Trace lines all share the [stop-guard] prefix.
     assert "[stop-guard]" in result.stderr
-    # The boundary scan summary should report 1/5 sub-skills seen.
+    # The boundary scan summary should report 1/6 sub-skills seen.
     assert "sub_skills_seen=1/6" in result.stderr
     assert "block:" in result.stderr
 
