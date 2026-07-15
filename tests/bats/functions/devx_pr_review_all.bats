@@ -55,6 +55,17 @@ setup() {
     [ "$status" -eq 2 ]
 }
 
+@test "pr + literal origin remote + extra positional -> exit 2" {
+    run devx_pr_review_all_parse 123 origin extra
+    [ "$status" -eq 2 ]
+}
+
+@test "pr + literal origin remote (no extra) -> exit 0 with remote=origin" {
+    run devx_pr_review_all_parse 123 origin
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"remote=origin"* ]]
+}
+
 @test "help flag -> help_requested" {
     run devx_pr_review_all_parse --help
     [ "$status" -eq 0 ]

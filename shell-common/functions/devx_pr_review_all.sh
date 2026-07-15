@@ -12,6 +12,7 @@ devx_pr_review_all_parse() {
     reply_mode="inline"
     reply_delay="8"
     _no_reply=0
+    _remote_set=0
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -44,8 +45,9 @@ devx_pr_review_all_parse() {
         *)
             if [ -z "$pr" ]; then
                 pr="$1"
-            elif [ "$remote" = "origin" ]; then
+            elif [ "$_remote_set" -eq 0 ]; then
                 remote="$1"
+                _remote_set=1
             else
                 echo "Unexpected positional arg: $1" >&2
                 return 2
