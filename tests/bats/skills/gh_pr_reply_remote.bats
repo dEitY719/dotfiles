@@ -39,21 +39,21 @@ teardown() {
     cd "$MULTI_REMOTE_REPO" || return 1
     run _gh_pr_review_resolve_target_repo
     assert_success
-    [ "$output" = "owner-a/repo-a" ]
+    assert_output "owner-a/repo-a"
 }
 
 @test "remote: explicit 'origin' resolves owner-a/repo-a" {
     cd "$MULTI_REMOTE_REPO" || return 1
     run _gh_pr_review_resolve_target_repo origin
     assert_success
-    [ "$output" = "owner-a/repo-a" ]
+    assert_output "owner-a/repo-a"
 }
 
 @test "remote: explicit 'upstream' resolves owner-b/repo-b (not origin)" {
     cd "$MULTI_REMOTE_REPO" || return 1
     run _gh_pr_review_resolve_target_repo upstream
     assert_success
-    [ "$output" = "owner-b/repo-b" ]
+    assert_output "owner-b/repo-b"
 }
 
 # ---- rejection paths ------------------------------------------------------
