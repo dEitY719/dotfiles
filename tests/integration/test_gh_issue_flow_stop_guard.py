@@ -202,7 +202,7 @@ def test_completed_flow_allows_stop(tmp_path: Path) -> None:
             _assistant_skill("gh-issue-implement"),
             _assistant_skill("gh-commit"),
             _assistant_skill("gh-pr"),
-            _assistant_skill("devx-schedule"),
+            _assistant_skill("devx-pr-review-all"),
             _assistant_skill("gh-pr-resolve-conflict"),
             _assistant_skill("gh-pr-resolve-outdated"),
             _assistant_text("gh:issue-flow complete (#42)\n  PR URL: https://github.com/example/repo/pull/99"),
@@ -278,7 +278,7 @@ def test_mid_flow_after_all_6_blocks_for_step_3_report(tmp_path: Path) -> None:
             _assistant_skill("gh-issue-implement"),
             _assistant_skill("gh-commit"),
             _assistant_skill("gh-pr"),
-            _assistant_skill("devx-schedule"),
+            _assistant_skill("devx-pr-review-all"),
             _assistant_skill("gh-pr-resolve-conflict"),
             _assistant_skill("gh-pr-resolve-outdated"),
             # No Step 3 report yet.
@@ -302,7 +302,7 @@ def test_mid_flow_after_resolve_conflict_blocks_for_resolve_outdated(tmp_path: P
             _assistant_skill("gh-issue-implement"),
             _assistant_skill("gh-commit"),
             _assistant_skill("gh-pr"),
-            _assistant_skill("devx-schedule"),
+            _assistant_skill("devx-pr-review-all"),
             _assistant_skill("gh-pr-resolve-conflict"),
             # No Step 3 report yet — resolve-outdated still pending.
         ],
@@ -317,9 +317,13 @@ def test_mid_flow_after_resolve_conflict_blocks_for_resolve_outdated(tmp_path: P
     assert "5/6" in reason
 
 
-def test_quality_gate_reminder_after_gh_pr(tmp_path: Path) -> None:
-    """After gh-pr (3 seen), the next-step hint routes to Step 2.4 but must
-    also remind the model to run the parallel quality gate first."""
+def test_pr_review_all_next_step_after_gh_pr(tmp_path: Path) -> None:
+    """After gh-pr (3 seen), the next-step hint routes to Step 2.4 —
+    Skill(devx:pr-review-all) — which itself runs the gemini ∥ codex ∥
+    /simplify quality gate (with commit+push) and schedules the deferred
+    pr-reply. gh-issue-flow no longer dispatches the gate inline, so the
+    reminder must NOT reference the old inline 2.3.1/2.3.2/2.3.3 gate or
+    devx:schedule."""
     transcript = _write_transcript(
         tmp_path,
         [
@@ -336,11 +340,41 @@ def test_quality_gate_reminder_after_gh_pr(tmp_path: Path) -> None:
     assert decision["decision"] == "block"
     reason = decision["reason"]
     assert "Step 2.4" in reason
-    assert "devx-schedule" in reason
+    assert "devx:pr-review-all" in reason
     assert "3/6" in reason
-    # Quality-gate reminder substrings.
+    # New next-step content: the delegated skill runs the quality gate.
     assert "simplify" in reason
     assert "pr-review" in reason
+    # Old inline-gate / devx:schedule content must be gone.
+    assert "devx-schedule" not in reason
+    assert "devx:schedule" not in reason
+    assert "2.3.1" not in reason
+    assert "2.3.2" not in reason
+    assert "2.3.3" not in reason
+
+
+def test_missing_pr_review_all_blocks_naming_step_2_4(tmp_path: Path) -> None:
+    """A run that reaches gh-pr but has not yet invoked devx:pr-review-all
+    (Step 2.4) → block, and the reason names that step as the next action."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 42"),
+            _assistant_skill("gh-issue-implement"),
+            _assistant_skill("gh-commit"),
+            _assistant_skill("gh-pr"),
+            # devx:pr-review-all NOT invoked; model authors a fake wrap-up.
+            _assistant_text("gh:pr #42 opened — PR URL: https://x/pull/9\nAll done!"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    reason = decision["reason"]
+    assert "devx:pr-review-all" in reason
+    assert "Step 2.4" in reason
+    assert "3/6" in reason
 
 
 def test_skill_invocation_via_assistant_works_as_boundary(tmp_path: Path) -> None:
@@ -556,7 +590,7 @@ def test_trace_on_emits_allow_reason_for_terminal_marker(tmp_path: Path) -> None
             _assistant_skill("gh-issue-implement"),
             _assistant_skill("gh-commit"),
             _assistant_skill("gh-pr"),
-            _assistant_skill("devx-schedule"),
+            _assistant_skill("devx-pr-review-all"),
             _assistant_skill("gh-pr-resolve-conflict"),
             _assistant_skill("gh-pr-resolve-outdated"),
             _assistant_text("gh:issue-flow complete (#42)"),
@@ -1032,7 +1066,7 @@ def test_real_terminal_marker_in_assistant_text_still_allows_stop(
             _assistant_skill("gh-issue-implement"),
             _assistant_skill("gh-commit"),
             _assistant_skill("gh-pr"),
-            _assistant_skill("devx-schedule"),
+            _assistant_skill("devx-pr-review-all"),
             _assistant_skill("gh-pr-resolve-conflict"),
             _assistant_skill("gh-pr-resolve-outdated"),
             # Real Step 3 success report — assistant role, real terminal marker.

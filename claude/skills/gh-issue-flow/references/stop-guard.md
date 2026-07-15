@@ -3,20 +3,28 @@
 ## Why this exists
 
 `gh:issue-flow` chains 6 sub-skills (`gh:issue-implement` → `gh:commit` →
-`gh:pr` → `devx:schedule` → `gh:pr-resolve-conflict` →
-`gh:pr-resolve-outdated`) plus a parallel post-PR quality gate (2.3.1
-codex review ∥ 2.3.2 `/simplify` → 2.3.3 commit+push) and a final Step 3
-report. `gh-pr-resolve-outdated` is now the 6th entry of the hook's
-`EXPECTED_CHAIN`. Across multiple revisions of this skill (issue #333,
-issue #383) the model has repeatedly invented a "I'm done now" markdown
-block between Skill() calls and ended its turn early — leaving the user to
-manually finish the chain.
+`gh:pr` → `devx:pr-review-all` → `gh:pr-resolve-conflict` →
+`gh:pr-resolve-outdated`) plus a final Step 3 report. The post-PR quality
+gate (gemini ∥ codex ∥ `/simplify`, with commit+push) and the deferred
+`/gh-pr-reply` scheduling now live *inside* the delegated
+`devx:pr-review-all` (Step 2.4) — they are no longer dispatched inline by
+gh:issue-flow. `devx-pr-review-all` is the 4th entry of the hook's
+`EXPECTED_CHAIN`, and `gh-pr-resolve-outdated` is the 6th. Across multiple
+revisions of this skill (issue #333, issue #383) the model has repeatedly
+invented a "I'm done now" markdown block between Skill() calls and ended
+its turn early — leaving the user to manually finish the chain.
 
-The quality gate's Agent dispatch (2.3.1/2.3.2) and the Bash commit+push
-(2.3.3) are tool calls, not `Skill()` calls, and are permitted between the
-chain skills. They need no Agent-detection logic in the hook: the
-terminal-marker gating (L1.5 below) blocks turn-end until a Step 3 marker
-appears, which transitively covers these tool steps too.
+Because the quality gate and pr-reply scheduling are folded into a single
+`Skill(devx:pr-review-all)` call, Step 2 is a clean six-`Skill()` sequence:
+there is no inline Agent/Bash gate work between the chain skills for the
+hook to reason about. The terminal-marker gating (L1.5 below) blocks
+turn-end until a Step 3 marker appears.
+
+> History (pre-#1160): the quality gate used to be dispatched inline as
+> steps 2.3.1 (codex review) ∥ 2.3.2 (`/simplify`) → 2.3.3 (commit+push)
+> via Agent/git tool calls, and pr-reply was scheduled by a separate
+> `devx:schedule` step that occupied the 4th `EXPECTED_CHAIN` slot. Both
+> were consolidated into `devx:pr-review-all`.
 
 Two earlier mitigations help but are not sufficient:
 
