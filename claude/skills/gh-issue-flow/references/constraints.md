@@ -3,14 +3,15 @@
 - Never invoke implementation modes other than `direct`.
 - Never retry a failed step. Human decides retry or fix.
 - Never skip a step. All 6 or stop.
-- **Quality-gate soft-fail exception.** Steps 2.3.1/2.3.2/2.3.3 are
-  additive polish, not gating: codex absent → 2.3.1 skip (not a
-  failure); `/simplify` produced no change → 2.3.3 skip; any error in
-  review/simplify/commit → `[WARN]` and continue. The gate never stops
+- **Quality-gate soft-fail exception.** Step 2.4 (`devx:pr-review-all`)
+  is additive polish, not gating: gemini/codex absent → that lane skips
+  (not a failure); `/simplify` produced no change → no commit; any error
+  in review/simplify/commit → `[WARN]` and continue. The gate never stops
   the flow.
-- **Simplify commit before rebase.** Step 2.3.3 (commit + push simplify
-  changes) MUST run before the rebase steps 2.5 / 2.5.1 — a dirty
-  working tree breaks `git rebase`.
+- **Simplify commit before rebase.** Step 2.4 commits + pushes any
+  simplify changes **synchronously inside `devx:pr-review-all`** before it
+  returns, so the tree is clean before the rebase steps 2.5 / 2.5.1 — a
+  dirty working tree breaks `git rebase`.
 - Step 2.5.1 (gh:pr-resolve-outdated) does a clean rebase-sync when the
   base moved forward with no conflicts; it is a no-op when the PR is
   already up to date.
@@ -37,11 +38,12 @@
   recap ("Step 2.1 complete, now committing..."), no progress
   markdown headers, no per-step bullet summaries. Such text reads as
   a turn-ending answer and re-introduces the early-stop. The only
-  prose allowed inside Step 2 is the final Step 3 report. Tool calls
-  are not prose — the quality-gate Agent dispatch (2.3.1/2.3.2) and the
-  Bash commit+push (2.3.3) between Skill() calls are permitted.
+  prose allowed inside Step 2 is the final Step 3 report. The quality
+  gate now runs inside the delegated Step 2.4 (`devx:pr-review-all`),
+  so Step 2 is a clean six-`Skill()` sequence with no inline gate
+  dispatch or Bash commit+push between calls.
 - **Do NOT stop after any sub-skill completes.** Each step (2.1 through
-  2.5.1, including the 2.3.x quality gate) is a waypoint, not a final
+  2.5.1, including the Step 2.4 quality gate) is a waypoint, not a final
   answer. Continue to the next step immediately. The only valid stopping
   points are: a step failure (output the failure report), or the Step 3
   success report after all 6 steps complete.
