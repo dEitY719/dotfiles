@@ -79,9 +79,9 @@ devx_pr_review_all_parse() {
         esac
     fi
 
-    echo "pr=$pr"
-    echo "remote=$remote"
-    echo "reply_mode=$reply_mode"
-    echo "reply_delay=$reply_delay"
+    printf '%s\n' "pr=$pr"
+    printf '%s\n' "remote=$remote"
+    printf '%s\n' "reply_mode=$reply_mode"
+    printf '%s\n' "reply_delay=$reply_delay"
     return 0
 }
