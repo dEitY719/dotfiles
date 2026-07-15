@@ -186,27 +186,34 @@ run_bats() {
     outdir="$(mktemp -d)"
     print_info "Parallel: ${#bats_files[@]} files across ${jobs} jobs (override with BATS_JOBS=N, or -s for serial)"
 
-    printf '%s\n' "${bats_files[@]}" \
-        | xargs -P "$jobs" -I {} bash -c '
-            f="$1"; bats="$2"; out="$3"
-            base=$(printf "%s" "$f" | tr "/" "_")
-            if "$bats" "$f" >"$out/$base.log" 2>&1; then
-                printf "0" >"$out/$base.status"
+    # Emit "index\npath" pairs; -n 2 hands each (idx, path) to one worker.
+    # Keying outputs by array index (not a path-derived name) gives the
+    # producer and the aggregation loop below one shared, collision-free map.
+    local i=0 f
+    for f in "${bats_files[@]}"; do
+        printf '%s\n%s\n' "$i" "$f"
+        i=$((i + 1))
+    done \
+        | xargs -P "$jobs" -n 2 bash -c '
+            bats="$1"; out="$2"; idx="$3"; f="$4"
+            if "$bats" "$f" >"$out/$idx.log" 2>&1; then
+                printf "0" >"$out/$idx.status"
             else
-                printf "1" >"$out/$base.status"
+                printf "1" >"$out/$idx.status"
             fi
-          ' _ {} "$bats_bin" "$outdir"
+          ' _ "$bats_bin" "$outdir"
 
     # Aggregate: count tests, print per-file failures with their full log.
+    # Iterate the same indices the producer used, so outputs line up exactly.
     local rc=0 total_tests=0 failed_files=0
-    local f base status_val log_file
-    for f in "${bats_files[@]}"; do
-        base=$(printf "%s" "$f" | tr '/' '_')
-        log_file="$outdir/$base.log"
-        status_val=$(cat "$outdir/$base.status" 2>/dev/null || echo 1)
+    local status_val log_file n
+    for i in "${!bats_files[@]}"; do
+        f="${bats_files[$i]}"
+        log_file="$outdir/$i.log"
+        status_val=$(cat "$outdir/$i.status" 2>/dev/null || echo 1)
         if [ -f "$log_file" ]; then
-            local n
-            n=$(grep -cE '^(ok|not ok)' "$log_file" 2>/dev/null || echo 0)
+            # grep -c always prints a count (0 on no match), so no fallback needed.
+            n=$(grep -cE '^(ok|not ok)' "$log_file" 2>/dev/null)
             total_tests=$((total_tests + n))
         fi
         if [ "$status_val" != "0" ]; then
