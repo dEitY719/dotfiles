@@ -17,11 +17,16 @@ with `--no-next-hint`).
    no recap, no "now committing", no markdown headers, no progress
    bullets. Those tokens read as a turn-ending summary and re-introduce
    the early-stop. The only prose allowed inside Step 2 is the final
-   Step 3 report. **Tool calls are not prose and are permitted** — the
-   Agent dispatch for the 2.3.1/2.3.2 quality gate and the Bash
-   commit+push of 2.3.3 may run between Skill() calls. Only conversational
-   prose is forbidden; the terminal-marker gating (see guard 3) covers
-   those tool steps automatically, so no Agent-detection logic is needed.
+   Step 3 report. The six calls are `gh:issue-implement`, `gh:commit`,
+   `gh:pr`, `devx:pr-review-all`, `gh:pr-resolve-conflict`, and
+   `gh:pr-resolve-outdated`. The quality gate is no longer inline here —
+   it runs inside the delegated `devx:pr-review-all` (Step 2.4), so
+   issue-flow makes only that one `Skill()` call with no inline Agent
+   dispatch or Bash commit+push between calls. (Historically, in the
+   pre-#1160 inline gate, the 2.3.1/2.3.2 Agent dispatch and the 2.3.3
+   Bash commit+push ran between Skill() calls and were permitted as
+   non-prose tool calls; that gate work now lives in the delegated skill.)
+   Terminal-marker gating (see guard 3) covers any tool steps automatically.
 3. **Harness Stop hook (`claude/hooks/gh_issue_flow_stop_guard.py`)** —
    when the model nonetheless tries to end its turn mid-flow, this hook
    parses the transcript, detects that fewer than 6 sub-skills have run

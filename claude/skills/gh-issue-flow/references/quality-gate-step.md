@@ -1,53 +1,45 @@
-# gh:issue-flow — Post-PR Quality Gate (Steps 2.3.1 / 2.3.2 / 2.3.3)
+# gh:issue-flow — Post-PR Quality Gate (Step 2.4, delegated)
 
 Runs after Step 2.3 (`gh:pr`) has produced `<PR_NUM>`, before the rebase
-steps 2.5 / 2.5.1. The whole gate is **soft-fail**: review and simplify are
-additive polish, so any failure warns and the chain continues — never block.
+steps 2.5 / 2.5.1. The quality gate is no longer inline in issue-flow — it is
+performed by a single delegated call to `devx:pr-review-all`, which owns the
+gate logic as SSOT. The whole gate stays **soft-fail**: review and simplify
+are additive polish, so any failure warns and the chain continues — never
+block.
 
-## F-3 — dispatch 2.3.1 ∥ 2.3.2 as two parallel Agent subagents in one turn
+## The delegated call
 
-Steps 2.3.1 and 2.3.2 are independent (pr-review reads the remote PR diff;
-simplify edits the local working tree), so dispatch **both Agent subagents
-in a single turn** for parallel execution. Do not serialize them. No
-conversational prose between the dispatches (see `references/critical-contract.md`);
-the Agent/Bash tool calls of this gate are themselves permitted between the
-Skill() calls — only prose is forbidden.
+```
+Skill(devx:pr-review-all, "<PR_NUM> <remote> --defer-reply 8")
+```
 
-### Step 2.3.1 — codex second-opinion review
+One call replaces the former inline gate (codex ∥ /simplify + commit/push)
+AND the former `devx:schedule` pr-reply step. Inside `devx:pr-review-all`:
 
-- Check availability first: `command -v codex`.
-- **Present** → dispatch an Agent that runs
-  `Skill(gh:pr-review, "--ai codex <PR_NUM>")`. It streams codex findings and
-  posts them as a PR comment (no approve / request-changes — that is not this
-  gate's job).
-- **Absent** → skip. A missing `codex` CLI is a normal skip, not a failure.
+- **gemini ∥ codex ∥ /simplify** run as parallel Agent subagents in one turn.
+  gemini review is now included (it was missing from the old inline gate).
+  Each lane is soft-fail: a missing CLI or transient error skips that lane and
+  the others continue.
+- **simplify commit + push** happens **synchronously inside** the skill,
+  before it returns. It uses an explicit `-m` message (never a bare
+  `git commit`, which would hang on the editor in a non-interactive shell).
+- **pr-reply is deferred** — `--defer-reply 8` schedules `/gh-pr-reply
+  <PR_NUM>` 8 minutes later (was 5 min in the old `devx:schedule` step),
+  giving CI and reviewers time to post before the reply pass runs.
 
-### Step 2.3.2 — /simplify on the branch diff
+## Ordering is preserved
 
-- Dispatch an Agent that runs the built-in `/simplify`.
-- `simplify` operates on the **working-tree / branch diff**, so a PR-number
-  argument may be ignored — do not rely on passing `<PR_NUM>` to it. It edits
-  local files to reduce duplication / complexity without changing behaviour.
-
-## Step 2.3.3 — commit + push simplify changes (only if the tree changed)
-
-After both subagents return:
-
-- If `/simplify` produced working-tree changes (`git status --porcelain`
-  non-empty) → commit with an explicit `-m` message in the repo's
-  conventional-commit style (e.g.
-  `git commit -m "refactor(<scope>): simplify per /simplify"`) and
-  `git push`. Never run a bare `git commit` — in a non-interactive AI
-  environment it opens an editor and hangs; always pass `-m`.
-- If the tree is clean → skip (simplify found nothing to change).
-
-**Ordering is load-bearing: 2.3.3 MUST run before the rebase steps 2.5 /
-2.5.1.** A dirty working tree breaks `git rebase`, so the simplify commit has
-to land (or be confirmed absent) before any rebase-sync runs.
+Because the simplify commit + push runs synchronously **inside**
+`devx:pr-review-all` before it returns, any simplify changes are already
+committed and pushed by the time Step 2.4 completes. The tree is therefore
+clean before the rebase steps 2.5 / 2.5.1 run — the same
+simplify-commit-before-rebase guarantee the old inline Step 2.3.3 provided.
+**A dirty working tree breaks `git rebase`**, so this ordering is load-bearing.
 
 ## Soft-fail policy
 
-- codex absent → 2.3.1 skip (not a failure).
-- simplify no change → 2.3.3 skip.
-- Any error in review, simplify, or the simplify commit/push → emit a
-  `[WARN] …` line and continue to Step 2.4. The gate never stops the flow.
+- codex/gemini absent → that lane skips (not a failure).
+- simplify no change → no commit (clean tree).
+- Any error in review, simplify, the simplify commit/push, or the reply
+  scheduling → the delegated skill emits a `[WARN]`/`[SKIP]` line and the
+  flow continues to Step 2.5. The gate never stops the flow.
