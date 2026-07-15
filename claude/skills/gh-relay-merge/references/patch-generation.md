@@ -4,10 +4,13 @@ Steps 3-4. Runs only after Step 2 confirmed the push is blocked.
 
 ## Pre-flight (Step 3): destination divergence sanity check
 
-Resolve the PR's real commit range first:
+Resolve the PR's real commit range first. Reuse the `headRefOid` already
+captured by Step 1's `gh pr view` (no re-fetch), and resolve `$DEST_DEFAULT`
+— the destination's default branch (e.g. `git ls-remote --symref "$REMOTE"
+HEAD`) — once:
 
 ```bash
-HEAD_SHA=$(gh pr view "$N" --repo "$ORIGIN_REPO" --json headRefOid -q .headRefOid)
+HEAD_SHA=$HEAD_REF_OID                                          # from Step 1; no re-fetch
 BASE_SHA=$(git merge-base "$REMOTE/$DEST_DEFAULT" "$HEAD_SHA")   # or the PR's recorded base
 ```
 
@@ -18,7 +21,7 @@ Before generating anything, compare the files this PR touches against the
 destination's current default branch:
 
 ```bash
-git fetch "$REMOTE"
+# Step 1 already fetched "$REMOTE"; re-fetch only if the branch may have moved.
 git diff --name-only "$BASE_SHA" "$HEAD_SHA"        # files the PR changes
 # for each, check it exists / is compatible on $REMOTE/$DEST_DEFAULT
 ```

@@ -23,22 +23,21 @@ done
 **raw** URL for `curl … | git am`. Derive it after creation:
 
 ```bash
-GIST_URL=$(gh gist create "$patch" --desc "...")      # https://gist.github.com/<user>/<id>
+GIST_URL=$(gh gist create "$patch" --desc "...")            # https://gist.github.com/<user>/<id>
 GIST_ID=${GIST_URL##*/}
-RAW_URL=$(gh gist view "$GIST_ID" --files -q '...' ) # or construct the /raw/ URL
+RAW_URL=$(gh api "gists/$GIST_ID" --jq '.files[].raw_url')  # exact file's raw URL
 ```
 
-Prefer resolving the raw URL via `gh gist view` so it points at the exact
-file, rather than hand-constructing it. Record `(order, description,
-web URL, raw URL)` per patch for the Step 6 table.
+Resolve the raw URL from the gist API (`.files[].raw_url`) so it points at
+the exact file, rather than hand-constructing it. Record `(order,
+description, web URL, raw URL)` per patch for the Step 6 table.
 
 ## Failure handling
 
-- **Size-related failure on an individual file** — this means Step 4's
-  exclusion did not bring the file under the cutoff, or a non-artifact file
-  is itself oversized. Report which file and stop. Do **not** split
-  arbitrary code diffs to force it through; only recognized generated
-  artifacts get split (see `references/patch-generation.md`).
+- **Size-related failure on an individual file** — Step 4's exclusion did
+  not clear the cutoff, or a non-artifact file is itself oversized. Report
+  which file and stop; do not force it through (no-silent-truncation rule,
+  see `references/patch-generation.md`).
 - **Transient/network failure** — retry that single upload once after a
   short backoff (same policy as the push probe). Still failing → stop.
 - **Any other failure** — report and stop. No automatic retries beyond the

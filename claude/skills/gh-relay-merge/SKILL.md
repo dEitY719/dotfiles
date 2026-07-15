@@ -60,8 +60,8 @@ that will fail `git am` on the far side.
 
 ## Step 4: Generate Patches
 
-`git format-patch <base>..<head> -o <tmpdir>` (one `git am`-able file per
-commit). Enforce the `RELAY_PATCH_MAX_BYTES` size cutoff, generated-artifact
+Run `git format-patch` over the commit range (one `git am`-able file per
+commit) and enforce the `RELAY_PATCH_MAX_BYTES` size cutoff, generated-artifact
 exclusion, and no-silent-truncation rule per `references/patch-generation.md`.
 
 ## Step 5: Upload Gists (one file per call)
