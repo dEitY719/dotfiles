@@ -21,7 +21,9 @@ setup() {
 
     # Fake repo with two GitHub remotes on the same host.
     MULTI_REMOTE_REPO="$TEST_TEMP_HOME/multi-remote"
-    git init -q --initial-branch=main "$MULTI_REMOTE_REPO"
+    # No --initial-branch: these tests never reference the branch name, so
+    # omitting it keeps the setup working on Git < 2.28.
+    git init -q "$MULTI_REMOTE_REPO"
     (
         cd "$MULTI_REMOTE_REPO" || exit 1
         git remote add origin "git@github.com:owner-a/repo-a.git"
