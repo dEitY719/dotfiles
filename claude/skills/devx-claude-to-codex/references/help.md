@@ -19,8 +19,8 @@ phase-03 문서를 codex용으로 재구성해줘
 1. Reads the named reference document(s), then the target phase document.
 2. Decides single vs. multi-document Codex output — see
    `references/output-and-split.md`.
-3. Writes `docs/ai/phases/codex/<base>-codex-NN.md` (zero-padded,
-   numbered only when split).
+3. Writes `docs/ai/phases/codex/<base>-codex-NN.md` (zero-padded from
+   `01`; additional `-codex-02`, `-codex-03`, ... only appear when split).
 4. Rewrites prose into imperative Codex instructions — see
    `references/rewrite-rules.md` and `references/document-template.md`.
 5. Creates or updates `AGENTS.md` with `@CLAUDE.md` per
