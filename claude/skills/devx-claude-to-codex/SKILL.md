@@ -36,9 +36,10 @@ content verbatim, then stop. No API calls, no file mutation.
 
 ## Step 1: Read Inputs
 
-Read every reference document the user listed, then the target phase
-document. Scan repo structure (`AGENTS.md`, `CLAUDE.md`) for context the
-transformed document should preserve.
+Read every reference document the user listed plus the target phase
+document in one batch (they are independent reads). Scan repo structure
+(`AGENTS.md`, `CLAUDE.md`) for context the transformed document should
+preserve.
 
 ## Step 2: Decide Single vs Split
 
@@ -46,9 +47,8 @@ Evaluate whether the phase document is already narrow and deterministic
 enough for one Codex pass. Default to a single output document — do not
 split by default. Split into multiple numbered documents only when a
 trigger condition in `references/output-and-split.md` is met; follow that
-file's split-axis guidance (backend/frontend/shared,
-transport/state/UI, infrastructure/integration/UX, deterministic-first/
-uncertain-later) and prefer the minimum number of documents needed.
+file's split-axis guidance and prefer the minimum number of documents
+needed.
 
 ## Step 3: Write the Output File(s)
 
@@ -56,11 +56,8 @@ Naming and path rules (zero-padded `-codex-NN` suffix, base filename
 preservation, `docs/ai/phases/codex/` target dir): see
 `references/output-and-split.md`. Rewrite descriptive prose into imperative
 instructions and strip vague/deferred wording per
-`references/rewrite-rules.md`. Structure each generated document — Title,
-Goal, Inputs/References, Scope, Out of scope, Files to create or modify,
-Implementation instructions, Constraints, Assumptions/Notes, Completion
-checklist, and the closing Codex prompt block (plus the multi-slice notice
-when splitting) — exactly per `references/document-template.md`.
+`references/rewrite-rules.md`. Structure each generated document exactly
+per `references/document-template.md`.
 
 ## Step 4: Sync AGENTS.md
 

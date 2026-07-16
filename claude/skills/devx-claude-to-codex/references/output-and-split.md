@@ -29,17 +29,11 @@ implementation pass.
 Split into multiple Codex documents only when one or more of the
 following are true:
 
-- The phase mixes main-process, backend, frontend, renderer, IPC, and UI
-  responsibilities in one document.
-- The phase includes both infrastructure wiring and detailed UX work in
-  the same implementation scope.
+- The scope spans multiple distinct responsibility domains (e.g.
+  backend/frontend/shared, infra/UX, staged implementation slices) or
+  would require Codex to touch many unrelated files or too many distinct
+  concerns in one reliable pass.
 - The phase depends on uncertain or unverified external interfaces.
-- The completion criteria cover too many distinct concerns for one
-  reliable Codex pass.
-- The implementation would likely require Codex to modify many unrelated
-  files at once.
-- The document contains meaningful internal subgroups such as backend,
-  frontend, shared, integration, or staged implementation slices.
 
 When splitting, prefer coherent implementation boundaries over mechanical
 equal sizing. Good split axes include:
