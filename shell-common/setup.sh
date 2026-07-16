@@ -183,6 +183,30 @@ EOF
     fi
 }
 
+# Escape + append one CLAUDE_ACCOUNT_EMAIL_<acct> export line to file $3
+# (issue #1173 review, PR #1176). Pure — no prompt, no tty check — so it is
+# directly unit-testable without a pty harness, unlike the interactive loop
+# below. Empty $2 is a silent no-op (mirrors the caller's skip-on-Enter rule).
+_pcae_write_email_export() {
+    _pcae_acct="$1"
+    _pcae_email="$2"
+    _pcae_file="$3"
+
+    [ -n "$_pcae_email" ] || return 0
+
+    # Escape backslash/quote/backtick/dollar before embedding in a
+    # double-quoted export — this file gets `.`-sourced on every shell
+    # startup (shell-common/env/claude.sh), so an unescaped `"`, `` ` ``,
+    # or `$(...)` in the typed value would execute as shell syntax. `[$]`
+    # (not `\$`) matches a literal dollar portably across sed
+    # implementations (gemini-code-assist review on PR #1176).
+    _pcae_email_esc="$(printf '%s' "$_pcae_email" \
+        | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' \
+              -e 's/`/\\`/g' -e 's/[$]/\\$/g')"
+    printf 'export CLAUDE_ACCOUNT_EMAIL_%s="%s"\n' \
+        "$_pcae_acct" "$_pcae_email_esc" >> "$_pcae_file"
+}
+
 # Interactively populate CLAUDE_ACCOUNT_EMAIL_<account> for each account in
 # $1 (space-separated), appending export lines to file $2 (issue #1173).
 # Mirrors _resolve_knox_id's tty-guard pattern: skip silently when stdin is
@@ -201,17 +225,7 @@ _prompt_claude_account_emails() {
         # shellcheck disable=SC2016
         printf '`%s` 계정 이메일 (Enter로 건너뛰기): ' "$_pcae_acct" >&2
         read -r _pcae_email || _pcae_email=""
-        [ -n "$_pcae_email" ] || continue
-
-        # Escape backslash/quote/backtick/dollar before embedding in a
-        # double-quoted export — this file gets `.`-sourced on every shell
-        # startup (shell-common/env/claude.sh), so an unescaped `"`, `` ` ``,
-        # or `$(...)` in the typed value would execute as shell syntax.
-        _pcae_email_esc="$(printf '%s' "$_pcae_email" \
-            | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' \
-                  -e 's/`/\\`/g' -e 's/\$/\\$/g')"
-        printf 'export CLAUDE_ACCOUNT_EMAIL_%s="%s"\n' \
-            "$_pcae_acct" "$_pcae_email_esc" >> "$_pcae_file"
+        _pcae_write_email_export "$_pcae_acct" "$_pcae_email" "$_pcae_file"
     done
 }
 
