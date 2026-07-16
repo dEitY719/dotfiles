@@ -117,14 +117,15 @@ copy_local_files() {
 
     ux_header "Copying template files for: $environment"
 
-    # Capture whether the script's stdin is a real terminal *before* entering
-    # the `find | while` pipe below. Inside that pipe fd 0 is rebound to find's
-    # output, so `[ -t 0 ]` there is always false — the interactive email
-    # prompt (issue #1173) reads this saved flag instead, and reads answers
-    # from /dev/tty so the pipe's stdin is never consumed. Non-interactive runs
-    # (CI / test harness / `bash -c`) leave stdin non-tty → prompt is skipped.
-    _stdin_is_tty=0
-    [ -t 0 ] && _stdin_is_tty=1
+    # External-PC account list. SSOT is shell-common/env/claude.sh's
+    # external-mode default (CLAUDE_ENABLED_ACCOUNTS="personal work work1");
+    # kept as a literal here (not sourced from claude.sh) because that file
+    # has an interactive guard and sources claude.local.sh itself — the very
+    # file this function is generating. Update both places if the list
+    # changes. Assigned once here, before the `find | while` pipe below,
+    # so it survives into the post-pipe block further down (that pipe forks
+    # a subshell — anything assigned inside it is lost once `done` returns).
+    _ext_accounts="personal work work1"
 
     # Copy .local.example files to .local.sh (sh-compatible approach)
     find "$SHELL_COMMON_DIR" -name "*.local.example" -type f | while IFS= read -r example_file; do
@@ -154,55 +155,63 @@ copy_local_files() {
                     cp "$example_file" "$local_file"
                     ux_success "Created: ${local_file#"$SHELL_COMMON_DIR"/}"
 
-                    # External-specific: Auto-enable work1 for multi-account setup
+                    # External-specific: Auto-enable work1 for multi-account setup.
                     if [ "$basename_file" = "claude.local.example" ]; then
-                        # SSOT for the external-PC account list — reused by both
-                        # the heredoc below and the email-prompt loop (F-2), so
-                        # the "personal work work1" literal lives in one place.
-                        _ext_accounts="personal work work1"
                         cat >> "$local_file" <<EOF
 
 # ─── External PC: Multi-account setup ────────────────────────────────────
 export CLAUDE_ENABLED_ACCOUNTS="$_ext_accounts"
 EOF
                         ux_info "  + Configured: work1 account for multi-account setup"
-
-                        # Interactive per-account email prompt (issue #1173).
-                        # Populates CLAUDE_ACCOUNT_EMAIL_<name> so the account/
-                        # email mismatch guard in tools/integrations/claude.sh
-                        # works without hand-editing the file on every new PC.
-                        # Mirrors _resolve_knox_id's tty pattern: prompt to
-                        # stderr, and skip silently when stdin is not a tty (CI /
-                        # test harness / `bash -c`) so non-interactive setup
-                        # falls back to the current behavior (F-4). Reads from
-                        # /dev/tty (not fd 0) because this runs inside the
-                        # `find | while` pipe above — see _stdin_is_tty note.
-                        if [ "$_stdin_is_tty" = 1 ] && [ -e /dev/tty ]; then
-                            for _acct in $_ext_accounts; do
-                                # Backticks are literal prompt text, so the
-                                # format string stays single-quoted (SC2016).
-                                # shellcheck disable=SC2016
-                                printf '`%s` 계정 이메일 (Enter로 건너뛰기): ' "$_acct" >&2
-                                read -r _acct_email </dev/tty || _acct_email=""
-                                if [ -n "$_acct_email" ]; then
-                                    # Escape backslash/quote/backtick/dollar before
-                                    # embedding in a double-quoted export — this
-                                    # file gets `.`-sourced on every shell startup
-                                    # (shell-common/env/claude.sh), so an
-                                    # unescaped `"`, `` ` ``, or `$(...)` in the
-                                    # typed value would execute as shell syntax.
-                                    _acct_email_esc="$(printf '%s' "$_acct_email" \
-                                        | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' \
-                                              -e 's/`/\\`/g' -e 's/\$/\\$/g')"
-                                    printf 'export CLAUDE_ACCOUNT_EMAIL_%s="%s"\n' \
-                                        "$_acct" "$_acct_email_esc" >> "$local_file"
-                                fi
-                            done
-                        fi
                     fi
                 fi
                 ;;
         esac
+    done
+
+    # External-specific: interactive per-account email prompt (issue #1173),
+    # run *after* the find|while pipe above (not inside it) so the prompt's
+    # own `[ -t 0 ]` check sees the real terminal — inside the pipe, fd 0 is
+    # rebound to find's output and would always read as non-tty. Populates
+    # CLAUDE_ACCOUNT_EMAIL_<name> so the account/email mismatch guard in
+    # tools/integrations/claude.sh works without hand-editing the file on
+    # every new PC. Guarded on the file actually having been created above
+    # (skipped e.g. if claude.local.example is ever removed from the repo).
+    if [ "$environment" = "external" ]; then
+        _claude_local_file="${SHELL_COMMON_DIR}/env/claude.local.sh"
+        [ -f "$_claude_local_file" ] && _prompt_claude_account_emails "$_ext_accounts" "$_claude_local_file"
+    fi
+}
+
+# Interactively populate CLAUDE_ACCOUNT_EMAIL_<account> for each account in
+# $1 (space-separated), appending export lines to file $2 (issue #1173).
+# Mirrors _resolve_knox_id's tty-guard pattern: skip silently when stdin is
+# not a tty (CI / test harness / `bash -c`) so non-interactive setup falls
+# back to the current behavior (F-4). Caller must invoke this outside any
+# pipe (see copy_local_files) so `[ -t 0 ]` reflects the real terminal.
+_prompt_claude_account_emails() {
+    _pcae_accounts="$1"
+    _pcae_file="$2"
+
+    [ -t 0 ] || return 0
+
+    for _pcae_acct in $_pcae_accounts; do
+        # Backticks are literal prompt text, so the format string stays
+        # single-quoted (SC2016).
+        # shellcheck disable=SC2016
+        printf '`%s` 계정 이메일 (Enter로 건너뛰기): ' "$_pcae_acct" >&2
+        read -r _pcae_email || _pcae_email=""
+        [ -n "$_pcae_email" ] || continue
+
+        # Escape backslash/quote/backtick/dollar before embedding in a
+        # double-quoted export — this file gets `.`-sourced on every shell
+        # startup (shell-common/env/claude.sh), so an unescaped `"`, `` ` ``,
+        # or `$(...)` in the typed value would execute as shell syntax.
+        _pcae_email_esc="$(printf '%s' "$_pcae_email" \
+            | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' \
+                  -e 's/`/\\`/g' -e 's/\$/\\$/g')"
+        printf 'export CLAUDE_ACCOUNT_EMAIL_%s="%s"\n' \
+            "$_pcae_acct" "$_pcae_email_esc" >> "$_pcae_file"
     done
 }
 
