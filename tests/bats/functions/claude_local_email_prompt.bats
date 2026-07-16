@@ -4,12 +4,18 @@
 # mappings interactively (issue #1173) while staying safe non-interactively.
 #
 # Scope note: like tests/bats/functions/setup_opencode_config.bats (the
-# _resolve_knox_id precedent), only the non-interactive path is automated —
-# the test suite has no pty/expect harness, so the interactive prompt-success
-# path (a typed email producing an `export CLAUDE_ACCOUNT_EMAIL_<name>` line)
-# is manually verified only. What is covered here:
+# _resolve_knox_id precedent), the interactive *prompt loop* itself (tty
+# read via `_prompt_claude_account_emails`) has no pty/expect harness in this
+# suite, so it stays manually verified only. But the escaping/export-writing
+# logic it calls — `_pcae_write_email_export` — was deliberately extracted
+# into a pure function (no prompt, no tty check) precisely so it CAN be
+# unit-tested directly (PR #1176 review feedback: codex flagged the escaping
+# safety contract as untested). What is covered here:
 #   1. non-interactive run → CLAUDE_ENABLED_ACCOUNTS written, NO email lines (F-4)
 #   2. git-tracked claude.local.example stays byte-identical (NF-1)
+#   3. _pcae_write_email_export: shell-metacharacter input is escaped so the
+#      resulting export line is inert when the generated file is sourced
+#   4. _pcae_write_email_export: empty input writes no line
 
 load '../test_helper'
 
@@ -72,4 +78,58 @@ run_copy_local_files() {
     # The generated .local.sh is where writes land; the tracked .example
     # template must remain byte-identical to the pristine repo source.
     cmp "$EXAMPLE" "$_BATS_REAL_DOTFILES_ROOT/shell-common/env/claude.local.example"
+}
+
+# --- _pcae_write_email_export: escaping safety (PR #1176 review) -----------
+# claude.local.sh is `.`-sourced on every shell startup (shell-common/env/
+# claude.sh), so an unescaped `"`, backtick, or `$(...)` typed at the prompt
+# would execute as shell syntax the next time a shell starts. These tests
+# call the pure write function directly (no read, no tty) so the escaping
+# contract is verified without needing a pty/expect harness.
+
+run_write_email_export() {
+    run bash --noprofile --norc -c "
+        set -e
+        cd '$FIXTURE_DOTFILES/shell-common'
+        . './setup.sh'
+        _pcae_write_email_export \"\$1\" \"\$2\" \"\$3\"
+    " _ "$1" "$2" "$3"
+}
+
+@test "_pcae_write_email_export: shell metacharacters are escaped inert" {
+    OUT="$TEST_TEMP_HOME/out.sh"
+    : >"$OUT"
+    run_write_email_export personal 'a"; touch INJECTED; echo "' "$OUT"
+    assert_success
+
+    grep -q '^export CLAUDE_ACCOUNT_EMAIL_personal=' "$OUT"
+
+    # Sourcing the generated line must not execute the embedded command and
+    # must preserve the literal value.
+    run bash --noprofile --norc -c ". '$OUT'; printf '%s' \"\$CLAUDE_ACCOUNT_EMAIL_personal\""
+    assert_success
+    [ "$output" = 'a"; touch INJECTED; echo "' ]
+    [ ! -e "$TEST_TEMP_HOME/INJECTED" ]
+    [ ! -e "./INJECTED" ]
+}
+
+@test "_pcae_write_email_export: dollar and backtick are escaped inert" {
+    OUT="$TEST_TEMP_HOME/out.sh"
+    : >"$OUT"
+    run_write_email_export work 'a$(touch INJECTED2)`touch INJECTED3`b' "$OUT"
+    assert_success
+
+    run bash --noprofile --norc -c ". '$OUT'; printf '%s' \"\$CLAUDE_ACCOUNT_EMAIL_work\""
+    assert_success
+    [ "$output" = 'a$(touch INJECTED2)`touch INJECTED3`b' ]
+    [ ! -e "$TEST_TEMP_HOME/INJECTED2" ]
+    [ ! -e "$TEST_TEMP_HOME/INJECTED3" ]
+}
+
+@test "_pcae_write_email_export: empty input writes no line" {
+    OUT="$TEST_TEMP_HOME/out.sh"
+    : >"$OUT"
+    run_write_email_export work1 "" "$OUT"
+    assert_success
+    [ ! -s "$OUT" ]
 }
