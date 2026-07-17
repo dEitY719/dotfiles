@@ -159,7 +159,7 @@ _gcp_scan_preflight_is_noop() {
                 # misclassify the probe as "already in HEAD" (#1177).
                 if _gcp_scan_conflict_adds_new_content "$sha" "$f"; then
                     real_content_conflict=1
-                    continue
+                    break
                 fi
                 git checkout HEAD -- "$f"
             done <<EOF
