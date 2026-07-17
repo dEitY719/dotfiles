@@ -1,8 +1,9 @@
 # devx:pr-review-all — Help
 
 Fan out **every available reviewer** on one PR in parallel — `gemini` ∥
-`codex` second opinions ∥ the built-in `/simplify` cleanup — then run a
-reply pass over the resulting review comments. A composition skill: it
+`codex` second opinions ∥ a sequential `/code-review --fix` → `/simplify`
+auto-fix chain (each sub-step commits its own changes) — then run a reply
+pass over the resulting review comments. A composition skill: it
 orchestrates several reviewers plus a reply, unlike `gh:pr-review` (a single
 external AI, one aggregate comment). It submits **no decision** (approve /
 request-changes) — that is `gh:pr-approve`.
@@ -36,14 +37,18 @@ request-changes) — that is `gh:pr-approve`.
 
 1. Parse args via `devx_pr_review_all_parse`; record `START_TS`.
 2. Pre-flight: PR must be `OPEN` and non-draft, `gh auth` must be live, and
-   check out the PR head branch if not already on it (so `/simplify` acts on
-   the right tree).
-3. Parallel review gate — dispatch gemini, codex, and `/simplify` as Agent
-   subagents **in one turn**. gemini/codex delegate to
-   `gh:pr-review --ai <name>` (streams findings + posts a PR comment).
-   Each lane is soft-fail.
-4. Commit + push any `/simplify` changes (only if the working tree changed),
-   always with an explicit `-m` message.
+   check out the PR head branch if not already on it (so `/code-review --fix`
+   and `/simplify` act on the right tree).
+3. Review + auto-fix gate — dispatch gemini, codex, and an auto-fix chain as
+   Agent subagents **in one turn**. gemini/codex delegate to
+   `gh:pr-review --ai <name>` (streams findings + posts a PR comment) and run
+   fully in parallel. `/code-review --fix` and `/simplify` both mutate the
+   working tree, so they run **sequentially** within their own lane, each
+   committing its own changes immediately (`fix(<scope>): code-review --fix`,
+   then `refactor(<scope>): simplify per /simplify`) — never concurrently
+   with each other. Each lane is soft-fail.
+4. Push any commits from the auto-fix chain (only if the working tree
+   changed), always with an explicit `-m` message on each commit.
 5. Reply — inline `gh:pr-reply <pr> <remote>` (default), or deferred via
    `devx:schedule` (`--defer-reply M`), or skipped (`--no-reply`). The
    `<remote>` is threaded so the reply pass resolves the same target repo.
