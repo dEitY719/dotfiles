@@ -77,10 +77,10 @@ lane `[SKIP]`/`[WARN]` and the others continue.
 - **auto-fix chain** (sequential sub-steps, both on the working-tree diff;
   PR# is ignored by both — hence the Step 2 checkout):
   1. An Agent runs `/code-review --fix`. `git status --porcelain` non-empty →
-     `git commit -m "fix(<scope>): code-review --fix"`; erroring invocation →
+     `git commit -am "fix(<scope>): code-review --fix"`; erroring invocation →
      WARN, continue to sub-step 2 regardless.
   2. Only after sub-step 1's commit (or no-op), an Agent runs the built-in
-     `/simplify`. `git status --porcelain` non-empty → `git commit -m
+     `/simplify`. `git status --porcelain` non-empty → `git commit -am
      "refactor(<scope>): simplify per /simplify"`.
   **Never a bare `git commit`** in either sub-step — it hangs on the editor
   in a non-interactive shell; always pass `-m`.
