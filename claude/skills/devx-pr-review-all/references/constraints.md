@@ -15,6 +15,23 @@ The SKILL.md body lists these as terse rules; the full rationale lives here.
   conventional-commit message, e.g.
   `git commit -m "refactor(<scope>): simplify per /simplify"`.
 
+- **`/code-review --fix` and `/simplify` both mutate the working tree — never
+  run them concurrently with each other.** gemini/codex only post PR
+  comments, so they're safe to fan out fully in parallel. But two agents
+  editing the same files at the same time is a real correctness risk (lost
+  edits, interleaved partial writes, a resulting diff that matches neither
+  agent's intent). Step 3's third lane is therefore internally sequential —
+  `/code-review --fix` runs to completion and commits before `/simplify`
+  starts — even though the lane as a whole still dispatches in the same turn
+  as gemini/codex.
+
+- **Each auto-fix sub-step gets its own commit, not one combined commit.**
+  `fix(<scope>): code-review --fix` and `refactor(<scope>): simplify per
+  /simplify` land as two separate commits when both mutate the tree. This
+  keeps `git blame`/revert granular — a bad `/simplify` cleanup can be
+  reverted without touching a `/code-review --fix` correctness fix, and vice
+  versa. A single `git push` at Step 4 sends up whichever commits exist.
+
 - **Delay is not a guarantee — inline reply is the deterministic path.**
   gemini/codex reviews are synchronous `gh:pr-review` CLI calls: they post the
   PR comment before returning. Because Step 3 awaits all three Agents, the
@@ -31,13 +48,14 @@ The SKILL.md body lists these as terse rules; the full rationale lives here.
   and replies to comments; it never submits a `gh pr review` decision. That is
   `gh:pr-approve`'s job.
 
-- **Built-in `/simplify` ignores the PR# argument** and operates on the
-  current working tree / branch diff. This is why Step 2 checks out the PR
-  head branch first when running standalone — without it, `/simplify` would
-  edit whatever tree happens to be checked out. On the issue-flow delegation
-  path the branch is already correct, so the checkout is a no-op skip.
+- **Built-in `/simplify` and `/code-review --fix` both ignore the PR# argument**
+  and operate on the current working tree / branch diff. This is why Step 2
+  checks out the PR head branch first when running standalone — without it,
+  either command would edit whatever tree happens to be checked out. On the
+  issue-flow delegation path the branch is already correct, so the checkout
+  is a no-op skip.
 
-- **The simplify commit + push (Step 4) runs synchronously before return.**
+- **The auto-fix commits + push (Step 4) run synchronously before return.**
   On the issue-flow delegation path this guarantees no dirty tree is left for
   the later rebase steps — a dirty working tree breaks `git rebase`.
 
