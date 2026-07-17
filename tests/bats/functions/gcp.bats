@@ -842,6 +842,32 @@ FIXTURE
     assert_output --partial "PICK_CLEAR"
 }
 
+@test "preflight #1177: single conflicted file with real new content is NOT dropped as no-op" {
+    # Regression: a child commit touching the same lone file as its parent can
+    # be deferred by Stage-1.6 when the parent is also in the pick list, but
+    # Stage-2 must still keep it once the file carries genuine new content.
+    run_in_bash "
+        repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp1177.XXXXXX\")\"
+        trap \"rm -rf \$repo\" EXIT
+        cd \"\$repo\" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME=\"Test\" GIT_AUTHOR_EMAIL=\"t@t\" \
+               GIT_COMMITTER_NAME=\"Test\" GIT_COMMITTER_EMAIL=\"t@t\"
+        git init -q -b main
+        printf 'line 1\nbase\n' > setup.sh && git add setup.sh && git commit -qm 'init'
+        git checkout -q -b source
+        printf 'line 1\nparent\n' > setup.sh && git add setup.sh && git commit -qm 'parent change'
+        printf 'line 1\nchild\n' > setup.sh && git add setup.sh && git commit -qm 'child change'
+        child_sha=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf 'line 1\nmain\n' > setup.sh && git add setup.sh && git commit -qm 'main diverges'
+        _gcp_scan_preflight_is_noop \"\$child_sha\"; echo \"rc=\$?\"
+        git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
+    "
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "PICK_CLEAR"
+}
+
 @test "scan #913: context-drift commit auto-skipped by pre-flight (no conflict surfaced)" {
     run_in_bash "
         $(_gcp907_make_partial_repo)

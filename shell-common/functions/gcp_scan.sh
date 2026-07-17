@@ -57,7 +57,7 @@ _gcp_scan_preflight_is_noop() {
         echo "Error: Not in a git repository" >&2
         return 1
     fi
-    local sha="$1" result=1 had_stash=0 conflicted f
+    local sha="$1" result=1 had_stash=0 conflicted f real_content_conflict=0
     if ! git diff --quiet || ! git diff --cached --quiet; then
         git stash push -q --include-untracked -m "gcp_preflight_probe" && had_stash=1
         # Data-loss guard (PR #916 review): a failed stash leaves the tree
@@ -152,11 +152,22 @@ _gcp_scan_preflight_is_noop() {
         # `git add` is needed (and `git add -A` would wrongly stage untracked
         # files, breaking the empty-diff check).
         if [ -n "$conflicted" ]; then
-            echo "$conflicted" | while IFS= read -r f; do
+            while IFS= read -r f; do
                 [ -z "$f" ] && continue
+                # Keep genuine content conflicts intact: resetting those files
+                # to HEAD would erase the commit's only real work and
+                # misclassify the probe as "already in HEAD" (#1177).
+                if _gcp_scan_conflict_adds_new_content "$sha" "$f"; then
+                    real_content_conflict=1
+                    continue
+                fi
                 git checkout HEAD -- "$f"
-            done
-            git diff --cached --quiet && result=0
+            done <<EOF
+$conflicted
+EOF
+            if [ "$real_content_conflict" -eq 0 ]; then
+                git diff --cached --quiet && result=0
+            fi
         fi
     fi
     [ -n "$_gcfg1_bak" ] && rm -f "$_gcfg1_bak"
