@@ -12,8 +12,11 @@ The SKILL.md body lists these as terse rules; the full rationale lives here.
 
 - **Never run a bare `git commit`.** In a non-interactive AI shell a bare
   commit opens an editor for the message and hangs. Always pass `-m` with a
-  conventional-commit message, e.g.
-  `git commit -m "refactor(<scope>): simplify per /simplify"`.
+  conventional-commit message. The auto-fix agents (`/code-review --fix`,
+  `/simplify`) edit files without staging them, so a plain `-m` finds nothing
+  staged and fails with `no changes added to commit` — use `-am` so the
+  commit picks up the unstaged edits too, e.g.
+  `git commit -am "refactor(<scope>): simplify per /simplify"`.
 
 - **`/code-review --fix` and `/simplify` both mutate the working tree — never
   run them concurrently with each other.** gemini/codex only post PR
