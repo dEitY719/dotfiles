@@ -47,7 +47,7 @@ main() {
     # Step 1: Check if installed (idempotent)
     # ========================================
     ux_step "1/2" "Checking for agy binary..."
-    if [ ! -e "$AGY_BIN" ] && ! have_command agy; then
+    if [ ! -e "$AGY_BIN" ] && [ ! -L "$AGY_BIN" ] && ! have_command agy; then
         ux_success "agy is not installed. Nothing to do. (이미 제거됨)"
         echo ""
         exit 0
@@ -68,7 +68,7 @@ main() {
     if [ "$DRY_RUN" = "1" ]; then
         ux_info "[dry-run] rm -f ${AGY_BIN}"
     else
-        if [ -e "$AGY_BIN" ]; then
+        if [ -e "$AGY_BIN" ] || [ -L "$AGY_BIN" ]; then
             rm -f "$AGY_BIN" || { ux_error "Failed to remove ${AGY_BIN}."; exit 1; }
         fi
     fi
