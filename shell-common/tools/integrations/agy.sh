@@ -34,6 +34,7 @@ alias agyhelp='agy --help'
 alias agyc='agy --continue'
 alias agyplan='agy --mode plan'
 alias agymodels='agy models'
+alias agy-yolo='agy --dangerously-skip-permissions'
 
 # --- Functions ---
 
