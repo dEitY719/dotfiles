@@ -20,6 +20,8 @@ Antigravity CLI (agy) Dotfiles Helper - Getting Started
    OAuth 토큰은 ~/.gemini/antigravity-cli/ 에 저장된다.
    Use: agyhelp   (agy --help — 실제 CLI 옵션 확인)
    Use: agymodels (agy models — 사용 가능한 모델 목록)
+   Use: agy-yolo  (agy --dangerously-skip-permissions — codex-yolo 와 동일하게
+                   승인/권한 확인을 건너뛴다. 신뢰된 로컬 작업에서만 사용할 것)
 
 주의: agy 자체 인스톨러(agy install)는 셸 프로파일의 PATH/alias 를
 수정한다. dotfiles 는 shell-common/env/path.sh 가 ~/.local/bin 을
