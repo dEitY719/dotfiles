@@ -8,6 +8,7 @@ without errors in both bash and zsh environments.
 import pytest
 
 HELP_TOPICS = [
+    "agy_help",
     "apt_help",
     "bat_help",
     "bun_help",
@@ -28,7 +29,6 @@ HELP_TOPICS = [
     "fasd_help",
     "fd_help",
     "fzf_help",
-    "agy_help",
     "gc_help",
     "git_help",
     "gwt_help",
