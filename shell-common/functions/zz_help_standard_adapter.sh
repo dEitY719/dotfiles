@@ -209,7 +209,7 @@ gpu
 network
 claude
 cc
-gemini
+agy
 codex
 litellm
 ollama
