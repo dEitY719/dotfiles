@@ -45,7 +45,7 @@ main() {
     # ========================================
     ux_step "2/3" "Installing Antigravity CLI..."
     if ux_confirm "Run '${INSTALL_URL}' installer now?" "y"; then
-        if ! ux_with_spinner "Installing agy" bash -c "curl -fsSL '${INSTALL_URL}' | bash"; then
+        if ! ux_with_spinner "Installing agy" bash -c "set -o pipefail; curl -fsSL '${INSTALL_URL}' | bash"; then
             ux_error "Antigravity CLI installation failed."
             exit 1
         fi
