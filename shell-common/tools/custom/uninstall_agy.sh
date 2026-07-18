@@ -47,7 +47,7 @@ main() {
     # Step 1: Check if installed (idempotent)
     # ========================================
     ux_step "1/2" "Checking for agy binary..."
-    if [ ! -e "$AGY_BIN" ] && ! command -v agy >/dev/null 2>&1; then
+    if [ ! -e "$AGY_BIN" ] && ! have_command agy; then
         ux_success "agy is not installed. Nothing to do. (이미 제거됨)"
         echo ""
         exit 0
@@ -78,7 +78,7 @@ main() {
     # ========================================
     echo ""
     ux_header "Antigravity CLI Uninstallation Complete"
-    if [ "$DRY_RUN" != "1" ] && command -v agy >/dev/null 2>&1; then
+    if [ "$DRY_RUN" != "1" ] && have_command agy; then
         ux_warning "The 'agy' command still exists on PATH."
         ux_info "It may be installed elsewhere; check: ${UX_PRIMARY}command -v agy${UX_RESET}"
     else
