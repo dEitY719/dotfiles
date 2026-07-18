@@ -24,11 +24,9 @@ UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 if [ -f "$UX_LIB" ]; then
     source "$UX_LIB"
     log_info() { ux_info "$1"; }
-    log_error() { ux_error "$1"; }
     log_success() { ux_success "$1"; }
 else
     log_info() { echo "[INFO] $1"; }
-    log_error() { echo "[ERROR] $1"; }
     log_success() { echo "[SUCCESS] $1"; }
 fi
 
