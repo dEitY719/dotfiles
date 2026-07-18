@@ -160,7 +160,7 @@ _register_default_help_categories() {
     # Category membership (space-separated topic keys)
     HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git gwt gbr devx uv py nvm npm bun pp cli ux du psql mytool ghes_mirror mirror_pages_activate}"
     HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql redis gpu network wsl_check window sync_to_deploy}"
-    HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc gemini codex litellm ollama claude_plugins claude_skills_marketplace superpowers}"
+    HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc agy codex litellm ollama claude_plugins claude_skills_marketplace superpowers}"
     HELP_CATEGORY_MEMBERS[cli]="${HELP_CATEGORY_MEMBERS[cli]:-fzf fd fasd ripgrep pet bat zsh zsh_autosuggestions gc tmux del_file}"
     HELP_CATEGORY_MEMBERS[config]="${HELP_CATEGORY_MEMBERS[config]:-p10k crt apt pip ghostty}"
     HELP_CATEGORY_MEMBERS[docs]="${HELP_CATEGORY_MEMBERS[docs]:-dot show_doc notion work_log work}"
@@ -212,7 +212,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[claude_help]="${HELP_DESCRIPTIONS[claude_help]:-[AI/LLM] Claude Code + MCP integration}"
     HELP_DESCRIPTIONS[docker_help]="${HELP_DESCRIPTIONS[docker_help]:-[DevOps] Docker commands and aliases}"
     HELP_DESCRIPTIONS[apt_help]="${HELP_DESCRIPTIONS[apt_help]:-[Config] APT package manager}"
-    HELP_DESCRIPTIONS[gemini_help]="${HELP_DESCRIPTIONS[gemini_help]:-[AI/LLM] Gemini CLI commands}"
+    HELP_DESCRIPTIONS[agy_help]="${HELP_DESCRIPTIONS[agy_help]:-[AI/LLM] Antigravity CLI commands}"
     HELP_DESCRIPTIONS[codex_help]="${HELP_DESCRIPTIONS[codex_help]:-[AI/LLM] Codex CLI commands}"
     HELP_DESCRIPTIONS[dproxy_help]="${HELP_DESCRIPTIONS[dproxy_help]:-[DevOps] Docker corporate proxy}"
     HELP_DESCRIPTIONS[npm_help]="${HELP_DESCRIPTIONS[npm_help]:-[Development] npm package manager}"
