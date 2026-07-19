@@ -70,3 +70,4 @@ claude/settings.local.json
 .understand-anything/fingerprints.json
 .understand-anything/.trash-*/
 .understand-anything/*.log
+.understand-anything/diff-overlay.json
