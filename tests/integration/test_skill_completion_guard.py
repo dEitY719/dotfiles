@@ -325,12 +325,12 @@ def test_mid_sentence_command_does_not_match(tmp_path: Path) -> None:
     "sibling",
     [
         # hyphen-form siblings
-        "/gh-pr-review --ai gemini 123",
+        "/gh-pr-review --ai agy 123",
         "/gh-pr-reply 123",
         "/gh-pr-resolve-conflict 123",
         # colon-form siblings — `:` is also not a word char, so the lookahead
         # must exclude it too (PR #1169 gemini review).
-        "/gh:pr:review --ai gemini 123",
+        "/gh:pr:review --ai agy 123",
         "/gh:pr:reply 123",
         "/gh:pr:resolve-conflict 123",
     ],

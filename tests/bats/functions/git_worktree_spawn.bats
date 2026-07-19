@@ -225,10 +225,15 @@ teardown() {
     assert_output "codex --dangerously-bypass-approvals-and-sandbox"
 }
 
-@test "bash: _gwt_yolo_command gemini returns the yolo+skip-trust command" {
-    run_in_bash '_gwt_yolo_command gemini'
+@test "bash: _gwt_yolo_command agy returns the skip-permissions command" {
+    run_in_bash '_gwt_yolo_command agy'
     assert_success
-    assert_output "gemini --approval-mode=yolo --skip-trust"
+    assert_output "agy --dangerously-skip-permissions"
+}
+
+@test "bash: _gwt_yolo_command gemini is now rejected (removed agent)" {
+    run_in_bash '_gwt_yolo_command gemini'
+    assert_failure
 }
 
 @test "bash: _gwt_yolo_command opencode returns the bare command" {
@@ -247,7 +252,7 @@ teardown() {
     # must derive from this output to prevent drift from the dispatch table.
     run_in_bash '_gwt_yolo_command --list'
     assert_success
-    assert_output "claude, codex, gemini, opencode"
+    assert_output "claude, codex, agy, opencode"
 }
 
 @test "zsh: _gwt_yolo_command claude returns the function, not the alias name" {
@@ -266,10 +271,10 @@ teardown() {
     assert_output "codex --dangerously-bypass-approvals-and-sandbox"
 }
 
-@test "zsh: _gwt_yolo_command gemini returns the yolo+skip-trust command" {
-    run_in_zsh '_gwt_yolo_command gemini'
+@test "zsh: _gwt_yolo_command agy returns the skip-permissions command" {
+    run_in_zsh '_gwt_yolo_command agy'
     assert_success
-    assert_output "gemini --approval-mode=yolo --skip-trust"
+    assert_output "agy --dangerously-skip-permissions"
 }
 
 @test "zsh: _gwt_yolo_command opencode returns the bare command" {
@@ -286,7 +291,7 @@ teardown() {
 @test "zsh: _gwt_yolo_command --list lists supported agents (SSOT)" {
     run_in_zsh '_gwt_yolo_command --list'
     assert_success
-    assert_output "claude, codex, gemini, opencode"
+    assert_output "claude, codex, agy, opencode"
 }
 
 # ---------------------------------------------------------------------------
@@ -332,7 +337,7 @@ teardown() {
 }
 
 @test "bash: _gwt_yolo_command non-claude agents ignore account" {
-    # Multi-account is claude-only — codex/gemini/opencode have no --user
+    # Multi-account is claude-only — codex/agy/opencode have no --user
     # support, so any value passed in 2nd position must be a no-op for them.
     run_in_bash '_gwt_yolo_command codex work'
     assert_success
@@ -360,7 +365,7 @@ teardown() {
 @test "bash: spawn rejects --user with non-claude agent (--tmux)" {
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn --wt-name issue-xyz --tmux --ai gemini --user work 2>&1
+        git_worktree_spawn --wt-name issue-xyz --tmux --ai agy --user work 2>&1
     "
     assert_failure
     assert_output --partial "--user is only supported with --ai claude"

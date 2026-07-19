@@ -4,7 +4,7 @@
 - Never retry a failed step. Human decides retry or fix.
 - Never skip a step. All 6 or stop.
 - **Quality-gate soft-fail exception.** Step 2.4 (`devx:pr-review-all`)
-  is additive polish, not gating: gemini/codex absent → that lane skips
+  is additive polish, not gating: agy/codex absent → that lane skips
   (not a failure); `/simplify` produced no change → no commit; any error
   in review/simplify/commit → `[WARN]` and continue. The gate never stops
   the flow.

@@ -2,7 +2,7 @@
 name: gh:issue-flow
 description: >-
   Composition skill that chains gh:issue-implement → gh:commit → gh:pr →
-  devx:pr-review-all (gemini ∥ codex ∥ /code-review --fix → /simplify
+  devx:pr-review-all (agy ∥ codex ∥ /code-review --fix → /simplify
   quality gate + deferred pr-reply, 8 min) → gh:pr-resolve-conflict →
   gh:pr-resolve-outdated
   (out-of-date base sync) for a single issue number. Use when the user runs
@@ -42,7 +42,7 @@ If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output
 its content verbatim, then stop. No API calls. The help output names the 6
 chained skills (gh:issue-implement, gh:commit, gh:pr, devx:pr-review-all,
 gh:pr-resolve-conflict, gh:pr-resolve-outdated); devx:pr-review-all runs the
-post-PR quality gate (gemini ∥ codex ∥ /simplify) and schedules the pr-reply.
+post-PR quality gate (agy ∥ codex ∥ /simplify) and schedules the pr-reply.
 
 ## Step 1: Parse Args
 
@@ -70,7 +70,7 @@ sequence. After each call, immediately proceed to the next.
 3. **Step 2.3 — gh:pr** (only if 2.2 succeeded) — ensures `Closes #<N>`;
    extract `<PR_NUM>` from the PR URL. `Skill(gh:pr, "<N>")`
 4. **Step 2.4 — devx:pr-review-all** (only if 2.3 succeeded; soft-fail) — one
-   delegated call runs the post-PR quality gate (gemini ∥ codex ∥ `/simplify`),
+   delegated call runs the post-PR quality gate (agy ∥ codex ∥ `/simplify`),
    commits + pushes any simplify changes synchronously, and schedules
    `/gh-pr-reply <PR_NUM>` 8 min later via `--defer-reply`. The synchronous
    simplify commit lands before the 2.5/2.5.1 rebase steps. Detail:

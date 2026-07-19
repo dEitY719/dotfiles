@@ -40,7 +40,7 @@ detect_ai_agent() {
 
   # Priority 3: Agent-specific env vars
   if [[ "${CLAUDECODE:-}" == "1" ]]; then echo "claude"; return; fi
-  if [[ "${GEMINI_CLI:-}" == "1" ]]; then echo "gemini"; return; fi
+  if [[ "${AGY_CLI:-}" == "1" ]]; then echo "agy"; return; fi
   if [[ "${CODEX_CLI:-}" == "1" ]]; then echo "codex"; return; fi
   if [[ "${OPENCODE:-}" == "1" ]]; then echo "opencode"; return; fi
   if [[ "${CURSOR:-}" == "1" || "${TERM_PROGRAM:-}" == "cursor" ]]; then echo "cursor"; return; fi
