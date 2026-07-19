@@ -29,7 +29,7 @@ agentmemory --version
 ## 3. systemd 유저 서비스로 상시 구동 + 자동 시작
 
 ```bash
-mkdir -p ~/.config/systemd/user
+mkdir -p ~/.config/systemd/user ~/.agentmemory
 cp docs/guide/playbooks/agentmemory/agentmemory.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now agentmemory.service
