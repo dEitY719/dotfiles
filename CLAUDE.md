@@ -90,6 +90,12 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 **On lint/test failure**: fix the root cause — do not use `--no-verify` or skip hooks.
 
+## Codebase Map (선탐색 인덱스)
+
+아키텍처/오리엔테이션/"X 어디 있나"/"Y가 뭘 호출하나" 류 질문은 소스 전체를 grep 하기 전에 `.understand-anything/knowledge-graph.json` 을 **먼저 grep-쿼리**한다 (노드 `summary`/`tags`/`edges` 만 슬라이스 — 파일 통독 금지, 약 1.1MB). 파일·함수 지도는 여기서 얻고, 정확한 코드 확인은 소스로 fallback 한다.
+
+**주의**: 그래프는 마지막 `/understand` 실행 시점 스냅샷 (`.understand-anything/meta.json` 의 `gitCommitHash`). 그 이후 변경된 파일은 드리프트 가능 — 소스가 최종 진실이다. 크게 어긋나면 `/understand` 재실행.
+
 ## Standards & References
 
 - 운영 교훈 지식 베이스: `docs/guide/learnings/` (반복 실수 예방용 패턴 모음)
