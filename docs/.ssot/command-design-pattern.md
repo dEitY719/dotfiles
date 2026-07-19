@@ -20,14 +20,14 @@
 |------|------|------|
 | Public 함수 (dispatcher/main) | `snake_case` | `git_branch`, `git_worktree` |
 | Private sub-function | `_<prefix>_<verb>` | `_gb_clean_local`, `_gwt_help_rows_add` |
-| Public alias (user-facing) | `dash-form`, 풀어쓴 `<tool>-<noun>` 권장 (§1.1) | `agy-version`, `git-clean-local`; git 예외: `gb`, `gwt` |
+| Public alias (user-facing) | `dash-form`, 풀어쓴 `<tool>-<noun/verb>` 권장 (§1.1) | `agy-version`, `git-log`; git 예외: `gb`, `gwt` |
 | Help 함수 (inline) | `_<prefix>_help` | `_gb_help` |
 | Help 함수 (standalone) | `<topic>_help` + alias `<topic>-help` | `gwt_help` / `gwt-help` |
 
 ### 1.1 별칭 가독성 — cryptic 축약 지양
 
-- **원칙**: user-facing alias 는 의미가 드러나는 풀어쓴 `<tool>-<noun>`
-  형태를 사용한다. 축약형은 완전한 명사로 spell out 하고, 단일 문자나
+- **원칙**: user-facing alias 는 의미가 드러나는 풀어쓴 `<tool>-<noun/verb>`
+  형태를 사용한다. 축약형은 완전한 단어로 spell out 하고, 단일 문자나
   의미를 유추할 수 없는 축약은 쓰지 않는다.
   - Good: `agy-version`, `agy-continue`, `agy-models`, `agy-install`
   - Avoid: `agyver`, `agyc`(= `--continue`, `c` 가 불명확), `agymodels`
