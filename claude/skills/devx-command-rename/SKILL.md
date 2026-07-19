@@ -38,9 +38,8 @@ its content verbatim, then stop. No API calls.
 
 ## Step 1: Parse input & resolve target family
 
-Record `START_TS=$(date +%s)`. Parse `<command-family>` (e.g. `agy`),
-`<desired-convention>` (e.g. `dash-form`), optional `[remote]` (default
-`origin`). Resolve `TARGET_REPO` per `references/repo-resolution.md`
+Parse `<command-family>` (e.g. `agy`), `<desired-convention>` (e.g.
+`dash-form`), optional `[remote]` (default `origin`). Resolve `TARGET_REPO` per `references/repo-resolution.md`
 (fail-fast on a missing remote). If the family is ambiguous or matches
 nothing, present the candidate names you found and ask — never guess.
 
