@@ -41,13 +41,12 @@ Set repo root `ROOT` = this dotfiles repo, `CFG=${CLAUDE_CONFIG_DIR:-$HOME/.clau
 
 ## Step 2: Verify Installed (F-2)
 
-Grep `claude/plugin/plugins.json` for an entry matching `PLUGIN@`. If found and
-`MARKETPLACE` was omitted, take `MARKETPLACE` from the matched entry.
-
-Not found → this is the **not-installed error case**. Print the install
-instructions block from `references/help.md` ("설치 안내") filled in with this
-plugin + its `marketplaces.json` `owner/repo`, then **stop** — never run
-`/plugin install` yourself. The user installs, then re-runs the skill.
+Resolve `MARKETPLACE` by exact-matching `PLUGIN@` against
+`claude/plugin/plugins.json`'s `plugins` array — **never** substring `grep`
+(a plugin named `skills` would falsely match `example-skills@...`). Zero, one,
+or 2+ matches (e.g. `superpowers` is installed under two marketplaces today)
+are each handled per `references/marketplace-resolution.md`, which also
+covers the not-installed case when `MARKETPLACE` itself is unknown.
 
 ## Step 3: Locate Cache + Enumerate Skills (F-3)
 
@@ -75,13 +74,14 @@ sections. `--force` overwrites the file wholesale.
 ## Step 5: Write the Doc (F-4, F-6)
 
 Write `docs/guide/plugins/<PLUGIN>.md` in **Korean**, following the exact
-3-section skeleton in `references/doc-template.md`
-(설치 방법 → 스킬 설명 → 사용법 예제). SKILL.md sources are English; summarize
-them in Korean — do not copy English prose.
+3-section skeleton in `references/doc-template.md` (설치 방법 → 스킬 설명 →
+사용법 예제). SKILL.md sources are English — summarize, don't copy prose.
 
 ## Step 6: Update Index (F-5)
 
-Append one line under `## Index` in `docs/guide/plugins/README.md`:
+Insert one line inside the `## Index` list in `docs/guide/plugins/README.md`
+— after the last existing `- [...]` item and **before** the next `## ` header
+(e.g. `## 문서 구성`); never blindly append to end-of-file:
 `- [<PLUGIN>](./<PLUGIN>.md) — <one-line Korean summary>`. **Idempotent**: if a
 line already links `./<PLUGIN>.md`, skip. `docs/guide/README.md` already has a
 `plugins/` link — leave it untouched (add only if genuinely absent).
