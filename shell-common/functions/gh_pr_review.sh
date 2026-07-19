@@ -3,7 +3,7 @@
 # shell-common/functions/gh_pr_review.sh
 # gh-pr-review — synchronous PR review delegation to an external AI CLI.
 # Sibling of gh-pr-approve (gh_pr_approve.sh) and gh-pr-reply
-# (gh_pr_reply.sh). Reads the same `--ai <codex|gemini|claude>` contract
+# (gh_pr_reply.sh). Reads the same `--ai <codex|agy|claude>` contract
 # but does a single-shot opinion-collection run inline (no worktree spawn,
 # no detached worker) — the skill's only side effect is one PR comment
 # unless `--no-post-comment` is set.
@@ -103,20 +103,20 @@ gh_pr_review_parse() {
     done
 
     if [ -z "$ai" ]; then
-        echo "missing required flag: --ai <codex|gemini|claude>" >&2
+        echo "missing required flag: --ai <codex|agy|claude>" >&2
         return 2
     fi
 
     case "$ai" in
-    codex | gemini | claude) ;;
+    codex | agy | claude) ;;
     *)
-        echo "Unknown --ai value: '$ai' (allowed: codex, gemini, claude)" >&2
+        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude)" >&2
         return 2
         ;;
     esac
 
     if [ -n "$user" ] && [ "$ai" != "claude" ]; then
-        echo "--user is only valid with --ai claude (codex/gemini have no multi-account routing)" >&2
+        echo "--user is only valid with --ai claude (codex/agy have no multi-account routing)" >&2
         return 2
     fi
 
@@ -162,9 +162,9 @@ EOF
 _gh_pr_review_require_ai_cli() {
     local ai="$1"
     case "$ai" in
-    codex | gemini | claude) ;;
+    codex | agy | claude) ;;
     *)
-        echo "Unknown --ai value: '$ai' (allowed: codex, gemini, claude)" >&2
+        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude)" >&2
         return 2
         ;;
     esac
@@ -222,14 +222,12 @@ _gh_pr_review_stderr_is_noise() {
 # cleaned up automatically.
 #
 # Issue #694:
-#   - Bug A — `gemini -p` requires a string argument (yargs). Read the
-#     prompt into a variable so the CLI sees a valid positional value.
 #   - Bug B — `head -n 1` of stderr surfaced informational banners
 #     (e.g. codex's "Reading prompt from stdin...") as the failure
 #     reason. The dispatcher now skips known-noise prefixes when
 #     building the one-line summary AND emits the full stderr below it.
 #
-# Args: $1 = ai (codex|gemini|claude), $2 = PROMPT_FILE, $3 = optional
+# Args: $1 = ai (codex|agy|claude), $2 = PROMPT_FILE, $3 = optional
 # CLAUDE_CONFIG_DIR (claude --user routing). Stdout of the CLI streams to
 # the caller's stdout; stderr is captured for the failure summary.
 _gh_pr_review_run_ai() {
@@ -239,7 +237,7 @@ _gh_pr_review_run_ai() {
     # mktemp template — the `XXXXXX` suffix prevents the predictable-PID
     # symlink-attack class on shared `/tmp` filesystems (gemini-code-assist
     # review on PR #695). The `$ai` discriminator stays in the name so the
-    # user can grep for "the gemini run" vs "the codex run" when several
+    # user can grep for "the agy run" vs "the codex run" when several
     # invocations linger after failures.
     local _stderr_file
     if ! _stderr_file=$(mktemp "/tmp/gh-pr-review-stderr.$ai.XXXXXX" 2>/dev/null); then
@@ -251,19 +249,10 @@ _gh_pr_review_run_ai() {
     codex)
         codex exec --color=never <"$prompt_file" 2>"$_stderr_file" || _rc=$?
         ;;
-    gemini)
-        # `gemini -p` is non-interactive headless mode and the yargs
-        # parser REQUIRES a token after `-p` — `gemini -p <file` raises
-        # "Not enough arguments following: p" (issue #694 Bug A).
-        # However, `gemini --help` says: "Run in non-interactive
-        # (headless) mode with the given prompt. Appended to input on
-        # stdin (if any)." → providing any non-empty `-p` value
-        # satisfies yargs, AND the actual prompt can still flow on
-        # stdin. That sidesteps the ARG_MAX / shell-quoting concern of
-        # `gemini -p "$(cat "$file")"` (gemini-code-assist review on
-        # PR #695). A single-space marker keeps the prompt suffix
-        # effectively empty.
-        gemini -p ' ' <"$prompt_file" 2>"$_stderr_file" || _rc=$?
+    agy)
+        # `agy --print` runs the Antigravity CLI non-interactively,
+        # reading the prompt from stdin.
+        agy --print <"$prompt_file" 2>"$_stderr_file" || _rc=$?
         ;;
     claude)
         if [ -n "$cfg_dir" ]; then
@@ -273,7 +262,7 @@ _gh_pr_review_run_ai() {
         fi
         ;;
     *)
-        echo "Unknown --ai value: '$ai' (allowed: codex, gemini, claude)" >&2
+        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude)" >&2
         rm -f "$_stderr_file"
         return 2
         ;;
@@ -703,11 +692,11 @@ for a second opinion. Streams the AI's findings to stdout and posts
 them as a PR comment by default. Does NOT submit a decision.
 
 Usage:
-  gh-pr-review --ai <codex|gemini|claude> [flags] [<pr-number>] [<remote>]
+  gh-pr-review --ai <codex|agy|claude> [flags] [<pr-number>] [<remote>]
   gh-pr-review -h | --help | help
 
 Flags:
-  --ai <codex|gemini|claude>   required; external CLI to delegate to
+  --ai <codex|agy|claude>      required; external CLI to delegate to
   --review <preset>            default 'default'; KR aliases supported
                                enum: default | quick | thorough |
                                      security | performance
@@ -724,7 +713,7 @@ Positional:
 
 Examples:
   gh-pr-review --ai codex 99
-  gh-pr-review --ai gemini --review thorough 99
+  gh-pr-review --ai agy --review thorough 99
   gh-pr-review --ai claude --review 꼼꼼 99
   gh-pr-review --ai claude --user work 99
   gh-pr-review --ai codex --no-post-comment 99

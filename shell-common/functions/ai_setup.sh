@@ -27,12 +27,12 @@ ai_setup() {
                 ux_info ""
                 ux_info "Options:"
                 ux_info "  --ai <agent>   Pre-fill the 'Tmux window agents' prompt"
-                ux_info "                    default (claude, codex, gemini,"
+                ux_info "                    default (claude, codex, agy,"
                 ux_info "                    opencode, cursor, copilot)."
                 ux_info ""
                 ux_info "Steps:"
                 ux_info "  1. Enter worktree names   (free-form: issue-11 login-fix)"
-                ux_info "  2. Enter tmux windows     (AI agents: claude codex gemini)"
+                ux_info "  2. Enter tmux windows     (AI agents: claude codex agy)"
                 ux_info "  3. Worktrees + tmux sessions are created automatically"
                 ux_info ""
                 ux_info "Note: worktree names are free-form (task/issue/feature slugs)."
@@ -48,7 +48,7 @@ ai_setup() {
                 fi
                 if ! _ts_known_agent "$2"; then
                     ux_error "Unknown agent: $2"
-                    ux_info "Available: claude, codex, gemini, opencode, cursor, copilot"
+                    ux_info "Available: claude, codex, agy, opencode, cursor, copilot"
                     return 1
                 fi
                 default_agent="$2"
@@ -136,7 +136,7 @@ ai_setup() {
     for a in $win_input; do
         if ! _ts_known_agent "$a"; then
             ux_error "Unknown agent: $a"
-            ux_info "Available: claude, codex, gemini, opencode, cursor, copilot"
+            ux_info "Available: claude, codex, agy, opencode, cursor, copilot"
             return 1
         fi
         win_agents="$win_agents $a"

@@ -24,7 +24,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _ts_known_agent() {
     case "$1" in
-        claude|codex|gemini|opencode|cursor|copilot) return 0 ;;
+        claude|codex|agy|opencode|cursor|copilot) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -110,7 +110,7 @@ tmux_spawn() {
             ux_info "  Worktree dir  session = dir name, agent auto-detected"
             ux_info "  Main repo     session = <project>-<branch>, agent = claude"
             ux_info ""
-            ux_info "Agents: claude, codex, gemini, opencode, cursor, copilot"
+            ux_info "Agents: claude, codex, agy, opencode, cursor, copilot"
             ux_info ""
             ux_info "Layout:"
             ux_info "  +----------+----------+"
@@ -161,7 +161,7 @@ tmux_spawn() {
             _ts_agent="$_ts_arg"
         else
             ux_error "Unknown agent: $_ts_arg"
-            ux_info  "Available: claude, codex, gemini, opencode, cursor, copilot"
+            ux_info  "Available: claude, codex, agy, opencode, cursor, copilot"
             unset _ts_arg _ts_dir _ts_basename _ts_agent _ts_session
             return 1
         fi

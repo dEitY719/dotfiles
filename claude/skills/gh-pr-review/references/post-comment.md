@@ -32,7 +32,7 @@ Substitutions:
 
 | Token | Source |
 |-------|--------|
-| `<AI_NAME>` | The `--ai` argument value (`codex` / `gemini` / `claude`). |
+| `<AI_NAME>` | The `--ai` argument value (`codex` / `agy` / `claude`). |
 | `<PRESET>` | The normalized `--review` enum (after KR-alias mapping). |
 | `<TOKENS>` | Estimated prompt tokens, rounded to the nearest 500. Minimum 1 000. |
 | `<HUMAN_H>` | Baseline human-review hours. See "Human time baseline" below. |

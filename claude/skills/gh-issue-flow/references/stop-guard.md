@@ -5,7 +5,7 @@
 `gh:issue-flow` chains 6 sub-skills (`gh:issue-implement` → `gh:commit` →
 `gh:pr` → `devx:pr-review-all` → `gh:pr-resolve-conflict` →
 `gh:pr-resolve-outdated`) plus a final Step 3 report. The post-PR quality
-gate (gemini ∥ codex ∥ `/simplify`, with commit+push) and the deferred
+gate (agy ∥ codex ∥ `/simplify`, with commit+push) and the deferred
 `/gh-pr-reply` scheduling now live *inside* the delegated
 `devx:pr-review-all` (Step 2.4) — they are no longer dispatched inline by
 gh:issue-flow. `devx-pr-review-all` is the 4th entry of the hook's

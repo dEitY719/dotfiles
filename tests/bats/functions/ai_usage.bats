@@ -303,3 +303,86 @@ _usage_record_count() {
     [ "$(jq -s 'length' "$USAGE_LOG")" = "2" ]
     [ "$(jq -s '[.[] | select(.session_id != null)] | length' "$USAGE_LOG")" = "2" ]
 }
+
+# ---------------------------------------------------------------------------
+# agy dispatch (issue #1184) — gemini→agy replacement. agy has no
+# `--output-format json` equivalent, so this case only verifies the CLI is
+# actually invoked (with the right flags, prompt on stdin) and that a
+# minimal untracked record is appended — not full usage parsing.
+# ---------------------------------------------------------------------------
+
+# Stub agy — echoes its argv and copies stdin to stdout so a test can
+# assert on the exact invocation shape, then exits with $AGY_STUB_EXIT
+# (default 0).
+_setup_agy_stub() {
+    cat >"$STUB_BIN/agy" <<'STUB'
+#!/usr/bin/env bash
+printf 'agy-stub: args=%s\n' "$*"
+cat
+exit "${AGY_STUB_EXIT:-0}"
+STUB
+    chmod +x "$STUB_BIN/agy"
+}
+
+@test "agy: invoked with --dangerously-skip-permissions --print and prompt on stdin" {
+    _setup_agy_stub
+
+    run bash --noprofile --norc -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        export SHELL_COMMON='${SHELL_COMMON}'
+        export DOTFILES_FORCE_INIT=1
+        export DOTFILES_TEST_MODE=1
+        export HOME='${HOME}'
+        export TERM=dumb
+        export PATH='${STUB_BIN}:/usr/bin:/bin'
+        . '${DOTFILES_ROOT}/shell-common/functions/ai_usage.sh'
+        _ai_usage_run agy '${USAGE_LOG}' 'test-label' 'hello agy'
+        echo \"rc=\$?\"
+    "
+
+    assert_output --partial "rc=0"
+    assert_output --partial "agy-stub: args=--dangerously-skip-permissions --print"
+    assert_output --partial "hello agy"
+    [ "$(jq -r '.ai' "$USAGE_LOG")" = "agy" ]
+    [ "$(jq -r '.tracking' "$USAGE_LOG")" = "unsupported" ]
+    [ "$(jq -r '.exit_code' "$USAGE_LOG")" = "0" ]
+}
+
+@test "agy: non-zero exit propagates and is recorded" {
+    _setup_agy_stub
+
+    run bash --noprofile --norc -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        export SHELL_COMMON='${SHELL_COMMON}'
+        export DOTFILES_FORCE_INIT=1
+        export DOTFILES_TEST_MODE=1
+        export HOME='${HOME}'
+        export TERM=dumb
+        export PATH='${STUB_BIN}:/usr/bin:/bin'
+        export AGY_STUB_EXIT=3
+        . '${DOTFILES_ROOT}/shell-common/functions/ai_usage.sh'
+        _ai_usage_run agy '${USAGE_LOG}' 'test-label' 'hello agy'
+        echo \"rc=\$?\"
+    "
+
+    assert_output --partial "rc=3"
+    [ "$(jq -r '.exit_code' "$USAGE_LOG")" = "3" ]
+}
+
+@test "unknown ai runner is rejected" {
+    run bash --noprofile --norc -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        export SHELL_COMMON='${SHELL_COMMON}'
+        export DOTFILES_FORCE_INIT=1
+        export DOTFILES_TEST_MODE=1
+        export HOME='${HOME}'
+        export TERM=dumb
+        export PATH='/usr/bin:/bin'
+        . '${DOTFILES_ROOT}/shell-common/functions/ai_usage.sh'
+        _ai_usage_run bogus '${USAGE_LOG}' 'test-label' 'hello'
+        echo \"rc=\$?\"
+    "
+
+    assert_output --partial "rc=2"
+    assert_output --partial "invalid ai runner: bogus"
+}

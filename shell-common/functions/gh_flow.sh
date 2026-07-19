@@ -69,10 +69,10 @@ _gh_flow_has_branch_commits() {
     [ "${_count:-0}" -gt 0 ]
 }
 
-# Returns 0 if the ai runner is one of: claude, codex, gemini.
+# Returns 0 if the ai runner is one of: claude, codex, agy.
 _gh_flow_known_ai() {
     case "$1" in
-    claude | codex | gemini) return 0 ;;
+    claude | codex | agy) return 0 ;;
     *) return 1 ;;
     esac
 }
@@ -92,14 +92,14 @@ _gh_flow_require_ai_cli() {
             return 1
         fi
         ;;
-    gemini)
-        if ! _have gemini; then
-            ux_error "gemini CLI not found"
+    agy)
+        if ! _have agy; then
+            ux_error "agy CLI not found"
             return 1
         fi
         ;;
     *)
-        ux_error "invalid --ai value: '$1' (allowed: claude, codex, gemini)"
+        ux_error "invalid --ai value: '$1' (allowed: claude, codex, agy)"
         return 1
         ;;
     esac
@@ -672,7 +672,7 @@ gh_flow_help() {
     ux_header "gh-flow - fire-and-forget GitHub issue → PR automation"
     ux_info "Usage:"
     ux_bullet "gh-flow <issue-number>... [--ai <agent>] [--user <account>]  spawn N parallel workers"
-    ux_bullet_sub "agent: claude (default) | codex | gemini"
+    ux_bullet_sub "agent: claude (default) | codex | agy"
     ux_bullet_sub "--user <account>: claude account (personal|work). Only with --ai claude."
     ux_bullet_sub "                  Default: \$CLAUDE_DEFAULT_ACCOUNT (multi-account env)"
     ux_bullet "gh-flow status [<N>]            full table, or per-issue diagnostic"
@@ -688,7 +688,7 @@ gh_flow_help() {
     ux_bullet "gh-flow 13                  # single issue"
     ux_bullet "gh-flow 13 42 88            # 3 issues in parallel"
     ux_bullet "gh-flow 33 --ai codex       # run workers with codex CLI"
-    ux_bullet "gh-flow --ai gemini 44      # run workers with gemini CLI"
+    ux_bullet "gh-flow --ai agy 44         # run workers with agy CLI"
     ux_bullet "gh-flow 13 --user work      # multi-account: route worker to ~/.claude-work"
     ux_bullet "gh-flow status              # full table — who's still running, who failed"
     ux_bullet "gh-flow status 153          # per-issue diagnostic (verdict + next action)"
@@ -704,7 +704,7 @@ gh_flow_help() {
     ux_bullet_sub "pr.number     - PR number"
     ux_bullet_sub "reply.done    - marker (present if reply already ran)"
     ux_bullet_sub "log           - full stdout+stderr"
-    ux_bullet_sub "usage.jsonl   - per-invocation token usage (claude + codex + gemini)"
+    ux_bullet_sub "usage.jsonl   - per-invocation token usage (claude + codex + agy)"
     ux_info ""
     ux_info "Failure isolation:"
     ux_bullet "One worker failure does not affect others."
@@ -747,8 +747,8 @@ gh_flow() {
     esac
 
     # Parse optional args:
-    #   --ai <claude|codex|gemini>
-    #   --ai=<claude|codex|gemini>
+    #   --ai <claude|codex|agy>
+    #   --ai=<claude|codex|agy>
     #   --user <account>          (claude multi-account, issue #365)
     #   --user=<account>
     local _ai="claude"
@@ -759,7 +759,7 @@ gh_flow() {
         --ai)
             shift
             if [ $# -eq 0 ]; then
-                ux_error "--ai requires a value (claude|codex|gemini)"
+                ux_error "--ai requires a value (claude|codex|agy)"
                 return 1
             fi
             _ai="$1"
@@ -780,7 +780,7 @@ gh_flow() {
             ;;
         -*)
             ux_error "unknown option: '$1'"
-            ux_info "Usage: gh-flow <issue-number>... [--ai <claude|codex|gemini>] [--user <account>]"
+            ux_info "Usage: gh-flow <issue-number>... [--ai <claude|codex|agy>] [--user <account>]"
             return 1
             ;;
         *)
@@ -795,12 +795,12 @@ gh_flow() {
     set -- $_issue_args
     if [ $# -eq 0 ]; then
         ux_error "no issue numbers provided"
-        ux_info "Usage: gh-flow <issue-number>... [--ai <claude|codex|gemini>]"
+        ux_info "Usage: gh-flow <issue-number>... [--ai <claude|codex|agy>]"
         return 1
     fi
 
     if ! _gh_flow_known_ai "$_ai"; then
-        ux_error "invalid --ai value: '$_ai' (allowed: claude, codex, gemini)"
+        ux_error "invalid --ai value: '$_ai' (allowed: claude, codex, agy)"
         return 1
     fi
 

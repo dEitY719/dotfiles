@@ -1,6 +1,6 @@
 # devx:pr-review-all — Help
 
-Fan out **every available reviewer** on one PR in parallel — `gemini` ∥
+Fan out **every available reviewer** on one PR in parallel — `agy` ∥
 `codex` second opinions ∥ a sequential `/code-review --fix` → `/simplify`
 auto-fix chain (each sub-step commits its own changes) — then run a reply
 pass over the resulting review comments. A composition skill: it
@@ -39,8 +39,8 @@ request-changes) — that is `gh:pr-approve`.
 2. Pre-flight: PR must be `OPEN` and non-draft, `gh auth` must be live, and
    check out the PR head branch if not already on it (so `/code-review --fix`
    and `/simplify` act on the right tree).
-3. Review + auto-fix gate — dispatch gemini, codex, and an auto-fix chain as
-   Agent subagents **in one turn**. gemini/codex delegate to
+3. Review + auto-fix gate — dispatch agy, codex, and an auto-fix chain as
+   Agent subagents **in one turn**. agy/codex delegate to
    `gh:pr-review --ai <name>` (streams findings + posts a PR comment) and run
    fully in parallel. `/code-review --fix` and `/simplify` both mutate the
    working tree, so they run **sequentially** within their own lane, each

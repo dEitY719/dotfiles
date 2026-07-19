@@ -17,7 +17,7 @@ command -v "$AI_BIN" >/dev/null 2>&1 || {
 }
 ```
 
-`AI_BIN` is the literal command name: `codex`, `gemini`, or `claude`.
+`AI_BIN` is the literal command name: `codex`, `agy`, or `claude`.
 
 ## stdin payload shape
 
@@ -57,31 +57,20 @@ Why `codex exec` instead of `codex review --base <branch>`:
 comment renders cleanly. The CLI's exit code propagates; non-zero →
 quote the first stderr line and exit 1.
 
-## `--ai gemini`
+## `--ai agy`
 
 ```sh
-gemini -p ' ' < "$PROMPT_FILE"
+agy --print < "$PROMPT_FILE"
 ```
 
-`gemini -p` is yargs-backed and **requires a token after `-p`**. The
-original `gemini -p < "$PROMPT_FILE"` shape produced `Not enough
-arguments following: p` because yargs sees no follow-up token (issue
-#694 Bug A). However, `gemini --help` documents that the `-p` value
-is "Appended to input on stdin (if any)" — so a single-space marker
-satisfies the parser while the actual prompt still flows on stdin.
-This sidesteps the ARG_MAX / shell-quoting hazard of the earlier
-`gemini -p "$(cat "$PROMPT_FILE")"` shape (gemini-code-assist review
-on PR #695).
-
-Model selection (`-m <model>`) intentionally falls back to the user's
-environment default; add a `--gemini-model` flag in a future iteration
-only if users report drift between defaults.
+`agy --print` runs the Antigravity CLI non-interactively, reading the
+prompt (and appended diff) from stdin. Model selection intentionally
+falls back to agy's own default; no `--model` flag is passed.
 
 Stderr policy is identical to codex: non-zero exit → noise-filtered
 summary + full stderr tail + persistent stderr log on disk. The stderr
 file is created via `mktemp "/tmp/gh-pr-review-stderr.<ai>.XXXXXX"`
-to avoid the predictable-PID symlink-attack class (also raised in the
-gemini-code-assist review on PR #695).
+to avoid the predictable-PID symlink-attack class.
 
 ## `--ai claude` (no `--user`)
 
@@ -89,7 +78,7 @@ gemini-code-assist review on PR #695).
 claude -p < "$PROMPT_FILE"
 ```
 
-Same stdin pattern as the gemini invocation — `claude -p` reads from
+Same stdin pattern as the agy invocation — `claude -p` reads from
 stdin when no argv prompt is supplied. The skill inherits whatever
 `CLAUDE_CONFIG_DIR` the calling shell has set. If the user is inside
 `claude-yolo --user work`, that `work` account is preserved
@@ -125,7 +114,7 @@ CLAUDE_CONFIG_DIR="$CFG_DIR" claude -p < "$PROMPT_FILE"
 
 ```sh
 if [ -n "$USER_ACCOUNT" ] && [ "$AI" != "claude" ]; then
-    echo "--user is only valid with --ai claude (codex/gemini have no multi-account routing)" >&2
+    echo "--user is only valid with --ai claude (codex/agy have no multi-account routing)" >&2
     exit 2
 fi
 ```
@@ -149,7 +138,7 @@ omit `--user` and let the current shell's `CLAUDE_CONFIG_DIR` win.
 Step 5 of the skill delegates to `_gh_pr_review_run_ai` in
 `shell-common/functions/gh_pr_review.sh`. The function pipes
 `PROMPT_FILE` into the chosen CLI with the exact invocation shape
-documented above (`codex exec --color=never`, `gemini -p`, `claude -p`,
+documented above (`codex exec --color=never`, `agy --print`, `claude -p`,
 plus the `CLAUDE_CONFIG_DIR` injection for `--user`). Stdout streams to
 the user verbatim — no reformatting, no summarization, no truncation.
 
@@ -162,9 +151,9 @@ skips Step 6; partial output is discarded.
 
 | Condition | Exit | stderr |
 |-----------|------|--------|
-| `--ai` missing | 2 | `missing required flag: --ai <codex\|gemini\|claude>` |
-| `--ai` unknown | 2 | `Unknown --ai value: '<x>' (allowed: codex, gemini, claude)` |
-| `--user` with codex/gemini | 2 | `--user is only valid with --ai claude (codex/gemini have no multi-account routing)` |
+| `--ai` missing | 2 | `missing required flag: --ai <codex\|agy\|claude>` |
+| `--ai` unknown | 2 | `Unknown --ai value: '<x>' (allowed: codex, agy, claude)` |
+| `--user` with codex/agy | 2 | `--user is only valid with --ai claude (codex/agy have no multi-account routing)` |
 | `--user <bogus>` with claude | 1 | `Unknown claude account: '<bogus>' (allowed: ...)` |
 | AI CLI not on PATH | 1 | `Required CLI '<name>' not found in PATH` |
 | AI CLI non-zero exit | 1 | `External AI CLI '<name>' failed (exit <rc>): <noise-filtered first line>` + full tail + `/tmp/gh-pr-review-stderr.<pid>.<ai>.log` (issue #694 Bug B — no longer surfaces codex's "Reading prompt from stdin…" banner as the failure cause) |

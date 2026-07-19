@@ -1,14 +1,14 @@
 ---
 name: gh:pr-review
 description: >-
-  Delegate a GitHub PR's review to an external AI CLI (codex, gemini,
+  Delegate a GitHub PR's review to an external AI CLI (codex, agy,
   or claude) for a second opinion. Streams the external CLI's findings
   to stdout and posts them as a PR comment by default. Does NOT submit
   a decision (no approve / request-changes) — that is gh:pr-approve's
   job, and replying to individual review comments is gh:pr-reply's. Use
   for /gh-pr-review, /gh:pr-review, "PR 99 코덱스에 리뷰 시켜",
-  "gemini 한테 2차 의견 받아", "second-opinion review on PR 42".
-  Accepts `--ai <codex|gemini|claude>` (required), `--review <preset>`,
+  "agy 한테 2차 의견 받아", "second-opinion review on PR 42".
+  Accepts `--ai <codex|agy|claude>` (required), `--review <preset>`,
   `--user <name>` (claude only), `--no-post-comment`, and `<PR#>
   [remote]` positional args. `-h`/`--help`/`help` prints usage.
 allowed-tools: Bash, Read, Grep, Glob, Agent
@@ -25,7 +25,7 @@ metadata:
 ## Role
 
 Gather a second-opinion review on a GitHub PR from one external AI CLI
-(`codex`/`gemini`/`claude`), stream its output, and post it as a PR
+(`codex`/`agy`/`claude`), stream its output, and post it as a PR
 comment by default — then stop. No decision (approve/request-changes —
 `gh:pr-approve`'s job) and no per-comment replies (`gh:pr-reply`'s
 job). Every preset's prompt demands a critical stance

@@ -143,7 +143,7 @@ teardown() {
     run_in_bash 'gh_pr_approve --help'
     assert_success
     assert_output --partial "--ai"
-    assert_output --partial "claude (default) | codex | gemini"
+    assert_output --partial "claude (default) | codex | agy"
 }
 
 @test "help: documents self-PR modes" {
@@ -154,7 +154,7 @@ teardown() {
 }
 
 @test "bash: '--ai codex' parses (precondition fails on missing codex CLI, not parser)" {
-    # We can't easily fake the codex/gemini CLI here, so we assert the
+    # We can't easily fake the codex/agy CLI here, so we assert the
     # parser accepted the value and produced a precondition-shaped error
     # rather than the generic 'unknown option' or 'invalid --ai value'
     # parser errors.
@@ -163,12 +163,18 @@ teardown() {
     refute_output --partial "invalid --ai value"
 }
 
-@test "bash: '--ai gemini' parses with leading position" {
+@test "bash: '--ai agy' parses with leading position" {
     # --ai may appear before PR numbers — position-agnostic.
-    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve --ai gemini 42 2>&1 || true"
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve --ai agy 42 2>&1 || true"
     refute_output --partial "unknown option"
     refute_output --partial "invalid --ai value"
     refute_output --partial "invalid PR number"
+}
+
+@test "bash: '--ai gemini' is now rejected (removed value)" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_approve --ai gemini 42 2>&1"
+    assert_failure
+    assert_output --partial "invalid --ai value"
 }
 
 @test "bash: trailing '42 --ai codex' is accepted" {
@@ -182,14 +188,14 @@ teardown() {
     run_in_bash "cd '$FAKE_REPO' && gh_pr_approve 42 --ai 2>&1"
     assert_failure
     assert_output --partial "missing value for --ai"
-    assert_output --partial "claude|codex|gemini"
+    assert_output --partial "claude|codex|agy"
 }
 
 @test "bash: invalid --ai value is rejected" {
     run_in_bash "cd '$FAKE_REPO' && gh_pr_approve 42 --ai bogus 2>&1"
     assert_failure
     assert_output --partial "invalid --ai value"
-    assert_output --partial "claude|codex|gemini"
+    assert_output --partial "claude|codex|agy"
 }
 
 @test "bash: unknown long option is rejected" {
@@ -583,7 +589,7 @@ _seed_pr_state() {
 # ---------------------------------------------------------------------------
 # auth pre-flight (issue #327)
 # ---------------------------------------------------------------------------
-# We can't drive a real claude/codex/gemini CLI from the test sandbox, so
+# We can't drive a real claude/codex/agy CLI from the test sandbox, so
 # we install a minimal stub on PATH for each runner. The stub never gets
 # invoked — the auth check (file-existence + env var) runs *before* the
 # CLI is called. Its only job is to satisfy `_have <ai>`.
@@ -665,23 +671,23 @@ EOF
     refute_output --partial "codex CLI not authenticated"
 }
 
-@test "auth: gemini logged out — refuses spawn" {
-    _install_fake_ai_cli gemini
+@test "auth: agy logged out — refuses spawn" {
+    _install_fake_ai_cli agy
+    rm -rf "$HOME/.gemini/antigravity-cli"
     # See claude test above for why `export PATH` is required (issue #758).
-    run_in_bash "export PATH='$TEST_TEMP_HOME/bin:'\$PATH; unset GEMINI_API_KEY GOOGLE_API_KEY; cd '$FAKE_REPO' && gh_pr_approve 42 --ai gemini 2>&1"
+    run_in_bash "export PATH='$TEST_TEMP_HOME/bin:'\$PATH; cd '$FAKE_REPO' && gh_pr_approve 42 --ai agy 2>&1"
     assert_failure
-    assert_output --partial "gemini CLI not authenticated"
+    assert_output --partial "agy CLI not authenticated"
     [ ! -d "$HOME/.local/state/gh-pr-approve/fake-main/42" ]
 }
 
-@test "auth: gemini credentials file present → auth check passes" {
-    _install_fake_ai_cli gemini
-    mkdir -p "$HOME/.gemini"
-    printf '{"refresh_token":"fake"}\n' >"$HOME/.gemini/oauth_creds.json"
+@test "auth: agy credentials dir present → auth check passes" {
+    _install_fake_ai_cli agy
+    mkdir -p "$HOME/.gemini/antigravity-cli"
     # See claude credentials test above for why `export PATH` is required
     # (PR #765 review).
-    run_in_bash "export PATH='$TEST_TEMP_HOME/bin:'\$PATH; cd '$FAKE_REPO' && gh_pr_approve 42 --ai gemini 2>&1"
-    refute_output --partial "gemini CLI not authenticated"
+    run_in_bash "export PATH='$TEST_TEMP_HOME/bin:'\$PATH; cd '$FAKE_REPO' && gh_pr_approve 42 --ai agy 2>&1"
+    refute_output --partial "agy CLI not authenticated"
 }
 
 @test "help: documents auth pre-flight" {
@@ -745,7 +751,7 @@ EOF
 }
 
 @test "status <N>: failed:approving — usage.jsonl .result wins over log fallback (issue #666)" {
-    # Regression guard for codex/gemini adapters that DO populate
+    # Regression guard for codex/agy adapters that DO populate
     # usage.jsonl with .result — the log fallback must not override it.
     # Pad the log so the is_error JSON dump is NOT in the last 5 lines;
     # otherwise the `tail -5 log` block in status would echo the sentinel

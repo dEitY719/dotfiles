@@ -14,7 +14,7 @@ Determine `agent_name` using this order (first match wins):
 | AI Agent | Detection Method | Result Name |
 |---|---|---|
 | Claude Code | `$CLAUDECODE == 1` | `claude` |
-| Gemini CLI | `$GEMINI_CLI == 1` or process name `gemini` | `gemini` |
+| Antigravity CLI | `$AGY_CLI == 1` or process name `agy` | `agy` |
 | Codex CLI | `$CODEX_CLI == 1` or process name `codex` | `codex` |
 | OpenCode | `$OPENCODE == 1` or `~/.opencode/` exists | `opencode` |
 | Cursor | `$CURSOR == 1` or `$TERM_PROGRAM == cursor` | `cursor` |

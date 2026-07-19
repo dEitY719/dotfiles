@@ -10,7 +10,7 @@ _claude_plugins_help_summary() {
     ux_bullet_sub "commands: open_claude_plugins | list-plugins | claude-plugin-list | init-plugins-docs | sync-plugins-structure"
     ux_bullet_sub "view: view-plugin-info | generate-plugin-doc-ko | create-plugin-structure-ko"
     ux_bullet_sub "examples: quick examples for create-plugin-ko"
-    ux_bullet_sub "ai-tools: claude | gemini | codex"
+    ux_bullet_sub "ai-tools: claude | agy | codex"
     ux_bullet_sub "workflow: recommended workflow"
     ux_bullet_sub "structure: plugin and docs directory layout"
     ux_bullet_sub "git: git integration & mount details"
@@ -41,17 +41,17 @@ _claude_plugins_help_rows_view() {
     ux_bullet "  Usage: ${UX_CODE}view-plugin-info algorithmic-art${UX_RESET}"
     ux_bullet "generate-plugin-doc-ko <source-file> <output-file> [ai-tool]"
     ux_bullet "  Default Claude: ${UX_CODE}generate-plugin-doc-ko file.md output_KO.md${UX_RESET}"
-    ux_bullet "  Gemini: ${UX_CODE}generate-plugin-doc-ko file.md output_KO.md gemini${UX_RESET}"
+    ux_bullet "  agy: ${UX_CODE}generate-plugin-doc-ko file.md output_KO.md agy${UX_RESET}"
     ux_bullet "create-plugin-structure-ko <marketplace> <plugin-path> [ai-tool]"
     ux_bullet "  Default: ${UX_CODE}create-plugin-structure-ko <marketplace> <path/to/file.md>${UX_RESET}"
-    ux_bullet "  Gemini: ${UX_CODE}create-plugin-structure-ko <marketplace> <path/to/file.md> gemini${UX_RESET}"
+    ux_bullet "  agy: ${UX_CODE}create-plugin-structure-ko <marketplace> <path/to/file.md> agy${UX_RESET}"
 }
 
 _claude_plugins_help_rows_examples() {
     ux_bullet "1. Generate with default AI (Claude):"
     ux_bullet "   ${UX_CODE}create-plugin-ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
-    ux_bullet "2. Generate with Gemini:"
-    ux_bullet "   ${UX_CODE}create-plugin-ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md gemini${UX_RESET}"
+    ux_bullet "2. Generate with agy:"
+    ux_bullet "   ${UX_CODE}create-plugin-ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md agy${UX_RESET}"
     ux_bullet "3. Change default AI tool for session:"
     ux_bullet "   ${UX_CODE}export CLAUDE_DOC_GENERATOR=codex${UX_RESET}"
     ux_bullet "   ${UX_CODE}create-plugin-ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
@@ -63,7 +63,7 @@ _claude_plugins_help_rows_examples() {
 
 _claude_plugins_help_rows_ai_tools() {
     ux_bullet "claude - Anthropic Claude (default)"
-    ux_bullet "gemini - Google Gemini"
+    ux_bullet "agy - Antigravity CLI"
     ux_bullet "codex - OpenAI Codex"
     ux_bullet "Any CLI tool accepting -p or --prompt flag"
 }

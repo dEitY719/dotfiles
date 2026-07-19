@@ -103,11 +103,11 @@ teardown() {
 @test "bash: help documents --ai option and supported runners" {
     # Issue #215 contract: --ai must be discoverable from help, with
     # the explicit list of supported agents. If users don't see codex
-    # / gemini in help they have no way to know the option exists.
+    # / agy in help they have no way to know the option exists.
     run_in_bash 'gh_pr_reply --help 2>&1'
     assert_success
     assert_output --partial "--ai"
-    assert_output --partial "claude (default) | codex | gemini"
+    assert_output --partial "claude (default) | codex | agy"
 }
 
 # ---------------------------------------------------------------------------
@@ -166,7 +166,7 @@ teardown() {
     run_in_bash "cd '$FAKE_REPO' && gh_pr_reply 42 --ai 2>&1"
     assert_failure
     assert_output --partial "--ai requires a value"
-    assert_output --partial "claude|codex|gemini"
+    assert_output --partial "claude|codex|agy"
 }
 
 @test "bash: invalid --ai value is rejected with allowed list" {
@@ -176,7 +176,7 @@ teardown() {
     run_in_bash "cd '$FAKE_REPO' && gh_pr_reply 42 --ai not-supported 2>&1"
     assert_failure
     assert_output --partial "invalid --ai value"
-    assert_output --partial "claude|codex|gemini"
+    assert_output --partial "claude|codex|agy"
 }
 
 @test "bash: unknown long option is rejected" {
@@ -199,13 +199,19 @@ teardown() {
     refute_output --partial "unknown option"
 }
 
-@test "bash: --ai gemini with leading position is accepted" {
-    # Per issue #215 example: `gh-pr-reply --ai gemini '#56' '#78'` —
+@test "bash: --ai agy with leading position is accepted" {
+    # Per issue #215 example: `gh-pr-reply --ai agy '#56' '#78'` —
     # --ai before PR numbers must parse just as well as after them.
-    run_in_bash "cd '$FAKE_REPO' && gh_pr_reply --ai gemini 42 2>&1 || true"
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_reply --ai agy 42 2>&1 || true"
     refute_output --partial "invalid --ai value"
     refute_output --partial "--ai requires a value"
     refute_output --partial "unknown option"
+}
+
+@test "bash: --ai gemini is now rejected (removed value)" {
+    run_in_bash "cd '$FAKE_REPO' && gh_pr_reply 42 --ai gemini 2>&1"
+    assert_failure
+    assert_output --partial "invalid --ai value"
 }
 
 @test "bash: --ai=value form is accepted" {
@@ -264,7 +270,7 @@ teardown() {
     # is invariant across ai runners — switching --ai must not silently
     # bypass the inspection step that protects unpushed commits.
     # Use --ai claude here so we exercise the parser path without
-    # requiring codex/gemini to be installed in the test env.
+    # requiring codex/agy to be installed in the test env.
     local _state_dir="$HOME/.local/state/gh-pr-reply/fake-main/42"
     mkdir -p "$_state_dir"
     printf 'failed:replying\n' >"$_state_dir/state"

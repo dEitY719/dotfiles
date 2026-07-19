@@ -16,7 +16,7 @@ and the production parser is caught by
 Contract this skill depends on (do not duplicate the parser here; read
 `shell-common/functions/gh_pr_review.sh` for the authoritative shape):
 
-- `--ai <codex|gemini|claude>` — required.
+- `--ai <codex|agy|claude>` — required.
 - `--review <preset>` — closed enum; KR aliases normalize before
   dispatch.
 - `--user <name>` — `--ai claude` only.
@@ -38,7 +38,7 @@ has already happened. Free-text values are rejected (see exit codes).
 |------|---------|
 | 0 | Parse succeeded. |
 | 1 | Resolution failure (e.g. unknown claude account, target/PR resolution failed). |
-| 2 | Argument-surface error (missing/unknown `--ai`, `--user` with codex/gemini, free-text `--review` typo). |
+| 2 | Argument-surface error (missing/unknown `--ai`, `--user` with codex/agy, free-text `--review` typo). |
 
 ## Post-parse setup
 

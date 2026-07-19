@@ -7,7 +7,7 @@
 # ═══════════════════════════════════════════════════════════════
 
 # Default AI tool for documentation generation
-# Can be overridden by: CLAUDE_DOC_GENERATOR=gemini, CLAUDE_DOC_GENERATOR=codex, etc.
+# Can be overridden by: CLAUDE_DOC_GENERATOR=agy, CLAUDE_DOC_GENERATOR=codex, etc.
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
@@ -51,12 +51,12 @@ generate_plugin_doc_ko() {
         ux_header "generate-plugin-doc-ko"
         ux_usage "generate-plugin-doc-ko" "<source-file> <output-file> [ai-tool] [--force]" "Generate Korean summary from plugin file"
         ux_bullet "Example: ${UX_INFO}generate-plugin-doc-ko file.md output_KO.md${UX_RESET}"
-        ux_bullet "With specific AI: ${UX_INFO}generate-plugin-doc-ko file.md output_KO.md gemini${UX_RESET}"
+        ux_bullet "With specific AI: ${UX_INFO}generate-plugin-doc-ko file.md output_KO.md agy${UX_RESET}"
         ux_bullet "Force overwrite: ${UX_INFO}generate-plugin-doc-ko file.md output_KO.md claude --force${UX_RESET}"
 
         ux_section "Available AI Tools"
         ux_bullet "claude (default) - Anthropic Claude (uses -p flag)"
-        ux_bullet "gemini - Google Gemini (uses -p flag)"
+        ux_bullet "agy - Antigravity CLI (uses --print flag)"
         ux_bullet "codex - Codex CLI (uses 'exec' subcommand)"
         ux_bullet "Other tools - Any CLI tool that accepts -p, --prompt, exec, or positional argument"
 
@@ -64,7 +64,7 @@ generate_plugin_doc_ko() {
         ux_bullet "--force - Overwrite existing files (default: skip if exists)"
 
         ux_section "Override Default AI Tool"
-        ux_bullet "Set environment variable: ${UX_CODE}export CLAUDE_DOC_GENERATOR=gemini${UX_RESET}"
+        ux_bullet "Set environment variable: ${UX_CODE}export CLAUDE_DOC_GENERATOR=agy${UX_RESET}"
         return 1
     fi
 
@@ -128,10 +128,15 @@ generate_plugin_doc_ko() {
     local prompt_output
     local rc=0
     case "$ai_tool" in
-    claude | gemini)
+    claude)
         # These tools use -p flag
         prompt_output=$(_generate_plugin_doc_ko_prompt "$plugin_file")
         "$ai_tool" -p "$prompt_output" >"$output_file" 2>&1
+        rc=$?
+        ;;
+    agy)
+        # agy reads the prompt from stdin under --print
+        _generate_plugin_doc_ko_prompt "$plugin_file" | "$ai_tool" --print >"$output_file" 2>&1
         rc=$?
         ;;
     codex)
@@ -310,7 +315,7 @@ process_plugin_directory_ko() {
         ux_header "process-plugin-directory-ko"
         ux_usage "process-plugin-directory-ko" "<marketplace> <plugin-path/> [ai-tool] [--force]" "Recursively generate Korean docs for all files in directory"
         ux_bullet "Example: ${UX_INFO}process-plugin-directory-ko claude-code-workflows plugins/code-refactoring/${UX_RESET}"
-        ux_bullet "With Gemini: ${UX_INFO}process-plugin-directory-ko claude-code-workflows plugins/code-refactoring/ gemini${UX_RESET}"
+        ux_bullet "With agy: ${UX_INFO}process-plugin-directory-ko claude-code-workflows plugins/code-refactoring/ agy${UX_RESET}"
         ux_bullet "Force update: ${UX_INFO}process-plugin-directory-ko claude-code-workflows plugins/code-refactoring/ --force${UX_RESET}"
 
         ux_section "Options"
@@ -441,12 +446,12 @@ create_plugin_structure_ko() {
         ux_usage "create-plugin-structure-ko" "<marketplace> <plugin-path|plugin-path/> [ai-tool] [--force]" "Generate Korean docs for file or directory"
         ux_bullet "Single file: ${UX_INFO}create-plugin-structure-ko claude-code-workflows plugins/code-refactoring/agents/code-reviewer.md${UX_RESET}"
         ux_bullet "Full directory: ${UX_INFO}create-plugin-structure-ko claude-code-workflows plugins/code-refactoring/${UX_RESET}"
-        ux_bullet "With Gemini: ${UX_INFO}create-plugin-structure-ko claude-code-workflows plugins/code-refactoring/ gemini${UX_RESET}"
+        ux_bullet "With agy: ${UX_INFO}create-plugin-structure-ko claude-code-workflows plugins/code-refactoring/ agy${UX_RESET}"
         ux_bullet "Force overwrite: ${UX_INFO}create-plugin-structure-ko claude-code-workflows plugins/code-refactoring/ --force${UX_RESET}"
 
         ux_section "Available AI Tools"
         ux_bullet "claude (default) - Anthropic Claude (uses -p flag)"
-        ux_bullet "gemini - Google Gemini (uses -p flag)"
+        ux_bullet "agy - Antigravity CLI (uses --print flag)"
         ux_bullet "codex - Codex CLI (uses 'exec' subcommand)"
         ux_bullet "Other tools - Any CLI tool that accepts -p, --prompt, exec, or positional argument"
 

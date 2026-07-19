@@ -72,7 +72,7 @@ _gwt_help_rows_spawn() {
     ux_table_row "syntax" "gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch [--ai <agent>]] [--user <account>]" "Create named worktree"
     ux_table_row "context" "Run from main repo only" "Fails inside a worktree"
     ux_table_row "name" "Free-form slug (required)" "e.g. issue-11, login-fix"
-    ux_table_row "--ai" "AI agent (default: claude)" "claude, codex, gemini, opencode, cursor, copilot"
+    ux_table_row "--ai" "AI agent (default: claude)" "claude, codex, agy, opencode, cursor, copilot"
     ux_table_row "--user" "Claude account for --tmux/--launch (only with --ai claude)" "personal, work — default: \$CLAUDE_DEFAULT_ACCOUNT"
     ux_table_row "--tmux" "Runs <agent>-yolo in new tmux pane" "Mutually exclusive with --launch"
     ux_table_row "--launch" "cd into worktree + run <agent>-yolo inline" "Current shell, no tmux"
@@ -1364,7 +1364,7 @@ git_worktree_add() {
 # Bypasses shell alias expansion, which is unreliable inside function
 # context — zsh in particular fails to expand `claude-yolo` from inside
 # a function body, even via `eval`. Keeping the SSOT here means the
-# alias files (claude.sh, codex.sh, gemini.sh, opencode.sh) and the
+# alias files (claude.sh, codex.sh, agy.sh, opencode.sh) and the
 # launch path stay in sync via grep, not via shell alias resolution.
 #
 # Output: command string on stdout, exit 0 on known agent.
@@ -1380,7 +1380,7 @@ _gwt_yolo_command() {
     # `claude_yolo --user <account>`; other agents ignore it because they do
     # not support multi-account.
     case "$1" in
-        --list)   echo "claude, codex, gemini, opencode" ;;
+        --list)   echo "claude, codex, agy, opencode" ;;
         claude)
             if [ -n "${2-}" ]; then
                 echo "claude_yolo --user $2"
@@ -1389,7 +1389,7 @@ _gwt_yolo_command() {
             fi
             ;;
         codex)    echo "codex --dangerously-bypass-approvals-and-sandbox" ;;
-        gemini)   echo "gemini --approval-mode=yolo --skip-trust" ;;
+        agy)      echo "agy --dangerously-skip-permissions" ;;
         opencode) echo "opencode" ;;
         *)        return 1 ;;
     esac
@@ -1418,7 +1418,7 @@ _git_worktree_spawn_show_help() {
     ux_info "  --bg             Dispatch claude in background mode (Agent View, #640)."
     ux_info "                   Requires --launch or --tmux. Only with --ai claude."
     ux_info "  --ai <agent>     AI agent (default: claude)."
-    ux_info "                   Known: claude, codex, gemini, opencode, cursor, copilot"
+    ux_info "                   Known: claude, codex, agy, opencode, cursor, copilot"
     ux_info "  --user <account> Claude account for --tmux/--launch (issue #295)."
     ux_info "                   Only valid with --ai claude."
     ux_info ""
@@ -1607,7 +1607,7 @@ git_worktree_spawn() {
     # Validate --ai: must be a known AI agent (only when tmux/launch will use it)
     if { [ "$use_tmux" = 1 ] || [ "$use_launch" = 1 ]; } && ! _ts_known_agent "$agent"; then
         ux_error "Unknown agent: $agent"
-        ux_info "Available: claude, codex, gemini, opencode, cursor, copilot"
+        ux_info "Available: claude, codex, agy, opencode, cursor, copilot"
         return 1
     fi
 

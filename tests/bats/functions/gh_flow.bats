@@ -57,7 +57,7 @@ teardown() {
     assert_output --partial "gh-flow status"
     assert_output --partial "gh-flow prune"
     assert_output --partial "--ai"
-    assert_output --partial "claude (default) | codex | gemini"
+    assert_output --partial "claude (default) | codex | agy"
     # New distinct failure states must be documented.
     assert_output --partial "failed:committing"
     assert_output --partial "failed:opening-pr"
@@ -216,7 +216,13 @@ teardown() {
     run_in_bash "cd '$REPO_DIR' && gh_flow 13 --ai not-supported 2>&1"
     assert_failure
     assert_output --partial "invalid --ai value"
-    assert_output --partial "claude, codex, gemini"
+    assert_output --partial "claude, codex, agy"
+}
+
+@test "dispatcher: --ai gemini is now rejected (removed value)" {
+    run_in_bash "cd '$REPO_DIR' && gh_flow 13 --ai gemini 2>&1"
+    assert_failure
+    assert_output --partial "invalid --ai value"
 }
 
 @test "dispatcher: --ai without value fails with clear message" {
