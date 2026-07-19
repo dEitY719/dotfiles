@@ -15,6 +15,7 @@
 - [playbooks/](./playbooks/) — 실행 절차·셋업 순서·운영 체크리스트
 - [technic/](./technic/) — 검증된 스택 중심 기술 문서 (수백 줄). 전체 셋업 + tradeoff
 - [superpowers-ko/](./superpowers-ko/) — superpowers 플러그인 14 개 스킬의 한글 가이드 (`SKILL_ko.md` + 동료 공유용 `README.md`)
+- [plugins/](./plugins/) — 체리픽 플러그인별 설치 방법 · 스킬 설명 · 사용법 (1 플러그인 = 1 파일)
 
 ## 디렉토리 분담 (vs 다른 docs 영역)
 
