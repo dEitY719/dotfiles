@@ -67,11 +67,11 @@ _gh_pr_reply_get_state() {
 # Validate the requested ai runner is supported and its CLI is on PATH.
 _gh_pr_reply_require_ai_cli() {
     case "$1" in
-        claude|codex|gemini)
+        claude|codex|agy)
             ux_require "$1" || return 1
             ;;
         *)
-            ux_error "invalid --ai value: '$1' (expected: claude|codex|gemini)"
+            ux_error "invalid --ai value: '$1' (expected: claude|codex|agy)"
             return 1
             ;;
     esac
@@ -94,7 +94,7 @@ _gh_pr_reply_run_ai_prompt() {
 gh_pr_reply_help() {
     ux_header "gh-pr-reply - fire-and-forget GitHub PR review-reply runner"
     ux_info "Usage: gh-pr-reply <pr-number>... [--ai <agent>] [--user <account>] | -h|--help"
-    ux_bullet_sub "agent: claude (default) | codex | gemini"
+    ux_bullet_sub "agent: claude (default) | codex | agy"
     ux_bullet_sub "--user <account>: claude account (personal|work). Only with --ai claude."
     ux_bullet_sub "                  Default: \$CLAUDE_DEFAULT_ACCOUNT (multi-account env)"
     ux_info ""
@@ -110,17 +110,17 @@ gh_pr_reply_help() {
     ux_bullet "gh-pr-reply 12 34 56            # 3 PRs in parallel"
     ux_bullet "gh-pr-reply '#42'               # '#' prefix accepted"
     ux_bullet "gh-pr-reply 33 --ai codex       # run worker with codex CLI"
-    ux_bullet "gh-pr-reply --ai gemini 44 55   # run workers with gemini CLI"
+    ux_bullet "gh-pr-reply --ai agy 44 55      # run workers with agy CLI"
     ux_bullet "gh-pr-reply 42 --user work      # multi-account: route worker to ~/.claude-work"
     ux_info ""
     ux_info "State directory: ~/.local/state/gh-pr-reply/<repo>/<pr>/"
     ux_bullet_sub "state         - current step"
     ux_bullet_sub "pid           - worker process id"
-    ux_bullet_sub "ai            - selected ai runner (claude|codex|gemini)"
+    ux_bullet_sub "ai            - selected ai runner (claude|codex|agy)"
     ux_bullet_sub "worktree.path - git worktree path"
     ux_bullet_sub "log           - full stdout+stderr"
     ux_bullet_sub "log.prev      - previous run's log (one generation)"
-    ux_bullet_sub "usage.jsonl   - per-invocation token usage (claude + codex + gemini)"
+    ux_bullet_sub "usage.jsonl   - per-invocation token usage (claude + codex + agy)"
     ux_info ""
     ux_info "Failure isolation:"
     ux_bullet "One worker failure does not affect others."
@@ -156,8 +156,8 @@ gh_pr_reply() {
     esac
 
     # Parse optional args (PR numbers and --ai may interleave):
-    #   --ai <claude|codex|gemini>
-    #   --ai=<claude|codex|gemini>
+    #   --ai <claude|codex|agy>
+    #   --ai=<claude|codex|agy>
     #   --user <account>          (claude multi-account, issue #365)
     #   --user=<account>
     # Last --ai/--user wins on duplicates — same policy gh-flow chose for #208.
@@ -169,7 +169,7 @@ gh_pr_reply() {
             --ai)
                 shift
                 if [ $# -eq 0 ]; then
-                    ux_error "--ai requires a value (expected: claude|codex|gemini)"
+                    ux_error "--ai requires a value (expected: claude|codex|agy)"
                     return 1
                 fi
                 _ai="$1"
@@ -190,7 +190,7 @@ gh_pr_reply() {
                 ;;
             -*)
                 ux_error "unknown option: '$1'"
-                ux_info "Usage: gh-pr-reply <pr-number>... [--ai <claude|codex|gemini>] [--user <account>]"
+                ux_info "Usage: gh-pr-reply <pr-number>... [--ai <claude|codex|agy>] [--user <account>]"
                 return 1
                 ;;
             *)
@@ -205,7 +205,7 @@ gh_pr_reply() {
     set -- $_pr_args
     if [ $# -eq 0 ]; then
         ux_error "no PR numbers provided"
-        ux_info "Usage: gh-pr-reply <pr-number>... [--ai <claude|codex|gemini>] [--user <account>]"
+        ux_info "Usage: gh-pr-reply <pr-number>... [--ai <claude|codex|agy>] [--user <account>]"
         return 1
     fi
 
@@ -214,9 +214,9 @@ gh_pr_reply() {
     # PATH; CLI presence is checked later in _gh_pr_reply_spawn_worker so
     # the failed:* short-circuit can still trip when the CLI is missing.
     case "$_ai" in
-        claude|codex|gemini) ;;
+        claude|codex|agy) ;;
         *)
-            ux_error "invalid --ai value: '$_ai' (expected: claude|codex|gemini)"
+            ux_error "invalid --ai value: '$_ai' (expected: claude|codex|agy)"
             return 1
             ;;
     esac

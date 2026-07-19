@@ -35,7 +35,7 @@ teardown() {
     run gh_pr_review_parse --ai chatgpt 99
     assert_failure 2
     assert_output --partial "Unknown --ai value: 'chatgpt'"
-    assert_output --partial "allowed: codex, gemini, claude"
+    assert_output --partial "allowed: codex, agy, claude"
 }
 
 @test "ai: --ai codex → ok, ai=codex" {
@@ -45,10 +45,16 @@ teardown() {
     assert_output --partial "pr=99"
 }
 
-@test "ai: --ai=gemini (= form) → ok, ai=gemini" {
-    run gh_pr_review_parse --ai=gemini 99
+@test "ai: --ai=agy (= form) → ok, ai=agy" {
+    run gh_pr_review_parse --ai=agy 99
     assert_success
-    assert_output --partial "ai=gemini"
+    assert_output --partial "ai=agy"
+}
+
+@test "ai: --ai gemini → exit 2 (removed value)" {
+    run gh_pr_review_parse --ai gemini 99
+    assert_failure 2
+    assert_output --partial "Unknown --ai value: 'gemini'"
 }
 
 @test "ai: --ai claude → ok, ai=claude" {
@@ -114,13 +120,13 @@ teardown() {
 }
 
 @test "review: KR alias 보안 → security" {
-    run gh_pr_review_parse --ai gemini --review 보안 99
+    run gh_pr_review_parse --ai agy --review 보안 99
     assert_success
     assert_output --partial "review=security"
 }
 
 @test "review: KR alias 성능 → performance" {
-    run gh_pr_review_parse --ai gemini --review 성능 99
+    run gh_pr_review_parse --ai agy --review 성능 99
     assert_success
     assert_output --partial "review=performance"
 }
@@ -149,8 +155,8 @@ teardown() {
     assert_output --partial "--user is only valid with --ai claude"
 }
 
-@test "user: --user with --ai gemini → exit 2 (cross-AI rejected)" {
-    run gh_pr_review_parse --ai gemini --user work 99
+@test "user: --user with --ai agy → exit 2 (cross-AI rejected)" {
+    run gh_pr_review_parse --ai agy --user work 99
     assert_failure 2
     assert_output --partial "--user is only valid with --ai claude"
 }

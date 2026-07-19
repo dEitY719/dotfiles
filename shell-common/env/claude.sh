@@ -9,7 +9,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # AI tool for documentation generation
-# Options: claude (default), gemini, codex, or any CLI tool accepting -p/--prompt
+# Options: claude (default), agy, codex, or any CLI tool accepting -p/--prompt
 # Can be overridden per-command or per-session
 export CLAUDE_DOC_GENERATOR=claude
 

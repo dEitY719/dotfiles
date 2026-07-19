@@ -2,7 +2,7 @@
 
 `--review` is a **closed enum**. Free-text input is rejected; Korean
 aliases normalize to the English enum before dispatch. The same prompt
-template is fed to all three CLIs (`codex` / `gemini` / `claude`) so
+template is fed to all three CLIs (`codex` / `agy` / `claude`) so
 their outputs are comparable side-by-side.
 
 ## Enum + Korean alias table

@@ -16,8 +16,8 @@ Skill(devx:pr-review-all, "<PR_NUM> <remote> --defer-reply 8")
 One call replaces the former inline gate (codex ∥ /simplify + commit/push)
 AND the former `devx:schedule` pr-reply step. Inside `devx:pr-review-all`:
 
-- **gemini ∥ codex ∥ /simplify** run as parallel Agent subagents in one turn.
-  gemini review is now included (it was missing from the old inline gate).
+- **agy ∥ codex ∥ /simplify** run as parallel Agent subagents in one turn.
+  agy review is now included (it was missing from the old inline gate).
   Each lane is soft-fail: a missing CLI or transient error skips that lane and
   the others continue.
 - **simplify commit + push** happens **synchronously inside** the skill,
@@ -38,7 +38,7 @@ simplify-commit-before-rebase guarantee the old inline Step 2.3.3 provided.
 
 ## Soft-fail policy
 
-- codex/gemini absent → that lane skips (not a failure).
+- codex/agy absent → that lane skips (not a failure).
 - simplify no change → no commit (clean tree).
 - Any error in review, simplify, the simplify commit/push, or the reply
   scheduling → the delegated skill emits a `[WARN]`/`[SKIP]` line and the

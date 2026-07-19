@@ -52,10 +52,10 @@ _gh_pr_approve_get_state() {
 # AI runner helpers (mirror gh_flow.sh — keep both modules in sync)
 # ============================================================================
 
-# Returns 0 if the ai runner is one of: claude, codex, gemini.
+# Returns 0 if the ai runner is one of: claude, codex, agy.
 _gh_pr_approve_known_ai() {
     case "$1" in
-    claude | codex | gemini) return 0 ;;
+    claude | codex | agy) return 0 ;;
     *) return 1 ;;
     esac
 }
@@ -75,14 +75,14 @@ _gh_pr_approve_require_ai_cli() {
             return 1
         fi
         ;;
-    gemini)
-        if ! _have gemini; then
-            ux_error "gemini CLI not found"
+    agy)
+        if ! _have agy; then
+            ux_error "agy CLI not found"
             return 1
         fi
         ;;
     *)
-        ux_error "invalid --ai value: '$1' (allowed: claude, codex, gemini)"
+        ux_error "invalid --ai value: '$1' (allowed: claude, codex, agy)"
         return 1
         ;;
     esac
@@ -141,14 +141,11 @@ _gh_pr_approve_check_ai_auth() {
         ux_error "codex CLI not authenticated. Run 'codex login' first."
         return 1
         ;;
-    gemini)
-        if [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${GOOGLE_API_KEY:-}" ]; then
+    agy)
+        if [ -d "$HOME/.gemini/antigravity-cli" ]; then
             return 0
         fi
-        if [ -f "$HOME/.gemini/oauth_creds.json" ]; then
-            return 0
-        fi
-        ux_error "gemini CLI not authenticated. Run 'gemini' once interactively to sign in."
+        ux_error "agy CLI not authenticated. Run 'agy' once interactively to sign in."
         return 1
         ;;
     *)
@@ -417,7 +414,7 @@ _gh_pr_approve_status_single() {
     fi
 
     # For approving failures the tail above usually only shows the Token
-    # Usage block — the actual claude/codex/gemini error message
+    # Usage block — the actual claude/codex/agy error message
     # (e.g. "Not logged in · Please run /login") gets buried earlier in
     # the log. Surface it directly from usage.jsonl so the diagnosis is
     # one glance away instead of one tail|grep away.
@@ -806,7 +803,7 @@ gh_pr_approve_help() {
     ux_header "gh-pr-approve - fire-and-forget GitHub PR approval runner"
     ux_info "Usage:"
     ux_bullet "gh-pr-approve <pr-number>... [--ai <agent>] [--user <account>] [--self-record|--admin-merge] [--squash|--rebase|--merge]"
-    ux_bullet_sub "agent: claude (default) | codex | gemini"
+    ux_bullet_sub "agent: claude (default) | codex | agy"
     ux_bullet_sub "--user <account>: claude account (personal|work). Only with --ai claude."
     ux_bullet_sub "                  Default: \$CLAUDE_DEFAULT_ACCOUNT (multi-account env)"
     ux_bullet_sub "--self-record: for self-authored PRs, leave a comment-only review record"
@@ -823,7 +820,7 @@ gh_pr_approve_help() {
     ux_bullet "gh-pr-approve 42                            # single PR (default: claude)"
     ux_bullet "gh-pr-approve 12 34 56                      # 3 PRs in parallel"
     ux_bullet "gh-pr-approve 42 --ai codex                 # run worker with codex CLI"
-    ux_bullet "gh-pr-approve --ai gemini '#56' '#78'       # gemini + #prefix"
+    ux_bullet "gh-pr-approve --ai agy '#56' '#78'          # agy + #prefix"
     ux_bullet "gh-pr-approve 42 --user work                # multi-account: route worker to ~/.claude-work"
     ux_bullet "gh-pr-approve 42 --self-record              # self-PR comment-only record"
     ux_bullet "gh-pr-approve 42 --admin-merge --squash     # self-PR admin merge"
@@ -836,13 +833,13 @@ gh_pr_approve_help() {
     ux_info ""
     ux_info "State directory: ~/.local/state/gh-pr-approve/<repo>/<pr>/"
     ux_bullet_sub "state         - current step"
-    ux_bullet_sub "ai            - selected ai runner (claude|codex|gemini)"
+    ux_bullet_sub "ai            - selected ai runner (claude|codex|agy)"
     ux_bullet_sub "pid           - worker process id"
     ux_bullet_sub "worktree.path - git worktree path"
     ux_bullet_sub "flags         - launch flags (--self-record, --admin-merge, etc.)"
     ux_bullet_sub "log           - full stdout+stderr"
     ux_bullet_sub "log.prev      - previous run's log (one generation)"
-    ux_bullet_sub "usage.jsonl   - per-invocation token usage (claude + codex + gemini)"
+    ux_bullet_sub "usage.jsonl   - per-invocation token usage (claude + codex + agy)"
     ux_info ""
     ux_info "Failure isolation:"
     ux_bullet "One worker failure does not affect others."
@@ -855,7 +852,7 @@ gh_pr_approve_help() {
     ux_bullet "Selected AI CLI authenticated (env var or local credentials file)"
     ux_bullet_sub "claude: ANTHROPIC_API_KEY or ~/.claude/.credentials.json or ~/.claude.json"
     ux_bullet_sub "codex:  OPENAI_API_KEY or ~/.codex/auth.json"
-    ux_bullet_sub "gemini: GEMINI_API_KEY / GOOGLE_API_KEY or ~/.gemini/oauth_creds.json"
+    ux_bullet_sub "agy: OAuth token in ~/.gemini/antigravity-cli/"
     ux_bullet_sub "if missing, gh-pr-approve refuses to spawn (no worktree, no state dir)"
     ux_info ""
     ux_info "Related:"
@@ -891,8 +888,8 @@ gh_pr_approve() {
     esac
 
     # Parse optional args:
-    #   --ai <claude|codex|gemini>
-    #   --ai=<claude|codex|gemini>
+    #   --ai <claude|codex|agy>
+    #   --ai=<claude|codex|agy>
     #   --user <account>          (claude multi-account, issue #365)
     #   --user=<account>
     #   --self-record             (comment-only self-PR mode in skill)
@@ -911,7 +908,7 @@ gh_pr_approve() {
         --ai)
             shift
             if [ $# -eq 0 ]; then
-                ux_error "missing value for --ai (expected: claude|codex|gemini)"
+                ux_error "missing value for --ai (expected: claude|codex|agy)"
                 return 1
             fi
             _ai="$1"
@@ -950,7 +947,7 @@ gh_pr_approve() {
             ;;
         -*)
             ux_error "unknown option: '$1'"
-            ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>] [--user <account>] [--self-record|--admin-merge]"
+            ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|agy>] [--user <account>] [--self-record|--admin-merge]"
             return 1
             ;;
         *)
@@ -975,7 +972,7 @@ gh_pr_approve() {
     fi
 
     if ! _gh_pr_approve_known_ai "$_ai"; then
-        ux_error "invalid --ai value: '$_ai' (expected: claude|codex|gemini)"
+        ux_error "invalid --ai value: '$_ai' (expected: claude|codex|agy)"
         return 1
     fi
 
@@ -1044,7 +1041,7 @@ gh_pr_approve() {
 
     if [ "$_pr_count" -eq 0 ]; then
         ux_error "no PR numbers provided"
-        ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|gemini>] [--user <account>] [--self-record|--admin-merge]"
+        ux_info "Usage: gh-pr-approve <pr-number>... [--ai <claude|codex|agy>] [--user <account>] [--self-record|--admin-merge]"
         return 1
     fi
 

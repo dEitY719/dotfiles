@@ -1,11 +1,11 @@
 ---
 name: devx:pr-review-all
 description: >-
-  Fan out every available reviewer on one PR in parallel — gemini ∥ codex
+  Fan out every available reviewer on one PR in parallel — agy ∥ codex
   second opinions ∥ a sequential /code-review --fix → /simplify auto-fix
   chain (each sub-step commits its own changes) — then run a reply pass over
   the review comments. Use for /devx:pr-review-all, /devx-pr-review-all,
-  "PR 다중 리뷰어 병렬로", "gemini codex simplify 한번에 돌려",
+  "PR 다중 리뷰어 병렬로", "agy codex simplify 한번에 돌려",
   "PR 99 전체 리뷰". A composition skill — distinct from gh:pr-review
   (single external AI, one comment). Reused by gh:issue-flow as its post-PR
   quality gate. Accepts `<PR#> [remote] [--defer-reply M] [--no-reply]`
@@ -23,7 +23,7 @@ metadata:
 
 ## Role
 
-Orchestrate a single PR through all available reviewers at once (gemini ∥
+Orchestrate a single PR through all available reviewers at once (agy ∥
 codex ∥ `/code-review --fix` → `/simplify`), commit any auto-fix changes per
 sub-step, then reply to the review comments — inline (deterministic) or
 deferred. No approve / request-changes decision (that is `gh:pr-approve`) and
@@ -61,7 +61,7 @@ print the stderr line and stop. Capture `pr`, `remote`, `reply_mode`
 
 ## Step 3: Review + auto-fix gate (dispatch all lanes in ONE turn)
 
-The three lanes dispatch together in a single turn. gemini and codex are
+The three lanes dispatch together in a single turn. agy and codex are
 comment-only (never touch the working tree), so they run fully in parallel
 with everything else. `/code-review --fix` and `/simplify` both mutate the
 PR working tree, so **within the third lane they run sequentially, each
@@ -70,8 +70,8 @@ other, or the two agents could edit the same files at once
 (`references/constraints.md`). Each lane is soft-fail — a failure marks that
 lane `[SKIP]`/`[WARN]` and the others continue.
 
-- **gemini** — if `command -v gemini`, an Agent runs
-  `Skill(gh:pr-review, "--ai gemini <pr> <remote>")`; absent or non-zero exit → SKIP/WARN.
+- **agy** — if `command -v agy`, an Agent runs
+  `Skill(gh:pr-review, "--ai agy <pr> <remote>")`; absent or non-zero exit → SKIP/WARN.
 - **codex** — if `command -v codex`, an Agent runs
   `Skill(gh:pr-review, "--ai codex <pr> <remote>")`; absent or non-zero exit → SKIP/WARN.
 - **auto-fix chain** (sequential sub-steps, both on the working-tree diff;
@@ -96,7 +96,7 @@ Await all lanes, then:
 ## Step 5: pr-reply (per reply_mode)
 
 - `inline` (default) → run `Skill(gh:pr-reply, "<pr> <remote>")` immediately.
-  Step 3 was awaited, so gemini/codex comments are already posted — reply
+  Step 3 was awaited, so agy/codex comments are already posted — reply
   order is deterministic, no delay needed. The `<remote>` is threaded so
   `gh:pr-reply` resolves the same target repo this skill did, not gh's
   default-repo heuristic (`references/constraints.md`).
@@ -106,7 +106,7 @@ Await all lanes, then:
 ## Step 6: Report
 
 Print exactly one `[OK]`/`[SKIP]`/`[WARN]` line, e.g.
-`[OK] PR #<pr> reviewed (gemini:OK codex:SKIP code-review:committed simplify:committed) — reply: inline`.
+`[OK] PR #<pr> reviewed (agy:OK codex:SKIP code-review:committed simplify:committed) — reply: inline`.
 
 ## Constraints (full rationale: `references/constraints.md`)
 

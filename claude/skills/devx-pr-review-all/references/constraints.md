@@ -2,10 +2,10 @@
 
 The SKILL.md body lists these as terse rules; the full rationale lives here.
 
-- **Every reviewer lane is soft-fail — never hard-fail.** A missing `gemini`
+- **Every reviewer lane is soft-fail — never hard-fail.** A missing `agy`
   or `codex` CLI (`command -v` empty), a rate-limit, or any non-zero exit from
   `gh:pr-review` marks only that lane `[SKIP]`/`[WARN]`; the other lanes and
-  the rest of the flow continue. If both gemini and codex are unavailable,
+  the rest of the flow continue. If both agy and codex are unavailable,
   `/simplify` still runs. `gh:pr-review` already does its own
   `command -v`/OPEN/draft pre-flight, so do **not** duplicate those as
   hard-fails here — always wrap the lane softly.
@@ -19,14 +19,14 @@ The SKILL.md body lists these as terse rules; the full rationale lives here.
   `git commit -am "refactor(<scope>): simplify per /simplify"`.
 
 - **`/code-review --fix` and `/simplify` both mutate the working tree — never
-  run them concurrently with each other.** gemini/codex only post PR
+  run them concurrently with each other.** agy/codex only post PR
   comments, so they're safe to fan out fully in parallel. But two agents
   editing the same files at the same time is a real correctness risk (lost
   edits, interleaved partial writes, a resulting diff that matches neither
   agent's intent). Step 3's third lane is therefore internally sequential —
   `/code-review --fix` runs to completion and commits before `/simplify`
   starts — even though the lane as a whole still dispatches in the same turn
-  as gemini/codex.
+  as agy/codex.
 
 - **Each auto-fix sub-step gets its own commit, not one combined commit.**
   `fix(<scope>): code-review --fix` and `refactor(<scope>): simplify per
@@ -36,7 +36,7 @@ The SKILL.md body lists these as terse rules; the full rationale lives here.
   versa. A single `git push` at Step 4 sends up whichever commits exist.
 
 - **Delay is not a guarantee — inline reply is the deterministic path.**
-  gemini/codex reviews are synchronous `gh:pr-review` CLI calls: they post the
+  agy/codex reviews are synchronous `gh:pr-review` CLI calls: they post the
   PR comment before returning. Because Step 3 awaits all three Agents, the
   comments exist by the time Step 5 runs, so an **inline** `gh:pr-reply` sees
   them with deterministic ordering — no fixed delay needed. `--defer-reply` is

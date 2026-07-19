@@ -343,6 +343,21 @@ _ai_usage_run() {
         rm -f "$_tmp"
         return 0
         ;;
+    agy)
+        # agy has no `--output-format json` equivalent (issue #1184), so we
+        # cannot parse per-call usage the way claude/codex/gemini do. Run it
+        # unchanged and record a minimal untracked entry — same
+        # graceful-degradation shape as the cli_failed records above —
+        # rather than silently reporting 0 tokens. Usage/cost tracking for
+        # agy is a follow-up issue once its output format is investigated.
+        agy --dangerously-skip-permissions --print <<<"$_prompt"
+        _ec=$?
+        printf '{"ai":"agy","ts":"%s","label":%s,"exit_code":%d,"tracking":"unsupported"}\n' \
+            "$_now" \
+            "$(printf '%s' "$_label" | jq -Rsc . 2>/dev/null || printf '"%s"' "$_label")" \
+            "$_ec" >>"$_log"
+        return $_ec
+        ;;
     *)
         printf '[ai-usage] invalid ai runner: %s\n' "$_ai" >&2
         return 2

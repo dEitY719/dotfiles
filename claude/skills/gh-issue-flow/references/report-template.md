@@ -7,7 +7,7 @@ gh:issue-flow complete (#<N>)
   [OK] Step 1: gh:issue-implement       (<n files changed>, <n tests passed>)
   [OK] Step 2: gh:commit                (<sha> "<subject>")
   [OK] Step 3: gh:pr                    (PR #<M>)
-  [OK] Step 4: devx:pr-review-all       (gemini+codex+simplify, reply in 8 min)
+  [OK] Step 4: devx:pr-review-all       (agy+codex+simplify, reply in 8 min)
   [OK] Step 5: gh:pr-resolve-conflict   (no conflicts / resolved)
   [OK] Step 5.1: gh:pr-resolve-outdated (up to date / rebased)
   [OK] Step 6: ai-metrics               (~X tokens · ~M h · ~L min)
@@ -17,7 +17,7 @@ gh:issue-flow complete (#<N>)
 Step 4 (`devx:pr-review-all`) is soft-fail — its row uses `[SKIP]`/`[WARN]`
 for the gate's degraded cases (the delegated skill reports the per-lane
 detail):
-- `[SKIP] Step 4: devx:pr-review-all  (gemini/codex absent)` — no CLI.
+- `[SKIP] Step 4: devx:pr-review-all  (agy/codex absent)` — no CLI.
 - `[SKIP] Step 4: devx:pr-review-all  (simplify: no change)` — clean tree, no commit.
 - `[WARN] Step 4: devx:pr-review-all  (<reason>)` — review/simplify error, continued.
 
