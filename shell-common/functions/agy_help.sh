@@ -7,8 +7,8 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 _agy_help_summary() {
     ux_info "Usage: agy-help [section|--list|--all]"
     ux_bullet "sections"
-    ux_bullet_sub "basic: agyver | agyhelp | agyc | agyplan | agymodels"
-    ux_bullet_sub "setup: agy_install | agy_uninstall"
+    ux_bullet_sub "basic: agy-version | agy-continue | agy-plan | agy-models"
+    ux_bullet_sub "setup: agy-install | agy-uninstall"
     ux_bullet_sub "tips: OAuth token dir | agy install PATH conflict"
     ux_bullet_sub "details: agy-help <section>  (example: agy-help basic)"
 }
@@ -21,22 +21,21 @@ _agy_help_list_sections() {
 }
 
 _agy_help_rows_basic() {
-    ux_table_row "agyver" "agy --version" "Check version"
-    ux_table_row "agyhelp" "agy --help" "Show CLI help"
-    ux_table_row "agyc" "agy --continue" "Continue recent conversation"
-    ux_table_row "agyplan" "agy --mode plan" "Run in plan mode"
-    ux_table_row "agymodels" "agy models" "List available models"
+    ux_table_row "agy-version" "agy --version" "Check version"
+    ux_table_row "agy-continue" "agy --continue" "Continue recent conversation"
+    ux_table_row "agy-plan" "agy --mode plan" "Run in plan mode"
+    ux_table_row "agy-models" "agy models" "List available models"
 }
 
 _agy_help_rows_setup() {
-    ux_table_row "agy_install" "Install Script" "Install Antigravity CLI"
-    ux_table_row "agy_uninstall" "Uninstall Script" "Remove Antigravity CLI"
+    ux_table_row "agy-install" "Install Script" "Install Antigravity CLI"
+    ux_table_row "agy-uninstall" "Uninstall Script" "Remove Antigravity CLI"
 }
 
 _agy_help_rows_tips() {
     ux_bullet "OAuth token stored in ~/.gemini/antigravity-cli/"
-    ux_bullet "Use 'agyhelp' for detailed CLI options"
-    ux_bullet "Model list changes often — use 'agymodels' instead of fixed aliases"
+    ux_bullet "Use 'agy --help' for detailed CLI options"
+    ux_bullet "Model list changes often — use 'agy-models' instead of fixed aliases"
     ux_bullet "agy install edits shell profiles; PATH SSOT is shell-common/env/path.sh"
     ux_bullet "Prefer: agy install --skip-path --skip-aliases"
 }
