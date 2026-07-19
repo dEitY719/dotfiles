@@ -20,9 +20,21 @@
 |------|------|------|
 | Public 함수 (dispatcher/main) | `snake_case` | `git_branch`, `git_worktree` |
 | Private sub-function | `_<prefix>_<verb>` | `_gb_clean_local`, `_gwt_help_rows_add` |
-| Public alias (user-facing) | `dash-form` | `gb`, `gwt`, `git-clean-local` (deprecated) |
+| Public alias (user-facing) | `dash-form`, 풀어쓴 `<tool>-<noun>` 권장 (§1.1) | `agy-version`, `git-clean-local`; git 예외: `gb`, `gwt` |
 | Help 함수 (inline) | `_<prefix>_help` | `_gb_help` |
 | Help 함수 (standalone) | `<topic>_help` + alias `<topic>-help` | `gwt_help` / `gwt-help` |
+
+### 1.1 별칭 가독성 — cryptic 축약 지양
+
+- **원칙**: user-facing alias 는 의미가 드러나는 풀어쓴 `<tool>-<noun>`
+  형태를 사용한다. 축약형은 완전한 명사로 spell out 하고, 단일 문자나
+  의미를 유추할 수 없는 축약은 쓰지 않는다.
+  - Good: `agy-version`, `agy-continue`, `agy-models`, `agy-install`
+  - Avoid: `agyver`, `agyc`(= `--continue`, `c` 가 불명확), `agymodels`
+- **예외 — git 계열 고빈도 관용 축약**: `gb`(git branch),
+  `gwt`(git worktree) 등 수십 년간 관용으로 굳고 타이핑 빈도가 매우 높은
+  git 명령 축약은 그대로 유지한다. 이 예외는 **git 계열에 한정**하며,
+  신규 non-git 명령에는 적용하지 않는다.
 
 ## 2. Command 유형 결정 기준
 
