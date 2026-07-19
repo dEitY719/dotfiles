@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=%h/.agentmemory
-ExecStart=/usr/bin/agentmemory
+ExecStart=/usr/bin/env agentmemory
 Environment=CI=1
 Restart=on-failure
 RestartSec=5
