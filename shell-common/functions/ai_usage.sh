@@ -350,7 +350,7 @@ _ai_usage_run() {
         # graceful-degradation shape as the cli_failed records above —
         # rather than silently reporting 0 tokens. Usage/cost tracking for
         # agy is a follow-up issue once its output format is investigated.
-        agy --dangerously-skip-permissions --print <<<"$_prompt"
+        printf '%s\n' "$_prompt" | agy --dangerously-skip-permissions --print
         _ec=$?
         printf '{"ai":"agy","ts":"%s","label":%s,"exit_code":%d,"tracking":"unsupported"}\n' \
             "$_now" \
