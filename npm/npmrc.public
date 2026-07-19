@@ -13,5 +13,12 @@
 #
 # Note: public registry (registry.npmjs.org) is npm's default, so no
 #       registry/proxy/cafile lines are needed here — only the prefix.
+#
+# Why allow-git=true:
+#   npm 12+ defaults allow-git to disabled (supply-chain hardening),
+#   blocking `npx github:owner/repo`-style installs. Some CLI installers
+#   (e.g. plugin marketplaces installed via curl|bash -> npx github:...)
+#   need it enabled.
 
 prefix=${HOME}/.npm-global
+allow-git=true
