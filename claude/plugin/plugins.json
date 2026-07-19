@@ -9,12 +9,12 @@
     "example-skills@anthropic-agent-skills",
     "hookify@claude-plugins-official",
     "last30days@last30days-skill",
+    "obsidian@obsidian-skills",
     "playwright@claude-plugins-official",
     "ponytail@ponytail",
     "ralph-loop@claude-plugins-official",
     "session-report@claude-plugins-official",
     "superpowers@claude-plugins-official",
-    "superpowers@superpowers-dev",
     "understand-anything@understand-anything"
   ]
 }
