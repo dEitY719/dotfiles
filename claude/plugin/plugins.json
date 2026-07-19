@@ -8,6 +8,7 @@
     "document-skills@anthropic-agent-skills",
     "example-skills@anthropic-agent-skills",
     "hookify@claude-plugins-official",
+    "last30days@last30days-skill",
     "playwright@claude-plugins-official",
     "ponytail@ponytail",
     "ralph-loop@claude-plugins-official",
