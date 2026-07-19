@@ -4,6 +4,7 @@
     "andrej-karpathy-skills@karpathy-skills",
     "caveman@caveman",
     "claude-md-management@claude-plugins-official",
+    "code-review@claude-plugins-official",
     "codex@openai-codex",
     "document-skills@anthropic-agent-skills",
     "example-skills@anthropic-agent-skills",
@@ -14,8 +15,8 @@
     "ponytail@ponytail",
     "ralph-loop@claude-plugins-official",
     "session-report@claude-plugins-official",
+    "skill-creator@claude-plugins-official",
     "superpowers@claude-plugins-official",
-    "superpowers@superpowers-dev",
     "understand-anything@understand-anything"
   ]
 }
