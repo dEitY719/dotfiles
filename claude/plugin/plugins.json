@@ -1,5 +1,6 @@
 {
   "plugins": [
+    "agentmemory@agentmemory",
     "andrej-karpathy-skills@karpathy-skills",
     "claude-md-management@claude-plugins-official",
     "codex@openai-codex",
