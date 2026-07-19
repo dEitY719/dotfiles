@@ -7,6 +7,7 @@
 ## Index
 
 - [ponytail](./ponytail.md) — 과잉설계 방지 (YAGNI/stdlib/native 우선 강제)
+- [andrej-karpathy-skills](./andrej-karpathy-skills.md) — LLM 코딩 실수 방지 행동 지침 (가정 명시/단순성/외과적 수정)
 
 ## 문서 구성
 
