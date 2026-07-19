@@ -35,7 +35,7 @@ _agy_help_rows_setup() {
 _agy_help_rows_tips() {
     ux_bullet "OAuth token stored in ~/.gemini/antigravity-cli/"
     ux_bullet "Use 'agy --help' for detailed CLI options"
-    ux_bullet "Model list changes often — use 'agy-models' instead of fixed aliases"
+    ux_bullet "Model list changes often — run 'agy models' directly rather than relying on the 'agy-models' alias"
     ux_bullet "agy install edits shell profiles; PATH SSOT is shell-common/env/path.sh"
     ux_bullet "Prefer: agy install --skip-path --skip-aliases"
 }

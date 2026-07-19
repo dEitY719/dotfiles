@@ -36,6 +36,8 @@ alias agy-continue='agy --continue'
 alias agy-plan='agy --mode plan'
 alias agy-models='agy models'
 alias agy-yolo='agy --dangerously-skip-permissions'
+alias agy-install='agy_install'
+alias agy-uninstall='agy_uninstall'
 
 # --- Functions ---
 
@@ -48,6 +50,3 @@ agy_install() {
 agy_uninstall() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/uninstall_agy.sh"
 }
-
-alias agy-install='agy_install'
-alias agy-uninstall='agy_uninstall'
