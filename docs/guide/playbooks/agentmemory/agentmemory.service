@@ -1,0 +1,16 @@
+[Unit]
+Description=agentmemory - persistent memory server for AI coding agents
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.agentmemory
+ExecStart=/usr/bin/agentmemory
+Environment=CI=1
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
