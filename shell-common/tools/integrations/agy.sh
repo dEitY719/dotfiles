@@ -12,14 +12,14 @@ Antigravity CLI (agy) Dotfiles Helper - Getting Started
 1) 설치 (공식 스크립트)
 ------------------------
    curl -fsSL https://antigravity.google/cli/install.sh | bash
-   Use: agy_install   (runs interactive installation script)
-   Use: agy_uninstall (runs interactive uninstallation script)
+   Use: agy-install   (runs interactive installation script)
+   Use: agy-uninstall (runs interactive uninstallation script)
 
 2) 인증 / 사용
 ------------------------
    OAuth 토큰은 ~/.gemini/antigravity-cli/ 에 저장된다.
-   Use: agyhelp   (agy --help — 실제 CLI 옵션 확인)
-   Use: agymodels (agy models — 사용 가능한 모델 목록)
+   Use: agy --help (실제 CLI 옵션 확인)
+   Use: agy-models (agy models — 사용 가능한 모델 목록)
    Use: agy-yolo  (agy --dangerously-skip-permissions — codex-yolo 와 동일하게
                    승인/권한 확인을 건너뛴다. 신뢰된 로컬 작업에서만 사용할 것)
 
@@ -31,11 +31,10 @@ PATH SSOT 로 관리하므로, agy install 을 직접 쓸 때는
 AGY_DOC
 
 # --- Aliases (agy --help 로 확인된 실제 플래그 기반) ---
-alias agyver='agy --version'
-alias agyhelp='agy --help'
-alias agyc='agy --continue'
-alias agyplan='agy --mode plan'
-alias agymodels='agy models'
+alias agy-version='agy --version'
+alias agy-continue='agy --continue'
+alias agy-plan='agy --mode plan'
+alias agy-models='agy models'
 alias agy-yolo='agy --dangerously-skip-permissions'
 
 # --- Functions ---
@@ -49,3 +48,6 @@ agy_install() {
 agy_uninstall() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/uninstall_agy.sh"
 }
+
+alias agy-install='agy_install'
+alias agy-uninstall='agy_uninstall'
