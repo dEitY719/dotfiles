@@ -2,6 +2,7 @@
   "plugins": [
     "agentmemory@agentmemory",
     "andrej-karpathy-skills@karpathy-skills",
+    "caveman@caveman",
     "claude-md-management@claude-plugins-official",
     "codex@openai-codex",
     "document-skills@anthropic-agent-skills",
