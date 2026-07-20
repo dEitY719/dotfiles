@@ -293,22 +293,24 @@ del_file() {
     # Parse options in a loop so help works regardless of flag order
     # (e.g. `clean-home --help` == `del_file --home --help`), and unknown
     # flags are rejected instead of being treated as cleanup patterns.
-    local home_mode=0
-    local cache_mode=0
+    local mode=""
+    local new_mode=""
     while [ $# -gt 0 ]; do
         case "$1" in
             -h|--help|help) del_file_help; return 0 ;;
-            --home) home_mode=1; shift ;;
-            --cache) cache_mode=1; shift ;;
+            --home|--cache)
+                new_mode="${1#--}"
+                if [ -n "$mode" ] && [ "$mode" != "$new_mode" ]; then
+                    ux_error "del-file: --home and --cache are mutually exclusive"
+                    return 1
+                fi
+                mode="$new_mode"
+                shift
+                ;;
             -*) ux_error "del-file: unknown option $1"; return 1 ;;
             *) break ;;
         esac
     done
-
-    if [ "$home_mode" -eq 1 ] && [ "$cache_mode" -eq 1 ]; then
-        ux_error "del-file: --home and --cache are mutually exclusive"
-        return 1
-    fi
 
     if [ ! -t 0 ] || [ ! -t 1 ]; then
         ux_error "del-file requires an interactive terminal"
@@ -321,28 +323,32 @@ del_file() {
     local default_pattern=""
     local selection=""
 
-    if [ "$home_mode" -eq 1 ]; then
-        search_dir="${HOME}"
-        _cleanup_set_home_patterns
-        for default_pattern in "${CLEANUP_HOME_PATTERNS[@]}"; do
-            [ -n "$default_pattern" ] || continue
-            patterns+=("$default_pattern")
-        done
-    elif [ "$cache_mode" -eq 1 ]; then
-        search_dir="${HOME}"
-        _cleanup_set_cache_patterns
-        for default_pattern in "${CLEANUP_CACHE_PATTERNS[@]}"; do
-            [ -n "$default_pattern" ] || continue
-            patterns+=("$default_pattern")
-        done
-    else
-        search_dir="${PWD}"
-        _cleanup_set_default_patterns
-        for default_pattern in "${CLEANUP_DEFAULT_PATTERNS[@]}"; do
-            [ -n "$default_pattern" ] || continue
-            patterns+=("$default_pattern")
-        done
-    fi
+    case "$mode" in
+        home)
+            search_dir="${HOME}"
+            _cleanup_set_home_patterns
+            for default_pattern in "${CLEANUP_HOME_PATTERNS[@]}"; do
+                [ -n "$default_pattern" ] || continue
+                patterns+=("$default_pattern")
+            done
+            ;;
+        cache)
+            search_dir="${HOME}"
+            _cleanup_set_cache_patterns
+            for default_pattern in "${CLEANUP_CACHE_PATTERNS[@]}"; do
+                [ -n "$default_pattern" ] || continue
+                patterns+=("$default_pattern")
+            done
+            ;;
+        *)
+            search_dir="${PWD}"
+            _cleanup_set_default_patterns
+            for default_pattern in "${CLEANUP_DEFAULT_PATTERNS[@]}"; do
+                [ -n "$default_pattern" ] || continue
+                patterns+=("$default_pattern")
+            done
+            ;;
+    esac
 
     for extra_pattern in "$@"; do
         [ -n "$extra_pattern" ] || continue
@@ -350,20 +356,19 @@ del_file() {
     done
 
     # Home mode also cleans the legacy ~/dotfiles-backup/ directory.
-    if [ "$home_mode" -eq 1 ]; then
+    if [ "$mode" = "home" ]; then
         _cleanup_offer_dotfiles_backup_dir "$search_dir"
     fi
 
     # Cache mode also cleans stale .zcompdump-*.lock/ directories.
-    if [ "$cache_mode" -eq 1 ]; then
+    if [ "$mode" = "cache" ]; then
         _cleanup_offer_cache_lock_dirs "$search_dir"
     fi
 
     if ! _cleanup_preview "$search_dir" "${patterns[@]}"; then
         # In home/cache mode the directory cleanup above may already have
         # done useful work, so a "no matching files" result is not an error.
-        [ "$home_mode" -eq 1 ] && return 0
-        [ "$cache_mode" -eq 1 ] && return 0
+        [ -n "$mode" ] && return 0
         return 1
     fi
 
