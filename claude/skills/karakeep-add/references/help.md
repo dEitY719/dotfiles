@@ -5,7 +5,7 @@
 | Token | Default | Description |
 |-------|---------|-------------|
 | `<url>` | — | The URL to bookmark (required). |
-| `--list <path>` | — | Target List, slash-nested e.g. `github/repository` (required). |
+| `--list <path>` | — | Target List, slash-nested e.g. `github/repository`. Omit to get a `karakeep:classify` suggestion (propose-then-confirm; nothing is written). |
 | `-h` / `--help` / `help` | — | Print this help and stop. |
 
 ## Usage
@@ -14,6 +14,9 @@
   — create the `github` → `repository` path if missing, bookmark the URL,
   attach it, and verify membership.
 - `/karakeep-add <url> --list reading/longform` — nested two levels deep.
+- `/karakeep-add <url>` — no `--list`: delegates to `karakeep:classify` for a
+  suggested path and stops (writes nothing). Re-run with the suggested
+  `--list` to actually add.
 - `/karakeep-add -h` — print this help.
 
 ## What the skill does
