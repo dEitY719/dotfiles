@@ -304,45 +304,9 @@ _publish_manifest_diff() {
 	if ! _manifest_diff_exists "$repo_dir" "$@"; then
 		echo "${UX_MUTED}[$label] 변경 없음 — 할 일 없음${UX_RESET}"
 		# No content diff vs origin/main — but local `main` can still be stuck
-		# AHEAD by un-publishable commits. The plugin-sync hook auto-commits every
-		# manifest change on `main`, and branch protection then blocks the direct
-		# push. An add-then-revert within one session (e.g. `marketplace add X`
-		# then `remove X`) leaves TWO pure-sync commits whose COMBINED diff is
-		# exactly zero: un-pushable (protection), un-PR-able (empty diff → nothing
-		# to PR), and never tidied (the post-publish _cleanup runs only on the
-		# real-publish path, never reached here). Collapse them when provably safe.
+		# ahead by un-publishable no-op commits (see _collapse_stuck_sync_commits).
 		# Skipped under --dry-run, which must stay read-only (a reset would mutate).
-		if [ "${DRY_RUN:-0}" != "1" ]; then
-			local origin_sha ahead cur_branch
-			origin_sha=$(git -C "$repo_dir" rev-parse origin/main 2>/dev/null) || return 0
-			ahead=$(git -C "$repo_dir" rev-list --count "${origin_sha}..main" 2>/dev/null || echo 0)
-			if [ "${ahead:-0}" -gt 0 ]; then
-				# The reset is provably safe ONLY when purity holds AND the tree is
-				# clean: _manifest_diff_exists already proved current content ==
-				# origin/main, and purity proves the ahead commits touch nothing but
-				# the given files — so every dropped commit's content already exists
-				# in origin/main. This is the documented exception to the
-				# "never force-reset" invariant (see _cleanup_local_main_if_pure_sync).
-				if _ahead_commits_are_pure_sync "$repo_dir" "$origin_sha" "$@" &&
-					git -C "$repo_dir" diff --quiet && git -C "$repo_dir" diff --cached --quiet; then
-					cur_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null || echo "")
-					if [ "$cur_branch" = "main" ]; then
-						git -C "$repo_dir" reset --hard origin/main >/dev/null 2>&1 || return 0
-					else
-						# main not checked out — move the ref without a reset,
-						# mirroring _cleanup_local_main_if_pure_sync's else-branch.
-						git -C "$repo_dir" branch -f main origin/main >/dev/null 2>&1 || return 0
-					fi
-					echo "${UX_SUCCESS}[$label] origin/main과 내용이 동일한 no-op 로컬 sync 커밋 ${ahead}개를 정리했습니다 (로컬 main을 origin/main으로 리셋)${UX_RESET}"
-				else
-					# Ahead commits exist but are not provably discardable — some are
-					# not pure sync commits, or the working tree is dirty. Never reset
-					# here; these can never auto-publish (empty diff → no PR, branch
-					# protection → no push), so the user must reconcile by hand.
-					echo "${UX_WARNING}[$label] 로컬 main이 origin/main보다 ${ahead}개 앞서 있으나 자동 게시할 수 없습니다 (sync 외 커밋이 섞였거나 워킹트리가 더럽습니다) — 'git rebase origin/main' 또는 'git reset --hard origin/main' 으로 직접 정리하세요${UX_RESET}" >&2
-				fi
-			fi
-		fi
+		[ "${DRY_RUN:-0}" = "1" ] || _collapse_stuck_sync_commits "$repo_dir" "$label" "$@" || true
 		return 0
 	fi
 	echo "${UX_MUTED}[$label] 변경 감지됨${UX_RESET}"
@@ -382,6 +346,41 @@ _publish_manifest_diff() {
 	return 0
 }
 
+# _repo_is_clean <repo_dir>
+#
+# Return 0 iff the working tree and index have no uncommitted changes vs HEAD.
+# Single `git diff-index` call rather than the two-call `diff --quiet &&
+# diff --cached --quiet` idiom — same combined check, one subprocess. Like its
+# two-call predecessor, this does not detect untracked files; that's fine for
+# every caller here, since neither `reset --hard` nor `rebase` touches
+# untracked files, so their presence can't turn either operation into data loss.
+_repo_is_clean() {
+	git -C "$1" diff-index --quiet HEAD --
+}
+
+# _repo_current_branch <repo_dir>
+#
+# Print the checked-out branch name, or empty on detached HEAD / error.
+_repo_current_branch() {
+	git -C "$1" symbolic-ref --short HEAD 2>/dev/null || echo ""
+}
+
+# _move_main_ref <repo_dir> <target_sha>
+#
+# Point local `main` at <target_sha> via `branch -f` — used whenever `main` is
+# NOT the currently checked-out branch (a plain ref move is always safe there;
+# no working tree to disturb). `branch -f` refuses to move a branch checked
+# out in another linked worktree; that failure is warned to stderr rather than
+# swallowed, since a linked worktree with `main` checked out elsewhere is the
+# realistic way this fails in practice.
+_move_main_ref() {
+	local repo_dir="$1" target="$2"
+	git -C "$repo_dir" branch -f main "$target" >/dev/null 2>&1 || {
+		echo "${UX_WARNING}publish-sync: 로컬 main ref 이동 실패 (다른 worktree에서 체크아웃 중일 수 있음) — 직접 확인하세요${UX_RESET}" >&2
+		return 1
+	}
+}
+
 # _ahead_commits_are_pure_sync <repo_dir> <origin_sha> <file...>
 #
 # Return 0 iff every commit local `main` is ahead of <origin_sha> by is a pure
@@ -389,8 +388,8 @@ _publish_manifest_diff() {
 # commit with a non-sync subject or a path outside <file...>. Factored out of
 # _cleanup_local_main_if_pure_sync so the identical purity rule is shared by
 # both the post-publish tidy (that function) and the no-diff/no-op stuck-commit
-# collapse in _publish_manifest_diff — the two must never drift on what counts
-# as "safe to discard".
+# collapse in _collapse_stuck_sync_commits — the two must never drift on what
+# counts as "safe to discard".
 _ahead_commits_are_pure_sync() {
 	local repo_dir="$1" origin_sha="$2"
 	shift 2
@@ -420,6 +419,50 @@ _ahead_commits_are_pure_sync() {
 	[ "$pure" -eq 1 ]
 }
 
+# _collapse_stuck_sync_commits <repo_dir> <label> <file...>
+#
+# Called from _publish_manifest_diff's no-diff/no-op branch. The plugin-sync
+# hook auto-commits every manifest change on `main`, and branch protection
+# blocks the direct push it then attempts. An add-then-revert within one
+# session (e.g. `marketplace add X` then `remove X`) leaves TWO pure-sync
+# commits whose COMBINED diff is exactly zero: un-pushable (protection),
+# un-PR-able (empty diff vs origin/main → nothing to PR), and never tidied by
+# _cleanup_local_main_if_pure_sync (that function only runs on the real-publish
+# path, never reached here). Collapse them when provably safe: the caller
+# already proved current content == origin/main (that's WHY this is the
+# no-diff branch); if every ahead commit is also a pure sync commit touching
+# only the given files, AND the tree is clean, then every dropped commit's
+# content is already reflected in origin/main and nothing is lost.
+#
+# This is the ONE narrow, documented exception to "never force-resets" (see
+# _cleanup_local_main_if_pure_sync, which keeps that property intact for its
+# own diverged/published case).
+_collapse_stuck_sync_commits() {
+	local repo_dir="$1" label="$2"
+	shift 2
+	local ahead cur_branch
+
+	ahead=$(git -C "$repo_dir" rev-list --count "origin/main..main" 2>/dev/null) || ahead=0
+	[ "$ahead" -gt 0 ] || return 0
+
+	if ! _ahead_commits_are_pure_sync "$repo_dir" "origin/main" "$@" || ! _repo_is_clean "$repo_dir"; then
+		# Ahead commits exist but are not provably discardable — some are not
+		# pure sync commits, or the working tree is dirty. Never reset here;
+		# these can never auto-publish (empty diff → no PR, branch protection →
+		# no push), so the user must reconcile by hand.
+		echo "${UX_WARNING}[$label] 로컬 main이 origin/main보다 ${ahead}개 앞서 있으나 자동 게시할 수 없습니다 (sync 외 커밋이 섞였거나 워킹트리가 더럽습니다) — 'git rebase origin/main' 또는 'git reset --hard origin/main' 으로 직접 정리하세요${UX_RESET}" >&2
+		return 0
+	fi
+
+	cur_branch=$(_repo_current_branch "$repo_dir")
+	if [ "$cur_branch" = "main" ]; then
+		git -C "$repo_dir" reset --hard origin/main >/dev/null 2>&1 || return 0
+	else
+		_move_main_ref "$repo_dir" origin/main || return 1
+	fi
+	echo "${UX_SUCCESS}[$label] origin/main과 내용이 동일한 no-op 로컬 sync 커밋 ${ahead}개를 정리했습니다 (로컬 main을 origin/main으로 리셋)${UX_RESET}"
+}
+
 # _cleanup_local_main_if_pure_sync <repo_dir> <before_origin_sha> <file...>
 #
 # After a successful publish, advance local main to the new origin/main IF
@@ -433,16 +476,9 @@ _ahead_commits_are_pure_sync() {
 # lost. Leaves main untouched with an explanatory message when the tree is
 # dirty, the rebase conflicts, or purity fails.
 #
-# Never force-resets — with ONE narrow, documented exception that lives NOT in
-# this function but in the no-diff/no-op branch of _publish_manifest_diff: that
-# path may `git reset --hard origin/main` local main, but ONLY when (a)
-# _manifest_diff_exists has already proven zero content diff vs origin/main, (b)
-# every ahead commit is a pure sync-message commit touching only the given files
-# (the same _ahead_commits_are_pure_sync check), and (c) the working tree is
-# clean. Under all three the reset only ever discards commits whose entire
-# content is already reflected in origin/main — never real unpublished work.
-# This function itself (the diverged/published case) keeps the never-force-reset
-# property intact.
+# Never force-resets — see _collapse_stuck_sync_commits for the one narrow,
+# documented exception (a different function, called from the no-diff/no-op
+# branch of _publish_manifest_diff, never from here).
 _cleanup_local_main_if_pure_sync() {
 	local repo_dir="$1" before_origin="$2"
 	shift 2
@@ -458,11 +494,11 @@ _cleanup_local_main_if_pure_sync() {
 		return 0
 	fi
 
-	cur_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null || echo "")
+	cur_branch=$(_repo_current_branch "$repo_dir")
 	if [ "$cur_branch" = "main" ]; then
 		if git -C "$repo_dir" merge --ff-only origin/main --quiet 2>/dev/null; then
 			: # local main was a strict ancestor — a plain fast-forward sufficed
-		elif git -C "$repo_dir" diff --quiet && git -C "$repo_dir" diff --cached --quiet; then
+		elif _repo_is_clean "$repo_dir"; then
 			# Diverged, but purity is already proven (pure=1) and the working
 			# tree is clean. Rebase onto the new origin/main: git's patch-id
 			# detection drops the now-redundant published sync commit (the manual
@@ -482,9 +518,7 @@ _cleanup_local_main_if_pure_sync() {
 			return 1
 		fi
 	else
-		# `branch -f` (not `update-ref`) refuses to move main if it's checked
-		# out in another linked worktree, avoiding a phantom diff there.
-		git -C "$repo_dir" branch -f main origin/main || return 1
+		_move_main_ref "$repo_dir" origin/main || return 1
 	fi
 	echo "${UX_SUCCESS}publish-sync: 로컬 main을 origin/main으로 정리했습니다${UX_RESET}"
 }
