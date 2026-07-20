@@ -549,6 +549,86 @@ STUB
     assert_output --partial "변경 없음"
 }
 
+@test "_publish_manifest_diff collapses net-zero stuck sync commits onto origin/main" {
+    # The real-world bug: the plugin-sync hook auto-commits an `add X` then a
+    # `remove X` as TWO separate pure-sync commits on main. Their combined diff
+    # vs origin/main is exactly zero, so nothing can ever be published — but
+    # branch protection blocked the direct push, so local main sits AHEAD by 2
+    # commits forever. The no-diff branch must recognize this and collapse main
+    # back onto origin/main.
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    ORIGIN_MAIN=$(git -C "$REPO" rev-parse origin/main)
+
+    # commit 1: add an entry; commit 2: revert it back to the seed content.
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{}'
+    # two distinct local commits ahead of origin, but net-zero content diff
+    assert_equal "$(git -C "$REPO" rev-list --count "${ORIGIN_MAIN}..main")" "2"
+
+    DRY_RUN=0
+    run _publish_manifest_diff "$REPO" "public" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    assert_output --partial "변경 없음"
+    assert_output --partial "정리했습니다"
+    # local main collapsed onto origin/main — the two no-op commits are gone.
+    assert_equal "$(git -C "$REPO" rev-parse main)" "$(git -C "$REPO" rev-parse origin/main)"
+}
+
+@test "_publish_manifest_diff does not reset stuck commits when the working tree is dirty" {
+    # Same net-zero stuck commits, but a dirty tree — the reset is only safe on
+    # a clean tree, so main must be left ahead and a warning shown. The dirty
+    # file must be a NON-manifest tracked file: dirtying a manifest file would
+    # instead make _manifest_diff_exists true and take the publish path entirely.
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+
+    # add a tracked non-manifest file to origin so we can dirty the tree later
+    # without creating a manifest diff vs origin/main.
+    echo "readme" >"$REPO/README.md"
+    git -C "$REPO" add README.md
+    git -C "$REPO" commit -q -m "seed readme"
+    git -C "$REPO" push -q origin main
+
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{}'
+    LOCAL_MAIN_BEFORE=$(git -C "$REPO" rev-parse main)
+
+    # dirty the tree via the non-manifest file
+    echo "uncommitted work" >"$REPO/README.md"
+
+    DRY_RUN=0
+    run _publish_manifest_diff "$REPO" "public" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    assert_output --partial "변경 없음"
+    assert_output --partial "직접 정리하세요"
+    # main NOT reset — still at its original ahead SHA
+    assert_equal "$(git -C "$REPO" rev-parse main)" "$LOCAL_MAIN_BEFORE"
+}
+
+@test "_publish_manifest_diff does not reset stuck commits when a non-sync commit is mixed in" {
+    # Net-zero pure-sync commits, but an unrelated non-sync commit is also ahead
+    # of origin/main. Purity fails, so the reset must be skipped and a warning
+    # shown — main left untouched. (Mirrors the _cleanup skip-on-mixed test.)
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{}'
+    echo "unrelated change" >"$REPO/README.md"
+    git -C "$REPO" add README.md
+    git -C "$REPO" commit -q -m "docs: unrelated"
+    LOCAL_HEAD=$(git -C "$REPO" rev-parse HEAD)
+
+    DRY_RUN=0
+    run _publish_manifest_diff "$REPO" "public" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    assert_output --partial "변경 없음"
+    assert_output --partial "직접 정리하세요"
+    # main untouched
+    assert_equal "$(git -C "$REPO" rev-parse main)" "$LOCAL_HEAD"
+}
+
 @test "_publish_manifest_diff --dry-run prints the diff without pushing or opening a PR" {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"

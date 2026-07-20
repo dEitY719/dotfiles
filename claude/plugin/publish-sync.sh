@@ -303,6 +303,46 @@ _publish_manifest_diff() {
 
 	if ! _manifest_diff_exists "$repo_dir" "$@"; then
 		echo "${UX_MUTED}[$label] 변경 없음 — 할 일 없음${UX_RESET}"
+		# No content diff vs origin/main — but local `main` can still be stuck
+		# AHEAD by un-publishable commits. The plugin-sync hook auto-commits every
+		# manifest change on `main`, and branch protection then blocks the direct
+		# push. An add-then-revert within one session (e.g. `marketplace add X`
+		# then `remove X`) leaves TWO pure-sync commits whose COMBINED diff is
+		# exactly zero: un-pushable (protection), un-PR-able (empty diff → nothing
+		# to PR), and never tidied (the post-publish _cleanup runs only on the
+		# real-publish path, never reached here). Collapse them when provably safe.
+		# Skipped under --dry-run, which must stay read-only (a reset would mutate).
+		if [ "${DRY_RUN:-0}" != "1" ]; then
+			local origin_sha ahead cur_branch
+			origin_sha=$(git -C "$repo_dir" rev-parse origin/main 2>/dev/null) || return 0
+			ahead=$(git -C "$repo_dir" rev-list --count "${origin_sha}..main" 2>/dev/null || echo 0)
+			if [ "${ahead:-0}" -gt 0 ]; then
+				# The reset is provably safe ONLY when purity holds AND the tree is
+				# clean: _manifest_diff_exists already proved current content ==
+				# origin/main, and purity proves the ahead commits touch nothing but
+				# the given files — so every dropped commit's content already exists
+				# in origin/main. This is the documented exception to the
+				# "never force-reset" invariant (see _cleanup_local_main_if_pure_sync).
+				if _ahead_commits_are_pure_sync "$repo_dir" "$origin_sha" "$@" &&
+					git -C "$repo_dir" diff --quiet && git -C "$repo_dir" diff --cached --quiet; then
+					cur_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null || echo "")
+					if [ "$cur_branch" = "main" ]; then
+						git -C "$repo_dir" reset --hard origin/main >/dev/null 2>&1 || return 0
+					else
+						# main not checked out — move the ref without a reset,
+						# mirroring _cleanup_local_main_if_pure_sync's else-branch.
+						git -C "$repo_dir" branch -f main origin/main >/dev/null 2>&1 || return 0
+					fi
+					echo "${UX_SUCCESS}[$label] origin/main과 내용이 동일한 no-op 로컬 sync 커밋 ${ahead}개를 정리했습니다 (로컬 main을 origin/main으로 리셋)${UX_RESET}"
+				else
+					# Ahead commits exist but are not provably discardable — some are
+					# not pure sync commits, or the working tree is dirty. Never reset
+					# here; these can never auto-publish (empty diff → no PR, branch
+					# protection → no push), so the user must reconcile by hand.
+					echo "${UX_WARNING}[$label] 로컬 main이 origin/main보다 ${ahead}개 앞서 있으나 자동 게시할 수 없습니다 (sync 외 커밋이 섞였거나 워킹트리가 더럽습니다) — 'git rebase origin/main' 또는 'git reset --hard origin/main' 으로 직접 정리하세요${UX_RESET}" >&2
+				fi
+			fi
+		fi
 		return 0
 	fi
 	echo "${UX_MUTED}[$label] 변경 감지됨${UX_RESET}"
@@ -342,38 +382,29 @@ _publish_manifest_diff() {
 	return 0
 }
 
-# _cleanup_local_main_if_pure_sync <repo_dir> <before_origin_sha> <file...>
+# _ahead_commits_are_pure_sync <repo_dir> <origin_sha> <file...>
 #
-# After a successful publish, advance local main to the new origin/main IF
-# every commit main was ahead of before_origin_sha by is a pure SYNC_MSG
-# commit touching only the given files. Fast-forwards when local main is a
-# strict ancestor; otherwise (main diverged because the PR-merged sync
-# commit landed with a different SHA than the hook's local one — the usual
-# case) rebases onto origin/main, but only when the working tree is clean —
-# git's patch-id detection drops the redundant published commit while
-# replaying any pure-sync commit whose content never landed, so nothing is
-# lost. Leaves main untouched with an explanatory message when the tree is
-# dirty, the rebase conflicts, or purity fails. Never force-resets.
-_cleanup_local_main_if_pure_sync() {
-	local repo_dir="$1" before_origin="$2"
+# Return 0 iff every commit local `main` is ahead of <origin_sha> by is a pure
+# SYNC_MSG commit that touches only the given files; return 1 on the first
+# commit with a non-sync subject or a path outside <file...>. Factored out of
+# _cleanup_local_main_if_pure_sync so the identical purity rule is shared by
+# both the post-publish tidy (that function) and the no-diff/no-op stuck-commit
+# collapse in _publish_manifest_diff — the two must never drift on what counts
+# as "safe to discard".
+_ahead_commits_are_pure_sync() {
+	local repo_dir="$1" origin_sha="$2"
 	shift 2
-	local sha msg f pure=1 match want cur_branch
-
-	_fetch_origin "$repo_dir" || {
-		echo "${UX_ERROR}publish-sync: 정리 단계 fetch 실패 (재시도 후) — 로컬 main은 그대로 둡니다${UX_RESET}" >&2
-		return 1
-	}
-
-	for sha in $(git -C "$repo_dir" rev-list "${before_origin}..main" 2>/dev/null); do
+	local sha msg f match want pure=1
+	for sha in $(git -C "$repo_dir" rev-list "${origin_sha}..main" 2>/dev/null); do
 		msg=$(git -C "$repo_dir" log -1 --format=%s "$sha")
 		if [ "$msg" != "$SYNC_MSG" ]; then
 			pure=0
 			break
 		fi
-		# `git show --name-only` is newline-delimited; read line-by-line via
-		# process substitution (keeps the loop in this shell so `break 2` still
-		# escapes the outer rev-list loop) so a path containing spaces isn't
-		# word-split into false mismatches.
+		# `git show --name-only` is newline-delimited; read line-by-line (keeps
+		# the loop in this shell so `break 2` still escapes the outer rev-list
+		# loop) so a path containing spaces isn't word-split into false
+		# mismatches.
 		while IFS= read -r f; do
 			[ -n "$f" ] || continue
 			match=0
@@ -386,8 +417,43 @@ _cleanup_local_main_if_pure_sync() {
 			}
 		done < <(git -C "$repo_dir" show --format= --name-only "$sha")
 	done
+	[ "$pure" -eq 1 ]
+}
 
-	if [ "$pure" -ne 1 ]; then
+# _cleanup_local_main_if_pure_sync <repo_dir> <before_origin_sha> <file...>
+#
+# After a successful publish, advance local main to the new origin/main IF
+# every commit main was ahead of before_origin_sha by is a pure SYNC_MSG
+# commit touching only the given files. Fast-forwards when local main is a
+# strict ancestor; otherwise (main diverged because the PR-merged sync
+# commit landed with a different SHA than the hook's local one — the usual
+# case) rebases onto origin/main, but only when the working tree is clean —
+# git's patch-id detection drops the redundant published commit while
+# replaying any pure-sync commit whose content never landed, so nothing is
+# lost. Leaves main untouched with an explanatory message when the tree is
+# dirty, the rebase conflicts, or purity fails.
+#
+# Never force-resets — with ONE narrow, documented exception that lives NOT in
+# this function but in the no-diff/no-op branch of _publish_manifest_diff: that
+# path may `git reset --hard origin/main` local main, but ONLY when (a)
+# _manifest_diff_exists has already proven zero content diff vs origin/main, (b)
+# every ahead commit is a pure sync-message commit touching only the given files
+# (the same _ahead_commits_are_pure_sync check), and (c) the working tree is
+# clean. Under all three the reset only ever discards commits whose entire
+# content is already reflected in origin/main — never real unpublished work.
+# This function itself (the diverged/published case) keeps the never-force-reset
+# property intact.
+_cleanup_local_main_if_pure_sync() {
+	local repo_dir="$1" before_origin="$2"
+	shift 2
+	local cur_branch
+
+	_fetch_origin "$repo_dir" || {
+		echo "${UX_ERROR}publish-sync: 정리 단계 fetch 실패 (재시도 후) — 로컬 main은 그대로 둡니다${UX_RESET}" >&2
+		return 1
+	}
+
+	if ! _ahead_commits_are_pure_sync "$repo_dir" "$before_origin" "$@"; then
 		echo "${UX_WARNING}publish-sync: 로컬 main에 sync 외 다른 커밋이 섞여 있어 정리를 건너뜁니다 — 직접 확인하세요${UX_RESET}" >&2
 		return 0
 	fi
