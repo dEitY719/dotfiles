@@ -11,8 +11,10 @@ description: >-
   verifies membership after attaching. Respects the Company confidentiality
   boundary (refuses public/personal URLs into `Company` or its children).
   Sister skill of [[karakeep:classify]] — that one suggests a List (default
-  dry-run); this one performs the write. Accepts `<url> --list <path>` and
-  `-h`/`--help`/`help` to print usage.
+  dry-run); this one performs the write. Accepts `<url> --list <path>`; if
+  `--list` is omitted it delegates to [[karakeep:classify]] for a suggested
+  path and writes nothing (propose-then-confirm). Also `-h`/`--help`/`help`
+  to print usage.
 allowed-tools: Bash, Read
 metadata:
   model_recommendation:
@@ -38,9 +40,17 @@ has no create/attach methods. Idempotent end to end.
 
 ## Step 1: Parse Args + Load Env
 
-Positional `<url>`; required flag `--list <path>` (slash-delimited nesting).
-Missing either → print the usage pointer (`Run /karakeep-add -h for usage.`)
-and stop.
+Positional `<url>`; flag `--list <path>` (slash-delimited nesting).
+
+- Missing `<url>` → print the usage pointer (`Run /karakeep-add -h for
+  usage.`) and stop.
+- `<url>` present but `--list` omitted → **do not write.** Delegate to
+  `karakeep:classify` for a suggestion and stop:
+  `Skill(karakeep:classify, "<url>")`. That runs dry-run: it proposes a
+  best-fit List path and ends with the exact `karakeep:add <url> --list
+  <path>` command for the user to confirm. This skill only writes when the
+  user re-runs with an explicit `--list` (propose-then-confirm — never
+  auto-apply the guess).
 
 Load `NEXTAUTH_URL` and `KARAKEEP_API_KEY` from the working directory's
 `.env` per `references/rest-mechanics.md` → "Env + base URL". If either is
