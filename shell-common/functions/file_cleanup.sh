@@ -79,13 +79,24 @@ _cleanup_offer_dotfiles_backup_dir() {
 _cleanup_offer_cache_lock_dirs() {
     local search_dir="$1"
     local lock_matches=""
+    local lock_dirs=()
     local lock_dir=""
 
     lock_matches="$(find "$search_dir" -maxdepth 1 -type d -name '.zcompdump-*.lock' -print 2>/dev/null | LC_ALL=C sort -u)"
     [ -n "$lock_matches" ] || return 0
 
+    # Collect into an array first, then loop with a plain `for` — ux_confirm
+    # does its own `read` from stdin, and a `while read <<EOF` loop would
+    # redirect fd0 to the heredoc for the whole body, so ux_confirm's read
+    # would consume the next match instead of prompting the user.
     while IFS= read -r lock_dir; do
         [ -n "$lock_dir" ] || continue
+        lock_dirs+=("$lock_dir")
+    done <<EOF
+$lock_matches
+EOF
+
+    for lock_dir in "${lock_dirs[@]}"; do
         ux_section "Stale zcompdump Lock Directory"
         ux_bullet "$lock_dir"
         if ux_confirm "Remove ${lock_dir}?" "n"; then
@@ -97,9 +108,7 @@ _cleanup_offer_cache_lock_dirs() {
         else
             ux_info "Skipped: $lock_dir"
         fi
-    done <<EOF
-$lock_matches
-EOF
+    done
 }
 
 _cleanup_collect_matches() {
