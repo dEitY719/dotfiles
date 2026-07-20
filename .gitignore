@@ -26,6 +26,11 @@ build/
 __pycache__/
 *.egg-info/
 
+# agentmemory/iii-engine writes state_store.db + stream_store here when its
+# daemon is started with this repo as cwd (relative path in the tool's
+# global config, not project-specific — see iii-config.yaml upstream).
+/data/
+
 # Secrets — never track. Originals must live outside the repo
 # (e.g., ~/.config/dotfiles-secrets/ or a password manager).
 .env
