@@ -629,6 +629,36 @@ STUB
     assert_equal "$(git -C "$REPO" rev-parse main)" "$LOCAL_HEAD"
 }
 
+@test "_publish_manifest_diff warns instead of silently no-oping when main is checked out in another worktree" {
+    # codex review (PR #1211) BLOCKER: when main isn't checked out here, the
+    # collapse falls to `git branch -f main origin/main`, which git refuses
+    # when main is checked out in ANOTHER linked worktree — that failure must
+    # be warned, not swallowed silently.
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills"}'
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{}'
+    LOCAL_MAIN_BEFORE=$(git -C "$REPO" rev-parse main)
+
+    # Move $REPO off main first (worktree add refuses a branch already
+    # checked out in the worktree you're adding from), then check main out in
+    # a second linked worktree so `branch -f main ...` from $REPO fails.
+    git -C "$REPO" checkout -q -b other-branch
+    OTHER_WT="$TEST_TEMP_HOME/repo-other-wt"
+    git -C "$REPO" worktree add -q "$OTHER_WT" main
+
+    DRY_RUN=0
+    run _publish_manifest_diff "$REPO" "public" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    assert_output --partial "변경 없음"
+    assert_output --partial "다른 worktree"
+    # main ref left untouched — the failed move must not be silently accepted
+    # as success (no "정리했습니다" success message either).
+    refute_output --partial "정리했습니다"
+    assert_equal "$(git -C "$REPO" rev-parse main)" "$LOCAL_MAIN_BEFORE"
+}
+
 @test "_publish_manifest_diff --dry-run prints the diff without pushing or opening a PR" {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
