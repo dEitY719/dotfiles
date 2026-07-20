@@ -528,6 +528,122 @@ _gcp_scan_show_skip_list() {
     done
 }
 
+_gcp_scan_skip_paths_file() {
+    # Resolve the path-excluded skip-list file path (issue #1215). Honors the
+    # GCP_SCAN_SKIP_PATHS_FILE override (absolute or cwd-relative); otherwise
+    # defaults to <repo-toplevel>/git/config/gcp-scan-skip-paths.conf so the
+    # list is a tracked SSOT alongside the SHA-based gcp-scan-skip.conf. Prints
+    # the path (it may not exist yet — callers must -f check). Mirrors
+    # _gcp_scan_skip_file().
+    if [ -n "${GCP_SCAN_SKIP_PATHS_FILE-}" ]; then
+        printf '%s\n' "$GCP_SCAN_SKIP_PATHS_FILE"
+        return 0
+    fi
+    local top
+    top=$(git rev-parse --show-toplevel 2>/dev/null) || top="."
+    printf '%s/git/config/gcp-scan-skip-paths.conf\n' "$top"
+}
+
+_gcp_scan_load_skip_paths() {
+    # Parse the path-excluded skip-list file (issue #1215) into one cleaned
+    # LITERAL path per line. Each line is `<path> [# free-text reason]`; inline
+    # comments, full-comment lines, and blank lines are stripped. Pure
+    # parameter-expansion parsing (no awk/sed fork). Mirrors
+    # _gcp_scan_load_skip_list() but does NOT validate/reject glob characters:
+    # the path matcher is string-EQUALITY (not a `case` glob), so a stray `*`
+    # is harmless — it simply matches nothing.
+    local file line token
+    file=$(_gcp_scan_skip_paths_file)
+    [ -f "$file" ] || return 0
+    # `|| [ -n "$line" ]` flushes a final newline-less line (POSIX read idiom).
+    while IFS= read -r line || [ -n "$line" ]; do
+        token=${line%%#*}                              # drop inline comment
+        token=${token%"${token##*[![:space:]]}"}       # trim trailing space
+        token=${token#"${token%%[![:space:]]*}"}       # trim leading space
+        [ -z "$token" ] && continue
+        printf '%s\n' "$token"
+    done <"$file"
+}
+
+_gcp_scan_path_in_list() {
+    # True (0) when candidate path $1 EXACTLY equals one of the allowlist paths
+    # in $2 (newline-separated). Deliberately a string-equality test
+    # ([ "$cand" = "$entry" ]), NEVER a `case` glob like the SHA matcher's
+    # intentional prefix-glob: a path allowlist must match literally so a stray
+    # `*`/`?`/`[` in the config cannot over-match every file (the glob-over-match
+    # bug class gemini PR #1040 flagged for the SHA matcher). Mirrors the no-fork
+    # here-doc read style.
+    local cand="$1" entry
+    while IFS= read -r entry; do
+        [ -z "$entry" ] && continue
+        if [ "$cand" = "$entry" ]; then
+            return 0
+        fi
+    done <<EOF
+$2
+EOF
+    return 1
+}
+
+_gcp_scan_is_path_excluded() {
+    # True (0) when commit $1's full changed-file set is NON-EMPTY and EVERY
+    # changed path is in the allowlist $2 (issue #1215). A single miss (a file
+    # not in the allowlist) disqualifies the whole commit, so a commit carrying
+    # any real, unrelated content still surfaces. Uses `git diff-tree` for the
+    # complete changed-file set of the commit.
+    local sha="$1" paths="$2" file seen=0
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        seen=1
+        if ! _gcp_scan_path_in_list "$file" "$paths"; then
+            return 1
+        fi
+    done <<EOF
+$(git diff-tree --no-commit-id --name-only -r "$sha" 2>/dev/null)
+EOF
+    [ "$seen" -eq 1 ]
+}
+
+_gcp_scan_show_skip_paths() {
+    # Render the current path-excluded skip list for `gcp scan --show-skip-paths`
+    # (issue #1215): the resolved file path plus every registered literal path.
+    # Mirrors _gcp_scan_show_skip_list().
+    local file entries
+    file=$(_gcp_scan_skip_paths_file)
+    entries=$(_gcp_scan_load_skip_paths)
+    if type ux_section >/dev/null 2>&1; then
+        ux_section "Path-excluded skip list"
+        ux_bullet "File: $file"
+    else
+        echo "=== Path-excluded skip list ==="
+        echo "  File: $file"
+    fi
+    if [ ! -f "$file" ]; then
+        if type ux_info >/dev/null 2>&1; then
+            ux_info "(no skip-paths file — nothing registered)"
+        else
+            echo "  (no skip-paths file — nothing registered)"
+        fi
+        return 0
+    fi
+    if [ -z "$entries" ]; then
+        if type ux_info >/dev/null 2>&1; then
+            ux_info "(file present but no paths registered)"
+        else
+            echo "  (file present but no paths registered)"
+        fi
+        return 0
+    fi
+    printf '%s\n' "$entries" | while IFS= read -r entry; do
+        [ -z "$entry" ] && continue
+        if type ux_bullet >/dev/null 2>&1; then
+            ux_bullet "$entry"
+        else
+            echo "  $entry"
+        fi
+    done
+}
+
 _gcp_scan() {
     # zsh compatibility: emulate POSIX sh to ensure consistent behavior
     if [ -n "${ZSH_VERSION-}" ]; then
@@ -544,6 +660,7 @@ _gcp_scan() {
     local author="dEitY719"
     local arg1="" arg2=""
     local show_skip_list=0
+    local show_skip_paths=0
 
     # Check for incomplete cherry-pick
     if git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
@@ -583,6 +700,9 @@ _gcp_scan() {
         --show-skip-list)
             show_skip_list=1
             ;;
+        --show-skip-paths)
+            show_skip_paths=1
+            ;;
         *)
             # Store positional arguments without array syntax
             if [ -z "$arg1" ]; then
@@ -608,6 +728,16 @@ _gcp_scan() {
     # standalone query that works outside a configured base/source.
     if [ "$show_skip_list" -eq 1 ]; then
         _gcp_scan_show_skip_list
+        if [ $_xtrace_set -eq 1 ]; then
+            set -x
+        fi
+        return 0
+    fi
+
+    # --show-skip-paths (issue #1215): print the path-excluded skip list and
+    # return without scanning. Mirrors --show-skip-list above.
+    if [ "$show_skip_paths" -eq 1 ]; then
+        _gcp_scan_show_skip_paths
         if [ $_xtrace_set -eq 1 ]; then
             set -x
         fi
@@ -827,6 +957,44 @@ EOF
         count=$((count - known_resolved_count))
     fi
 
+    # Stage-1.4b: path-excluded skip list. Independent of and parallel to the
+    # SHA-based Stage-1.4 above: instead of matching a specific SHA, it matches
+    # a commit's whole changed-file SET against a path allowlist
+    # (git/config/gcp-scan-skip-paths.conf, override GCP_SCAN_SKIP_PATHS_FILE).
+    # A commit whose every changed file is in the allowlist (e.g. an
+    # auto-generated `chore(claude-plugin): sync manifest` touching only the
+    # machine-local plugin manifests) is silently dropped here — no per-SHA
+    # registration, so a class of ever-new SHAs stops being whack-a-mole. A
+    # commit that also touches any other file is left to surface (it carries
+    # real content). Like Stage-1.4 this is IGNORED under --author=all so the
+    # full detection safety net is never silenced.
+    local path_excluded_list="" path_excluded_count=0 pe_survivor_list=""
+    local skip_paths=""
+    if [ "$author_lc" != "all" ]; then
+        skip_paths=$(_gcp_scan_load_skip_paths)
+    fi
+    if [ -n "$skip_paths" ]; then
+        while IFS= read -r sha; do
+            [ -z "$sha" ] && continue
+            if _gcp_scan_is_path_excluded "$sha" "$skip_paths" </dev/null; then
+                path_excluded_list="${path_excluded_list}${sha}
+"
+                path_excluded_count=$((path_excluded_count + 1))
+            else
+                if [ -z "$pe_survivor_list" ]; then
+                    pe_survivor_list="$sha"
+                else
+                    pe_survivor_list="${pe_survivor_list}
+${sha}"
+                fi
+            fi
+        done <<EOF
+$final_selected_list
+EOF
+        final_selected_list="$pe_survivor_list"
+        count=$((count - path_excluded_count))
+    fi
+
     # Stage-1.5: file-dependency pre-check (issue #1033). A candidate that
     # modifies/deletes a file absent from base — because the upstream commit
     # that creates it was filtered out (e.g. a non-author commit) and is not
@@ -954,6 +1122,9 @@ EOF
             if [ "$known_resolved_count" -gt 0 ]; then
                 printf "%s  ◆ Known-resolved (skipped): %d%s\n" "${UX_MUTED-}" "$known_resolved_count" "${UX_RESET-}"
             fi
+            if [ "$path_excluded_count" -gt 0 ]; then
+                printf "%s  ◆ Path-excluded (skipped): %d%s\n" "${UX_MUTED-}" "$path_excluded_count" "${UX_RESET-}"
+            fi
             if [ "$dep_missing_count" -gt 0 ]; then
                 printf "%s  ◆ Dep-missing (skipped): %d%s\n" "${UX_MUTED-}" "$dep_missing_count" "${UX_RESET-}"
             fi
@@ -970,6 +1141,9 @@ EOF
             echo "  Duplicates (already applied): $duplicate_count"
             if [ "$known_resolved_count" -gt 0 ]; then
                 echo "  Known-resolved (skipped): $known_resolved_count"
+            fi
+            if [ "$path_excluded_count" -gt 0 ]; then
+                echo "  Path-excluded (skipped): $path_excluded_count"
             fi
             if [ "$dep_missing_count" -gt 0 ]; then
                 echo "  Dep-missing (skipped): $dep_missing_count"
@@ -1007,6 +1181,9 @@ EOF
         if [ "$known_resolved_count" -gt 0 ]; then
             printf "%s  ◆ Known-resolved (skipped): %d%s\n" "${UX_MUTED-}" "$known_resolved_count" "${UX_RESET-}"
         fi
+        if [ "$path_excluded_count" -gt 0 ]; then
+            printf "%s  ◆ Path-excluded (skipped): %d%s\n" "${UX_MUTED-}" "$path_excluded_count" "${UX_RESET-}"
+        fi
         if [ "$dep_missing_count" -gt 0 ]; then
             printf "%s  ◆ Dep-missing (skipped): %d%s\n" "${UX_MUTED-}" "$dep_missing_count" "${UX_RESET-}"
         fi
@@ -1026,6 +1203,9 @@ EOF
         fi
         if [ "$known_resolved_count" -gt 0 ]; then
             echo "  Known-resolved (skipped): $known_resolved_count"
+        fi
+        if [ "$path_excluded_count" -gt 0 ]; then
+            echo "  Path-excluded (skipped): $path_excluded_count"
         fi
         if [ "$dep_missing_count" -gt 0 ]; then
             echo "  Dep-missing (skipped): $dep_missing_count"
@@ -1091,8 +1271,27 @@ EOF
     local dep_skipped=0
     local conflict_skipped=0
     local kr_skipped=0
+    local pe_skipped=0
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
+
+        # Stage-1.4b path-excluded (issue #1215): silently skip — the Analysis
+        # phase already counted it; the user configured a path allowlist
+        # precisely to stop seeing this class of auto-generated commit. No log
+        # line here (that is the point); the summary's "(N skipped —
+        # path-excluded)" line is the only trace. Mirrors the known-resolved
+        # skip below.
+        local _in_pe=0
+        case "
+$path_excluded_list" in
+            *"
+$sha
+"*) _in_pe=1 ;;
+        esac
+        if [ "$_in_pe" -eq 1 ]; then
+            pe_skipped=$((pe_skipped + 1))
+            continue
+        fi
 
         # Stage-1.4 known-resolved (issue #1039): silently skip — the Analysis
         # phase already counted it and the user registered it precisely to stop
@@ -1209,6 +1408,9 @@ EOF
         if [ "$kr_skipped" -gt 0 ]; then
             ux_info "($kr_skipped commit(s) skipped — known-resolved)"
         fi
+        if [ "$pe_skipped" -gt 0 ]; then
+            ux_info "($pe_skipped commit(s) skipped — path-excluded)"
+        fi
         if [ "$dep_skipped" -gt 0 ]; then
             ux_info "($dep_skipped commit(s) skipped — file dependency missing in $base)"
         fi
@@ -1225,6 +1427,9 @@ EOF
         echo "✓ $picked applied, $dup_skipped skipped (dup), 0 conflicts"
         if [ "$kr_skipped" -gt 0 ]; then
             echo "  ($kr_skipped commit(s) skipped — known-resolved)"
+        fi
+        if [ "$pe_skipped" -gt 0 ]; then
+            echo "  ($pe_skipped commit(s) skipped — path-excluded)"
         fi
         if [ "$dep_skipped" -gt 0 ]; then
             echo "  ($dep_skipped commit(s) skipped — file dependency missing in $base)"
