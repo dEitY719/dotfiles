@@ -443,19 +443,26 @@ _gcp_scan_skip_file() {
     printf '%s/git/config/gcp-scan-skip.conf\n' "$top"
 }
 
+_gcp_scan_clean_token() {
+    # Shared line-cleaning for the skip-list parsers below: drop an inline
+    # `#` comment, then trim leading/trailing whitespace. Pure
+    # parameter-expansion (no awk/sed fork), matching this file's style.
+    local token="${1%%#*}"                         # drop inline comment
+    token=${token%"${token##*[![:space:]]}"}       # trim trailing space
+    token=${token#"${token%%[![:space:]]*}"}       # trim leading space
+    printf '%s\n' "$token"
+}
+
 _gcp_scan_load_skip_list() {
     # Parse the known-resolved skip-list file (issue #1039) into one cleaned
     # SHA token per line. Each line is `<sha> [# free-text reason]`; inline
-    # comments, full-comment lines, and blank lines are stripped. Pure
-    # parameter-expansion parsing (no awk/sed fork), matching this file's style.
+    # comments, full-comment lines, and blank lines are stripped.
     local file line token
     file=$(_gcp_scan_skip_file)
     [ -f "$file" ] || return 0
     # `|| [ -n "$line" ]` flushes a final newline-less line (POSIX read idiom).
     while IFS= read -r line || [ -n "$line" ]; do
-        token=${line%%#*}                              # drop inline comment
-        token=${token%"${token##*[![:space:]]}"}       # trim trailing space
-        token=${token#"${token%%[![:space:]]*}"}       # trim leading space
+        token=$(_gcp_scan_clean_token "$line")
         [ -z "$token" ] && continue
         # Hardening (gemini PR #1040 review): the token is later used UNESCAPED
         # as a `case` glob in _gcp_scan_in_skip_list ("$tok"*), so a stray `*`,
@@ -489,43 +496,54 @@ EOF
     return 1
 }
 
+_gcp_scan_show_skip_generic() {
+    # Shared renderer behind --show-skip-list (issue #1039) and
+    # --show-skip-paths (issue #1215): section title, resolved file path, and
+    # every registered entry. $1=title $2=file $3=entries $4=no-file-message
+    # $5=no-entries-message.
+    local title="$1" file="$2" entries="$3" no_file_msg="$4" no_entries_msg="$5"
+    if type ux_section >/dev/null 2>&1; then
+        ux_section "$title"
+        ux_bullet "File: $file"
+    else
+        echo "=== $title ==="
+        echo "  File: $file"
+    fi
+    if [ ! -f "$file" ]; then
+        if type ux_info >/dev/null 2>&1; then
+            ux_info "$no_file_msg"
+        else
+            echo "  $no_file_msg"
+        fi
+        return 0
+    fi
+    if [ -z "$entries" ]; then
+        if type ux_info >/dev/null 2>&1; then
+            ux_info "$no_entries_msg"
+        else
+            echo "  $no_entries_msg"
+        fi
+        return 0
+    fi
+    printf '%s\n' "$entries" | while IFS= read -r entry; do
+        [ -z "$entry" ] && continue
+        if type ux_bullet >/dev/null 2>&1; then
+            ux_bullet "$entry"
+        else
+            echo "  $entry"
+        fi
+    done
+}
+
 _gcp_scan_show_skip_list() {
     # Render the current known-resolved skip list for `gcp scan --show-skip-list`
     # (issue #1039): the resolved file path plus every registered SHA token.
     local file entries
     file=$(_gcp_scan_skip_file)
     entries=$(_gcp_scan_load_skip_list)
-    if type ux_section >/dev/null 2>&1; then
-        ux_section "Known-resolved skip list"
-        ux_bullet "File: $file"
-    else
-        echo "=== Known-resolved skip list ==="
-        echo "  File: $file"
-    fi
-    if [ ! -f "$file" ]; then
-        if type ux_info >/dev/null 2>&1; then
-            ux_info "(no skip-list file — nothing registered)"
-        else
-            echo "  (no skip-list file — nothing registered)"
-        fi
-        return 0
-    fi
-    if [ -z "$entries" ]; then
-        if type ux_info >/dev/null 2>&1; then
-            ux_info "(file present but no SHAs registered)"
-        else
-            echo "  (file present but no SHAs registered)"
-        fi
-        return 0
-    fi
-    printf '%s\n' "$entries" | while IFS= read -r tok; do
-        [ -z "$tok" ] && continue
-        if type ux_bullet >/dev/null 2>&1; then
-            ux_bullet "$tok"
-        else
-            echo "  $tok"
-        fi
-    done
+    _gcp_scan_show_skip_generic "Known-resolved skip list" "$file" "$entries" \
+        "(no skip-list file — nothing registered)" \
+        "(file present but no SHAs registered)"
 }
 
 _gcp_scan_skip_paths_file() {
@@ -547,19 +565,17 @@ _gcp_scan_skip_paths_file() {
 _gcp_scan_load_skip_paths() {
     # Parse the path-excluded skip-list file (issue #1215) into one cleaned
     # LITERAL path per line. Each line is `<path> [# free-text reason]`; inline
-    # comments, full-comment lines, and blank lines are stripped. Pure
-    # parameter-expansion parsing (no awk/sed fork). Mirrors
-    # _gcp_scan_load_skip_list() but does NOT validate/reject glob characters:
-    # the path matcher is string-EQUALITY (not a `case` glob), so a stray `*`
-    # is harmless — it simply matches nothing.
+    # comments, full-comment lines, and blank lines are stripped. Shares
+    # _gcp_scan_clean_token() with _gcp_scan_load_skip_list() but does NOT
+    # validate/reject glob characters: the path matcher is string-EQUALITY
+    # (not a `case` glob), so a stray `*` is harmless — it simply matches
+    # nothing.
     local file line token
     file=$(_gcp_scan_skip_paths_file)
     [ -f "$file" ] || return 0
     # `|| [ -n "$line" ]` flushes a final newline-less line (POSIX read idiom).
     while IFS= read -r line || [ -n "$line" ]; do
-        token=${line%%#*}                              # drop inline comment
-        token=${token%"${token##*[![:space:]]}"}       # trim trailing space
-        token=${token#"${token%%[![:space:]]*}"}       # trim leading space
+        token=$(_gcp_scan_clean_token "$line")
         [ -z "$token" ] && continue
         printf '%s\n' "$token"
     done <"$file"
@@ -607,41 +623,12 @@ EOF
 _gcp_scan_show_skip_paths() {
     # Render the current path-excluded skip list for `gcp scan --show-skip-paths`
     # (issue #1215): the resolved file path plus every registered literal path.
-    # Mirrors _gcp_scan_show_skip_list().
     local file entries
     file=$(_gcp_scan_skip_paths_file)
     entries=$(_gcp_scan_load_skip_paths)
-    if type ux_section >/dev/null 2>&1; then
-        ux_section "Path-excluded skip list"
-        ux_bullet "File: $file"
-    else
-        echo "=== Path-excluded skip list ==="
-        echo "  File: $file"
-    fi
-    if [ ! -f "$file" ]; then
-        if type ux_info >/dev/null 2>&1; then
-            ux_info "(no skip-paths file — nothing registered)"
-        else
-            echo "  (no skip-paths file — nothing registered)"
-        fi
-        return 0
-    fi
-    if [ -z "$entries" ]; then
-        if type ux_info >/dev/null 2>&1; then
-            ux_info "(file present but no paths registered)"
-        else
-            echo "  (file present but no paths registered)"
-        fi
-        return 0
-    fi
-    printf '%s\n' "$entries" | while IFS= read -r entry; do
-        [ -z "$entry" ] && continue
-        if type ux_bullet >/dev/null 2>&1; then
-            ux_bullet "$entry"
-        else
-            echo "  $entry"
-        fi
-    done
+    _gcp_scan_show_skip_generic "Path-excluded skip list" "$file" "$entries" \
+        "(no skip-paths file — nothing registered)" \
+        "(file present but no paths registered)"
 }
 
 _gcp_scan() {
