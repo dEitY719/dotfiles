@@ -1429,6 +1429,153 @@ FIXTURE
 }
 
 # ---------------------------------------------------------------------------
+# Issue #1215 — Stage-1.4b path-excluded skip list. A class of auto-generated
+# commits (e.g. `chore(claude-plugin): sync manifest`) touches ONLY the
+# machine-local plugin manifests, spawning an endless stream of new SHAs.
+# Rather than registering each SHA (whack-a-mole), a PATH allowlist
+# (git/config/gcp-scan-skip-paths.conf, override GCP_SCAN_SKIP_PATHS_FILE)
+# silently drops any commit whose whole changed-file SET is a subset of the
+# allowlist, counted under "Path-excluded (skipped)". A commit that also
+# touches any other file still surfaces. The list is IGNORED under
+# --author=all (full detection stays as a safety net). Independent of and
+# parallel to the SHA-based Stage-1.4.
+#
+# Fixture: main seeds both manifest files; source commit A modifies ONLY
+# claude/plugin/plugins.json (pure manifest sync — the path-excluded case);
+# source commit B adds an unrelated file AND modifies marketplaces.json (mixed
+# — must surface and apply cleanly onto main).
+# ---------------------------------------------------------------------------
+
+_gcp_pathskip_make_repo() {
+    cat <<'FIXTURE'
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Me" GIT_AUTHOR_EMAIL="me@me" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        mkdir -p claude/plugin
+        printf 'v0\n' > claude/plugin/plugins.json
+        printf 'v0\n' > claude/plugin/marketplaces.json
+        git add claude/plugin/plugins.json claude/plugin/marketplaces.json \
+            && git commit -qm "init"
+        git checkout -q -b source
+        # Commit A: pure manifest sync — touches ONLY plugins.json.
+        printf 'v1\n' > claude/plugin/plugins.json \
+            && git add claude/plugin/plugins.json \
+            && git commit -qm "chore(claude-plugin): sync manifest"
+        # Commit B: mixed — an unrelated file plus a manifest edit.
+        echo real > unrelated.txt
+        printf 'v1\n' > claude/plugin/marketplaces.json
+        git add unrelated.txt claude/plugin/marketplaces.json \
+            && git commit -qm "feat: real change"
+        git checkout -q main
+        skipf="$repo/skip-paths.conf"
+        printf 'claude/plugin/plugins.json\nclaude/plugin/marketplaces.json\n' > "$skipf"
+        export GCP_SCAN_SKIP_PATHS_FILE="$skipf"
+FIXTURE
+}
+
+@test "bash: _gcp_scan_load_skip_paths private function exists" {
+    run_in_bash 'declare -f _gcp_scan_load_skip_paths >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "bash: _gcp_scan_is_path_excluded private function exists" {
+    run_in_bash 'declare -f _gcp_scan_is_path_excluded >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "scan path-skip: pure manifest-sync commit skipped silently as path-excluded" {
+    run_in_bash "
+        $(_gcp_pathskip_make_repo)
+        printf 'y\n' | _gcp_scan main source --author=Me
+    "
+    assert_success
+    # Counted as path-excluded in the Analysis Result.
+    assert_output --partial "Path-excluded (skipped): 1"
+    # The pure-manifest commit never surfaces — no subject, no conflict warning.
+    refute_output --partial "sync manifest"
+    refute_output --partial "CONFLICT"
+    refute_output --partial "Resolve and run"
+}
+
+@test "scan path-skip: manifest+unrelated commit is NOT skipped (surfaces and applies)" {
+    run_in_bash "
+        $(_gcp_pathskip_make_repo)
+        printf 'y\n' | _gcp_scan main source --author=Me >/dev/null 2>&1
+        git cat-file -e HEAD:unrelated.txt && echo HAS_UNRELATED
+        git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
+    "
+    assert_success
+    # The mixed commit was applied — its unrelated file is now in HEAD.
+    assert_output --partial "HAS_UNRELATED"
+    # Only the pure-manifest commit was path-excluded, not the mixed one.
+    assert_output --partial "PICK_CLEAR"
+}
+
+@test "scan path-skip: --author=all ignores the path list (safety net)" {
+    run_in_bash "
+        $(_gcp_pathskip_make_repo)
+        printf 'y\n' | _gcp_scan main source --author=all
+    "
+    assert_success
+    # Under --author=all the allowlist is bypassed -> nothing path-excluded and
+    # the pure-manifest commit surfaces in the commit list (full detection).
+    refute_output --partial "Path-excluded (skipped)"
+    assert_output --partial "sync manifest"
+}
+
+@test "scan path-skip: --show-skip-paths prints entries, strips comments/blanks" {
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        git init -q -b main
+        skipf="$repo/skip-paths.conf"
+        printf "claude/plugin/plugins.json  # inline reason\n# whole-line comment\n\nclaude/plugin/marketplaces.json\n" > "$skipf"
+        export GCP_SCAN_SKIP_PATHS_FILE="$skipf"
+        _gcp_scan main upstream/main --show-skip-paths
+    '
+    assert_success
+    assert_output --partial "Path-excluded skip list"
+    assert_output --partial "claude/plugin/plugins.json"
+    assert_output --partial "claude/plugin/marketplaces.json"
+    # Reasons / full-comment lines must not be emitted as path entries.
+    refute_output --partial "whole-line comment"
+    refute_output --partial "inline reason"
+}
+
+@test "scan path-skip: --show-skip-paths reports empty when no file registered" {
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        git init -q -b main
+        export GCP_SCAN_SKIP_PATHS_FILE="$repo/does-not-exist.conf"
+        _gcp_scan main upstream/main --show-skip-paths
+    '
+    assert_success
+    assert_output --partial "Path-excluded skip list"
+    assert_output --partial "no skip-paths file"
+}
+
+@test "scan path-skip: comments and blank lines in the paths config are tolerated" {
+    run_in_bash "
+        $(_gcp_pathskip_make_repo)
+        # Rewrite the config with comments and blanks interleaved.
+        printf '# header comment\n\nclaude/plugin/plugins.json  # reason\n\n# trailing\nclaude/plugin/marketplaces.json\n' > \"\$skipf\"
+        printf 'y\n' | _gcp_scan main source --author=Me
+    "
+    assert_success
+    # Parsing tolerates the noise -> the pure-manifest commit is still excluded.
+    assert_output --partial "Path-excluded (skipped): 1"
+    refute_output --partial "sync manifest"
+}
+
+# ---------------------------------------------------------------------------
 # Issue #1134 — phantom commit: two independent defects.
 #
 # Bug A: the Stage-1 subject-dup cache used a fixed `git log -n 200` window, so
