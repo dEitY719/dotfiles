@@ -31,9 +31,12 @@ Fill the placeholders and write to `$tmpdir/apply-guide.md` (outer fence is
 
 ~~~markdown
 ## Relay of origin PR #<N> — <PR title>
+<!-- --commits mode: no PR object — use "## Relay of commit range `<base>..<head>`" instead -->
 
 Source PR was **<merged|open>** on the internal remote. `git push` to this
 remote is proxy-blocked, so its commits are relayed as patches below.
+<!-- --commits mode: replace the line above with "Source range is
+`<base>..<head>` on the internal remote (no origin PR)." -->
 
 ### Apply order
 
@@ -45,8 +48,10 @@ remote is proxy-blocked, so its commits are relayed as patches below.
 
 A commit too large for one patch is pre-split by file group (per
 `references/patch-generation.md`). Render its parts as "commit N의 1/2,
-2/2" and keep them adjacent in apply order — they reconstruct one origin
-commit. Omit the split wording when nothing was pre-split.
+2/2" and keep them adjacent in apply order — applying them in order
+reproduces the origin commit's full diff as N sequential destination
+commits (not one — `git am` cannot re-merge sub-patches back into a
+single commit). Omit the split wording when nothing was pre-split.
 
 Apply **in this exact order** (each patch builds on the previous):
 
@@ -75,6 +80,9 @@ What was verified on the origin side (from `gh pr view` in Step 1):
 - CI: <statusCheckRollup summary — e.g. all checks green>
 - Review: <reviewDecision — e.g. APPROVED by N reviewers>
 - Origin PR: <origin PR URL>
+
+(PR mode only — no `gh pr view` data exists in `--commits` mode; omit this
+whole section then.)
 ~~~
 
 ## Notes

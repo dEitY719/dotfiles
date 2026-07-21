@@ -101,10 +101,11 @@ limit.
    per-commit, so size per file directly):
 
    ```bash
-   for f in $(git diff --name-only "$SHA"^.."$SHA"); do
-     bytes=$(git diff "$SHA"^.."$SHA" -- "$f" | wc -c)
-     printf '%s\t%s\n' "$bytes" "$f"
-   done
+   git diff --no-color --no-ext-diff -z --name-only "$SHA"^.."$SHA" |
+     while IFS= read -r -d '' f; do
+       bytes=$(git diff --no-color --no-ext-diff "$SHA"^.."$SHA" -- "$f" | wc -c)
+       printf '%s\t%s\n' "$bytes" "$f"
+     done
    ```
 
 2. Greedily bucket files into groups so each group's cumulative patch size
