@@ -37,13 +37,19 @@ if [[ "${1:-}" == "repo" && "${2:-}" == "view" ]]; then
     exit 0
 fi
 
-# All mutations (PATCH / POST / DELETE) succeed silently.
+# A mutation call matching MOCK_FAIL_PATTERN (grep -E, optional) fails.
+if [ -n "${MOCK_FAIL_PATTERN:-}" ] && printf '%s' "$*" | grep -qE "${MOCK_FAIL_PATTERN}"; then
+    exit 1
+fi
+
+# All other mutations (PATCH / POST / DELETE) succeed silently.
 exit 0
 EOF
     chmod +x "${MOCK_BIN}/gh"
 
     export MOCK_GH_LOG="$MOCK_LOG"
     export MOCK_EXISTING_FILE
+    export MOCK_FAIL_PATTERN=""
     export PATH="${MOCK_BIN}:${PATH}"
 }
 
@@ -143,4 +149,16 @@ run_bootstrap() {
         echo "renamed alias source 'bug' must not be deleted" && return 1
     fi
     grep -q 'repos/acme/widget/labels/bug -X PATCH -f new_name=fix' "$MOCK_LOG"
+}
+
+# ── Rename PATCH fails (bug+fix collision) → fix still synced, not skipped ──
+@test "rename PATCH failure does not skip the target's SSOT sync" {
+    set_existing bug fix
+    MOCK_FAIL_PATTERN='labels/bug -X PATCH' run_bootstrap
+    assert_success
+    # The failed rename attempt is logged...
+    grep -q 'repos/acme/widget/labels/bug -X PATCH -f new_name=fix' "$MOCK_LOG"
+    # ...but since it failed, 'fix' must NOT be treated as already-synced —
+    # step 2 (SSOT apply) must still PATCH it directly (codex review, PR #1229).
+    grep -q 'repos/acme/widget/labels/fix -X PATCH -f new_name=fix -f color=d73a4a' "$MOCK_LOG"
 }

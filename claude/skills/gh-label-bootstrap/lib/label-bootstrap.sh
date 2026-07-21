@@ -104,6 +104,8 @@ resolve_repo() {
 }
 
 # gh api wrapper honoring --dry-run. Prints the planned action either way.
+# Returns the real gh api exit status (0 success, 1 failure) so callers that
+# need to know (e.g. the rename step) can react; dry-run always reports 0.
 # Usage: api_mutate "<plan line>" <gh api args...>
 api_mutate() {
     local plan="$1"
@@ -114,9 +116,10 @@ api_mutate() {
     fi
     if gh api "$@" >/dev/null 2>&1; then
         printf '%s\n' "$plan"
-    else
-        warn "$plan FAILED (permission / rate-limit / API error) — skipped"
+        return 0
     fi
+    warn "$plan FAILED (permission / rate-limit / API error) — skipped"
+    return 1
 }
 
 # Membership test against a newline-separated set on stdin-free vars.
@@ -138,9 +141,12 @@ main() {
     # --- Parse SSOT plain feeds -------------------------------------------
     # 10-label feed:  name|<6hex>|description
     # alias feed:     old|new     (two lowercase words)
-    local feed alias_feed
-    feed="$(grep -E '^[A-Za-z][A-Za-z0-9]*\|[0-9a-fA-F]{6}\|' "$ssot_file" || true)"
-    alias_feed="$(grep -E '^[a-z]+\|[a-z]+$' "$ssot_file" || true)"
+    # tr -d '\r' + leading-whitespace tolerance guard against CRLF checkouts
+    # and incidental fence indentation (gemini-code-assist review, PR #1229).
+    local feed alias_feed ssot_content
+    ssot_content="$(tr -d '\r' <"$ssot_file")"
+    feed="$(printf '%s\n' "$ssot_content" | grep -E '^[[:space:]]*[A-Za-z][A-Za-z0-9]*\|[0-9a-fA-F]{6}\|' || true)"
+    alias_feed="$(printf '%s\n' "$ssot_content" | grep -E '^[[:space:]]*[a-z]+\|[a-z]+$' || true)"
     [ -n "$feed" ] || die "no label feed found in $ssot_file"
 
     # SSOT label names (for keep-set membership).
@@ -153,8 +159,7 @@ main() {
     # --- Fetch existing labels --------------------------------------------
     local existing
     if ! existing="$(gh api "repos/${REPO}/labels?per_page=100" --jq '.[].name' 2>/dev/null)"; then
-        warn "could not list labels on ${REPO} (permission?) — treating as empty"
-        existing=""
+        die "could not list labels on ${REPO}. Check network connectivity, repo permissions, or gh auth."
     fi
 
     local mode=""
@@ -171,13 +176,18 @@ main() {
         [ -z "$old" ] && continue
         if in_set "$old" "$existing"; then
             IFS='|' read -r color desc <<<"$(ssot_row "$new")"
-            api_mutate "rename label '${old}' -> '${new}' (sync color/desc)" \
+            # Only bookkeep the rename as done when the API call actually
+            # succeeded — otherwise step 2 below must still sync '$new'
+            # directly instead of silently skipping it (codex review, PR
+            # #1229: a failed rename must not mask an out-of-sync label).
+            if api_mutate "rename label '${old}' -> '${new}' (sync color/desc)" \
                 "repos/${REPO}/labels/${old}" -X PATCH \
-                -f "new_name=${new}" -f "color=${color}" -f "description=${desc}"
-            # Reflect in effective set: drop old, add new.
-            effective="$(printf '%s\n' "$effective" | grep -Fxv "$old" || true)"
-            in_set "$new" "$effective" || effective="$(printf '%s\n%s' "$effective" "$new")"
-            renamed_targets="${renamed_targets}${new}"$'\n'
+                -f "new_name=${new}" -f "color=${color}" -f "description=${desc}"; then
+                # Reflect in effective set: drop old, add new.
+                effective="$(printf '%s\n' "$effective" | grep -Fxv "$old" || true)"
+                in_set "$new" "$effective" || effective="$(printf '%s\n%s' "$effective" "$new")"
+                renamed_targets="${renamed_targets}${new}"$'\n'
+            fi
         fi
     done <<<"$alias_feed"
 
@@ -191,11 +201,11 @@ main() {
         if in_set "$name" "$effective"; then
             api_mutate "PATCH label '${name}' (color=${color})" \
                 "repos/${REPO}/labels/${name}" -X PATCH \
-                -f "new_name=${name}" -f "color=${color}" -f "description=${desc}"
+                -f "new_name=${name}" -f "color=${color}" -f "description=${desc}" || true
         else
             api_mutate "POST label '${name}' (color=${color})" \
                 "repos/${REPO}/labels" -X POST \
-                -f "name=${name}" -f "color=${color}" -f "description=${desc}"
+                -f "name=${name}" -f "color=${color}" -f "description=${desc}" || true
             effective="$(printf '%s\n%s' "$effective" "$name")"
         fi
     done <<<"$feed"
@@ -219,7 +229,7 @@ main() {
             continue
         fi
         api_mutate "DELETE label '${label}' (prune: not in SSOT/alias/allowlist)" \
-            "repos/${REPO}/labels/${label}" -X DELETE
+            "repos/${REPO}/labels/${label}" -X DELETE || true
     done <<<"$effective"
 }
 
