@@ -147,9 +147,8 @@ main() {
     local ssot_names
     ssot_names="$(printf '%s\n' "$feed" | cut -d'|' -f1)"
 
-    # Look up SSOT color/description by name.
-    ssot_color() { printf '%s\n' "$feed" | awk -F'|' -v n="$1" '$1==n{print $2; exit}'; }
-    ssot_desc() { printf '%s\n' "$feed" | awk -F'|' -v n="$1" '$1==n{sub(/^[^|]*\|[^|]*\|/,""); print; exit}'; }
+    # Look up SSOT "color|description" by name in one scan (not two).
+    ssot_row() { printf '%s\n' "$feed" | awk -F'|' -v n="$1" '$1==n{sub(/^[^|]*\|/,""); print; exit}'; }
 
     # --- Fetch existing labels --------------------------------------------
     local existing
@@ -171,8 +170,7 @@ main() {
     while IFS='|' read -r old new; do
         [ -z "$old" ] && continue
         if in_set "$old" "$existing"; then
-            color="$(ssot_color "$new")"
-            desc="$(ssot_desc "$new")"
+            IFS='|' read -r color desc <<<"$(ssot_row "$new")"
             api_mutate "rename label '${old}' -> '${new}' (sync color/desc)" \
                 "repos/${REPO}/labels/${old}" -X PATCH \
                 -f "new_name=${new}" -f "color=${color}" -f "description=${desc}"
