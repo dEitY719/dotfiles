@@ -82,7 +82,7 @@ _git_help_rows_branch() {
     ux_table_row "gset-dev" "set-upstream dev" "Track origin/dev"
     ux_table_row "gset" "gset [branch]" "Track origin/[branch]"
     ux_table_row "gb -D local" "git_branch -D local" "Delete local branches (keeps: main/master + current + keywords)"
-    ux_table_row "gb -D remote [origin|upstream]" "git_branch -D remote" "Delete remote-tracking branches (default: origin, keeps: main/master)"
+    ux_table_row "gb -D remote [<remote>]" "git_branch -D remote" "Delete remote-tracking branches (default: origin, e.g. origin, upstream, keeps: main/master)"
     ux_table_row "gb -h" "git_branch --help" "Show gb sub-command help"
 }
 
