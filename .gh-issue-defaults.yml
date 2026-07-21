@@ -11,12 +11,12 @@ default_labels:
   static: []
   by_title_prefix:
     feat: [feat]
-    fix: [bug]
+    fix: [fix]
     refactor: [refactor]
     test: [test]
     verify: [verify]
     ci: [ci]
-    docs: [documentation]
+    docs: [docs]
     chore: []
 
 milestone: none

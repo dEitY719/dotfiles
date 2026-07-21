@@ -24,7 +24,7 @@ setup() {
     # The dotfiles SSOT under test (committed alongside this suite).
     DOTFILES_YML="${_BATS_REAL_DOTFILES_ROOT}/.gh-issue-defaults.yml"
     # Mock of `gh label list --jq '.[].name'` for the dotfiles repo.
-    DOTFILES_EXISTING="bug,documentation,enhancement,feat,refactor,test,ci,skill"
+    DOTFILES_EXISTING="fix,docs,enhancement,feat,refactor,test,ci,skill"
 }
 
 teardown() {
@@ -96,19 +96,19 @@ YAML
 
 # ── Row 7 ────────────────────────────────────────────────────────────
 @test "auto-labels: missing target label → warn skip + keep others" {
-    # 'documentation' is the prefix-mapped label for docs; user added
-    # 'skill'; the mocked repo is missing 'documentation'.
-    EXISTING_NO_DOCS="bug,enhancement,feat,refactor,test,ci,skill"
+    # 'docs' is the prefix-mapped label for docs; user added
+    # 'skill'; the mocked repo is missing 'docs'.
+    EXISTING_NO_DOCS="fix,enhancement,feat,refactor,test,ci,skill"
 
     # Use --separate-stderr so we can assert stdout (kept labels) and
     # stderr (warning) independently.
     run --separate-stderr gh_issue_create_compose_labels \
         "$DOTFILES_YML" docs "skill" "$EXISTING_NO_DOCS" 0
     assert_success
-    # 'documentation' got dropped; 'skill' (user) survives on stdout.
+    # 'docs' got dropped; 'skill' (user) survives on stdout.
     assert_output 'skill'
     # The drop surfaces on stderr.
-    [[ "$stderr" == *"auto-labels: label 'documentation' not found"* ]]
+    [[ "$stderr" == *"auto-labels: label 'docs' not found"* ]]
     [[ "$stderr" != *"label 'skill' not found"* ]]
 }
 
