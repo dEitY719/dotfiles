@@ -40,7 +40,13 @@ remote is proxy-blocked, so its commits are relayed as patches below.
 | # | Patch (gist) | Description |
 |---|--------------|-------------|
 | 1 | [0001-…](https://gist.github.com/<user>/<id>) | <one-line summary> |
-| 2 | [0002-…](https://gist.github.com/<user>/<id>) | <one-line summary> |
+| 2 (commit 2의 1/2) | [0002-1-…](https://gist.github.com/<user>/<id>) | <one-line summary> — split commit, part 1/2 |
+| 2 (commit 2의 2/2) | [0002-2-…](https://gist.github.com/<user>/<id>) | <one-line summary> — split commit, part 2/2 |
+
+A commit too large for one patch is pre-split by file group (per
+`references/patch-generation.md`). Render its parts as "commit N의 1/2,
+2/2" and keep them adjacent in apply order — they reconstruct one origin
+commit. Omit the split wording when nothing was pre-split.
 
 Apply **in this exact order** (each patch builds on the previous):
 

@@ -4,18 +4,21 @@ Steps 3-4. Runs only after Step 2 confirmed the push is blocked.
 
 ## Pre-flight (Step 3): destination divergence sanity check
 
-Resolve the PR's real commit range first. Reuse the `headRefOid` already
-captured by Step 1's `gh pr view` (no re-fetch), and resolve `$DEST_DEFAULT`
-— the destination's default branch (e.g. `git ls-remote --symref "$REMOTE"
-HEAD`) — once:
+Resolve the real commit range first, then resolve `$DEST_DEFAULT` — the
+destination's default branch (e.g. `git ls-remote --symref "$REMOTE" HEAD`)
+— once. Where `HEAD_SHA` comes from depends on Step 1's input mode:
 
 ```bash
-HEAD_SHA=$HEAD_REF_OID                                          # from Step 1; no re-fetch
+# PR mode:      reuse the headRefOid captured by Step 1's gh pr view (no re-fetch)
+# --commits mode: no PR object exists — use the head SHA parsed from <base>..<head>
+HEAD_SHA=$HEAD_REF_OID                                          # PR mode; --commits mode: HEAD_SHA=<head> from the arg
 BASE_SHA=$(git merge-base "$REMOTE/$DEST_DEFAULT" "$HEAD_SHA")   # or the PR's recorded base
 ```
 
 For a merged PR use the merge commit's parents; for an open PR use the
-current head and the PR's base. The range is `BASE..HEAD`.
+current head and the PR's base. In `--commits <base>..<head>` mode the range
+is exactly git's `<base>..<head>` (base excluded, head included) — use it
+directly, no `gh pr view`. Either way the range is `BASE..HEAD`.
 
 Before generating anything, compare the files this PR touches against the
 destination's current default branch:
@@ -84,20 +87,69 @@ Record a regeneration note for each excluded artifact so the destination
 can rebuild it — e.g. `openapi.json` → `make codegen`, a lockfile →
 `npm install`. These notes go into the apply-guide comment (Step 6).
 
+## File-group pre-split (oversized non-artifact commit)
+
+When a patch is **still** over `RELAY_PATCH_MAX_BYTES` after artifact
+exclusion **and** the excess is *not* attributable to a recognized
+generated-artifact pattern — it's just a large real code change in one
+commit — pre-split that single commit into multiple sub-patches by file
+group. This runs **before** the no-silent-truncation FAIL below; the FAIL
+now fires only when pre-split itself cannot get every sub-patch under the
+limit.
+
+1. Compute each file's diff size within the commit (`git format-patch` is
+   per-commit, so size per file directly):
+
+   ```bash
+   for f in $(git diff --name-only "$SHA"^.."$SHA"); do
+     bytes=$(git diff "$SHA"^.."$SHA" -- "$f" | wc -c)
+     printf '%s\t%s\n' "$bytes" "$f"
+   done
+   ```
+
+2. Greedily bucket files into groups so each group's cumulative patch size
+   stays under `RELAY_PATCH_MAX_BYTES` (account for ~1KB of per-patch header
+   overhead when bucketing near the limit).
+
+3. Generate one independent sub-patch per group. `git format-patch -1 <SHA>`
+   with a pathspec clones the original commit's `From`/`Subject`/date/author
+   headers onto each sub-patch (git's default for `-1` + pathspec — verified),
+   so every sub-patch stays independently `git am`-able:
+
+   ```bash
+   git format-patch -1 "$SHA" -o "$tmpdir" -- <files-in-group>   # per group
+   ```
+
+   Number the sub-patches so apply order — relative to each other and to the
+   rest of the series — is unambiguous: keep the commit's `NNNN` slot and add
+   a sub-index so they sort between it and the next commit, e.g. rename to
+   `NNNN-1-<name>.patch`, `NNNN-2-<name>.patch`. `git am` order follows the
+   order the apply-guide lists them, so the guide must render them as
+   "commit N의 1/2, 2/2" (Step 6 / `references/apply-guide-template.md`) so a
+   human applying in order knows they belong to one commit.
+
+Pre-split only triggers for non-artifact oversized commits; artifact
+exclusion (above) is tried first. A single **file** whose own diff alone
+exceeds the limit cannot be file-group-split — fall through to the FAIL
+below (no arbitrary truncation).
+
 ## No silent truncation
 
 If a patch is **still** over `RELAY_PATCH_MAX_BYTES` after excluding
-recognized generated artifacts — or is oversized and *not* attributable to
-any known generated pattern — do **not** truncate or split arbitrary code
-diffs. Stop and report:
+recognized generated artifacts **and** after the file-group pre-split above
+— i.e. a single **file's** own diff alone exceeds the limit and cannot be
+split further — do **not** truncate or split arbitrary code diffs. Stop and
+report:
 
 ```
-[FAIL] <NNNN>-<name>.patch is <size> bytes (> RELAY_PATCH_MAX_BYTES=40960)
-and its bulk is not a recognized generated artifact.
+[FAIL] <NNNN>-<name>.patch is <size> bytes (> RELAY_PATCH_MAX_BYTES=40960):
+a single file's diff exceeds the limit even after file-group pre-split, and
+its bulk is not a recognized generated artifact.
 Refusing to truncate — arbitrary truncation would corrupt the applied commit.
 Options: add its path to --generated-patterns if it IS generated, or split
 the origin commit into smaller commits and re-run.
 ```
 
 Arbitrary content truncation corrupts the commit `git am` reconstructs;
-only recognized generated-artifact diffs are ever dropped.
+only recognized generated-artifact diffs are ever dropped, and only
+whole-file groups are ever pre-split.
