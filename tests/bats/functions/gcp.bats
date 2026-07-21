@@ -726,10 +726,16 @@ FIXTURE
         printf "[include]\n\tpath = %s/git/.gitconfig\n" "$repo" > "$HOME/.gitconfig"
         printf "y\n" | _gcp_scan main source --author=all
         echo "scan_rc=$?"
+        # PR #1228 review (codex): assert the sequencer state itself, not just
+        # the message text — guards against a future regression that clears
+        # CHERRY_PICK_HEAD (e.g. an accidental --skip/--abort) while still
+        # coincidentally printing "Resolve and run".
+        [ -f "$repo/.git/CHERRY_PICK_HEAD" ] && echo "CPH_PRESENT" || echo "CPH_MISSING"
     '
     # New code: the real conflict is surfaced and the scan stops with rc=1.
     assert_output --partial "Resolve and run"
     assert_output --partial "scan_rc=1"
+    assert_output --partial "CPH_PRESENT"
     # Old code silently skipped it and lied "0 conflicts" — regression guard.
     refute_output --partial "0 conflicts"
 }
