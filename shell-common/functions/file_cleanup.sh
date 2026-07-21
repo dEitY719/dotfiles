@@ -311,6 +311,7 @@ del_file() {
                 new_mode="${1#--}"
                 if [ -n "$mode" ] && [ "$mode" != "$new_mode" ]; then
                     ux_error "del-file: --home and --cache are mutually exclusive"
+                    ux_bullet "clean-home is an alias for 'del-file --home' — for cache cleanup run: del-file --cache"
                     return 1
                 fi
                 mode="$new_mode"
