@@ -32,8 +32,9 @@ output its content verbatim, then stop. No API calls.
 ## Step 1: Resolve Skill Dir
 
 Record `START_TS=$(date +%s)` immediately. Locate `SKILL_DIR` (this
-file's directory): the script lives at `${SKILL_DIR}/lib/setup.sh`, the
-label SSOT at `${SKILL_DIR}/references/labels.md`.
+file's directory): the script lives at `${SKILL_DIR}/lib/setup.sh`. The
+label bootstrap is delegated to the sibling `gh:label-bootstrap` skill,
+whose SSOT is the repo-level `docs/.ssot/gh-labels.md` (issue #1226).
 
 ## Step 2: Prereq Check
 
@@ -52,16 +53,27 @@ this repo). Detect `OWNER/REPO` via `gh repo view`. If user passed
 
 If `--hide-columns` was not passed and this looks like a personal repo,
 ask the user once (1-line question) — never auto-infer from collaborator
-count (NF-3 / privacy). Parse `--no-bootstrap-labels` (skip Step 5) and
-`--force-label-sync` (Step 5 sync mode).
+count (NF-3 / privacy). Parse `--no-bootstrap-labels` (skip Step 5).
+`--force-label-sync` is a back-compat **no-op** (accept silently): the
+delegated `gh:label-bootstrap` now always force-syncs SSOT label
+colors/descriptions, so flag-present and flag-absent behave identically
+(intentional, per F-3 of issue #1226).
 
 ## Step 5: Label Bootstrap
 
-Apply the 8 SSOT labels per `references/labels.md` — its "Apply decision
-matrix" resolves skip / PATCH (on `--force-label-sync`) / POST per label.
-`--no-bootstrap-labels` skips the step with a one-line notice. Per-label
-permission errors warn on stderr and continue (label absence never blocks
-board setup).
+Delegate to the sibling `gh:label-bootstrap` skill (SSOT:
+`docs/.ssot/gh-labels.md`):
+
+```
+bash "${SKILL_DIR}/../gh-label-bootstrap/lib/label-bootstrap.sh" \
+    --repo "$OWNER/$REPO"
+```
+
+Pass `--dry-run` through on the dry-run dispatch (Step 6). It force-syncs
+the 10 SSOT labels' color/description and renames the 3 alias labels.
+`--no-bootstrap-labels` skips this step entirely with a one-line notice.
+Per-label permission errors warn on stderr and continue (label absence
+never blocks board setup).
 
 ## Step 6: Dry-run Dispatch
 

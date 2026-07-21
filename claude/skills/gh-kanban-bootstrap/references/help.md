@@ -15,7 +15,7 @@ label bootstrap, and host-aware UI checklist.
 | Option | Description | Default |
 |---|---|---|
 | `--no-bootstrap-labels` | Skip the label registration step (target repo follows a different label policy) | labels bootstrapped |
-| `--force-label-sync` | PATCH existing labels whose color/description differ from the SSOT (`references/labels.md`) | preserve (no color change) |
+| `--force-label-sync` | Back-compat **no-op** (#1226): `gh:label-bootstrap` now always force-syncs SSOT label colors/descriptions, so this flag has no effect. Accepted silently. | inert |
 | `--with-smoke-test` | Execute the smoke test commands instead of only printing them | print-only |
 
 ## Options (passed through to `lib/setup.sh`)
@@ -42,8 +42,11 @@ label bootstrap, and host-aware UI checklist.
 
 1. Checks `gh` / `jq` + `project` scope (rc=1 on miss).
 2. Resolves target repo (always `origin` — single dotfiles policy).
-3. Bootstraps the 8 SSOT labels (`feat`, `refactor`, `test`, `ci`,
-   `chore`, `performance`, `build`, `skill`) — idempotent.
+3. Delegates label bootstrap to `gh:label-bootstrap`, which force-syncs
+   the 10 SSOT labels (`feat`, `fix`, `docs`, `refactor`, `test`, `ci`,
+   `chore`, `skill`, `TODO`, `reference`) per `docs/.ssot/gh-labels.md`
+   and renames the 3 alias labels (`bug`->`fix`, `documentation`->`docs`,
+   `build`->`chore`) — idempotent.
 4. Dry-runs `lib/setup.sh`. Aborts if dry-run fails.
 5. Real-runs `lib/setup.sh`. Captures Project URL and number.
 6. Idempotently wires `OWNER/REPO` into
@@ -69,5 +72,6 @@ non-Claude-Code contexts:
 ## Related
 
 - SSOT: `docs/.ssot/github-project-board.md`
+- Label SSOT: `docs/.ssot/gh-labels.md` (delegated to `gh:label-bootstrap`)
 - Playbook: `docs/guide/playbooks/kanban-board-setup.md`
 - Decision: #289 (3-stage issue lifecycle, workflow #3 disabled)

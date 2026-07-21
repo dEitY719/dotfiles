@@ -47,7 +47,7 @@ way to release. dotfiles inherits that posture.
 ```
 labels = json.labels[].name
 block  = split(GH_ISSUE_BLOCK_LABELS, ",")
-        default: "do-not-work,on-hold,보류,⏸️ Postpone"
+        default: "do-not-work,on-hold,보류,⏸️ Postpone,reference"
 
 for L in labels:
     for B in block:
@@ -197,7 +197,7 @@ not abort — the dependency check is informational.
 
 | Variable | Default | Effect |
 |---|---|---|
-| `GH_ISSUE_BLOCK_LABELS` | `do-not-work,on-hold,보류,⏸️ Postpone` | Comma-separated block-label list for 3.2. Spaces inside a label are part of the label (don't pad commas). |
+| `GH_ISSUE_BLOCK_LABELS` | `do-not-work,on-hold,보류,⏸️ Postpone,reference` | Comma-separated block-label list for 3.2. Spaces inside a label are part of the label (don't pad commas). `reference` marks 참고용/구현 불필요 issues (issue #1226). |
 | `GH_ISSUE_SKIP_SELF_ASSIGN` | unset | When `1`, skip 3.3 entirely. |
 | `GH_ISSUE_SKIP_BOARD_TRANSITION` | unset | When `1`, skip 3.4 entirely. |
 | `GH_ISSUE_SKIP_DEPS_CHECK` | unset | When `1`, skip 3.5 entirely. |

@@ -117,9 +117,9 @@ Scan `git log <base>..HEAD --format=%s` and collect types from each subject:
 
 | Commit type | Candidate label     |
 |-------------|---------------------|
-| `feat`      | `enhancement`       |
-| `fix`       | `bug`               |
-| `docs`      | `documentation`     |
+| `feat`      | `feat`              |
+| `fix`       | `fix`               |
+| `docs`      | `docs`              |
 | `refactor`  | `refactor`          |
 | `style`     | `style`             |
 | `perf`      | `performance`       |
