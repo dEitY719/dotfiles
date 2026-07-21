@@ -11,7 +11,7 @@ destination's default branch (e.g. `git ls-remote --symref "$REMOTE" HEAD`)
 ```bash
 # PR mode:      reuse the headRefOid captured by Step 1's gh pr view (no re-fetch)
 # --commits mode: no PR object exists — use the head SHA parsed from <base>..<head>
-HEAD_SHA=$HEAD_REF_OID                                          # PR mode; --commits mode: HEAD_SHA=<head> from the arg
+HEAD_SHA=$HEAD_REF_OID                                          # PR mode
 BASE_SHA=$(git merge-base "$REMOTE/$DEST_DEFAULT" "$HEAD_SHA")   # or the PR's recorded base
 ```
 
@@ -129,10 +129,8 @@ limit.
    "commit N의 1/2, 2/2" (Step 6 / `references/apply-guide-template.md`) so a
    human applying in order knows they belong to one commit.
 
-Pre-split only triggers for non-artifact oversized commits; artifact
-exclusion (above) is tried first. A single **file** whose own diff alone
-exceeds the limit cannot be file-group-split — fall through to the FAIL
-below (no arbitrary truncation).
+A single **file** whose own diff alone exceeds the limit cannot be
+file-group-split — fall through to the FAIL below (no arbitrary truncation).
 
 ## No silent truncation
 
