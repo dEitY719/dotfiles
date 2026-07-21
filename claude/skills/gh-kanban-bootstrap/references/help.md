@@ -44,7 +44,8 @@ label bootstrap, and host-aware UI checklist.
 2. Resolves target repo (always `origin` — single dotfiles policy).
 3. Delegates label bootstrap to `gh:label-bootstrap`, which force-syncs
    the 10 SSOT labels (`feat`, `fix`, `docs`, `refactor`, `test`, `ci`,
-   `chore`, `skill`, `TODO`, `reference`) per `docs/.ssot/gh-labels.md`
+   `chore`, `skill`, `TODO`, `reference`) per
+   `gh-label-bootstrap/references/gh-labels.md`
    and renames the 3 alias labels (`bug`->`fix`, `documentation`->`docs`,
    `build`->`chore`) — idempotent.
 4. Dry-runs `lib/setup.sh`. Aborts if dry-run fails.
@@ -72,6 +73,6 @@ non-Claude-Code contexts:
 ## Related
 
 - SSOT: `docs/.ssot/github-project-board.md`
-- Label SSOT: `docs/.ssot/gh-labels.md` (delegated to `gh:label-bootstrap`)
+- Label SSOT: `gh-label-bootstrap/references/gh-labels.md` (delegated to `gh:label-bootstrap`)
 - Playbook: `docs/guide/playbooks/kanban-board-setup.md`
 - Decision: #289 (3-stage issue lifecycle, workflow #3 disabled)
