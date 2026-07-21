@@ -429,8 +429,9 @@ _my_help_show_category() {
     ux_table_header "Topic" "Description"
 
     for topic in $(printf '%s' "$members"); do
-        # FIX: Combine declaration and assignment - zsh echoes desc='...' otherwise
-        local desc=$(_my_help_topic_description "$topic")
+        # FIX: Suppress zsh debug output - redirect stdout during local declaration
+        { local desc; } >/dev/null 2>&1
+        desc=$(_my_help_topic_description "$topic")
         ux_table_row "$topic" "$desc"
     done
 
