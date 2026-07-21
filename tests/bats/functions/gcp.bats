@@ -689,6 +689,51 @@ FIXTURE
     assert_output --partial "NAME_OK"
 }
 
+@test "scan #1213: real conflict in [include]-d git/.gitconfig reaches execution loop — surfaced, not silently skipped" {
+    # The config-poisoning class (#1016/#1149) only defended the non-destructive
+    # preflight probe. Here a REAL cherry-pick conflict lands in the tracked
+    # git/.gitconfig that ~/.gitconfig [include]s, poisoning config so every
+    # later git call dies with "bad config line". The old
+    # `git rev-parse --verify CHERRY_PICK_HEAD` check misread that death as
+    # "no conflict" and `continue`d, silently skipping it and reporting
+    # "0 conflicts". Two source commits both touch git/.gitconfig so Stage-1.6's
+    # precedent guard defers the conflict to the execution loop (where the fix
+    # lives) instead of pre-flagging it into conflict_list.
+    run_in_bash '
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp1213.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        mkdir -p git
+        printf "[user]\n\tname = base\n" > git/.gitconfig
+        git add git/.gitconfig && git commit -qm "init: tracked gitconfig"
+        git checkout -q -b source
+        # A — precedent: also touches git/.gitconfig (adds a section, keeps name)
+        # so Stage-1.6 defers B rather than pre-flagging the conflict.
+        printf "[user]\n\tname = base\n[core]\n\teditor = vim\n" > git/.gitconfig
+        git add git/.gitconfig && git commit -qm "source: add core section"
+        # B — changes name; conflicts against mainvalue at the real cherry-pick.
+        printf "[user]\n\tname = sidevalue\n[core]\n\teditor = vim\n" > git/.gitconfig
+        git add git/.gitconfig && git commit -qm "source: gitconfig name=sidevalue"
+        git checkout -q main
+        printf "[user]\n\tname = mainvalue\n" > git/.gitconfig
+        git add git/.gitconfig && git commit -qm "main: gitconfig name=mainvalue"
+        # [include] topology: ~/.gitconfig pulls in the tracked file the conflict
+        # will corrupt.
+        rm -f "$HOME/.gitconfig"
+        printf "[include]\n\tpath = %s/git/.gitconfig\n" "$repo" > "$HOME/.gitconfig"
+        printf "y\n" | _gcp_scan main source --author=all
+        echo "scan_rc=$?"
+    '
+    # New code: the real conflict is surfaced and the scan stops with rc=1.
+    assert_output --partial "Resolve and run"
+    assert_output --partial "scan_rc=1"
+    # Old code silently skipped it and lied "0 conflicts" — regression guard.
+    refute_output --partial "0 conflicts"
+}
+
 @test "scan #913: content-dup commit (unique subject, different patch-id) skipped via no-op pre-flight, no conflict" {
     # The content-dup commit must reach the individual loop, so its patch-id
     # has to DIFFER from how HEAD acquired the same final content (else

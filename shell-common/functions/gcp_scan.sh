@@ -1259,6 +1259,12 @@ EOF
     local conflict_skipped=0
     local kr_skipped=0
     local pe_skipped=0
+    # Cache the .git dir BEFORE any cherry-pick runs, while config is still
+    # readable (issue #1213). A real conflict in a tracked-and-[include]-d
+    # git/.gitconfig poisons config, so the later CHERRY_PICK_HEAD check must
+    # be a plain file test — `git rev-parse` itself would die on the poison.
+    local _gcp_git_dir
+    _gcp_git_dir=$(git rev-parse --git-dir 2>/dev/null) || _gcp_git_dir=".git"
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
 
@@ -1374,7 +1380,10 @@ $sha
                 fi
                 break
             done
-            if ! git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
+            # Plain file test, not `git rev-parse` (issue #1213): a poisoned
+            # config makes any git call fail, which the old code misread as
+            # "no conflict → skip", silently dropping the real conflict.
+            if [ ! -f "${_gcp_git_dir}/CHERRY_PICK_HEAD" ]; then
                 continue
             fi
             # Genuine conflict (the pre-flight already excluded redundant ones):
