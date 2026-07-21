@@ -180,7 +180,9 @@ _register_default_help_categories() {
         for category in $(_my_help_get_category_keys 2>/dev/null); do
             local members="${HELP_CATEGORY_MEMBERS[$category]}"
             # FIX: Don't declare topic separately - declare it in the for loop
-            for topic in $members; do
+            # zsh doesn't word-split a bare "$members" expansion; routing it
+            # through a command substitution forces splitting in both shells.
+            for topic in $(printf '%s' "$members"); do
                 HELP_COMMAND_TO_CATEGORY["$topic"]="$category"
             done
         done
@@ -376,7 +378,9 @@ _my_help_show_categories() {
         local total=0
 
         # FIX: Don't declare topic/label separately in zsh - causes debug output
-        for topic in $members; do
+        # zsh doesn't word-split a bare "$members" expansion; routing it
+        # through a command substitution forces splitting in both shells.
+        for topic in $(printf '%s' "$members"); do
             total=$((total + 1))
             if [ "$shown" -lt 5 ]; then
                 if [ -n "$preview" ]; then
@@ -419,18 +423,20 @@ _my_help_show_category() {
     ux_info "${HELP_CATEGORIES[$category]}"
 
     # FIX: Don't declare topic separately - it causes zsh debug output
+    # zsh doesn't word-split a bare "$members" expansion; routing it
+    # through a command substitution forces splitting in both shells.
     local total=0
-    for topic in $members; do
+    for topic in $(printf '%s' "$members"); do
         total=$((total + 1))
     done
 
     ux_section "Topics (${total})"
     ux_table_header "Topic" "Description"
 
-    for topic in $members; do
-        # FIX: Combine declaration and assignment
-        local desc
-        desc=$(_my_help_topic_description "$topic")
+    for topic in $(printf '%s' "$members"); do
+        # A separate "local desc" + "desc=$(...)" here makes zsh echo
+        # "desc='...'" once per iteration; combining onto one line avoids it.
+        local desc=$(_my_help_topic_description "$topic")
         ux_table_row "$topic" "$desc"
     done
 
