@@ -7,8 +7,8 @@ Input is EITHER the positional `<origin-PR#>` OR `--commits <base>..<head>`
 
 | # | Name | Default | Description |
 |---|------|---------|-------------|
-| 1 | `<origin-PR#>` or `-h`/`--help`/`help` | — | PR on `origin` whose commit range is the relay payload (merged or open). Mutually exclusive with `--commits` |
-| flag | `--commits <base>..<head>` | — | Alternate input mode: relay this git range directly, skipping `gh pr view`. Standard git semantics — `base` EXCLUDED, `head` INCLUDED. Mutually exclusive with the positional `<origin-PR#>` |
+| 1 | `<origin-PR#>` or `-h`/`--help`/`help` | — | PR on `origin` whose commit range is the relay payload (merged or open) |
+| flag | `--commits <base>..<head>` | — | Alternate input mode: relay this git range directly, skipping `gh pr view`. Standard git semantics — `base` EXCLUDED, `head` INCLUDED |
 | flag | `--remote <name-or-URL>` | `upstream` | Destination remote. Name (resolved via `git remote get-url`) or raw URL |
 | flag | `--target-issue <N>` | new issue | Post the apply-guide to this existing destination issue/PR instead of creating a new one |
 | flag | `--generated-patterns <globs>` | built-in list | Comma-separated globs marking generated artifacts to strip from oversized patches |
