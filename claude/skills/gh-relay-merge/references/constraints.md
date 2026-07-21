@@ -31,10 +31,13 @@ of file count, and parallel uploads risk rate-limit / abuse triggers.
 
 A patch over `RELAY_PATCH_MAX_BYTES` (40KB) is only ever shrunk by excluding
 **recognized generated-artifact** paths (with a recorded regeneration
-command). If it is still oversized after exclusion, or its bulk is not a
-recognized generated artifact, stop and report — do not truncate or split
-arbitrary code diffs. Truncation corrupts the commit `git am` reconstructs.
-This is the repo's "no silent caps" norm.
+command), or — for an oversized non-artifact commit — pre-split by file
+group into independently `git am`-able sub-patches (see
+`references/patch-generation.md` → "File-group pre-split"). Only when a
+single **file's** own diff alone still exceeds the limit does the skill
+stop and report — do not truncate or split arbitrary code diffs at that
+point. Truncation corrupts the commit `git am` reconstructs. This is the
+repo's "no silent caps" norm.
 
 ## Never auto-close an origin-side issue
 
