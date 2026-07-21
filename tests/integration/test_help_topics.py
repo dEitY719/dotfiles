@@ -199,9 +199,7 @@ class TestHelpCategoryRendering:
         """my_help_impl cli must render all 11 topics individually, not merged."""
         result = shell_runner(shell, "my_help_impl cli")
         assert result.exit_code == 0, f"{shell}: my_help_impl cli failed"
-        assert "Topics (11)" in result.stdout, (
-            f"{shell}: expected 11 separate topics, got: {result.stdout}"
-        )
+        assert "Topics (11)" in result.stdout, f"{shell}: expected 11 separate topics, got: {result.stdout}"
         assert "No description available" not in result.stdout, (
             f"{shell}: a topic fell back to the missing-description placeholder"
         )
