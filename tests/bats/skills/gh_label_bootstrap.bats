@@ -162,3 +162,19 @@ run_bootstrap() {
     # step 2 (SSOT apply) must still PATCH it directly (codex review, PR #1229).
     grep -q 'repos/acme/widget/labels/fix -X PATCH -f new_name=fix -f color=d73a4a' "$MOCK_LOG"
 }
+
+# ── Standalone deployment: skill dir copied outside the dotfiles tree ──
+# (codex review, PR #1231): resolve_ssot_file() must find references/gh-labels.md
+# as a sibling of lib/ with no docs/.ssot/ or dotfiles repo root anywhere nearby —
+# this is the whole point of moving the SSOT into the skill directory.
+@test "standalone: works when the skill dir is copied outside the dotfiles repo" {
+    STANDALONE_DIR="${TEST_TEMP_HOME}/standalone-gh-label-bootstrap"
+    mkdir -p "$STANDALONE_DIR"
+    cp -r "${DOTFILES_ROOT}/claude/skills/gh-label-bootstrap/lib" "$STANDALONE_DIR/"
+    cp -r "${DOTFILES_ROOT}/claude/skills/gh-label-bootstrap/references" "$STANDALONE_DIR/"
+
+    set_existing feat
+    run bash "${STANDALONE_DIR}/lib/label-bootstrap.sh" --repo acme/widget --dry-run
+    assert_success
+    assert_output --partial "[dry-run] PATCH label 'feat' (color=fbca04)"
+}
