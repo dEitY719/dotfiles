@@ -152,10 +152,10 @@ EOF
 }
 
 _gb_help() {
-    ux_info "Usage: gb [-D local] [-D remote [-y] [<remote>]] [git-branch-flags...]"
+    ux_info "Usage: gb [-D local] [-D remote [-y] [origin|upstream]] [git-branch-flags...]"
     ux_bullet "sub-commands"
-    ux_bullet_sub "gb -D local                  delete local branches (keeps: main + current + keywords)"
-    ux_bullet_sub "gb -D remote [-y] [<remote>] delete branches on the remote SERVER (default: origin, keeps: main/master)"
+    ux_bullet_sub "gb -D local                          delete local branches (keeps: main + current + keywords)"
+    ux_bullet_sub "gb -D remote [-y] [origin|upstream]  delete branches on the remote SERVER (default: origin, keeps: main/master)"
     ux_bullet_sub "gb [flags]                   passthrough to git --no-pager branch"
     ux_bullet "options"
     ux_bullet_sub "-y, --yes                 skip the confirmation prompt (remote deletion is permanent)"
@@ -167,7 +167,15 @@ git_branch() {
             case "${2:-}" in
                 local)  shift 2; _gb_clean_local "$@" ;;
                 remote) shift 2; _gb_clean_remote "$@" ;;
-                *)      git --no-pager branch "$@" ;;
+                *)
+                    if [ $# -eq 2 ] && git remote get-url "$2" >/dev/null 2>&1 \
+                        && ! git rev-parse --verify --quiet "refs/heads/$2" >/dev/null 2>&1; then
+                        ux_error "No local branch named '$2' — '$2' is a remote, not a branch."
+                        ux_info "Try: gb -D remote $2"
+                        return 1
+                    fi
+                    git --no-pager branch "$@"
+                    ;;
             esac
             ;;
         -h|--help|help)
