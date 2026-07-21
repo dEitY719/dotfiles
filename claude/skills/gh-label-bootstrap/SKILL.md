@@ -2,7 +2,7 @@
 name: gh:label-bootstrap
 description: >-
   Sync a GitHub repo's labels to the dotfiles 10-label SSOT
-  (docs/.ssot/gh-labels.md) — force-PATCH existing SSOT labels to the
+  (references/gh-labels.md) — force-PATCH existing SSOT labels to the
   canonical color/description, POST missing ones, rename the 3 alias
   labels (bug->fix, documentation->docs, build->chore) preserving their
   issue/PR links, and optionally prune extraneous custom labels. Use when
@@ -29,8 +29,9 @@ output its content verbatim, then stop. No API calls.
 ## Step 1: Resolve Skill Dir
 
 The script lives at `${SKILL_DIR}/lib/label-bootstrap.sh`. The label SSOT
-it parses is the repo-level `docs/.ssot/gh-labels.md` (the script resolves
-this from its own location — 4 levels up from `lib/`).
+it parses is `${SKILL_DIR}/references/gh-labels.md`, co-located inside this
+skill (the script resolves this as a sibling of `lib/`) — this keeps the
+skill self-contained for standalone distribution.
 
 ## Step 2: Target Repo
 
@@ -74,7 +75,7 @@ continue — a single label's failure never aborts the run.
 - Never mutate the script's behavior — wrap, don't rewrite.
 - `--dry-run` must make zero POST/PATCH/DELETE API calls.
 - Never delete a label unless `--prune` was explicitly passed.
-- The 10-label + alias SSOT lives only in `docs/.ssot/gh-labels.md` — do
+- The 10-label + alias SSOT lives only in `references/gh-labels.md` — do
   not hardcode a second copy here or in the script.
 - `lib/label-bootstrap.sh` is the sole entry point; invoke it directly
   from non-Claude contexts:

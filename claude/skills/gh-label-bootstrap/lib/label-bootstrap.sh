@@ -5,10 +5,11 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 # gh:label-bootstrap — sync a target repo's GitHub labels to the dotfiles SSOT.
 #
-# SSOT feed: docs/.ssot/gh-labels.md (plain-feed blocks). This script parses
-# that file directly — it holds no second hardcoded copy of the label set.
+# SSOT feed: references/gh-labels.md, co-located with this script (plain-feed
+# blocks). This script parses that file directly — it holds no second
+# hardcoded copy of the label set.
 #
-# Behavior (see docs/.ssot/gh-labels.md for the authoritative spec):
+# Behavior (see references/gh-labels.md for the authoritative spec):
 #   1. Alias renames first  — PATCH old -> new_name (preserves issue/PR links).
 #   2. SSOT 10 apply         — PATCH if exists (force color/description sync),
 #                              POST if missing.
@@ -48,7 +49,7 @@ Options:
   --prune              DELETE non-SSOT custom labels (default: off).
   -h, --help, help     Show this help.
 
-Full spec: docs/.ssot/gh-labels.md
+Full spec: references/gh-labels.md
 EOF
 }
 
@@ -79,10 +80,11 @@ parse_args() {
     done
 }
 
-# Resolve the dotfiles repo root from this script's own (symlink-resolved)
-# location so the SSOT feed is found regardless of cwd or the entry-level
-# skill symlink (~/.claude*/skills/<name> -> dotfiles/claude/skills/<name>).
-# lib -> gh-label-bootstrap -> skills -> claude -> repo root (4 levels up).
+# Resolve the SSOT feed from this script's own (symlink-resolved) location so
+# it is found regardless of cwd or the entry-level skill symlink
+# (~/.claude*/skills/<name> -> dotfiles/claude/skills/<name>). references/ is
+# always a sibling of lib/, so this works standalone even if the skill
+# directory is copied out of the dotfiles repo entirely.
 resolve_ssot_file() {
     if [ -n "${GH_LABELS_SSOT:-}" ]; then
         printf '%s' "$GH_LABELS_SSOT"
@@ -90,7 +92,7 @@ resolve_ssot_file() {
     fi
     local script_dir
     script_dir="$(cd "$(dirname "$0")" && pwd -P)"
-    printf '%s' "${script_dir}/../../../../docs/.ssot/gh-labels.md"
+    printf '%s' "${script_dir}/../references/gh-labels.md"
 }
 
 require_command() {

@@ -1,7 +1,7 @@
 # gh:label-bootstrap — Help
 
 Sync a GitHub repo's labels to the dotfiles 10-label SSOT
-(`docs/.ssot/gh-labels.md`). Generic and reusable on any repo. Wraps the
+(`references/gh-labels.md`). Generic and reusable on any repo. Wraps the
 single SSOT script at `lib/label-bootstrap.sh`.
 
 ## Usage
@@ -21,7 +21,7 @@ single SSOT script at `lib/label-bootstrap.sh`.
 
 ## What the skill does
 
-1. Parses the plain-feed blocks in `docs/.ssot/gh-labels.md` (10 labels +
+1. Parses the plain-feed blocks in `references/gh-labels.md` (10 labels +
    3 alias renames) — the one physical SSOT feed. No second hardcoded copy.
 2. **Alias renames first**: for `bug->fix`, `documentation->docs`,
    `build->chore`, if the old name exists it is renamed via
@@ -60,7 +60,7 @@ this skill. This is an intentional, documented change (F-3 of issue #1226).
 
 ## Related
 
-- SSOT: `docs/.ssot/gh-labels.md` (labels, aliases, allowlist, prune rule)
+- SSOT: `references/gh-labels.md` (labels, aliases, allowlist, prune rule)
 - Consumers: `.gh-issue-defaults.yml`, `gh:issue-implement`
   (`GH_ISSUE_BLOCK_LABELS` includes `reference`), `gh:pr` (commit-type map)
 - Sibling: `gh:kanban-bootstrap` (delegates its label step to this skill)
