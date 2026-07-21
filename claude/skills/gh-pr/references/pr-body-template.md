@@ -122,11 +122,11 @@ Scan `git log <base>..HEAD --format=%s` and collect types from each subject:
 | `docs`      | `docs`              |
 | `refactor`  | `refactor`          |
 | `style`     | `style`             |
-| `perf`      | `performance`       |
+| `perf`      | `feat`              |
 | `test`      | `test`              |
 | `chore`     | `chore`             |
 | `ci`        | `ci`                |
-| `build`     | `build`             |
+| `build`     | `chore`             |
 
 Multiple commit types → multiple candidate labels (dedup first).
 
@@ -135,7 +135,7 @@ Multiple commit types → multiple candidate labels (dedup first).
 Add scope labels that match the PR's actual footprint, e.g.:
 
 - `claude/skills/**` changes → `skill`
-- `docs/**` or `**/*.md` only → `documentation`
+- `docs/**` or `**/*.md` only → `docs`
 - Changes under a specific package → that package's label if one exists
 
 Use judgment; do not stretch — a label should meaningfully describe the PR.
