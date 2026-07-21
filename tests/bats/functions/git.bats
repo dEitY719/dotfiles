@@ -100,15 +100,13 @@ teardown() {
 @test "bash: gb -D <remote-name> hints 'gb -D remote' instead of failing silently" {
     run_in_bash '
         tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
         git init -q -b main --bare "$tmp/remote.git"
         git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
         cd "$tmp/work"
         git config user.email t@t; git config user.name t
         git commit -q --allow-empty -m init
         git_branch -D origin
-        status=$?
-        rm -rf "$tmp"
-        exit "$status"
     '
     assert_failure
     assert_output --partial "is a remote, not a branch"
@@ -118,6 +116,7 @@ teardown() {
 @test "bash: gb -D <local-branch-name-matching-remote> still deletes the local branch" {
     run_in_bash '
         tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
         git init -q -b main --bare "$tmp/remote.git"
         git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
         cd "$tmp/work"
@@ -125,10 +124,25 @@ teardown() {
         git commit -q --allow-empty -m init
         git branch origin
         git_branch -D origin
-        rm -rf "$tmp"
     '
     assert_success
     assert_output --partial "Deleted branch origin"
+}
+
+@test "zsh: gb -D <remote-name> hints 'gb -D remote' instead of failing silently" {
+    run_in_zsh '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git_branch -D origin
+    '
+    assert_failure
+    assert_output --partial "is a remote, not a branch"
+    assert_output --partial "gb -D remote origin"
 }
 
 # --- git worktree functions ---
