@@ -185,6 +185,31 @@ class TestHelpTopicsWithDifferentFormats:
         assert "git stash" in result.stdout.lower(), f"{shell}: stash content not shown"
 
 
+class TestHelpCategoryRendering:
+    """Regression test for the zsh word-splitting bug (#1225).
+
+    zsh doesn't word-split a bare `$members` expansion, unlike bash — a
+    category's space-separated topic list used to collapse into a single
+    loop iteration under zsh, showing one merged "topic" with a
+    "No description available" fallback instead of one row per topic.
+    """
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_category_lists_each_topic_with_its_description(self, shell_runner, shell):
+        """my_help_impl cli must render all 11 topics individually, not merged."""
+        result = shell_runner(shell, "my_help_impl cli")
+        assert result.exit_code == 0, f"{shell}: my_help_impl cli failed"
+        assert "Topics (11)" in result.stdout, (
+            f"{shell}: expected 11 separate topics, got: {result.stdout}"
+        )
+        assert "No description available" not in result.stdout, (
+            f"{shell}: a topic fell back to the missing-description placeholder"
+        )
+        assert "del_file" in result.stdout and "fzf" in result.stdout, (
+            f"{shell}: expected topic names not found individually"
+        )
+
+
 class TestHelpTopicsErrorHandling:
     """Test help system error handling."""
 
