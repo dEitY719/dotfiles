@@ -34,7 +34,7 @@ output its content verbatim, then stop. No API calls.
 Record `START_TS=$(date +%s)` immediately. Locate `SKILL_DIR` (this
 file's directory): the script lives at `${SKILL_DIR}/lib/setup.sh`. The
 label bootstrap is delegated to the sibling `gh:label-bootstrap` skill,
-whose SSOT is `gh-label-bootstrap/references/gh-labels.md` (issue #1226).
+whose SSOT is `../gh-label-bootstrap/references/gh-labels.md` (issue #1226).
 
 ## Step 2: Prereq Check
 
@@ -62,7 +62,7 @@ colors/descriptions, so flag-present and flag-absent behave identically
 ## Step 5: Label Bootstrap
 
 Delegate to the sibling `gh:label-bootstrap` skill (SSOT:
-`gh-label-bootstrap/references/gh-labels.md`):
+`../gh-label-bootstrap/references/gh-labels.md`):
 
 ```
 bash "${SKILL_DIR}/../gh-label-bootstrap/lib/label-bootstrap.sh" \
