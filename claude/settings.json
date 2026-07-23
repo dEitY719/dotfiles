@@ -21,6 +21,10 @@
           {
             "type": "command",
             "command": "${HOME}/dotfiles/claude/hooks/session-start-settings-drift.sh"
+          },
+          {
+            "type": "command",
+            "command": "${HOME}/dotfiles/claude/hooks/session-start-statusline-project-override.sh"
           }
         ]
       }
