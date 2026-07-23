@@ -45,14 +45,12 @@ cwd=$(printf '%s' "$input" | jq -r '.cwd // ""' 2>/dev/null) || exit 0
 # defines .statusLine — otherwise there is nothing overriding the global.
 PROJ_SETTINGS="$cwd/.claude/settings.json"
 [ -f "$PROJ_SETTINGS" ] || exit 0
-has_sl=$(jq -r 'has("statusLine")' "$PROJ_SETTINGS" 2>/dev/null) || exit 0
-[ "$has_sl" = "true" ] || exit 0
+jq -e 'has("statusLine")' "$PROJ_SETTINGS" >/dev/null 2>&1 || exit 0
 
 # Don't clobber an existing personal override.
 PROJ_LOCAL="$cwd/.claude/settings.local.json"
 if [ -f "$PROJ_LOCAL" ]; then
-	local_has_sl=$(jq -r 'has("statusLine")' "$PROJ_LOCAL" 2>/dev/null) || exit 0
-	[ "$local_has_sl" = "true" ] && exit 0
+	jq -e 'has("statusLine") | not' "$PROJ_LOCAL" >/dev/null 2>&1 || exit 0
 fi
 
 # SSOT resolves relative to this script (…/claude/hooks/x.sh → …/claude), same
