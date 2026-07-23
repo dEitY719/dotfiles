@@ -13,13 +13,15 @@
 #   1. non-SessionStart event                    → exit 0, silent
 #   2. empty stdin                               → exit 0, silent
 #   3. missing .cwd                              → exit 0, silent
-#   4. no project settings.json                  → exit 0, silent
+#   4. no project settings.json up the tree      → exit 0, silent
 #   5. project settings.json without .statusLine → exit 0, silent
 #   6. happy path (gitignored)                   → seeds settings.local.json
 #   7. existing local .statusLine preserved      → never overwritten
 #   8. merge preserves other pre-existing keys
 #   9. settings.local.json NOT gitignored        → safety skip, hint printed
 #  10. idempotent — second happy-path run = same end state
+#  11. cwd in a subdirectory                     → walks up, seeds project root
+#  12. PROJ_ROOT not a git repo                  → silent no-op, no hint, no write
 
 load '../test_helper'
 
@@ -176,4 +178,37 @@ JSON
     second=$(cat "$PROJ_LOCAL")
     [ "$first" = "$second" ]
     [ "$(jq -r '.statusLine.command' "$PROJ_LOCAL")" = '${HOME}/dotfiles/claude/statusline-command.sh' ]
+}
+
+@test "statusline-override: cwd in a subdirectory → walks up, seeds project root" {
+    _project_has_statusline
+    _gitignore_local
+    mkdir -p "$PROJ/src/nested"
+
+    # Session started deep inside the project, not at its root.
+    _run_hook "SessionStart" "$PROJ/src/nested"
+    assert_success
+    assert_output --partial '"hookEventName": "SessionStart"'
+    assert_output --partial 'Seeded'
+
+    # Seeded at the discovered project root, not under the nested subdir.
+    [ -f "$PROJ_LOCAL" ]
+    [ ! -e "$PROJ/src/nested/.claude" ]
+    seeded=$(jq -r '.statusLine.command' "$PROJ_LOCAL")
+    [ "$seeded" = '${HOME}/dotfiles/claude/statusline-command.sh' ]
+}
+
+@test "statusline-override: PROJ_ROOT not a git repo → silent no-op, no hint, no write" {
+    # A project dir with a .statusLine settings.json but NOT inside any git work
+    # tree — distinct from case 9 (a git repo merely missing the .gitignore).
+    NOGIT="$TEST_TEMP_HOME/nogit"
+    mkdir -p "$NOGIT/.claude"
+    cat >"$NOGIT/.claude/settings.json" <<'JSON'
+{ "statusLine": { "type": "command", "command": "./project-statusline.sh" } }
+JSON
+    _run_hook "SessionStart" "$NOGIT"
+    assert_success
+    [ -z "$output" ]
+    [[ "$STDERR_CONTENT" != *"NOT gitignored"* ]]
+    [ ! -f "$NOGIT/.claude/settings.local.json" ]
 }

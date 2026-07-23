@@ -41,14 +41,30 @@ cwd=$(printf '%s' "$input" | jq -r '.cwd // ""' 2>/dev/null) || exit 0
 [ -n "$cwd" ] || exit 0
 [ -d "$cwd" ] || exit 0
 
+# Claude Code resolves project config by searching upward from the session's
+# cwd for the nearest .claude/settings.json (like git discovering .git), so the
+# project root is not necessarily $cwd. Walk up to find it; bail if no ancestor
+# (up to and including /) carries one.
+PROJ_ROOT=""
+_dir="$cwd"
+while [ -n "$_dir" ]; do
+	if [ -f "$_dir/.claude/settings.json" ]; then
+		PROJ_ROOT="$_dir"
+		break
+	fi
+	[ "$_dir" = "/" ] && break
+	_dir=$(dirname -- "$_dir")
+done
+[ -n "$PROJ_ROOT" ] || exit 0
+
 # Only act if the project ships a git-tracked settings.json that itself
 # defines .statusLine — otherwise there is nothing overriding the global.
-PROJ_SETTINGS="$cwd/.claude/settings.json"
+PROJ_SETTINGS="$PROJ_ROOT/.claude/settings.json"
 [ -f "$PROJ_SETTINGS" ] || exit 0
 jq -e 'has("statusLine")' "$PROJ_SETTINGS" >/dev/null 2>&1 || exit 0
 
 # Don't clobber an existing personal override.
-PROJ_LOCAL="$cwd/.claude/settings.local.json"
+PROJ_LOCAL="$PROJ_ROOT/.claude/settings.local.json"
 if [ -f "$PROJ_LOCAL" ]; then
 	jq -e 'has("statusLine") | not' "$PROJ_LOCAL" >/dev/null 2>&1 || exit 0
 fi
@@ -63,9 +79,13 @@ SSOT="$_hook_dir/../settings.json"
 ssot_sl=$(jq -c '.statusLine // empty' "$SSOT" 2>/dev/null) || exit 0
 [ -n "$ssot_sl" ] || exit 0
 
+# If PROJ_ROOT isn't inside a git work tree (or git is missing), there's nothing
+# to gitignore against — silent no-op, same as any other missing prerequisite.
+git -C "$PROJ_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
+
 # Safety gate: only write if settings.local.json is actually gitignored in this
 # project, so we never leave a file git would track in the working tree.
-if ! git -C "$cwd" check-ignore -q .claude/settings.local.json 2>/dev/null; then
+if ! git -C "$PROJ_ROOT" check-ignore -q .claude/settings.local.json 2>/dev/null; then
 	_hint="[dotfiles #1236] ${PROJ_LOCAL} is NOT gitignored in this project, so the dotfiles global statusLine was NOT seeded (writing it would dirty a git-tracked file). Add '.claude/settings.local.json' to the project's .gitignore, then restart Claude Code."
 	printf '%s\n' "$_hint" >&2
 	jq -n --arg ctx "$_hint" \
@@ -74,7 +94,7 @@ if ! git -C "$cwd" check-ignore -q .claude/settings.local.json 2>/dev/null; then
 fi
 
 # Seed/merge .statusLine, preserving every other existing key untouched.
-mkdir -p "$cwd/.claude" 2>/dev/null || exit 0
+mkdir -p "$PROJ_ROOT/.claude" 2>/dev/null || exit 0
 if [ -f "$PROJ_LOCAL" ]; then
 	merged=$(jq --argjson sl "$ssot_sl" '.statusLine = $sl' "$PROJ_LOCAL" 2>/dev/null) || exit 0
 else
