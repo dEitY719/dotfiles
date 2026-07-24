@@ -20,7 +20,7 @@ dependencies = [
 
 # --- 개발 및 테스트 환경 의존성 ---
 [dependency-groups] # 비표준으로 uv 에서는 인식, 그러나 pip 인식못함
-dev = ["ruff", "mypy", "pytest", "pytest-mock", "pytest-xdist", "pexpect"]
+dev = ["ruff==0.12.7", "mypy", "pytest", "pytest-mock", "pytest-xdist", "pexpect"]
 
 
 # --- Python 프로젝트 의존성 및 extras ---
@@ -32,7 +32,7 @@ dev = [
     "pytest-xdist>=3.0",  # For parallel test execution
     "pexpect>=4.8",  # For interactive shell testing
     # Linting and formatting
-    "ruff>=0.6.0",
+    "ruff==0.12.7",  # pinned: CI (uv sync --group dev) 가 최신 ruff 픽업 시 format 규칙 드리프트로 red (#1219 PR #1238)
     # Type checking
     "mypy>=1.10",
     "types-toml",
