@@ -12,6 +12,7 @@ _herdr_help_summary() {
     ux_bullet_sub "workspace: navigation | new"
     ux_bullet_sub "control: detach"
     ux_bullet_sub "example | related"
+    ux_bullet_sub "install: 사외 curl|sh · 사내 GitHub 릴리스 바이너리"
     ux_bullet_sub "details: herdr-help <section>  (example: herdr-help pane)"
 }
 
@@ -24,6 +25,7 @@ _herdr_help_list_sections() {
     ux_bullet_sub "control"
     ux_bullet_sub "example"
     ux_bullet_sub "related"
+    ux_bullet_sub "install"
 }
 
 _herdr_help_rows_concept() {
@@ -73,6 +75,13 @@ _herdr_help_rows_related() {
     ux_bullet "tmux 사용자라면: ${UX_BOLD}tmux-help${UX_RESET}"
 }
 
+_herdr_help_rows_install() {
+    ux_bullet "사외(표준): curl -fsSL https://herdr.dev/install.sh | sh  (또는 brew install herdr / mise use -g herdr)"
+    ux_bullet "사내(프록시 차단 우회, 권장): curl -fsSL -o ~/.local/bin/herdr https://github.com/ogulcancelik/herdr/releases/latest/download/herdr-linux-x86_64 && chmod +x ~/.local/bin/herdr"
+    ux_bullet "사내(버전 고정): 위 URL의 latest/download 대신 download/v0.7.5 로 태그 지정"
+    ux_bullet "근본 해결: 프록시 예외 신청 — GSAMS ${UX_BOLD}https://gsams.samsungds.net${UX_RESET}"
+}
+
 _herdr_help_render_section() {
     ux_section "$1"
     "$2"
@@ -87,6 +96,7 @@ _herdr_help_section_rows() {
         control)              _herdr_help_rows_control ;;
         example|examples)     _herdr_help_rows_example ;;
         related)              _herdr_help_rows_related ;;
+        install)              _herdr_help_rows_install ;;
         *)
             ux_error "Unknown herdr-help section: $1"
             ux_info "Try: herdr-help --list"
@@ -104,6 +114,7 @@ _herdr_help_full() {
     _herdr_help_render_section "Session Control - prefix +" _herdr_help_rows_control
     _herdr_help_render_section "Practical Example" _herdr_help_rows_example
     _herdr_help_render_section "Related Help" _herdr_help_rows_related
+    _herdr_help_render_section "Install" _herdr_help_rows_install
 }
 
 herdr_help() {
