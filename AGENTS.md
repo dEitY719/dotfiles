@@ -66,3 +66,8 @@ Direct-Exec Guard pattern, Bash/Zsh compatibility rules, and diagnostic design s
 - **[Documentation](./docs/AGENTS.md)** — Project docs, AGENTS.md master prompt, SOLID reviews
 
 See **[Claude Code](./claude/AGENTS.md)** for skills management, multi-CLI registry, and commands.
+
+# 변경 기록 (changelog)
+
+- 사용자 가시·운영·스키마·배포·비자명 동작 변경 완료 시 `docs/public/changelog.md`를 갱신한다(불필요하면 이유 명시). 포맷: `## YYYY-MM-DD` 아래 `- 변경: **요약**`.
+- 일일/주간 보고 허브(my-share)가 이 changelog를 수집한다.
