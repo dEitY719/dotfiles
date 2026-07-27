@@ -40,7 +40,7 @@ skill_loader() {
         ux_bullet "Claude Code: Use ${UX_SUCCESS}/skill <name>${UX_RESET} within Claude Code"
         ux_bullet "View skill content: ${UX_SUCCESS}cat \"\$(skill-loader req-define)\"${UX_RESET}"
         ux_bullet "Codex: ${UX_SUCCESS}codex -p \"\$(cat \"\$(skill-loader cli-dev)\")\"${UX_RESET}"
-        ux_bullet "Antigravity (agy): ${UX_SUCCESS}agy --print < \"\$(skill-loader agents-md)\"${UX_RESET}"
+        ux_bullet "Antigravity (agy): ${UX_SUCCESS}agy --print \"\$(cat \"\$(skill-loader agents-md)\")\"${UX_RESET}"
 
         ux_section "Environment"
         ux_info "Skills path: $skills_dir"
