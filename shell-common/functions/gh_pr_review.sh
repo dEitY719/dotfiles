@@ -245,14 +245,25 @@ _gh_pr_review_run_ai() {
         return 1
     fi
     local _rc=0
+    local _prompt_size
     case "$ai" in
     codex)
         codex exec --color=never <"$prompt_file" 2>"$_stderr_file" || _rc=$?
         ;;
     agy)
-        # `agy --print` runs the Antigravity CLI non-interactively,
-        # reading the prompt from the prompt file content.
-        agy --print "$(cat "$prompt_file")" 2>"$_stderr_file" || _rc=$?
+        # `agy --print` runs the Antigravity CLI non-interactively but
+        # takes the prompt as a value argument, not stdin. The kernel caps
+        # a single argv string at MAX_ARG_STRLEN (32 pages = 131072 bytes
+        # on Linux) — a large PR diff would blow past that as a bare
+        # "Argument list too long" exec failure, so guard it explicitly.
+        _prompt_size=$(wc -c <"$prompt_file")
+        if [ "$_prompt_size" -ge 131072 ]; then
+            printf 'agy --print: prompt is %s bytes, over the %s-byte argv limit (MAX_ARG_STRLEN) — use --ai codex or --ai claude for this PR instead.\n' \
+                "$_prompt_size" 131072 >"$_stderr_file"
+            _rc=1
+        else
+            agy --print "$(cat "$prompt_file")" 2>"$_stderr_file" || _rc=$?
+        fi
         ;;
     claude)
         if [ -n "$cfg_dir" ]; then
