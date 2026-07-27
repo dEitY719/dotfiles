@@ -251,8 +251,8 @@ _gh_pr_review_run_ai() {
         ;;
     agy)
         # `agy --print` runs the Antigravity CLI non-interactively,
-        # reading the prompt from stdin.
-        agy --print <"$prompt_file" 2>"$_stderr_file" || _rc=$?
+        # reading the prompt from the prompt file content.
+        agy --print "$(cat "$prompt_file")" 2>"$_stderr_file" || _rc=$?
         ;;
     claude)
         if [ -n "$cfg_dir" ]; then
