@@ -246,6 +246,7 @@ _gh_pr_review_run_ai() {
     fi
     local _rc=0
     local _prompt_size
+    local _prompt_content
     case "$ai" in
     codex)
         codex exec --color=never <"$prompt_file" 2>"$_stderr_file" || _rc=$?
@@ -261,8 +262,10 @@ _gh_pr_review_run_ai() {
             printf 'agy --print: prompt is %s bytes, over the %s-byte argv limit (MAX_ARG_STRLEN) — use --ai codex or --ai claude for this PR instead.\n' \
                 "$_prompt_size" 131072 >"$_stderr_file"
             _rc=1
+        elif ! _prompt_content=$(cat "$prompt_file" 2>"$_stderr_file"); then
+            _rc=1
         else
-            agy --print "$(cat "$prompt_file")" 2>"$_stderr_file" || _rc=$?
+            agy --print "$_prompt_content" 2>>"$_stderr_file" || _rc=$?
         fi
         ;;
     claude)

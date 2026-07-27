@@ -296,3 +296,57 @@ EOF
     assert_success
     assert_output --partial "issuecomment-1"
 }
+
+# ---------------------------------------------------------------------------
+# _gh_pr_review_run_ai — agy transport (issue #1244 / PR #1245 review)
+# ---------------------------------------------------------------------------
+
+# Stub `agy` so the run_ai dispatcher can exercise the --print value-argument
+# path without invoking the real Antigravity CLI. Echoes its own argv back
+# so tests can assert on exactly what the function passed as $1.
+_stub_agy_echo() {
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/agy" <<'EOF'
+#!/bin/sh
+# $1 is --print; $2 is the prompt value this test asserts on.
+echo "agy called with: $2"
+exit 0
+EOF
+    chmod +x "$stub_dir/agy"
+    export PATH="$stub_dir:$PATH"
+}
+
+@test "run_ai agy: small prompt → passed as value argument, not stdin" {
+    _source_module
+    _stub_agy_echo
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+    run _gh_pr_review_run_ai agy "$f"
+    assert_success
+    assert_output --partial "agy called with: review this diff"
+}
+
+@test "run_ai agy: prompt at/over MAX_ARG_STRLEN (131072 bytes) → fails with clear message, agy never invoked" {
+    _source_module
+    _stub_agy_echo
+    local f="$TEST_TEMP_HOME/big.txt"
+    # 131072 bytes exactly — the guard's `-ge` boundary.
+    head -c 131072 /dev/zero | tr '\0' 'x' >"$f"
+    run _gh_pr_review_run_ai agy "$f"
+    assert_failure
+    assert_output --partial "over the 131072-byte argv limit"
+    refute_output --partial "agy called with"
+}
+
+@test "run_ai agy: unreadable prompt file → fails, does not silently swallow the read error" {
+    _source_module
+    _stub_agy_echo
+    local f="$TEST_TEMP_HOME/unreadable.txt"
+    printf 'x' >"$f"
+    chmod 000 "$f"
+    run _gh_pr_review_run_ai agy "$f"
+    assert_failure
+    refute_output --partial "agy called with"
+    chmod 644 "$f" # restore so bats can clean up TEST_TEMP_HOME
+}
