@@ -579,6 +579,73 @@ _my_help_show_all() {
     return 0
 }
 
+# Internal: fzf-based fuzzy topic finder
+_my_help_search() {
+    # Degrade to the static category table when fzf is missing or there is no
+    # TTY (piped output, scripts, test harness) — fzf needs an interactive terminal.
+    if ! command -v fzf >/dev/null 2>&1 || [ ! -t 0 ] || [ ! -t 1 ]; then
+        _my_help_show_categories
+        return $?
+    fi
+
+    # In zsh, users may enable strict options (e.g., noclobber) that break temp-file
+    # redirections. Make these option changes local to this function only.
+    if [ -n "$ZSH_VERSION" ]; then
+        setopt localoptions clobber 2>/dev/null || true
+    fi
+
+    local tmp_dir="${TMPDIR:-/tmp}"
+    local temp_topics
+    if command -v mktemp >/dev/null 2>&1; then
+        temp_topics=$(mktemp "${tmp_dir%/}/my_help_search.XXXXXX" 2>/dev/null) || temp_topics="${tmp_dir%/}/.help_search_$$"
+    else
+        temp_topics="${tmp_dir%/}/.help_search_$$"
+    fi
+
+    # Ensure clean slate even under noclobber.
+    rm -f "$temp_topics" 2>/dev/null || true
+    : > "$temp_topics"
+
+    # Same enumeration + exclusion rules as _my_help_show_all.
+    local func
+    while IFS= read -r func; do
+        local func_name="${func%%[( ]*}"
+        case "$func_name" in
+            *help)
+                case "$func_name" in
+                    my-help|run-help) ;;
+                    _*) ;;
+                    *)
+                        local underscore_name=""
+                        underscore_name=$(printf "%s" "$func_name" | tr '-' '_')
+                        local display_name=""
+                        display_name=$(printf "%s" "$func_name" | tr '_' '-')
+                        local desc
+                        desc=$(_my_help_topic_description "${underscore_name%_help}")
+                        printf '%s\t%s\n' "$display_name" "$desc" >> "$temp_topics"
+                        ;;
+                esac
+                ;;
+        esac
+    done << EOF
+$(_get_help_functions)
+EOF
+
+    local selected=""
+    selected=$(fzf --delimiter='\t' --with-nth=1,2 --prompt="my-help> " < "$temp_topics")
+    rm -f "$temp_topics" 2>/dev/null || true
+
+    # Esc / empty selection: nothing to show.
+    if [ -z "$selected" ]; then
+        return 0
+    fi
+
+    local topic=""
+    topic=$(printf "%s" "$selected" | cut -f1)
+    my_help_impl "$topic"
+    return $?
+}
+
 _my_help_summary() {
     ux_info "Usage: my-help [topic|category|section|--list|--all]"
     ux_bullet "sections"
@@ -586,6 +653,7 @@ _my_help_summary() {
     ux_bullet_sub "popular: git | docker | claude | uv | fzf"
     ux_bullet_sub "navigation: my-help <topic> [args] / my-help <category>"
     ux_bullet_sub "details: my-help <section>  (example: my-help categories)"
+    ux_bullet_sub "search: my-help search  (fzf fuzzy topic finder, needs fzf)"
 }
 
 _my_help_list_sections() {
@@ -679,6 +747,10 @@ my_help_impl() {
             ;;
         categories|popular|navigation)
             _my_help_section_rows "$1"
+            rc=$?
+            ;;
+        search|find)
+            _my_help_search
             rc=$?
             ;;
         *)

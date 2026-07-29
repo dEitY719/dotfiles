@@ -209,6 +209,24 @@ class TestHelpCategoryRendering:
         )
 
 
+class TestHelpSearchFallback:
+    """`my-help search` (alias `find`) degrades to the category table (#1246).
+
+    The harness runs non-interactive subprocesses with no TTY, so fzf can never
+    be launched here — every run must take the fallback path instead of hanging
+    or erroring.
+    """
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    @pytest.mark.parametrize("arg", ["search", "find"])
+    def test_search_falls_back_to_categories(self, shell_runner, shell, arg):
+        result = shell_runner(shell, f"my_help_impl {arg}")
+        assert result.exit_code == 0, f"{shell}: my_help_impl {arg} failed\nstderr: {result.stderr}"
+        assert "Categories" in result.stdout, f"{shell}: my_help_impl {arg} did not render the category table"
+        assert "CLI Utilities" in result.stdout, f"{shell}: my_help_impl {arg} category rows missing"
+        assert "not found" not in result.stdout, f"{shell}: '{arg}' fell through to topic resolution"
+
+
 class TestHelpTopicsErrorHandling:
     """Test help system error handling."""
 
