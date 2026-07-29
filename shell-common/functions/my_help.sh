@@ -453,6 +453,26 @@ _my_help_show_category() {
     return 0
 }
 
+# Internal: enumerate discovered help-function names in dash form, one per
+# line. Shared filter rule for _my_help_show_all and _my_help_search — keep
+# the match/exclude logic here so both stay in sync.
+_my_help_enumerate_topic_names() {
+    local func
+    while IFS= read -r func; do
+        # Extract function name (before '(' or first space)
+        local func_name="${func%%[( ]*}"
+        case "$func_name" in
+            my-help|run-help|_*) ;;
+            *help)
+                # Normalize to dash format for display
+                printf '%s\n' "$(printf "%s" "$func_name" | tr '_' '-')"
+                ;;
+        esac
+    done << EOF
+$(_get_help_functions)
+EOF
+}
+
 # Internal: Show all available commands
 _my_help_show_all() {
     ux_header "Dotfiles Help Functions"
@@ -466,49 +486,20 @@ _my_help_show_all() {
     # Collect help functions (using temp file instead of array)
     local tmp_dir="${TMPDIR:-/tmp}"
     local temp_funcs
-    local temp_raw
     local temp_sorted
 
     if command -v mktemp >/dev/null 2>&1; then
         temp_funcs=$(mktemp "${tmp_dir%/}/my_help_funcs.XXXXXX" 2>/dev/null) || temp_funcs="${tmp_dir%/}/.help_funcs_$$"
-        temp_raw=$(mktemp "${tmp_dir%/}/my_help_raw.XXXXXX" 2>/dev/null) || temp_raw="${tmp_dir%/}/.help_raw_$$"
         temp_sorted=$(mktemp "${tmp_dir%/}/my_help_sorted.XXXXXX" 2>/dev/null) || temp_sorted="${tmp_dir%/}/.help_sorted_$$"
     else
         temp_funcs="${tmp_dir%/}/.help_funcs_$$"
-        temp_raw="${tmp_dir%/}/.help_raw_$$"
         temp_sorted="${tmp_dir%/}/.help_sorted_$$"
     fi
 
     # Ensure clean slate even under noclobber.
-    rm -f "$temp_funcs" "$temp_raw" "$temp_sorted" 2>/dev/null || true
-    : > "$temp_funcs"
-    : > "$temp_raw"
+    rm -f "$temp_funcs" "$temp_sorted" 2>/dev/null || true
 
-    _get_help_functions > "$temp_raw"
-
-    while IFS= read -r func; do
-        # Extract function name (before '(' or first space)
-        local func_name="${func%%[( ]*}"
-
-        # Include functions ending with 'help' (both dash and underscore)
-        # Exclude: my-help, run-help, _* (internal functions)
-        case "$func_name" in
-            *help)
-                case "$func_name" in
-                    my-help|run-help) ;;
-                    _*) ;;
-                    *)
-                        # Normalize to dash format for display
-                        local display_name=""
-                        display_name=$(echo "$func_name" | tr '_' '-')
-                        echo "$display_name" >> "$temp_funcs"
-                        ;;
-                esac
-                ;;
-        esac
-    done < "$temp_raw"
-
-    rm -f "$temp_raw"
+    _my_help_enumerate_topic_names > "$temp_funcs"
 
     # Remove duplicates and sort
     local unique_count
@@ -588,59 +579,27 @@ _my_help_search() {
         return $?
     fi
 
-    # In zsh, users may enable strict options (e.g., noclobber) that break temp-file
-    # redirections. Make these option changes local to this function only.
-    if [ -n "$ZSH_VERSION" ]; then
-        setopt localoptions clobber 2>/dev/null || true
-    fi
-
-    local tmp_dir="${TMPDIR:-/tmp}"
-    local temp_topics
-    if command -v mktemp >/dev/null 2>&1; then
-        temp_topics=$(mktemp "${tmp_dir%/}/my_help_search.XXXXXX" 2>/dev/null) || temp_topics="${tmp_dir%/}/.help_search_$$"
-    else
-        temp_topics="${tmp_dir%/}/.help_search_$$"
-    fi
-
-    # Ensure clean slate even under noclobber.
-    rm -f "$temp_topics" 2>/dev/null || true
-    : > "$temp_topics"
-
-    # Same enumeration + exclusion rules as _my_help_show_all.
-    local func
-    while IFS= read -r func; do
-        local func_name="${func%%[( ]*}"
-        case "$func_name" in
-            *help)
-                case "$func_name" in
-                    my-help|run-help) ;;
-                    _*) ;;
-                    *)
-                        local underscore_name=""
-                        underscore_name=$(printf "%s" "$func_name" | tr '-' '_')
-                        local display_name=""
-                        display_name=$(printf "%s" "$func_name" | tr '_' '-')
-                        local desc
-                        desc=$(_my_help_topic_description "${underscore_name%_help}")
-                        printf '%s\t%s\n' "$display_name" "$desc" >> "$temp_topics"
-                        ;;
-                esac
-                ;;
-        esac
-    done << EOF
-$(_get_help_functions)
-EOF
-
-    local selected=""
-    selected=$(fzf --delimiter='\t' --with-nth=1,2 --prompt="my-help> " < "$temp_topics") || true
-    rm -f "$temp_topics" 2>/dev/null || true
+    # Feed name\tdescription lines straight into fzf — nothing else reads this
+    # list, so there's no need for a temp file (see _my_help_show_all's temp
+    # file, which the "unique count" and "uncategorized topics" checks below
+    # it still need to re-read).
+    local selected
+    selected=$(
+        _my_help_enumerate_topic_names | while IFS= read -r display_name; do
+            local underscore_name
+            underscore_name=$(printf "%s" "$display_name" | tr '-' '_')
+            local desc
+            desc=$(_my_help_topic_description "${underscore_name%_help}")
+            printf '%s\t%s\n' "$display_name" "$desc"
+        done | fzf --delimiter='\t' --with-nth=1,2 --prompt="my-help> "
+    ) || true
 
     # Esc / empty selection: nothing to show.
     if [ -z "$selected" ]; then
         return 0
     fi
 
-    local topic=""
+    local topic
     topic=$(printf "%s" "$selected" | cut -f1)
     my_help_impl "$topic"
     return $?
