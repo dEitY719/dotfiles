@@ -583,15 +583,15 @@ _my_help_search() {
     # list, so there's no need for a temp file (see _my_help_show_all's temp
     # file, which the "unique count" and "uncategorized topics" checks below
     # it still need to re-read).
-    local selected
+    # Declare the loop-body variables once, up front: `local x=$(cmd)` inside
+    # the piped while-read makes zsh echo the assignment as a stray stdout line
+    # (#1248) and also masks $cmd's exit status behind the `local` builtin's.
+    # Pre-declaring keeps the in-loop assignments plain and does neither.
+    local selected underscore_name desc
     selected=$(
         _my_help_enumerate_topic_names | while IFS= read -r display_name; do
-            # Combine "local x" + "x=$(...)" onto one line — zsh echoes the
-            # assignment as a stray stdout line otherwise when split across
-            # two statements inside a piped while-read (same fix already
-            # applied to _my_help_show_category's "local desc=$(...)" line).
-            local underscore_name=$(printf "%s" "$display_name" | tr '-' '_')
-            local desc=$(_my_help_topic_description "${underscore_name%_help}")
+            underscore_name=$(printf "%s" "$display_name" | tr '-' '_')
+            desc=$(_my_help_topic_description "${underscore_name%_help}")
             printf '%s\t%s\n' "$display_name" "$desc"
         done | fzf --delimiter='\t' --with-nth=1,2 --prompt="my-help> "
     ) || true
