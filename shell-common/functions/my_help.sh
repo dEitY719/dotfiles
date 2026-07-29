@@ -586,10 +586,12 @@ _my_help_search() {
     local selected
     selected=$(
         _my_help_enumerate_topic_names | while IFS= read -r display_name; do
-            local underscore_name
-            underscore_name=$(printf "%s" "$display_name" | tr '-' '_')
-            local desc
-            desc=$(_my_help_topic_description "${underscore_name%_help}")
+            # Combine "local x" + "x=$(...)" onto one line — zsh echoes the
+            # assignment as a stray stdout line otherwise when split across
+            # two statements inside a piped while-read (same fix already
+            # applied to _my_help_show_category's "local desc=$(...)" line).
+            local underscore_name=$(printf "%s" "$display_name" | tr '-' '_')
+            local desc=$(_my_help_topic_description "${underscore_name%_help}")
             printf '%s\t%s\n' "$display_name" "$desc"
         done | fzf --delimiter='\t' --with-nth=1,2 --prompt="my-help> "
     ) || true
