@@ -5,7 +5,14 @@ Tests that all registered my-help topics are callable
 without errors in both bash and zsh environments.
 """
 
+import os
+import re
+import stat
+from pathlib import Path
+
 import pytest
+
+REPO_ROOT = Path(__file__).parent.parent.parent
 
 HELP_TOPICS = [
     "agy_help",
@@ -225,6 +232,90 @@ class TestHelpSearchFallback:
         assert "Categories" in result.stdout, f"{shell}: my_help_impl {arg} did not render the category table"
         assert "CLI Utilities" in result.stdout, f"{shell}: my_help_impl {arg} category rows missing"
         assert "not found" not in result.stdout, f"{shell}: '{arg}' fell through to topic resolution"
+
+
+class TestHelpSearchInteractive:
+    """`my-help search` on the real fzf path, driven through a pty (#1248).
+
+    TestHelpSearchFallback above can only reach the no-TTY fallback, so the
+    interactive branch — the one where the zsh stray-`desc=` line bug lived —
+    went untested. pexpect gives us a pty so `[ -t 0 ] && [ -t 1 ]` holds, and
+    a stub `fzf` on PATH captures the candidate stream and picks a topic.
+    """
+
+    @staticmethod
+    def _spawn(shell, tmp_path, stub_body, prelude=""):
+        """Run `my_help_impl search` under a pty with a stubbed fzf.
+
+        Returns (exit_code, output, captured_candidates_or_None).
+        """
+        pexpect = pytest.importorskip("pexpect")
+
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        capture = tmp_path / "candidates.txt"
+        stub = bindir / "fzf"
+        stub.write_text('#!/bin/sh\ncat > "$FZF_STUB_CAPTURE"\n' + stub_body)
+        stub.chmod(stub.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+        home = tmp_path / "home"
+        home.mkdir()
+        env = {
+            "PATH": f"{bindir}:{os.environ['PATH']}",
+            "FZF_STUB_CAPTURE": str(capture),
+            "DOTFILES_FORCE_INIT": "1",
+            "DOTFILES_TEST_MODE": "1",
+            "DOTFILES_ROOT": str(REPO_ROOT),
+            "SHELL_COMMON": str(REPO_ROOT / "shell-common"),
+            "DOTFILES_ROOT_NO_CANONICALIZE": "1",
+            "HOME": str(home),
+            "ZDOTDIR": str(home),
+            "XDG_CONFIG_HOME": str(home),
+            "XDG_CACHE_HOME": str(home),
+            "XDG_DATA_HOME": str(home),
+            "TERM": "dumb",
+        }
+        if shell == "zsh":
+            entry, args = REPO_ROOT / "zsh/main.zsh", ["-f", "-lc"]
+        else:
+            entry, args = REPO_ROOT / "bash/main.bash", ["--noprofile", "--norc", "-lc"]
+        args.append(f"source {entry}; {prelude}my_help_impl search")
+
+        child = pexpect.spawn(shell, args, env=env, encoding="utf-8", timeout=60, dimensions=(40, 200))
+        child.expect(pexpect.EOF)
+        output = child.before
+        child.close()
+        captured = capture.read_text() if capture.exists() else None
+        return child.exitstatus, output, captured
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_selecting_a_candidate_dispatches_to_that_topic(self, shell, tmp_path):
+        """The fzf candidate stream carries only `topic<TAB>desc` lines, and the
+        selected line dispatches to that topic's help output."""
+        exit_code, output, captured = self._spawn(
+            shell, tmp_path, stub_body='grep -m1 "^git-help\t" "$FZF_STUB_CAPTURE"\n'
+        )
+        assert exit_code == 0, f"{shell}: my_help_impl search failed\n{output}"
+        assert captured, f"{shell}: fzf stub received no candidates"
+
+        # #1248: zsh echoed `local x=$(...)` assignments as stray stdout lines,
+        # polluting the list the user picks from.
+        noise = [ln for ln in captured.splitlines() if re.match(r"^(desc|underscore_name)=", ln)]
+        assert not noise, f"{shell}: {len(noise)} debug-echo noise lines in candidate list, e.g. {noise[:3]}"
+        assert all("\t" in ln for ln in captured.splitlines()), f"{shell}: malformed candidate line in {captured!r}"
+        assert "git-help\t" in captured, f"{shell}: git-help candidate missing"
+
+        # Same assertion style as TestHelpTopicsWithDifferentFormats: the topic ran.
+        assert "Usage: git-help" in output, f"{shell}: selection did not dispatch to git-help\n{output}"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_cancelling_fzf_exits_cleanly(self, shell, tmp_path):
+        """Esc (fzf exits 130 with no selection) must return 0 silently instead
+        of aborting the shell under err_exit / pipefail (PR #1247)."""
+        prelude = "setopt err_exit pipe_fail; " if shell == "zsh" else "set -e -o pipefail; "
+        exit_code, output, _ = self._spawn(shell, tmp_path, stub_body="exit 130\n", prelude=prelude)
+        assert exit_code == 0, f"{shell}: cancelled search returned {exit_code}\n{output}"
+        assert not output.strip(), f"{shell}: cancelled search printed output: {output!r}"
 
 
 class TestHelpTopicsErrorHandling:
