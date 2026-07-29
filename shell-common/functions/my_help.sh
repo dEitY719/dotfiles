@@ -632,7 +632,7 @@ $(_get_help_functions)
 EOF
 
     local selected=""
-    selected=$(fzf --delimiter='\t' --with-nth=1,2 --prompt="my-help> " < "$temp_topics")
+    selected=$(fzf --delimiter='\t' --with-nth=1,2 --prompt="my-help> " < "$temp_topics") || true
     rm -f "$temp_topics" 2>/dev/null || true
 
     # Esc / empty selection: nothing to show.
