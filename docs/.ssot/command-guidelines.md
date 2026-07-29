@@ -21,6 +21,7 @@
 - 섹션 목록: `<topic>-help [--list|list]`
 - 전체 상세: `<topic>-help [--all|all]`
 - 통합 라우팅: `my-help [<topic>] [section|--list|--all]` (인자 생략 시 카테고리 목록 표시)
+- 퍼지 검색: `my-help search` (alias `find`) — fzf 기반 topic finder, fzf 미설치·비대화형이면 카테고리 목록으로 폴백
 
 ### 2) 출력 정책
 
