@@ -2,6 +2,7 @@
 
 # Status line command for Claude Code
 # Format: [한글|영어] HH:MM:SS | model | project(branch) | git-status
+# ([한글|영어]는 fcitx-remote가 설치된 환경에서만 나타나는 optional 필드)
 
 # ANSI color codes
 CYAN='\033[36m'
@@ -37,21 +38,27 @@ IFS=$'\t' read -r cwd model_id model_display used_pct total_tokens < <(
 
 # Get current time in HH:MM:SS format
 current_time=$(date +%H:%M:%S)
-current_hour=$(date +%H)
+current_hour="${current_time%%:*}"
 
-# Current input method (fcitx): 2=active(한글) 1=inactive(영어) 0/missing=unknown
+# Current input method (fcitx only — ibus/fcitx5 not supported): state
+# 2=active(한글) 1=inactive(영어). State 0 (daemon closed) or fcitx-remote
+# missing both fall through to an empty ime_label (no label shown).
+# `timeout 0.3` bounds a hung/no-DBus fcitx-remote so it can't stall the
+# whole statusline render.
 ime_label=""
 if command -v fcitx-remote >/dev/null 2>&1; then
-    case "$(fcitx-remote 2>/dev/null)" in
+    case "$(timeout 0.3 fcitx-remote 2>/dev/null)" in
     2) ime_label="한글" ;;
     1) ime_label="영어" ;;
     esac
 fi
 
 # Determine time-based emoji
-if ((current_hour >= 6 && current_hour < 12)); then
+# 10# forces base-10 — a bare "08"/"09" would otherwise be parsed as
+# (invalid) octal and abort the arithmetic comparison.
+if ((10#$current_hour >= 6 && 10#$current_hour < 12)); then
     time_emoji="🌅" # Morning
-elif ((current_hour >= 12 && current_hour < 18)); then
+elif ((10#$current_hour >= 12 && 10#$current_hour < 18)); then
     time_emoji="☀️" # Afternoon
 else
     time_emoji="🌙" # Night
