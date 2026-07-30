@@ -3,6 +3,10 @@
 # Status line command for Claude Code
 # Format: [한글|영어] HH:MM:SS | model | project(branch) | git-status
 # ([한글|영어]는 fcitx-remote가 설치된 환경에서만 나타나는 optional 필드)
+# CLAUDE_STATUSLINE_SKIP_FCITX=1 이면 fcitx-remote 호출 자체를 생략한다.
+# Windows Terminal / VS Code Remote-WSL 콘솔은 X11 클라이언트가 아니라 fcitx
+# XIM 경로에 아예 안 걸려 상태가 항상 비어있다 — 매 프롬프트마다 의미 없는
+# timeout 0.3s 대기만 생기므로, 이런 PC는 ~/.zshrc.local 에 export 로 꺼둔다.
 
 # ANSI color codes
 CYAN='\033[36m'
@@ -46,7 +50,7 @@ current_hour="${current_time%%:*}"
 # `timeout 0.3` bounds a hung/no-DBus fcitx-remote so it can't stall the
 # whole statusline render.
 ime_label=""
-if command -v fcitx-remote >/dev/null 2>&1; then
+if [ "${CLAUDE_STATUSLINE_SKIP_FCITX:-0}" != "1" ] && command -v fcitx-remote >/dev/null 2>&1; then
     case "$(timeout 0.3 fcitx-remote 2>/dev/null)" in
     2) ime_label="한글" ;;
     1) ime_label="영어" ;;
