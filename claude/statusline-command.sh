@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Status line command for Claude Code
-# Format: YY-MM-DD HH:MM:SS | model | project(branch) | git-status
+# Format: [한글|영어] HH:MM:SS | model | project(branch) | git-status
 
 # ANSI color codes
 CYAN='\033[36m'
@@ -35,9 +35,18 @@ IFS=$'\t' read -r cwd model_id model_display used_pct total_tokens < <(
     '
 )
 
-# Get current time in YY-MM-DD HH:MM:SS format
-current_time=$(date +%y-%m-%d\ %H:%M:%S)
+# Get current time in HH:MM:SS format
+current_time=$(date +%H:%M:%S)
 current_hour=$(date +%H)
+
+# Current input method (fcitx): 2=active(한글) 1=inactive(영어) 0/missing=unknown
+ime_label=""
+if command -v fcitx-remote >/dev/null 2>&1; then
+    case "$(fcitx-remote 2>/dev/null)" in
+    2) ime_label="한글" ;;
+    1) ime_label="영어" ;;
+    esac
+fi
 
 # Determine time-based emoji
 if ((current_hour >= 6 && current_hour < 12)); then
@@ -261,7 +270,7 @@ fi
 
 # Output format with colors and emojis
 # Time: Cyan, Model: Orange, Project+Branch: Magenta, Context: Blue, Cost: varies, Git status: Red/Orange/Green
-out="${CYAN}${time_emoji} ${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET}"
+out="${CYAN}${time_emoji} ${ime_label:+$ime_label }${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET}"
 if [[ -n "$account_info" ]]; then
     out="${account_info} | ${out}"
 fi
