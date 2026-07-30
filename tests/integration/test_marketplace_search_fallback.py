@@ -78,8 +78,11 @@ class TestMarketplaceSearchInteractive:
     """
 
     @staticmethod
-    def _spawn(shell, tmp_path, stub_body, cmd, prelude=""):
+    def _spawn(shell, tmp_path, stub_body, cmd, prelude="", manifest_text=None):
         """Run `claude_skills_marketplace <cmd>` under a pty with a stubbed fzf.
+
+        `manifest_text` overrides the cached manifest contents (default: the
+        valid MANIFEST fixture) — used to simulate a corrupt cache.
 
         Returns (exit_code, output, captured_candidates_or_None, fzf_args).
         """
@@ -96,7 +99,9 @@ class TestMarketplaceSearchInteractive:
         home = tmp_path / "home"
         marketplaces = home / ".claude/plugins/marketplaces"
         marketplaces.mkdir(parents=True)
-        (marketplaces / ".skills-manifest.json").write_text(json.dumps(MANIFEST))
+        (marketplaces / ".skills-manifest.json").write_text(
+            manifest_text if manifest_text is not None else json.dumps(MANIFEST)
+        )
 
         env = {
             "PATH": f"{bindir}:{os.environ['PATH']}",
@@ -152,3 +157,37 @@ class TestMarketplaceSearchInteractive:
         exit_code, output, _, _ = self._spawn(shell, tmp_path, stub_body="exit 130\n", cmd="find", prelude=prelude)
         assert exit_code == 0, f"{shell}: cancel aborted the shell\n{output}"
         assert "Skill:" not in output, f"{shell}: cancel still rendered a skill\n{output}"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    @pytest.mark.parametrize("subcmd", ["search", "find"])
+    def test_zero_arg_picker_dispatches_to_info(self, shell, tmp_path, subcmd):
+        """The main user-facing flow — `csm search`/`csm find` with NO keyword —
+        must launch the full picker (all skills, no --query prefill) and dispatch
+        the selection to `info`, same as the query-prefilled case."""
+        exit_code, output, captured, fzf_args = self._spawn(
+            shell, tmp_path, stub_body='head -n1 "$FZF_STUB_CAPTURE"\n', cmd=subcmd
+        )
+        assert exit_code == 0, f"{shell}: csm {subcmd} (no args) failed\n{output}"
+        assert captured, f"{shell}: fzf stub received no candidates"
+        assert captured.splitlines() == ["alpha-skill\tdesc two\tpl", "zed-skill\tdesc one\tpl"], (
+            f"{shell}: unexpected candidate stream: {captured!r}"
+        )
+        assert "--query=" in fzf_args, f"{shell}: no-keyword picker must pass an empty --query: {fzf_args}"
+        assert "Skill: alpha-skill" in output, f"{shell}: selection did not reach info\n{output}"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_corrupt_manifest_surfaces_error_instead_of_silent_success(self, shell, tmp_path):
+        """A jq parse failure (corrupt manifest) must be reported, not swallowed
+        as if the user had simply cancelled the picker (PR #1252 review)."""
+        exit_code, output, captured, _ = self._spawn(
+            shell,
+            tmp_path,
+            stub_body="exit 1\n",  # fzf must never be reached — jq fails first.
+            cmd="search",
+            manifest_text="{not valid json",
+        )
+        assert exit_code != 0, f"{shell}: corrupt manifest silently succeeded\n{output}"
+        assert "Failed to parse marketplace manifest" in output, (
+            f"{shell}: no parse-error message surfaced\n{output}"
+        )
+        assert not captured, f"{shell}: fzf ran despite the manifest failing to parse: {captured!r}"
