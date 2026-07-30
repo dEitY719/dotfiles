@@ -405,9 +405,34 @@ _claude_skills_marketplace_stats() {
     echo ""
 }
 
-# Search marketplace skills
+# Search marketplace skills — fzf fuzzy picker when interactive, jq substring otherwise
 _claude_skills_marketplace_search() {
     local query="$1"
+
+    # Interactive fuzzy picker; skipped when fzf is missing or there is no TTY
+    # (pipes, scripts, test harness) so the jq substring search below stays the
+    # always-available path. An optional query pre-fills fzf rather than filtering.
+    if command -v fzf >/dev/null 2>&1 && [ -t 0 ] && [ -t 1 ]; then
+        _ensure_manifest_fresh || {
+            ux_error "Failed to generate marketplace manifest"
+            return 1
+        }
+
+        # Feed name\tdescription\tplugin straight into fzf — nothing else reads
+        # this list, so no temp file is needed (same shape as _my_help_search).
+        local selected
+        selected=$(
+            jq -r '.skills | sort_by(.name) | .[] | [.name, .description, .plugin] | @tsv' \
+                "$MANIFEST_CACHE_PATH" |
+                fzf --delimiter='\t' --with-nth=1,2,3 --prompt="csm search> " --query="$query"
+        ) || true
+
+        # Esc / empty selection: nothing to show.
+        [ -z "$selected" ] && return 0
+
+        _claude_skills_marketplace_info "$(printf '%s' "$selected" | cut -f1)"
+        return $?
+    fi
 
     [ -z "$query" ] && {
         ux_error "Query required: claude-skills-marketplace search <keyword>"
@@ -517,7 +542,7 @@ _claude_skills_marketplace_help_summary() {
     ux_info "Usage: claude-skills-marketplace-help [section|--list|--all]"
     ux_bullet "sections"
     ux_bullet_sub "quickstart: csm | csm list --all | csm search | csm info"
-    ux_bullet_sub "commands: list | group | stats | search | info | refresh | help"
+    ux_bullet_sub "commands: list | group | stats | search (find) | info | refresh | help"
     ux_bullet_sub "aliases: claude_skills_marketplace | csm"
     ux_bullet_sub "examples: common usage examples"
     ux_bullet_sub "caching: manifest cache details"
@@ -544,7 +569,7 @@ _claude_skills_marketplace_help_rows_commands() {
     ux_numbered 1 "list [--all|-A]         - Group by plugin (default), or --all for marketplace view"
     ux_numbered 2 "group [plugin]          - Group skills by plugin (optionally filter)"
     ux_numbered 3 "stats                   - Show marketplace statistics"
-    ux_numbered 4 "search <keyword>        - Search skills by keyword"
+    ux_numbered 4 "search|find [keyword]   - fzf fuzzy picker (needs fzf+TTY), else keyword search"
     ux_numbered 5 "info <skill-name>       - Show detailed skill information"
     ux_numbered 6 "refresh                 - Force rebuild skill manifest"
     ux_numbered 7 "help                    - Show this help message"
@@ -553,6 +578,7 @@ _claude_skills_marketplace_help_rows_commands() {
 _claude_skills_marketplace_help_rows_aliases() {
     ux_bullet "Long form: ${UX_SUCCESS}claude_skills_marketplace${UX_RESET}"
     ux_bullet "Short form: ${UX_SUCCESS}csm${UX_RESET}"
+    ux_bullet "Subcommand: ${UX_SUCCESS}csm find${UX_RESET} = ${UX_SUCCESS}csm search${UX_RESET}"
 }
 
 _claude_skills_marketplace_help_rows_examples() {
@@ -561,6 +587,7 @@ _claude_skills_marketplace_help_rows_examples() {
     ux_bullet "Show marketplaces: ${UX_SUCCESS}csm list --all${UX_RESET}"
     ux_bullet "Explore plugin: ${UX_SUCCESS}csm search backend${UX_RESET} (or filter: ${UX_SUCCESS}csm group backend${UX_RESET})"
     ux_bullet "Search skills: ${UX_SUCCESS}csm search python${UX_RESET}"
+    ux_bullet "Fuzzy pick: ${UX_SUCCESS}csm find${UX_RESET} (fzf picker over all skills)"
     ux_bullet "Skill details: ${UX_SUCCESS}csm info api-design-principles${UX_RESET}"
     ux_bullet "Statistics: ${UX_SUCCESS}csm stats${UX_RESET}"
 }
@@ -642,7 +669,7 @@ claude_skills_marketplace() {
         stats)
             _claude_skills_marketplace_stats "$@"
             ;;
-        search)
+        search|find)
             _claude_skills_marketplace_search "$@"
             ;;
         info)
