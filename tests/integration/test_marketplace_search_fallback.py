@@ -187,7 +187,5 @@ class TestMarketplaceSearchInteractive:
             manifest_text="{not valid json",
         )
         assert exit_code != 0, f"{shell}: corrupt manifest silently succeeded\n{output}"
-        assert "Failed to parse marketplace manifest" in output, (
-            f"{shell}: no parse-error message surfaced\n{output}"
-        )
+        assert "Failed to parse marketplace manifest" in output, f"{shell}: no parse-error message surfaced\n{output}"
         assert not captured, f"{shell}: fzf ran despite the manifest failing to parse: {captured!r}"
