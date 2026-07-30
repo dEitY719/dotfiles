@@ -418,16 +418,19 @@ _claude_skills_marketplace_search() {
             return 1
         }
 
-        # Feed name\tdescription\tplugin straight into fzf — nothing else reads
-        # this list, so no temp file is needed (same shape as _my_help_search).
-        local selected
-        selected=$(
-            jq -r '.skills | sort_by(.name) | .[] | [.name, .description, .plugin] | @tsv' \
-                "$MANIFEST_CACHE_PATH" |
-                fzf --delimiter='\t' --with-nth=1,2,3 --prompt="csm search> " --query="$query"
-        ) || true
+        # jq and fzf are checked separately so a corrupt manifest surfaces as
+        # an error instead of being swallowed as if the user had cancelled.
+        local candidates
+        candidates=$(jq -r '.skills | sort_by(.name) | .[] | [.name, .description, .plugin] | @tsv' \
+            "$MANIFEST_CACHE_PATH") || {
+            ux_error "Failed to parse marketplace manifest"
+            return 1
+        }
 
-        # Esc / empty selection: nothing to show.
+        # Esc / no match / any other fzf exit: nothing selected, not an error.
+        local selected
+        selected=$(printf '%s\n' "$candidates" |
+            fzf --delimiter='\t' --with-nth=1,2,3 --prompt="csm search> " --query="$query") || true
         [ -z "$selected" ] && return 0
 
         _claude_skills_marketplace_info "$(printf '%s' "$selected" | cut -f1)"
