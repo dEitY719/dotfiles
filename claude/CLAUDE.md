@@ -20,17 +20,3 @@ skill이 메인 세션의 직접 실행을 명시한 단계(git/gh 명령 등)�
 
 계획 문서 기반 다중 작업 실행 시에는 superpowers:subagent-driven-development가 이 원칙의
 구체 절차다.
-
-## 코딩 행동 지침: Karpathy Guidelines
-
-`andrej-karpathy-skills:karpathy-guidelines` 스킬을 모든 코딩 작업(작성/리뷰/리팩터링)에
-상시 적용되는 기본 행동 지침으로 삼는다 — 매 세션 명시적으로 호출하지 않아도 전제로 둔다.
-(전제: `andrej-karpathy-skills` 플러그인이 설치되어 있어야 하며, 미설치 세션에서는 이 절이 no-op이다.)
-
-핵심 원칙:
-1. 가정은 명시하고 확신 없으면 질문
-2. 요청 범위를 넘는 기능/추상화 금지
-3. 기존 코드는 요청과 무관한 부분을 건드리지 않음 (무관한 죽은 코드는 삭제 대신 언급)
-4. 작업을 검증 가능한 성공 기준으로 변환해 반복 완수
-
-전문은 `Skill` 도구로 `andrej-karpathy-skills:karpathy-guidelines`를 호출해 확인한다.
