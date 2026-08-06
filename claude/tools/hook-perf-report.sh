@@ -39,12 +39,14 @@ TARGET_P99_MS=5000
 HOOK_MATCH="post-bash-dispatch.sh"
 DAYS=""
 TIMING_LOG="${XDG_STATE_HOME:-$HOME/.local/state}/claude/post-bash-dispatch-timing.log"
-# Every Claude Code config dir on this machine (multi-account layout). A
-# missing root is skipped silently — no PC has all of them.
-TRANSCRIPT_ROOTS="$HOME/.claude/projects $HOME/.claude-work/projects $HOME/.claude-work1/projects"
+# Every Claude Code config dir on this machine (multi-account layout). Globbed
+# rather than listed: the accounts differ per PC and the default one is
+# `personal` (~/.claude-personal), so any fixed list silently under-samples
+# somewhere. A non-matching glob or a missing dir is skipped below.
+TRANSCRIPT_ROOTS="$(printf '%s ' "$HOME"/.claude*/projects)"
 
 _usage() {
-    cat <<'EOF'
+    cat <<EOF
 Usage: hook-perf-report.sh [options]
 
   --hook <substr>   Match this substring against the transcript's hook
@@ -55,7 +57,7 @@ Usage: hook-perf-report.sh [options]
   -h, --help        Print this help.
 
 Reports count / median / p90 / p99 / max in milliseconds and a PASS/FAIL
-verdict against median < 2000ms and p99 < 5000ms (issue #1258).
+verdict against median < ${TARGET_MEDIAN_MS}ms and p99 < ${TARGET_P99_MS}ms (issue #1258).
 EOF
 }
 
@@ -84,15 +86,14 @@ hook_perf_stats() {
 # Print a labelled stats line from a "<count> <min> <p50> <p90> <p99> <max>"
 # tuple produced by hook_perf_stats.
 _print_stats() {
-    local label="$1" stats="$2"
-    # shellcheck disable=SC2086 # deliberate word-split of the stats tuple
-    set -- $stats
-    if [ "${1:-0}" -eq 0 ]; then
+    local label="$1" n min p50 p90 p99 max
+    read -r n min p50 p90 p99 max <<<"$2"
+    if [ "${n:-0}" -eq 0 ]; then
         printf '  %-22s (no samples)\n' "$label"
         return 0
     fi
     printf '  %-22s n=%-5s min=%-7s p50=%-7s p90=%-7s p99=%-7s max=%s\n' \
-        "$label" "$1" "$2" "$3" "$4" "$5" "$6"
+        "$label" "$n" "$min" "$p50" "$p90" "$p99" "$max"
 }
 
 # --- source A: transcripts --------------------------------------------------
@@ -117,12 +118,12 @@ _transcript_durations() {
 # --- source B: dispatcher stage log ----------------------------------------
 
 # Print `field$1 - field$2` per stage-log row (1 entry, 2 pre-invoke, 3
-# post-exit). Rows that are malformed, non-numeric or out of order are
-# dropped. HOOK_FILTER, when set, restricts to one handler (field 4).
+# post-exit). $3, when given, restricts to one handler (field 4). Rows that
+# are malformed, non-numeric or out of order are dropped.
 _timing_deltas() {
-    local a="$1" b="$2"
+    local a="$1" b="$2" want="${3:-}"
     [ -f "$TIMING_LOG" ] || return 0
-    awk -v want="${HOOK_FILTER:-}" -v a="$a" -v b="$b" '
+    awk -v want="$want" -v a="$a" -v b="$b" '
         NF >= 4 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ {
             if (want != "" && $4 != want) { next }
             d = $a - $b
@@ -132,6 +133,17 @@ _timing_deltas() {
 }
 
 # --- main -------------------------------------------------------------------
+
+# PASS/FAIL one metric ($1 label, $2 value) against its budget ($3). Returns 1
+# when the budget is blown, so callers can OR the verdicts into one exit code.
+_verdict() {
+    if [ "$2" -lt "$3" ]; then
+        printf 'PASS  %s %sms < %sms\n' "$1" "$2" "$3"
+        return 0
+    fi
+    printf 'FAIL  %s %sms >= %sms\n' "$1" "$2" "$3"
+    return 1
+}
 
 _hook_perf_main() {
     while [ "$#" -gt 0 ]; do
@@ -166,39 +178,24 @@ _hook_perf_main() {
     _print_stats "entry->invoke" "$(_timing_deltas 2 1 | hook_perf_stats)"
     _print_stats "invoke->exit" "$(_timing_deltas 3 2 | hook_perf_stats)"
     _print_stats "entry->exit" "$(_timing_deltas 3 1 | hook_perf_stats)"
-    if [ -f "$TIMING_LOG" ]; then
-        # HOOK_FILTER is read by _timing_deltas; bash's dynamic scoping makes
-        # the local visible to it (and to the command-substitution subshell).
-        local handler HOOK_FILTER=""
-        for handler in post-gh-pr-create.sh plugin-sync.sh; do
-            HOOK_FILTER="$handler"
-            _print_stats "  $handler" \
-                "$(_timing_deltas 3 2 | hook_perf_stats)"
+    # Per-handler breakdown derived from field 4 of the log itself, so a newly
+    # routed handler reports without this tool having to learn its name.
+    awk 'NF >= 4 { print $4 }' "$TIMING_LOG" 2>/dev/null | sort -u |
+        while IFS= read -r handler; do
+            _print_stats "  $handler" "$(_timing_deltas 3 2 "$handler" | hook_perf_stats)"
         done
-    fi
     printf '\n'
 
     # Verdict from source A — that is the number the issue's targets describe.
-    # shellcheck disable=SC2086 # deliberate word-split of the stats tuple
-    set -- $total_stats
-    local n="$1" median="$3" p99="$5"
+    local n median p99 _skip
+    read -r n _skip median _skip p99 _skip <<<"$total_stats"
     if [ "$n" -eq 0 ]; then
         printf 'VERDICT: NO DATA — no hook attachments matched "%s".\n' "$HOOK_MATCH"
         return 0
     fi
     local rc=0
-    if [ "$median" -lt "$TARGET_MEDIAN_MS" ]; then
-        printf 'PASS  median %sms < %sms\n' "$median" "$TARGET_MEDIAN_MS"
-    else
-        printf 'FAIL  median %sms >= %sms\n' "$median" "$TARGET_MEDIAN_MS"
-        rc=1
-    fi
-    if [ "$p99" -lt "$TARGET_P99_MS" ]; then
-        printf 'PASS  p99 %sms < %sms\n' "$p99" "$TARGET_P99_MS"
-    else
-        printf 'FAIL  p99 %sms >= %sms\n' "$p99" "$TARGET_P99_MS"
-        rc=1
-    fi
+    _verdict median "$median" "$TARGET_MEDIAN_MS" || rc=1
+    _verdict p99 "$p99" "$TARGET_P99_MS" || rc=1
     return "$rc"
 }
 

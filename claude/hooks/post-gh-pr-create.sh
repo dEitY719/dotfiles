@@ -121,11 +121,12 @@ export GH_REPO
 # Tunables (env): POST_GH_PR_CREATE_SYNC_ATTEMPTS (default 6),
 #                 POST_GH_PR_CREATE_SYNC_SLEEP    (default 2 seconds),
 #                 POST_GH_PR_CREATE_ASYNC         (default 1; 0 = run the
-#                 deferred tail in the foreground, for deterministic tests).
+#                 deferred tail in the foreground — deterministic tests, and
+#                 manual runs where you want to watch the whole sync).
 
-# True (rc 0) when GH_REPO has >=1 projectV2 board. Used once, up front, so a
-# repo with no board skips the retry budget entirely (the sync would no-op
-# forever otherwise).
+# True (rc 0) when GH_REPO has >=1 projectV2 board. Called once at the top of
+# the deferred tail, so a repo with no board does not burn the retry budget in
+# the background (the sync would no-op forever otherwise).
 _post_gh_pr_create_repo_has_board() {
     [ -n "$GH_REPO" ] || return 1
     local _o="${GH_REPO%/*}" _n="${GH_REPO#*/}" _cnt
@@ -165,6 +166,9 @@ _post_gh_pr_create_deferred() {
             _i=$((_i + 1))
         done
         if [ "$_i" -gt "$_attempts" ]; then
+            # Reaches a human only under POST_GH_PR_CREATE_ASYNC=0; the
+            # detached branch sends stderr to /dev/null, which is the price
+            # of not holding the turn open for the retry budget.
             printf '[post-gh-pr-create] PR #%s still not "In review" after %s attempts — GitHub auto-add may have landed late; verify the board.\n' \
                 "$pr_num" "$_attempts" >&2
         fi
