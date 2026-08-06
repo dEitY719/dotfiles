@@ -29,7 +29,7 @@ set -u
 
 # Entry stamp. Taken on EVERY invocation, but it is a plain variable read of
 # bash 5's EPOCHREALTIME — no fork — so the non-matching majority pays
-# nothing. Pre-bash-5 leaves it empty and _pbd_ms degrades (see below).
+# nothing. Pre-bash-5 leaves it empty and _pbd_ms falls back (see below).
 _t_entry="${EPOCHREALTIME:-}"
 
 # A PostToolUse hook always receives JSON on stdin. If stdin is a terminal the
@@ -51,47 +51,57 @@ cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // ""' 2>/dev/null) || e
 DISPATCH_DIR="${POST_BASH_DISPATCH_DIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
 
 # --- stage timing (#1258) ---------------------------------------------------
-# Both helpers are only ever CALLED from the routed branches below, so the
-# non-matching path costs one function definition and nothing else.
+# All three helpers are only ever CALLED from the routed branches below, so the
+# non-matching path costs three function definitions and nothing else. Inside
+# them, timestamps are taken with plain expansions + `printf -v` rather than
+# command substitutions: a `$(…)` fork per stamp would be self-defeating in the
+# very code that measures dispatcher overhead.
 
-# Epoch milliseconds. $1 = an EPOCHREALTIME snapshot ("<sec>.<usec>", locale
-# decimal point); empty/absent = stamp now. Without EPOCHREALTIME (bash < 5)
-# it falls back to GNU `date +%s%3N`, and to whole-second granularity when
-# that prints a literal `%N` (BSD date).
+# Convert an EPOCHREALTIME snapshot ("<sec>.<usec>", locale decimal point) to
+# epoch milliseconds, assigned to the variable named by $1. An empty snapshot
+# (bash < 5, no EPOCHREALTIME) falls back to GNU `date +%s%3N`; anything that
+# still comes out non-numeric is dropped by the reader, so there is no third
+# tier here — see claude/tools/hook-perf-report.sh.
 _pbd_ms() {
-	local _v="${1:-}" _sec _frac _d
-	[ -n "$_v" ] || _v="${EPOCHREALTIME:-}"
-	case "$_v" in
-	*[.,]*)
-		_sec="${_v%%[.,]*}"
-		_frac="${_v#*[.,]}000"
-		printf '%s%s\n' "$_sec" "${_frac:0:3}"
-		return 0
-		;;
+	case "${2:-}" in
+	*[.,]*) printf -v "$1" '%s%.3s' "${2%%[.,]*}" "${2#*[.,]}000" ;;
+	*) printf -v "$1" '%s' "$(date +%s%3N 2>/dev/null || printf '0')" ;;
 	esac
-	_d=$(date +%s%3N 2>/dev/null) || _d=""
-	case "$_d" in
-	'' | *[!0-9]*) _d="$(date +%s 2>/dev/null || printf '0')000" ;;
-	esac
-	printf '%s\n' "$_d"
 }
 
 # Append `<entry-ms> <pre-invoke-ms> <post-exit-ms> <handler>`. Strictly
 # best-effort: every failure path returns 0 so the exit-0 contract holds.
 _pbd_log_timing() {
-	local _handler="$1" _pre="$2" _post="$3" _dir _f _n
+	local _handler="$1" _entry _pre _post _dir _f _lines=()
+	_pbd_ms _entry "$_t_entry"
+	_pbd_ms _pre "$2"
+	_pbd_ms _post "$3"
 	_dir="${XDG_STATE_HOME:-$HOME/.local/state}/claude"
 	_f="$_dir/post-bash-dispatch-timing.log"
-	mkdir -p "$_dir" 2>/dev/null || return 0
-	printf '%s %s %s %s\n' "$(_pbd_ms "$_t_entry")" "$_pre" "$_post" "$_handler" \
+	[ -d "$_dir" ] || mkdir -p "$_dir" 2>/dev/null || return 0
+	printf '%s %s %s %s\n' "$_entry" "$_pre" "$_post" "$_handler" \
 		>>"$_f" 2>/dev/null || return 0
 	# Cap growth without rewriting on every routed call: only once the log
-	# passes 1000 lines is it trimmed back to the most recent 500.
-	_n=$(wc -l <"$_f" 2>/dev/null) || return 0
-	if [ "${_n:-0}" -gt 1000 ] 2>/dev/null; then
-		tail -n 500 "$_f" >"$_f.tmp" 2>/dev/null && mv -f "$_f.tmp" "$_f" 2>/dev/null
+	# passes 1000 lines is it trimmed back to the most recent 500. `mapfile`
+	# keeps the check a builtin — `wc -l` costs a process on every routed call
+	# just to learn that the usual answer is "no trim needed".
+	mapfile -t _lines <"$_f" 2>/dev/null || return 0
+	if [ "${#_lines[@]}" -gt 1000 ]; then
+		printf '%s\n' "${_lines[@]: -500}" >"$_f.tmp" 2>/dev/null &&
+			mv -f "$_f.tmp" "$_f" 2>/dev/null
 	fi
 	return 0
+}
+
+# Forward the untouched stdin JSON to one handler and record its stage timings.
+# Guarded with `-x` so a missing/non-executable script is a silent no-op
+# (best-effort contract) rather than stderr noise + a non-zero pipeline.
+_pbd_route() {
+	local _h="$1" _pre
+	[ -x "$DISPATCH_DIR/$_h" ] || return 0
+	_pre="${EPOCHREALTIME:-}"
+	printf '%s' "$input" | "$DISPATCH_DIR/$_h"
+	_pbd_log_timing "$_h" "$_pre" "${EPOCHREALTIME:-}"
 }
 
 # Route on a cheap, deliberately-loose command match; the handler's own filter
@@ -99,21 +109,12 @@ _pbd_log_timing() {
 # prefix (`FOO=bar gh pr create`) still routes (#390); both regexes use the
 # same `(^|[[:space:]])…([[:space:]]|$)` shape for symmetry. `gh pr create` and
 # `claude plugin ...` never co-occur in one command, so exclusive routing is
-# sufficient — and forwards the untouched stdin JSON the handler expects. Guard
-# each handler with `-x` so a missing/non-executable script is a silent no-op
-# (best-effort contract) rather than stderr noise + a non-zero pipeline.
+# sufficient. Naming each handler exactly once keeps the routing table, the
+# `-x` guard and the timing label from drifting apart.
 if printf '%s' "$cmd" | grep -qE '(^|[[:space:]])gh[[:space:]]+pr[[:space:]]+create([[:space:]]|$)'; then
-	if [ -x "$DISPATCH_DIR/post-gh-pr-create.sh" ]; then
-		_t_pre=$(_pbd_ms)
-		printf '%s' "$input" | "$DISPATCH_DIR/post-gh-pr-create.sh"
-		_pbd_log_timing post-gh-pr-create.sh "$_t_pre" "$(_pbd_ms)"
-	fi
+	_pbd_route post-gh-pr-create.sh
 elif printf '%s' "$cmd" | grep -qE '(^|[[:space:]])claude[[:space:]]+plugin([[:space:]]|$)'; then
-	if [ -x "$DISPATCH_DIR/plugin-sync.sh" ]; then
-		_t_pre=$(_pbd_ms)
-		printf '%s' "$input" | "$DISPATCH_DIR/plugin-sync.sh"
-		_pbd_log_timing plugin-sync.sh "$_t_pre" "$(_pbd_ms)"
-	fi
+	_pbd_route plugin-sync.sh
 fi
 
 exit 0
