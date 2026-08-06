@@ -720,7 +720,7 @@ def test_skill_expansion_user_messages_are_not_fresh_prompts(tmp_path: Path) -> 
             _user_text("<command-message>gh-pr</command-message>\n<command-args></command-args>\n"),
             _user_text("<command-name>/gh-pr</command-name>\n<command-args></command-args>\n"),
             _user_text("<local-command-stdout>ok</local-command-stdout>"),
-            _user_text("The gh-pr skill is already loaded above."),
+            _user_text("Skill /gh-pr is already loaded above; instructions unchanged. Arguments: "),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -959,6 +959,83 @@ def test_tool_result_only_message_still_not_a_fresh_prompt(tmp_path: Path) -> No
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert result.stdout.strip(), f"tool_result-only messages were counted as fresh prompts. stdout={result.stdout!r}"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+# ---------------------------------------------------------------------------
+# Issue #1281 (PR #1278 review, agy + codex) — the marker checks were
+# unanchored substring tests, so a human merely *quoting* a marker had the
+# whole turn dropped from the fresh-prompt count. Under-count ⇒ the stale
+# boundary could not expire. Markers are now `(?m)^`-anchored.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("label", "prompt"),
+    [
+        (
+            "stop-hook-feedback",
+            "I got confused — what does 'Stop hook feedback:' actually mean in this hook?",
+        ),
+        (
+            "task-notification",
+            "Where in the transcript does a <task-notification> block show up?",
+        ),
+        (
+            "base-directory",
+            "Explain why 'Base directory for this skill:' is treated as machinery.",
+        ),
+    ],
+)
+def test_quoted_marker_mid_sentence_still_counts_as_fresh_prompt(tmp_path: Path, label: str, prompt: str) -> None:
+    """A marker quoted mid-sentence is human prose, not a harness injection."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            _user_text(prompt),
+        ],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"DEVX_AUTOPILOT_STOP_GUARD_MAX_USER_TURNS": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"A human turn quoting the {label} marker mid-sentence was discarded, "
+        f"so the stale boundary never expired. stdout={result.stdout!r}"
+    )
+
+
+def test_already_loaded_injection_alone_is_not_a_fresh_prompt(tmp_path: Path) -> None:
+    """The real "already loaded" injection must still be recognised (#1281).
+
+    Its literal marker text sits mid-line — Claude Code writes the whole
+    message as `Skill <name> is already loaded above; …` — so line anchoring
+    the bare literal would have stopped matching it and handed the #1275
+    over-count back. Isolated here on purpose: the multi-marker
+    `test_skill_expansion_user_messages_are_not_fresh_prompts` fixture also
+    carries `Base directory for this skill:`, so it stayed green through
+    exactly that regression.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            _user_text("Skill /devx-autopilot is already loaded above; instructions unchanged. Arguments: "),
+        ],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"DEVX_AUTOPILOT_STOP_GUARD_MAX_USER_TURNS": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        "The 'Skill <name> is already loaded above' injection was counted as a "
+        f"fresh user prompt and expired the boundary. stdout={result.stdout!r}"
+    )
     assert json.loads(result.stdout)["decision"] == "block"
 
 
