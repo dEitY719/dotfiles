@@ -333,6 +333,103 @@ _prompt_fallback_path() {
     rm -f "$out" "$body"
 }
 
+@test "mktemp_safe: fallback file is mode 0600 even under a permissive umask" {
+    # `mktemp` guarantees 0600; the noclobber fallback creates the file with
+    # a plain redirect, which honours the ambient umask instead. Under the
+    # very common `022` that would leave the prompt / AI output / comment
+    # body world-readable to other local users (codex review, PR #1284).
+    _source_module
+    _stub_mktemp_failing
+    local fallback="/tmp/gh-pr-review-out.$$"
+    rm -f "$fallback"
+
+    local _prev_umask
+    _prev_umask=$(umask)
+    umask 022
+    run _gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"
+    umask "$_prev_umask"
+
+    assert_success
+    assert_output "$fallback"
+    run stat -c '%a' "$fallback"
+    assert_success
+    assert_output "600"
+    rm -f "$fallback"
+}
+
+# ---------------------------------------------------------------------------
+# gh_pr_review() temp-file failure + cascading cleanup (issue #1283)
+#
+# The allocator itself is covered above; these drive the *public entry point*
+# far enough to hit the three guarded assignments and prove that (a) it aborts
+# with the documented stderr message and (b) the `rm -f` cascade really removes
+# the already-allocated files instead of leaking them (codex review, PR #1284).
+#
+# Everything before the temp-file block (CLI presence, auth, repo/PR
+# resolution, metadata fetch, state preflight) is bypassed by redefining the
+# internal helpers in the test body — `run` executes in the same shell, so the
+# overrides are what gh_pr_review sees. `mktemp` is then forced to fail so all
+# three allocations land on their predictable `$$` fallback paths, and the
+# chosen failure site is blocked by squatting that exact path.
+# ---------------------------------------------------------------------------
+
+_stub_gh_pr_review_preconditions() {
+    _stub_gh_noop # satisfies `command -v gh` and `gh auth status`
+    _gh_pr_review_require_ai_cli() { return 0; }
+    _gh_pr_review_resolve_target_repo() { echo "owner/repo"; }
+    _gh_pr_review_resolve_pr_number() { echo "1283"; }
+    _gh_pr_review_fetch_meta() {
+        echo '{"state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"feat"}'
+    }
+    _gh_pr_review_preflight_pr_state() { return 0; }
+}
+
+@test "gh_pr_review: AI_OUT allocation fails → returns 1 and removes PROMPT_FILE" {
+    _source_module
+    _stub_gh_pr_review_preconditions
+    _stub_mktemp_failing
+
+    local prompt_fb="/tmp/gh-pr-review-prompt.codex.1283.$$"
+    local out_fb="/tmp/gh-pr-review-out.$$"
+    rm -f "$prompt_fb"
+    # Squat the AI_OUT fallback so its noclobber create is refused, while
+    # PROMPT_FILE still allocates successfully.
+    printf 'squatted\n' >"$out_fb"
+
+    run gh_pr_review --ai codex 1283
+    assert_failure 1
+    assert_output --partial "Could not create AI output temp file under /tmp"
+
+    # The cleanup cascade must not leak the prompt file it already created.
+    [ ! -e "$prompt_fb" ]
+    # ...and must not have clobbered the squatted path either.
+    run cat "$out_fb"
+    assert_output "squatted"
+    rm -f "$out_fb"
+}
+
+@test "gh_pr_review: BODY_FILE allocation fails → returns 1 and removes PROMPT_FILE + AI_OUT" {
+    _source_module
+    _stub_gh_pr_review_preconditions
+    _stub_mktemp_failing
+
+    local prompt_fb="/tmp/gh-pr-review-prompt.codex.1283.$$"
+    local out_fb="/tmp/gh-pr-review-out.$$"
+    local body_fb="/tmp/gh-pr-review-body.$$"
+    rm -f "$prompt_fb" "$out_fb"
+    printf 'squatted\n' >"$body_fb"
+
+    run gh_pr_review --ai codex 1283
+    assert_failure 1
+    assert_output --partial "Could not create comment body temp file under /tmp"
+
+    [ ! -e "$prompt_fb" ]
+    [ ! -e "$out_fb" ]
+    run cat "$body_fb"
+    assert_output "squatted"
+    rm -f "$body_fb"
+}
+
 # ---------------------------------------------------------------------------
 # Token estimator
 # ---------------------------------------------------------------------------

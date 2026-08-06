@@ -240,6 +240,12 @@ _gh_pr_review_mktemp_safe() {
     fi
     if (
         set -C
+        # `mktemp` always creates 0600; a plain `>` redirect instead honours
+        # the caller's ambient umask, so under the common `022` the prompt /
+        # AI-output / comment-body temp files would be world-readable to
+        # other local users (codex review, PR #1284). Tighten inside the
+        # subshell so the caller's umask is left untouched.
+        umask 077
         : >"$_fallback"
     ) 2>/dev/null; then
         printf '%s\n' "$_fallback"
