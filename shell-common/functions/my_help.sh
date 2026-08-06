@@ -570,7 +570,241 @@ _my_help_show_all() {
     return 0
 }
 
-# Internal: fzf-based fuzzy topic finder
+# ═══════════════════════════════════════════════════════════════
+# Alias Search Index (issue #1261)
+# ═══════════════════════════════════════════════════════════════
+#
+# The `*_help.sh` topics answer "what is csm?" but not "what was that one
+# alias called?" — there are two orders of magnitude more aliases than
+# topics. The index below widens `my-help search` to every `alias name=...`
+# definition in the repo (~460) so name recall works at the alias level too.
+#
+# Index record (tab-separated, 5 fields):
+#   1 name        alias name                    (fzf column 1)
+#   2 desc        trailing `# comment`, else `relpath:line`   (fzf column 2)
+#   3 kind        literal "alias" — tells _my_help_search how to render it
+#   4 location    relpath:line
+#   5 definition  the alias body, quotes and trailing comment stripped
+#
+# Fields 3-5 are hidden from fzf (`--with-nth=1,2`) and read back off the
+# selected line, so no second lookup is needed after picking an entry.
+
+# Measured on ext4 the cold scan and the cached read are within ~1ms of each
+# other at ~470 aliases, so the cache is not a local speed win — it is
+# insurance for the trees that live on a slow mount (WSL /mnt, NFS home,
+# AV-scanned corporate disk), where a 105-file recursive grep costs orders of
+# magnitude more than one file read. Same 24h TTL as csm's manifest cache.
+MY_HELP_ALIAS_CACHE_MAX_AGE="${MY_HELP_ALIAS_CACHE_MAX_AGE:-86400}"  # 24 hours
+
+# Internal: resolve the alias-index cache path. Computed per call (not frozen
+# at source time) so a test that re-points HOME/XDG_CACHE_HOME after sourcing
+# still lands in its own sandbox. Override wholesale with MY_HELP_ALIAS_CACHE_PATH.
+_my_help_alias_cache_path() {
+    if [ -n "${MY_HELP_ALIAS_CACHE_PATH-}" ]; then
+        printf '%s\n' "$MY_HELP_ALIAS_CACHE_PATH"
+        return 0
+    fi
+    printf '%s\n' "${XDG_CACHE_HOME:-${HOME}/.cache}/dotfiles/my-help-alias-index.tsv"
+}
+
+# Internal: scan the repo for alias definitions and emit index records.
+# Writes nothing and returns 1 when the tree is missing or the scan finds
+# nothing — the caller then falls back to topics-only (issue #1261 Error Cases).
+_my_help_build_alias_index() {
+    local root
+    root="${DOTFILES_ROOT:-${SHELL_COMMON%/shell-common}}"
+    [ -n "$root" ] && [ -d "$root" ] || return 1
+
+    local scanned
+    # --include keeps prose out of the index: shell-common/README.md opens a
+    # line with "alias and function defined within." which the regex would
+    # otherwise happily accept as an alias named "and".
+    scanned=$(
+        grep -rnE '^alias [^ =]+=' \
+            --include='*.sh' --include='*.bash' --include='*.zsh' \
+            "$root/bash" "$root/zsh" "$root/shell-common" 2>/dev/null |
+            awk -v root="${root}/" '
+            {
+                # grep -n emits <path>:<line>:<content>; no path in this repo
+                # contains a colon, so splitting on the first two is safe.
+                ci = index($0, ":")
+                if (ci == 0) next
+                path = substr($0, 1, ci - 1)
+                rest = substr($0, ci + 1)
+                cj = index(rest, ":")
+                if (cj == 0) next
+                lineno = substr(rest, 1, cj - 1)
+                body = substr(rest, cj + 1)
+                if (substr(body, 1, 6) != "alias ") next
+
+                kv = substr(body, 7)
+                eq = index(kv, "=")
+                if (eq < 2) next
+                name = substr(kv, 1, eq - 1)
+                expansion = substr(kv, eq + 1)
+
+                # Split the trailing "# comment" off the body. When the value is
+                # quoted only a "#" past the closing quote counts, otherwise
+                # `alias x='"'"'echo #1'"'"'` would lose everything after the hash.
+                q = substr(expansion, 1, 1)
+                defn = expansion
+                tail = ""
+                if (q == "'"'"'" || q == "\"") {
+                    ce = index(substr(expansion, 2), q)
+                    if (ce > 0) {
+                        defn = substr(expansion, 2, ce - 1)
+                        tail = substr(expansion, ce + 2)
+                    }
+                } else {
+                    si = index(expansion, " ")
+                    if (si > 0) {
+                        defn = substr(expansion, 1, si - 1)
+                        tail = substr(expansion, si)
+                    }
+                }
+
+                note = ""
+                hi = index(tail, "#")
+                if (hi > 0) {
+                    note = substr(tail, hi + 1)
+                    sub(/^[ \t]+/, "", note)
+                    sub(/[ \t]+$/, "", note)
+                }
+
+                sub(/^[ \t]+/, "", defn)
+                sub(/[ \t]+$/, "", defn)
+
+                # Drop the dash-form aliases that only re-expose a help topic
+                # (`agy-help` -> `agy_help`). The topic stream already lists
+                # every one of them, with a real description instead of a
+                # file:line — keeping both would duplicate ~72 picker rows and
+                # let the user land on "definition: agy_help" instead of the
+                # actual help text. Aliases that point elsewhere (`doc-help`
+                # -> `show_doc_help`) are genuinely new names, so they stay.
+                if (name ~ /-help$/) {
+                    canonical = name
+                    gsub(/-/, "_", canonical)
+                    if (defn == canonical) next
+                }
+
+                rel = path
+                if (index(rel, root) == 1) rel = substr(rel, length(root) + 1)
+
+                loc = rel ":" lineno
+                desc = (note != "") ? note : loc
+                printf "%s\t%s\talias\t%s\t%s\n", name, desc, loc, defn
+            }' |
+            LC_ALL=C sort -t "$(printf '\t')" -k1,1 -u
+    )
+
+    [ -n "$scanned" ] || return 1
+    printf '%s\n' "$scanned"
+}
+
+# Internal: true (0) when the cache needs rebuilding.
+_my_help_alias_cache_stale() {
+    local cache="$1"
+
+    # Missing, empty, or unreadable — all "rebuild".
+    [ -s "$cache" ] && [ -r "$cache" ] || return 0
+
+    # Truncated or hand-mangled file: every valid record carries the literal
+    # "alias" kind field, so a first line without it means rebuild (#1261).
+    head -n 1 "$cache" 2>/dev/null | grep -q "$(printf '\talias\t')" || return 0
+
+    local mtime
+    if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
+        mtime=$(stat -f %m "$cache" 2>/dev/null)
+    else
+        mtime=$(stat -c %Y "$cache" 2>/dev/null)
+    fi
+    [ -n "$mtime" ] || return 0
+
+    local age
+    age=$(( $(date +%s) - mtime ))
+    [ "$age" -le "${MY_HELP_ALIAS_CACHE_MAX_AGE:-86400}" ] || return 0
+    return 1
+}
+
+# Internal: emit the alias index, rebuilding the cache when stale.
+# Returns 1 (and emits nothing) if the scan came up empty — never fatal.
+_my_help_alias_index() {
+    # Users may run with noclobber set; keep the temp-file redirection below
+    # working without leaking the option change (same guard as _my_help_show_all).
+    if [ -n "$ZSH_VERSION" ]; then
+        setopt localoptions clobber 2>/dev/null || true
+    fi
+
+    local cache
+    cache=$(_my_help_alias_cache_path)
+
+    if ! _my_help_alias_cache_stale "$cache"; then
+        cat "$cache" 2>/dev/null
+        return 0
+    fi
+
+    local fresh
+    fresh=$(_my_help_build_alias_index) || return 1
+
+    # Write via a temp file + mv so a concurrent reader never sees a half-built
+    # index. An unwritable cache dir is not an error — just skip persisting.
+    local dir tmp
+    dir=$(dirname "$cache")
+    if mkdir -p "$dir" 2>/dev/null; then
+        tmp="${cache}.$$"
+        if printf '%s\n' "$fresh" > "$tmp" 2>/dev/null; then
+            mv -f "$tmp" "$cache" 2>/dev/null || rm -f "$tmp" 2>/dev/null
+        else
+            rm -f "$tmp" 2>/dev/null
+        fi
+    fi
+
+    printf '%s\n' "$fresh"
+    return 0
+}
+
+# Internal: render one alias index record picked out of fzf.
+_my_help_show_alias_entry() {
+    local record="$1"
+    local name desc location defn
+    name=$(printf '%s' "$record" | cut -f1)
+    desc=$(printf '%s' "$record" | cut -f2)
+    location=$(printf '%s' "$record" | cut -f4)
+    defn=$(printf '%s' "$record" | cut -f5)
+
+    ux_section "Alias: ${name}"
+    ux_bullet "definition: ${defn}"
+    if [ -n "$location" ]; then
+        ux_bullet "source:     ${location}"
+    fi
+    # desc doubles as the location when the alias carries no comment; only
+    # print it when it is a real note.
+    if [ -n "$desc" ] && [ "$desc" != "$location" ]; then
+        ux_bullet "note:       ${desc}"
+    fi
+    return 0
+}
+
+# Internal: emit every fzf candidate — help topics first, then repo aliases.
+# Split out of _my_help_search so it can be exercised without a TTY or fzf.
+_my_help_search_candidates() {
+    # Declare the loop-body variables once, up front: `local x=$(cmd)` inside
+    # the piped while-read makes zsh echo the assignment as a stray stdout line
+    # (#1248) and also masks $cmd's exit status behind the `local` builtin's.
+    # Pre-declaring keeps the in-loop assignments plain and does neither.
+    local underscore_name desc
+    _my_help_enumerate_topic_names | while IFS= read -r display_name; do
+        underscore_name=$(printf "%s" "$display_name" | tr '-' '_')
+        desc=$(_my_help_topic_description "${underscore_name%_help}")
+        printf '%s\t%s\ttopic\t\t\n' "$display_name" "$desc"
+    done
+
+    # Aliases extend the same stream. A failed/empty scan writes nothing,
+    # leaving the topic list exactly as it was before #1261.
+    _my_help_alias_index 2>/dev/null || true
+}
+
+# Internal: fzf-based fuzzy finder over help topics + repo aliases
 _my_help_search() {
     # Degrade to the static category table when fzf is missing or there is no
     # TTY (piped output, scripts, test harness) — fzf needs an interactive terminal.
@@ -583,22 +817,22 @@ _my_help_search() {
     # list, so there's no need for a temp file (see _my_help_show_all's temp
     # file, which the "unique count" and "uncategorized topics" checks below
     # it still need to re-read).
-    # Declare the loop-body variables once, up front: `local x=$(cmd)` inside
-    # the piped while-read makes zsh echo the assignment as a stray stdout line
-    # (#1248) and also masks $cmd's exit status behind the `local` builtin's.
-    # Pre-declaring keeps the in-loop assignments plain and does neither.
-    local selected underscore_name desc
+    local selected
     selected=$(
-        _my_help_enumerate_topic_names | while IFS= read -r display_name; do
-            underscore_name=$(printf "%s" "$display_name" | tr '-' '_')
-            desc=$(_my_help_topic_description "${underscore_name%_help}")
-            printf '%s\t%s\n' "$display_name" "$desc"
-        done | fzf --delimiter='\t' --with-nth=1,2 --prompt="my-help> "
+        _my_help_search_candidates |
+            fzf --delimiter='\t' --with-nth=1,2 --prompt="my-help> "
     ) || true
 
     # Esc / empty selection: nothing to show.
     if [ -z "$selected" ]; then
         return 0
+    fi
+
+    local kind
+    kind=$(printf "%s" "$selected" | cut -f3)
+    if [ "$kind" = "alias" ]; then
+        _my_help_show_alias_entry "$selected"
+        return $?
     fi
 
     local topic
@@ -614,7 +848,7 @@ _my_help_summary() {
     ux_bullet_sub "popular: git | docker | claude | uv | fzf"
     ux_bullet_sub "navigation: my-help <topic> [args] / my-help <category>"
     ux_bullet_sub "details: my-help <section>  (example: my-help categories)"
-    ux_bullet_sub "search: my-help search  (fzf fuzzy topic finder, needs fzf)"
+    ux_bullet_sub "search: my-help search  (fzf fuzzy finder over topics + aliases, needs fzf)"
 }
 
 _my_help_list_sections() {
