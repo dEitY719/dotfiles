@@ -10,6 +10,9 @@
 - 변경: **소스 주석에만 있던 엣지케이스를 `docs/guide/commands/.notes/<커맨드>.md` 에 수기 보강하면 재생성 시 문서에 삽입 — 첫 대상은 `csm find` 의 fzf 피커/Esc 무음 종료 동작**
 - 변경: **`my-help search`(alias `find`) 인덱스를 `*_help.sh` 토픽에서 저장소 전체 alias까지 확장 — alias 이름으로 바로 찾고, 고르면 정의·정의 위치·주석을 표시. 토픽을 그대로 다시 노출하는 dash-form alias(`agy-help` → `agy_help`)는 중복 제거하되, 서로 다른 정의를 가진 동명 alias(`llm-help`)는 양쪽 다 노출한다 (#1261)**
 - 변경: **alias 인덱스는 `${XDG_CACHE_HOME:-~/.cache}/dotfiles/my-help-alias-index.tsv`에 24시간 TTL로 캐시 — `MY_HELP_ALIAS_CACHE_PATH` / `MY_HELP_ALIAS_CACHE_MAX_AGE`로 재정의 가능하며, 캐시가 비었거나 손상되면 자동 재생성**
+- 변경: **gh-issue-flow Stop 훅이 `Bash` heredoc/`printf` 로 출력된 Step 3 종료 리포트도 인식 — 기존에는 assistant text 블록만 스캔해 리포트가 tool_use `input.command` 와 `tool_result` 에만 남으면 플로우가 영원히 종료되지 않았다. 템플릿 자리표시자(`<N>`/`<i>`) 대신 실제 숫자를 요구하는 엄격한 정규식을 쓰고 `Bash` 만 스캔한다(`Write`/`Edit` 입력은 SKILL.md 편집 시 진짜 템플릿 텍스트를 담으므로 제외) (#1270)**
+- 변경: **오래된 flow boundary 자동 만료 — 종료 리포트 없이 끝난 플로우의 boundary 가 세션 내내 남아 무관한 턴까지 계속 차단하던 문제 수정. boundary 이후 사용자 프롬프트가 3회 쌓이면 fail-open 한다. `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS` 로 조정하고 `0` 이면 만료 비활성화. tool_result·skill 확장·`<system-reminder>` 전용 메시지는 사용자 프롬프트로 세지 않는다 (#1270)**
+- 변경: **Step 3 리포트는 반드시 plain assistant text 로 출력하도록 SKILL.md·report-template.md 에 명시 — `Bash` 경로는 어디까지나 폴백 (#1270)**
 - 변경: **macOS/BSD 이식성 수정 — 타이밍 테스트가 GNU 전용 `date +%s%N` 대신 bash 내장 `SECONDS` 를 쓰도록 바꿔 BSD `date` 에서 테스트가 중단되지 않는다. ms 변환 헬퍼는 `claude/hooks/lib/pbd_ms.sh`(디스패처와 같은 디렉터리에 함께 배포되어야 하는 신규 파일) 로 분리해 BSD `date` fallback 경로에 테스트 커버리지를 붙였다 (#1258 리뷰 후속)**
 
 ## 2026-07-30

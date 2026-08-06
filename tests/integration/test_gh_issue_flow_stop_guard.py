@@ -112,6 +112,51 @@ def _assistant_skill(skill: str, args: str = "") -> dict[str, Any]:
     }
 
 
+def _assistant_bash(command: str) -> dict[str, Any]:
+    """Build an assistant tool_use message invoking Bash(command=...).
+
+    Mirrors `_assistant_skill` — used by the issue #1270 fixtures where the
+    model prints the Step 3 report through a heredoc / printf instead of
+    plain assistant text.
+    """
+    return {
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_bash",
+                    "name": "Bash",
+                    "input": {"command": command, "description": "run a command"},
+                }
+            ],
+        },
+    }
+
+
+def _assistant_tool_use(name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
+    """Build an assistant tool_use message for an arbitrary tool.
+
+    Used by issue #1270 to prove that non-Bash tool inputs (Edit / Write)
+    are never scanned for the terminal marker.
+    """
+    return {
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": f"toolu_{name.lower()}",
+                    "name": name,
+                    "input": tool_input,
+                }
+            ],
+        },
+    }
+
+
 def _hook_event(transcript_path: Path | None, **extras: Any) -> str:
     """Build a Stop hook stdin payload."""
     payload: dict[str, Any] = {
@@ -1081,3 +1126,382 @@ def test_trace_emits_layer_field_for_no_boundary_allow(tmp_path: Path) -> None:
     assert "layer=L1" in result.stderr, (
         f"Expected layer=L1 on the no-boundary allow trace, got stderr={result.stderr!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Issue #1270 — F-1: Bash-emitted Step 3 report is recognized as terminal
+#
+# The canonical channel stays assistant *text*. But when the model prints
+# the Step 3 report through `Bash` (`cat <<'EOF' … EOF`, `printf`), the
+# report text only ever exists in the tool_use `input.command` string and
+# in the resulting `tool_result` — neither of which was scanned, so the
+# flow could never terminate and the stale boundary then blocked every
+# later turn in the session. The scan now also matches assistant `Bash`
+# commands against a stricter regex requiring a literal digit where the
+# SKILL.md templates carry `<N>` / `<i>`.
+#
+# Deliberately NOT widened: `tool_result` (issue #608), and every tool
+# other than `Bash` — an `Edit`/`Write` of SKILL.md or
+# references/report-template.md legitimately carries real template text.
+# ---------------------------------------------------------------------------
+
+
+_ALL_SIX_SUB_SKILLS = [
+    "gh-issue-implement",
+    "gh-commit",
+    "gh-pr",
+    "devx-pr-review-all",
+    "gh-pr-resolve-conflict",
+    "gh-pr-resolve-outdated",
+]
+
+
+def _full_chain_prefix() -> list[dict[str, Any]]:
+    """Boundary + all six sub-skill invocations, with no Step 3 report yet."""
+    return [_user_text("/gh-issue-flow 1270")] + [_assistant_skill(name) for name in _ALL_SIX_SUB_SKILLS]
+
+
+def test_bash_heredoc_terminal_report_allows_stop(tmp_path: Path) -> None:
+    """F-1: Step 3 report emitted via a `cat <<'EOF'` heredoc → allow."""
+    heredoc = (
+        "cat <<'EOF'\n"
+        "gh:issue-flow complete (#1270)\n"
+        "  [OK] Step 1: gh:issue-implement\n"
+        "  PR URL: https://github.com/example/repo/pull/99\n"
+        "EOF\n"
+    )
+    transcript = _write_transcript(tmp_path, [*_full_chain_prefix(), _assistant_bash(heredoc)])
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        "Hook blocked a completed flow whose Step 3 report was emitted through a "
+        f"Bash heredoc. stdout={result.stdout!r}"
+    )
+
+
+def test_bash_printf_terminal_report_allows_stop(tmp_path: Path) -> None:
+    """F-1: the `printf` form of the report is recognized too."""
+    transcript = _write_transcript(
+        tmp_path,
+        [*_full_chain_prefix(), _assistant_bash("printf 'gh:issue-flow complete (#42)\\n'")],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"stdout={result.stdout!r}"
+
+
+def test_bash_stopped_at_step_report_allows_stop(tmp_path: Path) -> None:
+    """F-1: the failure marker `stopped at step <i>/6` also terminates."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _assistant_bash("echo 'gh:issue-flow stopped at step 2/6 (gh:commit)'"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"stdout={result.stdout!r}"
+
+
+def test_bash_grep_of_template_text_does_not_terminate(tmp_path: Path) -> None:
+    """F-1 false-positive guard: a command that merely greps the template
+    text carries no literal issue/step digit, so the stricter Bash regex
+    must not match it — the flow keeps blocking."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _assistant_bash('grep "gh:issue-flow complete" claude/skills/gh-issue-flow/SKILL.md'),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"Hook fail-opened on a grep of the Step 3 template text. stdout={result.stdout!r}"
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "1/6" in decision["reason"]
+
+
+def test_template_text_in_tool_result_of_bash_cat_does_not_terminate(
+    tmp_path: Path,
+) -> None:
+    """F-1 false-positive guard: `cat`ing the template puts the real
+    placeholder text in a `tool_result`, which stays out of scope (#608).
+    The `cat` command itself has no digit, so nothing terminates."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _assistant_bash("cat claude/skills/gh-issue-flow/references/report-template.md"),
+            _user_tool_result(
+                "If all steps succeeded:\n"
+                "```\n"
+                "gh:issue-flow complete (#<N>)\n"
+                "```\n"
+                "If a step failed:\n"
+                "```\n"
+                "gh:issue-flow stopped at step <i>/6 (<skill-name>)\n"
+                "```\n"
+            ),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"Hook treated template text inside a tool_result as terminal. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_edit_and_write_tool_inputs_are_not_scanned_for_terminal(
+    tmp_path: Path,
+) -> None:
+    """F-1 scope guard: only `Bash` tool inputs are scanned.
+
+    Editing SKILL.md / report-template.md legitimately puts a real-looking
+    `gh:issue-flow complete (#1270)` string into an `Edit.new_string` or
+    `Write.content` — exactly what the #1270 change itself did. Those must
+    never terminate the flow.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _assistant_tool_use(
+                "Edit",
+                {
+                    "file_path": "claude/skills/gh-issue-flow/references/report-template.md",
+                    "old_string": "example report",
+                    "new_string": "example report: gh:issue-flow complete (#1270)",
+                },
+            ),
+            _assistant_tool_use(
+                "Write",
+                {
+                    "file_path": "notes.md",
+                    "content": "gh:issue-flow stopped at step 3/6 (gh:pr)",
+                },
+            ),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"Hook scanned a non-Bash tool input for the terminal marker. stdout={result.stdout!r}"
+    )
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "1/6" in decision["reason"]
+
+
+# ---------------------------------------------------------------------------
+# Issue #1270 — F-2: stale boundary expiry
+#
+# `stop_hook_active` only prevents an infinite Stop→block→Stop loop *within*
+# one turn; it resets when the user sends a new message. So a flow that
+# never emitted a Step 3 marker used to keep blocking every later turn of
+# the session, on completely unrelated topics. After N fresh user prompts
+# (default 3, `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS`, `0` = disabled)
+# the boundary is declared stale and the hook fails open.
+#
+# "Fresh" excludes tool_result carriers, `<system-reminder>`-only messages
+# and Claude Code's skill-expansion injections — all of those are flow
+# machinery, not human turns.
+# ---------------------------------------------------------------------------
+
+
+def test_three_fresh_user_prompts_expire_the_boundary(tmp_path: Path) -> None:
+    """F-2: 3 unrelated user prompts after an unfinished flow → allow."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _user_text("actually, forget that — what does mise tasks list?"),
+            _assistant_text("It lists the repo's lint/test tasks."),
+            _user_text("thanks. now show me the zsh env file"),
+            _assistant_text("Here it is."),
+            _user_text("what is the p10k prompt config path?"),
+            _assistant_text("~/.p10k.zsh"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"Stale gh-issue-flow boundary kept blocking unrelated turns. stdout={result.stdout!r}"
+    )
+
+
+def test_boundary_expiry_reported_in_trace(tmp_path: Path) -> None:
+    """F-2: the expiry allow-path names itself under trace mode."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _user_text("unrelated question one"),
+            _user_text("unrelated question two"),
+            _user_text("unrelated question three"),
+        ],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_TRACE": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+    assert "stale boundary expiry" in result.stderr, f"stderr={result.stderr!r}"
+    assert "fresh_user_prompts=3" in result.stderr, f"stderr={result.stderr!r}"
+    assert "layer=L1.5" in result.stderr
+
+
+def test_two_fresh_user_prompts_still_block(tmp_path: Path) -> None:
+    """F-2 boundary condition: below the limit the guard keeps blocking."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _user_text("wait, is the PR going to close the issue?"),
+            _assistant_text("Yes, via Closes #1270."),
+            _user_text("ok continue"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"Expected a block below the expiry limit. stdout={result.stdout!r}"
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "1/6" in decision["reason"]
+
+
+def test_skill_expansion_user_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
+    """F-2: Claude Code injects an invoked skill's body as a user-role
+    message. Those are flow machinery and must not expire the boundary."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _user_text("Base directory for this skill: /home/user/.claude/skills/gh-issue-implement\n"),
+            _assistant_skill("gh-commit"),
+            _user_slash_command("gh-commit", ""),
+            _user_text("<command-name>/gh-commit</command-name>\n<command-args></command-args>\n"),
+            _user_text("<local-command-stdout>ok</local-command-stdout>"),
+            _user_text("The gh-commit skill is already loaded above."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        "Skill-expansion user messages were miscounted as fresh user prompts "
+        f"and expired the boundary. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_tool_result_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
+    """F-2: tool output rides in `role=user` messages but is not a prompt."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _user_tool_result("tests: 42 passed"),
+            _user_tool_result("commit abc123 created"),
+            _user_tool_result("PR https://x/pull/9 opened"),
+            _user_tool_result("review posted"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"tool_result messages were miscounted as fresh user prompts. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_system_reminder_only_user_message_is_not_a_fresh_prompt(
+    tmp_path: Path,
+) -> None:
+    """F-2: a user message consisting solely of a `<system-reminder>` span
+    is harness chatter, not a human turn."""
+    reminder = "<system-reminder>\nThis is a reminder about file state.\nIt spans lines.\n</system-reminder>"
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _user_text(reminder),
+            _user_text(reminder),
+            _user_text(reminder),
+            _user_text(reminder),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"A <system-reminder>-only message was counted as a fresh prompt. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_expiry_disabled_by_env_zero(tmp_path: Path) -> None:
+    """F-2: `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS=0` never expires."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            *[_user_text(f"unrelated prompt {i}") for i in range(5)],
+        ],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS": "0"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"Expiry ran even though it was disabled with =0. stdout={result.stdout!r}"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_expiry_limit_configurable_via_env(tmp_path: Path) -> None:
+    """F-2: a custom non-zero limit is honoured (1 prompt is enough here)."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _user_text("never mind, different topic now"),
+        ],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"stdout={result.stdout!r}"
+
+
+def test_invalid_expiry_env_falls_back_to_default(tmp_path: Path) -> None:
+    """F-2: an unparseable / negative value degrades to the default of 3."""
+    two_prompts = [
+        _user_text("/gh-issue-flow 1270"),
+        _assistant_skill("gh-issue-implement"),
+        _user_text("question one"),
+        _user_text("question two"),
+    ]
+    transcript = _write_transcript(tmp_path, two_prompts)
+    for bad in ("not-a-number", "-1", ""):
+        result = _run_hook(
+            _hook_event(transcript),
+            env={"GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS": bad},
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip(), f"value {bad!r} did not fall back to the default limit"
+        assert json.loads(result.stdout)["decision"] == "block"
