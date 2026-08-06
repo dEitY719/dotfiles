@@ -37,9 +37,15 @@ setup() {
     assert_line "remote=upstream"
 }
 
-@test "non-integer pr -> exit 2" {
+# A first positional that does NOT start with a digit is the remote, not a
+# malformed PR# — that is how `[pr-number] [remote]` with an optional
+# pr-number stays expressible. Digit-leading typos are still PR# errors
+# (see "digit-leading typo stays a PR# error" below).
+@test "non-digit first positional -> remote, not a PR# error" {
     run devx_pr_verify_live_parse abc
-    assert_failure 2
+    assert_success
+    assert_line "pr="
+    assert_line "remote=abc"
 }
 
 @test "pr '0' -> exit 2 (zero is not a positive integer)" {
@@ -74,6 +80,18 @@ setup() {
     assert_failure 2
 }
 
+@test "--url= empty equals form -> exit 2" {
+    run devx_pr_verify_live_parse --url=
+    assert_failure 2
+    assert_output --partial "--url value must not be empty"
+}
+
+@test "--url with empty string value -> exit 2" {
+    run devx_pr_verify_live_parse --url ""
+    assert_failure 2
+    assert_output --partial "--url value must not be empty"
+}
+
 @test "--api-url space form" {
     run devx_pr_verify_live_parse --api-url http://localhost:8000
     assert_success
@@ -91,6 +109,18 @@ setup() {
     assert_failure 2
 }
 
+@test "--api-url= empty equals form -> exit 2" {
+    run devx_pr_verify_live_parse --api-url=
+    assert_failure 2
+    assert_output --partial "--api-url value must not be empty"
+}
+
+@test "--api-url with empty string value -> exit 2" {
+    run devx_pr_verify_live_parse --api-url ""
+    assert_failure 2
+    assert_output --partial "--api-url value must not be empty"
+}
+
 @test "--start space form preserves spaces" {
     run devx_pr_verify_live_parse --start "bun run dev:frontend"
     assert_success
@@ -106,6 +136,13 @@ setup() {
 @test "--start with empty value -> exit 2" {
     run devx_pr_verify_live_parse --start ""
     assert_failure 2
+    assert_output --partial "--start value must not be empty"
+}
+
+@test "--start= empty equals form -> exit 2" {
+    run devx_pr_verify_live_parse --start=
+    assert_failure 2
+    assert_output --partial "--start value must not be empty"
 }
 
 @test "--matrix full ok" {
@@ -123,6 +160,18 @@ setup() {
 @test "--matrix bogus -> exit 2" {
     run devx_pr_verify_live_parse --matrix bogus
     assert_failure 2
+}
+
+@test "--matrix= empty equals form -> exit 2" {
+    run devx_pr_verify_live_parse --matrix=
+    assert_failure 2
+    assert_output --partial "--matrix value must not be empty"
+}
+
+@test "--matrix with empty string value -> exit 2" {
+    run devx_pr_verify_live_parse --matrix ""
+    assert_failure 2
+    assert_output --partial "--matrix value must not be empty"
 }
 
 @test "--viewports CSV of integers ok" {
@@ -147,6 +196,18 @@ setup() {
     assert_failure 2
 }
 
+@test "--viewports= empty equals form -> exit 2" {
+    run devx_pr_verify_live_parse --viewports=
+    assert_failure 2
+    assert_output --partial "--viewports value must not be empty"
+}
+
+@test "--viewports with empty string value -> exit 2" {
+    run devx_pr_verify_live_parse --viewports ""
+    assert_failure 2
+    assert_output --partial "--viewports value must not be empty"
+}
+
 @test "--locales CSV ok" {
     run devx_pr_verify_live_parse --locales ko,en
     assert_success
@@ -162,6 +223,18 @@ setup() {
 @test "--locales with empty element -> exit 2" {
     run devx_pr_verify_live_parse --locales ko,,en
     assert_failure 2
+}
+
+@test "--locales= empty equals form -> exit 2" {
+    run devx_pr_verify_live_parse --locales=
+    assert_failure 2
+    assert_output --partial "--locales value must not be empty"
+}
+
+@test "--locales with empty string value -> exit 2" {
+    run devx_pr_verify_live_parse --locales ""
+    assert_failure 2
+    assert_output --partial "--locales value must not be empty"
 }
 
 @test "--dry-run -> issue_mode=dry-run" {
@@ -191,6 +264,20 @@ setup() {
 @test "unknown flag -> exit 2" {
     run devx_pr_verify_live_parse 123 --bogus
     assert_failure 2
+    assert_output --partial "Unknown flag: --bogus"
+}
+
+@test "single-dash typo -> Unknown flag, not a PR# error" {
+    run devx_pr_verify_live_parse -x
+    assert_failure 2
+    assert_output --partial "Unknown flag: -x"
+    refute_output --partial "PR# must be a positive integer"
+}
+
+@test "single-dash typo after a pr -> Unknown flag" {
+    run devx_pr_verify_live_parse 123 -x
+    assert_failure 2
+    assert_output --partial "Unknown flag: -x"
 }
 
 @test "pr + literal origin remote (no extra) -> exit 0 with remote=origin" {
@@ -202,6 +289,32 @@ setup() {
 @test "third positional -> exit 2" {
     run devx_pr_verify_live_parse 123 origin extra
     assert_failure 2
+}
+
+@test "remote-only positional -> pr empty (auto-detect), remote used" {
+    run devx_pr_verify_live_parse upstream
+    assert_success
+    assert_line "pr="
+    assert_line "remote=upstream"
+}
+
+@test "pr + remote still both resolve" {
+    run devx_pr_verify_live_parse 1273 upstream
+    assert_success
+    assert_line "pr=1273"
+    assert_line "remote=upstream"
+}
+
+@test "digit-leading typo stays a PR# error, not a remote" {
+    run devx_pr_verify_live_parse 12a
+    assert_failure 2
+    assert_output --partial "PR# must be a positive integer: '12a'"
+}
+
+@test "remote-only + extra positional -> exit 2" {
+    run devx_pr_verify_live_parse upstream extra
+    assert_failure 2
+    assert_output --partial "Unexpected positional arg: extra"
 }
 
 @test "-h -> help_requested" {
@@ -237,4 +350,48 @@ setup() {
     assert_line "locales=ko,en"
     assert_line "issue_mode=create"
     assert_line "allow_remote_host=1"
+}
+
+# The parser lives in shell-common/functions/, which zsh/main.zsh auto-sources
+# into the user's interactive shell — so every variable it assigns must be
+# `local`. These leak guards call the function DIRECTLY (no `run`): `run`
+# executes in a subshell, where a global assignment would be invisible and the
+# regression would pass unnoticed.
+@test "parse does not leak pr/remote into the caller's shell" {
+    pr="SENTINEL_PR"
+    remote="SENTINEL_REMOTE"
+    devx_pr_verify_live_parse 123 upstream >/dev/null
+    [ "$pr" = "SENTINEL_PR" ]
+    [ "$remote" = "SENTINEL_REMOTE" ]
+}
+
+@test "parse does not leak url/api_url/start_cmd/matrix into the caller's shell" {
+    url="SENTINEL_URL"
+    api_url="SENTINEL_API_URL"
+    start_cmd="SENTINEL_START"
+    matrix="SENTINEL_MATRIX"
+    devx_pr_verify_live_parse --url http://127.0.0.1:3000 \
+        --api-url http://127.0.0.1:8080 --start "npm run dev" \
+        --matrix full >/dev/null
+    [ "$url" = "SENTINEL_URL" ]
+    [ "$api_url" = "SENTINEL_API_URL" ]
+    [ "$start_cmd" = "SENTINEL_START" ]
+    [ "$matrix" = "SENTINEL_MATRIX" ]
+}
+
+@test "parse does not leak viewports/locales/issue_mode/allow_remote_host/_item" {
+    viewports="SENTINEL_VIEWPORTS"
+    locales="SENTINEL_LOCALES"
+    issue_mode="SENTINEL_ISSUE_MODE"
+    allow_remote_host="SENTINEL_ALLOW"
+    _rest="SENTINEL_REST"
+    _item="SENTINEL_ITEM"
+    devx_pr_verify_live_parse --viewports 1440,390 --locales ko,en \
+        --dry-run --allow-remote-host >/dev/null
+    [ "$viewports" = "SENTINEL_VIEWPORTS" ]
+    [ "$locales" = "SENTINEL_LOCALES" ]
+    [ "$issue_mode" = "SENTINEL_ISSUE_MODE" ]
+    [ "$allow_remote_host" = "SENTINEL_ALLOW" ]
+    [ "$_rest" = "SENTINEL_REST" ]
+    [ "$_item" = "SENTINEL_ITEM" ]
 }

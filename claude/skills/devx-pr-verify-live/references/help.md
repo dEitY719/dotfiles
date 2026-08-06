@@ -14,6 +14,11 @@
 | 1 | PR number, or `-h`/`--help`/`help` | 자동 | 생략 시 현재 브랜치 → 실패하면 현재 커밋을 포함하는 PR 을 역추적 |
 | 2 | remote name | `origin` | 대상 레포를 해석할 git remote |
 
+두 positional 은 **첫 글자로 구분**한다 — 숫자로 시작하면 PR#(양의 정수여야 하며 아니면
+exit 2), 아니면 remote 다. 그래서 `/devx-pr-verify-live upstream` 처럼 **PR 은 자동 감지하고
+remote 만 지정**하는 호출이 가능하다. 반대로 `12a` 는 숫자로 시작하므로 remote 로 조용히
+넘어가지 않고 PR# 오류가 난다 — 오타를 삼키지 않기 위한 규칙이다.
+
 ### Flags
 
 | Flag | Default | Description |
@@ -26,7 +31,7 @@
 | `--locales <csv>` | 유도 | 명시하면 그 로케일만 |
 | `--dry-run` | off | 이슈 본문을 **작성해서 출력**하되 등록하지 않는다 |
 | `--no-issue` | off | 초안조차 쓰지 않고 리포트 행으로만 보고한다 |
-| `--allow-remote-host` | off | loopback 이 아닌 호스트 대상 허용. 이 스킬은 앱 데이터에 쓰기를 한다 |
+| `--allow-remote-host` | off | 로컬이 아닌 호스트 대상 허용. 이 스킬은 앱 데이터에 쓰기를 한다. 로컬 판정: `localhost` · `127.0.0.0/8` · `::1` · `[::1]` · `0.0.0.0` · `[::]` |
 | `-h` / `--help` / `help` | — | 이 도움말을 출력하고 정지 |
 
 `--dry-run` 과 `--no-issue` 를 같이 주면 `--no-issue` 가 이긴다(초안조차 쓰지 않음).
@@ -68,7 +73,7 @@
 - 아무것도 안 나오면 이슈를 만들지 않는다 — 없는 문제를 지어내지 않는다.
 - dotfiles 에 이슈를 만들지 않는다 — 등록 대상은 **대상 프로젝트 레포**이고, 생성 직전
   리포트에 그 레포를 출력한다.
-- loopback 이 아닌 호스트에 `--allow-remote-host` 없이 붙지 않는다 — 앱 데이터에 쓰기를 한다.
+- 로컬이 아닌 호스트에 `--allow-remote-host` 없이 붙지 않는다 — 앱 데이터에 쓰기를 한다.
 - 자격증명을 로그 · 이슈 본문 · 레시피 캐시에 남기지 않는다.
 - 커밋하거나 push 하지 않는다.
 
@@ -77,8 +82,8 @@
 | Code | Cause |
 |------|-------|
 | 0 | 검증이 끝났다 — 발견이 0건이든 N건이든, degraded 모드였든 포함 |
-| 1 | 검증 전 단언 실패(서빙 체크아웃 불일치 · 전환 no-op · 대상 가려짐), 서버 미발견, `gh` 미인증, loopback 아닌 호스트에 `--allow-remote-host` 없음 |
-| 2 | 인자 오류: 정수 아닌 PR#, http(s) 아닌 `--url`/`--api-url`, `auto\|full` 아닌 `--matrix`, 잘못된 CSV, 모르는 플래그, 남는 positional |
+| 1 | 검증 전 단언 실패(서빙 체크아웃 불일치 · 전환 no-op · 대상 가려짐), 서버 미발견, `gh` 미인증, 로컬 아닌 호스트에 `--allow-remote-host` 없음 |
+| 2 | 인자 오류: 숫자로 시작하는데 양의 정수가 아닌 PR#, http(s) 아닌 `--url`/`--api-url`, `auto\|full` 아닌 `--matrix`, 잘못된 CSV, **명시했는데 값이 빈 플래그**(`--url=` 등), 모르는 플래그(`-x` 포함), 남는 positional |
 
 ## Good vs. bad invocation
 
@@ -87,7 +92,9 @@
   병렬 스택이 여럿일 때 대상을 못 박는다.
 - **Bad**: `/devx-pr-verify-live 2483` 를 서버가 다른 워크트리를 서빙 중인 상태로 —
   스킬이 정지시킨다. 그 디렉터리에서 rebase 후 재기동하는 것이 맞다.
-- **Bad**: `/devx-pr-verify-live abc` — exit 2 (PR# 는 양의 정수).
+- **Good**: `/devx-pr-verify-live upstream` — PR 은 자동 감지, remote 만 `upstream` 으로.
+- **Bad**: `/devx-pr-verify-live 12a` — exit 2 (숫자로 시작하면 PR# 이고, 양의 정수여야 한다).
+- **Bad**: `/devx-pr-verify-live 2483 --url=` — exit 2. 명시한 override 를 조용히 무시하지 않는다.
 - **Bad**: staging URL 을 `--url` 로 주는 것 — 이 스킬은 앱 데이터에 쓰기를 하므로
   dev/fake 스택 전용이다.
 
