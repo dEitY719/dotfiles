@@ -48,8 +48,9 @@ the stderr line and stop. Capture `pr` `remote` `url` `api_url` `start_cmd` `mat
   · `_gh_pr_review_resolve_pr_number` 를 쓴다; 브랜치가 `[gone]` 이면 커밋 → PR 역추적.
 - base URL / API origin 발견 (`--url`·`--api-url` 이 있으면 건너뛴다). 후보가 여럿이면
   `AskUserQuestion` — **추측 금지**.
-- **호스트 가드**: 대상이 loopback 이 아니면 `--allow-remote-host` 없이 정지 (Step 6 은 앱 데이터에
-  쓰기를 한다). `--start` 를 준 경우에만 레포 루트에서 기동하고 종료 시 정리한다.
+- **호스트 가드**: 대상이 로컬(`localhost` · `127.0.0.0/8` · `::1` · `0.0.0.0`)이 아니면
+  `--allow-remote-host` 없이 정지 (Step 6 은 앱 데이터에 쓰기를 한다). `--start` 를 준
+  경우에만 레포 루트에서 기동하고 종료 시 정리한다.
 
 ## Step 3: Pre-verification assertion 1 — serving checkout
 
