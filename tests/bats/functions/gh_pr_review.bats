@@ -259,14 +259,21 @@ EOF
     hash -r 2>/dev/null || true
 }
 
+# Single source of truth for the codex/1283 fallback path these tests share,
+# so the naming template only needs to change in one place. `$$` is the bats
+# test process PID and is inherited unchanged by the subshell `run` uses, so
+# this is exactly the path the allocator tries.
+_prompt_fallback_path() {
+    printf '/tmp/gh-pr-review-prompt.codex.1283.%s\n' "$$"
+}
+
 @test "mktemp_safe: mktemp fails + symlink pre-planted at fallback path → refuses, victim untouched" {
     _source_module
     _stub_mktemp_failing
     local victim="$TEST_TEMP_HOME/victim.txt"
     printf 'original\n' >"$victim"
-    # `$$` is the bats test process PID and is inherited unchanged by the
-    # subshell `run` uses, so this is exactly the path the allocator tries.
-    local fallback="/tmp/gh-pr-review-prompt.codex.1283.$$"
+    local fallback
+    fallback=$(_prompt_fallback_path)
     rm -f "$fallback"
     ln -s "$victim" "$fallback"
 
@@ -284,7 +291,8 @@ EOF
 @test "mktemp_safe: mktemp fails + regular file pre-planted at fallback path → refuses, file untouched" {
     _source_module
     _stub_mktemp_failing
-    local fallback="/tmp/gh-pr-review-prompt.codex.1283.$$"
+    local fallback
+    fallback=$(_prompt_fallback_path)
     printf 'squatted\n' >"$fallback"
 
     run _gh_pr_review_mktemp_prompt codex 1283
@@ -299,7 +307,8 @@ EOF
 @test "mktemp_safe: mktemp fails with a clear fallback path → exclusive create succeeds" {
     _source_module
     _stub_mktemp_failing
-    local fallback="/tmp/gh-pr-review-prompt.codex.1283.$$"
+    local fallback
+    fallback=$(_prompt_fallback_path)
     rm -f "$fallback"
 
     run _gh_pr_review_mktemp_prompt codex 1283
