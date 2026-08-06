@@ -388,12 +388,21 @@ def _iter_tool_results(message: dict[str, Any]) -> list[tuple[str, str]]:
     a pair.
 
     Exactly ONE tuple is emitted per tool_result block: when `content` is a
-    list, its text sub-blocks are `"\\n".join`ed first (same reason
-    `_count_fresh_user_prompts` joins before matching). Claude Code may
-    split one command's stdout across several text sub-blocks, so the #1274
-    check — marker line AND a report field line in the SAME result — would
-    miss a genuine report whose two lines landed in different sub-blocks.
-    Joining restores the single logical payload the caller reasons about.
+    list, its text sub-blocks are concatenated first. Claude Code may split
+    one command's stdout across several text sub-blocks, so the #1274 check
+    — marker line AND a report field line in the SAME result — would miss a
+    genuine report whose two lines landed in different sub-blocks.
+    Concatenation restores the single logical payload the caller reasons
+    about.
+
+    Joined with `""`, not `"\\n"` (PR #1279 codex review): the sub-blocks are
+    fragments of ONE underlying stdout string, and nothing guarantees the
+    split points fall on line boundaries. Inserting a synthetic `"\\n"`
+    between two fragments that split mid-token (e.g. `"gh:issue-flow compl"`
+    + `"ete (#42)"`) would sever the very marker this function exists to
+    detect — the opposite of `_count_fresh_user_prompts`'s join, which
+    concatenates distinct, already-line-bounded *messages* and so safely
+    uses `"\\n"` as a paragraph separator.
     """
     out: list[tuple[str, str]] = []
     content = message.get("content")
@@ -411,7 +420,7 @@ def _iter_tool_results(message: dict[str, Any]) -> list[tuple[str, str]]:
         elif isinstance(rc, list):
             parts = _text_from_sub_blocks(rc)
             if parts:
-                out.append((tool_use_id, "\n".join(parts)))
+                out.append((tool_use_id, "".join(parts)))
     return out
 
 
