@@ -72,12 +72,14 @@ def _assistant_text(text: str) -> dict[str, Any]:
     }
 
 
-def _user_tool_result(text: str) -> dict[str, Any]:
+def _user_tool_result(text: str, tool_use_id: str = "toolu_test") -> dict[str, Any]:
     """Build a user message carrying a single tool_result block.
 
     Used to simulate Read/Bash tool output landing in the transcript — i.e.
     file content that happens to mention "/gh-issue-flow" but is NOT a
-    user-typed command.
+    user-typed command. `tool_use_id` is explicit because the #1270 Bash
+    terminal channel pairs a command with its OWN result by that id
+    (PR #1272 review).
     """
     return {
         "type": "user",
@@ -86,8 +88,29 @@ def _user_tool_result(text: str) -> dict[str, Any]:
             "content": [
                 {
                     "type": "tool_result",
-                    "tool_use_id": "toolu_test",
+                    "tool_use_id": tool_use_id,
                     "content": text,
+                }
+            ],
+        },
+    }
+
+
+def _user_tool_result_blocks(texts: list[str], tool_use_id: str) -> dict[str, Any]:
+    """Same as `_user_tool_result`, but `content` is a LIST of text blocks.
+
+    Both shapes occur in real transcripts; the pairing lookup must read
+    either one (#1270 / PR #1272 review).
+    """
+    return {
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,
+                    "content": [{"type": "text", "text": t} for t in texts],
                 }
             ],
         },
@@ -155,13 +178,36 @@ def _assistant_skill(skill: str, args: str = "") -> dict[str, Any]:
     return _assistant_tool_use("Skill", {"skill": skill, "args": args}, f"toolu_{skill}")
 
 
-def _assistant_bash(command: str) -> dict[str, Any]:
+def _assistant_bash(command: str, block_id: str = "toolu_bash") -> dict[str, Any]:
     """Build an assistant tool_use message invoking Bash(command=...).
 
     Used by the issue #1270 fixtures where the model prints the Step 3
     report through a heredoc / printf instead of plain assistant text.
+    `block_id` is explicit so a fixture can pair (or deliberately
+    mis-pair) the command with its `tool_result`.
     """
-    return _assistant_tool_use("Bash", {"command": command, "description": "run a command"})
+    return _assistant_tool_use("Bash", {"command": command, "description": "run a command"}, block_id)
+
+
+def _assistant_bash_no_id(command: str) -> dict[str, Any]:
+    """A `Bash` tool_use block with NO `id` field (#1270 / PR #1272).
+
+    Such a block can never be paired with a tool_result, so it must never
+    terminate the flow.
+    """
+    return {
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "name": "Bash",
+                    "input": {"command": command, "description": "run a command"},
+                }
+            ],
+        },
+    }
 
 
 # The canonical 6-step gh-issue-flow chain, restated here on purpose: these
@@ -1154,37 +1200,190 @@ def test_trace_emits_layer_field_for_no_boundary_allow(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Issue #1270 — F-1: a Bash-emitted Step 3 report is terminal, while
-# `tool_result` (issue #608) and non-`Bash` tool inputs deliberately are
-# not. Mechanism and rationale:
-# claude/skills/gh-issue-flow/references/stop-guard.md step 4.
+# Issue #1270 — F-1: a Bash-emitted Step 3 report is terminal, but ONLY when
+# the command AND its own paired `tool_result` both carry the marker
+# (PR #1272 review, Codex BLOCKER — a command string alone proves the model
+# mentioned the marker, not that it emitted a report). `tool_result` on its
+# own (issue #608) and non-`Bash` tool inputs stay non-terminal. Mechanism
+# and rationale: claude/skills/gh-issue-flow/references/stop-guard.md step 4.
 # ---------------------------------------------------------------------------
+
+_BASH_REPORT_HEREDOC = (
+    "cat <<'EOF'\n"
+    "gh:issue-flow complete (#1270)\n"
+    "  [OK] Step 1: gh:issue-implement\n"
+    "  PR URL: https://github.com/example/repo/pull/99\n"
+    "EOF\n"
+)
+_BASH_REPORT_HEREDOC_STDOUT = (
+    "gh:issue-flow complete (#1270)\n"
+    "  [OK] Step 1: gh:issue-implement\n"
+    "  PR URL: https://github.com/example/repo/pull/99\n"
+)
 
 
 @pytest.mark.parametrize(
-    "command",
+    ("command", "stdout_text"),
     [
+        pytest.param(_BASH_REPORT_HEREDOC, _BASH_REPORT_HEREDOC_STDOUT, id="heredoc"),
         pytest.param(
-            "cat <<'EOF'\n"
-            "gh:issue-flow complete (#1270)\n"
-            "  [OK] Step 1: gh:issue-implement\n"
-            "  PR URL: https://github.com/example/repo/pull/99\n"
-            "EOF\n",
-            id="heredoc",
+            "printf 'gh:issue-flow complete (#42)\\n'",
+            "gh:issue-flow complete (#42)\n",
+            id="printf",
         ),
-        pytest.param("printf 'gh:issue-flow complete (#42)\\n'", id="printf"),
-        pytest.param("echo 'gh:issue-flow stopped at step 2/6 (gh:commit)'", id="stopped-at-step"),
+        pytest.param(
+            "echo 'gh:issue-flow stopped at step 2/6 (gh:commit)'",
+            "gh:issue-flow stopped at step 2/6 (gh:commit)\n",
+            id="stopped-at-step",
+        ),
     ],
 )
-def test_bash_emitted_terminal_report_allows_stop(tmp_path: Path, command: str) -> None:
-    """F-1: a Step 3 report printed through Bash terminates the flow."""
-    transcript = _write_transcript(tmp_path, [*_full_chain_prefix(), _assistant_bash(command)])
+def test_bash_emitted_terminal_report_allows_stop(tmp_path: Path, command: str, stdout_text: str) -> None:
+    """F-1: a Step 3 report printed through Bash terminates the flow — the
+    command matches and its paired `tool_result` proves it reached stdout."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_full_chain_prefix(),
+            _assistant_bash(command, "toolu_report"),
+            _user_tool_result(stdout_text, "toolu_report"),
+        ],
+    )
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert result.stdout.strip() == "", (
         "Hook blocked a completed flow whose Step 3 report was emitted through "
         f"Bash. command={command!r} stdout={result.stdout!r}"
     )
+
+
+def test_bash_terminal_report_list_shaped_tool_result_allows_stop(tmp_path: Path) -> None:
+    """F-1: `tool_result.content` may be a list of text blocks, not just a
+    plain string — the pairing lookup must read either shape."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_full_chain_prefix(),
+            _assistant_bash(_BASH_REPORT_HEREDOC, "toolu_report"),
+            _user_tool_result_blocks(
+                ["gh:issue-flow complete (#1270)", "  PR URL: https://github.com/example/repo/pull/99"],
+                "toolu_report",
+            ),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"Hook ignored a list-shaped tool_result when pairing. stdout={result.stdout!r}"
+
+
+def test_bash_report_redirected_to_file_does_not_terminate(tmp_path: Path) -> None:
+    """PR #1272 Codex BLOCKER: the command carries the marker but redirects
+    it into a file, so the `tool_result` is empty — no report ever surfaced
+    as the completion signal and the flow must keep blocking."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_full_chain_prefix(),
+            _assistant_bash(
+                "cat <<'EOF' > /tmp/report.txt\ngh:issue-flow complete (#1270)\nEOF\n",
+                "toolu_redirect",
+            ),
+            _user_tool_result("", "toolu_redirect"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        "Hook treated a marker-bearing command whose output was redirected to a "
+        f"file as a real Step 3 report. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_bash_marker_in_comment_with_unrelated_output_does_not_terminate(
+    tmp_path: Path,
+) -> None:
+    """PR #1272 Codex BLOCKER, second shape: the marker sits in a shell
+    comment, so the paired `tool_result` carries unrelated text."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_full_chain_prefix(),
+            _assistant_bash(
+                "# next up: gh:issue-flow complete (#1270)\ngit status --short\n",
+                "toolu_comment",
+            ),
+            _user_tool_result(" M claude/hooks/gh_issue_flow_stop_guard.py\n", "toolu_comment"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"Hook terminated on a marker that only appeared in a shell comment. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_marker_in_tool_result_without_matching_command_does_not_terminate(
+    tmp_path: Path,
+) -> None:
+    """Issue #608 case, restated under pairing: the `tool_result` carries the
+    marker but the command that produced it (`cat` of the template) cannot
+    match `_TERMINAL_COMMAND_RE`, so no pair forms. Condition 2 alone is
+    never enough."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_full_chain_prefix(),
+            _assistant_bash("cat claude/skills/gh-issue-flow/references/report-template.md", "toolu_cat"),
+            _user_tool_result(
+                "If all steps succeeded:\n```\ngh:issue-flow complete (#<N>)\n```\n",
+                "toolu_cat",
+            ),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"Hook terminated on a tool_result whose command never matched. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_bash_terminal_report_with_mismatched_tool_use_id_does_not_terminate(
+    tmp_path: Path,
+) -> None:
+    """The marker-bearing `tool_result` must belong to THAT tool_use — a
+    result carried under a different `tool_use_id` forms no pair."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_full_chain_prefix(),
+            _assistant_bash(_BASH_REPORT_HEREDOC, "toolu_A"),
+            _user_tool_result(_BASH_REPORT_HEREDOC_STDOUT, "toolu_B"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"Hook paired a tool_result with the wrong tool_use. stdout={result.stdout!r}"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_bash_tool_use_without_id_does_not_terminate(tmp_path: Path) -> None:
+    """A `Bash` tool_use with no `id` cannot be paired with anything, so it
+    must never terminate — even with a marker-bearing result nearby."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_full_chain_prefix(),
+            _assistant_bash_no_id(_BASH_REPORT_HEREDOC),
+            _user_tool_result(_BASH_REPORT_HEREDOC_STDOUT, "toolu_report"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"Hook terminated on an unpairable Bash tool_use. stdout={result.stdout!r}"
+    assert json.loads(result.stdout)["decision"] == "block"
 
 
 def test_bash_grep_of_template_text_does_not_terminate(tmp_path: Path) -> None:

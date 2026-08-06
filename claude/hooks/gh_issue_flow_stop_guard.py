@@ -21,10 +21,12 @@ Safety rails (each is critical — never accidentally trap the user):
   - Boundary went stale (N fresh user prompts since it) → exit 0 (#1270).
   - Any unexpected exception → exit 0 (fail open).
 
-Terminal-marker channels: assistant **text** blocks (canonical), plus the
-`input.command` of assistant `Bash` `tool_use` blocks (#1270 fallback).
-`tool_result` (issue #608) and every non-`Bash` tool stay excluded — the
-rationale and the scope guard live on `_scan_after_boundary`.
+Terminal-marker channels: assistant **text** blocks (canonical), plus a
+`Bash` `tool_use` whose `input.command` AND whose own paired `tool_result`
+both carry the marker (#1270 fallback, narrowed by the PR #1272 review).
+Every non-`Bash` tool stays excluded, and a `tool_result` is never read on
+its own (issue #608) — rationale and scope guard live on
+`_scan_after_boundary`.
 
 The hook only ever does two things: emit nothing (allow), or emit one JSON
 object `{"decision":"block","reason":"..."}` on stdout (block + nudge).
@@ -111,8 +113,9 @@ TERMINAL_PATTERNS: tuple[str, ...] = (
     "gh-issue-flow stopped at step",
 )
 
-# Issue #1270 — terminal marker as it appears inside a `Bash` tool_use
-# `input.command` string (why that channel exists: `_scan_after_boundary`).
+# Issue #1270 — terminal marker as it appears in the `Bash` fallback
+# channel: matched against BOTH a tool_use `input.command` string and that
+# same tool_use's paired `tool_result` (why: `_scan_after_boundary`).
 # Deliberately STRICTER than TERMINAL_PATTERNS: it demands a literal digit
 # exactly where the SKILL.md / report-template.md templates carry the
 # placeholders `<N>` and `<i>`. A command that merely mentions or greps the
@@ -303,13 +306,78 @@ def _iter_skill_uses(message: dict[str, Any]) -> list[str]:
     return _iter_tool_use_inputs(message, "Skill", "skill")
 
 
-def _iter_bash_commands(message: dict[str, Any]) -> list[str]:
-    """Return the `input.command` strings of `Bash` tool_use blocks (#1270).
+def _iter_bash_tool_uses(message: dict[str, Any]) -> list[tuple[str, str]]:
+    """Return `(id, input.command)` for every `Bash` tool_use block (#1270).
 
-    `Bash` is the ONLY tool name ever passed here — never `Write` / `Edit` /
-    anything else. That scope is load-bearing; see `_scan_after_boundary`.
+    `Bash` is the ONLY tool name ever inspected here — never `Write` /
+    `Edit` / anything else. That scope is load-bearing; see
+    `_scan_after_boundary`.
+
+    Unlike `_iter_tool_use_inputs`, the block `id` is kept: the terminal
+    channel must pair a command with its OWN `tool_result` (PR #1272
+    review). A block carrying no usable string `id` cannot be paired, so it
+    is dropped here rather than passed on as unpairable — it must never
+    terminate the flow.
+
+    Every level is isinstance-checked so a malformed transcript entry can
+    only yield fewer results, never an exception — the hook must fail open.
     """
-    return _iter_tool_use_inputs(message, "Bash", "command")
+    out: list[tuple[str, str]] = []
+    content = message.get("content")
+    if not isinstance(content, list):
+        return out
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        if block.get("type") != "tool_use" or block.get("name") != "Bash":
+            continue
+        block_id = block.get("id")
+        if not isinstance(block_id, str) or not block_id:
+            continue
+        tool_input = block.get("input")
+        if not isinstance(tool_input, dict):
+            continue
+        command = tool_input.get("command")
+        if isinstance(command, str):
+            out.append((block_id, command))
+    return out
+
+
+def _iter_tool_results(message: dict[str, Any]) -> list[tuple[str, str]]:
+    """Return `(tool_use_id, text)` for every tool_result block (#1270).
+
+    The ONLY caller is `_scan_after_boundary`'s pairing lookup, and only for
+    an id whose `Bash` command already matched `_TERMINAL_COMMAND_RE`. This
+    is the single place in the module where a `tool_result` may be read at
+    all; the general `include_tool_results=False` rule (issue #608) stands
+    everywhere else, including boundary detection and the text-block
+    terminal scan.
+
+    `tool_result.content` is a plain string in some transcripts and a list
+    of `{"type": "text", "text": ...}` blocks in others, so both shapes are
+    handled (mirroring `_iter_text_blocks`). A block with no usable string
+    `tool_use_id` is dropped — it can never form a pair.
+    """
+    out: list[tuple[str, str]] = []
+    content = message.get("content")
+    if not isinstance(content, list):
+        return out
+    for block in content:
+        if not isinstance(block, dict) or block.get("type") != "tool_result":
+            continue
+        tool_use_id = block.get("tool_use_id")
+        if not isinstance(tool_use_id, str) or not tool_use_id:
+            continue
+        rc = block.get("content")
+        if isinstance(rc, str):
+            out.append((tool_use_id, rc))
+        elif isinstance(rc, list):
+            for sub in rc:
+                if isinstance(sub, dict) and sub.get("type") == "text":
+                    st = sub.get("text")
+                    if isinstance(st, str):
+                        out.append((tool_use_id, st))
+    return out
 
 
 def _load_transcript(path: Path) -> list[dict[str, Any]]:
@@ -387,40 +455,73 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
     skill counter is unaffected — only the terminal-marker scan
     narrows.
 
-    Issue #1270 widens the scan by exactly one channel: the `input.command`
-    string of an assistant `Bash` `tool_use` block, matched against the
-    stricter `_TERMINAL_COMMAND_RE`. When the model prints the Step 3
-    report via `cat <<'EOF' … EOF` or `printf`, the report text lands in
-    that command string (and in a `tool_result`), never in an assistant
-    text block — so before #1270 the flow could never terminate and the
-    stale boundary blocked every later turn in the session.
+    Issue #1270 widens the scan by exactly one channel: an assistant `Bash`
+    `tool_use`. When the model prints the Step 3 report via `cat <<'EOF' …
+    EOF` or `printf`, the report text lands in that tool_use's
+    `input.command` (and in its `tool_result`), never in an assistant text
+    block — so before #1270 the flow could never terminate and the stale
+    boundary blocked every later turn in the session.
+
+    That channel is **pair-matched** (PR #1272 review, Codex BLOCKER).
+    `_TERMINAL_COMMAND_RE` must match BOTH:
+      1. the `input.command` of a `Bash` tool_use, AND
+      2. the `tool_result` whose `tool_use_id` equals THAT tool_use's `id`.
+    Condition 1 alone only proves the model *mentioned* the marker, not
+    that it *emitted* a report: `cat <<'EOF' > /tmp/report.txt` redirects
+    the text to a file, and a marker inside a script comment or a
+    templating command never surfaces either. Condition 2 is what proves
+    the report actually reached stdout — a redirect produces no stdout, so
+    the pair never forms.
+
+    Requiring the pair does NOT reopen issue #608 (SKILL.md read into a
+    `tool_result`): that path can only ever satisfy condition 2, because
+    the command doing the reading (`Read`, `cat SKILL.md`) can never
+    satisfy condition 1 — `_TERMINAL_COMMAND_RE` demands a literal digit
+    where the templates carry `<N>` / `<i>`. The pair requirement is
+    strictly narrower than either half on its own.
+
+    One residual false positive is accepted honestly: `grep
+    "gh:issue-flow complete (#1270)" some.log` would satisfy both halves.
+    It is contrived — the searcher has to already type a concrete issue
+    number in the digit-form the templates never contain.
 
     **Only `Bash` is scanned — never `Write`, `Edit`, or any other tool.**
     Editing `SKILL.md` or `references/report-template.md` puts real
     template text into an `Edit.new_string` / `Write.content` (this very
     change does exactly that), so scanning those inputs would
-    false-terminate any flow that touches the skill's own files.
-    `tool_result` remains excluded for the #608 reason above.
+    false-terminate any flow that touches the skill's own files. Outside
+    the pairing lookup above, `tool_result` remains excluded for the #608
+    reason.
     """
     terminal = False
     seen: list[str] = []
+    # Ids of `Bash` tool_uses whose command matched but whose paired
+    # tool_result has not been seen yet. The result arrives in a LATER
+    # `role=user` entry than the tool_use, so the candidate has to be
+    # carried across iterations of this single forward walk.
+    pending_bash_ids: set[str] = set()
     for entry in messages[start + 1 :]:
         msg = _message_payload(entry)
         role = msg.get("role")
         # `terminal` is monotonic, so once it is set the marker work on
-        # every later message is pure waste on the turn-end hot path. The
-        # loop itself cannot break — `seen` must keep accumulating so the
-        # trace still reports the full sub-skill count.
+        # every later message is pure waste on the turn-end hot path (that
+        # includes growing `pending_bash_ids`). The loop itself cannot
+        # break — `seen` must keep accumulating so the trace still reports
+        # the full sub-skill count.
         if role == "assistant" and not terminal:
             for text in _iter_text_blocks(msg, include_tool_results=False):
                 if any(pat in text for pat in TERMINAL_PATTERNS):
                     terminal = True
                     break
             if not terminal:
-                for command in _iter_bash_commands(msg):
+                for block_id, command in _iter_bash_tool_uses(msg):
                     if _TERMINAL_COMMAND_RE.search(command):
-                        terminal = True
-                        break
+                        pending_bash_ids.add(block_id)
+        elif role == "user" and not terminal and pending_bash_ids:
+            for tool_use_id, text in _iter_tool_results(msg):
+                if tool_use_id in pending_bash_ids and _TERMINAL_COMMAND_RE.search(text):
+                    terminal = True
+                    break
         for skill in _iter_skill_uses(msg):
             if skill not in SUB_SKILL_NAMES:
                 continue
