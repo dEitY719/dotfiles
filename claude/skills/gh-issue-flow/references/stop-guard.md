@@ -89,18 +89,34 @@ On every Stop event:
    user text would silently false-match every real invocation and
    fail-open the hook (issue #608, 5th regression).
 
-   **Bash fallback channel (#1270).** Assistant text is the canonical
-   channel — `references/report-template.md` requires the Step 3 report
-   to be plain assistant text. But models sometimes print it through
-   `Bash` (`cat <<'EOF' … EOF`, `printf`), in which case the report text
-   only ever exists in the tool_use `input.command` string and in a
-   `tool_result`, and the flow could never terminate. So the scan also
-   matches an assistant `Bash` tool_use command against a **stricter**
-   regex that requires a literal digit where the templates carry `<N>` /
-   `<i>` — `grep "gh:issue-flow complete" SKILL.md` therefore cannot
-   false-terminate. **Only `Bash` is scanned**: `Write`/`Edit` inputs
-   legitimately carry real template text whenever the skill's own files
-   are edited.
+   **Bash fallback channel (#1270), pair-matched.** Assistant text is the
+   canonical channel — `references/report-template.md` requires the Step 3
+   report to be plain assistant text. But models sometimes print it
+   through `Bash` (`cat <<'EOF' … EOF`, `printf`), in which case the
+   report text only ever exists in the tool_use `input.command` string and
+   in a `tool_result`, and the flow could never terminate. So the scan
+   also accepts a `Bash` tool_use — but only when a **stricter** regex
+   (one that requires a literal digit where the templates carry `<N>` /
+   `<i>`) matches **both**:
+   1. the tool_use's `input.command`, **and**
+   2. the `tool_result` whose `tool_use_id` equals that tool_use's `id`.
+
+   Condition 1 alone proves only that the model *mentioned* the marker:
+   `cat <<'EOF' > /tmp/report.txt` redirects it into a file, and a marker
+   in a shell comment never surfaces either. Condition 2 is what proves
+   the report reached stdout — a redirect produces none, so no pair forms.
+   Condition 2 alone is the #608 hazard (SKILL.md read into a
+   `tool_result`); that path can never satisfy condition 1, because the
+   command doing the reading (`Read`, `cat SKILL.md`) carries no literal
+   digit. **The pair is strictly narrower than either half**, so adding it
+   does not reopen #608. This lookup is the only place in the hook that
+   reads a `tool_result` at all, and only for an id whose command already
+   matched. A `Bash` block with no usable `id` is unpairable and never
+   terminates. One residual false positive is accepted: `grep
+   "gh:issue-flow complete (#1270)" some.log` satisfies both halves —
+   contrived, and it requires typing a concrete issue number.
+   **Only `Bash` is scanned**: `Write`/`Edit` inputs legitimately carry
+   real template text whenever the skill's own files are edited.
 5. **Boundary expiry (#1270).** Count *fresh* user prompts after the
    boundary. A user-role entry counts only when all of:
    - the **outer** transcript entry is not flagged `isMeta` — Claude Code
@@ -200,10 +216,17 @@ Re-install via `./setup.sh` to restore the default behaviour.
   the mid-chain stop. A defensive variant covers the case where the
   model reads `gh_issue_flow_stop_guard.py` itself inside the flow.
 - #1270 F-1: a Step 3 report emitted through a `Bash` heredoc/`printf`
-  → allow; a `Bash` command that only greps the template text (no
-  literal issue/step digit) → still block; the same template text
-  arriving via `tool_result`, or a real marker inside an `Edit`/`Write`
-  tool input → still block.
+  **with its paired `tool_result`** → allow (string- and list-shaped
+  `tool_result.content` both); a `Bash` command that only greps the
+  template text (no literal issue/step digit) → still block; the same
+  template text arriving via `tool_result`, or a real marker inside an
+  `Edit`/`Write` tool input → still block.
+- #1270 / PR #1272 (pair matching): command matches but output was
+  redirected to a file (empty `tool_result`) → still block; marker only
+  in a shell comment (unrelated output) → still block; marker in the
+  `tool_result` of a non-matching `cat` command → still block; command
+  under `toolu_A` with a marker-bearing result under `toolu_B` → still
+  block; `Bash` tool_use with no `id` → still block.
 - #1270 F-2: 3 fresh unrelated user prompts after an unfinished flow
   → allow (stale boundary); 2 → still block; skill-expansion,
   `tool_result`-only and `<system-reminder>`-only messages are not

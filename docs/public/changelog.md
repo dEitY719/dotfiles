@@ -14,6 +14,7 @@
 - 변경: **오래된 flow boundary 자동 만료 — 종료 리포트 없이 끝난 플로우의 boundary 가 세션 내내 남아 무관한 턴까지 계속 차단하던 문제 수정. boundary 이후 사용자 프롬프트가 3회 쌓이면 fail-open 한다. `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS` 로 조정하고 `0` 이면 만료 비활성화. tool_result·skill 확장·`<system-reminder>` 전용 메시지는 사용자 프롬프트로 세지 않는다 (#1270)**
 - 변경: **Step 3 리포트는 반드시 plain assistant text 로 출력하도록 SKILL.md·report-template.md 에 명시 — `Bash` 경로는 어디까지나 폴백 (#1270)**
 - 변경: **flow boundary 만료 카운터가 훅 자체 피드백을 사용자 턴으로 오인하던 문제 수정 — 실제 2489-entry 트랜스크립트에서 "새 사용자 프롬프트" 102건 중 실제 사람 입력은 4건뿐이었고, 나머지는 훅이 되돌려받은 `Stop hook feedback:` 62건과 백그라운드 서브에이전트 완료 알림 `<task-notification>` 40건이었다. 그 결과 1/6 단계에서 가드가 스스로 꺼졌다(`devx:pr-review-all` 이 백그라운드 에이전트 3개를 띄우므로 상시 재현). 이제 트랜스크립트 엔트리의 `isMeta` 플래그와 harness 주입 마커를 걸러내고, 반대로 사람이 쓴 텍스트가 `tool_result` 와 같은 턴에 실려 온 경우는 정상적으로 사용자 턴으로 센다 (#1270)**
+- 변경: **`Bash` 폴백 종료 채널을 command + `tool_result` 쌍 매칭으로 좁힘 — 기존에는 `Bash` 명령 문자열에 종료 마커가 들어 있기만 하면 플로우를 종료로 판정해, `cat <<'EOF' > /tmp/report.txt` 처럼 파일로 리다이렉트하거나 셸 주석에 마커가 있는 경우에도 리포트를 실제로 출력한 것으로 오인했다. 이제 tool_use 의 `input.command` 와 같은 `id` 를 가진 `tool_result` 가 **둘 다** 엄격 정규식에 매치할 때만 종료로 본다(리다이렉트는 stdout 이 없어 쌍이 성립하지 않음). SKILL.md 를 읽어 `tool_result` 에만 템플릿이 실리는 #608 경로는 명령 쪽(`Read`/`cat`)이 숫자 형식을 만족할 수 없어 여전히 차단된다 — 쌍 조건은 양쪽 각각보다 엄격하다 (#1270 / PR #1272 리뷰)**
 - 변경: **macOS/BSD 이식성 수정 — 타이밍 테스트가 GNU 전용 `date +%s%N` 대신 bash 내장 `SECONDS` 를 쓰도록 바꿔 BSD `date` 에서 테스트가 중단되지 않는다. ms 변환 헬퍼는 `claude/hooks/lib/pbd_ms.sh`(디스패처와 같은 디렉터리에 함께 배포되어야 하는 신규 파일) 로 분리해 BSD `date` fallback 경로에 테스트 커버리지를 붙였다 (#1258 리뷰 후속)**
 
 ## 2026-07-30
