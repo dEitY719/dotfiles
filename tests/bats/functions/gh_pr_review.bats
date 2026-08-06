@@ -17,6 +17,11 @@ setup() {
 }
 
 teardown() {
+    # Sweep this file's own /tmp naming convention even when a test's
+    # assertions abort mid-body before its own `rm -f` runs (agy review,
+    # PR #1282 / issue #1276) — teardown_isolated_home only cleans
+    # $TEST_TEMP_HOME, not real /tmp.
+    rm -f /tmp/gh-pr-review-prompt.*
     teardown_isolated_home
 }
 
@@ -200,6 +205,16 @@ EOF
     case "$agy_path" in *agy*) ;; *) false ;; esac
     case "$codex_path" in *codex*) ;; *) false ;; esac
     rm -f "$agy_path" "$codex_path"
+}
+
+@test "mktemp_prompt: PR token with path-traversal chars is sanitized, never escapes /tmp" {
+    _source_module
+    local p
+    p=$(_gh_pr_review_mktemp_prompt codex "../../etc/passwd")
+    [ -n "$p" ]
+    case "$p" in /tmp/gh-pr-review-prompt.codex.*) ;; *) false ;; esac
+    case "$p" in *..* | */etc/*) false ;; esac
+    rm -f "$p"
 }
 
 @test "mktemp_prompt: same ai + PR twice → still distinct (retries never collide)" {

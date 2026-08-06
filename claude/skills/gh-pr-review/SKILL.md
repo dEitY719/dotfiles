@@ -78,7 +78,10 @@ tool call. The Bash tool starts a fresh subprocess per call, so
 `$PROMPT_FILE` does not survive into the next one; splitting the two steps
 forces re-typing a fixed path, and parallel `devx:pr-review-all` lanes then
 overwrite each other's prompt — agy and codex review identical bytes and
-the run false-passes (#1276).
+the run false-passes (#1276). After Step 5's dispatch completes, `rm -f
+"$PROMPT_FILE"` — the file is created fresh per invocation and nothing
+else reads it afterward, so leaving it behind just accumulates /tmp
+clutter across repeated reviews.
 
 ## Step 5: Dispatch to External CLI
 
