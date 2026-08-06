@@ -214,6 +214,40 @@ _gh_pr_review_stderr_is_noise() {
     return 1
 }
 
+# _gh_pr_review_mktemp_safe — SSOT for temp-path allocation in this module.
+# Args: $1 = mktemp template ending in `XXXXXX` (e.g. /tmp/foo.XXXXXX).
+# Prints the allocated path on stdout and returns 0; prints nothing and
+# returns 1 when no path could be allocated safely.
+#
+# Issue #1283: the old call sites fell back to a bare `$$`-suffixed path
+# whenever mktemp failed (unwritable /tmp, quota) and later wrote to it
+# with a plain `>` redirect. A local attacker who guesses the PID can
+# pre-plant a symlink there and have that redirect clobber whatever the
+# link points at. The fallback here creates the path under `set -C`
+# (noclobber) in a subshell, which opens with O_CREAT|O_EXCL: a
+# pre-existing file *or* symlink makes the create fail, and the caller
+# aborts instead of writing through it. A genuine PID-reuse collision
+# fails the same way, which is the safe outcome.
+_gh_pr_review_mktemp_safe() {
+    local _template="$1"
+    # Fallback is derived from the template so the two can never drift:
+    # strip the mktemp placeholder, append this shell's PID.
+    local _fallback="${_template%XXXXXX}$$"
+    local _path
+    if _path=$(mktemp "$_template" 2>/dev/null) && [ -n "$_path" ]; then
+        printf '%s\n' "$_path"
+        return 0
+    fi
+    if (
+        set -C
+        : >"$_fallback"
+    ) 2>/dev/null; then
+        printf '%s\n' "$_fallback"
+        return 0
+    fi
+    return 1
+}
+
 # _gh_pr_review_mktemp_prompt — lane-discriminated unique prompt-file path.
 # SSOT for PROMPT_FILE naming (issue #1276). Mirrors the `$ai`-discriminated
 # mktemp template used for the stderr file in _gh_pr_review_run_ai: the
@@ -223,9 +257,10 @@ _gh_pr_review_stderr_is_noise() {
 # or hardcoded prompt path lets one lane clobber the other's prompt, so both
 # CLIs review byte-identical input and the run silently false-passes.
 # Args: $1 = ai (codex|agy|claude), $2 = PR number (for debuggability).
-# Prints a path on stdout. Falls back to a $$-suffixed path (still
-# lane-discriminated) when mktemp itself is unavailable, so this stays
-# the single place that knows the PROMPT_FILE naming template.
+# Prints a path on stdout; returns non-zero and prints nothing when no
+# path could be allocated safely (see _gh_pr_review_mktemp_safe for the
+# noclobber fallback), so this stays the single place that knows the
+# PROMPT_FILE naming template.
 # Both args are sanitized to `[A-Za-z0-9_-]` before touching the path —
 # an unvalidated PR token (e.g. containing `/`) could otherwise steer
 # the mktemp template outside /tmp (codex review, PR #1282 / issue #1276).
@@ -235,8 +270,7 @@ _gh_pr_review_mktemp_prompt() {
     pr=$(printf '%s' "${2:-0}" | tr -cd 'A-Za-z0-9_-')
     [ -n "$ai" ] || ai="unknown"
     [ -n "$pr" ] || pr="0"
-    mktemp "/tmp/gh-pr-review-prompt.$ai.$pr.XXXXXX" 2>/dev/null ||
-        echo "/tmp/gh-pr-review-prompt.$ai.$pr.$$"
+    _gh_pr_review_mktemp_safe "/tmp/gh-pr-review-prompt.$ai.$pr.XXXXXX"
 }
 
 # _gh_pr_review_run_ai — pipes PROMPT_FILE into the chosen AI CLI per
@@ -879,9 +913,20 @@ EOF
 
     # ---- Step 3 + 4: build prompt + diff into a temp file ----
     local PROMPT_FILE BODY_FILE AI_OUT
-    PROMPT_FILE=$(_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER")
-    AI_OUT=$(mktemp 2>/dev/null) || AI_OUT="/tmp/gh-pr-review-out.$$"
-    BODY_FILE=$(mktemp 2>/dev/null) || BODY_FILE="/tmp/gh-pr-review-body.$$"
+    if ! PROMPT_FILE=$(_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER"); then
+        echo "Could not create prompt temp file under /tmp" >&2
+        return 1
+    fi
+    if ! AI_OUT=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"); then
+        echo "Could not create AI output temp file under /tmp" >&2
+        rm -f "$PROMPT_FILE"
+        return 1
+    fi
+    if ! BODY_FILE=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-body.XXXXXX"); then
+        echo "Could not create comment body temp file under /tmp" >&2
+        rm -f "$PROMPT_FILE" "$AI_OUT"
+        return 1
+    fi
 
     if ! _gh_pr_review_build_prompt "$review" "$PROMPT_FILE" \
         "$PR_NUMBER" "$TARGET_REPO" "${base:-?}" "${head:-?}"; then
