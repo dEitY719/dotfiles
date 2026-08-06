@@ -18,8 +18,19 @@
 # Contract mirrors the handlers: set -u, no-op without jq, always exit 0
 # (best-effort — a dispatch hiccup never blocks the user's flow).
 #
-# Reference: issue #1144.
+# Stage timings for the ROUTED path only are appended to
+# ${XDG_STATE_HOME:-$HOME/.local/state}/claude/post-bash-dispatch-timing.log
+# so a latency regression is measurable instead of guessed (#1258); the
+# common non-matching path stays write-free on purpose. Report the log with
+# claude/tools/hook-perf-report.sh.
+#
+# Reference: issue #1144, #1258.
 set -u
+
+# Entry stamp. Taken on EVERY invocation, but it is a plain variable read of
+# bash 5's EPOCHREALTIME — no fork — so the non-matching majority pays
+# nothing. Pre-bash-5 leaves it empty and _pbd_ms degrades (see below).
+_t_entry="${EPOCHREALTIME:-}"
 
 # A PostToolUse hook always receives JSON on stdin. If stdin is a terminal the
 # script was launched by hand — bail before `cat` blocks forever.
@@ -39,6 +50,50 @@ cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // ""' 2>/dev/null) || e
 # shellcheck disable=SC1007 # intentional env-prefix: CDPATH= cd ...
 DISPATCH_DIR="${POST_BASH_DISPATCH_DIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
 
+# --- stage timing (#1258) ---------------------------------------------------
+# Both helpers are only ever CALLED from the routed branches below, so the
+# non-matching path costs one function definition and nothing else.
+
+# Epoch milliseconds. $1 = an EPOCHREALTIME snapshot ("<sec>.<usec>", locale
+# decimal point); empty/absent = stamp now. Without EPOCHREALTIME (bash < 5)
+# it falls back to GNU `date +%s%3N`, and to whole-second granularity when
+# that prints a literal `%N` (BSD date).
+_pbd_ms() {
+	local _v="${1:-}" _sec _frac _d
+	[ -n "$_v" ] || _v="${EPOCHREALTIME:-}"
+	case "$_v" in
+	*[.,]*)
+		_sec="${_v%%[.,]*}"
+		_frac="${_v#*[.,]}000"
+		printf '%s%s\n' "$_sec" "${_frac:0:3}"
+		return 0
+		;;
+	esac
+	_d=$(date +%s%3N 2>/dev/null) || _d=""
+	case "$_d" in
+	'' | *[!0-9]*) _d="$(date +%s 2>/dev/null || printf '0')000" ;;
+	esac
+	printf '%s\n' "$_d"
+}
+
+# Append `<entry-ms> <pre-invoke-ms> <post-exit-ms> <handler>`. Strictly
+# best-effort: every failure path returns 0 so the exit-0 contract holds.
+_pbd_log_timing() {
+	local _handler="$1" _pre="$2" _post="$3" _dir _f _n
+	_dir="${XDG_STATE_HOME:-$HOME/.local/state}/claude"
+	_f="$_dir/post-bash-dispatch-timing.log"
+	mkdir -p "$_dir" 2>/dev/null || return 0
+	printf '%s %s %s %s\n' "$(_pbd_ms "$_t_entry")" "$_pre" "$_post" "$_handler" \
+		>>"$_f" 2>/dev/null || return 0
+	# Cap growth without rewriting on every routed call: only once the log
+	# passes 1000 lines is it trimmed back to the most recent 500.
+	_n=$(wc -l <"$_f" 2>/dev/null) || return 0
+	if [ "${_n:-0}" -gt 1000 ] 2>/dev/null; then
+		tail -n 500 "$_f" >"$_f.tmp" 2>/dev/null && mv -f "$_f.tmp" "$_f" 2>/dev/null
+	fi
+	return 0
+}
+
 # Route on a cheap, deliberately-loose command match; the handler's own filter
 # makes the final call. Anchor on a word boundary so an env-var/`command`
 # prefix (`FOO=bar gh pr create`) still routes (#390); both regexes use the
@@ -49,11 +104,15 @@ DISPATCH_DIR="${POST_BASH_DISPATCH_DIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && 
 # (best-effort contract) rather than stderr noise + a non-zero pipeline.
 if printf '%s' "$cmd" | grep -qE '(^|[[:space:]])gh[[:space:]]+pr[[:space:]]+create([[:space:]]|$)'; then
 	if [ -x "$DISPATCH_DIR/post-gh-pr-create.sh" ]; then
+		_t_pre=$(_pbd_ms)
 		printf '%s' "$input" | "$DISPATCH_DIR/post-gh-pr-create.sh"
+		_pbd_log_timing post-gh-pr-create.sh "$_t_pre" "$(_pbd_ms)"
 	fi
 elif printf '%s' "$cmd" | grep -qE '(^|[[:space:]])claude[[:space:]]+plugin([[:space:]]|$)'; then
 	if [ -x "$DISPATCH_DIR/plugin-sync.sh" ]; then
+		_t_pre=$(_pbd_ms)
 		printf '%s' "$input" | "$DISPATCH_DIR/plugin-sync.sh"
+		_pbd_log_timing plugin-sync.sh "$_t_pre" "$(_pbd_ms)"
 	fi
 fi
 
