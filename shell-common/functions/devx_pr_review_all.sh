@@ -5,14 +5,20 @@
 # gh_pr_review_parse contract: one `key=value` line per resolved arg on
 # success, errors to stderr. Exit 0 ok/help, exit 2 arg error. Runtime
 # checks (PR state, gh auth, CLI presence) belong to the skill body.
+#
+# This file lives under shell-common/functions/, so it is auto-sourced into
+# the user's interactive shell. Every variable the parser assigns is `local`
+# (house style here — see gh_pr_review.sh) so a call cannot clobber the
+# user's `$pr` / `$remote`. Callers read the stdout `key=value` contract,
+# never the shell variables.
 
 devx_pr_review_all_parse() {
-    pr=""
-    remote="origin"
-    reply_mode="inline"
-    reply_delay="8"
-    _no_reply=0
-    _remote_set=0
+    local pr=""
+    local remote="origin"
+    local reply_mode="inline"
+    local reply_delay="8"
+    local _no_reply=0
+    local _remote_set=0
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
