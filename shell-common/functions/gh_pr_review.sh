@@ -11,7 +11,7 @@
 # SSOT: this file owns the Step 1 arg-parse logic, the AI CLI dispatch,
 # the prompt builder, and the PR comment body builder. The matching
 # claude/skills/gh-pr-review/SKILL.md delegates to gh_pr_review on
-# Steps 1, 5, and 6. The bats fixture
+# Steps 1, 4 (PROMPT_FILE path allocation only), 5, and 6. The bats fixture
 # tests/bats/skills/_fixtures/gh_pr_review_arg_parse.sh sources this
 # file so the arg-parse contract has exactly one definition.
 
@@ -212,6 +212,22 @@ _gh_pr_review_stderr_is_noise() {
     "") return 0 ;;                           # blank line
     esac
     return 1
+}
+
+# _gh_pr_review_mktemp_prompt — lane-discriminated unique prompt-file path.
+# SSOT for PROMPT_FILE naming (issue #1276). Mirrors the `$ai`-discriminated
+# mktemp template used for the stderr file in _gh_pr_review_run_ai: the
+# `XXXXXX` suffix avoids the predictable-PID symlink-attack class, and the
+# `$ai` + PR discriminators keep parallel lanes apart. devx:pr-review-all
+# dispatches agy and codex as separate subagents in the same turn — a shared
+# or hardcoded prompt path lets one lane clobber the other's prompt, so both
+# CLIs review byte-identical input and the run silently false-passes.
+# Args: $1 = ai (codex|agy|claude), $2 = PR number (for debuggability).
+# Prints the created path on stdout; non-zero when /tmp is unwritable.
+_gh_pr_review_mktemp_prompt() {
+    local ai="$1"
+    local pr="${2:-0}"
+    mktemp "/tmp/gh-pr-review-prompt.$ai.$pr.XXXXXX" 2>/dev/null
 }
 
 # _gh_pr_review_run_ai — pipes PROMPT_FILE into the chosen AI CLI per
@@ -854,7 +870,8 @@ EOF
 
     # ---- Step 3 + 4: build prompt + diff into a temp file ----
     local PROMPT_FILE BODY_FILE AI_OUT
-    PROMPT_FILE=$(mktemp 2>/dev/null) || PROMPT_FILE="/tmp/gh-pr-review-prompt.$$"
+    PROMPT_FILE=$(_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER") ||
+        PROMPT_FILE="/tmp/gh-pr-review-prompt.$ai.$PR_NUMBER.$$"
     AI_OUT=$(mktemp 2>/dev/null) || AI_OUT="/tmp/gh-pr-review-out.$$"
     BODY_FILE=$(mktemp 2>/dev/null) || BODY_FILE="/tmp/gh-pr-review-body.$$"
 
