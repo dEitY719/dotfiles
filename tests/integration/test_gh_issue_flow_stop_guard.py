@@ -1989,3 +1989,37 @@ def test_already_loaded_injection_alone_is_not_a_fresh_prompt(tmp_path: Path) ->
         f"fresh user prompt and expired the boundary. stdout={result.stdout!r}"
     )
     assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_marker_quoted_at_true_line_start_is_still_not_a_fresh_prompt(tmp_path: Path) -> None:
+    """Known residual limitation, not a regression (PR #1285 review, agy+codex).
+
+    A human who quotes/pastes a marker verbatim as the FIRST thing on a
+    line (e.g. a code block or transcript excerpt, as opposed to a
+    mid-sentence mention) is indistinguishable from a genuine harness
+    injection under `(?m)^` anchoring, and is still excluded from the
+    fresh-prompt count. This is not new: the old unanchored substring
+    check already excluded this exact case (any occurrence matched), so
+    #1281 narrows the false-positive class without eliminating it. Fixing
+    it fully needs structural signal beyond line position (see #1275 P-3
+    shared-lib consolidation) — out of scope here. Pinned so a future
+    change doesn't silently alter this boundary either direction.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1281"),
+            _assistant_skill("gh-issue-implement"),
+            _user_text("Stop hook feedback: I'm quoting this exactly to ask you about it."),
+        ],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        "A line-initial quoted marker should still be excluded from the fresh-prompt "
+        f"count, matching pre-#1281 behavior. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
