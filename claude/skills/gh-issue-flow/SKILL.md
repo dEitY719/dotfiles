@@ -88,9 +88,9 @@ sequence. After each call, immediately proceed to the next.
 
 ## Step 3: Report
 
-Output format (success template, soft-fail variant, failure template, and
-the per-step resume-hint logic) is defined in `references/report-template.md`.
-Always end with the `[OK]`/`[FAIL]`/`[SKIP]` structured report.
+Output format (success/soft-fail/failure templates + resume-hint logic) is in
+`references/report-template.md`. Always end with the `[OK]`/`[FAIL]`/`[SKIP]`
+report as plain assistant text — never via `Bash` heredoc or `Write` (#1270).
 
 ## Constraints
 
