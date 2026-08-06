@@ -38,7 +38,6 @@
 ### mounts
 
 - Claude environment directories automatically configured
-- (렌더 실패)
 
 ### features
 

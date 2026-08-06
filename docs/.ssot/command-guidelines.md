@@ -67,6 +67,12 @@ row 함수는 화면 출력뿐 아니라 **커맨드 레퍼런스 문서의 데�
 - 소스 주석에만 있는 엣지케이스(예: fzf 피커가 Esc 에 조용히 exit 0)는 자동 추출 대상이 아니다.
   `docs/guide/commands/.notes/<커맨드>.md` 에 수기로 적으면 재생성 시 문서에 삽입된다.
 - 재생성: `./shell-common/tools/custom/gen_command_docs.sh --force` (내용이 바뀐 파일만 갱신).
+- **row 함수는 호스트 환경값을 출력하지 않는다.** `$SSL_CERT_FILE` 처럼 머신마다 다른 값을
+  찍는 row 는 생성 문서가 재현 불가능해지고, 사내 인증서 경로 같은 값이 공개 저장소로
+  새어 나간다. 그런 topic 은 `gen_command_docs.sh` 의 `GCD_DENY_TOPICS` 에 등록해
+  문서 생성에서 제외한다 (현재 `ssl`, `crt`).
+- 로케일 의존 출력(`sort` 정렬 순서, 멀티바이트 문자에 대한 `cut -c`)은 렌더 자식이
+  `LC_ALL=C` 로 고정하므로 별도 처리 불필요.
 
 ## 네이밍 규칙 (help 함수)
 

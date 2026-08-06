@@ -57,7 +57,7 @@
 - 5. Commit to git:
 -    cd ~/dotfiles && git add claude/docs/ && git commit -m 'docs: Add Korean summary'
 
-### ai_tools
+### ai-tools
 
 - claude - Anthropic Claude (default)
 - agy - Antigravity CLI

@@ -35,7 +35,7 @@
 - **dcl** — logs <svc> — Smart logs (service/container)
 - **dce** — exec <svc> <cmd> — Execute command
 
-### compose_extra
+### compose-extra
 
 - **dcps** — docker compose ps — Status
 - **dcb** — docker compose build — Build services
