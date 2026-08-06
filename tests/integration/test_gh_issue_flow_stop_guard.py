@@ -1227,13 +1227,13 @@ _BASH_REPORT_HEREDOC_STDOUT = (
     [
         pytest.param(_BASH_REPORT_HEREDOC, _BASH_REPORT_HEREDOC_STDOUT, id="heredoc"),
         pytest.param(
-            "printf 'gh:issue-flow complete (#42)\\n'",
-            "gh:issue-flow complete (#42)\n",
+            "printf 'gh:issue-flow complete (#42)\\n  PR URL: https://github.com/example/repo/pull/7\\n'",
+            "gh:issue-flow complete (#42)\n  PR URL: https://github.com/example/repo/pull/7\n",
             id="printf",
         ),
         pytest.param(
-            "echo 'gh:issue-flow stopped at step 2/6 (gh:commit)'",
-            "gh:issue-flow stopped at step 2/6 (gh:commit)\n",
+            "echo 'gh:issue-flow stopped at step 2/6 (gh:commit)\\n\\nResume after fix:\\n  /gh-pr-resolve-conflict 7'",
+            "gh:issue-flow stopped at step 2/6 (gh:commit)\n\nResume after fix:\n  /gh-pr-resolve-conflict 7\n",
             id="stopped-at-step",
         ),
     ],
@@ -1404,6 +1404,61 @@ def test_bash_grep_of_template_text_does_not_terminate(tmp_path: Path) -> None:
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
     assert "1/6" in decision["reason"]
+
+
+# ---------------------------------------------------------------------------
+# Issue #1274 — the residual false positive PR #1272 left behind: a `grep` of
+# a REAL, already-completed report line satisfies both halves of the pair
+# (literal-digit marker in the command, the same line echoed back as stdout).
+# Fixed by demanding the full report SHAPE on the result side — the marker
+# line plus a `PR URL:` / `Resume after fix:` field line, which one grepped
+# line cannot reproduce.
+# ---------------------------------------------------------------------------
+
+
+def test_bash_grep_of_real_report_line_does_not_terminate(tmp_path: Path) -> None:
+    """Issue #1274: `grep "gh:issue-flow complete (#1270)" some.log` echoes
+    exactly the line it searched for, so before #1274 both halves of the
+    #1272 pair matched and a live flow terminated on a log search. The result
+    carries no `PR URL:` / `Resume after fix:` field, so it is not a report
+    and the flow must keep blocking."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_full_chain_prefix(),
+            _assistant_bash('grep "gh:issue-flow complete (#1270)" some.log', "toolu_grep"),
+            _user_tool_result("gh:issue-flow complete (#1270)\n", "toolu_grep"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"Hook treated a grep echo of one real report line as a Step 3 report. stdout={result.stdout!r}"
+    )
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+
+
+def test_report_template_still_carries_the_fields_the_hook_matches() -> None:
+    """Issue #1274 drift guard (not a hook-behavior test).
+
+    The Bash channel now requires a report *field* line in the paired
+    `tool_result`, and those field names live in the report template the
+    model is told to emit. If the template is ever edited to rename or drop
+    `PR URL:` / `Resume after fix:`, the hook's matching would silently go
+    stale — real reports would stop being recognized and the flow would
+    block forever (the #1270 bug, reintroduced). Fail loudly here instead."""
+    template = (REPO_ROOT / "claude" / "skills" / "gh-issue-flow" / "references" / "report-template.md").read_text(
+        encoding="utf-8"
+    )
+    assert "PR URL:" in template, (
+        "The success report template no longer contains 'PR URL:' — update "
+        "_TERMINAL_REPORT_FIELD_RE in claude/hooks/gh_issue_flow_stop_guard.py (#1274)."
+    )
+    assert "Resume after fix:" in template, (
+        "The failure report template no longer contains 'Resume after fix:' — update "
+        "_TERMINAL_REPORT_FIELD_RE in claude/hooks/gh_issue_flow_stop_guard.py (#1274)."
+    )
 
 
 def test_template_text_in_tool_result_of_bash_cat_does_not_terminate(
