@@ -186,6 +186,41 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# Prompt-file path allocator — parallel-lane collision guard (issue #1276)
+# ---------------------------------------------------------------------------
+
+@test "mktemp_prompt: different ai, same PR → two distinct lane-tagged paths" {
+    _source_module
+    local agy_path codex_path
+    agy_path=$(_gh_pr_review_mktemp_prompt agy 99)
+    codex_path=$(_gh_pr_review_mktemp_prompt codex 99)
+    [ -n "$agy_path" ]
+    [ -n "$codex_path" ]
+    [ "$agy_path" != "$codex_path" ]
+    case "$agy_path" in *agy*) ;; *) false ;; esac
+    case "$codex_path" in *codex*) ;; *) false ;; esac
+    rm -f "$agy_path" "$codex_path"
+}
+
+@test "mktemp_prompt: same ai + PR twice → still distinct (retries never collide)" {
+    _source_module
+    local first second
+    first=$(_gh_pr_review_mktemp_prompt codex 99)
+    second=$(_gh_pr_review_mktemp_prompt codex 99)
+    [ "$first" != "$second" ]
+    rm -f "$first" "$second"
+}
+
+@test "mktemp_prompt: returned path exists as a file" {
+    _source_module
+    local p
+    p=$(_gh_pr_review_mktemp_prompt claude 1276)
+    [ -f "$p" ]
+    case "$p" in /tmp/gh-pr-review-prompt.claude.1276.*) ;; *) false ;; esac
+    rm -f "$p"
+}
+
+# ---------------------------------------------------------------------------
 # Token estimator
 # ---------------------------------------------------------------------------
 

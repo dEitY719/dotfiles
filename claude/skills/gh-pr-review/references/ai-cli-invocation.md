@@ -33,6 +33,15 @@ All three CLIs receive the same byte stream on stdin:
 --- END PR DIFF ---
 ```
 
+`PROMPT_FILE` is created via
+`_gh_pr_review_mktemp_prompt <ai> <PR#>` (SSOT in
+`shell-common/functions/gh_pr_review.sh`), which expands to
+`mktemp "/tmp/gh-pr-review-prompt.<ai>.<PR#>.XXXXXX"` — the same
+`<ai>`-discriminated template the stderr file uses. The `<ai>` + PR
+discriminators are mandatory, not cosmetic: `devx:pr-review-all` runs the
+agy and codex lanes concurrently, and a shared path lets one lane clobber
+the other's prompt so both CLIs review identical bytes (#1276).
+
 Large diffs follow the same delegation pattern as
 `gh-pr-approve/references/large-diff-delegation.md`. When `additions +
 deletions ≥ 800`, dispatch an Explore subagent to pre-classify

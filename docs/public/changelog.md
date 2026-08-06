@@ -3,6 +3,7 @@
 사용자 관점의 의미 있는 변경 기록. 포맷: `## YYYY-MM-DD` 헤더 아래 `- 변경: **요약**`.
 
 ## 2026-08-06
+- 변경: **`gh:pr-review` 의 `PROMPT_FILE` 경로를 레인별로 분리 — `_gh_pr_review_mktemp_prompt <ai> <PR#>`(`mktemp "/tmp/gh-pr-review-prompt.<ai>.<PR#>.XXXXXX"`) 가 SSOT. `devx:pr-review-all` 이 agy·codex 레인을 같은 턴에 병렬로 띄울 때 두 레인이 고정된 프롬프트 파일 이름을 공유해 서로 덮어쓰면 두 CLI 가 동일한 바이트를 리뷰하고도 `agy:OK codex:OK` 로 조용히 통과하던 위양성을 차단한다. SKILL.md Step 4 는 프롬프트 작성과 Step 5 디스패치를 같은 Bash 호출 안에서 수행하도록 명시(Bash 툴은 호출마다 새 서브프로세스라 `$PROMPT_FILE` 이 다음 호출로 이어지지 않는다) (#1276)**
 - 변경: **`PostToolUse:Bash` 훅 지연 제거 — `gh pr create` 후 project board retry-poll(최대 6회 x 2s sleep + GraphQL 왕복)과 연결 이슈 동기화를 백그라운드로 분리. foreground 는 sync 1회만 수행하므로 훅이 재시도 예산을 기다리지 않고 반환한다 (median 7.8s / max 48.7s → sync 1회 왕복) (#1258)**
 - 변경: **훅 구간별 타이밍 계측 추가 — 라우팅된 호출만 `~/.local/state/claude/post-bash-dispatch-timing.log` 에 기록하고, `claude/tools/hook-perf-report.sh` 로 median/p90/p99/max 와 목표치(median < 2000ms · p99 < 5000ms) PASS/FAIL 을 집계한다 (#1258)**
 - 변경: **커맨드별 마크다운 레퍼런스 자동생성 — `shell-common/tools/custom/gen_command_docs.sh` 가 `_<topic>_help_rows_<section>()` row 함수를 실행해 `docs/guide/commands/<커맨드>.md` 57개를 생성. `rg "<키워드>" docs/guide/commands/` 로 커맨드 동작 전체 텍스트 검색 (#1262)**

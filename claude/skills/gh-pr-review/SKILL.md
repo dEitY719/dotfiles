@@ -70,6 +70,16 @@ Decide path by diff size (`gh pr view ... --json additions,deletions`):
 inline `gh pr diff`. Append the diff per `references/ai-cli-invocation.md`
 § "stdin payload shape"; write `(prompt + diff)` to `PROMPT_FILE` (stdin).
 
+Never hardcode or reuse a `PROMPT_FILE` name. Derive it from
+`_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER"`
+(`shell-common/functions/gh_pr_review.sh` — source it first if this turn
+has not), and do the write **and** the Step 5 dispatch in the *same* Bash
+tool call. The Bash tool starts a fresh subprocess per call, so
+`$PROMPT_FILE` does not survive into the next one; splitting the two steps
+forces re-typing a fixed path, and parallel `devx:pr-review-all` lanes then
+overwrite each other's prompt — agy and codex review identical bytes and
+the run false-passes (#1276).
+
 ## Step 5: Dispatch to External CLI
 
 Delegate to `_gh_pr_review_run_ai` (`shell-common/functions/gh_pr_review.sh`).
