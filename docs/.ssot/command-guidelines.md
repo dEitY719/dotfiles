@@ -21,7 +21,8 @@
 - 섹션 목록: `<topic>-help [--list|list]`
 - 전체 상세: `<topic>-help [--all|all]`
 - 통합 라우팅: `my-help [<topic>] [section|--list|--all]` (인자 생략 시 카테고리 목록 표시)
-- 퍼지 검색: `my-help search` (alias `find`) — fzf 기반 topic finder, fzf 미설치·비대화형이면 카테고리 목록으로 폴백
+- 퍼지 검색: `my-help search` (alias `find`) — fzf 기반 finder. 인덱스는 `*_help.sh` 토픽 + 저장소 전체 alias(`bash/`, `zsh/`, `shell-common/` 의 `*.sh`/`*.bash`/`*.zsh`) 를 함께 포함한다. 토픽을 그대로 다시 노출하는 dash-form alias(`agy-help` → `agy_help`)는 중복이므로 인덱스에서 제외한다. alias 항목을 고르면 정의·정의 위치·주석을 출력한다. fzf 미설치·비대화형이면 카테고리 목록으로 폴백
+  - alias 인덱스는 `${XDG_CACHE_HOME:-~/.cache}/dotfiles/my-help-alias-index.tsv` 에 24시간 TTL 로 캐시된다 (`MY_HELP_ALIAS_CACHE_PATH` / `MY_HELP_ALIAS_CACHE_MAX_AGE` 로 재정의 가능). 캐시가 비었거나 손상되면 자동 재생성하고, 스캔 결과가 없으면 토픽 목록만으로 폴백한다
 
 ### 2) 출력 정책
 
