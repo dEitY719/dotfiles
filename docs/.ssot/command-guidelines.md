@@ -55,6 +55,19 @@
 - row 데이터 정의와 화면 조립 로직을 분리한다.
 - 섹션 추가 시 row 함수만 추가하고 renderer에 조립한다.
 
+### 3) 문서 자동생성 (issue #1262)
+
+row 함수는 화면 출력뿐 아니라 **커맨드 레퍼런스 문서의 데이터 소스** 이기도 하다.
+`shell-common/tools/custom/gen_command_docs.sh` 가 `shell-common/functions/*.sh` 전체에서
+`_<topic>_help_rows_<section>()` 를 찾아 실행하고, 결과를
+`docs/guide/commands/<커맨드>.md` 로 렌더링한다 (`rg` 전체 텍스트 검색 대상).
+
+- row 함수 네이밍(`_<topic>_help_rows_<section>`)을 벗어나면 그 커맨드는 문서 생성에서 **조용히 누락된다**.
+- 생성 문서는 직접 편집하지 않는다. 내용을 바꾸려면 row 함수를 고치고 재생성한다.
+- 소스 주석에만 있는 엣지케이스(예: fzf 피커가 Esc 에 조용히 exit 0)는 자동 추출 대상이 아니다.
+  `docs/guide/commands/.notes/<커맨드>.md` 에 수기로 적으면 재생성 시 문서에 삽입된다.
+- 재생성: `./shell-common/tools/custom/gen_command_docs.sh --force` (내용이 바뀐 파일만 갱신).
+
 ## 네이밍 규칙 (help 함수)
 
 - 함수명: snake_case (`git_help`, `gwt_help`)

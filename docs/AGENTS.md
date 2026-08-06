@@ -19,7 +19,7 @@
 - **DO**: 일관된 용어 사용
 - **DO**: 구체적 예시(코드 스니펫·명령어) 포함
 - **DO**: 피처별 문서는 `feature/<feature-name>/` 로 묶기
-- **DO**: 사람-팀원 가이드는 `guide/` 하위에 두기 (`guide/learnings/`, `guide/playbooks/`, `guide/technic/`, `guide/superpowers-ko/`)
+- **DO**: 사람-팀원 가이드는 `guide/` 하위에 두기 (`guide/learnings/`, `guide/playbooks/`, `guide/technic/`, `guide/superpowers-ko/`). 단 `guide/commands/` 는 자동 생성물 — 직접 편집 금지
 - **DON'T**: TODO 마커를 추적 없이 남기기 (`archive/todo-<topic>.md` 처럼 별도 파일로 분리)
 - **DON'T**: 이유 없이 archive 하지 않기 (이동 사유를 `archive/README.md` 또는 커밋 메시지에 남길 것)
 - **DON'T**: `docs/` 루트에 산문 파일 새로 만들지 않기 — 항상 6 개 디렉토리 중 하나로 분류 (AGENTS.md 제외)
@@ -33,7 +33,7 @@
 | **`.ssot/`** | 프로젝트 정책 SSOT — 명령 UX, env vars, 보드 운영, 커밋/discussion 규칙 | [`.ssot/README.md`](./.ssot/README.md) |
 | **`requirement/`** | 제품 요구사항 entry SSOT — D (확정 결정) / F (기능) / NF (비기능) / O (미해소) 4-섹션. D-섹션 = **경량 inline 결정** | [`requirement/product-requirements.md`](./requirement/product-requirements.md) |
 | **`adr/`** | 아키텍처 결정 로그 (#1027) — 프로젝트 전체에 파급되는 **굵직한 결정**의 불변 기록. `NNNN-<kebab>.md` | [`adr/README.md`](./adr/README.md) |
-| **`guide/`** | 사람-팀원 가이드 — setup, team-git, learnings, playbooks, technic, superpowers-ko 한글 가이드 | [`guide/README.md`](./guide/README.md) |
+| **`guide/`** | 사람-팀원 가이드 — setup, team-git, learnings, playbooks, technic, superpowers-ko 한글 가이드. `commands/` 는 row 함수에서 자동 생성 (#1262) | [`guide/README.md`](./guide/README.md) |
 | **`feature/`** | 피처별 설계·분석 번들 — 한 디렉토리 = 한 피처. superpowers-plans/specs 포함 | (디렉토리 직접 탐색) |
 | **`archive/`** | 보관소 — 사후 분석, 평가 자료(company), 다이어그램, 도래일 지난 todo. 외부 노출 차단 영역 포함 | [`archive/README.md`](./archive/README.md) |
 
