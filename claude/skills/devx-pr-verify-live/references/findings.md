@@ -123,15 +123,37 @@ SKILL.md 의 **발견 처리 단계**를 뒷받침한다 — 후보를 스스로
 safe 래퍼로 갈아탄 뒤에야 라벨이 붙었다.
 3번을 부르지 않으면 **이슈만 생기고 카드가 없다.**
 
+2·3번 헬퍼는 **레포 표준 폴백 블록(#644 NF-1 + #724)으로 감싸 부른다** — 맨 호출로 쓰면
+헬퍼가 없는 환경(agent-toolbox 등 크로스 프로젝트 복사본)에서 `command not found` 로
+스킬이 통째로 죽는다. `tests/bats/skills/helper_fallback_nf1.bats` 가 이 계약을 지킨다.
+
+```bash
+_HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
+if [ -r "$_HELPER" ]; then
+    . "$_HELPER"
+    if ! command -v _gh_project_status_sync >/dev/null 2>&1; then
+        printf '[pr-verify-live] %s sourced but _gh_project_status_sync undefined (#724).\n' \
+            "$_HELPER" >&2
+    else
+        GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$N" "Backlog" || true
+    fi
+fi
+```
+
+`GH_REPO="$TARGET_REPO"` 가 load-bearing 이다 — 보드 동기화 헬퍼에는 `-R` 파라미터가 없어서
+빼먹으면 `gh` 기본 레포(=dotfiles) 보드로 카드가 간다. 이 스킬은 `origin` 이 아닐 수도 있는
+대상 레포를 일부러 해소해 놓고 쓰므로 특히 위험하다. `_gh_pr_edit_safe_label` 도 같은 모양으로
+(`gh_pr_edit_safe.sh` / `command -v _gh_pr_edit_safe_label`) 감싼다.
+
 ---
 
 ## 7. 대상 레포 오등록 가드
 
 스킬은 dotfiles 에 살고 실행은 **프로젝트 워크트리**에서 된다 — 정확히 사고가 나는 구도다.
 
-```sh
-TARGET_REPO=$(_gh_pr_review_resolve_target_repo "$REMOTE")   # shell-common/functions/gh_pr_review.sh
-```
+`TARGET_REPO` 는 Step 2 에서 이미 확정돼 있다 — `discovery.md` §3 의 소스 블록을 쓴다
+(`DOTFILES_FORCE_INIT=1` 없이 `gh_pr_review.sh` 를 source 하면 인터랙티브 가드에 막혀
+헬퍼가 정의되지 않는다). 여기서 다시 해소하지 않는다.
 
 **생성 직전 리포트에 대상 레포를 출력**한 뒤 만든다.
 이슈는 **대상 프로젝트 레포**에 등록한다 — **dotfiles 가 아니다.**

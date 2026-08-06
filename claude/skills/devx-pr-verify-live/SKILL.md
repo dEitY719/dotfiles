@@ -44,8 +44,8 @@ the stderr line and stop. Capture `pr` `remote` `url` `api_url` `start_cmd` `mat
 
 ## Step 2: Resolve target + discover the environment (`references/discovery.md`)
 
-- `TARGET_REPO` ← `_gh_pr_review_resolve_target_repo "<remote>"`; `pr` 이 비었으면 현재 브랜치
-  → 실패 시 `gh api /repos/{owner}/{repo}/commits/<sha>/pulls` 로 역추적.
+- `discovery.md` §3 의 소스 블록(`DOTFILES_FORCE_INIT=1` 필수)으로 `_gh_pr_review_resolve_target_repo`
+  · `_gh_pr_review_resolve_pr_number` 를 쓴다; 브랜치가 `[gone]` 이면 커밋 → PR 역추적.
 - base URL / API origin 발견 (`--url`·`--api-url` 이 있으면 건너뛴다). 후보가 여럿이면
   `AskUserQuestion` — **추측 금지**.
 - **호스트 가드**: 대상이 loopback 이 아니면 `--allow-remote-host` 없이 정지 (Step 6 은 앱 데이터에
@@ -54,7 +54,7 @@ the stderr line and stop. Capture `pr` `remote` `url` `api_url` `start_cmd` `mat
 ## Step 3: Pre-verification assertion 1 — serving checkout
 
 **변경된 코드를 서빙하는 모든 프로세스**에 대해 cwd → repo root → ancestry 를 돌린다. 비교
-대상은 `gh pr view --json mergeCommit -q .mergeCommit.oid` — `headRefOid` 는 rebase/squash
+대상은 PR 메타 1회 fetch(`$PR_JSON`, Step 4 까지 재사용)의 `.mergeCommit.oid` — `headRefOid` 는 rebase/squash
 merge 로 재작성되므로 쓰지 않는다(미머지 PR 일 때만 폴백). 불일치면 몇 커밋 뒤처졌는지와 함께
 **정지**한다. dirty 워킹 트리는 경고, 컨테이너 백엔드는 `unverified` — 둘 다 정지가 아니다.
 

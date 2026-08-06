@@ -1,13 +1,12 @@
 # 무엇을 검증할지 결정 (verification target)
 
-SKILL.md Step 3 — 브라우저를 켜기 전에 검증 항목과 그 항목에 **도달하기 위한 선행 조건**(데이터
+SKILL.md Step 4 — 브라우저를 켜기 전에 검증 항목과 그 항목에 **도달하기 위한 선행 조건**(데이터
 상태 · feature flag)을 PR 에서 뽑는 단계를 뒷받침한다.
 
 ## 1. 입력 우선순위
 
-```sh
-gh pr view "$PR" -R "$TARGET_REPO" --json title,body,files,mergeCommit,closingIssuesReferences
-```
+입력은 Step 2 에서 이미 받아 둔 `$PR_JSON` 이다 (`discovery.md` §2-1). **다시 받지 않는다** —
+`title,body,files,mergeCommit,headRefOid,closingIssuesReferences` 가 그 한 번에 다 들어 있다.
 
 | 순위 | 원천 | 뽑는 것 |
 |---|---|---|

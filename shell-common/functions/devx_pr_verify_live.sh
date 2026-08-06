@@ -6,6 +6,14 @@
 # on success, errors to stderr. Exit 0 ok/help, exit 2 arg error. Runtime
 # checks (PR state, gh auth, dev-server reachability) belong to the skill body.
 
+_devx_pr_verify_live_pos_int() {
+    case "$1" in
+    "" | *[!0-9]*) return 1 ;;
+    *[!0]*) return 0 ;;
+    *) return 1 ;;
+    esac
+}
+
 devx_pr_verify_live_parse() {
     pr=""
     remote="origin"
@@ -19,18 +27,21 @@ devx_pr_verify_live_parse() {
     allow_remote_host=0
     _remote_set=0
     _start_set=0
-    _dry_run=0
     _no_issue=0
     _rest=""
     _item=""
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
-        --url)
+        --url | --api-url | --start | --matrix | --viewports | --locales)
             [ "$#" -lt 2 ] && {
-                echo "missing value for --url" >&2
+                echo "missing value for $1" >&2
                 return 2
             }
+            ;;
+        esac
+        case "$1" in
+        --url)
             url="$2"
             shift 2
             ;;
@@ -39,10 +50,6 @@ devx_pr_verify_live_parse() {
             shift
             ;;
         --api-url)
-            [ "$#" -lt 2 ] && {
-                echo "missing value for --api-url" >&2
-                return 2
-            }
             api_url="$2"
             shift 2
             ;;
@@ -51,10 +58,6 @@ devx_pr_verify_live_parse() {
             shift
             ;;
         --start)
-            [ "$#" -lt 2 ] && {
-                echo "missing value for --start" >&2
-                return 2
-            }
             start_cmd="$2"
             _start_set=1
             shift 2
@@ -65,10 +68,6 @@ devx_pr_verify_live_parse() {
             shift
             ;;
         --matrix)
-            [ "$#" -lt 2 ] && {
-                echo "missing value for --matrix" >&2
-                return 2
-            }
             matrix="$2"
             shift 2
             ;;
@@ -77,10 +76,6 @@ devx_pr_verify_live_parse() {
             shift
             ;;
         --viewports)
-            [ "$#" -lt 2 ] && {
-                echo "missing value for --viewports" >&2
-                return 2
-            }
             viewports="$2"
             shift 2
             ;;
@@ -89,10 +84,6 @@ devx_pr_verify_live_parse() {
             shift
             ;;
         --locales)
-            [ "$#" -lt 2 ] && {
-                echo "missing value for --locales" >&2
-                return 2
-            }
             locales="$2"
             shift 2
             ;;
@@ -101,7 +92,7 @@ devx_pr_verify_live_parse() {
             shift
             ;;
         --dry-run)
-            _dry_run=1
+            issue_mode="dry-run"
             shift
             ;;
         --no-issue)
@@ -136,38 +127,27 @@ devx_pr_verify_live_parse() {
     done
 
     if [ -n "$pr" ]; then
-        case "$pr" in
-        *[!0-9]*)
+        _devx_pr_verify_live_pos_int "$pr" || {
             echo "PR# must be a positive integer: '$pr'" >&2
             return 2
-            ;;
-        *[!0]*) ;;
-        *)
-            echo "PR# must be a positive integer: '$pr'" >&2
-            return 2
-            ;;
-        esac
+        }
     fi
 
-    if [ -n "$url" ]; then
-        case "$url" in
-        http://* | https://*) ;;
-        *)
-            echo "--url must be an http(s) URL: '$url'" >&2
-            return 2
-            ;;
-        esac
-    fi
+    case "$url" in
+    "" | http://* | https://*) ;;
+    *)
+        echo "--url must be an http(s) URL: '$url'" >&2
+        return 2
+        ;;
+    esac
 
-    if [ -n "$api_url" ]; then
-        case "$api_url" in
-        http://* | https://*) ;;
-        *)
-            echo "--api-url must be an http(s) URL: '$api_url'" >&2
-            return 2
-            ;;
-        esac
-    fi
+    case "$api_url" in
+    "" | http://* | https://*) ;;
+    *)
+        echo "--api-url must be an http(s) URL: '$api_url'" >&2
+        return 2
+        ;;
+    esac
 
     if [ "$_start_set" -eq 1 ] && [ -z "$start_cmd" ]; then
         echo "--start value must not be empty" >&2
@@ -187,17 +167,10 @@ devx_pr_verify_live_parse() {
         while [ -n "$_rest" ]; do
             _item="${_rest%%,*}"
             _rest="${_rest#*,}"
-            case "$_item" in
-            "" | *[!0-9]*)
+            if ! _devx_pr_verify_live_pos_int "$_item"; then
                 echo "--viewports must be a CSV of positive integers: '$viewports'" >&2
                 return 2
-                ;;
-            *[!0]*) ;;
-            *)
-                echo "--viewports must be a CSV of positive integers: '$viewports'" >&2
-                return 2
-                ;;
-            esac
+            fi
         done
     fi
 
@@ -215,8 +188,6 @@ devx_pr_verify_live_parse() {
 
     if [ "$_no_issue" -eq 1 ]; then
         issue_mode="none"
-    elif [ "$_dry_run" -eq 1 ]; then
-        issue_mode="dry-run"
     fi
 
     printf '%s\n' "pr=$pr"
