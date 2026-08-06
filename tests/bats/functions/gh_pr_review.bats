@@ -22,6 +22,9 @@ teardown() {
     # PR #1282 / issue #1276) — teardown_isolated_home only cleans
     # $TEST_TEMP_HOME, not real /tmp.
     rm -f /tmp/gh-pr-review-prompt.*
+    # Same reason for the #1283 fallback-path tests, scoped to this
+    # process's own PID so a concurrent run is never touched.
+    rm -f "/tmp/gh-pr-review-out.$$" "/tmp/gh-pr-review-body.$$"
     teardown_isolated_home
 }
 
@@ -233,6 +236,92 @@ EOF
     [ -f "$p" ]
     case "$p" in /tmp/gh-pr-review-prompt.claude.1276.*) ;; *) false ;; esac
     rm -f "$p"
+}
+
+# ---------------------------------------------------------------------------
+# Temp-path allocator — predictable-PID symlink hardening (issue #1283)
+# ---------------------------------------------------------------------------
+
+# Stage a `mktemp` that always fails, so the allocator is forced onto its
+# $$-suffixed fallback branch — the branch a local attacker can predict.
+# Only setup/teardown of this suite use the real mktemp, and both run
+# outside the test body, so shadowing it here is safe.
+_stub_mktemp_failing() {
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/mktemp" <<'EOF'
+#!/bin/sh
+echo "simulated mktemp failure" >&2
+exit 1
+EOF
+    chmod +x "$stub_dir/mktemp"
+    export PATH="$stub_dir:$PATH"
+    hash -r 2>/dev/null || true
+}
+
+@test "mktemp_safe: mktemp fails + symlink pre-planted at fallback path → refuses, victim untouched" {
+    _source_module
+    _stub_mktemp_failing
+    local victim="$TEST_TEMP_HOME/victim.txt"
+    printf 'original\n' >"$victim"
+    # `$$` is the bats test process PID and is inherited unchanged by the
+    # subshell `run` uses, so this is exactly the path the allocator tries.
+    local fallback="/tmp/gh-pr-review-prompt.codex.1283.$$"
+    rm -f "$fallback"
+    ln -s "$victim" "$fallback"
+
+    run _gh_pr_review_mktemp_prompt codex 1283
+    assert_failure
+    refute_output --partial "/tmp/gh-pr-review-prompt"
+
+    # The redirect must not have followed the link.
+    [ -L "$fallback" ]
+    run cat "$victim"
+    assert_output "original"
+    rm -f "$fallback"
+}
+
+@test "mktemp_safe: mktemp fails + regular file pre-planted at fallback path → refuses, file untouched" {
+    _source_module
+    _stub_mktemp_failing
+    local fallback="/tmp/gh-pr-review-prompt.codex.1283.$$"
+    printf 'squatted\n' >"$fallback"
+
+    run _gh_pr_review_mktemp_prompt codex 1283
+    assert_failure
+    refute_output --partial "/tmp/gh-pr-review-prompt"
+
+    run cat "$fallback"
+    assert_output "squatted"
+    rm -f "$fallback"
+}
+
+@test "mktemp_safe: mktemp fails with a clear fallback path → exclusive create succeeds" {
+    _source_module
+    _stub_mktemp_failing
+    local fallback="/tmp/gh-pr-review-prompt.codex.1283.$$"
+    rm -f "$fallback"
+
+    run _gh_pr_review_mktemp_prompt codex 1283
+    assert_success
+    assert_output "$fallback"
+    [ -f "$fallback" ]
+    [ ! -L "$fallback" ]
+    rm -f "$fallback"
+}
+
+@test "mktemp_safe: out/body templates fall back to their own \$\$ paths, not a shared one" {
+    _source_module
+    _stub_mktemp_failing
+    local out body
+    rm -f "/tmp/gh-pr-review-out.$$" "/tmp/gh-pr-review-body.$$"
+    out=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX")
+    body=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-body.XXXXXX")
+    [ "$out" = "/tmp/gh-pr-review-out.$$" ]
+    [ "$body" = "/tmp/gh-pr-review-body.$$" ]
+    [ -f "$out" ]
+    [ -f "$body" ]
+    rm -f "$out" "$body"
 }
 
 # ---------------------------------------------------------------------------
