@@ -33,13 +33,13 @@
 - **scope** — ruff check --fix + ruff format + shfmt -w — Python + Shell auto-fix
 - **deprecated** — devx fmt / devx format — Routed to fix with a one-time warning
 
-### lint_helpfunc
+### lint-helpfunc
 
 - **syntax** — devx lint-helpfunc — Audit help-function registration
 - **checks** — Every public *_help in shell-common/functions/ — Must appear in HELP_DESCRIPTIONS
 - **exit** — 0 = all registered, 1 = unregistered helpers found — Pre-commit gate candidate
 
-### lint_deadcode
+### lint-deadcode
 
 - **syntax** — devx lint-deadcode — Find unused _internal functions
 - **checks** — ^_<name>() definitions in shell-common/functions/ — 1 ref = likely dead code
