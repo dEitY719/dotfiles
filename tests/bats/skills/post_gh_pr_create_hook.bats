@@ -314,15 +314,21 @@ EOF
     # POST_GH_PR_CREATE_ASYNC intentionally left at its default.
     export POST_GH_PR_CREATE_SYNC_SLEEP=3 POST_GH_PR_CREATE_SYNC_ATTEMPTS=3
     payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/99"}}'
-    start_ns=$(date +%s%N)
+    # Timed with bash's builtin SECONDS rather than `date +%s%N`: `%N` is a
+    # GNU-date extension, and on BSD/macOS `date` echoes the literal `%N` back,
+    # which makes the surrounding $(( )) arithmetic abort the test outright.
+    SECONDS=0
     run bash -c "printf '%s' '$payload' | '$HOOK'"
-    elapsed_ms=$(( ($(date +%s%N) - start_ns) / 1000000 ))
+    elapsed_s="$SECONDS"
     assert_success
     # The one foreground sync still lands before the hook returns.
     grep -q '^sync pr 99 In review$' "$CALL_LOG"
-    # ...but the 6s of retry sleeps do not.
-    [ "$elapsed_ms" -lt 1000 ] || {
-        echo "hook blocked for ${elapsed_ms}ms — retry loop is still synchronous" >&2
+    # ...but the 6s of retry sleeps do not. SECONDS truncates to whole seconds
+    # (a sub-second run straddling a tick already reads 1), so the threshold
+    # sits between the two outcomes rather than at 1: detached reads 0-1,
+    # synchronous would read 6+ (2 remaining attempts x 3s).
+    [ "$elapsed_s" -lt 3 ] || {
+        echo "hook blocked for ${elapsed_s}s — retry loop is still synchronous" >&2
         return 1
     }
 }
