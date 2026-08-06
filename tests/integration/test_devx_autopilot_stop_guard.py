@@ -870,60 +870,35 @@ def test_ismeta_user_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
     assert json.loads(result.stdout)["decision"] == "block"
 
 
-def test_stop_hook_feedback_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
-    """The hook's own `reason`, re-injected as user text, must not count.
-
-    This is the self-defeat loop: every block the guard emits comes back as a
-    "fresh user prompt", and three of them would expire the guard's own
-    boundary.
-    """
-    feedback = (
-        "Stop hook feedback: devx-autopilot incomplete: 1/7 Stage-B step markers "
-        "emitted since the flow started, and no terminal report "
-        "('[OK] devx:autopilot' / '[FAIL] devx:autopilot') has been emitted yet. "
-        "Per the CRITICAL CONTRACT in claude/skills/devx-autopilot/SKILL.md, you "
-        "MUST continue immediately. Next action: Step 0b — Skill(gh:issue-create)."
-    )
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/devx-autopilot"),
-            _step_markers_result("plan"),
-            _user_text(feedback),
-            _user_text(feedback),
-            _user_text(feedback),
-            _user_text(feedback),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    assert result.stdout.strip(), f"Stop-hook feedback was miscounted as fresh user prompts. stdout={result.stdout!r}"
-    assert json.loads(result.stdout)["decision"] == "block"
-
-
-def test_task_notification_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
-    """Background-subagent completion notices are harness, not human."""
-    notice = "<task-notification>Agent 'codex-review' (id: agent_1) has completed.</task-notification>"
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/devx-autopilot"),
-            _step_markers_result("plan"),
-            _user_text(notice),
-            _user_text(notice),
-            _user_text(notice),
-            _user_text(notice),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    assert result.stdout.strip(), f"<task-notification> was miscounted as fresh user prompts. stdout={result.stdout!r}"
-    assert json.loads(result.stdout)["decision"] == "block"
-
-
-def test_system_notification_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
-    """`[SYSTEM NOTIFICATION - NOT USER INPUT]` says so on the tin."""
-    notice = "[SYSTEM NOTIFICATION - NOT USER INPUT] Background command exited with code 0."
+@pytest.mark.parametrize(
+    ("label", "notice"),
+    [
+        (
+            "stop-hook-feedback",
+            # The hook's own `reason`, re-injected as user text, must not count —
+            # this is the self-defeat loop: every block the guard emits comes back
+            # as a "fresh user prompt", and three of them would expire the guard's
+            # own boundary.
+            "Stop hook feedback: devx-autopilot incomplete: 1/7 Stage-B step markers "
+            "emitted since the flow started, and no terminal report "
+            "('[OK] devx:autopilot' / '[FAIL] devx:autopilot') has been emitted yet. "
+            "Per the CRITICAL CONTRACT in claude/skills/devx-autopilot/SKILL.md, you "
+            "MUST continue immediately. Next action: Step 0b — Skill(gh:issue-create).",
+        ),
+        (
+            "task-notification",
+            # Background-subagent completion notices are harness, not human.
+            "<task-notification>Agent 'codex-review' (id: agent_1) has completed.</task-notification>",
+        ),
+        (
+            "system-notification",
+            # `[SYSTEM NOTIFICATION - NOT USER INPUT]` says so on the tin.
+            "[SYSTEM NOTIFICATION - NOT USER INPUT] Background command exited with code 0.",
+        ),
+    ],
+)
+def test_harness_injection_markers_are_not_fresh_prompts(tmp_path: Path, label: str, notice: str) -> None:
+    """Each `_HARNESS_INJECTION_MARKERS` entry must not count as a fresh user prompt."""
     transcript = _write_transcript(
         tmp_path,
         [
@@ -937,9 +912,7 @@ def test_system_notification_messages_are_not_fresh_prompts(tmp_path: Path) -> N
     )
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
-    assert result.stdout.strip(), (
-        f"[SYSTEM NOTIFICATION] was miscounted as fresh user prompts. stdout={result.stdout!r}"
-    )
+    assert result.stdout.strip(), f"{label} was miscounted as fresh user prompts. stdout={result.stdout!r}"
     assert json.loads(result.stdout)["decision"] == "block"
 
 
