@@ -8,6 +8,8 @@
 - 변경: **커맨드별 마크다운 레퍼런스 자동생성 — `shell-common/tools/custom/gen_command_docs.sh` 가 `_<topic>_help_rows_<section>()` row 함수를 실행해 `docs/guide/commands/<커맨드>.md` 57개를 생성. `rg "<키워드>" docs/guide/commands/` 로 커맨드 동작 전체 텍스트 검색 (#1262)**
 - 변경: **호스트 환경값(`$SSL_CERT_FILE` 등)을 출력하는 `ssl`/`crt` topic 은 문서 생성에서 제외 — 머신마다 값이 달라 재현 불가능하고 사내 인증서 경로가 공개 저장소로 새어 나간다. 해당 값은 `ssl-help`/`crt-help` 로 직접 확인 (#1262)**
 - 변경: **소스 주석에만 있던 엣지케이스를 `docs/guide/commands/.notes/<커맨드>.md` 에 수기 보강하면 재생성 시 문서에 삽입 — 첫 대상은 `csm find` 의 fzf 피커/Esc 무음 종료 동작**
+- 변경: **`my-help search`(alias `find`) 인덱스를 `*_help.sh` 토픽에서 저장소 전체 alias(385개)까지 확장 — alias 이름으로 바로 찾고, 고르면 정의·정의 위치·주석을 표시. 토픽을 그대로 다시 노출하는 dash-form alias(`agy-help` → `agy_help`)는 중복 제거 (#1261)**
+- 변경: **alias 인덱스는 `${XDG_CACHE_HOME:-~/.cache}/dotfiles/my-help-alias-index.tsv`에 24시간 TTL로 캐시 — `MY_HELP_ALIAS_CACHE_PATH` / `MY_HELP_ALIAS_CACHE_MAX_AGE`로 재정의 가능하며, 캐시가 비었거나 손상되면 자동 재생성**
 
 ## 2026-07-30
 - 변경: **statusline 시간 표시 `HH:MM:SS`로 축약 + fcitx 한글/영어 입력기 상태 표시 (#1251)**
