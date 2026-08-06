@@ -1,9 +1,9 @@
 # devx:pr-review-all — Help
 
 Fan out **every available reviewer** on one PR in parallel — `agy` ∥
-`codex` second opinions ∥ a sequential `/code-review --fix` → `/simplify`
-auto-fix chain (each sub-step commits its own changes) — then run a reply
-pass over the resulting review comments. A composition skill: it
+`codex` second opinions ∥ a `/simplify` auto-fix pass (which commits its own
+changes) — then run a reply pass over the resulting review comments. A
+composition skill: it
 orchestrates several reviewers plus a reply, unlike `gh:pr-review` (a single
 external AI, one aggregate comment). It submits **no decision** (approve /
 request-changes) — that is `gh:pr-approve`.
@@ -37,18 +37,16 @@ request-changes) — that is `gh:pr-approve`.
 
 1. Parse args via `devx_pr_review_all_parse`; record `START_TS`.
 2. Pre-flight: PR must be `OPEN` and non-draft, `gh auth` must be live, and
-   check out the PR head branch if not already on it (so `/code-review --fix`
-   and `/simplify` act on the right tree).
-3. Review + auto-fix gate — dispatch agy, codex, and an auto-fix chain as
+   check out the PR head branch if not already on it (so `/simplify` acts on
+   the right tree).
+3. Review + auto-fix gate — dispatch agy, codex, and the auto-fix pass as
    Agent subagents **in one turn**. agy/codex delegate to
    `gh:pr-review --ai <name>` (streams findings + posts a PR comment) and run
-   fully in parallel. `/code-review --fix` and `/simplify` both mutate the
-   working tree, so they run **sequentially** within their own lane, each
-   committing its own changes immediately (`fix(<scope>): code-review --fix`,
-   then `refactor(<scope>): simplify per /simplify`) — never concurrently
-   with each other. Each lane is soft-fail.
-4. Push any commits from the auto-fix chain (only if the working tree
-   changed), always with an explicit `-m` message on each commit.
+   fully in parallel. `/simplify` mutates the working tree and commits its own
+   changes (`refactor(<scope>): simplify per /simplify`). Each lane is
+   soft-fail.
+4. Push the auto-fix commit (only if the working tree changed), always with
+   an explicit `-m` message.
 5. Reply — inline `gh:pr-reply <pr> <remote>` (default), or deferred via
    `devx:schedule` (`--defer-reply M`), or skipped (`--no-reply`). The
    `<remote>` is threaded so the reply pass resolves the same target repo.
@@ -57,6 +55,9 @@ request-changes) — that is `gh:pr-approve`.
 ## What the skill will NOT do
 
 - Submit `gh pr review --approve` / `--request-changes` — that is `gh:pr-approve`.
+- Run `/code-review --fix` — it is user-invocation-only since Claude Code
+  v2.1.215, so no skill can invoke it. Run it yourself when you want it; agy,
+  codex, and the closing `gh:pr-reply` pass cover the same ground here.
 - Hard-fail because a reviewer CLI is missing or errors — each lane is soft-fail.
 - Run a bare `git commit` — an editor prompt would hang the non-interactive shell.
 - Schedule sub-minute delays — `devx:schedule` is minutes-only; for tight
