@@ -37,6 +37,20 @@ lsof -nP -iTCP -sTCP:LISTEN
 **`/health` 류 추측 경로를 프로빙하지 않는다** — 실측에서 그 앱은 `/health` 가 404 였다.
 `/` HTML 판정이 맞고, 백엔드는 `/openapi.json`·`/docs` 처럼 프레임워크가 규정한 경로만 본다.
 
+프로브는 **반드시 타임아웃을 걸고 후보 전체를 한 번에 펼친다**. 필터링된 docker-published
+포트 하나가 curl 기본 connect timeout(~2분) 을 다 쓰면 Step 3 에 들어가기도 전에 멎는다.
+후보 4개 x 경로 3개를 순차로 돌리면 12회 왕복이지만, 아래는 ~2초에 끝난다.
+
+```sh
+for p in $PORTS; do
+  for path in / /openapi.json /docs; do
+    curl -s -o /dev/null -m 2 -w "$p $path %{http_code} %{content_type}\n" \
+      "http://127.0.0.1:$p$path" &
+  done
+done
+wait
+```
+
 ### 1-2. 백엔드 origin 은 브라우저가 알려 준다
 
 포트 우선순위로 백엔드를 고르는 것은 **병렬 스택 환경에서 통하지 않는다**. 실측:
@@ -93,8 +107,10 @@ page.goto(BASE_URL, wait_until="domcontentloaded")
 4. ancestry 검사는 **`mergeCommit.oid`** 로 한다.
 
    ```sh
-   TARGET_SHA=$(gh pr view "$PR" -R "$TARGET_REPO" --json mergeCommit -q '.mergeCommit.oid // empty')
-   [ -n "$TARGET_SHA" ] || TARGET_SHA=$(gh pr view "$PR" -R "$TARGET_REPO" --json headRefOid -q .headRefOid)
+   # PR 메타는 여기서 한 번만 받아 Step 4(targets.md §1)까지 재사용한다 — 왕복 3회 → 1회.
+   PR_JSON=$(gh pr view "$PR" -R "$TARGET_REPO" \
+     --json title,body,files,mergeCommit,headRefOid,closingIssuesReferences)
+   TARGET_SHA=$(printf '%s' "$PR_JSON" | jq -r '.mergeCommit.oid // .headRefOid')
    git -C "$SERVING_ROOT" merge-base --is-ancestor "$TARGET_SHA" HEAD
    ```
 
@@ -136,7 +152,10 @@ git -C "$SERVING_ROOT" status --porcelain
 1. PR 변경 파일을 레이어로 분류 — `apps/web/**` → 프런트 / `apps/server/**` → 백엔드 /
    공용 패키지 → 양쪽
 2. 각 레이어를 서빙하는 LISTEN 프로세스를 찾는다 (1-1 의 프런트/백엔드 필터)
-3. **해당하는 모든 프로세스**에 cwd → HEAD → ancestry 를 돌린다
+3. **해당하는 모든 프로세스**에 cwd → HEAD → ancestry 를 돌린다. 단 여러 프로세스가 같은
+   `SERVING_ROOT` 로 해소되면(모노레포에서 흔하다 — Vite 는 `apps/web` 에서 떠도 §2-1 의 3번이
+   레포 루트로 되돌린다) **git 검사는 루트당 한 번만** 돌린다. cwd 프로브 자체는 §2-5 대로
+   프로세스마다 매번 읽는다 — PID 는 바뀐다.
 4. 하나라도 불일치면 정지
 
 프런트 전용 PR 이면 프런트 프로세스만 확인하면 된다 — 실측 런이 그랬고, Vite 쪽만 맞으면 됐다.
@@ -154,13 +173,31 @@ docker-published 포트는 `ss -ltnp` 에 **PID 가 안 잡힌다**(docker-proxy
 dev 서버 PID 는 재기동으로 세션 중에 바뀐다. 실측: 같은 런 안에서 Vite PID 가
 `3208206` → `3982320` 으로 바뀌었다. **검증 시점에 매번 읽는다.**
 
-## 3. PR 번호 역추적
+## 3. 대상 레포 확정과 PR 번호
 
-rebase merge + 로컬 main rebase 후에는 작업 브랜치가 `[gone]` 이라 브랜치 기준 조회가 안 된다
-(실측 런이 정확히 그 상태였다). 커밋 → PR 역참조가 정확하다.
+레포 확정과 PR 번호 해소는 **레포 SSOT 헬퍼를 그대로 쓴다** — `gh repo view` 기본 레포
+휴리스틱을 다시 짜지 않는다(`origin`/`upstream` 이 함께 있으면 엉뚱한 쪽으로 붙는다).
 
 ```sh
-gh api "/repos/{owner}/{repo}/commits/$(git rev-parse HEAD)/pulls" -q '.[].number'
+# DOTFILES_FORCE_INIT=1 은 load-bearing 이다: 이 파일의 인터랙티브 가드가
+# 비대화형 셸에서 조기 return 하면 헬퍼가 아예 정의되지 않는다.
+export DOTFILES_FORCE_INIT=1
+. "${SHELL_COMMON}/functions/gh_pr_review.sh"
+TARGET_REPO=$(_gh_pr_review_resolve_target_repo "${remote:-origin}") || {
+  echo "Cannot resolve remote '${remote:-origin}' to a repo" >&2; exit 1; }
+PR=$(_gh_pr_review_resolve_pr_number "$pr")   # 인자 우선, 없으면 현재 브랜치
+```
+
+이후 **모든** `gh` 호출에 `-R "$TARGET_REPO"` 를 넘긴다.
+
+### 3-1. 브랜치가 `[gone]` 이면 커밋으로 역추적
+
+`_gh_pr_review_resolve_pr_number` 가 실패하는 경우가 하나 있다 — rebase merge + 로컬 main
+rebase 후에는 작업 브랜치가 `[gone]` 이라 브랜치 기준 조회가 안 된다(실측 런이 정확히 그
+상태였다). 그때만 커밋 → PR 역참조로 떨어진다.
+
+```sh
+PR=$(gh api "/repos/$TARGET_REPO/commits/$(git rev-parse HEAD)/pulls" -q '.[].number')
 ```
 
 ## 4. 기동 명령 발견 (`--start` 를 쓸 때만)
