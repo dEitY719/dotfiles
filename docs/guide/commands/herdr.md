@@ -1,0 +1,90 @@
+# herdr
+
+> 자동 생성 문서입니다. 직접 편집하지 마세요 — 내용은 `shell-common/functions/herdr_help.sh` 의 row 함수가 SSOT 입니다.
+> 재생성: `shell-common/tools/custom/gen_command_docs.sh --topic herdr --force`
+
+## 호출
+
+- Help 진입점: `herdr-help [section|--list|--all]`
+- 통합 라우팅: `my-help herdr [section]`
+- Alias: `herdr-help`
+
+## 요약 (herdr-help)
+
+- Usage: herdr-help [section|--list|--all]
+- sections
+    - concept: agent multiplexer | 세션 유지 | prefix Ctrl+b
+    - pane: split right/down | hjkl 이동 | zoom | rename | close
+    - tab: new | next/prev
+    - workspace: navigation | new
+    - control: detach
+    - example | related
+    - install: 사외 curl|sh · 사내 GitHub 릴리스 바이너리
+    - details: herdr-help <section>  (example: herdr-help pane)
+
+## 섹션
+
+### concept
+
+- 여러 코딩 agent를 한 터미널에서 실행하는 multiplexer
+- 서버에 세션 유지 — 터미널/SSH 끊겨도 agent 계속 동작
+- 모든 단축키: prefix (기본 Ctrl+b) 누른 뒤 해당 키
+
+### pane
+
+- **prefix+v** — split right (좌우 분할)
+- **prefix+minus** — split down (상하 분할, horizontal)
+- **prefix+h** — 왼쪽 pane으로 이동
+- **prefix+j** — 아래 pane으로 이동
+- **prefix+k** — 위 pane으로 이동
+- **prefix+l** — 오른쪽 pane으로 이동
+- **prefix+z** — 현재 pane 풀스크린 토글 (zoom)
+- **prefix+shift+p** — 현재 pane 이름 변경
+- **prefix+x** — 현재 pane 닫기
+
+### tab
+
+- **prefix+c** — 새 탭 생성
+- **prefix+n / prefix+p** — 다음 / 이전 탭
+
+### workspace
+
+- **prefix+w** — workspace 간 이동
+- **prefix+shift+n** — 새 workspace 생성
+
+### control
+
+- **prefix+q** — 세션에서 빠져나오기 (detach client) — agent는 계속 실행
+
+### example
+
+- herdr                    # 세션 시작/재접속
+- claude                   # pane 안에서 agent 실행
+- prefix+v                 # 오른쪽 split
+- prefix+minus             # 아래 split (오른쪽 pane 안에서)
+- prefix+j / prefix+l 등   # pane 간 이동
+- prefix+q                 # detach
+- herdr                    # 나중에 다시 접속, agent 그대로
+
+### related
+
+- Docs: https://herdr.dev/docs/
+- tmux 사용자라면: tmux-help
+
+### install
+
+- 사외(표준, 전 OS): curl -fsSL https://herdr.dev/install.sh | sh  (또는 brew install herdr / mise use -g herdr)
+- 사내(프록시 차단 우회, Linux x86_64 전용): curl -fsSL -o ~/.local/bin/herdr https://github.com/ogulcancelik/herdr/releases/latest/download/herdr-linux-x86_64 && chmod +x ~/.local/bin/herdr
+- macOS/Apple Silicon 사내망: 위 바이너리는 Linux 전용 — 사외(표준) brew/mise 경로 사용 또는 releases 페이지에서 darwin 자산명 확인
+- 사내(버전 고정): 위 URL의 latest/download 대신 download/v0.7.5 로 태그 지정
+- 근본 해결: 프록시 예외 신청 — GSAMS https://gsams.samsungds.net
+
+## 엣지케이스 / 의도된 동작
+
+아직 정리된 항목이 없습니다. 소스 주석에만 있는 동작을 발견하면
+`docs/guide/commands/.notes/herdr.md` 에 추가한 뒤 이 문서를 재생성하세요.
+
+## 소스
+
+- `shell-common/functions/herdr_help.sh`
+- 인터페이스 규칙: `docs/.ssot/command-guidelines.md`
