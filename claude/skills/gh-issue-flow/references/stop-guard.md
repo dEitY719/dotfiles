@@ -1,5 +1,9 @@
 # Stop hook — harness-level guard against gh-issue-flow early-stop
 
+SSOT for the guard's detection contract. Other docs (`SKILL.md`,
+`references/report-template.md`) state the *rule* for report authors and
+point here for the *mechanism*.
+
 ## Why this exists
 
 `gh:issue-flow` chains 6 sub-skills (`gh:issue-implement` → `gh:commit` →
@@ -132,11 +136,8 @@ gh-issue-flow ones, so misbehaviour would be very visible. Defenses:
 - **`stop_hook_active` short-circuit.** When Claude Code re-fires Stop
   after a previous block, the field is set; the hook bails out so we
   never form an infinite Stop→block→Stop loop within a single chain.
-- **Boundary expiry (#1270).** `stop_hook_active` resets on every new
-  user message, so it cannot stop a stale boundary from blocking turn
-  after turn. After 3 fresh user prompts the boundary is abandoned and
-  the hook fails open. Tune with
-  `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS` (`0` = never expire).
+- **Boundary expiry (#1270).** A boundary that outlives 3 fresh user
+  prompts is declared stale and the hook fails open — see step 5 above.
 - **No state file, no network, no writes.** The hook only reads stdin
   and the transcript. There is nothing to corrupt.
 
