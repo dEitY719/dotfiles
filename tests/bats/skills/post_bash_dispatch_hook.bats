@@ -154,6 +154,26 @@ teardown() {
     grep -q '^pr-create:' "$ROUTE_LOG"
 }
 
+@test "timing (#1258): missing lib/pbd_ms.sh → still exit 0, handler still runs" {
+    # The dispatcher resolves lib/pbd_ms.sh from its OWN directory, so a lone
+    # copy simulates a partial deployment. Its fallback stub must still ASSIGN
+    # the output variable: under `set -u` a bare `_pbd_ms() { :; }` leaves
+    # _pbd_log_timing's `local _entry` unset and the hook dies 1 with stderr
+    # noise — the exact opposite of the best-effort contract.
+    local lone="$TEST_TEMP_HOME/lone"
+    mkdir -p "$lone"
+    cp "$HOOK" "$lone/post-bash-dispatch.sh"
+    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"}}'
+    run bash -c "printf '%s' '$payload' | '$lone/post-bash-dispatch.sh'"
+    assert_success
+    assert_output ''
+    grep -q '^pr-create:' "$ROUTE_LOG"
+    # Timings degrade to empty fields, which hook-perf-report.sh drops as a
+    # malformed row — never a fake 0ms measurement that would skew the stats.
+    run cat "$TIMING_LOG"
+    assert_output --regexp '^[[:space:]]*post-gh-pr-create\.sh$'
+}
+
 # ---------------------------------------------------------------------------
 # Issue #1258 — claude/tools/hook-perf-report.sh, the regression-measurement
 # reader for the log the dispatcher above writes. Kept in this file because

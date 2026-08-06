@@ -44,38 +44,35 @@ tool_name=$(printf '%s' "$input" | jq -r '.tool_name // ""' 2>/dev/null) || exit
 
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // ""' 2>/dev/null) || exit 0
 
-# Handlers live beside this dispatcher. POST_BASH_DISPATCH_DIR overrides the
-# location for tests (stub handlers that record the routed stdin). The `CDPATH=`
-# prefix neutralises a user CDPATH so `cd` cannot resolve elsewhere.
+# This script's own directory, resolved once and reused twice below. The
+# `CDPATH=` prefix neutralises a user CDPATH so `cd` cannot resolve elsewhere.
 # shellcheck disable=SC1007 # intentional env-prefix: CDPATH= cd ...
-DISPATCH_DIR="${POST_BASH_DISPATCH_DIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
+_pbd_self_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+# Handlers live beside this dispatcher. POST_BASH_DISPATCH_DIR overrides the
+# location for tests (stub handlers that record the routed stdin).
+DISPATCH_DIR="${POST_BASH_DISPATCH_DIR:-$_pbd_self_dir}"
 
 # --- stage timing (#1258) ---------------------------------------------------
-# All three helpers are only ever CALLED from the routed branches below, so the
-# non-matching path costs three function definitions and nothing else. Inside
-# them, timestamps are taken with plain expansions + `printf -v` rather than
-# command substitutions: a `$(…)` fork per stamp would be self-defeating in the
-# very code that measures dispatcher overhead.
+# The two helpers below are only ever CALLED from the routed branches, so the
+# non-matching path costs one source + two function definitions and nothing
+# else. Inside them, timestamps are taken with plain expansions + `printf -v`
+# rather than command substitutions: a `$(…)` fork per stamp would be
+# self-defeating in the very code that measures dispatcher overhead.
 
-# Convert an EPOCHREALTIME snapshot ("<sec>.<usec>", locale decimal point) to
-# epoch milliseconds, assigned to the variable named by $1. An empty snapshot
-# (bash < 5, no EPOCHREALTIME) falls back to GNU `date +%s%3N`, and to
-# whole-second granularity when that prints the literal `%N` (BSD date) —
-# without this tier a BSD host would silently lose the whole timing row
-# (the reader drops any non-numeric field), not just precision.
-_pbd_ms() {
-	local _d
-	case "${2:-}" in
-	*[.,]*) printf -v "$1" '%s%.3s' "${2%%[.,]*}" "${2#*[.,]}000" ;;
-	*)
-		_d=$(date +%s%3N 2>/dev/null) || _d=""
-		case "$_d" in
-		'' | *[!0-9]*) _d="$(date +%s 2>/dev/null || printf '0')000" ;;
-		esac
-		printf -v "$1" '%s' "$_d"
-		;;
-	esac
-}
+# _pbd_ms (EPOCHREALTIME snapshot -> epoch milliseconds) lives in a separate
+# pure-function library so its BSD-date fallback tier is testable: this script
+# reads stdin and exits early, so a test can never source it to reach the
+# function. Resolved from _pbd_self_dir, NOT from DISPATCH_DIR — the latter is
+# deliberately test-overridable (stub handlers), while the library is an
+# implementation-internal file no test needs to stub. Sourcing failure degrades
+# to a stub that still ASSIGNS its output variable (empty): under `set -u` a
+# `{ :; }` body would leave _pbd_log_timing's `local _entry` unset and the hook
+# would die 1 with stderr noise — the opposite of the best-effort contract.
+# Empty (not 0) so the row is dropped by hook-perf-report.sh as malformed
+# rather than counted as a fake 0ms measurement: timings vanish, nothing lies.
+# shellcheck source=lib/pbd_ms.sh
+. "$_pbd_self_dir/lib/pbd_ms.sh" 2>/dev/null || _pbd_ms() { printf -v "$1" '%s' ''; }
 
 # Append `<entry-ms> <pre-invoke-ms> <post-exit-ms> <handler>`. Strictly
 # best-effort: every failure path returns 0 so the exit-0 contract holds.
