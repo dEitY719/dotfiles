@@ -226,9 +226,15 @@ _gh_pr_review_stderr_is_noise() {
 # Prints a path on stdout. Falls back to a $$-suffixed path (still
 # lane-discriminated) when mktemp itself is unavailable, so this stays
 # the single place that knows the PROMPT_FILE naming template.
+# Both args are sanitized to `[A-Za-z0-9_-]` before touching the path —
+# an unvalidated PR token (e.g. containing `/`) could otherwise steer
+# the mktemp template outside /tmp (codex review, PR #1282 / issue #1276).
 _gh_pr_review_mktemp_prompt() {
-    local ai="$1"
-    local pr="${2:-0}"
+    local ai pr
+    ai=$(printf '%s' "${1:-unknown}" | tr -cd 'A-Za-z0-9_-')
+    pr=$(printf '%s' "${2:-0}" | tr -cd 'A-Za-z0-9_-')
+    [ -n "$ai" ] || ai="unknown"
+    [ -n "$pr" ] || pr="0"
     mktemp "/tmp/gh-pr-review-prompt.$ai.$pr.XXXXXX" 2>/dev/null ||
         echo "/tmp/gh-pr-review-prompt.$ai.$pr.$$"
 }
