@@ -1276,6 +1276,30 @@ def test_bash_terminal_report_list_shaped_tool_result_allows_stop(tmp_path: Path
     assert result.stdout.strip() == "", f"Hook ignored a list-shaped tool_result when pairing. stdout={result.stdout!r}"
 
 
+def test_bash_terminal_report_split_mid_token_still_allows_stop(tmp_path: Path) -> None:
+    """PR #1279 codex review: sub-blocks are fragments of ONE stdout string,
+    not separate lines — nothing guarantees a split lands on a line boundary.
+    Concatenating with `""` (not `"\\n"`) must reconstruct the original text
+    even when a fragment splits mid-word, so a genuine report is still
+    recognized instead of regressing to the #1270 'block forever' bug."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_full_chain_prefix(),
+            _assistant_bash(_BASH_REPORT_HEREDOC, "toolu_report"),
+            _user_tool_result_blocks(
+                ["gh:issue-flow compl", "ete (#1270)\n  PR URL: https://github.com/example/repo/pull/99"],
+                "toolu_report",
+            ),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"Hook missed a genuine report whose marker was split mid-token across sub-blocks. stdout={result.stdout!r}"
+    )
+
+
 def test_bash_report_redirected_to_file_does_not_terminate(tmp_path: Path) -> None:
     """PR #1272 Codex BLOCKER: the command carries the marker but redirects
     it into a file, so the `tool_result` is empty — no report ever surfaced
