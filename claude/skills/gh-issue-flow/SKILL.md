@@ -2,8 +2,8 @@
 name: gh:issue-flow
 description: >-
   Composition skill that chains gh:issue-implement → gh:commit → gh:pr →
-  devx:pr-review-all (agy ∥ codex ∥ /code-review --fix → /simplify
-  quality gate + deferred pr-reply, 8 min) → gh:pr-resolve-conflict →
+  devx:pr-review-all (agy ∥ codex ∥ /simplify quality gate + deferred
+  pr-reply, 8 min) → gh:pr-resolve-conflict →
   gh:pr-resolve-outdated
   (out-of-date base sync) for a single issue number. Use when the user runs
   /gh:issue-flow, /gh-issue-flow, or asks "issue #16 처음부터 PR까지 자동으로",

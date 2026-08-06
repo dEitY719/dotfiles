@@ -12,28 +12,40 @@ The SKILL.md body lists these as terse rules; the full rationale lives here.
 
 - **Never run a bare `git commit`.** In a non-interactive AI shell a bare
   commit opens an editor for the message and hangs. Always pass `-m` with a
-  conventional-commit message. The auto-fix agents (`/code-review --fix`,
-  `/simplify`) edit files without staging them, so a plain `-m` finds nothing
-  staged and fails with `no changes added to commit` — use `-am` so the
-  commit picks up the unstaged edits too, e.g.
+  conventional-commit message. `/simplify` edits files without staging them,
+  so a plain `-m` finds nothing staged and fails with `no changes added to
+  commit` — use `-am` so the commit picks up the unstaged edits too, e.g.
   `git commit -am "refactor(<scope>): simplify per /simplify"`.
 
-- **`/code-review --fix` and `/simplify` both mutate the working tree — never
-  run them concurrently with each other.** agy/codex only post PR
-  comments, so they're safe to fan out fully in parallel. But two agents
-  editing the same files at the same time is a real correctness risk (lost
-  edits, interleaved partial writes, a resulting diff that matches neither
-  agent's intent). Step 3's third lane is therefore internally sequential —
-  `/code-review --fix` runs to completion and commits before `/simplify`
-  starts — even though the lane as a whole still dispatches in the same turn
-  as agy/codex.
+- **`/code-review --fix` is NOT a lane here, and must not be re-added.**
+  Claude Code v2.1.215 made `/code-review` (and `/verify`) user-invocation-only:
+  the docs mark it `disable-model-invocation`, so a skill calling
+  `Skill(code-review, ...)` is rejected outright. Two reasons Anthropic gives,
+  both sound: the review fans out a fleet of agents (the managed cloud variant
+  bills $15-25 per run), and `--fix` writes to the working tree from a
+  background subagent **outside the session's checkpoints** — `/rewind` cannot
+  undo those edits, only git can. A model firing that autonomously is exactly
+  the failure mode the restriction prevents.
 
-- **Each auto-fix sub-step gets its own commit, not one combined commit.**
-  `fix(<scope>): code-review --fix` and `refactor(<scope>): simplify per
-  /simplify` land as two separate commits when both mutate the tree. This
-  keeps `git blame`/revert granular — a bad `/simplify` cleanup can be
-  reverted without touching a `/code-review --fix` correctness fix, and vice
-  versa. A single `git push` at Step 4 sends up whichever commits exist.
+  Before this was understood, the lane sat here silently soft-failing on every
+  single run. Two workarounds were considered and rejected: shadowing the
+  bundled skill with a same-named override (it would mask a maintained,
+  more capable tool — working-diff scoping, `--fix`, `--comment`, `ultra`,
+  effort tuning — with a frozen fork), and prompting the user mid-flow (breaks
+  the unattended issue-flow contract). Removal is the honest fix.
+
+  **Nothing meaningful is lost.** Bug-hunting is covered by the agy and codex
+  lanes, which post real PR comments; cleanup is covered by `/simplify`; and
+  the apply-fixes-and-commit behaviour still happens at the end of the flow,
+  where `gh:pr-reply` evaluates each review comment and commits the valid
+  fixes. Users who want the bundled reviewer can type `/code-review --fix`
+  themselves at any point — it runs in the background and does not block.
+
+- **The auto-fix commit is its own commit.** `refactor(<scope>): simplify per
+  /simplify` lands separately from any fix commits `gh:pr-reply` makes later,
+  keeping `git blame`/revert granular — a bad cleanup can be reverted without
+  touching a review-driven correctness fix. A single `git push` at Step 4
+  sends up whatever exists.
 
 - **Delay is not a guarantee — inline reply is the deterministic path.**
   agy/codex reviews are synchronous `gh:pr-review` CLI calls: they post the
@@ -51,14 +63,13 @@ The SKILL.md body lists these as terse rules; the full rationale lives here.
   and replies to comments; it never submits a `gh pr review` decision. That is
   `gh:pr-approve`'s job.
 
-- **Built-in `/simplify` and `/code-review --fix` both ignore the PR# argument**
-  and operate on the current working tree / branch diff. This is why Step 2
-  checks out the PR head branch first when running standalone — without it,
-  either command would edit whatever tree happens to be checked out. On the
-  issue-flow delegation path the branch is already correct, so the checkout
-  is a no-op skip.
+- **Built-in `/simplify` ignores the PR# argument** and operates on the
+  current working tree / branch diff. This is why Step 2 checks out the PR
+  head branch first when running standalone — without it, `/simplify` would
+  edit whatever tree happens to be checked out. On the issue-flow delegation
+  path the branch is already correct, so the checkout is a no-op skip.
 
-- **The auto-fix commits + push (Step 4) run synchronously before return.**
+- **The auto-fix commit + push (Step 4) run synchronously before return.**
   On the issue-flow delegation path this guarantees no dirty tree is left for
   the later rebase steps — a dirty working tree breaks `git rebase`.
 
