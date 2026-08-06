@@ -94,6 +94,40 @@ def _user_tool_result(text: str) -> dict[str, Any]:
     }
 
 
+def _user_meta_text(text: str) -> dict[str, Any]:
+    """Build a user-role entry flagged `isMeta` on the OUTER entry (#1270).
+
+    Claude Code stamps `isMeta: true` on the text it injects into the user
+    channel itself (Stop-hook feedback, skill expansions) and never on a
+    human prompt. The flag deliberately sits outside `message`, which is
+    exactly what the pre-fix counter failed to look at.
+    """
+    return {"type": "user", "isMeta": True, "message": {"role": "user", "content": text}}
+
+
+def _user_text_with_tool_result(text: str) -> dict[str, Any]:
+    """Build a user message carrying BOTH human text and tool output (#1270).
+
+    Real transcripts bundle these in one turn. The pre-fix counter skipped
+    any message containing a tool_result wholesale, so the human half never
+    counted and a stale boundary could not expire (Codex BLOCKER, PR #1272).
+    """
+    return {
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "toolu_test_mixed",
+                    "content": "tests: 42 passed",
+                },
+                {"type": "text", "text": text},
+            ],
+        },
+    }
+
+
 def _assistant_tool_use(name: str, tool_input: dict[str, Any], block_id: str | None = None) -> dict[str, Any]:
     """Build an assistant tool_use message for an arbitrary tool.
 
@@ -1446,3 +1480,157 @@ def test_invalid_expiry_env_falls_back_to_default(tmp_path: Path) -> None:
         assert result.returncode == 0
         assert result.stdout.strip(), f"value {bad!r} did not fall back to the default limit"
         assert json.loads(result.stdout)["decision"] == "block"
+
+
+# ---------------------------------------------------------------------------
+# Issue #1270 / PR #1272 review — fresh-prompt counter over-counting.
+#
+# Measured on a real 2489-entry gh-issue-flow transcript: 102 "fresh
+# prompts" of which only 4 were human. 62 were Stop-hook feedback blocks
+# (Claude Code re-injects the hook's own `reason` as a `role=user` message)
+# and 40 were `<task-notification>` background-subagent completions — so the
+# limit of 3 was hit at entry 322 with 1/6 sub-skills done and the guard
+# disabled itself mid-flow. `devx:pr-review-all` (Step 2.4 of the guarded
+# chain) fans out three background agents, which makes that self-defeat the
+# normal case rather than an edge case.
+#
+# Two independent fixes are pinned below: `isMeta` on the OUTER entry plus
+# harness-injection markers (over-count), and counting a mixed
+# text + tool_result turn (under-count, Codex BLOCKER).
+# ---------------------------------------------------------------------------
+
+
+def test_ismeta_user_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
+    """`isMeta: true` on the outer entry means harness text, never a human."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _user_meta_text("please continue with the next step"),
+            _user_meta_text("keep going, do not stop"),
+            _user_meta_text("resume the chain now"),
+            _user_meta_text("another injected line"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"isMeta entries were miscounted as fresh user prompts. stdout={result.stdout!r}"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_stop_hook_feedback_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
+    """The hook's own `reason`, re-injected as user text, must not count.
+
+    This is the self-defeat loop: every block the guard emits came back as
+    a "fresh user prompt" and three of them expired the guard's own boundary.
+    """
+    feedback = (
+        "Stop hook feedback: gh-issue-flow incomplete: 1/6 sub-skills invoked since "
+        "the flow started, and no terminal Step 3 report has been emitted yet. "
+        "Next action: Step 2.2 — Skill(gh-commit)."
+    )
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _user_text(feedback),
+            _user_text(feedback),
+            _user_text(feedback),
+            _user_text(feedback),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"Stop-hook feedback was miscounted as fresh user prompts. stdout={result.stdout!r}"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_task_notification_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
+    """Background-subagent completion notices are harness, not human."""
+    notice = "<task-notification>Agent 'codex-review' (id: agent_1) has completed.</task-notification>"
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _user_text(notice),
+            _user_text(notice),
+            _user_text(notice),
+            _user_text(notice),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"<task-notification> was miscounted as fresh user prompts. stdout={result.stdout!r}"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_system_notification_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
+    """`[SYSTEM NOTIFICATION - NOT USER INPUT]` says so on the tin."""
+    notice = "[SYSTEM NOTIFICATION - NOT USER INPUT] Background command exited with code 0."
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _user_text(notice),
+            _user_text(notice),
+            _user_text(notice),
+            _user_text(notice),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"[SYSTEM NOTIFICATION] was miscounted as fresh user prompts. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_mixed_text_and_tool_result_message_counts_as_fresh_prompt(
+    tmp_path: Path,
+) -> None:
+    """A human prompt bundled with tool output still counts (Codex BLOCKER).
+
+    Skipping such messages wholesale meant a genuinely abandoned flow could
+    keep blocking forever whenever the user typed while a tool was in flight.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _user_text_with_tool_result("stop that — what does mise tasks list?"),
+            _user_text_with_tool_result("and where is the zsh env file?"),
+            _user_text_with_tool_result("last one: the p10k config path?"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        "Human text bundled alongside a tool_result was not counted, so the "
+        f"stale boundary kept blocking. stdout={result.stdout!r}"
+    )
+
+
+def test_tool_result_only_message_still_not_a_fresh_prompt(tmp_path: Path) -> None:
+    """Regression guard: dropping the wholesale skip must not let bare tool
+    output start counting — `include_tool_results=False` yields empty text,
+    and the existing emptiness check drops it."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1270"),
+            _assistant_skill("gh-issue-implement"),
+            _user_tool_result("tests: 42 passed"),
+            _user_tool_result("commit abc123 created"),
+            _user_tool_result("PR https://x/pull/9 opened"),
+            _user_tool_result("review posted"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"tool_result-only messages were counted as fresh prompts. stdout={result.stdout!r}"
+    assert json.loads(result.stdout)["decision"] == "block"
