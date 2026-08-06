@@ -84,10 +84,34 @@ On every Stop event:
    contains those marker strings as Step 3 *instructions*. Scanning
    user text would silently false-match every real invocation and
    fail-open the hook (issue #608, 5th regression).
-5. If no terminal marker is present, count the distinct sub-skill
+
+   **Bash fallback channel (#1270).** Assistant text is the canonical
+   channel — `references/report-template.md` requires the Step 3 report
+   to be plain assistant text. But models sometimes print it through
+   `Bash` (`cat <<'EOF' … EOF`, `printf`), in which case the report text
+   only ever exists in the tool_use `input.command` string and in a
+   `tool_result`, and the flow could never terminate. So the scan also
+   matches an assistant `Bash` tool_use command against a **stricter**
+   regex that requires a literal digit where the templates carry `<N>` /
+   `<i>` — `grep "gh:issue-flow complete" SKILL.md` therefore cannot
+   false-terminate. **Only `Bash` is scanned**: `Write`/`Edit` inputs
+   legitimately carry real template text whenever the skill's own files
+   are edited.
+5. **Boundary expiry (#1270).** Count *fresh* user prompts after the
+   boundary — user-role messages that carry no `tool_result`, are not
+   just a `<system-reminder>` block, and show none of the skill-expansion
+   markers (`Base directory for this skill:`, `<command-name>`,
+   `<command-message>`, `<local-command-stdout>`, `is already loaded
+   above`). At 3 or more (`GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS`,
+   `0` disables), the boundary is declared stale and the hook fails
+   open. Without it a boundary lives for the rest of the session:
+   `stop_hook_active` only breaks the loop *within* a turn and resets on
+   the next user message, so an un-terminated flow would keep blocking
+   unrelated turns.
+6. If no terminal marker is present, count the distinct sub-skill
    `Skill()` invocations after the boundary and pick the *next* one
    in the canonical chain.
-6. Emit `{"decision":"block","reason":"…"}` on stdout. The `reason`
+7. Emit `{"decision":"block","reason":"…"}` on stdout. The `reason`
    tells the model exactly which Skill() call to make next, with the
    "no conversational text" rule restated.
 
@@ -108,6 +132,11 @@ gh-issue-flow ones, so misbehaviour would be very visible. Defenses:
 - **`stop_hook_active` short-circuit.** When Claude Code re-fires Stop
   after a previous block, the field is set; the hook bails out so we
   never form an infinite Stop→block→Stop loop within a single chain.
+- **Boundary expiry (#1270).** `stop_hook_active` resets on every new
+  user message, so it cannot stop a stale boundary from blocking turn
+  after turn. After 3 fresh user prompts the boundary is abandoned and
+  the hook fails open. Tune with
+  `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS` (`0` = never expire).
 - **No state file, no network, no writes.** The hook only reads stdin
   and the transcript. There is nothing to corrupt.
 
@@ -144,5 +173,14 @@ Re-install via `./setup.sh` to restore the default behaviour.
   (which literally quotes the Step 3 template) must still **block**
   the mid-chain stop. A defensive variant covers the case where the
   model reads `gh_issue_flow_stop_guard.py` itself inside the flow.
+- #1270 F-1: a Step 3 report emitted through a `Bash` heredoc/`printf`
+  → allow; a `Bash` command that only greps the template text (no
+  literal issue/step digit) → still block; the same template text
+  arriving via `tool_result`, or a real marker inside an `Edit`/`Write`
+  tool input → still block.
+- #1270 F-2: 3 fresh unrelated user prompts after an unfinished flow
+  → allow (stale boundary); 2 → still block; skill-expansion,
+  `tool_result` and `<system-reminder>`-only messages are not counted;
+  `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS=0` disables expiry.
 
 Run: `pytest tests/integration/test_gh_issue_flow_stop_guard.py -v`.
