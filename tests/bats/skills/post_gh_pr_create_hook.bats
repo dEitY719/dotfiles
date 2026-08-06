@@ -195,6 +195,13 @@ EOF
 #
 # These three cases stage a fake `gh` on PATH (board count) plus a
 # query_current stub (when the card flips to "In review").
+#
+# Issue #1258 moved that retry tail (and the linked-issue sync) into a
+# detached background subprocess, so the hook returns without waiting. The
+# loop LOGIC is unchanged and these three still assert it — they just set
+# POST_GH_PR_CREATE_ASYNC=0 to run the tail in the foreground, otherwise
+# $CALL_LOG would be read while the background writer is still running.
+# T17 below covers the async property itself.
 # ---------------------------------------------------------------------------
 
 @test "T14 (#813): no projectV2 board → single sync, retry loop skipped" {
@@ -216,6 +223,7 @@ _gh_project_status_query_current() { printf 'query %s\n' "\$*" >> "$CALL_LOG"; e
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
     export PATH="$TEST_TEMP_HOME/bin:$PATH"
+    export POST_GH_PR_CREATE_ASYNC=0
     payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/55"}}'
     run bash -c "printf '%s' '$payload' | '$HOOK'"
     assert_success
@@ -245,7 +253,7 @@ _gh_project_status_query_current() {
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
     export PATH="$TEST_TEMP_HOME/bin:$PATH"
-    export POST_GH_PR_CREATE_SYNC_SLEEP=0
+    export POST_GH_PR_CREATE_SYNC_SLEEP=0 POST_GH_PR_CREATE_ASYNC=0
     payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/77"}}'
     run bash -c "printf '%s' '$payload' | '$HOOK'"
     assert_success
@@ -271,9 +279,50 @@ _gh_pr_closing_issue_numbers() { return 0; }
 EOF
     export PATH="$TEST_TEMP_HOME/bin:$PATH"
     export POST_GH_PR_CREATE_SYNC_SLEEP=0 POST_GH_PR_CREATE_SYNC_ATTEMPTS=2
+    export POST_GH_PR_CREATE_ASYNC=0
     payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/88"}}'
     run bash -c "printf '%s' '$payload' | '$HOOK'"
     assert_success
     [ "$(grep -c '^sync pr 88 In review$' "$CALL_LOG")" -eq 2 ]
     assert_output --partial 'still not "In review" after 2 attempts'
+}
+
+# ---------------------------------------------------------------------------
+# Issue #1258 — the retry-poll must not block the user's turn
+# ---------------------------------------------------------------------------
+
+@test "T17 (#1258): board present, never converges → hook returns without waiting out the retry budget" {
+    # The regression this guards: the #813 loop used to run inline, so a PR
+    # card that never reaches "In review" cost (attempts-1) x sleep seconds
+    # of PostToolUse blocking (measured median 7.8s / max 48.7s). With the
+    # default (async) setting the hook must hand the loop to a background
+    # subprocess and return immediately — here the budget alone is
+    # 3 attempts x 3s of sleep, so anything under ~1s proves it detached.
+    mkdir -p "$TEST_TEMP_HOME/bin"
+    cat > "$TEST_TEMP_HOME/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+[ "$1 $2" = "api graphql" ] && { echo 1; exit 0; }
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_HOME/bin/gh"
+    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+_gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
+_gh_project_status_query_current() { echo "Backlog"; }   # never converges
+_gh_pr_closing_issue_numbers() { return 0; }
+EOF
+    export PATH="$TEST_TEMP_HOME/bin:$PATH"
+    # POST_GH_PR_CREATE_ASYNC intentionally left at its default.
+    export POST_GH_PR_CREATE_SYNC_SLEEP=3 POST_GH_PR_CREATE_SYNC_ATTEMPTS=3
+    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/99"}}'
+    start_ns=$(date +%s%N)
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    elapsed_ms=$(( ($(date +%s%N) - start_ns) / 1000000 ))
+    assert_success
+    # The one foreground sync still lands before the hook returns.
+    grep -q '^sync pr 99 In review$' "$CALL_LOG"
+    # ...but the 6s of retry sleeps do not.
+    [ "$elapsed_ms" -lt 1000 ] || {
+        echo "hook blocked for ${elapsed_ms}ms — retry loop is still synchronous" >&2
+        return 1
+    }
 }

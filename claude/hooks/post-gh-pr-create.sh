@@ -20,9 +20,14 @@
 #   the verify pair inside _gh_project_status_sync.
 #
 # Always exits 0 — board sync is best-effort, never blocks the user's flow.
+# "Never blocks" is literal since issue #1258: only ONE sync call is made in
+# the foreground; the #813 retry-poll (which sleeps between GraphQL round
+# trips) and the linked-issue sync are detached into a background subprocess,
+# so the hook process returns in ~one round trip instead of the measured
+# median 7.8s / max 48.7s.
 #
 # Reference: issue #390, design SSOT on parent issue #384 (good-point 9 +
-# conflict C).
+# conflict C). Latency fix: issue #1258.
 
 set -u
 
@@ -108,8 +113,15 @@ export GH_REPO
 # the item *after* we looked. So poll: re-sync until the card exists and
 # reaches "In review", bounded so boardless repos exit immediately.
 #
+# Issue #1258: that poll used to run inline, so the PostToolUse hook sat on
+# up to (attempts-1) x sleep seconds plus 2 GraphQL round trips per attempt
+# while the user's turn waited. Only the first sync stays in the foreground
+# now; the rest is detached (see _post_gh_pr_create_deferred below).
+#
 # Tunables (env): POST_GH_PR_CREATE_SYNC_ATTEMPTS (default 6),
-#                 POST_GH_PR_CREATE_SYNC_SLEEP    (default 2 seconds).
+#                 POST_GH_PR_CREATE_SYNC_SLEEP    (default 2 seconds),
+#                 POST_GH_PR_CREATE_ASYNC         (default 1; 0 = run the
+#                 deferred tail in the foreground, for deterministic tests).
 
 # True (rc 0) when GH_REPO has >=1 projectV2 board. Used once, up front, so a
 # repo with no board skips the retry budget entirely (the sync would no-op
@@ -129,34 +141,57 @@ _post_gh_pr_create_repo_has_board() {
     [ "${_cnt:-0}" -gt 0 ] 2>/dev/null
 }
 
-printf '[post-gh-pr-create] PR #%s → "In review"\n' "$pr_num" >&2
-if _post_gh_pr_create_repo_has_board; then
-    _attempts="${POST_GH_PR_CREATE_SYNC_ATTEMPTS:-6}"
-    _i=1
-    while [ "$_i" -le "$_attempts" ]; do
-        _gh_project_status_sync pr "$pr_num" "In review"
-        if [ "$(_gh_project_status_query_current pr "$pr_num")" = "In review" ]; then
-            break
+# Everything that may have to WAIT. Runs detached in production; the tests
+# force it inline via POST_GH_PR_CREATE_ASYNC=0 so call counts are observable.
+#
+#   1. has-board probe + attempts 2..N of the #813 retry-poll. Attempt 1's
+#      sync already happened in the foreground below, so the loop opens with
+#      the verify query — the call sequence per attempt is unchanged.
+#   2. Linked-issue ("Closes #N") sync. Two more GraphQL round trips with no
+#      user-visible urgency, so it rides along here.
+_post_gh_pr_create_deferred() {
+    local _attempts _i _issue
+    if _post_gh_pr_create_repo_has_board; then
+        _attempts="${POST_GH_PR_CREATE_SYNC_ATTEMPTS:-6}"
+        _i=1
+        while [ "$_i" -le "$_attempts" ]; do
+            if [ "$(_gh_project_status_query_current pr "$pr_num")" = "In review" ]; then
+                break
+            fi
+            if [ "$_i" -lt "$_attempts" ]; then
+                sleep "${POST_GH_PR_CREATE_SYNC_SLEEP:-2}"
+                _gh_project_status_sync pr "$pr_num" "In review"
+            fi
+            _i=$((_i + 1))
+        done
+        if [ "$_i" -gt "$_attempts" ]; then
+            printf '[post-gh-pr-create] PR #%s still not "In review" after %s attempts — GitHub auto-add may have landed late; verify the board.\n' \
+                "$pr_num" "$_attempts" >&2
         fi
-        if [ "$_i" -lt "$_attempts" ]; then
-            sleep "${POST_GH_PR_CREATE_SYNC_SLEEP:-2}"
-        fi
-        _i=$((_i + 1))
-    done
-    if [ "$_i" -gt "$_attempts" ]; then
-        printf '[post-gh-pr-create] PR #%s still not "In review" after %s attempts — GitHub auto-add may have landed late; verify the board.\n' \
-            "$pr_num" "$_attempts" >&2
     fi
-else
-    # No board attached → single call keeps the helper's silent no-op contract.
-    _gh_project_status_sync pr "$pr_num" "In review"
-fi
 
-if [ -n "$GH_REPO" ]; then
-    for _issue in $(_gh_pr_closing_issue_numbers "$pr_num" "$GH_REPO" 2>/dev/null); do
-        _gh_project_status_sync issue "$_issue" "In progress" \
-            --only-from "Backlog,Ready,In review"
-    done
+    if [ -n "$GH_REPO" ]; then
+        for _issue in $(_gh_pr_closing_issue_numbers "$pr_num" "$GH_REPO" 2>/dev/null); do
+            _gh_project_status_sync issue "$_issue" "In progress" \
+                --only-from "Backlog,Ready,In review"
+        done
+    fi
+}
+
+printf '[post-gh-pr-create] PR #%s → "In review"\n' "$pr_num" >&2
+# The one synchronous write. Boardless repos keep the helper's silent no-op
+# contract, and a board that already carries the card is done right here.
+_gh_project_status_sync pr "$pr_num" "In review"
+
+if [ "${POST_GH_PR_CREATE_ASYNC:-1}" = "0" ]; then
+    _post_gh_pr_create_deferred
+else
+    # Detach. The stdio redirections are load-bearing, not cosmetic: a child
+    # holding the hook's stdout/stderr open keeps Claude Code waiting on the
+    # pipe even after this process exits, which would undo the whole fix.
+    # `disown` then drops the job so the exiting shell cannot SIGHUP it.
+    (_post_gh_pr_create_deferred) </dev/null >/dev/null 2>&1 &
+    disown 2>/dev/null || true
 fi
 
 exit 0
