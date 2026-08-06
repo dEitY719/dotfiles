@@ -102,16 +102,41 @@ On every Stop event:
    legitimately carry real template text whenever the skill's own files
    are edited.
 5. **Boundary expiry (#1270).** Count *fresh* user prompts after the
-   boundary — user-role messages that carry no `tool_result`, are not
-   just a `<system-reminder>` block, and show none of the skill-expansion
-   markers (`Base directory for this skill:`, `<command-name>`,
-   `<command-message>`, `<local-command-stdout>`, `is already loaded
-   above`). At 3 or more (`GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS`,
-   `0` disables), the boundary is declared stale and the hook fails
-   open. Without it a boundary lives for the rest of the session:
+   boundary. A user-role entry counts only when all of:
+   - the **outer** transcript entry is not flagged `isMeta` — Claude Code
+     stamps that on text it injects into the user channel itself and never
+     on a human prompt. It sits on the entry, not on the inner `message`,
+     so the counter reads role/content from `message` but the flag from
+     the entry;
+   - its text — collected with `include_tool_results=False`, then with
+     every `<system-reminder>…</system-reminder>` span deleted — is
+     non-empty. This is what excludes tool output: `tool_result` blocks
+     contribute no text, so a tool-output-only message yields `""`. There
+     is deliberately **no** "contains a tool_result ⇒ skip" rule — a
+     human prompt bundled in the same turn as tool output must still
+     count, or an abandoned flow could never expire;
+   - it shows no *skill-expansion* marker (`Base directory for this
+     skill:`, `<command-name>`, `<command-message>`,
+     `<local-command-stdout>`, `is already loaded above`) and no
+     *harness-injection* marker (`Stop hook feedback:`, `gh-issue-flow
+     incomplete:`, `<task-notification>`, `[SYSTEM NOTIFICATION - NOT
+     USER INPUT]`, `<local-command-caveat>`).
+
+   At 3 or more (`GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS`, `0`
+   disables), the boundary is declared stale and the hook fails open.
+   Without it a boundary lives for the rest of the session:
    `stop_hook_active` only breaks the loop *within* a turn and resets on
    the next user message, so an un-terminated flow would keep blocking
    unrelated turns.
+
+   > The harness-injection markers exist because the counter used to
+   > over-count catastrophically: on a real 2489-entry transcript it saw
+   > 102 "fresh prompts" of which only 4 were human — 62 were this hook's
+   > own `reason` re-injected as `Stop hook feedback: …` and 40 were
+   > `<task-notification>` background-agent completions. The limit of 3
+   > was hit at entry 322 with 1/6 sub-skills done, so the guard turned
+   > itself off mid-flow. `devx:pr-review-all` (Step 2.4) fans out three
+   > background agents, which made that the normal path (PR #1272).
 6. If no terminal marker is present, count the distinct sub-skill
    `Skill()` invocations after the boundary and pick the *next* one
    in the canonical chain.
@@ -181,7 +206,11 @@ Re-install via `./setup.sh` to restore the default behaviour.
   tool input → still block.
 - #1270 F-2: 3 fresh unrelated user prompts after an unfinished flow
   → allow (stale boundary); 2 → still block; skill-expansion,
-  `tool_result` and `<system-reminder>`-only messages are not counted;
-  `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS=0` disables expiry.
+  `tool_result`-only and `<system-reminder>`-only messages are not
+  counted; `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS=0` disables expiry.
+- #1270 / PR #1272: `isMeta` entries, `Stop hook feedback:` blocks,
+  `<task-notification>` and `[SYSTEM NOTIFICATION - NOT USER INPUT]`
+  messages are not counted; a message carrying both human text and a
+  `tool_result` **is** counted.
 
 Run: `pytest tests/integration/test_gh_issue_flow_stop_guard.py -v`.
