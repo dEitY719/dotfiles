@@ -1453,11 +1453,11 @@ def test_report_template_still_carries_the_fields_the_hook_matches() -> None:
     )
     assert "PR URL:" in template, (
         "The success report template no longer contains 'PR URL:' — update "
-        "_TERMINAL_REPORT_FIELD_RE in claude/hooks/gh_issue_flow_stop_guard.py (#1274)."
+        "_TERMINAL_REPORT_FIELDS in claude/hooks/gh_issue_flow_stop_guard.py (#1274)."
     )
     assert "Resume after fix:" in template, (
         "The failure report template no longer contains 'Resume after fix:' — update "
-        "_TERMINAL_REPORT_FIELD_RE in claude/hooks/gh_issue_flow_stop_guard.py (#1274)."
+        "_TERMINAL_REPORT_FIELDS in claude/hooks/gh_issue_flow_stop_guard.py (#1274)."
     )
 
 
