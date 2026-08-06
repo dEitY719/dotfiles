@@ -624,6 +624,11 @@ _my_help_build_alias_index() {
             --include='*.sh' --include='*.bash' --include='*.zsh' \
             "$root/bash" "$root/zsh" "$root/shell-common" 2>/dev/null |
             awk -v root="${root}/" '
+            function trim(s) {
+                sub(/^[ \t]+/, "", s)
+                sub(/[ \t]+$/, "", s)
+                return s
+            }
             {
                 # grep -n emits <path>:<line>:<content>; no path in this repo
                 # contains a colon, so splitting on the first two is safe.
@@ -665,14 +670,9 @@ _my_help_build_alias_index() {
 
                 note = ""
                 hi = index(tail, "#")
-                if (hi > 0) {
-                    note = substr(tail, hi + 1)
-                    sub(/^[ \t]+/, "", note)
-                    sub(/[ \t]+$/, "", note)
-                }
+                if (hi > 0) note = trim(substr(tail, hi + 1))
 
-                sub(/^[ \t]+/, "", defn)
-                sub(/[ \t]+$/, "", defn)
+                defn = trim(defn)
 
                 # Drop the dash-form aliases that only re-expose a help topic
                 # (`agy-help` -> `agy_help`). The topic stream already lists
@@ -752,11 +752,11 @@ _my_help_alias_index() {
     dir=$(dirname "$cache")
     if mkdir -p "$dir" 2>/dev/null; then
         tmp="${cache}.$$"
-        if printf '%s\n' "$fresh" > "$tmp" 2>/dev/null; then
-            mv -f "$tmp" "$cache" 2>/dev/null || rm -f "$tmp" 2>/dev/null
-        else
-            rm -f "$tmp" 2>/dev/null
-        fi
+        # A failed write or mv just means no cache this round. The unconditional
+        # rm covers both failure paths and is a no-op once mv consumed the temp.
+        printf '%s\n' "$fresh" > "$tmp" 2>/dev/null &&
+            mv -f "$tmp" "$cache" 2>/dev/null
+        rm -f "$tmp" 2>/dev/null
     fi
 
     printf '%s\n' "$fresh"
@@ -774,9 +774,9 @@ _my_help_show_alias_entry() {
 
     ux_section "Alias: ${name}"
     ux_bullet "definition: ${defn}"
-    if [ -n "$location" ]; then
-        ux_bullet "source:     ${location}"
-    fi
+    # Field 4 is always populated for an alias record (see the record layout
+    # above), so no emptiness guard is needed here.
+    ux_bullet "source:     ${location}"
     # desc doubles as the location when the alias carries no comment; only
     # print it when it is a real note.
     if [ -n "$desc" ] && [ "$desc" != "$location" ]; then
