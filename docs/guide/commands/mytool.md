@@ -41,13 +41,14 @@
 - **devx** — This script exists so `devx` can be run as a standalone c...
 - **docker_configure_proxy** — Docker Proxy 설정 스크립트 (대화형)
 - **enable_docker** — Docker 서비스 자동 시작 설정 (systemd) - 대화형
-- **ensure_jq** — Ensure jq is installed (dependency checker)
 - **ensure-ollama-deps** — Ollama Dependency Installer
+- **ensure_jq** — Ensure jq is installed (dependency checker)
 - **gen_command_docs** — Generate one markdown reference doc per user-facing comma...
 - **get_hw_info** — Display comprehensive hardware information
-- **gpu_status** — 목적: WSL2 특성상 컨테이너 내 nvidia-smi 사용 불가를 해결하고
+- **gpu_status** — 목적: WSL2 특성상 컨테이너 내 nvidia-smi 사용...
 - **hook_check** — Git Hook Configuration Diagnostic Tool
 - **init** — Centralized initialization for all custom tools scripts.
+- **install-ollama** — WSL Environment: Ollama Binary Installation Script
 - **install_agy** — Antigravity CLI (agy) 설치 스크립트 (대화형)
 - **install_bat** — Install and configure bat (cat replacement with syntax hi...
 - **install_claude** — Claude Code CLI Install Script
@@ -60,7 +61,6 @@
 - **install_notion_mcp** — Install and configure Notion MCP (Model Context Protocol)...
 - **install_npm** — Node.js & npm 설치 스크립트 (대화형)
 - **install_nvm** — NVM (Node Version Manager) Install Script
-- **install-ollama** — WSL Environment: Ollama Binary Installation Script
 - **install_opencode** — OpenCode CLI Installation Script (Interactive)
 - **install_p10k** — Install and configure powerlevel10k theme for zsh
 - **install_pet** — Install and configure pet (command snippet manager)
@@ -69,8 +69,8 @@
 - **install_redis** — Redis server installer for WSL/Ubuntu (interactive)
 - **install_ripgrep** — Install and configure ripgrep (fast text search tool)
 - **install_uv** — UV Install Script
-- **install_zsh_autosuggestions** — Install and configure zsh-autosuggestions
 - **install_zsh** — Zsh Install Script
+- **install_zsh_autosuggestions** — Install and configure zsh-autosuggestions
 - **make_confluence** — Transform a technical markdown document into a Confluence...
 - **make_jira** — Simple version handling both:
 - **mirror-pages-activate** — Activates GitHub Pages on the GHE origin repo and replace...

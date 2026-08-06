@@ -37,7 +37,9 @@
 
 ### topics
 
-- (렌더 실패)
+- Run: my-help <topic> to view a topic's help
+- Run: my-help for the full category list
+- Run: category-help categories to see categories inline
 
 ## 엣지케이스 / 의도된 동작
 

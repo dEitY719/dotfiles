@@ -67,7 +67,7 @@
 - **install-bat** — Install bat (cat with highlighting)
 - **install-pet** — Install pet (command snippet manager)
 
-### themes_list
+### themes-list
 
 - robbyrussell - Default clean theme
 - powerlevel10k - Modern powerline theme (requires Nerd Font)
@@ -75,7 +75,7 @@
 - minimal - Minimal and fast
 - afowler - Syntax highlighting focused
 
-### plugins_list
+### plugins-list
 
 - git - Git aliases and functions
 - zsh-autosuggestions - Command suggestions (type then use arrow)

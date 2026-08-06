@@ -150,6 +150,78 @@ class TestCommittedDocs:
         hits = [p.name for p in DOCS_DIR.glob("*.md") if "fzf 피커" in p.read_text(encoding="utf-8")]
         assert CSM_DOC in hits, f"'fzf 피커' not found in command docs (hits: {hits})"
 
+    def test_no_doc_contains_a_render_failure_marker(self):
+        """A row function that dies must never reach a committed doc.
+
+        Two docs shipped with this marker because the generator's failure
+        guard tested `[ -z "$content" ]`, which could never be true — the
+        document header is emitted before any row function runs.
+        """
+        broken = [p.name for p in DOCS_DIR.glob("*.md") if "렌더 실패" in p.read_text(encoding="utf-8")]
+        assert broken == [], f"docs contain a render-failure placeholder: {broken}"
+
+    def test_section_headings_name_tokens_the_cli_accepts(self):
+        """Headings must match the dispatcher's `case` labels, not the row-function suffix.
+
+        Row functions are `_<topic>_help_rows_release_artifacts` but the CLI
+        only accepts `git-help release-artifacts`; a doc naming the underscore
+        form instructs a command that errors.
+        """
+        offenders = []
+        for doc in DOCS_DIR.glob("*.md"):
+            for line in doc.read_text(encoding="utf-8").splitlines():
+                if not line.startswith("### "):
+                    continue
+                token = line[4:].strip()
+                if "_" in token:
+                    offenders.append(f"{doc.name}: {token}")
+        assert offenders == [], f"headings use underscore form the CLI rejects: {offenders}"
+
+    def test_committed_docs_match_a_fresh_render(self, tmp_path: Path):
+        """The drift gate.
+
+        The generator's whole premise is that the docs cannot diverge from the
+        row functions. Nothing enforced that, so a forgotten `--force` would
+        leave `rg docs/guide/commands/` answering confidently wrong. This is
+        the check that makes the claim real.
+        """
+        fresh = tmp_path / "commands"
+        fresh.mkdir()
+        shutil.copytree(DOCS_DIR / NOTES_DIRNAME, fresh / NOTES_DIRNAME)
+
+        result = run_generator("--force", "--out-dir", str(fresh))
+        assert result.returncode == 0, result.stderr
+
+        committed = {p.name for p in DOCS_DIR.glob("*.md")}
+        regenerated = {p.name for p in fresh.glob("*.md")}
+        assert committed == regenerated, (
+            f"file set drift — only committed: {sorted(committed - regenerated)}; "
+            f"only regenerated: {sorted(regenerated - committed)}"
+        )
+
+        stale = [
+            name
+            for name in sorted(committed)
+            if (DOCS_DIR / name).read_text(encoding="utf-8") != (fresh / name).read_text(encoding="utf-8")
+        ]
+        assert stale == [], (
+            f"stale docs (row functions changed without regenerating): {stale}. "
+            f"Fix: ./shell-common/tools/custom/gen_command_docs.sh --force"
+        )
+
+    @pytest.mark.parametrize("denied", ["ssl", "crt"])
+    def test_host_state_topics_are_never_documented(self, denied: str):
+        """`ssl`/`crt` rows print $SSL_CERT_FILE and friends.
+
+        Generating them bakes whatever certificate paths the generating
+        machine happens to have into a doc that ships to a public repo, and
+        makes the output differ per machine. They are deny-listed; read them
+        with `ssl-help` / `crt-help` where the values are actually yours.
+        """
+        assert not (DOCS_DIR / f"{denied}.md").exists(), (
+            f"{denied}.md renders host environment values and must not be committed"
+        )
+
     def test_index_links_every_doc(self):
         index = (DOCS_DIR / "README.md").read_text(encoding="utf-8")
         for doc in DOCS_DIR.glob("*.md"):

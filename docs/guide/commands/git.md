@@ -172,7 +172,7 @@
   ssh <PROD_SSH_ALIAS> "docker logs <PROD_API_CONTAINER> --since 10m --tail 50"
 - 공지 등 후처리: git-help release-artifacts / 근거: docs/guide/deploy-workflow.md
 
-### release_artifacts
+### release-artifacts
 
 **Release artifacts (프로젝트별 — 예시)**
 

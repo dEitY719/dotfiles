@@ -52,9 +52,30 @@ OPT_TOPIC=""
 OPT_OUT_DIR=""
 
 _STUB_FILE=""
+_RENDER_FILE=""
+_WORK_DIR=""
+
+# Frames the per-topic bodies in the render child's single output stream.
+# Long and unlikely enough that no help row can collide with it.
+GCD_DELIM="@@GEN_COMMAND_DOCS@@"
+FAILED_TOPICS=" "
+
+# Topics whose row functions render live host state rather than static help
+# text, so their output differs per machine and must never be committed.
+# `ssl` / `crt` (security_ssh_help.sh) print the values of $SSL_CERT_FILE,
+# $REQUESTS_CA_BUNDLE and $NODE_EXTRA_CA_CERTS — on a corporate machine that
+# bakes internal certificate paths into a doc that ships to a public repo.
+# Read these with `ssl-help` / `crt-help` instead, where the values are
+# genuinely yours.
+#
+# Locale-dependent output (`sort` collation, `cut -c` on multibyte text) is
+# NOT handled here — the render child pins LC_ALL=C so it is deterministic.
+GCD_DENY_TOPICS="ssl crt"
 
 _cleanup() {
     [ -n "$_STUB_FILE" ] && [ -f "$_STUB_FILE" ] && rm -f "$_STUB_FILE"
+    [ -n "$_RENDER_FILE" ] && [ -f "$_RENDER_FILE" ] && rm -f "$_RENDER_FILE"
+    [ -n "$_WORK_DIR" ] && [ -d "$_WORK_DIR" ] && rm -rf "$_WORK_DIR"
     return 0
 }
 trap _cleanup EXIT
@@ -114,6 +135,89 @@ _gcd_row() {
 ux_table_row() { _gcd_row "$@"; }
 ux_table_header() { _gcd_row "$@"; }
 STUBS
+}
+
+# The child renderer. Reads a manifest of "<topic>\t<file>\t<sec1,sec2,...>"
+# lines and streams every topic's body, framed by $GCD_DELIM marker lines the
+# parent splits on.
+make_render_file() {
+    _RENDER_FILE="$(mktemp "${TMPDIR:-/tmp}/gen_command_docs_render.XXXXXX")"
+    cat >"$_RENDER_FILE" <<'RENDER'
+set +u
+stubs="$1"
+manifest="$2"
+
+. "$stubs" || exit 3
+for _f in "$FUNCTIONS_DIR"/*.sh; do
+    [ -f "$_f" ] || continue
+    . "$_f" >/dev/null 2>&1 || true
+done
+# Re-assert the stubs: a file that loads ux_lib unconditionally would otherwise
+# have replaced the markdown renderers with the real terminal ones.
+. "$stubs" || exit 3
+
+# Every variable below is _gcd_-prefixed and the manifest is read into an
+# array before the first row function runs. Both are load-bearing: we have
+# just sourced ~96 files, and a help function that assigns an unlocalized
+# global (my_help.sh sets a bare `topic=`) would otherwise rewrite the loop
+# variable mid-iteration and file one topic's output under another's name.
+_gcd_manifest_lines=()
+while IFS= read -r _gcd_line; do
+    [ -n "$_gcd_line" ] && _gcd_manifest_lines+=("$_gcd_line")
+done <"$manifest"
+
+# Emit a section body; returns non-zero only when the row function produced
+# nothing at all. A row that prints its content and still exits non-zero
+# (dot_help.sh's `show_mnt` call is a dangling name) is what the user sees
+# from `<topic>-help <section>`, so it is documented, not discarded.
+_gcd_emit_section() {
+    _gcd_out="$("$1" 2>/dev/null)"
+    if [ -z "$_gcd_out" ]; then
+        return 1
+    fi
+    printf '%s\n' "$_gcd_out"
+    return 0
+}
+
+for _gcd_entry in "${_gcd_manifest_lines[@]}"; do
+    _gcd_topic="${_gcd_entry%%	*}"
+    _gcd_rest="${_gcd_entry#*	}"
+    _gcd_secs="${_gcd_rest#*	}"
+    printf '%s TOPIC %s\n' "$GCD_DELIM" "$_gcd_topic"
+
+    # Section headings must name a token the dispatcher accepts. Row-function
+    # suffixes are underscore-form by necessity, but the `case` labels are
+    # dash-form (`git-help release-artifacts`). The topic's own
+    # _help_list_sections is the SSOT for the accepted spelling, so prefer it
+    # and fall back to the suffix when the topic has no such function.
+    _gcd_tokens=""
+    if declare -F "_${_gcd_topic}_help_list_sections" >/dev/null 2>&1; then
+        _gcd_tokens=$("_${_gcd_topic}_help_list_sections" 2>/dev/null |
+            sed -e 's/^[[:space:]]*-[[:space:]]*//' -e 's/[[:space:]].*$//' -e 's/:$//')
+    fi
+
+    if declare -F "_${_gcd_topic}_help_summary" >/dev/null 2>&1; then
+        printf '## 요약 (%s-help)\n\n' "$(printf '%s' "$_gcd_topic" | tr '_' '-')"
+        _gcd_emit_section "_${_gcd_topic}_help_summary" ||
+            printf '%s FAIL %s summary\n' "$GCD_DELIM" "$_gcd_topic"
+        printf '\n'
+    fi
+
+    printf '## 섹션\n\n'
+    for _gcd_suffix in $(printf '%s' "$_gcd_secs" | tr ',' ' '); do
+        _gcd_heading="$_gcd_suffix"
+        for _gcd_tok in $_gcd_tokens; do
+            [ "$(printf '%s' "$_gcd_tok" | tr '-' '_')" = "$_gcd_suffix" ] || continue
+            _gcd_heading="$_gcd_tok"
+            break
+        done
+        printf '### %s\n\n' "$_gcd_heading"
+        _gcd_emit_section "_${_gcd_topic}_help_rows_${_gcd_suffix}" ||
+            printf '%s FAIL %s %s\n' "$GCD_DELIM" "$_gcd_topic" "$_gcd_heading"
+        printf '\n'
+    done
+done
+RENDER
 }
 
 # ---------------------------------------------------------------------------
@@ -210,50 +314,74 @@ topic_alias_list() {
 # Rendering
 # ---------------------------------------------------------------------------
 
-# Render a topic's summary + every section in ONE bash subshell.
-# One process per topic keeps a full 40+ topic regeneration well under a
-# second (NF-1); a process per section would not.
+# Render EVERY topic in ONE bash child that sources the whole functions/ tree
+# up front.
+#
+# Why the whole tree and not just the topic's own file: row functions
+# legitimately call helpers defined in sibling files — `_dot_help_rows_mounts`
+# calls `show_mnt` from mount.sh, `_category_help_rows_topics` reaches into
+# my_help.sh. Sourcing one file in isolation made those die mid-render, and the
+# failure was papered over as literal "(렌더 실패)" text inside a doc that still
+# counted as written. An interactive shell loads all of these together, so the
+# whole tree is the faithful environment, not a workaround.
+#
+# One child for all topics also beats one child per topic on wall clock: the
+# tree is sourced once (~100 ms) instead of once per topic.
 #
 # The output is post-processed so the committed docs stay machine-independent:
 # ANSI escapes stripped, and absolute paths folded back to `~/dotfiles` / `~`
 # (some rows interpolate $DOTFILES_ROOT, which differs per worktree — without
 # this every clone would regenerate a diff).
-render_topic_body() {
-    local file="$1" topic="$2"
-    shift 2
+render_all_bodies() {
+    local manifest="$1" stream="$2"
 
-    DOTFILES_FORCE_INIT=1 NO_COLOR=1 TERM=dumb DOTFILES_TEST_MODE=1 \
+    # LC_ALL=C pins collation and byte-wise truncation. Without it a row that
+    # does `find | sort` or `cut -c1-57` over multibyte text renders
+    # differently depending on the generating machine's locale, and the
+    # committed docs stop being reproducible.
+    DOTFILES_FORCE_INIT=1 NO_COLOR=1 TERM=dumb DOTFILES_TEST_MODE=1 LC_ALL=C \
         SHELL_COMMON="$SHELL_COMMON" DOTFILES_ROOT="$DOTFILES_ROOT" \
-        bash --noprofile --norc -c '
-            set +u
-            stubs="$1"; target="$2"; topic="$3"; shift 3
-            . "$stubs" || exit 3
-            . "$target" >/dev/null 2>&1 || exit 4
-            . "$stubs" || exit 3
-
-            if declare -F "_${topic}_help_summary" >/dev/null 2>&1; then
-                printf "## 요약 (%s-help)\n\n" "${topic//_/-}"
-                "_${topic}_help_summary"
-                printf "\n"
-            fi
-
-            printf "## 섹션\n\n"
-            for section in "$@"; do
-                printf "### %s\n\n" "$section"
-                "_${topic}_help_rows_${section}" || printf -- "- (렌더 실패)\n"
-                printf "\n"
-            done
-        ' _ "$_STUB_FILE" "$file" "$topic" "$@" 2>/dev/null |
+        FUNCTIONS_DIR="$FUNCTIONS_DIR" GCD_DELIM="$GCD_DELIM" \
+        bash --noprofile --norc "$_RENDER_FILE" "$_STUB_FILE" "$manifest" 2>/dev/null |
         LC_ALL=C sed \
             -e 's/\x1b\[[0-9;]*[A-Za-z]//g' \
             -e "s|${DOTFILES_ROOT}|~/dotfiles|g" \
-            -e "s|${HOME}|~|g"
+            -e "s|${HOME}|~|g" >"$stream"
+}
+
+# Split the combined stream into per-topic body files and surface render
+# failures. A topic that reports a failed section is recorded in FAILED_TOPICS
+# so main() can refuse to write a half-rendered doc — the previous code tested
+# `[ -z "$content" ]`, which could never be true because the document header is
+# emitted before anything can fail.
+split_bodies() {
+    local stream="$1" dir="$2"
+    local line cur="" rest ftopic fsec
+
+    FAILED_TOPICS=" "
+    while IFS= read -r line; do
+        case "$line" in
+        "$GCD_DELIM TOPIC "*)
+            cur="${line#"$GCD_DELIM TOPIC "}"
+            : >"${dir}/${cur}.body"
+            ;;
+        "$GCD_DELIM FAIL "*)
+            rest="${line#"$GCD_DELIM FAIL "}"
+            ftopic="${rest%% *}"
+            fsec="${rest#* }"
+            ux_warning "${ftopic}: '${fsec}' 섹션 렌더 실패 — 문서를 갱신하지 않음"
+            case "$FAILED_TOPICS" in *" $ftopic "*) ;; *) FAILED_TOPICS="${FAILED_TOPICS}${ftopic} " ;; esac
+            ;;
+        *)
+            [ -n "$cur" ] && printf '%s\n' "$line" >>"${dir}/${cur}.body"
+            ;;
+        esac
+    done <"$stream"
 }
 
 # Full markdown document for one topic.
 render_topic_doc() {
-    local file="$1" topic="$2" basename_stem="$3" notes_file="$4"
-    shift 4
+    local file="$1" topic="$2" basename_stem="$3" notes_file="$4" body_file="$5"
 
     local rel_source="${file#"${DOTFILES_ROOT}"/}"
     local topic_dash="${topic//_/-}"
@@ -276,7 +404,7 @@ render_topic_doc() {
     fi
     printf '\n'
 
-    render_topic_body "$file" "$topic" "$@"
+    cat "$body_file"
 
     printf '## 엣지케이스 / 의도된 동작\n\n'
     if [ -f "$notes_file" ]; then
@@ -298,15 +426,15 @@ render_topic_doc() {
 # ---------------------------------------------------------------------------
 
 # Write only when the rendered content differs, so a no-op regeneration
-# leaves the file (and its mtime) untouched. Echoes the verdict.
+# leaves the file (and its mtime) untouched.
+# Returns 0 when it wrote, 1 when the content was already identical.
 write_if_changed() {
     local target="$1" content="$2"
-    if [ -f "$target" ] && [ "$content" = "$(cat "$target")" ]; then
-        printf 'unchanged\n'
-        return 0
+    if [ -f "$target" ] && [ "$content" = "$(<"$target")" ]; then
+        return 1
     fi
     printf '%s\n' "$content" >"$target"
-    printf 'written\n'
+    return 0
 }
 
 write_index() {
@@ -394,28 +522,38 @@ main() {
     fi
 
     make_stub_file
+    make_render_file
+    _WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/gen_command_docs_work.XXXXXX")"
     mkdir -p "$out_dir" "$notes_dir"
 
     ux_header "Command Docs Generator"
 
-    local topic file stem doc content verdict
+    local topic file stem doc content body i
     local -a sections=()
     local -a stems=()
     local -a taken=()
-    local n_written=0 n_unchanged=0 n_skipped=0 n_failed=0
+    local -a r_topic=() r_file=() r_stem=()
+    local n_written=0 n_unchanged=0 n_skipped=0 n_failed=0 n_denied=0
+    local manifest="${_WORK_DIR}/manifest.tsv"
+    : >"$manifest"
 
+    # Plan pass: resolve each topic's filename and section list up front so the
+    # render child can handle every topic in a single process.
     while IFS=$'\t' read -r topic file; do
         [ -n "$topic" ] || continue
         if [ -n "$OPT_TOPIC" ] && [ "$topic" != "$OPT_TOPIC" ]; then
             continue
         fi
 
-        mapfile -t sections < <(topic_sections "$file" "$topic")
-        if [ "${#sections[@]}" -eq 0 ]; then
-            ux_warning "${topic}: row 함수 없음 — skip"
-            n_failed=$((n_failed + 1))
+        case " $GCD_DENY_TOPICS " in
+        *" $topic "*)
+            ux_warning "${topic}: 호스트 환경값을 렌더 — 문서 생성 제외 (${topic}-help 로 직접 확인)"
+            n_denied=$((n_denied + 1))
             continue
-        fi
+            ;;
+        esac
+
+        mapfile -t sections < <(topic_sections "$file" "$topic")
 
         stem="$(topic_doc_basename "$file" "$topic")"
         # Two topics claiming one filename: the later one falls back to its
@@ -433,19 +571,47 @@ main() {
             continue
         fi
 
-        content="$(render_topic_doc "$file" "$topic" "$stem" "${notes_dir}/${stem}.md" "${sections[@]}")"
-        if [ -z "$content" ]; then
-            ux_warning "${topic}: 렌더 실패 — skip"
-            n_failed=$((n_failed + 1))
-            continue
-        fi
-
-        verdict="$(write_if_changed "$doc" "$content")"
-        case "$verdict" in
-        written) n_written=$((n_written + 1)) ;;
-        *) n_unchanged=$((n_unchanged + 1)) ;;
-        esac
+        r_topic+=("$topic")
+        r_file+=("$file")
+        r_stem+=("$stem")
+        printf '%s\t%s\t%s\n' "$topic" "$file" "$(
+            IFS=,
+            printf '%s' "${sections[*]}"
+        )" >>"$manifest"
     done <<<"$(discover_topics)"
+
+    # Render pass: one child for every topic, then compose and write.
+    if [ "${#r_topic[@]}" -gt 0 ]; then
+        render_all_bodies "$manifest" "${_WORK_DIR}/stream"
+        split_bodies "${_WORK_DIR}/stream" "$_WORK_DIR"
+
+        for i in "${!r_topic[@]}"; do
+            topic="${r_topic[$i]}"
+            stem="${r_stem[$i]}"
+            body="${_WORK_DIR}/${topic}.body"
+
+            # A topic whose rows failed keeps its previous doc rather than
+            # publishing a half-rendered one.
+            case "$FAILED_TOPICS" in
+            *" $topic "*)
+                n_failed=$((n_failed + 1))
+                continue
+                ;;
+            esac
+            if [ ! -s "$body" ]; then
+                ux_warning "${topic}: 렌더 결과 없음 — 문서를 갱신하지 않음"
+                n_failed=$((n_failed + 1))
+                continue
+            fi
+
+            content="$(render_topic_doc "${r_file[$i]}" "$topic" "$stem" "${notes_dir}/${stem}.md" "$body")"
+            if write_if_changed "${out_dir}/${stem}.md" "$content"; then
+                n_written=$((n_written + 1))
+            else
+                n_unchanged=$((n_unchanged + 1))
+            fi
+        done
+    fi
 
     if [ -z "$OPT_TOPIC" ]; then
         warn_legacy_help_files
@@ -454,13 +620,18 @@ main() {
     if [ -z "$OPT_TOPIC" ] && [ "${#stems[@]}" -gt 0 ]; then
         local -a sorted_stems=()
         mapfile -t sorted_stems < <(printf '%s\n' "${stems[@]}" | LC_ALL=C sort)
-        write_index "$out_dir" "${sorted_stems[@]}" >/dev/null
+        if write_index "$out_dir" "${sorted_stems[@]}"; then
+            n_written=$((n_written + 1))
+        else
+            n_unchanged=$((n_unchanged + 1))
+        fi
     fi
 
     ux_table_row "written" "$n_written"
     ux_table_row "unchanged" "$n_unchanged"
     ux_table_row "skipped (문서 존재, --force 없음)" "$n_skipped"
     ux_table_row "legacy (row 함수 없는 *_help.sh)" "$N_LEGACY"
+    ux_table_row "denied (호스트 환경값 렌더)" "$n_denied"
     ux_table_row "failed" "$n_failed"
     ux_success "Docs: ${out_dir#"${DOTFILES_ROOT}"/}"
     ux_info "Search: rg \"<keyword>\" ${out_dir#"${DOTFILES_ROOT}"/}"
