@@ -223,11 +223,14 @@ _gh_pr_review_stderr_is_noise() {
 # or hardcoded prompt path lets one lane clobber the other's prompt, so both
 # CLIs review byte-identical input and the run silently false-passes.
 # Args: $1 = ai (codex|agy|claude), $2 = PR number (for debuggability).
-# Prints the created path on stdout; non-zero when /tmp is unwritable.
+# Prints a path on stdout. Falls back to a $$-suffixed path (still
+# lane-discriminated) when mktemp itself is unavailable, so this stays
+# the single place that knows the PROMPT_FILE naming template.
 _gh_pr_review_mktemp_prompt() {
     local ai="$1"
     local pr="${2:-0}"
-    mktemp "/tmp/gh-pr-review-prompt.$ai.$pr.XXXXXX" 2>/dev/null
+    mktemp "/tmp/gh-pr-review-prompt.$ai.$pr.XXXXXX" 2>/dev/null ||
+        echo "/tmp/gh-pr-review-prompt.$ai.$pr.$$"
 }
 
 # _gh_pr_review_run_ai — pipes PROMPT_FILE into the chosen AI CLI per
@@ -870,8 +873,7 @@ EOF
 
     # ---- Step 3 + 4: build prompt + diff into a temp file ----
     local PROMPT_FILE BODY_FILE AI_OUT
-    PROMPT_FILE=$(_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER") ||
-        PROMPT_FILE="/tmp/gh-pr-review-prompt.$ai.$PR_NUMBER.$$"
+    PROMPT_FILE=$(_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER")
     AI_OUT=$(mktemp 2>/dev/null) || AI_OUT="/tmp/gh-pr-review-out.$$"
     BODY_FILE=$(mktemp 2>/dev/null) || BODY_FILE="/tmp/gh-pr-review-body.$$"
 
