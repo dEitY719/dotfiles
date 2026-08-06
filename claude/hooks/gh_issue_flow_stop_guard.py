@@ -140,7 +140,7 @@ _TERMINAL_COMMAND_RE: re.Pattern[str] = re.compile(
 # fix:` line, neither of which a single grepped marker line reproduces.
 # Kept as its own pattern (not folded into `_TERMINAL_COMMAND_RE`) because
 # the two run against different halves of the pair.
-_TERMINAL_REPORT_FIELD_RE: re.Pattern[str] = re.compile(r"PR URL:|Resume after fix:")
+_TERMINAL_REPORT_FIELDS: tuple[str, ...] = ("PR URL:", "Resume after fix:")
 
 # Issue #1270 — spans Claude Code injects into user-role messages that are
 # NOT user prose. `<system-reminder>…</system-reminder>` blocks are harness
@@ -246,6 +246,23 @@ def _block(reason: str, *, layer: str | None = None) -> int:
     return 0
 
 
+def _text_from_sub_blocks(content: list[Any]) -> list[str]:
+    """Return the text of every `{"type": "text", "text": ...}` sub-block.
+
+    `tool_result.content` is a plain string in some transcripts and a list
+    of text sub-blocks in others; this handles the list shape. Shared by
+    `_iter_text_blocks`'s tool_result branch and `_iter_tool_results` so the
+    same extraction logic isn't duplicated across both.
+    """
+    parts: list[str] = []
+    for sub in content:
+        if isinstance(sub, dict) and sub.get("type") == "text":
+            st = sub.get("text")
+            if isinstance(st, str):
+                parts.append(st)
+    return parts
+
+
 def _iter_text_blocks(message: dict[str, Any], include_tool_results: bool = False) -> list[str]:
     """Return all text-bearing chunks in a message's content array.
 
@@ -282,11 +299,7 @@ def _iter_text_blocks(message: dict[str, Any], include_tool_results: bool = Fals
                 if isinstance(rc, str):
                     parts.append(rc)
                 elif isinstance(rc, list):
-                    for sub in rc:
-                        if isinstance(sub, dict) and sub.get("type") == "text":
-                            st = sub.get("text")
-                            if isinstance(st, str):
-                                parts.append(st)
+                    parts.extend(_text_from_sub_blocks(rc))
     return parts
 
 
@@ -370,8 +383,9 @@ def _iter_tool_results(message: dict[str, Any]) -> list[tuple[str, str]]:
 
     `tool_result.content` is a plain string in some transcripts and a list
     of `{"type": "text", "text": ...}` blocks in others, so both shapes are
-    handled (mirroring `_iter_text_blocks`). A block with no usable string
-    `tool_use_id` is dropped — it can never form a pair.
+    handled via `_text_from_sub_blocks` (shared with `_iter_text_blocks`). A
+    block with no usable string `tool_use_id` is dropped — it can never form
+    a pair.
 
     Exactly ONE tuple is emitted per tool_result block: when `content` is a
     list, its text sub-blocks are `"\\n".join`ed first (same reason
@@ -395,12 +409,7 @@ def _iter_tool_results(message: dict[str, Any]) -> list[tuple[str, str]]:
         if isinstance(rc, str):
             out.append((tool_use_id, rc))
         elif isinstance(rc, list):
-            parts: list[str] = []
-            for sub in rc:
-                if isinstance(sub, dict) and sub.get("type") == "text":
-                    st = sub.get("text")
-                    if isinstance(st, str):
-                        parts.append(st)
+            parts = _text_from_sub_blocks(rc)
             if parts:
                 out.append((tool_use_id, "\n".join(parts)))
     return out
@@ -493,7 +502,7 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
       1. `_TERMINAL_COMMAND_RE` matches the `input.command` of a `Bash`
          tool_use, AND
       2. the `tool_result` whose `tool_use_id` equals THAT tool_use's `id`
-         matches `_TERMINAL_COMMAND_RE` *and* `_TERMINAL_REPORT_FIELD_RE`
+         matches `_TERMINAL_COMMAND_RE` *and* one of `_TERMINAL_REPORT_FIELDS`
          (issue #1274).
     Condition 1 alone only proves the model *mentioned* the marker, not
     that it *emitted* a report: `cat <<'EOF' > /tmp/report.txt` redirects
@@ -510,7 +519,7 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
     strictly narrower than either half on its own.
 
     Issue #1274 narrows condition 2 further: the paired `tool_result` must
-    also carry a report *field* line (`_TERMINAL_REPORT_FIELD_RE` — `PR
+    also carry a report *field* line (`_TERMINAL_REPORT_FIELDS` — `PR
     URL:` for the success form, `Resume after fix:` for the failure form).
     The marker line alone used to be enough, which let `grep
     "gh:issue-flow complete (#1270)" some.log` terminate a live flow: the
@@ -569,7 +578,7 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
                     and _TERMINAL_COMMAND_RE.search(text)
                     # #1274 — a bare marker line can be a grep echo; a real
                     # report also carries `PR URL:` / `Resume after fix:`.
-                    and _TERMINAL_REPORT_FIELD_RE.search(text)
+                    and any(field in text for field in _TERMINAL_REPORT_FIELDS)
                 ):
                     terminal = True
                     break
