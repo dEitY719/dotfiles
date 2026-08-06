@@ -94,48 +94,7 @@ def _user_tool_result(text: str) -> dict[str, Any]:
     }
 
 
-def _assistant_skill(skill: str, args: str = "") -> dict[str, Any]:
-    """Build an assistant tool_use message invoking Skill(<skill>)."""
-    return {
-        "type": "assistant",
-        "message": {
-            "role": "assistant",
-            "content": [
-                {
-                    "type": "tool_use",
-                    "id": f"toolu_{skill}",
-                    "name": "Skill",
-                    "input": {"skill": skill, "args": args},
-                }
-            ],
-        },
-    }
-
-
-def _assistant_bash(command: str) -> dict[str, Any]:
-    """Build an assistant tool_use message invoking Bash(command=...).
-
-    Mirrors `_assistant_skill` — used by the issue #1270 fixtures where the
-    model prints the Step 3 report through a heredoc / printf instead of
-    plain assistant text.
-    """
-    return {
-        "type": "assistant",
-        "message": {
-            "role": "assistant",
-            "content": [
-                {
-                    "type": "tool_use",
-                    "id": "toolu_bash",
-                    "name": "Bash",
-                    "input": {"command": command, "description": "run a command"},
-                }
-            ],
-        },
-    }
-
-
-def _assistant_tool_use(name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
+def _assistant_tool_use(name: str, tool_input: dict[str, Any], block_id: str | None = None) -> dict[str, Any]:
     """Build an assistant tool_use message for an arbitrary tool.
 
     Used by issue #1270 to prove that non-Bash tool inputs (Edit / Write)
@@ -148,13 +107,45 @@ def _assistant_tool_use(name: str, tool_input: dict[str, Any]) -> dict[str, Any]
             "content": [
                 {
                     "type": "tool_use",
-                    "id": f"toolu_{name.lower()}",
+                    "id": block_id or f"toolu_{name.lower()}",
                     "name": name,
                     "input": tool_input,
                 }
             ],
         },
     }
+
+
+def _assistant_skill(skill: str, args: str = "") -> dict[str, Any]:
+    """Build an assistant tool_use message invoking Skill(<skill>)."""
+    return _assistant_tool_use("Skill", {"skill": skill, "args": args}, f"toolu_{skill}")
+
+
+def _assistant_bash(command: str) -> dict[str, Any]:
+    """Build an assistant tool_use message invoking Bash(command=...).
+
+    Used by the issue #1270 fixtures where the model prints the Step 3
+    report through a heredoc / printf instead of plain assistant text.
+    """
+    return _assistant_tool_use("Bash", {"command": command, "description": "run a command"})
+
+
+# The canonical 6-step gh-issue-flow chain, restated here on purpose: these
+# tests drive the hook as a black box via subprocess and never import its
+# EXPECTED_CHAIN, so a change to the chain must break the tests loudly.
+_ALL_SIX_SUB_SKILLS = [
+    "gh-issue-implement",
+    "gh-commit",
+    "gh-pr",
+    "devx-pr-review-all",
+    "gh-pr-resolve-conflict",
+    "gh-pr-resolve-outdated",
+]
+
+
+def _full_chain_prefix() -> list[dict[str, Any]]:
+    """Boundary + all six sub-skill invocations, with no Step 3 report yet."""
+    return [_user_text("/gh-issue-flow 1270"), *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS)]
 
 
 def _hook_event(transcript_path: Path | None, **extras: Any) -> str:
@@ -1129,80 +1120,37 @@ def test_trace_emits_layer_field_for_no_boundary_allow(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Issue #1270 — F-1: Bash-emitted Step 3 report is recognized as terminal
-#
-# The canonical channel stays assistant *text*. But when the model prints
-# the Step 3 report through `Bash` (`cat <<'EOF' … EOF`, `printf`), the
-# report text only ever exists in the tool_use `input.command` string and
-# in the resulting `tool_result` — neither of which was scanned, so the
-# flow could never terminate and the stale boundary then blocked every
-# later turn in the session. The scan now also matches assistant `Bash`
-# commands against a stricter regex requiring a literal digit where the
-# SKILL.md templates carry `<N>` / `<i>`.
-#
-# Deliberately NOT widened: `tool_result` (issue #608), and every tool
-# other than `Bash` — an `Edit`/`Write` of SKILL.md or
-# references/report-template.md legitimately carries real template text.
+# Issue #1270 — F-1: a Bash-emitted Step 3 report is terminal, while
+# `tool_result` (issue #608) and non-`Bash` tool inputs deliberately are
+# not. Mechanism and rationale:
+# claude/skills/gh-issue-flow/references/stop-guard.md step 4.
 # ---------------------------------------------------------------------------
 
 
-_ALL_SIX_SUB_SKILLS = [
-    "gh-issue-implement",
-    "gh-commit",
-    "gh-pr",
-    "devx-pr-review-all",
-    "gh-pr-resolve-conflict",
-    "gh-pr-resolve-outdated",
-]
-
-
-def _full_chain_prefix() -> list[dict[str, Any]]:
-    """Boundary + all six sub-skill invocations, with no Step 3 report yet."""
-    return [_user_text("/gh-issue-flow 1270")] + [_assistant_skill(name) for name in _ALL_SIX_SUB_SKILLS]
-
-
-def test_bash_heredoc_terminal_report_allows_stop(tmp_path: Path) -> None:
-    """F-1: Step 3 report emitted via a `cat <<'EOF'` heredoc → allow."""
-    heredoc = (
-        "cat <<'EOF'\n"
-        "gh:issue-flow complete (#1270)\n"
-        "  [OK] Step 1: gh:issue-implement\n"
-        "  PR URL: https://github.com/example/repo/pull/99\n"
-        "EOF\n"
-    )
-    transcript = _write_transcript(tmp_path, [*_full_chain_prefix(), _assistant_bash(heredoc)])
+@pytest.mark.parametrize(
+    "command",
+    [
+        pytest.param(
+            "cat <<'EOF'\n"
+            "gh:issue-flow complete (#1270)\n"
+            "  [OK] Step 1: gh:issue-implement\n"
+            "  PR URL: https://github.com/example/repo/pull/99\n"
+            "EOF\n",
+            id="heredoc",
+        ),
+        pytest.param("printf 'gh:issue-flow complete (#42)\\n'", id="printf"),
+        pytest.param("echo 'gh:issue-flow stopped at step 2/6 (gh:commit)'", id="stopped-at-step"),
+    ],
+)
+def test_bash_emitted_terminal_report_allows_stop(tmp_path: Path, command: str) -> None:
+    """F-1: a Step 3 report printed through Bash terminates the flow."""
+    transcript = _write_transcript(tmp_path, [*_full_chain_prefix(), _assistant_bash(command)])
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert result.stdout.strip() == "", (
-        "Hook blocked a completed flow whose Step 3 report was emitted through a "
-        f"Bash heredoc. stdout={result.stdout!r}"
+        "Hook blocked a completed flow whose Step 3 report was emitted through "
+        f"Bash. command={command!r} stdout={result.stdout!r}"
     )
-
-
-def test_bash_printf_terminal_report_allows_stop(tmp_path: Path) -> None:
-    """F-1: the `printf` form of the report is recognized too."""
-    transcript = _write_transcript(
-        tmp_path,
-        [*_full_chain_prefix(), _assistant_bash("printf 'gh:issue-flow complete (#42)\\n'")],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    assert result.stdout.strip() == "", f"stdout={result.stdout!r}"
-
-
-def test_bash_stopped_at_step_report_allows_stop(tmp_path: Path) -> None:
-    """F-1: the failure marker `stopped at step <i>/6` also terminates."""
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/gh-issue-flow 1270"),
-            _assistant_skill("gh-issue-implement"),
-            _assistant_bash("echo 'gh:issue-flow stopped at step 2/6 (gh:commit)'"),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    assert result.stdout.strip() == "", f"stdout={result.stdout!r}"
 
 
 def test_bash_grep_of_template_text_does_not_terminate(tmp_path: Path) -> None:
@@ -1300,18 +1248,11 @@ def test_edit_and_write_tool_inputs_are_not_scanned_for_terminal(
 
 
 # ---------------------------------------------------------------------------
-# Issue #1270 — F-2: stale boundary expiry
-#
-# `stop_hook_active` only prevents an infinite Stop→block→Stop loop *within*
-# one turn; it resets when the user sends a new message. So a flow that
-# never emitted a Step 3 marker used to keep blocking every later turn of
-# the session, on completely unrelated topics. After N fresh user prompts
+# Issue #1270 — F-2: stale boundary expiry. After N fresh user prompts
 # (default 3, `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS`, `0` = disabled)
-# the boundary is declared stale and the hook fails open.
-#
-# "Fresh" excludes tool_result carriers, `<system-reminder>`-only messages
-# and Claude Code's skill-expansion injections — all of those are flow
-# machinery, not human turns.
+# the boundary is abandoned and the hook fails open. What counts as
+# "fresh", and why the valve is needed at all:
+# claude/skills/gh-issue-flow/references/stop-guard.md step 5.
 # ---------------------------------------------------------------------------
 
 

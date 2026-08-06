@@ -2,11 +2,9 @@
 
 **Emit this report as plain assistant text.** Do not print it through a
 tool — no `Bash` heredoc (`cat <<'EOF'`), no `printf`, no `Write`/`Edit`.
-The harness Stop guard (`claude/hooks/gh_issue_flow_stop_guard.py`)
-detects flow completion by scanning assistant **text** blocks; that is the
-canonical channel. Since #1270 a `Bash`-emitted report is also recognized
-as a fallback, but plain assistant text stays canonical — a report written
-via any other tool is invisible to the guard and the turn will be blocked.
+Any other channel may be invisible to the harness Stop guard, which then
+blocks the turn. The guard's detection contract is the SSOT in
+`references/stop-guard.md` (#1270).
 
 If all steps succeeded:
 

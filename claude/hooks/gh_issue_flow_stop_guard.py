@@ -21,16 +21,10 @@ Safety rails (each is critical — never accidentally trap the user):
   - Boundary went stale (N fresh user prompts since it) → exit 0 (#1270).
   - Any unexpected exception → exit 0 (fail open).
 
-Terminal-marker channels (issue #1270 widened the coverage):
-  - canonical: `role=assistant` **text** blocks (the SKILL.md Step 3 report
-    is specified to be emitted as plain assistant text);
-  - fallback: the `input.command` string of an assistant `Bash` `tool_use`
-    block, matched against the stricter `_TERMINAL_COMMAND_RE`. Models
-    sometimes print the Step 3 report via `cat <<'EOF'` / `printf`, in
-    which case the report text never reaches an assistant text block and
-    the flow could never terminate.
-`tool_result` blocks stay excluded (issue #608, layer L1.5), and no tool
-other than `Bash` is scanned — see `_scan_after_boundary`.
+Terminal-marker channels: assistant **text** blocks (canonical), plus the
+`input.command` of assistant `Bash` `tool_use` blocks (#1270 fallback).
+`tool_result` (issue #608) and every non-`Bash` tool stay excluded — the
+rationale and the scope guard live on `_scan_after_boundary`.
 
 The hook only ever does two things: emit nothing (allow), or emit one JSON
 object `{"decision":"block","reason":"..."}` on stdout (block + nudge).
@@ -69,6 +63,9 @@ def _trace(message: str, *, layer: str | None = None) -> None:
       - `L1.5` — terminal-marker / sub-skill scan (`_scan_after_boundary`)
       - `L2`   — state file (`.claude/.gh-issue-flow-state.json`, future)
       - `L3`   — heartbeat cron (`CronCreate(durable=true)`, future)
+    Boundary *expiry* (#1270) is scored `L1.5` even though it invalidates an
+    `L1` boundary: it is decided purely from the post-boundary window that
+    `L1.5` owns, so it belongs with the scan it runs alongside.
     The tag is appended (not prepended) so existing substring-based test
     assertions like `"[stop-guard] allow:"` keep matching.
     """
@@ -115,14 +112,14 @@ TERMINAL_PATTERNS: tuple[str, ...] = (
 )
 
 # Issue #1270 — terminal marker as it appears inside a `Bash` tool_use
-# `input.command` string (e.g. `cat <<'EOF' … EOF` or `printf` used to print
-# the Step 3 report). Deliberately STRICTER than TERMINAL_PATTERNS: it
-# demands a literal digit exactly where the SKILL.md / report-template.md
-# templates carry the placeholders `<N>` and `<i>`. A command that merely
-# mentions or greps the template text — `grep "gh:issue-flow complete"
-# SKILL.md`, `rg 'gh:issue-flow stopped at step'` — therefore cannot match,
-# while a real report (`gh:issue-flow complete (#1270)`, `gh:issue-flow
-# stopped at step 2/6`) does.
+# `input.command` string (why that channel exists: `_scan_after_boundary`).
+# Deliberately STRICTER than TERMINAL_PATTERNS: it demands a literal digit
+# exactly where the SKILL.md / report-template.md templates carry the
+# placeholders `<N>` and `<i>`. A command that merely mentions or greps the
+# template text — `grep "gh:issue-flow complete" SKILL.md`, `rg
+# 'gh:issue-flow stopped at step'` — therefore cannot match, while a real
+# report (`gh:issue-flow complete (#1270)`, `gh:issue-flow stopped at step
+# 2/6`) does.
 _TERMINAL_COMMAND_RE: re.Pattern[str] = re.compile(
     r"gh[-:]issue-flow\s+(?:complete\s+\(#\d+\)|stopped\s+at\s+step\s+\d)",
 )
@@ -247,8 +244,12 @@ def _iter_text_blocks(message: dict[str, Any], include_tool_results: bool = Fals
     return parts
 
 
-def _iter_skill_uses(message: dict[str, Any]) -> list[str]:
-    """Return the skill names invoked via Skill tool_use blocks in this message."""
+def _iter_tool_use_inputs(message: dict[str, Any], tool_name: str, input_key: str) -> list[str]:
+    """Return `input[<input_key>]` of every `<tool_name>` tool_use block.
+
+    Every level is isinstance-checked so a malformed transcript entry can
+    only yield fewer results, never an exception — the hook must fail open.
+    """
     out: list[str] = []
     content = message.get("content")
     if not isinstance(content, list):
@@ -258,103 +259,29 @@ def _iter_skill_uses(message: dict[str, Any]) -> list[str]:
             continue
         if block.get("type") != "tool_use":
             continue
-        if block.get("name") != "Skill":
+        if block.get("name") != tool_name:
             continue
         tool_input = block.get("input")
         if not isinstance(tool_input, dict):
             continue
-        skill = tool_input.get("skill")
-        if isinstance(skill, str):
-            out.append(skill)
+        value = tool_input.get(input_key)
+        if isinstance(value, str):
+            out.append(value)
     return out
+
+
+def _iter_skill_uses(message: dict[str, Any]) -> list[str]:
+    """Return the skill names invoked via Skill tool_use blocks in this message."""
+    return _iter_tool_use_inputs(message, "Skill", "skill")
 
 
 def _iter_bash_commands(message: dict[str, Any]) -> list[str]:
     """Return the `input.command` strings of `Bash` tool_use blocks (#1270).
 
-    Mirrors the defensive isinstance style of `_iter_skill_uses`: every
-    level is type-checked so a malformed transcript entry can only yield
-    fewer results, never an exception.
-
-    Only `Bash` is collected on purpose — see `_scan_after_boundary`.
+    `Bash` is the ONLY tool name ever passed here — never `Write` / `Edit` /
+    anything else. That scope is load-bearing; see `_scan_after_boundary`.
     """
-    out: list[str] = []
-    content = message.get("content")
-    if not isinstance(content, list):
-        return out
-    for block in content:
-        if not isinstance(block, dict):
-            continue
-        if block.get("type") != "tool_use":
-            continue
-        if block.get("name") != "Bash":
-            continue
-        tool_input = block.get("input")
-        if not isinstance(tool_input, dict):
-            continue
-        command = tool_input.get("command")
-        if isinstance(command, str):
-            out.append(command)
-    return out
-
-
-def _max_stale_user_turns() -> int:
-    """Read the boundary-expiry threshold from the environment (#1270).
-
-    Env var: `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS`.
-      - a valid non-negative int  → use it,
-      - `0`                       → expiry disabled (never fail open on
-                                    staleness alone),
-      - unset / unparseable / negative → `_DEFAULT_MAX_STALE_USER_TURNS`.
-    Never raises — a bad value silently degrades to the default.
-    """
-    raw = os.environ.get("GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS")
-    if raw is None:
-        return _DEFAULT_MAX_STALE_USER_TURNS
-    try:
-        value = int(raw.strip())
-    except (AttributeError, ValueError):
-        return _DEFAULT_MAX_STALE_USER_TURNS
-    if value < 0:
-        return _DEFAULT_MAX_STALE_USER_TURNS
-    return value
-
-
-def _count_fresh_user_prompts(messages: list[dict[str, Any]], start: int) -> int:
-    """Count genuinely NEW user prompts after the boundary (#1270).
-
-    A `role=user` transcript entry counts only when ALL of these hold:
-      - it carries no `tool_result` block — tool output is transported as a
-        user-role message but is not a user prompt;
-      - after collecting text (`include_tool_results=False`), joining, and
-        deleting every `<system-reminder>…</system-reminder>` span, the
-        remainder is non-empty;
-      - the remainder contains none of `_SKILL_EXPANSION_MARKERS` — those
-        identify Claude Code's injection of an invoked skill's body, i.e.
-        flow machinery generated by the chain itself.
-
-    The result drives boundary expiry: a boundary that has survived this
-    many real human turns is stale, and continuing to block would hijack
-    unrelated conversation.
-    """
-    count = 0
-    for entry in messages[start + 1 :]:
-        msg = _message_payload(entry)
-        if msg.get("role") != "user":
-            continue
-        content = msg.get("content")
-        if isinstance(content, list) and any(
-            isinstance(block, dict) and block.get("type") == "tool_result" for block in content
-        ):
-            continue
-        joined = "\n".join(_iter_text_blocks(msg, include_tool_results=False))
-        remainder = _SYSTEM_REMINDER_RE.sub("", joined).strip()
-        if not remainder:
-            continue
-        if any(marker in remainder for marker in _SKILL_EXPANSION_MARKERS):
-            continue
-        count += 1
-    return count
+    return _iter_tool_use_inputs(message, "Bash", "command")
 
 
 def _load_transcript(path: Path) -> list[dict[str, Any]]:
@@ -452,13 +379,20 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
     for entry in messages[start + 1 :]:
         msg = _message_payload(entry)
         role = msg.get("role")
-        if role == "assistant":
+        # `terminal` is monotonic, so once it is set the marker work on
+        # every later message is pure waste on the turn-end hot path. The
+        # loop itself cannot break — `seen` must keep accumulating so the
+        # trace still reports the full sub-skill count.
+        if role == "assistant" and not terminal:
             for text in _iter_text_blocks(msg, include_tool_results=False):
                 if any(pat in text for pat in TERMINAL_PATTERNS):
                     terminal = True
-            for command in _iter_bash_commands(msg):
-                if _TERMINAL_COMMAND_RE.search(command):
-                    terminal = True
+                    break
+            if not terminal:
+                for command in _iter_bash_commands(msg):
+                    if _TERMINAL_COMMAND_RE.search(command):
+                        terminal = True
+                        break
         for skill in _iter_skill_uses(msg):
             if skill not in SUB_SKILL_NAMES:
                 continue
@@ -466,6 +400,60 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
             if normalized not in seen:
                 seen.append(normalized)
     return terminal, seen
+
+
+def _max_stale_user_turns() -> int:
+    """Read the boundary-expiry threshold from the environment (#1270).
+
+    Env var: `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS`.
+      - a valid non-negative int  → use it,
+      - `0`                       → expiry disabled (never fail open on
+                                    staleness alone),
+      - unset / unparseable / negative → `_DEFAULT_MAX_STALE_USER_TURNS`
+        (unset reaches the `ValueError` arm via the `""` default).
+    Never raises — a bad value silently degrades to the default.
+    """
+    try:
+        value = int(os.environ.get("GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS", ""))
+    except ValueError:
+        return _DEFAULT_MAX_STALE_USER_TURNS
+    return value if value >= 0 else _DEFAULT_MAX_STALE_USER_TURNS
+
+
+def _count_fresh_user_prompts(messages: list[dict[str, Any]], start: int) -> int:
+    """Count genuinely NEW user prompts after the boundary (#1270).
+
+    A `role=user` transcript entry counts only when ALL of these hold:
+      - it carries no `tool_result` block — tool output is transported as a
+        user-role message but is not a user prompt;
+      - after collecting text (`include_tool_results=False`), joining, and
+        deleting every `<system-reminder>…</system-reminder>` span, the
+        remainder is non-empty;
+      - the remainder contains none of `_SKILL_EXPANSION_MARKERS` — those
+        identify Claude Code's injection of an invoked skill's body, i.e.
+        flow machinery generated by the chain itself.
+
+    Drives boundary expiry — see `_DEFAULT_MAX_STALE_USER_TURNS` for why
+    that valve has to exist at all.
+    """
+    count = 0
+    for entry in messages[start + 1 :]:
+        msg = _message_payload(entry)
+        if msg.get("role") != "user":
+            continue
+        content = msg.get("content")
+        if isinstance(content, list) and any(
+            isinstance(block, dict) and block.get("type") == "tool_result" for block in content
+        ):
+            continue
+        joined = "\n".join(_iter_text_blocks(msg, include_tool_results=False))
+        remainder = _SYSTEM_REMINDER_RE.sub("", joined).strip()
+        if not remainder:
+            continue
+        if any(marker in remainder for marker in _SKILL_EXPANSION_MARKERS):
+            continue
+        count += 1
+    return count
 
 
 def _next_step_label(seen: list[str]) -> str:
@@ -510,7 +498,15 @@ def main() -> int:
         return _allow("no gh-issue-flow boundary in transcript", layer="L1")
 
     terminal, seen = _scan_after_boundary(messages, boundary)
-    fresh_prompts = _count_fresh_user_prompts(messages, boundary)
+    # Issue #1270 — the fresh-prompt count feeds nothing but the expiry
+    # valve below, and counting is a second full pass over the transcript
+    # on the turn-end hot path. Skip it whenever the result provably cannot
+    # be used (flow already terminal, or expiry disabled); trace mode still
+    # forces it so the L1.5 diagnostic line stays complete.
+    limit = _max_stale_user_turns()
+    fresh_prompts = (
+        _count_fresh_user_prompts(messages, boundary) if _TRACE_ENABLED or (not terminal and limit > 0) else 0
+    )
     if _TRACE_ENABLED:
         _trace(
             f"boundary={boundary} sub_skills_seen={len(seen)}/{len(EXPECTED_CHAIN)} "
@@ -521,13 +517,8 @@ def main() -> int:
     if terminal:
         return _allow("Step 3 terminal marker present — flow finished", layer="L1.5")
 
-    # Issue #1270 — boundary expiry. `stop_hook_active` only breaks an
-    # infinite Stop→block→Stop loop *within* one turn; it resets when the
-    # user sends a new message, so on its own it cannot stop a stale
-    # boundary from hijacking every subsequent turn of the session. This is
-    # that missing valve: once the user has taken over with N real prompts,
-    # the flow is abandoned in practice and the guard must fail open.
-    limit = _max_stale_user_turns()
+    # Issue #1270 — stale-boundary expiry valve. Why `stop_hook_active` is
+    # not enough on its own: see `_DEFAULT_MAX_STALE_USER_TURNS`.
     if limit > 0 and fresh_prompts >= limit:
         return _allow(
             f"stale boundary expiry — {fresh_prompts} fresh user prompt(s) since the "
