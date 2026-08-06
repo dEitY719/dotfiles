@@ -87,7 +87,7 @@ setup() {
     assert_output --partial "help_requested=1"
 }
 
-@test "parse does not leak pr/remote/reply_mode/reply_delay into the caller's shell" {
+@test "parse does not leak pr/remote/reply_mode/reply_delay/_no_reply/_remote_set into the caller's shell" {
     pr="SENTINEL_PR"
     remote="SENTINEL_REMOTE"
     reply_mode="SENTINEL_REPLY_MODE"
@@ -95,6 +95,8 @@ setup() {
     _no_reply="SENTINEL_NO_REPLY"
     _remote_set="SENTINEL_REMOTE_SET"
     devx_pr_review_all_parse 123 upstream --defer-reply 8 >/dev/null
+    _rc=$?
+    [ "$_rc" -eq 0 ]
     [ "$pr" = "SENTINEL_PR" ]
     [ "$remote" = "SENTINEL_REMOTE" ]
     [ "$reply_mode" = "SENTINEL_REPLY_MODE" ]
