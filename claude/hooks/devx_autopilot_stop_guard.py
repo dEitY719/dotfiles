@@ -32,6 +32,7 @@ Safety rails (each is critical — never accidentally trap the user):
     chain; bowing out prevents an infinite Stop→block→Stop loop).
   - No devx-autopilot boundary in the transcript → exit 0 (not our flow).
   - Terminal report marker present in assistant text → exit 0 (chain done).
+  - Boundary went stale (N fresh user prompts since it) → exit 0 (#1275).
   - Any unexpected exception → exit 0 (fail open).
 
 The hook only ever does two things: emit nothing (allow), or emit one JSON
@@ -52,6 +53,16 @@ from typing import Any
 # `DEVX_AUTOPILOT_STOP_GUARD_TRACE=1`.
 _TRACE_ENABLED: bool = os.environ.get("DEVX_AUTOPILOT_STOP_GUARD_TRACE") == "1"
 
+# Issue #1275 (ported from #1270 / PR #1272) — how many *fresh* user prompts
+# may accumulate after a devx-autopilot boundary before the hook declares that
+# boundary stale and fails open. Without this valve a boundary lives forever:
+# `stop_hook_active` only prevents an infinite Stop→block→Stop loop *within*
+# one turn, and it resets the moment the user sends a new message, so an
+# abandoned Stage-B run that never emitted a terminal report would keep
+# blocking every unrelated turn for the rest of the session (cross-turn
+# session hijacking).
+_DEFAULT_MAX_STALE_USER_TURNS: int = 3
+
 
 def _trace(message: str, *, layer: str | None = None) -> None:
     """Emit an `[autopilot-stop-guard]` trace line on stderr when trace mode is on.
@@ -59,6 +70,9 @@ def _trace(message: str, *, layer: str | None = None) -> None:
     `layer` is the protection layer the trace belongs to:
       - `L1`   — boundary detection (`_find_flow_boundary`)
       - `L1.5` — step-marker / terminal scan (`_scan_after_boundary`)
+    Boundary *expiry* (#1275) is scored `L1.5` even though it invalidates an
+    `L1` boundary: it is decided purely from the post-boundary window that
+    `L1.5` owns, so it belongs with the scan it runs alongside.
     The tag is appended (not prepended) so substring-based test assertions
     like `[autopilot-stop-guard] allow:` keep matching.
     """
@@ -103,6 +117,55 @@ TERMINAL_PATTERNS: tuple[str, ...] = (
     "[step:devx-autopilot/report] OK",
     "[OK] devx:autopilot",
     "[FAIL] devx:autopilot",
+)
+
+# Issue #1275 — spans Claude Code injects into user-role messages that are
+# NOT user prose. `<system-reminder>…</system-reminder>` blocks are harness
+# chatter appended to otherwise-empty turns, so they must not make a message
+# look like a fresh user prompt.
+_SYSTEM_REMINDER_RE: re.Pattern[str] = re.compile(
+    r"<system-reminder>.*?</system-reminder>",
+    re.DOTALL,
+)
+
+# Issue #1275 — markers proving a `role=user` message is a skill expansion
+# (Claude Code injects an invoked skill's SKILL.md body as a user-role
+# message) rather than something the human typed. Any of these present ⇒
+# flow machinery, not a fresh user turn.
+_SKILL_EXPANSION_MARKERS: tuple[str, ...] = (
+    "Base directory for this skill:",
+    "<command-name>",
+    "<command-message>",
+    "<local-command-stdout>",
+    "is already loaded above",
+)
+
+# Issue #1275 — markers proving a `role=user` message is a *harness
+# injection*, i.e. text Claude Code itself wrote into the user channel, not a
+# human turn. A different category from `_SKILL_EXPANSION_MARKERS` above
+# (which identifies an expanded SKILL.md body), so it lives in its own tuple;
+# both are consulted.
+#
+# WHY this exists (measured on gh-issue-flow's twin guard in PR #1272): a
+# naive `role=user` count reported 102 "fresh prompts" on a real transcript of
+# which only 4 were human — the rest were Stop-hook feedback blocks (Claude
+# Code re-injects THIS hook's own `reason` string as a `role=user` text
+# message) and `<task-notification>` background-subagent completions. The
+# default limit of 3 would therefore be reached mid-flow with zero human
+# involvement, disabling the guard exactly when it is needed. Stage-B runs
+# `simplify` and `pr-reply`, which fan out background agents, so the
+# `<task-notification>` case is the norm here too.
+#
+# `isMeta` on the outer transcript entry is the primary defense; this tuple is
+# defense-in-depth for transcripts that lack the flag. `devx-autopilot
+# incomplete:` is this hook's own block-reason prefix — exactly the string
+# that gets re-injected — so it is the strongest single signal available.
+_HARNESS_INJECTION_MARKERS: tuple[str, ...] = (
+    "Stop hook feedback:",
+    "devx-autopilot incomplete:",
+    "<task-notification>",
+    "[SYSTEM NOTIFICATION - NOT USER INPUT]",
+    "<local-command-caveat>",
 )
 
 # Regex that marks the *start* of a devx-autopilot chain in a user message.
@@ -286,6 +349,74 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
     return terminal, steps
 
 
+def _max_stale_user_turns() -> int:
+    """Read the boundary-expiry threshold from the environment (#1275).
+
+    Env var: `DEVX_AUTOPILOT_STOP_GUARD_MAX_USER_TURNS`.
+      - a valid non-negative int  → use it,
+      - `0`                       → expiry disabled (never fail open on
+                                    staleness alone),
+      - unset / unparseable / negative → `_DEFAULT_MAX_STALE_USER_TURNS`
+        (unset reaches the `ValueError` arm via the `""` default).
+    Never raises — a bad value silently degrades to the default.
+    """
+    try:
+        value = int(os.environ.get("DEVX_AUTOPILOT_STOP_GUARD_MAX_USER_TURNS", ""))
+    except ValueError:
+        return _DEFAULT_MAX_STALE_USER_TURNS
+    return value if value >= 0 else _DEFAULT_MAX_STALE_USER_TURNS
+
+
+def _count_fresh_user_prompts(messages: list[dict[str, Any]], start: int) -> int:
+    """Count genuinely NEW user prompts after the boundary (#1275).
+
+    A `role=user` transcript entry counts only when ALL of these hold:
+      - the OUTER transcript entry is not flagged `isMeta` — Claude Code
+        stamps that flag on Stop-hook feedback injections and skill
+        expansions but never on a genuine human prompt. The flag lives on the
+        entry, NOT on the inner `message` dict, which is why this loop
+        inspects `entry` and `_message_payload(entry)` separately;
+      - after collecting text (`include_tool_results=False`), joining, and
+        deleting every `<system-reminder>…</system-reminder>` span, the
+        remainder is non-empty. This is also what makes a tool-output-only
+        message free: `tool_result` blocks contribute no text under
+        `include_tool_results=False`, so such a message yields "" and is
+        dropped here — which matters especially in this guard, whose step
+        markers ride in Bash `tool_result` payloads. There is deliberately NO
+        wholesale "has a tool_result block ⇒ skip" rule: a real human prompt
+        bundled in the same turn as tool output must still count, otherwise a
+        stale boundary can never expire;
+      - the remainder contains none of `_SKILL_EXPANSION_MARKERS` (an invoked
+        sub-skill's body injected as a user message — Stage-B expands several)
+        nor any of `_HARNESS_INJECTION_MARKERS` (Stop-hook feedback,
+        background-task notifications) — both are machinery generated by the
+        flow itself.
+
+    Drives boundary expiry — see `_DEFAULT_MAX_STALE_USER_TURNS` for why that
+    valve has to exist at all.
+
+    Never raises: `entry` is treated as "not meta" whenever it is not a dict
+    or carries no flag, and every other access is already isinstance-guarded.
+    """
+    count = 0
+    for entry in messages[start + 1 :]:
+        if isinstance(entry, dict) and entry.get("isMeta"):
+            continue
+        msg = _message_payload(entry)
+        if msg.get("role") != "user":
+            continue
+        joined = "\n".join(_iter_text_blocks(msg, include_tool_results=False))
+        remainder = _SYSTEM_REMINDER_RE.sub("", joined).strip()
+        if not remainder:
+            continue
+        if any(marker in remainder for marker in _SKILL_EXPANSION_MARKERS):
+            continue
+        if any(marker in remainder for marker in _HARNESS_INJECTION_MARKERS):
+            continue
+        count += 1
+    return count
+
+
 def _first_missing_step(steps: set[str]) -> str | None:
     """Return the first REQUIRED_STEPS id not yet emitted, or None if all done."""
     for sid in REQUIRED_STEPS:
@@ -324,14 +455,33 @@ def main() -> int:
         return _allow("no devx-autopilot boundary in transcript", layer="L1")
 
     terminal, steps = _scan_after_boundary(messages, boundary)
+    # Issue #1275 — the fresh-prompt count feeds nothing but the expiry valve
+    # below, and counting is a second full pass over the transcript on the
+    # turn-end hot path. Skip it whenever the result provably cannot be used
+    # (flow already terminal, or expiry disabled); trace mode still forces it
+    # so the L1.5 diagnostic line stays complete.
+    limit = _max_stale_user_turns()
+    fresh_prompts = (
+        _count_fresh_user_prompts(messages, boundary) if _TRACE_ENABLED or (not terminal and limit > 0) else 0
+    )
     if _TRACE_ENABLED:
         emitted = ",".join(s for s in REQUIRED_STEPS if s in steps) or "none"
         _trace(
-            f"boundary={boundary} steps_seen={len(steps)}/{len(REQUIRED_STEPS)} ({emitted}) terminal={terminal}",
+            f"boundary={boundary} steps_seen={len(steps)}/{len(REQUIRED_STEPS)} ({emitted}) "
+            f"terminal={terminal} fresh_user_prompts={fresh_prompts}",
             layer="L1.5",
         )
     if terminal:
         return _allow("terminal report marker present — flow finished", layer="L1.5")
+
+    # Issue #1275 — stale-boundary expiry valve. Why `stop_hook_active` is not
+    # enough on its own: see `_DEFAULT_MAX_STALE_USER_TURNS`.
+    if limit > 0 and fresh_prompts >= limit:
+        return _allow(
+            f"stale boundary expiry — {fresh_prompts} fresh user prompt(s) since the "
+            f"devx-autopilot boundary (limit {limit}); flow abandoned, failing open",
+            layer="L1.5",
+        )
 
     missing = _first_missing_step(steps)
     if missing is None:

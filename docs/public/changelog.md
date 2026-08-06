@@ -18,6 +18,7 @@
 - 변경: **`/devx:pr-verify-live` 스킬 신설 — 머지 직후(또는 PR 브랜치에서) 이미 떠 있는 dev 앱에 붙어 PR 이 실제로 동작하는지 확인하고 발견을 대상 프로젝트 레포 이슈로 등록한다. base URL·API origin 을 하드코딩 없이 발견하고, 서빙 중인 체크아웃이 대상 커밋(`mergeCommit.oid`)을 포함하는지 확인한 뒤에만 측정한다 (#1271)**
 - 변경: **`devx:pr-verify-live` 의 검증 전 단언 3종 — 서빙 체크아웃 · 로케일/뷰포트 전환 적용 · 대상 요소 비가림. 하나라도 실패하면 측정하지 않고 정지한다. "화면은 멀쩡히 뜨는데 검증이 무효" 인 실패를 여섯 번의 실행에서 반복 관측한 결과 (#1271)**
 - 변경: **`devx:pr-verify-live` 는 이슈 등록 전에 자기 반증 3가설(하네스 오류 · 데이터 상태 · 의도된 동작)을 세워 위양성을 걷어낸다. 근거 게이트는 "수치" 가 아니라 "기계 판독 가능한 단언" 이라 i18n·상태·어포던스 결함도 등록 가능하다. 이슈 본문·라벨·메트릭은 `gh:issue-create` 가 SSOT (#1271)**
+- 변경: **devx-autopilot Stop 훅에도 오래된 boundary 자동 만료 이식 — 종료 리포트 없이 중단된 Stage-B 실행의 boundary 가 세션 내내 남아 무관한 턴까지 계속 차단하던 문제 수정(gh-issue-flow 는 #1270 에서 이미 해결). boundary 이후 진짜 사용자 프롬프트가 3회 쌓이면 fail-open 하며 `DEVX_AUTOPILOT_STOP_GUARD_MAX_USER_TURNS` 로 조정하고 `0` 이면 만료 비활성화. 엔트리의 `isMeta` 플래그, 훅 자신의 `devx-autopilot incomplete:` 재주입, `<task-notification>` 등 harness 주입, skill 확장, `<system-reminder>` 전용·tool_result 전용 메시지는 사용자 프롬프트로 세지 않는다 (#1275)**
 - 변경: **macOS/BSD 이식성 수정 — 타이밍 테스트가 GNU 전용 `date +%s%N` 대신 bash 내장 `SECONDS` 를 쓰도록 바꿔 BSD `date` 에서 테스트가 중단되지 않는다. ms 변환 헬퍼는 `claude/hooks/lib/pbd_ms.sh`(디스패처와 같은 디렉터리에 함께 배포되어야 하는 신규 파일) 로 분리해 BSD `date` fallback 경로에 테스트 커버리지를 붙였다 (#1258 리뷰 후속)**
 
 ## 2026-07-30
