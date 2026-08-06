@@ -59,13 +59,21 @@ DISPATCH_DIR="${POST_BASH_DISPATCH_DIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && 
 
 # Convert an EPOCHREALTIME snapshot ("<sec>.<usec>", locale decimal point) to
 # epoch milliseconds, assigned to the variable named by $1. An empty snapshot
-# (bash < 5, no EPOCHREALTIME) falls back to GNU `date +%s%3N`; anything that
-# still comes out non-numeric is dropped by the reader, so there is no third
-# tier here — see claude/tools/hook-perf-report.sh.
+# (bash < 5, no EPOCHREALTIME) falls back to GNU `date +%s%3N`, and to
+# whole-second granularity when that prints the literal `%N` (BSD date) —
+# without this tier a BSD host would silently lose the whole timing row
+# (the reader drops any non-numeric field), not just precision.
 _pbd_ms() {
+	local _d
 	case "${2:-}" in
 	*[.,]*) printf -v "$1" '%s%.3s' "${2%%[.,]*}" "${2#*[.,]}000" ;;
-	*) printf -v "$1" '%s' "$(date +%s%3N 2>/dev/null || printf '0')" ;;
+	*)
+		_d=$(date +%s%3N 2>/dev/null) || _d=""
+		case "$_d" in
+		'' | *[!0-9]*) _d="$(date +%s 2>/dev/null || printf '0')000" ;;
+		esac
+		printf -v "$1" '%s' "$_d"
+		;;
 	esac
 }
 
