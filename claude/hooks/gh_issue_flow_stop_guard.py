@@ -22,11 +22,12 @@ Safety rails (each is critical — never accidentally trap the user):
   - Any unexpected exception → exit 0 (fail open).
 
 Terminal-marker channels: assistant **text** blocks (canonical), plus a
-`Bash` `tool_use` whose `input.command` AND whose own paired `tool_result`
-both carry the marker (#1270 fallback, narrowed by the PR #1272 review).
-Every non-`Bash` tool stays excluded, and a `tool_result` is never read on
-its own (issue #608) — rationale and scope guard live on
-`_scan_after_boundary`.
+`Bash` `tool_use` whose `input.command` carries the marker AND whose own
+paired `tool_result` carries the marker together with a report field line
+(`PR URL:` / `Resume after fix:`) — #1270 fallback, narrowed by the PR
+#1272 review and again by #1274. Every non-`Bash` tool stays excluded, and
+a `tool_result` is never read on its own (issue #608) — rationale and scope
+guard live on `_scan_after_boundary`.
 
 The hook only ever does two things: emit nothing (allow), or emit one JSON
 object `{"decision":"block","reason":"..."}` on stdout (block + nudge).
@@ -126,6 +127,20 @@ TERMINAL_PATTERNS: tuple[str, ...] = (
 _TERMINAL_COMMAND_RE: re.Pattern[str] = re.compile(
     r"gh[-:]issue-flow\s+(?:complete\s+\(#\d+\)|stopped\s+at\s+step\s+\d)",
 )
+
+# Issue #1274 — report-SHAPE requirement, applied to the paired
+# `tool_result` only (never to the command; why: `_scan_after_boundary`).
+# `_TERMINAL_COMMAND_RE` alone still let `grep "gh:issue-flow complete
+# (#1270)" some.log` terminate a flow: the command carries the literal-digit
+# marker and grep echoes the matched line straight back into the
+# tool_result, so both halves of the #1272 pair were satisfied by a plain
+# log search. A real Step 3 report is never one line — per
+# `claude/skills/gh-issue-flow/references/report-template.md` the success
+# form always carries a `PR URL:` line and the failure form a `Resume after
+# fix:` line, neither of which a single grepped marker line reproduces.
+# Kept as its own pattern (not folded into `_TERMINAL_COMMAND_RE`) because
+# the two run against different halves of the pair.
+_TERMINAL_REPORT_FIELD_RE: re.Pattern[str] = re.compile(r"PR URL:|Resume after fix:")
 
 # Issue #1270 — spans Claude Code injects into user-role messages that are
 # NOT user prose. `<system-reminder>…</system-reminder>` blocks are harness
@@ -357,6 +372,14 @@ def _iter_tool_results(message: dict[str, Any]) -> list[tuple[str, str]]:
     of `{"type": "text", "text": ...}` blocks in others, so both shapes are
     handled (mirroring `_iter_text_blocks`). A block with no usable string
     `tool_use_id` is dropped — it can never form a pair.
+
+    Exactly ONE tuple is emitted per tool_result block: when `content` is a
+    list, its text sub-blocks are `"\\n".join`ed first (same reason
+    `_count_fresh_user_prompts` joins before matching). Claude Code may
+    split one command's stdout across several text sub-blocks, so the #1274
+    check — marker line AND a report field line in the SAME result — would
+    miss a genuine report whose two lines landed in different sub-blocks.
+    Joining restores the single logical payload the caller reasons about.
     """
     out: list[tuple[str, str]] = []
     content = message.get("content")
@@ -372,11 +395,14 @@ def _iter_tool_results(message: dict[str, Any]) -> list[tuple[str, str]]:
         if isinstance(rc, str):
             out.append((tool_use_id, rc))
         elif isinstance(rc, list):
+            parts: list[str] = []
             for sub in rc:
                 if isinstance(sub, dict) and sub.get("type") == "text":
                     st = sub.get("text")
                     if isinstance(st, str):
-                        out.append((tool_use_id, st))
+                        parts.append(st)
+            if parts:
+                out.append((tool_use_id, "\n".join(parts)))
     return out
 
 
@@ -463,9 +489,12 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
     boundary blocked every later turn in the session.
 
     That channel is **pair-matched** (PR #1272 review, Codex BLOCKER).
-    `_TERMINAL_COMMAND_RE` must match BOTH:
-      1. the `input.command` of a `Bash` tool_use, AND
-      2. the `tool_result` whose `tool_use_id` equals THAT tool_use's `id`.
+    Both of these must hold:
+      1. `_TERMINAL_COMMAND_RE` matches the `input.command` of a `Bash`
+         tool_use, AND
+      2. the `tool_result` whose `tool_use_id` equals THAT tool_use's `id`
+         matches `_TERMINAL_COMMAND_RE` *and* `_TERMINAL_REPORT_FIELD_RE`
+         (issue #1274).
     Condition 1 alone only proves the model *mentioned* the marker, not
     that it *emitted* a report: `cat <<'EOF' > /tmp/report.txt` redirects
     the text to a file, and a marker inside a script comment or a
@@ -480,10 +509,26 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
     where the templates carry `<N>` / `<i>`. The pair requirement is
     strictly narrower than either half on its own.
 
-    One residual false positive is accepted honestly: `grep
-    "gh:issue-flow complete (#1270)" some.log` would satisfy both halves.
-    It is contrived — the searcher has to already type a concrete issue
-    number in the digit-form the templates never contain.
+    Issue #1274 narrows condition 2 further: the paired `tool_result` must
+    also carry a report *field* line (`_TERMINAL_REPORT_FIELD_RE` — `PR
+    URL:` for the success form, `Resume after fix:` for the failure form).
+    The marker line alone used to be enough, which let `grep
+    "gh:issue-flow complete (#1270)" some.log` terminate a live flow: the
+    command holds a literal-digit marker and grep echoes the matched line
+    back, satisfying both halves without any report being produced. A real
+    Step 3 report is multi-line and always carries one of those fields, so
+    demanding the full shape splits the two cases apart. The requirement is
+    deliberately placed on the result only — the command side stays the
+    plain marker match, so a heredoc that prints the report still qualifies
+    regardless of how the field line is quoted or built.
+
+    Residual risk after #1274, stated honestly: a context-grep that happens
+    to pull a real report's field line along with its marker line — e.g.
+    `grep -A5 "gh:issue-flow complete (#1270)" some.log` over a log that
+    stores a genuine past report. That is markedly more contrived than the
+    bare `grep` it replaces (concrete issue number, matching the *live*
+    flow's number, plus a context flag wide enough to reach the field
+    line), which is the point of the narrowing.
 
     **Only `Bash` is scanned — never `Write`, `Edit`, or any other tool.**
     Editing `SKILL.md` or `references/report-template.md` puts real
@@ -519,7 +564,13 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
                         pending_bash_ids.add(block_id)
         elif role == "user" and not terminal and pending_bash_ids:
             for tool_use_id, text in _iter_tool_results(msg):
-                if tool_use_id in pending_bash_ids and _TERMINAL_COMMAND_RE.search(text):
+                if (
+                    tool_use_id in pending_bash_ids
+                    and _TERMINAL_COMMAND_RE.search(text)
+                    # #1274 — a bare marker line can be a grep echo; a real
+                    # report also carries `PR URL:` / `Resume after fix:`.
+                    and _TERMINAL_REPORT_FIELD_RE.search(text)
+                ):
                     terminal = True
                     break
         for skill in _iter_skill_uses(msg):

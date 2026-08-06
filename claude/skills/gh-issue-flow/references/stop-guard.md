@@ -95,11 +95,13 @@ On every Stop event:
    through `Bash` (`cat <<'EOF' … EOF`, `printf`), in which case the
    report text only ever exists in the tool_use `input.command` string and
    in a `tool_result`, and the flow could never terminate. So the scan
-   also accepts a `Bash` tool_use — but only when a **stricter** regex
-   (one that requires a literal digit where the templates carry `<N>` /
-   `<i>`) matches **both**:
+   also accepts a `Bash` tool_use — but only when a **stricter** marker
+   regex (one that requires a literal digit where the templates carry
+   `<N>` / `<i>`) matches **both**:
    1. the tool_use's `input.command`, **and**
-   2. the `tool_result` whose `tool_use_id` equals that tool_use's `id`.
+   2. the `tool_result` whose `tool_use_id` equals that tool_use's `id`
+      — which must **additionally** carry a report *field* line, `PR
+      URL:` (success form) or `Resume after fix:` (failure form) (#1274).
 
    Condition 1 alone proves only that the model *mentioned* the marker:
    `cat <<'EOF' > /tmp/report.txt` redirects it into a file, and a marker
@@ -112,9 +114,29 @@ On every Stop event:
    does not reopen #608. This lookup is the only place in the hook that
    reads a `tool_result` at all, and only for an id whose command already
    matched. A `Bash` block with no usable `id` is unpairable and never
-   terminates. One residual false positive is accepted: `grep
-   "gh:issue-flow complete (#1270)" some.log` satisfies both halves —
-   contrived, and it requires typing a concrete issue number.
+   terminates.
+
+   **Full report shape on the result side (#1274).** The marker line alone
+   used to be enough on the result side, which left one false positive:
+   `grep "gh:issue-flow complete (#1270)" some.log` satisfies condition 1
+   (literal-digit marker in the command) and condition 2 (grep echoes the
+   matched line back), so a plain log search could terminate a live flow.
+   The result must therefore also carry a report field line — a real Step
+   3 report is multi-line and always has `PR URL:` or `Resume after fix:`,
+   which one grepped line cannot reproduce. The requirement sits on the
+   *result* only; the command side stays the plain marker match, so a
+   heredoc still qualifies however its field line is quoted or built. When
+   `tool_result.content` is a list of text blocks, the blocks are joined
+   before matching — Claude Code may split one command's stdout, and a
+   genuine report whose marker and field line land in different sub-blocks
+   must still match. Residual risk left standing: a context grep that
+   drags a real report's field line along with its marker line (`grep -A5
+   "gh:issue-flow complete (#1270)" some.log` over a log holding a genuine
+   past report) — far more contrived than the bare `grep` it replaces,
+   which is the point. A **drift test** ties the field names to
+   `references/report-template.md`, so renaming them there fails loudly
+   instead of silently staling the hook.
+
    **Only `Bash` is scanned**: `Write`/`Edit` inputs legitimately carry
    real template text whenever the skill's own files are edited.
 5. **Boundary expiry (#1270).** Count *fresh* user prompts after the
@@ -227,6 +249,12 @@ Re-install via `./setup.sh` to restore the default behaviour.
   `tool_result` of a non-matching `cat` command → still block; command
   under `toolu_A` with a marker-bearing result under `toolu_B` → still
   block; `Bash` tool_use with no `id` → still block.
+- #1274 (full report shape): `grep "gh:issue-flow complete (#1270)"
+  some.log` whose result is just that one echoed line — both halves of
+  the #1272 pair match, but no `PR URL:` / `Resume after fix:` field is
+  present → still block. Plus a **drift test** asserting both field
+  strings still occur in `references/report-template.md`, so renaming
+  them there breaks the build instead of silently staling the hook.
 - #1270 F-2: 3 fresh unrelated user prompts after an unfinished flow
   → allow (stale boundary); 2 → still block; skill-expansion,
   `tool_result`-only and `<system-reminder>`-only messages are not
