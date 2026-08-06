@@ -5,6 +5,12 @@
 # devx_pr_review_all_parse contract: one `key=value` line per resolved arg
 # on success, errors to stderr. Exit 0 ok/help, exit 2 arg error. Runtime
 # checks (PR state, gh auth, dev-server reachability) belong to the skill body.
+#
+# This file lives under shell-common/functions/, so it is auto-sourced into
+# the user's interactive shell. Every variable the parser assigns is `local`
+# (house style here — see gh_pr_review.sh) so a call cannot clobber the
+# user's `$pr` / `$remote` / `$url`. Callers read the stdout `key=value`
+# contract, never the shell variables.
 
 _devx_pr_verify_live_pos_int() {
     case "$1" in
@@ -15,21 +21,27 @@ _devx_pr_verify_live_pos_int() {
 }
 
 devx_pr_verify_live_parse() {
-    pr=""
-    remote="origin"
-    url=""
-    api_url=""
-    start_cmd=""
-    matrix="auto"
-    viewports=""
-    locales=""
-    issue_mode="create"
-    allow_remote_host=0
-    _remote_set=0
-    _start_set=0
-    _no_issue=0
-    _rest=""
-    _item=""
+    local pr=""
+    local remote="origin"
+    local url=""
+    local api_url=""
+    local start_cmd=""
+    local matrix="auto"
+    local viewports=""
+    local locales=""
+    local issue_mode="create"
+    local allow_remote_host=0
+    local _remote_set=0
+    local _pos_seen=0
+    local _url_set=0
+    local _api_url_set=0
+    local _start_set=0
+    local _matrix_set=0
+    local _viewports_set=0
+    local _locales_set=0
+    local _no_issue=0
+    local _rest=""
+    local _item=""
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -43,18 +55,22 @@ devx_pr_verify_live_parse() {
         case "$1" in
         --url)
             url="$2"
+            _url_set=1
             shift 2
             ;;
         --url=*)
             url="${1#--url=}"
+            _url_set=1
             shift
             ;;
         --api-url)
             api_url="$2"
+            _api_url_set=1
             shift 2
             ;;
         --api-url=*)
             api_url="${1#--api-url=}"
+            _api_url_set=1
             shift
             ;;
         --start)
@@ -69,26 +85,32 @@ devx_pr_verify_live_parse() {
             ;;
         --matrix)
             matrix="$2"
+            _matrix_set=1
             shift 2
             ;;
         --matrix=*)
             matrix="${1#--matrix=}"
+            _matrix_set=1
             shift
             ;;
         --viewports)
             viewports="$2"
+            _viewports_set=1
             shift 2
             ;;
         --viewports=*)
             viewports="${1#--viewports=}"
+            _viewports_set=1
             shift
             ;;
         --locales)
             locales="$2"
+            _locales_set=1
             shift 2
             ;;
         --locales=*)
             locales="${1#--locales=}"
+            _locales_set=1
             shift
             ;;
         --dry-run)
@@ -107,13 +129,29 @@ devx_pr_verify_live_parse() {
             echo "help_requested=1"
             return 0
             ;;
-        --*)
+        -*)
+            # Single- and double-dash typos alike are flag errors, not
+            # positionals — `-x` must not surface as a PR# complaint.
             echo "Unknown flag: $1" >&2
             return 2
             ;;
         *)
-            if [ -z "$pr" ]; then
-                pr="$1"
+            # `[pr-number] [remote]` with an optional PR#. Discriminator:
+            # PR numbers start with a digit, git remote names conventionally
+            # do not. A leading digit therefore always means "this is the
+            # PR#" — `12a` stays a loud PR# error instead of silently
+            # becoming a remote name.
+            if [ "$_pos_seen" -eq 0 ]; then
+                _pos_seen=1
+                case "$1" in
+                [0-9]*)
+                    pr="$1"
+                    ;;
+                *)
+                    remote="$1"
+                    _remote_set=1
+                    ;;
+                esac
             elif [ "$_remote_set" -eq 0 ]; then
                 remote="$1"
                 _remote_set=1
@@ -127,10 +165,43 @@ devx_pr_verify_live_parse() {
     done
 
     if [ -n "$pr" ]; then
-        _devx_pr_verify_live_pos_int "$pr" || {
+        if ! _devx_pr_verify_live_pos_int "$pr"; then
             echo "PR# must be a positive integer: '$pr'" >&2
             return 2
-        }
+        fi
+    fi
+
+    # An explicitly passed but empty value is an error for every
+    # value-taking flag — silently dropping it would verify a different
+    # app than the user asked for.
+    if [ "$_url_set" -eq 1 ] && [ -z "$url" ]; then
+        echo "--url value must not be empty" >&2
+        return 2
+    fi
+
+    if [ "$_api_url_set" -eq 1 ] && [ -z "$api_url" ]; then
+        echo "--api-url value must not be empty" >&2
+        return 2
+    fi
+
+    if [ "$_start_set" -eq 1 ] && [ -z "$start_cmd" ]; then
+        echo "--start value must not be empty" >&2
+        return 2
+    fi
+
+    if [ "$_matrix_set" -eq 1 ] && [ -z "$matrix" ]; then
+        echo "--matrix value must not be empty" >&2
+        return 2
+    fi
+
+    if [ "$_viewports_set" -eq 1 ] && [ -z "$viewports" ]; then
+        echo "--viewports value must not be empty" >&2
+        return 2
+    fi
+
+    if [ "$_locales_set" -eq 1 ] && [ -z "$locales" ]; then
+        echo "--locales value must not be empty" >&2
+        return 2
     fi
 
     case "$url" in
@@ -148,11 +219,6 @@ devx_pr_verify_live_parse() {
         return 2
         ;;
     esac
-
-    if [ "$_start_set" -eq 1 ] && [ -z "$start_cmd" ]; then
-        echo "--start value must not be empty" >&2
-        return 2
-    fi
 
     case "$matrix" in
     auto | full) ;;
