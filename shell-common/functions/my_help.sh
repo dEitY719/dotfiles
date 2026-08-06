@@ -588,6 +588,17 @@ _my_help_show_all() {
 #
 # Fields 3-5 are hidden from fzf (`--with-nth=1,2`) and read back off the
 # selected line, so no second lookup is needed after picking an entry.
+#
+# A name may legitimately appear more than once: 12 alias names in this repo
+# are defined in two places with *different* bodies (`llm-help` is
+# `litellm_help` in ai_tools_help.sh and `ollama_help` in
+# help_system_aliases.sh). Collapsing those to one row would have to pick a
+# winner, and the only correct winner is whichever file the shell sourced
+# last — which this file-level scan cannot know. An arbitrary pick would
+# actively lie about what the alias resolves to, so every distinct
+# (name, location, definition) triple is kept and the conflict shows up as
+# two adjacent rows in the picker. `sort -u` therefore dedupes whole records
+# only, never on the name key.
 
 # Measured on ext4 the cold scan and the cached read are within ~1ms of each
 # other at ~470 aliases, so the cache is not a local speed win — it is
@@ -694,7 +705,7 @@ _my_help_build_alias_index() {
                 desc = (note != "") ? note : loc
                 printf "%s\t%s\talias\t%s\t%s\n", name, desc, loc, defn
             }' |
-            LC_ALL=C sort -t "$(printf '\t')" -k1,1 -u
+            LC_ALL=C sort -u
     )
 
     [ -n "$scanned" ] || return 1

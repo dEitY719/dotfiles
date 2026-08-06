@@ -39,15 +39,37 @@ TAB=$'\t'
     assert_output "0"
 }
 
-@test "T2: build finds a meaningful number of aliases and dedupes by name" {
+@test "T2: build finds a meaningful number of aliases, with no duplicate records" {
     run_in_bash '_my_help_build_alias_index | wc -l'
     assert_success
     [ "$output" -gt 300 ]
 
-    # `sort -u -k1,1` must leave exactly one record per alias name.
-    run_in_bash '_my_help_build_alias_index | cut -f1 | LC_ALL=C sort | uniq -d | wc -l'
+    # `sort -u` dedupes whole records. Identical (name, location, definition)
+    # triples must never appear twice — but see T2b: the same *name* legitimately
+    # may, when two files define it differently.
+    run_in_bash '_my_help_build_alias_index | LC_ALL=C sort | uniq -d | wc -l'
     assert_success
     assert_output "0"
+}
+
+@test "T2b: a name defined twice with different bodies keeps BOTH definitions" {
+    # Regression pin for the PR #1266 review blocker. `llm-help` is
+    # `litellm_help` in shell-common/functions/ai_tools_help.sh and
+    # `ollama_help` in shell-common/aliases/help_system_aliases.sh. Collapsing
+    # them with `sort -u -k1,1` picked an arbitrary winner, so the picker could
+    # claim a definition the shell does not actually resolve to. Only the shell
+    # knows which file was sourced last, so the index must surface both rather
+    # than guess.
+    run_in_bash '_my_help_build_alias_index | awk -F"\t" "\$1==\"llm-help\"{print \$5}" | LC_ALL=C sort'
+    assert_success
+    assert_line --index 0 "litellm_help"
+    assert_line --index 1 "ollama_help"
+
+    # Both rows must carry their own distinct location, or the conflict is
+    # indistinguishable from a duplicate.
+    run_in_bash '_my_help_build_alias_index | awk -F"\t" "\$1==\"llm-help\"{print \$4}" | LC_ALL=C sort -u | wc -l'
+    assert_success
+    assert_output "2"
 }
 
 @test "T3: trailing comment becomes the description; kind field is 'alias'" {
@@ -81,8 +103,17 @@ TAB=$'\t'
     assert_output "show_doc_help"
 }
 
-@test "T4d: no name appears twice across the merged candidate stream" {
-    run_in_bash '_my_help_search_candidates | cut -f1 | LC_ALL=C sort | uniq -d | wc -l'
+@test "T4d: no alias row shadows a topic row of the same name" {
+    # The property that actually matters: the -help dedupe (T4c) must leave no
+    # name owned by both a topic row and an alias row, because the two would
+    # render differently for the same pick. Names duplicated *within* the alias
+    # rows are a separate, legitimate case — see T2b.
+    run_in_bash '
+        _my_help_search_candidates > "$HOME/cands.tsv"
+        awk -F"\t" "\$3==\"topic\"{print \$1}" "$HOME/cands.tsv" | LC_ALL=C sort -u > "$HOME/t.txt"
+        awk -F"\t" "\$3==\"alias\"{print \$1}" "$HOME/cands.tsv" | LC_ALL=C sort -u > "$HOME/a.txt"
+        LC_ALL=C comm -12 "$HOME/t.txt" "$HOME/a.txt" | wc -l
+    '
     assert_success
     assert_output "0"
 }
