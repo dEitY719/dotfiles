@@ -126,6 +126,63 @@ TAB=$'\t'
     assert_output "cd .."
 }
 
+# Synthetic tree — the real repo has neither a colon in its path nor a
+# double-quoted alias, so the two PR #1266 review fixes below need a fixture.
+# Written from the bats shell with a quoted heredoc: routing these lines
+# through run_in_bash's nested `bash -c` string mangles the backslashes and
+# would test the fixture's escaping rather than the parser.
+_stage_odd_tree() {
+    local root="$1"
+    mkdir -p "$root/bash" "$root/zsh" "$root/shell-common"
+    cat > "$root/shell-common/odd.sh" <<'FIXTURE'
+alias plainq='echo hi'
+alias dq="echo \"hi\" there"
+FIXTURE
+}
+
+@test "T4e: a colon in the repo path does not corrupt path/line parsing" {
+    # grep -n emits <path>:<line>:<content>; splitting on the first two colons
+    # returned path="…/we" and lineno="ird/shell-common/odd.sh" here. The
+    # parser now anchors on the first ":<digits>:" instead.
+    _stage_odd_tree "$HOME/we:ird"
+    run_in_bash 'DOTFILES_ROOT="$HOME/we:ird" _my_help_build_alias_index |
+        awk -F"\t" "\$1==\"plainq\"{print \$4; print \$5}"'
+    assert_success
+    # Location must be the relative path with a real line number, not a
+    # fragment of the path itself.
+    assert_line --index 0 "shell-common/odd.sh:1"
+    assert_line --index 1 "echo hi"
+}
+
+@test "T4f: a double-quoted alias keeps its escaped quotes intact" {
+    # `alias dq="echo \"hi\" there"` terminated on the escaped quote before the
+    # fix, truncating the body to `echo \`. Backslash escapes are honoured for
+    # the double-quoted form only — POSIX single quotes have no escapes.
+    _stage_odd_tree "$HOME/odd"
+    run_in_bash 'DOTFILES_ROOT="$HOME/odd" _my_help_build_alias_index |
+        awk -F"\t" "\$1==\"dq\"{print \$5}"'
+    assert_success
+    assert_output 'echo \"hi\" there'
+
+    # The single-quoted sibling in the same fixture must be untouched by the
+    # escape handling — POSIX gives backslash no special meaning there.
+    run_in_bash 'DOTFILES_ROOT="$HOME/odd" _my_help_build_alias_index |
+        awk -F"\t" "\$1==\"plainq\"{print \$5}"'
+    assert_success
+    assert_output "echo hi"
+}
+
+@test "T7b: a cache corrupted past the first line is rebuilt, not served" {
+    # The staleness check used to validate only line 1, so a TSV truncated
+    # mid-write stayed "valid" for the whole 24h TTL (PR #1266 review).
+    run_in_bash '
+        printf "good\tdesc\talias\tloc\tdef\nTRUNCATED-LINE\n" > "$MY_HELP_ALIAS_CACHE_PATH"
+        _my_help_alias_index | wc -l
+    '
+    assert_success
+    [ "$output" -gt 300 ]
+}
+
 # ---------------------------------------------------------------------------
 # T5-T8: cache behavior (NF-1 + Error Cases)
 # ---------------------------------------------------------------------------

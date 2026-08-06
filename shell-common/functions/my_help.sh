@@ -641,16 +641,15 @@ _my_help_build_alias_index() {
                 return s
             }
             {
-                # grep -n emits <path>:<line>:<content>; no path in this repo
-                # contains a colon, so splitting on the first two is safe.
-                ci = index($0, ":")
-                if (ci == 0) next
-                path = substr($0, 1, ci - 1)
-                rest = substr($0, ci + 1)
-                cj = index(rest, ":")
-                if (cj == 0) next
-                lineno = substr(rest, 1, cj - 1)
-                body = substr(rest, cj + 1)
+                # grep -n emits <path>:<line>:<content>. Anchor on the first
+                # ":<digits>:" rather than the first two colons — splitting on
+                # bare colons hands back a path of "a" and a line number of
+                # "b/c.sh" the moment a parent directory contains one
+                # (PR #1266 review).
+                if (!match($0, /:[0-9]+:/)) next
+                path = substr($0, 1, RSTART - 1)
+                lineno = substr($0, RSTART + 1, RLENGTH - 2)
+                body = substr($0, RSTART + RLENGTH)
                 if (substr(body, 1, 6) != "alias ") next
 
                 kv = substr(body, 7)
@@ -665,13 +664,29 @@ _my_help_build_alias_index() {
                 q = substr(expansion, 1, 1)
                 defn = expansion
                 tail = ""
-                if (q == "'"'"'" || q == "\"") {
-                    ce = index(substr(expansion, 2), q)
-                    if (ce > 0) {
-                        defn = substr(expansion, 2, ce - 1)
-                        tail = substr(expansion, ce + 2)
+                ce = 0
+                if (q == "\"") {
+                    # Inside double quotes a backslash escapes the next
+                    # character, so `alias x="echo \"hi\""` must not terminate
+                    # on the escaped quote (PR #1266 review). No alias in this
+                    # repo is double-quoted today; this keeps the first one
+                    # that is from being silently truncated.
+                    for (i = 2; i <= length(expansion); i++) {
+                        c = substr(expansion, i, 1)
+                        if (c == "\\") { i++; continue }
+                        if (c == q) { ce = i; break }
                     }
-                } else {
+                } else if (q == "'"'"'") {
+                    # POSIX single quotes admit no escape at all — the very
+                    # next quote always closes the string, so a plain index()
+                    # is exact here rather than a heuristic.
+                    p = index(substr(expansion, 2), q)
+                    if (p > 0) ce = p + 1
+                }
+                if (ce > 0) {
+                    defn = substr(expansion, 2, ce - 2)
+                    tail = substr(expansion, ce + 1)
+                } else if (q != "'"'"'" && q != "\"") {
                     si = index(expansion, " ")
                     if (si > 0) {
                         defn = substr(expansion, 1, si - 1)
@@ -719,9 +734,12 @@ _my_help_alias_cache_stale() {
     # Missing, empty, or unreadable — all "rebuild".
     [ -s "$cache" ] && [ -r "$cache" ] || return 0
 
-    # Truncated or hand-mangled file: every valid record carries the literal
-    # "alias" kind field, so a first line without it means rebuild (#1261).
-    head -n 1 "$cache" 2>/dev/null | grep -q "$(printf '\talias\t')" || return 0
+    # Truncated or hand-mangled file: every valid record is 5 fields with
+    # "alias" in the kind column. Checking only the first line would serve a
+    # TSV truncated mid-write for the full TTL (PR #1266 review), so validate
+    # every record — one awk pass over ~400 lines, and fewer forks than the
+    # head|grep pair it replaces.
+    awk -F'\t' 'NF != 5 || $3 != "alias" { exit 1 }' "$cache" 2>/dev/null || return 0
 
     local mtime
     if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
