@@ -100,6 +100,40 @@ def _user_tool_result(text: str) -> dict[str, Any]:
     }
 
 
+def _user_meta_text(text: str) -> dict[str, Any]:
+    """Build a user-role entry flagged `isMeta` on the OUTER entry (#1275).
+
+    Claude Code stamps `isMeta: true` on the text it injects into the user
+    channel itself (Stop-hook feedback, skill expansions) and never on a
+    human prompt. The flag deliberately sits outside `message`, which is
+    exactly what a naive `role=user` counter fails to look at.
+    """
+    return {"type": "user", "isMeta": True, "message": {"role": "user", "content": text}}
+
+
+def _user_text_with_tool_result(text: str) -> dict[str, Any]:
+    """Build a user message carrying BOTH human text and tool output (#1275).
+
+    Real transcripts bundle these in one turn. Skipping any message that
+    contains a tool_result wholesale would mean the human half never counts,
+    so a genuinely abandoned flow could never expire its boundary.
+    """
+    return {
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "toolu_test_mixed",
+                    "content": "tests: 42 passed",
+                },
+                {"type": "text", "text": text},
+            ],
+        },
+    }
+
+
 def _assistant_skill(skill: str, args: str = "") -> dict[str, Any]:
     """Build an assistant tool_use message invoking Skill(<skill>)."""
     return {
@@ -599,6 +633,360 @@ def test_trace_on_emits_allow_reason_for_no_boundary(tmp_path: Path) -> None:
     assert result.stdout.strip() == ""
     assert "[autopilot-stop-guard] allow:" in result.stderr
     assert "no devx-autopilot boundary" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# Issue #1275 — stale boundary expiry (ported from #1270 / PR #1272). After N
+# fresh user prompts (default 3, `DEVX_AUTOPILOT_STOP_GUARD_MAX_USER_TURNS`,
+# `0` = disabled) the boundary is abandoned and the hook fails open. Without
+# it, a Stage-B run the user walks away from keeps blocking every unrelated
+# turn for the rest of the session.
+# ---------------------------------------------------------------------------
+
+
+def test_three_fresh_user_prompts_expire_the_boundary(tmp_path: Path) -> None:
+    """3 unrelated user prompts after an unfinished flow → allow."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            _user_text("actually, forget that — what does mise tasks list?"),
+            _assistant_text("It lists the repo's lint/test tasks."),
+            _user_text("thanks. now show me the zsh env file"),
+            _assistant_text("Here it is."),
+            _user_text("what is the p10k prompt config path?"),
+            _assistant_text("~/.p10k.zsh"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"Stale devx-autopilot boundary kept blocking unrelated turns. stdout={result.stdout!r}"
+    )
+
+
+def test_boundary_expiry_reported_in_trace(tmp_path: Path) -> None:
+    """The expiry allow-path names itself under trace mode."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            _user_text("unrelated question one"),
+            _user_text("unrelated question two"),
+            _user_text("unrelated question three"),
+        ],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"DEVX_AUTOPILOT_STOP_GUARD_TRACE": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+    assert "stale boundary expiry" in result.stderr, f"stderr={result.stderr!r}"
+    assert "fresh_user_prompts=3" in result.stderr, f"stderr={result.stderr!r}"
+    assert "layer=L1.5" in result.stderr
+
+
+def test_two_fresh_user_prompts_still_block(tmp_path: Path) -> None:
+    """Boundary condition: below the limit the guard keeps blocking."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _user_text("wait, is the PR going to close the issue?"),
+            _assistant_text("Yes, via Closes #1275."),
+            _user_text("ok continue"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"Expected a block below the expiry limit. stdout={result.stdout!r}"
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "0/7 Stage-B step markers emitted" in decision["reason"]
+
+
+def test_skill_expansion_user_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
+    """Claude Code injects an invoked sub-skill's body as a user-role message.
+    Stage-B expands several of those; they must not expire the boundary."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _user_text("Base directory for this skill: /home/user/.claude/skills/gh-issue-create\n"),
+            _assistant_skill("gh-issue-create"),
+            _user_text("<command-message>gh-pr</command-message>\n<command-args></command-args>\n"),
+            _user_text("<command-name>/gh-pr</command-name>\n<command-args></command-args>\n"),
+            _user_text("<local-command-stdout>ok</local-command-stdout>"),
+            _user_text("The gh-pr skill is already loaded above."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        "Skill-expansion user messages were miscounted as fresh user prompts "
+        f"and expired the boundary. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_tool_result_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
+    """Tool output rides in `role=user` messages but is not a prompt.
+
+    Load-bearing for this guard specifically: its own step markers arrive as
+    Bash tool_result payloads, so every real flow generates such messages.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            _user_tool_result("tests: 42 passed"),
+            _user_tool_result("commit abc123 created"),
+            _user_tool_result("PR https://x/pull/9 opened"),
+            _user_tool_result("review posted"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"tool_result messages were miscounted as fresh user prompts. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_system_reminder_only_user_message_is_not_a_fresh_prompt(
+    tmp_path: Path,
+) -> None:
+    """A user message consisting solely of a `<system-reminder>` span is
+    harness chatter, not a human turn."""
+    reminder = "<system-reminder>\nThis is a reminder about file state.\nIt spans lines.\n</system-reminder>"
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            _user_text(reminder),
+            _user_text(reminder),
+            _user_text(reminder),
+            _user_text(reminder),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"A <system-reminder>-only message was counted as a fresh prompt. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_expiry_disabled_by_env_zero(tmp_path: Path) -> None:
+    """`DEVX_AUTOPILOT_STOP_GUARD_MAX_USER_TURNS=0` never expires."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            *[_user_text(f"unrelated prompt {i}") for i in range(5)],
+        ],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"DEVX_AUTOPILOT_STOP_GUARD_MAX_USER_TURNS": "0"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"Expiry ran even though it was disabled with =0. stdout={result.stdout!r}"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_expiry_limit_configurable_via_env(tmp_path: Path) -> None:
+    """A custom non-zero limit is honoured (1 prompt is enough here)."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            _user_text("never mind, different topic now"),
+        ],
+    )
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"DEVX_AUTOPILOT_STOP_GUARD_MAX_USER_TURNS": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"stdout={result.stdout!r}"
+
+
+def test_invalid_expiry_env_falls_back_to_default(tmp_path: Path) -> None:
+    """An unparseable / negative value degrades to the default of 3."""
+    two_prompts = [
+        _user_text("/devx-autopilot"),
+        _step_markers_result("plan"),
+        _user_text("question one"),
+        _user_text("question two"),
+    ]
+    transcript = _write_transcript(tmp_path, two_prompts)
+    for bad in ("not-a-number", "-1", ""):
+        result = _run_hook(
+            _hook_event(transcript),
+            env={"DEVX_AUTOPILOT_STOP_GUARD_MAX_USER_TURNS": bad},
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip(), f"value {bad!r} did not fall back to the default limit"
+        assert json.loads(result.stdout)["decision"] == "block"
+
+
+# ---------------------------------------------------------------------------
+# Issue #1275 — fresh-prompt counter over/under-counting.
+#
+# Measured on gh-issue-flow's twin guard (PR #1272): a naive `role=user` count
+# saw 102 "fresh prompts" on a real transcript of which only 4 were human —
+# the rest were Stop-hook feedback re-injections and `<task-notification>`
+# background-subagent completions, so the limit of 3 was hit mid-flow and the
+# guard disabled itself. Two independent fixes are pinned below: `isMeta` on
+# the OUTER entry plus harness-injection markers (over-count), and counting a
+# mixed text + tool_result turn (under-count).
+# ---------------------------------------------------------------------------
+
+
+def test_ismeta_user_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
+    """`isMeta: true` on the outer entry means harness text, never a human."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            _user_meta_text("please continue with the next step"),
+            _user_meta_text("keep going, do not stop"),
+            _user_meta_text("resume the chain now"),
+            _user_meta_text("another injected line"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"isMeta entries were miscounted as fresh user prompts. stdout={result.stdout!r}"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_stop_hook_feedback_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
+    """The hook's own `reason`, re-injected as user text, must not count.
+
+    This is the self-defeat loop: every block the guard emits comes back as a
+    "fresh user prompt", and three of them would expire the guard's own
+    boundary.
+    """
+    feedback = (
+        "Stop hook feedback: devx-autopilot incomplete: 1/7 Stage-B step markers "
+        "emitted since the flow started, and no terminal report "
+        "('[OK] devx:autopilot' / '[FAIL] devx:autopilot') has been emitted yet. "
+        "Per the CRITICAL CONTRACT in claude/skills/devx-autopilot/SKILL.md, you "
+        "MUST continue immediately. Next action: Step 0b — Skill(gh:issue-create)."
+    )
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            _user_text(feedback),
+            _user_text(feedback),
+            _user_text(feedback),
+            _user_text(feedback),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"Stop-hook feedback was miscounted as fresh user prompts. stdout={result.stdout!r}"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_task_notification_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
+    """Background-subagent completion notices are harness, not human."""
+    notice = "<task-notification>Agent 'codex-review' (id: agent_1) has completed.</task-notification>"
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            _user_text(notice),
+            _user_text(notice),
+            _user_text(notice),
+            _user_text(notice),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"<task-notification> was miscounted as fresh user prompts. stdout={result.stdout!r}"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_system_notification_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
+    """`[SYSTEM NOTIFICATION - NOT USER INPUT]` says so on the tin."""
+    notice = "[SYSTEM NOTIFICATION - NOT USER INPUT] Background command exited with code 0."
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            _user_text(notice),
+            _user_text(notice),
+            _user_text(notice),
+            _user_text(notice),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"[SYSTEM NOTIFICATION] was miscounted as fresh user prompts. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_mixed_text_and_tool_result_message_counts_as_fresh_prompt(
+    tmp_path: Path,
+) -> None:
+    """A human prompt bundled with tool output still counts.
+
+    Skipping such messages wholesale would mean a genuinely abandoned flow
+    keeps blocking forever whenever the user types while a tool is in flight.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            _user_text_with_tool_result("stop that — what does mise tasks list?"),
+            _user_text_with_tool_result("and where is the zsh env file?"),
+            _user_text_with_tool_result("last one: the p10k config path?"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        "Human text bundled alongside a tool_result was not counted, so the "
+        f"stale boundary kept blocking. stdout={result.stdout!r}"
+    )
+
+
+def test_tool_result_only_message_still_not_a_fresh_prompt(tmp_path: Path) -> None:
+    """Regression guard: having no wholesale tool_result skip must not let
+    bare tool output start counting — `include_tool_results=False` yields
+    empty text, and the emptiness check drops it."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _user_tool_result("tests: 42 passed"),
+            _user_tool_result("commit abc123 created"),
+            _user_tool_result("PR https://x/pull/9 opened"),
+            _user_tool_result("review posted"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"tool_result-only messages were counted as fresh prompts. stdout={result.stdout!r}"
+    assert json.loads(result.stdout)["decision"] == "block"
 
 
 # ---------------------------------------------------------------------------
