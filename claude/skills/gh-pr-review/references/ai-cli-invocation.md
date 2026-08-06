@@ -2,9 +2,11 @@
 
 Maps the three supported `--ai` values to concrete CLI commands. The
 prompt (built from `references/review-presets.md`) is passed via
-**stdin**; the PR diff is appended to that same stdin payload. None of
-the three CLIs receive the prompt as a single argv string — argv has
-length limits and quoting hazards, stdin doesn't.
+**stdin** by default; the PR diff is appended to that same stdin
+payload. Exception: `agy --print` takes the prompt as an argv string
+(see `--ai agy` below) — everything else (`PROMPT_FILE`'s own creation,
+codex, claude) stays stdin-based, since argv has length limits and
+quoting hazards that stdin avoids.
 
 ## PATH pre-flight
 
