@@ -299,13 +299,16 @@ _gh_pr_review_run_ai() {
     local ai="$1"
     local prompt_file="$2"
     local cfg_dir="${3:-}"
-    # mktemp template — the `XXXXXX` suffix prevents the predictable-PID
-    # symlink-attack class on shared `/tmp` filesystems (gemini-code-assist
-    # review on PR #695). The `$ai` discriminator stays in the name so the
-    # user can grep for "the agy run" vs "the codex run" when several
-    # invocations linger after failures.
+    # Temp path comes from `_gh_pr_review_mktemp_safe`, this module's SSOT
+    # allocator (issue #1283): mktemp first, then a noclobber fallback that
+    # refuses a pre-planted symlink or regular file instead of writing
+    # through it. Routed through the helper for consistency with the other
+    # three call sites (PROMPT_FILE / AI_OUT / BODY_FILE) — issue #1286.
+    # The `$ai` discriminator stays in the name so the user can grep for
+    # "the agy run" vs "the codex run" when several invocations linger
+    # after failures.
     local _stderr_file
-    if ! _stderr_file=$(mktemp "/tmp/gh-pr-review-stderr.$ai.XXXXXX" 2>/dev/null); then
+    if ! _stderr_file=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-stderr.$ai.XXXXXX"); then
         echo "Could not create stderr temp file under /tmp" >&2
         return 1
     fi
@@ -923,19 +926,67 @@ EOF
         echo "Could not create prompt temp file under /tmp" >&2
         return 1
     fi
+    # Issue #1286 — interrupt cleanup. Without a trap, Ctrl-C during the
+    # (potentially minutes-long) external AI CLI run, or during the
+    # `gh pr diff` inside the prompt builder, unwinds this function
+    # outright: none of the `rm -f` cascades below ever run and all three
+    # temp files leak into /tmp. A later run that recycles the same PID
+    # then hits the noclobber fallback and fails closed on its own litter.
+    #
+    # Installed here — right after the first successful allocation — so it
+    # covers the earliest point any of the three files can exist. AI_OUT
+    # and BODY_FILE are still empty strings at this instant; `rm -f ""` is
+    # a documented no-op, so the single handler stays correct throughout.
+    #
+    # The handler ends in `return 130` (128 + SIGINT) on purpose: a trap
+    # action alone does NOT abort the function — both bash and zsh resume
+    # at the next command after the handler returns, which would carry a
+    # half-finished run into Step 6 and post a comment built from files
+    # the handler just deleted. The abort holds in both shells; the
+    # *status* only in bash. When the signal lands on the Step 5
+    # `if ! ( … | tee … )` subshell, zsh drops the 130 and the function
+    # reports 0 (it still aborts). Do not rely on the exit code alone to
+    # detect an interrupt under zsh.
+    #
+    # Every `return` past this point must disarm the handler first. This
+    # function is sourced into the user's interactive shell, so a leaked
+    # handler would silently override their Ctrl-C at the prompt on every
+    # later command — and reference locals that no longer exist.
+    #
+    # Disarming is `trap - INT TERM` *plus* re-arming whatever the caller
+    # already had: bash traps are global to the shell, so a bare reset
+    # deletes the caller's own handler as a side effect (bats' own
+    # `bats_interrupt_trap` is a live example of a caller that has one).
+    # zsh needs no snapshot — under `emulate -L sh` its traps are
+    # function-local, so the caller's are restored on return for free.
+    local _saved_traps=""
+    if [ -n "${BASH_VERSION-}" ]; then
+        _saved_traps=$(
+            trap -p INT
+            trap -p TERM
+        )
+    fi
+    trap 'rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE" 2>/dev/null; trap - INT TERM; return 130' INT TERM
+
     if ! AI_OUT=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"); then
         echo "Could not create AI output temp file under /tmp" >&2
+        trap - INT TERM
+        [ -z "$_saved_traps" ] || eval "$_saved_traps"
         rm -f "$PROMPT_FILE"
         return 1
     fi
     if ! BODY_FILE=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-body.XXXXXX"); then
         echo "Could not create comment body temp file under /tmp" >&2
+        trap - INT TERM
+        [ -z "$_saved_traps" ] || eval "$_saved_traps"
         rm -f "$PROMPT_FILE" "$AI_OUT"
         return 1
     fi
 
     if ! _gh_pr_review_build_prompt "$review" "$PROMPT_FILE" \
         "$PR_NUMBER" "$TARGET_REPO" "${base:-?}" "${head:-?}"; then
+        trap - INT TERM
+        [ -z "$_saved_traps" ] || eval "$_saved_traps"
         rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
         return 1
     fi
@@ -951,6 +1002,8 @@ EOF
         _gh_pr_review_run_ai "$ai" "$PROMPT_FILE" "$CFG_DIR" | tee "$AI_OUT"
     ); then
         local _rc=$?
+        trap - INT TERM
+        [ -z "$_saved_traps" ] || eval "$_saved_traps"
         rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
         return "$_rc"
     fi
@@ -972,6 +1025,8 @@ EOF
     printf '[OK] PR #%s reviewed by %s (--review=%s) — comment: %s\n' \
         "$PR_NUMBER" "$ai" "$review" "$COMMENT_RESULT"
 
+    trap - INT TERM
+    [ -z "$_saved_traps" ] || eval "$_saved_traps"
     rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
     return 0
 }

@@ -25,6 +25,19 @@ teardown() {
     # Same reason for the #1283 fallback-path tests, scoped to this
     # process's own PID so a concurrent run is never touched.
     rm -f "/tmp/gh-pr-review-out.$$" "/tmp/gh-pr-review-body.$$"
+    # Same for the #1286 stderr-allocator tests, one path per AI lane.
+    rm -f "/tmp/gh-pr-review-stderr.codex.$$" \
+        "/tmp/gh-pr-review-stderr.agy.$$" \
+        "/tmp/gh-pr-review-stderr.claude.$$"
+    # The #1286 interrupt harness runs gh_pr_review in its own process
+    # group, so its fallback paths carry the harness PID, not ours. Kill
+    # any survivor of an aborted assertion and sweep its litter.
+    if [ -n "${_HARNESS_PID-}" ]; then
+        kill -9 "-$_HARNESS_PID" 2>/dev/null || true
+        rm -f "/tmp/gh-pr-review-out.$_HARNESS_PID" \
+            "/tmp/gh-pr-review-body.$_HARNESS_PID" \
+            "/tmp/gh-pr-review-stderr.codex.$_HARNESS_PID"
+    fi
     teardown_isolated_home
 }
 
@@ -357,6 +370,67 @@ _prompt_fallback_path() {
     rm -f "$fallback"
 }
 
+@test "mktemp_safe: two same-\$\$ racers on one fallback path → exactly one wins, loser fails closed" {
+    # Issue #1286 item 3 — `$$` is the *parent* shell's PID and does not
+    # change in a subshell, so two `&`-forked writers inside one script
+    # derive the identical fallback path and genuinely race for it. This
+    # reconfirms the documented contract: `set -C` opens with
+    # O_CREAT|O_EXCL, which the kernel serializes, so the loser fails
+    # closed (no output, non-zero exit) instead of clobbering the winner.
+    # A passing run is the reason the fallback naming stays `$$`-derived
+    # rather than mixing in `$RANDOM`.
+    _source_module
+    _stub_mktemp_failing
+    local fallback="/tmp/gh-pr-review-out.$$"
+    rm -f "$fallback"
+    local race_dir="$TEST_TEMP_HOME/race"
+    mkdir -p "$race_dir"
+
+    local i
+    for i in 1 2; do
+        (
+            if p=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"); then
+                printf 'racer-%s\n' "$i" >>"$p"
+                printf '%s' "$p" >"$race_dir/$i.path"
+                echo 0 >"$race_dir/$i.rc"
+            else
+                printf '%s' "$p" >"$race_dir/$i.path"
+                echo 1 >"$race_dir/$i.rc"
+            fi
+        ) &
+    done
+    wait
+
+    local rc1 rc2
+    rc1=$(cat "$race_dir/1.rc")
+    rc2=$(cat "$race_dir/2.rc")
+    # Exactly one winner — never two, never zero.
+    [ "$((rc1 + rc2))" -eq 1 ]
+
+    local winner loser
+    if [ "$rc1" -eq 0 ]; then
+        winner=1
+        loser=2
+    else
+        winner=2
+        loser=1
+    fi
+
+    # Winner got the shared fallback path; the loser printed nothing.
+    [ "$(cat "$race_dir/$winner.path")" = "$fallback" ]
+    [ ! -s "$race_dir/$loser.path" ]
+
+    # The winner's file is intact — the loser neither truncated it nor
+    # appended to it — and still carries mktemp-equivalent 0600 bits.
+    [ -f "$fallback" ]
+    [ ! -L "$fallback" ]
+    run stat -c '%a' "$fallback"
+    assert_output "600"
+    run cat "$fallback"
+    assert_output "racer-$winner"
+    rm -f "$fallback"
+}
+
 # ---------------------------------------------------------------------------
 # gh_pr_review() temp-file failure + cascading cleanup (issue #1283)
 #
@@ -428,6 +502,191 @@ _stub_gh_pr_review_preconditions() {
     run cat "$body_fb"
     assert_output "squatted"
     rm -f "$body_fb"
+}
+
+# ---------------------------------------------------------------------------
+# gh_pr_review() interrupt cleanup (issue #1286 item 2)
+#
+# Ctrl-C used to unwind the function outright, so none of the `rm -f`
+# cascades ran and PROMPT_FILE / AI_OUT / BODY_FILE leaked into /tmp. The
+# INT/TERM trap must (a) delete all three and (b) reset itself at every
+# return, since this function is sourced into the user's *interactive*
+# shell — a leaked handler would override their Ctrl-C at the prompt.
+#
+# The harness runs gh_pr_review in a real, separate process group: bash
+# sets SIGINT to SIG_IGN for `&`-backgrounded children and then refuses to
+# trap it, so a plain `&` would make the test silently vacuous. `setsid
+# --fork` returns immediately and leaves the run signalable as a group,
+# which is what a terminal Ctrl-C actually does.
+# ---------------------------------------------------------------------------
+
+# Stage stub CLIs plus a harness script that drives gh_pr_review to Step 5
+# and blocks there with all three temp files allocated. `mktemp` is forced
+# to fail so the three land on their deterministic `$$` fallback paths —
+# the harness reports its own PID so the test can compute them.
+# Args: $1 = shell to run the harness under (bash|zsh).
+# Sets: _HARNESS_PID, _HARNESS_PROMPT_FB, _HARNESS_OUT_FB, _HARNESS_BODY_FB.
+_interrupt_harness_start() {
+    local shell_bin="$1"
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    printf '#!/bin/sh\nexit 0\n' >"$stub_dir/gh"
+    printf '#!/bin/sh\nexit 1\n' >"$stub_dir/mktemp"
+    local marker="$TEST_TEMP_HOME/codex-started"
+    rm -f "$marker"
+    # The fake CLI announces itself, then blocks — that is the window in
+    # which the interrupt has to arrive.
+    cat >"$stub_dir/codex" <<EOF
+#!/bin/sh
+: >"$marker"
+sleep 30
+EOF
+    chmod +x "$stub_dir/gh" "$stub_dir/mktemp" "$stub_dir/codex"
+
+    local pidfile="$TEST_TEMP_HOME/harness.pid"
+    local harness="$TEST_TEMP_HOME/harness.sh"
+    rm -f "$pidfile"
+    cat >"$harness" <<EOF
+export DOTFILES_FORCE_INIT=1
+export PATH="$stub_dir:\$PATH"
+. "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_review.sh"
+_gh_pr_review_require_ai_cli() { return 0; }
+_gh_pr_review_resolve_target_repo() { echo "owner/repo"; }
+_gh_pr_review_resolve_pr_number() { echo "1286"; }
+_gh_pr_review_fetch_meta() {
+    echo '{"state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"feat"}'
+}
+_gh_pr_review_preflight_pr_state() { return 0; }
+echo \$\$ >"$pidfile"
+gh_pr_review --ai codex 1286
+echo "FUNC-RC=\$?"
+EOF
+    _HARNESS_OUT="$TEST_TEMP_HOME/harness.out"
+
+    setsid --fork "$shell_bin" "$harness" </dev/null \
+        >"$TEST_TEMP_HOME/harness.out" 2>&1
+
+    local i
+    for i in $(seq 1 150); do
+        [ -f "$marker" ] && break
+        sleep 0.1
+    done
+    [ -f "$marker" ]
+
+    _HARNESS_PID=$(cat "$pidfile")
+    [ -n "$_HARNESS_PID" ]
+    _HARNESS_PROMPT_FB="/tmp/gh-pr-review-prompt.codex.1286.$_HARNESS_PID"
+    _HARNESS_OUT_FB="/tmp/gh-pr-review-out.$_HARNESS_PID"
+    _HARNESS_BODY_FB="/tmp/gh-pr-review-body.$_HARNESS_PID"
+}
+
+# Deliver SIGINT to the whole harness process group (what a terminal
+# Ctrl-C does) and wait for the run to finish unwinding.
+_interrupt_harness_interrupt() {
+    local pgid
+    pgid=$(ps -o pgid= -p "$_HARNESS_PID" | tr -d ' ')
+    [ -n "$pgid" ]
+    kill -INT "-$pgid"
+    local i
+    for i in $(seq 1 150); do
+        kill -0 "$_HARNESS_PID" 2>/dev/null || break
+        sleep 0.1
+    done
+    ! kill -0 "$_HARNESS_PID" 2>/dev/null
+}
+
+@test "bash: SIGINT mid-run removes PROMPT_FILE + AI_OUT + BODY_FILE" {
+    command -v setsid >/dev/null 2>&1 || skip "setsid (util-linux) not available"
+    _source_module
+    _interrupt_harness_start bash
+
+    # Precondition: the run really did allocate all three before we signal.
+    [ -f "$_HARNESS_PROMPT_FB" ]
+    [ -f "$_HARNESS_OUT_FB" ]
+    [ -f "$_HARNESS_BODY_FB" ]
+
+    _interrupt_harness_interrupt
+
+    [ ! -e "$_HARNESS_PROMPT_FB" ]
+    [ ! -e "$_HARNESS_OUT_FB" ]
+    [ ! -e "$_HARNESS_BODY_FB" ]
+
+    # The run must abort, not resume: Step 7's report would mean Step 6
+    # built and posted a PR comment from files the handler just deleted.
+    run cat "$_HARNESS_OUT"
+    refute_output --partial "[OK] PR #1286 reviewed"
+    # bash propagates the handler's `return 130` (128 + SIGINT) as the
+    # function's status, so callers can tell an interrupt from a success.
+    assert_output --partial "FUNC-RC=130"
+}
+
+@test "zsh: SIGINT mid-run removes PROMPT_FILE + AI_OUT + BODY_FILE" {
+    # The function runs under `emulate -L sh` in zsh; the trap action is a
+    # plain `rm -f` + `return`, but "should be fine" is not evidence.
+    command -v setsid >/dev/null 2>&1 || skip "setsid (util-linux) not available"
+    command -v zsh >/dev/null 2>&1 || skip "zsh not available"
+    _source_module
+    _interrupt_harness_start zsh
+
+    [ -f "$_HARNESS_PROMPT_FB" ]
+    [ -f "$_HARNESS_OUT_FB" ]
+    [ -f "$_HARNESS_BODY_FB" ]
+
+    _interrupt_harness_interrupt
+
+    [ ! -e "$_HARNESS_PROMPT_FB" ]
+    [ ! -e "$_HARNESS_OUT_FB" ]
+    [ ! -e "$_HARNESS_BODY_FB" ]
+
+    # Same abort guarantee as bash. The exit *status* is deliberately not
+    # asserted here: when the signal lands on the `if ! ( … | tee … )`
+    # subshell, zsh does not propagate the handler's `return 130` and the
+    # function reports 0 (bash reports 130). Cleanup and the abort itself
+    # — the properties issue #1286 is about — hold in both shells.
+    run cat "$_HARNESS_OUT"
+    refute_output --partial "[OK] PR #1286 reviewed"
+}
+
+@test "bash: INT/TERM traps do not leak to the caller after a successful run" {
+    # gh_pr_review is called directly (not via `run`) so the traps it sets
+    # are visible in this very shell — `run` would hide them in a subshell
+    # and make the assertion vacuous.
+    _source_module
+    _stub_gh_pr_review_preconditions
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    printf '#!/bin/sh\necho "[PRAISE] a.sh:1 — ok"\nexit 0\n' >"$stub_dir/codex"
+    chmod +x "$stub_dir/codex"
+
+    local before after rc=0
+    before=$(trap -p INT; trap -p TERM)
+    gh_pr_review --ai codex --no-post-comment 1283 >/dev/null 2>&1 || rc=$?
+    after=$(trap -p INT; trap -p TERM)
+
+    [ "$rc" -eq 0 ]
+    [ "$before" = "$after" ]
+    case "$after" in *PROMPT_FILE*) false ;; esac
+}
+
+@test "bash: INT/TERM traps do not leak to the caller on an early-failure return" {
+    _source_module
+    _stub_gh_pr_review_preconditions
+    _stub_mktemp_failing
+
+    local prompt_fb="/tmp/gh-pr-review-prompt.codex.1283.$$"
+    local out_fb="/tmp/gh-pr-review-out.$$"
+    rm -f "$prompt_fb"
+    # Squat the AI_OUT fallback so the run aborts after the trap is armed.
+    printf 'squatted\n' >"$out_fb"
+
+    local before after rc=0
+    before=$(trap -p INT; trap -p TERM)
+    gh_pr_review --ai codex 1283 >/dev/null 2>&1 || rc=$?
+    after=$(trap -p INT; trap -p TERM)
+
+    [ "$rc" -eq 1 ]
+    [ "$before" = "$after" ]
+    case "$after" in *PROMPT_FILE*) false ;; esac
+    rm -f "$out_fb" "$prompt_fb"
 }
 
 # ---------------------------------------------------------------------------
@@ -594,4 +853,182 @@ EOF
     assert_failure
     refute_output --partial "agy called with"
     chmod 644 "$f" # restore so bats can clean up TEST_TEMP_HOME
+}
+
+# ---------------------------------------------------------------------------
+# _gh_pr_review_run_ai — stderr temp file uses the SSOT allocator (issue #1286
+# item 1). It used to call `mktemp` raw, so an unwritable /tmp aborted the
+# whole review even though the module already had a safe fallback; and the
+# fallback it does now use has to keep #1283's refuse-don't-clobber contract.
+# ---------------------------------------------------------------------------
+
+@test "run_ai: mktemp failure falls back to the safe \$\$ stderr path instead of aborting" {
+    _source_module
+    _stub_agy_echo
+    _stub_mktemp_failing
+    local fallback="/tmp/gh-pr-review-stderr.agy.$$"
+    rm -f "$fallback"
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    run _gh_pr_review_run_ai agy "$f"
+    assert_success
+    assert_output --partial "agy called with: review this diff"
+    # The success path still cleans the stderr file up after itself.
+    [ ! -e "$fallback" ]
+}
+
+@test "run_ai: symlink pre-planted at the stderr fallback path → refuses, victim untouched" {
+    _source_module
+    _stub_agy_echo
+    _stub_mktemp_failing
+    local victim="$TEST_TEMP_HOME/victim.txt"
+    printf 'original\n' >"$victim"
+    local fallback="/tmp/gh-pr-review-stderr.agy.$$"
+    rm -f "$fallback"
+    ln -s "$victim" "$fallback"
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    run _gh_pr_review_run_ai agy "$f"
+    assert_failure 1
+    assert_output --partial "Could not create stderr temp file under /tmp"
+    # Aborts before invoking the CLI — nothing is written through the link.
+    refute_output --partial "agy called with"
+    [ -L "$fallback" ]
+    run cat "$victim"
+    assert_output "original"
+    rm -f "$fallback"
+}
+
+# ---------------------------------------------------------------------------
+# zsh regression coverage for the noclobber fallback (issue #1286 item 4)
+#
+# This module is sourced by both bash/main.bash and zsh/main.zsh, but the
+# #1283 symlink-rejection hardening was only ever exercised under bash —
+# bats itself runs in bash, and the cases above call the allocator
+# in-process. These mirror the key bash cases through `run_in_zsh`, which
+# sources the real zsh/main.zsh (auto-loading this module) under `zsh -f`.
+#
+# Constraints of the harness worth knowing when editing these:
+#   - the command string is wrapped in single quotes on the bats side, so
+#     it may not contain single quotes itself;
+#   - `$$` expands inside the zsh subprocess, so the fallback path carries
+#     *its* PID, not the bats PID — each case cleans up its own path;
+#   - zsh's `trap -p` prints nothing, so trap state is inspected with a
+#     bare `trap` redirected to a file (a command substitution would come
+#     back empty because zsh clears traps in subshells).
+# ---------------------------------------------------------------------------
+
+# Shared zsh preamble: stage a always-failing `mktemp` on PATH (forcing the
+# allocator onto its `$$` fallback) and export `$fallback` for the case body.
+_zsh_mktemp_stub_preamble() {
+    cat <<'EOF'
+mkdir -p "$HOME/bin"
+printf "#!/bin/sh\nexit 1\n" > "$HOME/bin/mktemp"
+chmod +x "$HOME/bin/mktemp"
+export PATH="$HOME/bin:$PATH"
+rehash 2>/dev/null || true
+fallback="/tmp/gh-pr-review-out.$$"
+EOF
+}
+
+@test "zsh: mktemp_safe refuses a pre-planted symlink at the fallback path, victim untouched" {
+    run_in_zsh "$(_zsh_mktemp_stub_preamble)"'
+        victim="$HOME/victim.txt"
+        printf "original\n" > "$victim"
+        rm -f "$fallback"
+        ln -s "$victim" "$fallback"
+        if _gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"; then
+            echo "ALLOCATED"
+        else
+            echo "REFUSED"
+        fi
+        [ -L "$fallback" ] && echo "LINK_INTACT"
+        printf "victim=%s\n" "$(cat "$victim")"
+        rm -f "$fallback"
+    '
+    assert_success
+    assert_output --partial "REFUSED"
+    refute_output --partial "ALLOCATED"
+    assert_output --partial "LINK_INTACT"
+    assert_output --partial "victim=original"
+}
+
+@test "zsh: mktemp_safe refuses a pre-planted regular file at the fallback path, content untouched" {
+    run_in_zsh "$(_zsh_mktemp_stub_preamble)"'
+        rm -f "$fallback"
+        printf "squatted\n" > "$fallback"
+        if _gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"; then
+            echo "ALLOCATED"
+        else
+            echo "REFUSED"
+        fi
+        printf "content=%s\n" "$(cat "$fallback")"
+        rm -f "$fallback"
+    '
+    assert_success
+    assert_output --partial "REFUSED"
+    refute_output --partial "ALLOCATED"
+    assert_output --partial "content=squatted"
+}
+
+@test "zsh: mktemp_safe on a clear fallback path → exclusive create succeeds" {
+    run_in_zsh "$(_zsh_mktemp_stub_preamble)"'
+        rm -f "$fallback"
+        p=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX")
+        [ "$?" -eq 0 ] && echo "ALLOCATED"
+        [ "$p" = "$fallback" ] && echo "PATH_IS_FALLBACK"
+        [ -f "$p" ] && echo "IS_REGULAR_FILE"
+        [ -L "$p" ] && echo "IS_SYMLINK"
+        rm -f "$fallback"
+    '
+    assert_success
+    assert_output --partial "ALLOCATED"
+    assert_output --partial "PATH_IS_FALLBACK"
+    assert_output --partial "IS_REGULAR_FILE"
+    refute_output --partial "IS_SYMLINK"
+}
+
+@test "zsh: mktemp_safe fallback file is mode 0600 even under a permissive umask" {
+    run_in_zsh "$(_zsh_mktemp_stub_preamble)"'
+        rm -f "$fallback"
+        umask 022
+        p=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX")
+        printf "mode=%s\n" "$(stat -c "%a" "$p")"
+        rm -f "$fallback"
+    '
+    assert_success
+    assert_output --partial "mode=600"
+}
+
+@test "zsh: INT/TERM traps do not leak to the caller after a successful run" {
+    # zsh runs gh_pr_review under `emulate -L sh`; confirm the trap reset
+    # behaves there too rather than assuming sh emulation matches bash.
+    run_in_zsh '
+        mkdir -p "$HOME/bin"
+        printf "#!/bin/sh\nexit 0\n" > "$HOME/bin/gh"
+        printf "#!/bin/sh\necho REVIEW-OK\nexit 0\n" > "$HOME/bin/codex"
+        chmod +x "$HOME/bin/gh" "$HOME/bin/codex"
+        export PATH="$HOME/bin:$PATH"
+        rehash 2>/dev/null || true
+        _gh_pr_review_resolve_target_repo() { echo "owner/repo"; }
+        _gh_pr_review_resolve_pr_number() { echo "1286"; }
+        _gh_pr_review_fetch_meta() {
+            echo "{\"state\":\"OPEN\",\"isDraft\":false,\"baseRefName\":\"main\",\"headRefName\":\"feat\"}"
+        }
+        _gh_pr_review_preflight_pr_state() { return 0; }
+        gh_pr_review --ai codex --no-post-comment 1286 >/dev/null 2>&1
+        echo "rc=$?"
+        trap > "$HOME/traps.after" 2>&1
+        if grep -q PROMPT_FILE "$HOME/traps.after"; then
+            echo "TRAP_LEAKED"
+        else
+            echo "TRAP_CLEAN"
+        fi
+    '
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "TRAP_CLEAN"
+    refute_output --partial "TRAP_LEAKED"
 }
