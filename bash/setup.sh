@@ -133,7 +133,7 @@ create_symlink "$MAIN_BASH_SOURCE" "$HOME_BASHRC"
 
 # Seed ~/.bashrc.local (untracked, PC-specific overrides). Issue #1290 —
 # mirrors the zsh pattern from issue #737. Installer/hook side-effects
-# (gateway-migration, bun, nvm, …) must NOT land in the tracked dotfile.
+# (bun, nvm, …) must NOT land in the tracked dotfile.
 # We create the file once if it does not exist; existing content is never
 # touched (idempotent).
 
