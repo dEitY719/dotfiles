@@ -810,6 +810,17 @@ Exit codes:
 EOF
 }
 
+# _gh_pr_review_disarm_trap — shared by every INT/TERM exit path inside
+# gh_pr_review (the trap body itself included) so the disarm-and-restore
+# pair lives in exactly one place instead of six near-identical copies.
+# Relies on bash/zsh-sh-emulation dynamic scoping to see the caller's
+# `_saved_traps` local without it being passed as an argument — same
+# scoping `_gh_pr_review_*` helpers already lean on throughout this file.
+_gh_pr_review_disarm_trap() {
+    trap - INT TERM
+    [ -z "${_saved_traps-}" ] || eval "$_saved_traps"
+}
+
 # gh_pr_review — orchestrator. Maps SKILL.md Steps 1–7 to this function.
 gh_pr_review() {
     # zsh compatibility — keep the rest of the function POSIX-shaped.
@@ -959,6 +970,9 @@ EOF
     # `bats_interrupt_trap` is a live example of a caller that has one).
     # zsh needs no snapshot — under `emulate -L sh` its traps are
     # function-local, so the caller's are restored on return for free.
+    # Every disarm point below — including the trap body itself — goes
+    # through `_gh_pr_review_disarm_trap` so the reset-plus-restore pair
+    # can't drift out of sync between the six exit paths.
     local _saved_traps=""
     if [ -n "${BASH_VERSION-}" ]; then
         _saved_traps=$(
@@ -966,27 +980,24 @@ EOF
             trap -p TERM
         )
     fi
-    trap 'rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE" 2>/dev/null; trap - INT TERM; return 130' INT TERM
+    trap 'rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE" 2>/dev/null; _gh_pr_review_disarm_trap; return 130' INT TERM
 
     if ! AI_OUT=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"); then
         echo "Could not create AI output temp file under /tmp" >&2
-        trap - INT TERM
-        [ -z "$_saved_traps" ] || eval "$_saved_traps"
+        _gh_pr_review_disarm_trap
         rm -f "$PROMPT_FILE"
         return 1
     fi
     if ! BODY_FILE=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-body.XXXXXX"); then
         echo "Could not create comment body temp file under /tmp" >&2
-        trap - INT TERM
-        [ -z "$_saved_traps" ] || eval "$_saved_traps"
+        _gh_pr_review_disarm_trap
         rm -f "$PROMPT_FILE" "$AI_OUT"
         return 1
     fi
 
     if ! _gh_pr_review_build_prompt "$review" "$PROMPT_FILE" \
         "$PR_NUMBER" "$TARGET_REPO" "${base:-?}" "${head:-?}"; then
-        trap - INT TERM
-        [ -z "$_saved_traps" ] || eval "$_saved_traps"
+        _gh_pr_review_disarm_trap
         rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
         return 1
     fi
@@ -1002,8 +1013,7 @@ EOF
         _gh_pr_review_run_ai "$ai" "$PROMPT_FILE" "$CFG_DIR" | tee "$AI_OUT"
     ); then
         local _rc=$?
-        trap - INT TERM
-        [ -z "$_saved_traps" ] || eval "$_saved_traps"
+        _gh_pr_review_disarm_trap
         rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
         return "$_rc"
     fi
@@ -1025,8 +1035,7 @@ EOF
     printf '[OK] PR #%s reviewed by %s (--review=%s) — comment: %s\n' \
         "$PR_NUMBER" "$ai" "$review" "$COMMENT_RESULT"
 
-    trap - INT TERM
-    [ -z "$_saved_traps" ] || eval "$_saved_traps"
+    _gh_pr_review_disarm_trap
     rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
     return 0
 }
