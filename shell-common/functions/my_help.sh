@@ -461,13 +461,13 @@ _my_help_enumerate_topic_names() {
     while IFS= read -r func; do
         # Extract function name (before '(' or first space)
         local func_name="${func%%[( ]*}"
-        # `_help_std_*` is excluded explicitly, not just via the `_*` arm: the
-        # adapter's internal helpers (_help_std_orig_*, _help_std_summary_*,
-        # _help_std_rows_*, _help_std_full_*, _help_std_list_*) end in the topic
-        # name, and only today's leading-underscore convention keeps them out of
-        # the `*help` match. Naming it here makes the exclusion a contract.
+        # The `_*` arm below already excludes the adapter's internal helpers
+        # (_help_std_orig_*, _help_std_summary_*, _help_std_rows_*,
+        # _help_std_full_*, _help_std_list_*): they end in the topic name, and
+        # only today's leading-underscore convention keeps them out of the
+        # `*help` match.
         case "$func_name" in
-            my-help|run-help|_help_std_*|_*) ;;
+            my-help|run-help|_*) ;;
             *help)
                 # Normalize to dash format for display
                 printf '%s\n' "$(printf "%s" "$func_name" | tr '_' '-')"
