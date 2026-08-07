@@ -293,8 +293,9 @@ _gh_pr_review_mktemp_prompt() {
 #     building the one-line summary AND emits the full stderr below it.
 #
 # Args: $1 = ai (codex|agy|claude), $2 = PROMPT_FILE, $3 = optional
-# CLAUDE_CONFIG_DIR (claude --user routing). Stdout of the CLI streams to
-# the caller's stdout; stderr is captured for the failure summary.
+# CLAUDE_CONFIG_DIR (claude --user routing), $4 = optional pre-allocated
+# stderr temp path. Stdout of the CLI streams to the caller's stdout;
+# stderr is captured for the failure summary.
 _gh_pr_review_run_ai() {
     local ai="$1"
     local prompt_file="$2"
@@ -307,8 +308,16 @@ _gh_pr_review_run_ai() {
     # The `$ai` discriminator stays in the name so the user can grep for
     # "the agy run" vs "the codex run" when several invocations linger
     # after failures.
-    local _stderr_file
-    if ! _stderr_file=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-stderr.$ai.XXXXXX"); then
+    #
+    # Issue #1294: when $4 is given the *caller* already allocated the path
+    # (same allocator, same template). A self-allocated path is a local of
+    # this function, so gh_pr_review's INT/TERM handler cannot see it and a
+    # Ctrl-C during the CLI run leaks it into /tmp. Callers that care hand
+    # the path down so it sits in the handler's `rm -f` list; the
+    # self-allocating branch stays for direct callers (and tests).
+    local _stderr_file="${4:-}"
+    if [ -z "$_stderr_file" ] &&
+        ! _stderr_file=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-stderr.$ai.XXXXXX"); then
         echo "Could not create stderr temp file under /tmp" >&2
         return 1
     fi
@@ -807,6 +816,8 @@ Exit codes:
       failed, external CLI returned non-zero, gh not authenticated)
   2 — argument error (missing --ai, unknown --ai/--review, --user with
       non-claude --ai)
+  130 — interrupted (Ctrl-C / SIGINT or SIGTERM); temp files are
+      removed and no PR comment is posted
 EOF
 }
 
@@ -933,6 +944,13 @@ EOF
 
     # ---- Step 3 + 4: build prompt + diff into a temp file ----
     local PROMPT_FILE BODY_FILE AI_OUT
+    # AI_STDERR_FILE is _gh_pr_review_run_ai's stderr capture, allocated
+    # here rather than inside that helper so the INT/TERM handler below can
+    # reach it too (issue #1294 — see the helper's own comment). Empty until
+    # its allocation point at Step 5, which the handler tolerates: it is in
+    # the `rm -f` list from the moment it is armed and `rm -f ""` is a
+    # documented no-op.
+    local AI_STDERR_FILE=""
     if ! PROMPT_FILE=$(_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER"); then
         echo "Could not create prompt temp file under /tmp" >&2
         return 1
@@ -945,19 +963,27 @@ EOF
     # then hits the noclobber fallback and fails closed on its own litter.
     #
     # Installed here — right after the first successful allocation — so it
-    # covers the earliest point any of the three files can exist. AI_OUT
-    # and BODY_FILE are still empty strings at this instant; `rm -f ""` is
-    # a documented no-op, so the single handler stays correct throughout.
+    # covers the earliest point any of the four files can exist. AI_OUT,
+    # BODY_FILE and AI_STDERR_FILE are still empty strings at this instant;
+    # `rm -f ""` is a documented no-op, so the single handler stays correct
+    # throughout.
     #
     # The handler ends in `return 130` (128 + SIGINT) on purpose: a trap
     # action alone does NOT abort the function — both bash and zsh resume
     # at the next command after the handler returns, which would carry a
     # half-finished run into Step 6 and post a comment built from files
-    # the handler just deleted. The abort holds in both shells; the
-    # *status* only in bash. When the signal lands on the Step 5
-    # `if ! ( … | tee … )` subshell, zsh drops the 130 and the function
-    # reports 0 (it still aborts). Do not rely on the exit code alone to
-    # detect an interrupt under zsh.
+    # the handler just deleted.
+    #
+    # Issue #1294 — for that `return 130` to reach the *caller* under zsh,
+    # the interrupted command must not be evaluated as a condition. zsh
+    # discards a trap's return status when the signal lands in an `if` test
+    # (the `if` then falls through with its own status 0), and likewise for
+    # a *subshell* on the left of `||`. Measured under zsh 5.9: `if ! cmd`
+    # → 0, `( … ) || rc=$?` → 0, but `cmd || rc=$?` → 130 and `( … )`
+    # followed by `rc=$?` → 130. bash reports 130 for all four. So every
+    # guard from here to Step 5 is written as `cmd || { … }`, and Step 5's
+    # subshell stands alone with its status read on the next line; the
+    # surviving `if`s only test `[ … ]`, which cannot be interrupted.
     #
     # Every `return` past this point must disarm the handler first. This
     # function is sourced into the user's interactive shell, so a leaked
@@ -980,27 +1006,27 @@ EOF
             trap -p TERM
         )
     fi
-    trap 'rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE" 2>/dev/null; _gh_pr_review_disarm_trap; return 130' INT TERM
+    trap 'rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE" "$AI_STDERR_FILE" 2>/dev/null; _gh_pr_review_disarm_trap; return 130' INT TERM
 
-    if ! AI_OUT=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"); then
+    AI_OUT=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX") || {
         echo "Could not create AI output temp file under /tmp" >&2
         _gh_pr_review_disarm_trap
         rm -f "$PROMPT_FILE"
         return 1
-    fi
-    if ! BODY_FILE=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-body.XXXXXX"); then
+    }
+    BODY_FILE=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-body.XXXXXX") || {
         echo "Could not create comment body temp file under /tmp" >&2
         _gh_pr_review_disarm_trap
         rm -f "$PROMPT_FILE" "$AI_OUT"
         return 1
-    fi
+    }
 
-    if ! _gh_pr_review_build_prompt "$review" "$PROMPT_FILE" \
-        "$PR_NUMBER" "$TARGET_REPO" "${base:-?}" "${head:-?}"; then
+    _gh_pr_review_build_prompt "$review" "$PROMPT_FILE" \
+        "$PR_NUMBER" "$TARGET_REPO" "${base:-?}" "${head:-?}" || {
         _gh_pr_review_disarm_trap
         rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
         return 1
-    fi
+    }
 
     # ---- Step 5: dispatch external AI CLI ----
     # Tee CLI stdout: stream to the user's terminal verbatim AND capture
@@ -1008,12 +1034,35 @@ EOF
     # subshell so a non-zero exit from `_gh_pr_review_run_ai` propagates
     # past the trailing `tee`; without it the pipeline always inherits
     # tee's (usually 0) exit code and the failure branch never runs.
-    if ! (
-        set -o pipefail
-        _gh_pr_review_run_ai "$ai" "$PROMPT_FILE" "$CFG_DIR" | tee "$AI_OUT"
-    ); then
-        local _rc=$?
+    #
+    # The CLI's stderr capture is allocated here, not inside
+    # _gh_pr_review_run_ai, so the handler above can delete it on Ctrl-C —
+    # a helper-local path is invisible to it and leaked into /tmp
+    # (issue #1294). Allocation failure is fatal for the same reason it is
+    # inside the helper: without it a CLI failure has no diagnosable cause.
+    AI_STDERR_FILE=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-stderr.$ai.XXXXXX") || {
+        echo "Could not create stderr temp file under /tmp" >&2
         _gh_pr_review_disarm_trap
+        rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
+        return 1
+    }
+    # The subshell stands alone and its status is read from `$?` on the next
+    # line, instead of the former `if ! ( … ); then`. Under zsh an interrupt
+    # that lands inside a subshell used as an `if` condition — or as the left
+    # side of `||` — loses the INT handler's `return 130` and the caller sees
+    # 0 (issue #1294; see the trap comment above). Only the plain
+    # command-then-`$?` form propagates it. The subshell itself, its
+    # `pipefail` and the `tee` are unchanged.
+    local _rc=0
+    (
+        set -o pipefail
+        _gh_pr_review_run_ai "$ai" "$PROMPT_FILE" "$CFG_DIR" "$AI_STDERR_FILE" | tee "$AI_OUT"
+    )
+    _rc=$?
+    if [ "$_rc" -ne 0 ]; then
+        _gh_pr_review_disarm_trap
+        # AI_STDERR_FILE is deliberately NOT removed: a genuine CLI failure
+        # leaves it for the user to inspect (the helper prints its path).
         rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
         return "$_rc"
     fi
@@ -1036,7 +1085,7 @@ EOF
         "$PR_NUMBER" "$ai" "$review" "$COMMENT_RESULT"
 
     _gh_pr_review_disarm_trap
-    rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
+    rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE" "$AI_STDERR_FILE"
     return 0
 }
 

@@ -509,9 +509,11 @@ _stub_gh_pr_review_preconditions() {
 #
 # Ctrl-C used to unwind the function outright, so none of the `rm -f`
 # cascades ran and PROMPT_FILE / AI_OUT / BODY_FILE leaked into /tmp. The
-# INT/TERM trap must (a) delete all three and (b) reset itself at every
-# return, since this function is sourced into the user's *interactive*
-# shell — a leaked handler would override their Ctrl-C at the prompt.
+# INT/TERM trap must (a) delete all three — plus the AI CLI's stderr
+# capture, moved into the caller's scope by issue #1294 — (b) reset itself
+# at every return, since this function is sourced into the user's
+# *interactive* shell (a leaked handler would override their Ctrl-C at the
+# prompt), and (c) surface 130 to the caller in both shells (#1294).
 #
 # The harness runs gh_pr_review in a real, separate process group: bash
 # sets SIGINT to SIG_IGN for `&`-backgrounded children and then refuses to
@@ -525,7 +527,8 @@ _stub_gh_pr_review_preconditions() {
 # to fail so the three land on their deterministic `$$` fallback paths —
 # the harness reports its own PID so the test can compute them.
 # Args: $1 = shell to run the harness under (bash|zsh).
-# Sets: _HARNESS_PID, _HARNESS_PROMPT_FB, _HARNESS_OUT_FB, _HARNESS_BODY_FB.
+# Sets: _HARNESS_PID, _HARNESS_PROMPT_FB, _HARNESS_OUT_FB, _HARNESS_BODY_FB,
+# _HARNESS_STDERR_FB.
 _interrupt_harness_start() {
     local shell_bin="$1"
     local stub_dir="$TEST_TEMP_HOME/bin"
@@ -578,6 +581,9 @@ EOF
     _HARNESS_PROMPT_FB="/tmp/gh-pr-review-prompt.codex.1286.$_HARNESS_PID"
     _HARNESS_OUT_FB="/tmp/gh-pr-review-out.$_HARNESS_PID"
     _HARNESS_BODY_FB="/tmp/gh-pr-review-body.$_HARNESS_PID"
+    # The AI CLI's stderr capture (issue #1294): allocated by gh_pr_review
+    # itself, not by _gh_pr_review_run_ai, so the handler can reach it.
+    _HARNESS_STDERR_FB="/tmp/gh-pr-review-stderr.codex.$_HARNESS_PID"
 }
 
 # Deliver SIGINT to the whole harness process group (what a terminal
@@ -595,21 +601,25 @@ _interrupt_harness_interrupt() {
     ! kill -0 "$_HARNESS_PID" 2>/dev/null
 }
 
-@test "bash: SIGINT mid-run removes PROMPT_FILE + AI_OUT + BODY_FILE" {
+@test "bash: SIGINT mid-run removes PROMPT_FILE + AI_OUT + BODY_FILE + stderr file" {
     command -v setsid >/dev/null 2>&1 || skip "setsid (util-linux) not available"
     _source_module
     _interrupt_harness_start bash
 
-    # Precondition: the run really did allocate all three before we signal.
+    # Precondition: the run really did allocate all four before we signal.
     [ -f "$_HARNESS_PROMPT_FB" ]
     [ -f "$_HARNESS_OUT_FB" ]
     [ -f "$_HARNESS_BODY_FB" ]
+    [ -f "$_HARNESS_STDERR_FB" ]
 
     _interrupt_harness_interrupt
 
     [ ! -e "$_HARNESS_PROMPT_FB" ]
     [ ! -e "$_HARNESS_OUT_FB" ]
     [ ! -e "$_HARNESS_BODY_FB" ]
+    # Issue #1294: the CLI's stderr capture used to be a local of
+    # _gh_pr_review_run_ai, invisible to the handler, and leaked on Ctrl-C.
+    [ ! -e "$_HARNESS_STDERR_FB" ]
 
     # The run must abort, not resume: Step 7's report would mean Step 6
     # built and posted a PR comment from files the handler just deleted.
@@ -620,7 +630,7 @@ _interrupt_harness_interrupt() {
     assert_output --partial "FUNC-RC=130"
 }
 
-@test "zsh: SIGINT mid-run removes PROMPT_FILE + AI_OUT + BODY_FILE" {
+@test "zsh: SIGINT mid-run removes PROMPT_FILE + AI_OUT + BODY_FILE + stderr file" {
     # The function runs under `emulate -L sh` in zsh; the trap action is a
     # plain `rm -f` + `return`, but "should be fine" is not evidence.
     command -v setsid >/dev/null 2>&1 || skip "setsid (util-linux) not available"
@@ -631,20 +641,23 @@ _interrupt_harness_interrupt() {
     [ -f "$_HARNESS_PROMPT_FB" ]
     [ -f "$_HARNESS_OUT_FB" ]
     [ -f "$_HARNESS_BODY_FB" ]
+    [ -f "$_HARNESS_STDERR_FB" ]
 
     _interrupt_harness_interrupt
 
     [ ! -e "$_HARNESS_PROMPT_FB" ]
     [ ! -e "$_HARNESS_OUT_FB" ]
     [ ! -e "$_HARNESS_BODY_FB" ]
+    [ ! -e "$_HARNESS_STDERR_FB" ]
 
-    # Same abort guarantee as bash. The exit *status* is deliberately not
-    # asserted here: when the signal lands on the `if ! ( … | tee … )`
-    # subshell, zsh does not propagate the handler's `return 130` and the
-    # function reports 0 (bash reports 130). Cleanup and the abort itself
-    # — the properties issue #1286 is about — hold in both shells.
     run cat "$_HARNESS_OUT"
     refute_output --partial "[OK] PR #1286 reviewed"
+    # Issue #1294: zsh used to report 0 here. It drops a trap's `return`
+    # when the interrupt lands on a subshell that is being *evaluated as a
+    # condition* — the old `if ! ( … | tee … ); then`. Step 5 now runs the
+    # subshell standalone and reads `$?` on the next line, which propagates
+    # the handler's 130 in zsh exactly as it always did in bash.
+    assert_output --partial "FUNC-RC=130"
 }
 
 @test "bash: INT/TERM traps do not leak to the caller after a successful run" {
@@ -899,6 +912,36 @@ EOF
     run cat "$victim"
     assert_output "original"
     rm -f "$fallback"
+}
+
+@test "run_ai: caller-supplied stderr path (\$4) is used instead of self-allocating" {
+    # Issue #1294 — gh_pr_review now allocates this file itself so its
+    # INT/TERM handler can delete it on Ctrl-C. A self-allocated path was a
+    # local of this helper and leaked. Direct callers that pass nothing keep
+    # the self-allocating behaviour (the two tests above cover that).
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    printf '#!/bin/sh\necho boom >&2\nexit 3\n' >"$stub_dir/agy"
+    chmod +x "$stub_dir/agy"
+    export PATH="$stub_dir:$PATH"
+    # mktemp fails, so a self-allocation would land on this predictable
+    # path — asserting it never appears proves $4 short-circuited it.
+    _stub_mktemp_failing
+    local self_fb="/tmp/gh-pr-review-stderr.agy.$$"
+    rm -f "$self_fb"
+
+    local caller_path="$TEST_TEMP_HOME/caller-stderr.txt"
+    : >"$caller_path"
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    run _gh_pr_review_run_ai agy "$f" "" "$caller_path"
+    assert_failure 3
+    assert_output --partial "full stderr saved to: $caller_path"
+    [ ! -e "$self_fb" ]
+    run cat "$caller_path"
+    assert_output --partial "boom"
 }
 
 # ---------------------------------------------------------------------------
