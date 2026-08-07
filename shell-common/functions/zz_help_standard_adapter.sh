@@ -127,24 +127,6 @@ ${func_name}() {
 "
 }
 
-_help_std_define_zsh_dash_function() {
-    local alias_name="$1"
-    local func_name="$2"
-
-    [ -n "${ZSH_VERSION:-}" ] || return 0
-
-    if _help_std_is_function "$alias_name"; then
-        return 0
-    fi
-
-    setopt localoptions no_aliases
-    eval "
-${alias_name}() {
-    ${func_name} \"\$@\"
-}
-"
-}
-
 _help_std_wrap_one() {
     local func_name="$1"
     local alias_name
@@ -153,14 +135,14 @@ _help_std_wrap_one() {
 
     _help_std_is_function "$func_name" || return 0
     alias_name="$(_help_std_func_to_alias "$func_name")"
-    _help_std_define_zsh_dash_function "$alias_name" "$func_name"
 
-    case "$func_name" in
-        git_help|gwt_help|gbr_help)
-            alias "${alias_name}=${func_name}" 2>/dev/null || true
-            return 0
-            ;;
-    esac
+    # Dash-form is an alias in BOTH shells (issue #1287). zsh used to get a real
+    # `<topic>-help` function here; that put a second `*help` name in the
+    # function table, so every topic showed up twice in `my-help find`. Register
+    # before the early returns below so guideline-compliant topics keep their
+    # alias — non-interactive / `no_aliases` callers are served by the
+    # command_not_found_handler shim in my_help.sh.
+    alias "${alias_name}=${func_name}" 2>/dev/null || true
 
     _help_std_is_wrapped "$func_name" && return 0
     _help_std_is_guideline_compliant "$func_name" && return 0
@@ -170,7 +152,6 @@ _help_std_wrap_one() {
     _help_std_clone_original "$func_name" || return 1
     _help_std_define_wrapper "$func_name" "$alias_name" "$description"
 
-    alias "${alias_name}=${func_name}" 2>/dev/null || true
     return 0
 }
 
