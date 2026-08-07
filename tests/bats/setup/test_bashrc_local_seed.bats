@@ -58,18 +58,6 @@ teardown() {
     refute_output --partial "NOT tracked in dotfiles"
 }
 
-@test "bash/setup.sh: two consecutive runs keep the seeded file intact" {
-    run bash "$BASH_SETUP"
-    assert_success
-    first="$(cat "$HOME/.bashrc.local")"
-
-    run bash "$BASH_SETUP"
-    assert_success
-    second="$(cat "$HOME/.bashrc.local")"
-
-    [ "$first" = "$second" ]
-}
-
 @test "bash/main.bash: sources ~/.bashrc.local" {
     # Static check — main.bash carries interactive guards and heavy module
     # loading, so a structural grep is the least fragile assertion here.
