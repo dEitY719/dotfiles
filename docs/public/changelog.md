@@ -3,6 +3,7 @@
 사용자 관점의 의미 있는 변경 기록. 포맷: `## YYYY-MM-DD` 헤더 아래 `- 변경: **요약**`.
 
 ## 2026-08-07
+- 변경: **`bash/main.bash`(`~/.bashrc` SSOT)에 `~/.bashrc.local` source 훅 추가, `bash/setup.sh`에 idempotent seed 로직 추가 — zsh의 `~/.zshrc.local` 격리 패턴(#737)을 bash에도 대칭 도입. gateway-migration 등 외부 installer/훅 스크립트가 `~/.bashrc`에 하드코딩 절대경로를 직접 append해 SSOT를 오염시키는 사고를 막는다. 실제 차단은 기존 pre-commit 하드코딩 home-path 가드(#1142)가 커밋 시점에 잡아내고, `~/.bashrc.local`은 그 걸린 줄을 옮겨 담는 착지 지점 역할 — zsh 쪽과 동일한 이단계 메커니즘 (#1290)**
 - 변경: **`devx:pr-verify-live` 가 검증 리포트를 대상 PR 에 코멘트로 게시 — Step 8 결과가 `[OK]`/`[WARN]` 이면 그 리포트 블록을 그대로 PR 코멘트로 남긴다(Step 9). `[FAIL]` 은 검증 전 단언이 막은 환경 문제이므로 게시하지 않고 로컬 출력으로만 끝낸다. 게시 경로는 `gh_pr_review.sh` 의 `_gh_pr_review_post_comment` 재사용이라 soft-fail 계약(게시 실패는 경고, 스킬 정지 아님)이 그대로 유지되고, 헬퍼는 레포 표준 폴백 블록(#644 NF-1 + #724)으로 감싸 부른다. 매 실행이 새 코멘트를 덧붙이는 append-only 동작 — 재검증 이력이 덮이지 않는다. 끄려면 새 플래그 `--no-comment`(파서 출력 `post_comment=0`); `--dry-run`/`--no-issue` 는 이슈 생성만 게이트하므로 코멘트 게시와 서로 독립이다 (#1288)**
 
 ## 2026-08-06
