@@ -131,6 +131,26 @@ fi
 
 create_symlink "$MAIN_BASH_SOURCE" "$HOME_BASHRC"
 
+# Seed ~/.bashrc.local (untracked, PC-specific overrides). Issue #1290 —
+# mirrors the zsh pattern from issue #737. Installer/hook side-effects
+# (gateway-migration, bun, nvm, …) must NOT land in the tracked dotfile.
+# We create the file once if it does not exist; existing content is never
+# touched (idempotent).
+
+HOME_BASHRC_LOCAL="${HOME}/.bashrc.local"
+
+if [ ! -f "$HOME_BASHRC_LOCAL" ]; then
+
+    log_info "${HOME_BASHRC_LOCAL} 생성 (PC-specific overrides 용)"
+
+    cat >"$HOME_BASHRC_LOCAL" <<'EOF'
+# ~/.bashrc.local — PC-specific overrides, NOT tracked in dotfiles.
+# Installer-mutable lines (bun, nvm, pyenv, …) belong here so the
+# tracked bash/main.bash stays portable across machines. See issue #1290.
+EOF
+
+fi
+
 # ~/.bash_profile도 심볼릭링크 (선택 사항)
 
 if [ -f "${DOTFILES_BASH_DIR}/profile.bash" ]; then
