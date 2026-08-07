@@ -46,6 +46,9 @@ PR 에 남는 것이 **한 글자도 다르면 안 된다.**
 `command not found` 로 스킬이 통째로 죽는다.
 
 ```bash
+REPORT_BODY_FILE=$(mktemp) && trap 'rm -f "$REPORT_BODY_FILE"' EXIT
+# ... Step 8 이 stdout 에 출력한 리포트 블록을 한 글자도 바꾸지 않고 "$REPORT_BODY_FILE" 에 그대로 옮겨 쓴다 ...
+
 _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_review.sh"
 if [ -r "$_HELPER" ]; then
     . "$_HELPER"
@@ -53,10 +56,15 @@ if [ -r "$_HELPER" ]; then
         printf '[pr-verify-live] %s sourced but _gh_pr_review_post_comment undefined (#724).\n' \
             "$_HELPER" >&2
     else
-        _gh_pr_review_post_comment "$PR_NUMBER" "$TARGET_REPO" "$REPORT_BODY_FILE" 1 || true
+        _gh_pr_review_post_comment "$PR" "$TARGET_REPO" "$REPORT_BODY_FILE" "$post_comment" || true
     fi
 fi
 ```
+
+`$PR` 는 Step 2 (`discovery.md`) 가 해소한 그 변수다 — 이 스킬 안에 `PR_NUMBER` 라는 변수는
+없다. 4 번째 인자는 `1` 을 하드코딩하지 않고 Step 1 이 캡처한 `$post_comment` 를 그대로
+넘긴다 — 트리거 조건(§1)이 프로즈에만 있고 실행 코드에는 없으면, 이 블록만 따로 복사해
+쓰는 자리에서 `--no-comment` 가 조용히 무시된다.
 
 `export DOTFILES_FORCE_INIT=1` 이 여기서도 load-bearing 이다 — Step 2 가 이미
 `discovery.md` §3 에서 export 했다면 그대로 유효하다. 없으면 인터랙티브 가드에 막혀
