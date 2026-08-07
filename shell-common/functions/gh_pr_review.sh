@@ -316,10 +316,11 @@ _gh_pr_review_run_ai() {
     # the path down so it sits in the handler's `rm -f` list; the
     # self-allocating branch stays for direct callers (and tests).
     local _stderr_file="${4:-}"
-    if [ -z "$_stderr_file" ] &&
-        ! _stderr_file=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-stderr.$ai.XXXXXX"); then
-        echo "Could not create stderr temp file under /tmp" >&2
-        return 1
+    if [ -z "$_stderr_file" ]; then
+        _stderr_file=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-stderr.$ai.XXXXXX") || {
+            echo "Could not create stderr temp file under /tmp" >&2
+            return 1
+        }
     fi
     local _rc=0
     local _prompt_size
@@ -943,18 +944,14 @@ EOF
     fi
 
     # ---- Step 3 + 4: build prompt + diff into a temp file ----
-    local PROMPT_FILE BODY_FILE AI_OUT
     # AI_STDERR_FILE is _gh_pr_review_run_ai's stderr capture, allocated
     # here rather than inside that helper so the INT/TERM handler below can
-    # reach it too (issue #1294 — see the helper's own comment). Empty until
-    # its allocation point at Step 5, which the handler tolerates: it is in
-    # the `rm -f` list from the moment it is armed and `rm -f ""` is a
-    # documented no-op.
-    local AI_STDERR_FILE=""
-    if ! PROMPT_FILE=$(_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER"); then
+    # reach it too (issue #1294 — see the helper's own comment).
+    local PROMPT_FILE BODY_FILE AI_OUT AI_STDERR_FILE
+    PROMPT_FILE=$(_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER") || {
         echo "Could not create prompt temp file under /tmp" >&2
         return 1
-    fi
+    }
     # Issue #1286 — interrupt cleanup. Without a trap, Ctrl-C during the
     # (potentially minutes-long) external AI CLI run, or during the
     # `gh pr diff` inside the prompt builder, unwinds this function
@@ -1046,14 +1043,9 @@ EOF
         rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
         return 1
     }
-    # The subshell stands alone and its status is read from `$?` on the next
-    # line, instead of the former `if ! ( … ); then`. Under zsh an interrupt
-    # that lands inside a subshell used as an `if` condition — or as the left
-    # side of `||` — loses the INT handler's `return 130` and the caller sees
-    # 0 (issue #1294; see the trap comment above). Only the plain
-    # command-then-`$?` form propagates it. The subshell itself, its
-    # `pipefail` and the `tee` are unchanged.
-    local _rc=0
+    # Standalone subshell + `$?` on the next line, per the zsh trap caveat
+    # above (~L978) — do not fold this back into an `if`/`||` condition.
+    local _rc
     (
         set -o pipefail
         _gh_pr_review_run_ai "$ai" "$PROMPT_FILE" "$CFG_DIR" "$AI_STDERR_FILE" | tee "$AI_OUT"
