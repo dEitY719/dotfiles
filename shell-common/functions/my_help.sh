@@ -461,8 +461,13 @@ _my_help_enumerate_topic_names() {
     while IFS= read -r func; do
         # Extract function name (before '(' or first space)
         local func_name="${func%%[( ]*}"
+        # `_help_std_*` is excluded explicitly, not just via the `_*` arm: the
+        # adapter's internal helpers (_help_std_orig_*, _help_std_summary_*,
+        # _help_std_rows_*, _help_std_full_*, _help_std_list_*) end in the topic
+        # name, and only today's leading-underscore convention keeps them out of
+        # the `*help` match. Naming it here makes the exclusion a contract.
         case "$func_name" in
-            my-help|run-help|_*) ;;
+            my-help|run-help|_help_std_*|_*) ;;
             *help)
                 # Normalize to dash format for display
                 printf '%s\n' "$(printf "%s" "$func_name" | tr '_' '-')"
@@ -1187,10 +1192,24 @@ if [ -n "$ZSH_VERSION" ]; then
                 return $?
             fi
 
-            if [ "$cmd_name" = "gwt-help" ]; then
-                gwt_help "$@"
-                return $?
-            fi
+            # Generic `<topic>-help` fallback (issue #1287). The adapter registers
+            # dash-form topics as aliases only, so a non-interactive shell or one
+            # with `setopt no_aliases` lands here; map back to the canonical
+            # underscore helper and dispatch only when it is a real function
+            # (never for aliases that point at a binary, e.g. `codex --help`).
+            case "$cmd_name" in
+                *-help)
+                    local _cnf_helper
+                    _cnf_helper="${cmd_name//-/_}"
+                    # _my_help_is_function, not `typeset -f`: in zsh the latter
+                    # declares a local when called inside a function (see its
+                    # definition above).
+                    if _my_help_is_function "$_cnf_helper"; then
+                        "$_cnf_helper" "$@"
+                        return $?
+                    fi
+                    ;;
+            esac
 
             if typeset -f _dotfiles_prev_command_not_found_handler >/dev/null 2>&1; then
                 _dotfiles_prev_command_not_found_handler "$cmd_name" "$@"
