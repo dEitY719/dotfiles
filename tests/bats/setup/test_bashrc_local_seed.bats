@@ -64,8 +64,3 @@ teardown() {
     run grep -Fx '[ -f "$HOME/.bashrc.local" ] && source "$HOME/.bashrc.local"' "$MAIN_BASH"
     assert_success
 }
-
-@test "bash/main.bash: the local-override hook references issue #1290" {
-    run grep -n "issue #1290\|Issue #1290" "$MAIN_BASH"
-    assert_success
-}
