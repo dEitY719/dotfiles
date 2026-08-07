@@ -703,6 +703,77 @@ _interrupt_harness_interrupt() {
 }
 
 # ---------------------------------------------------------------------------
+# gh_pr_review() cleanup under caller `set -e` (codex review, issue #1294
+# follow-up)
+#
+# The Step 5 fix above (standalone subshell + `$?` on the next line) made a
+# real, non-interrupt AI-CLI failure errexit-unsafe: with the caller's shell
+# under `set -e`, the subshell's non-zero status — read as a bare compound
+# command, not guarded by `if`/`&&`/`||` — used to abort the shell right
+# there, skipping `_gh_pr_review_disarm_trap` and every `rm -f` below it.
+# `gh_pr_review` now saves/restores `-e` around just that one statement.
+# Bats' own test-body semantics make a bare failing call untestable
+# in-process (the same errexit machinery that's under test would end the
+# test itself before any post-call assertion runs) — so, like the SIGINT
+# tests above, this drives gh_pr_review from a real subprocess and checks
+# survivorship on disk instead of via `$?` in this process.
+# ---------------------------------------------------------------------------
+
+@test "bash: real CLI failure under caller's set -e still cleans up temp files" {
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    printf '#!/bin/sh\nexit 0\n' >"$stub_dir/gh"
+    printf '#!/bin/sh\nexit 1\n' >"$stub_dir/mktemp"
+    printf '#!/bin/sh\necho boom >&2\nexit 4\n' >"$stub_dir/codex"
+    chmod +x "$stub_dir/gh" "$stub_dir/mktemp" "$stub_dir/codex"
+
+    local pidfile="$TEST_TEMP_HOME/errexit-harness.pid"
+    local harness="$TEST_TEMP_HOME/errexit-harness.sh"
+    rm -f "$pidfile"
+    cat >"$harness" <<EOF
+set -e
+export DOTFILES_FORCE_INIT=1
+export PATH="$stub_dir:\$PATH"
+. "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_review.sh"
+_gh_pr_review_require_ai_cli() { return 0; }
+_gh_pr_review_resolve_target_repo() { echo "owner/repo"; }
+_gh_pr_review_resolve_pr_number() { echo "1294"; }
+_gh_pr_review_fetch_meta() {
+    echo '{"state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"feat"}'
+}
+_gh_pr_review_preflight_pr_state() { return 0; }
+echo \$\$ >"$pidfile"
+gh_pr_review --ai codex --no-post-comment 1294
+EOF
+
+    run bash "$harness"
+    # Before the fix: `set -e` aborted mid-function, so the CLI's own exit
+    # code (4) never made it back out through `return "$_rc"` — the shell
+    # just died with whatever status the aborting subshell carried, which
+    # is indistinguishable from this at the `run` level. The real signal is
+    # cleanup, checked below: with the bug, none of it ran.
+    assert_failure 4
+
+    local pid prompt_fb out_fb body_fb stderr_fb
+    pid=$(cat "$pidfile")
+    [ -n "$pid" ]
+    prompt_fb="/tmp/gh-pr-review-prompt.codex.1294.$pid"
+    out_fb="/tmp/gh-pr-review-out.$pid"
+    body_fb="/tmp/gh-pr-review-body.$pid"
+    stderr_fb="/tmp/gh-pr-review-stderr.codex.$pid"
+
+    [ ! -e "$prompt_fb" ]
+    [ ! -e "$out_fb" ]
+    [ ! -e "$body_fb" ]
+    # stderr file is deliberately kept on a genuine CLI failure (existing
+    # behaviour, unrelated to this fix) — assert it exists, not that it's
+    # gone, then clean it up ourselves.
+    [ -e "$stderr_fb" ]
+    rm -f "$prompt_fb" "$out_fb" "$body_fb" "$stderr_fb"
+}
+
+# ---------------------------------------------------------------------------
 # Token estimator
 # ---------------------------------------------------------------------------
 
