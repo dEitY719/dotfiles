@@ -50,10 +50,10 @@ _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_review.sh"
 if [ -r "$_HELPER" ]; then
     . "$_HELPER"
     if ! command -v _gh_pr_review_post_comment >/dev/null 2>&1; then
-        printf '[pr-verify-live] %s sourced but _gh_pr_review_post_comment undefined.\n' \
+        printf '[pr-verify-live] %s sourced but _gh_pr_review_post_comment undefined (#724).\n' \
             "$_HELPER" >&2
     else
-        _gh_pr_review_post_comment "$PR_NUMBER" "$TARGET_REPO" "$REPORT_BODY_FILE" 1
+        _gh_pr_review_post_comment "$PR_NUMBER" "$TARGET_REPO" "$REPORT_BODY_FILE" 1 || true
     fi
 fi
 ```
