@@ -234,8 +234,8 @@ _apply_setup_mode_config
 
 # Local PC-specific overrides — installer-mutable lines (bun, nvm, pyenv, …)
 # live here so the tracked dotfile stays clean. Issue #1290 mirrors the zsh
-# pattern from issue #737 / PR #736 — installer and hook scripts (e.g. the
-# internal gateway-migration plugin) keep appending resolved absolute
+# pattern from issue #737 / PR #736 — installer and hook scripts (e.g.
+# internal plugin hooks) keep appending resolved absolute
 # /home/<user>/... paths to ~/.bashrc; routing those through ~/.bashrc.local
 # (untracked) plus the pre-commit hardcoded-home-path guard prevents the
 # drift from landing in this tracked SSOT.
