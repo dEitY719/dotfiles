@@ -817,8 +817,11 @@ Exit codes:
       failed, external CLI returned non-zero, gh not authenticated)
   2 — argument error (missing --ai, unknown --ai/--review, --user with
       non-claude --ai)
-  130 — interrupted (Ctrl-C / SIGINT or SIGTERM); temp files are
-      removed and no PR comment is posted
+  130 — interrupted (Ctrl-C / SIGINT or SIGTERM); the handler reports
+      128+SIGINT (130) for both signals deliberately — it does not
+      distinguish TERM's conventional 143 — since either one aborts the
+      same cleanup path. Temp files are removed and no PR comment is
+      posted.
 EOF
 }
 
@@ -1045,12 +1048,24 @@ EOF
     }
     # Standalone subshell + `$?` on the next line, per the zsh trap caveat
     # above (~L978) — do not fold this back into an `if`/`||` condition.
-    local _rc
+    # That shape is also what makes it errexit-unsafe (codex review, issue
+    # #1294 follow-up): a bare compound command's non-zero status trips
+    # `set -e` in the *caller's* shell before `_rc=$?` runs, skipping every
+    # `disarm_trap`/`rm -f` below and leaving the INT/TERM handler armed.
+    # `gh_pr_review` is sourced into interactive shells and scripts, so an
+    # ambient errexit is not implausible. Suspending `-e` for just this one
+    # statement keeps the standalone shape zsh needs while making the
+    # caller's errexit setting irrelevant to it; `-e` is restored right
+    # after `_rc` is captured.
+    local _rc _had_errexit=0
+    case "$-" in *e*) _had_errexit=1 ;; esac
+    [ "$_had_errexit" -eq 1 ] && set +e
     (
         set -o pipefail
         _gh_pr_review_run_ai "$ai" "$PROMPT_FILE" "$CFG_DIR" "$AI_STDERR_FILE" | tee "$AI_OUT"
     )
     _rc=$?
+    [ "$_had_errexit" -eq 1 ] && set -e
     if [ "$_rc" -ne 0 ]; then
         _gh_pr_review_disarm_trap
         # AI_STDERR_FILE is deliberately NOT removed: a genuine CLI failure
