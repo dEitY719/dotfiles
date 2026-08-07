@@ -31,6 +31,7 @@ devx_pr_verify_live_parse() {
     local locales=""
     local issue_mode="create"
     local allow_remote_host=0
+    local post_comment=1
     local _remote_set=0
     local _pos_seen=0
     local _url_set=0
@@ -119,6 +120,10 @@ devx_pr_verify_live_parse() {
             ;;
         --no-issue)
             _no_issue=1
+            shift
+            ;;
+        --no-comment)
+            post_comment=0
             shift
             ;;
         --allow-remote-host)
@@ -266,5 +271,6 @@ devx_pr_verify_live_parse() {
     printf '%s\n' "locales=$locales"
     printf '%s\n' "issue_mode=$issue_mode"
     printf '%s\n' "allow_remote_host=$allow_remote_host"
+    printf '%s\n' "post_comment=$post_comment"
     return 0
 }

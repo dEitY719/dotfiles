@@ -10,7 +10,8 @@ description: >-
   PR branch too. Read-only on source code — fixes go out as new issues via
   gh:issue-create. Accepts `[pr-number] [remote] [--url <base-url>] [--api-url
   <origin>] [--start <cmd>] [--matrix auto|full] [--viewports <csv>] [--locales
-  <csv>] [--dry-run] [--no-issue] [--allow-remote-host]` and `-h`/`--help`/`help`.
+  <csv>] [--dry-run] [--no-issue] [--no-comment] [--allow-remote-host]` and
+  `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion, Agent
 metadata:
   model_recommendation:
@@ -40,7 +41,8 @@ verbatim, then stop. No API calls, no browser.
 `source "${SHELL_COMMON}/functions/devx_pr_verify_live.sh"` then
 `devx_pr_verify_live_parse "$@"`. On `help_requested=1` follow Help; on exit 2 print
 the stderr line and stop. Capture `pr` `remote` `url` `api_url` `start_cmd` `matrix`
-`viewports` `locales` `issue_mode` `allow_remote_host`. Record `START_TS=$(date +%s)`.
+`viewports` `locales` `issue_mode` `allow_remote_host` `post_comment`. Record
+`START_TS=$(date +%s)`.
 
 ## Step 2: Resolve target + discover the environment (`references/discovery.md`)
 
@@ -90,6 +92,13 @@ merge 로 재작성되므로 쓰지 않는다(미머지 PR 일 때만 폴백). �
 ## Step 8: Report (`references/report-template.md`)
 
 그 양식으로 한 블록을 출력한다. `Checks:` 만 적지 않는다 — `Matrix:` `Unverified:` `Synthetic:` `Rejected:` `Created:` 가 빠지면 실제보다 강해 보인다.
+
+## Step 9: 리포트를 PR 코멘트로 게시 (`references/pr-comment.md`)
+
+Step 8 이 `[OK]` 또는 `[WARN]` 이고 `post_comment=1` 일 때만, 그 리포트 블록을 **그대로**
+대상 PR 에 코멘트로 남긴다 — `gh_pr_review.sh` 의 `_gh_pr_review_post_comment` 를 폴백
+블록으로 감싸 재사용하고, 게시 실패는 경고일 뿐 정지가 아니다. `[FAIL]` 은 게시하지 않으며
+(`--no-comment` 여부와 무관), `--dry-run`·`--no-issue` 는 이 단계를 게이트하지 않는다.
 
 ## Constraints (전체 목록과 근거: `references/constraints.md`)
 

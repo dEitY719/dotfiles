@@ -21,6 +21,7 @@ setup() {
     assert_line "locales="
     assert_line "issue_mode=create"
     assert_line "allow_remote_host=0"
+    assert_line "post_comment=1"
 }
 
 @test "pr only -> remote origin" {
@@ -255,6 +256,13 @@ setup() {
     assert_line "issue_mode=none"
 }
 
+@test "--no-comment -> post_comment=0" {
+    run devx_pr_verify_live_parse --no-comment
+    assert_success
+    assert_line "post_comment=0"
+    assert_line "issue_mode=create"
+}
+
 @test "--allow-remote-host -> 1" {
     run devx_pr_verify_live_parse --allow-remote-host
     assert_success
@@ -338,7 +346,8 @@ setup() {
 @test "combined flags resolve together" {
     run devx_pr_verify_live_parse 99 upstream --url http://127.0.0.1:3000 \
         --api-url=http://127.0.0.1:8080 --start "npm run dev" \
-        --matrix full --viewports 1440,768,390 --locales ko,en --allow-remote-host
+        --matrix full --viewports 1440,768,390 --locales ko,en --allow-remote-host \
+        --no-comment
     assert_success
     assert_line "pr=99"
     assert_line "remote=upstream"
@@ -350,6 +359,7 @@ setup() {
     assert_line "locales=ko,en"
     assert_line "issue_mode=create"
     assert_line "allow_remote_host=1"
+    assert_line "post_comment=0"
 }
 
 # The parser lives in shell-common/functions/, which zsh/main.zsh auto-sources
@@ -379,19 +389,21 @@ setup() {
     [ "$matrix" = "SENTINEL_MATRIX" ]
 }
 
-@test "parse does not leak viewports/locales/issue_mode/allow_remote_host/_item" {
+@test "parse does not leak viewports/locales/issue_mode/allow_remote_host/post_comment/_item" {
     viewports="SENTINEL_VIEWPORTS"
     locales="SENTINEL_LOCALES"
     issue_mode="SENTINEL_ISSUE_MODE"
     allow_remote_host="SENTINEL_ALLOW"
+    post_comment="SENTINEL_POST_COMMENT"
     _rest="SENTINEL_REST"
     _item="SENTINEL_ITEM"
     devx_pr_verify_live_parse --viewports 1440,390 --locales ko,en \
-        --dry-run --allow-remote-host >/dev/null
+        --dry-run --allow-remote-host --no-comment >/dev/null
     [ "$viewports" = "SENTINEL_VIEWPORTS" ]
     [ "$locales" = "SENTINEL_LOCALES" ]
     [ "$issue_mode" = "SENTINEL_ISSUE_MODE" ]
     [ "$allow_remote_host" = "SENTINEL_ALLOW" ]
+    [ "$post_comment" = "SENTINEL_POST_COMMENT" ]
     [ "$_rest" = "SENTINEL_REST" ]
     [ "$_item" = "SENTINEL_ITEM" ]
 }

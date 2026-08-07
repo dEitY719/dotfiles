@@ -31,10 +31,12 @@ remote 만 지정**하는 호출이 가능하다. 반대로 `12a` 는 숫자로 
 | `--locales <csv>` | 유도 | 명시하면 그 로케일만 |
 | `--dry-run` | off | 이슈 본문을 **작성해서 출력**하되 등록하지 않는다 |
 | `--no-issue` | off | 초안조차 쓰지 않고 리포트 행으로만 보고한다 |
+| `--no-comment` | off | 리포트를 PR 코멘트로 **게시하지 않는다**. 기본은 게시 — `[OK]`/`[WARN]` 이면 리포트 블록이 대상 PR 에 코멘트로 남는다(`[FAIL]` 은 원래 게시하지 않는다) |
 | `--allow-remote-host` | off | 로컬이 아닌 호스트 대상 허용. 이 스킬은 앱 데이터에 쓰기를 한다. 로컬 판정: `localhost` · `127.0.0.0/8` · `::1` · `[::1]` · `0.0.0.0` · `[::]` |
 | `-h` / `--help` / `help` | — | 이 도움말을 출력하고 정지 |
 
 `--dry-run` 과 `--no-issue` 를 같이 주면 `--no-issue` 가 이긴다(초안조차 쓰지 않음).
+`--no-comment` 는 그 둘과 **독립**이다 — 이슈 생성과 코멘트 게시는 서로를 게이트하지 않는다.
 플래그는 모두 `--url X` 와 `--url=X` 두 형태를 받는다.
 
 ## Usage
@@ -46,6 +48,7 @@ remote 만 지정**하는 호출이 가능하다. 반대로 `12a` 는 숫자로 
 - `/devx-pr-verify-live 2483 --locales ko,en --viewports 1440` — 축을 직접 고정
 - `/devx-pr-verify-live 2483 --dry-run` — 이슈 본문만 출력하고 등록하지 않는다
 - `/devx-pr-verify-live 2483 --no-issue` — 리포트만
+- `/devx-pr-verify-live 2483 --no-comment` — 검증은 그대로 하되 PR 에 리포트 코멘트를 남기지 않는다
 - `/devx-pr-verify-live -h` / `--help` / `help` — 이 도움말
 
 ## What the skill does
@@ -64,6 +67,8 @@ remote 만 지정**하는 호출이 가능하다. 반대로 `12a` 는 숫자로 
 7. 후보 발견마다 **자기 반증 3가설**을 세워 반증하고, 게이트를 통과한 것만 발견 1건 =
    이슈 1건으로 `gh:issue-create` 에 넘긴다.
 8. 돈 셀 · 미검증 · 합성 · 기각 · 생성 레코드를 모두 담은 리포트를 출력한다.
+9. 결과가 `[OK]` 또는 `[WARN]` 이면 그 리포트를 대상 PR 에 코멘트로 게시한다 —
+   매번 새 코멘트로 덧붙이며, `--no-comment` 로 끌 수 있다. `[FAIL]` 은 게시하지 않는다.
 
 ## What the skill will NOT do
 
