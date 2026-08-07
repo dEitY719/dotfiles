@@ -2,6 +2,9 @@
 
 사용자 관점의 의미 있는 변경 기록. 포맷: `## YYYY-MM-DD` 헤더 아래 `- 변경: **요약**`.
 
+## 2026-08-07
+- 변경: **`devx:pr-verify-live` 가 검증 리포트를 대상 PR 에 코멘트로 게시 — Step 8 결과가 `[OK]`/`[WARN]` 이면 그 리포트 블록을 그대로 PR 코멘트로 남긴다(Step 9). `[FAIL]` 은 검증 전 단언이 막은 환경 문제이므로 게시하지 않고 로컬 출력으로만 끝낸다. 게시 경로는 `gh_pr_review.sh` 의 `_gh_pr_review_post_comment` 재사용이라 soft-fail 계약(게시 실패는 경고, 스킬 정지 아님)이 그대로 유지되고, 헬퍼는 레포 표준 폴백 블록(#644 NF-1 + #724)으로 감싸 부른다. 매 실행이 새 코멘트를 덧붙이는 append-only 동작 — 재검증 이력이 덮이지 않는다. 끄려면 새 플래그 `--no-comment`(파서 출력 `post_comment=0`); `--dry-run`/`--no-issue` 는 이슈 생성만 게이트하므로 코멘트 게시와 서로 독립이다 (#1288)**
+
 ## 2026-08-06
 - 변경: **Stop 가드 두 개(`gh_issue_flow_stop_guard.py` / `devx_autopilot_stop_guard.py`)의 harness 마커 판정을 부분 문자열에서 줄머리 고정(`(?m)^`) 으로 교체 — 사람이 `"Stop hook feedback:"` 이나 `<task-notification>` 을 문장 안에 인용하기만 해도 그 턴 전체가 fresh user prompt 집계에서 빠져 stale boundary 가 만료되지 않던 문제 수정. 마커 문자열 SSOT 인 `_SKILL_EXPANSION_MARKERS` / `_HARNESS_INJECTION_MARKERS` 튜플에서 `re.escape` 로 정규식을 파생하며, 두 훅에 동일한 구조로 적용해 #1275 식 구조 드리프트를 막는다. 단 `is already loaded above` 는 예외 — 실제 주입문이 `Skill <name> is already loaded above; instructions unchanged. Arguments: …` 형태라 리터럴이 줄머리에 오지 않으므로, `_SKILL_EXPANSION_SHAPES` 의 `^Skill\s+\S+\s+is already loaded above` 정규식 조각으로 실제 문장 구조를 매칭한다(그대로 리터럴로 두면 이 한 마커에 대해 #1270 의 over-count 가 되살아난다) (#1281)**
 - 변경: **`gh:pr-review` 의 임시파일 3종(`PROMPT_FILE`/`AI_OUT`/`BODY_FILE`) 할당을 `_gh_pr_review_mktemp_safe <template>` 하나로 통일 — `mktemp` 실패 시 쓰던 예측 가능한 `$$` 폴백 경로를 `set -C`(noclobber, O_CREAT\|O_EXCL) 서브셸로 배타 생성하고, 그 자리에 파일이나 심볼릭 링크가 이미 있으면 링크를 따라 덮어쓰지 않고 즉시 실패한다. 세 호출 지점 모두 실패를 검사해 `gh_pr_review` 를 중단하므로(빈 경로로 진행하지 않음), `/tmp` 가 쓰기 불가·쿼터 초과일 때 로컬 공격자가 PID 를 예측해 심링크를 심어 임의 파일을 덮어쓰던 경로가 닫힌다 (#1283)**
