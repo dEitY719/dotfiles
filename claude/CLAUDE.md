@@ -1,5 +1,7 @@
 # Global Instructions
 
+**Always write Korean (and other non-ASCII) strings in tool-call parameters as literal UTF-8; never as \uXXXX unicode escapes.**
+
 ## 모델 역할 분담: Advisor / Worker
 
 메인 세션(Advisor)은 판단에 집중하고, 열린 구현 작업(open-ended implementation)은
