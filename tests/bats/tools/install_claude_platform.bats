@@ -21,27 +21,13 @@ teardown() {
     teardown_isolated_home
 }
 
-# Source install_claude.sh and classify each argument, one token per line.
-#
-# The script resolves its dependency with `source "$(dirname "$0")/init.sh"`,
-# so the subshell cds into the tools dir first: under `bash -c` $0 is "bash",
-# dirname yields "." and the real init.sh is found (it returns early under
-# DOTFILES_TEST_MODE=1). main() stays dormant — its direct-exec guard requires
-# BASH_SOURCE[0] = $0 or a $0 basename of install_claude.sh, neither of which
-# holds here.
+# Source install_claude.sh and classify each argument, one token per line, via
+# the shared run_sourced_tool_script / quote_args helpers (test_helper.bash).
 classify() {
-    local args_q="" arg
-    for arg in "$@"; do
-        args_q+=" $(printf '%q' "$arg")"
-    done
+    local args_q
+    args_q="$(quote_args "$@")"
 
-    run bash -c "
-        export DOTFILES_ROOT='${DOTFILES_ROOT}'
-        export DOTFILES_TEST_MODE=1
-        export HOME='${HOME}'
-        export TERM=dumb
-        cd '${TOOLS_DIR}' || exit 1
-        source '${INSTALL_CLAUDE_SCRIPT}'
+    run_sourced_tool_script "$TOOLS_DIR" "$INSTALL_CLAUDE_SCRIPT" "
         for ostype in${args_q}; do
             install_claude_platform_branch \"\$ostype\"
         done
