@@ -2,6 +2,11 @@
 
 # Status line command for Claude Code
 # Format: [한글|영어] HH:MM:SS | model | [effort] | project(branch) | git-status
+#
+# Requires bash 4.4+ — `mapfile -d ''` in the field reader below. Note the
+# floor was already 4.0+ before that (`${acct_first^^}` in the account-tag
+# block), so stock macOS /bin/bash (3.2) has never been able to run this
+# file; the reader did not introduce that constraint, only raised it.
 # ([한글|영어]는 fcitx-remote가 설치된 환경에서만 나타나는 optional 필드)
 # CLAUDE_STATUSLINE_SKIP_FCITX=1 이면 fcitx-remote 호출 자체를 생략한다.
 # Windows Terminal / VS Code Remote-WSL 콘솔은 X11 클라이언트가 아니라 fcitx
