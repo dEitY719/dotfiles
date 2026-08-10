@@ -6,7 +6,7 @@
 # causing console pollution, side effects, and initialization conflicts.
 #
 # Solution: All tools/custom/*.sh files MUST have guard pattern:
-#   if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+#   if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
 #       main "$@"
 #   fi
 
@@ -52,14 +52,14 @@ check_direct_exec_guard() {
             echo ""
             echo "  Required Pattern (place at END of script, after all functions):"
             echo ""
-            echo "  if [ \"\${BASH_SOURCE[0]}\" = \"\$0\" ] || [ -z \"\$BASH_SOURCE\" ]; then"
+            echo "  if [ \"\${BASH_SOURCE[0]}\" = \"\$0\" ] || [ -z \"\${BASH_SOURCE[0]}\" ]; then"
             echo "      main \"\$@\""
             echo "  fi"
             echo ""
             echo "  Explanation:"
             echo "  - Runs main() only if script executed directly (./script.sh)"
             echo "  - Skips main() if file is sourced (source script.sh)"
-            echo "  - [ -z \"\$BASH_SOURCE\" ] handles POSIX shells (sh, etc)"
+            echo "  - [ -z \"\${BASH_SOURCE[0]}\" ] handles POSIX shells (sh, etc)"
             echo ""
             echo "  Alternative (zsh compatible, more strict):"
             echo "  if [ \"\${BASH_SOURCE[0]:-\$0}\" = \"\$0\" ]; then"

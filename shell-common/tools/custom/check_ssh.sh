@@ -129,7 +129,6 @@ check_ssh_link() {
         return 1
     fi
 
-    # shellcheck disable=SC2088  # tildes below are display strings in messages, not paths
     if [ -L "$ssh_config_link" ]; then
         local current_target
         current_target=$(readlink "$ssh_config_link")
@@ -141,8 +140,10 @@ check_ssh_link() {
         ux_warning "Symlink points to: $current_target"
         ux_info "Expected: $dotfiles_config"
     elif [ -f "$ssh_config_link" ]; then
+        # shellcheck disable=SC2088  # display string in a message, not a path
         ux_warning "~/.ssh/config is a regular file (not a symlink)"
     else
+        # shellcheck disable=SC2088  # display string in a message, not a path
         ux_info "~/.ssh/config does not exist"
     fi
     echo ""

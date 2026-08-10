@@ -521,9 +521,7 @@ ux_numbered() {
 ux_divider() {
     local width="${1:-60}"
 
-    if $_UX_IS_BASH; then
-        printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' $(seq 1 "$width"))"
-    elif $_UX_IS_ZSH; then
+    if $_UX_IS_ZSH; then
         # shellcheck disable=SC2051,SC2086  # zsh expands variables in brace ranges; branch is zsh-only
         printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' {1..$width})"
     else
@@ -536,9 +534,7 @@ ux_divider() {
 ux_divider_thick() {
     local width="${1:-60}"
 
-    if $_UX_IS_BASH; then
-        printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '═%.0s' $(seq 1 "$width"))"
-    elif $_UX_IS_ZSH; then
+    if $_UX_IS_ZSH; then
         # shellcheck disable=SC2051,SC2086  # zsh expands variables in brace ranges; branch is zsh-only
         printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '═%.0s' {1..$width})"
     else

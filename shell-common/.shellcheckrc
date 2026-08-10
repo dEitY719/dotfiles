@@ -1,1 +1,13 @@
+# shell=bash: files here branch on bash/zsh at runtime but carry `#!/bin/sh`
+# shebangs, which would otherwise raise ~1,200 SC3xxx POSIX false positives.
+#
+# NOTE: shellcheck does not merge config files — it reads only the *nearest*
+# .shellcheckrc found walking up from each file. This file therefore REPLACES
+# the repo-root .shellcheckrc for everything under shell-common/, rather than
+# adding to it. Two consequences worth knowing before editing either file:
+#   - The root config's `disable=SC2034` does not apply here, which is why
+#     this tree carries per-site `# shellcheck disable=SC2034` comments.
+#   - A new policy line added to the root config will not reach shell-common/;
+#     it has to be repeated here.
+# (SC1090/SC1091 stay quiet only because mise.toml passes them as -e flags.)
 shell=bash

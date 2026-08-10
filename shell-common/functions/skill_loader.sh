@@ -5,9 +5,6 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-# Called with no arguments on purpose from the --help branch below, where the
-# no-arg path is the help screen (SC2120).
-# shellcheck disable=SC2120
 skill_loader() {
     # Load UX library (unified library at shell-common/tools/ux_lib/) only if
     # it is not already available — avoid re-sourcing on every invocation.
@@ -25,8 +22,8 @@ skill_loader() {
         is_interactive=false
     fi
 
-    # Show help if no arguments
-    if [ -z "$1" ]; then
+    # Show help when called with no arguments or an explicit help flag
+    if [ -z "$1" ] || [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
         ux_header "Skill Loader - Get AI Agent Skills"
 
         ux_section "Usage"
@@ -54,13 +51,6 @@ skill_loader() {
     # Handle --list flag
     if [ "$1" = "--list" ]; then
         get_claude_skills
-        return 0
-    fi
-
-    # Handle help flags
-    if [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
-        # shellcheck disable=SC2119
-        skill_loader  # Call with no args to show help
         return 0
     fi
 
