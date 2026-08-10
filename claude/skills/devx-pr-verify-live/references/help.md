@@ -107,6 +107,7 @@ remote 만 지정**하는 호출이 가능하다. 반대로 `12a` 는 숫자로 
 
 | 스킬 | 관계 |
 |---|---|
+| `devx:pr-verify-merged` | **sister skill**. 같은 머지 후 슬롯, 다른 증명 대상(신선한 클론 동일성) — 띄울 앱이 없는 레포(shell · CLI · lib)용. 공통 계약은 `references/verify-contract.md` |
 | `gh:issue-create` | 발견 1건마다 호출. 본문 골격 · 라벨 · ai-metrics 의 SSOT |
 | `devx:pr-review-all` | 머지 **전** 정적 리뷰 게이트. 이쪽은 머지 **후** 실물 검증 |
 | `gh:issue-flow` | 이슈 → PR 을 잇는 상위 흐름. 이 스킬은 그 뒤에 사람이 부른다 |
