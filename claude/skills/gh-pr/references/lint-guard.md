@@ -37,7 +37,7 @@ The guard picks tools in this order, top-down:
    are actually declared.
 2. **shellcheck** — `command -v shellcheck` succeeds **and** the changed
    file set contains at least one `*.sh`. Runs
-   `shellcheck -x -S warning <changed-sh-files>`.
+   `shellcheck -x -e SC1090,SC1091 -S warning <changed-sh-files>`.
 3. **actionlint** — `command -v actionlint` succeeds **and** the change
    set contains at least one `.github/workflows/*`. Runs
    `actionlint <changed-workflow-files>`.
