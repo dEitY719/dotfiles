@@ -206,8 +206,9 @@ TOX
     assert_output --partial "rc=0"
     assert_output --partial "running shellcheck on 2 file(s)"
     assert_output --partial "shellcheck passed"
-    # The lint tool was invoked once with -x -S warning + both .sh files.
-    run grep -cF '[-x] [-S] [warning]' "$TOOL_LOG"
+    # The lint tool was invoked once with -x -e SC1090,SC1091 -S warning
+    # (mise.toml lint-sh SSOT parity, #1306) + both .sh files.
+    run grep -cF '[-x] [-e] [SC1090,SC1091] [-S] [warning]' "$TOOL_LOG"
     assert_output "1"
     run grep -cF '[bar.sh]' "$TOOL_LOG"
     assert_output "1"
