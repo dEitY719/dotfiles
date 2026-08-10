@@ -7,11 +7,12 @@ description: >-
   new issues in the target project repo. Use for /devx:pr-verify-live,
   /devx-pr-verify-live, "머지된 PR 라이브 검증", "실행 중인 앱에서 내 PR 직접 확인해",
   "live-verify this PR". Primarily used right after a merge, but works on an unmerged
-  PR branch too. Read-only on source code — fixes go out as new issues via
-  gh:issue-create. Accepts `[pr-number] [remote] [--url <base-url>] [--api-url
-  <origin>] [--start <cmd>] [--matrix auto|full] [--viewports <csv>] [--locales
-  <csv>] [--dry-run] [--no-issue] [--no-comment] [--allow-remote-host]` and
-  `-h`/`--help`/`help`.
+  PR branch too. Sister skill of [[devx-pr-verify-merged]] — same post-merge slot,
+  different proof target (live=serving-checkout identity, merged=fresh-clone identity).
+  Read-only on source code — fixes go out as new issues via gh:issue-create. Accepts
+  `[pr-number] [remote] [--url <base-url>] [--api-url <origin>] [--start <cmd>]
+  [--matrix auto|full] [--viewports <csv>] [--locales <csv>] [--dry-run] [--no-issue]
+  [--no-comment] [--allow-remote-host]` and `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion, Agent
 metadata:
   model_recommendation:
@@ -30,6 +31,7 @@ metadata:
 **화면은 멀쩡히 뜨는데 검증이 무효인 상태**(잘못된 체크아웃 · no-op 전환 · 오버레이에 가린
 대상 · 일부 분기만 보고 전부 봤다는 착각). 이슈 본문·라벨·메트릭은 `gh:issue-create` 가 SSOT
 — 이 스킬은 **게이트만** 책임진다. 항목별 실측 출처: `references/provenance.md`.
+`devx:pr-verify-merged` 와 함께 지키는 6줄 공통 계약(유일한 사본): `references/verify-contract.md`.
 
 ## Help
 
