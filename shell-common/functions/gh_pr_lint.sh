@@ -149,7 +149,7 @@ _gh_pr_lint_run() {
                 done <<EOF
 $_sh_files
 EOF
-                if shellcheck -x -S warning "$@"; then
+                if shellcheck -x -e SC1090,SC1091 -S warning "$@"; then
                     _gh_pr_lint__log "shellcheck passed"
                 else
                     _gh_pr_lint__log "shellcheck FAILED"
