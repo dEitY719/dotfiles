@@ -254,10 +254,7 @@ main() {
     # - Avoids NewGenAI domain blocking (opencode.ai → 403)
     # - Uses configured npm registry (public or internal)
     # - Proxy/no-proxy settings from ~/.npmrc apply automatically
-    ux_with_spinner "Installing opencode-ai package..." npm install -g opencode-ai 2>"$install_log" >>"$install_log"
-    local install_rc=$?
-
-    if [ "$install_rc" -eq 0 ]; then
+    if ux_with_spinner "Installing opencode-ai package..." npm install -g opencode-ai 2>"$install_log" >>"$install_log"; then
         ux_success "OpenCode installed successfully"
         rm -f "$install_log"
     else

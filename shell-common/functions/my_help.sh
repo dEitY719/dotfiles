@@ -419,8 +419,10 @@ _my_help_show_category() {
         return 1
     fi
 
-    # FIX: Suppress zsh debug output - redirect stdout during local declaration
-    { local label; } >/dev/null 2>&1
+    # FIX: Suppress zsh debug output - redirect stdout during local declaration.
+    # `desc` is declared here too: a bare "local desc" inside the loop below
+    # makes zsh echo "desc=..." on every iteration after the first.
+    { local label desc; } >/dev/null 2>&1
     label=$(_my_help_category_label "$category")
 
     ux_header "Help Category: ${label}"
@@ -435,10 +437,6 @@ _my_help_show_category() {
     ux_section "Topics (${total})"
     ux_table_header "Topic" "Description"
 
-    # Declare once outside the loop: a bare "local desc" *inside* the loop makes
-    # zsh echo "desc=..." on every iteration after the first. Same suppression
-    # idiom as "label" above.
-    { local desc; } >/dev/null 2>&1
     for topic in $(_my_help_split_members "$members"); do
         desc=$(_my_help_topic_description "$topic")
         ux_table_row "$topic" "$desc"
