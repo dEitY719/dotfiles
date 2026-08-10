@@ -131,11 +131,24 @@ fi
 ux_header() {
     local text="$1"
     local width=60
+    if [ ${#text} -gt "$width" ]; then
+        width=${#text}
+    fi
+
+    local border
+    if $_UX_IS_BASH; then
+        border=$(printf '═%.0s' $(seq 1 $((width + 2))))
+    elif $_UX_IS_ZSH; then
+        border=$(printf '═%.0s' {1..$((width + 2))})
+    else
+        # POSIX fallback
+        border=$(printf '═%.0s' $(seq 1 $((width + 2))))
+    fi
 
     echo ""
-    printf "%s%s╔══════════════════════════════════════════════════════════════╗%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
-    printf "%s%s║%s %-60s %s%s║%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}" "$text" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
-    printf "%s%s╚══════════════════════════════════════════════════════════════╝%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
+    printf "%s%s╔%s╗%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$border" "${UX_RESET}"
+    printf "%s%s║%s %-${width}s %s%s║%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}" "$text" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
+    printf "%s%s╚%s╝%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$border" "${UX_RESET}"
     echo ""
 }
 
