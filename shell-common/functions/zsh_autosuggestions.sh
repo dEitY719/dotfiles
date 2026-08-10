@@ -91,7 +91,9 @@ _zsh_autosuggestions_help_rows_strategies() {
 _zsh_autosuggestions_help_rows_customize() {
     ux_info "Add to ~/.zshrc (before sourcing zsh-autosuggestions):"
     echo "  # Accept suggestion with Tab key"
-    echo "  bindkey '\\t' autosuggest-accept"
+    # printf, not echo: `\t` must stay a literal two-character sequence for the
+    # user to paste into ~/.zshrc (zsh's echo would expand it to a real tab).
+    printf '%s\n' "  bindkey '\\t' autosuggest-accept"
     echo "  # Change suggestion highlight color"
     echo "  export ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=10'"
     echo "  # Use history strategy only"

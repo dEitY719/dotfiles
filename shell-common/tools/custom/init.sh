@@ -39,6 +39,7 @@ if [ -n "$BASH_VERSION" ]; then
     _THIS_SCRIPT="${BASH_SOURCE[0]}"
 elif [ -n "$ZSH_VERSION" ]; then
     # Running in zsh: use parameter expansion for accurate location
+    # shellcheck disable=SC2296  # zsh-only expansion; branch is unreachable under bash
     _THIS_SCRIPT="${(%):-%N}"
 else
     # Fallback for other POSIX shells
@@ -97,7 +98,7 @@ run_with_timeout() {
 _CUSTOM_TOOLS_INITIALIZED=1
 
 # Direct-exec guard: this file is source-only, not meant to be executed directly
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     echo "Error: init.sh is meant to be sourced, not executed directly." >&2
     echo "Usage: source \"\$(dirname \"\$0\")/init.sh\"" >&2
     exit 1

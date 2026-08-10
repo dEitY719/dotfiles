@@ -87,6 +87,8 @@ clean_paths() {
         # Save IFS and split PATH manually
         local OLD_IFS="$IFS"
         IFS=':'
+        # Intentional word split on IFS=':' — that is how PATH is tokenized here.
+        # shellcheck disable=SC2086
         set -- $PATH
         IFS="$OLD_IFS"
 

@@ -75,6 +75,7 @@ npm_list() {
 
     ux_section "User Global (~/.npm-global/bin)"
     if [ -d "$HOME/.npm-global/bin" ]; then
+        # shellcheck disable=SC2012  # counting/listing entries in a controlled dir for display only
         if [ "$(ls -1 "$HOME/.npm-global/bin" 2>/dev/null | wc -l)" -gt 0 ]; then
             ls -1 "$HOME/.npm-global/bin" 2>/dev/null | sed 's/^/  • /'
         else

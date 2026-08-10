@@ -101,6 +101,7 @@ main() {
     ux_info "Running: $INSTALL_CMD$MISSING_PKGS"
     echo ""
     
+    # shellcheck disable=SC2086  # reason: both hold space-separated words that must split into argv
     if $INSTALL_CMD$MISSING_PKGS; then
         ux_success "Dependencies installed successfully!"
         echo ""

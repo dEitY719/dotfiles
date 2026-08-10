@@ -87,6 +87,7 @@ detect_apt_target() {
         return 1
     fi
 
+    # shellcheck disable=SC2016  # '$(URI)' is apt-get's own field placeholder, not a shell expansion
     apt_uri="$(apt-get indextargets --format '$(URI)' 2>/dev/null | grep -E -m 1 '^https?://')"
     if [ -n "$apt_uri" ]; then
         printf "%s\n" "$apt_uri"
@@ -424,6 +425,6 @@ main() {
     check_network "$@"
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     main "$@"
 fi

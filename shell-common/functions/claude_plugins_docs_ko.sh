@@ -195,8 +195,6 @@ _generate_plugin_directory_readme_ko() {
     local ai_tool="$3"
 
     local readme_file="$docs_dir/README.md"
-    local plugin_name
-    plugin_name=$(basename "$plugin_dir")
 
     ux_info "Generating directory summary: README.md"
 

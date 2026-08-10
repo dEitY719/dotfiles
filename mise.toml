@@ -42,8 +42,12 @@ run = [
 
 [tasks.lint-sh]
 description = "Shell lint (shellcheck + shfmt diff)"
+# shellcheck scope covers bash/ + shell-common/ (#1305). shell-common/.shellcheckrc
+# pins shell=bash so its bash/zsh-branching files don't get flagged with POSIX-sh
+# false positives (SC3xxx). shfmt stays bash/-only — shell-common/'s formatting
+# conventions diverge widely and reformatting it is a separate effort.
 run = [
-    'find bash -type f \( -name "*.sh" -o -name "*.bash" \) -exec shellcheck -x -e SC1090,SC1091 {} +',
+    'find bash shell-common -type f \( -name "*.sh" -o -name "*.bash" \) -exec shellcheck -x -e SC1090,SC1091 {} +',
     "shfmt -d -i 4 bash/",
 ]
 

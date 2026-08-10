@@ -40,7 +40,7 @@ main() {
     ux_step "2/2" "Installing Claude Code..."
 
     case "$OSTYPE" in
-        darwin* | linux* | linux-gnu* | freebsd*)
+        darwin* | linux* | freebsd*)
             # macOS, Linux, WSL - use bash installer
             ux_info "Platform: ${OSTYPE} (using bash installer)"
             if ! ux_with_spinner "Installing Claude Code" \

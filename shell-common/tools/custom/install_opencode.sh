@@ -156,7 +156,8 @@ generate_internal_config() {
     # overwriting. The customised-file guard above already returned for the
     # case we actually need to protect.
     if [ -f "$config_file" ] || [ -L "$config_file" ]; then
-        local backup="${config_file}.backup.$(date +%Y%m%d%H%M%S)"
+        local backup
+        backup="${config_file}.backup.$(date +%Y%m%d%H%M%S)"
         mv "$config_file" "$backup"
         ux_info "Backed up existing config: $backup"
     fi
@@ -205,7 +206,7 @@ main() {
     # Simple read-based selection (stable, no external dependencies)
     local choice
     printf "%sSelect (1-3):%s " "$UX_PRIMARY" "$UX_RESET"
-    read choice
+    read -r choice
     case "$choice" in
         1) environment="home" ;;
         2) environment="external" ;;
@@ -246,21 +247,23 @@ main() {
     echo ""
 
     # Create temp file for error capture
-    local install_log=$(mktemp)
+    local install_log
+    install_log=$(mktemp)
 
     # Use npm directly instead of curl | bash:
     # - Avoids NewGenAI domain blocking (opencode.ai → 403)
     # - Uses configured npm registry (public or internal)
     # - Proxy/no-proxy settings from ~/.npmrc apply automatically
     ux_with_spinner "Installing opencode-ai package..." npm install -g opencode-ai 2>"$install_log" >>"$install_log"
+    local install_rc=$?
 
-    if [ $? -eq 0 ]; then
+    if [ "$install_rc" -eq 0 ]; then
         ux_success "OpenCode installed successfully"
         rm -f "$install_log"
     else
         ux_error "OpenCode installation failed."
         ux_warning "Installation error details:"
-        cat "$install_log" 2>/dev/null | sed 's/^/  /' || echo "  (No error details available)"
+        sed 's/^/  /' "$install_log" 2>/dev/null || echo "  (No error details available)"
         echo ""
         ux_info "Troubleshooting:"
         ux_bullet "Check proxy settings: npm-config"

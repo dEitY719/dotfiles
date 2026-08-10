@@ -112,12 +112,10 @@ _register_notion_mcp() {
     ux_info "Registering Notion MCP with claude-code..."
     ux_info "Executing: claude mcp add notion --scope user --env NOTION_API_KEY=***"
 
-    claude mcp add notion \
+    if claude mcp add notion \
         --scope user \
         --env "NOTION_API_KEY=$api_key" \
-        -- npx -y @notionhq/notion-mcp-server
-
-    if [ $? -eq 0 ]; then
+        -- npx -y @notionhq/notion-mcp-server; then
         ux_success "Notion MCP registered with claude-code"
         return 0
     else
@@ -131,6 +129,7 @@ _verify_mcp_registration() {
     ux_info "Verifying Notion MCP registration..."
 
     if [ ! -f ~/.claude.json ]; then
+        # shellcheck disable=SC2088  # display string, not a path
         ux_warning "~/.claude.json not found (may not exist until first use)"
         return 0
     fi
@@ -289,6 +288,6 @@ install_notion_mcp() {
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Allow direct execution and function sourcing
-if [ "${0##*/}" = "install_notion_mcp.sh" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     install_notion_mcp "$@"
 fi

@@ -191,7 +191,8 @@ list_skills() {
         # Skip if not a directory
         [ -d "$skill_path" ] || continue
 
-        local skill_name="$(basename "$skill_path")"
+        local skill_name
+        skill_name="$(basename "$skill_path")"
         local skill_md="$skill_path/SKILL.md"
 
         # Skip if SKILL.md doesn't exist

@@ -24,6 +24,7 @@ main() {
 # Check 1: Find deprecated raw `tput` color definitions
 # =============================================================================
 ux_section "1. Checking for deprecated color definitions"
+# shellcheck disable=SC2016  # literal grep patterns — '$(tput ...)' must stay unexpanded
 deprecated_patterns=(
     'bold=$(tput bold'
     'blue=$(tput setaf 4'
@@ -106,6 +107,6 @@ fi
 # Direct-Execution Guard
 # ═══════════════════════════════════════════════════════════════
 # Only run main() if this script is executed directly, not sourced
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     main "$@"
 fi

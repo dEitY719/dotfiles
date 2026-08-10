@@ -389,6 +389,9 @@ mount_show() {
         mounts=$(findmnt -l 2>/dev/null | grep "$HOME/.claude")
 
         if [ -n "$mounts" ]; then
+            # Per-line indent of a multi-line string; ${var//search/replace}
+            # has no clean equivalent for an anchored ^ match (SC2001).
+            # shellcheck disable=SC2001
             echo "$mounts" | sed 's/^/  /'
             return 0
         else

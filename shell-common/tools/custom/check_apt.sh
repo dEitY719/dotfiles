@@ -109,9 +109,11 @@ check_apt_config_files() {
     ux_section "Additional Sources (/etc/apt/sources.list.d/)"
     if [ -d /etc/apt/sources.list.d ]; then
         local count
+        # shellcheck disable=SC2012  # counting entries in a system-controlled dir; ls output is sufficient
         count=$(ls -1 /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null | wc -l)
         if [ "$count" -gt 0 ]; then
             _format_setting "Additional source files" "$count"
+            # shellcheck disable=SC2012  # display-only listing of a system-controlled dir
             ls -1 /etc/apt/sources.list.d/ 2>/dev/null | sed 's/^/    /'
         else
             ux_info "No additional source files"
@@ -246,6 +248,6 @@ main() {
     esac
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     main "$@"
 fi

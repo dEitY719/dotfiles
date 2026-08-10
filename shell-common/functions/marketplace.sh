@@ -467,6 +467,8 @@ _claude_skills_marketplace_search() {
     }
 
     local count=0
+    # `idx` is only read to line up the remaining fields; $count is displayed.
+    # shellcheck disable=SC2034
     while IFS='|' read -r idx name desc plugin; do
         ((count++))
         desc_short="${desc:0:60}"

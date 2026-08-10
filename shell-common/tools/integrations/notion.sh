@@ -179,11 +179,14 @@ notion_check_token() {
         -H "Authorization: Bearer $api_key" \
         -H "Notion-Version: 2022-06-28")
 
-    local http_code=$(echo "$response" | tail -n1)
-    local body=$(echo "$response" | head -n-1)
+    local http_code
+    http_code=$(echo "$response" | tail -n1)
+    local body
+    body=$(echo "$response" | head -n-1)
 
     if [ "$http_code" = "200" ]; then
-        local workspace_name=$(echo "$body" | grep -o '"workspace_name":"[^"]*' | cut -d'"' -f4)
+        local workspace_name
+        workspace_name=$(echo "$body" | grep -o '"workspace_name":"[^"]*' | cut -d'"' -f4)
         ux_success "Token is valid!"
         ux_info "Workspace: $workspace_name"
         return 0
@@ -197,6 +200,7 @@ notion_check_token() {
 # Check if MCP server is registered
 notion_check_mcp() {
     if [ ! -f ~/.claude.json ]; then
+        # shellcheck disable=SC2088  # display string, not a path
         ux_error "~/.claude.json not found"
         ux_info "MCP servers not configured yet"
         return 1
@@ -220,5 +224,5 @@ if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
     true
 else
     # Directly executed
-    notion_help
+    notion_help "$@"
 fi

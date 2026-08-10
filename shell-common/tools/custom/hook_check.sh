@@ -95,6 +95,7 @@ check_hook_files() {
 
     # Check pre-commit hook
     local pre_commit_hook="$expanded_hooks_path/pre-commit"
+    # shellcheck disable=SC2088  # tildes below are display labels in messages, not paths
     if [ -f "$pre_commit_hook" ]; then
         _format_check "~/.config/git/hooks/pre-commit" "✓" "Exists"
     else

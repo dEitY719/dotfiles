@@ -56,12 +56,13 @@ ollama_backend_detect() {
 
 # Get current backend status with details
 ollama_backend_status() {
-    local backend=$(ollama_backend_detect)
-    local status
+    local backend
+    backend=$(ollama_backend_detect)
 
     case "$backend" in
         local)
-            local version=$(ollama --version 2>/dev/null || echo "unknown")
+            local version
+            version=$(ollama --version 2>/dev/null || echo "unknown")
             ux_success "Backend: LOCAL (WSL)"
             ux_info "Version: $version"
             ux_info "Host: 127.0.0.1:11434 (default)"
@@ -134,7 +135,8 @@ ollama_cmd() {
 
 # Get API base URL for current backend
 ollama_api_base_url() {
-    local backend=$(ollama_backend_detect)
+    local backend
+    backend=$(ollama_backend_detect)
 
     case "$backend" in
         local)
@@ -158,7 +160,8 @@ ollama_api_base_url() {
 
 # Get Ollama version
 ollama_version() {
-    local backend=$(ollama_backend_detect)
+    local backend
+    backend=$(ollama_backend_detect)
     [[ "$backend" == "unavailable" ]] && {
         ux_error "Ollama not available"
         return 1
@@ -194,7 +197,8 @@ ollama_status_env() {
 ollama_status() {
     ux_header "Ollama Status"
 
-    local backend=$(ollama_backend_detect)
+    local backend
+    backend=$(ollama_backend_detect)
     if [[ "$backend" == "unavailable" ]]; then
         ux_error "Ollama is not available"
         echo ""
@@ -208,7 +212,8 @@ ollama_status() {
     echo ""
 
     # Check if service is responding
-    local api_url=$(ollama_api_base_url)
+    local api_url
+    api_url=$(ollama_api_base_url)
     ux_section "Service Check"
     if curl -s "$api_url/api/tags" > /dev/null 2>&1; then
         ux_success "API responding at $api_url"
@@ -227,6 +232,7 @@ ollama_models() {
         backend_arg="$1"
     fi
 
+    # shellcheck disable=SC2086  # reason: backend_arg is empty or one flag; quoting would pass an empty arg
     ollama_cmd $backend_arg list
 }
 

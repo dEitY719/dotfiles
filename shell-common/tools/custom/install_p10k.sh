@@ -87,7 +87,9 @@ _install_nerd_font() {
     ux_info "Downloading ${font_name}..."
 
     # Create temporary directory
-    local temp_dir=$(mktemp -d)
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    # shellcheck disable=SC2064  # reason: temp_dir is function-local, so it must expand at trap-set time
     trap "rm -rf $temp_dir" EXIT
 
     # Download font zip
@@ -112,7 +114,7 @@ _install_nerd_font() {
 _select_nerd_font() {
     _list_nerd_fonts
 
-    read -p "Select font to install (1-6) [default: 2 - Meslo LG]: " font_choice
+    read -r -p "Select font to install (1-6) [default: 2 - Meslo LG]: " font_choice
     font_choice="${font_choice:-2}"  # Default to Meslo LG (option 2)
 
     case "$font_choice" in
@@ -205,6 +207,6 @@ install-p10k() {
 }
 
 # Run installation if script is executed directly
-if [ "${0##*/}" = "install_p10k.sh" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     install-p10k
 fi

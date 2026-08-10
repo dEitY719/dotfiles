@@ -161,7 +161,10 @@ _ssh_help_rows_hosts() {
     if [ -f "${HOME}/.ssh/config" ]; then
         set -f  # Disable glob expansion to prevent Host * from expanding
         while IFS= read -r line; do
-            # Trim leading whitespace
+            # Trim leading whitespace. ${var//search/replace} is not an
+            # equivalent here — it would strip whitespace everywhere, not
+            # just the leading run (SC2001).
+            # shellcheck disable=SC2001
             line_trimmed=$(echo "$line" | sed 's/^[[:space:]]*//')
             case "$line_trimmed" in
                 \#* | "")  continue ;;  # Skip comments and empty lines
@@ -176,11 +179,15 @@ _ssh_help_rows_hosts() {
         done < "${HOME}/.ssh/config"
         set +f  # Re-enable glob expansion
     else
+        # `~/.ssh/config` here is display text, not a path being dereferenced.
+        # shellcheck disable=SC2088
         ux_info "~/.ssh/config not found. Run ./setup.sh to create symlink."
     fi
 }
 
 _ssh_help_rows_config() {
+    # Display text, not a path being dereferenced.
+    # shellcheck disable=SC2088
     ux_table_row "config file" "~/.ssh/config → dotfiles/ssh/config" "Managed by dotfiles"
 }
 

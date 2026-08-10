@@ -77,6 +77,7 @@ uninstall_bun() {
     echo ""
 
     if [ -d "$HOME/.bun" ]; then
+        # shellcheck disable=SC2088  # display string, not a path
         ux_info "~/.bun 디렉토리 제거 중..."
         rm -rf "$HOME/.bun"
         ux_success "Bun 제거 완료"
@@ -85,6 +86,7 @@ uninstall_bun() {
     fi
 
     if [ -f "$HOME/.bunfig.toml" ] || [ -L "$HOME/.bunfig.toml" ]; then
+        # shellcheck disable=SC2088  # display string, not a path
         ux_info "~/.bunfig.toml 제거 중..."
         rm -f "$HOME/.bunfig.toml"
         ux_success "bunfig.toml 제거 완료"

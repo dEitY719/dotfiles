@@ -96,6 +96,7 @@ check_nuget_config_files() {
 _check_nuget_file() {
     local conf_path="$1"
     local display_path
+    # shellcheck disable=SC2001  # ${var//} form needs shell-specific '~' escaping (bash vs zsh); keep sed
     display_path="$(echo "$conf_path" | sed "s|$HOME|~|")"
 
     if [ -L "$conf_path" ]; then
@@ -241,6 +242,6 @@ main() {
     esac
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     main "$@"
 fi

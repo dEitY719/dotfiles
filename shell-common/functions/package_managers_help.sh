@@ -336,14 +336,14 @@ npm_config() {
     ux_header "NPM Configuration"
 
     ux_section "Registry & Security"
-    ux_table_row "Registry" $(_npm_config_get registry)
-    ux_table_row "CA File" $(_npm_config_get cafile)
-    ux_table_row "Strict SSL" $(_npm_config_get strict-ssl)
+    ux_table_row "Registry" "$(_npm_config_get registry)"
+    ux_table_row "CA File" "$(_npm_config_get cafile)"
+    ux_table_row "Strict SSL" "$(_npm_config_get strict-ssl)"
 
     ux_section "Proxy Settings"
-    ux_table_row "Proxy" $(_npm_config_get proxy)
-    ux_table_row "HTTPS Proxy" $(_npm_config_get https-proxy)
-    ux_table_row "No Proxy" $(_npm_config_get noproxy)
+    ux_table_row "Proxy" "$(_npm_config_get proxy)"
+    ux_table_row "HTTPS Proxy" "$(_npm_config_get https-proxy)"
+    ux_table_row "No Proxy" "$(_npm_config_get noproxy)"
 
     ux_section "Quick Commands"
     ux_bullet "npm-config              Show this configuration"

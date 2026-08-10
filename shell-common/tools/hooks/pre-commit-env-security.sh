@@ -57,7 +57,7 @@ DUPLICATE_FOUND=0
 
 for func in $FUNCTIONS_TO_CHECK; do
     # Count definitions (excluding ux_lib.sh which is the source of truth)
-    COUNT=$(grep -r "^${func}()" shell-common --include="*.sh" 2>/dev/null | grep -v "ux_lib.sh" | wc -l)
+    COUNT=$(grep -r "^${func}()" shell-common --include="*.sh" 2>/dev/null | grep -vc "ux_lib.sh" || true)
 
     if [ "$COUNT" -gt 1 ]; then
         echo "❌ ERROR: '${func}' 함수가 여러 파일에서 정의되었습니다:"

@@ -12,11 +12,11 @@ alias cd-work='cd ~/workspace'
 
 # Dotfiles navigation functions
 dot() {
-    cd "${DOTFILES_ROOT:-$HOME/dotfiles}"
+    cd "${DOTFILES_ROOT:-$HOME/dotfiles}" || return 1
 }
 
 dotfiles() {
-    cd "${DOTFILES_ROOT:-$HOME/dotfiles}"
+    cd "${DOTFILES_ROOT:-$HOME/dotfiles}" || return 1
 }
 
 # Windows directory paths (WSL) — /mnt/c/Users/... are Windows-side mounts

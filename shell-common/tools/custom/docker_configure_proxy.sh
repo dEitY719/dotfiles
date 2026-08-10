@@ -65,8 +65,7 @@ main() {
 
     local drop_in_dir="/etc/systemd/system/docker.service.d"
 
-    sudo mkdir -p "$drop_in_dir"
-    if [ $? -ne 0 ]; then
+    if ! sudo mkdir -p "$drop_in_dir"; then
         ux_error "Failed to create directory: $drop_in_dir"
         return 1
     fi
@@ -148,6 +147,6 @@ main() {
     echo ""
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     main "$@"
 fi

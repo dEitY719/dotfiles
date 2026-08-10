@@ -1269,6 +1269,7 @@ claude_accounts_rollback() {
     _car_src="$HOME/.claude-${_car_active}"
     if [ ! -d "$_car_src" ]; then
         ux_error "Active account dir missing: $_car_src"
+        # shellcheck disable=SC2012  # display-only listing of account dirs under $HOME
         ux_info  "Available: $(ls -d "$HOME"/.claude-* 2>/dev/null | tr '\n' ' ')"
         return 1
     fi
