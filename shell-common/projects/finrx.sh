@@ -9,6 +9,8 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
+# Read by cli_help.sh, not here.
+# shellcheck disable=SC2034
 REPO_FINRX_URL="https://github.com/dEitY719/FinRx.git"
 
 # ═══════════════════════════════════════════════════════════════

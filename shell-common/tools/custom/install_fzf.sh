@@ -56,7 +56,7 @@ _install_fzf() {
             ux_info "Installing fzf via Homebrew..."
             brew install fzf
             # Install shell integration
-            $(brew --prefix)/opt/fzf/install --all
+            "$(brew --prefix)/opt/fzf/install" --all
         else
             ux_error "Homebrew is required for macOS installation"
             ux_info "Install Homebrew from: https://brew.sh"
@@ -149,6 +149,6 @@ install-fzf() {
 }
 
 # Run installation if script is executed directly
-if [ "${0##*/}" = "install_fzf.sh" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     install-fzf
 fi

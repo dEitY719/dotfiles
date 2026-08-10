@@ -19,7 +19,8 @@ _check_installed() {
 
 # Detect system architecture
 _get_arch() {
-    local arch=$(uname -m)
+    local arch
+    arch=$(uname -m)
     case $arch in
         x86_64)
             echo "amd64"
@@ -36,7 +37,8 @@ _get_arch() {
 # Install pet from GitHub releases
 _install_pet_from_github() {
     local os_type="$1"
-    local arch="$(_get_arch)"
+    local arch
+    arch="$(_get_arch)"
     local version="0.4.0"
     local temp_dir="/tmp/pet-install"
 
@@ -83,7 +85,7 @@ _install_pet_from_github() {
     # Verify file is actually gzip
     if ! file "$filename" | grep -q "gzip\|tar"; then
         ux_error "Downloaded file is not a valid archive"
-        ux_info "File type: $(file $filename)"
+        ux_info "File type: $(file "$filename")"
         return 1
     fi
 
@@ -203,6 +205,6 @@ install-pet() {
 }
 
 # Run installation if script is executed directly
-if [ "${0##*/}" = "install_pet.sh" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     install-pet
 fi

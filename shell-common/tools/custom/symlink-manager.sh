@@ -102,6 +102,7 @@ symlink_init() {
 
         # Verify
         if [[ -L "$target" ]] && [[ -e "$target" ]]; then
+            # shellcheck disable=SC2012  # ls -la on a single known file to read its symlink arrow
             echo "    ✓ Verified: $(ls -la "$target" | awk '{print $(NF-1), $NF}')"
         else
             echo "    ✗ Verification failed"

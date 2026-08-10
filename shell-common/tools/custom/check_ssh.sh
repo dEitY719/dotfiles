@@ -129,6 +129,7 @@ check_ssh_link() {
         return 1
     fi
 
+    # shellcheck disable=SC2088  # tildes below are display strings in messages, not paths
     if [ -L "$ssh_config_link" ]; then
         local current_target
         current_target=$(readlink "$ssh_config_link")
@@ -185,6 +186,6 @@ main() {
     esac
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     main "$@"
 fi

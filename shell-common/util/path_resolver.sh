@@ -24,6 +24,7 @@ resolve_dotfiles_root() {
         script_path="${BASH_SOURCE[1]}"
     elif [[ -n "${ZSH_VERSION}" ]]; then
         # Zsh: Use special substitution to get script location
+        # shellcheck disable=SC2296
         script_path="${(%):-%N}"
     else
         # Fallback for other shells

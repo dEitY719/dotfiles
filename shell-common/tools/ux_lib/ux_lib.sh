@@ -139,6 +139,7 @@ ux_header() {
     if $_UX_IS_BASH; then
         border=$(printf '═%.0s' $(seq 1 $((width + 2))))
     elif $_UX_IS_ZSH; then
+        # shellcheck disable=SC2051  # zsh expands variables in brace ranges; branch is zsh-only
         border=$(printf '═%.0s' {1..$((width + 2))})
     else
         # POSIX fallback
@@ -162,6 +163,7 @@ ux_section() {
     if $_UX_IS_BASH; then
         printf "%s%s%s%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$(printf '─%.0s' $(seq 1 ${#title}))" "${UX_RESET}"
     elif $_UX_IS_ZSH; then
+        # shellcheck disable=SC2051  # zsh expands variables in brace ranges; branch is zsh-only
         printf "%s%s%s%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$(printf '─%.0s' {1..${#title}})" "${UX_RESET}"
     else
         # POSIX fallback using awk
@@ -264,7 +266,7 @@ ux_spinner() {
 ux_with_spinner() {
     local message="$1"
     shift
-    local cmd="$@"
+    local cmd="$*"
 
     # Create temp file for output
     local temp_log="/tmp/ux_spinner_$$.log"
@@ -300,7 +302,7 @@ ux_with_spinner() {
 ux_with_progress() {
     local message="$1"
     shift
-    local cmd="$@"
+    local cmd="$*"
     local progress_script="${UX_LIB_DIR}/ux_progress.py"
 
     # Check if Python + rich is available
@@ -388,13 +390,14 @@ ux_input() {
 ux_menu() {
     local title="$1"
     shift
-    local options="$@"
+    local options="$*"
     local menu_script="${UX_LIB_DIR}/ux_menu.py"
 
     # Check if Python + rich is available
     if command -v python3 &>/dev/null && python3 -c "import rich" &>/dev/null && command -v jq &>/dev/null; then
         # Use rich Python menu
         local config
+        # shellcheck disable=SC2086  # intentional word split: one menu option per printf line
         config=$(jq -n \
             --arg title "$title" \
             --argjson options "$(printf '%s\n' $options | jq -R . | jq -s .)" \
@@ -521,6 +524,7 @@ ux_divider() {
     if $_UX_IS_BASH; then
         printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' $(seq 1 "$width"))"
     elif $_UX_IS_ZSH; then
+        # shellcheck disable=SC2051,SC2086  # zsh expands variables in brace ranges; branch is zsh-only
         printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' {1..$width})"
     else
         printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' $(seq 1 "$width"))"
@@ -535,6 +539,7 @@ ux_divider_thick() {
     if $_UX_IS_BASH; then
         printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '═%.0s' $(seq 1 "$width"))"
     elif $_UX_IS_ZSH; then
+        # shellcheck disable=SC2051,SC2086  # zsh expands variables in brace ranges; branch is zsh-only
         printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '═%.0s' {1..$width})"
     else
         printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '═%.0s' $(seq 1 "$width"))"

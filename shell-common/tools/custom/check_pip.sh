@@ -54,7 +54,7 @@ check_pip_config_files() {
         ux_bullet "Size: $(wc -c < "$HOME/.config/pip/pip.conf") bytes"
         echo ""
         ux_section "Content:"
-        cat "$HOME/.config/pip/pip.conf" | sed 's/^/    /'
+        sed 's/^/    /' "$HOME/.config/pip/pip.conf"
         echo ""
     else
         ux_warning "NOT FOUND: ~/.config/pip/pip.conf"
@@ -186,6 +186,6 @@ main() {
     esac
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     main "$@"
 fi

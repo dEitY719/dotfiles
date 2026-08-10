@@ -24,8 +24,12 @@ SMT_PROD_PORT=9019
 # Service URLs (derived from host/port)
 # ═══════════════════════════════════════════════════════════════
 
+# Read by smithery_help() in shell-common/functions/cli_help.sh, not here.
+# shellcheck disable=SC2034
 SMT_DEV_URL="http://${DEV_HOST}:${SMT_DEV_PORT}"
+# shellcheck disable=SC2034
 SMT_TEST_URL="http://${TEST_HOST}:${SMT_TEST_PORT}"
+# shellcheck disable=SC2034
 SMT_PROD_URL="http://${PROD_HOST}:${SMT_PROD_PORT}"
 
 # ═══════════════════════════════════════════════════════════════

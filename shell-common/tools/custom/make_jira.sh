@@ -44,7 +44,8 @@ main() {
         day_of_week=$(date -d "$jan4" +%u)
 
         # Monday of week 1
-        local week1_mon=$(date -d "$jan4 -$((day_of_week-1)) days" +%Y-%m-%d)
+        local week1_mon
+        week1_mon=$(date -d "$jan4 -$((day_of_week-1)) days" +%Y-%m-%d)
 
         # Monday of target week
         week_start=$(date -d "$week1_mon +$((week-1)) weeks" +%Y-%m-%d)
@@ -65,7 +66,7 @@ main() {
     declare -A entries  # key -> "hours|categories"
 
     # Read file line by line
-    local prev_date prev_key prev_hours prev_cat
+    local prev_key prev_cat
 
     while IFS= read -r line; do
         # Skip empty lines and category-only lines
@@ -176,6 +177,6 @@ main() {
 # Direct Execution Guard
 # ═══════════════════════════════════════════════════════════════════════════
 
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     main "$@"
 fi

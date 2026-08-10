@@ -45,7 +45,7 @@ check_naming_violations() {
                 grep -v ":[[:space:]]*#" | \
                 grep -v "alias.*=" | \
                 grep -v ":[[:space:]]*$func_name()" | \
-                grep -v "ux_info\|ux_header\|ux_error\|ux_success\|ux_warning\|ux_bullet" || true
+                grep -v "ux_info\|ux_header\|ux_error\|ux_success\|ux_warning\|ux_bullet\|ux_table_row" || true
         )
 
         if [ -n "$matches" ]; then

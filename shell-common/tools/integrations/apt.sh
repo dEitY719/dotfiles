@@ -107,6 +107,7 @@ aclean_kernel() {
         dpkg -l | grep linux-image | grep -v "$current_kernel" | awk '{print $2}' > "$_tmp_kernels"
 
         if [ -s "$_tmp_kernels" ]; then
+            # shellcheck disable=SC2046  # intentional split: one package name per line becomes a separate arg
             sudo apt-get remove --purge $(cat "$_tmp_kernels")
             ux_success "Old kernels removed successfully!"
         else

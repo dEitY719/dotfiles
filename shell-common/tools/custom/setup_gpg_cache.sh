@@ -50,6 +50,7 @@ main() {
     ux_step "2/4" "Checking ~/.gnupg directory..."
 
     if [[ -d ~/.gnupg ]]; then
+        # shellcheck disable=SC2088  # display string, not a path
         ux_success "~/.gnupg directory already exists"
     else
         mkdir -p ~/.gnupg
@@ -113,7 +114,7 @@ main() {
     # ========================================
     ux_section "Configuration Verification"
     ux_section "gpg-agent.conf contents:"
-    cat "$gpg_agent_conf" | sed 's/^/  /'
+    sed 's/^/  /' < "$gpg_agent_conf"
     echo ""
 
     # ========================================
@@ -144,6 +145,6 @@ main() {
     echo ""
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     main "$@"
 fi
