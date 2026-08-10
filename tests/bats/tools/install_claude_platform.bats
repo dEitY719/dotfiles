@@ -83,3 +83,18 @@ unsupported"
     run grep -Fq 'case "$(install_claude_platform_branch "$OSTYPE")" in' "$INSTALL_CLAUDE_SCRIPT"
     assert_success
 }
+
+# A text match on the dispatch line alone would not catch a label mismatch
+# (e.g. main() spelling an arm "Unix)" while the classifier still returns
+# "unix") — this pins main()'s case arms to the classifier's exact output
+# vocabulary, so the two can't drift apart silently.
+@test "install_claude.sh main() case arms match the classifier's output vocabulary exactly" {
+    run bash -c "
+        sed -n '/case \"\\\$(install_claude_platform_branch \"\\\$OSTYPE\")\" in/,/esac/p' '$INSTALL_CLAUDE_SCRIPT' |
+            grep -oE '^[[:space:]]+[a-z*]+\)' | sed 's/^[[:space:]]*//; s/)\$//' | sort
+    "
+    assert_success
+    assert_output "*
+unix
+windows"
+}

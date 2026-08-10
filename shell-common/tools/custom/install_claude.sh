@@ -21,7 +21,7 @@ install_claude_platform_branch() {
         darwin* | linux* | freebsd*)
             printf '%s\n' "unix"
             ;;
-        msys | msys* | win32 | cygwin)
+        msys* | win32 | cygwin)
             printf '%s\n' "windows"
             ;;
         *)
