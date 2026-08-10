@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Status line command for Claude Code
-# Format: [한글|영어] HH:MM:SS | model | project(branch) | git-status
+# Format: [한글|영어] HH:MM:SS | model | [effort] | project(branch) | git-status
 # ([한글|영어]는 fcitx-remote가 설치된 환경에서만 나타나는 optional 필드)
 # CLAUDE_STATUSLINE_SKIP_FCITX=1 이면 fcitx-remote 호출 자체를 생략한다.
 # Windows Terminal / VS Code Remote-WSL 콘솔은 X11 클라이언트가 아니라 fcitx
@@ -23,7 +23,14 @@ input=$(cat)
 
 # Extract everything we need in a single jq pass — statusline runs on every
 # prompt render, so consolidating 5 jq forks into 1 is a meaningful win.
-IFS=$'\t' read -r cwd model_id model_display used_pct total_tokens < <(
+#
+# One value per line + `mapfile`, NOT `@tsv` + `IFS=$'\t' read`: tab is an
+# IFS *whitespace* character, so bash merges runs of tabs into one delimiter
+# and strips leading ones — every empty field vanishes and the fields after
+# it shift left. That stayed invisible while the only fields that could be
+# empty (used_pct, total_tokens) sat at the end of the list; adding
+# `.effort.level` moves them into the middle and turns it into a real bug.
+mapfile -t _sl_fields < <(
     echo "$input" | jq -r '
       (.context_window.current_usage // {}) as $u
       | [
@@ -34,11 +41,18 @@ IFS=$'\t' read -r cwd model_id model_display used_pct total_tokens < <(
           (($u.input_tokens // 0)
             + ($u.cache_read_input_tokens // 0)
             + ($u.cache_creation_input_tokens // 0)
-            | if . > 0 then tostring else "" end)
+            | if . > 0 then tostring else "" end),
+          (.effort.level // "")
         ]
-      | @tsv
+      | .[] | tostring
     '
 )
+cwd="${_sl_fields[0]-}"
+model_id="${_sl_fields[1]-}"
+model_display="${_sl_fields[2]-}"
+used_pct="${_sl_fields[3]-}"
+total_tokens="${_sl_fields[4]-}"
+effort_level="${_sl_fields[5]-}"
 
 # Get current time in HH:MM:SS format
 current_time=$(date +%H:%M:%S)
@@ -90,6 +104,28 @@ elif [[ "$model_name" == *"Opus"* ]]; then
     model_emoji="🎭" # Opus - theater mask
 else
     model_emoji="🧠" # Default - brain
+fi
+
+# Effort level → moon-phase glyph, waxing with reasoning depth:
+#   🌑 low  🌒 medium  🌓 high  🌔 xhigh  🌕 max
+# The `.effort` key only exists when the model supports effort levels
+# (claude-3-*, opus-4-0/4-1, sonnet-4-0/4-5 … don't) — then the segment and
+# its separator drop out entirely, leaving the line byte-identical to before.
+# `ultracode` is deliberately absent: it is a session mode, not a level, and
+# it forces effortValue to "xhigh", so the payload cannot distinguish the two.
+# An unmapped value renders as bare text rather than vanishing, so a future
+# level stays visible.
+effort_info=""
+if [ -n "$effort_level" ]; then
+    case "$effort_level" in
+    low) effort_glyph="🌑" ;;
+    medium) effort_glyph="🌒" ;;
+    high) effort_glyph="🌓" ;;
+    xhigh) effort_glyph="🌔" ;;
+    max) effort_glyph="🌕" ;;
+    *) effort_glyph="" ;;
+    esac
+    effort_info="${ORANGE}${effort_glyph:+${effort_glyph} }${effort_level}${RESET}"
 fi
 
 # Active account tag from CLAUDE_CONFIG_DIR (set by `claude-yolo --user <name>`).
@@ -280,8 +316,11 @@ if [ "$SETUP_MODE" = "internal" ]; then
 fi
 
 # Output format with colors and emojis
-# Time: Cyan, Model: Orange, Project+Branch: Magenta, Context: Blue, Cost: varies, Git status: Red/Orange/Green
-out="${CYAN}${time_emoji} ${ime_label:+$ime_label }${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET} | ${MAGENTA}${project_branch}${RESET}"
+# Time: Cyan, Model+Effort: Orange, Project+Branch: Magenta, Context: Blue, Cost: varies, Git status: Red/Orange/Green
+# Effort shares the model's colour so the two read as one "model config" group.
+# It sits mid-line, so the separator is folded into the expansion (`:+ | …`)
+# rather than appended by a trailing `if` like the optional tail segments.
+out="${CYAN}${time_emoji} ${ime_label:+$ime_label }${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET}${effort_info:+ | ${effort_info}} | ${MAGENTA}${project_branch}${RESET}"
 if [[ -n "$account_info" ]]; then
     out="${account_info} | ${out}"
 fi
