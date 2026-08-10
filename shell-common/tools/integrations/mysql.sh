@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/tools/integrations/mysql.sh
 # MySQL service bootstrap and helpers (bash/zsh compatible)
 

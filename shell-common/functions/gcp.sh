@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/gcp.sh
 #
 # Type 2A dispatcher for the gcp_* cherry-pick family. See

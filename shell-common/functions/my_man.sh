@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/my_man.sh
 # Project-level "manual" — pages through aliases/functions discovered by
 # analyze_bash_scripts.sh.

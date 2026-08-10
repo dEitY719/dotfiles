@@ -9,7 +9,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _ux_lib_path="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh"
 if [ -f "$_ux_lib_path" ]; then
-    source "$_ux_lib_path" 2>/dev/null || {
+    . "$_ux_lib_path" 2>/dev/null || {
         echo "Warning: Failed to source UX library at $_ux_lib_path" >&2
     }
 else
@@ -31,13 +31,13 @@ ollama_backend_detect() {
     local forced_backend="${DOTFILES_OLLAMA_BACKEND:-}"
 
     # 1. Check for explicit environment variable override
-    if [[ "$forced_backend" == "local" || "$forced_backend" == "docker" ]]; then
+    if [ "$forced_backend" = "local" ] || [ "$forced_backend" = "docker" ]; then
         echo "$forced_backend"
         return 0
     fi
 
     # 2. Check for local ollama binary
-    if command -v ollama &> /dev/null; then
+    if command -v ollama >/dev/null 2>&1; then
         echo "local"
         return 0
     fi
@@ -85,10 +85,13 @@ ollama_backend_status() {
 # Usage: ollama_cmd [--docker|--local|--auto] <ollama_args>
 ollama_cmd() {
     local backend_override=""
-    local args=()
+    # POSIX-safe arg filtering (no bash array): rotate each non-flag arg to
+    # the end of "$@" and shift it out of the scan window, so after exactly
+    # $_n iterations "$@" holds only the non-flag args, original order.
+    local _n=$#
+    local _i=0
 
-    # Parse backend override flags
-    while [[ $# -gt 0 ]]; do
+    while [ "$_i" -lt "$_n" ]; do
         case "$1" in
             --docker)
                 backend_override="docker"
@@ -103,15 +106,16 @@ ollama_cmd() {
                 shift
                 ;;
             *)
-                args+=("$1")
+                set -- "$@" "$1"
                 shift
                 ;;
         esac
+        _i=$((_i + 1))
     done
 
     # Determine backend
     local backend
-    if [[ -n "$backend_override" ]]; then
+    if [ -n "$backend_override" ]; then
         backend="$backend_override"
     else
         backend=$(ollama_backend_detect)
@@ -120,11 +124,11 @@ ollama_cmd() {
     # Execute command
     case "$backend" in
         local)
-            command ollama "${args[@]}"
+            command ollama "$@"
             ;;
         docker)
             local container_name="${DOTFILES_OLLAMA_DOCKER_CONTAINER:-ollama}"
-            docker exec "$container_name" ollama "${args[@]}"
+            docker exec "$container_name" ollama "$@"
             ;;
         unavailable)
             ux_error "Ollama is not available (neither local nor Docker)"
@@ -162,10 +166,10 @@ ollama_api_base_url() {
 ollama_version() {
     local backend
     backend=$(ollama_backend_detect)
-    [[ "$backend" == "unavailable" ]] && {
+    if [ "$backend" = "unavailable" ]; then
         ux_error "Ollama not available"
         return 1
-    }
+    fi
     ollama_cmd --auto version 2>/dev/null || ollama_cmd --auto --version
 }
 
@@ -199,7 +203,7 @@ ollama_status() {
 
     local backend
     backend=$(ollama_backend_detect)
-    if [[ "$backend" == "unavailable" ]]; then
+    if [ "$backend" = "unavailable" ]; then
         ux_error "Ollama is not available"
         echo ""
         echo "Install options:"
@@ -228,12 +232,11 @@ ollama_models() {
     local backend_arg=""
 
     # Check for explicit backend flag
-    if [[ "$1" == "--docker" || "$1" == "--local" || "$1" == "--auto" ]]; then
+    if [ "$1" = "--docker" ] || [ "$1" = "--local" ] || [ "$1" = "--auto" ]; then
         backend_arg="$1"
     fi
 
-    # shellcheck disable=SC2086  # reason: backend_arg is empty or one flag; quoting would pass an empty arg
-    ollama_cmd $backend_arg list
+    ollama_cmd ${backend_arg:+"$backend_arg"} list
 }
 
 # Pull a model

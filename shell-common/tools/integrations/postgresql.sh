@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/tools/integrations/postgresql.sh
 # PostgreSQL service bootstrap & helpers (bash/zsh compatible)
 

@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 
 # shell-common/functions/marketplace.sh
 # Marketplace Skills Management System

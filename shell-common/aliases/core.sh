@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # core_aliases.bash
 # 기본 명령어에 대한 alias 정의
 

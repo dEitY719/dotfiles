@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/file_cleanup.sh
 # Interactive cleanup for backup/original files in the current directory.
 #

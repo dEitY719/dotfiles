@@ -7,7 +7,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 git_ssh_check() {
     # Load UX library if available
     if [ -n "$SHELL_COMMON" ] && [ -f "$SHELL_COMMON/tools/ux_lib/ux_lib.sh" ]; then
-        source "$SHELL_COMMON/tools/ux_lib/ux_lib.sh"
+        . "$SHELL_COMMON/tools/ux_lib/ux_lib.sh"
     fi
 
     ux_header "GitHub SSH Connection Test"

@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/ai_setup.sh
 # One-command AI workspace orchestrator.
 #

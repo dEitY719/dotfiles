@@ -26,7 +26,7 @@ safe_source() {
 
     if [ $source_exit -eq 0 ]; then
         # Increment counter after successful source
-        ((++SOURCED_FILES_COUNT))
+        SOURCED_FILES_COUNT=$((SOURCED_FILES_COUNT + 1))
         return 0
     fi
 

@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/mount.sh
 # Mount management functions following SOLID principles
 # Single Responsibility: addmnt() mounts, show_mnt() displays status

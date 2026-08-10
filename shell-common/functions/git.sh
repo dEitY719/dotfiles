@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/git.sh
 # Git log, branch management, and utility functions
 

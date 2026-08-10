@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # work_log_help.sh - Help function for work-log command
 # Provides integration with the my-help system
 

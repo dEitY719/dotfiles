@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/manage_doc.sh
 # Document management utilities for dotfiles
 # Provides functions to manage documentation files (clear, archive, etc.)

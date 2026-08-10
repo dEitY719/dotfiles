@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/tools/claude.sh
 # Claude Code CLI - setup, utilities, and workflow helpers
 # Shared between bash and zsh

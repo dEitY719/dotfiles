@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/tools/integrations/git.sh
 # Bash-specific git functions and features
 # (This file requires bash and should not be sourced in other shells)
@@ -186,7 +187,7 @@ alias gset-main='git branch --set-upstream-to=origin/main main'
 alias gset-dev='git branch --set-upstream-to=origin/dev dev'
 
 gset() {
-    local branch=${1:-$(git symbolic-ref --short HEAD)}
+    local branch="${1:-$(git symbolic-ref --short HEAD)}"
     git branch --set-upstream-to=origin/"$branch" "$branch"
 }
 

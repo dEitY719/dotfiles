@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/devx.sh
 # Dev helper — Type 2A positional dispatcher (issue #726 / #722 PR 2).
 #

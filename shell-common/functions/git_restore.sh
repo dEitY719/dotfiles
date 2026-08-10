@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/git_restore.sh
 # grs — friendly `git restore` wrapper (Verdict + Next-action preflight).
 #

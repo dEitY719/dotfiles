@@ -73,11 +73,14 @@ gpuinfo() {
         local offload
         offload=$(docker logs ollama 2>&1 | grep "offloaded.*layers to GPU" | tail -1 | grep -oP 'offloaded \K\d+/\d+' 2>/dev/null)
         if [ -n "$offload" ]; then
-            if [[ "$offload" == "0/"* ]]; then
-                ux_error "$offload (CPU 모드)"
-            else
-                ux_success "$offload layers"
-            fi
+            case "$offload" in
+                "0/"*)
+                    ux_error "$offload (CPU 모드)"
+                    ;;
+                *)
+                    ux_success "$offload layers"
+                    ;;
+            esac
         else
             ux_warning "아직 모델 로드 안됨"
         fi

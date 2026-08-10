@@ -9,7 +9,7 @@ skill_loader() {
     # Load UX library (unified library at shell-common/tools/ux_lib/) only if
     # it is not already available — avoid re-sourcing on every invocation.
     if ! type ux_header >/dev/null 2>&1; then
-        source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
+        . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
     fi
 
     # Get skills directory

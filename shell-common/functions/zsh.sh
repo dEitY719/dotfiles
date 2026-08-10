@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/zsh.sh
 # Zsh shell management functions
 # Shared between bash and zsh

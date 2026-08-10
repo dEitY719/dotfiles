@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/tools/external/zsh.sh
 # Auto-generated from bash/app/zsh.bash
 

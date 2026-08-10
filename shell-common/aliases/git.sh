@@ -7,8 +7,9 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-if ! declare -f ux_header >/dev/null 2>&1; then
-    source "${BASH_SOURCE[0]%/*}/../tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+if ! type ux_header >/dev/null 2>&1; then
+    # shellcheck source=/dev/null
+    . "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
 fi
 
 # Git status shortcuts
@@ -63,11 +64,10 @@ hook_check() {
     if [ -n "${DOTFILES_ROOT:-}" ]; then
         dotfiles_root="$DOTFILES_ROOT"
     else
-        # Try to find it by searching for shell-common directory
-        dotfiles_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)" || {
-            ux_error "Could not determine DOTFILES_ROOT"
-            return 1
-        }
+        # Derive from SHELL_COMMON (exported by both shell loaders).
+        # ${BASH_SOURCE[0]} is bash-only and expands empty under zsh.
+        dotfiles_root="${SHELL_COMMON:-$HOME/dotfiles/shell-common}"
+        dotfiles_root="${dotfiles_root%/shell-common}"
     fi
 
     local hook_check_script="$dotfiles_root/shell-common/tools/custom/hook_check.sh"
