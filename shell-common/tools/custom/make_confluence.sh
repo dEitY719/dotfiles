@@ -36,7 +36,6 @@ EOF
 # Configuration
 # ═══════════════════════════════════════════════════════════════════════════
 
-DOTFILES_ROOT="${HOME}/dotfiles"
 RCA_KNOWLEDGE="${HOME}/para/archive/playbook"
 OUTPUT_BASE="${RCA_KNOWLEDGE}/docs/confluence-guides"
 

@@ -146,11 +146,11 @@ main() {
     echo "2) Manual setup (you will copy the file manually)"
     echo ""
 
-    read -p "Choose option (1 or 2): " choice
+    read -r -p "Choose option (1 or 2): " choice
     echo ""
 
     if [ "$choice" = "1" ]; then
-        read -p "Enter the path to your certificate file: " cert_path
+        read -r -p "Enter the path to your certificate file: " cert_path
         cert_path="${cert_path/#\~/$HOME}"  # Expand ~ to HOME
 
         if [ ! -f "$cert_path" ]; then
@@ -269,6 +269,6 @@ main() {
     echo ""
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     main "$@"
 fi

@@ -77,7 +77,7 @@ validate_time() {
     local time="$1"
     if echo "$time" | grep -qE '^[0-9]+(\.[0-9]+)?h?$'; then
         # Normalize: remove trailing 'h' if present
-        echo "$time" | sed 's/h$//'
+        echo "${time%h}"
         return 0
     fi
     return 1
@@ -123,7 +123,8 @@ work_log_record() {
     local time_spent="$4"
 
     # Get timestamp
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local timestamp
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
     # Create log entry (same format as post-commit hook)
     local log_entry="[$timestamp] [$jira_key] | $type | $category | ${time_spent}h | manual"
@@ -153,48 +154,48 @@ work_log_add_interactive() {
             ux_error "Jira key cannot be empty"
             continue
         fi
-        jira_key=$(validate_jira_key "$jira_input") && {
+        if jira_key=$(validate_jira_key "$jira_input"); then
             ux_success "Jira key: $jira_key"
-        } || {
+        else
             ux_error "Invalid Jira key format. Expected: [A-Z][A-Z0-9]*-[0-9]+"
             jira_key=""
-        }
+        fi
     done
 
     # Prompt for type
     while [ -z "$type" ]; do
         printf "%s❓%s Type (coordination/assessment/approval/meeting): " "${UX_WARNING}" "${UX_RESET}"
         read -r type_input
-        type=$(validate_type "$type_input") && {
+        if type=$(validate_type "$type_input"); then
             ux_success "Type: $type"
-        } || {
+        else
             ux_error "Invalid type. Choose: coordination, assessment, approval, or meeting"
             type=""
-        }
+        fi
     done
 
     # Prompt for category
     while [ -z "$category" ]; do
         printf "%s❓%s Category (Testing/Infrastructure/Documentation/Communication/Training/Other): " "${UX_WARNING}" "${UX_RESET}"
         read -r cat_input
-        category=$(validate_category "$cat_input") && {
+        if category=$(validate_category "$cat_input"); then
             ux_success "Category: $category"
-        } || {
+        else
             ux_error "Invalid category"
             category=""
-        }
+        fi
     done
 
     # Prompt for time
     while [ -z "$time_spent" ]; do
         printf "%s❓%s Time spent (e.g., 2.5h or 2.5): " "${UX_WARNING}" "${UX_RESET}"
         read -r time_input
-        time_spent=$(validate_time "$time_input") && {
+        if time_spent=$(validate_time "$time_input"); then
             ux_success "Time: ${time_spent}h"
-        } || {
+        else
             ux_error "Invalid time format. Use numeric format: 2.5, 2.5h, or 4h"
             time_spent=""
-        }
+        fi
     done
 
     # Record the entry
@@ -321,14 +322,15 @@ work_log_list_help() {
 # Output: "TIMESTAMP TYPE | HASH | SUBJECT"
 format_work_log_entry() {
     local entry="$1"
-    local timestamp category type time hash subject jira
+    local timestamp category type time hash subject
 
     # Parse the entry - split by |
     timestamp=$(echo "$entry" | cut -d'[' -f2 | cut -d']' -f1)  # YYYY-MM-DD HH:MM:SS
-    jira=$(echo "$entry" | cut -d'[' -f3 | cut -d']' -f1)
 
     # Split by | and extract fields (after [JIRA-KEY])
-    local fields=$(echo "$entry" | sed 's/.*] | //')
+    local fields
+    # shellcheck disable=SC2001  # greedy regex strip; parameter expansion is not a clean equivalent
+    fields=$(echo "$entry" | sed 's/.*] | //')
     type=$(echo "$fields" | cut -d'|' -f1 | xargs)
     category=$(echo "$fields" | cut -d'|' -f2 | xargs)
     time=$(echo "$fields" | cut -d'|' -f3 | xargs)
@@ -336,7 +338,8 @@ format_work_log_entry() {
 
     # Extract subject if present (pipe-separated after hash)
     # Handle both old format (no subject) and new format (with subject)
-    local subject_part=$(echo "$fields" | cut -d'|' -f5-)
+    local subject_part
+    subject_part=$(echo "$fields" | cut -d'|' -f5-)
     subject=$(echo "$subject_part" | xargs)  # trim whitespace
 
     # Format category display (omit if empty or "other")
@@ -394,7 +397,8 @@ work_log_list() {
     ux_header "Work Log Entries"
 
     if $today_only; then
-        local today=$(date '+%Y-%m-%d')
+        local today
+        today=$(date '+%Y-%m-%d')
         ux_section "Today's entries"
         grep "^\[$today" "$WORK_LOG_FILE" | tail -n "$count" | while IFS= read -r line; do
             format_work_log_entry "$line"
@@ -507,6 +511,6 @@ main() {
 }
 
 # Run main function only when executed directly (not sourced)
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     main "$@"
 fi

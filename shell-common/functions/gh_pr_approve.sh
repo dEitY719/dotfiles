@@ -361,7 +361,9 @@ _gh_pr_approve_status_single() {
     fi
 
     # Worktree presence.
-    _wt_removed_at="$(cat "$_dir/worktree_removed_at" 2>/dev/null | tr -d '\n')"
+    # Brace group so the "no such file" redirect error is swallowed in zsh too
+    # (zsh reports a failed `<` before the command's own 2>/dev/null applies).
+    _wt_removed_at="$({ tr -d '\n' < "$_dir/worktree_removed_at"; } 2>/dev/null)"
     _wt_absent=0
     if [ -n "$_wt" ]; then
         if [ -d "$_wt" ]; then

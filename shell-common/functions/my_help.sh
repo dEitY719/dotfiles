@@ -435,10 +435,12 @@ _my_help_show_category() {
     ux_section "Topics (${total})"
     ux_table_header "Topic" "Description"
 
+    # Declare once outside the loop: a bare "local desc" *inside* the loop makes
+    # zsh echo "desc=..." on every iteration after the first. Same suppression
+    # idiom as "label" above.
+    { local desc; } >/dev/null 2>&1
     for topic in $(_my_help_split_members "$members"); do
-        # A separate "local desc" + "desc=$(...)" here makes zsh echo
-        # "desc='...'" once per iteration; combining onto one line avoids it.
-        local desc=$(_my_help_topic_description "$topic")
+        desc=$(_my_help_topic_description "$topic")
         ux_table_row "$topic" "$desc"
     done
 
@@ -1090,6 +1092,10 @@ my_help_impl() {
 # Help Content (Detailed information for topics)
 # ═══════════════════════════════════════════════════════════════
 
+# HELP_CONTENT is a global (declare -gA / typeset -gA) registry populated for
+# consumption from the interactive shell and by user overrides, so nothing in
+# this file reads it back (SC2034).
+# shellcheck disable=SC2034
 _register_default_help_content() {
     # Initialize HELP_CONTENT as associative array (if not already)
     if [ -n "$BASH_VERSION" ]; then

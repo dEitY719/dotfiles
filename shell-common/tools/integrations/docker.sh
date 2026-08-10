@@ -268,6 +268,7 @@ dstopall() {
     fi
     echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} 모든 실행 중 컨테이너 정지:"
     echo "${UX_SUCCESS}$ids${UX_RESET}"
+    # shellcheck disable=SC2086  # intentional split: each container ID must be a separate arg
     docker stop $ids
 }
 
@@ -280,6 +281,7 @@ drmall() {
     fi
     echo "${UX_BOLD}${UX_ERROR}[Docker]${UX_RESET} 모든 컨테이너 삭제:"
     echo "${UX_SUCCESS}$ids${UX_RESET}"
+    # shellcheck disable=SC2086  # intentional split: each container ID must be a separate arg
     docker rm $ids
 }
 
@@ -292,6 +294,7 @@ drm_dangling() {
     fi
     echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} dangling 이미지 삭제:"
     echo "${UX_SUCCESS}$ids${UX_RESET}"
+    # shellcheck disable=SC2086  # intentional split: each image ID must be a separate arg
     docker rmi $ids
 }
 
@@ -357,6 +360,7 @@ dvol_rm_dangling() {
     fi
     echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} dangling 볼륨 삭제:"
     echo "${UX_SUCCESS}$ids${UX_RESET}"
+    # shellcheck disable=SC2086  # intentional split: each volume name must be a separate arg
     docker volume rm $ids
     ux_success "dangling 볼륨 삭제 완료"
 }
@@ -479,6 +483,7 @@ dexport() {
     fi
 
     ux_info "백업 파일 목록:"
+    # shellcheck disable=SC2012  # ls -lh long format is the displayed output; find has no equivalent
     ls -lh "$backup_dir" | tail -n +2 | while read -r line; do
         ux_bullet "$line"
     done

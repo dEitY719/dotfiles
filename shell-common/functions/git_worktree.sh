@@ -974,7 +974,7 @@ _gwt_status_render() {
         fi
         _lock_line="claude agent (pid $_lock_pid, $_lock_alive)"
     elif [ -f "$_git_common/worktrees/$(basename "$_wt")/locked" ]; then
-        _lock_line="$(cat "$_git_common/worktrees/$(basename "$_wt")/locked" 2>/dev/null | head -1)"
+        _lock_line="$(head -1 "$_git_common/worktrees/$(basename "$_wt")/locked" 2>/dev/null)"
         [ -z "$_lock_line" ] && _lock_line="git worktree lock"
     else
         _lock_line="(none)"
@@ -1344,7 +1344,9 @@ git_worktree_add() {
     fi
 
     git -C "$wt_path" sparse-checkout init --no-cone
-    printf "/*\n${excludes}" | git -C "$wt_path" sparse-checkout set --stdin
+    # %b (not the format string) expands the literal "\n" separators that
+    # $excludes accumulates above, without treating patterns as a format.
+    printf '/*\n%b' "$excludes" | git -C "$wt_path" sparse-checkout set --stdin
 
     git -C "$wt_path" checkout || {
         ux_error "Checkout failed in worktree: $wt_path"

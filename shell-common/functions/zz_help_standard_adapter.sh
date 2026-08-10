@@ -142,6 +142,9 @@ _help_std_wrap_one() {
     # before the early returns below so guideline-compliant topics keep their
     # alias — non-interactive / `no_aliases` callers are served by the
     # command_not_found_handler shim in my_help.sh.
+    # Expansion at definition time is exactly the intent here — both names are
+    # loop-local and must be baked into the alias now (SC2139).
+    # shellcheck disable=SC2139
     alias "${alias_name}=${func_name}" 2>/dev/null || true
 
     _help_std_is_wrapped "$func_name" && return 0

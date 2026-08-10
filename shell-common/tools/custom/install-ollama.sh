@@ -33,6 +33,7 @@ main() {
     elif [ -z "$offline_file" ]; then
         # Auto-detect ollama tar.zst in current directory
         if ls ollama*.tar.zst 1> /dev/null 2>&1; then
+            # shellcheck disable=SC2012  # reason: picks the first of well-known ollama*.tar.zst names in CWD
             offline_file=$(ls ollama*.tar.zst 2>/dev/null | head -1)
             ux_info "Detected local installation file: $offline_file"
         fi
@@ -50,7 +51,8 @@ main() {
 
     # Step 1: Pre-check - Is Ollama already installed?
     if command -v ollama &> /dev/null; then
-        local version=$(ollama --version)
+        local version
+        version=$(ollama --version)
         ux_success "Ollama already installed: $version"
         return 0
     fi
@@ -93,7 +95,8 @@ main() {
     if command -v lsof &> /dev/null; then
         if lsof -i :11434 &> /dev/null; then
             ux_error "Port 11434 is already in use!"
-            local proc=$(lsof -i :11434 | tail -1)
+            local proc
+            proc=$(lsof -i :11434 | tail -1)
             ux_info "Process: $proc"
             ux_info "Options:"
             ux_bullet "Stop Docker Ollama: docker stop ollama"
@@ -113,7 +116,8 @@ main() {
 
     # Step 2.5: Network connectivity check
     ux_section "Network Connectivity Check"
-    local net_check=$(mktemp)
+    local net_check
+    net_check=$(mktemp)
     curl -I -m 5 https://ollama.com > "$net_check" 2>&1
     local curl_exit=$?
 
@@ -146,7 +150,8 @@ main() {
     # Step 3: Installation
     ux_section "Installing Ollama"
 
-    local install_log=$(mktemp)
+    local install_log
+    install_log=$(mktemp)
 
     if [ -n "$offline_file" ]; then
         # OFFLINE MODE: Install from local tar file
@@ -261,7 +266,8 @@ main() {
         return 1
     fi
 
-    local version=$(ollama --version)
+    local version
+    version=$(ollama --version)
     ux_success "Ollama installed: $version"
 
     # Step 5: Environment configuration

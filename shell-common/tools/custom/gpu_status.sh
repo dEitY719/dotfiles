@@ -28,10 +28,10 @@ if [ -x /usr/lib/wsl/lib/nvidia-smi ]; then
         echo ""
         # ux_table_row is not suitable for this 6-column layout, so we format manually
         printf "  ${UX_BOLD}%-9s │ %-30s │ %-8s │ %-10s │ %-9s │ %s${UX_RESET}\n" "Index" "GPU Name" "Driver" "Total VRAM" "Free VRAM" "Used VRAM"
-        printf "  ${UX_MUTED}──────────────────────────────────────────────────────────────────────────────────────────────────${UX_RESET}\n"
+        printf "  %s\n" "${UX_MUTED}──────────────────────────────────────────────────────────────────────────────────────────────────${UX_RESET}"
         echo "$GPU_INFO" | while IFS=, read -r index name driver total free used; do
             printf "  %-9s │ %-30s │ %-8s │ %-10s │ %-9s │ %s\n" \
-                "$index" "$(echo $name | cut -c1-30)" "$driver" "$total" "$free" "$used"
+                "$index" "$(echo "$name" | cut -c1-30)" "$driver" "$total" "$free" "$used"
         done
         echo ""
     else
@@ -122,6 +122,7 @@ else
     if [ -n "$OLLAMA_ENVS" ]; then
         ux_info "Found relevant environment variables:"
         echo "${UX_MUTED}"
+        # shellcheck disable=SC2001  # per-line '^' anchored indent; ${var//} cannot express it
         echo "$OLLAMA_ENVS" | sed 's/^/  /'
         echo "${UX_RESET}"
         
@@ -189,6 +190,6 @@ echo ""
 
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "$BASH_SOURCE" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
     main "$@"
 fi

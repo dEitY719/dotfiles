@@ -604,7 +604,8 @@ ollama_help() {
 # Depends on: ollama_backend_detect() from tools/integrations/ollama.sh (auto-sourced)
 _ollama_help_auto() {
     if command -v ollama_backend_detect &> /dev/null; then
-        local backend=$(ollama_backend_detect 2>/dev/null || echo "docker")
+        local backend
+        backend=$(ollama_backend_detect 2>/dev/null || echo "docker")
         if [[ "$backend" == "local" ]]; then
             _ollama_help_local
         else

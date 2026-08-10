@@ -28,10 +28,14 @@ _git_log_formatter() {
 
     local fmt='%Cred%h%Creset %s %C(dim white)(%ad %an)%Creset%C(blue)%d%Creset'
 
+    # $branch and $saved_args are deliberately unquoted: both hold
+    # space-separated argument lists that must split into separate git args.
     if [ $show_all -eq 1 ]; then
+        # shellcheck disable=SC2086
         git log --graph --abbrev-commit --decorate=short --date=short \
             --pretty=format:"$fmt" $branch $saved_args
     else
+        # shellcheck disable=SC2086
         git --no-pager log --graph --abbrev-commit --decorate=short --date=short \
             --pretty=format:"$fmt" -n 11 $branch $saved_args
         echo

@@ -52,6 +52,8 @@ _hook_help_rows_trouble() {
 }
 
 _hook_help_rows_types() {
+    # Display text, not a path being dereferenced.
+    # shellcheck disable=SC2088
     ux_table_row "User-level" "~/.config/git/hooks/pre-commit" "모든 git 프로젝트에 적용 (전역)"
     ux_table_row "Project-level" "dotfiles/.git/hooks/pre-commit" "이 dotfiles 프로젝트에만 적용"
 }
