@@ -115,6 +115,54 @@ validate_category() {
 # Core Functions
 # =============================================================================
 
+# Validate one interactive field and report the outcome.
+#
+# Usage:
+#   work_log_prompt_validate OUT_VAR VALIDATOR INPUT OK_PREFIX ERR_MSG [OK_SUFFIX]
+#
+#   OUT_VAR    name of the caller's variable that receives the normalized value
+#   VALIDATOR  name of a validate_* function (prints the normalized value)
+#   INPUT      raw user input to validate
+#   OK_PREFIX  success message prefix, e.g. "Jira key: "
+#   ERR_MSG    message passed to ux_error when validation fails
+#   OK_SUFFIX  optional success message suffix, e.g. "h" for time values
+#
+# On success  : OUT_VAR is set to the normalized value, ux_success reports it,
+#               and the function returns 0.
+# On failure  : OUT_VAR is reset to the empty string, ux_error reports ERR_MSG,
+#               and the function returns 1.
+#
+# The value is handed back through OUT_VAR (not stdout) so that the ux_success
+# side effect can never influence what the caller receives. Deciding success
+# strictly on the VALIDATOR's exit status — and returning 0 explicitly after
+# ux_success — is the point of this helper: the previous
+# `value=$(validate ...) && { ux_success ...; } || { value=""; }` form wiped a
+# validly-parsed value whenever the success branch itself returned non-zero
+# (issue #1305 / PR #1307, regression-locked by issue #1308).
+#
+# Call sites append `|| continue`. The loop would repeat regardless, but the
+# trailing list is what keeps a legitimate validation failure from tripping the
+# script-level `set -eE`.
+work_log_prompt_validate() {
+    local _wlpv_out="$1"
+    local _wlpv_validator="$2"
+    local _wlpv_input="$3"
+    local _wlpv_ok_prefix="$4"
+    local _wlpv_err_msg="$5"
+    local _wlpv_ok_suffix="${6:-}"
+    local _wlpv_value
+
+    if ! _wlpv_value=$("$_wlpv_validator" "$_wlpv_input"); then
+        printf -v "$_wlpv_out" '%s' ""
+        ux_error "$_wlpv_err_msg"
+        return 1
+    fi
+
+    printf -v "$_wlpv_out" '%s' "$_wlpv_value"
+    ux_success "${_wlpv_ok_prefix}${_wlpv_value}${_wlpv_ok_suffix}"
+    return 0
+}
+
 # Record a work log entry
 work_log_record() {
     local jira_key="$1"
@@ -154,48 +202,32 @@ work_log_add_interactive() {
             ux_error "Jira key cannot be empty"
             continue
         fi
-        if jira_key=$(validate_jira_key "$jira_input"); then
-            ux_success "Jira key: $jira_key"
-        else
-            ux_error "Invalid Jira key format. Expected: [A-Z][A-Z0-9]*-[0-9]+"
-            jira_key=""
-        fi
+        work_log_prompt_validate jira_key validate_jira_key "$jira_input" \
+            "Jira key: " "Invalid Jira key format. Expected: [A-Z][A-Z0-9]*-[0-9]+" || continue
     done
 
     # Prompt for type
     while [ -z "$type" ]; do
         printf "%s❓%s Type (coordination/assessment/approval/meeting): " "${UX_WARNING}" "${UX_RESET}"
         read -r type_input
-        if type=$(validate_type "$type_input"); then
-            ux_success "Type: $type"
-        else
-            ux_error "Invalid type. Choose: coordination, assessment, approval, or meeting"
-            type=""
-        fi
+        work_log_prompt_validate type validate_type "$type_input" \
+            "Type: " "Invalid type. Choose: coordination, assessment, approval, or meeting" || continue
     done
 
     # Prompt for category
     while [ -z "$category" ]; do
         printf "%s❓%s Category (Testing/Infrastructure/Documentation/Communication/Training/Other): " "${UX_WARNING}" "${UX_RESET}"
         read -r cat_input
-        if category=$(validate_category "$cat_input"); then
-            ux_success "Category: $category"
-        else
-            ux_error "Invalid category"
-            category=""
-        fi
+        work_log_prompt_validate category validate_category "$cat_input" \
+            "Category: " "Invalid category" || continue
     done
 
     # Prompt for time
     while [ -z "$time_spent" ]; do
         printf "%s❓%s Time spent (e.g., 2.5h or 2.5): " "${UX_WARNING}" "${UX_RESET}"
         read -r time_input
-        if time_spent=$(validate_time "$time_input"); then
-            ux_success "Time: ${time_spent}h"
-        else
-            ux_error "Invalid time format. Use numeric format: 2.5, 2.5h, or 4h"
-            time_spent=""
-        fi
+        work_log_prompt_validate time_spent validate_time "$time_input" \
+            "Time: " "Invalid time format. Use numeric format: 2.5, 2.5h, or 4h" "h" || continue
     done
 
     # Record the entry

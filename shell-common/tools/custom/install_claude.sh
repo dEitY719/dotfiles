@@ -9,6 +9,27 @@ set -e
 # Initialize common tools environment
 source "$(dirname "$0")/init.sh" || exit 1
 
+# Classify an OSTYPE string into the installer branch it selects.
+# Usage: install_claude_platform_branch "$OSTYPE"  ->  unix | windows | unsupported
+#
+# Pure routing helper: no side effects, and the token it writes to stdout is a
+# return value, not user-facing output. Extracted from main() so the OSTYPE
+# variants stay verifiable after the case-pattern cleanup in PR #1307
+# (issue #1308).
+install_claude_platform_branch() {
+    case "$1" in
+        darwin* | linux* | freebsd*)
+            printf '%s\n' "unix"
+            ;;
+        msys | msys* | win32 | cygwin)
+            printf '%s\n' "windows"
+            ;;
+        *)
+            printf '%s\n' "unsupported"
+            ;;
+    esac
+}
+
 main() {
     clear
     ux_header "Claude Code CLI Installer"
@@ -39,8 +60,8 @@ main() {
     # ========================================
     ux_step "2/2" "Installing Claude Code..."
 
-    case "$OSTYPE" in
-        darwin* | linux* | freebsd*)
+    case "$(install_claude_platform_branch "$OSTYPE")" in
+        unix)
             # macOS, Linux, WSL - use bash installer
             ux_info "Platform: ${OSTYPE} (using bash installer)"
             if ! ux_with_spinner "Installing Claude Code" \
@@ -50,7 +71,7 @@ main() {
                 exit 1
             fi
             ;;
-        msys | msys* | win32 | cygwin)
+        windows)
             # Windows (Git Bash, Cygwin)
             ux_error "Windows detected in Git Bash/Cygwin environment"
             echo ""
