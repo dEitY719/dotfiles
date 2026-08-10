@@ -10,6 +10,27 @@ set -e
 source "$(dirname "$0")/init.sh" || exit 1
 
 
+# Create the systemd drop-in directory that holds http-proxy.conf.
+# Usage: docker_proxy_create_dropin_dir /etc/systemd/system/docker.service.d
+#
+# Extracted out of main() so the failure path is directly testable with a
+# mocked `sudo` (issue #1308). Success is decided by `sudo mkdir -p` itself:
+# the previous `sudo mkdir -p ...` followed by a separate `if [ $? -ne 0 ]`
+# inspected the status one statement too late, and under this script's `set -e`
+# the bare mkdir aborted the whole run first — the error handler was dead code
+# (issue #1305 / PR #1307). The explicit `return 0` keeps the ux_success side
+# effect out of the function's exit status.
+docker_proxy_create_dropin_dir() {
+    local dir="$1"
+
+    if ! sudo mkdir -p "$dir"; then
+        ux_error "Failed to create directory: $dir"
+        return 1
+    fi
+    ux_success "Directory created: $dir"
+    return 0
+}
+
 # Main script
 main() {
     clear
@@ -65,11 +86,9 @@ main() {
 
     local drop_in_dir="/etc/systemd/system/docker.service.d"
 
-    if ! sudo mkdir -p "$drop_in_dir"; then
-        ux_error "Failed to create directory: $drop_in_dir"
+    if ! docker_proxy_create_dropin_dir "$drop_in_dir"; then
         return 1
     fi
-    ux_success "Directory created: $drop_in_dir"
 
     # ========================================
     # Step 4: Create http-proxy.conf file
