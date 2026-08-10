@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/git_worktree.sh
 # Git worktree management functions (split from git.sh)
 

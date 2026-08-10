@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/gcp_scan.sh
 #
 # Portable cherry-pick scanner - works in bash, zsh, and other POSIX shells

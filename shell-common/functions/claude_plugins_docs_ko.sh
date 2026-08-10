@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/claude_plugins_docs_ko.sh
 # Korean documentation generation for Claude plugins (split from claude_plugins.sh)
 

@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/util/loader.sh
 # Module loader with configuration-based directory filtering
 # Centralizes module loading logic for both bash and zsh

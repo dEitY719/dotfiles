@@ -6,8 +6,9 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-if ! declare -f ux_header >/dev/null 2>&1; then
-    source "${BASH_SOURCE[0]%/*}/../ux_lib/ux_lib.sh" 2>/dev/null || true
+if ! type ux_header >/dev/null 2>&1; then
+    # shellcheck source=/dev/null
+    . "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -59,7 +60,16 @@ _notion_help_list_sections() {
 
 _notion_help_rows_status() {
     if [ -n "${NOTION_API_KEY:-}" ]; then
-        local key_preview="${NOTION_API_KEY:0:10}...${NOTION_API_KEY: -10}"
+        # POSIX-safe first-10 / last-10 slicing (no ${var:offset:len}).
+        # The length guard mirrors bash's "${var: -10}", which yields an empty
+        # string when the value is shorter than 10 characters.
+        local key_head key_tail key_preview
+        key_head=$(printf '%.10s' "$NOTION_API_KEY")
+        key_tail=""
+        if [ "${#NOTION_API_KEY}" -ge 10 ]; then
+            key_tail=$(printf '%s' "$NOTION_API_KEY" | tail -c 10)
+        fi
+        key_preview="${key_head}...${key_tail}"
         ux_success "NOTION_API_KEY is set"
         ux_info "Key preview: $key_preview"
     else
@@ -219,6 +229,11 @@ notion_check_mcp() {
 alias notion-help='notion_help'
 
 # Verify installation on module load
+# Direct-exec guard: ${BASH_SOURCE[0]} is intentionally bash-specific here — it
+# is the repo-wide "sourced vs. executed" idiom (see
+# git/hooks/checks/direct_exec_guard_check.sh), so the POSIX-dialect warnings
+# about it are expected, not drift.
+# shellcheck disable=SC3028,SC3054
 if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
     # Being sourced (not directly executed)
     true

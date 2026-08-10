@@ -31,7 +31,7 @@ if [ -x /usr/lib/wsl/lib/nvidia-smi ]; then
         printf "  %s\n" "${UX_MUTED}──────────────────────────────────────────────────────────────────────────────────────────────────${UX_RESET}"
         echo "$GPU_INFO" | while IFS=, read -r index name driver total free used; do
             printf "  %-9s │ %-30s │ %-8s │ %-10s │ %-9s │ %s\n" \
-                "$index" "$(echo "$name" | cut -c1-30)" "$driver" "$total" "$free" "$used"
+                "$index" "${name:0:30}" "$driver" "$total" "$free" "$used"
         done
         echo ""
     else

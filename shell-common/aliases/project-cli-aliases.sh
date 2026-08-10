@@ -45,7 +45,8 @@ _run_project_cli() {
     cd "$project_dir" || return 1
 
     # Validate backend/{module}/__main__.py exists
-    local module_path="${python_module//.//}"
+    local module_path
+    module_path=$(printf '%s' "$python_module" | tr '.' '/')
     if [ ! -f "backend/$module_path/__main__.py" ]; then
         echo "Error: Python module not found: backend/$module_path/__main__.py"
         return 1
@@ -101,27 +102,34 @@ run_jiravis_test() {
 
     cd "$project_dir" || return 1
 
-    case "${1:-all}" in
+    # Consume the subcommand so "$@" holds the extra pytest args
+    # (POSIX equivalent of the bash-only "${@:2}" slice).
+    local subcommand="${1:-all}"
+    if [ "$#" -gt 0 ]; then
+        shift
+    fi
+
+    case "$subcommand" in
         all)
-            .venv/bin/pytest tests/unit_test/jira/ -v --tb=short "${@:2}"
+            .venv/bin/pytest tests/unit_test/jira/ -v --tb=short "$@"
             ;;
         func)
-            .venv/bin/pytest tests/unit_test/jira/issues/test_functions.py -v "${@:2}"
+            .venv/bin/pytest tests/unit_test/jira/issues/test_functions.py -v "$@"
             ;;
         api)
-            .venv/bin/pytest tests/unit_test/jira/api/test_issues_router.py -v "${@:2}"
+            .venv/bin/pytest tests/unit_test/jira/api/test_issues_router.py -v "$@"
             ;;
         coverage)
-            .venv/bin/pytest tests/unit_test/jira/ -v --cov=jira --cov-report=term-missing "${@:2}"
+            .venv/bin/pytest tests/unit_test/jira/ -v --cov=jira --cov-report=term-missing "$@"
             ;;
         parallel)
-            .venv/bin/pytest tests/unit_test/jira/ -v -n auto "${@:2}"
+            .venv/bin/pytest tests/unit_test/jira/ -v -n auto "$@"
             ;;
         help|--help|-h|'')
             _jiravis_test_help
             ;;
         *)
-            ux_error "Unknown option: $1"
+            ux_error "Unknown option: $subcommand"
             echo ""
             _jiravis_test_help
             return 1
@@ -131,8 +139,9 @@ run_jiravis_test() {
 
 _jiravis_test_help() {
     # Load UX library if not already loaded
-    if ! declare -f ux_header >/dev/null 2>&1; then
-        source "${BASH_SOURCE[0]%/*}/../tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+    if ! type ux_header >/dev/null 2>&1; then
+        # shellcheck source=/dev/null
+        . "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
     fi
 
     ux_header "jiravis Test Runner"

@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/my_help.sh
 # Help system for bash/zsh dotfiles
 # Provides centralized help registry for all commands
