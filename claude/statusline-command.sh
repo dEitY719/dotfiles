@@ -23,15 +23,20 @@ input=$(cat)
 
 # Extract everything we need in a single jq pass — statusline runs on every
 # prompt render, so consolidating 5 jq forks into 1 is a meaningful win.
+# The here-string keeps this process substitution to a single child; piping
+# `echo` into jq forks a second one that `mapfile` (unlike `read`) waits on,
+# because it drains to EOF rather than returning after the first field.
 #
-# One value per line + `mapfile`, NOT `@tsv` + `IFS=$'\t' read`: tab is an
-# IFS *whitespace* character, so bash merges runs of tabs into one delimiter
-# and strips leading ones — every empty field vanishes and the fields after
-# it shift left. That stayed invisible while the only fields that could be
-# empty (used_pct, total_tokens) sat at the end of the list; adding
-# `.effort.level` moves them into the middle and turns it into a real bug.
-mapfile -t _sl_fields < <(
-    echo "$input" | jq -r '
+# NUL-delimited — NOT `@tsv` + `IFS=$'\t' read`, and not one-field-per-line
+# either. Any in-band separator is a byte some field may legitimately hold,
+# and a field carrying it shifts every later field left: a tab in
+# `.model.display_name` breaks the former, a newline in `.cwd` the latter.
+# Tab additionally is an IFS *whitespace* character, so bash merges runs of
+# them and strips leading ones — empty fields vanish outright. NUL is the
+# one byte a bash variable cannot contain, so `-d ''` is the only delimiter
+# no value can forge.
+mapfile -d '' -t _sl_fields < <(
+    jq -j '
       (.context_window.current_usage // {}) as $u
       | [
           (.workspace.current_dir // .cwd // ""),
@@ -44,8 +49,8 @@ mapfile -t _sl_fields < <(
             | if . > 0 then tostring else "" end),
           (.effort.level // "")
         ]
-      | .[] | tostring
-    '
+      | .[] | tostring + "\u0000"
+    ' <<<"$input"
 )
 cwd="${_sl_fields[0]-}"
 model_id="${_sl_fields[1]-}"
@@ -106,8 +111,8 @@ else
     model_emoji="🧠" # Default - brain
 fi
 
-# Effort level → moon-phase glyph, waxing with reasoning depth:
-#   🌑 low  🌒 medium  🌓 high  🌔 xhigh  🌕 max
+# Effort level → moon-phase glyph, waxing with reasoning depth (the `case`
+# below is the table — do not restate it here).
 # The `.effort` key only exists when the model supports effort levels
 # (claude-3-*, opus-4-0/4-1, sonnet-4-0/4-5 … don't) — then the segment and
 # its separator drop out entirely, leaving the line byte-identical to before.
