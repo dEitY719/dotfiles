@@ -29,6 +29,16 @@ _render() {
     run bash -c "printf '%s' '$1' | bash '${STATUSLINE}'"
 }
 
+# Same as _render but with the ANSI colour codes stripped, so an assertion can
+# pin exact segment adjacency — which is what proves a separator was *not*
+# emitted. The ESC byte is interpolated rather than written as `\x1b` so the
+# sed script works on BSD sed too.
+_render_plain() {
+    local esc
+    esc=$(printf '\033')
+    run bash -c "printf '%s' '$1' | bash '${STATUSLINE}' | sed 's/${esc}\[[0-9;]*m//g'"
+}
+
 @test "statusline effort: low renders 🌑 low" {
     _render '{"effort":{"level":"low"}}'
     assert_success
@@ -71,6 +81,17 @@ _render() {
     refute_output --partial '🌕'
     # The rest of the line still renders.
     assert_output --partial 'Haiku 4.5'
+}
+
+@test "statusline effort: absent .effort key emits no leftover separator" {
+    # The glyph being gone is not enough — `${effort_info:+ | …}` also has to
+    # swallow the separator, which is what makes the line byte-identical to
+    # the pre-effort statusline. Asserting the model segment butts directly
+    # against the project segment is the only way to see that.
+    _render_plain '{"model":{"display_name":"Haiku 4.5"}}'
+    assert_success
+    assert_output --partial 'Haiku 4.5 | 📁'
+    refute_output --partial 'Haiku 4.5 |  | 📁'
 }
 
 @test "statusline effort: unknown level shows raw text, no crash" {
