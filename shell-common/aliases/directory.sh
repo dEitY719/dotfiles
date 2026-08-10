@@ -40,16 +40,15 @@ alias cd-resource='cd ~/para/resource'
 alias cd-archive='cd ~/para/archive'
 
 # PROJECT directories
-alias cd-ss='cd ~/para/project/stock-steward'
-alias cd-ll='cd ~/para/project/litellm'
-alias cd-jv='cd ~/para/project/jiravis'
-alias cd-at='cd ~/para/project/agent-toolbox'
 alias cd-af='cd-at'
-alias cd-qf='cd ~/para/project/quantfolio'
+alias cd-at='cd ~/para/project/agent-toolbox'
+alias cd-jv='cd ~/para/project/jiravis'
 alias cd-kk='cd ~/para/project/karakeep'
-alias cd-jmcp='cd ~/para/project/jira-mcp'
-alias cd-jmcp-as='cd ~/para/project/jira-mcp/mcp-atlassian'
-alias cd-jmcp-as-ds='cd ~/para/project/jira-mcp/mcp-atlassian-ds'
+alias cd-lak='cd ~/para/project/llm-agent-kit'
+alias cd-ll='cd ~/para/project/litellm'
+alias cd-op='cd ~/para/project/obsidian-para'
+alias cd-qf='cd ~/para/project/quantfolio'
+alias cd-ss='cd ~/para/project/stock-steward'
 # Note: Project-specific CLI commands are defined in project-cli-aliases.sh
 
 # AREA directories
