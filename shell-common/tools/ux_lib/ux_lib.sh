@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 
 # ~/dotfiles/shell-common/tools/ux_lib/ux_lib.sh
 # Central UX library for consistent styling across all dotfiles scripts

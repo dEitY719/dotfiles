@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/tools/codex.sh
 # Codex CLI - utilities and workflow helpers
 # Shared between bash and zsh

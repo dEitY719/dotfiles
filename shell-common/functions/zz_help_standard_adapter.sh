@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/zz_help_standard_adapter.sh
 # Normalizes my-help topic functions to the command-guidelines interface.
 

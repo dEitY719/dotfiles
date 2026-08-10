@@ -13,7 +13,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 if ! type ux_header >/dev/null 2>&1; then
     SHELL_COMMON="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
     # shellcheck source=/dev/null
-    source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+    . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
 fi
 
 # ═══════════════════════════════════════════════════════════════

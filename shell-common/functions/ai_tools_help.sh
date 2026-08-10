@@ -603,10 +603,10 @@ ollama_help() {
 # Auto-detect and show appropriate help
 # Depends on: ollama_backend_detect() from tools/integrations/ollama.sh (auto-sourced)
 _ollama_help_auto() {
-    if command -v ollama_backend_detect &> /dev/null; then
+    if command -v ollama_backend_detect >/dev/null 2>&1; then
         local backend
         backend=$(ollama_backend_detect 2>/dev/null || echo "docker")
-        if [[ "$backend" == "local" ]]; then
+        if [ "$backend" = "local" ]; then
             _ollama_help_local
         else
             _ollama_help_docker
@@ -619,7 +619,7 @@ _ollama_help_auto() {
 # WSL Local Ollama Help
 _ollama_help_local() {
     # Check if local ollama is available
-    if ! command -v ollama &> /dev/null; then
+    if ! command -v ollama >/dev/null 2>&1; then
         ux_header "WSL Ollama — Not Installed"
 
         ux_section "Current Status"
@@ -706,10 +706,10 @@ _ollama_help_docker() {
 _ollama_help_status() {
     ux_header "Current Ollama Backend Status"
 
-    if command -v ollama_backend_status &> /dev/null; then
+    if command -v ollama_backend_status >/dev/null 2>&1; then
         ollama_backend_status
     else
-        if command -v ollama &> /dev/null; then
+        if command -v ollama >/dev/null 2>&1; then
             ux_success "Backend: LOCAL (WSL)"
             ux_info "Version: $(ollama --version 2>/dev/null || echo 'unknown')"
             ux_info "API: http://127.0.0.1:11434"

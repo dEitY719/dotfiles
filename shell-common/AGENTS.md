@@ -7,7 +7,7 @@
 
 # Operational Commands
 
-- **Lint**: `mise run lint-sh` — shellcheck covers `bash/` + `shell-common/` (`.shellcheckrc` pins `shell=bash` so bash/zsh-branching files don't get POSIX-sh false positives); shfmt diff stays `bash/`-only (#1305).
+- **Lint**: `mise run lint-sh` — shellcheck covers `bash/` + `shell-common/`, checked per-file under **default POSIX-sh dialect** (enforces the Golden Rules below). Files that genuinely branch on `_UX_IS_BASH`/`_UX_IS_ZSH` carry a `# shellcheck shell=bash` directive as their second line so the intentional branch doesn't false-positive — that opt-in is per-file, not directory-wide, so it never silences a real POSIX violation elsewhere. shfmt diff stays `bash/`-only (#1305).
 - **Format**: `shfmt -w -i 4 shell-common/`
 - **Reload**: `source ~/.bashrc` (bash) 또는 `source ~/.zshrc` (zsh)
 - **Syntax**: `bash -n <file>` / `zsh -n <file>`

@@ -16,7 +16,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 _work_help_load_ux() {
     if ! type ux_header >/dev/null 2>&1; then
         if [ -n "$SHELL_COMMON" ] && [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
-            source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null
+            . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null
         fi
     fi
 }

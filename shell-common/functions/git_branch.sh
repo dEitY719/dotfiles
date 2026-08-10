@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/functions/git_branch.sh
 # Git branch management — feature-branch cleanup (gbr teardown)
 # Mirrors shell-common/functions/git_worktree.sh (gwt) design for consistency.

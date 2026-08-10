@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/util/path_resolver.sh
 # POSIX-compliant path resolution for both bash and zsh
 # Centralizes DOTFILES_ROOT detection to avoid duplication

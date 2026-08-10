@@ -12,3 +12,12 @@ disable=SC1090
 # SC2034: Variable appears unused
 # Used for HELP_DESCRIPTIONS array registration and template variables
 disable=SC2034
+
+# SC3043: 'local' is undefined in POSIX sh
+# `local` isn't POSIX-standard, but every /bin/sh this repo targets (dash,
+# bash, busybox ash) implements it, and shell-common/ relies on it pervasively
+# for function-scoped variables. Disabling it here (rather than per-file) is
+# deliberate: leaving every OTHER POSIX-dialect check active is what caught
+# real bashisms (unconditional [[ ]], bash arrays, &>) hidden until now by a
+# too-broad shell=bash pin — see #1305 PR #1307 review discussion.
+disable=SC3043

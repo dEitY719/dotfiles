@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck shell=bash
 # shell-common/tools/integrations/litellm.sh
 # LiteLLM proxy server helpers (bash/zsh compatible)
 
