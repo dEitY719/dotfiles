@@ -6,15 +6,22 @@
 # statusline renders it as a moon-phase glyph + the level name between the
 # model and project segments.
 #
-# The suite also locks the field-reader fix that had to land with it: the
-# old `@tsv` + `IFS=$'\t' read` pair silently dropped empty fields (tab is
-# an IFS *whitespace* character), which shifted every later value left as
-# soon as `.effort.level` pushed the optional fields into the middle.
+# The suite also locks the NUL-delimited field reader that had to land with
+# it — empty fields and separator bytes inside values both used to shift
+# every later field left (rationale in the script's reader comment).
 
 load '../test_helper'
 
 setup() {
+    # Neutral $HOME: the script reads ~/.dotfiles-setup-mode, and on an
+    # `internal` PC that forks a background curl to the usage API and
+    # rewrites the shared cost cache on every render.
+    setup_isolated_home
     STATUSLINE="${DOTFILES_ROOT}/claude/statusline-command.sh"
+}
+
+teardown() {
+    teardown_isolated_home
 }
 
 # Feed a JSON payload to the statusline and capture its rendered line.
@@ -99,4 +106,26 @@ _render() {
     assert_output --partial 'Opus 5'
     assert_output --partial '🌕 max'
     assert_output --partial '65.7k / 7%'
+}
+
+# The two below lock the other half of the reader invariant: a value may
+# legitimately contain the byte a previous implementation used as its field
+# separator. Both payloads are decoded by jq into a real control character.
+
+@test "statusline effort: a newline inside a value does not shift later fields" {
+    # One-field-per-line reader rendered `🧠 ird` here — the tail of the path
+    # landed in the model slot, effort vanished, and fmt_tokens hit stderr.
+    _render '{"cwd":"/tmp/we\nird","model":{"display_name":"Opus 5"},"effort":{"level":"max"}}'
+    assert_success
+    assert_output --partial '🎭 Opus 5'
+    assert_output --partial '🌕 max'
+}
+
+@test "statusline effort: a tab inside a value does not shift later fields" {
+    # `@tsv` + `IFS=$'\t' read` rendered `🧠 unknown` here — the display name
+    # split in two and every later field slid left.
+    _render '{"cwd":"/tmp","model":{"display_name":"Op\tus"},"effort":{"level":"max"}}'
+    assert_success
+    assert_output --partial '🌕 max'
+    assert_output --partial '📁 tmp'
 }
