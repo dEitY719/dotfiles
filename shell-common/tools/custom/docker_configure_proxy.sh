@@ -13,13 +13,10 @@ source "$(dirname "$0")/init.sh" || exit 1
 # Create the systemd drop-in directory that holds http-proxy.conf.
 # Usage: docker_proxy_create_dropin_dir /etc/systemd/system/docker.service.d
 #
-# Extracted out of main() so the failure path is directly testable with a
-# mocked `sudo` (issue #1308). Success is decided by `sudo mkdir -p` itself:
-# the previous `sudo mkdir -p ...` followed by a separate `if [ $? -ne 0 ]`
-# inspected the status one statement too late, and under this script's `set -e`
-# the bare mkdir aborted the whole run first — the error handler was dead code
-# (issue #1305 / PR #1307). The explicit `return 0` keeps the ux_success side
-# effect out of the function's exit status.
+# Branches on `sudo mkdir -p` directly, not a separately-inspected `$?` —
+# under this script's `set -e`, a failing bare `mkdir -p` would abort the
+# run before any later `$?` check ran. The explicit `return 0` keeps the
+# ux_success side effect out of the function's exit status.
 docker_proxy_create_dropin_dir() {
     local dir="$1"
 
