@@ -47,26 +47,14 @@ teardown() {
     teardown_isolated_home
 }
 
-# Source docker_configure_proxy.sh and call the extracted step.
-#
-# The script resolves its own dependency with `source "$(dirname "$0")/init.sh"`,
-# so the subshell cds into the tools dir first: under `bash -c` $0 is "bash",
-# dirname yields "." and the real init.sh is found. init.sh returns early under
-# DOTFILES_TEST_MODE=1 without defining ux_*, so the doubles below are the only
-# implementations in play. main() stays dormant because the script's direct-exec
-# guard compares BASH_SOURCE[0] against $0.
+# Source docker_configure_proxy.sh and call the extracted step, via the
+# shared run_sourced_tool_script helper (tests/bats/test_helper.bash).
 #
 # $1 = extra statement appended to the ux_success double (e.g. "return 1")
 run_create_dropin_dir() {
     local ux_success_tail="${1:-return 0}"
 
-    run bash -c "
-        export DOTFILES_ROOT='${DOTFILES_ROOT}'
-        export DOTFILES_TEST_MODE=1
-        export HOME='${HOME}'
-        export TERM=dumb
-        cd '${TOOLS_DIR}' || exit 1
-        source '${DOCKER_PROXY_SCRIPT}'
+    run_sourced_tool_script "$TOOLS_DIR" "$DOCKER_PROXY_SCRIPT" "
         ux_success() { printf 'OK: %s\n' \"\$1\"; ${ux_success_tail}; }
         ux_error() { printf 'ERR: %s\n' \"\$1\" >&2; }
         if docker_proxy_create_dropin_dir '${TARGET_DIR}'; then
