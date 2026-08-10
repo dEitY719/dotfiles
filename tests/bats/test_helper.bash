@@ -119,6 +119,42 @@ run_in_bash() {
     "
 }
 
+# Quote each argument with printf %q and print them space-joined, for
+# interpolation into a `bash -c "..."` command string (e.g. a `for x in ...`
+# list built from bats args). Assign the result with `args_q="$(quote_args ...)"`.
+quote_args() {
+    local q="" arg
+    for arg in "$@"; do
+        q+=" $(printf '%q' "$arg")"
+    done
+    printf '%s' "$q"
+}
+
+# Run BODY in a bash subprocess after sourcing a tools/custom/*.sh script that
+# resolves its own dependencies via `source "$(dirname "$0")/init.sh"`.
+#
+# Sourcing under `bash -c` makes $0 == "bash", so `dirname "$0"` would resolve
+# relative to the caller's cwd instead of the script's — hence the leading
+# `cd` into TOOLS_DIR before sourcing. DOTFILES_TEST_MODE=1 makes init.sh
+# return before defining ux_*, so any doubles installed in BODY are the only
+# implementations in play. The script's own main() stays dormant: its
+# direct-exec guard compares BASH_SOURCE[0] against $0, which never matches
+# while sourced.
+#
+# Usage: run_sourced_tool_script TOOLS_DIR SCRIPT BODY
+run_sourced_tool_script() {
+    local tools_dir="$1" script="$2" body="$3"
+    run bash -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        export DOTFILES_TEST_MODE=1
+        export HOME='${HOME}'
+        export TERM=dumb
+        cd '${tools_dir}' || exit 1
+        source '${script}'
+        ${body}
+    "
+}
+
 # Run a command in zsh subprocess with dotfiles loaded
 run_in_zsh() {
     run zsh -f -c "

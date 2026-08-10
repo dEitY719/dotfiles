@@ -42,10 +42,8 @@ run_prompt_validate() {
     preset_q="$(printf '%q' "$1")"
     shift
 
-    local args_q="" arg
-    for arg in "$@"; do
-        args_q+=" $(printf '%q' "$arg")"
-    done
+    local args_q
+    args_q="$(quote_args "$@")"
 
     run bash -c "
         export HOME='${HOME}'
