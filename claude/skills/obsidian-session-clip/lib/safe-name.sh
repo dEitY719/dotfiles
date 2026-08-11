@@ -17,6 +17,21 @@
 
 set -euo pipefail
 
+# `${var:0:N}` below counts *characters*, not bytes, only when the process
+# locale has a UTF-8 LC_CTYPE. A caller running under LC_ALL=C (cron, a
+# minimal container, an unset LANG) makes bash count bytes instead, slicing
+# a multibyte Korean slug mid-character and emitting invalid UTF-8 — the
+# exact silent-corruption failure mode NF-1 exists to rule out. Force a
+# UTF-8 locale here so the behaviour is deterministic regardless of caller
+# environment (PR #1322 review).
+for _candidate_locale in C.utf8 C.UTF-8 en_US.UTF-8; do
+    if locale -a 2>/dev/null | grep -qx "$_candidate_locale"; then
+        export LC_ALL="$_candidate_locale"
+        break
+    fi
+done
+unset _candidate_locale
+
 # The 9 characters Windows forbids in a path component.
 FORBIDDEN_SET='\\/:*?"<>|'
 MAX_LEN=100
@@ -88,16 +103,25 @@ resolve_path() {
         return 1
     fi
 
-    candidate="${dir%/}/${stem}${ext}"
-    if [ ! -e "$candidate" ]; then
-        printf '%s\n' "$candidate"
-        return 0
-    fi
-
-    n=2
+    n=1
     while [ "$n" -le "$MAX_CANDIDATES" ]; do
-        candidate="${dir%/}/${stem}-${n}${ext}"
-        if [ ! -e "$candidate" ]; then
+        if [ "$n" -eq 1 ]; then
+            candidate="${dir%/}/${stem}${ext}"
+        else
+            candidate="${dir%/}/${stem}-${n}${ext}"
+        fi
+        # Reserve the candidate atomically: `set -C` (noclobber) makes `>`
+        # fail with EEXIST instead of truncating when the file already
+        # exists. A plain `[ ! -e "$candidate" ]` check followed later by a
+        # separate write leaves a TOCTOU window — two sessions racing on the
+        # same minute + stem could both see "free" and one note would
+        # silently overwrite the other, defeating the NF-2 parallel-session
+        # guarantee (PR #1322 review). The caller (SKILL.md Step 5) writes
+        # the real content into this now-reserved, empty file.
+        if (
+            set -C
+            : >"$candidate"
+        ) 2>/dev/null; then
             printf '%s\n' "$candidate"
             return 0
         fi

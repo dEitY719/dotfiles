@@ -69,12 +69,13 @@ NOTE=$(bash "${SKILL_DIR}/lib/safe-name.sh" resolve "$VAULT/99-Inbox/ai-session"
 ```
 
 Either failing is fatal — surface stderr, do not invent a fallback name.
+`resolve` reserves `NOTE` atomically (empty file, closes a parallel-session race).
 
 ## Step 5: Write
 
-`--dry-run` → print `NOTE` and the full body, write nothing, jump to Step 7.
-Otherwise write the body to `NOTE`. **This is the objective**; everything
-after it is best-effort (NF-4).
+`--dry-run` → print `NOTE` + body, `rm -f "$NOTE"` (undo the reservation —
+write nothing), jump to Step 7. Otherwise write the body to `NOTE`. **This
+is the objective**; everything after it is best-effort (NF-4).
 
 ## Step 6: Commit (F-7, NF-2)
 

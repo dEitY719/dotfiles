@@ -19,7 +19,7 @@
 
 set -uo pipefail
 
-FORBIDDEN_SET='\\/:*?"<>|'
+SAFE_NAME_SH="$(dirname -- "$0")/safe-name.sh"
 REQUIRED_KEYS="title source repo branch session_type created status memo tags"
 MEMO_SECTIONS="### 핵심 요약
 ### 왜 저장했나
@@ -88,9 +88,20 @@ main() {
     fi
 
     # --- 2. Windows-safe filename (NF-1) -----------------------------------
+    # Delegates to safe-name.sh's real sanitize function instead of keeping
+    # a second copy of the forbidden-character set here — the two had
+    # drifted-config risk otherwise (PR #1322 review). Split stem/ext first:
+    # sanitize's own 100-char cap already applied to the stem alone at
+    # generation time, so re-sanitizing the bare stem is idempotent for a
+    # genuine note and safe against a long-slug false positive.
     base="$(basename -- "$note")"
-    stripped="$(printf '%s' "$base" | tr -d "$FORBIDDEN_SET" | tr -d '[:cntrl:]')"
-    if [ "$stripped" = "$base" ]; then
+    stem="${base%.*}"
+    case "$base" in
+        *.*) ext=".${base##*.}" ;;
+        *) ext="" ;;
+    esac
+    sanitized_stem="$(bash "$SAFE_NAME_SH" sanitize "$stem" 2>/dev/null)" || sanitized_stem=""
+    if [ "${sanitized_stem}${ext}" = "$base" ]; then
         pass "파일명에 Windows 금지문자 없음 (NF-1)"
     else
         fail "파일명에 금지문자 또는 제어문자가 있다 (NF-1): ${base}"
@@ -111,6 +122,21 @@ main() {
             pass "frontmatter 9개 키 모두 존재 (F-3)"
         else
             fail "frontmatter 누락 키 (F-3):${missing}"
+        fi
+    fi
+
+    # --- 3.5 created matches the filename date (F-2/F-3 consistency) -------
+    # The spec ties `created` to the note's own YYYY-MM-DD filename prefix;
+    # check 3 above only confirmed the key exists, not that its value is
+    # right — a note with a stale/wrong `created` would pass self-check and
+    # still reach /ingest wrong (PR #1322 review).
+    if [ -n "$fm" ]; then
+        fname_date="$(printf '%s' "$base" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}' || true)"
+        fm_created="$(printf '%s\n' "$fm" | sed -n 's/^created:[[:space:]]*//p' | head -n1 | tr -d '[:space:]')"
+        if [ -n "$fname_date" ] && [ "$fname_date" = "$fm_created" ]; then
+            pass "created 값이 파일명 날짜와 일치 (F-2/F-3)"
+        else
+            fail "created(${fm_created:-없음})가 파일명 날짜(${fname_date:-불명})와 다르다 (F-2/F-3)"
         fi
     fi
 
