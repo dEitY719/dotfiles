@@ -17,7 +17,7 @@ SKILL.md **Step 8** 을 뒷받침한다. 설계 목표는 live 와 같다 — **
   Unproven:   <차등에서 before == after 인 주장>   (또는 none · disabled (--no-diff-check))
   Unverified: <도달 못 한 것 — 각각 이유>          (또는 none)
   Rejected:   <N> (self-refuted: <한 줄 이유들>)
-  Created:    <생성한 이슈 URL 목록>              (또는 none)
+  Findings:   <생성한 이슈 URL 목록>              (또는 none)
   Next:       <다음 행동 — 클론 경로에서 재현 / --matrix full 재실행 / 생성된 이슈 확인>
 ```
 
@@ -33,7 +33,7 @@ SKILL.md **Step 8** 을 뒷받침한다. 설계 목표는 live 와 같다 — **
 | `Unproven:` | 차등에서 전후 동일한 주장. 끈 경우도 행을 남긴다 | 초록 테스트가 "수정이 동작한다" 로 잘못 승격된다 |
 | `Unverified:` | 도달 못 한 것과 이유(러너 미탐지 · 로케일 미설치 · collect-only 없음) | 통과 목록만 보면 전수 검증한 것으로 읽힌다 |
 | `Rejected:` | 자기 반증에서 걷힌 건수 | **`0 findings` 와 `안 찾아봤음` 이 구별되지 않는다** |
-| `Created:` | **생성한 이슈 URL**. live 의 같은 이름 행과 뜻이 다르다 — 거기서는 앱에 남긴 레코드다 | 무엇이 어디에 등록됐는지 추적 불가 |
+| `Findings:` | **생성한 이슈 URL**. live 의 `Findings:` 행과 이름·뜻이 같다 — live 의 `Created:` (앱에 남긴 레코드)와는 별개다 | 무엇이 어디에 등록됐는지 추적 불가 |
 | `Next:` | 항상 마지막 줄. 구체 명령 또는 경로 | 리포트를 읽고 무엇을 할지가 남지 않는다 |
 
 ## 정지 (`[FAIL]`)
@@ -64,7 +64,7 @@ F-2/F-3 단언이 막으면 **측정하지 않고** 정지한다. 무엇이 왜 
 
 ```
 [WARN] PR #<N> merge-verified — 1 finding could not be filed (gh:issue-create failed)
-  Created:  none — 본문을 아래에 그대로 출력했습니다 (복사해서 수동 등록하세요)
+  Findings: none — 본문을 아래에 그대로 출력했습니다 (복사해서 수동 등록하세요)
 ```
 
 ## 발견 없음

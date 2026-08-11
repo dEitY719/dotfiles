@@ -67,7 +67,7 @@ remote 만 지정**하는 호출이 가능하다. `12a` 는 숫자로 시작하�
 7. **환경을 바꿔 다시 돌린다** — 기본은 `PATH=/usr/bin:/bin` 정규화. 결과가 갈리면 발견이다.
 8. **차등 검증** — 같은 검사를 PR 이전 상태로 돌려 결과가 실제로 달라지는지 본다.
 9. 후보 발견마다 자기 반증을 세워 걸러내고, 살아남은 것만 `gh:issue-create` 로 넘긴다.
-10. `Clone:` `Claims:` `Matrix:` `Unproven:` `Unverified:` `Rejected:` `Created:` 를 담은
+10. `Clone:` `Claims:` `Matrix:` `Unproven:` `Unverified:` `Rejected:` `Findings:` 를 담은
     리포트를 출력하고, `[OK]`/`[WARN]` 이면 대상 PR 에 코멘트로 남긴다.
 
 ## What the skill will NOT do
