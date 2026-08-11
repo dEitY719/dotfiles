@@ -132,8 +132,20 @@ fi
 ux_header() {
     local text="$1"
     local width=60
-    if [ ${#text} -gt "$width" ]; then
-        width=${#text}
+
+    # ${#text} counts characters, not terminal columns — CJK/한글처럼
+    # 2칸을 차지하는 wide character가 섞이면 border/padding이 어긋난다.
+    # `wc -L`은 locale-aware하게 실제 표시 폭을 반환한다.
+    local text_width
+    text_width=$(printf '%s' "$text" | wc -L)
+    if [ "$text_width" -gt "$width" ]; then
+        width=$text_width
+    fi
+
+    local pad=$((width - text_width))
+    local padding=""
+    if [ "$pad" -gt 0 ]; then
+        padding=$(printf '%*s' "$pad" '')
     fi
 
     local border
@@ -149,7 +161,7 @@ ux_header() {
 
     echo ""
     printf "%s%s╔%s╗%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$border" "${UX_RESET}"
-    printf "%s%s║%s %-${width}s %s%s║%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}" "$text" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
+    printf "%s%s║%s %s%s %s%s║%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}" "$text" "$padding" "${UX_BOLD}" "${UX_PRIMARY}" "${UX_RESET}"
     printf "%s%s╚%s╝%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$border" "${UX_RESET}"
     echo ""
 }
