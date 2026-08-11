@@ -148,16 +148,13 @@ ux_header() {
         padding=$(printf '%*s' "$pad" '')
     fi
 
+    # `seq` (an external command) is unaffected by shell parser mode, unlike
+    # zsh's native `{1..N}` brace-range syntax — that extension is disabled
+    # under `emulate -L sh` (used throughout shell-common for POSIX word-
+    # splitting), which silently turns `{1..N}` into a literal string and
+    # collapses the border to a single character. Use `seq` unconditionally.
     local border
-    if $_UX_IS_BASH; then
-        border=$(printf '═%.0s' $(seq 1 $((width + 2))))
-    elif $_UX_IS_ZSH; then
-        # shellcheck disable=SC2051  # zsh expands variables in brace ranges; branch is zsh-only
-        border=$(printf '═%.0s' {1..$((width + 2))})
-    else
-        # POSIX fallback
-        border=$(printf '═%.0s' $(seq 1 $((width + 2))))
-    fi
+    border=$(printf '═%.0s' $(seq 1 $((width + 2))))
 
     echo ""
     printf "%s%s╔%s╗%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$border" "${UX_RESET}"
