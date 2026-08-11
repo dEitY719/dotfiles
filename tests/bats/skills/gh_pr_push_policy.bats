@@ -11,7 +11,7 @@
 #   F-1-3  upstream == origin/main, on feature → push -u origin HEAD (NOT bare)
 #   F-1-4  upstream diverged                  → STOP (pre-existing row)
 #   F-2-1  on base + local-only commits       → auto-branch + rewind
-#   F-2-2  on base + commits already on origin → stop as before
+#   F-2-2  on base + commits already on origin → nothing-to-pr (stop)
 #   F-2-3  Korean commit titles               → ASCII-safe branch names
 
 load '../test_helper'
@@ -132,13 +132,13 @@ teardown() {
 
 # ── F-2-0: not on the base branch → untouched normal path ─────────────
 @test "F-2-0: on a feature branch → not-on-base" {
-    run gh_pr_base_branch_decision 'feat/issue-1315' 'main' 'aaa111' 'aaa111' ''
+    run gh_pr_base_branch_decision 'feat/issue-1315' 'main' 'aaa111' 'aaa111'
     assert_success
     assert_output 'not-on-base'
 }
 
 @test "F-2-0: base branch may be a parent PR head ref (stacked PR)" {
-    run gh_pr_base_branch_decision 'feat/child' 'feat/parent' '' '' ''
+    run gh_pr_base_branch_decision 'feat/child' 'feat/parent' '' ''
     assert_success
     assert_output 'not-on-base'
 }
@@ -146,45 +146,54 @@ teardown() {
 # ── F-2-1: on base with local-only commits → auto-branch + rewind ─────
 @test "F-2-1: on base, local-only commits not on origin → auto-branch-and-rewind" {
     run gh_pr_base_branch_decision 'main' 'main' \
-        $'aaa111\nbbb222' $'aaa111\nbbb222' $'ccc333\nddd444'
+        $'aaa111\nbbb222' $'aaa111\nbbb222'
     assert_success
     assert_output 'auto-branch-and-rewind'
 }
 
 @test "F-2-1: set comparison is order-insensitive" {
     run gh_pr_base_branch_decision 'main' 'main' \
-        $'bbb222\naaa111' $'aaa111\nbbb222' 'ccc333'
+        $'bbb222\naaa111' $'aaa111\nbbb222'
     assert_success
     assert_output 'auto-branch-and-rewind'
 }
 
 @test "F-2-1: straggler left on base (sets differ) → warn only, no rewind" {
     run gh_pr_base_branch_decision 'main' 'main' \
-        $'aaa111\nbbb222' 'aaa111' 'ccc333'
+        $'aaa111\nbbb222' 'aaa111'
     assert_success
     assert_output 'auto-branch-warn-only'
 }
 
 @test "F-2-1: empty local-only range → nothing-to-pr (dirty tree is out of scope)" {
-    run gh_pr_base_branch_decision 'main' 'main' '' '' 'ccc333'
+    run gh_pr_base_branch_decision 'main' 'main' '' ''
     assert_success
     assert_output 'nothing-to-pr'
 }
 
-# ── F-2-2: commits already pushed to origin/<base> → stop as before ───
-@test "F-2-2: moved commits already on origin/<base> → stop-already-pushed" {
-    run gh_pr_base_branch_decision 'main' 'main' \
-        $'aaa111\nbbb222' $'aaa111\nbbb222' $'aaa111\nccc333'
+# ── F-2-2: commits already pushed to origin/<base> → nothing-to-pr ────
+# Step 1b fetches origin before deciding, so commits that already reached
+# origin/<base> are excluded from `git rev-list origin/<base>..<base>` — the
+# empty-$3 branch IS the "already pushed, stop as before" safety net. There is
+# no separate stop-already-pushed decision to test (it was unreachable: the
+# A..B range operator already subtracts everything reachable from A).
+@test "F-2-2: empty local-only range → nothing-to-pr regardless of moved set" {
+    run gh_pr_base_branch_decision 'main' 'main' '' $'aaa111\nbbb222'
     assert_success
-    assert_output 'stop-already-pushed'
+    assert_output 'nothing-to-pr'
+}
+
+@test "F-2-2: already-pushed state never prescribes an auto-branch or rewind" {
+    run gh_pr_base_branch_decision 'main' 'main' '' 'aaa111'
+    assert_success
+    refute_output --partial 'auto-branch'
     refute_output --partial 'rewind'
 }
 
-@test "F-2-2: stop-already-pushed never prescribes an auto-branch" {
-    run gh_pr_base_branch_decision 'main' 'main' \
-        'aaa111' 'aaa111' 'aaa111'
+@test "F-2-2: whitespace-only local-only range is still nothing-to-pr" {
+    run gh_pr_base_branch_decision 'main' 'main' $'  \n\t ' 'aaa111'
     assert_success
-    refute_output --partial 'auto-branch'
+    assert_output 'nothing-to-pr'
 }
 
 # ── F-2-3: branch-name generator, Korean titles ───────────────────────

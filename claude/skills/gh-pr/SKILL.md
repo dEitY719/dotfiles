@@ -51,8 +51,8 @@ Then read `references/branch-state.md` and paste its SSOT functions +
 "How Step 1b ties it together" dispatch block verbatim. They cover the
 upstream mispair check feeding Step 5's push policy (F-1) and the
 on-the-base-branch recovery (F-2). Outcomes: `not-on-base` → continue;
-`nothing-to-pr` → stop (empty range, nothing to PR); `stop-already-pushed` →
-stop (commits already on `origin/$BASE_BRANCH`); `auto-branch-*` → a feature
+`nothing-to-pr` → stop (empty range — covers both "nothing committed" and
+"commits already on `origin/$BASE_BRANCH`"); `auto-branch-*` → a feature
 branch is created from the local-only commits, the local base branch is
 rewound to `origin/$BASE_BRANCH` when the guard allows, and the run continues.
 

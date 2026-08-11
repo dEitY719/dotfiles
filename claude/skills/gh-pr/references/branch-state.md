@@ -18,6 +18,15 @@ two questions the old policy conflated:
 > verbatim via `tests/bats/skills/_fixtures/gh_pr_push_policy.sh` — when
 > this file changes, mirror the change there too (and vice versa).
 
+**Test-coverage boundary.** The mirroring above covers the *functions* only:
+they are pure string/set logic, so bats exercises them with plain arguments.
+The "How Step 1b ties it together" dispatch block below is **not** bats-covered
+— it performs live `git switch -c` and `git branch -f` mutations, which the
+fixture's no-live-git philosophy deliberately excludes, and this repo's skill
+bats suites have no scratch-repo harness for branch mutation to reuse. That
+glue script is documentation reviewed by hand; treat edits to it with the care
+that unverified code deserves.
+
 ## F-1 — upstream / branch-name mismatch
 
 `git worktree add ... -b <branch>` started from `origin/main` leaves the new
@@ -174,13 +183,22 @@ step people forget. Without it the local base stays ahead of
 git branch -f "$BASE_BRANCH" "origin/$BASE_BRANCH"
 ```
 
-Auto-rewind only when BOTH hold; otherwise warn and leave the base alone:
+Auto-rewind only when this holds; otherwise warn and leave the base alone:
 
-1. `git rev-list origin/$BASE_BRANCH..$BASE_BRANCH` is exactly the commit
-   set that moved to the new branch (no stragglers left behind).
-2. Those commits are **not** already on `origin/$BASE_BRANCH`. If they are
-   already pushed this is not a PR-able state — stop as before (unchanged
-   pre-#1315 behaviour).
+- `git rev-list origin/$BASE_BRANCH..$BASE_BRANCH` is exactly the commit
+  set that moved to the new branch (no stragglers left behind).
+
+**Why there is no separate "already pushed to origin" condition** (it was
+removed after review of PR #1318): Step 1b always runs `git fetch origin`
+*before* this decision. After that fetch, any local commit that had already
+reached `origin/$BASE_BRANCH` by another path is, by definition, reachable
+from `origin/$BASE_BRANCH` — so `git rev-list origin/$BASE_BRANCH..$BASE_BRANCH`
+excludes it and the range comes back empty. That case therefore already
+lands on `nothing-to-pr`, which is the same stop it needs. A dedicated
+`stop-already-pushed` branch comparing `origin/$BASE_BRANCH..HEAD` against
+`git rev-list origin/$BASE_BRANCH` was not merely redundant but *unreachable*:
+the `A..B` range operator already subtracts everything reachable from `A`, so
+the two sets can never intersect. Do not re-add that check.
 
 The rewound commits are local-only, therefore `reflog`-recoverable. Print
 one recovery hint right after rewinding:
@@ -196,29 +214,23 @@ _gh_pr_normalize_sha_set() {
     printf '%s\n' "${1-}" | tr -s '[:space:]' '\n' | grep -E '^[0-9a-fA-F]+$' | sort -u
 }
 
-_gh_pr_set_contains() {
-    local _set="${1-}" _needle="${2-}" _item
-    for _item in $_set; do
-        [ "$_item" = "$_needle" ] && return 0
-    done
-    return 1
-}
-
 # Decides what Step 1b does when the session is sitting on the base branch.
 #   $1  current branch
 #   $2  base branch
 #   $3  SHAs from `git rev-list origin/$BASE..$BASE`   (local-only commits)
 #   $4  SHAs that would move to the new feature branch
-#   $5  SHAs already contained in origin/$BASE
 # Output (stdout), one of:
 #   not-on-base            — normal path, nothing to do here
 #   nothing-to-pr          — no local-only commits (dirty tree is gh:commit's job)
-#   stop-already-pushed    — commits are on origin/$BASE — pre-#1315 stop
 #   auto-branch-and-rewind — create branch, then `git branch -f` the base
 #   auto-branch-warn-only  — create branch, warn, do NOT rewind the base
+#
+# There is deliberately no `stop-already-pushed` output. Step 1b fetches
+# origin before deciding, so commits already on origin/$BASE drop out of the
+# $3 range and land on `nothing-to-pr` instead — see "Rewind guard" above.
 gh_pr_base_branch_decision() {
     local _current="${1-}" _base="${2-}"
-    local _local_only _moved _on_origin _sha
+    local _local_only _moved
 
     if [ "$_current" != "$_base" ]; then
         printf 'not-on-base\n'
@@ -227,20 +239,16 @@ gh_pr_base_branch_decision() {
 
     _local_only=$(_gh_pr_normalize_sha_set "${3-}")
     _moved=$(_gh_pr_normalize_sha_set "${4-}")
-    _on_origin=$(_gh_pr_normalize_sha_set "${5-}")
 
     if [ -z "$_local_only" ]; then
         printf 'nothing-to-pr\n'
         return 0
     fi
 
-    for _sha in $_moved; do
-        if _gh_pr_set_contains "$_on_origin" "$_sha"; then
-            printf 'stop-already-pushed\n'
-            return 0
-        fi
-    done
-
+    # Defensive guard for the function's general contract, not a live branch:
+    # the single real call site below only runs with CUR == BASE, where
+    # origin/$BASE..HEAD and origin/$BASE..$BASE are the same range, so
+    # _local_only == _moved always holds and warn-only cannot fire today.
     if [ "$_local_only" = "$_moved" ]; then
         printf 'auto-branch-and-rewind\n'
     else
@@ -257,13 +265,11 @@ UPSTREAM=$(git rev-parse --symbolic-full-name @{u} 2>/dev/null)
 
 DECISION=$(gh_pr_base_branch_decision "$CUR" "$BASE_BRANCH" \
     "$(git rev-list "origin/$BASE_BRANCH..$BASE_BRANCH" 2>/dev/null)" \
-    "$(git rev-list "origin/$BASE_BRANCH..HEAD" 2>/dev/null)" \
-    "$(git rev-list "origin/$BASE_BRANCH" 2>/dev/null)")
+    "$(git rev-list "origin/$BASE_BRANCH..HEAD" 2>/dev/null)")
 
 case "$DECISION" in
     not-on-base) ;;                      # normal path
-    nothing-to-pr)       exit 0 ;;       # nothing to PR
-    stop-already-pushed) exit 0 ;;       # pre-#1315 stop, unchanged
+    nothing-to-pr)       exit 0 ;;       # nothing to PR (incl. already-pushed)
     auto-branch-and-rewind|auto-branch-warn-only)
         FIRST=$(git rev-list "origin/$BASE_BRANCH..HEAD" | tail -n 1)
         NEW_BRANCH=$(gh_pr_branch_name \
@@ -271,7 +277,14 @@ case "$DECISION" in
             "$ISSUE_NUMBER" \
             "$(git log -1 --format=%ad --date=format:%Y%m%d "$FIRST")" \
             "$(git rev-parse --short "$FIRST")")
-        git switch -c "$NEW_BRANCH"
+        # MUST be guarded: on failure (e.g. $NEW_BRANCH already exists from a
+        # partial earlier run) HEAD is still the base branch, and rewinding it
+        # below would yank commits out from under the user's feet.
+        if ! git switch -c "$NEW_BRANCH"; then
+            printf "error: branch '%s' already exists — resolve manually (git branch -D '%s', or pick a different issue), then re-run.\n" \
+                "$NEW_BRANCH" "$NEW_BRANCH" >&2
+            exit 1
+        fi
         if [ "$DECISION" = "auto-branch-and-rewind" ]; then
             git branch -f "$BASE_BRANCH" "origin/$BASE_BRANCH"
             printf "Local '%s' rewound to origin/%s. Recover with:\n" \
