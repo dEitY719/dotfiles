@@ -36,9 +36,25 @@ exit on bad input (`rc=2` mutually-exclusive flags, `rc=3` bad `--base`,
 
 **1b — gather range + push state (one message):** using `$BASE_BRANCH`, run
 `git rev-parse --abbrev-ref HEAD`, `git status`, `git fetch origin`, `git log
---oneline "$BASE_BRANCH"..HEAD`, `git diff "$BASE_BRANCH"...HEAD`, `git
-rev-parse --symbolic-full-name @{u} 2>/dev/null`. Stop conditions: current
-branch equals `BASE_BRANCH` → ask for a feature branch; empty range → nothing to PR.
+--oneline "$BASE_BRANCH"..HEAD`, `git diff "$BASE_BRANCH"...HEAD`, plus these
+**two separate** probes — they answer different questions, never conflate them:
+
+```bash
+git rev-parse --symbolic-full-name @{u}        # pairing target (push/pull direction)
+git log HEAD..origin/"$BASE_BRANCH" --oneline  # how far behind base (rebase needed?)
+```
+
+Use `$BASE_BRANCH`, not a hard-coded `main` — Step 1a may have bound it to a
+parent PR's head ref (`references/stacked-pr.md`).
+
+Then read `references/branch-state.md` and paste its SSOT functions +
+"How Step 1b ties it together" dispatch block verbatim. They cover the
+upstream mispair check feeding Step 5's push policy (F-1) and the
+on-the-base-branch recovery (F-2). Outcomes: `not-on-base` → continue;
+`nothing-to-pr` → stop (empty range, nothing to PR); `stop-already-pushed` →
+stop (commits already on `origin/$BASE_BRANCH`); `auto-branch-*` → a feature
+branch is created from the local-only commits, the local base branch is
+rewound to `origin/$BASE_BRANCH` when the guard allows, and the run continues.
 
 ## Steps 2-3: Analyze ALL Commits + Resolve Issue
 
