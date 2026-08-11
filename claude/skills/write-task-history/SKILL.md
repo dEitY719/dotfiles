@@ -9,7 +9,8 @@ description: >-
   trigger when the user mentions task history, work log, JIRA ticket drafting
   from conversation context, or preparing PR descriptions based on what was
   just done. Works across any project. (재사용 패턴 문서화는 write:insight,
-  장애 분석은 write:rca)
+  장애 분석은 write:rca, 세션 1건을 PARA vault Inbox 노트로 남기는 것은
+  [[obsidian:session-clip]] — 이쪽은 일자별 daily log append 다)
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 metadata:
   model_recommendation:

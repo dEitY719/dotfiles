@@ -13,7 +13,8 @@ description: >-
   (이슈 게시 생략), `--new-issue` (신규 트래킹 이슈 강제), and
   `-h`/`--help`/`help` to print usage. (중단 후 같은 세션 재개는
   devx:restart, 토큰 리밋 후 크론 재개는 devx:resume-after-limit — 이들은
-  재개자(resumer)이고 본 스킬은 그에 선행하는 handoff 작성자다.)
+  재개자(resumer)이고 본 스킬은 그에 선행하는 handoff 작성자다. *미완* 이 아니라
+  *완료* 된 세션을 vault Inbox 노트로 남기는 것은 [[obsidian:session-clip]].)
 allowed-tools: Bash, Read, Write, Grep, TaskList
 metadata:
   model_recommendation:
