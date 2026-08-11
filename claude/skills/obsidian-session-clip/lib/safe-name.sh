@@ -53,16 +53,17 @@ sanitize_name() {
 
     cleaned="$(printf '%s' "$raw" | tr -d "$FORBIDDEN_SET" | tr -d '[:cntrl:]')"
 
-    # Trim leading/trailing whitespace. Windows also rejects names that end in
-    # a dot or a space, so those go too.
+    # Trim leading whitespace before truncating, so truncation counts real
+    # content instead of padding.
     cleaned="${cleaned#"${cleaned%%[![:space:]]*}"}"
-    cleaned="${cleaned%"${cleaned##*[![:space:]]}"}"
 
     # Truncate to MAX_LEN characters (bash substring expansion is
     # multibyte-aware, so a Korean slug is cut at 100 characters, not bytes).
     cleaned="${cleaned:0:$MAX_LEN}"
 
-    # Re-trim: the truncation may have exposed a trailing space or dot.
+    # Trim trailing whitespace/dots. Windows also rejects names that end in a
+    # dot or a space — this single pass covers both the case where truncation
+    # exposed one and the case where the raw name already ended in one.
     cleaned="${cleaned%"${cleaned##*[![:space:]]}"}"
     while [ -n "$cleaned" ] && [ "${cleaned%.}" != "$cleaned" ]; do
         cleaned="${cleaned%.}"
