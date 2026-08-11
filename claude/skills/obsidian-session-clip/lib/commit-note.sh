@@ -90,9 +90,10 @@ main() {
 
     # --- stage, retrying past .git/index.lock contention -------------------
     staged=0
+    last_add_err=""
     i=1
     while [ "$i" -le "$LOCK_RETRIES" ]; do
-        if git -C "$vault" add -- "$rel" 2>/dev/null; then
+        if last_add_err=$(git -C "$vault" add -- "$rel" 2>&1); then
             staged=1
             break
         fi
@@ -103,7 +104,12 @@ main() {
     done
 
     if [ "$staged" -ne 1 ]; then
+        # index.lock is the common cause, but `git add` can also fail on
+        # permission errors, a full disk, or a corrupt repo — those look
+        # identical from the exit code alone, so surface the real stderr
+        # instead of always blaming the lock (PR #1322 review).
         warn "git index 가 ${LOCK_RETRIES}회 재시도 후에도 잠겨 있다 (.git/index.lock) — 노트는 디스크에 남았고 obsidian-git 이 다음 주기에 회수한다"
+        [ -n "$last_add_err" ] && warn "마지막 git add 오류: ${last_add_err}"
         return 0
     fi
 
@@ -120,12 +126,14 @@ main() {
         subject="clip: ${summary}"
     fi
 
-    if git -C "$vault" commit -q -m "$subject" -- "$rel" 2>/dev/null; then
+    commit_err=""
+    if commit_err=$(git -C "$vault" commit -q -m "$subject" -- "$rel" 2>&1); then
         info "커밋 완료: ${subject}"
         return 0
     fi
 
     warn "커밋에 실패했지만 노트는 디스크에 남아 있다 — obsidian-git 이 회수한다: ${rel}"
+    [ -n "$commit_err" ] && warn "git commit 오류: ${commit_err}"
     return 0
 }
 
