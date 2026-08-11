@@ -52,6 +52,10 @@ full` 로 한 번 더 돌릴지 판단하게 한다.
 
 `--env <csv>` 는 `--matrix` 보다 우선한다 — `--env path,eol` 이면 그 둘만 돈다.
 
+축 사이에 의존성은 없다 — 각자 같은 클론을 읽기 전용으로 쓰거나(`path`/`locale`/`shell`) 자기
+사본에서 돈다(`eol`). `--matrix full` 이나 `--env` 로 축이 둘 이상 선택되면 **병렬로 실행**한다 —
+순차 실행은 축 수만큼 시간이 늘어난다.
+
 ```sh
 # locale 축은 로케일이 실제로 설치돼 있을 때만 의미가 있다
 locale -a 2>/dev/null | grep -qi '^ko_KR\.utf-\?8$' || axis_unverified locale "ko_KR.UTF-8 not installed"

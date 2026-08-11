@@ -28,6 +28,10 @@ git -C "$CLONE" worktree add --detach --quiet "$CLONE/.before" "${MERGE_SHA}~1"
 `.before` 는 **클론 내부**에 만든다. 사용자 레포에 워크트리를 추가하지 않는다(NF-1).
 정리는 `git -C "$CLONE" worktree remove` 로 하고, 클론 전체 정리 규칙(NF-2/NF-4)을 따른다.
 
+여러 주장이 같은 `TEST_CMD` 를 쓰면 `.before` 실행은 **1회만** 하고 그 결과(exit code · 케이스별
+pass/fail)를 모든 주장에 나눠 쓴다 — 같은 명령을 주장 개수만큼 반복 실행하지 않는다. 주장이 서로
+다른 입력·명령을 요구할 때만 별도로 다시 돈다.
+
 ## 3. 주장 유형별 절차
 
 ### 3-1. PR 이 **기존** 검사의 동작을 바꿨다
