@@ -114,11 +114,12 @@ ignored 파일 목록**을 뽑아 두면, 픽스처가 로컬 생성물에 의�
 
 ## 3. 정지 메시지
 
-정지할 때는 **무엇이 왜 막혔는지 + 사용자가 할 수 있는 다음 행동**을 함께 적는다.
+정지할 때는 **무엇이 왜 막혔는지 + 사용자가 할 수 있는 다음 행동**을 함께 적는다. 필드 형식의
+정본은 `references/report-template.md` 의 `[FAIL]` 절 — 아래는 실측값을 채운 예시다.
 
 ```
 [FAIL] PR #16 not verified — clone HEAD does not match the merge commit
   Clone:   /tmp/pr-verify-merged-16-Ab3d9x @ 1c2f9ae
   Target:  b534f99...
-  Next:    remote 에 그 커밋이 있는지 확인하거나(git fetch origin b534f99) --clone-dir 로 기존 클론을 지정하세요
+  Next:    git -C /tmp/pr-verify-merged-16-Ab3d9x fetch origin b534f99 후 재실행하거나 --clone-dir 로 기존 클론을 지정하세요
 ```

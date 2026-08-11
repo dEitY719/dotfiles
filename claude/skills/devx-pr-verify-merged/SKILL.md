@@ -74,8 +74,9 @@ fetch 해 Step 6 까지 재사용하고, `state != MERGED` 또는 `.mergeCommit.
 ## Step 6: 차등 검증 (`references/differential.md`)
 
 주장 1건마다 **PR 이전 상태**(`git show <merge>~1:<path>`, 또는 클론 안의 `<merge>~1` 워크트리)로 같은
-입력을 돌린다. 전·후 결과가 같으면 그 주장은 `unproven` — 전후 모두 통과하는 검사는 아무것도 증명하지
-않는다. 기본 on, `--no-diff-check` 로만 끄고 껐다는 사실을 리포트에 적는다.
+입력을 돌린다. 같은 `TEST_CMD` 를 공유하는 주장은 이전 상태 실행을 **1회만** 돌려 결과를 나눠 쓴다 —
+주장 개수만큼 반복 실행하지 않는다. 전·후 결과가 같으면 그 주장은 `unproven` — 전후 모두 통과하는
+검사는 아무것도 증명하지 않는다. 기본 on, `--no-diff-check` 로만 끄고 껐다는 사실을 리포트에 적는다.
 
 ## Step 7: 자기 반증 후 이슈화 (F-8)
 
@@ -86,7 +87,7 @@ fetch 해 Step 6 까지 재사용하고, `state != MERGED` 또는 `.mergeCommit.
 ## Step 8: 리포트와 PR 코멘트 게시 (`references/report-template.md`)
 
 `[OK]`/`[WARN]`/`[FAIL]` 한 블록 — `Clone:` `Claims:` `Matrix:` `Unproven:` `Unverified:` `Rejected:`
-`Created:` 가 모두 있어야 하고 마지막 줄은 항상 `Next:` 다. 게시는 live 와 **같은 규칙**: `[OK]`/`[WARN]`
+`Findings:` 가 모두 있어야 하고 마지막 줄은 항상 `Next:` 다. 게시는 live 와 **같은 규칙**: `[OK]`/`[WARN]`
 이고 `post_comment=1` 일 때만 그 블록을 그대로 대상 PR 코멘트로 남기고, `[FAIL]` 은 `--no-comment` 와
 무관하게 게시하지 않는다. 경로는 `_gh_pr_review_post_comment` 하나 — 절차는
 `../devx-pr-verify-live/references/pr-comment.md`.
