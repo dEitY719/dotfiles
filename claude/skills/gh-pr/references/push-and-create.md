@@ -20,12 +20,14 @@ Mispair detection reuses that same `$UPSTREAM`:
 
 ```bash
 CUR=$(git rev-parse --abbrev-ref HEAD)
-[ -n "$UPSTREAM" ] && [ "$UPSTREAM" != "origin/$CUR" ] && MISPAIRED=1
+UPSTREAM_NORM="${UPSTREAM#refs/remotes/}"
+[ -n "$UPSTREAM_NORM" ] && [ "$UPSTREAM_NORM" != "origin/$CUR" ] && MISPAIRED=1
 ```
 
-(`--symbolic-full-name` yields `refs/remotes/origin/main`; strip the
-`refs/remotes/` prefix before comparing — `gh_pr_normalize_upstream` in
-`references/branch-state.md` does this.)
+The strip is load-bearing: `--symbolic-full-name` yields
+`refs/remotes/origin/main`, which never equals `origin/$CUR` — comparing the
+raw value would flag *every* branch as mispaired. `gh_pr_normalize_upstream`
+in `references/branch-state.md` is the reusable form of that same strip.
 
 This row is the *normal* state after `git worktree add ... -b <branch>` off
 `origin/main`: git's `branch.autoSetupMerge` points the new branch at its

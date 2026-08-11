@@ -82,17 +82,12 @@ _gh_pr_normalize_sha_set() {
     printf '%s\n' "${1-}" | tr -s '[:space:]' '\n' | grep -E '^[0-9a-fA-F]+$' | sort -u
 }
 
-_gh_pr_set_contains() {
-    local _set="${1-}" _needle="${2-}" _item
-    for _item in $_set; do
-        [ "$_item" = "$_needle" ] && return 0
-    done
-    return 1
-}
-
+# There is deliberately no `stop-already-pushed` output: Step 1b fetches
+# origin before deciding, so commits already on origin/$BASE drop out of the
+# $3 range and land on `nothing-to-pr` instead.
 gh_pr_base_branch_decision() {
     local _current="${1-}" _base="${2-}"
-    local _local_only _moved _on_origin _sha
+    local _local_only _moved
 
     if [ "$_current" != "$_base" ]; then
         printf 'not-on-base\n'
@@ -101,20 +96,16 @@ gh_pr_base_branch_decision() {
 
     _local_only=$(_gh_pr_normalize_sha_set "${3-}")
     _moved=$(_gh_pr_normalize_sha_set "${4-}")
-    _on_origin=$(_gh_pr_normalize_sha_set "${5-}")
 
     if [ -z "$_local_only" ]; then
         printf 'nothing-to-pr\n'
         return 0
     fi
 
-    for _sha in $_moved; do
-        if _gh_pr_set_contains "$_on_origin" "$_sha"; then
-            printf 'stop-already-pushed\n'
-            return 0
-        fi
-    done
-
+    # Defensive guard for the function's general contract, not a live branch:
+    # the single real call site only runs with CUR == BASE, where
+    # origin/$BASE..HEAD and origin/$BASE..$BASE are the same range, so
+    # _local_only == _moved always holds and warn-only cannot fire today.
     if [ "$_local_only" = "$_moved" ]; then
         printf 'auto-branch-and-rewind\n'
     else
