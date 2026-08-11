@@ -18,11 +18,16 @@ SKILL.md **Step 3** 을 뒷받침한다. 이 절의 두 단언은 **하드 정�
 
 ```sh
 SRC=$(git -C "$PWD" rev-parse --show-toplevel)        # 사용자 레포 (읽기 전용으로만 쓴다)
-CLONE=${clone_dir:-$(mktemp -d "${TMPDIR:-/tmp}/pr-verify-merged-${PR}-XXXXXX")}
+CLONE=${clone_dir:-$(mktemp -d "${TMPDIR:-/tmp}/pr-verify-merged-${pr}-XXXXXX")}
 git clone --no-hardlinks --no-checkout --quiet "$SRC" "$CLONE" || stop "clone failed"
 git -C "$CLONE" cat-file -e "${MERGE_SHA}^{commit}" 2>/dev/null || {
     git -C "$CLONE" remote set-url origin "$(git -C "$SRC" remote get-url "${remote:-origin}")"
-    git -C "$CLONE" fetch --quiet origin "$MERGE_SHA" || stop "merge commit not fetchable"
+    # 서버가 임의 SHA want 를 막아 두면(uploadpack.allowTipSHA1InWant=false, 흔히 자체 호스팅
+    # GHES/GitLab) 원시 SHA fetch 가 거부된다. 병합 커밋은 이미 base 브랜치 히스토리의
+    # 일부이므로, base ref 를 fetch 하면 부수적으로 함께 따라온다 — 이 경로가 항상 동작한다.
+    git -C "$CLONE" fetch --quiet origin "$MERGE_SHA" 2>/dev/null \
+        || git -C "$CLONE" fetch --quiet origin "$BASE" 2>/dev/null
+    git -C "$CLONE" cat-file -e "${MERGE_SHA}^{commit}" 2>/dev/null || stop "merge commit not fetchable"
 }
 git -C "$CLONE" checkout --quiet --detach "$MERGE_SHA" || stop "checkout failed"
 ```
@@ -68,6 +73,15 @@ HEAD_SHA=$(git -C "$CLONE" rev-parse HEAD)
 리뷰어 2명도 통과시켰다. worktree 에서 검증하는 한 영원히 안 잡힌다.
 
 그래서 이 검사는 선택이 아니다. 순서대로 한다.
+
+**의존성 설치 — 러너를 돌리기 전에 한 번.** 클론은 `git clone` 산출물이라 `node_modules` /
+`.venv` / 잠금파일 기반 설치 상태를 담지 않는다. 클론 안에서 감지된 검증 명령(F-5 사다리)을
+그대로 실행하기 전에, 프로젝트가 선언한 표준 설치 스텝을 **클론 안에서 1회** 돈다 —
+`package.json`→`npm ci`(lockfile 있으면) 아니면 `npm install`, `pyproject.toml`(uv 관리)→
+`uv sync`, `requirements.txt`→`pip install -r requirements.txt`, `Gemfile`→`bundle install`.
+AGENTS.md/README 에 명시된 설치 명령이 있으면 그쪽을 우선한다. 설치 자체가 실패하면(오프라인 ·
+사설 레지스트리 인증 없음) 정지가 아니라 `Unverified: dependency install failed (<원인>)` 로
+적고 의존성 없이도 돌아가는 검사(grep/sed 기반 lint, CLI 진입점 직접 호출)만 계속한다.
 
 **(a) 케이스 집합 비교 — 실행된 것을 센다.**
 

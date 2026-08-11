@@ -73,10 +73,10 @@ fetch 해 Step 6 까지 재사용하고, `state != MERGED` 또는 `.mergeCommit.
 
 ## Step 6: 차등 검증 (`references/differential.md`)
 
-주장 1건마다 **PR 이전 상태**(`git show <merge>~1:<path>`, 또는 클론 안의 `<merge>~1` 워크트리)로 같은
-입력을 돌린다. 같은 `TEST_CMD` 를 공유하는 주장은 이전 상태 실행을 **1회만** 돌려 결과를 나눠 쓴다 —
-주장 개수만큼 반복 실행하지 않는다. 전·후 결과가 같으면 그 주장은 `unproven` — 전후 모두 통과하는
-검사는 아무것도 증명하지 않는다. 기본 on, `--no-diff-check` 로만 끄고 껐다는 사실을 리포트에 적는다.
+주장 1건마다 **PR 이전 상태**(머지 전략별 좌표 계산은 `differential.md` §1-1 — squash·단일커밋
+rebase 는 `~1`, 다중커밋 rebase 는 `~N`)로 같은 입력을 돌린다. 같은 `TEST_CMD` 를 공유하는 주장은 이전
+상태 실행을 **1회만** 돌려 결과를 나눠 쓴다. 전·후 결과가 같으면 `unproven` — 둘 다 통과하는 검사는
+아무것도 증명하지 않는다. 기본 on, `--no-diff-check` 로만 끄고 껐다는 사실을 리포트에 적는다.
 
 ## Step 7: 자기 반증 후 이슈화 (F-8)
 
