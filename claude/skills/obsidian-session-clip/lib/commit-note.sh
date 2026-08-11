@@ -64,22 +64,24 @@ main() {
     summary="$3"
     repo="${4:-}"
 
-    # Absolute note path, for the on-disk existence check.
+    # Absolute note path (for the on-disk existence check) and vault-relative
+    # pathspec (for `git add`/`git commit`), computed together so a relative
+    # $note isn't round-tripped relative -> absolute -> relative.
     case "$note" in
-        /*) note_abs="$note" ;;
-        *) note_abs="${vault}/${note}" ;;
+        /*)
+            note_abs="$note"
+            rel="${note_abs#"${vault}/"}"
+            ;;
+        *)
+            note_abs="${vault}/${note}"
+            rel="$note"
+            ;;
     esac
 
     if [ ! -f "$note_abs" ]; then
         printf 'ERROR: 노트 파일이 없다: %s\n' "$note_abs" >&2
         return 1
     fi
-
-    # Vault-relative pathspec. Both `git add` and `git commit` get it.
-    rel="$note_abs"
-    case "$rel" in
-        "${vault}/"*) rel="${rel#"${vault}/"}" ;;
-    esac
 
     if ! git -C "$vault" rev-parse --git-dir >/dev/null 2>&1; then
         warn "vault 가 git 저장소가 아니다 — 노트만 남기고 커밋을 건너뛴다: ${vault}"
