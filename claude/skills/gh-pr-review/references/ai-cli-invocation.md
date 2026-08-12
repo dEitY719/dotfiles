@@ -160,15 +160,17 @@ omit `--user` and let the current shell's `CLAUDE_CONFIG_DIR` win.
 
 opencode run "첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘." \
     --model codemate/CodeLLMPro \
+    --dir "$OPENCODE_WORKDIR" \
     --file "$PROMPT_FILE"
 ```
 
 The model is fixed to `codemate/CodeLLMPro`; no user-facing `--model`
 override is accepted. `codemate/CodeLLMMax` is intentionally absent from
 the code path. Because OpenCode is agentic and may have filesystem
-permissions, the dispatcher compares `git status --porcelain` before and
-after the run. Any change is reported as a failure and no PR comment is
-posted.
+permissions, the dispatcher creates an isolated temporary run directory,
+passes it with `--dir`, and removes it after the run. The PR worktree is
+not the OpenCode process directory, so relative agent writes do not leak
+into the caller checkout or race with `/simplify`.
 
 ## Step 5 dispatch procedure (`_gh_pr_review_run_ai`)
 
@@ -176,7 +178,7 @@ Step 5 of the skill delegates to `_gh_pr_review_run_ai` in
 `shell-common/functions/gh_pr_review.sh`. The function pipes
 `PROMPT_FILE` into the chosen CLI with the exact invocation shape
 documented above (`codex exec --color=never`, `agy --print`, `claude -p`,
-or `opencode run ... --model codemate/CodeLLMPro --file`, plus the
+or `opencode run ... --model codemate/CodeLLMPro --dir ... --file`, plus the
 `CLAUDE_CONFIG_DIR` injection for `--user`). Stdout streams to
 the user verbatim — no reformatting, no summarization, no truncation.
 
