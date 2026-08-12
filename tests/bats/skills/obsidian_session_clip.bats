@@ -321,7 +321,7 @@ EOF
 
     run bash "$VERIFY_CLIP" "$note"
     assert_success
-    assert_output --partial 'VERDICT: PASS'
+    assert_output --partial '[OK] verify-clip passed'
 }
 
 @test "verify-clip: FAIL when a frontmatter key is missing" {
@@ -330,7 +330,7 @@ EOF
 
     run bash "$VERIFY_CLIP" "$note"
     assert_failure
-    assert_output --partial 'FAIL'
+    assert_output --partial '[FAIL]'
     assert_output --partial 'source'
 }
 
@@ -340,6 +340,7 @@ EOF
 
     run bash "$VERIFY_CLIP" "$note"
     assert_failure
+    assert_output --partial '[FAIL]'
     assert_output --partial 'unprocessed'
 }
 
@@ -349,6 +350,7 @@ EOF
 
     run bash "$VERIFY_CLIP" "$note"
     assert_failure
+    assert_output --partial '[FAIL]'
     assert_output --partial 'NF-1'
 }
 
@@ -358,12 +360,14 @@ EOF
 
     run bash "$VERIFY_CLIP" "$note"
     assert_failure
+    assert_output --partial '[FAIL]'
     assert_output --partial '왜 저장했나'
 }
 
 @test "verify-clip: FAIL when the note does not exist" {
     run bash "$VERIFY_CLIP" "${WORK}/nope.md"
     assert_failure
+    assert_output --partial '[FAIL]'
 }
 
 # ── NF-3: no remote push anywhere in the skill ────────────────────────
