@@ -11,10 +11,12 @@ DECK=<output>.html
 grep -c 'class="slide[ "]' "$DECK"            # slide count
 grep -c 'class="deck-nav__dot"' "$DECK"       # must equal slide count
 grep -c 'class="next-cue"' "$DECK"            # must equal slide count - 1
-grep -c 'viz-menu\|cycleTheme\|toggleMenu\|downloadImage\|theme-dark' "$DECK"  # must be 0
-grep -c 'url("data:font\|url(data:font' "$DECK"   # must be 0 unless user asked
+# -E (not BRE '\|'): BSD grep (macOS default) doesn't support '\|' as
+# alternation — always use extended regex for portability here.
+grep -cE 'viz-menu|cycleTheme|toggleMenu|downloadImage|theme-dark' "$DECK"  # must be 0
+grep -cE 'url\("data:font|url\(data:font' "$DECK"   # must be 0 unless user asked
 grep -c 'aria-labelledby=' "$DECK"            # must equal slide count
-grep -n 'scroll-snap-type: y mandatory\|scroll-snap-align: start\|scroll-snap-stop: always\|IntersectionObserver\|ArrowDown\|ArrowUp\|prefers-reduced-motion\|@media print\|page-break-after' "$DECK"
+grep -nE 'scroll-snap-type: y mandatory|scroll-snap-align: start|scroll-snap-stop: always|IntersectionObserver|ArrowDown|ArrowUp|prefers-reduced-motion|@media print|page-break-after' "$DECK"
 ```
 
 Cross-checks a plain `grep` cannot do — dot `href`s resolving to real slide

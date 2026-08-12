@@ -12,14 +12,13 @@ description: >-
   this doc" — and also when the user points at a .md file and asks for
   slides, a deck, or a presentation without naming the format. The hard
   part is editorial curation (39 headings become ~15 slides on the
-  reference deck), so always run the outline step first. Deliberately
-  omits devx:visualize's hamburger
-  menu, theme toggle, and PNG export, and never base64-embeds a font.
-  Sister skill of [[devx-visualize]] — that one covers dashboards,
-  infographics, posters and horizontal decks; this one owns the vertical
-  scroll deck. Accepts `<input.md> [--out <path>] [--slides <n>]
-  [--outline-only] [--lang <code>] [--offline-font] [--no-open]` and
-  `-h`/`--help`/`help`.
+  reference deck), so always run the outline step first. Deliberately omits
+  devx:visualize's hamburger menu, theme toggle, and PNG export; never
+  base64-embeds a font. Sister skill of [[devx-visualize]] — that one
+  covers dashboards, infographics, posters and horizontal decks; this one
+  owns the vertical scroll deck. Accepts `<input.md> [--out <path>]
+  [--slides <n>] [--outline-only] [--lang <code>] [--offline-font]
+  [--no-open]` and `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 metadata:
   version: 0.1.0
@@ -43,97 +42,59 @@ output its content verbatim, then stop. **No file reads, no file writes.**
 
 Required positional: exactly one `<input.md>`. Flags: `--out <path>`,
 `--slides <n>`, `--outline-only`, `--lang <code>`, `--offline-font`,
-`--no-open`. Full table in `references/help.md`.
+`--no-open` — full table in `references/help.md`.
 
-The path must exist as a regular file — on a miss, print
-`[FAIL] devx:md-to-scrolldeck: input not found: <path>` and stop with
-exit 1. More than one positional → `[FAIL] one Markdown file per run`.
-A non-Markdown extension is a `[WARN]`, not a stop — the user may have a
-`.txt` that is really Markdown.
+Missing/unreadable path → `[FAIL] devx:md-to-scrolldeck: input not found:
+<path>` + exit 1. Two+ positionals → `[FAIL] one Markdown file per run`.
+Non-`.md` extension → `[WARN]`, not a stop.
 
-Resolve the output path now so later steps have it:
-
-1. `--out <path>` given → honor it verbatim.
-2. Otherwise → **same directory, same basename, `.html` extension** as the
-   input. `docs/vision.md` → `docs/vision.html`.
-
-If the output already exists, say so in Step 5's report; overwrite it.
+Output path: `--out <path>` if given, else input's dir + basename with
+`.html` (`docs/vision.md` → `docs/vision.html`); overwrite silently if it
+already exists, but say so in the final report.
 
 ## Step 2: Read + Outline (do not skip)
 
-Read the **entire** document before deciding anything — you need the ending
-to know what the opening should set up.
+Read the **entire** document first — you need the ending to know what the
+opening should set up. Then apply `references/slide-curation.md` to compress
+it into narrative beats; this is the skill's main quality lever, not a
+1:1 heading→slide `map()` (see that file for why).
 
-Then apply `references/slide-curation.md` to compress it into narrative
-beats. This is the main quality lever of the skill: the reference deck this
-format comes from turned 39 headings into 15 slides, merging four
-subsections into one slide and splitting another section across two. A 1:1
-heading→slide mapping produces a table of contents, which is exactly what a
-leadership audience does not want.
-
-Produce the **nav-dot outline** as an intermediate artifact and print it to
-the user before writing any HTML — one row per slide with number, `id` slug,
-label, archetype, `data-phase`, and the source line range, plus a line
-listing what was cut. Format in `references/slide-curation.md` → Step C.
-
-Then:
+Print the **nav-dot outline** (id, label, archetype, `data-phase`, source
+lines, plus what was cut — format in `slide-curation.md` → Step C) before
+writing any HTML.
 
 - `--outline-only` → stop here.
-- Fewer than 5 beats → `[WARN] too short for a deck — devx:visualize
-  one-pager is a better fit` and ask before continuing.
-- More than 20 beats → propose a scope cut rather than silently building 30
-  slides.
-- Otherwise → state that you are building it and continue. Do not wait for
-  approval unless the user asked to review first; the outline is printed so
-  they can interrupt.
+- Fewer than 5 beats → `[WARN] too short — devx:visualize one-pager fits better` and ask before continuing.
+- More than 20 beats → propose a scope cut, don't silently build 30 slides.
+- Otherwise → continue without waiting for approval; the printed outline is what lets the user interrupt, not a blocking prompt.
 
-## Step 3: Build from the Skeleton
+## Step 3: Build, Write, Verify, Deliver
 
 Copy `references/scroll-deck-skeleton.md` and replace its `YOUR ... HERE`
-tokens. **Never write this HTML from scratch** — the chrome (progress bar,
-`scroll-snap-type: y mandatory`, dot rail, `IntersectionObserver`, arrow
-keys, print styles, reduced-motion) is load-bearing and the checklist
-greps for it.
+tokens — **never write this HTML from scratch**, the chrome is load-bearing
+and the checklist greps for it. Per-slide: pick the archetype from the
+outline, vary the slide treatment so no three are identical, write real
+content only (never placeholder text or invented figures). Keep the CDN
+webfont link; base64-embed only behind `--offline-font`, after warning —
+see `references/font-and-bedrock-safety.md`. Do not add back `.viz-menu`,
+theme toggle, or PNG export — deliberately out of scope here.
 
-Per-slide: pick the archetype from the outline, choose a slide variant so
-consecutive slides never look identical, and write real content from the
-source — never placeholder text, never invented figures.
+Then, in this order: (1) **one `Write` call** for the whole file — see
+`font-and-bedrock-safety.md` § 2 for why one call, no chat echo; (2) run
+`references/checklist.md`'s grep block against the file you just wrote —
+any failure gets fixed and rewritten before you report, never report a
+broken dot rail as `[OK]`; (3) auto-open unless `--no-open` (`xdg-open` on
+Linux/WSL, `open` on macOS — never `wslview`, it errors on HTML).
 
-Fonts: keep the skeleton's **CDN webfont link**. Do not base64-embed a font
-unless `--offline-font` was passed, and then only after warning the user —
-see `references/font-and-bedrock-safety.md`.
-
-Out of scope by design: `.viz-menu`, theme toggle, PNG export. This is a
-deliberate divergence from `devx:visualize`; do not add them back.
-
-## Step 4: Verify
-
-Run `references/checklist.md` against the file you are about to write (or
-just wrote). Its grep block checks the mechanical items in one pass: slide
-count, dot count, cue count, absence of `.viz-menu` and base64 fonts,
-presence of snap / observer / arrow keys / print styles.
-
-Any failure → fix it before reporting. Do not report a deck with a broken
-dot rail as `[OK]`.
-
-## Step 5: Write, Open, Report
-
-Follow the delivery hard rules in `references/font-and-bedrock-safety.md`
-§ 2 — one `Write` call for the whole `.html`, never echo the HTML body into
-chat. Then auto-open unless `--no-open`: `xdg-open <file>.html` on
-Linux/WSL, `open <file>.html` on macOS. **Never `wslview`** — it errors on
-HTML.
-
-Then print the verdict:
+Report:
 
 ```
 [OK] devx:md-to-scrolldeck slides=<n> out=<path>
 file://<absolute-path>
 ```
 
-Follow it with the one-line slide list (ids only) and what was cut, so the
-user can judge the curation without opening the file. If any checklist item
-was waived, emit `[WARN] <item>: <reason>` instead of hiding it.
+Follow with the slide-id list and what was cut. Waived checklist items are
+`[WARN] <item>: <reason>`, never silent.
 
-Next: `Review the deck, or re-run with --slides <n> to force a different
-count, or --outline-only first next time to approve the beats before build.`
+Next: `Review the deck, or re-run with --slides <n> / --outline-only to
+adjust the curation before another build.`

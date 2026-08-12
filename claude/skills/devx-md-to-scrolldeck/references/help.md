@@ -44,14 +44,16 @@ Natural-language triggers work too: "이 md를 프레젠테이션으로 만들�
    this is editorial compression, not a heading-to-slide `map()`. Sections
    merge, split, or get cut.
 3. Prints the **nav-dot outline** (slide id, label, archetype, phase,
-   source lines, plus what was cut) and pauses for your reaction. This is
-   the main quality lever.
+   source lines, plus what was cut) before writing any HTML — this is the
+   main quality lever, and your chance to interrupt, but the skill does
+   not block waiting for a reply unless you asked to review first.
 4. Builds the deck from `references/scroll-deck-skeleton.md`: top progress
    bar, fixed header with phase + `01 / NN` counter, right-edge dot rail,
    `scroll-snap-type: y mandatory` slides, `IntersectionObserver` active
    tracking, arrow-key navigation, per-slide scroll cues.
-5. Verifies against `references/checklist.md`, writes the file in a single
-   `Write` call, opens it, and reports the slide count + `file://` URL.
+5. Writes the file in a single `Write` call, verifies it against
+   `references/checklist.md` (fixing and rewriting on any failure), opens
+   it, and reports the slide count + `file://` URL.
 
 ## What the skill will NOT do
 
