@@ -12,8 +12,8 @@ So: read the whole document first, decide the beats, *then* write HTML.
 
 Measured on the reference deck (`avatar-realization-vision-and-roadmap`):
 
-- source: ~25 headings (`##` + `###`) over 535 lines
-- deck: **14 slides**
+- source: 39 headings (`##` + `###`) over 535 lines
+- deck: **15 slides**
 - section 3 had 4 `###` subsections (Card / Role / Task / Skill) → collapsed
   into **one** slide, because they are four facets of a single idea
   ("what an avatar is made of")
@@ -73,7 +73,7 @@ a table and let them react. It costs one short message and saves a rewrite
 of a 3000-line file.
 
 ```
-Outline (14 slides)
+Outline (15 slides)
 
  #  id           label                       archetype        phase   source
  1  hero         아바타 현실화                hero             INTRO   L1-33
@@ -81,7 +81,7 @@ Outline (14 slides)
  3  definition   아바타의 정의                comparison       WHAT    L51-66
  4  anatomy      Card/Role/Task/Skill 구조    data-callout     WHAT    L68-121
  ...
-14  action       지금 시작할 한 가지          closing          START   L465-524
+15  action       지금 시작할 한 가지          closing          START   L465-524
 
 Cut: 참고 자료 (link list), 5.2/5.4 (folded into #6)
 ```
@@ -126,7 +126,7 @@ Rules that keep archetypes from degenerating:
 
 ## Step E — sanity-read the deck as a story
 
-Read the 14 headlines in order, out loud, ignoring everything else. They
+Read the 15 headlines in order, out loud, ignoring everything else. They
 should form a coherent argument on their own. If two consecutive headlines
 say the same thing, merge. If the sequence lurches, reorder or add a
 section-divider. This 60-second pass catches most curation errors.

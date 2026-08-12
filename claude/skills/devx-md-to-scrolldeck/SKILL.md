@@ -11,8 +11,9 @@ description: >-
   presentation", "turn this report into slides", "scrollytelling deck from
   this doc" — and also when the user points at a .md file and asks for
   slides, a deck, or a presentation without naming the format. The hard
-  part is editorial curation (25 headings become ~14 slides), so always run
-  the outline step first. Deliberately omits devx:visualize's hamburger
+  part is editorial curation (39 headings become ~15 slides on the
+  reference deck), so always run the outline step first. Deliberately
+  omits devx:visualize's hamburger
   menu, theme toggle, and PNG export, and never base64-embeds a font.
   Sister skill of [[devx-visualize]] — that one covers dashboards,
   infographics, posters and horizontal decks; this one owns the vertical
@@ -65,7 +66,7 @@ to know what the opening should set up.
 
 Then apply `references/slide-curation.md` to compress it into narrative
 beats. This is the main quality lever of the skill: the reference deck this
-format comes from turned ~25 headings into 14 slides, merging four
+format comes from turned 39 headings into 15 slides, merging four
 subsections into one slide and splitting another section across two. A 1:1
 heading→slide mapping produces a table of contents, which is exactly what a
 leadership audience does not want.
@@ -117,19 +118,11 @@ dot rail as `[OK]`.
 
 ## Step 5: Write, Open, Report
 
-Three rules, all non-negotiable — reasoning in
-`references/font-and-bedrock-safety.md`:
-
-1. **One `Write` call** writes the whole `.html`. `Write` overwrites, so a
-   second `Write` to the same path destroys the first. Refine with `Edit`.
-   For files over ~1000 lines, seed unique `<!-- DATA:slide-xyz -->`
-   anchors and fill them with targeted `Edit` calls.
-2. **Auto-open** unless `--no-open`: `xdg-open <file>.html` on Linux/WSL,
-   `open <file>.html` on macOS. **Never `wslview`** — it errors on HTML.
-3. **Never echo the HTML body into chat.** Not the full file, not a
-   preview, not the `<head>`, not a `<style>` excerpt. This avoids the AWS
-   Bedrock `Truncated event message received` abort and is harmless on the
-   Anthropic-direct path.
+Follow the delivery hard rules in `references/font-and-bedrock-safety.md`
+§ 2 — one `Write` call for the whole `.html`, never echo the HTML body into
+chat. Then auto-open unless `--no-open`: `xdg-open <file>.html` on
+Linux/WSL, `open <file>.html` on macOS. **Never `wslview`** — it errors on
+HTML.
 
 Then print the verdict:
 
