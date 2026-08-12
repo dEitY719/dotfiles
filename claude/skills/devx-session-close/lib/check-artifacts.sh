@@ -22,7 +22,15 @@
 
 set -uo pipefail
 
-RESERVED_GLOBS='*.tmp *.bak *.orig *.rej *.swp'
+_cra_lib_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+. "${_cra_lib_dir}/_repo_common.sh"
+
+# 편집/병합 부산물로 취급할 이름 글롭. shell-common/functions/file_cleanup.sh
+# 의 CLEANUP_DEFAULT_PATTERNS 와는 목적이 다르다 — 그쪽은 사람이 opt-in 으로
+# 지우는 "백업/구버전 파일" 목록(del_file 용, bash 배열)이고, 여기는 세션이
+# 끊기며 남는 "편집기·병합 도구가 흘린 임시 산출물"만 read-only 로 잡는다.
+# 둘을 하나로 합치면 서로 다른 의도의 글롭이 뒤섞인다.
+RESERVED_GLOBS='*.tmp *.bak *.orig *.rej *.swp *~'
 NOTE_COUNT=0
 SCRATCHPAD=""
 
@@ -61,9 +69,6 @@ warn() {
 # is_reserved_name <basename> — 편집/병합 부산물 이름이면 0.
 is_reserved_name() {
     _irn_base="$1"
-    case "$_irn_base" in
-        *~) return 0 ;;
-    esac
     for _irn_glob in $RESERVED_GLOBS; do
         # shellcheck disable=SC2254  # 글롭으로 쓰려고 일부러 따옴표를 뺀다
         case "$_irn_base" in
@@ -79,10 +84,11 @@ check_scratchpad() {
         warn "scratchpad 경로가 없다 — 건너뜀: ${_cs_dir}"
         return 0
     fi
-    _cs_count=$(find "$_cs_dir" -type f 2>/dev/null | grep -c . || true)
+    _cs_files=$(find "$_cs_dir" -type f 2>/dev/null)
+    _cs_count=$(printf '%s\n' "$_cs_files" | grep -c . || true)
     if [ "${_cs_count:-0}" -gt 0 ]; then
         note "scratchpad 잔재 ${_cs_count}건: ${_cs_dir}"
-        find "$_cs_dir" -type f 2>/dev/null | sed -n '1,10p' | sed 's/^/    /'
+        printf '%s\n' "$_cs_files" | sed -n '1,10p' | sed 's/^/    /'
     else
         pass "scratchpad 잔재 없음: ${_cs_dir}"
     fi
@@ -91,16 +97,10 @@ check_scratchpad() {
 check_repo_artifacts() {
     _cra_repo="$1"
 
-    if [ ! -d "$_cra_repo" ]; then
-        warn "${_cra_repo}: 경로가 없다 — 건너뜀"
+    if ! resolve_repo "$_cra_repo"; then
         return 0
     fi
-    if ! git -C "$_cra_repo" rev-parse --git-dir >/dev/null 2>&1; then
-        warn "${_cra_repo}: git 저장소가 아니다 — 건너뜀"
-        return 0
-    fi
-
-    _cra_top=$(git -C "$_cra_repo" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$_cra_repo")
+    _cra_top="$_RC_TOP"
     printf 'REPO: %s\n' "$_cra_top"
 
     _cra_empty=""
