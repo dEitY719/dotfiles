@@ -30,6 +30,9 @@ set -uo pipefail
 
 # 임시 파일 패턴 등 다른 검사는 check-artifacts.sh 가 맡는다.
 
+_cr_lib_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+. "${_cr_lib_dir}/_repo_common.sh"
+
 BLOCKED_COUNT=0
 NOTE_COUNT=0
 WARN_COUNT=0
@@ -144,17 +147,11 @@ check_unsynced() {
 check_repo() {
     _cr_repo="$1"
 
-    if [ ! -d "$_cr_repo" ]; then
-        warn "${_cr_repo}: 경로가 없다 — 건너뜀"
+    if ! resolve_repo "$_cr_repo"; then
         return 0
     fi
-    if ! git -C "$_cr_repo" rev-parse --git-dir >/dev/null 2>&1; then
-        warn "${_cr_repo}: git 저장소가 아니다 — 건너뜀"
-        return 0
-    fi
-
-    _cr_top=$(git -C "$_cr_repo" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$_cr_repo")
-    _cr_git=$(git -C "$_cr_repo" rev-parse --absolute-git-dir 2>/dev/null || printf '')
+    _cr_top="$_RC_TOP"
+    _cr_git="$_RC_GITDIR"
     printf 'REPO: %s\n' "$_cr_top"
 
     # --- 1. 진행중 merge / rebase / cherry-pick -----------------------------
@@ -171,16 +168,22 @@ EOF
         pass "${_cr_top}: 진행중인 merge/rebase/cherry-pick 없음"
     fi
 
-    # --- 2. 미커밋 변경 (추적 파일) ------------------------------------------
-    _cr_dirty=$(git -C "$_cr_repo" status --porcelain --untracked-files=no 2>/dev/null | count_lines)
+    # --- 2/3. 미커밋 변경 + untracked 파일 -----------------------------------
+    # git status 는 한 번만 부른다 — "??" 로 시작하는 줄이 untracked, 나머지
+    # 비어있지 않은 줄이 추적 파일의 미커밋 변경이다.
+    # --untracked-files=all — 디렉터리를 "?? newdir/" 로 뭉치지 않고 파일
+    # 단위로 펼친다. 원래 untracked 검사가 쓰던 `ls-files --others` 와
+    # 같은 단위여야 건수가 어긋나지 않는다.
+    _cr_status=$(git -C "$_cr_repo" status --porcelain --untracked-files=all 2>/dev/null)
+    _cr_dirty=$(printf '%s\n' "$_cr_status" | grep -v '^??' | count_lines)
+    _cr_untracked=$(printf '%s\n' "$_cr_status" | grep '^??' | count_lines)
+
     if [ "${_cr_dirty:-0}" -gt 0 ]; then
         blocked "${_cr_top}: 미커밋 변경 ${_cr_dirty}건"
     else
         pass "${_cr_top}: 미커밋 변경 없음"
     fi
 
-    # --- 3. untracked 파일 ---------------------------------------------------
-    _cr_untracked=$(git -C "$_cr_repo" ls-files --others --exclude-standard 2>/dev/null | count_lines)
     if [ "${_cr_untracked:-0}" -gt 0 ]; then
         blocked "${_cr_top}: untracked 파일 ${_cr_untracked}건 — 추적되지 않아 다음 세션이 못 찾는다"
     else

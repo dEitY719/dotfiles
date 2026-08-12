@@ -60,6 +60,15 @@ set_mode() {
     printf '%s\n' "$1" >"${HOME}/.dotfiles-setup-mode"
 }
 
+# Adds one commit to REPO that origin doesn't have yet — the "@{u}..HEAD
+# ahead" state every C-1/NF-4 unsynced-commit test needs before it varies
+# the origin URL or mode.
+commit_unsynced() {
+    printf 'more\n' >>"${REPO}/README.md"
+    git -C "$REPO" add -- README.md
+    git -C "$REPO" commit -q -m "local only"
+}
+
 # ── C-1: clean baseline ───────────────────────────────────────────────
 
 @test "C-1: a clean repo produces no BLOCKED lines" {
@@ -129,9 +138,7 @@ set_mode() {
 
 @test "C-1: a commit not yet on the remote is BLOCKED" {
     make_repo ahead
-    printf 'more\n' >>"${REPO}/README.md"
-    git -C "$REPO" add -- README.md
-    git -C "$REPO" commit -q -m "local only"
+    commit_unsynced
 
     run bash "$CHECK_REPOS" "$REPO"
     assert_failure
@@ -154,9 +161,7 @@ set_mode() {
 
 @test "NF-4: internal mode + github.com origin demotes an unsynced commit to NOTE" {
     make_repo internal
-    printf 'more\n' >>"${REPO}/README.md"
-    git -C "$REPO" add -- README.md
-    git -C "$REPO" commit -q -m "local only"
+    commit_unsynced
     git -C "$REPO" remote set-url origin 'https://github.com/testorg/testrepo.git'
     set_mode internal
 
@@ -172,9 +177,7 @@ set_mode() {
 
 @test "NF-4: the legacy numeric mode value 2 also means internal" {
     make_repo legacy
-    printf 'more\n' >>"${REPO}/README.md"
-    git -C "$REPO" add -- README.md
-    git -C "$REPO" commit -q -m "local only"
+    commit_unsynced
     git -C "$REPO" remote set-url origin 'git@github.com:testorg/testrepo.git'
     set_mode 2
 
@@ -186,9 +189,7 @@ set_mode() {
 
 @test "NF-4: internal mode does NOT demote a GHES origin" {
     make_repo ghes
-    printf 'more\n' >>"${REPO}/README.md"
-    git -C "$REPO" add -- README.md
-    git -C "$REPO" commit -q -m "local only"
+    commit_unsynced
     git -C "$REPO" remote set-url origin 'https://github.samsungds.net/testorg/testrepo.git'
     set_mode internal
 
@@ -200,9 +201,7 @@ set_mode() {
 
 @test "NF-4: external mode keeps a github.com unsynced commit BLOCKED" {
     make_repo external
-    printf 'more\n' >>"${REPO}/README.md"
-    git -C "$REPO" add -- README.md
-    git -C "$REPO" commit -q -m "local only"
+    commit_unsynced
     git -C "$REPO" remote set-url origin 'https://github.com/testorg/testrepo.git'
     set_mode external
 
