@@ -110,6 +110,32 @@ STUB
     done
 }
 
+# Env-export lines shared by _run_helper (bash) and _run_helper_zsh —
+# factored out so the two interpreter-specific wrappers below can't drift
+# on the fixtures/bypass plumbing they both depend on (issue #1328 review).
+#   _run_helper_env_lines <extra-path>
+# Pass GH_PR_LINT_BYPASS / GH_PR_LINT_TOOLS through ONLY when the parent
+# test set them (non-empty). Empty `GH_PR_LINT_TOOLS=''` now has explicit
+# "no tools match" semantics, so accidental empty exports would mask
+# intended detection.
+_run_helper_env_lines() {
+    local extra_path="$1"
+    printf '%s\n' \
+        "export DOTFILES_ROOT='${DOTFILES_ROOT}'" \
+        "export SHELL_COMMON='${SHELL_COMMON}'" \
+        "export DOTFILES_FORCE_INIT=1" \
+        "export DOTFILES_TEST_MODE=1" \
+        "export HOME='${HOME}'" \
+        "export TERM=dumb" \
+        "export PATH='${extra_path}/usr/local/bin:/usr/bin:/bin'" \
+        "export FAKE_TOX_RC='${FAKE_TOX_RC:-0}'" \
+        "export FAKE_SHELLCHECK_RC='${FAKE_SHELLCHECK_RC:-0}'" \
+        "export FAKE_ACTIONLINT_RC='${FAKE_ACTIONLINT_RC:-0}'" \
+        "export FAKE_PRE_COMMIT_RC='${FAKE_PRECOMMIT_RC:-0}'" \
+        "${GH_PR_LINT_BYPASS:+export GH_PR_LINT_BYPASS='${GH_PR_LINT_BYPASS}'}" \
+        "${GH_PR_LINT_TOOLS:+export GH_PR_LINT_TOOLS='${GH_PR_LINT_TOOLS}'}"
+}
+
 # Run a snippet in bash with the helper sourced and PATH controlled.
 #   _run_helper <path-mode> <snippet>
 # path-mode:
@@ -121,24 +147,8 @@ _run_helper() {
     if [ "$mode" = "stubs" ]; then
         extra_path="${STUB_BIN}:"
     fi
-    # Pass GH_PR_LINT_BYPASS / GH_PR_LINT_TOOLS through ONLY when the
-    # parent test set them (non-empty). Empty `GH_PR_LINT_TOOLS=''` now
-    # has explicit "no tools match" semantics, so accidental empty
-    # exports would mask intended detection.
     run bash --noprofile --norc -c "
-        export DOTFILES_ROOT='${DOTFILES_ROOT}'
-        export SHELL_COMMON='${SHELL_COMMON}'
-        export DOTFILES_FORCE_INIT=1
-        export DOTFILES_TEST_MODE=1
-        export HOME='${HOME}'
-        export TERM=dumb
-        export PATH='${extra_path}/usr/local/bin:/usr/bin:/bin'
-        export FAKE_TOX_RC='${FAKE_TOX_RC:-0}'
-        export FAKE_SHELLCHECK_RC='${FAKE_SHELLCHECK_RC:-0}'
-        export FAKE_ACTIONLINT_RC='${FAKE_ACTIONLINT_RC:-0}'
-        export FAKE_PRE_COMMIT_RC='${FAKE_PRECOMMIT_RC:-0}'
-        ${GH_PR_LINT_BYPASS:+export GH_PR_LINT_BYPASS='${GH_PR_LINT_BYPASS}'}
-        ${GH_PR_LINT_TOOLS:+export GH_PR_LINT_TOOLS='${GH_PR_LINT_TOOLS}'}
+        $(_run_helper_env_lines "$extra_path")
         cd '${REPO_DIR}' || exit 99
         . '${DOTFILES_ROOT}/shell-common/functions/gh_pr_lint.sh'
         ${snippet}
@@ -159,21 +169,9 @@ _run_helper_zsh() {
         extra_path="${STUB_BIN}:"
     fi
     run zsh -f -c "
-        export DOTFILES_ROOT='${DOTFILES_ROOT}'
-        export SHELL_COMMON='${SHELL_COMMON}'
-        export DOTFILES_FORCE_INIT=1
-        export DOTFILES_TEST_MODE=1
+        $(_run_helper_env_lines "$extra_path")
         export DOTFILES_ROOT_NO_CANONICALIZE=1
-        export HOME='${HOME}'
         export ZDOTDIR='${HOME}'
-        export TERM=dumb
-        export PATH='${extra_path}/usr/local/bin:/usr/bin:/bin'
-        export FAKE_TOX_RC='${FAKE_TOX_RC:-0}'
-        export FAKE_SHELLCHECK_RC='${FAKE_SHELLCHECK_RC:-0}'
-        export FAKE_ACTIONLINT_RC='${FAKE_ACTIONLINT_RC:-0}'
-        export FAKE_PRE_COMMIT_RC='${FAKE_PRECOMMIT_RC:-0}'
-        ${GH_PR_LINT_BYPASS:+export GH_PR_LINT_BYPASS='${GH_PR_LINT_BYPASS}'}
-        ${GH_PR_LINT_TOOLS:+export GH_PR_LINT_TOOLS='${GH_PR_LINT_TOOLS}'}
         cd '${REPO_DIR}' || exit 99
         . '${DOTFILES_ROOT}/shell-common/functions/gh_pr_lint.sh'
         ${snippet}
