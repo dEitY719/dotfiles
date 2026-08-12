@@ -111,6 +111,14 @@ _source_module() {
     assert_output --partial "performance"
 }
 
+@test "gh_pr_review: parser errors preserve exit 2" {
+    _source_module
+
+    run gh_pr_review --ai chatgpt 99
+    assert_failure 2
+    assert_output --partial "Unknown --ai value: 'chatgpt'"
+}
+
 # ---------------------------------------------------------------------------
 # _gh_pr_review_require_ai_cli — PATH pre-flight
 # ---------------------------------------------------------------------------
@@ -163,6 +171,16 @@ EOF
     PATH="" run _gh_pr_review_require_ai_cli opencode
     assert_failure 1
     assert_output --partial "Required CLI 'opencode' not found in PATH"
+}
+
+@test "gh_pr_review: opencode non-internal preflight returns 1" {
+    _source_module
+    _stub_gh_noop
+    _dotfiles_setup_mode() { echo external; }
+
+    run gh_pr_review --ai opencode 1337 origin
+    assert_failure 1
+    assert_output --partial "--ai opencode is internal-PC only"
 }
 
 # ---------------------------------------------------------------------------
