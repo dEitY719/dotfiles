@@ -1,15 +1,12 @@
 ---
 name: devx:pr-review-all
 description: >-
-  Fan out every available reviewer on one PR in parallel — agy ∥ codex
-  second opinions ∥ a /simplify auto-fix pass (which commits its own
-  changes) — then run a reply pass over the review comments.
-  Use for /devx:pr-review-all, /devx-pr-review-all,
-  "PR 다중 리뷰어 병렬로", "agy codex simplify 한번에 돌려",
-  "PR 99 전체 리뷰". A composition skill — distinct from gh:pr-review
-  (single external AI, one comment). Reused by gh:issue-flow as its post-PR
-  quality gate. Accepts `<PR#> [remote] [--defer-reply M] [--no-reply]`
-  and `-h`/`--help`/`help`.
+  Fan out every available reviewer on one PR in parallel: agy, codex,
+  opencode, and a /simplify auto-fix pass, then run a reply pass. Use for
+  /devx:pr-review-all, /devx-pr-review-all, "PR 다중 리뷰어 병렬로",
+  "agy codex opencode simplify 한번에 돌려", "PR 99 전체 리뷰". Distinct from
+  gh:pr-review, and reused by gh:issue-flow as its post-PR quality gate.
+  Accepts `<PR#> [remote] [--defer-reply M] [--no-reply]`.
 allowed-tools: Bash, Read, Grep, Agent
 metadata:
   model_recommendation:
@@ -23,13 +20,10 @@ metadata:
 
 ## Role
 
-Orchestrate a single PR through all available reviewers at once (agy ∥
-codex ∥ `/simplify`), commit any auto-fix changes, then reply to the review
-comments — inline (deterministic) or
-deferred. No approve / request-changes decision (that is `gh:pr-approve`) and
-no per-comment authoring beyond the delegated `gh:pr-reply`. Every reviewer is
-soft-fail: a missing CLI or a transient error skips that one lane and the
-rest continue.
+Orchestrate a single PR through all available reviewers at once (agy,
+codex, opencode, `/simplify`), commit any auto-fix changes, then reply to review
+comments inline or deferred. No approve/request-changes decision and no manual
+per-comment authoring. Every reviewer lane is soft-fail.
 
 ## Help
 
@@ -40,46 +34,36 @@ it verbatim, then stop. No API calls.
 
 Source and delegate to `devx_pr_review_all_parse`:
 `source "${SHELL_COMMON}/functions/devx_pr_review_all.sh"` then
-`devx_pr_review_all_parse "$@"`. On `help_requested=1` follow Help; on exit 2
-print the stderr line and stop. Capture `pr`, `remote`, `reply_mode`
-(inline|defer|none), `reply_delay`. Record `START_TS=$(date +%s)`.
+`devx_pr_review_all_parse "$@"`. On help, follow Help; on exit 2, print stderr
+and stop. Capture `pr`, `remote`, `reply_mode`, `reply_delay`, and `START_TS`.
 
 ## Step 2: Pre-flight
 
-- Resolve `TARGET_REPO` for `<remote>`: `gh repo view "$(git remote get-url
-  <remote>)" --json nameWithOwner -q .nameWithOwner`; failure → exit 1 `Cannot
-  resolve remote '<remote>' to a repo`. Pass `-R <TARGET_REPO>` on every `gh
-  pr`/`gh repo` call below so a non-origin `<remote>` is honored.
+- Resolve `TARGET_REPO` for `<remote>` and pass `-R <TARGET_REPO>` on every
+  `gh pr`/`gh repo` call.
 - PR state must be `OPEN` and not draft (`gh pr view <pr> -R <TARGET_REPO>`)
   → else exit 1 `PR #<pr> is <state>; aborting`.
 - `gh auth status` returns 0 → else exit 1 with the gh error line.
-- **auto-fix branch context**: if the current branch is not the PR head
-  branch, run `gh pr checkout <pr> -R <TARGET_REPO>`; if already on it (e.g.
-  the issue-flow worktree path), skip. `/simplify` ignores PR# and acts on
-  the working tree, so this checkout is load-bearing
-  (`references/constraints.md`).
+- **auto-fix branch context**: if not on the PR head branch, run
+  `gh pr checkout <pr> -R <TARGET_REPO>`; `/simplify` acts on the working tree.
 
 ## Step 3: Review + auto-fix gate (dispatch all lanes in ONE turn)
 
-The three lanes dispatch together in a single turn. agy and codex are
-comment-only (never touch the working tree), so they run fully in parallel
-with everything else. `/simplify` mutates the PR working tree and commits its
-own changes. Each lane is soft-fail — a failure marks that lane
-`[SKIP]`/`[WARN]` and the others continue.
+The four lanes dispatch together in a single turn. agy/codex/opencode are
+comment-only; `/simplify` may mutate and commit. Each lane is soft-fail.
 
 - **agy** — if `command -v agy`, an Agent runs
   `Skill(gh:pr-review, "--ai agy <pr> <remote>")`; absent or non-zero exit → SKIP/WARN.
 - **codex** — if `command -v codex`, an Agent runs
   `Skill(gh:pr-review, "--ai codex <pr> <remote>")`; absent or non-zero exit → SKIP/WARN.
-- **auto-fix** — an Agent runs the built-in `/simplify` (working-tree diff;
-  PR# is ignored — hence the Step 2 checkout). `git status --porcelain`
-  non-empty → `git commit -am "refactor(<scope>): simplify per /simplify"`.
-  **Never a bare `git commit`** — it hangs on the editor in a non-interactive
-  shell; always pass `-m`.
+- **opencode** — if `command -v opencode` and `_dotfiles_setup_mode` is
+  `internal`, an Agent runs
+  `Skill(gh:pr-review, "--ai opencode <pr> <remote>")`; absent, non-internal,
+  or non-zero exit → SKIP/WARN.
+- **auto-fix** — an Agent runs built-in `/simplify`; if `git status --porcelain`
+  is non-empty, commit with `git commit -am "refactor(<scope>): simplify per /simplify"`.
 
-`/code-review --fix` is deliberately NOT part of this lane — it is
-user-invocation-only since Claude Code v2.1.215 and cannot be called from a
-skill (`references/constraints.md`).
+Never add `/code-review --fix`; it is user-invocation-only (`references/constraints.md`).
 
 ## Step 4: Push the auto-fix commit (only if something changed)
 
@@ -91,24 +75,17 @@ Await all lanes, then:
 ## Step 5: pr-reply (per reply_mode)
 
 - `inline` (default) → run `Skill(gh:pr-reply, "<pr> <remote>")` immediately.
-  Step 3 was awaited, so agy/codex comments are already posted — reply
-  order is deterministic, no delay needed. The `<remote>` is threaded so
-  `gh:pr-reply` resolves the same target repo this skill did, not gh's
-  default-repo heuristic (`references/constraints.md`).
 - `defer` → `Skill(devx:schedule, "--time <reply_delay> \"/gh-pr-reply <pr> <remote>\"")`.
 - `none` → skip.
 
 ## Step 6: Report
 
 Print exactly one `[OK]`/`[SKIP]`/`[WARN]` line, e.g.
-`[OK] PR #<pr> reviewed (agy:OK codex:SKIP simplify:committed) — reply: inline`.
+`[OK] PR #<pr> reviewed (agy:OK codex:SKIP opencode:OK simplify:committed) — reply: inline`.
 
 ## Constraints (full rationale: `references/constraints.md`)
 
-- Every reviewer lane is soft-fail — never hard-fail on a missing/erroring CLI.
-- `/simplify` mutates the working tree — it commits its own changes before Step 4 pushes.
-- Never add a `/code-review` lane back — it is user-invocation-only since
-  Claude Code v2.1.215 and a skill cannot invoke it.
-- Never a bare `git commit` — always `-m` (non-interactive hang guard).
-- Inline reply is the deterministic path; `--defer-reply` is minutes-only and not a guarantee.
+- Reviewer lanes are soft-fail; `/simplify` commits its own changes before push.
+- Never add `/code-review`; never run bare `git commit`.
+- Inline reply is deterministic; `--defer-reply` is minutes-only and not a guarantee.
 - No approve / request-changes here — that is `gh:pr-approve`.
