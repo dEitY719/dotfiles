@@ -58,6 +58,18 @@ _gh_pr_lint__filter_changed() {
     # Stdin: list of changed files (one per line).
     # Args:  glob pattern(s) to keep (e.g. '*.sh', '.github/workflows/*').
     # Stdout: filtered subset, preserving order.
+    #
+    # zsh caveat (issue #1328): this file is sourced into the *caller's*
+    # shell, which may be zsh. In zsh's native mode an unquoted parameter
+    # in a `case` arm expands to a literal string, not a glob — so
+    # `case "$_f" in $_pat)` never matches and the whole lint gate
+    # silently filters everything out. GLOB_SUBST restores the ksh/bash
+    # behaviour (glob chars from the expansion stay active). KSH_GLOB does
+    # NOT fix this. LOCAL_OPTIONS scopes the setopt to this function, so
+    # the caller's interactive shell options are left untouched.
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        setopt LOCAL_OPTIONS GLOB_SUBST
+    fi
     _pat="$1"
     while IFS= read -r _f; do
         # Use a case-glob — POSIX, no GNU-only flags.

@@ -146,6 +146,41 @@ _run_helper() {
     "
 }
 
+# zsh counterpart of _run_helper (issue #1328).
+#   _run_helper_zsh <path-mode> <snippet>
+# Same contract and same fixtures, but the snippet runs under `zsh -f -c`
+# sourcing ONLY gh_pr_lint.sh — deliberately NOT zsh/main.zsh (run_in_zsh).
+# The bug this guards against is a zsh *default-mode* globbing difference,
+# so the reproduction must not be masked by whatever options main.zsh sets.
+_run_helper_zsh() {
+    local mode="$1" snippet="$2"
+    local extra_path=""
+    if [ "$mode" = "stubs" ]; then
+        extra_path="${STUB_BIN}:"
+    fi
+    run zsh -f -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        export SHELL_COMMON='${SHELL_COMMON}'
+        export DOTFILES_FORCE_INIT=1
+        export DOTFILES_TEST_MODE=1
+        export DOTFILES_ROOT_NO_CANONICALIZE=1
+        export HOME='${HOME}'
+        export ZDOTDIR='${HOME}'
+        export TERM=dumb
+        export PATH='${extra_path}/usr/local/bin:/usr/bin:/bin'
+        export FAKE_TOX_RC='${FAKE_TOX_RC:-0}'
+        export FAKE_SHELLCHECK_RC='${FAKE_SHELLCHECK_RC:-0}'
+        export FAKE_ACTIONLINT_RC='${FAKE_ACTIONLINT_RC:-0}'
+        export FAKE_PRE_COMMIT_RC='${FAKE_PRECOMMIT_RC:-0}'
+        ${GH_PR_LINT_BYPASS:+export GH_PR_LINT_BYPASS='${GH_PR_LINT_BYPASS}'}
+        ${GH_PR_LINT_TOOLS:+export GH_PR_LINT_TOOLS='${GH_PR_LINT_TOOLS}'}
+        cd '${REPO_DIR}' || exit 99
+        . '${DOTFILES_ROOT}/shell-common/functions/gh_pr_lint.sh'
+        ${snippet}
+        echo \"rc=\$?\"
+    "
+}
+
 # ---------------------------------------------------------------------------
 # Loading: helper exists in bash and zsh
 # ---------------------------------------------------------------------------
@@ -216,6 +251,75 @@ TOX
     assert_output "1"
     # README.md must NOT appear in the shellcheck call
     run grep -c 'README.md' "$TOOL_LOG"
+    assert_output "0"
+}
+
+# ---------------------------------------------------------------------------
+# Case 2z — issue #1328 regression: the same filtering must work when the
+# helper is sourced into a *zsh* session.
+#
+# In zsh's native mode an unquoted parameter used as a `case` pattern is a
+# literal string, not a glob, so `case "$_f" in $_pat)` never matched and
+# _gh_pr_lint__filter_changed returned nothing. The guard then reported
+# "no lint tools detected — skip" (rc=0) even with .sh files changed and
+# shellcheck available — a silent no-op quality gate. The fix is
+# `setopt LOCAL_OPTIONS GLOB_SUBST` inside the ZSH_VERSION branch.
+# ---------------------------------------------------------------------------
+
+@test "zsh (#1328): _gh_pr_lint__filter_changed globs via a variable pattern" {
+    _run_helper_zsh no-stubs \
+        "printf '%s\n' foo.sh README.md sub/bar.sh .github/workflows/ci.yml \
+             | _gh_pr_lint__filter_changed '*.sh'"
+    assert_output --partial "rc=0"
+    assert_line "foo.sh"
+    assert_line "sub/bar.sh"
+    refute_line "README.md"
+    refute_line ".github/workflows/ci.yml"
+}
+
+@test "zsh (#1328): shellcheck detected → runs only on changed .sh files" {
+    _stage_changes "foo.sh:echo hi" "bar.sh:echo bye" "README.md:doc"
+    _run_helper_zsh stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "rc=0"
+    # Pre-fix this said "no lint tools detected — skip" instead.
+    assert_output --partial "running shellcheck on 2 file(s)"
+    assert_output --partial "shellcheck passed"
+    refute_output --partial "no lint tools detected"
+    run grep -cF '[-x] [-e] [SC1090,SC1091] [-S] [warning]' "$TOOL_LOG"
+    assert_output "1"
+    run grep -cF '[bar.sh]' "$TOOL_LOG"
+    assert_output "1"
+    run grep -cF '[foo.sh]' "$TOOL_LOG"
+    assert_output "1"
+    run grep -c 'README.md' "$TOOL_LOG"
+    assert_output "0"
+}
+
+@test "zsh (#1328): actionlint detected → runs only on changed workflow files" {
+    _stage_changes ".github/workflows/ci.yml:on: push" "README.md:doc"
+    _run_helper_zsh stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "rc=0"
+    assert_output --partial "running actionlint on 1 file(s)"
+    assert_output --partial "actionlint passed"
+    refute_output --partial "no lint tools detected"
+    run grep -cF 'actionlint [.github/workflows/ci.yml]' "$TOOL_LOG"
+    assert_output "1"
+    # No .sh changed → the shellcheck fallback must stay silent.
+    run grep -c '^shellcheck' "$TOOL_LOG"
+    assert_output "0"
+    run grep -c 'README.md' "$TOOL_LOG"
+    assert_output "0"
+}
+
+@test "bash (#1328): actionlint detected → runs only on changed workflow files" {
+    _stage_changes ".github/workflows/ci.yml:on: push" "README.md:doc"
+    _run_helper stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "rc=0"
+    assert_output --partial "running actionlint on 1 file(s)"
+    assert_output --partial "actionlint passed"
+    run grep -cF 'actionlint [.github/workflows/ci.yml]' "$TOOL_LOG"
+    assert_output "1"
+    run grep -c '^shellcheck' "$TOOL_LOG"
     assert_output "0"
 }
 
