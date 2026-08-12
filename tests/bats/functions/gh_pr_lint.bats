@@ -275,6 +275,19 @@ TOX
     refute_line ".github/workflows/ci.yml"
 }
 
+# PR #1330 review (codex): the fix relies on `setopt LOCAL_OPTIONS GLOB_SUBST`
+# staying scoped to _gh_pr_lint__filter_changed — GLOB_SUBST must be back off
+# in the caller's shell once the function returns. Pin that directly instead
+# of only inferring it from LOCAL_OPTIONS semantics.
+@test "zsh (#1328): GLOB_SUBST does not leak past _gh_pr_lint__filter_changed" {
+    _run_helper_zsh no-stubs \
+        "printf '%s\n' foo.sh | _gh_pr_lint__filter_changed '*.sh' >/dev/null
+         if setopt | grep -qi globsubst; then echo OPTION_LEAKED; else echo OPTION_SCOPED; fi"
+    assert_output --partial "rc=0"
+    assert_output --partial "OPTION_SCOPED"
+    refute_output --partial "OPTION_LEAKED"
+}
+
 @test "zsh (#1328): shellcheck detected → runs only on changed .sh files" {
     _stage_changes "foo.sh:echo hi" "bar.sh:echo bye" "README.md:doc"
     _run_helper_zsh stubs '_gh_pr_lint_run main 2>&1'
