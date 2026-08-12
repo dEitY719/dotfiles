@@ -47,6 +47,7 @@ alias cd-kk='cd ~/para/project/karakeep'
 alias cd-lak='cd ~/para/project/llm-agent-kit'
 alias cd-ll='cd ~/para/project/litellm'
 alias cd-op='cd ~/para/project/obsidian-para'
+alias cd-opc='cd ~/para/project/obsidian-para-company'
 alias cd-qf='cd ~/para/project/quantfolio'
 alias cd-ss='cd ~/para/project/stock-steward'
 # Note: Project-specific CLI commands are defined in project-cli-aliases.sh
