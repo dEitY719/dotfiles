@@ -86,9 +86,9 @@ must hold; any failing is one warning line, not a failed run. Step 8 is report-o
 bash "${SKILL_DIR}/lib/verify-sync.sh" "$VAULT" ${PEER:+--peer "$PEER"} ${RESOLVED:+--resolved "$RESOLVED"}
 ```
 
-Show every FAIL and SUGGEST line verbatim; never edit `.gitignore` yourself.
-**Last line** = the next action: the pending follow-up command
-(`/obsidian-resolve-conflict <side>`, or `--vault <vault>/90-personal`) or `해결 완료`.
+Show every FAIL/SUGGEST line from `verify-sync.sh` verbatim; never edit `.gitignore`.
+**Last line** = `[OK] 해결 완료`, `[FAIL] <reason>`, or the pending follow-up
+command (`/obsidian-resolve-conflict <side>` / `--vault <vault>/90-personal`); never bare `해결 완료`.
 
 ## Constraints
 
