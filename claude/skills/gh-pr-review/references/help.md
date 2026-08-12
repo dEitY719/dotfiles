@@ -61,8 +61,8 @@ claude -p ...`.
 ## `--ai opencode`
 
 Internal-PC only. The lane uses fixed model `codemate/CodeLLMPro`,
-passes the prompt file with `--file`, and refuses to post if the run
-changes the working tree.
+passes the prompt file with `--file`, and runs in an isolated temporary
+directory via `--dir` so relative writes do not touch the PR checkout.
 
 ## Usage
 

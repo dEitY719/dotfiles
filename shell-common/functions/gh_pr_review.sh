@@ -350,8 +350,7 @@ _gh_pr_review_run_ai() {
     local _rc=0
     local _prompt_size
     local _prompt_content
-    local _before_status
-    local _after_status
+    local _opencode_workdir
     local _opencode_instruction="첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘."
     case "$ai" in
     codex)
@@ -385,22 +384,18 @@ _gh_pr_review_run_ai() {
         if ! _gh_pr_review_require_opencode_internal >"$_stderr_file" 2>&1; then
             _rc=1
         else
-            _before_status=$(git status --porcelain 2>/dev/null || echo "")
+            _opencode_workdir=$(mktemp -d "${TMPDIR:-/tmp}/gh-pr-review-opencode.XXXXXX") || {
+                echo "Could not create opencode run directory under ${TMPDIR:-/tmp}" >"$_stderr_file"
+                _rc=1
+            }
+        fi
+        if [ "$_rc" -eq 0 ]; then
             opencode run "$_opencode_instruction" \
                 --model codemate/CodeLLMPro \
+                --dir "$_opencode_workdir" \
                 --file "$prompt_file" 2>"$_stderr_file" || _rc=$?
-            _after_status=$(git status --porcelain 2>/dev/null || echo "")
-            if [ "$_before_status" != "$_after_status" ]; then
-                {
-                    printf '%s\n' "opencode review changed the working tree; refusing to continue"
-                    printf '%s\n' "before:"
-                    printf '%s\n' "${_before_status:-<clean>}"
-                    printf '%s\n' "after:"
-                    printf '%s\n' "${_after_status:-<clean>}"
-                } >>"$_stderr_file"
-                [ "$_rc" -eq 0 ] && _rc=1
-            fi
         fi
+        [ -n "$_opencode_workdir" ] && rm -rf "$_opencode_workdir"
         ;;
     *)
         echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude, opencode)" >&2
@@ -851,8 +846,8 @@ Flags:
 OpenCode:
   --ai opencode                internal-PC only; fixed model
                                codemate/CodeLLMPro; prompt is attached
-                               with --file and the working tree must not
-                               change
+                               with --file; execution runs in an
+                               isolated temporary directory
 
 Positional:
   <pr-number>                  optional — auto-detect from current
