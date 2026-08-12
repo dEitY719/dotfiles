@@ -990,6 +990,7 @@ EOF
     assert_success
     assert_output --partial "opencode args: [run]"
     assert_output --partial "[--model] [codemate/CodeLLMPro]"
+    assert_output --partial "[--dir]"
     assert_output --partial "[--file] [$f]"
 }
 
@@ -1014,7 +1015,7 @@ EOF
     refute_output --partial "SHOULD_NOT_RUN"
 }
 
-@test "run_ai opencode: working-tree mutation is detected and returned as failure" {
+@test "run_ai opencode: relative writes are isolated outside caller working tree" {
     _source_module
     _dotfiles_setup_mode() { echo internal; }
     local repo="$TEST_TEMP_HOME/repo"
@@ -1028,9 +1029,18 @@ EOF
 
     local stub_dir="$TEST_TEMP_HOME/bin"
     mkdir -p "$stub_dir"
-    cat >"$stub_dir/opencode" <<EOF
+    cat >"$stub_dir/opencode" <<'EOF'
 #!/bin/sh
-printf 'after\n' >>"$repo/tracked.txt"
+dir=""
+prev=""
+for arg in "$@"; do
+    if [ "$prev" = "--dir" ]; then
+        dir="$arg"
+    fi
+    prev="$arg"
+done
+printf 'opencode dir: %s\n' "$dir"
+printf 'agent write\n' >"$dir/tracked.txt"
 echo "review output"
 exit 0
 EOF
@@ -1043,9 +1053,12 @@ EOF
     (
         cd "$repo"
         run _gh_pr_review_run_ai opencode "$f"
-        assert_failure 1
+        assert_success
         assert_output --partial "review output"
-        assert_output --partial "opencode review changed the working tree"
+        assert_equal "$(cat tracked.txt)" "before"
+        dir="$(printf '%s\n' "$output" | sed -n 's/^opencode dir: //p')"
+        [ -n "$dir" ]
+        [ ! -d "$dir" ]
     )
 }
 
