@@ -54,6 +54,9 @@ Output, one row per path:
 
 With --apply each resolved row is echoed as:
   APPLIED<TAB><action><TAB><path>
+A delete row whose path had already vanished resolves to nothing and is
+echoed instead as:
+  SKIPPED<TAB>delete<TAB><path><TAB>already absent
 
 Exits non-zero when the vault is not a git repository, when a non-merge
 operation is in progress, or when an --apply step fails.
@@ -161,7 +164,7 @@ collect_paths() {
 }
 
 classify() {
-    local path base
+    local path
     A_ROWS=()
     B_ROWS=()
     C_ROWS=()
@@ -173,14 +176,16 @@ classify() {
     fi
 
     for path in ${PATHS[@]+"${PATHS[@]}"}; do
-        base="${path##*/}"
         case "$path" in
             "${NESTED_DIR}" | "${NESTED_DIR}"/*)
                 C_ROWS+=("nested-repo${TAB}${path}")
                 continue
                 ;;
         esac
-        if [ "$base" = "$ARTIFACT" ]; then
+        # Vault root only. obsidian-git writes its artifact there and nowhere
+        # else, so a basename match would delete a same-named user note living
+        # deeper in the tree (e.g. 40-Areas/conflict-files-obsidian-git.md).
+        if [ "$path" = "$ARTIFACT" ]; then
             in_list "delete${TAB}${path}" ${A_ROWS[@]+"${A_ROWS[@]}"} || A_ROWS+=("delete${TAB}${path}")
             continue
         fi
@@ -203,6 +208,9 @@ apply_row() {
     local action="$1" path="$2"
     case "$action" in
         delete)
+            # Neither in the index nor on disk: something else removed it
+            # between classify() and here. Nothing was applied, so say so
+            # rather than claiming a deletion that never happened.
             if is_tracked "$path"; then
                 run_git_index rm -q -f -- "$path" || return 1
             elif [ -e "${VAULT}/${path}" ]; then
@@ -210,6 +218,9 @@ apply_row() {
                     err "아티팩트 삭제 실패: ${path}"
                     return 1
                 }
+            else
+                printf 'SKIPPED\t%s\t%s\talready absent\n' "$action" "$path"
+                return 0
             fi
             ;;
         rm-cached)

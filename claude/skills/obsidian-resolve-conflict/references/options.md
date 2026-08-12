@@ -58,6 +58,7 @@ glob 이 사용자명 차이를 흡수한다 — Windows 사용자명 ≠ WSL �
 | `SIDE` | `windows` / `wsl` |
 | `VAULT` | 해석된 대상 절대경로 |
 | `VAULT_ORIGIN` | `git remote get-url origin` |
+| `REMOTE` | vault 의 git remote 이름 (항상 `origin`) — fetch/push 대상 |
 | `BRANCH` / `UPSTREAM` | 현재 브랜치와 그 upstream (없으면 빈 문자열) |
 | `BACKUP_SHA` | 시작 시점 HEAD — 되돌리기 기준점 |
 | `PEER` / `PEER_ORIGIN` | 반대편 클론과 그 origin (없으면 빈 문자열) |

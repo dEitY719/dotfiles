@@ -40,9 +40,9 @@ stop. No API calls, no git writes.
 eval "$(bash "${SKILL_DIR}/lib/resolve-vault.sh" "$SIDE" ${VAULT_OPT:+--vault "$VAULT_OPT"})"
 ```
 
-It sets `MODE SIDE VAULT VAULT_ORIGIN BRANCH UPSTREAM BACKUP_SHA PEER
-PEER_ORIGIN PEER_MATCH PUSH_ALLOWED PUSH_BLOCK_REASON` (mode detection per
-`references/pc-modes.md`). A non-zero exit is fatal — surface its stderr
+It sets `MODE SIDE VAULT VAULT_ORIGIN REMOTE BRANCH UPSTREAM BACKUP_SHA
+PEER PEER_ORIGIN PEER_MATCH PUSH_ALLOWED PUSH_BLOCK_REASON` (mode detection
+per `references/pc-modes.md`). A non-zero exit is fatal — surface its stderr
 verbatim and stop. **Never** create a directory to make a path resolve (NF-4).
 
 ## Step 2-3: Preflight (NF-6) + entry state (F-3)

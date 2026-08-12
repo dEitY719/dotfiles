@@ -30,6 +30,9 @@ WIN_SUBDIR="Documents"
 WSL_ROOT="${OBSIDIAN_VAULT_WSL_ROOT:-${HOME}/para/project}"
 WSL_COMPANY="obsidian-para-company"
 WSL_PERSONAL="obsidian-para"
+# The vault's git remote. A vault clone always has exactly one, named origin —
+# emitted as REMOTE so merge-flow.md can name it instead of hardcoding it.
+REMOTE_NAME="origin"
 # NF-7: the one host `internal` PCs may never push to (SSOT: §3 of
 # docs/.ssot/pc-environment.md — "GitHub (common) = pull only").
 PUBLIC_HOST="github.com"
@@ -47,7 +50,7 @@ Usage:
   --mode <mode>     override ~/.dotfiles-setup-mode (public|internal|external)
 
 Emits shell-quoted KEY=value lines on stdout:
-  MODE SIDE VAULT VAULT_ORIGIN BRANCH UPSTREAM BACKUP_SHA
+  MODE SIDE VAULT VAULT_ORIGIN REMOTE BRANCH UPSTREAM BACKUP_SHA
   PEER PEER_ORIGIN PEER_MATCH PUSH_ALLOWED PUSH_BLOCK_REASON
 
 Environment:
@@ -94,6 +97,7 @@ setup_mode() {
 
 # origin_host <url> -> hostname of a git remote URL (scp-like or scheme form)
 origin_host() {
+    local url rest
     url="$1"
     case "$url" in
         '') printf '%s' "" ;;
@@ -112,7 +116,7 @@ origin_host() {
 }
 
 origin_of() {
-    git -C "$1" remote get-url origin 2>/dev/null || printf '%s' ""
+    git -C "$1" remote get-url "$REMOTE_NAME" 2>/dev/null || printf '%s' ""
 }
 
 is_git_repo() {
@@ -319,10 +323,13 @@ main() {
     push_allowed="yes"
     push_reason=""
     host="$(origin_host "$origin")"
+    # Hostnames are case-insensitive: git@GitHub.com:... must not slip past the
+    # guard. Only the comparison is normalised — VAULT_ORIGIN keeps its casing.
+    host_lc="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
     if [ -z "$origin" ]; then
         push_allowed="no"
         push_reason="origin 원격이 없다 — push 할 대상이 없다"
-    elif [ "$mode" = "internal" ] && [ "$host" = "$PUBLIC_HOST" ]; then
+    elif [ "$mode" = "internal" ] && [ "$host_lc" = "$PUBLIC_HOST" ]; then
         push_allowed="no"
         push_reason="internal 모드 PC 에서 ${PUBLIC_HOST} 원격은 pull only 다 (docs/.ssot/pc-environment.md §3). 커밋까지만 하고 external/public PC 에서 push 하라"
     fi
@@ -331,6 +338,7 @@ main() {
     emit SIDE "$side"
     emit VAULT "$vault"
     emit VAULT_ORIGIN "$origin"
+    emit REMOTE "$REMOTE_NAME"
     emit BRANCH "$branch"
     emit UPSTREAM "$upstream"
     emit BACKUP_SHA "$backup_sha"
