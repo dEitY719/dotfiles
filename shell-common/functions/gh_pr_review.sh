@@ -906,9 +906,11 @@ gh_pr_review() {
     START_TS=$(date +%s)
 
     # ---- Step 1: parse args ----
-    local _parsed
-    if ! _parsed=$(gh_pr_review_parse "$@"); then
-        return $?
+    local _parsed _parse_rc
+    _parsed=$(gh_pr_review_parse "$@")
+    _parse_rc=$?
+    if [ "$_parse_rc" -ne 0 ]; then
+        return "$_parse_rc"
     fi
     if printf '%s\n' "$_parsed" | grep -q '^help_requested=1$'; then
         gh_pr_review_help
@@ -945,8 +947,11 @@ EOF
         echo "Required CLI 'git' not found in PATH" >&2
         return 1
     fi
-    if ! _gh_pr_review_require_ai_cli "$ai"; then
-        return $?
+    local _ai_cli_rc
+    _gh_pr_review_require_ai_cli "$ai"
+    _ai_cli_rc=$?
+    if [ "$_ai_cli_rc" -ne 0 ]; then
+        return "$_ai_cli_rc"
     fi
     if ! gh auth status >/dev/null 2>&1; then
         echo "gh CLI not authenticated; run 'gh auth login'" >&2
