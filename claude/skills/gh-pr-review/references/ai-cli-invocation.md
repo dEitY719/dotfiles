@@ -1,12 +1,11 @@
 # AI CLI Invocation — for gh:pr-review
 
-Maps the three supported `--ai` values to concrete CLI commands. The
+Maps the four supported `--ai` values to concrete CLI commands. The
 prompt (built from `references/review-presets.md`) is passed via
 **stdin** by default; the PR diff is appended to that same stdin
-payload. Exception: `agy --print` takes the prompt as an argv string
-(see `--ai agy` below) — everything else (`PROMPT_FILE`'s own creation,
-codex, claude) stays stdin-based, since argv has length limits and
-quoting hazards that stdin avoids.
+payload. Exceptions: `agy --print` takes the prompt as an argv string,
+and `opencode run` receives a short instruction as argv plus
+`--file "$PROMPT_FILE"` because stdin is not its supported review path.
 
 ## PATH pre-flight
 
@@ -19,11 +18,17 @@ command -v "$AI_BIN" >/dev/null 2>&1 || {
 }
 ```
 
-`AI_BIN` is the literal command name: `codex`, `agy`, or `claude`.
+`AI_BIN` is the literal command name: `codex`, `agy`, `claude`, or
+`opencode`. For `opencode`, first source
+`${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/integrations/claude.sh`
+when needed and require `_dotfiles_setup_mode` to return `internal`; any
+other value fails with
+`--ai opencode is internal-PC only (~/.dotfiles-setup-mode != internal)`
+before invoking the CLI.
 
 ## stdin payload shape
 
-All three CLIs receive the same byte stream on stdin:
+The shared review material has this shape:
 
 ```text
 <common-prompt-prefix-from-review-presets.md>
@@ -62,7 +67,7 @@ Why `codex exec` instead of `codex review --base <branch>`:
   control over the preset/lens dimensions defined in
   `references/review-presets.md`.
 - `codex exec` accepts our prompt + diff verbatim on stdin, so all
-  three CLIs see identical inputs and outputs stay comparable.
+  stdin-based CLIs see identical inputs and outputs stay comparable.
 
 `--color=never` keeps the output free of ANSI escapes so the PR
 comment renders cleanly. The CLI's exit code propagates; non-zero →
@@ -125,7 +130,7 @@ CLAUDE_CONFIG_DIR="$CFG_DIR" claude -p < "$PROMPT_FILE"
 
 ```sh
 if [ -n "$USER_ACCOUNT" ] && [ "$AI" != "claude" ]; then
-    echo "--user is only valid with --ai claude (codex/agy have no multi-account routing)" >&2
+    echo "--user is only valid with --ai claude (codex/agy/opencode have no multi-account routing)" >&2
     exit 2
 fi
 ```
@@ -144,13 +149,35 @@ branch — internal PCs typically have an empty
 rejects any `--user <name>`. The cleanest user experience there is to
 omit `--user` and let the current shell's `CLAUDE_CONFIG_DIR` win.
 
+## `--ai opencode`
+
+```sh
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/integrations/claude.sh"
+[ "$(_dotfiles_setup_mode)" = "internal" ] || {
+    echo "--ai opencode is internal-PC only (~/.dotfiles-setup-mode != internal)" >&2
+    exit 1
+}
+
+opencode run "첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘." \
+    --model codemate/CodeLLMPro \
+    --file "$PROMPT_FILE"
+```
+
+The model is fixed to `codemate/CodeLLMPro`; no user-facing `--model`
+override is accepted. `codemate/CodeLLMMax` is intentionally absent from
+the code path. Because OpenCode is agentic and may have filesystem
+permissions, the dispatcher compares `git status --porcelain` before and
+after the run. Any change is reported as a failure and no PR comment is
+posted.
+
 ## Step 5 dispatch procedure (`_gh_pr_review_run_ai`)
 
 Step 5 of the skill delegates to `_gh_pr_review_run_ai` in
 `shell-common/functions/gh_pr_review.sh`. The function pipes
 `PROMPT_FILE` into the chosen CLI with the exact invocation shape
 documented above (`codex exec --color=never`, `agy --print`, `claude -p`,
-plus the `CLAUDE_CONFIG_DIR` injection for `--user`). Stdout streams to
+or `opencode run ... --model codemate/CodeLLMPro --file`, plus the
+`CLAUDE_CONFIG_DIR` injection for `--user`). Stdout streams to
 the user verbatim — no reformatting, no summarization, no truncation.
 
 On non-zero exit from the external CLI the helper writes
@@ -162,10 +189,11 @@ skips Step 6; partial output is discarded.
 
 | Condition | Exit | stderr |
 |-----------|------|--------|
-| `--ai` missing | 2 | `missing required flag: --ai <codex\|agy\|claude>` |
-| `--ai` unknown | 2 | `Unknown --ai value: '<x>' (allowed: codex, agy, claude)` |
-| `--user` with codex/agy | 2 | `--user is only valid with --ai claude (codex/agy have no multi-account routing)` |
+| `--ai` missing | 2 | `missing required flag: --ai <codex\|agy\|claude\|opencode>` |
+| `--ai` unknown | 2 | `Unknown --ai value: '<x>' (allowed: codex, agy, claude, opencode)` |
+| `--user` with codex/agy/opencode | 2 | `--user is only valid with --ai claude (codex/agy/opencode have no multi-account routing)` |
 | `--user <bogus>` with claude | 1 | `Unknown claude account: '<bogus>' (allowed: ...)` |
+| `--ai opencode` outside internal mode | 1 | `--ai opencode is internal-PC only (~/.dotfiles-setup-mode != internal)` |
 | AI CLI not on PATH | 1 | `Required CLI '<name>' not found in PATH` |
 | AI CLI non-zero exit | 1 | `External AI CLI '<name>' failed (exit <rc>): <noise-filtered first line>` + full tail + `/tmp/gh-pr-review-stderr.<pid>.<ai>.log` (issue #694 Bug B — no longer surfaces codex's "Reading prompt from stdin…" banner as the failure cause) |
 | PR closed / merged / draft | 1 | `PR #<N> is <state>; aborting` |

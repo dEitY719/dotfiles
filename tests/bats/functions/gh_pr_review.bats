@@ -28,7 +28,8 @@ teardown() {
     # Same for the #1286 stderr-allocator tests, one path per AI lane.
     rm -f "/tmp/gh-pr-review-stderr.codex.$$" \
         "/tmp/gh-pr-review-stderr.agy.$$" \
-        "/tmp/gh-pr-review-stderr.claude.$$"
+        "/tmp/gh-pr-review-stderr.claude.$$" \
+        "/tmp/gh-pr-review-stderr.opencode.$$"
     # The #1286 interrupt harness runs gh_pr_review in its own process
     # group, so its fallback paths carry the harness PID, not ours. Kill
     # any survivor of an aborted assertion and sweep its litter.
@@ -143,6 +144,25 @@ EOF
     chmod +x "$stub_dir/codex"
     PATH="$stub_dir:$PATH" run _gh_pr_review_require_ai_cli codex
     assert_success
+}
+
+@test "require_ai_cli: opencode on non-internal PC refuses before PATH check" {
+    _source_module
+    _dotfiles_setup_mode() { echo external; }
+
+    PATH="" run _gh_pr_review_require_ai_cli opencode
+    assert_failure 1
+    assert_output --partial "--ai opencode is internal-PC only"
+    refute_output --partial "Required CLI 'opencode' not found in PATH"
+}
+
+@test "require_ai_cli: opencode on internal PC still requires the CLI" {
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+
+    PATH="" run _gh_pr_review_require_ai_cli opencode
+    assert_failure 1
+    assert_output --partial "Required CLI 'opencode' not found in PATH"
 }
 
 # ---------------------------------------------------------------------------
@@ -937,6 +957,96 @@ EOF
     assert_failure
     refute_output --partial "agy called with"
     chmod 644 "$f" # restore so bats can clean up TEST_TEMP_HOME
+}
+
+# ---------------------------------------------------------------------------
+# _gh_pr_review_run_ai — opencode transport (issue #1334)
+# ---------------------------------------------------------------------------
+
+_stub_opencode_echo() {
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/opencode" <<'EOF'
+#!/bin/sh
+printf 'opencode args:'
+for arg in "$@"; do
+    printf ' [%s]' "$arg"
+done
+printf '\n'
+exit 0
+EOF
+    chmod +x "$stub_dir/opencode"
+    export PATH="$stub_dir:$PATH"
+}
+
+@test "run_ai opencode: internal mode uses CodeLLMPro and attaches prompt file" {
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+    _stub_opencode_echo
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    run _gh_pr_review_run_ai opencode "$f"
+    assert_success
+    assert_output --partial "opencode args: [run]"
+    assert_output --partial "[--model] [codemate/CodeLLMPro]"
+    assert_output --partial "[--file] [$f]"
+}
+
+@test "run_ai opencode: non-internal mode refuses without invoking opencode" {
+    _source_module
+    _dotfiles_setup_mode() { echo external; }
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/opencode" <<'EOF'
+#!/bin/sh
+echo "SHOULD_NOT_RUN"
+exit 0
+EOF
+    chmod +x "$stub_dir/opencode"
+    export PATH="$stub_dir:$PATH"
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    run _gh_pr_review_run_ai opencode "$f"
+    assert_failure 1
+    assert_output --partial "--ai opencode is internal-PC only"
+    refute_output --partial "SHOULD_NOT_RUN"
+}
+
+@test "run_ai opencode: working-tree mutation is detected and returned as failure" {
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+    local repo="$TEST_TEMP_HOME/repo"
+    mkdir -p "$repo"
+    git -C "$repo" init -q
+    git -C "$repo" config user.email "test@example.com"
+    git -C "$repo" config user.name "Test User"
+    printf 'before\n' >"$repo/tracked.txt"
+    git -C "$repo" add tracked.txt
+    git -C "$repo" commit -q -m "seed"
+
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/opencode" <<EOF
+#!/bin/sh
+printf 'after\n' >>"$repo/tracked.txt"
+echo "review output"
+exit 0
+EOF
+    chmod +x "$stub_dir/opencode"
+    export PATH="$stub_dir:$PATH"
+
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    (
+        cd "$repo"
+        run _gh_pr_review_run_ai opencode "$f"
+        assert_failure 1
+        assert_output --partial "review output"
+        assert_output --partial "opencode review changed the working tree"
+    )
 }
 
 # ---------------------------------------------------------------------------

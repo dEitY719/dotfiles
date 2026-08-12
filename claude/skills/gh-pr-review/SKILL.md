@@ -1,16 +1,13 @@
 ---
 name: gh:pr-review
 description: >-
-  Delegate a GitHub PR's review to an external AI CLI (codex, agy,
-  or claude) for a second opinion. Streams the external CLI's findings
-  to stdout and posts them as a PR comment by default. Does NOT submit
-  a decision (no approve / request-changes) — that is gh:pr-approve's
-  job, and replying to individual review comments is gh:pr-reply's. Use
-  for /gh-pr-review, /gh:pr-review, "PR 99 코덱스에 리뷰 시켜",
-  "agy 한테 2차 의견 받아", "second-opinion review on PR 42".
-  Accepts `--ai <codex|agy|claude>` (required), `--review <preset>`,
-  `--user <name>` (claude only), `--no-post-comment`, and `<PR#>
-  [remote]` positional args. `-h`/`--help`/`help` prints usage.
+  Delegate a GitHub PR review to one external AI CLI (codex, agy,
+  claude, or opencode), stream findings, and post one aggregate PR comment.
+  Never approve/request changes or reply to individual review comments. Use for
+  /gh-pr-review, /gh:pr-review, "PR 99 코덱스에 리뷰 시켜", "agy 한테 2차 의견 받아",
+  "second-opinion review on PR 42". Accepts `--ai <codex|agy|claude|opencode>`,
+  `--review <preset>`, `--user <name>` (claude only), `--no-post-comment`,
+  and `<PR#> [remote]`.
 allowed-tools: Bash, Read, Grep, Glob, Agent
 metadata:
   model_recommendation:
@@ -25,12 +22,9 @@ metadata:
 ## Role
 
 Gather a second-opinion review on a GitHub PR from one external AI CLI
-(`codex`/`agy`/`claude`), stream its output, and post it as a PR
-comment by default — then stop. No decision (approve/request-changes —
-`gh:pr-approve`'s job) and no per-comment replies (`gh:pr-reply`'s
-job). Every preset's prompt demands a critical stance
-(`references/review-presets.md` § "Why critical review is always on")
-with no flag to disable it.
+(`codex`/`agy`/`claude`/`opencode`), stream raw output, and post one PR
+comment by default. No decisions and no per-comment replies. Every preset
+requires a critical stance (`references/review-presets.md`).
 
 ## Help
 
@@ -45,15 +39,15 @@ Argument shape + KR aliases + exit codes: `references/parser-contract.md`
 
 ## Step 2: Pre-flight
 
-Run these checks in parallel before any expensive work:
+Run these checks before expensive work:
 
 - PR state must be `OPEN` AND not draft → else exit 1 `PR #<N> is <state>; aborting`.
 - `command -v <ai-bin>` for the chosen `--ai` → else exit 1 `Required CLI '<name>' not found in PATH`.
+- `--ai opencode` requires `_dotfiles_setup_mode == internal`; otherwise
+  exit 1 `--ai opencode is internal-PC only (~/.dotfiles-setup-mode != internal)`.
 - `gh auth status` returns 0 → else exit 1 with the gh error line.
 
-CI status is intentionally not a gate (a failing CI is often the reason
-a second opinion is wanted); self-authored PRs are allowed (no
-decision is submitted, so the self-approve block doesn't apply).
+CI status is not a gate; self-authored PRs are allowed because no decision is submitted.
 
 ## Step 3: Load Review Preset
 
@@ -66,48 +60,34 @@ Normalized enum: `default` / `quick` / `thorough` / `security` /
 
 Decide path by diff size (`gh pr view ... --json additions,deletions`):
 `≥ 800` lines → follow
-`claude/skills/gh-pr-approve/references/large-diff-delegation.md`; else
-inline `gh pr diff`. Append the diff per `references/ai-cli-invocation.md`
-§ "stdin payload shape"; write `(prompt + diff)` to `PROMPT_FILE` (stdin).
+`claude/skills/gh-pr-approve/references/large-diff-delegation.md`; else inline
+`gh pr diff`. Append the diff per `references/ai-cli-invocation.md` and write
+`(prompt + diff)` to `PROMPT_FILE`.
 
-Never hardcode or reuse a `PROMPT_FILE` name. Derive it from
-`_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER"`
-(`shell-common/functions/gh_pr_review.sh` — source it first if this turn
-has not), and do the write **and** the Step 5 dispatch in the *same* Bash
-tool call. The Bash tool starts a fresh subprocess per call, so
-`$PROMPT_FILE` does not survive into the next one; splitting the two steps
-forces re-typing a fixed path, and parallel `devx:pr-review-all` lanes then
-overwrite each other's prompt — agy and codex review identical bytes and
-the run false-passes (#1276). After Step 5's dispatch completes, `rm -f
-"$PROMPT_FILE"` — the file is created fresh per invocation and nothing
-else reads it afterward, so leaving it behind just accumulates /tmp
-clutter across repeated reviews.
+Never hardcode or reuse a `PROMPT_FILE`; derive it from
+`_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER"` and do the write plus Step 5
+dispatch in the same Bash tool call. Then `rm -f "$PROMPT_FILE"`.
 
 ## Step 5: Dispatch to External CLI
 
 Delegate to `_gh_pr_review_run_ai` (`shell-common/functions/gh_pr_review.sh`).
-Invocation shapes, stdout streaming, non-zero-exit handling:
+Invocation shapes, stdout streaming, non-zero handling:
 `references/ai-cli-invocation.md` § "Step 5 dispatch procedure".
 
 ## Step 6: Post PR Comment (default ON)
 
 Delegate to `_gh_pr_review_build_comment_body` +
 `_gh_pr_review_post_comment` (`shell-common/functions/gh_pr_review.sh`).
-SSOT body template, 3-branch decision tree (`--no-post-comment` /
-`GH_DISABLE_AI_METRICS=1` / soft-fail), and token/human-h arithmetic:
+SSOT body template, posting decision tree, and token/human-h arithmetic:
 `references/post-comment.md` § "Step 6 delegation + 3-branch decision tree".
 
 ## Step 7: Report
 
 Print exactly one line on success:
-`[OK] PR #<N> reviewed by <ai> (--review=<preset>) — comment: <URL or skipped>`,
-where `<URL or skipped>` is the comment URL, else
-`skipped (--no-post-comment)` / `skipped (GH_DISABLE_AI_METRICS=1)` / `[WARN] post failed`.
+`[OK] PR #<N> reviewed by <ai> (--review=<preset>) — comment: <URL or skipped>`.
 
 ## Constraints (full rationale: `references/constraints.md`)
 
-- Never submit a decision (`gh:pr-approve`'s job) or reply to individual comments (`gh:pr-reply`'s job) — write one aggregate comment.
-- Never run multiple AI CLIs per invocation (single `--ai`; rerun N times) or accept free-text `--review` (closed enum + KR aliases; typos exit 2).
-- Never reformat the external AI's stdout (raw only) or block self-authored PRs (no decision submitted).
-- Never edit the PR body — `gh pr comment` (append); `gh pr edit --body` fails on classic-Projects repos (#326 Bug B). Never log the CLI's stderr to a PR comment.
-- Honor `GH_DISABLE_AI_METRICS=1` like sister skills: skip the entire PR comment, not just the footer.
+- One AI CLI per invocation; closed `--review` enum; raw external output only.
+- Never submit decisions, reply to individual comments, edit the PR body, or log CLI stderr to PR comments.
+- Honor `GH_DISABLE_AI_METRICS=1` by skipping the entire PR comment.

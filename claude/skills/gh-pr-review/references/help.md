@@ -1,7 +1,7 @@
 # gh:pr-review — Help
 
 Delegate a GitHub PR's review to an external AI CLI (`codex`, `agy`,
-or `claude`) for a **second opinion**. Output is written to stdout and
+`claude`, or `opencode`) for a **second opinion**. Output is written to stdout and
 posted as a PR comment by default. **No decision (approve /
 request-changes) is submitted** — see `gh-pr-approve` for that.
 
@@ -16,7 +16,7 @@ request-changes) is submitted** — see `gh-pr-approve` for that.
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--ai <codex\|agy\|claude>` | yes | External AI CLI to delegate the review to. Single value — no CSV. |
+| `--ai <codex\|agy\|claude\|opencode>` | yes | External AI CLI to delegate the review to. Single value — no CSV. |
 | `--review <preset>` | no | Review depth/lens enum. Default `default`. See below. |
 | `--user <name>` | no | `--ai claude` only. Multi-account routing via `_claude_resolve_account` (e.g. `personal`, `work`, `work1`). |
 | `--no-post-comment` | no | Skip the automatic PR comment; only print to stdout. |
@@ -51,18 +51,25 @@ claude -p ...`.
   preserved** — no forced `personal`. Calling `/gh-pr-review --ai
   claude 99` from inside a `claude-yolo --user work` shell continues to
   use the `work` account.
-- `--user` with `--ai codex` or `--ai agy` is **rejected (exit 2)** —
+- `--user` with `--ai codex`, `--ai agy`, or `--ai opencode` is **rejected (exit 2)** —
   those CLIs have no multi-account routing mechanism, so silently
   ignoring would risk hiding an intent mismatch.
 - Unknown account names fall through `_claude_resolve_account` and exit
   1 with `Unknown claude account: '<name>' (allowed: <list>)`. The
   allowed list comes from `CLAUDE_ENABLED_ACCOUNTS`.
 
+## `--ai opencode`
+
+Internal-PC only. The lane uses fixed model `codemate/CodeLLMPro`,
+passes the prompt file with `--file`, and refuses to post if the run
+changes the working tree.
+
 ## Usage
 
 - `/gh-pr-review --ai codex 99` — codex review of PR #99 (default preset)
 - `/gh-pr-review --ai agy --review thorough 99` — agy, thorough preset
 - `/gh-pr-review --ai claude --review 꼼꼼 99` — claude, KR alias → thorough
+- `/gh-pr-review --ai opencode 99` — opencode review on internal PC
 - `/gh-pr-review --ai claude --user work 99` — claude as `work` account
 - `/gh-pr-review --ai claude --user work1 --review 보안 99` — work1 + security
 - `/gh-pr-review --ai codex --no-post-comment 99` — stdout only, no PR comment
@@ -116,7 +123,7 @@ claude -p ...`.
 
 - **Good**: `/gh-pr-review --ai codex 99` — gather a 2nd opinion on PR #99.
 - **Good**: `/gh-pr-review --ai agy --review security 99` — security-focused lens.
-- **Good**: chained `/gh-pr-review --ai codex 99` then `/gh-pr-review --ai agy 99` — three-way comparison.
+- **Good**: chained `/gh-pr-review --ai codex 99` then `/gh-pr-review --ai opencode 99` — side-by-side comparison.
 - **Bad**: `/gh-pr-review --ai codex --user work 99` — exits 2 (`--user` is claude-only).
 - **Bad**: `/gh-pr-review --ai claude --review "꼼꼼하게 봐줘" 99` — exits 2 (free text rejected; use `꼼꼼` alias).
 - **Bad**: `/gh-pr-review --ai chatgpt 99` — exits 2 (unknown AI).

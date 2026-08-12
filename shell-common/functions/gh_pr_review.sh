@@ -3,7 +3,7 @@
 # shell-common/functions/gh_pr_review.sh
 # gh-pr-review — synchronous PR review delegation to an external AI CLI.
 # Sibling of gh-pr-approve (gh_pr_approve.sh) and gh-pr-reply
-# (gh_pr_reply.sh). Reads the same `--ai <codex|agy|claude>` contract
+# (gh_pr_reply.sh). Reads the same `--ai <codex|agy|claude|opencode>` contract
 # but does a single-shot opinion-collection run inline (no worktree spawn,
 # no detached worker) — the skill's only side effect is one PR comment
 # unless `--no-post-comment` is set.
@@ -103,20 +103,20 @@ gh_pr_review_parse() {
     done
 
     if [ -z "$ai" ]; then
-        echo "missing required flag: --ai <codex|agy|claude>" >&2
+        echo "missing required flag: --ai <codex|agy|claude|opencode>" >&2
         return 2
     fi
 
     case "$ai" in
-    codex | agy | claude) ;;
+    codex | agy | claude | opencode) ;;
     *)
-        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude)" >&2
+        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude, opencode)" >&2
         return 2
         ;;
     esac
 
     if [ -n "$user" ] && [ "$ai" != "claude" ]; then
-        echo "--user is only valid with --ai claude (codex/agy have no multi-account routing)" >&2
+        echo "--user is only valid with --ai claude (codex/agy/opencode have no multi-account routing)" >&2
         return 2
     fi
 
@@ -155,21 +155,46 @@ EOF
 # ============================================================================
 
 # _gh_pr_review_require_ai_cli — validates that the requested AI CLI is
-# one of the three allowed values AND that its binary is on PATH.
+# one of the four allowed values AND that its binary is on PATH.
 # Exits 1 with `Required CLI '<name>' not found in PATH` if the binary
 # is missing (matches references/ai-cli-invocation.md § "PATH pre-flight").
 # Exits 2 with `Unknown --ai value: '...'` if the value is unknown.
 _gh_pr_review_require_ai_cli() {
     local ai="$1"
     case "$ai" in
-    codex | agy | claude) ;;
+    codex | agy | claude | opencode) ;;
     *)
-        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude)" >&2
+        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude, opencode)" >&2
         return 2
         ;;
     esac
+    if [ "$ai" = "opencode" ] && ! _gh_pr_review_require_opencode_internal; then
+        return 1
+    fi
     if ! command -v "$ai" >/dev/null 2>&1; then
         echo "Required CLI '$ai' not found in PATH" >&2
+        return 1
+    fi
+    return 0
+}
+
+# _gh_pr_review_require_opencode_internal — fail closed unless the
+# dotfiles setup-mode SSOT says this is an internal PC. The opencode lane
+# depends on the internal Code Mate provider, so a personal/public install
+# of the binary is not enough.
+_gh_pr_review_require_opencode_internal() {
+    if ! command -v _dotfiles_setup_mode >/dev/null 2>&1; then
+        local _helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/integrations/claude.sh"
+        # shellcheck disable=SC1090
+        [ -f "$_helper" ] && . "$_helper"
+    fi
+
+    local _mode=""
+    if command -v _dotfiles_setup_mode >/dev/null 2>&1; then
+        _mode=$(_dotfiles_setup_mode 2>/dev/null || echo "")
+    fi
+    if [ "$_mode" != "internal" ]; then
+        echo "--ai opencode is internal-PC only (~/.dotfiles-setup-mode != internal)" >&2
         return 1
     fi
     return 0
@@ -262,7 +287,7 @@ _gh_pr_review_mktemp_safe() {
 # dispatches agy and codex as separate subagents in the same turn — a shared
 # or hardcoded prompt path lets one lane clobber the other's prompt, so both
 # CLIs review byte-identical input and the run silently false-passes.
-# Args: $1 = ai (codex|agy|claude), $2 = PR number (for debuggability).
+# Args: $1 = ai (codex|agy|claude|opencode), $2 = PR number (for debuggability).
 # Prints a path on stdout; returns non-zero and prints nothing when no
 # path could be allocated safely (see _gh_pr_review_mktemp_safe for the
 # noclobber fallback), so this stays the single place that knows the
@@ -292,7 +317,7 @@ _gh_pr_review_mktemp_prompt() {
 #     reason. The dispatcher now skips known-noise prefixes when
 #     building the one-line summary AND emits the full stderr below it.
 #
-# Args: $1 = ai (codex|agy|claude), $2 = PROMPT_FILE, $3 = optional
+# Args: $1 = ai (codex|agy|claude|opencode), $2 = PROMPT_FILE, $3 = optional
 # CLAUDE_CONFIG_DIR (claude --user routing), $4 = optional pre-allocated
 # stderr temp path. Stdout of the CLI streams to the caller's stdout;
 # stderr is captured for the failure summary.
@@ -325,6 +350,9 @@ _gh_pr_review_run_ai() {
     local _rc=0
     local _prompt_size
     local _prompt_content
+    local _before_status
+    local _after_status
+    local _opencode_instruction="첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘."
     case "$ai" in
     codex)
         codex exec --color=never <"$prompt_file" 2>"$_stderr_file" || _rc=$?
@@ -353,8 +381,29 @@ _gh_pr_review_run_ai() {
             claude -p <"$prompt_file" 2>"$_stderr_file" || _rc=$?
         fi
         ;;
+    opencode)
+        if ! _gh_pr_review_require_opencode_internal >"$_stderr_file" 2>&1; then
+            _rc=1
+        else
+            _before_status=$(git status --porcelain 2>/dev/null || echo "")
+            opencode run "$_opencode_instruction" \
+                --model codemate/CodeLLMPro \
+                --file "$prompt_file" 2>"$_stderr_file" || _rc=$?
+            _after_status=$(git status --porcelain 2>/dev/null || echo "")
+            if [ "$_before_status" != "$_after_status" ]; then
+                {
+                    printf '%s\n' "opencode review changed the working tree; refusing to continue"
+                    printf '%s\n' "before:"
+                    printf '%s\n' "${_before_status:-<clean>}"
+                    printf '%s\n' "after:"
+                    printf '%s\n' "${_after_status:-<clean>}"
+                } >>"$_stderr_file"
+                [ "$_rc" -eq 0 ] && _rc=1
+            fi
+        fi
+        ;;
     *)
-        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude)" >&2
+        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude, opencode)" >&2
         rm -f "$_stderr_file"
         return 2
         ;;
@@ -784,11 +833,12 @@ for a second opinion. Streams the AI's findings to stdout and posts
 them as a PR comment by default. Does NOT submit a decision.
 
 Usage:
-  gh-pr-review --ai <codex|agy|claude> [flags] [<pr-number>] [<remote>]
+  gh-pr-review --ai <codex|agy|claude|opencode> [flags] [<pr-number>] [<remote>]
   gh-pr-review -h | --help | help
 
 Flags:
-  --ai <codex|agy|claude>      required; external CLI to delegate to
+  --ai <codex|agy|claude|opencode>
+                               required; external CLI to delegate to
   --review <preset>            default 'default'; KR aliases supported
                                enum: default | quick | thorough |
                                      security | performance
@@ -797,6 +847,12 @@ Flags:
   --user <name>                claude only; multi-account routing via
                                _claude_resolve_account
   --no-post-comment            skip the PR comment; stdout only
+
+OpenCode:
+  --ai opencode                internal-PC only; fixed model
+                               codemate/CodeLLMPro; prompt is attached
+                               with --file and the working tree must not
+                               change
 
 Positional:
   <pr-number>                  optional — auto-detect from current
@@ -808,6 +864,7 @@ Examples:
   gh-pr-review --ai agy --review thorough 99
   gh-pr-review --ai claude --review 꼼꼼 99
   gh-pr-review --ai claude --user work 99
+  gh-pr-review --ai opencode 99
   gh-pr-review --ai codex --no-post-comment 99
   gh-pr-review --ai codex 99 upstream
 
