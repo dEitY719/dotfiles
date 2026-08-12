@@ -88,9 +88,7 @@ warnings through verbatim; never let them change the exit code.
 
 ## Step 7: Verify and report
 
-Run `bash "${SKILL_DIR}/lib/verify-clip.sh" "$NOTE"` (skip on `--dry-run`) and
-show any FAIL lines, then the note path, then as the **last line**:
-`/ingest <NOTE>`.
+Run `bash "${SKILL_DIR}/lib/verify-clip.sh" "$NOTE"` (skip on `--dry-run`), show **all output lines verbatim** (each line begins with `[OK]` or `[FAIL]`), then the note path, and as the **last line**: `/ingest <NOTE>`.
 
 ## Constraints
 
