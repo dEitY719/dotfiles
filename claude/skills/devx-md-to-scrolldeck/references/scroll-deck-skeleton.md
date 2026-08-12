@@ -605,11 +605,14 @@ it is what stops Korean headlines breaking mid-word.
             const visible = entries
               .filter((entry) => entry.isIntersecting)
               .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-            if (!visible || visible.intersectionRatio < 0.28) return;
+            // No ratio floor: a slide taller than ~3.57x the viewport can
+            // never reach a 0.28 intersection ratio, so gating on one here
+            // would permanently strand it as "never active".
+            if (!visible) return;
             const index = slides.indexOf(visible.target);
             if (index >= 0 && index !== activeIndex) setActive(index);
           },
-          { threshold: [0.28, 0.45, 0.62, 0.8] },
+          { threshold: [0, 0.28, 0.45, 0.62, 0.8] },
         );
         slides.forEach((slide) => observer.observe(slide));
 
@@ -633,6 +636,16 @@ it is what stops Korean headlines breaking mid-word.
           "End",
         ]);
 
+        // A slide taller than the viewport still needs native scrolling to
+        // read its own overflow — only jump to the next/prev slide once
+        // the active slide has no more room to scroll in that direction.
+        function activeSlideHasScrollRoom(dir) {
+          const slide = slides[activeIndex];
+          if (!slide) return false;
+          const rect = slide.getBoundingClientRect();
+          return dir > 0 ? rect.bottom > innerHeight + 1 : rect.top < -1;
+        }
+
         addEventListener("keydown", (event) => {
           if (event.ctrlKey || event.metaKey || event.altKey) return;
           if (
@@ -641,6 +654,14 @@ it is what stops Korean headlines breaking mid-word.
             return;
           if (!navigationKeys.has(event.key) && event.key !== " " && event.key !== "Spacebar")
             return;
+
+          const isSpace = event.key === " " || event.key === "Spacebar";
+          const forward = event.key === "ArrowDown" || event.key === "PageDown" ||
+            (isSpace && !event.shiftKey);
+          const backward = event.key === "ArrowUp" || event.key === "PageUp" ||
+            (isSpace && event.shiftKey);
+          if (forward && activeSlideHasScrollRoom(1)) return;
+          if (backward && activeSlideHasScrollRoom(-1)) return;
 
           const keyActions = {
             ArrowDown: () => goTo(activeIndex + 1),
@@ -652,7 +673,7 @@ it is what stops Korean headlines breaking mid-word.
           };
 
           let action = keyActions[event.key];
-          if (event.key === " " || event.key === "Spacebar") {
+          if (isSpace) {
             action = () => goTo(activeIndex + (event.shiftKey ? -1 : 1));
           }
           if (action) {
