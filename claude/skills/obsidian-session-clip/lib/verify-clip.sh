@@ -39,11 +39,11 @@ EOF
 }
 
 pass() {
-    printf 'PASS: %s\n' "$1"
+    printf '[OK] %s\n' "$1"
 }
 
 fail() {
-    printf 'FAIL: %s\n' "$1"
+    printf '[FAIL] %s\n' "$1"
     FAILURES=$((FAILURES + 1))
 }
 
@@ -83,7 +83,7 @@ main() {
         pass "노트 파일 존재: ${note}"
     else
         fail "노트 파일이 없다: ${note}"
-        printf '\nVERDICT: FAIL (%d)\n' "$FAILURES"
+        printf '\n[FAIL] verify-clip failed (1 issue)\n'
         return 1
     fi
 
@@ -163,10 +163,14 @@ main() {
 
     printf '\n'
     if [ "$FAILURES" -eq 0 ]; then
-        printf 'VERDICT: PASS\n'
+        printf '[OK] verify-clip passed\n'
         return 0
     fi
-    printf 'VERDICT: FAIL (%d)\n' "$FAILURES"
+    if [ "$FAILURES" -eq 1 ]; then
+        printf '[FAIL] verify-clip failed (1 issue)\n'
+    else
+        printf '[FAIL] verify-clip failed (%d issues)\n' "$FAILURES"
+    fi
     return 1
 }
 
