@@ -214,6 +214,26 @@ make_vault() {
     assert_output --partial 'git'
 }
 
+@test "F-2: the remote name is emitted so merge-flow.md's \$REMOTE resolves" {
+    make_clone "${OBSIDIAN_VAULT_WSL_ROOT}/obsidian-para" 'git@github.com:dEitY719/obsidian-para.git'
+
+    run bash "$RESOLVE_VAULT" wsl --mode external
+    assert_success
+    assert_line "REMOTE='origin'"
+    # ...and the emitted block really is eval-able into that variable.
+    run bash -c "eval \"\$(bash '$RESOLVE_VAULT' wsl --mode external)\"; printf '%s\n' \"\$REMOTE\""
+    assert_success
+    assert_output 'origin'
+}
+
+@test "F-2: origin_host keeps its locals out of the caller's scope" {
+    run bash -c "source '$RESOLVE_VAULT' -h >/dev/null
+        origin_host 'git@github.com:dEitY719/obsidian-para.git' >/dev/null
+        printf 'url=[%s] rest=[%s]\n' \"\${url-unset}\" \"\${rest-unset}\""
+    assert_success
+    assert_output 'url=[unset] rest=[unset]'
+}
+
 # ── NF-7: the internal-PC push guard ──────────────────────────────────
 
 @test "NF-7: internal + github.com origin refuses to push" {
@@ -237,6 +257,25 @@ make_vault() {
 
 @test "NF-7: https github.com origin is caught too, not just the ssh form" {
     make_clone "${OBSIDIAN_VAULT_WSL_ROOT}/obsidian-para" 'https://github.com/dEitY719/obsidian-para.git'
+
+    run bash "$RESOLVE_VAULT" wsl --mode internal
+    assert_success
+    assert_line "PUSH_ALLOWED='no'"
+}
+
+@test "NF-7: a mixed-case GitHub.com host does not slip past the guard" {
+    make_clone "${OBSIDIAN_VAULT_WSL_ROOT}/obsidian-para" 'https://GitHub.com/dEitY719/obsidian-para.git'
+
+    run bash "$RESOLVE_VAULT" wsl --mode internal
+    assert_success
+    assert_line "PUSH_ALLOWED='no'"
+    assert_output --partial 'pull only'
+    # only the comparison is lowercased — the URL is reported as it is stored
+    assert_line "VAULT_ORIGIN='https://GitHub.com/dEitY719/obsidian-para.git'"
+}
+
+@test "NF-7: a mixed-case scp-form GitHub.com host is caught too" {
+    make_clone "${OBSIDIAN_VAULT_WSL_ROOT}/obsidian-para" 'git@GitHub.Com:dEitY719/obsidian-para.git'
 
     run bash "$RESOLVE_VAULT" wsl --mode internal
     assert_success
@@ -381,6 +420,42 @@ make_vault() {
     assert_success
     assert_line $'A\tdelete\tconflict-files-obsidian-git.md'
     [ ! -e "${WORK}/quiet/conflict-files-obsidian-git.md" ]
+}
+
+@test "F-4: a user note merely sharing the artifact's basename is class B" {
+    # obsidian-git writes its artifact at the vault root only. A note deeper in
+    # the tree with the same filename is the user's writing (NF-3).
+    make_clone "${WORK}/quiet" ''
+    lookalike="40-Areas/conflict-files-obsidian-git.md"
+    mkdir -p "${WORK}/quiet/40-Areas"
+    printf 'my own note\n' >"${WORK}/quiet/${lookalike}"
+    git -C "${WORK}/quiet" add -- "$lookalike"
+    git -C "${WORK}/quiet" commit -q -m "track lookalike note"
+    printf 'edited today\n' >>"${WORK}/quiet/${lookalike}"
+
+    run bash "$CLASSIFY" "${WORK}/quiet" --apply
+    assert_success
+    assert_line $'B\tmanual\t'"${lookalike}"
+    refute_line $'A\tdelete\t'"${lookalike}"
+    refute_output --partial $'APPLIED'
+    assert_line 'SUMMARY: A=0 B=1 C=0'
+    # the acceptance criterion: the note survives, contents intact
+    [ -f "${WORK}/quiet/${lookalike}" ]
+    run cat "${WORK}/quiet/${lookalike}"
+    assert_output --partial 'my own note'
+}
+
+@test "F-4: --apply reports SKIPPED, not APPLIED, when the path is already gone" {
+    # The classify() -> apply_row() race: the row was real when it was
+    # classified, but something removed the file before it was applied.
+    make_clone "${WORK}/quiet" ''
+
+    run bash -c "source '$CLASSIFY' -h >/dev/null
+        VAULT='${WORK}/quiet'
+        apply_row delete 'conflict-files-obsidian-git.md'"
+    assert_success
+    assert_line $'SKIPPED\tdelete\tconflict-files-obsidian-git.md\talready absent'
+    refute_output --partial 'APPLIED'
 }
 
 @test "F-8: a nested 90-personal path is excluded from automatic handling" {
