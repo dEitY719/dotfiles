@@ -32,6 +32,7 @@ _cra_lib_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 # 둘을 하나로 합치면 서로 다른 의도의 글롭이 뒤섞인다.
 RESERVED_GLOBS='*.tmp *.bak *.orig *.rej *.swp *~'
 NOTE_COUNT=0
+CHECKED_COUNT=0
 SCRATCHPAD=""
 
 usage() {
@@ -100,9 +101,14 @@ check_repo_artifacts() {
     if ! resolve_repo "$_cra_repo"; then
         return 0
     fi
+    CHECKED_COUNT=$((CHECKED_COUNT + 1))
     _cra_top="$_RC_TOP"
     printf 'REPO: %s\n' "$_cra_top"
 
+    # `ls-files` 는 -C 로 넘긴 디렉터리를 기준으로 상대경로를 찍는다. 호출자가
+    # 저장소 하위 디렉터리를 넘기면(F-2 는 그걸 막지 않는다) `$_cra_repo` 기준
+    # 상대경로를 `$_cra_top`(실제 최상위) 에 이어붙여 잘못된 절대경로가 나왔다
+    # (PR #1331 리뷰, agy). `-C` 도 `$_cra_top` 으로 통일해 조인 기준을 맞춘다.
     _cra_empty=""
     _cra_temp=""
     while IFS= read -r _cra_rel; do
@@ -119,7 +125,7 @@ check_repo_artifacts() {
 "
         fi
     done <<EOF
-$(git -C "$_cra_repo" ls-files --others --exclude-standard 2>/dev/null)
+$(git -C "$_cra_top" ls-files --others --exclude-standard 2>/dev/null)
 EOF
 
     if [ -n "$_cra_empty" ]; then
@@ -199,6 +205,15 @@ main() {
     done <<EOF
 $repos
 EOF
+
+    # check-repos.sh 의 같은 리뷰(codex, PR #1331)에서 나온 지적을 여기도
+    # 대칭 적용한다: 저장소가 넘어왔는데 전부 무효면 그 사실을 드러낸다.
+    # NOTE_COUNT 는 그대로 두므로(집계는 정확) VERDICT 는 바꾸지 않는다 —
+    # C-3 는 안전-critical 한 BLOCKED 판정이 없어 check-repos.sh 만큼
+    # 오탐 리스크가 크지 않다.
+    if [ -n "$repos" ] && [ "$CHECKED_COUNT" -eq 0 ]; then
+        printf 'WARN: 전달된 저장소 목록 중 유효하게 검사된 것이 0개다 — 전부 경로 없음/git 아님 (위 WARN 참고)\n'
+    fi
 
     printf '\n'
     if [ "$NOTE_COUNT" -eq 0 ]; then

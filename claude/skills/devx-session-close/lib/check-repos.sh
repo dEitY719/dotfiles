@@ -36,6 +36,7 @@ _cr_lib_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 BLOCKED_COUNT=0
 NOTE_COUNT=0
 WARN_COUNT=0
+CHECKED_COUNT=0
 SETUP_MODE=""
 
 usage() {
@@ -150,6 +151,7 @@ check_repo() {
     if ! resolve_repo "$_cr_repo"; then
         return 0
     fi
+    CHECKED_COUNT=$((CHECKED_COUNT + 1))
     _cr_top="$_RC_TOP"
     _cr_git="$_RC_GITDIR"
     printf 'REPO: %s\n' "$_cr_top"
@@ -221,6 +223,16 @@ main() {
     for repo in "$@"; do
         check_repo "$repo"
     done
+
+    # 넘겨받은 저장소가 전부 경로 없음/git 아님이면 CHECKED_COUNT 는 0인데
+    # BLOCKED_COUNT 도 0 이라 "VERDICT: OK" 로 찍혀 왔다 — 실제로는 아무것도
+    # 감사하지 못한 채 성공으로 오인시킨다 (PR #1331 리뷰, codex). NF-6 취지대로
+    # 이 경우도 "검사 대상 없음" 과 같은 층위로 명시한다.
+    if [ "$CHECKED_COUNT" -eq 0 ]; then
+        printf '\n전달된 저장소 %d개 중 유효하게 검사된 저장소가 0개다 — 전부 경로 없음/git 아님 (위 WARN 참고)\n' "$#"
+        printf '\nVERDICT: NO-TARGET\n'
+        return 2
+    fi
 
     printf '\n'
     if [ "$BLOCKED_COUNT" -eq 0 ]; then
