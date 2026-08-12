@@ -253,8 +253,36 @@ commit_unsynced() {
     mkdir -p "${WORK}/plain"
 
     run bash "$CHECK_REPOS" "${WORK}/plain"
+    assert_output --partial 'git 저장소가 아니다'
+}
+
+@test "NF-6: check-repos with all-invalid repos reports NO-TARGET, not OK (PR #1331 review, codex)" {
+    mkdir -p "${WORK}/plain1" "${WORK}/plain2"
+
+    run bash "$CHECK_REPOS" "${WORK}/plain1" "${WORK}/plain2"
+    [ "$status" -eq 2 ]
+    assert_output --partial '유효하게 검사된 저장소가 0개'
+    assert_output --partial 'VERDICT: NO-TARGET'
+    refute_output --partial 'VERDICT: OK'
+}
+
+@test "NF-6: check-repos with one valid + one invalid repo still verdicts normally" {
+    make_repo mixed
+    mkdir -p "${WORK}/plain"
+
+    run bash "$CHECK_REPOS" "$REPO" "${WORK}/plain"
     assert_success
     assert_output --partial 'git 저장소가 아니다'
+    assert_output --partial 'VERDICT: OK'
+}
+
+@test "NF-6: check-artifacts with all-invalid repos warns but keeps VERDICT: OK (PR #1331 review, codex)" {
+    mkdir -p "${WORK}/plain1"
+
+    run bash "$CHECK_ARTIFACTS" "${WORK}/plain1"
+    assert_success
+    assert_output --partial '유효하게 검사된 것이 0개'
+    assert_output --partial 'VERDICT: OK'
 }
 
 # ── C-3: 임시 산출물 ──────────────────────────────────────────────────
@@ -269,6 +297,20 @@ commit_unsynced() {
     assert_output --partial '0 바이트 untracked'
     assert_output --partial 'draft.md'
     assert_output --partial 'VERDICT: NOTE'
+}
+
+@test "C-3: a subdirectory target still finds artifacts inside it (PR #1331 review, agy)" {
+    make_repo subdir
+    mkdir -p "${REPO}/sub"
+    : >"${REPO}/sub/draft.md"
+
+    # Pass the subdirectory, not the repo root. ls-files must resolve against
+    # the toplevel (not $_cra_repo) or the reconstructed path points at a
+    # nonexistent file at repo root and the real artifact is silently missed.
+    run bash "$CHECK_ARTIFACTS" "${REPO}/sub"
+    assert_success
+    assert_output --partial '버려진 예약 파일 1건'
+    assert_output --partial 'sub/draft.md'
 }
 
 @test "C-3: a non-empty untracked file is not a 버려진 예약 파일" {
