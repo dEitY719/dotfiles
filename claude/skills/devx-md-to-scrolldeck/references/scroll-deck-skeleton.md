@@ -698,7 +698,7 @@ Standard content slide — reuse `.section-heading` for every non-hero slide:
 ```
 
 Variant rotation — alternate so consecutive slides never look identical.
-A good default rhythm for a 12–16 slide deck:
+A good default rhythm for a 12–16 slide scroll deck:
 
 ```
 hero(dark) -> paper -> soft -> paper -> dark -> paper -> soft
