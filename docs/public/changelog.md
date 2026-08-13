@@ -3,6 +3,9 @@
 사용자 관점의 의미 있는 변경 기록. 포맷: `## YYYY-MM-DD` 헤더 아래 `- 변경: **요약**`.
 
 ## 2026-08-13
+- 변경: **`check-proxy` 와 `show-setup-mode` 가 문자열 setup mode (`public`/`internal`/`external`) 를 정상 인식하도록 수정했다. 이제 `~/.dotfiles-setup-mode` 에 `external` 이 저장된 환경에서 거짓 `Unknown setup mode` 실패가 나지 않는다.**
+
+## 2026-08-13
 - 변경: **`devx:pr-verify-live`에 스크립트 기반 컨테이너 백엔드 identity 검증(4단 fallback ladder: host PID, docker exec git, container file/route, version endpoint)을 위한 `devx_pr_verify_live_backend_identity.sh` 헬퍼 및 python helper 추가 (#1340)**
 
 ## 2026-08-12
