@@ -2,6 +2,9 @@
 
 사용자 관점의 의미 있는 변경 기록. 포맷: `## YYYY-MM-DD` 헤더 아래 `- 변경: **요약**`.
 
+## 2026-08-13
+- 변경: **`devx:pr-verify-live`에 스크립트 기반 컨테이너 백엔드 identity 검증(4단 fallback ladder: host PID, docker exec git, container file/route, version endpoint)을 위한 `devx_pr_verify_live_backend_identity.sh` 헬퍼 및 python helper 추가 (#1340)**
+
 ## 2026-08-12
 - 변경: **`skill:create`와 `skill:check`에 executable-first 규칙 추가 — 반복적·결정적 절차는 prose보다 `lib/*.sh|*.py` helper 추출을 우선하고, `skill:check`는 새 12번 체크로 prose-only 절차 남용을 감사한다 (#1341)**
 - 변경: **`obsidian:session-clip` 의 산출물 자체검증에 성공/실패 여부를 판단할 수 있는 명시적 `[OK]`/`[FAIL]` verdict 마커 추가 및 SKILL.md Step 7 표현 갱신 (#1336)**

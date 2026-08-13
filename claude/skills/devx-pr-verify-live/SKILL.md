@@ -61,7 +61,9 @@ the stderr line and stop. Capture `pr` `remote` `url` `api_url` `start_cmd` `mat
 **변경된 코드를 서빙하는 모든 프로세스**에 대해 cwd → repo root → ancestry 를 돌린다. 비교
 대상은 PR 메타 1회 fetch(`$PR_JSON`, Step 4 까지 재사용)의 `.mergeCommit.oid` — `headRefOid` 는 rebase/squash
 merge 로 재작성되므로 쓰지 않는다(미머지 PR 일 때만 폴백). 불일치면 몇 커밋 뒤처졌는지와 함께
-**정지**한다. dirty 워킹 트리는 경고, 컨테이너 백엔드는 `unverified` — 둘 다 정지가 아니다.
+**정지**한다. dirty 워킹 트리는 경고이다. 컨테이너 백엔드는 `devx_pr_verify_live_backend_identity.sh`
+헬퍼를 통해 검증하며, verified면 계속 진행, mismatch면 즉시 정지, unverified면 사유/근거를 리포트에 명시하고 계속 진행한다.
+
 
 ## Step 4: Decide what to verify (`references/targets.md`)
 
