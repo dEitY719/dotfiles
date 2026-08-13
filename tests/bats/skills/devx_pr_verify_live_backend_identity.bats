@@ -9,6 +9,7 @@ setup() {
     # Create bin directory for fake executables
     mkdir -p "$TEST_TEMP_HOME/bin"
     export PATH="$TEST_TEMP_HOME/bin:$PATH"
+    TEST_SERVER_PID=""
     
     # Paths
     HELPER_PY="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_verify_live_backend_identity.py"
@@ -52,6 +53,10 @@ EOF
 }
 
 teardown() {
+    if [ -n "${TEST_SERVER_PID:-}" ]; then
+        kill "$TEST_SERVER_PID" 2>/dev/null || true
+        wait "$TEST_SERVER_PID" 2>/dev/null || true
+    fi
     teardown_isolated_home
 }
 
@@ -217,4 +222,121 @@ EOF
     assert_success
     assert_output --partial '"result": "unverified"'
     assert_output --partial '"reason":'
+}
+
+@test "version endpoint path" {
+    cat <<'EOF' > "$TEST_TEMP_HOME/bin/ss"
+#!/bin/sh
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_HOME/bin/ss"
+
+    cat <<'EOF' > "$TEST_TEMP_HOME/version_server.py"
+import json
+import sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = json.dumps({"git_sha": "target_sha_123"}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):
+        return
+
+
+HTTPServer(("127.0.0.1", int(sys.argv[1])), Handler).serve_forever()
+EOF
+
+    PORT="$(python3 - <<'PY'
+import socket
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()
+PY
+)"
+    python3 "$TEST_TEMP_HOME/version_server.py" "$PORT" &
+    TEST_SERVER_PID=$!
+    sleep 1
+
+    run python3 "$HELPER_PY" --repo-root "$REPO_ROOT" --target-repo "foo/bar" --target-sha "target_sha_123" --base-url "http://localhost:3000" --backend-ports "$PORT"
+    assert_success
+    assert_output --partial '"result": "verified"'
+    assert_output --partial '"mode": "version-endpoint"'
+    assert_output --partial '"observed_sha": "target_sha_123"'
+}
+
+@test "container file route heuristic path" {
+    cat <<'EOF' > "$TEST_TEMP_HOME/bin/ss"
+#!/bin/sh
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_HOME/bin/ss"
+
+    cat <<EOF > "$TEST_TEMP_HOME/bin/git"
+#!/bin/sh
+case "\$*" in
+    *"diff --name-only target_sha~1 target_sha"*)
+        echo "apps/server/src/api/admin/router.py"
+        exit 0
+        ;;
+    *"diff -U0 target_sha~1 target_sha -- apps/server/src/api/admin/router.py"*)
+        cat <<'DIFF'
+@@ -1,0 +1,2 @@
++router.add_api_route("/curation-thresholds", endpoint)
++from app.api import router
+DIFF
+        exit 0
+        ;;
+    *"show --name-only --pretty=format: target_sha"*)
+        echo "apps/server/src/api/admin/router.py"
+        exit 0
+        ;;
+esac
+exit 1
+EOF
+    chmod +x "$TEST_TEMP_HOME/bin/git"
+
+    cat <<EOF > "$TEST_TEMP_HOME/bin/docker"
+#!/bin/sh
+case "\$*" in
+    *"ps --format"*)
+        echo "heuristic-container 0.0.0.0:8000->8000/tcp"
+        exit 0
+        ;;
+    "ps")
+        exit 0
+        ;;
+    *"inspect heuristic-container"*)
+        echo '[{"Mounts":[{"Source":"$REPO_ROOT","Destination":"/app"}],"Config":{"WorkingDir":"/app"}}]'
+        exit 0
+        ;;
+    *"exec heuristic-container git -C /app rev-parse --show-toplevel"*)
+        exit 1
+        ;;
+    *"exec heuristic-container test -f /app/apps/server/src/api/admin/router.py"*)
+        exit 0
+        ;;
+    *'exec heuristic-container grep -F router.add_api_route("/curation-thresholds", endpoint) /app/apps/server/src/api/admin/router.py'*)
+        exit 0
+        ;;
+    *"exec heuristic-container grep -F from app.api import router /app/apps/server/src/api/admin/router.py"*)
+        exit 0
+        ;;
+esac
+exit 1
+EOF
+    chmod +x "$TEST_TEMP_HOME/bin/docker"
+
+    run python3 "$HELPER_PY" --repo-root "$REPO_ROOT" --target-repo "foo/bar" --target-sha "target_sha" --base-url "http://localhost:3000" --backend-ports "8000"
+    assert_success
+    assert_output --partial '"result": "unverified"'
+    assert_output --partial 'container-file-route presence check successful'
+    assert_output --partial 'matches 2 added lines'
 }
