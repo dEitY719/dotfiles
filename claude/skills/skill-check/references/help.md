@@ -18,12 +18,13 @@ Examples:
   /skill:check claude/skills/gh-issue-flow/SKILL.md --recursive
   /skill:check help
 
-Checks run (14 total):
+Checks run (15 total):
   Structure (1-5):    Line Count, Progressive Disclosure, Frontmatter Validity,
                       References Directory Usage, Output Report Defined
-  UX Quality (6-11):  Help Flag Pattern, Step Structure, Options Documentation,
-                      Verdict Output, Next-action Hint, No Emojis
-  Model (12):         Model Recommendation Metadata (read-only tier advice;
+  UX Quality (6-12):  Help Flag Pattern, Step Structure, Options Documentation,
+                      Verdict Output, Next-action Hint, No Emojis,
+                      Executable Procedure Extraction
+  Model (13):         Model Recommendation Metadata (read-only tier advice;
                       rubric: references/model-recommendation.md)
-  Security (13-14):   License Declaration, Capability Declaration Consistency
+  Security (14-15):   License Declaration, Capability Declaration Consistency
                       (read-only policy alignment; pre-empts security scanners)

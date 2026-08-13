@@ -17,10 +17,13 @@ skill-name/
 │   ├── YAML frontmatter (name, description required)
 │   └── Markdown instructions
 └── Bundled Resources (optional)
-    ├── scripts/    - Executable code for deterministic/repetitive tasks
+    ├── lib/        - Executable helpers for deterministic/repetitive tasks
     ├── references/ - Docs loaded into context as needed
     └── assets/     - Files used in output (templates, icons, fonts)
 ```
+
+`lib/` is the SSOT location for skill-local executable helpers. Keep `references/`
+markdown-only and use `lib/` when the step should be run, not merely read.
 
 ## Progressive Disclosure
 
@@ -37,6 +40,25 @@ These word counts are approximate and you can feel free to go longer if needed.
 - Keep SKILL.md under 500 lines; if approaching this limit, add hierarchy with pointers
 - Reference files clearly from SKILL.md with guidance on when to read them
 - For large reference files (>300 lines), include a table of contents
+- Prefer executable helpers over prose when the procedure is deterministic, repetitive, or easier to verify in code
+
+## Executable-First Gate
+
+Push a procedure into `lib/*.sh` or `lib/*.py` when it is:
+
+- deterministic file creation, transformation, or scaffold work
+- repeated CLI orchestration across steps or test cases
+- a multi-step fallback or retry chain
+- parsing, validation, normalization, or aggregation logic
+- easier to verify by rerunning code than rereading prose
+
+Keep prose for judgment calls, policy rationale, output interpretation, and user communication.
+Show direct invocation patterns in SKILL.md, for example:
+
+```bash
+bash claude/skills/<name>/lib/<script>.sh
+python claude/skills/<name>/lib/<script>.py
+```
 
 **Domain organization**: When a skill supports multiple domains/frameworks, organize by variant:
 
