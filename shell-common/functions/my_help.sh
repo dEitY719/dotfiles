@@ -208,6 +208,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[gwt_help]="${HELP_DESCRIPTIONS[gwt_help]:-[Development] Git worktree command guide}"
     HELP_DESCRIPTIONS[gbr_help]="${HELP_DESCRIPTIONS[gbr_help]:-[Development] Git feature-branch teardown guide}"
     HELP_DESCRIPTIONS[devx_help]="${HELP_DESCRIPTIONS[devx_help]:-[Development] Dev helper — mise wrapper + repo checks}"
+    HELP_DESCRIPTIONS[show_devx_pr_verify_live_backend_identity_help]="${HELP_DESCRIPTIONS[show_devx_pr_verify_live_backend_identity_help]:-[Development] Backend container identity verification helper}"
     HELP_DESCRIPTIONS[py_help]="${HELP_DESCRIPTIONS[py_help]:-[Development] Python environments and tooling}"
     HELP_DESCRIPTIONS[dir_help]="${HELP_DESCRIPTIONS[dir_help]:-[System] Directory navigation shortcuts}"
     HELP_DESCRIPTIONS[sys_help]="${HELP_DESCRIPTIONS[sys_help]:-[DevOps] System management helpers}"

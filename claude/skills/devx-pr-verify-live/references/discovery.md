@@ -160,13 +160,21 @@ git -C "$SERVING_ROOT" status --porcelain
 
 프런트 전용 PR 이면 프런트 프로세스만 확인하면 된다 — 실측 런이 그랬고, Vite 쪽만 맞으면 됐다.
 
-### 2-4. 컨테이너 백엔드는 적용 불가 (정지하지 않는다)
+### 2-4. 컨테이너 백엔드 검증 (fallback ladder)
 
-docker-published 포트는 `ss -ltnp` 에 **PID 가 안 잡힌다**(docker-proxy). 위 표의 8000/8010/8020
-세 줄이 전부 그렇다. `/proc/<pid>/cwd` 경로가 통째로 무의미하다.
+docker-published 포트는 `ss -ltnp` 에 PID 가 안 잡힌다(docker-proxy). 이 경우, `devx_pr_verify_live_backend_identity.sh` 헬퍼를 통해 identity를 기계적으로 검증한다.
+입력: `--repo-root`, `--target-repo`, `--target-sha`, `--base-url`, `--backend-ports`, `--container-name`
 
-- 이 경우 해당 레이어를 **`unverified` 로 표시하되 정지하지 않는다**.
-- 컨테이너 이미지/compose project 로 확인하는 것은 **별도 과제**다 — 이 스킬의 범위 밖.
+1. **A. host PID/cwd ancestry**: 호스트의 ss/lsof를 확인해 docker-proxy가 아닌 API 서버 프로세스가 존재하면 검증을 시도한다.
+2. **B. docker exec git ancestry**: docker ps로 포트에 매핑되는 컨테이너를 찾고, 컨테이너 내부에 마운트된 git 저장소의 merge-base ancestry를 검증한다.
+3. **C. 컨테이너 내부 파일/라우트 존재 검증**: git이 없는 컨테이너의 경우, PR 변경 사항에 해당하는 백엔드 파일들의 존재 여부와 추가된 라우트/코드 일부(grep)가 컨테이너 내부에 포함되어 있는지 검증한다. 성공 시 unverified 상태이지만 근거(evidence)를 함께 제시한다.
+4. **D. build SHA/version endpoint 대조**: API 서버가 제공하는 `/version` 등 endpoint에서 SHA 값을 응답받아 target SHA와 대조한다.
+
+**판정 결과 처리**:
+- `verified`: 검증 성공, live-verify 진행.
+- `mismatch`: 대상 커밋이 서빙 중이 아님이 증명됨 -> 검증 전 단언 실패로 **하드 정지**.
+- `unverified`: 컨테이너 또는 git 환경 문제로 증명 불가 -> 정지하지 않고 구체적인 미검증 사유(reason)와 근거(evidence)를 리포트에 남기고 계속 진행.
+
 
 ### 2-5. cwd 프로브 결과를 캐시하지 않는다
 
