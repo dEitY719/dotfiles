@@ -35,9 +35,9 @@ get_setup_mode_name() {
     mode=$(get_setup_mode)
 
     case "$mode" in
-        1) echo "Public PC (Home environment)" ;;
-        2) echo "Internal company PC (Direct connection)" ;;
-        3) echo "External company PC (VPN)" ;;
+        1|public) echo "Public PC (Home environment)" ;;
+        2|internal) echo "Internal company PC (Direct connection)" ;;
+        3|external) echo "External company PC (VPN)" ;;
         *) echo "Not configured" ;;
     esac
 }
@@ -61,16 +61,16 @@ show_setup_mode() {
     mode_name=$(get_setup_mode_name)
 
     case "$mode" in
-        1)
+        1|public)
             ux_success "Mode 1: $mode_name"
             ux_info "Expected: No proxy, No company configurations"
             ;;
-        2)
+        2|internal)
             ux_success "Mode 2: $mode_name"
             ux_info "Expected: Company proxy enabled (12.26.204.100:8080)"
             ux_info "Expected: All company configurations (.local.sh files) enabled"
             ;;
-        3)
+        3|external)
             ux_success "Mode 3: $mode_name"
             ux_info "Expected: No proxy, Only VPN certificate configurations"
             ;;
