@@ -36,5 +36,7 @@
 | §6 을 viewport × locale 전 조합으로 | 상태 기계 PR 과 i18n PR 에서 폭 스윕은 0의 값, 12셀이면 6~12분 | 축을 diff 가 정하고 전체 곱은 `--matrix full` opt-in |
 | §5 팝업 해제를 로그인의 1회성 단계로 | full page load 마다 재등장하고 대상 CTA 를 덮었다 | 모든 네비게이션 직후의 멱등 단계 + 해제 단언 |
 | §3-2 를 프로세스 하나로 | 백엔드 PR 이면 프런트 cwd 확인이 아무것도 증명하지 못한다 | 변경 레이어를 서빙하는 **모든** 프로세스 |
+| 컨테이너 백엔드 identity 검증 불가 | docker-proxy 포트는 PID가 없어서 unverified로 넘어감 | 헬퍼(devx_pr_verify_live_backend_identity.sh)를 도입해 4단 fallback ladder로 검증함 |
 | §10 "읽기 전용 검증" | 검증에 필요해서 앱 데이터를 실제로 생성했다(`POST … 201`) | 소스는 읽기 전용, 앱 데이터는 쓰기 — dev 전용 + 호스트 가드 + `Created:` 행 |
 | §8 게이트 4개 | 그 4개를 전부 통과한 위양성 4건이 한 런에서 나왔다 | 게이트 **앞에** 자기 반증 3가설 |
+
