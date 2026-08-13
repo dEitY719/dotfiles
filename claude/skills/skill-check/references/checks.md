@@ -174,10 +174,11 @@ On WARN, recommend a concrete SPDX identifier when the LICENSE is recognizable
 (e.g. `license: MIT`), else `license: <SPDX>`.
 
 ### Check 15: Capability Declaration Consistency
-Scan the skill's executable helpers (primarily `lib/`, plus any
-`*.sh`/`*.py` shipped beside the SKILL.md) for network-capability signals and
-compare against the `compatibility.network` declaration. 1st-scope is **network
-only** — the capability the external scanner actually flags
+Scan the skill's executable helpers across both the current `lib/` SSOT and
+legacy `scripts/` layouts, plus any `*.sh`/`*.py` shipped beside the SKILL.md,
+for network-capability signals and compare against the
+`compatibility.network` declaration. 1st-scope is **network only** — the
+capability the external scanner actually flags
 (`TOOL_ABUSE_UNDECLARED_NETWORK`).
 
 Network signals: imports of `requests` / `httpx` / `urllib` / `http.client` /
