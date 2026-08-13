@@ -56,17 +56,17 @@ check_setup_mode() {
     mode=$(cat "$setup_mode_file" 2>/dev/null)
 
     case "$mode" in
-        1)
+        1|public)
             ux_success "Setup Mode: Public PC (Home environment)"
             ux_info "Expected behavior: NO proxy variables should be set"
             record_pass
             ;;
-        2)
+        2|internal)
             ux_success "Setup Mode: Internal company PC (Direct connection)"
             ux_info "Expected behavior: Company proxy SHOULD be set (12.26.204.100:8080)"
             record_pass
             ;;
-        3)
+        3|external)
             ux_success "Setup Mode: External company PC (VPN)"
             ux_info "Expected behavior: NO proxy variables should be set"
             record_pass
@@ -104,7 +104,7 @@ check_proxy_env() {
     local mode
     mode="$(get_setup_mode)"
     case "$mode" in
-        1|3)
+        1|3|public|external)
             if [ "$has_proxy" -eq 1 ]; then
                 echo ""
                 ux_error "ISSUE DETECTED: Proxy is set but should not be (Mode $mode)"
@@ -115,10 +115,10 @@ check_proxy_env() {
                 record_pass
             fi
             ;;
-        2)
+        2|internal)
             if [ "$has_proxy" -eq 0 ]; then
                 echo ""
-                ux_warning "No proxy set but Mode 2 (Internal PC) expects proxy"
+                ux_warning "No proxy set but internal mode expects proxy"
                 ux_info "Check if proxy.local.sh exists and is properly sourced"
                 record_warn
             else
@@ -191,9 +191,9 @@ check_proxy_shell_loading() {
     local zsh_result=""
     local expected_proxy=0
 
-    if [ "$mode" = "2" ]; then
-        expected_proxy=1
-    fi
+    case "$mode" in
+        2|internal) expected_proxy=1 ;;
+    esac
 
     ux_section "Bash"
     ux_info "Testing: bash -c 'source proxy.sh && echo \$http_proxy'"
@@ -237,14 +237,17 @@ check_proxy_connectivity() {
     local mode
     mode="$(get_setup_mode)"
     if [ -z "${http_proxy:-}" ] && [ -z "${HTTP_PROXY:-}" ]; then
-        if [ "$mode" = "2" ]; then
-            ux_warning "No proxy configured but Mode 2 expects one"
+        case "$mode" in
+        2|internal)
+            ux_warning "No proxy configured but internal mode expects one"
             ux_info "Check proxy.local.sh and shell loading diagnostics"
             record_warn
-        else
+            ;;
+        *)
             ux_info "No proxy configured, skipping proxy connectivity test"
             ux_info "Run check-network quick for general internet connectivity"
-        fi
+            ;;
+        esac
         echo ""
         return 0
     fi
