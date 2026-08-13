@@ -41,3 +41,43 @@ teardown() {
     assert_output --partial '"result": "unverified"'
     assert_output --partial "helper_script_missing"
 }
+
+@test "wrapper preserves spaced arguments when invoking python helper" {
+    export SHELL_COMMON="$TEST_TEMP_HOME/shell-common"
+    export TEST_TEMP_HOME
+    mkdir -p "$SHELL_COMMON/functions"
+    mkdir -p "$TEST_TEMP_HOME/bin"
+    export PATH="$TEST_TEMP_HOME/bin:$PATH"
+
+    cat <<'EOF' > "$TEST_TEMP_HOME/bin/python3"
+#!/bin/sh
+printf '%s\n' "$@" > "${TEST_TEMP_HOME}/python3.args"
+printf '{"result":"unverified","layer":"backend","reason":"captured"}\n'
+EOF
+    chmod +x "$TEST_TEMP_HOME/bin/python3"
+
+    cat <<'EOF' > "$SHELL_COMMON/functions/devx_pr_verify_live_backend_identity.py"
+#!/bin/sh
+exit 0
+EOF
+    chmod +x "$SHELL_COMMON/functions/devx_pr_verify_live_backend_identity.py"
+
+    run devx_pr_verify_live_backend_identity \
+        --repo-root "/tmp/repo with space" \
+        --target-repo "foo/bar" \
+        --target-sha "abc 123" \
+        --base-url "http://localhost:3000/path with space" \
+        --backend-ports "8000, 8001" \
+        --container-name "api service"
+
+    assert_success
+    assert_output --partial '"reason":"captured"'
+    run cat "$TEST_TEMP_HOME/python3.args"
+    assert_success
+    assert_output --partial "$SHELL_COMMON/functions/devx_pr_verify_live_backend_identity.py"
+    assert_output --partial "/tmp/repo with space"
+    assert_output --partial "abc 123"
+    assert_output --partial "http://localhost:3000/path with space"
+    assert_output --partial "8000, 8001"
+    assert_output --partial "api service"
+}

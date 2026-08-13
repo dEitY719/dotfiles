@@ -13,17 +13,15 @@ import argparse
 import json
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import sys
-import urllib.error
 import urllib.request
 
 
 def run_cmd(cmd, cwd=None):
     try:
-        res = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=cwd)
+        res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, check=False)
         return res.returncode, res.stdout.strip(), res.stderr.strip()
     except Exception as e:
         return -1, "", str(e)
@@ -60,7 +58,7 @@ def main():
         log("Rung A: Checking host PID/cwd ancestry...")
         # Check Linux
         if os.path.exists("/proc"):
-            ret, out, err = run_cmd("ss -ltnp")
+            ret, out, err = run_cmd(["ss", "-ltnp"])
             if ret == 0:
                 for line in out.splitlines():
                     for port in ports:
@@ -79,7 +77,7 @@ def main():
         # Check macOS / other via lsof
         if not pids and shutil.which("lsof"):
             for port in ports:
-                ret, out, err = run_cmd(f"lsof -nP -iTCP:{port} -sTCP:LISTEN")
+                ret, out, err = run_cmd(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN"])
                 if ret == 0:
                     for line in out.splitlines()[1:]:
                         parts = line.split()
@@ -94,7 +92,7 @@ def main():
     # Filter out docker processes from host PIDs
     non_docker_pids = set()
     for pid in pids:
-        ret, comm, _ = run_cmd(f"ps -p {pid} -o comm=")
+        ret, comm, _ = run_cmd(["ps", "-p", str(pid), "-o", "comm="])
         comm_clean = comm.strip() if ret == 0 else ""
         if comm_clean in ("docker-proxy", "dockerd", "containerd", "docker"):
             log(f"PID {pid} belongs to docker ({comm_clean}), skipping host check.")
@@ -111,18 +109,18 @@ def main():
                 log(f"readlink failed for PID {pid}: {e}")
         else:
             # lsof fallback
-            ret, out, _ = run_cmd(f"lsof -a -p {pid} -d cwd -Fn")
+            ret, out, _ = run_cmd(["lsof", "-a", "-p", str(pid), "-d", "cwd", "-Fn"])
             if ret == 0:
                 for line in out.splitlines():
                     if line.startswith("n"):
                         cwd = line[1:]
                         break
         if cwd:
-            ret, git_root, _ = run_cmd("git rev-parse --show-toplevel", cwd=cwd)
+            ret, git_root, _ = run_cmd(["git", "rev-parse", "--show-toplevel"], cwd=cwd)
             if ret == 0 and git_root:
                 log(f"Found host git repo at {git_root}")
-                ret, _, _ = run_cmd(f"git -C {git_root} merge-base --is-ancestor {args.target_sha} HEAD")
-                ret_sha, HEAD_sha, _ = run_cmd("git rev-parse HEAD", cwd=git_root)
+                ret, _, _ = run_cmd(["git", "-C", git_root, "merge-base", "--is-ancestor", args.target_sha, "HEAD"])
+                ret_sha, HEAD_sha, _ = run_cmd(["git", "rev-parse", "HEAD"], cwd=git_root)
                 observed_sha = HEAD_sha if ret_sha == 0 else "unknown"
                 if ret == 0:
                     log(f"Host PID {pid} verified successfully.")
@@ -161,7 +159,7 @@ def main():
     # =========================================================================
     docker_available = False
     if shutil.which("docker"):
-        ret, _, _ = run_cmd("docker ps")
+        ret, _, _ = run_cmd(["docker", "ps"])
         if ret == 0:
             docker_available = True
 
@@ -171,7 +169,7 @@ def main():
         if args.container_name:
             containers = [args.container_name]
         elif ports_regex:
-            ret, out, _ = run_cmd("docker ps --format '{{.Names}} {{.Ports}}'")
+            ret, out, _ = run_cmd(["docker", "ps", "--format", "{{.Names}} {{.Ports}}"])
             if ret == 0:
                 for line in out.splitlines():
                     parts = line.split()
@@ -188,7 +186,7 @@ def main():
 
     for container in containers:
         log(f"Inspecting container: {container}")
-        ret, inspect_out, err = run_cmd(f"docker inspect {container}")
+        ret, inspect_out, err = run_cmd(["docker", "inspect", container])
         if ret != 0 or not inspect_out:
             log(f"Failed to inspect {container}: {err}")
             unverified_reasons[container] = "inspect_failed"
@@ -237,7 +235,7 @@ def main():
         log(f"Container {container} candidates: {unique_candidates}")
         resolved_git_root = None
         for cand in unique_candidates:
-            ret, toplevel, _ = run_cmd(f"docker exec {container} git -C {cand} rev-parse --show-toplevel")
+            ret, toplevel, _ = run_cmd(["docker", "exec", container, "git", "-C", cand, "rev-parse", "--show-toplevel"])
             if ret == 0 and toplevel:
                 resolved_git_root = toplevel
                 break
@@ -246,9 +244,22 @@ def main():
             log(f"Resolved git repository inside {container} at {resolved_git_root}")
             # Check ancestry
             ret, _, _ = run_cmd(
-                f"docker exec {container} git -C {resolved_git_root} merge-base --is-ancestor {args.target_sha} HEAD"
+                [
+                    "docker",
+                    "exec",
+                    container,
+                    "git",
+                    "-C",
+                    resolved_git_root,
+                    "merge-base",
+                    "--is-ancestor",
+                    args.target_sha,
+                    "HEAD",
+                ]
             )
-            ret_sha, HEAD_sha, _ = run_cmd(f"docker exec {container} git -C {resolved_git_root} rev-parse HEAD")
+            ret_sha, HEAD_sha, _ = run_cmd(
+                ["docker", "exec", container, "git", "-C", resolved_git_root, "rev-parse", "HEAD"]
+            )
             observed_sha = HEAD_sha if ret_sha == 0 else "unknown"
             if ret == 0:
                 log(f"Container {container} verified successfully.")
@@ -367,9 +378,13 @@ def main():
     if docker_available and containers:
         log("Rung C: Checking container files / routes presence...")
         # Get list of files changed in commit
-        ret, files_out, _ = run_cmd(f"git diff --name-only {args.target_sha}~1 {args.target_sha}", cwd=args.repo_root)
+        ret, files_out, _ = run_cmd(
+            ["git", "diff", "--name-only", f"{args.target_sha}~1", args.target_sha], cwd=args.repo_root
+        )
         if ret != 0 or not files_out:
-            ret, files_out, _ = run_cmd(f"git show --name-only --pretty=format: {args.target_sha}", cwd=args.repo_root)
+            ret, files_out, _ = run_cmd(
+                ["git", "show", "--name-only", "--pretty=format:", args.target_sha], cwd=args.repo_root
+            )
 
         changed_files = [f.strip() for f in files_out.splitlines() if f.strip()] if ret == 0 else []
         backend_files = []
@@ -389,7 +404,7 @@ def main():
 
         if backend_files:
             for container in containers:
-                ret, inspect_out, _ = run_cmd(f"docker inspect {container}")
+                ret, inspect_out, _ = run_cmd(["docker", "inspect", container])
                 if ret != 0 or not inspect_out:
                     continue
                 try:
@@ -422,14 +437,15 @@ def main():
 
                 existing_files = []
                 for rel_path, cont_path in resolved_paths:
-                    ret, _, _ = run_cmd(f"docker exec {container} test -f {cont_path}")
+                    ret, _, _ = run_cmd(["docker", "exec", container, "test", "-f", cont_path])
                     if ret == 0:
                         existing_files.append((rel_path, cont_path))
 
                 lines_matched = []
                 for rel_path, cont_path in existing_files:
                     ret_diff, diff_out, _ = run_cmd(
-                        f"git diff -U0 {args.target_sha}~1 {args.target_sha} -- {rel_path}", cwd=args.repo_root
+                        ["git", "diff", "-U0", f"{args.target_sha}~1", args.target_sha, "--", rel_path],
+                        cwd=args.repo_root,
                     )
                     if ret_diff == 0 and diff_out:
                         added_lines = []
@@ -441,9 +457,7 @@ def main():
                                     added_lines.append(clean)
 
                         for line in added_lines[:5]:
-                            escaped_line = shlex.quote(line)
-                            escaped_path = shlex.quote(cont_path)
-                            ret_grep, _, _ = run_cmd(f"docker exec {container} grep -F {escaped_line} {escaped_path}")
+                            ret_grep, _, _ = run_cmd(["docker", "exec", container, "grep", "-F", line, cont_path])
                             if ret_grep == 0:
                                 lines_matched.append(f"container {container}:{cont_path} contains code: {line}")
 

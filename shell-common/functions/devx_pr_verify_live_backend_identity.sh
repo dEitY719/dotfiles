@@ -18,8 +18,14 @@ if [ -f "$_UX_LIB_PATH" ]; then
     # shellcheck disable=SC1090
     source "$_UX_LIB_PATH"
 else
-    ux_error() { echo "✗ $1" >&2; }
-    ux_info() { echo "ℹ $1"; }
+    ux_error() { echo "$1" >&2; }
+    ux_info() {
+        if [ -n "$1" ]; then
+            echo "$1"
+        else
+            echo ""
+        fi
+    }
     ux_header() { echo "=== $1 ==="; }
 fi
 unset _UX_LIB_PATH
@@ -119,32 +125,30 @@ devx_pr_verify_live_backend_identity() {
     fi
 
     # Build options
-    local opts="--repo-root $repo_root --target-repo $target_repo --target-sha $target_sha --base-url $base_url"
+    set -- --repo-root "$repo_root" --target-repo "$target_repo" --target-sha "$target_sha" --base-url "$base_url"
     if [ -n "$backend_ports" ]; then
-        opts="$opts --backend-ports $backend_ports"
+        set -- "$@" --backend-ports "$backend_ports"
     fi
     if [ -n "$container_name" ]; then
-        opts="$opts --container-name $container_name"
+        set -- "$@" --container-name "$container_name"
     fi
 
-    # Run helper
-    # shellcheck disable=SC2086
-    python3 "$python_script" $opts
+    python3 "$python_script" "$@"
 }
 
 show_devx_pr_verify_live_backend_identity_help() {
     ux_header "devx-pr-verify-live-backend-identity Help"
-    echo ""
+    ux_info ""
     ux_info "Usage: devx-pr-verify-live-backend-identity --repo-root <path> --target-repo <repo> --target-sha <sha> --base-url <url> [--backend-ports <ports>] [--container-name <name>]"
-    echo ""
+    ux_info ""
     ux_info "Options:"
-    echo "  --repo-root <path>      Host repository root directory"
-    echo "  --target-repo <repo>    GitHub repository owner/repo"
-    echo "  --target-sha <sha>      Target commit OID to check ancestry"
-    echo "  --base-url <url>        Frontend serving URL"
-    echo "  --backend-ports <ports> Comma-separated candidate backend ports"
-    echo "  --container-name <name> Explicit backend docker container name"
-    echo ""
+    ux_info "  --repo-root <path>      Host repository root directory"
+    ux_info "  --target-repo <repo>    GitHub repository owner/repo"
+    ux_info "  --target-sha <sha>      Target commit OID to check ancestry"
+    ux_info "  --base-url <url>        Frontend serving URL"
+    ux_info "  --backend-ports <ports> Comma-separated candidate backend ports"
+    ux_info "  --container-name <name> Explicit backend docker container name"
+    ux_info ""
 }
 
 alias devx-pr-verify-live-backend-identity='devx_pr_verify_live_backend_identity'
