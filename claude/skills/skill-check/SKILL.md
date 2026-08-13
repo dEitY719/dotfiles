@@ -51,8 +51,9 @@ audited skill names that appear in that file resolve to `[N/A] allowlisted`.
 License Declaration · Capability Declaration Consistency
 
 Check 14 cross-checks frontmatter `license` against a repo-root `LICENSE`
-(pre-empts scanner `MANIFEST_MISSING_LICENSE`). Check 15 scans shipped scripts
-and helpers for network signals and compares against `compatibility.network` (pre-empts
+(pre-empts scanner `MANIFEST_MISSING_LICENSE`). Check 15 scans helpers across
+`lib/`, legacy `scripts/`, and adjacent executables for network signals and
+compares against `compatibility.network` (pre-empts
 `TOOL_ABUSE_UNDECLARED_NETWORK`). Both are **read-only** — they flag a policy
 gap, never edit files.
 
