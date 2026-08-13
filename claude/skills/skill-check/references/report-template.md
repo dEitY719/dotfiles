@@ -37,7 +37,7 @@ References dir: <exists / missing>
 | #  | Check                          | Result | Notes                                      |
 |----|--------------------------------|--------|--------------------------------------------|
 | 14 | License Declaration            | WARN   | no license; repo LICENSE exists → add MIT  |
-| 15 | Capability Declaration Consistency | WARN | helpers import requests; network undeclared |
+| 15 | Capability Declaration Consistency | WARN | lib/scripts helper imports requests; network undeclared |
 
 Recommended tier: haiku — read-only audit, bounded output (declared: none yet)
 
