@@ -26,17 +26,18 @@ References dir: <exists / missing>
 | 9  | Verdict Output               | FAIL   | output ends without [OK]/[FAIL]       |
 | 10 | Next-action Hint             | PASS   | teardown shown in success report      |
 | 11 | No Emojis                    | PASS   | no emoji glyphs in body or references |
+| 12 | Executable Procedure Extraction | WARN | repeated fallback should move to lib/ |
 
 ### Model Recommendation Check
 | #  | Check                        | Result | Notes                                 |
 |----|------------------------------|--------|---------------------------------------|
-| 12 | Model Recommendation Metadata| WARN   | metadata absent (migration period)    |
+| 13 | Model Recommendation Metadata| WARN   | metadata absent (migration period)    |
 
 ### Security & Policy Alignment Checks
 | #  | Check                          | Result | Notes                                      |
 |----|--------------------------------|--------|--------------------------------------------|
-| 13 | License Declaration            | WARN   | no license; repo LICENSE exists → add MIT  |
-| 14 | Capability Declaration Consistency | WARN | scripts import requests; network undeclared |
+| 14 | License Declaration            | WARN   | no license; repo LICENSE exists → add MIT  |
+| 15 | Capability Declaration Consistency | WARN | helpers import requests; network undeclared |
 
 Recommended tier: haiku — read-only audit, bounded output (declared: none yet)
 
@@ -64,6 +65,7 @@ This skill's own tier: sonnet — orchestration, no deep edits
 ### WARN: Check N — <Name>
 **Problem:** <specific issue>
 **How to fix:** <concrete suggestion>
+For Check 12, name the helper to extract, its inputs/outputs, and the direct `lib/` call pattern.
 
 ## Next Actions
 1. <highest priority fix>
@@ -74,7 +76,7 @@ Run /skill:check again after fixes to verify.
 Rules:
 - Only include WARN and FAIL items in Issues & Improvements section
 - Quote actual lines from the file when describing problems
-- Score denominator excludes N/A checks (14 checks total, minus any N/A)
+- Score denominator excludes N/A checks (15 checks total, minus any N/A)
 - The "Model Recommendation Check" table row + "Recommended tier" line are
   always shown; the "Sub-skill Model Plan" section appears only for composite
   skills (omit it entirely for leaf skills)

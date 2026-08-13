@@ -1,6 +1,6 @@
 # Skill Quality Checks
 
-Fourteen checks, each rated PASS / WARN / FAIL / N/A.
+Fifteen checks, each rated PASS / WARN / FAIL / N/A.
 
 ---
 
@@ -37,7 +37,7 @@ FAIL — no output format defined
 
 ---
 
-## UX Quality Checks (6–11)
+## UX Quality Checks (6–12)
 
 ### Check 6: Help Flag Pattern
 PASS — `-h`/`--help`/`help` arg → reads `references/help.md` verbatim, then stops. No API calls.
@@ -95,9 +95,34 @@ FAIL output: list up to 5 matched files+lines and append the guidance
 
 ---
 
-## Model Recommendation Check (12)
+### Check 12: Executable Procedure Extraction
+Audit whether executable, repeatable procedures are still trapped in prose
+instead of being extracted into `lib/*.sh` or `lib/*.py`.
 
-### Check 12: Model Recommendation Metadata
+| Result | Criteria |
+|---|---|
+| PASS | deterministic/repetitive procedures are already delegated to helpers, or the skill is genuinely judgment-heavy |
+| WARN | at least one candidate helper is still described in prose, but the risk is limited and the remediation is straightforward |
+| FAIL | the skill relies on prose for multi-step fallback, repeated command sequences, parsing/validation, aggregation, or reproducible artifact generation |
+| N/A | pure reference or policy skill with no executable procedure to extract |
+
+Heuristics to look for:
+
+- multi-step try/retry/fallback instructions written only in prose
+- deterministic output generation steps without a helper
+- the same command sequence repeated across steps or references
+- parsing, validation, normalization, or aggregation logic explained but not coded
+
+WARN/FAIL remediation must name a concrete helper candidate, its expected
+inputs/outputs, and a direct call pattern such as
+`bash claude/skills/<name>/lib/<script>.sh` or
+`python claude/skills/<name>/lib/<script>.py`.
+
+---
+
+## Model Recommendation Check (13)
+
+### Check 13: Model Recommendation Metadata
 Read `references/model-recommendation.md` (rubric SSOT) for the full schema,
 tier rubric, migration gate, and compatibility policy. This check is
 **read-only — it recommends a tier, never switches models or writes files** (#809).
@@ -128,13 +153,13 @@ Recursion is 1-depth by default; `--recursive` opts into deeper traversal.
 
 ---
 
-## Security & Policy Alignment Checks (13–14)
+## Security & Policy Alignment Checks (14–15)
 
 These two checks pre-empt findings that external security scanners (e.g. an
 org's AgentToolbox scanner) raise against published skills. Both are
 **read-only — they flag a policy gap, never edit files** (audit-only invariant).
 
-### Check 13: License Declaration
+### Check 14: License Declaration
 Cross-check frontmatter `license` against the repo-root `LICENSE` file.
 
 | Result | Criteria |
@@ -148,8 +173,8 @@ or a `.git` directory is found; the LICENSE check is relative to that root.
 On WARN, recommend a concrete SPDX identifier when the LICENSE is recognizable
 (e.g. `license: MIT`), else `license: <SPDX>`.
 
-### Check 14: Capability Declaration Consistency
-Scan the skill's executable scripts (primarily `scripts/`, plus any
+### Check 15: Capability Declaration Consistency
+Scan the skill's executable helpers (primarily `lib/`, plus any
 `*.sh`/`*.py` shipped beside the SKILL.md) for network-capability signals and
 compare against the `compatibility.network` declaration. 1st-scope is **network
 only** — the capability the external scanner actually flags

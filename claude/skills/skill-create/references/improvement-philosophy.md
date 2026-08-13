@@ -10,7 +10,7 @@ This is the heart of the loop. You've run the test cases, the user has reviewed 
 
 3. **Explain the why.** Try hard to explain the **why** behind everything you're asking the model to do. Today's LLMs are *smart*. They have good theory of mind and when given a good harness can go beyond rote instructions. Even if the feedback from the user is terse or frustrated, try to actually understand the task and transmit this understanding into the instructions. If you find yourself writing ALWAYS or NEVER in all caps, that's a yellow flag — reframe and explain the reasoning instead. That's a more humane, powerful, and effective approach.
 
-4. **Look for repeated work across test cases.** Read the transcripts and notice if the subagents all independently wrote similar helper scripts or took the same multi-step approach. If all 3 test cases resulted in the subagent writing a `create_docx.py` or a `build_chart.py`, that's a strong signal the skill should bundle that script. Write it once, put it in `scripts/`, and tell the skill to use it.
+4. **Look for repeated work across test cases.** Read the transcripts and notice if the subagents all independently wrote similar helper scripts, retried the same manual sequence, or used the same A-then-B fallback. If all 3 test cases resulted in a `create_docx.py`, a `build_chart.py`, or the same recovery chain, that's a strong signal the skill should bundle that logic. Write it once, put it in `lib/`, and tell the skill to call it directly.
 
 This task is important and your thinking time is not the blocker; take your time and really mull things over. Write a draft revision then look at it with fresh eyes and improve it.
 
