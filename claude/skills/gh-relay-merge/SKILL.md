@@ -47,7 +47,7 @@ Confirm the destination is reachable (`git fetch` / `git ls-remote`) first.
 
 ## Step 2: Push-Capability Probe (branch point)
 
-Run the throwaway-ref dry-run push probe in `references/push-probe.md`.
+Run the throwaway-ref real push probe in `references/push-probe.md`.
 - Probe says push works → **SIMPLE PATH**: delegate to [[gh-pr]] (or an
   equivalent normal branch push + PR) and stop. Relay mode is a fallback,
   not the default.
