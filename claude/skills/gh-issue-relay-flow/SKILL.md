@@ -43,6 +43,12 @@ output its content verbatim, then stop. No API calls.
 
 Record `BASE_TS=$(date +%s)` for later elapsed-time reporting in Step 6.
 
+**Stop-on-error policy**: Steps 2–5 run in order, each only if the previous
+succeeded — a failure stops the chain immediately and reports per that
+step's own guidance (branch-reuse question, Open-Questions gate,
+re-delegate-on-failure, `gh:relay-merge`'s error surfaced unmodified);
+never skip ahead.
+
 ## Step 2: Resolve Destination + Branch
 
 Follow `references/branch-setup.md`. Resolves `--remote` (hard error on a
@@ -79,7 +85,9 @@ verbatim — no inline patch/gist/apply-guide logic here:
 Relay `gh:relay-merge`'s Step 8 output as-is (destination comment URL, gist
 count, whether SIMPLE PATH or relay mode was used), then end with a single
 `[OK]`/`[FAIL]` line summarizing the whole chain (branch created, Worker
-delegated, Advisor verification result, relay result).
+delegated, Advisor verification result, relay result), followed by a
+`Next:` line naming the concrete follow-up — the apply-guide comment URL
+(relay mode) or the created PR URL (SIMPLE PATH, no relay needed).
 
 ## Constraints
 
