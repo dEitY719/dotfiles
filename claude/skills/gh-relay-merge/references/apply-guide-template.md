@@ -35,6 +35,19 @@ Fill the placeholders and write to `$tmpdir/apply-guide.md` (outer fence is
 Source PR was **<merged|open>** on the internal remote. `git push` to this
 remote is proxy-blocked, so its commits are relayed as patches below.
 
+### Setup (destination branch)
+
+**Note:** `<remote-name>` here is the remote name *on the destination
+machine* — it may differ from the name used on the machine that ran this
+relay (e.g. this side calls it `upstream`, the destination side may call
+the same URL `origin`). Substitute whatever name actually resolves to this
+repo on the machine applying the guide.
+
+```bash
+git fetch <remote-name> <default-branch>
+git checkout -b <new-branch-name> <remote-name>/<default-branch>
+```
+
 ### Apply order
 
 | # | Patch (gist) | Description |
@@ -58,6 +71,13 @@ Apply **in this exact order** (each patch builds on the previous):
 curl -sL <raw-url-0001> | git am
 curl -sL <raw-url-0002> | git am
 # … one line per patch, in order
+```
+
+### Finish (push + PR)
+
+```bash
+git push -u <remote-name> <new-branch-name>
+gh pr create --repo <owner/repo> --title "<title>" --body "Closes #<N>"
 ```
 
 ### Excluded generated artifacts
@@ -94,3 +114,9 @@ What was verified on the origin side (from `gh pr view` in Step 1):
   was…" line with "Source range is `<base>..<head>` on the internal remote
   (no origin PR)."; omit the "Verification basis" section entirely — there
   is no `gh pr view` data to report.
+- **The destination-side remote name may not match this side's.** The
+  `<remote-name>` placeholder in "Setup" and "Finish" is resolved on the
+  *destination* machine, not here — e.g. this side's `upstream` (github.com)
+  may be the destination machine's `origin`. Fill the placeholder with
+  whatever name the destination-side reader will actually have configured,
+  or leave it as a literal placeholder for them to substitute if unknown.
