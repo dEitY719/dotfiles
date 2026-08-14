@@ -37,15 +37,18 @@ remote is proxy-blocked, so its commits are relayed as patches below.
 
 ### Setup (destination branch)
 
-**Note:** `<remote-name>` here is the remote name *on the destination
-machine* — it may differ from the name used on the machine that ran this
-relay (e.g. this side calls it `upstream`, the destination side may call
-the same URL `origin`). Substitute whatever name actually resolves to this
-repo on the machine applying the guide.
+**Note:** Commands below default to `origin` — the common case when the
+destination machine has only one remote for this repo. It may differ from
+the name used on the machine that ran this relay (e.g. this side calls it
+`upstream`; that's irrelevant on the destination side). If you already know
+the destination reader's remote is named differently, substitute it before
+posting; otherwise leave `origin` as the copy-pasteable default — the
+reader can swap it in seconds, but a `<placeholder>` blocks copy-paste
+entirely, which defeats the point of an apply-guide.
 
 ```bash
-git fetch <remote-name> <default-branch>
-git checkout -b <new-branch-name> <remote-name>/<default-branch>
+git fetch origin <default-branch>
+git checkout -b <new-branch-name> origin/<default-branch>
 ```
 
 ### Apply order
@@ -76,7 +79,7 @@ curl -sL <raw-url-0002> | git am
 ### Finish (push + PR)
 
 ```bash
-git push -u <remote-name> <new-branch-name>
+git push -u origin <new-branch-name>
 gh pr create --repo <owner/repo> --title "<title>" --body "Closes #<N>"
 ```
 
@@ -114,9 +117,14 @@ What was verified on the origin side (from `gh pr view` in Step 1):
   was…" line with "Source range is `<base>..<head>` on the internal remote
   (no origin PR)."; omit the "Verification basis" section entirely — there
   is no `gh pr view` data to report.
-- **The destination-side remote name may not match this side's.** The
-  `<remote-name>` placeholder in "Setup" and "Finish" is resolved on the
-  *destination* machine, not here — e.g. this side's `upstream` (github.com)
-  may be the destination machine's `origin`. Fill the placeholder with
-  whatever name the destination-side reader will actually have configured,
-  or leave it as a literal placeholder for them to substitute if unknown.
+- **The destination-side remote name may not match this side's** — e.g.
+  this side's `upstream` (github.com) may be the destination machine's
+  `origin`. "Setup" and "Finish" default to the literal `origin` (the
+  overwhelmingly common case for a single-remote clone) precisely so the
+  reader can copy-paste without editing anything; only override it inline
+  if you already know the destination uses a different name. Never leave
+  an unresolved `<placeholder>` in these two code blocks — that forces a
+  manual edit before every single command, which is the exact friction
+  this template exists to remove (#1346 review: an earlier draft used
+  `<remote-name>` here and the destination-side reader could not copy-paste
+  any of the three commands that referenced it).
