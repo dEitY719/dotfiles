@@ -48,8 +48,9 @@ Input is EITHER the positional `<origin-PR#>` OR `--commits <base>..<head>`
    `--commits <base>..<head>` range (base excluded, head included; no PR
    lookup) — plus the `--remote` destination (hard error on a missing
    remote — never silent fallback to `origin`), and confirms it is reachable.
-2. **Probes push capability** with a throwaway-ref `--dry-run` push. If
-   push works, delegates to `gh:pr` and stops (relay is a fallback only).
+2. **Probes push capability** with a real (non-dry-run) throwaway-ref
+   push, deleting the ref immediately on success. If push works, delegates
+   to `gh:pr` and stops (relay is a fallback only).
 3. On confirmed block (HTTP 403 / block-page), resolves the base/head SHAs
    (from the PR or the parsed `--commits` range) and runs a
    destination-divergence pre-flight — in both input modes.
