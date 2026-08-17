@@ -520,6 +520,10 @@ case "$1 $2" in
                 echo "${FAKE_VERIFY_FAIL_MSG:-graphql: insufficient scopes}" >&2
                 exit 1
             fi
+            # $FAKE_VERIFY_STDERR_NOISE models a real `gh` quirk: update
+            # notices / proxy warnings on stderr even on a *successful*
+            # (exit 0) call — see #1356 agy review, PR #1357.
+            [ -n "${FAKE_VERIFY_STDERR_NOISE:-}" ] && echo "$FAKE_VERIFY_STDERR_NOISE" >&2
             idx=$(cat "$FAKE_VERIFY_IDX")
             idx=$((idx + 1))
             echo "$idx" >"$FAKE_VERIFY_IDX"
@@ -565,6 +569,7 @@ _run_full_bash() {
         export FAKE_REPO_VIEW_FAIL='${FAKE_REPO_VIEW_FAIL:-0}'
         export FAKE_VERIFY_FAIL='${FAKE_VERIFY_FAIL:-0}'
         export FAKE_VERIFY_FAIL_MSG='${FAKE_VERIFY_FAIL_MSG:-}'
+        export FAKE_VERIFY_STDERR_NOISE='${FAKE_VERIFY_STDERR_NOISE:-}'
         export _GH_PROJECT_STATUS_RETRY_SLEEP=0
         export _GH_PROJECT_STATUS_VERIFY_SLEEP=0
         export _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS='${_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS:-0}'
@@ -602,6 +607,21 @@ _run_full_bash() {
     assert_output --partial "out=[In review]"
 }
 
+@test "query_current: stderr noise on a successful call does not pollute the value" {
+    # Regression guard (#1356, agy review on PR #1357): `gh` can write
+    # update-notifier / proxy-warning text to stderr even on a *successful*
+    # (exit 0) call. Before the fix, merging stderr into the same capture
+    # as stdout would have made this noise line — not "Approved" — the
+    # first line the function returns.
+    _setup_fake_gh_full
+    FAKE_VERIFY_SEQUENCE="Approved" \
+        FAKE_VERIFY_STDERR_NOISE='A new release of gh is available: 2.63.0' \
+        _run_full_bash 'out=$(_gh_project_status_query_current pr 42 2>/dev/null); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "out=[Approved]"
+}
+
 @test "query_current: no board attached → rc=0 with empty stdout" {
     # Fake gh returns zero rows (default FAKE_VERIFY_SEQUENCE) and exits 0.
     _setup_fake_gh_full
@@ -631,7 +651,10 @@ _run_full_bash() {
         _run_full_bash 'out=$(_gh_project_status_query_current pr 42 2>/dev/null); echo "rc=$?"; echo "out=[$out]"'
     assert_output --partial "rc=2"
     assert_output --partial "out=[]"
-    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 1 ]
+    # Two calls on failure: the primary attempt (stdout only, stderr
+    # discarded so success-path noise never pollutes _raw — agy review,
+    # PR #1357) plus one stderr-only re-run purely to classify the error.
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 2 ]
 }
 
 @test "query_current: gh api graphql failure — generic/network error → rc=1, empty stdout" {
@@ -643,7 +666,7 @@ _run_full_bash() {
         _run_full_bash 'out=$(_gh_project_status_query_current pr 42 2>/dev/null); echo "rc=$?"; echo "out=[$out]"'
     assert_output --partial "rc=1"
     assert_output --partial "out=[]"
-    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 1 ]
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 2 ]
 }
 
 @test "query_current: gh api graphql failure — 'Resource not accessible' pattern → rc=2, empty stdout" {
