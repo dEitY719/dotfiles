@@ -9,6 +9,9 @@
 #   3. proxy.local.sh는 자동으로 .gitignore에 의해 제외됨
 
 # 회사 프록시 설정
+# NOTE: 끝에 trailing slash('/')를 붙이지 마세요 — gateway-cli verify가
+#       정규화된(slash 없는) URL을 기대하며, 붙이면 [!] warn이 재발합니다.
+#       Confluence 가이드 문서를 그대로 복사할 때 특히 주의 (#1358).
 export http_proxy="http://12.26.204.100:8080"
 export HTTP_PROXY="$http_proxy"
 export https_proxy="http://12.26.204.100:8080"
