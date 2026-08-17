@@ -477,6 +477,11 @@ case "$1 $2" in
         ;;
     "repo view")
         echo "repo-view" >>"$LOG"
+        # $FAKE_REPO_VIEW_FAIL=1 models an owner/repo resolution failure
+        # (gh auth expiry, network reset) — see #1354.
+        if [ "${FAKE_REPO_VIEW_FAIL:-0}" = "1" ]; then
+            exit 1
+        fi
         echo "owner reponame"
         exit 0
         ;;
@@ -506,6 +511,12 @@ case "$1 $2" in
             exit 0
         elif [[ "$all_args" == *"fieldValueByName"* ]]; then
             echo "verify" >>"$LOG"
+            # $FAKE_VERIFY_FAIL=1 models a failing read query (missing
+            # `project` token scope, GraphQL error) — see #1354.
+            if [ "${FAKE_VERIFY_FAIL:-0}" = "1" ]; then
+                echo "graphql: insufficient scopes" >&2
+                exit 1
+            fi
             idx=$(cat "$FAKE_VERIFY_IDX")
             idx=$((idx + 1))
             echo "$idx" >"$FAKE_VERIFY_IDX"
@@ -526,6 +537,10 @@ GH
 
 # Run an arbitrary snippet in bash with the full fake gh on PATH.
 # All sleep knobs default to 0 so tests don't pause.
+# DOTFILES_ROOT_NO_CANONICALIZE=1 matches run_in_bash in test_helper.bash:
+# without it, bash/main.bash rewrites ${DOTFILES_ROOT} from this worktree
+# back to ~/dotfiles (issue #589) and the tests exercise the installed copy
+# instead of the code under test.
 _run_full_bash() {
     local snippet="$1"
     run bash --noprofile --norc -c "
@@ -533,6 +548,7 @@ _run_full_bash() {
         export SHELL_COMMON='${SHELL_COMMON}'
         export DOTFILES_FORCE_INIT=1
         export DOTFILES_TEST_MODE=1
+        export DOTFILES_ROOT_NO_CANONICALIZE=1
         export HOME='${HOME}'
         export TERM=dumb
         export PATH='${STUB_BIN}:${PATH}'
@@ -543,6 +559,8 @@ _run_full_bash() {
         export FAKE_REVIEW_FAIL='${FAKE_REVIEW_FAIL:-0}'
         export FAKE_MUTATE_SEQUENCE='${FAKE_MUTATE_SEQUENCE:-}'
         export FAKE_VERIFY_SEQUENCE='${FAKE_VERIFY_SEQUENCE:-}'
+        export FAKE_REPO_VIEW_FAIL='${FAKE_REPO_VIEW_FAIL:-0}'
+        export FAKE_VERIFY_FAIL='${FAKE_VERIFY_FAIL:-0}'
         export _GH_PROJECT_STATUS_RETRY_SLEEP=0
         export _GH_PROJECT_STATUS_VERIFY_SLEEP=0
         export _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS='${_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS:-0}'
@@ -561,6 +579,51 @@ _run_full_bash() {
     run_in_zsh 'typeset -f _gh_project_status_query_current >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
+}
+
+# ------- query_current exit-code contract (#1354) --------------------------
+# rc 0 + value = answered; rc 0 + empty = no board; rc 1 = query failed.
+# The gh-pr-merge Step 2-B gate fails closed on rc 1, so the three cases
+# must stay distinguishable.
+
+@test "query_current: Status value present → rc=0 with the value" {
+    _setup_fake_gh_full
+    FAKE_VERIFY_SEQUENCE="In review" \
+        _run_full_bash 'out=$(_gh_project_status_query_current pr 42); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "out=[In review]"
+}
+
+@test "query_current: no board attached → rc=0 with empty stdout" {
+    # Fake gh returns zero rows (default FAKE_VERIFY_SEQUENCE) and exits 0.
+    _setup_fake_gh_full
+    _run_full_bash 'out=$(_gh_project_status_query_current pr 42); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "out=[]"
+}
+
+@test "query_current: owner/repo resolution failure → rc=1, empty stdout" {
+    _setup_fake_gh_full
+    FAKE_REPO_VIEW_FAIL=1 \
+        _run_full_bash 'out=$(_gh_project_status_query_current pr 42); echo "rc=$?"; echo "out=[$out]"'
+    assert_output --partial "rc=1"
+    assert_output --partial "out=[]"
+    # Bails before the GraphQL read is ever attempted.
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 0 ]
+}
+
+@test "query_current: gh api graphql failure → rc=1, empty stdout" {
+    # Regression guard: the old `gh ... | head -n 1` pipeline reported
+    # head's rc (always 0), so a failed read was indistinguishable from
+    # "no board" and the merge gate silently passed.
+    _setup_fake_gh_full
+    FAKE_VERIFY_FAIL=1 \
+        _run_full_bash 'out=$(_gh_project_status_query_current pr 42 2>/dev/null); echo "rc=$?"; echo "out=[$out]"'
+    assert_output --partial "rc=1"
+    assert_output --partial "out=[]"
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 1 ]
 }
 
 @test "bash: _gh_project_status_set_and_verify helper exists" {
