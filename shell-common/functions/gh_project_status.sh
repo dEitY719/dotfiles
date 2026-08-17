@@ -320,16 +320,19 @@ _gh_project_status_set_and_verify() {
 #                          no projectV2 attached, item not on a board, or no
 #                          Status field set. A legitimate "no board" answer.
 #   1 + empty stdout     — the query itself failed: owner/repo resolution
-#                          failed, or the GraphQL read call below exited
-#                          non-zero (auth/scope/network error). Callers that
+#                          failed, the GraphQL read call below exited
+#                          non-zero (auth/scope/network error), or the
+#                          caller passed empty/invalid args. Callers that
 #                          gate on board state MUST fail closed here instead
 #                          of treating it as "no board".
-# Missing/invalid args still return 0 with empty output — that is a caller
-# bug, not a board answer nor a query failure (out of scope for #1354).
+# Missing/invalid args (empty kind/num, or an unrecognized kind) also
+# return 1 — a caller bug here must not be indistinguishable from "no
+# board attached", or a gate built on this helper would silently open
+# on its own misuse. Reviewer follow-up, PR #1355 (agy).
 _gh_project_status_query_current() {
     local _kind="$1" _num="$2"
-    [ -z "$_kind" ] && return 0
-    [ -z "$_num" ] && return 0
+    [ -z "$_kind" ] && return 1
+    [ -z "$_num" ] && return 1
 
     # Public entry point (gh-pr-merge Step 2-B gate) — also route to the
     # correct host when invoked directly without GH_HOST (issue #804).
@@ -339,7 +342,7 @@ _gh_project_status_query_current() {
     case "$_kind" in
         issue) _q_field='issue' ;;
         pr) _q_field='pullRequest' ;;
-        *) return 0 ;;
+        *) return 1 ;;
     esac
 
     local _owner _repo _resolved
