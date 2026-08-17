@@ -21,14 +21,12 @@
 
 ## 환경변수 / vault 해석 순서 (F-1, #1351)
 
-| Variable | 기본값 | 비고 |
-|---|---|---|
-| `OBSIDIAN_VAULT_DIR` | (모드 기반, 아래) | vault 루트. `write:task-history` 의 `TASK_HISTORY_DIR` 선례와 같은 이유(PC 마다 vault 경로가 다르다) |
-
 vault 해석은 `lib/resolve-vault.sh [explicit-vault-path]` 가 구현하며, 우선순위는:
 
 1. `--vault <path>` — 명시적 override, 최우선
-2. `$OBSIDIAN_VAULT_DIR` — 명시적 env override
+2. `$OBSIDIAN_VAULT_DIR` — vault 루트를 지정하는 명시적 env override
+   (`write:task-history` 의 `TASK_HISTORY_DIR` 선례와 같은 이유: PC 마다 vault
+   경로가 다르다)
 3. `~/.dotfiles-setup-mode` 를 읽어 PC 모드별 기본값 (신규):
 
    | 모드 파일 값 | 해석 결과 |
@@ -38,12 +36,11 @@ vault 해석은 `lib/resolve-vault.sh [explicit-vault-path]` 가 구현하며, �
 
 `internal` PC 2대는 사내용 vault(`obsidian-para-company`)가 WSL 상의 개인
 `obsidian-para` 클론과 별도로 존재한다 (`shell-common/functions/obsidian_claude.sh`
-가 쓰는 vault 와도 다르다). 이 3단계는 vault 후보 문자열만 넓히는 것이고, "vault
-루트가 없으면 만들지 않고 정지"하는 안전장치는 `resolve-vault.sh` 가 아니라
-SKILL.md Step 1 이 계속 소유한다.
+가 쓰는 vault 와도 다르다). 이 3단계는 vault 후보 문자열만 넓힌다.
 
 출력 디렉토리는 항상 `<vault>/99-Inbox/ai-session/` 이다. vault 루트 자체가
-없으면 **만들지 않고 정지**한다 (오타난 경로에 유령 vault 를 만들면 안 된다).
+없으면 **만들지 않고 정지**한다 (오타난 경로에 유령 vault 를 만들면 안 된다) —
+이 판단은 `resolve-vault.sh` 가 아니라 SKILL.md Step 1 의 몫이다.
 `99-Inbox/ai-session/` 만 없으면 `mkdir -p` 한다.
 
 ## 파일명 규칙 (F-2 / NF-1)
