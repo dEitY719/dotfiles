@@ -363,14 +363,8 @@ _gh_project_status_query_current() {
     # Substitute gh's output into a variable, then filter it — a
     # `gh ... | head -n 1` pipeline would report head's exit status, not
     # gh's, and the POSIX Golden Rules rule out ${PIPESTATUS[0]} (#1354).
-    local _raw _nl
-    # stderr is merged into the capture on purpose: the call below stays
-    # silent on stderr when it succeeds, so the happy-path parsing is
-    # unaffected, while a failure leaves the error text in _raw for the
-    # scope-vs-generic classification (#1356) — no temp file needed.
-    # Variables: $owner String!, $repo String!, $number Int!
-    if ! _raw=$(gh api graphql \
-        -f query="
+    local _raw _nl _gql_query _gql_jq _gql_err
+    _gql_query="
           query(\$owner: String!, \$repo: String!, \$number: Int!) {
             repository(owner: \$owner, name: \$repo) {
               ${_q_field}(number: \$number) {
@@ -383,14 +377,26 @@ _gh_project_status_query_current() {
                 }
               }
             }
-          }" \
-        -f owner="$_owner" -f repo="$_repo" -F number="$_num" \
-        --jq ".data.repository.${_q_field}.projectItems.nodes[]
+          }"
+    _gql_jq=".data.repository.${_q_field}.projectItems.nodes[]
               | .fieldValueByName?.name?
-              | select(. != null and . != \"\")" \
-        2>&1); then
-        # rc 2 vs rc 1 — see the contract above (#1356).
-        case "$_raw" in
+              | select(. != null and . != \"\")"
+
+    # Variables: $owner String!, $repo String!, $number Int!
+    if ! _raw=$(gh api graphql -f query="$_gql_query" \
+        -f owner="$_owner" -f repo="$_repo" -F number="$_num" \
+        --jq "$_gql_jq" \
+        2>/dev/null); then
+        # Do NOT merge stderr into the primary capture above: `gh` can write
+        # update-notifier / proxy-warning noise to stderr even on a
+        # *successful* call, which would corrupt _raw on the happy path
+        # (agy review, PR #1357). Re-run stderr-only, read-only, purely to
+        # classify the failure — rc 2 vs rc 1, see the contract above (#1356).
+        _gql_err=$(gh api graphql -f query="$_gql_query" \
+            -f owner="$_owner" -f repo="$_repo" -F number="$_num" \
+            --jq "$_gql_jq" \
+            2>&1 1>/dev/null)
+        case "$_gql_err" in
             *"insufficient scopes"*|*"Resource not accessible"*) return 2 ;;
             *) return 1 ;;
         esac
