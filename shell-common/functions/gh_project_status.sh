@@ -392,6 +392,7 @@ _gh_project_status_query_current() {
         # *successful* call, which would corrupt _raw on the happy path
         # (agy review, PR #1357). Re-run stderr-only, read-only, purely to
         # classify the failure — rc 2 vs rc 1, see the contract above (#1356).
+        # Variables: $owner String!, $repo String!, $number Int!
         _gql_err=$(gh api graphql -f query="$_gql_query" \
             -f owner="$_owner" -f repo="$_repo" -F number="$_num" \
             --jq "$_gql_jq" \
