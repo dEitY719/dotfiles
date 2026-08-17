@@ -19,13 +19,28 @@
 
 `--dry-run` 과 `--no-commit` 이 같이 오면 `--dry-run` 이 이긴다 (아무것도 쓰지 않음).
 
-## 환경변수
+## 환경변수 / vault 해석 순서 (F-1, #1351)
 
 | Variable | 기본값 | 비고 |
 |---|---|---|
-| `OBSIDIAN_VAULT_DIR` | `$HOME/para/project/obsidian-para` | vault 루트. `write:task-history` 의 `TASK_HISTORY_DIR` 선례와 같은 이유(PC 마다 vault 경로가 다르다) |
+| `OBSIDIAN_VAULT_DIR` | (모드 기반, 아래) | vault 루트. `write:task-history` 의 `TASK_HISTORY_DIR` 선례와 같은 이유(PC 마다 vault 경로가 다르다) |
 
-해석 순서: `--vault` → `OBSIDIAN_VAULT_DIR` → 기본 경로.
+vault 해석은 `lib/resolve-vault.sh [explicit-vault-path]` 가 구현하며, 우선순위는:
+
+1. `--vault <path>` — 명시적 override, 최우선
+2. `$OBSIDIAN_VAULT_DIR` — 명시적 env override
+3. `~/.dotfiles-setup-mode` 를 읽어 PC 모드별 기본값 (신규):
+
+   | 모드 파일 값 | 해석 결과 |
+   |---|---|
+   | `internal` / `2` (legacy 숫자값) | `$HOME/para/project/obsidian-para-company` |
+   | `external` / `public` / 빈 값 / 파일 없음 / 미인식 | `$HOME/para/project/obsidian-para` |
+
+`internal` PC 2대는 사내용 vault(`obsidian-para-company`)가 WSL 상의 개인
+`obsidian-para` 클론과 별도로 존재한다 (`shell-common/functions/obsidian_claude.sh`
+가 쓰는 vault 와도 다르다). 이 3단계는 vault 후보 문자열만 넓히는 것이고, "vault
+루트가 없으면 만들지 않고 정지"하는 안전장치는 `resolve-vault.sh` 가 아니라
+SKILL.md Step 1 이 계속 소유한다.
 
 출력 디렉토리는 항상 `<vault>/99-Inbox/ai-session/` 이다. vault 루트 자체가
 없으면 **만들지 않고 정지**한다 (오타난 경로에 유령 vault 를 만들면 안 된다).

@@ -18,6 +18,7 @@ SKILL_DIR="${DOTFILES_ROOT}/claude/skills/obsidian-session-clip"
 SAFE_NAME="${SKILL_DIR}/lib/safe-name.sh"
 COMMIT_NOTE="${SKILL_DIR}/lib/commit-note.sh"
 VERIFY_CLIP="${SKILL_DIR}/lib/verify-clip.sh"
+RESOLVE_VAULT="${SKILL_DIR}/lib/resolve-vault.sh"
 
 setup() {
     setup_isolated_home
@@ -25,6 +26,7 @@ setup() {
     SAFE_NAME="${SKILL_DIR}/lib/safe-name.sh"
     COMMIT_NOTE="${SKILL_DIR}/lib/commit-note.sh"
     VERIFY_CLIP="${SKILL_DIR}/lib/verify-clip.sh"
+    RESOLVE_VAULT="${SKILL_DIR}/lib/resolve-vault.sh"
 
     WORK="$(mktemp -d)"
 }
@@ -411,9 +413,67 @@ EOF
 }
 
 @test "lib scripts print their own usage on -h" {
-    for s in "$SAFE_NAME" "$COMMIT_NOTE" "$VERIFY_CLIP"; do
+    for s in "$SAFE_NAME" "$COMMIT_NOTE" "$VERIFY_CLIP" "$RESOLVE_VAULT"; do
         run bash "$s" -h
         assert_success
         assert_output --partial 'Usage:'
     done
+}
+
+# ── resolve-vault: PC-mode-aware vault default (issue #1351) ───────────
+
+@test "resolve-vault: explicit arg wins over env var and mode file" {
+    export OBSIDIAN_VAULT_DIR="${WORK}/env-vault"
+    printf 'internal\n' >"${HOME}/.dotfiles-setup-mode"
+
+    run bash "$RESOLVE_VAULT" "${WORK}/explicit-vault"
+    assert_success
+    assert_output "${WORK}/explicit-vault"
+}
+
+@test "resolve-vault: OBSIDIAN_VAULT_DIR wins over mode file when no explicit arg" {
+    export OBSIDIAN_VAULT_DIR="${WORK}/env-vault"
+    printf 'internal\n' >"${HOME}/.dotfiles-setup-mode"
+
+    run bash "$RESOLVE_VAULT"
+    assert_success
+    assert_output "${WORK}/env-vault"
+}
+
+@test "resolve-vault: mode file 'internal' resolves to the company vault" {
+    printf 'internal\n' >"${HOME}/.dotfiles-setup-mode"
+
+    run bash "$RESOLVE_VAULT"
+    assert_success
+    assert_output "${HOME}/para/project/obsidian-para-company"
+}
+
+@test "resolve-vault: legacy mode file '2' resolves to the company vault" {
+    printf '2\n' >"${HOME}/.dotfiles-setup-mode"
+
+    run bash "$RESOLVE_VAULT"
+    assert_success
+    assert_output "${HOME}/para/project/obsidian-para-company"
+}
+
+@test "resolve-vault: mode file 'external' resolves to the default vault" {
+    printf 'external\n' >"${HOME}/.dotfiles-setup-mode"
+
+    run bash "$RESOLVE_VAULT"
+    assert_success
+    assert_output "${HOME}/para/project/obsidian-para"
+}
+
+@test "resolve-vault: mode file 'public' resolves to the default vault" {
+    printf 'public\n' >"${HOME}/.dotfiles-setup-mode"
+
+    run bash "$RESOLVE_VAULT"
+    assert_success
+    assert_output "${HOME}/para/project/obsidian-para"
+}
+
+@test "resolve-vault: no mode file resolves to the default vault without crashing" {
+    run bash "$RESOLVE_VAULT"
+    assert_success
+    assert_output "${HOME}/para/project/obsidian-para"
 }

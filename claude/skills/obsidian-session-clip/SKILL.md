@@ -33,12 +33,12 @@ stop. No API calls, no file writes.
 
 `SKILL_DIR` = this file's directory. Parse per `references/options.md`: non-flag
 tokens join into `[description]`; `--no-commit`, `--dry-run`, `--vault <path>`
-(`--dry-run` wins). `VAULT` = `--vault` > `$OBSIDIAN_VAULT_DIR` >
-`$HOME/para/project/obsidian-para` — the WSL-side `obsidian-para` clone, a
-different vault from the one `shell-common/functions/obsidian_claude.sh` uses.
-If `VAULT` does not exist, print the resolved path plus the `--vault` usage line
-and **stop** (never create a vault at a typo'd path). Otherwise
-`mkdir -p "$VAULT/99-Inbox/ai-session"` (skip on `--dry-run`).
+(`--dry-run` wins). `VAULT` = `bash "${SKILL_DIR}/lib/resolve-vault.sh" "$VAULT_ARG"`
+(`$VAULT_ARG` = the parsed `--vault` value, empty if absent) — priority and
+PC-mode mapping in `references/options.md`. If `VAULT` does not exist, print
+the resolved path plus the `--vault` usage line and **stop** (never create a
+vault at a typo'd path). Otherwise `mkdir -p "$VAULT/99-Inbox/ai-session"`
+(skip on `--dry-run`).
 
 ## Step 2: Git context (F-6) + classify (F-4)
 
