@@ -66,7 +66,7 @@ gh pr comment <N> --repo "$TARGET_REPO" --body-file "$BODY"
 After posting, re-fetch `reviewDecision` and report that external review or
 admin merge is still required when branch protection applies.
 
-### Board promotion (`In review` -> `Approved`)
+### Board promotion (-> `Approved`)
 
 `--self-record` is the explicit human action that promotes the card for
 self-authored PRs (issue #1350). Run `references/board-approved-sync.sh.md`
