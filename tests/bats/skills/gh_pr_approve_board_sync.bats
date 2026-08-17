@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/skills/gh_pr_approve_board_sync.bats
-# Verify the Step 4.5 `In review` -> `Approved` promotion documented in
+# Verify the Step 4.5 promotion into `Approved` documented in
 #   claude/skills/gh-pr-approve/SKILL.md                        (Step 4.5)
 #   claude/skills/gh-pr-approve/references/board-approved-sync.sh.md
 # Source-of-truth fixture: _fixtures/gh_pr_approve_board_sync.sh.
@@ -11,7 +11,7 @@
 #   2. --self-record path (bypass=1)     → helper called with bypass=1 + audit line
 #   3. bypass does not leak to caller    → prefix form scoping contract
 #   4. helper rc=2                       → soft-fail WARN, rc=0
-#   5. --only-from "In review" guard on every call
+#   5. --only-from "Backlog,In progress,In review" guard on every call
 #   6. doc-guard: gh:pr-reply carries no Step 8 auto-approve any more
 #   7. doc-guard: gh:pr-approve documents the Step 4.5 promotion
 #   8. doc-guard: no OTHER skill promotes to Approved (the invariant)
@@ -38,7 +38,7 @@ teardown() {
     refute_output --partial 'bypassing #393'
     run cat "$FAKE_HELPER_LOG"
     assert_output --partial 'helper called bypass=unset'
-    assert_output --partial 'args=pr 1349 Approved --only-from In review'
+    assert_output --partial 'args=pr 1349 Approved --only-from Backlog,In progress,In review'
 }
 
 @test "board-approve: --self-record path calls helper WITH bypass=1 + audit line" {
@@ -47,7 +47,7 @@ teardown() {
     assert_output --partial 'self-record: bypassing #393 fail-closed guard for PR #1349'
     run cat "$FAKE_HELPER_LOG"
     assert_output --partial 'helper called bypass=1'
-    assert_output --partial 'args=pr 1349 Approved --only-from In review'
+    assert_output --partial 'args=pr 1349 Approved --only-from Backlog,In progress,In review'
 }
 
 @test "board-approve: bypass env var does NOT leak to caller scope" {
@@ -66,14 +66,17 @@ teardown() {
     assert_output --partial 'board sync rc=2 — continuing (soft-fail)'
 }
 
-@test "board-approve: --only-from \"In review\" guard is present on both paths" {
-    # Without it, a re-review on an already-merged PR would drag the
-    # `Done` card backwards into `Approved`.
+@test "board-approve: --only-from pre-merge whitelist is present on both paths" {
+    # `Done` is deliberately absent: without the guard, a re-review on an
+    # already-merged PR would drag the `Done` card backwards into
+    # `Approved`. The three allowed origins mirror
+    # .github/workflows/project-board-sync.yml's approve handler, so the
+    # skill path never refuses a promotion the workflow path would make.
     gh_pr_approve_board_sync_step45 1349 0 >/dev/null 2>&1
     gh_pr_approve_board_sync_step45 1349 1 >/dev/null 2>&1
     run cat "$FAKE_HELPER_LOG"
     assert_success
-    [ "$(grep -c -- '--only-from In review' "$FAKE_HELPER_LOG")" = "2" ]
+    [ "$(grep -c -- '--only-from Backlog,In progress,In review' "$FAKE_HELPER_LOG")" = "2" ]
 }
 
 @test "issue #1350 doc-guard: gh:pr-reply no longer auto-promotes to Approved" {
@@ -106,6 +109,6 @@ teardown() {
     grep -q 'board-approved-sync.sh.md' "${approve_dir}/SKILL.md"
     grep -q '_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1' \
         "${approve_dir}/references/board-approved-sync.sh.md"
-    grep -q -- '--only-from "In review"' \
+    grep -q -- '--only-from "Backlog,In progress,In review"' \
         "${approve_dir}/references/board-approved-sync.sh.md"
 }

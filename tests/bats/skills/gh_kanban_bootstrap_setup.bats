@@ -424,10 +424,15 @@ setup_basic_mocks() {
 # ---------------------------------------------------------------------------
 
 @test "issue #1350: --no-auto-approve-env is no longer a known option" {
+    # Assert the behaviour (rejected, and the offending flag is named),
+    # not the parser's exact wording — rewording "Unknown option: ..."
+    # must not break this test. The source-level check is the real
+    # invariant: the flag is gone from the parser entirely.
     setup_basic_mocks
     run_setup_kanban --owner acme --repo widget --no-auto-approve-env
     assert_failure
-    assert_output --partial "Unknown option: --no-auto-approve-env"
+    assert_output --partial "--no-auto-approve-env"
+    ! grep -q -- '--no-auto-approve-env' "$SETUP_KANBAN_SCRIPT"
 }
 
 @test "issue #1350: a normal run never creates or edits ~/.zshrc.local" {
