@@ -11,7 +11,7 @@
 
 | Flag | Description |
 |------|-------------|
-| `--self-record` | For a self-authored PR, read the diff and leave a comment-only review record. This does not satisfy review-based branch protection. |
+| `--self-record` | For a self-authored PR, read the diff and leave a comment-only review record, then move the board card `In review` -> `Approved`. This does not satisfy review-based branch protection. |
 | `--admin-merge` | For a self-authored PR, read the diff and merge with `gh pr merge --admin` when there are no blockers. Requires admin rights. |
 | `--squash`, `--rebase`, `--merge` | Optional merge strategy for `--admin-merge`. |
 
@@ -40,7 +40,10 @@
      comment linking them, then approves. Keeps the AI-driven issue workflow intact.
    - ≥1 BLOCKER → **Request changes** with per-blocker file:line pointers. Blockers
      stay on the PR so the author's next push triggers natural re-review.
-6. Re-fetches `reviewDecision` + `mergeStateStatus` and reports a compact summary
+6. Moves the project-board card `In review` -> `Approved` — but only on the
+   approve paths and on `--self-record`. This skill is the sole owner of the
+   `Approved` column (#1350); `gh:pr-reply` no longer auto-promotes.
+7. Re-fetches `reviewDecision` + `mergeStateStatus` and reports a compact summary
    (plus diagnosis if merge is still blocked for reasons outside your review).
 
 ## Self-authored PRs

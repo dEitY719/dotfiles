@@ -418,81 +418,38 @@ setup_basic_mocks() {
 }
 
 # ---------------------------------------------------------------------------
-# Issue #743: GH_PR_REPLY_AUTO_APPROVE_REPOS env wiring in ~/.zshrc.local
+# Issue #1350: the ~/.zshrc.local auto-approve env wiring was REMOVED along
+# with gh:pr-reply Step 8. `Approved` is now owned solely by gh:pr-approve,
+# so setup.sh must not touch the user's shell rc any more.
 # ---------------------------------------------------------------------------
 
-@test "issue #743: --no-auto-approve-env emits SKIP and leaves ~/.zshrc.local alone" {
+@test "issue #1350: --no-auto-approve-env is no longer a known option" {
     setup_basic_mocks
     run_setup_kanban --owner acme --repo widget --no-auto-approve-env
+    assert_failure
+    assert_output --partial "Unknown option: --no-auto-approve-env"
+}
+
+@test "issue #1350: a normal run never creates or edits ~/.zshrc.local" {
+    setup_basic_mocks
+    run_setup_kanban --owner acme --repo widget
     assert_success
-    assert_output --partial "[SKIP] auto-approve env wiring (--no-auto-approve-env)"
     [ ! -e "${TEST_TEMP_HOME}/.zshrc.local" ]
+    refute_output --partial "GH_PR_REPLY_AUTO_APPROVE_REPOS"
+    refute_output --partial "auto-approve env"
+    refute_output --partial "source ~/.zshrc.local"
 }
 
-@test "issue #743: --dry-run shows 'would add' and writes nothing" {
+@test "issue #1350: a pre-existing ~/.zshrc.local is left byte-identical" {
     setup_basic_mocks
-    run_setup_kanban --owner acme --repo widget --dry-run
-    assert_success
-    assert_output --partial '[dry-run] would add export GH_PR_REPLY_AUTO_APPROVE_REPOS="acme/widget" to ~/.zshrc.local'
-    [ ! -e "${TEST_TEMP_HOME}/.zshrc.local" ]
-}
-
-@test "issue #743: creates ~/.zshrc.local with header + variable when file is missing" {
-    setup_basic_mocks
+    printf '# user-managed\nexport FOO="bar"\n' >"${TEST_TEMP_HOME}/.zshrc.local"
+    before="$(cat "${TEST_TEMP_HOME}/.zshrc.local")"
     run_setup_kanban --owner acme --repo widget
     assert_success
-    assert_output --partial "[OK] auto-approve env updated: acme/widget appended to ~/.zshrc.local"
-    [ -f "${TEST_TEMP_HOME}/.zshrc.local" ]
-    grep -q '^# ~/.zshrc.local' "${TEST_TEMP_HOME}/.zshrc.local"
-    grep -q '^export GH_PR_REPLY_AUTO_APPROVE_REPOS="acme/widget"$' "${TEST_TEMP_HOME}/.zshrc.local"
+    [ "$(cat "${TEST_TEMP_HOME}/.zshrc.local")" = "$before" ]
 }
 
-@test "issue #743: idempotent — same repo twice does not duplicate the CSV entry" {
-    setup_basic_mocks
-    cat >"${TEST_TEMP_HOME}/.zshrc.local" <<'EOF'
-# user-managed
-export GH_PR_REPLY_AUTO_APPROVE_REPOS="acme/widget"
-EOF
-    run_setup_kanban --owner acme --repo widget
-    assert_success
-    assert_output --partial "[OK] auto-approve env already configured for acme/widget"
-    # Variable line must still appear exactly once and unchanged
-    occurrences="$(grep -c '^export GH_PR_REPLY_AUTO_APPROVE_REPOS=' "${TEST_TEMP_HOME}/.zshrc.local")"
-    [ "$occurrences" = "1" ]
-    grep -q '^export GH_PR_REPLY_AUTO_APPROVE_REPOS="acme/widget"$' "${TEST_TEMP_HOME}/.zshrc.local"
-}
-
-@test "issue #743: appends to existing CSV when repo not present" {
-    setup_basic_mocks
-    cat >"${TEST_TEMP_HOME}/.zshrc.local" <<'EOF'
-# user-managed
-export GH_PR_REPLY_AUTO_APPROVE_REPOS="other/repo,another/one"
-EOF
-    run_setup_kanban --owner acme --repo widget
-    assert_success
-    assert_output --partial "[OK] auto-approve env updated: acme/widget appended to ~/.zshrc.local"
-    grep -q '^export GH_PR_REPLY_AUTO_APPROVE_REPOS="other/repo,another/one,acme/widget"$' "${TEST_TEMP_HOME}/.zshrc.local"
-}
-
-@test "issue #743: PR #744 review — single-quoted CSV value is rewritten to double-quoted with repo appended" {
-    setup_basic_mocks
-    cat >"${TEST_TEMP_HOME}/.zshrc.local" <<'EOF'
-# user-managed
-export GH_PR_REPLY_AUTO_APPROVE_REPOS='other/repo'
-EOF
-    run_setup_kanban --owner acme --repo widget
-    assert_success
-    assert_output --partial "[OK] auto-approve env updated: acme/widget appended to ~/.zshrc.local"
-    # Single-quoted value must NOT corrupt the line (regression: pre-fix
-    # the unquoted fallback matched `'other/repo'` and produced
-    # `="'other/repo',acme/widget"`).
-    grep -q "^export GH_PR_REPLY_AUTO_APPROVE_REPOS=\"other/repo,acme/widget\"\$" \
-        "${TEST_TEMP_HOME}/.zshrc.local"
-    # No stray single quotes inside the rewritten value.
-    ! grep -qE "GH_PR_REPLY_AUTO_APPROVE_REPOS=.*'.*'" "${TEST_TEMP_HOME}/.zshrc.local"
-}
-
-@test "issue #743: existing-project re-run also wires env (idempotent)" {
+@test "issue #1350: existing-project re-run also leaves ~/.zshrc.local alone" {
     export MOCK_GH_AUTH_HEADERS="${TEST_TEMP_HOME}/auth-headers.txt"
     export MOCK_GH_REPO_CONTEXT_JSON="${TEST_TEMP_HOME}/repo.json"
     export MOCK_GH_EXISTING_PROJECTS_JSON="${TEST_TEMP_HOME}/projects.json"
@@ -512,8 +469,7 @@ EOF
     run_setup_kanban --owner deity --repo dotfiles
     assert_success
     assert_output --partial "already exists (#12)"
-    assert_output --partial "[OK] auto-approve env updated: deity/dotfiles appended to ~/.zshrc.local"
-    grep -q '^export GH_PR_REPLY_AUTO_APPROVE_REPOS="deity/dotfiles"$' "${TEST_TEMP_HOME}/.zshrc.local"
+    [ ! -e "${TEST_TEMP_HOME}/.zshrc.local" ]
 }
 
 @test "issue #699: detect_host derives GHE host from git remote" {

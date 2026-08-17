@@ -28,7 +28,6 @@ $EDITOR claude/settings.local.json
 ```json
 {
   "env": {
-    "GH_PR_REPLY_AUTO_APPROVE_REPOS": "dEitY719/dotfiles",
     "ANTHROPIC_BASE_URL": "http://a2g.samsungds.net:8090",
     "ANTHROPIC_AUTH_TOKEN": "",
     "ANTHROPIC_MODEL": "Qwen3.6-27B",

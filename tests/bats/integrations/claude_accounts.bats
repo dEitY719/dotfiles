@@ -1357,7 +1357,7 @@ run_with_fake_ssot() {
     "ANTHROPIC_MODEL": "TestModel-7B",
     "NODE_TLS_REJECT_UNAUTHORIZED": 0,
     "ANTHROPIC_CUSTOM_HEADERS": "x-foo: bar\nx-baz: qux",
-    "GH_PR_REPLY_AUTO_APPROVE_REPOS": "owner/repo"
+    "CUSTOM_EXTRA_VAR": "owner/repo"
   }
 }
 JSON
@@ -1365,12 +1365,12 @@ JSON
     run_in_bash '
         unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_MODEL \
               NODE_TLS_REJECT_UNAUTHORIZED ANTHROPIC_CUSTOM_HEADERS \
-              GH_PR_REPLY_AUTO_APPROVE_REPOS
+              CUSTOM_EXTRA_VAR
         _claude_yolo_export_settings_env "$HOME/.claude-test"
-        printf "BASE=[%s]\nTOKEN=[%s]\nMODEL=[%s]\nTLS=[%s]\nHEADERS=[%s]\nREPOS=[%s]\n" \
+        printf "BASE=[%s]\nTOKEN=[%s]\nMODEL=[%s]\nTLS=[%s]\nHEADERS=[%s]\nEXTRA=[%s]\n" \
             "${ANTHROPIC_BASE_URL}" "${ANTHROPIC_AUTH_TOKEN}" "${ANTHROPIC_MODEL}" \
             "${NODE_TLS_REJECT_UNAUTHORIZED}" "${ANTHROPIC_CUSTOM_HEADERS}" \
-            "${GH_PR_REPLY_AUTO_APPROVE_REPOS}"
+            "${CUSTOM_EXTRA_VAR}"
     '
     assert_success
     assert_output --partial "BASE=[http://gw.example.local:8090]"
@@ -1380,7 +1380,7 @@ JSON
     # ANTHROPIC_CUSTOM_HEADERS has an embedded newline — assert both halves.
     assert_output --partial "HEADERS=[x-foo: bar"
     assert_output --partial "x-baz: qux]"
-    assert_output --partial "REPOS=[owner/repo]"
+    assert_output --partial "EXTRA=[owner/repo]"
 }
 
 @test "bash: _claude_yolo_export_settings_env silent no-op when file missing" {
