@@ -10,7 +10,7 @@ description: >-
   the former scripts/ location per issue #699). Accepts the
   same flags as the script (`--owner`, `--repo`, `--title`,
   `--auto-archive-window`, `--hide-columns`, `--dry-run`,
-  `--skip-pr-template`, `--no-auto-approve-env`) plus
+  `--skip-pr-template`) plus
   `--no-bootstrap-labels`, `--force-label-sync`,
   `--with-smoke-test`. Accepts `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Grep
@@ -92,9 +92,7 @@ bash "${SKILL_DIR}/lib/setup.sh" <user-flags>
 
 Parse stdout for `Project board setup finished` (success) or
 `A project titled '<TITLE>' already exists` (idempotent re-run). Extract
-the Project URL and number. The script then idempotently wires the
-`gh:pr-reply` auto-approve env per `references/env-wiring.md` (suppress
-with `--no-auto-approve-env`).
+the Project URL and number.
 
 ## Step 8: UI Checklist + Report
 

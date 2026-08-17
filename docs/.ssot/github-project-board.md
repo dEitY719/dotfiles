@@ -54,7 +54,7 @@ Status 필드는 아래 6개 옵션을 이 순서로 가진다:
 | Ready       | (사용 안 함)                                    | (사용 안 함)                 |
 | In progress | 작업 중 (브랜치 생성, 커밋 진행) / 연결된 PR 오픈 | 리뷰 피드백 반영 중 (Changes requested 루프) |
 | In review   | (사용 안 함 — Issue는 도달하지 않음, #289)       | 본인의 리뷰 대기             |
-| Approved    | (사용 안 함 — Issue는 도달하지 않음)             | 리뷰 승인됨, 머지 대기        |
+| Approved    | (사용 안 함 — Issue는 도달하지 않음)             | 리뷰 승인됨 — 작성자가 머지 여부를 판단하는 단계 |
 | Done        | 연결된 PR 머지로 close됨                         | 머지 완료                   |
 
 ## 카드 정책 (Open Question #1 결정)
@@ -162,15 +162,23 @@ dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
   PR 을 만든 경우엔 수동 이동이 필요하다. `project-board-sync.yml` 의
   `pull_request.opened` 핸들러도 동일 동작을 수행하므로 어느 경로든
   수렴한다.
-- **PR 카드 `In review → Approved`**: 두 경로로 보정한다.
-  1. `/gh-pr-reply` 가 reply 라운드 종료 후 자동 전환한다. 1인 repo
-     에서는 GitHub 정책상 PR 작성자가 자기 PR 을 Approve 할 수 없어
-     빌트인 `Code review approved` 가 작동하지 않는다 — 이 갭을 메운다.
+- **PR 카드 `In review → Approved`**: 사람이 명시적으로 승인 행위를
+  했을 때만 전환된다 (#1350). `Approved` 컬럼의 소유자는
+  `/gh-pr-approve` 하나뿐이다.
+  1. `/gh-pr-approve` 가 4a/4b (실제 `--approve`) 또는 self-PR
+     `--self-record` 경로에서 전환한다. 1인 repo 에서는 GitHub 정책상
+     PR 작성자가 자기 PR 을 Approve 할 수 없어 빌트인
+     `Code review approved` 가 영원히 트리거되지 않는데,
+     `--self-record` 가 그 갭을 사람의 명시적 호출로 메운다
+     (#393 fail-closed 가드는 그 한 번의 호출에만 bypass).
   2. `project-board-sync.yml` 의 `pull_request_review.submitted` +
      `review.state == approved` 핸들러가 동일 전환을 수행한다. 복수
      리뷰어가 있는 repo 에서 외부 Approve 가 들어올 때도 동작한다.
-  `--only-from "Backlog,In progress,In review"` 가드를 적용해 이미
-  `Done` 인 PR 에 잘못 호출되어도 카드가 역행하지 않는다.
+  `--only-from "In review"` 가드를 적용해 이미 `Done` 인 PR 에 잘못
+  호출되어도 카드가 역행하지 않는다.
+  `/gh-pr-reply` 는 이 전환을 하지 않는다. reply 답변과 `agy`/`codex`
+  리뷰는 모두 `COMMENTED` 라 `reviewDecision` 을 바꾸지 않으므로,
+  자동 전환은 BLOCKING 판정 PR 까지 `Approved` 로 올려보냈다 (PR #1349).
 - **PR 카드 `Approved → Done`**: 두 갈래로 보정한다.
   - `/gh-pr-merge` / `/gh-pr-merge-emergency` 경유 머지: 스킬이 머지
     성공 직후 in-skill Step 4(a) 에서 직접 전환한다.
@@ -284,9 +292,10 @@ gh auth refresh -s project
   raw `gh pr create` 경로에선 수동 이동이 필요하다.
 - PR 카드 `Backlog → In review` 는 dotfiles 스킬 (`/gh-flow`,
   `/gh-pr`) 사용 시 자동, raw `gh pr create` 사용 시에만 수동이다.
-  `In review → Approved` 는 `/gh-pr-reply` 가 자동 처리한다 (1인
-  repo 에서 self-approve 불가로 빌트인 `Code review approved` 가
-  영원히 트리거되지 않는 갭을 메우기 위함). `In progress → In
+  `In review → Approved` 는 사람이 `/gh-pr-approve` 를 명시적으로
+  호출할 때만 일어난다 (#1350). 1인 repo 에서 self-approve 불가로
+  빌트인 `Code review approved` 가 영원히 트리거되지 않는 갭은
+  `/gh-pr-approve <N> --self-record` 가 메운다. `In progress → In
   review` (`Changes requested` 루프 탈출 시) 전환만 항상 수동이다
   — 빌트인·스킬 모두 이 경로를 자동화하지 않는다.
 - 보드가 없는 repo 에서 `/gh-pr`, `/gh-commit`, `/gh-pr-reply`,
@@ -323,6 +332,7 @@ gh auth refresh -s project
   - `claude/skills/gh-commit/SKILL.md`
   - `claude/skills/gh-pr/SKILL.md`
   - `claude/skills/gh-pr-reply/SKILL.md`
+  - `claude/skills/gh-pr-approve/SKILL.md` (`Approved` 컬럼 단독 소유자, #1350)
   - `claude/skills/gh-pr-merge/SKILL.md`
   - `claude/skills/gh-issue-flow/SKILL.md`
 - 관련 헬퍼: `shell-common/functions/gh_project_status.sh` (공용
