@@ -16,12 +16,14 @@
 # Stand-in for _gh_project_status_query_current. The real helper lives in
 # shell-common/functions/gh_project_status.sh; tests inject mock values
 # via FAKE_BOARD_STATUS so we don't need a live projectV2.
-# FAKE_BOARD_STATUS_RC mirrors the helper's exit-code contract (#1354):
+# FAKE_HELPER_RC mirrors the helper's exit-code contract (#1354) — same
+# knob name sibling fixtures use for stubbed-helper rc injection (see
+# gh_pr_approve_board_sync.sh, gh_pr_reply_board_sync.sh):
 #   0 — query answered (value in stdout, or empty = no board attached)
 #   1 — the query itself failed (auth / `project` scope / GraphQL error)
 _gh_project_status_query_current() {
     printf '%s' "${FAKE_BOARD_STATUS-}"
-    return "${FAKE_BOARD_STATUS_RC:-0}"
+    return "${FAKE_HELPER_RC:-0}"
 }
 
 # Mirrors SKILL.md Step 4-B verbatim. Any change here must propagate to
