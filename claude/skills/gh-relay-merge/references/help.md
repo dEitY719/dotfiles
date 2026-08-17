@@ -61,7 +61,7 @@ Input is EITHER the positional `<origin-PR#>` OR `--commits <base>..<head>`
    diff still exceeds the limit stops the skill (no arbitrary truncation).
 5. Uploads each patch via single-file `gh gist create`, one call at a time.
 6. Posts an apply-guide comment (gist table + `git am` steps + regeneration
-   commands + verification basis) to a new or `--target-issue` destination.
+   commands + background notes) to a new or `--target-issue` destination.
 7. Optionally (with explicit confirmation) closes a duplicate origin issue.
 8. Reports the destination URL, gist count, and any split-patch decisions.
 

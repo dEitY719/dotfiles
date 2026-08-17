@@ -75,25 +75,26 @@ Upload each patch via single-file `gh gist create`, sequentially — never
 multi-file/parallel — per `references/gist-relay.md`. Stop on any failure.
 
 ## Step 6: Post the Apply-Guide Comment
-Build the comment from `references/apply-guide-template.md`, posting to a NEW
-destination issue (default) or `--target-issue <N>`. The top must carry a
-bold "no skill selection / no re-investigation / no separate worktree"
-directive before the 3-step command block, then the ordered gist table,
-`git am` steps, regeneration commands, and background verification notes (PR mode only).
+
+Build the comment from `references/apply-guide-template.md`, which owns its
+wording and section order. Post to a NEW destination issue (default) or
+`--target-issue <N>`; fill the pre-existing-failures section from the brief.
 
 ## Step 7: Origin-side Cleanup (optional)
+
 Only with explicit user confirmation, close a duplicate origin-side tracking
 issue with a cross-reference comment. Never auto-close.
 
 ## Step 8: Report
+
 Summarize the destination issue/comment URL, gist count, whether any patches
 were split (artifact exclusion or file-group pre-split), and — if Step 2's
 probe passed — that the simple push+PR path was used instead of relay.
 
 ## Constraints
 
-See `references/constraints.md` for the full list. Hard rules: never fall back
-to `origin` silently · never plain-`push`-then-relay (probe first) · never
-multi-file/parallel `gh gist create` · never silently truncate (only generated
-artifacts stripped; oversized commits get file-group pre-split) · never
-auto-close an origin issue.
+See `references/constraints.md` for the full list. Hard rules: never fall
+back to `origin` silently · never plain-`push`-then-relay (probe first) ·
+never multi-file/parallel `gh gist create` · never silently truncate (only
+generated artifacts stripped; oversized commits get file-group pre-split) ·
+never auto-close an origin issue.
