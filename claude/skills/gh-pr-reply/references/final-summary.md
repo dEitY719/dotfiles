@@ -18,14 +18,9 @@ PR #123 review comments processed: 5 total
 - **Answered** — count of comments classified QUESTION.
 - **Closing line** — `-> All comments replied to.` confirms the
   politeness contract was met.
-
-## No board-promotion row
-
-Earlier revisions rendered an auto-approve outcome row here. That gate
-was removed in issue #1350: `Approved` is now owned exclusively by
-`gh:pr-approve`, so `gh:pr-reply` never promotes a card and the report
-has no row to render. The only board write left in this skill is the
-Step 6 `In review` recovery.
+- **No board-promotion row** — `Approved` is owned by `gh:pr-approve`
+  (#1350). This skill's only board write is the Step 6 `In review`
+  recovery, which the table does not report.
 
 ## Optional appendix
 

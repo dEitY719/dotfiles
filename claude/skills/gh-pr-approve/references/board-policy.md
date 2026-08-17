@@ -16,10 +16,15 @@ gate, not a bookkeeping stop.
 
 ## Ownership (issue #1350)
 
-`gh:pr-approve` is the **sole** writer of this column. Promotion happens
-only when a person explicitly runs `/gh-pr-approve` — see
+`gh:pr-approve` is the **sole skill** writer of this column: no other
+skill may promote a card into it, and promotion happens only when a
+person explicitly runs `/gh-pr-approve` — see
 `references/board-approved-sync.sh.md` for the per-path table and the
-`--self-record` bypass.
+`--self-record` bypass. The one non-skill writer is
+`.github/workflows/project-board-sync.yml`'s
+`pull_request_review.submitted` handler, which covers an external
+collaborator's Approve; both writers are enumerated in
+`docs/.ssot/github-project-board.md`.
 
 `gh:pr-reply` used to auto-promote after a reply round (its Step 8,
 allowlist-gated). That was removed: `agy` / `codex` reviews and

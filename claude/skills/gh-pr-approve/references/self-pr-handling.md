@@ -68,17 +68,11 @@ admin merge is still required when branch protection applies.
 
 ### Board promotion (`In review` -> `Approved`)
 
-`--self-record` is the explicit human action that owns the `Approved`
-column for self-authored PRs (issue #1350): the operator ran
-`/gh-pr-approve <N> --self-record` on purpose, so the card moves. Run
-`references/board-approved-sync.sh.md` with `BOARD_BYPASS=1` — a solo
-repo's own PR keeps `reviewDecision == ""` forever, so the #393
-fail-closed guard needs the single-call
-`_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1` prefix.
-
-The other two self-PR modes never promote: analysis-only performs no
-GitHub mutation at all, and `--admin-merge` drives the card to `Done`
-via the merge itself.
+`--self-record` is the explicit human action that promotes the card for
+self-authored PRs (issue #1350). Run `references/board-approved-sync.sh.md`
+with `BOARD_BYPASS=1`; that file holds the per-path table (the other two
+self-PR modes never promote) and the rationale for the `#393` bypass and
+its POSIX prefix form.
 
 ## `--admin-merge`: Admin Bypass Merge
 

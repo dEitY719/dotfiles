@@ -163,19 +163,23 @@ dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
   `pull_request.opened` 핸들러도 동일 동작을 수행하므로 어느 경로든
   수렴한다.
 - **PR 카드 `In review → Approved`**: 사람이 명시적으로 승인 행위를
-  했을 때만 전환된다 (#1350). `Approved` 컬럼의 소유자는
-  `/gh-pr-approve` 하나뿐이다.
+  했을 때만 전환된다 (#1350). 쓰기 주체는 아래 둘뿐이며, 스킬 중에서는
+  `/gh-pr-approve` 가 유일한 소유자다.
   1. `/gh-pr-approve` 가 4a/4b (실제 `--approve`) 또는 self-PR
      `--self-record` 경로에서 전환한다. 1인 repo 에서는 GitHub 정책상
      PR 작성자가 자기 PR 을 Approve 할 수 없어 빌트인
      `Code review approved` 가 영원히 트리거되지 않는데,
      `--self-record` 가 그 갭을 사람의 명시적 호출로 메운다
      (#393 fail-closed 가드는 그 한 번의 호출에만 bypass).
+     가드는 `--only-from "In review"` — 리뷰를 거친 카드만 올린다.
   2. `project-board-sync.yml` 의 `pull_request_review.submitted` +
      `review.state == approved` 핸들러가 동일 전환을 수행한다. 복수
      리뷰어가 있는 repo 에서 외부 Approve 가 들어올 때도 동작한다.
-  `--only-from "In review"` 가드를 적용해 이미 `Done` 인 PR 에 잘못
-  호출되어도 카드가 역행하지 않는다.
+     가드는 `--only-from "Backlog,In progress,In review"` — 외부
+     Approve 는 카드가 아직 `In review` 로 옮겨지기 전에도 도착할 수
+     있으므로 시작 컬럼을 더 넓게 잡는다.
+  어느 쪽이든 `Done` 은 `--only-from` 목록에 없으므로, 이미 머지된 PR
+  에 잘못 호출되어도 카드가 역행하지 않는다.
   `/gh-pr-reply` 는 이 전환을 하지 않는다. reply 답변과 `agy`/`codex`
   리뷰는 모두 `COMMENTED` 라 `reviewDecision` 을 바꾸지 않으므로,
   자동 전환은 BLOCKING 판정 PR 까지 `Approved` 로 올려보냈다 (PR #1349).
@@ -299,7 +303,8 @@ gh auth refresh -s project
   review` (`Changes requested` 루프 탈출 시) 전환만 항상 수동이다
   — 빌트인·스킬 모두 이 경로를 자동화하지 않는다.
 - 보드가 없는 repo 에서 `/gh-pr`, `/gh-commit`, `/gh-pr-reply`,
-  `/gh-pr-merge`, 또는 `/gh-pr-merge-emergency` 를 실행하면 공용 헬퍼
+  `/gh-pr-approve`, `/gh-pr-merge`, 또는 `/gh-pr-merge-emergency` 를
+  실행하면 공용 헬퍼
   `_gh_project_status_sync` 가 `projectItems` 가 0건임을 자동
   감지하고 조용히 no-op 한다 (별도 분기 불필요).
 - Projects v2 빌트인 워크플로우는 best-effort delivery 라 드물게
