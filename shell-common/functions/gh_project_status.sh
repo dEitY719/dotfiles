@@ -348,11 +348,10 @@ _gh_project_status_query_current() {
     _owner="${_resolved%% *}"
     _repo="${_resolved#* }"
 
-    # Capture `gh`'s own exit status BEFORE any pipe swallows it — a
-    # `gh ... | head -n 1` pipeline reports head's status, and the POSIX
-    # Golden Rules rule out ${PIPESTATUS[0]}. So: substitute first, then
-    # filter the captured text (#1354).
-    local _raw _rc
+    # Substitute gh's output into a variable, then filter it — a
+    # `gh ... | head -n 1` pipeline would report head's exit status, not
+    # gh's, and the POSIX Golden Rules rule out ${PIPESTATUS[0]} (#1354).
+    local _raw _nl
     # Variables: $owner String!, $repo String!, $number Int!
     _raw=$(gh api graphql \
         -f query="
@@ -373,13 +372,14 @@ _gh_project_status_query_current() {
         --jq ".data.repository.${_q_field}.projectItems.nodes[]
               | .fieldValueByName?.name?
               | select(. != null and . != \"\")" \
-        2>/dev/null)
-    _rc=$?
+        2>/dev/null) || return 1
 
-    [ "$_rc" -ne 0 ] && return 1
     [ -z "$_raw" ] && return 0
-    printf '%s\n' "$_raw" | head -n 1
-    return 0
+    # First line only — projectItems(first: 10) can yield multiple rows.
+    # Plain parameter expansion instead of `| head -n 1` to skip the fork.
+    _nl='
+'
+    printf '%s\n' "${_raw%%"$_nl"*}"
 }
 
 # Resolve cwd's GitHub owner/repo via `gh repo view`. Prints
