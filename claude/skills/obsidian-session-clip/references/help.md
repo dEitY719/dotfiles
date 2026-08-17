@@ -24,7 +24,7 @@
 
 | Variable | Description | Default |
 |---|---|---|
-| `OBSIDIAN_VAULT_DIR` | vault 루트 | PC 모드 기반 (아래) |
+| `OBSIDIAN_VAULT_DIR` | vault 루트 | 미설정 — 미설정이면 PC 모드 기반 기본 경로로 fallback (아래) |
 
 우선순위: `--vault` > `OBSIDIAN_VAULT_DIR` > `~/.dotfiles-setup-mode` 기반 기본
 경로. 모드별 경로 표는 `references/options.md`, 구현은
