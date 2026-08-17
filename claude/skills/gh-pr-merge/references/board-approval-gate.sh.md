@@ -29,8 +29,14 @@ if [ -r "$_HELPER" ]; then
         # rc != 0 = the query itself failed (owner/repo resolution, gh auth /
         # `project` scope, GraphQL or network error) — the gate was never
         # evaluated, so fail closed instead of merging on an unverified
-        # signal (#1354).
-        if [ "$_BOARD_QUERY_RC" -ne 0 ]; then
+        # signal (#1354). rc 2 narrows that to "the token has no `project`
+        # scope", the one cause the operator can fix directly (#1356).
+        if [ "$_BOARD_QUERY_RC" -eq 2 ]; then
+            echo "[gh-pr-merge] board status query failed — gh token missing 'project' scope." >&2
+            echo "Refusing to merge PR #$PR_NUMBER — could not verify board approval status (missing 'project' scope)."
+            echo "  Grant the gh token 'project' (read:project) scope, or use GH_PR_MERGE_SKIP_BOARD_CHECK=1 to bypass."
+            exit 2
+        elif [ "$_BOARD_QUERY_RC" -ne 0 ]; then
             echo "[gh-pr-merge] board status query failed — gate not evaluated." >&2
             echo "Refusing to merge PR #$PR_NUMBER — could not verify board approval status (query failed)."
             echo "  Check gh token 'project' scope / GraphQL access, or use GH_PR_MERGE_SKIP_BOARD_CHECK=1 to bypass."
@@ -55,13 +61,22 @@ fi
 - Empty Status **with rc 0** (no projectV2 attached, or the item is not
   on a board) → silently continue. Repos without a board run on the
   legacy `reviewDecision` gate from Step 2 alone.
-- Query failure, i.e. `_gh_project_status_query_current` **rc != 0**
-  (owner/repo resolution failed, gh auth / missing `project` token scope,
-  GraphQL or network error) → exit 2 with a *distinct* message
-  ("could not verify board approval status"), never the
-  `board Status is ...` wording. The gate was never evaluated, so it
-  fails closed rather than merging on an unverified approval signal
-  (#1354). Escape via `GH_PR_MERGE_SKIP_BOARD_CHECK=1`.
+- Query failure from a missing token scope, i.e.
+  `_gh_project_status_query_current` **rc == 2** (GitHub answered the
+  `projectItems` lookup with "insufficient scopes" / "Resource not
+  accessible") → exit 2 with a scope-specific message
+  ("could not verify board approval status (missing 'project' scope)")
+  that names the fix: grant the gh token the `project` (read:project)
+  scope. Checked *before* the generic branch so this cause never hides
+  behind the generic wording (#1356). Escape via
+  `GH_PR_MERGE_SKIP_BOARD_CHECK=1`.
+- Any other query failure, i.e. `_gh_project_status_query_current`
+  **rc != 0** (owner/repo resolution failed, gh auth, GraphQL or network
+  error) → exit 2 with a *distinct* message ("could not verify board
+  approval status (query failed)"), never the `board Status is ...`
+  wording. The gate was never evaluated, so it fails closed rather than
+  merging on an unverified approval signal (#1354). Escape via
+  `GH_PR_MERGE_SKIP_BOARD_CHECK=1`.
 - `GH_PR_MERGE_SKIP_BOARD_CHECK=1` → skip Step 2-B entirely. Document
   the reason in the operator's commit message or Slack channel; this
   flag is for repos in transition, not a quiet-the-warning button.

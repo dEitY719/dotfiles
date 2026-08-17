@@ -314,17 +314,26 @@ _gh_project_status_set_and_verify() {
 #
 # Args: kind num
 # Output (stdout): current Status name, or nothing.
-# Returns (three-way contract, issue #1354):
+# Returns (four-way contract, issues #1354 and #1356):
 #   0 + non-empty stdout — query succeeded, item has a Status value.
 #   0 + empty stdout     — query succeeded but there is nothing to report:
 #                          no projectV2 attached, item not on a board, or no
 #                          Status field set. A legitimate "no board" answer.
-#   1 + empty stdout     — the query itself failed: owner/repo resolution
-#                          failed, the GraphQL read call below exited
-#                          non-zero (auth/scope/network error), or the
-#                          caller passed empty/invalid args. Callers that
-#                          gate on board state MUST fail closed here instead
-#                          of treating it as "no board".
+#   1 + empty stdout     — the query itself failed for a generic reason:
+#                          owner/repo resolution failed, the GraphQL read
+#                          call below exited non-zero on a network/5xx/other
+#                          error, or the caller passed empty/invalid args.
+#                          Callers that gate on board state MUST fail closed
+#                          here instead of treating it as "no board".
+#   2 + empty stdout     — the query failed specifically because the `gh`
+#                          token lacks the `project` (read:project) OAuth
+#                          scope: GitHub answers the projectItems lookup
+#                          with "insufficient scopes" / "Resource not
+#                          accessible" no matter whether a board is even
+#                          attached. Split out from rc 1 (#1356) so callers
+#                          can tell the operator exactly what to fix instead
+#                          of printing a generic "query failed". Still a
+#                          failure — callers fail closed here too.
 # Missing/invalid args (empty kind/num, or an unrecognized kind) also
 # return 1 — a caller bug here must not be indistinguishable from "no
 # board attached", or a gate built on this helper would silently open
@@ -354,7 +363,11 @@ _gh_project_status_query_current() {
     # Substitute gh's output into a variable, then filter it — a
     # `gh ... | head -n 1` pipeline would report head's exit status, not
     # gh's, and the POSIX Golden Rules rule out ${PIPESTATUS[0]} (#1354).
-    local _raw _nl
+    local _raw _nl _gql_rc
+    # stderr is merged into the capture on purpose: `gh api graphql` stays
+    # silent on stderr when it succeeds, so the happy-path parsing below is
+    # unaffected, while a failure leaves the error text in _raw for the
+    # scope-vs-generic classification (#1356) — no temp file needed.
     # Variables: $owner String!, $repo String!, $number Int!
     _raw=$(gh api graphql \
         -f query="
@@ -375,7 +388,16 @@ _gh_project_status_query_current() {
         --jq ".data.repository.${_q_field}.projectItems.nodes[]
               | .fieldValueByName?.name?
               | select(. != null and . != \"\")" \
-        2>/dev/null) || return 1
+        2>&1)
+    _gql_rc=$?
+    if [ "$_gql_rc" -ne 0 ]; then
+        # Missing `project` scope fails this lookup on every repo, board or
+        # not — worth its own rc so the caller can name the fix (#1356).
+        case "$_raw" in
+            *"insufficient scopes"*|*"Resource not accessible"*) return 2 ;;
+            *) return 1 ;;
+        esac
+    fi
 
     [ -z "$_raw" ] && return 0
     # First line only — projectItems(first: 10) can yield multiple rows.
@@ -499,7 +521,8 @@ _gh_project_status_in_list() {
 # in gh_pr_edit_safe.sh):
 #   - _gh_project_status_sync          (write API; used by every gh-* skill)
 #   - _gh_project_status_query_current (read API; gh-pr-merge Step 2-B gate;
-#     rc 0 = answered — value or "no board", rc 1 = query failed, see #1354)
+#     rc 0 = answered — value or "no board", rc 1 = query failed,
+#     rc 2 = query failed on a missing `project` scope, see #1354/#1356)
 #   - _gh_pr_closing_issue_numbers     (PR→issue link; gh-pr, gh-pr-merge)
 # If any one is missing the helper is broken as a whole — fail loudly.
 # Per gemini-code-assist review on PR #725.
