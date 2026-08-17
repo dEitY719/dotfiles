@@ -74,10 +74,10 @@ target repo's standard lint/test commands, and only proceed once they pass.
 On failure, re-delegate with a sharper brief per that file's guidance.
 
 ## Step 5: Relay Delegation
+
 Record `HEAD_SHA=$(git rev-parse HEAD)`, then call `gh:relay-merge`
-verbatim — no inline patch/gist/apply-guide logic here. If Step 4 confirmed
-pre-existing unrelated failures, pass their exact file-path list verbatim in
-the delegation brief so `gh:relay-merge` can render the apply-guide's "Known unrelated pre-existing failures" section:
+verbatim — no inline patch/gist/apply-guide logic here. Pass along any
+pre-existing unrelated failure paths recorded in Step 4, as exact paths:
 
 `Skill(gh:relay-merge, "--commits <BASE_SHA>..<HEAD_SHA> --target-issue <N> --remote <remote>")`
 

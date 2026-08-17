@@ -33,14 +33,12 @@ Fill the placeholders and write to `$tmpdir/apply-guide.md` (outer fence is
 # Instruction — execute only the 3 steps below, in order
 
 **Do not choose a skill. Do not re-investigate. Do not create a separate worktree.**
-This comment is a patch-relay apply-guide. Execute the three steps below as written.
+This comment is a patch-relay apply-guide.
 
 ## 1) Create the destination branch
 
-Commands below default to `origin` — the common case when the destination
-machine has only one remote for this repo. If you already know the
-destination remote uses a different name, substitute it before posting;
-otherwise keep `origin` so the reader can copy-paste immediately.
+Commands below assume the destination remote is `origin`; substitute your
+own remote name if it differs.
 
 ```bash
 git fetch origin <default-branch>
@@ -83,13 +81,16 @@ gh pr create --repo <owner/repo> --title "<title>" --body "Closes #<N>"
 
 ## Reference
 
-Check this section only if the three commands above fail or if you need to
-regenerate an intentionally excluded artifact.
+Check this section only if a command above fails, if a lint/test run reports
+a failure after applying, or if you need to regenerate an excluded artifact.
 
 ### Known unrelated pre-existing failures
 
-- `<exact file path 1>` — already known unrelated failure; do not re-investigate, continue.
-- `<exact file path 2>` — already known unrelated failure; do not re-investigate, continue.
+These already failed on the origin side before this change. Do not
+re-investigate them; continue.
+
+- `<exact file path 1>`
+- `<exact file path 2>`
 
 (Omit this section entirely if none were confirmed on the origin side.)
 
@@ -120,20 +121,21 @@ What was verified on the origin side (from `gh pr view` in Step 1):
   `references/gist-relay.md`, not the web URLs.
 - Keep the apply order identical to the numeric patch order from
   `git format-patch` — out-of-order application breaks `git am`.
-- The verification-basis section reuses data already fetched in Step 1; do
-  not make extra API calls for it.
-- **`--commits` mode** (no origin PR object exists): replace the header
-  with `# Instruction — execute only the 3 steps below, in order` plus a
-  first background line stating `Source range is <base>..<head> on the
-  internal remote (no origin PR).`; omit the "Background" bullets derived
-  from `gh pr view` — there is no PR metadata to report.
+- The "Background" section reuses data already fetched in Step 1; do not
+  make extra API calls for it.
+- **`--commits` mode** (no origin PR object exists): keep the header as-is
+  and replace the "Background" intro line with `Source range is
+  <base>..<head> on the internal remote (no origin PR).`, dropping the
+  CI/Review/Origin-PR bullets — there is no `gh pr view` data to report.
+  The "Known unrelated pre-existing failures" section still applies when
+  the caller supplied a list.
 - **The destination-side remote name may not match this side's** — e.g.
   this side's `upstream` (github.com) may be the destination machine's
-  `origin`. "Setup" and "Finish" default to the literal `origin` (the
+  `origin`. Steps 1 and 3 default to the literal `origin` (the
   overwhelmingly common case for a single-remote clone) precisely so the
   reader can copy-paste without editing anything; only override it inline
   if you already know the destination uses a different name. Never leave
-  an unresolved `<placeholder>` in these two code blocks — that forces a
+  an unresolved `<placeholder>` in those two code blocks — that forces a
   manual edit before every single command, which is the exact friction
   this template exists to remove (#1346 review: an earlier draft used
   `<remote-name>` here and the destination-side reader could not copy-paste
