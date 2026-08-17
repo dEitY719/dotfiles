@@ -11,9 +11,9 @@ description: >-
   comment on the destination issue. Use when the user runs /gh:relay-merge,
   /gh-relay-merge, or asks "origin PR를 upstream 으로 릴레이", "push 막혀서
   patch+gist 로 넘겨줘", "relay merged PR to upstream via gist". Accepts
-  either `<origin-PR#>` or `--commits <base-sha>..<head-sha>` (mutually
-  exclusive) plus `[--remote <name-or-URL>] [--target-issue <N>]
-  [--generated-patterns <globs>]`, and `-h`/`--help`/`help`.
+  either `<origin-PR#>` or `--commits <base>..<head>` (mutually exclusive)
+  plus `[--remote <name-or-URL>] [--target-issue <N>] [--known-failures
+  <entries>] [--generated-patterns <globs>]`, and `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Write, Grep, Glob
 metadata:
   model_recommendation:
@@ -34,7 +34,7 @@ output its content verbatim, then stop. No API calls.
 
 Input is EITHER positional `<origin-PR#>` OR `--commits <base>..<head>`
 (both supplied → hard error, stop). Shared flags: `--remote`,
-`--target-issue`, `--generated-patterns`.
+`--target-issue`, `--known-failures`, `--generated-patterns`.
 - **PR mode**: `gh pr view <N> --repo <origin-repo> --json number,state,url,headRefOid,baseRefName,mergeCommit,statusCheckRollup,reviewDecision`.
   Do **not** require `merged` — use the PR's current head/base commits.
 - **`--commits` mode**: skip `gh pr view`; use the range directly. Git
@@ -78,7 +78,7 @@ multi-file/parallel — per `references/gist-relay.md`. Stop on any failure.
 
 Build the comment from `references/apply-guide-template.md`, which owns its
 wording and section order. Post to a NEW destination issue (default) or
-`--target-issue <N>`; fill the pre-existing-failures section from the brief.
+`--target-issue <N>`; render `--known-failures` into its known-failures section.
 
 ## Step 7: Origin-side Cleanup (optional)
 

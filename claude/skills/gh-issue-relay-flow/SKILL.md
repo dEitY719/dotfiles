@@ -75,11 +75,12 @@ On failure, re-delegate with a sharper brief per that file's guidance.
 
 ## Step 5: Relay Delegation
 
-Record `HEAD_SHA=$(git rev-parse HEAD)`, then call `gh:relay-merge`
-verbatim — no inline patch/gist/apply-guide logic here. Pass along any
-pre-existing unrelated failure paths recorded in Step 4, as exact paths:
+Record `HEAD_SHA=$(git rev-parse HEAD)`, then call `gh:relay-merge` verbatim
+— no inline patch/gist/apply-guide logic here. Pass Step 4's pre-existing
+unrelated failures through `--known-failures` (comma-separated
+`<path>[::<test-or-check>]` entries); omit the flag when Step 4 found none:
 
-`Skill(gh:relay-merge, "--commits <BASE_SHA>..<HEAD_SHA> --target-issue <N> --remote <remote>")`
+`Skill(gh:relay-merge, "--commits <BASE_SHA>..<HEAD_SHA> --target-issue <N> --remote <remote> [--known-failures <entries>]")`
 
 ## Step 6: Report
 

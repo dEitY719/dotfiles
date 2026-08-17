@@ -11,7 +11,14 @@ Input is EITHER the positional `<origin-PR#>` OR `--commits <base>..<head>`
 | flag | `--commits <base>..<head>` | — | Alternate input mode: relay this git range directly, skipping `gh pr view`. Standard git semantics — `base` EXCLUDED, `head` INCLUDED |
 | flag | `--remote <name-or-URL>` | `upstream` | Destination remote. Name (resolved via `git remote get-url`) or raw URL |
 | flag | `--target-issue <N>` | new issue | Post the apply-guide to this existing destination issue/PR instead of creating a new one |
+| flag | `--known-failures <entries>` | none (section omitted) | Comma-separated `<path>[::<test-or-check>]` entries for lint/test failures already confirmed pre-existing and unrelated on the origin side. Rendered verbatim into the apply-guide's "Known unrelated pre-existing failures" section |
 | flag | `--generated-patterns <globs>` | built-in list | Comma-separated globs marking generated artifacts to strip from oversized patches |
+
+`--known-failures` entry format: a bare `<path>` marks the whole file's
+current failures as known; `<path>::<test-or-check>` narrows it to one named
+test/check so a file that holds both a pre-existing failure and a new
+regression does not suppress investigation of the regression. Prefer the
+qualified form whenever the runner reports a test/check name.
 
 ## Usage
 
@@ -21,6 +28,7 @@ Input is EITHER the positional `<origin-PR#>` OR `--commits <base>..<head>`
 /gh-relay-merge 168 --remote fork                # relay to remote named 'fork'
 /gh-relay-merge 168 --remote https://github.com/org/repo.git
 /gh-relay-merge 168 --target-issue 42            # post guide to existing issue #42
+/gh-relay-merge --commits abc123..def456 --known-failures 'tests/test_a.py::test_legacy,tests/flaky.bats'
 /gh-relay-merge 168 --generated-patterns '**/gen/**,*.lock'
 /gh-relay-merge -h                               # this help
 ```
@@ -61,7 +69,8 @@ Input is EITHER the positional `<origin-PR#>` OR `--commits <base>..<head>`
    diff still exceeds the limit stops the skill (no arbitrary truncation).
 5. Uploads each patch via single-file `gh gist create`, one call at a time.
 6. Posts an apply-guide comment (gist table + `git am` steps + regeneration
-   commands + background notes) to a new or `--target-issue` destination.
+   commands + any `--known-failures` entries + background notes) to a new or
+   `--target-issue` destination.
 7. Optionally (with explicit confirmation) closes a duplicate origin issue.
 8. Reports the destination URL, gist count, and any split-patch decisions.
 
