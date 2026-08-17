@@ -32,11 +32,30 @@ on `$PATH` — that fails. The POSIX prefix form `VAR=val funcname …`
 scopes the binding to that one invocation, so the main shell never sees
 the bypass.
 
-## Why `--only-from "In review"`
+## Why `--only-from "Backlog,In progress,In review"`
 
-Defense-in-depth: the filter refuses to drag a card in from `Backlog` /
-`In progress` / `Done`. A re-review on an already-merged PR therefore
-cannot resurrect a `Done` card into `Approved`.
+Defense-in-depth: `Done` is deliberately absent, so a re-review on an
+already-merged PR cannot resurrect a `Done` card into `Approved`. That
+`Done` exclusion is the whole point of the filter.
+
+The three allowed origins match
+`.github/workflows/project-board-sync.yml`'s `pull_request_review.submitted`
+handler exactly. Both writers promote on the same human signal, so they
+must accept the same starting columns — otherwise the skill path refuses
+a promotion the workflow path would have made.
+
+A narrower `--only-from "In review"` was tried first and rejected: the
+`Code changes requested` builtin drops a PR card to `In progress`, and
+`In progress -> In review` recovery is only automatic when the author
+runs `/gh-pr-reply` and it actually pushes fix commits (its Step 6.5).
+On every other route back — a manual push, `/gh-pr-resolve-ci-fail`, a
+reply round where every comment was declined — the card stays at
+`In progress`, `/gh-pr-approve` silently refuses to promote it, and
+`gh:pr-merge` Step 2-B then fail-closes on `Status != Approved`. That
+pushes a normally-reviewed PR onto the emergency merge path for a
+bookkeeping reason. Requiring the card to have *visibly* passed through
+`In review` is not worth that failure mode; the human running
+`/gh-pr-approve` is the review signal.
 
 ## The block (soft-fail — never blocks the Step 5 report)
 
@@ -54,9 +73,9 @@ if [ -r "$_HELPER" ]; then
             printf '[gh-pr-approve] self-record: bypassing #393 fail-closed guard for PR #%s (operator intent).\n' \
                 "$PR_NUMBER" >&2
             _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1 \
-                _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "In review" || _rc=$?
+                _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "Backlog,In progress,In review" || _rc=$?
         else
-            _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "In review" || _rc=$?
+            _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "Backlog,In progress,In review" || _rc=$?
         fi
         if [ "$_rc" -ne 0 ]; then
             printf '[gh-pr-approve] board sync rc=%s — continuing (soft-fail).\n' "$_rc" >&2
@@ -75,7 +94,7 @@ the helper itself.
 Step 5 prints one line so the operator can see what happened:
 
 ```text
-Board: PR #<N> card -> Approved (only-from "In review")
+Board: PR #<N> card -> Approved (only-from "Backlog,In progress,In review")
 Board: skipped (rc=<N>) — card may need a manual move
 Board: not promoted (request-changes / analysis-only path)
 ```

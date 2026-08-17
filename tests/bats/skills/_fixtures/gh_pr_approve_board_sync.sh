@@ -11,8 +11,10 @@
 #   1. the POSIX prefix form `VAR=val funcname …` for the #393
 #      fail-closed bypass (a shell function cannot be invoked via
 #      `env VAR=val funcname`), scoped to one call only; and
-#   2. the `--only-from "In review"` guard that stops a `Done` card
-#      from being dragged back into `Approved`.
+#   2. the `--only-from "Backlog,In progress,In review"` guard that
+#      stops a `Done` card from being dragged back into `Approved`,
+#      while accepting every pre-merge column the
+#      project-board-sync.yml approve handler also accepts.
 #
 # Keep this file in sync with board-approved-sync.sh.md. If the block
 # changes, mirror the change here so the bats suite catches drift.
@@ -40,9 +42,9 @@ gh_pr_approve_board_sync_step45() {
         printf '[gh-pr-approve] self-record: bypassing #393 fail-closed guard for PR #%s (operator intent).\n' \
             "$PR_NUMBER" >&2
         _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1 \
-            _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "In review" || _rc=$?
+            _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "Backlog,In progress,In review" || _rc=$?
     else
-        _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "In review" || _rc=$?
+        _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "Backlog,In progress,In review" || _rc=$?
     fi
 
     if [ "$_rc" -ne 0 ]; then
