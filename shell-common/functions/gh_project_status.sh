@@ -313,9 +313,19 @@ _gh_project_status_set_and_verify() {
 # sufficient for the recovery contract.
 #
 # Args: kind num
-# Output (stdout): current Status name or empty string when no project /
-#                  no Status / gh failure.
-# Returns: 0 always.
+# Output (stdout): current Status name, or nothing.
+# Returns (three-way contract, issue #1354):
+#   0 + non-empty stdout — query succeeded, item has a Status value.
+#   0 + empty stdout     — query succeeded but there is nothing to report:
+#                          no projectV2 attached, item not on a board, or no
+#                          Status field set. A legitimate "no board" answer.
+#   1 + empty stdout     — the query itself failed: owner/repo resolution
+#                          failed, or the GraphQL read call below exited
+#                          non-zero (auth/scope/network error). Callers that
+#                          gate on board state MUST fail closed here instead
+#                          of treating it as "no board".
+# Missing/invalid args still return 0 with empty output — that is a caller
+# bug, not a board answer nor a query failure (out of scope for #1354).
 _gh_project_status_query_current() {
     local _kind="$1" _num="$2"
     [ -z "$_kind" ] && return 0
@@ -333,12 +343,18 @@ _gh_project_status_query_current() {
     esac
 
     local _owner _repo _resolved
-    _resolved=$(_gh_project_status_resolve_owner_repo) || return 0
+    # Resolution failure is a query failure, not "no board" (#1354).
+    _resolved=$(_gh_project_status_resolve_owner_repo) || return 1
     _owner="${_resolved%% *}"
     _repo="${_resolved#* }"
 
+    # Capture `gh`'s own exit status BEFORE any pipe swallows it — a
+    # `gh ... | head -n 1` pipeline reports head's status, and the POSIX
+    # Golden Rules rule out ${PIPESTATUS[0]}. So: substitute first, then
+    # filter the captured text (#1354).
+    local _raw _rc
     # Variables: $owner String!, $repo String!, $number Int!
-    gh api graphql \
+    _raw=$(gh api graphql \
         -f query="
           query(\$owner: String!, \$repo: String!, \$number: Int!) {
             repository(owner: \$owner, name: \$repo) {
@@ -357,8 +373,12 @@ _gh_project_status_query_current() {
         --jq ".data.repository.${_q_field}.projectItems.nodes[]
               | .fieldValueByName?.name?
               | select(. != null and . != \"\")" \
-        2>/dev/null \
-        | head -n 1
+        2>/dev/null)
+    _rc=$?
+
+    [ "$_rc" -ne 0 ] && return 1
+    [ -z "$_raw" ] && return 0
+    printf '%s\n' "$_raw" | head -n 1
     return 0
 }
 
@@ -475,7 +495,8 @@ _gh_project_status_in_list() {
 # Three public entry points are checked (matches the multi-function pattern
 # in gh_pr_edit_safe.sh):
 #   - _gh_project_status_sync          (write API; used by every gh-* skill)
-#   - _gh_project_status_query_current (read API; gh-pr-merge Step 2-B gate)
+#   - _gh_project_status_query_current (read API; gh-pr-merge Step 2-B gate;
+#     rc 0 = answered — value or "no board", rc 1 = query failed, see #1354)
 #   - _gh_pr_closing_issue_numbers     (PR→issue link; gh-pr, gh-pr-merge)
 # If any one is missing the helper is broken as a whole — fail loudly.
 # Per gemini-code-assist review on PR #725.
