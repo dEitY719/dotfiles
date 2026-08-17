@@ -8,6 +8,7 @@
 #   claude/skills/gh-pr-merge/references/project-board-sync.md      (Step 4)
 #   claude/skills/gh-commit/SKILL.md                                (Step 5)
 #   claude/skills/gh-pr-reply/references/board-sync-in-review.sh.md (Step 6.5)
+#   claude/skills/gh-pr-approve/references/board-approved-sync.sh.md (Step 4.5)
 #   claude/skills/gh-pr/references/project-board-sync.md            (Step 7)
 #   claude/skills/gh-pr-merge-emergency/references/project-board-sync.md
 #

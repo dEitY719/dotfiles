@@ -12,7 +12,9 @@
 #   3. bypass does not leak to caller    → prefix form scoping contract
 #   4. helper rc=2                       → soft-fail WARN, rc=0
 #   5. --only-from "In review" guard on every call
-#   6/7. doc-guards: gh:pr-reply carries no Approved promotion any more
+#   6. doc-guard: gh:pr-reply carries no Step 8 auto-approve any more
+#   7. doc-guard: gh:pr-approve documents the Step 4.5 promotion
+#   8. doc-guard: no OTHER skill promotes to Approved (the invariant)
 
 load '../test_helper'
 
@@ -79,7 +81,23 @@ teardown() {
     [ ! -e "${reply_dir}/references/auto-approve.md" ]
     ! grep -rq 'STEP8_OUTCOME' "$reply_dir"
     ! grep -rq 'GH_PR_REPLY_AUTO_APPROVE_REPOS' "$reply_dir"
-    ! grep -rqE '_gh_project_status_sync[[:space:]]+pr[^\n]*"Approved"' "$reply_dir"
+}
+
+@test "issue #1350 doc-guard: gh:pr-approve is the only skill promoting to Approved" {
+    # The invariant, not just the #1349 regression: no skill other than
+    # gh:pr-approve may carry an `_gh_project_status_sync pr … "Approved"`
+    # call. Catches Step 8 reappearing anywhere, not only in gh:pr-reply.
+    # (`.*` — not `[^\n]*`, which in ERE means "not backslash, not n".)
+    run grep -rlE '_gh_project_status_sync[[:space:]]+pr.*"Approved"' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/skills"
+    assert_success
+    while IFS= read -r hit; do
+        [ -n "$hit" ] || continue
+        case "$hit" in
+        */claude/skills/gh-pr-approve/*) ;;
+        *) fail "Approved promotion found outside gh:pr-approve: $hit" ;;
+        esac
+    done <<<"$output"
 }
 
 @test "issue #1350 doc-guard: gh:pr-approve documents the Step 4.5 promotion" {
