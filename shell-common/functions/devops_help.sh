@@ -493,8 +493,8 @@ _proxy_help_rows_commands() {
 }
 
 _proxy_help_rows_set() {
-    ux_bullet "export http_proxy=\"http://proxy.example.com:8080/\""
-    ux_bullet "export https_proxy=\"http://proxy.example.com:8080/\""
+    ux_bullet "export http_proxy=\"http://proxy.example.com:8080\""
+    ux_bullet "export https_proxy=\"http://proxy.example.com:8080\""
     ux_bullet "export no_proxy=\"localhost,127.0.0.1,.internal.domain.com\""
 }
 
