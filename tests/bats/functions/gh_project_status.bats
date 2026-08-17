@@ -511,10 +511,13 @@ case "$1 $2" in
             exit 0
         elif [[ "$all_args" == *"fieldValueByName"* ]]; then
             echo "verify" >>"$LOG"
-            # $FAKE_VERIFY_FAIL=1 models a failing read query (missing
-            # `project` token scope, GraphQL error) — see #1354.
+            # $FAKE_VERIFY_FAIL=1 models a failing read query — see #1354.
+            # $FAKE_VERIFY_FAIL_MSG picks the stderr text, which the helper
+            # classifies into rc 2 (missing `project` scope) vs rc 1
+            # (generic/network) since #1356; the default keeps the
+            # scope-failure shape earlier tests were written against.
             if [ "${FAKE_VERIFY_FAIL:-0}" = "1" ]; then
-                echo "graphql: insufficient scopes" >&2
+                echo "${FAKE_VERIFY_FAIL_MSG:-graphql: insufficient scopes}" >&2
                 exit 1
             fi
             idx=$(cat "$FAKE_VERIFY_IDX")
@@ -561,6 +564,7 @@ _run_full_bash() {
         export FAKE_VERIFY_SEQUENCE='${FAKE_VERIFY_SEQUENCE:-}'
         export FAKE_REPO_VIEW_FAIL='${FAKE_REPO_VIEW_FAIL:-0}'
         export FAKE_VERIFY_FAIL='${FAKE_VERIFY_FAIL:-0}'
+        export FAKE_VERIFY_FAIL_MSG='${FAKE_VERIFY_FAIL_MSG:-}'
         export _GH_PROJECT_STATUS_RETRY_SLEEP=0
         export _GH_PROJECT_STATUS_VERIFY_SLEEP=0
         export _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS='${_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS:-0}'
@@ -581,10 +585,13 @@ _run_full_bash() {
     assert_output --partial "ok"
 }
 
-# ------- query_current exit-code contract (#1354) --------------------------
-# rc 0 + value = answered; rc 0 + empty = no board; rc 1 = query failed.
-# The gh-pr-merge Step 2-B gate fails closed on rc 1, so the three cases
-# must stay distinguishable.
+# ------- query_current exit-code contract (#1354, #1356) -------------------
+# rc 0 + value = answered; rc 0 + empty = no board; rc 1 = query failed
+# generically (owner/repo resolution, network, GraphQL 5xx); rc 2 = query
+# failed because the gh token lacks the `project` scope (#1356).
+# The gh-pr-merge Step 2-B gate fails closed on both rc 1 and rc 2 but
+# prints a different message for each, so all four cases must stay
+# distinguishable.
 
 @test "query_current: Status value present → rc=0 with the value" {
     _setup_fake_gh_full
@@ -614,16 +621,38 @@ _run_full_bash() {
     [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 0 ]
 }
 
-@test "query_current: gh api graphql failure → rc=1, empty stdout" {
+@test "query_current: gh api graphql failure — missing project scope → rc=2, empty stdout" {
+    # The stub's default stderr ("insufficient scopes") is what GitHub emits
+    # when the token has no `project` scope — the projectItems lookup then
+    # fails on every repo, board attached or not. That deserves its own rc so
+    # the merge gate can name the fix instead of guessing (#1356).
+    _setup_fake_gh_full
+    FAKE_VERIFY_FAIL=1 \
+        _run_full_bash 'out=$(_gh_project_status_query_current pr 42 2>/dev/null); echo "rc=$?"; echo "out=[$out]"'
+    assert_output --partial "rc=2"
+    assert_output --partial "out=[]"
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 1 ]
+}
+
+@test "query_current: gh api graphql failure — generic/network error → rc=1, empty stdout" {
     # Regression guard: the old `gh ... | head -n 1` pipeline reported
     # head's rc (always 0), so a failed read was indistinguishable from
     # "no board" and the merge gate silently passed.
     _setup_fake_gh_full
-    FAKE_VERIFY_FAIL=1 \
+    FAKE_VERIFY_FAIL=1 FAKE_VERIFY_FAIL_MSG='graphql: connection reset by peer' \
         _run_full_bash 'out=$(_gh_project_status_query_current pr 42 2>/dev/null); echo "rc=$?"; echo "out=[$out]"'
     assert_output --partial "rc=1"
     assert_output --partial "out=[]"
-    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 1 ]
+}
+
+@test "query_current: gh api graphql failure — 'Resource not accessible' pattern → rc=2, empty stdout" {
+    # Second wording GitHub uses for the same scope problem — both globs
+    # must classify as rc 2, not just the "insufficient scopes" one.
+    _setup_fake_gh_full
+    FAKE_VERIFY_FAIL=1 FAKE_VERIFY_FAIL_MSG='graphql: Resource not accessible by integration' \
+        _run_full_bash 'out=$(_gh_project_status_query_current pr 42 2>/dev/null); echo "rc=$?"; echo "out=[$out]"'
+    assert_output --partial "rc=2"
+    assert_output --partial "out=[]"
 }
 
 @test "bash: _gh_project_status_set_and_verify helper exists" {

@@ -16,11 +16,12 @@
 # Stand-in for _gh_project_status_query_current. The real helper lives in
 # shell-common/functions/gh_project_status.sh; tests inject mock values
 # via FAKE_BOARD_STATUS so we don't need a live projectV2.
-# FAKE_HELPER_RC mirrors the helper's exit-code contract (#1354) — same
-# knob name sibling fixtures use for stubbed-helper rc injection (see
-# gh_pr_approve_board_sync.sh, gh_pr_reply_board_sync.sh):
+# FAKE_HELPER_RC mirrors the helper's exit-code contract (#1354, extended
+# by #1356) — same knob name sibling fixtures use for stubbed-helper rc
+# injection (see gh_pr_approve_board_sync.sh, gh_pr_reply_board_sync.sh):
 #   0 — query answered (value in stdout, or empty = no board attached)
-#   1 — the query itself failed (auth / `project` scope / GraphQL error)
+#   1 — the query itself failed (owner/repo resolution / GraphQL / network)
+#   2 — the query failed because the gh token lacks the `project` scope
 _gh_project_status_query_current() {
     printf '%s' "${FAKE_BOARD_STATUS-}"
     return "${FAKE_HELPER_RC:-0}"
@@ -29,8 +30,9 @@ _gh_project_status_query_current() {
 # Mirrors SKILL.md Step 4-B verbatim. Any change here must propagate to
 # the SKILL.md block, and vice versa. Returns:
 #   0 — proceed with merge (Approved, empty/no-board, or escape on)
-#   2 — refuse merge (query failed, or board Status set to anything other
-#       than Approved)
+#   2 — refuse merge (query failed — generically or on a missing `project`
+#       token scope (#1356) — or board Status set to anything other than
+#       Approved)
 gh_pr_merge_board_gate() {
     local _pr="$1" _repo="$2"
 
@@ -45,6 +47,14 @@ gh_pr_merge_board_gate() {
 
     # rc != 0 = the query itself failed — the gate was never evaluated,
     # so fail closed instead of merging on an unverified signal (#1354).
+    # rc 2 narrows that to a missing `project` token scope (#1356).
+    if [ "$_rc" -eq 2 ]; then
+        printf "[gh-pr-merge] board status query failed — gh token missing 'project' scope.\n" >&2
+        printf "Refusing to merge PR #%s — could not verify board approval status (missing 'project' scope).\n" "$_pr"
+        printf "  Grant the gh token 'project' (read:project) scope, or use GH_PR_MERGE_SKIP_BOARD_CHECK=1 to bypass.\n"
+        return 2
+    fi
+
     if [ "$_rc" -ne 0 ]; then
         printf '[gh-pr-merge] board status query failed — gate not evaluated.\n' >&2
         printf 'Refusing to merge PR #%s — could not verify board approval status (query failed).\n' "$_pr"

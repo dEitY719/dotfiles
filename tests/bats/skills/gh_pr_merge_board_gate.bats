@@ -15,6 +15,11 @@
 #   6. query rc=1, empty status          → rc=2 with a distinct message
 #   7. query rc=1, status also set       → rc=2 (rc wins over status content)
 #   8. query rc=1 + skip env var         → rc=0 (escape hatch still wins)
+#
+# Two more from issue #1356 (a missing `project` scope must not read as a
+# generic query failure):
+#   9. query rc=2, empty status          → rc=2 with a scope-specific message
+#  10. query rc=2 + skip env var         → rc=0 (escape hatch still wins)
 
 load '../test_helper'
 
@@ -103,6 +108,34 @@ teardown() {
     # it still wins even when the query would fail (matches test #4).
     FAKE_BOARD_STATUS=""
     FAKE_HELPER_RC=1
+    GH_PR_MERGE_SKIP_BOARD_CHECK=1 run gh_pr_merge_board_gate 42 owner/repo
+    assert_success
+    refute_output --partial "Refusing"
+}
+
+# --- issue #1356: missing `project` scope is not a generic query failure ----
+
+@test "board-gate: missing project scope (rc=2, empty status) → rc=2 with scope message" {
+    # Before #1356 this printed the generic "query failed" wording and the
+    # operator had to guess which of auth/scope/network was to blame.
+    FAKE_BOARD_STATUS=""
+    FAKE_HELPER_RC=2
+    run gh_pr_merge_board_gate 42 owner/repo
+    [ "$status" -eq 2 ]
+    assert_output --partial "missing 'project' scope"
+    assert_output --partial 'read:project'
+    assert_output --partial 'GH_PR_MERGE_SKIP_BOARD_CHECK=1'
+    # Neither the generic query-failure wording nor the not-Approved wording:
+    # each cause must stay greppable on its own.
+    refute_output --partial 'could not verify board approval status (query failed)'
+    refute_output --partial 'board Status is'
+}
+
+@test "board-gate: GH_PR_MERGE_SKIP_BOARD_CHECK=1 bypasses a missing-scope failure" {
+    # The escape hatch short-circuits before the query runs, so it wins over
+    # rc=2 just as it does over rc=1 (matches test #8).
+    FAKE_BOARD_STATUS=""
+    FAKE_HELPER_RC=2
     GH_PR_MERGE_SKIP_BOARD_CHECK=1 run gh_pr_merge_board_gate 42 owner/repo
     assert_success
     refute_output --partial "Refusing"
