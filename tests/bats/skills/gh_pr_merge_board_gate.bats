@@ -26,7 +26,7 @@ setup() {
 
 teardown() {
     teardown_isolated_home
-    unset FAKE_BOARD_STATUS FAKE_BOARD_STATUS_RC GH_PR_MERGE_SKIP_BOARD_CHECK
+    unset FAKE_BOARD_STATUS FAKE_HELPER_RC GH_PR_MERGE_SKIP_BOARD_CHECK
 }
 
 @test "board-gate: Status=Approved → rc=0 (proceed silently)" {
@@ -76,7 +76,7 @@ teardown() {
 @test "board-gate: query failure (rc=1, empty status) → rc=2 fail-closed" {
     # Before #1354 this collapsed into the empty-status branch and merged.
     FAKE_BOARD_STATUS=""
-    FAKE_BOARD_STATUS_RC=1
+    FAKE_HELPER_RC=1
     run gh_pr_merge_board_gate 42 owner/repo
     [ "$status" -eq 2 ]
     assert_output --partial 'could not verify board approval status (query failed)'
@@ -91,7 +91,7 @@ teardown() {
     # rc != 0 must short-circuit before the status content is considered —
     # a stale/partial stdout must never be trusted as the board answer.
     FAKE_BOARD_STATUS="Approved"
-    FAKE_BOARD_STATUS_RC=1
+    FAKE_HELPER_RC=1
     run gh_pr_merge_board_gate 42 owner/repo
     [ "$status" -eq 2 ]
     assert_output --partial 'could not verify board approval status (query failed)'
@@ -102,7 +102,7 @@ teardown() {
     # The sanctioned escape hatch short-circuits before the query runs, so
     # it still wins even when the query would fail (matches test #4).
     FAKE_BOARD_STATUS=""
-    FAKE_BOARD_STATUS_RC=1
+    FAKE_HELPER_RC=1
     GH_PR_MERGE_SKIP_BOARD_CHECK=1 run gh_pr_merge_board_gate 42 owner/repo
     assert_success
     refute_output --partial "Refusing"
