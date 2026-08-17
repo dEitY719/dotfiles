@@ -9,9 +9,9 @@
 #   3. proxy.local.sh는 자동으로 .gitignore에 의해 제외됨
 
 # 회사 프록시 설정
-export http_proxy="http://12.26.204.100:8080/"
+export http_proxy="http://12.26.204.100:8080"
 export HTTP_PROXY="$http_proxy"
-export https_proxy="http://12.26.204.100:8080/"
+export https_proxy="http://12.26.204.100:8080"
 export HTTPS_PROXY="$https_proxy"
 
 # Ref. https://confluence.samsungds.net/pages/viewpage.action?pageId=1367083095
