@@ -111,6 +111,7 @@ Regenerate them locally after applying:
 
 What was verified on the origin side (from `gh pr view` in Step 1):
 
+- Source PR state: **<merged|open>** on the internal remote
 - CI: <statusCheckRollup summary — e.g. all checks green>
 - Review: <reviewDecision — e.g. APPROVED by N reviewers>
 - Origin PR: <origin PR URL>
@@ -134,7 +135,8 @@ What was verified on the origin side (from `gh pr view` in Step 1):
 - **`--commits` mode** (no origin PR object exists): keep the header as-is
   and replace the "Background" intro line with `Source range is
   <base>..<head> on the internal remote (no origin PR).`, dropping the
-  CI/Review/Origin-PR bullets — there is no `gh pr view` data to report.
+  state/CI/Review/Origin-PR bullets — there is no `gh pr view` data to
+  report, and a commit range has no merge state.
   The "Known unrelated pre-existing failures" section still applies when
   `--known-failures` was supplied.
 - **The destination-side remote name may not match this side's** — e.g.
