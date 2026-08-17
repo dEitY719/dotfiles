@@ -36,30 +36,6 @@ Usage:
 EOF
 }
 
-resolve() {
-    explicit="${1:-}"
-
-    if [ -n "$explicit" ]; then
-        printf '%s\n' "$explicit"
-        return 0
-    fi
-
-    if [ -n "${OBSIDIAN_VAULT_DIR:-}" ]; then
-        printf '%s\n' "$OBSIDIAN_VAULT_DIR"
-        return 0
-    fi
-
-    mode="$( { cat "$HOME/.dotfiles-setup-mode" 2>/dev/null || true; } | tr -d '[:space:]')"
-    case "$mode" in
-        internal | 2)
-            printf '%s\n' "$HOME/para/project/obsidian-para-company"
-            ;;
-        *)
-            printf '%s\n' "$HOME/para/project/obsidian-para"
-            ;;
-    esac
-}
-
 main() {
     case "${1:-}" in
         -h | --help | help)
@@ -68,7 +44,29 @@ main() {
             ;;
     esac
 
-    resolve "${1:-}"
+    # Both overrides mean the same thing — "a caller already decided" — so one
+    # `:-` chain expresses the first-non-empty-wins precedence directly.
+    vault="${1:-${OBSIDIAN_VAULT_DIR:-}}"
+
+    if [ -z "$vault" ]; then
+        # Same normalisation as setup_mode() in the sibling
+        # obsidian-resolve-conflict lib and _dotfiles_setup_mode()
+        # (shell-common/tools/integrations/claude.sh): one `tr`, and the legacy
+        # numeric mode values written by pre-#571 setup.sh treated as aliases
+        # of their names. The `[ -f ]` guard is load-bearing — on a missing
+        # file the *shell* reports the failed redirect before `tr` ever runs,
+        # so an inner `2>/dev/null` would not suppress it.
+        mode=""
+        if [ -f "$HOME/.dotfiles-setup-mode" ]; then
+            mode="$(tr -d ' \t\n\r' <"$HOME/.dotfiles-setup-mode" 2>/dev/null || true)"
+        fi
+        case "$mode" in
+            2 | internal) vault="$HOME/para/project/obsidian-para-company" ;;
+            *) vault="$HOME/para/project/obsidian-para" ;;
+        esac
+    fi
+
+    printf '%s\n' "$vault"
 }
 
 main "$@"

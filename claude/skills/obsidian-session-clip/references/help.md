@@ -24,9 +24,11 @@
 
 | Variable | Description | Default |
 |---|---|---|
-| `OBSIDIAN_VAULT_DIR` | vault 루트 | `$HOME/para/project/obsidian-para` |
+| `OBSIDIAN_VAULT_DIR` | vault 루트 | PC 모드 기반 (아래) |
 
-우선순위: `--vault` > `OBSIDIAN_VAULT_DIR` > 기본 경로.
+우선순위: `--vault` > `OBSIDIAN_VAULT_DIR` > `~/.dotfiles-setup-mode` 기반 기본
+경로. 모드별 경로 표는 `references/options.md`, 구현은
+`lib/resolve-vault.sh -h` 가 SSOT 다.
 
 ## Output
 
