@@ -39,9 +39,13 @@ is ever run with this repo as the target, the standard commands are
 ## Run them and gate on the result
 
 - **Pass** — proceed to Step 5. If any failures here were confirmed
-  pre-existing and unrelated, record their exact file paths and carry that
-  list into the Step 5 `gh:relay-merge` brief, so the apply-guide can name
-  concrete files rather than a vague summary sentence.
+  pre-existing and unrelated, record each one as a `<path>::<test-or-check>`
+  entry and pass the comma-separated list to Step 5's `gh:relay-merge` call
+  via `--known-failures`, so the apply-guide names concrete failures rather
+  than a vague summary sentence. Use the bare `<path>` form only when every
+  current failure in that file is pre-existing — one file can hold both a
+  pre-existing failure and a new regression, and the unqualified form would
+  tell the destination-side reader to skip both.
 - **Fail** — do not proceed. Re-delegate to a fresh Worker call with a
   sharper brief: include the specific failing test output / lint errors,
   the file(s) involved, and anything the first brief's completion criteria

@@ -89,10 +89,11 @@ a failure after applying, or if you need to regenerate an excluded artifact.
 These already failed on the origin side before this change. Do not
 re-investigate them; continue.
 
-- `<exact file path 1>`
-- `<exact file path 2>`
+- `<path 1>` — failing check: `<test-or-check 1>`
+- `<path 2>` — whole file (no specific check named)
 
-(Omit this section entirely if none were confirmed on the origin side.)
+Anything not listed here is in scope: a failure in a listed file under a
+*different* test/check name is NOT covered and must be investigated.
 
 ### Excluded generated artifacts
 
@@ -121,6 +122,13 @@ What was verified on the origin side (from `gh pr view` in Step 1):
   `references/gist-relay.md`, not the web URLs.
 - Keep the apply order identical to the numeric patch order from
   `git format-patch` — out-of-order application breaks `git am`.
+- **"Known unrelated pre-existing failures" is driven entirely by the
+  `--known-failures` flag** (`references/help.md` → Arguments). Render one
+  bullet per comma-separated entry, in the order given: split the entry at
+  `::` and render the qualifier after the em dash (`` `<path>` — failing
+  check: `<test-or-check>` ``); a bare `<path>` entry renders the whole-file
+  form. Omit the whole section when the flag was not supplied — never
+  invent entries, and never widen a qualified entry to the whole file.
 - The "Background" section reuses data already fetched in Step 1; do not
   make extra API calls for it.
 - **`--commits` mode** (no origin PR object exists): keep the header as-is
@@ -128,7 +136,7 @@ What was verified on the origin side (from `gh pr view` in Step 1):
   <base>..<head> on the internal remote (no origin PR).`, dropping the
   CI/Review/Origin-PR bullets — there is no `gh pr view` data to report.
   The "Known unrelated pre-existing failures" section still applies when
-  the caller supplied a list.
+  `--known-failures` was supplied.
 - **The destination-side remote name may not match this side's** — e.g.
   this side's `upstream` (github.com) may be the destination machine's
   `origin`. Steps 1 and 3 default to the literal `origin` (the
