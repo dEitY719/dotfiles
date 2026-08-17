@@ -266,7 +266,7 @@ Issue:
     Backlog ─[/gh-commit]──▶ In progress ─[PR merge via Closes #N]──▶ Done
 
 PR:
-    Backlog ─[/gh-pr]──▶ In review ─[/gh-pr-reply or 외부 Approve]──▶ Approved ─[merge]──▶ Done
+    Backlog ─[/gh-pr]──▶ In review ─[/gh-pr-approve or 외부 Approve]──▶ Approved ─[merge]──▶ Done
                             ▲                                            │
                             └────────────── [수동 재리뷰] ── In progress ◀─ [Changes requested]
 ```
@@ -286,14 +286,16 @@ Issue 는 `In review` 에 도달하지 않는다 (#289) — 그 컬럼은 PR 전
 - PR `Backlog → In review`:
   `/gh-flow`·`/gh-pr` 자동, raw `gh pr create` 사용 시 수동.
 - PR `In review → Approved`:
-  `/gh-pr-reply` 자동, 또는 외부 협업자 Approve 시 built-in workflow 자동.
-  1인 repo 에서는 self-approve 불가라 `/gh-pr-reply` 가 사실상 갭을 메운다.
+  사람이 `/gh-pr-approve` 를 명시적으로 호출할 때만 전환된다 (#1350).
+  외부 협업자 Approve 시에는 built-in workflow 가 자동 처리한다.
+  1인 repo 에서는 self-approve 불가라 `/gh-pr-approve <N> --self-record`
+  가 그 갭을 메운다. `/gh-pr-reply` 는 이 전환을 하지 않는다.
 - PR `In progress → In review`:
   `Changes requested` 루프 탈출 시 수동.
 - 보드 미연결 repo:
   `_gh_project_status_sync` 가 `projectItems == 0` 을 감지하고 조용히
   return 0 한다. 호출자:
-  `/gh-flow`, `/gh-pr`, `/gh-commit`, `/gh-pr-reply`.
+  `/gh-flow`, `/gh-pr`, `/gh-commit`, `/gh-pr-reply`, `/gh-pr-approve`.
 - 그 외 상태 전환:
   GitHub Projects v2 built-in workflow 가 자동 처리한다.
 

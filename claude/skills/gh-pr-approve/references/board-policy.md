@@ -10,6 +10,25 @@ A PR card may only sit in the `Approved` column when GitHub's
 `reviewDecision` for that PR equals `APPROVED`. Any other state
 (`REVIEW_REQUIRED`, `CHANGES_REQUESTED`, empty) is a policy violation.
 
+The column's purpose: **the PR is already reviewed, and the author is
+now deciding whether to actually merge it.** It is a human decision
+gate, not a bookkeeping stop.
+
+## Ownership (issue #1350)
+
+`gh:pr-approve` is the **sole** writer of this column. Promotion happens
+only when a person explicitly runs `/gh-pr-approve` — see
+`references/board-approved-sync.sh.md` for the per-path table and the
+`--self-record` bypass.
+
+`gh:pr-reply` used to auto-promote after a reply round (its Step 8,
+allowlist-gated). That was removed: `agy` / `codex` reviews and
+`gh:pr-reply` answers all post as `COMMENTED`, which never changes
+`reviewDecision`, so the `""|null|APPROVED` guard passed
+unconditionally and BLOCKING PRs landed in `Approved` (PR #1349). The
+env var `GH_PR_REPLY_AUTO_APPROVE_REPOS` and its `~/.zshrc.local`
+wiring are gone with it.
+
 The same rule cascades into `gh:pr-merge`: a card whose Status is not
 `Approved` cannot be merged via the regular `/gh-pr-merge` skill — the
 caller is redirected to `/gh-pr-merge-emergency` for an admin override
@@ -77,6 +96,7 @@ guard.
 
 ## See also
 
+- `references/board-approved-sync.sh.md` — Step 4.5 promotion block.
 - `shell-common/functions/gh_project_status.sh` — write-side guard impl.
 - `claude/skills/gh-pr-merge/SKILL.md` Step 2-B — merge-gate impl.
 - `claude/skills/gh-pr-merge/references/board-policy.md` — cross-link.

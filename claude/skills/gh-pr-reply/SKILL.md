@@ -106,20 +106,15 @@ no-op when `PUSHED_FIXES == 0`).
 ## Step 7: Report
 
 Print the summary table per `references/final-summary.md` (Accepted /
-Declined / Answered counts, commit SHAs, skipped comments, the
-`STEP8_OUTCOME`-driven Step 8 row, and the lingering `CHANGES_REQUESTED`
-nudge — all rendering rules in that reference; an empty `STEP8_OUTCOME` is an
-**incomplete** report, issue #662). Then post the ai-metrics PR comment per
+Declined / Answered counts, commit SHAs, skipped comments, and the
+lingering `CHANGES_REQUESTED` nudge — all rendering rules in that
+reference). Then post the ai-metrics PR comment per
 `references/ai-metrics-comment.sh.md` (soft-fail; skip when `GH_DISABLE_AI_METRICS=1`).
-
-## Step 8: Solo-Repo Auto-Approve (opt-in, soft-fail)
-
-After Step 7, optionally move the PR card from `In review` to `Approved`.
-Run the 4-guard gate per `references/auto-approve.md`.
 
 ## Constraints
 
 - **Never skip a reply** — even "Declined: out of scope" counts, bot comments included; core contract. Never dismiss a bot comment as "just a bot".
+- Never move the PR card to `Approved` — that column is owned by `gh:pr-approve` (#1350). Replies/bot reviews are `COMMENTED` and never change `reviewDecision`, so promoting on them lands unreviewed PRs in `Approved` (#1349 regression). Step 6 `In review` recovery is the only board write here.
 - Never close/resolve threads programmatically — leave that to the user.
 - Never fix files outside the PR's diff without flagging scope creep first.
 - Never `--force-push`. If history rewrite is needed, stop and ask.

@@ -29,7 +29,6 @@ label bootstrap, and host-aware UI checklist.
 | `--hide-columns` | Add solo-repo hide guidance for `Approved` and `Ready` | off |
 | `--dry-run` | Print the plan without mutations | off |
 | `--skip-pr-template` | Skip remote PR template creation/check | off |
-| `--no-auto-approve-env` | Skip wiring `GH_PR_REPLY_AUTO_APPROVE_REPOS` into `~/.zshrc.local` (non-solo / org / collab repos) | env wired |
 
 ## Prerequisites
 
@@ -50,11 +49,7 @@ label bootstrap, and host-aware UI checklist.
    `build`->`chore`) — idempotent.
 4. Dry-runs `lib/setup.sh`. Aborts if dry-run fails.
 5. Real-runs `lib/setup.sh`. Captures Project URL and number.
-6. Idempotently wires `OWNER/REPO` into
-   `GH_PR_REPLY_AUTO_APPROVE_REPOS` (in `~/.zshrc.local`) so the
-   `gh:pr-reply` Step 8 solo-repo auto-approve G1 guard passes on
-   the next session. Disable with `--no-auto-approve-env`.
-7. Prints the host-aware UI checklist with workflow #3 disable
+6. Prints the host-aware UI checklist with workflow #3 disable
    guidance (per SSOT decision #289) and the smoke test commands.
 
 ## Re-run safety

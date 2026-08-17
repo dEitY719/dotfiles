@@ -75,13 +75,18 @@ After submitting the review (any path), post a separate PR comment with
 ai-metrics. Read `references/ai-metrics.md` for the exact command,
 footer template, and the `GH_DISABLE_AI_METRICS=1` skip path (#399/#403).
 
+## Step 4.5: Promote the Board Card (soft-fail)
+
+Sole owner of the `Approved` column (#1350): on 4a / 4b / self-PR
+`--self-record`, sync the card per `references/board-approved-sync.sh.md`
+(`--self-record` needs the #393 single-call bypass).
+
 ## Step 5: Verify and Report
 
 Re-fetch `reviewDecision` + `mergeStateStatus`; for `--admin-merge`, also
-re-fetch `state` and `mergeCommit`. Report status, blocker/follow-up
-counts, issue links, merge state, and PR URL. If the PR had
-`mergeable: CONFLICTING` or `rebaseable: false`, include the conflict
-warning in the report.
+re-fetch `state` and `mergeCommit`. Report status, blocker/follow-up counts,
+issue links, merge state, the Step 4.5 board line, and PR URL. Include the
+conflict warning if the PR had `mergeable: CONFLICTING` or `rebaseable: false`.
 For `--self-record`, confirm `reviewDecision` did not become `APPROVED`.
 
 ## Constraints
@@ -92,3 +97,4 @@ For `--self-record`, confirm `reviewDecision` did not become `APPROVED`.
 - Never fabricate follow-ups. Each issue must represent a defensible concern.
 - Never merge a colleague's PR. `--admin-merge` is self-PR only.
 - No labels/milestones unless `gh label list` confirms the label exists.
+- Never promote a card to `Approved` on the 4c / analysis-only / `--admin-merge` paths.
