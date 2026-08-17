@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh
-# Source-of-truth mirror for the Step 4-B board approval gate snippet
+# Source-of-truth mirror for the Step 2-B board approval gate snippet
 # documented in claude/skills/gh-pr-merge/SKILL.md.
 #
 # The skill itself runs inside a Claude session, but the gating logic is
@@ -27,8 +27,10 @@ _gh_project_status_query_current() {
     return "${FAKE_HELPER_RC:-0}"
 }
 
-# Mirrors SKILL.md Step 4-B verbatim. Any change here must propagate to
-# the SKILL.md block, and vice versa. Returns:
+# Mirrors verbatim the gate block in
+# claude/skills/gh-pr-merge/references/board-approval-gate.sh.md, which
+# SKILL.md Step 2-B delegates to. Any change here must propagate to that
+# block, and vice versa. Returns:
 #   0 — proceed with merge (Approved, empty/no-board, or escape on)
 #   2 — refuse merge (query failed — generically or on a missing `project`
 #       token scope (#1356) — or board Status set to anything other than

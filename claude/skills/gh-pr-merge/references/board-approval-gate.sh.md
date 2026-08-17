@@ -67,9 +67,7 @@ fi
   accessible") → exit 2 with a scope-specific message
   ("could not verify board approval status (missing 'project' scope)")
   that names the fix: grant the gh token the `project` (read:project)
-  scope. Checked *before* the generic branch so this cause never hides
-  behind the generic wording (#1356). Escape via
-  `GH_PR_MERGE_SKIP_BOARD_CHECK=1`.
+  scope (#1356). Escape via `GH_PR_MERGE_SKIP_BOARD_CHECK=1`.
 - Any other query failure, i.e. `_gh_project_status_query_current`
   **rc != 0** (owner/repo resolution failed, gh auth, GraphQL or network
   error) → exit 2 with a *distinct* message ("could not verify board
