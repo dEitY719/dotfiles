@@ -39,6 +39,10 @@ is ever run with this repo as the target, the standard commands are
 ## Run them and gate on the result
 
 - **Pass** — proceed to Step 5.
+- If Step 4 confirmed any pre-existing unrelated failures, record the exact
+  file paths before proceeding and carry that list into the Step 5
+  `gh:relay-merge` brief verbatim so the apply-guide can say "do not
+  re-investigate" against the concrete files, not a vague summary sentence.
 - **Fail** — do not proceed. Re-delegate to a fresh Worker call with a
   sharper brief: include the specific failing test output / lint errors,
   the file(s) involved, and anything the first brief's completion criteria

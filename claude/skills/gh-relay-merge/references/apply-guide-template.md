@@ -30,28 +30,24 @@ Fill the placeholders and write to `$tmpdir/apply-guide.md` (outer fence is
 `~~~` so the inner ```bash``` blocks nest without breaking it):
 
 ~~~markdown
-## Relay of origin PR #<N> — <PR title>
+# Instruction — execute only the 3 steps below, in order
 
-Source PR was **<merged|open>** on the internal remote. `git push` to this
-remote is proxy-blocked, so its commits are relayed as patches below.
+**Do not choose a skill. Do not re-investigate. Do not create a separate worktree.**
+This comment is a patch-relay apply-guide. Execute the three steps below as written.
 
-### Setup (destination branch)
+## 1) Create the destination branch
 
-**Note:** Commands below default to `origin` — the common case when the
-destination machine has only one remote for this repo. It may differ from
-the name used on the machine that ran this relay (e.g. this side calls it
-`upstream`; that's irrelevant on the destination side). If you already know
-the destination reader's remote is named differently, substitute it before
-posting; otherwise leave `origin` as the copy-pasteable default — the
-reader can swap it in seconds, but a `<placeholder>` blocks copy-paste
-entirely, which defeats the point of an apply-guide.
+Commands below default to `origin` — the common case when the destination
+machine has only one remote for this repo. If you already know the
+destination remote uses a different name, substitute it before posting;
+otherwise keep `origin` so the reader can copy-paste immediately.
 
 ```bash
 git fetch origin <default-branch>
 git checkout -b <new-branch-name> origin/<default-branch>
 ```
 
-### Apply order
+## 2) Apply the patches in this exact order
 
 | # | Patch (gist) | Description |
 |---|--------------|-------------|
@@ -68,7 +64,7 @@ them adjacent and in order:
 
 Omit the split rows when nothing was pre-split.
 
-Apply **in this exact order** (each patch builds on the previous):
+Apply them in this exact order (each patch builds on the previous):
 
 ```bash
 curl -sL <raw-url-0001> | git am
@@ -76,12 +72,26 @@ curl -sL <raw-url-0002> | git am
 # … one line per patch, in order
 ```
 
-### Finish (push + PR)
+## 3) Push and open the PR
 
 ```bash
 git push -u origin <new-branch-name>
 gh pr create --repo <owner/repo> --title "<title>" --body "Closes #<N>"
 ```
+
+---
+
+## Reference
+
+Check this section only if the three commands above fail or if you need to
+regenerate an intentionally excluded artifact.
+
+### Known unrelated pre-existing failures
+
+- `<exact file path 1>` — already known unrelated failure; do not re-investigate, continue.
+- `<exact file path 2>` — already known unrelated failure; do not re-investigate, continue.
+
+(Omit this section entirely if none were confirmed on the origin side.)
 
 ### Excluded generated artifacts
 
@@ -95,7 +105,7 @@ Regenerate them locally after applying:
 
 (Omit this section if nothing was excluded.)
 
-### Verification basis
+### Background
 
 What was verified on the origin side (from `gh pr view` in Step 1):
 
@@ -113,10 +123,10 @@ What was verified on the origin side (from `gh pr view` in Step 1):
 - The verification-basis section reuses data already fetched in Step 1; do
   not make extra API calls for it.
 - **`--commits` mode** (no origin PR object exists): replace the header
-  with `## Relay of commit range \`<base>..<head>\`` and the "Source PR
-  was…" line with "Source range is `<base>..<head>` on the internal remote
-  (no origin PR)."; omit the "Verification basis" section entirely — there
-  is no `gh pr view` data to report.
+  with `# Instruction — execute only the 3 steps below, in order` plus a
+  first background line stating `Source range is <base>..<head> on the
+  internal remote (no origin PR).`; omit the "Background" bullets derived
+  from `gh pr view` — there is no PR metadata to report.
 - **The destination-side remote name may not match this side's** — e.g.
   this side's `upstream` (github.com) may be the destination machine's
   `origin`. "Setup" and "Finish" default to the literal `origin` (the

@@ -4,6 +4,7 @@
 
 ## 2026-08-17
 - 변경: **`obsidian:session-clip` 의 vault 기본 경로가 PC 모드를 인식한다 — `--vault` 도 `$OBSIDIAN_VAULT_DIR` 도 없을 때만, `~/.dotfiles-setup-mode` 가 `internal`(레거시 숫자값 `2` 포함)이면 기본 후보가 `$HOME/para/project/obsidian-para-company` 로, 그 외 값·빈 값·파일 없음이면 종전대로 `$HOME/para/project/obsidian-para` 로 해석된다. 종전에는 단일 하드코딩 기본값이라 사내 PC 에서 옵션 없이 실행하면 항상 vault-missing 으로 멈췄다. **사용자 가시 동작 변경 주의** — 사내 PC 에 두 vault 가 함께 있으면 옵션 없는 실행의 기본 저장 대상이 개인 vault 에서 사내 vault 로 바뀐다. 종전 대상을 유지하려면 `--vault $HOME/para/project/obsidian-para` 또는 `OBSIDIAN_VAULT_DIR` 로 명시한다(둘 다 모드 기본값보다 우선한다). 해석은 `lib/resolve-vault.sh` 가 SSOT 이며 경로 존재 확인은 종전대로 SKILL.md Step 1 의 몫이다 (#1351)**
+- 변경: **`gh:relay-merge` apply-guide 코멘트를 순수 3단계 명령형으로 단순화했다. 최상단에 "스킬 선택·재조사·별도 워크트리 생성 금지" 지시를 고정하고, 브랜치 생성 → 순서대로 `git am` → push/PR 생성만 먼저 보이도록 재구성했다. `gh:issue-relay-flow` 검증 단계는 origin 쪽에서 확인한 무관한 기존 실패의 정확한 파일 경로를 Step 5 relay 브리프로 넘기도록 명시해, apply-guide가 그 파일들을 "재조사하지 말고 넘어가라"는 문장과 함께 적도록 했다.**
 
 ## 2026-08-13
 - 변경: **`check-proxy` 와 `show-setup-mode` 가 문자열 setup mode (`public`/`internal`/`external`) 를 정상 인식하도록 수정했다. 이제 `~/.dotfiles-setup-mode` 에 `external` 이 저장된 환경에서 거짓 `Unknown setup mode` 실패가 나지 않는다.**
