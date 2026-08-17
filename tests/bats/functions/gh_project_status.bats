@@ -643,6 +643,7 @@ _run_full_bash() {
         _run_full_bash 'out=$(_gh_project_status_query_current pr 42 2>/dev/null); echo "rc=$?"; echo "out=[$out]"'
     assert_output --partial "rc=1"
     assert_output --partial "out=[]"
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 1 ]
 }
 
 @test "query_current: gh api graphql failure — 'Resource not accessible' pattern → rc=2, empty stdout" {

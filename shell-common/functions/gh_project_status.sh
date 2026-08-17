@@ -363,13 +363,13 @@ _gh_project_status_query_current() {
     # Substitute gh's output into a variable, then filter it — a
     # `gh ... | head -n 1` pipeline would report head's exit status, not
     # gh's, and the POSIX Golden Rules rule out ${PIPESTATUS[0]} (#1354).
-    local _raw _nl _gql_rc
-    # stderr is merged into the capture on purpose: `gh api graphql` stays
-    # silent on stderr when it succeeds, so the happy-path parsing below is
+    local _raw _nl
+    # stderr is merged into the capture on purpose: the call below stays
+    # silent on stderr when it succeeds, so the happy-path parsing is
     # unaffected, while a failure leaves the error text in _raw for the
     # scope-vs-generic classification (#1356) — no temp file needed.
     # Variables: $owner String!, $repo String!, $number Int!
-    _raw=$(gh api graphql \
+    if ! _raw=$(gh api graphql \
         -f query="
           query(\$owner: String!, \$repo: String!, \$number: Int!) {
             repository(owner: \$owner, name: \$repo) {
@@ -388,11 +388,8 @@ _gh_project_status_query_current() {
         --jq ".data.repository.${_q_field}.projectItems.nodes[]
               | .fieldValueByName?.name?
               | select(. != null and . != \"\")" \
-        2>&1)
-    _gql_rc=$?
-    if [ "$_gql_rc" -ne 0 ]; then
-        # Missing `project` scope fails this lookup on every repo, board or
-        # not — worth its own rc so the caller can name the fix (#1356).
+        2>&1); then
+        # rc 2 vs rc 1 — see the contract above (#1356).
         case "$_raw" in
             *"insufficient scopes"*|*"Resource not accessible"*) return 2 ;;
             *) return 1 ;;
