@@ -1,20 +1,27 @@
 #!/usr/bin/env bats
 # tests/bats/setup/aws_merge_claude_settings.bats
-# Regression guard for aws/setup.sh → _merge_claude_settings_json() (issue #1088).
+# Regression guard for aws/setup.sh's DEPRECATED settings.json handling.
 #
-# Bug (#1088): the deep-merge `base * overlay * existing` let the live real file
-# (existing) win on EVERY field. jq's `*` recurses objects but REPLACES arrays
-# with the RHS, so a stale `existing.hooks.SessionStart` array permanently
-# clobbered the SSOT `base.hooks.SessionStart` — new hooks added to the SSOT
-# never propagated to already-set-up PCs.
+# History: this file used to pin the `base * overlay * existing` deep-merge
+# that seeded an internal PC's ~/.claude/settings.json (#687), including the
+# SSOT-wins fix (#1088) and the key-order churn fix (#1130).
 #
-# Fix: SSOT-owned fields (hooks / statusLine from base, availableModels /
-# modelOverrides from overlay) are del'd from `existing` before the merge so the
-# SSOT values survive. User-owned fields (model, custom keys) stay preserved.
+# 2026-08-18: that merge is GONE. The org's LLM Gateway migration made
+# `gateway-cli setup` the owner of the internal-PC live ~/.claude/settings.json
+# (apiKeyHelper / awsCredentialExport / awsAuthRefresh / cleanupPeriodDays /
+# env.*), and it also overwrote `.statusLine`. Two writers ping-ponging over one
+# file is unfixable, so dotfiles withdrew: `_merge_claude_settings_json` and
+# `_archive_legacy_settings_local` were deleted outright and aws/setup.sh keeps
+# only the AWS-CLI-side seeding (aws.local.sh + ~/.aws/config). SSOT
+# `.hooks`/`.statusLine` now reach the live file via the self-healing
+# SessionStart hook (claude/hooks/session-start-settings-drift.sh) — covered by
+# tests/bats/skills/session_start_settings_drift_hook.bats.
 #
-# The real function is extracted from aws/setup.sh at test time (the script has
-# no source guard and `exit 0`s for non-internal mode, so it can't be sourced
-# wholesale) and run against isolated fixtures with ux_* stubbed to no-ops.
+# So the assertions inverted: this file now proves the script does NOT touch
+# settings.json, prints the deprecation notice, and still does its remaining
+# job. The whole script is run end-to-end against an isolated dotfiles tree +
+# isolated $HOME (it can no longer be sourced piecemeal — there is no merge
+# function left to extract).
 
 load '../test_helper'
 
@@ -22,173 +29,132 @@ setup() {
     setup_isolated_home
     command -v jq >/dev/null 2>&1 || skip "jq not available"
 
-    # Extract just _merge_claude_settings_json() from the real script, source
-    # it, and stub the ux_* helpers it calls. This tests the SHIPPED jq program,
-    # not a copy — any drift in the merge logic breaks this test.
-    local fn_file="$TEST_TEMP_HOME/merge_fn.sh"
-    # Spacing-tolerant so a shfmt reformat of the `func() {` line can't
-    # silently break extraction (PR #1089 review — gemini).
-    awk '/^_merge_claude_settings_json[[:space:]]*\([[:space:]]*\)[[:space:]]*\{/{grab=1} grab{print} /^}/{if(grab)exit}' \
-        "${_BATS_REAL_DOTFILES_ROOT}/aws/setup.sh" >"$fn_file"
-    # shellcheck disable=SC1090
-    ux_success() { :; }
-    ux_error() { echo "ux_error: $*" >&2; }
-    ux_warning() { :; }
-    ux_bullet() { :; }
-    . "$fn_file"
+    # Isolated dotfiles tree: aws/setup.sh must be a COPY (it resolves
+    # DOTFILES_DIR from its own path, so a symlink would escape isolation and
+    # seed aws.local.sh into the real, version-controlled checkout).
+    ISO="$TEST_TEMP_HOME/iso"
+    mkdir -p "$ISO/aws" "$ISO/claude"
+    ln -s "${_BATS_REAL_DOTFILES_ROOT}/shell-common" "$ISO/shell-common"
+    cp "${_BATS_REAL_DOTFILES_ROOT}/aws/setup.sh" "$ISO/aws/setup.sh"
+    cp "${_BATS_REAL_DOTFILES_ROOT}/aws/aws.local.example" "$ISO/aws/aws.local.example"
+    cp "${_BATS_REAL_DOTFILES_ROOT}/aws/aws-config.example" "$ISO/aws/aws-config.example"
+    # NOTE: claude/settings.bedrock-overlay.example is deliberately NOT staged —
+    # the deprecated script must run clean without the retired overlay template
+    # present (the old merge would have hard-failed on a missing overlay).
+    SCRIPT="$ISO/aws/setup.sh"
 
-    BASE="$TEST_TEMP_HOME/base.json"
-    OVERLAY="$TEST_TEMP_HOME/overlay.json"
-    TGT="$TEST_TEMP_HOME/settings.json"
-
-    # SSOT base: 3-hook SessionStart block + statusLine.
-    cat >"$BASE" <<'JSON'
+    # dotfiles SSOT stand-in — deliberately carries the fields the old merge
+    # would have pushed into the live file.
+    cat >"$ISO/claude/settings.json" <<'JSON'
 {
   "hooks": { "SessionStart": [ { "hooks": [
     { "type": "command", "command": "a.sh" },
-    { "type": "command", "command": "b.sh" },
-    { "type": "command", "command": "c.sh" }
+    { "type": "command", "command": "b.sh" }
   ] } ] },
-  "statusLine": { "type": "command", "command": "new-statusline.sh" },
-  "theme": "dark"
+  "statusLine": { "type": "command", "command": "dotfiles-statusline.sh" }
 }
 JSON
 
-    # Bedrock overlay: SSOT-owned availableModels / modelOverrides.
-    cat >"$OVERLAY" <<'JSON'
+    # Live config as gateway-cli leaves it: its own auth keys, its own
+    # statusLine, and a stale single-hook block.
+    LIVE_DIR="$HOME/.claude"
+    mkdir -p "$LIVE_DIR"
+    LIVE="$LIVE_DIR/settings.json"
+    cat >"$LIVE" <<'JSON'
 {
-  "_comment": "overlay",
-  "availableModels": ["sonnet", "haiku"],
-  "modelOverrides": { "opus": "global.anthropic.opus" },
-  "model": "global.anthropic.opus"
+  "apiKeyHelper": "gateway-cli token",
+  "awsCredentialExport": "gateway-cli creds",
+  "awsAuthRefresh": "gateway-cli refresh",
+  "cleanupPeriodDays": 365000,
+  "env": { "ANTHROPIC_BASE_URL": "https://gateway.internal" },
+  "model": "gateway-opus",
+  "hooks": { "SessionStart": [ { "hooks": [
+    { "type": "command", "command": "a.sh" }
+  ] } ] },
+  "statusLine": { "type": "command", "command": "gateway-cli statusline" }
 }
 JSON
+    cp "$LIVE" "$TEST_TEMP_HOME/live-before.json"
+
+    printf 'internal' >"$HOME/.dotfiles-setup-mode"
 }
 
 teardown() {
     teardown_isolated_home
 }
 
-@test "merge #1088: stale existing.hooks is replaced by SSOT base.hooks" {
-    # existing real file: only 1 stale hook, plus a user-edited field.
-    cat >"$TGT" <<'JSON'
-{
-  "hooks": { "SessionStart": [ { "hooks": [
-    { "type": "command", "command": "a.sh" }
-  ] } ] },
-  "model": "user-picked-model",
-  "myCustomKey": "keep-me"
-}
-JSON
-
-    run _merge_claude_settings_json "$BASE" "$OVERLAY" "$TGT"
+@test "aws/setup.sh deprecated: internal run leaves live settings.json byte-identical" {
+    run bash "$SCRIPT"
     [ "$status" -eq 0 ]
 
-    # SSOT hooks win: all 3 commands present.
-    run jq -r '.hooks.SessionStart[0].hooks | length' "$TGT"
-    [ "$output" -eq 3 ]
-    run jq -r '[.hooks.SessionStart[0].hooks[].command] | join(",")' "$TGT"
-    [ "$output" = "a.sh,b.sh,c.sh" ]
+    run cmp -s "$TEST_TEMP_HOME/live-before.json" "$LIVE"
+    assert_success
+
+    # Specifically: the stale hooks were NOT re-seeded and gateway-cli's
+    # statusLine was NOT reverted by this script (that is the drift hook's job).
+    run jq -r '[.hooks.SessionStart[0].hooks[].command] | join(",")' "$LIVE"
+    [ "$output" = "a.sh" ]
+    run jq -r '.statusLine.command' "$LIVE"
+    [ "$output" = "gateway-cli statusline" ]
 }
 
-@test "merge #1088: SSOT statusLine / availableModels / modelOverrides win over stale existing" {
-    cat >"$TGT" <<'JSON'
-{
-  "statusLine": { "type": "command", "command": "OLD-statusline.sh" },
-  "availableModels": ["stale-model"],
-  "modelOverrides": { "opus": "stale-map" },
-  "model": "user-picked-model"
+@test "aws/setup.sh deprecated: prints the deprecation notice + gateway-cli pointer" {
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"DEPRECATED"* ]]
+    [[ "$output" == *"gateway-cli"* ]]
+    [[ "$output" == *"session-start-settings-drift.sh"* ]]
 }
-JSON
 
-    run _merge_claude_settings_json "$BASE" "$OVERLAY" "$TGT"
+@test "aws/setup.sh deprecated: writes no backup / merge artifacts at all" {
+    run bash "$SCRIPT"
     [ "$status" -eq 0 ]
 
-    run jq -r '.statusLine.command' "$TGT"
-    [ "$output" = "new-statusline.sh" ]
-    run jq -r '.availableModels | join(",")' "$TGT"
-    [ "$output" = "sonnet,haiku" ]
-    run jq -r '.modelOverrides.opus' "$TGT"
-    [ "$output" = "global.anthropic.opus" ]
-}
-
-@test "merge #1088: user-owned fields (model, custom keys) are still preserved" {
-    cat >"$TGT" <<'JSON'
-{
-  "hooks": { "SessionStart": [ { "hooks": [
-    { "type": "command", "command": "a.sh" }
-  ] } ] },
-  "model": "user-picked-model",
-  "theme": "light",
-  "myCustomKey": "keep-me"
-}
-JSON
-
-    run _merge_claude_settings_json "$BASE" "$OVERLAY" "$TGT"
-    [ "$status" -eq 0 ]
-
-    # model is NOT in the SSOT whitelist → existing (user /model choice) wins.
-    run jq -r '.model' "$TGT"
-    [ "$output" = "user-picked-model" ]
-    # arbitrary user key survives.
-    run jq -r '.myCustomKey' "$TGT"
-    [ "$output" = "keep-me" ]
-    # existing overrides base for non-whitelisted scalar (theme).
-    run jq -r '.theme' "$TGT"
-    [ "$output" = "light" ]
-}
-
-@test "merge #1130: values equal but key order differs → Preserved, no backup churn" {
-    # Seed TGT via one real merge so it becomes the merge fixed point.
-    cat >"$TGT" <<'JSON'
-{
-  "model": "user-picked-model",
-  "theme": "light",
-  "myCustomKey": "keep-me"
-}
-JSON
-    run _merge_claude_settings_json "$BASE" "$OVERLAY" "$TGT"
-    [ "$status" -eq 0 ]
-
-    # Rewrite TGT with IDENTICAL values but a different (sorted) key order —
-    # this is the real-world churn trigger. jq `*` re-orders keys, so a byte
-    # comparison (cmp -s) always saw a "change" and re-wrote + backed up on
-    # every re-run even though nothing drifted (issue #1130).
-    jq -S . "$TGT" >"$TGT.sorted"
-    mv "$TGT.sorted" "$TGT"
-    # umask can reset perms on a temp-file rewrite; restore 0600 to mirror the
-    # real ~/.claude/settings.json (matches the chmod-after-mv idiom in setup.sh).
-    chmod 0600 "$TGT"
-    # Drop the backup produced by the seeding merge above — we only want to
-    # observe whether the SECOND (idempotent) run creates one.
-    rm -f "$TEST_TEMP_HOME"/settings.json.bedrock-merge-backup.*
-
-    # Capture which branch the idempotent re-run takes.
-    ux_success() { echo "SUCCESS: $*"; }
-    run _merge_claude_settings_json "$BASE" "$OVERLAY" "$TGT"
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"Preserved (already up to date)"* ]]
-    [[ "$output" != *"Merged Bedrock keys into"* ]]
-
-    # No new backup file created on the idempotent run.
-    run bash -c 'ls "$1"/settings.json.bedrock-merge-backup.* 2>/dev/null | wc -l' _ "$TEST_TEMP_HOME"
+    run bash -c 'ls "$1"/.claude/settings.json.bedrock-merge-backup.* 2>/dev/null | wc -l' _ "$HOME"
+    [ "$output" -eq 0 ]
+    run bash -c 'ls "$1"/.claude/settings.json.* 2>/dev/null | wc -l' _ "$HOME"
     [ "$output" -eq 0 ]
 }
 
-@test "merge #1130: real value drift still Merges + creates one backup" {
-    # existing lacks the SSOT-owned fields → a genuine merge is required.
-    cat >"$TGT" <<'JSON'
-{
-  "model": "user-picked-model",
-  "theme": "light"
-}
-JSON
-    ux_success() { echo "SUCCESS: $*"; }
-    run _merge_claude_settings_json "$BASE" "$OVERLAY" "$TGT"
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"Merged Bedrock keys into"* ]]
-    [[ "$output" != *"Preserved (already up to date)"* ]]
+@test "aws/setup.sh deprecated: settings.local.json is no longer archived away" {
+    # #924 made settings.local.json the sanctioned personal-override slot, so
+    # the old #687 auto-archive became actively harmful and was removed.
+    printf '{ "model": "sonnet" }' >"$LIVE_DIR/settings.local.json"
 
-    run bash -c 'ls "$1"/settings.json.bedrock-merge-backup.* 2>/dev/null | wc -l' _ "$TEST_TEMP_HOME"
-    [ "$output" -eq 1 ]
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+
+    [ -f "$LIVE_DIR/settings.local.json" ]
+    run jq -r '.model' "$LIVE_DIR/settings.local.json"
+    [ "$output" = "sonnet" ]
+    run bash -c 'ls "$1"/.claude/settings.local.json.deprecated-687.* 2>/dev/null | wc -l' _ "$HOME"
+    [ "$output" -eq 0 ]
+}
+
+@test "aws/setup.sh deprecated: still seeds aws.local.sh + ~/.aws/config" {
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+
+    [ -f "$ISO/aws/aws.local.sh" ]
+    [ -f "$HOME/.aws/config" ]
+}
+
+@test "aws/setup.sh deprecated: no settings.json merge code remains in the script" {
+    # Guard against someone re-wiring a second writer to the live file. The
+    # header comment still NAMES the removed helpers (explaining why they are
+    # gone), so match only definitions/calls — a line that STARTS with the name.
+    run grep -nE '^[[:space:]]*(_merge_claude_settings_json|_archive_legacy_settings_local)' "$SCRIPT"
+    [ -z "$output" ]
+}
+
+@test "aws/setup.sh deprecated: non-internal mode is still a plain no-op" {
+    printf 'external' >"$HOME/.dotfiles-setup-mode"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"skip (internal-only)"* ]]
+    [[ "$output" != *"DEPRECATED"* ]]
+
+    run cmp -s "$TEST_TEMP_HOME/live-before.json" "$LIVE"
+    assert_success
+    [ ! -f "$ISO/aws/aws.local.sh" ]
 }

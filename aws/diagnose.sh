@@ -2,9 +2,16 @@
 # shellcheck disable=SC2088  # ~/path literals in user-facing strings are intentional (not paths to expand)
 # aws/diagnose.sh — Claude Code Linux 환경설정 진단 (사내 PC, read-only).
 #
-# 가이드(Claude_Linux.md) 기준으로 ./aws/setup.sh +
+# 가이드(Claude_Linux.md) 기준으로 ./aws/setup.sh(AWS CLI env/config 시드) +
 # ./aws/install-otel-managed-settings.sh 부트스트랩 결과를 점검한다.
 # 2-5) AWS SSO 로그인 절차는 대화형이므로 제외한다.
+#
+# 2026-08-18 부터 ~/.claude/settings.json 의 auth/env/모델 설정은 조직 LLM
+# Gateway 도구 `gateway-cli setup`/`gateway-cli verify` 가 소유·검증한다 —
+# aws/setup.sh 의 구 SSOT+Bedrock 오버레이 jq deep-merge(#687)는 폐지됐고,
+# 본 스크립트도 그 값들을 더 이상 진단하지 않는다(2-6 참고). dotfiles 가
+# 그 파일에 대해 여전히 검증할 수 있는 건 `.hooks`/`.statusLine` 이 SSOT와
+# 일치하는지뿐 — 나머지 auth/model 상태는 `gateway-cli verify` 로 확인한다.
 #
 # 사용:
 #   ./aws/diagnose.sh           # 진단 실행
@@ -35,7 +42,8 @@ Read-only 진단. ./aws/setup.sh 와 ./aws/install-otel-managed-settings.sh
   2-3) AWS 인증서/Bedrock env (AWS_CA_BUNDLE, CLAUDE_CODE_USE_BEDROCK,
        ANTHROPIC_BEDROCK_BASE_URL, http(s)_proxy, no_proxy)
   2-4) ~/.aws/config (sso_start_url, sso_role_name, region)
-  2-6) ~/.claude/settings.json (env, model, modelOverrides, awsAuthRefresh)
+  2-6) ~/.claude/settings.json — JSON 유효성 + dotfiles 소유 필드(.hooks/
+       .statusLine)만 SSOT 와 일치하는지 (auth/env/모델은 gateway-cli 영역)
   2-7) /etc/claude-code/managed-settings.json (OTel telemetry)
   2-8) AWS SSO 세션 상태 (aws sts get-caller-identity)
 
@@ -372,37 +380,29 @@ else
 fi
 
 # ============================================================
-header "2-6) 모델 정보 (~/.claude/settings.json) — #687"
+header "2-6) ~/.claude/settings.json — JSON 유효성 + dotfiles 소유 필드"
 # ============================================================
 
-# #687: settings.local.json 의 deep-merge 가 사용자 환경에서 신뢰 불가하므로
-# 모든 Bedrock 키는 ~/.claude/settings.json 으로 통합됐다. aws/setup.sh 가
-# dotfiles SSOT (claude/settings.json) + Bedrock 오버레이를
-# (claude/settings.bedrock-overlay.example) jq deep-merge 한 실파일로 시드한다.
+# 2026-08-18 부터 이 파일의 writer 는 gateway-cli setup 이다 (auth/env/모델은
+# 그쪽 영역 — 상태 확인은 `gateway-cli verify` 로 한다, 아래서 진단하지 않음).
+# dotfiles 가 여전히 검증할 수 있는 건 딱 두 가지: JSON 유효성, 그리고
+# dotfiles SSOT 가 "동작"으로 배포하는 `.hooks`/`.statusLine` 이 실제로
+# live 파일에 반영돼 있는지 — 반영 담당은 SessionStart 훅
+# claude/hooks/session-start-settings-drift.sh (사내 모드 자동 복구).
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
-CLAUDE_SETTINGS_LOCAL="$HOME/.claude/settings.local.json"
 SETTINGS_FILE=""
 if [ -f "$CLAUDE_SETTINGS" ]; then
   if [ -L "$CLAUDE_SETTINGS" ]; then
-    fail "~/.claude/settings.json 이 symlink 입니다 (#687 마이그레이션 미완료) → ./aws/setup.sh 재실행"
+    fail "~/.claude/settings.json 이 symlink 입니다 → gateway-cli setup 이 실파일로 쓰지 못함, symlink 제거 후 gateway-cli setup 재실행"
   else
-    pass "~/.claude/settings.json 실파일 존재 (#687)"
+    pass "~/.claude/settings.json 실파일 존재"
   fi
   SETTINGS_FILE="$CLAUDE_SETTINGS"
 else
-  fail "~/.claude/settings.json 파일 없음 → ./setup.sh 와 ./aws/setup.sh 미수행"
-fi
-
-if [ -f "$CLAUDE_SETTINGS_LOCAL" ]; then
-  fail "~/.claude/settings.local.json 잔존 — #687 부터 deprecated → ./aws/setup.sh 재실행 시 자동 archive 됨 (mv → *.deprecated-687.<ts>)"
-fi
-# Archive 흔적 (deprecated backup) 이 있으면 정상 마이그레이션 완료를 알린다.
-if ls "${CLAUDE_SETTINGS_LOCAL}".deprecated-687.* >/dev/null 2>&1; then
-  pass "settings.local.json 마이그레이션 완료 (#687 deprecated archive 존재)"
+  fail "~/.claude/settings.json 파일 없음 → gateway-cli setup 미수행"
 fi
 
 if [ -n "$SETTINGS_FILE" ]; then
-  # JSON 유효성 검사
   if command -v jq >/dev/null 2>&1; then
     if jq empty "$SETTINGS_FILE" 2>/dev/null; then
       pass "JSON 형식 유효 (${SETTINGS_FILE})"
@@ -410,83 +410,32 @@ if [ -n "$SETTINGS_FILE" ]; then
       fail "JSON 형식 오류 (${SETTINGS_FILE}) → 문법(쉼표, 중괄호 등)을 확인하세요"
     fi
 
-    # 양립-불가 잔존 키 확인 (#677 O-1)
-    LEGACY=$(jq -r '.env // {} | keys_unsorted[] | select(test("^(ANTHROPIC_BASE_URL|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_MODEL|ANTHROPIC_CUSTOM_HEADERS|NODE_TLS_REJECT_UNAUTHORIZED)$"))' "$SETTINGS_FILE" 2>/dev/null | tr '\n' ' ')
-    if [ -n "$LEGACY" ]; then
-      fail "Bedrock 와 양립 불가한 레거시 gateway env 키 잔존: ${LEGACY}→ ./aws/setup.sh 재실행 (자동 제거됨)"
+    # dotfiles SSOT 와 .hooks/.statusLine 비교 — session-start-settings-drift.sh
+    # 의 비교 로직과 동일 기준(jq -S -c). 사내 모드는 그 훅이 매 세션 자동
+    # 복구하므로 여기서 FAIL 이 뜨면 "훅이 아직 한 번도 안 돌았다" 신호다.
+    _dotfiles_dir="$(cd "${SCRIPT_DIR}/.." && pwd)"
+    _ssot_settings="${_dotfiles_dir}/claude/settings.json"
+    if [ -f "$_ssot_settings" ]; then
+      _ssot_hooks=$(jq -S -c '.hooks // {}' "$_ssot_settings" 2>/dev/null)
+      _live_hooks=$(jq -S -c '.hooks // {}' "$SETTINGS_FILE" 2>/dev/null)
+      if [ "$_ssot_hooks" = "$_live_hooks" ]; then
+        pass ".hooks 가 dotfiles SSOT 와 일치"
+      else
+        fail ".hooks 가 dotfiles SSOT 와 다름 → session-start-settings-drift.sh 가 아직 복구 전 (새 세션 시작하면 사내 모드에서 자동 복구됨)"
+      fi
+
+      _ssot_statusline=$(jq -S -c '.statusLine // null' "$_ssot_settings" 2>/dev/null)
+      _live_statusline=$(jq -S -c '.statusLine // null' "$SETTINGS_FILE" 2>/dev/null)
+      if [ "$_ssot_statusline" = "$_live_statusline" ]; then
+        pass ".statusLine 이 dotfiles SSOT 와 일치"
+      else
+        fail ".statusLine 이 dotfiles SSOT 와 다름 → gateway-cli 등 외부 도구가 덮어썼을 가능성 (새 세션 시작하면 사내 모드에서 자동 복구됨)"
+      fi
     else
-      pass "레거시 gateway env 키 없음 (Bedrock 단일 경로)"
+      warn "dotfiles SSOT 를 찾을 수 없음: ${_ssot_settings} → .hooks/.statusLine 비교 생략"
     fi
 
-    SETTINGS_JSON=$(jq '.' "$SETTINGS_FILE" 2>/dev/null || echo "{}")
-
-    # #687: Bedrock 모델 매핑 env 키가 settings.json 에 실제로 들어있는지
-    # 검증. settings.local.json 시절에는 deep-merge 시점에 누락되는 사례가
-    # 있었지만 이제는 settings.json 한 곳에서 직접 확인 가능.
-    SONNET=$(echo "$SETTINGS_JSON" | jq -r '.env.ANTHROPIC_DEFAULT_SONNET_MODEL // empty' 2>/dev/null)
-    if [ -n "$SONNET" ]; then
-      pass "env.ANTHROPIC_DEFAULT_SONNET_MODEL 설정됨: ${SONNET}"
-    else
-      fail "env.ANTHROPIC_DEFAULT_SONNET_MODEL 미설정 → 사내 PC에서 400 invalid model 위험 (#687)"
-    fi
-
-    HAIKU=$(echo "$SETTINGS_JSON" | jq -r '.env.ANTHROPIC_DEFAULT_HAIKU_MODEL // empty' 2>/dev/null)
-    if [ -n "$HAIKU" ]; then
-      pass "env.ANTHROPIC_DEFAULT_HAIKU_MODEL 설정됨: ${HAIKU}"
-    else
-      warn "env.ANTHROPIC_DEFAULT_HAIKU_MODEL 미설정"
-    fi
-
-    # #685 / #687 보강: settings.json env 에 CLAUDE_CODE_USE_BEDROCK + AWS_REGION
-    # 직접 명시 (사내 가이드 2-6 요구). aws/aws.local.sh 의 shell env 와 중복이지만
-    # Claude Code 가 자체 env 적용 경로로 두 키를 읽는 사례가 있어 양쪽에 둔다.
-    USE_BR=$(echo "$SETTINGS_JSON" | jq -r '.env.CLAUDE_CODE_USE_BEDROCK // empty' 2>/dev/null)
-    if [ "$USE_BR" = "1" ]; then
-      pass "settings 의 env.CLAUDE_CODE_USE_BEDROCK=1 (가이드 2-6 충족)"
-    else
-      fail "settings 의 env.CLAUDE_CODE_USE_BEDROCK 누락 → 가이드 2-6 미충족 (#685)"
-    fi
-
-    AWS_REG=$(echo "$SETTINGS_JSON" | jq -r '.env.AWS_REGION // empty' 2>/dev/null)
-    if [ "$AWS_REG" = "ap-northeast-2" ]; then
-      pass "settings 의 env.AWS_REGION=ap-northeast-2 (가이드 2-6 충족)"
-    elif [ -n "$AWS_REG" ]; then
-      warn "settings 의 env.AWS_REGION 값이 가이드 기본값(ap-northeast-2)과 다름: ${AWS_REG}"
-    else
-      fail "settings 의 env.AWS_REGION 누락 → 가이드 2-6 미충족 (#685)"
-    fi
-
-    # model 확인
-    MODEL=$(echo "$SETTINGS_JSON" | jq -r '.model // empty' 2>/dev/null)
-    if [ -n "$MODEL" ]; then
-      pass "settings model 설정됨: ${MODEL}"
-    else
-      fail "settings model 미설정"
-    fi
-
-    # availableModels
-    if [ "$(echo "$SETTINGS_JSON" | jq -r '.availableModels | length // 0' 2>/dev/null)" -gt 0 ] 2>/dev/null; then
-      pass "settings availableModels 설정됨"
-    else
-      warn "settings availableModels 미설정"
-    fi
-
-    # modelOverrides
-    if [ "$(echo "$SETTINGS_JSON" | jq -r '.modelOverrides | length // 0' 2>/dev/null)" -gt 0 ] 2>/dev/null; then
-      pass "settings modelOverrides 설정됨"
-    else
-      warn "settings modelOverrides 미설정"
-    fi
-
-    # awsAuthRefresh
-    AUTH_REFRESH=$(echo "$SETTINGS_JSON" | jq -r '.awsAuthRefresh // empty' 2>/dev/null)
-    if [ "$AUTH_REFRESH" = "aws sso login" ]; then
-      pass "settings awsAuthRefresh 올바름"
-    elif [ -n "$AUTH_REFRESH" ]; then
-      fail "settings awsAuthRefresh 값이 다름 (현재: ${AUTH_REFRESH}, 기대: aws sso login)"
-    else
-      fail "settings awsAuthRefresh 미설정"
-    fi
+    warn "auth/env/모델 설정(apiKeyHelper, env.*, model, availableModels 등)은 gateway-cli 영역 → 'gateway-cli verify' 로 확인"
   else
     warn "jq 미설치 → settings 내용 상세 검증 생략 (jq 설치 후 재실행 권장)"
   fi
@@ -571,10 +520,11 @@ else
   printf '  %s%sFAIL 항목을 확인하고 가이드에 따라 수정해 주세요.%s\n' "$RED" "$BOLD" "$NC"
   printf '\n'
   printf '  %sNext:%s\n' "$BOLD" "$NC"
-  printf '    1. ./aws/setup.sh                          (env / config / settings 시드 + 레거시 키 제거)\n'
+  printf '    1. ./aws/setup.sh                          (aws.local.sh / ~/.aws/config 시드 — settings.json 은 안 건드림)\n'
   printf '    2. aws sso login                           (SSO 토큰 갱신)\n'
-  printf '    3. ./aws/install-otel-managed-settings.sh  (OTel 재설치)\n'
-  printf '    4. 새 쉘에서 ./aws/diagnose.sh 재실행\n'
+  printf '    3. gateway-cli setup && gateway-cli verify (~/.claude/settings.json auth/env/모델)\n'
+  printf '    4. ./aws/install-otel-managed-settings.sh  (OTel 재설치)\n'
+  printf '    5. 새 쉘에서 ./aws/diagnose.sh 재실행\n'
   exit_code=1
 fi
 printf '\n'
