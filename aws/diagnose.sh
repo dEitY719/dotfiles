@@ -416,8 +416,7 @@ if [ -n "$SETTINGS_FILE" ]; then
     # dotfiles SSOT 와 .hooks/.statusLine 비교 — session-start-settings-drift.sh
     # 의 비교 로직과 동일 기준(jq -S -c). 사내 모드는 그 훅이 매 세션 자동
     # 복구하므로 여기서 FAIL 이 뜨면 "훅이 아직 한 번도 안 돌았다" 신호다.
-    _dotfiles_dir="$(cd "${SCRIPT_DIR}/.." && pwd)"
-    _ssot_settings="${_dotfiles_dir}/claude/settings.json"
+    _ssot_settings="${DOTFILES_DIR}/claude/settings.json"
     # session-start-settings-drift.sh 만 사내 모드에서 자동 복구한다 — 그 외
     # 모드는 advisory 뿐이라 여기서도 같은 재시드 안내(./setup.sh)를 줘야
     # "새 세션이면 알아서 고쳐진다"는 잘못된 기대를 심지 않는다.
