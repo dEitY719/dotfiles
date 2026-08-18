@@ -336,6 +336,7 @@ JSON
 
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
+    [[ "$output" == *"symlink"* ]]
 
     [ -L "$LIVE" ]
     run cmp -s "$TEST_TEMP_HOME/live-before.json" "$TEST_TEMP_HOME/symlink-target.json"
