@@ -98,7 +98,7 @@ symlink 였던 구 레이아웃은 Claude Code `/model` 이 tracked SSOT 를 wri
 - **그 외 모드**: 종전 그대로 안내만 (`./setup.sh` 재실행 → `claude/setup.sh` 실파일 복사, #940).
 
 자기 자신의 최초 미설치는 감지 못하지만(체크인 후 1회 재시드 필요) 이후 추가되는 모든 훅은 커버한다. best-effort, 항상 exit 0.
-- **부트스트랩 데드락과 그 탈출구 (#1364)**: Claude Code 는 live `.hooks.SessionStart` 에 등록된 훅만 호출하므로, 외부 요인이 live `.hooks` 를 통째로 날리면 이 훅의 등록도 함께 사라져 훅이 **스스로를 복구할 수 없다** — 위 "자기 자신" 한계의 심각한 형태. 사내 모드의 탈출구는 `./aws/setup.sh` 재실행이다: `_reregister_session_start_drift_hook` (F-7b) 이 SSOT 에서 훅 커맨드를 읽어 그 1건만 `.hooks.SessionStart` 에 append 한다 (live 파일을 새로 만들지 않고, symlink 면 skip, 그 외 키는 무손상, 백업 `~/.claude/settings.json.pre-sessionstart-hook-reg.backup`).
+- **부트스트랩 데드락과 그 탈출구 (#1364)**: Claude Code 는 live `.hooks.SessionStart` 에 등록된 훅만 호출하므로, 외부 요인이 live `.hooks` 를 통째로 날리면 이 훅의 등록도 함께 사라져 훅이 **스스로를 복구할 수 없다** — 위 "자기 자신" 한계의 심각한 형태. 탈출구(F-7b, `./aws/setup.sh` 재실행)의 스코프·안전장치 전체는 `aws/AGENTS.md` → "F-7b (#1364) 스코프 경계" 가 SSOT다.
 
 `claude/hooks/session-start-statusline-project-override.sh` — `SessionStart` hook, `settings.json`에 등록됨. Claude Code 의 settings 병합 우선순위(`settings.local.json` > 프로젝트 `settings.json` > 글로벌 `~/.claude/settings.json`)상, 프로젝트의 git-tracked `.claude/settings.json`이 자체 `.statusLine`을 정의하면 dotfiles 글로벌 statusline 을 덮어쓴다(#1236). 이를 되살릴 유일한 개인 슬롯인 `<project>/.claude/settings.local.json`은 gitignore 대상이라 fresh clone/새 worktree 마다 사라진다. 이 훅은 페이로드의 `.cwd`로 프로젝트를 식별해, 프로젝트 `settings.json`에 `.statusLine`이 있고 local 에 아직 개인 override 가 없을 때 SSOT(`claude/settings.json`, 스크립트 경로 기준 상대 해석)의 `.statusLine`을 `settings.local.json`에 seed/merge 한다(기존 키 보존). 안전장치: `git check-ignore`로 `settings.local.json`이 실제 gitignore 대상일 때만 write 하고(아니면 write 대신 .gitignore 추가 힌트만 출력해 working tree 오염 방지), 기존 `.statusLine`은 절대 덮어쓰지 않는 멱등 동작. best-effort, 항상 exit 0.
 

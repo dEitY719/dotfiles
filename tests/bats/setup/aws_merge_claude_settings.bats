@@ -197,6 +197,19 @@ _ssot_with_drift_hook() {
 JSON
 }
 
+# Shared by the two F-7b write-path tests: every non-.hooks key still matches
+# the pre-run snapshot (value-wise), and a latest-only backup of that snapshot
+# was left behind (#806). Expects $TEST_TEMP_HOME/live-before.json pre-run.
+_assert_other_keys_preserved_and_backed_up() {
+    run bash -c 'diff <(jq -S -c "del(.hooks)" "$1") <(jq -S -c "del(.hooks)" "$2")' \
+        _ "$TEST_TEMP_HOME/live-before.json" "$LIVE"
+    assert_success
+
+    [ -f "${LIVE}${REG_BACKUP_SUFFIX}" ]
+    run cmp -s "$TEST_TEMP_HOME/live-before.json" "${LIVE}${REG_BACKUP_SUFFIX}"
+    assert_success
+}
+
 @test "#1364: live settings.json already registering the drift hook is left untouched" {
     _ssot_with_drift_hook
     cat >"$LIVE" <<JSON
@@ -256,15 +269,7 @@ JSON
     run jq -r '[.hooks.SessionStart[]?.hooks[]?.command | select(. == "unrelated-other-tool.sh")] | length' "$LIVE"
     [ "$output" -eq 1 ]
 
-    # Every non-.hooks key is untouched (value-wise; jq re-serialises whitespace).
-    run bash -c 'diff <(jq -S -c "del(.hooks)" "$1") <(jq -S -c "del(.hooks)" "$2")' \
-        _ "$TEST_TEMP_HOME/live-before.json" "$LIVE"
-    assert_success
-
-    # ...and a latest-only backup of the pre-change content exists (#806).
-    [ -f "${LIVE}${REG_BACKUP_SUFFIX}" ]
-    run cmp -s "$TEST_TEMP_HOME/live-before.json" "${LIVE}${REG_BACKUP_SUFFIX}"
-    assert_success
+    _assert_other_keys_preserved_and_backed_up
 }
 
 @test "#1364: live settings.json with .hooks entirely absent gets the hook back" {
@@ -287,13 +292,7 @@ JSON
     run jq -S -c '.hooks' "$LIVE"
     [ "$output" = "{\"SessionStart\":[{\"hooks\":[{\"command\":\"${DRIFT_HOOK_CMD}\",\"type\":\"command\"}]}]}" ]
 
-    run bash -c 'diff <(jq -S -c "del(.hooks)" "$1") <(jq -S -c "del(.hooks)" "$2")' \
-        _ "$TEST_TEMP_HOME/live-before.json" "$LIVE"
-    assert_success
-
-    [ -f "${LIVE}${REG_BACKUP_SUFFIX}" ]
-    run cmp -s "$TEST_TEMP_HOME/live-before.json" "${LIVE}${REG_BACKUP_SUFFIX}"
-    assert_success
+    _assert_other_keys_preserved_and_backed_up
 }
 
 @test "#1364: re-registration is idempotent across two runs" {
