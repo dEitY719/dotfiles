@@ -66,7 +66,7 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 ~/.claude-personal/CLAUDE.md             -> dotfiles/claude/CLAUDE.md       (글로벌 지침, #1115)
 
 # 사내 PC (옵션 2) — 단일 계정 (issue #571)
-~/.claude/settings.json                  = aws/setup.sh 가 SSOT + Bedrock 오버레이를 merge 한 실파일 (#687)
+~/.claude/settings.json                  = gateway-cli setup 이 쓰는 실파일 (조직 LLM Gateway 도구 소유, 2026-08-18~)
 ~/.claude/statusline-command.sh          -> dotfiles/claude/statusline-command.sh
 ~/.claude/skills/<name>                  -> dotfiles/claude/skills/<name>   (entry symlink, #707)
 ~/.claude/docs                           -> dotfiles/claude/docs            (dir symlink)
@@ -82,14 +82,22 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 
 기존 PC 에 남아 있는 `/etc/sudoers.d/claude-{skills,docs}-mount-*` 파일은 #575 이후로 사용처가 없다. `claude/setup.sh` 실행 시 잔존 파일이 감지되면 수동 삭제 명령을 안내한다.
 
-`settings.json` — **tracked SSOT** (#584). 모든 모드에서 config dir 의 `settings.json` 은 SSOT 의 **실파일 복사**다 — 멀티 계정은 `_claude_ensure_settings_copy` (#940), Internal 은 `aws/setup.sh` merge (#687). symlink 였던 구 레이아웃은 Claude Code `/model` 이 tracked SSOT 를 write-through 로 오염시켰음 (#924 → #940). 기존 실파일의 개인 `model` 키는 setup 재실행 시 `settings.local.json` 으로 자동 이주.
-`~/.claude/settings.local.json` — out-of-repo, gitignored, Internal PC 1회 손수 작성. 사번 헤더 / 사내 `ANTHROPIC_*` 가 들어가며 Claude Code 가 settings.json 과 native merge. `claude/setup.sh` 가 Internal 모드 종료 직전 copy-paste heredoc 안내 출력 (#584).
+`settings.json` — **tracked SSOT** (#584). 모든 모드에서 config dir 의 `settings.json` 은 symlink 가 아닌 **실파일**이다. 다만 그 실파일을 *쓰는 주체*가 모드별로 다르다:
+- **외부/공용 PC (멀티 계정)** — dotfiles 소유. `_claude_ensure_settings_copy` 가 SSOT 를 그대로 복사 (#940). 재시드: `./setup.sh`.
+- **사내 PC (2026-08-18~)** — **dotfiles 소유 아님**. 조직 LLM Gateway 전환 도구 `gateway-cli setup` 이 이 파일을 직접 쓴다 (`apiKeyHelper` / `awsCredentialExport` / `awsAuthRefresh` / `cleanupPeriodDays` / `env.*`). 종전 소유자였던 `aws/setup.sh` 의 "SSOT + Bedrock 오버레이 jq deep-merge" (#687) 와 `claude/settings.bedrock-overlay.example` 는 **deprecated (2026-08-18)** — 한 파일에 writer 가 둘이면 서로를 지우는 왕복이 되기 때문(실제로 gateway-cli 가 `.statusLine` 을 자기 바이너리로 덮어썼다). dotfiles 가 사내 live 파일에 남긴 유일한 지분은 아래 `session-start-settings-drift.sh` 의 `.hooks`/`.statusLine` 자동 복구뿐이다. 재시드는 `gateway-cli setup` / 점검은 `gateway-cli verify`.
+
+symlink 였던 구 레이아웃은 Claude Code `/model` 이 tracked SSOT 를 write-through 로 오염시켰음 (#924 → #940). 기존 실파일의 개인 `model` 키는 setup 재실행 시 `settings.local.json` 으로 자동 이주.
+`~/.claude/settings.local.json` — out-of-repo, gitignored, 개인 override 의 정식 슬롯 (#924). Claude Code 가 settings.json 과 native merge 하며 local 이 이긴다. 사내 PC 에서 gateway-cli 가 쓴 키를 개인적으로 덮고 싶을 때도 여기를 쓴다 (live `settings.json` 직접 편집 금지 — gateway-cli 재실행에 지워진다).
 
 `~/.dotfiles-setup-mode` 가 `internal` 이면 `claude_yolo` 가 멀티-계정 해석을 우회하고 `~/.claude/` 를 강제 사용 (F-2). 잘못 migrate된 사내 PC 복구: `claude-accounts rollback` (F-3). 자세한 내용은 `docs/guide/internal-pc.md`.
 
 `claude/hooks/session-start-pc-context.sh` — `SessionStart` hook, `settings.json`에 등록됨. `~/.dotfiles-setup-mode` + hostname을 매 세션 시작마다 `additionalContext`로 주입해 5대 PC 혼동을 방지한다(#1052). 모드 파일이 없으면 조용히 빈 컨텍스트를 반환하고 세션 시작을 막지 않는다.
 
-`claude/hooks/session-start-settings-drift.sh` — `SessionStart` hook, `settings.json`에 등록됨. 모든 모드에서 live `settings.json`은 SSOT의 **실파일**이라 SSOT에 훅을 추가/변경한 커밋 이후 `./setup.sh`(internal: `./aws/setup.sh`) 재실행 전까지 새 훅이 발화하지 않는다(#1086). 이 훅은 SSOT(`claude/settings.json`, 스크립트 경로 기준 상대 해석)와 live(`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json`)의 `.hooks` 필드만 jq로 비교해 drift 감지 시 stderr + `additionalContext`로 재시드를 안내한다. Bedrock 오버레이는 `.hooks`를 건드리지 않아 오탐이 없다. 자기 자신의 최초 미설치는 감지 못하지만(체크인 후 1회 재시드 필요) 이후 추가되는 모든 훅은 커버한다. best-effort, 항상 exit 0.
+`claude/hooks/session-start-settings-drift.sh` — `SessionStart` hook, `settings.json`에 등록됨. 모든 모드에서 live `settings.json`은 SSOT의 **실파일**이라 SSOT에 훅을 추가/변경한 커밋 이후 재시드 전까지 새 훅이 발화하지 않는다(#1086). SSOT(`claude/settings.json`, 스크립트 경로 기준 상대 해석)와 live(`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json`)의 **`.hooks` + `.statusLine`** 두 필드를 jq로 비교한다 — dotfiles가 "동작"으로 배포하는 필드는 이 둘뿐이고, 나머지(auth/model)는 소유자가 다르다.
+- **사내 모드 (2026-08-18~)**: drift 감지 시 그 두 키만 live 파일에 in-place **자동 복구**하고 "auto-corrected — no action needed" 로 알린다. `aws/setup.sh` deprecate 로 사내 PC의 재시드 통로가 없어졌고, gateway-cli가 `.statusLine`을 자기 바이너리로 덮어쓰는 실제 사고가 있었기 때문. 백업은 `~/.claude-backups/settings.json.pre-drift-heal.backup` (latest-only, #919/#806). gateway-cli 소유 키(`apiKeyHelper`/`awsCredentialExport`/`awsAuthRefresh`/`cleanupPeriodDays`/`env`/`model`/`availableModels`)와 Claude Code 네이티브 키(`enabledPlugins`/`extraKnownMarketplaces`)는 **절대 건드리지 않는다**. live가 symlink거나 SSOT가 해당 키를 정의하지 않거나 patch가 실패하면 자동 복구를 포기하고 안내만 한다.
+- **그 외 모드**: 종전 그대로 안내만 (`./setup.sh` 재실행 → `claude/setup.sh` 실파일 복사, #940).
+
+자기 자신의 최초 미설치는 감지 못하지만(체크인 후 1회 재시드 필요) 이후 추가되는 모든 훅은 커버한다. best-effort, 항상 exit 0.
 
 `claude/hooks/session-start-statusline-project-override.sh` — `SessionStart` hook, `settings.json`에 등록됨. Claude Code 의 settings 병합 우선순위(`settings.local.json` > 프로젝트 `settings.json` > 글로벌 `~/.claude/settings.json`)상, 프로젝트의 git-tracked `.claude/settings.json`이 자체 `.statusLine`을 정의하면 dotfiles 글로벌 statusline 을 덮어쓴다(#1236). 이를 되살릴 유일한 개인 슬롯인 `<project>/.claude/settings.local.json`은 gitignore 대상이라 fresh clone/새 worktree 마다 사라진다. 이 훅은 페이로드의 `.cwd`로 프로젝트를 식별해, 프로젝트 `settings.json`에 `.statusLine`이 있고 local 에 아직 개인 override 가 없을 때 SSOT(`claude/settings.json`, 스크립트 경로 기준 상대 해석)의 `.statusLine`을 `settings.local.json`에 seed/merge 한다(기존 키 보존). 안전장치: `git check-ignore`로 `settings.local.json`이 실제 gitignore 대상일 때만 write 하고(아니면 write 대신 .gitignore 추가 힌트만 출력해 working tree 오염 방지), 기존 `.statusLine`은 절대 덮어쓰지 않는 멱등 동작. best-effort, 항상 exit 0.
 

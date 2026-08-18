@@ -14,13 +14,15 @@
 #   6. Creates ~/.claude/CLAUDE.md symlink (global instructions, #1115)
 #   7. Verifies ~/.claude directory structure
 #
-# Internal mode 에서 ~/.claude/settings.json 은 aws/setup.sh 가 dotfiles
-# SSOT (claude/settings.json) + Bedrock 오버레이
-# (claude/settings.bedrock-overlay.example) 를 jq deep-merge 한 결과
-# 실파일로 시드한다 (#687, 이전 #677 F-7 의 settings.local.json 분리 디자인
-# 폐기). 본 스크립트는 internal 분기에서 settings.json symlink 를
-# 만들지 않는다. ~/.claude/settings.local.json 은 #683 F-2 이후 본 스크립트가
-# 생성하지 않으며, #687 이후엔 aws/setup.sh 도 만들지 않고 잔존 시 안내만 한다.
+# Internal mode 에서 ~/.claude/settings.json 은 (2026-08-18 부터) 조직 LLM
+# Gateway 전환 도구 `gateway-cli setup` 이 소유·작성한다 — dotfiles 는 이
+# 파일을 만들거나 덮어쓰지 않는다. aws/setup.sh 의 구 SSOT+Bedrock 오버레이
+# jq deep-merge(#687)는 폐지됐다. 본 스크립트는 internal 분기에서
+# settings.json symlink 를 만들지 않으며, dotfiles SSOT 의 `.hooks`/
+# `.statusLine` 만 SessionStart 훅(claude/hooks/session-start-settings-drift.sh)
+# 이 사내 모드에서 live 파일에 자동 복구한다. ~/.claude/settings.local.json 은
+# #924 이후 개인 override 의 정식 슬롯이라 본 스크립트도 aws/setup.sh 도
+# 더 이상 건드리지 않는다.
 #
 # These files/directories are version-controlled in dotfiles and should
 # be managed via symbolic links for consistency across machines.
@@ -478,17 +480,11 @@ EOF
 }
 
 # Note: 이전에 있던 `_print_internal_local_env_guidance` 는 #683 F-2 에서 제거.
-# 사내 PC 의 settings 는 `aws/setup.sh` 가 dotfiles SSOT (claude/settings.json)
-# + Bedrock 오버레이 (claude/settings.bedrock-overlay.example) 를 jq deep-merge
-# 해 ~/.claude/settings.json 실파일로 작성한다 (#687, 이전 #677 F-7 의
-# settings.local.json 분리 디자인 폐기).
-#
-# 함께 deprecate 된 env 키 (게이트웨이 path 전용, Bedrock 와 양립 불가 — #677 O-1):
-#   - ANTHROPIC_BASE_URL  (was: http://cloud.dtgpt.samsungds.net/llm)
-#   - ANTHROPIC_AUTH_TOKEN (was: placeholder "your-dt-api-key")
-#   - ANTHROPIC_MODEL      (was: "Qwen3.6-27B")
-# 위 3 키는 더 이상 주입되지 않으며, ~/.claude/settings.json 에 잔존해도
-# aws/setup.sh 가 머지 중 자동 strip 한다.
+# 사내 PC 의 live ~/.claude/settings.json 은 (2026-08-18 부터) `gateway-cli
+# setup` 이 쓴다 — aws/setup.sh 의 구 SSOT+Bedrock 오버레이 jq deep-merge
+# (#687)는 폐지됐다. `env.ANTHROPIC_BASE_URL` 등은 예전엔 Bedrock 과
+# 양립 불가한 레거시 게이트웨이 키(#677 O-1)로 취급돼 strip 대상이었지만,
+# 지금은 gateway-cli 가 쓰는 정상 키다 — strip 로직 자체가 없어졌다.
 
 # --- Main Script Logic (issue #287, Phase 1: multi-account) ---
 
@@ -542,9 +538,11 @@ _migrate_install_gh_issue_flow_stop_hook
 DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/env/claude.sh"
 DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/tools/integrations/claude.sh"
 
-# settings.local.json 은 dotfiles 가 직접 관리하지 않는다 (#584).
-# Internal-PC 의 Bedrock 모델 매핑은 aws/setup.sh 가 Bedrock 템플릿으로
-# jq-머지한다 (#677 F-7). 이전 게이트웨이 자동 생성 분기는 #683 F-2 에서 제거.
+# settings.local.json 은 dotfiles 가 직접 관리하지 않는다 (#584) — #924 부터
+# 개인 override 의 정식 슬롯. Internal-PC 의 live settings.json 자체도
+# (2026-08-18 부터) gateway-cli setup 이 소유하며 aws/setup.sh 는 더 이상
+# 이 파일을 쓰지 않는다 (구 #677 F-7 Bedrock jq-머지 폐지). 이전 게이트웨이
+# 자동 생성 분기는 #683 F-2 에서 제거.
 
 # Setup-mode SSOT read (issue #571). Reuses the _dotfiles_setup_mode
 # helper sourced from shell-common/tools/integrations/claude.sh (line
@@ -631,20 +629,21 @@ _single_account_ensure_link() {
 # Direct-symlink the dotfiles SSOT into ~/.claude/ — no claude-accounts,
 # no ~/.claude-personal, no ~/.claude-work.
 #
-# #687: settings.json 은 더 이상 symlink 가 아니다. aws/setup.sh 가
-# dotfiles SSOT (claude/settings.json) + Bedrock 오버레이를 jq deep-merge
-# 한 결과를 ~/.claude/settings.json 에 실파일로 작성한다. Claude Code 의
-# settings.local.json deep-merge 가 사용자 환경에서 신뢰 불가하기 때문
-# (실측 사례: ANTHROPIC_DEFAULT_SONNET_MODEL 미반영 → 400 invalid model).
-# 그래서 본 분기에서는 settings.json 처리를 aws/setup.sh 에 위임한다.
-# settings.local.json 은 #683 F-2 부터 본 분기가 만들지 않으며, #687 부터는
-# aws/setup.sh 도 만들지 않고 기존 파일이 있으면 timestamp suffix 백업으로
-# 자동 archive 한다 (mv → *.deprecated-687.<ts>).
+# settings.json 은 symlink 가 아니라 실파일이지만, (2026-08-18 부터) 그 실파일의
+# writer 는 dotfiles 가 아니라 `gateway-cli setup` (조직 LLM Gateway 전환 도구)
+# 이다. 구 #687 설계(aws/setup.sh 가 SSOT + Bedrock 오버레이를 jq deep-merge)
+# 는 폐지됐다 — gateway-cli 가 apiKeyHelper/env.* 를 직접 쓰는 같은 파일을
+# dotfiles 가 다시 덮어쓰면 두 writer 가 서로를 지우는 왕복이 되기 때문
+# (실측 사례: gateway-cli 가 .statusLine 을 자기 바이너리로 덮어씀). 그래서
+# 본 분기는 settings.json 을 아예 건드리지 않는다. dotfiles SSOT 의
+# `.hooks`/`.statusLine` 만 SessionStart 훅(session-start-settings-drift.sh)이
+# 사내 모드에서 live 파일에 자동 복구한다. settings.local.json 은 #924 이후
+# 개인 override 의 정식 슬롯이라 본 분기도 aws/setup.sh 도 건드리지 않는다.
 if [ "$_setup_mode" = "internal" ]; then
     log_info "Internal PC mode — single-account setup (skipping claude-accounts)"
 
-    # settings.json 처리는 aws/setup.sh 가 책임진다 (#687). 본 분기는 이
-    # 파일에 손대지 않아 aws/setup.sh 가 작성한 실파일이 보존된다.
+    # settings.json 은 gateway-cli setup 이 소유한다 — 본 분기는 이 파일에
+    # 손대지 않는다. dotfiles SSOT 변경은 session-start-settings-drift.sh 가 전파.
     _single_account_ensure_link "$CLAUDE_STATUSLINE_SOURCE"             "$HOME_STATUSLINE"
     # skills/ uses entry-level composition (issue #707, F-8) so externally
     # added symlinks can be layered into the same target dir without
@@ -658,9 +657,10 @@ if [ "$_setup_mode" = "internal" ]; then
     _single_account_ensure_link "$CLAUDE_MD_SOURCE"                     "$HOME_CLAUDE_MD"
 
     # --- Verify Links (single-account) ---
-    # settings.json is intentionally absent from this list — aws/setup.sh
-    # writes it as a regular file (#687). settings.local.json is also
-    # absent — deprecated (#687) and never a dotfiles symlink (#584).
+    # settings.json is intentionally absent from this list — gateway-cli
+    # setup writes it as a regular file (2026-08-18~, aws/setup.sh's #687
+    # merge is deprecated). settings.local.json is also absent — it is the
+    # personal-override slot (#924) and never a dotfiles symlink (#584).
     # skills/ is a real directory of entry-level symlinks (#707, F-8), so
     # it is checked as `-d` (and `! -L`) rather than `-L`.
     ux_section "심볼릭 링크 확인 (internal/single-account)"
@@ -690,11 +690,10 @@ if [ "$_setup_mode" = "internal" ]; then
     ux_bullet "실행: ${UX_BOLD}claude-yolo${UX_RESET} (멀티 계정 우회됨)"
     echo ""
 
-    # settings.local.json 의 Bedrock 모델 매핑은 aws/setup.sh 가 책임진다 (#677 F-7).
-    # 이전의 _print_internal_local_env_guidance 호출은 #683 F-2 에서 제거됨 —
-    # 같은 ./setup.sh 안에서 게이트웨이 블록 (env: ANTHROPIC_BASE_URL /
-    # ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL) 을 만들고 곧바로 aws/setup.sh
-    # 가 strip 하던 자기상충 흐름을 정리. 위 3 env 키는 모두 deprecate.
+    # settings.json 의 auth/env/모델 설정은 (2026-08-18 부터) gateway-cli setup
+    # 이 책임진다 — dotfiles 는 관여하지 않는다 (구 #677 F-7 Bedrock jq-머지
+    # 폐지). 이전의 _print_internal_local_env_guidance 호출은 #683 F-2 에서
+    # 이미 제거됨.
 
     # Surface stale /etc/sudoers.d/claude-{skills,docs}-mount-* files left
     # behind from any prior multi-account install on this box.

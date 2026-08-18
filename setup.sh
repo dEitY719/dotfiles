@@ -63,7 +63,11 @@ fi
 ./obsidian/setup.sh            # Obsidian CLI wrapper → ~/.local/bin/obsidian (#1023)
 ./claude/setup.sh
 ./agy/setup.sh                 # Antigravity CLI (agy) 바이너리 존재 확인 (#1180)
-./aws/setup.sh                 # Internal-PC AWS Bedrock bootstrap (#677). No-op on external/public PCs.
+# Internal-PC AWS SSO/CLI seeding only (aws.local.sh + ~/.aws/config). Its old
+# ~/.claude/settings.json merge is DEPRECATED (2026-08-18) — gateway-cli owns
+# that file now; the call is kept so the deprecation notice surfaces once here.
+# No-op on external/public PCs.
+./aws/setup.sh
 ./scripts/setup-skills-ssot.sh
 ./vscode-extensions/setup.sh
 # Propagate .vscode/base.json (SSOT) to the live VS Code User settings.json (#586).
