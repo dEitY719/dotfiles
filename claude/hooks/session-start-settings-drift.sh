@@ -27,11 +27,15 @@
 # dotfiles-owned keys back in place, every session, automatically.
 #
 # Scope of the write is deliberately tiny — ONLY `.hooks` and `.statusLine`
-# are assigned, via jq, into the existing document. Every other key is left
-# byte-for-byte alone: gateway-cli's (apiKeyHelper, awsCredentialExport,
+# are assigned, via jq, into the existing document. Every other key's VALUE
+# is left alone: gateway-cli's (apiKeyHelper, awsCredentialExport,
 # awsAuthRefresh, cleanupPeriodDays, env, model, availableModels), Claude
 # Code's own (enabledPlugins, extraKnownMarketplaces), and anything a user or
 # a future tool adds. dotfiles claims no other key in the live file.
+# (Not literally byte-for-byte: jq re-serializes the whole document on write,
+# so whitespace/key-order and — in the unlikely event a value is a very large
+# integer or a high-precision float — numeric formatting can change. No
+# gateway-cli/Claude-Code key currently holds such a value.)
 #
 # Which keys are compared, and why exactly these two: they are the only
 # settings.json fields that dotfiles ships as behaviour (hook wiring + the
@@ -128,13 +132,21 @@ if [ "$_mode" = "internal" ] && [ ! -L "$LIVE" ]; then
 	# Build the jq assignment for the drifted keys only. A drifted
 	# `.statusLine` that the SSOT does not define is intentionally skipped —
 	# healing it would mean deleting the live value with nothing to put back.
+	# `_healed_keys` tracks only what `_prog` actually assigns — kept
+	# separate from `_drift_keys` (which is "what differs") so the message
+	# below never claims a key was healed when it was silently skipped here.
 	_prog=""
+	_healed_keys=""
 	# Single quotes are deliberate: `$ssot_hooks` / `$ssot_statusline` are jq
 	# --argjson variable names, not shell variables.
 	# shellcheck disable=SC2016
-	[ "$_drift_hooks" -eq 1 ] && _prog='.hooks = $ssot_hooks'
+	if [ "$_drift_hooks" -eq 1 ]; then
+		_prog='.hooks = $ssot_hooks'
+		_healed_keys=".hooks"
+	fi
 	if [ "$_drift_statusline" -eq 1 ] && [ "$ssot_statusline" != "null" ]; then
 		_prog="${_prog:+${_prog} | }.statusLine = \$ssot_statusline"
+		_healed_keys="${_healed_keys:+${_healed_keys}, }.statusLine"
 	fi
 
 	if [ -n "$_prog" ]; then
@@ -145,6 +157,7 @@ if [ "$_mode" = "internal" ] && [ ! -L "$LIVE" ]; then
 		_tmp=""
 		if mkdir -p "$_backup_dir" 2>/dev/null &&
 			cp "$LIVE" "$_backup" 2>/dev/null &&
+			chmod 0600 "$_backup" 2>/dev/null &&
 			_tmp=$(mktemp "${LIVE}.XXXXXX" 2>/dev/null) &&
 			jq --argjson ssot_hooks "$ssot_hooks" \
 				--argjson ssot_statusline "$ssot_statusline" \
@@ -167,7 +180,17 @@ fi
 # Both branches keep the literal "hook drift" phrase so log greps / existing
 # regression tests written against the advisory wording keep matching.
 if [ "$_healed" -eq 1 ]; then
-	_msg="[dotfiles #1086] Claude settings.json hook drift auto-corrected: the live config (${LIVE}) had drifted from the dotfiles SSOT (claude/settings.json) in: ${_drift_keys}. Internal-PC mode patched ONLY those keys back in place — gateway-cli-owned keys (apiKeyHelper / awsCredentialExport / awsAuthRefresh / cleanupPeriodDays / env / model) were not touched. No action needed; restart Claude Code if you want the restored hooks/statusLine active in THIS session. Backup: ${_backup}"
+	# `_drift_statusline` can be 1 while `.statusLine` was skipped by the heal
+	# (SSOT doesn't define it) — say so explicitly instead of letting the
+	# "auto-corrected" claim silently cover a key that is still drifted.
+	_leftover=""
+	case " $_healed_keys " in
+	*" .statusLine "*) ;;
+	*)
+		[ "$_drift_statusline" -eq 1 ] && _leftover=".statusLine (SSOT 값 없음 — 자동 복구 불가, 수동 확인 필요)"
+		;;
+	esac
+	_msg="[dotfiles #1086] Claude settings.json hook drift auto-corrected: the live config (${LIVE}) had drifted from the dotfiles SSOT (claude/settings.json) in: ${_healed_keys}. Internal-PC mode patched ONLY those keys back in place — gateway-cli-owned keys (apiKeyHelper / awsCredentialExport / awsAuthRefresh / cleanupPeriodDays / env / model) were not touched. No action needed; restart Claude Code if you want the restored hooks/statusLine active in THIS session. Backup: ${_backup}${_leftover:+ | NOT auto-corrected: ${_leftover}}"
 else
 	# Non-internal PCs (and the internal fallbacks: symlinked live file, SSOT
 	# does not define the drifted key, or a failed patch) re-seed by hand.

@@ -18,7 +18,9 @@
 #   5. live file absent         → exit 0, silent
 #   6. internal + .hooks drift  → live patched from SSOT, backup, "auto-corrected"
 #   7. internal + .statusLine drift → same, gateway-owned keys untouched
-#   8. non-internal + drift     → advisory only, live file NOT mutated
+#   8. internal + .statusLine drift but SSOT has none → only .hooks healed,
+#      message doesn't overclaim .statusLine was corrected
+#   9. non-internal + drift     → advisory only, live file NOT mutated
 
 load '../test_helper'
 
@@ -208,6 +210,44 @@ JSON
     [ "$output" = "true" ]
 
     [ -f "$HOME/.claude-backups/settings.json.pre-drift-heal.backup" ]
+}
+
+@test "settings-drift: internal mode + .statusLine drift but SSOT defines none → only .hooks healed, message doesn't overclaim" {
+    printf 'internal' >"$HOME/.dotfiles-setup-mode"
+    # SSOT has NO .statusLine at all — the heal has nothing to put back.
+    cat >"$SSOT" <<'JSON'
+{ "hooks": { "SessionStart": [ { "hooks": [
+  { "type": "command", "command": "a.sh" },
+  { "type": "command", "command": "b.sh" }
+] } ] } }
+JSON
+    # Live: .hooks drifted (missing b.sh) AND carries a statusLine the SSOT
+    # doesn't define — both differ from SSOT, but only .hooks is healable.
+    cat >"$LIVE_DIR/settings.json" <<'JSON'
+{ "hooks": { "SessionStart": [ { "hooks": [
+  { "type": "command", "command": "a.sh" }
+] } ] },
+  "statusLine": { "type": "command", "command": "gateway-cli statusline" } }
+JSON
+    _run_hook
+    assert_success
+
+    ctx=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')
+    [[ "$ctx" == *"auto-corrected"* ]]
+    # Message must credit only what was actually healed...
+    [[ "$ctx" == *".hooks"* ]]
+    # ...and must NOT claim .statusLine was corrected when it was skipped.
+    [[ "$ctx" != *"in: .hooks, .statusLine"* ]]
+    [[ "$ctx" == *"NOT auto-corrected"* ]]
+
+    # .hooks healed from SSOT.
+    run bash -c "jq -S -c '.hooks' '$LIVE_DIR/settings.json'"
+    ssot_hooks=$(jq -S -c '.hooks' "$SSOT")
+    [ "$output" = "$ssot_hooks" ]
+
+    # .statusLine left exactly as-is — nothing to heal it with.
+    run jq -r '.statusLine.command' "$LIVE_DIR/settings.json"
+    [ "$output" = "gateway-cli statusline" ]
 }
 
 @test "settings-drift: non-internal mode + drift → advisory only, live NOT mutated" {
