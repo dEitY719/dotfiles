@@ -197,16 +197,8 @@ fi
 # (_merge_claude_settings_json / _archive_legacy_settings_local) 도 dead code
 # 로 남기지 않고 삭제했다 — 남겨두면 다음 사람이 다시 배선할 유혹이 된다.
 #
-# NOT fully removed since #1364: F-7b below is a deliberately narrow successor.
-# 스코프 차이를 분명히 해 둔다 —
-#   F-7 (삭제됨)  : SSOT + Bedrock overlay + 기존 파일의 전체 deep-merge.
-#                   gateway-cli 소유 키(apiKeyHelper / awsCredentialExport /
-#                   awsAuthRefresh / cleanupPeriodDays / env.*)까지 덮어써서
-#                   두 writer 가 서로를 지우는 왕복을 만들었다.
-#   F-7b (신규)   : `.hooks.SessionStart` 배열에 drift-heal 훅 커맨드 문자열
-#                   1개가 있는지만 보고, 없으면 그 1개만 append. 그 외 어떤
-#                   키도 읽지도 쓰지도 않는다 (jq 프로그램이 대입하는 곳은
-#                   `.hooks` 뿐이고, `.hooks` 안에서도 `.SessionStart` 뿐).
+# F-7b (#1364, 아래 함수) 는 그 삭제의 되돌림이 아니라 좁게 도려낸 예외다 —
+# 스코프 경계(F-7 과 무엇이 다른지)는 파일 상단 주석과 함수 docstring 참조.
 # ---------------------------------------------------------------------------
 
 # _reregister_session_start_drift_hook — F-7b (issue #1364).
@@ -282,18 +274,17 @@ _reregister_session_start_drift_hook() {
         return 0
     }
 
-    # `.hooks` / `.hooks.SessionStart` 의 모든 부재 단계를 한 프로그램으로
-    # 처리하고, 이미 존재하면 그대로 두므로 idempotent 하다. 다른 키는 값이
-    # 그대로 보존된다 (jq 가 문서를 재직렬화하므로 공백/키 순서만 정규화됨).
+    # `.hooks` / `.hooks.SessionStart` 의 모든 부재 단계는 jq path assignment
+    # 가 알아서 autovivify 하므로 별도 `// {}` 없이 한 프로그램으로 처리된다.
+    # 이미 등록된 경우는 위 already-registered 가드가 먼저 return 하므로 여기
+    # 도달했다는 것 자체가 $cmd 가 아직 없다는 뜻이다 — 그래서 append 만 하고
+    # 존재 여부를 다시 검사하지 않는다. 다른 키는 값이 그대로 보존된다 (jq 가
+    # 문서를 재직렬화하므로 공백/키 순서만 정규화됨).
     # shellcheck disable=SC2016
     if jq --arg cmd "$_rr_cmd" \
-            '.hooks = ((.hooks // {}) | .SessionStart = (
-               (.SessionStart // []) as $existing
-               | if ($existing | any(.hooks[]?.command == $cmd))
-                 then $existing
-                 else $existing + [{"hooks":[{"type":"command","command":$cmd}]}]
-                 end
-             ))' \
+            '.hooks.SessionStart = (
+               (.hooks.SessionStart // []) + [{"hooks":[{"type":"command","command":$cmd}]}]
+             )' \
             "$_rr_live" >"$_rr_tmp" 2>/dev/null &&
         [ -s "$_rr_tmp" ] &&
         chmod 0600 "$_rr_tmp" 2>/dev/null &&
