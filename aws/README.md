@@ -71,6 +71,8 @@ gateway-cli setup && gateway-cli verify
 
 `~/.claude/settings.json` 에 `apiKeyHelper` / `awsCredentialExport` / `awsAuthRefresh` / `cleanupPeriodDays` / `env.*` 를 씁니다. dotfiles 는 이 키들을 쓰지 않으므로 모델 목록이 비거나 인증이 깨지면 먼저 이 두 명령을 의심하세요. `setup` 은 `.statusLine.command` 도 덮어쓰지만 조치는 불필요 — 다음 세션 시작 시 drift 훅이 dotfiles statusline 으로 되돌리고 "auto-corrected" 로 알립니다.
 
+설치 아티팩트 위치와 `gateway-cli env --persist` 의 tracked `zsh/zshrc` 오염 주의사항은 `docs/guide/internal-pc.md` → "Claude Code 인증 (gateway-cli)" 참고.
+
 ## Step 4 — OTel 텔레메트리 설치
 
 ```sh
