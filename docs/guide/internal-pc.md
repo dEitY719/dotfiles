@@ -23,14 +23,18 @@
 "Configuration Files" 섹션과 `aws/AGENTS.md` 참고 (중복 서술 생략).
 
 1. **설치** — 아티팩트 `gateway-cli-setup.run` (~50MB 바이너리) 은 사내 전용 배포물이라
-   git 에 커밋하지 않는다. `~/download/` 에 수동 다운로드해 실행하면 실체
+   git 에 커밋하지 않는다. 정확한 배포 URL은 사내 전용이라 이 문서(`pc-environment.md`
+   의 "비밀은 적지 않는다" 원칙 적용)에는 적지 않는다 — 사내 IT 소프트웨어 배포 포털에서
+   `gateway-cli` 로 검색해 받는다. `~/download/` 에 수동 다운로드해 실행하면 실체
    `~/.local/share/gateway-cli-suite/gateway-cli` + symlink `~/.local/bin/gateway-cli` 가 생긴다.
 2. **`gateway-cli env --persist` 는 tracked 파일을 오염시킬 수 있다** — 이 명령이 쓰는
    `ADMIN_API_URL` / `ANTHROPIC_BASE_URL` 등은 tracked `zsh/zshrc` 가 아니라
-   `~/.zshrc.local` (gitignored 개인 슬롯, #737) 에 떨어져야 한다. 실제로 tracked 쪽에
-   먼저 쓰였다가 수동으로 옮긴 전례가 있다.
-3. **설치 확인** — `gateway-cli verify` 통과, 그리고 `git -C ~/dotfiles status` 로
-   `zsh/zshrc` 오염 없음. 재설치하거나 두 번째 사내 PC 를 셋업할 때도 같다.
+   `~/.zshrc.local` (gitignored 개인 슬롯, #737) 에 떨어져야 한다. bash 사용자도 마찬가지
+   위험이 있다 — `~/.bashrc` 는 tracked `bash/main.bash` 에 심링크되어 있다. 실제로
+   tracked 쪽에 먼저 쓰였다가 수동으로 옮긴 전례가 있다.
+3. **설치 확인** — `gateway-cli verify` 통과, 그리고
+   `git -C "${DOTFILES_ROOT:-$HOME/dotfiles}" status` 로 `zsh/zshrc` / `bash/main.bash`
+   오염 없음. 재설치하거나 두 번째 사내 PC 를 셋업할 때도 같다.
 
 아래 "사내 게이트웨이 env 블록 추가" 는 별개 파일(`settings.local.json`) 경로다 —
 gateway-cli 가 쓴 `settings.json` 값을 개인적으로 덮을 때 쓰며 native merge 에서 local 이
