@@ -541,7 +541,8 @@ DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/tools/integrations/claude.s
 # settings.local.json 은 dotfiles 가 직접 관리하지 않는다 (#584) — #924 부터
 # 개인 override 의 정식 슬롯. Internal-PC 의 live settings.json 자체도
 # (2026-08-18 부터) gateway-cli setup 이 소유하며 aws/setup.sh 는 더 이상
-# 이 파일을 쓰지 않는다 (구 #677 F-7 Bedrock jq-머지 폐지). 이전 게이트웨이
+# 이 파일을 머지하지 않는다 (구 #677 F-7 Bedrock jq-머지 폐지). 단 #1364 부터
+# drift-heal 훅 자신의 .hooks.SessionStart 등록 1건만은 aws/setup.sh 가 복구한다. 이전 게이트웨이
 # 자동 생성 분기는 #683 F-2 에서 제거.
 
 # Setup-mode SSOT read (issue #571). Reuses the _dotfiles_setup_mode
