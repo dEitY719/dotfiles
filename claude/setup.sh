@@ -636,10 +636,13 @@ _single_account_ensure_link() {
 # 는 폐지됐다 — gateway-cli 가 apiKeyHelper/env.* 를 직접 쓰는 같은 파일을
 # dotfiles 가 다시 덮어쓰면 두 writer 가 서로를 지우는 왕복이 되기 때문
 # (실측 사례: gateway-cli 가 .statusLine 을 자기 바이너리로 덮어씀). 그래서
-# 본 분기는 settings.json 을 아예 건드리지 않는다. dotfiles SSOT 의
-# `.hooks`/`.statusLine` 만 SessionStart 훅(session-start-settings-drift.sh)이
-# 사내 모드에서 live 파일에 자동 복구한다. settings.local.json 은 #924 이후
-# 개인 override 의 정식 슬롯이라 본 분기도 aws/setup.sh 도 건드리지 않는다.
+# 본 분기(이 스크립트)는 settings.json 을 아예 건드리지 않는다. dotfiles
+# SSOT 의 `.hooks`/`.statusLine` 만 SessionStart 훅(session-start-settings-
+# drift.sh)이 사내 모드에서 live 파일에 자동 복구한다. settings.local.json
+# 은 #924 이후 개인 override 의 정식 슬롯이라 본 분기도 aws/setup.sh 도
+# 건드리지 않는다. 단 예외 하나 — 그 드리프트 훅 자신의 `.hooks.SessionStart`
+# 등록이 사라지면 (별도 스크립트인) `aws/setup.sh` 가 그 1건만 되살린다
+# (F-7b, #1364).
 if [ "$_setup_mode" = "internal" ]; then
     log_info "Internal PC mode — single-account setup (skipping claude-accounts)"
 
