@@ -127,6 +127,7 @@ fi
 
 # --- Internal mode: auto-heal the two dotfiles-owned keys in place ---------
 _healed=0
+_healed_statusline=0
 _backup=""
 if [ "$_mode" = "internal" ] && [ ! -L "$LIVE" ]; then
 	# Build the jq assignment for the drifted keys only. A drifted
@@ -147,6 +148,7 @@ if [ "$_mode" = "internal" ] && [ ! -L "$LIVE" ]; then
 	if [ "$_drift_statusline" -eq 1 ] && [ "$ssot_statusline" != "null" ]; then
 		_prog="${_prog:+${_prog} | }.statusLine = \$ssot_statusline"
 		_healed_keys="${_healed_keys:+${_healed_keys}, }.statusLine"
+		_healed_statusline=1
 	fi
 
 	if [ -n "$_prog" ]; then
@@ -184,12 +186,9 @@ if [ "$_healed" -eq 1 ]; then
 	# (SSOT doesn't define it) — say so explicitly instead of letting the
 	# "auto-corrected" claim silently cover a key that is still drifted.
 	_leftover=""
-	case " $_healed_keys " in
-	*" .statusLine "*) ;;
-	*)
-		[ "$_drift_statusline" -eq 1 ] && _leftover=".statusLine (SSOT 값 없음 — 자동 복구 불가, 수동 확인 필요)"
-		;;
-	esac
+	if [ "$_drift_statusline" -eq 1 ] && [ "$_healed_statusline" -ne 1 ]; then
+		_leftover=".statusLine (SSOT 값 없음 — 자동 복구 불가, 수동 확인 필요)"
+	fi
 	_msg="[dotfiles #1086] Claude settings.json hook drift auto-corrected: the live config (${LIVE}) had drifted from the dotfiles SSOT (claude/settings.json) in: ${_healed_keys}. Internal-PC mode patched ONLY those keys back in place — gateway-cli-owned keys (apiKeyHelper / awsCredentialExport / awsAuthRefresh / cleanupPeriodDays / env / model) were not touched. No action needed; restart Claude Code if you want the restored hooks/statusLine active in THIS session. Backup: ${_backup}${_leftover:+ | NOT auto-corrected: ${_leftover}}"
 else
 	# Non-internal PCs (and the internal fallbacks: symlinked live file, SSOT
