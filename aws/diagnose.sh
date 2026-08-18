@@ -421,7 +421,7 @@ if [ -n "$SETTINGS_FILE" ]; then
     # 모드는 advisory 뿐이라 여기서도 같은 재시드 안내(./setup.sh)를 줘야
     # "새 세션이면 알아서 고쳐진다"는 잘못된 기대를 심지 않는다.
     case "${_mode_raw:-}" in
-      2|internal) _drift_fix_hint="새 세션 시작하면 사내 모드에서 자동 복구됨" ;;
+      2|internal) _drift_fix_hint="./aws/setup.sh 재실행(훅 등록 자체가 지워진 경우 #1364) 후 새 세션 시작하면 사내 모드에서 자동 복구됨" ;;
       *) _drift_fix_hint="사내 모드가 아니라 자동 복구 대상 아님 → ./setup.sh 재실행 필요" ;;
     esac
     if [ -f "$_ssot_settings" ]; then
@@ -529,7 +529,7 @@ else
   printf '  %s%sFAIL 항목을 확인하고 가이드에 따라 수정해 주세요.%s\n' "$RED" "$BOLD" "$NC"
   printf '\n'
   printf '  %sNext:%s\n' "$BOLD" "$NC"
-  printf '    1. ./aws/setup.sh                          (aws.local.sh / ~/.aws/config 시드 — settings.json 은 안 건드림)\n'
+  printf '    1. ./aws/setup.sh                          (aws.local.sh / ~/.aws/config 시드 + SessionStart 훅 등록 1건 복구 #1364)\n'
   printf '    2. aws sso login                           (SSO 토큰 갱신)\n'
   printf '    3. gateway-cli setup && gateway-cli verify (~/.claude/settings.json auth/env/모델)\n'
   printf '    4. ./aws/install-otel-managed-settings.sh  (OTel 재설치)\n'

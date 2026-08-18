@@ -21,10 +21,13 @@
 # 롤백 참조용으로만 남긴다.
 #
 # 남는 책임 (gateway-cli 와 겹치지 않는, 순수 AWS CLI 영역):
-#   - F-1  aws/aws.local.sh   시드 (없을 때만) + AWS_CA_BUNDLE sanity 경고
-#   - F-6  ~/.aws/config      시드 (없을 때만)
-# gateway-cli 는 AWS SSO 프로필/CA bundle 을 만들지 않으므로 이 두 개는 계속
-# dotfiles 소유다. 이 스크립트는 그 외 어떤 Claude 설정 파일도 쓰지 않는다.
+#   - F-1   aws/aws.local.sh   시드 (없을 때만) + AWS_CA_BUNDLE sanity 경고
+#   - F-6   ~/.aws/config      시드 (없을 때만)
+#   - F-7b  live settings.json 의 .hooks.SessionStart 에 drift-heal 훅
+#           '자신의 등록' 한 항목만 재삽입 (#1364, 아래 참조)
+# gateway-cli 는 AWS SSO 프로필/CA bundle 을 만들지 않으므로 앞의 두 개는 계속
+# dotfiles 소유다. F-7b 를 제외하면 이 스크립트는 그 외 어떤 Claude 설정
+# 파일/키도 쓰지 않는다.
 #
 # SSOT 갱신 경로 대체 (중요): 예전에는 이 스크립트만이 dotfiles SSOT
 # (claude/settings.json) 의 .hooks / .statusLine 변경을 사내 PC live 파일로
@@ -32,6 +35,13 @@
 # `claude/hooks/session-start-settings-drift.sh` 가 맡는다 — 사내 모드에서
 # .hooks / .statusLine drift 를 감지하면 그 두 키만 live 파일에 in-place
 # 자동 복구하고, gateway-cli 소유 키는 건드리지 않는다.
+#
+# 그 위임에는 부트스트랩 구멍이 하나 있다 (#1364): Claude Code 는 live 파일의
+# .hooks.SessionStart 에 등록된 훅만 호출한다. 그러므로 외부 요인(gateway-cli
+# 재설정, 손편집)이 live .hooks 를 통째로 날리면 훅 자신의 등록도 함께
+# 사라지고, 훅은 영원히 호출되지 않아 스스로를 복구할 수 없다 — 단일 실패점.
+# F-7b 가 정확히 그 한 항목만 되살린다. 이것은 위 삭제의 되돌림이 아니라
+# 좁게 도려낸 예외다 (#687 식 deep-merge 재도입 아님).
 #
 # Idempotent: re-runs preserve user edits to aws.local.sh / ~/.aws/config.
 #
@@ -50,6 +60,11 @@ DOTFILES_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # shellcheck source=../shell-common/tools/ux_lib/ux_lib.sh
 . "${DOTFILES_DIR}/shell-common/tools/ux_lib/ux_lib.sh"
+
+# Backup primitives SSOT (#806): fixed-suffix, latest-only backups. Used by
+# F-7b below. Defines functions only — no output at source time.
+# shellcheck source=../shell-common/functions/dotfiles_backup.sh
+. "${DOTFILES_DIR}/shell-common/functions/dotfiles_backup.sh"
 
 # ---------------------------------------------------------------------------
 # Setup-mode gate. _dotfiles_setup_mode is defined inside the heavy
@@ -82,18 +97,23 @@ ux_section "AWS SSO/CLI seeding (internal mode)"
 # invokes this script expecting the old #687 settings.json merge learns
 # immediately that the merge is gone and who owns the file now.
 #
-# This is a hard no-op for settings.json — not a warn-then-continue. The
-# merge helper and the settings.local.json archiver were deleted outright,
-# so there is no code path left in this file that opens ~/.claude/settings*.
+# The old merge helper and the settings.local.json archiver were deleted
+# outright. The single remaining settings.json write is F-7b (#1364) — the
+# drift-heal hook's OWN .hooks.SessionStart registration, which nothing else
+# can restore once it is gone. Everything else about settings.json is a no-op.
 # ---------------------------------------------------------------------------
-ux_warning "DEPRECATED: aws/setup.sh 는 더 이상 ~/.claude/settings.json 을 쓰지 않습니다 (2026-08-18)."
+ux_warning "DEPRECATED: aws/setup.sh 는 더 이상 ~/.claude/settings.json 을 머지하지 않습니다 (2026-08-18)."
 ux_bullet "사내 PC live settings.json 소유자: gateway-cli (조직 LLM Gateway 전환 도구)"
 ux_bullet "  재시드/점검: gateway-cli setup  /  gateway-cli verify"
 ux_bullet "dotfiles SSOT (claude/settings.json) 의 .hooks / .statusLine 변경은"
 ux_bullet "  SessionStart 훅 claude/hooks/session-start-settings-drift.sh 가"
-ux_bullet "  사내 모드에서 자동 복구합니다 — 이 스크립트 재실행이 필요 없습니다."
+ux_bullet "  사내 모드에서 자동 복구합니다 — 평소엔 이 스크립트 재실행이 불필요합니다."
+ux_bullet "예외 하나 (#1364): 그 훅 '자신의 등록' 만은 이 스크립트가 책임집니다."
+ux_bullet "  live .hooks.SessionStart 에서 훅 항목이 사라지면 훅은 호출조차 되지"
+ux_bullet "  않아 스스로 복구 못 합니다 — 그때 그 한 항목만 여기서 되살립니다."
 ux_bullet "claude/settings.bedrock-overlay.example 도 함께 deprecated (참조용 보존)."
-ux_info "이 스크립트가 지금도 하는 일: aws/aws.local.sh + ~/.aws/config 시드뿐."
+ux_info "이 스크립트가 지금도 하는 일: aws/aws.local.sh + ~/.aws/config 시드,"
+ux_info "  그리고 위 SessionStart 훅 등록 1건 점검/복구 (#1364)."
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -176,7 +196,121 @@ fi
 # 않는다. 위 deprecation guard 가 사용자에게 이미 안내했다. 함수 자체
 # (_merge_claude_settings_json / _archive_legacy_settings_local) 도 dead code
 # 로 남기지 않고 삭제했다 — 남겨두면 다음 사람이 다시 배선할 유혹이 된다.
+#
+# NOT fully removed since #1364: F-7b below is a deliberately narrow successor.
+# 스코프 차이를 분명히 해 둔다 —
+#   F-7 (삭제됨)  : SSOT + Bedrock overlay + 기존 파일의 전체 deep-merge.
+#                   gateway-cli 소유 키(apiKeyHelper / awsCredentialExport /
+#                   awsAuthRefresh / cleanupPeriodDays / env.*)까지 덮어써서
+#                   두 writer 가 서로를 지우는 왕복을 만들었다.
+#   F-7b (신규)   : `.hooks.SessionStart` 배열에 drift-heal 훅 커맨드 문자열
+#                   1개가 있는지만 보고, 없으면 그 1개만 append. 그 외 어떤
+#                   키도 읽지도 쓰지도 않는다 (jq 프로그램이 대입하는 곳은
+#                   `.hooks` 뿐이고, `.hooks` 안에서도 `.SessionStart` 뿐).
 # ---------------------------------------------------------------------------
+
+# _reregister_session_start_drift_hook — F-7b (issue #1364).
+#
+# 부트스트랩 단일 실패점 해소: session-start-settings-drift.sh 는 live 파일의
+# .hooks/.statusLine drift 를 자동 복구하지만, Claude Code 가 그 훅을 호출하려면
+# 훅이 live `.hooks.SessionStart` 에 등록돼 있어야 한다. 외부 요인이 live
+# `.hooks` 를 통째로 날리면 훅의 등록도 함께 사라져 훅이 스스로를 되살릴 수
+# 없다. 그 한 항목만 여기서 되돌린다.
+#
+# 안전 장치:
+#   - jq 없음 / SSOT 없음 / live 파일 없음 / live 가 symlink → 조용히 no-op.
+#     특히 파일을 새로 만들지 않는다 (생성 소유자는 gateway-cli). symlink
+#     레이아웃은 그 symlink 를 만든 쪽 소유 — 훅 자신의 heal 경로와 동일 규칙.
+#   - 훅 커맨드 문자열은 하드코딩하지 않고 SSOT 에서 jq 로 읽는다. 그래야
+#     비표준 체크아웃 경로에서도 맞는 문자열이 들어간다.
+#   - 이미 등록돼 있으면 파일을 열어보기만 하고 쓰지 않는다 (조용한 no-op).
+#   - 쓰기 전 dotfiles_backup_copy 로 백업 (#806 고정 suffix, latest-only).
+#     suffix 는 훅 자신의 `.pre-drift-heal.backup` 과 겹치지 않게 분리한다.
+#   - mktemp → jq → mv 순서라 중간 실패가 live 파일을 반쯤 쓴 상태로 남기지
+#     않는다. 실패 시 백업은 남긴다 (훅과 동일 규칙).
+#   - 어떤 경로로도 0 을 반환한다 — `set -e` 아래에서 AWS 시드 결과나 이후
+#     안내 출력을 이 부가 점검이 날려버리면 안 된다.
+_reregister_session_start_drift_hook() {
+    _rr_live="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+    _rr_ssot="${DOTFILES_DIR}/claude/settings.json"
+    _rr_suffix=".pre-sessionstart-hook-reg.backup"
+
+    if ! command -v jq >/dev/null 2>&1; then
+        ux_warning "jq 미설치 — SessionStart drift-heal 훅 등록 점검 건너뜀 (#1364)"
+        return 0
+    fi
+    if [ ! -f "$_rr_ssot" ]; then
+        ux_warning "dotfiles SSOT 없음: $_rr_ssot — 훅 등록 점검 건너뜀 (#1364)"
+        return 0
+    fi
+    # live 파일이 없으면 만들지 않는다 / symlink 면 손대지 않는다.
+    [ -f "$_rr_live" ] || return 0
+    [ ! -L "$_rr_live" ] || return 0
+    jq empty "$_rr_live" >/dev/null 2>&1 || {
+        ux_warning "live settings.json JSON 파싱 실패 — 훅 등록 점검 건너뜀: $_rr_live"
+        return 0
+    }
+
+    # SSOT 에서 훅 커맨드 문자열을 그대로 읽어온다 (하드코딩 금지).
+    _rr_cmd=$(jq -r '
+        [ .hooks.SessionStart[]?.hooks[]?.command
+          | select(type == "string")
+          | select(endswith("session-start-settings-drift.sh")) ][0] // ""
+    ' "$_rr_ssot" 2>/dev/null) || _rr_cmd=""
+    if [ -z "$_rr_cmd" ]; then
+        ux_warning "SSOT 에 session-start-settings-drift.sh 훅 정의가 없음 — 등록 생략 (#1364)"
+        return 0
+    fi
+
+    # 이미 등록돼 있으면 조용히 끝낸다 (정상 경로 = 무출력).
+    # jq 변수 ($cmd) 는 --arg 주입 — shell 변수 아님.
+    # shellcheck disable=SC2016
+    if jq -e --arg cmd "$_rr_cmd" \
+        'any(.hooks.SessionStart[]?.hooks[]?.command; . == $cmd)' \
+        "$_rr_live" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    _rr_backup=$(dotfiles_backup_copy "$_rr_live" "$_rr_suffix") || {
+        ux_error "settings.json 백업 실패 — SessionStart 훅 등록 중단: $_rr_live"
+        return 0
+    }
+    chmod 0600 "$_rr_backup" 2>/dev/null || true
+
+    _rr_tmp=$(mktemp "${_rr_live}.XXXXXX" 2>/dev/null) || {
+        ux_error "임시 파일 생성 실패 — SessionStart 훅 등록 중단 (백업 보존: $_rr_backup)"
+        return 0
+    }
+
+    # `.hooks` / `.hooks.SessionStart` 의 모든 부재 단계를 한 프로그램으로
+    # 처리하고, 이미 존재하면 그대로 두므로 idempotent 하다. 다른 키는 값이
+    # 그대로 보존된다 (jq 가 문서를 재직렬화하므로 공백/키 순서만 정규화됨).
+    # shellcheck disable=SC2016
+    if jq --arg cmd "$_rr_cmd" \
+            '.hooks = ((.hooks // {}) | .SessionStart = (
+               (.SessionStart // []) as $existing
+               | if ($existing | any(.hooks[]?.command == $cmd))
+                 then $existing
+                 else $existing + [{"hooks":[{"type":"command","command":$cmd}]}]
+                 end
+             ))' \
+            "$_rr_live" >"$_rr_tmp" 2>/dev/null &&
+        [ -s "$_rr_tmp" ] &&
+        chmod 0600 "$_rr_tmp" 2>/dev/null &&
+        mv -f "$_rr_tmp" "$_rr_live" 2>/dev/null; then
+        ux_warning "settings.json 에 SessionStart drift-heal 훅 자동 등록 완료 (#1364)"
+        ux_bullet "  hook: $_rr_cmd"
+        ux_bullet "  backup: $_rr_backup"
+        ux_bullet "  .hooks.SessionStart 외 어떤 키도 변경하지 않았습니다."
+        ux_bullet "  Claude Code 를 재시작하면 drift 자동 복구가 다시 동작합니다."
+    else
+        rm -f "$_rr_tmp"
+        ux_error "settings.json 갱신 실패 — 백업 보존: $_rr_backup"
+    fi
+    return 0
+}
+
+_reregister_session_start_drift_hook
 
 # ---------------------------------------------------------------------------
 # F-8: OTel installer guidance (do NOT auto-run — needs sudo + sso login)
