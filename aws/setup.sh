@@ -235,9 +235,19 @@ _reregister_session_start_drift_hook() {
         ux_warning "dotfiles SSOT 없음: $_rr_ssot — 훅 등록 점검 건너뜀 (#1364)"
         return 0
     fi
-    # live 파일이 없으면 만들지 않는다 / symlink 면 손대지 않는다.
+    # live 파일이 없으면 만들지 않는다 (조용히 skip — gateway-cli 미실행 상태는
+    # 위 2-6 진단이 이미 명확히 알려준다).
     [ -f "$_rr_live" ] || return 0
-    [ ! -L "$_rr_live" ] || return 0
+    # symlink 면 손대지 않는다 — 그 레이아웃은 심링크를 만든 쪽 소유. 여기는
+    # 조용히 skip하지 않고 알린다: 이 케이스가 바로 "./aws/setup.sh 재실행"을
+    # 일반 복구 경로로 안내하는 문서(aws/README.md 트러블슈팅)가 실제로는
+    # 아무 효과가 없는 유일한 분기이기 때문이다 (PR #1366 코덱스 리뷰 지적).
+    if [ -L "$_rr_live" ]; then
+        ux_warning "live settings.json 이 symlink 입니다 — SessionStart 훅 등록 점검 건너뜀 (#1364)"
+        ux_bullet "  symlink 레이아웃은 만든 쪽 소유라 여기서 건드리지 않습니다."
+        ux_bullet "  복구: symlink 제거 후 gateway-cli setup 재실행 (./aws/diagnose.sh 2-6 참고)"
+        return 0
+    fi
     jq empty "$_rr_live" >/dev/null 2>&1 || {
         ux_warning "live settings.json JSON 파싱 실패 — 훅 등록 점검 건너뜀: $_rr_live"
         return 0
