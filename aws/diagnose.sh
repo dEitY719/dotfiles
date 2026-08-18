@@ -389,7 +389,10 @@ header "2-6) ~/.claude/settings.json — JSON 유효성 + dotfiles 소유 필드
 # dotfiles SSOT 가 "동작"으로 배포하는 `.hooks`/`.statusLine` 이 실제로
 # live 파일에 반영돼 있는지 — 반영 담당은 SessionStart 훅
 # claude/hooks/session-start-settings-drift.sh (사내 모드 자동 복구).
-CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+# 훅(session-start-settings-drift.sh)이 읽는 LIVE 파일과 동일한 경로 해석을
+# 써야 한다 — CLAUDE_CONFIG_DIR 가 설정된 환경(예: 멀티 계정 전환 중)에서
+# 여기가 기본 ~/.claude 만 보면 훅이 이미 고친 파일과 다른 파일을 진단하게 됨.
+CLAUDE_SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 SETTINGS_FILE=""
 if [ -f "$CLAUDE_SETTINGS" ]; then
   if [ -L "$CLAUDE_SETTINGS" ]; then
@@ -415,13 +418,20 @@ if [ -n "$SETTINGS_FILE" ]; then
     # 복구하므로 여기서 FAIL 이 뜨면 "훅이 아직 한 번도 안 돌았다" 신호다.
     _dotfiles_dir="$(cd "${SCRIPT_DIR}/.." && pwd)"
     _ssot_settings="${_dotfiles_dir}/claude/settings.json"
+    # session-start-settings-drift.sh 만 사내 모드에서 자동 복구한다 — 그 외
+    # 모드는 advisory 뿐이라 여기서도 같은 재시드 안내(./setup.sh)를 줘야
+    # "새 세션이면 알아서 고쳐진다"는 잘못된 기대를 심지 않는다.
+    case "${_mode_raw:-}" in
+      2|internal) _drift_fix_hint="새 세션 시작하면 사내 모드에서 자동 복구됨" ;;
+      *) _drift_fix_hint="사내 모드가 아니라 자동 복구 대상 아님 → ./setup.sh 재실행 필요" ;;
+    esac
     if [ -f "$_ssot_settings" ]; then
       _ssot_hooks=$(jq -S -c '.hooks // {}' "$_ssot_settings" 2>/dev/null)
       _live_hooks=$(jq -S -c '.hooks // {}' "$SETTINGS_FILE" 2>/dev/null)
       if [ "$_ssot_hooks" = "$_live_hooks" ]; then
         pass ".hooks 가 dotfiles SSOT 와 일치"
       else
-        fail ".hooks 가 dotfiles SSOT 와 다름 → session-start-settings-drift.sh 가 아직 복구 전 (새 세션 시작하면 사내 모드에서 자동 복구됨)"
+        fail ".hooks 가 dotfiles SSOT 와 다름 → ${_drift_fix_hint}"
       fi
 
       _ssot_statusline=$(jq -S -c '.statusLine // null' "$_ssot_settings" 2>/dev/null)
@@ -429,7 +439,7 @@ if [ -n "$SETTINGS_FILE" ]; then
       if [ "$_ssot_statusline" = "$_live_statusline" ]; then
         pass ".statusLine 이 dotfiles SSOT 와 일치"
       else
-        fail ".statusLine 이 dotfiles SSOT 와 다름 → gateway-cli 등 외부 도구가 덮어썼을 가능성 (새 세션 시작하면 사내 모드에서 자동 복구됨)"
+        fail ".statusLine 이 dotfiles SSOT 와 다름 → gateway-cli 등 외부 도구가 덮어썼을 가능성 (${_drift_fix_hint})"
       fi
     else
       warn "dotfiles SSOT 를 찾을 수 없음: ${_ssot_settings} → .hooks/.statusLine 비교 생략"
