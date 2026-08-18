@@ -32,6 +32,7 @@
 
 | 항목 | 위치 | 비고 |
 |------|------|------|
+| Claude Code 인증 | `gateway-cli setup` (조직 LLM Gateway) | `internal` → 2026-08-18부터 `gateway-cli` 소유; 상세: `claude/AGENTS.md` / `aws/AGENTS.md` |
 | Claude 계정 활성화 | `shell-common/env/claude.sh` | `internal` → work 계정만; 그 외 → personal/work/work1 |
 | Git host 라우팅 | `shell-common/functions/gh_host.sh` | `internal` → GHES, 그 외 → github.com |
 | 프록시 자동 정리 | `shell-common/util/setup_mode.sh` | WSL2 프록시 상속 방지 (레거시 숫자값만 매칭, 문자열 값 미지원 — issue #1051) |

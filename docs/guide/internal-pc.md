@@ -15,6 +15,36 @@
 | `claude-yolo` 동작 | `~/.dotfiles-setup-mode == internal` 감지 시 `~/.claude/` 강제 | `_claude_resolve_account` 로 분기 |
 | `settings.local.json` 위치 | `claude/settings.local.json` (gitignored) | 동일, 두 계정이 SSOT 공유 |
 
+## Claude Code 인증 (gateway-cli)
+
+`internal` 모드 PC 의 Claude Code 인증은 2026-08-18부터 조직 LLM Gateway 전환 도구
+`gateway-cli` 가 담당한다. `~/.claude/settings.json` 의 auth/env/model 키 소유권 상세는
+`claude/AGENTS.md` "Configuration Files" 섹션과 `aws/AGENTS.md` 참고 (중복 서술 생략).
+
+### 설치
+
+- 설치 아티팩트 `gateway-cli-setup.run` (~50MB 바이너리) 은 git 에 커밋하지 않는다 —
+  사내 전용 배포물이므로 `~/download/` 에 수동 다운로드해 실행한다.
+- 설치 결과 레이아웃:
+  - 실체: `~/.local/share/gateway-cli-suite/gateway-cli`
+  - symlink: `~/.local/bin/gateway-cli`
+
+### `gateway-cli env --persist` 주의사항 — tracked 파일 오염
+
+`gateway-cli env --persist` 는 `ADMIN_API_URL` / `ANTHROPIC_BASE_URL` 등을 셸 rc 파일에
+쓴다. 이 값은 tracked `zsh/zshrc` 가 아니라 `~/.zshrc.local` (gitignored 개인 슬롯) 에
+떨어져야 한다.
+
+실제로 2026-08-18 에 tracked 파일에 먼저 쓰였다가 수동으로 옮긴 전례가 있다
+(`~/.zshrc.local:11` 주석: "moved from tracked zshrc, 2026-08-18"). 재설치하거나 두 번째
+사내 PC 를 셋업할 때는 `git -C ~/dotfiles status` 로 tracked `zsh/zshrc` 오염 여부를
+먼저 확인한다.
+
+### 설치 확인 체크리스트
+
+- [ ] `gateway-cli verify` 통과
+- [ ] `git -C ~/dotfiles status` 로 tracked 파일(특히 `zsh/zshrc`) 오염 없음 확인
+
 ## 사내 게이트웨이 env 블록 추가
 
 `./setup.sh` 실행 후 다음 파일을 편집한다 (gitignored, 푸시되지 않음):
