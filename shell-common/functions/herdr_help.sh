@@ -71,9 +71,11 @@ _herdr_help_rows_plugin() {
     ux_bullet "현재 설치 상태는 ${UX_BOLD}herdr plugin list${UX_RESET} 가 SSOT — 위 표는 기본 구성"
 
     ux_section "신규 PC 부트스트랩"
-    ux_bullet "${UX_BOLD}./setup.sh${UX_RESET} 한 번이면 config 심링크 + 위 플러그인 설치까지 끝 (herdr/plugins.conf 기준, 멱등)"
-    ux_bullet "설치는 GitHub 접근이 필요 — 사내 프록시로 막히면 경고만 남기고 넘어가며, 재시도 명령을 출력한다"
-    ux_bullet "HERDR_SKIP_PLUGINS=1 ./setup.sh                  # 플러그인 설치만 건너뛰기"
+    ux_bullet "${UX_BOLD}./setup.sh${UX_RESET} 한 번이면 config 심링크 + 플러그인 + 외부 바이너리까지 끝 (멱등)"
+    ux_bullet "플러그인 herdr/plugins.conf · 외부 바이너리 herdr/tools.conf (lazygit · glow · delta · bat)"
+    ux_bullet "외부 바이너리는 ${UX_BOLD}gh auth login${UX_RESET} 이 끝나 있어야 한다 — 익명 GitHub API 는 IP 당 60회/시간이라 공용 사내 IP 에서 먼저 소진된다"
+    ux_bullet "설치 실패는 경고만 남기고 넘어간다 — 플러그인이 없으면 키바인딩이 무동작, 렌더러가 없으면 뷰어가 plain text"
+    ux_bullet "HERDR_SKIP_PLUGINS=1 / HERDR_SKIP_TOOLS=1 ./setup.sh   # 각 단계 건너뛰기"
 
     ux_section "키바인딩"
     ux_bullet "커스텀 명령은 ${UX_BOLD}prefix+ctrl+<letter>${UX_RESET} 로 통일 (내장 액션과 충돌 회피)"
@@ -82,7 +84,7 @@ _herdr_help_rows_plugin() {
     ux_table_row "prefix+ctrl+t" "파일 뷰어 (별도 tab)"
     ux_table_row "prefix+ctrl+r" "reviewr 토글"
     ux_table_row "prefix+ctrl+p" "플러그인 매니저 열기"
-    ux_table_row "prefix+ctrl+g" "lazygit 팝업 (플러그인 아님, 별도 바이너리)"
+    ux_table_row "prefix+ctrl+g" "lazygit 팝업 (플러그인 아님 — tools.conf 로 설치)"
 
     ux_section "herdr plugin CLI"
     ux_bullet "herdr plugin install <owner>/<repo>              # 부트스트랩 실패분 수동 재시도"
@@ -100,7 +102,7 @@ _herdr_help_rows_plugin() {
     ux_bullet "herdr config check                               # 문법 검증 (내장 액션과의 키 충돌은 검사하지 않음)"
     ux_bullet "herdr server reload-config                       # 재시작 없이 반영"
     ux_bullet "HERDR_CONFIG_PATH=/tmp/try.toml herdr config check  # 실제 설정을 건드리지 않고 후보 검증"
-    ux_bullet "파일 뷰어 렌더러(선택) glow · delta · bat — PATH 에 있으면 자동 사용, 없으면 plain text"
+    ux_bullet "파일 뷰어 렌더러 glow · delta · bat — setup.sh 가 설치, PATH 에 있으면 자동 사용"
 }
 
 _herdr_help_rows_example() {
