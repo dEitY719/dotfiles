@@ -9,16 +9,13 @@
 #       Plugin list declared in herdr/plugins.conf
 #       External tool list declared in herdr/tools.conf
 #
-# The three parts fail differently on purpose:
-#   - config symlink  — hard-fail (exit 1). A missing source means a dangling
-#                       link and herdr silently reverting to its defaults.
-#   - plugin install  — soft-fail. Installs reach GitHub and build from source;
-#   - tool install      on a proxied corporate network that can fail for reasons
-#                       this script cannot fix. Never abort the parent setup.sh
-#                       (which runs under `set -e`) over it — warn and move on.
-#                       Everything they provide degrades gracefully: a missing
-#                       plugin makes its keybinding inert, a missing renderer
-#                       drops the viewer to plain text.
+# Failure policy: Part 1 (config symlink) hard-fails — a missing source means a
+# dangling link and herdr silently reverting to its defaults. Parts 2-4 soft-fail:
+# they reach GitHub over a proxied corporate network and can fail for reasons this
+# script cannot fix, and everything they provide degrades gracefully (a missing
+# plugin makes its keybinding inert, a missing renderer drops the viewer to plain
+# text). Never abort the parent setup.sh — which runs under `set -e` — over any of
+# it: warn and move on.
 #
 # Opt out of the install halves with HERDR_SKIP_PLUGINS=1 / HERDR_SKIP_TOOLS=1.
 
@@ -53,24 +50,31 @@ if [ ! -d "${HERDR_CONFIG_DIR}" ]; then
 	ux_success "Created: ~/.config/herdr"
 fi
 
-link_current_target=""
-[ -L "${HERDR_CONFIG_LINK}" ] && link_current_target=$(readlink "${HERDR_CONFIG_LINK}")
-
-if [ "${link_current_target}" = "${HERDR_CONFIG_SRC}" ]; then
-	ux_success "Symlink already correct: ~/.config/herdr/config.toml → ${HERDR_CONFIG_SRC}"
-else
+# A function so the "already correct" case returns early instead of nesting the
+# rewrite branch. Body matches obsidian/setup.sh except `exit 0` → `return 0`:
+# Parts 2-4 must still run.
+_herdr_link_config() {
 	if [ -L "${HERDR_CONFIG_LINK}" ]; then
-		ux_info "Updating symlink (was: ${link_current_target})"
+		local current_target
+		current_target=$(readlink "${HERDR_CONFIG_LINK}")
+		if [ "${current_target}" = "${HERDR_CONFIG_SRC}" ]; then
+			ux_success "Symlink already correct: ~/.config/herdr/config.toml → ${HERDR_CONFIG_SRC}"
+			return 0
+		fi
+		ux_info "Updating symlink (was: ${current_target})"
 		rm "${HERDR_CONFIG_LINK}"
 	elif [ -e "${HERDR_CONFIG_LINK}" ]; then
-		backup="${HERDR_CONFIG_LINK}.backup"
+		local backup="${HERDR_CONFIG_LINK}.backup"
 		rm -f "${backup}"
 		ux_info "Backing up existing file: ${backup}"
 		mv "${HERDR_CONFIG_LINK}" "${backup}"
 	fi
+
 	ln -s "${HERDR_CONFIG_SRC}" "${HERDR_CONFIG_LINK}"
 	ux_success "Created: ~/.config/herdr/config.toml → ${HERDR_CONFIG_SRC}"
-fi
+}
+
+_herdr_link_config
 
 # ============================================================================
 # Part 2: plugin bootstrap (soft-fail)
@@ -106,15 +110,11 @@ _herdr_install_plugins() {
 
 	ux_section "herdr plugins"
 
-	installed=0
-	skipped=0
-	failed=0
-	failed_repos=""
+	local installed=0 skipped=0 failed=0 failed_repos=""
+	local plugin_id repo description
 
 	while IFS='|' read -r plugin_id repo description; do
-		case "$plugin_id" in
-			''|\#*) continue ;;
-		esac
+		case "$plugin_id" in ''|\#*) continue ;; esac
 		[ -n "$repo" ] || continue
 
 		if _herdr_plugin_installed "$plugin_id"; then
@@ -169,10 +169,8 @@ _herdr_bridge_batcat() {
 # ~/.local/bin (the PATH SSOT dir — shell-common/env/path.sh already exports it,
 # so nothing here touches PATH or any shell profile).
 _herdr_install_one_tool() {
-	_name="$1"
-	_repo="$2"
-	_glob="$3"
-	_bin="$4"
+	local _name="$1" _repo="$2" _glob="$3" _bin="$4"
+	local _tmp _archive _found
 
 	_tmp=$(mktemp -d) || return 1
 
@@ -182,7 +180,7 @@ _herdr_install_one_tool() {
 	fi
 
 	# One asset per glob; guard against a release that changed its naming.
-	_archive=$(find "$_tmp" -maxdepth 1 -name '*.tar.gz' | head -n 1)
+	_archive=$(find "$_tmp" -maxdepth 1 -name '*.tar.gz' -print -quit)
 	if [ -z "$_archive" ]; then
 		rm -rf "$_tmp"
 		return 1
@@ -195,7 +193,7 @@ _herdr_install_one_tool() {
 
 	# `find` rather than a fixed path: lazygit/glow put the binary at the archive
 	# root, delta/bat nest it one level down.
-	_found=$(find "$_tmp" -type f -name "$_bin" -perm -u+x | head -n 1)
+	_found=$(find "$_tmp" -type f -name "$_bin" -perm -u+x -print -quit)
 	if [ -z "$_found" ]; then
 		rm -rf "$_tmp"
 		return 1
@@ -248,44 +246,40 @@ _herdr_install_tools() {
 
 	ux_section "herdr external tools"
 
-	t_installed=0
-	t_skipped=0
-	t_failed=0
-	t_failed_names=""
+	local installed=0 skipped=0 failed=0 failed_names=""
+	local name repo glob bin description
 
 	while IFS='|' read -r name repo glob bin description; do
-		case "$name" in
-			''|\#*) continue ;;
-		esac
+		case "$name" in ''|\#*) continue ;; esac
 		[ -n "$bin" ] || continue
 
 		if command -v "$name" >/dev/null 2>&1; then
 			ux_success "already on PATH: ${name} ($(command -v "$name"))"
-			t_skipped=$((t_skipped + 1))
+			skipped=$((skipped + 1))
 			continue
 		fi
 
 		if [ "$name" = "bat" ] && _herdr_bridge_batcat; then
-			t_installed=$((t_installed + 1))
+			installed=$((installed + 1))
 			continue
 		fi
 
 		ux_info "installing ${name} from ${repo} (${description})"
 		if _herdr_install_one_tool "$name" "$repo" "$glob" "$bin"; then
-			t_installed=$((t_installed + 1))
+			installed=$((installed + 1))
 			ux_success "installed: ~/.local/bin/${name}"
 		else
-			t_failed=$((t_failed + 1))
-			t_failed_names="${t_failed_names} ${name}"
+			failed=$((failed + 1))
+			failed_names="${failed_names} ${name}"
 			ux_warning "failed: ${name} (${repo})"
 		fi
 	done < "${HERDR_TOOLS_CONF}"
 
-	ux_info "tools — installed: ${t_installed}, already present: ${t_skipped}, failed: ${t_failed}"
+	ux_info "tools — installed: ${installed}, already present: ${skipped}, failed: ${failed}"
 
-	if [ "$t_failed" -gt 0 ]; then
+	if [ "$failed" -gt 0 ]; then
 		ux_warning "Some tools did not install. herdr still runs — lazygit's keybinding does nothing, and the file viewer falls back to plain text without its renderers."
-		ux_bullet "Missing:${t_failed_names}"
+		ux_bullet "Missing:${failed_names}"
 		ux_bullet "Retry needs GitHub release reachability (corporate proxy is the usual cause)"
 	fi
 
@@ -308,5 +302,6 @@ if command -v herdr >/dev/null 2>&1; then
 	fi
 fi
 
-# Plugin failures are reported, never fatal — see the header comment.
+# Install failures are warnings, never fatal — pin the status so the parent's
+# `set -e` cannot trip over Parts 2-4. See the header comment.
 exit 0
