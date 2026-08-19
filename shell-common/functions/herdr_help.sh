@@ -70,6 +70,11 @@ _herdr_help_rows_plugin() {
     ux_table_row "ray.plugin-manager" "speardragon/herdr-plugin-manager" "open — 플러그인 매니저 팝업"
     ux_bullet "현재 설치 상태는 ${UX_BOLD}herdr plugin list${UX_RESET} 가 SSOT — 위 표는 기본 구성"
 
+    ux_section "신규 PC 부트스트랩"
+    ux_bullet "${UX_BOLD}./setup.sh${UX_RESET} 한 번이면 config 심링크 + 위 플러그인 설치까지 끝 (herdr/plugins.conf 기준, 멱등)"
+    ux_bullet "설치는 GitHub 접근이 필요 — 사내 프록시로 막히면 경고만 남기고 넘어가며, 재시도 명령을 출력한다"
+    ux_bullet "HERDR_SKIP_PLUGINS=1 ./setup.sh                  # 플러그인 설치만 건너뛰기"
+
     ux_section "키바인딩"
     ux_bullet "커스텀 명령은 ${UX_BOLD}prefix+ctrl+<letter>${UX_RESET} 로 통일 (내장 액션과 충돌 회피)"
     ux_table_header "Key" "Action"
@@ -80,7 +85,7 @@ _herdr_help_rows_plugin() {
     ux_table_row "prefix+ctrl+g" "lazygit 팝업 (플러그인 아님, 별도 바이너리)"
 
     ux_section "herdr plugin CLI"
-    ux_bullet "herdr plugin install <owner>/<repo>              # 설치 소스는 위 표 참조"
+    ux_bullet "herdr plugin install <owner>/<repo>              # 부트스트랩 실패분 수동 재시도"
     ux_bullet "herdr plugin uninstall <plugin-id>               # 업데이트는 uninstall 후 재설치"
     ux_bullet "herdr plugin list                                # 설치 목록 + plugin_id + config 경로"
     ux_bullet "herdr plugin enable|disable <plugin-id>"
