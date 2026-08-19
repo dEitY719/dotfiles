@@ -1,0 +1,49 @@
+onboarding = false
+
+[ui]
+show_agent_labels_on_pane_borders = true
+
+[theme]
+name = "nord"
+auto_switch = false
+
+[ui.toast]
+delivery = "herdr"
+
+[experimental]
+pane_history = true
+kitty_graphics = true
+
+# Git-aware file viewer
+[[keys.command]]
+key = "prefix+ctrl+f"
+type = "plugin_action"
+command = "herdr-file-viewer.open-file-viewer"
+description = "open file viewer"
+
+[[keys.command]]
+key = "prefix+shift+f"
+type = "plugin_action"
+command = "herdr-file-viewer.open-file-viewer-tab"
+description = "open file viewer in tab"
+
+# Code review pane
+[[keys.command]]
+key = "prefix+ctrl+r"
+type = "plugin_action"
+command = "persiyanov.reviewr.toggle"
+description = "toggle reviewr"
+
+[[keys.command]]
+key = "prefix+ctrl+g"
+type = "popup"
+command = "lazygit"
+description = "run lazygit"
+width = "80%"
+height = "80%"
+
+[[keys.command]]
+key = "prefix+ctrl+p"
+type = "plugin_action"
+command = "ray.plugin-manager.open"
+description = "open plugin manager"

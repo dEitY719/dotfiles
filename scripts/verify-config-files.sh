@@ -40,6 +40,7 @@ bytes   $HOME/.cargo/config.toml
 bytes   $HOME/.config/uv/uv.toml
 bytes   $HOME/.bunfig.toml
 bytes   $HOME/.nuget/NuGet/NuGet.Config
+bytes   $HOME/.config/herdr/config.toml
 "
 
 # Detect helpers
