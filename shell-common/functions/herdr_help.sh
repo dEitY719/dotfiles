@@ -74,7 +74,8 @@ _herdr_help_rows_plugin() {
     ux_section "신규 PC 부트스트랩"
     ux_bullet "${UX_BOLD}./setup.sh${UX_RESET} 한 번이면 config 심링크 + 플러그인 + 외부 바이너리까지 끝 (멱등)"
     ux_bullet "플러그인 herdr/plugins.conf · 외부 바이너리 herdr/tools.conf (lazygit · glow · delta · bat)"
-    ux_bullet "외부 바이너리는 ${UX_BOLD}gh auth login${UX_RESET} 이 끝나 있어야 한다 — 익명 GitHub API 는 IP 당 60회/시간이라 공용 사내 IP 에서 먼저 소진된다"
+    ux_bullet "외부 바이너리는 ${UX_BOLD}gh${UX_RESET} 설치 + ${UX_BOLD}gh auth login${UX_RESET} 필요 — 익명 GitHub API 는 IP 당 60회/시간이라 공용 사내 IP 에서 먼저 소진된다"
+    ux_bullet "외부 바이너리 릴리스 자산은 Linux x86_64 로 고정 — 다른 플랫폼은 설치 안내만 하고 건너뛴다"
     ux_bullet "설치 실패는 경고만 남기고 넘어간다 — 플러그인이 없으면 키바인딩이 무동작, 렌더러가 없으면 뷰어가 plain text"
     ux_bullet "HERDR_SKIP_PLUGINS=1 / HERDR_SKIP_TOOLS=1 ./setup.sh   # 각 단계 건너뛰기"
 
