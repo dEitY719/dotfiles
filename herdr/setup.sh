@@ -46,7 +46,7 @@ fi
 
 # herdr creates this directory itself on first run, but setup.sh may run first.
 if [ ! -d "${HERDR_CONFIG_DIR}" ]; then
-	mkdir -p "${HERDR_CONFIG_DIR}"
+	mkdir -p "${HERDR_CONFIG_DIR}" || { ux_error "Could not create: ${HERDR_CONFIG_DIR}"; exit 1; }
 	ux_success "Created: ~/.config/herdr"
 fi
 
@@ -62,15 +62,15 @@ _herdr_link_config() {
 			return 0
 		fi
 		ux_info "Updating symlink (was: ${current_target})"
-		rm "${HERDR_CONFIG_LINK}"
+		rm "${HERDR_CONFIG_LINK}" || { ux_error "Could not remove stale symlink: ${HERDR_CONFIG_LINK}"; exit 1; }
 	elif [ -e "${HERDR_CONFIG_LINK}" ]; then
 		local backup="${HERDR_CONFIG_LINK}.backup"
 		rm -f "${backup}"
 		ux_info "Backing up existing file: ${backup}"
-		mv "${HERDR_CONFIG_LINK}" "${backup}"
+		mv "${HERDR_CONFIG_LINK}" "${backup}" || { ux_error "Could not back up: ${HERDR_CONFIG_LINK}"; exit 1; }
 	fi
 
-	ln -s "${HERDR_CONFIG_SRC}" "${HERDR_CONFIG_LINK}"
+	ln -s "${HERDR_CONFIG_SRC}" "${HERDR_CONFIG_LINK}" || { ux_error "Could not create symlink: ${HERDR_CONFIG_LINK}"; exit 1; }
 	ux_success "Created: ~/.config/herdr/config.toml → ${HERDR_CONFIG_SRC}"
 }
 
@@ -169,12 +169,15 @@ _herdr_bridge_batcat() {
 # ~/.local/bin (the PATH SSOT dir — shell-common/env/path.sh already exports it,
 # so nothing here touches PATH or any shell profile).
 _herdr_install_one_tool() {
-	local _name="$1" _repo="$2" _glob="$3" _bin="$4"
+	local _name="$1" _repo="$2" _version="$3" _glob="$4" _bin="$5"
 	local _tmp _archive _found
 
 	_tmp=$(mktemp -d) || return 1
 
-	if ! gh release download --repo "$_repo" --pattern "$_glob" --dir "$_tmp" >/dev/null 2>&1; then
+	# A positional tag pins the exact release; omitting it would fall back to
+	# latest, which breaks the "same binary on every machine" goal tools.conf
+	# documents (VERSION field).
+	if ! gh release download "$_version" --repo "$_repo" --pattern "$_glob" --dir "$_tmp" >/dev/null 2>&1; then
 		rm -rf "$_tmp"
 		return 1
 	fi
@@ -200,7 +203,10 @@ _herdr_install_one_tool() {
 	fi
 
 	mkdir -p "${HOME}/.local/bin"
-	install -m 0755 "$_found" "${HOME}/.local/bin/${_name}"
+	if ! install -m 0755 "$_found" "${HOME}/.local/bin/${_name}"; then
+		rm -rf "$_tmp"
+		return 1
+	fi
 	rm -rf "$_tmp"
 	return 0
 }
@@ -247,9 +253,9 @@ _herdr_install_tools() {
 	ux_section "herdr external tools"
 
 	local installed=0 skipped=0 failed=0 failed_names=""
-	local name repo glob bin description
+	local name repo version glob bin description
 
-	while IFS='|' read -r name repo glob bin description; do
+	while IFS='|' read -r name repo version glob bin description; do
 		case "$name" in ''|\#*) continue ;; esac
 		[ -n "$bin" ] || continue
 
@@ -264,8 +270,8 @@ _herdr_install_tools() {
 			continue
 		fi
 
-		ux_info "installing ${name} from ${repo} (${description})"
-		if _herdr_install_one_tool "$name" "$repo" "$glob" "$bin"; then
+		ux_info "installing ${name} ${version} from ${repo} (${description})"
+		if _herdr_install_one_tool "$name" "$repo" "$version" "$glob" "$bin"; then
 			installed=$((installed + 1))
 			ux_success "installed: ~/.local/bin/${name}"
 		else
