@@ -6,6 +6,9 @@
     "superpowers@claude-plugins-official": true,
     "understand-anything@understand-anything": true
   },
+  "env": {
+    "ENABLE_PROMPT_CACHING_1H": "1"
+  },
   "hooks": {
     "PostToolUse": [
       {
