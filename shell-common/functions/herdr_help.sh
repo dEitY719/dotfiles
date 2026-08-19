@@ -11,6 +11,7 @@ _herdr_help_summary() {
     ux_bullet_sub "tab: new | next/prev"
     ux_bullet_sub "workspace: navigation | new"
     ux_bullet_sub "control: detach"
+    ux_bullet_sub "plugin: 설치된 플러그인 | 키바인딩 | herdr plugin CLI"
     ux_bullet_sub "example | related"
     ux_bullet_sub "install: 사외 curl|sh · 사내 GitHub 릴리스 바이너리"
     ux_bullet_sub "details: herdr-help <section>  (example: herdr-help pane)"
@@ -23,6 +24,7 @@ _herdr_help_list_sections() {
     ux_bullet_sub "tab"
     ux_bullet_sub "workspace"
     ux_bullet_sub "control"
+    ux_bullet_sub "plugin"
     ux_bullet_sub "example"
     ux_bullet_sub "related"
     ux_bullet_sub "install"
@@ -60,6 +62,43 @@ _herdr_help_rows_control() {
     ux_table_row "prefix+q" "세션에서 빠져나오기 (detach client) — agent는 계속 실행"
 }
 
+_herdr_help_rows_plugin() {
+    ux_bullet "설치된 플러그인 (2026-08-19 기준)"
+    ux_table_row "herdr-file-viewer" "git-aware 파일 뷰어 — smarzban/herdr-file-viewer"
+    ux_table_row "persiyanov.reviewr" "agent diff 코드리뷰 페인 — persiyanov/herdr-reviewr"
+    ux_table_row "ray.plugin-manager" "플러그인 매니저 팝업 — speardragon/herdr-plugin-manager"
+    ux_bullet "키바인딩 — 커스텀 명령은 ${UX_BOLD}prefix+ctrl+<letter>${UX_RESET} 로 통일 (내장 액션과 충돌 회피)"
+    ux_table_row "prefix+ctrl+f" "파일 뷰어 (split)"
+    ux_table_row "prefix+shift+f" "파일 뷰어 (별도 tab)"
+    ux_table_row "prefix+ctrl+r" "reviewr 토글"
+    ux_table_row "prefix+ctrl+p" "플러그인 매니저 열기"
+    ux_table_row "prefix+ctrl+g" "lazygit 팝업 (플러그인 아님, 별도 바이너리)"
+    ux_bullet "설치 / 제거 — GitHub owner/repo 로 설치, plugin_id 로 제거"
+    ux_bullet_sub "herdr plugin install smarzban/herdr-file-viewer"
+    ux_bullet_sub "herdr plugin install persiyanov/herdr-reviewr"
+    ux_bullet_sub "herdr plugin install speardragon/herdr-plugin-manager"
+    ux_bullet_sub "herdr plugin uninstall persiyanov.reviewr        # 업데이트는 uninstall 후 재설치"
+    ux_bullet "조회 / 활성화"
+    ux_bullet_sub "herdr plugin list                                # 설치 목록 + plugin_id + config 경로"
+    ux_bullet_sub "herdr plugin action list                         # 호출 가능한 액션 전체 (JSON)"
+    ux_bullet_sub "herdr plugin enable|disable <plugin-id>"
+    ux_bullet_sub "herdr plugin config-dir <plugin-id>              # 플러그인별 설정 디렉터리"
+    ux_bullet_sub "herdr plugin log list                            # 플러그인 명령 실행 로그 (--plugin ID, --limit N)"
+    ux_bullet "액션 직접 호출 — 키바인딩 없이 CLI 로 실행"
+    ux_bullet_sub "herdr plugin action invoke open-file-viewer --plugin herdr-file-viewer"
+    ux_bullet_sub "herdr plugin action invoke open-file-viewer-tab --plugin herdr-file-viewer"
+    ux_bullet_sub "herdr plugin action invoke toggle --plugin persiyanov.reviewr"
+    ux_bullet_sub "herdr plugin action invoke open --plugin ray.plugin-manager"
+    ux_bullet "로컬 개발 — 저장소를 복제하지 않고 작업 디렉터리를 그대로 연결"
+    ux_bullet_sub "herdr plugin link <path> / herdr plugin unlink <plugin-id>"
+    ux_bullet "설정 — config.toml 은 dotfiles SSOT (herdr/config.toml) 심링크"
+    ux_bullet_sub "herdr config check                               # 문법 검증 (내장 액션과의 키 충돌은 검사하지 않음)"
+    ux_bullet_sub "herdr server reload-config                       # 재시작 없이 반영"
+    ux_bullet_sub "HERDR_CONFIG_PATH=/tmp/try.toml herdr config check  # 실제 설정을 건드리지 않고 후보 검증"
+    ux_bullet "파일 뷰어 렌더러 (선택) — 없으면 plain text 로 표시"
+    ux_bullet_sub "glow (markdown) · delta (diff) · bat (syntax) — 모두 ~/.local/bin 에 설치됨"
+}
+
 _herdr_help_rows_example() {
     ux_bullet "herdr                    # 세션 시작/재접속"
     ux_bullet "claude                   # pane 안에서 agent 실행"
@@ -95,6 +134,7 @@ _herdr_help_section_rows() {
         tab|tabs)             _herdr_help_rows_tab ;;
         workspace|workspaces) _herdr_help_rows_workspace ;;
         control)              _herdr_help_rows_control ;;
+        plugin|plugins)       _herdr_help_rows_plugin ;;
         example|examples)     _herdr_help_rows_example ;;
         related)              _herdr_help_rows_related ;;
         install)              _herdr_help_rows_install ;;
@@ -113,6 +153,7 @@ _herdr_help_full() {
     _herdr_help_render_section "Tab - prefix +" _herdr_help_rows_tab
     _herdr_help_render_section "Workspace - prefix +" _herdr_help_rows_workspace
     _herdr_help_render_section "Session Control - prefix +" _herdr_help_rows_control
+    _herdr_help_render_section "Plugin" _herdr_help_rows_plugin
     _herdr_help_render_section "Practical Example" _herdr_help_rows_example
     _herdr_help_render_section "Related Help" _herdr_help_rows_related
     _herdr_help_render_section "Install" _herdr_help_rows_install
