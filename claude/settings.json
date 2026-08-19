@@ -1,80 +1,90 @@
 {
+  "autoUpdatesChannel": "latest",
+  "enabledPlugins": {
+    "codex@openai-codex": true,
+    "ralph-loop@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true,
+    "understand-anything@understand-anything": true
+  },
   "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "${HOME}/dotfiles/claude/hooks/post-bash-dispatch.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
           {
-            "type": "command",
-            "command": "${HOME}/dotfiles/claude/hooks/session-start-plugin-path-normalize.sh"
+            "command": "${HOME}/dotfiles/claude/hooks/session-start-plugin-path-normalize.sh",
+            "type": "command"
           },
           {
-            "type": "command",
-            "command": "${HOME}/dotfiles/claude/hooks/session-start-pc-context.sh"
+            "command": "${HOME}/dotfiles/claude/hooks/session-start-pc-context.sh",
+            "type": "command"
           },
           {
-            "type": "command",
-            "command": "${HOME}/dotfiles/claude/hooks/plugin-sync-session.sh"
+            "command": "${HOME}/dotfiles/claude/hooks/plugin-sync-session.sh",
+            "type": "command"
           },
           {
-            "type": "command",
-            "command": "${HOME}/dotfiles/claude/hooks/session-start-settings-drift.sh"
+            "command": "${HOME}/dotfiles/claude/hooks/session-start-settings-drift.sh",
+            "type": "command"
           },
           {
-            "type": "command",
-            "command": "${HOME}/dotfiles/claude/hooks/session-start-statusline-project-override.sh"
+            "command": "${HOME}/dotfiles/claude/hooks/session-start-statusline-project-override.sh",
+            "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash '/home/bwyoon/.claude/hooks/herdr-agent-state.sh' session",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
       }
     ],
     "Stop": [
       {
         "hooks": [
           {
-            "type": "command",
-            "command": "${HOME}/dotfiles/claude/hooks/gh_issue_flow_stop_guard.py"
+            "command": "${HOME}/dotfiles/claude/hooks/gh_issue_flow_stop_guard.py",
+            "type": "command"
           },
           {
-            "type": "command",
-            "command": "${HOME}/dotfiles/claude/hooks/devx_autopilot_stop_guard.py"
+            "command": "${HOME}/dotfiles/claude/hooks/devx_autopilot_stop_guard.py",
+            "type": "command"
           },
           {
-            "type": "command",
-            "command": "${HOME}/dotfiles/claude/hooks/skill_completion_guard.py"
+            "command": "${HOME}/dotfiles/claude/hooks/skill_completion_guard.py",
+            "type": "command"
           },
           {
-            "type": "command",
-            "command": "${HOME}/dotfiles/claude/hooks/plugin-sync-session.sh"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${HOME}/dotfiles/claude/hooks/post-bash-dispatch.sh"
+            "command": "${HOME}/dotfiles/claude/hooks/plugin-sync-session.sh",
+            "type": "command"
           }
         ]
       }
     ]
   },
-  "statusLine": {
-    "type": "command",
-    "command": "${HOME}/dotfiles/claude/statusline-command.sh"
-  },
-  "enabledPlugins": {
-    "superpowers@claude-plugins-official": true,
-    "ralph-loop@claude-plugins-official": true,
-    "codex@openai-codex": true,
-    "understand-anything@understand-anything": true
-  },
-  "tui": "fullscreen",
-  "autoUpdatesChannel": "latest",
   "skipDangerousModePermissionPrompt": true,
-  "theme": "dark",
+  "statusLine": {
+    "command": "${HOME}/dotfiles/claude/statusline-command.sh",
+    "type": "command"
+  },
   "telemetry": {
     "enabled": false
-  }
+  },
+  "theme": "dark",
+  "tui": "fullscreen"
 }
