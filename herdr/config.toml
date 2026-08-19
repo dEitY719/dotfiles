@@ -22,7 +22,7 @@ command = "herdr-file-viewer.open-file-viewer"
 description = "open file viewer"
 
 [[keys.command]]
-key = "prefix+shift+f"
+key = "prefix+ctrl+t"
 type = "plugin_action"
 command = "herdr-file-viewer.open-file-viewer-tab"
 description = "open file viewer in tab"

@@ -69,7 +69,7 @@ _herdr_help_rows_plugin() {
     ux_table_row "ray.plugin-manager" "플러그인 매니저 팝업 — speardragon/herdr-plugin-manager"
     ux_bullet "키바인딩 — 커스텀 명령은 ${UX_BOLD}prefix+ctrl+<letter>${UX_RESET} 로 통일 (내장 액션과 충돌 회피)"
     ux_table_row "prefix+ctrl+f" "파일 뷰어 (split)"
-    ux_table_row "prefix+shift+f" "파일 뷰어 (별도 tab)"
+    ux_table_row "prefix+ctrl+t" "파일 뷰어 (별도 tab)"
     ux_table_row "prefix+ctrl+r" "reviewr 토글"
     ux_table_row "prefix+ctrl+p" "플러그인 매니저 열기"
     ux_table_row "prefix+ctrl+g" "lazygit 팝업 (플러그인 아님, 별도 바이너리)"
