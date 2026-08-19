@@ -63,6 +63,7 @@ _herdr_help_rows_control() {
 }
 
 _herdr_help_rows_plugin() {
+    # Keep this table in sync with herdr/plugins.conf (setup.sh's install SSOT).
     ux_section "설치된 플러그인"
     ux_table_header "plugin_id" "설치 소스 (owner/repo)" "액션 — 용도"
     ux_table_row "herdr-file-viewer" "smarzban/herdr-file-viewer" "open-file-viewer[-tab] — git-aware 파일 뷰어"
