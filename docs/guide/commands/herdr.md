@@ -18,6 +18,7 @@
     - tab: new | next/prev
     - workspace: navigation | new
     - control: detach
+    - plugin: 설치된 플러그인 | 키바인딩 | herdr plugin CLI
     - example | related
     - install: 사외 curl|sh · 사내 GitHub 릴리스 바이너리
     - details: herdr-help <section>  (example: herdr-help pane)
@@ -55,6 +56,43 @@
 ### control
 
 - **prefix+q** — 세션에서 빠져나오기 (detach client) — agent는 계속 실행
+
+### plugin
+
+**설치된 플러그인**
+
+- **plugin_id** — 설치 소스 (owner/repo) — 액션 — 용도
+- **herdr-file-viewer** — smarzban/herdr-file-viewer — open-file-viewer[-tab] — git-aware 파일 뷰어
+- **persiyanov.reviewr** — persiyanov/herdr-reviewr — toggle — agent diff 코드리뷰 페인
+- **ray.plugin-manager** — speardragon/herdr-plugin-manager — open — 플러그인 매니저 팝업
+- 현재 설치 상태는 herdr plugin list 가 SSOT — 위 표는 기본 구성
+**키바인딩**
+
+- 커스텀 명령은 prefix+ctrl+<letter> 로 통일 (내장 액션과 충돌 회피)
+- **Key** — Action
+- **prefix+ctrl+f** — 파일 뷰어 (split)
+- **prefix+ctrl+t** — 파일 뷰어 (별도 tab)
+- **prefix+ctrl+r** — reviewr 토글
+- **prefix+ctrl+p** — 플러그인 매니저 열기
+- **prefix+ctrl+g** — lazygit 팝업 (플러그인 아님, 별도 바이너리)
+**herdr plugin CLI**
+
+- herdr plugin install <owner>/<repo>              # 설치 소스는 위 표 참조
+- herdr plugin uninstall <plugin-id>               # 업데이트는 uninstall 후 재설치
+- herdr plugin list                                # 설치 목록 + plugin_id + config 경로
+- herdr plugin enable|disable <plugin-id>
+- herdr plugin config-dir <plugin-id>              # 플러그인별 설정 디렉터리
+- herdr plugin log list                            # 실행 로그 (--plugin ID, --limit N)
+- herdr plugin action list                         # 호출 가능한 액션 전체 (JSON)
+- herdr plugin action invoke <action> --plugin <plugin-id>   # 액션명은 위 표 참조
+- herdr plugin link <path> / unlink <plugin-id>    # 복제 없이 작업 디렉터리 연결
+**설정**
+
+- config.toml 은 dotfiles SSOT (herdr/config.toml) 심링크
+- herdr config check                               # 문법 검증 (내장 액션과의 키 충돌은 검사하지 않음)
+- herdr server reload-config                       # 재시작 없이 반영
+- HERDR_CONFIG_PATH=/tmp/try.toml herdr config check  # 실제 설정을 건드리지 않고 후보 검증
+- 파일 뷰어 렌더러(선택) glow · delta · bat — PATH 에 있으면 자동 사용, 없으면 plain text
 
 ### example
 

@@ -1,20 +1,29 @@
+# herdr (agent multiplexer) configuration
+# Managed via dotfiles symlink:
+#   ~/.config/herdr/config.toml -> ~/dotfiles/herdr/config.toml
+# Apply edits without restarting the server: `herdr server reload-config`
+
 onboarding = false
 
 [ui]
 show_agent_labels_on_pane_borders = true
 
+[ui.toast]
+delivery = "herdr"
+
 [theme]
 name = "nord"
 auto_switch = false
-
-[ui.toast]
-delivery = "herdr"
 
 [experimental]
 pane_history = true
 kitty_graphics = true
 
-# Git-aware file viewer
+# Custom bindings use prefix+ctrl+<letter> to avoid colliding with built-in
+# actions. `herdr config check` validates syntax but NOT key collisions.
+
+# --- type = "plugin_action" (requires the named plugin to be installed) ---
+
 [[keys.command]]
 key = "prefix+ctrl+f"
 type = "plugin_action"
@@ -27,12 +36,19 @@ type = "plugin_action"
 command = "herdr-file-viewer.open-file-viewer-tab"
 description = "open file viewer in tab"
 
-# Code review pane
 [[keys.command]]
 key = "prefix+ctrl+r"
 type = "plugin_action"
 command = "persiyanov.reviewr.toggle"
 description = "toggle reviewr"
+
+[[keys.command]]
+key = "prefix+ctrl+p"
+type = "plugin_action"
+command = "ray.plugin-manager.open"
+description = "open plugin manager"
+
+# --- type = "popup" (plain binary on PATH, not a plugin) ---
 
 [[keys.command]]
 key = "prefix+ctrl+g"
@@ -41,9 +57,3 @@ command = "lazygit"
 description = "run lazygit"
 width = "80%"
 height = "80%"
-
-[[keys.command]]
-key = "prefix+ctrl+p"
-type = "plugin_action"
-command = "ray.plugin-manager.open"
-description = "open plugin manager"
