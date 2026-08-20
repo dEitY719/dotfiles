@@ -35,7 +35,7 @@ teardown() {
     run gh_pr_review_parse --ai chatgpt 99
     assert_failure 2
     assert_output --partial "Unknown --ai value: 'chatgpt'"
-    assert_output --partial "allowed: codex, agy, claude, opencode"
+    assert_output --partial "allowed: codex, agy, claude, opencode, hermes"
 }
 
 @test "ai: --ai codex → ok, ai=codex" {
@@ -67,6 +67,13 @@ teardown() {
     run gh_pr_review_parse --ai opencode 99
     assert_success
     assert_output --partial "ai=opencode"
+    assert_output --partial "pr=99"
+}
+
+@test "ai: --ai hermes → ok, ai=hermes" {
+    run gh_pr_review_parse --ai hermes 99
+    assert_success
+    assert_output --partial "ai=hermes"
     assert_output --partial "pr=99"
 }
 
@@ -170,6 +177,12 @@ teardown() {
 
 @test "user: --user with --ai opencode → exit 2 (cross-AI rejected)" {
     run gh_pr_review_parse --ai opencode --user work 99
+    assert_failure 2
+    assert_output --partial "--user is only valid with --ai claude"
+}
+
+@test "user: --user with --ai hermes → exit 2 (cross-AI rejected)" {
+    run gh_pr_review_parse --ai hermes --user work 99
     assert_failure 2
     assert_output --partial "--user is only valid with --ai claude"
 }
