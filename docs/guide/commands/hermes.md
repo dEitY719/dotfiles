@@ -71,10 +71,10 @@
 - hermes config set model.base_url <url>    # OpenAI-compatible 엔드포인트 (/v1 포함)
 - hermes config set model.api_key <key>     # .env 아님 — 함정 1 참조
 - hermes doctor                             # 키/엔드포인트 인식 여부 확인
-**주의: config.yaml 은 이 저장소 심링크**
+**config.yaml 은 이 저장소 심링크 — 시크릿 주입 전 자동 detach**
 
-- 런타임 config ($HOME/.hermes/config.yaml) 은 hermes/config.yaml 심링크라 hermes config set 결과가 repo 작업트리에 나타난다
-- 커밋 전 git diff hermes/config.yaml 로 api_key 가 스테이징되지 않는지 확인할 것
+- 런타임 config ($HOME/.hermes/config.yaml) 은 기본적으로 hermes/config.yaml 심링크
+- setup.sh 는 hermes config set 직전 그 심링크를 로컬 실파일로 바꿔치기한다 — api_key 는 저장소에 절대 안 들어감
 
 ### pitfalls
 

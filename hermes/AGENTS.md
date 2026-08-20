@@ -72,6 +72,11 @@ config set` 을 실행하기 직전 그 심링크를 로컬 실파일로 교체�
   로 지정하거나 이 탐색 목록을 갱신할 것.
 - **`config.yaml` 스키마**: 검증되지 않은 키를 지어내지 않기 위해 주석만 두었다.
   설정을 추가할 때는 설치된 버전의 `hermes config` 로 키를 먼저 확인할 것.
+- **api_key 가 커맨드라인 인자로 전달됨**: `hermes config set model.api_key
+  "<key>"` 는 `hermes` CLI 자체의 인터페이스라 이 저장소에서 바꿀 수 없다.
+  실행 짧은 구간 동안 같은 머신의 다른 사용자가 `ps`/`/proc/<pid>/cmdline`
+  으로 값을 볼 수 있는 알려진 한계 — stdin 기반 입력을 지원하는 hermes CLI
+  버전이 나오면 그쪽으로 전환할 것.
 
 # References
 
