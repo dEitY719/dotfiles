@@ -1,0 +1,20 @@
+# Hermes Agent configuration
+# Managed via dotfiles symlink:
+#   ~/.hermes/config.yaml -> ~/dotfiles/hermes/config.yaml
+#
+# Secrets are deliberately NOT here. This file is git-tracked, so anything you
+# add lands in the repo. `model.api_key` in particular must be injected
+# separately — hermes/setup.sh reads hermes/llm_endpoint.local.sh (gitignored)
+# and applies it with:
+#   hermes config set model.api_key "<key>"
+# which writes into this same ~/.hermes/config.yaml at runtime.
+#
+# Note: ~/.hermes/config.yaml starts as a symlink into this repo, but
+# hermes/setup.sh detaches it into a real local copy before any `hermes
+# config set` write (see _hermes_materialize_config) — the secret lands only
+# in the local copy, never in this tracked file.
+#
+# Keys are intentionally left to hermes' own defaults; add only settings you
+# have verified against `hermes config` on your version.
+#
+# See: hermes-help config
