@@ -2,10 +2,12 @@
 name: gh:pr-review
 description: >-
   Delegate a GitHub PR review to one external AI CLI (codex, agy,
-  claude, or opencode), stream findings, and post one aggregate PR comment.
-  Never approve/request changes or reply to individual review comments. Use for
-  /gh-pr-review, /gh:pr-review, "PR 99 코덱스에 리뷰 시켜", "agy 한테 2차 의견 받아",
-  "second-opinion review on PR 42". Accepts `--ai <codex|agy|claude|opencode>`,
+  claude, opencode, or hermes), stream findings, and post one aggregate PR
+  comment. Never approve/request changes or reply to individual review comments.
+  Use for /gh-pr-review, /gh:pr-review, "PR 99 코덱스에 리뷰 시켜",
+  "agy 한테 2차 의견 받아",
+  "second-opinion review on PR 42". Accepts
+  `--ai <codex|agy|claude|opencode|hermes>`,
   `--review <preset>`, `--user <name>` (claude only), `--no-post-comment`,
   and `<PR#> [remote]`.
 allowed-tools: Bash, Read, Grep, Glob, Agent
@@ -22,7 +24,7 @@ metadata:
 ## Role
 
 Gather a second-opinion review on a GitHub PR from one external AI CLI
-(`codex`/`agy`/`claude`/`opencode`), stream raw output, and post one PR
+(`codex`/`agy`/`claude`/`opencode`/`hermes`), stream raw output, and post one PR
 comment by default. No decisions and no per-comment replies. Every preset
 requires a critical stance (`references/review-presets.md`).
 
@@ -45,6 +47,8 @@ Run these checks before expensive work:
 - `command -v <ai-bin>` for the chosen `--ai` → else exit 1 `Required CLI '<name>' not found in PATH`.
 - `--ai opencode` requires `_dotfiles_setup_mode == internal`; otherwise
   exit 1 `--ai opencode is internal-PC only (~/.dotfiles-setup-mode != internal)`.
+- `--ai hermes` requires `_dotfiles_setup_mode == internal`; otherwise
+  exit 1 `--ai hermes is internal-PC only (~/.dotfiles-setup-mode != internal)`.
 - `gh auth status` returns 0 → else exit 1 with the gh error line.
 
 CI status is not a gate; self-authored PRs are allowed because no decision is submitted.

@@ -2,7 +2,7 @@
 name: devx:pr-review-all
 description: >-
   Fan out every available reviewer on one PR in parallel: agy, codex,
-  opencode, and a /simplify auto-fix pass, then run a reply pass. Use for
+  opencode, hermes, and a /simplify auto-fix pass, then run a reply pass. Use for
   /devx:pr-review-all, /devx-pr-review-all, "PR 다중 리뷰어 병렬로",
   "agy codex opencode simplify 한번에 돌려", "PR 99 전체 리뷰". Distinct from
   gh:pr-review, and reused by gh:issue-flow as its post-PR quality gate.
@@ -21,7 +21,7 @@ metadata:
 ## Role
 
 Orchestrate a single PR through all available reviewers at once (agy,
-codex, opencode, `/simplify`), commit any auto-fix changes, then reply to review
+codex, opencode, hermes, `/simplify`), commit any auto-fix changes, then reply to review
 comments inline or deferred. No approve/request-changes decision and no manual
 per-comment authoring. Every reviewer lane is soft-fail.
 
@@ -49,8 +49,8 @@ and stop. Capture `pr`, `remote`, `reply_mode`, `reply_delay`, and `START_TS`.
 
 ## Step 3: Review + auto-fix gate (dispatch all lanes in ONE turn)
 
-The four lanes dispatch together in a single turn. agy/codex/opencode are
-comment-only; `/simplify` may mutate and commit. Each lane is soft-fail.
+The five lanes dispatch together in a single turn. agy/codex/opencode/hermes
+are comment-only; `/simplify` may mutate and commit. Each lane is soft-fail.
 
 - **agy** — if `command -v agy`, an Agent runs
   `Skill(gh:pr-review, "--ai agy <pr> <remote>")`; absent or non-zero exit → SKIP/WARN.
@@ -59,6 +59,10 @@ comment-only; `/simplify` may mutate and commit. Each lane is soft-fail.
 - **opencode** — if `command -v opencode` and `_dotfiles_setup_mode` is
   `internal`, an Agent runs
   `Skill(gh:pr-review, "--ai opencode <pr> <remote>")`; absent, non-internal,
+  or non-zero exit → SKIP/WARN.
+- **hermes** — if `command -v hermes` and `_dotfiles_setup_mode` is
+  `internal`, an Agent runs
+  `Skill(gh:pr-review, "--ai hermes <pr> <remote>")`; absent, non-internal,
   or non-zero exit → SKIP/WARN.
 - **auto-fix** — an Agent runs built-in `/simplify`; if `git status --porcelain`
   is non-empty, commit with `git commit -am "refactor(<scope>): simplify per /simplify"`.
@@ -81,7 +85,7 @@ Await all lanes, then:
 ## Step 6: Report
 
 Print exactly one `[OK]`/`[SKIP]`/`[WARN]` line, e.g.
-`[OK] PR #<pr> reviewed (agy:OK codex:SKIP opencode:OK simplify:committed) — reply: inline`.
+`[OK] PR #<pr> reviewed (agy:OK codex:SKIP opencode:OK hermes:SKIP simplify:committed) — reply: inline`.
 
 ## Constraints (full rationale: `references/constraints.md`)
 
