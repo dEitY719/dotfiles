@@ -1,19 +1,18 @@
 ---
 name: gh:issue-implement
 description: >-
-  Read a GitHub issue by number and implement it — editing files and
-  running tests, but NOT committing or opening a PR. Use when the user
-  runs /gh:issue-implement, /gh-issue-implement, or asks "issue #16
-  구현해", "PR 없이 이 이슈 코드만 짜줘", "implement #42". Default mode
-  is direct (no human intervention); optional `plan` or `brainstorming`
-  modes invoke the matching superpowers skills when the plugin is
-  installed (falls back to direct with a warning if not). Precondition:
-  user is already inside a dedicated git worktree on a feature branch.
-  Sibling of [[gh:issue-proceed]] — this skill edits files to satisfy a
-  code-change issue; that one executes the protocol a directive issue
-  embeds. Accepts `<issue-number> [direct|plan|brainstorming] [remote]`,
-  optional `--no-next-hint` (suppress final `Next:` hint), and
-  `-h`/`--help`/`help`.
+  Read a GitHub issue by number and implement it — editing files and running tests,
+  but NOT committing or opening a PR. Use when the user runs /gh:issue-implement,
+  /gh-issue-implement, or asks "issue #16 구현해", "PR 없이 이 이슈 코드만 짜줘",
+  "implement #42". Default mode is direct (no human intervention), driven by
+  `superpowers:test-driven-development` when installed, else by the built-in
+  edit-then-test flow; optional `plan` or `brainstorming` modes invoke the matching
+  superpowers skills when the plugin is installed (falls back to direct with a
+  warning if not). Precondition: user is already inside a dedicated git worktree on
+  a feature branch. Sibling of [[gh:issue-proceed]] — this skill edits files to
+  satisfy a code-change issue; that one executes the protocol a directive issue
+  embeds. Accepts `<issue-number> [direct|plan|brainstorming] [remote]`, optional
+  `--no-next-hint` (suppress final `Next:` hint), and `-h`/`--help`/`help`.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write
 metadata:
   model_recommendation:
@@ -51,7 +50,8 @@ Check preconditions in parallel per `references/implementation-flow.md`
 ## Step 2: superpowers Plugin Detection
 
 Per `references/superpowers-detection.md`: plugin missing → force mode
-= `direct` + one warning line; else honor the requested mode.
+= `direct` + one warning line; else honor the requested mode. The resolve
+check includes `test-driven-development`, which gates Step 5's TDD path.
 
 ## Step 3: Fetch + Claim Issue
 
@@ -75,13 +75,16 @@ Skip 3.3 / 3.4 / 3.5 via their `GH_ISSUE_SKIP_*` env vars.
   appear, switch to `brainstorming`; else `Skill(superpowers:writing-plans)`.
 - **`brainstorming`** → `Skill(superpowers:brainstorming)` (terminal state
   invokes `writing-plans`). After plan approval, proceed to Step 5.
+- Both plan modes already reach TDD per task via `subagent-driven-development`.
 
 ## Step 5: Implement + Test
 
-Follow the direct-mode flow in `references/implementation-flow.md` →
-"Direct-mode flow" (detect `$TEST_CMD`, scan, edit, run tests, failure
-loop max 3×). After tests pass (or skip — no runner), emit before Step 6:
-`printf '[step:gh-issue-implement/implement] OK\n'`.
+Follow `references/implementation-flow.md` → "Direct-mode flow": common steps
+(fetch, intent, scan, `$TEST_CMD`, pre-edit baseline), then branch — detected →
+**TDD path** (`Skill(superpowers:test-driven-development)` drives red-green-refactor,
+no attempt cap, stops on judgment); not detected → **fallback path** (edit, run
+tests, failure loop max 3×). Neither fixes pre-existing failures. After tests pass
+(or skip — no runner), emit `printf '[step:gh-issue-implement/implement] OK\n'`.
 
 ## Step 6: Report
 
@@ -92,6 +95,6 @@ Print the success/failure report per `references/implementation-flow.md`
 
 ## Constraints
 
-Read `references/constraints.md` first: never commit/PR, create a
-worktree, run on the default branch, fix pre-existing test failures,
-exceed 3 test-loop retries, or hard-require superpowers.
+Read `references/constraints.md` first: never commit/PR, create a worktree, run on
+the default branch, fix pre-existing test failures (TDD path included — it does not
+override this), exceed 3 test-loop retries (fallback path), or require superpowers.
