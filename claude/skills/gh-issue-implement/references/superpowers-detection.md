@@ -9,15 +9,35 @@ superpowers is present if EITHER is true:
    test -d "$HOME/.claude/plugins/cache/superpowers-dev"
    ```
 2. The required skills are resolvable via the Skill tool (checked by
-   attempting to describe `superpowers:writing-plans` and
-   `superpowers:brainstorming` and verifying both return a skill
-   definition, not a "not found" error).
+   attempting to describe `superpowers:writing-plans`,
+   `superpowers:brainstorming`, and
+   `superpowers:test-driven-development`, and verifying they return a
+   skill definition, not a "not found" error).
 
 If either check passes → honor requested mode.
 If both fail → force `direct` mode.
 
 This disjunction handles manual/symlink installs that bypass the
 plugin cache but still expose the skills to the Skill tool.
+
+## What detection gates
+
+| Mode | Detected | Not detected |
+|---|---|---|
+| `plan` | `Skill(superpowers:writing-plans)` | forced to `direct` + warning |
+| `brainstorming` | `Skill(superpowers:brainstorming)` | forced to `direct` + warning |
+| `direct` | TDD path — `Skill(superpowers:test-driven-development)` | built-in fallback path |
+
+`direct` mode is never blocked by detection — it only picks a different
+implementation path (`references/implementation-flow.md`).
+
+If `superpowers:test-driven-development` specifically fails to resolve
+at invocation time (partial install), take the fallback path and print
+one warning line:
+
+```
+[WARN] superpowers:test-driven-development unavailable — using built-in implementation flow.
+```
 
 ## Fallback behavior
 
@@ -39,6 +59,44 @@ on some machines. Graceful degradation (direct mode is always
 available) keeps the skill useful everywhere.
 
 ## Invocation of superpowers skills
+
+In `direct` mode (plugin present) — the default path:
+
+1. Capture the pre-edit test baseline FIRST
+   (`references/implementation-flow.md` → "Direct-mode flow" step 4).
+   The TDD cycle must not start before `pre_existing_failures` is known.
+2. Invoke `Skill(superpowers:test-driven-development)` after issuing a
+   context block to the main model:
+   ```
+   Context for test-driven-development: implementing issue #<N> of <TARGET_REPO>.
+   Issue body follows below. Test runner: <TEST_CMD>.
+   Pre-existing failures (do NOT fix, report as-is): <list or "none">.
+   ```
+3. Drive the issue as a sequence of red-green-refactor cycles, one
+   behavior per cycle, until the issue's intent is satisfied.
+4. Carry the pre-existing exception through every cycle — see
+   "Pre-existing exception" below.
+5. Return to Step 6 (report) with the changed-file list and the final
+   `$TEST_CMD` result.
+
+`plan` and `brainstorming` modes reach TDD indirectly: their plans are
+executed through `superpowers:subagent-driven-development`, whose
+subagents already follow `superpowers:test-driven-development` per task.
+No extra wiring is needed there.
+
+### Pre-existing exception (direct-mode TDD path)
+
+`superpowers:test-driven-development` → "Verify GREEN" says **"Other
+tests fail? Fix now."** That instruction is scoped here: it applies only
+to failures NOT in `pre_existing_failures`.
+
+- A failing test already in `pre_existing_failures` → leave it alone,
+  carry it to the final report as pre-existing.
+- Any other failing test → fix now, per the TDD skill.
+
+This is a `gh:issue-implement` scope rule, not an edit to the TDD skill.
+`references/constraints.md` → "Never dismiss pre-existing test failures"
+is a hard constraint and outranks the TDD skill's blanket wording.
 
 When in `plan` mode (plugin present):
 

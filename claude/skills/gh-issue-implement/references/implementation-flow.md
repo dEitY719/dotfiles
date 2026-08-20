@@ -31,24 +31,62 @@ Store the chosen command as `$TEST_CMD`.
 
 ## Direct-mode flow
 
+### Common steps (both paths)
+
 1. Fetch issue (same `gh issue view --json ...` as gh:issue-read).
 2. Extract change intent from body + comments.
 3. Scan repo structure: read AGENTS.md, CLAUDE.md, top-level README if present.
-4. Identify files to touch. For each file:
+4. Detect `$TEST_CMD` (above), then capture the **baseline**: run
+   `$TEST_CMD` once with no edits and record the failing set as
+   `pre_existing_failures`. Any test failing in that baseline is never
+   "caused" by this skill's edits. No runner detected → skip the
+   baseline and every test step below; both paths still run.
+
+Then branch on the Step 2 superpowers detection result:
+
+- **detected** → "TDD path" below (default).
+- **not detected** → "Fallback path" below.
+
+### TDD path (superpowers detected)
+
+`Skill(superpowers:test-driven-development)` drives the implementation.
+Invocation detail: `references/superpowers-detection.md` → "Invocation
+of superpowers skills" → "In `direct` mode".
+
+1. Split the issue's intent into behaviors, smallest first.
+2. Per behavior, run one red-green-refactor cycle: write the failing
+   test, watch it fail for the right reason, write minimal code, verify
+   green, refactor.
+3. **Pre-existing exception** — the TDD skill's "Other tests fail? Fix
+   now." applies only to failures NOT in `pre_existing_failures`.
+   A test in that list stays untouched and is reported as pre-existing.
+4. Repeat until the issue's intent is satisfied, then run `$TEST_CMD`
+   once more for the final report numbers.
+5. Report.
+
+There is **no iteration cap** on this path — the red-green-refactor
+cycle already bounds each step. Stop and hand back to the human when
+you judge yourself stuck: the same test failing the same way after
+repeated fixes, a fix that keeps breaking a previously-green test, or
+a failure you cannot explain. Report what was tried instead of
+inventing a new attempt budget.
+
+### Fallback path (superpowers not detected)
+
+Unchanged legacy flow — always available, never degraded.
+
+1. Identify files to touch. For each file:
    - Use `Read` to load current content (if exists).
    - Use `Edit`/`Write` to modify/create.
-5. Run `$TEST_CMD`. Capture output.
-6. If fail → **Test-failure loop** (below).
-7. Report.
+2. Run `$TEST_CMD`. Capture output.
+3. If fail → **Test-failure loop** (below).
+4. Report.
 
-## Test-failure loop (max 3 iterations)
+## Test-failure loop (max 3 iterations, fallback path only)
 
-Before starting edits, capture a baseline: run `$TEST_CMD` once with
-no edits and record the set of failing tests as `pre_existing_failures`.
-Any test failing in that baseline is never "caused" by this skill's
-edits.
+Uses `pre_existing_failures` from common step 4 above.
 
-Then loop:
+Loop:
 
 ```
 attempt = 0
@@ -74,18 +112,22 @@ else:
 
 **Invariants:**
 - PRE-EXISTING failures are NEVER fixed by this skill — reported as
-  pre-existing in the final output.
+  pre-existing in the final output. Holds on the TDD path too.
 - `attempt` counts `$TEST_CMD` runs that had at least one CAUSED
   failure. Runs with only PRE-EXISTING failures do not consume attempts.
 - Baseline run happens before any edit — this is what makes the
-  CAUSED vs PRE-EXISTING split well-defined.
+  CAUSED vs PRE-EXISTING split well-defined, on both paths.
 
 ## Final report format
+
+`Path:` is printed for `direct` mode only — it names which branch of
+the direct-mode flow ran (`tdd` or `fallback`).
 
 Success:
 ```
 gh:issue-implement #<N> complete
   Mode:     <direct|plan|brainstorming>
+  Path:     <tdd|fallback>
   Changes:
     <path1>  (new|modified)
     <path2>  (new|modified)
@@ -93,10 +135,11 @@ gh:issue-implement #<N> complete
   Next:     /gh-commit && /gh-pr   (or /gh-issue-flow to do both)
 ```
 
-Failure (test loop exhausted):
+Failure, fallback path (test loop exhausted):
 ```
 gh:issue-implement #<N> stopped after 3 test-fix attempts
   Mode:     <mode>
+  Path:     fallback
   Changes:  <list>
   Failing (caused by edits):
     <test1> — <error summary>
@@ -106,6 +149,22 @@ gh:issue-implement #<N> stopped after 3 test-fix attempts
   Last diff snippet:
     <file:line>
   Resolution: review the edits above, fix manually, re-run tests.
+```
+
+Failure, TDD path (judged stuck):
+```
+gh:issue-implement #<N> stopped — TDD cycle stuck
+  Mode:     direct
+  Path:     tdd
+  Changes:  <list>
+  Stuck at: <behavior being implemented>
+  Symptom:  <same failure repeating | fix breaks a green test | unexplained failure>
+  Tried:
+    <attempt1 — outcome>
+    <attempt2 — outcome>
+  Pre-existing failures (not touched):
+    <test3>
+  Resolution: review the cycle above, decide the design, re-run.
 ```
 
 ## ai-metrics line

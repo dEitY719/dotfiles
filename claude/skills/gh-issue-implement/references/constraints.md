@@ -31,22 +31,40 @@ ever fires, do not bypass it.
 
 ## Never dismiss pre-existing test failures
 
-The test-failure loop in `implementation-flow.md` distinguishes
+The pre-edit baseline in `implementation-flow.md` distinguishes
 PRE-EXISTING (failing before this skill ran) from CAUSED (introduced
 by this skill's edits). Fixing pre-existing failures expands scope
 silently and pollutes the diff. Report them in the final output and
 let the human decide whether to fix them in a separate change.
 
+**Applies to every path, including the direct-mode TDD path.**
+`superpowers:test-driven-development` → "Verify GREEN" says "Other
+tests fail? Fix now." — that is scoped to failures NOT in
+`pre_existing_failures`. This constraint outranks the TDD skill's
+blanket wording; the exception is documented in
+`references/superpowers-detection.md` → "Pre-existing exception". Never
+edit the TDD skill itself to encode it.
+
 ## Never retry the test-failure loop more than 3 times
 
-Three attempts is enough for the model to either converge or admit
-defeat. Beyond that, the failure pattern is usually not a
-mechanical-fix problem — handing back to the human is faster than
-burning more tokens on a wrong hypothesis.
+Scope: the **fallback path** (superpowers absent), which is the only
+path with a mechanical retry counter. Three attempts is enough for the
+model to either converge or admit defeat. Beyond that, the failure
+pattern is usually not a mechanical-fix problem — handing back to the
+human is faster than burning more tokens on a wrong hypothesis.
+
+The TDD path has no counter and must not grow one: red-green-refactor
+already bounds each step. It stops on judgment (same failure repeating,
+fix breaking a green test, unexplained failure) — do not invent a
+substitute attempt budget.
 
 ## Never require superpowers to work
 
 Direct mode is always available. The plugin gates `plan` and
-`brainstorming` modes only. Hard-requiring the plugin would make the
-skill fail on machines without it — defeating the purpose of a
-graceful fallback.
+`brainstorming` modes, and picks the TDD path over the built-in
+fallback path inside `direct` — but it never gates `direct` itself.
+The fallback path stays a **complete** implementation flow: baseline
+capture, edits, tests, bounded failure loop, full report. It is a
+different route to the same finish line, not a degraded one.
+Hard-requiring the plugin would make the skill fail on machines
+without it — defeating the purpose of a graceful fallback.

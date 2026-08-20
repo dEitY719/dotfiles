@@ -11,7 +11,7 @@
 
 ## Usage
 
-- `/gh-issue-implement 16` — direct mode: read issue, implement, run tests. No human intervention.
+- `/gh-issue-implement 16` — direct mode: read issue, implement, run tests. No human intervention. Uses superpowers:test-driven-development when installed; falls back to the built-in edit-then-test flow when not.
 - `/gh-issue-implement 16 plan` — invoke superpowers:writing-plans first, implement per plan.
 - `/gh-issue-implement 16 brainstorming` — invoke superpowers:brainstorming for design, then plan, then implement.
 - `/gh-issue-implement 16 direct upstream` — direct mode on `upstream` remote's repo.
@@ -29,21 +29,33 @@ worktrees.
 2. Verifies precondition: inside a git repo, on a non-base branch, working tree clean.
 3. Claims the issue via `gh issue edit <N> --add-assignee @me` so teammates see it's being worked (soft-fail on error; see `references/claim-issue.md`).
 4. Depending on mode:
-   - **direct** — explores the codebase, edits/creates files, runs tests.
+   - **direct** — with superpowers installed, invokes superpowers:test-driven-development and implements the issue as red-green-refactor cycles. Without it, explores the codebase, edits/creates files, runs tests.
    - **plan** — invokes superpowers:writing-plans with the issue body as context. If issue is ambiguous (see `references/implementation-flow.md` → "Ambiguity signals"), auto-promotes to brainstorming.
    - **brainstorming** — invokes superpowers:brainstorming, then writing-plans, then implements.
-5. Auto-detects the test runner from AGENTS.md → `tox.ini` → `pyproject.toml` → `package.json` → `tests/*.bats`, using the first that matches.
-6. Test-failure loop: up to 3 attempts to fix failures caused by its own edits; pre-existing failures are reported separately, not fixed.
-7. Prints a compact report: changed files, test result, next-step hint.
+
+   `plan` and `brainstorming` also end up in TDD — their plans execute through superpowers:subagent-driven-development, whose subagents follow test-driven-development per task.
+5. Auto-detects the test runner from AGENTS.md → `tox.ini` → `pyproject.toml` → `package.json` → `tests/*.bats`, using the first that matches, then records a pre-edit baseline of already-failing tests.
+6. Pre-existing failures are reported separately, never fixed — on both paths. The 3-attempt test-failure loop applies to the fallback path only; the TDD path stops on judgment instead (same failure repeating, fix breaking a green test, unexplained failure).
+7. Prints a compact report: changed files, which path ran (`tdd`/`fallback`), test result, next-step hint.
 
 ## superpowers plugin not installed → fallback
 
-If `~/.claude/plugins/cache/superpowers-dev/` does not exist, any
-`plan`/`brainstorming` mode falls back to `direct` with one warning line:
+If `~/.claude/plugins/cache/superpowers-dev/` does not exist and the
+superpowers skills do not resolve:
 
-```
-[WARN] superpowers plugin not installed — falling back to direct mode.
-```
+- `plan`/`brainstorming` fall back to `direct` with one warning line:
+
+  ```
+  [WARN] superpowers plugin not installed — falling back to direct mode.
+  ```
+
+- `direct` stays `direct` and runs the built-in implementation flow.
+  Nothing is lost — the fallback path is complete on its own. If only
+  test-driven-development is missing (partial install):
+
+  ```
+  [WARN] superpowers:test-driven-development unavailable — using built-in implementation flow.
+  ```
 
 ## What the skill will NOT do
 
