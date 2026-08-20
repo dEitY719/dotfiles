@@ -253,26 +253,22 @@ _hermes_install_browser() {
 
 	ux_section "agent-browser"
 
-	local mode
+	local npm_flag="--workspaces=false"
+	local mode="root only (--workspaces=false)"
 	if [ "${HERMES_BROWSER_FULL_INSTALL:-0}" = "1" ]; then
+		npm_flag=""
 		mode="full (desktop workspace included)"
-		ux_info "installing in ${browser_dir} — ${mode}"
-		if (cd "${browser_dir}" && npm install); then
-			ux_success "agent-browser dependencies installed (${mode})"
-		else
-			ux_warning "npm install failed in ${browser_dir}"
-			ux_bullet "Retry: cd ${browser_dir} && npm install"
+	fi
+
+	ux_info "installing in ${browser_dir} — ${mode}"
+	if (cd "${browser_dir}" && npm install ${npm_flag}); then
+		ux_success "agent-browser dependencies installed (${mode})"
+		if [ -n "${npm_flag}" ]; then
+			ux_bullet "Need the Electron desktop app too? HERMES_BROWSER_FULL_INSTALL=1 ./hermes/setup.sh"
 		fi
 	else
-		mode="root only (--workspaces=false)"
-		ux_info "installing in ${browser_dir} — ${mode}"
-		if (cd "${browser_dir}" && npm install --workspaces=false); then
-			ux_success "agent-browser dependencies installed (${mode})"
-			ux_bullet "Need the Electron desktop app too? HERMES_BROWSER_FULL_INSTALL=1 ./hermes/setup.sh"
-		else
-			ux_warning "npm install failed in ${browser_dir}"
-			ux_bullet "Retry: cd ${browser_dir} && npm install --workspaces=false"
-		fi
+		ux_warning "npm install failed in ${browser_dir}"
+		ux_bullet "Retry: cd ${browser_dir} && npm install ${npm_flag}"
 	fi
 
 	return 0
