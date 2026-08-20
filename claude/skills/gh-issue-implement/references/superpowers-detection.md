@@ -10,9 +10,9 @@ superpowers is present if EITHER is true:
    ```
 2. The required skills are resolvable via the Skill tool (checked by
    attempting to describe `superpowers:writing-plans`,
-   `superpowers:brainstorming`, and
-   `superpowers:test-driven-development`, and verifying they return a
-   skill definition, not a "not found" error).
+   `superpowers:brainstorming`, `superpowers:test-driven-development`,
+   and `superpowers:subagent-driven-development`, and verifying they all
+   return a skill definition, not a "not found" error).
 
 If either check passes → honor requested mode.
 If both fail → force `direct` mode.
@@ -26,17 +26,21 @@ plugin cache but still expose the skills to the Skill tool.
 |---|---|---|
 | `plan` | `Skill(superpowers:writing-plans)` | forced to `direct` + warning |
 | `brainstorming` | `Skill(superpowers:brainstorming)` | forced to `direct` + warning |
-| `direct` | TDD path — `Skill(superpowers:test-driven-development)` | built-in fallback path |
+| `direct` | TDD path — `Skill(superpowers:test-driven-development)`, only when a test runner was also detected (see `references/implementation-flow.md` → "Common steps") | built-in fallback path |
 
 `direct` mode is never blocked by detection — it only picks a different
-implementation path (`references/implementation-flow.md`).
+implementation path (`references/implementation-flow.md`), and that
+path choice also depends on test-runner presence, not detection alone.
 
-If `superpowers:test-driven-development` specifically fails to resolve
-at invocation time (partial install), take the fallback path and print
-one warning line:
+If `superpowers:test-driven-development` or
+`superpowers:subagent-driven-development` specifically fails to resolve
+at invocation time (partial install), take the fallback path — or, for
+`plan`/`brainstorming`, proceed without the TDD guarantee — and print
+one warning line naming the missing skill, e.g.:
 
 ```
 [WARN] superpowers:test-driven-development unavailable — using built-in implementation flow.
+[WARN] superpowers:subagent-driven-development unavailable — plan/brainstorming will not guarantee TDD.
 ```
 
 ## Fallback behavior
@@ -81,8 +85,13 @@ In `direct` mode (plugin present) — the default path:
 
 `plan` and `brainstorming` modes reach TDD indirectly: their plans are
 executed through `superpowers:subagent-driven-development`, whose
-subagents already follow `superpowers:test-driven-development` per task.
-No extra wiring is needed there.
+subagents follow `superpowers:test-driven-development` per task. Step 2
+now verifies both skills resolve before honoring these modes, so a
+partial install (e.g. `subagent-driven-development` missing while
+`writing-plans` still resolves) is caught up front instead of failing
+deep inside plan execution. This does not audit `writing-plans` /
+`executing-plans`'s own internals beyond that resolve check — a failure
+inside those skills themselves is out of scope here.
 
 ### Pre-existing exception (direct-mode TDD path)
 

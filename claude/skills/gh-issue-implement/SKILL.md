@@ -13,7 +13,7 @@ description: >-
   satisfy a code-change issue; that one executes the protocol a directive issue
   embeds. Accepts `<issue-number> [direct|plan|brainstorming] [remote]`, optional
   `--no-next-hint` (suppress final `Next:` hint), and `-h`/`--help`/`help`.
-allowed-tools: Bash, Read, Grep, Glob, Edit, Write
+allowed-tools: Bash, Read, Grep, Glob, Edit, Write, Skill
 metadata:
   model_recommendation:
     tier: opus
@@ -51,7 +51,9 @@ Check preconditions in parallel per `references/implementation-flow.md`
 
 Per `references/superpowers-detection.md`: plugin missing → force mode
 = `direct` + one warning line; else honor the requested mode. The resolve
-check includes `test-driven-development`, which gates Step 5's TDD path.
+check includes `test-driven-development` (gates Step 5's TDD path) and
+`subagent-driven-development` (gates the plan/brainstorming TDD guarantee
+in Step 4).
 
 ## Step 3: Fetch + Claim Issue
 
@@ -75,16 +77,19 @@ Skip 3.3 / 3.4 / 3.5 via their `GH_ISSUE_SKIP_*` env vars.
   appear, switch to `brainstorming`; else `Skill(superpowers:writing-plans)`.
 - **`brainstorming`** → `Skill(superpowers:brainstorming)` (terminal state
   invokes `writing-plans`). After plan approval, proceed to Step 5.
-- Both plan modes already reach TDD per task via `subagent-driven-development`.
+- Both plan modes reach TDD per task via `subagent-driven-development` when
+  that skill also resolves (verified alongside the rest of Step 2).
 
 ## Step 5: Implement + Test
 
 Follow `references/implementation-flow.md` → "Direct-mode flow": common steps
-(fetch, intent, scan, `$TEST_CMD`, pre-edit baseline), then branch — detected →
+(fetch, intent, scan, `$TEST_CMD`, pre-edit baseline), then branch on
+superpowers detection **and** test-runner presence — detected + runner →
 **TDD path** (`Skill(superpowers:test-driven-development)` drives red-green-refactor,
-no attempt cap, stops on judgment); not detected → **fallback path** (edit, run
-tests, failure loop max 3×). Neither fixes pre-existing failures. After tests pass
-(or skip — no runner), emit `printf '[step:gh-issue-implement/implement] OK\n'`.
+no attempt cap, stops on judgment); anything else (not detected, or no runner
+regardless of detection) → **fallback path** (edit, run tests if a runner
+exists, failure loop max 3×). Neither fixes pre-existing failures. After tests
+pass (or skip — no runner), emit `printf '[step:gh-issue-implement/implement] OK\n'`.
 
 ## Step 6: Report
 
