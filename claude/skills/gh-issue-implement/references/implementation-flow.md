@@ -39,13 +39,18 @@ Store the chosen command as `$TEST_CMD`.
 4. Detect `$TEST_CMD` (above), then capture the **baseline**: run
    `$TEST_CMD` once with no edits and record the failing set as
    `pre_existing_failures`. Any test failing in that baseline is never
-   "caused" by this skill's edits. No runner detected → skip the
-   baseline and every test step below; both paths still run.
+   "caused" by this skill's edits.
 
-Then branch on the Step 2 superpowers detection result:
+Then branch on the Step 2 superpowers detection result **and** whether a
+test runner was detected:
 
-- **detected** → "TDD path" below (default).
-- **not detected** → "Fallback path" below.
+- **runner detected AND superpowers detected** → "TDD path" below (default).
+- **no runner detected** → "Fallback path" below, regardless of superpowers
+  detection. The TDD path requires running tests to verify RED and GREEN —
+  without a runner there is nothing to verify, so it cannot function. Skip
+  the baseline and every test step in whichever path runs; report "No test
+  runner detected, skipping tests." per "Test runner detection" above.
+- **runner detected, superpowers not detected** → "Fallback path" below.
 
 ### TDD path (superpowers detected)
 
