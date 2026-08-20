@@ -850,11 +850,11 @@ for a second opinion. Streams the AI's findings to stdout and posts
 them as a PR comment by default. Does NOT submit a decision.
 
 Usage:
-  gh-pr-review --ai <codex|agy|claude|opencode> [flags] [<pr-number>] [<remote>]
+  gh-pr-review --ai <codex|agy|claude|opencode|hermes> [flags] [<pr-number>] [<remote>]
   gh-pr-review -h | --help | help
 
 Flags:
-  --ai <codex|agy|claude|opencode>
+  --ai <codex|agy|claude|opencode|hermes>
                                required; external CLI to delegate to
   --review <preset>            default 'default'; KR aliases supported
                                enum: default | quick | thorough |
@@ -871,6 +871,11 @@ OpenCode:
                                with --file; execution runs in an
                                isolated temporary directory
 
+Hermes:
+  --ai hermes                  internal-PC only; Samsung DS internal CLI;
+                               prompt is attached with --file (invocation
+                               shape unverified — see ai-cli-invocation.md)
+
 Positional:
   <pr-number>                  optional — auto-detect from current
                                branch via `gh pr view`
@@ -882,6 +887,7 @@ Examples:
   gh-pr-review --ai claude --review 꼼꼼 99
   gh-pr-review --ai claude --user work 99
   gh-pr-review --ai opencode 99
+  gh-pr-review --ai hermes 99
   gh-pr-review --ai codex --no-post-comment 99
   gh-pr-review --ai codex 99 upstream
 
