@@ -9,17 +9,7 @@
 # Setup:   ./hermes/setup.sh
 # Details: hermes-help
 
-# ========================================
-# Load UX Library
-# ========================================
-
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
-
-if ! type ux_header >/dev/null 2>&1; then
-    _hermes_dir="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
-    . "${_hermes_dir}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
-    unset _hermes_dir
-fi
 
 # ========================================
 # Hermes Aliases
