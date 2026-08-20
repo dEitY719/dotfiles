@@ -44,6 +44,7 @@ rg "fzf 피커" docs/guide/commands/
 - [gpu](./gpu.md)
 - [gwt](./gwt.md)
 - [herdr](./herdr.md)
+- [hermes](./hermes.md)
 - [hook](./hook.md)
 - [litellm](./litellm.md)
 - [mount](./mount.md)

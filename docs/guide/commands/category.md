@@ -24,7 +24,7 @@
 **Categories**
 
 - **Category** — Topics
-- **AI/LLM (9)** — claude, cc, agy, codex, litellm, +4 more
+- **AI/LLM (10)** — claude, cc, agy, codex, hermes, +5 more
 - **CLI Utilities (12)** — fzf, fd, fasd, ripgrep, pet, +7 more
 - **Configuration (5)** — p10k, crt, apt, pip, ghostty
 - **Development (17)** — git, gwt, gbr, devx, uv, +12 more
