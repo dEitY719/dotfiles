@@ -327,7 +327,7 @@ _hermes_import_ca() {
 		return 0
 	fi
 
-	mkdir -p "${HOME}/.pki/nssdb"
+	mkdir -p "${HOME}/.pki/nssdb" || { ux_warning "Could not create ~/.pki/nssdb — skipping NSS import"; return 0; }
 
 	# -A on an existing nickname replaces it, so re-running is idempotent.
 	if certutil -d "sql:${HOME}/.pki/nssdb" -A -t "C,," -n "corp-root-ca" -i "${cert_path}" >/dev/null 2>&1; then
