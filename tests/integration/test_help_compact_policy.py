@@ -38,6 +38,7 @@ HELP_TOPICS = [
     "git_help",
     "gwt_help",
     "gpu_help",
+    "hermes_help",
     "litellm_help",
     "mytool_help",
     "mysql_help",
