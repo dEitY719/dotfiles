@@ -3,9 +3,9 @@
 # shell-common/functions/gh_pr_review.sh
 # gh-pr-review — synchronous PR review delegation to an external AI CLI.
 # Sibling of gh-pr-approve (gh_pr_approve.sh) and gh-pr-reply
-# (gh_pr_reply.sh). Reads the same `--ai <codex|agy|claude|opencode>` contract
-# but does a single-shot opinion-collection run inline (no worktree spawn,
-# no detached worker) — the skill's only side effect is one PR comment
+# (gh_pr_reply.sh). Reads the same `--ai <codex|agy|claude|opencode|hermes>`
+# contract but does a single-shot opinion-collection run inline (no worktree
+# spawn, no detached worker) — the skill's only side effect is one PR comment
 # unless `--no-post-comment` is set.
 #
 # SSOT: this file owns the Step 1 arg-parse logic, the AI CLI dispatch,
@@ -103,20 +103,20 @@ gh_pr_review_parse() {
     done
 
     if [ -z "$ai" ]; then
-        echo "missing required flag: --ai <codex|agy|claude|opencode>" >&2
+        echo "missing required flag: --ai <codex|agy|claude|opencode|hermes>" >&2
         return 2
     fi
 
     case "$ai" in
-    codex | agy | claude | opencode) ;;
+    codex | agy | claude | opencode | hermes) ;;
     *)
-        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude, opencode)" >&2
+        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude, opencode, hermes)" >&2
         return 2
         ;;
     esac
 
     if [ -n "$user" ] && [ "$ai" != "claude" ]; then
-        echo "--user is only valid with --ai claude (codex/agy/opencode have no multi-account routing)" >&2
+        echo "--user is only valid with --ai claude (codex/agy/opencode/hermes have no multi-account routing)" >&2
         return 2
     fi
 
@@ -155,20 +155,23 @@ EOF
 # ============================================================================
 
 # _gh_pr_review_require_ai_cli — validates that the requested AI CLI is
-# one of the four allowed values AND that its binary is on PATH.
+# one of the five allowed values AND that its binary is on PATH.
 # Exits 1 with `Required CLI '<name>' not found in PATH` if the binary
 # is missing (matches references/ai-cli-invocation.md § "PATH pre-flight").
 # Exits 2 with `Unknown --ai value: '...'` if the value is unknown.
 _gh_pr_review_require_ai_cli() {
     local ai="$1"
     case "$ai" in
-    codex | agy | claude | opencode) ;;
+    codex | agy | claude | opencode | hermes) ;;
     *)
-        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude, opencode)" >&2
+        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude, opencode, hermes)" >&2
         return 2
         ;;
     esac
     if [ "$ai" = "opencode" ] && ! _gh_pr_review_require_opencode_internal; then
+        return 1
+    fi
+    if [ "$ai" = "hermes" ] && ! _gh_pr_review_require_hermes_internal; then
         return 1
     fi
     if ! command -v "$ai" >/dev/null 2>&1; then
@@ -195,6 +198,28 @@ _gh_pr_review_require_opencode_internal() {
     fi
     if [ "$_mode" != "internal" ]; then
         echo "--ai opencode is internal-PC only (~/.dotfiles-setup-mode != internal)" >&2
+        return 1
+    fi
+    return 0
+}
+
+# _gh_pr_review_require_hermes_internal — fail closed unless the dotfiles
+# setup-mode SSOT says this is an internal PC. hermes is the Samsung DS
+# internal AI coding CLI and only reaches its provider from inside the
+# corporate network, so a stray binary on a personal PC is not enough.
+_gh_pr_review_require_hermes_internal() {
+    if ! command -v _dotfiles_setup_mode >/dev/null 2>&1; then
+        local _helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/integrations/claude.sh"
+        # shellcheck disable=SC1090
+        [ -f "$_helper" ] && . "$_helper"
+    fi
+
+    local _mode=""
+    if command -v _dotfiles_setup_mode >/dev/null 2>&1; then
+        _mode=$(_dotfiles_setup_mode 2>/dev/null || echo "")
+    fi
+    if [ "$_mode" != "internal" ]; then
+        echo "--ai hermes is internal-PC only (~/.dotfiles-setup-mode != internal)" >&2
         return 1
     fi
     return 0
@@ -352,6 +377,7 @@ _gh_pr_review_run_ai() {
     local _prompt_content
     local _opencode_workdir
     local _opencode_instruction="첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘."
+    local _hermes_instruction="첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘."
     case "$ai" in
     codex)
         codex exec --color=never <"$prompt_file" 2>"$_stderr_file" || _rc=$?
@@ -380,6 +406,20 @@ _gh_pr_review_run_ai() {
             claude -p <"$prompt_file" 2>"$_stderr_file" || _rc=$?
         fi
         ;;
+    hermes)
+        # Assumption pending real-CLI verification (issue #1377 Open
+        # Questions): hermes-agent's non-interactive review subcommand is
+        # not yet confirmed (hermes-help documents doctor/config/--version
+        # only). Mirrors the opencode pattern — short instruction argv +
+        # --file "$PROMPT_FILE" — as the first-pass shape; revisit once
+        # `hermes --help` is checked on an internal PC.
+        if ! _gh_pr_review_require_hermes_internal >"$_stderr_file" 2>&1; then
+            _rc=1
+        else
+            hermes exec "$_hermes_instruction" \
+                --file "$prompt_file" 2>"$_stderr_file" || _rc=$?
+        fi
+        ;;
     opencode)
         if ! _gh_pr_review_require_opencode_internal >"$_stderr_file" 2>&1; then
             _rc=1
@@ -398,7 +438,7 @@ _gh_pr_review_run_ai() {
         [ -n "$_opencode_workdir" ] && rm -rf "$_opencode_workdir"
         ;;
     *)
-        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude, opencode)" >&2
+        echo "Unknown --ai value: '$ai' (allowed: codex, agy, claude, opencode, hermes)" >&2
         rm -f "$_stderr_file"
         return 2
         ;;

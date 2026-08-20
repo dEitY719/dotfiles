@@ -1,7 +1,7 @@
 # gh:pr-review — Help
 
 Delegate a GitHub PR's review to an external AI CLI (`codex`, `agy`,
-`claude`, or `opencode`) for a **second opinion**. Output is written to stdout and
+`claude`, `opencode`, or `hermes`) for a **second opinion**. Output is written to stdout and
 posted as a PR comment by default. **No decision (approve /
 request-changes) is submitted** — see `gh-pr-approve` for that.
 
@@ -16,7 +16,7 @@ request-changes) is submitted** — see `gh-pr-approve` for that.
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--ai <codex\|agy\|claude\|opencode>` | yes | External AI CLI to delegate the review to. Single value — no CSV. |
+| `--ai <codex\|agy\|claude\|opencode\|hermes>` | yes | External AI CLI to delegate the review to. Single value — no CSV. |
 | `--review <preset>` | no | Review depth/lens enum. Default `default`. See below. |
 | `--user <name>` | no | `--ai claude` only. Multi-account routing via `_claude_resolve_account` (e.g. `personal`, `work`, `work1`). |
 | `--no-post-comment` | no | Skip the automatic PR comment; only print to stdout. |
@@ -51,7 +51,7 @@ claude -p ...`.
   preserved** — no forced `personal`. Calling `/gh-pr-review --ai
   claude 99` from inside a `claude-yolo --user work` shell continues to
   use the `work` account.
-- `--user` with `--ai codex`, `--ai agy`, or `--ai opencode` is **rejected (exit 2)** —
+- `--user` with `--ai codex`, `--ai agy`, `--ai opencode`, or `--ai hermes` is **rejected (exit 2)** —
   those CLIs have no multi-account routing mechanism, so silently
   ignoring would risk hiding an intent mismatch.
 - Unknown account names fall through `_claude_resolve_account` and exit
@@ -64,12 +64,24 @@ Internal-PC only. The lane uses fixed model `codemate/CodeLLMPro`,
 passes the prompt file with `--file`, and runs in an isolated temporary
 directory via `--dir` so relative writes do not touch the PR checkout.
 
+## `--ai hermes`
+
+Internal-PC only (Samsung DS internal AI coding CLI; setup module
+`hermes/`). Outside `_dotfiles_setup_mode == internal` the lane exits 1
+with `--ai hermes is internal-PC only (~/.dotfiles-setup-mode !=
+internal)`. The invocation passes a short instruction as argv plus the
+prompt file with `--file`; no `--model` override is accepted. The exact
+non-interactive subcommand is a first-pass assumption pending
+verification on an internal PC — see
+`references/ai-cli-invocation.md` § `--ai hermes`.
+
 ## Usage
 
 - `/gh-pr-review --ai codex 99` — codex review of PR #99 (default preset)
 - `/gh-pr-review --ai agy --review thorough 99` — agy, thorough preset
 - `/gh-pr-review --ai claude --review 꼼꼼 99` — claude, KR alias → thorough
 - `/gh-pr-review --ai opencode 99` — opencode review on internal PC
+- `/gh-pr-review --ai hermes 99` — hermes review on internal PC
 - `/gh-pr-review --ai claude --user work 99` — claude as `work` account
 - `/gh-pr-review --ai claude --user work1 --review 보안 99` — work1 + security
 - `/gh-pr-review --ai codex --no-post-comment 99` — stdout only, no PR comment

@@ -1,7 +1,7 @@
 # devx:pr-review-all — Help
 
 Fan out **every available reviewer** on one PR in parallel — `agy` ∥
-`codex` ∥ `opencode` second opinions ∥ a `/simplify` auto-fix pass (which commits its own
+`codex` ∥ `opencode` ∥ `hermes` second opinions ∥ a `/simplify` auto-fix pass (which commits its own
 changes) — then run a reply pass over the resulting review comments. A
 composition skill: it
 orchestrates several reviewers plus a reply, unlike `gh:pr-review` (a single
@@ -39,10 +39,11 @@ request-changes) — that is `gh:pr-approve`.
 2. Pre-flight: PR must be `OPEN` and non-draft, `gh auth` must be live, and
    check out the PR head branch if not already on it (so `/simplify` acts on
    the right tree).
-3. Review + auto-fix gate — dispatch agy, codex, opencode, and the auto-fix pass as
-   Agent subagents **in one turn**. agy/codex/opencode delegate to
+3. Review + auto-fix gate — dispatch agy, codex, opencode, hermes, and the
+   auto-fix pass as
+   Agent subagents **in one turn**. agy/codex/opencode/hermes delegate to
    `gh:pr-review --ai <name>` (streams findings + posts a PR comment) and run
-   fully in parallel. opencode runs only on internal PCs. `/simplify` mutates the working tree and commits its own
+   fully in parallel. opencode and hermes run only on internal PCs. `/simplify` mutates the working tree and commits its own
    changes (`refactor(<scope>): simplify per /simplify`). Each lane is
    soft-fail.
 4. Push the auto-fix commit (only if the working tree changed), always with

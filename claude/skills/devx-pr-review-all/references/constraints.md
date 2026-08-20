@@ -3,9 +3,9 @@
 The SKILL.md body lists these as terse rules; the full rationale lives here.
 
 - **Every reviewer lane is soft-fail — never hard-fail.** A missing `agy`,
-  `codex`, or `opencode` CLI (`command -v` empty), a rate-limit, or any non-zero exit from
+  `codex`, `opencode`, or `hermes` CLI (`command -v` empty), a rate-limit, or any non-zero exit from
   `gh:pr-review` marks only that lane `[SKIP]`/`[WARN]`; the other lanes and
-  the rest of the flow continue. `opencode` also skips softly unless
+  the rest of the flow continue. `opencode` and `hermes` also skip softly unless
   `_dotfiles_setup_mode` is `internal`. If all reviewer CLIs are unavailable,
   `/simplify` still runs. `gh:pr-review` already does its own
   `command -v`/OPEN/draft pre-flight, so do **not** duplicate those as
@@ -36,7 +36,7 @@ The SKILL.md body lists these as terse rules; the full rationale lives here.
   the unattended issue-flow contract). Removal is the honest fix.
 
   **Nothing meaningful is lost.** Bug-hunting is covered by the agy, codex,
-  and opencode
+  opencode, and hermes
   lanes, which post real PR comments; cleanup is covered by `/simplify`; and
   the apply-fixes-and-commit behaviour still happens at the end of the flow,
   where `gh:pr-reply` evaluates each review comment and commits the valid
@@ -50,8 +50,8 @@ The SKILL.md body lists these as terse rules; the full rationale lives here.
   sends up whatever exists.
 
 - **Delay is not a guarantee — inline reply is the deterministic path.**
-  agy/codex/opencode reviews are synchronous `gh:pr-review` CLI calls: they post the
-  PR comment before returning. Because Step 3 awaits all four Agents, the
+  agy/codex/opencode/hermes reviews are synchronous `gh:pr-review` CLI calls: they post the
+  PR comment before returning. Because Step 3 awaits all five Agents, the
   comments exist by the time Step 5 runs, so an **inline** `gh:pr-reply` sees
   them with deterministic ordering — no fixed delay needed. `--defer-reply` is
   a convenience for the issue-flow path (short turns), not a correctness
