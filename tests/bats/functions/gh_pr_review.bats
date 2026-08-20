@@ -183,6 +183,35 @@ EOF
     assert_output --partial "--ai opencode is internal-PC only"
 }
 
+@test "require_ai_cli: hermes on non-internal PC refuses before PATH check" {
+    _source_module
+    _dotfiles_setup_mode() { echo external; }
+
+    PATH="" run _gh_pr_review_require_ai_cli hermes
+    assert_failure 1
+    assert_output --partial "--ai hermes is internal-PC only"
+    refute_output --partial "Required CLI 'hermes' not found in PATH"
+}
+
+@test "require_ai_cli: hermes on internal PC still requires the CLI" {
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+
+    PATH="" run _gh_pr_review_require_ai_cli hermes
+    assert_failure 1
+    assert_output --partial "Required CLI 'hermes' not found in PATH"
+}
+
+@test "gh_pr_review: hermes non-internal preflight returns 1" {
+    _source_module
+    _stub_gh_noop
+    _dotfiles_setup_mode() { echo external; }
+
+    run gh_pr_review --ai hermes 1337 origin
+    assert_failure 1
+    assert_output --partial "--ai hermes is internal-PC only"
+}
+
 # ---------------------------------------------------------------------------
 # Prompt builder — preset selection + diff section
 # ---------------------------------------------------------------------------
@@ -1078,6 +1107,60 @@ EOF
         [ -n "$dir" ]
         [ ! -d "$dir" ]
     )
+}
+
+# ---------------------------------------------------------------------------
+# _gh_pr_review_run_ai — hermes transport (issue #1377)
+# ---------------------------------------------------------------------------
+
+_stub_hermes_echo() {
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/hermes" <<'EOF'
+#!/bin/sh
+printf 'hermes args:'
+for arg in "$@"; do
+    printf ' [%s]' "$arg"
+done
+printf '\n'
+exit 0
+EOF
+    chmod +x "$stub_dir/hermes"
+    export PATH="$stub_dir:$PATH"
+}
+
+@test "run_ai hermes: internal mode invokes exec and attaches prompt file" {
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+    _stub_hermes_echo
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    run _gh_pr_review_run_ai hermes "$f"
+    assert_success
+    assert_output --partial "hermes args: [exec]"
+    assert_output --partial "[--file] [$f]"
+}
+
+@test "run_ai hermes: non-internal mode refuses without invoking hermes" {
+    _source_module
+    _dotfiles_setup_mode() { echo external; }
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/hermes" <<'EOF'
+#!/bin/sh
+echo "SHOULD_NOT_RUN"
+exit 0
+EOF
+    chmod +x "$stub_dir/hermes"
+    export PATH="$stub_dir:$PATH"
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    run _gh_pr_review_run_ai hermes "$f"
+    assert_failure 1
+    assert_output --partial "--ai hermes is internal-PC only"
+    refute_output --partial "SHOULD_NOT_RUN"
 }
 
 # ---------------------------------------------------------------------------
