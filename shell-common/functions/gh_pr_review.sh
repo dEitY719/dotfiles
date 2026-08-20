@@ -168,12 +168,11 @@ _gh_pr_review_require_ai_cli() {
         return 2
         ;;
     esac
-    if [ "$ai" = "opencode" ] && ! _gh_pr_review_require_opencode_internal; then
-        return 1
-    fi
-    if [ "$ai" = "hermes" ] && ! _gh_pr_review_require_hermes_internal; then
-        return 1
-    fi
+    case "$ai" in
+    opencode | hermes)
+        _gh_pr_review_require_internal_cli "$ai" || return 1
+        ;;
+    esac
     if ! command -v "$ai" >/dev/null 2>&1; then
         echo "Required CLI '$ai' not found in PATH" >&2
         return 1
@@ -181,11 +180,14 @@ _gh_pr_review_require_ai_cli() {
     return 0
 }
 
-# _gh_pr_review_require_opencode_internal — fail closed unless the
-# dotfiles setup-mode SSOT says this is an internal PC. The opencode lane
-# depends on the internal Code Mate provider, so a personal/public install
-# of the binary is not enough.
-_gh_pr_review_require_opencode_internal() {
+# _gh_pr_review_require_internal_cli — fail closed unless the dotfiles
+# setup-mode SSOT says this is an internal PC. Shared gate for AI CLIs
+# that only reach their provider from inside the corporate network:
+# opencode (Code Mate) and hermes (Samsung DS internal AI coding CLI). A
+# personal/public install of either binary is not enough on its own.
+# Args: $1 = ai name, used only to build the error message.
+_gh_pr_review_require_internal_cli() {
+    local ai="$1"
     if ! command -v _dotfiles_setup_mode >/dev/null 2>&1; then
         local _helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/integrations/claude.sh"
         # shellcheck disable=SC1090
@@ -197,29 +199,7 @@ _gh_pr_review_require_opencode_internal() {
         _mode=$(_dotfiles_setup_mode 2>/dev/null || echo "")
     fi
     if [ "$_mode" != "internal" ]; then
-        echo "--ai opencode is internal-PC only (~/.dotfiles-setup-mode != internal)" >&2
-        return 1
-    fi
-    return 0
-}
-
-# _gh_pr_review_require_hermes_internal — fail closed unless the dotfiles
-# setup-mode SSOT says this is an internal PC. hermes is the Samsung DS
-# internal AI coding CLI and only reaches its provider from inside the
-# corporate network, so a stray binary on a personal PC is not enough.
-_gh_pr_review_require_hermes_internal() {
-    if ! command -v _dotfiles_setup_mode >/dev/null 2>&1; then
-        local _helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/integrations/claude.sh"
-        # shellcheck disable=SC1090
-        [ -f "$_helper" ] && . "$_helper"
-    fi
-
-    local _mode=""
-    if command -v _dotfiles_setup_mode >/dev/null 2>&1; then
-        _mode=$(_dotfiles_setup_mode 2>/dev/null || echo "")
-    fi
-    if [ "$_mode" != "internal" ]; then
-        echo "--ai hermes is internal-PC only (~/.dotfiles-setup-mode != internal)" >&2
+        echo "--ai $ai is internal-PC only (~/.dotfiles-setup-mode != internal)" >&2
         return 1
     fi
     return 0
@@ -376,8 +356,10 @@ _gh_pr_review_run_ai() {
     local _prompt_size
     local _prompt_content
     local _opencode_workdir
-    local _opencode_instruction="첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘."
-    local _hermes_instruction="첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘."
+    # Shared by the opencode and hermes cases below — both CLIs get the
+    # exact same short instruction as argv, with the diff attached via
+    # --file "$prompt_file".
+    local _ai_file_instruction="첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘."
     case "$ai" in
     codex)
         codex exec --color=never <"$prompt_file" 2>"$_stderr_file" || _rc=$?
@@ -413,15 +395,15 @@ _gh_pr_review_run_ai() {
         # only). Mirrors the opencode pattern — short instruction argv +
         # --file "$PROMPT_FILE" — as the first-pass shape; revisit once
         # `hermes --help` is checked on an internal PC.
-        if ! _gh_pr_review_require_hermes_internal >"$_stderr_file" 2>&1; then
+        if ! _gh_pr_review_require_internal_cli hermes >"$_stderr_file" 2>&1; then
             _rc=1
         else
-            hermes exec "$_hermes_instruction" \
+            hermes exec "$_ai_file_instruction" \
                 --file "$prompt_file" 2>"$_stderr_file" || _rc=$?
         fi
         ;;
     opencode)
-        if ! _gh_pr_review_require_opencode_internal >"$_stderr_file" 2>&1; then
+        if ! _gh_pr_review_require_internal_cli opencode >"$_stderr_file" 2>&1; then
             _rc=1
         else
             _opencode_workdir=$(mktemp -d "${TMPDIR:-/tmp}/gh-pr-review-opencode.XXXXXX") || {
@@ -430,7 +412,7 @@ _gh_pr_review_run_ai() {
             }
         fi
         if [ "$_rc" -eq 0 ]; then
-            opencode run "$_opencode_instruction" \
+            opencode run "$_ai_file_instruction" \
                 --model codemate/CodeLLMPro \
                 --dir "$_opencode_workdir" \
                 --file "$prompt_file" 2>"$_stderr_file" || _rc=$?
