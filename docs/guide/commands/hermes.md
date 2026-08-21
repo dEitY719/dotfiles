@@ -15,7 +15,7 @@
 - sections
     - concept: 코딩 에이전트 | 커스텀 OpenAI-compatible 엔드포인트
     - install: 공식 install.sh | ./hermes/setup.sh 가 하는 5단계
-    - config: llm_endpoint.local.sh | hermes config set | 심링크 SSOT
+    - config: llm_endpoint.local.sh | hermes config set | 1회 복사 SSOT
     - pitfalls: api_key 위치 | agent-browser workspace | TLS 인터셉션 CA
     - browser: agent-browser 설치 옵션
     - example | related
@@ -28,17 +28,17 @@
 - Hermes Agent (NousResearch) — 터미널에서 도는 코딩 에이전트
 - OpenAI-compatible 엔드포인트면 무엇이든 붙는다 — 자체 호스팅 모델, 사내 LLM 게이트웨이, Gemini 호환 엔드포인트
 - 이 저장소는 설치와 설정의 재현만 관리 — 에이전트 기능 자체는 upstream 소관
-- config SSOT: hermes/config.yaml → ~/.hermes/config.yaml 심링크
+- config SSOT: hermes/config.yaml → ~/.hermes/config.yaml 1회 복사(심링크 아님)
 
 ### install
 
-- 공식 설치: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | sh
+- 공식 설치: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 - dotfiles 경유(권장): ./setup.sh 또는 ./hermes/setup.sh — 멱등, 이미 설치돼 있으면 스킵
 - 확인: hermes --version · hermes doctor (alias hermes-doctor)
 **./hermes/setup.sh 가 하는 일 (5단계)**
 
 - **Part** — 동작 — 실패 정책
-- **1** — hermes/config.yaml → ~/.hermes/config.yaml 심링크 — hard-fail
+- **1** — hermes/config.yaml → ~/.hermes/config.yaml 1회 복사 — hard-fail
 - **2** — 공식 install.sh 실행 (설치돼 있으면 스킵) — soft-fail
 - **3** — llm_endpoint.local.sh 읽어 base_url/api_key 주입 — soft-fail, 옵션
 - **4** — agent-browser npm 의존성 설치 — soft-fail, 옵션
@@ -71,10 +71,11 @@
 - hermes config set model.base_url <url>    # OpenAI-compatible 엔드포인트 (/v1 포함)
 - hermes config set model.api_key <key>     # .env 아님 — 함정 1 참조
 - hermes doctor                             # 키/엔드포인트 인식 여부 확인
-**config.yaml 은 이 저장소 심링크 — 시크릿 주입 전 자동 detach**
+**config.yaml 은 심링크가 아니라 1회 복사본**
 
-- 런타임 config ($HOME/.hermes/config.yaml) 은 기본적으로 hermes/config.yaml 심링크
-- setup.sh 는 hermes config set 직전 그 심링크를 로컬 실파일로 바꿔치기한다 — api_key 는 저장소에 절대 안 들어감
+- 런타임 config ($HOME/.hermes/config.yaml) 은 첫 setup 때 hermes/config.yaml 에서 복사된 로컬 실파일 — 이후 setup 은 손대지 않는다
+- hermes 자신의 쓰기(OAuth·모델 선택·_config_version)도, api_key 주입도 이 로컬 파일에만 남고 저장소 추적 파일에는 절대 도달하지 않는다
+- 레거시 심링크가 남아 있으면 setup.sh 가 현재 내용을 보존한 채 실파일로 detach 한다
 
 ### pitfalls
 
@@ -111,7 +112,7 @@
 
 ### example
 
-- ./hermes/setup.sh                                  # 설치 + 심링크 (멱등)
+- ./hermes/setup.sh                                  # 설치 + config 시드 복사 (멱등)
 - cp hermes/llm_endpoint.local.example hermes/llm_endpoint.local.sh
 - $EDITOR hermes/llm_endpoint.local.sh               # base_url + api_key 채우기
 - ./hermes/setup.sh                                  # 재실행 — 엔드포인트 주입

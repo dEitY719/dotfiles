@@ -1,17 +1,18 @@
 #!/bin/bash
 # hermes/setup.sh: Hermes Agent install + config activation
 #
-# PURPOSE: Make a fresh machine's Hermes Agent match this repo — symlink the
+# PURPOSE: Make a fresh machine's Hermes Agent match this repo — seed the
 #          tracked config, install the CLI, wire up a custom OpenAI-compatible
 #          LLM endpoint, and (optionally) prepare the browser automation tool
 #          for a TLS-intercepting network.
 # WHEN TO RUN: Via ./setup.sh (do NOT run manually)
-# SSOT: Symlink target declared in shell-common/config/symlinks.conf
+# SSOT: Config template is hermes/config.yaml — copied (never symlinked) to
+#       ~/.hermes/config.yaml; see Part 1.
 #       Endpoint credentials declared in hermes/llm_endpoint.local.sh
 #       (gitignored — copy hermes/llm_endpoint.local.example to create it)
 #
-# Failure policy: Part 1 (config symlink) hard-fails — a missing source means a
-# dangling link and hermes silently reverting to its defaults. Parts 2-5
+# Failure policy: Part 1 (config seed copy) hard-fails — without a local config
+# hermes silently reverts to its built-in defaults. Parts 2-5
 # soft-fail: they reach the network (installer, npm registry) or depend on
 # host-specific state (a certificate path, certutil) that this script cannot
 # fix, and everything they provide degrades gracefully — no CLI means the help
@@ -34,18 +35,18 @@ source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 
 HERMES_CONFIG_SRC="${_SCRIPT_DIR}/config.yaml"
 HERMES_CONFIG_DIR="${HOME}/.hermes"
-HERMES_CONFIG_LINK="${HERMES_CONFIG_DIR}/config.yaml"
+HERMES_CONFIG_DST="${HERMES_CONFIG_DIR}/config.yaml"
 HERMES_ENDPOINT_LOCAL="${_SCRIPT_DIR}/llm_endpoint.local.sh"
 HERMES_INSTALL_URL="https://hermes-agent.nousresearch.com/install.sh"
 
 ux_header "Hermes Agent Setup"
 
 # ============================================================================
-# Part 1: config symlink (hard-fail)
+# Part 1: config seed copy (hard-fail)
 # ============================================================================
 
-# The source must exist; without it the symlink would dangle and hermes would
-# silently fall back to its built-in defaults.
+# The source must exist; without it a fresh machine gets no seed config and
+# hermes silently falls back to its built-in defaults.
 if [ ! -f "${HERMES_CONFIG_SRC}" ]; then
 	ux_error "Source config not found: ${HERMES_CONFIG_SRC}"
 	exit 1
@@ -57,45 +58,52 @@ if [ ! -d "${HERMES_CONFIG_DIR}" ]; then
 	ux_success "Created: ~/.hermes"
 fi
 
-# A function so the "already correct" case returns early instead of nesting the
-# rewrite branch. Body matches herdr/setup.sh's _herdr_link_config.
-_hermes_link_config() {
-	if [ -L "${HERMES_CONFIG_LINK}" ]; then
-		local current_target
-		current_target=$(readlink "${HERMES_CONFIG_LINK}")
-		if [ "${current_target}" = "${HERMES_CONFIG_SRC}" ]; then
-			ux_success "Symlink already correct: ~/.hermes/config.yaml → ${HERMES_CONFIG_SRC}"
-			return 0
-		fi
-		ux_info "Updating symlink (was: ${current_target})"
-		rm "${HERMES_CONFIG_LINK}" || { ux_error "Could not remove stale symlink: ${HERMES_CONFIG_LINK}"; exit 1; }
-	elif [ -e "${HERMES_CONFIG_LINK}" ]; then
-		local backup="${HERMES_CONFIG_LINK}.backup"
-		rm -f "${backup}"
-		ux_info "Backing up existing file: ${backup}"
-		mv "${HERMES_CONFIG_LINK}" "${backup}" || { ux_error "Could not back up: ${HERMES_CONFIG_LINK}"; exit 1; }
-	fi
+# ~/.hermes/config.yaml is seeded once from the tracked template and is this
+# machine's file from then on — never a symlink.
+#
+# Why not a symlink: hermes rewrites that path itself (OAuth setup, model
+# selection, `_config_version` stamping) on paths this repo does not control.
+# Through a symlink every one of those writes lands in the tracked
+# hermes/config.yaml, replacing the documented placeholder with one PC's live
+# runtime state — the same write-through leak claude/settings.json hit via
+# `/model` (#924/#940), and the same fix: copy once, never link.
+#
+#   missing    → copy the tracked template
+#   symlink    → detach: copy what it currently *resolves to*, so a legacy
+#                link's live content survives the migration (recopying the
+#                template here would discard this PC's real settings)
+#   real file  → leave untouched. The template is comments only, so it has
+#                nothing to re-propagate, and hermes keeps rewriting keys like
+#                _config_version — re-syncing would only fight the CLI and
+#                clobber the user's model choice.
+_hermes_ensure_config_copy() {
+	local staged="${HERMES_CONFIG_DST}.new.$$"
 
-	ln -s "${HERMES_CONFIG_SRC}" "${HERMES_CONFIG_LINK}" || { ux_error "Could not create symlink: ${HERMES_CONFIG_LINK}"; exit 1; }
-	ux_success "Created: ~/.hermes/config.yaml → ${HERMES_CONFIG_SRC}"
-}
-
-# `hermes config set` (Part 3) rewrites whatever ~/.hermes/config.yaml points
-# at. Left as a symlink, that write lands on the tracked hermes/config.yaml —
-# the exact leak F-2/NF-1 forbid. Detach the link into a real local copy
-# before any secret write; the next run's _hermes_link_config backs that copy
-# up and re-links from the repo, so tracked defaults still propagate.
-_hermes_materialize_config() {
-	if [ -L "${HERMES_CONFIG_LINK}" ]; then
+	if [ -L "${HERMES_CONFIG_DST}" ]; then
 		local resolved
-		resolved=$(readlink "${HERMES_CONFIG_LINK}")
-		rm "${HERMES_CONFIG_LINK}" || { ux_error "Could not detach symlink: ${HERMES_CONFIG_LINK}"; return 1; }
-		cp "${resolved}" "${HERMES_CONFIG_LINK}" || { ux_error "Could not materialize config: ${HERMES_CONFIG_LINK}"; return 1; }
+		resolved=$(readlink -f "${HERMES_CONFIG_DST}" 2>/dev/null)
+		if [ -z "${resolved}" ] || [ ! -f "${resolved}" ]; then
+			# Dangling link: no live content to keep, so seed from the template.
+			resolved="${HERMES_CONFIG_SRC}"
+		fi
+		# Stage first so a failed copy cannot leave the target missing.
+		cp "${resolved}" "${staged}" || { ux_error "Could not stage config copy: ${staged}"; exit 1; }
+		rm -f "${HERMES_CONFIG_DST}" || { rm -f "${staged}"; ux_error "Could not remove legacy symlink: ${HERMES_CONFIG_DST}"; exit 1; }
+		mv "${staged}" "${HERMES_CONFIG_DST}" || { rm -f "${staged}"; ux_error "Could not install config copy: ${HERMES_CONFIG_DST}"; exit 1; }
+		ux_success "Detached legacy symlink → real file (content preserved): ~/.hermes/config.yaml"
+		return 0
 	fi
-	return 0
+
+	if [ -e "${HERMES_CONFIG_DST}" ]; then
+		ux_success "Local config already present (real file, left as-is): ~/.hermes/config.yaml"
+		return 0
+	fi
+
+	cp "${HERMES_CONFIG_SRC}" "${HERMES_CONFIG_DST}" || { ux_error "Could not seed config: ${HERMES_CONFIG_DST}"; exit 1; }
+	ux_success "Seeded from ${HERMES_CONFIG_SRC}: ~/.hermes/config.yaml"
 }
 
-_hermes_link_config
+_hermes_ensure_config_copy
 
 # ============================================================================
 # Part 2: CLI install (soft-fail, idempotent)
@@ -122,10 +130,11 @@ _hermes_install_cli() {
 	ux_section "Hermes CLI"
 	ux_info "installing from ${HERMES_INSTALL_URL}"
 
-	# Piping the installer to sh is upstream's documented path. It is also the
-	# one step that reaches the public internet, so a proxied/offline machine
-	# fails here — say what to retry and move on.
-	if curl -fsSL "${HERMES_INSTALL_URL}" | sh; then
+	# Upstream's install.sh declares `#!/bin/bash` and uses bashisms ([[, arrays) —
+	# piping to `sh` silently invokes dash on Debian/Ubuntu and fails mid-script.
+	# This is also the one step that reaches the public internet, so a
+	# proxied/offline machine fails here too — say what to retry and move on.
+	if curl -fsSL "${HERMES_INSTALL_URL}" | bash; then
 		if command -v hermes >/dev/null 2>&1; then
 			ux_success "installed: $(hermes --version 2>&1 | head -1)"
 		else
@@ -135,7 +144,7 @@ _hermes_install_cli() {
 		fi
 	else
 		ux_warning "Hermes CLI install failed (network or proxy is the usual cause)"
-		ux_bullet "Retry: curl -fsSL ${HERMES_INSTALL_URL} | sh"
+		ux_bullet "Retry: curl -fsSL ${HERMES_INSTALL_URL} | bash"
 		ux_bullet "Details: hermes-help install"
 	fi
 
@@ -149,7 +158,10 @@ _hermes_install_cli
 # ============================================================================
 
 # Why `hermes config set` and not the tracked config.yaml: the api_key must
-# never land in a git-tracked file (F-2). And why config.yaml at all rather
+# never land in a git-tracked file (F-2). `hermes config set` writes to
+# ~/.hermes/config.yaml, which Part 1 has already guaranteed is a real local
+# file rather than a symlink into this repo — so no detach step is needed here.
+# And why config.yaml at all rather
 # than ~/.hermes/.env — hermes host-gates OPENAI_API_KEY to openai.com /
 # openai.azure.com, so a .env key is silently dropped for a custom base_url and
 # the request comes back 401. See hermes-help pitfalls.
@@ -174,8 +186,6 @@ _hermes_configure_endpoint() {
 		ux_bullet "Install hermes first: hermes-help install"
 		return 0
 	fi
-
-	_hermes_materialize_config || { ux_warning "Could not detach ~/.hermes/config.yaml from the repo symlink — skipping endpoint write to avoid leaking a secret into a tracked file"; return 0; }
 
 	ux_section "Custom LLM endpoint"
 
