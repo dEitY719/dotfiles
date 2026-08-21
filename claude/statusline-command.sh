@@ -30,14 +30,18 @@ RESET='\033[0m'
 # file rather than via $DOTFILES_ROOT: statusline-command.sh is reached both
 # directly and through the ~/.claude/statusline-command.sh symlink, and only
 # the link's target has the helper next to it — hence the symlink walk. Plain
-# `readlink` (no GNU-only -f) keeps this working on macOS/BSD.
+# `readlink` (no GNU-only -f) keeps this working on macOS/BSD. The hop cap
+# (40, matching Linux's ELOOP limit) turns a symlink cycle into "helper not
+# found" instead of hanging the shell mid-prompt-render.
 _sl_self="${BASH_SOURCE[0]}"
-while [ -L "$_sl_self" ]; do
+_sl_hops=0
+while [ -L "$_sl_self" ] && [ "$_sl_hops" -lt 40 ]; do
     _sl_link=$(readlink "$_sl_self")
     case "$_sl_link" in
     /*) _sl_self="$_sl_link" ;;
     *) _sl_self="${_sl_self%/*}/${_sl_link}" ;;
     esac
+    _sl_hops=$((_sl_hops + 1))
 done
 _sl_dir="${_sl_self%/*}"
 [ "$_sl_dir" = "$_sl_self" ] && _sl_dir="."
