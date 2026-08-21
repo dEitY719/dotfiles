@@ -162,6 +162,23 @@ run_sourced_tool_script() {
     "
 }
 
+# Feed a JSON payload to claude/statusline-command.sh and capture its
+# rendered line. Callers must set STATUSLINE to the script path before use
+# (see tests/bats/integrations/claude_statusline_*.bats).
+_render() {
+    run bash -c "printf '%s' '$1' | bash '${STATUSLINE}'"
+}
+
+# Same as _render but with the ANSI colour codes stripped, so an assertion can
+# pin exact segment adjacency — which is what proves a separator was *not*
+# emitted. The ESC byte is interpolated rather than written as `\x1b` so the
+# sed script works on BSD sed too.
+_render_plain() {
+    local esc
+    esc=$(printf '\033')
+    run bash -c "printf '%s' '$1' | bash '${STATUSLINE}' | sed 's/${esc}\[[0-9;]*m//g'"
+}
+
 # Run a command in zsh subprocess with dotfiles loaded
 run_in_zsh() {
     run zsh -f -c "

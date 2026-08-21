@@ -30,20 +30,8 @@ teardown() {
     teardown_isolated_home
 }
 
-# Feed a JSON payload to the statusline and capture its rendered line.
-_render() {
-    run bash -c "printf '%s' '$1' | bash '${STATUSLINE}'"
-}
-
-# Same as _render but with the ANSI colour codes stripped, so an assertion can
-# pin exact segment adjacency — which is what proves a separator was *not*
-# emitted. The ESC byte is interpolated rather than written as `\x1b` so the
-# sed script works on BSD sed too.
-_render_plain() {
-    local esc
-    esc=$(printf '\033')
-    run bash -c "printf '%s' '$1' | bash '${STATUSLINE}' | sed 's/${esc}\[[0-9;]*m//g'"
-}
+# _render / _render_plain (shared with claude_statusline_effort.bats) live in
+# test_helper.bash.
 
 # One assistant transcript line. $1=message id, then input / cache_creation /
 # cache_read / output token counts.
@@ -185,7 +173,7 @@ _mkrepo() {
     _usage_line msg_a 1000 2000 7000 500 >"$t"
     _render "$(_payload "$t")"
     assert_success
-    [ -f "${XDG_CACHE_HOME}/claude-statusline/sess-1.seg" ]
+    [ -f "${XDG_CACHE_HOME}/dotfiles/claude-statusline/sess-1.seg" ]
 }
 
 # --- NF-3: fail soft --------------------------------------------------------

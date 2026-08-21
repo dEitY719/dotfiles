@@ -59,7 +59,7 @@ _token_segment() {
 
     local key="${session_id:-$transcript}"
     key="${key//[^A-Za-z0-9_-]/_}"
-    local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/claude-statusline"
+    local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/claude-statusline"
     local cache_file="${cache_dir}/${key}.seg"
 
     local cached_mtime="" cached_seg=""
