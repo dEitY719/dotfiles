@@ -17,13 +17,22 @@ setup() {
     _WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/issue-watcher-test.XXXXXX")"
     _BIN_DIR="${_WORK_DIR}/bin"
     _STATE_HOME="${_WORK_DIR}/state"
-    _STATE_FILE="${_STATE_HOME}/issue-watcher/herdr-watch.json"
+    _STATE_DIR="${_STATE_HOME}/issue-watcher"
+    _STATE_FILE="${_STATE_DIR}/herdr-watch.json"
+    _LOCK_FILE="${_STATE_DIR}/.lock"
     _LOG="${_WORK_DIR}/herdr.log"
+    # Overridable per test; _run_tick passes it as --cwd.
+    _TICK_CWD=""
+    _LOCK_HOLDER_PID=""
     mkdir -p "${_BIN_DIR}"
     : >"${_LOG}"
 }
 
 teardown() {
+    if [ -n "${_LOCK_HOLDER_PID}" ]; then
+        kill "${_LOCK_HOLDER_PID}" 2>/dev/null || true
+        wait "${_LOCK_HOLDER_PID}" 2>/dev/null || true
+    fi
     rm -rf "${_WORK_DIR}"
     teardown_isolated_home
 }
@@ -65,17 +74,36 @@ EOF
 
 # Run one tick with the stub on PATH and an isolated XDG_STATE_HOME.
 # Extra env assignments may be passed as leading VAR=VALUE arguments.
+# Set _TICK_CWD to pass a --cwd other than the default work dir.
 _run_tick() {
     run env \
         "PATH=${_BIN_DIR}:${PATH}" \
         "HERDR_LOG=${_LOG}" \
         "XDG_STATE_HOME=${_STATE_HOME}" \
         "$@" \
-        bash "${SCRIPT}" --cwd "${_WORK_DIR}"
+        bash "${SCRIPT}" --cwd "${_TICK_CWD:-${_WORK_DIR}}"
 }
 
 _log_count() {
     grep -c -- "$1" "${_LOG}" 2>/dev/null || true
+}
+
+# Hold an exclusive flock on the tick's lock file in a background process
+# until teardown kills it, so the script under test sees a contended lock.
+# Blocks until the holder has actually acquired the lock.
+_hold_lock() {
+    local _ready="${_WORK_DIR}/lock-held"
+    mkdir -p "${_STATE_DIR}"
+    flock -x "${_LOCK_FILE}" \
+        sh -c "printf held >'${_ready}'; sleep 30" >/dev/null 2>&1 &
+    _LOCK_HOLDER_PID=$!
+
+    local _i=0
+    while [ ! -s "${_ready}" ] && [ "${_i}" -lt 200 ]; do
+        sleep 0.05
+        _i=$((_i + 1))
+    done
+    [ -s "${_ready}" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -147,6 +175,7 @@ _log_count() {
     assert_output --partial '"workspace_id": "ws-test-1"'
     assert_output --partial '"pane_id": "ws-test-1:p1"'
     assert_output --partial '"agent_name": "iw-watch"'
+    assert_output --partial "\"cwd\": \"${_WORK_DIR}\""
 }
 
 @test "issue_watcher_cron: state file lives under XDG_STATE_HOME/issue-watcher" {
@@ -174,6 +203,101 @@ _log_count() {
     run grep -F -- "agent start" "${_LOG}"
     assert_failure
     run grep -F -- "agent get iw-watch" "${_LOG}"
+    assert_success
+}
+
+@test "issue_watcher_cron: reuse with a different --cwd warns and keeps the workspace" {
+    _install_herdr_stub
+    _run_tick
+    assert_success
+
+    : >"${_LOG}"
+    local _other="${_WORK_DIR}/other-repo"
+    mkdir -p "${_other}"
+    _TICK_CWD="${_other}"
+    _run_tick
+    assert_success
+    assert_output --partial "${_WORK_DIR}"
+    assert_output --partial "ignoring --cwd ${_other}"
+
+    # Informational only — no re-bootstrap, and the state file is untouched.
+    run grep -F -- "workspace create" "${_LOG}"
+    assert_failure
+    run grep -F -- "agent start" "${_LOG}"
+    assert_failure
+    run grep -F -- "agent get iw-watch" "${_LOG}"
+    assert_success
+
+    run cat "${_STATE_FILE}"
+    assert_output --partial "\"cwd\": \"${_WORK_DIR}\""
+}
+
+@test "issue_watcher_cron: reuse with the same --cwd does not warn" {
+    _install_herdr_stub
+    _run_tick
+    assert_success
+
+    _run_tick
+    assert_success
+    refute_output --partial "ignoring --cwd"
+}
+
+# ---------------------------------------------------------------------------
+# Single-instance lock
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: a tick is skipped while another instance holds the lock" {
+    _install_herdr_stub
+    _hold_lock
+
+    _run_tick
+    assert_success
+    assert_output --partial "already running"
+    assert_output --partial "skip"
+
+    # No herdr call at all — the tick bailed before touching the state.
+    run grep -F -- "agent get" "${_LOG}"
+    assert_failure
+    run grep -F -- "agent prompt" "${_LOG}"
+    assert_failure
+    run grep -F -- "workspace create" "${_LOG}"
+    assert_failure
+}
+
+@test "issue_watcher_cron: the lock is released so the next tick runs" {
+    _install_herdr_stub
+    _run_tick
+    assert_success
+    refute_output --partial "already running"
+
+    _run_tick
+    assert_success
+    refute_output --partial "already running"
+    [ "$(_log_count 'agent prompt')" -eq 2 ]
+}
+
+@test "issue_watcher_cron: missing flock degrades to a warning, not a failure" {
+    _install_herdr_stub
+    # A PATH without flock: only the stub dir plus a dir holding the coreutils
+    # the script needs, minus flock itself.
+    local _nolock="${_WORK_DIR}/nolock"
+    mkdir -p "${_nolock}"
+    local _cmd
+    for _cmd in bash sh dirname cat sed awk head mkdir git grep jq tput; do
+        if command -v "${_cmd}" >/dev/null 2>&1; then
+            ln -sf "$(command -v "${_cmd}")" "${_nolock}/${_cmd}"
+        fi
+    done
+
+    run env \
+        "PATH=${_BIN_DIR}:${_nolock}" \
+        "HERDR_LOG=${_LOG}" \
+        "XDG_STATE_HOME=${_STATE_HOME}" \
+        bash "${SCRIPT}" --cwd "${_WORK_DIR}"
+    assert_success
+    assert_output --partial "flock not found"
+
+    run grep -F -- "agent prompt iw-watch" "${_LOG}"
     assert_success
 }
 
@@ -261,6 +385,68 @@ _log_count() {
 }
 
 # ---------------------------------------------------------------------------
+# Corrupted state file
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: an empty state file falls back to bootstrap" {
+    _install_herdr_stub
+    mkdir -p "${_STATE_DIR}"
+    : >"${_STATE_FILE}"
+
+    _run_tick
+    assert_success
+
+    run grep -F -- "workspace create --cwd ${_WORK_DIR} --label issue-watcher --no-focus" "${_LOG}"
+    assert_success
+    # The default agent name must survive an unusable state file — a clobbered
+    # _IW_AGENT_NAME would make this `agent start  --kind claude`.
+    run grep -F -- "agent start iw-watch --kind claude --pane ws-test-1:p1" "${_LOG}"
+    assert_success
+    run grep -F -- "agent prompt iw-watch" "${_LOG}"
+    assert_success
+
+    run cat "${_STATE_FILE}"
+    assert_output --partial '"workspace_id": "ws-test-1"'
+    assert_output --partial '"agent_name": "iw-watch"'
+}
+
+@test "issue_watcher_cron: a garbage state file falls back to bootstrap" {
+    _install_herdr_stub
+    mkdir -p "${_STATE_DIR}"
+    printf '%s\n' 'not json at all {{{ "workspace_id" ,,, ' >"${_STATE_FILE}"
+
+    _run_tick
+    assert_success
+
+    run grep -F -- "workspace create --cwd ${_WORK_DIR} --label issue-watcher --no-focus" "${_LOG}"
+    assert_success
+    # The default agent name must survive an unusable state file — a clobbered
+    # _IW_AGENT_NAME would make this `agent start  --kind claude`.
+    run grep -F -- "agent start iw-watch --kind claude --pane ws-test-1:p1" "${_LOG}"
+    assert_success
+    run grep -F -- "agent prompt iw-watch" "${_LOG}"
+    assert_success
+
+    run cat "${_STATE_FILE}"
+    assert_output --partial '"workspace_id": "ws-test-1"'
+    assert_output --partial '"agent_name": "iw-watch"'
+}
+
+@test "issue_watcher_cron: valid JSON missing the required fields falls back to bootstrap" {
+    _install_herdr_stub
+    mkdir -p "${_STATE_DIR}"
+    printf '%s\n' '{ "workspace_id": "ws-partial" }' >"${_STATE_FILE}"
+
+    _run_tick
+    assert_success
+
+    run grep -F -- "workspace create --cwd ${_WORK_DIR} --label issue-watcher --no-focus" "${_LOG}"
+    assert_success
+    run cat "${_STATE_FILE}"
+    refute_output --partial "ws-partial"
+}
+
+# ---------------------------------------------------------------------------
 # Idempotency
 # ---------------------------------------------------------------------------
 
@@ -288,7 +474,8 @@ _log_count() {
     _run_tick
     assert_success
 
-    [ "$(find "${_STATE_HOME}/issue-watcher" -maxdepth 1 -type f | wc -l)" -eq 1 ]
+    # The single-instance .lock lives here too and is not state.
+    [ "$(find "${_STATE_HOME}/issue-watcher" -maxdepth 1 -type f ! -name '.lock' | wc -l)" -eq 1 ]
     [ "${_first}" = "$(cat "${_STATE_FILE}")" ]
 }
 
@@ -309,4 +496,27 @@ _log_count() {
 @test "issue_watcher_cron: --cwd without a value fails" {
     run bash "${SCRIPT}" --cwd
     assert_failure
+}
+
+@test "issue_watcher_cron: unset HOME and XDG_STATE_HOME does not trip set -u" {
+    _install_herdr_stub
+
+    # `set -u` + `${XDG_STATE_HOME:-$HOME/.local/state}` used to abort the
+    # state-dir expansion with "HOME: unbound variable" when both were unset.
+    # Contract: fall back to ${TMPDIR:-/tmp} and keep running.
+    local _tmp="${_WORK_DIR}/nohome-tmp"
+    mkdir -p "${_tmp}"
+
+    run env -u HOME -u XDG_STATE_HOME \
+        "PATH=${_BIN_DIR}:${PATH}" \
+        "HERDR_LOG=${_LOG}" \
+        "TMPDIR=${_tmp}" \
+        bash "${SCRIPT}" --cwd "${_WORK_DIR}"
+    assert_success
+    refute_output --partial "unbound variable"
+
+    [ -f "${_tmp}/.local/state/issue-watcher/herdr-watch.json" ]
+
+    run grep -F -- "agent prompt iw-watch" "${_LOG}"
+    assert_success
 }

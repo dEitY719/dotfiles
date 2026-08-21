@@ -36,6 +36,7 @@ fi
 _IW_LABEL="issue-watcher"
 _IW_STATE_SUBDIR="issue-watcher"
 _IW_STATE_BASENAME="herdr-watch.json"
+_IW_LOCK_BASENAME=".lock"
 _IW_PROMPT="@issue-watcher:dispatcher 실행"
 # 5분 주기보다 여유 있게 4분 — cron tick 이 겹치지 않게 한다.
 _IW_TIMEOUT_MS="240000"
@@ -44,13 +45,21 @@ _IW_TIMEOUT_MS="240000"
 _IW_AGENT_NAME="iw-watch"
 _IW_WORKSPACE_ID=""
 _IW_PANE_ID=""
+# cwd the workspace was bootstrapped with (persisted so a later tick can tell
+# the user its --cwd is being ignored). Empty for pre-#1391 state files.
+_IW_CWD=""
 
 # ============================================================
 # Helpers
 # ============================================================
 
+# Nested defaults on purpose: under `set -u`, `${XDG_STATE_HOME:-$HOME/...}`
+# still aborts with "HOME: unbound variable" when HOME itself is unset (a cron
+# environment can be that bare), so HOME is never referenced unguarded.
 _iw_state_dir() {
-    printf '%s/%s' "${XDG_STATE_HOME:-$HOME/.local/state}" "${_IW_STATE_SUBDIR}"
+    printf '%s/%s' \
+        "${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}" \
+        "${_IW_STATE_SUBDIR}"
 }
 
 _iw_state_file() {
@@ -92,25 +101,37 @@ _iw_write_state() {
     fi
 
     # Fixed-shape object — printf is the data writer here, not UX output.
-    printf '{ "workspace_id": "%s", "pane_id": "%s", "agent_name": "%s" }\n' \
-        "${_IW_WORKSPACE_ID}" "${_IW_PANE_ID}" "${_IW_AGENT_NAME}" >"${_file}"
+    printf '{ "workspace_id": "%s", "pane_id": "%s", "agent_name": "%s", "cwd": "%s" }\n' \
+        "${_IW_WORKSPACE_ID}" "${_IW_PANE_ID}" "${_IW_AGENT_NAME}" "${_IW_CWD}" >"${_file}"
 }
 
 # Populate _IW_* from the state file. Returns non-zero when the file is
 # absent or incomplete, which the caller treats as "bootstrap needed".
+#
+# Parses into locals and commits to the globals only once every required field
+# is present: an empty/corrupt state file must leave the defaults (notably
+# _IW_AGENT_NAME) intact, or the bootstrap that follows would run
+# `herdr agent start ""`.
 _iw_read_state() {
-    local _file _json
+    local _file _json _ws _pane _agent _cwd
     _file=$(_iw_state_file)
     [ -f "${_file}" ] || return 1
 
     _json=$(cat "${_file}" 2>/dev/null) || return 1
-    _IW_WORKSPACE_ID=$(printf '%s' "${_json}" | _iw_json_value '.workspace_id')
-    _IW_PANE_ID=$(printf '%s' "${_json}" | _iw_json_value '.pane_id')
-    _IW_AGENT_NAME=$(printf '%s' "${_json}" | _iw_json_value '.agent_name')
+    _ws=$(printf '%s' "${_json}" | _iw_json_value '.workspace_id')
+    _pane=$(printf '%s' "${_json}" | _iw_json_value '.pane_id')
+    _agent=$(printf '%s' "${_json}" | _iw_json_value '.agent_name')
+    # Optional — state files written before the field existed have no cwd.
+    _cwd=$(printf '%s' "${_json}" | _iw_json_value '.cwd')
 
-    [ -n "${_IW_WORKSPACE_ID}" ] || return 1
-    [ -n "${_IW_PANE_ID}" ] || return 1
-    [ -n "${_IW_AGENT_NAME}" ] || return 1
+    [ -n "${_ws}" ] || return 1
+    [ -n "${_pane}" ] || return 1
+    [ -n "${_agent}" ] || return 1
+
+    _IW_WORKSPACE_ID="${_ws}"
+    _IW_PANE_ID="${_pane}"
+    _IW_AGENT_NAME="${_agent}"
+    _IW_CWD="${_cwd}"
 }
 
 # Create the dedicated workspace, start a claude agent in its root pane, and
@@ -120,6 +141,7 @@ _iw_bootstrap() {
     local _cwd="$1" _ws_json
 
     ux_info "Bootstrapping herdr workspace (label: ${_IW_LABEL}, cwd: ${_cwd})"
+    _IW_CWD="${_cwd}"
 
     _ws_json=$(herdr workspace create --cwd "${_cwd}" --label "${_IW_LABEL}" --no-focus 2>/dev/null) ||
         _ws_json=""
@@ -160,6 +182,38 @@ _iw_dispatch() {
 
     ux_error "herdr agent prompt failed for agent ${_IW_AGENT_NAME}."
     return 1
+}
+
+# Single-instance guard. A cron tick can fire while the previous one is still
+# blocked in `herdr agent prompt --wait`; without a lock both would observe
+# `idle` and both dispatch, breaking the one-cycle-at-a-time invariant.
+# Deliberately non-blocking: a skipped tick just retries 5 minutes later.
+# Returns non-zero only when another tick holds the lock; a missing flock or an
+# unusable state dir soft-degrades to "no protection" rather than failing.
+_iw_acquire_lock() {
+    local _dir _lock
+    _dir=$(_iw_state_dir)
+    _lock="${_dir}/${_IW_LOCK_BASENAME}"
+
+    if ! command -v flock >/dev/null 2>&1; then
+        ux_warning "flock not found — running without single-instance protection"
+        return 0
+    fi
+
+    if ! mkdir -p "${_dir}" 2>/dev/null; then
+        ux_warning "Cannot create state directory (${_dir}) — running without single-instance protection"
+        return 0
+    fi
+
+    if ! exec 9>"${_lock}" 2>/dev/null; then
+        ux_warning "Cannot open lock file (${_lock}) — running without single-instance protection"
+        return 0
+    fi
+
+    if ! flock -n 9; then
+        ux_warning "another issue_watcher_cron tick is already running — skip"
+        return 1
+    fi
 }
 
 _iw_usage() {
@@ -217,8 +271,15 @@ main() {
         exit 1
     fi
 
+    _iw_acquire_lock || exit 0
+
     if _iw_read_state; then
         ux_info "Reusing state: workspace=${_IW_WORKSPACE_ID} pane=${_IW_PANE_ID} agent=${_IW_AGENT_NAME}"
+        # One global issue-watcher workspace by design (issue #1389): a later
+        # --cwd never re-bootstraps, so say so instead of silently ignoring it.
+        if [ -n "${_IW_CWD}" ] && [ "${_IW_CWD}" != "${_cwd}" ]; then
+            ux_warning "Workspace was bootstrapped for ${_IW_CWD} — ignoring --cwd ${_cwd} (single global issue-watcher workspace)."
+        fi
     else
         _iw_bootstrap "${_cwd}" || exit 1
     fi
