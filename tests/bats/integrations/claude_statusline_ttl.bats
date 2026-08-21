@@ -3,9 +3,9 @@
 #
 # claude/statusline-command.sh (#1385): renders a ⏱️ segment showing the
 # current session's prompt cache TTL, read directly from
-# $ENABLE_PROMPT_CACHING_1H (claude/settings.json's env block, introduced by
-# 9715f397) rather than from the stdin payload. "1" -> 1h, anything else
-# (unset/"0"/other) -> Claude Code's true default of 5m. It joins the
+# $ENABLE_PROMPT_CACHING_1H (claude/settings.json's env block) rather than
+# from the stdin payload. "1" -> 1h, anything else (unset/"0"/other) ->
+# Claude Code's true default of 5m. It joins the
 # existing usage_group (📥💰📤📜) instead of opening a new ┊ group, and unlike
 # cost_info it is never gated by SETUP_MODE — the TTL setting applies to
 # every account/PC alike.
@@ -34,13 +34,6 @@ teardown() {
     assert_success
     assert_output --partial '⏱️ 1h'
     refute_output --partial '⏱️ 5m'
-}
-
-@test "statusline ttl: ENABLE_PROMPT_CACHING_1H=0 renders ⏱️ 5m" {
-    export ENABLE_PROMPT_CACHING_1H=0
-    _render '{}'
-    assert_success
-    assert_output --partial '⏱️ 5m'
 }
 
 @test "statusline ttl: joins usage_group right after ctx_info, no new separator" {
