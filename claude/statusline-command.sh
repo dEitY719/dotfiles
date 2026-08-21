@@ -303,6 +303,15 @@ if [ -n "$ctx_info" ]; then
     usage_group="${usage_group:+${usage_group} }${ctx_info}"
 fi
 
+# Prompt cache TTL (#1385): read straight from the env var 9715f397 wires
+# into claude/settings.json's `env` block — no JSON parsing needed, and
+# unlike cost_info this is never gated by SETUP_MODE (the SSOT setting
+# applies to every account/PC alike, so it should always be visible).
+ttl_label="5m"
+[ "${ENABLE_PROMPT_CACHING_1H:-}" = "1" ] && ttl_label="1h"
+ttl_info="${CYAN}⏱️ ${ttl_label}${RESET}"
+usage_group="${usage_group:+${usage_group} }${ttl_info}"
+
 # Bedrock cost display (internal only)
 SETUP_MODE=""
 [ -f "$HOME/.dotfiles-setup-mode" ] && SETUP_MODE=$(cat "$HOME/.dotfiles-setup-mode")
