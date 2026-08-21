@@ -58,10 +58,11 @@ _iw_state_file() {
 }
 
 # Extract one string field from JSON on stdin.
-#   $1 = jq filter (used when jq is available)
-#   $2 = flat key name (POSIX fallback — matches the key anywhere in the doc)
+#   $1 = jq filter, e.g. '.result.pane.pane_id' (used when jq is available).
+#        The POSIX fallback derives the flat key from the filter's last
+#        dot-segment (here: pane_id) and matches that key anywhere in the doc.
 _iw_json_value() {
-    local _json
+    local _json _key
     _json=$(cat)
     [ -n "${_json}" ] || return 0
 
@@ -70,11 +71,13 @@ _iw_json_value() {
         return 0
     fi
 
+    _key="${1##*.}"
+
     # One JSON token per line first, so the greedy `.*` below cannot skip past
     # the wanted key into a later one on the same (single-line) document.
     printf '%s' "${_json}" |
         awk '{ gsub(/[,{}]/, "\n"); print }' |
-        sed -n "s/.*\"${2}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" |
+        sed -n "s/.*\"${_key}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" |
         head -n 1
 }
 
@@ -101,9 +104,9 @@ _iw_read_state() {
     [ -f "${_file}" ] || return 1
 
     _json=$(cat "${_file}" 2>/dev/null) || return 1
-    _IW_WORKSPACE_ID=$(printf '%s' "${_json}" | _iw_json_value '.workspace_id' 'workspace_id')
-    _IW_PANE_ID=$(printf '%s' "${_json}" | _iw_json_value '.pane_id' 'pane_id')
-    _IW_AGENT_NAME=$(printf '%s' "${_json}" | _iw_json_value '.agent_name' 'agent_name')
+    _IW_WORKSPACE_ID=$(printf '%s' "${_json}" | _iw_json_value '.workspace_id')
+    _IW_PANE_ID=$(printf '%s' "${_json}" | _iw_json_value '.pane_id')
+    _IW_AGENT_NAME=$(printf '%s' "${_json}" | _iw_json_value '.agent_name')
 
     [ -n "${_IW_WORKSPACE_ID}" ] || return 1
     [ -n "${_IW_PANE_ID}" ] || return 1
@@ -121,8 +124,8 @@ _iw_bootstrap() {
     _ws_json=$(herdr workspace create --cwd "${_cwd}" --label "${_IW_LABEL}" --no-focus 2>/dev/null) ||
         _ws_json=""
 
-    _IW_WORKSPACE_ID=$(printf '%s' "${_ws_json}" | _iw_json_value '.result.workspace.workspace_id' 'workspace_id')
-    _IW_PANE_ID=$(printf '%s' "${_ws_json}" | _iw_json_value '.result.root_pane.pane_id' 'pane_id')
+    _IW_WORKSPACE_ID=$(printf '%s' "${_ws_json}" | _iw_json_value '.result.workspace.workspace_id')
+    _IW_PANE_ID=$(printf '%s' "${_ws_json}" | _iw_json_value '.result.root_pane.pane_id')
 
     if [ -z "${_IW_WORKSPACE_ID}" ] || [ -z "${_IW_PANE_ID}" ]; then
         ux_error "herdr workspace create failed — no workspace_id/pane_id in the response."
@@ -145,7 +148,7 @@ _iw_agent_status() {
     local _json _rc=0
     _json=$(herdr agent get "${_IW_AGENT_NAME}" 2>/dev/null) || _rc=$?
     [ "${_rc}" -eq 0 ] || return 1
-    printf '%s' "${_json}" | _iw_json_value '.result.agent.agent_status' 'agent_status'
+    printf '%s' "${_json}" | _iw_json_value '.result.agent.agent_status'
 }
 
 _iw_dispatch() {
