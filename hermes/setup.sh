@@ -77,18 +77,22 @@ fi
 #                _config_version — re-syncing would only fight the CLI and
 #                clobber the user's model choice.
 _hermes_ensure_config_copy() {
-	local staged="${HERMES_CONFIG_DST}.new.$$"
-
 	if [ -L "${HERMES_CONFIG_DST}" ]; then
 		local resolved
-		resolved=$(readlink -f "${HERMES_CONFIG_DST}" 2>/dev/null)
+		# Plain `readlink` (no -f, a GNU-only flag missing on macOS/BSD) is
+		# enough here: this repo only ever creates this link with an absolute
+		# target (HERMES_CONFIG_SRC), so one level of resolution is sufficient.
+		resolved=$(readlink "${HERMES_CONFIG_DST}" 2>/dev/null)
 		if [ -z "${resolved}" ] || [ ! -f "${resolved}" ]; then
 			# Dangling link: no live content to keep, so seed from the template.
 			resolved="${HERMES_CONFIG_SRC}"
 		fi
-		# Stage first so a failed copy cannot leave the target missing.
+		# Stage in the same dir, then `mv` — rename() atomically replaces the
+		# symlink with the staged file in one step, so there is never a window
+		# where ~/.hermes/config.yaml is missing (a plain rm-then-cp would leave
+		# it gone if the copy failed after the removal).
+		local staged="${HERMES_CONFIG_DST}.new.$$"
 		cp "${resolved}" "${staged}" || { ux_error "Could not stage config copy: ${staged}"; exit 1; }
-		rm -f "${HERMES_CONFIG_DST}" || { rm -f "${staged}"; ux_error "Could not remove legacy symlink: ${HERMES_CONFIG_DST}"; exit 1; }
 		mv "${staged}" "${HERMES_CONFIG_DST}" || { rm -f "${staged}"; ux_error "Could not install config copy: ${HERMES_CONFIG_DST}"; exit 1; }
 		ux_success "Detached legacy symlink → real file (content preserved): ~/.hermes/config.yaml"
 		return 0
