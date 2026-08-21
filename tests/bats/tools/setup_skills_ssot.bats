@@ -49,6 +49,12 @@ seed_opencode_home() {
 seed_gemini_home() {
     mkdir -p "${FIXTURE_HOME}/.gemini"
 }
+# Hermes (#1376) composes into the dedicated `skills/dotfiles` subdirectory
+# rather than the `skills/` root, because `~/.hermes/skills/` is an actively
+# managed hub (hub metadata + category dirs) owned by Hermes itself.
+seed_hermes_home() {
+    mkdir -p "${FIXTURE_HOME}/.hermes"
+}
 
 teardown() {
     teardown_isolated_home
@@ -241,6 +247,14 @@ EOF
     [ "$(readlink "${FIXTURE_HOME}/.gemini/skills")" = "${TEST_TEMP_HOME}/elsewhere/skills" ]
 }
 
+@test "hermes: config dir absent is a non-fatal warn + skip (#1376)" {
+    # No seed_hermes_home — ~/.hermes does not exist.
+    run_setup
+    assert_success
+    assert_output --partial "Hermes 설정 디렉토리가 없습니다"
+    [ ! -e "${FIXTURE_HOME}/.hermes" ]
+}
+
 @test "opencode: stale entry whose source vanished gets pruned (#791)" {
     seed_opencode_home
 
@@ -258,4 +272,123 @@ EOF
     # Other skills still present.
     [ -L "${FIXTURE_HOME}/.config/opencode/skills/alpha" ]
     [ -L "${FIXTURE_HOME}/.config/opencode/skills/gamma" ]
+}
+
+# ---------------------------------------------------------------------
+# issue #1376 — Hermes entry-level 합성
+# 다른 4개 CLI 와 달리 Hermes 는 skills/ 루트가 아니라 전용 네임스페이스
+# 서브디렉토리(skills/dotfiles/)에서 합성한다 — 루트는 Hermes 자체
+# hub/curator 메타데이터와 카테고리 디렉토리가 소유하기 때문 (NF-1).
+# ---------------------------------------------------------------------
+
+@test "hermes: fresh install creates entry-level synthesis subdirectory (#1376)" {
+    seed_hermes_home
+
+    run_setup
+    assert_success
+
+    local h_dir="${FIXTURE_HOME}/.hermes/skills/dotfiles"
+    [ -d "$h_dir" ] && [ ! -L "$h_dir" ]
+    for s in alpha beta gamma; do
+        [ -L "${h_dir}/${s}" ]
+        [ "$(readlink -f "${h_dir}/${s}")" = "$(readlink -f "${FIXTURE_DOTFILES}/claude/skills/${s}")" ]
+    done
+
+    # skills/ 루트에는 entry symlink 가 직접 생기지 않는다.
+    [ ! -L "${FIXTURE_HOME}/.hermes/skills/alpha" ]
+}
+
+@test "hermes: legacy dir-symlink migrates to entry-level synthesis (#1376)" {
+    seed_hermes_home
+    mkdir -p "${FIXTURE_HOME}/.hermes/skills"
+    ln -s "${FIXTURE_DOTFILES}/claude/skills" \
+        "${FIXTURE_HOME}/.hermes/skills/dotfiles"
+    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles" ]
+
+    run_setup
+    assert_success
+    assert_output --partial "[hermes] legacy dir-symlink"
+
+    local h_dir="${FIXTURE_HOME}/.hermes/skills/dotfiles"
+    [ ! -L "$h_dir" ]
+    [ -d "$h_dir" ]
+    for s in alpha beta gamma; do
+        [ -L "${h_dir}/${s}" ]
+    done
+}
+
+@test "hermes: synthesis is idempotent on re-run (#1376)" {
+    seed_hermes_home
+
+    run_setup
+    assert_success
+    local before
+    before="$(ls -la "${FIXTURE_HOME}/.hermes/skills/dotfiles")"
+
+    run_setup
+    assert_success
+    local after
+    after="$(ls -la "${FIXTURE_HOME}/.hermes/skills/dotfiles")"
+
+    [ "$before" = "$after" ]
+}
+
+@test "hermes: user symlink to non-SSOT location is preserved + warned (#1376)" {
+    seed_hermes_home
+    mkdir -p "${FIXTURE_HOME}/.hermes/skills"
+    mkdir -p "${TEST_TEMP_HOME}/elsewhere-hermes/skills"
+    ln -s "${TEST_TEMP_HOME}/elsewhere-hermes/skills" \
+        "${FIXTURE_HOME}/.hermes/skills/dotfiles"
+
+    run_setup
+    assert_success
+    assert_output --partial "[hermes] 사용자 symlink"
+
+    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles" ]
+    [ "$(readlink "${FIXTURE_HOME}/.hermes/skills/dotfiles")" \
+        = "${TEST_TEMP_HOME}/elsewhere-hermes/skills" ]
+}
+
+@test "hermes: hub metadata and category dirs are left untouched (#1376 NF-1)" {
+    seed_hermes_home
+    local hs="${FIXTURE_HOME}/.hermes/skills"
+    mkdir -p "${hs}/.hub" "${hs}/github/gh-helper" "${hs}/productivity"
+    printf 'gh-helper:deadbeef\n' > "${hs}/.bundled_manifest"
+    printf '{"last_run":0}\n' > "${hs}/.curator_state"
+    printf '{"gh-helper":3}\n' > "${hs}/.usage.json"
+    printf 'audit\n' > "${hs}/.hub/audit.log"
+    printf 'stub\n' > "${hs}/github/gh-helper/SKILL.md"
+
+    # Snapshot content + mtime of every Hermes-owned path.
+    local before_listing before_hashes
+    before_listing="$(cd "$hs" && ls -A | LC_ALL=C sort)"
+    before_hashes="$(cd "$hs" && find . -path ./dotfiles -prune -o -type f -print0 \
+        | LC_ALL=C sort -z | xargs -0 stat -c '%n %s %Y %a' 2>/dev/null)"
+
+    run_setup
+    assert_success
+
+    local after_hashes
+    after_hashes="$(cd "$hs" && find . -path ./dotfiles -prune -o -type f -print0 \
+        | LC_ALL=C sort -z | xargs -0 stat -c '%n %s %Y %a' 2>/dev/null)"
+    [ "$before_hashes" = "$after_hashes" ]
+
+    # Hermes-owned directories survive intact.
+    [ -d "${hs}/.hub" ]
+    [ -d "${hs}/github/gh-helper" ]
+    [ -d "${hs}/productivity" ]
+    [ ! -L "${hs}/github" ]
+    [ ! -L "${hs}/productivity" ]
+
+    # Exactly one new top-level entry was created: dotfiles/.
+    local after_listing
+    after_listing="$(cd "$hs" && ls -A | LC_ALL=C sort)"
+    local added
+    added="$(comm -13 <(printf '%s\n' "$before_listing") <(printf '%s\n' "$after_listing"))"
+    [ "$added" = "dotfiles" ]
+
+    # And the synthesis really happened inside it.
+    for s in alpha beta gamma; do
+        [ -L "${hs}/dotfiles/${s}" ]
+    done
 }
