@@ -17,7 +17,7 @@
 
 | Part | 동작 | 실패 정책 |
 |---|---|---|
-| 1 | `hermes/config.yaml` → `~/.hermes/config.yaml` 심링크 | **hard-fail** (dangling link = 조용한 기본값 복귀) |
+| 1 | `hermes/config.yaml` → `~/.hermes/config.yaml` **1회 복사** (심링크 아님) | **hard-fail** (로컬 config 부재 = 조용한 기본값 복귀) |
 | 2 | 공식 `install.sh` 실행 (`command -v hermes` 로 스킵) | soft-fail |
 | 3 | `llm_endpoint.local.sh` 읽어 `model.base_url`/`model.api_key` 주입 | soft-fail, 옵션 |
 | 4 | `agent-browser` npm 의존성 설치 | soft-fail, 옵션 |
@@ -44,11 +44,21 @@ hermes config set model.api_key "<value>"   → ~/.hermes/config.yaml
 `llm_endpoint.local.sh` 는 셸이 자동 source 하지 않는다 (`shell-common/env/*.local.sh`
 와 다른 점) — API 키가 매 셸 환경변수로 떠 있지 않게 하기 위함이다.
 
-Part 1 은 `~/.hermes/config.yaml` 을 이 저장소로 심링크하지만, Part 3 는 `hermes
-config set` 을 실행하기 직전 그 심링크를 로컬 실파일로 교체한다
-(`_hermes_materialize_config`) — 시크릿은 로컬 사본에만 쓰이고 이 저장소의
-`hermes/config.yaml` 에는 도달하지 않는다. 다음 실행의 Part 1 이 그 사본을
-백업하고 저장소 기본값으로 다시 심링크한다.
+Part 1(`_hermes_ensure_config_copy`)은 `~/.hermes/config.yaml` 을 템플릿에서
+**한 번만 복사**하고, 그 뒤로는 이 머신 소유의 실파일이다 — 심링크로 두지 않는다.
+hermes 자신이 그 파일을 다시 쓰기 때문이다(OAuth 설정, 모델 선택,
+`_config_version` 스탬프). 심링크면 그 쓰기가 추적 파일 `hermes/config.yaml` 에
+착지해 문서용 플레이스홀더를 한 PC 의 런타임 상태로 덮어쓴다 —
+`claude/settings.json` 이 `/model` 로 겪은 write-through 누출(#924/#940)과 같은
+문제이고 해법도 같다: 링크 대신 복사. golden rule 7 이 재발을 커밋 단계에서 막는다.
+
+- 없으면 → 템플릿 복사
+- 심링크면(레거시) → 현재 **해석된 내용**을 실파일로 옮겨 detach (라이브 설정 보존)
+- 이미 실파일이면 → 손대지 않음. 템플릿은 주석뿐이라 전파할 값이 없고, 재동기화는
+  hermes 의 쓰기와 싸우며 사용자의 모델 선택을 날린다
+
+Part 3 의 `hermes config set` 은 이미 실파일에 쓰므로 별도 detach 단계가 없다.
+심링크로 되돌아가지 않도록 `symlinks.conf` 에도 hermes 항목을 두지 않는다.
 
 # 3가지 함정 (`hermes-help pitfalls` 가 SSOT)
 
@@ -82,4 +92,4 @@ config set` 을 실행하기 직전 그 심링크를 로컬 실파일로 교체�
 
 - **[Root](../AGENTS.md)** · **[shell-common](../shell-common/AGENTS.md)** · **[herdr](../herdr/)**
 - **Upstream**: https://github.com/NousResearch/hermes-agent
-- **Symlink SSOT**: `shell-common/config/symlinks.conf`
+- **Config 템플릿 SSOT**: `hermes/config.yaml` (복사본 배포, 심링크 아님 — 위 참조)

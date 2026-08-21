@@ -156,6 +156,24 @@ else
 fi
 echo ""
 
+# Rule 7: tracked hermes/config.yaml (SSOT) must not carry a `_config_version`
+# key. That key is stamped only by the hermes CLI when it rewrites its own
+# config — a hand-authored template never has one. Its presence therefore
+# proves ~/.hermes/config.yaml was a write-through symlink into this repo and
+# hermes' own write (OAuth setup, model selection) clobbered the documented
+# placeholder with one PC's runtime state. Same failure class as rule 6.
+# hermes/setup.sh Part 1 now copies instead of symlinking; this rule keeps a
+# regression from ever being committed.
+# Recovery: git checkout hermes/config.yaml
+echo "Rule 7: No _config_version key in tracked hermes/config.yaml SSOT"
+if [ -f hermes/config.yaml ] \
+    && grep -qE '^[[:space:]]*_config_version[[:space:]]*:' hermes/config.yaml; then
+    test_case "hermes/config.yaml has no _config_version key" 1
+else
+    test_case "hermes/config.yaml has no _config_version key" 0
+fi
+echo ""
+
 echo "════════════════════════════════════════════════════════════"
 if [ "$failed" -eq 0 ]; then
     echo -e "${GREEN}All golden rules validated ✓${NC}"

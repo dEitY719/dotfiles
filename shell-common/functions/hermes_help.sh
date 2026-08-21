@@ -8,7 +8,7 @@ _hermes_help_summary() {
     ux_bullet "sections"
     ux_bullet_sub "concept: 코딩 에이전트 | 커스텀 OpenAI-compatible 엔드포인트"
     ux_bullet_sub "install: 공식 install.sh | ./hermes/setup.sh 가 하는 5단계"
-    ux_bullet_sub "config: llm_endpoint.local.sh | hermes config set | 심링크 SSOT"
+    ux_bullet_sub "config: llm_endpoint.local.sh | hermes config set | 1회 복사 SSOT"
     ux_bullet_sub "pitfalls: api_key 위치 | agent-browser workspace | TLS 인터셉션 CA"
     ux_bullet_sub "browser: agent-browser 설치 옵션"
     ux_bullet_sub "example | related"
@@ -30,17 +30,17 @@ _hermes_help_rows_concept() {
     ux_bullet "Hermes Agent (NousResearch) — 터미널에서 도는 코딩 에이전트"
     ux_bullet "OpenAI-compatible 엔드포인트면 무엇이든 붙는다 — 자체 호스팅 모델, 사내 LLM 게이트웨이, Gemini 호환 엔드포인트"
     ux_bullet "이 저장소는 ${UX_BOLD}설치와 설정의 재현${UX_RESET}만 관리 — 에이전트 기능 자체는 upstream 소관"
-    ux_bullet "config SSOT: ${UX_BOLD}hermes/config.yaml${UX_RESET} → ~/.hermes/config.yaml 심링크"
+    ux_bullet "config SSOT: ${UX_BOLD}hermes/config.yaml${UX_RESET} → ~/.hermes/config.yaml 1회 복사(심링크 아님)"
 }
 
 _hermes_help_rows_install() {
-    ux_bullet "공식 설치: ${UX_BOLD}curl -fsSL https://hermes-agent.nousresearch.com/install.sh | sh${UX_RESET}"
+    ux_bullet "공식 설치: ${UX_BOLD}curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash${UX_RESET}"
     ux_bullet "dotfiles 경유(권장): ${UX_BOLD}./setup.sh${UX_RESET} 또는 ${UX_BOLD}./hermes/setup.sh${UX_RESET} — 멱등, 이미 설치돼 있으면 스킵"
     ux_bullet "확인: ${UX_BOLD}hermes --version${UX_RESET} · ${UX_BOLD}hermes doctor${UX_RESET} (alias ${UX_BOLD}hermes-doctor${UX_RESET})"
 
     ux_section "./hermes/setup.sh 가 하는 일 (5단계)"
     ux_table_header "Part" "동작" "실패 정책"
-    ux_table_row "1" "hermes/config.yaml → ~/.hermes/config.yaml 심링크" "hard-fail"
+    ux_table_row "1" "hermes/config.yaml → ~/.hermes/config.yaml 1회 복사" "hard-fail"
     ux_table_row "2" "공식 install.sh 실행 (설치돼 있으면 스킵)" "soft-fail"
     ux_table_row "3" "llm_endpoint.local.sh 읽어 base_url/api_key 주입" "soft-fail, 옵션"
     ux_table_row "4" "agent-browser npm 의존성 설치" "soft-fail, 옵션"
@@ -74,9 +74,10 @@ _hermes_help_rows_config() {
     ux_bullet "hermes config set model.api_key <key>     # .env 아님 — 함정 1 참조"
     ux_bullet "hermes doctor                             # 키/엔드포인트 인식 여부 확인"
 
-    ux_section "config.yaml 은 이 저장소 심링크 — 시크릿 주입 전 자동 detach"
-    ux_bullet "런타임 config (\$HOME/.hermes/config.yaml) 은 기본적으로 hermes/config.yaml 심링크"
-    ux_bullet "setup.sh 는 ${UX_BOLD}hermes config set${UX_RESET} 직전 그 심링크를 로컬 실파일로 바꿔치기한다 — api_key 는 저장소에 절대 안 들어감"
+    ux_section "config.yaml 은 심링크가 아니라 1회 복사본"
+    ux_bullet "런타임 config (\$HOME/.hermes/config.yaml) 은 첫 setup 때 hermes/config.yaml 에서 복사된 ${UX_BOLD}로컬 실파일${UX_RESET} — 이후 setup 은 손대지 않는다"
+    ux_bullet "hermes 자신의 쓰기(OAuth·모델 선택·_config_version)도, api_key 주입도 이 로컬 파일에만 남고 저장소 추적 파일에는 절대 도달하지 않는다"
+    ux_bullet "레거시 심링크가 남아 있으면 setup.sh 가 현재 내용을 보존한 채 실파일로 detach 한다"
 }
 
 _hermes_help_rows_pitfalls() {
@@ -112,7 +113,7 @@ _hermes_help_rows_browser() {
 }
 
 _hermes_help_rows_example() {
-    ux_bullet "./hermes/setup.sh                                  # 설치 + 심링크 (멱등)"
+    ux_bullet "./hermes/setup.sh                                  # 설치 + config 시드 복사 (멱등)"
     ux_bullet "cp hermes/llm_endpoint.local.example hermes/llm_endpoint.local.sh"
     ux_bullet "\$EDITOR hermes/llm_endpoint.local.sh               # base_url + api_key 채우기"
     ux_bullet "./hermes/setup.sh                                  # 재실행 — 엔드포인트 주입"
