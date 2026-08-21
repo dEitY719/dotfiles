@@ -84,14 +84,17 @@ _render_plain() {
 }
 
 @test "statusline effort: absent .effort key emits no leftover separator" {
-    # The glyph being gone is not enough — `${effort_info:+ | …}` also has to
-    # swallow the separator, which is what makes the line byte-identical to
-    # the pre-effort statusline. Asserting the model segment butts directly
-    # against the project segment is the only way to see that.
+    # The glyph being gone is not enough — `${effort_info:+ …}` also has to
+    # swallow the space that would join it to the model, which is what makes
+    # the line byte-identical to the pre-effort statusline. Asserting the model
+    # group butts directly against the project group is the only way to see
+    # that. (Separator is the dim ┊ since #1380; effort now shares the model's
+    # group rather than sitting in one of its own.)
     _render_plain '{"model":{"display_name":"Haiku 4.5"}}'
     assert_success
-    assert_output --partial 'Haiku 4.5 | 📁'
-    refute_output --partial 'Haiku 4.5 |  | 📁'
+    assert_output --partial 'Haiku 4.5 ┊ 📁'
+    refute_output --partial 'Haiku 4.5  ┊ 📁'
+    refute_output --partial 'Haiku 4.5 ┊ ┊ 📁'
 }
 
 @test "statusline effort: unknown level shows raw text, no crash" {
@@ -120,13 +123,14 @@ _render_plain() {
 }
 
 @test "statusline effort: model and context survive alongside effort" {
-    # Every optional field populated at once — the six-field reader must keep
-    # each value in its own slot.
+    # Every optional field populated at once — the field reader must keep each
+    # value in its own slot (six fields originally; #1380 appended two more at
+    # the end, which must not disturb these).
     _render '{"model":{"display_name":"Opus 5"},"effort":{"level":"max"},"context_window":{"used_percentage":7.2,"current_usage":{"input_tokens":100,"cache_read_input_tokens":65600}}}'
     assert_success
     assert_output --partial 'Opus 5'
     assert_output --partial '🌕 max'
-    assert_output --partial '65.7k / 7%'
+    assert_output --partial '65.7k(7%)'
 }
 
 # The two below lock the other half of the reader invariant: a value may
