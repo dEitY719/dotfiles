@@ -1,7 +1,9 @@
 #!/bin/bash
 
 # Status line command for Claude Code
-# Format: [한글|영어] HH:MM:SS | model | [effort] | project(branch) | git-status
+# Format: [한글|영어] HH:MM:SS ┊ model [effort] ┊ project(branch) ┊ usage ┊ git-status
+# Segments are grouped by meaning and joined with a dim ┊ (#1380); a plain
+# space separates the members *within* one group.
 #
 # Requires bash 4.4+ — `mapfile -d ''` in the field reader below. Note the
 # floor was already 4.0+ before that (`${acct_first^^}` in the account-tag
@@ -21,7 +23,27 @@ RED='\033[31m'
 MAGENTA='\033[35m'
 BLUE='\033[34m'
 BOLD='\033[1m'
+DIM='\033[2m'
 RESET='\033[0m'
+
+# Session-cumulative token segment (#1380). Resolved as a sibling of *this*
+# file rather than via $DOTFILES_ROOT: statusline-command.sh is reached both
+# directly and through the ~/.claude/statusline-command.sh symlink, and only
+# the link's target has the helper next to it — hence the symlink walk. Plain
+# `readlink` (no GNU-only -f) keeps this working on macOS/BSD.
+_sl_self="${BASH_SOURCE[0]}"
+while [ -L "$_sl_self" ]; do
+    _sl_link=$(readlink "$_sl_self")
+    case "$_sl_link" in
+    /*) _sl_self="$_sl_link" ;;
+    *) _sl_self="${_sl_self%/*}/${_sl_link}" ;;
+    esac
+done
+_sl_dir="${_sl_self%/*}"
+[ "$_sl_dir" = "$_sl_self" ] && _sl_dir="."
+if [ -r "${_sl_dir}/statusline-tokens.sh" ]; then
+    . "${_sl_dir}/statusline-tokens.sh"
+fi
 
 # Read JSON input from stdin
 input=$(cat)
@@ -52,7 +74,9 @@ mapfile -d '' -t _sl_fields < <(
             + ($u.cache_read_input_tokens // 0)
             + ($u.cache_creation_input_tokens // 0)
             | if . > 0 then tostring else "" end),
-          (.effort.level // "")
+          (.effort.level // ""),
+          (.transcript_path // ""),
+          (.session_id // "")
         ]
       | .[] | tostring + "\u0000"
     ' <<<"$input"
@@ -63,6 +87,10 @@ model_display="${_sl_fields[2]-}"
 used_pct="${_sl_fields[3]-}"
 total_tokens="${_sl_fields[4]-}"
 effort_level="${_sl_fields[5]-}"
+# Appended after the original six — new fields go at the END so no existing
+# index shifts (the effort suite pins that order).
+transcript_path="${_sl_fields[6]-}"
+session_id="${_sl_fields[7]-}"
 
 # Get current time in HH:MM:SS format
 current_time=$(date +%H:%M:%S)
@@ -173,18 +201,12 @@ if [ -n "$cwd" ] && [ -d "$cwd" ]; then
         git_branch=$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null)
         # Remove origin/ prefix if present
         git_branch="${git_branch#origin/}"
-        # Add branch emoji
-        if [[ "$git_branch" == "main" ]]; then
-            branch_emoji="🌳" # Main branch - tree
-        elif [[ "$git_branch" == "master" ]]; then
-            branch_emoji="👑" # Master branch - crown
-        elif [[ "$git_branch" == pr/* ]]; then
-            branch_emoji="⬆️" # PR branch - pull request
-        elif [[ "$git_branch" == feat/* ]]; then
-            branch_emoji="✨" # Feature branch - sparkles
-        else
-            branch_emoji="🌿" # Other branch - leaf
-        fi
+        # One icon for every branch kind (#1380): the branch *name* right next
+        # to it already says whether it is main / pr/* / feat/*, so per-kind
+        # icons only duplicated it. Losing the "you are on main" warning is a
+        # deliberate trade — uncommitted work is what actually matters there,
+        # and the git segment's ●N already shows it.
+        branch_emoji="🌿" # Branch - leaf
     else
         git_branch="no-git"
         branch_emoji="⚠️" # No git - warning
@@ -194,7 +216,7 @@ else
     branch_emoji="❓" # No directory - question
 fi
 
-# Combine project name with branch: "📁 quantfolio(🌳 main)"
+# Combine project name with branch: "📁 quantfolio(🌿 main)"
 project_branch="📁 ${project_name}(${branch_emoji} ${git_branch})"
 
 # Compact git status: dirty count / ahead / behind
@@ -234,7 +256,7 @@ fi
 
 git_status_info=""
 if [ -n "$git_status_text" ]; then
-    git_status_info="${git_status_color}📝 ${git_status_text}${RESET}"
+    git_status_info="${git_status_color}🔀 ${git_status_text}${RESET}"
 fi
 
 # Format tokens: 65700 -> 65.7k
@@ -247,10 +269,12 @@ fmt_tokens() {
     fi
 }
 
-# Build context segment like "65.7k / 7%"
+# Build context segment like "65.7k(7%)" — the percentage is bracketed onto
+# its own token count so it cannot be read as the neighbouring 💰 hit ratio,
+# which is a different measurement entirely (#1380).
 ctx_segment=""
 if [ -n "$total_tokens" ] && [ -n "$used_pct" ]; then
-    ctx_segment="$(printf '%s / %.0f%%' "$(fmt_tokens "$total_tokens")" "$used_pct")"
+    ctx_segment="$(printf '%s(%.0f%%)' "$(fmt_tokens "$total_tokens")" "$used_pct")"
 elif [ -n "$used_pct" ]; then
     ctx_segment="$(printf '%.0f%%' "$used_pct")"
 elif [ -n "$total_tokens" ]; then
@@ -259,7 +283,20 @@ fi
 
 ctx_info=""
 if [ -n "$ctx_segment" ]; then
-    ctx_info="${BLUE}🧮 ${ctx_segment}${RESET}"
+    ctx_info="${BLUE}📜 ${ctx_segment}${RESET}"
+fi
+
+# Usage group: session-cumulative tokens first, then the context window.
+# _token_segment emits no leading separator of its own, so either half can be
+# absent without leaving a stray space — and if both are, the whole group
+# drops out of the line.
+token_seg=""
+if command -v _token_segment >/dev/null 2>&1; then
+    token_seg="$(_token_segment "$transcript_path" "$session_id")"
+fi
+usage_group="$token_seg"
+if [ -n "$ctx_info" ]; then
+    usage_group="${usage_group:+${usage_group} }${ctx_info}"
 fi
 
 # Bedrock cost display (internal only)
@@ -326,21 +363,27 @@ if [ "$SETUP_MODE" = "internal" ]; then
 fi
 
 # Output format with colors and emojis
-# Time: Cyan, Model+Effort: Orange, Project+Branch: Magenta, Context: Blue, Cost: varies, Git status: Red/Orange/Green
-# Effort shares the model's colour so the two read as one "model config" group.
-# It sits mid-line, so the separator is folded into the expansion (`:+ | …`)
-# rather than appended by a trailing `if` like the optional tail segments.
-out="${CYAN}${time_emoji} ${ime_label:+$ime_label }${current_time}${RESET} | ${ORANGE}${model_emoji} ${model_name}${RESET}${effort_info:+ | ${effort_info}} | ${MAGENTA}${project_branch}${RESET}"
-if [[ -n "$account_info" ]]; then
-    out="${account_info} | ${out}"
-fi
-if [[ -n "$ctx_info" ]]; then
-    out="${out} | ${ctx_info}"
-fi
-if [[ -n "$cost_info" ]]; then
-    out="${out} | ${cost_info}"
-fi
-if [[ -n "$git_status_info" ]]; then
-    out="${out} | ${git_status_info}"
-fi
+# Time: Cyan, Model+Effort: Orange, Project+Branch: Magenta, Usage: Blue/Green,
+# Cost: varies, Git status: Red/Orange/Green
+#
+# Six groups, each one "thing": identity+time, model config, location, usage,
+# cost, git. Members of a group are space-joined; the groups themselves are
+# joined by a dim ┊, so the separator recedes and the grouping — not the
+# separator — is what the eye picks up. Building the array first means an
+# absent optional group simply never joins, so no dangling ┊ is possible.
+SEP=" ${DIM}┊${RESET} "
+
+groups=()
+_time_group="${CYAN}${time_emoji} ${ime_label:+$ime_label }${current_time}${RESET}"
+groups+=("${account_info:+${account_info} }${_time_group}")
+groups+=("${ORANGE}${model_emoji} ${model_name}${RESET}${effort_info:+ ${effort_info}}")
+groups+=("${MAGENTA}${project_branch}${RESET}")
+[ -n "$usage_group" ] && groups+=("$usage_group")
+[ -n "$cost_info" ] && groups+=("$cost_info")
+[ -n "$git_status_info" ] && groups+=("$git_status_info")
+
+out=""
+for _g in "${groups[@]}"; do
+    out="${out:+${out}${SEP}}${_g}"
+done
 echo -e "$out"
