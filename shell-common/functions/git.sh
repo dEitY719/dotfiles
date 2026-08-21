@@ -61,12 +61,13 @@ _gb_clean_remote() {
         emulate -L sh
     fi
 
-    local assume_yes=0 remote=""
+    local assume_yes=0 include_others=0 remote=""
 
     # Parse optional flags and an optional remote name (order-independent)
     while [ $# -gt 0 ]; do
         case "$1" in
             -y | --yes) assume_yes=1 ;;
+            --all) include_others=1 ;;
             -h | --help) _gb_help; return 0 ;;
             -*) ux_error "Unknown option: $1"; return 1 ;;
             *) remote="$1" ;;
@@ -84,48 +85,118 @@ _gb_clean_remote() {
     # Sync tracking refs with the server so the deletion list is accurate
     git fetch --prune "$remote" >/dev/null 2>&1 || true
 
-    # Build the deletable-branch list with a pure-shell loop: no per-line
-    # subprocess forks, and `case "$ref" in "$remote"/*)` matches the remote
-    # name *literally* — a remote whose name contains a regex metachar (e.g.
-    # '.') would mis-match under `grep "^$remote/"`. Emit short names (no
-    # "<remote>/" prefix) — that is what `git push --delete` wants. Branch
-    # names carry no whitespace, so `read`'s IFS-trimming of the "  origin/foo"
-    # indentation is safe, and the HEAD pointer line is skipped via " -> ".
-    local branches="" branch_count=0 ref b
-    while read -r ref; do
+    # Ownership check: a branch is "mine" when its tip commit's author email
+    # matches the local `git config user.email`. With no identity configured we
+    # cannot claim anything, so every branch falls into the "others" bucket and
+    # the safe default (delete nothing) applies.
+    local my_email=""
+    my_email=$(git config user.email 2>/dev/null) || my_email=""
+    if [ -z "$my_email" ]; then
+        ux_warning "git config user.email is unset — no branch can be identified as yours."
+    fi
+
+    # Build the deletable-branch lists with a pure-shell loop: one
+    # `git for-each-ref` call yields branch name *and* author email together —
+    # no per-branch subprocess forks. `case "$ref" in "$remote"/*)` matches the
+    # remote name *literally* — a remote whose name contains a regex metachar
+    # (e.g. '.') would mis-match under `grep "^$remote/"`. Emit short names (no
+    # "<remote>/" prefix) — that is what `git push --delete` wants.
+    # NOTE: unlike `git branch -r`, for-each-ref lists the symbolic
+    # refs/remotes/<remote>/HEAD as a plain "origin/HEAD <email>" line with no
+    # " -> " marker, so it must be skipped by name.
+    # `mine` holds one branch per line; `others` holds "<branch> <email>".
+    local mine="" others="" mine_count=0 other_count=0 ref email b
+    while read -r ref email; do
         [ -n "$ref" ] || continue
         case "$ref" in
-            *" -> "*) continue ;;
+            "$remote"/*) b="${ref#"$remote"/}" ;;
+            *) continue ;;
         esac
-        case "$ref" in
-            "$remote"/*)
-                b="${ref#"$remote"/}"
-                [ "$b" = "main" ] && continue
-                [ "$b" = "master" ] && continue
-                branch_count=$((branch_count + 1))
-                if [ -z "$branches" ]; then
-                    branches="$b"
-                else
-                    branches="${branches}
+        [ "$b" = "HEAD" ] && continue
+        [ "$b" = "main" ] && continue
+        [ "$b" = "master" ] && continue
+        # %(authoremail) renders as <user@example.com>
+        email="${email#<}"
+        email="${email%>}"
+        if [ -n "$my_email" ] && [ "$email" = "$my_email" ]; then
+            mine_count=$((mine_count + 1))
+            if [ -z "$mine" ]; then
+                mine="$b"
+            else
+                mine="${mine}
 ${b}"
-                fi
-                ;;
-        esac
+            fi
+        else
+            other_count=$((other_count + 1))
+            if [ -z "$others" ]; then
+                others="$b $email"
+            else
+                others="${others}
+${b} ${email}"
+            fi
+        fi
     done <<EOF
-$(git branch -r)
+$(git for-each-ref --format='%(refname:short) %(authoremail)' "refs/remotes/$remote")
 EOF
 
-    if [ "$branch_count" -eq 0 ]; then
+    if [ $((mine_count + other_count)) -eq 0 ]; then
         ux_info "No branches to delete on '$remote' (keeping main/master)"
         return 0
     fi
 
-    ux_warning "About to PERMANENTLY DELETE $branch_count branch(es) on remote '$remote':"
-    while IFS= read -r branch; do
-        [ -n "$branch" ] && ux_bullet_sub "$remote/$branch"
-    done <<EOF
-$branches
+    if [ "$mine_count" -eq 0 ] && [ "$include_others" -ne 1 ]; then
+        ux_info "No branches of yours to delete on '$remote' — skipped $other_count branch(es) owned by others (use --all to include them)."
+        return 0
+    fi
+
+    # Deletion target = mine, plus others only when --all was given
+    local branches="$mine" branch_count="$mine_count" line branch
+    if [ "$include_others" -eq 1 ] && [ "$other_count" -gt 0 ]; then
+        while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            b="${line%% *}"
+            if [ -z "$branches" ]; then
+                branches="$b"
+            else
+                branches="${branches}
+${b}"
+            fi
+            branch_count=$((branch_count + 1))
+        done <<EOF
+$others
 EOF
+    fi
+
+    if [ "$include_others" -eq 1 ] && [ "$other_count" -gt 0 ]; then
+        ux_warning "About to PERMANENTLY DELETE $branch_count branch(es) on remote '$remote', including OTHER PEOPLE'S branches:"
+    else
+        ux_warning "About to PERMANENTLY DELETE $branch_count branch(es) on remote '$remote':"
+    fi
+
+    if [ "$mine_count" -gt 0 ]; then
+        ux_bullet "Your branches ($mine_count) — will be deleted:"
+        while IFS= read -r branch; do
+            [ -n "$branch" ] && ux_bullet_sub "$remote/$branch"
+        done <<EOF
+$mine
+EOF
+    fi
+
+    if [ "$other_count" -gt 0 ]; then
+        if [ "$include_others" -eq 1 ]; then
+            ux_bullet "Other's branches ($other_count) — will ALSO be deleted (--all):"
+        else
+            ux_bullet "Other's branches ($other_count) — skipped (use --all to include):"
+        fi
+        while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            b="${line%% *}"
+            email="${line#* }"
+            ux_bullet_sub "$remote/$b (author: $email)"
+        done <<EOF
+$others
+EOF
+    fi
 
     if [ "$assume_yes" -ne 1 ]; then
         if ! ux_confirm "Permanently delete these remote branches?"; then
@@ -157,13 +228,14 @@ EOF
 }
 
 _gb_help() {
-    ux_info "Usage: gb [-D local] [-D remote [-y] [<remote>]] [git-branch-flags...]"
+    ux_info "Usage: gb [-D local] [-D remote [-y] [--all] [<remote>]] [git-branch-flags...]"
     ux_bullet "sub-commands"
-    ux_bullet_sub "gb -D local                          delete local branches (keeps: main + current + keywords)"
-    ux_bullet_sub "gb -D remote [-y] [<remote>]         delete branches on the remote SERVER (default: origin, e.g. origin, upstream, keeps: main/master)"
-    ux_bullet_sub "gb [flags]                           passthrough to git --no-pager branch"
+    ux_bullet_sub "gb -D local                              delete local branches (keeps: main + current + keywords)"
+    ux_bullet_sub "gb -D remote [-y] [--all] [<remote>]     delete YOUR OWN branches on the remote SERVER (default: origin, e.g. origin, upstream, keeps: main/master; others' branches are listed but skipped unless --all)"
+    ux_bullet_sub "gb [flags]                               passthrough to git --no-pager branch"
     ux_bullet "options"
     ux_bullet_sub "-y, --yes                 skip the confirmation prompt (remote deletion is permanent)"
+    ux_bullet_sub "    --all                 also delete branches authored by other people (default: your own only, matched by git config user.email)"
 }
 
 git_branch() {
