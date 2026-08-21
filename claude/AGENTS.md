@@ -80,6 +80,8 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 ~/.gemini/skills/<name>                  -> dotfiles/claude/skills/<name>   (entry symlink, #791)
 ```
 
+`statusline-tokens.sh` (#1380) 은 계정 dir 로 링크하지 **않는다** — `statusline-command.sh` 가 자기 경로의 symlink 를 따라간 뒤 형제 파일로 source 하므로 SSOT 한 곳에만 있으면 직접 실행/symlink 경로 양쪽에서 해석된다. 없으면 세션 누적 토큰 세그먼트만 빠지고 나머지는 정상 렌더된다.
+
 기존 PC 에 남아 있는 `/etc/sudoers.d/claude-{skills,docs}-mount-*` 파일은 #575 이후로 사용처가 없다. `claude/setup.sh` 실행 시 잔존 파일이 감지되면 수동 삭제 명령을 안내한다.
 
 `settings.json` — **tracked SSOT** (#584). 모든 모드에서 config dir 의 `settings.json` 은 symlink 가 아닌 **실파일**이다. 다만 그 실파일을 *쓰는 주체*가 모드별로 다르다:
