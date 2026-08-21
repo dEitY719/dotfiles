@@ -75,11 +75,16 @@ _token_segment() {
     # each copy repeating an identical `message.usage` — summing naively
     # overcounts it 2-3x, so every `message.id` is counted exactly once (NF-1).
     # `-n` + `inputs` streams the JSONL instead of slurping it into memory.
+    #
+    # `$m` is bound via an `if/then/else`, not `select(type=="object")`: a
+    # `select` that matches nothing produces zero outputs, and a `reduce`
+    # update expression with zero outputs resets the whole accumulator to
+    # null — silently discarding every total collected before that line.
     local nums
     nums=$(jq -n -r '
       reduce (inputs | select(type == "object")) as $line
         ({seen: {}, i: 0, c: 0, r: 0, o: 0};
-          (($line.message // {}) | select(type == "object")) as $m
+          (if ($line.message | type) == "object" then $line.message else {} end) as $m
           | ($m.usage // null) as $u
           | ($m.id // null) as $id
           | if $u == null or $id == null or (.seen[$id] // false) then .
