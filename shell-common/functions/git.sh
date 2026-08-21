@@ -104,7 +104,11 @@ _gb_clean_remote() {
     # NOTE: unlike `git branch -r`, for-each-ref lists the symbolic
     # refs/remotes/<remote>/HEAD as a plain "origin/HEAD <email>" line with no
     # " -> " marker, so it must be skipped by name.
-    # `mine` holds one branch per line; `others` holds "<branch> <email>".
+    # `mine` holds one branch per line; `others` holds "<branch> <email>". Both
+    # accumulate with a leading newline (harmless — stripped once below) so the
+    # append site needs no is-this-the-first-line branch.
+    local nl="
+"
     local mine="" others="" mine_count=0 other_count=0 ref email b
     while read -r ref email; do
         [ -n "$ref" ] || continue
@@ -120,24 +124,16 @@ _gb_clean_remote() {
         email="${email%>}"
         if [ -n "$my_email" ] && [ "$email" = "$my_email" ]; then
             mine_count=$((mine_count + 1))
-            if [ -z "$mine" ]; then
-                mine="$b"
-            else
-                mine="${mine}
-${b}"
-            fi
+            mine="${mine}${nl}${b}"
         else
             other_count=$((other_count + 1))
-            if [ -z "$others" ]; then
-                others="$b $email"
-            else
-                others="${others}
-${b} ${email}"
-            fi
+            others="${others}${nl}${b} ${email}"
         fi
     done <<EOF
 $(git for-each-ref --format='%(refname:short) %(authoremail)' "refs/remotes/$remote")
 EOF
+    mine="${mine#"$nl"}"
+    others="${others#"$nl"}"
 
     if [ $((mine_count + other_count)) -eq 0 ]; then
         ux_info "No branches to delete on '$remote' (keeping main/master)"
@@ -150,28 +146,23 @@ EOF
     fi
 
     # Deletion target = mine, plus others only when --all was given
-    local branches="$mine" branch_count="$mine_count" line branch
-    if [ "$include_others" -eq 1 ] && [ "$other_count" -gt 0 ]; then
+    local include_all_others=0 branches="$mine" branch_count="$mine_count" line branch
+    [ "$include_others" -eq 1 ] && [ "$other_count" -gt 0 ] && include_all_others=1
+    if [ "$include_all_others" -eq 1 ]; then
+        branch_count=$((mine_count + other_count))
         while IFS= read -r line; do
             [ -n "$line" ] || continue
             b="${line%% *}"
-            if [ -z "$branches" ]; then
-                branches="$b"
-            else
-                branches="${branches}
-${b}"
-            fi
-            branch_count=$((branch_count + 1))
+            branches="${branches}${nl}${b}"
         done <<EOF
 $others
 EOF
+        branches="${branches#"$nl"}"
     fi
 
-    if [ "$include_others" -eq 1 ] && [ "$other_count" -gt 0 ]; then
-        ux_warning "About to PERMANENTLY DELETE $branch_count branch(es) on remote '$remote', including OTHER PEOPLE'S branches:"
-    else
-        ux_warning "About to PERMANENTLY DELETE $branch_count branch(es) on remote '$remote':"
-    fi
+    local warn_suffix=""
+    [ "$include_all_others" -eq 1 ] && warn_suffix=", including OTHER PEOPLE'S branches"
+    ux_warning "About to PERMANENTLY DELETE $branch_count branch(es) on remote '$remote'$warn_suffix:"
 
     if [ "$mine_count" -gt 0 ]; then
         ux_bullet "Your branches ($mine_count) — will be deleted:"
@@ -183,11 +174,9 @@ EOF
     fi
 
     if [ "$other_count" -gt 0 ]; then
-        if [ "$include_others" -eq 1 ]; then
-            ux_bullet "Other's branches ($other_count) — will ALSO be deleted (--all):"
-        else
-            ux_bullet "Other's branches ($other_count) — skipped (use --all to include):"
-        fi
+        local others_label="Other's branches ($other_count) — skipped (use --all to include):"
+        [ "$include_all_others" -eq 1 ] && others_label="Other's branches ($other_count) — will ALSO be deleted (--all):"
+        ux_bullet "$others_label"
         while IFS= read -r line; do
             [ -n "$line" ] || continue
             b="${line%% *}"
