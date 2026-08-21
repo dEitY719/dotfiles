@@ -50,7 +50,8 @@ PATH SSOT 로 관리한다. 따라서:
 - `antigravity`(WSL 이 상속한 Windows VS Code 계열 GUI 실행기) 통합 — 별개 도구.
 - `~/.gemini/skills` 합성 로직(`scripts/setup-skills-ssot.sh`) — `agy` 의 OAuth
   토큰이 `~/.gemini/antigravity-cli/` 에 저장되므로 Gemini 런타임 디렉토리는
-  그대로 둔다.
+  그대로 둔다. 즉 `agy` 는 별도 연동 분기 없이 Gemini 합성 결과를 상속한다
+  (역방향 참조: `scripts/setup-skills-ssot.sh` 헤더 주석 + Gemini 블록, #1376).
 - Gemini CLI(`gemini` 바이너리) 자체 제거 — 이 모듈은 shell 통합 레이어만 다룬다.
 
 ## References

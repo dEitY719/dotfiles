@@ -2,13 +2,21 @@
 
 # scripts/setup-skills-ssot.sh: Skills SSOT 연결 설정
 #
-# PURPOSE: claude/skills/를 SSOT로 삼아 OpenCode·Codex·Gemini에 연결
+# PURPOSE: claude/skills/를 SSOT로 삼아 OpenCode·Codex·Gemini·Hermes에 연결
 # WHEN TO RUN: Via ./setup.sh (do NOT run manually)
 #
-# 연결 전략 (issue #791 — 4 CLI 모두 entry-level 합성):
-#   - entry-level 합성 디렉토리 (4 CLI 공통, #707 / #791):
+# 연결 전략 (issue #791 / #1376 — 5 CLI 모두 entry-level 합성):
+#   - entry-level 합성 디렉토리 (#707 / #791 / #1376):
 #     ~/.config/opencode/skills/<skill>     → ~/dotfiles/claude/skills/<skill>
 #     ~/.gemini/skills/<skill>              → ~/dotfiles/claude/skills/<skill>
+#     ~/.hermes/skills/dotfiles/<skill>     → ~/dotfiles/claude/skills/<skill>
+#
+#   - Hermes 예외 (#1376, NF-1): Hermes 는 다른 CLI 와 달리 ~/.hermes/skills/
+#     루트를 자체 hub/curator 가 능동적으로 관리한다 (.hub/, .bundled_manifest,
+#     .curator_state, .usage.json* 메타데이터 + apple/ github/ 등 카테고리
+#     디렉토리). 루트에 직접 합성하면 그 네임스페이스와 충돌하므로,
+#     전용 서브디렉토리 ~/.hermes/skills/dotfiles/ 안에서만 합성한다.
+#
 #   - Codex 전용 합성: .system 디렉토리는 로컬 보존
 #     ~/.codex/skills/.system                          ← local (codex managed)
 #     ~/.codex/skills/<custom-skill>                   → ~/dotfiles/claude/skills/<custom-skill>
@@ -24,7 +32,12 @@
 #     SSOT 가 아닌 경우) 는 보존 + warn.
 #
 # ~/.claude*/skills 는 claude/setup.sh 가 entry-level 합성 디렉토리로 관리 (#707, F-8).
-# 4 CLI 모두 동일 layout 이므로 외부에서 추가된 symlink 도 4 곳 전부에 동일하게 적용된다.
+# 5 CLI 모두 동일 layout (Hermes 만 서브디렉토리 — 위 예외 참고) 이므로 외부에서
+# 추가된 symlink 도 5 곳 전부에 동일하게 적용된다.
+#
+# Antigravity CLI (agy) 는 본 스크립트에 별도 분기가 없다 — agy 의 OAuth 토큰이
+# ~/.gemini/antigravity-cli/ 에 저장되어 Gemini 런타임을 그대로 공유하므로
+# ~/.gemini/skills 합성을 자동 상속한다. 상세: agy/AGENTS.md (Non-Goals).
 
 # --- Constants ---
 
@@ -432,7 +445,7 @@ if [ ! -d "$SKILLS_SOURCE" ]; then
     log_critical "SSOT 디렉토리가 없습니다: $SKILLS_SOURCE"
 fi
 
-# 1. OpenCode: entry-level 합성 (issue #791 — 4 CLI 공통 layout)
+# 1. OpenCode: entry-level 합성 (issue #791 — 5 CLI 공통 layout)
 OPENCODE_SKILLS="${HOME}/.config/opencode/skills"
 if [ ! -d "${HOME}/.config/opencode" ]; then
     log_warning "OpenCode 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.config/opencode"
@@ -477,12 +490,25 @@ else
     done <<< "$CODEX_HOME_LIST"
 fi
 
-# 3. Gemini: entry-level 합성 (issue #791 — 4 CLI 공통 layout)
+# 3. Gemini: entry-level 합성 (issue #791 — 5 CLI 공통 layout)
+#    Antigravity CLI (agy) 는 Gemini 런타임을 공유하므로 별도 분기 없이
+#    이 합성 결과를 그대로 상속한다 (agy/AGENTS.md Non-Goals 참고).
 GEMINI_SKILLS="${HOME}/.gemini/skills"
 if [ ! -d "${HOME}/.gemini" ]; then
     log_warning "Gemini 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.gemini"
 else
     link_skills_compose "gemini" "$GEMINI_SKILLS"
+fi
+
+# 4. Hermes: 전용 네임스페이스 서브디렉토리에서 entry-level 합성 (issue #1376)
+#    ~/.hermes/skills/ 루트는 Hermes 자체 hub/curator 가 관리하므로 (.hub/,
+#    .bundled_manifest, .curator_state, .usage.json*, 카테고리 디렉토리)
+#    직접 합성하지 않는다 — NF-1.
+HERMES_SKILLS="${HOME}/.hermes/skills/dotfiles"
+if [ ! -d "${HOME}/.hermes" ]; then
+    log_warning "Hermes 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.hermes"
+else
+    link_skills_compose "hermes" "$HERMES_SKILLS"
 fi
 
 # --- Verify ---
@@ -524,5 +550,6 @@ if [ -n "${CODEX_HOME_LIST:-}" ]; then
     done <<< "$CODEX_HOME_LIST"
 fi
 [ -d "${HOME}/.gemini" ] && verify_link "gemini" "$GEMINI_SKILLS" "compose"
+[ -d "${HOME}/.hermes" ] && verify_link "hermes" "$HERMES_SKILLS" "compose"
 
 ux_success "Skills SSOT 연결 완료"
