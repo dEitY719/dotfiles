@@ -3,7 +3,12 @@
 # Validate golden rules compliance across the dotfiles project
 # Run: bash tests/test_golden_rules.sh
 
-DOTFILES_ROOT="${DOTFILES_ROOT:-.}"
+# Self-locate the repo root so every relative path below (hermes/config.yaml,
+# claude/settings.json, ...) resolves correctly regardless of the caller's
+# cwd — PR #1381 review (agy): running this script from outside the repo
+# root silently no-ops the `[ -f ... ]` guards, false-passing every rule.
+DOTFILES_ROOT="${DOTFILES_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+cd "$DOTFILES_ROOT" || { echo "Could not cd to DOTFILES_ROOT: $DOTFILES_ROOT" >&2; exit 1; }
 failed=0
 
 # Color codes
