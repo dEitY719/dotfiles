@@ -10,7 +10,7 @@ block.
 ## The delegated call
 
 ```
-Skill(devx:pr-review-all, "<PR_NUM> <remote> --defer-reply 8")
+Skill(devx:pr-review-all, "<PR_NUM> <remote> --defer-reply 4")
 ```
 
 One call replaces the former inline gate (codex ∥ /simplify + commit/push)
@@ -23,8 +23,8 @@ AND the former `devx:schedule` pr-reply step. Inside `devx:pr-review-all`:
 - **simplify commit + push** happens **synchronously inside** the skill,
   before it returns. It uses an explicit `-m` message (never a bare
   `git commit`, which would hang on the editor in a non-interactive shell).
-- **pr-reply is deferred** — `--defer-reply 8` schedules `/gh-pr-reply
-  <PR_NUM>` 8 minutes later (was 5 min in the old `devx:schedule` step),
+- **pr-reply is deferred** — `--defer-reply 4` schedules `/gh-pr-reply
+  <PR_NUM>` 4 minutes later (was 5 min in the old `devx:schedule` step),
   giving CI and reviewers time to post before the reply pass runs.
 
 ## Ordering is preserved

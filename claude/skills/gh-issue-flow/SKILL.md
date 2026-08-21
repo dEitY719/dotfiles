@@ -3,7 +3,7 @@ name: gh:issue-flow
 description: >-
   Composition skill that chains gh:issue-implement → gh:commit → gh:pr →
   devx:pr-review-all (agy ∥ codex ∥ /simplify quality gate + deferred
-  pr-reply, 8 min) → gh:pr-resolve-conflict →
+  pr-reply, 4 min) → gh:pr-resolve-conflict →
   gh:pr-resolve-outdated
   (out-of-date base sync) for a single issue number. Use when the user runs
   /gh:issue-flow, /gh-issue-flow, or asks "issue #16 처음부터 PR까지 자동으로",
@@ -72,10 +72,10 @@ sequence. After each call, immediately proceed to the next.
 4. **Step 2.4 — devx:pr-review-all** (only if 2.3 succeeded; soft-fail) — one
    delegated call runs the post-PR quality gate (agy ∥ codex ∥ `/simplify`),
    commits + pushes any simplify changes synchronously, and schedules
-   `/gh-pr-reply <PR_NUM>` 8 min later via `--defer-reply`. The synchronous
+   `/gh-pr-reply <PR_NUM>` 4 min later via `--defer-reply`. The synchronous
    simplify commit lands before the 2.5/2.5.1 rebase steps. Detail:
    `references/quality-gate-step.md`.
-   `Skill(devx:pr-review-all, "<PR_NUM> <remote> --defer-reply 8")`
+   `Skill(devx:pr-review-all, "<PR_NUM> <remote> --defer-reply 4")`
 5. **Step 2.5 — gh:pr-resolve-conflict** (only if 2.4 succeeded) —
    rebase-resolve; a fresh PR usually prints "이미 충돌 없음 — skip".
    `Skill(gh:pr-resolve-conflict, "<PR_NUM>")`
