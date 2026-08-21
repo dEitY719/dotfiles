@@ -62,7 +62,7 @@ fi
 ./git/setup.sh
 ./obsidian/setup.sh            # Obsidian CLI wrapper → ~/.local/bin/obsidian (#1023)
 ./herdr/setup.sh               # herdr config → ~/.config/herdr/config.toml (symlinks.conf SSOT)
-./hermes/setup.sh              # Hermes Agent config → ~/.hermes/config.yaml (symlinks.conf SSOT, #1373)
+./hermes/setup.sh              # Hermes Agent config → ~/.hermes/config.yaml (1회 복사, symlinks.conf 미등록, #1373)
 ./claude/setup.sh
 ./agy/setup.sh                 # Antigravity CLI (agy) 바이너리 존재 확인 (#1180)
 # Internal-PC AWS SSO/CLI seeding only (aws.local.sh + ~/.aws/config). Its old
