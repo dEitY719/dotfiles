@@ -55,6 +55,18 @@ seed_gemini_home() {
 seed_hermes_home() {
     mkdir -p "${FIXTURE_HOME}/.hermes"
 }
+# Portable per-file `stat` snapshot (GNU `-c` first, BSD `-f` fallback —
+# same try-GNU-then-BSD idiom as shell-common/functions/file_cleanup.sh).
+# A combined `xargs stat -c ...` call fails outright on macOS/BSD stat,
+# and with its stderr suppressed both the before/after snapshots would
+# collapse to the same empty string — silently defeating the comparison
+# instead of failing loudly (agy review, PR #1383).
+_stat_snapshot() {
+    local f
+    while IFS= read -r -d '' f; do
+        stat -c '%n %s %Y %a' "$f" 2>/dev/null || stat -f '%N %z %m %OLp' "$f" 2>/dev/null
+    done
+}
 
 teardown() {
     teardown_isolated_home
@@ -363,14 +375,14 @@ EOF
     local before_listing before_hashes
     before_listing="$(cd "$hs" && ls -A | LC_ALL=C sort)"
     before_hashes="$(cd "$hs" && find . -path ./dotfiles -prune -o -type f -print0 \
-        | LC_ALL=C sort -z | xargs -0 stat -c '%n %s %Y %a' 2>/dev/null)"
+        | LC_ALL=C sort -z | _stat_snapshot)"
 
     run_setup
     assert_success
 
     local after_hashes
     after_hashes="$(cd "$hs" && find . -path ./dotfiles -prune -o -type f -print0 \
-        | LC_ALL=C sort -z | xargs -0 stat -c '%n %s %Y %a' 2>/dev/null)"
+        | LC_ALL=C sort -z | _stat_snapshot)"
     [ "$before_hashes" = "$after_hashes" ]
 
     # Hermes-owned directories survive intact.
@@ -391,4 +403,25 @@ EOF
     for s in alpha beta gamma; do
         [ -L "${hs}/dotfiles/${s}" ]
     done
+}
+
+@test "hermes: stale entry whose source vanished gets pruned (#1376)" {
+    seed_hermes_home
+
+    run_setup
+    assert_success
+    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles/beta" ]
+
+    # Remove `beta` from the SSOT, then re-run. link_skills_compose's
+    # stale-entry pruning must also fire on the nested target dir
+    # (~/.hermes/skills/dotfiles), not just root-level compose targets
+    # like opencode/gemini (codex review, PR #1383).
+    rm -rf "${FIXTURE_DOTFILES}/claude/skills/beta"
+
+    run_setup
+    assert_success
+    [ ! -e "${FIXTURE_HOME}/.hermes/skills/dotfiles/beta" ]
+    # Other skills still present; sibling hub dirs untouched.
+    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles/alpha" ]
+    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles/gamma" ]
 }
