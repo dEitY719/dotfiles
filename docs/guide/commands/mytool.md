@@ -71,6 +71,7 @@
 - **install_uv** — UV Install Script
 - **install_zsh** — Zsh Install Script
 - **install_zsh_autosuggestions** — Install and configure zsh-autosuggestions
+- **issue_watcher_cron** — issue-watcher 5분 주기 감시 사이클 — 1회 tick ...
 - **make_confluence** — Transform a technical markdown document into a Confluence...
 - **make_jira** — Simple version handling both:
 - **mirror-pages-activate** — Activates GitHub Pages on the GHE origin repo and replace...
@@ -86,7 +87,7 @@
 - **uninstall_docker** — WSL Docker 제거 스크립트 (대화형)
 - **uninstall_npm** — Node.js & npm 제거 스크립트 (대화형)
 - **work_log** — Companion to post-commit hook for tracking non-developmen...
-- Total: 63 custom tools available
+- Total: 64 custom tools available
 - Location: ~/dotfiles/shell-common/tools/custom
 
 ### usage
