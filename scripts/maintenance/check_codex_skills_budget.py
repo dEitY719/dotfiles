@@ -8,17 +8,9 @@ context window (about 5440 chars on current builds), which silently degrades
 trigger accuracy. Run this to detect when the SSOT is approaching that limit.
 
 Scope: Codex only (#1376, G-4/F-6)
-    The same claude/skills/ SSOT is also composed into OpenCode, Gemini
-    (inherited by the Antigravity CLI `agy`, which shares the Gemini
-    runtime), Claude Code, and Hermes (~/.hermes/skills/dotfiles/). None of
-    those has shown description truncation: the 2% budget cap is a
-    Codex-specific loader behaviour, and no truncation symptom has been
-    reported or reproduced on the other four targets. So this guard is
-    deliberately NOT parameterized by target — adding a --target flag now
-    would encode a limit we cannot observe. If truncation is ever seen on
-    Gemini/agy/Hermes, generalize this script with --target and give each
-    target its own budget constant plus an allowlist file (the Codex path
-    uses claude/skills/.codex-allowlist).
+    The same SSOT also composes into OpenCode, Gemini (incl. `agy`), and
+    Hermes, but none has shown truncation — it's a Codex-specific loader
+    behaviour. Not parameterized by --target until another target shows it.
 
 Usage:
     python3 check_codex_skills_budget.py [--budget N] [--top N] [--all]

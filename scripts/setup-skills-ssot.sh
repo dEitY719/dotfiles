@@ -491,8 +491,7 @@ else
 fi
 
 # 3. Gemini: entry-level 합성 (issue #791 — 5 CLI 공통 layout)
-#    Antigravity CLI (agy) 는 Gemini 런타임을 공유하므로 별도 분기 없이
-#    이 합성 결과를 그대로 상속한다 (agy/AGENTS.md Non-Goals 참고).
+#    agy 상속 근거는 파일 상단 헤더 주석 참고.
 GEMINI_SKILLS="${HOME}/.gemini/skills"
 if [ ! -d "${HOME}/.gemini" ]; then
     log_warning "Gemini 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.gemini"

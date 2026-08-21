@@ -682,7 +682,7 @@ if [ "$_setup_mode" = "internal" ]; then
     fi
 
     # OpenCode / Codex / Gemini / Hermes entry-level 합성은 scripts/setup-skills-ssot.sh 가
-    # 책임짐 (#791, #1376). agy 는 별도 연동 없이 Gemini 런타임을 공유해 상속(agy/AGENTS.md 참고).
+    # 책임짐 (#791, #1376) — 상세 및 agy 상속 근거는 아래 멀티 계정 루프 뒤 주석 참고.
 
     _print_change_summary  # 변경 요약 한 줄 (#997)
     ux_success "Claude Code dotfiles setup 완료 (internal/single-account)"
