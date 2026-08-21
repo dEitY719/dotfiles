@@ -681,7 +681,8 @@ if [ "$_setup_mode" = "internal" ]; then
         log_error_and_exit "$HOME/.claude/skills entry-level 합성 실패 (디렉토리 아님)"
     fi
 
-    # Gemini / OpenCode entry-level 합성은 scripts/setup-skills-ssot.sh 가 책임짐 (#791).
+    # OpenCode / Codex / Gemini / Hermes entry-level 합성은 scripts/setup-skills-ssot.sh 가
+    # 책임짐 (#791, #1376). agy 는 별도 연동 없이 Gemini 런타임을 공유해 상속(agy/AGENTS.md 참고).
 
     _print_change_summary  # 변경 요약 한 줄 (#997)
     ux_success "Claude Code dotfiles setup 완료 (internal/single-account)"
@@ -746,9 +747,12 @@ for acct in $ENABLED_ACCOUNTS; do
     fi
 done
 
-# Gemini / OpenCode entry-level 합성은 scripts/setup-skills-ssot.sh 가 책임짐 (#791).
+# OpenCode / Codex / Gemini / Hermes entry-level 합성은 scripts/setup-skills-ssot.sh 가
+# 책임짐 (#791, #1376). agy 는 별도 연동 없이 Gemini 런타임을 공유해 상속(agy/AGENTS.md 참고).
 # 이전엔 본 분기에서 _setup_gemini_skills_symlink 를 호출했지만, #791 에서
-# 4 CLI 모두 entry-level 합성으로 통일했고 SSOT 는 setup-skills-ssot.sh 로 이전됨.
+# 4 CLI 모두 entry-level 합성으로 통일했고 SSOT 는 setup-skills-ssot.sh 로 이전됐다.
+# #1376 에서 Hermes 가 5번째 대상으로 추가됐다 (Hermes 만 전용 서브디렉토리
+# ~/.hermes/skills/dotfiles/ 사용 — 루트는 Hermes hub/curator 소유).
 
 # --- Completion Messages ---
 # 활성 계정 수는 네이티브 배열로 집계 — 외부 wc/tr 포크 회피 (PR #998 리뷰).
