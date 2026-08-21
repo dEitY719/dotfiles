@@ -97,6 +97,109 @@ teardown() {
     assert_output --partial "No branches to delete"
 }
 
+@test "bash: gb -D remote deletes only my branches by default when authors differ" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email mine@t; git config user.name mine
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        git checkout -q -b mine-branch
+        git commit -q --allow-empty -m mine
+        git push -q origin HEAD:mine-branch
+        git config user.email other@t; git config user.name other
+        git checkout -q -b other-branch main
+        git commit -q --allow-empty -m other
+        git push -q origin HEAD:other-branch
+        git config user.email mine@t; git config user.name mine
+        _gb_clean_remote -y origin >/dev/null 2>&1
+        printf "REMAINING: "
+        git ls-remote --heads "$tmp/remote.git" | sed "s#.*refs/heads/##" | sort | tr "\n" " "
+        echo
+        rm -rf "$tmp"
+    '
+    assert_success
+    assert_output --partial "other-branch"
+    refute_output --partial "mine-branch"
+}
+
+@test "bash: gb -D remote --all deletes other people's branches too" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email mine@t; git config user.name mine
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        git checkout -q -b mine-branch
+        git commit -q --allow-empty -m mine
+        git push -q origin HEAD:mine-branch
+        git config user.email other@t; git config user.name other
+        git checkout -q -b other-branch main
+        git commit -q --allow-empty -m other
+        git push -q origin HEAD:other-branch
+        git config user.email mine@t; git config user.name mine
+        _gb_clean_remote --all -y origin >/dev/null 2>&1
+        printf "REMAINING: "
+        git ls-remote --heads "$tmp/remote.git" | sed "s#.*refs/heads/##" | sort | tr "\n" " "
+        echo
+        rm -rf "$tmp"
+    '
+    assert_success
+    assert_output --partial "REMAINING: main"
+    refute_output --partial "mine-branch"
+    refute_output --partial "other-branch"
+}
+
+@test "bash: gb -D remote skips without prompting when nothing is mine" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email other@t; git config user.name other
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        git checkout -q -b other-branch
+        git commit -q --allow-empty -m other
+        git push -q origin HEAD:other-branch
+        git config user.email third@t; git config user.name third
+        _gb_clean_remote origin </dev/null
+        printf "REMAINING: "
+        git ls-remote --heads "$tmp/remote.git" | sed "s#.*refs/heads/##" | sort | tr "\n" " "
+        echo
+        rm -rf "$tmp"
+    '
+    assert_success
+    assert_output --partial "No branches of yours to delete"
+    assert_output --partial "REMAINING: main other-branch"
+}
+
+@test "bash: gb -D remote deletes nothing and warns when user.email is unset" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        git push -q origin HEAD:some-branch
+        git config --unset user.email
+        GIT_AUTHOR_EMAIL= GIT_COMMITTER_EMAIL= EMAIL= _gb_clean_remote origin </dev/null
+        printf "REMAINING: "
+        git ls-remote --heads "$tmp/remote.git" | sed "s#.*refs/heads/##" | sort | tr "\n" " "
+        echo
+        rm -rf "$tmp"
+    '
+    assert_success
+    assert_output --partial "user.email is unset"
+    assert_output --partial "REMAINING: main some-branch"
+}
+
 @test "bash: gb -D <remote-name> hints 'gb -D remote' instead of failing silently" {
     run_in_bash '
         tmp=$(mktemp -d)
