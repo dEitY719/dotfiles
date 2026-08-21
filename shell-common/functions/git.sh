@@ -174,8 +174,8 @@ EOF
     fi
 
     if [ "$other_count" -gt 0 ]; then
-        local others_label="Other's branches ($other_count) — skipped (use --all to include):"
-        [ "$include_all_others" -eq 1 ] && others_label="Other's branches ($other_count) — will ALSO be deleted (--all):"
+        local others_label="Others' branches ($other_count) — skipped (use --all to include):"
+        [ "$include_all_others" -eq 1 ] && others_label="Others' branches ($other_count) — will ALSO be deleted (--all):"
         ux_bullet "$others_label"
         while IFS= read -r line; do
             [ -n "$line" ] || continue
