@@ -13,7 +13,7 @@ gh:issue-flow complete (#<N>)
   [OK] Step 1: gh:issue-implement       (<n files changed>, <n tests passed>)
   [OK] Step 2: gh:commit                (<sha> "<subject>")
   [OK] Step 3: gh:pr                    (PR #<M>)
-  [OK] Step 4: devx:pr-review-all       (agy+codex+simplify, reply in 8 min)
+  [OK] Step 4: devx:pr-review-all       (agy+codex+simplify, reply in 4 min)
   [OK] Step 5: gh:pr-resolve-conflict   (no conflicts / resolved)
   [OK] Step 5.1: gh:pr-resolve-outdated (up to date / rebased)
   [OK] Step 6: ai-metrics               (~X tokens · ~M h · ~L min)
@@ -45,7 +45,7 @@ Resume hint logic:
 - Failed at step 1 → `/gh-issue-implement <N>` (user decides retry).
 - Failed at step 2 → `/gh-commit && /gh-pr <N>`.
 - Failed at step 3 → `/gh-pr <N>`.
-- Failed at step 4 → `/devx-pr-review-all <PR_NUM> <remote> --defer-reply 8`.
+- Failed at step 4 → `/devx-pr-review-all <PR_NUM> <remote> --defer-reply 4`.
 - Failed at step 5 → `/gh-pr-resolve-conflict <PR_NUM>`.
 - Failed at step 5.1 → `/gh-pr-resolve-outdated <PR_NUM>`.
 
