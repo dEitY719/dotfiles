@@ -501,9 +501,7 @@ else
 fi
 
 # 4. Hermes: 전용 네임스페이스 서브디렉토리에서 entry-level 합성 (issue #1376)
-#    ~/.hermes/skills/ 루트는 Hermes 자체 hub/curator 가 관리하므로 (.hub/,
-#    .bundled_manifest, .curator_state, .usage.json*, 카테고리 디렉토리)
-#    직접 합성하지 않는다 — NF-1.
+#    루트를 직접 합성하지 않는 이유는 파일 상단 "Hermes 예외" 참고.
 HERMES_SKILLS="${HOME}/.hermes/skills/dotfiles"
 if [ ! -d "${HOME}/.hermes" ]; then
     log_warning "Hermes 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.hermes"
