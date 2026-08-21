@@ -24,8 +24,9 @@ AND the former `devx:schedule` pr-reply step. Inside `devx:pr-review-all`:
   before it returns. It uses an explicit `-m` message (never a bare
   `git commit`, which would hang on the editor in a non-interactive shell).
 - **pr-reply is deferred** — `--defer-reply 4` schedules `/gh-pr-reply
-  <PR_NUM>` 4 minutes later (was 5 min in the old `devx:schedule` step),
-  giving CI and reviewers time to post before the reply pass runs.
+  <PR_NUM>` 4 minutes later (5 min under the old `devx:schedule` step, then
+  8 min under `--defer-reply` before #1379), giving CI and reviewers time to
+  post before the reply pass runs.
 
 ## Ordering is preserved
 
