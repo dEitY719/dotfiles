@@ -351,6 +351,26 @@ _mkrepo() {
     refute_output --partial '👑'
 }
 
+# --- symlink-walk coverage (the real install path: ~/.claude/statusline-command.sh -> dotfiles) ---
+
+@test "statusline symlink: token segment loads through a symlinked statusline-command.sh" {
+    local link_dir="$FIXTURES/linked"
+    mkdir -p "$link_dir"
+    ln -s "${DOTFILES_ROOT}/claude/statusline-command.sh" "$link_dir/statusline-command.sh"
+    local t="$FIXTURES/session.jsonl"
+    _usage_line msg_a 1000 2000 7000 400 >"$t"
+
+    local saved_statusline="$STATUSLINE"
+    STATUSLINE="$link_dir/statusline-command.sh"
+    _render_plain "$(_payload "$t")"
+    STATUSLINE="$saved_statusline"
+
+    assert_success
+    # link_dir has no sibling statusline-tokens.sh — this only renders if the
+    # symlink walk resolved to the real dotfiles/claude/ dir first.
+    assert_output --partial '📥 3k 💰70% 📤 400'
+}
+
 @test "statusline branch: non-repo still renders ⚠️ and missing dir ❓ (F-8b)" {
     local plain="$FIXTURES/plain"
     mkdir -p "$plain"
