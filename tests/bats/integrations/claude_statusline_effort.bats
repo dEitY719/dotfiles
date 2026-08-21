@@ -24,20 +24,8 @@ teardown() {
     teardown_isolated_home
 }
 
-# Feed a JSON payload to the statusline and capture its rendered line.
-_render() {
-    run bash -c "printf '%s' '$1' | bash '${STATUSLINE}'"
-}
-
-# Same as _render but with the ANSI colour codes stripped, so an assertion can
-# pin exact segment adjacency — which is what proves a separator was *not*
-# emitted. The ESC byte is interpolated rather than written as `\x1b` so the
-# sed script works on BSD sed too.
-_render_plain() {
-    local esc
-    esc=$(printf '\033')
-    run bash -c "printf '%s' '$1' | bash '${STATUSLINE}' | sed 's/${esc}\[[0-9;]*m//g'"
-}
+# _render / _render_plain (shared with claude_statusline_tokens.bats) live in
+# test_helper.bash.
 
 @test "statusline effort: low renders 🌑 low" {
     _render '{"effort":{"level":"low"}}'
