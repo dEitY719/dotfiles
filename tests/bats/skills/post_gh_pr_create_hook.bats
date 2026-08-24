@@ -17,13 +17,13 @@ load '../test_helper'
 HOOK="${_BATS_REAL_DOTFILES_ROOT}/claude/hooks/post-gh-pr-create.sh"
 
 # Emit a stub of _gh_project_status_normalize_repo for the fake
-# gh_project_status.sh files staged below. Every stub gets it, so the hook's
-# happy path is exercised with the helper function PRESENT — the way a
-# same-generation deploy behaves. Kept in one function rather than copied into
-# each heredoc so the stubs cannot drift apart from the real helper's
-# contract: print "<owner> <repo>", dropping gh's optional HOST/ prefix
-# (#1405). The rollout-skew case (function ABSENT) is covered on purpose by
-# T18/T19, which stage their own stub without it (#1414).
+# gh_project_status.sh files staged below. Every stub staged through
+# stage_status_helper gets it, so the hook's happy path is exercised with the
+# helper function PRESENT — the way a same-generation deploy behaves. Kept in
+# one function rather than copied into each heredoc so the stubs cannot drift
+# apart from the real helper's contract: print "<owner> <repo>", dropping gh's
+# optional HOST/ prefix (#1405). The rollout-skew case (function ABSENT) is
+# covered on purpose by T18/T19, which stage their own stub without it (#1414).
 stub_normalize_repo() {
     cat <<'STUB'
 _gh_project_status_normalize_repo() {
@@ -33,6 +33,17 @@ _gh_project_status_normalize_repo() {
     printf '%s %s\n' "${_v%%/*}" "${_v#*/}"
 }
 STUB
+}
+
+# Write a fake gh_project_status.sh at $1 from the heredoc on stdin, with the
+# normalizer stub appended. One statement per stub site instead of a
+# `cat > FILE` / `stub_normalize_repo >> FILE` pair that repeats the long path
+# and leaves "every stub gets the normalizer" to per-site discipline. T18/T19
+# keep the plain `cat >` form precisely because they must NOT get it (#1414),
+# so their deviation now reads as a different call rather than as a missing
+# line six tests could silently lose.
+stage_status_helper() {
+    { cat; stub_normalize_repo; } > "$1"
 }
 
 setup() {
@@ -45,11 +56,10 @@ setup() {
     mkdir -p "$FAKE_SHELL_COMMON/functions"
     CALL_LOG="$TEST_TEMP_HOME/calls.log"
     : > "$CALL_LOG"
-    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_pr_closing_issue_numbers() { return 0; }  # no linked issues by default
 EOF
-    stub_normalize_repo >> "$FAKE_SHELL_COMMON/functions/gh_project_status.sh"
     export SHELL_COMMON="$FAKE_SHELL_COMMON"
     # Block real gh from running — the hook only calls `gh repo view` for
     # GH_REPO; passing GH_REPO directly avoids the network and the PATH lookup.
@@ -164,11 +174,10 @@ teardown() {
     cat > "$HYBRID_SHELL_COMMON/functions/_setup_mode_stub.sh" <<'EOF'
 _dotfiles_setup_mode() { echo "internal"; }
 EOF
-    cat > "$HYBRID_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$HYBRID_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
-    stub_normalize_repo >> "$HYBRID_SHELL_COMMON/functions/gh_project_status.sh"
     # Drive the hook through a wrapper that pre-sources the
     # `_dotfiles_setup_mode` stub into the hook's shell environment.
     # `BASH_ENV` is honoured by `bash` when started non-interactively.
@@ -193,11 +202,10 @@ EOF
     cat > "$HYBRID_SHELL_COMMON/functions/_setup_mode_stub.sh" <<'EOF'
 _dotfiles_setup_mode() { echo "external"; }
 EOF
-    cat > "$HYBRID_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$HYBRID_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
-    stub_normalize_repo >> "$HYBRID_SHELL_COMMON/functions/gh_project_status.sh"
     BASH_ENV="$HYBRID_SHELL_COMMON/functions/_setup_mode_stub.sh" \
     DOTFILES_FORCE_INIT=1 \
     GH_HOST="github.example.com" \
@@ -239,12 +247,11 @@ exit 0
 EOF
     chmod +x "$TEST_TEMP_HOME/bin/gh"
     # query_current logs every call so its ABSENCE proves the loop was skipped.
-    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() { printf 'query %s\n' "\$*" >> "$CALL_LOG"; echo "Backlog"; }
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
-    stub_normalize_repo >> "$FAKE_SHELL_COMMON/functions/gh_project_status.sh"
     export PATH="$TEST_TEMP_HOME/bin:$PATH"
     export POST_GH_PR_CREATE_ASYNC=0
     payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/55"}}'
@@ -267,7 +274,7 @@ exit 0
 EOF
     chmod +x "$TEST_TEMP_HOME/bin/gh"
     QC_COUNT="$TEST_TEMP_HOME/qc.count"; : > "$QC_COUNT"
-    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() {
     n=\$(cat "$QC_COUNT" 2>/dev/null || echo 0); n=\$((n + 1)); echo "\$n" > "$QC_COUNT"
@@ -275,7 +282,6 @@ _gh_project_status_query_current() {
 }
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
-    stub_normalize_repo >> "$FAKE_SHELL_COMMON/functions/gh_project_status.sh"
     export PATH="$TEST_TEMP_HOME/bin:$PATH"
     export POST_GH_PR_CREATE_SYNC_SLEEP=0 POST_GH_PR_CREATE_ASYNC=0
     payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/77"}}'
@@ -301,12 +307,11 @@ EOF
 exit 0
 EOF
     chmod +x "$TEST_TEMP_HOME/bin/gh"
-    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() { echo "Backlog"; }
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
-    stub_normalize_repo >> "$FAKE_SHELL_COMMON/functions/gh_project_status.sh"
     export PATH="$TEST_TEMP_HOME/bin:$PATH"
     export POST_GH_PR_CREATE_SYNC_SLEEP=0 POST_GH_PR_CREATE_SYNC_ATTEMPTS=2
     export POST_GH_PR_CREATE_ASYNC=0
@@ -335,12 +340,11 @@ EOF
 exit 0
 EOF
     chmod +x "$TEST_TEMP_HOME/bin/gh"
-    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() { echo "Backlog"; }   # never converges
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
-    stub_normalize_repo >> "$FAKE_SHELL_COMMON/functions/gh_project_status.sh"
     export PATH="$TEST_TEMP_HOME/bin:$PATH"
     # POST_GH_PR_CREATE_ASYNC intentionally left at its default.
     export POST_GH_PR_CREATE_SYNC_SLEEP=3 POST_GH_PR_CREATE_SYNC_ATTEMPTS=3
@@ -386,10 +390,7 @@ EOF
 # ---------------------------------------------------------------------------
 
 @test "T18 (#1414): helper without normalize_repo → #724 warning, retry-poll survives" {
-    # The stub omits _gh_project_status_normalize_repo, exactly as a helper
-    # deployed before #1405 would. The guard must fall back rather than let
-    # has_board return 1, so the poll still re-syncs (2 calls) — and must say
-    # so on stderr instead of degrading silently.
+    # Stub omits the normalizer, exactly as a pre-#1405 helper would.
     mkdir -p "$TEST_TEMP_HOME/bin"
     cat > "$TEST_TEMP_HOME/bin/gh" <<'EOF'
 #!/usr/bin/env bash
