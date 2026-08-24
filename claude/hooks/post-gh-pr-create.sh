@@ -101,11 +101,11 @@ _helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_statu
 #
 # Since #1405 the board helpers honor this exported GH_REPO explicitly: their
 # resolution order is `--repo` arg > $GH_REPO > $TARGET_REPO > `gh repo view`
-# auto-detect. Exporting it here is therefore the hook's repo pin, and the
-# calls below deliberately do NOT repeat it as `--repo "$GH_REPO"`: this
-# GH_REPO is best-effort (`gh repo view` can flake), and `--repo ""` is
-# rejected by the helper, which would turn a transient flake into a hard
-# skip instead of letting the helper's own #341 retry recover.
+# auto-detect. Exporting it here IS the hook's repo pin, so the calls below
+# deliberately do not repeat it as `--repo "$GH_REPO"` — the env level
+# already carries the same value, and one binding is one place to keep
+# right. (An empty `--repo` would not have broken anything either: the
+# helper treats it as "not supplied" and falls through.)
 GH_REPO="${GH_REPO:-$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)}"
 export GH_REPO
 
@@ -136,7 +136,14 @@ export GH_REPO
 # the background (the sync would no-op forever otherwise).
 _post_gh_pr_create_repo_has_board() {
     [ -n "$GH_REPO" ] || return 1
-    local _o="${GH_REPO%/*}" _n="${GH_REPO#*/}" _cnt
+    # Split via the board helper's own normalizer rather than by hand: it
+    # also accepts gh's `HOST/OWNER/REPO` form of GH_REPO (#1405), which a
+    # bare `${GH_REPO%/*}` / `${GH_REPO#*/}` pair would mis-split into
+    # "host/owner" + "owner/repo" and query a repo that does not exist.
+    local _slug _o _n _cnt
+    _slug=$(_gh_project_status_normalize_repo "$GH_REPO") || return 1
+    _o="${_slug%% *}"
+    _n="${_slug#* }"
     [ -n "$_o" ] && [ -n "$_n" ] || return 1
     # GraphQL variables ($o, $n) are bound via the -f flags below, so the
     # single-quoted query intentionally does not shell-expand. Both are
