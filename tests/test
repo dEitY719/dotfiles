@@ -160,11 +160,16 @@ check_requirements() {
 # ---------------------------------------------------------------------------
 
 # Registry dir for tracking concurrently-running ./tests/test invocations.
-# One empty file per live PID; liveness is re-checked at read time (kill -0),
-# so a stale file left by a crashed/killed run is harmless and self-heals —
-# no trap-based cleanup is required for correctness.
+# One empty file per live PID; liveness is re-checked at read time (kill -0)
+# and stale entries are pruned as they're found (see
+# _concurrent_test_run_count), so a file left by a crashed/killed run is
+# harmless. Scoped per-UID: a fixed shared name under TMPDIR would let the
+# first user's `mkdir -p` (typically mode 755 under a standard umask) block
+# every other user on the same host from registering — each UID gets its own
+# directory instead, so cross-user permission conflicts can't happen (agy
+# review, PR #1416).
 _test_run_registry_dir() {
-    printf '%s\n' "${TMPDIR:-/tmp}/dotfiles-tests-test-registry"
+    printf '%s\n' "${TMPDIR:-/tmp}/dotfiles-tests-test-registry-$(id -u)"
 }
 
 # Register this process ($$) in the registry. Best-effort: if the dir can't
@@ -179,8 +184,12 @@ _register_test_run() {
 }
 
 # Count OTHER currently-running ./tests/test invocations (excludes $$).
-# A registry entry counts only if `kill -0 <pid>` succeeds — dead PIDs from
-# crashed runs are ignored automatically, no cleanup needed.
+# A registry entry counts only if `kill -0 <pid>` succeeds; an entry that
+# fails the check is actively removed (not just skipped) so the registry
+# stays close to its true size instead of growing unbounded across repeated
+# runs — this also shrinks the (nonzero but very unlikely) window for a
+# stale entry's PID to later be reused by an unrelated live process and get
+# miscounted as a peer (codex/agy review, PR #1416).
 _concurrent_test_run_count() {
     local dir count=0 f pid
     dir="$(_test_run_registry_dir)"
@@ -192,7 +201,11 @@ _concurrent_test_run_count() {
         [ -e "$f" ] || continue
         pid="${f##*/}"
         [ "$pid" = "$$" ] && continue
-        kill -0 "$pid" 2>/dev/null && count=$((count + 1))
+        if kill -0 "$pid" 2>/dev/null; then
+            count=$((count + 1))
+        else
+            rm -f "$f" 2>/dev/null
+        fi
     done
     printf '%s\n' "$count"
 }
@@ -428,6 +441,15 @@ run_tests() {
     run_golden_rules || exit_code=1
     run_pytest || exit_code=1
 
+    # Unconditional, not trap-based: run_bats() sets and then clears its own
+    # EXIT trap around $outdir, which silently clobbers (and never restores)
+    # whatever trap main() registered before calling into here — so on every
+    # normal, complete run the registry entry was never actually being
+    # removed (agy review, PR #1416). This line is what performs the real
+    # cleanup; main()'s trap is a secondary net for the early-return paths
+    # (e.g. check_requirements failure) that occur before run_bats ever runs.
+    rm -f "$(_test_run_registry_dir)/$$" 2>/dev/null
+
     return $exit_code
 }
 
@@ -464,9 +486,13 @@ main() {
 
     # Announce this run so concurrent ./tests/test invocations on this host
     # can detect each other and split the CPU pool (#1413). After arg parsing
-    # so -h/--help never registers. The trap is tidiness only — run_bats()
-    # clears EXIT traps when it finishes, and the registry self-heals via the
-    # kill -0 liveness check, so nothing depends on it firing.
+    # so -h/--help never registers. This trap only covers an early return
+    # before run_tests() (e.g. check_requirements failing below) — run_bats()
+    # sets its own EXIT trap and clears it when done, which silently
+    # supersedes this one for every run that reaches it. run_tests() performs
+    # the actual cleanup unconditionally on its own return for that reason
+    # (agy review, PR #1416); an interrupted run still self-heals via
+    # _concurrent_test_run_count's kill -0 + prune-on-read.
     _register_test_run
     trap 'rm -f "$(_test_run_registry_dir)/$$" 2>/dev/null' EXIT
 
