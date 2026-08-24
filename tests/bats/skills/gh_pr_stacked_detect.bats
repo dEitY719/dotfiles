@@ -29,7 +29,7 @@ teardown() {
     [ -n "$REPO_ROOT" ] && [ -d "$REPO_ROOT" ] && rm -rf "$REPO_ROOT"
     unset FAKE_OPEN_PRS FAKE_ANCESTOR_REFS FAKE_NONDEFAULT_REFS FAKE_PARENT_STATE
     unset FAKE_PARENT_BODY _GH_PR_PARENT_BODY_CACHE
-    unset STACK_MODE STACK_BASE ISSUE_NUMBER
+    unset STACK_MODE STACK_BASE ISSUE_NUMBER REMOTE
     teardown_isolated_home
 }
 
@@ -117,6 +117,39 @@ teardown() {
     FAKE_OPEN_PRS=$'201 feat/unrelated-a\n205 feat/unrelated-b'
     FAKE_ANCESTOR_REFS=''
     FAKE_NONDEFAULT_REFS=''
+    run find_parent_pr_candidates main
+    assert_success
+    [ -z "$output" ]
+}
+
+# ── [remote] threading (#1405) ────────────────────────────────────────
+# find_parent_pr_candidates probes refs on $REMOTE, defaulting to origin, so
+# the matrix cases above (which set origin/* refs and never set REMOTE) are
+# unchanged.
+@test "remote: unset REMOTE keeps the origin/* ref probes (regression zero)" {
+    FAKE_OPEN_PRS='201 feat/parent-branch'
+    FAKE_ANCESTOR_REFS='origin/feat/parent-branch'
+    FAKE_NONDEFAULT_REFS='origin/feat/parent-branch'
+    run find_parent_pr_candidates main
+    assert_success
+    assert_output --partial '201:feat/parent-branch'
+}
+
+@test "remote: REMOTE=upstream probes upstream/* refs, not origin/*" {
+    REMOTE=upstream
+    FAKE_OPEN_PRS='201 feat/parent-branch'
+    FAKE_ANCESTOR_REFS='upstream/feat/parent-branch'
+    FAKE_NONDEFAULT_REFS='upstream/feat/parent-branch'
+    run find_parent_pr_candidates main
+    assert_success
+    assert_output --partial '201:feat/parent-branch'
+}
+
+@test "remote: REMOTE=upstream ignores origin/* ancestor refs" {
+    REMOTE=upstream
+    FAKE_OPEN_PRS='201 feat/parent-branch'
+    FAKE_ANCESTOR_REFS='origin/feat/parent-branch'
+    FAKE_NONDEFAULT_REFS='origin/feat/parent-branch'
     run find_parent_pr_candidates main
     assert_success
     [ -z "$output" ]

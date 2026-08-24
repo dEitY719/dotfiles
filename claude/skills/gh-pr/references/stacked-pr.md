@@ -104,6 +104,8 @@ none of these is treated as solo / non-stacked.
 #   STACK_MODE     — auto | no-stack | base
 #   STACK_BASE     — branch name when STACK_MODE=base
 #   ISSUE_NUMBER   — first positional integer (legacy "/gh-pr 123" link)
+# Non-integer positionals are deliberately ignored here: that is the [remote]
+# positional, already consumed by Step 1a-0 into $REMOTE (#1405).
 # Returns 0 on success, 2 on mutually-exclusive violation, 3 on bad value.
 parse_stacked_args() {
     STACK_MODE=auto
@@ -200,7 +202,9 @@ _gh_pr_default_default_tip_diff_check() {
 
 find_parent_pr_candidates() {
     local _default_branch="$1"
-    local _default_tip="origin/$_default_branch"
+    # $REMOTE is the [remote] positional bound in Step 1a-0 (#1405).
+    local _remote="${REMOTE:-origin}"
+    local _default_tip="$_remote/$_default_branch"
     local _line _pr _head _candidates
 
     _candidates=$(_gh_pr_default_open_pr_list)
@@ -213,10 +217,10 @@ find_parent_pr_candidates() {
         [ "$_head" = "$_default_branch" ] && continue
         # Live mode only — fetch the head so the ancestor probe is fresh.
         if [ -z "${FAKE_OPEN_PRS+set}" ]; then
-            git fetch origin "$_head" --quiet 2>/dev/null || continue
+            git fetch "$_remote" "$_head" --quiet 2>/dev/null || continue
         fi
-        _gh_pr_default_is_ancestor "origin/$_head" || continue
-        _gh_pr_default_default_tip_diff_check "origin/$_head" "$_default_tip" || continue
+        _gh_pr_default_is_ancestor "$_remote/$_head" || continue
+        _gh_pr_default_default_tip_diff_check "$_remote/$_head" "$_default_tip" || continue
         printf '%s:%s\n' "$_pr" "$_head"
     done <<EOF
 $_candidates
@@ -330,7 +334,10 @@ helpers only run inside the 1-candidate branch of the Stage-2 dispatch.
 Step 1a-0 when this block runs — every `gh` call below (and in the helpers
 above) pins both. Without them `gh` resolves against its own
 `gh repo set-default`, so on a dual-host login `DEFAULT_BRANCH` and the
-candidate PR list come from a different GitHub server than `origin` (#1403).
+candidate PR list come from a different GitHub server than the target remote
+(#1403). That remote is `$REMOTE` — the `[remote]` positional, `origin` by
+default (#1405); the ref probes above fetch and compare against it, never a
+hard-coded `origin`.
 
 ```sh
 parse_stacked_args "$@" || exit $?

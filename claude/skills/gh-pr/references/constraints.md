@@ -55,8 +55,9 @@ still acknowledge them.
 
 Never call `gh` without both `GH_HOST="$TARGET_HOST"` and `--repo "$GH_REPO"`,
 and never derive those two from different sources — Step 1a-0 reads both from
-the one `git remote get-url origin` URL. Without `--repo`, `gh` follows its
-own `gh repo set-default` rather than git's `origin`; when the user is
+the one `git remote get-url "$REMOTE"` URL (`$REMOTE` = the `[remote]`
+positional, `origin` by default, #1405). Without `--repo`, `gh` follows its
+own `gh repo set-default` rather than git's remote; when the user is
 authenticated to both github.com and a GHES instance and those two disagree,
 `gh` queries the wrong server and **succeeds** — no error, just wrong data.
 That is how an OPEN issue came back as "doesn't exist" in #1403.

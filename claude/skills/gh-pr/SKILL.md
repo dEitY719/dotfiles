@@ -6,7 +6,8 @@ description: >-
   /gh-pr, or asks "PR 생성", "풀리퀘 만들어", "지금까지 커밋들로 PR 올려". Pushes
   the branch if needed, drafts a structured PR body covering every commit in
   the range (not just HEAD), auto-links a related issue when known, and
-  returns only the PR URL. Accepts `-h`/`--help`/`help` to print usage.
+  returns only the PR URL. Accepts `[N] [remote] [--no-stack] [--base <branch>]`
+  (remote defaults to `origin`) and `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Grep
 metadata:
   model_recommendation:
@@ -29,23 +30,32 @@ return the PR URL. Accepted options: `references/options.md`.
 
 Record `START_TS=$(date +%s)` immediately for Step 4 elapsed-time tracking.
 
+**Positional args (#1405):** `/gh:pr [N] [remote] [--no-stack] [--base
+<branch>]` — a positional made only of digits is the issue number, any other
+positional is the remote name; `$REMOTE` defaults to `origin`. It drives the
+GitHub API target below **and** every git plumbing call here (`git fetch`,
+`<remote>/$BASE_BRANCH` ranges, `git push -u <remote> HEAD`). An unknown remote
+stops the run with `git remote -v` — never a silent `origin` fallback (same
+Failure rule as `gh-issue-implement/references/repo-resolution.md`).
+
 **1a-0 — bind the GitHub target (#1403), before any `gh` call:** resolve the
 host and repo from one and the same remote URL, then export the host so the
 sourced helpers (`gh_project_status.sh`, `gh_pr_edit_safe.sh`) inherit it:
 
 ```bash
+REMOTE="${REMOTE:-origin}"
 . "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
-REMOTE_URL=$(git remote get-url origin)
+REMOTE_URL=$(git remote get-url "$REMOTE")
 GH_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL")
 TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
 export GH_HOST="$TARGET_HOST"
-export GH_REPO TARGET_HOST
+export GH_REPO TARGET_HOST REMOTE
 ```
 
 Every `gh` call in this skill — `gh repo view`, `gh pr list`, `gh pr view`,
 `gh pr create`, `gh label list` — then runs as `GH_HOST="$TARGET_HOST" gh ...
 --repo "$GH_REPO"`. A bare `gh` follows gh CLI's own `gh repo set-default`
-instead of git's `origin`, so on a dual-host login (github.com + GHES) it
+instead of git's `$REMOTE`, so on a dual-host login (github.com + GHES) it
 silently targets the wrong server: the base branch comes from the wrong repo,
 or the PR is opened against it.
 
@@ -56,13 +66,14 @@ exit on bad input (`rc=2` mutually-exclusive flags, `rc=3` bad `--base`,
 `rc=5` parent PR not `OPEN`). Abort without pushing on any of them.
 
 **1b — gather range + push state (one message):** using `$BASE_BRANCH`, run
-`git rev-parse --abbrev-ref HEAD`, `git status`, `git fetch origin`, `git log
---oneline "$BASE_BRANCH"..HEAD`, `git diff "$BASE_BRANCH"...HEAD`, plus these
-**two separate** probes — they answer different questions, never conflate them:
+`git rev-parse --abbrev-ref HEAD`, `git status`, `git fetch "$REMOTE"`, `git
+log --oneline "$BASE_BRANCH"..HEAD`, `git diff "$BASE_BRANCH"...HEAD`, plus
+these **two separate** probes — they answer different questions, never conflate
+them:
 
 ```bash
-git rev-parse --symbolic-full-name @{u}        # pairing target (push/pull direction)
-git log HEAD..origin/"$BASE_BRANCH" --oneline  # how far behind base (rebase needed?)
+git rev-parse --symbolic-full-name @{u}               # pairing target (push/pull direction)
+git log HEAD.."$REMOTE/$BASE_BRANCH" --oneline        # how far behind base (rebase needed?)
 ```
 
 Use `$BASE_BRANCH`, not a hard-coded `main` — Step 1a may have bound it to a
@@ -73,9 +84,9 @@ Then read `references/branch-state.md` and paste its SSOT functions +
 upstream mispair check feeding Step 5's push policy (F-1) and the
 on-the-base-branch recovery (F-2). Outcomes: `not-on-base` → continue;
 `nothing-to-pr` → stop (empty range — covers both "nothing committed" and
-"commits already on `origin/$BASE_BRANCH`"); `auto-branch-*` → a feature
+"commits already on `$REMOTE/$BASE_BRANCH`"); `auto-branch-*` → a feature
 branch is created from the local-only commits, the local base branch is
-rewound to `origin/$BASE_BRANCH` when the guard allows, and the run continues.
+rewound to `$REMOTE/$BASE_BRANCH` when the guard allows, and the run continues.
 
 ## Steps 2-3: Analyze ALL Commits + Resolve Issue
 

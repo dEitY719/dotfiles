@@ -372,6 +372,7 @@ _run_resolve_bash() {
         export FAKE_GH_REPO_MODE='${mode}'
         export FAKE_GH_COUNTER='${FAKE_GH_COUNTER}'
         export _GH_PROJECT_STATUS_RETRY_SLEEP=0
+        unset GH_REPO TARGET_REPO
         source '${DOTFILES_ROOT}/bash/main.bash'
         ${snippet}
     "
@@ -466,6 +467,9 @@ LOG="${FAKE_GH_LOG:?FAKE_GH_LOG not set}"
 case "$1 $2" in
     "pr view")
         echo "pr-view" >>"$LOG"
+        # Separate tag so existing `grep -c '^pr-view$'` counts stay exact
+        # while #1405 can assert the --repo flag actually reached gh.
+        echo "pr-view-argv:$*" >>"$LOG"
         if [ "${FAKE_REVIEW_FAIL:-0}" = "1" ]; then
             exit 1
         fi
@@ -573,6 +577,7 @@ _run_full_bash() {
         export _GH_PROJECT_STATUS_RETRY_SLEEP=0
         export _GH_PROJECT_STATUS_VERIFY_SLEEP=0
         export _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS='${_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS:-0}'
+        unset GH_REPO TARGET_REPO
         source '${DOTFILES_ROOT}/bash/main.bash'
         ${snippet}
     "
@@ -896,4 +901,342 @@ STUB
     assert_output --partial "rc=0"
     assert_output --partial \
         "BUG: public functions undefined after source"
+}
+
+# ---------------------------------------------------------------------------
+# Repo pinning — issue #1405
+#
+# `gh repo view` with no --repo answers "what did `gh repo set-default`
+# pick", NOT "what is git's origin". On a host serving several repos in one
+# working tree that can sync the wrong board. These cases cover the slug
+# normalizer, the resolution precedence chain, the fail-closed behaviour on a
+# malformed explicit slug, and the `--repo` plumbing through
+# _gh_project_status_sync / _gh_project_status_query_current.
+# ---------------------------------------------------------------------------
+
+@test "bash: _gh_project_status_normalize_repo helper exists" {
+    run_in_bash 'declare -f _gh_project_status_normalize_repo >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "zsh: _gh_project_status_normalize_repo helper exists" {
+    run_in_zsh 'typeset -f _gh_project_status_normalize_repo >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "normalize: owner/repo -> 'owner repo'" {
+    run_in_bash '_gh_project_status_normalize_repo "acme/widgets"; echo "rc=$?"'
+    assert_success
+    assert_output --partial "acme widgets"
+    assert_output --partial "rc=0"
+}
+
+@test "normalize: host/owner/repo -> 'owner repo' (host dropped)" {
+    # The HOST/OWNER/REPO form is what gh's own GH_REPO accepts; host routing
+    # is _gh_project_status_ensure_host's job, so the host is validated then
+    # discarded.
+    run_in_bash '_gh_project_status_normalize_repo "github.example.com/acme/widgets"; echo "rc=$?"'
+    assert_success
+    assert_output --partial "acme widgets"
+    assert_output --partial "rc=0"
+    refute_output --partial "github.example.com"
+}
+
+@test "normalize: empty value returns 1" {
+    run_in_bash 'out=$(_gh_project_status_normalize_repo ""); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "out=[]"
+}
+
+@test "normalize: value without a slash returns 1" {
+    run_in_bash 'out=$(_gh_project_status_normalize_repo "norepo"); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "out=[]"
+}
+
+@test "normalize: four segments returns 1" {
+    run_in_bash 'out=$(_gh_project_status_normalize_repo "a/b/c/d"); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "out=[]"
+}
+
+@test "normalize: trailing empty segment (owner/) returns 1" {
+    run_in_bash 'out=$(_gh_project_status_normalize_repo "owner/"); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "out=[]"
+}
+
+@test "normalize: leading empty segment (/repo) returns 1" {
+    run_in_bash 'out=$(_gh_project_status_normalize_repo "/repo"); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "out=[]"
+}
+
+# ------- resolution precedence ---------------------------------------------
+#
+# A marker-file fake `gh`: every `repo view` invocation appends a line to
+# $FAKE_GH_MARKER, so a test can prove the auto-detect fallback was NOT
+# consulted (the file stays absent) as well as that it was.
+
+_setup_fake_gh_marker() {
+    STUB_BIN="$TEST_TEMP_HOME/bin"
+    FAKE_GH_MARKER="$TEST_TEMP_HOME/fake_gh_repo_view_marker"
+    mkdir -p "$STUB_BIN"
+    rm -f "$FAKE_GH_MARKER"
+    cat >"$STUB_BIN/gh" <<'GH'
+#!/usr/bin/env bash
+case "$1 $2" in
+    "repo view")
+        echo "consulted" >>"${FAKE_GH_MARKER:?FAKE_GH_MARKER not set}"
+        echo "autoowner autorepo"
+        exit 0
+        ;;
+esac
+exit 0
+GH
+    chmod +x "$STUB_BIN/gh"
+}
+
+# Run a snippet with the marker fake on PATH. $1 is a block of env
+# assignments applied AFTER main.bash is sourced (so nothing the loader does
+# can clobber them); $2 is the snippet under test.
+_run_marker_bash() {
+    local env_block="$1" snippet="$2"
+    run bash --noprofile --norc -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        export SHELL_COMMON='${SHELL_COMMON}'
+        export DOTFILES_FORCE_INIT=1
+        export DOTFILES_TEST_MODE=1
+        export DOTFILES_ROOT_NO_CANONICALIZE=1
+        export HOME='${HOME}'
+        export TERM=dumb
+        export PATH='${STUB_BIN}:${PATH}'
+        export FAKE_GH_MARKER='${FAKE_GH_MARKER}'
+        export _GH_PROJECT_STATUS_RETRY_SLEEP=0
+        export _GH_PROJECT_STATUS_VERIFY_SLEEP=0
+        unset GH_REPO TARGET_REPO
+        source '${DOTFILES_ROOT}/bash/main.bash'
+        ${env_block}
+        ${snippet}
+    "
+}
+
+@test "resolve: no override falls back to gh repo view" {
+    _setup_fake_gh_marker
+    _run_marker_bash '' '_gh_project_status_resolve_owner_repo; echo "rc=$?"'
+    assert_success
+    assert_output --partial "autoowner autorepo"
+    assert_output --partial "rc=0"
+    [ -f "$FAKE_GH_MARKER" ]
+}
+
+@test "resolve: TARGET_REPO beats gh repo view" {
+    _setup_fake_gh_marker
+    _run_marker_bash 'export TARGET_REPO=tgt/tgtrepo' \
+        '_gh_project_status_resolve_owner_repo; echo "rc=$?"'
+    assert_success
+    assert_output --partial "tgt tgtrepo"
+    assert_output --partial "rc=0"
+    refute_output --partial "autoowner"
+    [ ! -f "$FAKE_GH_MARKER" ]
+}
+
+@test "resolve: GH_REPO beats TARGET_REPO" {
+    _setup_fake_gh_marker
+    _run_marker_bash 'export GH_REPO=envown/envrepo; export TARGET_REPO=tgt/tgtrepo' \
+        '_gh_project_status_resolve_owner_repo; echo "rc=$?"'
+    assert_success
+    assert_output --partial "envown envrepo"
+    assert_output --partial "rc=0"
+    refute_output --partial "tgt tgtrepo"
+    [ ! -f "$FAKE_GH_MARKER" ]
+}
+
+@test "resolve: explicit arg beats GH_REPO" {
+    _setup_fake_gh_marker
+    _run_marker_bash 'export GH_REPO=envown/envrepo; export TARGET_REPO=tgt/tgtrepo' \
+        '_gh_project_status_resolve_owner_repo "argown/argrepo"; echo "rc=$?"'
+    assert_success
+    assert_output --partial "argown argrepo"
+    assert_output --partial "rc=0"
+    refute_output --partial "envown envrepo"
+    [ ! -f "$FAKE_GH_MARKER" ]
+}
+
+@test "resolve: explicit HOST/OWNER/REPO arg is accepted" {
+    _setup_fake_gh_marker
+    _run_marker_bash '' \
+        '_gh_project_status_resolve_owner_repo "gh.example.net/argown/argrepo"; echo "rc=$?"'
+    assert_success
+    assert_output --partial "argown argrepo"
+    assert_output --partial "rc=0"
+    [ ! -f "$FAKE_GH_MARKER" ]
+}
+
+@test "resolve: malformed explicit arg returns 1 and never consults gh repo view" {
+    # Fail-closed core of #1405: a typo'd slug must NOT silently fall back to
+    # auto-detect, or the sync would happily write to whatever repo
+    # `gh repo set-default` happens to point at.
+    _setup_fake_gh_marker
+    _run_marker_bash '' \
+        'out=$(_gh_project_status_resolve_owner_repo "typo-no-slash"); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "out=[]"
+    [ ! -f "$FAKE_GH_MARKER" ]
+}
+
+@test "resolve: malformed GH_REPO returns 1 and never consults gh repo view" {
+    _setup_fake_gh_marker
+    _run_marker_bash 'export GH_REPO=a/b/c/d' \
+        'out=$(_gh_project_status_resolve_owner_repo); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "out=[]"
+    [ ! -f "$FAKE_GH_MARKER" ]
+}
+
+# ------- --repo plumbing through _gh_project_status_sync --------------------
+
+@test "repo-opt: --repo with missing value rejected" {
+    run_in_bash '_gh_project_status_sync issue 42 "In progress" --repo 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "--repo requires an argument"
+}
+
+@test "repo-opt: unknown option after --repo still warns and returns 0" {
+    run_in_bash '_gh_project_status_sync issue 42 "In progress" --repo a/b --bogus 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "unknown option: --bogus"
+}
+
+@test "repo-opt: empty --repo value falls through to TARGET_REPO (#1405)" {
+    # An empty value is "not supplied", NOT "skip the sync": callers pass
+    # "$SOME_VAR" whose binding can legitimately come back empty, and a hard
+    # skip there would defeat the helper's own #341 retry.
+    _setup_fake_gh_marker
+    _run_marker_bash 'export TARGET_REPO=env/fallback' \
+        '_gh_project_status_sync issue 42 "In progress" --repo "" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    refute_output --partial "--repo requires an argument"
+    refute_output --partial "could not determine owner/repo"
+    [ ! -f "$FAKE_GH_MARKER" ]
+}
+
+@test "repo-opt: empty --repo value still reaches gh repo view when no env is set" {
+    _setup_fake_gh_marker
+    _run_marker_bash '' \
+        '_gh_project_status_sync issue 42 "In progress" --repo "" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    refute_output --partial "--repo requires an argument"
+    [ -f "$FAKE_GH_MARKER" ]
+}
+
+@test "repo-opt: --repo pins the repo, skipping gh repo view auto-detect" {
+    _setup_fake_gh_marker
+    _run_marker_bash '' \
+        '_gh_project_status_sync issue 42 "In progress" --repo pinned/board 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    refute_output --partial "could not determine owner/repo"
+    [ ! -f "$FAKE_GH_MARKER" ]
+}
+
+@test "repo-opt: malformed --repo fails closed (no auto-detect rescue)" {
+    _setup_fake_gh_marker
+    _run_marker_bash '' \
+        '_gh_project_status_sync issue 42 "In progress" --repo typo 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "could not determine owner/repo, skipping"
+    [ ! -f "$FAKE_GH_MARKER" ]
+}
+
+# ------- Approved guard carries --repo, and still fires when resolve fails --
+
+@test "guard: gh pr view carries --repo from the resolved owner/repo" {
+    _setup_fake_gh_full
+    FAKE_REVIEW_DECISION="APPROVED" \
+    FAKE_VERIFY_SEQUENCE="Approved" \
+        _run_full_bash '_gh_project_status_sync pr 42 "Approved" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    grep -q -- '^pr-view-argv:.*--repo owner/reponame' "$FAKE_GH_LOG"
+}
+
+@test "guard: --repo option overrides the repo passed to gh pr view" {
+    _setup_fake_gh_full
+    FAKE_REVIEW_DECISION="APPROVED" \
+    FAKE_VERIFY_SEQUENCE="Approved" \
+        _run_full_bash '_gh_project_status_sync pr 42 "Approved" --repo pin/board 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    grep -q -- '^pr-view-argv:.*--repo pin/board' "$FAKE_GH_LOG"
+    # Explicit --repo short-circuits auto-detect entirely.
+    [ "$(grep -c '^repo-view$' "$FAKE_GH_LOG")" -eq 0 ]
+}
+
+@test "guard: owner/repo resolution failure does NOT skip the Approved guard" {
+    # Ordering regression for #1405: resolution now runs first so the guard
+    # can pass --repo, but a resolution failure must not turn a fail-closed
+    # policy check into a fail-open skip. Expect rc 2, not rc 0.
+    _setup_fake_gh_full
+    FAKE_REPO_VIEW_FAIL=1 \
+    FAKE_REVIEW_DECISION="REVIEW_REQUIRED" \
+        _run_full_bash '_gh_project_status_sync pr 42 "Approved" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=2"
+    assert_output --partial 'refusing PR #42 -> "Approved": reviewDecision=REVIEW_REQUIRED'
+    [ "$(grep -c '^pr-view$' "$FAKE_GH_LOG")" -eq 1 ]
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 0 ]
+    # Bare `gh pr view` on the fallback branch — no empty --repo argument.
+    refute_output --partial "--repo /"
+}
+
+@test "guard: resolution failure + APPROVED still bails out with the skip line" {
+    # The guard passes, then the deferred bail-out fires — rc 0, no mutation.
+    _setup_fake_gh_full
+    FAKE_REPO_VIEW_FAIL=1 \
+    FAKE_REVIEW_DECISION="APPROVED" \
+        _run_full_bash '_gh_project_status_sync pr 42 "Approved" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "could not determine owner/repo, skipping"
+    [ "$(grep -c '^pr-view$' "$FAKE_GH_LOG")" -eq 1 ]
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 0 ]
+}
+
+# ------- query_current explicit repo argument -------------------------------
+
+@test "query_current: explicit malformed repo returns rc=1" {
+    # Four-way rc contract is unchanged: a resolution failure — including a
+    # typo'd explicit slug — stays rc 1 so board gates fail closed.
+    _setup_fake_gh_full
+    _run_full_bash 'out=$(_gh_project_status_query_current pr 42 "typo"); echo "rc=$?"; echo "out=[$out]"'
+    assert_output --partial "rc=1"
+    assert_output --partial "out=[]"
+    # Bails before the GraphQL read is attempted, and without auto-detecting.
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 0 ]
+    [ "$(grep -c '^repo-view$' "$FAKE_GH_LOG")" -eq 0 ]
+}
+
+@test "query_current: explicit repo pins the query without auto-detect" {
+    _setup_fake_gh_full
+    FAKE_VERIFY_SEQUENCE="In review" \
+        _run_full_bash 'out=$(_gh_project_status_query_current pr 42 "pin/board"); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "out=[In review]"
+    [ "$(grep -c '^repo-view$' "$FAKE_GH_LOG")" -eq 0 ]
 }

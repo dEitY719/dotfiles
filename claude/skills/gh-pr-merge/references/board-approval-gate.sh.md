@@ -22,8 +22,11 @@ if [ -r "$_HELPER" ]; then
     # Use for in-transition repos or one-shot ops (also leaves an audit signal:
     # any reviewer can re-run gh-pr-merge without the env var to verify).
     elif [ "${GH_PR_MERGE_SKIP_BOARD_CHECK:-0}" != "1" ]; then
-        BOARD_STATUS=$(GH_REPO="$TARGET_REPO" \
-            _gh_project_status_query_current pr "$PR_NUMBER" 2>/dev/null)
+        # 3rd positional = repo (#1405). Explicit beats the helper's
+        # `gh repo view` auto-detect, which reports `gh repo set-default`
+        # rather than the remote Step 1 resolved.
+        BOARD_STATUS=$(_gh_project_status_query_current \
+            pr "$PR_NUMBER" "$TARGET_REPO" 2>/dev/null)
         _BOARD_QUERY_RC=$?
 
         # rc != 0 = the query itself failed (owner/repo resolution, gh auth /

@@ -90,7 +90,8 @@ GH_HOST="$TARGET_HOST" gh pr create \
   --assignee @me
 ```
 
-`GH_HOST` + `--repo` are the pair Step 1a-0 bound from `origin`'s URL. Both
+`GH_HOST` + `--repo` are the pair Step 1a-0 bound from `$REMOTE`'s URL
+(`origin` by default, #1405). Both
 are mandatory — a bare `gh pr create` follows gh CLI's own
 `gh repo set-default`, which on a dual-host login opens the PR against the
 wrong GitHub server (#1403).
@@ -167,7 +168,7 @@ done
 ```
 
 `GH_REPO` is `owner/repo` (e.g. `dEitY719/dotfiles`), bound in Step 1a-0 from
-`origin`'s remote URL together with `TARGET_HOST`. If it is somehow unset,
+`$REMOTE`'s URL (`origin` by default, #1405) together with `TARGET_HOST`. If it is somehow unset,
 re-resolve it from that same URL via `_gh_parse_owner_repo_url` — not via a
 bare `gh repo view --json nameWithOwner`, which reads gh CLI's default repo
 and can name a different host's repo entirely (#1403). `_gh_pr_edit_safe_label`

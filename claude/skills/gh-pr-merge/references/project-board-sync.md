@@ -24,7 +24,9 @@ if [ -r "$_HELPER" ]; then
         printf '[gh-pr-merge] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
             "$_HELPER" >&2
     else
-        GH_REPO="$TARGET_REPO" _gh_project_status_sync pr "$PR_NUMBER" "Done" || true
+        # --repo is explicit (#1405) — the helper's auto-detect answers
+        # `gh repo set-default`, not the remote Step 1 resolved.
+        _gh_project_status_sync pr "$PR_NUMBER" "Done" --repo "$TARGET_REPO" || true
     fi
 fi
 ```
@@ -64,8 +66,8 @@ query, which is supported across all `gh` versions that ship the
 # (NF-1, #644) OR sourced-but-function-undefined (#724) the entire
 # reconciliation is silently skipped — both gates live in step (1).
 for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$TARGET_REPO" 2>/dev/null || true); do
-    GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$_issue" "Done" \
-        --only-from "Backlog,In progress,In review" || true
+    _gh_project_status_sync issue "$_issue" "Done" \
+        --only-from "Backlog,In progress,In review" --repo "$TARGET_REPO" || true
 done
 ```
 

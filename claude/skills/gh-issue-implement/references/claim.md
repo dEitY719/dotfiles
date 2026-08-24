@@ -140,13 +140,20 @@ if [ -r "$_HELPER" ]; then
         printf '[gh-issue-implement] %s sourced but _gh_project_status_sync undefined — board transition skipped (#724).\n' \
             "$_HELPER" >&2
     else
-        _gh_project_status_sync issue <N> "In progress" --only-from "Backlog,Ready"
+        # --repo "$TARGET_REPO" (Step 1) is explicit (#1405): the helper's
+        # `gh repo view` fallback answers `gh repo set-default`, not the
+        # remote this run resolved.
+        _gh_project_status_sync issue <N> "In progress" --only-from "Backlog,Ready" --repo "$TARGET_REPO"
     fi
 fi
 ```
 
 The helper (`shell-common/functions/gh_project_status.sh`) handles:
 
+- **Explicit `--repo`**: `$TARGET_REPO` from Step 1 (#1405). Without it
+  the helper resolves via `gh repo view`, i.e. whatever
+  `gh repo set-default` picked — which need not be the remote this run
+  resolved.
 - **No-board repos**: returns 0 silently when the issue belongs to no
   projectV2.
 - **`--only-from` whitelist**: `Backlog,Ready` — never bounces an

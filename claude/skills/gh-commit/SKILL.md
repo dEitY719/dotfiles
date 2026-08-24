@@ -10,6 +10,7 @@ description: >-
   "커밋해", "지금까지 작업 커밋", "이슈 N번 연결해서 커밋". The user does NOT
   need to prefix with "git status 확인하고" — that is step 1 of this skill.
   Creates a new commit — never amends. Never skips hooks. Accepts
+  `[issue-number] [remote]` (remote defaults to `origin`) and
   `-h`/`--help`/`help` to print usage.
 allowed-tools: Bash, Read, Grep
 metadata:
@@ -44,30 +45,41 @@ NOT ask "what did you change?". In a single message run: `git status` (never
 `-uall`), `git diff` (staged + unstaged), `git diff --staged` if anything is
 staged, and `git log --oneline -20` (to mimic the repo's commit style).
 
-**Bind the GitHub target (#1403)** — Step 5 talks to GitHub, so resolve the
-host and repo from `origin`'s URL in this same message and export them:
+**Positional args (#1405)** — `/gh:commit [issue-number] [remote]`: a
+positional made only of digits is the issue number, any other positional is the
+remote name. `/gh:commit 123`, `/gh:commit upstream`, `/gh:commit 123 upstream`
+all work; bare `/gh:commit` is unchanged. Remote defaults to `origin`.
+
+**Bind the GitHub target (#1403, #1405)** — Step 5 talks to GitHub, so resolve
+the host and repo from the `[remote]`'s URL in this same message and export
+them; if `git remote get-url "$REMOTE"` fails, stop with the available-remotes
+list (`git remote -v`) and `Error: remote '<name>' not found. Available
+remotes:` — never fall back to `origin` silently, which masks typos and posts
+metrics to the wrong repo (same Failure rule as
+`gh-issue-implement/references/repo-resolution.md`).
 
 ```bash
+REMOTE="${REMOTE:-origin}"
 . "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
-REMOTE_URL=$(git remote get-url origin)
+REMOTE_URL=$(git remote get-url "$REMOTE")
 TARGET_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL")
 TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
 export GH_HOST="$TARGET_HOST"
-export TARGET_REPO TARGET_HOST
+export TARGET_REPO TARGET_HOST REMOTE
 ```
 
 Every `gh` call in Step 5 is then `GH_HOST="$TARGET_HOST" gh ... --repo
 "$TARGET_REPO"`. A bare `gh` follows gh CLI's own `gh repo set-default`, not
-git's `origin`; on a dual-host login (github.com + GHES) that posts to the
+git's `$REMOTE`; on a dual-host login (github.com + GHES) that posts to the
 wrong server with no error. `export` is what carries the host into
 `gh_project_status.sh`, which calls `gh` on its own.
 
 ## Step 2: Resolve the Issue Number
 
-First hit wins: (1) explicit argument (`/gh:commit 123` or "이슈 123번 연결"
-in the latest message); (2) recent conversation — scan the last ~10 messages
-for `#N` or "Issue #N created" (gh:issue-create's output); (3) none → skip
-the footer, do NOT invent an issue number.
+First hit wins: (1) explicit all-digit argument (`/gh:commit 123` or "이슈
+123번 연결" in the latest message); (2) recent conversation — scan the last ~10
+messages for `#N` or "Issue #N created" (gh:issue-create's output); (3) none →
+skip the footer, do NOT invent an issue number.
 
 ## Step 3: Draft the Commit Message
 

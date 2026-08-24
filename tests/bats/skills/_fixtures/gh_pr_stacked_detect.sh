@@ -35,6 +35,8 @@ is_stacked_pr_repo() {
 }
 
 # ── Argument parsing ───────────────────────────────────────────────────
+# Non-integer positionals are deliberately ignored: that is the [remote]
+# positional, already consumed by Step 1a-0 into $REMOTE (#1405).
 parse_stacked_args() {
     STACK_MODE=auto
     STACK_BASE=
@@ -119,7 +121,9 @@ _gh_pr_default_default_tip_diff_check() {
 
 find_parent_pr_candidates() {
     local _default_branch="$1"
-    local _default_tip="origin/$_default_branch"
+    # $REMOTE is the [remote] positional bound in Step 1a-0 (#1405).
+    local _remote="${REMOTE:-origin}"
+    local _default_tip="$_remote/$_default_branch"
     local _line _pr _head _candidates
 
     _candidates=$(_gh_pr_default_open_pr_list)
@@ -131,10 +135,10 @@ find_parent_pr_candidates() {
         _head="${_line#* }"
         [ "$_head" = "$_default_branch" ] && continue
         if [ -z "${FAKE_OPEN_PRS+set}" ]; then
-            git fetch origin "$_head" --quiet 2>/dev/null || continue
+            git fetch "$_remote" "$_head" --quiet 2>/dev/null || continue
         fi
-        _gh_pr_default_is_ancestor "origin/$_head" || continue
-        _gh_pr_default_default_tip_diff_check "origin/$_head" "$_default_tip" || continue
+        _gh_pr_default_is_ancestor "$_remote/$_head" || continue
+        _gh_pr_default_default_tip_diff_check "$_remote/$_head" "$_default_tip" || continue
         printf '%s:%s\n' "$_pr" "$_head"
     done <<EOF
 $_candidates
