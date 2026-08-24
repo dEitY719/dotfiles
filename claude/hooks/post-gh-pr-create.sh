@@ -153,20 +153,21 @@ _post_gh_pr_create_repo_has_board() {
     local _slug _o _n _cnt
     if command -v _gh_project_status_normalize_repo >/dev/null 2>&1; then
         _slug=$(_gh_project_status_normalize_repo "$GH_REPO") || return 1
-        _o="${_slug%% *}"
-        _n="${_slug#* }"
     else
         printf '[post-gh-pr-create] %s sourced but _gh_project_status_normalize_repo undefined — splitting GH_REPO inline (#724).\n' \
             "$_helper" >&2
         # Mirrors only the host-stripping slice of the normalizer, not its
         # validation half: a malformed slug simply yields an empty projectsV2
         # count below, which is the same "no board" answer validation would
-        # have produced.
+        # have produced. Ends in the normalizer's own "<owner> <repo>" output
+        # contract, so both branches feed the one split below instead of
+        # carrying two split idioms that must stay in sync.
         _slug="$GH_REPO"
         case "$_slug" in */*/*) _slug="${_slug#*/}" ;; esac
-        _o="${_slug%%/*}"
-        _n="${_slug#*/}"
+        _slug="${_slug%%/*} ${_slug#*/}"
     fi
+    _o="${_slug%% *}"
+    _n="${_slug#* }"
     [ -n "$_o" ] && [ -n "$_n" ] || return 1
     # GraphQL variables ($o, $n) are bound via the -f flags below, so the
     # single-quoted query intentionally does not shell-expand. Both are
