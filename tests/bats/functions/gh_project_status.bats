@@ -1212,23 +1212,42 @@ _run_marker_bash() {
         _run_full_bash '_gh_project_status_sync pr 42 "Approved" 2>&1; echo "rc=$?"'
     assert_success
     assert_output --partial "rc=2"
-    assert_output --partial 'refusing PR #42 -> "Approved": reviewDecision=REVIEW_REQUIRED'
-    [ "$(grep -c '^pr-view$' "$FAKE_GH_LOG")" -eq 1 ]
+    assert_output --partial 'refusing PR #42 -> "Approved": reviewDecision=UNKNOWN'
+    assert_output --partial 'owner/repo unresolved'
+    # No `gh pr view` at all on this path: a bare call would read whichever
+    # repo `gh repo set-default` picked (PR #1409 review, codex BLOCKER).
+    [ "$(grep -c '^pr-view$' "$FAKE_GH_LOG")" -eq 0 ]
     [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 0 ]
-    # Bare `gh pr view` on the fallback branch — no empty --repo argument.
     refute_output --partial "--repo /"
 }
 
-@test "guard: resolution failure + APPROVED still bails out with the skip line" {
-    # The guard passes, then the deferred bail-out fires — rc 0, no mutation.
+@test "guard: resolution failure refuses even when the default repo would say APPROVED" {
+    # PR #1409 review (codex BLOCKER): the wrong-repo read is the hazard, so
+    # an unresolved repo refuses (rc 2) rather than consulting `gh pr view`
+    # without --repo and trusting whatever reviewDecision comes back. The
+    # stub is primed with APPROVED precisely to prove it is never asked.
     _setup_fake_gh_full
     FAKE_REPO_VIEW_FAIL=1 \
     FAKE_REVIEW_DECISION="APPROVED" \
         _run_full_bash '_gh_project_status_sync pr 42 "Approved" 2>&1; echo "rc=$?"'
     assert_success
+    assert_output --partial "rc=2"
+    assert_output --partial 'owner/repo unresolved'
+    refute_output --partial "could not determine owner/repo, skipping"
+    [ "$(grep -c '^pr-view$' "$FAKE_GH_LOG")" -eq 0 ]
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 0 ]
+}
+
+@test "guard: non-Approved target still reaches the deferred bail-out on resolution failure" {
+    # The deferred "skipping" bail-out is still the outcome for every target
+    # the Approved guard does not gate — proves the guard change narrowed
+    # nothing else (PR #1409 review).
+    _setup_fake_gh_full
+    FAKE_REPO_VIEW_FAIL=1 \
+        _run_full_bash '_gh_project_status_sync pr 42 "In review" 2>&1; echo "rc=$?"'
+    assert_success
     assert_output --partial "rc=0"
     assert_output --partial "could not determine owner/repo, skipping"
-    [ "$(grep -c '^pr-view$' "$FAKE_GH_LOG")" -eq 1 ]
     [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 0 ]
 }
 
