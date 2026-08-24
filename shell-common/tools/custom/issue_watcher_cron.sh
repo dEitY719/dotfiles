@@ -147,6 +147,16 @@ _iw_read_state() {
 #   1  unknown account / missing directory (fail-fast, message already printed)
 #   2  HOME unset — nothing to route against; caller degrades to no --env
 #
+# One narrow exception to the fail-fast (PR #1395 review): a user who never ran
+# `claude-accounts setup` has no CLAUDE_ENABLED_ACCOUNTS whitelist at all and
+# never named an account, so `_claude_resolve_account` rejects even the implicit
+# `personal` default. Before #1393 the pane ran bare `claude` and worked for
+# them; routing must not turn that into a hard failure, so ~/.claude is used
+# when it exists. Every other resolution failure still fails fast — an explicit
+# CLAUDE_DEFAULT_ACCOUNT whose dir is missing, or a non-empty whitelist that
+# does not list the account, are real misconfigurations and silently switching
+# accounts there would route the pane at the wrong credentials.
+#
 # claude.sh is sourced inside a subshell on purpose:
 #   - its interactive guard (`case $- in *i*`) defines nothing at all in a
 #     non-interactive cron run unless DOTFILES_FORCE_INIT is exported first;
@@ -157,6 +167,13 @@ _iw_resolve_config_dir() {
     [ -n "${HOME:-}" ] || return 2
 
     (
+        # Captured before claude.sh is sourced: the *caller's* environment is
+        # what says whether the single-account fallback below applies.
+        # set-but-empty CLAUDE_DEFAULT_ACCOUNT counts as explicitly set.
+        _enabled="${CLAUDE_ENABLED_ACCOUNTS:-}"
+        _default_set=0
+        [ -z "${CLAUDE_DEFAULT_ACCOUNT+x}" ] || _default_set=1
+
         DOTFILES_FORCE_INIT=1
         export DOTFILES_FORCE_INIT
 
@@ -174,6 +191,16 @@ _iw_resolve_config_dir() {
         else
             _account="${CLAUDE_DEFAULT_ACCOUNT:-personal}"
             _cfg_dir=$(_claude_resolve_account "${_account}") || {
+                # No multi-account opt-in at all *and* no account was asked
+                # for — the pre-#1393 single-account user. ux_* writes to
+                # stdout, which this subshell reserves for the resolved path.
+                if [ -z "${_enabled}" ] && [ "${_default_set}" -eq 0 ] &&
+                    [ -d "$HOME/.claude" ]; then
+                    ux_warning "CLAUDE_ENABLED_ACCOUNTS not configured — falling back to \$HOME/.claude (single-account mode)." >&2
+                    ux_info "Run 'claude-accounts setup' to opt into multi-account routing." >&2
+                    printf '%s' "$HOME/.claude"
+                    exit 0
+                fi
                 ux_error "Unknown claude account: ${_account} — cannot set CLAUDE_CONFIG_DIR for the watcher pane."
                 ux_info "Available: $(_claude_resolve_account --list | tr '\n' ' ')"
                 exit 1
@@ -309,7 +336,9 @@ _iw_usage() {
     ux_bullet_sub "the pane runs claude --dangerously-skip-permissions (unattended cron)"
     ux_bullet_sub "internal setup mode  → CLAUDE_CONFIG_DIR=\$HOME/.claude"
     ux_bullet_sub "otherwise            → CLAUDE_CONFIG_DIR=\$HOME/.claude-\${CLAUDE_DEFAULT_ACCOUNT:-personal}"
-    ux_bullet_sub "the account directory must already exist — the tick fails fast otherwise"
+    ux_bullet_sub "  (that account must be listed in \$CLAUDE_ENABLED_ACCOUNTS)"
+    ux_bullet_sub "no \$CLAUDE_ENABLED_ACCOUNTS and no \$CLAUDE_DEFAULT_ACCOUNT → \$HOME/.claude if it exists"
+    ux_bullet_sub "the resolved directory must already exist — the tick fails fast otherwise"
     ux_bullet "crontab"
     ux_bullet_sub "*/5 * * * * /path/to/issue_watcher_cron.sh >> ~/.local/state/issue-watcher/cron.log 2>&1"
 }
