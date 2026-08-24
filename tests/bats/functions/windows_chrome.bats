@@ -1,0 +1,160 @@
+#!/usr/bin/env bats
+# tests/bats/functions/windows_chrome.bats
+# Windows-side Chrome resolution helper — SSOT shared by
+# shell-common/env/browser.sh and tools/custom/open_in_windows_chrome.sh
+# (issue #1408).
+
+load '../test_helper'
+
+setup() {
+    setup_isolated_home
+    HELPER="${SHELL_COMMON}/functions/windows_chrome.sh"
+    FAKE_DRIVE="${TEST_TEMP_HOME}/mnt/c"
+    PROC="${TEST_TEMP_HOME}/proc-version"
+}
+
+teardown() {
+    teardown_isolated_home
+}
+
+# Source the helper in a bare bash subprocess and run BODY against it.
+_helper_bash() {
+    run bash --noprofile --norc -c "
+        export _WINDOWS_CHROME_PROC_VERSION='${PROC}'
+        export WINDOWS_CHROME_DRIVE='${FAKE_DRIVE}'
+        export WINDOWS_CHROME_EXE='${WINDOWS_CHROME_EXE:-}'
+        . '${HELPER}'
+        $1
+    "
+}
+
+_helper_zsh() {
+    run zsh -f -c "
+        export _WINDOWS_CHROME_PROC_VERSION='${PROC}'
+        export WINDOWS_CHROME_DRIVE='${FAKE_DRIVE}'
+        export WINDOWS_CHROME_EXE='${WINDOWS_CHROME_EXE:-}'
+        . '${HELPER}'
+        $1
+    "
+}
+
+# Create an executable stub at $1 (parent dirs included).
+_stub_exe() {
+    mkdir -p "$(dirname "$1")"
+    printf '#!/bin/sh\nprintf "stub:%%s\\n" "$*"\n' > "$1"
+    chmod +x "$1"
+}
+
+# --- WSL detection -------------------------------------------------
+
+@test "_windows_chrome_is_wsl: true when /proc/version names microsoft" {
+    printf 'Linux version 6.6.87.2-microsoft-standard-WSL2\n' > "$PROC"
+    _helper_bash '_windows_chrome_is_wsl && echo yes'
+    assert_success
+    assert_output "yes"
+}
+
+@test "_windows_chrome_is_wsl: case-insensitive match" {
+    printf 'Linux version 5.15.0 (Microsoft@WSL)\n' > "$PROC"
+    _helper_bash '_windows_chrome_is_wsl && echo yes'
+    assert_success
+    assert_output "yes"
+}
+
+@test "_windows_chrome_is_wsl: false on a plain Linux kernel" {
+    printf 'Linux version 6.8.0-generic (Ubuntu)\n' > "$PROC"
+    _helper_bash '_windows_chrome_is_wsl || echo no'
+    assert_success
+    assert_output "no"
+}
+
+@test "_windows_chrome_is_wsl: false when the proc file is missing" {
+    rm -f "$PROC"
+    _helper_bash '_windows_chrome_is_wsl || echo no'
+    assert_success
+    assert_output "no"
+}
+
+# --- executable resolution -----------------------------------------
+
+@test "_windows_chrome_exe: honors an executable WINDOWS_CHROME_EXE override" {
+    local exe="${TEST_TEMP_HOME}/custom-chrome.exe"
+    _stub_exe "$exe"
+    WINDOWS_CHROME_EXE="$exe" _helper_bash '_windows_chrome_exe'
+    assert_success
+    assert_output "$exe"
+}
+
+@test "_windows_chrome_exe: fails when WINDOWS_CHROME_EXE is set but not executable" {
+    local exe="${TEST_TEMP_HOME}/missing-chrome.exe"
+    # A default-install candidate exists — an explicit broken override must
+    # still fail rather than silently opening a different Chrome.
+    _stub_exe "${FAKE_DRIVE}/Program Files/Google/Chrome/Application/chrome.exe"
+    WINDOWS_CHROME_EXE="$exe" _helper_bash '_windows_chrome_exe'
+    assert_failure
+    assert_output ""
+}
+
+@test "_windows_chrome_exe: finds the Program Files install" {
+    local exe="${FAKE_DRIVE}/Program Files/Google/Chrome/Application/chrome.exe"
+    _stub_exe "$exe"
+    _helper_bash '_windows_chrome_exe'
+    assert_success
+    assert_output "$exe"
+}
+
+@test "_windows_chrome_exe: finds the 32-bit Program Files (x86) install" {
+    local exe="${FAKE_DRIVE}/Program Files (x86)/Google/Chrome/Application/chrome.exe"
+    _stub_exe "$exe"
+    _helper_bash '_windows_chrome_exe'
+    assert_success
+    assert_output "$exe"
+}
+
+@test "_windows_chrome_exe: finds a per-user AppData install" {
+    local exe="${FAKE_DRIVE}/Users/someone/AppData/Local/Google/Chrome/Application/chrome.exe"
+    _stub_exe "$exe"
+    _helper_bash '_windows_chrome_exe'
+    assert_success
+    assert_output "$exe"
+}
+
+@test "_windows_chrome_exe: prefers Program Files over a per-user install" {
+    local sys="${FAKE_DRIVE}/Program Files/Google/Chrome/Application/chrome.exe"
+    _stub_exe "$sys"
+    _stub_exe "${FAKE_DRIVE}/Users/someone/AppData/Local/Google/Chrome/Application/chrome.exe"
+    _helper_bash '_windows_chrome_exe'
+    assert_success
+    assert_output "$sys"
+}
+
+@test "_windows_chrome_exe: fails silently when Chrome is not installed" {
+    _helper_bash '_windows_chrome_exe'
+    assert_failure
+    assert_output ""
+}
+
+@test "_windows_chrome_exe: ignores a non-executable chrome.exe" {
+    local exe="${FAKE_DRIVE}/Program Files/Google/Chrome/Application/chrome.exe"
+    mkdir -p "$(dirname "$exe")"
+    : > "$exe"
+    _helper_bash '_windows_chrome_exe'
+    assert_failure
+}
+
+# --- cross-shell ---------------------------------------------------
+
+@test "zsh: helper sources and resolves identically" {
+    local exe="${FAKE_DRIVE}/Program Files/Google/Chrome/Application/chrome.exe"
+    _stub_exe "$exe"
+    _helper_zsh '_windows_chrome_exe'
+    assert_success
+    assert_output "$exe"
+}
+
+@test "zsh: WSL detection works" {
+    printf 'Linux version 6.6.87.2-microsoft-standard-WSL2\n' > "$PROC"
+    _helper_zsh '_windows_chrome_is_wsl && echo yes'
+    assert_success
+    assert_output "yes"
+}
