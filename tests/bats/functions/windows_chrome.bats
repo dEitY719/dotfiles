@@ -17,26 +17,22 @@ teardown() {
     teardown_isolated_home
 }
 
-# Source the helper in a bare bash subprocess and run BODY against it.
-_helper_bash() {
-    run bash --noprofile --norc -c "
-        export _WINDOWS_CHROME_PROC_VERSION='${PROC}'
-        export WINDOWS_CHROME_DRIVE='${FAKE_DRIVE}'
-        export WINDOWS_CHROME_EXE='${WINDOWS_CHROME_EXE:-}'
-        . '${HELPER}'
-        $1
-    "
+# Source the helper in a bare subprocess and run BODY against it.
+# $1 = body, rest = the shell command words — one env list for both shells, so
+# the cross-shell tests are guaranteed to compare like with like.
+_helper_run() {
+    local body="$1"
+    shift
+    run env \
+        "_WINDOWS_CHROME_PROC_VERSION=${PROC}" \
+        "WINDOWS_CHROME_DRIVE=${FAKE_DRIVE}" \
+        "WINDOWS_CHROME_EXE=${WINDOWS_CHROME_EXE:-}" \
+        "$@" -c ". '${HELPER}'
+${body}"
 }
 
-_helper_zsh() {
-    run zsh -f -c "
-        export _WINDOWS_CHROME_PROC_VERSION='${PROC}'
-        export WINDOWS_CHROME_DRIVE='${FAKE_DRIVE}'
-        export WINDOWS_CHROME_EXE='${WINDOWS_CHROME_EXE:-}'
-        . '${HELPER}'
-        $1
-    "
-}
+_helper_bash() { _helper_run "$1" bash --noprofile --norc; }
+_helper_zsh() { _helper_run "$1" zsh -f; }
 
 # Create an executable stub at $1 (parent dirs included).
 _stub_exe() {
