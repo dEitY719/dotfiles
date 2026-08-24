@@ -194,10 +194,10 @@ _iw_resolve_config_dir() {
 # persist the resulting ids. Idempotent at the tick level: only ever called
 # when there is no usable state.
 _iw_bootstrap() {
-    local _cwd="$1" _ws_json _cfg_dir="" _rc=0
+    local _cwd="$1" _ws_json _cfg_dir=""
 
-    _cfg_dir=$(_iw_resolve_config_dir) || _rc=$?
-    case "${_rc}" in
+    _cfg_dir=$(_iw_resolve_config_dir)
+    case "$?" in
     0) ;;
     2)
         _cfg_dir=""
