@@ -17,12 +17,14 @@ set -u
 # Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
 . "$(dirname "$0")/init.sh" || exit 1
 
-# init.sh returns early under DOTFILES_TEST_MODE=1 (and before its own ux
-# fallbacks), so ux_* can still be undefined here. Load ux_lib directly from
-# this script's own location in that case — every output path below depends
-# on it.
+# init.sh returns early under DOTFILES_TEST_MODE=1 (and before it exports
+# SHELL_COMMON), so resolve shell-common from this script's own location as a
+# fallback. Both ux_lib and the claude integration below are loaded from here.
+_IW_SHELL_COMMON="${SHELL_COMMON:-$(cd "$(dirname "$0")/../.." && pwd)}"
+
+# Same early return means ux_* can still be undefined here — every output path
+# below depends on it.
 if ! type ux_header >/dev/null 2>&1; then
-    _IW_SHELL_COMMON="$(cd "$(dirname "$0")/../.." && pwd)"
     if [ -f "${_IW_SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
         # shellcheck source=/dev/null
         . "${_IW_SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
@@ -134,16 +136,87 @@ _iw_read_state() {
     _IW_CWD="${_cwd}"
 }
 
+# Echo the CLAUDE_CONFIG_DIR the bootstrapped pane must run `claude` with —
+# the same account routing `claude_yolo` applies (issue #1393). herdr's
+# `--kind` enum has no `claude-yolo`, so the two effects of that wrapper are
+# reproduced here instead: this env var, plus the
+# `-- --dangerously-skip-permissions` tail on `herdr agent start`.
+#
+# Returns:
+#   0  directory echoed on stdout
+#   1  unknown account / missing directory (fail-fast, message already printed)
+#   2  HOME unset — nothing to route against; caller degrades to no --env
+#
+# claude.sh is sourced inside a subshell on purpose:
+#   - its interactive guard (`case $- in *i*`) defines nothing at all in a
+#     non-interactive cron run unless DOTFILES_FORCE_INIT is exported first;
+#   - the subshell keeps its ~40 functions and aliases out of this script.
+# ux_* diagnostics go to stderr (ux_error) or are suppressed, so only the
+# resolved directory ever reaches stdout.
+_iw_resolve_config_dir() {
+    [ -n "${HOME:-}" ] || return 2
+
+    (
+        DOTFILES_FORCE_INIT=1
+        export DOTFILES_FORCE_INIT
+
+        # shellcheck source=/dev/null
+        . "${_IW_SHELL_COMMON}/tools/integrations/claude.sh" >&2 || {
+            ux_error "Cannot load ${_IW_SHELL_COMMON}/tools/integrations/claude.sh — CLAUDE_CONFIG_DIR unresolvable."
+            exit 1
+        }
+
+        # Internal-PC single-account override (issue #571): the multi-account
+        # layout is off there, so this branch must run before account
+        # resolution — an empty CLAUDE_ENABLED_ACCOUNTS must not fail the tick.
+        if [ "$(_dotfiles_setup_mode)" = "internal" ]; then
+            _cfg_dir="$HOME/.claude"
+        else
+            _account="${CLAUDE_DEFAULT_ACCOUNT:-personal}"
+            _cfg_dir=$(_claude_resolve_account "${_account}") || {
+                ux_error "Unknown claude account: ${_account} — cannot set CLAUDE_CONFIG_DIR for the watcher pane."
+                ux_info "Available: $(_claude_resolve_account --list | tr '\n' ' ')"
+                exit 1
+            }
+        fi
+
+        if [ ! -d "${_cfg_dir}" ]; then
+            ux_error "Claude account directory missing: ${_cfg_dir} — cannot bootstrap the watcher pane."
+            ux_info "Run: claude-accounts setup"
+            exit 1
+        fi
+
+        printf '%s' "${_cfg_dir}"
+    )
+}
+
 # Create the dedicated workspace, start a claude agent in its root pane, and
 # persist the resulting ids. Idempotent at the tick level: only ever called
 # when there is no usable state.
 _iw_bootstrap() {
-    local _cwd="$1" _ws_json
+    local _cwd="$1" _ws_json _cfg_dir="" _rc=0
+
+    _cfg_dir=$(_iw_resolve_config_dir) || _rc=$?
+    case "${_rc}" in
+    0) ;;
+    2)
+        _cfg_dir=""
+        ux_warning "HOME is unset — starting claude without CLAUDE_CONFIG_DIR account routing."
+        ;;
+    *)
+        return 1
+        ;;
+    esac
 
     ux_info "Bootstrapping herdr workspace (label: ${_IW_LABEL}, cwd: ${_cwd})"
     _IW_CWD="${_cwd}"
 
-    _ws_json=$(herdr workspace create --cwd "${_cwd}" --label "${_IW_LABEL}" --no-focus 2>/dev/null) ||
+    # POSIX-safe optional argument (no bash arrays): build the flag list in the
+    # positional parameters, which are function-local here.
+    set -- --cwd "${_cwd}" --label "${_IW_LABEL}" --no-focus
+    [ -z "${_cfg_dir}" ] || set -- "$@" --env "CLAUDE_CONFIG_DIR=${_cfg_dir}"
+
+    _ws_json=$(herdr workspace create "$@" 2>/dev/null) ||
         _ws_json=""
 
     _IW_WORKSPACE_ID=$(printf '%s' "${_ws_json}" | _iw_json_value '.result.workspace.workspace_id')
@@ -154,7 +227,10 @@ _iw_bootstrap() {
         return 1
     fi
 
-    if ! herdr agent start "${_IW_AGENT_NAME}" --kind claude --pane "${_IW_PANE_ID}" >/dev/null 2>&1; then
+    # `-- ARG...` is passed through to the pane's claude invocation. Unattended
+    # cron ticks must never stop on a permission-approval prompt (issue #1393).
+    if ! herdr agent start "${_IW_AGENT_NAME}" --kind claude --pane "${_IW_PANE_ID}" \
+        -- --dangerously-skip-permissions >/dev/null 2>&1; then
         ux_error "herdr agent start ${_IW_AGENT_NAME} failed (pane ${_IW_PANE_ID})."
         return 1
     fi
@@ -205,7 +281,11 @@ _iw_acquire_lock() {
         return 0
     fi
 
-    if ! exec 9>"${_lock}" 2>/dev/null; then
+    # The 2>/dev/null must be scoped to the group, not attached to `exec`:
+    # `exec 9>FILE 2>/dev/null` applies *both* redirections permanently, muting
+    # the whole script's stderr — every later ux_error would vanish from the
+    # cron log. The group restores fd 2 on exit while fd 9 persists.
+    if ! { exec 9>"${_lock}"; } 2>/dev/null; then
         ux_warning "Cannot open lock file (${_lock}) — running without single-instance protection"
         return 0
     fi
@@ -225,6 +305,11 @@ _iw_usage() {
     ux_bullet_sub "-h, --help, help   show this help"
     ux_bullet "state"
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/${_IW_STATE_BASENAME}"
+    ux_bullet "claude session (claude-yolo parity)"
+    ux_bullet_sub "the pane runs claude --dangerously-skip-permissions (unattended cron)"
+    ux_bullet_sub "internal setup mode  → CLAUDE_CONFIG_DIR=\$HOME/.claude"
+    ux_bullet_sub "otherwise            → CLAUDE_CONFIG_DIR=\$HOME/.claude-\${CLAUDE_DEFAULT_ACCOUNT:-personal}"
+    ux_bullet_sub "the account directory must already exist — the tick fails fast otherwise"
     ux_bullet "crontab"
     ux_bullet_sub "*/5 * * * * /path/to/issue_watcher_cron.sh >> ~/.local/state/issue-watcher/cron.log 2>&1"
 }

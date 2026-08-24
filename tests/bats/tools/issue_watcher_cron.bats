@@ -26,6 +26,15 @@ setup() {
     _LOCK_HOLDER_PID=""
     mkdir -p "${_BIN_DIR}"
     : >"${_LOG}"
+
+    # CLAUDE_CONFIG_DIR account routing (issue #1393): the tick resolves the
+    # claude account dir before it touches herdr and fails fast when it is
+    # missing, so the default account must exist inside the isolated $HOME.
+    # Pinned here (not inherited) so the developer's own shell env cannot
+    # steer the tests.
+    export CLAUDE_ENABLED_ACCOUNTS="personal"
+    unset CLAUDE_DEFAULT_ACCOUNT
+    mkdir -p "${HOME}/.claude-personal"
 }
 
 teardown() {
@@ -183,6 +192,137 @@ _hold_lock() {
     _run_tick
     assert_success
     [ -f "${_STATE_HOME}/issue-watcher/herdr-watch.json" ]
+}
+
+# ---------------------------------------------------------------------------
+# claude-yolo parity: CLAUDE_CONFIG_DIR routing + skipped permission prompts
+# (issue #1393 — herdr's --kind enum has no `claude-yolo`, so the wrapper's two
+# effects are reproduced through --env and the `-- ARG...` passthrough tail.)
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: bootstrap routes CLAUDE_CONFIG_DIR to the default account" {
+    _install_herdr_stub
+    _run_tick
+    assert_success
+
+    run grep -F -- "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-personal" "${_LOG}"
+    assert_success
+}
+
+@test "issue_watcher_cron: bootstrap starts claude with --dangerously-skip-permissions" {
+    _install_herdr_stub
+    _run_tick
+    assert_success
+
+    run grep -F -- "agent start iw-watch --kind claude --pane ws-test-1:p1 -- --dangerously-skip-permissions" "${_LOG}"
+    assert_success
+}
+
+@test "issue_watcher_cron: CLAUDE_DEFAULT_ACCOUNT selects the account dir" {
+    _install_herdr_stub
+    mkdir -p "${HOME}/.claude-work"
+
+    _run_tick CLAUDE_ENABLED_ACCOUNTS="personal work" CLAUDE_DEFAULT_ACCOUNT=work
+    assert_success
+
+    run grep -F -- "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-work" "${_LOG}"
+    assert_success
+    run grep -F -- ".claude-personal" "${_LOG}"
+    assert_failure
+}
+
+@test "issue_watcher_cron: internal setup mode uses ~/.claude without account resolution" {
+    _install_herdr_stub
+    printf '%s\n' 'internal' >"${HOME}/.dotfiles-setup-mode"
+    mkdir -p "${HOME}/.claude"
+
+    # No CLAUDE_ENABLED_ACCOUNTS at all: the internal branch must run *before*
+    # account resolution, or an empty whitelist would fail the tick (#571 F-2).
+    run env -u CLAUDE_ENABLED_ACCOUNTS -u CLAUDE_DEFAULT_ACCOUNT \
+        "PATH=${_BIN_DIR}:${PATH}" \
+        "HERDR_LOG=${_LOG}" \
+        "XDG_STATE_HOME=${_STATE_HOME}" \
+        bash "${SCRIPT}" --cwd "${_WORK_DIR}"
+    assert_success
+
+    run grep -F -- "--env CLAUDE_CONFIG_DIR=${HOME}/.claude" "${_LOG}"
+    assert_success
+    # Never the multi-account layout: no ~/.claude-<name> anywhere in the call.
+    run grep -F -- ".claude-" "${_LOG}"
+    assert_failure
+}
+
+@test "issue_watcher_cron: missing account directory fails fast before touching herdr" {
+    _install_herdr_stub
+    # CLAUDE_ENABLED_ACCOUNTS accepts the name, but the directory never exists.
+    _run_tick CLAUDE_ENABLED_ACCOUNTS=ghost CLAUDE_DEFAULT_ACCOUNT=ghost
+    assert_failure
+    assert_output --partial "${HOME}/.claude-ghost"
+
+    run grep -F -- "workspace create" "${_LOG}"
+    assert_failure
+    run grep -F -- "agent start" "${_LOG}"
+    assert_failure
+}
+
+@test "issue_watcher_cron: unknown account name fails fast with the available list" {
+    _install_herdr_stub
+    _run_tick CLAUDE_ENABLED_ACCOUNTS=personal CLAUDE_DEFAULT_ACCOUNT=nosuch
+    assert_failure
+    assert_output --partial "Unknown claude account: nosuch"
+
+    run grep -F -- "workspace create" "${_LOG}"
+    assert_failure
+}
+
+@test "issue_watcher_cron: the implicit 'personal' default fails fast when its dir is absent" {
+    _install_herdr_stub
+    rmdir "${HOME}/.claude-personal"
+
+    # Neither CLAUDE_DEFAULT_ACCOUNT nor an internal override — the
+    # `${CLAUDE_DEFAULT_ACCOUNT:-personal}` fallback must be validated too.
+    _run_tick
+    assert_failure
+    assert_output --partial "${HOME}/.claude-personal"
+
+    run grep -F -- "workspace create" "${_LOG}"
+    assert_failure
+}
+
+@test "issue_watcher_cron: re-bootstrap after stale state keeps both claude-yolo flags" {
+    _install_herdr_stub
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "workspace_id": "ws-stale", "pane_id": "ws-stale:p9", "agent_name": "iw-watch" }\n' \
+        >"${_STATE_FILE}"
+
+    _run_tick HERDR_AGENT_GET_FAIL=1
+    assert_success
+
+    run grep -F -- "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-personal" "${_LOG}"
+    assert_success
+    run grep -F -- "agent start iw-watch --kind claude --pane ws-test-1:p1 -- --dangerously-skip-permissions" "${_LOG}"
+    assert_success
+}
+
+@test "issue_watcher_cron: unset HOME degrades to no --env instead of failing" {
+    _install_herdr_stub
+    local _tmp="${_WORK_DIR}/nohome-tmp"
+    mkdir -p "${_tmp}"
+
+    # Nothing to route against without HOME — the tick must still run (the
+    # pre-#1393 behaviour) rather than fail-fast on an uncomputable path.
+    run env -u HOME -u XDG_STATE_HOME \
+        "PATH=${_BIN_DIR}:${PATH}" \
+        "HERDR_LOG=${_LOG}" \
+        "TMPDIR=${_tmp}" \
+        bash "${SCRIPT}" --cwd "${_WORK_DIR}"
+    assert_success
+    assert_output --partial "HOME is unset"
+
+    run grep -F -- "CLAUDE_CONFIG_DIR" "${_LOG}"
+    assert_failure
+    run grep -F -- "agent start iw-watch --kind claude --pane ws-test-1:p1 -- --dangerously-skip-permissions" "${_LOG}"
+    assert_success
 }
 
 # ---------------------------------------------------------------------------
