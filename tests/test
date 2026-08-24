@@ -143,6 +143,17 @@ check_requirements() {
 }
 
 
+# Shared by run_bats()'s two "shell unit tests couldn't run" early-return
+# sites: honor the SKIP_BATS=1 opt-out (mirrors SKIP_LOCAL_PYTEST=1 in
+# git/hooks/pre-push), otherwise fail closed with a consistent message.
+bats_fail_closed() {
+    if [ "${SKIP_BATS:-0}" = "1" ]; then
+        return 0
+    fi
+    print_error "Set SKIP_BATS=1 to explicitly bypass shell unit tests"
+    return 1
+}
+
 # Run bats tests
 #
 # bats-core's own `--jobs` needs GNU parallel (or shenwei356/rush), which we
@@ -157,11 +168,8 @@ run_bats() {
     if [ ! -x "$bats_bin" ]; then
         print_warning "bats-core not found. Skipping shell unit tests."
         print_info "Run: git submodule update --init --recursive"
-        if [ "${SKIP_BATS:-0}" = "1" ]; then
-            return 0
-        fi
-        print_error "Set SKIP_BATS=1 to explicitly bypass shell unit tests"
-        return 1
+        bats_fail_closed
+        return $?
     fi
 
     print_header "Running Bats Shell Unit Tests"
@@ -179,11 +187,8 @@ run_bats() {
     )
     if [ ${#bats_files[@]} -eq 0 ]; then
         print_warning "No bats test files found"
-        if [ "${SKIP_BATS:-0}" = "1" ]; then
-            return 0
-        fi
-        print_error "Set SKIP_BATS=1 to explicitly bypass shell unit tests"
-        return 1
+        bats_fail_closed
+        return $?
     fi
 
     # Serial: single bats invocation over all files (deterministic order).
