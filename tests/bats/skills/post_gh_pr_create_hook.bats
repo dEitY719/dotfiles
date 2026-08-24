@@ -16,6 +16,25 @@ load '../test_helper'
 
 HOOK="${_BATS_REAL_DOTFILES_ROOT}/claude/hooks/post-gh-pr-create.sh"
 
+# Emit a stub of _gh_project_status_normalize_repo for the fake
+# gh_project_status.sh files staged below. Every stub gets it, so the hook's
+# happy path is exercised with the helper function PRESENT — the way a
+# same-generation deploy behaves. Kept in one function rather than copied into
+# each heredoc so the stubs cannot drift apart from the real helper's
+# contract: print "<owner> <repo>", dropping gh's optional HOST/ prefix
+# (#1405). The rollout-skew case (function ABSENT) is covered on purpose by
+# T18/T19, which stage their own stub without it (#1414).
+stub_normalize_repo() {
+    cat <<'STUB'
+_gh_project_status_normalize_repo() {
+    _v="$1"
+    case "$_v" in */*/*) _v="${_v#*/}" ;; esac
+    case "$_v" in */*) ;; *) return 1 ;; esac
+    printf '%s %s\n' "${_v%%/*}" "${_v#*/}"
+}
+STUB
+}
+
 setup() {
     setup_isolated_home
     # Stage a fake shell-common with a stub gh_project_status.sh that
@@ -30,6 +49,7 @@ setup() {
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_pr_closing_issue_numbers() { return 0; }  # no linked issues by default
 EOF
+    stub_normalize_repo >> "$FAKE_SHELL_COMMON/functions/gh_project_status.sh"
     export SHELL_COMMON="$FAKE_SHELL_COMMON"
     # Block real gh from running — the hook only calls `gh repo view` for
     # GH_REPO; passing GH_REPO directly avoids the network and the PATH lookup.
@@ -148,6 +168,7 @@ EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
+    stub_normalize_repo >> "$HYBRID_SHELL_COMMON/functions/gh_project_status.sh"
     # Drive the hook through a wrapper that pre-sources the
     # `_dotfiles_setup_mode` stub into the hook's shell environment.
     # `BASH_ENV` is honoured by `bash` when started non-interactively.
@@ -176,6 +197,7 @@ EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
+    stub_normalize_repo >> "$HYBRID_SHELL_COMMON/functions/gh_project_status.sh"
     BASH_ENV="$HYBRID_SHELL_COMMON/functions/_setup_mode_stub.sh" \
     DOTFILES_FORCE_INIT=1 \
     GH_HOST="github.example.com" \
@@ -222,6 +244,7 @@ _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() { printf 'query %s\n' "\$*" >> "$CALL_LOG"; echo "Backlog"; }
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
+    stub_normalize_repo >> "$FAKE_SHELL_COMMON/functions/gh_project_status.sh"
     export PATH="$TEST_TEMP_HOME/bin:$PATH"
     export POST_GH_PR_CREATE_ASYNC=0
     payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/55"}}'
@@ -252,6 +275,7 @@ _gh_project_status_query_current() {
 }
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
+    stub_normalize_repo >> "$FAKE_SHELL_COMMON/functions/gh_project_status.sh"
     export PATH="$TEST_TEMP_HOME/bin:$PATH"
     export POST_GH_PR_CREATE_SYNC_SLEEP=0 POST_GH_PR_CREATE_ASYNC=0
     payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/77"}}'
@@ -259,6 +283,11 @@ EOF
     assert_success
     [ "$(grep -c '^sync pr 77 In review$' "$CALL_LOG")" -eq 2 ]
     ! echo "$output" | grep -q 'still not'
+    # Counterpart to T18: with the normalizer PRESENT the hook must take the
+    # helper path, so the #724 fallback warning stays silent. Without this the
+    # stub could quietly rot back to "undefined" and T15 would still pass on
+    # the degraded path (#1414).
+    ! echo "$output" | grep -q '#724'
 }
 
 @test "T16 (#813): board present, never reaches In review → warning + exit 0" {
@@ -277,6 +306,7 @@ _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() { echo "Backlog"; }
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
+    stub_normalize_repo >> "$FAKE_SHELL_COMMON/functions/gh_project_status.sh"
     export PATH="$TEST_TEMP_HOME/bin:$PATH"
     export POST_GH_PR_CREATE_SYNC_SLEEP=0 POST_GH_PR_CREATE_SYNC_ATTEMPTS=2
     export POST_GH_PR_CREATE_ASYNC=0
@@ -310,6 +340,7 @@ _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() { echo "Backlog"; }   # never converges
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
+    stub_normalize_repo >> "$FAKE_SHELL_COMMON/functions/gh_project_status.sh"
     export PATH="$TEST_TEMP_HOME/bin:$PATH"
     # POST_GH_PR_CREATE_ASYNC intentionally left at its default.
     export POST_GH_PR_CREATE_SYNC_SLEEP=3 POST_GH_PR_CREATE_SYNC_ATTEMPTS=3
@@ -331,4 +362,90 @@ EOF
         echo "hook blocked for ${elapsed_s}s — retry loop is still synchronous" >&2
         return 1
     }
+}
+
+# ---------------------------------------------------------------------------
+# Issue #1414 — #724 guard on the board helper's normalize_repo
+#
+# `350bd95d` replaced the hand-rolled `${GH_REPO%/*}` split in
+# _post_gh_pr_create_repo_has_board with the helper's
+# _gh_project_status_normalize_repo, but called it bare:
+#
+#     _slug=$(_gh_project_status_normalize_repo "$GH_REPO") || return 1
+#
+# When the sourced helper predates that function (rollout skew: hook and
+# helper deploy independently) the call is `command not found` (rc 127), the
+# `|| return 1` swallows it, has_board goes false, and the whole #813
+# retry-poll vanishes WITHOUT A WORD — reviving the "PR card stuck in
+# Backlog" symptom #813 exists to prevent. That is precisely the failure mode
+# #724 mandates a guard for.
+#
+# These two stage a deliberately OLD helper stub (no normalize_repo) and
+# assert the degraded path: warn on stderr, keep polling, and still split
+# GH_REPO correctly.
+# ---------------------------------------------------------------------------
+
+@test "T18 (#1414): helper without normalize_repo → #724 warning, retry-poll survives" {
+    # The stub omits _gh_project_status_normalize_repo, exactly as a helper
+    # deployed before #1405 would. The guard must fall back rather than let
+    # has_board return 1, so the poll still re-syncs (2 calls) — and must say
+    # so on stderr instead of degrading silently.
+    mkdir -p "$TEST_TEMP_HOME/bin"
+    cat > "$TEST_TEMP_HOME/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+[ "$1 $2" = "api graphql" ] && { echo 1; exit 0; }
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_HOME/bin/gh"
+    QC_COUNT="$TEST_TEMP_HOME/qc.count"; : > "$QC_COUNT"
+    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+_gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
+_gh_project_status_query_current() {
+    n=\$(cat "$QC_COUNT" 2>/dev/null || echo 0); n=\$((n + 1)); echo "\$n" > "$QC_COUNT"
+    if [ "\$n" -ge 2 ]; then echo "In review"; else echo "Backlog"; fi
+}
+_gh_pr_closing_issue_numbers() { return 0; }
+EOF
+    export PATH="$TEST_TEMP_HOME/bin:$PATH"
+    export POST_GH_PR_CREATE_SYNC_SLEEP=0 POST_GH_PR_CREATE_ASYNC=0
+    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/1414"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    [ "$(grep -c '^sync pr 1414 In review$' "$CALL_LOG")" -eq 2 ]
+    assert_output --partial '_gh_project_status_normalize_repo undefined'
+    assert_output --partial '#724'
+}
+
+@test "T19 (#1414): fallback split still drops the host segment of HOST/OWNER/REPO" {
+    # The degraded path must not resurrect the bug #1405 fixed. A plain
+    # `${GH_REPO%/*}` / `${GH_REPO#*/}` pair turns "github.com/owner/repo"
+    # into owner="github.com/owner", name="owner/repo" and queries a repo
+    # that does not exist — has_board then goes false anyway, i.e. the guard
+    # would buy nothing for gh's three-segment GH_REPO form.
+    mkdir -p "$TEST_TEMP_HOME/bin"
+    GH_ARGS_LOG="$TEST_TEMP_HOME/gh-args.log"; : > "$GH_ARGS_LOG"
+    cat > "$TEST_TEMP_HOME/bin/gh" <<EOF
+#!/usr/bin/env bash
+if [ "\$1 \$2" = "api graphql" ]; then
+    printf '%s\n' "\$@" >> "$GH_ARGS_LOG"
+    echo 1
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_HOME/bin/gh"
+    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+_gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
+_gh_project_status_query_current() { echo "In review"; }
+_gh_pr_closing_issue_numbers() { return 0; }
+EOF
+    export PATH="$TEST_TEMP_HOME/bin:$PATH"
+    export GH_REPO="github.com/owner/repo"
+    export POST_GH_PR_CREATE_SYNC_SLEEP=0 POST_GH_PR_CREATE_SYNC_ATTEMPTS=1
+    export POST_GH_PR_CREATE_ASYNC=0
+    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/1415"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    grep -qx 'o=owner' "$GH_ARGS_LOG"
+    grep -qx 'n=repo' "$GH_ARGS_LOG"
 }
