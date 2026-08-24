@@ -1,14 +1,11 @@
 ---
 name: devx:schedule
 description: >-
-  [Claude Code Only] Schedule a skill or command to run after a specified
-  delay (default: 5 min). Requires the `CronCreate` tool — does not work on
-  Codex / Gemini CLIs. Use when the user says "N분 후에 /skill 실행해",
-  "M분 뒤에 [skill] 수행해", "/devx:schedule", "/devx-schedule",
-  "schedule /skill in N minutes", or "[command] N분 후에 해줘". Always invoke
-  this skill whenever the user wants to defer any slash-command or task to
-  run after a time delay. gh:issue-flow 내 세션 로컬 지연 단계용; 클라우드
-  에이전트 정기 스케줄은 내장 /schedule 스킬 사용.
+  [Claude Code Only] 슬래시 명령/작업을 N분 뒤 실행되도록 예약(기본 5분).
+  `CronCreate` 도구 필요 — Codex / Gemini CLI 에서는 동작하지 않는다. Use for
+  /devx:schedule, /devx-schedule, "N분 후에 /skill 실행해",
+  "schedule /skill in N minutes". 세션 로컬 지연 전용 — 클라우드 정기 스케줄은
+  내장 /schedule 스킬.
 allowed-tools: [CronCreate]
 metadata:
   model_recommendation:
@@ -84,3 +81,10 @@ Print one line after scheduling:
 ```
 [SCHEDULED] [M]분 후에 실행됩니다: <command>  (job: <returned-id>)
 ```
+
+## Related Skills
+
+`devx:rate-limit-guard` — the rate-limit specialization of this skill (reset-time
+cron + state file + cleanup) · built-in `/schedule` — recurring cloud-agent
+routines; this skill is session-local one-shot deferral, used by `gh:issue-flow`
+for its in-flow delay steps.

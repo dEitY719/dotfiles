@@ -1,17 +1,10 @@
 ---
 name: gh:pr-resolve-ci-fail
 description: >-
-  Resolve a GitHub PR's CI failure: fetch failing check logs, fix the cause
-  locally, run local lint/test, commit and push (never force), then remove
-  the `CI fail` label as the **last** step so reviewers can re-approve. Use
-  when the user runs /gh:pr-resolve-ci-fail, /gh-pr-resolve-ci-fail, or asks
-  "PR CI fail 해결", "CI fail 라벨 떼줘", "PR CI 빨간 거 고쳐". Refuses on the
-  default branch, refuses `--force` / `--force-with-lease`, refuses to push
-  when local lint/test is red (CI infinite-loop guard). Sister skill of
-  [[gh-pr-resolve-conflict]] and [[gh-pr-resolve-outdated]] — same
-  PR-lifecycle slot, different verb and risk profile. Accepts `[pr-number] [remote] [--wait <seconds>]
-  [--label-variant <input>]`; defaults to the PR attached to the current
-  branch. Accepts `-h`/`--help`/`help`.
+  Fix a GitHub PR's red CI: read failing check logs, fix the cause locally.
+  Use for /gh:pr-resolve-ci-fail, /gh-pr-resolve-ci-fail, "PR CI fail 해결",
+  "CI fail 라벨 떼줘". Not a rebase conflict (gh:pr-resolve-conflict) or base
+  sync (gh:pr-resolve-outdated).
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 metadata:
   model_recommendation:
@@ -39,7 +32,8 @@ off), `--label-variant <input>` (override canonical label).
 - `remote` default `origin`. Missing → `git remote -v` and stop. `--label-variant`
   normalized via `references/label-normalization.md`; unknown → fail-fast.
 
-State `OPEN` required. Hard preconditions in `references/safety.md` →
+State `OPEN` required. Hard preconditions (refuses the repo default branch ·
+clean tree · no in-progress rebase) in `references/safety.md` →
 "Preconditions". Capture `BACKUP_SHA=$(git rev-parse HEAD)` for recovery.
 
 ## Step 2: Fetch Failing Checks
@@ -96,3 +90,9 @@ Report: `[OK] PR #<N> CI 복구 완료 · 라벨 제거됨 · <sha> push 됨.` f
 ## Constraints
 
 Full constraint list: [references/constraints.md](references/constraints.md)
+
+## Related Skills
+
+Same PR-lifecycle slot, different verb — `gh:pr-resolve-conflict` (rebase-resolve
+file conflicts) · `gh:pr-resolve-outdated` (clean rebase when the base moved with
+no conflicts). Full list: `references/help.md` → "Related skills".

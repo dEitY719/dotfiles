@@ -1,15 +1,10 @@
 ---
 name: devx:pr-to-ssot-issue
 description: >-
-  Reverse-engineer an exception PR (already merged or in-flight without a
-  matching PRD/TRD issue) into a SSOT-tracking GitHub issue so the project's
-  normal Issue → PRD → TRD → 구현 → PR workflow regains coverage. Use when the
-  user runs /devx:pr-to-ssot-issue, /devx-pr-to-ssot-issue, or asks "예외 PR
-  을 SSOT 이슈로", "이 PR 의 PRD 갭을 issue 로 등록", "reverse-engineer this PR
-  into a tracking issue". Read-only on the source PR; the only mutation is a
-  new GitHub issue (plus optional backlink comment on the parent). Refuses
-  when `--reason` is empty or shorter than 10 characters — the exception
-  audit trail is mandatory. Accepts `-h`/`--help`/`help` to print usage.
+  PRD/TRD 없이 진행된 예외 PR(이미 머지됐거나 대응 이슈 없이 진행 중)을 역산해
+  SSOT 추적 이슈로 등록한다. Use for /devx:pr-to-ssot-issue,
+  /devx-pr-to-ssot-issue, "예외 PR 을 SSOT 이슈로", "이 PR 의 PRD 갭을 이슈로
+  등록", "reverse-engineer this merged PR into a tracking issue".
 allowed-tools: Bash, Read, Edit, Write, Grep, Agent
 metadata:
   model_recommendation:
@@ -20,6 +15,13 @@ metadata:
 ---
 
 # devx:pr-to-ssot-issue — Exception PR → SSOT-recovery Issue
+
+An **exception PR** is one that bypassed the project's normal
+`Issue → PRD → TRD → 구현 → PR` workflow — it is already merged, or in
+flight with no matching PRD/TRD issue. This skill reverse-engineers such
+a PR into a SSOT-tracking issue so the workflow regains coverage. The
+source PR is read-only; the only mutations are the new issue plus an
+optional backlink comment on the parent.
 
 ## Help
 
@@ -83,8 +85,7 @@ See `references/constraints.md` for the full list. Highlights:
   `GH_DISABLE_AI_METRICS=1`. No automatic rollback on mid-flow
   failure. No auto-chaining to `/gh-issue-flow`.
 
-## Sister skill
+## Related Skills
 
-`/devx:exception-merge-checklist` — entry-side
-recovery (this skill) + exit-side gate (sister skill) together form
-the exception-PR roundtrip.
+`/devx:exception-merge-checklist` — entry-side recovery (this skill) +
+exit-side gate (sister) together form the exception-PR roundtrip.

@@ -1,15 +1,11 @@
 ---
 name: devx:rate-limit-guard
 description: >-
-  [Claude Code Only] Wrap a long-running command with a rate-limit safety net.
-  Schedules a `CronCreate(durable=true)` that fires at the user-supplied reset
-  time, runs the wrapped command, and clears the safety net on successful
-  completion. Use when the user runs /devx:rate-limit-guard,
-  /devx-rate-limit-guard, or asks "rate limit 걸려도 자동 재개", "퇴근하면서
-  작업 시키고 limit 풀리면 이어가게 해줘", "auto-resume after my token limit
-  resets". Supports multi-cycle re-arming via `--max-cycles N`. Requires the
-  user to know their reset time (run /usage first). Accepts `-h`/`--help`/`help`
-  to print usage.
+  [Claude Code Only] 장시간 명령에 리셋 시각 크론 안전망을 건다 — `CronCreate`
+  필요. Use for /devx:rate-limit-guard, /devx-rate-limit-guard, "rate limit
+  걸려도 자동 재개", "퇴근하면서 작업 시키고 limit 풀리면 이어가게",
+  "auto-resume after my token limit resets". 재개 실행은
+  devx:resume-after-limit 몫.
 allowed-tools: Bash, Read, Write, CronCreate, CronDelete
 metadata:
   model_recommendation:
@@ -77,3 +73,10 @@ place** — that is exactly when the safety net should fire.
 - Never auto-cleanup on transient errors.
 - Never invoke from inside another skill — user-triggered only.
 - `--max-cycles 1` (default) preserves PR #369 behavior.
+
+## Related Skills
+
+`devx:resume-after-limit` — the companion the cron prompt calls to actually
+re-run the wrapped command · `devx:schedule` — generic session-local deferral
+without the state file or cleanup semantics · `devx:restart` — same-session
+recovery for non-rate-limit interruptions.

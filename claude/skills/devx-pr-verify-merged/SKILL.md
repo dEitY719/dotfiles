@@ -1,19 +1,10 @@
 ---
 name: devx:pr-verify-merged
 description: >-
-  Re-verify a merged PR inside a fresh clone of its merge commit — prove a clean
-  checkout behaves as claimed, independent of the user's working tree. For repos
-  with no running app (shell scripts, CLIs, libraries) where post-merge checks
-  otherwise run in a dirty worktree and hide untracked-artifact bugs. Use for
-  /devx:pr-verify-merged, /devx-pr-verify-merged, "머지된 PR 신선한 클론에서
-  재검증", "worktree 말고 clone 에서 검증해", "클론에서도 테스트가 같은지 확인해",
-  "verify this merged PR from a clean clone". Sister skill of
-  [[devx-pr-verify-live]] — same post-merge verification slot, different proof
-  target (live=serving-checkout identity, merged=fresh-clone identity).
-  Read-only on source — findings go out as new issues via gh:issue-create.
-  Accepts `[pr-number] [remote] [--matrix auto|full] [--env <csv>] [--clone-dir
-  <path>] [--no-diff-check] [--dry-run] [--no-issue] [--no-comment]` and
-  `-h`/`--help`/`help`.
+  Re-verify a merged PR in a fresh clone of its merge commit, proving a clean
+  checkout behaves as claimed — no app to run. Use for /devx:pr-verify-merged,
+  /devx-pr-verify-merged, "머지된 PR 신선한 클론에서 재검증", "clone 에서 검증해",
+  "verify from a clean clone".
 allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion, Agent
 metadata:
   model_recommendation:
@@ -27,10 +18,12 @@ metadata:
 
 ## Role
 
-**머지 커밋의 신선한 클론 안에서만 · PR·이슈의 AC 를 · 기계 판독 가능한 단언으로 확인하고 ·
-자기 반증에서 살아남은 발견만 이슈로 넘긴다.** 막으려는 실패 클래스는 **작업 worktree 에서는
-초록인데 다른 모든 클론과 CI 에서는 그 검사가 존재하지도 않는 상태** 하나다. 두 스킬의 6줄 공통
-계약은 `../devx-pr-verify-live/references/verify-contract.md` — 이슈 본문·라벨·메트릭은 `gh:issue-create` 가 SSOT.
+**머지 커밋의 신선한 클론 안에서만 · PR·이슈의 AC 를 · 기계 판독 가능한 단언으로 확인하고 · 자기 반증에서
+살아남은 발견만 이슈로 넘긴다** — 사용자의 작업 트리와 **독립적으로** 깨끗한 체크아웃이 주장대로 동작함을 증명한다.
+막으려는 실패 클래스는 **작업 worktree 에서는 초록인데 다른 모든 클론과 CI 에서는 그 검사가 존재하지도 않는 상태**
+하나다. 대상은 **띄울 앱이 없는 레포**(shell 스크립트 · CLI · 라이브러리) — 머지 후 점검이 더러운 worktree 에서
+돌아 untracked-artifact 버그를 숨기는 곳이다. 두 스킬의 6줄 공통 계약은
+`../devx-pr-verify-live/references/verify-contract.md` — 이슈 본문·라벨·메트릭은 `gh:issue-create` 가 SSOT.
 
 ## Help
 
@@ -97,4 +90,8 @@ rebase 는 `~1`, 다중커밋 rebase 는 `~N`)로 같은 입력을 돌린다. �
 - F-2/F-3 단언 중 하나라도 실패하면 **측정하지 않고 정지**한다. 환경 축 1개 실패는 정지가 아니다.
 - 검증은 임시 클론 안에서만 — 작업 트리·인덱스·스태시를 읽지도 쓰지도 않는다(F-3 비교용 읽기만 예외).
 - 클론은 종료 시 정리하되 `[FAIL]` 이면 남기고 경로를 출력한다. deny 규칙(`Bash(rm:*)`)에 막히면 **경로를 출력하고 사용자에게 맡긴다 — 우회 금지**.
-- 코드를 고치지 않는다. 자기 반증을 통과하지 못한 후보는 이슈로 만들지 않는다.
+- **소스는 읽기 전용 — 코드를 고치지 않는다.** 발견은 `gh:issue-create` 로 신규 이슈로만 나간다. 자기 반증을 통과하지 못한 후보는 이슈로 만들지 않는다.
+
+## Related Skills
+
+자매 스킬 `devx:pr-verify-live` — 같은 머지 후 슬롯, 다른 증명 대상(merged=신선한 클론 신원, live=서빙 체크아웃 신원). 발견 등록은 `gh:issue-create`, 테스트 러너 탐지 사다리는 `gh:issue-implement`, 머지 **전** 정적 게이트는 `devx:pr-review-all`. 전체 표와 플래그: `references/help.md`.

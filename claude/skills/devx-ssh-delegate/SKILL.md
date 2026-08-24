@@ -1,19 +1,10 @@
 ---
 name: devx:ssh-delegate
 description: >-
-  Manage AI SSH key delegation through a manifest-based, idempotent skill
-  instead of ad-hoc `ssh-copy-id`. The manifest (`~/.ssh/delegations.yml`,
-  mode 0600) is the single source of truth for which key is installed on
-  which host as which account, when it was last verified, and the host
-  fingerprint pinned at first install. Use when the user runs
-  /devx:ssh-delegate, /devx-ssh-delegate, or asks "이 호스트에 키 위임
-  표준화", "ssh-copy-id 한 거 매니페스트로 관리", "delegate ssh access to
-  the AI", "어떤 서버에 접근 가능한지 알려줘", "revoke ssh key from host".
-  Sub-commands: sync / add <user>@<host> [alias] / list / test / revoke /
-  doctor. 3-layer safety: identity-pinning, host-fingerprint pinning (no
-  auto re-trust), and a flock-serialized JSONL audit log. POSIX shell +
-  optional yq; runs standalone with a plain-printf fallback. Accepts
-  `-h`/`--help`/`help` to print usage.
+  Manage AI SSH key delegation through a manifest instead of ad-hoc
+  ssh-copy-id. Use for /devx:ssh-delegate, /devx-ssh-delegate, "이 호스트에
+  키 위임 표준화", "ssh-copy-id 한 거 매니페스트로 관리", "어떤 서버에 접근
+  가능한지", "delegate ssh access", "revoke ssh key from host".
 allowed-tools: Bash, Read, Grep
 metadata:
   model_recommendation:
@@ -28,6 +19,14 @@ metadata:
 Standardizes one-shot `ssh-copy-id` delegation into an idempotent, audited
 skill. All real work lives in `lib/ssh_delegate.sh` (+ sibling `lib/*.sh`);
 this file routes the user's sub-command to it.
+
+The manifest **`~/.ssh/delegations.yml`** (mode **0600**) is the single source
+of truth for which key is installed on which host as which account, when it was
+last verified, and the host fingerprint pinned at first install. 3-layer safety:
+identity pinning, host-fingerprint pinning (no auto re-trust), and a
+`flock`-serialized JSONL audit log (`references/safety-model.md`). POSIX shell
+with a plain-printf parser so it runs standalone; `yq` is optional and used by
+`doctor` only (`references/manifest-schema.md`).
 
 ## Help
 

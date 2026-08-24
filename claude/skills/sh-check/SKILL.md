@@ -1,15 +1,10 @@
 ---
 name: sh:check
 description: >-
-  Audit a shell script (`*.sh`) against the dotfiles quality bar derived from
-  `git_worktree.sh` — the canonical reference implementation. Reports
-  PASS/WARN/FAIL/N/A across 10 criteria covering POSIX hygiene, sourcing
-  guards, naming, ZSH compatibility, help UX, UX-lib usage, input validation,
-  verdict structure, and next-action hints. Use when the user says "check
-  this shell script", "is my .sh file production-ready?", "audit this shell
-  function", "/sh:check". Mirrors `skill:check` but for `.sh` files instead
-  of `SKILL.md`. Do NOT use for SKILL.md (use `skill:check`) or AGENTS.md
-  (use `agents-md:check`).
+  Audit a shell script (`*.sh`) against the dotfiles quality bar — 10
+  PASS/WARN/FAIL/N/A criteria. Use on "check this shell script",
+  "셸 스크립트 점검해줘", "/sh:check". Do NOT use for SKILL.md
+  (use `skill:check`) or AGENTS.md (use `devx:ai-context`).
 compatibility:
   tools: Read, Glob, Grep, Bash
 metadata:
@@ -25,7 +20,8 @@ metadata:
 ## Help
 
 If the argument is `-h`, `--help`, or `help`, read `references/help.md` and
-output its content verbatim, then stop. No further checks.
+output its content verbatim, then stop. No further checks. `references/help.md`
+is also the SSOT for the accepted arguments (`[path/to/script.sh]`, `help`).
 
 ## Step 1: Locate the File
 
@@ -96,3 +92,8 @@ great!" prose — the table and Verdict speak for themselves.
   N/A with an explanatory note rather than failing silently.
 - The canonical reference is `shell-common/functions/git_worktree.sh`. When
   in doubt about whether a pattern is "the right way", compare to it.
+
+## Related Skills
+
+Mirrors `skill:check`, which audits `SKILL.md` files instead of `.sh` files.
+`devx:ai-context check` audits `AGENTS.md` / `CLAUDE.md` / `GEMINI.md`.

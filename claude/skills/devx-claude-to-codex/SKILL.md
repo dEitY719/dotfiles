@@ -1,17 +1,10 @@
 ---
 name: devx:claude-to-codex
 description: >-
-  Transform detailed phase implementation documents authored with Claude
-  Opus into Codex-optimized implementation documents. Use when the user
-  provides one or more reference documents plus a phase document and asks
-  to convert, split, rewrite, or optimize that phase document for Codex
-  execution inside a real project — e.g. "docs/ai/architecture.md,
-  docs/ai/backend.md, docs/ai/phases/phase-02-x.md를 참조해서
-  phase-02-x 문서를 codex에서 작업하기 최적화된 설계문서로 변경해줘",
-  "phase-03 문서를 codex용으로 재구성해줘", "이 phase 문서를 codex-friendly
-  task 문서로 필요하면 분할해서 만들어줘". Also use when the user wants
-  codex-ready task documents, imperative implementation specs, or derived
-  Codex documents under docs/ai/phases/codex/.
+  Claude 로 작성한 phase 구현 문서를 Codex 실행에 최적화된 명령형 문서로
+  변환(필요하면 분할)한다. Use for /devx:claude-to-codex,
+  /devx-claude-to-codex, "이 phase 문서를 codex용으로 재구성해줘", "codex 에서
+  작업하기 최적화된 설계문서로 바꿔줘", "convert this phase doc for Codex".
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 metadata:
   model_recommendation:

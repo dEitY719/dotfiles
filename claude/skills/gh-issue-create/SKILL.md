@@ -1,17 +1,10 @@
 ---
 name: gh:issue-create
 description: >-
-  Save the current conversation as a GitHub issue. Use when the user runs
-  /gh:issue-create, /gh-issue-create, or asks "이 대화 이슈로 등록",
-  "chat을 깃허브 이슈로 남겨", "기록용 이슈 만들어". Summarizes the chat into
-  a body keyed by conventional-commit prefix (feat / fix / refactor / perf /
-  docs / test / verify / chore / misc) and creates the issue via
-  `gh issue create` on
-  the target remote's repo without confirmation, printing only the issue
-  number and URL. Preserves reasoning and concrete details — the issue is
-  reused for PR drafts and blog posts. Optional remote positional arg; flags
-  `--no-auto-labels`, `--auto-label-debug`, `--as-discussion <category>`
-  (#619) and `-h`/`--help`/`help` are documented in references/help.md.
+  Save the current conversation as a GitHub issue, classified by
+  conventional-commit prefix. Use for /gh:issue-create, /gh-issue-create,
+  "이 대화 이슈로 등록", "기록용 이슈 만들어". A pre-decision RFC goes to
+  gh:discussion-create instead. Flags: references/help.md.
 allowed-tools: Bash, Read, Grep
 metadata:
   model_recommendation:
@@ -97,3 +90,8 @@ See `references/constraints.md` (assignee/label rules, always
 `GH_HOST="$TARGET_HOST"` + `--repo "$TARGET_REPO"`, fail-fast on missing remote,
 no over-compression,
 `--as-discussion` explicit-intent only, no confirmation prompts).
+
+## Related Skills
+
+`gh:discussion-create` — same conversation capture, pre-decision RFC lifecycle;
+reachable from here via `--as-discussion <category>` (#619).

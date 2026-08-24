@@ -1,17 +1,10 @@
 ---
 name: gh:discussion-create
 description: >-
-  Save the current conversation as a GitHub Discussion (default category
-  `Ideas`, RFC-shaped body). Use when the user runs /gh:discussion-create,
-  /gh-discussion-create, asks "이 대화 RFC 로 등록", "Ideas Discussion 으로
-  남겨", "이 토론 깃허브 디스커션으로", or wants the chat preserved as a
-  pre-decision RFC instead of a to-do issue. Drafts an Open-Questions-forward
-  body and posts it via the `createDiscussion` GraphQL mutation. Sister skill
-  of [[gh-issue-create]] — same conversation capture, different lifecycle.
-  Refuses when the conversation is already a decided to-do unless
-  `--force-discussion` is set; suggests `/gh-issue-create` instead. Accepts an
-  optional remote name and a `[category]` (`Ideas` / `Q&A` / `Announcements` /
-  `Lessons`); `-h`/`--help`/`help` prints usage.
+  Save the current chat as an RFC-shaped GitHub Discussion (default `Ideas`).
+  Use for /gh:discussion-create, /gh-discussion-create, "이 대화 RFC 로 등록",
+  "깃허브 디스커션으로 남겨". Refuses a decided to-do — that is gh:issue-create.
+  Options: references/options.md.
 allowed-tools: Bash, Read, Grep
 metadata:
   model_recommendation:
@@ -30,9 +23,11 @@ output its content verbatim, then stop. No API calls.
 
 ## Role
 
-Convert the chat into a GitHub Discussion (default `Ideas`/RFC), executing
-once the routing guard passes and printing only the URL. Sister of
-`gh:issue-create` (same "preserve detail" contract), emphasising **Open Questions** over AC.
+Convert the chat into a GitHub Discussion (default `Ideas`/RFC) — an
+Open-Questions-forward body posted via the `createDiscussion` GraphQL mutation —
+executing once the routing guard passes and printing only the URL. Categories
+`Ideas` / `Q&A` / `Announcements` / `Lessons` →
+[`references/category-table.md`](references/category-table.md).
 
 ## Options
 
@@ -55,13 +50,12 @@ guard — body shape changes, not the check.
 
 ## Step 2.1: Routing Guard (Issue-vs-Discussion)
 
-Per the SSOT routing tree (principle #1 "Issue is default"), apply the
-trigger signals in [`references/scope-guard.md`](references/scope-guard.md):
-a **decided to-do** -> stop with that file's "Refusal format" (destination
-`/gh-issue-create`; override with `--force-discussion`); ambiguous-noun-list
-/ ≥3-component-mix -> emit the same 1~2 line clarification as
-`gh:issue-create` and wait. Load-bearing requirement F-3 + F-4 (issue #617)
-— never disable without a SSOT update.
+Per the SSOT routing tree (principle #1 "Issue is default"), apply the trigger
+signals in [`references/scope-guard.md`](references/scope-guard.md): a **decided
+to-do** -> stop with that file's "Refusal format" (destination `/gh-issue-create`;
+override with `--force-discussion`); ambiguous-noun-list / ≥3-component-mix ->
+emit the same 1~2 line clarification as `gh:issue-create` and wait. Load-bearing
+requirement F-3 + F-4 (issue #617) — never disable without a SSOT update.
 
 ## Step 3: Draft the Discussion Body
 
@@ -75,8 +69,8 @@ fine). For non-`Ideas` categories, swap per that file's "Category variants".
 
 Read `gh-issue-create`'s
 [`references/metrics-baseline.md`](../gh-issue-create/references/metrics-baseline.md)
-and bind `TOKENS`, `HUMAN_H`, `ELAPSED` for Step 4 (inputs: `START_TS`,
-category, title + body; for `Ideas`, size like `feat`).
+and bind `TOKENS`, `HUMAN_H`, `ELAPSED` for Step 4 (inputs: `START_TS`, category,
+title + body; for `Ideas`, size like `feat`).
 
 ## Step 4: Create the Discussion
 
@@ -98,3 +92,8 @@ Operating invariants (always `--repo`, fail on missing remote, guard active
 for all categories, no log over-compression, `--force-discussion`
 bypass-only, no confirmation prompt, no category-ID cache) live in
 [`references/constraints.md`](references/constraints.md).
+
+## Related Skills
+
+`gh:issue-create` — same capture, different lifecycle: a decided to-do belongs
+there (it can also route in here via `--as-discussion <category>`).

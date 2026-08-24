@@ -1,20 +1,10 @@
 ---
 name: gh:add-ai-metrics
 description: >-
-  Backfill the ai-metrics footer (tokens · human-h · ai-min) into
-  pre-existing GitHub Issues and PRs that were created before issue #317 /
-  PR #320 introduced automatic metric capture. Use when the user runs
-  /gh:add-ai-metrics, /gh-add-ai-metrics, or asks "기존 이슈에 메트릭
-  소급 부착", "지난주 PR 들에 ai-metrics 붙여줘", "retrofit metrics
-  on issue #N", "backfill ai-metrics". Three call patterns:
-  (1) no args → infer targets from current chat context;
-  (2) explicit list `issue#N pr#M` (case-insensitive `issue#`/`pr#` prefix);
-  (3) `--type [issue|PR] --date <YYYY-MM-DD>` for date-bounded bulk
-  enumeration via `gh {issue,pr} list --search`. Idempotent — skips cards
-  that already carry an `<!-- ai-metrics -->` block. With `--force`,
-  re-computes metrics fresh and replaces the existing block in place
-  (recompute, not blind overwrite). Never modifies issue/PR body content
-  other than the footer. Accepts `-h`/`--help`/`help` to print usage.
+  Retrofit the ai-metrics footer onto GitHub Issues/PRs that predate
+  automatic capture. Use for /gh:add-ai-metrics, /gh-add-ai-metrics,
+  "기존 이슈/PR 에 메트릭 소급 부착", "backfill ai-metrics". Backfill only —
+  new cards get the footer automatically.
 allowed-tools: Bash, Read, Grep
 metadata:
   model_recommendation:
@@ -25,6 +15,11 @@ metadata:
 ---
 
 # gh:add-ai-metrics — Retrofit ai-metrics footer onto past Issues/PRs
+
+Backfills the `tokens · human-h · ai-min` footer onto cards created before
+issue #317 / PR #320 made capture automatic. Idempotent — a card already
+carrying an `<!-- ai-metrics -->` block is skipped, and bytes outside that
+block are never modified. Full flag / call-pattern table: `references/help.md`.
 
 ## Help
 
@@ -94,7 +89,10 @@ instead — no per-card metrics, no counters.
 
 ## Constraints
 
-Operating invariants (always `--repo`, body byte-identical outside the
-footer, `--force` recompute-not-overwrite, continue-on-error, pacing,
-`--limit`/`--budget` OR-semantics) live in
-[`references/constraints.md`](references/constraints.md).
+Operating invariants (always `--repo`, body byte-identical outside the footer,
+`--force` recompute-not-overwrite, continue-on-error, pacing, `--limit`/
+`--budget` OR-semantics) live in [`references/constraints.md`](references/constraints.md).
+
+## Related Skills
+
+`gh:issue-create` / `gh:pr` write the same footer at creation time — this skill only fills the gap for cards that predate them.

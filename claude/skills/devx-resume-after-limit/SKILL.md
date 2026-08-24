@@ -1,18 +1,10 @@
 ---
 name: devx:resume-after-limit
 description: >-
-  토큰 한계(rate limit) 리셋 후 크론 잡 자동 재개 — devx:rate-limit-guard와 쌍으로 동작 —
-  [Claude Code Only] Companion to /devx:rate-limit-guard. Invoked by the
-  scheduled cron when token-limit reset arrives — verifies the worktree/
-  branch context recorded by the guard, pre-emptively re-arms the next cron
-  for multi-cycle runs (`--max-cycles N` > 1), re-runs the original wrapped
-  command idempotently, and clears state on success. Use when the user runs
-  /devx:resume-after-limit, /devx-resume-after-limit, or when a
-  /devx:rate-limit-guard cron prompt fires. Accepts an optional <command>
-  argument (cron path) or reads `.claude/.rate-limit-guard.json` (manual
-  re-trigger). Accepts `-h`/`--help`/`help` to print usage.
-  (API 에러/ESC 중단 후 현재 세션 재개는 devx:restart 사용;
-  세션을 넘기기 전 handoff 코멘트 작성은 devx:session-handoff 사용)
+  [Claude Code Only] 토큰 한계(rate limit) 리셋 후 devx:rate-limit-guard 가 건
+  크론이 호출하는 재개 스킬 — `CronCreate` 필요. Use for
+  /devx:resume-after-limit, /devx-resume-after-limit, "리밋 풀리면 이어서",
+  "resume after my token limit resets". API 에러·ESC 재개는 devx:restart.
 allowed-tools: Bash, Read, Write, CronCreate, CronDelete
 metadata:
   model_recommendation:
@@ -99,3 +91,9 @@ next fire re-triggers this skill, or the user re-invokes manually.
 - Never proceed past Step 3 on worktree mismatch — wrong dir = wrong work.
 - Never delete state or the next cron before the wrapped command succeeds.
 - Never invoke from inside another skill — cron- or user-triggered only.
+
+## Related Skills
+
+`devx:rate-limit-guard` — the scheduler that writes the state file and cron this
+skill consumes · `devx:restart` — same-session recovery from an API flake / OOM /
+ESC, no cron · `devx:session-handoff` — hands unfinished work to the next session.

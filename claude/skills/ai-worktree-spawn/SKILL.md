@@ -1,11 +1,10 @@
 ---
 name: ai-worktree:spawn
 description: >-
-  Create an isolated git worktree workspace for the current AI coding agent.
-  Use when starting new parallel work in a multi-AI agent environment. Triggers
-  on: "새로운 작업 시작", "새 작업 시작하자", "격리된 작업 공간 만들어줘",
-  "start new task", "spawn a worktree", or any request to begin isolated work
-  in a multi-agent setup.
+  Create an isolated git worktree so this AI agent works in parallel without
+  colliding with other agents in the repo. Use for /ai-worktree:spawn,
+  "새로운 작업 시작", "격리된 작업 공간 만들어줘", "spawn a worktree",
+  "start isolated work". Cleanup is ai-worktree:teardown.
 allowed-tools: Bash, Read, Grep, Glob
 metadata:
   model_recommendation:

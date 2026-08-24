@@ -1,14 +1,9 @@
 ---
 name: write:rca
 description: >-
-  장애, 버그, 반복 실수에 대한 Root Cause Analysis 보고서 작성. Auto-document
-  incidents, bug fixes, and technical challenges as structured markdown with
-  root cause analysis, prevention checklists, and learning resources. Produces
-  Jekyll-compatible publication-ready markdown (YAML frontmatter + single .md
-  files) for postmortem review, technical blogging, AI tool training, and
-  junior engineer onboarding. Saves to
-  ${RCA_REPO_PATH:-~/para/archive/rca-knowledge} with centralized media in
-  _assets/. (재사용 패턴 문서화는 write:insight, 작업 로그는 write:task-history)
+  장애·버그·반복 실수의 Root Cause Analysis 보고서 작성. Use for `/write:rca`, "RCA 써줘",
+  or "document this incident as a postmortem". Do NOT use for narrative 삽질 blog
+  posts (write:blog-dev-learnings) or daily work logs (write:task-history).
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash, AskUserQuestion
 metadata:
   model_recommendation:
@@ -26,11 +21,12 @@ If args is `-h` / `--help` / `help`, read `references/help.md` verbatim and stop
 
 ## Role & purpose
 
-Transform technical incidents, bug fixes, and problem-solving conversations
-into publication-ready markdown at
+Auto-document incidents, bug fixes, and problem-solving conversations as
+Jekyll-compatible, publication-ready markdown (YAML frontmatter + one `.md` file) at
 `${RCA_REPO_PATH:-~/para/archive/rca-knowledge}/docs/analysis/YYYY-MM-DD-{slug}.md`,
-following a fixed 9-section template. One document serves four audiences:
-postmortem review, technical blog, AI tool training, junior engineer onboarding.
+using a fixed 9-section template carrying root cause analysis, prevention
+checklists, and learning resources. One document serves four audiences: postmortem
+review, technical blog, AI tool training, junior engineer onboarding.
 
 ## Trigger scenarios
 
@@ -92,7 +88,11 @@ Failure:
 
 ## SSOT — repository path
 
-`$RCA_REPO_PATH` (default: `~/para/archive/rca-knowledge`) is the SSOT for every output path; set it once in your shell profile to override.
+`$RCA_REPO_PATH` (default: `~/para/archive/rca-knowledge`) is the SSOT for every output path; set it once in your shell profile to override. Media is centralized in `${RCA_REPO_PATH}/_assets/`, never beside the document.
+
+## Related skills
+
+재사용 패턴 문서화는 [[write:insight]], 작업 로그는 [[write:task-history]], 서사형 삽질 블로그는 [[write:blog-dev-learnings]].
 
 ## References
 

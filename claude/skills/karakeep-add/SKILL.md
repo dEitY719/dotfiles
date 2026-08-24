@@ -1,20 +1,10 @@
 ---
 name: karakeep:add
 description: >-
-  Add a URL to a Karakeep List via REST, creating the List (and any nested
-  parent path) on demand. Use when the user runs /karakeep:add,
-  /karakeep-add, or asks "이 URL Karakeep <list>에 넣어줘", "북마크를
-  github/repository 에 추가", "add <url> to list <path>". Idempotent —
-  reuses an existing bookmark for the same URL and an existing List for the
-  same name/parent, so re-runs never duplicate. Writes directly to the live
-  Karakeep instance (base URL = `.env` `NEXTAUTH_URL`, not localhost) and
-  verifies membership after attaching. Respects the Company confidentiality
-  boundary (refuses public/personal URLs into `Company` or its children).
-  Sister skill of [[karakeep:classify]] — that one suggests a List (default
-  dry-run); this one performs the write. Accepts `<url> --list <path>`; if
-  `--list` is omitted it delegates to [[karakeep:classify]] for a suggested
-  path and writes nothing (propose-then-confirm). Also `-h`/`--help`/`help`
-  to print usage.
+  Add a URL to a Karakeep List via REST, creating the List path on demand.
+  Use when the user runs /karakeep:add, /karakeep-add, or asks "이 URL
+  Karakeep <list>에 넣어줘", "add <url> to list <path>". Do NOT use to pick a
+  List — use karakeep:classify.
 allowed-tools: Bash, Read
 metadata:
   model_recommendation:
@@ -101,3 +91,8 @@ confirm the no-op. Error templates: `references/rest-mechanics.md`
 - Never write a public/personal URL into the `Company` subtree.
 - This skill only touches the live Karakeep instance — it does not edit the
   karakeep-sync repo or run `karakeep-sync push` (next push materializes).
+
+## Related Skills
+
+- Sister skill [[karakeep:classify]] suggests a List (default dry-run); this
+  one performs the write. Flags and usage: `references/help.md`.

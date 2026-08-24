@@ -1,7 +1,10 @@
 ---
 name: gh:pr-reply
 description: >-
-  Fetch code review comments on a GitHub PR, evaluate each one, apply valid fixes, and leave an individual reply on every comment (Accepted with what changed, or Declined with reasoning). Use when the user runs /gh:pr-reply, /gh-pr-reply, or asks "PR 리뷰 코멘트 확인하고 수정", "리뷰 답변 달아", "PR 123 코멘트 처리해". Defaults to the PR for the current branch; accepts an explicit PR number and an optional `[remote]` positional (the remote pins the target repo when several remotes share one GitHub host). Every comment MUST get a reply — bot comments (gemini, sourcery, copilot) included. Accepts `-h`/`--help`/`help` to print usage.
+  Reply individually to every review comment on a GitHub PR — bots included —
+  and apply the valid fixes. Use for /gh:pr-reply, /gh-pr-reply, "PR 리뷰 코멘트
+  확인하고 수정", "PR 123 코멘트 처리해", "reply to review comments". Per-comment
+  replies, not a summary comment.
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 metadata:
   model_recommendation:
@@ -28,39 +31,12 @@ not acceptable; silent declines are worse.
 ## Step 1: Resolve Target PR + Repo
 
 Record `START_TS=$(date +%s)` immediately (elapsed tracking in Step 7).
-Positional args: `<pr-number> [remote]` (`remote` defaults to `origin`).
 
-**PR number** precedence: (1) **explicit arg** — `/gh:pr-reply 123` → PR
-#123; (2) **current branch** — `gh pr view --json
-number,url,headRefName,baseRefName`, stop if no PR; (3) never guess, never
-pick "the latest PR".
-
-**TARGET_REPO** — resolve from the `[remote]` positional, not from `gh`'s
-default-repo heuristic, so a repo with two remotes on the same host (e.g.
-`origin` + `upstream`) replies to the intended one. Bind `remote` to the
-positional (default `origin`), source the SSOT helper, and parse the
-remote's URL (network-free):
-
-```sh
-# DOTFILES_FORCE_INIT=1 is load-bearing: the file's interactive guard
-# otherwise returns early in a non-interactive shell and the helper is
-# never defined. `remote` is the [remote] positional; ${remote:-origin}
-# keeps the block self-contained whether or not it was set.
-export DOTFILES_FORCE_INIT=1
-. "${SHELL_COMMON}/functions/gh_pr_review.sh"
-TARGET_REPO=$(_gh_pr_review_resolve_target_repo "${remote:-origin}") || {
-  echo "Cannot resolve remote '${remote:-origin}' to a repo" >&2; exit 1; }
-```
-
-Pass `TARGET_REPO` (`--repo "$TARGET_REPO"` / `-R`, or as the
-`repos/$TARGET_REPO/...` path) on **every** subsequent `gh` API call.
-
-**Default-remote tradeoff** — `[remote]` defaults to `origin`. This is more
-predictable than the old `gh repo view` default-repo heuristic, but note the
-fork workflow where `origin` is your fork and `upstream` is the canonical
-repo: there, reply explicitly with `/gh:pr-reply <N> upstream`. On the
-`devx:pr-review-all` / `gh:issue-flow` path the remote is threaded through, so
-the default only applies to a bare manual `/gh:pr-reply <N>`.
+Read `references/target-resolution.md` and follow it: positional args
+`<pr-number> [remote]`, PR-number precedence (explicit arg → current branch →
+stop; never guess "the latest PR"), the `TARGET_REPO` snippet (parse the
+`[remote]`'s URL via `_gh_pr_review_resolve_target_repo`, never `gh`'s
+default-repo heuristic), and the fork-workflow tradeoff. Pass `TARGET_REPO` on **every** subsequent `gh` API call.
 
 ## Step 2: Fetch All Review Comments
 
@@ -105,19 +81,20 @@ no-op when `PUSHED_FIXES == 0`).
 
 ## Step 7: Report
 
-Print the summary table per `references/final-summary.md` (Accepted /
-Declined / Answered counts, commit SHAs, skipped comments, and the
-lingering `CHANGES_REQUESTED` nudge — all rendering rules in that
-reference). Then post the ai-metrics PR comment per
+Print the summary table per `references/final-summary.md` (Accepted / Declined /
+Answered counts, commit SHAs, skipped comments, and the lingering
+`CHANGES_REQUESTED` nudge). Then post the ai-metrics PR comment per
 `references/ai-metrics-comment.sh.md` (soft-fail; skip when `GH_DISABLE_AI_METRICS=1`).
 
 ## Constraints
 
-- **Never skip a reply** — even "Declined: out of scope" counts, bot comments included; core contract. Never dismiss a bot comment as "just a bot".
-- Never move the PR card to `Approved` — that column is owned by `gh:pr-approve` (#1350). Replies/bot reviews are `COMMENTED` and never change `reviewDecision`, so promoting on them lands unreviewed PRs in `Approved` (#1349 regression). Step 6 `In review` recovery is the only board write here.
-- Never close/resolve threads programmatically — leave that to the user.
-- Never fix files outside the PR's diff without flagging scope creep first.
-- Never `--force-push`. If history rewrite is needed, stop and ask.
-- To mutate PR labels or body, route through `_gh_pr_edit_safe_label` /
-  `_gh_pr_edit_safe_body` (`shell-common/functions/gh_pr_edit_safe.sh`) — bare
-  `gh pr edit --add-label` / `--body-file` silently exits 1 on classic-Projects repos (issue #326 Bug B).
+Read `references/constraints.md`. Non-negotiables: never skip a reply (bot
+comments included), never promote the card to `Approved` (owned by
+`gh:pr-approve`, #1350), never resolve threads programmatically, never
+`--amend` / `--no-verify` / force-push, and route label/body edits through
+`_gh_pr_edit_safe_*`.
+
+## Related Skills
+
+`gh:pr-review` posts one aggregate second-opinion comment instead of per-comment
+replies · `gh:pr-approve` owns the approve / request-changes decision.

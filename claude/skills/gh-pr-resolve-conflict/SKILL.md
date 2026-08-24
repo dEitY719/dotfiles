@@ -1,16 +1,10 @@
 ---
 name: gh:pr-resolve-conflict
 description: >-
-  Resolve a GitHub PR's "This branch has conflicts that must be resolved"
-  warning using rebase (never a merge commit), then push with
-  `--force-with-lease`. Use when the user runs /gh:pr-resolve-conflict,
-  /gh-pr-resolve-conflict, or asks "PR conflict 해결", "base 변경됐는데 rebase
-  해줘", "리베이스로 컨플릭트 풀어". Refuses to run on the default branch,
-  refuses plain `--force`, and never auto-guesses conflict content — the
-  user drives each resolution. Sister skill of [[gh-pr-resolve-ci-fail]]
-  and [[gh-pr-resolve-outdated]] — same PR-lifecycle slot, different
-  verb (rebase-resolve vs read-logs-and-edit vs clean-rebase-no-conflicts). Accepts `[pr-number] [remote]`; defaults to the PR
-  attached to the current branch. Accepts `-h`/`--help`/`help`.
+  Rebase-resolve a GitHub PR's "branch has conflicts" warning. Use for
+  /gh:pr-resolve-conflict, /gh-pr-resolve-conflict, "PR conflict 해결",
+  "리베이스로 컨플릭트 풀어". Not a clean base sync (gh:pr-resolve-outdated)
+  or a CI fix (gh:pr-resolve-ci-fail).
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 metadata:
   model_recommendation:
@@ -98,3 +92,8 @@ Helper policy (each soft-fail, applies only when `mergeable == MERGEABLE`):
 - Never auto-resolve ambiguous conflicts. Ask the user.
 - Never retry a rejected `--force-with-lease` by fetching and re-rebasing on the user's behalf. Surface divergence and stop.
 - Never skip Step 5. The whole point is clearing the PR warning.
+
+## Related Skills
+
+Same PR-lifecycle slot, different verb — `gh:pr-resolve-outdated` (clean rebase, base
+moved but nothing conflicts) · `gh:pr-resolve-ci-fail` (read failing CI logs and fix).

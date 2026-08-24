@@ -2,12 +2,13 @@
 
 ## Arguments
 
-| # | Name | Default | Description |
-|---|------|---------|-------------|
-| 1 | `<pr-number>` or `-h`/`--help`/`help` | current-branch PR | Target PR, e.g. `803` |
-| 2 | remote-name | `origin` | Git remote whose repo owns the PR |
-| flag | `--wait <seconds>` | off | Opt-in: poll CI green before label removal |
-| flag | `--label-variant <input>` | `CI fail` | Override canonical label (normalized via `references/label-normalization.md`) |
+| Option | Description | Default |
+|--------|-------------|---------|
+| `[pr-number]` | Positional 1 — target PR to fix, e.g. `803`. | PR attached to the current branch |
+| `[remote]` | Positional 2 — git remote whose repo owns the PR. | `origin` |
+| `--wait <seconds>` | Opt-in: poll `gh pr checks --required` every 30 s until CI is green (or the timeout elapses) before removing the label. | off (skip the wait) |
+| `--label-variant <input>` | Override the canonical label name; normalized via `references/label-normalization.md`, unknown input fails fast. | `CI fail` |
+| `-h` / `--help` / `help` | Print this help verbatim and stop. No API calls. | — |
 
 ## Usage
 

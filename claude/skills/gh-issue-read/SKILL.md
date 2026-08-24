@@ -1,15 +1,10 @@
 ---
 name: gh:issue-read
 description: >-
-  Fetch a GitHub issue by number and print a structured, human-readable
-  summary without modifying it. Use when the user runs /gh:issue-read,
-  /gh-issue-read, or asks "이슈 #N 읽고 정리해줘", "issue 42 뭐하는 거야",
-  "#16 요약", "이 이슈 내용 파악". Preserves body and comments verbatim
-  so the output can be reused as context for implementation work — by
-  [[gh:issue-implement]] (code-change issues) or [[gh:issue-proceed]]
-  (directive issues that embed an executable protocol). Accepts
-  `<issue-number> [remote]`; defaults remote to `origin`. Accepts
-  `-h`/`--help`/`help` to print usage.
+  Fetch a GitHub issue and print a verbatim structured summary. Read-only —
+  never mutates. Use for /gh:issue-read, /gh-issue-read, "이슈 #N 읽고 정리해줘",
+  "#16 요약". Not an implementer (gh:issue-implement) nor a protocol runner
+  (gh:issue-proceed).
 allowed-tools: Bash, Read, Grep
 metadata:
   model_recommendation:
@@ -43,20 +38,16 @@ Positional args: `<issue-number> [remote]`.
 | `<issue-number>` | GitHub issue number to fetch | — | Yes |
 | `[remote]` | Git remote name whose repo owns the issue | `origin` | No |
 
-- `issue-number` — required, positive integer. Missing/invalid → print
-  usage pointer (`Run /gh-issue-read -h for usage.`) and stop.
-- `remote` — default `origin`. From `git remote get-url <remote>` resolve
-  **both** `TARGET_REPO=<owner>/<repo>` and `TARGET_HOST` (via
-  `shell-common/functions/gh_host.sh`), then `export GH_HOST="$TARGET_HOST"`.
-  Missing remote → list `git remote -v` and stop.
+- Missing/invalid `issue-number` → print `Run /gh-issue-read -h for usage.`, stop.
+- From `git remote get-url <remote>` resolve **both** `TARGET_REPO=<owner>/<repo>`
+  and `TARGET_HOST` (`shell-common/functions/gh_host.sh`), then
+  `export GH_HOST="$TARGET_HOST"`. Missing remote → `git remote -v` + stop.
 
 Substeps and error templates in `references/repo-resolution.md`.
 
 **Host targeting (#1403)** — every `gh` call below is
-`GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"`. A bare `gh` follows gh
-CLI's own `gh repo set-default` rather than git's `origin`, so on a dual-host
-login (github.com + GHES) it silently reads the wrong host and this read-only
-skill reports "issue not found" for an issue that is OPEN.
+`GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"`; rationale + failure mode in
+`references/repo-resolution.md` → "Host targeting rule".
 
 ## Step 2: Fetch Issue
 
@@ -83,12 +74,9 @@ Header → Summary → Body → Discussion → Meta → Checklist.
 
 ## Step 4: Report
 
-Print the formatted output directly. No preamble ("Here's the issue..."),
-no trailing summary ("Let me know if you want..."). The output IS the
-deliverable.
-
-After the formatted output, append the ai-metrics line (stdout only —
-this skill never mutates GitHub):
+Print the formatted output directly — no preamble ("Here's the issue..."), no
+trailing summary ("Let me know if you want..."). The output IS the deliverable.
+Then append the ai-metrics line (stdout only — this skill never mutates GitHub):
 
 ```
 [ai-metrics:gh-issue-read] ~{ELAPSED} min (read-only — not written to GitHub)
@@ -102,5 +90,9 @@ Compute `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))` just before printing.
 - Never call `gh` without both `GH_HOST` and `--repo` (#1403).
 - Never fall back to `origin` when a non-existent remote is passed.
 - Never truncate or paraphrase body/comments — the point is preservation.
-- Never assume English; match the issue's language in body/comments and
-  the user's conversation language for section headers.
+- Never assume English — issue language for content, chat language for headers.
+
+## Related Skills
+
+Downstream consumers — `gh:issue-implement` (code-change issues: edits files) ·
+`gh:issue-proceed` (directive issues embedding an executable protocol).

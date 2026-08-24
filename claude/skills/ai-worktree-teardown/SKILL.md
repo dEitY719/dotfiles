@@ -1,11 +1,10 @@
 ---
 name: ai-worktree:teardown
 description: >-
-  Clean up an AI worktree after work is done — remove worktree, delete branch,
-  sync main. The reverse of ai-worktree:spawn. Run from the MAIN repo, passing
-  the worktree path as an argument. Use when the user says "작업 끝",
-  "워크트리 정리", "teardown", "cleanup worktree", "작업 완료", "워크트리 제거",
-  or any request to clean up after finishing work in a worktree.
+  Remove an AI worktree, delete its branch, and sync main — the reverse of
+  ai-worktree:spawn. Run from the MAIN repo with the worktree path as an
+  argument. Use for /ai-worktree:teardown, "작업 끝", "워크트리 정리",
+  "워크트리 제거", "cleanup worktree".
 allowed-tools: Bash, Read, Grep, Glob
 metadata:
   model_recommendation:

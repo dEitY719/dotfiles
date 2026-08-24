@@ -1,19 +1,10 @@
 ---
 name: obsidian:resolve-conflict
 description: >-
-  Obsidian vault 클론(`windows` / `wsl`)의 `git pull` 충돌을 진단 → 분류 → 해결
-  → 커밋 → push → peer 클론 동기화까지 한 번에 처리한다. Use when the user runs
-  /obsidian:resolve-conflict, /obsidian-resolve-conflict, or says "볼트 충돌
-  해결", "obsidian-git pull 이 충돌났어", "vault 머지 충돌 풀어줘", "resolve my
-  obsidian vault conflict". `~/.dotfiles-setup-mode` 를 읽어 사내PC(`internal`)
-  와 개인PC(`external`/`public`) 를 같은 명령으로 다루고, 사내PC 의 github.com
-  push 금지를 코드로 강제한다 (NF-7). 자동 해결 대상은 로컬 상태 파일뿐 —
-  obsidian-git 아티팩트와 지금 `.gitignore` 가 제외 중인 `.obsidian/**` 만
-  건드리고 노트 본문(`*.md`)은 절대 자동 병합하지 않는다 (NF-3). 형제 스킬
-  [[gh-pr-resolve-conflict]] 가 PR 브랜치를 히스토리 재작성 + 강제 push 로 푸는 것과
-  달리 이쪽은 vault 를 merge 로만 푼다 (NF-1). 이웃 [[obsidian-session-clip]] 은
-  원격을 건드리지 않지만 이 스킬은 원격 동기화가 목적이다. Accepts `[windows|wsl]`,
-  `--no-push`, `--no-sync-peer`, `--dry-run`, `--vault <path>`, `-h`/`--help`/`help`.
+  Obsidian vault 의 `git pull` 충돌을 진단·분류·해결·커밋·push 한다. Use for
+  /obsidian:resolve-conflict, /obsidian-resolve-conflict, "볼트 충돌 해결",
+  "vault 머지 충돌 풀어줘", "resolve my obsidian vault conflict". Do NOT use
+  for PR 브랜치 — use gh:pr-resolve-conflict instead.
 allowed-tools: Bash, Read, Edit, Write, Grep
 metadata:
   model_recommendation:
@@ -60,10 +51,12 @@ conflicts and nothing behind → "해결할 충돌 없음" + ahead/behind, stop 
 bash "${SKILL_DIR}/lib/classify-conflicts.sh" "$VAULT" ${APPLY:+--apply}
 ```
 
-`--dry-run` omits `--apply`, so nothing is written. Class A is resolved by the
-script; **class B and C are the user's decision** — present the per-file diff
-summary and the 3 options from `references/classify.md`, never guess. Deferring
-is a valid outcome: leave the merge in progress, say how to resume, stop.
+`--dry-run` omits `--apply`, so nothing is written. Class A — obsidian-git
+아티팩트와 지금 `.gitignore` 가 제외 중인 `.obsidian/**` 같은 **로컬 상태
+파일뿐** — is resolved by the script; **class B (노트 본문 `*.md`) and C are the
+user's decision** — present the per-file diff summary and the 3 options from
+`references/classify.md`, never guess (NF-3). Deferring is a valid outcome:
+leave the merge in progress, say how to resume, stop.
 
 ## Step 5-6: Merge commit (F-5) + push (F-6, NF-7)
 
@@ -98,3 +91,9 @@ follow-up command (`/obsidian-resolve-conflict <side> --vault <vault>/90-persona
 - Never create a vault; an unresolved path is a stop, not a `mkdir` (NF-4). Never
   delete `.git/index.lock` — back off and retry (NF-6). Never copy the tables out
   of `docs/.ssot/pc-environment.md` (NF-9).
+
+## Related Skills
+
+형제 [[gh-pr-resolve-conflict]] 는 PR 브랜치를 히스토리 재작성 + 강제 push 로 풀지만
+이쪽은 vault 를 merge 로만 푼다 (NF-1). 이웃 [[obsidian-session-clip]] 은 원격을
+건드리지 않지만 이 스킬은 원격 동기화가 목적이다. 옵션·env: `references/options.md`.

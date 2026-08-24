@@ -1,16 +1,11 @@
 ---
 name: devx:session-close
 description: >-
-  세션을 닫기 전 "남은 작업 없나"를 고정된 4개 항목으로 감사해
-  `[OK]`/`[BLOCKED]` 판정을 내리는 read-only 스킬 — 저장소를 전혀 바꾸지
-  않는다. Use when the user runs /devx:session-close, /devx-session-close,
-  or says "세션 닫아도 되나", "종료 전 점검", "남은 작업 없는지 봐줘",
-  "이제 끝내도 돼?", "audit this session before I close it". git 상태(미커밋
-  변경 · 원격 미반영 커밋 · 진행중 merge/rebase/cherry-pick · stash) ·
-  TodoList 잔여 · 임시 산출물 · 이번 세션이 만든 이슈/PR 을 점검하고,
-  마지막 두 줄에 판정과 다음 행동만 남긴다. 그린이면 `/exit` 를 안내한다 —
-  대신 실행하지 않고, 잔여 작업을 대신 처리하지도 않는다.
-  (재개: devx:restart, handoff: devx:session-handoff)
+  세션 종료 전 남은 작업을 4개 항목으로 감사해 `[OK]`/`[BLOCKED]` 판정만 내리는
+  read-only 스킬 — 저장소를 전혀 바꾸지 않고, 그린이면 `/exit` 안내만 한다(대신
+  실행하지 않는다). Use for /devx:session-close, /devx-session-close,
+  "세션 닫아도 되나", "audit this session before I close it". 인계는
+  devx:session-handoff.
 allowed-tools: Bash, Read, Grep, TaskList
 metadata:
   model_recommendation:
@@ -94,6 +89,11 @@ scratchpad 경로는 세션이 시스템 프롬프트로 받은 값을 그대로
   사용자가 정한다 (NF-1).
 - `/exit` 를 대신 실행하지 않는다. 프로세스를 강제로 끝내지도, 대화 종료
   도구를 부르지도 않는다 — 안내 문자열만 찍는다 (NF-2).
-- 네트워크는 C-4 만 쓴다 (NF-3). 잔여 작업을 대신 처리하지 않는다 — 인계
-  문서는 devx:session-handoff, 세션 기록은 write:task-history /
-  obsidian:session-clip 몫이다.
+- 네트워크는 C-4 만 쓴다 (NF-3). 잔여 작업을 대신 처리하지 않는다.
+
+## Related Skills
+
+같은 "세션 끝" 자리, 다른 동사 — `devx:session-handoff` (미완 작업을 이슈
+코멘트로 인계) · `devx:restart` (중단된 작업을 이어서 재개) ·
+`write:task-history` / `obsidian:session-clip` (세션 기록 남기기). 본 스킬은
+감사만 하고 저장소를 바꾸지 않는다.

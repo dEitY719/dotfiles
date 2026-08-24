@@ -1,13 +1,10 @@
 ---
 name: devx:plugin-guide
 description: >-
-  Generate a Korean, human-facing guide doc for an already-installed Claude
-  Code plugin by reading its cached SKILL.md files, then update the plugins
-  index. Use when the user runs /devx:plugin-guide <plugin-name>, or asks
-  "이 플러그인 가이드 만들어줘", "플러그인 문서화해줘", "새 플러그인 스킬
-  정리해줘". Produces docs/guide/plugins/<plugin>.md with 3 fixed sections
-  (설치 방법 / 스킬 설명 / 사용법). Does NOT install plugins and does NOT
-  commit. Accepts `<plugin-name> [--force]` and `-h`/`--help`/`help`.
+  Generate a Korean guide doc for an installed Claude Code plugin from its
+  cached SKILL.md files, then update the plugins index. Use for
+  /devx:plugin-guide <plugin-name>, "플러그인 가이드 만들어줘",
+  "플러그인 문서화해줘". Does NOT install plugins and does NOT commit.
 allowed-tools: Bash, Read, Grep, Write, Edit
 metadata:
   model_recommendation:

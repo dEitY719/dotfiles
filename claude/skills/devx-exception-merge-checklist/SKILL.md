@@ -1,18 +1,10 @@
 ---
 name: devx:exception-merge-checklist
 description: >-
-  Run a 10-point read-only sanity check on a GitHub PR right before a
-  merge on the "exception track" (CI green but hand-merged with extra
-  scrutiny). Detects hidden regressions that ordinary CI gates miss:
-  mid-rebase broken commits, OpenAPI lock drift, YAML indent breakage,
-  over-scoped prettier writes, and missing test mocks for new framework
-  calls (`cookies()` / `headers()` / `new NextRequest(`). Use when the
-  user runs /devx:exception-merge-checklist,
-  /devx-exception-merge-checklist, or asks "예외 트랙 머지 전 점검", "PR
-  머지 직전 회귀 체크", "exception PR pre-merge audit". Read-only by
-  default; `--auto-fix` only stages C8 / C9 fixes (no commit). Accepts
-  `[<PR#>] [--skip-bisect] [--auto-fix] [--build-cmd <cmd>]` and
-  `-h`/`--help`/`help`.
+  Run a 10-point read-only sanity check on a PR right before an exception-track
+  hand-merge — regressions ordinary CI gates miss. Use for
+  /devx:exception-merge-checklist, /devx-exception-merge-checklist,
+  "예외 트랙 머지 전 점검", "exception PR pre-merge audit".
 allowed-tools: Bash, Read, Grep, Glob, Edit
 metadata:
   model_recommendation:
@@ -23,6 +15,14 @@ metadata:
 ---
 
 # devx:exception-merge-checklist — Pre-merge 10-point sanity check
+
+## Role
+
+"예외 트랙"(CI 는 초록이지만 추가 검토와 함께 손으로 머지하는 PR) 머지 **직전**에 도는 **읽기 전용 10항목 점검**.
+평범한 CI 게이트가 놓치는 숨은 회귀를 잡는다 — rebase 중간 커밋이 깨진 경우 · OpenAPI lock drift · YAML 들여쓰기
+파손 · 과범위 prettier write · 새 프레임워크 호출(`cookies()` / `headers()` / `new NextRequest(`)에 대한 테스트 mock
+누락. 기본은 읽기 전용이며 `--auto-fix` 도 C8 / C9 만 스테이징한다(커밋하지 않는다). 인자/플래그 표와 C1–C10
+요약: `references/help.md`.
 
 ## Help
 
@@ -36,13 +36,10 @@ Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 5.
 Positional: `[<PR#>]`. Optional flags: `--skip-bisect`, `--auto-fix`,
 `--build-cmd <cmd>`. Full table in `references/help.md`.
 
-- `<PR#>` omitted → auto-detect via `gh pr view --json
-  number,headRefName,baseRefName,url` on the current branch. No PR
-  for the branch → exit 3.
-- Resolve `TARGET_REPO=<owner>/<repo>` via `git remote get-url origin`
-  (parse `https://github.com/<o>/<r>.git` or
-  `git@github.com:<o>/<r>.git`). Missing remote → `git remote -v` and
-  stop with exit 2.
+- `<PR#>` omitted → auto-detect via `gh pr view --json number,headRefName,baseRefName,url` on the current branch.
+  No PR for the branch → exit 3.
+- Resolve `TARGET_REPO=<owner>/<repo>` via `git remote get-url origin` (parse `https://github.com/<o>/<r>.git` or
+  `git@github.com:<o>/<r>.git`). Missing remote → `git remote -v` and stop with exit 2.
 - Bad / unknown flag → usage pointer and stop with exit 2.
 
 ## Step 2: Run 10 Checks
@@ -61,11 +58,9 @@ to checks in `references/checks.md`).
 
 ## Step 3: Render Report
 
-Read `references/report-template.md` for the exact format. The
-report has the PR header, two tables (Gating C1–C5 + Regression
-C6–C10), a Score line, a Verdict line, and a Recovery Actions
-section with one bullet per WARN / FAIL (PASS / N/A produce no
-bullet). Do NOT prepend filler prose.
+Read `references/report-template.md` for the exact format. The report has the PR header, two tables (Gating
+C1–C5 + Regression C6–C10), a Score line, a Verdict line, and a Recovery Actions section with one bullet per
+WARN / FAIL (PASS / N/A produce no bullet). Do NOT prepend filler prose.
 
 ## Step 4: Optional Auto-fix (`--auto-fix` only)
 
@@ -96,3 +91,9 @@ by other skills. `GH_DISABLE_AI_METRICS=1` skips this step entirely
 - **C6 opt-out via `--skip-bisect` only.** C7–C10 are not opt-outable — that would re-open the regression gap.
 - **Exit codes**: `0` (all PASS or only WARN) / `1` (≥ 1 FAIL) / `2` (bad args, missing remote) / `3` (no PR detected).
 - **Never silently switch the build command.** If `--build-cmd` is absent and `bun run build` does not exist, mark C6 `N/A` with the reason — do NOT guess `npm test`.
+
+## Related Skills
+
+`gh:pr-approve` (normal review/approve flow) · `gh:pr-merge` (merge an approved PR) ·
+`gh:pr-resolve-conflict` (conflicts before merging) · `gh:pr-merge-emergency`
+(incident bypass with audit) · `gh:commit` (commit what `--auto-fix` staged).

@@ -1,14 +1,10 @@
 ---
 name: devx:trd-to-issues
 description: >-
-  Decompose one or more TRD files (with optional companion PRD) into a
-  three-level Epic → Feature → Task plan and, on `--apply`, register the
-  resulting GitHub Milestones + Issues in bulk via `gh`. Use when the user
-  runs /devx:trd-to-issues, /devx-trd-to-issues, or asks "TRD를 마일스톤/이슈로
-  분해해줘", "PRD/TRD 파일로 일괄 등록", "decompose this TRD into milestones".
-  Default mode is `--dry-run` — only writes a Markdown plan; `--apply` mutates
-  GitHub. Refuses to auto-create missing labels and refuses an unknown remote.
-  Accepts `-h`/`--help`/`help` to print usage.
+  TRD 를 Epic → Feature → Task 3단으로 분해하고, `--apply` 일 때만 GitHub
+  Milestone/Issue 를 대량 등록한다. Use for /devx:trd-to-issues,
+  /devx-trd-to-issues, "TRD를 마일스톤/이슈로 분해해줘", "TRD 로 이슈 일괄 등록",
+  "decompose this TRD into issues". PRD → TRD 스캐폴드는 devx:prd-to-trd.
 allowed-tools: Bash, Read, Edit, Write, Grep
 metadata:
   model_recommendation:
@@ -39,7 +35,10 @@ the first miss, list the missing path and stop.
 
 ## Step 2: Read TRD/PRD + Decompose
 
-Load each TRD (and optional PRD) via `Read`. Extract:
+Load each TRD (and optional PRD) via `Read`. Decompose into three
+levels — **Epic → Feature → Task** (Epic = the TRD-scale outcome,
+Feature = a milestone-sized slice, Task = the issue that is actually
+filed). Extract:
 
 - Milestones — TRD-named structure first; if absent, write the
   proposed names directly into the dry-run plan (under each
@@ -74,7 +73,11 @@ Run with --apply to register on GitHub.
 
 ## Step 4: Apply (only if `--apply`)
 
-Detailed substep procedure: see [references/bulk-create-procedure.md](references/bulk-create-procedure.md)
+Nothing is registered on GitHub without an explicit `--apply` — the
+default `--dry-run` writes the plan and stops. Bulk registration (label
+pre-validation → milestones via `gh api` → `gh issue create` per Task →
+`#new-N` resolution → Ready promotion) and its mid-flow-failure rules:
+[references/bulk-create-procedure.md](references/bulk-create-procedure.md).
 
 ## Step 5: Report
 
@@ -86,3 +89,9 @@ Print: `--plan-out` path, milestone count, task count, and (for
 ```
 
 Operational constraints: see `references/constraints.md`.
+
+## Related Skills
+
+`devx:prd-to-trd` — previous pipeline stage (PRD → per-component TRD
+scaffolds); this one starts from filled-in TRDs. `gh:issue-create` —
+single-issue alternative when bulk decomposition is overkill.

@@ -18,7 +18,7 @@ Examples:
   /skill:check claude/skills/gh-issue-flow/SKILL.md --recursive
   /skill:check help
 
-Checks run (15 total):
+Checks run (16 total):
   Structure (1-5):    Line Count, Progressive Disclosure, Frontmatter Validity,
                       References Directory Usage, Output Report Defined
   UX Quality (6-12):  Help Flag Pattern, Step Structure, Options Documentation,
@@ -28,3 +28,5 @@ Checks run (15 total):
                       rubric: references/model-recommendation.md)
   Security (14-15):   License Declaration, Capability Declaration Consistency
                       (read-only policy alignment; pre-empts security scanners)
+  Budget (16):        Description Length (PASS <=250 chars / WARN 251-400 /
+                      FAIL >400; characters not bytes)

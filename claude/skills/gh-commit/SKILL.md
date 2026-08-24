@@ -1,17 +1,10 @@
 ---
 name: gh:commit
 description: >-
-  Create a git commit for the current changes following the repo's style,
-  auto-linking a GitHub issue number if it appears in the recent conversation
-  or is passed as an argument. Always inspects the current working-tree state
-  first — works equally for changes made by Claude in this conversation and
-  for changes the user made manually outside the conversation (e.g. quick
-  alias additions). Use when the user runs /gh:commit, /gh-commit, or asks
-  "커밋해", "지금까지 작업 커밋", "이슈 N번 연결해서 커밋". The user does NOT
-  need to prefix with "git status 확인하고" — that is step 1 of this skill.
-  Creates a new commit — never amends. Never skips hooks. Accepts
-  `[issue-number] [remote]` (remote defaults to `origin`) and
-  `-h`/`--help`/`help` to print usage.
+  Create a git commit for the current changes in the repo's style, auto-linking
+  a GitHub issue number. Use for /gh:commit, /gh-commit, "커밋해", "지금까지 작업
+  커밋", "이슈 N번 연결해서 커밋". Commits only — never pushes and never opens a
+  PR (gh:pr).
 allowed-tools: Bash, Read, Grep
 metadata:
   model_recommendation:
@@ -45,34 +38,9 @@ NOT ask "what did you change?". In a single message run: `git status` (never
 `-uall`), `git diff` (staged + unstaged), `git diff --staged` if anything is
 staged, and `git log --oneline -20` (to mimic the repo's commit style).
 
-**Positional args (#1405)** — `/gh:commit [issue-number] [remote]`: a
-positional made only of digits is the issue number, any other positional is the
-remote name. `/gh:commit 123`, `/gh:commit upstream`, `/gh:commit 123 upstream`
-all work; bare `/gh:commit` is unchanged. Remote defaults to `origin`.
-
-**Bind the GitHub target (#1403, #1405)** — Step 5 talks to GitHub, so resolve
-the host and repo from the `[remote]`'s URL in this same message and export
-them; if `git remote get-url "$REMOTE"` fails, stop with the available-remotes
-list (`git remote -v`) and `Error: remote '<name>' not found. Available
-remotes:` — never fall back to `origin` silently, which masks typos and posts
-metrics to the wrong repo (same Failure rule as
-`gh-issue-implement/references/repo-resolution.md`).
-
-```bash
-REMOTE="${REMOTE:-origin}"
-. "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
-REMOTE_URL=$(git remote get-url "$REMOTE")
-TARGET_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL")
-TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
-export GH_HOST="$TARGET_HOST"
-export TARGET_REPO TARGET_HOST REMOTE
-```
-
-Every `gh` call in Step 5 is then `GH_HOST="$TARGET_HOST" gh ... --repo
-"$TARGET_REPO"`. A bare `gh` follows gh CLI's own `gh repo set-default`, not
-git's `$REMOTE`; on a dual-host login (github.com + GHES) that posts to the
-wrong server with no error. `export` is what carries the host into
-`gh_project_status.sh`, which calls `gh` on its own.
+In that same message, parse `[issue-number] [remote]` (#1405) and bind the
+GitHub target for Step 5: read `references/github-target.md` and paste its
+snippet verbatim (exports `GH_HOST`/`TARGET_REPO`/`TARGET_HOST`/`REMOTE`, #1403).
 
 ## Step 2: Resolve the Issue Number
 
@@ -107,9 +75,8 @@ guard (`skill_completion_guard.py`, issue #753) can verify this step ran:
 ## Step 5: AI Metrics + Sync Project Board Status
 
 The ai-metrics comment POST (`GH_DISABLE_AI_METRICS` branch, token formula,
-soft-fail) follows
-[`references/ai-metrics-comment.md`](references/ai-metrics-comment.md). The
-project-board sync (`--only-from Backlog` guard, helper-fallback NF-1/#724
+soft-fail) follows [`references/ai-metrics-comment.md`](references/ai-metrics-comment.md).
+The project-board sync (`--only-from Backlog` guard, helper-fallback NF-1/#724
 defense) follows [`references/board-sync.md`](references/board-sync.md) —
 skip it entirely when no issue footer was written. After both blocks, emit
 `printf '[step:gh-commit/metrics-board-sync] OK\n'`.
@@ -117,9 +84,8 @@ skip it entirely when no issue footer was written. After both blocks, emit
 ## Step 6: Verify
 
 After commit succeeds, run `git status` and report
-`Committed <short-hash>: <subject line>` (mention the issue number on a
-second line if one was linked). Then emit the report step-completion marker
-so the step-skip guard recognizes the skill finished:
+`Committed <short-hash>: <subject line>` (issue number on a second line if one
+was linked), then emit the closing step-skip-guard marker:
 `printf '[step:gh-commit/report] OK\n'`.
 
 ## Constraints
@@ -127,3 +93,8 @@ so the step-skip guard recognizes the skill finished:
 - One commit per invocation by default. If the diff is clearly two unrelated
   changes, ask the user whether to split before staging.
 - Never push (`/gh:pr` handles pushing), create empty commits, or edit git config.
+
+## Related Skills
+
+`gh:pr` pushes the branch and opens the PR from these commits · `gh:issue-create`
+files the issue this commit links to.

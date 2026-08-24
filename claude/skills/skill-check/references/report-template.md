@@ -39,6 +39,11 @@ References dir: <exists / missing>
 | 14 | License Declaration            | WARN   | no license; repo LICENSE exists → add MIT  |
 | 15 | Capability Declaration Consistency | WARN | lib/scripts helper imports requests; network undeclared |
 
+### Context Budget Check
+| #  | Check                        | Result | Notes                                      |
+|----|------------------------------|--------|--------------------------------------------|
+| 16 | Description Length           | FAIL   | 668 chars > 400 — move flag detail to references/help.md |
+
 Recommended tier: haiku — read-only audit, bounded output (declared: none yet)
 
 Score: 6/13 checks passed (5 warnings, 2 fails, 1 N/A)
@@ -76,7 +81,9 @@ Run /skill:check again after fixes to verify.
 Rules:
 - Only include WARN and FAIL items in Issues & Improvements section
 - Quote actual lines from the file when describing problems
-- Score denominator excludes N/A checks (15 checks total, minus any N/A)
+- Score denominator excludes N/A checks (16 checks total, minus any N/A)
+- Check 16 always reports the measured character count in Notes, so the
+  overage is actionable without re-running a measurement
 - The "Model Recommendation Check" table row + "Recommended tier" line are
   always shown; the "Sub-skill Model Plan" section appears only for composite
   skills (omit it entirely for leaf skills)

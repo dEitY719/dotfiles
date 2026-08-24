@@ -2,16 +2,9 @@
 name: devx:command-rename
 description: >-
   Design a command-naming refactor and file the tracking issue(s) — never
-  touch code. Use when the user runs /devx:command-rename,
-  /devx-command-rename, or asks "이 명령 dash-form으로 리네임 이슈 만들어",
-  "agy 명령들 네이밍 통일 이슈 떠줘", "rename this command family to <convention>".
-  Takes a target command family + desired naming convention, discovers every
-  definition and reference point, compares against the 3 naming SSOT docs,
-  detects a rule gap when the requested convention isn't codified, then
-  creates a `refactor` issue (and a cross-linked `docs` issue on a gap) by
-  reusing [[gh-issue-create]]. Does NOT edit source or commit — the actual
-  rename runs later via /gh:issue-flow. Accepts
-  `<command-family> <desired-convention> [remote]` and `-h`/`--help`/`help`.
+  touch code. Use on /devx:command-rename, /devx-command-rename,
+  "명령 네이밍 통일 이슈 만들어", "rename this command family". The rename
+  itself runs later via /gh:issue-flow.
 allowed-tools: Bash, Read, Grep, Agent
 metadata:
   model_recommendation:
@@ -34,7 +27,9 @@ separate later `/gh:issue-flow` run.
 ## Help
 
 If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output
-its content verbatim, then stop. No API calls.
+its content verbatim, then stop. No API calls. That file is the SSOT for the
+argument surface: `<command-family> <desired-convention> [remote]` plus
+`-h`/`--help`/`help`.
 
 ## Step 1: Parse input & resolve target family
 
@@ -91,3 +86,9 @@ an `[OK]`/`[FAIL]` verdict, and a `Next:` hint pointing at
 See `references/constraints.md` (no source edits/commits, never skip the
 git-family exclusion, never invent SSOT text, always confirm
 backward-compat/collision decisions, docs issue only on a real gap).
+
+## Related Skills
+
+Issue creation is delegated to [[gh-issue-create]] (never `gh issue create`
+directly). The rename this skill designs is executed later by a separate
+`/gh:issue-flow <refactor-issue-number>` run — this skill never edits code.

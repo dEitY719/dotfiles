@@ -1,18 +1,10 @@
 ---
 name: karakeep:classify
 description: >-
-  Analyze a URL and suggest the best-fit Karakeep List, comparing it against
-  the live List tree — default dry-run (prints the proposal, writes nothing).
-  Use when the user runs /karakeep:classify, /karakeep-classify, or asks
-  "이 URL 어느 list 가 좋을지", "분류 제안해줘", "where should this bookmark
-  go", "triage <url>". When no existing List fits, proposes a new (possibly
-  nested) List structure. `--apply` executes the proposal by delegating to
-  [[karakeep:add]]; otherwise the user confirms with `karakeep:add <url>
-  --list <path>`. Honors the Company confidentiality boundary — never
-  suggests a public/personal URL into `Company` or its children. Reads the
-  live tree via REST (base URL = `.env` `NEXTAUTH_URL`). Sister skill of
-  [[karakeep:add]] — that one writes; this one decides. Accepts `<url>`,
-  `--apply`, and `-h`/`--help`/`help` to print usage.
+  Analyze a URL and suggest the best-fit Karakeep List (dry-run by default).
+  Use for /karakeep:classify, /karakeep-classify, "이 URL 어느 list 가
+  좋을지", "분류 제안해줘", "where should this bookmark go". Do NOT use to
+  write — use karakeep:add instead.
 allowed-tools: Bash, Read, WebFetch
 metadata:
   model_recommendation:
@@ -88,3 +80,8 @@ to confirm the no-op.
 - Never propose or apply a public/personal URL under the `Company` subtree.
 - Lightweight analysis — title/meta over full-body fetch unless the user
   asks for deeper inspection.
+
+## Related Skills
+
+- Sister skill [[karakeep:add]] owns the write path; this one only decides.
+  Flags and usage: `references/help.md`.

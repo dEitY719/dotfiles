@@ -26,6 +26,7 @@
 | `--backend <name>` | `hatchling` | Build backend to modernize toward: `hatchling` or `uv_build`. |
 | `--keep-venv` | off | Skip the cleanup step — leave the old `.venv/` and `*.egg-info/` in place. |
 | `--update-docs` | off | With `--apply`, rewrite in-repo stale `venv`/`pip` references (README, docs, bootstrap scripts) to the `uv` workflow. Off → the scan is report-only. |
+| `-h` / `--help` / `help` | — | Print this help and stop. No detection, no file mutation. |
 
 ## Examples
 

@@ -1,11 +1,12 @@
 # devx:plugin-guide — Help
 
-## Arguments
+## Options
 
-| # | Name | Default | Description |
-|---|------|---------|-------------|
-| 1 | `<plugin-name>` or `-h`/`--help`/`help` | — | `<plugin>@<marketplace>` or `<plugin>` alone (required unless help) |
-| 2 | `--force` | off | Regenerate the doc even if it already exists |
+| Option | Description | Default |
+|--------|-------------|---------|
+| `<plugin-name>` | Positional 1 — `<plugin>@<marketplace>` or `<plugin>` alone; required unless help | — |
+| `--force` | Positional 2 — regenerate the doc even if it already exists | off |
+| `-h` / `--help` / `help` | Print this help and stop; no file reads/writes | — |
 
 ## Usage
 

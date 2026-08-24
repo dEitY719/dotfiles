@@ -21,6 +21,16 @@ session-spawn scheduler.
 | `<command>` | Skill invocation or natural-language task to run after the delay. | — |
 | `-h` / `--help` / `help` | Print this help and stop. | — |
 
+## When to invoke
+
+Always invoke this skill whenever the user wants to defer **any** slash-command
+or task to run after a time delay — "N분 후에 /skill 실행해", "M분 뒤에 [skill]
+수행해", "[command] N분 후에 해줘", "schedule /skill in N minutes".
+
+Not this skill: a recurring cloud-agent routine is the built-in `/schedule`
+skill; a rate-limit reset safety net (state file + cleanup) is
+`devx:rate-limit-guard`.
+
 ## Examples
 
 ```

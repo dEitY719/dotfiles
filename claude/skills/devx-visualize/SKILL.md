@@ -1,15 +1,10 @@
 ---
 name: devx:visualize
 description: >-
-  Create beautiful, self-contained HTML visualizations from any content or idea.
-  Use for slide decks, presentations, infographics, dashboards, flowcharts,
-  diagrams, timelines, comparison tables, data visualizations, landing pages,
-  one-pagers, org charts, mind maps, process flows, kanban boards, report
-  summaries, or any visual that helps humans digest information faster. Trigger
-  on requests like "/devx:visualize", "visualize this," "make a deck," "create a
-  slide," "build an infographic," "show me a dashboard," "make this visual," or
-  any request to present information in a visual HTML format.
-  (Excalidraw .excalidraw 파일은 devx:excalidraw-diagram 사용)
+  Create a self-contained HTML visualization — deck, infographic, dashboard,
+  flowchart, timeline, poster. Use for /devx:visualize, "visualize this",
+  "make a deck", "이거 시각화해줘". Excalidraw 파일은 devx:excalidraw-diagram,
+  세로 스크롤 덱은 devx:md-to-scrolldeck.
 license: MIT
 metadata:
   author: careerhackeralex
@@ -92,3 +87,10 @@ This skill runs mid-conversation. Use all available context: conversation histor
 5. **Verify** — run [references/checklist.md](references/checklist.md) before outputting.
 
 Chart.js patterns → [references/chartjs-patterns.md](references/chartjs-patterns.md) | Debugging → [references/debugging.md](references/debugging.md) | Bedrock-safe delivery → [references/bedrock-safe-write.md](references/bedrock-safe-write.md)
+
+## Related Skills
+
+`devx:md-to-scrolldeck` — a Markdown file into a vertical scroll-snap deck;
+this skill owns everything else (dashboards, infographics, posters, horizontal
+decks) · `devx:excalidraw-diagram` — when the deliverable is an `.excalidraw`
+file, not HTML.

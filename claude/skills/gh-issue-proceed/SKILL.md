@@ -1,20 +1,10 @@
 ---
 name: gh:issue-proceed
 description: >-
-  Read a GitHub directive issue (a work-order issue whose body embeds an
-  executable 8-section protocol) and proceed end-to-end WITHOUT human
-  intervention — strictly validating the schema, executing each step per
-  the body's decision rules, and applying authorized write actions
-  (commit / PR / comment / close / file follow-up). Use when the user runs
-  /gh:issue-proceed, /gh-issue-proceed, or asks "이 지시 이슈 끝까지 수행해",
-  "directive 이슈 실행해", "proceed #81". Sibling of [[gh:issue-implement]]
-  (which edits files to satisfy a code-change issue) — this skill instead
-  EXECUTES the protocol the issue carries. Strict schema: refuses any issue
-  missing one of the 8 required sections. Always direct mode — the directive
-  is the plan; no plan/brainstorming dispatch. Safety gates (absolute
-  prohibitions + token-gated conditional permissions + pre-flight + runtime
-  monitors) bound every write. Accepts `<issue-number> [remote]` and
-  `-h`/`--help`/`help`.
+  Execute the 8-section protocol a GitHub directive issue embeds, unattended —
+  strict schema validation, safety-gated writes. Use for /gh:issue-proceed,
+  /gh-issue-proceed, "이 지시 이슈 끝까지 수행해", "proceed #81". Not a code
+  implementer (gh:issue-implement).
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, Skill, TaskCreate, TaskUpdate, TaskList
 metadata:
   model_recommendation:
@@ -26,11 +16,14 @@ metadata:
 
 # gh:issue-proceed — Directive Issue → Execution
 
-Sibling of `/gh:issue-implement`: same shell, minus superpowers detection
-and mode dispatch — directive issues are pre-designed, so execution is always
-direct. SSOT: `docs/feature/gh-issue-proceed-skill/design.md`. On each step's
-success emit its marker `printf '[step:gh-issue-proceed/<id>] OK\n'` (`<id>`
-= `fetch-issue`, `schema-valid`, `execute`, `report`).
+Read a directive issue (work-order body embedding an executable protocol) and proceed
+end-to-end WITHOUT human intervention: validate the schema, execute each step per the
+body's `decision_rules`, apply the authorized write actions (commit / PR / comment /
+close / file follow-up). Same shell as `/gh:issue-implement` minus superpowers
+detection and mode dispatch — a directive issue is pre-designed, so mode is always
+`direct`. SSOT: `docs/feature/gh-issue-proceed-skill/design.md`. On each step's success
+emit `printf '[step:gh-issue-proceed/<id>] OK\n'` (`fetch-issue`, `schema-valid`,
+`execute`, `report`).
 
 ## Help
 
@@ -98,3 +91,8 @@ Gate rules are absolute; see `references/safety-gates.md` for full layers:
 - **Never** run `mutation-required` on the default branch or a dirty tree.
 - **Never** comment on schema-validation failure (caller-side).
 - Mode is always `direct`; no plan / brainstorming dispatch.
+
+## Related Skills
+
+`gh:issue-implement` — sibling in the same slot: that one edits files to satisfy a
+code-change issue, this one executes the protocol a directive issue carries.

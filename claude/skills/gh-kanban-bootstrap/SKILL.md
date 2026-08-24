@@ -1,18 +1,10 @@
 ---
 name: gh:kanban-bootstrap
 description: >-
-  Bootstrap a GitHub Projects v2 kanban board for the current repo in one
-  shot — prereq validation, target repo identification, label bootstrap
-  from SSOT, dry-run dispatch, real run, and host-aware UI checklist.
-  Use when the user runs /gh:kanban-bootstrap, /gh-kanban-bootstrap, or
-  asks "kanban 보드 셋업", "프로젝트 보드 자동화 셋업", "set up the kanban
-  board". Wraps the single SSOT script `lib/setup.sh` (absorbed from
-  the former scripts/ location per issue #699). Accepts the
-  same flags as the script (`--owner`, `--repo`, `--title`,
-  `--auto-archive-window`, `--hide-columns`, `--dry-run`,
-  `--skip-pr-template`) plus
-  `--no-bootstrap-labels`, `--force-label-sync`,
-  `--with-smoke-test`. Accepts `-h`/`--help`/`help`.
+  Bootstrap a GitHub Projects v2 kanban board for a repo in one shot. Use
+  for /gh:kanban-bootstrap, /gh-kanban-bootstrap, "kanban 보드 셋업",
+  "프로젝트 보드 자동화 셋업", "set up the kanban board". Board setup — pure
+  label sync is gh:label-bootstrap.
 allowed-tools: Bash, Read, Grep
 metadata:
   model_recommendation:
@@ -32,48 +24,41 @@ output its content verbatim, then stop. No API calls.
 ## Step 1: Resolve Skill Dir
 
 Record `START_TS=$(date +%s)` immediately. Locate `SKILL_DIR` (this
-file's directory): the script lives at `${SKILL_DIR}/lib/setup.sh`. The
-label bootstrap is delegated to the sibling `gh:label-bootstrap` skill,
-whose SSOT is `../gh-label-bootstrap/references/gh-labels.md` (issue #1226).
+file's directory): the script lives at `${SKILL_DIR}/lib/setup.sh`.
 
 ## Step 2: Prereq Check
 
-Follow `references/prereq.md` for tool / host / token-scope checks
-(including the `gh api --hostname` vs `gh auth refresh -h` flag-naming
-inconsistency). On any miss the helper prints the install or
-`gh auth refresh -h <host> -s project` hint and aborts (rc=1).
+Follow `references/prereq.md` for tool / host / token-scope checks. On any
+miss the helper prints the install or `gh auth refresh -h <host> -s project`
+hint and aborts (rc=1).
 
 ## Step 3: Target Repo
 
-Always `origin` (memory policy — never prompt for remote selection on
-this repo). Detect `OWNER/REPO` via `gh repo view`. If user passed
-`--owner`/`--repo` explicitly, those override.
+Always `origin` (never prompt for remote selection). Detect `OWNER/REPO`
+via `gh repo view`; explicit `--owner`/`--repo` override.
 
 ## Step 4: Options
 
 If `--hide-columns` was not passed and this looks like a personal repo,
 ask the user once (1-line question) — never auto-infer from collaborator
 count (NF-3 / privacy). Parse `--no-bootstrap-labels` (skip Step 5).
-`--force-label-sync` is a back-compat **no-op** (accept silently): the
-delegated `gh:label-bootstrap` now always force-syncs SSOT label
-colors/descriptions, so flag-present and flag-absent behave identically
-(intentional, per F-3 of issue #1226).
+`--force-label-sync` is a back-compat **no-op**, accepted silently (F-3 of
+issue #1226 — flags and their defaults: `references/help.md`).
 
 ## Step 5: Label Bootstrap
 
 Delegate to the sibling `gh:label-bootstrap` skill (SSOT:
-`../gh-label-bootstrap/references/gh-labels.md`):
+`../gh-label-bootstrap/references/gh-labels.md`) — it force-syncs the 10
+SSOT labels' color/description and renames the 3 alias labels:
 
 ```
 bash "${SKILL_DIR}/../gh-label-bootstrap/lib/label-bootstrap.sh" \
     --repo "$OWNER/$REPO"
 ```
 
-Pass `--dry-run` through on the dry-run dispatch (Step 6). It force-syncs
-the 10 SSOT labels' color/description and renames the 3 alias labels.
-`--no-bootstrap-labels` skips this step entirely with a one-line notice.
-Per-label permission errors warn on stderr and continue (label absence
-never blocks board setup).
+Pass `--dry-run` through on the dry-run dispatch (Step 6).
+`--no-bootstrap-labels` skips this step with a one-line notice. Per-label
+permission errors warn on stderr and continue (never blocks board setup).
 
 ## Step 6: Dry-run Dispatch
 
@@ -108,3 +93,7 @@ then append the smoke-test block and compact closing report per
 - Never echo token / collaborator / project ID to stdout (NF-3).
 - Never silently fall back to a different remote — `origin` only.
 - `lib/setup.sh` is the sole entry point — do not reintroduce the old `scripts/` location (removed in #699).
+
+## Related Skills
+
+`gh:label-bootstrap` (label SSOT sync only — delegated in Step 5) · `devx:docs-bootstrap` (docs/ tree) — same new-repo setup slot.

@@ -1,12 +1,10 @@
 ---
 name: devx:harness-refactor
 description: >-
-  harness-legacy-check 감사 리포트를 바탕으로 low-risk 하네스 개선을 적용하는
-  워크플로우를 생성하고 실행한다. claude/workflows/harness-refactor.js 를 현재
-  감사 결과에 맞게 새로 작성한 뒤 Workflow 도구로 실행한다.
-  Use when the user runs /devx:harness-refactor, "harness 리팩토링해줘",
-  "harness-refactor 실행해줘", "하네스 정리해줘", or after reviewing a
-  harness-legacy-check report and wanting to apply the findings.
+  harness-legacy-check 감사 리포트를 바탕으로 low-risk 하네스 개선 워크플로우를
+  생성하고 실행한다. Use when the user runs /devx:harness-refactor,
+  "하네스 리팩토링해줘", "하네스 정리해줘", or after reviewing a
+  harness-legacy-check report to apply its findings.
 metadata:
   model_recommendation:
     tier: sonnet
@@ -64,3 +62,10 @@ Workflow({ scriptPath: 'claude/workflows/harness-refactor.js' })
 ```
 
 실패 시: `[FAIL] devx:harness-refactor — <이유>`
+
+---
+
+## 짝을 이루는 스킬 (Related Skills)
+
+- `devx:harness-legacy-check` — 이 스킬의 입력인 감사 리포트를 생성한다.
+  먼저 실행해 `.claude/reports/harness-legacy-check.md` 를 만들어 둘 것.
