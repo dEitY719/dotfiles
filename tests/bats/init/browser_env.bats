@@ -32,29 +32,23 @@ _stub_chrome() {
 
 # Source env/browser.sh in a bare subprocess and print the resulting
 # $BROWSER via the environment (proves it was *exported*, not just set).
-_source_bash() {
-    run bash --noprofile --norc -c "
-        export SHELL_COMMON='${1:-$SHELL_COMMON}'
-        export DOTFILES_FORCE_INIT=1
-        export _WINDOWS_CHROME_PROC_VERSION='${PROC}'
-        export WINDOWS_CHROME_EXE='${WINDOWS_CHROME_EXE:-}'
-        export WINDOWS_CHROME_DRIVE='${TEST_TEMP_HOME}/no-such-drive'
-        . '${BROWSER_ENV}'
-        printenv BROWSER || true
-    "
+# $1 = SHELL_COMMON override, rest = the shell command words — one env list for
+# both shells, so the cross-shell tests are guaranteed to compare like with like.
+_source_run() {
+    local shell_common="${1:-$SHELL_COMMON}"
+    shift
+    run env \
+        "SHELL_COMMON=${shell_common}" \
+        DOTFILES_FORCE_INIT=1 \
+        "_WINDOWS_CHROME_PROC_VERSION=${PROC}" \
+        "WINDOWS_CHROME_EXE=${WINDOWS_CHROME_EXE:-}" \
+        "WINDOWS_CHROME_DRIVE=${TEST_TEMP_HOME}/no-such-drive" \
+        "$@" -c ". '${BROWSER_ENV}'
+printenv BROWSER || true"
 }
 
-_source_zsh() {
-    run zsh -f -c "
-        export SHELL_COMMON='${1:-$SHELL_COMMON}'
-        export DOTFILES_FORCE_INIT=1
-        export _WINDOWS_CHROME_PROC_VERSION='${PROC}'
-        export WINDOWS_CHROME_EXE='${WINDOWS_CHROME_EXE:-}'
-        export WINDOWS_CHROME_DRIVE='${TEST_TEMP_HOME}/no-such-drive'
-        . '${BROWSER_ENV}'
-        printenv BROWSER || true
-    "
-}
+_source_bash() { _source_run "${1-}" bash --noprofile --norc; }
+_source_zsh() { _source_run "${1-}" zsh -f; }
 
 # --- bash ---
 

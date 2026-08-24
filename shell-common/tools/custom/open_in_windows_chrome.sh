@@ -17,32 +17,31 @@
 # registering rewrites this machine's desktop defaults and must stay an
 # explicit, per-machine decision.
 
-# --- self location (authoritative; do not trust an inherited DOTFILES_ROOT) ---
-_SELF_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)" || exit 1
-_SELF="${_SELF_DIR}/$(basename "$0")"
+# --- self location (authoritative; never trust an inherited SHELL_COMMON) ---
+# realpath on BASH_SOURCE, not $0: --register points /usr/bin/x-www-browser at
+# this file via update-alternatives, so under that name a $0-derived directory
+# would resolve to /usr/bin and miss the helper. Same spelling as the siblings
+# that skip init.sh (mirror-pages-activate.sh, gen_command_docs.sh).
+_SELF="$(realpath "${BASH_SOURCE[0]}")" || exit 1
+SHELL_COMMON="${_SELF%/tools/custom/*}"
 
-# ux_lib, via the shared custom-tools initializer. Under DOTFILES_TEST_MODE it
-# returns before defining anything, so the fallbacks below are unconditional.
-if [ -r "${_SELF_DIR}/init.sh" ]; then
+# ux_lib directly rather than through init.sh: init.sh returns before loading
+# anything under DOTFILES_TEST_MODE, which would leave the bats suite asserting
+# against local stubs instead of the output this script actually ships. ux_lib
+# has no interactive guard and mutes its own ANSI in test mode, so one source
+# covers both. The fallback only matters if ux_lib itself is missing.
+if [ -r "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
     # shellcheck source=/dev/null
-    . "${_SELF_DIR}/init.sh" || true
+    . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
+else
+    ux_error() { printf '[ERROR] %s\n' "$*" >&2; }
+    ux_warning() { printf '[WARN] %s\n' "$*"; }
+    ux_info() { printf '%s\n' "$*"; }
+    ux_success() { printf '[OK] %s\n' "$*"; }
+    ux_bullet() { printf '  %s\n' "$*"; }
+    ux_section() { printf '\n%s\n' "$*"; }
+    ux_usage() { printf 'Usage: %s %s%s\n' "$1" "$2" "${3:+ - $3}"; }
 fi
-
-if ! command -v ux_error >/dev/null 2>&1; then
-    ux_error() { echo "Error: $*" >&2; }
-    ux_warning() { echo "Warning: $*" >&2; }
-    ux_info() { echo "$*"; }
-    ux_success() { echo "$*"; }
-    ux_bullet() { echo "  $*"; }
-    ux_section() { echo "$*"; }
-    ux_usage() { echo "Usage: $1 $2${3:+ - $3}"; }
-fi
-
-# init.sh derives these too, but it is skipped in test mode and may be absent;
-# recompute unconditionally so the resolved helper always belongs to THIS
-# checkout rather than to whatever DOTFILES_ROOT the caller happened to export.
-DOTFILES_ROOT="${_SELF_DIR%/shell-common/tools/custom}"
-SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 
 _CHROME_HELPER="${SHELL_COMMON}/functions/windows_chrome.sh"
 if [ ! -r "$_CHROME_HELPER" ]; then
@@ -108,6 +107,15 @@ _register() {
     local desktop_file="${apps_dir}/${_DESKTOP_ID}"
     local exe
 
+    # Defined once and both run and printed from here: the dry run exists to
+    # promise what the real run will do, so the two must not drift apart.
+    local -a xdg_default=(xdg-settings set default-web-browser "$_DESKTOP_ID")
+    local -a xdg_mime=(xdg-mime default "$_DESKTOP_ID"
+        x-scheme-handler/http x-scheme-handler/https text/html)
+    local -a alt_install=(update-alternatives --install
+        /usr/bin/x-www-browser x-www-browser "$_SELF" 200)
+    local -a alt_set=(update-alternatives --set x-www-browser "$_SELF")
+
     # Registering a browser that is not installed would leave every path
     # pointing at a dead Exec line, so resolve first and refuse otherwise.
     exe="$(_windows_chrome_exe)" || {
@@ -124,9 +132,9 @@ _register() {
         ux_info "Dry run - nothing on this machine was changed."
         ux_bullet "chrome.exe:    ${exe}"
         ux_bullet "desktop entry: ${desktop_file}  (Exec=${_SELF} %u)"
-        ux_bullet "xdg default:   xdg-settings set default-web-browser ${_DESKTOP_ID}"
-        ux_bullet "mime default:  xdg-mime default ${_DESKTOP_ID} x-scheme-handler/http x-scheme-handler/https text/html"
-        ux_bullet "alternatives:  sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser ${_SELF} 200"
+        ux_bullet "xdg default:   ${xdg_default[*]}"
+        ux_bullet "mime default:  ${xdg_mime[*]}"
+        ux_bullet "alternatives:  sudo ${alt_install[*]}"
         return 0
     fi
 
@@ -139,7 +147,7 @@ _register() {
     fi
 
     if command -v xdg-settings >/dev/null 2>&1; then
-        if xdg-settings set default-web-browser "$_DESKTOP_ID" >/dev/null 2>&1; then
+        if "${xdg_default[@]}" >/dev/null 2>&1; then
             ux_success "xdg default-web-browser -> ${_DESKTOP_ID}"
         else
             ux_warning "xdg-settings refused ${_DESKTOP_ID}; xdg-open may still use the old browser."
@@ -149,8 +157,7 @@ _register() {
     fi
 
     if command -v xdg-mime >/dev/null 2>&1; then
-        if xdg-mime default "$_DESKTOP_ID" \
-            x-scheme-handler/http x-scheme-handler/https text/html >/dev/null 2>&1; then
+        if "${xdg_mime[@]}" >/dev/null 2>&1; then
             ux_success "mimeapps http/https/html -> ${_DESKTOP_ID}"
         else
             ux_warning "xdg-mime failed; check ~/.config/mimeapps.list by hand."
@@ -164,16 +171,15 @@ _register() {
     if ! command -v update-alternatives >/dev/null 2>&1; then
         ux_warning "update-alternatives not found - x-www-browser left untouched."
     elif sudo -n true >/dev/null 2>&1; then
-        if sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser "$_SELF" 200 >/dev/null \
-            && sudo update-alternatives --set x-www-browser "$_SELF" >/dev/null; then
+        if sudo "${alt_install[@]}" >/dev/null && sudo "${alt_set[@]}" >/dev/null; then
             ux_success "x-www-browser -> ${_SELF}"
         else
             ux_warning "update-alternatives failed - x-www-browser left untouched."
         fi
     else
         ux_warning "sudo needs a password - run these two lines to finish x-www-browser:"
-        ux_bullet "sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser ${_SELF} 200"
-        ux_bullet "sudo update-alternatives --set x-www-browser ${_SELF}"
+        ux_bullet "sudo ${alt_install[*]}"
+        ux_bullet "sudo ${alt_set[*]}"
     fi
 }
 
@@ -186,16 +192,15 @@ main() {
         return 0
         ;;
     --register)
-        shift
-        case "${1-}" in
+        case "${2-}" in
         --dry-run) _register 1 ;;
         "") _register 0 ;;
         *)
-            ux_error "unknown --register option: $1"
+            ux_error "unknown --register option: $2"
             return 2
             ;;
         esac
-        return $?
+        return
         ;;
     --)
         shift
