@@ -4,8 +4,9 @@
 #
 # This is the single target the three WSL "default browser" mechanisms point at:
 #
-#   $BROWSER              <- shell-common/env/browser.sh (resolves chrome.exe
-#                            through the same helper this script uses)
+#   $BROWSER              <- shell-common/env/browser.sh (exports THIS file's
+#                            path; $BROWSER is word-split by its consumers and
+#                            chrome.exe's own path contains a space)
 #   xdg-open              <- ~/.local/share/applications/windows-chrome.desktop
 #   x-www-browser         <- update-alternatives
 #
@@ -83,8 +84,116 @@ _no_chrome() {
     ux_bullet "Install Chrome on Windows, or set WINDOWS_CHROME_EXE to its chrome.exe."
 }
 
+# --- argument translation --------------------------------------------------
+#
+# chrome.exe is a Windows process and cannot see the Linux filesystem, so a
+# local path that reaches this wrapper has to be translated first. It does
+# reach us: --register claims text/html, which makes `xdg-open ./report.html`
+# and a `file:///home/...` URL land here.
+#
+# Exactly two shapes are translated, both via `wslpath -w`, and both are
+# emitted as the bare Windows path (`C:\Users\...\report.html`) rather than a
+# rebuilt file:// URL — Chrome accepts a Windows path argument directly, and
+# one output shape means one thing to test:
+#
+#   1. a file:// URL whose decoded local path exists
+#   2. a bare argument that names an existing filesystem path
+#
+# Everything else is forwarded byte-identical: https:// URLs, Chrome's own
+# flags (--new-window), and any path that does not exist. Without wslpath on
+# PATH nothing is translated at all — passing the argument through unchanged
+# is strictly better than failing.
+#
+# Percent-decoding is deliberately partial: %20 and %25 only, in that order.
+# Any other escape (%C3%A9, …) is left alone, so such a URL simply fails the
+# existence test below and passes through untouched rather than being mangled.
+# Query strings and fragments are not stripped either, for the same reason.
+_CONVERTED=""
+_convert_arg() {
+    local arg="$1"
+    local path
+
+    _CONVERTED="$arg"
+    command -v wslpath >/dev/null 2>&1 || return 0
+
+    case "$arg" in
+    file://*)
+        path="${arg#file://}"
+        # file://localhost/p and file:///p both name a local path; anything
+        # else after the authority is a remote host and must not be touched.
+        path="${path#localhost}"
+        case "$path" in
+        /*) ;;
+        *) return 0 ;;
+        esac
+        path="${path//%20/ }"
+        path="${path//%25/%}"
+        ;;
+    -*)
+        # A leading dash is always a flag here, never a relative path.
+        return 0
+        ;;
+    *://*)
+        # http, https, chrome, about, … — remote schemes stay verbatim.
+        return 0
+        ;;
+    *)
+        path="$arg"
+        ;;
+    esac
+
+    [ -e "$path" ] || return 0
+    _CONVERTED="$(wslpath -w "$path" 2>/dev/null)" || _CONVERTED="$arg"
+    [ -n "$_CONVERTED" ] || _CONVERTED="$arg"
+}
+
+# --- registration ----------------------------------------------------------
+
+# Desktop Entry spec: the Exec executable is wrapped in double quotes, and
+# `"`, backtick, `$` and `\` are backslash-escaped inside them. Without this a
+# dotfiles checkout under a path with a space produces an unlaunchable entry.
+_desktop_quote() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//\`/\\\`}"
+    s="${s//\$/\\\$}"
+    printf '"%s"' "$s"
+}
+
+# printf %q for the sudo lines we only *print*: the user pastes them into a
+# shell, so a space or a metacharacter in the path has to survive that trip.
+# The arrays this script actually executes need no quoting — bash arrays
+# already pass each element as one argv word.
+_quoted_cmd() {
+    local out
+    out="$(printf '%q ' "$@")"
+    printf '%s' "${out% }"
+}
+
+# --register bakes $_SELF (absolute) into the .desktop Exec line and into
+# update-alternatives. From a linked git worktree that path is temporary:
+# tearing the worktree down silently breaks this machine's default browser
+# for every one of the three mechanisms. Refuse instead of warning.
+#
+# A copy that is in no git repo at all is legitimate (an installed copy), so
+# only a *linked* worktree refuses — that is exactly where --absolute-git-dir
+# (…/.git/worktrees/NAME) and --git-common-dir (…/.git) disagree.
+# Prints the main checkout on success so the error can name it.
+_linked_worktree_main() {
+    local dir="$1" gitdir commondir
+    command -v git >/dev/null 2>&1 || return 1
+    gitdir="$(git -C "$dir" rev-parse --absolute-git-dir 2>/dev/null)" || return 1
+    commondir="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+    [ -n "$gitdir" ] && [ -n "$commondir" ] || return 1
+    [ "$gitdir" != "$commondir" ] || return 1
+    printf '%s\n' "${commondir%/.git}"
+}
+
 _write_desktop_entry() {
     local desktop_file="$1"
+    local exec_field
+    exec_field="$(_desktop_quote "$_SELF")"
 
     cat > "$desktop_file" <<DESKTOP
 [Desktop Entry]
@@ -93,7 +202,7 @@ Type=Application
 Name=Windows Chrome (WSL)
 GenericName=Web Browser
 Comment=Open links in the Windows-side Google Chrome
-Exec=${_SELF} %u
+Exec=${exec_field} %u
 Terminal=false
 StartupNotify=false
 MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
@@ -105,7 +214,7 @@ _register() {
     local dry_run="$1"
     local apps_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
     local desktop_file="${apps_dir}/${_DESKTOP_ID}"
-    local exe
+    local exe main_checkout
 
     # Defined once and both run and printed from here: the dry run exists to
     # promise what the real run will do, so the two must not drift apart.
@@ -116,6 +225,16 @@ _register() {
         /usr/bin/x-www-browser x-www-browser "$_SELF" 200)
     local -a alt_set=(update-alternatives --set x-www-browser "$_SELF")
 
+    # Ahead of the dry-run branch on purpose: --dry-run promises what a real
+    # run would do, and a real run from here would do nothing but break.
+    if main_checkout="$(_linked_worktree_main "$(dirname "$_SELF")")"; then
+        ux_error "refusing to register from a linked git worktree: ${_SELF}"
+        ux_bullet "Every registration hard-codes that absolute path, and a worktree is temporary."
+        ux_bullet "Run it from the main checkout instead:"
+        ux_bullet "${main_checkout}/shell-common/tools/custom/open_in_windows_chrome.sh --register"
+        return 1
+    fi
+
     # Registering a browser that is not installed would leave every path
     # pointing at a dead Exec line, so resolve first and refuse otherwise.
     exe="$(_windows_chrome_exe)" || {
@@ -123,18 +242,13 @@ _register() {
         return 1
     }
 
-    # Every registration below hard-codes this file's absolute path, so a
-    # register run from a throwaway git worktree leaves dangling defaults once
-    # that worktree is torn down.
-    ux_info "Registering ${_SELF} - run this from your permanent dotfiles checkout."
-
     if [ "$dry_run" = "1" ]; then
         ux_info "Dry run - nothing on this machine was changed."
         ux_bullet "chrome.exe:    ${exe}"
-        ux_bullet "desktop entry: ${desktop_file}  (Exec=${_SELF} %u)"
+        ux_bullet "desktop entry: ${desktop_file}  (Exec=$(_desktop_quote "$_SELF") %u)"
         ux_bullet "xdg default:   ${xdg_default[*]}"
         ux_bullet "mime default:  ${xdg_mime[*]}"
-        ux_bullet "alternatives:  sudo ${alt_install[*]}"
+        ux_bullet "alternatives:  sudo $(_quoted_cmd "${alt_install[@]}")"
         return 0
     fi
 
@@ -178,13 +292,14 @@ _register() {
         fi
     else
         ux_warning "sudo needs a password - run these two lines to finish x-www-browser:"
-        ux_bullet "sudo ${alt_install[*]}"
-        ux_bullet "sudo ${alt_set[*]}"
+        ux_bullet "sudo $(_quoted_cmd "${alt_install[@]}")"
+        ux_bullet "sudo $(_quoted_cmd "${alt_set[@]}")"
     fi
 }
 
 main() {
-    local exe
+    local exe arg
+    local -a forward=()
 
     case "${1-}" in
     -h | --help | help)
@@ -212,7 +327,12 @@ main() {
         return 1
     }
 
-    exec "$exe" "$@"
+    for arg in "$@"; do
+        _convert_arg "$arg"
+        forward+=("$_CONVERTED")
+    done
+
+    exec "$exe" "${forward[@]}"
 }
 
 # Direct-exec guard: this file is a command, not a library.
