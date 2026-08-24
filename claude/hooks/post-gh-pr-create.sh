@@ -96,6 +96,18 @@ _helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_statu
 # shellcheck disable=SC1090
 . "$_helper" 2>/dev/null || exit 0
 
+# Rollout-skew warning, emitted HERE in the foreground on purpose (PR #1420
+# review). The consumer of this check is _post_gh_pr_create_repo_has_board
+# below, which runs inside the detached tail whose stderr goes to /dev/null
+# (#1258) — a warning printed there would never reach a human, so the guard
+# would restore the retry-poll but tell nobody the deploy is skewed. Printing
+# it at the top costs one builtin lookup, no fork and no wait, and it fires
+# only in the window where the sourced helper predates #1405.
+if ! command -v _gh_project_status_normalize_repo >/dev/null 2>&1; then
+    printf '[post-gh-pr-create] %s sourced but _gh_project_status_normalize_repo undefined — splitting GH_REPO inline (#724).\n' \
+        "$_helper" >&2
+fi
+
 # Need owner/repo to look up linked issues (`_gh_pr_closing_issue_numbers`
 # takes it as an argument).
 #
@@ -148,22 +160,25 @@ _post_gh_pr_create_repo_has_board() {
     # (`unknown option: --repo`). Calling the normalizer bare sent its rc 127
     # straight into `|| return 1`: has_board went false and the entire #813
     # retry-poll vanished without a word, reviving the stuck-in-Backlog
-    # symptom #813 exists to prevent (#1414). Warn and split inline instead —
-    # one missing helper function is no reason to drop the poll.
+    # symptom #813 exists to prevent (#1414). Split inline instead — one
+    # missing helper function is no reason to drop the poll.
     local _slug _o _n _cnt
     if command -v _gh_project_status_normalize_repo >/dev/null 2>&1; then
         _slug=$(_gh_project_status_normalize_repo "$GH_REPO") || return 1
     else
-        printf '[post-gh-pr-create] %s sourced but _gh_project_status_normalize_repo undefined — splitting GH_REPO inline (#724).\n' \
-            "$_helper" >&2
-        # Mirrors only the host-stripping slice of the normalizer, not its
-        # validation half: a malformed slug simply yields an empty projectsV2
-        # count below, which is the same "no board" answer validation would
-        # have produced. Ends in the normalizer's own "<owner> <repo>" output
+        # The warning for this branch was already printed in the foreground
+        # at source time — see the block above the GH_REPO binding.
+        #
+        # Mirrors the normalizer's host-stripping and its "must contain a
+        # slash" rejection, then ends in its "<owner> <repo>" output
         # contract, so both branches feed the one split below instead of
-        # carrying two split idioms that must stay in sync.
+        # carrying two split idioms that must stay in sync. A slashless value
+        # would otherwise leave _o == _n == the whole string, pass the
+        # non-empty gate, and spend a GraphQL round trip to learn what the
+        # normalizer answers for free (PR #1420 review).
         _slug="$GH_REPO"
         case "$_slug" in */*/*) _slug="${_slug#*/}" ;; esac
+        case "$_slug" in */*) ;; *) return 1 ;; esac
         _slug="${_slug%%/*} ${_slug#*/}"
     fi
     _o="${_slug%% *}"
