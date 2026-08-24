@@ -28,9 +28,15 @@ stub_normalize_repo() {
     cat <<'STUB'
 _gh_project_status_normalize_repo() {
     _v="$1"
-    case "$_v" in */*/*) _v="${_v#*/}" ;; esac
-    case "$_v" in */*) ;; *) return 1 ;; esac
+    case "$_v" in
+        /*|*/*/*/*) return 1 ;;
+        */*/*) _v="${_v#*/}" ;;
+        */*) ;;
+        *) return 1 ;;
+    esac
+    case "$_v" in /*|*/) return 1 ;; esac
     printf '%s %s\n' "${_v%%/*}" "${_v#*/}"
+    return 0
 }
 STUB
 }
@@ -449,4 +455,77 @@ EOF
     assert_success
     grep -qx 'o=owner' "$GH_ARGS_LOG"
     grep -qx 'n=repo' "$GH_ARGS_LOG"
+}
+
+# ---------------------------------------------------------------------------
+# PR #1420 review follow-ups
+# ---------------------------------------------------------------------------
+
+@test "T20 (#1414): stub_normalize_repo matches the real helper's contract (drift guard)" {
+    # codex flagged that a hand-written stub can drift from the real
+    # gh_project_status.sh and leave this suite green against a contract the
+    # helper no longer honours. It already had: the first version of the stub
+    # accepted "owner/", "/repo" and "a/b/c/d", all of which the real
+    # normalizer rejects. Compare the two directly instead of trusting a
+    # comment to keep them aligned.
+    local _real="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_project_status.sh"
+    [ -r "$_real" ] || skip "real gh_project_status.sh not readable"
+    stub_normalize_repo > "$TEST_TEMP_HOME/stub_normalize.sh"
+
+    local _in _s_out _s_rc _r_out _r_rc
+    for _in in "owner/repo" "github.com/owner/repo" "norepo" "owner/" "/repo" "a/b/c/d" ""; do
+        # `if _out=$(...)` rather than a bare assignment plus `$?`: bats runs
+        # the test body under `set -e`, and half these inputs are supposed to
+        # exit non-zero — a bare assignment would abort the test instead of
+        # recording the rejection we came to compare.
+        if _s_out=$(DOTFILES_FORCE_INIT=1 bash -c \
+            ". '$TEST_TEMP_HOME/stub_normalize.sh'; _gh_project_status_normalize_repo \"\$1\"" \
+            _ "$_in" 2>/dev/null); then _s_rc=0; else _s_rc=$?; fi
+        if _r_out=$(DOTFILES_FORCE_INIT=1 bash -c \
+            ". '$_real' >/dev/null 2>&1; _gh_project_status_normalize_repo \"\$1\"" \
+            _ "$_in" 2>/dev/null); then _r_rc=0; else _r_rc=$?; fi
+        [ "$_s_rc" = "$_r_rc" ] || {
+            echo "rc drift for '$_in': stub=$_s_rc real=$_r_rc" >&2
+            return 1
+        }
+        [ "$_s_out" = "$_r_out" ] || {
+            echo "output drift for '$_in': stub='$_s_out' real='$_r_out'" >&2
+            return 1
+        }
+    done
+}
+
+@test "T21 (#1414): fallback rejects a slashless GH_REPO without a GraphQL round trip" {
+    # agy: the inline fallback used to leave _o == _n == the whole string for a
+    # value with no slash, which passed the non-empty gate and spent a GraphQL
+    # request to learn what the normalizer answers for free. The probe must
+    # bail before touching the network — proven by an empty gh arg log.
+    mkdir -p "$TEST_TEMP_HOME/bin"
+    GH_ARGS_LOG="$TEST_TEMP_HOME/gh-args.log"; : > "$GH_ARGS_LOG"
+    cat > "$TEST_TEMP_HOME/bin/gh" <<EOF
+#!/usr/bin/env bash
+if [ "\$1 \$2" = "api graphql" ]; then
+    printf '%s\n' "\$@" >> "$GH_ARGS_LOG"
+    echo 1
+    exit 0
+fi
+exit 0
+EOF
+    chmod +x "$TEST_TEMP_HOME/bin/gh"
+    # No normalizer: force the inline-fallback branch.
+    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+_gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
+_gh_project_status_query_current() { echo "Backlog"; }
+_gh_pr_closing_issue_numbers() { return 0; }
+EOF
+    export PATH="$TEST_TEMP_HOME/bin:$PATH"
+    export GH_REPO="norepo"
+    export POST_GH_PR_CREATE_SYNC_SLEEP=0 POST_GH_PR_CREATE_ASYNC=0
+    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.com/owner/repo/pull/1421"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    # has_board returned 1 before the query, so the retry-poll never ran:
+    # exactly the one foreground sync, and zero GraphQL calls.
+    [ "$(grep -c '^sync pr 1421 In review$' "$CALL_LOG")" -eq 1 ]
+    [ ! -s "$GH_ARGS_LOG" ]
 }
