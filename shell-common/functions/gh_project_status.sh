@@ -188,14 +188,17 @@ _gh_project_status_sync() {
 
     # Fail-closed guard (issue #393): only an APPROVED PR may land in the
     # "Approved" column. Other Statuses are unaffected. UNKNOWN (gh pr view
-    # failure) is treated as non-APPROVED — preferring a loud refusal over
-    # a possibly-incorrect mutation. Bypass via
+    # failure, or an unresolved repo) is treated as non-APPROVED — preferring
+    # a loud refusal over a possibly-incorrect mutation. Bypass via
     # _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1 (explicit operator intent).
     #
-    # Two explicit branches instead of splicing the flag in via
-    # ${_owner:+--repo ...}: unquoted expansion would word-split on any repo
-    # name containing whitespace, and quoting it would pass one empty
-    # argument on the auto-detect-failed path.
+    # There is deliberately NO bare `gh pr view` fallback when the repo did
+    # not resolve (PR #1409 review, codex BLOCKER). A bare call reads whatever
+    # `gh repo set-default` picked, so it would answer with the reviewDecision
+    # of a DIFFERENT repo's PR #<num> — and a coincidental APPROVED there would
+    # open this fail-closed gate on an unreviewed PR. That is the exact
+    # wrong-repo read #1405 exists to remove, so an unresolved repo is simply
+    # UNKNOWN: refuse, and name the reason.
     if [ "$_kind" = "pr" ] \
         && [ "$_target" = "Approved" ] \
         && [ "${_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS-0}" != "1" ]; then
@@ -206,9 +209,9 @@ _gh_project_status_sync() {
                         --jq '.reviewDecision? // empty' 2>/dev/null) \
                 || _decision="UNKNOWN"
         else
-            _decision=$(gh pr view "$_num" --json reviewDecision \
-                        --jq '.reviewDecision? // empty' 2>/dev/null) \
-                || _decision="UNKNOWN"
+            printf '[gh-project-status] cannot verify PR #%s approval: owner/repo unresolved — refusing "Approved"\n' \
+                "$_num" >&2
+            _decision="UNKNOWN"
         fi
         if [ -z "$_decision" ]; then
             _decision="UNKNOWN"
@@ -563,6 +566,11 @@ _gh_project_status_resolve_owner_repo() {
         return 0
     fi
 
+    # Output contract is space-separated "<owner> <repo>", and callers split
+    # it back on whitespace. That round-trip is safe only because GitHub
+    # owner and repo names cannot contain whitespace (alphanumerics, `-`,
+    # `_`, `.` only) — it is not a general-purpose serialization, and this
+    # is the reason it does not need to be one (PR #1409 review, agy).
     _output=$(gh repo view --json owner,name --jq '"\(.owner.login) \(.name)"' 2>/dev/null) || return 1
     [ -z "$_output" ] && return 1
     if ! read -r _owner _repo <<EOF
