@@ -691,6 +691,38 @@ _hold_lock() {
     [ "$(_log_count 'agent prompt')" -eq 1 ]
 }
 
+@test "issue_watcher_cron: agent_prompt_stalled retry is skipped when the agent is already working" {
+    _install_herdr_stub
+
+    # Call 1 (main()'s idle|done check) reports idle, so dispatch is attempted.
+    # HERDR_PROMPT_MODE=stall makes the first `agent prompt` stall; call 2 is
+    # the pre-retry status check this fixes — it reports `working`, meaning
+    # the stalled call actually landed, so no second prompt should be sent
+    # (PR #1400 codex review: `agent_prompt_stalled` alone doesn't prove the
+    # keystroke was dropped).
+    _run_tick HERDR_AGENT_GET_SEQ="idle working" HERDR_PROMPT_MODE=stall
+    assert_success
+    assert_output --partial "already working"
+    refute_output --partial "retrying once"
+
+    [ "$(_log_count 'agent get')" -eq 2 ]
+    [ "$(_log_count 'agent prompt')" -eq 1 ]
+}
+
+@test "issue_watcher_cron: the idle-poll give-up warning reports health-check failure count" {
+    _install_herdr_stub
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "workspace_id": "ws-stale", "pane_id": "ws-stale:p9", "agent_name": "iw-watch" }\n' \
+        >"${_STATE_FILE}"
+
+    # Every poll call (including the stale-state probe) reports agent_not_found:
+    # a genuinely gone agent, not merely a slow one.
+    _run_tick HERDR_AGENT_GET_SEQ="fail"
+    assert_success
+    assert_output --partial "did not report idle"
+    assert_output --partial "10/10 health-check failures"
+}
+
 @test "issue_watcher_cron: a stall on the retry falls through to the failure path" {
     _install_herdr_stub
 

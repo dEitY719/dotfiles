@@ -290,17 +290,29 @@ _iw_agent_status() {
 # the 5-minute tick interval, and hitting the cap still dispatches because the
 # stall retry in _iw_dispatch is the second line of defence.
 _iw_wait_for_idle() {
-    local _i=0 _status
+    local _i=0 _status _get_failed=0
 
     while [ "${_i}" -lt 10 ]; do
-        _status=$(_iw_agent_status) || _status=""
-        [ "${_status}" != "idle" ] || return 0
+        if _status=$(_iw_agent_status); then
+            [ "${_status}" != "idle" ] || return 0
+        else
+            _status=""
+            _get_failed=$((_get_failed + 1))
+        fi
         _i=$((_i + 1))
         [ "${_i}" -lt 10 ] || break
         sleep 0.5
     done
 
-    ux_warning "Agent ${_IW_AGENT_NAME} did not report idle within ~5s — dispatching anyway."
+    # Health-check failures (agent missing / pane closed) and a merely slow
+    # `starting` pane both fall through to this warning today — surface the
+    # failure count so a genuinely-gone agent doesn't read as "just slow"
+    # (PR #1400 codex review).
+    if [ "${_get_failed}" -gt 0 ]; then
+        ux_warning "Agent ${_IW_AGENT_NAME} did not report idle within ~5s (${_get_failed}/10 health-check failures) — dispatching anyway."
+    else
+        ux_warning "Agent ${_IW_AGENT_NAME} did not report idle within ~5s — dispatching anyway."
+    fi
 }
 
 # Echo herdr's JSON response on stdout; the exit code is herdr's own.
@@ -310,7 +322,7 @@ _iw_prompt_once() {
 }
 
 _iw_dispatch() {
-    local _json _code _rc=0
+    local _json _code _rc=0 _post_stall_status
 
     _json=$(_iw_prompt_once) || _rc=$?
 
@@ -321,10 +333,22 @@ _iw_dispatch() {
     if [ "${_rc}" -ne 0 ]; then
         _code=$(printf '%s' "${_json}" | _iw_json_value '.error.code')
         if [ "${_code}" = "agent_prompt_stalled" ]; then
-            ux_warning "herdr reported agent_prompt_stalled — retrying once."
-            sleep 1
-            _rc=0
-            _json=$(_iw_prompt_once) || _rc=$?
+            # `agent_prompt_stalled` only proves herdr saw no state change
+            # within its fixed 5s window — it does NOT prove the prompt was
+            # never submitted (PR #1400 codex review). `working` is positive
+            # evidence the first call *did* land, so retrying would type the
+            # same dispatcher text into an already-busy pane; any other
+            # status gives no such evidence, so the retry proceeds as before.
+            _post_stall_status=$(_iw_agent_status) || _post_stall_status=""
+            if [ "${_post_stall_status}" = "working" ]; then
+                ux_warning "herdr reported agent_prompt_stalled but agent is already working — treating as delivered, not retrying."
+                _rc=0
+            else
+                ux_warning "herdr reported agent_prompt_stalled — retrying once."
+                sleep 1
+                _rc=0
+                _json=$(_iw_prompt_once) || _rc=$?
+            fi
         fi
     fi
 
