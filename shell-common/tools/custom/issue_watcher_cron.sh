@@ -280,9 +280,54 @@ _iw_agent_status() {
     printf '%s' "${_json}" | _iw_json_value '.result.agent.agent_status'
 }
 
+# Wait for a freshly (re-)bootstrapped agent to report idle before prompting it.
+# `herdr agent start` only confirms the pane looks interactive — a claude process
+# can have drawn its prompt box before its key-input loop accepts Enter, so the
+# dispatcher text is typed but never submitted and herdr's fixed 5s stall check
+# fires `agent_prompt_stalled` (issue #1399). The first-bootstrap path gets this
+# grace for free from the status query that follows it; this gives the
+# re-bootstrap path the same. Capped at ~5s (10 x 0.5s): far below the 5-minute
+# tick interval, and hitting the cap still dispatches because the stall retry in
+# _iw_dispatch is the second line of defence.
+_iw_wait_for_idle() {
+    local _i=0 _status
+
+    while [ "${_i}" -lt 10 ]; do
+        _status=$(_iw_agent_status) || _status=""
+        [ "${_status}" != "idle" ] || return 0
+        sleep 0.5
+        _i=$((_i + 1))
+    done
+
+    ux_warning "Agent ${_IW_AGENT_NAME} did not report idle within ~5s — dispatching anyway."
+}
+
+# Echo herdr's JSON response on stdout; the exit code is herdr's own.
+_iw_prompt_once() {
+    herdr agent prompt "${_IW_AGENT_NAME}" "${_IW_PROMPT}" \
+        --wait --timeout "${_IW_TIMEOUT_MS}" 2>/dev/null
+}
+
 _iw_dispatch() {
-    if herdr agent prompt "${_IW_AGENT_NAME}" "${_IW_PROMPT}" \
-        --wait --timeout "${_IW_TIMEOUT_MS}" >/dev/null 2>&1; then
+    local _json _code _rc=0
+
+    _json=$(_iw_prompt_once) || _rc=$?
+
+    # Only `agent_prompt_stalled` is retried: it means the keystroke was dropped
+    # by a not-yet-ready input loop (issue #1399), which a second later is gone.
+    # Every other error is a real failure and must not be re-sent — a duplicate
+    # prompt would start a second dispatcher cycle.
+    if [ "${_rc}" -ne 0 ]; then
+        _code=$(printf '%s' "${_json}" | _iw_json_value '.error.code')
+        if [ "${_code}" = "agent_prompt_stalled" ]; then
+            ux_warning "herdr reported agent_prompt_stalled — retrying once."
+            sleep 1
+            _rc=0
+            _json=$(_iw_prompt_once) || _rc=$?
+        fi
+    fi
+
+    if [ "${_rc}" -eq 0 ]; then
         ux_success "Dispatched to ${_IW_AGENT_NAME}: ${_IW_PROMPT}"
         return 0
     fi
@@ -415,6 +460,7 @@ main() {
     *)
         ux_warning "Agent ${_IW_AGENT_NAME} unreachable (status: ${_status:-none}) — stale state, re-bootstrapping."
         _iw_bootstrap "${_cwd}" || exit 1
+        _iw_wait_for_idle
         _iw_dispatch || exit 1
         ;;
     esac

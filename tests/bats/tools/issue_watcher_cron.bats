@@ -54,10 +54,28 @@ teardown() {
 #   HERDR_AGENT_STATUS      status reported by `agent get` (default: idle)
 #   HERDR_AGENT_GET_FAIL=1  `agent get` returns the real agent_not_found error
 #                           payload and exits 1 (agent missing / pane closed)
+#   HERDR_AGENT_GET_SEQ     space-separated per-call `agent get` script, one
+#                           word consumed per invocation, last word repeating.
+#                           `fail` = agent_not_found + exit 1; anything else is
+#                           reported as that agent_status. Used to prove the
+#                           post-re-bootstrap idle poll really polls (#1399).
+#   HERDR_PROMPT_MODE       `agent prompt` behaviour (default: always ok)
+#                             stall-once  first call agent_prompt_stalled, rest ok
+#                             stall       every call agent_prompt_stalled
+#                             fail        every call a non-stall error
+# Each herdr invocation is a fresh process, so the per-call sequences count
+# through marker files next to ${HERDR_LOG} rather than through shell state.
 _install_herdr_stub() {
     cat >"${_BIN_DIR}/herdr" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$*" >>"${HERDR_LOG}"
+
+_bump() {
+    _n=$(cat "$1" 2>/dev/null || printf 0)
+    _n=$((_n + 1))
+    printf '%s' "${_n}" >"$1"
+}
+
 case "$1 $2" in
 "workspace create")
     printf '%s\n' '{"id":"cli:workspace:create","result":{"workspace":{"workspace_id":"ws-test-1"},"root_pane":{"pane_id":"ws-test-1:p1"}}}'
@@ -66,6 +84,20 @@ case "$1 $2" in
     printf '%s\n' '{"id":"cli:agent:start","result":{"agent":{"agent_status":"idle","pane_id":"ws-test-1:p1"}}}'
     ;;
 "agent get")
+    if [ -n "${HERDR_AGENT_GET_SEQ:-}" ]; then
+        _bump "${HERDR_LOG}.getcount"
+        # Word-splitting is the point: the sequence is a list of responses.
+        # shellcheck disable=SC2086
+        set -- ${HERDR_AGENT_GET_SEQ}
+        [ "${_n}" -le "$#" ] || _n=$#
+        eval "_resp=\${${_n}}"
+        if [ "${_resp}" = "fail" ]; then
+            printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target iw-watch not found"},"id":"cli:agent:get"}'
+            exit 1
+        fi
+        printf '{"id":"cli:agent:get","result":{"agent":{"agent_status":"%s"}}}\n' "${_resp}"
+        exit 0
+    fi
     if [ "${HERDR_AGENT_GET_FAIL:-0}" = "1" ]; then
         printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target iw-watch not found"},"id":"cli:agent:get"}'
         exit 1
@@ -73,6 +105,23 @@ case "$1 $2" in
     printf '{"id":"cli:agent:get","result":{"agent":{"agent_status":"%s"}}}\n' "${HERDR_AGENT_STATUS:-idle}"
     ;;
 "agent prompt")
+    case "${HERDR_PROMPT_MODE:-ok}" in
+    stall-once)
+        _bump "${HERDR_LOG}.promptcount"
+        if [ "${_n}" = "1" ]; then
+            printf '%s\n' '{"error":{"code":"agent_prompt_stalled","message":"no agent state change observed within 5000ms"},"id":"cli:agent:prompt"}'
+            exit 1
+        fi
+        ;;
+    stall)
+        printf '%s\n' '{"error":{"code":"agent_prompt_stalled","message":"no agent state change observed within 5000ms"},"id":"cli:agent:prompt"}'
+        exit 1
+        ;;
+    fail)
+        printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target iw-watch not found"},"id":"cli:agent:prompt"}'
+        exit 1
+        ;;
+    esac
     printf '%s\n' '{"id":"cli:agent:prompt","result":{"ok":true}}'
     ;;
 esac
@@ -573,6 +622,96 @@ _hold_lock() {
     run cat "${_STATE_FILE}"
     assert_output --partial '"workspace_id": "ws-test-1"'
     refute_output --partial "ws-stale"
+}
+
+# ---------------------------------------------------------------------------
+# Dispatch readiness after a re-bootstrap (issue #1399)
+#
+# A freshly started claude can render its prompt box before its key-input loop
+# accepts Enter; prompting into that gap loses the submission and herdr fails
+# the tick with `agent_prompt_stalled`. Two guards: poll for idle after the
+# re-bootstrap, and retry that one error class once.
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: re-bootstrap polls for idle before dispatching" {
+    _install_herdr_stub
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "workspace_id": "ws-stale", "pane_id": "ws-stale:p9", "agent_name": "iw-watch" }\n' \
+        >"${_STATE_FILE}"
+
+    # Call 1 is the stale-state probe that triggers the re-bootstrap; the poll
+    # that follows must keep asking until the agent stops being `starting`.
+    _run_tick HERDR_AGENT_GET_SEQ="fail starting starting idle"
+    assert_success
+
+    [ "$(_log_count 'agent get')" -eq 4 ]
+    [ "$(_log_count 'agent prompt')" -eq 1 ]
+
+    # The prompt is last: every status query happened before the dispatch.
+    run tail -n 1 "${_LOG}"
+    assert_output --partial "agent prompt iw-watch"
+}
+
+@test "issue_watcher_cron: the idle poll gives up after its cap and still dispatches" {
+    _install_herdr_stub
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "workspace_id": "ws-stale", "pane_id": "ws-stale:p9", "agent_name": "iw-watch" }\n' \
+        >"${_STATE_FILE}"
+
+    # Never idle: the tick must not newly fail over a slow pane.
+    _run_tick HERDR_AGENT_GET_SEQ="fail starting"
+    assert_success
+    assert_output --partial "did not report idle"
+
+    [ "$(_log_count 'agent get')" -eq 11 ]
+    run grep -F -- "agent prompt iw-watch" "${_LOG}"
+    assert_success
+}
+
+@test "issue_watcher_cron: agent_prompt_stalled is retried once and then succeeds" {
+    _install_herdr_stub
+
+    _run_tick HERDR_PROMPT_MODE=stall-once
+    assert_success
+    assert_output --partial "agent_prompt_stalled"
+
+    [ "$(_log_count 'agent prompt')" -eq 2 ]
+}
+
+@test "issue_watcher_cron: a non-stall prompt failure is not retried" {
+    _install_herdr_stub
+
+    _run_tick HERDR_PROMPT_MODE=fail
+    assert_failure
+    assert_output --partial "herdr agent prompt failed"
+    refute_output --partial "retrying once"
+
+    [ "$(_log_count 'agent prompt')" -eq 1 ]
+}
+
+@test "issue_watcher_cron: a stall on the retry falls through to the failure path" {
+    _install_herdr_stub
+
+    _run_tick HERDR_PROMPT_MODE=stall
+    assert_failure
+    assert_output --partial "herdr agent prompt failed"
+
+    # Exactly one retry — never a loop.
+    [ "$(_log_count 'agent prompt')" -eq 2 ]
+}
+
+@test "issue_watcher_cron: a reused idle agent is dispatched without an extra poll" {
+    _install_herdr_stub
+    _run_tick
+    assert_success
+
+    : >"${_LOG}"
+    _run_tick
+    assert_success
+
+    # The reuse path is unchanged by #1399: one status query, then the prompt.
+    [ "$(_log_count 'agent get')" -eq 1 ]
+    [ "$(_log_count 'agent prompt')" -eq 1 ]
 }
 
 # ---------------------------------------------------------------------------
