@@ -55,6 +55,13 @@ fi
 # `filter.git-crypt.required=true` in their per-repo git config.
 ./scripts/disable-git-crypt-local.sh
 
+# Initialize the bats-core/bats-support/bats-assert submodules so a fresh
+# clone's ./tests/test doesn't silently skip all shell unit tests (#1398).
+# shellcheck source=shell-common/functions/dotfiles_bats_submodules.sh
+source "${DOTFILES_DIR}/shell-common/functions/dotfiles_bats_submodules.sh"
+dotfiles_ensure_bats_submodules "$DOTFILES_DIR" \
+    || ux_warning "bats submodule 초기화 실패 — ./tests/test 실행 시 bats 케이스가 스킵될 수 있습니다."
+
 # Run setup scripts for shell-common, bash, zsh, git, claude, and vscode-extensions
 ./shell-common/setup.sh
 ./bash/setup.sh
