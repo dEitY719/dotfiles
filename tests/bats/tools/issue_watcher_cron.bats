@@ -497,24 +497,15 @@ _hold_lock() {
 
     run grep -F -- "agent prompt iw-watch" "${_LOG}"
     assert_success
-    run grep -F -- "issue-watcher:dispatcher" "${_LOG}"
+    run grep -F -- "issue-watcher:dispatcher 를 Agent 도구로 실행해" "${_LOG}"
     assert_success
-    run grep -F -- "--wait --timeout 240000" "${_LOG}"
+    # 세션 언어 설정에 덜 흔들리도록 영어 지시문을 병기한다 (PR #1396 agy 리뷰).
+    run grep -F -- "run the issue-watcher:dispatcher agent via the Agent tool" "${_LOG}"
     assert_success
-}
-
-# The prompt reaches a claude session verbatim, and "@<name>" has no defined
-# meaning there — the receiving model guessed Skill() first, hit
-# "Unknown skill", and only then self-corrected to the Agent tool (issue
-# #1394). Name the tool in prose instead so no inference is needed.
-@test "issue_watcher_cron: dispatcher prompt names the Agent tool without an '@' prefix" {
-    _install_herdr_stub
-    _run_tick HERDR_AGENT_STATUS=idle
-    assert_success
-
+    # 회귀 가드: "@" 접두사가 다시 붙으면 받는 세션이 Skill/Agent 를 헷갈린다 (#1394).
     run grep -F -- "@issue-watcher:dispatcher" "${_LOG}"
     assert_failure
-    run grep -F -- "issue-watcher:dispatcher 를 Agent 도구로 실행해" "${_LOG}"
+    run grep -F -- "--wait --timeout 240000" "${_LOG}"
     assert_success
 }
 
