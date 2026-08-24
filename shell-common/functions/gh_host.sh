@@ -68,6 +68,27 @@ _gh_resolve_host() {
     unset _grh_mode
 }
 
+# _gh_match_known_host — print the known GitHub host a URL matches, or
+# fail with exit 1 when the URL doesn't point at any host this repo
+# knows about. Single source of truth for the host allowlist so
+# `_gh_parse_owner_repo_url` and `_gh_host_from_url` never carry two
+# independent copies of the domain list to drift out of sync.
+#
+# GHE is matched first so a future `github.com`-suffixed GHE domain
+# cannot be swallowed by the github.com glob.
+#
+# When a new GHE domain is added, extend this case-glob (and the sed
+# regex in `_gh_parse_owner_repo_url`, which still needs its own
+# stripping pattern) — no other function should grow a second copy of
+# the matching logic.
+_gh_match_known_host() {
+    case "${1:-}" in
+        *github.samsungds.net*) echo "github.samsungds.net" ;;
+        *github.com*)           echo "github.com" ;;
+        *)                      return 1 ;;
+    esac
+}
+
 # _gh_parse_owner_repo_url — parse `owner/repo` out of a git remote URL.
 #
 # Accepts the common shapes:
@@ -83,21 +104,16 @@ _gh_resolve_host() {
 # clean two-segment slug.
 #
 # Used by F-4 (gh_pr_review.sh URL parser) and F-5 (kanban setup).
-# When a new GHE domain is added, extend BOTH the case-glob and the
-# sed regex in this single function.
 _gh_parse_owner_repo_url() {
     _gpu_url="${1:-}"
     if [ -z "$_gpu_url" ]; then
         echo "empty remote URL" >&2
         return 1
     fi
-    case "$_gpu_url" in
-        *github.com*|*github.samsungds.net*) ;;
-        *)
-            echo "remote URL is not a github remote: $_gpu_url" >&2
-            return 1
-            ;;
-    esac
+    if ! _gh_match_known_host "$_gpu_url" >/dev/null; then
+        echo "remote URL is not a github remote: $_gpu_url" >&2
+        return 1
+    fi
     _gpu_slug=$(printf '%s' "$_gpu_url" |
         sed -E 's#^.*(github\.com|github\.samsungds\.net)[:/]+##; s#\.git/?$##; s#/$##')
     if ! printf '%s' "$_gpu_slug" | grep -qE '^[^/[:space:]]+/[^/[:space:]]+$'; then
@@ -132,8 +148,8 @@ _gh_parse_owner_repo_url() {
 # URL is empty or is not a known github remote. Callers that have no URL
 # at all (no git remote in scope) should fall back to `_gh_resolve_host`.
 #
-# When a new GHE domain is added, extend the case-glob here as well as
-# the two in `_gh_parse_owner_repo_url` — this file stays the only copy.
+# Delegates the actual host matching to `_gh_match_known_host` — see
+# that function's comment for where to extend the domain list.
 _gh_host_from_url() {
     _ghu_url="${1:-}"
     if [ -z "$_ghu_url" ]; then
@@ -141,23 +157,11 @@ _gh_host_from_url() {
         unset _ghu_url
         return 1
     fi
-    # GHE is matched first so a future `github.com`-suffixed GHE domain
-    # cannot be swallowed by the github.com glob.
-    case "$_ghu_url" in
-        *github.samsungds.net*)
-            unset _ghu_url
-            echo "github.samsungds.net"
-            return 0
-            ;;
-        *github.com*)
-            unset _ghu_url
-            echo "github.com"
-            return 0
-            ;;
-        *)
-            echo "remote URL is not a github remote: $_ghu_url" >&2
-            unset _ghu_url
-            return 1
-            ;;
-    esac
+    if ! _ghu_host=$(_gh_match_known_host "$_ghu_url"); then
+        echo "remote URL is not a github remote: $_ghu_url" >&2
+        unset _ghu_url _ghu_host
+        return 1
+    fi
+    printf '%s\n' "$_ghu_host"
+    unset _ghu_url _ghu_host
 }
