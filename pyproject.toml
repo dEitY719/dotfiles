@@ -55,9 +55,15 @@ packages = []
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests/integration"]
-addopts = "-v --strict-markers -n auto --dist load"
+addopts = "-v --strict-markers -n auto --dist worksteal"
 # -n auto: parallel execution using all available CPU cores
-# --dist load: distribute tests evenly across workers (better for heterogeneous tests)
+#   (./tests/test caps this via PYTEST_XDIST_AUTO_NUM_WORKERS when other
+#    concurrent test runs are detected on the host — see tests/test, #1413)
+# --dist worksteal: work-stealing scheduler — every worker pulls from a shared
+#   queue and idle workers steal pending tests from busy ones. Better than
+#   --dist load for this suite's uneven per-test durations (fast unit-style
+#   checks mixed with slow subprocess/pexpect-driven integration tests), where
+#   load's up-front round-robin leaves workers idle behind one long straggler.
 # Note: override per-machine via PYTEST_ADDOPTS in shell-common/env/development.local.sh
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
