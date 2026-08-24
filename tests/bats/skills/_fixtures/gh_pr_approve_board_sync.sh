@@ -14,7 +14,10 @@
 #   2. the `--only-from "Backlog,In progress,In review"` guard that
 #      stops a `Done` card from being dragged back into `Approved`,
 #      while accepting every pre-merge column the
-#      project-board-sync.yml approve handler also accepts.
+#      project-board-sync.yml approve handler also accepts; and
+#   3. the explicit `--repo "$TARGET_REPO"` (#1405) — without it the
+#      helper resolves the repo via `gh repo view`, i.e. whatever
+#      `gh repo set-default` picked, not the remote Step 1 resolved.
 #
 # Keep this file in sync with board-approved-sync.sh.md. If the block
 # changes, mirror the change here so the bats suite catches drift.
@@ -33,18 +36,19 @@ _gh_project_status_sync() {
 # Mirrors the Step 4.5 block. Args:
 #   $1 PR number
 #   $2 BOARD_BYPASS — "1" only on the self-PR `--self-record` path
+#   $3 TARGET_REPO  — owner/repo resolved in Step 1 (#1405)
 # Always returns 0 (soft-fail policy: board bookkeeping never blocks
 # the Step 5 report).
 gh_pr_approve_board_sync_step45() {
-    local PR_NUMBER="$1" BOARD_BYPASS="${2-0}" _rc=0
+    local PR_NUMBER="$1" BOARD_BYPASS="${2-0}" TARGET_REPO="${3-}" _rc=0
 
     if [ "${BOARD_BYPASS:-0}" = "1" ]; then
         printf '[gh-pr-approve] self-record: bypassing #393 fail-closed guard for PR #%s (operator intent).\n' \
             "$PR_NUMBER" >&2
         _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1 \
-            _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "Backlog,In progress,In review" || _rc=$?
+            _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "Backlog,In progress,In review" --repo "$TARGET_REPO" || _rc=$?
     else
-        _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "Backlog,In progress,In review" || _rc=$?
+        _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "Backlog,In progress,In review" --repo "$TARGET_REPO" || _rc=$?
     fi
 
     if [ "$_rc" -ne 0 ]; then

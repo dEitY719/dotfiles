@@ -28,17 +28,17 @@ teardown() {
 }
 
 @test "board-sync: PUSHED_FIXES>0 → helper called, OK line" {
-    run gh_pr_reply_board_sync_step65 663 2
+    run gh_pr_reply_board_sync_step65 663 2 owner/repo
     assert_success
     assert_output --partial 'In review'
     assert_output --partial '[OK] PR'
     run cat "$FAKE_HELPER_LOG"
     assert_output --partial 'helper called'
-    assert_output --partial 'args=pr 663 In review --only-from In progress,Changes requested'
+    assert_output --partial 'args=pr 663 In review --only-from In progress,Changes requested --repo owner/repo'
 }
 
 @test "board-sync: PUSHED_FIXES=0 → silent no-op" {
-    run gh_pr_reply_board_sync_step65 663 0
+    run gh_pr_reply_board_sync_step65 663 0 owner/repo
     assert_success
     refute_output --partial '[OK]'
     refute_output --partial '[WARN]'
@@ -47,7 +47,7 @@ teardown() {
 }
 
 @test "board-sync: PUSHED_FIXES unset → silent no-op (default 0)" {
-    run gh_pr_reply_board_sync_step65 663 ""
+    run gh_pr_reply_board_sync_step65 663 "" owner/repo
     assert_success
     refute_output --partial '[OK]'
     refute_output --partial '[WARN]'
@@ -57,7 +57,7 @@ teardown() {
 
 @test "board-sync: helper rc=2 → WARN line, rc=0 (soft-fail)" {
     FAKE_HELPER_RC=2
-    run gh_pr_reply_board_sync_step65 663 1
+    run gh_pr_reply_board_sync_step65 663 1 owner/repo
     assert_success
     assert_output --partial '[WARN] 보드 sync 실패'
     refute_output --partial '[OK] PR'
@@ -65,12 +65,22 @@ teardown() {
     assert_output --partial 'helper called'
 }
 
+@test "board-sync (#1405): argv carries the explicit --repo" {
+    # Without --repo the helper resolves the repo through `gh repo view`,
+    # which answers `gh repo set-default` rather than the remote Step 1
+    # resolved — the wrong board on a multi-repo host.
+    run gh_pr_reply_board_sync_step65 663 5 owner/repo
+    assert_success
+    run cat "$FAKE_HELPER_LOG"
+    assert_output --partial '--repo owner/repo'
+}
+
 @test "board-sync: argv carries --only-from guard (regression: don't demote cards already past In review)" {
     # The `--only-from "In progress,Changes requested"` filter is the
     # safety belt that prevents accidentally demoting cards already at
     # `In review` / `Approved` / `Done`. Drop it and a re-run after
     # approval would push the card backwards.
-    run gh_pr_reply_board_sync_step65 663 5
+    run gh_pr_reply_board_sync_step65 663 5 owner/repo
     assert_success
     run cat "$FAKE_HELPER_LOG"
     assert_output --partial '--only-from In progress,Changes requested'

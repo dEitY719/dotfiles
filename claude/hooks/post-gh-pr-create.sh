@@ -96,9 +96,16 @@ _helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_statu
 # shellcheck disable=SC1090
 . "$_helper" 2>/dev/null || exit 0
 
-# Need owner/repo to look up linked issues. `_gh_project_status_sync` itself
-# does not need GH_REPO (it discovers projects via the item's node id), but
-# `_gh_pr_closing_issue_numbers` does.
+# Need owner/repo to look up linked issues (`_gh_pr_closing_issue_numbers`
+# takes it as an argument).
+#
+# Since #1405 the board helpers honor this exported GH_REPO explicitly: their
+# resolution order is `--repo` arg > $GH_REPO > $TARGET_REPO > `gh repo view`
+# auto-detect. Exporting it here is therefore the hook's repo pin, and the
+# calls below deliberately do NOT repeat it as `--repo "$GH_REPO"`: this
+# GH_REPO is best-effort (`gh repo view` can flake), and `--repo ""` is
+# rejected by the helper, which would turn a transient flake into a hard
+# skip instead of letting the helper's own #341 retry recover.
 GH_REPO="${GH_REPO:-$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)}"
 export GH_REPO
 

@@ -22,7 +22,10 @@
 #   0 — query answered (value in stdout, or empty = no board attached)
 #   1 — the query itself failed (owner/repo resolution / GraphQL / network)
 #   2 — the query failed because the gh token lacks the `project` scope
+# Records its argv into $FAKE_HELPER_LOG when the test sets it, so the
+# #1405 explicit-repo argument can be asserted.
 _gh_project_status_query_current() {
+    [ -n "${FAKE_HELPER_LOG-}" ] && printf 'query args=%s\n' "$*" >>"$FAKE_HELPER_LOG"
     printf '%s' "${FAKE_BOARD_STATUS-}"
     return "${FAKE_HELPER_RC:-0}"
 }
@@ -42,9 +45,12 @@ gh_pr_merge_board_gate() {
         return 0
     fi
 
+    # 3rd positional = repo (#1405): explicit beats the helper's
+    # `gh repo view` auto-detect, which answers `gh repo set-default`
+    # rather than the remote Step 1 resolved.
     local _status _rc
-    _status=$(GH_REPO="$_repo" \
-        _gh_project_status_query_current pr "$_pr" 2>/dev/null)
+    _status=$(_gh_project_status_query_current \
+        pr "$_pr" "$_repo" 2>/dev/null)
     _rc=$?
 
     # rc != 0 = the query itself failed — the gate was never evaluated,

@@ -24,7 +24,10 @@ if [ -r "$_HELPER" ]; then
         printf '[gh-pr-merge-emergency] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
             "$_HELPER" >&2
     else
-        _gh_project_status_sync pr <PR_NUMBER> "Done" || true
+        # --repo "$TARGET_REPO" (Step 1) is explicit (#1405): the helper's
+        # `gh repo view` fallback reports `gh repo set-default`, not this
+        # skill's resolved remote.
+        _gh_project_status_sync pr <PR_NUMBER> "Done" --repo "$TARGET_REPO" || true
     fi
 fi
 ```

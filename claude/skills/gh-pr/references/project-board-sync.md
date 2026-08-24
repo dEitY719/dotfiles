@@ -44,13 +44,15 @@ if [ "$hook_skip" -eq 0 ]; then
             # sync isn't silently no-op'd by an empty repo arg (PR #780
             # review).
             if [ -z "${GH_REPO:-}" ]; then
-                # Re-resolve from git's origin, never from `gh repo view`
+                # Re-resolve from git's remote, never from `gh repo view`
                 # (which answers gh CLI's default repo — wrong host on a
-                # dual-host login, #1403). Source gh_host.sh explicitly:
+                # dual-host login, #1403). The remote is parameterized: it is
+                # $REMOTE, the [remote] positional bound in Step 1a-0, `origin`
+                # by default (#1405). Source gh_host.sh explicitly:
                 # gh_project_status.sh only sources it on the GH_HOST-unset
                 # path, which Step 1a-0's export already bypassed.
                 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_host.sh"
-                GH_REPO=$(_gh_parse_owner_repo_url "$(git remote get-url origin)" 2>/dev/null || true)
+                GH_REPO=$(_gh_parse_owner_repo_url "$(git remote get-url "${REMOTE:-origin}")" 2>/dev/null || true)
             fi
             for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO" 2>/dev/null || true); do
                 _gh_project_status_sync issue "$_issue" "In progress" \
@@ -62,9 +64,9 @@ fi
 ```
 
 `GH_REPO` should be `owner/repo` (e.g. `dEitY719/dotfiles`) — normally bound
-in Step 1a-0. The block re-resolves it from `origin`'s remote URL when
-unset/empty so the linked-issues loop never silently no-ops on a missing env
-var. It deliberately does **not** fall back to `gh repo view --json
+in Step 1a-0. The block re-resolves it from `$REMOTE`'s URL (`origin` by
+default, #1405) when unset/empty so the linked-issues loop never silently
+no-ops on a missing env var. It deliberately does **not** fall back to `gh repo view --json
 nameWithOwner`: that reads gh CLI's own default repo, which on a dual-host
 login names a repo on the other server (#1403). `_gh_project_status_sync`
 takes no host argument: its `_gh_project_status_ensure_host` keeps an already-
@@ -144,11 +146,14 @@ linked-issues sync loop would silently no-op.
 
 That fallback originally used `gh repo view --json nameWithOwner --jq
 .nameWithOwner`. Issue #1403 replaced it with `_gh_parse_owner_repo_url` over
-`git remote get-url origin`: `gh repo view` without `--repo` answers "what is
-gh CLI's default repo", not "what is git's origin", and on a PC logged into
-both github.com and GHES those two disagree silently. Reading the slug from
-the remote URL keeps it consistent with the `GH_HOST` bound from that same
-URL. Still a thin wrapper — no auth state changes, no API mutation.
+`git remote get-url "${REMOTE:-origin}"`: `gh repo view` without `--repo`
+answers "what is gh CLI's default repo", not "what is git's remote", and on a
+PC logged into both github.com and GHES those two disagree silently. Reading
+the slug from the remote URL keeps it consistent with the `GH_HOST` bound from
+that same URL. Issue #1405 then parameterized *which* remote that is —
+`$REMOTE`, the `[remote]` positional, `origin` by default — so a PR opened on
+`upstream` syncs `upstream`'s board rather than `origin`'s. Still a thin
+wrapper — no auth state changes, no API mutation.
 
 ## Behavior summary
 

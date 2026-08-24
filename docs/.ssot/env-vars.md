@@ -77,6 +77,51 @@ authoritative status moves between fields.
 When `0`, skip pushing project-board card status updates. Repos
 without a projectV2 attachment auto-skip without needing the var.
 
+### `GH_REPO`
+
+| Field | Value |
+|---|---|
+| Default | unset |
+| Active when | set to `OWNER/REPO` or `HOST/OWNER/REPO` |
+| Scope | `_gh_project_status_sync` / `_gh_project_status_query_current` repo resolution |
+| Source SSOT | `shell-common/functions/gh_project_status.sh` |
+| Issue | [#1405](https://github.com/dEitY719/dotfiles/issues/1405) |
+
+Pins the repo whose projectV2 board is read/written, instead of
+auto-detecting it. Same variable `gh` itself honors, so a value already
+exported for `gh` is reused as-is (both the `OWNER/REPO` and
+`HOST/OWNER/REPO` forms are accepted; the host segment is validated then
+dropped — host routing stays `GH_HOST`'s job).
+
+Precedence, first non-empty wins:
+
+1. `--repo <owner/repo>` argument to `_gh_project_status_sync` (or the
+   optional 3rd positional of `_gh_project_status_query_current`)
+2. `GH_REPO`
+3. `TARGET_REPO`
+4. `gh repo view --json owner,name` auto-detect
+
+A malformed value at levels 1–3 fails closed (resolution returns 1) — it
+does **not** fall through to auto-detect. A bare `gh repo view` reports
+what `gh repo set-default` chose, not git's origin, so silently rescuing a
+typo could sync a different repo's board.
+
+### `TARGET_REPO`
+
+| Field | Value |
+|---|---|
+| Default | unset |
+| Active when | set to `OWNER/REPO` or `HOST/OWNER/REPO` |
+| Scope | `_gh_project_status_sync` / `_gh_project_status_query_current` repo resolution |
+| Source SSOT | `shell-common/functions/gh_project_status.sh` |
+| Issue | [#1405](https://github.com/dEitY719/dotfiles/issues/1405) |
+
+Same meaning as `GH_REPO`, one step lower in the precedence chain above.
+Exists because the `gh:*` skills already export `TARGET_REPO` when they
+pin a remote, so the board helper picks it up without the skill having to
+also set `GH_REPO`. Ignored when `GH_REPO` or an explicit `--repo`
+argument is present.
+
 ## How to add a new entry
 
 1. Document the var here first (this file is the catalog SSOT).

@@ -116,7 +116,7 @@ SKILL.md 의 **발견 처리 단계**를 뒷받침한다 — 후보를 스스로
 |---|---|---|
 | 1 | **없는 라벨** | 만들지 않고 조용히 건너뛴다. `gh label list` 로 사전 검증. 실측: `refactor`·`test` 가 대상 레포에 없어 `enhancement` 로 낙착 |
 | 2 | **classic Projects 레포에서 `gh {issue,pr} edit --add-label` 이 exit 1** | `_gh_pr_edit_safe_label` (REST 폴백, `shell-common/functions/gh_pr_edit_safe.sh`) 경유 |
-| 3 | **보드 카드는 별도** | `_gh_project_status_sync issue <N> "Backlog"` (`shell-common/functions/gh_project_status.sh`) |
+| 3 | **보드 카드는 별도** | `_gh_project_status_sync issue <N> "Backlog" --repo "$TARGET_REPO"` (`shell-common/functions/gh_project_status.sh`) |
 
 2번 실측: 5회 재시도가 전부 같은 GraphQL 경고
 (`Projects (classic) is being deprecated … repository.pullRequest.projectCards`)로 실패했고,
@@ -135,14 +135,18 @@ if [ -r "$_HELPER" ]; then
         printf '[pr-verify-live] %s sourced but _gh_project_status_sync undefined (#724).\n' \
             "$_HELPER" >&2
     else
-        GH_REPO="$TARGET_REPO" _gh_project_status_sync issue "$N" "Backlog" || true
+        _gh_project_status_sync issue "$N" "Backlog" --repo "$TARGET_REPO" || true
     fi
 fi
 ```
 
-`GH_REPO="$TARGET_REPO"` 가 load-bearing 이다 — 보드 동기화 헬퍼에는 `-R` 파라미터가 없어서
-빼먹으면 `gh` 기본 레포(=dotfiles) 보드로 카드가 간다. 이 스킬은 `origin` 이 아닐 수도 있는
-대상 레포를 일부러 해소해 놓고 쓰므로 특히 위험하다. `_gh_pr_edit_safe_label` 도 같은 모양으로
+`--repo "$TARGET_REPO"` 가 load-bearing 이다 (#1405) — 빼먹으면 헬퍼가 `gh repo view`
+(= `gh repo set-default` 가 고른 레포, 보통 dotfiles) 보드로 카드를 보낸다. 이 스킬은
+`origin` 이 아닐 수도 있는 대상 레포를 일부러 해소해 놓고 쓰므로 특히 위험하다.
+(종전의 `GH_REPO="$TARGET_REPO"` 프리픽스 형태도 여전히 동작한다 — 헬퍼가 `GH_REPO` 를
+`--repo` 다음 순위로 존중한다. 의도를 코드에 남기려고 명시 플래그로 바꿨다.)
+
+`_gh_pr_edit_safe_label` 도 같은 모양으로
 (`gh_pr_edit_safe.sh` / `command -v _gh_pr_edit_safe_label`) 감싼다.
 
 ---

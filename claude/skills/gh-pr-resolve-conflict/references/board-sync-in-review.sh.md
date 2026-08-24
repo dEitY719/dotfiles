@@ -22,7 +22,8 @@ if [ "$MERGEABLE" = "MERGEABLE" ]; then
             printf '[gh-pr-resolve-conflict] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
                 "$_HELPER" >&2
         elif _gh_project_status_sync pr "$PR_NUMBER" "In review" \
-                --only-from "In progress,Changes requested"; then
+                --only-from "In progress,Changes requested" \
+                --repo "$TARGET_REPO"; then
             echo "[OK] PR 카드 \`In review\` 로 복귀됨"
         else
             echo "[WARN] 보드 sync 실패 — 카드 수동 이동 필요할 수 있음"
@@ -30,6 +31,10 @@ if [ "$MERGEABLE" = "MERGEABLE" ]; then
     fi
 fi
 ```
+
+`--repo "$TARGET_REPO"` 는 Step 1 이 해소한 remote 를 명시로 넘긴다 (#1405) —
+빼면 헬퍼가 `gh repo view` 로 폴백하는데, 이는 git origin 이 아니라
+`gh repo set-default` 가 고른 레포를 답한다.
 
 `GH_PROJECT_STATUS_SYNC=0` opt-out 은 helper 자체가 흡수한다. projectV2
 보드가 없는 레포는 helper 가 silent 0 반환. `--only-from` 의 missing column

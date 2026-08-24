@@ -4,7 +4,16 @@
 
 | # | Name | Default | Description |
 |---|------|---------|-------------|
-| 1 | issue-number, or `-h`/`--help`/`help` | auto-detected | Link PR to this GitHub issue via `Closes #N` (or `Fixes #N` for bug fixes) in the body |
+| 1 | issue-number, remote-name, or `-h`/`--help`/`help` | auto-detected | Link PR to this GitHub issue via `Closes #N` (or `Fixes #N` for bug fixes) in the body |
+| 2 | remote-name or issue-number | `origin` | Git remote the PR is pushed to and opened on (#1405) |
+
+**Positional parsing rule (#1405):** a positional consisting only of digits is
+the issue number; any other positional is the remote name. Order does not
+matter — `/gh-pr 123`, `/gh-pr upstream`, `/gh-pr 123 upstream` all parse. The
+remote drives both the `gh` target (host + `--repo`) and the git plumbing
+(`git fetch <remote>`, `<remote>/<base>` ranges, `git push -u <remote> HEAD`).
+An unknown remote stops the skill with the `git remote -v` list — there is no
+silent fallback to `origin`.
 
 ## Stacked-PR flags (mutually exclusive)
 
@@ -21,6 +30,9 @@ Auto-detect (default) is a no-op on solo / non-stacked repos. See
 - `/gh-pr` — push the current branch if needed, then open a PR.
   Resolves base via auto-detect (default branch on solo repos).
 - `/gh-pr 123` — same, force-link to issue `#123`.
+- `/gh-pr upstream` — push and open the PR on `upstream` instead of `origin`.
+- `/gh-pr 123 upstream` — both (this is what `gh:issue-flow <N> upstream`
+  passes down, #1405).
 - `/gh-pr --no-stack` — auto-detect off, base = default branch.
 - `/gh-pr --base release/v2.0` — auto-detect off, custom base branch.
 - `/gh-pr -h` / `--help` / `help` — print this help.
@@ -58,9 +70,9 @@ $ /gh-pr --base release/v2.0    →  base=release/v2.0
 
 ## What the skill does
 
-1. Parses args (`--no-stack` / `--base`), then resolves
+1. Parses args (`[N]` / `[remote]` / `--no-stack` / `--base`), then resolves
    the base branch via the stacked-PR auto-detect flow (see
-   `references/stacked-pr.md`). Fetches `origin` to make sure the range
+   `references/stacked-pr.md`). Fetches `<remote>` to make sure the range
    is computed against up-to-date refs.
 2. Reads **all** commits in `<base>..HEAD` — the PR body must cover every
    commit, not only HEAD. Groups them by theme for the Summary.
@@ -69,14 +81,15 @@ $ /gh-pr --base release/v2.0    →  base=release/v2.0
 4. Drafts title + body per `references/pr-body-template.md`, matching the
    language dominant in existing commits (Korean commits → Korean PR).
    When stacked on a parent PR, inserts `Depends on #N` in the body.
-5. Pushes the branch (`git push -u origin HEAD` if no upstream, `git push`
-   if ahead). Diverged upstream → stops and asks; never force-pushes on
-   its own.
+5. Pushes the branch (`git push -u <remote> HEAD` if no upstream or
+   mispaired, `git push` if ahead). Diverged upstream → stops and asks;
+   never force-pushes on its own.
 6. Creates the PR via
    `GH_HOST=<host> gh pr create --repo <owner>/<repo> --assignee @me --base "$BASE_BRANCH"`
    using a `mktemp` body file. Always self-assigns. Host and repo are both
-   read from `origin`'s remote URL, so a `gh` logged into both github.com and
-   a GHES instance cannot open the PR on the wrong server (#1403).
+   read from `<remote>`'s URL (`origin` unless `[remote]` says otherwise), so a
+   `gh` logged into both github.com and a GHES instance cannot open the PR on
+   the wrong server (#1403 / #1405).
 7. Applies labels derived from conventional-commit types (feat, fix, docs,
    etc.) plus scope labels — but only labels that **already exist** in the
    repo. Never creates new labels.
@@ -88,6 +101,8 @@ $ /gh-pr --base release/v2.0    →  base=release/v2.0
 - Run auto-stack detection on a repo without stacked-PR signals — solo
   repos always default to the repo's default branch.
 - Combine `--no-stack` / `--base` (mutually exclusive, rc=2 abort).
+- Fall back to `origin` when the named `[remote]` does not exist — it stops
+  and prints `git remote -v` instead.
 - Mutate parent PR bodies — cross-PR rollup is the downstream repo's
   job (e.g. AgentToolbox `stacked-closes-rollup.yml`).
 - Include the `🤖 Generated with Claude Code` footer unless the repo

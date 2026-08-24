@@ -38,8 +38,9 @@ else
 fi
 ```
 
-`$TARGET_HOST` / `$TARGET_REPO` are the pair Step 1 bound from `origin`'s
-URL. Both are mandatory: a bare `gh api repos/.../comments` resolves against
+`$TARGET_HOST` / `$TARGET_REPO` are the pair Step 1 bound from the
+`[remote]`'s URL — `$REMOTE`, which defaults to `origin` but is whatever the
+`[remote]` positional named (#1405). Both are mandatory: a bare `gh api repos/.../comments` resolves against
 gh CLI's own default host, so on a dual-host login the metrics comment lands
 on the wrong server's issue #N — or 404s — without failing loudly (#1403).
 

@@ -6,9 +6,13 @@ two questions the old policy conflated:
 1. **Pairing** — where does `git push` / `git pull` actually point?
    (`@{u}`). Wrong answer here silently pushes a feature branch onto the
    base branch — see `references/push-and-create.md` F-1 row.
-2. **Position** — how far is HEAD behind `origin/$BASE_BRANCH`?
-   (`git log HEAD..origin/$BASE_BRANCH`). Wrong answer here means a
+2. **Position** — how far is HEAD behind `$REMOTE/$BASE_BRANCH`?
+   (`git log HEAD.."$REMOTE/$BASE_BRANCH"`). Wrong answer here means a
    missing rebase.
+
+`$REMOTE` is the `[remote]` positional bound in Step 1a-0 (#1405); it defaults
+to `origin`, which is why every function below defaults its remote parameter
+to `origin` too. Wherever this file says `origin`, read "the target remote".
 
 > SSOT for the bash bound to `gh_pr_normalize_upstream`,
 > `gh_pr_upstream_is_mispaired`, `gh_pr_push_action`,
@@ -40,7 +44,7 @@ In that state:
 | `upstream` | the feature branch's commits land **directly on the upstream branch** (measured: `feature -> main`) — no PR, no review, silently |
 
 Both were reproduced on git 2.43.0 / Linux. The fix is always
-`git push -u origin HEAD`, which re-pairs the branch.
+`git push -u "$REMOTE" HEAD`, which re-pairs the branch.
 
 Secondary symptom: while mispaired, `git status`'s ahead/behind is computed
 against the *base* ref, so the branch can look "diverged" when what it
@@ -51,12 +55,12 @@ pairing is fixed.
 ### Accepted trade-off (known side effect)
 
 If a user *intentionally* tracks a differently-named remote branch (local
-`fix` -> `origin/hotfix-2026-08`), `git push -u origin HEAD` creates a new
+`fix` -> `origin/hotfix-2026-08`), `git push -u "$REMOTE" HEAD` creates a new
 same-named remote branch (`origin/fix`) instead of honouring the old
 tracking target. This is accepted: `gh:pr`'s job is "open a PR from the
 current branch", and a same-named remote branch is the normal, expected
 state for that. Users who want the old pairing back can restore it with
-`git branch -u origin/<other> <branch>` after the PR is merged.
+`git branch -u <remote>/<other> <branch>` after the PR is merged.
 
 ```sh
 # Normalises an upstream ref to "<remote>/<branch>".
@@ -68,16 +72,18 @@ gh_pr_normalize_upstream() {
     printf '%s' "$_u"
 }
 
-# Returns 0 when the upstream points at a different-named branch.
+# Returns 0 when the upstream points at a different-named branch, or at the
+# right-named branch on a *different remote* than the one this run targets.
 # No upstream at all → 1 (that is row 1 of the push table, not a mispair).
 #   $1  upstream ref (may be empty)
 #   $2  current branch name
+#   $3  target remote (optional, default "origin" — the [remote] positional, #1405)
 gh_pr_upstream_is_mispaired() {
-    local _upstream _current="${2-}"
+    local _upstream _current="${2-}" _remote="${3:-origin}"
     _upstream=$(gh_pr_normalize_upstream "${1-}")
     [ -n "$_upstream" ] || return 1
     [ -n "$_current" ] || return 1
-    [ "$_upstream" = "origin/$_current" ] && return 1
+    [ "$_upstream" = "$_remote/$_current" ] && return 1
     return 0
 }
 
@@ -85,18 +91,19 @@ gh_pr_upstream_is_mispaired() {
 #   $1  current branch name
 #   $2  upstream ref ("" when the branch has no upstream)
 #   $3  "diverged" when the branch and its upstream have both moved
-# Output: "push -u origin HEAD" | "push" | "STOP"
+#   $4  target remote (optional, default "origin" — the [remote] positional, #1405)
+# Output: "push -u <remote> HEAD" | "push" | "STOP"
 gh_pr_push_action() {
-    local _current="${1-}" _upstream="${2-}" _diverged="${3-}"
+    local _current="${1-}" _upstream="${2-}" _diverged="${3-}" _remote="${4:-origin}"
 
     if [ -z "$(gh_pr_normalize_upstream "$_upstream")" ]; then
-        printf 'push -u origin HEAD\n'
+        printf 'push -u %s HEAD\n' "$_remote"
         return 0
     fi
     # F-1 — checked BEFORE divergence: a mispaired branch's ahead/behind is
     # measured against the wrong ref, so "diverged" cannot be trusted yet.
-    if gh_pr_upstream_is_mispaired "$_upstream" "$_current"; then
-        printf 'push -u origin HEAD\n'
+    if gh_pr_upstream_is_mispaired "$_upstream" "$_current" "$_remote"; then
+        printf 'push -u %s HEAD\n' "$_remote"
         return 0
     fi
     if [ "$_diverged" = "diverged" ]; then
@@ -120,7 +127,7 @@ nothing to PR" condition already covers it, and committing is `gh:commit`'s
 job, not this skill's.
 
 **Interaction with F-1:** a freshly created branch has no upstream at all,
-so it lands on row 1 of the push table (`git push -u origin HEAD`). No
+so it lands on row 1 of the push table (`git push -u "$REMOTE" HEAD`). No
 special-casing is needed — the F-1 mispair row never fires for it.
 
 ### Branch naming
@@ -177,26 +184,26 @@ gh_pr_branch_name() {
 
 Rewinding the local base branch is **mandatory, not optional** — this is the
 step people forget. Without it the local base stays ahead of
-`origin/$BASE_BRANCH` and corrupts the next session's pull/push:
+`$REMOTE/$BASE_BRANCH` and corrupts the next session's pull/push:
 
 ```sh
-git branch -f "$BASE_BRANCH" "origin/$BASE_BRANCH"
+git branch -f "$BASE_BRANCH" "$REMOTE/$BASE_BRANCH"
 ```
 
 Auto-rewind only when this holds; otherwise warn and leave the base alone:
 
-- `git rev-list origin/$BASE_BRANCH..$BASE_BRANCH` is exactly the commit
+- `git rev-list "$REMOTE/$BASE_BRANCH..$BASE_BRANCH"` is exactly the commit
   set that moved to the new branch (no stragglers left behind).
 
-**Why there is no separate "already pushed to origin" condition** (it was
-removed after review of PR #1318): Step 1b always runs `git fetch origin`
+**Why there is no separate "already pushed to the remote" condition** (it was
+removed after review of PR #1318): Step 1b always runs `git fetch "$REMOTE"`
 *before* this decision. After that fetch, any local commit that had already
-reached `origin/$BASE_BRANCH` by another path is, by definition, reachable
-from `origin/$BASE_BRANCH` — so `git rev-list origin/$BASE_BRANCH..$BASE_BRANCH`
+reached `$REMOTE/$BASE_BRANCH` by another path is, by definition, reachable
+from `$REMOTE/$BASE_BRANCH` — so `git rev-list "$REMOTE/$BASE_BRANCH..$BASE_BRANCH"`
 excludes it and the range comes back empty. That case therefore already
 lands on `nothing-to-pr`, which is the same stop it needs. A dedicated
-`stop-already-pushed` branch comparing `origin/$BASE_BRANCH..HEAD` against
-`git rev-list origin/$BASE_BRANCH` was not merely redundant but *unreachable*:
+`stop-already-pushed` branch comparing `$REMOTE/$BASE_BRANCH..HEAD` against
+`git rev-list "$REMOTE/$BASE_BRANCH"` was not merely redundant but *unreachable*:
 the `A..B` range operator already subtracts everything reachable from `A`, so
 the two sets can never intersect. Do not re-add that check.
 
@@ -204,7 +211,7 @@ The rewound commits are local-only, therefore `reflog`-recoverable. Print
 one recovery hint right after rewinding:
 
 ```
-Local '<base>' rewound to origin/<base>. Recover with:
+Local '<base>' rewound to <remote>/<base>. Recover with:
   git reflog show <base>   # then: git branch -f <base> <old-sha>
 ```
 
@@ -217,7 +224,7 @@ _gh_pr_normalize_sha_set() {
 # Decides what Step 1b does when the session is sitting on the base branch.
 #   $1  current branch
 #   $2  base branch
-#   $3  SHAs from `git rev-list origin/$BASE..$BASE`   (local-only commits)
+#   $3  SHAs from `git rev-list "$REMOTE/$BASE..$BASE"` (local-only commits)
 #   $4  SHAs that would move to the new feature branch
 # Output (stdout), one of:
 #   not-on-base            — normal path, nothing to do here
@@ -226,7 +233,7 @@ _gh_pr_normalize_sha_set() {
 #   auto-branch-warn-only  — create branch, warn, do NOT rewind the base
 #
 # There is deliberately no `stop-already-pushed` output. Step 1b fetches
-# origin before deciding, so commits already on origin/$BASE drop out of the
+# $REMOTE before deciding, so commits already on $REMOTE/$BASE drop out of the
 # $3 range and land on `nothing-to-pr` instead — see "Rewind guard" above.
 gh_pr_base_branch_decision() {
     local _current="${1-}" _base="${2-}"
@@ -247,7 +254,7 @@ gh_pr_base_branch_decision() {
 
     # Defensive guard for the function's general contract, not a live branch:
     # the single real call site below only runs with CUR == BASE, where
-    # origin/$BASE..HEAD and origin/$BASE..$BASE are the same range, so
+    # $REMOTE/$BASE..HEAD and $REMOTE/$BASE..$BASE are the same range, so
     # _local_only == _moved always holds and warn-only cannot fire today.
     if [ "$_local_only" = "$_moved" ]; then
         printf 'auto-branch-and-rewind\n'
@@ -260,18 +267,19 @@ gh_pr_base_branch_decision() {
 ### How Step 1b ties it together
 
 ```sh
+REMOTE="${REMOTE:-origin}"
 CUR=$(git rev-parse --abbrev-ref HEAD)
 UPSTREAM=$(git rev-parse --symbolic-full-name @{u} 2>/dev/null)
 
 DECISION=$(gh_pr_base_branch_decision "$CUR" "$BASE_BRANCH" \
-    "$(git rev-list "origin/$BASE_BRANCH..$BASE_BRANCH" 2>/dev/null)" \
-    "$(git rev-list "origin/$BASE_BRANCH..HEAD" 2>/dev/null)")
+    "$(git rev-list "$REMOTE/$BASE_BRANCH..$BASE_BRANCH" 2>/dev/null)" \
+    "$(git rev-list "$REMOTE/$BASE_BRANCH..HEAD" 2>/dev/null)")
 
 case "$DECISION" in
     not-on-base) ;;                      # normal path
     nothing-to-pr)       exit 0 ;;       # nothing to PR (incl. already-pushed)
     auto-branch-and-rewind|auto-branch-warn-only)
-        FIRST=$(git rev-list "origin/$BASE_BRANCH..HEAD" | tail -n 1)
+        FIRST=$(git rev-list "$REMOTE/$BASE_BRANCH..HEAD" | tail -n 1)
         NEW_BRANCH=$(gh_pr_branch_name \
             "$(gh_pr_commit_type "$(git log -1 --format=%s "$FIRST")")" \
             "$ISSUE_NUMBER" \
@@ -286,9 +294,9 @@ case "$DECISION" in
             exit 1
         fi
         if [ "$DECISION" = "auto-branch-and-rewind" ]; then
-            git branch -f "$BASE_BRANCH" "origin/$BASE_BRANCH"
-            printf "Local '%s' rewound to origin/%s. Recover with:\n" \
-                "$BASE_BRANCH" "$BASE_BRANCH"
+            git branch -f "$BASE_BRANCH" "$REMOTE/$BASE_BRANCH"
+            printf "Local '%s' rewound to %s/%s. Recover with:\n" \
+                "$BASE_BRANCH" "$REMOTE" "$BASE_BRANCH"
             printf '  git reflog show %s\n' "$BASE_BRANCH"
         else
             printf "warning: local '%s' still holds commits that did not move — not rewinding.\n" \
@@ -301,4 +309,8 @@ esac
 `ISSUE_NUMBER` may still be empty at this point (Step 3 resolves it from the
 conversation); the fallback `<type>/<YYYYMMDD>-<short-sha>` form covers that.
 `BASE_BRANCH` is whatever Step 1a bound — possibly a parent PR's head ref
-(`references/stacked-pr.md`), never a hard-coded `main`.
+(`references/stacked-pr.md`), never a hard-coded `main`. `REMOTE` is whatever
+Step 1a-0 bound from the `[remote]` positional, defaulting to `origin` (#1405).
+Pass it as the trailing argument of `gh_pr_push_action` /
+`gh_pr_upstream_is_mispaired` in Step 5 — omitting it keeps the pre-#1405
+`origin` behaviour.

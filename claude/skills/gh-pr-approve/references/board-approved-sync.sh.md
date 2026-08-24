@@ -60,7 +60,10 @@ bookkeeping reason. Requiring the card to have *visibly* passed through
 ## The block (soft-fail — never blocks the Step 5 report)
 
 ```sh
-# Inputs: PR_NUMBER; BOARD_BYPASS=1 only on the --self-record path.
+# Inputs: PR_NUMBER; TARGET_REPO (Step 1); BOARD_BYPASS=1 only on --self-record.
+# --repo "$TARGET_REPO" is explicit (#1405): without it the helper falls back
+# to `gh repo view`, which answers `gh repo set-default`, not this skill's
+# resolved remote.
 _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
 if [ -r "$_HELPER" ]; then
     . "$_HELPER"
@@ -73,9 +76,9 @@ if [ -r "$_HELPER" ]; then
             printf '[gh-pr-approve] self-record: bypassing #393 fail-closed guard for PR #%s (operator intent).\n' \
                 "$PR_NUMBER" >&2
             _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1 \
-                _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "Backlog,In progress,In review" || _rc=$?
+                _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "Backlog,In progress,In review" --repo "$TARGET_REPO" || _rc=$?
         else
-            _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "Backlog,In progress,In review" || _rc=$?
+            _gh_project_status_sync pr "$PR_NUMBER" "Approved" --only-from "Backlog,In progress,In review" --repo "$TARGET_REPO" || _rc=$?
         fi
         if [ "$_rc" -ne 0 ]; then
             printf '[gh-pr-approve] board sync rc=%s — continuing (soft-fail).\n' "$_rc" >&2
