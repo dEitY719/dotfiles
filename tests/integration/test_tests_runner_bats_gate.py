@@ -18,6 +18,7 @@ so this test never recursively re-invokes `pytest tests/integration/`.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -36,15 +37,20 @@ def _run_bats_in(fake_script_dir: Path, skip_bats: str | None) -> subprocess.Com
         f'SCRIPT_DIR="{fake_script_dir}"\n'
         "run_bats\n"
     )
-    env = {}
+    # Merge onto the real environment (not replace it) so PATH etc. survive —
+    # a bare {"SKIP_BATS": "1"} would strip PATH and break `bash`'s ability
+    # to resolve any command these fixtures might still need.
+    env = os.environ.copy()
     if skip_bats is not None:
         env["SKIP_BATS"] = skip_bats
+    else:
+        env.pop("SKIP_BATS", None)
     return subprocess.run(
         ["bash", "-c", script],
         capture_output=True,
         text=True,
         timeout=30,
-        env=env or None,
+        env=env,
         cwd=REPO_ROOT,
     )
 
@@ -89,3 +95,21 @@ def test_zero_bats_files_skip_bats_opt_out_succeeds(zero_files_dir: Path) -> Non
     result = _run_bats_in(zero_files_dir, skip_bats="1")
     assert result.returncode == 0
     assert "No bats test files found" in result.stdout
+
+
+def test_direct_invocation_still_runs_main() -> None:
+    """The BASH_SOURCE guard must not break `./tests/test` itself.
+
+    `--help` exits before run_bats()/run_golden_rules()/run_pytest(), so
+    this proves main() fires on direct execution without paying the cost
+    (or recursion risk) of a real end-to-end suite run.
+    """
+    result = subprocess.run(
+        [str(RUNNER_PATH), "--help"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        cwd=REPO_ROOT,
+    )
+    assert result.returncode == 0
+    assert "USAGE:" in result.stdout
