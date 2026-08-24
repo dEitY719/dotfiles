@@ -39,10 +39,9 @@ if [ "$hook_skip" -eq 0 ]; then
             printf '[gh-pr] %s sourced but _gh_project_status_sync undefined — board sync skipped (#724).\n' \
                 "$_HELPER" >&2
         else
-            _gh_project_status_sync pr "$PR_NUMBER" "In review" || true
-            # Auto-resolve GH_REPO when unset/empty so the linked-issues
-            # sync isn't silently no-op'd by an empty repo arg (PR #780
-            # review).
+            # Auto-resolve GH_REPO when unset/empty so neither the PR sync
+            # below nor the linked-issues loop is left to the helper's
+            # `gh repo view` auto-detect (PR #780 review, #1405).
             if [ -z "${GH_REPO:-}" ]; then
                 # Re-resolve from git's remote, never from `gh repo view`
                 # (which answers gh CLI's default repo — wrong host on a
@@ -54,6 +53,7 @@ if [ "$hook_skip" -eq 0 ]; then
                 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_host.sh"
                 GH_REPO=$(_gh_parse_owner_repo_url "$(git remote get-url "${REMOTE:-origin}")" 2>/dev/null || true)
             fi
+            _gh_project_status_sync pr "$PR_NUMBER" "In review" --repo "$GH_REPO" || true
             for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO" 2>/dev/null || true); do
                 _gh_project_status_sync issue "$_issue" "In progress" \
                     --only-from "Backlog,Ready,In review" || true
@@ -65,8 +65,9 @@ fi
 
 `GH_REPO` should be `owner/repo` (e.g. `dEitY719/dotfiles`) — normally bound
 in Step 1a-0. The block re-resolves it from `$REMOTE`'s URL (`origin` by
-default, #1405) when unset/empty so the linked-issues loop never silently
-no-ops on a missing env var. It deliberately does **not** fall back to `gh repo view --json
+default, #1405) when unset/empty, ahead of both syncs, so neither the PR
+card's `--repo` nor the linked-issues loop is left holding an empty value.
+It deliberately does **not** fall back to `gh repo view --json
 nameWithOwner`: that reads gh CLI's own default repo, which on a dual-host
 login names a repo on the other server (#1403). `_gh_project_status_sync`
 takes no host argument: its `_gh_project_status_ensure_host` keeps an already-

@@ -34,9 +34,11 @@
 # Why the explicit forms come first: a bare `gh repo view` answers "what did
 # `gh repo set-default` pick", NOT "what is git's origin". In a working tree
 # whose host serves several remotes/repos that can silently sync the wrong
-# repo's board. An explicitly-supplied but malformed slug fails closed (the
-# resolver returns 1) instead of falling through to auto-detect — a typo must
-# not be masked by re-acquiring some other repo.
+# repo's board. An explicitly-supplied but malformed slug fails closed instead
+# of falling through to auto-detect — a typo must not be masked by
+# re-acquiring some other repo. The resolver reports that as rc 2 (vs rc 1 for
+# a failed auto-detect) so the sync can skip its retry sleep: re-parsing the
+# same bad string cannot produce a different answer.
 #
 # --only-from <list>: comma-separated whitelist of CURRENT Status values.
 # If the item's current Status is not in the list, the transition is skipped
@@ -164,15 +166,18 @@ _gh_project_status_sync() {
     # (e.g. graphql socket reset). Mirrors the mutation step's retry —
     # without it, a single transient `gh repo view` flake silently aborts
     # the whole sync (issue #341). Override _GH_PROJECT_STATUS_RETRY_SLEEP
-    # in tests to skip the wait.
+    # in tests to skip the wait. Only rc 1 (auto-detect) is retried: rc 2 is
+    # a malformed explicit pin, where the retry would re-parse the same
+    # string and fail identically after sleeping for nothing (#1405).
     #
     # This block runs BEFORE the Approved guard so the guard's `gh pr view`
     # can carry an explicit --repo (#1405). A resolution failure must NOT
     # short-circuit the guard — that would turn a fail-closed policy check
     # into a fail-open skip — so on total failure we leave _resolved empty
     # and defer the "skipping" bail-out to after the guard.
-    local _owner="" _repo="" _resolved=""
-    if ! _resolved=$(_gh_project_status_resolve_owner_repo "$_repo_opt"); then
+    local _owner="" _repo="" _resolved="" _rrc=0
+    _resolved=$(_gh_project_status_resolve_owner_repo "$_repo_opt") || { _rrc=$?; _resolved=""; }
+    if [ "$_rrc" = "1" ]; then
         sleep "${_GH_PROJECT_STATUS_RETRY_SLEEP-5}"
         _resolved=$(_gh_project_status_resolve_owner_repo "$_repo_opt") || _resolved=""
     fi
@@ -379,8 +384,9 @@ _gh_project_status_set_and_verify() {
 #   straight to _gh_project_status_resolve_owner_repo, so it accepts both
 #   "OWNER/REPO" and "HOST/OWNER/REPO" and, when omitted/empty, falls back to
 #   $GH_REPO -> $TARGET_REPO -> `gh repo view` auto-detect. A malformed
-#   explicit value is a resolution failure (rc 1 below), never a silent
-#   fallback to auto-detect.
+#   explicit value is a resolution failure, reported as rc 1 below (the
+#   resolver's own rc 2 is folded in), never a silent fallback to
+#   auto-detect.
 # Output (stdout): current Status name, or nothing.
 # Returns (four-way contract, issues #1354 and #1356):
 #   0 + non-empty stdout — query succeeded, item has a Status value.
@@ -494,42 +500,36 @@ _gh_project_status_query_current() {
 # Returns: 0 on success, 1 on anything that is not a valid slug — empty,
 #          no slash, more than three segments, or any empty segment.
 _gh_project_status_normalize_repo() {
-    local _val="$1" _first _rest _owner _repo
-    [ -z "$_val" ] && return 1
+    local _val="$1"
 
-    _first="${_val%%/*}"
-    _rest="${_val#*/}"
-    # No slash at all: the `#*/` strip is a no-op and _rest still equals _val.
-    [ "$_rest" = "$_val" ] && return 1
-    # A leading/host segment must not be empty in either accepted form.
-    [ -z "$_first" ] && return 1
-
-    case "$_rest" in
-        */*/*)
-            # Four or more segments — not a slug gh would accept either.
-            return 1
-            ;;
-        */*)
-            # HOST/OWNER/REPO — _first is the host, drop it.
-            _owner="${_rest%%/*}"
-            _repo="${_rest#*/}"
-            ;;
-        *)
-            # OWNER/REPO.
-            _owner="$_first"
-            _repo="$_rest"
-            ;;
+    case "$_val" in
+        # Empty host segment, or four-plus segments (`*/*/*/*` needs three
+        # slashes) — neither is a slug gh would accept either.
+        /*|*/*/*/*) return 1 ;;
+        # HOST/OWNER/REPO — drop the host segment.
+        */*/*) _val="${_val#*/}" ;;
+        # OWNER/REPO — already the wanted shape.
+        */*) ;;
+        # No slash at all, empty value included.
+        *) return 1 ;;
     esac
+    # Empty owner (`/repo`, only reachable via the host-stripped form) or
+    # empty repo (`owner/`).
+    case "$_val" in /*|*/) return 1 ;; esac
 
-    [ -z "$_owner" ] && return 1
-    [ -z "$_repo" ] && return 1
-    printf '%s %s\n' "$_owner" "$_repo"
+    printf '%s %s\n' "${_val%%/*}" "${_val#*/}"
     return 0
 }
 
-# Resolve the target GitHub owner/repo. Prints "<owner> <repo>" on success;
-# returns non-zero on failure (malformed explicit slug, gh exit, empty
-# output, or partial output).
+# Resolve the target GitHub owner/repo. Prints "<owner> <repo>" on success.
+#
+# Returns (split so callers can tell a retryable failure from a hopeless one):
+#   1 — the `gh repo view` auto-detect failed (gh exit, empty or partial
+#       output). Transient causes are common (socket reset), so this is the
+#       one worth retrying (#341).
+#   2 — an explicit value ($1 / $GH_REPO / $TARGET_REPO) is a malformed slug.
+#       Deterministic: a retry re-parses the same string and fails the same
+#       way, so retrying it would be pure latency.
 #
 # Args: [<repo>]  — optional explicit "OWNER/REPO" or "HOST/OWNER/REPO".
 #
@@ -559,7 +559,7 @@ _gh_project_status_resolve_owner_repo() {
         _explicit="$TARGET_REPO"
     fi
     if [ -n "$_explicit" ]; then
-        _gh_project_status_normalize_repo "$_explicit" || return 1
+        _gh_project_status_normalize_repo "$_explicit" || return 2
         return 0
     fi
 
