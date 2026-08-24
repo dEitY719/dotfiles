@@ -34,6 +34,11 @@ ${body}"
 _helper_bash() { _helper_run "$1" bash --noprofile --norc; }
 _helper_zsh() { _helper_run "$1" zsh -f; }
 
+# The cross-shell tests below are the only ones that need zsh; a machine
+# without it must skip them, not fail (same guard as setup_mode.bats /
+# gh_pr_review.bats).
+_need_zsh() { command -v zsh >/dev/null 2>&1 || skip "zsh not available"; }
+
 # Create an executable stub at $1 (parent dirs included).
 _stub_exe() {
     mkdir -p "$(dirname "$1")"
@@ -141,6 +146,7 @@ _stub_exe() {
 # --- cross-shell ---------------------------------------------------
 
 @test "zsh: helper sources and resolves identically" {
+    _need_zsh
     local exe="${FAKE_DRIVE}/Program Files/Google/Chrome/Application/chrome.exe"
     _stub_exe "$exe"
     _helper_zsh '_windows_chrome_exe'
@@ -149,6 +155,7 @@ _stub_exe() {
 }
 
 @test "zsh: WSL detection works" {
+    _need_zsh
     printf 'Linux version 6.6.87.2-microsoft-standard-WSL2\n' > "$PROC"
     _helper_zsh '_windows_chrome_is_wsl && echo yes'
     assert_success
