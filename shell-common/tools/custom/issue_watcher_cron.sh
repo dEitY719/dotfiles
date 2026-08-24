@@ -286,17 +286,18 @@ _iw_agent_status() {
 # dispatcher text is typed but never submitted and herdr's fixed 5s stall check
 # fires `agent_prompt_stalled` (issue #1399). The first-bootstrap path gets this
 # grace for free from the status query that follows it; this gives the
-# re-bootstrap path the same. Capped at ~5s (10 x 0.5s): far below the 5-minute
-# tick interval, and hitting the cap still dispatches because the stall retry in
-# _iw_dispatch is the second line of defence.
+# re-bootstrap path the same. Capped at ~5s (10 checks, 0.5s apart): far below
+# the 5-minute tick interval, and hitting the cap still dispatches because the
+# stall retry in _iw_dispatch is the second line of defence.
 _iw_wait_for_idle() {
     local _i=0 _status
 
     while [ "${_i}" -lt 10 ]; do
         _status=$(_iw_agent_status) || _status=""
         [ "${_status}" != "idle" ] || return 0
-        sleep 0.5
         _i=$((_i + 1))
+        [ "${_i}" -lt 10 ] || break
+        sleep 0.5
     done
 
     ux_warning "Agent ${_IW_AGENT_NAME} did not report idle within ~5s — dispatching anyway."
