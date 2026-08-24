@@ -316,6 +316,33 @@ _hold_lock() {
     assert_failure
 }
 
+@test "issue_watcher_cron: falls back to plain ~/.claude when no multi-account setup exists" {
+    _install_herdr_stub
+    mkdir -p "${HOME}/.claude"
+
+    # Never ran `claude-accounts setup` and never named an account: the
+    # pre-#1393 single-account user must keep working (PR #1395 review).
+    _run_tick_no_account_env
+    assert_success
+    assert_output --partial "CLAUDE_ENABLED_ACCOUNTS not configured"
+
+    _assert_config_dir "${HOME}/.claude"
+    _assert_skip_permissions_start
+}
+
+@test "issue_watcher_cron: the single-account fallback still fails fast without ~/.claude" {
+    _install_herdr_stub
+    # Same "no opt-in" env as above, but nothing to fall back to.
+    _run_tick_no_account_env
+    assert_failure
+    assert_output --partial "Unknown claude account: personal"
+
+    run grep -F -- "workspace create" "${_LOG}"
+    assert_failure
+    run grep -F -- "agent start" "${_LOG}"
+    assert_failure
+}
+
 @test "issue_watcher_cron: re-bootstrap after stale state keeps both claude-yolo flags" {
     _install_herdr_stub
     mkdir -p "${_STATE_DIR}"
