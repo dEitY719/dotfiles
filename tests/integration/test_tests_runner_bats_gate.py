@@ -32,11 +32,7 @@ BATS_STUB = "#!/bin/sh\nexit 0\n"
 
 def _run_bats_in(fake_script_dir: Path, skip_bats: str | None) -> subprocess.CompletedProcess[str]:
     """Source the real tests/test with SCRIPT_DIR overridden, then call run_bats()."""
-    script = (
-        f'source "{RUNNER_PATH}"\n'
-        f'SCRIPT_DIR="{fake_script_dir}"\n'
-        "run_bats\n"
-    )
+    script = f'source "{RUNNER_PATH}"\nSCRIPT_DIR="{fake_script_dir}"\nrun_bats\n'
     # Merge onto the real environment (not replace it) so PATH etc. survive —
     # a bare {"SKIP_BATS": "1"} would strip PATH and break `bash`'s ability
     # to resolve any command these fixtures might still need.
