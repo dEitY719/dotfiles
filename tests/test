@@ -18,6 +18,8 @@
 # Environment:
 #   Sets DOTFILES_TEST_MODE=1 for test-aware tool behavior
 #   Parallel execution uses all available CPU cores by default
+#   Self-throttles: detects other concurrent ./tests/test runs on this host
+#   and divides the job count among them
 #
 
 # Note: Do NOT use 'set -e' as it terminates the script when main() returns
@@ -88,6 +90,9 @@ PERFORMANCE:
     Default: bats + pytest both run parallel across all CPU cores (~4-5 min)
     Serial:  Sequential execution, single bats process (~15+ min)
     Tune:    BATS_JOBS=N overrides bats job count (default: nproc)
+    Throttle: detects other concurrent ./tests/test runs on this host and
+             divides the job count among them (BATS_JOBS /
+             PYTEST_XDIST_AUTO_NUM_WORKERS overrides are never throttled)
 
 REQUIREMENTS:
     - Python 3.10+
@@ -142,6 +147,93 @@ check_requirements() {
     return 0
 }
 
+
+# ---------------------------------------------------------------------------
+# Concurrency self-throttling (issue #1413)
+#
+# Every ./tests/test invocation used to claim all $(nproc) cores for itself
+# (bats via `xargs -P`, pytest via xdist's `-n auto`). On a machine running
+# several worktrees at once that oversubscribes the host — 3-4 concurrent
+# runs pushed load average past 25 on 20 cores, and each run got a fraction
+# of a core instead of a whole one. So each run now registers itself, counts
+# the other live runs, and divides the job pool among them.
+# ---------------------------------------------------------------------------
+
+# Registry dir for tracking concurrently-running ./tests/test invocations.
+# One empty file per live PID; liveness is re-checked at read time (kill -0),
+# so a stale file left by a crashed/killed run is harmless and self-heals —
+# no trap-based cleanup is required for correctness.
+_test_run_registry_dir() {
+    printf '%s\n' "${TMPDIR:-/tmp}/dotfiles-tests-test-registry"
+}
+
+# Register this process ($$) in the registry. Best-effort: if the dir can't
+# be created (e.g. read-only /tmp), silently no-op — throttling degrades to
+# "no throttling", never to a hard failure.
+_register_test_run() {
+    local dir
+    dir="$(_test_run_registry_dir)"
+    mkdir -p "$dir" 2>/dev/null || return 0
+    : >"$dir/$$" 2>/dev/null
+    return 0
+}
+
+# Count OTHER currently-running ./tests/test invocations (excludes $$).
+# A registry entry counts only if `kill -0 <pid>` succeeds — dead PIDs from
+# crashed runs are ignored automatically, no cleanup needed.
+_concurrent_test_run_count() {
+    local dir count=0 f pid
+    dir="$(_test_run_registry_dir)"
+    [ -d "$dir" ] || {
+        printf '0\n'
+        return 0
+    }
+    for f in "$dir"/*; do
+        [ -e "$f" ] || continue
+        pid="${f##*/}"
+        [ "$pid" = "$$" ] && continue
+        kill -0 "$pid" 2>/dev/null && count=$((count + 1))
+    done
+    printf '%s\n' "$count"
+}
+
+# Divide a base job count among this run and its detected peers.
+# effective = max(1, base / (concurrent_count + 1)). Never returns < 1 or
+# a non-integer. Falls back to $base unchanged if $base isn't a positive
+# integer (defensive — callers already validate, but this must not crash).
+_effective_parallel_jobs() {
+    local base="$1" count divisor effective
+    case "$base" in
+    '' | *[!0-9]*)
+        printf '%s\n' "$base"
+        return 0
+        ;;
+    esac
+    count=$(_concurrent_test_run_count)
+    divisor=$((count + 1))
+    effective=$((base / divisor))
+    [ "$effective" -lt 1 ] && effective=1
+    printf '%s\n' "$effective"
+}
+
+# Resolve run_bats()'s parallel job count.
+#   BATS_JOBS set    → honored verbatim (never throttled), 4 if not a
+#                      positive integer (guards a bogus override).
+#   BATS_JOBS unset  → CPU count (nproc → getconf → 4), divided among this
+#                      run and any concurrent ./tests/test runs.
+_resolve_bats_jobs() {
+    local jobs="${BATS_JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
+    # Guard a non-positive-integer BATS_JOBS override (gemini review).
+    case "$jobs" in
+    '' | *[!0-9]*) jobs=4 ;;
+    esac
+    [ "$jobs" -lt 1 ] && jobs=1
+    if [ -n "${BATS_JOBS:-}" ]; then
+        printf '%s\n' "$jobs"
+        return 0
+    fi
+    _effective_parallel_jobs "$jobs"
+}
 
 # Shared by run_bats()'s two "shell unit tests couldn't run" early-return
 # sites: honor the SKIP_BATS=1 opt-out (mirrors SKIP_LOCAL_PYTEST=1 in
@@ -198,13 +290,14 @@ run_bats() {
     fi
 
     # Parallel: one bats process per file, bounded by CPU count.
-    # CPU count: nproc (Linux) → getconf (macOS/BSD) → 4. BATS_JOBS overrides.
-    local jobs="${BATS_JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
-    # Guard a non-positive-integer BATS_JOBS override (gemini review).
-    case "$jobs" in
-        '' | *[!0-9]*) jobs=4 ;;
-    esac
-    [ "$jobs" -lt 1 ] && jobs=1
+    # CPU count: nproc (Linux) → getconf (macOS/BSD) → 4, then divided among
+    # any concurrent ./tests/test runs (#1413). BATS_JOBS overrides both.
+    local jobs others=0 throttle_note=""
+    jobs="$(_resolve_bats_jobs)"
+    if [ -z "${BATS_JOBS:-}" ]; then
+        others="$(_concurrent_test_run_count)"
+        [ "$others" -gt 0 ] && throttle_note=" (throttled: ${others} other ./tests/test run(s) detected)"
+    fi
     local outdir
     outdir="$(mktemp -d)"
     # Clean the temp dir on normal exit and on interrupt so an aborted run
@@ -212,7 +305,7 @@ run_bats() {
     # runner instead of continuing on a deleted outdir (gemini review).
     trap 'rm -rf "$outdir"' EXIT
     trap 'rm -rf "$outdir"; trap - EXIT; exit 130' INT TERM HUP
-    print_info "Parallel: ${#bats_files[@]} files across ${jobs} jobs (override with BATS_JOBS=N, or -s for serial)"
+    print_info "Parallel: ${#bats_files[@]} files across ${jobs} jobs (override with BATS_JOBS=N, or -s for serial)${throttle_note}"
 
     # Emit "index\npath" pairs; -n 2 hands each (idx, path) to one worker.
     # Keying outputs by array index (not a path-derived name) gives the
@@ -293,7 +386,18 @@ run_pytest() {
             -o addopts="-v --strict-markers" \
             -p no:xdist
     else
-        python3 -m pytest tests/integration/ $verbose_flag --tb=short
+        # Throttle xdist's `-n auto` (from pyproject's addopts) the same way
+        # run_bats throttles xargs -P: PYTEST_XDIST_AUTO_NUM_WORKERS is the
+        # supported knob for what `auto` resolves to, so the CPU count can be
+        # divided among concurrent ./tests/test runs without touching addopts.
+        # An override the caller already set wins untouched (#1413).
+        local pytest_env=()
+        if [ -z "${PYTEST_XDIST_AUTO_NUM_WORKERS:-}" ]; then
+            local base_jobs
+            base_jobs="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
+            pytest_env=("PYTEST_XDIST_AUTO_NUM_WORKERS=$(_effective_parallel_jobs "$base_jobs")")
+        fi
+        env "${pytest_env[@]}" python3 -m pytest tests/integration/ $verbose_flag --tb=short
     fi
     return $?
 }
@@ -342,6 +446,14 @@ main() {
             ;;
         esac
     done
+
+    # Announce this run so concurrent ./tests/test invocations on this host
+    # can detect each other and split the CPU pool (#1413). After arg parsing
+    # so -h/--help never registers. The trap is tidiness only — run_bats()
+    # clears EXIT traps when it finishes, and the registry self-heals via the
+    # kill -0 liveness check, so nothing depends on it firing.
+    _register_test_run
+    trap 'rm -f "$(_test_run_registry_dir)/$$" 2>/dev/null' EXIT
 
     # Check requirements
     if ! check_requirements; then
