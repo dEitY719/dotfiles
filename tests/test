@@ -73,6 +73,10 @@ OPTIONS:
 
 ENVIRONMENT VARIABLES:
     DOTFILES_TEST_MODE=1  Enable test mode (prevents side effects)
+    SKIP_BATS=1           Explicit opt-out: allow the suite to pass even
+                           when shell unit tests couldn't run (bats-core
+                           missing, or zero .bats files found). Without
+                           this, both conditions now fail the suite.
 
 EXAMPLES:
     ./tests/test                  # Run all tests (parallel)
@@ -153,7 +157,11 @@ run_bats() {
     if [ ! -x "$bats_bin" ]; then
         print_warning "bats-core not found. Skipping shell unit tests."
         print_info "Run: git submodule update --init --recursive"
-        return 0
+        if [ "${SKIP_BATS:-0}" = "1" ]; then
+            return 0
+        fi
+        print_error "Set SKIP_BATS=1 to explicitly bypass shell unit tests"
+        return 1
     fi
 
     print_header "Running Bats Shell Unit Tests"
@@ -171,7 +179,11 @@ run_bats() {
     )
     if [ ${#bats_files[@]} -eq 0 ]; then
         print_warning "No bats test files found"
-        return 0
+        if [ "${SKIP_BATS:-0}" = "1" ]; then
+            return 0
+        fi
+        print_error "Set SKIP_BATS=1 to explicitly bypass shell unit tests"
+        return 1
     fi
 
     # Serial: single bats invocation over all files (deterministic order).
@@ -341,7 +353,11 @@ main() {
     fi
 }
 
-# Run main function and exit with its return code
-main "$@"
-exit_code=$?
-exit $exit_code
+# Run main function and exit with its return code.
+# Guarded so this file can be `source`d (e.g. by tests) without executing
+# main() — only a direct invocation (./tests/test) runs it.
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    main "$@"
+    exit_code=$?
+    exit $exit_code
+fi
