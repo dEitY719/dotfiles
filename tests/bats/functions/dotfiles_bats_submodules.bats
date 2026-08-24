@@ -43,3 +43,15 @@ teardown() {
     assert_success
     [ ! -f "$GIT_LOG" ]
 }
+
+@test "dotfiles_ensure_bats_submodules: propagates a submodule-update failure (setup.sh's || ux_warning depends on this)" {
+    mkdir -p "${FAKE_REPO}/.git"
+    cat >"${FAKE_BIN}/git" <<EOF
+#!/bin/sh
+echo "\$@" >> "${GIT_LOG}"
+exit 1
+EOF
+    chmod +x "${FAKE_BIN}/git"
+    run dotfiles_ensure_bats_submodules "$FAKE_REPO"
+    assert_failure
+}
