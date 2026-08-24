@@ -4,6 +4,19 @@ These are deliberate boundaries. Do not violate them even when the user
 asks "just this once" — composition skills (`gh:issue-flow`) exist for
 the cases where these limits are inconvenient.
 
+## Never call `gh` without an explicit host + repo (#1403)
+
+Every `gh` invocation is `GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"`,
+with both values read from the one remote URL Step 1 resolved
+(`references/repo-resolution.md`). Without `--repo`, `gh` follows its own
+`gh repo set-default` rather than git's `origin`; a user authenticated to both
+github.com and a GHES instance then gets a query against the wrong server that
+**succeeds silently** — an OPEN issue comes back as "doesn't exist", and a
+write (self-assign, board move) lands on a stranger's issue #N.
+
+Never work around a surprising `gh` result by retrying, by dropping `--repo`,
+or by switching remotes. Verify the host first.
+
 ## Never create commits or PRs
 
 This skill stops at "files edited, tests run". Commits and PRs are

@@ -113,7 +113,7 @@ Post after the artifact is created (skip when
 if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
     : # ai-metrics skipped via GH_DISABLE_AI_METRICS
 else
-    gh api "repos/$TARGET_REPO/issues/$ISSUE_OR_PR_NUM/comments" \
+    GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/issues/$ISSUE_OR_PR_NUM/comments" \
       -X POST \
       -f body="<!-- ai-metrics:$SKILL tokens=$TOKENS human_h=$HUMAN_H ai_min=$ELAPSED -->
 🤖 ~$ELAPSED min · 👤 ~$HUMAN_H h · 📊 ~$TOKENS tokens"

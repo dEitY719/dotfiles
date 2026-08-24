@@ -13,8 +13,9 @@ either "force push" or "rebase first" — do not pick for them.
 
 The base branch is decided in Step 1a (`references/stacked-pr.md`):
 
-1. Default branch (`gh repo view --json defaultBranchRef`) when the
-   repo has no stacked-PR signals — solo / non-stacked workflow.
+1. Default branch
+   (`GH_HOST="$TARGET_HOST" gh repo view "$GH_REPO" --json defaultBranchRef`)
+   when the repo has no stacked-PR signals — solo / non-stacked workflow.
 2. Auto-detected parent PR's head ref when the repo opts into stacked
    PRs *and* exactly one open PR is an ancestor of HEAD.
 3. The user-supplied target when one of `--no-stack` / `--base <branch>`
@@ -29,8 +30,8 @@ explicitly passed `--base`.
 
 When Stage 2 of `references/stacked-pr.md` selects a parent PR for
 stacking, the parent's GitHub state **must** be `OPEN`. Re-check via
-`gh pr view <N> --json state` right before the base branch decision is
-committed (see `assert_parent_pr_open`). Closed or merged parents abort
+`GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$GH_REPO" --json state` right
+before the base branch decision is committed (see `assert_parent_pr_open`). Closed or merged parents abort
 with rc=5 plus a one-line recovery hint — never silently fall back to
 the default branch, since that would change the PR's meaning without
 asking the user.
@@ -39,8 +40,9 @@ asking the user.
 
 Never include `🤖 Generated with` or any "Claude Code" footer in the PR
 body **unless** the repo already uses that convention in existing PRs.
-Check recent merged PRs (`gh pr list --state merged --limit 5`) before
-deciding.
+Check recent merged PRs
+(`GH_HOST="$TARGET_HOST" gh pr list --repo "$GH_REPO" --state merged --limit 5`)
+before deciding.
 
 ## Commit coverage
 
@@ -48,6 +50,19 @@ Never skip commits in the Summary because "they're minor" — the commit
 range `<base>..HEAD` is the contract. A 5-commit PR mentions all 5
 concerns. If commits are truly trivial (e.g. typo fixes), group them but
 still acknowledge them.
+
+## Host and repo targeting (#1403)
+
+Never call `gh` without both `GH_HOST="$TARGET_HOST"` and `--repo "$GH_REPO"`,
+and never derive those two from different sources — Step 1a-0 reads both from
+the one `git remote get-url origin` URL. Without `--repo`, `gh` follows its
+own `gh repo set-default` rather than git's `origin`; when the user is
+authenticated to both github.com and a GHES instance and those two disagree,
+`gh` queries the wrong server and **succeeds** — no error, just wrong data.
+That is how an OPEN issue came back as "doesn't exist" in #1403.
+
+Never "fix" a surprising `gh` result (missing PR, missing label, unexpected
+default branch) by retrying or by relaxing the target. Check the host first.
 
 ## Output discipline
 

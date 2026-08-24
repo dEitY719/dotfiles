@@ -15,8 +15,8 @@
 
 ## What the skill does
 
-1. Resolves the target repo from the given remote (default `origin`). Missing remote → lists `git remote -v` and stops, no silent fallback.
-2. Fetches the issue via `gh issue view <N> --repo $TARGET_REPO --json ...` including body, author, labels, state, comments, assignees, timestamps.
+1. Resolves the target repo **and host** from the given remote's URL (default `origin`). Missing remote → lists `git remote -v` and stops, no silent fallback.
+2. Fetches the issue via `GH_HOST=$TARGET_HOST gh issue view <N> --repo $TARGET_REPO --json ...` including body, author, labels, state, comments, assignees, timestamps. Both the host and the repo are pinned explicitly so a dual-host `gh` login cannot silently read the wrong server (#1403).
 3. Prints a structured summary:
    - Header: `#N <title> by @author (state, labels)`
    - Summary: 2-4 line extraction of what the issue asks for
@@ -31,4 +31,5 @@
 - Modify the issue (no close/label/assign).
 - Follow through to linked PRs or other issues (only the one at hand).
 - Silently fall back to `origin` when a non-existent remote is given.
+- Call `gh` without an explicit `GH_HOST` + `--repo` pair.
 - Truncate body or comments — the skill's whole point is preserving detail for humans.

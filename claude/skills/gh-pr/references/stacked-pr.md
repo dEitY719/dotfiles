@@ -167,7 +167,8 @@ _gh_pr_default_open_pr_list() {
         printf '%s\n' "$FAKE_OPEN_PRS"
         return 0
     fi
-    gh pr list --state open --json number,headRefName \
+    GH_HOST="$TARGET_HOST" gh pr list --repo "$GH_REPO" \
+        --state open --json number,headRefName \
         --jq '.[] | "\(.number) \(.headRefName)"' 2>/dev/null
 }
 
@@ -262,7 +263,8 @@ _gh_pr_default_parent_state() {
     fi
     _delim=$(printf '\001')   # ASCII SOH — never appears in PR bodies
     # shellcheck disable=SC2016  # $d is a jq variable (--arg d), not shell
-    _meta=$(gh pr view "$_pr" --json state,body \
+    _meta=$(GH_HOST="$TARGET_HOST" gh pr view "$_pr" --repo "$GH_REPO" \
+        --json state,body \
         --jq --arg d "$_delim" '.state + $d + .body' 2>/dev/null)
     _GH_PR_PARENT_BODY_CACHE="${_meta#*"$_delim"}"
     printf '%s\n' "${_meta%%"$_delim"*}"
@@ -281,7 +283,8 @@ _gh_pr_default_parent_body() {
         printf '%s' "$FAKE_PARENT_BODY"
         return 0
     fi
-    gh pr view "$_pr" --json body -q .body 2>/dev/null
+    GH_HOST="$TARGET_HOST" gh pr view "$_pr" --repo "$GH_REPO" \
+        --json body -q .body 2>/dev/null
 }
 
 # Returns 0 when state == OPEN, 5 otherwise (with recovery hint on stderr).
@@ -323,10 +326,17 @@ helpers only run inside the 1-candidate branch of the Stage-2 dispatch.
 
 ## How Step 1 of `SKILL.md` ties it together
 
+`TARGET_HOST` / `GH_REPO` are already bound and `GH_HOST` already exported by
+Step 1a-0 when this block runs — every `gh` call below (and in the helpers
+above) pins both. Without them `gh` resolves against its own
+`gh repo set-default`, so on a dual-host login `DEFAULT_BRANCH` and the
+candidate PR list come from a different GitHub server than `origin` (#1403).
+
 ```sh
 parse_stacked_args "$@" || exit $?
 
-DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name)
+DEFAULT_BRANCH=$(GH_HOST="$TARGET_HOST" gh repo view "$GH_REPO" \
+    --json defaultBranchRef -q .defaultBranchRef.name)
 
 case "$STACK_MODE" in
     no-stack)

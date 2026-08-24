@@ -15,6 +15,13 @@
 - Step 2.5.1 (gh:pr-resolve-outdated) does a clean rebase-sync when the
   base moved forward with no conflicts; it is a no-op when the PR is
   already up to date.
+- **Never unset or re-derive `GH_HOST` mid-flow (#1403).** Step 1 exports it
+  once from the `[remote]`'s URL and every chained sub-skill inherits it. A
+  sub-skill re-resolving the host from `_dotfiles_setup_mode` instead would
+  disagree with `$TARGET_REPO` whenever the flow was invoked on a remote that
+  is not the PC's default server (internal PC: `origin`=GHES,
+  `upstream`=github.com) — and `gh` reports no error when it lands on the
+  wrong host, so the divergence surfaces as a "missing" issue or PR.
 - Never mutate state between steps beyond what the sub-skills do.
   Exception: Step 2.6 may post a comment after Step 2.5.1 — this is
   intentional and must soft-fail (never block the flow). If a future

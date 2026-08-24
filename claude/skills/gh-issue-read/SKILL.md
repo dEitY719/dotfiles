@@ -45,16 +45,23 @@ Positional args: `<issue-number> [remote]`.
 
 - `issue-number` — required, positive integer. Missing/invalid → print
   usage pointer (`Run /gh-issue-read -h for usage.`) and stop.
-- `remote` — default `origin`. Resolve `TARGET_REPO=<owner>/<repo>` via
-  `git remote get-url <remote>`. Missing remote → list `git remote -v`
-  and stop.
+- `remote` — default `origin`. From `git remote get-url <remote>` resolve
+  **both** `TARGET_REPO=<owner>/<repo>` and `TARGET_HOST` (via
+  `shell-common/functions/gh_host.sh`), then `export GH_HOST="$TARGET_HOST"`.
+  Missing remote → list `git remote -v` and stop.
 
 Substeps and error templates in `references/repo-resolution.md`.
+
+**Host targeting (#1403)** — every `gh` call below is
+`GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"`. A bare `gh` follows gh
+CLI's own `gh repo set-default` rather than git's `origin`, so on a dual-host
+login (github.com + GHES) it silently reads the wrong host and this read-only
+skill reports "issue not found" for an issue that is OPEN.
 
 ## Step 2: Fetch Issue
 
 ```bash
-gh issue view <N> --repo "$TARGET_REPO" --json \
+GH_HOST="$TARGET_HOST" gh issue view <N> --repo "$TARGET_REPO" --json \
   number,title,body,author,labels,state,stateReason,\
   comments,assignees,createdAt,updatedAt,url
 ```
@@ -92,6 +99,7 @@ Compute `ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))` just before printing.
 ## Constraints
 
 - Read-only — never call `gh issue edit`, `close`, or `comment`.
+- Never call `gh` without both `GH_HOST` and `--repo` (#1403).
 - Never fall back to `origin` when a non-existent remote is passed.
 - Never truncate or paraphrase body/comments — the point is preservation.
 - Never assume English; match the issue's language in body/comments and

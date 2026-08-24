@@ -68,10 +68,13 @@ Checklist:
 ## JSON fields to fetch
 
 ```bash
-gh issue view <N> --repo "$TARGET_REPO" --json \
+GH_HOST="$TARGET_HOST" gh issue view <N> --repo "$TARGET_REPO" --json \
   number,title,body,author,labels,state,stateReason,\
   comments,assignees,createdAt,updatedAt,url
 ```
+
+`GH_HOST` + `--repo` are both mandatory — see `references/repo-resolution.md`
+→ "Host targeting rule" (#1403).
 
 `comments` items: `{author, body, createdAt}`.
 `labels` items: `{name}`.

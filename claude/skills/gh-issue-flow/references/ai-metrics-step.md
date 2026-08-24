@@ -27,7 +27,10 @@ c. Human time: look up the issue type in `gh-issue-create`'s
    For `feat`, infer size from the implementation scope.
 d. Token estimate: character count of (issue body + implementation file
    reads) ÷ 4, rounded to nearest 500. Minimum 1 000.
-e. Post the aggregate comment on the linked issue (body template below).
+e. Post the aggregate comment on the linked issue (body template below),
+   with `GH_HOST` and the repo slug both explicit — this is the flow's only
+   direct `gh` call, and a bare `gh api` would follow gh CLI's own default
+   repo instead of the `<remote>` the flow was invoked with (#1403).
    Skip the post entirely when `GH_DISABLE_AI_METRICS=1` (issue #399);
    the six sub-skills already honour the same env var, so a disabled
    run leaves zero ai-metrics artifacts on the issue or PR.
@@ -37,7 +40,7 @@ f. On failure: print `[WARN] ai-metrics comment failed (<reason>) — continuing
 if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
     : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
 else
-    gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
+    GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
       -X POST \
       -f body="### gh-issue-flow 완료
 

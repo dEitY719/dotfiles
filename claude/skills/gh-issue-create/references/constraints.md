@@ -4,7 +4,11 @@
 - 라벨/마일스톤 은 (a) 사용자 명시 또는 (b) Step 2.5 의 SSOT 기반
   자동 적용 일 때만 부착. 자동 적용 결과는 항상 `gh label list` 검증
   통과한 라벨만 유지 — 미존재 라벨 자동 생성 금지.
-- 항상 `--repo "$TARGET_REPO"` — 암묵적 repo 감지 의존 금지.
+- 항상 `GH_HOST="$TARGET_HOST"` + `--repo "$TARGET_REPO"` — 암묵적 repo/host
+  감지 의존 금지. `gh` 는 `--repo` 가 없으면 git 의 `origin` 이 아니라 자기
+  `gh repo set-default` 를 따르므로, dual-host 로그인에서 에러 없이 다른
+  서버에 이슈를 만든다 (#1403). 두 값은 Step 1 이 같은 remote URL 에서 뽑은
+  쌍이어야 한다 — 절대 따로 구하지 말 것.
 - 사용자 지정 remote 가 없으면 즉시 실패.
 - discussion log 를 2~3줄로 압축하지 말 것. `DISCUSSION_MODE=1`
   경로에서도 동일하게 적용된다 — Discussion 본문은 future-self 검색의

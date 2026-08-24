@@ -15,7 +15,7 @@ TOKENS=$(( ( ($(git diff HEAD~1 | wc -c) / 4 / 500) + 1 ) * 500 ))
 if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
     : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
 else
-    gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
+    GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/issues/$ISSUE_NUMBER/comments" \
       -X POST \
       -f body="### AI Metrics — gh-commit
 
@@ -37,6 +37,11 @@ else
 </details>"
 fi
 ```
+
+`$TARGET_HOST` / `$TARGET_REPO` are the pair Step 1 bound from `origin`'s
+URL. Both are mandatory: a bare `gh api repos/.../comments` resolves against
+gh CLI's own default host, so on a dual-host login the metrics comment lands
+on the wrong server's issue #N — or 404s — without failing loudly (#1403).
 
 If no issue number exists, print the metrics to stdout only and skip the
 comment. On any API failure, print

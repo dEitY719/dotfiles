@@ -54,8 +54,11 @@
    milestone per that SSOT. Missing labels warn-and-skip; never auto-
    created. Disabled by `--no-auto-labels`. See
    `references/auto-labels.md`.
-5. Creates the issue via `gh issue create --repo "$TARGET_REPO"` using a
-   temp file written by `mktemp` (avoids shell escaping bugs).
+5. Creates the issue via
+   `GH_HOST="$TARGET_HOST" gh issue create --repo "$TARGET_REPO"` using a
+   temp file written by `mktemp` (avoids shell escaping bugs). Host and repo
+   are both pinned from the same remote URL so a dual-host `gh` login cannot
+   file the issue on the wrong server (#1403).
 6. Prints only `Issue #N created: <url>` — no preamble, no summary.
 
 ## Title format

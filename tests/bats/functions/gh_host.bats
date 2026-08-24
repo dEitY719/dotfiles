@@ -8,6 +8,9 @@
 #
 # T5-T8 cover `_gh_parse_owner_repo_url` across both hosts and the
 # common URL shapes (https://, git@host:, plus a non-github rejection).
+#
+# T9-T14 cover `_gh_host_from_url` (issue #1403) — the host read out of a
+# remote URL rather than out of the PC's setup-mode.
 
 load '../test_helper'
 
@@ -108,6 +111,58 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
+# T9-T14: _gh_host_from_url — host read out of the remote URL (issue #1403)
+#
+# `_gh_resolve_host` answers "which host does this PC default to"; this
+# function answers "which host does *this remote URL* name". They can
+# legitimately disagree (internal PC: origin=GHE, upstream=github.com), so
+# a skill that resolved owner/repo from a URL must take GH_HOST from the
+# same URL — that pairing is what makes the #1403 wrong-host query
+# impossible.
+# ---------------------------------------------------------------------------
+
+@test "T9: https github.com URL -> github.com" {
+    run_in_bash '_gh_host_from_url "https://github.com/dEitY719/dotfiles.git"'
+    assert_success
+    assert_output "github.com"
+}
+
+@test "T10: git@ GHE URL -> github.samsungds.net" {
+    run_in_bash '_gh_host_from_url "git@github.samsungds.net:byoungwoo-yoon/dotfiles.git"'
+    assert_success
+    assert_output "github.samsungds.net"
+}
+
+@test "T11: ssh:// GHE URL -> github.samsungds.net" {
+    run_in_bash '_gh_host_from_url "ssh://git@github.samsungds.net/owner/repo.git"'
+    assert_success
+    assert_output "github.samsungds.net"
+}
+
+@test "T12: non-github URL is rejected with exit 1" {
+    run_in_bash '_gh_host_from_url "https://gitlab.com/owner/repo" 2>&1'
+    assert_failure
+    assert_output --partial "not a github remote"
+}
+
+@test "T13: empty URL is rejected with exit 1" {
+    run_in_bash '_gh_host_from_url "" 2>&1'
+    assert_failure
+    assert_output --partial "empty remote URL"
+}
+
+@test "T14: URL host wins over the PC setup-mode (the #1403 invariant)" {
+    # internal PC (setup-mode -> GHE) working on the pull-only github.com
+    # upstream: _gh_resolve_host says GHE, but the remote URL says
+    # github.com and the URL is what `gh` must be pointed at.
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    run_in_bash '_gh_resolve_host; _gh_host_from_url "https://github.com/dEitY719/dotfiles.git"'
+    assert_success
+    assert_line --index 0 "github.samsungds.net"
+    assert_line --index 1 "github.com"
+}
+
+# ---------------------------------------------------------------------------
 # zsh coverage — the helper must work in both shells (POSIX compliance)
 # ---------------------------------------------------------------------------
 
@@ -130,6 +185,18 @@ teardown() {
     assert_output "owner/repo"
 }
 
+@test "zsh: _gh_host_from_url handles GHE https" {
+    run_in_zsh '_gh_host_from_url "https://github.samsungds.net/owner/repo.git"'
+    assert_success
+    assert_output "github.samsungds.net"
+}
+
+@test "zsh: _gh_host_from_url handles git@ github.com" {
+    run_in_zsh '_gh_host_from_url "git@github.com:dEitY719/dotfiles.git"'
+    assert_success
+    assert_output "github.com"
+}
+
 # ---------------------------------------------------------------------------
 # PR #704 review (gemini-code-assist, critical) — non-interactive sourcing.
 # The original gh_host.sh shipped with an interactive guard that returned 0
@@ -147,10 +214,12 @@ teardown() {
         . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh'
         command -v _gh_resolve_host >/dev/null && echo resolve_ok
         command -v _gh_parse_owner_repo_url >/dev/null && echo parse_ok
+        command -v _gh_host_from_url >/dev/null && echo host_from_url_ok
     "
     assert_success
     assert_output --partial "resolve_ok"
     assert_output --partial "parse_ok"
+    assert_output --partial "host_from_url_ok"
 }
 
 # ---------------------------------------------------------------------------

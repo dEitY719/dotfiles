@@ -18,5 +18,5 @@ Next: /gh-discussion-convert 45   # when decision lands
 
 ```
 [FAIL] <stderr first line>
-Next: <recovery step — e.g. `gh auth login`, fix `.gh-issue-defaults.yml`, enable Discussions in repo settings>
+Next: <recovery step — e.g. `gh auth login --hostname $TARGET_HOST`, fix `.gh-issue-defaults.yml`, enable Discussions in repo settings>
 ```
