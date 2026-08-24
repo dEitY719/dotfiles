@@ -140,10 +140,33 @@ _post_gh_pr_create_repo_has_board() {
     # also accepts gh's `HOST/OWNER/REPO` form of GH_REPO (#1405), which a
     # bare `${GH_REPO%/*}` / `${GH_REPO#*/}` pair would mis-split into
     # "host/owner" + "owner/repo" and query a repo that does not exist.
+    #
+    # Defense-in-depth (#724): the helper sourced above may predate #1405 and
+    # not define that normalizer. Hook and helper deploy independently — a
+    # worktree run resolves SHELL_COMMON to the *main* checkout — so a
+    # rollout-skew window is real, and it was observed on this very helper
+    # (`unknown option: --repo`). Calling the normalizer bare sent its rc 127
+    # straight into `|| return 1`: has_board went false and the entire #813
+    # retry-poll vanished without a word, reviving the stuck-in-Backlog
+    # symptom #813 exists to prevent (#1414). Warn and split inline instead —
+    # one missing helper function is no reason to drop the poll.
     local _slug _o _n _cnt
-    _slug=$(_gh_project_status_normalize_repo "$GH_REPO") || return 1
-    _o="${_slug%% *}"
-    _n="${_slug#* }"
+    if command -v _gh_project_status_normalize_repo >/dev/null 2>&1; then
+        _slug=$(_gh_project_status_normalize_repo "$GH_REPO") || return 1
+        _o="${_slug%% *}"
+        _n="${_slug#* }"
+    else
+        printf '[post-gh-pr-create] %s sourced but _gh_project_status_normalize_repo undefined — splitting GH_REPO inline (#724).\n' \
+            "$_helper" >&2
+        # Mirrors only the host-stripping slice of the normalizer, not its
+        # validation half: a malformed slug simply yields an empty projectsV2
+        # count below, which is the same "no board" answer validation would
+        # have produced.
+        _slug="$GH_REPO"
+        case "$_slug" in */*/*) _slug="${_slug#*/}" ;; esac
+        _o="${_slug%%/*}"
+        _n="${_slug#*/}"
+    fi
     [ -n "$_o" ] && [ -n "$_n" ] || return 1
     # GraphQL variables ($o, $n) are bound via the -f flags below, so the
     # single-quoted query intentionally does not shell-expand. Both are
