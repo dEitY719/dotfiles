@@ -15,13 +15,22 @@
 - Step 2.5.1 (gh:pr-resolve-outdated) does a clean rebase-sync when the
   base moved forward with no conflicts; it is a no-op when the PR is
   already up to date.
-- **Never unset or re-derive `GH_HOST` mid-flow (#1403).** Step 1 exports it
-  once from the `[remote]`'s URL and every chained sub-skill inherits it. A
-  sub-skill re-resolving the host from `_dotfiles_setup_mode` instead would
-  disagree with `$TARGET_REPO` whenever the flow was invoked on a remote that
-  is not the PC's default server (internal PC: `origin`=GHES,
-  `upstream`=github.com) — and `gh` reports no error when it lands on the
-  wrong host, so the divergence surfaces as a "missing" issue or PR.
+- **Never fall back to `_dotfiles_setup_mode` alone for the host (#1403).**
+  Step 1 exports `GH_HOST`/`TARGET_REPO`/`TARGET_HOST` from the `[remote]`'s
+  URL. `gh:issue-implement` (Step 2.1) uses `[remote]` directly; `gh:commit`
+  and `gh:pr` (Steps 2.2/2.3) each independently re-derive their own target
+  from `_gh_host_from_url`/`_gh_parse_owner_repo_url` over `origin`'s URL —
+  correct and safe for the common single-remote case, but it means they do
+  **not** actually inherit Step 1's `[remote]` choice when it differs from
+  `origin`. A sub-skill falling back further, to `_dotfiles_setup_mode`
+  (`_gh_resolve_host` with no URL) instead of a URL-derived host, is the
+  regression this line guards against — that path can disagree with
+  `$TARGET_REPO` whenever the PC's setup-mode default isn't the remote in
+  play (internal PC: `origin`=GHES, `upstream`=github.com). `gh` reports no
+  error when it lands on the wrong host, so the divergence surfaces as a
+  "missing" issue or PR. Full `[remote]` propagation into Steps 2.2/2.3 is a
+  separate, tracked gap (PR #1404 review, codex) — not something this line
+  claims is already solved.
 - Never mutate state between steps beyond what the sub-skills do.
   Exception: Step 2.6 may post a comment after Step 2.5.1 — this is
   intentional and must soft-fail (never block the flow). If a future

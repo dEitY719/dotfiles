@@ -36,6 +36,7 @@ file holds the substeps and error-message shape.
    TARGET_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL") || exit 1
    TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
    export GH_HOST="$TARGET_HOST"
+   export TARGET_REPO TARGET_HOST
    ```
 
    - `https://github.com/<owner>/<repo>.git` → `github.com` + `<owner>/<repo>`
