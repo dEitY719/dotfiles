@@ -39,7 +39,11 @@ _IW_LABEL="issue-watcher"
 _IW_STATE_SUBDIR="issue-watcher"
 _IW_STATE_BASENAME="herdr-watch.json"
 _IW_LOCK_BASENAME=".lock"
-_IW_PROMPT="@issue-watcher:dispatcher 실행"
+# 받는 claude 세션에 그대로 전달되는 문자열. "@<name>" 은 Skill 이름 패턴과
+# 겹쳐 보여 세션이 Skill() 을 먼저 시도했다가 "Unknown skill" 로 실패한 뒤에야
+# Agent 로 정정했다(#1394). 무인 tick 이 그 self-correction 에 기대지 않도록
+# 호출할 도구를 문장으로 명시한다.
+_IW_PROMPT="issue-watcher:dispatcher 를 Agent 도구로 실행해"
 # 5분 주기보다 여유 있게 4분 — cron tick 이 겹치지 않게 한다.
 _IW_TIMEOUT_MS="240000"
 
