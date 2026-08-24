@@ -197,21 +197,31 @@ _concurrent_test_run_count() {
     printf '%s\n' "$count"
 }
 
+# CPU count: nproc (Linux) → getconf (macOS/BSD) → 4. Shared by the bats and
+# pytest throttling paths so the fallback chain lives in exactly one place.
+_test_cpu_count() {
+    nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4
+}
+
 # Divide a base job count among this run and its detected peers.
 # effective = max(1, base / (concurrent_count + 1)). Never returns < 1 or
 # a non-integer. Falls back to $base unchanged if $base isn't a positive
 # integer (defensive — callers already validate, but this must not crash).
+#
+# $2 (optional) is a precomputed peer count from _concurrent_test_run_count;
+# pass it when the caller already has one to avoid re-scanning the registry.
+# Omit it (the common case, and what the bats tests exercise) to compute it
+# here.
 _effective_parallel_jobs() {
-    local base="$1" count divisor effective
+    local base="$1" count="${2:-}" effective
     case "$base" in
     '' | *[!0-9]*)
         printf '%s\n' "$base"
         return 0
         ;;
     esac
-    count=$(_concurrent_test_run_count)
-    divisor=$((count + 1))
-    effective=$((base / divisor))
+    [ -n "$count" ] || count=$(_concurrent_test_run_count)
+    effective=$((base / (count + 1)))
     [ "$effective" -lt 1 ] && effective=1
     printf '%s\n' "$effective"
 }
@@ -221,8 +231,13 @@ _effective_parallel_jobs() {
 #                      positive integer (guards a bogus override).
 #   BATS_JOBS unset  → CPU count (nproc → getconf → 4), divided among this
 #                      run and any concurrent ./tests/test runs.
+#
+# $1 (optional) is a precomputed peer count, forwarded to
+# _effective_parallel_jobs to avoid a second registry scan (run_bats already
+# has one to build its throttle_note). Omit it to compute internally.
 _resolve_bats_jobs() {
-    local jobs="${BATS_JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
+    local others="${1:-}" jobs
+    jobs="${BATS_JOBS:-$(_test_cpu_count)}"
     # Guard a non-positive-integer BATS_JOBS override (gemini review).
     case "$jobs" in
     '' | *[!0-9]*) jobs=4 ;;
@@ -232,7 +247,7 @@ _resolve_bats_jobs() {
         printf '%s\n' "$jobs"
         return 0
     fi
-    _effective_parallel_jobs "$jobs"
+    _effective_parallel_jobs "$jobs" "$others"
 }
 
 # Shared by run_bats()'s two "shell unit tests couldn't run" early-return
@@ -293,11 +308,11 @@ run_bats() {
     # CPU count: nproc (Linux) → getconf (macOS/BSD) → 4, then divided among
     # any concurrent ./tests/test runs (#1413). BATS_JOBS overrides both.
     local jobs others=0 throttle_note=""
-    jobs="$(_resolve_bats_jobs)"
     if [ -z "${BATS_JOBS:-}" ]; then
         others="$(_concurrent_test_run_count)"
         [ "$others" -gt 0 ] && throttle_note=" (throttled: ${others} other ./tests/test run(s) detected)"
     fi
+    jobs="$(_resolve_bats_jobs "$others")"
     local outdir
     outdir="$(mktemp -d)"
     # Clean the temp dir on normal exit and on interrupt so an aborted run
@@ -394,7 +409,7 @@ run_pytest() {
         local pytest_env=()
         if [ -z "${PYTEST_XDIST_AUTO_NUM_WORKERS:-}" ]; then
             local base_jobs
-            base_jobs="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
+            base_jobs="$(_test_cpu_count)"
             pytest_env=("PYTEST_XDIST_AUTO_NUM_WORKERS=$(_effective_parallel_jobs "$base_jobs")")
         fi
         env "${pytest_env[@]}" python3 -m pytest tests/integration/ $verbose_flag --tb=short
