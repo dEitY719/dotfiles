@@ -39,11 +39,11 @@ _IW_LABEL="issue-watcher"
 _IW_STATE_SUBDIR="issue-watcher"
 _IW_STATE_BASENAME="herdr-watch.json"
 _IW_LOCK_BASENAME=".lock"
-# 받는 claude 세션에 그대로 전달되는 문자열. "@<name>" 은 Skill 이름 패턴과
-# 겹쳐 보여 세션이 Skill() 을 먼저 시도했다가 "Unknown skill" 로 실패한 뒤에야
-# Agent 로 정정했다(#1394). 무인 tick 이 그 self-correction 에 기대지 않도록
-# 호출할 도구를 문장으로 명시한다.
-_IW_PROMPT="issue-watcher:dispatcher 를 Agent 도구로 실행해"
+# 받는 claude 세션에 그대로 전달된다. "@<name>" 만으로는 세션이 Skill/Agent 를
+# 헷갈려 재시도했다(#1394) — 호출할 도구를 문장으로 명시해 그 오인 경로를 없앤다.
+# herdr agent prompt 는 자유 문자열만 싣는 채널이라 구조적 도구 호출은 불가능하다.
+# 한국어/영어를 함께 적는 것도 그래서다 — 세션 언어 설정에 덜 흔들리게 하는 중복.
+_IW_PROMPT="issue-watcher:dispatcher 를 Agent 도구로 실행해 (run the issue-watcher:dispatcher agent via the Agent tool)"
 # 5분 주기보다 여유 있게 4분 — cron tick 이 겹치지 않게 한다.
 _IW_TIMEOUT_MS="240000"
 
