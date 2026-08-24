@@ -1,16 +1,10 @@
 ---
 name: gh:pr-merge-emergency
 description: >-
-  Emergency-merge a GitHub PR by bypassing branch-protection approval
-  requirements via admin override, while forcing an audit trail: a reason
-  comment on the PR and a follow-up incident issue for later retro. Use
-  when the user runs /gh-pr-merge-emergency, /gh:pr-merge-emergency, or
-  asks "긴급 머지", "주말 핫픽스 머지", "approval 없이 머지", "admin bypass
-  merge". NOT a replacement for normal review — the skill actively blocks
-  overuse by requiring a written reason and creating a post-merge issue.
-  Required CI must still pass; conflicts still stop the merge. Accepts
-  `-h`/`--help`/`help` to print usage. Project-agnostic; works in any repo
-  where the caller has admin/merge permission.
+  Admin-override a GitHub PR's branch-protection approval, forcing an audit
+  trail: reason comment plus follow-up incident issue. Use for
+  /gh:pr-merge-emergency, /gh-pr-merge-emergency, "긴급 머지", "approval 없이
+  머지", "admin bypass merge". CI still gates.
 allowed-tools: Bash, Read, Grep, Glob
 metadata:
   model_recommendation:
@@ -24,8 +18,12 @@ metadata:
 
 ## Help
 
-If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
-output it verbatim, then stop. No API calls.
+If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output it
+verbatim, then stop. No API calls. That file tables the positionals
+`<PR> <reason> [remote]` and good/bad reason examples. This skill is
+project-agnostic — it works in any repo where the caller has admin/merge rights,
+and it is **not** a replacement for review: the written reason and the post-merge
+incident issue exist to make overuse visible.
 
 ## Step 1: Parse Args + Resolve Target
 
@@ -70,8 +68,8 @@ Attach an `incident` label **only if** `gh label list --repo "$TARGET_REPO"`
 confirms it exists.
 
 Append the ai-metrics footer to the incident issue body before creating it
-(required artifact — no soft-fail; honors `GH_DISABLE_AI_METRICS=1` per issue
-#399). Exact block: `references/audit-templates.md` -> "ai-metrics footer".
+(required artifact — no soft-fail; honors `GH_DISABLE_AI_METRICS=1`, issue #399).
+Exact block: `references/audit-templates.md` -> "ai-metrics footer".
 
 ## Step 6: Sync Project Board Status
 
@@ -95,3 +93,8 @@ Never: bypass CI (approval bypass only); skip the incident issue (the audit tail
 is the whole point); run without affirmative confirmation; use `--merge`/`--rebase`
 to dodge a failing admin merge. Reason must be substantive — refuse
 `"urgent"`/`"fix"`/`"merge now"`.
+
+## Related Skills
+
+`gh:pr-merge` is the normal approved-PR path; come here only when approval cannot
+be obtained in time · `gh:pr-approve` is how that approval is produced.

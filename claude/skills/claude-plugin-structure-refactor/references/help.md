@@ -12,8 +12,9 @@ Flags:
   --apply              Execute the plan. Without it, the skill is DRY-RUN
                        (prints the plan, writes nothing).
   --mandatory | --mp   Scope = mandatory items M1-M10 only. (default scope)
-  --recommended | --op Scope = M1-M10 + recommended R1-R5 fixes (placeholder stubs
-                       + naming correction + README link backfill). R6-R8 are
+  --recommended | --op Scope = M1-M10 + recommended R1-R5 fixes (R1 guides via
+                       /devx:visualize, R2 placeholder stubs, R4 naming
+                       correction, R5 README link backfill). R6-R8 are
                        audit-only WARNs (check surfaces them; refactor skips).
   --single             Force the SINGLE target layout (repo itself is one
                        plugin; marketplace source "./", skills at root
@@ -61,16 +62,24 @@ Behavior:
                          - prune unknown top-level plugin.json fields (M10,
                            #1084 load-fail fix): e.g. a schema-violating skills
                            array; a .bak backup is kept
-                         - (--op only) create empty R1/R2 placeholder stubs,
-                           correct R4 naming mismatches, and backfill missing
-                           R5 README guide+usage links (stub level)
+                         - (--op only) generate R1 per-skill guides by
+                           delegating to /devx:visualize (real content; skipped
+                           when the file already exists), create R2 usage
+                           placeholder stubs, correct R4 naming mismatches,
+                           backfill missing R5 README guide+usage links, and
+                           auto-activate GitHub Pages (github.com + GHE)
 
-Placeholder stub boundary (--op):
-  Stubs are empty files with a TODO header only. This skill never calls
-  /devx:visualize or /devx:excalidraw-diagram to generate real guide/usage
-  content — the stub carries a comment pointing there for a later pass.
+R1 vs R2 boundary (--op):
+  R1 guides are real content — delegated to /devx:visualize and written to
+  docs/skill-guides/<skill>.html; idempotent (skipped when it already exists),
+  and it falls back to a TODO stub when /devx:visualize is unavailable.
+  R2 usage samples stay placeholder stubs: an empty file with a TODO header
+  pointing at /devx:visualize for a later pass. /devx:excalidraw-diagram is
+  never called by this skill.
 
 Safety:
+  - GitHub Pages activation and R5 link backfill are soft-fail: a missing token
+    scope or unreachable host warns and continues — it never aborts the run.
   - Not a git repo → warning (moves use plain `mv`).
   - Dirty tree → shows dry-run plan; requires explicit --apply to write.
   - Idempotent: an already-standard repo (within scope) is a no-op.

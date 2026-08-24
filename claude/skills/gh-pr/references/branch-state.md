@@ -264,6 +264,20 @@ gh_pr_base_branch_decision() {
 }
 ```
 
+### Step 1b state gathering (run first, one message)
+
+Using `$BASE_BRANCH` — never a hard-coded `main`, since Step 1a may have bound
+it to a parent PR's head ref (`references/stacked-pr.md`) — run in a single
+message: `git rev-parse --abbrev-ref HEAD`, `git status`, `git fetch origin`,
+`git log --oneline "$BASE_BRANCH"..HEAD`, `git diff "$BASE_BRANCH"...HEAD`,
+plus these **two separate** probes. They answer different questions; never
+conflate them:
+
+```sh
+git rev-parse --symbolic-full-name @{u}        # pairing target (push/pull direction)
+git log HEAD..origin/"$BASE_BRANCH" --oneline  # how far behind base (rebase needed?)
+```
+
 ### How Step 1b ties it together
 
 ```sh
@@ -305,6 +319,16 @@ case "$DECISION" in
         ;;
 esac
 ```
+
+### Outcomes
+
+- `not-on-base` — normal path, continue to Step 2.
+- `nothing-to-pr` — stop. The `$BASE_BRANCH..HEAD` range is empty; this covers
+  both "nothing committed yet" and "the commits are already on
+  `origin/$BASE_BRANCH`".
+- `auto-branch-and-rewind` / `auto-branch-warn-only` — a feature branch is
+  created from the local-only commits, the local base branch is rewound to
+  `origin/$BASE_BRANCH` when the rewind guard allows, and the run continues.
 
 `ISSUE_NUMBER` may still be empty at this point (Step 3 resolves it from the
 conversation); the fallback `<type>/<YYYYMMDD>-<short-sha>` form covers that.

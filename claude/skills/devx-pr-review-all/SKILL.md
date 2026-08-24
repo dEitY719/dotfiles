@@ -1,12 +1,10 @@
 ---
 name: devx:pr-review-all
 description: >-
-  Fan out every available reviewer on one PR in parallel: agy, codex,
-  opencode, hermes, and a /simplify auto-fix pass, then run a reply pass. Use for
-  /devx:pr-review-all, /devx-pr-review-all, "PR 다중 리뷰어 병렬로",
-  "agy codex opencode simplify 한번에 돌려", "PR 99 전체 리뷰". Distinct from
-  gh:pr-review, and reused by gh:issue-flow as its post-PR quality gate.
-  Accepts `<PR#> [remote] [--defer-reply M] [--no-reply]`.
+  Fan out every available reviewer on one PR in parallel, then run a reply pass.
+  Use for /devx:pr-review-all, /devx-pr-review-all, "PR 다중 리뷰어 병렬로",
+  "agy codex simplify 한번에 돌려", "PR 99 전체 리뷰". Not a single-reviewer run
+  (gh:pr-review); never approves.
 allowed-tools: Bash, Read, Grep, Agent
 metadata:
   model_recommendation:
@@ -20,10 +18,10 @@ metadata:
 
 ## Role
 
-Orchestrate a single PR through all available reviewers at once (agy,
-codex, opencode, hermes, `/simplify`), commit any auto-fix changes, then reply to review
-comments inline or deferred. No approve/request-changes decision and no manual
-per-comment authoring. Every reviewer lane is soft-fail.
+Orchestrate a single PR through all available reviewers at once — agy, codex, opencode, hermes, plus a `/simplify`
+auto-fix pass — commit any auto-fix changes, then reply to review comments inline or deferred. No
+approve/request-changes decision and no manual per-comment authoring. Every reviewer lane is soft-fail.
+Argument/flag table (`<PR#> [remote] [--defer-reply M] [--no-reply]`): `references/help.md`.
 
 ## Help
 
@@ -93,3 +91,9 @@ Print exactly one `[OK]`/`[SKIP]`/`[WARN]` line, e.g.
 - Never add `/code-review`; never run bare `git commit`.
 - Inline reply is deterministic; `--defer-reply` is minutes-only and not a guarantee.
 - No approve / request-changes here — that is `gh:pr-approve`.
+
+## Related Skills
+
+`gh:pr-review` (one reviewer at a time — this skill fans out over it) · `gh:pr-reply` / `devx:schedule` (the reply
+pass) · `gh:pr-approve` (the approve/request-changes decision). Reused by `gh:issue-flow` (Step 2.4) as its
+post-PR quality gate.

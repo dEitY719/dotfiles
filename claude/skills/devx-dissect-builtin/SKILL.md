@@ -1,12 +1,10 @@
 ---
 name: devx:dissect-builtin
 description: >-
-  Analyze and document Claude Code built-in skills. Load a built-in skill's
-  prompt via the Skill tool, explain its behavior in Korean, and save structured
-  documentation (README.md + PROMPT.md) to the dotfiles repository. Use when the
-  user wants to study, dissect, or document a built-in skill (e.g.,
-  "/devx:dissect-builtin simplify", "/devx:dissect-builtin loop"). Trigger on requests
-  like "내장 스킬 분석", "built-in skill 공부", or "스킬 해부".
+  Analyze a Claude Code built-in skill and save Korean documentation
+  (README.md + PROMPT.md) under claude/built-in-skills/. Use for
+  "/devx:dissect-builtin <skill-name>", "내장 스킬 분석", "스킬 해부", or any
+  request to study or document a built-in skill.
 metadata:
   model_recommendation:
     tier: sonnet

@@ -109,6 +109,17 @@ Try to explain to the model why things are important in lieu of heavy-handed mus
 
 - **name**: Skill identifier
 - **description**: When to trigger, what it does. This is the primary triggering mechanism — include both what the skill does AND specific contexts for when to use it. All "when to use" info goes here, not in the body. Note: Claude tends to "undertrigger" skills, so make descriptions a little bit "pushy". For instance, instead of "How to build a simple fast dashboard", write "How to build a simple fast dashboard to display internal data. Make sure to use this skill whenever the user mentions dashboards, data visualization, internal metrics, or wants to display any kind of data, even if they don't explicitly ask for a 'dashboard.'"
+- **description length**: keep it **≤ 250 characters** (`skill:check` Check 16
+  — WARN 251–400 with a justifying comment, FAIL over 400). Count characters,
+  not bytes: Korean trigger phrases are 3 bytes per glyph. Every installed
+  skill's description is loaded into the session's `available_skills` listing,
+  and Codex/Kimi cap that listing at ~5,440 characters across all skills — a
+  long description does not just cost this skill, it crowds out others (#1411).
+  This does **not** contradict the "pushy" rule above: keep trigger phrases in
+  both Korean and English plus short negative triggers, and move the rest —
+  flag semantics to `references/help.md`, behaviour detail to Step sections,
+  sister-skill cross-references to the body. "When to use" stays; "how it
+  behaves" goes.
 - **compatibility**: Required tools, dependencies (optional, rarely needed)
 
 ## Test Cases

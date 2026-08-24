@@ -1,23 +1,10 @@
 ---
 name: devx:restart
 description: >-
-  API 소켓 에러, OOM, 인증 만료(Not logged in), 또는 ESC 키로 현재 세션이
-  중단된 후 재개할 때 —
-  [Claude Code Only] Resume the previous in-progress task after an interruption
-  — an API error (socket disconnect, service flake, OOM, etc.), an auth
-  expiry (`Not logged in`), or the user pressing ESC because the turn was
-  running too long — without losing context. Use when the user runs
-  /devx:restart, /devx-restart, or asks "다시 작업해",
-  "이어서 해줘", "끊긴 데서 재개", "API 에러 복구",
-  "15분 이상 걸려서 ESC 눌렀어", "작업이 너무 커서 중단했어",
-  "다시 로그인했어", "oversized turn interrupted by user ESC". Identifies the in_progress
-  TodoList item, breaks the next step into single-tool-call chunks, and
-  delegates large reads/searches to subagents (Explore / general-purpose)
-  so the main context stays small. Does NOT re-invoke a process skill
-  (brainstorming / TDD / debugging) that already produced output earlier
-  in the conversation — it resumes from the implementation step they led
-  to. Accepts `-h`/`--help`/`help` to print usage.
-  (재개: devx:resume-after-limit, handoff: devx:session-handoff)
+  [Claude Code Only] 같은 세션에서 중단 직후 이어서 재개 — API 에러·OOM·인증
+  만료·ESC 로 턴이 끊겼을 때. Use for /devx:restart, /devx-restart,
+  "이어서 해줘", "끊긴 데서 재개", "다시 로그인했어", "resume after an API
+  error or ESC". 토큰 리밋 리셋 후 크론 재개는 devx:resume-after-limit.
 allowed-tools: Bash, Read, Edit, Write, Grep, Agent, TaskList, TaskUpdate
 metadata:
   model_recommendation:
@@ -99,3 +86,10 @@ and for the per-step / `Next:` line rules. Both Step 2 (announce) and Step 4
 - Never modify TodoList task subjects — only status (rewriting them loses the user's intent).
 - Never silently skip the Step 2 announce line — the user must see what you picked up to correct it cheaply.
 - Never invoke this skill from inside another skill — it is user-triggered recovery, not a building block.
+
+## Related Skills
+
+Same "resume" family, different trigger — `devx:resume-after-limit` (a cron
+fires it after the token-limit reset; this one is same-session, no cron) ·
+`devx:session-handoff` (writes the handoff for *unfinished* work before the
+context window runs out; this one resumes instead of handing off).

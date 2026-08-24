@@ -1,10 +1,10 @@
 ---
 name: devx:ux-guidelines
 description: >-
-  Apply UX_GUIDELINES.md standards to shell functions and help text. Trigger on
-  "/devx:ux-guidelines" or when refactoring help functions, creating new help
-  commands, or ensuring consistent formatting with semantic UX functions
-  (ux_header, ux_section, ux_bullet, etc).
+  Apply UX_GUIDELINES.md to shell functions and help text — replace raw
+  echo/printf/ANSI with semantic ux_lib calls (ux_header, ux_section,
+  ux_bullet). Use on "/devx:ux-guidelines", "help 함수 UX 가이드라인대로
+  리팩터링", or a bulk shell-common UX review.
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
 metadata:
   model_recommendation:

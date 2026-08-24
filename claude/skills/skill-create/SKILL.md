@@ -1,6 +1,6 @@
 ---
 name: skill:create
-description: Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy.
+description: Create a skill, or improve and evaluate an existing one. Use to build one from scratch, edit or optimize it, run evals or benchmarks, tune a description for triggering accuracy, or on "스킬 만들어줘", "/skill:create". Authoring — skill:check audits.
 metadata:
   model_recommendation:
     tier: sonnet
@@ -57,7 +57,7 @@ patterns, frontmatter fields, communication style, executable-first extraction r
 ## Phase 4: Run and Evaluate Test Cases
 
 Read `references/eval-pipeline.md` for the full pipeline: spawning runs, drafting assertions,
-capturing timing, grading, aggregating benchmarks, and launching the viewer.
+capturing timing, grading, benchmark aggregation, the high-variance analyst pass, and the viewer.
 
 IMPORTANT: Always generate the eval viewer using `eval-viewer/generate_review.py` BEFORE
 evaluating outputs yourself — get results in front of the human ASAP.

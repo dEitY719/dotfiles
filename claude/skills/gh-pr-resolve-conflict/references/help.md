@@ -2,10 +2,11 @@
 
 ## Arguments
 
-| # | Name | Default | Description |
-|---|------|---------|-------------|
-| 1 | `<pr-number>` or `-h`/`--help`/`help` | current-branch PR | Target PR, e.g. `168` |
-| 2 | remote-name | `origin` | Git remote whose repo owns the PR |
+| Option | Description | Default |
+|--------|-------------|---------|
+| `[pr-number]` | Positional 1 — target PR to resolve, e.g. `168`. | PR attached to the current branch |
+| `[remote]` | Positional 2 — git remote whose repo owns the PR. | `origin` |
+| `-h` / `--help` / `help` | Print this help verbatim and stop. No API calls. | — |
 
 ## Usage
 

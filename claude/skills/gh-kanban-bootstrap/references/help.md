@@ -17,6 +17,7 @@ label bootstrap, and host-aware UI checklist.
 | `--no-bootstrap-labels` | Skip the label registration step (target repo follows a different label policy) | labels bootstrapped |
 | `--force-label-sync` | Back-compat **no-op** (#1226): `gh:label-bootstrap` now always force-syncs SSOT label colors/descriptions, so this flag has no effect. Accepted silently. | inert |
 | `--with-smoke-test` | Execute the smoke test commands instead of only printing them | print-only |
+| `-h`, `--help`, `help` | Print this help and stop. No API calls. | — |
 
 ## Options (passed through to `lib/setup.sh`)
 

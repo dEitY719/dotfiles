@@ -13,6 +13,6 @@ Examples:
   /skill:refactor help
 
 Options:
-  help    Show this message
+  -h, --help, help   Show this message and stop. No files are read or written.
 
 Note: Always presents a refactoring plan and waits for confirmation before writing files.

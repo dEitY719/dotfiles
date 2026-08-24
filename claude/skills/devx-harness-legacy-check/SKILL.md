@@ -2,12 +2,9 @@
 name: devx:harness-legacy-check
 description: >-
   AI 코딩 하네스(CLAUDE.md, AGENTS.md, skills, workflows, settings, hooks,
-  MCP)를 읽기 전용으로 감사하고 리포트를 .claude/reports/
-  harness-legacy-check.md에 저장한다. 리포트는 devx:harness-refactor의
-  입력으로 사용된다.
-  Use when the user runs /devx:harness-legacy-check, "harness check 해줘",
-  "하네스 감사해줘", "하네스 리팩토링 전에 감사 먼저 실행해줘",
-  "harness-legacy-check 실행해줘", or before running devx:harness-refactor.
+  MCP)를 읽기 전용으로 감사해 리포트를 저장한다. Use when the user runs
+  /devx:harness-legacy-check, "하네스 감사해줘", "harness check 해줘", or
+  before running devx:harness-refactor.
 metadata:
   model_recommendation:
     tier: haiku
@@ -49,9 +46,10 @@ Workflow({ name: 'harness-legacy-check' })
 
 ---
 
-## 짝을 이루는 스킬
+## 짝을 이루는 스킬 (Related Skills)
 
-이 스킬은 `devx:harness-refactor`와 함께 사용한다:
+이 스킬은 `devx:harness-refactor`와 함께 사용한다. 저장된 리포트
+(`.claude/reports/harness-legacy-check.md`)가 그대로 refactor 스킬의 입력이 된다:
 
 1. `/devx:harness-legacy-check` — 감사 실행 + 리포트 저장
 2. `/devx:harness-refactor` — 리포트 읽고 low-risk 개선 적용

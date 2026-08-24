@@ -1,16 +1,10 @@
 ---
 name: claude-plugin:create
 description: >-
-  Create a new claude-plugin marketplace repo from scratch — build the
-  directory structure, copy skills in, write the manifests, git init,
-  create the GHES/GitHub repo, and push the initial commit, all in one
-  pass. NEVER modifies the source tree (dotfiles etc.) — copy-only. Use
-  when the user says "새 플러그인 만들어", "스킬 묶어서 플러그인으로",
-  "claude-plugin 신규 생성", "/claude-plugin:create <name>", or any request
-  to bundle skills into a new plugin repo. Sister skills:
-  `claude-plugin:structure-check` (verify after create),
-  `claude-plugin:structure-refactor` (fix structure),
-  `claude-plugin:rename-repo` (rename to the team convention).
+  Create a claude-plugin marketplace repo from scratch — structure,
+  manifests, copy-only skill import, git init, repo create, push. Use for
+  "새 플러그인 만들어", "스킬 묶어서 플러그인으로", "claude-plugin 신규 생성",
+  "/claude-plugin:create <name>". New repos only.
 compatibility:
   tools: Read, Write, Edit, Bash, Glob
 metadata:
@@ -96,5 +90,7 @@ URL, skills copied, M1-M10 verdict) plus the next-action hint.
 - **Source is copy-only** — never modify/delete/symlink `--src`. Abort if dest
   exists (not idempotent); `--dry-run` writes nothing. `gh auth status` before
   any `gh` call; confirm repo-create + push; never force-push.
-- Sisters: `structure-check` (verify) · `structure-refactor` (fix) ·
-  `rename-repo` (rename). This skill creates.
+
+## Related Skills
+
+`claude-plugin:structure-check` (verify after create) · `claude-plugin:structure-refactor` (fix an existing repo's layout) · `claude-plugin:rename-repo` (rename to the team convention). This skill creates.

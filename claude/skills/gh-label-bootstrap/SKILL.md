@@ -1,15 +1,10 @@
 ---
 name: gh:label-bootstrap
 description: >-
-  Sync a GitHub repo's labels to the dotfiles 10-label SSOT
-  (references/gh-labels.md) — force-PATCH existing SSOT labels to the
-  canonical color/description, POST missing ones, rename the 3 alias
-  labels (bug->fix, documentation->docs, build->chore) preserving their
-  issue/PR links, and optionally prune extraneous custom labels. Use when
-  the user runs /gh:label-bootstrap, /gh-label-bootstrap, or asks "라벨
-  동기화", "SSOT 라벨 적용", "sync repo labels". Generic and reusable on
-  any repo. Wraps the single SSOT script lib/label-bootstrap.sh. Accepts
-  `--repo <owner/repo>`, `--dry-run`, `--prune`, and `-h`/`--help`/`help`.
+  Sync a GitHub repo's labels to the dotfiles 10-label SSOT. Use for
+  /gh:label-bootstrap, /gh-label-bootstrap, "라벨 동기화", "SSOT 라벨 적용",
+  "sync repo labels". Labels only — the Projects v2 board is
+  gh:kanban-bootstrap.
 allowed-tools: Bash, Read, Grep
 metadata:
   model_recommendation:
@@ -64,7 +59,8 @@ continue — a single label's failure never aborts the run.
   the canonical color/description unconditionally. This is an intentional
   change from the old `gh:kanban-bootstrap` inline logic (which skipped
   existing labels unless `--force-label-sync`); see F-3 of issue #1226.
-- **Renames preserve links**: alias labels are renamed via
+- **3 alias renames preserve links**: `bug`->`fix`,
+  `documentation`->`docs`, `build`->`chore` are renamed via
   `PATCH new_name=`, never delete+recreate, so issues/PRs keep the label.
 - **`--prune` is opt-in**: without it, no label is ever deleted. With it,
   only labels outside (SSOT ∪ alias-targets ∪ allowlist) are deleted,
@@ -80,3 +76,8 @@ continue — a single label's failure never aborts the run.
 - `lib/label-bootstrap.sh` is the sole entry point; invoke it directly
   from non-Claude contexts:
   `bash claude/skills/gh-label-bootstrap/lib/label-bootstrap.sh [...]`.
+
+## Related Skills
+
+Same new-repo setup slot, different artifact — `gh:kanban-bootstrap` (Projects v2
+board; delegates its label step here) · `devx:docs-bootstrap` (docs/ tree).

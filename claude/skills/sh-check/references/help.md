@@ -8,6 +8,9 @@ Arguments:
   [path]    Path to the shell script to audit (optional)
             If omitted, searches the current directory for *.sh files
 
+Options:
+  -h, --help, help   Print this help and stop. No checks are run.
+
 What it checks (10 criteria, modeled on git_worktree.sh):
 
   Structure (1–5)
