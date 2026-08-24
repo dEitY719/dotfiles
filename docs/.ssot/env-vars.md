@@ -89,9 +89,14 @@ without a projectV2 attachment auto-skip without needing the var.
 
 Pins the repo whose projectV2 board is read/written, instead of
 auto-detecting it. Same variable `gh` itself honors, so a value already
-exported for `gh` is reused as-is (both the `OWNER/REPO` and
-`HOST/OWNER/REPO` forms are accepted; the host segment is validated then
-dropped — host routing stays `GH_HOST`'s job).
+exported for `gh` is reused as-is. Both the `OWNER/REPO` and
+`HOST/OWNER/REPO` forms are accepted; in the three-segment form the host
+segment is only **structurally** checked (present and non-empty) and then
+dropped. It is *not* compared against `GH_HOST` — host routing stays
+`GH_HOST`'s job, so `github.com/o/r` under `GH_HOST=ghes.example.com`
+resolves to `o/r` on the GHES host without complaint (PR #1409 review,
+codex). Pass the two-segment form and set `GH_HOST` explicitly if you want
+the host to be unambiguous.
 
 Precedence, first non-empty wins:
 
@@ -121,6 +126,22 @@ Exists because the `gh:*` skills already export `TARGET_REPO` when they
 pin a remote, so the board helper picks it up without the skill having to
 also set `GH_REPO`. Ignored when `GH_REPO` or an explicit `--repo`
 argument is present.
+
+**Staleness hazard** (PR #1409 review, agy). `TARGET_REPO` is a generic,
+non-namespaced name that many `gh:*` skills export into the shell. A value
+left over from an earlier skill run in the same shell can therefore be
+picked up by a later board sync that meant to auto-detect — silently
+writing to the wrong repo's board. Two things bound the risk, and neither
+removes it:
+
+- Every in-repo caller of the board helper now passes `--repo` explicitly
+  (precedence level 1), so the env tiers are a fallback that a correct
+  caller never reaches.
+- A stale value that is malformed fails closed rather than falling through.
+
+A stale value that is *well-formed but wrong* is still honored. If you
+export `TARGET_REPO` by hand, unset it when you are done — and prefer
+`--repo` over the env tiers in any new caller.
 
 ## How to add a new entry
 
