@@ -28,6 +28,26 @@ return the PR URL. Accepted options: `references/options.md`.
 ## Step 1: Parse Args, Resolve Base Branch, Gather State
 
 Record `START_TS=$(date +%s)` immediately for Step 4 elapsed-time tracking.
+
+**1a-0 — bind the GitHub target (#1403), before any `gh` call:** resolve the
+host and repo from one and the same remote URL, then export the host so the
+sourced helpers (`gh_project_status.sh`, `gh_pr_edit_safe.sh`) inherit it:
+
+```bash
+. "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
+REMOTE_URL=$(git remote get-url origin)
+GH_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL")
+TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
+export GH_HOST="$TARGET_HOST"
+```
+
+Every `gh` call in this skill — `gh repo view`, `gh pr list`, `gh pr view`,
+`gh pr create`, `gh label list` — then runs as `GH_HOST="$TARGET_HOST" gh ...
+--repo "$GH_REPO"`. A bare `gh` follows gh CLI's own `gh repo set-default`
+instead of git's `origin`, so on a dual-host login (github.com + GHES) it
+silently targets the wrong server: the base branch comes from the wrong repo,
+or the PR is opened against it.
+
 **1a — base via stacked-PR detection:** read `references/stacked-pr.md` and
 paste its SSOT functions + dispatch block ("How Step 1 of SKILL.md ties it
 together") verbatim. They bind `BASE_BRANCH`, `PARENT_PR`, `ISSUE_NUMBER` and
@@ -88,7 +108,8 @@ the `gh pr create` command (`mktemp` body file, `--assignee @me`, `--base
 
 Derive labels from conventional-commit types in `git log <base>..HEAD` and PR
 scope (e.g. `skill` for `claude/skills/` changes). Apply only labels that
-exist in the repo (`gh label list`) — never create new ones. See
+exist in the repo (`GH_HOST="$TARGET_HOST" gh label list --repo "$GH_REPO"`) —
+never create new ones. See
 `references/pr-body-template.md` for the full mapping and safe-apply loop.
 After the loop (including the all-missing no-op case), emit
 `printf '[step:gh-pr/labels] OK\n'`.

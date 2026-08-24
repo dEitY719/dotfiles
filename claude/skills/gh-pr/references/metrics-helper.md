@@ -33,15 +33,14 @@ compute_pr_tokens() {
 
 ISSUE_BODY=""
 if [ -n "${ISSUE_NUMBER-}" ]; then
-    # gh resolves the repo from the current dir if --repo is omitted;
-    # callers that already have $TARGET_REPO bound can pass it explicitly.
-    if [ -n "${TARGET_REPO-}" ]; then
-        ISSUE_BODY=$(gh issue view "$ISSUE_NUMBER" --repo "$TARGET_REPO" \
-            --json body --jq '.body? // empty' 2>/dev/null) || ISSUE_BODY=""
-    else
-        ISSUE_BODY=$(gh issue view "$ISSUE_NUMBER" \
-            --json body --jq '.body? // empty' 2>/dev/null) || ISSUE_BODY=""
-    fi
+    # Host + repo are both explicit (#1403). The old `--repo`-less fallback
+    # branch was removed: a bare `gh issue view <N>` resolves against gh
+    # CLI's own `gh repo set-default`, so on a dual-host login it reads a
+    # different server's issue #N — or reports "not found" for an issue that
+    # is OPEN — and the resulting empty body silently under-reports TOKENS.
+    ISSUE_BODY=$(GH_HOST="$TARGET_HOST" gh issue view "$ISSUE_NUMBER" \
+        --repo "$GH_REPO" \
+        --json body --jq '.body? // empty' 2>/dev/null) || ISSUE_BODY=""
 fi
 COMMIT_LOG=$( { git log "$BASE_BRANCH..HEAD" --format=%B; \
                 git diff "$BASE_BRANCH...HEAD"; } 2>/dev/null )
@@ -51,6 +50,11 @@ TOKENS=$(compute_pr_tokens "$ISSUE_BODY" "$COMMIT_LOG")
 
 The two inputs are computed explicitly. `$BODY` (the PR body temp file) is
 deliberately not referenced — it's the wrong input.
+
+`$TARGET_HOST` / `$GH_REPO` come from Step 1a-0. An empty `ISSUE_BODY` is a
+tolerated outcome here (the commit log alone usually clears the 1000 floor),
+which is exactly why the host must be pinned: a wrong-host read fails softly
+and looks identical to "the issue has no body".
 
 ## Regression case — PR #325
 

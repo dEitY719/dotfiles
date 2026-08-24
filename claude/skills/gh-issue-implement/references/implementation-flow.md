@@ -6,9 +6,11 @@ Run these in parallel at start; all must pass:
 
 - `git rev-parse --show-toplevel` — must succeed (in a git repo).
 - `git rev-parse --abbrev-ref HEAD` — must NOT equal the default branch.
-  Get default via `gh repo view "$TARGET_REPO" --json defaultBranchRef -q .defaultBranchRef.name`
-  (pass the resolved repo explicitly — avoids implicit repo detection
-  when the cwd is under a fork or unusual remote setup).
+  Get default via
+  `GH_HOST="$TARGET_HOST" gh repo view "$TARGET_REPO" --json defaultBranchRef -q .defaultBranchRef.name`
+  (pass the resolved host + repo explicitly — avoids implicit repo/host
+  detection, which on a dual-host login resolves to gh CLI's own default
+  repo rather than git's `origin`, #1403).
 - `git status --porcelain` — must be empty (clean working tree).
 
 **Failure responses:**
@@ -33,7 +35,8 @@ Store the chosen command as `$TEST_CMD`.
 
 ### Common steps (both paths)
 
-1. Fetch issue (same `gh issue view --json ...` as gh:issue-read).
+1. Fetch issue (same `GH_HOST="$TARGET_HOST" gh issue view --repo "$TARGET_REPO"
+   --json ...` as gh:issue-read).
 2. Extract change intent from body + comments.
 3. Scan repo structure: read AGENTS.md, CLAUDE.md, top-level README if present.
 4. Detect `$TEST_CMD` (above), then capture the **baseline**: run

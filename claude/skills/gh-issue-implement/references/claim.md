@@ -28,6 +28,14 @@ abort never leaves a stale claim or board state.
 
 ## Substep detail
 
+> **Host targeting (#1403)** — every `gh` call in this file runs as
+> `GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"`, using the pair Step 1
+> bound from one and the same remote URL (`references/repo-resolution.md`).
+> Step 1 also `export`s `GH_HOST`, which is what carries the host into
+> `gh_project_status.sh` in 3.4 — that helper calls `gh` itself and has no
+> other way to learn the host. Dropping either half sends the write to the
+> wrong GitHub server without an error.
+
 ### 3.1 Fetch issue
 
 See `references/fetch-issue.md`. The `gh issue view` JSON it returns is
@@ -66,13 +74,13 @@ skill correctly refused".
 
 ### 3.3 Self-assign
 
-**Goal**: broadcast on the issue page, in `gh issue list --assignee
-@me`, and on issue-list badges that this issue is being worked.
+**Goal**: broadcast on the issue page, in `gh issue list --repo "$TARGET_REPO"
+--assignee @me`, and on issue-list badges that this issue is being worked.
 
 **Algorithm**:
 
 ```
-me        = `gh api user -q .login`
+me        = `GH_HOST="$TARGET_HOST" gh api user -q .login`
 assignees = json.assignees[].login
 
 if "GH_ISSUE_SKIP_SELF_ASSIGN" set:
@@ -82,7 +90,7 @@ if me in assignees:
     return 0    # idempotent no-op
 
 if assignees == []:
-    gh issue edit <N> --repo <repo> --add-assignee @me
+    GH_HOST="$TARGET_HOST" gh issue edit <N> --repo "$TARGET_REPO" --add-assignee @me
     return 0    # soft-fail on API error: warn + continue
 
 # Someone else already holds it.
@@ -178,7 +186,7 @@ if "GH_ISSUE_SKIP_DEPS_CHECK" set:
 deps = grep -oE '(?i)Depends on #[0-9]+' <issue-body> | sed 's/.*#//'
 
 for M in deps:
-    state = `gh issue view <M> --repo <repo> --json state -q .state`
+    state = `GH_HOST="$TARGET_HOST" gh issue view <M> --repo "$TARGET_REPO" --json state -q .state`
     if state == "CLOSED":
         continue
     print "[WARN] Issue #<N> depends on #<M> which is still <state>."
@@ -189,7 +197,7 @@ Pattern is case-insensitive ("Depends on", "depends on", "DEPENDS
 ON" all match). Only matches whole `#<digits>` — not `#dep-3` or
 `#1.2.3`.
 
-**Failure mode**: if `gh issue view <M>` itself errors (deleted issue,
+**Failure mode**: if the `gh issue view <M>` above itself errors (deleted issue,
 cross-repo reference, network), print one warn line and continue. Do
 not abort — the dependency check is informational.
 
@@ -240,7 +248,7 @@ intentional — see "Block-label guard (fail-closed)" above.
 - **Does not auto-unassign on later failure.** If Step 5's test loop
   exhausts, the assignee + board state stay set. Manual cleanup is
   one line each:
-  - `gh issue edit <N> --remove-assignee @me`
+  - `GH_HOST="$TARGET_HOST" gh issue edit <N> --repo "$TARGET_REPO" --remove-assignee @me`
   - move the card back to `Backlog` on the project board.
 - **Does not enforce stacked-PR `Depends on #parent-pr`.** Only issue
   references are scanned. PR-to-PR stacking is `gh:pr`'s territory.

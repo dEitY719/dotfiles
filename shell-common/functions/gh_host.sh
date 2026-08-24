@@ -108,3 +108,56 @@ _gh_parse_owner_repo_url() {
     printf '%s\n' "$_gpu_slug"
     unset _gpu_url _gpu_slug
 }
+
+# _gh_host_from_url — print the GitHub host a git remote URL points at.
+#
+# Answers a different question than `_gh_resolve_host`: that one maps the
+# *PC's* setup-mode to a host, this one reads the host out of the *remote
+# URL we are actually about to talk to*. Both are needed because the two
+# can legitimately disagree — on an `internal` PC `origin` is the GHE
+# remote while `upstream` is a pull-only `github.com` remote (see
+# `docs/.ssot/pc-environment.md` section 3), so a skill that resolved
+# `owner/repo` from `upstream` must send `GH_HOST=github.com`, not the
+# setup-mode's `github.samsungds.net`.
+#
+# This is the fix for issue #1403: `gh` without `--repo`/`GH_HOST` follows
+# its own `gh repo set-default`, not git's `origin`, so on a dual-host
+# login it can query the wrong host and report "issue not found" with
+# exit 0. Pairing this function's output with `_gh_parse_owner_repo_url`'s
+# output guarantees host and repo are read from one and the same URL and
+# therefore can never name different servers.
+#
+# Accepts the same URL shapes as `_gh_parse_owner_repo_url`. Returns 0
+# with the bare hostname on stdout, or 1 with an error on stderr when the
+# URL is empty or is not a known github remote. Callers that have no URL
+# at all (no git remote in scope) should fall back to `_gh_resolve_host`.
+#
+# When a new GHE domain is added, extend the case-glob here as well as
+# the two in `_gh_parse_owner_repo_url` — this file stays the only copy.
+_gh_host_from_url() {
+    _ghu_url="${1:-}"
+    if [ -z "$_ghu_url" ]; then
+        echo "empty remote URL" >&2
+        unset _ghu_url
+        return 1
+    fi
+    # GHE is matched first so a future `github.com`-suffixed GHE domain
+    # cannot be swallowed by the github.com glob.
+    case "$_ghu_url" in
+        *github.samsungds.net*)
+            unset _ghu_url
+            echo "github.samsungds.net"
+            return 0
+            ;;
+        *github.com*)
+            unset _ghu_url
+            echo "github.com"
+            return 0
+            ;;
+        *)
+            echo "remote URL is not a github remote: $_ghu_url" >&2
+            unset _ghu_url
+            return 1
+            ;;
+    esac
+}

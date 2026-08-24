@@ -86,7 +86,8 @@ _gh_pr_default_open_pr_list() {
         printf '%s\n' "$FAKE_OPEN_PRS"
         return 0
     fi
-    gh pr list --state open --json number,headRefName \
+    GH_HOST="$TARGET_HOST" gh pr list --repo "$GH_REPO" \
+        --state open --json number,headRefName \
         --jq '.[] | "\(.number) \(.headRefName)"' 2>/dev/null
 }
 
@@ -153,7 +154,8 @@ _gh_pr_default_parent_state() {
     fi
     _delim=$(printf '\001')
     # shellcheck disable=SC2016  # $d is a jq variable (--arg d), not shell
-    _meta=$(gh pr view "$_pr" --json state,body \
+    _meta=$(GH_HOST="$TARGET_HOST" gh pr view "$_pr" --repo "$GH_REPO" \
+        --json state,body \
         --jq --arg d "$_delim" '.state + $d + .body' 2>/dev/null)
     _GH_PR_PARENT_BODY_CACHE="${_meta#*"$_delim"}"
     printf '%s\n' "${_meta%%"$_delim"*}"
@@ -169,7 +171,8 @@ _gh_pr_default_parent_body() {
         printf '%s' "$FAKE_PARENT_BODY"
         return 0
     fi
-    gh pr view "$_pr" --json body -q .body 2>/dev/null
+    GH_HOST="$TARGET_HOST" gh pr view "$_pr" --repo "$GH_REPO" \
+        --json body -q .body 2>/dev/null
 }
 
 assert_parent_pr_open() {

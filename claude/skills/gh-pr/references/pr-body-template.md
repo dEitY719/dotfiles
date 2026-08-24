@@ -82,12 +82,18 @@ collisions), then run:
 ```bash
 BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
 # ... write the drafted body to "$BODY" ...
-gh pr create \
+GH_HOST="$TARGET_HOST" gh pr create \
+  --repo "$GH_REPO" \
   --base "$BASE_BRANCH" \
   --title "<title>" \
   --body-file "$BODY" \
   --assignee @me
 ```
+
+`GH_HOST` + `--repo` are the pair Step 1a-0 bound from `origin`'s URL. Both
+are mandatory — a bare `gh pr create` follows gh CLI's own
+`gh repo set-default`, which on a dual-host login opens the PR against the
+wrong GitHub server (#1403).
 
 `$BASE_BRANCH` is bound by Step 1a (`references/stacked-pr.md`); it is
 either the repo default branch or — when stacking — a parent PR's
@@ -149,7 +155,8 @@ even on the REST fallback path: it re-checks `gh label list` before POST.
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh"
 
-EXISTING=$(gh label list --repo "$GH_REPO" --limit 200 --json name -q '.[].name')
+EXISTING=$(GH_HOST="$TARGET_HOST" gh label list --repo "$GH_REPO" \
+    --limit 200 --json name -q '.[].name')
 PR_NUMBER=<the number gh pr create printed>
 
 for LABEL in <candidate-list>; do
@@ -159,8 +166,12 @@ for LABEL in <candidate-list>; do
 done
 ```
 
-`GH_REPO` is `owner/repo` (e.g. `dEitY719/dotfiles`). Resolve via
-`gh repo view --json nameWithOwner --jq .nameWithOwner` if not already set.
+`GH_REPO` is `owner/repo` (e.g. `dEitY719/dotfiles`), bound in Step 1a-0 from
+`origin`'s remote URL together with `TARGET_HOST`. If it is somehow unset,
+re-resolve it from that same URL via `_gh_parse_owner_repo_url` — not via a
+bare `gh repo view --json nameWithOwner`, which reads gh CLI's default repo
+and can name a different host's repo entirely (#1403). `_gh_pr_edit_safe_label`
+calls `gh` internally and inherits the exported `GH_HOST`.
 
 Report the applied labels (and skipped ones, if any) alongside the PR URL
 in Step 7.

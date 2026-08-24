@@ -48,7 +48,10 @@ Executable SSOT for the rows above (`gh_pr_push_action`,
 
 Once the push succeeds, create the PR with the command and flags documented
 in `references/pr-body-template.md` (mktemp body file, `--assignee @me`,
-labels applied after creation).
+labels applied after creation). That command carries
+`GH_HOST="$TARGET_HOST"` and `--repo "$GH_REPO"` from Step 1a-0 — the push
+target and the PR target must be the same server, and only the explicit pair
+guarantees it (#1403).
 
 The base branch passed to `gh pr create --base` is `$BASE_BRANCH` from
 Step 1a — that variable is set by the stacked-PR detection block (see
