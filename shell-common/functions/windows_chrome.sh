@@ -47,13 +47,24 @@ _windows_chrome_exe() {
         setopt local_options null_glob
     fi
 
-    # System-wide installs first, then the per-user one: a machine with both
-    # should follow the install every Windows account shares. The last entry is
-    # a glob, so the Windows user name never has to be guessed from $USER.
+    # System-wide installs first: a machine with both should follow the install
+    # every Windows account shares. Kept in their own loop because a shell
+    # expands the whole `for` word list up front — with the glob below in this
+    # list, every shell start paid a full /mnt/c/Users scan (~20ms over 9p)
+    # even when the very first candidate matched.
     for _wce_cand in \
         "${_wce_drive}/Program Files/Google/Chrome/Application/chrome.exe" \
-        "${_wce_drive}/Program Files (x86)/Google/Chrome/Application/chrome.exe" \
-        "${_wce_drive}"/Users/*/AppData/Local/Google/Chrome/Application/chrome.exe; do
+        "${_wce_drive}/Program Files (x86)/Google/Chrome/Application/chrome.exe"; do
+        if [ -x "$_wce_cand" ]; then
+            printf '%s\n' "$_wce_cand"
+            unset _wce_cand _wce_drive
+            return 0
+        fi
+    done
+
+    # Per-user install last, and only once the shared ones missed. The glob
+    # means the Windows user name never has to be guessed from $USER.
+    for _wce_cand in "${_wce_drive}"/Users/*/AppData/Local/Google/Chrome/Application/chrome.exe; do
         if [ -x "$_wce_cand" ]; then
             printf '%s\n' "$_wce_cand"
             unset _wce_cand _wce_drive
