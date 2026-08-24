@@ -29,7 +29,7 @@ dev = [
     # Testing frameworks
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "pytest-xdist>=3.0",  # For parallel test execution
+    "pytest-xdist>=3.2",  # For parallel test execution; >=3.2 for --dist worksteal (#1413, codex review PR #1416)
     "pexpect>=4.8",  # For interactive shell testing
     # Linting and formatting
     "ruff==0.12.7",  # pinned: CI (uv sync --group dev) 가 최신 ruff 픽업 시 format 규칙 드리프트로 red (#1219 PR #1238)
