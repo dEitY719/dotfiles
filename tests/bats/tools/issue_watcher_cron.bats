@@ -97,6 +97,41 @@ _log_count() {
     grep -c -- "$1" "${_LOG}" 2>/dev/null || true
 }
 
+# claude-yolo parity (issue #1393): the two assertions repeated across the
+# CLAUDE_CONFIG_DIR-routing tests below.
+_assert_config_dir() {
+    run grep -F -- "--env CLAUDE_CONFIG_DIR=$1" "${_LOG}"
+    assert_success
+}
+
+_assert_skip_permissions_start() {
+    run grep -F -- "agent start iw-watch --kind claude --pane ws-test-1:p1 -- --dangerously-skip-permissions" "${_LOG}"
+    assert_success
+}
+
+# Run a tick with CLAUDE_ENABLED_ACCOUNTS / CLAUDE_DEFAULT_ACCOUNT unset —
+# _run_tick can only add/override env vars, not unset them (env -u).
+_run_tick_no_account_env() {
+    run env -u CLAUDE_ENABLED_ACCOUNTS -u CLAUDE_DEFAULT_ACCOUNT \
+        "PATH=${_BIN_DIR}:${PATH}" \
+        "HERDR_LOG=${_LOG}" \
+        "XDG_STATE_HOME=${_STATE_HOME}" \
+        bash "${SCRIPT}" --cwd "${_WORK_DIR}"
+}
+
+# Run a tick with HOME (and XDG_STATE_HOME) unset, redirecting state under a
+# throwaway TMPDIR. Shared by both "unset HOME ..." tests below.
+# Sets (not local — callers read it after this returns): _NOHOME_TMP.
+_run_tick_no_home() {
+    _NOHOME_TMP="${_WORK_DIR}/nohome-tmp"
+    mkdir -p "${_NOHOME_TMP}"
+    run env -u HOME -u XDG_STATE_HOME \
+        "PATH=${_BIN_DIR}:${PATH}" \
+        "HERDR_LOG=${_LOG}" \
+        "TMPDIR=${_NOHOME_TMP}" \
+        bash "${SCRIPT}" --cwd "${_WORK_DIR}"
+}
+
 # Hold an exclusive flock on the tick's lock file in a background process
 # until teardown kills it, so the script under test sees a contended lock.
 # Blocks until the holder has actually acquired the lock.
@@ -205,8 +240,7 @@ _hold_lock() {
     _run_tick
     assert_success
 
-    run grep -F -- "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-personal" "${_LOG}"
-    assert_success
+    _assert_config_dir "${HOME}/.claude-personal"
 }
 
 @test "issue_watcher_cron: bootstrap starts claude with --dangerously-skip-permissions" {
@@ -214,8 +248,7 @@ _hold_lock() {
     _run_tick
     assert_success
 
-    run grep -F -- "agent start iw-watch --kind claude --pane ws-test-1:p1 -- --dangerously-skip-permissions" "${_LOG}"
-    assert_success
+    _assert_skip_permissions_start
 }
 
 @test "issue_watcher_cron: CLAUDE_DEFAULT_ACCOUNT selects the account dir" {
@@ -225,8 +258,7 @@ _hold_lock() {
     _run_tick CLAUDE_ENABLED_ACCOUNTS="personal work" CLAUDE_DEFAULT_ACCOUNT=work
     assert_success
 
-    run grep -F -- "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-work" "${_LOG}"
-    assert_success
+    _assert_config_dir "${HOME}/.claude-work"
     run grep -F -- ".claude-personal" "${_LOG}"
     assert_failure
 }
@@ -238,15 +270,10 @@ _hold_lock() {
 
     # No CLAUDE_ENABLED_ACCOUNTS at all: the internal branch must run *before*
     # account resolution, or an empty whitelist would fail the tick (#571 F-2).
-    run env -u CLAUDE_ENABLED_ACCOUNTS -u CLAUDE_DEFAULT_ACCOUNT \
-        "PATH=${_BIN_DIR}:${PATH}" \
-        "HERDR_LOG=${_LOG}" \
-        "XDG_STATE_HOME=${_STATE_HOME}" \
-        bash "${SCRIPT}" --cwd "${_WORK_DIR}"
+    _run_tick_no_account_env
     assert_success
 
-    run grep -F -- "--env CLAUDE_CONFIG_DIR=${HOME}/.claude" "${_LOG}"
-    assert_success
+    _assert_config_dir "${HOME}/.claude"
     # Never the multi-account layout: no ~/.claude-<name> anywhere in the call.
     run grep -F -- ".claude-" "${_LOG}"
     assert_failure
@@ -298,31 +325,22 @@ _hold_lock() {
     _run_tick HERDR_AGENT_GET_FAIL=1
     assert_success
 
-    run grep -F -- "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-personal" "${_LOG}"
-    assert_success
-    run grep -F -- "agent start iw-watch --kind claude --pane ws-test-1:p1 -- --dangerously-skip-permissions" "${_LOG}"
-    assert_success
+    _assert_config_dir "${HOME}/.claude-personal"
+    _assert_skip_permissions_start
 }
 
 @test "issue_watcher_cron: unset HOME degrades to no --env instead of failing" {
     _install_herdr_stub
-    local _tmp="${_WORK_DIR}/nohome-tmp"
-    mkdir -p "${_tmp}"
 
     # Nothing to route against without HOME — the tick must still run (the
     # pre-#1393 behaviour) rather than fail-fast on an uncomputable path.
-    run env -u HOME -u XDG_STATE_HOME \
-        "PATH=${_BIN_DIR}:${PATH}" \
-        "HERDR_LOG=${_LOG}" \
-        "TMPDIR=${_tmp}" \
-        bash "${SCRIPT}" --cwd "${_WORK_DIR}"
+    _run_tick_no_home
     assert_success
     assert_output --partial "HOME is unset"
 
     run grep -F -- "CLAUDE_CONFIG_DIR" "${_LOG}"
     assert_failure
-    run grep -F -- "agent start iw-watch --kind claude --pane ws-test-1:p1 -- --dangerously-skip-permissions" "${_LOG}"
-    assert_success
+    _assert_skip_permissions_start
 }
 
 # ---------------------------------------------------------------------------
@@ -644,18 +662,11 @@ _hold_lock() {
     # `set -u` + `${XDG_STATE_HOME:-$HOME/.local/state}` used to abort the
     # state-dir expansion with "HOME: unbound variable" when both were unset.
     # Contract: fall back to ${TMPDIR:-/tmp} and keep running.
-    local _tmp="${_WORK_DIR}/nohome-tmp"
-    mkdir -p "${_tmp}"
-
-    run env -u HOME -u XDG_STATE_HOME \
-        "PATH=${_BIN_DIR}:${PATH}" \
-        "HERDR_LOG=${_LOG}" \
-        "TMPDIR=${_tmp}" \
-        bash "${SCRIPT}" --cwd "${_WORK_DIR}"
+    _run_tick_no_home
     assert_success
     refute_output --partial "unbound variable"
 
-    [ -f "${_tmp}/.local/state/issue-watcher/herdr-watch.json" ]
+    [ -f "${_NOHOME_TMP}/.local/state/issue-watcher/herdr-watch.json" ]
 
     run grep -F -- "agent prompt iw-watch" "${_LOG}"
     assert_success
