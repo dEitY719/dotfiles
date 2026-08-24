@@ -1080,26 +1080,41 @@ _run_marker_bash() {
     [ ! -f "$FAKE_GH_MARKER" ]
 }
 
-@test "resolve: malformed explicit arg returns 1 and never consults gh repo view" {
+@test "resolve: malformed explicit arg returns 2 and never consults gh repo view" {
     # Fail-closed core of #1405: a typo'd slug must NOT silently fall back to
     # auto-detect, or the sync would happily write to whatever repo
-    # `gh repo set-default` happens to point at.
+    # `gh repo set-default` happens to point at. rc 2 (not 1) marks it as
+    # deterministic so _gh_project_status_sync skips its #341 retry sleep.
     _setup_fake_gh_marker
     _run_marker_bash '' \
         'out=$(_gh_project_status_resolve_owner_repo "typo-no-slash"); echo "rc=$?"; echo "out=[$out]"'
     assert_success
-    assert_output --partial "rc=1"
+    assert_output --partial "rc=2"
     assert_output --partial "out=[]"
     [ ! -f "$FAKE_GH_MARKER" ]
 }
 
-@test "resolve: malformed GH_REPO returns 1 and never consults gh repo view" {
+@test "resolve: malformed GH_REPO returns 2 and never consults gh repo view" {
     _setup_fake_gh_marker
     _run_marker_bash 'export GH_REPO=a/b/c/d' \
         'out=$(_gh_project_status_resolve_owner_repo); echo "rc=$?"; echo "out=[$out]"'
     assert_success
-    assert_output --partial "rc=1"
+    assert_output --partial "rc=2"
     assert_output --partial "out=[]"
+    [ ! -f "$FAKE_GH_MARKER" ]
+}
+
+@test "sync: malformed explicit pin skips the #341 retry sleep entirely" {
+    # A deterministic resolution failure must not pay the 5s retry: with the
+    # sleep left at its real default the whole sync still has to return
+    # promptly. Guards the rc 1 / rc 2 split above from silently collapsing.
+    _setup_fake_gh_marker
+    _run_marker_bash 'unset _GH_PROJECT_STATUS_RETRY_SLEEP' \
+        'SECONDS=0; _gh_project_status_sync issue 42 "In progress" --repo "typo-no-slash" 2>&1; echo "rc=$?"; echo "elapsed=$SECONDS"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "could not determine owner/repo, skipping"
+    assert_output --partial "elapsed=0"
     [ ! -f "$FAKE_GH_MARKER" ]
 }
 
