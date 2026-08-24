@@ -74,6 +74,7 @@ _bump() {
     _n=$(cat "$1" 2>/dev/null || printf 0)
     _n=$((_n + 1))
     printf '%s' "${_n}" >"$1"
+    printf '%s' "${_n}"
 }
 
 case "$1 $2" in
@@ -85,12 +86,13 @@ case "$1 $2" in
     ;;
 "agent get")
     if [ -n "${HERDR_AGENT_GET_SEQ:-}" ]; then
-        _bump "${HERDR_LOG}.getcount"
+        _n=$(_bump "${HERDR_LOG}.getcount")
         # Word-splitting is the point: the sequence is a list of responses.
         # shellcheck disable=SC2086
         set -- ${HERDR_AGENT_GET_SEQ}
         [ "${_n}" -le "$#" ] || _n=$#
-        eval "_resp=\${${_n}}"
+        shift "$((_n - 1))"
+        _resp="$1"
         if [ "${_resp}" = "fail" ]; then
             printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target iw-watch not found"},"id":"cli:agent:get"}'
             exit 1
@@ -107,7 +109,7 @@ case "$1 $2" in
 "agent prompt")
     case "${HERDR_PROMPT_MODE:-ok}" in
     stall-once)
-        _bump "${HERDR_LOG}.promptcount"
+        _n=$(_bump "${HERDR_LOG}.promptcount")
         if [ "${_n}" = "1" ]; then
             printf '%s\n' '{"error":{"code":"agent_prompt_stalled","message":"no agent state change observed within 5000ms"},"id":"cli:agent:prompt"}'
             exit 1
