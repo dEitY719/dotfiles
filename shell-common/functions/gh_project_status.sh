@@ -15,12 +15,28 @@
 # GH_FLOW_PROJECT_STATUS_SYNC=0 is still honored for backwards compatibility.
 #
 # Usage:
-#   _gh_project_status_sync <issue|pr> <number> <target-status> [--only-from <list>]
+#   _gh_project_status_sync <issue|pr> <number> <target-status> \
+#       [--only-from <list>] [--repo <owner/repo>]
 #
 # Examples:
 #   _gh_project_status_sync issue 42 "In progress"
 #   _gh_project_status_sync pr    17 "In review"
 #   _gh_project_status_sync issue 42 "In progress" --only-from Backlog
+#   _gh_project_status_sync issue 42 "In progress" --repo dEitY719/dotfiles
+#
+# Repo resolution (issue #1405), first hit wins:
+#   1. --repo <owner/repo>   (explicit caller intent; an EMPTY value is
+#                            treated as "not supplied" and falls through)
+#   2. $GH_REPO              (gh's own override var; HOST/OWNER/REPO allowed)
+#   3. $TARGET_REPO          (the gh:* skills' remote-pinning convention)
+#   4. `gh repo view --json owner,name`  (auto-detect fallback)
+#
+# Why the explicit forms come first: a bare `gh repo view` answers "what did
+# `gh repo set-default` pick", NOT "what is git's origin". In a working tree
+# whose host serves several remotes/repos that can silently sync the wrong
+# repo's board. An explicitly-supplied but malformed slug fails closed (the
+# resolver returns 1) instead of falling through to auto-detect — a typo must
+# not be masked by re-acquiring some other repo.
 #
 # --only-from <list>: comma-separated whitelist of CURRENT Status values.
 # If the item's current Status is not in the list, the transition is skipped
@@ -86,7 +102,7 @@ _gh_project_status_sync() {
     local _kind="$1" _num="$2" _target="$3"
     [ "$#" -ge 3 ] && shift 3
 
-    local _only_from=""
+    local _only_from="" _repo_opt=""
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --only-from)
@@ -95,6 +111,22 @@ _gh_project_status_sync() {
                     return 0
                 fi
                 _only_from="$2"
+                shift 2
+                ;;
+            --repo)
+                if [ "$#" -lt 2 ]; then
+                    printf '[gh-project-status] --repo requires an argument\n' >&2
+                    return 0
+                fi
+                # An explicitly EMPTY value means "no pin": fall through to the
+                # $GH_REPO / $TARGET_REPO / auto-detect levels instead of
+                # skipping the whole sync. Callers pass "$SOME_VAR" whose
+                # binding can legitimately come back empty -- e.g.
+                # claude/hooks/post-gh-pr-create.sh resolves GH_REPO from a
+                # `gh repo view` that may transiently flake -- and turning that
+                # into a hard skip would defeat this helper's own #341 retry.
+                # A NON-empty but malformed slug still fails closed (#1405).
+                _repo_opt="$2"
                 shift 2
                 ;;
             *)
@@ -127,18 +159,52 @@ _gh_project_status_sync() {
             ;;
     esac
 
+    # Resolve owner/repo (precedence documented in the file header, #1405),
+    # with one 5s retry on transient failure of the `gh repo view` fallback
+    # (e.g. graphql socket reset). Mirrors the mutation step's retry —
+    # without it, a single transient `gh repo view` flake silently aborts
+    # the whole sync (issue #341). Override _GH_PROJECT_STATUS_RETRY_SLEEP
+    # in tests to skip the wait.
+    #
+    # This block runs BEFORE the Approved guard so the guard's `gh pr view`
+    # can carry an explicit --repo (#1405). A resolution failure must NOT
+    # short-circuit the guard — that would turn a fail-closed policy check
+    # into a fail-open skip — so on total failure we leave _resolved empty
+    # and defer the "skipping" bail-out to after the guard.
+    local _owner="" _repo="" _resolved=""
+    if ! _resolved=$(_gh_project_status_resolve_owner_repo "$_repo_opt"); then
+        sleep "${_GH_PROJECT_STATUS_RETRY_SLEEP-5}"
+        _resolved=$(_gh_project_status_resolve_owner_repo "$_repo_opt") || _resolved=""
+    fi
+    if [ -n "$_resolved" ]; then
+        _owner="${_resolved%% *}"
+        _repo="${_resolved#* }"
+    fi
+
     # Fail-closed guard (issue #393): only an APPROVED PR may land in the
     # "Approved" column. Other Statuses are unaffected. UNKNOWN (gh pr view
     # failure) is treated as non-APPROVED — preferring a loud refusal over
     # a possibly-incorrect mutation. Bypass via
     # _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1 (explicit operator intent).
+    #
+    # Two explicit branches instead of splicing the flag in via
+    # ${_owner:+--repo ...}: unquoted expansion would word-split on any repo
+    # name containing whitespace, and quoting it would pass one empty
+    # argument on the auto-detect-failed path.
     if [ "$_kind" = "pr" ] \
         && [ "$_target" = "Approved" ] \
         && [ "${_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS-0}" != "1" ]; then
         local _decision
-        _decision=$(gh pr view "$_num" --json reviewDecision \
-                    --jq '.reviewDecision? // empty' 2>/dev/null) \
-            || _decision="UNKNOWN"
+        if [ -n "$_owner" ]; then
+            _decision=$(gh pr view "$_num" --repo "$_owner/$_repo" \
+                        --json reviewDecision \
+                        --jq '.reviewDecision? // empty' 2>/dev/null) \
+                || _decision="UNKNOWN"
+        else
+            _decision=$(gh pr view "$_num" --json reviewDecision \
+                        --jq '.reviewDecision? // empty' 2>/dev/null) \
+                || _decision="UNKNOWN"
+        fi
         if [ -z "$_decision" ]; then
             _decision="UNKNOWN"
         fi
@@ -150,21 +216,12 @@ _gh_project_status_sync() {
         fi
     fi
 
-    # Resolve owner/repo via gh, with one 5s retry on transient failure
-    # (e.g. graphql socket reset). Mirrors the mutation step's retry —
-    # without it, a single transient `gh repo view` flake silently aborts
-    # the whole sync (issue #341). Override _GH_PROJECT_STATUS_RETRY_SLEEP
-    # in tests to skip the wait.
-    local _owner _repo _resolved
-    if ! _resolved=$(_gh_project_status_resolve_owner_repo); then
-        sleep "${_GH_PROJECT_STATUS_RETRY_SLEEP-5}"
-        if ! _resolved=$(_gh_project_status_resolve_owner_repo); then
-            printf '[gh-project-status] could not determine owner/repo, skipping\n' >&2
-            return 0
-        fi
+    # Deferred bail-out: the guard has had its say, so an unresolvable
+    # owner/repo now degrades to the historical best-effort skip.
+    if [ -z "$_resolved" ]; then
+        printf '[gh-project-status] could not determine owner/repo, skipping\n' >&2
+        return 0
     fi
-    _owner="${_resolved%% *}"
-    _repo="${_resolved#* }"
 
     # Single query: per projectV2 item, return
     #   project.id | item.id | field.id | target_option.id | current_status_name
@@ -230,7 +287,8 @@ _gh_project_status_sync() {
         # and verify-then-re-set (1s, _VERIFY_SLEEP) live in the helper so
         # this loop body stays focused on per-project gating.
         _gh_project_status_set_and_verify \
-            "$_kind" "$_num" "$_proj" "$_item" "$_field" "$_option" "$_target"
+            "$_kind" "$_num" "$_proj" "$_item" "$_field" "$_option" "$_target" \
+            "$_owner/$_repo"
     done <<EOF
 $_records
 EOF
@@ -244,7 +302,10 @@ EOF
 # the mutation once. A second mismatch fails loud on stderr but still
 # returns 0 — the helper's contract with callers is best-effort.
 #
-# Args: kind num proj item field option target
+# Args: kind num proj item field option target [owner/repo]
+#   The optional 8th positional pins the repo for the verify read (#1405).
+#   Without it the verify would re-resolve via `gh repo view` and could read
+#   a different repo's board than the one the mutation just wrote to.
 # Returns: 0 (always — preserves the helper's best-effort policy).
 #
 # Sleep knobs:
@@ -257,6 +318,7 @@ EOF
 _gh_project_status_set_and_verify() {
     local _kind="$1" _num="$2"
     local _proj="$3" _item="$4" _field="$5" _option="$6" _target="$7"
+    local _repo_arg="${8-}"
     local _actual _retry_label=''
 
     if ! _gh_project_status_mutate "$_proj" "$_item" "$_field" "$_option"; then
@@ -276,7 +338,7 @@ _gh_project_status_set_and_verify() {
     local _attempt
     for _attempt in 1 2; do
         sleep "${_GH_PROJECT_STATUS_VERIFY_SLEEP-1}"
-        _actual=$(_gh_project_status_query_current "$_kind" "$_num")
+        _actual=$(_gh_project_status_query_current "$_kind" "$_num" "$_repo_arg")
 
         if [ "$_actual" = "$_target" ]; then
             if [ "$_attempt" -eq 1 ]; then
@@ -312,7 +374,13 @@ _gh_project_status_set_and_verify() {
 # board runs the same builtin workflows so observing one race surface is
 # sufficient for the recovery contract.
 #
-# Args: kind num
+# Args: kind num [owner/repo]
+#   The optional third positional pins the repo (issue #1405). It is handed
+#   straight to _gh_project_status_resolve_owner_repo, so it accepts both
+#   "OWNER/REPO" and "HOST/OWNER/REPO" and, when omitted/empty, falls back to
+#   $GH_REPO -> $TARGET_REPO -> `gh repo view` auto-detect. A malformed
+#   explicit value is a resolution failure (rc 1 below), never a silent
+#   fallback to auto-detect.
 # Output (stdout): current Status name, or nothing.
 # Returns (four-way contract, issues #1354 and #1356):
 #   0 + non-empty stdout — query succeeded, item has a Status value.
@@ -339,7 +407,7 @@ _gh_project_status_set_and_verify() {
 # board attached", or a gate built on this helper would silently open
 # on its own misuse. Reviewer follow-up, PR #1355 (agy).
 _gh_project_status_query_current() {
-    local _kind="$1" _num="$2"
+    local _kind="$1" _num="$2" _repo_arg="${3-}"
     [ -z "$_kind" ] && return 1
     [ -z "$_num" ] && return 1
 
@@ -355,8 +423,10 @@ _gh_project_status_query_current() {
     esac
 
     local _owner _repo _resolved
-    # Resolution failure is a query failure, not "no board" (#1354).
-    _resolved=$(_gh_project_status_resolve_owner_repo) || return 1
+    # Resolution failure is a query failure, not "no board" (#1354). That
+    # includes a malformed explicit repo argument (#1405) — callers gate on
+    # board state and must fail closed here.
+    _resolved=$(_gh_project_status_resolve_owner_repo "$_repo_arg") || return 1
     _owner="${_resolved%% *}"
     _repo="${_resolved#* }"
 
@@ -411,14 +481,88 @@ _gh_project_status_query_current() {
     printf '%s\n' "${_raw%%"$_nl"*}"
 }
 
-# Resolve cwd's GitHub owner/repo via `gh repo view`. Prints
-# "<owner> <repo>" on success; returns non-zero on failure (gh exit,
-# empty output, or partial output). Extracted so the auto-detect step in
-# _gh_project_status_sync can mirror the mutation step's single-retry
-# pattern (issue #341): without retry, one transient `gh repo view`
-# socket reset silently aborts the sync.
+# Normalize a repo slug into "<owner> <repo>" (issue #1405).
+#
+# Accepts "OWNER/REPO" or "HOST/OWNER/REPO" — the same two forms gh's own
+# GH_REPO env var allows, so an operator can reuse a value they already
+# export for `gh`. The host segment is validated but dropped: host routing
+# is _gh_project_status_ensure_host's job, and the GraphQL calls downstream
+# want owner + name separately.
+#
+# Args: <value>
+# Output (stdout): "<owner> <repo>".
+# Returns: 0 on success, 1 on anything that is not a valid slug — empty,
+#          no slash, more than three segments, or any empty segment.
+_gh_project_status_normalize_repo() {
+    local _val="$1" _first _rest _owner _repo
+    [ -z "$_val" ] && return 1
+
+    _first="${_val%%/*}"
+    _rest="${_val#*/}"
+    # No slash at all: the `#*/` strip is a no-op and _rest still equals _val.
+    [ "$_rest" = "$_val" ] && return 1
+    # A leading/host segment must not be empty in either accepted form.
+    [ -z "$_first" ] && return 1
+
+    case "$_rest" in
+        */*/*)
+            # Four or more segments — not a slug gh would accept either.
+            return 1
+            ;;
+        */*)
+            # HOST/OWNER/REPO — _first is the host, drop it.
+            _owner="${_rest%%/*}"
+            _repo="${_rest#*/}"
+            ;;
+        *)
+            # OWNER/REPO.
+            _owner="$_first"
+            _repo="$_rest"
+            ;;
+    esac
+
+    [ -z "$_owner" ] && return 1
+    [ -z "$_repo" ] && return 1
+    printf '%s %s\n' "$_owner" "$_repo"
+    return 0
+}
+
+# Resolve the target GitHub owner/repo. Prints "<owner> <repo>" on success;
+# returns non-zero on failure (malformed explicit slug, gh exit, empty
+# output, or partial output).
+#
+# Args: [<repo>]  — optional explicit "OWNER/REPO" or "HOST/OWNER/REPO".
+#
+# Precedence, first non-empty wins (issue #1405):
+#   1. $1        (explicit caller intent, e.g. sync's --repo)
+#   2. $GH_REPO
+#   3. $TARGET_REPO
+#   4. `gh repo view --json owner,name`
+#
+# The first three go through _gh_project_status_normalize_repo and fail
+# closed on a malformed value — deliberately NOT falling through to the
+# auto-detect fallback. A bare `gh repo view` reports whatever
+# `gh repo set-default` chose, not git's origin, so masking a typo'd slug
+# with auto-detect could sync a completely different repo's board.
+#
+# Extracted so the auto-detect step in _gh_project_status_sync can mirror
+# the mutation step's single-retry pattern (issue #341): without retry, one
+# transient `gh repo view` socket reset silently aborts the sync.
 _gh_project_status_resolve_owner_repo() {
-    local _output _owner _repo
+    local _output _owner _repo _explicit=""
+
+    if [ -n "${1-}" ]; then
+        _explicit="$1"
+    elif [ -n "${GH_REPO-}" ]; then
+        _explicit="$GH_REPO"
+    elif [ -n "${TARGET_REPO-}" ]; then
+        _explicit="$TARGET_REPO"
+    fi
+    if [ -n "$_explicit" ]; then
+        _gh_project_status_normalize_repo "$_explicit" || return 1
+        return 0
+    fi
+
     _output=$(gh repo view --json owner,name --jq '"\(.owner.login) \(.name)"' 2>/dev/null) || return 1
     [ -z "$_output" ] && return 1
     if ! read -r _owner _repo <<EOF

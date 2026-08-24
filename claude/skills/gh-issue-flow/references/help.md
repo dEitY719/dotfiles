@@ -5,21 +5,21 @@
 | # | Name | Default | Description |
 |---|------|---------|-------------|
 | 1 | `<issue-number>` or `-h`/`--help`/`help` | — | GitHub issue number |
-| 2 | remote-name | `origin` | Git remote whose repo owns the issue |
+| 2 | remote-name | `origin` | Git remote whose repo owns the issue. Threaded into every GitHub-touching sub-skill (#1405), so implement / commit / PR / review all target it |
 
 ## Usage
 
 - `/gh-issue-flow 16` — chain: implement → commit → PR → devx:pr-review-all (agy ∥ codex ∥ /simplify quality gate + deferred pr-reply) → resolve conflicts → resolve out-of-date, for issue #16 on `origin`.
-- `/gh-issue-flow 16 upstream` — same chain on `upstream` remote.
+- `/gh-issue-flow 16 upstream` — same chain entirely on the `upstream` remote: the issue is read there, the commit's metrics land there, and the PR is pushed and opened there.
 - `/gh-issue-flow -h` / `--help` / `help` — print this help.
 
 ## What this skill chains
 
 This skill invokes **6 skills in sequence** (each step runs only if the previous succeeded); the 4th delegates the post-PR quality gate + pr-reply scheduling:
 
-1. **`gh:issue-implement <N> direct`** — reads the issue, edits files, runs tests. No human intervention.
-2. **`gh:commit`** — creates a commit for the changes with a message derived from the conversation (follows the repo's commit style).
-3. **`gh:pr`** — pushes the branch and opens a PR, auto-linking `Closes #<N>`.
+1. **`gh:issue-implement <N> direct <remote>`** — reads the issue, edits files, runs tests. No human intervention.
+2. **`gh:commit <N> <remote>`** — creates a commit for the changes with a message derived from the conversation (follows the repo's commit style); the ai-metrics comment and board sync go to `<remote>`'s repo (#1405).
+3. **`gh:pr <N> <remote>`** — pushes the branch to `<remote>` and opens the PR there, auto-linking `Closes #<N>` (#1405).
 4. **`devx:pr-review-all` `<PR_NUM> <remote> --defer-reply 4`** — one delegated call runs the post-PR quality gate (soft-fail, parallel): agy ∥ codex second-opinion reviews (each skipped if its CLI is absent) ∥ built-in `/simplify` on the branch diff. Any simplify changes are committed + pushed synchronously before it returns (so they land before the rebase steps), and `/gh-pr-reply <PR_NUM>` is scheduled 4 minutes later — giving CI and reviewers time to post before the reply pass runs. Failures warn and continue — they never stop the chain.
 5. **`gh:pr-resolve-conflict` `<PR_NUM>`** — checks and resolves any merge conflicts in the new PR via rebase. Exits cleanly if the PR has no conflicts (expected for a freshly created branch).
 6. **`gh:pr-resolve-outdated` `<PR_NUM>`** — clean rebase-sync when the base branch has moved forward with no conflicts. No-op if the PR is already up to date.

@@ -198,7 +198,7 @@ dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
     성공 직후 in-skill Step 4(a) 에서 직접 전환한다.
   - 웹 UI / 모바일 / raw `gh pr merge` 경유 머지 (#266): `project-board-sync.yml`
     이 `pull_request.closed && merged == true` 에 자동 fire 하여 동일
-    헬퍼 (`_gh_project_status_sync pr <N> "Done"`) 를 호출한다. 즉
+    헬퍼 (`_gh_project_status_sync pr <N> "Done" --repo <owner/repo>`) 를 호출한다. 즉
     머지 경로가 무엇이든 PR 카드는 `Done` 으로 수렴한다.
 
   GitHub Projects 빌트인 `Pull request merged` (#6) 는 enabled 이지만
@@ -236,6 +236,30 @@ dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
   대비한 안전망). 머지 경로가 스킬이든 웹 UI 든 동일 헬퍼
   (`_gh_pr_closing_issue_numbers` + `_gh_project_status_sync`) 가
   호출되므로 동작이 수렴한다.
+
+### 헬퍼의 대상 repo 해석 순서 (#1405)
+
+`_gh_project_status_sync` / `_gh_project_status_query_current` 는 어느
+repo 의 보드를 건드릴지 다음 순서로 정한다 (먼저 맞는 것이 이김):
+
+1. `--repo <owner/repo>` 인자 (`_gh_project_status_query_current` 는 3번째
+   위치 인자) — 호출자의 명시적 의도.
+2. `$GH_REPO` — `gh` 자체의 override 변수. `HOST/OWNER/REPO` 형태도 허용.
+3. `$TARGET_REPO` — `gh:*` 스킬들이 `[remote]` 인자에서 해소해 두는 관례.
+4. `gh repo view --json owner,name` 자동 감지 (폴백).
+
+명시 형태를 앞에 둔 이유: 맨 `gh repo view` 는 "git 의 origin 이 무엇인가"
+가 아니라 "`gh repo set-default` 가 무엇을 골랐나" 를 답한다. 한 호스트가
+여러 remote/repo 를 서빙하는 워크트리에서는 엉뚱한 repo 의 보드가 조용히
+갱신될 수 있다. 명시로 넘긴 값이 형식에 안 맞으면 자동 감지로 흘러가지
+않고 실패한다 — 오타가 다른 repo 재획득으로 가려지면 안 되기 때문이다.
+
+`[remote]` 를 받는 스킬(`gh:pr-merge`, `gh:pr-reply`, `gh:pr-approve`,
+`gh:pr-resolve-conflict`, `gh:issue-implement`, `gh:issue-proceed`,
+`gh:discussion-convert`, `devx:pr-verify-live` 등)은 Step 1 에서 해소한
+`$TARGET_REPO` 를 `--repo` 로 명시해 넘긴다. `project-board-sync.yml` 과
+`claude/hooks/post-gh-pr-create.sh` 는 `GH_REPO` 를 export 하므로 2번
+규칙으로 이미 올바르다.
 
 ### 용어 교정 (2026-04-24)
 
@@ -360,5 +384,6 @@ gh auth refresh -s project
   - `claude/skills/gh-issue-flow/SKILL.md`
 - 관련 헬퍼: `shell-common/functions/gh_project_status.sh` (공용
   `_gh_project_status_sync` — `/gh-flow`, `/gh-pr`, `/gh-commit`,
-  `/gh-pr-reply`, `/gh-pr-merge` 가 모두 호출).
+  `/gh-pr-reply`, `/gh-pr-merge` 가 모두 호출). 대상 repo 해석 순서는
+  위 "헬퍼의 대상 repo 해석 순서 (#1405)" 참고.
 - 관련 템플릿: `.github/pull_request_template.md`.

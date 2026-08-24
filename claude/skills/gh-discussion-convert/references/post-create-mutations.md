@@ -7,12 +7,17 @@ invariant "Issue must exist with backlink" is already satisfied.
 ## Step 6: Board Sync (skip with `--no-board-sync`)
 
 ```
-_gh_project_status_sync issue <M> "In progress" --only-from "Backlog,Ready"
+_gh_project_status_sync issue <M> "In progress" --only-from "Backlog,Ready" \
+    --repo "$TARGET_REPO"
 ```
 
 The helper is a no-op on repos without a project board attached. The
 `--only-from` whitelist prevents bouncing already-progressed cards back.
 Reuses the same pattern as `gh:issue-implement` Step 3.4.
+
+`--repo "$TARGET_REPO"` (Step 1) is explicit (#1405) — without it the
+helper resolves via `gh repo view`, i.e. `gh repo set-default`'s pick
+rather than the remote this run resolved.
 
 ## Step 7: Post Backlink Comment (skip with `--no-comment`)
 

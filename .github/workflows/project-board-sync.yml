@@ -82,7 +82,10 @@ jobs:
           [ -n "${GH_TOKEN:-}" ] || exit 0
           # shellcheck source=shell-common/functions/gh_project_status.sh
           . shell-common/functions/gh_project_status.sh
-          _gh_project_status_sync pr "$PR_NUMBER" "In review"
+          # --repo "$GH_REPO" is explicit (#1405). The exported GH_REPO alone
+          # would already be honored, but naming the repo at the call site
+          # keeps the intent in the code instead of in the step's `env:`.
+          _gh_project_status_sync pr "$PR_NUMBER" "In review" --repo "$GH_REPO"
           # Move linked Issues to "In progress" — the builtin "Pull request linked
           # to issue" workflow moves them to "In review", which is wrong for Issues.
           # "In review" is included in --only-from so we can correct the builtin's
@@ -90,7 +93,7 @@ jobs:
           # a re-opened PR cannot drag a closed Issue card backwards (#309).
           for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO"); do
             _gh_project_status_sync issue "$_issue" "In progress" \
-              --only-from "Backlog,Ready,In review"
+              --only-from "Backlog,Ready,In review" --repo "$GH_REPO"
           done
 
       - name: PR review approved → Approved
@@ -107,8 +110,9 @@ jobs:
           [ -n "${GH_TOKEN:-}" ] || exit 0
           # shellcheck source=shell-common/functions/gh_project_status.sh
           . shell-common/functions/gh_project_status.sh
+          # --repo "$GH_REPO" explicit (#1405) — see the opened-step comment.
           _gh_project_status_sync pr "$PR_NUMBER" "Approved" \
-            --only-from "Backlog,In progress,In review"
+            --only-from "Backlog,In progress,In review" --repo "$GH_REPO"
 
       - name: PR merged → Done (PR + linked Issues)
         if: >-
@@ -125,10 +129,11 @@ jobs:
           [ -n "${GH_TOKEN:-}" ] || exit 0
           # shellcheck source=shell-common/functions/gh_project_status.sh
           . shell-common/functions/gh_project_status.sh
-          _gh_project_status_sync pr "$PR_NUMBER" "Done"
+          # --repo "$GH_REPO" explicit (#1405) — see the opened-step comment.
+          _gh_project_status_sync pr "$PR_NUMBER" "Done" --repo "$GH_REPO"
           for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO"); do
             # "In review" kept in the guard as a safety net for Issues that were
             # incorrectly moved there by the builtin before the opened-step fires.
             _gh_project_status_sync issue "$_issue" "Done" \
-              --only-from "Backlog,In progress,In review"
+              --only-from "Backlog,In progress,In review" --repo "$GH_REPO"
           done

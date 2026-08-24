@@ -66,11 +66,17 @@ if GH_ISSUE_SKIP_BOARD_TRANSITION set: return 0
 _HELPER="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
 [ -r "$_HELPER" ] && . "$_HELPER"
 command -v _gh_project_status_sync >/dev/null 2>&1 \
-  && _gh_project_status_sync issue <N> "In progress" --only-from "Backlog,Ready"
+  && _gh_project_status_sync issue <N> "In progress" \
+       --only-from "Backlog,Ready" --repo "$TARGET_REPO"
 ```
 
-No-board repos → silent rc 0. `--only-from Backlog,Ready` never bounces an
-`In review` / `Done` card backwards. Soft-fail: any non-policy error → rc 0.
+`--repo "$TARGET_REPO"` (Step 1) is explicit (#1405) — the helper's
+`gh repo view` fallback answers `gh repo set-default`, not the remote
+this run resolved.
+
+No-board repos → silent rc 0. `--only-from Backlog,Ready` never bounces
+an `In review` / `Done` card backwards. Soft-fail: any non-policy error
+→ rc 0.
 
 ## 2.1.5 Depends-on guard (soft)
 

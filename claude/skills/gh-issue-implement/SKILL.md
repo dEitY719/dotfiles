@@ -72,7 +72,7 @@ guard (`skill_completion_guard.py`, #753) can verify the run.
 3.1 **Fetch** — `references/fetch-issue.md` (CLOSED refusal there).
 3.2 **Block-label guard** — fail-closed abort (exit 2) if any label matches `GH_ISSUE_BLOCK_LABELS`.
 3.3 **Self-assign** — `--add-assignee @me` unless already assigned (warn, no override, if held by another).
-3.4 **Board transition** — `_gh_project_status_sync issue <N> "In progress" --only-from "Backlog,Ready"`; no-op without a board.
+3.4 **Board transition** — `_gh_project_status_sync issue <N> "In progress" --only-from "Backlog,Ready" --repo "$TARGET_REPO"` (#1405); no-op without a board.
 3.5 **Depends-on guard** — soft-warn per OPEN `Depends on #M` line.
 
 Skip 3.3 / 3.4 / 3.5 via their `GH_ISSUE_SKIP_*` env vars.

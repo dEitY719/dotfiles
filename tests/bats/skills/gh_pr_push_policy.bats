@@ -13,6 +13,13 @@
 #   F-2-1  on base + local-only commits       → auto-branch + rewind
 #   F-2-2  on base + commits already on origin → nothing-to-pr (stop)
 #   F-2-3  Korean commit titles               → ASCII-safe branch names
+#
+# Issue #1405 verification checklist ([remote] threading):
+#   F-3-1  remote argument omitted             → identical to pre-#1405 output
+#   F-3-2  remote=upstream, no upstream ref    → push -u upstream HEAD
+#   F-3-3  remote=upstream, upstream/<branch>  → paired (not a mispair)
+#   F-3-4  remote=upstream, origin/<branch>    → mispair → push -u upstream HEAD
+#   F-3-5  diverged                            → STOP regardless of remote
 
 load '../test_helper'
 
@@ -268,4 +275,111 @@ teardown() {
     run gh_pr_branch_name 'bogus' '1315' '20260811' 'abc1234'
     assert_success
     assert_output 'chore/issue-1315'
+}
+
+# ── F-3: [remote] threading (#1405) ───────────────────────────────────
+# The trailing remote parameter defaults to "origin", so every expectation
+# above stays valid; these cases pin both halves of that contract.
+
+@test "F-3-1: omitted remote → push -u origin HEAD (regression zero)" {
+    run gh_pr_push_action 'feat/issue-1405' '' ''
+    assert_success
+    assert_output 'push -u origin HEAD'
+}
+
+@test "F-3-1: omitted remote → bare push when correctly paired to origin" {
+    run gh_pr_push_action 'feat/issue-1405' 'origin/feat/issue-1405' ''
+    assert_success
+    assert_output 'push'
+}
+
+@test "F-3-1: omitted remote → STOP when paired-and-diverged" {
+    run gh_pr_push_action 'feat/issue-1405' 'origin/feat/issue-1405' 'diverged'
+    assert_success
+    assert_output 'STOP'
+}
+
+@test "F-3-1: explicit 'origin' is identical to omitting the argument" {
+    local _implicit _explicit
+    _implicit=$(gh_pr_push_action 'feat/issue-1405' 'origin/main' '')
+    _explicit=$(gh_pr_push_action 'feat/issue-1405' 'origin/main' '' 'origin')
+    [ "$_implicit" = "$_explicit" ]
+    [ "$_implicit" = 'push -u origin HEAD' ]
+}
+
+@test "F-3-2: remote=upstream, no upstream ref → push -u upstream HEAD" {
+    run gh_pr_push_action 'feat/issue-1405' '' '' 'upstream'
+    assert_success
+    assert_output 'push -u upstream HEAD'
+}
+
+@test "F-3-2: remote=upstream never emits a literal 'origin'" {
+    run gh_pr_push_action 'feat/issue-1405' '' '' 'upstream'
+    assert_success
+    refute_output --partial 'origin'
+}
+
+@test "F-3-3: remote=upstream, upstream/<branch> → not a mispair (rc=1)" {
+    run gh_pr_upstream_is_mispaired 'upstream/feat/issue-1405' \
+        'feat/issue-1405' 'upstream'
+    [ "$status" -eq 1 ]
+}
+
+@test "F-3-3: remote=upstream, refs/remotes/upstream/<branch> → not a mispair" {
+    run gh_pr_upstream_is_mispaired 'refs/remotes/upstream/feat/issue-1405' \
+        'feat/issue-1405' 'upstream'
+    [ "$status" -eq 1 ]
+}
+
+@test "F-3-3: remote=upstream, paired upstream ref → bare push" {
+    run gh_pr_push_action 'feat/issue-1405' \
+        'refs/remotes/upstream/feat/issue-1405' '' 'upstream'
+    assert_success
+    assert_output 'push'
+}
+
+@test "F-3-4: remote=upstream, origin/<branch> IS a mispair" {
+    run gh_pr_upstream_is_mispaired 'origin/feat/issue-1405' \
+        'feat/issue-1405' 'upstream'
+    assert_success
+}
+
+@test "F-3-4: remote=upstream, refs/remotes/origin/<branch> IS a mispair" {
+    run gh_pr_upstream_is_mispaired 'refs/remotes/origin/feat/issue-1405' \
+        'feat/issue-1405' 'upstream'
+    assert_success
+}
+
+@test "F-3-4: remote=upstream, branch still paired to origin → push -u upstream HEAD" {
+    run gh_pr_push_action 'feat/issue-1405' 'origin/feat/issue-1405' '' 'upstream'
+    assert_success
+    assert_output 'push -u upstream HEAD'
+}
+
+@test "F-3-4: the same origin ref is NOT a mispair when remote=origin" {
+    # Same inputs, different target remote → opposite verdict. This is the
+    # whole point of the parameter (#1405).
+    run gh_pr_upstream_is_mispaired 'origin/feat/issue-1405' \
+        'feat/issue-1405' 'origin'
+    [ "$status" -eq 1 ]
+}
+
+@test "F-3-5: remote=upstream, paired + diverged → STOP" {
+    run gh_pr_push_action 'feat/issue-1405' 'upstream/feat/issue-1405' \
+        'diverged' 'upstream'
+    assert_success
+    assert_output 'STOP'
+}
+
+@test "F-3-5: remote=upstream, mispair still wins over diverged" {
+    run gh_pr_push_action 'feat/issue-1405' 'origin/feat/issue-1405' \
+        'diverged' 'upstream'
+    assert_success
+    assert_output 'push -u upstream HEAD'
+}
+
+@test "F-3-5: empty upstream + remote=fork → push -u fork HEAD (arbitrary name)" {
+    run gh_pr_push_action 'wt/issue-1405/1' '' '' 'fork'
+    assert_success
+    assert_output 'push -u fork HEAD'
 }

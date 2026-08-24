@@ -43,8 +43,8 @@ Resume after fix:
 
 Resume hint logic:
 - Failed at step 1 → `/gh-issue-implement <N>` (user decides retry).
-- Failed at step 2 → `/gh-commit && /gh-pr <N>`.
-- Failed at step 3 → `/gh-pr <N>`.
+- Failed at step 2 → `/gh-commit <N> <remote> && /gh-pr <N> <remote>`.
+- Failed at step 3 → `/gh-pr <N> <remote>`.
 - Failed at step 4 → `/devx-pr-review-all <PR_NUM> <remote> --defer-reply 4`.
 - Failed at step 5 → `/gh-pr-resolve-conflict <PR_NUM>`.
 - Failed at step 5.1 → `/gh-pr-resolve-outdated <PR_NUM>`.

@@ -31,7 +31,21 @@ setup() {
 
 teardown() {
     teardown_isolated_home
-    unset FAKE_BOARD_STATUS FAKE_HELPER_RC GH_PR_MERGE_SKIP_BOARD_CHECK
+    unset FAKE_BOARD_STATUS FAKE_HELPER_RC GH_PR_MERGE_SKIP_BOARD_CHECK FAKE_HELPER_LOG
+}
+
+@test "board-gate (#1405): repo is passed as the query helper's 3rd positional" {
+    # Explicit beats the helper's `gh repo view` auto-detect, which answers
+    # `gh repo set-default` rather than the remote Step 1 resolved.
+    FAKE_HELPER_LOG="$(mktemp)"
+    export FAKE_HELPER_LOG
+    FAKE_BOARD_STATUS="Approved"
+    run gh_pr_merge_board_gate 42 owner/repo
+    assert_success
+    run cat "$FAKE_HELPER_LOG"
+    assert_output --partial 'query args=pr 42 owner/repo'
+    rm -f "$FAKE_HELPER_LOG"
+    unset FAKE_HELPER_LOG
 }
 
 @test "board-gate: Status=Approved → rc=0 (proceed silently)" {

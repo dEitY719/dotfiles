@@ -16,6 +16,8 @@ Skip the board sync entirely when no issue footer was written.
 argument — it reads `GH_HOST` from the environment. Step 1's
 `export GH_HOST="$TARGET_HOST"` is therefore load-bearing here: without it the
 board mutation goes to gh CLI's default host on a dual-host login (#1403).
+That host comes from the `[remote]` positional's URL (`$REMOTE`, default
+`origin`), so `/gh-commit <N> upstream` syncs `upstream`'s board (#1405).
 
 ```bash
 # helper-fallback NF-1 (#644): silent-skip when helper missing.

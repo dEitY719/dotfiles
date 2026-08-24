@@ -6,9 +6,13 @@
 #
 # Two concerns live here, matching issue #1315:
 #   F-1  upstream / branch-name mispair → the push action must be
-#        `push -u origin HEAD`, never a bare `push`.
+#        `push -u <remote> HEAD`, never a bare `push`.
 #   F-2  the session started on the base branch → auto-create a feature
 #        branch, then rewind the local base only when the guard allows.
+#
+# Issue #1405 added the trailing optional remote parameter to
+# gh_pr_upstream_is_mispaired / gh_pr_push_action. It defaults to "origin",
+# so every pre-#1405 call site and expectation is unchanged.
 #
 # Everything is pure string/set logic, so the bats suite exercises it with
 # plain arguments — no live git, no live gh.
@@ -23,26 +27,28 @@ gh_pr_normalize_upstream() {
     printf '%s' "$_u"
 }
 
+# $3 = target remote (optional, default "origin" — the [remote] positional, #1405)
 gh_pr_upstream_is_mispaired() {
-    local _upstream _current="${2-}"
+    local _upstream _current="${2-}" _remote="${3:-origin}"
     _upstream=$(gh_pr_normalize_upstream "${1-}")
     [ -n "$_upstream" ] || return 1
     [ -n "$_current" ] || return 1
-    [ "$_upstream" = "origin/$_current" ] && return 1
+    [ "$_upstream" = "$_remote/$_current" ] && return 1
     return 0
 }
 
+# $4 = target remote (optional, default "origin" — the [remote] positional, #1405)
 gh_pr_push_action() {
-    local _current="${1-}" _upstream="${2-}" _diverged="${3-}"
+    local _current="${1-}" _upstream="${2-}" _diverged="${3-}" _remote="${4:-origin}"
 
     if [ -z "$(gh_pr_normalize_upstream "$_upstream")" ]; then
-        printf 'push -u origin HEAD\n'
+        printf 'push -u %s HEAD\n' "$_remote"
         return 0
     fi
     # F-1 — checked BEFORE divergence: a mispaired branch's ahead/behind is
     # measured against the wrong ref, so "diverged" cannot be trusted yet.
-    if gh_pr_upstream_is_mispaired "$_upstream" "$_current"; then
-        printf 'push -u origin HEAD\n'
+    if gh_pr_upstream_is_mispaired "$_upstream" "$_current" "$_remote"; then
+        printf 'push -u %s HEAD\n' "$_remote"
         return 0
     fi
     if [ "$_diverged" = "diverged" ]; then
@@ -83,7 +89,7 @@ _gh_pr_normalize_sha_set() {
 }
 
 # There is deliberately no `stop-already-pushed` output: Step 1b fetches
-# origin before deciding, so commits already on origin/$BASE drop out of the
+# $REMOTE before deciding, so commits already on $REMOTE/$BASE drop out of the
 # $3 range and land on `nothing-to-pr` instead.
 gh_pr_base_branch_decision() {
     local _current="${1-}" _base="${2-}"
@@ -104,7 +110,7 @@ gh_pr_base_branch_decision() {
 
     # Defensive guard for the function's general contract, not a live branch:
     # the single real call site only runs with CUR == BASE, where
-    # origin/$BASE..HEAD and origin/$BASE..$BASE are the same range, so
+    # $REMOTE/$BASE..HEAD and $REMOTE/$BASE..$BASE are the same range, so
     # _local_only == _moved always holds and warn-only cannot fire today.
     if [ "$_local_only" = "$_moved" ]; then
         printf 'auto-branch-and-rewind\n'

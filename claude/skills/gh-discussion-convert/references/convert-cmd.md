@@ -63,8 +63,11 @@ ISSUE_NUMBER="${ISSUE_URL##*/}"
 
 # Step 6 — board sync (best-effort).
 if [ "${OPT_NO_BOARD_SYNC:-0}" != "1" ]; then
+    # --repo "$TARGET_REPO" (Step 1) is explicit (#1405): the helper's
+    # `gh repo view` fallback answers `gh repo set-default`, not the
+    # remote this run resolved.
     _gh_project_status_sync issue "$ISSUE_NUMBER" "In progress" \
-        --only-from "Backlog,Ready" || true
+        --only-from "Backlog,Ready" --repo "$TARGET_REPO" || true
 fi
 
 # Step 7 — backlink comment on the discussion (best-effort).

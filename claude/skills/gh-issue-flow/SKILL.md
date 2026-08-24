@@ -56,14 +56,11 @@ No `mode` arg — implementation is always `direct`. Record
 `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 2.6.
 
 **Bind the GitHub target once, here (#1403)** — resolve host and repo from the
-`[remote]`'s URL and export them. This is a best-effort default, not a
-guarantee across the whole chain: Step 2.1 (`gh:issue-implement`) accepts and
-uses `[remote]` directly, but Step 2.2 (`gh:commit`) and Step 2.3 (`gh:pr`)
-each still resolve their own target from `origin` — `gh:pr` doesn't even
-accept a `[remote]` argument. Invoking `/gh-issue-flow <N> upstream` therefore
-still lands the commit's ai-metrics call and the PR itself on `origin`, not
-`upstream` (PR #1404 review, codex). Threading `[remote]` through every
-sub-skill is tracked separately, not fixed by this export alone.
+`[remote]`'s URL and export them. The binding is authoritative for the whole
+chain: since #1405, `[remote]` is also threaded explicitly into every sub-skill
+that talks to GitHub — 2.1 `gh:issue-implement`, 2.2 `gh:commit`, 2.3 `gh:pr`,
+2.4 `devx:pr-review-all` — so `/gh-issue-flow <N> upstream` implements,
+commits, opens the PR and reviews it on `upstream`, never on `origin`.
 
 ```bash
 . "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
@@ -90,10 +87,11 @@ sequence. After each call, immediately proceed to the next.
 
 1. **Step 2.1 — gh:issue-implement** — `--no-next-hint` is load-bearing.
    `Skill(gh:issue-implement, "<N> direct <remote> --no-next-hint")`
-2. **Step 2.2 — gh:commit** (only if 2.1 succeeded) — auto-detects the issue
-   number from the conversation. `Skill(gh:commit)`
-3. **Step 2.3 — gh:pr** (only if 2.2 succeeded) — ensures `Closes #<N>`;
-   extract `<PR_NUM>` from the PR URL. `Skill(gh:pr, "<N>")`
+2. **Step 2.2 — gh:commit** (only if 2.1 succeeded) — `[remote]` pins the
+   metrics/board target (#1405). `Skill(gh:commit, "<N> <remote>")`
+3. **Step 2.3 — gh:pr** (only if 2.2 succeeded) — ensures `Closes #<N>`, pushes
+   and opens the PR on `<remote>` (#1405); extract `<PR_NUM>` from the PR URL.
+   `Skill(gh:pr, "<N> <remote>")`
 4. **Step 2.4 — devx:pr-review-all** (only if 2.3 succeeded; soft-fail) — one
    delegated call runs the post-PR quality gate (agy ∥ codex ∥ `/simplify`),
    commits + pushes any simplify changes synchronously, and schedules

@@ -341,7 +341,10 @@ PR 생성을 건너뛰고 빠르게만 확인하려면 1번 후 바로
 - 관련 헬퍼:
   `shell-common/functions/gh_project_status.sh`
   (공용 `_gh_project_status_sync` — `/gh-flow`, `/gh-pr`,
-  `/gh-commit`, `/gh-pr-reply` 가 모두 호출)
+  `/gh-commit`, `/gh-pr-reply` 가 모두 호출).
+  대상 repo 는 `--repo` 인자 > `$GH_REPO` > `$TARGET_REPO` >
+  `gh repo view` 자동 감지 순으로 정해진다 (#1405) — 상세는
+  `docs/.ssot/github-project-board.md` "헬퍼의 대상 repo 해석 순서".
 - 관련 템플릿:
   `.github/pull_request_template.md`
 - 자동화 진입점:
