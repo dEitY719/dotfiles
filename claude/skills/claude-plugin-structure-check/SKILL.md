@@ -1,21 +1,10 @@
 ---
 name: claude-plugin:structure-check
 description: >-
-  Audit a claude-plugin marketplace repo (e.g. `claude-plugin-visuals`)
-  against the standard directory layout and report PASS/WARN/FAIL/N/A.
-  Supports both `mono` (`plugins/<p>/skills/`) and `single`
-  (repo-root `skills/`) layouts — auto-detected, or forced with
-  `--single` / `--mono`. Read-only — never edits. Discovers plugins/skills
-  dynamically by directory scan, then evaluates mandatory items M1-M10 (FAIL,
-  incl. M7-M9 marketplace `plugins[].source` install-integrity and M10
-  plugin.json known-field schema) and recommended items R1-R8 (WARN). Use when
-  the user says "check my
-  claude-plugin repo structure", "is this marketplace repo standard?",
-  "audit plugin layout", "/claude-plugin:structure-check". Sister skills:
-  `claude-plugin:structure-refactor` (fixes what this finds),
-  `claude-plugin:rename-repo` (renames the repo to the team convention).
-  Do NOT use for SKILL.md content quality (use `skill:check`) or shell
-  scripts (use `sh:check`).
+  Audit a claude-plugin marketplace repo's directory layout. Read-only;
+  `claude-plugin:structure-refactor` fixes. Use for "check my claude-plugin
+  repo structure", "/claude-plugin:structure-check". Not SKILL.md
+  (`skill:check`) or shell (`sh:check`).
 compatibility:
   tools: Read, Glob, Grep, Bash
 metadata:
@@ -57,7 +46,10 @@ header and the per-skill recommended checks (R1/R2/R5).
 ## Step 3: Evaluate M1-M10 and R1-R8
 
 Apply PASS/WARN/FAIL/N/A to each item per the scoring rules in
-[references/evaluation-rules.md](references/evaluation-rules.md).
+[references/evaluation-rules.md](references/evaluation-rules.md). Mandatory
+items M1-M10 fail when missing — including M7-M9 marketplace `plugins[].source`
+install integrity and M10 `plugin.json` known-field schema (#1084). Recommended
+items R1-R8 warn. Full item-by-item table: `references/help.md`.
 
 ## Step 4: Output the Report
 
@@ -85,3 +77,7 @@ the "structure-check PASS ≠ install/runtime 성공" disclaimer (report-templat
   spec is embedded, not read from the target repo. A `--single`/`--mono`
   override means "score by *that* mode" — a wrong override surfaces as a
   normal M2 FAIL, never a silent skip.
+
+## Related Skills
+
+`claude-plugin:structure-refactor` (fixes what this finds) · `claude-plugin:rename-repo` (renames the repo to the team convention) · `claude-plugin:create` (builds a new repo from scratch).

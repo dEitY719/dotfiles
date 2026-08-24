@@ -1,18 +1,10 @@
 ---
 name: gh:pr-resolve-outdated
 description: >-
-  Resolve a GitHub PR's "This branch is out-of-date with the base branch"
-  banner (base has moved forward but there are no file conflicts) by
-  rebasing onto the latest base and pushing with `--force-with-lease`.
-  Use when the user runs /gh:pr-resolve-outdated, /gh-pr-resolve-outdated,
-  or asks "PR base out-of-date", "base 변경됐는데 그냥 sync", "rebase 후
-  force-with-lease push 해줘". Refuses the repo default branch, refuses
-  plain `--force`, and delegates to [[gh-pr-resolve-conflict]] the moment
-  rebase produces conflicts. Sister skill of [[gh-pr-resolve-conflict]]
-  and [[gh-pr-resolve-ci-fail]] — same PR-lifecycle slot, different verb
-  (clean rebase vs conflict resolution vs CI fix). Idempotent: already
-  up-to-date PR is a no-op. Accepts `[pr-number] [remote]`; defaults to
-  the PR attached to the current branch. Accepts `-h`/`--help`/`help`.
+  Clean-rebase a GitHub PR "out-of-date with the base branch" — no file
+  conflicts. Use for /gh:pr-resolve-outdated, /gh-pr-resolve-outdated,
+  "PR base out-of-date", "base 변경됐는데 sync". Conflicts →
+  gh:pr-resolve-conflict; CI red → gh:pr-resolve-ci-fail.
 allowed-tools: Bash, Read
 metadata:
   model_recommendation:
@@ -53,7 +45,7 @@ gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
 Resolve the result via the action matrix in
 `references/mergeable-triage.md` — only `MERGEABLE`/`BEHIND` proceeds to
 Step 3; `CONFLICTING` delegates to `gh:pr-resolve-conflict` (exit 3),
-already-clean is a no-op (exit 0).
+already-clean is a no-op (exit 0 — idempotent, safe to re-run).
 
 ## Step 3: Fetch + Clean Rebase
 
@@ -98,3 +90,9 @@ ai-metrics footer follows the sister-skill pattern; skip when
 - Never run on the repo's default branch.
 - Never auto-resolve conflicts — delegate to `gh:pr-resolve-conflict` (exit 4).
 - Never retry a rejected `--force-with-lease`; never auto-stash (clean tree required).
+
+## Related Skills
+
+Same PR-lifecycle slot, different verb — `gh:pr-resolve-conflict` (rebase that
+walks each conflicting file) · `gh:pr-resolve-ci-fail` (read failing CI logs and
+fix). Full list: `references/help.md` → "Related skills".

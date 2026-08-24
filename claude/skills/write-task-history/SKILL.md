@@ -1,16 +1,10 @@
 ---
 name: write:task-history
 description: >-
-  오늘 한 작업을 JIRA 티켓 + PR 설명 형식으로 daily log에 기록. Write task
-  history from current conversation to a daily task list file. Generates two
-  copy-paste-ready formats: JIRA ticket (plain text with section symbols) and
-  git PR description (markdown). Use this skill whenever the user wants to
-  record, document, or summarize completed work from the current session. Also
-  trigger when the user mentions task history, work log, JIRA ticket drafting
-  from conversation context, or preparing PR descriptions based on what was
-  just done. Works across any project. (재사용 패턴 문서화는 write:insight,
-  장애 분석은 write:rca, 세션 1건을 PARA vault Inbox 노트로 남기는 것은
-  [[obsidian:session-clip]] — 이쪽은 일자별 daily log append 다)
+  오늘 한 작업을 JIRA 티켓 + PR 설명 형식으로 daily log 에 기록. Use for
+  `/write:task-history` or "record what I did this session". Do NOT use for reusable
+  patterns (write:insight), postmortems (write:rca), or vault notes
+  (obsidian:session-clip).
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 metadata:
   model_recommendation:
@@ -27,7 +21,9 @@ metadata:
 If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
 
 Document completed work from the current conversation into a daily task history file,
-producing copy-pasteable JIRA ticket and git PR formats.
+producing two copy-paste-ready formats: a JIRA ticket (plain text with section
+symbols) and a git PR description (markdown). Works across any project — the
+output directory is global, not repo-relative.
 
 ## Options
 
@@ -98,3 +94,7 @@ Read `references/example.md` for a full worked entry.
 
 Next: paste JIRA block into ticket / open PR with the markdown block
 ```
+
+## Related skills
+
+재사용 패턴 문서화는 [[write:insight]], 장애 분석은 [[write:rca]]. 세션 1건을 PARA vault Inbox 노트로 남기는 것은 [[obsidian:session-clip]] — 이쪽은 일자별 daily log append 다.

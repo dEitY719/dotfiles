@@ -1,24 +1,10 @@
 ---
 name: devx:mise-migrate
 description: >-
-  Convert a legacy Python project (pyenv / `python -m venv` + pip,
-  setuptools, `.venv/bin/activate` workflow) into the dotfiles canonical
-  mise structure: a `mise.toml` carrying `[tools]` + `[env]` + `[tasks.*]`
-  as the command SSOT, with uv owning the venv and dependencies and
-  hatchling as the build backend. Use when the user runs
-  /devx:mise-migrate, /devx-mise-migrate, or asks "이 프로젝트 mise 구조로
-  바꿔줘", "예전 파이썬 가상환경을 mise+uv 로 마이그레이션", "venv 프로젝트를
-  mise 로 전환", "migrate this venv project to mise", "adopt mise here".
-  Default mode is `--dry-run` — prints the migration plan (the full
-  generated `mise.toml`, a `pyproject.toml` diff, the cleanup list, and a
-  read-only scan for stale `venv`/`pip` references left in docs/scripts)
-  and mutates nothing; `--apply` writes the files, runs `uv sync`, and
-  removes the stale `.venv/` + `*.egg-info/` (add `--update-docs` to also
-  rewrite the stale doc references). Warns when lifting dev deps to PEP
-  735 `[dependency-groups]` silently breaks `pip install -e ".[dev]"`,
-  and auto-retargets to a single nested project when the path has none.
-  Python-venv projects only — refuses non-Python or already-migrated
-  directories. Accepts `-h`/`--help`/`help` to print usage.
+  Convert a legacy Python venv/pip project into the canonical mise + uv
+  structure. Use for /devx:mise-migrate, /devx-mise-migrate, "예전 파이썬
+  venv 프로젝트를 mise+uv 로 전환", "migrate this venv project to mise".
+  Python-venv projects only.
 allowed-tools: Bash, Read, Edit, Write, Grep
 metadata:
   model_recommendation:
@@ -29,6 +15,14 @@ metadata:
 ---
 
 # devx:mise-migrate — legacy Python venv → mise + uv
+
+Turns a pyenv / `python -m venv` + pip + setuptools project into the canonical
+structure: a `mise.toml` carrying `[tools]` + `[env]` + `[tasks.*]` as the
+command SSOT, with **uv** owning the venv and dependencies and **hatchling**
+(default `--backend`) as the build backend. **Python-venv projects only** —
+non-Python or already-migrated (`mise.toml` present) directories are refused,
+never improvised around. `--dry-run` is the default and mutates nothing; only
+an explicit `--apply` writes. Full flag table: `references/help.md`.
 
 ## Help
 
@@ -71,9 +65,11 @@ full before→after walkthrough):
    archive excluded). Full ERE + opt-in `--update-docs` rewrite:
    `references/stale-scan.md`.
 
-Surface the PEP 735 silent-regression `[WARN]` when a `dev` extra is
-lifted (`references/pyproject-rewrite.md`), and the floor-vs-resolved
-`[INFO]` when the pin came from `requires-python` (`references/extraction.md`).
+Surface the PEP 735 silent-regression `[WARN]` whenever a `dev` extra is
+lifted into `[dependency-groups]` — `pip install -e ".[dev]"` then installs
+nothing and still exits 0 (`references/pyproject-rewrite.md`) — and the
+floor-vs-resolved `[INFO]` when the pin came from `requires-python`
+(`references/extraction.md`).
 
 In `--dry-run` (default), print all four and stop using the plan block in
 `references/output-format.md`.

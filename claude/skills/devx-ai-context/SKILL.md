@@ -1,16 +1,10 @@
 ---
 name: devx:ai-context
 description: >-
-  Single entry point for AI context-injection files (CLAUDE.md, AGENTS.md,
-  GEMINI.md). Replaces five deprecated skills: agents-md:check / agents-md:create
-  / agents-md:refactor / claude-md-check / claude-md-create. Use when the user
-  says "check my AGENTS.md", "audit CLAUDE.md", "create AI context file",
-  "refactor my context doc", "/devx:ai-context", "/devx-ai-context", or any
-  request that touches a CLAUDE.md / AGENTS.md / GEMINI.md file. First
-  positional arg is the action: check (default) | create | refactor | help.
-  Use --file PATH for a non-standard target and --type TYPE to force the
-  adapter (agents / claude / gemini). Do NOT use for SKILL.md (use skill:check)
-  or for shell scripts (use sh:check).
+  AI context doc dispatcher for CLAUDE.md / AGENTS.md / GEMINI.md — check,
+  create, refactor. Use for "/devx:ai-context", "/devx-ai-context",
+  "check my AGENTS.md", "create AI context file". Do NOT use for SKILL.md
+  (skill:check) or *.sh (sh:check).
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
 metadata:
   model_recommendation:

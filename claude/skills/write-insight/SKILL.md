@@ -1,18 +1,10 @@
 ---
 name: write:insight
 description: >-
-  현재 대화에서 재사용 가능한 패턴/교훈을 docs/guide/learnings/에 영구 문서화.
-  Archive one reusable insight from the current conversation into
-  `docs/guide/learnings/<slug>.md` as a short Korean note that follows the repo
-  README rules (5 sections, 50-80 lines, and source links to PR/commit/file:line).
-  Use when the user runs `/write:insight` or asks to capture a concrete
-  pattern, debugging path, or review-driven discovery from this chat. Build the
-  note from conversation evidence (PRs, commits, review threads, repro steps)
-  instead of asking the user to restate context. Decline topics that belong in
-  `docs/guide/technic/`, `docs/.ssot/`, `docs/feature/`, or `claude/skills/`.
-  Do not use this for narrative "삽질" posts (`write:blog-dev-learnings`), formal
-  postmortems (`write:rca`), or JIRA/PR draft summaries (`write:task-history`).
-  (작업 로그는 write:task-history, 장애 분석은 write:rca)
+  현재 대화의 재사용 가능한 패턴/교훈을 `docs/guide/learnings/` 노트로 문서화.
+  Use for `/write:insight` or "capture this reusable pattern from the chat".
+  Do NOT use for 삽질 blog posts (write:blog-dev-learnings), postmortems
+  (write:rca), or work logs (write:task-history).
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 metadata:
   model_recommendation:
@@ -49,8 +41,9 @@ With a hint (`/write:insight <hint>`): anchor on it. Without: propose 1–3 cand
 from recent turns with one-line previews and let the user pick. Don't draft speculatively.
 
 Read `references/routing.md` to check whether the candidate actually belongs in
-`docs/guide/learnings/`. If it fits a neighbor directory or sibling write-* skill, decline
-using the phrasing template there.
+`docs/guide/learnings/`. Decline topics that belong in `docs/guide/technic/`,
+`docs/.ssot/`, `docs/feature/<name>/`, `claude/skills/`, or `memory/` — or in a
+sibling write-* skill — using the phrasing template there.
 
 ## Step 3: Check for overlap
 
@@ -60,16 +53,19 @@ when accessible: learnings holds the body, memory keeps a one-line pointer.
 
 ## Step 4: Mine the conversation for sources
 
-Extract from chat: PR numbers, commit SHAs, issue numbers, review URLs (`discussion_r...`),
-file paths with line ranges. Provenance-less learning is forgettable trivia — if extraction
-yields nothing, the Context section must state the concrete situation ("발견 상황: …"), not vague claims.
+Build the note from conversation evidence instead of asking the user to restate
+context. Extract from chat: PR numbers, commit SHAs, issue numbers, review threads
+and URLs (`discussion_r...`), repro steps, file paths with line ranges.
+Provenance-less learning is forgettable trivia — if extraction yields nothing, the
+Context section must state the concrete situation ("발견 상황: …"), not vague claims.
 
 ## Step 5: Draft the note
 
 Read `references/template.md` for section structure, length policy, filename rules,
 and bonus-section criteria. Read `references/examples.md` for tone anchors from the
 three notes already in repo. Filename names the **pattern**, not the action.
-Target 50–80 lines; past 150 → recommend `docs/guide/technic/` instead.
+Output = short Korean note per repo README rules: 5 sections, 50–80 lines, source
+links to PR / commit / file:line; past 150 lines → `docs/guide/technic/` instead.
 
 ## Step 6: Write the file + update README index
 
@@ -97,3 +93,7 @@ Next: review the file, then optionally /write:insight again for remaining candid
 - **Korean body, English headings** — for human teammates per README's language policy. **Don't paraphrase the README** — re-read every run; if rules conflict, README wins.
 - **No abstract generalities** — no PR/commit/file:line link → reject (back to Step 4 or decline). **One file per invocation** — multiple insights → pick one, offer the rest as a follow-up run.
 - **Never auto-write to `memory/`** — suggest, wait for confirmation. **Never overwrite silently** — existing slug → surface diff, ask update vs. new slug.
+
+## Related skills
+
+작업 로그는 [[write:task-history]], 장애 분석은 [[write:rca]], 서사형 삽질 블로그는 [[write:blog-dev-learnings]] — 전체 라우팅 표는 `references/routing.md`.

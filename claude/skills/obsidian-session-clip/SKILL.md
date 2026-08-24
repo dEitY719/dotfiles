@@ -1,18 +1,10 @@
 ---
 name: obsidian:session-clip
 description: >-
-  이번 AI 세션의 작업을 PARA vault 의 `99-Inbox/ai-session/` 에 md 노트 1개로
-  클립한다 — Web Clipper 가 "웹페이지 → Inbox" 라면 이 스킬은 "세션 → Inbox"
-  다. Use when the user runs /obsidian:session-clip, /obsidian-session-clip, or
-  says "이번 세션 볼트에 클립", "세션 옵시디언에 남겨", "inbox 에 세션 노트
-  만들어", "clip this session to my vault". 세션 성격을 자동 판별해
-  `session_type: code` / `research` 두 템플릿으로 분기하고, `/ingest` 가 추가
-  가공 없이 소비할 frontmatter 9키를 채운다. 1 세션 = 1 노트 — 통합 요약도
-  transcript 덤프도 하지 않고, vault 원격 동기화는 obsidian-git 소유라 원격에
-  반영하지 않는다 (NF-3). 인접 스킬: [[write:task-history]] 는 일자별 daily
-  log 에 append 하고 [[devx:session-handoff]] 는 *미완* 작업을 이슈 코멘트로
-  넘기지만, 이 스킬은 *완료* 기록을 vault 노트 1개로 남긴다. Accepts
-  `[description]`, `--no-commit`, `--dry-run`, `--vault <path>`, `-h`/`--help`/`help`.
+  AI 세션 작업을 PARA vault Inbox 에 md 노트 1개로 클립한다. 명시 호출에만
+  실행: /obsidian:session-clip, /obsidian-session-clip, "이번 세션 볼트에
+  클립", "세션 옵시디언에 남겨", "clip this session to my vault". 자동 트리거
+  금지. Do NOT use for 일자별 daily log — use write:task-history instead.
 allowed-tools: Bash, Read, Write, Grep
 metadata:
   model_recommendation:
@@ -96,3 +88,11 @@ Run `bash "${SKILL_DIR}/lib/verify-clip.sh" "$NOTE"` (skip on `--dry-run`), show
 - Never synchronise the vault to its remote; obsidian-git owns that (NF-3).
 - Never dump the transcript, never merge several sessions into one note.
 - Never modify code, never run `/ingest` — the vault's human gate is the point.
+
+## Related Skills
+
+- [[write:task-history]] 는 일자별 daily log 에 append 하고,
+  [[devx:session-handoff]] 는 *미완* 작업을 이슈 코멘트로 넘긴다 — 이 스킬은
+  *완료* 기록을 vault 노트 1개로 남긴다 (Web Clipper 가 "웹페이지 → Inbox"
+  라면 이 스킬은 "세션 → Inbox").
+- 옵션·env 상세는 `references/help.md` / `references/options.md`.

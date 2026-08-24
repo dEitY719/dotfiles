@@ -1,17 +1,10 @@
 ---
 name: gh:issue-flow
 description: >-
-  Composition skill that chains gh:issue-implement → gh:commit → gh:pr →
-  devx:pr-review-all (agy ∥ codex ∥ /simplify quality gate + deferred
-  pr-reply, 4 min) → gh:pr-resolve-conflict →
-  gh:pr-resolve-outdated
-  (out-of-date base sync) for a single issue number. Use when the user runs
-  /gh:issue-flow, /gh-issue-flow, or asks "issue #16 처음부터 PR까지 자동으로",
-  "이슈 구현하고 커밋하고 PR까지 한방에", "full flow on #42". Uses direct
-  implementation mode only — for plan/brainstorming modes, use the atomic
-  gh:issue-implement skill manually. Stops on first step failure with a
-  resume-instructions report. Precondition: already on a feature branch in a
-  dedicated worktree. Accepts `<issue-number> [remote]` and `-h`/`--help`/`help`.
+  Chain one GitHub issue to a reviewed PR: implement → commit → PR → review →
+  rebase-sync. Use for /gh:issue-flow, /gh-issue-flow, "이슈 #16 처음부터 PR까지
+  자동으로", "이슈 구현하고 PR까지 한방에", "full flow on #42". Takes an issue
+  number, not a spec (devx:autopilot).
 allowed-tools: Bash, Read, Grep, Agent
 metadata:
   model_recommendation:
@@ -23,67 +16,46 @@ metadata:
 
 # gh:issue-flow — Issue → PR composition
 
+## Role
+
+이슈 번호 1건을 원자 스킬 6개(Step 2)로 체인 실행한다 — 구현은 **direct 모드 전용**
+이고, plan/brainstorming 이 필요하면 `gh:issue-implement` 를 직접 부른다.
+**첫 단계 실패에서 즉시 중단하고 재개 지침이 담긴 리포트를 낸다**(이후 단계 자동 스킵).
+**전제조건**: 이미 전용 worktree 의 feature 브랜치 위에 있어야 한다.
+
 ## CRITICAL CONTRACT — read before editing
 
 **Recurring failure mode: early-stop after Step 2.x.** Three layered guards
 prevent it — (1) `--no-next-hint` on Step 2.1, (2) zero conversational text
 between the six `Skill()` calls in Step 2, (3) the harness Stop hook
 (`claude/hooks/gh_issue_flow_stop_guard.py`). **Do not remove any of them.**
-The quality gate is no longer inline here — it lives inside the delegated
-`devx:pr-review-all` (Step 2.4), so Step 2 is a clean sequence of six
-`Skill()` calls with no inline Agent/Bash gate work between them. Only
-conversational prose (recaps, headers, bullets) is forbidden between the
-calls. Full failure history (#333, #383) and guard rationale:
-`references/critical-contract.md`.
+Only prose is forbidden between the calls; the gate itself is delegated to
+Step 2.4. Failure history (#333, #383): `references/critical-contract.md`.
 
 ## Help
 
 If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output
-its content verbatim, then stop. No API calls. The help output names the 6
-chained skills (gh:issue-implement, gh:commit, gh:pr, devx:pr-review-all,
-gh:pr-resolve-conflict, gh:pr-resolve-outdated); devx:pr-review-all runs the
-post-PR quality gate (agy ∥ codex ∥ /simplify) and schedules the pr-reply.
+its content verbatim, then stop. No API calls. That file names the 6 chained
+skills and what devx:pr-review-all runs as the post-PR quality gate.
 
 ## Step 1: Parse Args
 
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `<issue-number>` | 처리할 GitHub Issue 번호 (양의 정수) | — |
-| `[remote]` | git remote 이름 | `origin` |
-| `-h`/`--help`/`help` | usage 출력 후 정지 | — |
-
-No `mode` arg — implementation is always `direct`. Record
-`START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 2.6.
+Argument table (`<issue-number>`, `[remote]`, `-h`/`--help`/`help`):
+`references/help.md`. No `mode` arg — implementation is always `direct`.
+Record `START_TS=$(date +%s)` for elapsed-time tracking in Step 2.6.
 
 **Bind the GitHub target once, here (#1403)** — resolve host and repo from the
-`[remote]`'s URL and export them. The binding is authoritative for the whole
-chain: since #1405, `[remote]` is also threaded explicitly into every sub-skill
-that talks to GitHub — 2.1 `gh:issue-implement`, 2.2 `gh:commit`, 2.3 `gh:pr`,
-2.4 `devx:pr-review-all` — so `/gh-issue-flow <N> upstream` implements,
-commits, opens the PR and reviews it on `upstream`, never on `origin`.
-
-```bash
-. "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
-REMOTE_URL=$(git remote get-url "${REMOTE:-origin}")
-TARGET_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL")
-TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
-export GH_HOST="$TARGET_HOST"
-export TARGET_REPO TARGET_HOST
-```
-
-Step 2.6's `gh api "repos/$TARGET_REPO/..."` — the only `gh` call this
-composition makes directly — takes `GH_HOST="$TARGET_HOST"` explicitly; the
-repo slug is already in its path. Without the host, `gh` follows its own
-`gh repo set-default` rather than git's `origin`, and on a dual-host login
-(github.com + GHES) it hits the wrong server with no error.
+`[remote]`'s URL and export `GH_HOST` / `TARGET_REPO` / `TARGET_HOST` before
+Step 2. Since #1405 the binding is authoritative for the whole chain —
+`[remote]` is threaded explicitly into 2.1 `gh:issue-implement`, 2.2
+`gh:commit`, 2.3 `gh:pr` and 2.4 `devx:pr-review-all`. Exact block and the
+reason the host is passed explicitly: `references/target-binding.md`.
 
 ## Step 2: Chain the Skills
 
 Invoke in order; each runs only if the previous succeeded. **Zero
 conversational text between the calls — no recap, headers, or progress
-bullets** (see CRITICAL CONTRACT). The quality gate now lives inside the
-delegated Step 2.4 (`devx:pr-review-all`), so Step 2 is a clean six-call
-sequence. After each call, immediately proceed to the next.
+bullets** (see CRITICAL CONTRACT). After each call, proceed to the next.
 
 1. **Step 2.1 — gh:issue-implement** — `--no-next-hint` is load-bearing.
    `Skill(gh:issue-implement, "<N> direct <remote> --no-next-hint")`
@@ -119,5 +91,9 @@ report as plain assistant text — never via `Bash` heredoc or `Write` (#1270).
 
 See `references/constraints.md` for the full list (direct mode only, never
 retry/skip a step, quality-gate + Step 2.6 soft-fail exceptions, the
-simplify-commit-before-rebase rule, the `--no-next-hint` and zero-prose
-early-stop guards, and the do-not-stop-mid-flow rule).
+simplify-commit-before-rebase rule, the early-stop guards, do-not-stop-mid-flow).
+
+## Related Skills
+
+Chained atoms: `gh:issue-implement` · `gh:commit` · `gh:pr` · `devx:pr-review-all`
+· `gh:pr-resolve-conflict` · `gh:pr-resolve-outdated`. Spec-driven cousin: `devx:autopilot`.

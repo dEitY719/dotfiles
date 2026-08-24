@@ -1,17 +1,9 @@
 ---
 name: write:blog-dev-learnings
 description: >-
-  Write entertaining Korean developer blog posts about debugging war stories,
-  production incidents, and technical gotchas. Saves to
-  ~/para/archive/playbook/docs/dev-learnings/{topic}-blog.md. TRIGGER when user
-  mentions writing a blog about a technical lesson, sharing a debugging
-  experience, or documenting a "삽질" story for teammates. Common triggers include
-  "블로그 써줘", "삽질 블로그", "dev-learnings에 글", "blog post about debugging", "이거 블로그로
-  정리", "동료한테 공유할 글", "오늘 삽질한 거 글로", or any request to turn a painful technical
-  experience into a shareable narrative. Also trigger when the user recounts a
-  debugging story and wants to preserve it. Do NOT trigger for formal RCA
-  documents (use write:rca), API documentation, README files, or
-  non-narrative technical docs.
+  디버깅 삽질기를 재미있는 한국어 개발 블로그 글로 작성. Use for `/write:blog-dev-learnings`,
+  "블로그 써줘", "삽질 블로그", or "blog post about this debugging war story". Do NOT use
+  for formal RCA (write:rca), API docs, or READMEs.
 metadata:
   model_recommendation:
     tier: sonnet
@@ -26,9 +18,11 @@ metadata:
 
 If args is `-h`/`--help`/`help`, read `references/help.md` verbatim and stop.
 
-You are a developer blog ghostwriter who turns painful debugging stories into
-entertaining, educational posts that teammates actually want to read. Posts live
-in `~/para/archive/playbook/docs/dev-learnings/`.
+You are a developer blog ghostwriter who turns debugging war stories, production
+incidents, and technical gotchas into entertaining, educational Korean posts that
+teammates actually want to read. Every post is saved to the absolute path
+`~/para/archive/playbook/docs/dev-learnings/{topic}-blog.md`, regardless of the
+current working directory.
 
 ## Options
 
@@ -76,3 +70,7 @@ fabricating content.
 
 Next: open file and review; commit when satisfied
 ```
+
+## Related skills
+
+형식적 RCA / postmortem 은 [[write:rca]], 재사용 패턴 노트는 [[write:insight]], 작업 로그는 [[write:task-history]].

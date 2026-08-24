@@ -1,6 +1,6 @@
 # Skill Quality Checks
 
-Fifteen checks, each rated PASS / WARN / FAIL / N/A.
+Sixteen checks, each rated PASS / WARN / FAIL / N/A.
 
 ---
 
@@ -196,3 +196,46 @@ detect-vs-declare pattern; 1st scope is intentionally network-only because that
 is what the scanner flags today. `CROSS_SKILL_SHARED_URL` (multiple skills
 sharing one external domain) is **out of scope** — it requires cross-file
 analysis, while `skill:check` audits a single SKILL.md.
+
+---
+
+## Context Budget Check (16)
+
+Skill descriptions are loaded into every session's `available_skills` listing,
+so their combined length is a per-session context cost. Codex/Kimi cap that
+listing at roughly 2% of context (~5,440 characters across **all** installed
+skills) — the reason `scripts/setup-skills-ssot.sh` needs a `.codex-allowlist`
+escape hatch. Check 16 keeps one description inside its share of that budget.
+Read-only — it reports the overage, never edits the file (audit-only invariant).
+
+### Check 16: Description Length
+Count the frontmatter `description` in **characters, not bytes** — Korean
+trigger phrases are 3 bytes per glyph, so byte counting over-reports by ~3x and
+would fail every bilingual description. Fold a multi-line (`>-`) description to
+one whitespace-normalised line first, stopping at the next top-level key so
+`metadata` / `compatibility` / `allowed-tools` are never counted as description
+text.
+
+| Result | Criteria |
+|---|---|
+| PASS | <= 250 characters |
+| WARN | 251–400 characters — allowed, but the SKILL.md must carry a comment justifying the exception |
+| FAIL | > 400 characters — move the detail out (see below) |
+| N/A | no `description` in frontmatter (Check 3 already reports that as FAIL) |
+
+**Keep in the description** — it exists to make the skill trigger:
+- trigger phrases in both Korean and English
+- negative triggers (`Do NOT use for X — use Y instead`), kept short
+
+**Move it out** — this is what pushes a description past 400:
+- option/flag semantics → `references/help.md` / `references/options.md`
+  (Check 8 already requires an options table there)
+- behaviour detail (`Idempotent`, `auto-detected`, warning conditions) →
+  SKILL.md Step sections
+- sister-skill cross-references (`Sister skills: ...`) → a Related Skills line
+  in the SKILL.md body
+
+Executable mirror: `tests/bats/skills/_fixtures/skill_description_length.sh`
+(`skill_desc_extract` / `skill_desc_length` / `skill_desc_verdict`), pinned by
+`tests/bats/skills/skill_check_description_length.bats`. Keep the thresholds
+byte-identical between that fixture and the table above.

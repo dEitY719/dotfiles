@@ -1,20 +1,10 @@
 ---
 name: devx:docs-bootstrap
 description: >-
-  Scaffold a standard kind-split docs/ tree in an empty or new repository —
-  the "folder = document kind, feature = filename" policy. Creates
-  docs/{adr,product,design,architecture/{system,features},testing,guides,public}
-  with a .gitkeep in every leaf directory (so git tracks the empty folders)
-  and a single docs/README.md describing the documentation policy + three
-  Docs-as-Code rules (status front-matter, ADR cross-linking, filename
-  linter). Use when the user runs /devx:docs-bootstrap, /devx-docs-bootstrap,
-  or asks "새 프로젝트 docs 구조 만들어줘", "빈 repo에 문서 폴더 스캐폴딩",
-  "docs 디렉토리 골격 깔아줘", "scaffold docs structure", "bootstrap docs
-  folders". Default mode is --dry-run (prints the plan, writes nothing);
-  --apply creates the tree; --check is a read-only conformance audit
-  (CI-friendly, non-zero exit on drift). Idempotent — existing files are
-  skipped. Sister skill of [[gh-kanban-bootstrap]] (board) — this one is the
-  docs-layout half of new-repo setup. Accepts -h/--help/help to print usage.
+  Scaffold the standard kind-split docs/ tree into an empty or new repo. Use
+  for /devx:docs-bootstrap, /devx-docs-bootstrap, "빈 repo에 docs 폴더 골격
+  스캐폴딩", "scaffold docs structure". Creates empty folders only — never
+  migrates a populated docs/.
 allowed-tools: Bash, Read
 metadata:
   model_recommendation:
@@ -28,6 +18,14 @@ metadata:
 
 All real work lives in `lib/scaffold.sh` (self-contained, copy-paste safe).
 The skill's job is to dispatch the right mode and relay the result.
+
+Policy: **folder = document kind, feature = filename**. The tree is
+`docs/{adr,product,design,architecture/{system,features},testing,guides,public}`
+— 8 leaf directories, each carrying a `.gitkeep` so git tracks the empty
+folder, plus one `docs/README.md` stating the documentation policy and the
+three Docs-as-Code rules (status front-matter, ADR cross-linking, filename
+linter). Layout SSOT: `lib/scaffold.sh`; README body SSOT:
+`references/docs-readme-template.md`.
 
 ## Help
 
@@ -79,3 +77,8 @@ Relay the script's `[OK]`/`[FAIL]` verdict and the create/skip plan. On
 - Never migrate an existing populated `docs/` — this skill only scaffolds.
 - Never overwrite `docs/README.md` without `--force`.
 - Default to `--dry-run`; only write on explicit `--apply`.
+
+## Related Skills
+
+Same new-repo setup slot, different artifact — `gh:kanban-bootstrap` (Projects v2
+board) · `gh:label-bootstrap` (label SSOT sync).

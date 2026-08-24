@@ -1,15 +1,10 @@
 ---
 name: skill:check
 description: >-
-  Audit a SKILL.md for structure and UX quality — checks line count,
-  progressive disclosure, frontmatter, references usage, output format,
-  help flag pattern, step structure, options docs, verdict output,
-  next-action hints, executable procedure extraction, plus
-  security/policy alignment (license declaration and network capability
-  declaration consistency). Use when the user says "check my skill", "audit my
-  skill", "does this skill follow best practices?", "/skill:check".
-  Reports PASS/WARN/FAIL/N/A per criterion with concrete fixes.
-  Do NOT use for AGENTS.md, CLAUDE.md, or GEMINI.md files — use devx:ai-context check instead.
+  Audit a SKILL.md against 16 structure, UX, security, and context-budget
+  checks. Use when the user says "check my skill", "audit my skill",
+  "스킬 점검해줘", "/skill:check". Do NOT use for AGENTS.md, CLAUDE.md, or
+  GEMINI.md — use devx:ai-context instead.
 compatibility:
   tools: Read, Glob, Grep, Bash
 ---
@@ -25,9 +20,9 @@ If the argument is `help`, read `references/help.md` and output its content verb
 If the user specifies a path, use it. Otherwise search for SKILL.md from the
 current directory.
 
-## Step 2: Run Fifteen Checks
+## Step 2: Run Sixteen Checks
 
-Read `references/checks.md` for all 15 check definitions and PASS/WARN/FAIL/N/A criteria.
+Read `references/checks.md` for all 16 check definitions and PASS/WARN/FAIL/N/A criteria.
 Assign one result per check. Audit-only — never stop on failure; report every check (`skill:check` is read-only and must produce a full report).
 
 **Checks 1–5: Structure**
@@ -56,6 +51,16 @@ Check 14 cross-checks frontmatter `license` against a repo-root `LICENSE`
 compares against `compatibility.network` (pre-empts
 `TOOL_ABUSE_UNDECLARED_NETWORK`). Both are **read-only** — they flag a policy
 gap, never edit files.
+
+**Check 16: Description Length**
+Frontmatter `description` measured in **characters, not bytes** (Korean glyphs
+are 3 bytes each). PASS ≤ 250 · WARN 251–400 (needs a justifying comment) ·
+FAIL > 400. Descriptions load into every session's `available_skills` listing,
+which Codex/Kimi cap at ~5,440 characters across all installed skills (#1411).
+Keep trigger phrases and short negative triggers; move flag semantics to
+`references/help.md`, behaviour detail to Step sections, and sister-skill
+cross-references to the body. Executable mirror:
+`tests/bats/skills/_fixtures/skill_description_length.sh`.
 
 ## Step 3: Output the Report
 

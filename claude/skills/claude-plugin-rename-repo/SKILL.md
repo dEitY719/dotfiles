@@ -1,13 +1,10 @@
 ---
 name: claude-plugin:rename-repo
 description: >-
-  Rename a claude-plugin marketplace repo to the team naming convention
-  (claude-plugin-<domain>). Walks through: env check → name proposal →
-  gh repo rename → remote URL update → hardcoded reference scan & fix →
-  commit. Destructive steps (rename, push) require user confirmation.
-  Use when the user says "rename this plugin repo", "이 레포 이름 바꿔",
+  Rename a claude-plugin marketplace repo to the team convention
+  (claude-plugin-<domain>) and fix every hardcoded reference. Rename and push
+  need confirmation. Use for "rename this plugin repo", "이 레포 이름 바꿔",
   "/claude-plugin:rename-repo <name>".
-  Sister skills: `claude-plugin:structure-check`, `claude-plugin:structure-refactor`.
 compatibility:
   tools: Read, Bash, Edit, Write, Grep
 metadata:
@@ -93,5 +90,7 @@ web UI (Settings → Repository name).
 - Never edit fields whose value is a relative `source` path.
 - Never work directly on the default branch.
 - `marketplace.json` `name` must equal the new repo name 1:1.
-- Sister skills: `claude-plugin:structure-check` (audit layout),
-  `claude-plugin:structure-refactor` (fix layout). This skill renames.
+
+## Related Skills
+
+`claude-plugin:structure-check` (audits the layout) · `claude-plugin:structure-refactor` (fixes the layout) · `claude-plugin:create` (builds a new repo from scratch). This skill renames.

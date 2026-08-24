@@ -1,24 +1,10 @@
 ---
 name: devx:md-to-scrolldeck
 description: >-
-  Convert a Markdown document into a single self-contained HTML vertical
-  scroll-snap presentation deck (scrollytelling) for reporting up to
-  leadership — progress bar, phase header, right-edge dot rail, snap
-  slides, arrow-key navigation, print-ready. Use whenever the user runs
-  /devx:md-to-scrolldeck or /devx-md-to-scrolldeck, or says "이 md를
-  프레젠테이션으로 만들어줘", "리더 보고용 슬라이드로 변환해줘", "이 문서를 스크롤
-  프레젠테이션으로", "이 보고서 슬라이드 덱으로", "make this markdown into a slide
-  presentation", "turn this report into slides", "scrollytelling deck from
-  this doc" — and also when the user points at a .md file and asks for
-  slides, a deck, or a presentation without naming the format. The hard
-  part is editorial curation (39 headings become ~15 slides on the
-  reference deck), so always run the outline step first. Deliberately omits
-  devx:visualize's hamburger menu, theme toggle, and PNG export; never
-  base64-embeds a font. Sister skill of [[devx-visualize]] — that one
-  covers dashboards, infographics, posters and horizontal decks; this one
-  owns the vertical scroll deck. Accepts `<input.md> [--out <path>]
-  [--slides <n>] [--outline-only] [--lang <code>] [--offline-font]
-  [--no-open]` and `-h`/`--help`/`help`.
+  Markdown 문서를 리더 보고용 세로 스크롤스냅 HTML 덱(scrollytelling) 한 파일로
+  변환한다. Use for /devx:md-to-scrolldeck, /devx-md-to-scrolldeck, "이 md를
+  프레젠테이션으로 만들어줘", "turn this report into slides", 또는 .md 를
+  가리키며 슬라이드/덱 요청 시. 대시보드·인포그래픽·가로 덱은 devx:visualize.
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 metadata:
   version: 0.1.0
@@ -71,12 +57,15 @@ writing any HTML.
 ## Step 3: Build, Write, Verify, Deliver
 
 Copy `references/scroll-deck-skeleton.md` and replace its `YOUR ... HERE`
-tokens — **never write this HTML from scratch**, the chrome is load-bearing
-and the checklist greps for it. Per-slide: pick the archetype from the
-outline, vary the slide treatment so no three are identical, write real
-content only (never placeholder text or invented figures). Keep the CDN
-webfont link; base64-embed only behind `--offline-font`, after warning —
-see `references/font-and-bedrock-safety.md`. Do not add back `.viz-menu`,
+tokens — **never write this HTML from scratch**. The chrome is load-bearing and
+the checklist greps for it: top progress bar, fixed phase header with an
+`01 / NN` counter, right-edge dot rail, `scroll-snap-type: y mandatory` slides
+tracked by `IntersectionObserver`, arrow-key navigation, print-ready output.
+
+Per-slide: pick the archetype from the outline, vary the slide treatment so no
+three are identical, write real content only (never placeholder text or
+invented figures). Keep the CDN webfont link; base64-embed only behind
+`--offline-font`, after warning — see `references/font-and-bedrock-safety.md`. Do not add back `.viz-menu`,
 theme toggle, or PNG export — deliberately out of scope here.
 
 Then, in this order: (1) **one `Write` call** for the whole file — see
@@ -98,3 +87,9 @@ Follow with the slide-id list and what was cut. Waived checklist items are
 
 Next: `Review the deck, or re-run with --slides <n> / --outline-only to
 adjust the curation before another build.`
+
+## Related Skills
+
+`devx:visualize` — the general-purpose sibling for dashboards, infographics,
+posters, and horizontal decks; this skill owns the vertical scroll deck only ·
+`devx:excalidraw-diagram` — when the deliverable is a diagram, not a deck.

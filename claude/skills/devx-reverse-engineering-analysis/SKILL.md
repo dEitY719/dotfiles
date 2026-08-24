@@ -1,14 +1,10 @@
 ---
 name: devx:reverse-engineering-analysis
 description: >-
-  Analyzes a specific feature or component in the current codebase and generates
-  a ready-to-reuse AI implementation prompt. Use this skill whenever the user wants
-  to understand how a particular feature works, extract the key libraries behind it,
-  or get a copy-pasteable prompt to recreate the same feature in another project.
-  Triggers on phrases like "analyze this feature", "how does X work", "extract the
-  graph feature", "reverse engineer the email system", or any request to understand
-  and reproduce a codebase feature elsewhere. Always produces a markdown document
-  in the specified output directory.
+  기존 기능 하나를 분석해 재사용 가능한 AI 구현 프롬프트를 생성한다. Use for
+  /devx:reverse-engineering-analysis, /devx-reverse-engineering-analysis,
+  "이 기능 어떻게 동작하는지 분석해줘", "graph 기능 뜯어서 프롬프트로 만들어줘",
+  "reverse engineer this feature into a reusable AI prompt".
 allowed-tools: Read, Glob, Grep, Write, Edit, Bash
 metadata:
   model_recommendation:

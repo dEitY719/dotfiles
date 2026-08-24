@@ -1,20 +1,11 @@
 ---
 name: devx:session-handoff
 description: >-
-  컨텍스트 임계 근접 시 세션 인수인계(handoff) 자동화 — 이번 세션의 검증된
-  완료분 / 남은 작업 / 재개 정보를 구조화해 트래킹 이슈에 코멘트로 게시하고,
-  auto-memory 를 갱신하고, 다음 세션 재개 문장 1줄을 출력한다. Use when the
-  user runs /devx:session-handoff, /devx-session-handoff, or says "핸드오프",
-  "세션 넘겨", "이어서 하게 정리해줘", "컨텍스트 다 찼어", "handoff this
-  session", "wrap up for the next session" — or when the context window nears
-  its limit mid-way through a multi-session task. 일회성 작업 완료 기록은
-  gh:issue-create / gh:discussion-create 를 쓰고, 본 스킬은 작업 진행 중
-  세션 연속성 전용. Accepts `[issue-number] [remote]`, `--memory-only`
-  (이슈 게시 생략), `--new-issue` (신규 트래킹 이슈 강제), and
-  `-h`/`--help`/`help` to print usage. (중단 후 같은 세션 재개는
-  devx:restart, 토큰 리밋 후 크론 재개는 devx:resume-after-limit — 이들은
-  재개자(resumer)이고 본 스킬은 그에 선행하는 handoff 작성자다. *미완* 이 아니라
-  *완료* 된 세션을 vault Inbox 노트로 남기는 것은 [[obsidian:session-clip]].)
+  컨텍스트 임계 근접 시 *미완* 작업을 트래킹 이슈 코멘트로 인계하고 auto-memory
+  와 재개 문장을 남긴다. Use for /devx:session-handoff, /devx-session-handoff,
+  "핸드오프", "세션 넘겨", "컨텍스트 다 찼어", "hand off this session".
+  *완료* 기록은 gh:issue-create, 재개는 devx:restart /
+  devx:resume-after-limit.
 allowed-tools: Bash, Read, Write, Grep, TaskList
 metadata:
   model_recommendation:
@@ -94,6 +85,13 @@ ending with the `Next:` hint.
 - Never overstate completion — unverified work is never listed as done.
 - Never invent a resume sentence that doesn't map to the tracking issue.
 - Reuses gh:issue-create (new tracking issue) and gh:issue-read
-  (candidate validation). Sister skills devx:restart and
-  devx:resume-after-limit are the resumers this handoff feeds — the resume
-  sentence must stay parseable by the human driving them.
+  (candidate validation).
+
+## Related Skills
+
+- Resumers this handoff feeds — `devx:restart` (같은 세션 중단 직후 재개) ·
+  `devx:resume-after-limit` (토큰 리밋 리셋 후 크론 재개). 재개 문장은 이들을
+  구동하는 사람이 그대로 읽을 수 있어야 한다.
+- 본 스킬은 *미완* 작업의 세션 연속성 전용이다. 일회성 *완료* 기록은
+  `gh:issue-create` / `gh:discussion-create`, 완료 세션의 vault Inbox 노트는
+  `obsidian:session-clip` 몫이다.

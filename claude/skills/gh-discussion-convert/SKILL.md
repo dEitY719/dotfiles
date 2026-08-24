@@ -1,19 +1,10 @@
 ---
 name: gh:discussion-convert
 description: >-
-  Promote a decided `Ideas` Discussion into a tracked Issue by emulating
-  GitHub's UI `Convert to issue` flow — creates the Issue with an
-  `Originated from discussion #<N>` backlink, posts a `Linked to issue #<M>`
-  comment back on the Discussion, locks + closes it (reason Resolved), and
-  moves the new Issue card to `In progress`. Use when the user runs
-  /gh:discussion-convert, /gh-discussion-convert, asks "Discussion #N
-  결정났으니 issue 로 승격", "RFC 결정 — convert 해줘", or wants the 4-step
-  variant from `discussions-policy.md` (#612) automated end-to-end. Sister
-  skill of [[gh-discussion-create]]; reuses the same `gh_discussion.sh`
-  helpers. Idempotent — a re-run prints the existing issue URL and exits 0.
-  Refuses non-`Ideas` categories unless `--force-category` is set. Accepts
-  `<N>` plus optional `[remote]` and `--no-comment`/`--no-lock`/
-  `--no-board-sync`/`--no-close`; `-h`/`--help`/`help` prints usage.
+  Promote a decided `Ideas` Discussion into a backlinked Issue, then lock +
+  close it. Idempotent. Use for /gh:discussion-convert, /gh-discussion-convert,
+  "Discussion #N 이슈로 승격", "convert this RFC". Does not author Discussions
+  (gh:discussion-create).
 allowed-tools: Bash, Read, Grep
 metadata:
   model_recommendation:
@@ -34,10 +25,12 @@ output its content verbatim, then stop. No API calls.
 
 Automate the 4-step `Discussion -> Issue` 변환 규약 from
 `docs/.ssot/discussions-policy.md` (#612). GitHub exposes no public
-`convertDiscussion` mutation, so this skill emulates the UI path via four
-primitive mutations (createIssue + comment + close + lock) plus a board
-sync, keeping the bidirectional-backlink invariant (principle #4). Print
-the new Issue URL; idempotent (Step 4).
+`convertDiscussion` mutation, so this skill emulates the UI `Convert to issue`
+path via four primitive mutations — Issue carrying an `Originated from discussion
+#<N>` backlink, a `Linked to issue #<M>` comment back on the Discussion, close
+(reason Resolved) + lock — plus a board sync to `In progress`, keeping the
+bidirectional-backlink invariant (principle #4). Print the new Issue URL;
+idempotent (Step 4). Reuses `gh_discussion.sh` with [[gh-discussion-create]].
 
 ## Options
 
@@ -98,3 +91,8 @@ name the failing step and quote the first helper stderr line.
 Operating invariants (always `--repo`, fail on missing remote, Ideas-only
 guard, best-effort post-create mutations, idempotency) →
 [`references/constraints.md`](references/constraints.md).
+
+## Related Skills
+
+`gh:discussion-create` — the authoring half of the same lifecycle: it opens the
+pre-decision RFC, this skill promotes the decided one into the tracker.

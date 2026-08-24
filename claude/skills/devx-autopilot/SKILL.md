@@ -1,15 +1,10 @@
 ---
 name: devx:autopilot
 description: >-
-  [Claude Code] 완성된 spec 으로부터 Stage-B(구현계획→신규 이슈→구현→PR→
-  /simplify→/gh-pr-reply)를 사용자 승인 없이 끝까지 자율 실행하는 composition
-  스킬. Use when the user runs /devx:autopilot, /devx-autopilot, or asks
-  "spec 부터 PR까지 자동으로", "stage-B 자동 실행", "구현계획부터 pr-reply까지
-  한방에", "autopilot 돌려", "내 승인 없이 끝까지 완수해". Stage-A(brainstorming·
-  spec 작성)는 대상 아님 — spec 이 준비된 뒤 실행한다. 머지는 하지 않는다(사람 몫).
-  Accepts `[spec-path] [--mode auto|sdd|inline] [remote]` and `-h`/`--help`/`help`.
-  (원자 단계: gh:issue-create, subagent-driven-development, gh:pr, simplify,
-  gh-pr-reply / 사촌: gh:issue-flow)
+  [Claude Code] 완성된 spec 하나로 Stage-B(계획→이슈→구현→PR→리뷰답변)를 사용자
+  승인 없이 끝까지 자율 실행한다 — 머지는 하지 않는다(사람 몫). Use for
+  /devx:autopilot, /devx-autopilot, "spec 부터 PR까지 자동으로", "stage-B 자동 실행",
+  "autopilot 돌려", "내 승인 없이 끝까지 완수해". Stage-A(spec 작성)는 대상 아님.
 allowed-tools: Bash, Read, Edit, Write, Grep, Skill, Agent, TaskCreate, TaskUpdate, TaskList
 metadata:
   model_recommendation:
@@ -20,6 +15,13 @@ metadata:
 ---
 
 # devx:autopilot — Stage-B 자율 실행 (spec → PR)
+
+## Role
+
+**승인된 spec 이 이미 있다는 전제**에서 Stage-B(구현계획 → 신규 이슈 → 구현 → PR → `/simplify`
+→ `/gh-pr-reply`)를 사용자 승인·체크인 없이 끝까지 자율 실행하는 composition 스킬.
+**Stage-A(brainstorming · spec 작성)는 대상이 아니다** — spec 이 준비된 뒤에 부른다.
+**PR 머지도 하지 않는다 — 리뷰와 머지는 사람 몫이다.**
 
 ## CRITICAL CONTRACT — read before editing
 
@@ -82,3 +84,9 @@ No API calls.
 `--force`/`--force-with-lease` push, `--no-verify`, 테스트 실패 상태 PR, spec 없는 자동 실행.
 **정지 규칙**: 어느 단계든 하드 실패 시 그 지점에서 정지하고 재개 리포트 출력(이후 단계 자동
 스킵). 전체 제약은 `references/constraints.md`, early-stop 가드는 `references/critical-contract.md`.
+
+## Related Skills
+
+원자 단계: `gh:issue-create` · `superpowers:writing-plans` ·
+`superpowers:subagent-driven-development` · `gh:pr` · `simplify` · `gh-pr-reply`.
+사촌: `gh:issue-flow`(spec 이 아니라 이슈 번호에서 시작). 중단 재개: `devx:restart`.
