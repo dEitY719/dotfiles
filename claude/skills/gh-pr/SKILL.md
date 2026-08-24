@@ -39,6 +39,7 @@ REMOTE_URL=$(git remote get-url origin)
 GH_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL")
 TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
 export GH_HOST="$TARGET_HOST"
+export GH_REPO TARGET_HOST
 ```
 
 Every `gh` call in this skill — `gh repo view`, `gh pr list`, `gh pr view`,

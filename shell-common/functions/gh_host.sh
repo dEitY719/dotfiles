@@ -77,15 +77,28 @@ _gh_resolve_host() {
 # GHE is matched first so a future `github.com`-suffixed GHE domain
 # cannot be swallowed by the github.com glob.
 #
-# When a new GHE domain is added, extend this case-glob (and the sed
-# regex in `_gh_parse_owner_repo_url`, which still needs its own
+# Anchored on both sides (issue #1403 PR review, codex/agy) — a plain
+# `*github.com*` substring glob also matches `https://notgithub.com/...`
+# or `https://github.com.evil.net/...`, silently misclassifying an
+# unrelated host as github.com and defeating the whole point of this
+# file. The host must be preceded by `://`, `@`, or the start of the
+# string, and followed by `:`, `/`, or the end of the string.
+#
+# When a new GHE domain is added, extend both `case` branches below (and
+# the sed regex in `_gh_parse_owner_repo_url`, which still needs its own
 # stripping pattern) — no other function should grow a second copy of
 # the matching logic.
 _gh_match_known_host() {
     case "${1:-}" in
-        *github.samsungds.net*) echo "github.samsungds.net" ;;
-        *github.com*)           echo "github.com" ;;
-        *)                      return 1 ;;
+        *://github.samsungds.net/*|*://github.samsungds.net|\
+        *@github.samsungds.net:*|*@github.samsungds.net/*|*@github.samsungds.net|\
+        github.samsungds.net/*|github.samsungds.net:*|github.samsungds.net)
+            echo "github.samsungds.net" ;;
+        *://github.com/*|*://github.com|\
+        *@github.com:*|*@github.com/*|*@github.com|\
+        github.com/*|github.com:*|github.com)
+            echo "github.com" ;;
+        *) return 1 ;;
     esac
 }
 

@@ -53,6 +53,7 @@ REMOTE_URL=$(git remote get-url origin)
 TARGET_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL")
 TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
 export GH_HOST="$TARGET_HOST"
+export TARGET_REPO TARGET_HOST
 ```
 
 Every `gh` call in Step 5 is then `GH_HOST="$TARGET_HOST" gh ... --repo
