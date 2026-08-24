@@ -41,9 +41,13 @@ All arguments, flags, and env vars are in `references/options.md`
 
 Record `START_TS=$(date +%s)` for Step 3.5. Parse the positional remote arg
 + flags. Confirm a git repo (`git rev-parse --show-toplevel`) and resolve
-`TARGET_REPO=<owner>/<repo>` via the remote (substeps in
+**both** `TARGET_REPO=<owner>/<repo>` and `TARGET_HOST` from that remote's URL,
+then `export GH_HOST="$TARGET_HOST"` (substeps in
 `references/repo-resolution.md`). Never silently fall back to `origin` when
-the user-supplied remote is missing. When `--as-discussion <category>` is
+the user-supplied remote is missing. 이후 모든 `gh` 호출은
+`GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"` 형태로 host 와 repo 를
+명시한다 — 생략하면 gh CLI 가 자기 `gh repo set-default` 를 따라가 dual-host
+로그인에서 조용히 엉뚱한 서버에 이슈를 만든다 (#1403). When `--as-discussion <category>` is
 present, follow `references/discussion-mode.md` to bind `DISCUSSION_MODE` /
 `CATEGORY` and validate the category (exit 3 on mismatch).
 
@@ -59,7 +63,7 @@ Apply `references/clarification.md` trigger signals (동사 없는 명사 나열
 
 ## Step 2.5: Auto-labels + Milestone (opt-in via SSOT)
 
-Skip entirely when `--no-auto-labels` **or** `DISCUSSION_MODE=1` is set (#619 F-3). Otherwise read `references/auto-labels.md` and follow verbatim (Stage-1 signal → SSOT load → label union → `gh label list` validation → milestone resolution). Stash kept labels + milestone for Step 4. `--auto-label-debug` emits the Stage-1 trace.
+Skip entirely when `--no-auto-labels` **or** `DISCUSSION_MODE=1` is set (#619 F-3). Otherwise read `references/auto-labels.md` and follow verbatim (Stage-1 signal → SSOT load → label union → `GH_HOST`-pinned `gh label list` validation → milestone resolution). Stash kept labels + milestone for Step 4. `--auto-label-debug` emits the Stage-1 trace.
 
 ## Step 3: Draft the Issue Body
 
@@ -90,5 +94,6 @@ line + a `Next:` hint.
 ## Constraints
 
 See `references/constraints.md` (assignee/label rules, always
-`--repo "$TARGET_REPO"`, fail-fast on missing remote, no over-compression,
+`GH_HOST="$TARGET_HOST"` + `--repo "$TARGET_REPO"`, fail-fast on missing remote,
+no over-compression,
 `--as-discussion` explicit-intent only, no confirmation prompts).

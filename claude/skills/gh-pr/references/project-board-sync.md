@@ -42,11 +42,15 @@ if [ "$hook_skip" -eq 0 ]; then
             _gh_project_status_sync pr "$PR_NUMBER" "In review" || true
             # Auto-resolve GH_REPO when unset/empty so the linked-issues
             # sync isn't silently no-op'd by an empty repo arg (PR #780
-            # review). Matches the existing convention in
-            # shell-common/functions/gh_pr_edit_safe.sh and
-            # gh_audit_builtin_workflows.sh.
+            # review).
             if [ -z "${GH_REPO:-}" ]; then
-                GH_REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
+                # Re-resolve from git's origin, never from `gh repo view`
+                # (which answers gh CLI's default repo — wrong host on a
+                # dual-host login, #1403). Source gh_host.sh explicitly:
+                # gh_project_status.sh only sources it on the GH_HOST-unset
+                # path, which Step 1a-0's export already bypassed.
+                . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_host.sh"
+                GH_REPO=$(_gh_parse_owner_repo_url "$(git remote get-url origin)" 2>/dev/null || true)
             fi
             for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO" 2>/dev/null || true); do
                 _gh_project_status_sync issue "$_issue" "In progress" \
@@ -57,12 +61,20 @@ if [ "$hook_skip" -eq 0 ]; then
 fi
 ```
 
-`GH_REPO` should be `owner/repo` (e.g. `dEitY719/dotfiles`). The block
-auto-resolves it via `gh repo view --json nameWithOwner --jq
-.nameWithOwner` when unset/empty so the linked-issues loop never
-silently no-ops on a missing env var. Opt-out per invocation:
-`GH_PROJECT_STATUS_SYNC=0`. Repos without a projectV2 board auto-skip
-silently (helper returns 0).
+`GH_REPO` should be `owner/repo` (e.g. `dEitY719/dotfiles`) — normally bound
+in Step 1a-0. The block re-resolves it from `origin`'s remote URL when
+unset/empty so the linked-issues loop never silently no-ops on a missing env
+var. It deliberately does **not** fall back to `gh repo view --json
+nameWithOwner`: that reads gh CLI's own default repo, which on a dual-host
+login names a repo on the other server (#1403). `_gh_project_status_sync`
+takes no host argument: its `_gh_project_status_ensure_host` keeps an already-
+exported `GH_HOST` and otherwise falls back to `_gh_resolve_host` (the
+setup-mode mapping, issue #804). Step 1a-0's `export GH_HOST` is what makes it
+take the *remote's* host rather than the PC's default — the two differ
+whenever the PR targets a remote that isn't the setup-mode's usual server.
+
+Opt-out per invocation: `GH_PROJECT_STATUS_SYNC=0`. Repos without a projectV2
+board auto-skip silently (helper returns 0).
 
 Track the outcome for Step 8's report row:
 - `hook_skip=1` → `[SKIP]: hook auto-skip`
@@ -125,15 +137,18 @@ still refusing to drag `Done` Issues backwards if a closed PR is re-opened (#309
 
 The closing-issues helper (`_gh_pr_closing_issue_numbers`) needs the repo
 slug as `owner/repo` (e.g. `dEitY719/dotfiles`). The Step 7 snippet
-auto-resolves `GH_REPO` inline when it is unset/empty via
-`gh repo view --json nameWithOwner --jq .nameWithOwner` — added in
-response to the PR #780 review: an unset `GH_REPO` would otherwise pass
-an empty string to `_gh_pr_closing_issue_numbers`, the helper would
-return immediately, and the linked-issues sync loop would silently
-no-op. The fallback is a thin wrapper — no auth state changes, no API
-mutation — and matches the existing convention in
-`shell-common/functions/gh_pr_edit_safe.sh` /
-`gh_audit_builtin_workflows.sh`.
+auto-resolves `GH_REPO` inline when it is unset/empty — added in response to
+the PR #780 review: an unset `GH_REPO` would otherwise pass an empty string to
+`_gh_pr_closing_issue_numbers`, the helper would return immediately, and the
+linked-issues sync loop would silently no-op.
+
+That fallback originally used `gh repo view --json nameWithOwner --jq
+.nameWithOwner`. Issue #1403 replaced it with `_gh_parse_owner_repo_url` over
+`git remote get-url origin`: `gh repo view` without `--repo` answers "what is
+gh CLI's default repo", not "what is git's origin", and on a PC logged into
+both github.com and GHES those two disagree silently. Reading the slug from
+the remote URL keeps it consistent with the `GH_HOST` bound from that same
+URL. Still a thin wrapper — no auth state changes, no API mutation.
 
 ## Behavior summary
 

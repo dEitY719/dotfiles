@@ -72,8 +72,11 @@ $ /gh-pr --base release/v2.0    →  base=release/v2.0
 5. Pushes the branch (`git push -u origin HEAD` if no upstream, `git push`
    if ahead). Diverged upstream → stops and asks; never force-pushes on
    its own.
-6. Creates the PR via `gh pr create --assignee @me --base "$BASE_BRANCH"`
-   using a `mktemp` body file. Always self-assigns.
+6. Creates the PR via
+   `GH_HOST=<host> gh pr create --repo <owner>/<repo> --assignee @me --base "$BASE_BRANCH"`
+   using a `mktemp` body file. Always self-assigns. Host and repo are both
+   read from `origin`'s remote URL, so a `gh` logged into both github.com and
+   a GHES instance cannot open the PR on the wrong server (#1403).
 7. Applies labels derived from conventional-commit types (feat, fix, docs,
    etc.) plus scope labels — but only labels that **already exist** in the
    repo. Never creates new labels.

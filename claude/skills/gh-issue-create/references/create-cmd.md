@@ -24,9 +24,15 @@ else
     printf '\n---\n<details>\n<summary>🤖 AI Metrics · 📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min</summary>\n\n<!-- ai-metrics -->\n📊 ~%s tokens · 👤 ~%s h · 🤖 ~%s min\n<!-- /ai-metrics -->\n\n</details>\n' \
       "$TOKENS" "$HUMAN_H" "$ELAPSED" "$TOKENS" "$HUMAN_H" "$ELAPSED" >> "$BODY"
 fi
-gh issue create --repo "$TARGET_REPO" --title "<title>" --body-file "$BODY" \
+GH_HOST="$TARGET_HOST" gh issue create --repo "$TARGET_REPO" \
+    --title "<title>" --body-file "$BODY" \
     "${LABEL_ARGS[@]}" "${MILESTONE_ARGS[@]}"
 ```
+
+`GH_HOST` 와 `--repo` 는 둘 다 필수이며 Step 1 이 같은 remote URL 에서 뽑은
+쌍이다 (`references/repo-resolution.md`). 하나라도 빠지면 gh CLI 가 자기
+`gh repo set-default` 를 따라가 dual-host 로그인에서 다른 서버에 이슈를
+만들어 버린다 — 사람이 지워야 되돌아온다 (#1403).
 
 `--assignee` is still only added when the user asks. User-supplied
 `--label` flags survive Step 2.5 (union with auto labels) unless
@@ -54,6 +60,9 @@ fi
 . "$DOTFILES_ROOT/shell-common/functions/gh_discussion.sh"
 
 BODY=$(mktemp) && trap 'rm -f "$BODY"' EXIT
+# GH_HOST was exported in Step 1; the _gh_discussion_* GraphQL helpers
+# below read it from the environment, so the Discussion lands on the same
+# host as the Issue path would have (#1403).
 # ... write Open-Questions-forward body to "$BODY" (Step 3 sets shape) ...
 if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
     : # ai-metrics footer skipped via GH_DISABLE_AI_METRICS

@@ -44,6 +44,23 @@ NOT ask "what did you change?". In a single message run: `git status` (never
 `-uall`), `git diff` (staged + unstaged), `git diff --staged` if anything is
 staged, and `git log --oneline -20` (to mimic the repo's commit style).
 
+**Bind the GitHub target (#1403)** — Step 5 talks to GitHub, so resolve the
+host and repo from `origin`'s URL in this same message and export them:
+
+```bash
+. "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
+REMOTE_URL=$(git remote get-url origin)
+TARGET_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL")
+TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
+export GH_HOST="$TARGET_HOST"
+```
+
+Every `gh` call in Step 5 is then `GH_HOST="$TARGET_HOST" gh ... --repo
+"$TARGET_REPO"`. A bare `gh` follows gh CLI's own `gh repo set-default`, not
+git's `origin`; on a dual-host login (github.com + GHES) that posts to the
+wrong server with no error. `export` is what carries the host into
+`gh_project_status.sh`, which calls `gh` on its own.
+
 ## Step 2: Resolve the Issue Number
 
 First hit wins: (1) explicit argument (`/gh:commit 123` or "이슈 123번 연결"

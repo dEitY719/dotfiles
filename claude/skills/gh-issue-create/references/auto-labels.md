@@ -49,8 +49,9 @@ milestone: auto                      # auto | none | "<exact name>"
 - `static` accepts both inline (`[a, b]`) and block-list (`- a` lines).
 - `by_title_prefix` keys must be lowercase conventional-commit prefixes.
   Anything not listed (e.g. `perf`, `misc`) yields no label.
-- `milestone: auto` resolves to the most recent open milestone returned
-  by `gh api repos/$TARGET_REPO/milestones?state=open` (highest `number`).
+- `milestone: auto` resolves to the most recent open milestone returned by
+  `GH_HOST="$TARGET_HOST" gh api repos/$TARGET_REPO/milestones?state=open`
+  (highest `number`).
 - `milestone: none` (or empty) skips milestone application.
 - `milestone: "<name>"` matches an open milestone with that exact title;
   unknown names warn-and-skip.
@@ -72,8 +73,11 @@ maps, multi-doc files, and other YAML features are NOT supported.
    `--label foo` values the operator passed on the CLI — they are
    merged, never overridden. `--no-auto-labels` short-circuits Step 2.5
    entirely so user labels are kept untouched.)
-4. Validate each candidate against `gh label list --repo $TARGET_REPO
-   --json name --jq '.[].name'`. Missing labels emit
+4. Validate each candidate against
+   `GH_HOST="$TARGET_HOST" gh label list --repo "$TARGET_REPO" --json name --jq '.[].name'`.
+   The `GH_HOST` prefix is not optional: without it a dual-host `gh` login
+   validates against the *other* server's label set, and every real label
+   gets dropped as "not found" (#1403). Missing labels emit
    `auto-labels: label '<x>' not found in $TARGET_REPO — skip` on stderr
    and are dropped from the set. **Never auto-create labels** — see the
    pinned memory rule "gh labels — verify before apply".
@@ -81,8 +85,9 @@ maps, multi-doc files, and other YAML features are NOT supported.
    - `auto` → query open milestones, pick the highest `number`.
    - `none`/empty → skip.
    - `"<name>"` → match by exact title; missing → warn-skip.
-6. Build the `gh issue create` arg list with one `--label <x>` per kept
-   label and (optionally) `--milestone <name>`.
+6. Build the `GH_HOST="$TARGET_HOST" gh issue create --repo "$TARGET_REPO"`
+   arg list with one `--label <x>` per kept label and (optionally)
+   `--milestone <name>`.
 
 ## Operator escapes
 

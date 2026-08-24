@@ -40,9 +40,16 @@ Positional args: `<issue-number> [mode] [remote]`; flag `--no-next-hint`.
 
 - `issue-number` — required, positive integer.
 - `mode` — default `direct`; one of `direct` / `plan` / `brainstorming`.
-- `remote` — default `origin`. Resolve `TARGET_REPO=<owner>/<repo>` per
-  `references/repo-resolution.md`; missing → `git remote -v` + stop.
+- `remote` — default `origin`. Resolve `TARGET_REPO=<owner>/<repo>` **and**
+  `TARGET_HOST` from that same remote URL per `references/repo-resolution.md`,
+  then `export GH_HOST="$TARGET_HOST"`; missing remote → `git remote -v` + stop.
 - `--no-next-hint` — omit the final `Next:` line in Step 6.
+
+**Host targeting (#1403)** — every `gh` call in this skill run is
+`GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"`. A bare `gh` follows its
+own `gh repo set-default`, not git's `origin`, and on a dual-host login
+(github.com + GHES) that silently queries the wrong host. Detail:
+`references/repo-resolution.md` → "Host targeting rule".
 
 Check preconditions in parallel per `references/implementation-flow.md`
 → "Preconditions" (git repo, not default branch, clean tree); fail-fast.

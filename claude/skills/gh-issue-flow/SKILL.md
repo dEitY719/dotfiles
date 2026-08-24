@@ -55,6 +55,24 @@ post-PR quality gate (agy ∥ codex ∥ /simplify) and schedules the pr-reply.
 No `mode` arg — implementation is always `direct`. Record
 `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 2.6.
 
+**Bind the GitHub target once, here (#1403)** — resolve host and repo from the
+`[remote]`'s URL and export the host, so every chained skill and every sourced
+helper inherits one consistent target:
+
+```bash
+. "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
+REMOTE_URL=$(git remote get-url "${REMOTE:-origin}")
+TARGET_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL")
+TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
+export GH_HOST="$TARGET_HOST"
+```
+
+Step 2.6's `gh api "repos/$TARGET_REPO/..."` — the only `gh` call this
+composition makes directly — takes `GH_HOST="$TARGET_HOST"` explicitly; the
+repo slug is already in its path. Without the host, `gh` follows its own
+`gh repo set-default` rather than git's `origin`, and on a dual-host login
+(github.com + GHES) it hits the wrong server with no error.
+
 ## Step 2: Chain the Skills
 
 Invoke in order; each runs only if the previous succeeded. **Zero

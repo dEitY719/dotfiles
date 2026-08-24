@@ -12,6 +12,11 @@ fix commit would bounce it back to `In progress`.
 
 Skip the board sync entirely when no issue footer was written.
 
+`_gh_project_status_sync` issues its own `gh api` calls and takes no host
+argument — it reads `GH_HOST` from the environment. Step 1's
+`export GH_HOST="$TARGET_HOST"` is therefore load-bearing here: without it the
+board mutation goes to gh CLI's default host on a dual-host login (#1403).
+
 ```bash
 # helper-fallback NF-1 (#644): silent-skip when helper missing.
 # Defense-in-depth (#724): also detect "[ -r ] passes but function never
