@@ -11,6 +11,10 @@
 #
 # T9-T14 cover `_gh_host_from_url` (issue #1403) — the host read out of a
 # remote URL rather than out of the PC's setup-mode.
+#
+# T15-T17 cover `_gh_match_known_host`'s boundary anchoring (PR #1404
+# review) — a substring-only glob also matches near-miss hosts like
+# `notgithub.com` or `github.com.evil.net`; these pin the rejection.
 
 load '../test_helper'
 
@@ -160,6 +164,30 @@ teardown() {
     assert_success
     assert_line --index 0 "github.samsungds.net"
     assert_line --index 1 "github.com"
+}
+
+# ---------------------------------------------------------------------------
+# T15-T17: near-miss hosts (PR #1404 review, codex/agy) — a plain
+# `*github.com*` substring glob also matches these; the boundary-anchored
+# `_gh_match_known_host` must reject all three.
+# ---------------------------------------------------------------------------
+
+@test "T15: notgithub.com (substring near-miss) is rejected, not misread as github.com" {
+    run_in_bash '_gh_host_from_url "https://notgithub.com/owner/repo.git" 2>&1'
+    assert_failure
+    assert_output --partial "not a github remote"
+}
+
+@test "T16: github.com.evil.net (suffix near-miss) is rejected" {
+    run_in_bash '_gh_host_from_url "https://github.com.evil.net/owner/repo.git" 2>&1'
+    assert_failure
+    assert_output --partial "not a github remote"
+}
+
+@test "T17: notgithub.com is also rejected by _gh_parse_owner_repo_url" {
+    run_in_bash '_gh_parse_owner_repo_url "https://notgithub.com/owner/repo.git" 2>&1'
+    assert_failure
+    assert_output --partial "not a github remote"
 }
 
 # ---------------------------------------------------------------------------

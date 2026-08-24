@@ -56,8 +56,14 @@ No `mode` arg — implementation is always `direct`. Record
 `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 2.6.
 
 **Bind the GitHub target once, here (#1403)** — resolve host and repo from the
-`[remote]`'s URL and export the host, so every chained skill and every sourced
-helper inherits one consistent target:
+`[remote]`'s URL and export them. This is a best-effort default, not a
+guarantee across the whole chain: Step 2.1 (`gh:issue-implement`) accepts and
+uses `[remote]` directly, but Step 2.2 (`gh:commit`) and Step 2.3 (`gh:pr`)
+each still resolve their own target from `origin` — `gh:pr` doesn't even
+accept a `[remote]` argument. Invoking `/gh-issue-flow <N> upstream` therefore
+still lands the commit's ai-metrics call and the PR itself on `origin`, not
+`upstream` (PR #1404 review, codex). Threading `[remote]` through every
+sub-skill is tracked separately, not fixed by this export alone.
 
 ```bash
 . "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
@@ -65,6 +71,7 @@ REMOTE_URL=$(git remote get-url "${REMOTE:-origin}")
 TARGET_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL")
 TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
 export GH_HOST="$TARGET_HOST"
+export TARGET_REPO TARGET_HOST
 ```
 
 Step 2.6's `gh api "repos/$TARGET_REPO/..."` — the only `gh` call this
