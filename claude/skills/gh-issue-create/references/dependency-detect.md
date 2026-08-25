@@ -199,9 +199,9 @@ Since #1457 it also pins the `addBlockedBy` argument shape, two ways:
   never written out here even as an example: doing so would turn the suite
   red on its own text.
 - **Live schema** — `AddBlockedByInput`'s input fields are read back from
-  the real API by introspection and compared to
-  `blockingIssueId,clientMutationId,issueId`. This is not a mock; it is a
-  read-only query against the server whose shape this doc records. Without
+  the real API by introspection and compared against the shape recorded at
+  the top of this file. This is not a mock; it is a read-only query against
+  the server whose shape this doc records. Without
   network or `gh` auth it **skips** rather than fails, so an offline shell
   never goes red over an unrelated concern — one networked run is enough to
   catch drift.
