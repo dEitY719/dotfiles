@@ -122,11 +122,36 @@ _worktree_path() {
 _set_live_agents() {
     local _json="" _sep="" _p
     for _p in "$@"; do
-        _json="${_json}${_sep}{\"agent\":\"claude\",\"agent_status\":\"working\",\"cwd\":\"${_p}\",\"pane_id\":\"wV:p1\"}"
+        _json="${_json}${_sep}{\"agent\":\"claude\",\"agent_status\":\"working\",\"cwd\":\"${_p}\",\"foreground_cwd\":\"${_p}\",\"pane_id\":\"wV:p1\"}"
         _sep=","
     done
     printf '{"id":"cli:agent:list","result":{"agents":[%s]}}\n' "${_json}" \
         >"${_WORK_DIR}/agents.json"
+}
+
+# A pane whose shell has walked away from where it was opened: `cwd` still says
+# the worktree, `foreground_cwd` says $2.
+_set_live_agent_moved() {
+    printf '{"id":"cli:agent:list","result":{"agents":[{"agent":"claude","agent_status":"working","cwd":"%s","foreground_cwd":"%s","pane_id":"wV:p1"}]}}\n' \
+        "$1" "$2" >"${_WORK_DIR}/agents.json"
+}
+
+# A pane that reports only `foreground_cwd` — inside the worktree, not its root.
+_set_live_agent_subdir() {
+    printf '{"id":"cli:agent:list","result":{"agents":[{"agent":"claude","agent_status":"working","foreground_cwd":"%s","pane_id":"wV:p1"}]}}\n' \
+        "$1" >"${_WORK_DIR}/agents.json"
+}
+
+# N open PRs in <1>, none of which closes any watched issue — used to fill the
+# `gh pr list` window so truncation can be observed.
+_set_filler_prs() {
+    local _repo="$1" _n="$2" _i=1 _json="" _sep=""
+    while [ "${_i}" -le "${_n}" ]; do
+        _json="${_json}${_sep}{\"number\":${_i},\"headRefName\":\"filler/${_i}\",\"body\":\"nothing\"}"
+        _sep=","
+        _i=$((_i + 1))
+    done
+    printf '{"%s":[%s]}\n' "${_repo}" "${_json}" >"${_WORK_DIR}/prs.json"
 }
 
 # The given issues are *running*: a worktree each, with a live pane sitting in
@@ -1194,7 +1219,7 @@ _two_repo_fixture() {
     rm -f "$(_worktree_path 21)/.git"
     _run_tick "GH_CLOSED_ISSUES=21"
     assert_success
-    assert_output --partial "Could not remove worktree"
+    assert_output --partial "Leaving worktree"
     _assert_logged "gwt spawn --wt-name issue-11"
 }
 
@@ -1215,6 +1240,160 @@ _two_repo_fixture() {
     assert_success
     run git -C "${_REPO_DIR}" worktree list --porcelain
     assert_output --partial "wt/issue-21/"
+}
+
+# ---------------------------------------------------------------------------
+# PR #1456 review regressions
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: a full open-PR window is treated as unknown, not as an answer" {
+    # 100 open PRs means the window is full; the issue's own PR may sit outside
+    # it, so answering "unhandled" would reinstate the duplicate-PR failure.
+    _set_filler_prs "acme/dotfiles" 100
+    _run_tick
+    assert_success
+    assert_output --partial "cannot rule out a duplicate"
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: a window with room to spare still answers" {
+    _set_filler_prs "acme/dotfiles" 99
+    _run_tick
+    assert_success
+    _assert_logged "gwt spawn --wt-name issue-11"
+}
+
+@test "issue_watcher_cron: 'Closes: #N' counts as an open PR closing the issue" {
+    _set_open_prs '{"acme/dotfiles":[{"number":90,"headRefName":"feature/x","body":"Closes: #11"}]}'
+    _run_tick
+    assert_success
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: a cross-repo 'Closes owner/repo#N' counts too" {
+    _set_open_prs '{"acme/dotfiles":[{"number":90,"headRefName":"feature/x","body":"Closes acme/dotfiles#11"}]}'
+    _run_tick
+    assert_success
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: a session that cd-ed away is still counted as running" {
+    _add_worktree 11
+    _set_live_agent_moved "$(_worktree_path 11)" "${_WORK_DIR}"
+    _run_tick
+    assert_success
+    assert_output --partial "already running"
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: a session in a subdirectory of its worktree still counts" {
+    _add_worktree 11
+    mkdir -p "$(_worktree_path 11)/sub/dir"
+    _set_live_agent_subdir "$(_worktree_path 11)/sub/dir"
+    _run_tick
+    assert_success
+    assert_output --partial "already running"
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: a worktree with uncommitted work is never collected" {
+    # An issue can be closed by hand while its session still holds unsaved work.
+    # Routine hygiene must not be a data-loss path.
+    _add_worktree 21
+    printf 'unsaved\n' >"$(_worktree_path 21)/WIP.txt"
+    git -C "$(_worktree_path 21)" add WIP.txt
+    _run_tick "GH_CLOSED_ISSUES=21"
+    assert_success
+    assert_output --partial "uncommitted or untracked changes"
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    assert_output --partial "wt/issue-21/"
+    [ -f "${_WORK_DIR}/dotfiles-issue-21-1/WIP.txt" ]
+}
+
+@test "issue_watcher_cron: an untracked file also blocks collection" {
+    _add_worktree 21
+    printf 'scratch\n' >"$(_worktree_path 21)/scratch.txt"
+    _run_tick "GH_CLOSED_ISSUES=21"
+    assert_success
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    assert_output --partial "wt/issue-21/"
+}
+
+@test "issue_watcher_cron: the tick never collects the worktree it is standing in" {
+    _add_worktree 21
+    _run_tick "GH_CLOSED_ISSUES=21" -- --cwd "$(_worktree_path 21)"
+    assert_success
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    assert_output --partial "wt/issue-21/"
+}
+
+@test "issue_watcher_cron: nor one it is standing inside" {
+    _add_worktree 21
+    mkdir -p "$(_worktree_path 21)/nested"
+    _run_tick "GH_CLOSED_ISSUES=21" -- --cwd "$(_worktree_path 21)/nested"
+    assert_success
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    assert_output --partial "wt/issue-21/"
+}
+
+@test "issue_watcher_cron: a raised per-tick cap cannot exceed the per-repo cap" {
+    # Two already running plus a per-tick allowance of three: only one slot is
+    # left in this repo, so only one issue may start.
+    local _paths=() _n
+    for _n in 21 22; do
+        _add_worktree "${_n}"
+        _paths+=("$(_worktree_path "${_n}")")
+    done
+    _set_live_agents "${_paths[@]}"
+    _set_issues '[
+      {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
+    ]'
+    _run_tick "IW_DISPATCH_PER_TICK=3"
+    assert_success
+    [ "$(_log_count 'gwt spawn')" -eq 1 ]
+}
+
+@test "issue_watcher_cron: a raised per-tick cap cannot exceed the global cap" {
+    local _paths=() _n
+    for _n in 21 22 23 24 25 26; do
+        _add_worktree "${_n}"
+        _paths+=("$(_worktree_path "${_n}")")
+    done
+    _set_live_agents "${_paths[@]}"
+    _set_issues '[
+      {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
+    ]'
+    # Per-repo headroom is lifted so the global ceiling is the only thing left
+    # to hold the line: six running, seven allowed, so exactly one may start.
+    _run_tick "IW_DISPATCH_PER_TICK=3" "IW_MAX_PER_REPO=9"
+    assert_success
+    [ "$(_log_count 'gwt spawn')" -eq 1 ]
+}
+
+@test "issue_watcher_cron: a non-integer cap override falls back to the default" {
+    _run_tick "IW_MAX_CONCURRENT=abc"
+    assert_success
+    assert_output --partial "not a positive integer"
+    _assert_logged "gwt spawn --wt-name issue-11"
+}
+
+@test "issue_watcher_cron: an empty cap override is silently the default" {
+    # Unset-vs-empty must not warn: `IW_MAX_CONCURRENT=` in a cron env is the
+    # same intent as not setting it at all.
+    _run_tick "IW_MAX_CONCURRENT="
+    assert_success
+    refute_output --partial "not a positive integer"
+    _assert_logged "gwt spawn --wt-name issue-11"
+}
+
+@test "issue_watcher_cron: --help reports the effective cap, not the default" {
+    run env "IW_MAX_CONCURRENT=5" bash "${SCRIPT}" --help
+    assert_success
+    assert_output --partial "5 running in total"
 }
 
 # ---------------------------------------------------------------------------
