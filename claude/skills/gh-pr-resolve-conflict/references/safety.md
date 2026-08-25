@@ -96,7 +96,8 @@ Decide whether to merge those in or discard them, then re-run this skill.
 
 ```bash
 CURRENT=$(git rev-parse --abbrev-ref HEAD)
-DEFAULT=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name)
+DEFAULT=$(GH_HOST="$TARGET_HOST" gh repo view --repo "$TARGET_REPO" \
+    --json defaultBranchRef -q .defaultBranchRef.name)
 if [ "$CURRENT" = "$DEFAULT" ]; then
     echo "refuse: currently on the default branch ($DEFAULT)."
     echo "check out the PR's head branch first."

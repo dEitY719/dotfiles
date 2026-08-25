@@ -28,17 +28,17 @@ Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 4.
 
 - `pr-number` — required, positive integer. Missing/invalid → usage pointer, stop.
 - `strategy` — default `rebase`; one of `rebase`/`squash`/`merge`. Other → print allowed values, stop.
-- `remote` — default `origin`. Resolve `TARGET_REPO=<owner>/<repo>` from
-  `git remote get-url <remote>` (parse `https://github.com/<o>/<r>.git` or
-  `git@github.com:<o>/<r>.git`). Missing remote → list `git remote -v`, stop (no silent fallback).
+- `remote` — default `origin`. Bind `TARGET_REPO` **and** `TARGET_HOST` from
+  that one remote URL and `export GH_HOST` per `references/github-target.md`
+  (#1403/#1407). Missing remote → list `git remote -v`, stop (no silent fallback).
 
 ## Step 2: Pre-flight (parallel)
 
-Run in one message: `gh pr view <N> --repo $TARGET_REPO --json number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefName,url`
-and `gh pr checks <N> --repo $TARGET_REPO --required`.
+Run in one message: `GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$TARGET_REPO" --json number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefName,url`
+and `GH_HOST="$TARGET_HOST" gh pr checks <N> --repo "$TARGET_REPO" --required`.
 
 Then detect base-branch protection via
-`gh api "repos/$TARGET_REPO/branches/<baseRefName>/protection"` (exit 0 →
+`GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/branches/<baseRefName>/protection"` (exit 0 →
 present; 403/404 → absent). The exact protection-vs-`reviewDecision` behavior
 table is in `references/strategy-selection.md` → "Branch protection detection".
 
@@ -61,7 +61,7 @@ helper-missing → silent-skip; `GH_PR_MERGE_SKIP_BOARD_CHECK=1` to bypass). Run
 ## Step 3: Merge (no confirmation)
 
 ```bash
-gh pr merge <N> --repo "$TARGET_REPO" --<strategy> --delete-branch
+GH_HOST="$TARGET_HOST" gh pr merge <N> --repo "$TARGET_REPO" --<strategy> --delete-branch
 ```
 
 Flag mapping in `references/strategy-selection.md`. If `gh` returns
@@ -83,7 +83,7 @@ After the board sync completes, post the ai-metrics PR comment per
 ## Step 5: Fetch Merge SHA + Report
 
 ```bash
-gh pr view <N> --repo "$TARGET_REPO" --json mergeCommit -q .mergeCommit.oid
+GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$TARGET_REPO" --json mergeCommit -q .mergeCommit.oid
 ```
 
 Print **only** the compact report (format in `references/strategy-selection.md` → "Final report format").

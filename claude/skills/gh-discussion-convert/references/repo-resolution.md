@@ -28,14 +28,46 @@ so all gh-discussion-* skills behave identically.
    upstream  https://github.com/org/repo.git  (fetch)
    ```
 
-4. Extract `owner/repo` from the remote URL returned in step 3:
+4. Extract `owner/repo` **and the host** from the remote URL returned in
+   step 3. Both must come from that one URL — never from two sources:
 
-   - `https://github.com/<owner>/<repo>.git` -> `<owner>/<repo>`
-   - `git@github.com:<owner>/<repo>.git`     -> `<owner>/<repo>`
+   ```bash
+   . "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
+   REMOTE_URL=$(git remote get-url "${REMOTE:-origin}") || exit 1
+   TARGET_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL") || exit 1
+   TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
+   export GH_HOST="$TARGET_HOST"
+   export TARGET_REPO TARGET_HOST
+   ```
 
-Store the resolved `owner/repo` as `TARGET_REPO`. Split into
+   - `https://github.com/<owner>/<repo>.git` -> `github.com` + `<owner>/<repo>`
+   - `git@github.samsungds.net:<owner>/<repo>.git` -> `github.samsungds.net`
+     + `<owner>/<repo>`
+
+   `gh_host.sh` is the host/URL mapping SSOT — do not copy a domain list or
+   regex into this file. `_gh_resolve_host` (setup-mode -> host) is only the
+   fallback for when there is no remote URL to parse.
+
+Store the results as `TARGET_REPO` and `TARGET_HOST`. Split the repo into
 `_owner="${TARGET_REPO%%/*}"` and `_repo="${TARGET_REPO##*/}"` for the
-GraphQL helpers in `gh_discussion.sh`.
+GraphQL helpers in `gh_discussion.sh` — they inherit the exported `GH_HOST`,
+so the Discussion mutations hit the same server as the Issue creation.
+
+## Host targeting rule (issues #1403 / #1407)
+
+Every `gh` call this skill runs names both host and repo:
+
+```bash
+GH_HOST="$TARGET_HOST" gh <sub-command> ... --repo "$TARGET_REPO"
+```
+
+`--repo <owner>/<repo>` carries no host, so a bare `gh` follows its own
+`gh repo set-default` rather than git's remote. On a dual-host login
+(github.com + GHES) the two disagree and the call silently hits the wrong
+server. Here that is worse than a bad read: Step 4's idempotency search
+would miss an existing Issue and Step 5 would create the promoted Issue in
+the wrong repo, splintering the very backlink chain this skill exists to
+keep intact.
 
 ## Failure rule
 

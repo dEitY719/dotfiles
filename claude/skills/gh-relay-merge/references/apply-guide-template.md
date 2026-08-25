@@ -8,7 +8,7 @@ Step 6. Post this to the destination: a NEW issue (default) or the
 - **New issue (default):**
 
   ```bash
-  gh issue create --repo "$DEST_REPO" \
+  GH_HOST="$DEST_HOST" gh issue create --repo "$DEST_REPO" \
     --title "Relay: origin PR #<N> — <PR title>" \
     --body-file "$tmpdir/apply-guide.md"
   ```
@@ -16,13 +16,17 @@ Step 6. Post this to the destination: a NEW issue (default) or the
 - **Existing target:**
 
   ```bash
-  gh issue comment "$TARGET_ISSUE" --repo "$DEST_REPO" \
+  GH_HOST="$DEST_HOST" gh issue comment "$TARGET_ISSUE" --repo "$DEST_REPO" \
     --body-file "$tmpdir/apply-guide.md"
   ```
 
 `--repo "$DEST_REPO"` uses the `owner/repo` resolved in
 `references/remote-resolution.md`; `gh` parses both `owner/repo` and URL
-forms safely.
+forms safely. `GH_HOST="$DEST_HOST"` comes from that same remote URL and is
+what actually pins the server — `--repo` alone carries no host, so on a
+dual-host login the apply-guide would land on whichever repo
+`gh repo set-default` happens to name (issues #1403 / #1407). This skill
+crosses hosts by design, so it never exports one global `GH_HOST`.
 
 ## Body template
 
@@ -74,8 +78,14 @@ curl -sL <raw-url-0002> | git am
 
 ```bash
 git push -u origin <new-branch-name>
-gh pr create --repo <owner/repo> --title "<title>" --body "Closes #<N>"
+GH_HOST="<destination-host>" gh pr create --repo <owner/repo> \
+  --title "<title>" --body "Closes #<N>"
 ```
+
+`GH_HOST=` pins the server this PR is opened on. You are on the destination
+host, and `--repo <owner/repo>` names a repo but no host — without the
+prefix, `gh` would follow your own `gh repo set-default`, which on a
+two-host login can be a different server entirely.
 
 ---
 
@@ -121,6 +131,10 @@ What was verified on the origin side (from `gh pr view` in Step 1):
 
 - The `git am` block uses the **raw** gist URLs captured in
   `references/gist-relay.md`, not the web URLs.
+- Step 6 renders `<destination-host>` and `<owner/repo>` in the step-3
+  `gh pr create` line from `$DEST_HOST` / `$DEST_REPO` before posting —
+  both are literal values in the published guide, never left as
+  placeholders (same copy-paste rule as the `origin` remote name below).
 - Keep the apply order identical to the numeric patch order from
   `git format-patch` — out-of-order application breaks `git am`.
 - **"Known unrelated pre-existing failures" is driven entirely by the

@@ -3,16 +3,17 @@
 ## Three comment endpoints (fetch all)
 
 Bot tools and humans scatter feedback across three APIs. Missing one means missing comments.
+`TARGET_HOST` / `TARGET_REPO` come from Step 1 (`references/arg-parsing.md`).
 
 ```bash
 # Inline code review comments (line-anchored)
-gh api "repos/<owner>/<repo>/pulls/<N>/comments" --paginate
+GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/pulls/<N>/comments" --paginate
 
 # Top-level issue-style comments on the PR conversation
-gh api "repos/<owner>/<repo>/issues/<N>/comments" --paginate
+GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/issues/<N>/comments" --paginate
 
 # Review summaries (bots often put content here)
-gh api "repos/<owner>/<repo>/pulls/<N>/reviews" --paginate
+GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/pulls/<N>/reviews" --paginate
 ```
 
 For threading / dedup details see the sibling skill

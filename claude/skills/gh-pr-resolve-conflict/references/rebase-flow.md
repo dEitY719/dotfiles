@@ -1,5 +1,8 @@
 # gh:pr-resolve-conflict — Rebase Flow
 
+Every `gh` call below assumes `TARGET_HOST` / `TARGET_REPO` are already bound
+and exported by Step 1 per `references/github-target.md` (#1403, #1407).
+
 ## Preconditions (parallel batch)
 
 Run all four in a single tool message. Any failure → stop immediately.
@@ -7,7 +10,7 @@ Run all four in a single tool message. Any failure → stop immediately.
 ```bash
 git rev-parse --is-inside-work-tree
 git rev-parse --abbrev-ref HEAD
-gh repo view --json defaultBranchRef -q .defaultBranchRef.name
+GH_HOST="$TARGET_HOST" gh repo view --repo "$TARGET_REPO" --json defaultBranchRef -q .defaultBranchRef.name
 git status --porcelain
 ls "$(git rev-parse --git-path rebase-merge)" \
    "$(git rev-parse --git-path rebase-apply)" \
@@ -35,11 +38,13 @@ Dirty working tree is NOT a stop — it triggers the stash flow in
 Prefer the PR's actual base (not the repo default):
 
 ```bash
-BASE=$(gh pr view "$PR" --repo "$TARGET_REPO" --json baseRefName -q .baseRefName)
+BASE=$(GH_HOST="$TARGET_HOST" gh pr view "$PR" --repo "$TARGET_REPO" \
+    --json baseRefName -q .baseRefName)
 ```
 
-Fall back to `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`
-only when auto-detecting a PR and `gh pr view` returned nothing yet.
+Fall back to `GH_HOST="$TARGET_HOST" gh repo view --repo "$TARGET_REPO" --json
+defaultBranchRef -q .defaultBranchRef.name` only when auto-detecting a PR and
+`gh pr view` returned nothing yet.
 
 ## Fetch + rebase
 
@@ -79,7 +84,7 @@ Never substitute `--force` for `--force-with-lease`.
 ## Verify mergeable
 
 ```bash
-gh pr view "$PR" --repo "$TARGET_REPO" \
+GH_HOST="$TARGET_HOST" gh pr view "$PR" --repo "$TARGET_REPO" \
   --json number,mergeable,mergeStateStatus,url
 ```
 
@@ -121,7 +126,7 @@ Immediately after resolving `PR_NUMBER`, short-circuit when there is
 nothing to resolve:
 
 ```bash
-MERGEABLE=$(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
+MERGEABLE=$(GH_HOST="$TARGET_HOST" gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
   --json mergeable --jq '.mergeable')
 ```
 

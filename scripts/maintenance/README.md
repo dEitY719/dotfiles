@@ -38,6 +38,18 @@ Dotfiles 유지보수를 위한 1회성/주기적 도구 모음
   - 개별 skill 이 `--per-skill-max` (기본 1024자) 초과 시 종료 코드 1 — 로더가 해당 skill 을 silently drop 하기 전에 사전 차단
   - 총합 예산 초과 시 종료 코드 1, 트리밍 또는 `.codex-allowlist` 사용 안내
 
+### check_gh_skill_host_pinning.py
+- **목적**: `gh:*` 스킬의 `GH_HOST` pinning 계약 (issue #1403 / PR #1404) 위반 감지 (issue #1407)
+- **사용**: `python3 check_gh_skill_host_pinning.py [--skills-dir PATH] [--prefix gh-] [--quiet]`
+- **요구사항**: Python stdlib 만 (외부 의존성 없음)
+- **기능**:
+  - `claude/skills/gh-*/**/*.md` 의 실행 가능한 `gh` 호출을 전수 스캔 (backslash 연속 행은 논리 행으로 결합)
+  - host 미고정 (`GH_HOST=` 접두사도 `--hostname` 도 없음) 시 위반
+  - repo 미고정 (`--repo` 부재) 시 위반 — `gh gist` / `gh auth` 등 repo 스코프가 아닌 서브커맨드는 예외
+  - `gh api` 는 `--repo` 플래그가 없으므로 경로에 `$TARGET_REPO` 를 요구하고, 리터럴 `{owner}/{repo}` placeholder 는 위반으로 잡는다 (암묵 해석 = #1403 의 조용한 오호스트 경로)
+  - 위반 1건 이상이면 종료 코드 1, skills 디렉토리 부재 시 2
+- **회귀 가드**: `tests/integration/test_gh_skill_host_pinning.py` 가 이 스크립트를 실 트리에 대해 돌린다
+
 ## 💡 사용 시나리오
 
 ### Shebang 검증

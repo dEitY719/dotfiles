@@ -28,22 +28,21 @@ tabled in that same file.
 
 Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 4.
 
-Parse args first, then fetch PR metadata in parallel before reading the diff.
-Read `references/arg-parsing.md` for the full flag table, rejection rules, the
-parallel fetch list (incl. the REST-only `rebaseable` field), and gate decisions
-(stop vs. warn). Self-PR (`author.login == ME`) follows
-`references/self-pr-handling.md`; prior `ME` comments trigger re-review mode
-(verify every prior concern fixed, tracked, or acceptably declined).
+Parse args, bind the GitHub target (`TARGET_HOST` + `TARGET_REPO` from one remote URL),
+then fetch PR metadata in parallel before reading the diff. `references/arg-parsing.md`
+holds the "GitHub target" block, the flag table, rejection rules, the parallel fetch
+list (incl. the REST-only `rebaseable` field), and gate decisions (stop vs. warn). Self-PR
+(`author.login == ME`) follows `references/self-pr-handling.md`; prior `ME` comments trigger re-review mode (verify every prior concern fixed, tracked, or acceptably declined).
 
 ## Step 2: Fetch Review Material
 
-Decide path by diff size: `gh pr view <N> --repo $TARGET_REPO --json additions,deletions`.
+Decide path by diff size: `GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$TARGET_REPO" --json additions,deletions`.
 When `additions + deletions` meets the threshold in
 `references/large-diff-delegation.md`, dispatch an Explore subagent following
 that file, skip loading the full diff into the main context, and feed its
 BLOCKER/FOLLOW-UP/PRAISE summary into Step 3.
 
-Inline path (below the threshold) — in parallel: `gh pr diff <N>`, commits JSON,
+Inline path (below the threshold) — in parallel: `GH_HOST="$TARGET_HOST" gh pr diff <N> --repo "$TARGET_REPO"`, commits JSON,
 and the three comment endpoints in `references/review-criteria.md`. Apply that
 checklist. In re-review mode, map each prior concern to a fixing commit, tracking
 issue, or acceptable author reply.
@@ -92,6 +91,7 @@ state, the Step 4.5 board line, and PR URL — plus the conflict warning if the 
 - Never fabricate follow-ups. Each issue must represent a defensible concern.
 - Never merge a colleague's PR. `--admin-merge` is self-PR only.
 - No labels/milestones unless `gh label list` confirms the label exists.
+- Never call `gh` without both `GH_HOST="$TARGET_HOST"` and `--repo "$TARGET_REPO"` (#1403/#1407) — `--repo` alone follows gh CLI's own default host, not git's remote.
 - Never promote a card to `Approved` on the 4c / analysis-only / `--admin-merge` paths.
 
 ## Related Skills
