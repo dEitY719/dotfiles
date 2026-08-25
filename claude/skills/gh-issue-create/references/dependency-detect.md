@@ -92,7 +92,6 @@ both node ids in one round trip (aliases), then mutate:
 DEP_WARNINGS=""
 _errf=$(mktemp)
 for N in $DEP_NUMS; do
-    # Variables: $owner String!, $name String!, $new Int!, $dep Int!
     # `// ""` on both ids is what keeps a GraphQL null out of the mutation:
     # a missing issue resolves to null, and interpolating that would send the
     # literal string "null" as an ID!.
@@ -100,6 +99,7 @@ for N in $DEP_NUMS; do
     # number is rejected *here*, not by the mutation, and the rejection names
     # itself in plain text. stdout stays on the pipe because $IDS needs it —
     # which is why this is a file and not a `2>&1` merge.
+    # Variables: $owner String!, $name String!, $new Int!, $dep Int!
     IDS=$(GH_HOST="$TARGET_HOST" gh api graphql \
         -f owner="${TARGET_REPO%%/*}" -f name="${TARGET_REPO##*/}" \
         -F new="$NEW_NUM" -F dep="$N" \
@@ -116,9 +116,9 @@ for N in $DEP_NUMS; do
     _dep_id="${IDS##* }"
     _rc=1
     if [ -n "$_new_id" ] && [ -n "$_dep_id" ]; then
-        # Variables: $issueId ID!, $blockingIssueId ID!
         # $_errf is reused, so a clean lookup can never leave a stale cause
         # attached to a mutation failure — the redirect truncates it.
+        # Variables: $issueId ID!, $blockingIssueId ID!
         GH_HOST="$TARGET_HOST" gh api graphql \
             -f issueId="$_new_id" -f blockingIssueId="$_dep_id" \
             -f query='
