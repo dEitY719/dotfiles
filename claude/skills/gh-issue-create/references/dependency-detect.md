@@ -60,6 +60,7 @@ runs here rather than inside Step 2.6. For each `N` in `DEP_NUMS`, resolve
 both node ids in one round trip (aliases), then mutate:
 
 ```bash
+# Variables: $owner String!, $name String!, $new Int!, $dep Int!
 IDS=$(GH_HOST="$TARGET_HOST" gh api graphql \
     -f owner="${TARGET_REPO%%/*}" -f name="${TARGET_REPO##*/}" \
     -F new="$NEW_NUM" -F dep="$N" \
@@ -72,6 +73,7 @@ IDS=$(GH_HOST="$TARGET_HOST" gh api graphql \
       }' --jq '.data.repository | "\(.newIssue.id) \(.depIssue.id)"') || IDS=""
 
 if [ -n "$IDS" ]; then
+    # Variables: $issueId ID!, $blockedById ID!
     GH_HOST="$TARGET_HOST" gh api graphql \
         -f issueId="${IDS% *}" -f blockedById="${IDS#* }" \
         -f query='
@@ -122,4 +124,4 @@ the Step 2.6 detection function verbatim; the bats suite at
 matrix, the plain-mention negatives, the NF-2 cross-repo skip, and the
 `--no-auto-deps` escape. Any change to a trigger phrase must land in both
 files (and this doc). The GraphQL half is not fixtured — it is a single
-`gh api graphql` pair with no branching beyond the NF-1 warning.
+query/mutation pair with no branching beyond the NF-1 warning.
