@@ -79,7 +79,7 @@ matching bash block verbatim — Issue path (default) or Discussion path
 
 ## Step 4.5: Link Dependencies
 
-For each `N` in `DEP_NUMS`, run the node-id query + `addBlockedBy` mutation from `references/dependency-detect.md` — the new issue number only exists after Step 4, which is why the mutation waits until here. Non-fatal (NF-1): any failure adds one `[WARN] Blocked by #<N> 링크 실패 — GH UI에서 수동 추가 필요` line to the Step 5 report and never aborts.
+For each `N` in `DEP_NUMS`, run the node-id query + `addBlockedBy` mutation from `references/dependency-detect.md` — the new issue number only exists after Step 4, which is why the mutation waits until here. Non-fatal (NF-1): any failure appends one `[WARN]` line per `references/report-template.md` and never aborts.
 
 ## Step 5: Report
 

@@ -47,26 +47,24 @@ gh_issue_create_detect_deps() {
         return 0
     fi
 
+    # Two greps, never one per match: the first anchors a reference to a
+    # trigger phrase (that anchoring is the whole false-positive defence),
+    # the second pulls the reference back out. Every trigger alternative
+    # embeds exactly one reference, so the two streams stay 1:1 and each
+    # surviving line is either a same-repo number or an NF-2 cross-repo skip.
     printf '%s\n' "$_text" |
         grep -oiE "$_GH_DEPS_TRIGGERS" |
-        _gh_deps_classify
+        grep -oE "$_GH_DEPS_REF" |
+        while IFS= read -r _ref; do
+            case "$_ref" in
+                */*)
+                    printf 'dependency-detect: cross-repo dependency detected but not supported in v1 — skip (%s)\n' \
+                        "$_ref" >&2
+                    ;;
+                *)
+                    printf '%s\n' "${_ref#\#}"
+                    ;;
+            esac
+        done | sort -n -u
     return 0
-}
-
-# Split each trigger match into "same-repo number" (stdout) or
-# "cross-repo, out of v1 scope" (stderr warning, dropped).
-_gh_deps_classify() {
-    while IFS= read -r _match; do
-        _ref=$(printf '%s' "$_match" | grep -oE "$_GH_DEPS_REF" | head -n 1)
-        [ -z "$_ref" ] && continue
-        case "$_ref" in
-            */*)
-                printf 'dependency-detect: cross-repo dependency detected but not supported in v1 — skip (%s)\n' \
-                    "$_ref" >&2
-                ;;
-            *)
-                printf '%s\n' "${_ref#\#}"
-                ;;
-        esac
-    done | sort -n -u
 }
