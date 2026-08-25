@@ -997,22 +997,39 @@ _run_full_bash() {
     # it must be covered by the canary. Without this, promoting a private
     # helper to cross-file (as #1405 did) silently widens the coverage gap.
     local helper="${SHELL_COMMON}/functions/gh_project_status.sh"
-    local listed missing="" fn
+    local listed missing="" fn _f _hit
     listed=$(sed -n '/^for _gh_ps_selfcheck_fn in/,/^done$/p' "$helper")
     [ -n "$listed" ]  # the loop shape this test reads must still exist
 
     while IFS= read -r fn; do
         [ -n "$fn" ] || continue
-        # -w is load-bearing: without a word boundary a short name that is a
-        # substring of a longer identifier in some other file registers as a
-        # caller and the guard fails on a function that is really file-local
-        # (PR #1426 review, codex + agy). It deliberately does NOT try to tell
-        # a real call from a mention in a comment or fixture — the guard is
-        # intentionally over-inclusive, because a false positive costs one
-        # extra name on the list while a false negative silently reproduces
-        # #1421. Verified: -w keeps the same 4-cross-file / 5-local split.
-        grep -rqwF "$fn" --include='*.sh' --exclude='gh_project_status.sh' \
-            "$DOTFILES_ROOT" 2>/dev/null || continue
+        # Two filters, both load-bearing (PR #1426 review, codex + agy):
+        #
+        # -w — without a word boundary a short name that is a substring of a
+        # longer identifier registers as a caller.
+        #
+        # comment-stripping — a name mentioned in a *comment* is not a call.
+        # This was initially left over-inclusive on the theory that a false
+        # positive merely adds one name to the list; that was wrong. The real
+        # cost is a RED TEST on an unrelated PR: main's #1425 added the line
+        # `# Mirrors _gh_project_status_ensure_host` to gh_pr_review.sh and
+        # this guard promptly failed on a function that is genuinely
+        # file-local. A recurrence guard that strangers trip by writing prose
+        # gets deleted, so it has to distinguish code from commentary.
+        #
+        # Still deliberately over-inclusive *within code*: a name appearing in
+        # a fixture or a string still counts, because a false negative here
+        # silently reproduces #1421, which is the expensive direction.
+        _hit=0
+        while IFS= read -r _f; do
+            [ -n "$_f" ] || continue
+            if grep -vE '^[[:space:]]*#' "$_f" | grep -qwF "$fn"; then
+                _hit=1
+                break
+            fi
+        done < <(grep -rlwF "$fn" --include='*.sh' \
+            --exclude='gh_project_status.sh' "$DOTFILES_ROOT" 2>/dev/null)
+        [ "$_hit" -eq 1 ] || continue
         case "$listed" in *"$fn"*) continue ;; esac
         missing="$missing $fn"
     done < <(grep -oE '^_[a-z0-9_]+\(\) \{$' "$helper" | sed 's/() {$//' | sort -u)
