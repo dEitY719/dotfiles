@@ -138,6 +138,15 @@ _IW_IDLE_POLL_SLEEP="${IW_IDLE_POLL_SLEEP:-0.5}"
 # "start at the first watched repo".
 _IW_SELECT_STATE_BASENAME="select.json"
 
+# Stall recovery (issue #1443). A stalled prompt means the text is already
+# sitting in the pane's input box unsubmitted, so the recovery is a bare Enter,
+# never a second `agent prompt` — see _iw_stall_recover_via_enter. Bounded at 3
+# presses 2s apart: a key-input loop that is not listening after ~6s is not
+# going to start, and the whole budget stays far inside the 5-minute tick.
+# The interval is overridable for the same reason _IW_IDLE_POLL_SLEEP is.
+_IW_STALL_RECOVER_ATTEMPTS="3"
+_IW_STALL_RECOVER_SLEEP="${IW_STALL_RECOVER_SLEEP:-2}"
+
 # Rate-limit gate (issue #1436). Rationale for each value sits with the gate
 # functions below; the values themselves live here with the rest of the SSOT.
 _IW_LIMIT_STATE_BASENAME="rate-limit.json"
@@ -148,6 +157,11 @@ _IW_LIMIT_BACKOFF_SECONDS="1800"
 # _iw_prompt_issue so the rate-limit gate can tell a quota wall from an
 # unrelated herdr failure. Empty whenever the dispatch succeeded.
 _IW_DISPATCH_ERROR_CODE=""
+# Set by _iw_stall_recover_via_enter when `herdr agent send-keys` itself fails —
+# the pane is gone, not merely slow. Kept distinct from the prompt response's
+# own `.error.code` so the rate-limit gate never books a broken pane as a
+# token-limit stall (issue #1443, PR #1449 codex review). Empty otherwise.
+_IW_STALL_RECOVER_ERROR=""
 # CLAUDE_CONFIG_DIR for every pane this tick opens. Resolved once per tick.
 _IW_CONFIG_DIR=""
 # Set by --dry-run: collect and report candidates, mutate nothing.
@@ -1147,6 +1161,23 @@ _iw_agent_status() {
     printf '%s' "${_json}" | _iw_json_value '.result.agent.agent_status'
 }
 
+# Echo the agent's `state_change_seq` — a counter herdr bumps on every
+# observable state change, a submitted prompt included. Returns non-zero when
+# herdr rejects the query; echoes nothing when the field is absent (an older
+# herdr, or a response this script cannot parse), which every caller reads as
+# "no usable baseline" rather than as a value.
+#
+# This is the signal `agent_status` cannot give: `idle` covers both "waiting for
+# input" and "drew the input box but the key loop is not wired up yet", and that
+# ambiguity is the whole of issue #1443. The counter moving is positive proof
+# the keystroke landed.
+_iw_agent_seq() {
+    local _json _rc=0
+    _json=$(herdr agent get "$1" 2>/dev/null) || _rc=$?
+    [ "${_rc}" -eq 0 ] || return 1
+    printf '%s' "${_json}" | _iw_json_value '.result.agent.state_change_seq'
+}
+
 # `-- ARG...` is passed through to the pane's claude invocation. Unattended
 # cron ticks must never stop on a permission-approval prompt (issue #1393).
 _iw_agent_start() {
@@ -1162,7 +1193,7 @@ _iw_agent_start() {
 # watcher pane got this grace; every dispatched pane needs it now, because each
 # one is cold (PR #1447 codex review). Capped at ~5s (10 checks, 0.5s apart):
 # far below the 5-minute tick interval, and hitting the cap still dispatches
-# because the stall retry in _iw_prompt_issue is the second line of defence.
+# because the stall recovery in _iw_prompt_issue is the second line of defence.
 _iw_wait_for_idle() {
     local _agent="$1" _i=0 _status _get_failed=0
 
@@ -1192,6 +1223,68 @@ _iw_prompt_once() {
     herdr agent prompt "$1" "$2" --wait --timeout "${_IW_TIMEOUT_MS}" 2>/dev/null
 }
 
+# Recover a stalled prompt by *submitting* what is already typed (issue #1443).
+#   $1 = agent name
+#   $2 = state_change_seq read before the prompt was sent, or "" when that read
+#        did not produce one
+#
+# `agent_prompt_stalled` means herdr typed the command into the pane and saw no
+# state change: the text is sitting in the input box, unsent, because the key
+# loop was not accepting Enter yet. Re-sending the *prompt* — which is what this
+# used to do — types the whole command a second time on top of the first, so the
+# box ends up holding a doubled, corrupt line and Enter still never lands. The
+# only correct recovery is the missing keystroke.
+#
+# Presses Enter up to _IW_STALL_RECOVER_ATTEMPTS times and returns 0 as soon as
+# the pane shows evidence the submission landed:
+#   - with a baseline seq: the counter moved (any move — a herdr restart could
+#     reset it downwards and that is still an observable change);
+#   - without one: `agent_status` reached `working`. A baseline read can fail on
+#     a transient local herdr blip, and a sequence comparison against an empty
+#     baseline can never succeed — that would escalate a one-off blip into a
+#     permanent hard failure (PR #1449 codex review). `working` is the same
+#     positive evidence the caller's pre-flight short-circuit already trusts.
+#
+# A `send-keys` that *itself* fails is a different animal from "no change yet":
+# the agent is gone or herdr is unreachable, so the remaining attempts would
+# only burn against a dead target. Bail immediately and publish a distinct error
+# via _IW_STALL_RECOVER_ERROR so the rate-limit gate does not read a broken pane
+# as a spent quota.
+_iw_stall_recover_via_enter() {
+    local _agent="$1" _seq0="$2" _i=1 _seq _status
+
+    _IW_STALL_RECOVER_ERROR=""
+
+    while [ "${_i}" -le "${_IW_STALL_RECOVER_ATTEMPTS}" ]; do
+        if ! herdr agent send-keys "${_agent}" Enter >/dev/null 2>&1; then
+            ux_error "herdr agent send-keys ${_agent} Enter failed — pane unreachable, abandoning stall recovery."
+            _IW_STALL_RECOVER_ERROR="herdr_send_keys_failed"
+            return 1
+        fi
+
+        [ "${_IW_STALL_RECOVER_SLEEP}" = "0" ] || sleep "${_IW_STALL_RECOVER_SLEEP}"
+
+        if [ -n "${_seq0}" ]; then
+            _seq=$(_iw_agent_seq "${_agent}") || _seq=""
+            if [ -n "${_seq}" ] && [ "${_seq}" != "${_seq0}" ]; then
+                ux_warning "Stalled prompt submitted by Enter on attempt ${_i}/${_IW_STALL_RECOVER_ATTEMPTS} (${_agent} state_change_seq ${_seq0} -> ${_seq})."
+                return 0
+            fi
+        else
+            _status=$(_iw_agent_status "${_agent}") || _status=""
+            if [ "${_status}" = "working" ]; then
+                ux_warning "Stalled prompt submitted by Enter on attempt ${_i}/${_IW_STALL_RECOVER_ATTEMPTS} (${_agent} is working; no seq baseline)."
+                return 0
+            fi
+        fi
+
+        _i=$((_i + 1))
+    done
+
+    ux_warning "Enter pressed ${_IW_STALL_RECOVER_ATTEMPTS}x on ${_agent} with no observable state change — prompt still unsubmitted."
+    return 1
+}
+
 # Send `/gh-issue-flow <N>` to the issue's agent.
 #
 # The prompt is a slash command, not prose: pre-#1440 this channel carried an
@@ -1200,34 +1293,37 @@ _iw_prompt_once() {
 # the command runs top-level rather than inside a subagent, which is what took
 # this path out of the `SubagentStop` guard gap (#1434).
 _iw_prompt_issue() {
-    local _agent="$1" _number="$2" _prompt _json _code _rc=0 _post_stall_status
+    local _agent="$1" _number="$2" _prompt _json _code _rc=0 _seq0 _post_stall_status
 
     _prompt="/gh-issue-flow ${_number}"
     _IW_DISPATCH_ERROR_CODE=""
+    _IW_STALL_RECOVER_ERROR=""
+
+    # Baseline taken *before* the prompt is sent, not after a stall is detected:
+    # by then the counter may already have moved for the very submission this
+    # comparison is supposed to detect, and a baseline read after the fact could
+    # never tell the two apart (issue #1443).
+    _seq0=$(_iw_agent_seq "${_agent}") || _seq0=""
+
     _json=$(_iw_prompt_once "${_agent}" "${_prompt}") || _rc=$?
 
-    # Only `agent_prompt_stalled` is retried: it means the keystroke was dropped
-    # by a not-yet-ready input loop (issue #1399), which a second later is gone.
-    # Every other error is a real failure and must not be re-sent — a duplicate
-    # prompt would start a second flow on the same issue.
+    # Only `agent_prompt_stalled` gets a recovery pass: it means the command was
+    # typed into a not-yet-ready input loop (issue #1399) and never submitted.
+    # Every other error is a real failure — and note nothing here ever re-sends
+    # the prompt, so a duplicate flow on the same issue is not reachable.
     if [ "${_rc}" -ne 0 ]; then
         _code=$(printf '%s' "${_json}" | _iw_json_value '.error.code')
         if [ "${_code}" = "agent_prompt_stalled" ]; then
             # `agent_prompt_stalled` only proves herdr saw no state change
             # within its fixed 5s window — it does NOT prove the prompt was
             # never submitted (PR #1400 codex review). `working` is positive
-            # evidence the first call *did* land, so retrying would type the
-            # same command into an already-busy pane; any other status gives no
-            # such evidence, so the retry proceeds as before.
+            # evidence the call *did* land, so there is nothing to recover.
             _post_stall_status=$(_iw_agent_status "${_agent}") || _post_stall_status=""
             if [ "${_post_stall_status}" = "working" ]; then
                 ux_warning "herdr reported agent_prompt_stalled but ${_agent} is already working — treating as delivered, not retrying."
                 _rc=0
-            else
-                ux_warning "herdr reported agent_prompt_stalled — retrying once."
-                sleep 1
+            elif _iw_stall_recover_via_enter "${_agent}" "${_seq0}"; then
                 _rc=0
-                _json=$(_iw_prompt_once "${_agent}" "${_prompt}") || _rc=$?
             fi
         fi
     fi
@@ -1237,10 +1333,16 @@ _iw_prompt_issue() {
         return 0
     fi
 
-    # Publish the *final* attempt's code — after a retry `$_json` holds the
-    # second response, so `$_code` from the first is stale. The rate-limit gate
-    # reads this to tell herdr's failure modes apart.
-    _IW_DISPATCH_ERROR_CODE=$(printf '%s' "${_json}" | _iw_json_value '.error.code')
+    # The rate-limit gate reads this to tell herdr's failure modes apart. A
+    # failed `send-keys` wins over the prompt response's own code: the response
+    # says `agent_prompt_stalled`, which is the gate's token-limit signature,
+    # but the pane being unreachable is an outage the gate cannot fix and must
+    # not shut for 30 minutes over (PR #1449 codex review).
+    if [ -n "${_IW_STALL_RECOVER_ERROR}" ]; then
+        _IW_DISPATCH_ERROR_CODE="${_IW_STALL_RECOVER_ERROR}"
+    else
+        _IW_DISPATCH_ERROR_CODE=$(printf '%s' "${_json}" | _iw_json_value '.error.code')
+    fi
     ux_error "herdr agent prompt failed for agent ${_agent} (${_IW_DISPATCH_ERROR_CODE:-unknown})."
     return 1
 }
@@ -1315,10 +1417,12 @@ EOF
 #
 # The signal: a spent quota stops the dispatched claude session before it can
 # change state, so herdr's `--wait` draws no transition, answers
-# `agent_prompt_stalled`, the retry stalls too and `_iw_prompt_issue` fails.
-# `_iw_agent_status` then separates a real wall from an unrelated hiccup: an
-# agent reporting `working`/`blocked` is alive and busy, so that failure earns
-# no strike.
+# `agent_prompt_stalled`, the Enter recovery (issue #1443) moves nothing either
+# and `_iw_prompt_issue` fails. `_iw_agent_status` then separates a real wall
+# from an unrelated hiccup: an agent reporting `working`/`blocked` is alive and
+# busy, so that failure earns no strike. A recovery that failed because
+# `send-keys` could not reach the pane at all reports `herdr_send_keys_failed`
+# instead and is filtered out below with the rest of the transport errors.
 #
 # Pre-#1440 this had to watch the resident `iw-watch` agent instead, because
 # the per-issue panes were opened by a subagent inside that session and their
