@@ -131,6 +131,21 @@ fix 앞에 있으면 무한 충돌 루프에 빠진다. `git diff --quiet HEAD` 
 net-zero(빈 커밋) 판별 후 `--skip`, 수동 우회 절차, `git cherry-pick -n`
 preflight probe 패턴. Discussion #927 기반.
 
+### 8. SKILL.md description 축소의 트리거 회귀 실측
+
+**파일**: [`skill-description-trigger-eval.md`](./skill-description-trigger-eval.md)
+
+길이만 재는 게이트는 "짧으면서 동시에 안 걸리는" description 을 통과시킨다.
+표본 16종 trigger eval 실측에서 경쟁 쌍 2건이 상호 경계 문장 삭제로 서로에게
+오발화한 것을 잡아냈다. **부정 트리거는 reject 를, 긍정 판별자는 recall 을**
+고친다는 분리 측정, 매칭이 문자열이 아니라 **의미** 기반임을 보인 음성 대조군,
+재측정 폭(15%p)이 계약 마진(5%p)의 3배라는 노이즈 바닥, 그리고 **결함을 근거로
+세운 설정은 그 결함이 고쳐지면 재측정해야 한다**는 교훈. 측정 절차는
+`claude/skills/skill-check/references/trigger-eval-procedure.md`.
+
+> 권장 분량(50–80줄)을 넘긴다. 실측 표(16종 × 2 arm, 대조군 3종, 재현성 3회)가
+> 본문의 대부분이고, 표를 덜어내면 결론의 근거가 사라져 분리하지 않았다.
+
 ## 성장 전략
 
 - 3–10개: 플랫 구조 유지 (현재)
