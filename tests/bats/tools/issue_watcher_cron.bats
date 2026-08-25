@@ -19,6 +19,7 @@ setup() {
     _STATE_HOME="${_WORK_DIR}/state"
     _STATE_DIR="${_STATE_HOME}/issue-watcher"
     _STATE_FILE="${_STATE_DIR}/herdr-watch.json"
+    _LIMIT_FILE="${_STATE_DIR}/rate-limit.json"
     _LOCK_FILE="${_STATE_DIR}/.lock"
     _LOG="${_WORK_DIR}/herdr.log"
     # Overridable per test; _run_tick passes it as --cwd.
@@ -876,4 +877,237 @@ _hold_lock() {
 
     run grep -F -- "agent prompt iw-watch" "${_LOG}"
     assert_success
+}
+
+# ---------------------------------------------------------------------------
+# Rate-limit gate (issue #1436)
+# ---------------------------------------------------------------------------
+
+# Seed a reusable state file so the gate tests exercise the reuse path (no
+# bootstrap noise in ${_LOG}) and every `agent get` call belongs to the gate.
+_seed_state() {
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "workspace_id": "ws-test-1", "pane_id": "ws-test-1:p1", "agent_name": "iw-watch", "cwd": "%s" }\n' \
+        "${_WORK_DIR}" >"${_STATE_FILE}"
+}
+
+_seed_gate() {
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "strikes": "%s", "backoff_until": "%s" }\n' "$1" "$2" >"${_LIMIT_FILE}"
+}
+
+_now() {
+    date +%s
+}
+
+@test "issue_watcher_cron: a healthy dispatch leaves no rate-limit state behind" {
+    _install_herdr_stub
+    _run_tick
+    assert_success
+
+    [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: a failed dispatch records a strike and still exits 1" {
+    _install_herdr_stub
+    _seed_state
+
+    _run_tick HERDR_PROMPT_MODE=fail
+    assert_failure
+    assert_output --partial "1/2"
+
+    run cat "${_LIMIT_FILE}"
+    assert_output --partial '"strikes": "1"'
+    assert_output --partial '"backoff_until": "0"'
+}
+
+@test "issue_watcher_cron: two consecutive failed dispatches close the gate" {
+    _install_herdr_stub
+    _seed_state
+
+    _run_tick HERDR_PROMPT_MODE=fail
+    assert_failure
+
+    _run_tick HERDR_PROMPT_MODE=fail
+    assert_failure
+    assert_output --partial "Rate-limit gate closed for 30m"
+
+    # Strikes are reset by the closure; the deadline is what holds later ticks.
+    run cat "${_LIMIT_FILE}"
+    assert_output --partial '"strikes": "0"'
+    refute_output --partial '"backoff_until": "0"'
+}
+
+@test "issue_watcher_cron: a closed gate holds the tick without dispatching" {
+    _install_herdr_stub
+    _seed_state
+    _seed_gate 0 "$(($(_now) + 600))"
+
+    _run_tick
+    assert_success
+    assert_output --partial "Rate-limit gate closed"
+    assert_output --partial "holding dispatch"
+
+    [ "$(_log_count 'agent prompt')" -eq 0 ]
+}
+
+@test "issue_watcher_cron: a held tick never sends the dispatcher prompt that spawns worktrees" {
+    _install_herdr_stub
+    _seed_state
+    _seed_gate 0 "$(($(_now) + 600))"
+
+    _run_tick
+    assert_success
+
+    # The tick creates no worktree itself — the dispatcher it prompts does.
+    # Proving the prompt never left is proving no `issue-<n>` worktree can
+    # appear this tick (issue #1436 F-1).
+    run grep -F -- "issue-watcher:dispatcher" "${_LOG}"
+    assert_failure
+}
+
+@test "issue_watcher_cron: a held tick leaves the gate deadline untouched" {
+    _install_herdr_stub
+    _seed_state
+    local _until
+    _until="$(($(_now) + 600))"
+    _seed_gate 0 "${_until}"
+
+    _run_tick
+    assert_success
+
+    run cat "${_LIMIT_FILE}"
+    assert_output --partial "\"backoff_until\": \"${_until}\""
+}
+
+@test "issue_watcher_cron: an expired backoff reopens the gate and dispatches" {
+    _install_herdr_stub
+    _seed_state
+    _seed_gate 0 "$(($(_now) - 60))"
+
+    _run_tick
+    assert_success
+    assert_output --partial "Rate-limit gate reopened"
+
+    run grep -F -- "agent prompt iw-watch" "${_LOG}"
+    assert_success
+    [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: an out-of-range future deadline is treated as expired" {
+    _install_herdr_stub
+    _seed_state
+    # Further out than twice the backoff: only a clock jump or a hand edit can
+    # write this, and stalling forever on it would break F-3.
+    _seed_gate 0 "$(($(_now) + 999999))"
+
+    _run_tick
+    assert_success
+    assert_output --partial "Rate-limit gate reopened"
+
+    run grep -F -- "agent prompt iw-watch" "${_LOG}"
+    assert_success
+}
+
+@test "issue_watcher_cron: a corrupt gate file fails open" {
+    _install_herdr_stub
+    _seed_state
+    mkdir -p "${_STATE_DIR}"
+    printf '%s\n' 'not json at all {{{ "backoff_until" ,,, ' >"${_LIMIT_FILE}"
+
+    _run_tick
+    assert_success
+    assert_output --partial "no backoff deadline"
+
+    run grep -F -- "agent prompt iw-watch" "${_LOG}"
+    assert_success
+}
+
+@test "issue_watcher_cron: a non-numeric deadline fails open" {
+    _install_herdr_stub
+    _seed_state
+    _seed_gate 0 "soon"
+
+    _run_tick
+    assert_success
+    assert_output --partial "unreadable"
+
+    run grep -F -- "agent prompt iw-watch" "${_LOG}"
+    assert_success
+}
+
+@test "issue_watcher_cron: a successful dispatch clears accumulated strikes" {
+    _install_herdr_stub
+    _seed_state
+    _seed_gate 1 0
+
+    _run_tick
+    assert_success
+
+    [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: a dispatch failure with the agent working earns no strike" {
+    _install_herdr_stub
+    _seed_state
+
+    # Call 1 is main()'s idle|done check; call 2 is the gate asking whether the
+    # failure was a token wall. `working` says the agent is alive and busy, so
+    # the failure is something else entirely.
+    _run_tick HERDR_AGENT_GET_SEQ="idle working" HERDR_PROMPT_MODE=fail
+    assert_failure
+    assert_output --partial "not a token-limit signal"
+
+    [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: the gate never runs on the working|blocked skip path" {
+    _install_herdr_stub
+    _seed_state
+    _seed_gate 0 "$(($(_now) + 600))"
+
+    # NF-2: a busy agent is skipped by the pre-existing gate, with the
+    # pre-existing message — the rate-limit gate must not shadow it.
+    _run_tick HERDR_AGENT_STATUS=working
+    assert_success
+    assert_output --partial "skip this tick"
+    refute_output --partial "Rate-limit gate"
+}
+
+@test "issue_watcher_cron: a state dir with no gate file ticks exactly as before" {
+    _install_herdr_stub
+    # Pre-#1436 layout: workspace state only, and without the later `cwd` field.
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "workspace_id": "ws-test-1", "pane_id": "ws-test-1:p1", "agent_name": "iw-watch" }\n' \
+        >"${_STATE_FILE}"
+
+    _run_tick
+    assert_success
+    refute_output --partial "Rate-limit gate"
+
+    [ "$(_log_count 'agent prompt')" -eq 1 ]
+    [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: an unwritable state dir warns but does not change the exit code" {
+    [ "$(id -u)" -ne 0 ] || skip "root ignores directory permissions"
+    _install_herdr_stub
+    _seed_state
+    # The lock file must exist before the dir goes read-only, or flock's own
+    # soft-degrade path would mask what this test is about.
+    : >"${_LOCK_FILE}"
+    chmod 500 "${_STATE_DIR}"
+
+    _run_tick HERDR_PROMPT_MODE=fail
+    assert_failure
+    assert_output --partial "rate-limit gate will not survive this tick"
+
+    chmod 700 "${_STATE_DIR}"
+}
+
+@test "issue_watcher_cron: --help documents the rate-limit gate and its state file" {
+    run bash "${SCRIPT}" --help
+    assert_success
+    assert_output --partial "rate-limit gate"
+    assert_output --partial "rate-limit.json"
 }
