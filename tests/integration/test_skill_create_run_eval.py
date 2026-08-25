@@ -16,23 +16,26 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent.parent
 SKILL_DIR = REPO_ROOT / "claude" / "skills" / "skill-create"
 
-# `run_eval.py` does `from scripts.utils import ...`. The repo root also has a
-# `scripts/` directory, which pytest's `pythonpath = ["."]` would otherwise bind
-# as an empty namespace package — so the skill dir has to win the name.
+# `run_eval.py` does `from scripts.utils import ...`, so the skill dir has to be
+# on `sys.path` — and the insert must PERSIST for the session, it cannot be undone
+# after the import (PR #1422 review, agy): `run_eval()` submits `run_single_query`
+# to a ProcessPoolExecutor, which pickles it by qualified name, so
+# `scripts.run_eval` has to stay importable and resolve to this same module object,
+# in this process and in every forked worker. Undoing the insert turns the two
+# subprocess tests below into `Can't pickle ... import of module
+# 'scripts.run_eval' failed`.
 #
-# Both mutations must PERSIST for the session, they cannot be undone after the
-# import (PR #1422 review, agy): `run_eval()` submits `run_single_query` to a
-# ProcessPoolExecutor, which pickles it by qualified name — so `scripts.run_eval`
-# has to stay importable and resolve to this same module object, in this process
-# and in every forked worker. Undoing either mutation turns the two subprocess
-# tests below into `Can't pickle ... import of module 'scripts.run_eval' failed`.
-#
-# The shadowing risk is bounded: the repo-root `scripts/` holds only shell
-# scripts (no `.py`, no `__init__.py`), and nothing in the suite imports
-# `scripts.*`, so there is no module for this binding to displace.
+# The repo root also has a `scripts/` directory, which other test modules import
+# from (`scripts.maintenance.*`, #1429). Both directories are namespace-package
+# *portions* — neither carries an `__init__.py` — so `scripts.__path__` spans both
+# and the two import trees coexist. A regular package on either side would win the
+# name outright and abort collection for the whole suite: the empty `__init__.py`
+# that used to sit in the skill dir did exactly that (#1432), and
+# `test_collection_integrity.py` now guards its absence. No `sys.modules` reset is
+# needed either — `_NamespacePath` recomputes when `sys.path` changes, so an
+# already-imported `scripts` picks the skill dir up on the next attribute lookup.
 if str(SKILL_DIR) not in sys.path:
     sys.path.insert(0, str(SKILL_DIR))
-sys.modules.pop("scripts", None)
 
 from scripts import run_loop as run_loop_module  # noqa: E402
 from scripts.run_eval import (  # noqa: E402
