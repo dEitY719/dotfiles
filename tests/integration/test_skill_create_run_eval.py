@@ -33,6 +33,7 @@ if str(SKILL_DIR) not in sys.path:
     sys.path.insert(0, str(SKILL_DIR))
 sys.modules.pop("scripts", None)
 
+from scripts import run_loop as run_loop_module  # noqa: E402
 from scripts.run_eval import (  # noqa: E402
     detect_trigger,
     find_shadowing_skills,
@@ -41,7 +42,7 @@ from scripts.run_eval import (  # noqa: E402
     run_single_query,
 )
 from scripts.run_loop import eval_run_counts  # noqa: E402
-from scripts.utils import usable_runs  # noqa: E402
+from scripts.utils import format_result_lines, usable_runs  # noqa: E402
 
 PROBE = "write-release-note-skill-deadbeef"
 
@@ -404,3 +405,115 @@ def test_usable_runs_excludes_errored_runs_from_the_denominator() -> None:
 def test_usable_runs_falls_back_to_the_attempt_count_for_old_payloads() -> None:
     """Result payloads written before #1412 carry no `usable_runs` key."""
     assert usable_runs({"runs": 3}) == 3
+
+
+# --- issue #1428: the loop entry point got only half of F-2/F-3 ---------------
+# `run_loop.py` calls `run_eval()` directly, bypassing `run_eval.main()` where
+# the `[ERROR]` label, the stderr excerpt and the shadowing warning all lived.
+# The documented optimization entry point (`python -m scripts.run_loop`) showed
+# `[FAIL] rate=0/2` for a completely dead harness — the exact illusion #1412
+# set out to remove.
+
+ERRORED_RESULT = {
+    "query": "do the demo thing please",
+    "should_trigger": False,
+    "trigger_rate": 0.0,
+    "triggers": 0,
+    "runs": 2,
+    "usable_runs": 0,
+    "errors": 2,
+    "error_samples": ["claude -p exited 1: Invalid API key - please run /login"],
+    "pass": False,
+}
+
+
+def test_result_line_labels_a_dead_harness_as_error() -> None:
+    """One formatter, shared by `run_eval.main()` and the loop — the split rule
+    used to be re-derived at each call site, which is how the loop lost it."""
+    lines = format_result_lines(ERRORED_RESULT)
+
+    assert lines[0].startswith("  [ERROR] rate=0/0 expected=False:")
+    assert lines[1] == "      ! claude -p exited 1: Invalid API key - please run /login"
+
+
+def test_result_line_falls_back_to_runs_when_usable_runs_is_absent() -> None:
+    """Pre-#1412 payloads carry neither `usable_runs` nor `errors`."""
+    result = {"query": "q", "should_trigger": True, "triggers": 1, "runs": 3, "pass": False}
+
+    assert format_result_lines(result) == ["  [FAIL] rate=1/3 expected=True: q"]
+
+
+def _prepare_loop_fixture(tmp_path, monkeypatch) -> Path:
+    """Project root, the skill to evaluate, and a same-named installed skill
+    that shadows it. Returns the path of the skill under evaluation."""
+    project = tmp_path / "project"
+    (project / ".claude").mkdir(parents=True)
+
+    skill = tmp_path / "work" / "demo-skill"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("---\nname: demo-skill\ndescription: demo description for eval\n---\n\n# Demo\n")
+
+    shadow = tmp_path / "claude-config" / "skills" / "demo-skill"
+    shadow.mkdir(parents=True)
+    (shadow / "SKILL.md").write_text("---\nname: demo-skill\ndescription: demo description for eval\n---\n")
+
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude-config"))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.chdir(project)
+    return skill
+
+
+def _canned_eval_output(results: list[dict]) -> dict:
+    passed = sum(1 for r in results if r["pass"])
+    return {
+        "skill_name": "demo-skill",
+        "description": "demo description for eval",
+        "results": results,
+        "summary": {
+            "total": len(results),
+            "passed": passed,
+            "failed": len(results) - passed,
+            "errors": sum(r["errors"] for r in results),
+        },
+    }
+
+
+def _drive_loop(skill_path: Path, monkeypatch, results: list[dict], max_iterations: int = 1) -> None:
+    """Run the loop against a canned `run_eval` payload — no `claude -p`."""
+    monkeypatch.setattr(run_loop_module, "run_eval", lambda **kwargs: _canned_eval_output(results))
+    monkeypatch.setattr(run_loop_module, "improve_description", lambda **kwargs: "an improved demo description")
+    run_loop_module.run_loop(
+        eval_set=[{"query": r["query"], "should_trigger": r["should_trigger"]} for r in results],
+        skill_path=skill_path,
+        description_override=None,
+        num_workers=1,
+        timeout=10,
+        max_iterations=max_iterations,
+        runs_per_query=2,
+        trigger_threshold=0.5,
+        holdout=0,
+        model="claude-sonnet-5",
+        verbose=True,
+    )
+
+
+def test_loop_labels_an_unusable_run_as_error_and_prints_the_cause(tmp_path, monkeypatch, capsys) -> None:
+    """The documented entry point showed `[FAIL] rate=0/2` for a dead harness."""
+    skill = _prepare_loop_fixture(tmp_path, monkeypatch)
+
+    _drive_loop(skill, monkeypatch, [ERRORED_RESULT])
+
+    stderr = capsys.readouterr().err
+    assert "[ERROR] rate=0/0" in stderr
+    assert "! claude -p exited 1: Invalid API key" in stderr
+
+
+def test_loop_warns_once_when_an_installed_skill_shadows_the_eval(tmp_path, monkeypatch, capsys) -> None:
+    """F-3's warning is per run, not per iteration — two iterations, one line."""
+    skill = _prepare_loop_fixture(tmp_path, monkeypatch)
+
+    _drive_loop(skill, monkeypatch, [ERRORED_RESULT], max_iterations=2)
+
+    stderr = capsys.readouterr().err
+    assert stderr.count("shadows this eval") == 1
+    assert "demo-skill" in stderr

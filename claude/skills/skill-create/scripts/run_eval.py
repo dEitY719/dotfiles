@@ -18,7 +18,7 @@ from collections.abc import Iterable
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
-from scripts.utils import parse_skill_md
+from scripts.utils import format_result_lines, parse_skill_md
 
 
 def find_project_root() -> Path:
@@ -181,6 +181,19 @@ def find_shadowing_skills(skill_name: str, project_root: Path, skill_path: Path 
             seen.add(resolved)
             found.append(candidate)
     return found
+
+
+# LOCAL PATCH (dotfiles #1428): `run_loop` needs the same warning, and a second
+# copy of the wording is how F-2's rules drifted apart in the first place.
+def warn_shadowing_skills(skill_name: str, project_root: Path, skill_path: Path | None = None) -> None:
+    """Print one F-3 warning per installed skill shadowing the one evaluated."""
+    for shadow in find_shadowing_skills(skill_name, project_root, skill_path=skill_path):
+        print(
+            f"Warning: installed skill '{skill_name}' shadows this eval at {shadow} — "
+            "the model may answer with it instead of the probe. "
+            "Run with an isolated CLAUDE_CONFIG_DIR for a clean signal.",
+            file=sys.stderr,
+        )
 
 
 def run_single_query(
@@ -432,13 +445,7 @@ def main():
 
     # LOCAL PATCH (dotfiles #1412, F-3): always warn — a forgotten isolation
     # step is the reason this eval silently reported zeros.
-    for shadow in find_shadowing_skills(name, project_root, skill_path=skill_path):
-        print(
-            f"Warning: installed skill '{name}' shadows this eval at {shadow} — "
-            "the model may answer with it instead of the probe. "
-            "Run with an isolated CLAUDE_CONFIG_DIR for a clean signal.",
-            file=sys.stderr,
-        )
+    warn_shadowing_skills(name, project_root, skill_path=skill_path)
 
     output = run_eval(
         eval_set=eval_set,
@@ -461,15 +468,10 @@ def main():
         for r in output["results"]:
             # LOCAL PATCH (dotfiles #1412, F-2): a run the harness could not
             # execute says nothing about the description — label it apart from
-            # FAIL, and print what actually went wrong.
-            if r["errors"] and not r["usable_runs"]:
-                status = "ERROR"
-            else:
-                status = "PASS" if r["pass"] else "FAIL"
-            rate_str = f"{r['triggers']}/{r['usable_runs']}"
-            print(f"  [{status}] rate={rate_str} expected={r['should_trigger']}: {r['query'][:70]}", file=sys.stderr)
-            for sample in r["error_samples"]:
-                print(f"      ! {sample}", file=sys.stderr)
+            # FAIL, and print what actually went wrong. Shared with `run_loop`
+            # since #1428.
+            for line in format_result_lines(r):
+                print(line, file=sys.stderr)
 
     print(json.dumps(output, indent=2))
 

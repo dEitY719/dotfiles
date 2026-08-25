@@ -17,8 +17,8 @@ from pathlib import Path
 
 from scripts.generate_report import generate_html
 from scripts.improve_description import improve_description
-from scripts.run_eval import find_project_root, run_eval
-from scripts.utils import parse_skill_md, usable_runs
+from scripts.run_eval import find_project_root, run_eval, warn_shadowing_skills
+from scripts.utils import format_result_lines, parse_skill_md, usable_runs
 
 
 def split_eval_set(eval_set: list[dict], holdout: float, seed: int = 42) -> tuple[list[dict], list[dict]]:
@@ -84,6 +84,11 @@ def run_loop(
     project_root = find_project_root()
     name, original_description, content = parse_skill_md(skill_path)
     current_description = description_override or original_description
+
+    # LOCAL PATCH (dotfiles #1428): F-3 lived only in `run_eval.main()`, which
+    # this entry point never goes through. Once per run, not per iteration —
+    # the shadowing set cannot change while the loop is running.
+    warn_shadowing_skills(name, project_root, skill_path=skill_path)
 
     # Split into train/test if holdout > 0
     if holdout > 0:
@@ -190,13 +195,12 @@ def run_loop(
                     ),
                     file=sys.stderr,
                 )
+                # LOCAL PATCH (dotfiles #1428): `runs` is the attempt count, so
+                # `triggers/runs` mixed two populations and a dead harness read
+                # as a plain [FAIL]. Same formatter as `run_eval.main()`.
                 for r in results:
-                    status = "PASS" if r["pass"] else "FAIL"
-                    rate_str = f"{r['triggers']}/{r['runs']}"
-                    print(
-                        f"  [{status}] rate={rate_str} expected={r['should_trigger']}: {r['query'][:60]}",
-                        file=sys.stderr,
-                    )
+                    for line in format_result_lines(r):
+                        print(line, file=sys.stderr)
 
             print_eval_stats("Train", train_results["results"], eval_elapsed)
             if test_summary:
