@@ -25,4 +25,10 @@
 - `--as-discussion` + `--label` / `--assignee` 동시 사용 시 후자를
   버리고 경고 1줄. `DISCUSSION_MODE=1` 일 때 Step 2.5 와 `gh issue
   create` 둘 다 우회.
+- 미결이 남은 초안으로 `gh issue create` 를 호출하지 않는다 (Step 3.1 미결 게이트).
+  `DISCUSSION_MODE=1` 만 예외 — RFC 는 `Open Questions` 가 산출물의 본질이다. 미결을
+  본문에서 지워서 통과시키지 말 것: 결정으로 전환하거나 `--no-ask` 로 자율 결정하고
+  `## 확정 사항 (Decisions)` 에 근거를 남긴다 (#1446).
+- `--no-ask` 는 게이트를 끄는 플래그가 아니라 "묻지 않고 스스로 정한다" 는 플래그다.
+  자율 결정도 `(자율 판단)` 표기와 근거 없이는 통과시키지 않는다.
 - "should I create it?" 같은 확인 질문 금지.

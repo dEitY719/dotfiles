@@ -13,6 +13,7 @@
 | `--no-auto-labels` | off | Skip Step 2.5 — never auto-attach labels/milestones from `.gh-issue-defaults.yml`. User-supplied `--label` flags still apply. |
 | `--no-auto-deps` | off | Skip Step 2.6 — never auto-detect 선행 이슈 phrases in the conversation, and never run Step 4.5's `addBlockedBy` linking. |
 | `--auto-label-debug` | off | Print Stage-1 detection trace plus kept/dropped label sets to stderr before issue creation. |
+| `--no-ask` | off | Do not stop at the Step 3.1 미결 게이트 to ask. Decide every open item autonomously — repo convention first, else the most conservative option, else drop it from the acceptance criteria and note it as a separate issue — and record each one as `(자율 판단)` + 근거 under `## 확정 사항 (Decisions)`. For unattended callers (`devx:autopilot` Step 0b); never blocks the chain. Does not disable the gate. |
 | `--as-discussion <category>` | off | Route to [[gh-discussion-create]] instead of creating an Issue. `<category>` is one of `Ideas` / `Q&A` / `Announcements` / `Lessons` (case-insensitive). Skips Step 2.5 entirely; `--label` / `--assignee` are ignored with a 1-line warning. Invalid category exits 3 without calling any API. |
 
 ## Usage
@@ -22,6 +23,7 @@
 - `/gh-issue-create --no-auto-labels` — skip the SSOT auto-label step
 - `/gh-issue-create --no-auto-deps` — skip 선행-이슈 (blockedBy) auto-detection
 - `/gh-issue-create --auto-label-debug` — verbose label-dispatch trace
+- `/gh-issue-create --no-ask` — 미결을 사용자에게 묻지 않고 보수적으로 자율 결정 (무인 호출용)
 - `/gh-issue-create --as-discussion Ideas` — route the same conversation to [[gh-discussion-create]] (RFC body, Ideas category)
 - `/gh-issue-create upstream --as-discussion Q&A` — Q&A Discussion on the `upstream` remote's repo
 - `/gh-issue-create -h` / `--help` / `help` — print this help
@@ -51,12 +53,26 @@
 
 3. Drafts a structured issue body matching the template in the language
    the user was speaking (Korean chat → Korean issue).
-4. **Auto-labels (Step 2.5, opt-in)** — when `$TARGET_REPO` ships
+4. **미결 게이트 (Step 3.1)** — inspects the draft for unresolved
+   items: a non-empty `## Open Questions` section, "구현 시 결정" / "추후
+   결정" / "논의 필요" / "TBD" / "미정" 류 wording anywhere in the body, or
+   acceptance criteria that cannot be judged (blank thresholds/paths, or
+   only "적절히" / "필요 시"). If any are found, the skill lists them with a
+   **권고안 + 근거** each and waits — `gh issue create` is not called before
+   the user answers. The settled items are written back as
+   `## 확정 사항 (Decisions)` in `<결정> — 근거: <한 줄>` form. `--no-ask`
+   decides them autonomously instead (marked `(자율 판단)`);
+   `--as-discussion` skips the gate entirely, since an RFC is *supposed* to
+   carry Open Questions. No open items → no output at all. This exists
+   because issues here are unattended-execution input for `gh:issue-flow` /
+   `devx:autopilot` / `gh:issue-proceed`, none of which can ask a human
+   mid-run (#1446). See `references/clarification.md`.
+5. **Auto-labels (Step 2.5, opt-in)** — when `$TARGET_REPO` ships
    `.gh-issue-defaults.yml`, attaches default labels and (optionally) a
    milestone per that SSOT. Missing labels warn-and-skip; never auto-
    created. Disabled by `--no-auto-labels`. See
    `references/auto-labels.md`.
-5. **Dependency auto-detect (Step 2.6 + 4.5)** — scans the conversation for
+6. **Dependency auto-detect (Step 2.6 + 4.5)** — scans the conversation for
    explicit 선행-이슈 phrases (`#13 완료 후`, `depends on #13`, `blocked by
    #13`, `선행 이슈: #13`, `#13 이후`) and, right after the issue is created,
    links each one with GitHub's native `addBlockedBy` so the sidebar shows
@@ -64,12 +80,12 @@
    `owner/repo#13` is warned and skipped in v1; a failed link is non-fatal
    and surfaces as one warning line. Disabled by `--no-auto-deps`. See
    `references/dependency-detect.md`.
-6. Creates the issue via
+7. Creates the issue via
    `GH_HOST="$TARGET_HOST" gh issue create --repo "$TARGET_REPO"` using a
    temp file written by `mktemp` (avoids shell escaping bugs). Host and repo
    are both pinned from the same remote URL so a dual-host `gh` login cannot
    file the issue on the wrong server (#1403).
-7. Prints only `Issue #N created: <url>` — no preamble, no summary.
+8. Prints only `Issue #N created: <url>` — no preamble, no summary.
 
 ## Title format
 
@@ -96,6 +112,10 @@ A 200-line issue is fine if the conversation warranted it.
   cross-repo `owner/repo#13` reference (warn + skip in v1).
 - Apply auto labels/milestones on repos without `.gh-issue-defaults.yml`.
 - Fall back to `origin` when the user-specified remote is missing.
+- Create an issue whose body still carries unresolved items — the Step
+  3.1 gate converts them to decisions first (Discussion mode excepted).
+- Silently delete an open item to get past that gate, or accept a
+  `--no-ask` autonomous decision without a `(자율 판단)` mark and a reason.
 - Ask "should I create it?" — running the skill is the confirmation.
 - Rely on implicit repo detection — always passes `--repo "$TARGET_REPO"`.
 - Truncate or summarize the conversation log.
@@ -114,6 +134,13 @@ A 200-line issue is fine if the conversation warranted it.
 - `--as-discussion <category>` when
   `shell-common/functions/gh_discussion.sh` is missing → print
   `Install gh-discussion-create skill first.` and exit 1.
+- User answers the Step 3.1 gate only partially → the remaining items are
+  asked again. Never filled in on the skill's own initiative.
+- User answers "그냥 만들어" → the gate passes, but each open item is
+  recorded as `(보류 — 사용자 지시)` under `## 확정 사항 (Decisions)`.
+- `--no-ask` and neither repo convention nor a conservative default settles
+  an item → that item is dropped from the acceptance criteria and flagged in
+  the body as belonging to a separate issue. The chain never stops.
 - `addBlockedBy` fails (permission, network, non-existent issue number,
   or a schema mismatch on the mutation's arguments) → the issue stays
   created; one `[WARN] Blocked by #N 링크 실패` line is appended to the
