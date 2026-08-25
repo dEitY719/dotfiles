@@ -3,6 +3,17 @@
 from pathlib import Path
 
 
+# --- LOCAL PATCH (dotfiles #1412, F-2) --------------------------------------
+# `run_eval()` counts `triggers` over the runs that actually executed, but
+# `runs` stayed the raw attempt count. Every consumer that divides one by the
+# other has to use this denominator instead, or a dead harness reads as a
+# perfect score (PR #1422 review, codex + /simplify altitude pass).
+# ----------------------------------------------------------------------------
+def usable_runs(result: dict) -> int:
+    """Runs that produced evidence about the description, errored ones excluded."""
+    return result.get("usable_runs", result["runs"])
+
+
 def parse_skill_md(skill_path: Path) -> tuple[str, str, str]:
     """Parse a SKILL.md file, returning (name, description, full_content)."""
     content = (skill_path / "SKILL.md").read_text()

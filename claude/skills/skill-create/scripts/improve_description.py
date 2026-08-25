@@ -14,7 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scripts.utils import parse_skill_md
+from scripts.utils import parse_skill_md, usable_runs
 
 
 def _call_claude(prompt: str, model: str | None, timeout: int = 300) -> str:
@@ -91,13 +91,13 @@ Current scores ({scores_summary}):
     if failed_triggers:
         prompt += "FAILED TO TRIGGER (should have triggered but didn't):\n"
         for r in failed_triggers:
-            prompt += f'  - "{r["query"]}" (triggered {r["triggers"]}/{r["runs"]} times)\n'
+            prompt += f'  - "{r["query"]}" (triggered {r["triggers"]}/{usable_runs(r)} times)\n'
         prompt += "\n"
 
     if false_triggers:
         prompt += "FALSE TRIGGERS (triggered but shouldn't have):\n"
         for r in false_triggers:
-            prompt += f'  - "{r["query"]}" (triggered {r["triggers"]}/{r["runs"]} times)\n'
+            prompt += f'  - "{r["query"]}" (triggered {r["triggers"]}/{usable_runs(r)} times)\n'
         prompt += "\n"
 
     if history:
@@ -114,7 +114,7 @@ Current scores ({scores_summary}):
                 prompt += "Train results:\n"
                 for r in h["results"]:
                     status = "PASS" if r["pass"] else "FAIL"
-                    prompt += f'  [{status}] "{r["query"][:80]}" (triggered {r["triggers"]}/{r["runs"]})\n'
+                    prompt += f'  [{status}] "{r["query"][:80]}" (triggered {r["triggers"]}/{usable_runs(r)})\n'
             if h.get("note"):
                 prompt += f"Note: {h['note']}\n"
             prompt += "</attempt>\n\n"

@@ -18,7 +18,7 @@ from pathlib import Path
 from scripts.generate_report import generate_html
 from scripts.improve_description import improve_description
 from scripts.run_eval import find_project_root, run_eval
-from scripts.utils import parse_skill_md
+from scripts.utils import parse_skill_md, usable_runs
 
 
 def split_eval_set(eval_set: list[dict], holdout: float, seed: int = 42) -> tuple[list[dict], list[dict]]:
@@ -42,6 +42,27 @@ def split_eval_set(eval_set: list[dict], holdout: float, seed: int = 42) -> tupl
     train_set = trigger[n_trigger_test:] + no_trigger[n_no_trigger_test:]
 
     return train_set, test_set
+
+
+# --- LOCAL PATCH (dotfiles #1412, F-2 follow-up) -----------------------------
+# `run_eval()` holds errored runs out of the trigger-rate denominator, so the
+# loop's own precision/recall must use the same denominator. Counting misses as
+# `runs - triggers` charges every harness failure to the description as a false
+# negative (PR #1422 review, codex).
+# ----------------------------------------------------------------------------
+def eval_run_counts(results: list[dict]) -> dict:
+    """Confusion-matrix counts over the runs that actually executed."""
+    tp = fn = fp = tn = 0
+    for r in results:
+        usable = usable_runs(r)
+        triggers = r["triggers"]
+        if r["should_trigger"]:
+            tp += triggers
+            fn += usable - triggers
+        else:
+            fp += triggers
+            tn += usable - triggers
+    return {"tp": tp, "fn": fn, "fp": fp, "tn": tn}
 
 
 def run_loop(
@@ -155,14 +176,8 @@ def run_loop(
         if verbose:
 
             def print_eval_stats(label, results, elapsed):
-                pos = [r for r in results if r["should_trigger"]]
-                neg = [r for r in results if not r["should_trigger"]]
-                tp = sum(r["triggers"] for r in pos)
-                pos_runs = sum(r["runs"] for r in pos)
-                fn = pos_runs - tp
-                fp = sum(r["triggers"] for r in neg)
-                neg_runs = sum(r["runs"] for r in neg)
-                tn = neg_runs - fp
+                counts = eval_run_counts(results)
+                tp, fn, fp, tn = counts["tp"], counts["fn"], counts["fp"], counts["tn"]
                 total = tp + tn + fp + fn
                 precision = tp / (tp + fp) if (tp + fp) > 0 else 1.0
                 recall = tp / (tp + fn) if (tp + fn) > 0 else 1.0

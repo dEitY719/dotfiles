@@ -2,7 +2,10 @@
 
 `claude/skills/skill-create/` is a **copy** of the Claude Code marketplace
 `skill-creator` plugin, taken deliberately so it survives plugin updates
-(`b13f6686`, 2026-04-02). The copy is the SSOT: nothing re-syncs it from the
+(`b13f6686`, 2026-04-02). The original still ships on this machine at
+`~/.claude-shared/plugins/marketplaces/anthropic-agent-skills/skills/skill-creator/`,
+which is what a re-import would diff against — before #1412 the only
+divergence in `scripts/` was ruff reflow. The copy is the SSOT: nothing re-syncs it from the
 marketplace, and it has already diverged (Korean SKILL.md, the `skill:create`
 name, `metadata.model_recommendation`, the Phase 8 quality gate, a
 progressive-disclosure `references/` split).
@@ -26,11 +29,21 @@ not record.
 |---|---|---|
 | #1412 F-1 | `scripts/run_eval.py` — `TriggerDetector` / `detect_trigger` | Upstream settled the whole query at the **first** tool block: a non-`Skill`/`Read` block returned False outright, and `content_block_stop` returned the verdict then and there. With the evaluated skill already installed, the model answers with the real skill first and the uuid probe never got looked at — every real trigger scored `trigger_rate 0.0`. Now every block is inspected and a negative is only settled at end of stream. |
 | #1412 F-2 | `scripts/run_eval.py` — `_outcome`, `_read_stderr`, `run_single_query`, `run_eval`, verbose report | Upstream sent the subprocess' stderr to `DEVNULL`, so auth expiry, the nesting guard and timeouts all reported the same `0.0` as a description that simply never fires. Each run now carries an explicit `error`; errored runs leave the trigger-rate denominator, a query with nothing usable can never be scored a pass, and `--verbose` prints `[ERROR]` plus the captured stderr. |
+| #1412 F-2b | `scripts/utils.py` — `usable_runs()`, used by `run_loop.py`, `generate_report.py`, `improve_description.py` | `run_eval()` counts `triggers` over the runs that executed, but `runs` stayed the raw attempt count, so every consumer dividing one by the other re-implemented the bug one layer up: an all-errored negative query scored as fully correct in the HTML report, and an all-errored query reached the improvement model labelled "triggered 0/3 times — FAILED TO TRIGGER". One helper is now the single denominator. |
 | #1412 F-3 | `scripts/run_eval.py` — `find_shadowing_skills` + the `main()` warning | The `CLAUDE_CONFIG_DIR` isolation workaround is easy to forget. An installed skill of the same name is now named on stderr instead of quietly making the run noisier. |
 
 ## Regression guards
 
-`tests/integration/test_skill_create_run_eval.py` pins all three. The stream
+`tests/integration/test_skill_create_run_eval.py` pins all of them. The stream
 decision logic is a pure function over stream-json lines, so the cases that
 used to be unreachable (probe behind a real skill call, probe behind a `Bash`
 call, probe in a later `assistant` content item) are cheap to assert.
+
+## Known gap
+
+F-2's `[ERROR]` labelling and F-3's shadowing warning are wired into
+`run_eval.py`'s `main()`. `run_loop.py` calls `run_eval()` directly, so the
+documented optimization entry point (`python -m scripts.run_loop`, see
+`references/description-optimization.md`) still prints neither. Tracked as
+follow-up, not fixed here — the numbers it reports are correct either way
+now that `usable_runs()` is the shared denominator.

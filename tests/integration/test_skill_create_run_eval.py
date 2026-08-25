@@ -16,9 +16,19 @@ REPO_ROOT = Path(__file__).parent.parent.parent
 SKILL_DIR = REPO_ROOT / "claude" / "skills" / "skill-create"
 
 # `run_eval.py` does `from scripts.utils import ...`. The repo root also has a
-# `scripts/` directory, which pytest's `pythonpath = ["."]` would otherwise
-# bind as an empty namespace package — drop that binding and let the skill's
-# own package win.
+# `scripts/` directory, which pytest's `pythonpath = ["."]` would otherwise bind
+# as an empty namespace package — so the skill dir has to win the name.
+#
+# Both mutations must PERSIST for the session, they cannot be undone after the
+# import (PR #1422 review, agy): `run_eval()` submits `run_single_query` to a
+# ProcessPoolExecutor, which pickles it by qualified name — so `scripts.run_eval`
+# has to stay importable and resolve to this same module object, in this process
+# and in every forked worker. Undoing either mutation turns the two subprocess
+# tests below into `Can't pickle ... import of module 'scripts.run_eval' failed`.
+#
+# The shadowing risk is bounded: the repo-root `scripts/` holds only shell
+# scripts (no `.py`, no `__init__.py`), and nothing in the suite imports
+# `scripts.*`, so there is no module for this binding to displace.
 if str(SKILL_DIR) not in sys.path:
     sys.path.insert(0, str(SKILL_DIR))
 sys.modules.pop("scripts", None)
@@ -30,6 +40,8 @@ from scripts.run_eval import (  # noqa: E402
     run_eval,
     run_single_query,
 )
+from scripts.run_loop import eval_run_counts  # noqa: E402
+from scripts.utils import usable_runs  # noqa: E402
 
 PROBE = "write-release-note-skill-deadbeef"
 
@@ -338,3 +350,57 @@ def test_main_reports_harness_failures_separately_from_non_triggering(tmp_path, 
     output = json.loads(captured.out)
     assert output["summary"]["errors"] == 1
     assert output["results"][0]["pass"] is False
+
+
+def test_assistant_fallback_survives_an_explicitly_null_tool_input() -> None:
+    """`get("input", {})` returns None when the key is present but null, and
+    the next `.get()` would raise (PR #1422 review, agy)."""
+    lines = [
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {"type": "tool_use", "name": "Skill", "input": None},
+                        {"type": "tool_use", "name": "Skill", "input": {"skill": PROBE}},
+                    ]
+                },
+            }
+        ),
+        json.dumps({"type": "result"}),
+    ]
+
+    assert detect_trigger(lines, PROBE) is True
+
+
+def test_loop_stats_do_not_count_errored_runs_as_false_negatives() -> None:
+    """`run_eval` drops errored runs from the trigger-rate denominator, so the
+    loop's precision/recall must use the same denominator (PR #1422, codex)."""
+    results = [
+        {"should_trigger": True, "triggers": 2, "runs": 3, "usable_runs": 2},
+        {"should_trigger": False, "triggers": 0, "runs": 3, "usable_runs": 1},
+    ]
+
+    counts = eval_run_counts(results)
+
+    # The 1 errored positive run is not a miss, and the 2 errored negative runs
+    # are not true negatives.
+    assert counts == {"tp": 2, "fn": 0, "fp": 0, "tn": 1}
+
+
+def test_loop_stats_fall_back_to_runs_when_usable_runs_is_absent() -> None:
+    """Older result payloads (pre-#1412) carry no `usable_runs` key."""
+    results = [{"should_trigger": True, "triggers": 1, "runs": 3}]
+
+    assert eval_run_counts(results) == {"tp": 1, "fn": 2, "fp": 0, "tn": 0}
+
+
+def test_usable_runs_excludes_errored_runs_from_the_denominator() -> None:
+    """One SSOT for "how many runs actually produced evidence" — three
+    consumers used to divide `triggers` by the raw attempt count."""
+    assert usable_runs({"runs": 3, "usable_runs": 2}) == 2
+
+
+def test_usable_runs_falls_back_to_the_attempt_count_for_old_payloads() -> None:
+    """Result payloads written before #1412 carry no `usable_runs` key."""
+    assert usable_runs({"runs": 3}) == 3
