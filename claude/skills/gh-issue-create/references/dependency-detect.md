@@ -24,6 +24,13 @@ Step 3 is not linked natively. Reconciling the two is out of v1 scope.
 `removeBlockedBy` mutations are available on `github.com` and on GHES 3.19+,
 so the step works on either host without a capability probe.
 
+`addBlockedBy` takes **one** blocker per call: `AddBlockedByInput` is
+`{issueId: ID!, blockingIssueId: ID!}`. Recording the argument shape here —
+not just the availability — is what this doc previously lacked, which is how
+an earlier plural-list spelling of that argument drifted out of sync with the
+schema and failed silently under NF-1 for every issue created afterwards
+(#1445).
+
 ## Step 2.6 — Detection (F-1)
 
 Skip entirely when `--no-auto-deps` **or** `DISCUSSION_MODE=1` is set —
@@ -101,12 +108,14 @@ for N in $DEP_NUMS; do
     _dep_id="${IDS##* }"
     _rc=1
     if [ -n "$_new_id" ] && [ -n "$_dep_id" ]; then
-        # Variables: $issueId ID!, $blockedById ID!
+        # Variables: $issueId ID!, $blockingIssueId ID!
+        # `blockingIssueId` is singular by schema — see the note below the
+        # loop before reaching for a list form (#1445).
         GH_HOST="$TARGET_HOST" gh api graphql \
-            -f issueId="$_new_id" -f blockedById="$_dep_id" \
+            -f issueId="$_new_id" -f blockingIssueId="$_dep_id" \
             -f query='
-              mutation($issueId:ID!, $blockedById:ID!) {
-                addBlockedBy(input:{issueId:$issueId, blockedByIds:[$blockedById]}) {
+              mutation($issueId:ID!, $blockingIssueId:ID!) {
+                addBlockedBy(input:{issueId:$issueId, blockingIssueId:$blockingIssueId}) {
                   issue { number }
                 }
               }' >/dev/null 2>&1 && _rc=0
@@ -128,9 +137,10 @@ done
 (`references/report-template.md`). An empty value means every `N` linked.
 
 Aliasing both lookups into one query keeps this at 2 round trips per `N`.
-Batching every `N` into a single `blockedByIds` list would cut it further,
-but NF-1 promises a per-`N` warning line and one bad number must not reject
-its siblings — so the per-`N` mutation stays.
+That is the floor: `AddBlockedByInput` takes a single `blockingIssueId: ID!`,
+so one mutation per `N` is the only shape the schema accepts — there is no
+batched list to trade against. NF-1's per-`N` warning line falls out of that
+for free: one bad number can never reject its siblings.
 
 `GH_HOST` is mandatory here for the same reason it is on every other `gh`
 call in this skill (#1403): the GraphQL endpoint is chosen by host, and a
