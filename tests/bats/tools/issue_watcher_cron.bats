@@ -132,6 +132,10 @@ case "$1 $2" in
     exit 0
     ;;
 "api graphql")
+    # The real `gh api` reads stdin. Draining it here is what makes the
+    # candidate-loop fd-3 test meaningful: on plain stdin this swallows the
+    # remaining search results (PR #1447 agy review).
+    cat >/dev/null 2>&1 || true
     [ "${GH_GRAPHQL_FAIL:-0}" = "1" ] && exit 1
     _num=""
     for _a in "$@"; do
@@ -158,6 +162,9 @@ EOF
 #
 #   HERDR_WORKSPACE_EXISTS=1  `workspace list` already carries the repo label
 #   HERDR_TAB_FAIL=1          `tab create` errors
+#   HERDR_TAB_FAIL_AFTER=N    the first N `tab create` calls succeed, the rest
+#                             error — lets one issue fail two different ways
+#                             across its retry attempts
 #   HERDR_START_FAIL=1        `agent start` errors
 #   HERDR_AGENT_STATUS        status reported by `agent get` (default: idle)
 #   HERDR_AGENT_GET_FAIL=1    `agent get` returns agent_not_found and exits 1
@@ -194,6 +201,10 @@ case "$1 $2" in
     ;;
 "tab create")
     [ "${HERDR_TAB_FAIL:-0}" = "1" ] && exit 1
+    if [ -n "${HERDR_TAB_FAIL_AFTER:-}" ]; then
+        _n=$(_bump "${CALL_LOG}.tabcount")
+        [ "${_n}" -gt "${HERDR_TAB_FAIL_AFTER}" ] && exit 1
+    fi
     printf '%s\n' '{"id":"cli:tab:create","result":{"tab":{"tab_id":"ws-test-1:t9"},"pane":{"pane_id":"ws-test-1:p9"}}}'
     ;;
 "tab close")
@@ -351,6 +362,7 @@ _run_tick() {
         "GH_ISSUES_FILE=${_WORK_DIR}/issues.json" \
         "IW_WATCHED_REPOS=${_WATCH_FILE}" \
         "XDG_STATE_HOME=${_STATE_HOME}" \
+        "IW_IDLE_POLL_SLEEP=0" \
         "${_env[@]}" \
         bash "${SCRIPT}" "$@"
 }
@@ -497,8 +509,8 @@ _hold_lock() {
     assert_success
     _assert_logged "gwt spawn --wt-name issue-11"
     _assert_logged "tab create --workspace"
-    _assert_logged "agent start iw-11 --kind claude --pane ws-test-1:p9"
-    _assert_logged "agent prompt iw-11 /gh-issue-flow 11"
+    _assert_logged "agent start iw-acme-dotfiles-11 --kind claude --pane ws-test-1:p9"
+    _assert_logged "agent prompt iw-acme-dotfiles-11 /gh-issue-flow 11"
 }
 
 @test "issue_watcher_cron: the prompt is the slash command, not a subagent instruction" {
@@ -514,7 +526,7 @@ _hold_lock() {
 @test "issue_watcher_cron: the dispatched pane runs claude with --dangerously-skip-permissions" {
     _run_tick
     assert_success
-    _assert_logged "agent start iw-11 --kind claude --pane ws-test-1:p9 -- --dangerously-skip-permissions"
+    _assert_logged "agent start iw-acme-dotfiles-11 --kind claude --pane ws-test-1:p9 -- --dangerously-skip-permissions"
 }
 
 @test "issue_watcher_cron: the tab is labelled with the issue number" {
@@ -683,6 +695,140 @@ _hold_lock() {
 }
 
 # ---------------------------------------------------------------------------
+# PR #1447 review regressions
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: the search is scoped to the watched repos" {
+    _run_tick
+    assert_success
+    # Without repo: qualifiers --limit truncates every assigned issue on the
+    # account and a watched repo can starve outside the window.
+    _assert_logged "search issues repo:acme/dotfiles"
+}
+
+@test "issue_watcher_cron: each watched repo contributes its own repo: qualifier" {
+    mkdir -p "${_WORK_DIR}/other"
+    git -C "${_WORK_DIR}/other" init -q
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'"},{"repo":"acme/other","path":"'"${_WORK_DIR}"'/other"}]'
+    _run_tick
+    assert_success
+    _assert_logged "repo:acme/dotfiles repo:acme/other"
+}
+
+@test "issue_watcher_cron: the search result order is pinned, not relevance-ranked" {
+    _run_tick
+    assert_success
+    _assert_logged "--sort updated --order desc"
+}
+
+@test "issue_watcher_cron: a stdin-consuming child cannot truncate the candidate loop" {
+    # The blockedBy query runs inside the candidate loop and drains stdin. On
+    # plain stdin that eats the remaining search results and the cycle silently
+    # dispatches one issue instead of three.
+    _set_issues '[
+      {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
+    ]'
+    _run_tick
+    assert_success
+    assert_output --partial "3 issue(s) dispatched"
+}
+
+@test "issue_watcher_cron: a stdin-consuming child cannot truncate the dispatch loop" {
+    _set_issues '[
+      {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
+    ]'
+    _run_tick
+    assert_success
+    [ "$(_log_count 'agent prompt')" -eq 3 ]
+}
+
+@test "issue_watcher_cron: the agent name carries the repo, not just the number" {
+    _run_tick
+    assert_success
+    # Two watched repos both having an issue #11 would otherwise share one herdr
+    # agent name, and the second prompt would land on the first one's pane.
+    _assert_logged "agent start iw-acme-dotfiles-11"
+    _refute_logged "agent start iw-11 "
+}
+
+@test "issue_watcher_cron: repos with colliding directory names get distinct workspaces" {
+    mkdir -p "${_WORK_DIR}/nest/dotfiles"
+    git -C "${_WORK_DIR}/nest/dotfiles" init -q
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'"},{"repo":"other/dotfiles","path":"'"${_WORK_DIR}"'/nest/dotfiles"}]'
+    _run_tick
+    assert_success
+    # Both leaf directories are "dotfiles", so the basename label would merge
+    # two repos onto one workspace — the slug disambiguates.
+    _assert_logged "--label acme/dotfiles"
+    _refute_logged "--label dotfiles "
+}
+
+@test "issue_watcher_cron: a unique directory name still labels the workspace plainly" {
+    _run_tick
+    assert_success
+    _assert_logged "workspace create --cwd ${_REPO_DIR} --label dotfiles --no-focus"
+}
+
+@test "issue_watcher_cron: a cold agent is polled for idle before it is prompted" {
+    _run_tick
+    assert_success
+    # `herdr agent start` returning does not prove the key-input loop accepts
+    # Enter yet (#1399) — prompting a cold pane drops the first keystroke.
+    run grep -n "agent get iw-acme-dotfiles-11" "${_LOG}"
+    assert_success
+    _agent_get_line=$(grep -n "agent get iw-acme-dotfiles-11" "${_LOG}" | head -1 | cut -d: -f1)
+    _prompt_line=$(grep -n "agent prompt iw-acme-dotfiles-11" "${_LOG}" | head -1 | cut -d: -f1)
+    [ "${_agent_get_line}" -lt "${_prompt_line}" ]
+}
+
+@test "issue_watcher_cron: the dedup check picks the highest worktree index" {
+    _add_worktree 11
+    git -C "${_REPO_DIR}" worktree add -q -b "wt/issue-11/2" "${_WORK_DIR}/dotfiles-issue-11-2" HEAD
+    _run_tick
+    assert_success
+    assert_output --partial "worktree already exists"
+}
+
+@test "issue_watcher_cron: a stale attempt error code cannot book a quota strike" {
+    # Attempt 1 stalls (quota-shaped); attempts 2-3 die at tab create, which is
+    # not quota-shaped. The gate must read the *last* attempt, not the first.
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_TAB_FAIL_AFTER=1"
+    assert_failure
+    assert_output --partial "not a token-limit signature"
+    [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: --dry-run does not take the tick lock" {
+    _hold_lock
+    _run_tick -- --dry-run
+    assert_success
+    assert_output --partial "acme/dotfiles#11"
+    refute_output --partial "already running"
+}
+
+@test "issue_watcher_cron: --dry-run leaves an expired gate file on disk" {
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) - 60))" >"${_LIMIT_FILE}"
+    _run_tick -- --dry-run
+    assert_success
+    # Evaluating the gate clears an expired file — a state change in the mode
+    # documented as changing nothing.
+    [ -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: --dry-run reports even while the gate is closed" {
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) + 900))" >"${_LIMIT_FILE}"
+    _run_tick -- --dry-run
+    assert_success
+    assert_output --partial "acme/dotfiles#11"
+}
+
+# ---------------------------------------------------------------------------
 # Read-only on issues
 # ---------------------------------------------------------------------------
 
@@ -766,7 +912,7 @@ _hold_lock() {
 @test "issue_watcher_cron: a spawn that fails once then succeeds still dispatches" {
     _run_tick "GWT_SPAWN_FAIL_TIMES=1"
     assert_success
-    _assert_logged "agent prompt iw-11 /gh-issue-flow 11"
+    _assert_logged "agent prompt iw-acme-dotfiles-11 /gh-issue-flow 11"
 }
 
 @test "issue_watcher_cron: agent_prompt_stalled is retried once and then succeeds" {
@@ -881,7 +1027,7 @@ _hold_lock() {
     _run_tick "PATH=$(_path_without flock)"
     assert_success
     assert_output --partial "without single-instance protection"
-    _assert_logged "agent prompt iw-11"
+    _assert_logged "agent prompt iw-acme-dotfiles-11"
 }
 
 # ---------------------------------------------------------------------------
@@ -960,6 +1106,7 @@ _hold_lock() {
         "GH_ISSUES_FILE=${_WORK_DIR}/issues.json" \
         "IW_WATCHED_REPOS=${_WATCH_FILE}" \
         "TMPDIR=${_tmp}" \
+        "IW_IDLE_POLL_SLEEP=0" \
         bash "${SCRIPT}"
     refute_output --partial "unbound variable"
 }
@@ -1030,7 +1177,7 @@ _hold_lock() {
     _run_tick
     assert_success
     assert_output --partial "Rate-limit gate reopened"
-    _assert_logged "agent prompt iw-11"
+    _assert_logged "agent prompt iw-acme-dotfiles-11"
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
@@ -1047,7 +1194,7 @@ _hold_lock() {
     printf 'not json at all\n' >"${_LIMIT_FILE}"
     _run_tick
     assert_success
-    _assert_logged "agent prompt iw-11"
+    _assert_logged "agent prompt iw-acme-dotfiles-11"
 }
 
 @test "issue_watcher_cron: a non-numeric deadline fails open" {
@@ -1056,7 +1203,7 @@ _hold_lock() {
     _run_tick
     assert_success
     assert_output --partial "dispatching anyway"
-    _assert_logged "agent prompt iw-11"
+    _assert_logged "agent prompt iw-acme-dotfiles-11"
 }
 
 @test "issue_watcher_cron: a successful dispatch clears accumulated strikes" {
@@ -1105,7 +1252,7 @@ _hold_lock() {
     mkdir -p "${_STATE_DIR}"
     _run_tick
     assert_success
-    _assert_logged "agent prompt iw-11"
+    _assert_logged "agent prompt iw-acme-dotfiles-11"
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
