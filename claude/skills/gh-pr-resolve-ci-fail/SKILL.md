@@ -27,9 +27,10 @@ Record `START_TS=$(date +%s)` immediately for Step 7.
 Positional: `[pr-number] [remote]`. Flags: `--wait <seconds>` (opt-in, default
 off), `--label-variant <input>` (override canonical label).
 
-- `pr-number` omitted → auto-detect via `gh pr view --json
-  number,state,headRefName` on current branch. No PR → stop.
-- `remote` default `origin`. Missing → `git remote -v` and stop. `--label-variant`
+- `remote` default `origin`. Missing → `git remote -v` and stop. Bind `TARGET_HOST` +
+  `TARGET_REPO` from that one remote URL **before any `gh` call** per `references/github-target.md` (#1403).
+- `pr-number` omitted → auto-detect via `GH_HOST="$TARGET_HOST" gh pr view --repo
+  "$TARGET_REPO" --json number,state,headRefName`. No PR → stop. `--label-variant`
   normalized via `references/label-normalization.md`; unknown → fail-fast.
 
 State `OPEN` required. Hard preconditions (refuses the repo default branch ·
@@ -43,14 +44,14 @@ Commands, judgment criteria, and transient-red exceptions: `references/ci-log-an
 
 ### Failing-check fetch
 
-`gh pr checks <N> --required --json name,state,workflow,link`, filter `state ==
-FAILURE`. All green → `[OK] no failing checks — nothing to resolve.` and stop.
+`GH_HOST="$TARGET_HOST" gh pr checks <N> --repo "$TARGET_REPO" --required --json
+name,state,workflow,link`, filter `state == FAILURE`. All green → `[OK] no failing checks — nothing to resolve.` and stop.
 Filter rubric + in-progress carveout: `references/ci-log-analysis.md` → "Step 2 — Fetch failing checks".
 
 ## Step 3: Fetch + Analyze Logs
 
-Resolve each failing workflow's latest `RUN_ID`, dump `gh run view <id>
---log-failed`, identify the root cause. Parsing rubric + common patterns (lint /
+Resolve each failing workflow's latest `RUN_ID`, dump `GH_HOST="$TARGET_HOST" gh
+run view <id> --repo "$TARGET_REPO" --log-failed`, identify the root cause. Parsing rubric + common patterns (lint /
 type / test / build): `references/ci-log-analysis.md` → "Step 3 — Log triage".
 No identifiable fix → surface log and stop. **Never** blind-retry.
 
@@ -71,7 +72,7 @@ yet removed**. Exact commands + divergence message: `references/safety.md` →
 
 ## Step 6: Optional CI Green Wait (`--wait`)
 
-`--wait <seconds>` passed → poll `gh pr checks --required` every 30 s until green
+`--wait <seconds>` passed → poll `gh pr checks` (host-pinned, `--repo "$TARGET_REPO"`) every 30 s until green
 or timeout. Timeout → `[WARN] CI still pending after <N>s — proceeding to label
 removal.` Without flag, skip. Polling loop: `references/ci-log-analysis.md` →
 "Step 6 — --wait polling loop".

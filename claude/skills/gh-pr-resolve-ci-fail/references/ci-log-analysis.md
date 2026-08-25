@@ -14,7 +14,7 @@ fix 가 원천적으로 불가능한 케이스를 30분 분석 후에야 깨닫�
 
 ```bash
 # 같은 워크플로의 main 최신 3 runs
-gh run list --repo "$TARGET_REPO" \
+GH_HOST="$TARGET_HOST" gh run list --repo "$TARGET_REPO" \
     --branch main \
     --workflow "$WORKFLOW_NAME" \
     --limit 3 \
@@ -28,8 +28,8 @@ gh run list --repo "$TARGET_REPO" \
 1. main 최신 3 runs 중 **2 개 이상** `conclusion == "failure"` (또는
    `"timed_out"`).
 2. main 의 실패 run 과 PR run 이 **동일 job + 동일 step name** 에서
-   터진다 — `gh run view <main-run-id> --log-failed` 와
-   `gh run view <pr-run-id> --log-failed` 의 첫 `##[error]` /
+   터진다 — `GH_HOST="$TARGET_HOST" gh run view <main-run-id> --repo "$TARGET_REPO" --log-failed` 와
+   같은 형태의 `<pr-run-id>` 조회 결과의 첫 `##[error]` /
    `Error:` 라인 (또는 첫 non-zero exit 의 step header) 이 일치하는지
    2초 비교.
 
@@ -54,7 +54,7 @@ gh run list --repo "$TARGET_REPO" \
 (e.g., main 회복 PR 자체의 CI 디버깅).
 
 ```bash
-gh pr checks "$PR_NUMBER" --repo "$TARGET_REPO" --required \
+GH_HOST="$TARGET_HOST" gh pr checks "$PR_NUMBER" --repo "$TARGET_REPO" --required \
     --json name,state,workflow,link \
     --jq '[.[] | select(.state=="FAILURE")]'
 ```
@@ -98,7 +98,8 @@ per failing workflow inside the loop:
 
 ```bash
 # Pre-fetch once: most recent run for each workflow on this branch.
-RUNS_JSON=$(gh run list --branch "$HEAD_REF" --limit 50 \
+RUNS_JSON=$(GH_HOST="$TARGET_HOST" gh run list --repo "$TARGET_REPO" \
+    --branch "$HEAD_REF" --limit 50 \
     --json databaseId,workflowName,headSha)
 
 # In the per-failing-workflow loop:
@@ -106,13 +107,14 @@ for WF_NAME in $FAILING_WORKFLOWS; do
     RUN_ID=$(printf '%s' "$RUNS_JSON" \
         | jq -r --arg n "$WF_NAME" \
             '[.[] | select(.workflowName==$n)] | .[0].databaseId')
-    gh run view "$RUN_ID" --log-failed
+    GH_HOST="$TARGET_HOST" gh run view "$RUN_ID" --repo "$TARGET_REPO" --log-failed
 done
 ```
 
 One `gh run list` call instead of N. Cuts network/process overhead
-when several workflows fail at once. `gh run view` does not accept
-`--repo`; rely on cwd-based repo detection.
+when several workflows fail at once. Both `gh run list` and `gh run view`
+take `--repo`, and both are host-pinned with `GH_HOST="$TARGET_HOST"` — never
+rely on cwd-based repo detection (#1403 / #1407, `references/github-target.md`).
 
 ### Common failure patterns
 
@@ -147,7 +149,7 @@ WAIT_SECONDS="$1"   # from --wait flag
 ELAPSED=0
 INTERVAL=30
 while [ "$ELAPSED" -lt "$WAIT_SECONDS" ]; do
-    PENDING=$(gh pr checks "$PR_NUMBER" --repo "$TARGET_REPO" --required \
+    PENDING=$(GH_HOST="$TARGET_HOST" gh pr checks "$PR_NUMBER" --repo "$TARGET_REPO" --required \
         --json state --jq '[.[] | select(.state=="IN_PROGRESS" or .state=="PENDING" or .state=="FAILURE")] | length')
     [ "$PENDING" -eq 0 ] && break
     sleep "$INTERVAL"

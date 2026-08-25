@@ -34,9 +34,10 @@ output it verbatim, then stop. No API calls.
 
 ## Step 1: Parse Flags + Resolve Target
 
-Delegate to `gh_pr_review_parse` (`shell-common/functions/gh_pr_review.sh`).
-Argument shape + KR aliases + exit codes: `references/parser-contract.md`
-(also covers `START_TS` and resolving `TARGET_REPO` / `PR_NUMBER`).
+Delegate to `gh_pr_review_parse` (`shell-common/functions/gh_pr_review.sh`). Argument shape + KR aliases + exit
+codes: `references/parser-contract.md` — it also covers `START_TS`, `PR_NUMBER`, and binding `TARGET_REPO` +
+`TARGET_HOST` from one remote URL. Every `gh` call below then runs as
+`GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"`; `--repo` alone carries no host (#1403 / #1407).
 
 ## Step 2: Pre-flight
 
@@ -59,11 +60,9 @@ Normalized enum: `default` / `quick` / `thorough` / `security` /
 
 ## Step 4: Fetch Review Material
 
-Decide path by diff size (`gh pr view ... --json additions,deletions`):
-`≥ 800` lines → follow
-`claude/skills/gh-pr-approve/references/large-diff-delegation.md`; else inline
-`gh pr diff`. Append the diff per `references/ai-cli-invocation.md` and write
-`(prompt + diff)` to `PROMPT_FILE`.
+Decide path by diff size (`gh pr view --json additions,deletions`): `≥ 800` lines → follow
+`claude/skills/gh-pr-approve/references/large-diff-delegation.md`; else inline `gh pr diff`. Append the diff per
+`references/ai-cli-invocation.md` and write `(prompt + diff)` to `PROMPT_FILE`.
 
 Never hardcode or reuse a `PROMPT_FILE`; derive it from
 `_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER"` and do the write plus Step 5

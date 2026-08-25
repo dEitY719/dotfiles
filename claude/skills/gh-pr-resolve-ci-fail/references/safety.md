@@ -2,6 +2,9 @@
 
 Detail companion for SKILL.md Steps 1, 4, 5, and 7.
 
+Every `gh` call below assumes `TARGET_HOST` / `TARGET_REPO` are already bound
+and exported by Step 1 per `references/github-target.md` (#1403, #1407).
+
 ## Preconditions (Step 1)
 
 Run as a parallel batch. Any failure → stop with the matching message.
@@ -9,7 +12,7 @@ Run as a parallel batch. Any failure → stop with the matching message.
 | Check | How | Fail message |
 |---|---|---|
 | Inside a git repo | `git rev-parse --show-toplevel` | `[FAIL] not inside a git repo` |
-| Not on default branch | Compare `git rev-parse --abbrev-ref HEAD` against `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` | `[FAIL] refuses on default branch (<DEFAULT>) — check out the PR's head branch first` |
+| Not on default branch | Compare `git rev-parse --abbrev-ref HEAD` against `GH_HOST="$TARGET_HOST" gh repo view --repo "$TARGET_REPO" --json defaultBranchRef -q .defaultBranchRef.name` | `[FAIL] refuses on default branch (<DEFAULT>) — check out the PR's head branch first` |
 | Working tree clean | `git status --porcelain` empty | `[FAIL] working tree dirty — commit/stash your edits first; this skill never auto-stashes` |
 | No in-progress rebase / merge / cherry-pick | `git rev-parse --git-path rebase-merge` / `rebase-apply` / `MERGE_HEAD` / `CHERRY_PICK_HEAD` / `REVERT_HEAD` all absent | `[FAIL] in-progress <name> at <marker> — finish or abort first` |
 
@@ -29,7 +32,7 @@ locally, before pushing, and stop on red.
 
 ### Detection heuristic for "what CI ran"
 
-Read the failing workflow's YAML (`gh api repos/.../contents/.github/workflows/<file>`)
+Read the failing workflow's YAML (`GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/contents/.github/workflows/<file>"`)
 and extract the `run:` line from the step that failed. If parsing the
 YAML is too fragile, fall back to the project's conventional commands
 in order:
@@ -100,15 +103,18 @@ The label-removal block uses REST DELETE (not `gh pr edit
 documented in `gh-pr-resolve-conflict` (#326 Bug B).
 
 ```bash
-gh api -X DELETE "repos/{owner}/{repo}/issues/$PR_NUMBER/labels/CI%20fail" \
+GH_HOST="$TARGET_HOST" gh api -X DELETE \
+    "repos/$TARGET_REPO/issues/$PR_NUMBER/labels/CI%20fail" \
     >/dev/null 2>&1 \
   && echo "[OK] \`CI fail\` 라벨 제거됨 — 동료 재-Approve 흐름 해제" \
   || echo "[WARN] \`CI fail\` 라벨 제거 실패 (이미 없거나 권한 없음 — 수동 제거 필요할 수 있음)"
 ```
 
-`{owner}/{repo}` placeholders are auto-resolved by `gh api` from the
-current working directory's git remote (or `GH_REPO` if set), so no
-`--repo` flag is needed — `gh api` does not accept `--repo` (#658).
+`gh api` accepts no `--repo` flag (#658), so the repo slug goes into the path
+as `$TARGET_REPO` — bound in Step 1 from the remote URL. Never leave a literal
+`{owner}/{repo}` here: that makes `gh` fall back to its own `gh repo set-default`
+instead of git's remote, which on a dual-host login silently DELETEs a label on
+the wrong server (#1403 / #1407). `GH_HOST="$TARGET_HOST"` pins that server.
 URL-encode any space or special char in the label name (e.g. `CI%20fail`).
 
 ### ai-metrics PR comment (soft-fail)
@@ -118,7 +124,7 @@ ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))
 if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
     : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
 else
-    gh api "repos/{owner}/{repo}/issues/$PR_NUMBER/comments" -X POST \
+    GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" -X POST \
       -f body="---
 <details>
 <summary>AI Metrics · tokens=~${TOKENS:-3000} · human_h=~2 · ai_min=~$ELAPSED</summary>
@@ -148,6 +154,9 @@ fi
 If something went wrong:
   git reset --hard $BACKUP_SHA     # discard local CI fix entirely
   git reflog                        # find any lost ref
-  gh pr view <N> --json labels     # confirm label state
-  gh pr edit <N> --add-label "CI fail"  # manually re-add if needed
+  GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$TARGET_REPO" --json labels
+  GH_HOST="$TARGET_HOST" gh pr edit <N> --repo "$TARGET_REPO" --add-label "CI fail"
 ```
+
+Render `$TARGET_HOST` / `$TARGET_REPO` as their resolved values in the printed
+report — the user's shell will not have them exported after the skill exits.

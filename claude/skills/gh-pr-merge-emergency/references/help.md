@@ -35,7 +35,7 @@
 1. Validates PR state (open, not draft, no conflicts) and that required CI is green.
 2. Shows you the exact plan (repo, PR, base/head, CI summary, reason) and waits for your confirmation.
 3. Posts a visible audit comment on the PR explaining *why* this is being emergency-merged.
-4. Runs `gh pr merge --admin --squash --delete-branch` to bypass approval requirements.
+4. Runs `GH_HOST="$TARGET_HOST" gh pr merge <N> --repo "$TARGET_REPO" --admin --squash --delete-branch` to bypass approval requirements.
 5. Creates a follow-up `incident:` issue with a retro checklist so the decision is tracked and reviewed later.
 6. Moves the PR project-board card to `Done` when a projectV2 board is attached.
 7. Reports the merge SHA, audit comment URL, and incident issue number.

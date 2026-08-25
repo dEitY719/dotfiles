@@ -83,7 +83,8 @@ the authoritative arithmetic.
 ## Posting via `gh pr comment`
 
 ```sh
-gh pr comment "$PR_NUMBER" --repo "$TARGET_REPO" --body-file "$BODY_FILE"
+GH_HOST="$TARGET_HOST" gh pr comment "$PR_NUMBER" --repo "$TARGET_REPO" \
+    --body-file "$BODY_FILE"
 ```
 
 Use `--body-file` (not `--body "..."`) because the verbatim AI output
@@ -100,7 +101,8 @@ attached. `gh pr comment` has no such failure mode.
 ## Soft-fail on post failure
 
 ```sh
-if ! gh pr comment "$PR_NUMBER" --repo "$TARGET_REPO" --body-file "$BODY_FILE"; then
+if ! GH_HOST="$TARGET_HOST" gh pr comment "$PR_NUMBER" --repo "$TARGET_REPO" \
+        --body-file "$BODY_FILE"; then
     echo "[WARN] PR comment post failed — output retained on stdout"
     # exit 0 — stdout already has the AI output for the user.
 fi
@@ -122,7 +124,8 @@ unaffected.
 if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
     : # PR comment skipped via GH_DISABLE_AI_METRICS — stdout still shown.
 else
-    gh pr comment "$PR_NUMBER" --repo "$TARGET_REPO" --body-file "$BODY_FILE" \
+    GH_HOST="$TARGET_HOST" gh pr comment "$PR_NUMBER" --repo "$TARGET_REPO" \
+      --body-file "$BODY_FILE" \
       || echo "[WARN] PR comment post failed — output retained on stdout"
 fi
 ```

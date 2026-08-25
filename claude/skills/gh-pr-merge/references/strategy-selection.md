@@ -32,7 +32,7 @@ Do NOT silently switch strategies.
 ## Pre-flight JSON fields
 
 ```bash
-gh pr view <N> --repo "$TARGET_REPO" --json \
+GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$TARGET_REPO" --json \
   number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,\
   baseRefName,headRefName,url
 ```
@@ -60,7 +60,7 @@ which is reserved for audited admin bypass.
 Detect protection presence:
 
 ```bash
-gh api "repos/$TARGET_REPO/branches/$BASE/protection" >/dev/null 2>&1
+GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/branches/$BASE/protection" >/dev/null 2>&1
 # exit 0 → protection PRESENT  (strict rules apply)
 # non-zero → protection ABSENT (403 Free-plan or 404 not-configured)
 ```
@@ -84,7 +84,7 @@ approval. Distinguishing them in the log adds noise without value.
 ## Required checks
 
 ```bash
-gh pr checks <N> --repo "$TARGET_REPO" --required
+GH_HOST="$TARGET_HOST" gh pr checks <N> --repo "$TARGET_REPO" --required
 ```
 
 Any row with conclusion `FAILURE` or status `IN_PROGRESS`/`QUEUED` → stop.
@@ -93,7 +93,7 @@ Only proceed when all required checks are `SUCCESS`.
 ## Post-merge SHA fetch
 
 ```bash
-gh pr view <N> --repo "$TARGET_REPO" --json mergeCommit -q .mergeCommit.oid
+GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$TARGET_REPO" --json mergeCommit -q .mergeCommit.oid
 ```
 
 If `.mergeCommit.oid` is null (API hasn't settled yet), retry once

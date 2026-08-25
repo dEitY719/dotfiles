@@ -9,13 +9,19 @@ enough context that the Worker never needs to re-explore).
 ## Fetch the issue
 
 ```bash
-gh issue view <N> --repo <owner/repo-of-remote> --json title,body,comments
+GH_HOST="$DEST_HOST" gh issue view <N> --repo "$DEST_REPO" --json title,body,comments
 ```
 
-`<owner/repo-of-remote>` is the `DEST_REPO` resolved in Step 2's remote
-resolution (`gh:relay-merge`'s `remote-resolution.md` substep 6). This is
-the brief's raw material — body **and** comments, verbatim, not summarized
-away (later steps, and the Worker, need the full context).
+`$DEST_REPO` (owner/repo of the destination remote) and `$DEST_HOST` are
+both resolved in Step 2's remote resolution (`gh:relay-merge`'s
+`remote-resolution.md` substep 6), from one and the same remote URL. Keep
+**both** halves: `--repo` names the repo but carries no host, so a bare `gh`
+would follow its own `gh repo set-default` — and this flow exists precisely
+because the destination is a *different* host from `origin`, so that default
+is the wrong server by construction (#1403 / #1407).
+
+This is the brief's raw material — body **and** comments, verbatim, not
+summarized away (later steps, and the Worker, need the full context).
 
 ## Open Questions gate — resolve before delegating
 

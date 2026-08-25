@@ -27,7 +27,7 @@ _Availability depends on repo settings → General → Pull Requests. If a strat
 ## What the skill does
 
 1. Parses args. Validates strategy ∈ {rebase, squash, merge}.
-2. Resolves target repo from remote.
+2. Resolves target repo **and host** from the remote URL (`GH_HOST` pinned, #1403/#1407).
 3. Pre-flight (in parallel):
    - PR state, draft status, mergeable, mergeStateStatus, reviewDecision
    - `gh pr checks` — required checks must pass
@@ -35,7 +35,7 @@ _Availability depends on repo settings → General → Pull Requests. If a strat
    - PR not OPEN / is draft / has merge conflicts
    - Review decision ≠ APPROVED → suggests `gh:pr-merge-emergency` instead
    - Required check failing or pending
-5. Runs `gh pr merge <N> --repo $TARGET_REPO --<strategy> --delete-branch` **without confirmation**.
+5. Runs `GH_HOST="$TARGET_HOST" gh pr merge <N> --repo "$TARGET_REPO" --<strategy> --delete-branch` **without confirmation**.
 6. Moves the PR project-board card to `Done` when a projectV2 board is attached.
 7. Fetches the merge SHA and prints a compact report.
 
@@ -56,7 +56,7 @@ merge through `gh:pr-merge-emergency`.
 
 To avoid that, the skill detects whether the base branch has protection:
 
-- `gh api "repos/<owner>/<repo>/branches/<baseRefName>/protection"` returning
+- `GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/branches/<baseRefName>/protection"` returning
   HTTP 200 → protection **present** → strict `APPROVED` required.
 - HTTP 403 (Free plan locks the feature) or 404 (not configured) →
   protection **absent** → empty `reviewDecision` is accepted and the

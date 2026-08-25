@@ -1,5 +1,8 @@
 # Approval Templates — for gh:pr-approve skill
 
+Every command below is host-pinned and repo-scoped with the `TARGET_HOST` /
+`TARGET_REPO` bound in Step 1 (`references/arg-parsing.md`).
+
 All three paths write the body to a `mktemp` file first (avoids shell-escaping and concurrent-run collisions), then call `gh`. Match the language dominant in the PR body/comments.
 
 ```bash
@@ -30,7 +33,7 @@ LGTM
 ### Command
 
 ```bash
-gh pr review <N> --repo "$TARGET_REPO" --approve --body-file "$BODY"
+GH_HOST="$TARGET_HOST" gh pr review <N> --repo "$TARGET_REPO" --approve --body-file "$BODY"
 ```
 
 ## 6b — Approve with Follow-up Issues
@@ -42,7 +45,7 @@ No BLOCKERs, ≥1 FOLLOW-UP. Three-step sequence — **do them in order**.
 ```bash
 ISSUE_BODY=$(mktemp) && trap 'rm -f "$ISSUE_BODY"' EXIT
 # ... write the issue body ...
-gh issue create \
+GH_HOST="$TARGET_HOST" gh issue create \
   --repo "$TARGET_REPO" \
   --title "<type>: <concise description>" \
   --body-file "$ISSUE_BODY"
@@ -72,7 +75,7 @@ Collect each created issue number for Step 2.
 ```bash
 COMMENT_BODY=$(mktemp) && trap 'rm -f "$COMMENT_BODY"' EXIT
 # ... write comment body ...
-gh pr comment <N> --repo "$TARGET_REPO" --body-file "$COMMENT_BODY"
+GH_HOST="$TARGET_HOST" gh pr comment <N> --repo "$TARGET_REPO" --body-file "$COMMENT_BODY"
 ```
 
 Comment template:
@@ -106,7 +109,7 @@ LGTM
 ```
 
 ```bash
-gh pr review <N> --repo "$TARGET_REPO" --approve --body-file "$BODY"
+GH_HOST="$TARGET_HOST" gh pr review <N> --repo "$TARGET_REPO" --approve --body-file "$BODY"
 ```
 
 ## 6c — Request Changes (BLOCKERs present)
@@ -137,7 +140,7 @@ Never approve. List each blocker with a `file:line` pointer and the minimal fix 
 ### Command
 
 ```bash
-gh pr review <N> --repo "$TARGET_REPO" --request-changes --body-file "$BODY"
+GH_HOST="$TARGET_HOST" gh pr review <N> --repo "$TARGET_REPO" --request-changes --body-file "$BODY"
 ```
 
 ## Self-PR bodies

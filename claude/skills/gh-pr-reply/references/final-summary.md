@@ -38,7 +38,7 @@ state once more and emit a one-line nudge if the decision is still
 replied to" for "PR ready to merge".
 
 ```bash
-REVIEW_DECISION=$(gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
+REVIEW_DECISION=$(GH_HOST="$TARGET_HOST" gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
   --json reviewDecision -q .reviewDecision 2>/dev/null)
 
 if [ "$REVIEW_DECISION" = "CHANGES_REQUESTED" ]; then

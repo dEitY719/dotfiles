@@ -1,6 +1,7 @@
 # Mergeable triage matrix
 
-Step 2 maps `gh pr view --json mergeable,mergeStateStatus` to an action:
+Step 2 maps the host-pinned `gh pr view --repo "$TARGET_REPO" --json
+mergeable,mergeStateStatus` (see `references/github-target.md`) to an action:
 
 | `mergeable` | `mergeStateStatus` | Action |
 |---|---|---|
