@@ -36,9 +36,11 @@ Record `START_TS=$(date +%s)` immediately (elapsed-time for Step 4).
 Positional args: `<issue-number> [remote]` — no `mode` arg; always `direct`.
 
 - `issue-number` — required, positive integer.
-- `remote` — default `origin`. Resolve `TARGET_REPO=<owner>/<repo>` per
-  `references/repo-resolution.md`. Missing remote → `git remote -v` + stop
-  (no silent fallback).
+- `remote` — default `origin`. Bind `TARGET_REPO` **and** `TARGET_HOST` from
+  that one remote URL per `references/repo-resolution.md`, then
+  `export GH_HOST="$TARGET_HOST"` — every `gh` call below runs as
+  `GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"` (#1403 / #1407).
+  Missing remote → `git remote -v` + stop (no silent fallback).
 
 ## Step 2: Fetch + Claim + Schema Validation
 
@@ -76,10 +78,9 @@ every STOP / fail-closed / default-deny trigger below is binding:
 
 ## Step 4: Report
 
-Print the audit report per `references/report-format.md` (per-step table,
-write-action audit, done-criteria reconciliation, outcome), then append the
-ai-metrics line defined there. Compute `ELAPSED=$(( ($(date +%s) - START_TS)
-/ 60 ))` before printing; honor `GH_DISABLE_AI_METRICS=1`. Then emit `report`.
+Print the audit report per `references/report-format.md` (per-step table, write-action audit, done-criteria
+reconciliation, outcome), then append the ai-metrics line defined there. Compute
+`ELAPSED=$(( ($(date +%s) - START_TS) / 60 ))` before printing; honor `GH_DISABLE_AI_METRICS=1`. Emit `report`.
 
 ## Constraints
 

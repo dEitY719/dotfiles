@@ -33,10 +33,10 @@ not acceptable; silent declines are worse.
 Record `START_TS=$(date +%s)` immediately (elapsed tracking in Step 7).
 
 Read `references/target-resolution.md` and follow it: positional args
-`<pr-number> [remote]`, PR-number precedence (explicit arg → current branch →
-stop; never guess "the latest PR"), the `TARGET_REPO` snippet (parse the
-`[remote]`'s URL via `_gh_pr_review_resolve_target_repo`, never `gh`'s
-default-repo heuristic), and the fork-workflow tradeoff. Pass `TARGET_REPO` on **every** subsequent `gh` API call.
+`<pr-number> [remote]`, PR-number precedence (never guess "the latest PR"), the
+`TARGET_REPO` + `TARGET_HOST` binding (both from the `[remote]`'s URL, never
+`gh`'s default-repo heuristic), the fork tradeoff. Every later `gh` call runs as
+`GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"` (#1403, #1407).
 
 ## Step 2: Fetch All Review Comments
 

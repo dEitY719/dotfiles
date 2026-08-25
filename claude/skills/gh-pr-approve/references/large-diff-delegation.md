@@ -8,8 +8,9 @@ in the same session.
 ## Threshold (single source of truth)
 
 `THRESHOLD_LINES = 800` — the sum of `additions + deletions` from
-`gh pr view <N> --json additions,deletions`. PRs at or above this
-threshold are delegated; below it, the inline path runs unchanged.
+`GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$TARGET_REPO" --json additions,deletions`.
+PRs at or above this threshold are delegated; below it, the inline path
+runs unchanged.
 
 The number is a starting point. Tune it in this file when PR-size
 distribution data justifies it. Do **not** hardcode the threshold
@@ -25,11 +26,12 @@ happens on top of it.
 ## Dispatch
 
 Invoke `Agent(subagent_type="Explore")` with this prompt template
-(substitute `<N>` and `<TARGET_REPO>`):
+(substitute `<N>`, `<TARGET_REPO>`, and `<TARGET_HOST>` — the subagent gets a
+fresh shell, so the exported `GH_HOST` does not reach it):
 
 > Summarize the diff for PR #<N> in repo <TARGET_REPO> for review
-> classification. Run `gh pr diff <N> --repo <TARGET_REPO>` (and any
-> follow-up grep / file read needed for context). Return a short
+> classification. Run `GH_HOST=<TARGET_HOST> gh pr diff <N> --repo <TARGET_REPO>`
+> (and any follow-up grep / file read needed for context). Return a short
 > report (≤ 300 words) split into three sections:
 >
 > 1. **BLOCKER candidates** — correctness, security, regression risks.

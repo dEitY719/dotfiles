@@ -34,7 +34,10 @@ fi
 
 `--repo "$TARGET_REPO"` 는 Step 1 이 해소한 remote 를 명시로 넘긴다 (#1405) —
 빼면 헬퍼가 `gh repo view` 로 폴백하는데, 이는 git origin 이 아니라
-`gh repo set-default` 가 고른 레포를 답한다.
+`gh repo set-default` 가 고른 레포를 답한다. 헬퍼가 내부에서 실행하는 `gh`
+호출의 host 는 Step 1 의 `export GH_HOST="$TARGET_HOST"` 를 상속한다
+(`references/github-target.md`, #1403) — 그 export 없이 이 블록을 복사해 쓰면
+dual-host 로그인에서 조용히 다른 서버의 보드를 건드린다.
 
 `GH_PROJECT_STATUS_SYNC=0` opt-out 은 helper 자체가 흡수한다. projectV2
 보드가 없는 레포는 helper 가 silent 0 반환. `--only-from` 의 missing column

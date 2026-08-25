@@ -40,17 +40,62 @@ asymmetric-network setup is `origin` = internal (isolated GHE),
    git remote add relay-tmp "$REMOTE_URL"   # remove in cleanup
    ```
 
-6. Extract `owner/repo` from the resolved URL for `gh` calls that need
-   `--repo` (the destination issue/comment in Step 6):
+6. Extract `owner/repo` **and the host** from the resolved URL. Both must
+   come from that one URL — this skill exists to cross hosts, so a host
+   taken from anywhere else (setup-mode, `gh repo set-default`) is exactly
+   the #1403 misroute:
 
-   - `https://github.com/<owner>/<repo>.git` → `<owner>/<repo>`
-   - `git@github.com:<owner>/<repo>.git` → `<owner>/<repo>`
+   ```bash
+   . "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
+   REMOTE_URL=$(git remote get-url "$REMOTE_NAME") || exit 1   # or "$REMOTE_URL" on the raw-URL path
+   DEST_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL") || exit 1
+   DEST_HOST=$(_gh_host_from_url "$REMOTE_URL") || DEST_HOST=$(_gh_resolve_host)
+   export DEST_REPO DEST_HOST
+   ```
 
-   Store as `DEST_REPO`.
+   - `https://github.com/<owner>/<repo>.git` → `github.com` + `<owner>/<repo>`
+   - `git@github.samsungds.net:<owner>/<repo>.git` → `github.samsungds.net`
+     + `<owner>/<repo>`
+
+   `gh_host.sh` is the host/URL mapping SSOT — never copy a domain list or
+   regex into this file. `_gh_resolve_host` (setup-mode → host) is only the
+   fallback for a URL that parses to no known host.
+
+7. Bind the **source** side the same way, from the source remote's URL
+   (`origin` unless the run says otherwise). Step 1's PR-mode `gh pr view`
+   reads the origin PR and must not inherit the destination's host:
+
+   ```bash
+   SOURCE_URL=$(git remote get-url "${SOURCE_REMOTE:-origin}") || exit 1
+   SOURCE_REPO=$(_gh_parse_owner_repo_url "$SOURCE_URL") || exit 1
+   SOURCE_HOST=$(_gh_host_from_url "$SOURCE_URL") || SOURCE_HOST=$(_gh_resolve_host)
+   export SOURCE_REPO SOURCE_HOST
+   ```
 
 Downstream steps (2-6) refer to the resolved destination as `$REMOTE` — the
 remote name on the name path, or the `relay-tmp` name added on the raw-URL
 path.
+
+## Host targeting rule (issues #1403 / #1407)
+
+This skill talks to **two** hosts in one run, so it never exports a single
+global `GH_HOST`. Every `gh` call carries the host of the side it targets,
+inline:
+
+```bash
+GH_HOST="$SOURCE_HOST" gh <sub-command> ... --repo "$SOURCE_REPO"   # origin side
+GH_HOST="$DEST_HOST"   gh <sub-command> ... --repo "$DEST_REPO"     # destination side
+```
+
+`--repo <owner>/<repo>` carries no host: `gh` resolves that slug against its
+own `gh repo set-default`, not git's remote. On a dual-host login the two
+disagree and the call silently succeeds against the wrong server — which for
+a relay means posting the apply-guide back onto the isolated origin, where
+the destination reader can never see it.
+
+`gh gist create` and `gh api gists/...` are not repo-scoped, so they take the
+host prefix only — see `references/gist-relay.md` for why that host is
+`$DEST_HOST`.
 
 ## The default-`upstream` hard-error rule
 

@@ -7,6 +7,8 @@ emulated convert sequence in order.
 Inputs bound by the caller:
 
 - `$TARGET_REPO`        — `owner/repo` from Step 1
+- `$TARGET_HOST`        — the host parsed from that same remote URL
+                          (Step 1); also exported as `GH_HOST`
 - `$N`                  — Discussion number (positional arg)
 - `$DISC_JSON`          — path to the temp file holding the JSON from
                           `_gh_discussion_fetch`
@@ -33,7 +35,7 @@ DLOCKED=$(jq -r '.locked' "$DISC_JSON")
 # `// empty` keeps EXISTING the empty string when the array is empty;
 # without it jq prints the literal "null" which [ -n ... ] treats as
 # non-empty, breaking first-run conversion (PR #628 gemini review).
-EXISTING=$(gh issue list --repo "$TARGET_REPO" --state all \
+EXISTING=$(GH_HOST="$TARGET_HOST" gh issue list --repo "$TARGET_REPO" --state all \
     --search "in:body \"Originated from discussion #${N}\"" \
     --json number,url --limit 1 --jq '.[0].url // empty')
 if [ -n "$EXISTING" ]; then
@@ -50,7 +52,7 @@ trap 'rm -f "$ISSUE_BODY" "${CBODY:-}"' EXIT
 printf 'Originated from discussion #%s\n\n' "$N" >"$ISSUE_BODY"
 jq -r '.body' "$DISC_JSON" >>"$ISSUE_BODY"
 
-ISSUE_URL=$(gh issue create --repo "$TARGET_REPO" \
+ISSUE_URL=$(GH_HOST="$TARGET_HOST" gh issue create --repo "$TARGET_REPO" \
     --title "$DTITLE" --body-file "$ISSUE_BODY")
 # Abort BEFORE Steps 6/7/8 if creation failed — mutating the Discussion
 # without an Issue to back-link to violates the SSOT chain documented in
@@ -65,7 +67,9 @@ ISSUE_NUMBER="${ISSUE_URL##*/}"
 if [ "${OPT_NO_BOARD_SYNC:-0}" != "1" ]; then
     # --repo "$TARGET_REPO" (Step 1) is explicit (#1405): the helper's
     # `gh repo view` fallback answers `gh repo set-default`, not the
-    # remote this run resolved.
+    # remote this run resolved. The host half rides along via the
+    # exported GH_HOST from Step 1 (#1403 / #1407) -- --repo names a
+    # repo but no server.
     _gh_project_status_sync issue "$ISSUE_NUMBER" "In progress" \
         --only-from "Backlog,Ready" --repo "$TARGET_REPO" || true
 fi

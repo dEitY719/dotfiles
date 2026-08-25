@@ -41,9 +41,11 @@ Arguments (`<discussion-number>`, `[remote]`, the four `--no-*` skip flags,
 ## Step 1: Detect Repo Context
 
 Record `START_TS=$(date +%s)` for elapsed-time reporting. Parse args, confirm
-a git repo, and resolve `TARGET_REPO` via the chosen remote — substeps in
-[`references/repo-resolution.md`](references/repo-resolution.md). No silent
-`origin` fallback on a missing remote.
+a git repo, and bind `TARGET_REPO` **and** `TARGET_HOST` from the chosen
+remote's URL, then `export GH_HOST="$TARGET_HOST"` — substeps in
+[`references/repo-resolution.md`](references/repo-resolution.md). Every `gh`
+call below runs as `GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"`
+(#1403 / #1407). No silent `origin` fallback on a missing remote.
 
 ## Step 2: Fetch the Discussion
 
@@ -63,10 +65,9 @@ not be silently coerced into the tracker.
 ## Step 4: Idempotency Check (BEFORE any mutation)
 
 Search for an Issue whose body already contains the backlink marker
-`Originated from discussion #${N}`. The full `gh issue list` command and the
-load-bearing `// empty` rationale live in
-[`references/convert-cmd.md`](references/convert-cmd.md) Step 4. On a match,
-print `[OK] Discussion #<N> already converted to <url>`, exit 0 (NF-1).
+`Originated from discussion #${N}`. The full `gh issue list` command and the load-bearing `// empty` rationale
+live in [`references/convert-cmd.md`](references/convert-cmd.md) Step 4. On a match, print
+`[OK] Discussion #<N> already converted to <url>`, exit 0 (NF-1).
 
 ## Step 5: Create the Issue
 

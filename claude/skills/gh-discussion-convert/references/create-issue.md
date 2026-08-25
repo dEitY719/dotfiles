@@ -11,7 +11,7 @@ Originated from discussion #<N>
 ```
 
 Title: the Discussion title verbatim (preserve the conventional-commit
-prefix). Create via `gh issue create --repo "$TARGET_REPO" --title ...
+prefix). Create via `GH_HOST="$TARGET_HOST" gh issue create --repo "$TARGET_REPO" --title ...
 --body-file ...`. Capture the printed URL and extract `<M>`.
 
 `gh issue create` is preferred over a raw `createIssue` GraphQL call

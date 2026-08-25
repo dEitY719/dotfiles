@@ -26,8 +26,8 @@ lint/test 를 직접 실행 → `gh:relay-merge --commits` 가 패치를 올리�
 
 ## Help
 
-If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
-output its content verbatim, then stop. No API calls.
+If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output its content verbatim, then stop.
+No API calls.
 
 ## Step 1: Parse Args
 
@@ -49,24 +49,24 @@ never skip ahead.
 ## Step 2: Resolve Destination + Branch
 
 Follow `references/branch-setup.md`. Resolves `--remote` (hard error on a missing remote — never fall back to
-`origin`), detects the destination's default branch (or honors `--base`), fetches it, computes the branch name
-`issue-<N>-<title-slug>`, and either creates a fresh branch or handles the "branch already exists" reuse/reset
-decision (never auto-resets a branch that has unique commits without asking).
+`origin`) and binds `DEST_REPO` + `DEST_HOST` from that one remote URL, detects the destination's default branch
+(or honors `--base`), fetches it, computes the branch name `issue-<N>-<title-slug>`, and either creates a fresh
+branch or handles the "branch already exists" reuse/reset decision (never auto-resets a branch with unique
+commits without asking). Destination `gh` calls run as `GH_HOST="$DEST_HOST" gh ... --repo "$DEST_REPO"` — the
+destination is a different host from `origin` by construction, so there is no global `GH_HOST` (#1403 / #1407).
 
 ## Step 3: Delegate Implementation (Advisor/Worker)
 
-Follow `references/worker-brief-checklist.md`. Fetch the issue body +
-comments, resolve any unresolved Open Questions with the user **before**
-delegating, assemble a self-contained brief, and delegate to an opus
-subagent via the `Agent` tool. Record `BASE_SHA=$(git rev-parse HEAD)`
-right before delegating — this is the relay range's lower bound.
+Follow `references/worker-brief-checklist.md`. Fetch the issue body + comments, resolve any unresolved Open
+Questions with the user **before** delegating, assemble a self-contained brief, and delegate to an opus subagent
+via the `Agent` tool. Record `BASE_SHA=$(git rev-parse HEAD)` right before delegating — the relay range's
+lower bound.
 
 ## Step 4: Advisor Verification
 
-Follow `references/verification.md`. Do not trust the Worker's completion
-report — read `git diff <BASE_SHA>..HEAD` directly, discover and run the
-target repo's standard lint/test commands, and only proceed once they pass.
-On failure, re-delegate with a sharper brief per that file's guidance.
+Follow `references/verification.md`. Do not trust the Worker's completion report — read
+`git diff <BASE_SHA>..HEAD` directly, discover and run the target repo's standard lint/test commands, and only
+proceed once they pass. On failure, re-delegate with a sharper brief per that file's guidance.
 
 ## Step 5: Relay Delegation
 

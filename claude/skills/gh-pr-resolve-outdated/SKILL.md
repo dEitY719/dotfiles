@@ -30,15 +30,15 @@ Record `START_TS=$(date +%s)` immediately for Step 5.
 | `[pr-number]` | PR to resolve; auto-detect from branch if omitted | branch PR |
 | `[remote]` | Remote owning the PR's repo | `origin` |
 
-Resolve `TARGET_REPO`, check `gh` auth, and enforce the hard
-preconditions (git repo · not default branch · clean tree · no
-in-progress rebase) per `references/preflight.md` — full exit codes and
-error templates there. Capture `BACKUP_SHA=$(git rev-parse HEAD)`.
+Bind `TARGET_HOST` + `TARGET_REPO` from the remote's URL **before any `gh`
+call** (`references/github-target.md`, #1403), check `gh` auth, and enforce the
+hard preconditions (git repo · not default branch · clean tree · no in-progress
+rebase) per `references/preflight.md`. Capture `BACKUP_SHA=$(git rev-parse HEAD)`.
 
 ## Step 2: Mergeable Triage
 
 ```bash
-gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
+GH_HOST="$TARGET_HOST" gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
   --json mergeable,mergeStateStatus,baseRefName,headRefName,url
 ```
 

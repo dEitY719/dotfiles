@@ -33,23 +33,23 @@ output its content verbatim, then stop. No API calls.
 
 Input is EITHER positional `<origin-PR#>` OR `--commits <base>..<head>` (both supplied → hard error, stop).
 Shared flags: `--remote`, `--target-issue`, `--known-failures`, `--generated-patterns` (table: `references/help.md`).
-- **PR mode**: `gh pr view <N> --repo <origin-repo> --json number,state,url,headRefOid,baseRefName,mergeCommit,statusCheckRollup,reviewDecision`.
+- **PR mode**: `GH_HOST="$SOURCE_HOST" gh pr view <N> --repo "$SOURCE_REPO" --json number,state,url,headRefOid,baseRefName,mergeCommit,statusCheckRollup,reviewDecision`.
   Do **not** require `merged` — use the PR's current head/base commits.
 - **`--commits` mode**: skip `gh pr view`; use the range directly. Git semantics — `base` EXCLUDED, `head`
   INCLUDED. No PR object exists, so Step 3's pre-flight uses the head SHA parsed from the arg.
 
 Resolve `--remote` per `references/remote-resolution.md`; missing `upstream` with no explicit `--remote` → hard
 error, never fall back to `origin`. Confirm the destination is reachable (`git fetch` / `git ls-remote`) first.
+It also binds `SOURCE_REPO`/`SOURCE_HOST` + `DEST_REPO`/`DEST_HOST`, each pair from **one** remote URL. Two hosts
+in one run → no global `GH_HOST`: every `gh` call carries its own side's host inline (#1403 / #1407).
 
 ## Step 2: Push-Capability Probe (branch point)
 
 Run the throwaway-ref real push probe in `references/push-probe.md`.
-- Probe says push works → **SIMPLE PATH**: delegate to [[gh-pr]] (or an
-  equivalent normal branch push + PR) and stop. Relay mode is a fallback,
-  not the default.
+- Probe says push works → **SIMPLE PATH**: delegate to [[gh-pr]] (or an equivalent normal branch push + PR) and
+  stop. Relay mode is a fallback, not the default.
 - Confirmed blocked (HTTP 403 / block-page marker) → continue to Step 3.
-- Transient/inconclusive → retry once with short backoff; still
-  inconclusive → treat as not-blocked and take the SIMPLE PATH.
+- Transient/inconclusive → retry once with short backoff; still inconclusive → not-blocked, take SIMPLE PATH.
 
 ## Step 3: Determine Commit Range + Pre-flight
 
@@ -83,9 +83,8 @@ issue with a cross-reference comment. Never auto-close.
 
 ## Step 8: Report
 
-Summarize the destination issue/comment URL, gist count, whether any patches
-were split (artifact exclusion or file-group pre-split), and — if Step 2's
-probe passed — that the simple push+PR path was used instead of relay.
+Summarize the destination issue/comment URL, gist count, whether any patches were split (artifact exclusion or
+file-group pre-split), and — if Step 2's probe passed — that the simple push+PR path was used instead of relay.
 
 ## Constraints
 

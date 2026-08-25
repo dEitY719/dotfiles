@@ -10,6 +10,13 @@ default (`upstream`), same hard-error-on-missing-remote rule, same
 never-fall-back-to-`origin` rule. Do not re-derive this logic here; if that
 file's procedure changes, this skill inherits the change by reference.
 
+That procedure also binds `DEST_REPO` **and** `DEST_HOST` from the one
+destination remote URL. Both are required downstream: Step 3's issue fetch
+runs as `GH_HOST="$DEST_HOST" gh issue view <N> --repo "$DEST_REPO" ...`,
+and `gh:relay-merge` re-resolves the same pair for its own calls. Never
+export a single global `GH_HOST` in this flow — `origin` and the destination
+are deliberately different hosts (#1403 / #1407).
+
 ```
 Error: no 'upstream' remote and no --remote given.
 origin is the internal remote and is never a relay destination.

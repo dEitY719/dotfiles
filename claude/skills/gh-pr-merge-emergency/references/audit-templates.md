@@ -58,7 +58,7 @@ incident issue — the decision is auditable.
 ### Command
 
 ```bash
-gh pr comment <N> --repo "$TARGET_REPO" --body-file "$COMMENT"
+GH_HOST="$TARGET_HOST" gh pr comment <N> --repo "$TARGET_REPO" --body-file "$COMMENT"
 ```
 
 Capture the comment URL from the command output for Step 7's report.
@@ -66,7 +66,7 @@ Capture the comment URL from the command output for Step 7's report.
 ## Step 5 — Admin merge command
 
 ```bash
-gh pr merge <N> --repo "$TARGET_REPO" --admin --squash --delete-branch
+GH_HOST="$TARGET_HOST" gh pr merge <N> --repo "$TARGET_REPO" --admin --squash --delete-branch
 ```
 
 Flags rationale:
@@ -83,7 +83,8 @@ bypass protection either, and trying them wastes audit clarity).
 
 Extract the merge commit SHA from PR JSON after merge:
 ```bash
-SHA=$(gh pr view <N> --repo "$TARGET_REPO" --json mergeCommit -q .mergeCommit.oid)
+SHA=$(GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$TARGET_REPO" \
+  --json mergeCommit -q .mergeCommit.oid)
 ```
 
 ## Step 6 — Post-merge incident issue
@@ -166,10 +167,11 @@ are complete.
 ### Command
 
 ```bash
-gh issue create --repo "$TARGET_REPO" --title "<title>" --body-file "$ISSUE"
+GH_HOST="$TARGET_HOST" gh issue create --repo "$TARGET_REPO" \
+  --title "<title>" --body-file "$ISSUE"
 ```
 
-Do NOT add labels/milestones unless `gh label list --repo "$TARGET_REPO"`
+Do NOT add labels/milestones unless `GH_HOST="$TARGET_HOST" gh label list --repo "$TARGET_REPO"`
 confirms an `incident` label already exists; if it does, apply it.
 
 Capture the issue URL + number from the command output for Step 7's report.

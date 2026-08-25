@@ -45,12 +45,13 @@ the implicit shell-error code).
 ## 2.1.3 Self-assign
 
 ```
-me        = gh api user -q .login
+me        = GH_HOST="$TARGET_HOST" gh api user -q .login   # no --repo: not repo-scoped
 assignees = json.assignees[].login
 if GH_ISSUE_SKIP_SELF_ASSIGN set: return 0
 if me in assignees:               return 0   # idempotent
 if assignees == []:
-    gh issue edit <N> --repo <repo> --add-assignee @me   # soft-fail on API error
+    GH_HOST="$TARGET_HOST" gh issue edit <N> --repo "$TARGET_REPO" \
+      --add-assignee @me                     # soft-fail on API error
     return 0
 print "[WARN] Issue #<N> is assigned to <other>; not overriding."
 return 0
@@ -58,6 +59,11 @@ return 0
 
 `--add-assignee` appends (never `--assignee`, which replaces). Forking a
 teammate's claim is worse than a duplicated attempt — warn, don't override.
+
+This is a **write**, so both halves of the Step 1 binding matter:
+`--repo "$TARGET_REPO"` names the repo, `GH_HOST="$TARGET_HOST"` names the
+server. Dropping the host on a dual-host login would assign someone on
+whichever repo `gh repo set-default` picked (#1403 / #1407).
 
 ## 2.1.4 Board Status transition
 
@@ -84,7 +90,7 @@ an `In review` / `Done` card backwards. Soft-fail: any non-policy error
 if GH_ISSUE_SKIP_DEPS_CHECK set: return 0
 deps = grep -oEi 'Depends on #[0-9]+' <body> | sed 's/.*#//'
 for M in deps:
-    state = gh issue view <M> --repo <repo> --json state -q .state
+    state = GH_HOST="$TARGET_HOST" gh issue view <M> --repo "$TARGET_REPO" --json state -q .state
     [ "$state" != CLOSED ] && print "[WARN] #<N> depends on #<M> (still <state>)."
 ```
 
@@ -109,5 +115,6 @@ There is **no** env var to bypass 2.1.2 (block-label guard) — intentional.
   still requires the user to be on a feature branch in a worktree
   (`references/preconditions.md`).
 - **Does not auto-unassign on later abort.** If Step 3 aborts, the assignee
-  + board state stay set. Manual cleanup: `gh issue edit <N>
+  + board state stay set. Manual cleanup:
+  `GH_HOST="$TARGET_HOST" gh issue edit <N> --repo "$TARGET_REPO"
   --remove-assignee @me` and move the card back on the board.

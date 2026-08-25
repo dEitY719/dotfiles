@@ -11,7 +11,7 @@ their register and tone (formal/informal) as well.
 Reply in-thread using the replies sub-resource:
 
 ```bash
-gh api "repos/<owner>/<repo>/pulls/<N>/comments/<comment_id>/replies" \
+GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/pulls/<N>/comments/<comment_id>/replies" \
   -X POST \
   -f body="<reply text>"
 ```
@@ -27,7 +27,7 @@ line in GitHub-flavored Markdown.
 # Build a properly quoted blockquote from the original body
 QUOTED=$(printf '%s\n' "$ORIGINAL_BODY" | sed 's/^/> /')
 
-gh api "repos/<owner>/<repo>/issues/<N>/comments" \
+GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/issues/<N>/comments" \
   -X POST \
   -f body="$QUOTED
 
@@ -51,7 +51,7 @@ up to read the original, and the reply stays scannable:
 # (e.g. Korean: "Re: 리뷰 #<review_id> — Blocker <N>건 + Suggestion <M>건").
 if [ "${#ORIGINAL_BODY}" -gt 500 ]; then
   HEADER="Re: review #<review_id> — <N> Blockers + <M> Suggestions"
-  gh api "repos/<owner>/<repo>/issues/<N>/comments" \
+  GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/issues/<N>/comments" \
     -X POST \
     -f body="$HEADER
 
@@ -59,7 +59,7 @@ if [ "${#ORIGINAL_BODY}" -gt 500 ]; then
 else
   # short bodies → keep the verbatim blockquote pattern above
   QUOTED=$(printf '%s\n' "$ORIGINAL_BODY" | sed 's/^/> /')
-  gh api "repos/<owner>/<repo>/issues/<N>/comments" \
+  GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/issues/<N>/comments" \
     -X POST \
     -f body="$QUOTED
 

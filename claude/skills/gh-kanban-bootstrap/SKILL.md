@@ -18,24 +18,25 @@ metadata:
 
 ## Help
 
-If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and
-output its content verbatim, then stop. No API calls.
+If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output its content verbatim, then stop.
+No API calls.
 
 ## Step 1: Resolve Skill Dir
 
-Record `START_TS=$(date +%s)` immediately. Locate `SKILL_DIR` (this
-file's directory): the script lives at `${SKILL_DIR}/lib/setup.sh`.
+Record `START_TS=$(date +%s)` immediately. Locate `SKILL_DIR` (this file's directory): the script lives at
+`${SKILL_DIR}/lib/setup.sh`.
 
 ## Step 2: Prereq Check
 
-Follow `references/prereq.md` for tool / host / token-scope checks. On any
-miss the helper prints the install or `gh auth refresh -h <host> -s project`
-hint and aborts (rc=1).
+Follow `references/prereq.md` for tool / host / token-scope checks — it also resolves `$HOST` from `origin`'s
+URL. On any miss the helper prints the install or `gh auth refresh -h <host> -s project` hint and aborts (rc=1).
 
 ## Step 3: Target Repo
 
-Always `origin` (never prompt for remote selection). Detect `OWNER/REPO`
-via `gh repo view`; explicit `--owner`/`--repo` override.
+Always `origin` (never prompt for remote selection). Detect `OWNER/REPO` via
+`GH_HOST="$HOST" gh repo view --json nameWithOwner`; explicit `--owner`/`--repo` override. `$HOST` is Step 2's
+`_kanban_host` value — every `gh` call carries it (`GH_HOST="$HOST"`, or `--hostname "$HOST"` for `gh api`),
+since `--repo` alone names no server (#1403 / #1407).
 
 ## Step 4: Options
 
@@ -81,9 +82,8 @@ the Project URL and number.
 
 ## Step 8: UI Checklist + Report
 
-The script's `print_final_report` already emits host-aware URLs (post-
-#699 fix) and the workflow #3 `DISABLE` instruction — pass it through,
-then append the smoke-test block and compact closing report per
+The script's `print_final_report` already emits host-aware URLs (post-#699 fix) and the workflow #3 `DISABLE`
+instruction — pass it through, then append the smoke-test block and compact closing report per
 `references/report-template.md`.
 
 ## Constraints

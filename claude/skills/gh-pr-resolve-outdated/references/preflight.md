@@ -2,12 +2,14 @@
 
 Positional args: `[pr-number] [remote]`, both optional.
 
-- `pr-number` — if omitted, auto-detect via `gh pr view --json
+- `remote` — default `origin`; missing → `git remote -v` + exit 2. Bind
+  `TARGET_HOST` + `TARGET_REPO` from that one remote URL **before any `gh`
+  call**, per `references/github-target.md` (#1403).
+- `pr-number` — if omitted, auto-detect via `GH_HOST="$TARGET_HOST" gh pr view
+  --repo "$TARGET_REPO" --json
   number,headRefName,baseRefName,url,mergeable,mergeStateStatus` on the
   current branch. No PR → `[FAIL] no PR for current branch — pass PR#
   explicitly` + exit 2.
-- `remote` — default `origin`. Resolve `TARGET_REPO` via `git remote
-  get-url <remote>`; missing → `git remote -v` + exit 2.
 - `gh` not authenticated → `[FAIL] gh CLI not authenticated — run gh
   auth login` + exit 5.
 

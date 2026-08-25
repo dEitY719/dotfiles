@@ -6,10 +6,26 @@ Step 5. Uploads each patch file from Step 4 as its own gist.
 
 ```bash
 for patch in "$tmpdir"/*.patch; do
-    gh gist create "$patch" --desc "relay: $(basename "$patch")"
+    GH_HOST="$DEST_HOST" gh gist create "$patch" --desc "relay: $(basename "$patch")"
     # capture the returned gist URL for the apply-guide table
 done
 ```
+
+## Which host the gists live on: the destination
+
+`gh gist create` is not repo-scoped (`--repo` is not a valid flag), so the
+`GH_HOST=` prefix is the *only* thing that decides which server the gist
+lands on — and it must be `$DEST_HOST`, never the origin host.
+
+The gist is not the payload's storage, it is the **hand-off channel**: the
+apply-guide is posted on the destination and the destination-side reader
+`curl`s the raw URL. A gist created on the isolated origin (internal GHE)
+has a raw URL that host cannot serve to the outside, so the reader gets a
+404 or an auth wall and the whole relay stalls at step 2 of the guide. The
+asymmetric-network premise in SKILL.md says the same thing from the other
+end: the proxy blocks `git push` to the destination but lets single-file
+`gh gist create` through *to the destination host* — that is the one hole
+this skill relays through. Put the gists where the reader is.
 
 - **Exactly one file per `gh gist create` invocation.** Multi-file gist
   creation (`gh gist create a.patch b.patch ...`) is reported to **always**
@@ -23,9 +39,9 @@ done
 **raw** URL for `curl … | git am`. Derive it after creation:
 
 ```bash
-GIST_URL=$(gh gist create "$patch" --desc "...")            # https://gist.github.com/<user>/<id>
+GIST_URL=$(GH_HOST="$DEST_HOST" gh gist create "$patch" --desc "...")   # https://gist.github.com/<user>/<id>
 GIST_ID=${GIST_URL##*/}
-RAW_URL=$(gh api "gists/$GIST_ID" --jq '.files[].raw_url')  # exact file's raw URL
+RAW_URL=$(GH_HOST="$DEST_HOST" gh api "gists/$GIST_ID" --jq '.files[].raw_url')  # exact file's raw URL
 ```
 
 Resolve the raw URL from the gist API (`.files[].raw_url`) so it points at

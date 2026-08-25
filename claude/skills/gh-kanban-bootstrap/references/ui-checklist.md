@@ -54,10 +54,16 @@ The script prints the host-corrected smoke test commands. They are
 NOT executed unless `--with-smoke-test` was passed.
 
 ```sh
-gh issue create --repo "$OWNER/$REPO" \
+GH_HOST="$HOST" gh issue create --repo "$OWNER/$REPO" \
     --title "[Test] kanban smoke" --body "ignore"
 # Card should appear in Backlog within seconds
 ```
+
+`$HOST` is the one `references/prereq.md` already resolved from `origin`'s
+URL (`_kanban_host`) — reuse it, do not introduce a second host variable.
+`--repo "$OWNER/$REPO"` names the repo but carries no host, so without the
+prefix this write would follow `gh repo set-default` and file the smoke-test
+issue on whichever server that points at (#1403 / #1407).
 
 See playbook §7 for the full 4-step smoke test (issue → PR → merge →
 close).

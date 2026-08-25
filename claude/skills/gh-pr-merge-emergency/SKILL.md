@@ -29,17 +29,17 @@ incident issue exist to make overuse visible.
 
 Record `START_TS=$(date +%s)` for Step 5 elapsed time. Positional: `<PR> <reason> [remote]`.
 
-- `PR` — required; omitted → `gh pr view --json number` on current branch, else stop with usage pointer.
+- `PR` — required; omitted → `GH_HOST="$TARGET_HOST" gh pr view --json number` on current branch, else stop.
 - `reason` — **required**, ≥10 chars, citing an incident/ticket ID or concrete user impact; vague (`"urgent"`, `"fix"`) → refuse. Examples: `references/help.md`.
-- `remote` — default `origin`; resolve `TARGET_REPO` via `git remote get-url`, missing → `git remote -v` and stop.
+- `remote` — default `origin`; bind `TARGET_REPO` + `TARGET_HOST` from that URL and export `GH_HOST` per `references/github-target.md` (#1403/#1407); missing → `git remote -v` and stop.
 
-Capture `ME=$(gh api user -q .login)`, `NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)`.
+Capture `ME=$(GH_HOST="$TARGET_HOST" gh api user -q .login)`, `NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)`.
 
 ## Step 2: Pre-flight Safety Gate (parallel)
 
 Fetch in parallel, evaluate stops **before** touching merge: PR JSON
 (`number,title,author,state,isDraft,mergeable,mergeStateStatus,baseRefName,headRefName`)
-and `gh pr checks <N> --repo $TARGET_REPO --required`.
+and `GH_HOST="$TARGET_HOST" gh pr checks <N> --repo "$TARGET_REPO" --required`.
 
 **Hard stops**: `state != OPEN`, draft, conflicts, or failing/pending required
 checks — emergency bypasses **approval**, not **CI**. **Soft warnings**: base
@@ -55,16 +55,16 @@ Never auto-proceed.
 
 Order matters — comment first so the audit survives branch deletion. (1) Post
 the "PR audit comment" from `references/audit-templates.md`, capturing its URL
-for Step 7. (2) `gh pr merge <N> --repo "$TARGET_REPO" --admin --squash
---delete-branch`; "Must have admin rights" → **stop**, never fall back to
-`--merge`/`--rebase`. (3) `gh pr view <N> --repo "$TARGET_REPO" --json
-mergeCommit -q .mergeCommit.oid` for the merge SHA (flag rationale: same file).
+for Step 7. (2) `GH_HOST="$TARGET_HOST" gh pr merge <N> --repo "$TARGET_REPO" --admin
+--squash --delete-branch`; "Must have admin rights" → **stop**, never fall back
+to `--merge`/`--rebase`. (3) `GH_HOST="$TARGET_HOST" gh pr view <N> --repo
+"$TARGET_REPO" --json mergeCommit -q .mergeCommit.oid` for the merge SHA.
 
 ## Step 5: Create Post-Merge Incident Issue
 
 Non-negotiable audit tail. File `incident: emergency merge of PR #<N> — <reason
 first line>` with the body + retro checklist from `references/audit-templates.md`.
-Attach an `incident` label **only if** `gh label list --repo "$TARGET_REPO"`
+Attach an `incident` label **only if** `GH_HOST="$TARGET_HOST" gh label list --repo "$TARGET_REPO"`
 confirms it exists.
 
 Append the ai-metrics footer to the incident issue body before creating it

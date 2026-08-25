@@ -27,14 +27,14 @@ Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 5.
 
 Positional args: `[pr-number] [remote]`. Both optional.
 
-- `pr-number` — if omitted, auto-detect via
-  `gh pr view --json number,headRefName,baseRefName,url,mergeable`
+- `remote` — default `origin`; missing → `git remote -v` and stop. Bind
+  `TARGET_HOST` + `TARGET_REPO` from that one remote URL **before any `gh` call** per `references/github-target.md` (#1403).
+- `pr-number` — if omitted, auto-detect via `GH_HOST="$TARGET_HOST" gh pr view
+  --repo "$TARGET_REPO" --json number,headRefName,baseRefName,url,mergeable`
   on the current branch. No PR for the branch → stop.
-- `remote` — default `origin`. Resolve `TARGET_REPO` via
-  `git remote get-url <remote>`; missing → `git remote -v` and stop.
 
 **Mergeable preflight** — immediately after resolving `PR_NUMBER`, run the
-`gh pr view --json mergeable` short-circuit per `references/rebase-flow.md`
+host-pinned `gh pr view --json mergeable` short-circuit per `references/rebase-flow.md`
 → "Mergeable preflight" (`MERGEABLE` → already-clean skip; `UNKNOWN`/other → continue).
 
 **Hard preconditions** (parallel batch; any fail → stop):
@@ -73,7 +73,7 @@ pushed while you rebased), stop and surface the upstream per
 
 ## Step 5: Verify Mergeable + Report
 
-Run `gh pr view <N> --repo "$TARGET_REPO" --json mergeable,mergeStateStatus,url,labels`.
+Run `GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$TARGET_REPO" --json mergeable,mergeStateStatus,url,labels`.
 If `mergeable == MERGEABLE` and `mergeStateStatus ∈ {CLEAN, UNSTABLE}`,
 the warning is cleared. Print the final report from
 `references/rebase-flow.md` → "Final report format". Still `CONFLICTING`

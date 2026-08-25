@@ -44,7 +44,7 @@ protection by self-approval.
 If BLOCKER exists:
 
 ```bash
-gh pr review <N> --repo "$TARGET_REPO" --comment --body-file "$BODY"
+GH_HOST="$TARGET_HOST" gh pr review <N> --repo "$TARGET_REPO" --comment --body-file "$BODY"
 ```
 
 If no BLOCKER exists, use the same command with an LGTM-style body that
@@ -60,7 +60,7 @@ comment does not satisfy review-based branch protection.
 If `gh pr review --comment` is rejected for a self-authored PR, fall back to:
 
 ```bash
-gh pr comment <N> --repo "$TARGET_REPO" --body-file "$BODY"
+GH_HOST="$TARGET_HOST" gh pr comment <N> --repo "$TARGET_REPO" --body-file "$BODY"
 ```
 
 After posting, re-fetch `reviewDecision` and report that external review or
@@ -89,7 +89,7 @@ Rules:
 Command:
 
 ```bash
-gh pr merge <N> --repo "$TARGET_REPO" --admin
+GH_HOST="$TARGET_HOST" gh pr merge <N> --repo "$TARGET_REPO" --admin
 ```
 
 When the user supplied a strategy, append exactly one of:

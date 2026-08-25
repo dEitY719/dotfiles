@@ -12,7 +12,7 @@ HUMAN_H=$(awk -v cc="$COMMENT_COUNT" 'BEGIN { printf "%.2f", cc * 0.25 }')
 if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
     : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
 else
-    gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
+    GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/issues/$PR_NUMBER/comments" \
       -X POST \
       -f body="---
 <details>
