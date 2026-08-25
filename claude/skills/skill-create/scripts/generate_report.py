@@ -12,6 +12,8 @@ import json
 import sys
 from pathlib import Path
 
+from scripts.utils import usable_runs
+
 
 def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") -> str:
     """Generate HTML report from loop output data. If auto_refresh is True, adds a meta refresh tag."""
@@ -248,7 +250,10 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
             correct = 0
             total = 0
             for r in results:
-                runs = r.get("runs", 0)
+                # LOCAL PATCH (dotfiles #1412): errored runs are evidence about
+                # the harness, not the description — scoring them as correct
+                # negatives turned a dead `claude -p` into a perfect report.
+                runs = usable_runs(r) if "runs" in r else 0
                 triggers = r.get("triggers", 0)
                 total += runs
                 if r.get("should_trigger", True):
