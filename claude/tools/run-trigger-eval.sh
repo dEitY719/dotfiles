@@ -104,6 +104,11 @@ DESC_OVERRIDE=""
 REPO_ROOT=""
 CONTRACT_MARGIN=5.0
 
+_die() {
+    printf 'run-trigger-eval: %s\n' "$1" >&2
+    exit "${2:-1}"
+}
+
 _usage() {
     cat <<EOF
 Usage: run-trigger-eval.sh [options] <skill-name> [<skill-name>...]
@@ -163,48 +168,37 @@ fi
 
 case "$ARM" in
     before | after | both) ;;
-    *) printf 'run-trigger-eval: --arm must be before|after|both, got %s\n' "$ARM" >&2; exit 2 ;;
+    *) _die "--arm must be before|after|both, got ${ARM}" 2 ;;
 esac
 
 if [ -n "$DESC_OVERRIDE" ]; then
-    if [ "${#SKILLS[@]}" -ne 1 ]; then
-        printf 'run-trigger-eval: --description takes exactly one skill.\n' >&2
-        exit 2
-    fi
+    [ "${#SKILLS[@]}" -eq 1 ] || _die "--description takes exactly one skill." 2
     # An overridden description has no "before" counterpart to compare against.
     ARM="after"
 fi
 
 if [ -z "$REPO_ROOT" ]; then
-    REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
-        printf 'run-trigger-eval: not in a git repo; pass --repo <path>.\n' >&2
-        exit 2
-    }
+    REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" \
+        || _die "not in a git repo; pass --repo <path>." 2
 fi
 
-SKILL_CREATE="${REPO_ROOT}/claude/skills/skill-create"
-if [ ! -f "${SKILL_CREATE}/scripts/run_eval.py" ]; then
-    printf 'run-trigger-eval: run_eval.py not found under %s\n' "$SKILL_CREATE" >&2
-    exit 1
-fi
+# The two facts this harness shares with the pytest guard and with #1410's
+# marketplace split: where skills live, and where a skill keeps its query set.
+SKILLS_SRC="${REPO_ROOT}/claude/skills"
+EVAL_SET_REL="evals/trigger-eval.json"
+
+SKILL_CREATE="${SKILLS_SRC}/skill-create"
+[ -f "${SKILL_CREATE}/scripts/run_eval.py" ] \
+    || _die "run_eval.py not found under ${SKILL_CREATE}"
 
 for _s in "${SKILLS[@]}"; do
-    if [ ! -f "${REPO_ROOT}/claude/skills/${_s}/SKILL.md" ]; then
-        printf 'run-trigger-eval: no SKILL.md for skill %s\n' "$_s" >&2
-        exit 1
-    fi
-    if [ ! -f "${REPO_ROOT}/claude/skills/${_s}/evals/trigger-eval.json" ]; then
-        printf 'run-trigger-eval: no evals/trigger-eval.json for skill %s\n' "$_s" >&2
-        exit 1
-    fi
+    [ -f "${SKILLS_SRC}/${_s}/SKILL.md" ] || _die "no SKILL.md for skill ${_s}"
+    [ -f "${SKILLS_SRC}/${_s}/${EVAL_SET_REL}" ] || _die "no ${EVAL_SET_REL} for skill ${_s}"
 done
 
 SRC_CONFIG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-if [ ! -r "${SRC_CONFIG}/.credentials.json" ]; then
-    printf 'run-trigger-eval: no readable %s/.credentials.json to copy.\n' "$SRC_CONFIG" >&2
-    printf '  Set CLAUDE_CONFIG_DIR to the logged-in account config dir.\n' >&2
-    exit 1
-fi
+[ -r "${SRC_CONFIG}/.credentials.json" ] || _die "no readable ${SRC_CONFIG}/.credentials.json to copy.
+  Set CLAUDE_CONFIG_DIR to the logged-in account config dir."
 
 # --- workspace --------------------------------------------------------------
 
@@ -223,6 +217,16 @@ mkdir -p "$OUT_DIR"
 
 # --- helpers ----------------------------------------------------------------
 
+# Every line of the progress table — header, result, SKIP, ERROR — is rendered
+# here, so the column widths exist in one place instead of being copied into
+# each printf (and hand-padded inside jq, which has no printf of its own).
+_row() {
+    local line
+    printf -v line '  %-34s %-7s %-7s %-11s %s' "$1" "$2" "${3-}" "${4-}" "${5-}"
+    # The padding aligns columns; a short row (SKIP, ERROR) must not trail it.
+    printf '%s\n' "${line%"${line##*[![:space:]]}"}"
+}
+
 # Extract the description from a SKILL.md using the SAME parser run_eval uses,
 # so the "before" and "after" strings cannot drift from what the runner would
 # have read itself. $1 = directory containing SKILL.md.
@@ -239,55 +243,58 @@ sys.stdout.write(parse_skill_md(Path(sys.argv[1]))[1])
 # $1 = skill, $2 = arm label, $3 = description. Gets a private config dir and
 # probe project so no other job's probe is ever visible to it.
 _run_job() {
-    _rj_skill="$1"
-    _rj_arm="$2"
-    _rj_desc="$3"
-    _rj_out="${OUT_DIR}/${_rj_skill}.${_rj_arm}.json"
-    _rj_dir="${SESSION_TMP}/${_rj_skill}.${_rj_arm}"
-    _rj_cfg="${_rj_dir}/config"
-    _rj_proj="${_rj_dir}/project"
+    local skill="$1" arm="$2" desc="$3"
+    local out="${OUT_DIR}/${skill}.${arm}.json"
+    local dir="${SESSION_TMP}/${skill}.${arm}"
+    local cfg="${dir}/config" proj="${dir}/project"
+    local stats passed total pct hit_t all_t hit_f all_f
 
-    mkdir -p "$_rj_cfg" "${_rj_proj}/.claude/commands"
-    cp "${SRC_CONFIG}/.credentials.json" "${_rj_cfg}/.credentials.json"
-    chmod 600 "${_rj_cfg}/.credentials.json"
+    mkdir -p "$cfg" "${proj}/.claude/commands"
+    cp "${SRC_CONFIG}/.credentials.json" "${cfg}/.credentials.json"
+    chmod 600 "${cfg}/.credentials.json"
 
     (
-        cd "$_rj_proj" || exit 1
-        CLAUDE_CONFIG_DIR="$_rj_cfg" \
+        cd "$proj" || exit 1
+        CLAUDE_CONFIG_DIR="$cfg" \
             PYTHONPATH="$SKILL_CREATE" \
             python3 -m scripts.run_eval \
-            --eval-set "${REPO_ROOT}/claude/skills/${_rj_skill}/evals/trigger-eval.json" \
-            --skill-path "${REPO_ROOT}/claude/skills/${_rj_skill}" \
-            --description "$_rj_desc" \
+            --eval-set "${SKILLS_SRC}/${skill}/${EVAL_SET_REL}" \
+            --skill-path "${SKILLS_SRC}/${skill}" \
+            --description "$desc" \
             --model "$MODEL" \
             --runs-per-query "$RUNS" \
             --num-workers 1 \
             --timeout "$QUERY_TIMEOUT"
-    ) > "$_rj_out" 2> "${OUT_DIR}/${_rj_skill}.${_rj_arm}.stderr"
+    ) > "$out" 2> "${OUT_DIR}/${skill}.${arm}.stderr"
 
-    rm -rf "$_rj_dir"
+    rm -rf "$dir"
 
-    if ! jq -e '.summary' "$_rj_out" > /dev/null 2>&1; then
-        printf '  %-34s %-7s ERROR (see %s.%s.stderr)\n' \
-            "$_rj_skill" "$_rj_arm" "$_rj_skill" "$_rj_arm"
+    # One pass over the result, emitting numbers only — the shell formats them.
+    # Splitting the score by expectation is the point: an all-zero trigger_rate
+    # across BOTH classes is the twin-shadowing signature, not a real
+    # measurement, and it would otherwise read as a respectable ~50% overall.
+    # A missing .summary/.results makes this jq exit non-zero, which is the
+    # ERROR path below — so no separate validity probe is needed.
+    stats="$(jq -r '
+        [.results[] | select(.should_trigger)]      as $t |
+        [.results[] | select(.should_trigger|not)]  as $f |
+        [ .summary.passed, .summary.total,
+          (100 * .summary.passed / .summary.total),
+          ([$t[] | select(.pass)] | length), ($t | length),
+          ([$f[] | select(.pass)] | length), ($f | length) ] | @tsv
+    ' "$out" 2> /dev/null)" || stats=""
+
+    if [ -z "$stats" ]; then
+        _row "$skill" "$arm" "ERROR (see ${skill}.${arm}.stderr)"
         return 1
     fi
 
-    jq -r --arg s "$_rj_skill" --arg a "$_rj_arm" \
-        '.summary | [$s, $a, .passed, .total, (100 * .passed / .total)] | @tsv' \
-        "$_rj_out" > "${OUT_DIR}/${_rj_skill}.${_rj_arm}.tsv"
+    IFS=$'\t' read -r passed total pct hit_t all_t hit_f all_f <<< "$stats"
 
-    # Split the score by expectation: an all-zero trigger_rate across BOTH
-    # classes is the twin-shadowing signature, not a real measurement, and it
-    # would otherwise read as a respectable ~50% overall.
-    jq -r --arg s "$_rj_skill" --arg a "$_rj_arm" '
-        [.results[] | select(.should_trigger)]      as $t |
-        [.results[] | select(.should_trigger|not)]  as $f |
-        "  \($s | . + (" " * (34 - length))) \($a | . + (" " * (7 - length)))" +
-        "\(.summary.passed)/\(.summary.total)   " +
-        "recall \([$t[]|select(.pass)]|length)/\($t|length)   " +
-        "reject \([$f[]|select(.pass)]|length)/\($f|length)"
-    ' "$_rj_out"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$skill" "$arm" "$passed" "$total" "$pct" \
+        > "${OUT_DIR}/${skill}.${arm}.tsv"
+
+    _row "$skill" "$arm" "${passed}/${total}" "${hit_t}/${all_t}" "${hit_f}/${all_f}"
 }
 
 # --- schedule ---------------------------------------------------------------
@@ -300,12 +307,18 @@ printf 'model       : %s   runs/query: %s   concurrent jobs: %s\n' "$MODEL" "$RU
 printf 'workspace   : %s  (removed on exit)\n' "$SESSION_TMP"
 printf 'results     : %s\n' "$OUT_DIR"
 printf '\n'
-printf '  %-34s %-7s %-7s %-11s %s\n' "skill" "arm" "score" "recall" "reject"
+_row "skill" "arm" "score" "recall" "reject"
 
 _throttle() {
     while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
         wait -n 2> /dev/null || true
     done
+}
+
+# The only way a measurement is launched, so the throttle cannot be forgotten.
+_spawn() {
+    _throttle
+    _run_job "$@" &
 }
 
 for skill in "${SKILLS[@]}"; do
@@ -314,21 +327,14 @@ for skill in "${SKILLS[@]}"; do
         mkdir -p "$before_dir"
         if git -C "$REPO_ROOT" show "${BEFORE_REF}:claude/skills/${skill}/SKILL.md" \
             > "${before_dir}/SKILL.md" 2> /dev/null; then
-            _throttle
-            _run_job "$skill" "before" "$(_describe "$before_dir")" &
+            _spawn "$skill" "before" "$(_describe "$before_dir")"
         else
-            printf '  %-34s %-7s SKIP (no SKILL.md at %s)\n' "$skill" "before" "$BEFORE_REF"
+            _row "$skill" "before" "SKIP (no SKILL.md at ${BEFORE_REF})"
         fi
     fi
 
     if [ "$ARM" = "after" ] || [ "$ARM" = "both" ]; then
-        if [ -n "$DESC_OVERRIDE" ]; then
-            _throttle
-            _run_job "$skill" "after" "$DESC_OVERRIDE" &
-        else
-            _throttle
-            _run_job "$skill" "after" "$(_describe "${REPO_ROOT}/claude/skills/${skill}")" &
-        fi
+        _spawn "$skill" "after" "${DESC_OVERRIDE:-$(_describe "${SKILLS_SRC}/${skill}")}"
     fi
 done
 wait
