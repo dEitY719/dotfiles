@@ -778,6 +778,27 @@ _gh_pr_review_resolve_target_repo() {
     return 0
 }
 
+# _gh_pr_review_ensure_host — pin the gh server for a `gh` call that cannot
+# carry `--repo`. Mirrors `_gh_project_status_ensure_host`
+# (shell-common/functions/gh_project_status.sh) rather than growing a second
+# mechanism: an already-set GH_HOST wins — and is re-exported, because a
+# caller may have assigned it as a plain (non-exported) shell variable that
+# `gh` subprocesses would not otherwise inherit — else the SSOT helper in
+# gh_host.sh resolves one. Never fails the caller: if the helper is
+# unavailable, `gh` simply keeps its own default host (#1403, #1407).
+_gh_pr_review_ensure_host() {
+    if [ -n "${GH_HOST-}" ]; then
+        export GH_HOST
+        return 0
+    fi
+    # shellcheck disable=SC1091
+    . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_host.sh" 2>/dev/null || return 0
+    if command -v _gh_resolve_host >/dev/null 2>&1; then
+        GH_HOST=$(_gh_resolve_host)
+        export GH_HOST
+    fi
+}
+
 _gh_pr_review_resolve_pr_number() {
     # Echoes the PR number; non-zero exit if neither arg nor branch resolves.
     local explicit="${1:-}"
@@ -785,6 +806,10 @@ _gh_pr_review_resolve_pr_number() {
         printf '%s\n' "$explicit"
         return 0
     fi
+    # Branch auto-detect: `gh pr view` must stay number-less so gh reads the
+    # PR off the current branch, which also rules out `--repo` (gh: "argument
+    # required when using the --repo flag"). The host still gets pinned.
+    _gh_pr_review_ensure_host
     local pr
     if ! pr=$(gh pr view --json number -q .number 2>/dev/null); then
         echo "No PR found for current branch; pass PR number explicitly" >&2
