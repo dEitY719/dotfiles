@@ -885,25 +885,22 @@ _run_full_bash() {
     # callers' `|| true` chains stay intact. Per gemini-code-assist
     # review on PR #725 the canary started at three entry points;
     # #1421 made it a data-driven loop over four and made each line
-    # name its function. The bare stub below leaves all four undefined,
-    # so all four lines must appear — proving the loop does not stop at
-    # the first miss.
-    cat >"$BATS_TEST_TMPDIR/regressed_helper.sh" <<'STUB'
-#!/bin/sh
-# Simulate: future regression — every public function removed/renamed.
-# Trailing self-check (copied verbatim from gh_project_status.sh tail):
-for _gh_ps_selfcheck_fn in \
-    _gh_project_status_sync \
-    _gh_project_status_query_current \
-    _gh_project_status_normalize_repo \
-    _gh_pr_closing_issue_numbers; do
-    command -v "$_gh_ps_selfcheck_fn" >/dev/null 2>&1 && continue
-    printf '[gh_project_status] BUG: %s undefined after source — board sync / closing-issue link will silently no-op. See dotfiles #724.\n' \
-        "$_gh_ps_selfcheck_fn" >&2
-done
-unset _gh_ps_selfcheck_fn
-:
-STUB
+    # name its function. The stub defines none of the four, so all four
+    # lines must appear — proving the loop does not stop at the first miss.
+    #
+    # The self-check block is *extracted* from the real helper rather than
+    # hand-copied: a verbatim copy silently drifts the moment the trailer
+    # changes, which would leave this test passing against a stale mirror.
+    {
+        printf '#!/bin/sh\n'
+        printf '# Simulate: future regression — every public function removed.\n'
+        sed -n '/^for _gh_ps_selfcheck_fn in/,/^done$/p' \
+            "${SHELL_COMMON}/functions/gh_project_status.sh"
+        printf 'unset _gh_ps_selfcheck_fn\n:\n'
+    } >"$BATS_TEST_TMPDIR/regressed_helper.sh"
+    # Fixture sanity: the extraction really captured the loop.
+    [ "$(grep -c '^done$' "$BATS_TEST_TMPDIR/regressed_helper.sh")" -eq 1 ]
+
     run bash --noprofile --norc -c \
         ". \"$BATS_TEST_TMPDIR/regressed_helper.sh\" 2>&1; echo \"rc=\$?\""
     assert_success
@@ -960,8 +957,8 @@ STUB
 
     while IFS= read -r fn; do
         [ -n "$fn" ] || continue
-        grep -rlF "$fn" --include='*.sh' "$DOTFILES_ROOT" 2>/dev/null \
-            | grep -qv 'functions/gh_project_status.sh' || continue
+        grep -rqF "$fn" --include='*.sh' --exclude='gh_project_status.sh' \
+            "$DOTFILES_ROOT" 2>/dev/null || continue
         case "$listed" in *"$fn"*) continue ;; esac
         missing="$missing $fn"
     done < <(grep -oE '^_[a-z0-9_]+\(\) \{$' "$helper" | sed 's/() {$//' | sort -u)
@@ -969,6 +966,7 @@ STUB
     [ -z "$missing" ] || \
         fail "cross-file functions missing from the self-check list:$missing"
 }
+
 # ---------------------------------------------------------------------------
 # Repo pinning — issue #1405
 #
