@@ -42,7 +42,9 @@ def test_serial_collection_of_the_integration_suite_reports_no_errors() -> None:
     session's already-mutated `sys.modules` from masking the very failure this
     asserts against.
     """
-    env = {k: v for k, v in os.environ.items() if k not in {"PYTEST_ADDOPTS", "PYTEST_CURRENT_TEST"}}
+    # Drop `PYTEST_ADDOPTS` so flags a CI or dev shell injects into the parent run
+    # cannot reach the child and reshape what it collects.
+    env = {k: v for k, v in os.environ.items() if k != "PYTEST_ADDOPTS"}
     proc = subprocess.run(
         [
             sys.executable,
@@ -62,13 +64,15 @@ def test_serial_collection_of_the_integration_suite_reports_no_errors() -> None:
         text=True,
         timeout=300,
     )
+    # The exit code is the whole assertion: pytest reports a collection error as
+    # exit 2 (`Interrupted: N error(s) during collection`), so a zero exit already
+    # means every module imported. Matching on the summary text would add nothing
+    # reachable — and would have to straddle pytest's singular/plural wording.
     assert proc.returncode == 0, (
         "serial collection of tests/integration/ failed — the whole suite is "
         f"unrunnable via the command tests/AGENTS.md documents (exit {proc.returncode}).\n"
         f"--- stdout ---\n{proc.stdout[-4000:]}\n--- stderr ---\n{proc.stderr[-2000:]}"
     )
-    assert "errors during collection" not in proc.stdout
-    assert "Interrupted:" not in proc.stdout
 
 
 def test_skill_create_scripts_stays_a_namespace_package_portion() -> None:
