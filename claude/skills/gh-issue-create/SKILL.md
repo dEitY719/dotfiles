@@ -26,21 +26,12 @@ If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output its
 
 All arguments, flags, and env vars are in `references/options.md` (Option | Description
 | Default). Key: `[remote]` positional (default `origin`), `--no-auto-labels`,
-`--no-auto-deps`, `--auto-label-debug`, `--label`, `--assignee @me`,
+`--no-auto-deps`, `--auto-label-debug`, `--label`, `--assignee @me`, `--no-ask`,
 `--as-discussion <category>`, `GH_DISABLE_AI_METRICS=1`.
 
 ## Step 1: Detect Repo Context
 
-Record `START_TS=$(date +%s)` for Step 3.5. Parse the positional remote arg + flags.
-Confirm a git repo (`git rev-parse --show-toplevel`) and resolve **both**
-`TARGET_REPO=<owner>/<repo>` and `TARGET_HOST` from that remote's URL, then
-`export GH_HOST="$TARGET_HOST"` (substeps in `references/repo-resolution.md`). Never
-silently fall back to `origin` when the user-supplied remote is missing. 이후 모든 `gh`
-호출은 `GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"` 형태로 host 와 repo 를
-명시한다 — 생략하면 gh CLI 가 자기 `gh repo set-default` 를 따라가 dual-host 로그인에서
-조용히 엉뚱한 서버에 이슈를 만든다 (#1403). When `--as-discussion <category>` is present,
-follow `references/discussion-mode.md` to bind `DISCUSSION_MODE` / `CATEGORY` and
-validate the category (exit 3 on mismatch).
+Record `START_TS=$(date +%s)` for Step 3.5. Parse the positional remote arg + flags. Confirm a git repo (`git rev-parse --show-toplevel`) and resolve **both** `TARGET_REPO=<owner>/<repo>` and `TARGET_HOST` from that remote's URL, then `export GH_HOST="$TARGET_HOST"` (substeps in `references/repo-resolution.md`). Never silently fall back to `origin` when the user-supplied remote is missing. 이후 모든 `gh` 호출은 `GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"` 형태로 host 와 repo 를 명시한다 — 생략하면 gh CLI 가 자기 `gh repo set-default` 를 따라가 dual-host 로그인에서 조용히 엉뚱한 서버에 이슈를 만든다 (#1403). When `--as-discussion <category>` is present, follow `references/discussion-mode.md` to bind `DISCUSSION_MODE` / `CATEGORY` and validate the category (exit 3 on mismatch).
 
 ## Step 2: Classify the Conversation
 
@@ -65,6 +56,10 @@ Use the `references/templates/<prefix>.md` skeleton; title format per
 `references/prefix-table.md`. **Over-compress 금지** — 파일 경로·명령 출력·결정·근거 유지
 (200줄 이슈도 정상). `DISCUSSION_MODE=1` 일 때는 Acceptance Criteria 대신 Open Questions
 섹션 + [[gh-discussion-create]] 의 `references/rfc-template.md` 스켈레톤 사용 (압축 금지 동일).
+
+## Step 3.1: 미결 게이트 (Open-Questions Gate)
+
+Apply `references/clarification.md` → "미결 게이트 (Step 3.1)". 초안에 미결이 남아 있으면 결정으로 전환하기 전까지 `gh issue create` 를 호출하지 않는다 — 이 저장소의 이슈는 `gh:issue-flow` / `devx:autopilot` / `gh:issue-proceed` 의 무인 실행 입력이라, 미결이 남으면 그 지점에서 체인이 멈추거나 근거 없이 추측해 진행한다 (#1446). 확정 결과는 본문 `## 확정 사항 (Decisions)` 에 결정+근거로 남긴다. `--no-ask` 는 묻는 대신 보수적 자율 결정 후 `(자율 판단)` 표기, `DISCUSSION_MODE=1` 은 게이트 전체 스킵 (RFC 는 미결이 본질). 미결이 없으면 no-op — 아무 출력도 내지 않는다.
 
 ## Step 3.5: Compute AI Metrics
 
