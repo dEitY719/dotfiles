@@ -664,27 +664,40 @@ _gh_project_status_in_list() {
 }
 
 # Self-check (issue #724): catch silent breakage where this file is sourceable
-# but a canonical entry point never gets defined — interactive-guard
-# regression, syntax error inside a function block, future rename without
-# updating callers, partial sourcing in a foreign env. Callers like
-# /gh-commit and /gh-pr source the file then invoke the function with
-# `|| true`, which absorbs `command not found` (rc 127) into a silent no-op
-# and hides the breakage from the operator. Prints one stderr line; rc
+# but a canonical function never gets defined — interactive-guard regression,
+# syntax error inside a function block, future rename without updating
+# callers, partial sourcing in a foreign env. Callers like /gh-commit and
+# /gh-pr source the file then invoke the function with `|| true`, which
+# absorbs `command not found` (rc 127) into a silent no-op and hides the
+# breakage from the operator. Prints one stderr line per missing name; rc
 # stays 0 so the helper's best-effort contract with `|| true` callers is
-# preserved.
+# preserved — never `return` out of the loop, that would break that contract
+# and skip the remaining names.
 #
-# Three public entry points are checked (matches the multi-function pattern
-# in gh_pr_edit_safe.sh):
+# The list is data rather than a hardcoded `if` chain (#1421) so that adding
+# a name costs one line and the warning can say *which* function is missing.
+# A name earns a slot by being called from outside this file, or by being a
+# dependency of one that is:
 #   - _gh_project_status_sync          (write API; used by every gh-* skill)
 #   - _gh_project_status_query_current (read API; gh-pr-merge Step 2-B gate;
 #     rc 0 = answered — value or "no board", rc 1 = query failed,
 #     rc 2 = query failed on a missing `project` scope, see #1354/#1356)
+#   - _gh_project_status_normalize_repo (slug parser; called cross-file by
+#     claude/hooks/post-gh-pr-create.sh since #1405, and internally by
+#     _gh_project_status_resolve_owner_repo — so `sync` and `query_current` are
+#     functionally broken without it even while they stay defined. That is
+#     the converse the old three-name check wrongly assumed, #1421)
 #   - _gh_pr_closing_issue_numbers     (PR→issue link; gh-pr, gh-pr-merge)
 # If any one is missing the helper is broken as a whole — fail loudly.
-# Per gemini-code-assist review on PR #725.
-if ! command -v _gh_project_status_sync >/dev/null 2>&1 \
-    || ! command -v _gh_project_status_query_current >/dev/null 2>&1 \
-    || ! command -v _gh_pr_closing_issue_numbers >/dev/null 2>&1; then
-    printf '[gh_project_status] BUG: public functions undefined after source — board sync / closing-issue link will silently no-op. See dotfiles #724.\n' >&2
-fi
+# Per gemini-code-assist review on PR #725; list extended per #1421.
+for _gh_ps_selfcheck_fn in \
+    _gh_project_status_sync \
+    _gh_project_status_query_current \
+    _gh_project_status_normalize_repo \
+    _gh_pr_closing_issue_numbers; do
+    command -v "$_gh_ps_selfcheck_fn" >/dev/null 2>&1 && continue
+    printf '[gh_project_status] BUG: %s undefined after source — board sync / closing-issue link will silently no-op. See dotfiles #724.\n' \
+        "$_gh_ps_selfcheck_fn" >&2
+done
+unset _gh_ps_selfcheck_fn
 :
