@@ -385,16 +385,16 @@ _iw_dispatch() {
 # itself on a timer. It is deliberately evidence-poor and fail-open (NF-1): a
 # detector that can wedge the watcher is worse than the leak it guards.
 #
-# Why it watches this agent and not the `iw-<n>` panes the issue's option A
-# names: the tick cannot address those panes. Their issue numbers are chosen by
-# the dispatcher inside the pane and never reported back, and `herdr agent
-# list` carries no agent-name field to recover them from. The same signal is
-# reachable one level up — a spent quota stops the `iw-watch` claude session
-# too, so its dispatcher prompt draws no state change, herdr answers
+# Why it watches this `iw-watch` agent and not the per-issue `iw-<n>` panes a
+# dispatcher spins up: the tick cannot address those panes. Their issue numbers
+# are chosen by the dispatcher inside the pane and never reported back, and
+# `herdr agent list` carries no agent-name field to recover them from. The same
+# signal is reachable one level up — a spent quota stops the `iw-watch` claude
+# session too, so its dispatcher prompt draws no state change, herdr answers
 # `agent_prompt_stalled`, the retry stalls as well and `_iw_dispatch` fails.
-# `_iw_agent_status` (option A's own helper) then separates a real wall from an
-# unrelated hiccup: an agent reporting `working`/`blocked` is alive and busy,
-# so that failure earns no strike.
+# `_iw_agent_status` then separates a real wall from an unrelated hiccup: an
+# agent reporting `working`/`blocked` is alive and busy, so that failure earns
+# no strike.
 
 _iw_limit_state_file() {
     printf '%s/%s' "$(_iw_state_dir)" "${_IW_LIMIT_STATE_BASENAME}"
@@ -416,7 +416,7 @@ _iw_limit_read() {
 _iw_limit_write() {
     local _dir _file
     _dir=$(_iw_state_dir)
-    _file=$(_iw_limit_state_file)
+    _file="${_dir}/${_IW_LIMIT_STATE_BASENAME}"
 
     if ! mkdir -p "${_dir}" 2>/dev/null; then
         ux_warning "Cannot create state directory (${_dir}) — the rate-limit gate will not survive this tick."
@@ -538,15 +538,12 @@ _iw_limit_record() {
     _iw_limit_write "0" "$((_now + _IW_LIMIT_BACKOFF_SECONDS))" || true
 }
 
-# Gate + dispatch + bookkeeping as one step, so both call sites in main() stay
-# short and cannot drift apart.
-#   0  dispatched
-#   1  dispatch failed (caller exits 1, unchanged from pre-#1436)
-#   2  gate closed, nothing dispatched (caller exits 0 — a hold, not an error)
-_iw_gated_dispatch() {
+# _iw_dispatch plus the gate's strike bookkeeping, so both call sites in main()
+# stay short and cannot drift apart. Its exit status is _iw_dispatch's own,
+# unchanged from pre-#1436; a closed gate is a separate guard clause at the call
+# site, written the same way as the pre-existing `_iw_acquire_lock || exit 0`.
+_iw_dispatch_recorded() {
     local _rc=0
-
-    _iw_limit_gate_check || return 2
 
     _iw_dispatch || _rc=$?
     _iw_limit_record "${_rc}"
@@ -619,7 +616,7 @@ _iw_usage() {
 # ============================================================
 
 main() {
-    local _cwd="" _status _rc
+    local _cwd="" _status
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -673,10 +670,8 @@ main() {
 
     case "${_status}" in
     idle | done)
-        _iw_gated_dispatch
-        _rc=$?
-        [ "${_rc}" -ne 2 ] || exit 0
-        [ "${_rc}" -eq 0 ] || exit 1
+        _iw_limit_gate_check || exit 0
+        _iw_dispatch_recorded || exit 1
         ;;
     working | blocked)
         ux_warning "Agent ${_IW_AGENT_NAME} is ${_status} — skip this tick (previous cycle still running or awaiting approval)."
@@ -686,10 +681,8 @@ main() {
         ux_warning "Agent ${_IW_AGENT_NAME} unreachable (status: ${_status:-none}) — stale state, re-bootstrapping."
         _iw_bootstrap "${_cwd}" || exit 1
         _iw_wait_for_idle
-        _iw_gated_dispatch
-        _rc=$?
-        [ "${_rc}" -ne 2 ] || exit 0
-        [ "${_rc}" -eq 0 ] || exit 1
+        _iw_limit_gate_check || exit 0
+        _iw_dispatch_recorded || exit 1
         ;;
     esac
 }
