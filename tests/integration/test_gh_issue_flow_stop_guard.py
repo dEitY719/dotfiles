@@ -2023,3 +2023,519 @@ def test_marker_quoted_at_true_line_start_is_still_not_a_fresh_prompt(tmp_path: 
         f"count, matching pre-#1281 behavior. stdout={result.stdout!r}"
     )
     assert json.loads(result.stdout)["decision"] == "block"
+
+
+# ---------------------------------------------------------------------------
+# Issue #1434 — the `SubagentStop` path. The guard used to be registered on
+# `Stop` only, so a `gh:issue-flow` chain running inside a subagent (the
+# unattended issue-watcher dispatch, #1389) lost the harness layer of the
+# three-layer guard entirely.
+#
+# Registering on `SubagentStop` is necessary but NOT sufficient. The MEASURED
+# `SubagentStop` payload carries BOTH transcript keys:
+#
+#     transcript_path        -> the PARENT session's transcript
+#     agent_transcript_path  -> the subagent's OWN transcript
+#
+# so a naive registration would parse the parent, find no flow boundary, and
+# fail open — a silent no-op. The hook therefore prefers
+# `agent_transcript_path`, and never falls back to the parent when the chosen
+# path is unreadable (a parent's unfinished flow must not block an unrelated
+# subagent).
+#
+# Every fixture below mirrors the measured payload/entry shapes recorded on
+# the issue so the tests cannot drift away from the real harness contract.
+# ---------------------------------------------------------------------------
+
+SETTINGS_PATH = REPO_ROOT / "claude" / "settings.json"
+
+_GUARD_COMMAND_FRAGMENT = "gh_issue_flow_stop_guard.py"
+
+
+def _write_named_transcript(tmp_path: Path, name: str, messages: list[dict[str, Any]]) -> Path:
+    """Write a JSONL transcript under an explicit file name.
+
+    `_write_transcript` always uses `transcript.jsonl`, but a `SubagentStop`
+    fixture needs TWO distinct transcripts (parent + subagent) inside the
+    same `tmp_path`.
+    """
+    p = tmp_path / name
+    with p.open("w", encoding="utf-8") as f:
+        for m in messages:
+            f.write(json.dumps(m) + "\n")
+    return p
+
+
+def _subagent_hook_event(
+    agent_transcript: Path | None,
+    parent_transcript: Path | None,
+    **extras: Any,
+) -> str:
+    """Build a `SubagentStop` hook stdin payload (measured shape, #1434).
+
+    Keys mirror the payload dumped from a live probe session: `agent_id`,
+    `agent_type`, `session_id`, `stop_hook_active`, `transcript_path` (the
+    PARENT) and `agent_transcript_path` (the SUBAGENT). Either transcript
+    key can be omitted by passing `None`, which is how the fail-open rails
+    are exercised.
+    """
+    payload: dict[str, Any] = {
+        "hook_event_name": "SubagentStop",
+        "agent_id": "agent-test-1434",
+        "agent_type": "general-purpose",
+        "session_id": "test-parent-session",
+        "stop_hook_active": False,
+    }
+    if parent_transcript is not None:
+        payload["transcript_path"] = str(parent_transcript)
+    if agent_transcript is not None:
+        payload["agent_transcript_path"] = str(agent_transcript)
+    payload.update(extras)
+    return json.dumps(payload)
+
+
+def _mid_flow_messages(issue: str = "1434") -> list[dict[str, Any]]:
+    """Boundary + one sub-skill, no Step 3 report — the blockable state."""
+    return [
+        _user_text(f"/gh-issue-flow {issue}"),
+        _assistant_skill("gh-issue-implement", f"{issue} direct origin --no-next-hint"),
+    ]
+
+
+def _unrelated_messages() -> list[dict[str, Any]]:
+    """A transcript with no gh-issue-flow boundary anywhere."""
+    return [
+        _user_text("summarize this directory for me"),
+        _assistant_text("here is the summary you asked for."),
+    ]
+
+
+def _write_subagent_pair(
+    tmp_path: Path,
+    agent_messages: list[dict[str, Any]] | None,
+    parent_messages: list[dict[str, Any]] | None,
+) -> tuple[Path | None, Path | None]:
+    """Write the subagent + parent transcripts, returning both paths."""
+    agent = None if agent_messages is None else _write_named_transcript(tmp_path, "agent-1434.jsonl", agent_messages)
+    parent = None if parent_messages is None else _write_named_transcript(tmp_path, "parent.jsonl", parent_messages)
+    return agent, parent
+
+
+# --- The core fix: judge the SUBAGENT's transcript, not the parent's -------
+
+
+def test_subagent_stop_mid_flow_blocks(tmp_path: Path) -> None:
+    """Mid-flow SUBAGENT transcript + boundary-free parent → block (#1434).
+
+    This is the regression the whole issue is about: before the fix the hook
+    read `transcript_path` (the parent), found no boundary, and allowed the
+    subagent to stop mid-chain with no error and no warning.
+    """
+    agent, parent = _write_subagent_pair(tmp_path, _mid_flow_messages(), _unrelated_messages())
+    result = _run_hook(_subagent_hook_event(agent, parent))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        "The subagent's own mid-flow transcript was ignored (the parent's was "
+        f"parsed instead), so the guard was a silent no-op. stdout={result.stdout!r}"
+    )
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "gh-issue-flow incomplete" in decision["reason"]
+
+
+def test_subagent_stop_does_not_inherit_parent_flow(tmp_path: Path) -> None:
+    """Boundary-free SUBAGENT transcript + mid-flow parent → allow (#1434).
+
+    The inverse contamination: a parent session holding a half-finished flow
+    must never block an unrelated subagent's turn.
+    """
+    agent, parent = _write_subagent_pair(tmp_path, _unrelated_messages(), _mid_flow_messages())
+    result = _run_hook(_subagent_hook_event(agent, parent))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"The parent session's unfinished flow blocked an unrelated subagent. stdout={result.stdout!r}"
+    )
+
+
+def test_subagent_transcript_missing_file_does_not_fall_back_to_parent(tmp_path: Path) -> None:
+    """A chosen-but-unreadable subagent transcript fails open (#1434).
+
+    Falling back to `transcript_path` here would judge the subagent by the
+    parent's flow state — exactly the cross-contamination the preference
+    order exists to prevent.
+    """
+    _, parent = _write_subagent_pair(tmp_path, None, _mid_flow_messages())
+    missing = tmp_path / "subagents" / "agent-does-not-exist.jsonl"
+    result = _run_hook(_subagent_hook_event(missing, parent))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"An unreadable agent_transcript_path fell back to the parent transcript. stdout={result.stdout!r}"
+    )
+
+
+def test_subagent_stop_terminal_marker_allows_stop(tmp_path: Path) -> None:
+    """A Step 3 report in the SUBAGENT transcript ends the chain."""
+    agent, parent = _write_subagent_pair(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1434"),
+            *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS),
+            _assistant_text("gh:issue-flow complete (#1434)\n  PR URL: https://github.com/example/repo/pull/1435"),
+        ],
+        _unrelated_messages(),
+    )
+    result = _run_hook(_subagent_hook_event(agent, parent))
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_subagent_stop_hook_active_short_circuits(tmp_path: Path) -> None:
+    """U-3: the infinite-loop valve is present on `SubagentStop` too.
+
+    Measured: the first `SubagentStop` carries `stop_hook_active=False` and
+    the event re-fired after a block carries `True`.
+    """
+    agent, parent = _write_subagent_pair(tmp_path, _mid_flow_messages(), _unrelated_messages())
+    result = _run_hook(_subagent_hook_event(agent, parent, stop_hook_active=True))
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_subagent_stop_trace_names_the_transcript_source(tmp_path: Path) -> None:
+    """Trace mode must show WHICH transcript the decision came from (#1434).
+
+    Without this field, "the guard is a no-op" and "the guard read the wrong
+    session" look identical in a log.
+    """
+    agent, parent = _write_subagent_pair(tmp_path, _mid_flow_messages(), _unrelated_messages())
+    result = _run_hook(
+        _subagent_hook_event(agent, parent),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_TRACE": "1"},
+    )
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["decision"] == "block"
+    assert "[stop-guard]" in result.stderr
+    assert "transcript_source=agent_transcript_path" in result.stderr
+
+
+def test_stop_event_trace_names_transcript_path_source(tmp_path: Path) -> None:
+    """A plain `Stop` event carries only `transcript_path` — traced as such."""
+    transcript = _write_transcript(tmp_path, _mid_flow_messages())
+    result = _run_hook(
+        _hook_event(transcript),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_TRACE": "1"},
+    )
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["decision"] == "block"
+    assert "transcript_source=transcript_path" in result.stderr
+
+
+# --- U-2: boundary detection on the subagent-specific entry surfaces -------
+
+
+def _subagent_base_dir_marker() -> dict[str, Any]:
+    """The skill-expansion marker Claude Code injects as a user message."""
+    return _user_text(
+        "Base directory for this skill: /home/tester/.claude/skills/gh-issue-flow\n"
+        "Use this to resolve relative paths in the instructions below."
+    )
+
+
+@pytest.mark.parametrize(
+    ("label", "boundary_entry"),
+    [
+        # Measured: the subagent transcript's FIRST entry is the dispatch
+        # prompt as plain user text, exactly this shape.
+        ("dispatch-prompt-user-text", _user_text("/gh-issue-flow 1434")),
+        ("assistant-skill-tool-use", _assistant_skill("gh-issue-flow", "1434")),
+        ("skill-expansion-base-dir", _subagent_base_dir_marker()),
+    ],
+)
+def test_subagent_boundary_surfaces_all_block(tmp_path: Path, label: str, boundary_entry: dict[str, Any]) -> None:
+    """Every entry surface that can start a flow inside a subagent (#1434)."""
+    agent, parent = _write_subagent_pair(
+        tmp_path,
+        [boundary_entry, _assistant_text("working on it")],
+        _unrelated_messages(),
+    )
+    result = _run_hook(_subagent_hook_event(agent, parent))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"Boundary surface {label!r} was not detected in the subagent transcript. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_real_subagent_entry_shapes_parse_and_block(tmp_path: Path) -> None:
+    """The MEASURED subagent JSONL shape parses cleanly (#1434, U-2).
+
+    Real subagent entries carry `isSidechain` / `agentId` siblings next to
+    `message`, and the stream also contains `{"type": "attachment"}` entries
+    that have no `role` at all. None of that may raise, and none of it may
+    hide the boundary sitting in the first entry.
+    """
+    agent, parent = _write_subagent_pair(
+        tmp_path,
+        [
+            {
+                "type": "user",
+                "isSidechain": True,
+                "agentId": "agent-test-1434",
+                "uuid": "11111111-1111-1111-1111-111111111111",
+                "message": {"role": "user", "content": "/gh-issue-flow 1434"},
+            },
+            {"type": "attachment", "attachment": {"type": "file", "path": "/tmp/context.md"}},
+            {
+                "type": "assistant",
+                "isSidechain": True,
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "thinking", "thinking": "plan the chain"}],
+                },
+            },
+            {
+                "type": "assistant",
+                "isSidechain": True,
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "toolu_probe",
+                            "name": "Bash",
+                            "input": {"command": "git status --porcelain"},
+                        }
+                    ],
+                },
+            },
+            {
+                "type": "user",
+                "isSidechain": True,
+                "message": {
+                    "role": "user",
+                    "content": [{"type": "tool_result", "tool_use_id": "toolu_probe", "content": ""}],
+                },
+            },
+            {
+                "type": "assistant",
+                "isSidechain": True,
+                "message": {"role": "assistant", "content": [{"type": "text", "text": "done"}]},
+            },
+        ],
+        _unrelated_messages(),
+    )
+    result = _run_hook(_subagent_hook_event(agent, parent))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"The measured subagent transcript shape broke boundary detection. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+# --- Every fail-open rail still holds under a SubagentStop payload ---------
+
+
+@pytest.mark.parametrize(
+    ("label", "stdin_payload"),
+    [
+        ("empty-stdin", ""),
+        ("malformed-json", "this is not json {{{"),
+        ("json-not-a-dict", json.dumps([{"hook_event_name": "SubagentStop"}])),
+        (
+            "both-transcript-keys-missing",
+            json.dumps(
+                {
+                    "hook_event_name": "SubagentStop",
+                    "agent_id": "agent-test-1434",
+                    "agent_type": "general-purpose",
+                    "session_id": "test-parent-session",
+                    "stop_hook_active": False,
+                }
+            ),
+        ),
+        (
+            "empty-string-transcript-keys",
+            json.dumps(
+                {
+                    "hook_event_name": "SubagentStop",
+                    "agent_transcript_path": "",
+                    "transcript_path": "",
+                    "stop_hook_active": False,
+                }
+            ),
+        ),
+    ],
+)
+def test_subagent_stdin_level_fail_open_rails(label: str, stdin_payload: str) -> None:
+    """The stdin-level rails are unchanged on the `SubagentStop` path."""
+    result = _run_hook(stdin_payload)
+    assert result.returncode == 0, label
+    assert result.stdout.strip() == "", f"{label} should fail open. stdout={result.stdout!r}"
+
+
+def test_subagent_no_boundary_in_either_transcript_allows_stop(tmp_path: Path) -> None:
+    """An issue-flow-unrelated subagent stop is untouched by the guard."""
+    agent, parent = _write_subagent_pair(tmp_path, _unrelated_messages(), _unrelated_messages())
+    result = _run_hook(_subagent_hook_event(agent, parent))
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_subagent_empty_transcript_file_allows_stop(tmp_path: Path) -> None:
+    """An existing-but-empty subagent transcript fails open."""
+    agent, parent = _write_subagent_pair(tmp_path, [], _mid_flow_messages())
+    result = _run_hook(_subagent_hook_event(agent, parent))
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_subagent_stale_boundary_expiry_still_applies(tmp_path: Path) -> None:
+    """The #1270 stale-boundary valve survives on the `SubagentStop` path."""
+    agent, parent = _write_subagent_pair(
+        tmp_path,
+        [
+            *_mid_flow_messages(),
+            _user_text("actually, forget that — what is the weather like?"),
+        ],
+        _unrelated_messages(),
+    )
+    result = _run_hook(
+        _subagent_hook_event(agent, parent),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"The stale boundary did not expire. stdout={result.stdout!r}"
+
+
+def test_subagent_stale_boundary_expiry_disabled_by_zero(tmp_path: Path) -> None:
+    """`GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS=0` disables expiry here too."""
+    agent, parent = _write_subagent_pair(
+        tmp_path,
+        [
+            *_mid_flow_messages(),
+            _user_text("one unrelated question"),
+            _user_text("and another one"),
+            _user_text("and a third"),
+            _user_text("and a fourth"),
+        ],
+        _unrelated_messages(),
+    )
+    result = _run_hook(
+        _subagent_hook_event(agent, parent),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS": "0"},
+    )
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+# --- Registration: the gap this issue is actually about -------------------
+
+
+def _registered_hook_commands(event: str) -> list[str]:
+    """Return the `command` strings registered on one hook event."""
+    settings = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+    commands: list[str] = []
+    for group in settings.get("hooks", {}).get(event, []):
+        for hook in group.get("hooks", []):
+            command = hook.get("command")
+            if isinstance(command, str):
+                commands.append(command)
+    return commands
+
+
+@pytest.mark.parametrize("event", ["Stop", "SubagentStop"])
+def test_guard_is_registered_on_both_turn_ending_events(event: str) -> None:
+    """The tracked SSOT must register the guard on `Stop` AND `SubagentStop`.
+
+    This is the test that would have caught #1434: the guard existed, was
+    correct, and simply never ran for a subagent because `SubagentStop` was
+    not in `claude/settings.json` at all.
+    """
+    commands = _registered_hook_commands(event)
+    assert any(_GUARD_COMMAND_FRAGMENT in c for c in commands), (
+        f"{_GUARD_COMMAND_FRAGMENT} is not registered on the {event} hook event "
+        f"in {SETTINGS_PATH}. Registered commands: {commands}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Issue #1434 (blast-radius addendum) — which valves are actually LIVE on the
+# `SubagentStop` path.
+#
+# The #1270 stale-boundary valve counts *fresh user prompts* after the
+# boundary. A subagent transcript has no human turns at all: its user-role
+# entries are the dispatch prompt (which IS the boundary, and the count
+# starts at boundary + 1), tool_results (no text under
+# `include_tool_results=False`), and harness injections such as `Stop hook
+# feedback:` (excluded by `_HARNESS_INJECTION_RE`). So on this path the
+# expiry valve can effectively never fire, which makes `stop_hook_active` the
+# ONLY live valve there. Both halves of that statement are pinned below.
+# ---------------------------------------------------------------------------
+
+
+def test_subagent_harness_entries_never_expire_the_boundary(tmp_path: Path) -> None:
+    """Nothing a subagent transcript contains can expire the boundary (#1434).
+
+    Every user-role entry a subagent accumulates after the boundary is
+    machinery — this hook's own re-injected block reason, background
+    `<task-notification>` blocks, skill expansions, and tool output — and all
+    of them are excluded from the fresh-prompt count. Run at the tightest
+    non-disabled limit (1) the boundary still stands, so the expiry valve is
+    inert on the `SubagentStop` path.
+
+    That is acceptable, but it is WHY `stop_hook_active` is load-bearing
+    here: it is the only remaining valve bounding the guard to one block per
+    stop-chain (measured — the `SubagentStop` re-fired after a block carries
+    `stop_hook_active=True`). If `stop_hook_active` ever regressed on this
+    path there would be no second line of defence, so
+    `test_subagent_stop_hook_active_short_circuits` must never be relaxed.
+    """
+    agent, parent = _write_subagent_pair(
+        tmp_path,
+        [
+            *_mid_flow_messages(),
+            _user_tool_result("tests: 42 passed", tool_use_id="toolu_subagent_1"),
+            _user_text("Stop hook feedback:\ngh-issue-flow incomplete: 1/6 sub-skills invoked since the flow started."),
+            _user_text("<task-notification>Agent 'reviewer' finished.</task-notification>"),
+            _user_text(
+                "Base directory for this skill: /home/tester/.claude/skills/gh-commit\nResolve relative paths with it."
+            ),
+            _user_meta_text("Skill gh-commit is already loaded above; instructions unchanged."),
+        ],
+        _unrelated_messages(),
+    )
+    result = _run_hook(
+        _subagent_hook_event(agent, parent),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        "Harness-generated subagent entries were counted as fresh user prompts "
+        f"and expired the boundary. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_subagent_dispatch_prompt_is_boundary_not_a_fresh_prompt(tmp_path: Path) -> None:
+    """The dispatch prompt is the boundary, so it is NOT also counted (#1434).
+
+    A subagent's first transcript entry is the dispatch prompt as plain user
+    text — a genuine `role=user` entry with no `isMeta` flag and no harness
+    marker, i.e. exactly the shape `_count_fresh_user_prompts` counts. It
+    does not double-count only because the count window opens at
+    `boundary + 1` and this entry IS the boundary. Pinned because the
+    alternative (counting it) would expire the boundary on the very first
+    stop at `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS=1`, silently disabling
+    the guard for every unattended dispatch.
+    """
+    agent, parent = _write_subagent_pair(tmp_path, _mid_flow_messages(), _unrelated_messages())
+    result = _run_hook(
+        _subagent_hook_event(agent, parent),
+        env={"GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        "The dispatch prompt was counted as a fresh user prompt on top of being "
+        f"the boundary, expiring it immediately. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"

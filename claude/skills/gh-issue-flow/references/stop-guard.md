@@ -50,20 +50,24 @@ cooperation; it intervenes after the model has already decided to stop.
 
 ## What it does
 
-`claude/hooks/gh_issue_flow_stop_guard.py` is registered as a `Stop`
-hook in the tracked `claude/settings.json` SSOT (#584). The legacy
-`_migrate_install_gh_issue_flow_stop_hook` helper in `claude/setup.sh`
-is left in place as a defense-in-depth no-op for installs whose live
-file still lacks the entry.
+`claude/hooks/gh_issue_flow_stop_guard.py` is registered on **both**
+`Stop` and `SubagentStop` in the tracked `claude/settings.json` SSOT
+(`Stop` since #584, `SubagentStop` since #1434 — see the dedicated
+section below). The legacy `_migrate_install_gh_issue_flow_stop_hook`
+helper in `claude/setup.sh` is left in place as a defense-in-depth no-op
+for installs whose live file still lacks the `Stop` entry.
 
-On every Stop event:
+On every Stop / SubagentStop event:
 
 1. Read JSON from stdin (`hook_event_name`, `transcript_path`,
-   `stop_hook_active`, …).
+   `agent_transcript_path`, `stop_hook_active`, …) and **resolve which
+   transcript to parse** — `agent_transcript_path` wins when present
+   (#1434, see below).
 2. Bail out (allow stop) if any of these is true:
    - stdin is empty / not JSON / not a dict
    - `stop_hook_active == true` (we already blocked once in this chain)
-   - `transcript_path` missing or unreadable
+   - the resolved transcript path is missing or unreadable (no fallback
+     to the other key — #1434)
 3. **L1 — Boundary detection.** Walk the transcript JSONL backwards to
    find the most recent gh-issue-flow start. Four boundary surfaces
    are matched (defense in depth against Claude Code wrapper drift):
@@ -186,10 +190,135 @@ When `GH_ISSUE_FLOW_STOP_GUARD_TRACE=1`, each decision logs a
 `[stop-guard] … layer=L1|L1.5` line on stderr so the layer
 attribution is greppable in post-mortems.
 
+## SubagentStop registration (#1434)
+
+### Why
+
+A subagent's turn-end fires `SubagentStop`, not `Stop`. With the guard
+registered on `Stop` only, any gh:issue-flow that ran *inside* a
+subagent lost the third of the three layered guards entirely — the
+harness layer, the only one that does not need the model's cooperation.
+Just the two prompt-layer mitigations remained, i.e. exactly the
+condition under which #333 / #383 / #1270 each recurred. The exposed
+path is the issue-watcher unattended dispatch (#1389): nobody is
+watching it, so a silently truncated chain leaves an unreviewed,
+un-rebased PR behind with no error and no warning.
+
+### Measured payload contract
+
+`Stop` and `SubagentStop` do **not** carry the same keys:
+
+| key | `Stop` | `SubagentStop` | meaning |
+| --- | --- | --- | --- |
+| `transcript_path` | yes | yes | **the parent session's** transcript |
+| `agent_transcript_path` | no | yes | **the subagent's own** transcript |
+| `agent_id` / `agent_type` | no | yes | which subagent ended |
+| `stop_hook_active` | yes | yes | re-fire flag (loop safety valve) |
+
+Measured on one real `SubagentStop` event:
+
+- `transcript_path` = `<projects>/<session_id>.jsonl` — parent
+- `agent_transcript_path` =
+  `<projects>/<session_id>/subagents/agent-<agent_id>.jsonl` — subagent
+
+So the hazard was never "the key is missing"; it was **the wrong
+transcript**. Registering the guard without a resolution rule would have
+had it parse the *parent* transcript, find no gh-issue-flow boundary
+there (the watcher parent never runs the flow itself), and fail open —
+a silent no-op that looks installed.
+
+### Resolution rule, and why there is no fallback
+
+The hook resolves the transcript as `agent_transcript_path` **first**,
+falling back to `transcript_path` only when the former is absent (which
+is every `Stop` event). If the *chosen* file does not exist the hook
+fails open; it does **not** then try the other key. A subagent must
+never be judged by its parent's flow state — the parent could be
+mid-flow while the subagent does something unrelated (spurious block),
+or the reverse (missed block). For a transcript we cannot read,
+fail-open is the correct answer.
+
+### Everything else carries over unchanged
+
+The subagent transcript uses the same JSONL schema as the parent's, with
+the dispatch prompt as its first `role=user` text entry. All four L1
+boundary surfaces, the L1.5 terminal-marker scan (assistant text plus
+the `Bash` command/result pair), the stale-boundary expiry valve and
+every fail-open rail therefore apply verbatim.
+
+`stop_hook_active` behaves identically too: `False` on the first
+`SubagentStop`, `True` on the event re-fired after a block — so the
+infinite-loop valve holds on this path.
+
+### A block really does continue a subagent (U-4)
+
+Confirmed by execution, not inference: "the hook fires" and "the chain
+actually resumes" are different claims, and closing the issue on the
+first one would leave the path undefended while looking fixed.
+
+Emitting `{"decision":"block","reason":"…"}` on a subagent's first
+`SubagentStop` injected `Stop hook feedback:\n<reason>` into **the
+subagent's own** user channel, and the subagent then performed another
+full turn (thinking -> tool_use -> tool_result -> final text) before
+stopping again. Same mechanism as the `Stop` path.
+
+`Stop hook feedback:` is already one of the `_HARNESS_INJECTION_RE`
+markers, so the guard's own re-injections do not inflate the
+fresh-prompt counter on this path either — the expiry valve keeps
+counting only genuine human prompts.
+
+### How the payload was measured (non-obvious — you will need this again)
+
+Registering a hook in the **running** session's settings does *not*
+work: Claude Code snapshots the hook set at session start, so a
+mid-session registration never fires. The payload was captured from a
+separate headless session instead:
+
+```bash
+cat > /tmp/probe.sh <<'EOF'
+#!/bin/sh
+tee -a /tmp/subagentstop-payload.jsonl >/dev/null
+EOF
+chmod +x /tmp/probe.sh
+# probe-settings.json registers /tmp/probe.sh on SubagentStop
+claude -p --settings /tmp/probe-settings.json --model haiku \
+  --dangerously-skip-permissions "<prompt that dispatches one subagent>"
+```
+
+The probe hook `tee`s stdin to a file. U-4 was measured by having the
+same probe emit one `{"decision":"block"}` and then reading the
+subagent's own transcript for the turns that followed.
+
+### Known gap, left open on purpose
+
+`claude/hooks/devx_autopilot_stop_guard.py` has the **same structural
+exposure** — same `Stop`-only registration, same three-layer contract —
+and was deliberately **not** registered on `SubagentStop` in this
+change. #1434 scopes it out pending the result here. This is a
+documented gap, not an oversight.
+
+### Deployment caveat
+
+The live `~/.claude*/settings.json` is a real file, not a symlink (#940
+/ #1086), so a hook added to the tracked SSOT does not reach a running
+install on `git pull` alone:
+
+- **internal mode** — heals automatically.
+  `claude/hooks/session-start-settings-drift.sh` re-assigns the SSOT's
+  `.hooks` and `.statusLine` into the live file at every SessionStart.
+- **every other mode (external / multi-account)** — advisory only. The
+  same hook only *warns*; the live file is re-seeded by
+  `claude/setup.sh` (i.e. `./setup.sh`), and until that runs the install
+  keeps the old hook set.
+
+Either way the new registration takes effect on the **next** session,
+never in the one that pulled the commit.
+
 ## Safety rails
 
-The hook runs on every Stop event in the session, not just
-gh-issue-flow ones, so misbehaviour would be very visible. Defenses:
+The hook runs on every Stop *and* SubagentStop event in the session,
+not just gh-issue-flow ones, so misbehaviour would be very visible.
+Defenses:
 
 - **Fail-open everywhere.** Every code path that hits an unexpected
   state — bad JSON, missing file, no boundary, etc. — exits 0 with
@@ -209,8 +338,9 @@ gh-issue-flow ones, so misbehaviour would be very visible. Defenses:
 Three escape hatches when debugging or when you genuinely want to
 end a turn mid-flow:
 
-1. **Comment the entry out** in `~/.claude/settings.json` (or whichever
-   account-specific copy you use) and restart the session.
+1. **Comment the entries out** in `~/.claude/settings.json` (or
+   whichever account-specific copy you use) — both the `Stop` and the
+   `SubagentStop` one — and restart the session.
 2. **Rename or `chmod -x`** the script — the hook command will fail to
    exec and Claude Code will treat that as a no-op (allow stop).
 3. **Patch the script** to `print('{}'); return 0` at the top of
@@ -263,5 +393,13 @@ Re-install via `./setup.sh` to restore the default behaviour.
   `<task-notification>` and `[SYSTEM NOTIFICATION - NOT USER INPUT]`
   messages are not counted; a message carrying both human text and a
   `tool_result` **is** counted.
+- #1434 (`SubagentStop`): a **registration test** asserts the tracked
+  `claude/settings.json` wires this hook onto `SubagentStop` as well as
+  `Stop` — the one check that would have caught the original gap. Plus
+  transcript resolution (`agent_transcript_path` preferred over
+  `transcript_path`; a missing chosen file fails open instead of
+  falling back), a mid-flow subagent transcript → block, an
+  unrelated subagent stop → allow, and the six existing fail-open rails
+  re-asserted against a `SubagentStop`-shaped payload.
 
 Run: `pytest tests/integration/test_gh_issue_flow_stop_guard.py -v`.

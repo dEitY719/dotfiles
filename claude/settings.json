@@ -78,6 +78,16 @@
           }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "command": "${HOME}/dotfiles/claude/hooks/gh_issue_flow_stop_guard.py",
+            "type": "command"
+          }
+        ]
+      }
     ]
   },
   "skipDangerousModePermissionPrompt": true,
