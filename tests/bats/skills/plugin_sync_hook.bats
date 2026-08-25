@@ -100,9 +100,9 @@ JSON
         "$MAIN_ROOT/claude/plugin/plugins.json"
     assert_success
 
-    # committed locally
+    # committed locally, title names the installed target (#1430)
     run git -C "$MAIN_ROOT" log -1 --format=%s
-    assert_output "chore(claude-plugin): sync manifest"
+    assert_output "chore(claude-plugin): sync manifest (ralph-loop@claude-plugins-official)"
 }
 
 @test "install → directory-source and scope:local entries excluded" {
@@ -161,7 +161,7 @@ JSON
     assert_failure
 
     run git -C "$MAIN_ROOT/claude/plugin/company" log -1 --format=%s
-    assert_output "chore(claude-plugin): sync manifest"
+    assert_output "chore(claude-plugin): sync manifest (secret@internal-tools)"
 }
 
 @test "install → internal entries skipped entirely when company/ repo not cloned" {
@@ -198,6 +198,9 @@ JSON
     run jq -e '.["claude-plugins-official"] == "anthropics/claude-plugins-official"' \
         "$MAIN_ROOT/claude/plugin/marketplaces.json"
     assert_success
+
+    run git -C "$MAIN_ROOT" log -1 --format=%s
+    assert_output "chore(claude-plugin): sync manifest (anthropics/claude-plugins-official)"
 }
 
 @test "install → pre-existing 0-byte manifest does not break the merge (empty-file guard)" {
@@ -232,7 +235,7 @@ JSON
     # The manifest is actually committed — not silently blocked and left
     # unstaged as it was before the ALLOW_MAIN_COMMIT=1 fix.
     run git -C "$MAIN_ROOT" log -1 --format=%s
-    assert_output "chore(claude-plugin): sync manifest"
+    assert_output "chore(claude-plugin): sync manifest (ralph-loop@claude-plugins-official)"
     run git -C "$MAIN_ROOT" status --porcelain
     assert_output ""
 }
@@ -261,7 +264,7 @@ JSON
     # Commit landed AND was pushed: local main == origin/main, so no local-only
     # commit lingers to later diverge.
     run git -C "$MAIN_ROOT" log -1 --format=%s
-    assert_output "chore(claude-plugin): sync manifest"
+    assert_output "chore(claude-plugin): sync manifest (ralph-loop@claude-plugins-official)"
     [ "$(git -C "$MAIN_ROOT" rev-parse main)" = "$(git -C "$MAIN_ROOT" rev-parse origin/main)" ]
     run git -C "$MAIN_ROOT" status --porcelain
     assert_output ""
@@ -290,9 +293,20 @@ JSON
     # early @{u} return cannot mask a broken branch filter — the only reason
     # origin/feat/x stays at seed is the main/master-only scope guard.
     run git -C "$MAIN_ROOT" log -1 --format=%s
-    assert_output "chore(claude-plugin): sync manifest"
+    assert_output "chore(claude-plugin): sync manifest (ralph-loop@claude-plugins-official)"
     run git -C "$MAIN_ROOT" log -1 --format=%s origin/feat/x
     assert_output "seed"
+}
+
+@test "install → internal reserved sentinel (session-hook bulk resync) commits without a parenthesized name (#1430)" {
+    _known_marketplaces
+    _installed_plugins
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install __slash_command_sync__"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+
+    run git -C "$MAIN_ROOT" log -1 --format=%s
+    assert_output "chore(claude-plugin): sync manifest"
 }
 
 @test "no-op re-run does not create an empty commit" {

@@ -52,17 +52,36 @@ action=""
 target=""
 if printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+marketplace[[:space:]]+add'; then
 	action="add"
+	target=$(_extract_target "$cmd" "add")
 elif printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+marketplace[[:space:]]+(remove|rm)'; then
 	action="marketplace_remove"
 	target=$(_extract_target "$cmd" "remove|rm")
 elif printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+install'; then
 	action="add"
+	target=$(_extract_target "$cmd" "install")
 elif printf '%s' "$cmd" | grep -qE 'claude[[:space:]]+plugin[[:space:]]+(uninstall|remove)'; then
 	action="uninstall"
 	target=$(_extract_target "$cmd" "uninstall|remove")
 else
 	exit 0
 fi
+
+# claude/hooks/plugin-sync-session.sh drives this same "add" branch with a
+# reserved dummy target (__slash_command_sync__) to trigger a full SSOT
+# re-sync that can add several plugins/marketplaces at once — not a single
+# real install. Naming that placeholder in the commit title would mislead
+# more than the plain title does, so it degrades to no name (#1430).
+if [ "$target" = "__slash_command_sync__" ]; then
+	target=""
+fi
+
+# Commit title: name the single install/uninstall target when known, so
+# `git log --oneline` distinguishes syncs instead of showing the same
+# subject for every plugin change (#1430). Falls back to the bare SYNC_MSG
+# when no target was parsed (unrecognized command shape, or the sentinel
+# above).
+SYNC_TITLE="$SYNC_MSG"
+[ -n "$target" ] && SYNC_TITLE="$SYNC_MSG ($target)"
 
 MAIN_ROOT="$HOME/dotfiles"
 [ -d "$MAIN_ROOT/.git" ] || exit 0
@@ -183,7 +202,7 @@ if [ "$action" = "add" ]; then
 		'{plugins: (($old.plugins? // []) + $new | unique | sort)}' \
 		>"$PUB_DIR/plugins.json.tmp" &&
 		mv "$PUB_DIR/plugins.json.tmp" "$PUB_DIR/plugins.json"
-	_commit_if_changed "$MAIN_ROOT" "$SYNC_MSG" \
+	_commit_if_changed "$MAIN_ROOT" "$SYNC_TITLE" \
 		claude/plugin/marketplaces.json claude/plugin/plugins.json
 
 	if [ -d "$PRIV_DIR/.git" ] && [ "$mp_internal" != "{}" ]; then
@@ -196,7 +215,7 @@ if [ "$action" = "add" ]; then
 			'{plugins: (($old.plugins? // []) + $new | unique | sort)}' \
 			>"$PRIV_DIR/plugins.json.tmp" &&
 			mv "$PRIV_DIR/plugins.json.tmp" "$PRIV_DIR/plugins.json"
-		_commit_if_changed "$PRIV_DIR" "$SYNC_MSG" \
+		_commit_if_changed "$PRIV_DIR" "$SYNC_TITLE" \
 			marketplaces.json plugins.json
 	elif [ "$mp_internal" != "{}" ] && [ ! -d "$PRIV_DIR/.git" ]; then
 		# 사내(non-github) 마켓플레이스가 감지됐지만 이 PC 에는 company/ 레포가
@@ -238,10 +257,10 @@ if [ "$action" = "uninstall" ] || [ "$action" = "marketplace_remove" ]; then
 		fi
 	done
 
-	_commit_if_changed "$MAIN_ROOT" "$SYNC_MSG" \
+	_commit_if_changed "$MAIN_ROOT" "$SYNC_TITLE" \
 		claude/plugin/marketplaces.json claude/plugin/plugins.json
 	if [ -d "$PRIV_DIR/.git" ]; then
-		_commit_if_changed "$PRIV_DIR" "$SYNC_MSG" \
+		_commit_if_changed "$PRIV_DIR" "$SYNC_TITLE" \
 			marketplaces.json plugins.json
 	fi
 fi

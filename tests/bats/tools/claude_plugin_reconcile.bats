@@ -130,11 +130,38 @@ JSON
     after=$(git -C "$REPO" rev-list --count HEAD)
     [ "$((after - before))" -eq 1 ]
     run git -C "$REPO" log -1 --pretty=%s
-    assert_output 'chore(claude-plugin): sync manifest'
+    assert_output 'chore(claude-plugin): sync manifest (+understand -ghost-mp +understand-anything@understand -ghost@ghost-mp)'
 
     run "$SCRIPT" --check
     assert_success
     assert_output --partial 'no drift'
+}
+
+@test "reconcile.sh --apply truncates a commit title with more than 4 changed entries (#1430)" {
+    cat > "$CLAUDE_SHARED_PLUGINS_DIR/known_marketplaces.json" <<'JSON'
+{
+  "mp-keep":   {"source": {"source": "github", "repo": "org/keep"}},
+  "mp-add-1":  {"source": {"source": "github", "repo": "org/add1"}},
+  "mp-add-2":  {"source": {"source": "github", "repo": "org/add2"}},
+  "mp-add-3":  {"source": {"source": "github", "repo": "org/add3"}}
+}
+JSON
+    cat > "$CLAUDE_SHARED_PLUGINS_DIR/installed_plugins.json" <<'JSON'
+{"plugins": {"kept-plugin@mp-keep": [{"scope": "user"}]}}
+JSON
+    cat > "$REPO/claude/plugin/marketplaces.json" <<'JSON'
+{"mp-keep": "org/keep", "mp-remove-1": "org/gone1", "mp-remove-2": "org/gone2"}
+JSON
+    cat > "$REPO/claude/plugin/plugins.json" <<'JSON'
+{"plugins": ["kept-plugin@mp-keep"]}
+JSON
+    git -C "$REPO" add -A
+    git -C "$REPO" commit -qm seed
+
+    run "$SCRIPT" --apply
+    assert_success
+    run git -C "$REPO" log -1 --pretty=%s
+    assert_output 'chore(claude-plugin): sync manifest (+mp-add-1 +mp-add-2 +mp-add-3 외 2개)'
 }
 
 @test "reconcile.sh --apply makes no commit when already in sync" {

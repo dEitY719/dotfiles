@@ -92,6 +92,17 @@ _commit_pure_sync_change_dated() {
         git -C "$repo_dir" commit -q -m "chore(claude-plugin): sync manifest"
 }
 
+_commit_pure_sync_change_named() {
+    # Like _commit_pure_sync_change, but the subject carries the parenthesized
+    # target name plugin-sync.sh/reconcile.sh now embed (#1430) — purity
+    # detection must recognize this as a prefix match, not just the bare
+    # subject.
+    local repo_dir="$1" rel_path="$2" content="$3" name="$4"
+    printf '%s\n' "$content" >"$repo_dir/$rel_path"
+    git -C "$repo_dir" add "$rel_path"
+    git -C "$repo_dir" commit -q -m "chore(claude-plugin): sync manifest ($name)"
+}
+
 _route_origin_offline() {
     # Point <repo_dir>'s origin at a parseable GitHub URL (so _repo_target and
     # `gh` see a real host/owner/repo) while redirecting actual git transport to
@@ -757,6 +768,31 @@ STUB
     MAIN_SHA=$(git -C "$REPO" rev-parse main)
     assert_equal "$MAIN_SHA" "$PUBLISHED"
     assert_not_equal "$MAIN_SHA" "$LOCAL_MAIN_BEFORE"
+}
+
+@test "_cleanup_local_main_if_pure_sync recognizes a parenthesized target name as pure sync (#1430)" {
+    # plugin-sync.sh's commit title now names its target — e.g.
+    # "chore(claude-plugin): sync manifest (ralph-loop)" — purity detection
+    # must still fast-forward/rebase past it, not treat it as a foreign commit.
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    BEFORE_ORIGIN=$(git -C "$REPO" rev-parse origin/main)
+
+    _commit_pure_sync_change_named "$REPO" claude/plugin/marketplaces.json \
+        '{"anthropic-agent-skills": "anthropics/skills"}' "ralph-loop"
+    git -C "$REPO" checkout -q -b other
+
+    git -C "$REPO" checkout -q "$BEFORE_ORIGIN"
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills-published"}'
+    PUBLISHED=$(git -C "$REPO" rev-parse HEAD)
+    git -C "$REPO" push -q origin "${PUBLISHED}:refs/heads/main"
+    git -C "$REPO" checkout -q other
+
+    run _cleanup_local_main_if_pure_sync "$REPO" "$BEFORE_ORIGIN" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    assert_output --partial "정리했습니다"
+    MAIN_SHA=$(git -C "$REPO" rev-parse main)
+    assert_equal "$MAIN_SHA" "$PUBLISHED"
 }
 
 @test "_cleanup_local_main_if_pure_sync rebases a diverged checked-out main onto origin/main when the published commit shares its content" {
