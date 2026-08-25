@@ -1,20 +1,26 @@
 #!/usr/bin/env bats
 # tests/bats/tools/issue_watcher_cron.bats
-# Tests for issue_watcher_cron.sh — the 5-minute issue-watcher tick
-# (issues #1389, #1436, #1440).
+# Tests for issue_watcher_cron.sh — the issue-watcher tick
+# (issues #1389, #1436, #1440, #1453).
 #
 # Since #1440 the tick does the watching and dispatching itself, so the suite
 # covers the whole pipeline rather than a single dispatcher prompt. Three PATH
 # stubs stand in for the outside world and log every invocation to ${_LOG} so
 # the tests can assert on *which* calls were made:
 #
-#   gh     `search issues` (canned result set, steerable per test) and
-#          `api graphql` (blockedBy). Every other subcommand is logged and
-#          refused — the tick must never write to an issue.
-#   herdr  workspace/tab/agent, with canned JSON matching the shapes measured
-#          on a live herdr server.
-#   gwt    real `git worktree` calls against a real fixture repo, so the
-#          worktree dedup criterion is exercised for real rather than mocked.
+#   gh     `search issues`, `pr list` (the already-handled signal), `issue view`
+#          (the collectable signal) and `api graphql` (blockedBy) — all canned
+#          and steerable per test. Every other subcommand is logged and refused:
+#          the tick must never write to an issue.
+#   herdr  workspace/tab/agent plus `agent list` (the running-now signal), with
+#          canned JSON matching the shapes measured on a live herdr server.
+#   gwt    real `git worktree` calls against a real fixture repo, so worktree
+#          creation and collection are exercised for real rather than mocked.
+#
+# Since #1453 a worktree's existence decides nothing (NF-1). The three signals
+# it used to stand in for are stubbed separately: `herdr agent list` says what
+# is running, `gh pr list` says what is already handled, and `gh issue view`
+# says what may be collected.
 
 load '../test_helper'
 
@@ -97,6 +103,30 @@ _set_issues() {
     printf '%s\n' "$1" >"${_WORK_DIR}/issues.json"
 }
 
+# The open-PR set `gh pr list` answers with, as a JSON object keyed by repo.
+_set_open_prs() {
+    printf '%s\n' "$1" >"${_WORK_DIR}/prs.json"
+}
+
+# The worktree path `_add_worktree <n>` creates — also what a live agent pane
+# working that issue reports as its cwd.
+_worktree_path() {
+    printf '%s/dotfiles-issue-%s-1' "${_WORK_DIR}" "$1"
+}
+
+# A live herdr agent pane sitting in each given worktree path. This is the
+# whole "is it running" signal: `herdr agent list` has no agent-name field, so
+# the tick recognises its own panes by the worktree they were opened on.
+_set_live_agents() {
+    local _json="" _sep="" _p
+    for _p in "$@"; do
+        _json="${_json}${_sep}{\"agent\":\"claude\",\"agent_status\":\"working\",\"cwd\":\"${_p}\",\"pane_id\":\"wV:p1\"}"
+        _sep=","
+    done
+    printf '{"id":"cli:agent:list","result":{"agents":[%s]}}\n' "${_json}" \
+        >"${_WORK_DIR}/agents.json"
+}
+
 # One issue with the given labels, e.g. _issues_with_labels 11 wontfix
 _issues_with_labels() {
     local _n="$1" _labels="" _sep=""
@@ -112,14 +142,18 @@ _issues_with_labels() {
 # Stubs
 # ---------------------------------------------------------------------------
 
-# gh: only `search issues` and `api graphql` are answered. Anything else is
-# logged and fails — the tick is read-only on issues by contract, and this is
-# what makes "no comment, label or assignee change" a test rather than a claim.
+# gh: only the four read calls are answered. Anything else is logged and fails
+# — the tick is read-only on issues by contract, and this is what makes "no
+# comment, label or assignee change" a test rather than a claim.
 #
-#   GH_SEARCH_FAIL=1   `search issues` errors
-#   GH_BLOCKED_BY      issue numbers whose blockedBy answer carries an OPEN
-#                      blocker, space-separated (default: none)
-#   GH_GRAPHQL_FAIL=1  `api graphql` errors (fail-open path)
+#   GH_SEARCH_FAIL=1      `search issues` errors
+#   GH_BLOCKED_BY         issue numbers whose blockedBy answer carries an OPEN
+#                         blocker, space-separated (default: none)
+#   GH_GRAPHQL_FAIL=1     `api graphql` errors (fail-open path)
+#   GH_PRS_FILE           JSON object, repo -> open-PR array (default: none)
+#   GH_PR_LIST_FAIL=1     `pr list` errors (fail-closed path, D-6)
+#   GH_CLOSED_ISSUES      issue numbers `issue view` reports CLOSED for
+#   GH_ISSUE_VIEW_FAIL=1  `issue view` errors (worktree is left in place)
 _install_gh_stub() {
     cat >"${_BIN_DIR}/gh" <<'EOF'
 #!/bin/sh
@@ -129,6 +163,34 @@ case "$1 $2" in
 "search issues")
     [ "${GH_SEARCH_FAIL:-0}" = "1" ] && exit 1
     cat "${GH_ISSUES_FILE}"
+    exit 0
+    ;;
+"pr list")
+    [ "${GH_PR_LIST_FAIL:-0}" = "1" ] && exit 1
+    _repo=""
+    _prev=""
+    for _a in "$@"; do
+        [ "${_prev}" = "--repo" ] && _repo="${_a}"
+        _prev="${_a}"
+    done
+    if [ -f "${GH_PRS_FILE:-}" ]; then
+        jq -c --arg r "${_repo}" '.[$r] // []' "${GH_PRS_FILE}"
+    else
+        printf '%s\n' '[]'
+    fi
+    exit 0
+    ;;
+"issue view")
+    # Read-only, like the two above: the cleanup step asks whether an issue is
+    # closed before it collects that issue's worktree.
+    [ "${GH_ISSUE_VIEW_FAIL:-0}" = "1" ] && exit 1
+    for _c in ${GH_CLOSED_ISSUES:-}; do
+        if [ "${_c}" = "$3" ]; then
+            printf 'CLOSED\n'
+            exit 0
+        fi
+    done
+    printf 'OPEN\n'
     exit 0
     ;;
 "api graphql")
@@ -160,6 +222,8 @@ EOF
 
 # herdr: the four call groups the tick makes.
 #
+#   HERDR_AGENTS_FILE         canned `agent list` JSON (default: no agents)
+#   HERDR_AGENT_LIST_FAIL=1   `agent list` errors — the tick must hold
 #   HERDR_WORKSPACE_EXISTS=1  `workspace list` already carries the repo label
 #   HERDR_TAB_FAIL=1          `tab create` errors
 #   HERDR_TAB_FAIL_AFTER=N    the first N `tab create` calls succeed, the rest
@@ -188,6 +252,17 @@ _bump() {
 }
 
 case "$1 $2" in
+"agent list")
+    if [ "${HERDR_AGENT_LIST_FAIL:-0}" = "1" ]; then
+        printf '%s\n' '{"error":{"code":"internal","message":"no server"},"id":"cli:agent:list"}'
+        exit 1
+    fi
+    if [ -f "${HERDR_AGENTS_FILE:-}" ]; then
+        cat "${HERDR_AGENTS_FILE}"
+    else
+        printf '%s\n' '{"id":"cli:agent:list","result":{"agents":[]}}'
+    fi
+    ;;
 "workspace list")
     if [ "${HERDR_WORKSPACE_EXISTS:-0}" = "1" ]; then
         printf '{"id":"cli:workspace:list","result":{"workspaces":[{"label":"%s","workspace_id":"ws-existing"}]}}\n' \
@@ -360,6 +435,8 @@ _run_tick() {
         "PATH=${_BIN_DIR}:${PATH}" \
         "CALL_LOG=${_LOG}" \
         "GH_ISSUES_FILE=${_WORK_DIR}/issues.json" \
+        "GH_PRS_FILE=${_WORK_DIR}/prs.json" \
+        "HERDR_AGENTS_FILE=${_WORK_DIR}/agents.json" \
         "IW_WATCHED_REPOS=${_WATCH_FILE}" \
         "XDG_STATE_HOME=${_STATE_HOME}" \
         "IW_IDLE_POLL_SLEEP=0" \
@@ -459,13 +536,22 @@ _hold_lock() {
     assert_output --partial "IW_WATCHED_REPOS"
 }
 
-@test "issue_watcher_cron: --help documents the filters and the per-cycle cap" {
+@test "issue_watcher_cron: --help documents the filters and the per-tick cap" {
     run bash "${SCRIPT}" --help
     assert_success
     assert_output --partial "gh search issues"
     assert_output --partial "wontfix"
     assert_output --partial "blockedBy"
-    assert_output --partial "at most 3 issues per cycle"
+    assert_output --partial "at most 1 issue(s) per tick"
+}
+
+@test "issue_watcher_cron: --help documents the concurrency limits and the cursor" {
+    run bash "${SCRIPT}" --help
+    assert_success
+    assert_output --partial "7 running in total"
+    assert_output --partial "3 in one repo"
+    assert_output --partial "round-robin"
+    assert_output --partial "select.json"
 }
 
 @test "issue_watcher_cron: --help documents the rate-limit gate and its state file" {
@@ -636,12 +722,15 @@ _hold_lock() {
     _refute_logged "gwt spawn"
 }
 
-@test "issue_watcher_cron: an issue that already has a worktree is skipped" {
+@test "issue_watcher_cron: an existing worktree no longer retires the issue" {
+    # The bug this replaces: /gh-issue-flow stops at "PR opened", so a worktree
+    # removed before the merge used to re-dispatch, and one kept until the merge
+    # piled up — while an issue whose session had died was never offered again,
+    # because its worktree was still there. A worktree is a workspace now.
     _add_worktree 11
     _run_tick
     assert_success
-    assert_output --partial "worktree already exists"
-    _refute_logged "gwt spawn"
+    _assert_logged "gwt spawn --wt-name issue-11"
 }
 
 @test "issue_watcher_cron: a watched repo whose path is gone is skipped with a warning" {
@@ -673,18 +762,32 @@ _hold_lock() {
     _assert_logged "gwt spawn --wt-name issue-11"
 }
 
-@test "issue_watcher_cron: at most three issues are dispatched per cycle" {
+@test "issue_watcher_cron: only one issue is dispatched per tick" {
+    # Intake rate, not total load: five ready issues must not all enter their
+    # token-heavy implement phase in the same minute.
     _set_issues '[
       {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
-      {"number":14,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
+      {"number":14,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":15,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
     ]'
     _run_tick
     assert_success
-    assert_output --partial "3 issue(s) dispatched"
-    [ "$(_log_count 'gwt spawn')" -eq 3 ]
-    _refute_logged "gwt spawn --wt-name issue-14"
+    assert_output --partial "1 issue(s) dispatched"
+    [ "$(_log_count 'gwt spawn')" -eq 1 ]
+}
+
+@test "issue_watcher_cron: the lowest issue number in a repo goes first" {
+    _set_issues '[
+      {"number":31,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":25,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
+    ]'
+    _run_tick
+    assert_success
+    _assert_logged "gwt spawn --wt-name issue-12"
+    _refute_logged "gwt spawn --wt-name issue-25"
 }
 
 @test "issue_watcher_cron: a failing issue search leaves the tick a no-op" {
@@ -722,17 +825,17 @@ _hold_lock() {
 }
 
 @test "issue_watcher_cron: a stdin-consuming child cannot truncate the candidate loop" {
-    # The blockedBy query runs inside the candidate loop and drains stdin. On
-    # plain stdin that eats the remaining search results and the cycle silently
-    # dispatches one issue instead of three.
+    # The candidate loop reads on fd 3. On plain stdin a child that drains it —
+    # `gh` does — would eat the remaining search results and the tick would pick
+    # from a silently shortened list. Blocking #11 proves the loop reached #12.
     _set_issues '[
       {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
     ]'
-    _run_tick
+    _run_tick "GH_BLOCKED_BY=11"
     assert_success
-    assert_output --partial "3 issue(s) dispatched"
+    _assert_logged "gwt spawn --wt-name issue-12"
 }
 
 @test "issue_watcher_cron: a stdin-consuming child cannot truncate the dispatch loop" {
@@ -741,9 +844,23 @@ _hold_lock() {
       {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
     ]'
-    _run_tick
+    _run_tick "IW_DISPATCH_PER_TICK=3"
     assert_success
     [ "$(_log_count 'agent prompt')" -eq 3 ]
+}
+
+@test "issue_watcher_cron: a stdin-consuming child cannot truncate the cleanup loop" {
+    # Same hazard one step earlier: the cleanup loop runs `gh issue view` per
+    # worktree, so on plain stdin the first call would eat the rest of the list
+    # and every worktree after the first would survive its closed issue.
+    _add_worktree 11
+    _add_worktree 12
+    _add_worktree 13
+    _run_tick "GH_CLOSED_ISSUES=11 12 13"
+    assert_success
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    refute_output --partial "wt/issue-12/"
+    refute_output --partial "wt/issue-13/"
 }
 
 @test "issue_watcher_cron: the agent name carries the repo, not just the number" {
@@ -785,12 +902,15 @@ _hold_lock() {
     [ "${_agent_get_line}" -lt "${_prompt_line}" ]
 }
 
-@test "issue_watcher_cron: the dedup check picks the highest worktree index" {
+@test "issue_watcher_cron: the pane opens on the newest worktree index" {
+    # A cleanup that failed leaves wt/issue-11/1 behind and the next spawn makes
+    # /2. Handing the tab the stale /1 path would open the session on the wrong
+    # worktree, so _iw_worktree_for_issue reads back the highest index.
     _add_worktree 11
-    git -C "${_REPO_DIR}" worktree add -q -b "wt/issue-11/2" "${_WORK_DIR}/dotfiles-issue-11-2" HEAD
     _run_tick
     assert_success
-    assert_output --partial "worktree already exists"
+    _assert_logged "--cwd ${_WORK_DIR}/dotfiles-issue-11-2"
+    _refute_logged "--cwd ${_WORK_DIR}/dotfiles-issue-11-1"
 }
 
 @test "issue_watcher_cron: a stale attempt error code cannot book a quota strike" {
@@ -829,6 +949,299 @@ _hold_lock() {
 }
 
 # ---------------------------------------------------------------------------
+# The three signals (issue #1453)
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: only open issues assigned to me are ever searched" {
+    # The "already closed" half of the handled signal is the search itself: a
+    # closed issue never enters the candidate list to begin with.
+    _run_tick
+    assert_success
+    _assert_logged "--assignee @me --state open"
+}
+
+@test "issue_watcher_cron: an issue an open PR closes is skipped" {
+    _set_open_prs '{"acme/dotfiles":[{"number":90,"headRefName":"feature/x","body":"Closes #11"}]}'
+    _run_tick
+    assert_success
+    assert_output --partial "an open PR already closes it"
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: the closing keyword is matched case-insensitively" {
+    _set_open_prs '{"acme/dotfiles":[{"number":90,"headRefName":"feature/x","body":"fixes #11"}]}'
+    _run_tick
+    assert_success
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: a PR on the issue branch counts even without the keyword" {
+    # A PR opened by hand may carry no `Closes #<n>`, but gwt always branches
+    # wt/issue-<n>/<index>, so the branch name is the second, independent mark.
+    _set_open_prs '{"acme/dotfiles":[{"number":90,"headRefName":"wt/issue-11/1","body":"no keyword here"}]}'
+    _run_tick
+    assert_success
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: a PR closing a longer number does not retire this issue" {
+    # Without the word boundary, `Closes #115` would read as closing #11 and
+    # retire it for as long as that PR stayed open.
+    _set_open_prs '{"acme/dotfiles":[{"number":90,"headRefName":"feature/x","body":"Closes #115"}]}'
+    _run_tick
+    assert_success
+    _assert_logged "gwt spawn --wt-name issue-11"
+}
+
+@test "issue_watcher_cron: an open PR on another repo does not retire this issue" {
+    _set_open_prs '{"other/elsewhere":[{"number":90,"headRefName":"wt/issue-11/1","body":"Closes #11"}]}'
+    _run_tick
+    assert_success
+    _assert_logged "gwt spawn --wt-name issue-11"
+}
+
+@test "issue_watcher_cron: a worktree with no PR and no session is offered again" {
+    # The failure this closes: dispatch is fire-and-forget, so a claude session
+    # that died after its worktree existed used to retire the issue forever.
+    _add_worktree 11
+    _run_tick
+    assert_success
+    _assert_logged "gwt spawn --wt-name issue-11"
+}
+
+@test "issue_watcher_cron: an issue whose session is live is not dispatched again" {
+    _add_worktree 11
+    _set_live_agents "$(_worktree_path 11)"
+    _run_tick
+    assert_success
+    assert_output --partial "already running"
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: a failing open-PR query skips the repo, not the tick" {
+    # Fail-closed on purpose (D-6): guessing "unhandled" here opens a second PR
+    # on an issue that already has one, and the next tick re-evaluates anyway.
+    _run_tick "GH_PR_LIST_FAIL=1"
+    assert_success
+    assert_output --partial "Cannot list open PRs"
+    _refute_logged "gwt spawn"
+}
+
+# ---------------------------------------------------------------------------
+# Concurrency limits (issue #1453 D-2)
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: the tick holds once the global limit is reached" {
+    local _paths=() _n
+    for _n in 21 22 23 24 25 26 27; do
+        _add_worktree "${_n}"
+        _paths+=("$(_worktree_path "${_n}")")
+    done
+    _set_live_agents "${_paths[@]}"
+    _run_tick
+    assert_success
+    assert_output --partial "7 issue session(s) already running"
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: one session short of the limit still dispatches" {
+    local _paths=() _n
+    for _n in 21 22 23 24 25 26; do
+        _add_worktree "${_n}"
+        _paths+=("$(_worktree_path "${_n}")")
+    done
+    _set_live_agents "${_paths[@]}"
+    _run_tick "IW_MAX_PER_REPO=9"
+    assert_success
+    _assert_logged "gwt spawn --wt-name issue-11"
+}
+
+@test "issue_watcher_cron: a repo at its own limit is skipped" {
+    local _paths=() _n
+    for _n in 21 22 23; do
+        _add_worktree "${_n}"
+        _paths+=("$(_worktree_path "${_n}")")
+    done
+    _set_live_agents "${_paths[@]}"
+    _run_tick
+    assert_success
+    assert_output --partial "3 of its issues are already running"
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: a repo at its limit does not stop another repo" {
+    local _other="${_WORK_DIR}/other" _paths=() _n
+    mkdir -p "${_other}"
+    git -C "${_other}" init -q
+    git -C "${_other}" config user.email "test@example.com"
+    git -C "${_other}" config user.name "test"
+    printf 'seed\n' >"${_other}/README.md"
+    git -C "${_other}" add -A
+    git -C "${_other}" commit -qm seed
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"},
+                        {"repo":"acme/other","path":"'"${_other}"'","host":"github.com"}]'
+    _set_issues '[
+      {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":41,"repository":{"nameWithOwner":"acme/other"},"labels":[]}
+    ]'
+    for _n in 21 22 23; do
+        _add_worktree "${_n}"
+        _paths+=("$(_worktree_path "${_n}")")
+    done
+    _set_live_agents "${_paths[@]}"
+    _run_tick
+    assert_success
+    _assert_logged "gwt spawn --wt-name issue-41"
+}
+
+@test "issue_watcher_cron: an unreachable herdr holds the tick instead of dispatching" {
+    # "How many are running" has no safe default: guessing "none" would lift the
+    # cap exactly when herdr is unhealthy.
+    _run_tick "HERDR_AGENT_LIST_FAIL=1"
+    assert_success
+    assert_output --partial "holding this tick"
+    _refute_logged "gwt spawn"
+}
+
+# ---------------------------------------------------------------------------
+# Round-robin cursor (issue #1453 D-3)
+# ---------------------------------------------------------------------------
+
+_two_repo_fixture() {
+    local _other="${_WORK_DIR}/other"
+    mkdir -p "${_other}"
+    git -C "${_other}" init -q
+    git -C "${_other}" config user.email "test@example.com"
+    git -C "${_other}" config user.name "test"
+    printf 'seed\n' >"${_other}/README.md"
+    git -C "${_other}" add -A
+    git -C "${_other}" commit -qm seed
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"},
+                        {"repo":"acme/other","path":"'"${_other}"'","host":"github.com"}]'
+    _set_issues '[
+      {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":41,"repository":{"nameWithOwner":"acme/other"},"labels":[]}
+    ]'
+}
+
+@test "issue_watcher_cron: consecutive ticks take turns between repos" {
+    _two_repo_fixture
+    _run_tick
+    assert_success
+    _assert_logged "gwt spawn --wt-name issue-11"
+
+    : >"${_LOG}"
+    _set_live_agents "$(_worktree_path 11)"
+    _run_tick
+    assert_success
+    _assert_logged "gwt spawn --wt-name issue-41"
+}
+
+@test "issue_watcher_cron: the cursor is persisted for the next tick" {
+    _two_repo_fixture
+    _run_tick
+    assert_success
+    run cat "${_STATE_DIR}/select.json"
+    assert_output --partial '"last_repo": "acme/dotfiles"'
+}
+
+@test "issue_watcher_cron: a state dir with no cursor starts at the first repo" {
+    _two_repo_fixture
+    mkdir -p "${_STATE_DIR}"
+    [ ! -f "${_STATE_DIR}/select.json" ]
+    _run_tick
+    assert_success
+    _assert_logged "gwt spawn --wt-name issue-11"
+}
+
+@test "issue_watcher_cron: an unwritable state dir does not stop the dispatch" {
+    _two_repo_fixture
+    mkdir -p "${_STATE_DIR}"
+    chmod 500 "${_STATE_DIR}"
+    _run_tick
+    assert_success
+    _assert_logged "gwt spawn --wt-name issue-11"
+}
+
+@test "issue_watcher_cron: --dry-run does not advance the cursor" {
+    _two_repo_fixture
+    _run_tick -- --dry-run
+    assert_success
+    [ ! -f "${_STATE_DIR}/select.json" ]
+}
+
+# ---------------------------------------------------------------------------
+# Worktree collection (issue #1453 D-4)
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: a closed issue's idle worktree is collected" {
+    _add_worktree 21
+    _run_tick "GH_CLOSED_ISSUES=21"
+    assert_success
+    assert_output --partial "Collected worktree"
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    refute_output --partial "wt/issue-21/"
+}
+
+@test "issue_watcher_cron: an open issue's worktree is left alone" {
+    _add_worktree 21
+    _run_tick
+    assert_success
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    assert_output --partial "wt/issue-21/"
+}
+
+@test "issue_watcher_cron: a closed issue whose session is still live is left alone" {
+    _add_worktree 21
+    _set_live_agents "$(_worktree_path 21)"
+    _run_tick "GH_CLOSED_ISSUES=21"
+    assert_success
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    assert_output --partial "wt/issue-21/"
+}
+
+@test "issue_watcher_cron: an unreadable issue state leaves the worktree in place" {
+    _add_worktree 21
+    _run_tick "GH_ISSUE_VIEW_FAIL=1"
+    assert_success
+    assert_output --partial "leaving its worktree in place"
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    assert_output --partial "wt/issue-21/"
+}
+
+@test "issue_watcher_cron: a failed collection warns and the tick continues" {
+    _add_worktree 21
+    # git refuses to remove a working tree whose .git link is gone, so this is a
+    # real removal failure rather than a mocked one. Deleting the *admin*
+    # directory instead would drop the entry from `git worktree list` entirely,
+    # and there would be nothing left to fail on.
+    rm -f "$(_worktree_path 21)/.git"
+    _run_tick "GH_CLOSED_ISSUES=21"
+    assert_success
+    assert_output --partial "Could not remove worktree"
+    _assert_logged "gwt spawn --wt-name issue-11"
+}
+
+@test "issue_watcher_cron: collection runs before the dispatch it frees room for" {
+    # Ordering matters twice over: the room it frees is usable in the same tick,
+    # and a collection failure must not be able to hold up a dispatch.
+    _add_worktree 21
+    _run_tick "GH_CLOSED_ISSUES=21"
+    assert_success
+    local _collected="${output%%Collected worktree*}"
+    local _dispatched="${output%%dispatched*}"
+    [ "${#_collected}" -lt "${#_dispatched}" ]
+}
+
+@test "issue_watcher_cron: --dry-run collects nothing" {
+    _add_worktree 21
+    _run_tick "GH_CLOSED_ISSUES=21" -- --dry-run
+    assert_success
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    assert_output --partial "wt/issue-21/"
+}
+
+# ---------------------------------------------------------------------------
 # Read-only on issues
 # ---------------------------------------------------------------------------
 
@@ -841,16 +1254,21 @@ _hold_lock() {
     _refute_logged "gh issue comment"
     _refute_logged "gh issue edit"
     _refute_logged "gh issue close"
-    run grep -E '^gh (issue|api graphql -f query=mutation)' "${_LOG}"
+    # `issue view` is a read and is expected; every other `gh issue` verb is a
+    # write, and so is a graphql mutation.
+    run grep -E '^gh issue [a-z-]+' "${_LOG}"
+    refute_output --regexp '^gh issue (comment|edit|close|reopen|create|delete|lock|unlock|pin|unpin|transfer|develop)'
+    run grep -E '^gh api graphql -f query=mutation' "${_LOG}"
     assert_failure
 }
 
-@test "issue_watcher_cron: only search and graphql reach gh" {
+@test "issue_watcher_cron: only the four read calls reach gh" {
+    _add_worktree 11
     _run_tick
     assert_success
-    run grep -cE '^gh (search issues|api graphql)' "${_LOG}"
+    run grep -cE '^gh (search issues|pr list|issue view|api graphql)' "${_LOG}"
     assert_success
-    run grep -vE '^gh (search issues|api graphql)' "${_LOG}"
+    run grep -vE '^gh (search issues|pr list|issue view|api graphql)' "${_LOG}"
     refute_output --partial "gh "
 }
 
@@ -1016,11 +1434,11 @@ _hold_lock() {
 @test "issue_watcher_cron: the lock is released so the next tick runs" {
     _run_tick
     assert_success
-    _add_worktree 12
+    : >"${_LOG}"
     _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
     _run_tick
     assert_success
-    assert_output --partial "worktree already exists"
+    _assert_logged "gwt spawn --wt-name issue-12"
 }
 
 @test "issue_watcher_cron: missing flock degrades to a warning, not a failure" {
@@ -1087,7 +1505,7 @@ _hold_lock() {
       {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
     ]'
-    _run_tick
+    _run_tick "IW_DISPATCH_PER_TICK=2"
     assert_success
     # Two dispatches, both carrying the same routing.
     [ "$(_log_count '--env CLAUDE_CONFIG_DIR=')" -ge 2 ]
@@ -1242,7 +1660,7 @@ _hold_lock() {
       {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
     ]'
-    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle"
+    _run_tick "IW_DISPATCH_PER_TICK=3" "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle"
     assert_failure
     # Two strikes shut the gate, so the third issue is never attempted.
     _refute_logged "gwt spawn --wt-name issue-13"
