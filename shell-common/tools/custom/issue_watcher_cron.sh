@@ -390,6 +390,9 @@ _iw_blocked_by_open() {
 
     # The $owner/$name/$number here are GraphQL variables bound by -F below,
     # not shell parameters — single quotes are exactly right.
+    # Variables: $owner String!, $name String!, $number Int!
+    # `-F number=` is what makes the Int! bind an integer; `-f` would send the
+    # string "1440" and the server would reject it (issue #395).
     # shellcheck disable=SC2016
     _json=$(GH_HOST="${_host}" gh api graphql \
         -f query='query($owner:String!,$name:String!,$number:Int!){
