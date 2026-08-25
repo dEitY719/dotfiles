@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """Claude Code Stop hook: harness-level guard for /gh-issue-flow early-stop (issue #383).
 
-Reads a Stop event JSON from stdin, parses the conversation transcript, and
-emits a `block` decision when the model tries to end its turn while a
-gh-issue-flow chain is still in progress (6 sub-skills + Step 3 report).
+Reads a `Stop` or `SubagentStop` event JSON from stdin, parses the
+conversation transcript, and emits a `block` decision when the model tries
+to end its turn while a gh-issue-flow chain is still in progress (6
+sub-skills + Step 3 report).
+
+Registered on BOTH turn-ending events (issue #1434): a subagent ending its
+turn fires `SubagentStop`, never `Stop`, so an unattended `gh:issue-flow`
+dispatched inside a subagent (#1389) would otherwise run with the harness
+layer of the three-layer guard entirely absent.
 
 Failure mode being mitigated: the model self-authors a markdown success
 report between Skill() calls in Step 2 of gh-issue-flow and treats that
@@ -13,7 +19,11 @@ are not enough — the harness must mechanically force continuation.
 
 Safety rails (each is critical — never accidentally trap the user):
   - Empty / unreadable / malformed stdin → exit 0 (allow stop).
-  - Missing or unreadable transcript_path → exit 0.
+  - Missing or unreadable transcript path → exit 0. On `SubagentStop` the
+    *subagent's own* `agent_transcript_path` is preferred over the parent
+    session's `transcript_path`, and a chosen-but-unreadable path never
+    falls back to the other key (measured, issue #1434 — see
+    `_resolve_transcript_path`).
   - `stop_hook_active == True` → exit 0 (we already blocked once in this
     chain; bowing out prevents an infinite Stop→block→Stop loop).
   - No gh-issue-flow boundary in the transcript → exit 0 (not our flow).
@@ -715,6 +725,34 @@ def _next_step_label(seen: list[str]) -> str:
     return f"{STEP_LABELS[next_idx]} — Skill({canonical[next_idx]})"
 
 
+def _resolve_transcript_path(event: dict[str, Any]) -> tuple[str | None, str]:
+    """Pick the transcript this event is really about (issue #1434).
+
+    `SubagentStop` carries BOTH keys: `transcript_path` is the PARENT
+    session's transcript and `agent_transcript_path` is the subagent's own
+    (measured, issue #1434). The subagent's is the one whose turn is ending,
+    so it wins whenever present. `Stop` events carry only `transcript_path`.
+
+    Returns `(path, source_key)`, or `(None, "")` when neither key holds a
+    non-empty string. The source key is returned so the L1 trace can name
+    which transcript the decision was made from — the difference between
+    "the guard is a no-op" and "the guard read the wrong session" is
+    otherwise invisible in a log.
+
+    Deliberately NOT a fallback chain on readability: `main()` fails open if
+    the *chosen* path does not exist rather than retrying the other key. A
+    subagent whose transcript is unreadable must never be judged by its
+    parent's flow state — the parent session can hold a half-finished flow
+    that has nothing to do with this subagent, and using it would block an
+    unrelated turn.
+    """
+    for key in ("agent_transcript_path", "transcript_path"):
+        value = event.get(key)
+        if isinstance(value, str) and value:
+            return value, key
+    return None, ""
+
+
 def main() -> int:
     raw = sys.stdin.read()
     if not raw.strip():
@@ -729,12 +767,15 @@ def main() -> int:
     if event.get("stop_hook_active"):
         return _allow("stop_hook_active=True (already blocked once)")
 
-    transcript_path = event.get("transcript_path")
-    if not isinstance(transcript_path, str) or not transcript_path:
+    transcript_path, transcript_source = _resolve_transcript_path(event)
+    if transcript_path is None:
         return _allow("missing transcript_path")
+    _trace(f"transcript_source={transcript_source} transcript_path={transcript_path}", layer="L1")
     p = Path(transcript_path)
     if not p.is_file():
-        return _allow(f"transcript file not found: {transcript_path}")
+        # No fallback to the other key on purpose (#1434) — why:
+        # `_resolve_transcript_path`.
+        return _allow(f"transcript file not found: {transcript_path} (transcript_source={transcript_source})")
 
     messages = _load_transcript(p)
     if not messages:

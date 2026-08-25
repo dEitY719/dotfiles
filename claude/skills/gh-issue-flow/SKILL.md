@@ -27,10 +27,10 @@ metadata:
 
 **Recurring failure mode: early-stop after Step 2.x.** Three layered guards
 prevent it — (1) `--no-next-hint` on Step 2.1, (2) zero conversational text
-between the six `Skill()` calls in Step 2, (3) the harness Stop hook
-(`claude/hooks/gh_issue_flow_stop_guard.py`). **Do not remove any of them.**
-Only prose is forbidden between the calls; the gate itself is delegated to
-Step 2.4. Failure history (#333, #383): `references/critical-contract.md`.
+between the six `Skill()` calls in Step 2, (3) the harness guard on `Stop` +
+`SubagentStop` (`claude/hooks/gh_issue_flow_stop_guard.py`, #1434). **Do not
+remove any of them.** Only prose is forbidden between the calls; the gate is
+delegated to Step 2.4. History (#333, #383): `references/critical-contract.md`.
 
 ## Help
 
