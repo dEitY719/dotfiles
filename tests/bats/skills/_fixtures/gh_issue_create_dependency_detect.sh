@@ -87,25 +87,45 @@ gh_issue_create_detect_deps() {
 #   $3 — addBlockedBy exit status ("0" = applied); ignored when either id
 #        is empty, because the mutation is never reached in that case
 #   $4 — dep issue number, for the warning line
+#   $5 — stderr captured from whichever GraphQL call failed ("" when the
+#        call said nothing). Either call can be the failing one: a
+#        non-existent number is rejected by the id lookup, an argument
+#        mismatch by the mutation, so both are captured upstream.
 #
 # Mirrors the Step 4.5 decision in references/dependency-detect.md: an
 # empty id is treated exactly like a rejected mutation, so a GraphQL null
 # (deleted issue, replication lag on a just-created one, no read access)
 # can never be handed to addBlockedBy as a literal "null".
 #
+# $5's first line is appended to the warning as an indented `원인:` line
+# (#1458). Discarding it made every cause — permission, network, bad
+# number, argument-schema mismatch — collapse into one indistinguishable
+# sentence, which is why #1445 stayed unfixed: the server was naming the
+# defect in plain text and nothing ever printed it. Only the first line
+# is carried; the rest would swamp the Step 5 report and adds nothing to
+# the permanent-vs-transient split.
+#
 # Stdout: nothing when the link was applied.
-# Stderr: the single NF-1 warning line otherwise.
+# Stderr: the NF-1 warning otherwise — one line, plus the 원인 line when a
+#         cause was captured.
 # Returns: 0 always — Step 4.5 never aborts, the issue already exists.
 gh_issue_create_dep_link_outcome() {
     _new_id="$1"
     _dep_id="$2"
     _mutation_rc="$3"
     _dep_num="$4"
+    _err="$5"
 
     if [ -n "$_new_id" ] && [ -n "$_dep_id" ] && [ "$_mutation_rc" = "0" ]; then
         return 0
     fi
-    printf '[WARN] Blocked by #%s 링크 실패 — GH UI에서 수동 추가 필요\n' \
-        "$_dep_num" >&2
+
+    _w="[WARN] Blocked by #${_dep_num} 링크 실패 — GH UI에서 수동 추가 필요"
+    _cause=$(printf '%s\n' "$_err" | head -1)
+    if [ -n "$_cause" ]; then
+        _w="${_w}
+    원인: ${_cause}"
+    fi
+    printf '%s\n' "$_w" >&2
     return 0
 }

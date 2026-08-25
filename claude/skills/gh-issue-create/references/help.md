@@ -72,7 +72,8 @@
    links each one with GitHub's native `addBlockedBy` so the sidebar shows
    `Blocked by #13`. Plain mentions (`#13 참고`) never link; cross-repo
    `owner/repo#13` is warned and skipped in v1; a failed link is non-fatal
-   and surfaces as one warning line. Disabled by `--no-auto-deps`. See
+   and surfaces as one warning line carrying the server's own first line of
+   error as `원인:`. Disabled by `--no-auto-deps`. See
    `references/dependency-detect.md`.
 7. Creates the issue via
    `GH_HOST="$TARGET_HOST" gh issue create --repo "$TARGET_REPO"` using a
@@ -138,4 +139,6 @@ A 200-line issue is fine if the conversation warranted it.
 - `addBlockedBy` fails (permission, network, non-existent issue number,
   or a schema mismatch on the mutation's arguments) → the issue stays
   created; one `[WARN] Blocked by #N 링크 실패` line is appended to the
-  report. Never aborts, never retries.
+  report, followed by an indented `원인:` line carrying the first line of
+  the GraphQL rejection (#1458) — that is what tells those four causes
+  apart. Never aborts, never retries.
