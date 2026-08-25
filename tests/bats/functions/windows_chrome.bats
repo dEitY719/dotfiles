@@ -140,10 +140,8 @@ _stub_exe() {
     mkdir -p "$(dirname "$exe")"
     : > "$exe"
     _helper_bash '_windows_chrome_exe'
+    # A missing helper exits 127, which assert_failure alone accepts (#1419).
     assert_failure
-    # Pair the status assertion with an output one (as at the two
-    # assert_failure cases above): a missing helper makes the call exit 127
-    # with a "command not found" message, which assert_failure alone accepts.
     assert_output ""
 }
 
