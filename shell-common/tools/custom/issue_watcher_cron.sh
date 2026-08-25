@@ -73,11 +73,17 @@ _IW_MAX_ATTEMPTS="3"
 # window has to be wider than the cap.
 _IW_SEARCH_LIMIT="50"
 
-# herdr agent naming. `iw-<issue-number>`; the tick picks these itself now, so
-# unlike pre-#1440 it can address the dispatched panes afterwards.
+# herdr agent naming. The tick picks these itself now, so unlike pre-#1440 it
+# can address the dispatched panes afterwards — which is also why the name must
+# be unique across every watched repo: `iw-<number>` alone collides the moment
+# two repos both have an issue #11, and herdr would route the second dispatch's
+# prompt at the first one's pane (PR #1447 agy review). See _iw_agent_name.
 _IW_AGENT_PREFIX="iw-"
 # 5분 주기보다 여유 있게 4분 — cron tick 이 겹치지 않게 한다.
 _IW_TIMEOUT_MS="240000"
+# Gap between the post-start idle checks (see _iw_wait_for_idle). Overridable
+# so the bats suite does not pay ~5s of real sleep per cold-agent path.
+_IW_IDLE_POLL_SLEEP="${IW_IDLE_POLL_SLEEP:-0.5}"
 
 # Rate-limit gate (issue #1436). Rationale for each value sits with the gate
 # functions below; the values themselves live here with the rest of the SSOT.
@@ -125,8 +131,13 @@ _iw_json_value() {
 # different parents (`.result.pane` vs `.result.root_pane`), and the CLI is
 # free to add another. Keying on the leaf name rather than the path keeps this
 # working across both shapes without a per-command filter table.
+# The key travels as a jq *argument*, never as interpolated program text: a
+# caller-supplied string spliced into the filter would be a jq syntax error at
+# best and arbitrary jq at worst (PR #1447 agy review).
 _iw_json_first() {
-    _iw_json_value "[.. | objects | .$1? // empty] | map(select(type == \"string\")) | first"
+    jq -r --arg k "$1" \
+        '[.. | objects | .[$k]? // empty] | map(select(type == "string")) | first // empty' \
+        2>/dev/null || return 0
 }
 
 # Echo epoch seconds, or nothing when the clock is unreadable.
@@ -299,11 +310,24 @@ _iw_resolve_config_dir() {
 # joined by US (0x1f) — a label can contain a comma or a space, so neither is
 # usable as the separator.
 _iw_search_issues() {
-    local _host _json
+    local _host _json _qualifiers
 
     for _host in $(_iw_watch_hosts); do
-        _json=$(GH_HOST="${_host}" gh search issues \
+        # `repo:` qualifiers, so the result window covers the watched repos and
+        # nothing else. Without them `--limit` truncates *every* assigned issue
+        # on the account, and under gh's default best-match ordering a watched
+        # repo can sit outside the window indefinitely — starvation with no
+        # symptom (PR #1447 codex/agy review). `--sort updated` then makes the
+        # truncation deterministic instead of relevance-ranked.
+        _qualifiers=$(_iw_watch_list |
+            awk -F "${_IW_TAB}" -v h="${_host}" '$3 == h { printf "repo:%s ", $1 }')
+        [ -n "${_qualifiers}" ] || continue
+
+        # Word splitting is the point: each qualifier is its own argument.
+        # shellcheck disable=SC2086
+        _json=$(GH_HOST="${_host}" gh search issues ${_qualifiers} \
             --assignee @me --state open \
+            --sort updated --order desc \
             --json number,repository,labels \
             --limit "${_IW_SEARCH_LIMIT}" 2>/dev/null) || {
             ux_warning "gh search issues failed on ${_host} — skipping that host this tick." >&2
@@ -354,11 +378,23 @@ _iw_excluded_by_label() {
 # `gwt spawn --wt-name issue-<n>` always branches `wt/issue-<n>/<index>`, so
 # the branch is what identifies the worktree; the directory name carries a
 # project prefix this script would otherwise have to reconstruct.
+#
+# The *highest* index wins, not the first listed. A cleanup that failed to
+# remove `wt/issue-<n>/1` leaves the next spawn creating `/2`, and handing the
+# tab the stale `/1` path would open the pane on the wrong worktree. The house
+# helper `_gh_pr_approve_locate_own_worktree` picks the highest index for this
+# same reason.
 _iw_worktree_for_issue() {
     git -C "$1" worktree list --porcelain 2>/dev/null |
         awk -v pat="^branch refs/heads/wt/issue-$2/" '
             /^worktree / { p = substr($0, 10) }
-            $0 ~ pat     { print p; exit }
+            $0 ~ pat {
+                n = $0
+                sub(pat, "", n)
+                if (n ~ /^[0-9]+$/ && n + 0 >= best) { best = n + 0; bestp = p }
+                else if (bestp == "") { bestp = p }
+            }
+            END { if (bestp != "") print bestp }
         '
 }
 
@@ -411,7 +447,10 @@ _iw_blocked_by_open() {
 _iw_collect_candidates() {
     local _repo _number _labels _path _host _found=0
 
-    while IFS="${_IW_TAB}" read -r _repo _number _labels; do
+    # fd 3, not stdin: the loop body calls `gh api graphql`, which reads stdin
+    # and would consume the rest of the search results, truncating the candidate
+    # set with no error (PR #1447 agy review).
+    while IFS="${_IW_TAB}" read -r _repo _number _labels <&3; do
         if [ -z "${_repo}" ] || [ -z "${_number}" ]; then
             continue
         fi
@@ -446,7 +485,7 @@ _iw_collect_candidates() {
 
         _found=$((_found + 1))
         [ "${_found}" -lt "${_IW_MAX_PER_CYCLE}" ] || break
-    done <<EOF
+    done 3<<EOF
 $(_iw_search_issues)
 EOF
 }
@@ -517,6 +556,31 @@ _iw_herdr_create() {
     herdr "$@" 2>/dev/null
 }
 
+# Echo the herdr workspace label for <repo> at <path>.
+#
+# The directory basename is the label users already see (`dotfiles`,
+# `agent-toolbox`), so it stays the default — but only while it identifies one
+# repo. Two watched checkouts whose leaf directory names collide would
+# otherwise be merged onto a single workspace, and the second repo's tabs would
+# open inside the first repo's (PR #1447 codex/agy review). When the watch list
+# contains such a collision, both sides fall back to the unambiguous slug.
+_iw_workspace_label() {
+    local _repo="$1" _path="$2" _base _count
+
+    _base=$(basename "${_path}")
+    _count=$(_iw_watch_list |
+        awk -F "${_IW_TAB}" -v b="${_base}" '
+            { n = split($2, parts, "/"); if (parts[n] == b) c++ }
+            END { print c + 0 }
+        ')
+
+    if [ "${_count}" -le 1 ]; then
+        printf '%s' "${_base}"
+    else
+        printf '%s' "${_repo}"
+    fi
+}
+
 # Echo the workspace id whose label is <1>, creating it against cwd <2> when no
 # such workspace exists. Label-matched rather than persisted: the herdr server
 # is the SSOT for what is open, and a state file would only drift from it.
@@ -551,6 +615,14 @@ _iw_tab_create() {
     printf '%s\t%s' "${_pane}" "${_tab}"
 }
 
+# Echo the herdr agent name for <owner/repo> issue <number>:
+# `iw-<owner>-<repo>-<number>`, with anything outside herdr's safe name charset
+# folded to `-`.
+_iw_agent_name() {
+    printf '%s%s-%s' "${_IW_AGENT_PREFIX}" \
+        "$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-')" "$2"
+}
+
 # Echo the agent status (idle|working|blocked|done|unknown). Returns non-zero
 # when herdr itself rejects the query (agent missing / pane closed).
 _iw_agent_status() {
@@ -565,6 +637,39 @@ _iw_agent_status() {
 _iw_agent_start() {
     herdr agent start "$1" --kind claude --pane "$2" \
         -- --dangerously-skip-permissions >/dev/null 2>&1
+}
+
+# Wait for a freshly started agent to report idle before prompting it.
+# `herdr agent start` only confirms the pane looks interactive — a claude
+# process can have drawn its prompt box before its key-input loop accepts
+# Enter, so the command is typed but never submitted and herdr's fixed 5s stall
+# check fires `agent_prompt_stalled` (issue #1399). Pre-#1440 the resident
+# watcher pane got this grace; every dispatched pane needs it now, because each
+# one is cold (PR #1447 codex review). Capped at ~5s (10 checks, 0.5s apart):
+# far below the 5-minute tick interval, and hitting the cap still dispatches
+# because the stall retry in _iw_prompt_issue is the second line of defence.
+_iw_wait_for_idle() {
+    local _agent="$1" _i=0 _status _get_failed=0
+
+    while [ "${_i}" -lt 10 ]; do
+        if _status=$(_iw_agent_status "${_agent}"); then
+            [ "${_status}" != "idle" ] || return 0
+        else
+            _get_failed=$((_get_failed + 1))
+        fi
+        _i=$((_i + 1))
+        [ "${_i}" -lt 10 ] || break
+        [ "${_IW_IDLE_POLL_SLEEP}" = "0" ] || sleep "${_IW_IDLE_POLL_SLEEP}"
+    done
+
+    # Health-check failures (agent missing / pane closed) and a merely slow
+    # `starting` pane both land here — surface the failure count so a genuinely
+    # gone agent does not read as "just slow" (PR #1400 codex review).
+    if [ "${_get_failed}" -gt 0 ]; then
+        ux_warning "Agent ${_agent} did not report idle within ~5s (${_get_failed}/10 health-check failures) — dispatching anyway."
+    else
+        ux_warning "Agent ${_agent} did not report idle within ~5s — dispatching anyway."
+    fi
 }
 
 # Echo herdr's JSON response on stdout; the exit code is herdr's own.
@@ -632,15 +737,19 @@ _iw_process_issue() {
     local _repo="$1" _number="$2" _path="$3"
     local _attempt=1 _agent _label _wt="" _ws="" _pane_tab="" _pane="" _tab=""
 
-    _agent="${_IW_AGENT_PREFIX}${_number}"
-    _label=$(basename "${_path}")
-    # Stale from the previous issue otherwise, and the rate-limit gate reads it
-    # to decide whether this failure was quota-shaped.
-    _IW_DISPATCH_ERROR_CODE=""
+    _agent=$(_iw_agent_name "${_repo}" "${_number}")
+    _label=$(_iw_workspace_label "${_repo}" "${_path}")
 
     while [ "${_attempt}" -le "${_IW_MAX_ATTEMPTS}" ]; do
         _wt=""
         _tab=""
+        # Cleared per *attempt*, not per issue. The rate-limit gate reads this
+        # to decide whether the failure was quota-shaped; if attempt 1 stalled
+        # and attempt 2 died earlier (at `tab create`, which never touches it),
+        # a per-issue reset would let attempt 1's `agent_prompt_stalled` book a
+        # quota strike for what was actually a herdr outage — the exact
+        # misattribution PR #1439's classifier exists to prevent.
+        _IW_DISPATCH_ERROR_CODE=""
 
         if ! _wt=$(_iw_spawn_worktree "${_path}" "${_number}"); then
             ux_warning "Worktree spawn failed for ${_repo}#${_number} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
@@ -658,7 +767,7 @@ ${_pane_tab}
 EOF
             if ! _iw_agent_start "${_agent}" "${_pane}"; then
                 ux_warning "herdr agent start ${_agent} failed on pane ${_pane} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
-            elif _iw_prompt_issue "${_agent}" "${_number}"; then
+            elif _iw_wait_for_idle "${_agent}" && _iw_prompt_issue "${_agent}" "${_number}"; then
                 ux_success "${_repo}#${_number} dispatched (worktree ${_wt}, pane ${_pane})."
                 return 0
             fi
@@ -903,6 +1012,7 @@ _iw_usage() {
     ux_bullet "options"
     ux_bullet_sub "--cwd <PATH>   run the tick from PATH; relative watch-list paths resolve against it"
     ux_bullet_sub "--dry-run      print the issues this tick would dispatch, change nothing"
+    ux_bullet_sub "               (takes no lock and does not evaluate the rate-limit gate)"
     ux_bullet_sub "-h, --help, help   show this help"
     ux_bullet "cycle"
     ux_bullet_sub "gh search issues --assignee @me --state open   (one query per watched host)"
@@ -1013,6 +1123,28 @@ main() {
         exit 1
     fi
 
+    # The dry run answers ahead of both guards, and deliberately so. Taking the
+    # lock would make a dry run silently no-op while a real tick is mid-cycle —
+    # exactly when a human is most likely to be asking what the watcher sees —
+    # and evaluating the gate would *clear* an expired `rate-limit.json`, which
+    # is a state change in a mode documented as changing nothing
+    # (PR #1447 codex/agy review).
+    if [ "${_IW_DRY_RUN}" -eq 1 ]; then
+        _candidates=$(_iw_collect_candidates)
+        if [ -z "${_candidates}" ]; then
+            ux_info "No dispatchable issue this tick."
+            exit 0
+        fi
+        ux_success "Dry run — would dispatch:"
+        while IFS="${_IW_TAB}" read -r _repo _number _path _host <&3; do
+            [ -n "${_repo}" ] || continue
+            ux_bullet "${_repo}#${_number}  (${_path}, ${_host})"
+        done 3<<EOF
+${_candidates}
+EOF
+        exit 0
+    fi
+
     _iw_acquire_lock || exit 0
 
     # Before any worktree is created: a closed gate must cost nothing.
@@ -1022,17 +1154,6 @@ main() {
 
     if [ -z "${_candidates}" ]; then
         ux_info "No dispatchable issue this tick."
-        exit 0
-    fi
-
-    if [ "${_IW_DRY_RUN}" -eq 1 ]; then
-        ux_success "Dry run — would dispatch:"
-        while IFS="${_IW_TAB}" read -r _repo _number _path _host; do
-            [ -n "${_repo}" ] || continue
-            ux_bullet "${_repo}#${_number}  (${_path}, ${_host})"
-        done <<EOF
-${_candidates}
-EOF
         exit 0
     fi
 
@@ -1051,12 +1172,15 @@ EOF
         ;;
     esac
 
-    while IFS="${_IW_TAB}" read -r _repo _number _path _host; do
+    # fd 3, not stdin: the loop body runs `gh`, `herdr` and `gwt`, any of which
+    # may read stdin and would otherwise swallow the rest of the candidate list,
+    # silently shortening the cycle (PR #1447 agy review).
+    while IFS="${_IW_TAB}" read -r _repo _number _path _host <&3; do
         [ -n "${_repo}" ] || continue
 
         _rc=0
         _iw_process_issue "${_repo}" "${_number}" "${_path}" || _rc=$?
-        _iw_limit_record "${_rc}" "${_IW_AGENT_PREFIX}${_number}"
+        _iw_limit_record "${_rc}" "$(_iw_agent_name "${_repo}" "${_number}")"
 
         if [ "${_rc}" -eq 0 ]; then
             _dispatched=$((_dispatched + 1))
@@ -1068,7 +1192,7 @@ EOF
         # cycle — the remaining issues would burn their worktrees against the
         # same wall.
         _iw_limit_gate_check || break
-    done <<EOF
+    done 3<<EOF
 ${_candidates}
 EOF
 
