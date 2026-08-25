@@ -55,13 +55,7 @@ class TriggerDetector:
         self.clean_name = clean_name
         self.triggered = False
         self.finished = False
-        self._pending_tool: str | None = None
-        self._accumulated = ""
-
-    def _settle_pending(self) -> None:
-        if self._pending_tool and self.clean_name in self._accumulated:
-            self.triggered = True
-        self._pending_tool = None
+        self._in_probe_block = False
         self._accumulated = ""
 
     def feed(self, line: str) -> bool:
@@ -84,24 +78,21 @@ class TriggerDetector:
             if se_type == "content_block_start":
                 # A block that is neither Skill nor Read simply carries no
                 # verdict — it must not end the query (upstream returned False).
-                self._settle_pending()
                 cb = se.get("content_block", {})
-                if cb.get("type") == "tool_use" and cb.get("name", "") in ("Skill", "Read"):
-                    self._pending_tool = cb.get("name", "")
+                self._in_probe_block = cb.get("type") == "tool_use" and cb.get("name", "") in ("Skill", "Read")
+                self._accumulated = ""
 
-            elif se_type == "content_block_delta" and self._pending_tool:
+            elif se_type == "content_block_delta" and self._in_probe_block:
                 delta = se.get("delta", {})
                 if delta.get("type") == "input_json_delta":
                     self._accumulated += delta.get("partial_json", "")
                     if self.clean_name in self._accumulated:
                         self.triggered = True
-                        self.finished = True
 
             elif se_type == "content_block_stop":
-                self._settle_pending()
+                self._in_probe_block = False
 
             elif se_type == "message_stop":
-                self._settle_pending()
                 self.finished = True
 
         # Fallback: the full assistant message, which arrives after tool
@@ -118,7 +109,6 @@ class TriggerDetector:
                     self.triggered = True
 
         elif event_type == "result":
-            self._settle_pending()
             self.finished = True
 
         return self.triggered
@@ -127,10 +117,7 @@ class TriggerDetector:
 def detect_trigger(lines: Iterable[str], clean_name: str) -> bool:
     """Scan a whole `claude -p` stream and report whether the probe was invoked."""
     detector = TriggerDetector(clean_name)
-    for line in lines:
-        if detector.feed(line):
-            return True
-    return detector.triggered
+    return any(detector.feed(line) for line in lines)
 
 
 # --- LOCAL PATCH (dotfiles #1412, F-2) --------------------------------------
@@ -250,7 +237,9 @@ def run_single_query(
         # programmatic subprocess usage is safe.
         env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
 
-        stderr_buf = tempfile.TemporaryFile()  # a file, not a pipe: stderr can never fill and deadlock
+        # LOCAL PATCH (dotfiles #1412, F-2): a file, not a pipe — a pipe's
+        # stderr can fill and deadlock a reader that only drains stdout.
+        stderr_buf = tempfile.TemporaryFile()
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -280,21 +269,23 @@ def run_single_query(
                     break
                 buffer += chunk.decode("utf-8", errors="replace")
 
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    if detector.feed(line):
-                        return _outcome(True)
+                *lines, buffer = buffer.split("\n")
+                if any(detector.feed(line) for line in lines):
+                    return _outcome(True)
                 if detector.finished:
                     break
 
-            # Drain the tail. Upstream read `remaining` into the buffer and
-            # then broke out without parsing it — harmless while the first
-            # tool block decided the verdict, load-bearing now that it doesn't.
+            # LOCAL PATCH (dotfiles #1412, F-1): drain the tail. Upstream read
+            # `remaining` into the buffer and then broke out without parsing it
+            # — harmless while the first tool block decided the verdict,
+            # load-bearing now that it doesn't.
             for line in buffer.split("\n"):
-                if detector.feed(line):
-                    return _outcome(True)
+                detector.feed(line)
+            if detector.triggered:
+                return _outcome(True)
 
-            # An EOF immediately followed by exit must not read as a timeout.
+            # LOCAL PATCH (dotfiles #1412, F-2): an EOF immediately followed by
+            # exit must not read as a timeout.
             if process.poll() is None and not detector.finished:
                 try:
                     process.wait(timeout=1)
@@ -308,14 +299,10 @@ def run_single_query(
                 process.kill()
                 process.wait()
 
-        stderr_text = _read_stderr(stderr_buf)
-
-        if detector.triggered:
-            return _outcome(True)
         if timed_out:
-            return _outcome(False, f"claude -p exceeded the {timeout}s timeout: {stderr_text}".strip())
+            return _outcome(False, f"claude -p exceeded the {timeout}s timeout: {_read_stderr(stderr_buf)}".strip())
         if returncode:
-            return _outcome(False, f"claude -p exited {returncode}: {stderr_text}".strip())
+            return _outcome(False, f"claude -p exited {returncode}: {_read_stderr(stderr_buf)}".strip())
         return _outcome(False)
     finally:
         if stderr_buf is not None:
