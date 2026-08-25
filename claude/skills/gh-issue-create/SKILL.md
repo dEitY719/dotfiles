@@ -57,7 +57,7 @@ Skip entirely when `--no-auto-labels` **or** `DISCUSSION_MODE=1` is set (#619 F-
 
 ## Step 2.6: Dependency Auto-detect
 
-Skip entirely when `--no-auto-deps` **or** `DISCUSSION_MODE=1` is set (#1424 F-3). Otherwise scan the conversation for the F-1 선행-이슈 trigger phrases per `references/dependency-detect.md` — `#N 참고` 류 단순 언급은 제외(오탐 방지), `owner/repo#N` 은 v1 범위 밖이라 경고 후 스킵(NF-2). Stash the surviving numbers as `DEP_NUMS` for Step 4.5; detection itself writes nothing.
+Skip entirely when `--no-auto-deps` **or** `DISCUSSION_MODE=1` is set (#1424 F-3). Otherwise scan the conversation for the F-1 선행-이슈 trigger phrases per `references/dependency-detect.md` — `#N 참고` 류 단순 언급은 제외(오탐 방지), `owner/repo#N` 은 v1 범위 밖이라 경고 후 스킵(NF-2). Stash the surviving numbers as `DEP_NUMS` for Step 4.5; detection touches no GitHub state (its only outputs are `DEP_NUMS` + the NF-2 stderr line), so it is safe before the issue exists.
 
 ## Step 3: Draft the Issue Body
 

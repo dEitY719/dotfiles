@@ -35,11 +35,15 @@ forms lead it, and matching is case-insensitive:
 
 | Trigger | Example |
 |---|---|
-| `#N 완료 후` | `#13 완료 후에 진행` |
+| `#N (완료\|해결)(후\|뒤\|되면\|하고\|하면)` | `#13 완료 후에 진행`, `#13 완료되면`, `#13 해결 후` |
 | `#N 이후` | `#13 이후에 재확인` |
-| `선행 이슈: #N` | `선행 이슈: #13` (full-width `：` also matches) |
+| `선행 이슈 #N` | `선행 이슈: #13`, `선행이슈 #13` (colon optional, full-width `：` also matches) |
 | `depends on #N` | `This depends on #13` |
 | `blocked by #N` | `blocked by #13` |
+
+The 완료/해결 row enumerates conjugations rather than matching a loose
+`#N .* 후`: the reference and the trigger word must stay adjacent, or
+`#13 참고. 검토 후 진행` would link `#13` to an unrelated clause.
 
 A plain mention is **not** a trigger — `#13 참고`, `#13 관련`, and a bare
 `#13` all yield nothing. That asymmetry is the whole point: an auto-linked
@@ -60,8 +64,13 @@ dependency-detect: cross-repo dependency detected but not supported in v1 — sk
 ```
 
 Stash the surviving numbers (ascending, de-duped) as `DEP_NUMS` for Step 4.5.
-Detection alone never writes anything, so it is safe to run before the issue
-exists.
+Detection touches no GitHub state — its only outputs are `DEP_NUMS` and the
+NF-2 stderr line above — so it is safe to run before the issue exists.
+
+Detection ends in `grep`, which exits 1 when the conversation names no
+dependency at all. That is the common case, so the pipeline must absorb it:
+under a caller's `set -e` + `set -o pipefail` an unguarded exit 1 would abort
+the whole issue creation over "nothing to link".
 
 ## Step 4.5 — Linking (F-2)
 
@@ -70,30 +79,53 @@ runs here rather than inside Step 2.6. For each `N` in `DEP_NUMS`, resolve
 both node ids in one round trip (aliases), then mutate:
 
 ```bash
-# Variables: $owner String!, $name String!, $new Int!, $dep Int!
-IDS=$(GH_HOST="$TARGET_HOST" gh api graphql \
-    -f owner="${TARGET_REPO%%/*}" -f name="${TARGET_REPO##*/}" \
-    -F new="$NEW_NUM" -F dep="$N" \
-    -f query='
-      query($owner:String!, $name:String!, $new:Int!, $dep:Int!) {
-        repository(owner:$owner, name:$name) {
-          newIssue: issue(number:$new) { id }
-          depIssue: issue(number:$dep) { id }
-        }
-      }' --jq '.data.repository | "\(.newIssue.id) \(.depIssue.id)"') || IDS=""
-
-if [ -n "$IDS" ]; then
-    # Variables: $issueId ID!, $blockedById ID!
-    GH_HOST="$TARGET_HOST" gh api graphql \
-        -f issueId="${IDS% *}" -f blockedById="${IDS#* }" \
+DEP_WARNINGS=""
+for N in $DEP_NUMS; do
+    # Variables: $owner String!, $name String!, $new Int!, $dep Int!
+    # `// ""` on both ids is what keeps a GraphQL null out of the mutation:
+    # a missing issue resolves to null, and interpolating that would send the
+    # literal string "null" as an ID!.
+    IDS=$(GH_HOST="$TARGET_HOST" gh api graphql \
+        -f owner="${TARGET_REPO%%/*}" -f name="${TARGET_REPO##*/}" \
+        -F new="$NEW_NUM" -F dep="$N" \
         -f query='
-          mutation($issueId:ID!, $blockedById:ID!) {
-            addBlockedBy(input:{issueId:$issueId, blockedByIds:[$blockedById]}) {
-              issue { number }
+          query($owner:String!, $name:String!, $new:Int!, $dep:Int!) {
+            repository(owner:$owner, name:$name) {
+              newIssue: issue(number:$new) { id }
+              depIssue: issue(number:$dep) { id }
             }
-          }' >/dev/null || IDS=""
-fi
+          }' --jq '(.data.repository // {}) |
+                   "\(.newIssue.id // "") \(.depIssue.id // "")"') || IDS=""
+
+    _new_id="${IDS%% *}"
+    _dep_id="${IDS##* }"
+    _rc=1
+    if [ -n "$_new_id" ] && [ -n "$_dep_id" ]; then
+        # Variables: $issueId ID!, $blockedById ID!
+        GH_HOST="$TARGET_HOST" gh api graphql \
+            -f issueId="$_new_id" -f blockedById="$_dep_id" \
+            -f query='
+              mutation($issueId:ID!, $blockedById:ID!) {
+                addBlockedBy(input:{issueId:$issueId, blockedByIds:[$blockedById]}) {
+                  issue { number }
+                }
+              }' >/dev/null 2>&1 && _rc=0
+    fi
+
+    # NF-1: one warning per failed N, on stderr *and* stacked for Step 5.
+    # Emitting only to stderr would lose it — Step 5's report is the artifact
+    # the operator actually reads.
+    if [ "$_rc" -ne 0 ]; then
+        _w="[WARN] Blocked by #${N} 링크 실패 — GH UI에서 수동 추가 필요"
+        printf '%s\n' "$_w" >&2
+        DEP_WARNINGS="${DEP_WARNINGS}${_w}
+"
+    fi
+done
 ```
+
+`$DEP_WARNINGS` is what Step 5 prepends to its verdict line
+(`references/report-template.md`). An empty value means every `N` linked.
 
 Aliasing both lookups into one query keeps this at 2 round trips per `N`.
 Batching every `N` into a single `blockedByIds` list would cut it further,
@@ -109,8 +141,9 @@ query succeeds and returns ids for a stranger's issues.
 
 The issue already exists by the time Step 4.5 runs, so nothing here is
 allowed to abort. Any failure — missing permission, network error, a
-`DEP_NUMS` entry that does not exist, a rejected mutation — emits one stderr
-line and adds one line to the Step 5 report:
+`DEP_NUMS` entry that does not exist, a null node id, a rejected mutation,
+or a host whose schema has no `addBlockedBy` at all — takes the same path:
+one stderr line, one line stacked into `$DEP_WARNINGS` for the Step 5 report.
 
 ```
 [WARN] Blocked by #<N> 링크 실패 — GH UI에서 수동 추가 필요
@@ -118,6 +151,17 @@ line and adds one line to the Step 5 report:
 
 Never retry, never fall back to a label or a body trailer: a half-applied
 dependency the operator cannot see is worse than a visible warning.
+
+That one path is also why the availability claim above needs no capability
+probe. If a target's schema turns out not to expose `addBlockedBy`, the
+mutation is rejected and the operator gets the warning — the same outcome a
+probe would produce, minus a round trip on every run.
+
+Known non-error cause of that warning: GitHub's own replication lag. The new
+issue is seconds old when its node id is queried, and a read can miss it.
+The result is a warning, not a wrong link, and the fix stays manual — a retry
+loop here would contradict the never-retry rule above and delay the report
+for the one case the operator can resolve in two clicks.
 
 ## Out of v1 scope
 
@@ -128,8 +172,17 @@ dependency the operator cannot see is worse than a visible warning.
 
 ## Test fixture
 
-Detection is mirrored in
-`tests/bats/skills/_fixtures/gh_issue_create_dependency_detect.sh` and locked
-by `tests/bats/skills/gh_issue_create_dependency_detect.bats`. That fixture's
-header carries the sync rule for trigger-phrase changes. The GraphQL half is
-not fixtured.
+Detection **and** the Step 4.5 outcome classification are mirrored in
+`tests/bats/skills/_fixtures/gh_issue_create_dependency_detect.sh`, locked by
+`tests/bats/skills/gh_issue_create_dependency_detect.bats`. That fixture's
+header carries the sync rule for trigger-phrase changes.
+
+What the suite covers: the trigger matrix, the plain-mention negatives, the
+NF-2 cross-repo skip, `--no-auto-deps`, and every id/mutation state that
+produces (or suppresses) the NF-1 warning. A drift guard asserts that the
+reference regex printed in this doc is byte-identical to the fixture's, so
+editing one without the other turns the suite red.
+
+What it does not cover: the two `gh api graphql` invocations themselves —
+mocking `gh` would test the mock. Everything that decides what happens
+*around* them is fixtured, which is where the branching lives.
