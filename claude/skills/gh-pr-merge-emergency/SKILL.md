@@ -29,9 +29,9 @@ incident issue exist to make overuse visible.
 
 Record `START_TS=$(date +%s)` for Step 5 elapsed time. Positional: `<PR> <reason> [remote]`.
 
-- `PR` — required; omitted → `GH_HOST="$TARGET_HOST" gh pr view --json number` on current branch, else stop.
+- `remote` — default `origin`; bind `TARGET_REPO` + `TARGET_HOST` from that URL and export `GH_HOST` per `references/github-target.md` (#1403/#1407) **first**, before any `gh` call below; missing → `git remote -v` and stop.
+- `PR` — required; omitted → `GH_HOST="$TARGET_HOST" gh pr view --json number` on current branch, else stop. No `--repo` here: `gh` rejects it without a PR argument (`references/github-target.md` → "Exception").
 - `reason` — **required**, ≥10 chars, citing an incident/ticket ID or concrete user impact; vague (`"urgent"`, `"fix"`) → refuse. Examples: `references/help.md`.
-- `remote` — default `origin`; bind `TARGET_REPO` + `TARGET_HOST` from that URL and export `GH_HOST` per `references/github-target.md` (#1403/#1407); missing → `git remote -v` and stop.
 
 Capture `ME=$(GH_HOST="$TARGET_HOST" gh api user -q .login)`, `NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)`.
 

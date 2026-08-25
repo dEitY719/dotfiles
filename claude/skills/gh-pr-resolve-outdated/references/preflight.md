@@ -6,10 +6,15 @@ Positional args: `[pr-number] [remote]`, both optional.
   `TARGET_HOST` + `TARGET_REPO` from that one remote URL **before any `gh`
   call**, per `references/github-target.md` (#1403).
 - `pr-number` — if omitted, auto-detect via `GH_HOST="$TARGET_HOST" gh pr view
-  --repo "$TARGET_REPO" --json
-  number,headRefName,baseRefName,url,mergeable,mergeStateStatus` on the
+  --json number,headRefName,baseRefName,url,mergeable,mergeStateStatus` on the
   current branch. No PR → `[FAIL] no PR for current branch — pass PR#
-  explicitly` + exit 2.
+  explicitly` + exit 2. `--repo` is deliberately omitted **on this one call**:
+  `gh` requires an explicit PR argument whenever `--repo` is set (`argument
+  required when using the --repo flag`), which would defeat the branch
+  detection. The `GH_HOST=` prefix still pins the server and `gh` infers the
+  repo from the current checkout's remotes on that host — see
+  `references/github-target.md` → "Exception". Every later `gh pr view <N>`
+  passes a positional and keeps `--repo "$TARGET_REPO"`.
 - `gh` not authenticated → `[FAIL] gh CLI not authenticated — run gh
   auth login` + exit 5.
 

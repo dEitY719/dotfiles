@@ -53,13 +53,20 @@ class Colors:
     YELLOW = "\033[33m"
 
 
-# An executable `gh` call: a line that starts one (optionally after an
-# assignment / `$(` / `if` style prefix), not prose that merely names `gh`.
-# Mirrors the reproduction script in issue #1407 so the counts line up.
+# An executable `gh` call: one that starts a line or a `$(...)`, optionally
+# behind `VAR=val` assignments and/or a shell keyword (`if`, `if !`, `while`,
+# `elif`, a bare `!`). Not prose that merely names `gh`.
+#
+# The keyword branch was added after PR #1425 review (codex): `if ! gh ... ;
+# then` is a copy-pasteable executable shape this file's own comment already
+# claimed to cover, and without it an unpinned call in that form passed both
+# the checker and its test.
 GH_CALL_RE = re.compile(
     r"""
     (?:^|\$\()                 # start of line, or command substitution
     [ \t]*
+    (?:(?:if|elif|while|until)[ \t]+)?                   # shell keyword
+    (?:![ \t]*)?                                         # negation
     (?P<prefix>(?:[A-Za-z_][A-Za-z0-9_]*=\S*[ \t]+)*)   # VAR=val ... prefixes
     gh[ \t]+(?P<sub>[a-z][a-z-]*)                       # gh <sub-command>
     """,
@@ -67,7 +74,35 @@ GH_CALL_RE = re.compile(
 )
 
 # `gh` sub-commands that are not repo-scoped: `--repo` is not a valid flag.
-REPO_LESS_SUBCOMMANDS = frozenset({"gist", "auth", "config", "extension", "version", "alias", "status", "search"})
+# `search` is deliberately NOT here - `gh search issues|prs` does take
+# `-R, --repo` (PR #1425 review, agy), so exempting it would hide real calls.
+REPO_LESS_SUBCOMMANDS = frozenset({"gist", "auth", "config", "extension", "version", "alias", "status"})
+
+# Verbs whose synopsis is `gh pr <verb> [<number> | <url> | <branch>]` - the
+# positional is OPTIONAL, so omitting it means "read the PR off the current
+# branch", and in exactly that mode `gh` REFUSES `--repo`:
+#
+#     $ gh pr view --repo owner/repo --json number
+#     argument required when using the --repo flag
+#
+# So the contract inverts for these: host pinned, repo flag forbidden.
+# Deliberately excluded: `create` / `list` / `status` take no positional at all
+# and are correctly repo-scoped, and `close` / `reopen` / `checkout` require
+# theirs (`{...}`), so neither group can reach the branch-autodetect mode.
+# Taken from `gh pr <verb> --help` synopses, not guessed.
+PR_AUTODETECT_VERBS = frozenset({"view", "diff", "checks", "edit", "merge", "review", "comment", "ready"})
+# The leading `VAR=val ` / keyword prefix is skipped here because check_command
+# receives the command starting at the regex match, i.e. including that prefix.
+PR_VERB_RE = re.compile(
+    r"""
+    ^
+    (?:(?:if|elif|while|until)[ \t]+)?
+    (?:![ \t]*)?
+    (?:[A-Za-z_][A-Za-z0-9_]*=\S*[ \t]+)*
+    gh[ \t]+pr[ \t]+(?P<verb>[a-z-]+)[ \t]*(?P<rest>.*)$
+    """,
+    re.VERBOSE | re.DOTALL,
+)
 
 # Names the skills bind their resolved repo slug to (#1404 used two: gh-pr
 # says GH_REPO, the gh-issue-* family says TARGET_REPO; gh:relay-merge adds
@@ -121,9 +156,38 @@ def api_path_is_repo_scoped(command: str) -> bool | None:
     return None
 
 
+def first_command(command: str) -> str:
+    """Truncate at the first shell separator so a later piped `gh` call's
+    `--repo` cannot satisfy an earlier one (PR #1425 review, agy).
+
+    Separators are matched outside quotes only in the crude sense that a `|`
+    inside a `--jq` expression is normally quoted; a stray split there costs a
+    false positive at worst, never a false negative.
+    """
+    return re.split(r"[|;]|&&|\|\|", command, maxsplit=1)[0]
+
+
+def pr_verb_without_positional(command: str) -> bool:
+    """True for `gh pr <verb>` called with no PR argument (branch auto-detect).
+
+    The token after the verb decides it: a flag (`--json`) means no positional,
+    anything else (`5`, `"$PR_NUMBER"`, `<N>`) means one was supplied.
+    """
+    match = PR_VERB_RE.match(command.strip())
+    if not match:
+        return False
+    if match.group("verb") not in PR_AUTODETECT_VERBS:
+        return False
+    rest = match.group("rest").strip()
+    if not rest:
+        return True
+    return rest.startswith("-")
+
+
 def check_command(sub: str, prefix: str, command: str) -> list[str]:
     """Return the list of contract violations for one `gh` command."""
     problems: list[str] = []
+    command = first_command(command)
 
     if not HOST_PIN_RE.search(prefix) and not HOSTNAME_FLAG_RE.search(command):
         problems.append("missing GH_HOST= prefix (or --hostname)")
@@ -132,6 +196,15 @@ def check_command(sub: str, prefix: str, command: str) -> list[str]:
         scoped = api_path_is_repo_scoped(command)
         if scoped is False:
             problems.append("gh api uses a literal {owner}/{repo} placeholder instead of $TARGET_REPO")
+    elif sub == "pr" and pr_verb_without_positional(command):
+        # Inverted contract: gh rejects --repo when it has to read the PR off
+        # the current branch. Requiring it here is what broke four skills in
+        # the first cut of #1407 (PR #1425 review, agy).
+        if "--repo" in command:
+            problems.append(
+                "gh pr <verb> with no PR argument must NOT pass --repo "
+                "(gh: 'argument required when using the --repo flag'); host prefix only"
+            )
     elif sub not in REPO_LESS_SUBCOMMANDS:
         if "--repo" not in command and not REPO_VAR_RE.search(command):
             problems.append("missing --repo")

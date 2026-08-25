@@ -38,6 +38,27 @@ GH_HOST="$TARGET_HOST" gh <sub-command> ... --repo "$TARGET_REPO"
 into the path instead — `gh api "repos/$TARGET_REPO/..."`, never a literal
 `{owner}/{repo}`.
 
+## Exception — `gh pr <verb>` with no PR argument
+
+`gh pr view` (and any `gh pr <verb>` taking `[<number> | <url> | <branch>]`)
+refuses `--repo` unless a PR argument is given:
+
+```
+$ gh pr view --repo <owner>/<repo> --json number
+argument required when using the --repo flag
+```
+
+So the Step 1 auto-detect — the deliberately number-less `gh pr view` that reads
+the PR off the **current branch** — runs with the host prefix only:
+
+```bash
+GH_HOST="$TARGET_HOST" gh pr view --json number,...
+```
+
+That still pins the server; `gh` then infers the repo from the current
+checkout's remotes on that host. Every other call in this skill passes an
+explicit `<N>` and therefore keeps `--repo "$TARGET_REPO"`.
+
 ## Why
 
 `--repo <owner>/<repo>` carries no host, so a bare `gh` resolves that slug

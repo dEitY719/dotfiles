@@ -29,8 +29,9 @@ off), `--label-variant <input>` (override canonical label).
 
 - `remote` default `origin`. Missing → `git remote -v` and stop. Bind `TARGET_HOST` +
   `TARGET_REPO` from that one remote URL **before any `gh` call** per `references/github-target.md` (#1403).
-- `pr-number` omitted → auto-detect via `GH_HOST="$TARGET_HOST" gh pr view --repo
-  "$TARGET_REPO" --json number,state,headRefName`. No PR → stop. `--label-variant`
+- `pr-number` omitted → auto-detect via `GH_HOST="$TARGET_HOST" gh pr view --json
+  number,state,headRefName` — no `--repo`, `gh` rejects it without a PR argument
+  (`references/github-target.md` → "Exception"). No PR → stop. `--label-variant`
   normalized via `references/label-normalization.md`; unknown → fail-fast.
 
 State `OPEN` required. Hard preconditions (refuses the repo default branch ·

@@ -33,6 +33,27 @@ Host-only sub-commands (`gh api user`, `gh api graphql`) take the `GH_HOST=`
 prefix and no `--repo` — `gh api` has no such flag; a repo-scoped `gh api` puts
 the repo in the path instead (`repos/$TARGET_REPO/...`).
 
+## Exception — `gh pr <verb>` with no PR argument
+
+`gh pr view` (and any `gh pr <verb>` taking `[<number> | <url> | <branch>]`)
+refuses `--repo` unless a PR argument is given:
+
+```
+$ gh pr view --repo <owner>/<repo> --json number
+argument required when using the --repo flag
+```
+
+So the Step 1 auto-detect — the deliberately number-less `gh pr view` that reads
+the PR off the **current branch** — runs with the host prefix only:
+
+```bash
+GH_HOST="$TARGET_HOST" gh pr view --json number,...
+```
+
+That still pins the server; `gh` then infers the repo from the current
+checkout's remotes on that host. Every other call in this skill passes an
+explicit `<N>` and therefore keeps `--repo "$TARGET_REPO"`.
+
 ## Why
 
 A bare `gh` follows gh CLI's own `gh repo set-default` instead of git's
