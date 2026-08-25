@@ -243,6 +243,47 @@ _run_check() {
 
 # --- --apply --------------------------------------------------------------
 
+# Bare "+key"/"-key"/"~key" tokens (no explanatory text, unlike
+# _diff_marketplaces/_diff_plugins above) for embedding in a commit title.
+_changed_keys_marketplaces() {
+	local current_file="$1" target="$2" current
+	current=$(_read_json_or "$current_file" '{}')
+	jq -rn --argjson c "$current" --argjson t "$target" '
+        [ ($t | to_entries[] | select($c[.key] == null) | "+\(.key)"),
+          ($c | to_entries[] | select($t[.key] == null) | "-\(.key)"),
+          ($t | to_entries[] | select($c[.key] != null and $c[.key] != .value) | "~\(.key)") ]
+        | .[]
+    '
+}
+
+_changed_keys_plugins() {
+	local current_file="$1" target="$2" current
+	current=$(_read_json_or "$current_file" '{"plugins":[]}')
+	jq -rn --argjson c "$current" --argjson t "$target" '
+        ($c.plugins // []) as $cur |
+        [ ($t[]   | select(. as $x | ($cur | index($x)) | not) | "+\(.)"),
+          ($cur[] | select(. as $x | ($t   | index($x)) | not) | "-\(.)") ]
+        | .[]
+    '
+}
+
+# Build a commit title naming the changed entries so `git log --oneline`
+# distinguishes syncs instead of showing the same subject every time
+# (#1430). No items → bare $1. More than 4 → first 3 + "외 N개" so the
+# title never grows unbounded on a large SSOT re-sync.
+_build_sync_title() {
+	local base="$1"
+	shift
+	local n="$#"
+	if [ "$n" -eq 0 ]; then
+		printf '%s' "$base"
+	elif [ "$n" -gt 4 ]; then
+		printf '%s (%s %s %s 외 %d개)' "$base" "$1" "$2" "$3" "$((n - 3))"
+	else
+		printf '%s (%s)' "$base" "$*"
+	fi
+}
+
 # Write pretty (2-space) JSON to $1 only when the content actually differs,
 # so an unchanged file keeps its mtime and never triggers a no-op commit.
 _write_if_changed() {
@@ -288,20 +329,33 @@ _run_apply() {
 		exit 1
 	fi
 
-	local mp_pretty pl_pretty
+	local mp_pretty pl_pretty pub_title priv_title
+	local -a pub_changes=() priv_changes=()
+	while IFS= read -r _line; do [ -n "$_line" ] && pub_changes+=("$_line"); done \
+		< <(_changed_keys_marketplaces "$PUB_DIR/marketplaces.json" "$target_common")
+	while IFS= read -r _line; do [ -n "$_line" ] && pub_changes+=("$_line"); done \
+		< <(_changed_keys_plugins "$PUB_DIR/plugins.json" "$plugins_common")
+	pub_title=$(_build_sync_title "$SYNC_MSG" "${pub_changes[@]}")
+
 	mp_pretty=$(jq -n --argjson x "$target_common" '$x')
 	pl_pretty=$(jq -n --argjson p "$plugins_common" '{plugins: $p}')
 	_write_if_changed "$PUB_DIR/marketplaces.json" "$mp_pretty"
 	_write_if_changed "$PUB_DIR/plugins.json" "$pl_pretty"
-	_commit_if_changed "$MAIN_ROOT" "$SYNC_MSG" \
+	_commit_if_changed "$MAIN_ROOT" "$pub_title" \
 		"$PUB_DIR/marketplaces.json" "$PUB_DIR/plugins.json"
 
 	if [ "$COMPANY_ACTIVE" -eq 1 ]; then
+		while IFS= read -r _line; do [ -n "$_line" ] && priv_changes+=("$_line"); done \
+			< <(_changed_keys_marketplaces "$PRIV_DIR/marketplaces.json" "$target_private")
+		while IFS= read -r _line; do [ -n "$_line" ] && priv_changes+=("$_line"); done \
+			< <(_changed_keys_plugins "$PRIV_DIR/plugins.json" "$plugins_private")
+		priv_title=$(_build_sync_title "$SYNC_MSG" "${priv_changes[@]}")
+
 		mp_pretty=$(jq -n --argjson x "$target_private" '$x')
 		pl_pretty=$(jq -n --argjson p "$plugins_private" '{plugins: $p}')
 		_write_if_changed "$PRIV_DIR/marketplaces.json" "$mp_pretty"
 		_write_if_changed "$PRIV_DIR/plugins.json" "$pl_pretty"
-		_commit_if_changed "$PRIV_DIR" "$SYNC_MSG" \
+		_commit_if_changed "$PRIV_DIR" "$priv_title" \
 			"$PRIV_DIR/marketplaces.json" "$PRIV_DIR/plugins.json"
 	fi
 

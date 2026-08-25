@@ -396,10 +396,17 @@ _ahead_commits_are_pure_sync() {
 	local sha msg f match want pure=1
 	for sha in $(git -C "$repo_dir" rev-list "${origin_sha}..main" 2>/dev/null); do
 		msg=$(git -C "$repo_dir" log -1 --format=%s "$sha")
-		if [ "$msg" != "$SYNC_MSG" ]; then
+		# Prefix match, not exact: plugin-sync.sh/reconcile.sh now suffix the
+		# subject with the changed target(s) — e.g. "... sync manifest
+		# (ralph-loop)" (#1430) — so an exact-equality check would reject
+		# every real sync commit and silently stop this cleanup.
+		case "$msg" in
+		"$SYNC_MSG"*) ;;
+		*)
 			pure=0
 			break
-		fi
+			;;
+		esac
 		# `git show --name-only` is newline-delimited; read line-by-line (keeps
 		# the loop in this shell so `break 2` still escapes the outer rev-list
 		# loop) so a path containing spaces isn't word-split into false
