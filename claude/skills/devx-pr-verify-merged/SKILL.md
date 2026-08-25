@@ -1,10 +1,25 @@
 ---
 name: devx:pr-verify-merged
+# Check 16 WARN-band exception (388 chars, limit 250) — measured, not preferred.
+# #1411 shrank this description and dropped two distinct things: the positive
+# discriminator ("no running app", "dirty worktree") and the "Sister skill of
+# [[devx-pr-verify-live]]" boundary. #1417's trigger eval measured each half
+# separately on this skill's own eval set:
+#   before (pre-#1411)              90%  recall 8/10  reject 10/10
+#   after  (#1411, 244 chars)       75%  recall 7/10  reject  8/10   FAIL
+#   boundary restored only         75%  recall 5/10  reject 10/10   FAIL
+#   both restored (this, 388ch)     90%  recall 8/10  reject 10/10   PASS
+# The boundary sentence restores rejection; the positive discriminator restores
+# recall. Both are load-bearing, so this stays over 250 until a shorter wording
+# is measured to hold 90%. Procedure:
+# claude/skills/skill-check/references/trigger-eval-procedure.md
 description: >-
   Re-verify a merged PR in a fresh clone of its merge commit, proving a clean
-  checkout behaves as claimed — no app to run. Use for /devx:pr-verify-merged,
-  /devx-pr-verify-merged, "머지된 PR 신선한 클론에서 재검증", "clone 에서 검증해",
-  "verify from a clean clone".
+  checkout behaves as claimed — for repos with no running app, where post-merge
+  checks otherwise run in a dirty worktree. Use for /devx:pr-verify-merged,
+  "머지된 PR 신선한 클론에서 재검증", "worktree 말고 clone 에서 검증해",
+  "verify from a clean clone". Sister skill of devx:pr-verify-live
+  (live=serving-checkout, merged=fresh-clone).
 allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion, Agent
 metadata:
   model_recommendation:

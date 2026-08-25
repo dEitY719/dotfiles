@@ -1,0 +1,84 @@
+[
+  {
+    "query": "이슈 1417 번, 구현부터 커밋 PR 리뷰까지 내가 중간에 안 끼고 끝나게 해줘",
+    "should_trigger": true
+  },
+  {
+    "query": "워크트리 잡아놨고 브랜치도 올라와 있어. 이제 이슈 #1402 하나 통째로 진행해줘",
+    "should_trigger": true
+  },
+  {
+    "query": "take issue 1410 all the way to a PR that's already been reviewed — i'll only look at the final report",
+    "should_trigger": true
+  },
+  {
+    "query": "#1416 작업 시작해서 PR 올리고 리뷰까지 붙여줘. 실패하면 거기서 멈추고 알려줘",
+    "should_trigger": true
+  },
+  {
+    "query": "issue 1417 — not just the code, i want the commit, the PR and the review gate too",
+    "should_trigger": true
+  },
+  {
+    "query": "/gh:issue-flow 1417 upstream",
+    "should_trigger": true,
+    "note": "slash-literal: update if the skill is renamed (#1410)"
+  },
+  {
+    "query": "do the whole thing for issue 1405 against the company remote — every step should target that remote, not origin",
+    "should_trigger": true
+  },
+  {
+    "query": "이슈 하나 던져줄 테니 리뷰 코멘트 답변까지 알아서 다 돌려줘. 번호는 1411",
+    "should_trigger": true
+  },
+  {
+    "query": "/gh-issue-flow 1409 진행해줘",
+    "should_trigger": true,
+    "note": "slash-literal: update if the skill is renamed (#1410)"
+  },
+  {
+    "query": "#1268 이거 브랜치 위에 있는 상태고, 구현하고 PR 만들고 base 최신화까지 이어서 해줘",
+    "should_trigger": true
+  },
+  {
+    "query": "이슈 1417 코드만 짜줘. 커밋이랑 PR 은 내가 할게",
+    "should_trigger": false
+  },
+  {
+    "query": "이 spec 문서 가지고 계획부터 PR까지 자동으로 진행해줘",
+    "should_trigger": false
+  },
+  {
+    "query": "read issue 1410 and give me a structured summary",
+    "should_trigger": false
+  },
+  {
+    "query": "i've got three commits on this branch — open the PR",
+    "should_trigger": false
+  },
+  {
+    "query": "지금 변경사항 이슈 번호 붙여서 커밋해줘",
+    "should_trigger": false
+  },
+  {
+    "query": "이 대화 내용 이슈로 등록해줘",
+    "should_trigger": false
+  },
+  {
+    "query": "fan out every reviewer on PR 1416 in parallel",
+    "should_trigger": false
+  },
+  {
+    "query": "사내 PC 라 push 가 막혀 있는데, 이 이슈 구현해서 upstream 으로 릴레이해줘",
+    "should_trigger": false
+  },
+  {
+    "query": "issue 81 embeds a directive protocol — execute it end to end",
+    "should_trigger": false
+  },
+  {
+    "query": "이슈 1417 작업할 격리된 워크트리부터 만들어줘",
+    "should_trigger": false
+  }
+]

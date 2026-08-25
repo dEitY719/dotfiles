@@ -1,10 +1,21 @@
 ---
 name: devx:pr-verify-live
+# Check 16 WARN-band exception (379 chars, limit 250) — measured, not preferred.
+# #1411 shrank this description and dropped its "Sister skill of
+# [[devx-pr-verify-merged]]" boundary. #1417's trigger eval measured the cost:
+# rejection of devx:pr-verify-merged's queries fell 9/10 -> 5/10 and the score
+# fell 85% -> 65%, breaking the `after >= before - 5%p` contract. Restoring the
+# negative trigger below returned it to 10/10 / 90%. The sentence is load-bearing
+# for discrimination, so it stays over 250 until a shorter wording is measured to
+# hold the same rejection rate. Procedure:
+# claude/skills/skill-check/references/trigger-eval-procedure.md
 description: >-
   Verify a PR against the already-running dev app, proving the serving checkout
   really is the target commit. Use for /devx:pr-verify-live, /devx-pr-verify-live,
   "머지된 PR 라이브 검증", "실행 중인 앱에서 내 PR 직접 확인해",
-  "live-verify this PR". Read-only on source.
+  "live-verify this PR". Do NOT use when there is no app to run and the proof must
+  come from a fresh clone of the merge commit — that is devx:pr-verify-merged.
+  Read-only on source.
 allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion, Agent
 metadata:
   model_recommendation:

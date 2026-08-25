@@ -164,3 +164,10 @@ origin에 직접 push되지 않는다 — `./claude/plugin/publish-sync.sh`
   는 markdown 전용 (paste-verbatim 또는 사람 읽기). 직접 호출 패턴:
   `bash claude/skills/<name>/lib/<script>.sh`. 첫 사례:
   `gh-kanban-bootstrap` — 이전 `scripts/` 하위 진입점을 흡수해 단일 SSOT 로 통합.
+- `description:` 를 줄이거나 스킬을 리네임한 뒤에는 **트리거 정확도를 실측**한다
+  (#1417). `skill:check` Check 16 은 길이만 재므로 "짧으면서 동시에 안 걸리는"
+  상태를 통과시킨다. 표본 스킬은 `claude/skills/<name>/evals/trigger-eval.json`
+  (20쿼리, should-trigger 10 / should-not 10) 을 가지며 수동 하네스
+  `claude/tools/run-trigger-eval.sh` 로 before/after 를 비교한다 — 계약은
+  `after >= before - 5%p`. 절차·격리 4종·모델 고정 근거:
+  `claude/skills/skill-check/references/trigger-eval-procedure.md`.

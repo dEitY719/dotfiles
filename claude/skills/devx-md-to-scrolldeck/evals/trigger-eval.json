@@ -1,0 +1,84 @@
+[
+  {
+    "query": "/devx:md-to-scrolldeck docs/2026-q3-retro.md --slides 12",
+    "should_trigger": true,
+    "note": "slash-literal: update if the skill is renamed (#1410)"
+  },
+  {
+    "query": "/devx-md-to-scrolldeck 돌리기 전에 어떤 장면으로 쪼갤지 목차만 먼저 보고 싶어",
+    "should_trigger": true,
+    "note": "slash-literal: update if the skill is renamed (#1410)"
+  },
+  {
+    "query": "내일 본부장 보고인데 docs/roadmap.md 를 그대로 띄우긴 좀 그래. 스크롤 내리면 한 화면에 한 메시지씩 딱 걸리는 형태로 바꿔줄 수 있어?",
+    "should_trigger": true
+  },
+  {
+    "query": "이 회고 문서 섹션이 마흔 개쯤 되는데 다 보여줄 순 없어. 핵심 흐름만 추려서 넘겨보는 자료로 만들어줘.",
+    "should_trigger": true
+  },
+  {
+    "query": "reports/incident-0812.md 를 팀 공유용 발표 자료로 뽑아줘. 첨부 없이 파일 하나로 열리면 좋겠어.",
+    "should_trigger": true
+  },
+  {
+    "query": "turn docs/vision.md into one html file I can send my manager - one section per screen, arrow keys to move between them",
+    "should_trigger": true
+  },
+  {
+    "query": "our office network blocks the google fonts cdn, so build the deck with the font embedded this time",
+    "should_trigger": true
+  },
+  {
+    "query": "same document, but produce the deck in english for the overseas team",
+    "should_trigger": true
+  },
+  {
+    "query": "이 md 좀 시각화해줘. 대시보드 말고, 위에서 아래로 쭉 넘겨보는 발표용으로.",
+    "should_trigger": true
+  },
+  {
+    "query": "회의 때 화면으로 넘겨보고, 끝나면 그대로 인쇄해서 나눠줄 수 있는 형태였으면 해. 원본은 docs/plan.md 야.",
+    "should_trigger": true
+  },
+  {
+    "query": "이 지표들로 대시보드 하나 만들어줘.",
+    "should_trigger": false
+  },
+  {
+    "query": "가로로 넘기는 키노트 스타일 덱으로 만들어줘.",
+    "should_trigger": false
+  },
+  {
+    "query": "이 아키텍처 흐름을 excalidraw 다이어그램으로 그려줘.",
+    "should_trigger": false
+  },
+  {
+    "query": "make an infographic poster out of these numbers",
+    "should_trigger": false
+  },
+  {
+    "query": "generate release notes between v1.2 and v1.3 from the git history",
+    "should_trigger": false
+  },
+  {
+    "query": "이번 장애를 RCA 보고서로 정리해줘.",
+    "should_trigger": false
+  },
+  {
+    "query": "이 md 문서 문장 다듬고 오탈자 좀 고쳐줘.",
+    "should_trigger": false
+  },
+  {
+    "query": "plot this csv as a grouped bar chart",
+    "should_trigger": false
+  },
+  {
+    "query": "README.md 가 GitHub Pages 로 배포되게 설정해줘.",
+    "should_trigger": false
+  },
+  {
+    "query": "docs 밑 마크다운 파일들 훑어서 목차 인덱스 페이지 하나 만들어줘.",
+    "should_trigger": false
+  }
+]
