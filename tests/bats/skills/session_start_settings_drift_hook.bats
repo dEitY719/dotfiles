@@ -21,6 +21,8 @@
 #   8. internal + .statusLine drift but SSOT has none → only .hooks healed,
 #      message doesn't overclaim .statusLine was corrected
 #   9. non-internal + drift     → advisory only, live file NOT mutated
+#  10. internal + live missing a whole hook EVENT KEY → the new key is
+#      propagated from the real SSOT (#1434 SubagentStop rollout, PR #1438)
 
 load '../test_helper'
 
@@ -248,6 +250,51 @@ JSON
     # .statusLine left exactly as-is — nothing to heal it with.
     run jq -r '.statusLine.command' "$LIVE_DIR/settings.json"
     [ "$output" = "gateway-cli statusline" ]
+}
+
+# --- Rollout of a NEWLY ADDED hook event key (#1434, PR #1438 codex) ------
+# Issue #1434 registered gh_issue_flow_stop_guard.py on `SubagentStop` in the
+# tracked SSOT. Nothing pinned that an already-installed live settings.json —
+# which has `Stop` but no `SubagentStop` key at all — actually gets the new
+# event back. The healer assigns `.hooks` wholesale, so it does; this test is
+# what fails if it is ever narrowed to a fixed list of event names.
+#
+# Uses the REAL dotfiles SSOT (not the synthetic a.sh/b.sh one) on purpose:
+# the assertion then covers both halves of the rollout — the SSOT really
+# registers the guard on `SubagentStop`, and the healer really carries a brand
+# new event key over into the live file.
+
+@test "settings-drift: internal mode + live missing the whole SubagentStop key → new event key propagated from SSOT" {
+    printf 'internal' >"$HOME/.dotfiles-setup-mode"
+    cp "${_BATS_REAL_DOTFILES_ROOT}/claude/settings.json" "$SSOT"
+
+    # Live = the SSOT as it looked before #1434: `Stop` present, the whole
+    # `SubagentStop` event key absent.
+    jq 'del(.hooks.SubagentStop)' "$SSOT" >"$LIVE_DIR/settings.json"
+    run jq -r '.hooks | has("Stop")' "$LIVE_DIR/settings.json"
+    [ "$output" = "true" ]
+    run jq -r '.hooks | has("SubagentStop")' "$LIVE_DIR/settings.json"
+    [ "$output" = "false" ]
+
+    _run_hook
+    assert_success
+
+    ctx=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')
+    [[ "$ctx" == *"auto-corrected"* ]]
+    [[ "$ctx" == *".hooks"* ]]
+
+    # The newly added EVENT KEY exists in the healed live file and carries the
+    # guard command — a healer narrowed to a fixed event list would leave the
+    # key missing and fail right here.
+    run jq -r '.hooks | has("SubagentStop")' "$LIVE_DIR/settings.json"
+    [ "$output" = "true" ]
+    run jq -r '[.hooks.SubagentStop[].hooks[].command] | join(",")' "$LIVE_DIR/settings.json"
+    [[ "$output" == *"gh_issue_flow_stop_guard.py"* ]]
+
+    # Whole block matches the SSOT (no partial merge left behind).
+    run bash -c "jq -S -c '.hooks' '$LIVE_DIR/settings.json'"
+    ssot_hooks=$(jq -S -c '.hooks' "$SSOT")
+    [ "$output" = "$ssot_hooks" ]
 }
 
 @test "settings-drift: non-internal mode + drift → advisory only, live NOT mutated" {
