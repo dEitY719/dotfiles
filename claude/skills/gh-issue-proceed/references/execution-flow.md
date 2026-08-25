@@ -50,7 +50,7 @@ parse time** (before any step runs).
 | Verb | Implementation |
 |---|---|
 | `continue` | proceed to next step |
-| `file_issue: <template-key>` | `Skill(gh:issue-create, …)`. Template source: §decision_rules may define named inline templates; `<template-key>` references one by name. No match → minimal default `{title:"<auto>", body:"Filed by /gh:issue-proceed from #<N> step <s>", labels:[]}` |
+| `file_issue: <template-key>` | `Skill(gh:issue-create, "--no-ask …")` — `--no-ask` is mandatory (#1460): this skill runs unattended, so the Step 3.1 미결 게이트 must auto-decide instead of prompting. Template source: §decision_rules may define named inline templates; `<template-key>` references one by name. No match → minimal default `{title:"<auto>", body:"Filed by /gh:issue-proceed from #<N> step <s>", labels:[]}` |
 | `queue_doc_patch: <file>` | accumulate; flushed as a single commit + PR at end of loop |
 | `comment_on_self: <body>` | `gh issue comment <PROCEED_N>` |
 | `comment_on_other: <N> <body>` | `gh issue comment <N>` |
@@ -67,6 +67,7 @@ When the skill calls another skill, the payload is **always structured**
 
 ```
 Skill(gh:issue-create, prompt=<<STRUCTURED
+--no-ask
 TITLE: <...>
 BODY: <markdown>
 LABELS: <comma-list>
@@ -76,11 +77,17 @@ STRUCTURED)
 
 Callees that see `NO_INTERACTIVE: true` skip confirmation prompts.
 
-> **Follow-up (design Open-Q3, non-blocking for this skill):** `/gh:commit`,
-> `/gh:pr`, `/gh:issue-create` do not yet formally honor the `STRUCTURED` /
+**`gh:issue-create` 는 예외 — `--no-ask` 가 정본이다 (#1460).** 이 경계에서
+무인성의 근거는 `NO_INTERACTIVE` 필드가 아니라 `--no-ask` 플래그다. 수신측이
+실제로 구현·문서화·테스트한 규약이 그쪽이기 때문이다 (#1446 / PR #1455).
+플래그 없이 STRUCTURED 필드만 넘기면 Step 3.1 미결 게이트가 응답할 사람이
+없는 자리에서 확인을 기다린다. 이 verb 를 호출할 때 `--no-ask` 를 빼지 않는다.
+
+> **Follow-up (design Open-Q3, non-blocking for this skill):** `/gh:commit`
+> and `/gh:pr` do not yet formally honor the `STRUCTURED` /
 > `NO_INTERACTIVE` contract. Until they do, this skill passes the structured
 > block as the prompt and relies on each callee's existing
-> no-confirmation-by-design behavior (all three already create their
+> no-confirmation-by-design behavior (both already create their
 > artifact without an interactive prompt). Tracked as a separate issue;
 > it does not block `/gh:issue-proceed` shipping.
 
