@@ -285,9 +285,10 @@ def test_the_skill_under_evaluation_is_not_its_own_shadow(tmp_path, monkeypatch)
     assert found == []
 
 
-def _prepare_main_fixture(tmp_path, monkeypatch, claude_script: str) -> Path:
-    """Lay out a project root, a skill to evaluate, a same-named installed
-    skill that shadows it, and a `claude` stand-in. Returns the eval-set path."""
+def _prepare_shadowed_skill(tmp_path, monkeypatch) -> Path:
+    """Lay out a project root, the skill to evaluate, and a same-named installed
+    skill that shadows it; cwd and the config env point at them. Returns the
+    path of the skill under evaluation."""
     project = tmp_path / "project"
     (project / ".claude").mkdir(parents=True)
 
@@ -299,14 +300,22 @@ def _prepare_main_fixture(tmp_path, monkeypatch, claude_script: str) -> Path:
     shadow.mkdir(parents=True)
     (shadow / "SKILL.md").write_text("---\nname: demo-skill\ndescription: demo description for eval\n---\n")
 
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude-config"))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.chdir(project)
+    return skill
+
+
+def _prepare_main_fixture(tmp_path, monkeypatch, claude_script: str) -> Path:
+    """`_prepare_shadowed_skill` plus what the CLI entry point needs: an
+    eval-set file, a `claude` stand-in, and argv. Returns the eval-set path."""
+    skill = _prepare_shadowed_skill(tmp_path, monkeypatch)
+
     eval_set = tmp_path / "eval.json"
     eval_set.write_text(json.dumps([{"query": "write the release notes for v2", "should_trigger": True}]))
 
     _install_fake_claude(tmp_path / "bin", claude_script)
     monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}")
-    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude-config"))
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    monkeypatch.chdir(project)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -443,26 +452,6 @@ def test_result_line_falls_back_to_runs_when_usable_runs_is_absent() -> None:
     assert format_result_lines(result) == ["  [FAIL] rate=1/3 expected=True: q"]
 
 
-def _prepare_loop_fixture(tmp_path, monkeypatch) -> Path:
-    """Project root, the skill to evaluate, and a same-named installed skill
-    that shadows it. Returns the path of the skill under evaluation."""
-    project = tmp_path / "project"
-    (project / ".claude").mkdir(parents=True)
-
-    skill = tmp_path / "work" / "demo-skill"
-    skill.mkdir(parents=True)
-    (skill / "SKILL.md").write_text("---\nname: demo-skill\ndescription: demo description for eval\n---\n\n# Demo\n")
-
-    shadow = tmp_path / "claude-config" / "skills" / "demo-skill"
-    shadow.mkdir(parents=True)
-    (shadow / "SKILL.md").write_text("---\nname: demo-skill\ndescription: demo description for eval\n---\n")
-
-    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude-config"))
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    monkeypatch.chdir(project)
-    return skill
-
-
 def _canned_eval_output(results: list[dict]) -> dict:
     passed = sum(1 for r in results if r["pass"])
     return {
@@ -499,7 +488,7 @@ def _drive_loop(skill_path: Path, monkeypatch, results: list[dict], max_iteratio
 
 def test_loop_labels_an_unusable_run_as_error_and_prints_the_cause(tmp_path, monkeypatch, capsys) -> None:
     """The documented entry point showed `[FAIL] rate=0/2` for a dead harness."""
-    skill = _prepare_loop_fixture(tmp_path, monkeypatch)
+    skill = _prepare_shadowed_skill(tmp_path, monkeypatch)
 
     _drive_loop(skill, monkeypatch, [ERRORED_RESULT])
 
@@ -510,7 +499,7 @@ def test_loop_labels_an_unusable_run_as_error_and_prints_the_cause(tmp_path, mon
 
 def test_loop_warns_once_when_an_installed_skill_shadows_the_eval(tmp_path, monkeypatch, capsys) -> None:
     """F-3's warning is per run, not per iteration — two iterations, one line."""
-    skill = _prepare_loop_fixture(tmp_path, monkeypatch)
+    skill = _prepare_shadowed_skill(tmp_path, monkeypatch)
 
     _drive_loop(skill, monkeypatch, [ERRORED_RESULT], max_iterations=2)
 
