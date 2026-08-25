@@ -75,23 +75,25 @@ teardown() {
 # Fixtures
 # ---------------------------------------------------------------------------
 
-# A real git repo, because the dedup criterion is `git worktree list` output.
-# Mocking that away would test the mock, not the criterion.
+# A real git repo — the tick creates and collects real worktrees, and mocking
+# `git worktree` away would test the mock, not the behavior. Defaults to the
+# main checkout; pass a path for a second watched repo.
 _make_repo() {
-    mkdir -p "${_REPO_DIR}"
-    git -C "${_REPO_DIR}" init -q
-    git -C "${_REPO_DIR}" config user.email "test@example.com"
-    git -C "${_REPO_DIR}" config user.name "test"
-    printf 'seed\n' >"${_REPO_DIR}/README.md"
-    git -C "${_REPO_DIR}" add -A
-    git -C "${_REPO_DIR}" commit -qm "seed"
+    local _dir="${1:-${_REPO_DIR}}"
+    mkdir -p "${_dir}"
+    git -C "${_dir}" init -q
+    git -C "${_dir}" config user.email "test@example.com"
+    git -C "${_dir}" config user.name "test"
+    printf 'seed\n' >"${_dir}/README.md"
+    git -C "${_dir}" add -A
+    git -C "${_dir}" commit -qm "seed"
 }
 
 # Register an existing worktree for issue <1>, the way a previous cycle would
 # have left it.
 _add_worktree() {
     git -C "${_REPO_DIR}" worktree add -q -b "wt/issue-$1/1" \
-        "${_WORK_DIR}/dotfiles-issue-$1-1" HEAD
+        "$(_worktree_path "$1")" HEAD
 }
 
 _write_watch_file() {
@@ -125,6 +127,18 @@ _set_live_agents() {
     done
     printf '{"id":"cli:agent:list","result":{"agents":[%s]}}\n' "${_json}" \
         >"${_WORK_DIR}/agents.json"
+}
+
+# The given issues are *running*: a worktree each, with a live pane sitting in
+# it. Both halves are required — that pairing is the running-now signal — so
+# they are set together rather than restated at every concurrency test.
+_set_running() {
+    local _paths=() _n
+    for _n in "$@"; do
+        _add_worktree "${_n}"
+        _paths+=("$(_worktree_path "${_n}")")
+    done
+    _set_live_agents "${_paths[@]}"
 }
 
 # One issue with the given labels, e.g. _issues_with_labels 11 wontfix
@@ -1032,12 +1046,7 @@ _hold_lock() {
 # ---------------------------------------------------------------------------
 
 @test "issue_watcher_cron: the tick holds once the global limit is reached" {
-    local _paths=() _n
-    for _n in 21 22 23 24 25 26 27; do
-        _add_worktree "${_n}"
-        _paths+=("$(_worktree_path "${_n}")")
-    done
-    _set_live_agents "${_paths[@]}"
+    _set_running 21 22 23 24 25 26 27
     _run_tick
     assert_success
     assert_output --partial "7 issue session(s) already running"
@@ -1045,24 +1054,14 @@ _hold_lock() {
 }
 
 @test "issue_watcher_cron: one session short of the limit still dispatches" {
-    local _paths=() _n
-    for _n in 21 22 23 24 25 26; do
-        _add_worktree "${_n}"
-        _paths+=("$(_worktree_path "${_n}")")
-    done
-    _set_live_agents "${_paths[@]}"
+    _set_running 21 22 23 24 25 26
     _run_tick "IW_MAX_PER_REPO=9"
     assert_success
     _assert_logged "gwt spawn --wt-name issue-11"
 }
 
 @test "issue_watcher_cron: a repo at its own limit is skipped" {
-    local _paths=() _n
-    for _n in 21 22 23; do
-        _add_worktree "${_n}"
-        _paths+=("$(_worktree_path "${_n}")")
-    done
-    _set_live_agents "${_paths[@]}"
+    _set_running 21 22 23
     _run_tick
     assert_success
     assert_output --partial "3 of its issues are already running"
@@ -1070,25 +1069,8 @@ _hold_lock() {
 }
 
 @test "issue_watcher_cron: a repo at its limit does not stop another repo" {
-    local _other="${_WORK_DIR}/other" _paths=() _n
-    mkdir -p "${_other}"
-    git -C "${_other}" init -q
-    git -C "${_other}" config user.email "test@example.com"
-    git -C "${_other}" config user.name "test"
-    printf 'seed\n' >"${_other}/README.md"
-    git -C "${_other}" add -A
-    git -C "${_other}" commit -qm seed
-    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"},
-                        {"repo":"acme/other","path":"'"${_other}"'","host":"github.com"}]'
-    _set_issues '[
-      {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
-      {"number":41,"repository":{"nameWithOwner":"acme/other"},"labels":[]}
-    ]'
-    for _n in 21 22 23; do
-        _add_worktree "${_n}"
-        _paths+=("$(_worktree_path "${_n}")")
-    done
-    _set_live_agents "${_paths[@]}"
+    _two_repo_fixture
+    _set_running 21 22 23
     _run_tick
     assert_success
     _assert_logged "gwt spawn --wt-name issue-41"
@@ -1109,13 +1091,7 @@ _hold_lock() {
 
 _two_repo_fixture() {
     local _other="${_WORK_DIR}/other"
-    mkdir -p "${_other}"
-    git -C "${_other}" init -q
-    git -C "${_other}" config user.email "test@example.com"
-    git -C "${_other}" config user.name "test"
-    printf 'seed\n' >"${_other}/README.md"
-    git -C "${_other}" add -A
-    git -C "${_other}" commit -qm seed
+    _make_repo "${_other}"
     _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"},
                         {"repo":"acme/other","path":"'"${_other}"'","host":"github.com"}]'
     _set_issues '[
