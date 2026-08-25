@@ -11,6 +11,7 @@
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--no-auto-labels` | off | Skip Step 2.5 — never auto-attach labels/milestones from `.gh-issue-defaults.yml`. User-supplied `--label` flags still apply. |
+| `--no-auto-deps` | off | Skip Step 2.6 — never auto-detect 선행 이슈 phrases in the conversation, and never run Step 4.5's `addBlockedBy` linking. |
 | `--auto-label-debug` | off | Print Stage-1 detection trace plus kept/dropped label sets to stderr before issue creation. |
 | `--as-discussion <category>` | off | Route to [[gh-discussion-create]] instead of creating an Issue. `<category>` is one of `Ideas` / `Q&A` / `Announcements` / `Lessons` (case-insensitive). Skips Step 2.5 entirely; `--label` / `--assignee` are ignored with a 1-line warning. Invalid category exits 3 without calling any API. |
 
@@ -19,6 +20,7 @@
 - `/gh-issue-create` — create issue on `origin`'s repo (the most common case)
 - `/gh-issue-create upstream` — create issue on the `upstream` remote's repo
 - `/gh-issue-create --no-auto-labels` — skip the SSOT auto-label step
+- `/gh-issue-create --no-auto-deps` — skip 선행-이슈 (blockedBy) auto-detection
 - `/gh-issue-create --auto-label-debug` — verbose label-dispatch trace
 - `/gh-issue-create --as-discussion Ideas` — route the same conversation to [[gh-discussion-create]] (RFC body, Ideas category)
 - `/gh-issue-create upstream --as-discussion Q&A` — Q&A Discussion on the `upstream` remote's repo
@@ -54,12 +56,20 @@
    milestone per that SSOT. Missing labels warn-and-skip; never auto-
    created. Disabled by `--no-auto-labels`. See
    `references/auto-labels.md`.
-5. Creates the issue via
+5. **Dependency auto-detect (Step 2.6 + 4.5)** — scans the conversation for
+   explicit 선행-이슈 phrases (`#13 완료 후`, `depends on #13`, `blocked by
+   #13`, `선행 이슈: #13`, `#13 이후`) and, right after the issue is created,
+   links each one with GitHub's native `addBlockedBy` so the sidebar shows
+   `Blocked by #13`. Plain mentions (`#13 참고`) never link; cross-repo
+   `owner/repo#13` is warned and skipped in v1; a failed link is non-fatal
+   and surfaces as one warning line. Disabled by `--no-auto-deps`. See
+   `references/dependency-detect.md`.
+6. Creates the issue via
    `GH_HOST="$TARGET_HOST" gh issue create --repo "$TARGET_REPO"` using a
    temp file written by `mktemp` (avoids shell escaping bugs). Host and repo
    are both pinned from the same remote URL so a dual-host `gh` login cannot
    file the issue on the wrong server (#1403).
-6. Prints only `Issue #N created: <url>` — no preamble, no summary.
+7. Prints only `Issue #N created: <url>` — no preamble, no summary.
 
 ## Title format
 
@@ -82,6 +92,8 @@ A 200-line issue is fine if the conversation warranted it.
 
 - Add `--assignee` unless the user asked.
 - Auto-create labels that don't exist on the target repo (warn + skip).
+- Link a dependency from a plain mention (`#13 참고`), or from a
+  cross-repo `owner/repo#13` reference (warn + skip in v1).
 - Apply auto labels/milestones on repos without `.gh-issue-defaults.yml`.
 - Fall back to `origin` when the user-specified remote is missing.
 - Ask "should I create it?" — running the skill is the confirmation.
@@ -102,3 +114,6 @@ A 200-line issue is fine if the conversation warranted it.
 - `--as-discussion <category>` when
   `shell-common/functions/gh_discussion.sh` is missing → print
   `Install gh-discussion-create skill first.` and exit 1.
+- `addBlockedBy` fails (permission, network, non-existent issue number)
+  → the issue stays created; one `[WARN] Blocked by #N 링크 실패` line is
+  appended to the report. Never aborts, never retries.
