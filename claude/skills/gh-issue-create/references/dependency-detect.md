@@ -7,9 +7,18 @@ Dependencies** (`addBlockedBy`) so the web UI shows `Blocked by #N` in the
 sidebar and the state can never drift from the referenced issue's real state.
 
 Native dependencies were chosen over a `blocked-by-13` label (nobody owns
-removing it when `#13` closes) and over a `Depends-on: #13` body trailer
-(re-inventing a query interface GitHub already ships). Both alternatives and
-their rejection reasons are recorded in issue #1424.
+removing it when `#13` closes) and over making the `Depends on #13` body line
+this repo already uses the *only* channel — a plain-text trailer cannot be
+queried the way GitHub's own dependency graph can. Both alternatives and their
+rejection reasons are recorded in issue #1424.
+
+The trailer is not hypothetical here, so the two channels now coexist:
+`references/templates/feat.md` still tells Step 3 to write `Depends on #N`
+under `## Dependencies`, and [[gh-issue-implement]] (`references/claim.md`
+Step 3.5) and [[gh-issue-proceed]] (`references/claim.md` Step 2.1.5) both
+grep issue bodies for that exact line. Those two guards read the body only —
+a native link created here is invisible to them, and a trailer written by
+Step 3 is not linked natively. Reconciling the two is out of v1 scope.
 
 `Issue.blockedBy` / `Issue.blocking` and the `addBlockedBy` /
 `removeBlockedBy` mutations are available on `github.com` and on GHES 3.19+,
@@ -18,7 +27,8 @@ so the step works on either host without a capability probe.
 ## Step 2.6 — Detection (F-1)
 
 Skip entirely when `--no-auto-deps` **or** `DISCUSSION_MODE=1` is set —
-Discussions have no dependency graph.
+Discussions have no dependency graph. `--no-auto-deps` skips detection *and*
+therefore Step 4.5, mirroring how `--no-auto-labels` short-circuits Step 2.5.
 
 These phrases mark a dependency. Korean forms trail the reference, English
 forms lead it, and matching is case-insensitive:
@@ -85,6 +95,11 @@ if [ -n "$IDS" ]; then
 fi
 ```
 
+Aliasing both lookups into one query keeps this at 2 round trips per `N`.
+Batching every `N` into a single `blockedByIds` list would cut it further,
+but NF-1 promises a per-`N` warning line and one bad number must not reject
+its siblings — so the per-`N` mutation stays.
+
 `GH_HOST` is mandatory here for the same reason it is on every other `gh`
 call in this skill (#1403): the GraphQL endpoint is chosen by host, and a
 dual-host login otherwise resolves node ids on the wrong server — where the
@@ -104,11 +119,6 @@ line and adds one line to the Step 5 report:
 Never retry, never fall back to a label or a body trailer: a half-applied
 dependency the operator cannot see is worse than a visible warning.
 
-## Operator escape
-
-`--no-auto-deps` skips Step 2.6 (and therefore Step 4.5) entirely, mirroring
-how `--no-auto-labels` short-circuits Step 2.5.
-
 ## Out of v1 scope
 
 - Adding or removing a dependency on an **existing** issue — a separate
@@ -118,10 +128,8 @@ how `--no-auto-labels` short-circuits Step 2.5.
 
 ## Test fixture
 
-`tests/bats/skills/_fixtures/gh_issue_create_dependency_detect.sh` mirrors
-the Step 2.6 detection function verbatim; the bats suite at
-`tests/bats/skills/gh_issue_create_dependency_detect.bats` locks the trigger
-matrix, the plain-mention negatives, the NF-2 cross-repo skip, and the
-`--no-auto-deps` escape. Any change to a trigger phrase must land in both
-files (and this doc). The GraphQL half is not fixtured — it is a single
-query/mutation pair with no branching beyond the NF-1 warning.
+Detection is mirrored in
+`tests/bats/skills/_fixtures/gh_issue_create_dependency_detect.sh` and locked
+by `tests/bats/skills/gh_issue_create_dependency_detect.bats`. That fixture's
+header carries the sync rule for trigger-phrase changes. The GraphQL half is
+not fixtured.

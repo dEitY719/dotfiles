@@ -91,7 +91,7 @@ teardown() {
         "depends on dEitY719/other-repo#13" 0
     assert_success
     assert_output ''
-    [[ "$stderr" == *"cross-repo dependency detected but not supported in v1"* ]]
+    assert_stderr --partial "cross-repo dependency detected but not supported in v1"
 }
 
 @test "deps: cross-repo skip does not drop a same-repo sibling" {
@@ -99,7 +99,7 @@ teardown() {
         "depends on dEitY719/other-repo#99 and blocked by #13" 0
     assert_success
     assert_output '13'
-    [[ "$stderr" == *"cross-repo dependency detected but not supported in v1"* ]]
+    assert_stderr --partial "cross-repo dependency detected but not supported in v1"
 }
 
 # ── F-3: --no-auto-deps escape ───────────────────────────────────────
