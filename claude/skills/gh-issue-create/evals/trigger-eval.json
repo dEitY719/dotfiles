@@ -1,0 +1,83 @@
+[
+  {
+    "query": "방금까지 얘기한 캐시 무효화 버그, 까먹기 전에 깃허브에 남겨줘",
+    "should_trigger": true
+  },
+  {
+    "query": "우리가 방금 정리한 리팩터링 방향, 이슈 하나로 만들어서 번호 알려줘. 밀스톤 맞는 거 있으면 붙여주고.",
+    "should_trigger": true
+  },
+  {
+    "query": "make a github issue out of everything we worked out here — i want a number i can reference from the commit footer later",
+    "should_trigger": true
+  },
+  {
+    "query": "아까 zsh 에서 배열이 첫 원소만 남고 잘리는 문제 얘기했잖아. 지금 당장 고칠 건 아닌데 나중에 다시 찾을 수 있게 남겨두고 싶어. 재현 절차랑 원인 추정까지 빠뜨리지 말고 정리해줘.",
+    "should_trigger": true
+  },
+  {
+    "query": "log this whole conversation on github so it doesn't get lost",
+    "should_trigger": true
+  },
+  {
+    "query": "이건 origin 말고 upstream 레포 쪽에 등록해줘",
+    "should_trigger": true
+  },
+  {
+    "query": "논의는 끝났고 이렇게 가기로 결정했어. 디스커션 말고 바로 할 일로 박아줘.",
+    "should_trigger": true
+  },
+  {
+    "query": "open a tracking ticket with the verify prefix — i'll paste live-verification results into its comments as i go",
+    "should_trigger": true
+  },
+  {
+    "query": "/gh-issue-create upstream 으로 등록해줘",
+    "should_trigger": true,
+    "note": "slash-literal: update if the skill is renamed (#1410)"
+  },
+  {
+    "query": "this needs to become a fix ticket with the right labels applied automatically, and don't ask me to confirm",
+    "should_trigger": true
+  },
+  {
+    "query": "아직 어느 쪽으로 갈지 결정 못 했어. 이 아이디어 팀 의견 받게 디스커션으로 올려줘.",
+    "should_trigger": false
+  },
+  {
+    "query": "이슈 #1417 내용 읽어서 정리해줘",
+    "should_trigger": false
+  },
+  {
+    "query": "이슈 #1410 대로 파일들 고쳐줘. 커밋은 하지 말고.",
+    "should_trigger": false
+  },
+  {
+    "query": "이거 커밋할 때 이슈 1417 번도 같이 붙여줘",
+    "should_trigger": false
+  },
+  {
+    "query": "write everything i did today into the daily work log",
+    "should_trigger": false
+  },
+  {
+    "query": "take issue #1417 from nothing all the way to a reviewed PR",
+    "should_trigger": false
+  },
+  {
+    "query": "sync this repo's labels to our 10-label SSOT",
+    "should_trigger": false
+  },
+  {
+    "query": "add a comment on issue 1403 saying the workaround already landed",
+    "should_trigger": false
+  },
+  {
+    "query": "이미 머지된 PR #1416 을 역산해서 SSOT 추적 이슈로 등록해줘",
+    "should_trigger": false
+  },
+  {
+    "query": "컨텍스트 거의 다 찼어. 남은 작업 인계하고 세션 넘겨줘.",
+    "should_trigger": false
+  }
+]
