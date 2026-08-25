@@ -278,7 +278,7 @@ _build_sync_title() {
 	if [ "$n" -eq 0 ]; then
 		printf '%s' "$base"
 	elif [ "$n" -gt 4 ]; then
-		printf '%s (%s %s %s 외 %d개)' "$base" "$1" "$2" "$3" "$((n - 3))"
+		printf '%s (%s 외 %d개)' "$base" "${*:1:3}" "$((n - 3))"
 	else
 		printf '%s (%s)' "$base" "$*"
 	fi
@@ -330,11 +330,11 @@ _run_apply() {
 	fi
 
 	local mp_pretty pl_pretty pub_title priv_title
-	local -a pub_changes=() priv_changes=()
-	while IFS= read -r _line; do [ -n "$_line" ] && pub_changes+=("$_line"); done \
-		< <(_changed_keys_marketplaces "$PUB_DIR/marketplaces.json" "$target_common")
-	while IFS= read -r _line; do [ -n "$_line" ] && pub_changes+=("$_line"); done \
-		< <(_changed_keys_plugins "$PUB_DIR/plugins.json" "$plugins_common")
+	local -a pub_changes priv_changes
+	mapfile -t pub_changes < <(
+		_changed_keys_marketplaces "$PUB_DIR/marketplaces.json" "$target_common"
+		_changed_keys_plugins "$PUB_DIR/plugins.json" "$plugins_common"
+	)
 	pub_title=$(_build_sync_title "$SYNC_MSG" "${pub_changes[@]}")
 
 	mp_pretty=$(jq -n --argjson x "$target_common" '$x')
@@ -345,10 +345,10 @@ _run_apply() {
 		"$PUB_DIR/marketplaces.json" "$PUB_DIR/plugins.json"
 
 	if [ "$COMPANY_ACTIVE" -eq 1 ]; then
-		while IFS= read -r _line; do [ -n "$_line" ] && priv_changes+=("$_line"); done \
-			< <(_changed_keys_marketplaces "$PRIV_DIR/marketplaces.json" "$target_private")
-		while IFS= read -r _line; do [ -n "$_line" ] && priv_changes+=("$_line"); done \
-			< <(_changed_keys_plugins "$PRIV_DIR/plugins.json" "$plugins_private")
+		mapfile -t priv_changes < <(
+			_changed_keys_marketplaces "$PRIV_DIR/marketplaces.json" "$target_private"
+			_changed_keys_plugins "$PRIV_DIR/plugins.json" "$plugins_private"
+		)
 		priv_title=$(_build_sync_title "$SYNC_MSG" "${priv_changes[@]}")
 
 		mp_pretty=$(jq -n --argjson x "$target_private" '$x')
