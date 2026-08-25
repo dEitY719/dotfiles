@@ -239,3 +239,11 @@ Executable mirror: `tests/bats/skills/_fixtures/skill_description_length.sh`
 (`skill_desc_extract` / `skill_desc_length` / `skill_desc_verdict`), pinned by
 `tests/bats/skills/skill_check_description_length.bats`. Keep the thresholds
 byte-identical between that fixture and the table above.
+
+**This check measures length only.** A description can pass Check 16 and still
+have stopped triggering — that is the failure mode #1411's diet risked and
+#1417 had to measure separately. Trigger accuracy is out of scope for a
+read-only audit (it costs API budget per query), so it lives in a manual
+harness instead: `references/trigger-eval-procedure.md` →
+`claude/tools/run-trigger-eval.sh`. Run it when a description is shrunk, when a
+skill is renamed, or when a competing pair's boundary wording changes.

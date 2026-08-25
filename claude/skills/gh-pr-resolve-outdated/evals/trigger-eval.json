@@ -1,0 +1,89 @@
+[
+  {
+    "query": "PR #1391 에 'This branch is out-of-date with the base branch' 배너가 떴어. 충돌은 없는데 Update branch 버튼 말고 리베이스로 맞추고 싶어",
+    "should_trigger": true
+  },
+  {
+    "query": "다른 PR 이 먼저 머지돼서 내 브랜치가 main 보다 3커밋 뒤처졌어. 충돌은 하나도 없고 최신만 따라가면 돼",
+    "should_trigger": true
+  },
+  {
+    "query": "/gh-pr-resolve-outdated 88 upstream",
+    "should_trigger": true,
+    "note": "slash-literal: update if the skill is renamed (#1410)"
+  },
+  {
+    "query": "base 가 앞으로 나갔는데 파일 충돌은 하나도 없어. 리베이스해서 원격에 다시 올려줘",
+    "should_trigger": true
+  },
+  {
+    "query": "my pr is behind main. no conflicts, i just need it sitting on top of the latest base before ci reruns",
+    "should_trigger": true
+  },
+  {
+    "query": "PR 상태가 BEHIND 로 나오는데 충돌인지 아닌지는 모르겠어. 충돌 없으면 최신 base 위로 올려주고 충돌 나면 거기서 멈춰줘",
+    "should_trigger": true
+  },
+  {
+    "query": "아까 한 번 /gh:pr-resolve-outdated 65 돌렸는데 또 돌려도 문제 없어? 다시 해줘",
+    "should_trigger": true,
+    "note": "slash-literal: update if the skill is renamed (#1410)"
+  },
+  {
+    "query": "bring pr 12 up to date on top of the latest main before it goes into the merge queue, and dont leave a merge commit behind",
+    "should_trigger": true
+  },
+  {
+    "query": "sync this pr onto the newest base with a rebase instead of githubs update-branch button",
+    "should_trigger": true
+  },
+  {
+    "query": "브랜치가 오래돼서 리뷰어가 base 최신으로 맞춰달래. #1330 처리해줘",
+    "should_trigger": true
+  },
+  {
+    "query": "PR #1402 에 'This branch has conflicts that must be resolved' 가 떠서 머지 버튼이 회색이야. 어떤 순서로 풀어야 돼?",
+    "should_trigger": false,
+    "note": "cross-pair: should_trigger:true for gh:pr-resolve-conflict"
+  },
+  {
+    "query": "feat/login-refactor 가 main 이랑 같은 파일에서 부딪혔어. 머지 커밋 남기지 말고 rebase 로 다시 쌓아줘",
+    "should_trigger": false,
+    "note": "cross-pair: should_trigger:true for gh:pr-resolve-conflict"
+  },
+  {
+    "query": "PR 올려둔 사이에 다른 사람이 같은 파일을 고쳐서 컨플릭트가 났어. 어느 쪽을 살릴지 내가 정하면서 하나씩 풀고 싶어",
+    "should_trigger": false,
+    "note": "cross-pair: should_trigger:true for gh:pr-resolve-conflict"
+  },
+  {
+    "query": "my pr cant be merged, github says conflicts must be resolved before merging. whats the right way to clear that without a merge commit?",
+    "should_trigger": false,
+    "note": "cross-pair: should_trigger:true for gh:pr-resolve-conflict"
+  },
+  {
+    "query": "base sync 하려고 리베이스 돌렸다가 shell-common/functions/my_help.sh 에서 CONFLICT 로 멈췄어. 이런 경우 끝까지 어떤 절차로 가야 돼?",
+    "should_trigger": false,
+    "note": "cross-pair: should_trigger:true for gh:pr-resolve-conflict"
+  },
+  {
+    "query": "PR #1402 CI 가 빨간불이야. 실패한 체크 로그 보고 원인 고쳐줘",
+    "should_trigger": false
+  },
+  {
+    "query": "review pr 99 and approve it if nothing blocking shows up",
+    "should_trigger": false
+  },
+  {
+    "query": "지금까지 커밋들로 PR 하나 올려줘",
+    "should_trigger": false
+  },
+  {
+    "query": "my obsidian vault wont pull, two notes collided. clean it up and commit",
+    "should_trigger": false
+  },
+  {
+    "query": "이슈 #16 처음부터 PR 까지 한 번에 진행해줘",
+    "should_trigger": false
+  }
+]
