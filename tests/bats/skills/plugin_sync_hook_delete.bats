@@ -83,7 +83,15 @@ teardown() {
     after=$(git -C "$MAIN_ROOT" rev-parse HEAD)
     [ "$before" != "$after" ]
     run git -C "$MAIN_ROOT" log -1 --format=%s
-    assert_output "chore(claude-plugin): sync manifest"
+    assert_output "chore(claude-plugin): sync manifest (ralph-loop@claude-plugins-official)"
+}
+
+@test "marketplace remove commits with the removed marketplace name (#1430)" {
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin marketplace remove claude-plugins-official"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    run git -C "$MAIN_ROOT" log -1 --format=%s
+    assert_output "chore(claude-plugin): sync manifest (claude-plugins-official)"
 }
 
 @test "marketplace remove also removes the matching entry from claude/plugin/company/" {
