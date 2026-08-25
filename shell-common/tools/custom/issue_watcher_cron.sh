@@ -107,7 +107,9 @@ _IW_PR_LIMIT="100"
 # two repos both have an issue #11, and herdr would route the second dispatch's
 # prompt at the first one's pane (PR #1447 agy review). See _iw_agent_name.
 _IW_AGENT_PREFIX="iw-"
-# 5분 주기보다 여유 있게 4분 — cron tick 이 겹치지 않게 한다.
+# `herdr agent prompt --wait` 한 번의 상한 — 4분. tick 이 겹치지 않게 막는 것은
+# flock 이므로 이 값은 cron 주기와 무관하다. 무응답 pane 하나가 tick 을 무한정
+# 붙들지 않게 하는 것이 목적이다.
 _IW_TIMEOUT_MS="240000"
 # Gap between the post-start idle checks (see _iw_wait_for_idle). Overridable
 # so the bats suite does not pay ~5s of real sleep per cold-agent path.
@@ -273,6 +275,14 @@ _iw_watch_hosts() {
 # (NF-1), so it can be removed at any moment without changing what the next
 # tick decides — which is what makes collecting them safe at all.
 
+# Parsed once per tick, like the watch list: both the running-now signal and
+# the collection step walk it, and a `git worktree list` per watched checkout
+# is the most expensive local call in the tick. Nothing re-reads it after
+# _iw_cleanup_worktrees removes entries — the spawn path asks
+# _iw_worktree_for_issue directly — so the cache cannot go stale within a tick.
+_IW_ISSUE_WORKTREES=""
+_IW_ISSUE_WORKTREES_LOADED=0
+
 # Emit `<worktree-path><TAB><owner/repo><TAB><number>` for every issue worktree
 # across every watched checkout.
 #
@@ -283,7 +293,12 @@ _iw_watch_hosts() {
 _iw_issue_worktrees() {
     local _repo _path _host
 
-    _iw_watch_list | while IFS="${_IW_TAB}" read -r _repo _path _host; do
+    if [ "${_IW_ISSUE_WORKTREES_LOADED}" -eq 1 ]; then
+        [ -z "${_IW_ISSUE_WORKTREES}" ] || printf '%s\n' "${_IW_ISSUE_WORKTREES}"
+        return 0
+    fi
+
+    _IW_ISSUE_WORKTREES=$(_iw_watch_list | while IFS="${_IW_TAB}" read -r _repo _path _host; do
         [ -n "${_path}" ] || continue
         [ -d "${_path}" ] || continue
         git -C "${_path}" worktree list --porcelain 2>/dev/null |
@@ -296,7 +311,10 @@ _iw_issue_worktrees() {
                     if (n ~ /^[0-9]+$/ && p != "") print p "\t" repo "\t" n
                 }
             '
-    done
+    done)
+
+    _IW_ISSUE_WORKTREES_LOADED=1
+    [ -z "${_IW_ISSUE_WORKTREES}" ] || printf '%s\n' "${_IW_ISSUE_WORKTREES}"
 }
 
 # Parsed once per tick, like the watch list: every cap check consults it and
@@ -350,6 +368,17 @@ _iw_live_agents() {
 
     _IW_LIVE_AGENTS_LOADED=1
     [ -z "${_IW_LIVE_AGENTS}" ] || printf '%s\n' "${_IW_LIVE_AGENTS}"
+}
+
+# Prime the memo with "nothing is running" after a failed lookup. Only
+# --dry-run may use this: it is a report, so it must stay usable where a real
+# tick cannot run at all, and the worst a wrong count can do there is overstate
+# what the next real tick would pick. A real tick must never assume this — the
+# concurrency cap would lift exactly when herdr is unhealthy. Named rather than
+# written out at the call site so the memo's two-variable invariant stays here.
+_iw_live_agents_assume_none() {
+    _IW_LIVE_AGENTS=""
+    _IW_LIVE_AGENTS_LOADED=1
 }
 
 # How many per-issue sessions are live, in total and per repo.
@@ -707,9 +736,12 @@ _iw_blocked_by_open() {
     return 0
 }
 
-# Emit `<repo><TAB><number><TAB><path><TAB><host>` for every searched issue
-# that survives the *local* filters — watch-list membership, a checkout that
-# exists, and the exclude labels. No cap and no network here: which of these
+# Emit `<repo><TAB><number>` for every searched issue that survives the *local*
+# filters — watch-list membership, a checkout that exists, and the exclude
+# labels. Just the two identifying columns: the checkout path and the host are
+# per-repo facts, and _iw_select_candidates resolves them once per repo it
+# serves rather than once per candidate it discards. No cap and no network
+# here either: which of these
 # actually gets dispatched is _iw_select_candidates' decision, and paying for a
 # GitHub round trip per candidate when at most _IW_DISPATCH_PER_TICK of them
 # can be dispatched would be wasted on all the rest.
@@ -718,7 +750,7 @@ _iw_blocked_by_open() {
 # and one ux_info line landing in it would be read back as an issue to
 # dispatch.
 _iw_collect_candidates() {
-    local _repo _number _labels _path _host
+    local _repo _number _labels _path
 
     # fd 3, not stdin: a loop body that reads stdin would consume the rest of
     # the search results and truncate the candidate set with no error
@@ -744,16 +776,16 @@ _iw_collect_candidates() {
             continue
         fi
 
-        _host=$(_iw_repo_host "${_repo}")
-
-        printf '%s\t%s\t%s\t%s\n' "${_repo}" "${_number}" "${_path}" "${_host}"
+        printf '%s\t%s\n' "${_repo}" "${_number}"
     done 3<<EOF
 $(_iw_search_issues)
 EOF
 }
 
-# Pick which of $1's candidate lines this tick dispatches, at most
-# _IW_DISPATCH_PER_TICK of them, and echo them in the same four-column shape.
+# Pick which of $1's `<repo><TAB><number>` lines this tick dispatches, at most
+# _IW_DISPATCH_PER_TICK of them, and echo each as
+# `<repo><TAB><number><TAB><path><TAB><host>` — the shape the dispatch loop and
+# the dry-run printer consume.
 #
 # Order is repo round-robin (D-3) then ascending issue number, so the oldest
 # issue of the repo whose turn it is goes first and the choice is deterministic
@@ -901,9 +933,10 @@ _iw_spawn_worktree() {
 }
 
 # Best-effort teardown of a half-built dispatch, so the next attempt starts
-# from nothing. A leftover worktree is not merely clutter: it is exactly what
-# the dedup check keys on, so leaving one behind would retire the issue
-# permanently without it ever having been worked.
+# from nothing. Since NF-1 a survivor no longer retires the issue — nothing
+# keys on a worktree's existence — but it still costs: `gwt spawn` skips any
+# index whose branch is still there, so the next attempt builds `issue-<n>/2`
+# and the abandoned `/1` stays on disk until a later tick collects it.
 _iw_cleanup_attempt() {
     local _path="$1" _wt="$2" _tab="$3"
 
@@ -1128,7 +1161,7 @@ _iw_process_issue() {
             ux_warning "Worktree spawn failed for ${_repo}#${_number} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
             # A spawn can fail after `git worktree add` succeeded. Recover the
             # path so the cleanup below really removes it — a survivor would
-            # satisfy the dedup check and retire the issue unworked.
+            # push the next attempt onto a fresh index and leak this one.
             _wt=$(_iw_worktree_for_issue "${_path}" "${_number}")
         elif ! _ws=$(_iw_workspace_for_label "${_label}" "${_path}"); then
             ux_warning "No herdr workspace for ${_label} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
@@ -1160,10 +1193,12 @@ EOF
 
 # Token-limit exhaustion is invisible to this tick by default: `herdr agent
 # prompt` hands the command over and returns, so a claude session that starts
-# and then stops on a spent quota still reads as a delivered dispatch. Worse,
-# by then the tick has created the `issue-<n>` worktree its own dedup check
-# keys on, so that issue is never offered again — exhaustion becomes silent
-# loss, not merely waste.
+# and then stops on a spent quota still reads as a delivered dispatch — the
+# tick books a success, the retry never fires, and the issue waits for a whole
+# cycle before the next tick can offer it again. Since NF-1 the worktree left
+# behind no longer retires the issue permanently (that was the pre-#1453
+# failure this gate was written against), so exhaustion now costs a wasted
+# dispatch slot rather than a lost issue — still worth holding the cycle for.
 #
 # The gate below holds dispatches after repeated unhealthy cycles and reopens
 # itself on a timer. It is deliberately evidence-poor and fail-open (NF-1): a
@@ -1495,6 +1530,12 @@ main() {
     # read and the jq parse happen exactly once per tick, as intended.
     _iw_watch_list >/dev/null
 
+    # Same reasoning, one signal down: the worktree scan feeds both the
+    # running-now join (inside a pipeline) and the collection loop (inside a
+    # heredoc), so neither call site can warm the memo for the other. Priming
+    # it here holds `git worktree list` to one run per watched checkout.
+    _iw_issue_worktrees >/dev/null
+
     # A dry run reports what it would dispatch and touches nothing, so it must
     # stay usable on a machine with no herdr server.
     if [ "${_IW_DRY_RUN}" -eq 0 ] && ! command -v herdr >/dev/null 2>&1; then
@@ -1512,11 +1553,9 @@ main() {
     if [ "${_IW_DRY_RUN}" -eq 1 ]; then
         # A dry run must stay usable where a real tick cannot run at all, so an
         # unreachable herdr degrades to "nothing is running" here instead of
-        # holding the tick. It is a report, not a dispatch decision — the worst
-        # a wrong count can do is overstate what the next real tick would pick.
+        # holding the tick.
         if ! _iw_live_agents >/dev/null; then
-            _IW_LIVE_AGENTS=""
-            _IW_LIVE_AGENTS_LOADED=1
+            _iw_live_agents_assume_none
             ux_warning "Cannot list herdr agents — reporting as if nothing were running."
         fi
 
