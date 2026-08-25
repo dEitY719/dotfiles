@@ -58,8 +58,9 @@ No API calls.
 - **Step 0a — 계획** — `Skill(superpowers:writing-plans)` — spec →
   `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`. 완료 후
   `printf '[step:devx-autopilot/plan] OK\n'`.
-- **Step 0b — 이슈** — `Skill(gh:issue-create)` — host-aware(`references/host-resolution.md`)로
-  추적 이슈 생성, `ISSUE_NUM`·URL 확보. 완료 후 `printf '[step:devx-autopilot/issue] OK\n'`.
+- **Step 0b — 이슈** — `Skill(gh:issue-create, "--no-ask")` — host-aware(`references/host-resolution.md`)로
+  추적 이슈 생성, `ISSUE_NUM`·URL 확보. `--no-ask` 는 미결 게이트가 무인 체인을 멈추지 않게
+  한다 (#1446). 완료 후 `printf '[step:devx-autopilot/issue] OK\n'`.
 - **Step 1 — 모드 선택** (`references/mode-heuristic.md`) — `auto` 면 계획을 읽어 판정,
   `mode=<sdd|inline> reason=...` 1줄 로그. `--mode` 우선. 완료 후
   `printf '[step:devx-autopilot/mode] OK\n'`.
