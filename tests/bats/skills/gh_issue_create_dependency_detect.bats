@@ -265,10 +265,17 @@ teardown() {
     # drift. github.com is queried explicitly because that is the host whose
     # shape the doc records.
     command -v gh >/dev/null 2>&1 || skip "gh not installed"
-    _gh_real_config gh auth status --hostname github.com >/dev/null 2>&1 ||
+    # `auth token`, not `auth status`: it answers the same question from the
+    # local config instead of verifying the token against the API, so the
+    # precondition costs no round-trip. Only the introspection below is
+    # allowed to touch the network.
+    _gh_real_config gh auth token --hostname github.com >/dev/null 2>&1 ||
         skip "not authenticated to github.com — live schema check needs a real API"
 
-    fields=$(_gh_real_config env GH_HOST=github.com gh api graphql \
+    # `mise run test` runs this suite from the pre-push hook, so the one
+    # network call is bounded: a half-open link must skip, not hang a push.
+    # A timeout leaves $fields empty and lands on the same skip as no network.
+    fields=$(_gh_real_config timeout 10 env GH_HOST=github.com gh api graphql \
         -f query='{__type(name:"AddBlockedByInput"){inputFields{name}}}' \
         --jq '[.data.__type.inputFields[].name] | sort | join(",")' 2>/dev/null) || fields=""
     [ -n "$fields" ] || skip "GraphQL introspection unavailable"
