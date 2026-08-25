@@ -9,6 +9,7 @@
 #   - agent 가 idle/done 이면 dispatcher 프롬프트를 보낸다.
 #   - agent 가 working/blocked 이면 이번 tick 을 건너뛴다(에러 아님, exit 0).
 #   - agent 가 사라졌거나 pane 이 닫혔으면 재부트스트랩 후 프롬프트를 보낸다.
+#   - 토큰 한도 게이트가 닫혀 있으면 dispatch 를 보류한다(issue #1436).
 #
 # Usage: issue_watcher_cron.sh [--cwd <PATH>] | [-h|--help|help]
 
@@ -46,6 +47,14 @@ _IW_LOCK_BASENAME=".lock"
 _IW_PROMPT="issue-watcher:dispatcher 를 Agent 도구로 실행해 (run the issue-watcher:dispatcher agent via the Agent tool)"
 # 5분 주기보다 여유 있게 4분 — cron tick 이 겹치지 않게 한다.
 _IW_TIMEOUT_MS="240000"
+
+# Rate-limit gate (issue #1436). Rationale for each value sits with the gate
+# functions below; the values themselves live here with the rest of the SSOT.
+# Gate state gets its own file so herdr-watch.json's schema — and every
+# pre-#1436 copy of it — stays untouched.
+_IW_LIMIT_STATE_BASENAME="rate-limit.json"
+_IW_LIMIT_STRIKES="2"
+_IW_LIMIT_BACKOFF_SECONDS="1800"
 
 # Overwritten by _iw_read_state when a state file exists.
 _IW_AGENT_NAME="iw-watch"
@@ -361,6 +370,189 @@ _iw_dispatch() {
     return 1
 }
 
+# ============================================================
+# Rate-limit gate (issue #1436)
+# ============================================================
+
+# Token-limit exhaustion is invisible to this tick by default: `herdr agent
+# prompt` hands the dispatcher prompt over and returns, so a claude session
+# that starts and then stops on a spent quota still reads as a delivered
+# dispatch. Worse, by then the dispatcher has created the `issue-<n>`
+# worktrees its own dedup check keys on, so those issues are never offered
+# again — exhaustion becomes silent loss, not merely waste.
+#
+# The gate below holds dispatches after repeated unhealthy cycles and reopens
+# itself on a timer. It is deliberately evidence-poor and fail-open (NF-1): a
+# detector that can wedge the watcher is worse than the leak it guards.
+#
+# Why it watches this agent and not the `iw-<n>` panes the issue's option A
+# names: the tick cannot address those panes. Their issue numbers are chosen by
+# the dispatcher inside the pane and never reported back, and `herdr agent
+# list` carries no agent-name field to recover them from. The same signal is
+# reachable one level up — a spent quota stops the `iw-watch` claude session
+# too, so its dispatcher prompt draws no state change, herdr answers
+# `agent_prompt_stalled`, the retry stalls as well and `_iw_dispatch` fails.
+# `_iw_agent_status` (option A's own helper) then separates a real wall from an
+# unrelated hiccup: an agent reporting `working`/`blocked` is alive and busy,
+# so that failure earns no strike.
+
+_iw_limit_state_file() {
+    printf '%s/%s' "$(_iw_state_dir)" "${_IW_LIMIT_STATE_BASENAME}"
+}
+
+# Echo one field of the gate state file, or nothing. A missing file, an
+# unreadable one and an absent field are all "nothing" on purpose — every
+# caller reads that as "no gate" and proceeds (NF-1).
+_iw_limit_read() {
+    local _file
+    _file=$(_iw_limit_state_file)
+    [ -f "${_file}" ] || return 0
+    _iw_json_value ".$1" <"${_file}" 2>/dev/null
+}
+
+# Persist strikes + backoff deadline. Both are written as JSON *strings*: the
+# jq-less branch of _iw_json_value only matches quoted values, and a bare cron
+# environment is exactly where jq is likely to be missing.
+_iw_limit_write() {
+    local _dir _file
+    _dir=$(_iw_state_dir)
+    _file=$(_iw_limit_state_file)
+
+    if ! mkdir -p "${_dir}" 2>/dev/null; then
+        ux_warning "Cannot create state directory (${_dir}) — the rate-limit gate will not survive this tick."
+        return 1
+    fi
+
+    if ! printf '{ "strikes": "%s", "backoff_until": "%s" }\n' "$1" "$2" >"${_file}" 2>/dev/null; then
+        ux_warning "Cannot write ${_file} — the rate-limit gate will not survive this tick."
+        return 1
+    fi
+}
+
+_iw_limit_clear() {
+    rm -f "$(_iw_limit_state_file)" 2>/dev/null || true
+}
+
+# Echo epoch seconds, or nothing when the clock is unreadable.
+_iw_now() {
+    local _now
+    _now=$(date +%s 2>/dev/null) || return 0
+    case "${_now}" in
+    '' | *[!0-9]*) return 0 ;;
+    esac
+    printf '%s' "${_now}"
+}
+
+# The gate itself. Returns 0 when this tick may dispatch, non-zero when it must
+# hold. Every unexpected input answers 0 — see NF-1.
+_iw_limit_gate_check() {
+    local _until _now _left
+
+    [ -f "$(_iw_limit_state_file)" ] || return 0
+
+    _until=$(_iw_limit_read backoff_until)
+    case "${_until}" in
+    *[!0-9]*)
+        ux_warning "Rate-limit state is unreadable (backoff_until='${_until}') — dispatching anyway."
+        return 0
+        ;;
+    '')
+        # Present but fieldless: a truncated write or a hand edit. Strike
+        # bookkeeping never produces this — _iw_limit_write always emits both
+        # fields.
+        ux_warning "Rate-limit state file has no backoff deadline — dispatching anyway."
+        return 0
+        ;;
+    esac
+
+    # 0 is the resting value written while strikes accumulate: evidence on
+    # record, gate still open.
+    [ "${_until}" -gt 0 ] || return 0
+
+    _now=$(_iw_now)
+    if [ -z "${_now}" ]; then
+        ux_warning "Cannot read the clock — rate-limit gate ignored this tick."
+        return 0
+    fi
+
+    # A deadline further out than twice its own length cannot have been written
+    # by this script; a clock jump or a hand edit did it. Expiring beats
+    # stalling forever (F-3).
+    _left=$((_until - _now))
+    if [ "${_left}" -le 0 ] || [ "${_left}" -gt $((_IW_LIMIT_BACKOFF_SECONDS * 2)) ]; then
+        ux_info "Rate-limit gate reopened — backoff expired, resuming dispatch."
+        _iw_limit_clear
+        return 0
+    fi
+
+    ux_warning "Rate-limit gate closed — holding dispatch for ~$(((_left + 59) / 60))m (no worktree is created this tick)."
+    return 1
+}
+
+# Record the outcome of the dispatch just attempted. $1 is _iw_dispatch's exit
+# status. Two consecutive unhealthy dispatches shut the gate; one healthy one
+# wipes the slate, so `_IW_LIMIT_STRIKES` really does count consecutive
+# failures. 1 would hold the watcher over a single transient herdr blip; 2 buys
+# that evidence for one extra tick (~5 min).
+_iw_limit_record() {
+    local _rc="$1" _status _strikes _now
+
+    if [ "${_rc}" -eq 0 ]; then
+        # A prompt herdr accepted means the agent changed state, i.e. it is
+        # processing — `--wait` would not have returned otherwise.
+        _iw_limit_clear
+        return 0
+    fi
+
+    _status=$(_iw_agent_status) || _status=""
+    case "${_status}" in
+    working | blocked)
+        ux_info "Dispatch failed but agent ${_IW_AGENT_NAME} is ${_status} — not a token-limit signal, gate untouched."
+        _iw_limit_clear
+        return 0
+        ;;
+    esac
+
+    _strikes=$(_iw_limit_read strikes)
+    case "${_strikes}" in
+    '' | *[!0-9]*) _strikes=0 ;;
+    esac
+    _strikes=$((_strikes + 1))
+
+    if [ "${_strikes}" -lt "${_IW_LIMIT_STRIKES}" ]; then
+        ux_warning "Dispatch failed with agent ${_IW_AGENT_NAME} at '${_status:-none}' (${_strikes}/${_IW_LIMIT_STRIKES}) — possible token-limit exhaustion."
+        _iw_limit_write "${_strikes}" "0" || true
+        return 0
+    fi
+
+    _now=$(_iw_now)
+    if [ -z "${_now}" ]; then
+        ux_warning "Cannot read the clock — rate-limit gate left open despite ${_strikes} failed dispatches."
+        return 0
+    fi
+
+    # Claude's quota windows run for hours, so a short backoff would only
+    # re-dispatch into the same wall; 30 minutes keeps the recovery latency
+    # (F-3) well inside one window while cutting the burn rate to zero.
+    ux_warning "Rate-limit gate closed for $((_IW_LIMIT_BACKOFF_SECONDS / 60))m — ${_strikes} consecutive dispatches failed with the agent idle (likely token limit)."
+    _iw_limit_write "0" "$((_now + _IW_LIMIT_BACKOFF_SECONDS))" || true
+}
+
+# Gate + dispatch + bookkeeping as one step, so both call sites in main() stay
+# short and cannot drift apart.
+#   0  dispatched
+#   1  dispatch failed (caller exits 1, unchanged from pre-#1436)
+#   2  gate closed, nothing dispatched (caller exits 0 — a hold, not an error)
+_iw_gated_dispatch() {
+    local _rc=0
+
+    _iw_limit_gate_check || return 2
+
+    _iw_dispatch || _rc=$?
+    _iw_limit_record "${_rc}"
+    return "${_rc}"
+}
+
 # Single-instance guard. A cron tick can fire while the previous one is still
 # blocked in `herdr agent prompt --wait`; without a lock both would observe
 # `idle` and both dispatch, breaking the one-cycle-at-a-time invariant.
@@ -406,6 +598,11 @@ _iw_usage() {
     ux_bullet_sub "-h, --help, help   show this help"
     ux_bullet "state"
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/${_IW_STATE_BASENAME}"
+    ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/${_IW_LIMIT_STATE_BASENAME}   (rate-limit gate)"
+    ux_bullet "rate-limit gate"
+    ux_bullet_sub "${_IW_LIMIT_STRIKES} dispatches in a row that fail with the agent idle close the gate"
+    ux_bullet_sub "while closed the tick holds: no dispatcher prompt, no worktree, exit 0"
+    ux_bullet_sub "it reopens by itself after $((_IW_LIMIT_BACKOFF_SECONDS / 60))m — delete ${_IW_LIMIT_STATE_BASENAME} to reopen it now"
     ux_bullet "claude session (claude-yolo parity)"
     ux_bullet_sub "the pane runs claude --dangerously-skip-permissions (unattended cron)"
     ux_bullet_sub "internal setup mode  → CLAUDE_CONFIG_DIR=\$HOME/.claude"
@@ -422,7 +619,7 @@ _iw_usage() {
 # ============================================================
 
 main() {
-    local _cwd="" _status
+    local _cwd="" _status _rc
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -476,7 +673,10 @@ main() {
 
     case "${_status}" in
     idle | done)
-        _iw_dispatch || exit 1
+        _iw_gated_dispatch
+        _rc=$?
+        [ "${_rc}" -ne 2 ] || exit 0
+        [ "${_rc}" -eq 0 ] || exit 1
         ;;
     working | blocked)
         ux_warning "Agent ${_IW_AGENT_NAME} is ${_status} — skip this tick (previous cycle still running or awaiting approval)."
@@ -486,7 +686,10 @@ main() {
         ux_warning "Agent ${_IW_AGENT_NAME} unreachable (status: ${_status:-none}) — stale state, re-bootstrapping."
         _iw_bootstrap "${_cwd}" || exit 1
         _iw_wait_for_idle
-        _iw_dispatch || exit 1
+        _iw_gated_dispatch
+        _rc=$?
+        [ "${_rc}" -ne 2 ] || exit 0
+        [ "${_rc}" -eq 0 ] || exit 1
         ;;
     esac
 }
