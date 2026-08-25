@@ -795,6 +795,32 @@ STUB
     assert_equal "$MAIN_SHA" "$PUBLISHED"
 }
 
+@test "_cleanup_local_main_if_pure_sync recognizes reconcile.sh's multi-item truncated suffix as pure sync (#1430 codex follow-up)" {
+    # reconcile.sh --apply's _build_sync_title emits "+foo +bar 외 N개" style
+    # suffixes (multiple changed keys, truncated past 4) — distinct shape from
+    # plugin-sync.sh's single "(name)" suffix above. Purity detection must
+    # accept this one too, not just the single-target case.
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    BEFORE_ORIGIN=$(git -C "$REPO" rev-parse origin/main)
+
+    _commit_pure_sync_change_named "$REPO" claude/plugin/marketplaces.json \
+        '{"anthropic-agent-skills": "anthropics/skills"}' "+foo +bar +baz 외 2개"
+    git -C "$REPO" checkout -q -b other
+
+    git -C "$REPO" checkout -q "$BEFORE_ORIGIN"
+    _commit_pure_sync_change "$REPO" claude/plugin/marketplaces.json '{"anthropic-agent-skills": "anthropics/skills-published"}'
+    PUBLISHED=$(git -C "$REPO" rev-parse HEAD)
+    git -C "$REPO" push -q origin "${PUBLISHED}:refs/heads/main"
+    git -C "$REPO" checkout -q other
+
+    run _cleanup_local_main_if_pure_sync "$REPO" "$BEFORE_ORIGIN" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    assert_output --partial "정리했습니다"
+    MAIN_SHA=$(git -C "$REPO" rev-parse main)
+    assert_equal "$MAIN_SHA" "$PUBLISHED"
+}
+
 @test "_cleanup_local_main_if_pure_sync rebases a diverged checked-out main onto origin/main when the published commit shares its content" {
     # The real post-publish state: the hook's local sync commit and the
     # PR-merged one carry IDENTICAL content but different SHAs (gh pr merge
