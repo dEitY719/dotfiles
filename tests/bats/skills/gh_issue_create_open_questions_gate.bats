@@ -411,3 +411,14 @@ teardown() {
         "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/devx-autopilot/SKILL.md"
     assert_success
 }
+
+@test "docs: gh-issue-proceed file_issue passes --no-ask to gh:issue-create" {
+    _flow="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-issue-proceed/references/execution-flow.md"
+    # The file_issue verb row must wire the flag through.
+    run grep -q 'file_issue.*--no-ask' "$_flow"
+    assert_success
+    # And the NO_INTERACTIVE follow-up note must no longer claim
+    # gh:issue-create is un-wired (#1460).
+    run awk '/^> / && /gh:issue-create/ { found = 1 } END { exit found }' "$_flow"
+    assert_success
+}
