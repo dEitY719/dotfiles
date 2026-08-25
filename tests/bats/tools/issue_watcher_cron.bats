@@ -272,10 +272,28 @@ EOF
 #   HERDR_AGENT_STATUS        status reported by `agent get` (default: idle)
 #   HERDR_AGENT_GET_FAIL=1    `agent get` returns agent_not_found and exits 1
 #   HERDR_PROMPT_MODE         `agent prompt` behaviour (default: always ok)
-#                               stall-once  first call stalled, rest ok
 #                               stall       every call stalled
 #                               fail        every call a non-stall error
 #   HERDR_PROMPT_FAIL_TIMES   first N `agent prompt` calls stall, then ok
+#
+# Stall recovery (issue #1443). A stall leaves the command typed but unsent, so
+# the tick presses Enter rather than retyping; `state_change_seq` is what proves
+# the keystroke landed.
+#
+#   HERDR_SENDKEYS_MODE       `agent send-keys` behaviour
+#                               nobump  (default) exits 0, seq unchanged — the
+#                                       input loop is still not listening, which
+#                                       is what every pre-#1443 stall test means
+#                                       by "stalled", so their meaning is
+#                                       preserved verbatim
+#                               ok      exits 0 and bumps state_change_seq
+#                               fail    exits 1 with agent_not_found — herdr
+#                                       cannot reach the target at all
+#   HERDR_SEQ_MODE=absent     `agent get` omits state_change_seq entirely (the
+#                             baseline-read blip the status fallback covers)
+#   HERDR_STATUS_AFTER_SENDKEYS  once any `send-keys` has run, `agent get`
+#                             reports this status instead of HERDR_AGENT_STATUS
+#
 # Each herdr invocation is a fresh process, so the per-call sequences count
 # through marker files next to ${CALL_LOG} rather than through shell state.
 _install_herdr_stub() {
@@ -333,7 +351,26 @@ case "$1 $2" in
         printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:get"}'
         exit 1
     fi
-    printf '{"id":"cli:agent:get","result":{"agent":{"agent_status":"%s"}}}\n' "${HERDR_AGENT_STATUS:-idle}"
+    _status="${HERDR_AGENT_STATUS:-idle}"
+    if [ -n "${HERDR_STATUS_AFTER_SENDKEYS:-}" ] && [ -f "${CALL_LOG}.sendkeys" ]; then
+        _status="${HERDR_STATUS_AFTER_SENDKEYS}"
+    fi
+    if [ "${HERDR_SEQ_MODE:-ok}" = "absent" ]; then
+        printf '{"id":"cli:agent:get","result":{"agent":{"agent_status":"%s"}}}\n' "${_status}"
+    else
+        _seq=$(cat "${CALL_LOG}.seq" 2>/dev/null || printf 0)
+        printf '{"id":"cli:agent:get","result":{"agent":{"agent_status":"%s","state_change_seq":%s}}}\n' \
+            "${_status}" "${_seq:-0}"
+    fi
+    ;;
+"agent send-keys")
+    if [ "${HERDR_SENDKEYS_MODE:-nobump}" = "fail" ]; then
+        printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:send-keys"}'
+        exit 1
+    fi
+    [ "${HERDR_SENDKEYS_MODE:-nobump}" != "ok" ] || _bump "${CALL_LOG}.seq" >/dev/null
+    _bump "${CALL_LOG}.sendkeys" >/dev/null
+    printf '%s\n' '{"id":"cli:agent:send-keys","result":{"ok":true}}'
     ;;
 "agent prompt")
     if [ -n "${HERDR_PROMPT_FAIL_TIMES:-}" ]; then
@@ -346,13 +383,6 @@ case "$1 $2" in
         exit 0
     fi
     case "${HERDR_PROMPT_MODE:-ok}" in
-    stall-once)
-        _n=$(_bump "${CALL_LOG}.promptcount")
-        if [ "${_n}" = "1" ]; then
-            printf '%s\n' '{"error":{"code":"agent_prompt_stalled","message":"no agent state change observed within 5000ms"},"id":"cli:agent:prompt"}'
-            exit 1
-        fi
-        ;;
     stall)
         printf '%s\n' '{"error":{"code":"agent_prompt_stalled","message":"no agent state change observed within 5000ms"},"id":"cli:agent:prompt"}'
         exit 1
@@ -479,6 +509,7 @@ _run_tick() {
         "IW_WATCHED_REPOS=${_WATCH_FILE}" \
         "XDG_STATE_HOME=${_STATE_HOME}" \
         "IW_IDLE_POLL_SLEEP=0" \
+        "IW_STALL_RECOVER_SLEEP=0" \
         "${_env[@]}" \
         bash "${SCRIPT}" "$@"
 }
@@ -1488,13 +1519,6 @@ _two_repo_fixture() {
     _assert_logged "agent prompt iw-acme-dotfiles-11 /gh-issue-flow 11"
 }
 
-@test "issue_watcher_cron: agent_prompt_stalled is retried once and then succeeds" {
-    _run_tick "HERDR_PROMPT_MODE=stall-once"
-    assert_success
-    [ "$(_log_count 'agent prompt')" -eq 2 ]
-    assert_output --partial "retrying once"
-}
-
 @test "issue_watcher_cron: a non-stall prompt failure is not retried within the attempt" {
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
@@ -1502,11 +1526,99 @@ _two_repo_fixture() {
     [ "$(_log_count 'agent prompt')" -eq 3 ]
 }
 
-@test "issue_watcher_cron: agent_prompt_stalled retry is skipped when the agent is already working" {
+# ---------------------------------------------------------------------------
+# Stall recovery (issue #1443)
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: agent_prompt_stalled is recovered by pressing Enter, never retyped" {
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=ok"
+    assert_success
+    # The stalled command is already sitting in the input box unsubmitted, so a
+    # second `agent prompt` would type it on top of itself and Enter would still
+    # never land. Exactly one prompt, ever.
+    [ "$(_log_count 'agent prompt')" -eq 1 ]
+    _assert_logged "agent send-keys iw-acme-dotfiles-11 Enter"
+    [ "$(_log_count 'agent send-keys')" -eq 1 ]
+}
+
+@test "issue_watcher_cron: the Enter recovery stops as soon as state_change_seq moves" {
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=ok"
+    assert_success
+    assert_output --partial "state_change_seq"
+    assert_output --partial "Dispatched to iw-acme-dotfiles-11"
+}
+
+@test "issue_watcher_cron: an unresolved stall presses Enter three times and still reports the stall" {
+    # HERDR_SENDKEYS_MODE defaults to nobump: Enter is accepted but the input
+    # loop never submits, so the counter never moves.
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle"
+    assert_failure
+    # Three attempts of three presses each, and still only one prompt per
+    # attempt.
+    [ "$(_log_count 'agent send-keys')" -eq 9 ]
+    [ "$(_log_count 'agent prompt')" -eq 3 ]
+    assert_output --partial "agent_prompt_stalled"
+    # The reported code stays the gate's token-limit signature, so the ordinary
+    # unresolved stall still books its strike.
+    refute_output --partial "not a token-limit signature"
+    run cat "${_LIMIT_FILE}"
+    assert_output --partial '"strikes": "1"'
+}
+
+@test "issue_watcher_cron: agent_prompt_stalled recovery is skipped when the agent is already working" {
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=working"
     assert_success
     [ "$(_log_count 'agent prompt')" -eq 1 ]
     assert_output --partial "treating as delivered"
+    # `working` is positive evidence the prompt landed — nothing to submit.
+    _refute_logged "agent send-keys"
+}
+
+@test "issue_watcher_cron: a blipped seq baseline falls back to the working status" {
+    # Regression (PR #1449 codex review, BLOCKER A): when the pre-prompt
+    # `agent get` yields no state_change_seq, a sequence comparison can never
+    # succeed afterwards — a one-off local herdr blip would become a permanent
+    # hard failure. HERDR_SENDKEYS_MODE stays at nobump so the counter is
+    # provably not what carries this test.
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" \
+        "HERDR_SEQ_MODE=absent" "HERDR_STATUS_AFTER_SENDKEYS=working"
+    assert_success
+    [ "$(_log_count 'agent send-keys')" -eq 1 ]
+    [ "$(_log_count 'agent prompt')" -eq 1 ]
+    assert_output --partial "no seq baseline"
+    [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: a failing send-keys abandons recovery instead of burning attempts" {
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=fail"
+    assert_failure
+    # One press per dispatch attempt, not three: retrying against a pane herdr
+    # cannot reach at all is pure waste.
+    [ "$(_log_count 'agent send-keys')" -eq 3 ]
+    [ "$(_log_count 'agent prompt')" -eq 3 ]
+    assert_output --partial "pane unreachable"
+}
+
+@test "issue_watcher_cron: a broken pane is not booked as a token-limit stall" {
+    # Regression (PR #1449 codex review, BLOCKER B): the prompt response says
+    # `agent_prompt_stalled`, which is the gate's quota signature. A pane that
+    # cannot be reached at all is an outage the gate cannot fix, so the distinct
+    # code has to win — otherwise a closed pane holds dispatch for 30 minutes.
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=fail"
+    assert_failure
+    assert_output --partial "herdr_send_keys_failed"
+    assert_output --partial "not a token-limit signature"
+    [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: a broken pane leaves an existing strike count untouched" {
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "strikes": "1", "backoff_until": "0" }\n' >"${_LIMIT_FILE}"
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=fail"
+    assert_failure
+    run cat "${_LIMIT_FILE}"
+    assert_output --partial '"strikes": "1"'
+    refute_output --partial '"strikes": "2"'
 }
 
 # ---------------------------------------------------------------------------
