@@ -9,6 +9,7 @@ the decision logic as a pure function over stream lines.
 
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -506,3 +507,68 @@ def test_loop_warns_once_when_an_installed_skill_shadows_the_eval(tmp_path, monk
     stderr = capsys.readouterr().err
     assert stderr.count("shadows this eval") == 1
     assert "demo-skill" in stderr
+
+
+def test_run_loop_cli_reports_a_dead_harness_as_error(tmp_path) -> None:
+    """The stubbed-`run_eval` tests above never touch argparse or `__main__`,
+    so an entry-point wiring regression would still slip past them (PR #1437
+    review, codex). This one runs the documented command for real."""
+    project = tmp_path / "project"
+    (project / ".claude").mkdir(parents=True)
+
+    skill = tmp_path / "work" / "demo-skill"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("---\nname: demo-skill\ndescription: a demo description\n---\n")
+
+    shadow = tmp_path / "claude-config" / "skills" / "demo-skill"
+    shadow.mkdir(parents=True)
+    (shadow / "SKILL.md").write_text("---\nname: demo-skill\ndescription: a demo description\n---\n")
+
+    eval_set = tmp_path / "eval.json"
+    eval_set.write_text(json.dumps([{"query": "do the demo thing please", "should_trigger": False}]))
+
+    _install_fake_claude(tmp_path / "bin", "#!/bin/sh\necho 'Invalid API key - please run /login' >&2\nexit 1\n")
+
+    env = {
+        **os.environ,
+        "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}",
+        "PYTHONPATH": str(SKILL_DIR),
+        "CLAUDE_CONFIG_DIR": str(tmp_path / "claude-config"),
+        "HOME": str(tmp_path / "home"),
+    }
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.run_loop",
+            "--eval-set",
+            str(eval_set),
+            "--skill-path",
+            str(skill),
+            "--model",
+            "claude-sonnet-5",
+            "--max-iterations",
+            "1",
+            "--runs-per-query",
+            "2",
+            "--num-workers",
+            "1",
+            "--timeout",
+            "15",
+            "--holdout",
+            "0",
+            "--report",
+            "none",
+            "--verbose",
+        ],
+        cwd=project,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    assert "[ERROR] rate=0/0" in proc.stderr
+    assert "claude -p exited 1: Invalid API key" in proc.stderr
+    assert proc.stderr.count("shadows this eval") == 1
