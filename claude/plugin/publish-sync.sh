@@ -14,8 +14,9 @@
 # advanced to the published origin/main — fast-forwarded when it is a strict
 # ancestor, or (the usual case, since the hook's local sync commit and the
 # PR-merged one share content but not SHA and therefore diverge) rebased onto
-# it — but ONLY when every commit main was ahead by is a pure
-# "chore(claude-plugin): sync manifest" commit AND the working tree is clean.
+# it — but ONLY when every commit main was ahead by is a pure sync commit
+# (subject == "chore(claude-plugin): sync manifest", optionally suffixed with
+# " (<target(s)>)" per #1430) AND the working tree is clean.
 # git's patch-id detection drops the now-redundant published commit while
 # replaying any pure-sync commit whose content never actually landed, so
 # nothing is lost (see _cleanup_local_main_if_pure_sync).
