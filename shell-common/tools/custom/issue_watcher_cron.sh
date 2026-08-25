@@ -63,6 +63,10 @@ _IW_PANE_ID=""
 # cwd the workspace was bootstrapped with (persisted so a later tick can tell
 # the user its --cwd is being ignored). Empty for pre-#1391 state files.
 _IW_CWD=""
+# herdr's `.error.code` from the last failed dispatch attempt, published by
+# _iw_dispatch so the rate-limit gate can tell a quota wall from an unrelated
+# herdr failure. Empty whenever the dispatch succeeded.
+_IW_DISPATCH_ERROR_CODE=""
 
 # ============================================================
 # Helpers
@@ -333,6 +337,7 @@ _iw_prompt_once() {
 _iw_dispatch() {
     local _json _code _rc=0 _post_stall_status
 
+    _IW_DISPATCH_ERROR_CODE=""
     _json=$(_iw_prompt_once) || _rc=$?
 
     # Only `agent_prompt_stalled` is retried: it means the keystroke was dropped
@@ -366,7 +371,11 @@ _iw_dispatch() {
         return 0
     fi
 
-    ux_error "herdr agent prompt failed for agent ${_IW_AGENT_NAME}."
+    # Publish the *final* attempt's code — after a retry `$_json` holds the
+    # second response, so `$_code` from the first is stale. The rate-limit gate
+    # reads this to tell herdr's failure modes apart.
+    _IW_DISPATCH_ERROR_CODE=$(printf '%s' "${_json}" | _iw_json_value '.error.code')
+    ux_error "herdr agent prompt failed for agent ${_IW_AGENT_NAME} (${_IW_DISPATCH_ERROR_CODE:-unknown})."
     return 1
 }
 
@@ -490,9 +499,9 @@ _iw_limit_gate_check() {
 }
 
 # Record the outcome of the dispatch just attempted. $1 is _iw_dispatch's exit
-# status. Two consecutive unhealthy dispatches shut the gate; one healthy one
+# status. Two consecutive stalled dispatches shut the gate; one delivered one
 # wipes the slate, so `_IW_LIMIT_STRIKES` really does count consecutive
-# failures. 1 would hold the watcher over a single transient herdr blip; 2 buys
+# stalls. 1 would hold the watcher over a single transient herdr blip; 2 buys
 # that evidence for one extra tick (~5 min).
 _iw_limit_record() {
     local _rc="$1" _status _strikes _now
@@ -501,6 +510,18 @@ _iw_limit_record() {
         # A prompt herdr accepted means the agent changed state, i.e. it is
         # processing — `--wait` would not have returned otherwise.
         _iw_limit_clear
+        return 0
+    fi
+
+    # Only a stall is quota-shaped. herdr's other failures — `agent_not_found`,
+    # an auth or transport error, a malformed response — say the pane or the
+    # connection broke, not that the account ran dry. Counting them would hold
+    # dispatch for 30 minutes over an outage this gate cannot fix, and would
+    # file it under "token limit" in the cron log where nobody would look for a
+    # broken socket (PR #1439 codex review). Such a failure leaves the strike
+    # count where it is: it is evidence of neither exhaustion nor health.
+    if [ "${_IW_DISPATCH_ERROR_CODE}" != "agent_prompt_stalled" ]; then
+        ux_info "Dispatch failed with '${_IW_DISPATCH_ERROR_CODE:-unknown}' — not a token-limit signature, gate untouched."
         return 0
     fi
 
@@ -520,7 +541,7 @@ _iw_limit_record() {
     _strikes=$((_strikes + 1))
 
     if [ "${_strikes}" -lt "${_IW_LIMIT_STRIKES}" ]; then
-        ux_warning "Dispatch failed with agent ${_IW_AGENT_NAME} at '${_status:-none}' (${_strikes}/${_IW_LIMIT_STRIKES}) — possible token-limit exhaustion."
+        ux_warning "Dispatch stalled with agent ${_IW_AGENT_NAME} at '${_status:-none}' (${_strikes}/${_IW_LIMIT_STRIKES}) — possible token-limit exhaustion."
         _iw_limit_write "${_strikes}" "0" || true
         return 0
     fi
@@ -534,7 +555,7 @@ _iw_limit_record() {
     # Claude's quota windows run for hours, so a short backoff would only
     # re-dispatch into the same wall; 30 minutes keeps the recovery latency
     # (F-3) well inside one window while cutting the burn rate to zero.
-    ux_warning "Rate-limit gate closed for $((_IW_LIMIT_BACKOFF_SECONDS / 60))m — ${_strikes} consecutive dispatches failed with the agent idle (likely token limit)."
+    ux_warning "Rate-limit gate closed for $((_IW_LIMIT_BACKOFF_SECONDS / 60))m — ${_strikes} consecutive dispatches stalled with the agent idle (likely token limit)."
     _iw_limit_write "0" "$((_now + _IW_LIMIT_BACKOFF_SECONDS))" || true
 }
 
@@ -597,7 +618,8 @@ _iw_usage() {
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/${_IW_STATE_BASENAME}"
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/${_IW_LIMIT_STATE_BASENAME}   (rate-limit gate)"
     ux_bullet "rate-limit gate"
-    ux_bullet_sub "${_IW_LIMIT_STRIKES} dispatches in a row that fail with the agent idle close the gate"
+    ux_bullet_sub "${_IW_LIMIT_STRIKES} dispatches in a row that stall with the agent idle close the gate"
+    ux_bullet_sub "other herdr failures (agent_not_found, auth, network) never close it"
     ux_bullet_sub "while closed the tick holds: no dispatcher prompt, no worktree, exit 0"
     ux_bullet_sub "it reopens by itself after $((_IW_LIMIT_BACKOFF_SECONDS / 60))m — delete ${_IW_LIMIT_STATE_BASENAME} to reopen it now"
     ux_bullet "claude session (claude-yolo parity)"
