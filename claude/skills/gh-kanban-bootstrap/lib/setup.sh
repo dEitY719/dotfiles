@@ -274,10 +274,17 @@ require_project_scope() {
     die "Your gh token is missing the project scope required for mutations. Run: gh auth refresh -s project"
 }
 
+# Every GraphQL round-trip (reads AND the project/field mutations) goes
+# through here, so this is where the host pin has to live (#1407). `HOST`
+# is the origin-derived host: it defaults to github.com at declaration and
+# `detect_host` overwrites it in `main` before the first `gh_graphql` call,
+# so it is always in scope even under `set -u`. `--hostname` is `gh api`'s
+# host flag (`-h` is its help flag) and matches `auth_scopes_csv` above;
+# without it a GHES checkout would silently read and mutate github.com.
 gh_graphql() {
     local query="$1"
     shift
-    gh api graphql -f query="$query" "$@"
+    gh api --hostname "${HOST:-github.com}" graphql -f query="$query" "$@"
 }
 
 load_repo_context() {
@@ -568,6 +575,7 @@ ensure_pr_template() {
 
     encoded_content="$(pr_template_body | base64 | tr -d '\n')"
     gh api \
+        --hostname "${HOST:-github.com}" \
         --method PUT \
         -H "Accept: application/vnd.github+json" \
         "repos/${OWNER}/${REPO}/contents/${PR_TEMPLATE_PATH}" \
@@ -653,7 +661,12 @@ print_final_report() {
     fi
 
     ux_section "Smoke Test"
-    ux_bullet "gh issue create --repo ${OWNER}/${REPO} --title \"[Test] kanban smoke\" --body \"ignore\""
+    # Printed verbatim for the user to paste, and mirrored in
+    # references/ui-checklist.md — keep both host-pinned and identical.
+    # `--repo` names a repo but no host, so without the prefix this write
+    # follows `gh repo set-default` to whichever server that points at
+    # (#1403/#1407). This runs after detect_host, so HOST is resolved.
+    ux_bullet "GH_HOST=\"${HOST}\" gh issue create --repo ${OWNER}/${REPO} --title \"[Test] kanban smoke\" --body \"ignore\""
 
     if $DRY_RUN; then
         ux_section "Mode"

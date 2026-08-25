@@ -30,8 +30,9 @@ Positional args: `[pr-number] [remote]`. Both optional.
 - `remote` — default `origin`; missing → `git remote -v` and stop. Bind
   `TARGET_HOST` + `TARGET_REPO` from that one remote URL **before any `gh` call** per `references/github-target.md` (#1403).
 - `pr-number` — if omitted, auto-detect via `GH_HOST="$TARGET_HOST" gh pr view
-  --repo "$TARGET_REPO" --json number,headRefName,baseRefName,url,mergeable`
-  on the current branch. No PR for the branch → stop.
+  --json number,headRefName,baseRefName,url,mergeable` on the current branch.
+  No PR for the branch → stop. No `--repo` on this one call — `gh` rejects
+  `--repo` without a PR argument; `references/github-target.md` → "Exception".
 
 **Mergeable preflight** — immediately after resolving `PR_NUMBER`, run the
 host-pinned `gh pr view --json mergeable` short-circuit per `references/rebase-flow.md`

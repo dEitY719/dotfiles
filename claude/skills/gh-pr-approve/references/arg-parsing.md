@@ -47,9 +47,14 @@ silently. If `_gh_host_from_url` fails (non-GitHub remote), fall back to
 ## Parallel fetch (before reading the diff)
 
 - `TARGET_HOST` / `TARGET_REPO` per the section above.
-- PR number: explicit arg or `GH_HOST="$TARGET_HOST" gh pr view --repo
-  "$TARGET_REPO" --json number` on current branch; if neither exists,
-  stop and ask.
+- PR number: explicit arg or `GH_HOST="$TARGET_HOST" gh pr view --json
+  number` on current branch; if neither exists, stop and ask. `--repo` is
+  deliberately omitted **on this one call**: `gh` requires an explicit PR
+  argument whenever `--repo` is set (`argument required when using the
+  --repo flag`), which would defeat the branch detection. The `GH_HOST=`
+  prefix still pins the server, and `gh` then infers the repo from the
+  current checkout's remotes on that host. Every other `gh pr view <N>`
+  below has a positional and keeps `--repo`.
 - `ME=$(GH_HOST="$TARGET_HOST" gh api user -q .login)` — not repo-scoped,
   host prefix only.
 - PR JSON: `number,title,author,state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,files`
