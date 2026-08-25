@@ -46,6 +46,19 @@ Do not re-invoke a process skill (`superpowers:brainstorming`,
 etc.) just because it appeared earlier — its output is already in the
 conversation. Resume from the implementation/edit step those skills led to.
 
+Run `git status --short` once to confirm the working tree actually matches
+what the picked task implies — self-reported TodoList status can lag disk
+reality (e.g. a task marked `completed` whose files are still uncommitted).
+If it contradicts the picked task, tell the user in one line before
+proceeding; don't silently resume over a mismatch.
+
+If the picked task is coarser than the actual interruption point (e.g. a
+todo like "구현 issue #N" when the prior turn died partway through it),
+don't guess — use the last completed tool result already in the
+conversation to pinpoint exactly where it died, then resume from there. If
+no completed tool result exists in context (e.g. the turn died at session
+start), fall back to rule 3 above and ask.
+
 ## Step 2: Announce + Plan Smaller Steps
 
 Print the announce line first (success template in
