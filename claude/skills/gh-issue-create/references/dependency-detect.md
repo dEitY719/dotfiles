@@ -183,6 +183,6 @@ produces (or suppresses) the NF-1 warning. A drift guard asserts that the
 reference regex printed in this doc is byte-identical to the fixture's, so
 editing one without the other turns the suite red.
 
-What it does not cover: the two `gh api graphql` invocations themselves —
+What it does not cover: the two GraphQL invocations themselves —
 mocking `gh` would test the mock. Everything that decides what happens
 *around* them is fixtured, which is where the branching lives.
