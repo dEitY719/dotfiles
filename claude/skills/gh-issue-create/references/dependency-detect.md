@@ -28,7 +28,8 @@ so the step works on either host without a capability probe.
 `{issueId: ID!, blockingIssueId: ID!}`, verified against the live schema.
 The shape is recorded here, not just the availability, because a wrong
 argument name is not loud: NF-1 downgrades the rejection to one warning
-line and the issue is still created (#1445).
+line and the issue is still created (#1445). Since #1457 that record is
+enforced rather than merely written down — see "Test fixture" below.
 
 ## Step 2.6 — Detection (F-1)
 
@@ -190,6 +191,27 @@ produces (or suppresses) the NF-1 warning. A drift guard asserts that the
 reference regex printed in this doc is byte-identical to the fixture's, so
 editing one without the other turns the suite red.
 
-What it does not cover: the two GraphQL invocations themselves —
+Since #1457 it also pins the `addBlockedBy` argument shape, two ways:
+
+- **Offline** — a string assertion that the mutation above still names
+  `blockingIssueId`, and that the rejected array spelling from #1445 appears
+  nowhere in this file. That second assertion is why the drifted name is
+  never written out here even as an example: doing so would turn the suite
+  red on its own text.
+- **Live schema** — `AddBlockedByInput`'s input fields are read back from
+  the real API by introspection and compared to
+  `blockingIssueId,clientMutationId,issueId`. This is not a mock; it is a
+  read-only query against the server whose shape this doc records. Without
+  network or `gh` auth it **skips** rather than fails, so an offline shell
+  never goes red over an unrelated concern — one networked run is enough to
+  catch drift.
+
+The two fail on different things on purpose: the offline check catches an
+accidental edit here, the live one catches an upstream schema change.
+
+What it still does not cover: the two GraphQL invocations themselves —
 mocking `gh` would test the mock. Everything that decides what happens
-*around* them is fixtured, which is where the branching lives.
+*around* them is fixtured, which is where the branching lives. Scope of the
+shape guards is `addBlockedBy` alone; the `Issue.blockedBy` read path was
+confirmed working in #1445, and pinning the whole schema would cost more
+upkeep than it returns.
