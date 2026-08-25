@@ -25,11 +25,10 @@ Step 3 is not linked natively. Reconciling the two is out of v1 scope.
 so the step works on either host without a capability probe.
 
 `addBlockedBy` takes **one** blocker per call: `AddBlockedByInput` is
-`{issueId: ID!, blockingIssueId: ID!}`. Recording the argument shape here —
-not just the availability — is what this doc previously lacked, which is how
-an earlier plural-list spelling of that argument drifted out of sync with the
-schema and failed silently under NF-1 for every issue created afterwards
-(#1445).
+`{issueId: ID!, blockingIssueId: ID!}`, verified against the live schema.
+The shape is recorded here, not just the availability, because a wrong
+argument name is not loud: NF-1 downgrades the rejection to one warning
+line and the issue is still created (#1445).
 
 ## Step 2.6 — Detection (F-1)
 
@@ -109,8 +108,6 @@ for N in $DEP_NUMS; do
     _rc=1
     if [ -n "$_new_id" ] && [ -n "$_dep_id" ]; then
         # Variables: $issueId ID!, $blockingIssueId ID!
-        # `blockingIssueId` is singular by schema — see the note below the
-        # loop before reaching for a list form (#1445).
         GH_HOST="$TARGET_HOST" gh api graphql \
             -f issueId="$_new_id" -f blockingIssueId="$_dep_id" \
             -f query='
@@ -136,11 +133,11 @@ done
 `$DEP_WARNINGS` is what Step 5 prepends to its verdict line
 (`references/report-template.md`). An empty value means every `N` linked.
 
-Aliasing both lookups into one query keeps this at 2 round trips per `N`.
-That is the floor: `AddBlockedByInput` takes a single `blockingIssueId: ID!`,
-so one mutation per `N` is the only shape the schema accepts — there is no
-batched list to trade against. NF-1's per-`N` warning line falls out of that
-for free: one bad number can never reject its siblings.
+Aliasing both lookups into one query keeps this at 2 round trips per `N`,
+and the mutation half cannot go lower: `AddBlockedByInput` takes a single
+`blockingIssueId: ID!`, so blockers are linked one at a time. NF-1's
+per-`N` warning line falls out of that for free — one bad number can never
+reject its siblings.
 
 `GH_HOST` is mandatory here for the same reason it is on every other `gh`
 call in this skill (#1403): the GraphQL endpoint is chosen by host, and a
