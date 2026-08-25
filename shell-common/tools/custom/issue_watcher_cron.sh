@@ -5,7 +5,7 @@
 # cron 이 주기마다 이 스크립트를 호출하면 tick 1회를 수행한다. tick 은 감시부터
 # 디스패치까지를 직접 수행한다 — 판단이 필요한 지점은 마지막 한 곳,
 # 디스패치된 pane 안에서 도는 `/gh-issue-flow <N>` 뿐이다 (issue #1440):
-#   1) 끝난 이슈의 워크트리 회수 (closed + 그 워크트리에 agent 없음)
+#   1) 끝난 이슈의 워크트리 회수 (closed + agent 없음 + 미커밋 변경 없음)
 #   2) 살아있는 per-issue agent 수가 상한이면 이번 tick 보류
 #   3) `gh search issues` 로 할당된 open 이슈를 교차 저장소 한 번에 조회
 #   4) 제외 라벨 필터 + watched-repos.json 밖 저장소 제외 + 로컬 경로 매핑
@@ -86,9 +86,27 @@ _IW_EXCLUDE_LABELS_DEFAULT="wontfix,보류,not-implement"
 # exercise the multi-dispatch paths without waiting out a real cycle, and so a
 # machine with a different budget can say so — the same shape as
 # IW_WATCHED_REPOS / IW_EXCLUDE_LABELS / IW_IDLE_POLL_SLEEP above.
-_IW_MAX_PER_REPO="${IW_MAX_PER_REPO:-3}"
-_IW_MAX_CONCURRENT="${IW_MAX_CONCURRENT:-7}"
-_IW_DISPATCH_PER_TICK="${IW_DISPATCH_PER_TICK:-1}"
+#
+# Defined here rather than with the other helpers because the three constants
+# below are its only callers and they must be final before anything reads them.
+# A cap that silently became "" or "abc" is worse than no override at all: every
+# later `[ "$n" -ge "$cap" ]` would error out and the guard would read as passed
+# (PR #1456 agy review).
+_iw_cap() {
+    case "${1-}" in
+    '' | *[!0-9]*) ;;
+    *) if [ "$1" -gt 0 ]; then
+        printf '%s' "$1"
+        return 0
+    fi ;;
+    esac
+    [ -z "${1-}" ] || printf '[issue-watcher] %s=%s is not a positive integer — using %s.\n' "$3" "$1" "$2" >&2
+    printf '%s' "$2"
+}
+
+_IW_MAX_PER_REPO=$(_iw_cap "${IW_MAX_PER_REPO-}" 3 IW_MAX_PER_REPO)
+_IW_MAX_CONCURRENT=$(_iw_cap "${IW_MAX_CONCURRENT-}" 7 IW_MAX_CONCURRENT)
+_IW_DISPATCH_PER_TICK=$(_iw_cap "${IW_DISPATCH_PER_TICK-}" 1 IW_DISPATCH_PER_TICK)
 # Attempts per issue before giving up on it for this cycle. Every failed
 # attempt cleans its own worktree up first, so a retry starts from scratch.
 _IW_MAX_ATTEMPTS="3"
@@ -283,6 +301,14 @@ _iw_watch_hosts() {
 _IW_ISSUE_WORKTREES=""
 _IW_ISSUE_WORKTREES_LOADED=0
 
+# Echo $1 with every symlink resolved, or $1 unchanged when it cannot be
+# entered. Path comparisons in this file are between two sources that need not
+# agree spelling-wise — herdr reports a pane's cwd, git reports a worktree root,
+# and either can have arrived through a symlink.
+_iw_physical_path() {
+    (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"
+}
+
 # Emit `<worktree-path><TAB><owner/repo><TAB><number>` for every issue worktree
 # across every watched checkout.
 #
@@ -350,20 +376,38 @@ _iw_live_agents() {
     # the concurrency cap exactly when herdr is unhealthy.
     [ -n "${_json}" ] || return 1
 
+    # Both columns, because they answer at different moments: `cwd` is where the
+    # pane was opened (stable for the session's whole life) and `foreground_cwd`
+    # is where its shell is standing now. Taking only one loses the session that
+    # `cd`-ed away, and losing it means the collection step reads a live
+    # worktree as idle (PR #1456 agy/codex review).
     _cwds=$(printf '%s' "${_json}" | jq -r '
         if (.result.agents | type) == "array"
-        then .result.agents[]? | (.cwd // empty)
+        then .result.agents[]? | (.cwd // empty), (.foreground_cwd // empty)
         else error("no agent list")
         end
     ' 2>/dev/null) || return 1
 
+    # Prefix match on the physical path, not string equality: an agent sitting in
+    # a subdirectory of its worktree is still working that issue, and one side of
+    # the comparison may have arrived through a symlink.
     _IW_LIVE_AGENTS=$(_iw_issue_worktrees |
+        while IFS="${_IW_TAB}" read -r _wt _repo _number; do
+            printf '%s\t%s\t%s\n' "$(_iw_physical_path "${_wt}")" "${_repo}" "${_number}"
+        done |
         awk -F "${_IW_TAB}" -v cwds="${_cwds}" '
             BEGIN {
                 n = split(cwds, a, "\n")
-                for (i = 1; i <= n; i++) if (a[i] != "") live[a[i]] = 1
+                for (i = 1; i <= n; i++) if (a[i] != "") live[++m] = a[i]
             }
-            live[$1] { print $2 "\t" $3 }
+            {
+                for (i = 1; i <= m; i++) {
+                    if (live[i] == $1 || index(live[i], $1 "/") == 1) {
+                        print $2 "\t" $3
+                        break
+                    }
+                }
+            }
         ')
 
     _IW_LIVE_AGENTS_LOADED=1
@@ -409,7 +453,7 @@ _IW_PR_CACHE_DATA=""
 # answers on every GHES version in the watch list rather than only on servers
 # new enough to know the field.
 _iw_load_open_prs() {
-    local _repo="$1" _host="$2" _json
+    local _repo="$1" _host="$2" _json _count
 
     [ "${_IW_PR_CACHE_REPO}" != "${_repo}" ] || return 0
 
@@ -417,6 +461,20 @@ _iw_load_open_prs() {
         --state open --limit "${_IW_PR_LIMIT}" \
         --json number,headRefName,body 2>/dev/null) || return 1
     [ -n "${_json}" ] || return 1
+
+    # A full window is indistinguishable from a truncated one, and a truncated
+    # one silently reinstates the exact failure this file exists to remove: the
+    # issue's PR sits outside the window, reads as "unhandled", and earns a
+    # second PR. Treat it as "cannot tell" rather than as an answer
+    # (PR #1456 agy/codex review).
+    _count=$(printf '%s' "${_json}" | jq -r 'length' 2>/dev/null) || _count=""
+    case "${_count}" in
+    '' | *[!0-9]*) return 1 ;;
+    esac
+    if [ "${_count}" -ge "${_IW_PR_LIMIT}" ]; then
+        ux_warning "${_repo} has ${_count}+ open PRs — cannot rule out a duplicate within the ${_IW_PR_LIMIT}-PR window." >&2
+        return 1
+    fi
 
     _IW_PR_CACHE_REPO="${_repo}"
     _IW_PR_CACHE_DATA="${_json}"
@@ -434,6 +492,11 @@ _iw_load_open_prs() {
 #
 # The `\b` after the number is load-bearing: without it `#14` would match a
 # body that closes `#145`, retiring issue 14 for as long as that PR is open.
+#
+# The optional `:` and the optional non-space run before `#` cover the two other
+# spellings GitHub honours — `Closes: #11` and the cross-repo `Closes
+# owner/repo#11` — which the first cut missed, so a hand-written PR using either
+# read as "unhandled" and the issue was dispatched again (PR #1456 codex review).
 _iw_handled_by_pr() {
     local _number="$1" _hits
 
@@ -442,7 +505,7 @@ _iw_handled_by_pr() {
           | select(
               ((.headRefName // "") | test("^wt/issue-" + $n + "/"))
               or ((.body // "")
-                  | test("\\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\\s+#" + $n + "\\b"; "i"))
+                  | test("\\b(close[sd]?|fix(e[sd])?|resolve[sd]?):?\\s+(\\S+)?#" + $n + "\\b"; "i"))
             )
         ] | length
     ' 2>/dev/null) || _hits=""
@@ -794,9 +857,33 @@ EOF
 # for issues that are about to be dispatched.
 #
 # Diagnostics go to stderr, for the same reason as in _iw_collect_candidates.
+# How many issues this tick may still start: the per-tick intake rate, further
+# clipped by the free slots under the global ceiling.
+#
+# Both halves are needed. main() already refuses a tick that is *at* the global
+# ceiling, but that check answers one question ("may this tick start anything?")
+# and cannot answer the other ("how many?"): with _IW_DISPATCH_PER_TICK raised
+# above 1, a tick starting at max-1 would pass that gate and then dispatch its
+# whole per-tick allowance, overshooting _IW_MAX_CONCURRENT (PR #1456 codex
+# review).
+_iw_dispatch_budget() {
+    local _slots
+    _slots=$(( _IW_MAX_CONCURRENT - $(_iw_live_count) ))
+    if [ "${_slots}" -lt "${_IW_DISPATCH_PER_TICK}" ]; then
+        [ "${_slots}" -gt 0 ] || _slots=0
+        printf '%s' "${_slots}"
+    else
+        printf '%s' "${_IW_DISPATCH_PER_TICK}"
+    fi
+}
+
 _iw_select_candidates() {
     local _candidates="$1"
-    local _repo _number _numbers _path _host _live _rc _picked=0 _selected=""
+    local _repo _number _numbers _path _host _live _rc _selected=""
+    local _budget _repo_budget
+
+    _budget=$(_iw_dispatch_budget)
+    [ "${_budget}" -gt 0 ] || return 0
 
     for _repo in $(_iw_repo_order "$(_iw_last_repo)"); do
         _numbers=$(printf '%s\n' "${_candidates}" |
@@ -806,10 +893,13 @@ _iw_select_candidates() {
         [ -n "${_numbers}" ] || continue
 
         _live=$(_iw_live_count_repo "${_repo}")
-        if [ "${_live}" -ge "${_IW_MAX_PER_REPO}" ]; then
+        _repo_budget=$(( _IW_MAX_PER_REPO - _live ))
+        if [ "${_repo_budget}" -le 0 ]; then
             ux_info "Skipping ${_repo} — ${_live} of its issues are already running (max ${_IW_MAX_PER_REPO})." >&2
             continue
         fi
+        # The repo's own headroom, never more than what is left for this tick.
+        [ "${_repo_budget}" -le "${_budget}" ] || _repo_budget="${_budget}"
 
         _path=$(_iw_repo_path "${_repo}")
         _host=$(_iw_repo_host "${_repo}")
@@ -846,11 +936,15 @@ _iw_select_candidates() {
 
             printf '%s\t%s\t%s\t%s\n' "${_repo}" "${_number}" "${_path}" "${_host}"
             _selected="${_repo}"
-            _picked=$((_picked + 1))
-            [ "${_picked}" -lt "${_IW_DISPATCH_PER_TICK}" ] || break
+            # Both budgets are spent per selection, so a repo cannot exceed its
+            # own headroom and the tick cannot exceed the global one.
+            _repo_budget=$((_repo_budget - 1))
+            _budget=$((_budget - 1))
+            [ "${_repo_budget}" -gt 0 ] || break
+            [ "${_budget}" -gt 0 ] || break
         done
 
-        [ "${_picked}" -lt "${_IW_DISPATCH_PER_TICK}" ] || break
+        [ "${_budget}" -gt 0 ] || break
     done
 
     # Advance the cursor only when this tick actually served a repo. A tick
@@ -866,14 +960,22 @@ _iw_select_candidates() {
 # hygiene, not correctness: since NF-1 nothing keys on a worktree's existence,
 # so a worktree that outlives its issue costs disk and nothing else.
 _iw_cleanup_worktrees() {
-    local _wt _repo _number _host _state _root
+    local _wt _repo _number _host _state _root _here _wt_real
+
+    _here=$(pwd -P)
 
     # fd 3: the loop body runs `gh`, which reads stdin (PR #1447 agy review).
     while IFS="${_IW_TAB}" read -r _wt _repo _number <&3; do
         [ -n "${_wt}" ] || continue
         [ -n "${_number}" ] || continue
-        # Never collect the worktree this tick is standing in.
-        [ "${_wt}" != "$PWD" ] || continue
+        # Never collect the worktree this tick is standing in — or any worktree
+        # it is standing *inside*. Comparing the two raw strings missed both a
+        # subdirectory cwd and a path that arrived through a symlink, either of
+        # which let the tick pull the ground out from under itself
+        # (PR #1456 agy/codex review).
+        _wt_real=$(_iw_physical_path "${_wt}")
+        [ "${_here}" = "${_wt_real}" ] && continue
+        case "${_here}/" in "${_wt_real}/"*) continue ;; esac
         ! _iw_live_has "${_repo}" "${_number}" || continue
 
         _host=$(_iw_repo_host "${_repo}")
@@ -884,11 +986,18 @@ _iw_cleanup_worktrees() {
         }
         [ "${_state}" = "CLOSED" ] || continue
 
+        # Deliberately no `--force`. `git worktree remove` refuses a working
+        # tree with modified or untracked files, and that refusal is the whole
+        # safety property here: an issue can be closed by hand while its session
+        # still holds uncommitted work, and forcing would delete that work with
+        # no warning and no recovery — routine hygiene must not be a data-loss
+        # path (PR #1456 agy/codex review). A worktree left behind costs disk
+        # and nothing else, since NF-1 means its existence decides nothing.
         _root=$(_iw_repo_path "${_repo}")
-        if git -C "${_root}" worktree remove "${_wt}" --force >/dev/null 2>&1; then
+        if git -C "${_root}" worktree remove "${_wt}" >/dev/null 2>&1; then
             ux_info "Collected worktree ${_wt} — ${_repo}#${_number} is closed."
         else
-            ux_warning "Could not remove worktree ${_wt} — continuing."
+            ux_warning "Leaving worktree ${_wt} in place — it has uncommitted or untracked changes (or git refused)."
         fi
     done 3<<EOF
 $(_iw_issue_worktrees)
