@@ -30,6 +30,9 @@ The shape is recorded here, not just the availability, because a wrong
 argument name is not loud: NF-1 downgrades the rejection to one warning
 line and the issue is still created (#1445). Since #1457 that record is
 enforced rather than merely written down — see "Test fixture" below.
+That warning now also carries the server's own sentence as its `원인:` line
+(#1458), so the next such mismatch identifies itself instead of looking like
+a network blip.
 
 ## Step 2.6 — Detection (F-1)
 
@@ -87,11 +90,16 @@ both node ids in one round trip (aliases), then mutate:
 
 ```bash
 DEP_WARNINGS=""
+_errf=$(mktemp)
 for N in $DEP_NUMS; do
     # Variables: $owner String!, $name String!, $new Int!, $dep Int!
     # `// ""` on both ids is what keeps a GraphQL null out of the mutation:
     # a missing issue resolves to null, and interpolating that would send the
     # literal string "null" as an ID!.
+    # stderr lands in $_errf rather than /dev/null (#1458): a non-existent
+    # number is rejected *here*, not by the mutation, and the rejection names
+    # itself in plain text. stdout stays on the pipe because $IDS needs it —
+    # which is why this is a file and not a `2>&1` merge.
     IDS=$(GH_HOST="$TARGET_HOST" gh api graphql \
         -f owner="${TARGET_REPO%%/*}" -f name="${TARGET_REPO##*/}" \
         -F new="$NEW_NUM" -F dep="$N" \
@@ -102,13 +110,15 @@ for N in $DEP_NUMS; do
               depIssue: issue(number:$dep) { id }
             }
           }' --jq '(.data.repository // {}) |
-                   "\(.newIssue.id // "") \(.depIssue.id // "")"') || IDS=""
+                   "\(.newIssue.id // "") \(.depIssue.id // "")"' 2>"$_errf") || IDS=""
 
     _new_id="${IDS%% *}"
     _dep_id="${IDS##* }"
     _rc=1
     if [ -n "$_new_id" ] && [ -n "$_dep_id" ]; then
         # Variables: $issueId ID!, $blockingIssueId ID!
+        # $_errf is reused, so a clean lookup can never leave a stale cause
+        # attached to a mutation failure — the redirect truncates it.
         GH_HOST="$TARGET_HOST" gh api graphql \
             -f issueId="$_new_id" -f blockingIssueId="$_dep_id" \
             -f query='
@@ -116,7 +126,7 @@ for N in $DEP_NUMS; do
                 addBlockedBy(input:{issueId:$issueId, blockingIssueId:$blockingIssueId}) {
                   issue { number }
                 }
-              }' >/dev/null 2>&1 && _rc=0
+              }' >/dev/null 2>"$_errf" && _rc=0
     fi
 
     # NF-1: one warning per failed N, on stderr *and* stacked for Step 5.
@@ -124,11 +134,17 @@ for N in $DEP_NUMS; do
     # the operator actually reads.
     if [ "$_rc" -ne 0 ]; then
         _w="[WARN] Blocked by #${N} 링크 실패 — GH UI에서 수동 추가 필요"
+        _cause=$(head -1 "$_errf")
+        if [ -n "$_cause" ]; then
+            _w="${_w}
+    원인: ${_cause}"
+        fi
         printf '%s\n' "$_w" >&2
         DEP_WARNINGS="${DEP_WARNINGS}${_w}
 "
     fi
 done
+rm -f "$_errf"
 ```
 
 `$DEP_WARNINGS` is what Step 5 prepends to its verdict line
@@ -155,21 +171,40 @@ one stderr line, one line stacked into `$DEP_WARNINGS` for the Step 5 report.
 
 ```
 [WARN] Blocked by #<N> 링크 실패 — GH UI에서 수동 추가 필요
+    원인: <captured stderr, first line>
 ```
 
+The `원인:` line is what separates those causes from one another (#1458).
+"Does not abort" and "throws the diagnosis away" are independent decisions,
+and Step 4.5 used to take both: `>/dev/null 2>&1` on the calls meant a
+permanent defect and a transient blip printed the same sentence. #1445 was a
+100%-reproducible argument-schema mismatch, and the server named it —
+`Argument 'blockingIssueId' on InputObject 'AddBlockedByInput' is required` —
+into a discarded stream. A failure diagnoses itself only at the moment it
+happens; after the issue exists the same conditions cannot be reconstructed.
+
+The line is omitted entirely when nothing was captured, so a silent failure
+still produces exactly the one line it always did. Only the first line of the
+capture is carried: the full GraphQL error would swamp `$DEP_WARNINGS` in the
+Step 5 report, and the first line already tells schema, permission, and
+network apart.
+
 Never retry, never fall back to a label or a body trailer: a half-applied
-dependency the operator cannot see is worse than a visible warning.
+dependency the operator cannot see is worse than a visible warning. Making
+the cause visible is not a step toward automatic recovery — a retry would
+still delay the report on the replication-lag path for something the operator
+resolves in two clicks.
 
 That one path is also why the availability claim above needs no capability
 probe. If a target's schema turns out not to expose `addBlockedBy`, the
 mutation is rejected and the operator gets the warning — the same outcome a
-probe would produce, minus a round trip on every run.
+probe would produce, minus a round trip on every run. With the cause attached,
+that rejection now also says so in words.
 
 Known non-error cause of that warning: GitHub's own replication lag. The new
 issue is seconds old when its node id is queried, and a read can miss it.
-The result is a warning, not a wrong link, and the fix stays manual — a retry
-loop here would contradict the never-retry rule above and delay the report
-for the one case the operator can resolve in two clicks.
+The result is a warning, not a wrong link, and the fix stays manual — and its
+`원인:` line is what lets the operator tell it apart from a defect at a glance.
 
 ## Out of v1 scope
 
@@ -186,10 +221,12 @@ Detection **and** the Step 4.5 outcome classification are mirrored in
 header carries the sync rule for trigger-phrase changes.
 
 What the suite covers: the trigger matrix, the plain-mention negatives, the
-NF-2 cross-repo skip, `--no-auto-deps`, and every id/mutation state that
-produces (or suppresses) the NF-1 warning. A drift guard asserts that the
-reference regex printed in this doc is byte-identical to the fixture's, so
-editing one without the other turns the suite red.
+NF-2 cross-repo skip, `--no-auto-deps`, every id/mutation state that produces
+(or suppresses) the NF-1 warning, and the `원인:` line's presence, truncation,
+and absence-when-silent. Two drift guards hold the doc to the fixture: the
+reference regex printed here must be byte-identical to the fixture's, and this
+doc must not reintroduce `>/dev/null 2>&1` over the GraphQL calls. Editing one
+side without the other turns the suite red.
 
 Since #1457 it also pins the `addBlockedBy` argument shape, two ways:
 
