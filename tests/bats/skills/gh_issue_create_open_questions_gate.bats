@@ -102,6 +102,38 @@ teardown() {
     assert_output ''
 }
 
+# 미정 token boundary — PR #1455 agy BLOCKER. A false positive here BLOCKS
+# issue creation, so precision beats recall on this one pattern.
+@test "gate: '김미정' (a personal name) is not a deferral" {
+    run gh_issue_create_detect_open_items "리뷰어는 김미정 님으로 배정한다."
+    assert_success
+    assert_output ''
+}
+
+@test "gate: '장미정원' does not trip the 미정 rule" {
+    run gh_issue_create_detect_open_items "테스트 픽스처 이름은 장미정원이다."
+    assert_success
+    assert_output ''
+}
+
+@test "gate: '미정임' (with a copula ending) is still an open item" {
+    run gh_issue_create_detect_open_items "알림 채널은 미정임"
+    assert_success
+    assert_output 'deferred-wording'
+}
+
+@test "gate: '미정이다' is still an open item" {
+    run gh_issue_create_detect_open_items "백오프 길이는 아직 미정이다."
+    assert_success
+    assert_output 'deferred-wording'
+}
+
+@test "gate: '미정' followed by punctuation is an open item" {
+    run gh_issue_create_detect_open_items "임계값: 미정."
+    assert_success
+    assert_output 'deferred-wording'
+}
+
 # ── D-2 rule 3: unjudgeable acceptance criteria ──────────────────────
 @test "gate: an empty acceptance-criterion checkbox is an open item" {
     run gh_issue_create_detect_open_items \
@@ -154,6 +186,56 @@ teardown() {
     run gh_issue_create_detect_open_items \
         "## 배경 (Why)
 기존 구현은 재시도를 적절히 하지 못한다.
+"
+    assert_success
+    assert_output ''
+}
+
+# Multi-space checkbox — PR #1455 agy FOLLOW-UP. `- [   ]` is a checkbox a
+# human typed; the old `\[[ xX]\]` pattern walked straight past it.
+@test "gate: a multi-space empty checkbox is an open item" {
+    run gh_issue_create_detect_open_items \
+        "## 수용 기준 (Acceptance Criteria)
+- [   ]
+"
+    assert_success
+    assert_output 'unjudgeable-criterion'
+}
+
+# Non-feat templates — PR #1455 codex BLOCKER. `fix`/`perf`/`refactor`/`test`
+# ship `## 검증` and `verify` ships `## Verification Goal`; both write plain
+# bullets, so a checkbox-only scan under 수용 기준 missed them entirely.
+@test "gate: an empty bullet under '## 검증' is an open item" {
+    run gh_issue_create_detect_open_items \
+        "## 검증 (Verification)
+-
+"
+    assert_success
+    assert_output 'unjudgeable-criterion'
+}
+
+@test "gate: a hedged bullet under '## 검증' is an open item" {
+    run gh_issue_create_detect_open_items \
+        "## 검증
+- 재현 스크립트를 필요 시 돌려 본다
+"
+    assert_success
+    assert_output 'unjudgeable-criterion'
+}
+
+@test "gate: a hedged bullet under '## Verification Goal' is an open item" {
+    run gh_issue_create_detect_open_items \
+        "## Verification Goal
+- 로그를 적절히 확인한다
+"
+    assert_success
+    assert_output 'unjudgeable-criterion'
+}
+
+@test "gate: a concrete bullet under '## 검증' is not an open item" {
+    run gh_issue_create_detect_open_items \
+        "## 검증 (Verification)
+- \`./tests/test\` 가 exit 0 으로 끝난다
 "
     assert_success
     assert_output ''
@@ -250,6 +332,26 @@ teardown() {
     assert_output '(보류 — 사용자 지시)'
 }
 
+# PR #1455 codex BLOCKER — the "그냥 만들어" escape is a live human overriding
+# the gate for their own issue. Unattended callers must never reach it: a
+# labeled deferral is still a deferral, not an executable choice.
+@test "decision mark: waived is refused under --no-ask" {
+    run gh_issue_create_decision_mark waived 1
+    assert_failure
+    assert_output ''
+}
+
+@test "decision mark: waived is still allowed with a human present" {
+    run gh_issue_create_decision_mark waived 0
+    assert_success
+    assert_output '(보류 — 사용자 지시)'
+}
+
+@test "decision mark: an unknown source is a caller bug" {
+    run gh_issue_create_decision_mark bogus
+    assert_failure
+}
+
 # ── Doc drift: the prose IS the implementation ───────────────────────
 @test "docs: feat template ships 확정 사항, not Open Questions" {
     run grep -c '^## Open Questions' "${SKILL_DIR}/references/templates/feat.md"
@@ -278,6 +380,23 @@ teardown() {
 
 @test "docs: clarification.md carries the Step 3.1 gate section" {
     run grep -q '^## 미결 게이트 (Step 3.1)' "${SKILL_DIR}/references/clarification.md"
+    assert_success
+}
+
+@test "docs: clarification.md documents the 미정 token boundary" {
+    run grep -q '미정' "${SKILL_DIR}/references/clarification.md"
+    assert_success
+    run grep -q '김미정' "${SKILL_DIR}/references/clarification.md"
+    assert_success
+}
+
+@test "docs: clarification.md scopes rule 3 beyond 수용 기준" {
+    run grep -qE '## 검증|Verification Goal' "${SKILL_DIR}/references/clarification.md"
+    assert_success
+}
+
+@test "docs: constraints.md refuses the waive escape under --no-ask" {
+    run grep -q '보류 — 사용자 지시' "${SKILL_DIR}/references/constraints.md"
     assert_success
 }
 
