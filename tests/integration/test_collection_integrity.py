@@ -3,12 +3,15 @@
 The repo's default entry points (`mise run test`, `./tests/test`) inherit
 `addopts = "-n auto"` from pyproject.toml, and xdist workers collect in separate
 processes — so an import-time `sys.path` / `sys.modules` mutation made by one
-test module never reaches the others, and a top-level module name collision
-stays invisible on that path. The command `tests/AGENTS.md` documents
-(`pytest tests/integration/`) collects everything in one process, where the same
-collision aborts collection for the *whole* suite: in #1432 a single
-`ModuleNotFoundError` cost all 1350 tests, silently, while the default path
-stayed green.
+test module never reaches the others, and the tests themselves still run. That
+does *not* make a top-level module name collision invisible on that path: the
+controller's own collection still errors, so pytest exits non-zero there too
+(measured at #1432's pre-fix commit: `1350 passed, 1 error`, `EXIT=1`). What the
+parallel path hides is the *scale* — the run reads as one broken module. Run
+serially (`-n 0`), the same collision aborts collection for the *whole* suite:
+in #1432 a single `ModuleNotFoundError` cost all 1350 tests. That is why this
+guard shells out with `-n 0` — it is the only configuration where the assertion
+sees the defect at its true size (#1448).
 
 The collision was `scripts`: `claude/skills/skill-create/scripts/` carried an
 (empty) `__init__.py`, making it a *regular* package, while the repo-root
