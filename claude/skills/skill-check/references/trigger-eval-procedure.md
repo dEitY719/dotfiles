@@ -72,22 +72,31 @@ Authoring rules that keep the measurement honest:
 
 ### One harness constraint that shapes true-queries
 
-`run_eval.py` judges from the **first** `content_block_start` of type
-`tool_use`: if that tool is not `Skill` or `Read`, it scores the query as "not
-triggered" no matter what happens next (`run_eval.py:135-143`). So a
-`should_trigger: true` query must be phrased so that consulting the skill is
-the natural *opening* move — ask for the workflow, not for a lookup. Queries
-that invite Claude to grep or shell out first are scored as misses even when
-the skill is invoked one turn later. This does not bind false-queries.
+A query only counts as triggered when the probe's own uuid command is the thing
+Claude invokes. So a `should_trigger: true` query must be phrased so that
+consulting the skill is the natural *opening* move — ask for the workflow, not
+for a lookup. Queries that send Claude grepping or shelling out first muddy the
+measurement. This does not bind false-queries.
+
+Before `b41dae08` this was absolute: the query was settled at the first tool
+block, so anything other than `Skill`/`Read` scored a miss outright. That
+early return is gone — every block is now inspected — but phrasing still moves
+the number, so the guidance stands.
+
+Worked example from #1417: bare slash-command queries like
+`/devx-pr-verify-merged 1388 --matrix full` scored **0/3 in every arm** — and
+`devx:pr-verify-live`, whose description *does* advertise its hyphen alias,
+scored 0/3 on the equivalent query too. The built-in control shows the alias is
+not the variable; the phrasing is.
 
 ## Probe twin-shadowing — the one failure mode, four causes
 
 `run_eval.py` registers the description under test as a uuid-named temp slash
 command and asks whether `claude -p <query>` calls **that** name. The
 measurement is valid only while exactly ONE such twin is visible to the probe
-session. Any second copy of the same skill wins the call instead, and
-`run_eval.py:143-151` returns on that first `Skill` block, scoring a correct
-trigger as a miss. It fails silently and reads as "the description is bad".
+session — any second copy of the same skill can win the call instead, and the
+probe's own uuid then never appears. It fails silently and reads as "the
+description is bad".
 
 Four separate things create a twin. `run-trigger-eval.sh` suppresses all four:
 
@@ -95,11 +104,28 @@ Four separate things create a twin. `run-trigger-eval.sh` suppresses all four:
 |---|---|---|---|
 | 1 | **Installed.** dotfiles exposes all 71 skills through `~/.claude*/skills/` | `CLAUDE_CONFIG_DIR` → throwaway dir holding only a copy of `.credentials.json` | #1412: 154 exposed slash commands → `trigger_rate 0.0`; 50 exposed → `1.0`, nothing else changed |
 | 2 | **Leftover.** A probe file from an earlier run is still in `.claude/commands/` | Every job gets a freshly created probe project, removed on exit | #1412 |
-| 3 | **Concurrent.** `run_eval --num-workers N` writes N uuid probes into ONE shared `.claude/commands/`, so N near-identical twins are visible at once; each worker only recognises its own uuid | `run_eval` is always invoked with `--num-workers 1`; parallelism moves up to `--jobs`, one whole (skill, arm) measurement per private config dir + probe project | #1417, one identical `sh:check` query: `--num-workers 3` → **0/3 FAIL**, `--num-workers 1` → **3/3 PASS** |
+| 3 | **Concurrent.** `run_eval --num-workers N` writes N uuid probes into ONE shared `.claude/commands/`, so N near-identical twins are visible at once; each worker only recognises its own uuid | `run_eval` is always invoked with `--num-workers 1`; parallelism moves up to `--jobs`, one whole (skill, arm) measurement per private config dir + probe project | #1417, identical `sh:check` query — before `b41dae08`: `--num-workers 3` → **0/3 FAIL** vs `1` → **3/3 PASS**; re-measured after it: **1/3 FAIL** vs **3/3 PASS** |
 | 4 | **Real checkout.** Without `PYTHONPATH`, `run_eval` only imports when cwd is `skill-create/`, and `find_project_root()` then writes probes into `~/dotfiles/.claude/commands/` | `PYTHONPATH` carries the `skill-create` dir; cwd is the probe project | cause 2, aimed at the live checkout |
 
+### What `b41dae08` (#1412) changed, and what it did not
+
+#1412's fixes have since landed on `main`. `run_eval.py` no longer settles the
+whole query at the first tool block — `TriggerDetector` inspects every block and
+only settles a negative at end of stream — and errored runs now leave the
+trigger-rate denominator instead of scoring as "did not fire". Registry:
+`claude/skills/skill-create/references/local-patches.md`.
+
+That removes the *severity* of causes 1–2 (a real trigger behind an installed
+twin now scores correctly) but not the need for isolation, and re-measurement
+shows **cause 3 still breaks the run**: with the fix in place, three concurrent
+workers still scored 1/3 against 3/3 serial. The `--num-workers 1` pin stays.
+
+Do not treat any isolation here as obsolete without re-measuring it. The two
+pins in this harness were re-verified against the fixed runner; that is the only
+reason their status is stated with confidence.
+
 Cause 3 is the trap worth restating: it is *created by the harness itself*, so
-"just add workers to make it faster" silently zeroes the run.
+"just add workers to make it faster" silently corrupts the run.
 
 **Reading `recall 0/10, reject 10/10`.** That pattern — a whole-set score near
 50%, every query scored as not-triggered, which flatters the reject class into a
@@ -115,24 +141,34 @@ Every temp dir, copied credentials included, is removed via
 복사한 credentials 가 삭제됐다", enforced structurally rather than by
 remembering.
 
-## Why `--model sonnet`, not the session model
+## Why `--model sonnet` is the default
 
-`description-optimization.md` Step 3 says to use the model powering your
-session. That guidance is for **optimising** a description. It does not hold
-here, and following it produces false failures:
+The contract is a **delta between two descriptions**, so the model only has to
+be held *constant* across the two arms, not maximised. `sonnet` is the default
+because it is roughly an order of magnitude cheaper per query at equal
+diagnostic value. Override with `--model`, but use one value for both arms or
+the numbers are meaningless.
 
-| model | same `sh:check` true-query | result |
-|---|---|---|
-| `opus` | identical | **0/2 FAIL** |
-| `sonnet` | identical | **1/1 PASS** |
+**Historical note — this used to be a correctness requirement, and no longer
+is.** Before `b41dae08`, `run_eval.py` settled the query at the first tool
+block, which it could not read for every model. Measured then on one identical
+`sh:check` query: `opus` **0/2 FAIL**, `sonnet` **1/1 PASS** — the `Skill` call
+happened under opus, but the detector missed it. Re-measured after the fix, on
+the same query: `opus` **3/3 PASS**, `sonnet` **3/3 PASS**. The model-dependence
+is gone; only the cost argument remains.
 
-Inspecting the stream shows the `Skill` call *does* happen under opus; the
-first-block detector above just cannot read opus-5's stream shape. Since the
-contract is a **delta between two descriptions**, the model only has to be held
-*constant* across arms, not maximised — so the harness pins the tier that the
-detector can actually read, which is also roughly an order of magnitude cheaper
-per query. Override with `--model`, but use one value for both arms or the
-numbers are meaningless.
+That correction is itself the lesson: a pin justified by a defect must be
+re-measured when the defect is fixed, or the justification quietly becomes
+folklore.
+
+## Measurement provenance
+
+Numbers recorded in `docs/guide/learnings/skill-description-trigger-eval.md`
+were taken **before** `b41dae08`. They stay internally valid — both arms ran on
+the identical runner, and the contract is a delta — but they are **not
+reproducible against today's `run_eval.py`**, which scores strictly more
+triggers. Re-measure before comparing new numbers against that table, and state
+which runner a figure came from whenever you add one.
 
 ## Deviation from the train/test split
 
