@@ -102,7 +102,9 @@ class TriggerDetector:
                 if content_item.get("type") != "tool_use":
                     continue
                 tool_name = content_item.get("name", "")
-                tool_input = content_item.get("input", {})
+                # `or {}` not `get(..., {})`: an explicitly null "input" is a
+                # present key, so the default never applies (PR #1422, agy).
+                tool_input = content_item.get("input") or {}
                 if tool_name == "Skill" and self.clean_name in tool_input.get("skill", ""):
                     self.triggered = True
                 elif tool_name == "Read" and self.clean_name in tool_input.get("file_path", ""):
