@@ -14,6 +14,26 @@ def usable_runs(result: dict) -> int:
     return result.get("usable_runs", result["runs"])
 
 
+# --- LOCAL PATCH (dotfiles #1428) -------------------------------------------
+# `run_eval.main()` and `run_loop()` each rendered the per-query verbose line
+# themselves, and only `main()` ever learned the F-2 rules — so the documented
+# entry point (`python -m scripts.run_loop`) still printed `[FAIL] rate=0/2`
+# for a harness that never ran. One formatter, both callers.
+# ----------------------------------------------------------------------------
+def format_result_lines(result: dict) -> list[str]:
+    """Verbose stderr lines for one eval result: status row, then any errors."""
+    if result.get("errors") and not usable_runs(result):
+        status = "ERROR"
+    else:
+        status = "PASS" if result["pass"] else "FAIL"
+    lines = [
+        f"  [{status}] rate={result['triggers']}/{usable_runs(result)} "
+        f"expected={result['should_trigger']}: {result['query'][:70]}"
+    ]
+    lines += [f"      ! {sample}" for sample in result.get("error_samples", [])]
+    return lines
+
+
 def parse_skill_md(skill_path: Path) -> tuple[str, str, str]:
     """Parse a SKILL.md file, returning (name, description, full_content)."""
     content = (skill_path / "SKILL.md").read_text()

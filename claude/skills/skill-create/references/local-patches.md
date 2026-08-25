@@ -39,11 +39,16 @@ decision logic is a pure function over stream-json lines, so the cases that
 used to be unreachable (probe behind a real skill call, probe behind a `Bash`
 call, probe in a later `assistant` content item) are cheap to assert.
 
-## Known gap
+## Closed gap (#1428)
 
-F-2's `[ERROR]` labelling and F-3's shadowing warning are wired into
-`run_eval.py`'s `main()`. `run_loop.py` calls `run_eval()` directly, so the
-documented optimization entry point (`python -m scripts.run_loop`, see
-`references/description-optimization.md`) still prints neither. Tracked as
-follow-up, not fixed here — the numbers it reports are correct either way
-now that `usable_runs()` is the shared denominator.
+F-2's `[ERROR]` labelling and F-3's shadowing warning used to be wired into
+`run_eval.py`'s `main()` only. `run_loop.py` calls `run_eval()` directly, so
+the documented optimization entry point (`python -m scripts.run_loop`, see
+`references/description-optimization.md`) printed neither, and its per-query
+line still divided `triggers` by the raw attempt count.
+
+Both call sites now share `utils.format_result_lines()` — the `[ERROR]` rule,
+the `usable_runs()` denominator and the stderr excerpt are derived in one
+place, since re-deriving them per call site is what opened the gap. The
+warning moved to `run_eval.warn_shadowing_skills()`, which `run_loop()` emits
+once per run before the first iteration.
