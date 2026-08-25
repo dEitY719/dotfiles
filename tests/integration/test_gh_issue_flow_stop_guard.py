@@ -47,9 +47,13 @@ def _run_hook(
     )
 
 
-def _write_transcript(tmp_path: Path, messages: list[dict[str, Any]]) -> Path:
-    """Write a list of dict messages to a JSONL transcript file."""
-    p = tmp_path / "transcript.jsonl"
+def _write_transcript(tmp_path: Path, messages: list[dict[str, Any]], name: str = "transcript.jsonl") -> Path:
+    """Write a list of dict messages to a JSONL transcript file.
+
+    `name` is overridden only by the `SubagentStop` fixtures (#1434), which
+    need TWO distinct transcripts (parent + subagent) inside one `tmp_path`.
+    """
+    p = tmp_path / name
     with p.open("w", encoding="utf-8") as f:
         for m in messages:
             f.write(json.dumps(m) + "\n")
@@ -228,8 +232,12 @@ def _full_chain_prefix() -> list[dict[str, Any]]:
     return [_user_text("/gh-issue-flow 1270"), *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS)]
 
 
-def _hook_event(transcript_path: Path | None, **extras: Any) -> str:
-    """Build a Stop hook stdin payload."""
+def _hook_event(transcript_path: Path | None, /, **extras: Any) -> str:
+    """Build a Stop hook stdin payload.
+
+    Positional-only so `extras` may carry a literal `transcript_path` key
+    (the empty-string fail-open rail, #1434) without colliding with it.
+    """
     payload: dict[str, Any] = {
         "hook_event_name": "Stop",
         "session_id": "test-session",
@@ -2052,20 +2060,6 @@ SETTINGS_PATH = REPO_ROOT / "claude" / "settings.json"
 _GUARD_COMMAND_FRAGMENT = "gh_issue_flow_stop_guard.py"
 
 
-def _write_named_transcript(tmp_path: Path, name: str, messages: list[dict[str, Any]]) -> Path:
-    """Write a JSONL transcript under an explicit file name.
-
-    `_write_transcript` always uses `transcript.jsonl`, but a `SubagentStop`
-    fixture needs TWO distinct transcripts (parent + subagent) inside the
-    same `tmp_path`.
-    """
-    p = tmp_path / name
-    with p.open("w", encoding="utf-8") as f:
-        for m in messages:
-            f.write(json.dumps(m) + "\n")
-    return p
-
-
 def _subagent_hook_event(
     agent_transcript: Path | None,
     parent_transcript: Path | None,
@@ -2073,32 +2067,29 @@ def _subagent_hook_event(
 ) -> str:
     """Build a `SubagentStop` hook stdin payload (measured shape, #1434).
 
-    Keys mirror the payload dumped from a live probe session: `agent_id`,
-    `agent_type`, `session_id`, `stop_hook_active`, `transcript_path` (the
-    PARENT) and `agent_transcript_path` (the SUBAGENT). Either transcript
-    key can be omitted by passing `None`, which is how the fail-open rails
-    are exercised.
+    Adds the keys a live probe session showed `SubagentStop` carries on top
+    of the `Stop` skeleton `_hook_event` already builds: `agent_id`,
+    `agent_type` and `agent_transcript_path` (the SUBAGENT's transcript,
+    versus `transcript_path` which is the PARENT's). Either transcript key
+    can be omitted by passing `None`, which is how the fail-open rails are
+    exercised.
     """
-    payload: dict[str, Any] = {
-        "hook_event_name": "SubagentStop",
-        "agent_id": "agent-test-1434",
-        "agent_type": "general-purpose",
-        "session_id": "test-parent-session",
-        "stop_hook_active": False,
-    }
-    if parent_transcript is not None:
-        payload["transcript_path"] = str(parent_transcript)
     if agent_transcript is not None:
-        payload["agent_transcript_path"] = str(agent_transcript)
-    payload.update(extras)
-    return json.dumps(payload)
+        extras.setdefault("agent_transcript_path", str(agent_transcript))
+    return _hook_event(
+        parent_transcript,
+        hook_event_name="SubagentStop",
+        agent_id="agent-test-1434",
+        agent_type="general-purpose",
+        **extras,
+    )
 
 
-def _mid_flow_messages(issue: str = "1434") -> list[dict[str, Any]]:
+def _mid_flow_messages() -> list[dict[str, Any]]:
     """Boundary + one sub-skill, no Step 3 report — the blockable state."""
     return [
-        _user_text(f"/gh-issue-flow {issue}"),
-        _assistant_skill("gh-issue-implement", f"{issue} direct origin --no-next-hint"),
+        _user_text("/gh-issue-flow 1434"),
+        _assistant_skill("gh-issue-implement", "1434 direct origin --no-next-hint"),
     ]
 
 
@@ -2113,11 +2104,15 @@ def _unrelated_messages() -> list[dict[str, Any]]:
 def _write_subagent_pair(
     tmp_path: Path,
     agent_messages: list[dict[str, Any]] | None,
-    parent_messages: list[dict[str, Any]] | None,
-) -> tuple[Path | None, Path | None]:
-    """Write the subagent + parent transcripts, returning both paths."""
-    agent = None if agent_messages is None else _write_named_transcript(tmp_path, "agent-1434.jsonl", agent_messages)
-    parent = None if parent_messages is None else _write_named_transcript(tmp_path, "parent.jsonl", parent_messages)
+    parent_messages: list[dict[str, Any]],
+) -> tuple[Path | None, Path]:
+    """Write the subagent + parent transcripts, returning both paths.
+
+    `agent_messages=None` writes no subagent transcript at all, which is how
+    the "chosen path is unreadable" rail is set up.
+    """
+    agent = None if agent_messages is None else _write_transcript(tmp_path, agent_messages, "agent-1434.jsonl")
+    parent = _write_transcript(tmp_path, parent_messages, "parent.jsonl")
     return agent, parent
 
 
@@ -2233,14 +2228,6 @@ def test_stop_event_trace_names_transcript_path_source(tmp_path: Path) -> None:
 # --- U-2: boundary detection on the subagent-specific entry surfaces -------
 
 
-def _subagent_base_dir_marker() -> dict[str, Any]:
-    """The skill-expansion marker Claude Code injects as a user message."""
-    return _user_text(
-        "Base directory for this skill: /home/tester/.claude/skills/gh-issue-flow\n"
-        "Use this to resolve relative paths in the instructions below."
-    )
-
-
 @pytest.mark.parametrize(
     ("label", "boundary_entry"),
     [
@@ -2248,7 +2235,7 @@ def _subagent_base_dir_marker() -> dict[str, Any]:
         # prompt as plain user text, exactly this shape.
         ("dispatch-prompt-user-text", _user_text("/gh-issue-flow 1434")),
         ("assistant-skill-tool-use", _assistant_skill("gh-issue-flow", "1434")),
-        ("skill-expansion-base-dir", _subagent_base_dir_marker()),
+        ("skill-expansion-base-dir", _user_skill_base_dir_marker()),
     ],
 )
 def test_subagent_boundary_surfaces_all_block(tmp_path: Path, label: str, boundary_entry: dict[str, Any]) -> None:
@@ -2338,47 +2325,24 @@ def test_real_subagent_entry_shapes_parse_and_block(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("label", "stdin_payload"),
     [
-        ("empty-stdin", ""),
-        ("malformed-json", "this is not json {{{"),
-        ("json-not-a-dict", json.dumps([{"hook_event_name": "SubagentStop"}])),
-        (
-            "both-transcript-keys-missing",
-            json.dumps(
-                {
-                    "hook_event_name": "SubagentStop",
-                    "agent_id": "agent-test-1434",
-                    "agent_type": "general-purpose",
-                    "session_id": "test-parent-session",
-                    "stop_hook_active": False,
-                }
-            ),
-        ),
+        ("both-transcript-keys-missing", _subagent_hook_event(None, None)),
         (
             "empty-string-transcript-keys",
-            json.dumps(
-                {
-                    "hook_event_name": "SubagentStop",
-                    "agent_transcript_path": "",
-                    "transcript_path": "",
-                    "stop_hook_active": False,
-                }
-            ),
+            _subagent_hook_event(None, None, agent_transcript_path="", transcript_path=""),
         ),
     ],
 )
-def test_subagent_stdin_level_fail_open_rails(label: str, stdin_payload: str) -> None:
-    """The stdin-level rails are unchanged on the `SubagentStop` path."""
+def test_subagent_transcript_key_fail_open_rails(label: str, stdin_payload: str) -> None:
+    """`_resolve_transcript_path` fails open when neither key names a path.
+
+    Only the transcript-key cases live here. The stdin-level rails (empty /
+    malformed / non-dict stdin) die in `main()` before the payload is ever
+    read as a dict, so they are event-agnostic by construction and are
+    already covered once by `test_empty_stdin_allows_stop` and friends.
+    """
     result = _run_hook(stdin_payload)
     assert result.returncode == 0, label
     assert result.stdout.strip() == "", f"{label} should fail open. stdout={result.stdout!r}"
-
-
-def test_subagent_no_boundary_in_either_transcript_allows_stop(tmp_path: Path) -> None:
-    """An issue-flow-unrelated subagent stop is untouched by the guard."""
-    agent, parent = _write_subagent_pair(tmp_path, _unrelated_messages(), _unrelated_messages())
-    result = _run_hook(_subagent_hook_event(agent, parent))
-    assert result.returncode == 0
-    assert result.stdout.strip() == ""
 
 
 def test_subagent_empty_transcript_file_allows_stop(tmp_path: Path) -> None:
@@ -2497,9 +2461,7 @@ def test_subagent_harness_entries_never_expire_the_boundary(tmp_path: Path) -> N
             _user_tool_result("tests: 42 passed", tool_use_id="toolu_subagent_1"),
             _user_text("Stop hook feedback:\ngh-issue-flow incomplete: 1/6 sub-skills invoked since the flow started."),
             _user_text("<task-notification>Agent 'reviewer' finished.</task-notification>"),
-            _user_text(
-                "Base directory for this skill: /home/tester/.claude/skills/gh-commit\nResolve relative paths with it."
-            ),
+            _user_skill_base_dir_marker("gh-commit"),
             _user_meta_text("Skill gh-commit is already loaded above; instructions unchanged."),
         ],
         _unrelated_messages(),

@@ -291,28 +291,21 @@ subagent's own transcript for the turns that followed.
 
 ### Known gap, left open on purpose
 
-`claude/hooks/devx_autopilot_stop_guard.py` has the **same structural
-exposure** — same `Stop`-only registration, same three-layer contract —
-and was deliberately **not** registered on `SubagentStop` in this
-change. #1434 scopes it out pending the result here. This is a
+`claude/hooks/devx_autopilot_stop_guard.py` and
+`claude/hooks/skill_completion_guard.py` both have the **same structural
+exposure** — `Stop`-only registration plus a `transcript_path`-only
+lookup — and were deliberately **not** registered on `SubagentStop` in
+this change. #1434 scopes them out pending the result here. This is a
 documented gap, not an oversight.
 
 ### Deployment caveat
 
 The live `~/.claude*/settings.json` is a real file, not a symlink (#940
-/ #1086), so a hook added to the tracked SSOT does not reach a running
-install on `git pull` alone:
-
-- **internal mode** — heals automatically.
-  `claude/hooks/session-start-settings-drift.sh` re-assigns the SSOT's
-  `.hooks` and `.statusLine` into the live file at every SessionStart.
-- **every other mode (external / multi-account)** — advisory only. The
-  same hook only *warns*; the live file is re-seeded by
-  `claude/setup.sh` (i.e. `./setup.sh`), and until that runs the install
-  keeps the old hook set.
-
-Either way the new registration takes effect on the **next** session,
-never in the one that pulled the commit.
+/ #1086), so this new registration does not reach a running install on
+`git pull` alone — it takes effect on the **next** session, never in the
+one that pulled the commit. Which mode heals automatically and which
+only warns is owned by `claude/AGENTS.md` → "Configuration Files"; do
+not restate the re-seed rules here, they have already changed once.
 
 ## Safety rails
 
