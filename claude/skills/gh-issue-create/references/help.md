@@ -54,8 +54,9 @@
 3. Drafts a structured issue body matching the template in the language
    the user was speaking (Korean chat → Korean issue).
 4. **미결 게이트 (Step 3.1)** — inspects the draft for unresolved items
-   (non-empty `## Open Questions`, deferral wording, unjudgeable acceptance
-   criteria) and, if any fire, lists them with a **권고안 + 근거** each and
+   (non-empty `## Open Questions`, deferral wording, unjudgeable criteria in
+   whichever section the template uses) and, if any fire, lists them with a
+   **권고안 + 근거** each and
    waits — `gh issue create` is not called before the user answers. Settled
    items are written back as `## 확정 사항 (Decisions)`. No open items → no
    output at all. `--no-ask` decides them autonomously instead;
