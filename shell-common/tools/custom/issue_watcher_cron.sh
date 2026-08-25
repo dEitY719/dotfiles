@@ -44,6 +44,14 @@ fi
 _IW_STATE_SUBDIR="issue-watcher"
 _IW_LOCK_BASENAME=".lock"
 
+# Field separators, resolved once. `IFS="$(printf '\t')"` written into a
+# `while` header is re-evaluated — and so re-forks `printf` — on every
+# iteration, and the candidate loop runs once per search result (up to
+# _IW_SEARCH_LIMIT per host). US (0x1f) joins label lists for the same reason
+# a tab joins the columns: a label may contain a comma or a space.
+_IW_TAB=$(printf '\t')
+_IW_US=$(printf '\037')
+
 # Watch list. Not a list of repos to *query* — `gh search issues` already spans
 # every repo the account can see in one call. It is the result filter (an issue
 # outside it is ignored) plus the repo -> local checkout map the worktree step
@@ -100,46 +108,25 @@ _iw_state_dir() {
 }
 
 # Extract one string field from JSON on stdin.
-#   $1 = jq filter, e.g. '.result.pane.pane_id' (used when jq is available).
-#        The POSIX fallback derives the flat key from the filter's last
-#        dot-segment (here: pane_id) and matches that key anywhere in the doc.
+#   $1 = jq filter, e.g. '.result.pane.pane_id'.
+#
+# jq-only, and deliberately so: main() refuses to run without jq (the watch
+# list and the search result are arrays of objects, which no flat-key text
+# scanner can walk), so every caller here is downstream of that check. A
+# hand-rolled awk/sed fallback would be unreachable code pretending to be a
+# safety net. Always returns 0 — a malformed document reads as "no such field",
+# which is what every caller already treats it as.
 _iw_json_value() {
-    local _json _key
-    _json=$(cat)
-    [ -n "${_json}" ] || return 0
-
-    if command -v jq >/dev/null 2>&1; then
-        printf '%s' "${_json}" | jq -r "${1} // empty" 2>/dev/null
-        return 0
-    fi
-
-    _key="${1##*.}"
-
-    # One JSON token per line first, so the greedy `.*` below cannot skip past
-    # the wanted key into a later one on the same (single-line) document.
-    printf '%s' "${_json}" |
-        awk '{ gsub(/[,{}]/, "\n"); print }' |
-        sed -n "s/.*\"${_key}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" |
-        head -n 1
+    jq -r "${1} // empty" 2>/dev/null || return 0
 }
 
-# First occurrence of a flat key anywhere in the document. `herdr tab create`
+# First string value of a flat key anywhere in the document. `herdr tab create`
 # and `herdr workspace create` both answer with a pane, but nest it under
 # different parents (`.result.pane` vs `.result.root_pane`), and the CLI is
 # free to add another. Keying on the leaf name rather than the path keeps this
 # working across both shapes without a per-command filter table.
 _iw_json_first() {
-    local _json
-    _json=$(cat)
-    [ -n "${_json}" ] || return 0
-
-    if command -v jq >/dev/null 2>&1; then
-        printf '%s' "${_json}" |
-            jq -r "[.. | objects | .$1? // empty] | map(select(type == \"string\")) | first // empty" 2>/dev/null
-        return 0
-    fi
-
-    printf '%s' "${_json}" | _iw_json_value ".$1"
+    _iw_json_value "[.. | objects | .$1? // empty] | map(select(type == \"string\")) | first"
 }
 
 # Echo epoch seconds, or nothing when the clock is unreadable.
@@ -336,13 +323,12 @@ _iw_search_issues() {
 # 0 when any of the issue's labels ($1, US-joined) is on the exclude list.
 # Exact matches only: a `wontfix-later` label must not be parked by `wontfix`.
 _iw_excluded_by_label() {
-    local _labels="$1" _excluded _label _us _oldifs
+    local _labels="$1" _excluded _label _oldifs
 
     _excluded="${IW_EXCLUDE_LABELS:-${_IW_EXCLUDE_LABELS_DEFAULT}}"
-    _us=$(printf '\037')
 
     _oldifs="$IFS"
-    IFS="${_us}"
+    IFS="${_IW_US}"
     # Word splitting on US is the point: the label list is a list. US is the
     # separator precisely because a label may contain a comma or a space.
     # shellcheck disable=SC2086
@@ -425,7 +411,7 @@ _iw_blocked_by_open() {
 _iw_collect_candidates() {
     local _repo _number _labels _path _host _found=0
 
-    while IFS="$(printf '\t')" read -r _repo _number _labels; do
+    while IFS="${_IW_TAB}" read -r _repo _number _labels; do
         if [ -z "${_repo}" ] || [ -z "${_number}" ]; then
             continue
         fi
@@ -513,6 +499,24 @@ _iw_cleanup_attempt() {
     [ -z "${_wt}" ] || (cd "${_path}" && _iw_gwt remove "${_wt}" --force) >/dev/null 2>&1 || true
 }
 
+# Run a herdr *create* command with the flags every such call shares:
+#   _iw_herdr_create <cwd> <label> <herdr-subcommand-word>...
+# e.g. `_iw_herdr_create "$_cwd" "$_label" tab create --workspace ws-1`.
+#
+# One owner on purpose. The `--env CLAUDE_CONFIG_DIR=` tail is the invariant
+# the rate-limit gate's soundness rests on — one account, one quota (see the
+# gate's header comment) — so a new creation call site must not be able to
+# quietly omit it. herdr's own JSON goes to stdout; the exit code is herdr's.
+_iw_herdr_create() {
+    local _cwd="$1" _label="$2"
+    shift 2
+
+    set -- "$@" --cwd "${_cwd}" --label "${_label}" --no-focus
+    [ -z "${_IW_CONFIG_DIR}" ] || set -- "$@" --env "CLAUDE_CONFIG_DIR=${_IW_CONFIG_DIR}"
+
+    herdr "$@" 2>/dev/null
+}
+
 # Echo the workspace id whose label is <1>, creating it against cwd <2> when no
 # such workspace exists. Label-matched rather than persisted: the herdr server
 # is the SSOT for what is open, and a state file would only drift from it.
@@ -529,10 +533,7 @@ _iw_workspace_for_label() {
         return 0
     fi
 
-    set -- --cwd "${_cwd}" --label "${_label}" --no-focus
-    [ -z "${_IW_CONFIG_DIR}" ] || set -- "$@" --env "CLAUDE_CONFIG_DIR=${_IW_CONFIG_DIR}"
-
-    _json=$(herdr workspace create "$@" 2>/dev/null) || _json=""
+    _json=$(_iw_herdr_create "${_cwd}" "${_label}" workspace create) || _json=""
     _ws=$(printf '%s' "${_json}" | _iw_json_first workspace_id)
     [ -n "${_ws}" ] || return 1
     printf '%s' "${_ws}"
@@ -542,10 +543,7 @@ _iw_workspace_for_label() {
 _iw_tab_create() {
     local _ws="$1" _cwd="$2" _label="$3" _json _pane _tab
 
-    set -- --workspace "${_ws}" --cwd "${_cwd}" --label "${_label}" --no-focus
-    [ -z "${_IW_CONFIG_DIR}" ] || set -- "$@" --env "CLAUDE_CONFIG_DIR=${_IW_CONFIG_DIR}"
-
-    _json=$(herdr tab create "$@" 2>/dev/null) || return 1
+    _json=$(_iw_herdr_create "${_cwd}" "${_label}" tab create --workspace "${_ws}") || return 1
 
     _pane=$(printf '%s' "${_json}" | _iw_json_first pane_id)
     _tab=$(printf '%s' "${_json}" | _iw_json_first tab_id)
@@ -655,7 +653,7 @@ _iw_process_issue() {
         elif ! _pane_tab=$(_iw_tab_create "${_ws}" "${_wt}" "#${_number}"); then
             ux_warning "herdr tab create failed for ${_repo}#${_number} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
         else
-            IFS="$(printf '\t')" read -r _pane _tab <<EOF
+            IFS="${_IW_TAB}" read -r _pane _tab <<EOF
 ${_pane_tab}
 EOF
             if ! _iw_agent_start "${_agent}" "${_pane}"; then
@@ -720,13 +718,14 @@ _iw_limit_read() {
     _iw_json_value ".$1" <"${_file}" 2>/dev/null
 }
 
-# Persist strikes + backoff deadline. Both are written as JSON *strings*: the
-# jq-less branch of _iw_json_value only matches quoted values, and a bare cron
-# environment is exactly where jq is likely to be missing.
+# Persist strikes + backoff deadline. Both are written as JSON *strings*. The
+# readers coerce either encoding, so this is a schema choice, not a constraint;
+# it stays quoted because a file already on disk from an earlier tick must keep
+# parsing across the upgrade.
 _iw_limit_write() {
     local _dir _file
     _dir=$(_iw_state_dir)
-    _file="${_dir}/${_IW_LIMIT_STATE_BASENAME}"
+    _file=$(_iw_limit_state_file)
 
     if ! mkdir -p "${_dir}" 2>/dev/null; then
         ux_warning "Cannot create state directory (${_dir}) — the rate-limit gate will not survive this tick."
@@ -902,7 +901,7 @@ _iw_usage() {
     ux_info "Usage: issue_watcher_cron.sh [--cwd <PATH>] [--dry-run] | [-h|--help|help]"
     ux_info "Runs one issue-watcher tick: find assigned issues, dispatch /gh-issue-flow."
     ux_bullet "options"
-    ux_bullet_sub "--cwd <PATH>   fallback checkout root for watched repos (default: git repo root)"
+    ux_bullet_sub "--cwd <PATH>   run the tick from PATH; relative watch-list paths resolve against it"
     ux_bullet_sub "--dry-run      print the issues this tick would dispatch, change nothing"
     ux_bullet_sub "-h, --help, help   show this help"
     ux_bullet "cycle"
@@ -999,6 +998,13 @@ main() {
         exit 1
     fi
 
+    # Parse the watch list here, in the tick's own shell. Every later consult
+    # sits inside a `$( )` — `_iw_repo_path` runs once per search result — and
+    # a memo written there would be discarded with the subshell, leaving the
+    # cache in _iw_watch_list permanently cold. Priming it once makes the file
+    # read and the jq parse happen exactly once per tick, as intended.
+    _iw_watch_list >/dev/null
+
     # A dry run reports what it would dispatch and touches nothing, so it must
     # stay usable on a machine with no herdr server.
     if [ "${_IW_DRY_RUN}" -eq 0 ] && ! command -v herdr >/dev/null 2>&1; then
@@ -1021,7 +1027,7 @@ main() {
 
     if [ "${_IW_DRY_RUN}" -eq 1 ]; then
         ux_success "Dry run — would dispatch:"
-        while IFS="$(printf '\t')" read -r _repo _number _path _host; do
+        while IFS="${_IW_TAB}" read -r _repo _number _path _host; do
             [ -n "${_repo}" ] || continue
             ux_bullet "${_repo}#${_number}  (${_path}, ${_host})"
         done <<EOF
@@ -1045,7 +1051,7 @@ EOF
         ;;
     esac
 
-    while IFS="$(printf '\t')" read -r _repo _number _path _host; do
+    while IFS="${_IW_TAB}" read -r _repo _number _path _host; do
         [ -n "${_repo}" ] || continue
 
         _rc=0
