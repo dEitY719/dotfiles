@@ -863,15 +863,17 @@ _run_full_bash() {
 # ---------------------------------------------------------------------------
 
 @test "self-check (#724): healthy source emits no BUG warning to stderr" {
-    # Sanity: the real helper defines all three public entry points.
+    # Sanity: the real helper defines all four checked entry points.
     # The tail-of-file self-check should see `command -v` succeed for
     # each and stay silent. Catches future regressions where the
-    # warning fires on the happy path (false positive).
+    # warning fires on the happy path (false positive). The assertion is
+    # deliberately message-shape agnostic (`BUG:` alone) so it keeps
+    # biting after #1421 renamed the text to name the missing function.
     run bash --noprofile --norc -c \
         ". \"${SHELL_COMMON}/functions/gh_project_status.sh\" 2>&1; echo \"rc=\$?\""
     assert_success
     assert_output --partial "rc=0"
-    refute_output --partial "BUG: public functions undefined"
+    refute_output --partial "BUG:"
 }
 
 @test "self-check (#724): typo'd/missing function still triggers stderr warning" {
@@ -881,28 +883,92 @@ _run_full_bash() {
     # snippet (mirroring the trailer in gh_project_status.sh) MUST
     # print a stderr warning and the file MUST still return rc 0 so
     # callers' `|| true` chains stay intact. Per gemini-code-assist
-    # review on PR #725 the canary covers three public entry points
-    # (sync / query_current / closing_issue_numbers); the bare stub
-    # below leaves all three undefined.
+    # review on PR #725 the canary started at three entry points;
+    # #1421 made it a data-driven loop over four and made each line
+    # name its function. The bare stub below leaves all four undefined,
+    # so all four lines must appear — proving the loop does not stop at
+    # the first miss.
     cat >"$BATS_TEST_TMPDIR/regressed_helper.sh" <<'STUB'
 #!/bin/sh
 # Simulate: future regression — every public function removed/renamed.
 # Trailing self-check (copied verbatim from gh_project_status.sh tail):
-if ! command -v _gh_project_status_sync >/dev/null 2>&1 \
-    || ! command -v _gh_project_status_query_current >/dev/null 2>&1 \
-    || ! command -v _gh_pr_closing_issue_numbers >/dev/null 2>&1; then
-    printf '[gh_project_status] BUG: public functions undefined after source — board sync / closing-issue link will silently no-op. See dotfiles #724.\n' >&2
-fi
+for _gh_ps_selfcheck_fn in \
+    _gh_project_status_sync \
+    _gh_project_status_query_current \
+    _gh_project_status_normalize_repo \
+    _gh_pr_closing_issue_numbers; do
+    command -v "$_gh_ps_selfcheck_fn" >/dev/null 2>&1 && continue
+    printf '[gh_project_status] BUG: %s undefined after source — board sync / closing-issue link will silently no-op. See dotfiles #724.\n' \
+        "$_gh_ps_selfcheck_fn" >&2
+done
+unset _gh_ps_selfcheck_fn
 :
 STUB
     run bash --noprofile --norc -c \
         ". \"$BATS_TEST_TMPDIR/regressed_helper.sh\" 2>&1; echo \"rc=\$?\""
     assert_success
     assert_output --partial "rc=0"
-    assert_output --partial \
-        "BUG: public functions undefined after source"
+    assert_output --partial "BUG: _gh_project_status_sync undefined after source"
+    assert_output --partial "BUG: _gh_project_status_query_current undefined after source"
+    assert_output --partial "BUG: _gh_project_status_normalize_repo undefined after source"
+    assert_output --partial "BUG: _gh_pr_closing_issue_numbers undefined after source"
 }
 
+@test "self-check (#1421): removing only normalize_repo triggers a named warning" {
+    # #1405 promoted _gh_project_status_normalize_repo to a cross-file
+    # dependency (claude/hooks/post-gh-pr-create.sh) and it is also called
+    # internally by _gh_project_status_resolve_owner_repo. The pre-#1421
+    # three-name check therefore stayed silent when this one function
+    # vanished: sync / query_current / closing_issue_numbers were all still
+    # defined, so `command -v` passed on each while board sync was
+    # functionally dead. Strip just this function out of a copy of the real
+    # helper and require the canary to fire, naming the culprit.
+    awk '/^_gh_project_status_normalize_repo\(\) \{$/{skip=1} skip && /^\}$/{skip=0; next} !skip' \
+        "${SHELL_COMMON}/functions/gh_project_status.sh" \
+        >"$BATS_TEST_TMPDIR/no_normalize_repo.sh"
+    # Fixture sanity: the surgery removed the target and left a sibling.
+    [ "$(grep -c '^_gh_project_status_normalize_repo() {$' "$BATS_TEST_TMPDIR/no_normalize_repo.sh")" -eq 0 ]
+    [ "$(grep -c '^_gh_project_status_sync() {$' "$BATS_TEST_TMPDIR/no_normalize_repo.sh")" -eq 1 ]
+
+    run bash --noprofile --norc -c \
+        ". \"$BATS_TEST_TMPDIR/no_normalize_repo.sh\" 2>&1; echo \"rc=\$?\""
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial \
+        "BUG: _gh_project_status_normalize_repo undefined after source"
+}
+
+@test "self-check (#1421): the loop variable does not leak into the caller" {
+    # The check is a top-level `for` in a *sourced* file, so its loop
+    # variable would otherwise persist in the operator's interactive shell.
+    run bash --noprofile --norc -c \
+        ". \"${SHELL_COMMON}/functions/gh_project_status.sh\"; \
+         echo \"leak=[\${_gh_ps_selfcheck_fn-unset}]\""
+    assert_success
+    assert_output --partial "leak=[unset]"
+}
+
+@test "self-check (#1421): every cross-file-called function is on the list" {
+    # Recurrence guard for #1421 itself. A function defined in this helper
+    # and referenced from any other *.sh is a public entry point by use, so
+    # it must be covered by the canary. Without this, promoting a private
+    # helper to cross-file (as #1405 did) silently widens the coverage gap.
+    local helper="${SHELL_COMMON}/functions/gh_project_status.sh"
+    local listed missing="" fn
+    listed=$(sed -n '/^for _gh_ps_selfcheck_fn in/,/^done$/p' "$helper")
+    [ -n "$listed" ]  # the loop shape this test reads must still exist
+
+    while IFS= read -r fn; do
+        [ -n "$fn" ] || continue
+        grep -rlF "$fn" --include='*.sh' "$DOTFILES_ROOT" 2>/dev/null \
+            | grep -qv 'functions/gh_project_status.sh' || continue
+        case "$listed" in *"$fn"*) continue ;; esac
+        missing="$missing $fn"
+    done < <(grep -oE '^_[a-z0-9_]+\(\) \{$' "$helper" | sed 's/() {$//' | sort -u)
+
+    [ -z "$missing" ] || \
+        fail "cross-file functions missing from the self-check list:$missing"
+}
 # ---------------------------------------------------------------------------
 # Repo pinning — issue #1405
 #
