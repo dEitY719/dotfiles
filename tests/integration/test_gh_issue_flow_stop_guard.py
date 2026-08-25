@@ -2353,6 +2353,92 @@ def test_subagent_empty_transcript_file_allows_stop(tmp_path: Path) -> None:
     assert result.stdout.strip() == ""
 
 
+# --- PR #1438 (agy) — the fallback is EVENT-AWARE, not a blind chain -------
+#
+# `_resolve_transcript_path` used to walk `("agent_transcript_path",
+# "transcript_path")` unconditionally. A `SubagentStop` whose subagent key
+# was missing or empty therefore resolved to the PARENT's transcript — the
+# exact cross-session contamination the function's own docstring forbids, and
+# a live parent mid-flow would then block an unrelated subagent's turn. On
+# `SubagentStop` the subagent's key is now the ONLY accepted source.
+
+
+@pytest.mark.parametrize(
+    ("label", "agent_extras"),
+    [
+        # The harness stopped emitting the key at all.
+        ("agent-transcript-key-absent", {}),
+        # The key is present but carries nothing usable.
+        ("agent-transcript-key-empty-string", {"agent_transcript_path": ""}),
+    ],
+)
+def test_subagent_stop_without_usable_agent_transcript_never_reads_parent(
+    tmp_path: Path, label: str, agent_extras: dict[str, Any]
+) -> None:
+    """No usable `agent_transcript_path` on `SubagentStop` → fail open (#1438).
+
+    The parent transcript here is deliberately MID-FLOW: under the old blind
+    preference chain the hook would have picked it up and blocked a subagent
+    that never ran a flow at all.
+    """
+    _, parent = _write_subagent_pair(tmp_path, None, _mid_flow_messages())
+    result = _run_hook(_subagent_hook_event(None, parent, **agent_extras))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"{label}: a SubagentStop with no usable agent_transcript_path fell back to "
+        f"the PARENT session's transcript and blocked on its unfinished flow. "
+        f"stdout={result.stdout!r}"
+    )
+
+
+def test_missing_hook_event_name_keeps_the_generic_preference_order(tmp_path: Path) -> None:
+    """A payload with no `hook_event_name` is untouched by the #1438 rule.
+
+    ONLY the literal `"SubagentStop"` narrows the lookup, so a payload that
+    names no event at all must keep the plain preference order: prefer
+    `agent_transcript_path`, else fall through to `transcript_path`. Both
+    halves are pinned — the fall-through half is what proves the subagent
+    restriction did not leak into the generic path.
+    """
+    agent, parent = _write_subagent_pair(tmp_path, _mid_flow_messages(), _unrelated_messages())
+    payload = json.loads(_subagent_hook_event(agent, parent))
+    del payload["hook_event_name"]
+    result = _run_hook(json.dumps(payload), env={"GH_ISSUE_FLOW_STOP_GUARD_TRACE": "1"})
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["decision"] == "block"
+    assert "transcript_source=agent_transcript_path" in result.stderr, (
+        f"An event-less payload stopped preferring agent_transcript_path. stderr={result.stderr!r}"
+    )
+
+    # Fall-through half: no subagent key, so `transcript_path` must still be
+    # read — the #1438 restriction is scoped to `SubagentStop` alone.
+    mid_flow_parent = _write_transcript(tmp_path, _mid_flow_messages(), "fallthrough.jsonl")
+    payload = json.loads(_subagent_hook_event(None, mid_flow_parent))
+    del payload["hook_event_name"]
+    result = _run_hook(json.dumps(payload), env={"GH_ISSUE_FLOW_STOP_GUARD_TRACE": "1"})
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"The SubagentStop-only restriction leaked into an event-less payload. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+    assert "transcript_source=transcript_path" in result.stderr
+
+
+def test_stop_event_with_only_transcript_path_still_blocks(tmp_path: Path) -> None:
+    """A plain `Stop` payload is unaffected by the #1438 narrowing.
+
+    `Stop` never carries `agent_transcript_path`, so the whole guard rests on
+    `transcript_path` there — the restriction must not reach this path.
+    """
+    transcript = _write_transcript(tmp_path, _mid_flow_messages())
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"A mid-flow `Stop` event stopped blocking after the #1438 change. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
 def test_subagent_stale_boundary_expiry_still_applies(tmp_path: Path) -> None:
     """The #1270 stale-boundary valve survives on the `SubagentStop` path."""
     agent, parent = _write_subagent_pair(

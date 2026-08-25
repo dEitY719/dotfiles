@@ -229,14 +229,20 @@ a silent no-op that looks installed.
 
 ### Resolution rule, and why there is no fallback
 
-The hook resolves the transcript as `agent_transcript_path` **first**,
-falling back to `transcript_path` only when the former is absent (which
-is every `Stop` event). If the *chosen* file does not exist the hook
-fails open; it does **not** then try the other key. A subagent must
-never be judged by its parent's flow state — the parent could be
-mid-flow while the subagent does something unrelated (spurious block),
-or the reverse (missed block). For a transcript we cannot read,
-fail-open is the correct answer.
+On `SubagentStop` the hook accepts **only** `agent_transcript_path`; on
+every other event (`Stop`, or a payload naming no event) it prefers
+`agent_transcript_path` and falls back to `transcript_path`. If the
+*chosen* file does not exist the hook fails open; it does **not** then
+try the other key. A subagent must never be judged by its parent's flow
+state — the parent could be mid-flow while the subagent does something
+unrelated (spurious block), or the reverse (missed block). For a
+transcript we cannot read, fail-open is the correct answer.
+
+The event-awareness is a PR #1438 (agy) tightening: the preference chain
+used to be unconditional, so a `SubagentStop` with an absent or empty
+`agent_transcript_path` silently walked on to the **parent's**
+transcript — the same cross-session contamination the no-fallback rule
+above exists to prevent. Such an event now fails open instead.
 
 ### Everything else carries over unchanged
 
@@ -288,6 +294,24 @@ claude -p --settings /tmp/probe-settings.json --model haiku \
 The probe hook `tee`s stdin to a file. U-4 was measured by having the
 same probe emit one `{"decision":"block"}` and then reading the
 subagent's own transcript for the turns that followed.
+
+### Rollout path (the live settings.json, not just the SSOT)
+
+Adding `SubagentStop` to the tracked `claude/settings.json` is not the
+whole deployment: every mode's live settings.json is a **real file**, so
+something has to carry the new event key over.
+
+- external / multi-account — `_claude_ensure_settings_copy`
+  (`shell-common/tools/integrations/claude.sh`) copies the SSOT over the
+  live file whenever the two differ, on `./setup.sh`.
+- internal — `claude/hooks/session-start-settings-drift.sh` re-assigns
+  the SSOT's whole `.hooks` block into the live file at every
+  SessionStart.
+
+Both propagate a wholly NEW event key, not just changed values; a
+regression test in `tests/bats/skills/session_start_settings_drift_hook.bats`
+pins that (live file with `Stop` but no `SubagentStop` → healed live
+file carries the guard under `.hooks.SubagentStop`).
 
 ### Known gap, left open on purpose
 
