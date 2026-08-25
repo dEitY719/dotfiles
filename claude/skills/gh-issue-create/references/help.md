@@ -53,20 +53,13 @@
 
 3. Drafts a structured issue body matching the template in the language
    the user was speaking (Korean chat → Korean issue).
-4. **미결 게이트 (Step 3.1)** — inspects the draft for unresolved
-   items: a non-empty `## Open Questions` section, "구현 시 결정" / "추후
-   결정" / "논의 필요" / "TBD" / "미정" 류 wording anywhere in the body, or
-   acceptance criteria that cannot be judged (blank thresholds/paths, or
-   only "적절히" / "필요 시"). If any are found, the skill lists them with a
-   **권고안 + 근거** each and waits — `gh issue create` is not called before
-   the user answers. The settled items are written back as
-   `## 확정 사항 (Decisions)` in `<결정> — 근거: <한 줄>` form. `--no-ask`
-   decides them autonomously instead (marked `(자율 판단)`);
-   `--as-discussion` skips the gate entirely, since an RFC is *supposed* to
-   carry Open Questions. No open items → no output at all. This exists
-   because issues here are unattended-execution input for `gh:issue-flow` /
-   `devx:autopilot` / `gh:issue-proceed`, none of which can ask a human
-   mid-run (#1446). See `references/clarification.md`.
+4. **미결 게이트 (Step 3.1)** — inspects the draft for unresolved items
+   (non-empty `## Open Questions`, deferral wording, unjudgeable acceptance
+   criteria) and, if any fire, lists them with a **권고안 + 근거** each and
+   waits — `gh issue create` is not called before the user answers. Settled
+   items are written back as `## 확정 사항 (Decisions)`. No open items → no
+   output at all. `--no-ask` decides them autonomously instead;
+   `--as-discussion` skips the gate. See `references/clarification.md`.
 5. **Auto-labels (Step 2.5, opt-in)** — when `$TARGET_REPO` ships
    `.gh-issue-defaults.yml`, attaches default labels and (optionally) a
    milestone per that SSOT. Missing labels warn-and-skip; never auto-
