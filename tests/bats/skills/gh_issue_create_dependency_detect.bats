@@ -198,32 +198,102 @@ teardown() {
 }
 
 # ── NF-1: Step 4.5 link-outcome classification (#1424 review) ────────
+# $5 carries the stderr captured from whichever GraphQL call failed. It is
+# what makes a permanent defect (argument-schema mismatch) distinguishable
+# from a transient one (replication lag, network) — before #1458 every cause
+# collapsed into the same single line.
 @test "link: both ids present and mutation ok → no warning" {
-    run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 0 13
+    run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 0 13 ""
+    assert_success
+    assert_output ''
+    [ -z "$stderr" ]
+}
+
+@test "link: a successful link stays silent even when stderr was captured" {
+    # Harmlessness (#1458): gh can chatter on stderr and still succeed. The
+    # 원인 line rides on the NF-1 warning, so it must never appear alone.
+    run --separate-stderr gh_issue_create_dep_link_outcome \
+        "I_new" "I_dep" 0 13 "note: unrelated gh chatter"
     assert_success
     assert_output ''
     [ -z "$stderr" ]
 }
 
 @test "link: null new-issue id → NF-1 warning, mutation never reached" {
-    run --separate-stderr gh_issue_create_dep_link_outcome "" "I_dep" 0 13
+    run --separate-stderr gh_issue_create_dep_link_outcome "" "I_dep" 0 13 ""
     assert_success
     assert_output ''
     [[ "$stderr" == *"[WARN] Blocked by #13 링크 실패"* ]]
 }
 
 @test "link: null dep-issue id → NF-1 warning" {
-    run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "" 0 13
+    run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "" 0 13 ""
     assert_success
     assert_output ''
     [[ "$stderr" == *"[WARN] Blocked by #13 링크 실패"* ]]
 }
 
 @test "link: rejected mutation → NF-1 warning naming that issue" {
-    run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 1 20
+    run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 1 20 ""
     assert_success
     assert_output ''
     [[ "$stderr" == *"[WARN] Blocked by #20 링크 실패 — GH UI에서 수동 추가 필요"* ]]
+}
+
+@test "link: no captured cause → the warning carries no 원인 line" {
+    # NF-1 is unchanged when there is nothing to add: a bare failure still
+    # produces exactly the one line it always did.
+    run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 1 20 ""
+    assert_success
+    [[ "$stderr" != *"원인:"* ]]
+}
+
+@test "link: a non-existent dep number surfaces its GraphQL cause" {
+    # The id lookup, not the mutation, is what fails here — the cause has to
+    # survive that call too, or this verification case is unreachable.
+    run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "" 0 999 \
+        "gh: Could not resolve to an Issue with the number of 999. (repository.depIssue)"
+    assert_success
+    [[ "$stderr" == *"[WARN] Blocked by #999 링크 실패"* ]]
+    [[ "$stderr" == *"원인: gh: Could not resolve to an Issue with the number of 999."* ]]
+}
+
+@test "link: an argument-schema mismatch surfaces verbatim (#1445 regression)" {
+    # This exact sentence was on the wire during #1445 and was thrown away.
+    run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 1 13 \
+        "gh: Argument 'blockingIssueId' on InputObject 'AddBlockedByInput' is required. Expected type ID!"
+    assert_success
+    [[ "$stderr" == *"원인: "* ]]
+    [[ "$stderr" == *"AddBlockedByInput"* ]]
+}
+
+@test "link: a multi-line cause is truncated to its first line" {
+    # 확정 3: the full GraphQL error would swamp \$DEP_WARNINGS in the Step 5
+    # report, and the first line already separates schema/permission/network.
+    run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 1 13 \
+        "$(printf 'first line matters\nsecond line must not appear\nthird')"
+    assert_success
+    [[ "$stderr" == *"원인: first line matters"* ]]
+    [[ "$stderr" != *"second line must not appear"* ]]
+}
+
+@test "link: the 원인 line is indented directly under its warning" {
+    run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 1 13 "boom"
+    assert_success
+    [[ "$stderr" == *"수동 추가 필요"$'\n'"    원인: boom"* ]]
+}
+
+@test "link: one failing sibling does not disturb the other's success" {
+    # Per-N isolation (#1458 verification): #13 fails with a cause, #20 links.
+    run --separate-stderr bash -c "
+        source '${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_issue_create_dependency_detect.sh'
+        gh_issue_create_dep_link_outcome 'I_new' '' 0 13 'gh: Could not resolve to an Issue with the number of 13.'
+        gh_issue_create_dep_link_outcome 'I_new' 'I_dep' 0 20 ''
+    "
+    assert_success
+    [[ "$stderr" == *"Blocked by #13 링크 실패"* ]]
+    [[ "$stderr" == *"원인: gh: Could not resolve"* ]]
+    [[ "$stderr" != *"#20"* ]]
 }
 
 # ── Drift guard: doc and fixture must share one reference regex ──────
@@ -234,6 +304,20 @@ teardown() {
     # post_gh_pr_create_hook.bats T20.
     run grep -Fq "$_GH_DEPS_REF" "$DOC"
     assert_success
+}
+
+# ── Drift guard: the doc must not discard the GraphQL cause (#1458) ──
+@test "drift: the doc's Step 4.5 keeps GraphQL stderr instead of discarding it" {
+    # Same reasoning as the regex guard, one level up: the fixture mirroring
+    # the cause line proves nothing if the prose that actually runs still
+    # writes the discard over it — that discard is precisely what hid #1445.
+    # Scoped to the fenced block, because the surrounding prose quotes the
+    # removed idiom on purpose when explaining why it went away.
+    BLOCK=$(awk '/^```bash$/ {f=1; next} /^```$/ {f=0} f' "$DOC")
+    [ -n "$BLOCK" ]
+    [[ "$BLOCK" != *'>/dev/null 2>&1'* ]]
+    [[ "$BLOCK" == *'2>"$_errf"'* ]]
+    [[ "$BLOCK" == *"원인: "* ]]
 }
 
 # ── #1457: addBlockedBy argument shape, pinned two ways ──────────────
