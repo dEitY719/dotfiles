@@ -1922,10 +1922,8 @@ _two_repo_fixture() {
     printf '{ "strikes": "1", "backoff_until": "0" }\n' >"${_LIMIT_FILE}"
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
-    # Positive control (issue #1442) — asserted before `run cat` replaces
-    # $output. The strike count standing still proves the gate classified the
-    # failure only if the gate saw it; a build with no gate leaves the file
-    # alone for the trivial reason that nothing reads it.
+    # Positive control (issue #1442; rationale at "a held tick leaves the gate
+    # deadline untouched") — must precede `run cat`, which replaces $output.
     assert_output --partial "not a token-limit signature"
     run cat "${_LIMIT_FILE}"
     assert_output --partial '"strikes": "1"'
@@ -1938,10 +1936,8 @@ _two_repo_fixture() {
     _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
-    # Two stalls in a row shut the gate; two broken panes must not. The
-    # positive control (issue #1442) is the classification line — it says the
-    # gate weighed this failure and let it pass, which the bare refute below
-    # cannot distinguish from a build that has no gate at all.
+    # Positive control (issue #1442; same rationale): two stalls in a row shut
+    # the gate, two non-quota failures must not.
     assert_output --partial "not a token-limit signature"
     refute_output --partial "Rate-limit gate closed"
     [ ! -f "${_LIMIT_FILE}" ]
