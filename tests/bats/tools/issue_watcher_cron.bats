@@ -43,6 +43,12 @@ teardown() {
         kill "${_LOCK_HOLDER_PID}" 2>/dev/null || true
         wait "${_LOCK_HOLDER_PID}" 2>/dev/null || true
     fi
+    # The unwritable-state-dir test chmods ${_STATE_DIR} to 500. A `bats`
+    # assertion aborts the test body at the failing line, so restoring the mode
+    # there is not enough — an early failure would leave the directory
+    # read-only and take `rm -rf` down with it, turning one red test into a
+    # broken teardown (PR #1439 agy review).
+    [ -d "${_STATE_DIR}" ] && chmod 700 "${_STATE_DIR}" 2>/dev/null || true
     rm -rf "${_WORK_DIR}"
     teardown_isolated_home
 }
@@ -908,11 +914,11 @@ _now() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: a failed dispatch records a strike and still exits 1" {
+@test "issue_watcher_cron: a stalled dispatch records a strike and still exits 1" {
     _install_herdr_stub
     _seed_state
 
-    _run_tick HERDR_PROMPT_MODE=fail
+    _run_tick HERDR_PROMPT_MODE=stall
     assert_failure
     assert_output --partial "1/2"
 
@@ -921,14 +927,14 @@ _now() {
     assert_output --partial '"backoff_until": "0"'
 }
 
-@test "issue_watcher_cron: two consecutive failed dispatches close the gate" {
+@test "issue_watcher_cron: two consecutive stalled dispatches close the gate" {
     _install_herdr_stub
     _seed_state
 
-    _run_tick HERDR_PROMPT_MODE=fail
+    _run_tick HERDR_PROMPT_MODE=stall
     assert_failure
 
-    _run_tick HERDR_PROMPT_MODE=fail
+    _run_tick HERDR_PROMPT_MODE=stall
     assert_failure
     assert_output --partial "Rate-limit gate closed for 30m"
 
@@ -1047,18 +1053,65 @@ _now() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: a dispatch failure with the agent working earns no strike" {
+@test "issue_watcher_cron: a stalled dispatch with the agent working earns no strike" {
     _install_herdr_stub
     _seed_state
 
-    # Call 1 is main()'s idle|done check; call 2 is the gate asking whether the
-    # failure was a token wall. `working` says the agent is alive and busy, so
-    # the failure is something else entirely.
-    _run_tick HERDR_AGENT_GET_SEQ="idle working" HERDR_PROMPT_MODE=fail
+    # Call 1 is main()'s idle|done check. Call 2 is _iw_dispatch's pre-retry
+    # probe — it must NOT say `working`, or the stall is treated as delivered
+    # and never reaches the gate. Call 3 is the gate asking whether the stall
+    # was a token wall; `working` says the agent is alive and busy after all.
+    _run_tick HERDR_AGENT_GET_SEQ="idle idle working" HERDR_PROMPT_MODE=stall
     assert_failure
     assert_output --partial "not a token-limit signal"
 
     [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: a non-quota dispatch failure earns no strike" {
+    _install_herdr_stub
+    _seed_state
+
+    # `fail` mode answers `agent_not_found` — a broken pane, an expired auth or
+    # a dead socket look like this too. None of them mean the account ran dry,
+    # so none may push the watcher toward a 30-minute hold (PR #1439 codex
+    # review).
+    _run_tick HERDR_PROMPT_MODE=fail
+    assert_failure
+    assert_output --partial "not a token-limit signature"
+    assert_output --partial "agent_not_found"
+
+    [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: repeated non-quota failures never close the gate" {
+    _install_herdr_stub
+    _seed_state
+
+    # Three rounds — one more than _IW_LIMIT_STRIKES. A herdr outage must not
+    # accumulate into a token-limit verdict no matter how long it lasts.
+    _run_tick HERDR_PROMPT_MODE=fail
+    assert_failure
+    _run_tick HERDR_PROMPT_MODE=fail
+    assert_failure
+    _run_tick HERDR_PROMPT_MODE=fail
+    assert_failure
+    refute_output --partial "Rate-limit gate closed"
+
+    [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: a non-quota failure leaves an existing strike untouched" {
+    _install_herdr_stub
+    _seed_state
+    _seed_gate 1 0
+
+    # Neither exhaustion evidence nor health evidence: the count stands.
+    _run_tick HERDR_PROMPT_MODE=fail
+    assert_failure
+
+    run cat "${_LIMIT_FILE}"
+    assert_output --partial '"strikes": "1"'
 }
 
 @test "issue_watcher_cron: the gate never runs on the working|blocked skip path" {
@@ -1098,11 +1151,9 @@ _now() {
     : >"${_LOCK_FILE}"
     chmod 500 "${_STATE_DIR}"
 
-    _run_tick HERDR_PROMPT_MODE=fail
+    _run_tick HERDR_PROMPT_MODE=stall
     assert_failure
     assert_output --partial "rate-limit gate will not survive this tick"
-
-    chmod 700 "${_STATE_DIR}"
 }
 
 @test "issue_watcher_cron: --help documents the rate-limit gate and its state file" {
