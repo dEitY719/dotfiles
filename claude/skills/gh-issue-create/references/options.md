@@ -4,6 +4,7 @@
 |----------|-------------|---------|
 | `[remote]` (positional) | Target remote name. Resolved to `TARGET_REPO=<owner>/<repo>`. Fails fast if missing. | `origin` |
 | `--no-auto-labels` | Skip Step 2.5 entirely; user `--label` flags remain in effect. | off |
+| `--no-auto-deps` | Skip Step 2.6 entirely — never auto-detect 선행 이슈 phrases or run Step 4.5's `addBlockedBy`. | off |
 | `--auto-label-debug` | Verbose stderr trace of Stage-1 detection and the kept/dropped label sets. | off |
 | `--label <name>` | User label, union with Step 2.5 auto-labels. Repeatable. | — |
 | `--assignee @me` | Only added when the user explicitly asks. | off |
