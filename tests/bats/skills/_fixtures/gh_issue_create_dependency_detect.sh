@@ -10,7 +10,7 @@
 #
 # The text->numbers half lives here, plus the Step 4.5 outcome
 # classification (which id/mutation states produce the NF-1 warning). The
-# `gh api graphql` calls themselves are out of scope — the fixture never
+# GraphQL calls themselves are out of scope — the fixture never
 # touches the network — but everything that decides what happens around
 # them is mirrored, so NF-1 cannot regress unnoticed.
 #
