@@ -57,6 +57,26 @@ Skills appear in Claude's `available_skills` list with their name + description,
 
 This means eval queries should be substantive enough that Claude would actually benefit from consulting a skill.
 
+## Reading the harness output
+
+`run_eval.py` distinguishes three outcomes per query, not two:
+
+- `[PASS]` / `[FAIL]` — the description did or did not trigger.
+- `[ERROR]` — `claude -p` never ran to completion (auth expiry, the nesting
+  guard, a timeout). The captured stderr is printed under the query, and those
+  runs are held out of the trigger rate. A query with no usable run left can
+  never be scored a pass, so a dead harness reads as a dead harness instead of
+  a tidy row of zeros.
+
+A `Warning: installed skill '<name>' shadows this eval` line means a skill of
+the same name is visible to the model, which will often answer with the real
+skill rather than the temporary probe. The score stays correct — the probe is
+counted wherever in the stream it appears — but an isolated
+`CLAUDE_CONFIG_DIR` still gives the cleanest signal.
+
+These three behaviors are local fixes to the vendored copy; see
+`references/local-patches.md`.
+
 ## Step 4: Apply the result
 
 Take `best_description` from the JSON output and update the skill's SKILL.md frontmatter. Show the user before/after and report the scores.

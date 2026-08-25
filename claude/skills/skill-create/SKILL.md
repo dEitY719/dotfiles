@@ -97,4 +97,5 @@ Read `references/platform-instructions.md` when running in Claude.ai or Cowork.
 
 ## Reference Files
 Phases cite each `references/*.md` inline. Also: `references/schemas.md` (JSON for evals.json/
-grading.json) and `agents/{grader,comparator,analyzer}.md` (assertion eval, blind A/B, why-one-won).
+grading.json), `references/local-patches.md` (this copy's local fixes and why it is not re-synced)
+and `agents/{grader,comparator,analyzer}.md` (assertion eval, blind A/B, why-one-won).
