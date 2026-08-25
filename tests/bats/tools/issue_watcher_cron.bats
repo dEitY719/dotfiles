@@ -325,10 +325,19 @@ _install_stubs() {
 # ---------------------------------------------------------------------------
 
 # Run one tick with the stubs on PATH and an isolated XDG_STATE_HOME.
-# Extra env assignments may be passed as leading VAR=VALUE arguments; extra
-# script flags after a `--` separator.
+#
+#   _run_tick [-u VAR ...] [VAR=VALUE ...] [-- script-flag ...]
+#
+# `-u VAR` pairs must come first — `env` only parses options ahead of the first
+# NAME=VALUE. The VAR=VALUE assignments are appended after the defaults, and
+# `env` applies assignments left to right, so a test can override any of them
+# (PATH included) without restating the whole sandbox.
 _run_tick() {
-    local _env=()
+    local _unset=() _env=()
+    while [ "$#" -gt 1 ] && [ "$1" = "-u" ]; do
+        _unset+=(-u "$2")
+        shift 2
+    done
     while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do
         _env+=("$1")
         shift
@@ -336,6 +345,7 @@ _run_tick() {
     [ "$#" -eq 0 ] || shift
 
     run env \
+        "${_unset[@]}" \
         "PATH=${_BIN_DIR}:${PATH}" \
         "CALL_LOG=${_LOG}" \
         "GH_ISSUES_FILE=${_WORK_DIR}/issues.json" \
@@ -349,14 +359,16 @@ _log_count() {
     grep -c -- "$1" "${_LOG}" 2>/dev/null || true
 }
 
+# Call-log assertions that leave `$output` and `$status` alone. Tests routinely
+# pair these with `assert_output` on the tick's own output, and a `run grep`
+# here would overwrite it — which used to make the order of the two
+# load-bearing, and silently assert against grep's output when it was wrong.
 _assert_logged() {
-    run grep -F -- "$1" "${_LOG}"
-    assert_success
+    grep -qF -- "$1" "${_LOG}" || fail "expected in call log: $1"
 }
 
 _refute_logged() {
-    run grep -F -- "$1" "${_LOG}"
-    assert_failure
+    ! grep -qF -- "$1" "${_LOG}" || fail "unexpected in call log: $1"
 }
 
 # A PATH that carries only the stub dir plus symlinks to the system binaries
@@ -747,8 +759,6 @@ _hold_lock() {
 @test "issue_watcher_cron: a spawn failure that never resolves gives up without a prompt" {
     _run_tick "GWT_SPAWN_MODE=fail"
     assert_failure
-    # assert_output before _refute_logged: `run grep` replaces $output, so the
-    # order is load-bearing.
     assert_output --partial "Worktree spawn failed"
     _refute_logged "agent prompt"
 }
@@ -810,13 +820,7 @@ _hold_lock() {
 
 @test "issue_watcher_cron: --dry-run works without herdr installed" {
     rm -f "${_BIN_DIR}/herdr"
-    run env \
-        "PATH=$(_path_without herdr)" \
-        "CALL_LOG=${_LOG}" \
-        "GH_ISSUES_FILE=${_WORK_DIR}/issues.json" \
-        "IW_WATCHED_REPOS=${_WATCH_FILE}" \
-        "XDG_STATE_HOME=${_STATE_HOME}" \
-        bash "${SCRIPT}" --dry-run
+    _run_tick "PATH=$(_path_without herdr)" -- --dry-run
     assert_success
     assert_output --partial "acme/dotfiles#11"
 }
@@ -827,11 +831,7 @@ _hold_lock() {
 
 @test "issue_watcher_cron: missing herdr binary fails with a clear error" {
     rm -f "${_BIN_DIR}/herdr"
-    run env "PATH=$(_path_without herdr)" "CALL_LOG=${_LOG}" \
-        "GH_ISSUES_FILE=${_WORK_DIR}/issues.json" \
-        "IW_WATCHED_REPOS=${_WATCH_FILE}" \
-        "XDG_STATE_HOME=${_STATE_HOME}" \
-        bash "${SCRIPT}"
+    _run_tick "PATH=$(_path_without herdr)"
     assert_failure
     assert_output --partial "herdr not found"
 }
@@ -878,13 +878,7 @@ _hold_lock() {
 }
 
 @test "issue_watcher_cron: missing flock degrades to a warning, not a failure" {
-    run env \
-        "PATH=$(_path_without flock)" \
-        "CALL_LOG=${_LOG}" \
-        "GH_ISSUES_FILE=${_WORK_DIR}/issues.json" \
-        "IW_WATCHED_REPOS=${_WATCH_FILE}" \
-        "XDG_STATE_HOME=${_STATE_HOME}" \
-        bash "${SCRIPT}"
+    _run_tick "PATH=$(_path_without flock)"
     assert_success
     assert_output --partial "without single-instance protection"
     _assert_logged "agent prompt iw-11"
@@ -931,26 +925,14 @@ _hold_lock() {
 
 @test "issue_watcher_cron: falls back to plain ~/.claude when no multi-account setup exists" {
     mkdir -p "${HOME}/.claude"
-    run env -u CLAUDE_ENABLED_ACCOUNTS -u CLAUDE_DEFAULT_ACCOUNT \
-        "PATH=${_BIN_DIR}:${PATH}" \
-        "CALL_LOG=${_LOG}" \
-        "GH_ISSUES_FILE=${_WORK_DIR}/issues.json" \
-        "IW_WATCHED_REPOS=${_WATCH_FILE}" \
-        "XDG_STATE_HOME=${_STATE_HOME}" \
-        bash "${SCRIPT}"
+    _run_tick -u CLAUDE_ENABLED_ACCOUNTS -u CLAUDE_DEFAULT_ACCOUNT
     assert_success
     _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude"
 }
 
 @test "issue_watcher_cron: the single-account fallback still fails fast without ~/.claude" {
     rm -rf "${HOME}/.claude" "${HOME}/.claude-personal"
-    run env -u CLAUDE_ENABLED_ACCOUNTS -u CLAUDE_DEFAULT_ACCOUNT \
-        "PATH=${_BIN_DIR}:${PATH}" \
-        "CALL_LOG=${_LOG}" \
-        "GH_ISSUES_FILE=${_WORK_DIR}/issues.json" \
-        "IW_WATCHED_REPOS=${_WATCH_FILE}" \
-        "XDG_STATE_HOME=${_STATE_HOME}" \
-        bash "${SCRIPT}"
+    _run_tick -u CLAUDE_ENABLED_ACCOUNTS -u CLAUDE_DEFAULT_ACCOUNT
     assert_failure
 }
 
@@ -962,13 +944,16 @@ _hold_lock() {
     _run_tick
     assert_success
     # Two dispatches, both carrying the same routing.
-    [ "$(_log_count -- '--env CLAUDE_CONFIG_DIR=')" -ge 2 ]
+    [ "$(_log_count '--env CLAUDE_CONFIG_DIR=')" -ge 2 ]
     _refute_logged "CLAUDE_CONFIG_DIR=${HOME}/.claude "
 }
 
 @test "issue_watcher_cron: unset HOME and XDG_STATE_HOME does not trip set -u" {
     local _tmp="${_WORK_DIR}/nohome-tmp"
     mkdir -p "${_tmp}"
+    # Open-coded rather than via _run_tick: this test needs XDG_STATE_HOME
+    # *absent*, and the helper always assigns it — `env` applies assignments
+    # after its own -u options, so -u could not win.
     run env -u HOME -u XDG_STATE_HOME \
         "PATH=${_BIN_DIR}:${PATH}" \
         "CALL_LOG=${_LOG}" \
