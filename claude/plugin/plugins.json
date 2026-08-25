@@ -2,6 +2,7 @@
   "plugins": [
     "andrej-karpathy-skills@karpathy-skills",
     "codex@openai-codex",
+    "plugin-dev@claude-plugins-official",
     "ralph-loop@claude-plugins-official",
     "superpowers@claude-plugins-official",
     "understand-anything@understand-anything"
