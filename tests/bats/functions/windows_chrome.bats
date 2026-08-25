@@ -140,8 +140,10 @@ _stub_exe() {
     mkdir -p "$(dirname "$exe")"
     : > "$exe"
     _helper_bash '_windows_chrome_exe'
-    # A missing helper exits 127, which assert_failure alone accepts (#1419).
-    assert_failure
+    # A missing helper exits 127, which a bare assert_failure accepts (#1419).
+    # _windows_chrome_exe returns 1 on every failure path, so pin the status
+    # and the silence the test name promises.
+    assert_failure 1
     assert_output ""
 }
 
