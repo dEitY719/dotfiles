@@ -20,9 +20,10 @@ are not enough — the harness must mechanically force continuation.
 Safety rails (each is critical — never accidentally trap the user):
   - Empty / unreadable / malformed stdin → exit 0 (allow stop).
   - Missing or unreadable transcript path → exit 0. On `SubagentStop` the
-    *subagent's own* `agent_transcript_path` is preferred over the parent
-    session's `transcript_path`, and a chosen-but-unreadable path never
-    falls back to the other key (measured, issue #1434 — see
+    *subagent's own* `agent_transcript_path` is the ONLY accepted source —
+    the parent session's `transcript_path` is never read on that event,
+    whether the subagent's key is absent, empty, or merely unreadable
+    (measured, issue #1434; tightened by the PR #1438 review — see
     `_resolve_transcript_path`).
   - `stop_hook_active == True` → exit 0 (we already blocked once in this
     chain; bowing out prevents an infinite Stop→block→Stop loop).
@@ -733,19 +734,37 @@ def _resolve_transcript_path(event: dict[str, Any]) -> tuple[str | None, str]:
     (measured, issue #1434). The subagent's is the one whose turn is ending,
     so it wins whenever present. `Stop` events carry only `transcript_path`.
 
-    Returns `(path, source_key)`, or `(None, "")` when neither key holds a
-    non-empty string. The source key is returned so the L1 trace can name
-    which transcript the decision was made from — the difference between
+    Returns `(path, source_key)`, or `(None, "")` when no acceptable key
+    holds a non-empty string. The source key is returned so the L1 trace can
+    name which transcript the decision was made from — the difference between
     "the guard is a no-op" and "the guard read the wrong session" is
     otherwise invisible in a log.
 
-    Deliberately NOT a fallback chain on readability: `main()` fails open if
-    the *chosen* path does not exist rather than retrying the other key. A
-    subagent whose transcript is unreadable must never be judged by its
-    parent's flow state — the parent session can hold a half-finished flow
-    that has nothing to do with this subagent, and using it would block an
-    unrelated turn.
+    On `SubagentStop` the subagent's own key is the ONLY acceptable source
+    (PR #1438, agy review). The preference chain used to be unconditional, so
+    a `SubagentStop` whose `agent_transcript_path` was missing or empty fell
+    straight through to the PARENT's `transcript_path` — exactly the
+    cross-session contamination the paragraph below forbids: a parent holding
+    a half-finished flow would block an unrelated subagent's turn. Such an
+    event now resolves to `(None, "")` and `main()` fails open instead.
+
+    ONLY the literal event name `"SubagentStop"` narrows the lookup. Any
+    other event — `Stop`, or a payload carrying no `hook_event_name` at all —
+    keeps the plain preference order (`agent_transcript_path` first, then
+    `transcript_path`), so nothing outside the subagent path changes.
+
+    Deliberately NOT a fallback chain on readability either: `main()` fails
+    open if the *chosen* path does not exist rather than retrying the other
+    key. A subagent whose transcript is unreadable must never be judged by
+    its parent's flow state — the parent session can hold a half-finished
+    flow that has nothing to do with this subagent, and using it would block
+    an unrelated turn.
     """
+    if event.get("hook_event_name") == "SubagentStop":
+        value = event.get("agent_transcript_path")
+        if isinstance(value, str) and value:
+            return value, "agent_transcript_path"
+        return None, ""
     for key in ("agent_transcript_path", "transcript_path"):
         value = event.get(key)
         if isinstance(value, str) and value:
