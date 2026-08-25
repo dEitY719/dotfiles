@@ -920,10 +920,20 @@ _run_full_bash() {
     # defined, so `command -v` passed on each while board sync was
     # functionally dead. Strip just this function out of a copy of the real
     # helper and require the canary to fire, naming the culprit.
+    local helper="${SHELL_COMMON}/functions/gh_project_status.sh"
+    # Pre-surgery sanity FIRST. The awk pattern below is pinned to the exact
+    # `name() {` definition format; if that format ever drifts, awk silently
+    # cuts nothing and the post-surgery "is it gone?" check below still reads
+    # 0 matches — passing for the wrong reason and failing later in a
+    # confusing place. Asserting the pattern matches exactly once in the
+    # SOURCE file makes the drift fail here, where the message says why
+    # (PR #1426 review, agy).
+    [ "$(grep -c '^_gh_project_status_normalize_repo() {$' "$helper")" -eq 1 ] || \
+        fail "definition-line format drifted — the awk surgery below no longer matches"
+
     awk '/^_gh_project_status_normalize_repo\(\) \{$/{skip=1} skip && /^\}$/{skip=0; next} !skip' \
-        "${SHELL_COMMON}/functions/gh_project_status.sh" \
-        >"$BATS_TEST_TMPDIR/no_normalize_repo.sh"
-    # Fixture sanity: the surgery removed the target and left a sibling.
+        "$helper" >"$BATS_TEST_TMPDIR/no_normalize_repo.sh"
+    # Post-surgery sanity: the target is gone and a sibling survived.
     [ "$(grep -c '^_gh_project_status_normalize_repo() {$' "$BATS_TEST_TMPDIR/no_normalize_repo.sh")" -eq 0 ]
     [ "$(grep -c '^_gh_project_status_sync() {$' "$BATS_TEST_TMPDIR/no_normalize_repo.sh")" -eq 1 ]
 
@@ -945,6 +955,42 @@ _run_full_bash() {
     assert_output --partial "leak=[unset]"
 }
 
+@test "self-check (#1421): zsh — healthy source is silent and leaks nothing" {
+    # gh_project_status.sh is sourced by BOTH shell loaders, but every other
+    # case in this section drives it through bash only. The #1421 mechanism is
+    # a top-level `for` plus an `unset` at file scope — constructs whose
+    # word-splitting and scoping rules differ between the shells — so bash-only
+    # coverage does not discharge this file's cross-shell requirement
+    # (PR #1426 review, codex BLOCKER).
+    run zsh -f -c \
+        ". \"${SHELL_COMMON}/functions/gh_project_status.sh\" 2>&1; \
+         echo \"rc=\$?\"; echo \"leak=[\${_gh_ps_selfcheck_fn-unset}]\""
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "leak=[unset]"
+    refute_output --partial "BUG:"
+}
+
+@test "self-check (#1421): zsh — removing only normalize_repo still warns" {
+    # The zsh half of the named-warning case above: the loop must iterate all
+    # four names and print the missing one under zsh too, and the file must
+    # still return rc 0 so `|| true` callers are unaffected.
+    local helper="${SHELL_COMMON}/functions/gh_project_status.sh"
+    [ "$(grep -c '^_gh_project_status_normalize_repo() {$' "$helper")" -eq 1 ] || \
+        fail "definition-line format drifted — the awk surgery below no longer matches"
+
+    awk '/^_gh_project_status_normalize_repo\(\) \{$/{skip=1} skip && /^\}$/{skip=0; next} !skip' \
+        "$helper" >"$BATS_TEST_TMPDIR/no_normalize_repo_zsh.sh"
+    [ "$(grep -c '^_gh_project_status_normalize_repo() {$' "$BATS_TEST_TMPDIR/no_normalize_repo_zsh.sh")" -eq 0 ]
+
+    run zsh -f -c \
+        ". \"$BATS_TEST_TMPDIR/no_normalize_repo_zsh.sh\" 2>&1; echo \"rc=\$?\""
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial \
+        "BUG: _gh_project_status_normalize_repo undefined after source"
+}
+
 @test "self-check (#1421): every cross-file-called function is on the list" {
     # Recurrence guard for #1421 itself. A function defined in this helper
     # and referenced from any other *.sh is a public entry point by use, so
@@ -957,7 +1003,15 @@ _run_full_bash() {
 
     while IFS= read -r fn; do
         [ -n "$fn" ] || continue
-        grep -rqF "$fn" --include='*.sh' --exclude='gh_project_status.sh' \
+        # -w is load-bearing: without a word boundary a short name that is a
+        # substring of a longer identifier in some other file registers as a
+        # caller and the guard fails on a function that is really file-local
+        # (PR #1426 review, codex + agy). It deliberately does NOT try to tell
+        # a real call from a mention in a comment or fixture — the guard is
+        # intentionally over-inclusive, because a false positive costs one
+        # extra name on the list while a false negative silently reproduces
+        # #1421. Verified: -w keeps the same 4-cross-file / 5-local split.
+        grep -rqwF "$fn" --include='*.sh' --exclude='gh_project_status.sh' \
             "$DOTFILES_ROOT" 2>/dev/null || continue
         case "$listed" in *"$fn"*) continue ;; esac
         missing="$missing $fn"
