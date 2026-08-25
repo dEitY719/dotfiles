@@ -8,12 +8,36 @@
 # Source-of-truth fixture: _fixtures/gh_issue_create_dependency_detect.sh.
 # It mirrors the detection half (pure text -> issue numbers) and the Step
 # 4.5 outcome classification (which id/mutation states raise the NF-1
-# warning). The two `gh api graphql` calls themselves are out of scope —
-# mocking `gh` would test the mock — so these tests stay network-free.
+# warning). The two `gh api graphql` calls are still not mocked — mocking
+# `gh` would test the mock — so the fixture-backed tests stay network-free.
+#
+# The two `addBlockedBy` argument-shape guards at the bottom (#1457) are the
+# exception, and they are not mocks either: one asserts the doc's own
+# mutation string offline, the other asks the *live* schema what
+# `AddBlockedByInput` actually accepts and skips when there is no network or
+# no auth. Together they close the gap #1445 exposed — before them this
+# suite was byte-for-byte green on both sides of that fix.
 
 bats_require_minimum_version 1.5.0
 
 load '../test_helper'
+
+# Captured at file-load time, i.e. before setup()'s sandbox replaces $HOME
+# and $XDG_CONFIG_HOME. `gh` reads its credentials from the real config dir;
+# under the sandbox every run looks unauthenticated, so the live-schema check
+# below would skip forever instead of ever detecting drift.
+_REAL_GH_HOME="$HOME"
+_REAL_GH_XDG_CONFIG_HOME="${XDG_CONFIG_HOME-}"
+
+# Run a command with the real gh config visible again. Read-only use only —
+# the sandbox exists to stop tests writing to the developer's home.
+_gh_real_config() {
+    if [ -n "$_REAL_GH_XDG_CONFIG_HOME" ]; then
+        env HOME="$_REAL_GH_HOME" XDG_CONFIG_HOME="$_REAL_GH_XDG_CONFIG_HOME" "$@"
+    else
+        env -u XDG_CONFIG_HOME HOME="$_REAL_GH_HOME" "$@"
+    fi
+}
 
 setup() {
     setup_isolated_home
@@ -196,4 +220,61 @@ teardown() {
     DOC="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-issue-create/references/dependency-detect.md"
     run grep -Fq "$_GH_DEPS_REF" "$DOC"
     assert_success
+}
+
+# ── #1457: addBlockedBy argument shape, pinned two ways ──────────────
+#
+# #1445 fixed a drift from the non-existent `blockedByIds: [ID!]` to the
+# real `blockingIssueId: ID!`, and this suite was green before *and* after
+# that fix — it proved nothing. NF-1 is why the drift was quiet in the
+# first place: a rejected mutation is downgraded to one warning line and
+# the issue is still created, so nobody notices until a `Blocked by` link
+# silently stops appearing.
+#
+# The two checks below fail differently on purpose: the offline one catches
+# an accidental edit to the doc, the live one catches an upstream schema
+# change. Scope is `addBlockedBy` only — the `Issue.blockedBy` read path was
+# verified working in #1445 and pinning the whole schema would cost more
+# than it is worth.
+
+@test "shape: the doc's addBlockedBy mutation uses blockingIssueId, not blockedByIds" {
+    # Offline half. `references/dependency-detect.md` is the SSOT that the
+    # skill actually executes, so a revert to the rejected array form must
+    # turn this suite red with no network at all — the live check below
+    # skips in that situation and would leave the tree undefended.
+    DOC="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-issue-create/references/dependency-detect.md"
+
+    # The prose that records the verified input shape.
+    run grep -Fq '{issueId: ID!, blockingIssueId: ID!}' "$DOC"
+    assert_success
+
+    # The executable mutation itself.
+    run grep -Fq 'addBlockedBy(input:{issueId:$issueId, blockingIssueId:$blockingIssueId})' "$DOC"
+    assert_success
+
+    # And the drifted spelling survives nowhere in the file.
+    run grep -Fq 'blockedByIds' "$DOC"
+    assert_failure
+}
+
+@test "shape: AddBlockedByInput's live input fields match the documented shape" {
+    # Live half — introspection, not a mock: it asks the real server what the
+    # mutation accepts. Skips rather than fails without network or auth
+    # (#1457 확정 2): a red here in an offline shell would get the check
+    # switched off, and detection is not lost — one networked run catches the
+    # drift. github.com is queried explicitly because that is the host whose
+    # shape the doc records.
+    command -v gh >/dev/null 2>&1 || skip "gh not installed"
+    _gh_real_config gh auth status --hostname github.com >/dev/null 2>&1 ||
+        skip "not authenticated to github.com — live schema check needs a real API"
+
+    fields=$(_gh_real_config env GH_HOST=github.com gh api graphql \
+        -f query='{__type(name:"AddBlockedByInput"){inputFields{name}}}' \
+        --jq '[.data.__type.inputFields[].name] | sort | join(",")' 2>/dev/null) || fields=""
+    [ -n "$fields" ] || skip "GraphQL introspection unavailable"
+
+    # Exact equality is deliberate. An added field is also drift worth
+    # seeing: the doc records this shape as verified, and the red is the
+    # prompt to re-verify it rather than a spurious failure.
+    assert_equal "$fields" 'blockingIssueId,clientMutationId,issueId'
 }
