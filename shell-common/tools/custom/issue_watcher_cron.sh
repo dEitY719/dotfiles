@@ -404,6 +404,12 @@ _iw_dispatch() {
 # `_iw_agent_status` then separates a real wall from an unrelated hiccup: an
 # agent reporting `working`/`blocked` is alive and busy, so that failure earns
 # no strike.
+#
+# Watching this agent only proves anything because one quota covers all of
+# them: `_iw_resolve_config_dir` picks a single CLAUDE_CONFIG_DIR for the
+# `iw-watch` pane (#1393), and the `iw-<n>` panes the dispatcher opens inside
+# that workspace inherit it — one account, one quota. If account routing ever
+# splits per pane, this reasoning has to be revisited (PR #1439 agy review).
 
 _iw_limit_state_file() {
     printf '%s/%s' "$(_iw_state_dir)" "${_IW_LIMIT_STATE_BASENAME}"
