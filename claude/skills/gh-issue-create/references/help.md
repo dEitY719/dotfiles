@@ -114,6 +114,7 @@ A 200-line issue is fine if the conversation warranted it.
 - `--as-discussion <category>` when
   `shell-common/functions/gh_discussion.sh` is missing → print
   `Install gh-discussion-create skill first.` and exit 1.
-- `addBlockedBy` fails (permission, network, non-existent issue number)
-  → the issue stays created; one `[WARN] Blocked by #N 링크 실패` line is
-  appended to the report. Never aborts, never retries.
+- `addBlockedBy` fails (permission, network, non-existent issue number,
+  or a schema mismatch on the mutation's arguments) → the issue stays
+  created; one `[WARN] Blocked by #N 링크 실패` line is appended to the
+  report. Never aborts, never retries.
