@@ -31,6 +31,11 @@ not record.
 | #1412 F-2 | `scripts/run_eval.py` — `_outcome`, `_read_stderr`, `run_single_query`, `run_eval`, verbose report | Upstream sent the subprocess' stderr to `DEVNULL`, so auth expiry, the nesting guard and timeouts all reported the same `0.0` as a description that simply never fires. Each run now carries an explicit `error`; errored runs leave the trigger-rate denominator, a query with nothing usable can never be scored a pass, and `--verbose` prints `[ERROR]` plus the captured stderr. |
 | #1412 F-2b | `scripts/utils.py` — `usable_runs()`, used by `run_loop.py`, `generate_report.py`, `improve_description.py` | `run_eval()` counts `triggers` over the runs that executed, but `runs` stayed the raw attempt count, so every consumer dividing one by the other re-implemented the bug one layer up: an all-errored negative query scored as fully correct in the HTML report, and an all-errored query reached the improvement model labelled "triggered 0/3 times — FAILED TO TRIGGER". One helper is now the single denominator. |
 | #1412 F-3 | `scripts/run_eval.py` — `find_shadowing_skills` + the `main()` warning | The `CLAUDE_CONFIG_DIR` isolation workaround is easy to forget. An installed skill of the same name is now named on stderr instead of quietly making the run noisier. |
+| #1432 | `scripts/__init__.py` — **deleted** | The (empty) file made this a *regular* package, which outranks the repo-root `scripts/` **namespace** package. `tests/integration/test_skill_create_run_eval.py` must keep this directory on `sys.path` for the whole session (pickling, see its module comment), so from #1429 onward every `scripts.maintenance.*` import in the suite died at collection time — `pytest tests/integration/` lost all 1350 tests, while the default `-n auto` path stayed green and hid it. With the file gone both directories are namespace *portions* and their `scripts.*` trees merge. `python -m scripts.run_loop` from the skill dir is unaffected. |
+
+A deletion cannot carry an in-file `LOCAL PATCH` comment, so a re-import from
+the marketplace must remember to delete `scripts/__init__.py` again — the guard
+in `tests/integration/test_collection_integrity.py` goes red if it returns.
 
 ## Regression guards
 
