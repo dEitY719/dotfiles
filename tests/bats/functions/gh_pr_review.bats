@@ -1110,7 +1110,9 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# _gh_pr_review_run_ai — hermes transport (issue #1377)
+# _gh_pr_review_run_ai — hermes transport (issue #1377, corrected in #1452:
+# hermes has no `exec` subcommand — the one-shot flag is `-z` and it takes the
+# prompt as a value argument, so it shares agy's MAX_ARG_STRLEN guard)
 # ---------------------------------------------------------------------------
 
 _stub_hermes_echo() {
@@ -1129,7 +1131,7 @@ EOF
     export PATH="$stub_dir:$PATH"
 }
 
-@test "run_ai hermes: internal mode invokes exec and attaches prompt file" {
+@test "run_ai hermes: small prompt → passed as value argument, not stdin" {
     _source_module
     _dotfiles_setup_mode() { echo internal; }
     _stub_hermes_echo
@@ -1138,8 +1140,23 @@ EOF
 
     run _gh_pr_review_run_ai hermes "$f"
     assert_success
-    assert_output --partial "hermes args: [exec]"
-    assert_output --partial "[--file] [$f]"
+    assert_output --partial "hermes args: [-z] [review this diff]"
+    refute_output --partial "[--file]"
+    refute_output --partial "[exec]"
+}
+
+@test "run_ai hermes: prompt at/over MAX_ARG_STRLEN (131072 bytes) → fails with clear message, hermes never invoked" {
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+    _stub_hermes_echo
+    local f="$TEST_TEMP_HOME/big.txt"
+    # 131072 bytes exactly — the guard's `-ge` boundary.
+    head -c 131072 /dev/zero | tr '\0' 'x' >"$f"
+
+    run _gh_pr_review_run_ai hermes "$f"
+    assert_failure
+    assert_output --partial "over the 131072-byte argv limit"
+    refute_output --partial "hermes args:"
 }
 
 @test "run_ai hermes: non-internal mode refuses without invoking hermes" {

@@ -356,9 +356,10 @@ _gh_pr_review_run_ai() {
     local _prompt_size
     local _prompt_content
     local _opencode_workdir
-    # Shared by the opencode and hermes cases below — both CLIs get the
-    # exact same short instruction as argv, with the diff attached via
-    # --file "$prompt_file".
+    # Used by the opencode case below only: opencode takes a short
+    # instruction as argv with the diff attached via --file "$prompt_file".
+    # hermes does NOT use this — `hermes -z` takes the full prompt content
+    # as its argv value (see the hermes case).
     local _ai_file_instruction="첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘."
     case "$ai" in
     codex)
@@ -389,17 +390,25 @@ _gh_pr_review_run_ai() {
         fi
         ;;
     hermes)
-        # Assumption pending real-CLI verification (issue #1377 Open
-        # Questions): hermes-agent's non-interactive review subcommand is
-        # not yet confirmed (hermes-help documents doctor/config/--version
-        # only). Mirrors the opencode pattern — short instruction argv +
-        # --file "$PROMPT_FILE" — as the first-pass shape; revisit once
-        # `hermes --help` is checked on an internal PC.
+        # Confirmed against real `hermes --help` output on an internal PC
+        # (issue #1452): there is no `exec` subcommand — the one-shot
+        # non-interactive flag is `-z` / `--oneshot`, and like `agy --print`
+        # it takes the prompt as a value argument rather than --file/stdin.
+        # So this mirrors the agy case exactly, MAX_ARG_STRLEN guard
+        # included.
         if ! _gh_pr_review_require_internal_cli hermes >"$_stderr_file" 2>&1; then
             _rc=1
         else
-            hermes exec "$_ai_file_instruction" \
-                --file "$prompt_file" 2>"$_stderr_file" || _rc=$?
+            _prompt_size=$(wc -c <"$prompt_file")
+            if [ "$_prompt_size" -ge 131072 ]; then
+                printf 'hermes -z: prompt is %s bytes, over the %s-byte argv limit (MAX_ARG_STRLEN) — use --ai codex or --ai claude for this PR instead.\n' \
+                    "$_prompt_size" 131072 >"$_stderr_file"
+                _rc=1
+            elif ! _prompt_content=$(cat "$prompt_file" 2>"$_stderr_file"); then
+                _rc=1
+            else
+                hermes -z "$_prompt_content" 2>>"$_stderr_file" || _rc=$?
+            fi
         fi
         ;;
     opencode)
