@@ -20,6 +20,8 @@
 #   Parallel execution uses all available CPU cores by default
 #   Self-throttles: detects other concurrent ./tests/test runs on this host
 #   and divides the job count among them
+#   Caps every bats test at BATS_TEST_TIMEOUT seconds (default 300) so a hung
+#   test fails the suite instead of stalling it forever
 #
 
 # Note: Do NOT use 'set -e' as it terminates the script when main() returns
@@ -79,6 +81,9 @@ ENVIRONMENT VARIABLES:
                            when shell unit tests couldn't run (bats-core
                            missing, or zero .bats files found). Without
                            this, both conditions now fail the suite.
+    BATS_TEST_TIMEOUT=N   Per-test timeout in seconds (default: 300). A test
+                           exceeding it is killed and reported as
+                           "# timeout after Ns" instead of hanging the run.
 
 EXAMPLES:
     ./tests/test                  # Run all tests (parallel)
@@ -263,6 +268,43 @@ _resolve_bats_jobs() {
     _effective_parallel_jobs "$jobs" "$others"
 }
 
+# Resolve run_bats()'s per-test timeout in seconds (issue #1483).
+#   BATS_TEST_TIMEOUT set    → honored verbatim (a file's own setup_file()
+#                              can also raise it further per-file).
+#   BATS_TEST_TIMEOUT unset  → 300. The full suite is ~4-5 min, so a single
+#                              test still running after 300s is pathological
+#                              — better a bounded TAP failure than the
+#                              multi-hour silent hang of #1483.
+_resolve_bats_timeout() {
+    printf '%s\n' "${BATS_TEST_TIMEOUT:-300}"
+}
+
+# Discover the .bats files run_bats() executes, ordered by @test count
+# descending (Longest-Processing-Time scheduling) so the long-pole file starts
+# first and the parallel makespan approaches its floor.
+#
+# lib/ is the vendored bats-core submodule (its own test suite). _fixtures/ is
+# deliberately-broken input invoked directly by tests — notably
+# bats/_fixtures/hang_timeout.bats, which hangs on purpose and would burn a
+# full BATS_TEST_TIMEOUT on every real run if discovered here.
+_discover_bats_files() {
+    find "${SCRIPT_DIR}/bats" -type f -name '*.bats' \
+        -not -path '*/lib/*' -not -path '*/_fixtures/*' \
+        -exec sh -c 'printf "%s\t%s\n" "$(grep -c "^@test" "$1")" "$1"' _ {} \; \
+        | sort -rn | cut -f2-
+}
+
+# Build run_bats()'s failure summary line. The ", N timed out" clause appears
+# only when a test was actually killed by BATS_TEST_TIMEOUT, so a #1483-style
+# hang is visibly distinct from an ordinary assertion failure (#1483 D-1).
+_bats_failure_summary() {
+    local failed_files="$1" total_files="$2" total_tests="$3" timeout_tests="$4"
+    local suffix=""
+    [ "$timeout_tests" -gt 0 ] 2>/dev/null && suffix=", ${timeout_tests} timed out"
+    printf 'bats: %s of %s files failed (%s tests total%s)\n' \
+        "$failed_files" "$total_files" "$total_tests" "$suffix"
+}
+
 # Shared by run_bats()'s two "shell unit tests couldn't run" early-return
 # sites: honor the SKIP_BATS=1 opt-out (mirrors SKIP_LOCAL_PYTEST=1 in
 # git/hooks/pre-push), otherwise fail closed with a consistent message.
@@ -294,17 +336,15 @@ run_bats() {
 
     print_header "Running Bats Shell Unit Tests"
 
-    # Discover .bats files (exclude lib/ submodules), ordered by @test count
-    # descending (Longest-Processing-Time scheduling) so the long-pole file
-    # starts first and the parallel makespan approaches its floor.
+    # Exported so both branches below inherit it — including the `bash -c`
+    # children xargs spawns, which get the environment but not shell locals.
+    export BATS_TEST_TIMEOUT
+    BATS_TEST_TIMEOUT="$(_resolve_bats_timeout)"
+
     local bats_files=()
     while IFS= read -r f; do
         bats_files+=("$f")
-    done < <(
-        find "${SCRIPT_DIR}/bats" -type f -name '*.bats' -not -path '*/lib/*' \
-            -exec sh -c 'printf "%s\t%s\n" "$(grep -c "^@test" "$1")" "$1"' _ {} \; \
-            | sort -rn | cut -f2-
-    )
+    done < <(_discover_bats_files)
     if [ ${#bats_files[@]} -eq 0 ]; then
         print_warning "No bats test files found"
         bats_fail_closed
@@ -354,7 +394,7 @@ run_bats() {
 
     # Aggregate: count tests, print per-file failures with their full log.
     # Iterate the same indices the producer used, so outputs line up exactly.
-    local rc=0 total_tests=0 failed_files=0
+    local rc=0 total_tests=0 failed_files=0 timeout_tests=0
     local status_val log_file n
     for i in "${!bats_files[@]}"; do
         f="${bats_files[$i]}"
@@ -364,6 +404,10 @@ run_bats() {
             # grep -c always prints a count (0 on no match), so no fallback needed.
             n=$(grep -cE '^(ok|not ok)' "$log_file" 2>/dev/null)
             total_tests=$((total_tests + n))
+            # bats marks a BATS_TEST_TIMEOUT kill as
+            # `not ok N <name> # timeout after Ns`.
+            n=$(grep -cF '# timeout after ' "$log_file" 2>/dev/null)
+            timeout_tests=$((timeout_tests + n))
         fi
         if [ "$status_val" != "0" ]; then
             failed_files=$((failed_files + 1))
@@ -381,7 +425,7 @@ run_bats() {
     if [ "$rc" -eq 0 ]; then
         print_success "bats: ${total_tests} tests in ${#bats_files[@]} files passed"
     else
-        print_error "bats: ${failed_files} of ${#bats_files[@]} files failed (${total_tests} tests total)"
+        print_error "$(_bats_failure_summary "$failed_files" "${#bats_files[@]}" "$total_tests" "$timeout_tests")"
     fi
     return $rc
 }
