@@ -84,18 +84,13 @@ _make_repo() {
     git -C "${_REPO_DIR}" commit -qm "seed"
 }
 
-# One `gh pr list --json` element: PR <1>, last updated <2> minutes ago.
+# One `gh pr list --json` element: PR <1>, last updated <2> minutes ago,
+# optionally a draft (<3>, default `false`) — a draft is never mergeable, so
+# never a reason to wake a session.
 _pr_json() {
     local _stamp
     _stamp=$(date -u -d "@$(($(date +%s) - $2 * 60))" +%Y-%m-%dT%H:%M:%SZ)
-    printf '{"number":%s,"updatedAt":"%s","isDraft":false}' "$1" "${_stamp}"
-}
-
-# Same, but a draft PR — never mergeable, so never a reason to wake a session.
-_pr_json_draft() {
-    local _stamp
-    _stamp=$(date -u -d "@$(($(date +%s) - $2 * 60))" +%Y-%m-%dT%H:%M:%SZ)
-    printf '{"number":%s,"updatedAt":"%s","isDraft":true}' "$1" "${_stamp}"
+    printf '{"number":%s,"updatedAt":"%s","isDraft":%s}' "$1" "${_stamp}" "${3:-false}"
 }
 
 # The array `gh pr list` answers with.
@@ -228,6 +223,14 @@ _refute_logged() {
     ! grep -qF -- "$1" "${_LOG}" || fail "unexpected in call log: $1"
 }
 
+# The tick started no train: it neither opened a new pane nor prompted an
+# existing one. Both refutes matter — checking only the prompt would pass for a
+# tick that opened a tab and then failed to use it.
+_refute_train_started() {
+    _refute_logged "herdr tab create"
+    _refute_logged "herdr agent prompt"
+}
+
 _log_count() {
     grep -c -- "$1" "${_LOG}" 2>/dev/null || true
 }
@@ -315,16 +318,14 @@ _hold_lock() {
     _run_tick
     assert_success
     assert_output --partial "No target PR"
-    _refute_logged "herdr tab create"
-    _refute_logged "herdr agent prompt"
+    _refute_train_started
 }
 
 @test "pr_merge_train_cron: a failing gh pr list does not start a train" {
     _run_tick GH_PR_LIST_FAIL=1
     assert_success
     assert_output --partial "gh pr list failed"
-    _refute_logged "herdr tab create"
-    _refute_logged "herdr agent prompt"
+    _refute_train_started
 }
 
 @test "pr_merge_train_cron: the PR query is scoped to the author's own PRs" {
@@ -344,7 +345,7 @@ _hold_lock() {
     _run_tick
     assert_success
     assert_output --partial "No target PR"
-    _refute_logged "herdr agent prompt"
+    _refute_train_started
 }
 
 @test "pr_merge_train_cron: a PR updated outside the quiet period is a target" {
@@ -362,11 +363,11 @@ _hold_lock() {
 }
 
 @test "pr_merge_train_cron: a draft PR is not a target" {
-    _set_prs "[$(_pr_json_draft 11 30)]"
+    _set_prs "[$(_pr_json 11 30 true)]"
     _run_tick
     assert_success
     assert_output --partial "No target PR"
-    _refute_logged "herdr agent prompt"
+    _refute_train_started
 }
 
 # ---------------------------------------------------------------------------
@@ -378,7 +379,7 @@ _hold_lock() {
     _run_tick
     assert_success
     assert_output --partial "already running"
-    _refute_logged "herdr agent prompt"
+    _refute_train_started
 }
 
 @test "pr_merge_train_cron: the lock is released so the next tick runs" {
@@ -393,15 +394,14 @@ _hold_lock() {
     _run_tick PMT_AGENT_STATUS=working
     assert_success
     assert_output --partial "train is already running"
-    _refute_logged "herdr tab create"
-    _refute_logged "herdr agent prompt"
+    _refute_train_started
 }
 
 @test "pr_merge_train_cron: a blocked train agent also blocks a new train" {
     _run_tick PMT_AGENT_STATUS=blocked
     assert_success
     assert_output --partial "train is already running"
-    _refute_logged "herdr agent prompt"
+    _refute_train_started
 }
 
 @test "pr_merge_train_cron: an idle train agent is reused rather than blocking" {
@@ -485,8 +485,7 @@ _hold_lock() {
     _run_tick -- --dry-run
     assert_success
     assert_output --partial "Dry run"
-    _refute_logged "herdr tab create"
-    _refute_logged "herdr agent prompt"
+    _refute_train_started
 }
 
 @test "pr_merge_train_cron: --dry-run does not take the tick lock" {

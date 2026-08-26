@@ -1,6 +1,6 @@
 # gh:pr-merge-train — Approval gate (D-5, F-7)
 
-Read the repo's **actual** policy once, in Step 2, and obey it. This skill never
+Read the repo's **actual** policy once, in Step 3, and obey it. This skill never
 bypasses an approval requirement and never manufactures one that the platform
 does not impose.
 
@@ -14,8 +14,11 @@ GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/rules/branches/$BASE" \
              | .parameters.required_approving_review_count] | max // empty'
 ```
 
-`$BASE` is the PR's `baseRefName` (usually `main`). `max` because more than one
-ruleset can apply and the strictest wins.
+`$BASE` is the queue's `baseRefName`, which Step 2's `gh pr list --json`
+already returned — never guess `main`, and never spend a `gh pr view` on it.
+(A `--author @me` queue targets one base in practice; on the rare mixed queue,
+read the ruleset once per distinct base.) `max` because more than one ruleset
+can apply and the strictest wins.
 
 Three outcomes:
 
