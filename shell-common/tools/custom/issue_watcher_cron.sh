@@ -20,7 +20,7 @@
 #
 # 이슈에 어떤 쓰기도 하지 않는다 — 댓글·라벨·assignee 변경 없음. 조회 전용이다.
 #
-# Usage: issue_watcher_cron.sh [--cwd <PATH>] [--dry-run] | [-h|--help|help]
+# Usage: issue_watcher_cron.sh [--cwd <PATH>] [--dry-run] | --status | [-h|--help|help]
 
 set -u
 
@@ -150,6 +150,18 @@ _IW_STALL_RECOVER_SLEEP="${IW_STALL_RECOVER_SLEEP:-2}"
 # Rate-limit gate (issue #1436; judgment input rebuilt in #1444). Rationale for
 # each value sits with the gate functions below; the values themselves live here
 # with the rest of the SSOT.
+#
+# Both values were re-examined and confirmed as constants in #1441, which had
+# proposed a one-strike close and an exponential 1800->3600->7200->14400 ramp:
+#   - strikes stays 2. One strike would hold the watcher for 30 minutes over a
+#     single transient herdr blip, and it contradicts the neighbouring
+#     requirement that one stall among several delivered dispatches must NOT
+#     close the gate.
+#   - the backoff stays a single fixed value. Claude's quota windows run for
+#     hours, so the real cost of retrying after 30 minutes is small, while a
+#     ramp needs a third field in `rate-limit.json` (with back-compat for files
+#     already on disk) and would invalidate the fixed-length outlier guard in
+#     _iw_limit_gate_check below.
 _IW_LIMIT_STATE_BASENAME="rate-limit.json"
 _IW_LIMIT_STRIKES="2"
 _IW_LIMIT_BACKOFF_SECONDS="1800"
@@ -1715,6 +1727,76 @@ _iw_limit_record() {
 }
 
 # ============================================================
+# Status report (--status)
+# ============================================================
+
+# A read-only window on the rate-limit gate (issue #1441, AC 11): it answers
+# "is the watcher holding, and for how long" without running a tick.
+#
+# Deliberately does *not* call _iw_limit_gate_check. That helper clears an
+# expired `rate-limit.json` as part of deciding, so reusing it would make an
+# inspection command mutate state — the same reason --dry-run stays clear of
+# it (PR #1447 codex/agy review). The expiry arithmetic is duplicated here
+# instead, including the "further out than twice its own length" outlier guard,
+# so the two agree on what "expired" means.
+#
+# Always exits 0, including on an unreadable file. A closed gate is a normal
+# operating state, not an error, and `set -e` cron wrappers that call this to
+# log the gate must not die on it; the state is carried by the text, which is
+# what a human reading cron.log reads anyway.
+_iw_status_report() {
+    local _file _until _strikes _now _left
+
+    _file=$(_iw_limit_state_file)
+
+    ux_header "issue-watcher status"
+    ux_bullet "state file"
+    ux_bullet_sub "${_file}"
+
+    if [ ! -f "${_file}" ]; then
+        ux_success "Rate-limit gate open — no state file, the next tick dispatches."
+        return 0
+    fi
+
+    _strikes=$(_iw_limit_read strikes)
+    case "${_strikes}" in
+    '' | *[!0-9]*) _strikes="?" ;;
+    esac
+    ux_bullet "strikes"
+    ux_bullet_sub "${_strikes}/${_IW_LIMIT_STRIKES} consecutive stalled dispatches on record"
+
+    _until=$(_iw_limit_read backoff_until)
+    case "${_until}" in
+    '' | *[!0-9]*)
+        ux_warning "Rate-limit state is unreadable (backoff_until='${_until}') — the next tick dispatches anyway."
+        return 0
+        ;;
+    esac
+
+    # 0 is the resting value written while strikes accumulate: evidence on
+    # record, gate still open.
+    if [ "${_until}" -le 0 ]; then
+        ux_success "Rate-limit gate open — the next tick dispatches."
+        return 0
+    fi
+
+    _now=$(_iw_now)
+    if [ -z "${_now}" ]; then
+        ux_warning "Cannot read the clock — cannot tell whether the backoff has expired."
+        return 0
+    fi
+
+    _left=$((_until - _now))
+    if [ "${_left}" -le 0 ] || [ "${_left}" -gt $((_IW_LIMIT_BACKOFF_SECONDS * 2)) ]; then
+        ux_success "Rate-limit gate open — the backoff expired, the next tick reopens it."
+        return 0
+    fi
+
+    ux_warning "Rate-limit gate closed — holding dispatch for ~$(((_left + 59) / 60))m."
+    ux_bullet_sub "delete ${_file} to reopen it now"
+}
+
+# ============================================================
 # Locking
 # ============================================================
 
@@ -1762,12 +1844,14 @@ _iw_acquire_lock() {
 
 _iw_usage() {
     ux_header "issue_watcher_cron"
-    ux_info "Usage: issue_watcher_cron.sh [--cwd <PATH>] [--dry-run] | [-h|--help|help]"
+    ux_info "Usage: issue_watcher_cron.sh [--cwd <PATH>] [--dry-run] | --status | [-h|--help|help]"
     ux_info "Runs one issue-watcher tick: find assigned issues, dispatch /gh-issue-flow."
     ux_bullet "options"
     ux_bullet_sub "--cwd <PATH>   run the tick from PATH; relative watch-list paths resolve against it"
     ux_bullet_sub "--dry-run      print the issues this tick would dispatch, change nothing"
     ux_bullet_sub "               (takes no lock and does not evaluate the rate-limit gate)"
+    ux_bullet_sub "--status       print the rate-limit gate state and exit; runs no tick"
+    ux_bullet_sub "               (takes no lock, changes nothing, always exits 0)"
     ux_bullet_sub "-h, --help, help   show this help"
     ux_bullet "cycle"
     ux_bullet_sub "gh search issues --assignee @me --state open   (one query per watched host)"
@@ -1812,7 +1896,7 @@ _iw_usage() {
 # ============================================================
 
 main() {
-    local _cwd="" _repo _number _path _host _rc _dispatched=0 _failed=0 _candidates _live
+    local _cwd="" _status=0 _repo _number _path _host _rc _dispatched=0 _failed=0 _candidates _live
     local _confirmed=""
 
     while [ "$#" -gt 0 ]; do
@@ -1833,6 +1917,10 @@ main() {
             _IW_DRY_RUN=1
             shift
             ;;
+        --status)
+            _status=1
+            shift
+            ;;
         *)
             ux_error "Unknown option: $1"
             ux_info "Run 'issue_watcher_cron.sh --help' for usage."
@@ -1849,6 +1937,14 @@ main() {
             ux_error "Cannot cd to --cwd ${_cwd}."
             exit 1
         fi
+    fi
+
+    # Ahead of the gh/herdr presence checks on purpose: the gate lives in a
+    # local state file, so --status must still answer on a box where a real
+    # tick cannot run at all — which is exactly when someone asks.
+    if [ "${_status}" -eq 1 ]; then
+        _iw_status_report
+        exit 0
     fi
 
     ux_header "issue-watcher tick"

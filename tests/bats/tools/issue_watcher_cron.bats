@@ -2183,3 +2183,88 @@ _two_repo_fixture() {
     assert_output --partial "rate-limit gate will not survive this tick"
     chmod 700 "${_STATE_DIR}"
 }
+
+# ---------------------------------------------------------------------------
+# --status (issue #1441, AC 11)
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: --status reports an open gate and runs no tick" {
+    _run_tick -- --status
+    assert_success
+    assert_output --partial "Rate-limit gate open"
+    _refute_logged "agent prompt"
+    _refute_logged "search issues"
+}
+
+@test "issue_watcher_cron: --status names the state file it read" {
+    _run_tick -- --status
+    assert_success
+    assert_output --partial "rate-limit.json"
+}
+
+@test "issue_watcher_cron: --status reports a closed gate with the time left" {
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) + 900))" >"${_LIMIT_FILE}"
+    _run_tick -- --status
+    assert_success
+    assert_output --partial "Rate-limit gate closed"
+    assert_output --partial "15m"
+    _refute_logged "agent prompt"
+}
+
+@test "issue_watcher_cron: --status reports accumulated strikes while the gate is open" {
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "strikes": "1", "backoff_until": "0" }\n' >"${_LIMIT_FILE}"
+    _run_tick -- --status
+    assert_success
+    assert_output --partial "1/2"
+    assert_output --partial "Rate-limit gate open"
+}
+
+@test "issue_watcher_cron: --status leaves an expired gate file on disk" {
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) - 60))" >"${_LIMIT_FILE}"
+    _run_tick -- --status
+    assert_success
+    assert_output --partial "Rate-limit gate open"
+    # Reporting is not deciding: only a real tick may clear an expired file,
+    # the same reason --dry-run stays clear of the gate check.
+    [ -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: --status treats an out-of-range deadline as expired" {
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) + 999999))" >"${_LIMIT_FILE}"
+    _run_tick -- --status
+    assert_success
+    assert_output --partial "Rate-limit gate open"
+}
+
+@test "issue_watcher_cron: --status fails open on a corrupt gate file" {
+    mkdir -p "${_STATE_DIR}"
+    printf 'not json at all\n' >"${_LIMIT_FILE}"
+    _run_tick -- --status
+    assert_success
+    assert_output --partial "unreadable"
+}
+
+@test "issue_watcher_cron: --status does not take the tick lock" {
+    _hold_lock
+    _run_tick -- --status
+    assert_success
+    refute_output --partial "already running"
+}
+
+@test "issue_watcher_cron: --status answers even without herdr on PATH" {
+    rm -f "${_BIN_DIR}/herdr"
+    _run_tick "PATH=$(_path_without herdr)" -- --status
+    assert_success
+    assert_output --partial "Rate-limit gate open"
+    refute_output --partial "herdr not found"
+}
+
+@test "issue_watcher_cron: --help documents --status" {
+    run bash "${SCRIPT}" --help
+    assert_success
+    assert_output --partial "--status"
+}
