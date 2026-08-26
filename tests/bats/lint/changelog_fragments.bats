@@ -38,10 +38,16 @@ run_linter() {
     assert_success
 }
 
-@test "missing fragment directory is a silent no-op" {
+@test "missing fragment directory fails closed" {
+    # changelog.d 가 유일한 changelog 소스가 된 뒤로 "디렉터리 부재"는
+    # 검사할 게 없는 상태가 아니라 소스 전체가 사라진 상태다 — 조용히
+    # 통과하면 lint-docs 가 초록인 채로 changelog 를 잃는다 (PR #1475 codex).
+    # 형제 린터 lint_docs_filenames.sh 와 같은 rc 2 를 쓴다: 1(=위반 발견)과
+    # 구별되는 "검사 대상 자체가 없음" 코드.
     rm -rf "$FRAG_DIR"
     run_linter
-    assert_success
+    assert_failure 2
+    assert_output --partial "찾을 수 없습니다"
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -117,6 +123,53 @@ run_linter() {
 
 @test "blank line between bullets passes (positive control)" {
     printf -- '- 변경: **A**\n\n- 변경: **B**\n' >"$FRAG_DIR/2026-08-26-1471.md"
+    run_linter
+    assert_success
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+# FAIL 5: `- 변경: **요약**` 계약 — 문서가 강제한다고 말하는 바로 그 형식
+# ─────────────────────────────────────────────────────────────────────────
+
+@test "bullet without the 변경: prefix fails" {
+    printf -- '- 그냥 불릿\n' >"$FRAG_DIR/2026-08-26-1471.md"
+    run_linter
+    assert_failure 1
+    assert_output --partial "변경:"
+}
+
+@test "bullet without a bold summary fails" {
+    printf -- '- 변경: 강조 없는 요약\n' >"$FRAG_DIR/2026-08-26-1471.md"
+    run_linter
+    assert_failure 1
+    assert_output --partial "변경:"
+}
+
+@test "bullet with an unclosed bold summary fails" {
+    printf -- '- 변경: **닫히지 않은 강조\n' >"$FRAG_DIR/2026-08-26-1471.md"
+    run_linter
+    assert_failure 1
+    assert_output --partial "변경:"
+}
+
+@test "documented format passes (positive control)" {
+    printf -- '- 변경: **요약**\n' >"$FRAG_DIR/2026-08-26-1471.md"
+    run_linter
+    assert_success
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+# FAIL 6: 들여쓴 하위 불릿 — CLAUDE.md 가 금지하지만 강제되지 않던 규칙
+# ─────────────────────────────────────────────────────────────────────────
+
+@test "indented sub-bullet fails" {
+    printf -- '- 변경: **A**\n  - 하위 불릿\n' >"$FRAG_DIR/2026-08-26-1471.md"
+    run_linter
+    assert_failure 1
+}
+
+@test "same two bullets unindented pass (positive control)" {
+    printf -- '- 변경: **A**\n- 변경: **B**\n' >"$FRAG_DIR/2026-08-26-1471.md"
     run_linter
     assert_success
 }
