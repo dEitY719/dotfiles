@@ -29,7 +29,11 @@ check_auto_executable_in_custom() {
             # that must also run under /bin/sh cannot reference BASH_SOURCE at
             # all, because dash rejects the expansion outright. Same list as
             # tests/golden_rules/test_golden_rules.sh Rule 2.
-            if tail -n "$guard_tail_lines" "$tmp_file" | grep -Eq 'BASH_SOURCE\[0\].*(\$\{?0\}?|\$0)|(\$\{?0\}?|\$0).*BASH_SOURCE\[0\]|"\$\{0##\*/\}"'; then
+            #
+            # It is anchored to a real test — inside `[ ]`/`[[ ]]`, against a
+            # "*.sh" name — the way the BASH_SOURCE forms are. Unanchored, a
+            # comment mentioning the string would satisfy the gate.
+            if tail -n "$guard_tail_lines" "$tmp_file" | grep -Eq 'BASH_SOURCE\[0\].*(\$\{?0\}?|\$0)|(\$\{?0\}?|\$0).*BASH_SOURCE\[0\]|\[\[?[[:space:]]+"\$\{0##\*/\}"[[:space:]]+[!=]?=[[:space:]]+"[^"]*\.sh"'; then
                 guard_present=1
             fi
 

@@ -96,7 +96,7 @@ aicron_usage() {
     ux_section "Commands"
     ux_table_row "list [--json]" "every manifest job: installed, paused, last run"
     ux_table_row "add <job>" "install the job's crontab block (--schedule <expr> to override)"
-    ux_table_row "remove <job>" "drop the job's crontab block; the state file is kept"
+    ux_table_row "remove <job>" "drop the job's crontab block (also cleans a doctor orphan); the state file is kept"
     ux_table_row "pause <job>" "stop running the job; the crontab entry stays"
     ux_table_row "resume <job>" "undo pause"
     ux_table_row "status <job> [--json]" "running now, schedule, last run result"
@@ -112,7 +112,8 @@ aicron_usage() {
     ux_bullet "0 — success, or a normal skip (paused, or already running)"
     ux_bullet "1 — usage or argument error"
     ux_bullet "2 — unknown job"
-    ux_bullet "3 — crontab operation failed"
+    ux_bullet "3 — crontab operation failed, or its current table could not be read"
+    ux_bullet "4 — a run took the lock and was killed before it reported a code"
     ux_bullet "otherwise — the job's own exit code, propagated by run"
     ux_info ""
     ux_section "Examples"
@@ -127,13 +128,30 @@ aicron_usage() {
 # Argument routing
 # ============================================================
 
-# Shared front half of every job-scoped command: a name is required (1) and it
-# has to be a manifest job (2).
-aicron_resolve_job() {
+# The argument shape every job-scoped command shares: exactly one name, and
+# nothing after it.
+#
+# Rejecting the extra word rather than ignoring it is the point.
+# `aicron run issue-watcher --dry-run` silently dropping the flag is how a run
+# does something other than what was asked, and the same typo on `remove`
+# would edit the crontab the user did not mean to edit.
+aicron_one_job_arg() {
     if [ "$#" -lt 1 ] || [ -z "$1" ]; then
         ux_error "a job name is required — see 'aicron help'"
         return 1
     fi
+    if [ "$#" -gt 1 ]; then
+        shift
+        ux_error "unexpected argument: $1 — this command takes exactly one job name"
+        return 1
+    fi
+    return 0
+}
+
+# Shared front half of every job-scoped command: the shape above (1), and the
+# name has to be a manifest job (2).
+aicron_resolve_job() {
+    aicron_one_job_arg "$@" || return 1
     if ! aicron_manifest_has "$1"; then
         ux_error "unknown job: $1"
         return 2
@@ -222,10 +240,37 @@ aicron_cmd_add() {
     ux_success "installed ${_job} — ${_sched}"
 }
 
+# remove is the only job-scoped command that does NOT require manifest
+# membership, and it has to be: an orphan block (one whose manifest entry was
+# deleted) is precisely what doctor reports, and if remove refused those the
+# drift doctor finds could not be fixed with aicron at all. Every other
+# command still requires the manifest — running or pausing a job nothing
+# describes has no meaning.
 aicron_cmd_remove() {
+    aicron_one_job_arg "$@" || return 1
     aicron_manifest_check || return 1
-    aicron_resolve_job "$@" || return $?
     _job="$1"
+
+    if ! aicron_manifest_has "${_job}"; then
+        if ! aicron_crontab_available; then
+            ux_error "crontab command not found — cannot update ${_job}"
+            return 3
+        fi
+        _state=$(aicron_crontab_state "${_job}")
+        case "${_state}" in
+        yes)
+            ux_info "${_job} is not in the manifest — removing its orphan crontab block"
+            ;;
+        unknown)
+            ux_error "could not read the crontab (${_AICRON_CRONTAB_ERR}) — cannot tell whether ${_job} is installed"
+            return 3
+            ;;
+        *)
+            ux_error "unknown job: ${_job}"
+            return 2
+            ;;
+        esac
+    fi
 
     aicron_edit_crontab "${_job}" aicron_crontab_uninstall "${_job}" || return $?
     ux_success "removed ${_job} from the crontab — its state file was kept"

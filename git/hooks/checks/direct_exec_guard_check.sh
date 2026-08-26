@@ -41,10 +41,16 @@ check_direct_exec_guard() {
     # evaluated, so patterns 1-3 are unavailable to any script that must also
     # run under /bin/sh (ensure_jq.sh, aicron.sh). tests/golden_rules already
     # accepted this pattern; this list had drifted behind it.
+    #
+    # Every pattern is anchored to an actual test, pattern 4 included: it has
+    # to appear inside `[ ... ]` / `[[ ... ]]`, compared against a "*.sh"
+    # name. An unanchored '"${0##*/}"' would be satisfied by a script that
+    # merely mentions the string in a comment or a message, which is a gate
+    # that passes files it never checked.
 
     local has_guard=0
 
-    if grep -qE 'if \[ "\$\{BASH_SOURCE\[0\]\}" = "\$0" \]|if \[\[ "\$\{BASH_SOURCE\[0\]\}" == "\$0" \]\]|if \[ "\$\{BASH_SOURCE\[0\]:-\$0\}" = "\$0" \]|"\$\{0##\*/\}"' "$tmp_file" 2>/dev/null; then
+    if grep -qE 'if \[ "\$\{BASH_SOURCE\[0\]\}" = "\$0" \]|if \[\[ "\$\{BASH_SOURCE\[0\]\}" == "\$0" \]\]|if \[ "\$\{BASH_SOURCE\[0\]:-\$0\}" = "\$0" \]|\[\[?[[:space:]]+"\$\{0##\*/\}"[[:space:]]+[!=]?=[[:space:]]+"[^"]*\.sh"' "$tmp_file" 2>/dev/null; then
         has_guard=1
     fi
 
