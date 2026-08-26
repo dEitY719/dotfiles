@@ -166,6 +166,15 @@ _set_running() {
     _set_live_agents "${_paths[@]}"
 }
 
+# The rate-limit gate state file: _set_limit_state <strikes> <backoff_until>.
+# Both fields are written as JSON *strings* because _iw_limit_write does, and
+# the quoting is a back-compat guarantee rather than an accident — so the
+# on-disk schema is spelled out here once instead of at every gate test.
+_set_limit_state() {
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "strikes": "%s", "backoff_until": "%s" }\n' "$1" "$2" >"${_LIMIT_FILE}"
+}
+
 # One issue with the given labels, e.g. _issues_with_labels 11 wontfix
 _issues_with_labels() {
     local _n="$1" _labels="" _sep=""
@@ -615,11 +624,16 @@ _path_without() {
 # Hold an exclusive flock on the tick's lock file in a background process
 # until teardown kills it, so the script under test sees a contended lock.
 # Blocks until the holder has actually acquired the lock.
+#
+# `3>&-` is load-bearing, not tidiness: bats streams TAP on fd 3 and will not
+# finish a test until every inheritor closes it. teardown kills the `flock`
+# process, but the inner `sh -c` is orphaned and would hold fd 3 open for the
+# rest of its `sleep 30` — turning each lock test into a 30-second wait.
 _hold_lock() {
     local _ready="${_WORK_DIR}/lock-held"
     mkdir -p "${_STATE_DIR}"
     flock -x "${_LOCK_FILE}" \
-        sh -c "printf held >'${_ready}'; sleep 30" >/dev/null 2>&1 &
+        sh -c "printf held >'${_ready}'; sleep 30" >/dev/null 2>&1 3>&- &
     _LOCK_HOLDER_PID=$!
 
     local _i=0
@@ -686,6 +700,12 @@ _hold_lock() {
     assert_output --partial "rate-limit gate"
     assert_output --partial "rate-limit.json"
     assert_output --partial "30m"
+}
+
+@test "issue_watcher_cron: --help documents --status" {
+    run bash "${SCRIPT}" --help
+    assert_success
+    assert_output --partial "--status"
 }
 
 @test "issue_watcher_cron: -h is equivalent to --help" {
@@ -1057,8 +1077,7 @@ _hold_lock() {
 }
 
 @test "issue_watcher_cron: --dry-run leaves an expired gate file on disk" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) - 60))" >"${_LIMIT_FILE}"
+    _set_limit_state "0" "$(($(date +%s) - 60))"
     _run_tick -- --dry-run
     assert_success
     # Evaluating the gate clears an expired file — a state change in the mode
@@ -1067,8 +1086,7 @@ _hold_lock() {
 }
 
 @test "issue_watcher_cron: --dry-run reports even while the gate is closed" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) + 900))" >"${_LIMIT_FILE}"
+    _set_limit_state "0" "$(($(date +%s) + 900))"
     _run_tick -- --dry-run
     assert_success
     assert_output --partial "acme/dotfiles#11"
@@ -1666,8 +1684,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: a broken pane leaves an existing strike count untouched" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "1", "backoff_until": "0" }\n' >"${_LIMIT_FILE}"
+    _set_limit_state "1" "0"
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=fail"
     assert_failure
     run cat "${_LIMIT_FILE}"
@@ -2027,8 +2044,7 @@ _two_repo_fixture() {
 # ---------------------------------------------------------------------------
 
 @test "issue_watcher_cron: a closed gate holds the tick without dispatching" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) + 900))" >"${_LIMIT_FILE}"
+    _set_limit_state "0" "$(($(date +%s) + 900))"
     _run_tick
     assert_success
     assert_output --partial "Rate-limit gate closed"
@@ -2036,8 +2052,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: a held tick creates no worktree" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) + 900))" >"${_LIMIT_FILE}"
+    _set_limit_state "0" "$(($(date +%s) + 900))"
     _run_tick
     assert_success
     _refute_logged "gwt spawn"
@@ -2046,9 +2061,8 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: a held tick leaves the gate deadline untouched" {
-    mkdir -p "${_STATE_DIR}"
     local _until=$(($(date +%s) + 900))
-    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "${_until}" >"${_LIMIT_FILE}"
+    _set_limit_state "0" "${_until}"
     _run_tick
     assert_success
     # Positive control (issue #1442): the deadline surviving is only evidence
@@ -2061,8 +2075,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: an expired backoff reopens the gate and dispatches" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) - 60))" >"${_LIMIT_FILE}"
+    _set_limit_state "0" "$(($(date +%s) - 60))"
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     assert_output --partial "Rate-limit gate reopened"
@@ -2071,8 +2084,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: an out-of-range future deadline is treated as expired" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) + 999999))" >"${_LIMIT_FILE}"
+    _set_limit_state "0" "$(($(date +%s) + 999999))"
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     assert_output --partial "Rate-limit gate reopened"
@@ -2087,8 +2099,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: a non-numeric deadline fails open" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "0", "backoff_until": "soon" }\n' >"${_LIMIT_FILE}"
+    _set_limit_state "0" "soon"
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     assert_output --partial "dispatching anyway"
@@ -2096,8 +2107,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: a productive tick clears accumulated strikes" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "1", "backoff_until": "0" }\n' >"${_LIMIT_FILE}"
+    _set_limit_state "1" "0"
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     [ ! -f "${_LIMIT_FILE}" ]
@@ -2119,8 +2129,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: a non-quota failure leaves an existing strike untouched" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "1", "backoff_until": "0" }\n' >"${_LIMIT_FILE}"
+    _set_limit_state "1" "0"
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
     # Positive control (issue #1442; rationale at "a held tick leaves the gate
@@ -2203,8 +2212,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: --status reports a closed gate with the time left" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) + 900))" >"${_LIMIT_FILE}"
+    _set_limit_state "0" "$(($(date +%s) + 900))"
     _run_tick -- --status
     assert_success
     assert_output --partial "Rate-limit gate closed"
@@ -2213,8 +2221,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: --status reports accumulated strikes while the gate is open" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "1", "backoff_until": "0" }\n' >"${_LIMIT_FILE}"
+    _set_limit_state "1" "0"
     _run_tick -- --status
     assert_success
     assert_output --partial "1/2"
@@ -2222,8 +2229,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: --status leaves an expired gate file on disk" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) - 60))" >"${_LIMIT_FILE}"
+    _set_limit_state "0" "$(($(date +%s) - 60))"
     _run_tick -- --status
     assert_success
     assert_output --partial "Rate-limit gate open"
@@ -2233,8 +2239,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: --status treats an out-of-range deadline as expired" {
-    mkdir -p "${_STATE_DIR}"
-    printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) + 999999))" >"${_LIMIT_FILE}"
+    _set_limit_state "0" "$(($(date +%s) + 999999))"
     _run_tick -- --status
     assert_success
     assert_output --partial "Rate-limit gate open"
@@ -2261,10 +2266,4 @@ _two_repo_fixture() {
     assert_success
     assert_output --partial "Rate-limit gate open"
     refute_output --partial "herdr not found"
-}
-
-@test "issue_watcher_cron: --help documents --status" {
-    run bash "${SCRIPT}" --help
-    assert_success
-    assert_output --partial "--status"
 }

@@ -160,8 +160,9 @@ _IW_STALL_RECOVER_SLEEP="${IW_STALL_RECOVER_SLEEP:-2}"
 #   - the backoff stays a single fixed value. Claude's quota windows run for
 #     hours, so the real cost of retrying after 30 minutes is small, while a
 #     ramp needs a third field in `rate-limit.json` (with back-compat for files
-#     already on disk) and would invalidate the fixed-length outlier guard in
-#     _iw_limit_gate_check below.
+#     already on disk) and would invalidate the "twice its own length" outlier
+#     guard, which every reader of this constant assumes is fixed-length —
+#     _iw_limit_gate_check and _iw_status_report both carry a copy of it.
 _IW_LIMIT_STATE_BASENAME="rate-limit.json"
 _IW_LIMIT_STRIKES="2"
 _IW_LIMIT_BACKOFF_SECONDS="1800"
@@ -1758,13 +1759,10 @@ _iw_status_report() {
         return 0
     fi
 
-    _strikes=$(_iw_limit_read strikes)
-    case "${_strikes}" in
-    '' | *[!0-9]*) _strikes="?" ;;
-    esac
-    ux_bullet "strikes"
-    ux_bullet_sub "${_strikes}/${_IW_LIMIT_STRIKES} consecutive stalled dispatches on record"
-
+    # The deadline is validated before anything is asserted about the record:
+    # reporting `?/2 ... on record` and then "the state is unreadable" one line
+    # later is a contradiction, and the strike line is the one that looks like
+    # data to whoever is reading cron.log.
     _until=$(_iw_limit_read backoff_until)
     case "${_until}" in
     '' | *[!0-9]*)
@@ -1772,6 +1770,15 @@ _iw_status_report() {
         return 0
         ;;
     esac
+
+    # A file whose deadline parsed but whose strike count did not was hand
+    # edited; "?" says so rather than inventing a 0.
+    _strikes=$(_iw_limit_read strikes)
+    case "${_strikes}" in
+    '' | *[!0-9]*) _strikes="?" ;;
+    esac
+    ux_bullet "strikes"
+    ux_bullet_sub "${_strikes}/${_IW_LIMIT_STRIKES} consecutive stalled dispatches on record"
 
     # 0 is the resting value written while strikes accumulate: evidence on
     # record, gate still open.
@@ -1896,7 +1903,7 @@ _iw_usage() {
 # ============================================================
 
 main() {
-    local _cwd="" _status=0 _repo _number _path _host _rc _dispatched=0 _failed=0 _candidates _live
+    local _cwd="" _repo _number _path _host _rc _dispatched=0 _failed=0 _candidates _live
     local _confirmed=""
 
     while [ "$#" -gt 0 ]; do
@@ -1918,8 +1925,16 @@ main() {
             shift
             ;;
         --status)
-            _status=1
-            shift
+            # Terminal, like --help, and deliberately answered from inside the
+            # parse loop: --status must reach the gate ahead of the gh/herdr
+            # presence checks, because the gate is a local state file and the
+            # box where a real tick cannot run is exactly where someone asks.
+            # Handling it here also keeps --cwd off the read path, which the
+            # report does not use — _iw_state_dir resolves through
+            # XDG_STATE_HOME/HOME, never the working directory — so a bad
+            # --cwd cannot make a documented always-0 command exit 1.
+            _iw_status_report
+            exit 0
             ;;
         *)
             ux_error "Unknown option: $1"
@@ -1937,14 +1952,6 @@ main() {
             ux_error "Cannot cd to --cwd ${_cwd}."
             exit 1
         fi
-    fi
-
-    # Ahead of the gh/herdr presence checks on purpose: the gate lives in a
-    # local state file, so --status must still answer on a box where a real
-    # tick cannot run at all — which is exactly when someone asks.
-    if [ "${_status}" -eq 1 ]; then
-        _iw_status_report
-        exit 0
     fi
 
     ux_header "issue-watcher tick"
