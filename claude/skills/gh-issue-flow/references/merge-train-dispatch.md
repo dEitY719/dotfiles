@@ -6,15 +6,40 @@ steps 2.5 / 2.5.1. Issue #1482.
 ## The call
 
 ```bash
-nohup aicron run merge-train >/dev/null 2>&1 &
+if [ "${REMOTE:-origin}" = "origin" ]; then
+    nohup "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/tools/custom/aicron.sh" \
+        run merge-train >/dev/null 2>&1 &
+fi
 ```
 
-This is the same invocation the merge-train crontab entry runs on its own
-schedule (`shell-common/tools/custom/cron-jobs.json`) — `aicron run
+This runs the same script the merge-train crontab entry runs on its own
+schedule (`shell-common/tools/custom/cron-jobs.json`) — `aicron.sh run
 merge-train` executes `pr_merge_train_cron.sh --cwd "$HOME/dotfiles"` under
 `aicron`'s own logging/locking. Step 2.4.5 does not add a new code path; it
 just triggers the existing one early, once, right when a fresh PR is most
 likely to be waiting for it.
+
+**Full script path, never bare `aicron`.** `aicron` is a shell function
+defined by `shell-common/tools/custom/aicron.sh` and guarded behind this
+repo's interactive-shell check (`case $- in *i*) ;; *) return 0 ;; esac`,
+`claude/AGENTS.md`) — it resolves to nothing in the non-interactive `Bash`
+tool call this step runs from. Calling `aicron run merge-train` bare
+silently no-ops (`command not found`, swallowed by the backgrounded `&`)
+and looks identical to a successful nudge. Verified live: a bare `aicron`
+invocation from this exact non-interactive context failed with `aicron not
+found` while the flow that produced this fix was executing (PR #1489
+agy/codex review, both flagged this independently).
+
+**Guarded to `origin` only.** The dispatcher script is hardcoded to
+`$HOME/dotfiles`'s own `origin` remote — its `--cwd "$HOME/dotfiles"`
+argument (baked into `cron-jobs.json`) is what it `cd`s into before reading
+that checkout's `origin` URL (`_pmt_bind_target`,
+`shell-common/tools/custom/pr_merge_train_cron.sh`). It has no flag to target
+a different remote. So when `gh:issue-flow` was invoked with a non-`origin`
+`[remote]`, nudging it anyway would wake the merge train for a *different*
+PR than the one this flow just opened. Skipping the nudge on any other
+remote is the correct behavior, not a missed feature — the crontab backstop
+still covers `origin`'s own queue regardless.
 
 Backgrounded (`nohup ... &`, no foreground wait) rather than run inline: when
 the dispatcher actually finds a train to start, it calls `herdr agent prompt

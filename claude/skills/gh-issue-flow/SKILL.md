@@ -76,14 +76,24 @@ bullets** (see CRITICAL CONTRACT). After each call, proceed to the next.
    succeeded; non-fatal, backgrounded) — nudges the merge-train cron
    dispatcher immediately instead of waiting for its next tick, so a fresh
    PR reaches `gh:pr-merge-train` in seconds rather than up to 5 minutes
-   later. Calls the existing dispatcher script, never `gh:pr-merge-train`
-   directly — the dispatcher owns NF-1 (one train per repo) and silently
+   later. Calls the dispatcher script by its full path, never `aicron` as a
+   bare command — `aicron` is a shell function guarded behind the repo's
+   interactive-shell check, so it silently resolves to nothing in a
+   non-interactive `Bash` tool call. Never `gh:pr-merge-train` directly,
+   either — the dispatcher owns NF-1 (one train per repo) and silently
    no-ops if a train is already running. Backgrounded because the
    dispatcher can itself block up to 4 minutes (`herdr agent prompt
    --wait`); this step must not stall Steps 2.5/2.5.1/2.6 while it waits.
+   The dispatcher is hardcoded to `$HOME/dotfiles`'s own `origin` remote
+   (`shell-common/tools/custom/cron-jobs.json`'s `--cwd`), so the nudge only
+   fires when `<remote>` (Step 1's binding) is `origin` — on any other
+   remote it would wake the wrong repo's train, so this step is skipped.
    Detail: `references/merge-train-dispatch.md`.
    ```bash
-   nohup aicron run merge-train >/dev/null 2>&1 &
+   if [ "${REMOTE:-origin}" = "origin" ]; then
+       nohup "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/tools/custom/aicron.sh" \
+           run merge-train >/dev/null 2>&1 &
+   fi
    ```
 6. **Step 2.5 — gh:pr-resolve-conflict** (only if 2.4 succeeded) —
    rebase-resolve; a fresh PR usually prints "이미 충돌 없음 — skip".
