@@ -161,8 +161,8 @@ _IW_STALL_RECOVER_SLEEP="${IW_STALL_RECOVER_SLEEP:-2}"
 #     hours, so the real cost of retrying after 30 minutes is small, while a
 #     ramp needs a third field in `rate-limit.json` (with back-compat for files
 #     already on disk) and would invalidate the "twice its own length" outlier
-#     guard, which every reader of this constant assumes is fixed-length —
-#     _iw_limit_gate_check and _iw_status_report both carry a copy of it.
+#     guard in _iw_limit_gate_state, which both gate readers go through and
+#     which assumes this value is fixed-length.
 _IW_LIMIT_STATE_BASENAME="rate-limit.json"
 _IW_LIMIT_STRIKES="2"
 _IW_LIMIT_BACKOFF_SECONDS="1800"
@@ -1519,47 +1519,105 @@ _iw_limit_clear() {
     rm -f "$(_iw_limit_state_file)" 2>/dev/null || true
 }
 
-# The gate itself. Returns 0 when this tick may dispatch, non-zero when it must
-# hold. Every unexpected input answers 0 — see NF-1.
-_iw_limit_gate_check() {
+# Classify the gate file. Pure: reads, never writes, never prints (PR #1469
+# codex review). Both readers route their expiry arithmetic through here — the
+# tick's deciding _iw_limit_gate_check below and the read-only
+# _iw_status_report — so a future change to what "expired" means cannot let
+# `--status` disagree with the tick it reports on. The side effect that must
+# NOT be shared (clearing an expired file) stays with the caller that is
+# allowed to have it.
+#
+# Echoes "<state> <seconds-left>"; the second field is meaningful only for
+# `closed`.
+#
+#   none        no state file at all — nothing to hold
+#   fieldless   file present, `backoff_until` absent: a truncated write or a
+#               hand edit. Strike bookkeeping never produces this —
+#               _iw_limit_write always emits both fields
+#   unreadable  `backoff_until` present but not a number
+#   open        deadline is 0, the resting value written while strikes
+#               accumulate: evidence on record, gate still open
+#   no-clock    _iw_now failed
+#   expired     deadline passed, or sits further out than twice its own length
+#               — the latter cannot have been written by this script, so a
+#               clock jump or a hand edit did it, and expiring beats stalling
+#               forever (F-3)
+#   closed      deadline still ahead; field 2 carries the seconds remaining
+#
+# Every unexpected input lands on a state its callers answer by dispatching —
+# see NF-1.
+_iw_limit_gate_state() {
     local _until _now _left
 
-    [ -f "$(_iw_limit_state_file)" ] || return 0
+    [ -f "$(_iw_limit_state_file)" ] || {
+        printf 'none 0\n'
+        return 0
+    }
 
     _until=$(_iw_limit_read backoff_until)
     case "${_until}" in
-    *[!0-9]*)
-        ux_warning "Rate-limit state is unreadable (backoff_until='${_until}') — dispatching anyway."
+    '')
+        printf 'fieldless 0\n'
         return 0
         ;;
-    '')
-        # Present but fieldless: a truncated write or a hand edit. Strike
-        # bookkeeping never produces this — _iw_limit_write always emits both
-        # fields.
-        ux_warning "Rate-limit state file has no backoff deadline — dispatching anyway."
+    *[!0-9]*)
+        printf 'unreadable 0\n'
         return 0
         ;;
     esac
 
-    # 0 is the resting value written while strikes accumulate: evidence on
-    # record, gate still open.
-    [ "${_until}" -gt 0 ] || return 0
+    if [ "${_until}" -le 0 ]; then
+        printf 'open 0\n'
+        return 0
+    fi
 
     _now=$(_iw_now)
     if [ -z "${_now}" ]; then
-        ux_warning "Cannot read the clock — rate-limit gate ignored this tick."
+        printf 'no-clock 0\n'
         return 0
     fi
 
-    # A deadline further out than twice its own length cannot have been written
-    # by this script; a clock jump or a hand edit did it. Expiring beats
-    # stalling forever (F-3).
     _left=$((_until - _now))
     if [ "${_left}" -le 0 ] || [ "${_left}" -gt $((_IW_LIMIT_BACKOFF_SECONDS * 2)) ]; then
+        printf 'expired 0\n'
+        return 0
+    fi
+
+    printf 'closed %s\n' "${_left}"
+}
+
+# The gate itself. Returns 0 when this tick may dispatch, non-zero when it must
+# hold. Every unexpected input answers 0 — see NF-1. This is the reader that
+# owns the write: an expired file is cleared here, and only here.
+_iw_limit_gate_check() {
+    local _state _left
+
+    read -r _state _left <<EOF
+$(_iw_limit_gate_state)
+EOF
+
+    case "${_state}" in
+    none | open)
+        return 0
+        ;;
+    fieldless)
+        ux_warning "Rate-limit state file has no backoff deadline — dispatching anyway."
+        return 0
+        ;;
+    unreadable)
+        ux_warning "Rate-limit state is unreadable (backoff_until='$(_iw_limit_read backoff_until)') — dispatching anyway."
+        return 0
+        ;;
+    no-clock)
+        ux_warning "Cannot read the clock — rate-limit gate ignored this tick."
+        return 0
+        ;;
+    expired)
         ux_info "Rate-limit gate reopened — backoff expired, resuming dispatch."
         _iw_limit_clear
         return 0
-    fi
+        ;;
+    esac
 
     ux_warning "Rate-limit gate closed — holding dispatch for ~$(((_left + 59) / 60))m (no worktree is created this tick)."
     return 1
@@ -1736,17 +1794,17 @@ _iw_limit_record() {
 #
 # Deliberately does *not* call _iw_limit_gate_check. That helper clears an
 # expired `rate-limit.json` as part of deciding, so reusing it would make an
-# inspection command mutate state — the same reason --dry-run stays clear of
-# it (PR #1447 codex/agy review). The expiry arithmetic is duplicated here
-# instead, including the "further out than twice its own length" outlier guard,
-# so the two agree on what "expired" means.
+# inspection command mutate state — the same reason --dry-run stays clear of it
+# (PR #1447 codex/agy review). What the two share instead is
+# _iw_limit_gate_state, which is pure: the arithmetic is stated once, the side
+# effect stays with the tick (PR #1469 codex review).
 #
 # Always exits 0, including on an unreadable file. A closed gate is a normal
 # operating state, not an error, and `set -e` cron wrappers that call this to
 # log the gate must not die on it; the state is carried by the text, which is
 # what a human reading cron.log reads anyway.
 _iw_status_report() {
-    local _file _until _strikes _now _left
+    local _file _state _left _strikes
 
     _file=$(_iw_limit_state_file)
 
@@ -1754,19 +1812,22 @@ _iw_status_report() {
     ux_bullet "state file"
     ux_bullet_sub "${_file}"
 
-    if [ ! -f "${_file}" ]; then
+    read -r _state _left <<EOF
+$(_iw_limit_gate_state)
+EOF
+
+    if [ "${_state}" = "none" ]; then
         ux_success "Rate-limit gate open — no state file, the next tick dispatches."
         return 0
     fi
 
-    # The deadline is validated before anything is asserted about the record:
+    # The deadline is classified before anything is asserted about the record:
     # reporting `?/2 ... on record` and then "the state is unreadable" one line
     # later is a contradiction, and the strike line is the one that looks like
     # data to whoever is reading cron.log.
-    _until=$(_iw_limit_read backoff_until)
-    case "${_until}" in
-    '' | *[!0-9]*)
-        ux_warning "Rate-limit state is unreadable (backoff_until='${_until}') — the next tick dispatches anyway."
+    case "${_state}" in
+    fieldless | unreadable)
+        ux_warning "Rate-limit state is unreadable (backoff_until='$(_iw_limit_read backoff_until)') — the next tick dispatches anyway."
         return 0
         ;;
     esac
@@ -1780,24 +1841,20 @@ _iw_status_report() {
     ux_bullet "strikes"
     ux_bullet_sub "${_strikes}/${_IW_LIMIT_STRIKES} consecutive stalled dispatches on record"
 
-    # 0 is the resting value written while strikes accumulate: evidence on
-    # record, gate still open.
-    if [ "${_until}" -le 0 ]; then
+    case "${_state}" in
+    open)
         ux_success "Rate-limit gate open — the next tick dispatches."
         return 0
-    fi
-
-    _now=$(_iw_now)
-    if [ -z "${_now}" ]; then
+        ;;
+    no-clock)
         ux_warning "Cannot read the clock — cannot tell whether the backoff has expired."
         return 0
-    fi
-
-    _left=$((_until - _now))
-    if [ "${_left}" -le 0 ] || [ "${_left}" -gt $((_IW_LIMIT_BACKOFF_SECONDS * 2)) ]; then
+        ;;
+    expired)
         ux_success "Rate-limit gate open — the backoff expired, the next tick reopens it."
         return 0
-    fi
+        ;;
+    esac
 
     ux_warning "Rate-limit gate closed — holding dispatch for ~$(((_left + 59) / 60))m."
     ux_bullet_sub "delete ${_file} to reopen it now"
@@ -1859,6 +1916,8 @@ _iw_usage() {
     ux_bullet_sub "               (takes no lock and does not evaluate the rate-limit gate)"
     ux_bullet_sub "--status       print the rate-limit gate state and exit; runs no tick"
     ux_bullet_sub "               (takes no lock, changes nothing, always exits 0)"
+    ux_bullet_sub "               --status and --help are terminal: the first of the two"
+    ux_bullet_sub "               on the line answers and exits, ignoring the rest"
     ux_bullet_sub "-h, --help, help   show this help"
     ux_bullet "cycle"
     ux_bullet_sub "gh search issues --assignee @me --state open   (one query per watched host)"
